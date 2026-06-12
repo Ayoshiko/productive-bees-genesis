@@ -1,0 +1,920 @@
+﻿Compiled from "BeeCreator.java"
+public class cy.jdkdigital.productivebees.util.BeeCreator {
+  public cy.jdkdigital.productivebees.util.BeeCreator();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public static net.minecraft.nbt.CompoundTag create(net.minecraft.resources.ResourceLocation, com.google.gson.JsonObject);
+    Code:
+       0: new           #7                  // class net/minecraft/nbt/CompoundTag
+       3: dup
+       4: invokespecial #9                  // Method net/minecraft/nbt/CompoundTag."<init>":()V
+       7: astore_2
+       8: aload_2
+       9: ldc           #10                 // String id
+      11: aload_0
+      12: invokevirtual #12                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+      15: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      18: aload_2
+      19: ldc           #22                 // String primaryColor
+      21: aload_1
+      22: ldc           #22                 // String primaryColor
+      24: invokestatic  #24                 // Method getColor:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/lang/Integer;
+      27: invokevirtual #30                 // Method java/lang/Integer.intValue:()I
+      30: invokevirtual #36                 // Method net/minecraft/nbt/CompoundTag.putInt:(Ljava/lang/String;I)V
+      33: aload_2
+      34: ldc           #40                 // String secondaryColor
+      36: aload_1
+      37: ldc           #40                 // String secondaryColor
+      39: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+      42: ifeq          57
+      45: aload_1
+      46: ldc           #40                 // String secondaryColor
+      48: invokestatic  #24                 // Method getColor:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/lang/Integer;
+      51: invokevirtual #30                 // Method java/lang/Integer.intValue:()I
+      54: goto          63
+      57: aload_2
+      58: ldc           #22                 // String primaryColor
+      60: invokevirtual #48                 // Method net/minecraft/nbt/CompoundTag.getInt:(Ljava/lang/String;)I
+      63: invokevirtual #36                 // Method net/minecraft/nbt/CompoundTag.putInt:(Ljava/lang/String;I)V
+      66: aload_1
+      67: ldc           #52                 // String description
+      69: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+      72: ifeq          90
+      75: aload_2
+      76: ldc           #52                 // String description
+      78: aload_1
+      79: ldc           #52                 // String description
+      81: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+      84: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+      87: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      90: aload_2
+      91: ldc           #63                 // String inverseFlower
+      93: iconst_0
+      94: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+      97: aload_1
+      98: ldc           #69                 // String flowerTag
+     100: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     103: ifeq          163
+     106: aload_1
+     107: ldc           #69                 // String flowerTag
+     109: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     112: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     115: invokevirtual #71                 // Method java/lang/String.isEmpty:()Z
+     118: ifne          163
+     121: aload_1
+     122: ldc           #69                 // String flowerTag
+     124: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     127: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     130: astore_3
+     131: aload_3
+     132: ldc           #77                 // String !
+     134: invokevirtual #79                 // Method java/lang/String.startsWith:(Ljava/lang/String;)Z
+     137: ifeq          153
+     140: aload_3
+     141: iconst_1
+     142: invokevirtual #82                 // Method java/lang/String.substring:(I)Ljava/lang/String;
+     145: astore_3
+     146: aload_2
+     147: ldc           #63                 // String inverseFlower
+     149: iconst_1
+     150: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     153: aload_2
+     154: ldc           #69                 // String flowerTag
+     156: aload_3
+     157: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     160: goto          297
+     163: aload_1
+     164: ldc           #86                 // String flowerBlock
+     166: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     169: ifeq          205
+     172: aload_1
+     173: ldc           #86                 // String flowerBlock
+     175: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     178: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     181: invokevirtual #71                 // Method java/lang/String.isEmpty:()Z
+     184: ifne          205
+     187: aload_2
+     188: ldc           #86                 // String flowerBlock
+     190: aload_1
+     191: ldc           #86                 // String flowerBlock
+     193: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     196: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     199: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     202: goto          297
+     205: aload_1
+     206: ldc           #88                 // String flowerFluid
+     208: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     211: ifeq          247
+     214: aload_1
+     215: ldc           #88                 // String flowerFluid
+     217: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     220: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     223: invokevirtual #71                 // Method java/lang/String.isEmpty:()Z
+     226: ifne          247
+     229: aload_2
+     230: ldc           #88                 // String flowerFluid
+     232: aload_1
+     233: ldc           #88                 // String flowerFluid
+     235: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     238: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     241: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     244: goto          297
+     247: aload_1
+     248: ldc           #90                 // String flowerItem
+     250: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     253: ifeq          289
+     256: aload_1
+     257: ldc           #90                 // String flowerItem
+     259: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     262: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     265: invokevirtual #71                 // Method java/lang/String.isEmpty:()Z
+     268: ifne          289
+     271: aload_2
+     272: ldc           #90                 // String flowerItem
+     274: aload_1
+     275: ldc           #90                 // String flowerItem
+     277: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     280: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     283: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     286: goto          297
+     289: aload_2
+     290: ldc           #69                 // String flowerTag
+     292: ldc           #92                 // String minecraft:flowers
+     294: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     297: aload_1
+     298: ldc           #94                 // String nestingPreference
+     300: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     303: ifeq          321
+     306: aload_2
+     307: ldc           #94                 // String nestingPreference
+     309: aload_1
+     310: ldc           #94                 // String nestingPreference
+     312: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     315: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     318: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     321: aload_1
+     322: ldc           #96                 // String beeTexture
+     324: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     327: ifeq          345
+     330: aload_2
+     331: ldc           #96                 // String beeTexture
+     333: aload_1
+     334: ldc           #96                 // String beeTexture
+     336: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     339: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     342: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     345: aload_1
+     346: ldc           #98                 // String particleColor
+     348: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     351: ifeq          369
+     354: aload_2
+     355: ldc           #98                 // String particleColor
+     357: aload_1
+     358: ldc           #98                 // String particleColor
+     360: invokestatic  #24                 // Method getColor:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/lang/Integer;
+     363: invokevirtual #30                 // Method java/lang/Integer.intValue:()I
+     366: invokevirtual #36                 // Method net/minecraft/nbt/CompoundTag.putInt:(Ljava/lang/String;I)V
+     369: aload_2
+     370: ldc           #100                // String tertiaryColor
+     372: aload_1
+     373: ldc           #100                // String tertiaryColor
+     375: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     378: ifeq          393
+     381: aload_1
+     382: ldc           #100                // String tertiaryColor
+     384: invokestatic  #24                 // Method getColor:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/lang/Integer;
+     387: invokevirtual #30                 // Method java/lang/Integer.intValue:()I
+     390: goto          399
+     393: aload_2
+     394: ldc           #22                 // String primaryColor
+     396: invokevirtual #48                 // Method net/minecraft/nbt/CompoundTag.getInt:(Ljava/lang/String;)I
+     399: invokevirtual #36                 // Method net/minecraft/nbt/CompoundTag.putInt:(Ljava/lang/String;I)V
+     402: aload_1
+     403: ldc           #102                // String attackResponse
+     405: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     408: ifeq          426
+     411: aload_2
+     412: ldc           #102                // String attackResponse
+     414: aload_1
+     415: ldc           #102                // String attackResponse
+     417: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     420: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     423: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     426: aload_1
+     427: ldc           #104                // String postPollination
+     429: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     432: ifeq          450
+     435: aload_2
+     436: ldc           #104                // String postPollination
+     438: aload_1
+     439: ldc           #104                // String postPollination
+     441: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     444: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     447: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     450: aload_2
+     451: ldc           #106                // String colorCycle
+     453: aload_1
+     454: ldc           #106                // String colorCycle
+     456: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     459: ifeq          478
+     462: aload_1
+     463: ldc           #106                // String colorCycle
+     465: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     468: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     471: ifeq          478
+     474: iconst_1
+     475: goto          479
+     478: iconst_0
+     479: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     482: aload_1
+     483: ldc           #111                // String model
+     485: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     488: ifeq          506
+     491: aload_2
+     492: ldc           #111                // String model
+     494: aload_1
+     495: ldc           #111                // String model
+     497: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     500: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     503: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     506: aload_1
+     507: ldc           #113                // String animation
+     509: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     512: ifeq          530
+     515: aload_2
+     516: ldc           #113                // String animation
+     518: aload_1
+     519: ldc           #113                // String animation
+     521: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     524: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     527: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     530: aload_2
+     531: ldc           #115                // String breedingItem
+     533: aload_1
+     534: ldc           #115                // String breedingItem
+     536: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     539: ifeq          554
+     542: aload_1
+     543: ldc           #115                // String breedingItem
+     545: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     548: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     551: goto          556
+     554: ldc           #117                // String
+     556: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     559: aload_2
+     560: ldc           #119                // String breedingItemCount
+     562: aload_1
+     563: ldc           #119                // String breedingItemCount
+     565: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     568: ifeq          583
+     571: aload_1
+     572: ldc           #119                // String breedingItemCount
+     574: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     577: invokevirtual #121                // Method com/google/gson/JsonElement.getAsInt:()I
+     580: goto          584
+     583: iconst_1
+     584: invokevirtual #36                 // Method net/minecraft/nbt/CompoundTag.putInt:(Ljava/lang/String;I)V
+     587: aload_2
+     588: ldc           #124                // String flowerType
+     590: aload_1
+     591: ldc           #124                // String flowerType
+     593: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     596: ifeq          611
+     599: aload_1
+     600: ldc           #124                // String flowerType
+     602: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     605: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     608: goto          613
+     611: ldc           #126                // String blocks
+     613: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     616: aload_2
+     617: ldc           #128                // String renderer
+     619: aload_1
+     620: ldc           #128                // String renderer
+     622: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     625: ifeq          640
+     628: aload_1
+     629: ldc           #128                // String renderer
+     631: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     634: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     637: goto          642
+     640: ldc           #130                // String default
+     642: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     645: aload_2
+     646: ldc           #132                // String renderTransform
+     648: aload_1
+     649: ldc           #132                // String renderTransform
+     651: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     654: ifeq          669
+     657: aload_1
+     658: ldc           #132                // String renderTransform
+     660: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     663: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     666: goto          671
+     669: ldc           #134                // String none
+     671: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     674: aload_2
+     675: ldc           #136                // String particleType
+     677: aload_1
+     678: ldc           #136                // String particleType
+     680: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     683: ifeq          698
+     686: aload_1
+     687: ldc           #136                // String particleType
+     689: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     692: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+     695: goto          700
+     698: ldc           #138                // String drip
+     700: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+     703: aload_2
+     704: ldc           #140                // String size
+     706: aload_1
+     707: ldc           #140                // String size
+     709: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     712: ifeq          727
+     715: aload_1
+     716: ldc           #140                // String size
+     718: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     721: invokevirtual #142                // Method com/google/gson/JsonElement.getAsFloat:()F
+     724: goto          728
+     727: fconst_1
+     728: invokevirtual #146                // Method net/minecraft/nbt/CompoundTag.putFloat:(Ljava/lang/String;F)V
+     731: aload_2
+     732: ldc           #150                // String pollinatedSize
+     734: aload_1
+     735: ldc           #150                // String pollinatedSize
+     737: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     740: ifeq          755
+     743: aload_1
+     744: ldc           #150                // String pollinatedSize
+     746: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     749: invokevirtual #142                // Method com/google/gson/JsonElement.getAsFloat:()F
+     752: goto          761
+     755: aload_2
+     756: ldc           #140                // String size
+     758: invokevirtual #152                // Method net/minecraft/nbt/CompoundTag.getFloat:(Ljava/lang/String;)F
+     761: invokevirtual #146                // Method net/minecraft/nbt/CompoundTag.putFloat:(Ljava/lang/String;F)V
+     764: aload_2
+     765: ldc           #156                // String speed
+     767: aload_1
+     768: ldc           #156                // String speed
+     770: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     773: ifeq          788
+     776: aload_1
+     777: ldc           #156                // String speed
+     779: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     782: invokevirtual #142                // Method com/google/gson/JsonElement.getAsFloat:()F
+     785: goto          789
+     788: fconst_1
+     789: invokevirtual #146                // Method net/minecraft/nbt/CompoundTag.putFloat:(Ljava/lang/String;F)V
+     792: aload_2
+     793: ldc           #158                // String attack
+     795: aload_1
+     796: ldc           #158                // String attack
+     798: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     801: ifeq          817
+     804: aload_1
+     805: ldc           #158                // String attack
+     807: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     810: invokevirtual #142                // Method com/google/gson/JsonElement.getAsFloat:()F
+     813: f2d
+     814: goto          820
+     817: ldc2_w        #160                // double 2.0d
+     820: invokevirtual #162                // Method net/minecraft/nbt/CompoundTag.putDouble:(Ljava/lang/String;D)V
+     823: aload_2
+     824: ldc           #166                // String translucent
+     826: aload_1
+     827: ldc           #166                // String translucent
+     829: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     832: ifeq          847
+     835: aload_1
+     836: ldc           #166                // String translucent
+     838: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     841: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     844: ifne          861
+     847: aload_2
+     848: ldc           #128                // String renderer
+     850: invokevirtual #168                // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+     853: ldc           #172                // String translucent_with_center
+     855: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     858: ifeq          865
+     861: iconst_1
+     862: goto          866
+     865: iconst_0
+     866: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     869: aload_2
+     870: ldc           #178                // String useGlowLayer
+     872: aload_1
+     873: ldc           #178                // String useGlowLayer
+     875: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     878: ifeq          893
+     881: aload_1
+     882: ldc           #178                // String useGlowLayer
+     884: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     887: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     890: goto          904
+     893: aload_2
+     894: ldc           #128                // String renderer
+     896: invokevirtual #168                // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+     899: ldc           #180                // String default_crystal
+     901: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     904: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     907: aload_2
+     908: ldc           #182                // String fireproof
+     910: aload_1
+     911: ldc           #182                // String fireproof
+     913: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     916: ifeq          935
+     919: aload_1
+     920: ldc           #182                // String fireproof
+     922: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     925: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     928: ifeq          935
+     931: iconst_1
+     932: goto          936
+     935: iconst_0
+     936: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     939: aload_2
+     940: ldc           #184                // String withered
+     942: aload_1
+     943: ldc           #184                // String withered
+     945: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     948: ifeq          967
+     951: aload_1
+     952: ldc           #184                // String withered
+     954: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     957: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     960: ifeq          967
+     963: iconst_1
+     964: goto          968
+     967: iconst_0
+     968: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+     971: aload_2
+     972: ldc           #186                // String blinding
+     974: aload_1
+     975: ldc           #186                // String blinding
+     977: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+     980: ifeq          999
+     983: aload_1
+     984: ldc           #186                // String blinding
+     986: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+     989: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+     992: ifeq          999
+     995: iconst_1
+     996: goto          1000
+     999: iconst_0
+    1000: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1003: aload_2
+    1004: ldc           #188                // String draconic
+    1006: aload_1
+    1007: ldc           #188                // String draconic
+    1009: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1012: ifeq          1031
+    1015: aload_1
+    1016: ldc           #188                // String draconic
+    1018: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1021: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1024: ifeq          1031
+    1027: iconst_1
+    1028: goto          1032
+    1031: iconst_0
+    1032: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1035: aload_2
+    1036: ldc           #190                // String slimy
+    1038: aload_1
+    1039: ldc           #190                // String slimy
+    1041: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1044: ifeq          1063
+    1047: aload_1
+    1048: ldc           #190                // String slimy
+    1050: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1053: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1056: ifeq          1063
+    1059: iconst_1
+    1060: goto          1064
+    1063: iconst_0
+    1064: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1067: aload_2
+    1068: ldc           #192                // String teleporting
+    1070: aload_1
+    1071: ldc           #192                // String teleporting
+    1073: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1076: ifeq          1095
+    1079: aload_1
+    1080: ldc           #192                // String teleporting
+    1082: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1085: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1088: ifeq          1095
+    1091: iconst_1
+    1092: goto          1096
+    1095: iconst_0
+    1096: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1099: aload_2
+    1100: ldc           #194                // String munchies
+    1102: aload_1
+    1103: ldc           #194                // String munchies
+    1105: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1108: ifeq          1127
+    1111: aload_1
+    1112: ldc           #194                // String munchies
+    1114: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1117: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1120: ifeq          1127
+    1123: iconst_1
+    1124: goto          1128
+    1127: iconst_0
+    1128: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1131: aload_2
+    1132: ldc           #196                // String redstoned
+    1134: aload_1
+    1135: ldc           #196                // String redstoned
+    1137: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1140: ifeq          1159
+    1143: aload_1
+    1144: ldc           #196                // String redstoned
+    1146: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1149: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1152: ifeq          1159
+    1155: iconst_1
+    1156: goto          1160
+    1159: iconst_0
+    1160: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1163: aload_2
+    1164: ldc           #198                // String stringy
+    1166: aload_1
+    1167: ldc           #198                // String stringy
+    1169: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1172: ifeq          1191
+    1175: aload_1
+    1176: ldc           #198                // String stringy
+    1178: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1181: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1184: ifeq          1191
+    1187: iconst_1
+    1188: goto          1192
+    1191: iconst_0
+    1192: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1195: aload_2
+    1196: ldc           #200                // String stingless
+    1198: aload_1
+    1199: ldc           #200                // String stingless
+    1201: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1204: ifeq          1223
+    1207: aload_1
+    1208: ldc           #200                // String stingless
+    1210: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1213: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1216: ifeq          1223
+    1219: iconst_1
+    1220: goto          1224
+    1223: iconst_0
+    1224: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1227: aload_2
+    1228: ldc           #202                // String waterproof
+    1230: aload_1
+    1231: ldc           #202                // String waterproof
+    1233: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1236: ifeq          1255
+    1239: aload_1
+    1240: ldc           #202                // String waterproof
+    1242: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1245: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1248: ifeq          1255
+    1251: iconst_1
+    1252: goto          1256
+    1255: iconst_0
+    1256: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1259: aload_2
+    1260: ldc           #204                // String coldResistant
+    1262: aload_1
+    1263: ldc           #204                // String coldResistant
+    1265: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1268: ifeq          1287
+    1271: aload_1
+    1272: ldc           #204                // String coldResistant
+    1274: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1277: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1280: ifeq          1287
+    1283: iconst_1
+    1284: goto          1288
+    1287: iconst_0
+    1288: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1291: aload_2
+    1292: ldc           #206                // String selfbreed
+    1294: aload_1
+    1295: ldc           #206                // String selfbreed
+    1297: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1300: ifeq          1315
+    1303: aload_1
+    1304: ldc           #206                // String selfbreed
+    1306: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1309: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1312: ifeq          1319
+    1315: iconst_1
+    1316: goto          1320
+    1319: iconst_0
+    1320: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1323: aload_2
+    1324: ldc           #208                // String selfheal
+    1326: aload_1
+    1327: ldc           #208                // String selfheal
+    1329: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1332: ifeq          1351
+    1335: aload_1
+    1336: ldc           #208                // String selfheal
+    1338: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1341: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1344: ifeq          1351
+    1347: iconst_1
+    1348: goto          1352
+    1351: iconst_0
+    1352: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1355: aload_2
+    1356: ldc           #210                // String irradiated
+    1358: aload_1
+    1359: ldc           #210                // String irradiated
+    1361: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1364: ifeq          1383
+    1367: aload_1
+    1368: ldc           #210                // String irradiated
+    1370: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1373: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1376: ifeq          1383
+    1379: iconst_1
+    1380: goto          1384
+    1383: iconst_0
+    1384: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1387: new           #212                // class net/minecraft/nbt/ListTag
+    1390: dup
+    1391: invokespecial #214                // Method net/minecraft/nbt/ListTag."<init>":()V
+    1394: astore_3
+    1395: aload_1
+    1396: ldc           #215                // String invulnerability
+    1398: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1401: ifeq          1456
+    1404: aload_1
+    1405: ldc           #215                // String invulnerability
+    1407: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1410: invokevirtual #217                // Method com/google/gson/JsonElement.getAsJsonArray:()Lcom/google/gson/JsonArray;
+    1413: invokevirtual #221                // Method com/google/gson/JsonArray.iterator:()Ljava/util/Iterator;
+    1416: astore        4
+    1418: aload         4
+    1420: invokeinterface #227,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+    1425: ifeq          1456
+    1428: aload         4
+    1430: invokeinterface #232,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+    1435: checkcast     #59                 // class com/google/gson/JsonElement
+    1438: astore        5
+    1440: aload_3
+    1441: aload         5
+    1443: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+    1446: invokestatic  #236                // Method net/minecraft/nbt/StringTag.valueOf:(Ljava/lang/String;)Lnet/minecraft/nbt/StringTag;
+    1449: invokevirtual #242                // Method net/minecraft/nbt/ListTag.add:(Ljava/lang/Object;)Z
+    1452: pop
+    1453: goto          1418
+    1456: aload_2
+    1457: ldc           #215                // String invulnerability
+    1459: aload_3
+    1460: invokevirtual #245                // Method net/minecraft/nbt/CompoundTag.put:(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;
+    1463: pop
+    1464: aload_1
+    1465: ldc           #249                // String attributes
+    1467: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1470: ifeq          1734
+    1473: aload_1
+    1474: ldc           #249                // String attributes
+    1476: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1479: invokevirtual #251                // Method com/google/gson/JsonElement.getAsJsonObject:()Lcom/google/gson/JsonObject;
+    1482: invokevirtual #255                // Method com/google/gson/JsonObject.entrySet:()Ljava/util/Set;
+    1485: invokeinterface #259,  1          // InterfaceMethod java/util/Set.iterator:()Ljava/util/Iterator;
+    1490: astore        4
+    1492: aload         4
+    1494: invokeinterface #227,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+    1499: ifeq          1734
+    1502: aload         4
+    1504: invokeinterface #232,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+    1509: checkcast     #262                // class java/util/Map$Entry
+    1512: astore        5
+    1514: aload         5
+    1516: invokeinterface #264,  1          // InterfaceMethod java/util/Map$Entry.getKey:()Ljava/lang/Object;
+    1521: checkcast     #72                 // class java/lang/String
+    1524: astore        6
+    1526: iconst_m1
+    1527: istore        7
+    1529: aload         6
+    1531: invokevirtual #267                // Method java/lang/String.hashCode:()I
+    1534: lookupswitch  { // 5
+
+           -1714720249: 1601
+
+            -877352063: 1618
+
+              52576642: 1652
+
+            1023856850: 1584
+
+            1510912594: 1635
+               default: 1666
+          }
+    1584: aload         6
+    1586: ldc_w         #270                // String productivity
+    1589: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+    1592: ifeq          1666
+    1595: iconst_0
+    1596: istore        7
+    1598: goto          1666
+    1601: aload         6
+    1603: ldc_w         #272                // String endurance
+    1606: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+    1609: ifeq          1666
+    1612: iconst_1
+    1613: istore        7
+    1615: goto          1666
+    1618: aload         6
+    1620: ldc_w         #274                // String temper
+    1623: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+    1626: ifeq          1666
+    1629: iconst_2
+    1630: istore        7
+    1632: goto          1666
+    1635: aload         6
+    1637: ldc_w         #276                // String behavior
+    1640: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+    1643: ifeq          1666
+    1646: iconst_3
+    1647: istore        7
+    1649: goto          1666
+    1652: aload         6
+    1654: ldc_w         #278                // String weather_tolerance
+    1657: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+    1660: ifeq          1666
+    1663: iconst_4
+    1664: istore        7
+    1666: iload         7
+    1668: tableswitch   { // 0 to 4
+
+                     0: 1704
+
+                     1: 1704
+
+                     2: 1704
+
+                     3: 1704
+
+                     4: 1704
+               default: 1731
+          }
+    1704: aload_2
+    1705: aload         5
+    1707: invokeinterface #264,  1          // InterfaceMethod java/util/Map$Entry.getKey:()Ljava/lang/Object;
+    1712: checkcast     #72                 // class java/lang/String
+    1715: aload         5
+    1717: invokeinterface #280,  1          // InterfaceMethod java/util/Map$Entry.getValue:()Ljava/lang/Object;
+    1722: checkcast     #59                 // class com/google/gson/JsonElement
+    1725: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+    1728: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+    1731: goto          1492
+    1734: aload_1
+    1735: ldc_w         #283                // String passiveEffects
+    1738: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1741: ifeq          1744
+    1744: aload_2
+    1745: ldc_w         #285                // String createComb
+    1748: aload_1
+    1749: ldc_w         #285                // String createComb
+    1752: invokevirtual #42                 // Method com/google/gson/JsonObject.has:(Ljava/lang/String;)Z
+    1755: ifeq          1771
+    1758: aload_1
+    1759: ldc_w         #285                // String createComb
+    1762: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+    1765: invokevirtual #108                // Method com/google/gson/JsonElement.getAsBoolean:()Z
+    1768: ifeq          1775
+    1771: iconst_1
+    1772: goto          1776
+    1775: iconst_0
+    1776: invokevirtual #65                 // Method net/minecraft/nbt/CompoundTag.putBoolean:(Ljava/lang/String;Z)V
+    1779: aload_2
+    1780: areturn
+
+  public static void setType(net.minecraft.resources.ResourceLocation, net.minecraft.world.item.ItemStack);
+    Code:
+       0: aload_1
+       1: getstatic     #287                // Field cy/jdkdigital/productivebees/init/ModDataComponents.BEE_TYPE:Ljava/util/function/Supplier;
+       4: aload_0
+       5: invokevirtual #293                // Method net/minecraft/world/item/ItemStack.set:(Ljava/util/function/Supplier;Ljava/lang/Object;)Ljava/lang/Object;
+       8: pop
+       9: return
+
+  public static net.minecraft.world.item.ItemStack getSpawnEgg(net.minecraft.resources.ResourceLocation);
+    Code:
+       0: aload_0
+       1: iconst_0
+       2: invokestatic  #299                // Method getSpawnEgg:(Lnet/minecraft/resources/ResourceLocation;Z)Lnet/minecraft/world/item/ItemStack;
+       5: areturn
+
+  public static net.minecraft.world.item.ItemStack getSpawnEgg(net.minecraft.resources.ResourceLocation, boolean);
+    Code:
+       0: getstatic     #303                // Field cy/jdkdigital/productivebees/setup/BeeReloadListener.INSTANCE:Lcy/jdkdigital/productivebees/setup/BeeReloadListener;
+       3: aload_0
+       4: invokevirtual #309                // Method cy/jdkdigital/productivebees/setup/BeeReloadListener.getData:(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/nbt/CompoundTag;
+       7: ifnonnull     14
+      10: iload_1
+      11: ifeq          80
+      14: new           #294                // class net/minecraft/world/item/ItemStack
+      17: dup
+      18: getstatic     #313                // Field cy/jdkdigital/productivebees/init/ModItems.CONFIGURABLE_SPAWN_EGG:Lnet/neoforged/neoforge/registries/DeferredHolder;
+      21: invokevirtual #319                // Method net/neoforged/neoforge/registries/DeferredHolder.get:()Ljava/lang/Object;
+      24: checkcast     #323                // class net/minecraft/world/level/ItemLike
+      27: invokespecial #325                // Method net/minecraft/world/item/ItemStack."<init>":(Lnet/minecraft/world/level/ItemLike;)V
+      30: astore_2
+      31: new           #7                  // class net/minecraft/nbt/CompoundTag
+      34: dup
+      35: invokespecial #9                  // Method net/minecraft/nbt/CompoundTag."<init>":()V
+      38: astore_3
+      39: aload_3
+      40: ldc_w         #328                // String type
+      43: aload_0
+      44: invokevirtual #12                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+      47: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      50: aload_3
+      51: ldc           #10                 // String id
+      53: getstatic     #330                // Field cy/jdkdigital/productivebees/init/ModEntities.CONFIGURABLE_BEE:Lnet/neoforged/neoforge/registries/DeferredHolder;
+      56: invokevirtual #335                // Method net/neoforged/neoforge/registries/DeferredHolder.getId:()Lnet/minecraft/resources/ResourceLocation;
+      59: invokevirtual #12                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+      62: invokevirtual #18                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      65: aload_2
+      66: getstatic     #339                // Field net/minecraft/core/component/DataComponents.ENTITY_DATA:Lnet/minecraft/core/component/DataComponentType;
+      69: aload_3
+      70: invokestatic  #345                // Method net/minecraft/world/item/component/CustomData.of:(Lnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/world/item/component/CustomData;
+      73: invokevirtual #351                // Method net/minecraft/world/item/ItemStack.set:(Lnet/minecraft/core/component/DataComponentType;Ljava/lang/Object;)Ljava/lang/Object;
+      76: pop
+      77: goto          166
+      80: aload_0
+      81: invokevirtual #354                // Method net/minecraft/resources/ResourceLocation.getNamespace:()Ljava/lang/String;
+      84: ldc_w         #359                // String productivebees
+      87: invokevirtual #174                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+      90: ifeq          131
+      93: new           #294                // class net/minecraft/world/item/ItemStack
+      96: dup
+      97: getstatic     #361                // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+     100: aload_0
+     101: invokevirtual #354                // Method net/minecraft/resources/ResourceLocation.getNamespace:()Ljava/lang/String;
+     104: aload_0
+     105: invokevirtual #367                // Method net/minecraft/resources/ResourceLocation.getPath:()Ljava/lang/String;
+     108: invokedynamic #370,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+     113: invokestatic  #373                // Method net/minecraft/resources/ResourceLocation.fromNamespaceAndPath:(Ljava/lang/String;Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+     116: invokeinterface #377,  2          // InterfaceMethod net/minecraft/core/DefaultedRegistry.get:(Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/Object;
+     121: checkcast     #323                // class net/minecraft/world/level/ItemLike
+     124: invokespecial #325                // Method net/minecraft/world/item/ItemStack."<init>":(Lnet/minecraft/world/level/ItemLike;)V
+     127: astore_2
+     128: goto          166
+     131: new           #294                // class net/minecraft/world/item/ItemStack
+     134: dup
+     135: getstatic     #361                // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+     138: aload_0
+     139: invokevirtual #354                // Method net/minecraft/resources/ResourceLocation.getNamespace:()Ljava/lang/String;
+     142: aload_0
+     143: invokevirtual #367                // Method net/minecraft/resources/ResourceLocation.getPath:()Ljava/lang/String;
+     146: invokedynamic #382,  0            // InvokeDynamic #1:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+     151: invokestatic  #373                // Method net/minecraft/resources/ResourceLocation.fromNamespaceAndPath:(Ljava/lang/String;Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+     154: invokeinterface #377,  2          // InterfaceMethod net/minecraft/core/DefaultedRegistry.get:(Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/Object;
+     159: checkcast     #323                // class net/minecraft/world/level/ItemLike
+     162: invokespecial #325                // Method net/minecraft/world/item/ItemStack."<init>":(Lnet/minecraft/world/level/ItemLike;)V
+     165: astore_2
+     166: aload_2
+     167: areturn
+
+  private static java.lang.Integer getColor(com.google.gson.JsonObject, java.lang.String);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokevirtual #54                 // Method com/google/gson/JsonObject.get:(Ljava/lang/String;)Lcom/google/gson/JsonElement;
+       5: invokevirtual #58                 // Method com/google/gson/JsonElement.getAsString:()Ljava/lang/String;
+       8: ldc_w         #383                // String #
+      11: ldc           #117                // String
+      13: invokevirtual #385                // Method java/lang/String.replace:(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+      16: ldc_w         #389                // String (?<=\\G.{2})
+      19: invokevirtual #391                // Method java/lang/String.split:(Ljava/lang/String;)[Ljava/lang/String;
+      22: astore_2
+      23: aload_2
+      24: iconst_0
+      25: aaload
+      26: bipush        16
+      28: invokestatic  #395                // Method java/lang/Integer.parseInt:(Ljava/lang/String;I)I
+      31: aload_2
+      32: iconst_1
+      33: aaload
+      34: bipush        16
+      36: invokestatic  #395                // Method java/lang/Integer.parseInt:(Ljava/lang/String;I)I
+      39: aload_2
+      40: iconst_2
+      41: aaload
+      42: bipush        16
+      44: invokestatic  #395                // Method java/lang/Integer.parseInt:(Ljava/lang/String;I)I
+      47: invokestatic  #399                // Method net/minecraft/util/FastColor$ARGB32.color:(III)I
+      50: invokestatic  #405                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+      53: areturn
+}

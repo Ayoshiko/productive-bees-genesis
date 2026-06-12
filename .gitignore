@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# Minecraft
+run/
+logs/
+crash-reports/
+
+# Dependencies
+libs/
+decompiled-productivebees/
+pb-original-textures/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

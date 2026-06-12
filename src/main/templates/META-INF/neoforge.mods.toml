@@ -1,0 +1,38 @@
+# 资源蜜蜂：创世模组配置文件
+# NeoForge 1.21.1 版本
+
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="资源蜜蜂：创世"
+authors="${mod_authors}"
+description='''资源蜜蜂的附属模组，添加了万象创世蜜蜂，可以产出整合包中所有资源蜜蜂的蜜脾。'''
+
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[${neo_version},)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="productivebees"
+    type="required"
+    versionRange="[1.21.1-13.13.5,)"
+    ordering="AFTER"
+    side="BOTH"

@@ -1,0 +1,165 @@
+﻿Compiled from "BeeAttributesHandler.java"
+public class cy.jdkdigital.productivebees.capabilities.attributes.BeeAttributesHandler implements cy.jdkdigital.productivebees.capabilities.attributes.IBeeAttributes, net.neoforged.neoforge.common.util.INBTSerializable<net.minecraft.nbt.CompoundTag> {
+  protected java.util.Map<cy.jdkdigital.productivebees.util.GeneAttribute, cy.jdkdigital.productivebees.util.GeneValue> beeAttributes;
+
+  public cy.jdkdigital.productivebees.capabilities.attributes.BeeAttributesHandler();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: new           #7                  // class java/util/HashMap
+       8: dup
+       9: invokespecial #9                  // Method java/util/HashMap."<init>":()V
+      12: putfield      #10                 // Field beeAttributes:Ljava/util/Map;
+      15: new           #16                 // class java/util/Random
+      18: dup
+      19: invokespecial #18                 // Method java/util/Random."<init>":()V
+      22: astore_1
+      23: aload_0
+      24: getstatic     #19                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.PRODUCTIVITY:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      27: aload_1
+      28: invokestatic  #25                 // Method cy/jdkdigital/productivebees/util/GeneValue.getRandomProductivity:(Ljava/util/Random;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      31: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      34: aload_0
+      35: getstatic     #35                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.TEMPER:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      38: getstatic     #38                 // Field cy/jdkdigital/productivebees/util/GeneValue.TEMPER_NORMAL:Lcy/jdkdigital/productivebees/util/GeneValue;
+      41: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      44: aload_0
+      45: getstatic     #42                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.ENDURANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      48: aload_1
+      49: invokestatic  #45                 // Method cy/jdkdigital/productivebees/util/GeneValue.getRandomEndurance:(Ljava/util/Random;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      52: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      55: aload_0
+      56: getstatic     #48                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.BEHAVIOR:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      59: getstatic     #51                 // Field cy/jdkdigital/productivebees/util/GeneValue.BEHAVIOR_DIURNAL:Lcy/jdkdigital/productivebees/util/GeneValue;
+      62: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      65: aload_0
+      66: getstatic     #54                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.WEATHER_TOLERANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      69: getstatic     #57                 // Field cy/jdkdigital/productivebees/util/GeneValue.WEATHER_TOLERANCE_NONE:Lcy/jdkdigital/productivebees/util/GeneValue;
+      72: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      75: return
+
+  public cy.jdkdigital.productivebees.util.GeneValue getAttributeValue(cy.jdkdigital.productivebees.util.GeneAttribute);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field beeAttributes:Ljava/util/Map;
+       4: aload_1
+       5: invokeinterface #60,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      10: checkcast     #26                 // class cy/jdkdigital/productivebees/util/GeneValue
+      13: areturn
+
+  public void setAttributeValue(cy.jdkdigital.productivebees.util.GeneAttribute, cy.jdkdigital.productivebees.util.GeneValue);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field beeAttributes:Ljava/util/Map;
+       4: aload_1
+       5: aload_2
+       6: invokeinterface #66,  3           // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+      11: pop
+      12: return
+
+  public java.util.Map<cy.jdkdigital.productivebees.util.GeneAttribute, cy.jdkdigital.productivebees.util.GeneValue> getAttributes();
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field beeAttributes:Ljava/util/Map;
+       4: areturn
+
+  public net.minecraft.nbt.CompoundTag serializeNBT(net.minecraft.core.HolderLookup$Provider);
+    Code:
+       0: new           #70                 // class net/minecraft/nbt/CompoundTag
+       3: dup
+       4: invokespecial #72                 // Method net/minecraft/nbt/CompoundTag."<init>":()V
+       7: astore_2
+       8: aload_2
+       9: ldc           #73                 // String bee_productivity
+      11: aload_0
+      12: getstatic     #19                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.PRODUCTIVITY:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      15: invokevirtual #75                 // Method getAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      18: invokevirtual #79                 // Method cy/jdkdigital/productivebees/util/GeneValue.getSerializedName:()Ljava/lang/String;
+      21: invokevirtual #83                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      24: aload_2
+      25: ldc           #87                 // String bee_endurance
+      27: aload_0
+      28: getstatic     #42                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.ENDURANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      31: invokevirtual #75                 // Method getAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      34: invokevirtual #79                 // Method cy/jdkdigital/productivebees/util/GeneValue.getSerializedName:()Ljava/lang/String;
+      37: invokevirtual #83                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      40: aload_2
+      41: ldc           #89                 // String bee_temper
+      43: aload_0
+      44: getstatic     #35                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.TEMPER:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      47: invokevirtual #75                 // Method getAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      50: invokevirtual #79                 // Method cy/jdkdigital/productivebees/util/GeneValue.getSerializedName:()Ljava/lang/String;
+      53: invokevirtual #83                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      56: aload_2
+      57: ldc           #91                 // String bee_behavior
+      59: aload_0
+      60: getstatic     #48                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.BEHAVIOR:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      63: invokevirtual #75                 // Method getAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      66: invokevirtual #79                 // Method cy/jdkdigital/productivebees/util/GeneValue.getSerializedName:()Ljava/lang/String;
+      69: invokevirtual #83                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      72: aload_2
+      73: ldc           #93                 // String bee_weather_tolerance
+      75: aload_0
+      76: getstatic     #54                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.WEATHER_TOLERANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      79: invokevirtual #75                 // Method getAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      82: invokevirtual #79                 // Method cy/jdkdigital/productivebees/util/GeneValue.getSerializedName:()Ljava/lang/String;
+      85: invokevirtual #83                 // Method net/minecraft/nbt/CompoundTag.putString:(Ljava/lang/String;Ljava/lang/String;)V
+      88: aload_2
+      89: areturn
+
+  public void deserializeNBT(net.minecraft.core.HolderLookup$Provider, net.minecraft.nbt.CompoundTag);
+    Code:
+       0: aload_0
+       1: getstatic     #19                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.PRODUCTIVITY:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+       4: aload_2
+       5: ldc           #73                 // String bee_productivity
+       7: invokevirtual #95                 // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+      10: invokestatic  #99                 // Method cy/jdkdigital/productivebees/util/GeneValue.byName:(Ljava/lang/String;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      13: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      16: aload_0
+      17: getstatic     #42                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.ENDURANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      20: aload_2
+      21: ldc           #87                 // String bee_endurance
+      23: invokevirtual #95                 // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+      26: invokestatic  #99                 // Method cy/jdkdigital/productivebees/util/GeneValue.byName:(Ljava/lang/String;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      29: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      32: aload_0
+      33: getstatic     #35                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.TEMPER:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      36: aload_2
+      37: ldc           #89                 // String bee_temper
+      39: invokevirtual #95                 // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+      42: invokestatic  #99                 // Method cy/jdkdigital/productivebees/util/GeneValue.byName:(Ljava/lang/String;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      45: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      48: aload_0
+      49: getstatic     #48                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.BEHAVIOR:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      52: aload_2
+      53: ldc           #91                 // String bee_behavior
+      55: invokevirtual #95                 // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+      58: invokestatic  #99                 // Method cy/jdkdigital/productivebees/util/GeneValue.byName:(Ljava/lang/String;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      61: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      64: aload_0
+      65: getstatic     #54                 // Field cy/jdkdigital/productivebees/util/GeneAttribute.WEATHER_TOLERANCE:Lcy/jdkdigital/productivebees/util/GeneAttribute;
+      68: aload_2
+      69: ldc           #93                 // String bee_weather_tolerance
+      71: invokevirtual #95                 // Method net/minecraft/nbt/CompoundTag.getString:(Ljava/lang/String;)Ljava/lang/String;
+      74: invokestatic  #99                 // Method cy/jdkdigital/productivebees/util/GeneValue.byName:(Ljava/lang/String;)Lcy/jdkdigital/productivebees/util/GeneValue;
+      77: invokevirtual #31                 // Method setAttributeValue:(Lcy/jdkdigital/productivebees/util/GeneAttribute;Lcy/jdkdigital/productivebees/util/GeneValue;)V
+      80: return
+
+  public void deserializeNBT(net.minecraft.core.HolderLookup$Provider, net.minecraft.nbt.Tag);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: aload_2
+       3: checkcast     #70                 // class net/minecraft/nbt/CompoundTag
+       6: invokevirtual #103                // Method deserializeNBT:(Lnet/minecraft/core/HolderLookup$Provider;Lnet/minecraft/nbt/CompoundTag;)V
+       9: return
+
+  public net.minecraft.nbt.Tag serializeNBT(net.minecraft.core.HolderLookup$Provider);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokevirtual #107                // Method serializeNBT:(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;
+       5: areturn
+}

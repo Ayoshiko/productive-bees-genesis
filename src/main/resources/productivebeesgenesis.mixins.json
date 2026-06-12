@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "com.ayoshiko.productivebeesgenesis.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "accessor.CentrifugeBlockEntityAccessor",
+    "BeeHelperMixin",
+    "CentrifugeBlockEntityMixin",
+    "HeatedCentrifugeBlockEntityMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
