@@ -4,9 +4,11 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "accessor.CentrifugeBlockEntityAccessor",
+    "BeeConfigReloadMixin",
     "BeeHelperMixin",
     "CentrifugeBlockEntityMixin",
-    "HeatedCentrifugeBlockEntityMixin"
+    "HeatedCentrifugeBlockEntityMixin",
+    "PoweredCentrifugeBlockEntityMixin"
   ],
   "client": [],
   "injectors": {

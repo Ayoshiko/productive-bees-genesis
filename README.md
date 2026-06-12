@@ -42,7 +42,27 @@ The Myriad Creations Bee randomly produces honeycombs from other registered reso
 
 ## Configuration
 
-Currently, the mod does not provide a configuration file. All behaviors are defined through bee JSON configuration files.
+The mod provides an in-game configuration interface accessible through the mod menu. Players can modify Myriad Creations bee attributes including:
+
+- **Appearance**: Primary color, secondary color, particle color
+- **Pollination**: Flower item
+- **Productive Bees Attributes**: Weather tolerance, temper, behavior, endurance, productivity
+- **Basic Attributes**: Honeycomb creation, size, speed, attack damage
+- **Breeding**: Breeding item, breeding item count, self-breeding
+- **Environment**: Waterproof, fireproof
+
+### Accessing Configuration
+
+1. Open Minecraft's main menu
+2. Click "Mods"
+3. Find "Productive Bees Genesis"
+4. Click the "Config" button
+
+Configuration changes take effect after restarting the game or running `/reload`.
+
+### Language Support
+
+The configuration interface supports multiple languages (English/Chinese) and automatically adapts to your client's language settings.
 
 ## Compatibility
 
