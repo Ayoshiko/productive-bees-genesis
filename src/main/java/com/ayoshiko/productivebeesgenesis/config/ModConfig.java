@@ -26,6 +26,13 @@ public final class ModConfig {
         public final ModConfigSpec.ConfigValue<String> secondaryColor;
         public final ModConfigSpec.ConfigValue<String> particleColor;
 
+        // ========== 彩虹特效 ==========
+        public final ModConfigSpec.BooleanValue rainbowMode;
+        public final ModConfigSpec.BooleanValue particleEffectEnabled;
+        public final ModConfigSpec.BooleanValue glowEnabled;
+        public final ModConfigSpec.ConfigValue<String> glowColor;
+        public final ModConfigSpec.IntValue particleCount;
+
         // ========== 授粉 ==========
         public final ModConfigSpec.ConfigValue<String> flowerItem;
 
@@ -56,15 +63,39 @@ public final class ModConfig {
 
             primaryColor = builder
                     .comment("主颜色（十六进制，如 #FFD700）")
-                    .define("primaryColor", "#FFD700");
+                    .define("primaryColor", "#FF0000");
 
             secondaryColor = builder
                     .comment("次要颜色")
-                    .define("secondaryColor", "#FF69B4");
+                    .define("secondaryColor", "#00FF00");
 
             particleColor = builder
                     .comment("粒子颜色")
-                    .define("particleColor", "#00FFFF");
+                    .define("particleColor", "#0000FF");
+
+            builder.push("rainbow_effects").comment("彩虹特效配置");
+            
+            rainbowMode = builder
+                    .comment("启用彩虹模式（颜色会动态变化）")
+                    .define("rainbowMode", true);
+
+            particleEffectEnabled = builder
+                    .comment("启用彩虹粒子特效")
+                    .define("particleEffectEnabled", true);
+
+            particleCount = builder
+                    .comment("每个tick生成的粒子数量")
+                    .defineInRange("particleCount", 1, 1, 20);
+
+            glowEnabled = builder
+                    .comment("启发光晕效果")
+                    .define("glowEnabled", true);
+
+            glowColor = builder
+                    .comment("光晕颜色（十六进制）")
+                    .define("glowColor", "#FFFFFF");
+            
+            builder.pop();
 
             flowerItem = builder
                     .comment("授粉物品ID")
@@ -94,11 +125,11 @@ public final class ModConfig {
 
             size = builder
                     .comment("蜜蜂大小")
-                    .defineInRange("size", 1.0D, 0.1D, 10.0D);
+                    .defineInRange("size", 1.2D, 0.1D, 10.0D);
 
             speed = builder
                     .comment("飞行速度")
-                    .defineInRange("speed", 0.5D, 0.01D, 10.0D);
+                    .defineInRange("speed", 0.6D, 0.01D, 10.0D);
 
             attack = builder
                     .comment("攻击力")

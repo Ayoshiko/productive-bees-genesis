@@ -10,7 +10,9 @@
     "HeatedCentrifugeBlockEntityMixin",
     "PoweredCentrifugeBlockEntityMixin"
   ],
-  "client": [],
+  "client": [
+    "ConfigurableBeeColorMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

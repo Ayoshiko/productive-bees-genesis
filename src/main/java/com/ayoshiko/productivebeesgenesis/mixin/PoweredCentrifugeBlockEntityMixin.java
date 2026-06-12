@@ -25,7 +25,7 @@ public class PoweredCentrifugeBlockEntityMixin {
 	/** canOperate RETURN — 能量充足但输出满时阻止启动 */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)
 	private void productivebeesgenesis$checkOutputSpace(CallbackInfoReturnable<Boolean> cir) {
-		if (!cir.getReturnValueZ()) return;
+		if (!cir.getReturnValue()) return;
 		if (MyriadCreationsEventHandler.shouldBlockOperation(
 				((CentrifugeBlockEntity)(Object)this).inventoryHandler)) {
 			cir.setReturnValue(false);

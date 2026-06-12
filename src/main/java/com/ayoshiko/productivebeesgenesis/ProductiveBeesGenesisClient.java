@@ -9,14 +9,17 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 /**
  * 资源蜜蜂：创世模组客户端专用初始化
  * <p>
- * 参考 Mekanism 的做法，使用仅客户端的 @Mod 类注册配置屏幕工厂，
- * 使模组界面中的"配置"按钮可点击打开配置文件界面。
+ * 负责：
+ * <ul>
+ *   <li>配置屏幕工厂注册</li>
+ * </ul>
+ * 蜜脾材质覆盖：通过 assets/productivebees/ 下的模型文件自动覆盖PB材质
  */
 @Mod(value = ProductiveBeesGenesis.MOD_ID, dist = Dist.CLIENT)
 public final class ProductiveBeesGenesisClient {
 
     public ProductiveBeesGenesisClient(ModContainer container) {
-        // 注册配置屏幕工厂：ConfigurationScreen 会自动读取已注册的 CLIENT 配置
+        // 注册配置屏幕工厂
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
     }
 }
