@@ -8,7 +8,7 @@ A Productive Bees addon mod that adds the Myriad Creations Bee, capable of produ
 
 ## Features
 
-- Adds the "Myriad Creations Bee" entity
+- Adds the "Myriad Creations Bee" entity with a smooth rainbow color gradient (8-second cycle) and colorful particle effects
 - Myriad Creations Bee can randomly produce honeycombs from all other resource bees in the modpack
 - Myriad Creations Honeycomb can be centrifuged to produce random honeycombs and beeswax
 
