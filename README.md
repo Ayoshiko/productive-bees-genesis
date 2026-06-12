@@ -1,62 +1,66 @@
-# 资源蜜蜂：创世
+# Productive Bees Genesis
 
-资源蜜蜂模组的附属模组，添加了万象创世蜜蜂，可以产出整合包中所有资源蜜蜂的蜜脾。
+A Productive Bees addon mod that adds the Myriad Creations Bee, capable of producing any resource honeycomb from bees available in the modpack.
 
-## 功能特性
+## 🌐 Languages
+- [English](README.md)
+- [中文](README_zh.md)
 
-- 添加「万象创世蜜蜂」实体
-- 万象创世蜜蜂可以随机产出整合包内所有其他资源蜜蜂的蜜脾
-- 万象创世蜜脾可以在离心机中离心出随机蜜脾和蜂蜡
+## Features
 
-## 安装说明
+- Adds the "Myriad Creations Bee" entity
+- Myriad Creations Bee can randomly produce honeycombs from all other resource bees in the modpack
+- Myriad Creations Honeycomb can be centrifuged to produce random honeycombs and beeswax
 
-### 前置要求
+## Installation
+
+### Requirements
 
 - Minecraft 1.21.1
-- NeoForge 21.1.101 或更高版本
-- Productive Bees 1.21.0 或更高版本
+- NeoForge 21.1.101 or higher
+- Productive Bees 1.21.0 or higher
 
-### 安装步骤
+### Installation Steps
 
-1. 确保已安装 NeoForge 加载器
-2. 下载最新版本的「资源蜜蜂：创世」模组文件
-3. 将模组文件放入 Minecraft 客户端的 `mods` 文件夹
-4. 启动游戏
+1. Ensure NeoForge loader is installed
+2. Download the latest version of "Productive Bees Genesis" mod
+3. Place the mod file into your Minecraft client's `mods` folder
+4. Launch the game
 
-## 获取方式
+## Obtaining
 
-### 万象创世蜜蜂
+### Myriad Creations Bee
 
-万象创世蜜蜂是稀有蜜蜂，可以通过以下方式获取：
+The Myriad Creations Bee is a rare bee that can be obtained through:
 
-- 使用资源蜜蜂的蜂巢升级系统
-- 在整合包中配置特定的生成条件
+- Using Productive Bees' hive upgrade system
+- Configuring specific spawn conditions in your modpack
 
-### 蜜脾产出
+### Honeycomb Production
 
-万象创世蜜蜂会随机产出整合包内已注册的其他资源蜜蜂的蜜脾，每次产出都会从可用类型中随机选择。
+The Myriad Creations Bee randomly produces honeycombs from other registered resource bees in the modpack, selecting randomly from available types each time.
 
-## 配置
+## Configuration
 
-模组目前没有提供配置文件，所有行为通过蜜蜂JSON配置文件定义。
+Currently, the mod does not provide a configuration file. All behaviors are defined through bee JSON configuration files.
 
-## 兼容性
+## Compatibility
 
-- Minecraft 版本：1.21.1
-- 加载器：NeoForge
-- 前置模组：Productive Bees 1.21.0+
+- Minecraft Version: 1.21.1
+- Loader: NeoForge
+- Dependency: Productive Bees 1.21.0+
 
-## 问题反馈
+## Support
 
-如果遇到问题或有功能建议，请通过以下方式联系：
+If you encounter issues or have feature suggestions, please contact us through:
 
 - GitHub Issues: https://github.com/Ayoshiko/productive-bees-genesis/issues
 
-## 许可证
+## License
 
-本项目采用 MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## 致谢
+## Acknowledgments
 
-- Productive Bees 模组团队
-- NeoForge 开发团队
+- Productive Bees mod team
+- NeoForge development team
