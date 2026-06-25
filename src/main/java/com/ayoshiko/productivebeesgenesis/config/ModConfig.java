@@ -238,7 +238,7 @@ public final class ModConfig {
                     .defineInRange("ejectDelay", 2, 0, 20);
 
             mekCentrifugeEjectDelayActive = builder
-                    .comment("输出槽仍有物品时(活动状态)的弹出延迟(tick)", "独立于ejectDelay, 仅在输出槽非空时使用", "推荐值: 1(0.05秒) - 最大化高产出场景吞吐", "最小值0表示每tick弹出(高负载)", "最大值20(1秒)")
+                    .comment("输出槽仍有物品时(活动状态)的弹出延迟(tick)", "独立于ejectDelay, 仅在输出槽非空时使用", "推荐值: 1(0.05秒) - 最大化高产出场景吞吐", "最小值0表示每tick弹出(高负载)", "最大值20(1秒)", "注意: 运行时会被自动限制为不超过ejectDelay, 避免活动延迟大于空闲延迟的反直觉组合")
                     .defineInRange("ejectDelayActive", 1, 0, 20);
 
             mekCentrifugeFluidTankCapacity = builder

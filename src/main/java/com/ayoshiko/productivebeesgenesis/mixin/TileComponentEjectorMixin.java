@@ -54,10 +54,12 @@ public class TileComponentEjectorMixin {
             var tile = accessor.productivebeesgenesis$getTile();
             if (tile == null) return;
             if (tile instanceof IMekCentrifugeTile) {
+                int idleDelay = ModConfig.COMMON.mekCentrifugeEjectDelay.get();
+                int activeDelay = ModConfig.COMMON.mekCentrifugeEjectDelayActive.get();
+                // 约束：活动延迟不应超过空闲延迟，避免 active > idle 的反直觉组合
+                activeDelay = Math.min(activeDelay, idleDelay);
                 // 输出槽仍有物品时（活动状态）使用active延迟配置，否则使用空闲延迟配置
-                int delay = productivebeesgenesis$hasOutputItems(tile)
-                        ? ModConfig.COMMON.mekCentrifugeEjectDelayActive.get()
-                        : ModConfig.COMMON.mekCentrifugeEjectDelay.get();
+                int delay = productivebeesgenesis$hasOutputItems(tile) ? activeDelay : idleDelay;
                 accessor.productivebeesgenesis$setTickDelay(delay);
             }
         }
