@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-A Productive Bees addon mod that adds the Myriad Creations Bee and Infinity Creation Bee, capable of producing any resource honeycomb from bees available in the modpack, with deep Mekanism centrifuge integration and cosmic rendering effects.
+A Productive Bees addon mod that adds the Myriad Creations Bee, capable of producing any resource honeycomb from bees available in the modpack, with deep Mekanism centrifuge integration and cosmic rendering effects. The Myriad Creations Honeycomb and Honeycomb Block now feature a starfield texture effect (mapped from the Infinity Creation Honeycomb via a BakedModel wrapper).
 
 ## 🌐 Languages
 - [English](README.md)
@@ -11,7 +11,7 @@ A Productive Bees addon mod that adds the Myriad Creations Bee and Infinity Crea
 ### Bees
 
 - **Myriad Creations Bee**: Smooth rainbow color gradient (8-second cycle via Mixin override of PB's 1.25s default) with colorful particle effects. Produces random honeycombs from all other resource bees.
-- **Infinity Creation Bee**: Higher-tier bee with cosmic starfield rendering (same shader as Infinity Sword). Produces Infinity Creation Honeycomb that transforms into random honeycombs. When in a hive with Omega upgrade, produces Infinity Creation Honeycomb Blocks instead.
+- **Starfield Honeycomb Texture**: The Myriad Creations Honeycomb and Honeycomb Block now use a starfield texture effect (mapped from the `infinitycreation_comb` texture via a BakedModel wrapper), while retaining all original functionality (centrifuge processing, random comb transformation).
 
 ### Mekanism Centrifuge Integration
 
@@ -22,7 +22,7 @@ A Productive Bees addon mod that adds the Myriad Creations Bee and Infinity Crea
   - EME: Absolute Overclocked, Supreme Quantum, Cosmic Dense, Infinite Multiversal
 - **Smart Recipe Processing**: SMELTING recipes take priority; PB CentrifugeRecipe processed independently with linear output scaling
 - **Output Safety**: Output slots merge identical stacks; centrifuge pauses when full to prevent energy waste
-- **Omega Upgrade Support**: Infinity Creation Bee produces honeycomb blocks instead of honeycombs when hive has Omega upgrade
+- **Ejection Speed Optimization**: All Mek centrifuge types (basic machine, Mekanism factories, ME factories, EME factories) use optimized ejection delay (configurable, default 1-2 ticks vs vanilla 10 ticks) for faster output transfer to adjacent containers
 
 ### Cosmic Rendering System
 
@@ -31,12 +31,13 @@ A Productive Bees addon mod that adds the Myriad Creations Bee and Infinity Crea
 - Halo rendering with blend/depth state management
 - Deferred rendering queue for Iris shader pack compatibility
 - Thread-safe render queue with size limits and exception-safe cleanup
+- **Starfield Texture Reuse**: The Myriad Creations Honeycomb and Honeycomb Block reuse the Infinity Creation Honeycomb's starfield rendering effect via a BakedModel wrapper, applying the cosmic visual to the production chain
 
 ### Configuration System
 
 - **Client Config**: Performance monitor toggle, bee filter UI settings
 - **Common Config**: Myriad Creations Bee attributes (appearance, pollination, PB attributes, basic attributes, breeding, environment)
-- **Server Config**: Bee type filtering (blacklist/whitelist), Infinity Creation settings, Mek centrifuge parameters
+- **Server Config**: Bee type filtering (blacklist/whitelist), Mek centrifuge parameters (including ejection delay for active/empty states)
 
 ### Bee Filter Configuration UI
 
@@ -91,17 +92,9 @@ The Myriad Creations Bee is a rare bee that can be obtained through:
 - Using Productive Bees' hive upgrade system
 - Configuring specific spawn conditions in your modpack
 
-### Infinity Creation Bee
-
-The Infinity Creation Bee is the highest-tier bee with cosmic appearance. Obtained through:
-
-- Advanced hive upgrades
-- Modpack-specific configuration
-
 ### Honeycomb Production
 
 - **Myriad Creations Bee**: Randomly produces honeycombs from other registered resource bees
-- **Infinity Creation Bee**: Produces Infinity Creation Honeycomb (or Honeycomb Blocks with Omega upgrade) that transforms into random honeycombs via centrifuge
 
 ## Configuration
 
@@ -114,7 +107,7 @@ The mod provides an in-game configuration interface accessible through the mod m
 - **Breeding**: Breeding item, breeding item count, self-breeding
 - **Environment**: Waterproof, fireproof
 - **Bee Filtering**: Blacklist/whitelist mode, filtered bee types list
-- **Mek Centrifuge**: Fluid tank capacity, eject delay, processing parameters
+- **Mek Centrifuge**: Fluid tank capacity, ejection delay (active/empty states), processing parameters
 
 ### Accessing Configuration
 
@@ -167,7 +160,7 @@ The configuration interface supports multiple languages (English/Chinese) and au
 
 ### Key Abstractions
 
-- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler` and `InfinityCreationEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic
+- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic
 - **`AbstractBakedModelCosmic`**: Base class for `BakedModelCosmic` and `BakedModelHell`, extracting cosmic render pipeline (shader uniforms, mask sprites, Iris defer)
 - **`CentrifugeMixinHelper`**: Utility class extracting common logic from 6 centrifuge Mixin classes (canOperate check, canProcessRecipe check, completeRecipeProcessing append)
 - **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent, preventing crashes
@@ -185,7 +178,7 @@ The configuration interface supports multiple languages (English/Chinese) and au
 
 ### Mixin Naming Convention
 
-All Mixin methods and fields use the `productivebeesgenesis$` prefix (e.g., `productivebeesgenesis$onInit`, `productivebeesgenesis$getProductivityModifier`). Infinity-system methods use `productivebeesgenesis$infinity$` prefix to coexist with Myriad-system methods on the same target class.
+All Mixin methods and fields use the `productivebeesgenesis$` prefix (e.g., `productivebeesgenesis$onInit`, `productivebeesgenesis$getProductivityModifier`).
 
 ## Support
 

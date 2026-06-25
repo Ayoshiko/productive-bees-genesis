@@ -1,8 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.component.config.ConfigInfo;
@@ -21,13 +20,20 @@ import java.util.List;
  * Mekanism原版硬编码tickDelay=10（半秒），导致多种物品输出时弹出缓慢。
  * 此Mixin在outputItems方法末尾注入，对MEK离心机使用配置的更小延迟值。
  * <p>
- * 优化策略：
- * - 输出槽仍有物品时：tickDelay=1（每tick弹出一次，最大化弹出吞吐）
- * - 输出槽已空时：tickDelay=配置值（默认2，节省服务器资源）
+ * 覆盖范围：通过 {@link IMekCentrifugeTile} 标记接口统一识别以下4种离心机：
+ * - TileEntityMekCentrifuge（原版基础离心机）
+ * - TileEntityMekCentrifugeFactory（原版工厂离心机）
+ * - TileEntityExtraMekCentrifugeFactory（ME扩展工厂离心机）
+ * - TileEntityEMExtraMekCentrifugeFactory（EME扩展工厂离心机）
+ * 使用标记接口避免对可选模组类的硬依赖，防止ClassNotFoundException。
+ * <p>
+ * 优化策略（活动/空闲双配置项）：
+ * - 输出槽仍有物品时（活动状态）：使用 mekCentrifugeEjectDelayActive（默认1，最大化弹出吞吐）
+ * - 输出槽已空时（空闲状态）：使用 mekCentrifugeEjectDelay（默认2，节省服务器资源）
  * <p>
  * 原理：
- * - outputItems()执行完毕后设置tickDelay=MekanismUtils.TICKS_PER_HALF_SECOND（10）
- * - 此Mixin在outputItems()返回前拦截，检查关联的tile是否为MEK离心机
+ * - outputItems()执行完毕后Mekanism会设置tickDelay=TICKS_PER_HALF_SECOND(10)
+ * - 此Mixin在outputItems()返回前拦截，通过标记接口判断tile是否为MEK离心机
  * - 如果是MEK离心机，根据输出槽状态动态设置tickDelay
  * - 非MEK离心机保持原版行为（10 tick延迟）
  */
@@ -37,8 +43,8 @@ public class TileComponentEjectorMixin {
     /**
      * 在outputItems方法末尾注入，对MEK离心机使用动态延迟值
      * <br/>
-     * 输出槽仍有物品时设为1tick（最大化弹出速度），
-     * 输出槽已空时设为配置值（减少无效tick开销）。
+     * 输出槽仍有物品时（活动状态）使用 mekCentrifugeEjectDelayActive 配置（默认1，最大化弹出速度），
+     * 输出槽已空时使用 mekCentrifugeEjectDelay 配置（减少无效tick开销）。
      */
     @Inject(method = "outputItems(Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V",
             at = @At("RETURN"),
@@ -47,10 +53,10 @@ public class TileComponentEjectorMixin {
         if (((Object) this) instanceof com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor accessor) {
             var tile = accessor.productivebeesgenesis$getTile();
             if (tile == null) return;
-            if (tile instanceof TileEntityMekCentrifuge || tile instanceof TileEntityMekCentrifugeFactory) {
-                // 输出槽仍有物品时用1tick延迟（最大化弹出速度），否则用配置值
+            if (tile instanceof IMekCentrifugeTile) {
+                // 输出槽仍有物品时（活动状态）使用active延迟配置，否则使用空闲延迟配置
                 int delay = productivebeesgenesis$hasOutputItems(tile)
-                        ? 1
+                        ? ModConfig.COMMON.mekCentrifugeEjectDelayActive.get()
                         : ModConfig.COMMON.mekCentrifugeEjectDelay.get();
                 accessor.productivebeesgenesis$setTickDelay(delay);
             }

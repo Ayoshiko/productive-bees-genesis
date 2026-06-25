@@ -8,7 +8,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.ayoshiko.productivebeesgenesis.InfinityCreationEventHandler;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 
@@ -43,8 +42,7 @@ public class BeeHelperMixin {
 			if (!(beeEntity instanceof ConfigurableBee configurableBee)) return;
 			ResourceLocation beeType = configurableBee.getBeeType();
 			boolean isMyriad = MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE.equals(beeType);
-			boolean isInfinity = InfinityCreationEventHandler.INFINITY_CREATION_TYPE.equals(beeType);
-			if (!isMyriad && !isInfinity) return;
+			if (!isMyriad) return;
 
 			List<ItemStack> originalOutput = new ArrayList<>(cir.getReturnValue());
 			List<ItemStack> enhancedOutput = new ArrayList<>();
@@ -54,12 +52,6 @@ public class BeeHelperMixin {
 				if (isMyriad && hasCombBlockUpgrade && MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(stack)) {
 					// Omega升级时将万象创世蜜脾转换为随机蜜脾块
 					enhancedOutput.add(MyriadCreationsEventHandler.getRandomCombBlock());
-				} else if (isInfinity && hasCombBlockUpgrade && InfinityCreationEventHandler.isInfinityCreationHoneycomb(stack)) {
-					// Omega升级时将无尽·创世蜜脾转换为无尽·创世蜜脾块（保持数量）
-					ItemStack blockStack = new ItemStack(
-							com.ayoshiko.productivebeesgenesis.init.ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get(),
-							stack.getCount());
-					enhancedOutput.add(blockStack);
 				} else {
 					enhancedOutput.add(stack);
 				}

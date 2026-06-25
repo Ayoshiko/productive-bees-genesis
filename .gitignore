@@ -12,6 +12,7 @@ build/
 .settings/
 .project
 .classpath
+.eclipse/
 
 # Minecraft
 run/

@@ -6,7 +6,7 @@
  *   <li>render/cosmic/ — 宇宙星空着色器渲染系统</li>
  *   <li>screen/ — 配置界面和Mek离心机GUI</li>
  *   <li>jei/ — JEI配方查看器集成</li>
- *   <li>InfinityCreationClientEventHandler / MyriadCreationsClientEventHandler — 客户端事件处理</li>
+ *   <li>MyriadCreationsClientEventHandler — 客户端事件处理</li>
  * </ul>
  * <p>
  * 注意：此包下的代码仅在客户端加载，不包含服务端逻辑。

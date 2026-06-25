@@ -163,6 +163,8 @@
   "productivebeesgenesis.configuration.autoEject.tooltip": "默认启用自动弹出输出",
   "productivebeesgenesis.configuration.ejectDelay": "弹出延迟（tick）",
   "productivebeesgenesis.configuration.ejectDelay.tooltip": "输出槽自动弹出延迟。原版Mekanism=10（0.5秒）。值越小弹出越快，服务器负载越高。推荐：2（0.1秒）",
+  "productivebeesgenesis.configuration.ejectDelayActive": "活动弹出延迟（tick）",
+  "productivebeesgenesis.configuration.ejectDelayActive.tooltip": "输出槽仍有物品时（活动状态）的弹出延迟。默认1（0.05秒），适用于高产出场景。值越小弹出越快，服务器负载越高。",
   "productivebeesgenesis.configuration.energyPerTick": "每tick能量消耗",
   "productivebeesgenesis.configuration.energyPerTick.tooltip": "每个处理槽每tick的能量消耗（FE）",
   "productivebeesgenesis.configuration.mek_port_visualization": "端口可视化",
@@ -273,7 +275,6 @@
 
   "itemGroup.productivebeesgenesis": "MEK离心机",
 
-  "entity.productivebees.infinitycreation_bee": "无尽·创世",
   "item.productivebeesgenesis.infinitycreation_comb": "无尽·创世蜜脾",
   "item.productivebeesgenesis.infinity_sword_replica": "寰宇支配之剑（验证）",
   "tooltip.productivebeesgenesis.sword_kill_mode.active": "杀戮模式：已激活",

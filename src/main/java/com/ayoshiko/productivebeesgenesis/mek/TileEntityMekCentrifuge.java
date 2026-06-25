@@ -72,7 +72,7 @@ import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
  * 额外添加2个副输出槽+FluidTank，支持PB配方的多物品和流体输出。
  * 通过Accessor Mixin访问父类的包私有字段（inputSlot/outputSlot/energySlot/energyContainer）。
  */
-public class TileEntityMekCentrifuge extends TileEntityElectricMachine {
+public class TileEntityMekCentrifuge extends TileEntityElectricMachine implements IMekCentrifugeTile {
 
     /** PB离心配方类型 */
     private static final RecipeType<CentrifugeRecipe> CENTRIFUGE_RECIPE_TYPE = ModRecipeTypes.CENTRIFUGE_TYPE.get();

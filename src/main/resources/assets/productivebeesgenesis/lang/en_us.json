@@ -164,6 +164,8 @@
   "productivebeesgenesis.configuration.autoEject.tooltip": "Auto-eject outputs by default",
   "productivebeesgenesis.configuration.ejectDelay": "Eject Delay (ticks)",
   "productivebeesgenesis.configuration.ejectDelay.tooltip": "Output slot auto-eject delay. Vanilla Mekanism=10 (0.5s). Lower=faster ejection, higher server load. Recommended: 2 (0.1s)",
+  "productivebeesgenesis.configuration.ejectDelayActive": "Active Eject Delay (ticks)",
+  "productivebeesgenesis.configuration.ejectDelayActive.tooltip": "Eject delay when output slots still contain items (active state). Default 1 (0.05s) for high-throughput scenarios. Lower=faster ejection, higher server load.",
   "productivebeesgenesis.configuration.energyPerTick": "Energy Per Tick",
   "productivebeesgenesis.configuration.energyPerTick.tooltip": "Energy consumption per tick per process (FE)",
   "productivebeesgenesis.configuration.mek_port_visualization": "Port Visualization",
@@ -274,7 +276,6 @@
 
   "itemGroup.productivebeesgenesis": "MEK Centrifuge",
 
-  "entity.productivebees.infinitycreation_bee": "Infinity Creation",
   "item.productivebeesgenesis.infinitycreation_comb": "Infinity Creation Comb",
   "item.productivebeesgenesis.infinity_sword_replica": "Infinity Sword Replica",
   "tooltip.productivebeesgenesis.sword_kill_mode.active": "Kill Mode: Active",

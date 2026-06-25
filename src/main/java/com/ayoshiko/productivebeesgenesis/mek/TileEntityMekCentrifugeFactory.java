@@ -66,7 +66,7 @@ import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccess
  * PB配方处理逻辑委托给 {@link PbRecipeProcessor}，通过实现 {@link PbRecipeContext} 提供依赖。
  */
 public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<ItemStackToItemStackRecipe>
-        implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, PbRecipeContext {
+        implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, PbRecipeContext, IMekCentrifugeTile {
 
     /** 副输出槽2 — 每进程第3个物品输出槽（ProcessInfo只支持1个secondary，第3个单独管理） */
     private OutputInventorySlot[] tertiaryOutputSlots;

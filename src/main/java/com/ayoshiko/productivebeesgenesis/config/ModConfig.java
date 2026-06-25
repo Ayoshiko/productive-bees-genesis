@@ -132,6 +132,7 @@ public final class ModConfig {
         public final ModConfigSpec.BooleanValue mekCentrifugeAutoEject;
         public final ModConfigSpec.BooleanValue mekCentrifugeChemicalOutput;
         public final ModConfigSpec.IntValue mekCentrifugeEjectDelay;
+        public final ModConfigSpec.IntValue mekCentrifugeEjectDelayActive;
         public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
         public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
         public final ModConfigSpec.BooleanValue enablePerformanceMonitor;
@@ -235,6 +236,10 @@ public final class ModConfig {
             mekCentrifugeEjectDelay = builder
                     .comment("输出槽自动弹出延迟(tick)", "原版Mekanism为10(0.5秒)", "减小值可加快多种物品弹出速度", "推荐值: 2(0.1秒) - 平衡性能与响应速度", "最小值0表示每tick弹出(高负载)", "最大值20(1秒)")
                     .defineInRange("ejectDelay", 2, 0, 20);
+
+            mekCentrifugeEjectDelayActive = builder
+                    .comment("输出槽仍有物品时(活动状态)的弹出延迟(tick)", "独立于ejectDelay, 仅在输出槽非空时使用", "推荐值: 1(0.05秒) - 最大化高产出场景吞吐", "最小值0表示每tick弹出(高负载)", "最大值20(1秒)")
+                    .defineInRange("ejectDelayActive", 1, 0, 20);
 
             mekCentrifugeFluidTankCapacity = builder
                     .comment("流体输出罐基础容量(mB)", "工厂版会按并行数倍增此值")

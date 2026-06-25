@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-资源蜜蜂模组的附属模组，添加了万象创世蜜蜂和无尽·创世蜜蜂，可以产出整合包中所有资源蜜蜂的蜜脾，并深度集成Mekanism离心机和宇宙星空渲染效果。
+资源蜜蜂模组的附属模组，添加了万象创世蜜蜂，可以产出整合包中所有资源蜜蜂的蜜脾，并深度集成Mekanism离心机和宇宙星空渲染效果。万象创世蜜脾/蜜脾块现在拥有星空材质特效（从无尽·创世蜜脾映射而来）。
 
 ## 🌐 语言
 - [English](README.md)
@@ -11,7 +11,7 @@
 ### 蜜蜂
 
 - **万象创世蜜蜂**：通过Mixin覆盖PB默认1.25秒色彩循环，实现8秒慢速彩虹渐变，配有多色粒子特效。可随机产出整合包内所有其他资源蜜蜂的蜜脾。
-- **无尽·创世蜜蜂**：高阶蜜蜂，拥有宇宙星空渲染效果（与无尽之剑相同的着色器）。产出无尽·创世蜜脾，可转化为随机蜜脾。在拥有Omega升级的蜂巢中，产出无尽·创世蜜脾块而非普通蜜脾。
+- **万象创世蜜脾/蜜脾块星空材质**：万象创世蜜脾和蜜脾块现在使用星空材质特效，通过BakedModel包装器从无尽·创世蜜脾映射而来。保留所有原有功能（离心机处理、随机转化等），仅替换视觉效果。
 
 ### Mekanism 离心机集成
 
@@ -22,7 +22,7 @@
   - EME：绝对超频、至尊量子、宇宙密集、无限多元宇宙
 - **智能配方处理**：SMELTING配方优先；PB CentrifugeRecipe独立处理，输出线性缩放
 - **输出安全**：输出槽合并相同堆叠；离心机满槽时暂停，避免空耗能量
-- **Omega升级支持**：无尽·创世蜜蜂在拥有Omega升级的蜂巢中产出蜜脾块而非蜜脾
+- **弹出速度优化**：所有Mek离心机类型（基础机器、Mekanism工厂、ME工厂、EME工厂）使用优化的弹出延迟（可配置，默认1~2 tick，原版为10 tick），更快地将产物转移到相邻容器
 
 ### 宇宙渲染系统
 
@@ -31,12 +31,13 @@
 - Halo光晕渲染，正确管理blend/depth状态
 - Iris光影包兼容的延迟渲染队列
 - 线程安全渲染队列，带大小限制和异常安全清理
+- **万象创世蜜脾/蜜脾块**：通过BakedModel包装器复用无尽·创世蜜脾的星空渲染效果，实现材质替换
 
 ### 配置系统
 
 - **客户端配置**：性能监控开关、蜜蜂过滤UI设置
 - **通用配置**：万象创世蜜蜂属性（外观、授粉、PB属性、基础属性、繁殖、环境）
-- **服务端配置**：蜜蜂类型过滤（黑名单/白名单）、无尽·创世设置、Mek离心机参数
+- **服务端配置**：蜜蜂类型过滤（黑名单/白名单）、Mek离心机参数（含弹出延迟活动/空闲）、Mek离心机弹出延迟（活动/空闲）
 
 ### 蜜蜂过滤配置界面
 
@@ -91,17 +92,9 @@
 - 使用资源蜜蜂的蜂巢升级系统
 - 在整合包中配置特定的生成条件
 
-### 无尽·创世蜜蜂
-
-无尽·创世蜜蜂是最高阶蜜蜂，拥有宇宙外观。获取方式：
-
-- 高级蜂巢升级
-- 整合包特定配置
-
 ### 蜜脾产出
 
 - **万象创世蜜蜂**：随机产出整合包内已注册的其他资源蜜蜂的蜜脾
-- **无尽·创世蜜蜂**：产出无尽·创世蜜脾（或拥有Omega升级时产出蜜脾块），通过离心机转化为随机蜜脾
 
 ## 配置
 
@@ -167,7 +160,7 @@
 
 ### 关键抽象
 
-- **`AbstractCombEventHandler`**：`MyriadCreationsEventHandler` 和 `InfinityCreationEventHandler` 的基类，提取公共的蜜蜂类型缓存、随机蜜脾生成和离心机拦截逻辑
+- **`AbstractCombEventHandler`**：`MyriadCreationsEventHandler` 的基类，提取公共的蜜蜂类型缓存、随机蜜脾生成和离心机拦截逻辑
 - **`AbstractBakedModelCosmic`**：`BakedModelCosmic` 和 `BakedModelHell` 的基类，提取宇宙渲染管线（着色器uniform、mask精灵、Iris延迟）
 - **`CentrifugeMixinHelper`**：工具类，从6个离心机Mixin中提取公共逻辑（canOperate检查、canProcessRecipe检查、completeRecipeProcessing追加）
 - **`MixinConfigPlugin`**：条件Mixin加载器 — 当ME/EME未安装时跳过相关Mixin，防止崩溃
@@ -185,7 +178,7 @@
 
 ### Mixin 命名规范
 
-所有Mixin方法和字段使用 `productivebeesgenesis$` 前缀（如 `productivebeesgenesis$onInit`、`productivebeesgenesis$getProductivityModifier`）。无尽体系方法使用 `productivebeesgenesis$infinity$` 前缀，以与万象体系方法在同一目标类上共存。
+所有Mixin方法和字段使用 `productivebeesgenesis$` 前缀（如 `productivebeesgenesis$onInit`、`productivebeesgenesis$getProductivityModifier`）。
 
 ## 问题反馈
 
