@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.ayoshiko.productivebeesgenesis.InfinityCreationEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeMixinHelper;
 
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;

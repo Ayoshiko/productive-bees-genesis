@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeMixinHelper;
 
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.PoweredCentrifugeBlockEntity;

@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.util;
 
 import java.util.function.Function;
 
@@ -26,6 +26,9 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  * </ol>
  * Mixin 类必须针对不同目标类独立定义，但方法体可委托给本工具类的静态方法，
  * 通过函数式参数注入差异化的 EventHandler 调用，遵循 DRY 原则。
+ * <p>
+ * <b>注意</b>：本类必须放在 mixin 包之外（util 包），因为 Mixin 框架将 mixin 包下的
+ * 所有类视为 Mixin 类，不允许直接引用非 Mixin 类，否则抛出 IllegalClassLoadError。
  */
 public final class CentrifugeMixinHelper {
 
@@ -34,9 +37,6 @@ public final class CentrifugeMixinHelper {
 
 	/**
 	 * canOperate RETURN 检查：输出满时阻止机器启动
-	 * <p>
-	 * 用于修复 PB 原版空转耗能问题：canOperate 返回 true 但输出槽已满时，
-	 * 机器仍会消耗能量但不产出，本方法拦截此种情况。
 	 *
 	 * @param cir         回调信息
 	 * @param entity      离心机实例（Mixin this 强转）
@@ -70,12 +70,6 @@ public final class CentrifugeMixinHelper {
 
 	/**
 	 * completeRecipeProcessing TAIL 追加随机蜜脾产出
-	 * <p>
-	 * 通过函数式参数注入具体的 EventHandler.appendRandomCombs 调用，
-	 * 避免 MyriadCreations 和 InfinityCreation 两个体系重复 try-catch 与强转逻辑。
-	 * <p>
-	 * PB 内部流程：3 参数版 completeRecipeProcessing → 计算 modifier → 调用 5 参数版 → 产出×modifier。
-	 * 本方法在 3 参数版 TAIL 注入，通过 accessor 获取 modifier。
 	 *
 	 * @param invHandler   物品处理器
 	 * @param random       随机源
@@ -98,9 +92,7 @@ public final class CentrifugeMixinHelper {
 		}
 	}
 
-	/**
-	 * 四参数消费者接口（Java 标准库未提供 QuadConsumer）
-	 */
+	/** 四参数消费者接口 */
 	@FunctionalInterface
 	public interface QuadConsumer<T, U, V, W> {
 		void accept(T t, U u, V v, W w);
