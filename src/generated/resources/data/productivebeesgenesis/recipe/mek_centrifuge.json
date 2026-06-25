@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "B": {
+      "tag": "c:circuits/basic"
+    },
+    "C": {
+      "item": "productivebees:powered_centrifuge"
+    },
+    "I": {
+      "tag": "c:ingots/steel"
+    },
+    "R": {
+      "tag": "c:dusts/redstone"
+    }
+  },
+  "pattern": [
+    "RBR",
+    "ICI",
+    "RBR"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:mek_centrifuge"
+  }
+}

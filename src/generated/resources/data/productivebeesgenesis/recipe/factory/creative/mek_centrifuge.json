@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "evolvedmekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "evolvedmekanism:alloys/creative"
+    },
+    "C": {
+      "tag": "c:circuits/creative"
+    },
+    "I": {
+      "item": "minecraft:nether_star"
+    },
+    "P": {
+      "item": "productivebeesgenesis:multiversal_mek_centrifuge_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:creative_mek_centrifuge_factory"
+  }
+}

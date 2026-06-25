@@ -1,0 +1,6 @@
+{
+  "parent": "productivebeesgenesis:block/mekanism_centrifuge",
+  "textures": {
+    "front": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_f_active"
+  }
+}

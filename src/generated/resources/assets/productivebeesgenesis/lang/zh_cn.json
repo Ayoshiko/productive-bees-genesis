@@ -1,0 +1,17 @@
+{
+  "gui.productivebeesgenesis.energy_per_tick": "能量: %d FE/t",
+  "gui.productivebeesgenesis.mek_centrifuge_recipes": "MEK离心机配方",
+  "gui.productivebeesgenesis.processing_time": "时间: %dt",
+  "itemGroup.productivebeesgenesis": "MEK离心机",
+  "productivebeesgenesis.configuration.chemicalOutput": "化学品输出",
+  "productivebeesgenesis.configuration.chemicalOutput.tooltip": "启用化学品副产物输出",
+  "productivebeesgenesis.configuration.energyPerTick": "每tick能量消耗",
+  "productivebeesgenesis.configuration.energyPerTick.tooltip": "每个处理槽每tick的能量消耗（FE）",
+  "productivebeesgenesis.configuration.mek_centrifuge": "MEK离心机",
+  "productivebeesgenesis.configuration.mek_centrifuge.button": "MEK离心机",
+  "productivebeesgenesis.configuration.mek_centrifuge.tooltip": "MEK离心机设置",
+  "productivebeesgenesis.configuration.processingTime": "处理时间（tick）",
+  "productivebeesgenesis.configuration.processingTime.tooltip": "每次操作的基础处理时间（tick）",
+  "productivebeesgenesis.configuration.section.productivebeesgenesis.common.toml": "MEK离心机设置",
+  "productivebeesgenesis.configuration.section.productivebeesgenesis.common.toml.title": "MEK离心机配置"
+}

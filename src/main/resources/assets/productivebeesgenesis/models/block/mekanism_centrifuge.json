@@ -1,0 +1,12 @@
+{
+  "parent": "mekanism:block/machine",
+  "textures": {
+    "sides": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_s1",
+    "front": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_f",
+    "west": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_s2",
+    "east": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_s1",
+    "south": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_ba",
+    "up": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_t",
+    "down": "productivebeesgenesis:block/mekanism_centrifuge/honey_mixer/honey_mixer_b"
+  }
+}

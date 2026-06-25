@@ -1,0 +1,21 @@
+{
+  "parent": "productivebeesgenesis:process_item",
+  "display": {
+    "icon": { "item": "productivebeesgenesis:ultimate_mek_centrifuge_factory" },
+    "title": { "translate": "advancement.productivebeesgenesis.ultimate_centrifuge" },
+    "description": { "translate": "advancement.productivebeesgenesis.ultimate_centrifuge.desc" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "has_ultimate_mek_centrifuge": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "items": ["productivebeesgenesis:ultimate_mek_centrifuge_factory"] }
+        ]
+      }
+    }
+  }
+}

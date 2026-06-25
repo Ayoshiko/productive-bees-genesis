@@ -1,0 +1,35 @@
+{
+  "required": true,
+  "package": "com.ayoshiko.productivebeesgenesis.mixin",
+  "plugin": "com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "accessor.CentrifugeBlockEntityAccessor",
+    "accessor.TileEntityElectricMachineAccessor",
+    "accessor.TileEntityEjectorAccessor",
+    "accessor.TileEntityExtraFactoryAccessor",
+    "accessor.TileEntityEMExtraFactoryAccessor",
+    "accessor.TileEntityFactoryAccessor",
+    "BeeConfigReloadMixin",
+    "BeeHelperMixin",
+    "CentrifugeBlockEntityMixin",
+    "HeatedCentrifugeBlockEntityMixin",
+    "InfinityCentrifugeBlockEntityMixin",
+    "InfinityHeatedCentrifugeBlockEntityMixin",
+    "InfinityPoweredCentrifugeBlockEntityMixin",
+    "MixinExtraFactory",
+    "MixinExtraFactoryForEME",
+    "MixinFactoryForME",
+    "MixinEMExtraFactory",
+    "PoweredCentrifugeBlockEntityMixin",
+    "TileComponentEjectorMixin"
+  ],
+  "client": [
+    "ConfigurableBeeColorMixin",
+    "CosmicItemRendererMixin",
+    "InfinityCreationColorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

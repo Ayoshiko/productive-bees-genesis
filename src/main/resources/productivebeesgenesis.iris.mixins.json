@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "com.ayoshiko.productivebeesgenesis.mixin.iris",
+	"compatibilityLevel": "JAVA_21",
+	"plugin": "com.ayoshiko.productivebeesgenesis.mixin.iris.IrisConfigPlugin",
+	"refmap": "mixins.productivebeesgenesis.refmap.json",
+	"mixins": [
+		"MixinShaderInstance"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"minVersion": "0.8",
+	"target": "@env(DEFAULT)"
+}

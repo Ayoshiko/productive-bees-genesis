@@ -1,0 +1,14 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "productivebees:infinitycreation",
+  "results": [
+    {
+      "item": {
+        "item": "productivebeesgenesis:infinitycreation_comb",
+        "components": {
+          "productivebees:bee_type": "productivebees:infinitycreation"
+        }
+      }
+    }
+  ]
+}

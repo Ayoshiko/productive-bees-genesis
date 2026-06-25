@@ -1,0 +1,21 @@
+{
+  "parent": "productivebeesgenesis:root",
+  "display": {
+    "icon": { "item": "productivebeesgenesis:mek_centrifuge" },
+    "title": { "translate": "advancement.productivebeesgenesis.mek_centrifuge" },
+    "description": { "translate": "advancement.productivebeesgenesis.mek_centrifuge.desc" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "has_basic_mek_centrifuge": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "items": ["productivebeesgenesis:mek_centrifuge"] }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+	"parent": "minecraft:item/handheld",
+	"textures": {
+		"layer0": "productivebeesgenesis:item/infinitycreation_comb_layer_0",
+		"layer1": "productivebeesgenesis:item/infinitycreation_comb_layer_1"
+	},
+	"loader": "productivebeesgenesis:cosmic",
+	"cosmic": {
+		"mask": [
+			"productivebeesgenesis:item/infinitycreation_comb_mask"
+		]
+	}
+}

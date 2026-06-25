@@ -1,0 +1,11 @@
+{
+	"parent": "minecraft:item/handheld",
+	"textures": {
+		"layer0": "productivebeesgenesis:item/infinity_sword_replica_layer_0",
+		"layer1": "productivebeesgenesis:item/infinity_sword_replica_layer_1"
+	},
+	"loader": "productivebeesgenesis:hell",
+	"hell": {
+		"mask": "productivebeesgenesis:item/infinity_sword_replica_mask"
+	}
+}

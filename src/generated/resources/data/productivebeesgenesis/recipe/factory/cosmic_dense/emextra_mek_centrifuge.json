@@ -1,0 +1,52 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:and",
+      "values": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "emextras"
+        },
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "mekanism_extras"
+        },
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "evolvedmekanism"
+        }
+      ]
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/shining"
+    },
+    "C": {
+      "tag": "c:circuits/cosmic_dense"
+    },
+    "P": {
+      "item": "productivebeesgenesis:cosmic_extra_mek_centrifuge_factory"
+    },
+    "Q": {
+      "item": "productivebeesgenesis:dense_mek_centrifuge_factory"
+    },
+    "T": {
+      "tag": "evolvedmekanism:alloys/singular"
+    },
+    "X": {
+      "item": "mekanism:steel_casing"
+    }
+  },
+  "pattern": [
+    "ACT",
+    "PXQ",
+    "TCA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:cosmic_dense_emextra_mek_centrifuge_factory"
+  }
+}

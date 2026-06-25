@@ -1,0 +1,162 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.107'
+}
+
+version = mod_version
+group = mod_group_id
+
+repositories {
+    mavenLocal()
+    maven {
+        url "https://www.cursemaven.com"
+    }
+    maven {
+        url "https://spongepowered.org/maven/"
+    }
+    maven {
+        url "https://modmaven.dev/mekanism/Mekanism/"
+    }
+    // Modrinth Maven — 用于获取 Iris 光影模组编译时依赖
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+    flatDir {
+        dir 'libs'
+    }
+}
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            data()
+            programArgument '--mod'
+            programArgument project.mod_id
+            programArgument '--all'
+            programArgument '--output'
+            programArgument file('src/generated/resources').absolutePath
+            programArgument '--existing'
+            programArgument file('src/main/resources').absolutePath
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// 模板文件处理 - 生成模组元数据
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+sourceSets.main.resources.srcDir 'src/generated/resources'
+neoForge.ideSyncTask generateModMetadata
+
+dependencies {
+    implementation name: 'productivebees-1.21.1-13.13.5'
+    implementation name: 'productivelib-1.21.1-0.2.0'
+
+    // RenderBlender 渲染库：官方仅支持 1.20.1，不兼容 1.21.1
+    // cosmic 渲染特效将采用自研 shader 方案实现，无需外部依赖
+
+    // Mekanism完整类路径（开发时需要访问Mekanism内部类，如GUI基类、槽位等）
+    implementation name: 'Mekanism-1.21.1-10.7.19.85'
+
+    // Mekanism本体（运行时依赖，用于游戏测试环境）
+    runtimeOnly name: 'Mekanism-1.21.1-10.7.19.85'
+
+    // Mekanism Extras（可选依赖，编译时需要访问ME的ExtraFactory等类）
+    compileOnly name: 'mekanism_extras-1.21.1-1.4.0'
+    // ME本体（测试环境运行时依赖）
+    runtimeOnly name: 'mekanism_extras-1.21.1-1.4.0'
+
+    // EvolvedMekanism（可选依赖，编译时需要访问EM的FactoryTier等类）
+    compileOnly name: 'Evolved Mekanism-1.21.1-1.2.1-fix3'
+    // EM本体（测试环境运行时依赖）
+    runtimeOnly name: 'Evolved Mekanism-1.21.1-1.2.1-fix3'
+
+    // EvolvedMekanismExtras（可选依赖，编译时需要访问EME的EMExtraFactory等类）
+    compileOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
+    // EME本体（测试环境运行时依赖）
+    runtimeOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
+
+    // Mixin 编译时依赖（运行时由 NeoForge 提供）
+    compileOnly files('libs/sponge-mixin.jar')
+
+    // JEI API（仅编译时需要，运行时由JEI提供）
+    compileOnly files('libs/jei-1.21.1-neoforge-19.27.0.340.jar')
+    // JEI本体（测试环境运行时依赖）
+    runtimeOnly files('libs/jei-1.21.1-neoforge-19.27.0.340.jar')
+
+    // Iris 光影兼容（仅编译时需要，运行时由 Iris 提供）
+    // 用于编译 Iris Mixin 中引用的 net.irisshaders.iris.* 类
+    compileOnly("maven.modrinth:iris:1.8.8+1.21.1-neoforge")
+
+    // 单元测试依赖（JUnit 5）
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(ProcessResources).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// 单元测试配置 — 启用JUnit 5 Platform
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}

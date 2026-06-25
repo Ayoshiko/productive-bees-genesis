@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism:alloys/atomic"
+    },
+    "C": {
+      "tag": "c:circuits/ultimate"
+    },
+    "I": {
+      "tag": "c:gems/diamond"
+    },
+    "P": {
+      "item": "productivebeesgenesis:elite_mek_centrifuge_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:ultimate_mek_centrifuge_factory"
+  }
+}

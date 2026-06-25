@@ -1,0 +1,108 @@
+# 资源蜜蜂：创世模组配置文件
+# NeoForge 1.21.1 版本
+# 配置文件说明：
+#   - 主mod入口: ProductiveBeesGenesis (通用)
+#   - 客户端入口: ProductiveBeesGenesisClient (仅客户端，注册配置屏幕)
+
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="资源蜜蜂：创世"
+authors="${mod_authors}"
+description='''资源蜜蜂的附属模组，添加了万象创世蜜蜂，可以产出整合包中所有资源蜜蜂的蜜脾。
+
+特性：
+- 添加万象创世蜜蜂实体，拥有慢速彩虹渐变（8秒循环）和多色粒子特效
+- 随机产出任意蜜蜂的蜜脾
+- 完整的游戏内配置界面支持（中英文），可调节彩虹颜色、粒子密度等蜜蜂属性
+- 离心机空转拦截优化，提升性能'''
+
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+# Iris 光影兼容 Mixin 配置（仅当 Iris 已安装时由 IrisConfigPlugin 应用）
+[[mixins]]
+config="${mod_id}.iris.mixins.json"
+
+# 主mod入口（非客户端）
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[${neo_version},)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="productivebees"
+    type="required"
+    versionRange="[1.21.1-13.13.5,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Mekanism 必需依赖（MEK离心机基于Mekanism API）
+[[dependencies.${mod_id}]]
+    modId="mekanism"
+    type="required"
+    versionRange="[10.7.14.79,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# EvolvedMekanism 可选依赖（提供OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE高等级工厂）
+[[dependencies.${mod_id}]]
+    modId="evolvedmekanism"
+    type="optional"
+    versionRange="[1.2.1,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Mekanism Extras 可选依赖（提供ABSOLUTE/SUPREME/COSMIC/INFINITE等级，后续任务支持）
+[[dependencies.${mod_id}]]
+    modId="mekanism_extras"
+    type="optional"
+    versionRange="[1.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# EvolvedMekanismExtras 可选依赖（提供交叉等级，后续任务支持）
+[[dependencies.${mod_id}]]
+    modId="evolvedmekanism_extras"
+    type="optional"
+    versionRange="[1.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Mekanism Unleashed 可选依赖（扩展升级上限，支持每tick多次操作）
+[[dependencies.${mod_id}]]
+    modId="mekanism_unleashed"
+    type="optional"
+    versionRange="[0.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# RenderBlender 可选依赖（提供 cosmic 星空渲染和 glow_edge 发光边缘效果，仅客户端）
+[[dependencies.${mod_id}]]
+    modId="renderblender"
+    type="optional"
+    versionRange="[1.1.1,)"
+    ordering="AFTER"
+    side="CLIENT"
+
+# Iris 光影可选依赖（提供着色器兼容层，仅客户端）
+# IrisConfigPlugin 会检测 Iris 是否安装，仅安装时才应用 Iris Mixin
+[[dependencies.${mod_id}]]
+    modId="iris"
+    type="optional"
+    ordering="AFTER"
+    side="CLIENT"

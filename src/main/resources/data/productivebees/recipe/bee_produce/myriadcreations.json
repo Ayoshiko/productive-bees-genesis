@@ -1,0 +1,14 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "productivebees:myriadcreations",
+  "results": [
+    {
+      "item": {
+        "item": "productivebees:configurable_honeycomb",
+        "components": {
+          "productivebees:bee_type": "productivebees:myriadcreations"
+        }
+      }
+    }
+  ]
+}

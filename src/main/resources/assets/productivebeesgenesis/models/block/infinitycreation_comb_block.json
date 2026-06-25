@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "productivebeesgenesis:block/infinitycreation_comb_block"
+  }
+}

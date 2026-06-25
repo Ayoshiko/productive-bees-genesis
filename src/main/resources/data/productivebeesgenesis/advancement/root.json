@@ -1,0 +1,27 @@
+{
+  "display": {
+    "icon": { "item": "productivebeesgenesis:mek_centrifuge" },
+    "title": { "translate": "advancement.productivebeesgenesis.root" },
+    "description": { "translate": "advancement.productivebeesgenesis.root.desc" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "background": "productivebeesgenesis:textures/block/mekanism_centrifuge/mekanism_centrifuge_front.png"
+  },
+  "criteria": {
+    "has_mek_centrifuge": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "items": [
+            "productivebeesgenesis:mek_centrifuge",
+            "productivebeesgenesis:basic_mek_centrifuge_factory",
+            "productivebeesgenesis:advanced_mek_centrifuge_factory",
+            "productivebeesgenesis:elite_mek_centrifuge_factory",
+            "productivebeesgenesis:ultimate_mek_centrifuge_factory"
+          ]}
+        ]
+      }
+    }
+  }
+}

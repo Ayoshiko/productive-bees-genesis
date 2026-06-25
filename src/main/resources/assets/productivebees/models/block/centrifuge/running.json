@@ -1,0 +1,6 @@
+{
+    "parent": "productivebees:block/centrifuge/idle",
+    "textures": {
+        "grindstone_side": "productivebees:block/centrifuge/grindstone_side"
+    }
+}
