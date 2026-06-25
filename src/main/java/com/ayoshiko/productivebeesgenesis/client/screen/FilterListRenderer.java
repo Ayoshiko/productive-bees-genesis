@@ -43,8 +43,12 @@ final class FilterListRenderer {
 		int nameColumnX = getNameColumnX();
 		int actionColumnX = getActionColumnX();
 
-		graphics.drawString(screen.getMinecraft().font, Component.literal("#"),
-				indexColumnX, FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
+		// 表头 # 与序号右对齐，避免视觉偏移（与最大序号"99"宽度对齐更稳妥）
+		String headerNumber = "#";
+		int headerWidth = screen.getMinecraft().font.width(headerNumber);
+		int headerX = indexColumnX + FilterListScreen.INDEX_COLUMN_WIDTH - headerWidth - 2;
+		graphics.drawString(screen.getMinecraft().font, Component.literal(headerNumber),
+				headerX, FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
 		graphics.drawString(screen.getMinecraft().font, Component.translatable("productivebeesgenesis.config.bee_type_id"),
 				idColumnX, FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
 		graphics.drawString(screen.getMinecraft().font, Component.translatable("productivebeesgenesis.config.bee_name"),
@@ -116,14 +120,24 @@ final class FilterListRenderer {
 	}
 
 	/**
-	 * 判断鼠标是否点击了某行的复选框，返回列表真实索引；未命中返回 {@code null}。
+	 * 判断鼠标是否点击了某行（任意位置，但排除拖拽手柄与删除按钮区域），返回列表真实索引；
+	 * 未命中或命中操作区域返回 {@code null}。
 	 */
 	Integer getRowCheckboxIndex(double mouseX, double mouseY, List<String> beeTypes, int scrollOffset) {
 		int row = getRowIndexAt(mouseY, beeTypes, scrollOffset);
 		if (row < 0) {
 			return null;
 		}
-		return mouseX >= getCheckboxX() && mouseX < getCheckboxX() + FilterListScreen.CHECKBOX_COLUMN_WIDTH ? row : null;
+		// 点击拖拽手柄时不切换选择
+		if (mouseX >= getDragHandleX() && mouseX < getDragHandleX() + FilterListScreen.DRAG_HANDLE_WIDTH) {
+			return null;
+		}
+		// 点击右侧操作区（删除按钮及滚动条）时不切换选择
+		int actionLeft = getActionColumnX() - 4;
+		if (mouseX >= actionLeft) {
+			return null;
+		}
+		return row;
 	}
 
 	/**
