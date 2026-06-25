@@ -1,8 +1,8 @@
 # Productive Bees Genesis
 
-A Productive Bees addon featuring the **Myriad Creations Bee**, deep Mekanism centrifuge integration with optimized ejection across all factory tiers, and cosmic starfield rendering.
+An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
-The Myriad Creations Honeycomb and Honeycomb Block reuse the Infinity Creation Honeycomb's starfield texture via a BakedModel wrapper, keeping all original functionality (centrifuge processing, random comb transformation) intact.
+The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
 
 ## Languages
 
@@ -13,25 +13,59 @@ The Myriad Creations Honeycomb and Honeycomb Block reuse the Infinity Creation H
 
 | Feature | Description |
 | --- | --- |
-| Myriad Creations Bee | 8-second rainbow color cycle (Mixin override of PB's default 1.25s) with particle effects; produces random resource honeycombs. |
-| Starfield Honeycomb Texture | Myriad Creations Honeycomb and Honeycomb Block reuse Infinity Creation Honeycomb's cosmic texture while preserving original mechanics. |
-| Mek Centrifuge | Custom Mekanism machine that processes Productive Bees honeycombs using SMELTING recipe type. |
-| Factory Tiers | 17 tiers across Mekanism, Mekanism Extras (ME), and Evolved Mekanism Extras (EME). |
-| Smart Recipe Processing | SMELTING recipes take priority; PB CentrifugeRecipe processed independently with linear output scaling. |
-| Output Safety | Output slots merge identical stacks; machine pauses when full to avoid wasting energy. |
-| Ejection Optimization | All Mek centrifuge types use configurable ejection delay (default 1-2 ticks vs vanilla 10 ticks). |
-| Cosmic Rendering | Custom shaders for starfield/nebula effects with Iris compatibility and deferred render queue. |
+| Myriad Creations Bee | 8-second rainbow gradient with rainbow particle effects; its honeycomb randomly produces honeycombs from other resource bees. |
+| Starfield Honeycomb Texture | The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia. |
+| Mek Centrifuge | Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes. |
+| Factory Tiers | 17 tiers across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras. |
 | Bee Filter UI | In-game bee blacklist/whitelist editor with search, sort, and collapse controls. |
-| Performance | LRU recipe cache, cached energy/operation values, pre-allocated render matrices, thread-safe collections. |
+
+### Mekanism Addon: Productive Bees Centrifuge
+
+- **Mek Centrifuge**: Adds a Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes.
+- **Factory Upgrade Compatibility**: Compatible with factory upgrades from Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras.
+- **Output Safety**: Output slots merge identical stacks; the centrifuge pauses when full to avoid wasting energy.
+- **Ejection Speed Optimization**: All Mek centrifuge types use optimized configurable ejection delay for faster output transfer to adjacent containers.
+
+### Configuration System
+
+- **Client Config**: Performance monitor toggle, bee filter UI settings.
+- **Common Config**: Myriad Creations Bee attributes (appearance, pollination, PB attributes, basic attributes, breeding, environment).
+- **Server Config**: Bee type filtering (blacklist/whitelist), Mek centrifuge parameters (including active/idle ejection delay).
+
+### Bee Filter Configuration UI
+
+- Full bee selection screen with search, sort, and group collapse.
+- Filter list supports blacklist/whitelist modes.
+- Visual distinction between added and unadded bees.
+- Numeric indices for filter list entries.
+- Dynamic product info display for special bees.
+- Sort mode and collapse state persistence.
 
 ## Configuration
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `ejectDelay` | 2 | Ejection delay (ticks) when output slots are empty. |
-| `ejectDelayActive` | 1 | Ejection delay (ticks) when output slots still contain items. Automatically clamped to be <= `ejectDelay`. |
-| `beeFilterMode` | Blacklist | Whether the bee filter acts as a blacklist or whitelist. |
-| `beeFilterList` | Empty | List of bee types excluded/included by the filter. |
+The mod provides an in-game configuration interface accessible through the mod menu. Players can modify:
+
+- **Appearance**: Primary color, secondary color, particle color, glow color.
+- **Pollination**: Flower item.
+- **Productive Bees Attributes**: Weather tolerance, temper, behavior, endurance, productivity.
+- **Basic Attributes**: Honeycomb creation, size, speed, attack damage.
+- **Breeding**: Breeding item, breeding item count, self-breeding.
+- **Environment**: Waterproof, fireproof.
+- **Bee Filtering**: Blacklist/whitelist mode, filtered bee types list.
+- **Mek Centrifuge**: Fluid tank capacity, ejection delay, processing parameters.
+
+### Accessing Configuration
+
+1. Open the Minecraft main menu.
+2. Click "Mods".
+3. Find "Productive Bees Genesis".
+4. Click the "Config" button.
+
+Configuration changes take effect after restarting the game or running `/reload`.
+
+### Language Support
+
+The configuration interface supports multiple languages (English/Chinese) and automatically adapts to your client's language settings.
 
 ## Required Dependencies
 
@@ -39,15 +73,16 @@ The Myriad Creations Honeycomb and Honeycomb Block reuse the Infinity Creation H
 | --- | --- | --- |
 | Minecraft | 1.21.1 | Game version. |
 | NeoForge | 21.1.214+ | Mod loader. |
-| Productive Bees | 1.21.1-13.13.5+ | Base bee system and honeycomb mechanics. |
+| Productive Bees | 1.21.1-13.13.5+ | Bee system and honeycomb mechanics. |
 | Mekanism | 1.21.1-10.7.14.79+ | Required for Mek centrifuge features. |
 
 ## Compatible Mods
 
 | Mod | Integration |
 | --- | --- |
-| Mekanism Extras | Higher-tier factory tiers (ME). |
-| Evolved Mekanism Extras | Higher-tier factory tiers (EME). |
+| Mekanism Extras | ME-tier factories. |
+| Evolved Mekanism | EM-tier factories. |
+| Evolved Mekanism Extras | EME-tier factories. |
 | Mekanism Unleashed | Extended upgrade limits. |
 | Iris | Shader compatibility for cosmic rendering. |
 | JEI | Recipe viewing support. |
@@ -56,26 +91,67 @@ The Myriad Creations Honeycomb and Honeycomb Block reuse the Infinity Creation H
 
 1. Install NeoForge and the required dependencies.
 2. Place the mod jar in your `mods` folder.
-3. Launch the game and obtain the Myriad Creations Bee through Productive Bees' hive upgrade system or modpack configuration.
+3. Launch the game and obtain the Myriad Creations Bee through the Productive Bees hive system.
 4. Process Myriad Creations Honeycombs in the Mek Centrifuge or its factory variants.
 
-## Build
+## Architecture
 
-```bash
-./gradlew.bat build
-```
+### Package Structure
+
+- `block/`: Custom blocks (centrifuge frames, decorative blocks).
+- `client/gui/`: Mek centrifuge GUI helpers and factory GUI helpers.
+- `client/jei/`: JEI recipe categories for PB centrifuge recipes.
+- `client/model/`: Custom model loaders and geometry loaders.
+- `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat.
+- `client/screen/`: GUI screens for configuration and Mek centrifuge (`FilterListScreen`, `FilterListRenderer`).
+- `compat/`: Cross-mod compatibility helpers.
+- `config/`: ModConfig definitions (CLIENT/COMMON/SERVER) with bilingual support.
+- `datagen/`: Data generation (block tags, recipes, loot tables).
+- `init/`: DeferredRegister registrations (blocks, items, block entities, etc.).
+- `item/`: Custom items (infinity sword replica, spawn eggs).
+- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing (`PbRecipeProcessor`, `RecipeCacheManager`).
+- `menu/`: Container menu definitions.
+- `mixin/`: Mixin classes (PB centrifuge, bee color, factory upgrade chain, Iris) with `CentrifugeMixinHelper` for DRY and `MixinConfigPlugin` for conditional loading.
+- `network/`: Network packet definitions.
+- `recipe/`: Custom recipe types.
+- `screen/`: Server-side screen holders.
+- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `PerformanceMonitor`, `BeeConfigApplier`.
+
+### Key Abstractions
+
+- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic.
+- **`AbstractBakedModelCosmic`**: Base class for `BakedModelCosmic` and `BakedModelHell`, extracting the cosmic render pipeline (shader uniforms, mask sprites, Iris defer).
+- **`CentrifugeMixinHelper`**: Utility class extracting common logic from 6 centrifuge Mixin classes (canOperate check, canProcessRecipe check, completeRecipeProcessing append).
+- **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent, preventing crashes.
+- **`PbRecipeProcessor`**: PB recipe processing helper with cached `energyPerTick`/`operationsPerTick` and recipe version tracking.
+
+### Thread Safety
+
+- Static fields use `volatile` for cross-thread visibility.
+- Concurrent collections: `ConcurrentHashMap`, `CopyOnWriteArrayList`.
+- Atomic counters: `AtomicInteger`, `AtomicLong`.
+- Holder pattern for thread-safe lazy initialization.
+- Per-instance caches instead of global static caches.
+- `synchronized` blocks for compound operations on non-concurrent collections.
+- Server stop event clears static caches to prevent memory leaks.
+
+### Mixin Naming Convention
+
+All Mixin methods and fields use the `productivebeesgenesis$` prefix (e.g., `productivebeesgenesis$onInit`, `productivebeesgenesis$getProductivityModifier`).
 
 ## Support
 
-Report issues or suggestions on [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
+If you encounter issues or have feature suggestions, please contact us through:
+
+- GitHub Issues: https://github.com/Ayoshiko/productive-bees-genesis/issues
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- Productive Bees mod team
+- Productive Bees development team
 - Mekanism development team
 - NeoForge development team
 - Re:Avaritia (cosmic shader reference)
