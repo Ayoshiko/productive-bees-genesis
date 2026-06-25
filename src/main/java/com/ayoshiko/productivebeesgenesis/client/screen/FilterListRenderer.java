@@ -257,7 +257,7 @@ final class FilterListRenderer {
 	}
 
 	private int getIndexColumnX() {
-		return getCheckboxX() + FilterListScreen.CHECKBOX_COLUMN_WIDTH + 4;
+		return getCheckboxX() + FilterListScreen.CHECKBOX_COLUMN_WIDTH + 2;
 	}
 
 	private int getIconColumnX() {

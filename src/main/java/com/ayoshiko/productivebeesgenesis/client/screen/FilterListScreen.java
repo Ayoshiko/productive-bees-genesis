@@ -70,8 +70,8 @@ public final class FilterListScreen extends Screen {
 	private static final int CONTROL_SPACING = 6;
 	/** 屏幕左右边距 */
 	static final int SCREEN_MARGIN = 20;
-	/** 序号列宽度 */
-	static final int INDEX_COLUMN_WIDTH = 28;
+	/** 序号列宽度（缩小以靠近复选框） */
+	static final int INDEX_COLUMN_WIDTH = 18;
 	/** 图标列宽度 */
 	static final int ICON_COLUMN_WIDTH = 20;
 	/** 复选框列宽度 */
