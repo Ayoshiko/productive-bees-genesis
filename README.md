@@ -5,7 +5,9 @@ An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges c
 The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
 
 目前模组仍处于开发阶段，更新频繁，仍存在大量bug，崩溃，不稳定和兼容性问题，感谢理解。
+
 This mod is under active development – expect bugs, crashes, instability, and compatibility problems. Thanks for your patience!
+
 ## Languages
 
 - [English](README.md)
