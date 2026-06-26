@@ -14,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
+import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 
 /**
@@ -123,6 +125,10 @@ public final class ProductiveBeesGenesis {
 		// 是 Mekanism 等模组用于重置缓存的可靠信号。
 		NeoForge.EVENT_BUS.addListener(this::onTagsReload);
 
+		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后根据 ModConfig
+		// 动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning 配方
+		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+
 		LOGGER.info("资源蜜蜂：创世模组初始化完成");
 	}
 
@@ -137,6 +143,19 @@ public final class ProductiveBeesGenesis {
 	private void onTagsReload(TagsUpdatedEvent event) {
 		recipeVersion++;
 		LOGGER.debug("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
+	}
+
+	/**
+	 * 注册蜜蜂配方重载器
+	 * <br/>
+	 * AddReloadListenerEvent 在 RecipeManager 完成数据包加载后触发，
+	 * 自定义监听器在所有内置监听器之后执行，此时配方已就绪可被替换。
+	 */
+	private void onAddReloadListener(AddReloadListenerEvent event) {
+		event.addListener(new BeeRecipeReloader(
+				event.getServerResources().getRecipeManager(),
+				event.getRegistryAccess()
+		));
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {

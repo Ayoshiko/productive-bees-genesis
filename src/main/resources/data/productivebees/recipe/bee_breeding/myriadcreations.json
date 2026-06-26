@@ -1,0 +1,12 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "productivebees:myriadcreations",
+  "parent2": "productivebees:myriadcreations",
+  "offspring": "productivebees:myriadcreations",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "productivebees:myriadcreations"
+    }
+  ]
+}

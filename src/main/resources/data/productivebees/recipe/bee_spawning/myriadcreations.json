@@ -1,0 +1,10 @@
+{
+  "type": "productivebees:bee_spawning",
+  "ingredient": {
+    "item": "productivebees:stone_nest"
+  },
+  "biomes": "#c:is_plains",
+  "results": [
+    "productivebees:myriadcreations"
+  ]
+}

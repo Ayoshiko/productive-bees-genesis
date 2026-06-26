@@ -126,6 +126,17 @@ public final class ModConfig {
         public final ModConfigSpec.BooleanValue waterproof;
         public final ModConfigSpec.BooleanValue fireproof;
 
+        // ========== 蜜蜂获得方式配置 ==========
+        public final ModConfigSpec.BooleanValue fishingEnabled;
+        public final ModConfigSpec.DoubleValue fishingChance;
+        public final ModConfigSpec.ConfigValue<List<? extends String>> fishingBiomes;
+        public final ModConfigSpec.BooleanValue breedingEnabled;
+        public final ModConfigSpec.ConfigValue<String> breedingParent1;
+        public final ModConfigSpec.ConfigValue<String> breedingParent2;
+        public final ModConfigSpec.BooleanValue spawningEnabled;
+        public final ModConfigSpec.ConfigValue<String> spawningNest;
+        public final ModConfigSpec.ConfigValue<String> spawningBiomes;
+
         // ========== MEK离心机配置 ==========
         public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
         public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
@@ -214,6 +225,56 @@ public final class ModConfig {
                     .define("fireproof", true);
 
             builder.pop(); // bee_attributes
+
+            builder.comment("蜜蜂获得方式配置").push("bee_acquisition");
+
+            builder.push("fishing").comment("钓鱼获得万象创世蜜蜂");
+            fishingEnabled = builder
+                    .comment("是否启用钓鱼获得万象创世蜜蜂")
+                    .define("enabled", false);
+            fishingChance = builder
+                    .comment("钓鱼获得蜜蜂的概率（0.0~1.0）")
+                    .defineInRange("chance", 0.1D, 0.0D, 1.0D);
+            fishingBiomes = builder
+                    .comment("可钓鱼获得蜜蜂的群系列表")
+                    .defineList("biomes", List.of(
+                            "minecraft:ocean",
+                            "minecraft:deep_ocean",
+                            "minecraft:cold_ocean",
+                            "minecraft:deep_cold_ocean",
+                            "minecraft:frozen_ocean",
+                            "minecraft:deep_frozen_ocean",
+                            "minecraft:warm_ocean",
+                            "minecraft:lukewarm_ocean",
+                            "minecraft:deep_lukewarm_ocean"
+                    ), o -> o instanceof String);
+            builder.pop(); // fishing
+
+            builder.push("breeding").comment("繁殖获得万象创世蜜蜂");
+            breedingEnabled = builder
+                    .comment("是否启用繁殖获得万象创世蜜蜂")
+                    .define("enabled", true);
+            breedingParent1 = builder
+                    .comment("亲代蜜蜂1（注册名，如 productivebees:myriadcreations）")
+                    .define("parent1", "productivebees:myriadcreations");
+            breedingParent2 = builder
+                    .comment("亲代蜜蜂2（注册名）")
+                    .define("parent2", "productivebees:myriadcreations");
+            builder.pop(); // breeding
+
+            builder.push("spawning").comment("蜂巢生成万象创世蜜蜂");
+            spawningEnabled = builder
+                    .comment("是否启用蜂巢自然生成万象创世蜜蜂")
+                    .define("enabled", false);
+            spawningNest = builder
+                    .comment("生成蜜蜂的蜂巢方块（如 productivebees:stone_nest）")
+                    .define("nest", "productivebees:stone_nest");
+            spawningBiomes = builder
+                    .comment("生成蜜蜂的群系（标签或群系ID，如 #c:is_plains）")
+                    .define("biomes", "#c:is_plains");
+            builder.pop(); // spawning
+
+            builder.pop(); // bee_acquisition
 
             builder.comment("MEK离心机设置").push("mek_centrifuge");
 
