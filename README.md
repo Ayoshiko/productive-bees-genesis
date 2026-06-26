@@ -2,11 +2,11 @@
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
-The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
-
 目前模组仍处于开发阶段，更新频繁，仍存在大量bug，崩溃，不稳定和兼容性问题，感谢理解。
 
 This mod is under active development – expect bugs, crashes, instability, and compatibility problems. Thanks for your patience!
+
+The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
 
 ## Languages
 
