@@ -5,7 +5,6 @@
  * <ul>
  *   <li>ModRecipes — 配方生成</li>
  *   <li>ModLootTables — 战利品表生成</li>
- *   <li>ModBlockTags — 方块标签生成</li>
  *   <li>ModLanguageProvider — 语言文件生成（中英文）</li>
  * </ul>
  */

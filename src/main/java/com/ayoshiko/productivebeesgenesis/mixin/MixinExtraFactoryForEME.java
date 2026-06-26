@@ -79,8 +79,11 @@ public abstract class MixinExtraFactoryForEME extends BlockType {
         DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
                 ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
                         "absolute_overclocked_emextra_mek_centrifuge_factory"));
+        // 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
+        var key = blockHolder.getKey();
+        if (key == null) return;
         DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-                net.minecraft.core.registries.Registries.ITEM, blockHolder.getKey().location());
+                net.minecraft.core.registries.Registries.ITEM, key.location());
         @SuppressWarnings("unchecked")
         Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
                 (DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);

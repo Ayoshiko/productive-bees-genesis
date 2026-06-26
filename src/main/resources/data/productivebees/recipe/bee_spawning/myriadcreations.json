@@ -6,5 +6,11 @@
   "biomes": "#c:is_plains",
   "results": [
     "productivebees:myriadcreations"
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "productivebees:myriadcreations"
+    }
   ]
 }

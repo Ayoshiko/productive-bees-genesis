@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.init;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeMEBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityExtraMekCentrifugeFactory;
@@ -156,7 +158,7 @@ public final class ModBlocks {
         }
         for (ExtraFactoryTier tier : ExtraFactoryTier.values()) {
             String registryName = tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory";
-            ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> blockType = MekCentrifugeBlockType.getMEFactoryType(tier);
+            ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> blockType = MekCentrifugeMEBlockType.getMEFactoryType(tier);
             if (blockType == null) {
                 ProductiveBeesGenesis.LOGGER.warn("ME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
                 continue;
@@ -194,7 +196,7 @@ public final class ModBlocks {
         }
         for (EMExtraFactoryTier tier : EMExtraFactoryTier.values()) {
             String registryName = tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory";
-            EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> blockType = MekCentrifugeBlockType.getEMEFactoryType(tier);
+            EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> blockType = MekCentrifugeEMEBlockType.getEMEFactoryType(tier);
             if (blockType == null) {
                 ProductiveBeesGenesis.LOGGER.warn("EME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
                 continue;

@@ -9,9 +9,21 @@ import net.minecraft.world.item.ItemDisplayContext;
  * <br/>
  * 通过反射检测 Iris 是否启用光影包；若启用则将第一/第三人称手持视角的 cosmic 光晕渲染延迟到世界渲染结束后执行。
  * <p>
- * 性能优化：反射获取的 Method 对象在 Holder 中缓存，避免每帧重复查找。
+ * 性能优化：
+ * <ul>
+ *   <li>反射获取的 Method 对象在 Holder 中缓存，避免每帧重复查找。</li>
+ *   <li>isShaderPackEnabled 结果带 1 秒 TTL 缓存，避免每帧通过反射 invoke IrisApi。
+ *       光影开关状态变化频率极低（用户手动切换），1 秒延迟可接受。</li>
+ * </ul>
  */
 public final class IrisCompat {
+
+	/** 反射结果缓存 — null 表示未缓存，避免 Boolean 装箱歧义 */
+	private static volatile Boolean cachedShaderPackEnabled = null;
+	/** 缓存到期时间戳（毫秒） */
+	private static volatile long cacheExpiry = 0L;
+	/** 缓存 TTL — 1 秒，平衡响应性与反射开销 */
+	private static final long CACHE_TTL_MS = 1000L;
 
 	private IrisCompat() {
 	}
@@ -45,7 +57,36 @@ public final class IrisCompat {
 		}
 	}
 
+	/**
+	 * 检测 Iris 是否启用了光影包
+	 * <br/>
+	 * 使用 1 秒 TTL 缓存避免每帧通过反射 invoke IrisApi。
+	 * 缓存未命中或已过期时执行反射查询并刷新缓存。
+	 * <p>
+	 * 线程安全：cachedShaderPackEnabled 与 cacheExpiry 均为 volatile，
+	 * 读取为原子操作；并发刷新时最坏情况是多执行一次反射查询，结果一致无危害。
+	 *
+	 * @return true 如果 Iris 已安装且当前启用了光影包
+	 */
 	public static boolean isShaderPackEnabled() {
+		// 命中缓存直接返回（volatile 读保证可见性）
+		Boolean cached = cachedShaderPackEnabled;
+		if (cached != null && System.currentTimeMillis() < cacheExpiry) {
+			return cached;
+		}
+		// 缓存未命中或已过期 — 执行反射查询
+		boolean result = queryShaderPackEnabled();
+		cachedShaderPackEnabled = result;
+		cacheExpiry = System.currentTimeMillis() + CACHE_TTL_MS;
+		return result;
+	}
+
+	/**
+	 * 通过反射查询 IrisApi.isShaderPackInUse()
+	 * <br/>
+	 * 仅在缓存未命中时调用，避免每帧反射开销。
+	 */
+	private static boolean queryShaderPackEnabled() {
 		if (!Holder.INITIALIZED) {
 			return false;
 		}

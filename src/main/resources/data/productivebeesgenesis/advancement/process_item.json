@@ -9,9 +9,16 @@
     "announce_to_chat": true
   },
   "criteria": {
-    "processed_item": {
-      "trigger": "minecraft:tick",
-      "conditions": {}
+    "got_comb": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "items": ["productivebeesgenesis:infinitycreation_comb"] }
+        ]
+      }
     }
-  }
+  },
+  "requirements": [
+    ["got_comb"]
+  ]
 }

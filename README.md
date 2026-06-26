@@ -106,26 +106,29 @@ The configuration interface supports multiple languages (English/Chinese) and au
 - `client/gui/`: Mek centrifuge GUI helpers and factory GUI helpers.
 - `client/jei/`: JEI recipe categories for PB centrifuge recipes.
 - `client/model/`: Custom model loaders and geometry loaders.
-- `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat.
+- `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat, `AbstractMaskGeometryLoader` base class.
 - `client/screen/`: GUI screens for configuration and Mek centrifuge (`FilterListScreen`, `FilterListRenderer`).
 - `compat/`: Cross-mod compatibility helpers.
 - `config/`: ModConfig definitions (CLIENT/COMMON/SERVER) with bilingual support.
 - `datagen/`: Data generation (block tags, recipes, loot tables).
 - `init/`: DeferredRegister registrations (blocks, items, block entities, etc.).
 - `item/`: Custom items (infinity sword replica, spawn eggs).
-- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing (`PbRecipeProcessor`, `RecipeCacheManager`).
+- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing (`PbRecipeProcessor`, `RecipeCacheManager`), isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`).
 - `menu/`: Container menu definitions.
-- `mixin/`: Mixin classes (PB centrifuge, bee color, factory upgrade chain, Iris) with `CentrifugeMixinHelper` for DRY and `MixinConfigPlugin` for conditional loading.
-- `network/`: Network packet definitions.
+- `mixin/`: Mixin classes (PB centrifuge, bee color, factory upgrade chain, Iris, recipe serializer fallbacks) with `CentrifugeMixinHelper` for DRY and `MixinConfigPlugin`/`IrisConfigPlugin` for conditional loading.
 - `recipe/`: Custom recipe types.
 - `screen/`: Server-side screen holders.
-- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `PerformanceMonitor`, `BeeConfigApplier`.
+- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `PerformanceMonitor`, `BeeConfigApplier`, `BeeIngredientFallback`, `PBConstants`.
 
 ### Key Abstractions
 
 - **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic.
 - **`AbstractBakedModelCosmic`**: Base class for `BakedModelCosmic` and `BakedModelHell`, extracting the cosmic render pipeline (shader uniforms, mask sprites, Iris defer).
+- **`AbstractMaskGeometryLoader`**: Base class for `GeometryLoaderCosmic` and `GeometryLoaderHell`, extracting common mask parsing and parent resolution logic.
 - **`CentrifugeMixinHelper`**: Utility class extracting common logic from 6 centrifuge Mixin classes (canOperate check, canProcessRecipe check, completeRecipeProcessing append).
+- **`BeeIngredientFallback`**: Utility class providing fallback serialization for 5 recipe Serializer Mixins, preventing NPE when BeeIngredientFactory is not ready.
+- **`PBConstants`**: Common constants class unifying `MYRIADCREATIONS_TYPE` and other shared constants across the codebase.
+- **`MekCentrifugeMEBlockType`/`MekCentrifugeEMEBlockType`**: Isolated BlockType definitions for optional ME/EME dependencies, loaded only when those mods are present to prevent `NoClassDefFoundError`.
 - **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent, preventing crashes.
 - **`PbRecipeProcessor`**: PB recipe processing helper with cached `energyPerTick`/`operationsPerTick` and recipe version tracking.
 

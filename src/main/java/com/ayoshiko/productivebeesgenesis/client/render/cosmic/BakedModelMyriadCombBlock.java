@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -26,10 +27,6 @@ import net.minecraft.world.item.ItemStack;
  */
 public class BakedModelMyriadCombBlock extends WrappedItemModel {
 
-	/** 万象创世蜜蜂类型 ID */
-	private static final ResourceLocation MYRIADCREATIONS_TYPE =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "myriadcreations");
-
 	/** 无尽创世蜜脾块的 BakedModel */
 	private final BakedModel infinityCombBlockModel;
 
@@ -42,7 +39,7 @@ public class BakedModelMyriadCombBlock extends WrappedItemModel {
 	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
 						   MultiBufferSource buffers, int packedLight, int packedOverlay) {
 		ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
-		if (MYRIADCREATIONS_TYPE.equals(beeType)) {
+		if (PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) {
 			renderModelDirect(infinityCombBlockModel, stack, poseStack, buffers, packedLight, packedOverlay);
 		} else {
 			renderWrapped(stack, poseStack, buffers, packedLight, packedOverlay, true);

@@ -5,16 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
-import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactoryType;
-import io.github.masyumero.emextras.common.content.blocktype.EMExtraMachine;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeSideConfig;
@@ -57,12 +48,9 @@ import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
  * DENSE/MULTIVERSAL/CREATIVE）动态创建BlockType，存入EM_FACTORY_TYPES。
  * EM等级的FactoryTier在编译时不存在（EM通过Mixin在运行时扩展枚举），必须反射获取。
  * <p>
- * ME扩展：当MekanismExtras加载时，通过initMETiers()为4个ME等级（ABSOLUTE/SUPREME/
- * COSMIC/INFINITE）动态创建BlockType，存入ME_FACTORY_TYPES。
- * ME等级使用ExtraFactoryMachine基类+ExtraAttributeTier/ExtraAttributeUpgradeable属性，
- * 能量配置遵循ME的ExtraFactory.setMachineData模式（storage=max(origStorage,usage)*processes）。
- * 使用without(ExtraAttributeUpgradeable.class)移除ME Mixin注入的错误升级目标，
- * 然后添加自己的ExtraAttributeUpgradeable指向下一级离心机工厂。
+ * ME/EME扩展：ME和EME为可选依赖，相关代码已拆分到独立的MekCentrifugeMEBlockType和
+ * MekCentrifugeEMEBlockType类中，避免未安装时触发NoClassDefFoundError。本类仅保留
+ * initMETiers()/initEMETiers()包装方法，先检测模组加载状态再委托给独立类。
  */
 public final class MekCentrifugeBlockType {
 
@@ -100,24 +88,6 @@ public final class MekCentrifugeBlockType {
      * 使用ConcurrentHashMap保证线程安全（initEMTiers可能与BlockType查询并发）。
      */
     private static final Map<FactoryTier, Machine.FactoryMachine<TileEntityMekCentrifugeFactory>> EM_FACTORY_TYPES =
-            new ConcurrentHashMap<>();
-
-    /**
-     * ME工厂BlockType映射 — 由initMETiers()在ME加载时填充
-     * <br/>
-     * Key=ExtraFactoryTier（ME的独立枚举），Value=对应的ExtraFactoryMachine BlockType。
-     * 使用ConcurrentHashMap保证线程安全。
-     */
-    private static final Map<ExtraFactoryTier, ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory>> ME_FACTORY_TYPES =
-            new ConcurrentHashMap<>();
-
-    /**
-     * EME工厂BlockType映射 — 由initEMETiers()在EME加载时填充
-     * <br/>
-     * Key=EMExtraFactoryTier（EME的独立枚举），Value=对应的EMExtraFactoryMachine BlockType。
-     * 使用ConcurrentHashMap保证线程安全。
-     */
-    private static final Map<EMExtraFactoryTier, EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory>> EME_FACTORY_TYPES =
             new ConcurrentHashMap<>();
 
     private MekCentrifugeBlockType() {}
@@ -215,7 +185,7 @@ public final class MekCentrifugeBlockType {
      * ME工厂方块由ModBlocks注册，此处通过DeferredHolder.create按注册名创建延迟Holder。
      * 注册名遵循 {tier}_extra_mek_centrifuge_factory 命名约定（使用ME的tier小写名）。
      */
-    private static DeferredHolder<Block, ?> getMEFactoryBlock(String tierName) {
+    public static DeferredHolder<Block, ?> getMEFactoryBlock(String tierName) {
         String registryName = tierName + "_extra_mek_centrifuge_factory";
         return DeferredHolder.create(Registries.BLOCK,
                 ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
@@ -227,7 +197,7 @@ public final class MekCentrifugeBlockType {
      * EME工厂方块由ModBlocks注册，此处通过DeferredHolder.create按注册名创建延迟Holder。
      * 注册名遵循 {tier}_emextra_mek_centrifuge_factory 命名约定（使用EME的tier小写名）。
      */
-    private static DeferredHolder<Block, ?> getEMEFactoryBlock(String tierName) {
+    public static DeferredHolder<Block, ?> getEMEFactoryBlock(String tierName) {
         String registryName = tierName + "_emextra_mek_centrifuge_factory";
         return DeferredHolder.create(Registries.BLOCK,
                 ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
@@ -241,7 +211,7 @@ public final class MekCentrifugeBlockType {
      * BlockRegistryObject需要block和item两个DeferredHolder，item部分通过block的注册名查找。
      */
     @SuppressWarnings("unchecked")
-    private static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(DeferredHolder<Block, ?> blockHolder) {
+    public static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(DeferredHolder<Block, ?> blockHolder) {
         return () -> {
             // 通过block的注册名创建item的DeferredHolder
             DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
@@ -279,7 +249,7 @@ public final class MekCentrifugeBlockType {
      * 使Shift+N显示离心机工厂专属描述文本。
      * key格式：description.productivebeesgenesis.{key}
      */
-    private static mekanism.api.text.ILangEntry descriptionLang(String key) {
+    public static mekanism.api.text.ILangEntry descriptionLang(String key) {
         return () -> "description.productivebeesgenesis." + key;
     }
 
@@ -312,197 +282,34 @@ public final class MekCentrifugeBlockType {
     }
 
     /**
-     * 初始化ME工厂等级的BlockType
+     * 初始化ME工厂等级的BlockType — 包装方法
      * <br/>
-     * 当ME加载时，为每个ExtraFactoryTier（ABSOLUTE/SUPREME/COSMIC/INFINITE）
-     * 创建BlockType并存入ME_FACTORY_TYPES。使用computeIfAbsent保证线程安全的单次创建。
-     * <p>
-     * ME等级使用ExtraFactoryMachine基类，而非原版的FactoryMachine，因为：
-     * 1. TileEntityExtraMekCentrifugeFactory继承自ME的TileEntityExtraFactory
-     * 2. ME的升级系统使用ExtraAttributeUpgradeable（而非Mekanism的AttributeUpgradeable）
-     * 3. ME的等级系统使用ExtraAttributeTier（而非Mekanism的AttributeTier）
-     * <p>
-     * 能量配置遵循ME的ExtraFactory.setMachineData模式：
-     * storage = max(origStorage, origUsage) * tier.processes
-     * 原版离心机：usage=50L, storage=20000L，所以storage = max(20000, 50) * processes
-     * <p>
-     * 调用时机：ME加载且ME工厂方块/TileEntity注册完成后调用。
+     * 先检测ME加载状态，再委托给MekCentrifugeMEBlockType。ME未加载时直接返回，
+     * 避免触发对ME类的加载导致NoClassDefFoundError。
      */
     public static void initMETiers() {
         if (!MekCompatHooks.isMekanismExtrasLoaded()) {
             return;
         }
-        for (ExtraFactoryTier tier : ExtraFactoryTier.values()) {
-            ME_FACTORY_TYPES.computeIfAbsent(tier, MekCentrifugeBlockType::createMEFactoryBlockType);
-        }
-        // 为ULTIMATE离心机工厂添加ExtraAttributeUpgradeable，使其能通过ME的ABSOLUTE Tier Installer升级
-        // ULTIMATE离心机原本只有AttributeUpgradeable（Mekanism升级系统），需要额外添加ExtraAttributeUpgradeable
-        // 指向ABSOLUTE离心机工厂，使ME的ItemExtraTierInstaller能识别并执行升级
-        ULTIMATE_MEK_CENTRIFUGE_FACTORY.add(new ExtraAttributeUpgradeable(
-                wrapAsBlockRegistryObject(getMEFactoryBlock("absolute"))));
+        MekCentrifugeMEBlockType.initMETiers(ULTIMATE_MEK_CENTRIFUGE_FACTORY);
     }
 
     /**
-     * 初始化EME工厂等级的BlockType
+     * 初始化EME工厂等级的BlockType — 包装方法
      * <br/>
-     * 当EME加载时，为每个EMExtraFactoryTier（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL）
-     * 创建BlockType并存入EME_FACTORY_TYPES。使用computeIfAbsent保证线程安全的单次创建。
+     * 先检测EME加载状态，再委托给MekCentrifugeEMEBlockType。EME未加载时直接返回，
+     * 避免触发对EME类的加载导致NoClassDefFoundError。
      * <p>
-     * EME等级使用EMExtraFactoryMachine基类，手动添加所有属性（能量、侧面配置、安全、GUI、声音、tier、upgradeable）。
-     * 不使用EME的EMExtraFactory，因为EMExtraFactory需要origMachine参数（EMExtraFactoryMachine类型），
-     * 而我们的离心机原版机器是FactoryMachine/ExtraFactoryMachine类型，不兼容。
-     * <p>
-     * 能量配置遵循EME的EMExtraFactory.setMachineData模式：
-     * storage = max(origStorage, origUsage) * tier.processes
-     * 原版离心机：usage=50L, storage=20000L，所以storage = max(20000, 50) * processes
-     * <p>
-     * 升级链处理：
-     * 1. ULTIMATE离心机工厂：移除EME MixinFactory注入的EMExtraAttributeUpgradeable（指向EME原版ABSOLUTE_OVERCLOCKED电力熔炼炉工厂），
-     *    替换为指向我们的ABSOLUTE_OVERCLOCKED离心机工厂
-     * 2. ME ABSOLUTE离心机工厂：添加EMExtraAttributeUpgradeable指向ABSOLUTE_OVERCLOCKED离心机工厂，
-     *    使ME ABSOLUTE离心机可以升级到EME ABSOLUTE_OVERCLOCKED离心机
-     * <p>
-     * 调用时机：EME加载且EME工厂方块/TileEntity注册完成后调用。
+     * 注意：包装方法中引用了ExtraFactoryTier.ABSOLUTE，但此引用只在方法被调用时解析（lazy）。
+     * 由于EME依赖ME，调用此方法时ME必然已加载，ExtraFactoryTier可用。
      */
     public static void initEMETiers() {
         if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
             return;
         }
-        for (EMExtraFactoryTier tier : EMExtraFactoryTier.values()) {
-            EME_FACTORY_TYPES.computeIfAbsent(tier, MekCentrifugeBlockType::createEMEFactoryBlockType);
-        }
-
-        // 为ULTIMATE离心机工厂替换EME MixinFactory注入的EMExtraAttributeUpgradeable
-        // EME的MixinFactory为ULTIMATE工厂注入EMExtraAttributeUpgradeable指向EME原版ABSOLUTE_OVERCLOCKED电力熔炼炉工厂
-        // 移除并替换为指向我们的ABSOLUTE_OVERCLOCKED离心机工厂
-        ULTIMATE_MEK_CENTRIFUGE_FACTORY.remove(EMExtraAttributeUpgradeable.class);
-        ULTIMATE_MEK_CENTRIFUGE_FACTORY.add(new EMExtraAttributeUpgradeable(
-                wrapAsBlockRegistryObject(getEMEFactoryBlock("absolute_overclocked"))));
-
-        // 为ME ABSOLUTE离心机工厂添加EMExtraAttributeUpgradeable
-        // 使ME ABSOLUTE离心机可以升级到EME ABSOLUTE_OVERCLOCKED离心机（跨升级系统升级）
-        ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> absoluteType =
-                ME_FACTORY_TYPES.get(ExtraFactoryTier.ABSOLUTE);
-        if (absoluteType != null) {
-            absoluteType.add(new EMExtraAttributeUpgradeable(
-                    wrapAsBlockRegistryObject(getEMEFactoryBlock("absolute_overclocked"))));
-        }
-    }
-
-    /**
-     * 创建EME等级的工厂BlockType
-     * <br/>
-     * 使用EMExtraFactoryMachine基类，手动添加所有属性。
-     * 不使用EME的EMExtraFactory，因为EMExtraFactory需要origMachine参数（EMExtraFactoryMachine类型），
-     * 而我们的离心机原版机器不兼容。
-     * <p>
-     * 关键：使用without(EMExtraAttributeUpgradeable.class)移除EME Mixin可能注入的错误升级属性
-     * （指向EME原版电力熔炼炉工厂），然后添加自己的EMExtraAttributeUpgradeable指向离心机工厂。
-     * <p>
-     * 配置卡兼容性：额外添加AttributeFactoryType(SMELTING)，使EME工厂方块同时拥有
-     * AttributeFactoryType和EMExtraAttributeFactoryType两种属性。
-     * MekanismUtils.isSameTypeFactory()只检查AttributeFactoryType，若EME方块缺少此属性，
-     * 配置卡无法在EME工厂与原版/EM/ME工厂之间互相粘贴。添加后三个TileEntity的
-     * isConfigurationDataCompatible()能正确识别EME方块并允许跨等级粘贴配置。
-     */
-    @SuppressWarnings("unchecked")
-    private static EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> createEMEFactoryBlockType(
-            EMExtraFactoryTier tier) {
-        // 能量配置：EME模式，storage = max(origStorage, origUsage) * tier.processes
-        long usage = 50L;
-        long storage = Math.max(20_000L, usage) * tier.processes;
-
-        // 使用离心机专属description key替代通用DESCRIPTION_FACTORY
-        // key格式：description.productivebeesgenesis.{tier小写}_emextra_mek_centrifuge_factory
-        var builder = EMExtraMachine.EMExtraMachineBuilder
-                .createEMExtraFactoryMachine(() -> ModBlockEntitiesHolder.EME_FACTORY_TILES.get(tier),
-                        descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory"), EMExtraFactoryType.SMELTING)
-                .withEnergyConfig(() -> usage, () -> storage)
-                .withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
-                .with(Attributes.SECURITY)
-                .withGui(() -> ModMenuTypes.EMEXTRA_MEK_CENTRIFUGE_FACTORY)
-                .withSound(MekanismSounds.ENERGIZED_SMELTER)
-                // 添加原版AttributeFactoryType(SMELTING)，使EME方块能被MekanismUtils.isSameTypeFactory()
-                // 识别，从而支持配置卡在EME工厂与原版/EM/ME工厂之间跨等级粘贴
-                .with(new AttributeFactoryType(FactoryType.SMELTING))
-                .with(new EMExtraAttributeTier<>(tier));
-
-        // 移除EME Mixin可能注入的EMExtraAttributeUpgradeable（安全措施）
-        builder.without(EMExtraAttributeUpgradeable.class);
-
-        // 添加自定义EMExtraAttributeUpgradeable，指向下一级离心机工厂
-        EMExtraFactoryTier[] tiers = EMExtraFactoryTier.values();
-        if (tier.ordinal() < tiers.length - 1) {
-            EMExtraFactoryTier nextTier = tiers[tier.ordinal() + 1];
-            builder.with(new EMExtraAttributeUpgradeable(wrapAsBlockRegistryObject(getEMEFactoryBlock(
-                    nextTier.getEMExtraTier().getLowerName()))));
-        }
-        // INFINITE_MULTIVERSAL是最高级，不添加升级属性
-
-        return builder.build();
-    }
-
-    /**
-     * 创建ME等级的工厂BlockType
-     * <br/>
-     * 使用ExtraFactoryMachine基类，手动添加所有属性（能量、侧面配置、安全、GUI、声音、tier、upgradeable）。
-     * 不使用ME的ExtraFactory，因为ExtraFactory需要origMachine参数（ExtraFactoryMachine类型），
-     * 而我们的离心机原版机器是FactoryMachine类型，不兼容。
-     * <p>
-     * 关键：使用without(ExtraAttributeUpgradeable.class)移除ME Mixin注入的错误升级属性
-     * （指向ME原版电力熔炼炉工厂），然后添加自己的ExtraAttributeUpgradeable指向离心机工厂。
-     */
-    @SuppressWarnings("unchecked")
-    private static ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> createMEFactoryBlockType(
-            ExtraFactoryTier tier) {
-        // 能量配置：ME模式，storage = max(origStorage, origUsage) * tier.processes
-        long usage = 50L;
-        long storage = Math.max(20_000L, usage) * tier.processes;
-
-        // 使用离心机专属description key替代通用DESCRIPTION_FACTORY
-        // key格式：description.productivebeesgenesis.{tier小写}_extra_mek_centrifuge_factory
-        var builder = ExtraMachine.ExtraMachineBuilder
-                .createExtraFactoryMachine(() -> ModBlockEntitiesHolder.ME_FACTORY_TILES.get(tier),
-                        descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory"), FactoryType.SMELTING)
-                .withEnergyConfig(() -> usage, () -> storage)
-                .withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
-                .with(Attributes.SECURITY)
-                .withGui(() -> ModMenuTypes.EXTRA_MEK_CENTRIFUGE_FACTORY)
-                .withSound(MekanismSounds.ENERGIZED_SMELTER)
-                .with(new ExtraAttributeTier<>(tier));
-
-        // 移除ME Mixin注入的ExtraAttributeUpgradeable（指向ME原版工厂，不是离心机）
-        builder.without(ExtraAttributeUpgradeable.class);
-
-        // 添加自定义ExtraAttributeUpgradeable，指向下一级离心机工厂
-        ExtraFactoryTier[] tiers = ExtraFactoryTier.values();
-        if (tier.ordinal() < tiers.length - 1) {
-            ExtraFactoryTier nextTier = tiers[tier.ordinal() + 1];
-            builder.with(new ExtraAttributeUpgradeable(wrapAsBlockRegistryObject(getMEFactoryBlock(
-                    nextTier.getAdvanceTier().getLowerName()))));
-        }
-
-        return builder.build();
-    }
-
-    /**
-     * 获取ME等级的工厂BlockType
-     *
-     * @param tier ME工厂等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）
-     * @return 对应的ExtraFactoryMachine BlockType，不存在时返回null
-     */
-    public static ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> getMEFactoryType(ExtraFactoryTier tier) {
-        return ME_FACTORY_TYPES.get(tier);
-    }
-
-    /**
-     * 获取EME等级的工厂BlockType
-     *
-     * @param tier EME工厂等级（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL）
-     * @return 对应的EMExtraFactoryMachine BlockType，不存在时返回null
-     */
-    public static EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> getEMEFactoryType(EMExtraFactoryTier tier) {
-        return EME_FACTORY_TYPES.get(tier);
+        // EME依赖ME，所以ME此时已加载
+        MekCentrifugeEMEBlockType.initEMETiers(ULTIMATE_MEK_CENTRIFUGE_FACTORY,
+                MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE));
     }
 
     /**
@@ -533,24 +340,6 @@ public final class MekCentrifugeBlockType {
          * 使用ConcurrentHashMap保证线程安全（填充与BlockType查询可能并发）。
          */
         public static final Map<FactoryTier, mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory>> EM_FACTORY_TILES =
-                new ConcurrentHashMap<>();
-
-        /**
-         * ME工厂TileEntityType映射 — 由ModBlockEntities在ME加载时填充
-         * <br/>
-         * Key=ExtraFactoryTier（ME的独立枚举），Value=对应的TileEntityTypeRegistryObject。
-         * 使用ConcurrentHashMap保证线程安全。
-         */
-        public static final Map<ExtraFactoryTier, mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityExtraMekCentrifugeFactory>> ME_FACTORY_TILES =
-                new ConcurrentHashMap<>();
-
-        /**
-         * EME工厂TileEntityType映射 — 由ModBlockEntities在EME加载时填充
-         * <br/>
-         * Key=EMExtraFactoryTier（EME的独立枚举），Value=对应的TileEntityTypeRegistryObject。
-         * 使用ConcurrentHashMap保证线程安全。
-         */
-        public static final Map<EMExtraFactoryTier, mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityEMExtraMekCentrifugeFactory>> EME_FACTORY_TILES =
                 new ConcurrentHashMap<>();
     }
 }

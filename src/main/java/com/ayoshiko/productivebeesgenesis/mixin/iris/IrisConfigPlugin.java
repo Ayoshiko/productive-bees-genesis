@@ -15,8 +15,29 @@ import net.neoforged.fml.loading.LoadingModList;
  * 原理：实现 IMixinConfigPlugin 接口，在 shouldApplyMixin 中检查
  * LoadingModList 是否包含 "iris" 模组。仅当 Iris 已安装时才应用
  * 本配置中的所有 Mixin，避免在无 Iris 环境下因缺少依赖类而崩溃。
+ * <p>
+ * 性能优化：使用 volatile 字段缓存 iris 加载状态，避免每次 shouldApplyMixin
+ * 调用都遍历 LoadingModList。首次调用时计算，后续直接返回缓存值。
  */
 public class IrisConfigPlugin implements IMixinConfigPlugin {
+
+	/** Iris 模组 ID */
+	private static final String IRIS_MOD_ID = "iris";
+
+	/**
+	 * Iris 加载状态缓存
+	 * <br/>
+	 * 使用 volatile 保证可见性：在 Mixin 应用阶段（早期加载线程）写入后，
+	 * 后续 shouldApplyMixin 调用线程能立即读到最新值。
+	 * <p>
+	 * 使用 Boolean 包装类型的 Holder 模式：
+	 * <ul>
+	 *   <li>null：尚未计算</li>
+	 *   <li>Boolean.TRUE/FALSE：已计算的结果</li>
+	 * </ul>
+	 * 同步块保证首次计算只执行一次（双重检查锁定）。
+	 */
+	private static volatile Boolean irisLoadedCache = null;
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -35,12 +56,24 @@ public class IrisConfigPlugin implements IMixinConfigPlugin {
 	/**
 	 * 仅当已加载 Iris 模组时才应用 Mixin
 	 * <br/>
-	 * 原理：遍历 LoadingModList 中的所有模组，筛选 modId 为 "iris" 的条目，
-	 * 若列表非空则返回 true，表示应用当前 Mixin。
+	 * 原理：使用 anyMatch 流式判断 LoadingModList 中是否存在 modId 为 "iris" 的条目，
+	 * 结果缓存到 {@link #irisLoadedCache}，避免每次调用都遍历模组列表。
 	 */
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return !LoadingModList.get().getMods().stream().filter(modInfo -> modInfo.getModId().equals("iris")).toList().isEmpty();
+		Boolean cached = irisLoadedCache;
+		if (cached != null) {
+			return cached;
+		}
+		synchronized (IrisConfigPlugin.class) {
+			cached = irisLoadedCache;
+			if (cached == null) {
+				cached = LoadingModList.get().getMods().stream()
+						.anyMatch(modInfo -> IRIS_MOD_ID.equals(modInfo.getModId()));
+				irisLoadedCache = cached;
+			}
+		}
+		return cached;
 	}
 
 	@Override

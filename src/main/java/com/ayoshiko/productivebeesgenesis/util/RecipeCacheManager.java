@@ -21,9 +21,6 @@ import net.minecraft.world.item.ItemStack;
  */
 public class RecipeCacheManager<T> {
 
-	/** 哨兵对象，标记"无配方"结果，避免重复查询 */
-	private static final Optional<?> NO_RECIPE = Optional.empty();
-
 	private final LinkedHashMap<String, Optional<T>> cache;
 	private final int maxSize;
 
@@ -31,11 +28,17 @@ public class RecipeCacheManager<T> {
 	private long hitCount;
 	/** 缓存未命中次数 */
 	private long missCount;
+	/** 上次get操作是否命中缓存（volatile保证可见性，供PerformanceMonitor精确记录cacheHit） */
+	private volatile boolean lastGetHit;
 
 	/**
-	 * @param maxSize 最大缓存条目数，超出后按LRU淘汰
+	 * @param maxSize 最大缓存条目数，超出后按LRU淘汰，必须为正数
+	 * @throws IllegalArgumentException 如果 maxSize <= 0
 	 */
 	public RecipeCacheManager(int maxSize) {
+		if (maxSize <= 0) {
+			throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
+		}
 		this.maxSize = maxSize;
 		this.cache = new LinkedHashMap<>(64, 0.75f, true) {
 			@Override
@@ -74,10 +77,22 @@ public class RecipeCacheManager<T> {
 		Optional<T> cached = cache.get(key);
 		if (cached != null) {
 			hitCount++;
+			lastGetHit = true;
 		} else {
 			missCount++;
+			lastGetHit = false;
 		}
 		return cached;
+	}
+
+	/**
+	 * 返回上次 {@link #get(ItemStack)} 操作是否命中缓存
+	 * <br/>
+	 * 供 PerformanceMonitor 在 findPbRecipe 调用后精确记录 cacheHit，
+	 * 避免修改 findPbRecipe 签名（保持单一职责）。
+	 */
+	public boolean wasLastGetHit() {
+		return lastGetHit;
 	}
 
 	/**

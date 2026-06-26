@@ -39,7 +39,8 @@ public final class BeeSelectionState {
 	private boolean showOnlyUnadded = false;
 	private SortMode sortMode = SortMode.NAME;
 	private final Set<String> collapsedGroups = ConcurrentHashMap.newKeySet();
-	private final Set<String> selectedBeeTypes = new HashSet<>();
+	/** 已选蜜蜂类型集合 — 使用并发集合以符合项目线程安全规范，与 collapsedGroups 保持一致 */
+	private final Set<String> selectedBeeTypes = ConcurrentHashMap.newKeySet();
 
 	public String getSearchText() {
 		return searchText;

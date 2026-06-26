@@ -193,9 +193,12 @@ public abstract class AbstractClientCombEventHandler {
 
 		float alpha = getGlowAlpha();
 		RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
-		model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
-		// 重置 RenderSystem 状态，避免污染后续渲染
-		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		try {
+			model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
+		} finally {
+			// 无论 renderToBuffer 是否抛异常都重置 RenderSystem 状态，避免污染后续渲染
+			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		}
 
 		poseStack.popPose();
 	}

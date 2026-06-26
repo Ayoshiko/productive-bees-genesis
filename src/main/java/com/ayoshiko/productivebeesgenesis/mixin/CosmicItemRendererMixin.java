@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.PerspectiveModel;
 
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -31,17 +32,25 @@ import net.minecraft.world.item.ItemStack;
 public class CosmicItemRendererMixin {
 
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", ordinal = 0))
-	public void productivebeesgenesis$onRenderItem(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, int packedLight, int packedOverlay, BakedModel modelIn, CallbackInfo callbackInfo) {
+	private void productivebeesgenesis$onRenderItem(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, int packedLight, int packedOverlay, BakedModel modelIn, CallbackInfo callbackInfo) {
 		if (modelIn instanceof PerspectiveModel renderer) {
-			poseStack.pushPose();
-			BakedModel transformed = renderer.applyTransform(context, poseStack, leftHand);
-			poseStack.translate(-0.5F, -0.5F, -0.5F);
-			if (transformed instanceof PerspectiveModel transformedRenderer) {
-				transformedRenderer.renderItem(stack, context, poseStack, multiBufferSource, packedLight, packedOverlay);
-			} else {
-				renderer.renderItem(stack, context, poseStack, multiBufferSource, packedLight, packedOverlay);
+			try {
+				try {
+					poseStack.pushPose();
+					BakedModel transformed = renderer.applyTransform(context, poseStack, leftHand);
+					poseStack.translate(-0.5F, -0.5F, -0.5F);
+					if (transformed instanceof PerspectiveModel transformedRenderer) {
+						transformedRenderer.renderItem(stack, context, poseStack, multiBufferSource, packedLight, packedOverlay);
+					} else {
+						renderer.renderItem(stack, context, poseStack, multiBufferSource, packedLight, packedOverlay);
+					}
+				} finally {
+					poseStack.popPose();
+				}
+			} catch (Exception e) {
+				// 捕获单个物品渲染异常，避免导致整体渲染崩溃
+				ProductiveBeesGenesis.LOGGER.error("Cosmic item rendering failed", e);
 			}
-			poseStack.popPose();
 		}
 	}
 }

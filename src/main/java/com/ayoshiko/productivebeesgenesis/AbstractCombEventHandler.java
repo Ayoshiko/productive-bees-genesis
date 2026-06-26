@@ -6,7 +6,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
@@ -192,6 +191,12 @@ public abstract class AbstractCombEventHandler {
 	 * <p>
 	 * 使用索引集合追踪已选元素，避免每次调用时完整拷贝列表。
 	 * 缓存列表由 {@link CopyOnWriteArrayList} 保证读安全，无需加锁。
+	 * <p>
+	 * 算法选择：
+	 * <ul>
+	 *   <li>count <= poolSize/2：使用 do-while 随机重试，碰撞率低，避免拷贝整个列表</li>
+	 *   <li>count > poolSize/2：改用洗牌算法（Fisher-Yates），避免高碰撞率下的无限重试</li>
+	 * </ul>
 	 *
 	 * @param count  需要选取的类型数量
 	 * @param random 随机源
@@ -203,6 +208,19 @@ public abstract class AbstractCombEventHandler {
 		int poolSize = cache.size();
 		if (poolSize == 0) return List.of();
 		if (count >= poolSize) return List.copyOf(cache);
+
+		// 当选取数量超过池容量一半时，do-while 碰撞率激增，改用洗牌算法
+		if (count > poolSize / 2) {
+			List<ResourceLocation> shuffled = new ArrayList<>(cache);
+			// Fisher-Yates 洗牌：仅洗前 count 个位置，避免全量洗牌
+			for (int i = 0; i < count; i++) {
+				int j = i + random.nextInt(poolSize - i);
+				ResourceLocation tmp = shuffled.get(i);
+				shuffled.set(i, shuffled.get(j));
+				shuffled.set(j, tmp);
+			}
+			return new ArrayList<>(shuffled.subList(0, count));
+		}
 
 		List<ResourceLocation> selected = new ArrayList<>(count);
 		Set<Integer> usedIndices = new HashSet<>(count * 2);
@@ -248,16 +266,21 @@ public abstract class AbstractCombEventHandler {
 	 *   <li>快速路径：通过目标判断条件过滤</li>
 	 *   <li>冷却缓存：50ms内复用"已满"结果，消除加速环境下99%的重复调用</li>
 	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：cacheMap 由调用方提供 {@link java.util.Collections#synchronizedMap} 包装的
+	 * {@link java.util.WeakHashMap}，复合操作（get + put）在 synchronized 块内执行，
+	 * 确保线程安全。WeakHashMap 的 key 为弱引用，BlockEntity 卸载后 handler 被 GC 时
+	 * 缓存条目自动被回收，避免内存泄漏。
 	 *
 	 * @param handler       物品处理器
 	 * @param isTarget      判断输入物品是否为目标物品的谓词
-	 * @param cacheMap      按 handler 实例存储的缓存
+	 * @param cacheMap      按 handler 实例存储的缓存（必须是 synchronizedMap 包装的 WeakHashMap）
 	 * @return 是否应阻止机器运行
 	 */
 	protected static boolean checkBlockOperation(
 			IItemHandlerModifiable handler,
 			Predicate<Item> isTarget,
-			ConcurrentHashMap<IItemHandlerModifiable, BlockCheckCache> cacheMap) {
+			Map<IItemHandlerModifiable, BlockCheckCache> cacheMap) {
 		try {
 			ItemStack input = handler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT);
 			Item inputItem = input.getItem();
@@ -265,25 +288,28 @@ public abstract class AbstractCombEventHandler {
 			if (!isTarget.test(inputItem)) return false;
 
 			long now = System.nanoTime();
-			BlockCheckCache cache = cacheMap.get(handler);
-			if (cache != null
-					&& inputItem == cache.inputItem
-					&& Boolean.TRUE.equals(cache.blockedFull)
-					&& (now - cache.checkTime) < BLOCK_CHECK_COOLDOWN_NS) {
-				return true;
+			// synchronizedMap 的复合操作（get + put）需要外部同步
+			synchronized (cacheMap) {
+				BlockCheckCache cache = cacheMap.get(handler);
+				if (cache != null
+						&& inputItem == cache.inputItem
+						&& Boolean.TRUE.equals(cache.blockedFull)
+						&& (now - cache.checkTime) < BLOCK_CHECK_COOLDOWN_NS) {
+					return true;
+				}
+
+				boolean blocked = !hasOutputSpace(handler);
+
+				if (cache == null) {
+					cache = new BlockCheckCache();
+					cacheMap.put(handler, cache);
+				}
+				cache.inputItem = inputItem;
+				cache.blockedFull = blocked ? Boolean.TRUE : null;
+				cache.checkTime = now;
+
+				return blocked;
 			}
-
-			boolean blocked = !hasOutputSpace(handler);
-
-			if (cache == null) {
-				cache = new BlockCheckCache();
-				cacheMap.put(handler, cache);
-			}
-			cache.inputItem = inputItem;
-			cache.blockedFull = blocked ? Boolean.TRUE : null;
-			cache.checkTime = now;
-
-			return blocked;
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("shouldBlockOperation 检查异常", e);
 			return false;
@@ -295,11 +321,16 @@ public abstract class AbstractCombEventHandler {
 	 * <p>
 	 * BLOCK_CHECK_CACHES按handler实例存储缓存，handler引用了BlockEntity，
 	 * 若不清理，服务器关闭后这些BlockEntity无法被GC回收，造成内存泄漏。
+	 * <p>
+	 * 注：cacheMap 使用 WeakHashMap，BlockEntity 被 GC 时缓存条目会自动回收，
+	 * 此方法作为兜底清理，确保服务器停止时立即释放所有缓存。
 	 *
 	 * @param cacheMap 待清理的缓存Map
 	 */
-	protected static void clearBlockCheckCaches(ConcurrentHashMap<IItemHandlerModifiable, BlockCheckCache> cacheMap) {
-		cacheMap.clear();
+	protected static void clearBlockCheckCaches(Map<IItemHandlerModifiable, BlockCheckCache> cacheMap) {
+		synchronized (cacheMap) {
+			cacheMap.clear();
+		}
 	}
 
 	/**

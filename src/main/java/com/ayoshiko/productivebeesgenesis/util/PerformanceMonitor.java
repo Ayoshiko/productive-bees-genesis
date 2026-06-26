@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
@@ -42,6 +43,16 @@ public final class PerformanceMonitor {
     private PerformanceMonitor() {}
 
     public static PerformanceMonitor getInstance() { return INSTANCE; }
+
+    /**
+     * 配置是否启用性能监控
+     * <br/>
+     * 直接读取 {@link ModConfig#COMMON} 的配置项，默认关闭时所有 recordXxx 调用前的判断立即返回 false，
+     * 不产生 System.nanoTime 等额外开销。COMMON 在配置加载前为 null，加 null 检查避免 NPE。
+     */
+    public static boolean isEnabled() {
+        return ModConfig.COMMON != null && ModConfig.COMMON.enablePerformanceMonitor.get();
+    }
 
     /** 记录tick耗时 */
     public void recordTickTime(long nanos) {

@@ -38,10 +38,31 @@ public class BakedModelHalo extends WrappedItemModel {
 	private final float alpha;
 	private final boolean pulse;
 
-	/** 缓存烘焙后的四边形列表（按type索引：0=halo, 1=halo_noise, 2=halo小尺寸） */
+	/**
+	 * 缓存烘焙后的四边形列表（按纹理区分：halo=HALO_TEXTURE，halo_noise=HALO_NOISE_TEXTURE）。
+	 * <br/>
+	 * type==0 与 type==2 均使用 HALO_TEXTURE，仅渲染时缩放参数不同，因此共用 cachedHaloQuads，
+	 * 避免对同一纹理重复烘焙。
+	 */
 	private static volatile List<BakedQuad> cachedHaloQuads;
 	private static volatile List<BakedQuad> cachedHaloNoiseQuads;
-	private static volatile List<BakedQuad> cachedHaloSmallQuads;
+
+	/**
+	 * 失效所有 halo 四边形缓存
+	 * <br/>
+	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient}
+	 * 在 {@link net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent} 中调用。
+	 * <br/>
+	 * 原因：图集重新拼接后，缓存中持有的 TextureAtlasSprite 引用对应的 UV 坐标可能已变化，
+	 * 继续使用旧缓存会导致 halo 渲染错位或采样到错误纹理，因此必须在图集重建时清空缓存，
+	 * 下一帧渲染时由双重检查锁定重新烘焙。
+	 */
+	public static void invalidateCache() {
+		synchronized (BakedModelHalo.class) {
+			cachedHaloQuads = null;
+			cachedHaloNoiseQuads = null;
+		}
+	}
 
 	public BakedModelHalo(BakedModel bakedModel, int type, float alpha, boolean pulse) {
 		super(bakedModel);
@@ -77,21 +98,6 @@ public class BakedModelHalo extends WrappedItemModel {
 					TextureAtlasSprite sprite = textureAtlas.getSprite(HALO_NOISE_TEXTURE);
 					quads = RenderUtils.bakeItem(sprite);
 					cachedHaloNoiseQuads = quads;
-				}
-			}
-		}
-		return quads;
-	}
-
-	private static List<BakedQuad> getHaloSmallQuads(TextureAtlas textureAtlas) {
-		List<BakedQuad> quads = cachedHaloSmallQuads;
-		if (quads == null) {
-			synchronized (BakedModelHalo.class) {
-				quads = cachedHaloSmallQuads;
-				if (quads == null) {
-					TextureAtlasSprite sprite = textureAtlas.getSprite(HALO_TEXTURE);
-					quads = RenderUtils.bakeItem(sprite);
-					cachedHaloSmallQuads = quads;
 				}
 			}
 		}
@@ -172,7 +178,7 @@ public class BakedModelHalo extends WrappedItemModel {
 				}
 				poseStack.popPose();
 			} else if (this.type == 2) {
-				// type==2也需要启用blend以支持透明效果
+				// type==2 复用 cachedHaloQuads（与 type==0 共用 HALO_TEXTURE），仅缩放参数不同
 				blendEnabled = true;
 				depthTestDisabled = true;
 				RenderSystem.enableBlend();
@@ -183,7 +189,7 @@ public class BakedModelHalo extends WrappedItemModel {
 				PoseStack.Pose pose = poseStack.last();
 				poseStack.scale(1.5F, 1.5F, 1.0F);
 				poseStack.translate(-0.17F, -0.155F, 0.0F);
-				List<BakedQuad> quads = getHaloSmallQuads(textureAtlas);
+				List<BakedQuad> quads = getHaloQuads(textureAtlas);
 				for (BakedQuad quad : quads) {
 					vertexConsumer.putBulkData(pose, quad, 0.0F, 0.0F, 0.0F, this.alpha, packedLight, packedOverlay, true);
 				}

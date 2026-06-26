@@ -1,15 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 import javax.annotation.Nullable;
 
 import org.jetbrains.annotations.NotNull;
 
-import com.google.common.collect.ImmutableMap;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
@@ -17,16 +13,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.renderer.block.model.BlockElement;
-import net.minecraft.client.renderer.block.model.BlockElementFace;
-import net.minecraft.client.renderer.block.model.FaceBakery;
-import net.minecraft.client.renderer.block.model.ItemModelGenerator;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.core.Direction;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
@@ -34,12 +24,11 @@ import net.minecraft.world.item.ItemStack;
  * 包装普通 BakedModel 的抽象基类
  * <br/>
  * 实现 PerspectiveModel，从被包装模型提取 ItemTransforms 构造 PerspectiveModelState；
- * 提供 bakeItem 工具方法与 renderWrapped 委托原模型渲染。
+ * 提供 renderWrapped 委托原模型渲染。
+ * <p>
+ * 物品模型烘焙工具方法已统一到 {@link RenderUtils#bakeItem}，本类不再持有副本。
  */
 public abstract class WrappedItemModel implements PerspectiveModel {
-
-	public static final ItemModelGenerator ITEM_MODEL_GENERATOR = new ItemModelGenerator();
-	public static final FaceBakery FACE_BAKERY = new FaceBakery();
 
 	protected final BakedModel wrapped;
 	protected PerspectiveModelState parentState;
@@ -65,20 +54,6 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 	public WrappedItemModel(BakedModel wrapped) {
 		this.wrapped = wrapped;
 		this.parentState = TransformUtils.stateFromItemTransforms(wrapped.getTransforms());
-	}
-
-	public static List<BakedQuad> bakeItem(List<TextureAtlasSprite> sprites) {
-		List<BakedQuad> quads = new LinkedList<>();
-		for (int i = 0; i < sprites.size(); i++) {
-			TextureAtlasSprite sprite = sprites.get(i);
-			List<BlockElement> unbaked = ITEM_MODEL_GENERATOR.processFrames(i, "layer" + i, sprite.contents());
-			for (BlockElement element : unbaked) {
-				for (Map.Entry<Direction, BlockElementFace> entry : element.faces.entrySet()) {
-					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, entry.getValue(), sprite, entry.getKey(), new PerspectiveModelState(ImmutableMap.of()), element.rotation, element.shade));
-				}
-			}
-		}
-		return quads;
 	}
 
 	@Override

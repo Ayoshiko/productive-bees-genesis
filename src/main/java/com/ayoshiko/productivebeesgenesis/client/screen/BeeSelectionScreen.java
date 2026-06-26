@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -13,6 +14,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionCache;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
+import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState.SortMode;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 
 import net.minecraft.FieldsAreNonnullByDefault;
@@ -104,6 +106,24 @@ public final class BeeSelectionScreen extends Screen {
 	private List<BeeEntry> filteredEntries;
 	/** 带分组标题的显示列表 */
 	private final List<BeeSelectionRenderer.DisplayItem> displayItems = new ArrayList<>();
+	/**
+	 * 排序缓存 — 仅在 sortMode 或 allEntries 规模变化时重新排序，避免 rebuildWidgets 触发的重复排序
+	 * <p>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
+	private SortMode lastSortedMode = null;
+	private int lastSortedSize = -1;
+	/**
+	 * displayItems 构建缓存 — 仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建
+	 * <p>
+	 * 折叠状态通过 {@link #collapsedVersion} 计数器追踪，每次切换分组折叠时递增使缓存失效。
+	 * size + search 足以检测 filteredEntries 内容变化：buildDisplayItems 内部按 namespace 分组后
+	 * 会用当前 sortMode 重新排序组内条目，因此 filteredEntries 的顺序变化不影响最终结果。
+	 */
+	private int lastFilteredSize = -1;
+	private String lastSearchText = null;
+	private int collapsedVersion = 0;
+	private int lastCollapsedVersion = -1;
 	/**
 	 * 初始化标志位 — 区分首次加载与重建
 	 * <p>
@@ -291,6 +311,9 @@ public final class BeeSelectionScreen extends Screen {
 			ItemStack icon = level != null ? BeeInfoHelper.resolveBeeIcon(level, beeType) : ItemStack.EMPTY;
 			allEntries.add(new BeeEntry(beeType, displayName, productInfo, icon));
 		}
+		// allEntries 被重新赋值为新列表，重置排序缓存以强制下次排序
+		lastSortedMode = null;
+		lastSortedSize = -1;
 		recomputeFilteredEntries();
 	}
 
@@ -314,9 +337,18 @@ public final class BeeSelectionScreen extends Screen {
 	 * <p>
 	 * 先按当前排序规则排序，再应用“仅未添加”过滤与搜索过滤，
 	 * 最后按 namespace 分组并插入可折叠的组标题。
+	 * <p>
+	 * 排序结果缓存：仅在 sortMode 或 allEntries 规模变化时执行排序，
+	 * 避免 rebuildWidgets() 触发的 init() 中重复排序已有序列表。
 	 */
 	private void recomputeFilteredEntries() {
-		allEntries.sort(getSortComparator());
+		SortMode currentMode = state.getSortMode();
+		int currentSize = allEntries.size();
+		if (lastSortedMode != currentMode || lastSortedSize != currentSize) {
+			allEntries.sort(getSortComparator());
+			lastSortedMode = currentMode;
+			lastSortedSize = currentSize;
+		}
 
 		String lower = state.getSearchText().toLowerCase().trim();
 		Stream<BeeEntry> stream = allEntries.stream();
@@ -350,8 +382,22 @@ public final class BeeSelectionScreen extends Screen {
 	 * <p>
 	 * 组标题按 namespace 字母顺序排列，组内按当前排序规则排序。
 	 * 已折叠的分组仅保留标题。
+	 * <p>
+	 * 构建缓存：仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建，
+	 * 避免 rebuildWidgets() 触发的 init() 中重复构建。
 	 */
 	private void buildDisplayItems() {
+		int currentSize = filteredEntries.size();
+		String currentSearch = searchField != null ? searchField.getValue() : "";
+		if (lastFilteredSize == currentSize
+				&& Objects.equals(lastSearchText, currentSearch)
+				&& lastCollapsedVersion == collapsedVersion) {
+			return; // 使用缓存
+		}
+		lastFilteredSize = currentSize;
+		lastSearchText = currentSearch;
+		lastCollapsedVersion = collapsedVersion;
+
 		displayItems.clear();
 		Map<String, List<BeeEntry>> groups = new TreeMap<>();
 		for (BeeEntry entry : filteredEntries) {
@@ -378,6 +424,8 @@ public final class BeeSelectionScreen extends Screen {
 	 */
 	private void toggleGroupCollapsed(String namespace) {
 		state.toggleGroupCollapsed(namespace);
+		// 折叠状态变化，递增版本号使 displayItems 缓存失效
+		collapsedVersion++;
 		buildDisplayItems();
 		state.clampScrollOffset(Math.max(0, displayItems.size() - getVisibleEntryCount()));
 	}

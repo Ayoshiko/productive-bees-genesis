@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
@@ -138,6 +139,8 @@ public class PbRecipeProcessor {
 	private void checkRecipeVersion() {
 		if (lastRecipeVersion != ProductiveBeesGenesis.recipeVersion) {
 			clearSmeltingCacheAll();
+			// 清空每进程的当前PB配方引用，防止使用过期配方（配方重载后旧引用可能已失效）
+			Arrays.fill(cachedPbRecipes, null);
 			pbRecipeCache.clear();
 			lastRecipeVersion = ProductiveBeesGenesis.recipeVersion;
 		}
@@ -147,11 +150,14 @@ public class PbRecipeProcessor {
 	 * 清空所有进程的 SMELTING 配方缓存
 	 * <br/>
 	 * 在配方重载（/reload）时调用，确保下次 hasSmeltingRecipe 调用会重新查询配方。
-	 * 同时清空 PB 配方缓存（pbRecipeCache），因为 PB CentrifugeRecipe 也可能变更。
+	 * 同时清空 PB 配方缓存（pbRecipeCache）和每进程的当前PB配方引用（cachedPbRecipes），
+	 * 因为 PB CentrifugeRecipe 也可能变更。
 	 */
 	public void clearSmeltingCacheAll() {
 		Arrays.fill(lastCheckedInputs, ItemStack.EMPTY);
 		Arrays.fill(lastHasSmeltingRecipes, false);
+		// 同步清空每进程的当前PB配方引用，确保配方重载后不会使用过期配方
+		Arrays.fill(cachedPbRecipes, null);
 	}
 
 	/**
@@ -229,7 +235,14 @@ public class PbRecipeProcessor {
 		}
 
 		// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方
+		// 性能监控：记录查找耗时和缓存命中，仅启用时产生nanoTime开销
+		boolean monitor = PerformanceMonitor.isEnabled();
+		long lookupStart = monitor ? System.nanoTime() : 0L;
 		RecipeHolder<CentrifugeRecipe> pbRecipe = findPbRecipe(input);
+		if (monitor) {
+			PerformanceMonitor.getInstance().recordRecipeLookup(
+					System.nanoTime() - lookupStart, pbRecipeCache.wasLastGetHit());
+		}
 		if (pbRecipe == null) {
 			// 找不到PB配方：清空PB状态并关闭激活位
 			clearPbState(processIndex);
@@ -534,8 +547,8 @@ public class PbRecipeProcessor {
 		int maxTypes = Math.min(3, totalCount);
 		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypes(maxTypes, random);
 		if (selectedTypes.isEmpty()) {
-			// 缓存为空，消耗输入但不产出（避免卡死）
-			context.inputSlot(processIndex).shrinkStack(modifier, Action.EXECUTE);
+			// 缓存为空：不消耗输入，记录WARN日志（避免卡死和物品丢失，等待缓存重建后重试）
+			ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次处理（不消耗输入）", logPrefix, processIndex);
 			return;
 		}
 

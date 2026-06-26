@@ -14,7 +14,7 @@ import cy.jdkdigital.productivebees.common.block.entity.PoweredCentrifugeBlockEn
 /**
  * 动力离心机Mixin：PoweredCentrifugeBlockEntity 重写了 canOperate()，需独立注入（万象创世体系）
  * <p>
- * 继承关系: CentrifugeBlockEntity → PoweredCentrifugeBlockEntity → HeatedCentrifugeBlockEntity
+ * 继承关系: HeatedCentrifugeBlockEntity → PoweredCentrifugeBlockEntity → CentrifugeBlockEntity
  * <ul>
  *   <li>Powered 重写 canOperate() 仅检查能量，忽略输出槽空间检查 → 需要此Mixin</li>
  *   <li>completeRecipeProcessing 未被重写 → 父类 CentrifugeBlockEntityMixin 已覆盖</li>

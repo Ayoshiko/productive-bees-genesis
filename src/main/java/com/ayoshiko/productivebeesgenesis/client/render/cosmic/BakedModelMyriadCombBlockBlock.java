@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
@@ -37,10 +38,6 @@ import net.neoforged.neoforge.client.model.data.ModelData;
  */
 public class BakedModelMyriadCombBlockBlock implements BakedModel {
 
-	/** 万象创世蜜蜂类型 ID */
-	private static final ResourceLocation MYRIADCREATIONS_TYPE =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "myriadcreations");
-
 	/** PB 原始 configurable_comb 方块模型 */
 	private final BakedModel originalPbModel;
 
@@ -63,7 +60,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, @NotNull RandomSource rand,
 									@Nullable ModelData data, @Nullable RenderType renderType) {
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
-		if (MYRIADCREATIONS_TYPE.equals(combType)) {
+		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
 			return infinityModel.getQuads(state, side, rand, data, renderType);
 		}
 		return originalPbModel.getQuads(state, side, rand, data, renderType);
@@ -99,7 +96,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	@NotNull
 	public TextureAtlasSprite getParticleIcon(@NotNull ModelData data) {
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
-		if (MYRIADCREATIONS_TYPE.equals(combType)) {
+		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
 			return infinityModel.getParticleIcon(data);
 		}
 		return originalPbModel.getParticleIcon(data);

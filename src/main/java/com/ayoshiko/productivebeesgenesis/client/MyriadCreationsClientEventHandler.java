@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.api.distmarker.Dist;
@@ -96,7 +96,7 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 
 	@Override
 	protected ResourceLocation getBeeType() {
-		return MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE;
+		return PBConstants.MYRIADCREATIONS_TYPE;
 	}
 
 	@Override

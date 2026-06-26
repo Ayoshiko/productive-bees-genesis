@@ -25,9 +25,10 @@ public class BeeConfigReloadMixin {
     private void productivebeesgenesis$applyConfigOverrides(CallbackInfo ci) {
         try {
             BeeConfigApplier.applyOverrides();
-        } catch (IllegalStateException e) {
-            // 配置文件尚未加载，跳过本次覆盖，后续由 ModConfigEvent 触发
-            ProductiveBeesGenesis.LOGGER.info("蜜蜂配置尚未加载，跳过属性覆盖（首次启动正常行为）");
+        } catch (Exception e) {
+            // 捕获所有异常（包括配置未加载的 IllegalStateException 及其他意外异常），
+            // 跳过本次覆盖，后续由 ModConfigEvent 触发
+            ProductiveBeesGenesis.LOGGER.info("蜜蜂配置尚未加载或应用失败，跳过属性覆盖（首次启动正常行为）", e);
         }
     }
 }

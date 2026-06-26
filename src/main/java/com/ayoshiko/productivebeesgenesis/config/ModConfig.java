@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import java.util.List;
+import java.util.Set;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
@@ -24,6 +26,58 @@ public final class ModConfig {
         BLACKLIST,
         /** 白名单，仅允许列表中的蜜蜂类型 */
         WHITELIST
+    }
+
+    // ========== Validator 辅助常量 ==========
+    /** 十六进制颜色格式：#RRGGBB */
+    private static final String COLOR_PATTERN = "^#[0-9A-Fa-f]{6}$";
+
+    /** weatherTolerance 合法值集合 */
+    private static final Set<String> WEATHER_TOLERANCE_VALUES = Set.of(
+            "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
+    /** temper 合法值集合 */
+    private static final Set<String> TEMPER_VALUES = Set.of(
+            "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
+    /** behavior 合法值集合 */
+    private static final Set<String> BEHAVIOR_VALUES = Set.of(
+            "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");
+    /** endurance 合法值集合 */
+    private static final Set<String> ENDURANCE_VALUES = Set.of(
+            "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
+    /** productivity 合法值集合 */
+    private static final Set<String> PRODUCTIVITY_VALUES = Set.of(
+            "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
+
+    /**
+     * 校验十六进制颜色格式（#RRGGBB）
+     */
+    private static boolean validateColor(Object o) {
+        return o instanceof String s && s.matches(COLOR_PATTERN);
+    }
+
+    /**
+     * 校验字符串是否为合法的 ResourceLocation（如 minecraft:bee）
+     */
+    private static boolean validateResourceLocation(Object o) {
+        return o instanceof String s && !s.isBlank() && ResourceLocation.tryParse(s) != null;
+    }
+
+    /**
+     * 校验群系规格字符串：支持 "minecraft:plains" 或 "#c:is_plains" 标签格式
+     */
+    private static boolean validateBiomeSpec(Object o) {
+        if (!(o instanceof String s) || s.isBlank()) {
+            return false;
+        }
+        String parsed = s.startsWith("#") ? s.substring(1) : s;
+        return ResourceLocation.tryParse(parsed) != null;
+    }
+
+    /**
+     * 校验 defineList 元素是否为合法 ResourceLocation 字符串
+     */
+    private static boolean validateResourceLocationElement(Object o) {
+        return o instanceof String s && !s.isBlank() && ResourceLocation.tryParse(s.trim()) != null;
     }
 
     public static final ModConfigSpec CLIENT_SPEC;
@@ -137,6 +191,18 @@ public final class ModConfig {
         public final ModConfigSpec.ConfigValue<String> spawningNest;
         public final ModConfigSpec.ConfigValue<String> spawningBiomes;
 
+        // ========== 蜜蜂转化与产出配置 ==========
+        public final ModConfigSpec.BooleanValue conversionEnabled;
+        public final ModConfigSpec.ConfigValue<String> conversionSource;
+        public final ModConfigSpec.ConfigValue<String> conversionResult;
+        public final ModConfigSpec.ConfigValue<String> conversionItem;
+        public final ModConfigSpec.DoubleValue conversionChance;
+        public final ModConfigSpec.BooleanValue produceEnabled;
+        public final ModConfigSpec.ConfigValue<String> produceOutputItem;
+        public final ModConfigSpec.IntValue produceOutputMin;
+        public final ModConfigSpec.IntValue produceOutputMax;
+        public final ModConfigSpec.DoubleValue produceOutputChance;
+
         // ========== MEK离心机配置 ==========
         public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
         public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
@@ -154,38 +220,43 @@ public final class ModConfig {
             builder.push("colors").comment("颜色配置（写入蜜蜂数据并在客户端渲染）");
             primaryColor = builder
                     .comment("主颜色（十六进制，如 #FFD700）")
-                    .define("primaryColor", "#FF0000");
+                    .define("primaryColor", "#FF0000", ModConfig::validateColor);
             secondaryColor = builder
                     .comment("次要颜色")
-                    .define("secondaryColor", "#00FF00");
+                    .define("secondaryColor", "#00FF00", ModConfig::validateColor);
             particleColor = builder
                     .comment("粒子颜色")
-                    .define("particleColor", "#0000FF");
+                    .define("particleColor", "#0000FF", ModConfig::validateColor);
             glowColor = builder
                     .comment("光晕颜色（十六进制）")
-                    .define("glowColor", "#FFFFFF");
+                    .define("glowColor", "#FFFFFF", ModConfig::validateColor);
             builder.pop(); // colors
 
             flowerItem = builder
                     .comment("授粉物品ID")
-                    .define("flowerItem", "productivebees:honey_treat");
+                    .define("flowerItem", "productivebees:honey_treat", ModConfig::validateResourceLocation);
 
             builder.push("pb_attributes").comment("Productive Bees 独有属性");
             weatherTolerance = builder
                     .comment("天气耐受性", "可选值: weather_tolerance.none / weather_tolerance.rain / weather_tolerance.any")
-                    .define("weatherTolerance", "weather_tolerance.any");
+                    .define("weatherTolerance", "weather_tolerance.any",
+                            o -> o instanceof String s && WEATHER_TOLERANCE_VALUES.contains(s));
             temper = builder
                     .comment("性格", "可选值: temper.passive / temper.normal / temper.hostile / temper.aggressive")
-                    .define("temper", "temper.passive");
+                    .define("temper", "temper.passive",
+                            o -> o instanceof String s && TEMPER_VALUES.contains(s));
             behavior = builder
                     .comment("行为", "可选值: behavior.diurnal (昼行) / behavior.nocturnal (夜行) / behavior.metaturnal (昼夜皆可)")
-                    .define("behavior", "behavior.metaturnal");
+                    .define("behavior", "behavior.metaturnal",
+                            o -> o instanceof String s && BEHAVIOR_VALUES.contains(s));
             endurance = builder
                     .comment("耐力", "可选值: endurance.weak / endurance.normal / endurance.medium / endurance.strong")
-                    .define("endurance", "endurance.strong");
+                    .define("endurance", "endurance.strong",
+                            o -> o instanceof String s && ENDURANCE_VALUES.contains(s));
             productivity = builder
                     .comment("产量", "可选值: productivity.normal / productivity.medium / productivity.high / productivity.very_high")
-                    .define("productivity", "productivity.very_high");
+                    .define("productivity", "productivity.very_high",
+                            o -> o instanceof String s && PRODUCTIVITY_VALUES.contains(s));
             builder.pop();
 
             createComb = builder
@@ -206,7 +277,7 @@ public final class ModConfig {
 
             breedingItem = builder
                     .comment("繁殖物品ID")
-                    .define("breedingItem", "productivebees:honey_treat");
+                    .define("breedingItem", "productivebees:honey_treat", ModConfig::validateResourceLocation);
 
             breedingItemCount = builder
                     .comment("繁殖所需物品数量")
@@ -247,7 +318,7 @@ public final class ModConfig {
                             "minecraft:warm_ocean",
                             "minecraft:lukewarm_ocean",
                             "minecraft:deep_lukewarm_ocean"
-                    ), o -> o instanceof String);
+                    ), () -> "minecraft:plains", ModConfig::validateResourceLocationElement);
             builder.pop(); // fishing
 
             builder.push("breeding").comment("繁殖获得万象创世蜜蜂");
@@ -256,10 +327,10 @@ public final class ModConfig {
                     .define("enabled", true);
             breedingParent1 = builder
                     .comment("亲代蜜蜂1（注册名，如 productivebees:myriadcreations）")
-                    .define("parent1", "productivebees:myriadcreations");
+                    .define("parent1", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
             breedingParent2 = builder
                     .comment("亲代蜜蜂2（注册名）")
-                    .define("parent2", "productivebees:myriadcreations");
+                    .define("parent2", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
             builder.pop(); // breeding
 
             builder.push("spawning").comment("蜂巢生成万象创世蜜蜂");
@@ -268,13 +339,49 @@ public final class ModConfig {
                     .define("enabled", false);
             spawningNest = builder
                     .comment("生成蜜蜂的蜂巢方块（如 productivebees:stone_nest）")
-                    .define("nest", "productivebees:stone_nest");
+                    .define("nest", "productivebees:stone_nest", ModConfig::validateResourceLocation);
             spawningBiomes = builder
                     .comment("生成蜜蜂的群系（标签或群系ID，如 #c:is_plains）")
-                    .define("biomes", "#c:is_plains");
+                    .define("biomes", "#c:is_plains", ModConfig::validateBiomeSpec);
             builder.pop(); // spawning
 
             builder.pop(); // bee_acquisition
+
+            builder.comment("蜜蜂转化配方配置（用其他物品转化获得万象创世）").push("bee_conversion");
+            conversionEnabled = builder
+                    .comment("是否启用万象创世的物品转化配方")
+                    .define("enabled", true);
+            conversionSource = builder
+                    .comment("源蜜蜂类型（注册名，如 minecraft:bee）")
+                    .define("source", "minecraft:bee", ModConfig::validateResourceLocation);
+            conversionResult = builder
+                    .comment("转化目标蜜蜂（注册名，如 productivebees:myriadcreations）")
+                    .define("result", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
+            conversionItem = builder
+                    .comment("转化所需物品ID（如 minecraft:stick）")
+                    .define("item", "minecraft:stick", ModConfig::validateResourceLocation);
+            conversionChance = builder
+                    .comment("转化概率（0.0~1.0）")
+                    .defineInRange("chance", 1.0D, 0.0D, 1.0D);
+            builder.pop(); // bee_conversion
+
+            builder.comment("蜜蜂产出配方配置（万象创世蜜脾产出参数）").push("bee_produce");
+            produceEnabled = builder
+                    .comment("是否启用万象创世的蜜脾产出")
+                    .define("enabled", true);
+            produceOutputItem = builder
+                    .comment("产出物品ID（如 productivebees:configurable_honeycomb）", "使用 configurable_honeycomb 时会自动附加 bee_type 组件")
+                    .define("outputItem", "productivebees:configurable_honeycomb", ModConfig::validateResourceLocation);
+            produceOutputMin = builder
+                    .comment("最小产出数量")
+                    .defineInRange("outputMin", 1, 1, 64);
+            produceOutputMax = builder
+                    .comment("最大产出数量")
+                    .defineInRange("outputMax", 1, 1, 64);
+            produceOutputChance = builder
+                    .comment("产出概率（0.0~1.0）")
+                    .defineInRange("outputChance", 1.0D, 0.0D, 1.0D);
+            builder.pop(); // bee_produce
 
             builder.comment("MEK离心机设置").push("mek_centrifuge");
 
@@ -340,7 +447,7 @@ public final class ModConfig {
 
             myriadCreationsFilteredBeeTypes = builder
                     .comment("过滤的蜜蜂类型列表", "格式: 模组ID:蜜蜂类型，如 productivebees:iron", "黑名单模式下排除这些类型，白名单模式下仅允许这些类型")
-                    .defineList("filteredBeeTypes", List.of(), obj -> obj instanceof String);
+                    .defineList("filteredBeeTypes", List.of(), () -> "productivebees:iron", ModConfig::validateResourceLocationElement);
 
             builder.pop();
         }

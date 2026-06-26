@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -49,17 +52,24 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 @MethodsReturnNonnullByDefault
 public final class MyriadCreationsEventHandler extends AbstractCombEventHandler {
 
-	/** 万象创世蜜蜂类型ID */
-	public static final ResourceLocation MYRIADCREATIONS_TYPE =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "myriadcreations");
-
 	/** 缓存排除万象创世自身后的所有蜜蜂类型（volatile保证跨线程可见性） */
 	private static volatile CopyOnWriteArrayList<ResourceLocation> CACHED_BEE_TYPES = new CopyOnWriteArrayList<>();
 	private static final AtomicBoolean CACHE_VALID = new AtomicBoolean(false);
 	private static final AtomicInteger lastCacheUpdateTick = new AtomicInteger(0);
 
-	/** 按 handler 实例存储空转拦截缓存，避免多机器场景下缓存互相覆盖 */
-	private static final ConcurrentHashMap<IItemHandlerModifiable, BlockCheckCache> BLOCK_CHECK_CACHES = new ConcurrentHashMap<>();
+	/**
+	 * 按 handler 实例存储空转拦截缓存，避免多机器场景下缓存互相覆盖
+	 * <p>
+	 * 使用 {@link Collections#synchronizedMap} 包装的 {@link WeakHashMap}：
+	 * <ul>
+	 *   <li>WeakHashMap 的 key 为弱引用，handler 与 BlockEntity 生命周期绑定，
+	 *       BlockEntity 被 GC 时 handler 也会被 GC，缓存条目自动被回收，避免内存泄漏</li>
+	 *   <li>synchronizedMap 提供线程安全访问，复合操作在 {@link AbstractCombEventHandler#checkBlockOperation}
+	 *       内通过 synchronized 块保护</li>
+	 * </ul>
+	 */
+	private static final Map<IItemHandlerModifiable, BlockCheckCache> BLOCK_CHECK_CACHES =
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	// ========== 缓存管理 ==========
 
@@ -88,14 +98,23 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 *   <li>排除没有离心配方的蜜蜂</li>
 	 *   <li>应用配置文件的黑白名单过滤</li>
 	 * </ol>
+	 * <p>
+	 * 性能优化：配置的过滤模式与过滤列表在单次缓存更新内不会变化，
+	 * 预先构建 filterSet 并捕获到 Predicate 中，避免对每个蜜蜂类型重复创建 HashSet。
 	 *
 	 * @param level 服务端世界
 	 */
 	private static void updateBeeTypeCache(ServerLevel level) {
 		Set<ResourceLocation> excluded = new HashSet<>();
-		excluded.add(MYRIADCREATIONS_TYPE);
+		excluded.add(PBConstants.MYRIADCREATIONS_TYPE);
 
-		CopyOnWriteArrayList<ResourceLocation> newCache = buildBeeTypeCache(level, excluded, MyriadCreationsEventHandler::applyConfigFilter);
+		// 预先读取配置并构建 filterSet，避免在 Predicate 中对每个蜜蜂类型重复分配
+		ModConfig.FilterMode mode = ModConfig.SERVER.myriadCreationsFilterMode.get();
+		List<? extends String> filteredList = ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get();
+		Set<String> filterSet = filteredList.isEmpty() ? Set.of() : new HashSet<>(filteredList);
+
+		CopyOnWriteArrayList<ResourceLocation> newCache = buildBeeTypeCache(
+				level, excluded, beeType -> applyConfigFilter(beeType, mode, filterSet));
 		if (newCache.isEmpty() && !CACHE_VALID.get()) {
 			// 首次构建且为空时不更新，保留旧缓存
 			return;
@@ -110,20 +129,19 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * DISABLED — 不过滤（默认）
 	 * BLACKLIST — 排除列表中的蜜蜂类型
 	 * WHITELIST — 仅保留列表中的蜜蜂类型
+	 * <p>
+	 * filterSet 由调用方预先构建并传入，避免对每个蜜蜂类型重复创建 HashSet。
 	 *
-	 * @param beeType 待检查的蜜蜂类型
+	 * @param beeType   待检查的蜜蜂类型
+	 * @param mode      过滤模式
+	 * @param filterSet 预先构建的过滤集合
 	 * @return true 保留该类型，false 排除
 	 */
-	private static boolean applyConfigFilter(ResourceLocation beeType) {
-		ModConfig.FilterMode mode = ModConfig.SERVER.myriadCreationsFilterMode.get();
+	private static boolean applyConfigFilter(ResourceLocation beeType, ModConfig.FilterMode mode, Set<String> filterSet) {
 		if (mode == ModConfig.FilterMode.DISABLED) return true;
+		if (filterSet.isEmpty()) return true;
 
-		List<? extends String> filteredList = ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get();
-		if (filteredList.isEmpty()) return true;
-
-		Set<String> filterSet = new HashSet<>(filteredList);
 		String beeTypeStr = beeType.toString();
-
 		if (mode == ModConfig.FilterMode.BLACKLIST) {
 			return !filterSet.contains(beeTypeStr);
 		} else if (mode == ModConfig.FilterMode.WHITELIST) {
@@ -157,7 +175,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()) {
 				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
-				return beeType != null && MYRIADCREATIONS_TYPE.equals(beeType);
+				return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
 			}
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾类型时发生错误", e);
@@ -171,7 +189,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
 				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
-				return beeType != null && MYRIADCREATIONS_TYPE.equals(beeType);
+				return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
 			}
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾块类型时发生错误", e);
@@ -243,7 +261,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * <p>
 	 * 委托给基类方法，保持public static API兼容。
 	 */
-	public static java.util.Map<ResourceLocation, Integer> allocateEvenly(int total, List<ResourceLocation> types) {
+	public static Map<ResourceLocation, Integer> allocateEvenly(int total, List<ResourceLocation> types) {
 		return AbstractCombEventHandler.allocateEvenly(total, types);
 	}
 

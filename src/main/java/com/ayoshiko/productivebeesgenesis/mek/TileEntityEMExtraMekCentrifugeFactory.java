@@ -153,9 +153,17 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
         return MekCentrifugeFactoryHelper.createFluidOutputHolder(this, listener, tier.processes, t -> fluidOutputTank = t);
     }
 
+    /**
+     * 重写isItemValidForSlot — 同时查找SMELTING和PB CentrifugeRecipe
+     * <br/>
+     * 父类默认无条件返回true，导致任意物品都能插入输入槽（如配置卡、红石等）。
+     * 委托给 {@link MekCentrifugeFactoryHelper#isValidInputItem} 验证物品是否有有效配方，
+     * 防止无效物品进入输入槽占用空间。客户端（level为null）返回false避免NPE。
+     */
     @Override
     public boolean isItemValidForSlot(@NotNull ItemStack stack) {
-        return true;
+        if (level == null) return false;
+        return MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor);
     }
 
     /**
@@ -226,9 +234,10 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
     }
 
     /**
-     * JEI配方查看器跳转支持 — 双配方类型
+     * JEI配方查看器跳转支持
      * <br/>
-     * 返回PB离心配方类型，使JEI中点击配方时能跳转到PB离心配方类别。
+     * 返回SMELTING类型，使JEI中点击配方时能正确跳转到熔炼配方类别。
+     * 参考Mekanism原版TileEntityItemStackToItemStackFactory的实现。
      */
     @NotNull
     @Override

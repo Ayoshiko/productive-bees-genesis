@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.init;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeMEBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityExtraMekCentrifugeFactory;
@@ -135,8 +137,8 @@ public final class ModBlockEntities {
      * 当MekanismExtras加载时，遍历4个ExtraFactoryTier（ABSOLUTE/SUPREME/COSMIC/INFINITE），
      * 为每个tier注册独立的BlockEntityType。
      * 使用TileEntityExtraMekCentrifugeFactory作为TileEntity类，配置server/client ticker和CONFIG_CARD。
-     * 注册结果填充到MekCentrifugeBlockType.ModBlockEntitiesHolder.ME_FACTORY_TILES Map，
-     * 供MekCentrifugeBlockType.createMEFactoryBlockType()的懒加载Supplier使用。
+     * 注册结果填充到MekCentrifugeMEBlockType.ME_FACTORY_TILES Map，
+     * 供MekCentrifugeMEBlockType.createMEFactoryBlockType()的懒加载Supplier使用。
      * <p>
      * 调用时机：必须在ModBlocks.registerMEFactories()之后（需要DeferredBlock）、
      * BLOCK_ENTITIES.register(eventBus)之前调用。
@@ -158,7 +160,7 @@ public final class ModBlockEntities {
                             .clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
                             .withSimple(Capabilities.CONFIG_CARD)
                             .build();
-            MekCentrifugeBlockType.ModBlockEntitiesHolder.ME_FACTORY_TILES.put(tier, tileType);
+            MekCentrifugeMEBlockType.ME_FACTORY_TILES.put(tier, tileType);
         }
     }
 
@@ -168,8 +170,8 @@ public final class ModBlockEntities {
      * 当EvolvedMekanismExtras加载时，遍历4个EMExtraFactoryTier（ABSOLUTE_OVERCLOCKED/
      * SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL），为每个tier注册独立的BlockEntityType。
      * 使用TileEntityEMExtraMekCentrifugeFactory作为TileEntity类，配置server/client ticker和CONFIG_CARD。
-     * 注册结果填充到MekCentrifugeBlockType.ModBlockEntitiesHolder.EME_FACTORY_TILES Map，
-     * 供MekCentrifugeBlockType.createEMEFactoryBlockType()的懒加载Supplier使用。
+     * 注册结果填充到MekCentrifugeEMEBlockType.EME_FACTORY_TILES Map，
+     * 供MekCentrifugeEMEBlockType.createEMEFactoryBlockType()的懒加载Supplier使用。
      * <p>
      * 调用时机：必须在ModBlocks.registerEMEFactories()之后（需要DeferredBlock）、
      * BLOCK_ENTITIES.register(eventBus)之前调用。
@@ -191,7 +193,7 @@ public final class ModBlockEntities {
                             .clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
                             .withSimple(Capabilities.CONFIG_CARD)
                             .build();
-            MekCentrifugeBlockType.ModBlockEntitiesHolder.EME_FACTORY_TILES.put(tier, tileType);
+            MekCentrifugeEMEBlockType.EME_FACTORY_TILES.put(tier, tileType);
         }
     }
 

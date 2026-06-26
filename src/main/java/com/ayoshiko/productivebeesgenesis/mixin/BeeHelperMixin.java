@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import cy.jdkdigital.productivebees.util.BeeHelper;
@@ -41,15 +42,18 @@ public class BeeHelperMixin {
 		try {
 			if (!(beeEntity instanceof ConfigurableBee configurableBee)) return;
 			ResourceLocation beeType = configurableBee.getBeeType();
-			boolean isMyriad = MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE.equals(beeType);
+			boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
 			if (!isMyriad) return;
 
-			List<ItemStack> originalOutput = new ArrayList<>(cir.getReturnValue());
+			// 防御性检查：原方法返回值可能为 null（理论上不应发生，但避免 NPE 导致崩溃）
+			List<ItemStack> ret = cir.getReturnValue();
+			if (ret == null) return;
+			List<ItemStack> originalOutput = new ArrayList<>(ret);
 			List<ItemStack> enhancedOutput = new ArrayList<>();
 
-			// 处理原版产出
+			// 处理原版产出（isMyriad 已在上方保证为 true，无需重复检查）
 			for (ItemStack stack : originalOutput) {
-				if (isMyriad && hasCombBlockUpgrade && MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(stack)) {
+				if (hasCombBlockUpgrade && MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(stack)) {
 					// Omega升级时将万象创世蜜脾转换为随机蜜脾块
 					enhancedOutput.add(MyriadCreationsEventHandler.getRandomCombBlock());
 				} else {
@@ -58,15 +62,13 @@ public class BeeHelperMixin {
 			}
 
 			// 万象创世追加随机产出：Omega时追加4个随机蜜脾块，否则追加1个随机蜜脾
-			if (isMyriad) {
-				int extraCount = hasCombBlockUpgrade ? 4 : 1;
-				for (int i = 0; i < extraCount; i++) {
-					ItemStack randomOutput = hasCombBlockUpgrade
-							? MyriadCreationsEventHandler.getRandomCombBlock()
-							: MyriadCreationsEventHandler.getRandomHoneycomb();
-					if (!randomOutput.isEmpty()) {
-						enhancedOutput.add(randomOutput);
-					}
+			int extraCount = hasCombBlockUpgrade ? 4 : 1;
+			for (int i = 0; i < extraCount; i++) {
+				ItemStack randomOutput = hasCombBlockUpgrade
+						? MyriadCreationsEventHandler.getRandomCombBlock()
+						: MyriadCreationsEventHandler.getRandomHoneycomb();
+				if (!randomOutput.isEmpty()) {
+					enhancedOutput.add(randomOutput);
 				}
 			}
 

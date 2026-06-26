@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
-import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import org.spongepowered.asm.mixin.Mixin;
@@ -32,7 +32,7 @@ public abstract class ConfigurableBeeColorMixin {
     @Inject(method = "getColor", at = @At("HEAD"), cancellable = true)
     private void productivebeesgenesis$onGetColor(int tintIndex, float partialTicks, CallbackInfoReturnable<Integer> cir) {
         ConfigurableBee self = productivebeesgenesis$getSelf();
-        if (!MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+        if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
             return; // 非万象创世蜜蜂，使用原始逻辑
         }
 
@@ -48,7 +48,7 @@ public abstract class ConfigurableBeeColorMixin {
     @Inject(method = "getTertiaryColor", at = @At("HEAD"), cancellable = true)
     private void productivebeesgenesis$onGetTertiaryColor(float partialTicks, CallbackInfoReturnable<Integer> cir) {
         ConfigurableBee self = productivebeesgenesis$getSelf();
-        if (!MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+        if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
             return;
         }
 
@@ -66,7 +66,7 @@ public abstract class ConfigurableBeeColorMixin {
     @Inject(method = "getParticleColor", at = @At("HEAD"), cancellable = true)
     private void productivebeesgenesis$onGetParticleColor(CallbackInfoReturnable<Integer> cir) {
         ConfigurableBee self = productivebeesgenesis$getSelf();
-        if (!MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+        if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
             return;
         }
 
@@ -84,6 +84,8 @@ public abstract class ConfigurableBeeColorMixin {
     /** 将 float[] {r, g, b} (0-1) 转换为 ARGB int */
     @Unique
     private static int productivebeesgenesis$floatToArgb(float[] rgb) {
+        // 防御性检查：避免 null 或长度不足导致数组越界崩溃
+        if (rgb == null || rgb.length < 3) return 0xFFFFFFFF;
         int color = 0xFF000000; // 完全不透明
         color |= ((int) (rgb[0] * 255) << 16);
         color |= ((int) (rgb[1] * 255) << 8);

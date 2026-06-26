@@ -9,7 +9,6 @@ import javax.annotation.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 
-import cy.jdkdigital.productivebees.ProductiveBees;
 import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
@@ -41,9 +40,14 @@ import net.minecraft.world.level.Level;
  */
 public final class BeeInfoHelper {
 
-	/** 万象创世自身类型，列表展示时排除 */
-	private static final ResourceLocation MYRIADCREATIONS_TYPE =
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "myriadcreations");
+	/**
+	 * getAllBeeTypes 结果缓存
+	 * <p>
+	 * 蜜蜂类型在 BeeReloadListener 重载前不会变化，缓存避免 GUI 每次打开时重复遍历。
+	 * 使用 volatile 保证跨线程可见性（客户端 GUI 线程读取，重载事件线程失效）。
+	 * 缓存值为不可变列表，发布后安全共享。
+	 */
+	private static volatile List<ResourceLocation> cachedAllBeeTypes = null;
 
 	private BeeInfoHelper() {
 		// 工具类禁止实例化
@@ -53,11 +57,16 @@ public final class BeeInfoHelper {
 	 * 获取所有已注册的蜜蜂类型（排除万象创世自身）
 	 * <p>
 	 * 数据来源：ProductiveBees 的 BeeReloadListener，包含所有通过 JSON 注册的可配置蜜蜂。
+	 * 结果会被缓存，直到 {@link #invalidateCache()} 被调用（通常在数据重载时）。
 	 *
 	 * @return 蜜蜂类型列表（只读副本，可能为空）
 	 */
 	@Nonnull
 	public static List<ResourceLocation> getAllBeeTypes() {
+		List<ResourceLocation> cached = cachedAllBeeTypes;
+		if (cached != null) {
+			return cached;
+		}
 		try {
 			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
 			if (beeData == null || beeData.isEmpty()) {
@@ -65,15 +74,28 @@ public final class BeeInfoHelper {
 			}
 			List<ResourceLocation> result = new ArrayList<>(beeData.size());
 			for (ResourceLocation beeType : beeData.keySet()) {
-				if (!MYRIADCREATIONS_TYPE.equals(beeType)) {
+				if (!PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) {
 					result.add(beeType);
 				}
 			}
-			return result;
+			// 发布为不可变列表，便于安全共享
+			List<ResourceLocation> immutable = List.copyOf(result);
+			cachedAllBeeTypes = immutable;
+			return immutable;
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("获取蜜蜂类型列表时发生错误", e);
 			return List.of();
 		}
+	}
+
+	/**
+	 * 失效蜜蜂类型缓存
+	 * <p>
+	 * 应在 BeeReloadListener 重载完成或数据包变更时调用，确保下次查询返回最新数据。
+	 * 由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 中统一调用。
+	 */
+	public static void invalidateCache() {
+		cachedAllBeeTypes = null;
 	}
 
 	/**
@@ -91,7 +113,7 @@ public final class BeeInfoHelper {
 	public static Component getBeeDisplayName(@Nonnull ResourceLocation beeType) {
 		try {
 			String beeName = ProductiveBee.getBeeName(beeType);
-			String translationKey = "entity." + ProductiveBees.MODID + "." + beeName + "_bee";
+			String translationKey = "entity." + PBConstants.PRODUCTIVE_BEES_MOD_ID + "." + beeName + "_bee";
 			return Component.translatable(translationKey);
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("获取蜜蜂显示名称失败: {}", beeType, e);
@@ -207,13 +229,13 @@ public final class BeeInfoHelper {
 
 	/** 特殊蜜蜂产物描述注册表：键为蜜蜂类型ID，值为产物翻译键（数据驱动，避免硬编码 switch） */
 	private static final Map<ResourceLocation, String> SPECIAL_BEE_PRODUCTS = Map.of(
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "lumber_bee"), "productivebeesgenesis.config.product.lumber_bee",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "quarry_bee"), "productivebeesgenesis.config.product.quarry_bee",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "dye_bee"), "productivebeesgenesis.config.product.dye_bee",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "wanna"), "productivebeesgenesis.config.product.wanna",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "farmer_bee"), "productivebeesgenesis.config.product.farmer_bee",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "collector_bee"), "productivebeesgenesis.config.product.collector_bee",
-			ResourceLocation.fromNamespaceAndPath(ProductiveBees.MODID, "hoarder_bee"), "productivebeesgenesis.config.product.hoarder_bee");
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"), "productivebeesgenesis.config.product.lumber_bee",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"), "productivebeesgenesis.config.product.quarry_bee",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"), "productivebeesgenesis.config.product.dye_bee",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "wanna"), "productivebeesgenesis.config.product.wanna",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "farmer_bee"), "productivebeesgenesis.config.product.farmer_bee",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "collector_bee"), "productivebeesgenesis.config.product.collector_bee",
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "hoarder_bee"), "productivebeesgenesis.config.product.hoarder_bee");
 
 	/**
 	 * 获取特殊蜜蜂的动态产物描述

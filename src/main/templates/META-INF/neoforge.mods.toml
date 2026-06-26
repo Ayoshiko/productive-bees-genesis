@@ -80,7 +80,7 @@ config="${mod_id}.iris.mixins.json"
 [[dependencies.${mod_id}]]
     modId="evolvedmekanism_extras"
     type="optional"
-    versionRange="[1.0,)"
+    versionRange="[1.2.1,)"
     ordering="AFTER"
     side="BOTH"
 
@@ -91,14 +91,6 @@ config="${mod_id}.iris.mixins.json"
     versionRange="[0.3.0,)"
     ordering="AFTER"
     side="BOTH"
-
-# RenderBlender 可选依赖（提供 cosmic 星空渲染和 glow_edge 发光边缘效果，仅客户端）
-[[dependencies.${mod_id}]]
-    modId="renderblender"
-    type="optional"
-    versionRange="[1.1.1,)"
-    ordering="AFTER"
-    side="CLIENT"
 
 # Iris 光影可选依赖（提供着色器兼容层，仅客户端）
 # IrisConfigPlugin 会检测 Iris 是否安装，仅安装时才应用 Iris Mixin

@@ -285,6 +285,6 @@ final class FilterListRenderer {
 	}
 
 	private int getActionColumnX() {
-		return screen.width - FilterListScreen.SCREEN_MARGIN - FilterListScreen.DELETE_BUTTON_WIDTH;
+		return FilterListScreen.getDeleteButtonX(screen.width);
 	}
 }

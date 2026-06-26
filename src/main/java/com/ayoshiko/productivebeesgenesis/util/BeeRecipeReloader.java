@@ -14,9 +14,12 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
+import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeBreedingRecipe;
+import cy.jdkdigital.productivebees.common.recipe.BeeConversionRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeSpawningRecipe;
+import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
@@ -48,9 +51,6 @@ import net.minecraft.world.level.biome.Biome;
  */
 public final class BeeRecipeReloader implements PreparableReloadListener {
 
-	/** 万象创世蜜蜂类型常量 */
-	private static final String MYRIADCREATIONS_TYPE = "productivebees:myriadcreations";
-
 	private final RecipeManager recipeManager;
 	private final HolderLookup.Provider registryAccess;
 
@@ -81,24 +81,31 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 */
 	private void overrideRecipes() {
 		try {
-			List<RecipeHolder<?>> allRecipes = new ArrayList<>(recipeManager.getRecipes());
+			// 就绪检查：BeeIngredientFactory 必须已加载 myriadcreations，否则 toNetwork 序列化时会 NPE
+			if (!BeeIngredientFactory.getOrCreateList().containsKey(PBConstants.MYRIADCREATIONS_TYPE_STRING)) {
+				ProductiveBeesGenesis.LOGGER.warn("BeeIngredientFactory 未就绪（缺少 myriadcreations），跳过配方替换");
+				return;
+			}
+			List<RecipeHolder<?>> sourceRecipes = new ArrayList<>(recipeManager.getRecipes());
+			// 构建新列表，避免在遍历中通过索引 remove(i)/i-- 造成的易错写法
+			List<RecipeHolder<?>> processedRecipes = new ArrayList<>(sourceRecipes.size());
 			boolean modified = false;
 
-			for (int i = 0; i < allRecipes.size(); i++) {
-				RecipeHolder<?> holder = allRecipes.get(i);
+			for (RecipeHolder<?> holder : sourceRecipes) {
 				RecipeHolder<?> processed = processRecipe(holder);
 				if (processed == null) {
-					allRecipes.remove(i);
-					i--;
+					// processRecipe 返回 null 表示移除该配方
 					modified = true;
-				} else if (processed != holder) {
-					allRecipes.set(i, processed);
-					modified = true;
+				} else {
+					if (processed != holder) {
+						modified = true;
+					}
+					processedRecipes.add(processed);
 				}
 			}
 
 			if (modified) {
-				recipeManager.replaceRecipes(allRecipes);
+				recipeManager.replaceRecipes(processedRecipes);
 				clearBeeFishingCaches();
 				ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂配方已根据配置重载");
 			}
@@ -157,6 +164,35 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			return new RecipeHolder<>(holder.id(), newRecipe);
 		}
 
+		// 蜜蜂转化配方：用其他物品转化获得万象创世，或禁用
+		if (recipe instanceof BeeConversionRecipe conversion) {
+			if (!isMyriadcreations(conversion.result)) {
+				return holder;
+			}
+			if (!ModConfig.COMMON.conversionEnabled.get()) {
+				return null;
+			}
+			Supplier<BeeIngredient> source = getBeeIngredient(ModConfig.COMMON.conversionSource.get());
+			Supplier<BeeIngredient> result = getBeeIngredient(ModConfig.COMMON.conversionResult.get());
+			Ingredient item = createIngredient(ModConfig.COMMON.conversionItem.get());
+			float chance = ModConfig.COMMON.conversionChance.get().floatValue();
+			BeeConversionRecipe newRecipe = new BeeConversionRecipe(source, result, item, chance);
+			return new RecipeHolder<>(holder.id(), newRecipe);
+		}
+
+		// 蜜蜂产出配方：万象创世蜜脾产出参数，或禁用
+		if (recipe instanceof AdvancedBeehiveRecipe produce) {
+			if (!isMyriadcreations(produce.ingredient)) {
+				return holder;
+			}
+			if (!ModConfig.COMMON.produceEnabled.get()) {
+				return null;
+			}
+			List<TagOutputRecipe.ChancedOutput> outputs = createProduceOutputs();
+			AdvancedBeehiveRecipe newRecipe = new AdvancedBeehiveRecipe(produce.ingredient, outputs);
+			return new RecipeHolder<>(holder.id(), newRecipe);
+		}
+
 		return holder;
 	}
 
@@ -165,8 +201,12 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 */
 	private static boolean isMyriadcreations(Supplier<BeeIngredient> supplier) {
 		try {
-			return supplier != null && supplier.get() != null
-					&& MYRIADCREATIONS_TYPE.equals(supplier.get().getBeeType().toString());
+			if (supplier == null) {
+				return false;
+			}
+			// 缓存 supplier.get() 结果，避免重复求值（supplier 可能涉及懒加载）
+			BeeIngredient ing = supplier.get();
+			return ing != null && PBConstants.MYRIADCREATIONS_TYPE.equals(ing.getBeeType());
 		} catch (Exception e) {
 			return false;
 		}
@@ -255,7 +295,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	/**
 	 * 根据物品 ID 创建 Ingredient，找不到则返回 EMPTY
 	 */
-	private Ingredient createIngredient(String itemId) {
+	private static Ingredient createIngredient(String itemId) {
 		try {
 			ResourceLocation rl = ResourceLocation.parse(itemId);
 			Optional<Item> item = BuiltInRegistries.ITEM.getOptional(rl);
@@ -264,6 +304,45 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			ProductiveBeesGenesis.LOGGER.warn("解析蜂巢物品 '{}' 失败，使用空 Ingredient", itemId, e);
 			return Ingredient.EMPTY;
 		}
+	}
+
+	/**
+	 * 根据蜜蜂类型名获取 BeeIngredient 供应商
+	 * <br/>
+	 * 使用 {@link BeeIngredientFactory#getIngredient(String)} 获取 lazy supplier。
+	 * 调用前会先校验 BeeIngredientFactory 已包含该类型，避免序列化时返回 null。
+	 * 若类型不存在，回退到 minecraft:bee 防止 NPE。
+	 */
+	private static Supplier<BeeIngredient> getBeeIngredient(String name) {
+		if (name == null || name.isBlank()) {
+			return BeeIngredientFactory.getIngredient("minecraft:bee");
+		}
+		if (!BeeIngredientFactory.getOrCreateList().containsKey(name)) {
+			ProductiveBeesGenesis.LOGGER.warn("蜜蜂类型 '{}' 未在 BeeIngredientFactory 中找到，回退到 minecraft:bee", name);
+			return BeeIngredientFactory.getIngredient("minecraft:bee");
+		}
+		return BeeIngredientFactory.getIngredient(name);
+	}
+
+	/**
+	 * 根据配置构建万象创世蜜脾的产出列表
+	 * <br/>
+	 * 返回单个 {@link TagOutputRecipe.ChancedOutput}，物品、数量、概率均来自配置。
+	 */
+	private static List<TagOutputRecipe.ChancedOutput> createProduceOutputs() {
+		Ingredient ingredient = createIngredient(ModConfig.COMMON.produceOutputItem.get());
+		int min = ModConfig.COMMON.produceOutputMin.get();
+		int max = ModConfig.COMMON.produceOutputMax.get();
+		// 防御性处理：当配置出现 min > max 时自动纠正，避免 ChancedOutput 行为异常
+		int finalMin = Math.min(min, max);
+		int finalMax = Math.max(min, max);
+		if (finalMin != min || finalMax != max) {
+			ProductiveBeesGenesis.LOGGER.warn("produceOutputMin({}) > produceOutputMax({})，已自动交换", min, max);
+		}
+		float chance = ModConfig.COMMON.produceOutputChance.get().floatValue();
+		List<TagOutputRecipe.ChancedOutput> outputs = new ArrayList<>(1);
+		outputs.add(new TagOutputRecipe.ChancedOutput(ingredient, finalMin, finalMax, chance));
+		return outputs;
 	}
 
 	/**

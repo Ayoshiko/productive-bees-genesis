@@ -123,7 +123,7 @@ public final class MekCompatHooks {
      * @param tier 待比较的Mekanism工厂等级
      * @return true 如果EM已加载且tier.ordinal >= OVERCLOCKED.ordinal
      */
-    public static boolean isEMTierAboveOverlocked(FactoryTier tier) {
+    public static boolean isEMTierAboveOverclocked(FactoryTier tier) {
         if (!isEvolvedMekanismLoaded() || tier == null) {
             return false;
         }

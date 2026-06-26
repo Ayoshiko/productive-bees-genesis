@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.mojang.datafixers.util.Pair;
@@ -81,6 +82,19 @@ public final class FilterListScreen extends Screen {
 	/** 右侧操作区固定宽度（仅保留删除按钮，并预留滚动条空间） */
 	static final int ACTION_AREA_WIDTH = DELETE_BUTTON_WIDTH + SCROLL_BAR_RIGHT_MARGIN + SCROLL_BAR_WIDTH + 4;
 
+	/**
+	 * 计算删除按钮的 X 坐标（左边界）。
+	 * <p>
+	 * 删除按钮位于滚动条左侧，避免遮挡滚动条。
+	 * {@link FilterListRenderer#getActionColumnX()} 复用此方法，保证操作列坐标与删除按钮位置一致。
+	 *
+	 * @param screenWidth 屏幕宽度
+	 * @return 删除按钮左边界 X 坐标
+	 */
+	static int getDeleteButtonX(int screenWidth) {
+		return screenWidth - SCREEN_MARGIN - SCROLL_BAR_RIGHT_MARGIN - SCROLL_BAR_WIDTH - DELETE_BUTTON_WIDTH;
+	}
+
 	// ========== 状态数据 ==========
 	private final Screen parent;
 	/** 本地编辑副本（用户修改后点击保存才写入配置） */
@@ -108,6 +122,14 @@ public final class FilterListScreen extends Screen {
 	private final Map<String, Component> beeProductInfoCache = new ConcurrentHashMap<>();
 	/** 列表渲染辅助类 */
 	private final FilterListRenderer renderer = new FilterListRenderer(this);
+
+	/**
+	 * 当前可见条目的删除按钮列表
+	 * <p>
+	 * 滚动时仅需重建这些按钮（因为回调捕获了条目索引），而非全量 {@link #rebuildWidgets()}，
+	 * 避免每帧销毁并重建搜索框、模式按钮、输入框等与滚动无关的组件。
+	 */
+	private final List<Button> entryButtons = new ArrayList<>();
 
 	/** 拖拽排序状态 */
 	private int dragSourceIndex = -1;
@@ -188,7 +210,6 @@ public final class FilterListScreen extends Screen {
 		inputField.setMaxLength(128);
 		inputField.setHint(Component.translatable("productivebeesgenesis.config.input_bee_type"));
 		inputField.setVisible(false);
-		inputField.setResponder(this::onInputChanged);
 		addRenderableWidget(inputField);
 
 		// 确认添加按钮
@@ -280,6 +301,7 @@ public final class FilterListScreen extends Screen {
 				filterMode = ModConfig.FilterMode.DISABLED;
 			}
 		} catch (IllegalStateException e) {
+			ProductiveBeesGenesis.LOGGER.warn("加载服务端过滤配置失败，回退到 DISABLED", e);
 			filterMode = ModConfig.FilterMode.DISABLED;
 		}
 		clampScrollOffset();
@@ -287,13 +309,17 @@ public final class FilterListScreen extends Screen {
 
 	/**
 	 * 创建可见列表条目的操作按钮（仅保留删除）
+	 * <p>
+	 * 同时将按钮引用存入 {@link #entryButtons}，便于滚动时仅移除并重建这些按钮。
 	 */
 	private void createEntryButtons() {
+		// rebuildWidgets 路径下旧按钮已被 clearWidgets 移除，这里仅清空引用
+		entryButtons.clear();
 		int visibleCount = getVisibleEntryCount();
 		int startIndex = scrollOffset;
 		int endIndex = Math.min(startIndex + visibleCount, beeTypes.size());
 		// 删除按钮左移到滚动条左侧，避免遮挡滚动条
-		int deleteX = width - SCREEN_MARGIN - SCROLL_BAR_RIGHT_MARGIN - SCROLL_BAR_WIDTH - DELETE_BUTTON_WIDTH;
+		int deleteX = getDeleteButtonX(width);
 
 		for (int i = startIndex; i < endIndex; i++) {
 			int entryY = LIST_TOP_Y + (i - startIndex) * ENTRY_SPACING;
@@ -301,11 +327,28 @@ public final class FilterListScreen extends Screen {
 			// 图标按钮垂直居中显示在条目内
 			int buttonY = entryY + (ENTRY_HEIGHT - DELETE_BUTTON_HEIGHT) / 2;
 
-			addRenderableWidget(Button.builder(
+			Button btn = Button.builder(
 					Component.literal("\u2715"),
 					button -> deleteEntry(index)
-			).bounds(deleteX, buttonY, DELETE_BUTTON_WIDTH, DELETE_BUTTON_HEIGHT).build());
+			).bounds(deleteX, buttonY, DELETE_BUTTON_WIDTH, DELETE_BUTTON_HEIGHT).build();
+			entryButtons.add(btn);
+			addRenderableWidget(btn);
 		}
+	}
+
+	/**
+	 * 仅重建条目删除按钮，避免滚动时全量 {@link #rebuildWidgets()}
+	 * <p>
+	 * 性能优化：滚动是高频操作，全量 rebuildWidgets 会销毁并重建搜索框、模式按钮、
+	 * 输入框等与滚动无关的组件。此方法仅移除旧的删除按钮并创建新的，
+	 * 将滚动开销从 O(全部组件) 降低到 O(可见条目数)。
+	 */
+	private void rebuildEntryButtonsOnly() {
+		for (Button btn : entryButtons) {
+			removeWidget(btn);
+		}
+		entryButtons.clear();
+		createEntryButtons();
 	}
 
 	@Override
@@ -375,11 +418,6 @@ public final class FilterListScreen extends Screen {
 			graphics.fill(btn.getX() + btn.getWidth(), btn.getY(), btn.getX() + btn.getWidth() + 1,
 					btn.getY() + btn.getHeight(), 0xFFFFFFFF);
 		}
-	}
-
-	@Override
-	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		graphics.fill(0, 0, width, height, 0xFF101010);
 	}
 
 	private record ScrollBarThumb(int y, int height) {}
@@ -456,7 +494,7 @@ public final class FilterListScreen extends Screen {
 		if (!validation.getFirst()) {
 			int bottomY = height - LIST_BOTTOM_MARGIN + 10;
 			graphics.drawString(font, validation.getSecond(),
-					width / 2 - INPUT_WIDTH / 2, bottomY + 22, 0xFFFF6060);
+					inputField.getX(), bottomY + 22, 0xFFFF6060);
 		}
 	}
 
@@ -469,7 +507,8 @@ public final class FilterListScreen extends Screen {
 		} else if (scrollY < 0) {
 			scrollOffset = Math.min(Math.max(0, beeTypes.size() - getVisibleEntryCount()), scrollOffset + 1);
 		}
-		rebuildWidgets();
+		// 仅重建条目删除按钮，避免全量 rebuildWidgets 重建搜索框/模式按钮等无关组件
+		rebuildEntryButtonsOnly();
 		return true;
 	}
 
@@ -485,6 +524,8 @@ public final class FilterListScreen extends Screen {
 				isDraggingScrollBar = true;
 			} else {
 				updateScrollOffsetFromMouseY(mouseY);
+				// 点击轨道跳转后重建删除按钮以匹配新的可见条目
+				rebuildEntryButtonsOnly();
 			}
 			return true;
 		}
@@ -529,6 +570,8 @@ public final class FilterListScreen extends Screen {
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
 		if (isDraggingScrollBar && button == 0) {
 			isDraggingScrollBar = false;
+			// 滚动条拖拽期间 scrollOffset 连续变化，释放时统一重建删除按钮以匹配当前可见条目
+			rebuildEntryButtonsOnly();
 			return true;
 		}
 		if (isDragging && button == 0) {
@@ -625,10 +668,6 @@ public final class FilterListScreen extends Screen {
 		rebuildWidgets();
 	}
 
-	private void onInputChanged(String text) {
-		// 验证状态由渲染时动态计算
-	}
-
 	private void toggleInputVisibility(boolean visible) {
 		inputVisible = visible;
 		inputField.setVisible(visible);
@@ -668,6 +707,7 @@ public final class FilterListScreen extends Screen {
 			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
 		} catch (Exception e) {
 			// 配置保存失败时记录日志，不阻断关闭
+			ProductiveBeesGenesis.LOGGER.error("保存过滤配置失败", e);
 		}
 		onClose();
 	}

@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import com.ayoshiko.productivebeesgenesis.client.render.cosmic.AbstractBakedModelCosmic;
+import com.ayoshiko.productivebeesgenesis.client.render.cosmic.BakedModelHalo;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.CosmicRenderQueue;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.CosmicShaders;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderCosmic;
@@ -111,11 +113,18 @@ public final class ProductiveBeesGenesisClient {
         @SubscribeEvent
         public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
             CosmicShaders.onTextureAtlasStitched(event);
+            // 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
+            BakedModelHalo.invalidateCache();
+            // 失效 cosmic 烘焙四边形缓存：图集重建后 atlasSprites 的 UV 变化，旧 bakedQuads 会采样错误纹理
+            AbstractBakedModelCosmic.invalidateCache();
         }
 
         @SubscribeEvent
         public static void onRenderLevelAfterLevel(RenderLevelStageEvent event) {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+                // 强制重置 GUI 渲染标志：防止 ScreenEvent.Render.Pre 设为 true 后 Post 未触发（异常情况）导致标志位卡在 true。
+                // AFTER_LEVEL 阶段一定处于世界渲染，不应使用 GUI 模式的固定视角参数。
+                CosmicShaders.cosmicInventoryRender = false;
                 CosmicRenderQueue.renderAll();
             }
         }

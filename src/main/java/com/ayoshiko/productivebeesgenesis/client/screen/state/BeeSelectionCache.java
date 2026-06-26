@@ -5,6 +5,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 
@@ -65,6 +67,7 @@ public final class BeeSelectionCache {
 			state.setSortMode(BeeSelectionState.SortMode.valueOf(this.sortMode));
 		} catch (IllegalArgumentException | NullPointerException e) {
 			// 缓存中的排序规则名称异常时回退到默认按名称排序
+			ProductiveBeesGenesis.LOGGER.warn("缓存的排序规则 {} 无效，回退到 NAME", this.sortMode, e);
 			state.setSortMode(BeeSelectionState.SortMode.NAME);
 		}
 		state.setCollapsedGroups(this.collapsedGroups);

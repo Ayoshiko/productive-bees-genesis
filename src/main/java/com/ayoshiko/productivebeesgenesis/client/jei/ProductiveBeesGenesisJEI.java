@@ -63,6 +63,17 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
     private static volatile IRecipeViewerRecipeType<CentrifugeRecipe> pbCentrifugeViewerType;
 
     /**
+     * 蜜脾块离心配方缓存
+     * <p>
+     * registerRecipes 在 JEI 初始化和配方重载时调用，蜜脾块配方由蜜脾配方派生，
+     * 缓存避免在重载时重复遍历所有蜜脾配方并创建大量 CentrifugeRecipe 对象。
+     * 缓存键为 {@link ProductiveBeesGenesis#recipeVersion}，每次标签/配方重载时递增，
+     * 自动触发缓存失效。使用 volatile 保证跨线程可见性。
+     */
+    private static volatile List<CentrifugeRecipe> cachedCombBlockRecipes = null;
+    private static volatile long cachedRecipeVersion = -1L;
+
+    /**
      * 获取PB离心配方的Mekanism配方查看器类型
      * <br/>
      * 用于在GuiProgress.recipeViewerCategories()中注册，实现双配方JEI跳转。
@@ -128,6 +139,9 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
      * <br/>
      * 从PB的RecipeManager获取所有CentrifugeRecipe注册到JEI，
      * 并为每个有bee_type的蜜脾配方动态生成对应的蜜脾块配方（4倍产出）。
+     * <p>
+     * 蜜脾块配方生成结果会被缓存，缓存键为 {@link ProductiveBeesGenesis#recipeVersion}，
+     * 配方重载时版本号递增自动失效，避免重复遍历蜜脾配方并创建大量派生对象。
      */
     @Override
     public void registerRecipes(IRecipeRegistration registry) {
@@ -138,12 +152,35 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
         List<RecipeHolder<CentrifugeRecipe>> centrifugeRecipes =
                 Minecraft.getInstance().level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get());
 
+        // 检查缓存：配方版本号未变化时复用已生成的蜜脾块配方
+        long currentVersion = ProductiveBeesGenesis.recipeVersion;
+        List<CentrifugeRecipe> blockRecipes;
+        if (cachedCombBlockRecipes != null && cachedRecipeVersion == currentVersion) {
+            blockRecipes = cachedCombBlockRecipes;
+        } else {
+            blockRecipes = generateCombBlockRecipes(centrifugeRecipes);
+            cachedCombBlockRecipes = blockRecipes;
+            cachedRecipeVersion = currentVersion;
+        }
+
         // 收集所有配方（蜜脾 + 动态生成的蜜脾块）
         List<CentrifugeRecipe> allRecipes = new ArrayList<>(
                 centrifugeRecipes.stream().map(RecipeHolder::value).toList());
-        allRecipes.addAll(generateCombBlockRecipes(centrifugeRecipes));
+        allRecipes.addAll(blockRecipes);
 
         registry.addRecipes(PB_CENTRIFUGE_TYPE, allRecipes);
+    }
+
+    /**
+     * 失效蜜脾块配方缓存
+     * <p>
+     * 通常由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 中间接触发
+     * （recipeVersion 递增后，下次 registerRecipes 自动重建）。
+     * 此方法提供手动失效入口，供特殊场景使用。
+     */
+    public static void invalidateCache() {
+        cachedCombBlockRecipes = null;
+        cachedRecipeVersion = -1L;
     }
 
     /**

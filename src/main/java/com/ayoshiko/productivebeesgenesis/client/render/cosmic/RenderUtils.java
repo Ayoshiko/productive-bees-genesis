@@ -24,6 +24,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
  * <br/>
  * 提供物品模型烘焙功能，将 TextureAtlasSprite 转换为 BakedQuad 列表。
  * 用于 cosmic 渲染系统中生成 mask 纹理的方块面四边形。
+ * <p>
+ * 设计原则：单一职责（SRP），仅负责物品模型烘焙工具方法与 RenderStateShard 常量。
+ * 所有 bakeItem 实现统一在此类，其他类（如 {@link WrappedItemModel}）通过此类调用。
  */
 public class RenderUtils {
 
@@ -40,10 +43,24 @@ public class RenderUtils {
 	});
 
 	/**
-	 * 使用默认变换烘焙物品模型
+	 * 使用默认变换烘焙物品模型（变长参数版本）
 	 */
 	public static List<BakedQuad> bakeItem(TextureAtlasSprite... sprites) {
 		return bakeItem(Transformation.identity(), sprites);
+	}
+
+	/**
+	 * 使用默认变换烘焙物品模型（List 版本）
+	 * <br/>
+	 * 为兼容 {@code WrappedItemModel.bakeItem(List)} 旧调用方提供重载，
+	 * 内部委托给 {@link #bakeItem(Transformation, TextureAtlasSprite...)}，
+	 * 使用 identity 变换，行为与原实现等价。
+	 *
+	 * @param sprites 各图层精灵图列表
+	 * @return 烘焙后的四边形列表
+	 */
+	public static List<BakedQuad> bakeItem(List<TextureAtlasSprite> sprites) {
+		return bakeItem(Transformation.identity(), sprites.toArray(new TextureAtlasSprite[0]));
 	}
 
 	/**

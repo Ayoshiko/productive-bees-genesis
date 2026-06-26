@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 
@@ -30,7 +31,6 @@ import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.Util;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -90,7 +90,7 @@ public final class ModItems {
     public static final DeferredItem<Item> INFINITY_CREATION_COMB =
             ITEMS.register("infinitycreation_comb", () -> new Item(new Item.Properties()
                     .component(ModDataComponents.BEE_TYPE.get(),
-                            ResourceLocation.fromNamespaceAndPath("productivebees", "infinitycreation"))));
+                            PBConstants.MYRIADCREATIONS_TYPE)));
 
     /** 无尽·创世蜜脾块 BlockItem */
     public static final DeferredItem<BlockItem> INFINITY_CREATION_COMB_BLOCK_ITEM =

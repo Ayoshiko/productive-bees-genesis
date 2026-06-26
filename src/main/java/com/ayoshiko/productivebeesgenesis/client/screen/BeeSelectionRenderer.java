@@ -149,9 +149,12 @@ final class BeeSelectionRenderer {
 		graphics.drawString(screen.getMinecraft().font, typeText, textX, y + 16, typeColor);
 
 		int productX = textX + BeeSelectionScreen.PRODUCT_OFFSET_X - 2;
-		int productMaxWidth = Math.max(20, x + width - productX - checkRightMargin);
-		String productText = screen.getMinecraft().font.plainSubstrByWidth(entry.productInfo.getString(), productMaxWidth);
-		graphics.drawString(screen.getMinecraft().font, Component.literal(productText), productX, y + 10, 0xFFD0D0D0);
+		int listRight = x + width - checkRightMargin;
+		int productMaxWidth = listRight - productX;
+		if (productMaxWidth > 0) {
+			String productText = screen.getMinecraft().font.plainSubstrByWidth(entry.productInfo.getString(), productMaxWidth);
+			graphics.drawString(screen.getMinecraft().font, Component.literal(productText), productX, y + 10, 0xFFD0D0D0);
+		}
 
 		if (added) {
 			int checkX = x + width - 12;

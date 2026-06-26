@@ -1,1 +1,0 @@
-{"variants": {"running=false": {"model": "productivebeesgenesis:block/centrifuge/heated_idle"}, "running=true": {"model": "productivebeesgenesis:block/centrifuge/heated_running"}}}

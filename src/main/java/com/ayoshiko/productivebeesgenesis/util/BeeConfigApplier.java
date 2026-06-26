@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
@@ -20,39 +19,47 @@ public final class BeeConfigApplier {
     /** 应用配置覆盖到万象创世蜜蜂数据 */
     public static void applyOverrides() {
         var config = ModConfig.COMMON;
-        CompoundTag data = BeeReloadListener.INSTANCE.getData(MyriadCreationsEventHandler.MYRIADCREATIONS_TYPE);
-        if (data == null) return;
+        CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
+        if (data == null) {
+            // 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
+            ProductiveBeesGenesis.LOGGER.warn("无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
+                    PBConstants.MYRIADCREATIONS_TYPE);
+            return;
+        }
 
-        // 外观
-        data.putInt("primaryColor", parseHexColor(config.primaryColor.get()));
-        data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
-        data.putInt("particleColor", parseHexColor(config.particleColor.get()));
-        data.putInt("glowColor", parseHexColor(config.glowColor.get()));
+        // 同步修改 CompoundTag，防止并发调用（如重载事件与启动事件并发）导致数据竞争
+        synchronized (BeeConfigApplier.class) {
+            // 外观
+            data.putInt("primaryColor", parseHexColor(config.primaryColor.get()));
+            data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
+            data.putInt("particleColor", parseHexColor(config.particleColor.get()));
+            data.putInt("glowColor", parseHexColor(config.glowColor.get()));
 
-        // 授粉
-        data.putString("flowerItem", config.flowerItem.get());
+            // 授粉
+            data.putString("flowerItem", config.flowerItem.get());
 
-        // PB 属性
-        data.putString("weather_tolerance", config.weatherTolerance.get());
-        data.putString("temper", config.temper.get());
-        data.putString("behavior", config.behavior.get());
-        data.putString("endurance", config.endurance.get());
-        data.putString("productivity", config.productivity.get());
+            // PB 属性
+            data.putString("weather_tolerance", config.weatherTolerance.get());
+            data.putString("temper", config.temper.get());
+            data.putString("behavior", config.behavior.get());
+            data.putString("endurance", config.endurance.get());
+            data.putString("productivity", config.productivity.get());
 
-        // 基础属性
-        data.putBoolean("createComb", config.createComb.get());
-        data.putFloat("size", config.size.get().floatValue());
-        data.putFloat("speed", config.speed.get().floatValue());
-        data.putDouble("attack", config.attack.get());
+            // 基础属性
+            data.putBoolean("createComb", config.createComb.get());
+            data.putFloat("size", config.size.get().floatValue());
+            data.putFloat("speed", config.speed.get().floatValue());
+            data.putDouble("attack", config.attack.get());
 
-        // 繁殖
-        data.putString("breedingItem", config.breedingItem.get());
-        data.putInt("breedingItemCount", config.breedingItemCount.get());
-        data.putBoolean("selfbreed", config.selfbreed.get());
+            // 繁殖
+            data.putString("breedingItem", config.breedingItem.get());
+            data.putInt("breedingItemCount", config.breedingItemCount.get());
+            data.putBoolean("selfbreed", config.selfbreed.get());
 
-        // 环境耐受
-        data.putBoolean("waterproof", config.waterproof.get());
-        data.putBoolean("fireproof", config.fireproof.get());
+            // 环境耐受
+            data.putBoolean("waterproof", config.waterproof.get());
+            data.putBoolean("fireproof", config.fireproof.get());
+        }
 
         ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂属性已从配置文件覆盖");
     }

@@ -1,19 +1,18 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTags;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLanguageProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
 import com.ayoshiko.productivebeesgenesis.datagen.ModRecipes;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModCreativeTabs;
-import com.ayoshiko.productivebeesgenesis.init.ModDataComponents;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import mekanism.common.capabilities.ICapabilityAware;
@@ -89,7 +88,6 @@ public final class ProductiveBeesGenesis {
         ModBlockEntities.register(eventBus);
         ModItems.ITEMS.register(eventBus);
         ModCreativeTabs.CREATIVE_MODE_TABS.register(eventBus);
-        ModDataComponents.register(eventBus);
         ModStats.register(eventBus);
         ModMenuTypes.register(eventBus);
 
@@ -133,15 +131,17 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 标签/配方重载完成回调 — 递增配方版本号
+	 * 标签/配方重载完成回调 — 递增配方版本号并失效蜜蜂类型缓存
 	 * <br/>
 	 * TagsUpdatedEvent 在所有 reload listener（包括 RecipeManager 和标签重载）完成后触发，
 	 * 无论是 /reload 命令、数据包变更还是服务器启动都会触发。
 	 * 递增 recipeVersion 使所有 PbRecipeProcessor 和 TileEntityMekCentrifuge 在下次 tick 时
 	 * 检测到版本号变化，从而清空 SMELTING/PB 配方缓存，确保使用最新的配方数据。
+	 * 同时失效 BeeInfoHelper 的蜜蜂类型缓存，使下次 GUI 查询返回最新注册的蜜蜂类型。
 	 */
 	private void onTagsReload(TagsUpdatedEvent event) {
 		recipeVersion++;
+		BeeInfoHelper.invalidateCache();
 		LOGGER.debug("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
 	}
 
@@ -173,10 +173,7 @@ public final class ProductiveBeesGenesis {
 		var generator = event.getGenerator();
 		var packOutput = generator.getPackOutput();
 		var lookupProvider = event.getLookupProvider();
-		var existingFileHelper = event.getExistingFileHelper();
 
-		// 方块标签
-		generator.addProvider(event.includeServer(), new ModBlockTags(packOutput, lookupProvider, existingFileHelper));
 		// 配方
 		generator.addProvider(event.includeServer(), new ModRecipes(packOutput, lookupProvider));
 		// 战利品表

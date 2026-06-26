@@ -103,20 +103,19 @@
 - `client/gui/`：Mek离心机GUI辅助类和工厂GUI辅助类
 - `client/jei/`：JEI配方类别（PB离心机配方）
 - `client/model/`：自定义模型加载器和几何加载器
-- `client/render/cosmic/`：宇宙着色器系统、烘焙模型（`AbstractBakedModelCosmic`、`BakedModelCosmic`、`BakedModelHell`、`BakedModelHalo`）、渲染队列、Iris兼容
+- `client/render/cosmic/`：宇宙着色器系统、烘焙模型（`AbstractBakedModelCosmic`、`BakedModelCosmic`、`BakedModelHell`、`BakedModelHalo`）、渲染队列、Iris兼容、`AbstractMaskGeometryLoader`基类
 - `client/screen/`：配置和Mek离心机GUI界面（`FilterListScreen`、`FilterListRenderer`）
 - `compat/`：跨模组兼容辅助类
 - `config/`：ModConfig定义（CLIENT/COMMON/SERVER），支持中英文双语
 - `datagen/`：数据生成（方块标签、配方、战利品表）
 - `init/`：DeferredRegister注册（方块、物品、方块实体等）
 - `item/`：自定义物品（无尽之剑复刻、生成蛋）
-- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理（`PbRecipeProcessor`、`RecipeCacheManager`）
+- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理（`PbRecipeProcessor`、`RecipeCacheManager`）、隔离的可选依赖BlockType（`MekCentrifugeMEBlockType`、`MekCentrifugeEMEBlockType`）
 - `menu/`：容器菜单定义
-- `mixin/`：Mixin类（PB离心机、蜜蜂颜色、工厂升级链、Iris），含 `CentrifugeMixinHelper` 消除重复和 `MixinConfigPlugin` 条件加载
-- `network/`：网络数据包定义
+- `mixin/`：Mixin类（PB离心机、蜜蜂颜色、工厂升级链、Iris、配方序列化兜底），含 `CentrifugeMixinHelper` 消除重复和 `MixinConfigPlugin`/`IrisConfigPlugin` 条件加载
 - `recipe/`：自定义配方类型
 - `screen/`：服务端界面持有者
-- `util/`：`BeeInfoHelper`、`RecipeCacheManager`、`PerformanceMonitor`、`BeeConfigApplier`
+- `util/`：`BeeInfoHelper`、`RecipeCacheManager`、`PerformanceMonitor`、`BeeConfigApplier`、`BeeIngredientFallback`、`PBConstants`
 
 ### 关键抽象
 
