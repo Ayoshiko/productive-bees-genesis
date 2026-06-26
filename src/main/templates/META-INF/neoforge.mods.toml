@@ -18,9 +18,9 @@ description='''
 资源蜜蜂：创世 / Productive Bees Genesis
 一个资源蜜蜂（Productive Bees）附属模组。
 
-中文：添加万象创世蜜蜂，可产出整合包内所有资源蜜蜂的蜜脾；万象创世蜜脾/蜜脾块拥有星空材质特效；深度集成 Mekanism 离心机，覆盖基础机器与 Mekanism / Mekanism Extras / Evolved Mekanism Extras 全工厂等级，并优化产物弹出速度；附带宇宙星空渲染系统与蜜蜂过滤配置界面。
+中文：添加万象创世蜜蜂，可产出整合包内所有资源蜜蜂的蜜脾；万象创世蜜脾/蜜脾块拥有星空材质特效；深度集成 Mekanism 离心机，覆盖基础机器与 Mekanism / Mekanism Extras / Evolved Mekanism / Evolved Mekanism Extras 全工厂等级，并优化产物弹出速度；附带宇宙星空渲染系统与蜜蜂过滤配置界面。
 
-English: A Productive Bees addon featuring the Myriad Creations Bee with cosmic starfield-textured honeycombs and honeycomb blocks. Includes deep Mekanism centrifuge integration with optimized ejection speed across all factory tiers (Mekanism, ME, EME), cosmic shader rendering system with Iris compatibility, and a configurable bee filter UI.
+English: A Productive Bees addon featuring the Myriad Creations Bee with cosmic starfield-textured honeycombs and honeycomb blocks. Includes deep Mekanism centrifuge integration with optimized ejection speed across all factory tiers (Mekanism, ME, EM, EME), cosmic shader rendering system with Iris compatibility, and a configurable bee filter UI.
 '''
 
 [[mixins]]

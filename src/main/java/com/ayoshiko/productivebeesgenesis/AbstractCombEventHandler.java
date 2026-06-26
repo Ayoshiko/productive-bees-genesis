@@ -406,6 +406,7 @@ public abstract class AbstractCombEventHandler {
 			}
 			return false;
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("检查输出空间时异常，回退为 false", e);
 			return false;
 		}
 	}

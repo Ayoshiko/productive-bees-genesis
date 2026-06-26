@@ -121,7 +121,11 @@
 
 - **`AbstractCombEventHandler`**：`MyriadCreationsEventHandler` 的基类，提取公共的蜜蜂类型缓存、随机蜜脾生成和离心机拦截逻辑
 - **`AbstractBakedModelCosmic`**：`BakedModelCosmic` 和 `BakedModelHell` 的基类，提取宇宙渲染管线（着色器uniform、mask精灵、Iris延迟）
+- **`AbstractMaskGeometryLoader`**：`GeometryLoaderCosmic` 和 `GeometryLoaderHell` 的基类，提取公共的 mask 解析和父模型解析逻辑
 - **`CentrifugeMixinHelper`**：工具类，从6个离心机Mixin中提取公共逻辑（canOperate检查、canProcessRecipe检查、completeRecipeProcessing追加）
+- **`BeeIngredientFallback`**：工具类，为5个配方 Serializer Mixin 提供 fallback 序列化，防止 BeeIngredientFactory 未就绪时 NPE
+- **`PBConstants`**：公共常量类，统一 `MYRIADCREATIONS_TYPE` 等全局共享常量
+- **`MekCentrifugeMEBlockType`/`MekCentrifugeEMEBlockType`**：ME/EME 可选依赖的隔离 BlockType 定义，仅在对应模组存在时加载，防止 `NoClassDefFoundError`
 - **`MixinConfigPlugin`**：条件Mixin加载器 — 当ME/EME未安装时跳过相关Mixin，防止崩溃
 - **`PbRecipeProcessor`**：PB配方处理辅助类，缓存 `energyPerTick`/`operationsPerTick` 并支持配方版本追踪
 
