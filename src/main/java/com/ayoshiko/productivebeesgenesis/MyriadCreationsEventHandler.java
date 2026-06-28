@@ -17,6 +17,7 @@ import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
+import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -209,6 +210,60 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		appendRandomCombBlocks(out, count, CACHED_COMB_BLOCK_TEMPLATES);
 	}
 
+	/**
+	 * 获取聚合后的随机蜜脾（最多 9 种类型，每种 1~2 个 stack）
+	 *
+	 * @param totalCount 总数量
+	 * @param random     随机源
+	 * @return 聚合后的随机蜜脾列表
+	 */
+	public static List<ItemStack> getAggregatedRandomHoneycombs(int totalCount, RandomSource random) {
+		return AbstractCombEventHandler.generateAggregatedStacks(
+				totalCount,
+				ModItems.CONFIGURABLE_HONEYCOMB.get(),
+				CACHED_BEE_TYPES,
+				CACHED_HONEYCOMB_TEMPLATES,
+				random);
+	}
+
+	/**
+	 * 获取聚合后的随机蜜脾块（最多 9 种类型，每种 1~2 个 stack）
+	 *
+	 * @param totalCount 总数量
+	 * @param random     随机源
+	 * @return 聚合后的随机蜜脾块列表
+	 */
+	public static List<ItemStack> getAggregatedRandomCombBlocks(int totalCount, RandomSource random) {
+		return AbstractCombEventHandler.generateAggregatedStacks(
+				totalCount,
+				ModItems.CONFIGURABLE_COMB_BLOCK.get(),
+				CACHED_BEE_TYPES,
+				CACHED_COMB_BLOCK_TEMPLATES,
+				random);
+	}
+
+	/**
+	 * 检查物品是否为万象创世蜜脾或蜜脾块
+	 */
+	public static boolean isMyriadCreationsItem(ItemStack stack) {
+		return isMyriadCreationsHoneycomb(stack) || isMyriadCreationsCombBlock(stack);
+	}
+
+	/**
+	 * 向输出列表追加指定数量的万象创世蜜脾（聚合为不超过 64 的 stack）
+	 */
+	public static void appendMyriadHoneycombStacks(List<ItemStack> out, int count) {
+		if (count <= 0) return;
+		Item item = ModItems.CONFIGURABLE_HONEYCOMB.get();
+		while (count > 0) {
+			int stackSize = Math.min(64, count);
+			ItemStack stack = new ItemStack(item, stackSize);
+			stack.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+			out.add(stack);
+			count -= stackSize;
+		}
+	}
+
 	// ========== 类型判断 ==========
 
 	/**
@@ -319,5 +374,78 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 */
 	public static boolean hasOutputSpace(IItemHandlerModifiable invHandler) {
 		return AbstractCombEventHandler.hasOutputSpace(invHandler);
+	}
+
+	// ========== MEK 离心机万象创世专用辅助方法 ==========
+
+	/**
+	 * 获取指定输出槽列表中不同 bee_type 的集合
+	 * <p>
+	 * 只统计可配置蜜脾/蜜脾块，非 PB 产物不计入，避免误判。
+	 *
+	 * @param slots 输出槽列表（通常为3个）
+	 * @return 不同 bee_type 的集合
+	 */
+	public static Set<ResourceLocation> getOutputBeeTypes(List<IInventorySlot> slots) {
+		Set<ResourceLocation> types = new HashSet<>();
+		for (IInventorySlot slot : slots) {
+			if (slot == null) continue;
+			ResourceLocation type = getBeeTypeFromStack(slot.getStack());
+			if (type != null) types.add(type);
+		}
+		return types;
+	}
+
+	/**
+	 * 获取指定输出槽列表中不同 bee_type 的种类数
+	 *
+	 * @param slots 输出槽列表（通常为3个）
+	 * @return 不同 bee_type 的种类数
+	 */
+	public static int countDistinctOutputBeeTypes(List<IInventorySlot> slots) {
+		return getOutputBeeTypes(slots).size();
+	}
+
+	/**
+	 * 万象创世专用输出槽“逻辑已满”判断
+	 * <p>
+	 * 当3个槽均非空且各自包含不同的 bee_type 时视为逻辑已满，
+	 * 此时新的随机类型无法堆叠，应暂停处理避免产物丢失。
+	 *
+	 * @param slots 输出槽列表（通常为3个）
+	 * @return true 如果逻辑已满
+	 */
+	public static boolean areOutputSlotsFullForMyriadCreations(List<IInventorySlot> slots) {
+		int nonEmpty = 0;
+		Set<ResourceLocation> types = getOutputBeeTypes(slots);
+		for (IInventorySlot slot : slots) {
+			if (slot == null) continue;
+			if (slot.getStack().isEmpty()) return false;
+			nonEmpty++;
+		}
+		return nonEmpty >= 3 && types.size() >= 3;
+	}
+
+	/**
+	 * 判断两个物品是否为相同的 bee_type（均须为可配置蜜脾/蜜脾块）
+	 *
+	 * @param a 物品A
+	 * @param b 物品B
+	 * @return true 如果均为非空且 bee_type 相同
+	 */
+	public static boolean isSameBeeType(ItemStack a, ItemStack b) {
+		if (a.isEmpty() || b.isEmpty()) return false;
+		ResourceLocation typeA = getBeeTypeFromStack(a);
+		ResourceLocation typeB = getBeeTypeFromStack(b);
+		return typeA != null && typeA.equals(typeB);
+	}
+
+	/** 从可配置蜜脾/蜜脾块中提取 bee_type */
+	private static ResourceLocation getBeeTypeFromStack(ItemStack stack) {
+		if (stack.isEmpty()) return null;
+		if (isConfigurableHoneycomb(stack) || isConfigurableCombBlock(stack)) {
+			return stack.get(ModDataComponents.BEE_TYPE.get());
+		}
+		return null;
 	}
 }

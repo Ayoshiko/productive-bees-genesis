@@ -38,10 +38,11 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  *   <li>随机蜜脾/蜜脾块生成</li>
  *   <li>离心机空转拦截（按 handler 实例缓存）</li>
  *   <li>离心机追加产出（预分配算法，保证总产出=消耗数且不溢出）</li>
+ *   <li>蜂箱产物聚合生成（高倍加速下减少 ItemStack 数量）</li>
  * </ol>
  * <p>
  * <b>线程安全</b>：所有公共方法均为线程安全，使用 {@link CopyOnWriteArrayList}、
- * {@link ConcurrentHashMap} 和 {@link ThreadLocalRandom} 保证并发安全。
+ * {@link java.util.concurrent.ConcurrentHashMap} 和 {@link ThreadLocalRandom} 保证并发安全。
  * <p>
  * <b>设计说明</b>：基类不持有任何状态字段，缓存由子类各自持有，确保两个处理器互不干扰。
  */
@@ -294,6 +295,83 @@ public abstract class AbstractCombEventHandler {
 	}
 
 	/**
+	 * 将总数聚合为少量堆叠（每种类型 1~2 个 stack，单个不超过 64）
+	 * <p>
+	 * 用于蜂箱高倍加速场景：先随机选取最多 9 种不同 bee_type，再把 totalCount
+	 * 按 allocateEvenly 均匀分配，避免生成大量 count=1 的 ItemStack。
+	 *
+	 * @param totalCount     总数量
+	 * @param baseItem       物品类型（蜜脾/蜜脾块）
+	 * @param cachedBeeTypes 蜜蜂类型缓存
+	 * @param templates      预构建模板数组（与缓存顺序一致，用于 copyWithCount）
+	 * @param random         随机源
+	 * @return 聚合后的 ItemStack 列表
+	 */
+	public static List<ItemStack> generateAggregatedStacks(
+			int totalCount,
+			Item baseItem,
+			CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes,
+			ItemStack[] templates,
+			RandomSource random) {
+		if (totalCount <= 0) {
+			return List.of();
+		}
+
+		List<ResourceLocation> selectedTypes;
+		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) {
+			selectedTypes = List.of(FALLBACK_BEE_TYPE);
+		} else {
+			int maxTypes = Math.min(9, totalCount);
+			selectedTypes = selectDistinctBeeTypes(maxTypes, random, cachedBeeTypes);
+		}
+		if (selectedTypes.isEmpty()) {
+			return List.of();
+		}
+
+		Map<ResourceLocation, Integer> allocation = allocateEvenly(totalCount, selectedTypes);
+		List<ItemStack> result = new ArrayList<>(selectedTypes.size() * 2);
+		for (ResourceLocation type : selectedTypes) {
+			Integer count = allocation.get(type);
+			if (count == null || count <= 0) {
+				continue;
+			}
+			int remaining = count;
+			ItemStack template = findTemplate(templates, type);
+			while (remaining > 0) {
+				int stackSize = Math.min(64, remaining);
+				if (template != null) {
+					result.add(template.copyWithCount(stackSize));
+				} else {
+					ItemStack stack = new ItemStack(baseItem, stackSize);
+					stack.set(ModDataComponents.BEE_TYPE.get(), type);
+					result.add(stack);
+				}
+				remaining -= stackSize;
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * 在模板数组中查找指定 bee_type 的模板
+	 *
+	 * @param templates 模板数组
+	 * @param type      蜜蜂类型
+	 * @return 对应模板，找不到返回 null
+	 */
+	private static ItemStack findTemplate(ItemStack[] templates, ResourceLocation type) {
+		if (templates == null || type == null) {
+			return null;
+		}
+		for (ItemStack template : templates) {
+			if (template != null && type.equals(template.get(ModDataComponents.BEE_TYPE.get()))) {
+				return template;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * 为指定蜜蜂类型缓存构建蜜脾模板数组
 	 * <p>
 	 * 模板在缓存更新时一次性构建，避免高频生成时重复创建 ItemStack 和设置数据组件。
@@ -414,7 +492,7 @@ public abstract class AbstractCombEventHandler {
 	 * <p>
 	 * <b>线程安全</b>：cacheMap 由调用方提供 {@link java.util.Collections#synchronizedMap} 包装的
 	 * {@link java.util.WeakHashMap}，复合操作（get + put）在 synchronized 块内执行，
-	 * 确保线程安全。WeakHashMap 的 key 为弱引用，BlockEntity 卸载后 handler 被 GC 时
+	 * 确保线程安全。WeakHashMap 的 key 为弱引用，BlockEntity 被 GC 时
 	 * 缓存条目自动被回收，避免内存泄漏。
 	 *
 	 * @param handler       物品处理器

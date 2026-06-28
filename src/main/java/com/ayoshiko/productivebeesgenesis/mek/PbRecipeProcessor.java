@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.jetbrains.annotations.NotNull;
@@ -351,12 +352,15 @@ public class PbRecipeProcessor {
 			context.energyContainer().extract(cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
 
 			if (pbOperatingTicks[processIndex] >= processingTime) {
-				// 输出槽满时暂停处理，避免物品丢失
-				if (areOutputSlotsFull(processIndex)) {
+				// 输出槽物理满或万象创世逻辑满时暂停处理，避免产物丢失
+				if (areOutputSlotsFull(processIndex) || areMyriadOutputSlotsFull(processIndex)) {
 					pbOperatingTicks[processIndex] = processingTime;
 					break;
 				}
-				completeMyriadCreations(input, processIndex, context.productivityModifier());
+				if (!completeMyriadCreations(input, processIndex, context.productivityModifier())) {
+					pbOperatingTicks[processIndex] = processingTime;
+					break;
+				}
 				pbOperatingTicks[processIndex] = 0;
 				if (context.inputSlot(processIndex).getStack().isEmpty()) {
 					context.setPbActiveState(false, processIndex);
@@ -557,13 +561,19 @@ public class PbRecipeProcessor {
 	 * 万象创世蜜脾块转化为随机蜜脾块（最多3种，总数=生产力倍率*4）。
 	 * 使用MyriadCreationsEventHandler的随机类型选择和均匀分配算法。
 	 * <p>
-	 * 性能优化：复用reusableOutputSlots列表避免每次创建新ArrayList。
+	 * 关键修复：
+	 * <ul>
+	 *   <li>按 bee_type 聚合产物后统一插入，同类型优先堆叠到同一槽</li>
+	 *   <li>插入前检查 occupiedTypes + 新增类型数，超过3种时暂停处理</li>
+	 *   <li>无法完全插入时返回 false，由调用方暂停而不是丢弃产物</li>
+	 * </ul>
 	 *
 	 * @param input                万象创世蜜脾或蜜脾块
 	 * @param processIndex         进程索引
 	 * @param productivityModifier 生产力倍率
+	 * @return true 处理成功，false 应暂停等待输出槽空间
 	 */
-	private void completeMyriadCreations(ItemStack input, int processIndex, int productivityModifier) {
+	private boolean completeMyriadCreations(ItemStack input, int processIndex, int productivityModifier) {
 		RandomSource random = context.level().getRandom();
 		boolean isCombBlock = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		int modifier = Math.max(1, productivityModifier);
@@ -577,15 +587,14 @@ public class PbRecipeProcessor {
 		if (selectedTypes.isEmpty()) {
 			// 缓存为空：不消耗输入，记录WARN日志（避免卡死和物品丢失，等待缓存重建后重试）
 			ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次处理（不消耗输入）", logPrefix, processIndex);
-			return;
+			return true;
 		}
 
-		// 均匀分配totalCount到selectedTypes
+		// 均匀分配totalCount到selectedTypes，已按 bee_type 聚合
 		Map<ResourceLocation, Integer> allocation = MyriadCreationsEventHandler.allocateEvenly(totalCount, selectedTypes);
 
-		// 构建输出物品并放入输出槽
+		// 构建输出槽列表
 		Item baseItem = isCombBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
-		// 复用输出槽列表
 		reusableOutputSlots.clear();
 		reusableOutputSlots.add(context.primaryOutputSlot(processIndex));
 		IInventorySlot secondary = context.secondaryOutputSlot(processIndex);
@@ -594,29 +603,48 @@ public class PbRecipeProcessor {
 		}
 		reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
 
-		int slotIndex = 0;
+		// 检查当前输出槽已占用类型数，仅统计本次新增的不同类型
+		Set<ResourceLocation> occupiedTypes = MyriadCreationsEventHandler.getOutputBeeTypes(reusableOutputSlots);
+		long newDistinctTypes = allocation.keySet().stream().filter(type -> !occupiedTypes.contains(type)).count();
+		if (occupiedTypes.size() + newDistinctTypes > 3) {
+			// 输出槽类型空间不足：不记录日志，避免高频暂停时刷屏
+			return false;
+		}
+
+		// 按 bee_type 聚合插入，同类型优先堆叠
 		for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
 			ItemStack output = new ItemStack(baseItem, entry.getValue());
 			output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
 
-			if (slotIndex < reusableOutputSlots.size()) {
-				ItemStack remainder = reusableOutputSlots.get(slotIndex)
-						.insertItem(output, Action.EXECUTE, AutomationType.INTERNAL);
-				// 放不下则尝试后续槽
-				for (int i = slotIndex + 1; i < reusableOutputSlots.size(); i++) {
+			ItemStack remainder = output;
+			// 第一优先级：已有同类型槽位
+			for (IInventorySlot slot : reusableOutputSlots) {
+				if (slot == null) continue;
+				if (MyriadCreationsEventHandler.isSameBeeType(slot.getStack(), output)) {
+					remainder = slot.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
 					if (remainder.isEmpty()) break;
-					remainder = reusableOutputSlots.get(i)
-							.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
-				}
-				if (!remainder.isEmpty()) {
-					ProductiveBeesGenesis.LOGGER.info("{}进程{}万象创世输出槽已满，丢弃: {}", logPrefix, processIndex, remainder);
 				}
 			}
-			slotIndex++;
+			// 第二优先级：空槽
+			if (!remainder.isEmpty()) {
+				for (IInventorySlot slot : reusableOutputSlots) {
+					if (slot == null) continue;
+					if (slot.getStack().isEmpty()) {
+						remainder = slot.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
+						if (remainder.isEmpty()) break;
+					}
+				}
+			}
+			// 仍有剩余说明无法放下，暂停处理而非丢弃
+			if (!remainder.isEmpty()) {
+				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世产物无法完全插入，暂停：{}", logPrefix, processIndex, remainder);
+				return false;
+			}
 		}
 
 		// 消耗输入（乘以生产力倍率）
 		context.inputSlot(processIndex).shrinkStack(modifier, Action.EXECUTE);
+		return true;
 	}
 
 	// ===== 辅助方法 =====
@@ -663,6 +691,23 @@ public class PbRecipeProcessor {
 		return context.productivebeesgenesis$outputSlotsFull();
 	}
 
+	/**
+	 * 检查指定进程的万象创世输出槽是否“逻辑已满”
+	 * <br/>
+	 * 当3个槽均非空且各自包含不同的 bee_type 时视为逻辑已满，
+	 * 新的随机类型无法堆叠，必须暂停处理等待弹出器清理。
+	 */
+	private boolean areMyriadOutputSlotsFull(int processIndex) {
+		reusableOutputSlots.clear();
+		reusableOutputSlots.add(context.primaryOutputSlot(processIndex));
+		IInventorySlot secondary = context.secondaryOutputSlot(processIndex);
+		if (secondary != null) {
+			reusableOutputSlots.add(secondary);
+		}
+		reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
+		return MyriadCreationsEventHandler.areOutputSlotsFullForMyriadCreations(reusableOutputSlots);
+	}
+
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */
 	private void clearPbState(int processIndex) {
 		if (pbProcessing[processIndex]) {
@@ -683,8 +728,8 @@ public class PbRecipeProcessor {
 	 * 只要有一个输出不兼容就返回false（排序不应将物品分配到输出不兼容的进程）。
 	 */
 	public boolean isPbOutputCompatible(CentrifugeRecipe recipe,
-										@NotNull IInventorySlot outputSlot,
-										@Nullable IInventorySlot secondaryOutputSlot) {
+									@NotNull IInventorySlot outputSlot,
+									@Nullable IInventorySlot secondaryOutputSlot) {
 		Map<ItemStack, ChancedOutput> outputs = recipe.getRecipeOutputs();
 		if (outputs.isEmpty()) {
 			return true;
