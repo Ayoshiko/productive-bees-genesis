@@ -24,9 +24,14 @@ All notable changes to this project will be documented in this file.
 * 宇宙渲染队列预分配矩阵 — CosmicRenderQueue复用REUSABLE_OLD_PROJECTION/MODEL_VIEW ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
 * 离心机能量计算基于实际能量差 — 摆脱getLastUsage父类语义依赖 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
 * PbRecipeProcessor缓存energyPerTick/operationsPerTick — 避免循环内重复Math.pow ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
+* 蜂箱产物聚合生成 — 256倍加速下按类型聚合，减少ItemStack分配和addOutput调用 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
+* 高级蜂箱物品栏脏标志去抖 — 同一tick内多次变化合并为一次setChanged ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
+* 离心机万象创世产物聚合 — 按bee_type聚合后统一插入，避免跨操作类型冲突 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
 
 ### fix
 * 移动CentrifugeMixinHelper从mixin到util包 — 避免Mixin框架误加载为Mixin目标 ([eed1574](https://github.com/Ayoshiko/productive-bees-genesis/commit/eed1574))
+* BeeHelperMixin保持原版万象产物 — 修复优化时误将原版产物替换为随机产物的行为 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
+* 离心机万象创世输出槽类型容量预检 — 输出槽已满时暂停处理，避免产物丢失 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
 * 修复checklist验证问题 ([f37a075](https://github.com/Ayoshiko/productive-bees-genesis/commit/f37a075))
 * JMX MBean注册异常 — 改用StandardMBean显式绑定接口，实现类改为static内部类 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
 * 流体槽满日志刷屏 — 256倍加速下INFO日志每tick数十条，改为静默丢弃 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
