@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import mekanism.api.IContentsListener;
@@ -78,6 +79,20 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
     /** PB配方处理器 — 封装所有PB离心配方处理逻辑 */
     private final PbRecipeProcessor pbProcessor;
 
+    // ===== Task 5: 输出槽状态标志位（volatile 保证 IContentsListener 线程与主线程可见性） =====
+    /** 输出槽是否有物品（供 EjectorMixin 读取） */
+    private volatile boolean hasOutputItems = false;
+    /** 输出槽是否已满（存在任意进程的所有输出槽都满时为 true） */
+    private volatile boolean outputSlotsFull = false;
+
+    // ===== Task 7: sortInventory 去抖（同 tick 内只标记一次 sortingNeeded） =====
+    private volatile boolean sortingMarkedThisTick = false;
+
+    // ===== Task 11: 激活状态计数器（O(1) 判断整体激活，替代 O(processes) 遍历） =====
+    private final AtomicInteger activeProcessCount = new AtomicInteger(0);
+    /** 每进程 PB 激活状态跟踪（CAS 防重复计数；tier 在 super() 中已设置） */
+    private final boolean[] pbActiveStates = new boolean[tier.processes];
+
     public TileEntityExtraMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
         super(blockProvider, pos, state);
         // 初始化PB配方处理器（tier在super()中已通过presetVariables设置）
@@ -114,8 +129,14 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
             FactoryRecipeCacheLookupMonitor<ItemStackToItemStackRecipe> lookupMonitor =
                     (FactoryRecipeCacheLookupMonitor<ItemStackToItemStackRecipe>) recipeCacheLookupMonitors[i];
             IContentsListener updateSortingAndUnpause = () -> {
-                updateSortingListener.onContentsChanged();
-                lookupMonitor.unpause();
+                // Task 5: 输出槽变更时实时更新标志位（供 areOutputSlotsFull / EjectorMixin 读取）
+                productivebeesgenesis$updateOutputSlotFlags();
+                // Task 7: 同 tick 内去抖，避免 AE2 高频拉取触发全量排序扫描
+                if (!sortingMarkedThisTick) {
+                    sortingMarkedThisTick = true;
+                    updateSortingListener.onContentsChanged();
+                    lookupMonitor.unpause();
+                }
             };
 
             // 主输出槽
@@ -287,6 +308,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
      */
     @Override
     protected boolean onUpdateServer() {
+        // Task 7: 重置去抖标志，允许本 tick 重新标记 sortingNeeded（在 super 与 PB 处理前重置）
+        sortingMarkedThisTick = false;
         // super前保存能量，由Helper基于能量差计算总消耗（SMELTING + PB）
         TileEntityExtraFactoryAccessor accessor = (TileEntityExtraFactoryAccessor) this;
         long energyBeforeSuper = energyContainer.getEnergy();
@@ -298,8 +321,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
                 tier.processes,
                 inputSlots,
                 pbProcessor,
-                i -> setActiveState(true, i),
-                accessor.productivebeesgenesis$getActiveStates(),
+                this,
                 getActive(),
                 this::setActive,
                 v -> accessor.productivebeesgenesis$setLastUsage(v)
@@ -395,6 +417,12 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
     @Override
     public void setPbActiveState(boolean active, int process) {
+        // Task 11: 通过计数器方法同步维护 activeProcessCount（CAS 防重复计数）
+        if (active) {
+            productivebeesgenesis$onProcessActivated(process);
+        } else {
+            productivebeesgenesis$onProcessDeactivated(process);
+        }
         setActiveState(active, process);
     }
 
@@ -416,6 +444,44 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
     @Override
     public boolean containsSmeltingInput(ItemStack input) {
         return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
+    }
+
+    // ===== Task 5: 输出槽状态标志位实现 =====
+
+    @Override
+    public boolean productivebeesgenesis$hasOutputItems() {
+        return hasOutputItems;
+    }
+
+    @Override
+    public boolean productivebeesgenesis$outputSlotsFull() {
+        return outputSlotsFull;
+    }
+
+    /** 遍历所有进程的输出槽重新计算标志位（由输出槽 IContentsListener 触发） */
+    @Override
+    public void productivebeesgenesis$updateOutputSlotFlags() {
+        MekCentrifugeFactoryHelper.updateOutputSlotFlags(
+                this,
+                hasItems -> hasOutputItems = hasItems,
+                full -> outputSlotsFull = full);
+    }
+
+    // ===== Task 11: 激活状态计数器实现 =====
+
+    @Override
+    public void productivebeesgenesis$onProcessActivated(int process) {
+        MekCentrifugeFactoryHelper.onProcessActivated(process, pbActiveStates, activeProcessCount);
+    }
+
+    @Override
+    public void productivebeesgenesis$onProcessDeactivated(int process) {
+        MekCentrifugeFactoryHelper.onProcessDeactivated(process, pbActiveStates, activeProcessCount);
+    }
+
+    @Override
+    public boolean productivebeesgenesis$hasActiveProcess() {
+        return MekCentrifugeFactoryHelper.hasActiveProcess(activeProcessCount);
     }
 
     // ===== GUI暴露方法 =====

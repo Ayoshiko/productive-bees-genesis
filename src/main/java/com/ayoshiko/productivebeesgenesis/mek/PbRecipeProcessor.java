@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
 
@@ -108,6 +109,20 @@ public class PbRecipeProcessor {
 	private int cachedOperationsPerTick;
 
 	/**
+	 * 缓存的 getTicksForBase(baseTicksRequired) 结果 — 用于万象创世处理时间计算
+	 * <br/>
+	 * getTicksForBase 内部涉及升级组件遍历与 Math.pow 计算，在升级未变更时结果稳定，
+	 * 通过时间窗口缓存避免每 tick 每进程重复计算。升级变更后最多 20 tick（1秒）内自动反映新值。
+	 */
+	private volatile int cachedTicksForBase = -1;
+
+	/** 上次计算 cachedTicksForBase 时的游戏刻（-1 表示未计算） */
+	private volatile long cachedTicksForBaseAt = -1L;
+
+	/** getTicksForBase 缓存失效间隔（tick） — 升级变更后最多 1 秒内反映新值 */
+	private static final int TICKS_CACHE_INTERVAL = 20;
+
+	/**
 	 * @param context   PB配方处理上下文（由Factory TileEntity实现）
 	 * @param logPrefix 日志前缀（如"工厂离心机"、"ME工厂离心机"、"EME工厂离心机"）
 	 */
@@ -142,6 +157,8 @@ public class PbRecipeProcessor {
 			// 清空每进程的当前PB配方引用，防止使用过期配方（配方重载后旧引用可能已失效）
 			Arrays.fill(cachedPbRecipes, null);
 			pbRecipeCache.clear();
+			// 失效 getTicksForBase 缓存（配方重载可能伴随升级配置变化，强制下次重新计算）
+			cachedTicksForBase = -1;
 			lastRecipeVersion = ProductiveBeesGenesis.recipeVersion;
 		}
 	}
@@ -301,14 +318,13 @@ public class PbRecipeProcessor {
 	 * 万象创世蜜脾转化为随机蜜脾（最多3种，总数=生产力倍率）。
 	 * 万象创世蜜脾块转化为随机蜜脾块（最多3种，总数=生产力倍率*4）。
 	 * 使用PB原版离心机的标准处理时间。
+	 * <p>
+	 * 能量和操作数使用调用方（tryProcessPbRecipeInternal）已缓存的 cachedEnergyPerTick 和 cachedOperationsPerTick，
+	 * 避免在此方法中重复调用 getEnergyPerTick/operationsPerTick（可能涉及 Math.pow 计算）。
 	 */
 	private boolean tryProcessMyriadCreations(int processIndex, ItemStack input) {
-		// 缓存能量和操作数（复用同一缓存，避免循环内重复调用）
-		cachedEnergyPerTick = context.energyContainer().getEnergyPerTick();
-		cachedOperationsPerTick = context.operationsPerTick();
-
 		// 万象创世使用固定的处理时间（参考PB原版离心机）
-		int processingTime = context.getTicksForBase(context.baseTicksRequired());
+		int processingTime = getCachedTicksForBase();
 		pbProcessingTime[processIndex] = processingTime;
 
 		// 配方变更时重置进度
@@ -358,6 +374,7 @@ public class PbRecipeProcessor {
 	 * 查找匹配输入物品的PB离心配方（带实例级LRU缓存）
 	 * <br/>
 	 * 缓存命中时直接返回，避免每tick全量遍历配方列表。
+	 * 普通蜜脾路径优先用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再回退到全量遍历（防御性）。
 	 * 蜜脾块输入会动态生成对应的蜜脾块离心配方（min/max和流体乘以倍率）。
 	 *
 	 * @param input 输入物品
@@ -385,7 +402,17 @@ public class PbRecipeProcessor {
 			return null;
 		}
 
-		// 普通蜜脾 — 使用类型特定配方查询，避免全量遍历
+		// 普通蜜脾 — 优先从索引查找（O(1)），未命中再全量遍历（防御性回退）
+		ResourceLocation beeType = input.get(ModDataComponents.BEE_TYPE.get());
+		if (beeType != null) {
+			RecipeHolder<CentrifugeRecipe> indexed = CentrifugeRecipeIndex.get(beeType);
+			if (indexed != null && indexed.value().ingredient.test(input)) {
+				pbRecipeCache.put(input, indexed);
+				return indexed;
+			}
+		}
+
+		// 索引未命中（无 bee_type 或索引为空或索引遗漏）— 全量遍历回退
 		for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
 				.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
 			if (holder.value().ingredient.test(input)) {
@@ -405,24 +432,27 @@ public class PbRecipeProcessor {
 	 * 蜜脾块 = 4个蜜脾，所以输出min/max和流体都乘以配置倍率。
 	 * 参考PB JEI插件（ProductiveBeesJeiPlugin）的蜜脾块配方生成逻辑。
 	 * 通过bee_type组件查找对应的蜜脾离心配方，然后构建蜜脾块版本。
+	 * 优先使用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再全量遍历（防御性回退）。
 	 */
 	@Nullable
 	private RecipeHolder<CentrifugeRecipe> createCombBlockRecipe(ItemStack combBlockInput) {
 		ResourceLocation beeType = combBlockInput.get(ModDataComponents.BEE_TYPE.get());
 		if (beeType == null) return null;
 
-		// 创建对应的蜜脾ItemStack用于查找配方
-		ItemStack honeycomb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-		honeycomb.set(ModDataComponents.BEE_TYPE.get(), beeType);
+		// 优先从索引查找蜜脾配方（O(1)）
+		RecipeHolder<CentrifugeRecipe> honeycombRecipe = CentrifugeRecipeIndex.get(beeType);
 
-		// 查找蜜脾的离心配方（使用类型特定查询避免全量遍历所有配方）
-		RecipeHolder<CentrifugeRecipe> honeycombRecipe = null;
-		Level level = context.level();
-		for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
-				.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
-			if (holder.value().ingredient.test(honeycomb)) {
-				honeycombRecipe = holder;
-				break;
+		// 索引未命中 — 回退到全量遍历（防御性）
+		if (honeycombRecipe == null) {
+			ItemStack honeycomb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+			honeycomb.set(ModDataComponents.BEE_TYPE.get(), beeType);
+			Level level = context.level();
+			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
+					.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
+				if (holder.value().ingredient.test(honeycomb)) {
+					honeycombRecipe = holder;
+					break;
+				}
 			}
 		}
 
@@ -507,15 +537,13 @@ public class PbRecipeProcessor {
 		}
 
 		// 处理流体输出（乘以生产力倍率）
+		// 流体槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
 		FluidStack fluidOutput = recipe.getFluidOutputs();
 		IExtendedFluidTank tank = context.fluidOutputTank();
 		if (tank != null && !fluidOutput.isEmpty()) {
 			FluidStack scaledFluid = fluidOutput.copy();
 			scaledFluid.setAmount(scaledFluid.getAmount() * modifier);
-			FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
-			if (!remainder.isEmpty()) {
-				ProductiveBeesGenesis.LOGGER.info("{}流体槽已满，丢弃: {}mB", logPrefix, remainder.getAmount());
-			}
+			tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 		}
 
 		// 消耗输入（乘以生产力倍率）
@@ -601,23 +629,38 @@ public class PbRecipeProcessor {
 	}
 
 	/**
+	 * 获取缓存的 getTicksForBase(baseTicksRequired) 结果（时间窗口缓存）
+	 * <br/>
+	 * 升级组件哈希计算开销较大且升级变更不频繁，采用"每 N tick 重新计算一次"策略，
+	 * 与 TileEntityMekCentrifuge.getCachedTicks 模式一致。
+	 * 升级变更后最多 {@link #TICKS_CACHE_INTERVAL} tick（1秒）内自动反映新值，可接受。
+	 * <p>
+	 * 线程安全：cachedTicksForBase 和 cachedTicksForBaseAt 为 volatile，读写原子；
+	 * 方块实体在服务端单线程执行，多进程共享同一缓存（升级组件为工厂级共享）。
+	 *
+	 * @return 受速度升级影响的 baseTicksRequired 处理时间
+	 */
+	private int getCachedTicksForBase() {
+		Level level = context.level();
+		long currentTick = level != null ? level.getGameTime() : 0L;
+		if (cachedTicksForBase < 0 || (currentTick - cachedTicksForBaseAt) >= TICKS_CACHE_INTERVAL) {
+			cachedTicksForBase = context.getTicksForBase(context.baseTicksRequired());
+			cachedTicksForBaseAt = currentTick;
+		}
+		return cachedTicksForBase;
+	}
+
+	/**
 	 * 检查指定进程的所有物品输出槽是否已满
 	 * <br/>
 	 * 满时暂停PB配方处理，避免物品丢失（与MEK原版NOT_ENOUGH_OUTPUT_SPACE行为一致）。
 	 * 仅检查物品槽，流体槽满时不暂停（流体溢出量通常较小）。
+	 * <p>
+	 * Task 5 优化：通过 {@link PbRecipeContext} 接口读取工厂维护的 outputSlotsFull 标志位，
+	 * 避免每次调用都遍历输出槽。标志位由工厂的 IContentsListener 触发 updateOutputSlotFlags() 更新。
 	 */
 	private boolean areOutputSlotsFull(int process) {
-		if (!isSlotFull(context.primaryOutputSlot(process))) return false;
-		IInventorySlot secondary = context.secondaryOutputSlot(process);
-		if (secondary != null && !isSlotFull(secondary)) return false;
-		if (!isSlotFull(context.tertiaryOutputSlot(process))) return false;
-		return true;
-	}
-
-	/** 检查单个物品输出槽是否已满 */
-	private boolean isSlotFull(IInventorySlot slot) {
-		ItemStack stack = slot.getStack();
-		return !stack.isEmpty() && stack.getCount() >= slot.getLimit(stack);
+		return context.productivebeesgenesis$outputSlotsFull();
 	}
 
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */

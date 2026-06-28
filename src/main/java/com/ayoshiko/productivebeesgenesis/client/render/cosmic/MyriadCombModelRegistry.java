@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 
@@ -27,6 +28,9 @@ import net.neoforged.neoforge.client.event.ModelEvent;
  */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class MyriadCombModelRegistry {
+
+	/** 方块模型包装注册日志仅输出一次 */
+	private static final AtomicBoolean BLOCK_WRAPPER_LOGGED = new AtomicBoolean(false);
 
 	private MyriadCombModelRegistry() {
 	}
@@ -59,26 +63,21 @@ public final class MyriadCombModelRegistry {
 			models.put(pbCombItemKey, new BakedModelMyriadCombBlock(pbCombItem, infinityCombBlockItem));
 		}
 
-		// PB 的 configurable_comb 方块模型 — 遍历查找匹配的 key
-		// 方块模型的 ModelResourceLocation variant 取决于 blockstate JSON 中的 variant 字符串
-		// 对于无属性方块，variant 为空字符串，需遍历查找
-		String pbCombBlockModelPath = "block/comb/configurable";
-		String infinityCombBlockModelPath = "block/infinitycreation_comb_block";
-		BakedModel pbCombBlock = null;
-		ModelResourceLocation pbCombBlockKey = null;
-		BakedModel infinityCombBlock = null;
-		for (Map.Entry<ModelResourceLocation, BakedModel> entry : models.entrySet()) {
-			ModelResourceLocation key = entry.getKey();
-			ResourceLocation id = key.id();
-			if ("productivebees".equals(id.getNamespace()) && pbCombBlockModelPath.equals(id.getPath())) {
-				pbCombBlock = entry.getValue();
-				pbCombBlockKey = key;
-			} else if (ProductiveBeesGenesis.MOD_ID.equals(id.getNamespace()) && infinityCombBlockModelPath.equals(id.getPath())) {
-				infinityCombBlock = entry.getValue();
-			}
-		}
-		if (pbCombBlock != null && infinityCombBlock != null && pbCombBlockKey != null) {
+		// PB 的 configurable_comb 方块模型
+		// 方块模型在 Map 中的键是 blockstate id + variant，而不是 model JSON 路径
+		// 无属性方块的 variant 为空字符串，因此直接构造 ModelResourceLocation 查询
+		ModelResourceLocation pbCombBlockKey = new ModelResourceLocation(
+				ResourceLocation.fromNamespaceAndPath("productivebees", "configurable_comb"), "");
+		BakedModel pbCombBlock = models.get(pbCombBlockKey);
+		ModelResourceLocation infinityCombBlockKey = new ModelResourceLocation(
+				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "infinitycreation_comb_block"), "");
+		BakedModel infinityCombBlock = models.get(infinityCombBlockKey);
+		if (pbCombBlock != null && infinityCombBlock != null) {
 			models.put(pbCombBlockKey, new BakedModelMyriadCombBlockBlock(pbCombBlock, infinityCombBlock));
+			if (BLOCK_WRAPPER_LOGGED.compareAndSet(false, true)) {
+				ProductiveBeesGenesis.LOGGER.info(
+						"万象创世蜜脾块方块模型包装已注册：PB key={}, Infinity key={}", pbCombBlockKey, infinityCombBlockKey);
+			}
 		}
 	}
 }

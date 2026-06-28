@@ -65,6 +65,13 @@ public abstract class AbstractCombEventHandler {
 		static final ItemStack INSTANCE = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
 	}
 
+	/** hasCentrifugeRecipe 测试输入复用 — Handler 单参构造时 blockEntity=null，onContentsChanged 空操作；matches() 仅读 getItem，无世界状态依赖，可静态复用 */
+	private static final class CentrifugeRecipeTestInputHolder {
+		static final InventoryHandlerHelper.BlockEntityItemStackHandler HANDLER =
+				new InventoryHandlerHelper.BlockEntityItemStackHandler(2);
+		static final ItemStack TEST_COMB = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+	}
+
 	/** 单个handler的空转拦截缓存条目 */
 	protected static final class BlockCheckCache {
 		volatile Item inputItem;
@@ -127,14 +134,14 @@ public abstract class AbstractCombEventHandler {
 	 */
 	protected static boolean hasCentrifugeRecipe(ServerLevel level, ResourceLocation beeType) {
 		try {
-			ItemStack testComb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-			testComb.set(ModDataComponents.BEE_TYPE.get(), beeType);
-
-			var testInput = new InventoryHandlerHelper.BlockEntityItemStackHandler(2);
-			testInput.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, testComb);
+			// 复用静态 Handler 与 ItemStack，仅重置 bee_type 组件，消除每调用的对象分配
+			CentrifugeRecipeTestInputHolder.TEST_COMB.set(ModDataComponents.BEE_TYPE.get(), beeType);
+			CentrifugeRecipeTestInputHolder.HANDLER.setStackInSlot(
+					InventoryHandlerHelper.INPUT_SLOT, CentrifugeRecipeTestInputHolder.TEST_COMB);
 
 			RecipeHolder<CentrifugeRecipe> recipe = level.getRecipeManager()
-					.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(), (RecipeInput) testInput, level)
+					.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(),
+							(RecipeInput) CentrifugeRecipeTestInputHolder.HANDLER, level)
 					.orElse(null);
 			return recipe != null;
 		} catch (Exception e) {
@@ -165,6 +172,25 @@ public abstract class AbstractCombEventHandler {
 	}
 
 	/**
+	 * 从预构建的蜜脾模板数组中随机选取一个并复制，生成蜜脾
+	 * <p>
+	 * 相比 {@link #generateRandomHoneycomb(CopyOnWriteArrayList)}，此方法避免在每次调用时
+	 * 都创建新的 {@link ItemStack} 并设置数据组件，显著降低256倍加速等高频场景下的GC压力。
+	 *
+	 * @param templates 蜜脾模板数组（每个元素已预设 bee_type 组件）
+	 * @return 随机蜜脾ItemStack
+	 */
+	protected static ItemStack generateRandomHoneycomb(ItemStack[] templates) {
+		try {
+			if (templates == null || templates.length == 0) return createFallbackHoneycomb();
+			return templates[ThreadLocalRandom.current().nextInt(templates.length)].copy();
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾时发生错误", e);
+			return createFallbackHoneycomb();
+		}
+	}
+
+	/**
 	 * 从指定缓存中随机选取一个蜜蜂类型，生成蜜脾块
 	 *
 	 * @param cachedBeeTypes 蜜蜂类型缓存
@@ -182,6 +208,125 @@ public abstract class AbstractCombEventHandler {
 			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾块时发生错误", e);
 			return createFallbackCombBlock();
 		}
+	}
+
+	/**
+	 * 从预构建的蜜脾块模板数组中随机选取一个并复制，生成蜜脾块
+	 *
+	 * @param templates 蜜脾块模板数组（每个元素已预设 bee_type 组件）
+	 * @return 随机蜜脾块ItemStack
+	 */
+	protected static ItemStack generateRandomCombBlock(ItemStack[] templates) {
+		try {
+			if (templates == null || templates.length == 0) return createFallbackCombBlock();
+			return templates[ThreadLocalRandom.current().nextInt(templates.length)].copy();
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾块时发生错误", e);
+			return createFallbackCombBlock();
+		}
+	}
+
+	/**
+	 * 批量生成蜜脾：一次性生成 count 个随机蜜脾并追加到输出列表
+	 * <p>
+	 * 预分配索引数组，减少 {@link ThreadLocalRandom} 调用与扩容开销，适用于 256x
+	 * 加速等高频调用场景。
+	 *
+	 * @param out       输出列表
+	 * @param count     生成数量
+	 * @param templates 蜜脾模板数组
+	 */
+	public static void appendRandomHoneycombs(List<ItemStack> out, int count, ItemStack[] templates) {
+		if (count <= 0 || templates == null || templates.length == 0) return;
+		int[] indices = new int[count];
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		for (int i = 0; i < count; i++) {
+			indices[i] = random.nextInt(templates.length);
+		}
+		for (int idx : indices) {
+			out.add(templates[idx].copy());
+		}
+	}
+
+	/**
+	 * 批量生成蜜脾并返回新列表
+	 *
+	 * @param count     生成数量
+	 * @param templates 蜜脾模板数组
+	 * @return 包含 count 个随机蜜脾的可变列表
+	 */
+	public static List<ItemStack> generateRandomHoneycombs(int count, ItemStack[] templates) {
+		List<ItemStack> out = new ArrayList<>(Math.max(0, count));
+		appendRandomHoneycombs(out, count, templates);
+		return out;
+	}
+
+	/**
+	 * 批量生成蜜脾块：一次性生成 count 个随机蜜脾块并追加到输出列表
+	 *
+	 * @param out       输出列表
+	 * @param count     生成数量
+	 * @param templates 蜜脾块模板数组
+	 */
+	public static void appendRandomCombBlocks(List<ItemStack> out, int count, ItemStack[] templates) {
+		if (count <= 0 || templates == null || templates.length == 0) return;
+		int[] indices = new int[count];
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		for (int i = 0; i < count; i++) {
+			indices[i] = random.nextInt(templates.length);
+		}
+		for (int idx : indices) {
+			out.add(templates[idx].copy());
+		}
+	}
+
+	/**
+	 * 批量生成蜜脾块并返回新列表
+	 *
+	 * @param count     生成数量
+	 * @param templates 蜜脾块模板数组
+	 * @return 包含 count 个随机蜜脾块的可变列表
+	 */
+	public static List<ItemStack> generateRandomCombBlocks(int count, ItemStack[] templates) {
+		List<ItemStack> out = new ArrayList<>(Math.max(0, count));
+		appendRandomCombBlocks(out, count, templates);
+		return out;
+	}
+
+	/**
+	 * 为指定蜜蜂类型缓存构建蜜脾模板数组
+	 * <p>
+	 * 模板在缓存更新时一次性构建，避免高频生成时重复创建 ItemStack 和设置数据组件。
+	 *
+	 * @param cachedBeeTypes 蜜蜂类型缓存
+	 * @return 蜜脾模板数组
+	 */
+	protected static ItemStack[] buildHoneycombTemplates(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) return new ItemStack[0];
+		ItemStack[] templates = new ItemStack[cachedBeeTypes.size()];
+		for (int i = 0; i < cachedBeeTypes.size(); i++) {
+			ItemStack stack = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(i));
+			templates[i] = stack;
+		}
+		return templates;
+	}
+
+	/**
+	 * 为指定蜜蜂类型缓存构建蜜脾块模板数组
+	 *
+	 * @param cachedBeeTypes 蜜蜂类型缓存
+	 * @return 蜜脾块模板数组
+	 */
+	protected static ItemStack[] buildCombBlockTemplates(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) return new ItemStack[0];
+		ItemStack[] templates = new ItemStack[cachedBeeTypes.size()];
+		for (int i = 0; i < cachedBeeTypes.size(); i++) {
+			ItemStack stack = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
+			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(i));
+			templates[i] = stack;
+		}
+		return templates;
 	}
 
 	// ========== 随机类型选择与分配 ==========

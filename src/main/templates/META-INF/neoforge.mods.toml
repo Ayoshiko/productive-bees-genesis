@@ -12,7 +12,7 @@ issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
-displayName="资源蜜蜂：创世"
+displayName="Productive Bees Genesis"
 authors="${mod_authors}"
 description='''
 资源蜜蜂：创世 / Productive Bees Genesis
@@ -99,3 +99,12 @@ config="${mod_id}.iris.mixins.json"
     type="optional"
     ordering="AFTER"
     side="CLIENT"
+
+# Super Factory Manager 可选依赖（仅保证加载顺序）
+# 离心机继承 Mekanism 的 TileEntityElectricMachine，自动暴露 IItemHandler/IEnergyStorage/IFluidHandler，
+# SFM 通过 NeoForge Capability 系统访问这些接口，应已天然兼容，此处声明仅为确保加载顺序。
+[[dependencies.${mod_id}]]
+    modId="sfm"
+    type="optional"
+    ordering="AFTER"
+    side="BOTH"

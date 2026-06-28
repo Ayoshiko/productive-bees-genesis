@@ -155,12 +155,8 @@
   "productivebeesgenesis.configuration.mek_centrifuge": "MEK离心机",
   "productivebeesgenesis.configuration.mek_centrifuge.button": "MEK离心机",
   "productivebeesgenesis.configuration.mek_centrifuge.tooltip": "MEK离心机设置",
-  "productivebeesgenesis.configuration.chemicalOutput": "化学品输出",
-  "productivebeesgenesis.configuration.chemicalOutput.tooltip": "启用化学品副产物输出",
   "productivebeesgenesis.configuration.portColorRenderRange": "端口颜色渲染范围",
   "productivebeesgenesis.configuration.portColorRenderRange.tooltip": "端口颜色可视化的渲染范围（格）",
-  "productivebeesgenesis.configuration.autoEject": "自动弹出",
-  "productivebeesgenesis.configuration.autoEject.tooltip": "默认启用自动弹出输出",
   "productivebeesgenesis.configuration.ejectDelay": "弹出延迟（tick）",
   "productivebeesgenesis.configuration.ejectDelay.tooltip": "输出槽自动弹出延迟。原版Mekanism=10（0.5秒）。值越小弹出越快，服务器负载越高。推荐：2（0.1秒）",
   "productivebeesgenesis.configuration.ejectDelayActive": "活动弹出延迟（tick）",
@@ -311,5 +307,10 @@
   "productivebeesgenesis.configuration.outputMax": "最大产出",
   "productivebeesgenesis.configuration.outputMax.tooltip": "最大产出数量",
   "productivebeesgenesis.configuration.outputChance": "产出概率",
-  "productivebeesgenesis.configuration.outputChance.tooltip": "产出概率（0.0~1.0）"
+  "productivebeesgenesis.configuration.outputChance.tooltip": "产出概率（0.0~1.0）",
+  "productivebeesgenesis.configuration.bee_produce.myriadProduceThrottlePerTick": "万象创世每刻产物节流",
+  "productivebeesgenesis.configuration.bee_produce.myriadProduceThrottlePerTick.tooltip": "每游戏刻每只万象创世蜜蜂的最大产物事件数（0=无限制）。在高倍加速/ME接口高频拉取场景下可降低CPU负载。",
+
+  "productivebeesgenesis.configuration.mek_centrifuge.mekCentrifugeMaxExtractPerTick": "每刻最大拉取量",
+  "productivebeesgenesis.configuration.mek_centrifuge.mekCentrifugeMaxExtractPerTick.tooltip": "每游戏刻外部通过管道/AE2从离心机输出槽拉取的最大物品总数（0=无限制）。防止ME接口过载拉取导致主线程卡顿。"
 }

@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.management.StandardMBean;
 
 /**
  * 性能监控器
@@ -127,7 +128,9 @@ public final class PerformanceMonitor {
             var mbs = ManagementFactory.getPlatformMBeanServer();
             var name = new javax.management.ObjectName("productivebeesgenesis:type=PerformanceMonitor");
             if (!mbs.isRegistered(name)) {
-                mbs.registerMBean(new PerformanceMonitorMBeanImpl(), name);
+                // 使用 StandardMBean 显式绑定接口，避免实现类名必须遵循 "接口名去 MBean 后缀" 的命名约定
+                var mbean = new StandardMBean(new PerformanceMonitorMBeanImpl(this), PerformanceMonitorMBean.class);
+                mbs.registerMBean(mbean, name);
                 ProductiveBeesGenesis.LOGGER.info("性能监控JMX MBean注册成功");
             }
         } catch (Exception e) {
@@ -147,13 +150,19 @@ public final class PerformanceMonitor {
     }
 
     /** JMX MBean实现 */
-    private class PerformanceMonitorMBeanImpl implements PerformanceMonitorMBean {
-        @Override public double getAverageTickTimeMs() { return PerformanceMonitor.this.getAverageTickTimeMs(); }
-        @Override public double getMaxTickTimeMs() { return PerformanceMonitor.this.getMaxTickTimeMs(); }
-        @Override public double getCacheHitRate() { return PerformanceMonitor.this.getCacheHitRate(); }
-        @Override public double getAverageRecipeLookupUs() { return PerformanceMonitor.this.getAverageRecipeLookupUs(); }
-        @Override public long getTotalEnergyConsumed() { return totalEnergyConsumed.get(); }
-        @Override public int getTickCount() { return tickCount.get(); }
+    private static class PerformanceMonitorMBeanImpl implements PerformanceMonitorMBean {
+        private final PerformanceMonitor monitor;
+
+        PerformanceMonitorMBeanImpl(PerformanceMonitor monitor) {
+            this.monitor = monitor;
+        }
+
+        @Override public double getAverageTickTimeMs() { return monitor.getAverageTickTimeMs(); }
+        @Override public double getMaxTickTimeMs() { return monitor.getMaxTickTimeMs(); }
+        @Override public double getCacheHitRate() { return monitor.getCacheHitRate(); }
+        @Override public double getAverageRecipeLookupUs() { return monitor.getAverageRecipeLookupUs(); }
+        @Override public long getTotalEnergyConsumed() { return monitor.getTotalEnergyConsumed(); }
+        @Override public int getTickCount() { return monitor.getTickCount(); }
     }
 
     /** 方块实体统计 */

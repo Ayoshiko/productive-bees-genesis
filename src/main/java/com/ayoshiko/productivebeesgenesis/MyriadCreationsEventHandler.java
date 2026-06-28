@@ -54,6 +54,10 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 缓存排除万象创世自身后的所有蜜蜂类型（volatile保证跨线程可见性） */
 	private static volatile CopyOnWriteArrayList<ResourceLocation> CACHED_BEE_TYPES = new CopyOnWriteArrayList<>();
+	/** 预构建的蜜脾模板数组，与 CACHED_BEE_TYPES 同步更新，避免高频生成时重复创建ItemStack */
+	private static volatile ItemStack[] CACHED_HONEYCOMB_TEMPLATES = new ItemStack[0];
+	/** 预构建的蜜脾块模板数组 */
+	private static volatile ItemStack[] CACHED_COMB_BLOCK_TEMPLATES = new ItemStack[0];
 	private static final AtomicBoolean CACHE_VALID = new AtomicBoolean(false);
 	private static final AtomicInteger lastCacheUpdateTick = new AtomicInteger(0);
 
@@ -120,6 +124,9 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 			return;
 		}
 		CACHED_BEE_TYPES = newCache;
+		// 同步预构建模板数组，256倍加速下通过copy()替代new ItemStack+set组件，显著降低GC压力
+		CACHED_HONEYCOMB_TEMPLATES = buildHoneycombTemplates(newCache);
+		CACHED_COMB_BLOCK_TEMPLATES = buildCombBlockTemplates(newCache);
 		CACHE_VALID.set(!newCache.isEmpty());
 	}
 
@@ -154,12 +161,52 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 获取随机蜜脾（排除万象创世自身） */
 	public static ItemStack getRandomHoneycomb() {
-		return generateRandomHoneycomb(CACHED_BEE_TYPES);
+		return generateRandomHoneycomb(CACHED_HONEYCOMB_TEMPLATES);
 	}
 
 	/** 获取随机蜜脾块 */
 	public static ItemStack getRandomCombBlock() {
-		return generateRandomCombBlock(CACHED_BEE_TYPES);
+		return generateRandomCombBlock(CACHED_COMB_BLOCK_TEMPLATES);
+	}
+
+	/**
+	 * 批量获取随机蜜脾
+	 *
+	 * @param count 生成数量
+	 * @return 包含 count 个随机蜜脾的可变列表
+	 */
+	public static List<ItemStack> getRandomHoneycombs(int count) {
+		return generateRandomHoneycombs(count, CACHED_HONEYCOMB_TEMPLATES);
+	}
+
+	/**
+	 * 批量获取随机蜜脾块
+	 *
+	 * @param count 生成数量
+	 * @return 包含 count 个随机蜜脾块的可变列表
+	 */
+	public static List<ItemStack> getRandomCombBlocks(int count) {
+		return generateRandomCombBlocks(count, CACHED_COMB_BLOCK_TEMPLATES);
+	}
+
+	/**
+	 * 批量追加随机蜜脾到输出列表
+	 *
+	 * @param out   输出列表
+	 * @param count 生成数量
+	 */
+	public static void appendRandomHoneycombs(List<ItemStack> out, int count) {
+		appendRandomHoneycombs(out, count, CACHED_HONEYCOMB_TEMPLATES);
+	}
+
+	/**
+	 * 批量追加随机蜜脾块到输出列表
+	 *
+	 * @param out   输出列表
+	 * @param count 生成数量
+	 */
+	public static void appendRandomCombBlocks(List<ItemStack> out, int count) {
+		appendRandomCombBlocks(out, count, CACHED_COMB_BLOCK_TEMPLATES);
 	}
 
 	// ========== 类型判断 ==========

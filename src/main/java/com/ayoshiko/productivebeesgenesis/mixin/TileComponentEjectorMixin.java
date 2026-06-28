@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mixin;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
+import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.component.config.ConfigInfo;
@@ -72,10 +74,23 @@ public class TileComponentEjectorMixin {
     /**
      * 检查离心机输出槽中是否仍有物品待弹出
      * <br/>
-     * 只检查OutputInventorySlot类型的槽位，避免输入槽/能量槽有物品时误触发快速弹出。
+     * 优先读取由 IContentsListener 维护的标志位（O(1)），避免每次弹出都遍历所有槽位（O(n)）。
+     * 覆盖两种实现路径：
+     * - 基础离心机 {@link TileEntityMekCentrifuge}：直接调用其标志位方法
+     * - 工厂版（三个 Factory 类）：通过 {@link PbRecipeContext} 接口读取标志位
+     * 其他 Mekanism 机器回退到原 O(n) 遍历逻辑。
      */
     @Unique
     private boolean productivebeesgenesis$hasOutputItems(mekanism.common.tile.base.TileEntityMekanism tile) {
+        // 基础离心机：直接读取标志位（未实现 PbRecipeContext，单独判断）
+        if (tile instanceof TileEntityMekCentrifuge mekCentrifuge) {
+            return mekCentrifuge.productivebeesgenesis$hasOutputItems();
+        }
+        // 工厂版：通过 PbRecipeContext 接口读取标志位（三个 Factory 类均实现该接口）
+        if (tile instanceof PbRecipeContext context) {
+            return context.productivebeesgenesis$hasOutputItems();
+        }
+        // 其他 Mekanism 机器：回退到原遍历逻辑
         for (IInventorySlot slot : tile.getInventorySlots(null)) {
             if (slot instanceof mekanism.common.inventory.slot.OutputInventorySlot && !slot.getStack().isEmpty()) {
                 return true;

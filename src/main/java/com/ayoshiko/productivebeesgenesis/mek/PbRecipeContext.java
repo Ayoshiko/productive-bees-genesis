@@ -92,4 +92,34 @@ public interface PbRecipeContext {
 	 * @return true 如果存在SMELTING配方
 	 */
 	boolean containsSmeltingInput(ItemStack input);
+
+	// ===== Task 5: 输出槽状态标志位 =====
+
+	/** 输出槽是否有物品（供 EjectorMixin 读取，判断是否需要弹出） */
+	boolean productivebeesgenesis$hasOutputItems();
+
+	/** 输出槽是否已满（供 PbRecipeProcessor.areOutputSlotsFull 读取，存在任意进程满时为true） */
+	boolean productivebeesgenesis$outputSlotsFull();
+
+	/** 重新计算输出槽状态标志（在输出槽 IContentsListener 中调用） */
+	void productivebeesgenesis$updateOutputSlotFlags();
+
+	// ===== Task 11: 激活状态计数器 =====
+
+	/**
+	 * 进程激活时调用（递增计数器）
+	 * <br/>
+	 * 使用 CAS 防止重复递增，内部维护 boolean[] 跟踪每进程状态。
+	 */
+	void productivebeesgenesis$onProcessActivated(int process);
+
+	/**
+	 * 进程失活时调用（递减计数器）
+	 * <br/>
+	 * 使用 CAS 防止重复递减，内部维护 boolean[] 跟踪每进程状态。
+	 */
+	void productivebeesgenesis$onProcessDeactivated(int process);
+
+	/** 是否有任意PB进程激活（O(1) 计数器读取，替代 O(processes) 遍历） */
+	boolean productivebeesgenesis$hasActiveProcess();
 }

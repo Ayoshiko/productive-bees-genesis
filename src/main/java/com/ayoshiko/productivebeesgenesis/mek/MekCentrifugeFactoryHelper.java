@@ -2,9 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
-import java.util.function.IntConsumer;
 import java.util.function.LongConsumer;
 
 import org.jetbrains.annotations.NotNull;
@@ -162,7 +162,7 @@ public final class MekCentrifugeFactoryHelper {
      * 抽取自三个工厂的 onUpdateServer 方法。super.onUpdateServer() 处理SMELTING配方后调用此方法。
      * <ul>
      *   <li>遍历所有进程，对非SMELTING输入独立处理PB配方</li>
-     *   <li>重新计算整体激活状态（PB进程在super中被设为false）</li>
+     *   <li>Task 11: 通过 AtomicInteger 计数器 O(1) 判断整体激活状态，替代 O(processes) 遍历</li>
      *   <li>基于实际能量差计算总消耗（SMELTING + PB），不依赖getLastUsage</li>
      * </ul>
      * SMELTING配方检查结果缓存优化（输入变更时才重新查询）由PbRecipeProcessor管理。
@@ -173,9 +173,8 @@ public final class MekCentrifugeFactoryHelper {
      * @param processes         进程数
      * @param inputSlots        输入槽列表
      * @param pbProcessor       PB配方处理器
-     * @param activateProcess   激活进程（process -> setActiveState(true, process)）
-     * @param activeStates      激活状态数组（从Accessor获取）
-     * @param currentActive     当前整体激活状态（getActive()）
+     * @param context           PB配方上下文（工厂实现，提供计数器方法）
+     * @param currentActive     super 后的整体激活状态（getActive()，反映 SMELTING）
      * @param setActive         设置整体激活状态（this::setActive）
      * @param setLastUsage      设置最近能量使用（从Accessor获取）
      * @return sendUpdatePacket（原样返回）
@@ -187,8 +186,7 @@ public final class MekCentrifugeFactoryHelper {
             int processes,
             @NotNull List<IInventorySlot> inputSlots,
             @NotNull PbRecipeProcessor pbProcessor,
-            @NotNull IntConsumer activateProcess,
-            @NotNull boolean[] activeStates,
+            @NotNull PbRecipeContext context,
             boolean currentActive,
             @NotNull Consumer<Boolean> setActive,
             @NotNull LongConsumer setLastUsage) {
@@ -199,26 +197,29 @@ public final class MekCentrifugeFactoryHelper {
             if (input.isEmpty()) {
                 // 空输入：重置缓存并跳过
                 pbProcessor.resetSmeltingCache(i);
+                // Task 11: 空输入确保 PB 进程失活（CAS 防重复，super 已重置 activeStates）
+                context.productivebeesgenesis$onProcessDeactivated(i);
                 continue;
             }
             // 缓存SMELTING配方检查结果，输入变更时才重新查询
             if (pbProcessor.hasSmeltingRecipe(i, input)) {
                 // SMELTING配方由super处理，跳过PB路径
+                // Task 11: SMELTING 配方占用，PB 进程失活
+                context.productivebeesgenesis$onProcessDeactivated(i);
                 continue;
             }
             if (pbProcessor.tryProcessPbRecipe(i)) {
-                activateProcess.accept(i);
+                // Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部 CAS 防重复 + setActiveState）
+                context.productivebeesgenesis$onProcessActivated(i);
+                context.setPbActiveState(true, i);
+            } else {
+                // Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处 CAS 防重复）
+                context.productivebeesgenesis$onProcessDeactivated(i);
             }
         }
 
-        // 重新计算整体激活状态（super已根据activeStates调用setActive，但PB进程在super中被设为false）
-        boolean isActive = false;
-        for (boolean state : activeStates) {
-            if (state) {
-                isActive = true;
-                break;
-            }
-        }
+        // Task 11: 整体激活 = SMELTING 激活（super 后 currentActive）|| PB 激活（计数器 O(1)，替代 O(processes) 遍历）
+        boolean isActive = currentActive || context.productivebeesgenesis$hasActiveProcess();
         if (isActive != currentActive) {
             setActive.accept(isActive);
         }
@@ -333,5 +334,110 @@ public final class MekCentrifugeFactoryHelper {
         TileComponentEjector ejector = new TileComponentEjector(factory);
         ejector.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
         return ejector;
+    }
+
+    // ===== 输出槽状态标志位管理 =====
+
+    /**
+     * 重新计算输出槽状态标志位（hasOutputItems / outputSlotsFull）
+     * <br/>
+     * 抽取自三个工厂的 productivebeesgenesis$updateOutputSlotFlags 方法。
+     * 遍历所有进程的3个输出槽，更新两个 volatile 标志位：
+     * <ul>
+     *   <li>hasOutputItems：任意输出槽有物品时为true（供 EjectorMixin 读取）</li>
+     *   <li>outputSlotsFull：任意进程的所有输出槽都满时为true（供 areOutputSlotsFull 读取）</li>
+     * </ul>
+     * 通过 {@link PbRecipeContext} 接口访问槽位，不依赖具体 TileEntity 类型。
+     *
+     * @param context               PB配方上下文（提供槽位访问和进程数）
+     * @param hasOutputItemsSetter  设置 hasOutputItems 标志位的回调
+     * @param outputSlotsFullSetter 设置 outputSlotsFull 标志位的回调
+     */
+    public static void updateOutputSlotFlags(
+            @NotNull PbRecipeContext context,
+            @NotNull Consumer<Boolean> hasOutputItemsSetter,
+            @NotNull Consumer<Boolean> outputSlotsFullSetter) {
+        boolean hasItems = false;
+        boolean full = false;
+        int processes = context.processes();
+        for (int i = 0; i < processes; i++) {
+            IInventorySlot primary = context.primaryOutputSlot(i);
+            IInventorySlot secondary = context.secondaryOutputSlot(i);
+            IInventorySlot tertiary = context.tertiaryOutputSlot(i);
+            if (!primary.getStack().isEmpty()
+                    || (secondary != null && !secondary.getStack().isEmpty())
+                    || !tertiary.getStack().isEmpty()) {
+                hasItems = true;
+            }
+            if (isSlotFull(primary) && (secondary == null || isSlotFull(secondary)) && isSlotFull(tertiary)) {
+                full = true;
+            }
+        }
+        hasOutputItemsSetter.accept(hasItems);
+        outputSlotsFullSetter.accept(full);
+    }
+
+    /**
+     * 检查单个输出槽是否已满
+     * <br/>
+     * 抽取自三个工厂的 isSlotFull 方法。槽位有物品且数量达到上限时返回true。
+     *
+     * @param slot 输出槽
+     * @return true 如果槽位已满
+     */
+    public static boolean isSlotFull(@NotNull IInventorySlot slot) {
+        ItemStack stack = slot.getStack();
+        return !stack.isEmpty() && stack.getCount() >= slot.getLimit(stack);
+    }
+
+    // ===== 激活状态计数器管理 =====
+
+    /**
+     * 进程激活时调用（递增计数器）
+     * <br/>
+     * 抽取自三个工厂的 productivebeesgenesis$onProcessActivated 方法。
+     * 使用 CAS 逻辑防止重复递增：仅状态 false→true 时递增计数器。
+     *
+     * @param process             进程索引
+     * @param pbActiveStates      PB激活状态数组（每进程一个）
+     * @param activeProcessCount  激活进程计数器
+     */
+    public static void onProcessActivated(int process, boolean[] pbActiveStates,
+                                          @NotNull AtomicInteger activeProcessCount) {
+        if (!pbActiveStates[process]) {
+            pbActiveStates[process] = true;
+            activeProcessCount.incrementAndGet();
+        }
+    }
+
+    /**
+     * 进程失活时调用（递减计数器）
+     * <br/>
+     * 抽取自三个工厂的 productivebeesgenesis$onProcessDeactivated 方法。
+     * 使用 CAS 逻辑防止重复递减：仅状态 true→false 时递减计数器。
+     *
+     * @param process             进程索引
+     * @param pbActiveStates      PB激活状态数组（每进程一个）
+     * @param activeProcessCount  激活进程计数器
+     */
+    public static void onProcessDeactivated(int process, boolean[] pbActiveStates,
+                                            @NotNull AtomicInteger activeProcessCount) {
+        if (pbActiveStates[process]) {
+            pbActiveStates[process] = false;
+            activeProcessCount.decrementAndGet();
+        }
+    }
+
+    /**
+     * 检查是否有任意PB进程激活
+     * <br/>
+     * 抽取自三个工厂的 productivebeesgenesis$hasActiveProcess 方法。
+     * O(1) 计数器读取，替代 O(processes) 遍历。
+     *
+     * @param activeProcessCount 激活进程计数器
+     * @return true 如果有激活的进程
+     */
+    public static boolean hasActiveProcess(@NotNull AtomicInteger activeProcessCount) {
+        return activeProcessCount.get() > 0;
     }
 }

@@ -54,8 +54,6 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.mek_centrifuge", "MEK离心机");
         add("productivebeesgenesis.configuration.mek_centrifuge.button", "MEK离心机");
         add("productivebeesgenesis.configuration.mek_centrifuge.tooltip", "MEK离心机设置");
-        add("productivebeesgenesis.configuration.chemicalOutput", "化学品输出");
-        add("productivebeesgenesis.configuration.chemicalOutput.tooltip", "启用化学品副产物输出");
         add("productivebeesgenesis.configuration.energyPerTick", "每tick能量消耗");
         add("productivebeesgenesis.configuration.energyPerTick.tooltip", "每个处理槽每tick的能量消耗（FE）");
     }

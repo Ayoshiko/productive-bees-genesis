@@ -59,6 +59,9 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	@NotNull
 	public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, @NotNull RandomSource rand,
 									@Nullable ModelData data, @Nullable RenderType renderType) {
+		if (data == null) {
+			return originalPbModel.getQuads(state, side, rand);
+		}
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
 			return infinityModel.getQuads(state, side, rand, data, renderType);
@@ -95,6 +98,9 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	@Override
 	@NotNull
 	public TextureAtlasSprite getParticleIcon(@NotNull ModelData data) {
+		if (data == null) {
+			return originalPbModel.getParticleIcon();
+		}
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
 			return infinityModel.getParticleIcon(data);

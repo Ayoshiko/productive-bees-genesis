@@ -14,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
  * 资源蜜蜂：创世模组主类
@@ -131,17 +133,25 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 标签/配方重载完成回调 — 递增配方版本号并失效蜜蜂类型缓存
+	 * 标签/配方重载完成回调 — 递增配方版本号、失效缓存、重建离心配方索引
 	 * <br/>
 	 * TagsUpdatedEvent 在所有 reload listener（包括 RecipeManager 和标签重载）完成后触发，
 	 * 无论是 /reload 命令、数据包变更还是服务器启动都会触发。
 	 * 递增 recipeVersion 使所有 PbRecipeProcessor 和 TileEntityMekCentrifuge 在下次 tick 时
 	 * 检测到版本号变化，从而清空 SMELTING/PB 配方缓存，确保使用最新的配方数据。
 	 * 同时失效 BeeInfoHelper 的蜜蜂类型缓存，使下次 GUI 查询返回最新注册的蜜蜂类型。
+	 * <p>
+	 * 重建 {@link CentrifugeRecipeIndex} 离心配方索引，使 findPbRecipe 和 createCombBlockRecipe
+	 * 的 O(1) 索引查找使用最新的配方数据。仅服务端重建（客户端无离心配方处理）。
 	 */
 	private void onTagsReload(TagsUpdatedEvent event) {
 		recipeVersion++;
 		BeeInfoHelper.invalidateCache();
+		// 重建离心配方索引（仅服务端，客户端无 ServerLevel）
+		var server = ServerLifecycleHooks.getCurrentServer();
+		if (server != null) {
+			CentrifugeRecipeIndex.rebuild(server.overworld());
+		}
 		LOGGER.debug("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
 	}
 

@@ -156,12 +156,8 @@
   "productivebeesgenesis.configuration.mek_centrifuge": "MEK Centrifuge",
   "productivebeesgenesis.configuration.mek_centrifuge.button": "MEK Centrifuge",
   "productivebeesgenesis.configuration.mek_centrifuge.tooltip": "MEK Centrifuge settings",
-  "productivebeesgenesis.configuration.chemicalOutput": "Chemical Output",
-  "productivebeesgenesis.configuration.chemicalOutput.tooltip": "Enable chemical byproduct output",
   "productivebeesgenesis.configuration.portColorRenderRange": "Port Color Render Range",
   "productivebeesgenesis.configuration.portColorRenderRange.tooltip": "Range in blocks for port color visualization",
-  "productivebeesgenesis.configuration.autoEject": "Auto Eject",
-  "productivebeesgenesis.configuration.autoEject.tooltip": "Auto-eject outputs by default",
   "productivebeesgenesis.configuration.ejectDelay": "Eject Delay (ticks)",
   "productivebeesgenesis.configuration.ejectDelay.tooltip": "Output slot auto-eject delay. Vanilla Mekanism=10 (0.5s). Lower=faster ejection, higher server load. Recommended: 2 (0.1s)",
   "productivebeesgenesis.configuration.ejectDelayActive": "Active Eject Delay (ticks)",
@@ -312,5 +308,10 @@
   "productivebeesgenesis.configuration.outputMax": "Output Max",
   "productivebeesgenesis.configuration.outputMax.tooltip": "Maximum output count",
   "productivebeesgenesis.configuration.outputChance": "Output Chance",
-  "productivebeesgenesis.configuration.outputChance.tooltip": "Output probability (0.0 to 1.0)"
+  "productivebeesgenesis.configuration.outputChance.tooltip": "Output probability (0.0 to 1.0)",
+  "productivebeesgenesis.configuration.bee_produce.myriadProduceThrottlePerTick": "Myriad Produce Throttle Per Tick",
+  "productivebeesgenesis.configuration.bee_produce.myriadProduceThrottlePerTick.tooltip": "Max produce events per game tick per Myriad bee (0=unlimited). Reduces CPU load in heavily accelerated setups.",
+
+  "productivebeesgenesis.configuration.mek_centrifuge.mekCentrifugeMaxExtractPerTick": "Max Extract Per Tick",
+  "productivebeesgenesis.configuration.mek_centrifuge.mekCentrifugeMaxExtractPerTick.tooltip": "Max items extractable per game tick via pipes/AE2 (0=unlimited). Prevents ME interface overload."
 }

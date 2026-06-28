@@ -202,17 +202,18 @@ public final class ModConfig {
         public final ModConfigSpec.IntValue produceOutputMin;
         public final ModConfigSpec.IntValue produceOutputMax;
         public final ModConfigSpec.DoubleValue produceOutputChance;
+        public final ModConfigSpec.IntValue myriadProduceThrottlePerTick;
 
         // ========== MEK离心机配置 ==========
         public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
         public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
-        public final ModConfigSpec.BooleanValue mekCentrifugeAutoEject;
-        public final ModConfigSpec.BooleanValue mekCentrifugeChemicalOutput;
         public final ModConfigSpec.IntValue mekCentrifugeEjectDelay;
         public final ModConfigSpec.IntValue mekCentrifugeEjectDelayActive;
         public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
         public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
         public final ModConfigSpec.BooleanValue enablePerformanceMonitor;
+        // Task 13: AE2/管道拉取限流（防止 ME 接口过载拉取触发全量排序扫描）
+        public final ModConfigSpec.IntValue mekCentrifugeMaxExtractPerTick;
 
         CommonConfig(ModConfigSpec.Builder builder) {
             builder.comment("万象创世蜜蜂属性覆盖配置（服务端生效）").push("bee_attributes");
@@ -220,13 +221,13 @@ public final class ModConfig {
             builder.push("colors").comment("颜色配置（写入蜜蜂数据并在客户端渲染）");
             primaryColor = builder
                     .comment("主颜色（十六进制，如 #FFD700）")
-                    .define("primaryColor", "#FF0000", ModConfig::validateColor);
+                    .define("primaryColor", "#FFFFFF", ModConfig::validateColor);
             secondaryColor = builder
                     .comment("次要颜色")
-                    .define("secondaryColor", "#00FF00", ModConfig::validateColor);
+                    .define("secondaryColor", "#FFFFFF", ModConfig::validateColor);
             particleColor = builder
                     .comment("粒子颜色")
-                    .define("particleColor", "#0000FF", ModConfig::validateColor);
+                    .define("particleColor", "#FFFFFF", ModConfig::validateColor);
             glowColor = builder
                     .comment("光晕颜色（十六进制）")
                     .define("glowColor", "#FFFFFF", ModConfig::validateColor);
@@ -381,6 +382,11 @@ public final class ModConfig {
             produceOutputChance = builder
                     .comment("产出概率（0.0~1.0）")
                     .defineInRange("outputChance", 1.0D, 0.0D, 1.0D);
+
+            myriadProduceThrottlePerTick = builder
+                    .comment("每游戏刻每只万象创世蜜蜂的最大产物事件数（0=无限制）",
+                            "在高倍加速/ME接口高频拉取场景下限制调用次数，降低CPU负载")
+                    .defineInRange("myriadProduceThrottlePerTick", 0, 0, 20);
             builder.pop(); // bee_produce
 
             builder.comment("MEK离心机设置").push("mek_centrifuge");
@@ -392,14 +398,6 @@ public final class ModConfig {
             mekCentrifugeProcessingTime = builder
                     .comment("基础处理时间(tick)")
                     .defineInRange("processingTime", 200, 1, 6000);
-
-            mekCentrifugeAutoEject = builder
-                    .comment("默认启用自动弹出输出")
-                    .define("autoEject", true);
-
-            mekCentrifugeChemicalOutput = builder
-                    .comment("启用化学品副产物输出")
-                    .define("chemicalOutput", true);
 
             mekCentrifugeEjectDelay = builder
                     .comment("输出槽自动弹出延迟(tick)", "原版Mekanism为10(0.5秒)", "减小值可加快多种物品弹出速度", "推荐值: 2(0.1秒) - 平衡性能与响应速度", "最小值0表示每tick弹出(高负载)", "最大值20(1秒)")
@@ -420,6 +418,12 @@ public final class ModConfig {
             enablePerformanceMonitor = builder
                     .comment("启用性能监控（兼容Spark profiler，通过JMX暴露数据）")
                     .define("enablePerformanceMonitor", false);
+
+            // Task 13: AE2/管道拉取限流 — 默认0=无限制，不影响正常游戏
+            mekCentrifugeMaxExtractPerTick = builder
+                    .comment("每游戏刻外部通过管道/AE2从离心机输出槽拉取的最大物品总数（0=无限制）",
+                            "防止ME接口过载拉取导致主线程卡顿")
+                    .defineInRange("mekCentrifugeMaxExtractPerTick", 0, 0, 1024);
 
             builder.pop(); // mek_centrifuge
         }

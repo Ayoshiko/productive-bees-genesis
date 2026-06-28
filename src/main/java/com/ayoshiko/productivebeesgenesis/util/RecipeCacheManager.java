@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import javax.annotation.Nullable;
 
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -21,7 +22,15 @@ import net.minecraft.world.item.ItemStack;
  */
 public class RecipeCacheManager<T> {
 
-	private final LinkedHashMap<String, Optional<T>> cache;
+	/**
+	 * 缓存键 — record 自动生成基于字段的 hashCode/equals，避免 String 拼接的 GC 开销
+	 * <p>
+	 * Item 为注册单例，identity equals/hashCode 在 JVM 内稳定；componentHash 覆盖数据组件差异。
+	 */
+	private record CacheKey(Item item, int componentHash) {
+	}
+
+	private final LinkedHashMap<CacheKey, Optional<T>> cache;
 	private final int maxSize;
 
 	/** 缓存命中次数 */
@@ -42,7 +51,7 @@ public class RecipeCacheManager<T> {
 		this.maxSize = maxSize;
 		this.cache = new LinkedHashMap<>(64, 0.75f, true) {
 			@Override
-			protected boolean removeEldestEntry(Map.Entry<String, Optional<T>> eldest) {
+			protected boolean removeEldestEntry(Map.Entry<CacheKey, Optional<T>> eldest) {
 				return size() > maxSize;
 			}
 		};
@@ -50,12 +59,14 @@ public class RecipeCacheManager<T> {
 
 	/**
 	 * 生成缓存键，使用官方 {@link ItemStack#hashItemAndComponents(ItemStack)} 覆盖物品与数据组件，避免手工拼接 hashCode 的碰撞风险
+	 * <p>
+	 * 返回 {@link CacheKey}（record）而非 String，避免高频查找时的字符串拼接 GC 开销。
 	 *
 	 * @param stack 输入物品
 	 * @return 缓存键
 	 */
-	public static String computeKey(ItemStack stack) {
-		return stack.getItem().toString() + ":" + ItemStack.hashItemAndComponents(stack);
+	private static CacheKey computeKey(ItemStack stack) {
+		return new CacheKey(stack.getItem(), ItemStack.hashItemAndComponents(stack));
 	}
 
 	/**
@@ -73,7 +84,7 @@ public class RecipeCacheManager<T> {
 	 */
 	@Nullable
 	public Optional<T> get(ItemStack input) {
-		String key = computeKey(input);
+		CacheKey key = computeKey(input);
 		Optional<T> cached = cache.get(key);
 		if (cached != null) {
 			hitCount++;
@@ -105,7 +116,7 @@ public class RecipeCacheManager<T> {
 	 * @param recipe 配方对象，为 null 时缓存为"无配方"
 	 */
 	public void put(ItemStack input, @Nullable T recipe) {
-		String key = computeKey(input);
+		CacheKey key = computeKey(input);
 		cache.put(key, recipe != null ? Optional.of(recipe) : Optional.empty());
 	}
 
