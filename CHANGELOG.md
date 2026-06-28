@@ -1,4 +1,4 @@
-# ChangeLog
+ # ChangeLog
 
 All notable changes to this project will be documented in this file.
 
@@ -27,11 +27,13 @@ All notable changes to this project will be documented in this file.
 * 蜂箱产物聚合生成 — 256倍加速下按类型聚合，减少ItemStack分配和addOutput调用 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
 * 高级蜂箱物品栏脏标志去抖 — 同一tick内多次变化合并为一次setChanged ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
 * 离心机万象创世产物聚合 — 按bee_type聚合后统一插入，避免跨操作类型冲突 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
+* 离心机Ejector阻塞冷却 — 输出侧阻塞时跳过outputItems调用，降低TimeWand加速下的TPS开销 ([82d147b](https://github.com/Ayoshiko/productive-bees-genesis/commit/82d147b))
 
 ### fix
 * 移动CentrifugeMixinHelper从mixin到util包 — 避免Mixin框架误加载为Mixin目标 ([eed1574](https://github.com/Ayoshiko/productive-bees-genesis/commit/eed1574))
 * BeeHelperMixin保持原版万象产物 — 修复优化时误将原版产物替换为随机产物的行为 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
 * 离心机万象创世输出槽类型容量预检 — 输出槽已满时暂停处理，避免产物丢失 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
+* 放宽离心机万象产物类型预检 — 仅物理满时暂停，避免少量不同类型占满3槽导致机器卡住 ([82d147b](https://github.com/Ayoshiko/productive-bees-genesis/commit/82d147b))
 * 修复checklist验证问题 ([f37a075](https://github.com/Ayoshiko/productive-bees-genesis/commit/f37a075))
 * JMX MBean注册异常 — 改用StandardMBean显式绑定接口，实现类改为static内部类 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
 * 流体槽满日志刷屏 — 256倍加速下INFO日志每tick数十条，改为静默丢弃 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
