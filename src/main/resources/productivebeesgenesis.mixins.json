@@ -26,7 +26,8 @@
     "MixinFactoryForME",
     "MixinEMExtraFactory",
     "PoweredCentrifugeBlockEntityMixin",
-    "TileComponentEjectorMixin"
+    "TileComponentEjectorMixin",
+    "TileComponentEjectorCooldownMixin"
   ],
   "client": [
     "IBlockEntityExtensionMixin",

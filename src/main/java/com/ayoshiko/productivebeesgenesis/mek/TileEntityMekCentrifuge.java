@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
@@ -578,8 +577,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
             energyContainer.extract(cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
 
             if (pbOperatingTicks >= processingTime) {
-                // 输出槽物理满或万象创世逻辑满时暂停处理，避免产物丢失
-                if (areOutputSlotsFull() || areMyriadOutputSlotsFull()) {
+                // 输出槽物理满时暂停处理，避免产物丢失；万象创世不再做类型数量预检
+                if (areOutputSlotsFull()) {
                     pbOperatingTicks = processingTime;
                     break;
                 }
@@ -662,20 +661,6 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
      */
     private boolean areOutputSlotsFull() {
         return outputSlotsFull;
-    }
-
-    /**
-     * 检查万象创世输出槽是否“逻辑已满”
-     * <br/>
-     * 当3个槽均非空且各自包含不同的 bee_type 时视为逻辑已满，
-     * 新的随机类型无法堆叠，必须暂停处理等待弹出器清理。
-     */
-    private boolean areMyriadOutputSlotsFull() {
-        reusableOutputSlots.clear();
-        reusableOutputSlots.add(accessor().productivebeesgenesis$getOutputSlot());
-        reusableOutputSlots.add(secondaryOutputSlot);
-        reusableOutputSlots.add(tertiaryOutputSlot);
-        return MyriadCreationsEventHandler.areOutputSlotsFullForMyriadCreations(reusableOutputSlots);
     }
 
     /**
@@ -897,8 +882,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
      * 关键修复：
      * <ul>
      *   <li>按 bee_type 聚合产物后统一插入，同类型优先堆叠到同一槽</li>
-     *   <li>插入前检查 occupiedTypes + 新增类型数，超过3种时暂停处理</li>
-     *   <li>无法完全插入时返回 false，由调用方暂停而不是丢弃产物</li>
+     *   <li>不再预检输出槽类型数量，只以物理上能否完整插入作为暂停依据</li>
+     *   <li>无法完全插入时返回 false，由调用方暂停；输入在全部产物插入成功后才会扣除</li>
      * </ul>
      *
      * @param input 万象创世蜜脾或蜜脾块
@@ -913,11 +898,11 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         // 万象创世蜜脾块 = 4个蜜脾，输出总数乘以4
         int totalCount = isCombBlock ? modifier * 4 : modifier;
 
-        // 限制种类数不超过3（用户要求）和输出槽数
+        // 限制种类数不超过3（输出槽数）和总数量
         int maxTypes = Math.min(3, totalCount);
         List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypes(maxTypes, random);
         if (selectedTypes.isEmpty()) {
-            // 缓存为空：不消耗输入，记录WARN日志（避免卡死和物品丢失，等待缓存重建后重试）
+            // 缓存为空：不消耗输入，等待缓存重建后重试
             ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世类型缓存为空，跳过本次处理（不消耗输入）");
             return true;
         }
@@ -932,15 +917,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         reusableOutputSlots.add(secondaryOutputSlot);
         reusableOutputSlots.add(tertiaryOutputSlot);
 
-        // 检查当前输出槽已占用类型数，仅统计本次新增的不同类型
-        Set<ResourceLocation> occupiedTypes = MyriadCreationsEventHandler.getOutputBeeTypes(reusableOutputSlots);
-        long newDistinctTypes = allocation.keySet().stream().filter(type -> !occupiedTypes.contains(type)).count();
-        if (occupiedTypes.size() + newDistinctTypes > 3) {
-            // 输出槽类型空间不足：不记录日志，避免高频暂停时刷屏
-            return false;
-        }
-
-        // 按 bee_type 聚合插入，同类型优先堆叠
+        // 按 bee_type 聚合插入，同类型优先堆叠；任一类型无法完全插入则暂停，且不扣输入
         for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
             ItemStack output = new ItemStack(baseItem, entry.getValue());
             output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
@@ -964,14 +941,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
                     }
                 }
             }
-            // 仍有剩余说明无法放下，暂停处理而非丢弃
+            // 仍有剩余说明物理上无法放下，暂停处理而非丢弃
             if (!remainder.isEmpty()) {
                 ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世产物无法完全插入，暂停：{}", remainder);
                 return false;
             }
         }
 
-        // 消耗输入（乘以生产力倍率）
+        // 全部产物成功插入后才消耗输入（乘以生产力倍率）
         accessor().productivebeesgenesis$getInputSlot().shrinkStack(modifier, Action.EXECUTE);
         return true;
     }

@@ -215,6 +215,10 @@ public final class ModConfig {
         // Task 13: AE2/管道拉取限流（防止 ME 接口过载拉取触发全量排序扫描）
         public final ModConfigSpec.IntValue mekCentrifugeMaxExtractPerTick;
 
+        // Task 14: Ejector 输出阻塞冷却参数（解决输出侧阻塞时 outputItems 高频尝试导致 TPS 暴跌）
+        public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedThreshold;
+        public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedCooldown;
+
         CommonConfig(ModConfigSpec.Builder builder) {
             builder.comment("万象创世蜜蜂属性覆盖配置（服务端生效）").push("bee_attributes");
 
@@ -424,6 +428,18 @@ public final class ModConfig {
                     .comment("每游戏刻外部通过管道/AE2从离心机输出槽拉取的最大物品总数（0=无限制）",
                             "防止ME接口过载拉取导致主线程卡顿")
                     .defineInRange("mekCentrifugeMaxExtractPerTick", 0, 0, 1024);
+
+            // Task 14: Ejector 输出阻塞冷却 — 输出侧无法接收物品时降低尝试频率
+            mekCentrifugeEjectBlockedThreshold = builder
+                    .comment("连续多少次 outputItems 未弹出物品后进入冷却",
+                            "默认3次，过小会导致冷却过于敏感，过大会降低缓解效果")
+                    .defineInRange("mekCentrifugeEjectBlockedThreshold", 3, 1, 20);
+
+            mekCentrifugeEjectBlockedCooldown = builder
+                    .comment("进入阻塞冷却跳过的 tick 数",
+                            "默认15 tick（0.75秒），0=关闭冷却（不推荐）",
+                            "冷却结束后会再次尝试弹出，保证物品不会永久卡住")
+                    .defineInRange("mekCentrifugeEjectBlockedCooldown", 15, 0, 200);
 
             builder.pop(); // mek_centrifuge
         }

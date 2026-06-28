@@ -379,54 +379,6 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	// ========== MEK 离心机万象创世专用辅助方法 ==========
 
 	/**
-	 * 获取指定输出槽列表中不同 bee_type 的集合
-	 * <p>
-	 * 只统计可配置蜜脾/蜜脾块，非 PB 产物不计入，避免误判。
-	 *
-	 * @param slots 输出槽列表（通常为3个）
-	 * @return 不同 bee_type 的集合
-	 */
-	public static Set<ResourceLocation> getOutputBeeTypes(List<IInventorySlot> slots) {
-		Set<ResourceLocation> types = new HashSet<>();
-		for (IInventorySlot slot : slots) {
-			if (slot == null) continue;
-			ResourceLocation type = getBeeTypeFromStack(slot.getStack());
-			if (type != null) types.add(type);
-		}
-		return types;
-	}
-
-	/**
-	 * 获取指定输出槽列表中不同 bee_type 的种类数
-	 *
-	 * @param slots 输出槽列表（通常为3个）
-	 * @return 不同 bee_type 的种类数
-	 */
-	public static int countDistinctOutputBeeTypes(List<IInventorySlot> slots) {
-		return getOutputBeeTypes(slots).size();
-	}
-
-	/**
-	 * 万象创世专用输出槽“逻辑已满”判断
-	 * <p>
-	 * 当3个槽均非空且各自包含不同的 bee_type 时视为逻辑已满，
-	 * 此时新的随机类型无法堆叠，应暂停处理避免产物丢失。
-	 *
-	 * @param slots 输出槽列表（通常为3个）
-	 * @return true 如果逻辑已满
-	 */
-	public static boolean areOutputSlotsFullForMyriadCreations(List<IInventorySlot> slots) {
-		int nonEmpty = 0;
-		Set<ResourceLocation> types = getOutputBeeTypes(slots);
-		for (IInventorySlot slot : slots) {
-			if (slot == null) continue;
-			if (slot.getStack().isEmpty()) return false;
-			nonEmpty++;
-		}
-		return nonEmpty >= 3 && types.size() >= 3;
-	}
-
-	/**
 	 * 判断两个物品是否为相同的 bee_type（均须为可配置蜜脾/蜜脾块）
 	 *
 	 * @param a 物品A
