@@ -122,8 +122,17 @@ public class PbRecipeProcessor {
 	/** getTicksForBase 缓存失效间隔（tick） — 升级变更后最多 1 秒内反映新值 */
 	private static final int TICKS_CACHE_INTERVAL = 20;
 
+	/** 万象创世日志冷却间隔（tick） — 避免输出阻塞时 WARN 刷屏 */
+	private static final int MYRIAD_LOG_COOLDOWN = 100;
+
+	/** 每进程上次打印"万象产物无法插入"日志的游戏刻 */
+	private final long[] lastMyriadFullLogTick;
+
+	/** 每进程上次打印"万象类型缓存为空"日志的游戏刻 */
+	private final long[] lastMyriadEmptyCacheLogTick;
+
 	/**
-	 * @param context   PB配方处理上下文（由Factory TileEntity实现）
+	 * @param context   PB配方处理上下文（由Factory TileEntity提供）
 	 * @param logPrefix 日志前缀（如"工厂离心机"、"ME工厂离心机"、"EME工厂离心机"）
 	 */
 	@SuppressWarnings("unchecked")
@@ -139,6 +148,32 @@ public class PbRecipeProcessor {
 		Arrays.fill(lastCheckedInputs, ItemStack.EMPTY);
 		this.cachedPbRecipes = new RecipeHolder[processes];
 		this.pbRecipeCache = new RecipeCacheManager<>(MAX_RECIPE_CACHE_SIZE);
+		this.lastMyriadFullLogTick = new long[processes];
+		this.lastMyriadEmptyCacheLogTick = new long[processes];
+		Arrays.fill(lastMyriadFullLogTick, -1L);
+		Arrays.fill(lastMyriadEmptyCacheLogTick, -1L);
+	}
+
+	/**
+	 * 检查指定进程的万象创世日志是否已超过冷却间隔
+	 * <br/>
+	 * 输出阻塞时同一条 WARN 每 tick 打印会严重拖慢 TPS（Spark 显示 Log4jLogger.warn 占 78%），
+	 * 通过 100 tick（5秒）冷却期抑制高频重复日志，同时保留问题诊断能力。
+	 *
+	 * @param processIndex 进程索引
+	 * @param lastLogTicks 各进程上次打印日志的游戏刻数组
+	 * @return true 如果当前可以打印日志
+	 */
+	private boolean canLogMyriad(int processIndex, long[] lastLogTicks) {
+		Level level = context.level();
+		if (level == null) return false;
+		long now = level.getGameTime();
+		long last = lastLogTicks[processIndex];
+		if (last < 0 || now - last >= MYRIAD_LOG_COOLDOWN) {
+			lastLogTicks[processIndex] = now;
+			return true;
+		}
+		return false;
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -530,9 +565,7 @@ public class PbRecipeProcessor {
 									.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
 							if (remainder.isEmpty()) break;
 						}
-						if (!remainder.isEmpty()) {
-							ProductiveBeesGenesis.LOGGER.info("{}进程{}输出槽已满，丢弃: {}", logPrefix, processIndex, remainder);
-						}
+						// 输出槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
 					}
 				}
 			}
@@ -584,8 +617,10 @@ public class PbRecipeProcessor {
 		int maxTypes = Math.min(3, totalCount);
 		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypes(maxTypes, random);
 		if (selectedTypes.isEmpty()) {
-			// 缓存为空：不消耗输入，等待缓存重建后重试
-			ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次处理（不消耗输入）", logPrefix, processIndex);
+			// 缓存为空：不消耗输入，等待缓存重建后重试；按冷却期打印避免刷屏
+			if (canLogMyriad(processIndex, lastMyriadEmptyCacheLogTick)) {
+				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次处理（不消耗输入）", logPrefix, processIndex);
+			}
 			return true;
 		}
 
@@ -626,9 +661,11 @@ public class PbRecipeProcessor {
 					}
 				}
 			}
-			// 仍有剩余说明物理上无法放下，暂停处理而非丢弃
+			// 仍有剩余说明物理上无法放下，暂停处理而非丢弃；按冷却期打印避免刷屏
 			if (!remainder.isEmpty()) {
-				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世产物无法完全插入，暂停：{}", logPrefix, processIndex, remainder);
+				if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
+					ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世产物无法完全插入，暂停：{}", logPrefix, processIndex, remainder);
+				}
 				return false;
 			}
 		}

@@ -157,6 +157,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
     /** getTicks 缓存失效间隔（tick） — 升级变更后最多 1 秒内反映新值 */
     private static final int TICKS_CACHE_INTERVAL = 20;
 
+    /** 万象创世日志冷却间隔（tick） — 避免输出阻塞时 WARN 刷屏 */
+    private static final int MYRIAD_LOG_COOLDOWN = 100;
+
     /** 可复用的输出槽列表（避免每次完成配方都创建新ArrayList） */
     private final List<IInventorySlot> reusableOutputSlots = new ArrayList<>(3);
 
@@ -165,6 +168,12 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
 
     /** 输出槽是否已满（由 IContentsListener 维护，供 areOutputSlotsFull 读取，避免每次完成配方遍历3个槽） */
     private volatile boolean outputSlotsFull = false;
+
+    /** 上次打印"万象产物无法插入"日志的游戏刻 */
+    private long lastMyriadFullLogTick = -1L;
+
+    /** 上次打印"万象类型缓存为空"日志的游戏刻 */
+    private long lastMyriadEmptyCacheLogTick = -1L;
 
     public TileEntityMekCentrifuge(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
         super(blockProvider, pos, state, BASE_TICKS_REQUIRED);
@@ -640,6 +649,21 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         return cachedTicks;
     }
 
+    /**
+     * 获取万象创世日志本次可打印时的游戏刻，未过冷却期返回 -1
+     * <br/>
+     * 输出阻塞时同一条 WARN 每 tick 打印会严重拖慢 TPS（Spark 显示 Log4jLogger.warn 占 78%），
+     * 通过 100 tick（5秒）冷却期抑制高频重复日志，同时保留问题诊断能力。
+     *
+     * @param lastLogTick 上次打印日志的游戏刻
+     * @return 当前游戏刻（可打印时）或 -1（冷却中）
+     */
+    private long nextMyriadLogTime(long lastLogTick) {
+        if (level == null) return -1;
+        long now = level.getGameTime();
+        return (lastLogTick < 0 || now - lastLogTick >= MYRIAD_LOG_COOLDOWN) ? now : -1;
+    }
+
     /** 清除PB处理状态 */
     private void clearPbState() {
         // 无条件重置所有PB状态字段，避免从PB配方切换到SMELTING配方后
@@ -851,9 +875,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
                                     .insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
                             if (remainder.isEmpty()) break;
                         }
-                        if (!remainder.isEmpty()) {
-                            ProductiveBeesGenesis.LOGGER.info("MEK离心机所有输出槽已满，丢弃: {}", remainder);
-                        }
+                        // 输出槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
                     }
                 }
             }
@@ -902,8 +924,12 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         int maxTypes = Math.min(3, totalCount);
         List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypes(maxTypes, random);
         if (selectedTypes.isEmpty()) {
-            // 缓存为空：不消耗输入，等待缓存重建后重试
-            ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世类型缓存为空，跳过本次处理（不消耗输入）");
+            // 缓存为空：不消耗输入，等待缓存重建后重试；按冷却期打印避免刷屏
+            long logTime = nextMyriadLogTime(lastMyriadEmptyCacheLogTick);
+            if (logTime >= 0) {
+                lastMyriadEmptyCacheLogTick = logTime;
+                ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世类型缓存为空，跳过本次处理（不消耗输入）");
+            }
             return true;
         }
 
@@ -941,9 +967,13 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
                     }
                 }
             }
-            // 仍有剩余说明物理上无法放下，暂停处理而非丢弃
+            // 仍有剩余说明物理上无法放下，暂停处理而非丢弃；按冷却期打印避免刷屏
             if (!remainder.isEmpty()) {
-                ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世产物无法完全插入，暂停：{}", remainder);
+                long logTime = nextMyriadLogTime(lastMyriadFullLogTick);
+                if (logTime >= 0) {
+                    lastMyriadFullLogTick = logTime;
+                    ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世产物无法完全插入，暂停：{}", remainder);
+                }
                 return false;
             }
         }
