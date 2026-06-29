@@ -50,6 +50,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
+import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 
 /**
  * 工厂版MEK离心机方块实体
@@ -91,6 +93,12 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
     private final AtomicInteger activeProcessCount = new AtomicInteger(0);
     /** 每进程 PB 激活状态跟踪（CAS 防重复计数；tier 在 super() 中已设置） */
     private final boolean[] pbActiveStates = new boolean[tier.processes];
+
+    // ===== Task 12: SFM/AE2 高频探测缓存（避免每 tick 反复查配方和 hashItemAndComponents） =====
+    /** 输入槽有效性校验缓存（isItemValidForSlot / isValidInputItem） */
+    private final InputValidationCache validInputCache = new InputValidationCache();
+    /** 输入-输出兼容性校验缓存（inputProducesOutput） */
+    private final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 
     public TileEntityMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
         super(blockProvider, pos, state, MekCentrifugeFactoryHelper.TRACKED_ERROR_TYPES, MekCentrifugeFactoryHelper.GLOBAL_ERROR_TYPES);
@@ -223,17 +231,19 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
     @Override
     public boolean isItemValidForSlot(@NotNull ItemStack stack) {
         if (level == null) return false;
-        return MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor);
+        return validInputCache.get(level, stack,
+                () -> MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor));
     }
 
     /**
-     * 重写isValidInputItem — 同时查找SMELTING和PB CentrifugeRecipe
+     * 重写isValidInputItem — 同时查找SMELTING和PB CentrifugeRecipe（带缓存）
      * <br/>
      * 输入物品只要有任一配方即可放入输入槽。
      */
     @Override
     public boolean isValidInputItem(@NotNull ItemStack stack) {
-        return MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor);
+        return validInputCache.get(level, stack,
+                () -> MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor));
     }
 
     @Override
@@ -273,9 +283,11 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
     public boolean inputProducesOutput(int process, @NotNull ItemStack fallbackInput,
                                        @NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot,
                                        boolean updateCache) {
-        // 先检查SMELTING配方（父类逻辑），不匹配时回退到PB配方兼容性检查
-        return super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache)
-                || MekCentrifugeFactoryHelper.checkPbOutputFallback(pbProcessor, fallbackInput, outputSlot, secondaryOutputSlot);
+        // SFM/AE2 高频调用，20 tick 缓存避免反复查配方和 hashItemAndComponents
+        return inputProducesOutputCache.get(level, fallbackInput, outputSlot.getStack(),
+                secondaryOutputSlot == null ? ItemStack.EMPTY : secondaryOutputSlot.getStack(),
+                () -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache)
+                        || MekCentrifugeFactoryHelper.checkPbOutputFallback(pbProcessor, fallbackInput, outputSlot, secondaryOutputSlot));
     }
 
     /**
