@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 * 放宽离心机万象产物类型预检 — 仅物理满时暂停，避免少量不同类型占满3槽导致机器卡住 ([82d147b](https://github.com/Ayoshiko/productive-bees-genesis/commit/82d147b))
 * 万象创世高频日志冷却 — Spark显示Log4jLogger.warn占78%，100 tick冷却抑制输出阻塞时的WARN刷屏 ([d170f3e](https://github.com/Ayoshiko/productive-bees-genesis/commit/d170f3e))
 * 输出槽满丢弃日志静默 — 普通PB配方与MEK离心机输出满属正常状态，删除INFO日志避免刷屏 ([d170f3e](https://github.com/Ayoshiko/productive-bees-genesis/commit/d170f3e))
+* SFM/AE2高频输入校验缓存 — isItemValidForSlot/inputProducesOutput增加20 tick缓存，减少反复配方查找与ItemStack哈希 ([7d9a899](https://github.com/Ayoshiko/productive-bees-genesis/commit/7d9a899))
 * 修复checklist验证问题 ([f37a075](https://github.com/Ayoshiko/productive-bees-genesis/commit/f37a075))
 * JMX MBean注册异常 — 改用StandardMBean显式绑定接口，实现类改为static内部类 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
 * 流体槽满日志刷屏 — 256倍加速下INFO日志每tick数十条，改为静默丢弃 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
