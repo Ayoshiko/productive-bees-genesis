@@ -46,9 +46,15 @@ public final class CentrifugeMixinHelper {
 			CallbackInfoReturnable<Boolean> cir,
 			CentrifugeBlockEntity entity,
 			Function<IItemHandlerModifiable, Boolean> shouldBlock) {
-		if (!cir.getReturnValue()) return;
-		if (shouldBlock.apply(entity.inventoryHandler)) {
-			cir.setReturnValue(false);
+		// try/catch 防止 shouldBlock 或 inventoryHandler 访问抛异常导致 PB 原方法崩溃
+		try {
+			if (!cir.getReturnValue()) return;
+			if (shouldBlock.apply(entity.inventoryHandler)) {
+				cir.setReturnValue(false);
+			}
+		} catch (Exception e) {
+			// 异常时不阻止机器运行（默认 false），让 PB 原逻辑继续，仅记录 warn 日志
+			ProductiveBeesGenesis.LOGGER.warn("CentrifugeMixinHelper.checkCanOperate 执行异常，跳过空转拦截", e);
 		}
 	}
 
@@ -63,8 +69,14 @@ public final class CentrifugeMixinHelper {
 			IItemHandlerModifiable invHandler,
 			CallbackInfoReturnable<Boolean> cir,
 			Function<IItemHandlerModifiable, Boolean> shouldBlock) {
-		if (shouldBlock.apply(invHandler)) {
-			cir.setReturnValue(false);
+		// try/catch 防止 shouldBlock 或 invHandler 访问抛异常导致 PB 原方法崩溃
+		try {
+			if (shouldBlock.apply(invHandler)) {
+				cir.setReturnValue(false);
+			}
+		} catch (Exception e) {
+			// 异常时不阻止配方处理（默认 false），让 PB 原逻辑继续，仅记录 warn 日志
+			ProductiveBeesGenesis.LOGGER.warn("CentrifugeMixinHelper.checkCanProcessRecipe 执行异常，跳过空转拦截", e);
 		}
 	}
 

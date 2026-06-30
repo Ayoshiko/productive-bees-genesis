@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.3.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
@@ -106,18 +106,19 @@ The configuration interface supports multiple languages (English/Chinese) and au
 
 ### Package Structure
 
+- (root): Main mod classes (`ProductiveBeesGenesis`, `ProductiveBeesGenesisClient`), comb event handlers (`AbstractCombEventHandler`, `MyriadCreationsEventHandler`), `RandomHoneycombSelector` (random comb allocation algorithms), `CombBlockCheckCache` (idle operation interception cache).
 - `block/`: Custom blocks (centrifuge frames, decorative blocks).
 - `client/gui/`: Mek centrifuge GUI helpers and factory GUI helpers.
 - `client/jei/`: JEI recipe categories for PB centrifuge recipes.
 - `client/model/`: Custom model loaders and geometry loaders.
 - `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat, `AbstractMaskGeometryLoader` base class.
-- `client/screen/`: GUI screens for configuration and Mek centrifuge (`FilterListScreen`, `FilterListRenderer`).
+- `client/screen/`: GUI screens for configuration and Mek centrifuge — main screens (`FilterListScreen`, `BeeSelectionScreen`) with composition helpers (`FilterListDragHandler`, `FilterListClipboardHelper`, `BeeSelectionSorter`) and renderers (`FilterListRenderer`, `BeeSelectionRenderer`).
 - `compat/`: Cross-mod compatibility helpers.
-- `config/`: ModConfig definitions (CLIENT/COMMON/SERVER) with bilingual support.
+- `config/`: Configuration definitions split into `ClientConfig`/`CommonConfig`/`ServerConfig` with `ModConfig` as aggregation entry, bilingual support.
 - `datagen/`: Data generation (block tags, recipes, loot tables).
 - `init/`: DeferredRegister registrations (blocks, items, block entities, etc.).
 - `item/`: Custom items (infinity sword replica, spawn eggs).
-- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing (`PbRecipeProcessor`, `RecipeCacheManager`), isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`).
+- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing — `PbRecipeProcessor` coordinator delegating to `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`, `FactoryPbContextDelegate` composition class for factories, `RecipeCacheManager`, isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`).
 - `menu/`: Container menu definitions.
 - `mixin/`: Mixin classes (PB centrifuge, bee color, factory upgrade chain, Iris, recipe serializer fallbacks) with `CentrifugeMixinHelper` for DRY and `MixinConfigPlugin`/`IrisConfigPlugin` for conditional loading.
 - `recipe/`: Custom recipe types.
@@ -126,7 +127,9 @@ The configuration interface supports multiple languages (English/Chinese) and au
 
 ### Key Abstractions
 
-- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic.
+- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic. Delegates random comb allocation to `RandomHoneycombSelector` and idle interception to `CombBlockCheckCache`.
+- **`RandomHoneycombSelector`**: Static utility for random comb allocation algorithms (Fisher-Yates shuffle, Stars-and-Bars distribution, even allocation), used by both event handlers and the Mekanism batch planner.
+- **`CombBlockCheckCache`**: Idle operation interception cache preventing redundant block state checks when output is full.
 - **`AbstractBakedModelCosmic`**: Base class for `BakedModelCosmic` and `BakedModelHell`, extracting the cosmic render pipeline (shader uniforms, mask sprites, Iris defer).
 - **`AbstractMaskGeometryLoader`**: Base class for `GeometryLoaderCosmic` and `GeometryLoaderHell`, extracting common mask parsing and parent resolution logic.
 - **`CentrifugeMixinHelper`**: Utility class extracting common logic from 6 centrifuge Mixin classes (canOperate check, canProcessRecipe check, completeRecipeProcessing append).
@@ -134,7 +137,10 @@ The configuration interface supports multiple languages (English/Chinese) and au
 - **`PBConstants`**: Common constants class unifying `MYRIADCREATIONS_TYPE` and other shared constants across the codebase.
 - **`MekCentrifugeMEBlockType`/`MekCentrifugeEMEBlockType`**: Isolated BlockType definitions for optional ME/EME dependencies, loaded only when those mods are present to prevent `NoClassDefFoundError`.
 - **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent, preventing crashes.
-- **`PbRecipeProcessor`**: PB recipe processing helper with cached `energyPerTick`/`operationsPerTick` and recipe version tracking.
+- **`PbRecipeProcessor`**: PB recipe processing coordinator holding shared state arrays and delegating to specialized components — `PbRecipeFinder` (double-layer cached recipe lookup), `PbRecipeCompleter` (output aggregation and batch insertion), `MyriadCreationsHandler` (Myriad Creations special path).
+- **`FactoryPbContextDelegate`**: Composition class eliminating ~293 lines of duplicated PB recipe context logic across the three factory tile entities.
+- **`BeeSelectionSorter`**: Composition class extracted from `BeeSelectionScreen` handling bee type sorting/filtering logic with cached display items.
+- **`FilterListDragHandler`/`FilterListClipboardHelper`**: Composition helpers extracted from `FilterListScreen` for drag/scroll interaction and clipboard import/export respectively.
 
 ### Thread Safety
 

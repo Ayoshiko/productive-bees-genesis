@@ -42,6 +42,11 @@ public final class CosmicRenderQueue {
 	/** 渲染线程复用的模型视图矩阵快照，避免每帧分配 Matrix4f */
 	private static final Matrix4f REUSABLE_OLD_MODEL_VIEW = new Matrix4f();
 
+	/** 渲染线程复用的快照列表，避免每帧 new ArrayList 分配 */
+	private static final List<CosmicRenderCall> RENDER_SNAPSHOT = new ArrayList<>();
+	/** 渲染线程复用的 PoseStack，避免每次循环 new 分配；push/pop 保证栈状态隔离 */
+	private static final PoseStack REUSABLE_POSE_STACK = new PoseStack();
+
 	private CosmicRenderQueue() {
 	}
 
@@ -59,7 +64,14 @@ public final class CosmicRenderQueue {
 		synchronized (CosmicRenderQueue.class) {
 			if (QUEUE.size() >= MAX_QUEUE_SIZE) {
 				ProductiveBeesGenesis.LOGGER.warn("CosmicRenderQueue 已达上限 {}，丢弃最旧条目", MAX_QUEUE_SIZE);
-				QUEUE.remove(0);
+				// 修复对象池泄漏：被丢弃的条目必须 release() 归还对象池并清空 model/stack/context 引用。
+				// 原实现仅 remove(0) 丢弃引用，未调用 release()：
+				//   1) 持续高压下池（上限 64）被耗尽，新实例不断 new，违背对象池复用初衷；
+				//   2) 丢弃实例仍持有 ItemStack/model 引用直到 GC，存在短期内存压力。
+				CosmicRenderCall discarded = QUEUE.remove(0);
+				if (discarded != null) {
+					CosmicRenderCall.release(discarded);
+				}
 			}
 			QUEUE.add(call);
 		}
@@ -75,7 +87,7 @@ public final class CosmicRenderQueue {
 	 * <ul>
 	 *   <li>try：执行渲染与 endBatch</li>
 	 *   <li>catch：记录异常日志，防止单帧异常导致整体崩溃</li>
-	 *   <li>finally：无条件恢复矩阵与全局渲染状态（shader color/blend/depth），并将 CosmicRenderCall 归还对象池</li>
+	 *   <li>finally：无条件恢复矩阵与全局渲染状态（shader color/blend/depth/polygon offset），并将 CosmicRenderCall 归还对象池</li>
 	 * </ul>
 	 * 矩阵恢复必须放在 finally，否则 renderCosmicLayer 或 endBatch 抛异常时矩阵会卡在被 cosmic 修改的状态，
 	 * 导致后续世界/实体渲染使用错误的投影矩阵。
@@ -87,8 +99,10 @@ public final class CosmicRenderQueue {
 			if (QUEUE.isEmpty()) {
 				return;
 			}
-			snapshot = new ArrayList<>(QUEUE);
+			RENDER_SNAPSHOT.clear();
+			RENDER_SNAPSHOT.addAll(QUEUE);
 			QUEUE.clear();
+			snapshot = RENDER_SNAPSHOT;
 		}
 		Minecraft mc = Minecraft.getInstance();
 		MultiBufferSource.BufferSource source = mc.renderBuffers().bufferSource();
@@ -100,10 +114,15 @@ public final class CosmicRenderQueue {
 				RenderSystem.setProjectionMatrix((Matrix4f) call.projection, (VertexSorting) RenderSystem.getVertexSorting());
 				RenderSystem.getModelViewStack().set((Matrix4fc) call.modelView);
 				RenderSystem.applyModelViewMatrix();
-				PoseStack poseStack = new PoseStack();
-				poseStack.last().pose().set((Matrix4fc) call.pose);
-				poseStack.last().normal().set((Matrix3fc) call.normal);
-				call.model.renderCosmicLayer(call.stack, call.context, poseStack, source, call.light, call.overlay);
+				// 复用 REUSABLE_POSE_STACK 避免每次循环分配；push/pop 隔离状态，try/finally 保证异常时栈平衡
+				REUSABLE_POSE_STACK.pushPose();
+				try {
+					REUSABLE_POSE_STACK.last().pose().set((Matrix4fc) call.pose);
+					REUSABLE_POSE_STACK.last().normal().set((Matrix3fc) call.normal);
+					call.model.renderCosmicLayer(call.stack, call.context, REUSABLE_POSE_STACK, source, call.light, call.overlay);
+				} finally {
+					REUSABLE_POSE_STACK.popPose();
+				}
 			}
 			source.endBatch();
 		} catch (Exception e) {
@@ -117,6 +136,13 @@ public final class CosmicRenderQueue {
 			RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 			RenderSystem.defaultBlendFunc();
 			RenderSystem.enableDepthTest();
+			// 修复 polygon offset 状态泄漏：COSMIC 渲染类型的 begin 回调会启用 POLYGON_OFFSET_LAYERING
+			// （见 RenderUtils.POLYGON_OFFSET_LAYERING：RenderSystem.polygonOffset(-1.0F, -10.0F) + enablePolygonOffset()）。
+			// 正常流程下 endBatch() 会触发 RenderType 的 end 回调关闭 polygon offset；
+			// 但若 renderCosmicLayer 抛异常，endBatch() 不执行，end 回调不触发，GL_POLYGON_OFFSET 将保持启用，
+			// 导致后续世界/方块渲染出现深度偏移异常。finally 块无条件重置，确保 GL 状态清洁。
+			RenderSystem.disablePolygonOffset();
+			RenderSystem.polygonOffset(0.0F, 0.0F);
 			// 归还 CosmicRenderCall 实例到对象池，复用矩阵对象避免后续入队的堆分配
 			for (CosmicRenderCall call : snapshot) {
 				CosmicRenderCall.release(call);

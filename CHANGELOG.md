@@ -5,6 +5,54 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0] - 2026-06-30
+
+### 新增
+- 自定义网络包 `FilterConfigSyncPayload`：多人游戏 SERVER 配置同步（OP 2 权限校验 + 双语错误提示）
+- `resetToDefault` 增加 `ConfirmScreen` 二次确认对话框，防止误操作清空过滤列表
+- 配置重载即时失效过滤缓存（`MyriadCreationsEventHandler.invalidateFilterCache`）
+- `RateLimitedItemHandler` 采用 CAS 占用配额 + 差额回退模式，杜绝 AE2 异步线程超额提取
+- `pack.mcmeta`（pack_format=34）
+- 方块标签数据生成（`ModBlockTagsProvider`）：离心机加入 `MINEABLE_WITH_PICKAXE`，蜜脾块加入 `MINEABLE_WITH_HOE`
+
+### 修复
+- **P0 严重 Bug**：
+  - `infinitycreation_comb_block` 战利品表不掉落（迁移到 1.21 格式，含 `random_sequence`/`bonus_rolls`/`survives_explosion`）
+  - 3 个 JEI GUI 翻译键缺失（`energy_per_tick`/`mek_centrifuge_recipes`/`processing_time`）
+  - 移除 8 处 debug 日志违规（改为 info/trace/warn）
+  - `SimulateContext` ThreadLocal 泄漏（改为实例字段 + WeakReference 混合方案）
+  - `CosmicRenderQueue` 渲染状态未重置（finally 块增加 `disablePolygonOffset` + `polygonOffset(0,0)`）
+  - 输出槽满时仍消耗能量（循环开始处增加前置检查）
+- **配置与 GUI**：
+  - `FilterListScreen` 滚动条拖拽错位（`mouseDragged` 后追加 `rebuildEntryButtonsOnly`）
+  - `produceOutputMin/Max` 和 `ejectDelay/Active` 跨字段联合校验（自动交换/降级）
+  - `BeeSelectionScreen.existingBeeTypes` 改用 `Set<String>`（O(1) 查询）
+- **资源文件**：
+  - `en_us.json` 重复 `createComb` 键
+  - `neoforge.mods.toml` sfm 依赖缺少 `versionRange`
+  - `CosmicRenderTypes` 命名冲突（改为 `productivebeesgenesis:cosmic_armor`）
+
+### 变更
+- **重复代码消除**：
+  - `TileEntityMekCentrifuge` 委托 `PbRecipeProcessor`（1091→697 行）
+  - 抽取 `FactoryPbContextDelegate` 组合类（消除三个工厂 293 行重复）
+- **文件超长拆分**（全部 ≤ 500 行软上限）：
+  - `PbRecipeProcessor`（1088→497 行）→ `PbRecipeFinder`（163）/`PbRecipeCompleter`（227）/`MyriadCreationsHandler`（420）
+  - `AbstractCombEventHandler`（685→176 行）→ `RandomHoneycombSelector`（394）/`CombBlockCheckCache`（134）
+  - `ModConfig`（570→182 行）→ `ClientConfig`（44）/`CommonConfig`（20）/`ServerConfig`（339）
+  - `FilterListScreen`（933→802 行）→ `FilterListDragHandler`（235）/`FilterListClipboardHelper`（193）
+  - `BeeSelectionScreen`（790→584 行）→ `BeeSelectionSorter`（204）
+- **性能优化**：
+  - `ticksForBaseCache` 改为 `HashMap`（单线程约束注释）
+  - `RenderUtils.bakeItem` 返回 `ArrayList`（替代 `LinkedList`）
+  - `hsvToRgb`/`getColor`/`renderAll`/`applyTransform` 复用数组/字段降低 GC 压力
+  - `CentrifugeMixinHelper` 补 `try/catch`，`SelectionCache` 字段改为 `volatile`
+- **规范清理**：
+  - 删除未使用 import 和 8 个未使用翻译键
+  - 替换字符串字面量为 `ProductiveBeesGenesis.MOD_ID` 常量
+  - 清理冗余资源目录和项目根目录开发辅助文件
+  - 统一语言文件生成机制（`ModLanguageProvider` 分工注释）
+
 ## [1.2.1] - 2026-06-30
 
 ### 变更

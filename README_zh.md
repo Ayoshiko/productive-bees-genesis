@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.3.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 资源蜜蜂（Productive Bees）和通用机械（Mekanism）附属模组，添加了通用机械（Mekanism）风格的离心机，可处理蜜脾和蜜脾块。添加了万象创世蜜蜂，其蜜脾可转化为整合包内所有资源蜜蜂的蜜脾。蜜脾转化功能拥有详细可配置的过滤名单。万象创世蜜蜂的数据包可以在配置文件里自定义修改。
 万象创世蜜脾拥有无尽贪婪（Re:Avaritia）模组的寰宇支配之剑（Sword of the Cosmos）同款的星空遮罩材质。
@@ -34,7 +34,7 @@
 
 - 客户端配置：性能监控开关、蜜蜂过滤UI设置
 - 通用配置：万象创世蜜蜂属性（外观、授粉、PB属性、基础属性、繁殖、环境）
-- 服务端配置：蜜蜂类型过滤（黑名单/白名单）、Mek离心机参数（含弹出延迟活动/空闲）、Mek离心机弹出延迟（活动/空闲）
+- 服务端配置：蜜蜂类型过滤（黑名单/白名单）、Mek离心机参数（含弹出延迟活动/空闲）
 
 ### 蜜蜂过滤配置界面
 
@@ -103,18 +103,19 @@
 
 ### 包结构
 
+- (根包)：主模组类（`ProductiveBeesGenesis`、`ProductiveBeesGenesisClient`）、蜜脾事件处理器（`AbstractCombEventHandler`、`MyriadCreationsEventHandler`）、`RandomHoneycombSelector`（随机蜜脾分配算法）、`CombBlockCheckCache`（空转拦截缓存）
 - `block/`：自定义方块（离心机框架、装饰方块）
 - `client/gui/`：Mek离心机GUI辅助类和工厂GUI辅助类
 - `client/jei/`：JEI配方类别（PB离心机配方）
 - `client/model/`：自定义模型加载器和几何加载器
 - `client/render/cosmic/`：宇宙着色器系统、烘焙模型（`AbstractBakedModelCosmic`、`BakedModelCosmic`、`BakedModelHell`、`BakedModelHalo`）、渲染队列、Iris兼容、`AbstractMaskGeometryLoader`基类
-- `client/screen/`：配置和Mek离心机GUI界面（`FilterListScreen`、`FilterListRenderer`）
+- `client/screen/`：配置和Mek离心机GUI界面 — 主屏幕（`FilterListScreen`、`BeeSelectionScreen`）配合组合助手（`FilterListDragHandler`、`FilterListClipboardHelper`、`BeeSelectionSorter`）和渲染器（`FilterListRenderer`、`BeeSelectionRenderer`）
 - `compat/`：跨模组兼容辅助类
-- `config/`：ModConfig定义（CLIENT/COMMON/SERVER），支持中英文双语
+- `config/`：配置定义拆分为 `ClientConfig`/`CommonConfig`/`ServerConfig`，`ModConfig` 作为聚合入口，支持中英文双语
 - `datagen/`：数据生成（方块标签、配方、战利品表）
 - `init/`：DeferredRegister注册（方块、物品、方块实体等）
 - `item/`：自定义物品（无尽之剑复刻、生成蛋）
-- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理（`PbRecipeProcessor`、`RecipeCacheManager`）、隔离的可选依赖BlockType（`MekCentrifugeMEBlockType`、`MekCentrifugeEMEBlockType`）
+- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理 — `PbRecipeProcessor` 协调器委托给 `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`，`FactoryPbContextDelegate` 工厂组合类，`RecipeCacheManager`，隔离的可选依赖BlockType（`MekCentrifugeMEBlockType`、`MekCentrifugeEMEBlockType`）
 - `menu/`：容器菜单定义
 - `mixin/`：Mixin类（PB离心机、蜜蜂颜色、工厂升级链、Iris、配方序列化兜底），含 `CentrifugeMixinHelper` 消除重复和 `MixinConfigPlugin`/`IrisConfigPlugin` 条件加载
 - `recipe/`：自定义配方类型
@@ -123,7 +124,9 @@
 
 ### 关键抽象
 
-- **`AbstractCombEventHandler`**：`MyriadCreationsEventHandler` 的基类，提取公共的蜜蜂类型缓存、随机蜜脾生成和离心机拦截逻辑
+- **`AbstractCombEventHandler`**：`MyriadCreationsEventHandler` 的基类，提取公共的蜜蜂类型缓存、随机蜜脾生成和离心机拦截逻辑。随机蜜脾分配委托给 `RandomHoneycombSelector`，空转拦截委托给 `CombBlockCheckCache`。
+- **`RandomHoneycombSelector`**：随机蜜脾分配算法的静态工具类（Fisher-Yates 洗牌、Stars-and-Bars 分配、均匀分配），事件处理器和 Mekanism 批量规划器共用。
+- **`CombBlockCheckCache`**：空转操作拦截缓存，在输出满时防止冗余的方块状态检查。
 - **`AbstractBakedModelCosmic`**：`BakedModelCosmic` 和 `BakedModelHell` 的基类，提取宇宙渲染管线（着色器uniform、mask精灵、Iris延迟）
 - **`AbstractMaskGeometryLoader`**：`GeometryLoaderCosmic` 和 `GeometryLoaderHell` 的基类，提取公共的 mask 解析和父模型解析逻辑
 - **`CentrifugeMixinHelper`**：工具类，从6个离心机Mixin中提取公共逻辑（canOperate检查、canProcessRecipe检查、completeRecipeProcessing追加）
@@ -131,7 +134,10 @@
 - **`PBConstants`**：公共常量类，统一 `MYRIADCREATIONS_TYPE` 等全局共享常量
 - **`MekCentrifugeMEBlockType`/`MekCentrifugeEMEBlockType`**：ME/EME 可选依赖的隔离 BlockType 定义，仅在对应模组存在时加载，防止 `NoClassDefFoundError`
 - **`MixinConfigPlugin`**：条件Mixin加载器 — 当ME/EME未安装时跳过相关Mixin，防止崩溃
-- **`PbRecipeProcessor`**：PB配方处理辅助类，缓存 `energyPerTick`/`operationsPerTick` 并支持配方版本追踪
+- **`PbRecipeProcessor`**：PB配方处理协调器，持有共享状态数组并委托给专门组件 — `PbRecipeFinder`（双层缓存配方查找）、`PbRecipeCompleter`（输出聚合与批量插入）、`MyriadCreationsHandler`（万象创世特殊路径）。
+- **`FactoryPbContextDelegate`**：组合类，消除三个工厂方块实体中约 293 行重复的 PB 配方上下文逻辑。
+- **`BeeSelectionSorter`**：从 `BeeSelectionScreen` 抽取的组合类，处理蜜蜂类型排序/过滤逻辑及缓存显示项。
+- **`FilterListDragHandler`/`FilterListClipboardHelper`**：从 `FilterListScreen` 抽取的组合助手，分别负责拖拽/滚动交互和剪贴板导入/导出。
 
 ### 线程安全
 

@@ -27,7 +27,7 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
  * 替代 findPbRecipe 和 createCombBlockRecipe 中的全量遍历 (O(N))，
  * 通过 bee_type -> 配方 的索引实现 O(1) 查找。
  * 同时维护蜜脾块配方索引：rebuild 时根据蜜脾配方静态生成对应的蜜脾块配方
- * （min/max/流体按 {@link ModConfig.ServerConfig#mekCentrifugeCombBlockMultiplier} 缩放），
+ * （min/max/流体按 {@link com.ayoshiko.productivebeesgenesis.config.ServerConfig#mekCentrifugeCombBlockMultiplier} 缩放），
  * 消除首次遇到新 bee_type 蜜脾块时的动态构建开销。
  * <p>
  * <b>线程安全</b>：使用 {@link ConcurrentHashMap} 存储索引，{@code volatile} 引用保证原子替换。
@@ -85,8 +85,8 @@ public final class CentrifugeRecipeIndex {
 						}
 					}
 				} catch (Exception e) {
-					// 单条配方解析失败不影响整体索引，记录调试日志便于排障
-					ProductiveBeesGenesis.LOGGER.debug("离心配方索引：跳过无法解析的配方 {}", holder.id(), e);
+					// 单条配方解析失败不影响整体索引，记录警告日志便于排障
+					ProductiveBeesGenesis.LOGGER.warn("离心配方索引：跳过无法解析的配方 {}", holder.id(), e);
 				}
 			}
 			// 原子替换，确保读线程看到一致状态
@@ -125,7 +125,7 @@ public final class CentrifugeRecipeIndex {
 					original.ingredient, blockOutputs, blockFluid, original.getProcessingTime());
 			return new RecipeHolder<>(honeycombRecipe.id().withSuffix("_block"), blockRecipe);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("派生蜜脾块配方失败: beeType={}", beeType, e);
+			ProductiveBeesGenesis.LOGGER.warn("派生蜜脾块配方失败: beeType={}", beeType, e);
 			return null;
 		}
 	}

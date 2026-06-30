@@ -57,6 +57,9 @@ public interface PerspectiveModel extends BakedModel {
 		PerspectiveModelState modelState = getModelState();
 		if (modelState != null) {
 			Transformation transform = modelState.getTransform(context);
+			// 性能说明：applyTransform 为接口默认方法，无法持有实例字段预分配 Vector3f。
+			// Transformation.getTranslation()/getScale() 由 Mojang API 定义为每次返回新对象，外部无法复用。
+			// 调用频率较低（仅物品显示变换），GC 影响可忽略，保持原实现。
 			Vector3f trans = transform.getTranslation();
 			Vector3f scale = transform.getScale();
 			poseStack.translate(trans.x(), trans.y(), trans.z());

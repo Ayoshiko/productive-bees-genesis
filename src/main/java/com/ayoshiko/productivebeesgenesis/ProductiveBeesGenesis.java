@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLanguageProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
 import com.ayoshiko.productivebeesgenesis.datagen.ModRecipes;
@@ -101,12 +102,22 @@ public final class ProductiveBeesGenesis {
 		// 配置文件加载/重载时重新应用蜜蜂属性覆盖（服务端配置，按存档生效）
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
+				// Task 13: 跨字段联合校验 — 在配置加载时主动修正无效组合，避免运行时反复触发被动防御
+				if (ModConfig.validateAndFixCrossFields()) {
+					ModConfig.SERVER_SPEC.save();
+				}
 				BeeConfigApplier.applyOverrides();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
+				// Task 13: 配置重载时同样执行联合校验
+				if (ModConfig.validateAndFixCrossFields()) {
+					ModConfig.SERVER_SPEC.save();
+				}
 				BeeConfigApplier.applyOverrides();
+				// Task 15: 失效万象创世过滤缓存，让下次 tick 重建反映最新过滤配置
+				MyriadCreationsEventHandler.invalidateFilterCache();
 			}
 		});
 
@@ -155,7 +166,7 @@ public final class ProductiveBeesGenesis {
 		if (server != null) {
 			CentrifugeRecipeIndex.rebuild(server.overworld());
 		}
-		LOGGER.debug("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
+		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
 	}
 
 	/**
@@ -200,6 +211,8 @@ public final class ProductiveBeesGenesis {
 		generator.addProvider(event.includeServer(), new ModRecipes(packOutput, lookupProvider));
 		// 战利品表
 		generator.addProvider(event.includeServer(), ModLootTables.create(packOutput, lookupProvider));
+		// 方块标签（镐/锄挖掘工具）
+		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider, event.getExistingFileHelper()));
 		// 语言文件
 		generator.addProvider(event.includeClient(), new ModLanguageProvider(packOutput, "en_us"));
 		generator.addProvider(event.includeClient(), new ModLanguageProvider(packOutput, "zh_cn"));

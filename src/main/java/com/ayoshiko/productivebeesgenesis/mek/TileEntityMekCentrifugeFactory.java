@@ -1,13 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.api.math.MathUtils;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -45,7 +42,6 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.common.util.TriPredicate;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -81,22 +77,13 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 	/** PB配方处理器 — 封装所有PB离心配方处理逻辑 */
 	private final PbRecipeProcessor pbProcessor;
 
-	// ===== Task 5: 输出槽状态标志位（批量/增量管理，避免每次 insertItem 全量扫描） =====
-	/** 输出槽标志位管理器 */
-	private final OutputSlotFlagManager outputSlotFlagManager;
-	/** addSlots 中传入的排序监听器，批量输出结束时需要触发一次 */
-	private IContentsListener updateSortingListener;
-
-	// ===== Task 16: 输出槽内容版本号（输出槽内容变更时递增） =====
-	private volatile long outputContentsVersion = 0L;
-
-	// ===== Task 7: sortInventory 去抖（同 tick 内只标记一次 sortingNeeded） =====
-	private volatile boolean sortingMarkedThisTick = false;
-
-	// ===== Task 11: 激活状态计数器（O(1) 判断整体激活，替代 O(processes) 遍历） =====
-	private final AtomicInteger activeProcessCount = new AtomicInteger(0);
-	/** 每进程 PB 激活状态跟踪（CAS 防重复计数；tier 在 super() 中已设置） */
-	private final boolean[] pbActiveStates = new boolean[tier.processes];
+	/**
+	 * Task 10: 工厂 PB 上下文委托 — 封装 Task 5/7/11/16 公共状态和方法
+	 * <br/>
+	 * 三个工厂继承不同 Mekanism 父类，无法通过继承抽取公共逻辑，
+	 * 采用组合模式委托给 {@link FactoryPbContextDelegate}，消除约 100 行重复代码。
+	 */
+	private final FactoryPbContextDelegate delegate;
 
 	// ===== Task 12: SFM/AE2 高频探测缓存（避免每 tick 反复查配方和 hashItemAndComponents） =====
 	/** 输入槽有效性校验缓存（isItemValidForSlot / isValidInputItem） */
@@ -108,8 +95,8 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		super(blockProvider, pos, state, MekCentrifugeFactoryHelper.TRACKED_ERROR_TYPES, MekCentrifugeFactoryHelper.GLOBAL_ERROR_TYPES);
 		// 初始化PB配方处理器（tier在super()中已通过presetVariables设置）
 		pbProcessor = new PbRecipeProcessor(this, "工厂离心机");
-		// 初始化输出槽标志位管理器（tier在super()中已设置）
-		outputSlotFlagManager = new OutputSlotFlagManager(this);
+		// Task 10: 初始化 PB 上下文委托（封装输出槽标志位、激活计数器、版本号、去抖等公共状态）
+		delegate = new FactoryPbContextDelegate(this);
 
 		// energySlot是TileEntityFactory的包私有字段，通过Accessor Mixin访问
 		// 副输出槽2注册、IO配置、流体侧面配置、FLUID弹出器由Helper统一处理
@@ -170,7 +157,13 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		outputHandlers = new IOutputHandler[tier.processes];
 		processInfoSlots = new ProcessInfo[tier.processes];
 		tertiaryOutputSlots = new OutputInventorySlot[tier.processes];
-		this.updateSortingListener = updateSortingListener;
+		// Task 10: 设置委托的排序监听器和 unpause 回调（输出槽变更时去抖触发排序/解除配方缓存暂停）
+		delegate.setUpdateSortingListener(updateSortingListener);
+		delegate.setUnpauseCallback(process -> {
+			if (process >= 0 && process < recipeCacheLookupMonitors.length) {
+				recipeCacheLookupMonitors[process].unpause();
+			}
+		});
 
 		// 通过FactoryLayoutHelper动态计算布局参数，支持原版4等级与EM扩展高等级
 		int baseX = FactoryLayoutHelper.getBaseX(tier);
@@ -179,18 +172,8 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		for (int i = 0; i < tier.processes; i++) {
 			int xPos = baseX + (i * baseXMult);
 			var lookupMonitor = recipeCacheLookupMonitors[i];
-			IContentsListener updateSortingAndUnpause = () -> {
-				// Task 5: 输出槽变更时更新标志位；批量模式下只标记 dirty，避免每次 insertItem 全量扫描
-				outputSlotFlagManager.onSlotChanged();
-				// Task 16: 输出槽内容变化时递增版本号，通知 Ejector Mixin 需要重新尝试输出
-				outputContentsVersion++;
-				// Task 7: 同 tick 内去抖，避免 AE2 高频拉取触发全量排序扫描
-				if (!sortingMarkedThisTick) {
-					sortingMarkedThisTick = true;
-					updateSortingListener.onContentsChanged();
-					lookupMonitor.unpause();
-				}
-			};
+			// Task 10: 通过委托创建输出槽监听器（封装标志位更新、版本号递增、去抖排序/unpause）
+			IContentsListener updateSortingAndUnpause = delegate.createOutputSlotListener(i);
 
 			// 主输出槽
 			OutputInventorySlot outputSlot = OutputInventorySlot.at(updateSortingAndUnpause, xPos, 57);
@@ -376,7 +359,7 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 	@Override
 	protected boolean onUpdateServer() {
 		// Task 7: 重置去抖标志，允许本 tick 重新标记 sortingNeeded（在 super 与 PB 处理前重置）
-		sortingMarkedThisTick = false;
+		delegate.resetSortingMark();
 		// super前保存能量，由Helper基于能量差计算总消耗（SMELTING + PB）
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
@@ -522,78 +505,61 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
 	}
 
-	// ===== Task 5: 输出槽状态标志位实现 =====
+	// ===== Task 5/7/11/16: 输出槽标志位/版本号/去抖/激活计数器 — 委托给 FactoryPbContextDelegate =====
 
 	@Override
 	public boolean productivebeesgenesis$hasOutputItems() {
-		return outputSlotFlagManager.hasOutputItems();
+		return delegate.hasOutputItems();
 	}
 
 	@Override
 	public boolean productivebeesgenesis$outputSlotsFull() {
-		return outputSlotFlagManager.outputSlotsFull();
+		return delegate.outputSlotsFull();
 	}
 
-	/** 遍历所有进程的输出槽重新计算标志位（由输出槽 IContentsListener 触发，外部插入/初始化用） */
 	@Override
 	public void productivebeesgenesis$updateOutputSlotFlags() {
-		outputSlotFlagManager.updateAll();
+		delegate.updateOutputSlotFlags();
 	}
 
 	@Override
 	public boolean productivebeesgenesis$outputSlotsFull(int process) {
-		return outputSlotFlagManager.outputSlotsFull(process);
+		return delegate.outputSlotsFull(process);
 	}
 
 	@Override
 	public void productivebeesgenesis$beginOutputBatch() {
-		outputSlotFlagManager.beginBatch();
+		delegate.beginOutputBatch();
 	}
 
 	@Override
 	public void productivebeesgenesis$endOutputBatch(int process) {
-		if (outputSlotFlagManager.endBatch(process)) {
-			// 批量结束时统一递增版本号并触发一次排序/解除 recipe cache 暂停
-			outputContentsVersion++;
-			if (!sortingMarkedThisTick) {
-				sortingMarkedThisTick = true;
-				if (updateSortingListener != null) {
-					updateSortingListener.onContentsChanged();
-				}
-				if (process >= 0 && process < recipeCacheLookupMonitors.length) {
-					recipeCacheLookupMonitors[process].unpause();
-				}
-			}
-		}
+		delegate.endOutputBatch(process);
 	}
 
-	/** Task 16: 返回输出槽内容版本号（供 Ejector Mixin 判断是否跳过 outputItems） */
 	@Override
 	public long productivebeesgenesis$outputContentsVersion() {
-		return outputContentsVersion;
+		return delegate.outputContentsVersion();
 	}
 
-	/** Step 5: 返回所有输出槽物品总数（O(1)，供 Ejector Mixin 替代 countOutputItems 遍历） */
 	@Override
 	public long productivebeesgenesis$outputItemCount() {
-		return outputSlotFlagManager.outputItemCount();
+		return delegate.outputItemCount();
 	}
-
-	// ===== Task 11: 激活状态计数器实现 =====
 
 	@Override
 	public void productivebeesgenesis$onProcessActivated(int process) {
-		MekCentrifugeFactoryHelper.onProcessActivated(process, pbActiveStates, activeProcessCount);
+		delegate.onProcessActivated(process);
 	}
 
 	@Override
 	public void productivebeesgenesis$onProcessDeactivated(int process) {
-		MekCentrifugeFactoryHelper.onProcessDeactivated(process, pbActiveStates, activeProcessCount);
+		delegate.onProcessDeactivated(process);
 	}
 
 	@Override
 	public boolean productivebeesgenesis$hasActiveProcess() {
-		return MekCentrifugeFactoryHelper.hasActiveProcess(activeProcessCount);
+		return delegate.hasActiveProcess();
 	}
 
 	// ===== GUI暴露方法 =====

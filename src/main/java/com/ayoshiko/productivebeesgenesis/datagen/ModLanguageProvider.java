@@ -7,7 +7,14 @@ import net.neoforged.neoforge.common.data.LanguageProvider;
 /**
  * 语言文件数据生成器
  * <br/>
- * 自动生成配置界面翻译键，保持与 lang/*.json 一致。
+ * 翻译键分工说明：
+ * <ul>
+ *   <li>手写 lang 文件（src/main/resources/assets/productivebeesgenesis/lang/*.json）：
+ *       包含 GUI 相关键（gui.*、jei.*、block.*、entity.*、itemGroup.* 等）。因 build.gradle 的
+ *       DuplicatesStrategy.EXCLUDE 会丢弃 generated 目录同名文件，故 GUI 键必须手写以保证进入 jar。</li>
+ *   <li>ModLanguageProvider（本类，输出到 generated 目录）：生成 configuration 相关键
+ *       （productivebeesgenesis.configuration.*），由 NeoForge 配置界面自动消费。</li>
+ * </ul>
  */
 public class ModLanguageProvider extends LanguageProvider {
 
@@ -403,7 +410,21 @@ public class ModLanguageProvider extends LanguageProvider {
 
         // FilterListScreen 工具按钮提示
         add("productivebeesgenesis.config.reset.tooltip", "重置过滤列表为默认值（空列表、模式关闭）");
+        add("productivebeesgenesis.config.reset.confirm.title", "重置过滤列表");
+        add("productivebeesgenesis.config.reset.confirm.message", "这将清空过滤列表并将模式设为关闭，是否继续？");
+        add("productivebeesgenesis.config.reset.confirm.yes", "重置");
+        add("productivebeesgenesis.config.reset.confirm.no", "取消");
         add("productivebeesgenesis.config.export.tooltip", "将当前过滤列表以 JSON 数组形式导出到剪贴板");
         add("productivebeesgenesis.config.import.tooltip", "从剪贴板导入过滤列表（支持 JSON 数组或逗号/换行分隔）");
+        add("productivebeesgenesis.config.import.result.success", "已导入 %s 个蜜蜂类型");
+        add("productivebeesgenesis.config.import.result.duplicate", "已导入 %s 个，跳过 %s 个重复项");
+        add("productivebeesgenesis.config.import.result.invalid", "已导入 %s 个，跳过 %s 个无效项");
+        add("productivebeesgenesis.config.import.result.mixed", "已导入 %s 个，跳过 %s 个重复项和 %s 个无效项");
+        // Task 12: 配置同步包服务端处理反馈消息
+        add("productivebeesgenesis.config.sync.permission_denied", "权限不足，无法修改服务端配置（需要管理员权限）");
+        add("productivebeesgenesis.config.sync.not_loaded", "服务端配置尚未加载，请稍后再试");
+        add("productivebeesgenesis.config.sync.invalid_mode", "无效的过滤模式: %s");
+        add("productivebeesgenesis.config.sync.invalid_type", "无效的蜜蜂类型: %s");
+        add("productivebeesgenesis.config.sync.error", "同步过滤配置时发生错误，请查看服务器日志");
     }
 }

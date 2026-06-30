@@ -8,7 +8,7 @@ import javax.annotation.Nullable;
 
 import org.jetbrains.annotations.NotNull;
 
-import com.ayoshiko.productivebeesgenesis.AbstractCombEventHandler;
+import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -127,7 +127,8 @@ public final class MyriadBatchPlanner {
 				empty[i] = true;
 				int limit = safeGetSlotLimit(slot, emptyTemplate);
 				if (limit <= 0) {
-					limit = baseItem.getMaxStackSize(ItemStack.EMPTY);
+					// 修正：使用基础物品模板的默认最大堆叠数，避免 ItemStack.EMPTY 无 bee_type 组件导致 maxStack 计算错误
+					limit = emptyTemplate.getMaxStackSize();
 				}
 				slotLimits[i] = limit;
 				totalRemainingCapacity += limit;
@@ -289,7 +290,7 @@ public final class MyriadBatchPlanner {
 			int totalCount = mid * multiplier;
 			// 类型数不超过总数量（避免 allocateEvenly 出现大量 0 分配），也不超过 3 种
 			int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
-			Map<ResourceLocation, Integer> allocation = AbstractCombEventHandler.allocateEvenly(
+			Map<ResourceLocation, Integer> allocation = RandomHoneycombSelector.allocateEvenly(
 					totalCount, selectedTypes.subList(0, typesToUse));
 
 			Plan plan = plan(snapshot, baseItem, allocation);

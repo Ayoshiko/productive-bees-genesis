@@ -146,10 +146,10 @@ public final class PerformanceMonitor {
 			var name = new javax.management.ObjectName("productivebeesgenesis:type=PerformanceMonitor");
 			if (mbs.isRegistered(name)) {
 				mbs.unregisterMBean(name);
-				ProductiveBeesGenesis.LOGGER.debug("性能监控JMX MBean已注销");
+				ProductiveBeesGenesis.LOGGER.trace("性能监控JMX MBean已注销");
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("性能监控JMX MBean注销失败（可忽略）", e);
+			ProductiveBeesGenesis.LOGGER.trace("性能监控JMX MBean注销失败（可忽略）", e);
 		}
 	}
 

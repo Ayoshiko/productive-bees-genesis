@@ -61,14 +61,15 @@ public abstract class AbstractClientCombEventHandler {
 	// ========== 公共辅助方法 ==========
 
 	/**
-	 * HSV → RGB 转换
+	 * HSV → RGB 转换（复用数组版本，降低 GC 压力）
 	 *
 	 * @param h 色相 0-360
 	 * @param s 饱和度 0-1
 	 * @param v 明度 0-1
-	 * @return float[] {r, g, b}，取值 0-1
+	 * @param out 复用的输出数组，长度至少 3
+	 * @return 传入的 out 数组本身（{r, g, b}，取值 0-1）
 	 */
-	protected static float[] hsvToRgb(float h, float s, float v) {
+	protected static float[] hsvToRgb(float h, float s, float v, float[] out) {
 		float c = v * s;
 		float x = c * (1 - Math.abs(((h / 60) % 2) - 1));
 		float m = v - c;
@@ -81,7 +82,10 @@ public abstract class AbstractClientCombEventHandler {
 		else if (h < 300) { r = x; g = 0; b = c; }
 		else              { r = c; g = 0; b = x; }
 
-		return new float[]{r + m, g + m, b + m};
+		out[0] = r + m;
+		out[1] = g + m;
+		out[2] = b + m;
+		return out;
 	}
 
 	// ========== 模板方法：事件处理框架 ==========

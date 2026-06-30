@@ -138,8 +138,8 @@ public final class MekCompatHooks {
 			// EM类路径变更或类未加载，安全降级返回false
 			return false;
 		} catch (NoSuchFieldException | IllegalAccessException e) {
-			// 字段访问失败（字段被移除/重命名/访问限制），记录调试日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.debug("EMFactoryTier反射访问失败，isEMTierAboveOverclocked降级返回false", e);
+			// 字段访问失败（字段被移除/重命名/访问限制），记录trace日志并安全降级返回false
+			ProductiveBeesGenesis.LOGGER.trace("EMFactoryTier反射访问失败，isEMTierAboveOverclocked降级返回false", e);
 			return false;
 		}
 	}
@@ -235,8 +235,8 @@ public final class MekCompatHooks {
 			Class<?> meFactoryTierClass = Class.forName(ME_FACTORY_TIER_CLASS);
 			return meFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
-			// ME类路径变更或类未加载，记录调试日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.debug("ExtraFactoryTier类未找到，isMETier降级返回false", e);
+			// ME类路径变更或类未加载，记录trace日志并安全降级返回false
+			ProductiveBeesGenesis.LOGGER.trace("ExtraFactoryTier类未找到，isMETier降级返回false", e);
 			return false;
 		}
 	}
@@ -299,8 +299,8 @@ public final class MekCompatHooks {
 			Class<?> emeFactoryTierClass = Class.forName(EME_FACTORY_TIER_CLASS);
 			return emeFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
-			// EME类路径变更或类未加载，记录调试日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.debug("EMExtraFactoryTier类未找到，isEMETier降级返回false", e);
+			// EME类路径变更或类未加载，记录trace日志并安全降级返回false
+			ProductiveBeesGenesis.LOGGER.trace("EMExtraFactoryTier类未找到，isEMETier降级返回false", e);
 			return false;
 		}
 	}

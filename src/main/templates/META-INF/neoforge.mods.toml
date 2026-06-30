@@ -106,5 +106,6 @@ config="${mod_id}.iris.mixins.json"
 [[dependencies.${mod_id}]]
     modId="sfm"
     type="optional"
+    versionRange="[0,)"
     ordering="AFTER"
     side="BOTH"

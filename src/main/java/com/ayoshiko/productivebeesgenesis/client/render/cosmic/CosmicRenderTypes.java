@@ -32,7 +32,8 @@ public class CosmicRenderTypes {
 					.createCompositeState(true));
 
 	public static final RenderType COSMIC_ARMOR = RenderType.create(
-			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic").toString(),
+			// 名称使用 "cosmic_armor" 区别于 COSMIC，便于调试与 profiler 阶段区分两套渲染类型
+			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic_armor").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
 			0x200000,

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -74,7 +74,7 @@ public class RenderUtils {
 	 * @return 烘焙后的四边形列表
 	 */
 	public static List<BakedQuad> bakeItem(Transformation state, TextureAtlasSprite... sprites) {
-		List<BakedQuad> quads = new LinkedList<>();
+		List<BakedQuad> quads = new ArrayList<>();
 
 		for (int i = 0; i < sprites.length; ++i) {
 			TextureAtlasSprite sprite = sprites[i];

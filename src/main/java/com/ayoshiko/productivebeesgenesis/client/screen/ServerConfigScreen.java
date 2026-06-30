@@ -26,12 +26,12 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 public final class ServerConfigScreen extends OptionsSubScreen {
 
     private final ModConfig modConfig;
-    private final ModConfig.Type configType;
 
     public ServerConfigScreen(Screen parent, ModConfig modConfig) {
         super(parent, Minecraft.getInstance().options, Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
         this.modConfig = modConfig;
-        this.configType = ModConfig.Type.SERVER;
+        // Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
+        // 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
     }
 
     // NeoForge 原生配置节屏幕的按钮/标签后缀（如“彩虹特效...”）
@@ -64,7 +64,7 @@ public final class ServerConfigScreen extends OptionsSubScreen {
                 Component.translatable("productivebeesgenesis.configuration.server.other.button"));
         Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
                         new ConfigurationScreen.ConfigurationSectionScreen(
-                                this, configType, modConfig,
+                                this, ModConfig.Type.SERVER, modConfig,
                                 Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"))))
                 .tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")))
                 .width(Button.DEFAULT_WIDTH)

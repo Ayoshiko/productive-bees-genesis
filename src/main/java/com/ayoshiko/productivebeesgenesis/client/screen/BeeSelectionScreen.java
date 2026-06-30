@@ -1,25 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionCache;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState.SortMode;
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -27,7 +20,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 
 /**
  * 蜜蜂选择屏幕
@@ -48,8 +40,9 @@ import net.minecraft.world.level.Level;
  * <p>
  * 设计原则：
  * <ul>
- *   <li>SRP：仅负责蜜蜂选择，不涉及配置读写；状态管理委托给 {@link BeeSelectionState}</li>
- *   <li>DIP：依赖 BeeInfoHelper 抽象获取蜜蜂信息，依赖 {@code Consumer<List<String>>} 批量回调</li>
+ *   <li>SRP：仅负责蜜蜂选择，不涉及配置读写；状态管理委托给 {@link BeeSelectionState}，
+ *       排序/过滤逻辑委托给 {@link BeeSelectionSorter}</li>
+ *   <li>DIP：依赖 {@code Consumer<List<String>>} 批量回调，蜜蜂信息获取由排序器间接依赖 BeeInfoHelper</li>
  *   <li>性能：预计算 BeeEntry 缓存，避免渲染时重复查询</li>
  * </ul>
  * <br/>
@@ -100,30 +93,8 @@ public final class BeeSelectionScreen extends Screen {
 	private final Consumer<List<String>> onSelectBees;
 	/** 运行时状态（搜索、滚动、过滤、已选） */
 	private final BeeSelectionState state = new BeeSelectionState();
-	/** 所有蜜蜂条目（预计算缓存） */
-	private List<BeeEntry> allEntries;
-	/** 过滤后的蜜蜂条目（不含分组标题） */
-	private List<BeeEntry> filteredEntries;
-	/** 带分组标题的显示列表 */
-	private final List<BeeSelectionRenderer.DisplayItem> displayItems = new ArrayList<>();
-	/**
-	 * 排序缓存 — 仅在 sortMode 或 allEntries 规模变化时重新排序，避免 rebuildWidgets 触发的重复排序
-	 * <p>
-	 * 线程安全：客户端 GUI 单线程访问，无需同步。
-	 */
-	private SortMode lastSortedMode = null;
-	private int lastSortedSize = -1;
-	/**
-	 * displayItems 构建缓存 — 仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建
-	 * <p>
-	 * 折叠状态通过 {@link #collapsedVersion} 计数器追踪，每次切换分组折叠时递增使缓存失效。
-	 * size + search 足以检测 filteredEntries 内容变化：buildDisplayItems 内部按 namespace 分组后
-	 * 会用当前 sortMode 重新排序组内条目，因此 filteredEntries 的顺序变化不影响最终结果。
-	 */
-	private int lastFilteredSize = -1;
-	private String lastSearchText = null;
-	private int collapsedVersion = 0;
-	private int lastCollapsedVersion = -1;
+	/** 排序与过滤逻辑处理器（组合模式） */
+	private final BeeSelectionSorter sorter = new BeeSelectionSorter(this, state);
 	/**
 	 * 初始化标志位 — 区分首次加载与重建
 	 * <p>
@@ -136,8 +107,13 @@ public final class BeeSelectionScreen extends Screen {
 
 	// ========== UI 组件 ==========
 	private EditBox searchField;
-	/** 已存在于过滤列表的蜜蜂类型（用于去重显示） */
-	private final List<String> existingBeeTypes;
+	/**
+	 * 已存在于过滤列表的蜜蜂类型（用于去重显示）。
+	 * <p>
+	 * Task 16.1: 使用 {@link HashSet} 替代 List，将 {@link #isAlreadyAdded} 的
+	 * contains 查找从 O(n) 降为 O(1)，提升大量蜜蜂类型下的渲染过滤性能。
+	 */
+	private final Set<String> existingBeeTypes;
 	/** 显示全部 / 仅未添加 切换按钮 */
 	private Button toggleButton;
 	/** 排序按钮 */
@@ -164,10 +140,11 @@ public final class BeeSelectionScreen extends Screen {
 	public BeeSelectionScreen(Screen parent, List<String> existingBeeTypes, Consumer<List<String>> onSelectBees) {
 		super(Component.translatable("productivebeesgenesis.config.bee_selection_title"));
 		this.parent = parent;
+		// Task 16.1: 复制为 HashSet 以获得 O(1) 查找性能（构造参数仍为 List 保持 API 兼容）
 		this.existingBeeTypes = existingBeeTypes.stream()
 				.map(String::trim)
 				.filter(s -> !s.isEmpty())
-				.toList();
+				.collect(Collectors.toCollection(HashSet::new));
 		this.onSelectBees = onSelectBees;
 		// 恢复上次关闭时保存的搜索与界面状态（不恢复已选项）
 		BeeSelectionCache.getInstance().restore(state);
@@ -200,10 +177,10 @@ public final class BeeSelectionScreen extends Screen {
 		if (!initialized) {
 			// 每次打开新界面时清空上次勾选，避免误操作
 			state.clearSelection();
-			loadBeeEntries();
+			sorter.loadBeeEntries();
 			initialized = true;
 		} else {
-			recomputeFilteredEntries();
+			sorter.recomputeFilteredEntries();
 		}
 
 		// 顶部按钮布局：排序按钮在搜索框左侧，全选/反选/切换在右侧
@@ -234,7 +211,7 @@ public final class BeeSelectionScreen extends Screen {
 
 		// 排序按钮 — 搜索框左侧
 		sortButton = Button.builder(
-				Component.translatable(getSortKey()),
+				Component.translatable(sorter.getSortKey()),
 				button -> cycleSortMode()
 		).bounds(searchX - SORT_BUTTON_WIDTH - TOP_BUTTON_GAP, TOP_ROW_Y, SORT_BUTTON_WIDTH, TOP_BUTTON_HEIGHT).build();
 		addRenderableWidget(sortButton);
@@ -293,31 +270,6 @@ public final class BeeSelectionScreen extends Screen {
 	}
 
 	/**
-	 * 加载所有蜜蜂类型并预计算显示信息
-	 * <p>
-	 * 预计算产物信息可能涉及配方查询，在 init() 时一次性完成，
-	 * 避免渲染每帧时重复查询，提升滚动和搜索性能。
-	 */
-	private void loadBeeEntries() {
-		Level level = this.minecraft.level;
-		List<ResourceLocation> beeTypes = BeeInfoHelper.getAllBeeTypes();
-		allEntries = new ArrayList<>(beeTypes.size());
-		for (ResourceLocation beeType : beeTypes) {
-			Component displayName = BeeInfoHelper.getBeeDisplayName(beeType);
-			Component productInfo = level != null
-					? BeeInfoHelper.getBeeProductInfo(level, beeType)
-					: Component.empty();
-			// 预计算代表图标，避免每帧创建 ItemStack；世界为空时返回空栈不渲染
-			ItemStack icon = level != null ? BeeInfoHelper.resolveBeeIcon(level, beeType) : ItemStack.EMPTY;
-			allEntries.add(new BeeEntry(beeType, displayName, productInfo, icon));
-		}
-		// allEntries 被重新赋值为新列表，重置排序缓存以强制下次排序
-		lastSortedMode = null;
-		lastSortedSize = -1;
-		recomputeFilteredEntries();
-	}
-
-	/**
 	 * 搜索框内容变化回调
 	 * <p>
 	 * 大小写不敏感匹配类型ID或显示名称。
@@ -329,94 +281,7 @@ public final class BeeSelectionScreen extends Screen {
 		if (!ignoreNextSearchReset) {
 			state.resetScroll();
 		}
-		recomputeFilteredEntries();
-	}
-
-	/**
-	 * 重新计算过滤后的列表与分组显示列表
-	 * <p>
-	 * 先按当前排序规则排序，再应用“仅未添加”过滤与搜索过滤，
-	 * 最后按 namespace 分组并插入可折叠的组标题。
-	 * <p>
-	 * 排序结果缓存：仅在 sortMode 或 allEntries 规模变化时执行排序，
-	 * 避免 rebuildWidgets() 触发的 init() 中重复排序已有序列表。
-	 */
-	private void recomputeFilteredEntries() {
-		SortMode currentMode = state.getSortMode();
-		int currentSize = allEntries.size();
-		if (lastSortedMode != currentMode || lastSortedSize != currentSize) {
-			allEntries.sort(getSortComparator());
-			lastSortedMode = currentMode;
-			lastSortedSize = currentSize;
-		}
-
-		String lower = state.getSearchText().toLowerCase().trim();
-		Stream<BeeEntry> stream = allEntries.stream();
-		if (state.isShowOnlyUnadded()) {
-			stream = stream.filter(entry -> !isAlreadyAdded(entry));
-		}
-		if (!lower.isEmpty()) {
-			stream = stream.filter(entry -> entry.typeIdLower.contains(lower)
-					|| entry.displayNameLower.contains(lower));
-		}
-		filteredEntries = stream.collect(Collectors.toList());
-
-		buildDisplayItems();
-		state.clampScrollOffset(Math.max(0, displayItems.size() - getVisibleEntryCount()));
-	}
-
-	/**
-	 * 根据当前排序规则生成比较器。
-	 */
-	private Comparator<BeeEntry> getSortComparator() {
-		return switch (state.getSortMode()) {
-			case NAME -> Comparator.comparing(entry -> entry.displayName.getString(), String.CASE_INSENSITIVE_ORDER);
-			case ID -> Comparator.comparing(entry -> entry.typeId, String.CASE_INSENSITIVE_ORDER);
-			case MOD -> Comparator.comparing((BeeEntry entry) -> entry.type.getNamespace(), String.CASE_INSENSITIVE_ORDER)
-					.thenComparing(entry -> entry.displayName.getString(), String.CASE_INSENSITIVE_ORDER);
-		};
-	}
-
-	/**
-	 * 按 namespace 分组并构建带标题的显示列表。
-	 * <p>
-	 * 组标题按 namespace 字母顺序排列，组内按当前排序规则排序。
-	 * 已折叠的分组仅保留标题。
-	 * <p>
-	 * 构建缓存：仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建，
-	 * 避免 rebuildWidgets() 触发的 init() 中重复构建。
-	 */
-	private void buildDisplayItems() {
-		int currentSize = filteredEntries.size();
-		String currentSearch = searchField != null ? searchField.getValue() : "";
-		if (lastFilteredSize == currentSize
-				&& Objects.equals(lastSearchText, currentSearch)
-				&& lastCollapsedVersion == collapsedVersion) {
-			return; // 使用缓存
-		}
-		lastFilteredSize = currentSize;
-		lastSearchText = currentSearch;
-		lastCollapsedVersion = collapsedVersion;
-
-		displayItems.clear();
-		Map<String, List<BeeEntry>> groups = new TreeMap<>();
-		for (BeeEntry entry : filteredEntries) {
-			groups.computeIfAbsent(entry.type.getNamespace(), k -> new ArrayList<>()).add(entry);
-		}
-
-		Comparator<BeeEntry> comparator = getSortComparator();
-		for (Map.Entry<String, List<BeeEntry>> group : groups.entrySet()) {
-			String namespace = group.getKey();
-			List<BeeEntry> entries = group.getValue();
-			entries.sort(comparator);
-			boolean collapsed = state.isGroupCollapsed(namespace);
-			displayItems.add(new BeeSelectionRenderer.HeaderItem(namespace, entries.size(), collapsed));
-			if (!collapsed) {
-				for (BeeEntry entry : entries) {
-					displayItems.add(new BeeSelectionRenderer.EntryItem(entry));
-				}
-			}
-		}
+		sorter.recomputeFilteredEntries();
 	}
 
 	/**
@@ -424,10 +289,8 @@ public final class BeeSelectionScreen extends Screen {
 	 */
 	private void toggleGroupCollapsed(String namespace) {
 		state.toggleGroupCollapsed(namespace);
-		// 折叠状态变化，递增版本号使 displayItems 缓存失效
-		collapsedVersion++;
-		buildDisplayItems();
-		state.clampScrollOffset(Math.max(0, displayItems.size() - getVisibleEntryCount()));
+		// 委托给排序处理器：使 displayItems 缓存失效并重建，再修正滚动偏移
+		sorter.onCollapsedChanged();
 	}
 
 	/**
@@ -437,7 +300,7 @@ public final class BeeSelectionScreen extends Screen {
 		state.toggleShowOnlyUnadded();
 		toggleButton.setMessage(getToggleMessage());
 		state.resetScroll();
-		recomputeFilteredEntries();
+		sorter.recomputeFilteredEntries();
 	}
 
 	/** 获取切换按钮的当前文本 */
@@ -458,25 +321,17 @@ public final class BeeSelectionScreen extends Screen {
 	private void cycleSortMode() {
 		state.cycleSortMode();
 		if (sortButton != null) {
-			sortButton.setMessage(Component.translatable(getSortKey()));
+			sortButton.setMessage(Component.translatable(sorter.getSortKey()));
 		}
 		state.resetScroll();
-		recomputeFilteredEntries();
-	}
-
-	private String getSortKey() {
-		return switch (state.getSortMode()) {
-			case NAME -> "productivebeesgenesis.config.sort_by_name";
-			case ID -> "productivebeesgenesis.config.sort_by_id";
-			case MOD -> "productivebeesgenesis.config.sort_by_mod";
-		};
+		sorter.recomputeFilteredEntries();
 	}
 
 	/**
 	 * 全选当前过滤结果中未添加的蜜蜂。
 	 */
 	private void selectAllFiltered() {
-		List<String> selectable = filteredEntries.stream()
+		List<String> selectable = sorter.getFilteredEntries().stream()
 				.filter(entry -> !isAlreadyAdded(entry))
 				.map(entry -> entry.typeId)
 				.distinct()
@@ -489,7 +344,7 @@ public final class BeeSelectionScreen extends Screen {
 	 * 反选当前过滤结果中未添加的蜜蜂。
 	 */
 	private void invertFiltered() {
-		List<String> selectable = filteredEntries.stream()
+		List<String> selectable = sorter.getFilteredEntries().stream()
 				.filter(entry -> !isAlreadyAdded(entry))
 				.map(entry -> entry.typeId)
 				.distinct()
@@ -544,7 +399,7 @@ public final class BeeSelectionScreen extends Screen {
 
 		// 裁剪并渲染列表
 		graphics.enableScissor(SIDE_PADDING, LIST_TOP_Y, width - SIDE_PADDING, listBottom);
-		renderer.renderDisplayList(graphics, displayItems, state.getScrollOffset(), mouseX, mouseY, state);
+		renderer.renderDisplayList(graphics, sorter.getDisplayItems(), state.getScrollOffset(), mouseX, mouseY, state);
 		graphics.disableScissor();
 
 		// 滚动条
@@ -587,7 +442,7 @@ public final class BeeSelectionScreen extends Screen {
 	 * 计算当前滚动条滑块位置与高度；列表无需滚动时返回 {@code null}。
 	 */
 	private ScrollBarThumb calculateScrollBarThumb() {
-		int total = displayItems.size();
+		int total = sorter.getDisplayItems().size();
 		int visible = getVisibleEntryCount();
 		if (total <= visible) {
 			return null;
@@ -630,7 +485,7 @@ public final class BeeSelectionScreen extends Screen {
 	 * 根据鼠标 Y 坐标更新滚动偏移，用于拖动滚动条。
 	 */
 	private void updateScrollOffsetFromMouseY(double mouseY) {
-		int total = displayItems.size();
+		int total = sorter.getDisplayItems().size();
 		int visible = getVisibleEntryCount();
 		int maxScroll = total - visible;
 		if (maxScroll <= 0) {
@@ -655,6 +510,9 @@ public final class BeeSelectionScreen extends Screen {
 		if (super.mouseClicked(mouseX, mouseY, button)) {
 			return true;
 		}
+
+		// 获取当前显示列表快照（同一渲染帧内复用，避免重复调用）
+		List<BeeSelectionRenderer.DisplayItem> displayItems = sorter.getDisplayItems();
 
 		// 滚动条交互：左键拖动滑块，点击轨道空白处快速跳转到对应位置
 		if (button == 0 && displayItems.size() > getVisibleEntryCount() && isMouseOverScrollBar(mouseX, mouseY)) {
@@ -704,7 +562,7 @@ public final class BeeSelectionScreen extends Screen {
 		if (scrollY > 0) {
 			state.setScrollOffset(state.getScrollOffset() - 1);
 		} else if (scrollY < 0) {
-			int maxScroll = Math.max(0, displayItems.size() - getVisibleEntryCount());
+			int maxScroll = Math.max(0, sorter.getDisplayItems().size() - getVisibleEntryCount());
 			state.setScrollOffset(state.getScrollOffset() + 1);
 			state.clampScrollOffset(maxScroll);
 		}

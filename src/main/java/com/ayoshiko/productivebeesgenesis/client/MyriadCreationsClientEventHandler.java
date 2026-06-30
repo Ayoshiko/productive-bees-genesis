@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,7 +30,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * 静态 {@code @SubscribeEvent} 方法委托给单例 {@link #INSTANCE} 的模板方法，
  * 以兼容 {@code @EventBusSubscriber} 静态注册要求。
  */
-@EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT)
+@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class MyriadCreationsClientEventHandler extends AbstractClientCombEventHandler {
 
 	/** 单例 — 静态事件方法委托给此实例的模板方法 */
@@ -57,6 +58,10 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 	/** 发光大颗粒垂直速度 */
 	private static final float GLOW_PARTICLE_VY = 0.1F;
 
+	/** 复用颜色缓冲，避免每帧每蜜蜂调用 hsvToRgb/getColor 时分配新数组（降低 GC 压力）
+	 * 单线程访问（客户端渲染线程），无需同步 */
+	private final float[] reusableColorBuffer = new float[3];
+
 	private MyriadCreationsClientEventHandler() {
 	}
 
@@ -67,6 +72,8 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 	 * 固定饱和度和明度，实现丝滑的彩虹渐变，消除离散颜色插值造成的突变。
 	 * <p>
 	 * 供 {@link com.ayoshiko.productivebeesgenesis.mixin.client.ConfigurableBeeColorMixin} 静态调用。
+	 * <p>
+	 * <b>性能注意</b>：返回的是复用数组实例，调用方必须立即读取值，不得跨调用缓存引用。
 	 *
 	 * @param time 当前时间戳（毫秒）
 	 * @return float[] {r, g, b}，取值范围 0-1
@@ -103,7 +110,7 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 	protected float[] getColor(long time) {
 		// 时间映射到色相 0~360°
 		double hue = ((time % RAINBOW_CYCLE_MS) / (double) RAINBOW_CYCLE_MS) * 360.0;
-		return hsvToRgb((float) hue, HSV_SATURATION, HSV_VALUE);
+		return hsvToRgb((float) hue, HSV_SATURATION, HSV_VALUE, reusableColorBuffer);
 	}
 
 	@Override
@@ -127,17 +134,17 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 		if (rng.nextBoolean()) {
 			return getColor(time);
 		}
-		return hsvToRgb(rng.nextFloat() * 360F, HSV_SATURATION, HSV_VALUE);
+		return hsvToRgb(rng.nextFloat() * 360F, HSV_SATURATION, HSV_VALUE, reusableColorBuffer);
 	}
 
 	@Override
 	protected float[] getGlowParticleColor(ThreadLocalRandom rng) {
-		return hsvToRgb(rng.nextFloat() * 360F, HSV_SATURATION, HSV_VALUE);
+		return hsvToRgb(rng.nextFloat() * 360F, HSV_SATURATION, HSV_VALUE, reusableColorBuffer);
 	}
 
 	@Override
 	protected float[] getJoinLevelParticleColor(int index, int total) {
-		return hsvToRgb((index / (float) total) * 360F, HSV_SATURATION, HSV_VALUE);
+		return hsvToRgb((index / (float) total) * 360F, HSV_SATURATION, HSV_VALUE, reusableColorBuffer);
 	}
 
 	@Override

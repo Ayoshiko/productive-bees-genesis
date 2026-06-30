@@ -6,12 +6,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.network.FilterConfigSyncPayload;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.mojang.datafixers.util.Pair;
 
@@ -22,11 +22,14 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * 万象创世过滤列表编辑屏幕
@@ -101,12 +104,12 @@ public final class FilterListScreen extends Screen {
 	// ========== 状态数据 ==========
 	private final Screen parent;
 	/** 本地编辑副本（用户修改后点击保存才写入配置） */
-	private final List<String> beeTypes = new ArrayList<>();
+	final List<String> beeTypes = new ArrayList<>();
 	/** 批量删除复选框选中的蜜蜂类型集合 */
 	private final Set<String> selectedTypes = new HashSet<>();
 	private ModConfig.FilterMode filterMode;
 	/** 滚动偏移（以条目为单位） */
-	private int scrollOffset = 0;
+	int scrollOffset = 0;
 	/** 输入框是否可见 */
 	private boolean inputVisible = false;
 	/**
@@ -123,8 +126,22 @@ public final class FilterListScreen extends Screen {
 	private final Map<String, Component> beeDisplayNameCache = new ConcurrentHashMap<>();
 	/** 蜜蜂产物信息缓存（避免每帧遍历配方） */
 	private final Map<String, Component> beeProductInfoCache = new ConcurrentHashMap<>();
+	/**
+	 * Task 16.2: 导入操作结果提示（限时显示）。
+	 * <p>
+	 * 区分"重复项"和"无效项"两种跳过原因，显示不同颜色和文案的提示。
+	 * {@code null} 表示无提示；通过 {@link #showImportResult} 设置，
+	 * 在 {@link #renderImportResult} 中渲染，超时后自动隐藏。
+	 */
+	private Component importResultMessage;
+	/** 导入提示文字颜色（ARGB） */
+	private int importResultColor;
+	/** 导入提示显示截止时刻（系统毫秒），超过则停止渲染 */
+	private long importResultShowUntil;
 	/** 列表渲染辅助类 */
-	private final FilterListRenderer renderer = new FilterListRenderer(this);
+	final FilterListRenderer renderer = new FilterListRenderer(this);
+	/** 拖拽与滚动条交互处理器（组合模式） */
+	private final FilterListDragHandler dragHandler = new FilterListDragHandler(this);
 
 	/**
 	 * 当前可见条目的删除按钮列表
@@ -132,14 +149,7 @@ public final class FilterListScreen extends Screen {
 	 * 滚动时仅需重建这些按钮（因为回调捕获了条目索引），而非全量 {@link #rebuildWidgets()}，
 	 * 避免每帧销毁并重建搜索框、模式按钮、输入框等与滚动无关的组件。
 	 */
-	private final List<Button> entryButtons = new ArrayList<>();
-
-	/** 拖拽排序状态 */
-	private int dragSourceIndex = -1;
-	private int dragInsertIndex = -1;
-	private boolean isDragging = false;
-	/** 是否正在拖动滚动条滑块 */
-	private boolean isDraggingScrollBar = false;
+	final List<Button> entryButtons = new ArrayList<>();
 
 	// ========== UI 组件 ==========
 	private final Button[] modeButtons = new Button[ModConfig.FilterMode.values().length];
@@ -318,20 +328,47 @@ public final class FilterListScreen extends Screen {
 				.build());
 	}
 
+	/**
+	 * 重置过滤列表 — 弹出 ConfirmScreen 二次确认，避免误操作直接清空。
+	 * <p>
+	 * 原理：Minecraft 的 ConfirmScreen 提供标准化的"是/否"确认对话框，
+	 * 回调接收 boolean（true=确认，false=取消）。确认后执行实际重置，
+	 * 取消则直接返回当前屏幕。
+	 */
 	private void resetToDefault() {
+		if (minecraft == null) return;
+		minecraft.setScreen(new ConfirmScreen(
+				confirmed -> {
+					if (confirmed) {
+						performResetToDefault();
+					}
+					// 无论确认或取消，都返回当前过滤列表屏幕；
+					// setScreen(this) 会触发 init() 重建组件以反映最新状态
+					minecraft.setScreen(this);
+				},
+				Component.translatable("productivebeesgenesis.config.reset.confirm.title"),
+				Component.translatable("productivebeesgenesis.config.reset.confirm.message"),
+				Component.translatable("productivebeesgenesis.config.reset.confirm.yes"),
+				Component.translatable("productivebeesgenesis.config.reset.confirm.no")
+		));
+	}
+
+	/**
+	 * 执行实际的重置操作（清空列表、重置模式）。
+	 * <p>
+	 * 仅修改本地状态数据，不调用 rebuildWidgets() — 由 {@link #resetToDefault()}
+	 * 中的 setScreen(this) 触发 init() 完成组件重建。
+	 */
+	private void performResetToDefault() {
 		beeTypes.clear();
 		selectedTypes.clear();
 		filterMode = ModConfig.FilterMode.DISABLED;
 		clampScrollOffset();
-		updateDeleteSelectedButton();
-		rebuildWidgets();
 	}
 
 	private void exportToClipboard() {
 		if (minecraft == null) return;
-		String json = beeTypes.stream()
-				.map(s -> "\"" + s + "\"")
-				.collect(Collectors.joining(", ", "[", "]"));
+		String json = FilterListClipboardHelper.exportToJson(beeTypes);
 		minecraft.keyboardHandler.setClipboard(json);
 		ProductiveBeesGenesis.LOGGER.info("已将 {} 个蜜蜂类型导出到剪贴板", beeTypes.size());
 	}
@@ -339,38 +376,41 @@ public final class FilterListScreen extends Screen {
 	private void importFromClipboard() {
 		if (minecraft == null) return;
 		String clipboard = minecraft.keyboardHandler.getClipboard();
-		if (clipboard == null || clipboard.isBlank()) {
+		// 解析剪贴板文本为 token 列表（无状态操作委托给工具类）
+		List<String> tokens = FilterListClipboardHelper.parseTokens(clipboard);
+		if (tokens.isEmpty()) {
 			return;
 		}
-		String trimmed = clipboard.trim();
-		String[] tokens;
-		if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-			tokens = trimmed.substring(1, trimmed.length() - 1).split(",");
-		} else {
-			tokens = trimmed.split("[,\\s]+");
-		}
 
-		int added = 0;
-		int skipped = 0;
-		for (String raw : tokens) {
-			String token = raw.replaceAll("[\\[\\]\"']", "").trim();
-			if (token.isEmpty()) {
-				continue;
-			}
-			Pair<Boolean, Component> validation = validateInput(token);
-			if (validation.getFirst() && !beeTypes.contains(token)) {
-				beeTypes.add(token);
-				added++;
-			} else {
-				skipped++;
-			}
-		}
+		// Task 16.2: 校验并区分重复项与无效项，分别计数；屏幕端负责应用结果与展示提示
+		FilterListClipboardHelper.ImportResult result = FilterListClipboardHelper.validateImport(tokens, beeTypes);
+		beeTypes.addAll(result.getAdded());
 
-		if (added > 0) {
+		if (result.hasAdded()) {
 			scrollToBottom();
 			rebuildWidgets();
 		}
-		ProductiveBeesGenesis.LOGGER.info("从剪贴板导入过滤列表：新增 {} 个，跳过 {} 个", added, skipped);
+
+		// 根据导入结果显示不同颜色和文案的限时提示
+		Component message = result.buildMessage();
+		if (message != null) {
+			showImportResult(message, result.buildColor());
+		}
+
+		ProductiveBeesGenesis.LOGGER.info("从剪贴板导入过滤列表：新增 {} 个，重复 {} 个，无效 {} 个",
+				result.getAdded().size(), result.getDuplicates(), result.getInvalid());
+	}
+
+	/**
+	 * 设置导入结果提示（Task 16.2），在屏幕底部限时显示 5 秒。
+	 *
+	 * @param message 提示文本
+	 * @param color   ARGB 颜色
+	 */
+	private void showImportResult(Component message, int color) {
+		this.importResultMessage = message;
+		this.importResultColor = color;
+		this.importResultShowUntil = System.currentTimeMillis() + 5000L;
 	}
 
 	private void loadFromConfig() {
@@ -395,7 +435,7 @@ public final class FilterListScreen extends Screen {
 	 * <p>
 	 * 同时将按钮引用存入 {@link #entryButtons}，便于滚动时仅移除并重建这些按钮。
 	 */
-	private void createEntryButtons() {
+	void createEntryButtons() {
 		// rebuildWidgets 路径下旧按钮已被 clearWidgets 移除，这里仅清空引用
 		entryButtons.clear();
 		int visibleCount = getVisibleEntryCount();
@@ -420,18 +460,22 @@ public final class FilterListScreen extends Screen {
 	}
 
 	/**
-	 * 仅重建条目删除按钮，避免滚动时全量 {@link #rebuildWidgets()}
+	 * 包级桥接方法：移除指定组件。
 	 * <p>
-	 * 性能优化：滚动是高频操作，全量 rebuildWidgets 会销毁并重建搜索框、模式按钮、
-	 * 输入框等与滚动无关的组件。此方法仅移除旧的删除按钮并创建新的，
-	 * 将滚动开销从 O(全部组件) 降低到 O(可见条目数)。
+	 * {@code Screen.removeWidget} 为 protected 访问，组合式辅助类（如 {@link FilterListDragHandler}）
+	 * 非 Screen 子类无法直接调用，故通过此包级方法转发。
 	 */
-	private void rebuildEntryButtonsOnly() {
-		for (Button btn : entryButtons) {
-			removeWidget(btn);
-		}
-		entryButtons.clear();
-		createEntryButtons();
+	void removeWidgetBridge(Button btn) {
+		removeWidget(btn);
+	}
+
+	/**
+	 * 包级桥接方法：重建全部控件。
+	 * <p>
+	 * {@code Screen.rebuildWidgets} 为 protected 访问，需通过此包级方法转发给辅助类。
+	 */
+	void rebuildWidgetsBridge() {
+		rebuildWidgets();
 	}
 
 	@Override
@@ -470,7 +514,7 @@ public final class FilterListScreen extends Screen {
 		graphics.disableScissor();
 
 		// 渲染滚动条
-		renderScrollBar(graphics);
+		dragHandler.renderScrollBar(graphics);
 
 		// 手动渲染组件
 		for (var renderable : renderables) {
@@ -481,10 +525,30 @@ public final class FilterListScreen extends Screen {
 		renderModeButtonHighlight(graphics);
 
 		// 在裁剪区域外渲染拖放指示线与幽灵
-		renderer.renderDragOverlay(graphics, beeTypes, scrollOffset, dragSourceIndex, dragInsertIndex, mouseX, mouseY);
+		renderer.renderDragOverlay(graphics, beeTypes, scrollOffset,
+				dragHandler.getDragSourceIndex(), dragHandler.getDragInsertIndex(), mouseX, mouseY);
 
 		// 渲染输入验证提示
 		renderInputHint(graphics, mouseX, mouseY);
+
+		// Task 16.2: 渲染导入结果限时提示
+		renderImportResult(graphics);
+	}
+
+	/**
+	 * 渲染导入结果提示（Task 16.2）。
+	 * <p>
+	 * 在列表区域底部上方居中显示，超时后自动停止渲染。
+	 */
+	private void renderImportResult(GuiGraphics graphics) {
+		if (importResultMessage == null) return;
+		if (System.currentTimeMillis() > importResultShowUntil) {
+			importResultMessage = null;
+			return;
+		}
+		// 显示在列表底边框上方，避免与底部控制栏重叠
+		int y = height - LIST_BOTTOM_MARGIN - 12;
+		graphics.drawCenteredString(font, importResultMessage, width / 2, y, importResultColor);
 	}
 
 	private void renderModeButtonHighlight(GuiGraphics graphics) {
@@ -501,71 +565,6 @@ public final class FilterListScreen extends Screen {
 			graphics.fill(btn.getX() + btn.getWidth(), btn.getY(), btn.getX() + btn.getWidth() + 1,
 					btn.getY() + btn.getHeight(), 0xFFFFFFFF);
 		}
-	}
-
-	private record ScrollBarThumb(int y, int height) {}
-
-	private ScrollBarThumb calculateScrollBarThumb() {
-		int total = beeTypes.size();
-		int visible = getVisibleEntryCount();
-		if (total <= visible) {
-			return null;
-		}
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int trackHeight = listBottom - LIST_TOP_Y;
-		int thumbHeight = Math.max(16, trackHeight * visible / total);
-		int maxScroll = total - visible;
-		int thumbY = LIST_TOP_Y + (trackHeight - thumbHeight) * scrollOffset / Math.max(1, maxScroll);
-		return new ScrollBarThumb(thumbY, thumbHeight);
-	}
-
-	private void renderScrollBar(GuiGraphics graphics) {
-		ScrollBarThumb thumb = calculateScrollBarThumb();
-		if (thumb == null) return;
-
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int scrollX = getScrollBarX();
-		graphics.fill(scrollX, LIST_TOP_Y, scrollX + SCROLL_BAR_WIDTH, listBottom, 0xFF404040);
-		graphics.fill(scrollX, thumb.y, scrollX + SCROLL_BAR_WIDTH, thumb.y + thumb.height, 0xFFA0A0A0);
-	}
-
-	private int getScrollBarX() {
-		return width - SCREEN_MARGIN - SCROLL_BAR_WIDTH;
-	}
-
-	private boolean isMouseOverScrollBar(double mouseX, double mouseY) {
-		return mouseX >= getScrollBarX() && mouseX < getScrollBarX() + SCROLL_BAR_WIDTH
-				&& mouseY >= LIST_TOP_Y && mouseY < height - LIST_BOTTOM_MARGIN;
-	}
-
-	private boolean isMouseOverScrollBarThumb(double mouseX, double mouseY) {
-		ScrollBarThumb thumb = calculateScrollBarThumb();
-		if (thumb == null) {
-			return false;
-		}
-		return mouseY >= thumb.y && mouseY < thumb.y + thumb.height;
-	}
-
-	private void updateScrollOffsetFromMouseY(double mouseY) {
-		int total = beeTypes.size();
-		int visible = getVisibleEntryCount();
-		int maxScroll = total - visible;
-		if (maxScroll <= 0) {
-			return;
-		}
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int trackHeight = listBottom - LIST_TOP_Y;
-		ScrollBarThumb thumb = calculateScrollBarThumb();
-		if (thumb == null) {
-			return;
-		}
-		int available = trackHeight - thumb.height;
-		if (available <= 0) {
-			return;
-		}
-		double relative = mouseY - LIST_TOP_Y - thumb.height / 2.0;
-		int offset = (int) Math.round(relative * maxScroll / available);
-		scrollOffset = Math.max(0, Math.min(maxScroll, offset));
 	}
 
 	private void renderInputHint(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -591,7 +590,7 @@ public final class FilterListScreen extends Screen {
 			scrollOffset = Math.min(Math.max(0, beeTypes.size() - getVisibleEntryCount()), scrollOffset + 1);
 		}
 		// 仅重建条目删除按钮，避免全量 rebuildWidgets 重建搜索框/模式按钮等无关组件
-		rebuildEntryButtonsOnly();
+		dragHandler.rebuildEntryButtonsOnly();
 		return true;
 	}
 
@@ -602,14 +601,7 @@ public final class FilterListScreen extends Screen {
 		}
 
 		// 滚动条交互：左键拖动滑块，点击轨道空白处快速跳转到对应位置
-		if (button == 0 && beeTypes.size() > getVisibleEntryCount() && isMouseOverScrollBar(mouseX, mouseY)) {
-			if (isMouseOverScrollBarThumb(mouseX, mouseY)) {
-				isDraggingScrollBar = true;
-			} else {
-				updateScrollOffsetFromMouseY(mouseY);
-				// 点击轨道跳转后重建删除按钮以匹配新的可见条目
-				rebuildEntryButtonsOnly();
-			}
+		if (dragHandler.handleScrollbarClick(mouseX, mouseY, button)) {
 			return true;
 		}
 
@@ -629,7 +621,7 @@ public final class FilterListScreen extends Screen {
 		// 拖拽手柄
 		Integer dragIndex = renderer.getDragHandleIndex(mouseX, mouseY, beeTypes, scrollOffset);
 		if (button == 0 && dragIndex != null) {
-			startDrag(dragIndex);
+			dragHandler.startDrag(dragIndex);
 			return true;
 		}
 
@@ -638,12 +630,8 @@ public final class FilterListScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-		if (isDraggingScrollBar && button == 0) {
-			updateScrollOffsetFromMouseY(mouseY);
-			return true;
-		}
-		if (isDragging && button == 0) {
-			dragInsertIndex = renderer.getInsertionIndex(mouseY, beeTypes, scrollOffset);
+		// 委托拖拽与滚动条拖拽逻辑给 DragHandler（Task 11 修复保留于处理器内）
+		if (dragHandler.handleMouseDragged(mouseX, mouseY, button)) {
 			return true;
 		}
 		return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -651,38 +639,10 @@ public final class FilterListScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		if (isDraggingScrollBar && button == 0) {
-			isDraggingScrollBar = false;
-			// 滚动条拖拽期间 scrollOffset 连续变化，释放时统一重建删除按钮以匹配当前可见条目
-			rebuildEntryButtonsOnly();
-			return true;
-		}
-		if (isDragging && button == 0) {
-			finishDrag();
+		if (dragHandler.handleMouseReleased(mouseX, mouseY, button)) {
 			return true;
 		}
 		return super.mouseReleased(mouseX, mouseY, button);
-	}
-
-	private void startDrag(int index) {
-		this.dragSourceIndex = index;
-		this.dragInsertIndex = index;
-		this.isDragging = true;
-	}
-
-	private void finishDrag() {
-		if (dragSourceIndex >= 0 && dragSourceIndex < beeTypes.size() && dragInsertIndex != dragSourceIndex) {
-			int target = Math.max(0, Math.min(beeTypes.size(), dragInsertIndex));
-			String moved = beeTypes.remove(dragSourceIndex);
-			if (target > dragSourceIndex) {
-				target--;
-			}
-			beeTypes.add(target, moved);
-		}
-		isDragging = false;
-		dragSourceIndex = -1;
-		dragInsertIndex = -1;
-		rebuildWidgets();
 	}
 
 	private void toggleHeaderCheckbox() {
@@ -786,14 +746,21 @@ public final class FilterListScreen extends Screen {
 
 	private void saveAndClose() {
 		try {
-			ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(beeTypes);
-			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
-			// NeoForge ConfigValue.set 只修改内存中的配置对象，必须调用 spec.save() 才能真正写回 .toml 文件
-			ModConfig.SERVER_SPEC.save();
-			ProductiveBeesGenesis.LOGGER.info("已保存万象创世过滤配置：模式={}, 条目数={}", filterMode, beeTypes.size());
+			// Task 12: 多人游戏下客户端无法直接修改 SERVER 配置 — 客户端的 SERVER 配置只是
+			// NeoForge 在配置阶段下发的只读同步副本，直接 ConfigValue.set() 仅修改本地副本，
+			// 不会同步到服务端，下次同步还会被覆盖。
+			// 通过自定义数据包将编辑结果发送到服务端，由服务端校验权限与数据后写入配置并持久化，
+			// 再由 NeoForge 原生 ConfigSync 同步到所有客户端（包括发起者）。
+			// 单机模式同样走此流程（集成服务器的内存连接，无额外网络开销）。
+			PacketDistributor.sendToServer(new FilterConfigSyncPayload(
+					filterMode.name(),
+					beeTypes
+			));
+			ProductiveBeesGenesis.LOGGER.info("已发送万象创世过滤配置同步包：模式={}, 条目数={}",
+					filterMode, beeTypes.size());
 		} catch (Exception e) {
-			// 配置保存失败时记录日志，不阻断关闭
-			ProductiveBeesGenesis.LOGGER.error("保存过滤配置失败", e);
+			// 数据包发送失败时记录日志，不阻断关闭
+			ProductiveBeesGenesis.LOGGER.error("发送过滤配置同步包失败", e);
 		}
 		onClose();
 	}
