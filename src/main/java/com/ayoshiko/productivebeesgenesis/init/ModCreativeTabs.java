@@ -22,50 +22,50 @@ import java.util.function.Supplier;
  */
 public final class ModCreativeTabs {
 
-    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
-            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, ProductiveBeesGenesis.MOD_ID);
+	public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
+			DeferredRegister.create(Registries.CREATIVE_MODE_TAB, ProductiveBeesGenesis.MOD_ID);
 
-    /** 模组标签页 */
-    public static final Supplier<CreativeModeTab> MEK_CENTRIFUGE_TAB = CREATIVE_MODE_TABS.register(
-            "mek_centrifuge_tab",
-            () -> CreativeModeTab.builder()
-                    .title(Component.translatable("itemGroup.productivebeesgenesis"))
-                    .icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
-                    .displayItems((parameters, output) -> {
-                        // 模组核心物品：无尽·创世蜜脾、蜜脾块、寰宇支配之剑复刻
-                        output.accept(ModItems.INFINITY_CREATION_COMB.get());
-                        output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
-                        output.accept(ModItems.INFINITY_SWORD_REPLICA.get());
-                        // 添加所有MEK离心机方块
-                        output.accept(ModItems.MEK_CENTRIFUGE.get());
-                        output.accept(ModItems.BASIC_MEK_CENTRIFUGE_FACTORY.get());
-                        output.accept(ModItems.ADVANCED_MEK_CENTRIFUGE_FACTORY.get());
-                        output.accept(ModItems.ELITE_MEK_CENTRIFUGE_FACTORY.get());
-                        output.accept(ModItems.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get());
-                        // EM加载时添加所有EM等级工厂方块
-                        if (MekCompatHooks.isEvolvedMekanismLoaded()) {
-                            for (Map.Entry<FactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
-                                    ModItems.EM_FACTORY_ITEMS.entrySet()) {
-                                output.accept(entry.getValue().get());
-                            }
-                        }
-                        // ME加载时添加所有ME等级工厂方块
-                        if (MekCompatHooks.isMekanismExtrasLoaded()) {
-                            for (Map.Entry<com.jerry.mekextras.common.tier.ExtraFactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
-                                    ModItems.ME_FACTORY_ITEMS.entrySet()) {
-                                output.accept(entry.getValue().get());
-                            }
-                        }
-                        // EME加载时添加所有EME等级工厂方块
-                        if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-                            for (Map.Entry<io.github.masyumero.emextras.common.tier.EMExtraFactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
-                                    ModItems.EME_FACTORY_ITEMS.entrySet()) {
-                                output.accept(entry.getValue().get());
-                            }
-                        }
-                    })
-                    .build()
-    );
+	/** 模组标签页 */
+	public static final Supplier<CreativeModeTab> MEK_CENTRIFUGE_TAB = CREATIVE_MODE_TABS.register(
+			"mek_centrifuge_tab",
+			() -> CreativeModeTab.builder()
+					.title(Component.translatable("itemGroup.productivebeesgenesis"))
+					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
+					.displayItems((parameters, output) -> {
+						// 模组核心物品：无尽·创世蜜脾、蜜脾块、寰宇支配之剑复刻
+						output.accept(ModItems.INFINITY_CREATION_COMB.get());
+						output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
+						output.accept(ModItems.INFINITY_SWORD_REPLICA.get());
+						// 添加所有MEK离心机方块
+						output.accept(ModItems.MEK_CENTRIFUGE.get());
+						output.accept(ModItems.BASIC_MEK_CENTRIFUGE_FACTORY.get());
+						output.accept(ModItems.ADVANCED_MEK_CENTRIFUGE_FACTORY.get());
+						output.accept(ModItems.ELITE_MEK_CENTRIFUGE_FACTORY.get());
+						output.accept(ModItems.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get());
+						// EM加载时添加所有EM等级工厂方块
+						if (MekCompatHooks.isEvolvedMekanismLoaded()) {
+							for (Map.Entry<FactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
+									ModItems.EM_FACTORY_ITEMS.entrySet()) {
+								output.accept(entry.getValue().get());
+							}
+						}
+						// ME加载时添加所有ME等级工厂方块
+						if (MekCompatHooks.isMekanismExtrasLoaded()) {
+							for (Map.Entry<com.jerry.mekextras.common.tier.ExtraFactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
+									ModItems.ME_FACTORY_ITEMS.entrySet()) {
+								output.accept(entry.getValue().get());
+							}
+						}
+						// EME加载时添加所有EME等级工厂方块
+						if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+							for (Map.Entry<io.github.masyumero.emextras.common.tier.EMExtraFactoryTier, DeferredItem<ItemBlockMekCentrifuge>> entry :
+									ModItems.EME_FACTORY_ITEMS.entrySet()) {
+								output.accept(entry.getValue().get());
+							}
+						}
+					})
+					.build()
+	);
 
-    private ModCreativeTabs() {}
+	private ModCreativeTabs() {}
 }

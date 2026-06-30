@@ -45,48 +45,48 @@ import java.util.function.Supplier;
 @Mixin(value = ExtraFactory.class, remap = false, priority = 1200)
 public abstract class MixinExtraFactoryForEME extends BlockType {
 
-    private MixinExtraFactoryForEME() {
-        super(null);
-    }
+	private MixinExtraFactoryForEME() {
+		super(null);
+	}
 
-    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
-                                               ExtraMachine.ExtraFactoryMachine<?> origMachine,
-                                               ExtraFactoryTier tier, CallbackInfo ci) {
-        if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-            return;
-        }
-        // 仅处理ABSOLUTE等级（ME → EME的入口等级）
-        if (tier != ExtraFactoryTier.ABSOLUTE) {
-            return;
-        }
-        // 仅处理SMELTING类型
-        if (get(AttributeFactoryType.class) == null
-                || get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
-            return;
-        }
-        // 通过description前缀判断origMachine是否为我们的离心机工厂
-        // 防御性检查：getDescription() 可能返回 null
-        var description = origMachine.getDescription();
-        if (description == null) {
-            return;
-        }
-        String desc = description.getTranslationKey();
-        if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
-            return;
-        }
-        // 添加EMExtraAttributeUpgradeable指向ABSOLUTE_OVERCLOCKED离心机工厂
-        DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
-                ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
-                        "absolute_overclocked_emextra_mek_centrifuge_factory"));
-        // 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
-        var key = blockHolder.getKey();
-        if (key == null) return;
-        DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-                net.minecraft.core.registries.Registries.ITEM, key.location());
-        @SuppressWarnings("unchecked")
-        Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
-                (DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);
-        this.add(new EMExtraAttributeUpgradeable(broSupplier));
-    }
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
+											   ExtraMachine.ExtraFactoryMachine<?> origMachine,
+											   ExtraFactoryTier tier, CallbackInfo ci) {
+		if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			return;
+		}
+		// 仅处理ABSOLUTE等级（ME → EME的入口等级）
+		if (tier != ExtraFactoryTier.ABSOLUTE) {
+			return;
+		}
+		// 仅处理SMELTING类型
+		if (get(AttributeFactoryType.class) == null
+				|| get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
+			return;
+		}
+		// 通过description前缀判断origMachine是否为我们的离心机工厂
+		// 防御性检查：getDescription() 可能返回 null
+		var description = origMachine.getDescription();
+		if (description == null) {
+			return;
+		}
+		String desc = description.getTranslationKey();
+		if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
+			return;
+		}
+		// 添加EMExtraAttributeUpgradeable指向ABSOLUTE_OVERCLOCKED离心机工厂
+		DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
+				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+						"absolute_overclocked_emextra_mek_centrifuge_factory"));
+		// 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
+		var key = blockHolder.getKey();
+		if (key == null) return;
+		DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
+				net.minecraft.core.registries.Registries.ITEM, key.location());
+		@SuppressWarnings("unchecked")
+		Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
+				(DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);
+		this.add(new EMExtraAttributeUpgradeable(broSupplier));
+	}
 }

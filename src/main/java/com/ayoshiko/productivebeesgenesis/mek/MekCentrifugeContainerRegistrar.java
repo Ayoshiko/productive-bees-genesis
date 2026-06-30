@@ -38,130 +38,130 @@ import net.minecraft.core.registries.Registries;
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public class MekCentrifugeContainerRegistrar {
 
-    private MekCentrifugeContainerRegistrar() {}
+	private MekCentrifugeContainerRegistrar() {}
 
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void registerContainers(RegisterEvent event) {
-        if (!event.getRegistryKey().equals(Registries.ITEM)) {
-            return;
-        }
-        for (var entry : ModItems.ITEMS.getEntries()) {
-            Item item = entry.get();
-            if (item instanceof ItemBlockMekCentrifuge mekItem) {
-                registerContainerCreators(mekItem);
-            }
-        }
-    }
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void registerContainers(RegisterEvent event) {
+		if (!event.getRegistryKey().equals(Registries.ITEM)) {
+			return;
+		}
+		for (var entry : ModItems.ITEMS.getEntries()) {
+			Item item = entry.get();
+			if (item instanceof ItemBlockMekCentrifuge mekItem) {
+				registerContainerCreators(mekItem);
+			}
+		}
+	}
 
-    private static void registerContainerCreators(ItemBlockMekCentrifuge item) {
-        MekCentrifugeBlock<?, ?> block = item.getBlock();
+	private static void registerContainerCreators(ItemBlockMekCentrifuge item) {
+		MekCentrifugeBlock<?, ?> block = item.getBlock();
 
-        if (Attribute.has(block, AttributeEnergy.class)) {
-            ContainerType.ENERGY.addDefaultCreators(null, item, () ->
-                    item.buildDefaultEnergyContainers(EnergyContainersBuilder.builder()).build(),
-                    MekanismConfig.storage, MekanismConfig.usage);
-        }
+		if (Attribute.has(block, AttributeEnergy.class)) {
+			ContainerType.ENERGY.addDefaultCreators(null, item, () ->
+					item.buildDefaultEnergyContainers(EnergyContainersBuilder.builder()).build(),
+					MekanismConfig.storage, MekanismConfig.usage);
+		}
 
-        // ITEM — 根据工厂类型获取进程数
-        FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
-        ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
-        EMExtraAttributeTier<?> emeAttrTier = Attribute.get(block, EMExtraAttributeTier.class);
+		// ITEM — 根据工厂类型获取进程数
+		FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
+		ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
+		EMExtraAttributeTier<?> emeAttrTier = Attribute.get(block, EMExtraAttributeTier.class);
 
-        int processes = 0;
-        if (factoryTier != null) {
-            processes = factoryTier.processes;
-        } else if (extraAttrTier != null) {
-            if (extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
-                processes = eft.processes;
-            }
-        } else if (emeAttrTier != null) {
-            if (emeAttrTier.tier() instanceof EMExtraFactoryTier emeft) {
-                processes = emeft.processes;
-            }
-        }
+		int processes = 0;
+		if (factoryTier != null) {
+			processes = factoryTier.processes;
+		} else if (extraAttrTier != null) {
+			if (extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
+				processes = eft.processes;
+			}
+		} else if (emeAttrTier != null) {
+			if (emeAttrTier.tier() instanceof EMExtraFactoryTier emeft) {
+				processes = emeft.processes;
+			}
+		}
 
-        if (processes > 0) {
-            int finalProcesses = processes;
-            ContainerType.ITEM.addDefaultCreators(null, item, () ->
-                    buildFactoryItemSlots(finalProcesses));
-        } else {
-            ContainerType.ITEM.addDefaultCreators(null, item, MekCentrifugeContainerRegistrar::buildCentrifugeItemSlots);
-        }
+		if (processes > 0) {
+			int finalProcesses = processes;
+			ContainerType.ITEM.addDefaultCreators(null, item, () ->
+					buildFactoryItemSlots(finalProcesses));
+		} else {
+			ContainerType.ITEM.addDefaultCreators(null, item, MekCentrifugeContainerRegistrar::buildCentrifugeItemSlots);
+		}
 
-        ContainerType.FLUID.addDefaultCreators(null, item, () ->
-                FluidTanksBuilder.builder()
-                        .addBasic(10000)
-                        .build());
-    }
+		ContainerType.FLUID.addDefaultCreators(null, item, () ->
+				FluidTanksBuilder.builder()
+						.addBasic(10000)
+						.build());
+	}
 
-    private static ItemSlotListCreator buildCentrifugeItemSlots() {
-        return new ItemSlotListCreator(List.of(
-                (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                        ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrue()),
-                (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                        ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
-                (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                        ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
-                (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                        ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
-                createEnergySlotCreator()
-        ));
-    }
+	private static ItemSlotListCreator buildCentrifugeItemSlots() {
+		return new ItemSlotListCreator(List.of(
+				(type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+						ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrue()),
+				(type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+						ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
+				(type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+						ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
+				(type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+						ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()),
+				createEnergySlotCreator()
+		));
+	}
 
-    private static ItemSlotListCreator buildFactoryItemSlots(int processes) {
-        List<IBasicContainerCreator<? extends ComponentBackedInventorySlot>> creators = new ArrayList<>();
+	private static ItemSlotListCreator buildFactoryItemSlots(int processes) {
+		List<IBasicContainerCreator<? extends ComponentBackedInventorySlot>> creators = new ArrayList<>();
 
-        for (int i = 0; i < processes; i++) {
-            creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                    ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrue()));
-            creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                    ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
-            creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                    ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
-            creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                    ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
-        }
+		for (int i = 0; i < processes; i++) {
+			creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+					ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrue()));
+			creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+					ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
+			creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+					ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
+			creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+					ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
+		}
 
-        creators.add(createEnergySlotCreator());
+		creators.add(createEnergySlotCreator());
 
-        return new ItemSlotListCreator(creators);
-    }
+		return new ItemSlotListCreator(creators);
+	}
 
-    private static IBasicContainerCreator<ComponentBackedInventorySlot> createEnergySlotCreator() {
-        return (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-                (stack, automationType) -> automationType == AutomationType.MANUAL
-                        || !EnergyCompatUtils.hasStrictEnergyHandler(stack)
-                        && EnergyInventorySlot.getPotentialConversion(null, stack) == 0L,
-                (stack, automationType) -> EnergyCompatUtils.hasStrictEnergyHandler(stack)
-                        || EnergyInventorySlot.getPotentialConversion(null, stack) > 0L,
-                stack -> EnergyCompatUtils.hasStrictEnergyHandler(stack)
-                        || EnergyInventorySlot.getPotentialConversion(null, stack) > 0L);
-    }
+	private static IBasicContainerCreator<ComponentBackedInventorySlot> createEnergySlotCreator() {
+		return (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+				(stack, automationType) -> automationType == AutomationType.MANUAL
+						|| !EnergyCompatUtils.hasStrictEnergyHandler(stack)
+						&& EnergyInventorySlot.getPotentialConversion(null, stack) == 0L,
+				(stack, automationType) -> EnergyCompatUtils.hasStrictEnergyHandler(stack)
+						|| EnergyInventorySlot.getPotentialConversion(null, stack) > 0L,
+				stack -> EnergyCompatUtils.hasStrictEnergyHandler(stack)
+						|| EnergyInventorySlot.getPotentialConversion(null, stack) > 0L);
+	}
 
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void modifyDefaultComponents(ModifyDefaultComponentsEvent event) {
-        for (var entry : ModItems.ITEMS.getEntries()) {
-            Item item = entry.get();
-            if (item instanceof ItemBlockMekCentrifuge) {
-                if (ContainerType.anySupports(entry)) {
-                    event.modify(entry.get(), builder -> {
-                        for (ContainerType<?, ?, ?> type : ContainerType.TYPES) {
-                            type.addDefault(entry, builder);
-                        }
-                    });
-                }
-            }
-        }
-    }
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void modifyDefaultComponents(ModifyDefaultComponentsEvent event) {
+		for (var entry : ModItems.ITEMS.getEntries()) {
+			Item item = entry.get();
+			if (item instanceof ItemBlockMekCentrifuge) {
+				if (ContainerType.anySupports(entry)) {
+					event.modify(entry.get(), builder -> {
+						for (ContainerType<?, ?, ?> type : ContainerType.TYPES) {
+							type.addDefault(entry, builder);
+						}
+					});
+				}
+			}
+		}
+	}
 
-    private static class ItemSlotListCreator extends BaseContainerCreator<AttachedItems, ComponentBackedInventorySlot> {
-        ItemSlotListCreator(List<IBasicContainerCreator<? extends ComponentBackedInventorySlot>> creators) {
-            super(creators);
-        }
+	private static class ItemSlotListCreator extends BaseContainerCreator<AttachedItems, ComponentBackedInventorySlot> {
+		ItemSlotListCreator(List<IBasicContainerCreator<? extends ComponentBackedInventorySlot>> creators) {
+			super(creators);
+		}
 
-        @Override
-        public AttachedItems initStorage(int containers) {
-            return AttachedItems.create(containers);
-        }
-    }
+		@Override
+		public AttachedItems initStorage(int containers) {
+			return AttachedItems.create(containers);
+		}
+	}
 }

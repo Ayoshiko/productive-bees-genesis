@@ -38,46 +38,46 @@ import java.util.function.Supplier;
 @Mixin(value = EMExtraFactory.class, remap = false, priority = 1100)
 public abstract class MixinEMExtraFactory extends BlockType {
 
-    private MixinEMExtraFactory() {
-        super(null);
-    }
+	private MixinEMExtraFactory() {
+		super(null);
+	}
 
-    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
-                                               EMExtraMachine.EMExtraFactoryMachine<?> origMachine,
-                                               EMExtraFactoryTier tier, CallbackInfo ci) {
-        if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-            return;
-        }
-        // 通过description前缀判断origMachine是否为我们的离心机工厂
-        // 防御性检查：getDescription() 可能返回 null
-        var description = origMachine.getDescription();
-        if (description == null) {
-            return;
-        }
-        String desc = description.getTranslationKey();
-        if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
-            return;
-        }
-        // 移除EMExtraFactory构造器添加的EMExtraAttributeUpgradeable（指向EME原版电力熔炼炉工厂）
-        this.remove(EMExtraAttributeUpgradeable.class);
-        // 添加指向我们的EME离心机工厂的EMExtraAttributeUpgradeable
-        EMExtraFactoryTier[] tiers = EMExtraFactoryTier.values();
-        if (tier.ordinal() < tiers.length - 1) {
-            EMExtraFactoryTier nextTier = tiers[tier.ordinal() + 1];
-            String nextTierName = nextTier.getEMExtraTier().getLowerName();
-            DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
-                    ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
-                            nextTierName + "_emextra_mek_centrifuge_factory"));
-            // 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
-            var key = blockHolder.getKey();
-            if (key == null) return;
-            DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-                    Registries.ITEM, key.location());
-            @SuppressWarnings("unchecked")
-            Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
-                    (DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);
-            this.add(new EMExtraAttributeUpgradeable(broSupplier));
-        }
-    }
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
+											   EMExtraMachine.EMExtraFactoryMachine<?> origMachine,
+											   EMExtraFactoryTier tier, CallbackInfo ci) {
+		if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			return;
+		}
+		// 通过description前缀判断origMachine是否为我们的离心机工厂
+		// 防御性检查：getDescription() 可能返回 null
+		var description = origMachine.getDescription();
+		if (description == null) {
+			return;
+		}
+		String desc = description.getTranslationKey();
+		if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
+			return;
+		}
+		// 移除EMExtraFactory构造器添加的EMExtraAttributeUpgradeable（指向EME原版电力熔炼炉工厂）
+		this.remove(EMExtraAttributeUpgradeable.class);
+		// 添加指向我们的EME离心机工厂的EMExtraAttributeUpgradeable
+		EMExtraFactoryTier[] tiers = EMExtraFactoryTier.values();
+		if (tier.ordinal() < tiers.length - 1) {
+			EMExtraFactoryTier nextTier = tiers[tier.ordinal() + 1];
+			String nextTierName = nextTier.getEMExtraTier().getLowerName();
+			DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
+					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+							nextTierName + "_emextra_mek_centrifuge_factory"));
+			// 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
+			var key = blockHolder.getKey();
+			if (key == null) return;
+			DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
+					Registries.ITEM, key.location());
+			@SuppressWarnings("unchecked")
+			Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
+					(DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);
+			this.add(new EMExtraAttributeUpgradeable(broSupplier));
+		}
+	}
 }

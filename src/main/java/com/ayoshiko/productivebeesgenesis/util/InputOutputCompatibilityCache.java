@@ -34,119 +34,119 @@ import net.minecraft.world.level.Level;
  */
 public class InputOutputCompatibilityCache {
 
-    /** 默认缓存有效期（tick） */
-    public static final int DEFAULT_TTL = 20;
+	/** 默认缓存有效期（tick） */
+	public static final int DEFAULT_TTL = 20;
 
-    /**
-     * 输出槽指纹 — Item + beeType，不含 count
-     * <br/>
-     * 与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），
-     * 避免输出槽数量变化时误触发缓存失效。{@link Item} 为注册单例，identity equals；
-     * {@link ResourceLocation} equals 为值比较。
-     */
-    private record SlotFingerprint(Item item, @Nullable ResourceLocation beeType) {
-        static final SlotFingerprint EMPTY = new SlotFingerprint(Items.AIR, null);
+	/**
+	 * 输出槽指纹 — Item + beeType，不含 count
+	 * <br/>
+	 * 与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），
+	 * 避免输出槽数量变化时误触发缓存失效。{@link Item} 为注册单例，identity equals；
+	 * {@link ResourceLocation} equals 为值比较。
+	 */
+	private record SlotFingerprint(Item item, @Nullable ResourceLocation beeType) {
+		static final SlotFingerprint EMPTY = new SlotFingerprint(Items.AIR, null);
 
-        /** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
-        static SlotFingerprint of(ItemStack stack) {
-            if (stack.isEmpty()) {
-                return EMPTY;
-            }
-            Item item = stack.getItem();
-            // configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
-            if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-                return new SlotFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
-            }
-            return new SlotFingerprint(item, null);
-        }
-    }
+		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
+		static SlotFingerprint of(ItemStack stack) {
+			if (stack.isEmpty()) {
+				return EMPTY;
+			}
+			Item item = stack.getItem();
+			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
+			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+				return new SlotFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
+			}
+			return new SlotFingerprint(item, null);
+		}
+	}
 
-    private final int ttlTicks;
+	private final int ttlTicks;
 
-    /** 上次缓存的输入/输出指纹（替代 ItemStack 副本，降低内存与哈希开销） */
-    private SlotFingerprint cachedInputFp = SlotFingerprint.EMPTY;
-    private SlotFingerprint cachedOutputFp = SlotFingerprint.EMPTY;
-    private SlotFingerprint cachedSecondaryFp = SlotFingerprint.EMPTY;
+	/** 上次缓存的输入/输出指纹（替代 ItemStack 副本，降低内存与哈希开销） */
+	private SlotFingerprint cachedInputFp = SlotFingerprint.EMPTY;
+	private SlotFingerprint cachedOutputFp = SlotFingerprint.EMPTY;
+	private SlotFingerprint cachedSecondaryFp = SlotFingerprint.EMPTY;
 
-    /**
-     * 上次缓存的输入/输出原引用（identity 短路用）
-     * <br/>
-     * 自动化模组高频探测同一组槽位时往往传入同一组 ItemStack 实例，
-     * 此时直接返回缓存结果，跳过 {@link SlotFingerprint#of(ItemStack)} 的组件读取。
-     */
-    private ItemStack cachedInputIdentity = ItemStack.EMPTY;
-    private ItemStack cachedOutputIdentity = ItemStack.EMPTY;
-    private ItemStack cachedSecondaryIdentity = ItemStack.EMPTY;
+	/**
+	 * 上次缓存的输入/输出原引用（identity 短路用）
+	 * <br/>
+	 * 自动化模组高频探测同一组槽位时往往传入同一组 ItemStack 实例，
+	 * 此时直接返回缓存结果，跳过 {@link SlotFingerprint#of(ItemStack)} 的组件读取。
+	 */
+	private ItemStack cachedInputIdentity = ItemStack.EMPTY;
+	private ItemStack cachedOutputIdentity = ItemStack.EMPTY;
+	private ItemStack cachedSecondaryIdentity = ItemStack.EMPTY;
 
-    private boolean cachedResult = false;
-    private long cachedAt = -1L;
+	private boolean cachedResult = false;
+	private long cachedAt = -1L;
 
-    public InputOutputCompatibilityCache() {
-        this(DEFAULT_TTL);
-    }
+	public InputOutputCompatibilityCache() {
+		this(DEFAULT_TTL);
+	}
 
-    public InputOutputCompatibilityCache(int ttlTicks) {
-        this.ttlTicks = ttlTicks;
-    }
+	public InputOutputCompatibilityCache(int ttlTicks) {
+		this.ttlTicks = ttlTicks;
+	}
 
-    /**
-     * 获取缓存结果，过期或任一输入/输出状态变更时调用 validator 重新计算
-     *
-     * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
-     * @param input     待投入输入槽的物品
-     * @param output    主输出槽当前内容
-     * @param secondary 副输出槽当前内容（可为空）
-     * @param validator 实际校验逻辑
-     * @return 校验结果
-     */
-    public boolean get(@Nullable Level level, @Nullable ItemStack input,
-                       @Nullable ItemStack output, @Nullable ItemStack secondary,
-                       Supplier<Boolean> validator) {
-        if (level == null || input == null || output == null) {
-            return validator.get();
-        }
-        long now = level.getGameTime();
-        // identity 短路，同一引用组且未过期时直接返回缓存结果
-        boolean identityMatch = input == cachedInputIdentity
-                && output == cachedOutputIdentity
-                && secondary == cachedSecondaryIdentity;
-        if (cachedAt >= 0 && now - cachedAt < ttlTicks && identityMatch) {
-            return cachedResult;
-        }
-        // 指纹比对（不含 count，与原 isSameItemSameComponents 语义一致）
-        SlotFingerprint inputFp = SlotFingerprint.of(input);
-        SlotFingerprint outputFp = SlotFingerprint.of(output);
-        SlotFingerprint secondaryFp = SlotFingerprint.of(secondary == null ? ItemStack.EMPTY : secondary);
-        if (cachedAt >= 0 && now - cachedAt < ttlTicks
-                && inputFp.equals(cachedInputFp)
-                && outputFp.equals(cachedOutputFp)
-                && secondaryFp.equals(cachedSecondaryFp)) {
-            // 指纹命中时也更新 identity 引用，加速下次 identity 短路
-            cachedInputIdentity = input;
-            cachedOutputIdentity = output;
-            cachedSecondaryIdentity = secondary;
-            return cachedResult;
-        }
-        // 未命中 — 重新校验并缓存指纹
-        cachedInputFp = inputFp;
-        cachedOutputFp = outputFp;
-        cachedSecondaryFp = secondaryFp;
-        cachedInputIdentity = input;
-        cachedOutputIdentity = output;
-        cachedSecondaryIdentity = secondary;
-        cachedResult = validator.get();
-        cachedAt = now;
-        return cachedResult;
-    }
+	/**
+	 * 获取缓存结果，过期或任一输入/输出状态变更时调用 validator 重新计算
+	 *
+	 * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
+	 * @param input     待投入输入槽的物品
+	 * @param output    主输出槽当前内容
+	 * @param secondary 副输出槽当前内容（可为空）
+	 * @param validator 实际校验逻辑
+	 * @return 校验结果
+	 */
+	public boolean get(@Nullable Level level, @Nullable ItemStack input,
+					   @Nullable ItemStack output, @Nullable ItemStack secondary,
+					   Supplier<Boolean> validator) {
+		if (level == null || input == null || output == null) {
+			return validator.get();
+		}
+		long now = level.getGameTime();
+		// identity 短路，同一引用组且未过期时直接返回缓存结果
+		boolean identityMatch = input == cachedInputIdentity
+				&& output == cachedOutputIdentity
+				&& secondary == cachedSecondaryIdentity;
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks && identityMatch) {
+			return cachedResult;
+		}
+		// 指纹比对（不含 count，与原 isSameItemSameComponents 语义一致）
+		SlotFingerprint inputFp = SlotFingerprint.of(input);
+		SlotFingerprint outputFp = SlotFingerprint.of(output);
+		SlotFingerprint secondaryFp = SlotFingerprint.of(secondary == null ? ItemStack.EMPTY : secondary);
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks
+				&& inputFp.equals(cachedInputFp)
+				&& outputFp.equals(cachedOutputFp)
+				&& secondaryFp.equals(cachedSecondaryFp)) {
+			// 指纹命中时也更新 identity 引用，加速下次 identity 短路
+			cachedInputIdentity = input;
+			cachedOutputIdentity = output;
+			cachedSecondaryIdentity = secondary;
+			return cachedResult;
+		}
+		// 未命中 — 重新校验并缓存指纹
+		cachedInputFp = inputFp;
+		cachedOutputFp = outputFp;
+		cachedSecondaryFp = secondaryFp;
+		cachedInputIdentity = input;
+		cachedOutputIdentity = output;
+		cachedSecondaryIdentity = secondary;
+		cachedResult = validator.get();
+		cachedAt = now;
+		return cachedResult;
+	}
 
-    /** 清空缓存（配方重载、输出槽内容变更等场景调用） */
-    public void clear() {
-        cachedInputFp = SlotFingerprint.EMPTY;
-        cachedOutputFp = SlotFingerprint.EMPTY;
-        cachedSecondaryFp = SlotFingerprint.EMPTY;
-        cachedInputIdentity = ItemStack.EMPTY;
-        cachedOutputIdentity = ItemStack.EMPTY;
-        cachedSecondaryIdentity = ItemStack.EMPTY;
-        cachedAt = -1L;
-    }
+	/** 清空缓存（配方重载、输出槽内容变更等场景调用） */
+	public void clear() {
+		cachedInputFp = SlotFingerprint.EMPTY;
+		cachedOutputFp = SlotFingerprint.EMPTY;
+		cachedSecondaryFp = SlotFingerprint.EMPTY;
+		cachedInputIdentity = ItemStack.EMPTY;
+		cachedOutputIdentity = ItemStack.EMPTY;
+		cachedSecondaryIdentity = ItemStack.EMPTY;
+		cachedAt = -1L;
+	}
 }

@@ -19,23 +19,23 @@ import org.jetbrains.annotations.NotNull;
  */
 public class EMExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory> {
 
-    public EMExtraMekCentrifugeFactoryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv, @NotNull TileEntityEMExtraMekCentrifugeFactory tile) {
-        super(type, id, inv, tile);
-    }
+	public EMExtraMekCentrifugeFactoryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv, @NotNull TileEntityEMExtraMekCentrifugeFactory tile) {
+		super(type, id, inv, tile);
+	}
 
-    /** Y偏移 — 3行输出槽布局需要更大的Y偏移 */
-    @Override
-    protected int getInventoryYOffset() {
-        return 135;
-    }
+	/** Y偏移 — 3行输出槽布局需要更大的Y偏移 */
+	@Override
+	protected int getInventoryYOffset() {
+		return 135;
+	}
 
-    /** X偏移 — 使用EME tier直接存储的inventoryLabelX值 */
-    @Override
-    protected int getInventoryXOffset() {
-        int labelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
-        if (labelX > 0) {
-            return labelX;
-        }
-        return super.getInventoryXOffset();
-    }
+	/** X偏移 — 使用EME tier直接存储的inventoryLabelX值 */
+	@Override
+	protected int getInventoryXOffset() {
+		int labelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
+		if (labelX > 0) {
+			return labelX;
+		}
+		return super.getInventoryXOffset();
+	}
 }

@@ -25,72 +25,72 @@ import net.minecraft.world.level.Level;
  */
 public class ItemInfinitySwordReplica extends SwordItem {
 
-    public static final String MODE_TAG = "mode";
-    public static final String KILL_MODE = "infinity_sword_kill";
+	public static final String MODE_TAG = "mode";
+	public static final String KILL_MODE = "infinity_sword_kill";
 
-    public ItemInfinitySwordReplica(Properties properties) {
-        super(Tiers.NETHERITE, properties.attributes(SwordItem.createAttributes(Tiers.NETHERITE, 2, -2.4F)));
-    }
+	public ItemInfinitySwordReplica(Properties properties) {
+		super(Tiers.NETHERITE, properties.attributes(SwordItem.createAttributes(Tiers.NETHERITE, 2, -2.4F)));
+	}
 
-    @Override
-    public boolean isFoil(ItemStack stack) {
-        return false;
-    }
+	@Override
+	public boolean isFoil(ItemStack stack) {
+		return false;
+	}
 
-    @Override
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        ItemStack heldItem = player.getItemInHand(hand);
-        if (player.isShiftKeyDown()) {
-            boolean activated = switchKillMode(heldItem);
-            if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-                serverPlayer.sendSystemMessage(Component.translatable(
-                        activated
-                                ? "tooltip.productivebeesgenesis.sword_kill_mode.active"
-                                : "tooltip.productivebeesgenesis.sword_kill_mode.inactive"), true);
-            }
-            player.swing(hand);
-            return InteractionResultHolder.sidedSuccess(heldItem, level.isClientSide);
-        }
-        return super.use(level, player, hand);
-    }
+	@Override
+	public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+		ItemStack heldItem = player.getItemInHand(hand);
+		if (player.isShiftKeyDown()) {
+			boolean activated = switchKillMode(heldItem);
+			if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+				serverPlayer.sendSystemMessage(Component.translatable(
+						activated
+								? "tooltip.productivebeesgenesis.sword_kill_mode.active"
+								: "tooltip.productivebeesgenesis.sword_kill_mode.inactive"), true);
+			}
+			player.swing(hand);
+			return InteractionResultHolder.sidedSuccess(heldItem, level.isClientSide);
+		}
+		return super.use(level, player, hand);
+	}
 
-    /**
-     * 切换杀戮模式并返回切换后的状态
-     */
-    private boolean switchKillMode(ItemStack stack) {
-        // 显式取出、修改再写回，避免依赖 ItemStack.update 的返回行为可能为 null
-        CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-        CompoundTag tag = customData.copyTag();
-        CompoundTag modeTag = tag.contains(MODE_TAG, Tag.TAG_COMPOUND)
-                ? tag.getCompound(MODE_TAG)
-                : new CompoundTag();
-        boolean newState = !modeTag.getBoolean(KILL_MODE);
-        modeTag.putBoolean(KILL_MODE, newState);
-        tag.put(MODE_TAG, modeTag);
-        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        return newState;
-    }
+	/**
+	 * 切换杀戮模式并返回切换后的状态
+	 */
+	private boolean switchKillMode(ItemStack stack) {
+		// 显式取出、修改再写回，避免依赖 ItemStack.update 的返回行为可能为 null
+		CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+		CompoundTag tag = customData.copyTag();
+		CompoundTag modeTag = tag.contains(MODE_TAG, Tag.TAG_COMPOUND)
+				? tag.getCompound(MODE_TAG)
+				: new CompoundTag();
+		boolean newState = !modeTag.getBoolean(KILL_MODE);
+		modeTag.putBoolean(KILL_MODE, newState);
+		tag.put(MODE_TAG, modeTag);
+		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+		return newState;
+	}
 
-    /**
-     * 判断当前是否处于杀戮模式
-     */
-    public static boolean isKillModeActive(ItemStack stack) {
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null) {
-            return false;
-        }
-        CompoundTag tag = customData.copyTag();
-        if (!tag.contains(MODE_TAG, Tag.TAG_COMPOUND)) {
-            return false;
-        }
-        return tag.getCompound(MODE_TAG).getBoolean(KILL_MODE);
-    }
+	/**
+	 * 判断当前是否处于杀戮模式
+	 */
+	public static boolean isKillModeActive(ItemStack stack) {
+		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+		if (customData == null) {
+			return false;
+		}
+		CompoundTag tag = customData.copyTag();
+		if (!tag.contains(MODE_TAG, Tag.TAG_COMPOUND)) {
+			return false;
+		}
+		return tag.getCompound(MODE_TAG).getBoolean(KILL_MODE);
+	}
 
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
-        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
-        if (isKillModeActive(stack)) {
-            tooltipComponents.add(Component.translatable("tooltip.productivebeesgenesis.sword_kill_mode.active").withStyle(net.minecraft.ChatFormatting.RED));
-        }
-    }
+	@Override
+	public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
+		super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+		if (isKillModeActive(stack)) {
+			tooltipComponents.add(Component.translatable("tooltip.productivebeesgenesis.sword_kill_mode.active").withStyle(net.minecraft.ChatFormatting.RED));
+		}
+	}
 }

@@ -117,12 +117,12 @@ public class PbRecipeProcessor {
 	/** 本 tick 尚未插入的 PB 配方输出（按 ItemStack key 累加数量） */
 	private final Map<ItemStack, Integer> pendingOutputs = new LinkedHashMap<>(4);
 	/** 当前聚合输出对应的 PB 配方（用于 flush 时按原顺序插入） */
-    @Nullable
-    private CentrifugeRecipe pendingRecipe;
-    /** 当前聚合输出对应的 PB 配方输出表（缓存避免每次重复创建 LinkedHashMap） */
-    @Nullable
-    private Map<ItemStack, ChancedOutput> pendingRecipeOutputs;
-    /** 本 tick 尚未插入的流体输出模板（amount=0） */
+	@Nullable
+	private CentrifugeRecipe pendingRecipe;
+	/** 当前聚合输出对应的 PB 配方输出表（缓存避免每次重复创建 LinkedHashMap） */
+	@Nullable
+	private Map<ItemStack, ChancedOutput> pendingRecipeOutputs;
+	/** 本 tick 尚未插入的流体输出模板（amount=0） */
 	@Nullable
 	private FluidStack pendingFluidTemplate;
 	/** 本 tick 尚未插入的流体输出总量 */
@@ -976,19 +976,19 @@ public class PbRecipeProcessor {
 	}
 
 	/**
-     * 检查指定进程的所有物品输出槽是否已满
-     * <br/>
-     * 满时暂停PB配方处理，避免物品丢失（与MEK原版NOT_ENOUGH_OUTPUT_SPACE行为一致）。
-     * 仅检查物品槽，流体槽满时不暂停（流体溢出量通常较小）。
-     * <p>
-     * Task 5 优化：通过 {@link PbRecipeContext} 接口读取工厂维护的 outputSlotsFull 标志位，
-     * 避免每次调用都遍历输出槽。标志位由工厂的 IContentsListener 触发 updateOutputSlotFlags() 更新。
-     * <p>
-     * Task 23: 使用按进程判断的版本，避免单个进程输出槽满导致所有进程暂停。
-     */
-    private boolean areOutputSlotsFull(int process) {
-        return context.productivebeesgenesis$outputSlotsFull(process);
-    }
+	 * 检查指定进程的所有物品输出槽是否已满
+	 * <br/>
+	 * 满时暂停PB配方处理，避免物品丢失（与MEK原版NOT_ENOUGH_OUTPUT_SPACE行为一致）。
+	 * 仅检查物品槽，流体槽满时不暂停（流体溢出量通常较小）。
+	 * <p>
+	 * Task 5 优化：通过 {@link PbRecipeContext} 接口读取工厂维护的 outputSlotsFull 标志位，
+	 * 避免每次调用都遍历输出槽。标志位由工厂的 IContentsListener 触发 updateOutputSlotFlags() 更新。
+	 * <p>
+	 * Task 23: 使用按进程判断的版本，避免单个进程输出槽满导致所有进程暂停。
+	 */
+	private boolean areOutputSlotsFull(int process) {
+		return context.productivebeesgenesis$outputSlotsFull(process);
+	}
 
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */
 	private void clearPbState(int processIndex) {

@@ -39,76 +39,76 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
 public class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
-    /** 上次执行农夫作物扫描时的游戏刻 */
-    @Unique
-    private long productivebeesgenesis$lastFarmerTick = -1L;
+	/** 上次执行农夫作物扫描时的游戏刻 */
+	@Unique
+	private long productivebeesgenesis$lastFarmerTick = -1L;
 
-    /** 上次执行囤积/收集掉落物扫描时的游戏刻 */
-    @Unique
-    private long productivebeesgenesis$lastHoarderTick = -1L;
+	/** 上次执行囤积/收集掉落物扫描时的游戏刻 */
+	@Unique
+	private long productivebeesgenesis$lastHoarderTick = -1L;
 
-    @Inject(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At("HEAD"),
-            remap = false
-    )
-    private static void productivebeesgenesis$onSimulateBeeHead(
-            ServerLevel pLevel, BlockPos pPos, BlockState state,
-            AdvancedBeehiveBlockEntityAbstract blockEntity, BeehiveBlockEntity.Occupant inhabitant,
-            CallbackInfoReturnable<Entity> cir) {
-        int cooldown = ModConfig.SERVER.advancedBeehiveSimulateCooldown.get();
-        SimulateContext ctx = SimulateContext.enter(cooldown);
-        if (cooldown <= 0 || blockEntity == null) {
-            return;
-        }
-        AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self =
-                (AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
-        long gameTime = pLevel.getGameTime();
-        if (gameTime - self.productivebeesgenesis$lastFarmerTick < cooldown) {
-            ctx.skipFarmer = true;
-        } else {
-            self.productivebeesgenesis$lastFarmerTick = gameTime;
-        }
-        if (gameTime - self.productivebeesgenesis$lastHoarderTick < cooldown) {
-            ctx.skipHoarder = true;
-        } else {
-            self.productivebeesgenesis$lastHoarderTick = gameTime;
-        }
-    }
+	@Inject(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At("HEAD"),
+			remap = false
+	)
+	private static void productivebeesgenesis$onSimulateBeeHead(
+			ServerLevel pLevel, BlockPos pPos, BlockState state,
+			AdvancedBeehiveBlockEntityAbstract blockEntity, BeehiveBlockEntity.Occupant inhabitant,
+			CallbackInfoReturnable<Entity> cir) {
+		int cooldown = ModConfig.SERVER.advancedBeehiveSimulateCooldown.get();
+		SimulateContext ctx = SimulateContext.enter(cooldown);
+		if (cooldown <= 0 || blockEntity == null) {
+			return;
+		}
+		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self =
+				(AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
+		long gameTime = pLevel.getGameTime();
+		if (gameTime - self.productivebeesgenesis$lastFarmerTick < cooldown) {
+			ctx.skipFarmer = true;
+		} else {
+			self.productivebeesgenesis$lastFarmerTick = gameTime;
+		}
+		if (gameTime - self.productivebeesgenesis$lastHoarderTick < cooldown) {
+			ctx.skipHoarder = true;
+		} else {
+			self.productivebeesgenesis$lastHoarderTick = gameTime;
+		}
+	}
 
-    @Inject(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "RETURN"),
-            remap = false
-    )
-    private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
-        SimulateContext.exit();
-    }
+	@Inject(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "RETURN"),
+			remap = false
+	)
+	private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
+		SimulateContext.exit();
+	}
 
-    @Redirect(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;"),
-            remap = false
-    )
-    private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range) {
-        SimulateContext ctx = SimulateContext.get();
-        if (ctx != null && ctx.skipFarmer) {
-            return List.of();
-        }
-        return FarmerBee.findHarvestablesNearby(level, pos, range);
-    }
+	@Redirect(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;"),
+			remap = false
+	)
+	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range) {
+		SimulateContext ctx = SimulateContext.get();
+		if (ctx != null && ctx.skipFarmer) {
+			return List.of();
+		}
+		return FarmerBee.findHarvestablesNearby(level, pos, range);
+	}
 
-    @SuppressWarnings("unchecked")
-    @Redirect(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
-            remap = true
-    )
-    private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb) {
-        SimulateContext ctx = SimulateContext.get();
-        if (ctx != null && ctx.skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
-            return List.of();
-        }
-        return level.getEntitiesOfClass(clazz, aabb);
-    }
+	@SuppressWarnings("unchecked")
+	@Redirect(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
+			remap = true
+	)
+	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb) {
+		SimulateContext ctx = SimulateContext.get();
+		if (ctx != null && ctx.skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
+			return List.of();
+		}
+		return level.getEntitiesOfClass(clazz, aabb);
+	}
 }

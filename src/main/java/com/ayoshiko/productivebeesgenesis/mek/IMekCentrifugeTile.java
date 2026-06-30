@@ -13,29 +13,29 @@ package com.ayoshiko.productivebeesgenesis.mek;
  */
 public interface IMekCentrifugeTile {
 
-    /**
-     * 输出槽内容版本号。
-     * <br/>
-     * 每次输出槽内容发生变化时应递增；Ejector Mixin 通过比较版本号判断是否需要执行
-     * outputItems。服务端单线程访问，实现类可用 volatile 保证可见性。
-     */
-    long productivebeesgenesis$outputContentsVersion();
+	/**
+	 * 输出槽内容版本号。
+	 * <br/>
+	 * 每次输出槽内容发生变化时应递增；Ejector Mixin 通过比较版本号判断是否需要执行
+	 * outputItems。服务端单线程访问，实现类可用 volatile 保证可见性。
+	 */
+	long productivebeesgenesis$outputContentsVersion();
 
-    /**
-     * 返回输出槽是否已满，供 Ejector Mixin 在输出槽满时取消跳过。
-     * <br/>
-     * 当所有物品输出槽均无剩余空间时返回 true；此时若继续跳过 outputItems，可能导致产物积压、机器停机，
-     * 因此 Mixin 会立即重置跳过计数器并尝试输出。
-     */
-    boolean productivebeesgenesis$outputSlotsFull();
+	/**
+	 * 返回输出槽是否已满，供 Ejector Mixin 在输出槽满时取消跳过。
+	 * <br/>
+	 * 当所有物品输出槽均无剩余空间时返回 true；此时若继续跳过 outputItems，可能导致产物积压、机器停机，
+	 * 因此 Mixin 会立即重置跳过计数器并尝试输出。
+	 */
+	boolean productivebeesgenesis$outputSlotsFull();
 
-    /**
-     * 返回所有输出槽的物品总数，供 Ejector Mixin 替代 O(processes×3) 遍历计数。
-     * <br/>
-     * 实现类通过 {@link OutputSlotFlagManager}（工厂）或本地字段（基础机）维护，
-     * 在输出槽内容变更时增量更新，读取为 O(1)。非目标机器默认返回 0。
-     */
-    default long productivebeesgenesis$outputItemCount() {
-        return 0L;
-    }
+	/**
+	 * 返回所有输出槽的物品总数，供 Ejector Mixin 替代 O(processes×3) 遍历计数。
+	 * <br/>
+	 * 实现类通过 {@link OutputSlotFlagManager}（工厂）或本地字段（基础机）维护，
+	 * 在输出槽内容变更时增量更新，读取为 O(1)。非目标机器默认返回 0。
+	 */
+	default long productivebeesgenesis$outputItemCount() {
+		return 0L;
+	}
 }

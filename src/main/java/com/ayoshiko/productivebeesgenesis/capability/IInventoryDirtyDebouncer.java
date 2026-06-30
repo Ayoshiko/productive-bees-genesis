@@ -11,17 +11,17 @@ package com.ayoshiko.productivebeesgenesis.capability;
  */
 public interface IInventoryDirtyDebouncer {
 
-    /**
-     * 标记物品栏在当前游戏刻内已变脏。
-     *
-     * @param gameTime 当前游戏刻（{@code level.getGameTime()}）
-     */
-    void productivebeesgenesis$markInventoryDirty(long gameTime);
+	/**
+	 * 标记物品栏在当前游戏刻内已变脏。
+	 *
+	 * @param gameTime 当前游戏刻（{@code level.getGameTime()}）
+	 */
+	void productivebeesgenesis$markInventoryDirty(long gameTime);
 
-    /**
-     * 若存在待刷新的脏标记，则调用一次 {@code setChanged()} 并清除标记。
-     *
-     * @param gameTime 当前游戏刻（{@code level.getGameTime()}）
-     */
-    void productivebeesgenesis$flushInventoryDirty(long gameTime);
+	/**
+	 * 若存在待刷新的脏标记，则调用一次 {@code setChanged()} 并清除标记。
+	 *
+	 * @param gameTime 当前游戏刻（{@code level.getGameTime()}）
+	 */
+	void productivebeesgenesis$flushInventoryDirty(long gameTime);
 }

@@ -24,18 +24,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe$Serializer")
 public class AdvancedBeehiveRecipeSerializerMixin {
 
-    @Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void productivebeesgenesis$fallbackOnNullIngredient(
-            RegistryFriendlyByteBuf buffer, AdvancedBeehiveRecipe recipe,
-            CallbackInfo ci) {
-        try {
-            if (recipe.ingredient.get() == null) {
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                buffer.writeInt(0); // 空输出列表
-                ci.cancel();
-            }
-        } catch (Exception e) {
-            BeeIngredientFallback.logSerializationError("AdvancedBeehiveRecipe", e);
-        }
-    }
+	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$fallbackOnNullIngredient(
+			RegistryFriendlyByteBuf buffer, AdvancedBeehiveRecipe recipe,
+			CallbackInfo ci) {
+		try {
+			if (recipe.ingredient.get() == null) {
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				buffer.writeInt(0); // 空输出列表
+				ci.cancel();
+			}
+		} catch (Exception e) {
+			BeeIngredientFallback.logSerializationError("AdvancedBeehiveRecipe", e);
+		}
+	}
 }

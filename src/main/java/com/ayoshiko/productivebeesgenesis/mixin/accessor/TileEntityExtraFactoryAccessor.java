@@ -17,15 +17,15 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(value = TileEntityExtraFactory.class, remap = false)
 public interface TileEntityExtraFactoryAccessor {
 
-    /** 暴露activeStates数组 — 用于onUpdateServer中重算整体激活状态 */
-    @Accessor("activeStates")
-    boolean[] productivebeesgenesis$getActiveStates();
+	/** 暴露activeStates数组 — 用于onUpdateServer中重算整体激活状态 */
+	@Accessor("activeStates")
+	boolean[] productivebeesgenesis$getActiveStates();
 
-    /** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
-    @Accessor("lastUsage")
-    void productivebeesgenesis$setLastUsage(long value);
+	/** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
+	@Accessor("lastUsage")
+	void productivebeesgenesis$setLastUsage(long value);
 
-    /** 暴露energySlot — 用于构造函数中重新配置IO和getUpgradeData */
-    @Accessor("energySlot")
-    EnergyInventorySlot productivebeesgenesis$getEnergySlot();
+	/** 暴露energySlot — 用于构造函数中重新配置IO和getUpgradeData */
+	@Accessor("energySlot")
+	EnergyInventorySlot productivebeesgenesis$getEnergySlot();
 }

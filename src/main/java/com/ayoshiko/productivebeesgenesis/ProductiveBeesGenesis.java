@@ -86,12 +86,12 @@ public final class ProductiveBeesGenesis {
 		ModItems.registerEMEFactoryItems();
 
 		// 注册DeferredRegister到事件总线
-        ModBlocks.BLOCKS.register(eventBus);
-        ModBlockEntities.register(eventBus);
-        ModItems.ITEMS.register(eventBus);
-        ModCreativeTabs.CREATIVE_MODE_TABS.register(eventBus);
-        ModStats.register(eventBus);
-        ModMenuTypes.register(eventBus);
+		ModBlocks.BLOCKS.register(eventBus);
+		ModBlockEntities.register(eventBus);
+		ModItems.ITEMS.register(eventBus);
+		ModCreativeTabs.CREATIVE_MODE_TABS.register(eventBus);
+		ModStats.register(eventBus);
+		ModMenuTypes.register(eventBus);
 
 		// 注册配置文件
 		modContainer.registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
@@ -128,6 +128,9 @@ public final class ProductiveBeesGenesis {
 		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后根据 ModConfig
 		// 动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning 配方
 		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+
+		// 服务器停止时注销 JMX MBean，防止重复加载时注册失败
+		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
 
 		LOGGER.info("资源蜜蜂：创世模组初始化完成");
 	}
@@ -166,6 +169,15 @@ public final class ProductiveBeesGenesis {
 				event.getServerResources().getRecipeManager(),
 				event.getRegistryAccess()
 		));
+	}
+
+	/**
+	 * 服务器停止回调 — 注销 JMX MBean，防止重复加载时注册失败
+	 */
+	private void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
+		if (ModConfig.COMMON.enablePerformanceMonitor.get()) {
+			PerformanceMonitor.getInstance().unregisterJMX();
+		}
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {

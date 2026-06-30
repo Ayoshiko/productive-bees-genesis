@@ -19,24 +19,24 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
  */
 public final class CustomConfigScreenFactory implements IConfigScreenFactory {
 
-    @Override
-    public Screen createScreen(ModContainer container, Screen modListScreen) {
-        return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
-            // 仅对服务端配置中的万象创世过滤分组使用自定义编辑器
-            if (type == ModConfig.Type.SERVER && isMyriadCreationsFilterTitle(title)) {
-                return new FilterListScreen(screen);
-            }
-            return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
-        });
-    }
+	@Override
+	public Screen createScreen(ModContainer container, Screen modListScreen) {
+		return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
+			// 仅对服务端配置中的万象创世过滤分组使用自定义编辑器
+			if (type == ModConfig.Type.SERVER && isMyriadCreationsFilterTitle(title)) {
+				return new FilterListScreen(screen);
+			}
+			return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
+		});
+	}
 
-    /**
-     * 判断当前 section 标题是否为“万象创世过滤”
-     * <br/>
-     * 通过翻译后的可见文本匹配，兼容中文与英文客户端。
-     */
-    private static boolean isMyriadCreationsFilterTitle(Component title) {
-        String text = title.getString();
-        return "万象创世过滤".equals(text) || "Myriad Creations Filter".equals(text);
-    }
+	/**
+	 * 判断当前 section 标题是否为“万象创世过滤”
+	 * <br/>
+	 * 通过翻译后的可见文本匹配，兼容中文与英文客户端。
+	 */
+	private static boolean isMyriadCreationsFilterTitle(Component title) {
+		String text = title.getString();
+		return "万象创世过滤".equals(text) || "Myriad Creations Filter".equals(text);
+	}
 }

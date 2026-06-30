@@ -20,20 +20,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeBreedingRecipe$Serializer")
 public class BeeBreedingRecipeSerializerMixin {
 
-    @Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void productivebeesgenesis$fallbackOnNullIngredient(
-            RegistryFriendlyByteBuf buffer, BeeBreedingRecipe recipe,
-            CallbackInfo ci) {
-        try {
-            if (recipe.parent1.get() == null || recipe.parent2.get() == null || recipe.offspring.get() == null) {
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                buffer.writeFloat(recipe.parentDeathChance);
-                ci.cancel();
-            }
-        } catch (Exception e) {
-            BeeIngredientFallback.logSerializationError("BeeBreedingRecipe", e);
-        }
-    }
+	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$fallbackOnNullIngredient(
+			RegistryFriendlyByteBuf buffer, BeeBreedingRecipe recipe,
+			CallbackInfo ci) {
+		try {
+			if (recipe.parent1.get() == null || recipe.parent2.get() == null || recipe.offspring.get() == null) {
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				buffer.writeFloat(recipe.parentDeathChance);
+				ci.cancel();
+			}
+		} catch (Exception e) {
+			BeeIngredientFallback.logSerializationError("BeeBreedingRecipe", e);
+		}
+	}
 }

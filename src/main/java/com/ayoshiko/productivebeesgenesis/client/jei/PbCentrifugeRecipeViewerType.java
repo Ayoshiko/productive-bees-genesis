@@ -26,96 +26,96 @@ import java.util.List;
  * - requiresHolder()返回false，因为PB配方不使用RecipeHolder包装
  */
 public record PbCentrifugeRecipeViewerType(
-        ResourceLocation id,
-        ItemLike iconItem,
-        Component textComponent,
-        Class<? extends CentrifugeRecipe> recipeClass,
-        int xOffset,
-        int yOffset,
-        int width,
-        int height,
-        List<ItemLike> workstations
+		ResourceLocation id,
+		ItemLike iconItem,
+		Component textComponent,
+		Class<? extends CentrifugeRecipe> recipeClass,
+		int xOffset,
+		int yOffset,
+		int width,
+		int height,
+		List<ItemLike> workstations
 ) implements IRecipeViewerRecipeType<CentrifugeRecipe> {
 
-    /**
-     * 构造PB离心配方查看器类型
-     *
-     * @param id            配方类型ID（用于JEI内部标识）
-     * @param iconItem      图标物品（显示在JEI分类标签上）
-     * @param textComponent 分类标题文本
-     * @param iconItem2     工作站物品（作为催化剂注册）
-     */
-    public PbCentrifugeRecipeViewerType(ResourceLocation id, ItemLike iconItem, Component textComponent,
-                                        ItemLike... altWorkstations) {
-        this(id, iconItem, textComponent, CentrifugeRecipe.class,
-                -28, -16, 144, 70,
-                altWorkstations.length == 0 ? List.of(iconItem) : List.of(altWorkstations));
-    }
+	/**
+	 * 构造PB离心配方查看器类型
+	 *
+	 * @param id            配方类型ID（用于JEI内部标识）
+	 * @param iconItem      图标物品（显示在JEI分类标签上）
+	 * @param textComponent 分类标题文本
+	 * @param iconItem2     工作站物品（作为催化剂注册）
+	 */
+	public PbCentrifugeRecipeViewerType(ResourceLocation id, ItemLike iconItem, Component textComponent,
+										ItemLike... altWorkstations) {
+		this(id, iconItem, textComponent, CentrifugeRecipe.class,
+				-28, -16, 144, 70,
+				altWorkstations.length == 0 ? List.of(iconItem) : List.of(altWorkstations));
+	}
 
-    @Override
-    public ResourceLocation id() {
-        return id;
-    }
+	@Override
+	public ResourceLocation id() {
+		return id;
+	}
 
-    @Override
-    public Class<? extends CentrifugeRecipe> recipeClass() {
-        return recipeClass;
-    }
+	@Override
+	public Class<? extends CentrifugeRecipe> recipeClass() {
+		return recipeClass;
+	}
 
-    /**
-     * PB离心配方不使用RecipeHolder包装
-     */
-    @Override
-    public boolean requiresHolder() {
-        return false;
-    }
+	/**
+	 * PB离心配方不使用RecipeHolder包装
+	 */
+	@Override
+	public boolean requiresHolder() {
+		return false;
+	}
 
-    @Override
-    public ItemStack iconStack() {
-        return new ItemStack(iconItem);
-    }
+	@Override
+	public ItemStack iconStack() {
+		return new ItemStack(iconItem);
+	}
 
-    @Nullable
-    @Override
-    public ResourceLocation icon() {
-        // 使用iconStack作为图标，不使用纹理路径
-        return null;
-    }
+	@Nullable
+	@Override
+	public ResourceLocation icon() {
+		// 使用iconStack作为图标，不使用纹理路径
+		return null;
+	}
 
-    @Override
-    public int xOffset() {
-        return xOffset;
-    }
+	@Override
+	public int xOffset() {
+		return xOffset;
+	}
 
-    @Override
-    public int yOffset() {
-        return yOffset;
-    }
+	@Override
+	public int yOffset() {
+		return yOffset;
+	}
 
-    @Override
-    public int width() {
-        return width;
-    }
+	@Override
+	public int width() {
+		return width;
+	}
 
-    @Override
-    public int height() {
-        return height;
-    }
+	@Override
+	public int height() {
+		return height;
+	}
 
-    @Override
-    public List<ItemLike> workstations() {
-        return workstations;
-    }
+	@Override
+	public List<ItemLike> workstations() {
+		return workstations;
+	}
 
-    @Override
-    public Component getTextComponent() {
-        return textComponent;
-    }
+	@Override
+	public Component getTextComponent() {
+		return textComponent;
+	}
 
-    /**
-     * 兼容IHasTextComponent接口（部分Mekanism版本通过此接口获取文本）
-     */
-    public Component getTranslationComponent() {
-        return textComponent;
-    }
+	/**
+	 * 兼容IHasTextComponent接口（部分Mekanism版本通过此接口获取文本）
+	 */
+	public Component getTranslationComponent() {
+		return textComponent;
+	}
 }

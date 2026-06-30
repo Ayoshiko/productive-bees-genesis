@@ -1,82 +1,52 @@
- # ChangeLog
+# Changelog
 
-All notable changes to this project will be documented in this file.
+所有重要变更将记录在此文件中。
 
-## [v1.1.0](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.1.0)
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-### feat
-* 万象创世批量处理规划器 — `MyriadBatchPlanner` 一次计算输出槽最大容量，支持 64+/tick 高倍加速吞吐
-* 输入校验双层缓存 — `InputValidationCache` TTL + identity 短路，减少 SFM/AE2 高频探测开销
-* 输入-输出兼容性指纹缓存 — `InputOutputCompatibilityCache` 用 `SlotFingerprint` 替代 `ItemStack.copy`
-* 蜜脾块配方 O(1) 静态索引 — `CentrifugeRecipeIndex.getCombBlock` 替代全量配方遍历
-* Ejector 单 tick 弹出上限 — `mekCentrifugeEjectMaxPerTick` 限制 256× 加速下 `outputItems` 调用次数
-* Ejector O(1) 输出计数 — `IMekCentrifugeTile.outputItemCount()` 替代 `O(processes×3)` 遍历
-* 基础机万象路径统一 — `TileEntityMekCentrifuge.completeMyriadCreations` 复用 `MyriadBatchPlanner`
+## [1.2.0] - 2026-06-30
 
-### fix
-* 配置系统分层 — 服务端游戏逻辑配置迁移到 `ServerConfig`，客户端仅保留渲染配置，服务端配置无需 `/reload`
-* 启动崩溃 — 修复 `ServerConfig` 在 `FMLCommonSetupEvent` 未加载导致的 `IllegalStateException`
-* 配置界面翻译键 — 补全所有服务端/通用配置分组和字段的中英文翻译键（扁平键名）
-* 性能监控配置位置 — `enablePerformanceMonitor` 放回 `CommonConfig`，避免跨端读取时机问题
+### 新增
+- 为 `PerformanceMonitor` 添加 JMX MBean 注销逻辑，服务器停止时自动注销防止重复加载注册失败
+- 为 13 个缺少 `package-info.java` 的包补充完整的包级文档和注解
+  - `capability`、`command`、`client/jei`、`client/screen`、`client/render/cosmic`、`client/screen/state`
+  - `mixin/accessor`、`mixin/beehive`、`mixin/client`、`mixin/iris`、`mixin/mek`、`mixin/recipe`
+  - `util/beehive`
 
-### refactor
-* `PbRecipeProcessor.ticksForBaseCache` 改为 `ConcurrentHashMap`，提升线程安全
-* `TileComponentEjectorCooldownMixin` 清理 `countOutputItems` 旧遍历逻辑
+### 修复
+- **代码风格统一**：将 72 个 Java 文件的 4 空格缩进统一为 Tab 缩进，符合 minecraft-code-standards 规范
+- **ProductiveBeesGenesis.java**：修复 DeferredRegister 注册块的空格缩进为 Tab
+- **CentrifugeRecipeIndex.java**：`catch (Exception ignored)` 改为记录 debug 级别日志，避免异常被静默吞掉
+- **MekCompatHooks.java**：统一异常日志策略，为 `isEMTierAboveOverclocked`、`isMETier`、`isEMETier` 方法的 `ClassNotFoundException` 和 `NoSuchFieldException|IllegalAccessException` catch 块添加 debug 日志
 
-## [v1.0.0](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.0.0)
+### 变更
+- 版本号从 1.1.0 递增至 1.2.0
 
-### feat
-* 万象创世蜜蜂（Myriad Creations Bee）—— 8秒彩虹渐变、随机产出资源蜜脾 ([588e190](https://github.com/Ayoshiko/productive-bees-genesis/commit/588e190))
-* Mekanism 风格离心机，覆盖17个工厂等级（Mekanism / ME / EM / EME） ([588e190](https://github.com/Ayoshiko/productive-bees-genesis/commit/588e190))
-* 宇宙星空渲染系统，兼容 Iris 光影 ([588e190](https://github.com/Ayoshiko/productive-bees-genesis/commit/588e190))
-* 游戏内蜜蜂过滤配置界面（中英双语） ([588e190](https://github.com/Ayoshiko/productive-bees-genesis/commit/588e190))
-* MixinConfigPlugin 条件加载 ([588e190](https://github.com/Ayoshiko/productive-bees-genesis/commit/588e190))
-* 清理万象创世蜜蜂，优化Mek离心机产物弹出 ([5728165](https://github.com/Ayoshiko/productive-bees-genesis/commit/5728165))
-* 添加可配置的蜜蜂获取方式（钓鱼、繁殖、生成） ([d3fc40c](https://github.com/Ayoshiko/productive-bees-genesis/commit/d3fc40c))
-* 配方O(1)索引 — CentrifugeRecipeIndex 避免每tick全量遍历 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* AE2/管道限流包装器 — RateLimitedItemHandler 防止高频拉取导致tick延迟 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 蜂箱产物路径优化 — BeeHelperMixin 短期缓存+对象池+合并堆叠+可选节流 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* hasCentrifugeRecipe输入复用 — AbstractCombEventHandler 避免重复配方查找 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 性能监控命令 /pbg perf — PerfCommand 支持Spark profiler集成 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 性能监控JMX MBean — PerformanceMonitor 暴露tick时间/缓存命中率/能量消耗 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 离心机标志位优化 — 输出槽hasOutputItems/outputSlotsFull避免每次遍历 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 配方缓存优化 — RecipeCacheManager 使用Record CacheKey+LRU淘汰（LinkedHashMap>1024） ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 客户端事件处理器模板方法模式 — AbstractClientCombEventHandler基类 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 宇宙渲染队列预分配矩阵 — CosmicRenderQueue复用REUSABLE_OLD_PROJECTION/MODEL_VIEW ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 离心机能量计算基于实际能量差 — 摆脱getLastUsage父类语义依赖 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* PbRecipeProcessor缓存energyPerTick/operationsPerTick — 避免循环内重复Math.pow ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 蜂箱产物聚合生成 — 256倍加速下按类型聚合，减少ItemStack分配和addOutput调用 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
-* 高级蜂箱物品栏脏标志去抖 — 同一tick内多次变化合并为一次setChanged ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
-* 离心机万象创世产物聚合 — 按bee_type聚合后统一插入，避免跨操作类型冲突 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
-* 离心机Ejector阻塞冷却 — 输出侧阻塞时跳过outputItems调用，降低TimeWand加速下的TPS开销 ([82d147b](https://github.com/Ayoshiko/productive-bees-genesis/commit/82d147b))
+## [1.1.0] - 2026-06-29
 
-### fix
-* 移动CentrifugeMixinHelper从mixin到util包 — 避免Mixin框架误加载为Mixin目标 ([eed1574](https://github.com/Ayoshiko/productive-bees-genesis/commit/eed1574))
-* BeeHelperMixin保持原版万象产物 — 修复优化时误将原版产物替换为随机产物的行为 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
-* 离心机万象创世输出槽类型容量预检 — 输出槽已满时暂停处理，避免产物丢失 ([051ce0d](https://github.com/Ayoshiko/productive-bees-genesis/commit/051ce0d))
-* 放宽离心机万象产物类型预检 — 仅物理满时暂停，避免少量不同类型占满3槽导致机器卡住 ([82d147b](https://github.com/Ayoshiko/productive-bees-genesis/commit/82d147b))
-* 万象创世高频日志冷却 — Spark显示Log4jLogger.warn占78%，100 tick冷却抑制输出阻塞时的WARN刷屏 ([d170f3e](https://github.com/Ayoshiko/productive-bees-genesis/commit/d170f3e))
-* 输出槽满丢弃日志静默 — 普通PB配方与MEK离心机输出满属正常状态，删除INFO日志避免刷屏 ([d170f3e](https://github.com/Ayoshiko/productive-bees-genesis/commit/d170f3e))
-* SFM/AE2高频输入校验缓存 — isItemValidForSlot/inputProducesOutput增加20 tick缓存，减少反复配方查找与ItemStack哈希 ([7d9a899](https://github.com/Ayoshiko/productive-bees-genesis/commit/7d9a899))
-* 修复checklist验证问题 ([f37a075](https://github.com/Ayoshiko/productive-bees-genesis/commit/f37a075))
-* JMX MBean注册异常 — 改用StandardMBean显式绑定接口，实现类改为static内部类 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 流体槽满日志刷屏 — 256倍加速下INFO日志每tick数十条，改为静默丢弃 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 配置文件不正确警告 — 移除dead config旧键残留，删除旧toml文件 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* 配方序列化NPE兜底 — 五种PB配方toNetwork的Mixin HEAD拦截+fallback ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* BeeRecipeReloader未就绪时跳过替换 — 避免toNetwork崩溃 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* getBeeIngredient containsKey校验 — 类型不存在时回退到minecraft:bee ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
+### 新增
+- 深度性能优化管线：256 倍加速下的离心机配方处理、弹出器限流、配方索引
+- Ejector 持续高负载下降频机制
+- 单 tick 弹出次数上限配置
+- 输出槽内容未变化时跳过 outputItems
+- 宇宙着色器渲染系统（Iris 兼容）
+- ME/EME 工厂等级支持
+- 自定义蜜蜂过滤界面
+- JEI 配方集成
 
-### refactor
-* 综合代码审计 — 合规性、稳定性、性能、代码标准 ([05c9112](https://github.com/Ayoshiko/productive-bees-genesis/commit/05c9112))
-* 工厂标志位管理逻辑抽取 — 3个工厂类约90行重复代码提取到MekCentrifugeFactoryHelper ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* GUI Helper组合模式 — GuiMekCentrifugeFactoryHelper工具类抽取widget创建逻辑 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
-* PbRecipeContext接口扩展 — 6个新方法供工厂版PbRecipeProcessor统一调用 ([5ff2716](https://github.com/Ayoshiko/productive-bees-genesis/commit/5ff2716))
+### 修复
+- 修复基础离心机冗余计算
+- 修复工厂版激活状态计数器
+- 修复 RecipeCacheManager 键生成
+- 修复多个线程安全和内存泄漏问题
 
-### ui
-* FilterListScreen交互改进 — 点击行任意位置勾选，#表头与序号对齐 ([6dc9ced](https://github.com/Ayoshiko/productive-bees-genesis/commit/6dc9ced))
-* FilterListScreen间距收紧 — INDEX_COLUMN_WIDTH 28→18, gap 4→2 ([df7f9da](https://github.com/Ayoshiko/productive-bees-genesis/commit/df7f9da))
+## [1.0.0] - 2026-06-15
 
-### docs
-* 中英双语README ([360f6ba](https://github.com/Ayoshiko/productive-bees-genesis/commit/360f6ba))
-* 同步英文README ([d6ce954](https://github.com/Ayoshiko/productive-bees-genesis/commit/d6ce954))
-* 重排README警告和宇宙纹理描述 ([31f578a](https://github.com/Ayoshiko/productive-bees-genesis/commit/31f578a))
+### 新增
+- 万象创世蜜蜂
+- Mekanism 离心机集成（基础 + 4 级工厂）
+- 宇宙着色器蜜脾渲染
+- Mixin 条件加载系统（ME/EME 兼容）
+- 配置系统（CLIENT/COMMON/SERVER）
+- 数据生成（配方、战利品表、语言文件）

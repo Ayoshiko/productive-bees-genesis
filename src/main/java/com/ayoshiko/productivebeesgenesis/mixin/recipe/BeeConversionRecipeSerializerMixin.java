@@ -21,24 +21,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeConversionRecipe$Serializer")
 public class BeeConversionRecipeSerializerMixin {
 
-    @Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void productivebeesgenesis$fallbackOnNullIngredient(
-            RegistryFriendlyByteBuf buffer, BeeConversionRecipe recipe,
-            CallbackInfo ci) {
-        try {
-            if (recipe.source.get() == null || recipe.result.get() == null) {
-                // source
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                // result
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                // item（保留原值）
-                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.item);
-                // chance（保留原值）
-                buffer.writeFloat(recipe.chance);
-                ci.cancel();
-            }
-        } catch (Exception e) {
-            BeeIngredientFallback.logSerializationError("BeeConversionRecipe", e);
-        }
-    }
+	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$fallbackOnNullIngredient(
+			RegistryFriendlyByteBuf buffer, BeeConversionRecipe recipe,
+			CallbackInfo ci) {
+		try {
+			if (recipe.source.get() == null || recipe.result.get() == null) {
+				// source
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				// result
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				// item（保留原值）
+				Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.item);
+				// chance（保留原值）
+				buffer.writeFloat(recipe.chance);
+				ci.cancel();
+			}
+		} catch (Exception e) {
+			BeeIngredientFallback.logSerializationError("BeeConversionRecipe", e);
+		}
+	}
 }

@@ -50,123 +50,123 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 @Mod(value = ProductiveBeesGenesis.MOD_ID, dist = Dist.CLIENT)
 public final class ProductiveBeesGenesisClient {
 
-    public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
-        // 注册自定义配置屏幕 — 替代 NeoForge 默认 ConfigurationScreen
-        // 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
-        // 直接传递实例避免 registerExtensionPoint 重载歧义
-        container.registerExtensionPoint(IConfigScreenFactory.class, new CustomConfigScreenFactory());
-    }
+	public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
+		// 注册自定义配置屏幕 — 替代 NeoForge 默认 ConfigurationScreen
+		// 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
+		// 直接传递实例避免 registerExtensionPoint 重载歧义
+		container.registerExtensionPoint(IConfigScreenFactory.class, new CustomConfigScreenFactory());
+	}
 
-    /**
-     * Screen注册事件处理器
-     * <br/>
-     * 使用@EventBusSubscriber注册到MOD事件总线，仅在客户端执行。
-     */
-    @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
-    public static final class ScreenRegistry {
-        @SubscribeEvent
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        public static void registerScreens(RegisterMenuScreensEvent event) {
-            // 基础MEK离心机Screen
-            event.register(ModMenuTypes.MEK_CENTRIFUGE.get(), GuiMekCentrifuge::new);
+	/**
+	 * Screen注册事件处理器
+	 * <br/>
+	 * 使用@EventBusSubscriber注册到MOD事件总线，仅在客户端执行。
+	 */
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class ScreenRegistry {
+		@SubscribeEvent
+		@SuppressWarnings({"rawtypes", "unchecked"})
+		public static void registerScreens(RegisterMenuScreensEvent event) {
+			// 基础MEK离心机Screen
+			event.register(ModMenuTypes.MEK_CENTRIFUGE.get(), GuiMekCentrifuge::new);
 
-            // 工厂版MEK离心机Screen  需要类型转换
-            event.register((MenuType) ModMenuTypes.MEK_CENTRIFUGE_FACTORY.get(),
-                    (MenuScreens.ScreenConstructor) (menu, inv, title) ->
-                            new GuiMekCentrifugeFactory(
-                                    (MekanismTileContainer<TileEntityFactory<?>>) (MekanismTileContainer<?>) menu,
-                                    inv, title));
+			// 工厂版MEK离心机Screen  需要类型转换
+			event.register((MenuType) ModMenuTypes.MEK_CENTRIFUGE_FACTORY.get(),
+					(MenuScreens.ScreenConstructor) (menu, inv, title) ->
+							new GuiMekCentrifugeFactory(
+									(MekanismTileContainer<TileEntityFactory<?>>) (MekanismTileContainer<?>) menu,
+									inv, title));
 
-            // ME扩展版离心机工厂Screen
-            event.register(ModMenuTypes.EXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
+			// ME扩展版离心机工厂Screen
+			event.register(ModMenuTypes.EXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
 
-            // EME扩展版离心机工厂Screen
-            event.register(ModMenuTypes.EMEXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
-        }
-    }
+			// EME扩展版离心机工厂Screen
+			event.register(ModMenuTypes.EMEXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
+		}
+	}
 
-    /**
-     * Cosmic 渲染系统注册
-     * <br/>
-     * 使用@EventBusSubscriber注册到MOD事件总线，仅在客户端执行。
-     * 负责注册：
-     * <ol>
-     *   <li>cosmic 几何加载器（ModelEvent.RegisterGeometryLoaders）</li>
-     *   <li>cosmic 着色器（RegisterShadersEvent）</li>
-     *   <li>cosmic 纹理 UV 采集（TextureAtlasStitchedEvent）</li>
-     * </ol>
-     */
-    @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
-    public static final class CosmicRenderRegistry {
-        @SubscribeEvent
-        public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
-            event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), new GeometryLoaderCosmic());
-            event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "halo"), new GeometryLoaderHalo());
-            event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), new GeometryLoaderHell());
-        }
+	/**
+	 * Cosmic 渲染系统注册
+	 * <br/>
+	 * 使用@EventBusSubscriber注册到MOD事件总线，仅在客户端执行。
+	 * 负责注册：
+	 * <ol>
+	 *   <li>cosmic 几何加载器（ModelEvent.RegisterGeometryLoaders）</li>
+	 *   <li>cosmic 着色器（RegisterShadersEvent）</li>
+	 *   <li>cosmic 纹理 UV 采集（TextureAtlasStitchedEvent）</li>
+	 * </ol>
+	 */
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class CosmicRenderRegistry {
+		@SubscribeEvent
+		public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), new GeometryLoaderCosmic());
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "halo"), new GeometryLoaderHalo());
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), new GeometryLoaderHell());
+		}
 
-        @SubscribeEvent
-        public static void onRegisterShaders(RegisterShadersEvent event) {
-            CosmicShaders.onRegisterShaders(event);
-        }
+		@SubscribeEvent
+		public static void onRegisterShaders(RegisterShadersEvent event) {
+			CosmicShaders.onRegisterShaders(event);
+		}
 
-        @SubscribeEvent
-        public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
-            CosmicShaders.onTextureAtlasStitched(event);
-            // 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
-            BakedModelHalo.invalidateCache();
-            // 失效 cosmic 烘焙四边形缓存：图集重建后 atlasSprites 的 UV 变化，旧 bakedQuads 会采样错误纹理
-            AbstractBakedModelCosmic.invalidateCache();
-        }
+		@SubscribeEvent
+		public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
+			CosmicShaders.onTextureAtlasStitched(event);
+			// 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
+			BakedModelHalo.invalidateCache();
+			// 失效 cosmic 烘焙四边形缓存：图集重建后 atlasSprites 的 UV 变化，旧 bakedQuads 会采样错误纹理
+			AbstractBakedModelCosmic.invalidateCache();
+		}
 
-        @SubscribeEvent
-        public static void onRenderLevelAfterLevel(RenderLevelStageEvent event) {
-            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-                // 强制重置 GUI 渲染标志：防止 ScreenEvent.Render.Pre 设为 true 后 Post 未触发（异常情况）导致标志位卡在 true。
-                // AFTER_LEVEL 阶段一定处于世界渲染，不应使用 GUI 模式的固定视角参数。
-                CosmicShaders.cosmicInventoryRender = false;
-                CosmicRenderQueue.renderAll();
-            }
-        }
+		@SubscribeEvent
+		public static void onRenderLevelAfterLevel(RenderLevelStageEvent event) {
+			if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+				// 强制重置 GUI 渲染标志：防止 ScreenEvent.Render.Pre 设为 true 后 Post 未触发（异常情况）导致标志位卡在 true。
+				// AFTER_LEVEL 阶段一定处于世界渲染，不应使用 GUI 模式的固定视角参数。
+				CosmicShaders.cosmicInventoryRender = false;
+				CosmicRenderQueue.renderAll();
+			}
+		}
 
-        /**
-         * GUI 屏幕渲染前事件
-         * <br/>
-         * 设置 cosmicInventoryRender 标志为 true，使 cosmic 渲染使用固定视角参数（scale=100）。
-         * 这确保 GUI 中物品的星空效果呈现静态星空而非动态视角流动。
-         */
-        @SubscribeEvent
-        public static void onScreenRenderPre(ScreenEvent.Render.Pre event) {
-            CosmicShaders.cosmicInventoryRender = true;
-        }
+		/**
+		 * GUI 屏幕渲染前事件
+		 * <br/>
+		 * 设置 cosmicInventoryRender 标志为 true，使 cosmic 渲染使用固定视角参数（scale=100）。
+		 * 这确保 GUI 中物品的星空效果呈现静态星空而非动态视角流动。
+		 */
+		@SubscribeEvent
+		public static void onScreenRenderPre(ScreenEvent.Render.Pre event) {
+			CosmicShaders.cosmicInventoryRender = true;
+		}
 
-        /**
-         * GUI 屏幕渲染后事件
-         * <br/>
-         * 重置 cosmicInventoryRender 标志为 false，恢复世界模式的动态视角参数。
-         */
-        @SubscribeEvent
-        public static void onScreenRenderPost(ScreenEvent.Render.Post event) {
-            CosmicShaders.cosmicInventoryRender = false;
-        }
-    }
+		/**
+		 * GUI 屏幕渲染后事件
+		 * <br/>
+		 * 重置 cosmicInventoryRender 标志为 false，恢复世界模式的动态视角参数。
+		 */
+		@SubscribeEvent
+		public static void onScreenRenderPost(ScreenEvent.Render.Post event) {
+			CosmicShaders.cosmicInventoryRender = false;
+		}
+	}
 
-    /**
-     * 客户端初始化事件处理器
-     * <br/>
-     * 注册物品 property override，用于模型根据 NBT 切换。
-     */
-    @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
-    public static final class ClientSetupRegistry {
-        @SubscribeEvent
-        public static void onClientSetup(FMLClientSetupEvent event) {
-            event.enqueueWork(() -> {
-                ItemProperties.register(
-                        ModItems.INFINITY_SWORD_REPLICA.get(),
-                        ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "kill"),
-                        (ItemPropertyFunction) (stack, level, entity, seed) ->
-                                ItemInfinitySwordReplica.isKillModeActive(stack) ? 1.0F : 0.0F);
-            });
-        }
-    }
+	/**
+	 * 客户端初始化事件处理器
+	 * <br/>
+	 * 注册物品 property override，用于模型根据 NBT 切换。
+	 */
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class ClientSetupRegistry {
+		@SubscribeEvent
+		public static void onClientSetup(FMLClientSetupEvent event) {
+			event.enqueueWork(() -> {
+				ItemProperties.register(
+						ModItems.INFINITY_SWORD_REPLICA.get(),
+						ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "kill"),
+						(ItemPropertyFunction) (stack, level, entity, seed) ->
+								ItemInfinitySwordReplica.isKillModeActive(stack) ? 1.0F : 0.0F);
+			});
+		}
+	}
 }

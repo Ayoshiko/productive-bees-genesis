@@ -32,53 +32,53 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "net.minecraft.world.level.block.entity.BeehiveBlockEntity$BeeData")
 public class BeeDataHasNectarCacheMixin {
 
-    /** 当前 tick 是否已经缓存过 hasNectar 结果 */
-    @Unique
-    private boolean productivebeesgenesis$hasNectarCached;
+	/** 当前 tick 是否已经缓存过 hasNectar 结果 */
+	@Unique
+	private boolean productivebeesgenesis$hasNectarCached;
 
-    /** 缓存的 hasNectar 结果 */
-    @Unique
-    private boolean productivebeesgenesis$hasNectarValue;
+	/** 缓存的 hasNectar 结果 */
+	@Unique
+	private boolean productivebeesgenesis$hasNectarValue;
 
-    /**
-     * 每次 tick 开始时失效缓存，确保 NBT 发生变化后能重新读取。
-     * <br/>
-     * BeeData.tick() 每游戏刻对每个蜂箱内的蜜蜂调用一次，因此最多每 tick 重新计算一次，
-     * 而 tickBees() 内部可能对同一只蜜蜂多次调用 hasNectar()，这些调用都会命中缓存。
-     * <br/>
-     * 注意：实际签名为 {@code boolean tick()}（返回蜜蜂是否该离巢），不是 {@code void tick()}。
-     */
-    @Inject(method = "tick()Z", at = @At("HEAD"), remap = true)
-    private void productivebeesgenesis$invalidateHasNectarCache(CallbackInfoReturnable<Boolean> cir) {
-        productivebeesgenesis$hasNectarCached = false;
-    }
+	/**
+	 * 每次 tick 开始时失效缓存，确保 NBT 发生变化后能重新读取。
+	 * <br/>
+	 * BeeData.tick() 每游戏刻对每个蜂箱内的蜜蜂调用一次，因此最多每 tick 重新计算一次，
+	 * 而 tickBees() 内部可能对同一只蜜蜂多次调用 hasNectar()，这些调用都会命中缓存。
+	 * <br/>
+	 * 注意：实际签名为 {@code boolean tick()}（返回蜜蜂是否该离巢），不是 {@code void tick()}。
+	 */
+	@Inject(method = "tick()Z", at = @At("HEAD"), remap = true)
+	private void productivebeesgenesis$invalidateHasNectarCache(CallbackInfoReturnable<Boolean> cir) {
+		productivebeesgenesis$hasNectarCached = false;
+	}
 
-    /**
-     * 命中缓存时直接返回结果，避免重复调用原版 hasNectar()。
-     */
-    @Inject(method = "hasNectar()Z", at = @At("HEAD"), cancellable = true, remap = true)
-    private void productivebeesgenesis$cachedHasNectarHead(CallbackInfoReturnable<Boolean> cir) {
-        if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
-            return;
-        }
-        if (productivebeesgenesis$hasNectarCached) {
-            cir.setReturnValue(productivebeesgenesis$hasNectarValue);
-        }
-    }
+	/**
+	 * 命中缓存时直接返回结果，避免重复调用原版 hasNectar()。
+	 */
+	@Inject(method = "hasNectar()Z", at = @At("HEAD"), cancellable = true, remap = true)
+	private void productivebeesgenesis$cachedHasNectarHead(CallbackInfoReturnable<Boolean> cir) {
+		if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
+			return;
+		}
+		if (productivebeesgenesis$hasNectarCached) {
+			cir.setReturnValue(productivebeesgenesis$hasNectarValue);
+		}
+	}
 
-    /**
-     * 首次调用原版 hasNectar() 后捕获返回值并写入缓存。
-     * <br/>
-     * 若配置禁用缓存，则跳过捕获，让每次调用都走原版逻辑。
-     */
-    @Inject(method = "hasNectar()Z", at = @At("RETURN"), remap = true)
-    private void productivebeesgenesis$cachedHasNectarTail(CallbackInfoReturnable<Boolean> cir) {
-        if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
-            return;
-        }
-        if (!productivebeesgenesis$hasNectarCached) {
-            productivebeesgenesis$hasNectarValue = cir.getReturnValue();
-            productivebeesgenesis$hasNectarCached = true;
-        }
-    }
+	/**
+	 * 首次调用原版 hasNectar() 后捕获返回值并写入缓存。
+	 * <br/>
+	 * 若配置禁用缓存，则跳过捕获，让每次调用都走原版逻辑。
+	 */
+	@Inject(method = "hasNectar()Z", at = @At("RETURN"), remap = true)
+	private void productivebeesgenesis$cachedHasNectarTail(CallbackInfoReturnable<Boolean> cir) {
+		if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
+			return;
+		}
+		if (!productivebeesgenesis$hasNectarCached) {
+			productivebeesgenesis$hasNectarValue = cir.getReturnValue();
+			productivebeesgenesis$hasNectarCached = true;
+		}
+	}
 }

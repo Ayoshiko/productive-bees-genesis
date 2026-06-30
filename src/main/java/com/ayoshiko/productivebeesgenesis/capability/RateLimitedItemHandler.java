@@ -26,111 +26,111 @@ import org.jetbrains.annotations.NotNull;
  */
 public class RateLimitedItemHandler implements IItemHandler {
 
-    /** 被包装的原始 handler */
-    private final IItemHandler inner;
+	/** 被包装的原始 handler */
+	private final IItemHandler inner;
 
-    /** 限流值供给方（0=无限制），动态读取配置以支持运行时修改 */
-    private final IntSupplier limitSupplier;
+	/** 限流值供给方（0=无限制），动态读取配置以支持运行时修改 */
+	private final IntSupplier limitSupplier;
 
-    /** 本 tick 已提取的物品总数（原子操作） */
-    private final AtomicInteger extractedThisTick = new AtomicInteger(0);
+	/** 本 tick 已提取的物品总数（原子操作） */
+	private final AtomicInteger extractedThisTick = new AtomicInteger(0);
 
-    /** 上次重置计数器时的游戏刻（volatile 保证可见性） */
-    private volatile long lastResetTick = -1L;
+	/** 上次重置计数器时的游戏刻（volatile 保证可见性） */
+	private volatile long lastResetTick = -1L;
 
-    public RateLimitedItemHandler(@NotNull IItemHandler inner, @NotNull IntSupplier limitSupplier) {
-        this.inner = inner;
-        this.limitSupplier = limitSupplier;
-    }
+	public RateLimitedItemHandler(@NotNull IItemHandler inner, @NotNull IntSupplier limitSupplier) {
+		this.inner = inner;
+		this.limitSupplier = limitSupplier;
+	}
 
-    /**
-     * 供 BlockEntity 在每 tick 调用，更新当前游戏刻。
-     * <br/>
-     * 当 tick 变更时重置计数器。使用 volatile 写保证对其他线程可见。
-     * 由服务端主线程调用即可，无需额外同步。
-     *
-     * @param currentTick 当前游戏刻（level.getGameTime()）
-     */
-    public void resetTick(long currentTick) {
-        if (currentTick != lastResetTick) {
-            extractedThisTick.set(0);
-            lastResetTick = currentTick;
-        }
-    }
+	/**
+	 * 供 BlockEntity 在每 tick 调用，更新当前游戏刻。
+	 * <br/>
+	 * 当 tick 变更时重置计数器。使用 volatile 写保证对其他线程可见。
+	 * 由服务端主线程调用即可，无需额外同步。
+	 *
+	 * @param currentTick 当前游戏刻（level.getGameTime()）
+	 */
+	public void resetTick(long currentTick) {
+		if (currentTick != lastResetTick) {
+			extractedThisTick.set(0);
+			lastResetTick = currentTick;
+		}
+	}
 
-    @Override
-    public int getSlots() {
-        return inner.getSlots();
-    }
+	@Override
+	public int getSlots() {
+		return inner.getSlots();
+	}
 
-    @NotNull
-    @Override
-    public ItemStack getStackInSlot(int slot) {
-        return inner.getStackInSlot(slot);
-    }
+	@NotNull
+	@Override
+	public ItemStack getStackInSlot(int slot) {
+		return inner.getStackInSlot(slot);
+	}
 
-    /**
-     * 插入直接委托给内部 handler — 限流只针对外部拉取（extract），不影响内部插入
-     */
-    @NotNull
-    @Override
-    public ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
-        return inner.insertItem(slot, stack, simulate);
-    }
+	/**
+	 * 插入直接委托给内部 handler — 限流只针对外部拉取（extract），不影响内部插入
+	 */
+	@NotNull
+	@Override
+	public ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
+		return inner.insertItem(slot, stack, simulate);
+	}
 
-    /**
-     * 限流核心：限制单 tick 内可提取的物品总数
-     * <br/>
-     * 流程：
-     * <ol>
-     *   <li>读取 limit（0=无限制），limit<=0 时直接委托</li>
-     *   <li>tick 变更时重置计数器（防御性：即使 BlockEntity 未调用 resetTick 也能自愈）</li>
-     *   <li>已提取数 >= limit 时返回 EMPTY，阻断本次拉取</li>
-     *   <li>实际提取量 = min(请求量, limit - 已提取数)</li>
-     *   <li>非 simulate 时累加计数器（实际提取的数量）</li>
-     * </ol>
-     */
-    @NotNull
-    @Override
-    public ItemStack extractItem(int slot, int amount, boolean simulate) {
-        int limit = limitSupplier.getAsInt();
-        // limit<=0 表示无限制，直接委托（默认行为，不影响正常游戏）
-        if (limit <= 0) {
-            return inner.extractItem(slot, amount, simulate);
-        }
+	/**
+	 * 限流核心：限制单 tick 内可提取的物品总数
+	 * <br/>
+	 * 流程：
+	 * <ol>
+	 *   <li>读取 limit（0=无限制），limit<=0 时直接委托</li>
+	 *   <li>tick 变更时重置计数器（防御性：即使 BlockEntity 未调用 resetTick 也能自愈）</li>
+	 *   <li>已提取数 >= limit 时返回 EMPTY，阻断本次拉取</li>
+	 *   <li>实际提取量 = min(请求量, limit - 已提取数)</li>
+	 *   <li>非 simulate 时累加计数器（实际提取的数量）</li>
+	 * </ol>
+	 */
+	@NotNull
+	@Override
+	public ItemStack extractItem(int slot, int amount, boolean simulate) {
+		int limit = limitSupplier.getAsInt();
+		// limit<=0 表示无限制，直接委托（默认行为，不影响正常游戏）
+		if (limit <= 0) {
+			return inner.extractItem(slot, amount, simulate);
+		}
 
-        // 防御性 tick 重置：若 BlockEntity 未调用 resetTick，extractItem 仍能自愈
-        // 注意：此处无法获取 currentTick，依赖 BlockEntity 调用 resetTick
-        int alreadyExtracted = extractedThisTick.get();
-        if (alreadyExtracted >= limit) {
-            // 本 tick 配额已用尽，阻断拉取
-            return ItemStack.EMPTY;
-        }
+		// 防御性 tick 重置：若 BlockEntity 未调用 resetTick，extractItem 仍能自愈
+		// 注意：此处无法获取 currentTick，依赖 BlockEntity 调用 resetTick
+		int alreadyExtracted = extractedThisTick.get();
+		if (alreadyExtracted >= limit) {
+			// 本 tick 配额已用尽，阻断拉取
+			return ItemStack.EMPTY;
+		}
 
-        // 实际可提取量 = min(请求量, 剩余配额)
-        int remaining = limit - alreadyExtracted;
-        int effectiveAmount = Math.min(amount, remaining);
+		// 实际可提取量 = min(请求量, 剩余配额)
+		int remaining = limit - alreadyExtracted;
+		int effectiveAmount = Math.min(amount, remaining);
 
-        ItemStack extracted = inner.extractItem(slot, effectiveAmount, simulate);
-        if (!simulate && !extracted.isEmpty()) {
-            // 原子累加实际提取数量
-            extractedThisTick.addAndGet(extracted.getCount());
-        }
-        return extracted;
-    }
+		ItemStack extracted = inner.extractItem(slot, effectiveAmount, simulate);
+		if (!simulate && !extracted.isEmpty()) {
+			// 原子累加实际提取数量
+			extractedThisTick.addAndGet(extracted.getCount());
+		}
+		return extracted;
+	}
 
-    @Override
-    public int getSlotLimit(int slot) {
-        return inner.getSlotLimit(slot);
-    }
+	@Override
+	public int getSlotLimit(int slot) {
+		return inner.getSlotLimit(slot);
+	}
 
-    @Override
-    public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-        return inner.isItemValid(slot, stack);
-    }
+	@Override
+	public boolean isItemValid(int slot, @NotNull ItemStack stack) {
+		return inner.isItemValid(slot, stack);
+	}
 
-    /** 测试/调试用：获取本 tick 已提取数量 */
-    public int getExtractedThisTick() {
-        return extractedThisTick.get();
-    }
+	/** 测试/调试用：获取本 tick 已提取数量 */
+	public int getExtractedThisTick() {
+		return extractedThisTick.get();
+	}
 }

@@ -27,31 +27,31 @@ import java.util.function.Supplier;
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeSpawningRecipe$Serializer")
 public class BeeSpawningRecipeSerializerMixin {
 
-    @Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void productivebeesgenesis$fallbackOnNullOutput(
-            RegistryFriendlyByteBuf buffer, BeeSpawningRecipe recipe,
-            CallbackInfo ci) {
-        try {
-            // 防御性检查：recipe.output 列表本身可能为 null，此时直接触发 fallback 逻辑
-            boolean hasNull = recipe.output == null;
-            if (!hasNull) {
-                for (Supplier<BeeIngredient> beeOutput : recipe.output) {
-                    if (beeOutput == null || beeOutput.get() == null) {
-                        hasNull = true;
-                        break;
-                    }
-                }
-            }
-            if (hasNull) {
-                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.ingredient);
-                Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.spawnItem);
-                buffer.writeInt(1); // 替换为单个 fallback 输出
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                ByteBufCodecs.holderSet(Registries.BIOME).encode(buffer, recipe.biomes);
-                ci.cancel();
-            }
-        } catch (Exception e) {
-            BeeIngredientFallback.logSerializationError("BeeSpawningRecipe", e);
-        }
-    }
+	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$fallbackOnNullOutput(
+			RegistryFriendlyByteBuf buffer, BeeSpawningRecipe recipe,
+			CallbackInfo ci) {
+		try {
+			// 防御性检查：recipe.output 列表本身可能为 null，此时直接触发 fallback 逻辑
+			boolean hasNull = recipe.output == null;
+			if (!hasNull) {
+				for (Supplier<BeeIngredient> beeOutput : recipe.output) {
+					if (beeOutput == null || beeOutput.get() == null) {
+						hasNull = true;
+						break;
+					}
+				}
+			}
+			if (hasNull) {
+				Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.ingredient);
+				Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.spawnItem);
+				buffer.writeInt(1); // 替换为单个 fallback 输出
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				ByteBufCodecs.holderSet(Registries.BIOME).encode(buffer, recipe.biomes);
+				ci.cancel();
+			}
+		} catch (Exception e) {
+			BeeIngredientFallback.logSerializationError("BeeSpawningRecipe", e);
+		}
+	}
 }

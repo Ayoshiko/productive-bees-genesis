@@ -84,8 +84,9 @@ public final class CentrifugeRecipeIndex {
 							newCombBlockIndex.putIfAbsent(beeType, blockRecipe);
 						}
 					}
-				} catch (Exception ignored) {
-					// 单条配方解析失败不影响整体索引
+				} catch (Exception e) {
+					// 单条配方解析失败不影响整体索引，记录调试日志便于排障
+					ProductiveBeesGenesis.LOGGER.debug("离心配方索引：跳过无法解析的配方 {}", holder.id(), e);
 				}
 			}
 			// 原子替换，确保读线程看到一致状态

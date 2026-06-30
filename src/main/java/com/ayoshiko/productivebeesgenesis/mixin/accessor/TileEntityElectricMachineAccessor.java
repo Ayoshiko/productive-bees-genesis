@@ -18,27 +18,27 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(value = TileEntityElectricMachine.class, remap = false)
 public interface TileEntityElectricMachineAccessor {
 
-    @Accessor("inputSlot")
-    InputInventorySlot productivebeesgenesis$getInputSlot();
+	@Accessor("inputSlot")
+	InputInventorySlot productivebeesgenesis$getInputSlot();
 
-    @Accessor("inputSlot")
-    void productivebeesgenesis$setInputSlot(InputInventorySlot slot);
+	@Accessor("inputSlot")
+	void productivebeesgenesis$setInputSlot(InputInventorySlot slot);
 
-    @Accessor("outputSlot")
-    OutputInventorySlot productivebeesgenesis$getOutputSlot();
+	@Accessor("outputSlot")
+	OutputInventorySlot productivebeesgenesis$getOutputSlot();
 
-    @Accessor("outputSlot")
-    void productivebeesgenesis$setOutputSlot(OutputInventorySlot slot);
+	@Accessor("outputSlot")
+	void productivebeesgenesis$setOutputSlot(OutputInventorySlot slot);
 
-    @Accessor("energySlot")
-    EnergyInventorySlot productivebeesgenesis$getEnergySlot();
+	@Accessor("energySlot")
+	EnergyInventorySlot productivebeesgenesis$getEnergySlot();
 
-    @Accessor("energySlot")
-    void productivebeesgenesis$setEnergySlot(EnergyInventorySlot slot);
+	@Accessor("energySlot")
+	void productivebeesgenesis$setEnergySlot(EnergyInventorySlot slot);
 
-    @Accessor("energyContainer")
-    MachineEnergyContainer<?> productivebeesgenesis$getEnergyContainer();
+	@Accessor("energyContainer")
+	MachineEnergyContainer<?> productivebeesgenesis$getEnergyContainer();
 
-    @Accessor("energyContainer")
-    void productivebeesgenesis$setEnergyContainer(MachineEnergyContainer<?> container);
+	@Accessor("energyContainer")
+	void productivebeesgenesis$setEnergyContainer(MachineEnergyContainer<?> container);
 }

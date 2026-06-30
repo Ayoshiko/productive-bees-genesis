@@ -32,54 +32,54 @@ import org.jetbrains.annotations.NotNull;
  */
 public class GuiExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEntityExtraMekCentrifugeFactory, MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> {
 
-    public GuiExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityExtraMekCentrifugeFactory> container, Inventory inv, Component title) {
-        super(container, inv, title);
-        // 3行输出槽需要额外高度：标准187 + 副输出1(20) + 副输出2(20) = 227
-        imageHeight = 187 + 40;
-        inventoryLabelY = 125;
+	public GuiExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityExtraMekCentrifugeFactory> container, Inventory inv, Component title) {
+		super(container, inv, title);
+		// 3行输出槽需要额外高度：标准187 + 副输出1(20) + 副输出2(20) = 227
+		imageHeight = 187 + 40;
+		inventoryLabelY = 125;
 
-        // 使用FactoryLayoutHelper的ExtraFactoryTier重载方法动态计算imageWidth增量
-        imageWidth += FactoryLayoutHelper.getImageWidthAddition(tile.tier);
+		// 使用FactoryLayoutHelper的ExtraFactoryTier重载方法动态计算imageWidth增量
+		imageWidth += FactoryLayoutHelper.getImageWidthAddition(tile.tier);
 
-        // 使用FactoryLayoutHelper动态计算inventoryLabelX
-        inventoryLabelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
-        titleLabelY = 4;
-        dynamicSlots = true;
-    }
+		// 使用FactoryLayoutHelper动态计算inventoryLabelX
+		inventoryLabelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
+		titleLabelY = 4;
+		dynamicSlots = true;
+	}
 
-    @Override
-    protected void addGuiElements() {
-        super.addGuiElements();
-        addRenderableWidget(new ExtraGuiSortingTab(this, tile));
-        // 标准能量条（右侧布局）+ 能量标签
-        addRenderableWidget(GuiMekCentrifugeFactoryHelper.createStandardPowerBar(this, tile.getEnergyContainer(), imageWidth))
-                .warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
-        addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(), tile::getLastUsage));
+	@Override
+	protected void addGuiElements() {
+		super.addGuiElements();
+		addRenderableWidget(new ExtraGuiSortingTab(this, tile));
+		// 标准能量条（右侧布局）+ 能量标签
+		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createStandardPowerBar(this, tile.getEnergyContainer(), imageWidth))
+				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
+		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(), tile::getLastUsage));
 
-        // 进度条循环（输入槽与主输出槽之间，双配方跳转）
-        int baseX = FactoryLayoutHelper.getBaseX(tile.tier);
-        int baseXMult = FactoryLayoutHelper.getBaseXMult(tile.tier);
-        for (GuiProgress bar : GuiMekCentrifugeFactoryHelper.createProgressBars(
-                this, tile.tier.processes,
-                i -> tile.getScaledProgress(1, i),
-                i -> tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT, i),
-                baseX, baseXMult)) {
-            addRenderableWidget(bar);
-        }
+		// 进度条循环（输入槽与主输出槽之间，双配方跳转）
+		int baseX = FactoryLayoutHelper.getBaseX(tile.tier);
+		int baseXMult = FactoryLayoutHelper.getBaseXMult(tile.tier);
+		for (GuiProgress bar : GuiMekCentrifugeFactoryHelper.createProgressBars(
+				this, tile.tier.processes,
+				i -> tile.getScaledProgress(1, i),
+				i -> tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT, i),
+				baseX, baseXMult)) {
+			addRenderableWidget(bar);
+		}
 
-        // 共享流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
-        addRenderableWidget(GuiMekCentrifugeFactoryHelper.createFluidGauge(
-                this,
-                tile::getFluidOutputTank,
-                () -> tile.getFluidTanks(null),
-                FactoryLayoutHelper.getFluidTankX(tile.tier),
-                FactoryLayoutHelper.getFluidTankY(tile.tier)));
-    }
+		// 共享流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
+		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createFluidGauge(
+				this,
+				tile::getFluidOutputTank,
+				() -> tile.getFluidTanks(null),
+				FactoryLayoutHelper.getFluidTankX(tile.tier),
+				FactoryLayoutHelper.getFluidTankY(tile.tier)));
+	}
 
-    @Override
-    protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        renderTitleText(guiGraphics);
-        renderInventoryText(guiGraphics);
-        super.drawForegroundText(guiGraphics, mouseX, mouseY);
-    }
+	@Override
+	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
+		renderTitleText(guiGraphics);
+		renderInventoryText(guiGraphics);
+		super.drawForegroundText(guiGraphics, mouseX, mouseY);
+	}
 }

@@ -32,33 +32,33 @@ import java.util.function.Supplier;
 @Mixin(value = ExtraFactory.class, remap = false)
 public abstract class MixinExtraFactory extends BlockType {
 
-    private MixinExtraFactory() {
-        super(null);
-    }
+	private MixinExtraFactory() {
+		super(null);
+	}
 
-    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
-                                               ExtraMachine.ExtraFactoryMachine<?> origMachine,
-                                               ExtraFactoryTier tier, CallbackInfo ci) {
-        if (!MekCompatHooks.isMekanismExtrasLoaded()) {
-            return;
-        }
-        // 仅处理SMELTING类型
-        if (get(AttributeFactoryType.class) == null
-                || get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
-            return;
-        }
-        // 通过description前缀判断origMachine是否为我们的离心机工厂
-        // 防御性检查：getDescription() 可能返回 null
-        var description = origMachine.getDescription();
-        if (description == null) {
-            return;
-        }
-        String desc = description.getTranslationKey();
-        if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
-            return;
-        }
-        // 移除ExtraFactory构造器添加的ExtraAttributeUpgradeable
-        this.remove(ExtraAttributeUpgradeable.class);
-    }
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
+											   ExtraMachine.ExtraFactoryMachine<?> origMachine,
+											   ExtraFactoryTier tier, CallbackInfo ci) {
+		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
+			return;
+		}
+		// 仅处理SMELTING类型
+		if (get(AttributeFactoryType.class) == null
+				|| get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
+			return;
+		}
+		// 通过description前缀判断origMachine是否为我们的离心机工厂
+		// 防御性检查：getDescription() 可能返回 null
+		var description = origMachine.getDescription();
+		if (description == null) {
+			return;
+		}
+		String desc = description.getTranslationKey();
+		if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
+			return;
+		}
+		// 移除ExtraFactory构造器添加的ExtraAttributeUpgradeable
+		this.remove(ExtraAttributeUpgradeable.class);
+	}
 }

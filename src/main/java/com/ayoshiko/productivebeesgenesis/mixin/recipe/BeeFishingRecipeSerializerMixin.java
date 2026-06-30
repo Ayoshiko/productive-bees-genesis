@@ -21,19 +21,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe$Serializer")
 public class BeeFishingRecipeSerializerMixin {
 
-    @Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void productivebeesgenesis$fallbackOnNullIngredient(
-            RegistryFriendlyByteBuf buffer, BeeFishingRecipe recipe,
-            CallbackInfo ci) {
-        try {
-            if (recipe.output.get() == null) {
-                BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
-                ByteBufCodecs.holderSet(Registries.BIOME).encode(buffer, recipe.biomes);
-                buffer.writeFloat(recipe.chance);
-                ci.cancel();
-            }
-        } catch (Exception e) {
-            BeeIngredientFallback.logSerializationError("BeeFishingRecipe", e);
-        }
-    }
+	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$fallbackOnNullIngredient(
+			RegistryFriendlyByteBuf buffer, BeeFishingRecipe recipe,
+			CallbackInfo ci) {
+		try {
+			if (recipe.output.get() == null) {
+				BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+				ByteBufCodecs.holderSet(Registries.BIOME).encode(buffer, recipe.biomes);
+				buffer.writeFloat(recipe.chance);
+				ci.cancel();
+			}
+		} catch (Exception e) {
+			BeeIngredientFallback.logSerializationError("BeeFishingRecipe", e);
+		}
+	}
 }

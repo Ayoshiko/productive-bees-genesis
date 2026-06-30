@@ -38,106 +38,106 @@ import java.util.stream.IntStream;
  */
 public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRecipe> {
 
-    /** JEI分类背景纹理路径（复用PB原版纹理） */
-    private static final ResourceLocation BACKGROUND_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("productivebees", "textures/gui/jei/centrifuge_recipe.png");
+	/** JEI分类背景纹理路径（复用PB原版纹理） */
+	private static final ResourceLocation BACKGROUND_TEXTURE =
+			ResourceLocation.fromNamespaceAndPath("productivebees", "textures/gui/jei/centrifuge_recipe.png");
 
-    private final IDrawable background;
-    private final IDrawable icon;
+	private final IDrawable background;
+	private final IDrawable icon;
 
-    public PbCentrifugeRecipeCategory(IGuiHelper guiHelper, ItemStack iconStack) {
-        this.background = guiHelper.createDrawable(BACKGROUND_TEXTURE, 0, 0, 126, 70);
-        this.icon = guiHelper.createDrawableIngredient(VanillaTypes.ITEM_STACK, iconStack);
-    }
+	public PbCentrifugeRecipeCategory(IGuiHelper guiHelper, ItemStack iconStack) {
+		this.background = guiHelper.createDrawable(BACKGROUND_TEXTURE, 0, 0, 126, 70);
+		this.icon = guiHelper.createDrawableIngredient(VanillaTypes.ITEM_STACK, iconStack);
+	}
 
-    @Override
-    public RecipeType<CentrifugeRecipe> getRecipeType() {
-        return ProductiveBeesGenesisJEI.PB_CENTRIFUGE_TYPE;
-    }
+	@Override
+	public RecipeType<CentrifugeRecipe> getRecipeType() {
+		return ProductiveBeesGenesisJEI.PB_CENTRIFUGE_TYPE;
+	}
 
-    @Nonnull
-    @Override
-    public Component getTitle() {
-        return Component.translatable("jei.productivebeesgenesis.pb_centrifuge");
-    }
+	@Nonnull
+	@Override
+	public Component getTitle() {
+		return Component.translatable("jei.productivebeesgenesis.pb_centrifuge");
+	}
 
-    @Nonnull
-    @Override
-    public IDrawable getBackground() {
-        return this.background;
-    }
+	@Nonnull
+	@Override
+	public IDrawable getBackground() {
+		return this.background;
+	}
 
-    @Nonnull
-    @Override
-    public IDrawable getIcon() {
-        return icon;
-    }
+	@Nonnull
+	@Override
+	public IDrawable getIcon() {
+		return icon;
+	}
 
-    /**
-     * 设置配方布局
-     * <br/>
-     * 原理：
-     * - 输入槽：展示配方ingredient的所有可能物品
-     * - 输出槽：每个ChancedOutput生成一个槽位，展示min~max所有可能数量
-     * - 流体槽：如果有流体输出，占用下一个可用输出槽位
-     * - 概率tooltip：显示产出概率和数量范围
-     */
-    @Override
-    public void setRecipe(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, IFocusGroup focuses) {
-        // 输入槽
-        builder.addSlot(RecipeIngredientRole.INPUT, 5, 27)
-                .addItemStacks(Arrays.stream(recipe.ingredient.getItems()).toList())
-                .setSlotName("ingredient");
+	/**
+	 * 设置配方布局
+	 * <br/>
+	 * 原理：
+	 * - 输入槽：展示配方ingredient的所有可能物品
+	 * - 输出槽：每个ChancedOutput生成一个槽位，展示min~max所有可能数量
+	 * - 流体槽：如果有流体输出，占用下一个可用输出槽位
+	 * - 概率tooltip：显示产出概率和数量范围
+	 */
+	@Override
+	public void setRecipe(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, IFocusGroup focuses) {
+		// 输入槽
+		builder.addSlot(RecipeIngredientRole.INPUT, 5, 27)
+				.addItemStacks(Arrays.stream(recipe.ingredient.getItems()).toList())
+				.setSlotName("ingredient");
 
-        // 输出槽布局：从(68,26)开始，每3个换行
-        int startX = 68;
-        int startY = 26;
-        final int[] slotIndex = {0};
+		// 输出槽布局：从(68,26)开始，每3个换行
+		int startX = 68;
+		int startY = 26;
+		final int[] slotIndex = {0};
 
-        // 物品输出
-        if (recipe.getRecipeOutputs().size() > 0) {
-            recipe.getRecipeOutputs().forEach((stack, value) -> {
-                // 为每个可能的输出数量生成一个物品堆栈
-                List<ItemStack> innerList = new ArrayList<>();
-                IntStream.range(value.min(), value.max() + 1).forEach(u -> {
-                    ItemStack newStack = stack.copy();
-                    newStack.setCount(u);
-                    innerList.add(newStack);
-                });
+		// 物品输出
+		if (recipe.getRecipeOutputs().size() > 0) {
+			recipe.getRecipeOutputs().forEach((stack, value) -> {
+				// 为每个可能的输出数量生成一个物品堆栈
+				List<ItemStack> innerList = new ArrayList<>();
+				IntStream.range(value.min(), value.max() + 1).forEach(u -> {
+					ItemStack newStack = stack.copy();
+					newStack.setCount(u);
+					innerList.add(newStack);
+				});
 
-                // 使用模运算计算行列位置：col = slotIndex % 3, row = slotIndex / 3
-                int col = slotIndex[0] % 3;
-                int row = slotIndex[0] / 3;
-                builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
-                        .addItemStacks(innerList)
-                        .addTooltipCallback((recipeSlotView, tooltip) -> {
-                            float chance = value.chance() * 100f;
-                            if (chance < 100) {
-                                tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.chance",
-                                        chance < 1 ? "<1%" : chance + "%"));
-                            }
-                            if (value.min() != value.max()) {
-                                tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
-                                        value.min() + " - " + value.max()));
-                            }
-                        })
-                        .setSlotName("output" + slotIndex[0]);
+				// 使用模运算计算行列位置：col = slotIndex % 3, row = slotIndex / 3
+				int col = slotIndex[0] % 3;
+				int row = slotIndex[0] / 3;
+				builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
+						.addItemStacks(innerList)
+						.addTooltipCallback((recipeSlotView, tooltip) -> {
+							float chance = value.chance() * 100f;
+							if (chance < 100) {
+								tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.chance",
+										chance < 1 ? "<1%" : chance + "%"));
+							}
+							if (value.min() != value.max()) {
+								tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
+										value.min() + " - " + value.max()));
+							}
+						})
+						.setSlotName("output" + slotIndex[0]);
 
-                slotIndex[0]++;
-            });
-        }
+				slotIndex[0]++;
+			});
+		}
 
-        // 流体输出
-        FluidStack fluid = recipe.getFluidOutputs();
-        if (!fluid.isEmpty()) {
-            int col = slotIndex[0] % 3;
-            int row = slotIndex[0] / 3;
-            builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
-                    .addIngredient(NeoForgeTypes.FLUID_STACK, fluid)
-                    .addTooltipCallback((recipeSlotView, tooltip) ->
-                            tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
-                                    fluid.getAmount() + "mB")))
-                    .setSlotName("output_fluid");
-        }
-    }
+		// 流体输出
+		FluidStack fluid = recipe.getFluidOutputs();
+		if (!fluid.isEmpty()) {
+			int col = slotIndex[0] % 3;
+			int row = slotIndex[0] / 3;
+			builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
+					.addIngredient(NeoForgeTypes.FLUID_STACK, fluid)
+					.addTooltipCallback((recipeSlotView, tooltip) ->
+							tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
+									fluid.getAmount() + "mB")))
+					.setSlotName("output_fluid");
+		}
+	}
 }

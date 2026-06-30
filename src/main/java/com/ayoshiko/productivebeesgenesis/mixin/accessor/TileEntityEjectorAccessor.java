@@ -16,15 +16,15 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(TileComponentEjector.class)
 public interface TileEntityEjectorAccessor {
 
-    /** 获取当前tickDelay值 */
-    @Accessor("tickDelay")
-    int productivebeesgenesis$getTickDelay();
+	/** 获取当前tickDelay值 */
+	@Accessor("tickDelay")
+	int productivebeesgenesis$getTickDelay();
 
-    /** 设置tickDelay值 */
-    @Accessor("tickDelay")
-    void productivebeesgenesis$setTickDelay(int value);
+	/** 设置tickDelay值 */
+	@Accessor("tickDelay")
+	void productivebeesgenesis$setTickDelay(int value);
 
-    /** 获取关联的TileEntity */
-    @Accessor("tile")
-    TileEntityMekanism productivebeesgenesis$getTile();
+	/** 获取关联的TileEntity */
+	@Accessor("tile")
+	TileEntityMekanism productivebeesgenesis$getTile();
 }

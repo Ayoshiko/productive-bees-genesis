@@ -24,30 +24,30 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(InventoryHandlerHelper.BlockEntityItemStackHandler.class)
 public class BlockEntityItemStackHandlerDebounceMixin {
 
-    @Shadow
-    protected BlockEntity blockEntity;
+	@Shadow
+	protected BlockEntity blockEntity;
 
-    /**
-     * 拦截内容变化回调，对高级蜂箱进行去抖。
-     * <p>
-     * 原理：
-     * <ol>
-     *   <li>仅当所属方块实体是 {@link AdvancedBeehiveBlockEntity} 且已附加到世界时才处理；</li>
-     *   <li>转换为 {@link IInventoryDirtyDebouncer} 并调用 mark 方法，保持跨 Mixin 可解析；</li>
-     *   <li>取消本次 super.onContentsChanged → setChanged 调用链。</li>
-     * </ol>
-     * 同一 tick 内的多次变化只会覆盖相同的脏标记，从而避免重复的 NBT 序列化与网络同步。
-     */
-    @Inject(method = "onContentsChanged", at = @At("HEAD"), cancellable = true)
-    private void productivebeesgenesis$debounceSetChanged(int slot, CallbackInfo ci) {
-        if (this.blockEntity instanceof AdvancedBeehiveBlockEntity) {
-            Level level = this.blockEntity.getLevel();
-            if (level != null) {
-                ((IInventoryDirtyDebouncer) this.blockEntity)
-                        .productivebeesgenesis$markInventoryDirty(level.getGameTime());
-                // 取消本次 setChanged，统一在 tick 尾部刷新
-                ci.cancel();
-            }
-        }
-    }
+	/**
+	 * 拦截内容变化回调，对高级蜂箱进行去抖。
+	 * <p>
+	 * 原理：
+	 * <ol>
+	 *   <li>仅当所属方块实体是 {@link AdvancedBeehiveBlockEntity} 且已附加到世界时才处理；</li>
+	 *   <li>转换为 {@link IInventoryDirtyDebouncer} 并调用 mark 方法，保持跨 Mixin 可解析；</li>
+	 *   <li>取消本次 super.onContentsChanged → setChanged 调用链。</li>
+	 * </ol>
+	 * 同一 tick 内的多次变化只会覆盖相同的脏标记，从而避免重复的 NBT 序列化与网络同步。
+	 */
+	@Inject(method = "onContentsChanged", at = @At("HEAD"), cancellable = true)
+	private void productivebeesgenesis$debounceSetChanged(int slot, CallbackInfo ci) {
+		if (this.blockEntity instanceof AdvancedBeehiveBlockEntity) {
+			Level level = this.blockEntity.getLevel();
+			if (level != null) {
+				((IInventoryDirtyDebouncer) this.blockEntity)
+						.productivebeesgenesis$markInventoryDirty(level.getGameTime());
+				// 取消本次 setChanged，统一在 tick 尾部刷新
+				ci.cancel();
+			}
+		}
+	}
 }

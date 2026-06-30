@@ -39,228 +39,228 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Mixin(value = TileComponentEjector.class, remap = false)
 public class TileComponentEjectorCooldownMixin {
 
-    /** 连续未弹出物品次数（Atomic 保证服务端主线程与异步回调的可见性） */
-    @Unique
-    private final AtomicInteger productivebeesgenesis$consecutiveEmptyEjects = new AtomicInteger(0);
+	/** 连续未弹出物品次数（Atomic 保证服务端主线程与异步回调的可见性） */
+	@Unique
+	private final AtomicInteger productivebeesgenesis$consecutiveEmptyEjects = new AtomicInteger(0);
 
-    /** 剩余冷却 tick 数，大于 0 时跳过 outputItems */
-    @Unique
-    private final AtomicInteger productivebeesgenesis$ejectCooldown = new AtomicInteger(0);
+	/** 剩余冷却 tick 数，大于 0 时跳过 outputItems */
+	@Unique
+	private final AtomicInteger productivebeesgenesis$ejectCooldown = new AtomicInteger(0);
 
-    // ===== Task 16: 输出槽内容未变化时跳过 outputItems =====
-    /** 上次观察到的输出槽内容版本号 */
-    @Unique
-    private volatile long productivebeesgenesis$lastOutputContentsVersion = -1L;
+	// ===== Task 16: 输出槽内容未变化时跳过 outputItems =====
+	/** 上次观察到的输出槽内容版本号 */
+	@Unique
+	private volatile long productivebeesgenesis$lastOutputContentsVersion = -1L;
 
-    /** 内容未变化时剩余可跳过的 tick 数 */
-    @Unique
-    private volatile int productivebeesgenesis$skipTicksRemaining = 0;
+	/** 内容未变化时剩余可跳过的 tick 数 */
+	@Unique
+	private volatile int productivebeesgenesis$skipTicksRemaining = 0;
 
-    // ===== Task 23: Ejector 持续高负载下降频 =====
-    /** 长冷却剩余 tick 数，大于 0 时跳过 outputItems */
-    @Unique
-    private final AtomicInteger productivebeesgenesis$busyCooldown = new AtomicInteger(0);
+	// ===== Task 23: Ejector 持续高负载下降频 =====
+	/** 长冷却剩余 tick 数，大于 0 时跳过 outputItems */
+	@Unique
+	private final AtomicInteger productivebeesgenesis$busyCooldown = new AtomicInteger(0);
 
-    /** 连续未减少输出槽物品的次数 */
-    @Unique
-    private final AtomicInteger productivebeesgenesis$consecutiveBusyEjects = new AtomicInteger(0);
+	/** 连续未减少输出槽物品的次数 */
+	@Unique
+	private final AtomicInteger productivebeesgenesis$consecutiveBusyEjects = new AtomicInteger(0);
 
-    /** 最小调用间隔剩余 tick 数 */
-    @Unique
-    private volatile int productivebeesgenesis$minIntervalRemaining = 0;
+	/** 最小调用间隔剩余 tick 数 */
+	@Unique
+	private volatile int productivebeesgenesis$minIntervalRemaining = 0;
 
-    // ===== Step 5: 单 tick 最大弹出次数上限 =====
-    /** 当前 tick 剩余可调用 outputItems 的次数（<=0=已耗尽；Integer.MAX_VALUE=无限制） */
-    @Unique
-    private volatile int productivebeesgenesis$ejectsRemainingThisTick = 0;
+	// ===== Step 5: 单 tick 最大弹出次数上限 =====
+	/** 当前 tick 剩余可调用 outputItems 的次数（<=0=已耗尽；Integer.MAX_VALUE=无限制） */
+	@Unique
+	private volatile int productivebeesgenesis$ejectsRemainingThisTick = 0;
 
-    @Shadow
-    private void outputItems(Direction facing, ConfigInfo info) {
-    }
+	@Shadow
+	private void outputItems(Direction facing, ConfigInfo info) {
+	}
 
-    /**
-     * 每 tick 开始时递减冷却计数器，使冷却以真实 tick 为单位。
-     * <p>
-     * 仅对目标工厂生效；非目标方块实体的冷却字段始终为 0，不会产生影响。
-     */
-    @Inject(method = "tickServer", at = @At("HEAD"))
-    private void productivebeesgenesis$decrementCooldownAtTickStart(CallbackInfo ci) {
-        TileEntityMekanism tile = ((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$getTile();
-        if (tile instanceof IHasEjectorCooldown) {
-            if (productivebeesgenesis$ejectCooldown.get() > 0) {
-                productivebeesgenesis$ejectCooldown.decrementAndGet();
-            }
-            // Task 23: 递减长冷却计数器
-            if (productivebeesgenesis$busyCooldown.get() > 0) {
-                productivebeesgenesis$busyCooldown.decrementAndGet();
-            }
-            // Task 23: 递减最小调用间隔计数器
-            if (productivebeesgenesis$minIntervalRemaining > 0) {
-                productivebeesgenesis$minIntervalRemaining--;
-            }
-            // Step 5: 每 tick 重置弹出次数上限（配置 0=无限制 → Integer.MAX_VALUE）
-            int maxPerTick = ModConfig.SERVER.mekCentrifugeEjectMaxPerTick.get();
-            productivebeesgenesis$ejectsRemainingThisTick = (maxPerTick > 0) ? maxPerTick : Integer.MAX_VALUE;
-        }
-    }
+	/**
+	 * 每 tick 开始时递减冷却计数器，使冷却以真实 tick 为单位。
+	 * <p>
+	 * 仅对目标工厂生效；非目标方块实体的冷却字段始终为 0，不会产生影响。
+	 */
+	@Inject(method = "tickServer", at = @At("HEAD"))
+	private void productivebeesgenesis$decrementCooldownAtTickStart(CallbackInfo ci) {
+		TileEntityMekanism tile = ((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$getTile();
+		if (tile instanceof IHasEjectorCooldown) {
+			if (productivebeesgenesis$ejectCooldown.get() > 0) {
+				productivebeesgenesis$ejectCooldown.decrementAndGet();
+			}
+			// Task 23: 递减长冷却计数器
+			if (productivebeesgenesis$busyCooldown.get() > 0) {
+				productivebeesgenesis$busyCooldown.decrementAndGet();
+			}
+			// Task 23: 递减最小调用间隔计数器
+			if (productivebeesgenesis$minIntervalRemaining > 0) {
+				productivebeesgenesis$minIntervalRemaining--;
+			}
+			// Step 5: 每 tick 重置弹出次数上限（配置 0=无限制 → Integer.MAX_VALUE）
+			int maxPerTick = ModConfig.SERVER.mekCentrifugeEjectMaxPerTick.get();
+			productivebeesgenesis$ejectsRemainingThisTick = (maxPerTick > 0) ? maxPerTick : Integer.MAX_VALUE;
+		}
+	}
 
-    /**
-     * 拦截 tickServer 中对 outputItems 的调用。
-     * <p>
-     * 非目标方块实体保持原行为；目标方块实体在冷却期内直接跳过 outputItems，
-     * 否则执行 outputItems，并根据输出槽物品总量变化更新阻塞计数器。
-     */
-    @Redirect(
-            method = "tickServer",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lmekanism/common/tile/component/TileComponentEjector;outputItems(Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V"
-            )
-    )
-    private void productivebeesgenesis$redirectOutputItems(TileComponentEjector ejector, Direction facing, ConfigInfo info) {
-        TileEntityMekanism tile = ((TileEntityEjectorAccessor) ejector).productivebeesgenesis$getTile();
-        if (!(tile instanceof IHasEjectorCooldown)) {
-            outputItems(facing, info);
-            return;
-        }
+	/**
+	 * 拦截 tickServer 中对 outputItems 的调用。
+	 * <p>
+	 * 非目标方块实体保持原行为；目标方块实体在冷却期内直接跳过 outputItems，
+	 * 否则执行 outputItems，并根据输出槽物品总量变化更新阻塞计数器。
+	 */
+	@Redirect(
+			method = "tickServer",
+			at = @At(
+					value = "INVOKE",
+					target = "Lmekanism/common/tile/component/TileComponentEjector;outputItems(Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V"
+			)
+	)
+	private void productivebeesgenesis$redirectOutputItems(TileComponentEjector ejector, Direction facing, ConfigInfo info) {
+		TileEntityMekanism tile = ((TileEntityEjectorAccessor) ejector).productivebeesgenesis$getTile();
+		if (!(tile instanceof IHasEjectorCooldown)) {
+			outputItems(facing, info);
+			return;
+		}
 
-        boolean maxSpeedMode = ModConfig.SERVER.mekCentrifugeEjectMaxSpeedMode.get();
+		boolean maxSpeedMode = ModConfig.SERVER.mekCentrifugeEjectMaxSpeedMode.get();
 
-        // 阻塞冷却计数器已在 tickServer 头部递减；此处直接跳过 outputItems 调用
-        if (productivebeesgenesis$ejectCooldown.get() > 0) {
-            return;
-        }
-        // Task 23: 长冷却期间跳过 outputItems（最大速度模式下关闭此节流）
-        if (!maxSpeedMode && productivebeesgenesis$busyCooldown.get() > 0) {
-            return;
-        }
+		// 阻塞冷却计数器已在 tickServer 头部递减；此处直接跳过 outputItems 调用
+		if (productivebeesgenesis$ejectCooldown.get() > 0) {
+			return;
+		}
+		// Task 23: 长冷却期间跳过 outputItems（最大速度模式下关闭此节流）
+		if (!maxSpeedMode && productivebeesgenesis$busyCooldown.get() > 0) {
+			return;
+		}
 
-        // Task 16 + Task 23: 输出槽内容未变化或强制最小间隔时跳过 outputItems
-        // 最大速度模式下关闭这些节流逻辑，仅保留阻塞冷却兜底
-        boolean outputFull = productivebeesgenesis$outputSlotsFull(tile);
-        if (!maxSpeedMode) {
-            if (ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get()) {
-                long currentVersion = productivebeesgenesis$getOutputContentsVersion(tile);
-                // 输出槽满时强制重置跳过计数器，避免产物因跳过 outputItems 而积压停机
-                if (outputFull) {
-                    productivebeesgenesis$lastOutputContentsVersion = currentVersion;
-                    productivebeesgenesis$skipTicksRemaining = 0;
-                    productivebeesgenesis$minIntervalRemaining = 0;
-                } else if (currentVersion == productivebeesgenesis$lastOutputContentsVersion) {
-                    if (productivebeesgenesis$skipTicksRemaining > 0) {
-                        productivebeesgenesis$skipTicksRemaining--;
-                        return;
-                    }
-                } else {
-                    // 输出槽内容发生变化：立即重置跳过计数器，确保物品能第一时间弹出
-                    productivebeesgenesis$lastOutputContentsVersion = currentVersion;
-                    productivebeesgenesis$skipTicksRemaining = 0;
-                }
-            }
-            // Task 23: 最小调用间隔兜底（仅在输出槽未满时生效）
-            if (!outputFull && productivebeesgenesis$minIntervalRemaining > 0) {
-                productivebeesgenesis$minIntervalRemaining--;
-                return;
-            }
-        }
+		// Task 16 + Task 23: 输出槽内容未变化或强制最小间隔时跳过 outputItems
+		// 最大速度模式下关闭这些节流逻辑，仅保留阻塞冷却兜底
+		boolean outputFull = productivebeesgenesis$outputSlotsFull(tile);
+		if (!maxSpeedMode) {
+			if (ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get()) {
+				long currentVersion = productivebeesgenesis$getOutputContentsVersion(tile);
+				// 输出槽满时强制重置跳过计数器，避免产物因跳过 outputItems 而积压停机
+				if (outputFull) {
+					productivebeesgenesis$lastOutputContentsVersion = currentVersion;
+					productivebeesgenesis$skipTicksRemaining = 0;
+					productivebeesgenesis$minIntervalRemaining = 0;
+				} else if (currentVersion == productivebeesgenesis$lastOutputContentsVersion) {
+					if (productivebeesgenesis$skipTicksRemaining > 0) {
+						productivebeesgenesis$skipTicksRemaining--;
+						return;
+					}
+				} else {
+					// 输出槽内容发生变化：立即重置跳过计数器，确保物品能第一时间弹出
+					productivebeesgenesis$lastOutputContentsVersion = currentVersion;
+					productivebeesgenesis$skipTicksRemaining = 0;
+				}
+			}
+			// Task 23: 最小调用间隔兜底（仅在输出槽未满时生效）
+			if (!outputFull && productivebeesgenesis$minIntervalRemaining > 0) {
+				productivebeesgenesis$minIntervalRemaining--;
+				return;
+			}
+		}
 
-        // Step 5: 单 tick 弹出次数上限（最大速度模式下跳过此上限）
-        // ejectsRemainingThisTick <= 0 表示本 tick 配额已耗尽；Integer.MAX_VALUE 表示无限制（配置 0）
-        if (!maxSpeedMode) {
-            if (productivebeesgenesis$ejectsRemainingThisTick <= 0) {
-                return;
-            }
-            productivebeesgenesis$ejectsRemainingThisTick--;
-        }
+		// Step 5: 单 tick 弹出次数上限（最大速度模式下跳过此上限）
+		// ejectsRemainingThisTick <= 0 表示本 tick 配额已耗尽；Integer.MAX_VALUE 表示无限制（配置 0）
+		if (!maxSpeedMode) {
+			if (productivebeesgenesis$ejectsRemainingThisTick <= 0) {
+				return;
+			}
+			productivebeesgenesis$ejectsRemainingThisTick--;
+		}
 
-        long before = productivebeesgenesis$getOutputItemCount(tile);
-        outputItems(facing, info);
-        long after = productivebeesgenesis$getOutputItemCount(tile);
+		long before = productivebeesgenesis$getOutputItemCount(tile);
+		outputItems(facing, info);
+		long after = productivebeesgenesis$getOutputItemCount(tile);
 
-        // Task 16: 调用 outputItems 后缓存版本号并设置下次可跳过的 tick 数
-        // 最大速度模式下不维护跳过状态
-        if (!maxSpeedMode && ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get()) {
-            productivebeesgenesis$lastOutputContentsVersion = productivebeesgenesis$getOutputContentsVersion(tile);
-            productivebeesgenesis$skipTicksRemaining = ModConfig.SERVER.mekCentrifugeEjectSkipTicks.get();
-        }
-        // Task 23: 每次调用后强制进入最小间隔（最大速度模式下关闭）
-        if (!maxSpeedMode) {
-            productivebeesgenesis$minIntervalRemaining = ModConfig.SERVER.mekCentrifugeEjectMinInterval.get();
-        }
+		// Task 16: 调用 outputItems 后缓存版本号并设置下次可跳过的 tick 数
+		// 最大速度模式下不维护跳过状态
+		if (!maxSpeedMode && ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get()) {
+			productivebeesgenesis$lastOutputContentsVersion = productivebeesgenesis$getOutputContentsVersion(tile);
+			productivebeesgenesis$skipTicksRemaining = ModConfig.SERVER.mekCentrifugeEjectSkipTicks.get();
+		}
+		// Task 23: 每次调用后强制进入最小间隔（最大速度模式下关闭）
+		if (!maxSpeedMode) {
+			productivebeesgenesis$minIntervalRemaining = ModConfig.SERVER.mekCentrifugeEjectMinInterval.get();
+		}
 
-        // 输出槽原本无物品或成功减少：本轮没有实际工作或已弹出，重置失败计数
-        if (before == 0 || after < before) {
-            productivebeesgenesis$consecutiveEmptyEjects.set(0);
-            if (!maxSpeedMode) {
-                productivebeesgenesis$consecutiveBusyEjects.set(0);
-            }
-            return;
-        }
+		// 输出槽原本无物品或成功减少：本轮没有实际工作或已弹出，重置失败计数
+		if (before == 0 || after < before) {
+			productivebeesgenesis$consecutiveEmptyEjects.set(0);
+			if (!maxSpeedMode) {
+				productivebeesgenesis$consecutiveBusyEjects.set(0);
+			}
+			return;
+		}
 
-        // Task 14: 输出侧完全阻塞时进入冷却，最大速度模式下仍保留此兜底
-        int failures = productivebeesgenesis$consecutiveEmptyEjects.incrementAndGet();
-        int blockedThreshold = ModConfig.SERVER.mekCentrifugeEjectBlockedThreshold.get();
-        if (failures >= blockedThreshold) {
-            int cooldown = ModConfig.SERVER.mekCentrifugeEjectBlockedCooldown.get();
-            if (cooldown > 0) {
-                productivebeesgenesis$ejectCooldown.set(cooldown);
-            }
-            productivebeesgenesis$consecutiveEmptyEjects.set(0);
-        }
+		// Task 14: 输出侧完全阻塞时进入冷却，最大速度模式下仍保留此兜底
+		int failures = productivebeesgenesis$consecutiveEmptyEjects.incrementAndGet();
+		int blockedThreshold = ModConfig.SERVER.mekCentrifugeEjectBlockedThreshold.get();
+		if (failures >= blockedThreshold) {
+			int cooldown = ModConfig.SERVER.mekCentrifugeEjectBlockedCooldown.get();
+			if (cooldown > 0) {
+				productivebeesgenesis$ejectCooldown.set(cooldown);
+			}
+			productivebeesgenesis$consecutiveEmptyEjects.set(0);
+		}
 
-        // Task 23: 连续未减少输出槽物品总量时进入长冷却（最大速度模式下关闭此节流）
-        if (!maxSpeedMode) {
-            int busyFailures = productivebeesgenesis$consecutiveBusyEjects.incrementAndGet();
-            int busyThreshold = ModConfig.SERVER.mekCentrifugeEjectBusyThreshold.get();
-            if (busyFailures >= busyThreshold) {
-                int busyCooldown = ModConfig.SERVER.mekCentrifugeEjectBusyCooldown.get();
-                if (busyCooldown > 0) {
-                    productivebeesgenesis$busyCooldown.set(busyCooldown);
-                }
-                productivebeesgenesis$consecutiveBusyEjects.set(0);
-            }
-        }
-    }
+		// Task 23: 连续未减少输出槽物品总量时进入长冷却（最大速度模式下关闭此节流）
+		if (!maxSpeedMode) {
+			int busyFailures = productivebeesgenesis$consecutiveBusyEjects.incrementAndGet();
+			int busyThreshold = ModConfig.SERVER.mekCentrifugeEjectBusyThreshold.get();
+			if (busyFailures >= busyThreshold) {
+				int busyCooldown = ModConfig.SERVER.mekCentrifugeEjectBusyCooldown.get();
+				if (busyCooldown > 0) {
+					productivebeesgenesis$busyCooldown.set(busyCooldown);
+				}
+				productivebeesgenesis$consecutiveBusyEjects.set(0);
+			}
+		}
+	}
 
-    /**
-     * 读取输出槽物品总数（O(1)）。
-     * <p>
-     * 通过 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()} 读取由输出槽 listener
-     * 增量维护的计数，替代 O(processes×3) 遍历的 countOutputItems，降低高频弹出时的 CPU 开销。
-     * 非目标机器返回 0。
-     */
-    @Unique
-    private static long productivebeesgenesis$getOutputItemCount(TileEntityMekanism tile) {
-        if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
-            return mekCentrifuge.productivebeesgenesis$outputItemCount();
-        }
-        return 0;
-    }
+	/**
+	 * 读取输出槽物品总数（O(1)）。
+	 * <p>
+	 * 通过 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()} 读取由输出槽 listener
+	 * 增量维护的计数，替代 O(processes×3) 遍历的 countOutputItems，降低高频弹出时的 CPU 开销。
+	 * 非目标机器返回 0。
+	 */
+	@Unique
+	private static long productivebeesgenesis$getOutputItemCount(TileEntityMekanism tile) {
+		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
+			return mekCentrifuge.productivebeesgenesis$outputItemCount();
+		}
+		return 0;
+	}
 
-    /**
-     * 获取输出槽内容版本号。
-     * <p>
-     * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 -1，使跳过逻辑失效，
-     * 保持原行为。
-     */
-    @Unique
-    private static long productivebeesgenesis$getOutputContentsVersion(TileEntityMekanism tile) {
-        if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
-            return mekCentrifuge.productivebeesgenesis$outputContentsVersion();
-        }
-        return -1L;
-    }
+	/**
+	 * 获取输出槽内容版本号。
+	 * <p>
+	 * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 -1，使跳过逻辑失效，
+	 * 保持原行为。
+	 */
+	@Unique
+	private static long productivebeesgenesis$getOutputContentsVersion(TileEntityMekanism tile) {
+		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
+			return mekCentrifuge.productivebeesgenesis$outputContentsVersion();
+		}
+		return -1L;
+	}
 
-    /**
-     * 获取输出槽是否已满。
-     * <p>
-     * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 false，保持跳过逻辑原行为。
-     */
-    @Unique
-    private static boolean productivebeesgenesis$outputSlotsFull(TileEntityMekanism tile) {
-        if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
-            return mekCentrifuge.productivebeesgenesis$outputSlotsFull();
-        }
-        return false;
-    }
+	/**
+	 * 获取输出槽是否已满。
+	 * <p>
+	 * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 false，保持跳过逻辑原行为。
+	 */
+	@Unique
+	private static boolean productivebeesgenesis$outputSlotsFull(TileEntityMekanism tile) {
+		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
+			return mekCentrifuge.productivebeesgenesis$outputSlotsFull();
+		}
+		return false;
+	}
 }

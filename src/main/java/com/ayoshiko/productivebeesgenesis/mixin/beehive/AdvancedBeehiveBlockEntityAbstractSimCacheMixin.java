@@ -24,31 +24,31 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
 public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 
-    /** 上次缓存 isSim() 结果时的游戏刻，-1L 表示未缓存 */
-    @Unique
-    private long productivebeesgenesis$isSimCacheTick = -1L;
+	/** 上次缓存 isSim() 结果时的游戏刻，-1L 表示未缓存 */
+	@Unique
+	private long productivebeesgenesis$isSimCacheTick = -1L;
 
-    /** 对应 tick 的 isSim() 缓存值 */
-    @Unique
-    private boolean productivebeesgenesis$isSimCacheValue;
+	/** 对应 tick 的 isSim() 缓存值 */
+	@Unique
+	private boolean productivebeesgenesis$isSimCacheValue;
 
-    @Redirect(
-            method = "tickBees(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;)V",
-            at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z"),
-            remap = false
-    )
-    private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity) {
-        if (!ModConfig.SERVER.advancedBeehiveCacheIsSim.get()) {
-            return blockEntity.isSim();
-        }
-        Level level = blockEntity.getLevel();
-        long gameTime = level != null ? level.getGameTime() : -1L;
-        AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =
-                (AdvancedBeehiveBlockEntityAbstractSimCacheMixin) (Object) blockEntity;
-        if (gameTime != mixin.productivebeesgenesis$isSimCacheTick) {
-            mixin.productivebeesgenesis$isSimCacheTick = gameTime;
-            mixin.productivebeesgenesis$isSimCacheValue = blockEntity.isSim();
-        }
-        return mixin.productivebeesgenesis$isSimCacheValue;
-    }
+	@Redirect(
+			method = "tickBees(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;)V",
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z"),
+			remap = false
+	)
+	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity) {
+		if (!ModConfig.SERVER.advancedBeehiveCacheIsSim.get()) {
+			return blockEntity.isSim();
+		}
+		Level level = blockEntity.getLevel();
+		long gameTime = level != null ? level.getGameTime() : -1L;
+		AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =
+				(AdvancedBeehiveBlockEntityAbstractSimCacheMixin) (Object) blockEntity;
+		if (gameTime != mixin.productivebeesgenesis$isSimCacheTick) {
+			mixin.productivebeesgenesis$isSimCacheTick = gameTime;
+			mixin.productivebeesgenesis$isSimCacheValue = blockEntity.isSim();
+		}
+		return mixin.productivebeesgenesis$isSimCacheValue;
+	}
 }

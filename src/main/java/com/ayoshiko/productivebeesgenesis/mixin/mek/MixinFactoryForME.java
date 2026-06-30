@@ -41,45 +41,45 @@ import java.util.function.Supplier;
 @Mixin(value = Factory.class, remap = false, priority = 1100)
 public abstract class MixinFactoryForME extends BlockType {
 
-    private MixinFactoryForME() {
-        super(null);
-    }
+	private MixinFactoryForME() {
+		super(null);
+	}
 
-    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
-                                               Machine.FactoryMachine<?> origMachine, FactoryTier tier,
-                                               CallbackInfo ci) {
-        if (!MekCompatHooks.isMekanismExtrasLoaded()) {
-            return;
-        }
-        // 仅处理ULTIMATE等级
-        if (tier != FactoryTier.ULTIMATE) {
-            return;
-        }
-        // 仅处理SMELTING类型
-        if (get(AttributeFactoryType.class) == null
-                || get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
-            return;
-        }
-        // 通过description前缀判断origMachine是否为我们的离心机工厂
-        // 防御性检查：getDescription() 可能返回 null
-        var description = origMachine.getDescription();
-        if (description == null) {
-            return;
-        }
-        String desc = description.getTranslationKey();
-        if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
-            return;
-        }
-        // 移除ME的MixinFactory注入的ExtraAttributeUpgradeable（指向ME原版ABSOLUTE电力熔炼炉）
-        this.remove(ExtraAttributeUpgradeable.class);
-        // 添加指向我们的ABSOLUTE离心机工厂的ExtraAttributeUpgradeable
-        ExtraMachine.ExtraFactoryMachine<?> absoluteType = MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE);
-        if (absoluteType != null) {
-            ExtraAttributeUpgradeable upgradeable = absoluteType.get(ExtraAttributeUpgradeable.class);
-            if (upgradeable != null) {
-                this.add(upgradeable);
-            }
-        }
-    }
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
+											   Machine.FactoryMachine<?> origMachine, FactoryTier tier,
+											   CallbackInfo ci) {
+		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
+			return;
+		}
+		// 仅处理ULTIMATE等级
+		if (tier != FactoryTier.ULTIMATE) {
+			return;
+		}
+		// 仅处理SMELTING类型
+		if (get(AttributeFactoryType.class) == null
+				|| get(AttributeFactoryType.class).getFactoryType() != FactoryType.SMELTING) {
+			return;
+		}
+		// 通过description前缀判断origMachine是否为我们的离心机工厂
+		// 防御性检查：getDescription() 可能返回 null
+		var description = origMachine.getDescription();
+		if (description == null) {
+			return;
+		}
+		String desc = description.getTranslationKey();
+		if (desc == null || !desc.startsWith("block." + ProductiveBeesGenesis.MOD_ID + ".")) {
+			return;
+		}
+		// 移除ME的MixinFactory注入的ExtraAttributeUpgradeable（指向ME原版ABSOLUTE电力熔炼炉）
+		this.remove(ExtraAttributeUpgradeable.class);
+		// 添加指向我们的ABSOLUTE离心机工厂的ExtraAttributeUpgradeable
+		ExtraMachine.ExtraFactoryMachine<?> absoluteType = MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE);
+		if (absoluteType != null) {
+			ExtraAttributeUpgradeable upgradeable = absoluteType.get(ExtraAttributeUpgradeable.class);
+			if (upgradeable != null) {
+				this.add(upgradeable);
+			}
+		}
+	}
 }

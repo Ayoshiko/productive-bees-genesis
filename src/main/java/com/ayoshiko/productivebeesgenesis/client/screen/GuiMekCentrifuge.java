@@ -37,34 +37,34 @@ import org.jetbrains.annotations.NotNull;
  */
 public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
 
-    public GuiMekCentrifuge(MekanismTileContainer<TileEntityMekCentrifuge> container, Inventory inv, Component title) {
-        super(container, inv, title);
-        dynamicSlots = true;
-        // 流体槽底部到83，需要增加imageHeight以避免与背包标签重叠
-        imageHeight += 12;
-        // 物品栏标题上移到物品栏格子之上（背包格子位于y=imageHeight-94=84，占y=84-102）
-        // 默认inventoryLabelY=imageHeight-94=84，会与物品栏顶部重叠，需上移6到y=78
-        inventoryLabelY -= 6;
-    }
+	public GuiMekCentrifuge(MekanismTileContainer<TileEntityMekCentrifuge> container, Inventory inv, Component title) {
+		super(container, inv, title);
+		dynamicSlots = true;
+		// 流体槽底部到83，需要增加imageHeight以避免与背包标签重叠
+		imageHeight += 12;
+		// 物品栏标题上移到物品栏格子之上（背包格子位于y=imageHeight-94=84，占y=84-102）
+		// 默认inventoryLabelY=imageHeight-94=84，会与物品栏顶部重叠，需上移6到y=78
+		inventoryLabelY -= 6;
+	}
 
-    @Override
-    protected void addGuiElements() {
-        super.addGuiElements();
+	@Override
+	protected void addGuiElements() {
+		super.addGuiElements();
 
-        addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), 164, 15)
-                .warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY)));
-        addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(), tile::getActive));
-        // 流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
-        addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(), FactoryLayoutHelper.getCentrifugeFluidTankY()));
-        addRenderableWidget(new GuiProgress(tile::getScaledProgress, ProgressType.BAR, this, 86, 38)
-                .recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
-                .warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
-    }
+		addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), 164, 15)
+				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY)));
+		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(), tile::getActive));
+		// 流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
+		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(), FactoryLayoutHelper.getCentrifugeFluidTankY()));
+		addRenderableWidget(new GuiProgress(tile::getScaledProgress, ProgressType.BAR, this, 86, 38)
+				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
+				.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
+	}
 
-    @Override
-    protected void drawForegroundText(@NotNull net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        renderTitleText(guiGraphics);
-        renderInventoryText(guiGraphics);
-        super.drawForegroundText(guiGraphics, mouseX, mouseY);
-    }
+	@Override
+	protected void drawForegroundText(@NotNull net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY) {
+		renderTitleText(guiGraphics);
+		renderInventoryText(guiGraphics);
+		super.drawForegroundText(guiGraphics, mouseX, mouseY);
+	}
 }

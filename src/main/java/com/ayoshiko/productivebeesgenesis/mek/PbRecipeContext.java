@@ -99,38 +99,38 @@ public interface PbRecipeContext {
 	boolean productivebeesgenesis$hasOutputItems();
 
 	/** 输出槽是否已满（供 PbRecipeProcessor.areOutputSlotsFull 读取，存在任意进程满时为true） */
-    boolean productivebeesgenesis$outputSlotsFull();
+	boolean productivebeesgenesis$outputSlotsFull();
 
-    /**
-     * 输出槽是否已满（按进程）
-     * <br/>
-     * 供 {@link PbRecipeProcessor} 判断指定进程的输出槽是否已满，避免全局标志导致
-     * 单个进程输出槽满时所有进程暂停。
-     *
-     * @param process 进程索引
-     * @return true 如果该进程的所有物品输出槽均无剩余空间
-     */
-    default boolean productivebeesgenesis$outputSlotsFull(int process) {
-        return productivebeesgenesis$outputSlotsFull();
-    }
+	/**
+	 * 输出槽是否已满（按进程）
+	 * <br/>
+	 * 供 {@link PbRecipeProcessor} 判断指定进程的输出槽是否已满，避免全局标志导致
+	 * 单个进程输出槽满时所有进程暂停。
+	 *
+	 * @param process 进程索引
+	 * @return true 如果该进程的所有物品输出槽均无剩余空间
+	 */
+	default boolean productivebeesgenesis$outputSlotsFull(int process) {
+		return productivebeesgenesis$outputSlotsFull();
+	}
 
-    /** 重新计算输出槽状态标志（在输出槽 IContentsListener 中调用） */
-    void productivebeesgenesis$updateOutputSlotFlags();
+	/** 重新计算输出槽状态标志（在输出槽 IContentsListener 中调用） */
+	void productivebeesgenesis$updateOutputSlotFlags();
 
-    /**
-     * 开始批量输出插入
-     * <br/>
-     * 在 {@link PbRecipeProcessor} 完成一次 PB 配方输出前调用，
-     * 期间输出槽 listener 只标记 dirty，避免每次 insertItem 都全量扫描。
-     */
-    void productivebeesgenesis$beginOutputBatch();
+	/**
+	 * 开始批量输出插入
+	 * <br/>
+	 * 在 {@link PbRecipeProcessor} 完成一次 PB 配方输出前调用，
+	 * 期间输出槽 listener 只标记 dirty，避免每次 insertItem 都全量扫描。
+	 */
+	void productivebeesgenesis$beginOutputBatch();
 
-    /**
-     * 结束批量输出插入
-     *
-     * @param process 发生变化的进程索引
-     */
-    void productivebeesgenesis$endOutputBatch(int process);
+	/**
+	 * 结束批量输出插入
+	 *
+	 * @param process 发生变化的进程索引
+	 */
+	void productivebeesgenesis$endOutputBatch(int process);
 
 	// ===== Task 11: 激活状态计数器 =====
 

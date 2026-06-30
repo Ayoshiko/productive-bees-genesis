@@ -14,21 +14,21 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(value = TileEntityFactory.class, remap = false)
 public interface TileEntityFactoryAccessor {
 
-    @Accessor("energySlot")
-    EnergyInventorySlot productivebeesgenesis$getEnergySlot();
+	@Accessor("energySlot")
+	EnergyInventorySlot productivebeesgenesis$getEnergySlot();
 
-    @Accessor("energySlot")
-    void productivebeesgenesis$setEnergySlot(EnergyInventorySlot slot);
+	@Accessor("energySlot")
+	void productivebeesgenesis$setEnergySlot(EnergyInventorySlot slot);
 
-    /** 暴露activeStates数组 — 用于onUpdateServer中重算整体激活状态 */
-    @Accessor("activeStates")
-    boolean[] productivebeesgenesis$getActiveStates();
+	/** 暴露activeStates数组 — 用于onUpdateServer中重算整体激活状态 */
+	@Accessor("activeStates")
+	boolean[] productivebeesgenesis$getActiveStates();
 
-    /** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
-    @Accessor("lastUsage")
-    void productivebeesgenesis$setLastUsage(long value);
+	/** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
+	@Accessor("lastUsage")
+	void productivebeesgenesis$setLastUsage(long value);
 
-    /** 暴露sortingNeeded setter — 用于重写getInitialInventory时标记排序需要更新 */
-    @Accessor("sortingNeeded")
-    void productivebeesgenesis$setSortingNeeded(boolean value);
+	/** 暴露sortingNeeded setter — 用于重写getInitialInventory时标记排序需要更新 */
+	@Accessor("sortingNeeded")
+	void productivebeesgenesis$setSortingNeeded(boolean value);
 }
