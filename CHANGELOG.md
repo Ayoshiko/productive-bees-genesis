@@ -60,7 +60,7 @@
 - 更新 `devMode` 提示文本：说明该选项仅供模组开发者调试使用，普通用户无需开启
 
 ### 修复
-- 在 [ModCreativeTabs.java](file:///e:/mczuixin/MCkaifa/1.21.1kaifa/ziyuanmifeng/productive-bees-addon/src/main/java/com/ayoshiko/productivebeesgenesis/init/ModCreativeTabs.java) 读取服务端 `devMode` 时增加 `ModConfig.SERVER_SPEC.isLoaded()` 保护，避免多人游戏客户端未加载服务端配置时崩溃
+- 在 `ModCreativeTabs` 读取服务端 `devMode` 时增加 `ModConfig.SERVER_SPEC.isLoaded()` 保护，避免多人游戏客户端未加载服务端配置时崩溃
 
 ## [1.2.0] - 2026-06-30
 
@@ -84,7 +84,6 @@
 - **过滤配置持久化**：修复 `FilterListScreen` 点击保存后配置未写入 `server.toml` 的问题，保存后显式调用 `ModConfig.SERVER_SPEC.save()`
 
 ### 变更
-- 版本号从 1.1.0 递增至 1.2.0
 - **高级蜂箱缓存优化**：`isSim()` 与 `hasNectar()` 缓存为默认开启且不可关闭的内部优化，已从服务端配置界面移除对应配置项，避免玩家误关闭导致性能回退
 
 ## [1.1.0] - 2026-06-29
