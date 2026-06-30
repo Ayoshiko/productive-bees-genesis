@@ -178,7 +178,7 @@
   "productivebeesgenesis.configuration.common.button": "通用配置",
   "productivebeesgenesis.configuration.common.tooltip": "跨端同步且无需按存档区分的参数",
   "productivebeesgenesis.configuration.devMode": "开发者模式",
-  "productivebeesgenesis.configuration.devMode.tooltip": "开启后创造模式标签页会显示无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）。",
+  "productivebeesgenesis.configuration.devMode.tooltip": "模组开发者用来调试模组正常功能不会用到的物品和调试配置日志等，用户无需开启此设置。",
   "productivebeesgenesis.configuration.filterMode": "过滤模式",
   "productivebeesgenesis.configuration.filterMode.tooltip": "DISABLED-不过滤 / BLACKLIST-排除列表中的蜜蜂类型 / WHITELIST-仅允许列表中的蜜蜂类型",
   "productivebeesgenesis.configuration.filteredBeeTypes": "过滤的蜜蜂类型",

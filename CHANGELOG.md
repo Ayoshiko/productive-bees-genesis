@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.1] - 2026-06-30
+
+### 变更
+- 将 `devMode`（开发者模式）从客户端配置迁移到服务端配置，更符合其“存档/服务器级调试开关”的语义
+- 更新 `devMode` 提示文本：说明该选项仅供模组开发者调试使用，普通用户无需开启
+
+### 修复
+- 在 [ModCreativeTabs.java](file:///e:/mczuixin/MCkaifa/1.21.1kaifa/ziyuanmifeng/productive-bees-addon/src/main/java/com/ayoshiko/productivebeesgenesis/init/ModCreativeTabs.java) 读取服务端 `devMode` 时增加 `ModConfig.SERVER_SPEC.isLoaded()` 保护，避免多人游戏客户端未加载服务端配置时崩溃
+
 ## [1.2.0] - 2026-06-30
 
 ### 新增

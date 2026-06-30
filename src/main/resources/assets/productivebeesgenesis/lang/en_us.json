@@ -178,7 +178,7 @@
   "productivebeesgenesis.configuration.common.button": "General",
   "productivebeesgenesis.configuration.common.tooltip": "Cross-client synchronized parameters that do not vary by save",
   "productivebeesgenesis.configuration.devMode": "Developer Mode",
-  "productivebeesgenesis.configuration.devMode.tooltip": "Show Infinity Creation comb, comb block and Sword of Cosmic Dominion (replica) in the creative inventory tab.",
+  "productivebeesgenesis.configuration.devMode.tooltip": "For mod developers only. Enables debug items and config logs not used in normal gameplay. Regular users do not need to enable this.",
   "productivebeesgenesis.configuration.createComb": "Create Comb",
   "productivebeesgenesis.configuration.filterMode": "Filter Mode",
   "productivebeesgenesis.configuration.filterMode.tooltip": "DISABLED-No filter / BLACKLIST-Exclude listed bee types / WHITELIST-Only allow listed bee types",

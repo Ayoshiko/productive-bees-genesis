@@ -116,9 +116,6 @@ public final class ModConfig {
 		public final ModConfigSpec.BooleanValue showPortColors;
 		public final ModConfigSpec.IntValue portColorRenderRange;
 
-		// ========== 开发者模式（控制创造模式标签页隐藏物品显示）==========
-		public final ModConfigSpec.BooleanValue devMode;
-
 		ClientConfig(ModConfigSpec.Builder builder) {
 			// 彩虹特效配置（仅客户端可见的粒子/光晕开关）
 			builder.push("rainbow_effects").comment("万象创世蜜蜂彩虹特效配置（仅客户端生效）");
@@ -153,11 +150,6 @@ public final class ModConfig {
 					.defineInRange("portColorRenderRange", 16, 4, 32);
 
 			builder.pop(); // mek_port_visualization
-
-			// 开发者模式：开启后才能在创造模式物品栏看到无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）
-			devMode = builder
-					.comment("开发者模式", "开启后创造模式标签页会显示无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）")
-					.define("devMode", false);
 		}
 	}
 
@@ -189,6 +181,9 @@ public final class ModConfig {
 	 * 无需执行 /reload。
 	 */
 	public static class ServerConfig {
+
+		// ========== 开发者模式（服务端控制）==========
+		public final ModConfigSpec.BooleanValue devMode;
 
 		// ========== 万象创世过滤配置（存档级别）==========
 		// 使用枚举类型，ConfigurationScreen自动渲染循环切换按钮
@@ -277,6 +272,11 @@ public final class ModConfig {
 		public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 
 		ServerConfig(ModConfigSpec.Builder builder) {
+			// 开发者模式：模组开发者用来调试正常功能不会用到的物品和调试配置日志等，用户无需开启此设置
+			devMode = builder
+					.comment("开发者模式", "模组开发者用来调试模组正常功能不会用到的物品和调试配置日志等，用户无需开启此设置。")
+					.define("devMode", false);
+
 			builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
 
 			myriadCreationsFilterMode = builder

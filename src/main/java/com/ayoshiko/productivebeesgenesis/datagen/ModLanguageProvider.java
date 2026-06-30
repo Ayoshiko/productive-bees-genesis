@@ -72,7 +72,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.common.button", "General");
         add("productivebeesgenesis.configuration.common.tooltip", "Cross-client synchronized parameters that do not vary by save");
         add("productivebeesgenesis.configuration.devMode", "Developer Mode");
-        add("productivebeesgenesis.configuration.devMode.tooltip", "Show Infinity Creation comb, comb block and Sword of Cosmic Dominion (replica) in the creative inventory tab.");
+        add("productivebeesgenesis.configuration.devMode.tooltip", "For mod developers only. Enables debug items and config logs not used in normal gameplay. Regular users do not need to enable this.");
         add("productivebeesgenesis.configuration.createComb", "Create Comb");
         add("productivebeesgenesis.configuration.createComb.tooltip", "Whether can produce honeycomb");
         add("productivebeesgenesis.configuration.ejectBusyCooldown", "Busy Eject Cooldown (ticks)");
@@ -262,7 +262,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.common.button", "通用配置");
         add("productivebeesgenesis.configuration.common.tooltip", "跨端同步且无需按存档区分的参数");
         add("productivebeesgenesis.configuration.devMode", "开发者模式");
-        add("productivebeesgenesis.configuration.devMode.tooltip", "开启后创造模式标签页会显示无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）。");
+        add("productivebeesgenesis.configuration.devMode.tooltip", "模组开发者用来调试模组正常功能不会用到的物品和调试配置日志等，用户无需开启此设置。");
         add("productivebeesgenesis.configuration.createComb", "产出蜜脾");
         add("productivebeesgenesis.configuration.createComb.tooltip", "是否能产出蜜脾");
         add("productivebeesgenesis.configuration.ejectBusyCooldown", "高负载弹出冷却（tick）");

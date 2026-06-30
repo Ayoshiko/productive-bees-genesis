@@ -33,8 +33,10 @@ public final class ModCreativeTabs {
 					.title(Component.translatable("itemGroup.productivebeesgenesis"))
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
-						// 开发者模式：开启后才能在创造模式标签页看到无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）
-						if (ModConfig.CLIENT.devMode.get()) {
+						// 开发者模式：开启后才能在创造模式物品栏看到无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）
+						// 使用 SERVER 配置并加 isLoaded 保护，避免多人游戏客户端未加载服务端配置时崩溃
+						boolean devModeEnabled = ModConfig.SERVER_SPEC.isLoaded() && ModConfig.SERVER.devMode.get();
+						if (devModeEnabled) {
 							output.accept(ModItems.INFINITY_CREATION_COMB.get());
 							output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
 							output.accept(ModItems.INFINITY_SWORD_REPLICA.get());
