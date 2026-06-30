@@ -45,6 +45,7 @@ import net.neoforged.neoforge.common.util.TriPredicate;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityExtraFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -81,11 +82,14 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
     /** PB配方处理器 — 封装所有PB离心配方处理逻辑 */
     private final PbRecipeProcessor pbProcessor;
 
-    // ===== Task 5: 输出槽状态标志位（volatile 保证 IContentsListener 线程与主线程可见性） =====
-    /** 输出槽是否有物品（供 EjectorMixin 读取） */
-    private volatile boolean hasOutputItems = false;
-    /** 输出槽是否已满（存在任意进程的所有输出槽都满时为 true） */
-    private volatile boolean outputSlotsFull = false;
+    // ===== Task 5: 输出槽状态标志位（批量/增量管理，避免每次 insertItem 全量扫描） =====
+    /** 输出槽标志位管理器 */
+    private final OutputSlotFlagManager outputSlotFlagManager;
+    /** addSlots 中传入的排序监听器，批量输出结束时需要触发一次 */
+    private IContentsListener updateSortingListener;
+
+    // ===== Task 16: 输出槽内容版本号（输出槽内容变更时递增） =====
+    private volatile long outputContentsVersion = 0L;
 
     // ===== Task 7: sortInventory 去抖（同 tick 内只标记一次 sortingNeeded） =====
     private volatile boolean sortingMarkedThisTick = false;
@@ -105,12 +109,15 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
         super(blockProvider, pos, state);
         // 初始化PB配方处理器（tier在super()中已通过presetVariables设置）
         pbProcessor = new PbRecipeProcessor(this, "ME工厂离心机");
+        // 初始化输出槽标志位管理器（tier在super()中已设置）
+        outputSlotFlagManager = new OutputSlotFlagManager(this);
 
         // energySlot通过Accessor Mixin访问，副输出槽2注册、IO配置、流体侧面配置、FLUID弹出器由Helper统一处理
         EnergyInventorySlot energySlot = ((TileEntityExtraFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
         ejectorComponent = MekCentrifugeFactoryHelper.setupTertiarySlotsAndIO(
                 this, configComponent, inputSlots, outputSlots, tertiaryOutputSlots,
-                tier.processes, energySlot, energyContainer, fluidOutputTank);
+                tier.processes, energySlot, energyContainer, fluidOutputTank,
+                () -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
     }
 
     /**
@@ -127,6 +134,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
         outputHandlers = new IOutputHandler[tier.processes];
         processInfoSlots = new ProcessInfo[tier.processes];
         tertiaryOutputSlots = new ExtraFactoryOutputInventorySlot[tier.processes];
+        this.updateSortingListener = updateSortingListener;
 
         int baseX = 27;
         int baseXMult = 19;
@@ -137,8 +145,10 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
             FactoryRecipeCacheLookupMonitor<ItemStackToItemStackRecipe> lookupMonitor =
                     (FactoryRecipeCacheLookupMonitor<ItemStackToItemStackRecipe>) recipeCacheLookupMonitors[i];
             IContentsListener updateSortingAndUnpause = () -> {
-                // Task 5: 输出槽变更时实时更新标志位（供 areOutputSlotsFull / EjectorMixin 读取）
-                productivebeesgenesis$updateOutputSlotFlags();
+                // Task 5: 输出槽变更时更新标志位；批量模式下只标记 dirty，避免每次 insertItem 全量扫描
+                outputSlotFlagManager.onSlotChanged();
+                // Task 16: 输出槽内容变化时递增版本号，通知 Ejector Mixin 需要重新尝试输出
+                outputContentsVersion++;
                 // Task 7: 同 tick 内去抖，避免 AE2 高频拉取触发全量排序扫描
                 if (!sortingMarkedThisTick) {
                     sortingMarkedThisTick = true;
@@ -188,14 +198,16 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
      * 重写isItemValidForSlot — 同时查找SMELTING和PB CentrifugeRecipe
      * <br/>
      * 父类默认无条件返回true，导致任意物品都能插入输入槽（如配置卡、红石等）。
-     * 委托给 {@link MekCentrifugeFactoryHelper#isValidInputItem} 验证物品是否有有效配方，
+     * 委托给 {@link MekCentrifugeFactoryHelper#getInputValidationResult} 验证物品是否有有效配方，
+     * 缓存完整 {@link com.ayoshiko.productivebeesgenesis.util.InputValidationCache.ValidationResult}，
+     * 供 tryProcessPbRecipe 等路径复用，避免重复 findPbRecipe。
      * 防止无效物品进入输入槽占用空间。客户端（level为null）返回false避免NPE。
      */
     @Override
     public boolean isItemValidForSlot(@NotNull ItemStack stack) {
         if (level == null) return false;
-        return validInputCache.get(level, stack,
-                () -> MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor));
+        return validInputCache.getResult(level, stack,
+                () -> MekCentrifugeFactoryHelper.getInputValidationResult(getRecipeType(), level, stack, pbProcessor)).valid();
     }
 
     /**
@@ -203,8 +215,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
      */
     @Override
     public boolean isValidInputItem(@NotNull ItemStack stack) {
-        return validInputCache.get(level, stack,
-                () -> MekCentrifugeFactoryHelper.isValidInputItem(getRecipeType(), level, stack, pbProcessor));
+        return validInputCache.getResult(level, stack,
+                () -> MekCentrifugeFactoryHelper.getInputValidationResult(getRecipeType(), level, stack, pbProcessor)).valid();
     }
 
     @Override
@@ -462,21 +474,56 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
     @Override
     public boolean productivebeesgenesis$hasOutputItems() {
-        return hasOutputItems;
+        return outputSlotFlagManager.hasOutputItems();
     }
 
     @Override
     public boolean productivebeesgenesis$outputSlotsFull() {
-        return outputSlotsFull;
+        return outputSlotFlagManager.outputSlotsFull();
     }
 
-    /** 遍历所有进程的输出槽重新计算标志位（由输出槽 IContentsListener 触发） */
+    /** 遍历所有进程的输出槽重新计算标志位（由输出槽 IContentsListener 触发，外部插入/初始化用） */
     @Override
     public void productivebeesgenesis$updateOutputSlotFlags() {
-        MekCentrifugeFactoryHelper.updateOutputSlotFlags(
-                this,
-                hasItems -> hasOutputItems = hasItems,
-                full -> outputSlotsFull = full);
+        outputSlotFlagManager.updateAll();
+    }
+
+    @Override
+    public boolean productivebeesgenesis$outputSlotsFull(int process) {
+        return outputSlotFlagManager.outputSlotsFull(process);
+    }
+
+    @Override
+    public void productivebeesgenesis$beginOutputBatch() {
+        outputSlotFlagManager.beginBatch();
+    }
+
+    @Override
+    public void productivebeesgenesis$endOutputBatch(int process) {
+        if (outputSlotFlagManager.endBatch(process)) {
+            outputContentsVersion++;
+            if (!sortingMarkedThisTick) {
+                sortingMarkedThisTick = true;
+                if (updateSortingListener != null) {
+                    updateSortingListener.onContentsChanged();
+                }
+                if (process >= 0 && process < recipeCacheLookupMonitors.length) {
+                    recipeCacheLookupMonitors[process].unpause();
+                }
+            }
+        }
+    }
+
+    /** Task 16: 返回输出槽内容版本号（供 Ejector Mixin 判断是否跳过 outputItems） */
+    @Override
+    public long productivebeesgenesis$outputContentsVersion() {
+        return outputContentsVersion;
+    }
+
+    /** Step 5: 返回所有输出槽物品总数（O(1)，供 Ejector Mixin 替代 countOutputItems 遍历） */
+    @Override
+    public long productivebeesgenesis$outputItemCount() {
+        return outputSlotFlagManager.outputItemCount();
     }
 
     // ===== Task 11: 激活状态计数器实现 =====

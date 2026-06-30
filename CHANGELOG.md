@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.1.0)
+
+### feat
+* 万象创世批量处理规划器 — `MyriadBatchPlanner` 一次计算输出槽最大容量，支持 64+/tick 高倍加速吞吐
+* 输入校验双层缓存 — `InputValidationCache` TTL + identity 短路，减少 SFM/AE2 高频探测开销
+* 输入-输出兼容性指纹缓存 — `InputOutputCompatibilityCache` 用 `SlotFingerprint` 替代 `ItemStack.copy`
+* 蜜脾块配方 O(1) 静态索引 — `CentrifugeRecipeIndex.getCombBlock` 替代全量配方遍历
+* Ejector 单 tick 弹出上限 — `mekCentrifugeEjectMaxPerTick` 限制 256× 加速下 `outputItems` 调用次数
+* Ejector O(1) 输出计数 — `IMekCentrifugeTile.outputItemCount()` 替代 `O(processes×3)` 遍历
+* 基础机万象路径统一 — `TileEntityMekCentrifuge.completeMyriadCreations` 复用 `MyriadBatchPlanner`
+
+### fix
+* 配置系统分层 — 服务端游戏逻辑配置迁移到 `ServerConfig`，客户端仅保留渲染配置，服务端配置无需 `/reload`
+* 启动崩溃 — 修复 `ServerConfig` 在 `FMLCommonSetupEvent` 未加载导致的 `IllegalStateException`
+* 配置界面翻译键 — 补全所有服务端/通用配置分组和字段的中英文翻译键（扁平键名）
+* 性能监控配置位置 — `enablePerformanceMonitor` 放回 `CommonConfig`，避免跨端读取时机问题
+
+### refactor
+* `PbRecipeProcessor.ticksForBaseCache` 改为 `ConcurrentHashMap`，提升线程安全
+* `TileComponentEjectorCooldownMixin` 清理 `countOutputItems` 旧遍历逻辑
+
 ## [v1.0.0](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.0.0)
 
 ### feat

@@ -127,11 +127,11 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!isMyriadcreations(fishing.output)) {
 				return holder;
 			}
-			if (!ModConfig.COMMON.fishingEnabled.get()) {
+			if (!ModConfig.SERVER.fishingEnabled.get()) {
 				return null;
 			}
-			HolderSet<Biome> biomes = createBiomeHolderSet(ModConfig.COMMON.fishingBiomes.get());
-			float chance = ModConfig.COMMON.fishingChance.get().floatValue();
+			HolderSet<Biome> biomes = createBiomeHolderSet(ModConfig.SERVER.fishingBiomes.get());
+			float chance = ModConfig.SERVER.fishingChance.get().floatValue();
 			BeeFishingRecipe newRecipe = new BeeFishingRecipe(fishing.output, biomes, chance);
 			return new RecipeHolder<>(holder.id(), newRecipe);
 		}
@@ -141,11 +141,11 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!isMyriadcreations(breeding.offspring)) {
 				return holder;
 			}
-			if (!ModConfig.COMMON.breedingEnabled.get()) {
+			if (!ModConfig.SERVER.breedingEnabled.get()) {
 				return null;
 			}
-			Supplier<BeeIngredient> parent1 = BeeIngredientFactory.getIngredient(ModConfig.COMMON.breedingParent1.get());
-			Supplier<BeeIngredient> parent2 = BeeIngredientFactory.getIngredient(ModConfig.COMMON.breedingParent2.get());
+			Supplier<BeeIngredient> parent1 = BeeIngredientFactory.getIngredient(ModConfig.SERVER.breedingParent1.get());
+			Supplier<BeeIngredient> parent2 = BeeIngredientFactory.getIngredient(ModConfig.SERVER.breedingParent2.get());
 			BeeBreedingRecipe newRecipe = new BeeBreedingRecipe(parent1, parent2, breeding.offspring, breeding.parentDeathChance);
 			return new RecipeHolder<>(holder.id(), newRecipe);
 		}
@@ -155,11 +155,11 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!containsMyriadcreations(spawning.output)) {
 				return holder;
 			}
-			if (!ModConfig.COMMON.spawningEnabled.get()) {
+			if (!ModConfig.SERVER.spawningEnabled.get()) {
 				return null;
 			}
-			Ingredient ingredient = createIngredient(ModConfig.COMMON.spawningNest.get());
-			HolderSet<Biome> biomes = createBiomeHolderSetFromString(ModConfig.COMMON.spawningBiomes.get());
+			Ingredient ingredient = createIngredient(ModConfig.SERVER.spawningNest.get());
+			HolderSet<Biome> biomes = createBiomeHolderSetFromString(ModConfig.SERVER.spawningBiomes.get());
 			BeeSpawningRecipe newRecipe = new BeeSpawningRecipe(ingredient, spawning.spawnItem, spawning.output, biomes);
 			return new RecipeHolder<>(holder.id(), newRecipe);
 		}
@@ -169,13 +169,13 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!isMyriadcreations(conversion.result)) {
 				return holder;
 			}
-			if (!ModConfig.COMMON.conversionEnabled.get()) {
+			if (!ModConfig.SERVER.conversionEnabled.get()) {
 				return null;
 			}
-			Supplier<BeeIngredient> source = getBeeIngredient(ModConfig.COMMON.conversionSource.get());
-			Supplier<BeeIngredient> result = getBeeIngredient(ModConfig.COMMON.conversionResult.get());
-			Ingredient item = createIngredient(ModConfig.COMMON.conversionItem.get());
-			float chance = ModConfig.COMMON.conversionChance.get().floatValue();
+			Supplier<BeeIngredient> source = getBeeIngredient(ModConfig.SERVER.conversionSource.get());
+			Supplier<BeeIngredient> result = getBeeIngredient(ModConfig.SERVER.conversionResult.get());
+			Ingredient item = createIngredient(ModConfig.SERVER.conversionItem.get());
+			float chance = ModConfig.SERVER.conversionChance.get().floatValue();
 			BeeConversionRecipe newRecipe = new BeeConversionRecipe(source, result, item, chance);
 			return new RecipeHolder<>(holder.id(), newRecipe);
 		}
@@ -185,7 +185,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!isMyriadcreations(produce.ingredient)) {
 				return holder;
 			}
-			if (!ModConfig.COMMON.produceEnabled.get()) {
+			if (!ModConfig.SERVER.produceEnabled.get()) {
 				return null;
 			}
 			List<TagOutputRecipe.ChancedOutput> outputs = createProduceOutputs();
@@ -330,16 +330,16 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 * 返回单个 {@link TagOutputRecipe.ChancedOutput}，物品、数量、概率均来自配置。
 	 */
 	private static List<TagOutputRecipe.ChancedOutput> createProduceOutputs() {
-		Ingredient ingredient = createIngredient(ModConfig.COMMON.produceOutputItem.get());
-		int min = ModConfig.COMMON.produceOutputMin.get();
-		int max = ModConfig.COMMON.produceOutputMax.get();
+		Ingredient ingredient = createIngredient(ModConfig.SERVER.produceOutputItem.get());
+		int min = ModConfig.SERVER.produceOutputMin.get();
+		int max = ModConfig.SERVER.produceOutputMax.get();
 		// 防御性处理：当配置出现 min > max 时自动纠正，避免 ChancedOutput 行为异常
 		int finalMin = Math.min(min, max);
 		int finalMax = Math.max(min, max);
 		if (finalMin != min || finalMax != max) {
 			ProductiveBeesGenesis.LOGGER.warn("produceOutputMin({}) > produceOutputMax({})，已自动交换", min, max);
 		}
-		float chance = ModConfig.COMMON.produceOutputChance.get().floatValue();
+		float chance = ModConfig.SERVER.produceOutputChance.get().floatValue();
 		List<TagOutputRecipe.ChancedOutput> outputs = new ArrayList<>(1);
 		outputs.add(new TagOutputRecipe.ChancedOutput(ingredient, finalMin, finalMax, chance));
 		return outputs;

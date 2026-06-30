@@ -23,6 +23,7 @@ import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -75,6 +76,28 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 */
 	private static final Map<IItemHandlerModifiable, BlockCheckCache> BLOCK_CHECK_CACHES =
 			Collections.synchronizedMap(new WeakHashMap<>());
+
+	// ===== Task 23: 万象创世类型选择缓存 =====
+	/** 蜜蜂类型缓存版本号，每次成功更新 CACHED_BEE_TYPES 后递增 */
+	private static final AtomicInteger BEE_TYPES_VERSION = new AtomicInteger(0);
+
+	/** 每 count 每 tick 的类型选择缓存（工厂中 count 通常为 1–3，预留到 9 覆盖蜂箱聚合路径） */
+	private static final int MAX_SELECTION_CACHE = 9;
+	private static final SelectionCache[] SELECTION_CACHES;
+
+	static {
+		SELECTION_CACHES = new SelectionCache[MAX_SELECTION_CACHE + 1];
+		for (int i = 0; i < SELECTION_CACHES.length; i++) {
+			SELECTION_CACHES[i] = new SelectionCache();
+		}
+	}
+
+	/** 类型选择缓存条目 */
+	private static final class SelectionCache {
+		long cachedTick = -1L;
+		int cachedVersion = -1;
+		List<ResourceLocation> selected = List.of();
+	}
 
 	// ========== 缓存管理 ==========
 
@@ -129,6 +152,8 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		CACHED_HONEYCOMB_TEMPLATES = buildHoneycombTemplates(newCache);
 		CACHED_COMB_BLOCK_TEMPLATES = buildCombBlockTemplates(newCache);
 		CACHE_VALID.set(!newCache.isEmpty());
+		// Task 23: 递增版本号使类型选择缓存自动失效
+		BEE_TYPES_VERSION.incrementAndGet();
 	}
 
 	/**
@@ -359,12 +384,77 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	}
 
 	/**
+	 * 带缓存的随机类型选择（Task 23）
+	 * <p>
+	 * 在工厂 256x 高倍加速、每 tick 多次完成万象创世配方的场景下，
+	 * 原 {@link #selectDistinctBeeTypes(int, RandomSource)} 会被高频调用，
+	 * 产生大量 {@link HashSet} 分配与随机数计算。此缓存按
+	 * {@code (count, gameTime, beeTypesVersion)} 复用结果，将同 tick 同 count 的
+	 * 多次选择合并为一次随机采样，显著降低 CPU 占用。
+	 * <p>
+	 * 随机性影响：同一游戏刻内相同 {@code count} 的多次完成使用同一类型集合；
+	 * 下一游戏刻会重新随机，长期分布基本不变，且更有利于同类型堆叠。
+	 *
+	 * @param count 需要选取的类型数
+	 * @param level 世界（用于获取当前游戏刻与随机源）
+	 * @return 选中的蜜蜂类型列表
+	 */
+	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level) {
+		if (count <= 0 || level == null) {
+			return List.of();
+		}
+		CopyOnWriteArrayList<ResourceLocation> cache = CACHED_BEE_TYPES;
+		int poolSize = cache.size();
+		if (poolSize == 0) {
+			return List.of();
+		}
+		if (count >= poolSize) {
+			return List.copyOf(cache);
+		}
+		if (count > MAX_SELECTION_CACHE) {
+			// 超出缓存范围时回退到无缓存版本（防御性）
+			return selectDistinctBeeTypes(count, level.getRandom(), cache);
+		}
+
+		long currentTick = level.getGameTime();
+		int currentVersion = BEE_TYPES_VERSION.get();
+		SelectionCache entry = SELECTION_CACHES[count];
+		if (entry.cachedTick == currentTick && entry.cachedVersion == currentVersion) {
+			return entry.selected;
+		}
+
+		// 缓存失效时一次性预生成 1..MAX_SELECTION_CACHE 的候选列表，
+		// 避免同一 tick 内多个 count 各自触发随机采样（高倍加速下仍可能每 tick 多次完成万象配方）
+		RandomSource random = level.getRandom();
+		for (int i = 1; i <= MAX_SELECTION_CACHE; i++) {
+			SelectionCache e = SELECTION_CACHES[i];
+			if (poolSize <= i) {
+				e.selected = List.copyOf(cache);
+			} else {
+				e.selected = List.copyOf(selectDistinctBeeTypes(i, random, cache));
+			}
+			e.cachedTick = currentTick;
+			e.cachedVersion = currentVersion;
+		}
+		return entry.selected;
+	}
+
+	/**
 	 * 将 total 均匀分配到各蜜蜂类型上
 	 * <p>
 	 * 委托给基类方法，保持public static API兼容。
 	 */
 	public static Map<ResourceLocation, Integer> allocateEvenly(int total, List<ResourceLocation> types) {
 		return AbstractCombEventHandler.allocateEvenly(total, types);
+	}
+
+	/**
+	 * 将 total 随机分配到各蜜蜂类型上（允许某些类型为0）
+	 * <p>
+	 * 委托给基类方法，保持public static API兼容。
+	 */
+	public static Map<ResourceLocation, Integer> allocateRandomly(int total, List<ResourceLocation> types, RandomSource random) {
+		return AbstractCombEventHandler.allocateRandomly(total, types, random);
 	}
 
 	/**

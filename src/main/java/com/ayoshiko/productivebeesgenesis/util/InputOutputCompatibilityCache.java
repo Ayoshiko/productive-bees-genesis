@@ -4,7 +4,12 @@ import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 
 /**
@@ -17,6 +22,12 @@ import net.minecraft.world.level.Level;
  * 此缓存按"输入物品 + 主输出槽 + 副输出槽 + tick 窗口"复用结果，输出槽内容变化时自动失效，
  * 避免同一状态下反复进行配方查找和 {@link ItemStack#hashItemAndComponents(ItemStack)}。
  * <p>
+ * 缓存键使用 {@link SlotFingerprint}（Item + beeType，不含 count），替代完整 {@link ItemStack} 副本：
+ * <ul>
+ *   <li>与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），避免输出槽数量变化时的误失效</li>
+ *   <li>消除完整 {@link ItemStack#hashItemAndComponents} 的组件哈希开销（3 次 → 3 次 fingerprint equals）</li>
+ *   <li>内存占用更低（不缓存完整 ItemStack 副本）</li>
+ * </ul>
  * 缓存有效期默认 20 tick（约 1 秒）。线程安全：方块实体在服务端单线程执行，无需同步锁。
  *
  * @author ayoshiko
@@ -26,11 +37,47 @@ public class InputOutputCompatibilityCache {
     /** 默认缓存有效期（tick） */
     public static final int DEFAULT_TTL = 20;
 
+    /**
+     * 输出槽指纹 — Item + beeType，不含 count
+     * <br/>
+     * 与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），
+     * 避免输出槽数量变化时误触发缓存失效。{@link Item} 为注册单例，identity equals；
+     * {@link ResourceLocation} equals 为值比较。
+     */
+    private record SlotFingerprint(Item item, @Nullable ResourceLocation beeType) {
+        static final SlotFingerprint EMPTY = new SlotFingerprint(Items.AIR, null);
+
+        /** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
+        static SlotFingerprint of(ItemStack stack) {
+            if (stack.isEmpty()) {
+                return EMPTY;
+            }
+            Item item = stack.getItem();
+            // configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
+            if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+                return new SlotFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
+            }
+            return new SlotFingerprint(item, null);
+        }
+    }
+
     private final int ttlTicks;
 
-    private ItemStack cachedInput = ItemStack.EMPTY;
-    private ItemStack cachedOutput = ItemStack.EMPTY;
-    private ItemStack cachedSecondary = ItemStack.EMPTY;
+    /** 上次缓存的输入/输出指纹（替代 ItemStack 副本，降低内存与哈希开销） */
+    private SlotFingerprint cachedInputFp = SlotFingerprint.EMPTY;
+    private SlotFingerprint cachedOutputFp = SlotFingerprint.EMPTY;
+    private SlotFingerprint cachedSecondaryFp = SlotFingerprint.EMPTY;
+
+    /**
+     * 上次缓存的输入/输出原引用（identity 短路用）
+     * <br/>
+     * 自动化模组高频探测同一组槽位时往往传入同一组 ItemStack 实例，
+     * 此时直接返回缓存结果，跳过 {@link SlotFingerprint#of(ItemStack)} 的组件读取。
+     */
+    private ItemStack cachedInputIdentity = ItemStack.EMPTY;
+    private ItemStack cachedOutputIdentity = ItemStack.EMPTY;
+    private ItemStack cachedSecondaryIdentity = ItemStack.EMPTY;
+
     private boolean cachedResult = false;
     private long cachedAt = -1L;
 
@@ -59,15 +106,34 @@ public class InputOutputCompatibilityCache {
             return validator.get();
         }
         long now = level.getGameTime();
-        if (cachedAt >= 0 && now - cachedAt < ttlTicks
-                && ItemStack.isSameItemSameComponents(input, cachedInput)
-                && ItemStack.isSameItemSameComponents(output, cachedOutput)
-                && ItemStack.isSameItemSameComponents(secondary, cachedSecondary)) {
+        // identity 短路，同一引用组且未过期时直接返回缓存结果
+        boolean identityMatch = input == cachedInputIdentity
+                && output == cachedOutputIdentity
+                && secondary == cachedSecondaryIdentity;
+        if (cachedAt >= 0 && now - cachedAt < ttlTicks && identityMatch) {
             return cachedResult;
         }
-        cachedInput = input.copy();
-        cachedOutput = output.copy();
-        cachedSecondary = secondary == null ? ItemStack.EMPTY : secondary.copy();
+        // 指纹比对（不含 count，与原 isSameItemSameComponents 语义一致）
+        SlotFingerprint inputFp = SlotFingerprint.of(input);
+        SlotFingerprint outputFp = SlotFingerprint.of(output);
+        SlotFingerprint secondaryFp = SlotFingerprint.of(secondary == null ? ItemStack.EMPTY : secondary);
+        if (cachedAt >= 0 && now - cachedAt < ttlTicks
+                && inputFp.equals(cachedInputFp)
+                && outputFp.equals(cachedOutputFp)
+                && secondaryFp.equals(cachedSecondaryFp)) {
+            // 指纹命中时也更新 identity 引用，加速下次 identity 短路
+            cachedInputIdentity = input;
+            cachedOutputIdentity = output;
+            cachedSecondaryIdentity = secondary;
+            return cachedResult;
+        }
+        // 未命中 — 重新校验并缓存指纹
+        cachedInputFp = inputFp;
+        cachedOutputFp = outputFp;
+        cachedSecondaryFp = secondaryFp;
+        cachedInputIdentity = input;
+        cachedOutputIdentity = output;
+        cachedSecondaryIdentity = secondary;
         cachedResult = validator.get();
         cachedAt = now;
         return cachedResult;
@@ -75,9 +141,12 @@ public class InputOutputCompatibilityCache {
 
     /** 清空缓存（配方重载、输出槽内容变更等场景调用） */
     public void clear() {
-        cachedInput = ItemStack.EMPTY;
-        cachedOutput = ItemStack.EMPTY;
-        cachedSecondary = ItemStack.EMPTY;
+        cachedInputFp = SlotFingerprint.EMPTY;
+        cachedOutputFp = SlotFingerprint.EMPTY;
+        cachedSecondaryFp = SlotFingerprint.EMPTY;
+        cachedInputIdentity = ItemStack.EMPTY;
+        cachedOutputIdentity = ItemStack.EMPTY;
+        cachedSecondaryIdentity = ItemStack.EMPTY;
         cachedAt = -1L;
     }
 }

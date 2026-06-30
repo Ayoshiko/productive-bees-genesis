@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -475,6 +476,38 @@ public abstract class AbstractCombEventHandler {
 
 		for (int i = 0; i < buckets; i++) {
 			result.put(types.get(i), base + (i < remainder ? 1 : 0));
+		}
+		return result;
+	}
+
+	/**
+	 * 将 total 随机分配到各蜜蜂类型上（允许某些类型为0）
+	 * <p>
+	 * 使用 Stars-and-Bars 算法：生成 {@code types.size()-1} 个 [0, total) 范围内的随机切点，
+	 * 排序后计算相邻切点之间的段长度，即为每种蜜蜂类型的分配数量。
+	 * 保证所有值非负且总和严格等于 total。
+	 *
+	 * @param total  总数量
+	 * @param types  蜜蜂类型列表
+	 * @param random 随机源
+	 * @return 类型→数量的映射
+	 */
+	public static Map<ResourceLocation, Integer> allocateRandomly(int total, List<ResourceLocation> types, RandomSource random) {
+		Map<ResourceLocation, Integer> result = new HashMap<>();
+		int buckets = types.size();
+		if (buckets <= 0 || total <= 0) return result;
+
+		// Stars-and-Bars：buckets 个桶需要 buckets-1 个切点，加上首尾 0 和 total
+		int[] cuts = new int[buckets + 1];
+		cuts[0] = 0;
+		cuts[buckets] = total;
+		for (int i = 1; i < buckets; i++) {
+			cuts[i] = random.nextInt(total);
+		}
+		Arrays.sort(cuts);
+
+		for (int i = 0; i < buckets; i++) {
+			result.put(types.get(i), cuts[i + 1] - cuts[i]);
 		}
 		return result;
 	}

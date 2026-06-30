@@ -117,7 +117,7 @@ public class BeeHelperMixin {
 			int beeId = beeEntity.getId();
 
 			// 可选节流：限制每 tick 每只蜜蜂的产物事件数
-			int throttle = ModConfig.COMMON.myriadProduceThrottlePerTick.get();
+			int throttle = ModConfig.SERVER.myriadProduceThrottlePerTick.get();
 			if (throttle > 0) {
 				clearThrottleIfTickChanged(currentTick);
 				long key = makeKey(currentTick, beeId);

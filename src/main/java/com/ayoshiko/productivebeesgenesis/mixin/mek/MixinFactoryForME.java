@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeMEBlockType;

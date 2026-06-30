@@ -210,7 +210,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
             combBlock.set(ModDataComponents.BEE_TYPE.get(), beeType);
 
             // 生成按配置倍率缩放的ChancedOutput列表
-            int multiplier = ModConfig.COMMON.mekCentrifugeCombBlockMultiplier.get();
+            int multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
             List<ChancedOutput> blockOutputs = new ArrayList<>();
             for (ChancedOutput chanced : recipe.itemOutput) {
                 blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier, chanced.chance()));

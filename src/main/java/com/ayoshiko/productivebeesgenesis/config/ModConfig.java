@@ -9,7 +9,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * 模组配置文件 — 万象创世蜜蜂属性覆盖
  * <p>
  * 允许整合包作者通过配置文件修改蜜蜂属性，无需编辑数据包JSON。
- * 默认值与数据包JSON一致，修改后需重启游戏或执行/reload生效。
+ * 客户端配置（CLIENT）仅影响本地渲染/显示；服务端配置（SERVER）按存档生效，
+ * 世界加载时自动生效，无需执行 /reload。
  */
 public final class ModConfig {
 
@@ -153,11 +154,38 @@ public final class ModConfig {
     }
 
     /**
-     * 通用配置 — 服务端生效的游戏逻辑参数
+     * 通用配置 — 保留跨端同步且在世界加载前就需要读取的字段。
      * <p>
-     * 修改后需重启游戏或执行 /reload 生效。
+     * 当前所有服务端游戏逻辑字段均已迁移至 {@link ServerConfig}，
+     * 此处仅保留性能监控开关等需要在 common setup 阶段读取的字段。
      */
     public static class CommonConfig {
+
+        public final ModConfigSpec.BooleanValue enablePerformanceMonitor;
+
+        CommonConfig(ModConfigSpec.Builder builder) {
+            builder.comment("通用配置 — 跨端同步且无需按存档区分的参数").push("common");
+
+            enablePerformanceMonitor = builder
+                    .comment("启用性能监控（兼容 Spark profiler，通过 JMX 暴露数据）")
+                    .define("enablePerformanceMonitor", false);
+
+            builder.pop(); // common
+        }
+    }
+
+    /**
+     * 服务端配置 — 存档级别配置
+     * <p>
+     * 随存档保存，不同存档可拥有不同配置。世界加载时自动生效，
+     * 无需执行 /reload。
+     */
+    public static class ServerConfig {
+
+        // ========== 万象创世过滤配置（存档级别）==========
+        // 使用枚举类型，ConfigurationScreen自动渲染循环切换按钮
+        public final ModConfigSpec.EnumValue<FilterMode> myriadCreationsFilterMode;
+        public final ModConfigSpec.ConfigValue<List<? extends String>> myriadCreationsFilteredBeeTypes;
 
         // ========== 万象创世蜜蜂属性（服务端生效）==========
         public final ModConfigSpec.ConfigValue<String> primaryColor;
@@ -204,14 +232,20 @@ public final class ModConfig {
         public final ModConfigSpec.DoubleValue produceOutputChance;
         public final ModConfigSpec.IntValue myriadProduceThrottlePerTick;
 
+        // ========== 高级蜂箱性能优化配置 ==========
+        public final ModConfigSpec.BooleanValue advancedBeehiveCacheIsSim;
+        public final ModConfigSpec.BooleanValue advancedBeehiveCacheHasNectar;
+        public final ModConfigSpec.IntValue advancedBeehiveSimulateCooldown;
+
         // ========== MEK离心机配置 ==========
         public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
         public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
         public final ModConfigSpec.IntValue mekCentrifugeEjectDelay;
         public final ModConfigSpec.IntValue mekCentrifugeEjectDelayActive;
         public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
+        /** 流体自动弹出速率（mB/tick），覆盖 Mekanism 默认的 1024 */
+        public final ModConfigSpec.IntValue mekCentrifugeFluidEjectRate;
         public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
-        public final ModConfigSpec.BooleanValue enablePerformanceMonitor;
         // Task 13: AE2/管道拉取限流（防止 ME 接口过载拉取触发全量排序扫描）
         public final ModConfigSpec.IntValue mekCentrifugeMaxExtractPerTick;
 
@@ -219,7 +253,34 @@ public final class ModConfig {
         public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedThreshold;
         public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedCooldown;
 
-        CommonConfig(ModConfigSpec.Builder builder) {
+        // Task 16: 输出槽内容未变化时跳过 outputItems，降低高倍加速下的 CPU 开销
+        public final ModConfigSpec.BooleanValue mekCentrifugeEjectSkipUnchanged;
+        public final ModConfigSpec.IntValue mekCentrifugeEjectSkipTicks;
+
+        // Task 24: 最大弹出速度模式：关闭 Ejector 节流以最大化物品弹出速度
+        public final ModConfigSpec.BooleanValue mekCentrifugeEjectMaxSpeedMode;
+
+        // Task 23: Ejector 持续高负载下降频：最小调用间隔与长冷却
+        public final ModConfigSpec.IntValue mekCentrifugeEjectMinInterval;
+        public final ModConfigSpec.IntValue mekCentrifugeEjectBusyThreshold;
+        public final ModConfigSpec.IntValue mekCentrifugeEjectBusyCooldown;
+
+        // Step 5: 单 tick 最大弹出次数上限（0=无限制），限制 256× 加速下高频 outputItems 调用
+        public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
+
+        ServerConfig(ModConfigSpec.Builder builder) {
+            builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
+
+            myriadCreationsFilterMode = builder
+                    .comment("过滤模式", "DISABLED - 不过滤，万象创世可转化为所有蜜蜂类型", "BLACKLIST - 黑名单，排除列表中的蜜蜂类型", "WHITELIST - 白名单，仅允许列表中的蜜蜂类型")
+                    .defineEnum("filterMode", FilterMode.DISABLED);
+
+            myriadCreationsFilteredBeeTypes = builder
+                    .comment("过滤的蜜蜂类型列表", "格式: 模组ID:蜜蜂类型，如 productivebees:iron", "黑名单模式下排除这些类型，白名单模式下仅允许这些类型")
+                    .defineList("filteredBeeTypes", List.of(), () -> "productivebees:iron", ModConfig::validateResourceLocationElement);
+
+            builder.pop();
+
             builder.comment("万象创世蜜蜂属性覆盖配置（服务端生效）").push("bee_attributes");
 
             builder.push("colors").comment("颜色配置（写入蜜蜂数据并在客户端渲染）");
@@ -393,6 +454,26 @@ public final class ModConfig {
                     .defineInRange("myriadProduceThrottlePerTick", 0, 0, 20);
             builder.pop(); // bee_produce
 
+            builder.comment("高级蜂箱性能优化（缓解大量模拟蜂箱导致的CPU压力）").push("advanced_beehive");
+
+            advancedBeehiveCacheIsSim = builder
+                    .comment("缓存每tick的 isSim() 结果",
+                            "高级蜂箱 tickBees() 会对每只蜜蜂调用 isSim()，开启后可避免同一 tick 内重复读取升级栏/配置")
+                    .define("cacheIsSim", true);
+
+            advancedBeehiveCacheHasNectar = builder
+                    .comment("缓存 BeeData.hasNectar() 结果",
+                            "hasNectar() 每次都会读取蜜蜂 NBT，开启后在同一只蜜蜂数据未重建前复用上一次结果")
+                    .define("cacheHasNectar", true);
+
+            advancedBeehiveSimulateCooldown = builder
+                    .comment("模拟蜜蜂中农夫/囤积/收集行为的查询冷却(tick)",
+                            "simulateBee() 每 tick 都会扫描附近作物或可拾取物品，设置 1-5 可显著降低高倍加速下的 CPU 开销",
+                            "0 = 不限制（原版行为）")
+                    .defineInRange("simulateCooldown", 0, 0, 20);
+
+            builder.pop(); // advanced_beehive
+
             builder.comment("MEK离心机设置").push("mek_centrifuge");
 
             mekCentrifugeEnergyPerTick = builder
@@ -412,16 +493,18 @@ public final class ModConfig {
                     .defineInRange("ejectDelayActive", 1, 0, 20);
 
             mekCentrifugeFluidTankCapacity = builder
-                    .comment("流体输出罐基础容量(mB)", "工厂版会按并行数倍增此值")
-                    .defineInRange("fluidTankCapacity", 10000, 1000, 100000);
+                    .comment("流体输出罐基础容量(mB)", "工厂版会按并行数倍增此值", "默认值：256000（256桶）")
+                    .defineInRange("fluidTankCapacity", 256000, 1000, 1_000_000);
+
+            mekCentrifugeFluidEjectRate = builder
+                    .comment("流体自动弹出速率(mB/tick)",
+                            "覆盖Mekanism默认的1024 mB/tick，提升工厂高产出时的流体输出速度",
+                            "默认值：16384")
+                    .defineInRange("mekCentrifugeFluidEjectRate", 16384, 1, Integer.MAX_VALUE);
 
             mekCentrifugeCombBlockMultiplier = builder
-                    .comment("蜜脾块产出倍率（蜜脾块 = N个蜜脾）", "影响离心蜜脾块时物品和流体产出的倍数")
+                    .comment("万象创世蜜脾块相对于蜜脾的产物倍率")
                     .defineInRange("combBlockMultiplier", 4, 1, 16);
-
-            enablePerformanceMonitor = builder
-                    .comment("启用性能监控（兼容Spark profiler，通过JMX暴露数据）")
-                    .define("enablePerformanceMonitor", false);
 
             // Task 13: AE2/管道拉取限流 — 默认0=无限制，不影响正常游戏
             mekCentrifugeMaxExtractPerTick = builder
@@ -441,35 +524,49 @@ public final class ModConfig {
                             "冷却结束后会再次尝试弹出，保证物品不会永久卡住")
                     .defineInRange("mekCentrifugeEjectBlockedCooldown", 15, 0, 200);
 
+            // Task 16: 输出槽内容未变化时跳过 outputItems，降低高倍加速下的 CPU 开销
+            mekCentrifugeEjectSkipUnchanged = builder
+                    .comment("当输出槽内容未变化时跳过 Ejector 输出尝试，降低高倍加速下的 CPU 开销")
+                    .define("ejectSkipUnchanged", true);
+
+            mekCentrifugeEjectSkipTicks = builder
+                    .comment("输出槽内容未变化时连续跳过的 tick 数（0=不跳过）", "默认值：1")
+                    .defineInRange("ejectSkipTicks", 1, 0, 20);
+
+            // Task 24: 最大弹出速度模式
+            mekCentrifugeEjectMaxSpeedMode = builder
+                    .comment("启用最大弹出速度模式",
+                            "开启后跳过 Ejector 的未变化跳过、最小调用间隔和高负载长冷却逻辑，",
+                            "仅在输出侧完全阻塞时保留阻塞冷却，以最大化物品弹出速度",
+                            "适合目标容器有充足空间且服务器性能冗余的场景")
+                    .define("ejectMaxSpeedMode", false);
+
+            // Task 23: Ejector 持续高负载下降频
+            mekCentrifugeEjectMinInterval = builder
+                    .comment("输出槽内容持续变化时，两次 outputItems 调用之间的最小 tick 间隔（0=关闭）",
+                            "用于产出速度高于弹出速度、内容未变化跳过失效时的兜底降频",
+                            "默认值：0")
+                    .defineInRange("ejectMinInterval", 0, 0, 20);
+
+            mekCentrifugeEjectBusyThreshold = builder
+                    .comment("连续多少次 outputItems 未减少输出槽物品总量后进入长冷却",
+                            "默认 5 次；过小会过于敏感，过大会降低缓解效果")
+                    .defineInRange("ejectBusyThreshold", 5, 1, 50);
+
+            mekCentrifugeEjectBusyCooldown = builder
+                    .comment("进入长冷却后跳过的 tick 数（0=关闭）",
+                            "默认 40 tick（2 秒）；冷却结束后会再次尝试弹出")
+                    .defineInRange("ejectBusyCooldown", 40, 0, 600);
+
+            // Step 5: 单 tick 最大弹出次数上限
+            mekCentrifugeEjectMaxPerTick = builder
+                    .comment("单 tick 内 outputItems 的最大调用次数上限（0=无限制）",
+                            "限制 256× 加速下单 tick 产生海量物品时反复调用 outputItems",
+                            "tickServer 每 tick 对 ITEM + FLUID 各调用一次 outputItems，上限应 ≥ 2",
+                            "默认 64；最大速度模式下跳过此上限")
+                    .defineInRange("ejectMaxPerTick", 64, 0, 4096);
+
             builder.pop(); // mek_centrifuge
-        }
-    }
-
-    /**
-     * 服务端配置 — 存档级别配置
-     * <p>
-     * 随存档保存，不同存档可拥有不同配置。
-     * 万象创世蜜蜂过滤配置迁移至此，支持每个存档独立的过滤规则。
-     */
-    public static class ServerConfig {
-
-        // ========== 万象创世过滤配置（存档级别）==========
-        // 使用枚举类型，ConfigurationScreen自动渲染循环切换按钮
-        public final ModConfigSpec.EnumValue<FilterMode> myriadCreationsFilterMode;
-        public final ModConfigSpec.ConfigValue<List<? extends String>> myriadCreationsFilteredBeeTypes;
-
-        ServerConfig(ModConfigSpec.Builder builder) {
-            builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
-
-            myriadCreationsFilterMode = builder
-                    .comment("过滤模式", "DISABLED - 不过滤，万象创世可转化为所有蜜蜂类型", "BLACKLIST - 黑名单，排除列表中的蜜蜂类型", "WHITELIST - 白名单，仅允许列表中的蜜蜂类型")
-                    .defineEnum("filterMode", FilterMode.DISABLED);
-
-            myriadCreationsFilteredBeeTypes = builder
-                    .comment("过滤的蜜蜂类型列表", "格式: 模组ID:蜜蜂类型，如 productivebees:iron", "黑名单模式下排除这些类型，白名单模式下仅允许这些类型")
-                    .defineList("filteredBeeTypes", List.of(), () -> "productivebees:iron", ModConfig::validateResourceLocationElement);
-
-            builder.pop();
         }
     }
 }

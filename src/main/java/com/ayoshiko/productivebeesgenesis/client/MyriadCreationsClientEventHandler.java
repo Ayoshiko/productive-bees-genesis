@@ -21,7 +21,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  *   <li>发光轮廓渲染</li>
  * </ol>
  * <p>
- * 颜色控制：由 {@link com.ayoshiko.productivebeesgenesis.mixin.ConfigurableBeeColorMixin}
+ * 颜色控制：由 {@link com.ayoshiko.productivebeesgenesis.mixin.client.ConfigurableBeeColorMixin}
  * 直接注入 ConfigurableBee.getColor()，使用自定义 8秒 彩虹循环，
  * 不操作 RenderSystem 全局状态，避免影响其他实体。
  * <p>
@@ -66,7 +66,7 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 	 * 原理：使用HSV色彩模型，色相(Hue)随时间在0°-360°连续变化，
 	 * 固定饱和度和明度，实现丝滑的彩虹渐变，消除离散颜色插值造成的突变。
 	 * <p>
-	 * 供 {@link com.ayoshiko.productivebeesgenesis.mixin.ConfigurableBeeColorMixin} 静态调用。
+	 * 供 {@link com.ayoshiko.productivebeesgenesis.mixin.client.ConfigurableBeeColorMixin} 静态调用。
 	 *
 	 * @param time 当前时间戳（毫秒）
 	 * @return float[] {r, g, b}，取值范围 0-1

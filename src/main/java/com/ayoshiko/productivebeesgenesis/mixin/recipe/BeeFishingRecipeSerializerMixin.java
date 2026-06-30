@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.mixin.recipe;
 
 import com.ayoshiko.productivebeesgenesis.util.BeeIngredientFallback;
 import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;

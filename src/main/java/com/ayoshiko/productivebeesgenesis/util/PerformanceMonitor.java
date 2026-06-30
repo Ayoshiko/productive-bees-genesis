@@ -46,7 +46,7 @@ public final class PerformanceMonitor {
     public static PerformanceMonitor getInstance() { return INSTANCE; }
 
     /**
-     * 配置是否启用性能监控
+     * 检查性能监控是否启用
      * <br/>
      * 直接读取 {@link ModConfig#COMMON} 的配置项，默认关闭时所有 recordXxx 调用前的判断立即返回 false，
      * 不产生 System.nanoTime 等额外开销。COMMON 在配置加载前为 null，加 null 检查避免 NPE。

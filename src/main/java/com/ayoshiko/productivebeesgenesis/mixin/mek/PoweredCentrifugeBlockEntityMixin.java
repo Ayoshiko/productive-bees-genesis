@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

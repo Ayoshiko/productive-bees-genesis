@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.mixin.client;
 
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;

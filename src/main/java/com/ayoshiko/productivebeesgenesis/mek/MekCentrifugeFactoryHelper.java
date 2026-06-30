@@ -5,14 +5,19 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
+import java.util.function.IntSupplier;
 import java.util.function.LongConsumer;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -25,6 +30,7 @@ import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
 import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.capabilities.fluid.BasicFluidTank;
+import mekanism.common.config.MekanismConfig;
 import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
@@ -37,6 +43,7 @@ import mekanism.common.tile.component.TileComponentConfig;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.interfaces.ISideConfiguration;
 import mekanism.common.util.InventoryUtils;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
@@ -124,6 +131,41 @@ public final class MekCentrifugeFactoryHelper {
             @NotNull PbRecipeProcessor pbProcessor) {
         if (containsSmeltingInput(recipeType, level, stack)) return true;
         return pbProcessor.findPbRecipe(stack) != null;
+    }
+
+    /**
+     * 获取输入校验的完整结果（包含配方/蜜蜂类型/是否蜜脾块）
+     * <br/>
+     * 扩展 {@link #isValidInputItem} 的返回值，缓存完整 {@link InputValidationCache.ValidationResult}，
+     * 供 {@code tryProcessPbRecipe} 等需要配方信息的路径直接复用，避免每 tick 重复 {@code findPbRecipe}。
+     * <ul>
+     *   <li>有 SMELTING 配方 → {@code valid=true, recipe=null}（SMELTING 由 super 处理，无 PB 配方）</li>
+     *   <li>有 PB 配方 → {@code valid=true, recipe=pbRecipe, beeType=..., isCombBlock=...}</li>
+     *   <li>无任何配方 → {@code valid=false, recipe=null}</li>
+     * </ul>
+     *
+     * @param recipeType  SMELTING 配方类型
+     * @param level       世界
+     * @param stack       输入物品
+     * @param pbProcessor PB配方处理器
+     * @return 校验结果（包含配方/蜜蜂类型/是否蜜脾块）
+     */
+    @NotNull
+    public static InputValidationCache.ValidationResult getInputValidationResult(
+            @NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+                    SingleItem<ItemStackToItemStackRecipe>> recipeType,
+            @NotNull Level level, @NotNull ItemStack stack,
+            @NotNull PbRecipeProcessor pbProcessor) {
+        if (containsSmeltingInput(recipeType, level, stack)) {
+            return new InputValidationCache.ValidationResult(true, null, null, false);
+        }
+        RecipeHolder<CentrifugeRecipe> recipe = pbProcessor.findPbRecipe(stack);
+        if (recipe == null) {
+            return InputValidationCache.ValidationResult.INVALID;
+        }
+        ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+        boolean isCombBlock = stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get();
+        return new InputValidationCache.ValidationResult(true, recipe, beeType, isCombBlock);
     }
 
     /** 查找SMELTING配方（PB配方不走Mekanism管线，由tryProcessPbRecipe独立处理） */
@@ -277,7 +319,7 @@ public final class MekCentrifugeFactoryHelper {
             @NotNull Consumer<IExtendedFluidTank> tankSetter) {
         FluidTankHelper helper = FluidTankHelper.forSideWithConfig(factory);
         IExtendedFluidTank tank = BasicFluidTank.output(
-                ModConfig.COMMON.mekCentrifugeFluidTankCapacity.get() * processes, listener);
+                ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get() * processes, listener);
         tankSetter.accept(tank);
         helper.addTank(tank);
         return helper.build();
@@ -308,6 +350,7 @@ public final class MekCentrifugeFactoryHelper {
      * @param energySlot          能量槽（调用方通过Accessor或getEnergySlot()获取）
      * @param energyContainer     能量容器
      * @param fluidOutputTank     流体输出槽
+     * @param fluidEjectRate      流体弹出速率（mB/tick）
      * @return 配置好的TileComponentEjector，调用方赋值给ejectorComponent字段
      */
     @NotNull
@@ -320,7 +363,8 @@ public final class MekCentrifugeFactoryHelper {
             int processes,
             @NotNull EnergyInventorySlot energySlot,
             @NotNull MachineEnergyContainer<?> energyContainer,
-            @NotNull IExtendedFluidTank fluidOutputTank) {
+            @NotNull IExtendedFluidTank fluidOutputTank,
+            @NotNull IntSupplier fluidEjectRate) {
         // 将副输出槽2加入outputSlots列表，使其参与侧面配置和弹出器
         for (int i = 0; i < processes; i++) {
             outputSlots.add(tertiaryOutputSlots[i]);
@@ -331,7 +375,9 @@ public final class MekCentrifugeFactoryHelper {
         // 配置流体侧面（TileEntityFactory默认不配置流体），作为输出配置（右侧）
         configComponent.setupOutputConfig(TransmissionType.FLUID, fluidOutputTank, RelativeSide.RIGHT);
         // 重写ejectorComponent添加FLUID弹出（父类TileEntityFactory只配置了ITEM）
-        TileComponentEjector ejector = new TileComponentEjector(factory);
+        // 使用自定义流体弹出速率，并把物品弹出 tickDelay 设为 1 tick
+        TileComponentEjector ejector = new TileComponentEjector(factory, MekanismConfig.general.chemicalAutoEjectRate, fluidEjectRate);
+        ((TileEntityEjectorAccessor) ejector).productivebeesgenesis$setTickDelay(1);
         ejector.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
         return ejector;
     }
@@ -339,27 +385,31 @@ public final class MekCentrifugeFactoryHelper {
     // ===== 输出槽状态标志位管理 =====
 
     /**
-     * 重新计算输出槽状态标志位（hasOutputItems / outputSlotsFull）
+     * 重新计算输出槽状态标志位（hasOutputItems / outputSlotsFull / outputSlotsFullPerProcess）
      * <br/>
      * 抽取自三个工厂的 productivebeesgenesis$updateOutputSlotFlags 方法。
-     * 遍历所有进程的3个输出槽，更新两个 volatile 标志位：
+     * 遍历所有进程的3个输出槽，更新标志位：
      * <ul>
      *   <li>hasOutputItems：任意输出槽有物品时为true（供 EjectorMixin 读取）</li>
-     *   <li>outputSlotsFull：任意进程的所有输出槽都满时为true（供 areOutputSlotsFull 读取）</li>
+     *   <li>outputSlotsFull：任意进程的所有输出槽都满时为true（全局标志，供 EjectorMixin 自适应保护使用）</li>
+     *   <li>outputSlotsFullPerProcess[i]：第 i 个进程的所有输出槽都满时为true（供 PbRecipeProcessor 按进程判断）</li>
      * </ul>
      * 通过 {@link PbRecipeContext} 接口访问槽位，不依赖具体 TileEntity 类型。
      *
-     * @param context               PB配方上下文（提供槽位访问和进程数）
-     * @param hasOutputItemsSetter  设置 hasOutputItems 标志位的回调
-     * @param outputSlotsFullSetter 设置 outputSlotsFull 标志位的回调
+     * @param context                  PB配方上下文（提供槽位访问和进程数）
+     * @param hasOutputItemsSetter     设置 hasOutputItems 标志位的回调
+     * @param outputSlotsFullSetter    设置全局 outputSlotsFull 标志位的回调
+     * @param perProcessFullSetter     设置每进程 outputSlotsFullPerProcess 数组的回调
      */
     public static void updateOutputSlotFlags(
             @NotNull PbRecipeContext context,
             @NotNull Consumer<Boolean> hasOutputItemsSetter,
-            @NotNull Consumer<Boolean> outputSlotsFullSetter) {
+            @NotNull Consumer<Boolean> outputSlotsFullSetter,
+            @NotNull Consumer<boolean[]> perProcessFullSetter) {
         boolean hasItems = false;
-        boolean full = false;
+        boolean globalFull = false;
         int processes = context.processes();
+        boolean[] perProcessFull = new boolean[processes];
         for (int i = 0; i < processes; i++) {
             IInventorySlot primary = context.primaryOutputSlot(i);
             IInventorySlot secondary = context.secondaryOutputSlot(i);
@@ -369,12 +419,17 @@ public final class MekCentrifugeFactoryHelper {
                     || !tertiary.getStack().isEmpty()) {
                 hasItems = true;
             }
-            if (isSlotFull(primary) && (secondary == null || isSlotFull(secondary)) && isSlotFull(tertiary)) {
-                full = true;
+            boolean processFull = isSlotFull(primary)
+                    && (secondary == null || isSlotFull(secondary))
+                    && isSlotFull(tertiary);
+            perProcessFull[i] = processFull;
+            if (processFull) {
+                globalFull = true;
             }
         }
         hasOutputItemsSetter.accept(hasItems);
-        outputSlotsFullSetter.accept(full);
+        outputSlotsFullSetter.accept(globalFull);
+        perProcessFullSetter.accept(perProcessFull);
     }
 
     /**

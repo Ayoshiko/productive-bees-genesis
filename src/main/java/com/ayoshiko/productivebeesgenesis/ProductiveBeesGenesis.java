@@ -98,14 +98,14 @@ public final class ProductiveBeesGenesis {
 		modContainer.registerConfig(Type.COMMON, ModConfig.COMMON_SPEC);
 		modContainer.registerConfig(Type.SERVER, ModConfig.SERVER_SPEC);
 
-		// 配置文件加载/重载时重新应用蜜蜂属性覆盖
+		// 配置文件加载/重载时重新应用蜜蜂属性覆盖（服务端配置，按存档生效）
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
-			if (event.getConfig().getSpec() == ModConfig.CLIENT_SPEC) {
+			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
 				BeeConfigApplier.applyOverrides();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
-			if (event.getConfig().getSpec() == ModConfig.CLIENT_SPEC) {
+			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
 				BeeConfigApplier.applyOverrides();
 			}
 		});

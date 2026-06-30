@@ -11,7 +11,6 @@ import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
@@ -36,6 +35,7 @@ import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
+import mekanism.common.config.MekanismConfig;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.prefab.TileEntityElectricMachine;
 import net.minecraft.core.BlockPos;
@@ -43,7 +43,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -52,13 +51,13 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
@@ -169,6 +168,34 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
     /** 输出槽是否已满（由 IContentsListener 维护，供 areOutputSlotsFull 读取，避免每次完成配方遍历3个槽） */
     private volatile boolean outputSlotsFull = false;
 
+    /** Task 16: 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否需要跳过 outputItems） */
+    private volatile long outputContentsVersion = 0L;
+
+    /**
+     * Step 5: 输出槽物品总数（主+副1+副2）
+     * <br/>
+     * 由 {@link #updateOutputSlotFlags} 维护，供 Ejector Mixin O(1) 读取，
+     * 替代 O(processes×3) 遍历的 countOutputItems。volatile 保证可见性。
+     */
+    private volatile long outputItemCount = 0L;
+
+    /** 输出槽批量更新深度（completePbRecipe/completeMyriadCreations 期间 >0） */
+    private int outputBatchDepth = 0;
+
+    /**
+     * 输出槽上限 identity 缓存
+     * <br/>
+     * {@code slot.getLimit(stack)} 在 owo 派生组件下会触发昂贵的 DataComponentMap 查询，
+     * 而输出槽中的栈引用在多数插入操作中保持不变（仅 count 变化）。
+     * 索引 0=主输出，1=副输出1，2=副输出2。
+     */
+    private final ItemStack[] cachedLimitStacks = new ItemStack[3];
+    private final int[] cachedLimits = new int[3];
+    /** 批量期间输出槽是否发生变化 */
+    private boolean outputBatchDirty = false;
+    /** getInitialInventory 中传入的 recipe cache unpause 监听器 */
+    private IContentsListener recipeCacheUnpauseListener;
+
     /** 上次打印"万象产物无法插入"日志的游戏刻 */
     private long lastMyriadFullLogTick = -1L;
 
@@ -190,7 +217,11 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         // 流体槽作为输出配置（右侧），参考TileEntityNutritionalLiquifier
         configComponent.setupOutputConfig(TransmissionType.FLUID, fluidOutputTank, RelativeSide.RIGHT);
 
-        ejectorComponent = new TileComponentEjector(this);
+        // 使用自定义流体弹出速率覆盖 Mekanism 默认值，同时把物品弹出 tickDelay 设为 1 tick
+        // （TileComponentEjectorMixin 会在此基础上根据输出槽状态做动态调整）
+        ejectorComponent = new TileComponentEjector(this, MekanismConfig.general.chemicalAutoEjectRate,
+                () -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
+        ((TileEntityEjectorAccessor) ejectorComponent).productivebeesgenesis$setTickDelay(1);
         // 同时弹出物品和流体
         ejectorComponent.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
     }
@@ -247,16 +278,24 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
                                                        @NotNull IContentsListener recipeCacheListener,
                                                        @NotNull IContentsListener recipeCacheUnpauseListener) {
         InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(this);
+        this.recipeCacheUnpauseListener = recipeCacheUnpauseListener;
 
         // 输入槽 — 与父类相同位置
         InputInventorySlot inputSlot = InputInventorySlot.at(this::containsRecipe, recipeCacheListener, 64, 17);
         builder.addSlot(inputSlot)
                 .tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE, getWarningCheck(RecipeError.NOT_ENOUGH_INPUT)));
 
-        // 输出槽组合 listener：原 recipeCacheUnpauseListener + 标志位更新
+        // 输出槽组合 listener：原 recipeCacheUnpauseListener + 标志位更新 + 版本号递增
+        // 批量模式下只标记 dirty，避免 completePbRecipe/completeMyriadCreations 中每次 insertItem 都遍历槽位
         IContentsListener outputListener = () -> {
+            if (outputBatchDepth > 0) {
+                outputBatchDirty = true;
+                return;
+            }
             recipeCacheUnpauseListener.onContentsChanged();
             updateOutputSlotFlags();
+            // Task 16: 输出槽内容变化时递增版本号，通知 Ejector Mixin 需要重新尝试输出
+            outputContentsVersion++;
         };
 
         // 主输出槽 — 竖排第1个（x=134, y=17）
@@ -300,7 +339,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
                                                      @NotNull IContentsListener recipeCacheListener,
                                                      @NotNull IContentsListener recipeCacheUnpauseListener) {
         FluidTankHelper helper = FluidTankHelper.forSideWithConfig(this);
-        fluidOutputTank = BasicFluidTank.output(ModConfig.COMMON.mekCentrifugeFluidTankCapacity.get(), listener);
+        fluidOutputTank = BasicFluidTank.output(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(), listener);
         helper.addTank(fluidOutputTank);
         return helper.build();
     }
@@ -511,7 +550,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
 
             if (pbOperatingTicks >= processingTime) {
                 // 输出槽满时暂停处理，避免物品丢失（与MEK原版NOT_ENOUGH_OUTPUT_SPACE一致）
-                if (areOutputSlotsFull()) {
+                // 纯流体输出配方（如 oritech 石油蜜脾）没有物品输出，跳过物品槽满检查
+                if (!pbRecipe.value().getRecipeOutputs().isEmpty() && areOutputSlotsFull()) {
                     pbOperatingTicks = processingTime; // 保持满进度，等弹出器腾出空间后立即完成
                     break;
                 }
@@ -690,8 +730,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
     /**
      * 重新计算并更新输出槽状态标志（由输出槽 IContentsListener 调用）
      * <br/>
-     * 一次遍历同时更新 {@link #hasOutputItems}（供 EjectorMixin 读取）和
-     * {@link #outputSlotsFull}（供 {@link #areOutputSlotsFull} 读取），
+     * 一次遍历同时更新 {@link #hasOutputItems}（供 EjectorMixin 读取）、
+     * {@link #outputSlotsFull}（供 {@link #areOutputSlotsFull} 读取）和
+     * {@link #outputItemCount}（Step 5: 供 Ejector Mixin O(1) 读取替代 countOutputItems 遍历），
      * 替代原 areOutputSlotsFull 的3槽遍历和 EjectorMixin 的全槽遍历。
      * volatile 保证可见性：服务端tick线程写入，EjectorMixin 同线程读取。
      */
@@ -703,18 +744,62 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         };
         boolean hasItems = false;
         boolean full = true;
-        for (OutputInventorySlot slot : slots) {
+        long itemCount = 0;
+        for (int i = 0; i < slots.length; i++) {
+            OutputInventorySlot slot = slots[i];
             if (slot == null) continue;
             ItemStack stack = slot.getStack();
             if (!stack.isEmpty()) {
                 hasItems = true;
-                if (stack.getCount() < slot.getLimit(stack)) full = false;
+                itemCount += stack.getCount();
+                if (stack.getCount() < getCachedSlotLimit(i, slot, stack)) {
+                    full = false;
+                }
             } else {
                 full = false;
             }
         }
         this.hasOutputItems = hasItems;
         this.outputSlotsFull = full;
+        this.outputItemCount = itemCount;
+    }
+
+    /**
+     * 获取输出槽上限（带 identity 缓存）
+     * <br/>
+     * 避免每次 {@link #updateOutputSlotFlags} 都调用 {@code slot.getLimit(stack)}，
+     * 从而跳过 owo 派生组件的昂贵 DataComponentMap 查询。
+     *
+     * @param index 槽位缓存索引（0=主输出，1=副输出1，2=副输出2）
+     * @param slot  输出槽
+     * @param stack 当前栈（非空）
+     * @return 槽位上限
+     */
+    private int getCachedSlotLimit(int index, OutputInventorySlot slot, ItemStack stack) {
+        if (stack == cachedLimitStacks[index]) {
+            return cachedLimits[index];
+        }
+        int limit = slot.getLimit(stack);
+        cachedLimitStacks[index] = stack;
+        cachedLimits[index] = limit;
+        return limit;
+    }
+
+    /** 开始批量输出插入；嵌套调用安全 */
+    private void beginOutputBatch() {
+        outputBatchDepth++;
+    }
+
+    /** 结束批量输出插入，统一触发一次标志位更新和 recipe cache unpause */
+    private void endOutputBatch() {
+        if (--outputBatchDepth == 0 && outputBatchDirty) {
+            outputBatchDirty = false;
+            if (recipeCacheUnpauseListener != null) {
+                recipeCacheUnpauseListener.onContentsChanged();
+            }
+            updateOutputSlotFlags();
+            outputContentsVersion++;
+        }
     }
 
     /**
@@ -727,11 +812,43 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
     }
 
     /**
+     * 输出槽内容版本号（供 TileComponentEjectorCooldownMixin 读取）
+     * <br/>
+     * 每次输出槽内容变化时递增，使 Ejector Mixin 能在内容未变化时跳过 outputItems 调用。
+     */
+    @Override
+    public long productivebeesgenesis$outputContentsVersion() {
+        return outputContentsVersion;
+    }
+
+    /**
+     * Step 5: 返回所有输出槽物品总数（O(1)，供 Ejector Mixin 替代 countOutputItems 遍历）
+     * <br/>
+     * 由 {@link #updateOutputSlotFlags} 维护，volatile 保证可见性。
+     */
+    @Override
+    public long productivebeesgenesis$outputItemCount() {
+        return outputItemCount;
+    }
+
+    /**
+     * 输出槽是否已满（供 TileComponentEjectorCooldownMixin 读取）
+     * <br/>
+     * 返回由 IContentsListener 维护的 {@link #outputSlotsFull} 标志位，所有物品输出槽无剩余空间时为 true。
+     * Mixin 在输出槽满时强制重置跳过计数器，避免产物因跳过 outputItems 而积压停机。
+     */
+    @Override
+    public boolean productivebeesgenesis$outputSlotsFull() {
+        return outputSlotsFull;
+    }
+
+    /**
      * 查找匹配输入物品的PB离心配方（带实例级LRU缓存）
      * <br/>
      * 缓存命中时直接返回，避免每tick全量遍历配方列表。
      * 普通蜜脾路径优先用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再回退到全量遍历（防御性）。
-     * 蜜脾块输入会动态生成对应的蜜脾块离心配方（min/max和流体乘以4）。
+     * 蜜脾块路径优先用 {@link CentrifugeRecipeIndex#getCombBlock} O(1) 查找静态预生成配方，
+     * 未命中再回退到全量遍历（防御性，仅索引构建遗漏时触发）。
      */
     @Nullable
     private RecipeHolder<CentrifugeRecipe> findPbRecipe(ItemStack input) {
@@ -743,12 +860,23 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
             return cached.orElse(null);
         }
 
-        // 蜜脾块 — 动态生成蜜脾块离心配方（参考PB JEI插件逻辑）
+        // 蜜脾块 — 优先从静态索引查找（O(1)），未命中回退到全量遍历（防御性）
         if (input.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-            RecipeHolder<CentrifugeRecipe> blockRecipe = createCombBlockRecipe(input);
-            if (blockRecipe != null) {
-                pbRecipeCache.put(input, blockRecipe);
-                return blockRecipe;
+            ResourceLocation beeType = input.get(ModDataComponents.BEE_TYPE.get());
+            if (beeType != null) {
+                RecipeHolder<CentrifugeRecipe> blockRecipe = CentrifugeRecipeIndex.getCombBlock(beeType);
+                if (blockRecipe != null) {
+                    pbRecipeCache.put(input, blockRecipe);
+                    return blockRecipe;
+                }
+            }
+            // 索引未命中（bee_type 为 null 或索引遗漏）— 全量遍历回退（防御性）
+            for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
+                    .getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
+                if (holder.value().ingredient.test(input)) {
+                    pbRecipeCache.put(input, holder);
+                    return holder;
+                }
             }
             pbRecipeCache.put(input, null);
             return null;
@@ -776,50 +904,6 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         // 缓存"无配方"结果，避免下次重复全量遍历
         pbRecipeCache.put(input, null);
         return null;
-    }
-
-    /**
-     * 动态生成蜜脾块离心配方
-     * <br/>
-     * 蜜脾块 = 4个蜜脾，所以输出min/max和流体都乘以4。
-     * 参考PB JEI插件（ProductiveBeesJeiPlugin）的蜜脾块配方生成逻辑。
-     * 通过bee_type组件查找对应的蜜脾离心配方，然后构建蜜脾块版本。
-     * 优先使用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再全量遍历（防御性回退）。
-     */
-    @Nullable
-    private RecipeHolder<CentrifugeRecipe> createCombBlockRecipe(ItemStack combBlockInput) {
-        ResourceLocation beeType = combBlockInput.get(ModDataComponents.BEE_TYPE.get());
-        if (beeType == null) return null;
-
-        // 优先从索引查找蜜脾配方（O(1)）
-        RecipeHolder<CentrifugeRecipe> honeycombRecipe = CentrifugeRecipeIndex.get(beeType);
-
-        // 索引未命中 — 回退到全量遍历（防御性）
-        if (honeycombRecipe == null) {
-            ItemStack honeycomb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-            honeycomb.set(ModDataComponents.BEE_TYPE.get(), beeType);
-            for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
-                    .getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
-                if (holder.value().ingredient.test(honeycomb)) {
-                    honeycombRecipe = holder;
-                    break;
-                }
-            }
-        }
-
-        if (honeycombRecipe == null) return null;
-
-        // 动态生成蜜脾块配方：min/max和流体按配置倍率缩放
-        int multiplier = ModConfig.COMMON.mekCentrifugeCombBlockMultiplier.get();
-        CentrifugeRecipe original = honeycombRecipe.value();
-        List<ChancedOutput> blockOutputs = new ArrayList<>();
-        for (ChancedOutput chanced : original.itemOutput) {
-            blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier, chanced.chance()));
-        }
-        SizedFluidIngredient blockFluid = new SizedFluidIngredient(original.fluidOutput.ingredient(), original.fluidOutput.amount() * multiplier);
-        CentrifugeRecipe blockRecipe = new CentrifugeRecipe(original.ingredient, blockOutputs, blockFluid, original.getProcessingTime());
-
-        return new RecipeHolder<>(honeycombRecipe.id().withSuffix("_block"), blockRecipe);
     }
 
     /**
@@ -851,35 +935,41 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         reusableOutputSlots.add(secondaryOutputSlot);
         reusableOutputSlots.add(tertiaryOutputSlot);
 
-        int slotIndex = 0;
-        for (var entry : outputs.entrySet()) {
-            var chanced = entry.getValue();
-            if (random.nextFloat() < chanced.chance()) {
-                int count = chanced.min();
-                if (chanced.max() > chanced.min()) {
-                    count += random.nextInt(chanced.max() - chanced.min() + 1);
-                }
-                // 生产力倍率影响输出数量
-                count *= modifier;
-                ItemStack outputStack = entry.getKey().copy();
-                outputStack.setCount(count);
+        // Task 48: 批量包装物品插入，避免每次 insertItem 都触发输出槽 listener 全量扫描
+        beginOutputBatch();
+        try {
+            int slotIndex = 0;
+            for (var entry : outputs.entrySet()) {
+                var chanced = entry.getValue();
+                if (random.nextFloat() < chanced.chance()) {
+                    int count = chanced.min();
+                    if (chanced.max() > chanced.min()) {
+                        count += random.nextInt(chanced.max() - chanced.min() + 1);
+                    }
+                    // 生产力倍率影响输出数量
+                    count *= modifier;
+                    ItemStack outputStack = entry.getKey().copy();
+                    outputStack.setCount(count);
 
-                // 尝试放入对应的输出槽
-                if (slotIndex < reusableOutputSlots.size()) {
-                    ItemStack remainder = reusableOutputSlots.get(slotIndex)
-                            .insertItem(outputStack, Action.EXECUTE, AutomationType.INTERNAL);
-                    if (!remainder.isEmpty()) {
-                        // 当前槽放不下，尝试后续槽
-                        for (int i = slotIndex + 1; i < reusableOutputSlots.size(); i++) {
-                            remainder = reusableOutputSlots.get(i)
-                                    .insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
-                            if (remainder.isEmpty()) break;
+                    // 尝试放入对应的输出槽
+                    if (slotIndex < reusableOutputSlots.size()) {
+                        ItemStack remainder = reusableOutputSlots.get(slotIndex)
+                                .insertItem(outputStack, Action.EXECUTE, AutomationType.INTERNAL);
+                        if (!remainder.isEmpty()) {
+                            // 当前槽放不下，尝试后续槽
+                            for (int i = slotIndex + 1; i < reusableOutputSlots.size(); i++) {
+                                remainder = reusableOutputSlots.get(i)
+                                        .insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
+                                if (remainder.isEmpty()) break;
+                            }
+                            // 输出槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
                         }
-                        // 输出槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
                     }
                 }
+                slotIndex++;
             }
-            slotIndex++;
+        } finally {
+            endOutputBatch();
         }
 
         // 处理流体输出（乘以生产力倍率）；流体槽满时静默丢弃（属正常状态，避免日志刷屏影响性能）
@@ -913,7 +1003,6 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
      * @return true 处理成功，false 应暂停等待输出槽空间
      */
     private boolean completeMyriadCreations(ItemStack input, int productivityModifier) {
-        RandomSource random = level.getRandom();
         boolean isCombBlock = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
         int modifier = Math.max(1, productivityModifier);
 
@@ -922,7 +1011,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
 
         // 限制种类数不超过3（输出槽数）和总数量
         int maxTypes = Math.min(3, totalCount);
-        List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypes(maxTypes, random);
+        // Step 6: 使用带缓存的类型选择，与工厂统一
+        List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(maxTypes, level);
         if (selectedTypes.isEmpty()) {
             // 缓存为空：不消耗输入，等待缓存重建后重试；按冷却期打印避免刷屏
             long logTime = nextMyriadLogTime(lastMyriadEmptyCacheLogTick);
@@ -943,40 +1033,18 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine implement
         reusableOutputSlots.add(secondaryOutputSlot);
         reusableOutputSlots.add(tertiaryOutputSlot);
 
-        // 按 bee_type 聚合插入，同类型优先堆叠；任一类型无法完全插入则暂停，且不扣输入
-        for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
-            ItemStack output = new ItemStack(baseItem, entry.getValue());
-            output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
-
-            ItemStack remainder = output;
-            // 第一优先级：已有同类型槽位
-            for (IInventorySlot slot : reusableOutputSlots) {
-                if (slot == null) continue;
-                if (MyriadCreationsEventHandler.isSameBeeType(slot.getStack(), output)) {
-                    remainder = slot.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
-                    if (remainder.isEmpty()) break;
-                }
+        // Step 6: 统一用 MyriadBatchPlanner 规划+执行，消除 isSameBeeType 调用与 insertItem 完整路径
+        // plan 失败表示容量不足（任一类型无法完全放下），暂停处理且不扣输入
+        MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(reusableOutputSlots, baseItem, allocation);
+        if (!plan.isSuccess()) {
+            long logTime = nextMyriadLogTime(lastMyriadFullLogTick);
+            if (logTime >= 0) {
+                lastMyriadFullLogTick = logTime;
+                ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世产物无法完全插入，暂停");
             }
-            // 第二优先级：空槽
-            if (!remainder.isEmpty()) {
-                for (IInventorySlot slot : reusableOutputSlots) {
-                    if (slot == null) continue;
-                    if (slot.getStack().isEmpty()) {
-                        remainder = slot.insertItem(remainder, Action.EXECUTE, AutomationType.INTERNAL);
-                        if (remainder.isEmpty()) break;
-                    }
-                }
-            }
-            // 仍有剩余说明物理上无法放下，暂停处理而非丢弃；按冷却期打印避免刷屏
-            if (!remainder.isEmpty()) {
-                long logTime = nextMyriadLogTime(lastMyriadFullLogTick);
-                if (logTime >= 0) {
-                    lastMyriadFullLogTick = logTime;
-                    ProductiveBeesGenesis.LOGGER.warn("MEK离心机万象创世产物无法完全插入，暂停：{}", remainder);
-                }
-                return false;
-            }
+            return false;
         }
+        MyriadBatchPlanner.apply(plan, reusableOutputSlots, this::beginOutputBatch, this::endOutputBatch);
 
         // 全部产物成功插入后才消耗输入（乘以生产力倍率）
         accessor().productivebeesgenesis$getInputSlot().shrinkStack(modifier, Action.EXECUTE);

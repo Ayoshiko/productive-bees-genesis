@@ -18,7 +18,7 @@ public final class BeeConfigApplier {
 
     /** 应用配置覆盖到万象创世蜜蜂数据 */
     public static void applyOverrides() {
-        var config = ModConfig.COMMON;
+        var config = ModConfig.SERVER;
         CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
         if (data == null) {
             // 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题

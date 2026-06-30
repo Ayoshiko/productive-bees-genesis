@@ -1,4 +1,4 @@
-package com.ayoshiko.productivebeesgenesis.mixin;
+package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
@@ -57,8 +57,8 @@ public class TileComponentEjectorMixin {
             var tile = accessor.productivebeesgenesis$getTile();
             if (tile == null) return;
             if (tile instanceof IMekCentrifugeTile) {
-                int idleDelay = ModConfig.COMMON.mekCentrifugeEjectDelay.get();
-                int activeDelay = ModConfig.COMMON.mekCentrifugeEjectDelayActive.get();
+                int idleDelay = ModConfig.SERVER.mekCentrifugeEjectDelay.get();
+                int activeDelay = ModConfig.SERVER.mekCentrifugeEjectDelayActive.get();
                 // 约束：活动延迟不应超过空闲延迟，避免 active > idle 的反直觉组合
                 if (activeDelay > idleDelay) {
                     ProductiveBeesGenesis.LOGGER.warn("mekCentrifugeEjectDelayActive({}) > mekCentrifugeEjectDelay({})，已自动调整为 idleDelay", activeDelay, idleDelay);
