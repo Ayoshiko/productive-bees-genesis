@@ -37,6 +37,9 @@ bee_*.txt
 config_bee.txt
 dependencies.txt
 
+# 审查文档（内部使用，不入库）
+docs/
+
 # OS
 .DS_Store
 Thumbs.db

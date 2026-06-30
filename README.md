@@ -1,10 +1,14 @@
 # Productive Bees Genesis
 
+![Version](https://img.shields.io/badge/version-1.2.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
 目前模组仍处于开发阶段，更新频繁，仍存在大量bug，崩溃，不稳定和兼容性问题，感谢理解。
 
 This mod is under active development – expect bugs, crashes, instability, and compatibility problems. Thanks for your patience!
+
+For a full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
 The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
 
@@ -140,7 +144,7 @@ The configuration interface supports multiple languages (English/Chinese) and au
 - Holder pattern for thread-safe lazy initialization.
 - Per-instance caches instead of global static caches.
 - `synchronized` blocks for compound operations on non-concurrent collections.
-- Server stop event clears static caches to prevent memory leaks.
+- Server stop event clears static caches and unregisters JMX MBeans to prevent memory leaks.
 
 ### Mixin Naming Convention
 
