@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.init;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import mekanism.common.tier.FactoryTier;
@@ -32,10 +33,12 @@ public final class ModCreativeTabs {
 					.title(Component.translatable("itemGroup.productivebeesgenesis"))
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
-						// 模组核心物品：无尽·创世蜜脾、蜜脾块、寰宇支配之剑复刻
-						output.accept(ModItems.INFINITY_CREATION_COMB.get());
-						output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
-						output.accept(ModItems.INFINITY_SWORD_REPLICA.get());
+						// 开发者模式：开启后才能在创造模式标签页看到无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）
+						if (ModConfig.CLIENT.devMode.get()) {
+							output.accept(ModItems.INFINITY_CREATION_COMB.get());
+							output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
+							output.accept(ModItems.INFINITY_SWORD_REPLICA.get());
+						}
 						// 添加所有MEK离心机方块
 						output.accept(ModItems.MEK_CENTRIFUGE.get());
 						output.accept(ModItems.BASIC_MEK_CENTRIFUGE_FACTORY.get());

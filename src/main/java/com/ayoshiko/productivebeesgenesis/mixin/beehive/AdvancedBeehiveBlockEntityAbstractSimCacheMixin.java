@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntityAbstract;
 import net.minecraft.world.level.Level;
@@ -38,9 +36,6 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 			remap = false
 	)
 	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity) {
-		if (!ModConfig.SERVER.advancedBeehiveCacheIsSim.get()) {
-			return blockEntity.isSim();
-		}
 		Level level = blockEntity.getLevel();
 		long gameTime = level != null ? level.getGameTime() : -1L;
 		AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =

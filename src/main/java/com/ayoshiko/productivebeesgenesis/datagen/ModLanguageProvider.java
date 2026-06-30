@@ -61,10 +61,6 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.breedingItem.tooltip", "Breeding item ID");
         add("productivebeesgenesis.configuration.breedingItemCount", "Breeding Item Count");
         add("productivebeesgenesis.configuration.breedingItemCount.tooltip", "Number of items required for breeding");
-        add("productivebeesgenesis.configuration.cacheHasNectar", "Cache hasNectar()");
-        add("productivebeesgenesis.configuration.cacheHasNectar.tooltip", "Cache BeeData.hasNectar() result per bee data instance to avoid repeated NBT reads.");
-        add("productivebeesgenesis.configuration.cacheIsSim", "Cache isSim() per tick");
-        add("productivebeesgenesis.configuration.cacheIsSim.tooltip", "Cache the isSim() result for each beehive per tick to avoid repeated upgrade/config reads in tickBees().");
         add("productivebeesgenesis.configuration.chance", "Chance");
         add("productivebeesgenesis.configuration.chance.tooltip", "Probability of acquiring the bee (0.0 to 1.0)");
         add("productivebeesgenesis.configuration.colors", "Colors");
@@ -75,6 +71,8 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.common", "General");
         add("productivebeesgenesis.configuration.common.button", "General");
         add("productivebeesgenesis.configuration.common.tooltip", "Cross-client synchronized parameters that do not vary by save");
+        add("productivebeesgenesis.configuration.devMode", "Developer Mode");
+        add("productivebeesgenesis.configuration.devMode.tooltip", "Show Infinity Creation comb, comb block and Sword of Cosmic Dominion (replica) in the creative inventory tab.");
         add("productivebeesgenesis.configuration.createComb", "Create Comb");
         add("productivebeesgenesis.configuration.createComb.tooltip", "Whether can produce honeycomb");
         add("productivebeesgenesis.configuration.ejectBusyCooldown", "Busy Eject Cooldown (ticks)");
@@ -212,6 +210,11 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.waterproof.tooltip", "Whether waterproof");
         add("productivebeesgenesis.configuration.weatherTolerance", "Weather Tolerance");
         add("productivebeesgenesis.configuration.weatherTolerance.tooltip", "Weather tolerance: none/rain/any");
+
+        // FilterListScreen 工具按钮提示
+        add("productivebeesgenesis.config.reset.tooltip", "Reset filter list to default (empty, mode disabled)");
+        add("productivebeesgenesis.config.export.tooltip", "Export current filter list to clipboard as JSON array");
+        add("productivebeesgenesis.config.import.tooltip", "Import filter list from clipboard (JSON array or comma/line separated)");
     }
 
     private void addChinese() {
@@ -248,10 +251,6 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.breedingItem.tooltip", "繁殖物品ID");
         add("productivebeesgenesis.configuration.breedingItemCount", "繁殖数量");
         add("productivebeesgenesis.configuration.breedingItemCount.tooltip", "繁殖所需物品数量");
-        add("productivebeesgenesis.configuration.cacheHasNectar", "缓存 hasNectar()");
-        add("productivebeesgenesis.configuration.cacheHasNectar.tooltip", "对每只蜜蜂的 BeeData 实例缓存 hasNectar() 结果，避免重复读取 NBT。");
-        add("productivebeesgenesis.configuration.cacheIsSim", "缓存 isSim()");
-        add("productivebeesgenesis.configuration.cacheIsSim.tooltip", "每个游戏刻缓存高级蜂箱的 isSim() 结果，避免 tickBees() 中对每只蜜蜂重复读取升级栏与配置。");
         add("productivebeesgenesis.configuration.chance", "概率");
         add("productivebeesgenesis.configuration.chance.tooltip", "获得蜜蜂的概率（0.0~1.0）");
         add("productivebeesgenesis.configuration.colors", "颜色");
@@ -262,6 +261,8 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.common", "通用配置");
         add("productivebeesgenesis.configuration.common.button", "通用配置");
         add("productivebeesgenesis.configuration.common.tooltip", "跨端同步且无需按存档区分的参数");
+        add("productivebeesgenesis.configuration.devMode", "开发者模式");
+        add("productivebeesgenesis.configuration.devMode.tooltip", "开启后创造模式标签页会显示无尽·创世蜜脾、蜜脾块和寰宇支配之剑（验证）。");
         add("productivebeesgenesis.configuration.createComb", "产出蜜脾");
         add("productivebeesgenesis.configuration.createComb.tooltip", "是否能产出蜜脾");
         add("productivebeesgenesis.configuration.ejectBusyCooldown", "高负载弹出冷却（tick）");
@@ -399,5 +400,10 @@ public class ModLanguageProvider extends LanguageProvider {
         add("productivebeesgenesis.configuration.waterproof.tooltip", "是否防水");
         add("productivebeesgenesis.configuration.weatherTolerance", "天气耐受性");
         add("productivebeesgenesis.configuration.weatherTolerance.tooltip", "天气耐受性: none/rain/any");
+
+        // FilterListScreen 工具按钮提示
+        add("productivebeesgenesis.config.reset.tooltip", "重置过滤列表为默认值（空列表、模式关闭）");
+        add("productivebeesgenesis.config.export.tooltip", "将当前过滤列表以 JSON 数组形式导出到剪贴板");
+        add("productivebeesgenesis.config.import.tooltip", "从剪贴板导入过滤列表（支持 JSON 数组或逗号/换行分隔）");
     }
 }

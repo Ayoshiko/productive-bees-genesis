@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -27,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * </ul>
  * 这样无需访问 BeeData 内部的 {@code occupant} 字段或 {@code Occupant} 记录，避免混淆字段名问题。
  * <p>
- * 配置项 {@link ModConfig.ServerConfig#advancedBeehiveCacheHasNectar} 控制是否启用缓存。
+ * 该缓存为默认开启且不可关闭的内部性能优化，不再提供配置项。
  */
 @Mixin(targets = "net.minecraft.world.level.block.entity.BeehiveBlockEntity$BeeData")
 public class BeeDataHasNectarCacheMixin {
@@ -58,9 +56,6 @@ public class BeeDataHasNectarCacheMixin {
 	 */
 	@Inject(method = "hasNectar()Z", at = @At("HEAD"), cancellable = true, remap = true)
 	private void productivebeesgenesis$cachedHasNectarHead(CallbackInfoReturnable<Boolean> cir) {
-		if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
-			return;
-		}
 		if (productivebeesgenesis$hasNectarCached) {
 			cir.setReturnValue(productivebeesgenesis$hasNectarValue);
 		}
@@ -68,14 +63,9 @@ public class BeeDataHasNectarCacheMixin {
 
 	/**
 	 * 首次调用原版 hasNectar() 后捕获返回值并写入缓存。
-	 * <br/>
-	 * 若配置禁用缓存，则跳过捕获，让每次调用都走原版逻辑。
 	 */
 	@Inject(method = "hasNectar()Z", at = @At("RETURN"), remap = true)
 	private void productivebeesgenesis$cachedHasNectarTail(CallbackInfoReturnable<Boolean> cir) {
-		if (!ModConfig.SERVER.advancedBeehiveCacheHasNectar.get()) {
-			return;
-		}
 		if (!productivebeesgenesis$hasNectarCached) {
 			productivebeesgenesis$hasNectarValue = cir.getReturnValue();
 			productivebeesgenesis$hasNectarCached = true;

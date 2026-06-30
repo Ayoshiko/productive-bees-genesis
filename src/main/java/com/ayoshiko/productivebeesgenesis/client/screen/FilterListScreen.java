@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -69,6 +70,8 @@ public final class FilterListScreen extends Screen {
 	private static final int INPUT_WIDTH = 180;
 	/** 底部控制栏元素间距 */
 	private static final int CONTROL_SPACING = 6;
+	/** 顶部小工具按钮尺寸（重置/导入/导出图标按钮） */
+	private static final int UTILITY_BUTTON_SIZE = 20;
 	/** 屏幕左右边距 */
 	static final int SCREEN_MARGIN = 20;
 	/** 序号列宽度（缩小以靠近复选框） */
@@ -172,6 +175,9 @@ public final class FilterListScreen extends Screen {
 				Component.translatable("productivebeesgenesis.config.invert_selection"),
 				button -> invertVisible()
 		).bounds(SCREEN_MARGIN + topButtonW + 4, topButtonY, topButtonW, 20).build());
+
+		// 顶部左侧：重置 / 导入 / 导出小工具按钮（图标按钮，带 tooltip）
+		createUtilityButtons(topButtonY, SCREEN_MARGIN + 2 * (topButtonW + 4));
 
 		// 顶部右侧：过滤模式图标按钮组
 		createModeButtons(topButtonY);
@@ -288,6 +294,83 @@ public final class FilterListScreen extends Screen {
 
 	private void setFilterMode(ModConfig.FilterMode mode) {
 		this.filterMode = mode;
+	}
+
+	private void createUtilityButtons(int y, int startX) {
+		int gap = 2;
+		int x = startX;
+
+		addRenderableWidget(Button.builder(Component.literal("\u21BA"), button -> resetToDefault())
+				.bounds(x, y, UTILITY_BUTTON_SIZE, UTILITY_BUTTON_SIZE)
+				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.config.reset.tooltip")))
+				.build());
+		x += UTILITY_BUTTON_SIZE + gap;
+
+		addRenderableWidget(Button.builder(Component.literal("\u2191"), button -> exportToClipboard())
+				.bounds(x, y, UTILITY_BUTTON_SIZE, UTILITY_BUTTON_SIZE)
+				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.config.export.tooltip")))
+				.build());
+		x += UTILITY_BUTTON_SIZE + gap;
+
+		addRenderableWidget(Button.builder(Component.literal("\u2193"), button -> importFromClipboard())
+				.bounds(x, y, UTILITY_BUTTON_SIZE, UTILITY_BUTTON_SIZE)
+				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.config.import.tooltip")))
+				.build());
+	}
+
+	private void resetToDefault() {
+		beeTypes.clear();
+		selectedTypes.clear();
+		filterMode = ModConfig.FilterMode.DISABLED;
+		clampScrollOffset();
+		updateDeleteSelectedButton();
+		rebuildWidgets();
+	}
+
+	private void exportToClipboard() {
+		if (minecraft == null) return;
+		String json = beeTypes.stream()
+				.map(s -> "\"" + s + "\"")
+				.collect(Collectors.joining(", ", "[", "]"));
+		minecraft.keyboardHandler.setClipboard(json);
+		ProductiveBeesGenesis.LOGGER.info("已将 {} 个蜜蜂类型导出到剪贴板", beeTypes.size());
+	}
+
+	private void importFromClipboard() {
+		if (minecraft == null) return;
+		String clipboard = minecraft.keyboardHandler.getClipboard();
+		if (clipboard == null || clipboard.isBlank()) {
+			return;
+		}
+		String trimmed = clipboard.trim();
+		String[] tokens;
+		if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+			tokens = trimmed.substring(1, trimmed.length() - 1).split(",");
+		} else {
+			tokens = trimmed.split("[,\\s]+");
+		}
+
+		int added = 0;
+		int skipped = 0;
+		for (String raw : tokens) {
+			String token = raw.replaceAll("[\\[\\]\"']", "").trim();
+			if (token.isEmpty()) {
+				continue;
+			}
+			Pair<Boolean, Component> validation = validateInput(token);
+			if (validation.getFirst() && !beeTypes.contains(token)) {
+				beeTypes.add(token);
+				added++;
+			} else {
+				skipped++;
+			}
+		}
+
+		if (added > 0) {
+			scrollToBottom();
+			rebuildWidgets();
+		}
+		ProductiveBeesGenesis.LOGGER.info("从剪贴板导入过滤列表：新增 {} 个，跳过 {} 个", added, skipped);
 	}
 
 	private void loadFromConfig() {
@@ -705,6 +788,9 @@ public final class FilterListScreen extends Screen {
 		try {
 			ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(beeTypes);
 			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
+			// NeoForge ConfigValue.set 只修改内存中的配置对象，必须调用 spec.save() 才能真正写回 .toml 文件
+			ModConfig.SERVER_SPEC.save();
+			ProductiveBeesGenesis.LOGGER.info("已保存万象创世过滤配置：模式={}, 条目数={}", filterMode, beeTypes.size());
 		} catch (Exception e) {
 			// 配置保存失败时记录日志，不阻断关闭
 			ProductiveBeesGenesis.LOGGER.error("保存过滤配置失败", e);
