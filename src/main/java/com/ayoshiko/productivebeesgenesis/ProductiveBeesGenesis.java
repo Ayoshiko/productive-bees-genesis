@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
-import com.ayoshiko.productivebeesgenesis.datagen.ModLanguageProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
 import com.ayoshiko.productivebeesgenesis.datagen.ModRecipes;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
@@ -213,9 +212,8 @@ public final class ProductiveBeesGenesis {
 		generator.addProvider(event.includeServer(), ModLootTables.create(packOutput, lookupProvider));
 		// 方块标签（镐/锄挖掘工具）
 		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider, event.getExistingFileHelper()));
-		// 语言文件
-		generator.addProvider(event.includeClient(), new ModLanguageProvider(packOutput, "en_us"));
-		generator.addProvider(event.includeClient(), new ModLanguageProvider(packOutput, "zh_cn"));
+		// 语言文件：主 lang（src/main/resources）已包含全部键（GUI + configuration + config.*），
+		// 不再通过 ModLanguageProvider 生成，避免 generated lang 与主 lang 键重叠触发 DuplicatesStrategy.EXCLUDE。
 	}
 
 	/**

@@ -64,7 +64,7 @@ final class BeeSelectionRenderer {
 	void renderEmptyResult(GuiGraphics graphics) {
 		graphics.drawCenteredString(screen.getMinecraft().font,
 				Component.translatable("productivebeesgenesis.config.no_search_result"),
-				screen.width / 2, BeeSelectionScreen.LIST_TOP_Y + 20, 0xFFB0B0B0);
+				screen.width / 2, BeeSelectionScreen.LIST_TOP_Y + 20, GuiColors.TEXT_DIM_GRAY);
 	}
 
 	/**
@@ -96,13 +96,13 @@ final class BeeSelectionRenderer {
 		int width = screen.width - 2 * BeeSelectionScreen.SIDE_PADDING - BeeSelectionScreen.SCROLL_BAR_WIDTH - 8;
 
 		// 分组标题背景
-		int bgColor = hovered ? 0xFF505070 : 0xFF404060;
+		int bgColor = hovered ? GuiColors.GROUP_HEADER_BG_HOVER : GuiColors.GROUP_HEADER_BG;
 		graphics.fill(x, y, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, bgColor);
-		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, 0xFF606080);
+		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.BORDER_GROUP_HEADER);
 
 		String arrow = header.collapsed ? COLLAPSED_ARROW : EXPANDED_ARROW;
 		String text = arrow + " " + header.namespace + " (" + header.count + ")";
-		graphics.drawString(screen.getMinecraft().font, Component.literal(text), x + 4, y + 8, 0xFFFFFFFF);
+		graphics.drawString(screen.getMinecraft().font, Component.literal(text), x + 4, y + 8, GuiColors.TEXT_WHITE);
 	}
 
 	private void renderEntry(GuiGraphics graphics, BeeSelectionScreen.BeeEntry entry, int y,
@@ -116,21 +116,21 @@ final class BeeSelectionRenderer {
 		// 背景：已添加条目使用淡绿色底，未添加使用默认半透明；悬停时叠加高亮
 		int bgColor;
 		if (hovered) {
-			bgColor = added ? 0x4080FF80 : 0x60FFFFFF;
+			bgColor = added ? GuiColors.OVERLAY_ENTRY_ADDED_HOVER_BG : GuiColors.OVERLAY_ENTRY_HOVER_BG;
 		} else {
-			bgColor = added ? 0x2080FF80 : 0x20FFFFFF;
+			bgColor = added ? GuiColors.OVERLAY_ENTRY_ADDED_BG : GuiColors.OVERLAY_ENTRY_BG;
 		}
 		graphics.fill(x, y, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, bgColor);
-		graphics.fill(x, y, x + width, y + 1, 0xFF404040);
-		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, 0xFF404040);
+		graphics.fill(x, y, x + width, y + 1, GuiColors.BORDER_DARK);
+		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.BORDER_DARK);
 
 		if (added) {
-			graphics.fill(x, y, x + 2, y + BeeSelectionScreen.ENTRY_HEIGHT, 0xFF40C040);
+			graphics.fill(x, y, x + 2, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.ADDED_INDICATOR_BAR);
 		}
 
 		if (!added) {
 			String checkbox = selected ? CHECKBOX_CHECKED : CHECKBOX_EMPTY;
-			graphics.drawString(screen.getMinecraft().font, Component.literal(checkbox), x + 2, y + 9, 0xFFFFFFFF);
+			graphics.drawString(screen.getMinecraft().font, Component.literal(checkbox), x + 2, y + 9, GuiColors.TEXT_WHITE);
 		}
 
 		if (!entry.icon.isEmpty()) {
@@ -138,8 +138,8 @@ final class BeeSelectionRenderer {
 		}
 
 		boolean activeSearch = !state.getSearchText().isEmpty();
-		int nameColor = activeSearch ? 0xFFFFFFFF : (added ? 0xFF80FF80 : 0xFFFFFF80);
-		int typeColor = activeSearch ? 0xFFFFFF80 : 0xFFC0C0C0;
+		int nameColor = activeSearch ? GuiColors.TEXT_WHITE : (added ? GuiColors.TEXT_NAME_ADDED_GREEN : GuiColors.TEXT_NAME_YELLOW);
+		int typeColor = activeSearch ? GuiColors.TEXT_NAME_YELLOW : GuiColors.TEXT_PRODUCT_GRAY;
 		int textX = x + BeeSelectionScreen.CHECKBOX_COLUMN_WIDTH + BeeSelectionScreen.ICON_COLUMN_WIDTH + 6;
 		graphics.drawString(screen.getMinecraft().font, entry.displayName, textX, y + 4, nameColor);
 
@@ -153,12 +153,12 @@ final class BeeSelectionRenderer {
 		int productMaxWidth = listRight - productX;
 		if (productMaxWidth > 0) {
 			String productText = screen.getMinecraft().font.plainSubstrByWidth(entry.productInfo.getString(), productMaxWidth);
-			graphics.drawString(screen.getMinecraft().font, Component.literal(productText), productX, y + 10, 0xFFD0D0D0);
+			graphics.drawString(screen.getMinecraft().font, Component.literal(productText), productX, y + 10, GuiColors.TEXT_PRODUCT_LIGHT);
 		}
 
 		if (added) {
 			int checkX = x + width - 12;
-			graphics.drawString(screen.getMinecraft().font, Component.literal(ADDED_MARK), checkX, y + 9, 0xFF00FF00);
+			graphics.drawString(screen.getMinecraft().font, Component.literal(ADDED_MARK), checkX, y + 9, GuiColors.TEXT_ADDED_MARK);
 		}
 	}
 

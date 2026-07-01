@@ -35,6 +35,30 @@ final class FilterListRenderer {
 	}
 
 	/**
+	 * 渲染列表区域背景与四周边框。
+	 * <p>
+	 * 列表顶部边框已作为表头与第一行条目之间的分隔线，不再额外绘制表头下边框，
+	 * 避免第一行蜜蜂类型 ID 下方出现重复横线。
+	 *
+	 * @param graphics   绘图上下文
+	 * @param listBottom 列表区域底部 Y 坐标
+	 */
+	void renderListBackground(GuiGraphics graphics, int listBottom) {
+		int left = FilterListScreen.SCREEN_MARGIN;
+		int right = screen.width - FilterListScreen.SCREEN_MARGIN;
+		// 列表区域深灰背景
+		graphics.fill(left, FilterListScreen.LIST_TOP_Y - 2, right, listBottom, GuiColors.BG_LIST_PANEL);
+		// 上边框
+		graphics.fill(left, FilterListScreen.LIST_TOP_Y - 2, right, FilterListScreen.LIST_TOP_Y - 1, GuiColors.BORDER_GRAY);
+		// 下边框
+		graphics.fill(left, listBottom - 1, right, listBottom, GuiColors.BORDER_GRAY);
+		// 左边框
+		graphics.fill(left, FilterListScreen.LIST_TOP_Y - 2, left + 1, listBottom, GuiColors.BORDER_GRAY);
+		// 右边框
+		graphics.fill(right - 1, FilterListScreen.LIST_TOP_Y - 2, right, listBottom, GuiColors.BORDER_GRAY);
+	}
+
+	/**
 	 * 渲染列表表头，包括新增的全选复选框列。
 	 */
 	void renderHeader(GuiGraphics graphics, List<String> beeTypes, Set<String> selectedTypes, int scrollOffset) {
@@ -48,19 +72,19 @@ final class FilterListRenderer {
 		int headerWidth = screen.getMinecraft().font.width(headerNumber);
 		int headerX = indexColumnX + FilterListScreen.INDEX_COLUMN_WIDTH - headerWidth - 2;
 		graphics.drawString(screen.getMinecraft().font, Component.literal(headerNumber),
-				headerX, FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
+				headerX, FilterListScreen.LIST_TOP_Y - 14, GuiColors.TEXT_WHITE);
 		graphics.drawString(screen.getMinecraft().font, Component.translatable("productivebeesgenesis.config.bee_type_id"),
-				idColumnX, FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
+				idColumnX, FilterListScreen.LIST_TOP_Y - 14, GuiColors.TEXT_WHITE);
 		graphics.drawString(screen.getMinecraft().font, Component.translatable("productivebeesgenesis.config.bee_name"),
-				nameColumnX, FilterListScreen.LIST_TOP_Y - 14, 0xFFB0B0B0);
+				nameColumnX, FilterListScreen.LIST_TOP_Y - 14, GuiColors.TEXT_DIM_GRAY);
 		graphics.drawString(screen.getMinecraft().font, Component.translatable("productivebeesgenesis.config.actions"),
-				actionColumnX, FilterListScreen.LIST_TOP_Y - 14, 0xFFB0B0B0);
+				actionColumnX, FilterListScreen.LIST_TOP_Y - 14, GuiColors.TEXT_DIM_GRAY);
 
 		// 表头复选框：仅当所有可见条目都被选中时显示 ☑
 		boolean allVisibleSelected = areAllVisibleSelected(beeTypes, selectedTypes, scrollOffset);
 		String checkbox = allVisibleSelected ? CHECKBOX_CHECKED : CHECKBOX_EMPTY;
 		graphics.drawString(screen.getMinecraft().font, Component.literal(checkbox),
-				getCheckboxX(), FilterListScreen.LIST_TOP_Y - 14, 0xFFFFFFFF);
+				getCheckboxX(), FilterListScreen.LIST_TOP_Y - 14, GuiColors.TEXT_WHITE);
 	}
 
 	/**
@@ -81,7 +105,7 @@ final class FilterListRenderer {
 		if (beeTypes.isEmpty()) {
 			graphics.drawCenteredString(screen.getMinecraft().font,
 					Component.translatable("productivebeesgenesis.config.empty_list"),
-					screen.width / 2, FilterListScreen.LIST_TOP_Y + 20, 0xFF808080);
+					screen.width / 2, FilterListScreen.LIST_TOP_Y + 20, GuiColors.TEXT_DARK_GRAY);
 		}
 	}
 
@@ -101,14 +125,14 @@ final class FilterListRenderer {
 		// 插入指示线
 		int insertY = FilterListScreen.LIST_TOP_Y + (dragInsertIndex - scrollOffset) * FilterListScreen.ENTRY_SPACING;
 		insertY = Math.max(FilterListScreen.LIST_TOP_Y, Math.min(listBottom, insertY));
-		graphics.fill(listLeft + 1, insertY - 1, listRight - 1, insertY, 0xFFFFFFFF);
-		graphics.fill(listLeft + 1, insertY, listRight - 1, insertY + 1, 0x80FFFFFF);
+		graphics.fill(listLeft + 1, insertY - 1, listRight - 1, insertY, GuiColors.TEXT_WHITE);
+		graphics.fill(listLeft + 1, insertY, listRight - 1, insertY + 1, GuiColors.OVERLAY_DRAG_LINE_GLOW);
 
 		// 被拖拽条目的幽灵（半透明背景 + 类型ID）
 		int ghostY = mouseY - FilterListScreen.ENTRY_HEIGHT / 2;
-		graphics.fill(listLeft + 1, ghostY, listRight - 1, ghostY + FilterListScreen.ENTRY_HEIGHT, 0x40000000);
+		graphics.fill(listLeft + 1, ghostY, listRight - 1, ghostY + FilterListScreen.ENTRY_HEIGHT, GuiColors.OVERLAY_DRAG_GHOST_BG);
 		graphics.drawString(screen.getMinecraft().font, Component.literal(beeTypes.get(dragSourceIdIndexSafe(beeTypes, dragSourceIndex))),
-				listLeft + 10, ghostY + 7, 0x80FFFFFF);
+				listLeft + 10, ghostY + 7, GuiColors.OVERLAY_DRAG_GHOST_TEXT);
 	}
 
 	/**
@@ -173,23 +197,23 @@ final class FilterListRenderer {
 		// 行背景：悬停时高亮
 		if (hovered) {
 			graphics.fill(FilterListScreen.SCREEN_MARGIN + 1, y,
-					screen.width - FilterListScreen.SCREEN_MARGIN - 1, y + FilterListScreen.ENTRY_HEIGHT, 0x30FFFFFF);
+					screen.width - FilterListScreen.SCREEN_MARGIN - 1, y + FilterListScreen.ENTRY_HEIGHT, GuiColors.OVERLAY_HOVER_ROW);
 		}
 
 		// 拖拽手柄
 		int handleTextWidth = screen.getMinecraft().font.width(DRAG_HANDLE);
 		int handleX = getDragHandleX() + (FilterListScreen.DRAG_HANDLE_WIDTH - handleTextWidth) / 2;
-		graphics.drawString(screen.getMinecraft().font, Component.literal(DRAG_HANDLE), handleX, y + 5, 0xFF808080);
+		graphics.drawString(screen.getMinecraft().font, Component.literal(DRAG_HANDLE), handleX, y + 5, GuiColors.TEXT_DARK_GRAY);
 
 		// 复选框
 		String checkbox = selected ? CHECKBOX_CHECKED : CHECKBOX_EMPTY;
 		graphics.drawString(screen.getMinecraft().font, Component.literal(checkbox),
-				getCheckboxX(), y + 5, 0xFFFFFFFF);
+				getCheckboxX(), y + 5, GuiColors.TEXT_WHITE);
 
 		// 序号（从1开始，右对齐）
 		String indexText = String.valueOf(index + 1);
 		int indexX = indexColumnX + FilterListScreen.INDEX_COLUMN_WIDTH - screen.getMinecraft().font.width(indexText) - 2;
-		graphics.drawString(screen.getMinecraft().font, indexText, indexX, y + 5, 0xFF909090);
+		graphics.drawString(screen.getMinecraft().font, indexText, indexX, y + 5, GuiColors.TEXT_INDEX_GRAY);
 
 		// 代表物品图标
 		ItemStack icon = screen.getBeeIcon(beeTypeId);
@@ -200,16 +224,16 @@ final class FilterListRenderer {
 
 		// 类型ID
 		String trimmedId = screen.getMinecraft().font.plainSubstrByWidth(beeTypeId, Math.max(20, idColumnMaxWidth));
-		graphics.drawString(screen.getMinecraft().font, trimmedId, idColumnX, y + 2, 0xFFE0E0E0);
+		graphics.drawString(screen.getMinecraft().font, trimmedId, idColumnX, y + 2, GuiColors.TEXT_LIGHT_GRAY);
 
 		// 显示名称和产物信息 — 使用screen缓存避免每帧重复解析
 		Component displayName = screen.getBeeDisplayName(beeTypeId);
 		String trimmedName = screen.getMinecraft().font.plainSubstrByWidth(displayName.getString(), Math.max(20, nameColumnMaxWidth));
-		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmedName), nameColumnX, y + 2, 0xFFFFFF80);
+		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmedName), nameColumnX, y + 2, GuiColors.TEXT_NAME_YELLOW);
 
 		Component productInfo = screen.getBeeProductInfo(beeTypeId);
 		String trimmed = screen.getMinecraft().font.plainSubstrByWidth(productInfo.getString(), Math.max(20, nameColumnMaxWidth));
-		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmed), nameColumnX, y + 14, 0xFFC0C0C0);
+		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmed), nameColumnX, y + 14, GuiColors.TEXT_PRODUCT_GRAY);
 	}
 
 	private boolean isRowHovered(int mouseX, int mouseY, int entryY) {

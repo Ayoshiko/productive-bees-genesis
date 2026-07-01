@@ -15,7 +15,6 @@ import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -77,15 +76,15 @@ public final class BeeSelectionScreen extends Screen {
 	/** 底部两个按钮之间的间距 */
 	private static final int BOTTOM_BUTTON_GAP = 20;
 	/** 顶部排序按钮宽度 */
-	private static final int SORT_BUTTON_WIDTH = 50;
+	static final int SORT_BUTTON_WIDTH = 50;
 	/** 顶部全选/反选按钮宽度 */
-	private static final int SELECT_BUTTON_WIDTH = 50;
+	static final int SELECT_BUTTON_WIDTH = 50;
 	/** 顶部“仅显示未添加”切换按钮宽度 */
-	private static final int TOGGLE_BUTTON_WIDTH = 60;
+	static final int TOGGLE_BUTTON_WIDTH = 60;
 	/** 顶部按钮高度 */
-	private static final int TOP_BUTTON_HEIGHT = 20;
+	static final int TOP_BUTTON_HEIGHT = 20;
 	/** 顶部按钮之间的间距 */
-	private static final int TOP_BUTTON_GAP = 4;
+	static final int TOP_BUTTON_GAP = 4;
 
 	// ========== 状态数据 ==========
 	private final Screen parent;
@@ -102,11 +101,8 @@ public final class BeeSelectionScreen extends Screen {
 	 * 保留用户的搜索状态、滚动位置及已勾选集合。
 	 */
 	private boolean initialized = false;
-	/** 首次设置搜索框值时避免触发滚动重置 */
-	private boolean ignoreNextSearchReset = false;
 
 	// ========== UI 组件 ==========
-	private EditBox searchField;
 	/**
 	 * 已存在于过滤列表的蜜蜂类型（用于去重显示）。
 	 * <p>
@@ -114,10 +110,6 @@ public final class BeeSelectionScreen extends Screen {
 	 * contains 查找从 O(n) 降为 O(1)，提升大量蜜蜂类型下的渲染过滤性能。
 	 */
 	private final Set<String> existingBeeTypes;
-	/** 显示全部 / 仅未添加 切换按钮 */
-	private Button toggleButton;
-	/** 排序按钮 */
-	private Button sortButton;
 	/** 全选 / 反选按钮 */
 	private Button selectAllButton;
 	private Button invertButton;
@@ -127,8 +119,12 @@ public final class BeeSelectionScreen extends Screen {
 	private Button addSelectedButton;
 	/** 列表渲染辅助类 */
 	private final BeeSelectionRenderer renderer = new BeeSelectionRenderer(this);
-	/** 是否正在拖动滚动条滑块 */
-	private boolean isDraggingScrollBar = false;
+	/** 搜索框与排序按钮管理器（组合模式） */
+	private final BeeSelectionSearchBar searchBar = new BeeSelectionSearchBar(this, state, sorter);
+	/** 分组折叠与显示切换管理器（组合模式） */
+	private final BeeSelectionGroupRenderer groupRenderer = new BeeSelectionGroupRenderer(state, sorter, renderer);
+	/** 滚动条交互与渲染辅助类（组合模式） */
+	private final BeeSelectionScrollBar scrollBar = new BeeSelectionScrollBar(this, state, sorter);
 
 	/**
 	 * 构造蜜蜂选择屏幕（多选模式）
@@ -183,41 +179,13 @@ public final class BeeSelectionScreen extends Screen {
 			sorter.recomputeFilteredEntries();
 		}
 
-		// 顶部按钮布局：排序按钮在搜索框左侧，全选/反选/切换在右侧
-		// 当右侧空间不足时，自动缩小搜索框宽度以避免按钮重叠
-		int desiredSearchWidth = SEARCH_WIDTH;
-		int searchX = width / 2 - desiredSearchWidth / 2;
-		int searchRight = searchX + desiredSearchWidth;
-		int rightArea = width - searchRight - SIDE_PADDING;
-		int requiredRight = SELECT_BUTTON_WIDTH * 2 + TOGGLE_BUTTON_WIDTH + TOP_BUTTON_GAP * 2;
-		int actualSearchWidth = desiredSearchWidth;
-		if (rightArea < requiredRight) {
-			actualSearchWidth = Math.max(140, desiredSearchWidth - (requiredRight - rightArea));
-			searchX = width / 2 - actualSearchWidth / 2;
-			searchRight = searchX + actualSearchWidth;
-		}
-
-		// 搜索框 — 顶部居中
-		searchField = new EditBox(font, searchX, TOP_ROW_Y, actualSearchWidth, TOP_BUTTON_HEIGHT,
-				Component.translatable("productivebeesgenesis.config.search"));
-		searchField.setMaxLength(64);
-		searchField.setHint(Component.translatable("productivebeesgenesis.config.search_hint"));
-		searchField.setResponder(this::onSearchChanged);
-		// 恢复之前的搜索文本；init 期间禁止滚动重置
-		ignoreNextSearchReset = true;
-		searchField.setValue(state.getSearchText());
-		ignoreNextSearchReset = false;
-		addRenderableWidget(searchField);
-
-		// 排序按钮 — 搜索框左侧
-		sortButton = Button.builder(
-				Component.translatable(sorter.getSortKey()),
-				button -> cycleSortMode()
-		).bounds(searchX - SORT_BUTTON_WIDTH - TOP_BUTTON_GAP, TOP_ROW_Y, SORT_BUTTON_WIDTH, TOP_BUTTON_HEIGHT).build();
-		addRenderableWidget(sortButton);
+		// 搜索框与排序按钮 — 由 BeeSelectionSearchBar 管理布局与创建
+		searchBar.init(width);
+		addRenderableWidget(searchBar.getSearchField());
+		addRenderableWidget(searchBar.getSortButton());
 
 		// 全选 / 反选 / 显示切换按钮 — 搜索框右侧依次排列，保持固定间距
-		int rightBtnX = searchRight + TOP_BUTTON_GAP;
+		int rightBtnX = searchBar.getSearchRight() + TOP_BUTTON_GAP;
 		selectAllButton = Button.builder(
 				Component.translatable("productivebeesgenesis.config.select_all"),
 				button -> selectAllFiltered()
@@ -232,15 +200,10 @@ public final class BeeSelectionScreen extends Screen {
 		addRenderableWidget(invertButton);
 
 		rightBtnX += SELECT_BUTTON_WIDTH + TOP_BUTTON_GAP;
-		int toggleWidth = Math.min(TOGGLE_BUTTON_WIDTH, width - SIDE_PADDING - rightBtnX);
-		toggleButton = Button.builder(
-				getToggleMessage(),
-				button -> toggleShowOnlyUnadded()
-		).bounds(rightBtnX, TOP_ROW_Y, Math.max(50, toggleWidth), TOP_BUTTON_HEIGHT).build();
-		addRenderableWidget(toggleButton);
+		addRenderableWidget(groupRenderer.createToggleButton(rightBtnX, TOP_ROW_Y, width - SIDE_PADDING - rightBtnX));
 
 		// 自动聚焦搜索框，方便用户立即输入
-		setFocused(searchField);
+		setFocused(searchBar.getSearchField());
 
 		// 底部按钮栏 — 添加选中 + 返回
 		int bottomY = height - 28;
@@ -269,62 +232,9 @@ public final class BeeSelectionScreen extends Screen {
 		addRenderableWidget(scrollToTopButton);
 	}
 
-	/**
-	 * 搜索框内容变化回调
-	 * <p>
-	 * 大小写不敏感匹配类型ID或显示名称。
-	 *
-	 * @param text 输入文本
-	 */
-	private void onSearchChanged(String text) {
-		state.setSearchText(text);
-		if (!ignoreNextSearchReset) {
-			state.resetScroll();
-		}
-		sorter.recomputeFilteredEntries();
-	}
-
-	/**
-	 * 切换指定分组的折叠状态。
-	 */
-	private void toggleGroupCollapsed(String namespace) {
-		state.toggleGroupCollapsed(namespace);
-		// 委托给排序处理器：使 displayItems 缓存失效并重建，再修正滚动偏移
-		sorter.onCollapsedChanged();
-	}
-
-	/**
-	 * 切换“仅显示未添加”状态，并刷新列表和按钮文本
-	 */
-	private void toggleShowOnlyUnadded() {
-		state.toggleShowOnlyUnadded();
-		toggleButton.setMessage(getToggleMessage());
-		state.resetScroll();
-		sorter.recomputeFilteredEntries();
-	}
-
-	/** 获取切换按钮的当前文本 */
-	private Component getToggleMessage() {
-		return Component.translatable(state.isShowOnlyUnadded()
-				? "productivebeesgenesis.config.show_unadded"
-				: "productivebeesgenesis.config.show_all");
-	}
-
 	/** 判断指定蜜蜂是否已在过滤列表中 */
 	boolean isAlreadyAdded(BeeEntry entry) {
 		return existingBeeTypes.contains(entry.typeId);
-	}
-
-	/**
-	 * 循环切换排序规则。
-	 */
-	private void cycleSortMode() {
-		state.cycleSortMode();
-		if (sortButton != null) {
-			sortButton.setMessage(Component.translatable(sorter.getSortKey()));
-		}
-		state.resetScroll();
-		sorter.recomputeFilteredEntries();
 	}
 
 	/**
@@ -373,37 +283,37 @@ public final class BeeSelectionScreen extends Screen {
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		// 全屏纯色不透明背景，彻底消除后方世界虚化/透视对可读性的影响
-		graphics.fill(0, 0, width, height, 0xFF101010);
+		graphics.fill(0, 0, width, height, GuiColors.BG_SCREEN_DARK);
 		// 标题
-		graphics.drawCenteredString(font, this.title, width / 2, 8, 0xFFFFFF);
+		graphics.drawCenteredString(font, this.title, width / 2, 8, GuiColors.TEXT_TITLE);
 
 		// 列表区域背景（不透明深灰背景，四边边框，确保列表内容清晰可见）
 		int listBottom = height - LIST_BOTTOM_MARGIN;
-		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, width - SIDE_PADDING, listBottom, 0xFF1A1A1A);
+		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, width - SIDE_PADDING, listBottom, GuiColors.BG_LIST_PANEL);
 		// 上边框
-		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, width - SIDE_PADDING, LIST_TOP_Y - 1, 0xFF707070);
+		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, width - SIDE_PADDING, LIST_TOP_Y - 1, GuiColors.BORDER_GRAY);
 		// 下边框
-		graphics.fill(SIDE_PADDING, listBottom - 1, width - SIDE_PADDING, listBottom, 0xFF707070);
+		graphics.fill(SIDE_PADDING, listBottom - 1, width - SIDE_PADDING, listBottom, GuiColors.BORDER_GRAY);
 		// 左边框
-		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, SIDE_PADDING + 1, listBottom, 0xFF707070);
+		graphics.fill(SIDE_PADDING, LIST_TOP_Y - 2, SIDE_PADDING + 1, listBottom, GuiColors.BORDER_GRAY);
 		// 右边框
-		graphics.fill(width - SIDE_PADDING - 1, LIST_TOP_Y - 2, width - SIDE_PADDING, listBottom, 0xFF707070);
+		graphics.fill(width - SIDE_PADDING - 1, LIST_TOP_Y - 2, width - SIDE_PADDING, listBottom, GuiColors.BORDER_GRAY);
 
 		// 表头（与条目文字列对齐，位置下调避免高 GUI 缩放下与搜索框重叠）
 		int nameHeaderX = SIDE_PADDING + 4 + CHECKBOX_COLUMN_WIDTH + ICON_COLUMN_WIDTH + 6;
 		int headerLabelY = LIST_TOP_Y - 6;
 		graphics.drawString(font, Component.translatable("productivebeesgenesis.config.bee_name"),
-				nameHeaderX, headerLabelY, 0xFFFFFFFF);
+				nameHeaderX, headerLabelY, GuiColors.TEXT_WHITE);
 		graphics.drawString(font, Component.translatable("productivebeesgenesis.config.bee_type_id"),
-				nameHeaderX + PRODUCT_OFFSET_X, headerLabelY, 0xFFB0B0B0);
+				nameHeaderX + PRODUCT_OFFSET_X, headerLabelY, GuiColors.TEXT_DIM_GRAY);
 
 		// 裁剪并渲染列表
 		graphics.enableScissor(SIDE_PADDING, LIST_TOP_Y, width - SIDE_PADDING, listBottom);
 		renderer.renderDisplayList(graphics, sorter.getDisplayItems(), state.getScrollOffset(), mouseX, mouseY, state);
 		graphics.disableScissor();
 
-		// 滚动条
-		renderScrollBar(graphics);
+		// 滚动条（委托给滚动条辅助类）
+		scrollBar.render(graphics);
 
 		// 渲染组件（搜索框、按钮）— 手动渲染避免Screen默认renderBackground渲染半透明背景
 		for (var renderable : renderables) {
@@ -416,92 +326,7 @@ public final class BeeSelectionScreen extends Screen {
 	 */
 	@Override
 	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		graphics.fill(0, 0, width, height, 0xFF101010);
-	}
-
-	/**
-	 * 滚动条滑块位置/高度记录
-	 */
-	private record ScrollBarThumb(int y, int height) {
-	}
-
-	/**
-	 * 渲染滚动条
-	 */
-	private void renderScrollBar(GuiGraphics graphics) {
-		ScrollBarThumb thumb = calculateScrollBarThumb();
-		if (thumb == null) return;
-
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int scrollX = getScrollBarX();
-		graphics.fill(scrollX, LIST_TOP_Y, scrollX + SCROLL_BAR_WIDTH, listBottom, 0xFF404040);
-		graphics.fill(scrollX, thumb.y, scrollX + SCROLL_BAR_WIDTH, thumb.y + thumb.height, 0xFFA0A0A0);
-	}
-
-	/**
-	 * 计算当前滚动条滑块位置与高度；列表无需滚动时返回 {@code null}。
-	 */
-	private ScrollBarThumb calculateScrollBarThumb() {
-		int total = sorter.getDisplayItems().size();
-		int visible = getVisibleEntryCount();
-		if (total <= visible) {
-			return null;
-		}
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int trackHeight = listBottom - LIST_TOP_Y;
-		int thumbHeight = Math.max(20, trackHeight * visible / total);
-		int maxScroll = total - visible;
-		int thumbY = LIST_TOP_Y + (trackHeight - thumbHeight) * state.getScrollOffset() / Math.max(1, maxScroll);
-		return new ScrollBarThumb(thumbY, thumbHeight);
-	}
-
-	/**
-	 * 获取滚动条轨道左侧 X 坐标。
-	 */
-	private int getScrollBarX() {
-		return width - SIDE_PADDING - SCROLL_BAR_WIDTH;
-	}
-
-	/**
-	 * 判断鼠标是否位于滚动条轨道区域内。
-	 */
-	private boolean isMouseOverScrollBar(double mouseX, double mouseY) {
-		return mouseX >= getScrollBarX() && mouseX < getScrollBarX() + SCROLL_BAR_WIDTH
-				&& mouseY >= LIST_TOP_Y && mouseY < height - LIST_BOTTOM_MARGIN;
-	}
-
-	/**
-	 * 判断鼠标是否位于滚动条滑块上。
-	 */
-	private boolean isMouseOverScrollBarThumb(double mouseX, double mouseY) {
-		ScrollBarThumb thumb = calculateScrollBarThumb();
-		if (thumb == null) {
-			return false;
-		}
-		return mouseY >= thumb.y && mouseY < thumb.y + thumb.height;
-	}
-
-	/**
-	 * 根据鼠标 Y 坐标更新滚动偏移，用于拖动滚动条。
-	 */
-	private void updateScrollOffsetFromMouseY(double mouseY) {
-		int total = sorter.getDisplayItems().size();
-		int visible = getVisibleEntryCount();
-		int maxScroll = total - visible;
-		if (maxScroll <= 0) {
-			return;
-		}
-		int listBottom = height - LIST_BOTTOM_MARGIN;
-		int trackHeight = listBottom - LIST_TOP_Y;
-		int thumbHeight = Math.max(20, trackHeight * visible / total);
-		int available = trackHeight - thumbHeight;
-		if (available <= 0) {
-			return;
-		}
-		double relative = mouseY - LIST_TOP_Y - thumbHeight / 2.0;
-		int offset = (int) Math.round(relative * maxScroll / available);
-		state.setScrollOffset(offset);
-		state.clampScrollOffset(maxScroll);
+		graphics.fill(0, 0, width, height, GuiColors.BG_SCREEN_DARK);
 	}
 
 	@Override
@@ -514,23 +339,13 @@ public final class BeeSelectionScreen extends Screen {
 		// 获取当前显示列表快照（同一渲染帧内复用，避免重复调用）
 		List<BeeSelectionRenderer.DisplayItem> displayItems = sorter.getDisplayItems();
 
-		// 滚动条交互：左键拖动滑块，点击轨道空白处快速跳转到对应位置
-		if (button == 0 && displayItems.size() > getVisibleEntryCount() && isMouseOverScrollBar(mouseX, mouseY)) {
-			if (isMouseOverScrollBarThumb(mouseX, mouseY)) {
-				isDraggingScrollBar = true;
-			} else {
-				updateScrollOffsetFromMouseY(mouseY);
-			}
+		// 滚动条交互（委托给滚动条辅助类）
+		if (scrollBar.handleMouseClicked(mouseX, mouseY, button)) {
 			return true;
 		}
 
 		// 分组标题：点击切换折叠/展开
-		Integer headerIndex = renderer.getHeaderIndexAt(mouseY, displayItems, state.getScrollOffset());
-		if (headerIndex != null) {
-			BeeSelectionRenderer.DisplayItem item = displayItems.get(headerIndex);
-			if (item instanceof BeeSelectionRenderer.HeaderItem header) {
-				toggleGroupCollapsed(header.namespace);
-			}
+		if (groupRenderer.handleHeaderClick(mouseY, displayItems, state.getScrollOffset())) {
 			return true;
 		}
 
@@ -572,18 +387,16 @@ public final class BeeSelectionScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-		if (isDraggingScrollBar && button == 0) {
-			updateScrollOffsetFromMouseY(mouseY);
-			updateScrollToTopButton();
+		if (scrollBar.handleMouseDragged(mouseX, mouseY, button)) {
 			return true;
 		}
 		return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
 	}
 
 	/**
-	 * 更新回到顶部按钮的激活状态
+	 * 更新回到顶部按钮的激活状态（包级可见，供 BeeSelectionScrollBar 调用）
 	 */
-	private void updateScrollToTopButton() {
+	void updateScrollToTopButton() {
 		if (scrollToTopButton != null) {
 			scrollToTopButton.active = state.getScrollOffset() > 0;
 		}
@@ -591,8 +404,7 @@ public final class BeeSelectionScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		if (isDraggingScrollBar && button == 0) {
-			isDraggingScrollBar = false;
+		if (scrollBar.handleMouseReleased(mouseX, mouseY, button)) {
 			return true;
 		}
 		return super.mouseReleased(mouseX, mouseY, button);

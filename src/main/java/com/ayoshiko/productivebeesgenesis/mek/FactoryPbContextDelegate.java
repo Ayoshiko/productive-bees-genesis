@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jetbrains.annotations.Nullable;
 
 import mekanism.api.IContentsListener;
+import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
 
 /**
  * 工厂离心机 PB 上下文委托 — 组合封装三个工厂的公共状态和方法
@@ -75,6 +76,35 @@ public class FactoryPbContextDelegate {
 	public FactoryPbContextDelegate(PbRecipeContext context) {
 		this.outputSlotFlagManager = new OutputSlotFlagManager(context);
 		this.pbActiveStates = new boolean[context.processes()];
+	}
+
+	/**
+	 * 工厂方法 — 一步完成委托创建、排序监听器设置和 unpause 回关注册
+	 * <br/>
+	 * 抽取三个工厂 addSlots 中重复的初始化代码：
+	 * <ol>
+	 *   <li>构造委托实例</li>
+	 *   <li>设置排序监听器（输出槽变更时去抖触发排序）</li>
+	 *   <li>设置 unpause 回调（输出槽变更时解除对应进程的配方缓存暂停）</li>
+	 * </ol>
+	 *
+	 * @param context                 PB上下文（工厂实现）
+	 * @param updateSortingListener   排序监听器（addSlots 中传入）
+	 * @param recipeCacheLookupMonitors 配方缓存查找监视器数组（工厂父类字段，用于 unpause 调用）
+	 * @return 配置好的委托实例
+	 */
+	public static FactoryPbContextDelegate create(
+			PbRecipeContext context,
+			@Nullable IContentsListener updateSortingListener,
+			FactoryRecipeCacheLookupMonitor<?>[] recipeCacheLookupMonitors) {
+		FactoryPbContextDelegate delegate = new FactoryPbContextDelegate(context);
+		delegate.setUpdateSortingListener(updateSortingListener);
+		delegate.setUnpauseCallback(process -> {
+			if (process >= 0 && process < recipeCacheLookupMonitors.length) {
+				recipeCacheLookupMonitors[process].unpause();
+			}
+		});
+		return delegate;
 	}
 
 	/**

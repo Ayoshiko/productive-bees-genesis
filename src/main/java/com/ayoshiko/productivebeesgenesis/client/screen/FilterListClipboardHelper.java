@@ -203,13 +203,13 @@ final class FilterListClipboardHelper {
 		 */
 		int buildColor() {
 			if (invalid > 0 && duplicates > 0) {
-				return 0xFFFFA500;
+				return GuiColors.STATUS_MIXED;
 			} else if (invalid > 0) {
-				return 0xFFFF6060;
+				return GuiColors.STATUS_INVALID;
 			} else if (duplicates > 0) {
-				return 0xFFFFC040;
+				return GuiColors.STATUS_DUPLICATE;
 			}
-			return 0xFF60FF60;
+			return GuiColors.STATUS_SUCCESS;
 		}
 	}
 }

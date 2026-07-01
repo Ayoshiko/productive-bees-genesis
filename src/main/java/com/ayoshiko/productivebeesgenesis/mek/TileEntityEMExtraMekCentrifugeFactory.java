@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-
 import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryInputInventorySlot;
 import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryOutputInventorySlot;
 import io.github.masyumero.emextras.common.tile.factory.TileEntityEMExtraItemStackToItemStackFactory;
@@ -66,7 +64,7 @@ import com.jerry.mekextras.api.recipes.outputs.ExtraOutputHelper;
  * PB配方处理逻辑委托给 {@link PbRecipeProcessor}，通过实现 {@link PbRecipeContext} 提供依赖。
  */
 public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItemStackToItemStackFactory
-		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, PbRecipeContext, IMekCentrifugeTile, IHasEjectorCooldown {
+		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown {
 
 	/** 副输出槽2 — 每进程第3个物品输出槽（ProcessInfo只支持1个secondary，第3个单独管理） */
 	private EMExtraFactoryOutputInventorySlot[] tertiaryOutputSlots;
@@ -118,15 +116,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		outputHandlers = new IOutputHandler[tier.processes];
 		processInfoSlots = new ProcessInfo[tier.processes];
 		tertiaryOutputSlots = new EMExtraFactoryOutputInventorySlot[tier.processes];
-		// Task 10: 初始化委托（在 addSlots 中，此时 tier 和 this 都可用）
-		delegate = new FactoryPbContextDelegate(this);
-		// Task 10: 设置委托的排序监听器和 unpause 回调（输出槽变更时去抖触发排序/解除配方缓存暂停）
-		delegate.setUpdateSortingListener(updateSortingListener);
-		delegate.setUnpauseCallback(process -> {
-			if (process >= 0 && process < recipeCacheLookupMonitors.length) {
-				recipeCacheLookupMonitors[process].unpause();
-			}
-		});
+		// 初始化委托：创建实例 + 设置排序监听器 + unpause 回调
+		delegate = FactoryPbContextDelegate.create(this, updateSortingListener, recipeCacheLookupMonitors);
 
 		int baseX = 27;
 		int baseXMult = 19;
@@ -452,61 +443,10 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
 	}
 
-	// ===== Task 5/7/11/16: 输出槽标志位/版本号/去抖/激活计数器 — 委托给 FactoryPbContextDelegate =====
-
+	/** 获取PB上下文委托 — 供 IFactoryPbDelegateAccess 默认方法转发使用 */
 	@Override
-	public boolean productivebeesgenesis$hasOutputItems() {
-		return delegate.hasOutputItems();
-	}
-
-	@Override
-	public boolean productivebeesgenesis$outputSlotsFull() {
-		return delegate.outputSlotsFull();
-	}
-
-	@Override
-	public void productivebeesgenesis$updateOutputSlotFlags() {
-		delegate.updateOutputSlotFlags();
-	}
-
-	@Override
-	public boolean productivebeesgenesis$outputSlotsFull(int process) {
-		return delegate.outputSlotsFull(process);
-	}
-
-	@Override
-	public void productivebeesgenesis$beginOutputBatch() {
-		delegate.beginOutputBatch();
-	}
-
-	@Override
-	public void productivebeesgenesis$endOutputBatch(int process) {
-		delegate.endOutputBatch(process);
-	}
-
-	@Override
-	public long productivebeesgenesis$outputContentsVersion() {
-		return delegate.outputContentsVersion();
-	}
-
-	@Override
-	public long productivebeesgenesis$outputItemCount() {
-		return delegate.outputItemCount();
-	}
-
-	@Override
-	public void productivebeesgenesis$onProcessActivated(int process) {
-		delegate.onProcessActivated(process);
-	}
-
-	@Override
-	public void productivebeesgenesis$onProcessDeactivated(int process) {
-		delegate.onProcessDeactivated(process);
-	}
-
-	@Override
-	public boolean productivebeesgenesis$hasActiveProcess() {
-		return delegate.hasActiveProcess();
+	public FactoryPbContextDelegate productivebeesgenesis$getDelegate() {
+		return delegate;
 	}
 
 	// ===== GUI暴露方法 =====

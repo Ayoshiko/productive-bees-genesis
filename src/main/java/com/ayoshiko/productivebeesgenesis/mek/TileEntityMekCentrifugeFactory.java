@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
@@ -51,22 +49,13 @@ import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 
 /**
- * 工厂版MEK离心机方块实体
+ * 工厂版MEK离心机方块实体 — 继承TileEntityItemToItemFactory，复用多进程并行处理。
  * <br/>
- * 继承Mekanism的TileEntityItemToItemFactory，复用多进程并行处理、排序、升级体系。
- * <p>
- * 双配方处理路径：
- * <ul>
- *   <li>SMELTING配方：走Mekanism标准CachedRecipe管线，输出到主输出槽</li>
- *   <li>PB CentrifugeRecipe：独立处理（不走CachedRecipe管线），支持概率多物品输出+流体输出</li>
- * </ul>
- * 每进程有3个输出槽（主输出+副输出1+副输出2），共享1个流体输出槽（容量随tier.processes缩放）。
- * SMELTING配方优先于PB配方（同一输入若有SMELTING配方则走SMELTING路径）。
- * <p>
- * PB配方处理逻辑委托给 {@link PbRecipeProcessor}，通过实现 {@link PbRecipeContext} 提供依赖。
+ * 双配方路径：SMELTING走Mekanism管线（主输出槽）；PB CentrifugeRecipe独立处理（3输出槽+流体槽）。
+ * SMELTING优先于PB。PB逻辑委托给 {@link PbRecipeProcessor}，通过 {@link IFactoryPbDelegateAccess} 提供依赖。
  */
 public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<ItemStackToItemStackRecipe>
-		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, PbRecipeContext, IMekCentrifugeTile, IHasEjectorCooldown {
+		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown {
 
 	/** 副输出槽2 — 每进程第3个物品输出槽（ProcessInfo只支持1个secondary，第3个单独管理） */
 	private OutputInventorySlot[] tertiaryOutputSlots;
@@ -106,16 +95,7 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 				() -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
 	}
 
-	/**
-	 * 重写getInitialInventory — 调整energySlot位置
-	 * <br/>
-	 * 父类TileEntityFactory硬编码energySlot坐标为(7, 13)，适合1行输出槽的原版工厂。
-	 * 本项目离心机工厂有3行输出槽，原版4等级与EM高等级需要不同布局：
-	 * <ul>
-	 *   <li>原版4等级：保持父类(7, 13)，红石槽在红色输入槽左侧，与Mek原版一致</li>
-	 *   <li>EM高等级：一比一复刻EM原版TileEntityFactoryMixin公式，红石槽在物品栏左侧下方</li>
-	 * </ul>
-	 */
+	/** 重写getInitialInventory — 调整energySlot位置（原版4等级保持(7,13)，EM高等级复刻EM原版公式） */
 	@NotNull
 	@Override
 	protected IInventorySlotHolder getInitialInventory(IContentsListener listener) {
@@ -126,45 +106,23 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 			accessor.productivebeesgenesis$setSortingNeeded(true);
 		});
 		// 计算energySlot坐标：原版4等级保持默认(7,13)；EM高等级使用EM原版公式
-		int energySlotX = 7;
-		int energySlotY = 13;
-		if (FactoryLayoutHelper.isEMHighTier(tier)) {
-			int imageWidth = 176 + FactoryLayoutHelper.getImageWidthAddition(tier);
-			int inventorySize = 9 * 20;
-			int startInventory = 8 + (imageWidth / 2 - inventorySize / 2);
-			energySlotX = startInventory - 22;
-			energySlotY = 193;
-		}
+		int energySlotX = FactoryLayoutHelper.getFactoryEnergySlotX(tier);
+		int energySlotY = FactoryLayoutHelper.getFactoryEnergySlotY(tier);
 		EnergyInventorySlot energySlot = EnergyInventorySlot.fillOrConvert(energyContainer, this::getLevel, listener, energySlotX, energySlotY);
 		accessor.productivebeesgenesis$setEnergySlot(energySlot);
 		builder.addSlot(energySlot);
 		return builder.build();
 	}
 
-	/**
-	 * 重写addSlots — 每进程添加3个输出槽
-	 * <br/>
-	 * 参考TileEntitySawingFactory，但添加2个副输出槽（而非1个）。
-	 * 主输出槽(y=57) + 副输出槽1(y=77) + 副输出槽2(y=97)。
-	 * ProcessInfo的secondaryOutputSlot设为副输出槽1，副输出槽2用单独数组管理。
-	 * <br/>
-	 * baseX/baseXMult通过 {@link FactoryLayoutHelper} 动态计算，统一支持原版4等级与EM扩展高等级。
-	 */
+	/** 重写addSlots — 每进程3个输出槽（y=57/77/97），副输出槽2用单独数组管理。布局通过 FactoryLayoutHelper 计算。 */
 	@Override
 	protected void addSlots(InventorySlotHelper builder, IContentsListener listener, IContentsListener updateSortingListener) {
 		inputHandlers = new IInputHandler[tier.processes];
 		outputHandlers = new IOutputHandler[tier.processes];
 		processInfoSlots = new ProcessInfo[tier.processes];
 		tertiaryOutputSlots = new OutputInventorySlot[tier.processes];
-		// Task 10: 初始化委托（在 addSlots 中，此时 tier 和 this 都可用）
-		delegate = new FactoryPbContextDelegate(this);
-		// Task 10: 设置委托的排序监听器和 unpause 回调（输出槽变更时去抖触发排序/解除配方缓存暂停）
-		delegate.setUpdateSortingListener(updateSortingListener);
-		delegate.setUnpauseCallback(process -> {
-			if (process >= 0 && process < recipeCacheLookupMonitors.length) {
-				recipeCacheLookupMonitors[process].unpause();
-			}
-		});
+		// 初始化委托：创建实例 + 设置排序监听器 + unpause 回调
+		delegate = FactoryPbContextDelegate.create(this, updateSortingListener, recipeCacheLookupMonitors);
 
 		// 通过FactoryLayoutHelper动态计算布局参数，支持原版4等级与EM扩展高等级
 		int baseX = FactoryLayoutHelper.getBaseX(tier);
@@ -200,14 +158,7 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		}
 	}
 
-	/**
-	 * 重写getInitialFluidTanks — 添加共享流体输出槽
-	 * <br/>
-	 * TileEntityFactory默认无流体槽，重写此方法添加输出槽。
-	 * 容量随tier.processes缩放（参考Mekanism原版化学工厂）：
-	 * BASIC(3进程)=30000mB, ADVANCED(5)=50000mB, ELITE(7)=70000mB, ULTIMATE(9)=90000mB。
-	 * PB配方的流体输出写入此槽。
-	 */
+	/** 重写getInitialFluidTanks — 添加共享流体输出槽，容量随tier.processes缩放。 */
 	@Nullable
 	@Override
 	protected IFluidTankHolder getInitialFluidTanks(IContentsListener listener) {
@@ -506,61 +457,10 @@ public class TileEntityMekCentrifugeFactory extends TileEntityItemToItemFactory<
 		return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
 	}
 
-	// ===== Task 5/7/11/16: 输出槽标志位/版本号/去抖/激活计数器 — 委托给 FactoryPbContextDelegate =====
-
+	/** 获取PB上下文委托 — 供 IFactoryPbDelegateAccess 默认方法转发使用 */
 	@Override
-	public boolean productivebeesgenesis$hasOutputItems() {
-		return delegate.hasOutputItems();
-	}
-
-	@Override
-	public boolean productivebeesgenesis$outputSlotsFull() {
-		return delegate.outputSlotsFull();
-	}
-
-	@Override
-	public void productivebeesgenesis$updateOutputSlotFlags() {
-		delegate.updateOutputSlotFlags();
-	}
-
-	@Override
-	public boolean productivebeesgenesis$outputSlotsFull(int process) {
-		return delegate.outputSlotsFull(process);
-	}
-
-	@Override
-	public void productivebeesgenesis$beginOutputBatch() {
-		delegate.beginOutputBatch();
-	}
-
-	@Override
-	public void productivebeesgenesis$endOutputBatch(int process) {
-		delegate.endOutputBatch(process);
-	}
-
-	@Override
-	public long productivebeesgenesis$outputContentsVersion() {
-		return delegate.outputContentsVersion();
-	}
-
-	@Override
-	public long productivebeesgenesis$outputItemCount() {
-		return delegate.outputItemCount();
-	}
-
-	@Override
-	public void productivebeesgenesis$onProcessActivated(int process) {
-		delegate.onProcessActivated(process);
-	}
-
-	@Override
-	public void productivebeesgenesis$onProcessDeactivated(int process) {
-		delegate.onProcessDeactivated(process);
-	}
-
-	@Override
-	public boolean productivebeesgenesis$hasActiveProcess() {
-		return delegate.hasActiveProcess();
+	public FactoryPbContextDelegate productivebeesgenesis$getDelegate() {
+		return delegate;
 	}
 
 	// ===== GUI暴露方法 =====

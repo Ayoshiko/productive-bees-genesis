@@ -5,6 +5,50 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.0] - 2026-07-01
+
+### 修复
+
+- **P0: iris 依赖缺少 versionRange**：`neoforge.mods.toml` 中 iris 可选依赖缺少版本范围，补充 `versionRange="[1.8.8,)"`
+- **P0: 5 处 LOGGER.debug 违规**：违反项目硬约束"生产代码无 debug 级日志"
+  - `AbstractCombEventHandler` — 异常路径改为 `warn`
+  - `MyriadCreationsEventHandler` — 非异常路径调试日志直接删除
+  - `BeeInfoHelper`（2 处）— 异常路径改为 `warn`
+  - `BeeRecipeReloader` — 异常路径改为 `warn`
+- **P0: mineable 标签文件缺失**：运行 `runData` 生成标签 JSON
+  - `data/minecraft/tags/block/mineable/pickaxe.json` — 包含 18 个离心机/工厂方块
+  - `data/minecraft/tags/block/mineable/hoe.json` — 包含 `infinitycreation_comb_block`
+- **P0: generated lang 与主 lang 键重叠**：`ModLanguageProvider` 生成的 configuration.* 键与主 lang 文件重复，触发 `DuplicatesStrategy.EXCLUDE`
+  - 修复：移除 `ModLanguageProvider` 注册，主 lang 文件作为单一真相源（307 键全覆盖）
+  - 删除过期的 generated lang 文件（仅含 1 个 stale 键）
+
+### 变更
+
+- **P1: README 包结构描述修正**：`client/gui/` → `client/screen/`，`client/model/` → `client/render/cosmic/`，补充 `capability/`、`command/`、`network/`、`mek/`、`mixin/` 等遗漏包
+- **P1: myriadcreations_comb 设计决策注释澄清**：`ServerConfig.produceOutputItem` 注释修正为"使用 configurable_honeycomb 时会自动附加 bee_type 组件"
+- **P2: 文件超长拆分**（所有 Java 文件均 < 500 行，符合项目硬约束）
+  - `FilterListScreen`（719→430 行）— 抽取 `FilterListInputHelper`、`FilterListActionBar`、`FilterListModeSelector`
+  - `TileEntityMekCentrifuge`（612→392 行）— 抽取 `MekCentrifugeSlotManager`、`MekCentrifugeSaveHandler`、`MekCentrifugeTickHandler`
+  - `BeeSelectionScreen`（584→411 行）— 抽取 `BeeSelectionSearchBar`、`BeeSelectionGroupRenderer`、`BeeSelectionScrollBar`
+  - `TileEntityMekCentrifugeFactory`（517→429 行）— 抽取 `FactoryLayoutHelper`
+  - `ServerConfig`（403→253 行）— 抽取 `CentrifugeConfigSection`、`BeeAttributeConfigSection`
+- **P2: GUI 颜色常量抽取**：新建 `GuiColors.java`，替换 6 个文件约 65 处硬编码 ARGB 颜色值
+- **P2: MyriadSelectionCache 抽取**：从 `MyriadCreationsEventHandler` 抽取类型选择缓存逻辑（SRP），volatile 字段保证多工厂共享安全
+- **P3: displayName 属性化**：`neoforge.mods.toml` 的 `displayName` 改为 `${mod_name}`，让 `gradle.properties` 的 `mod_name=资源蜜蜂：创世` 生效
+- **P3: 魔法数字命名化**
+  - `CosmicRenderTypes` — `0x200000` → `BUFFER_SIZE_2MB`
+  - `BeeHelperMixin` — `0xffffffffL` → `FULL_32_BIT_MASK`
+
+### 删除
+
+- **P1: 25 个未使用翻译键**：从 `en_us.json`/`zh_cn.json` 删除（含 3 个 JEI 键 `energy_per_tick`/`mek_centrifuge_recipes`/`processing_time`，经 Grep 验证代码无引用）
+- **P1: 19 个空目录**：Java 源码空包（`recipe/`、`screen/`、`block/entity/` 等）+ 资源空目录（`assets/.../atlases/`、`textures/gui/bar/` 等）
+- **P1: 2 个空配方子目录**：`data/productivebees/recipe/centrifuge/thermal/`、`data/productivebees/recipe/thermal/centrifuge/`
+- **P2: 7 个开发遗留文件**：`bee_attr.txt`、`bee_creator.txt`、`config_bee.txt`、`dependencies.txt`、`run_output.txt`、`apply_perf_patch.ps1`、`fix_debug_logs.py`
+- **P2: docs/ 目录**：`CODE_REVIEW_FINDINGS.md`、`CODE_REVIEW_SPEC.md`、`findings.md`（审查文档不入库）
+- **P2: 2 个开发辅助脚本**：`check_indent.ps1`、`fix_slot.py`（加入 .gitignore）
+- **P2: generated lang 文件**：过期 stale 文件（仅 1 键，与主 lang 重复）
+
 ## [1.3.3] - 2026-07-01
 
 ### 修复

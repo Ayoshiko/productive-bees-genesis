@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.3.3-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.4.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
@@ -107,23 +107,22 @@ The configuration interface supports multiple languages (English/Chinese) and au
 ### Package Structure
 
 - (root): Main mod classes (`ProductiveBeesGenesis`, `ProductiveBeesGenesisClient`), comb event handlers (`AbstractCombEventHandler`, `MyriadCreationsEventHandler`), `RandomHoneycombSelector` (random comb allocation algorithms), `CombBlockCheckCache` (idle operation interception cache).
-- `block/`: Custom blocks (centrifuge frames, decorative blocks).
-- `client/gui/`: Mek centrifuge GUI helpers and factory GUI helpers.
+- `capability/`: Capability helpers — `RateLimitedItemHandler` (rate-limited item handler), `IInventoryDirtyDebouncer` (inventory dirty debouncer).
+- `client/`: Client event handlers (`AbstractClientCombEventHandler`, `MyriadCreationsClientEventHandler`).
 - `client/jei/`: JEI recipe categories for PB centrifuge recipes.
-- `client/model/`: Custom model loaders and geometry loaders.
 - `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat, `AbstractMaskGeometryLoader` base class.
-- `client/screen/`: GUI screens for configuration and Mek centrifuge — main screens (`FilterListScreen`, `BeeSelectionScreen`) with composition helpers (`FilterListDragHandler`, `FilterListClipboardHelper`, `BeeSelectionSorter`) and renderers (`FilterListRenderer`, `BeeSelectionRenderer`).
-- `compat/`: Cross-mod compatibility helpers.
+- `client/screen/`: GUI screens for configuration and Mek centrifuge — main screens (`FilterListScreen`, `BeeSelectionScreen`) with composition helpers (`FilterListDragHandler`, `FilterListClipboardHelper`, `BeeSelectionSorter`) and renderers (`FilterListRenderer`, `BeeSelectionRenderer`); Mek centrifuge GUIs (`GuiMekCentrifuge`, `GuiMekCentrifugeFactory`, factory variants).
+- `client/screen/state/`: Screen state management (`BeeSelectionState`, `BeeSelectionCache`).
+- `command/`: Commands — `PerfCommand` (performance monitor command).
 - `config/`: Configuration definitions split into `ClientConfig`/`CommonConfig`/`ServerConfig` with `ModConfig` as aggregation entry, bilingual support.
-- `datagen/`: Data generation (block tags, recipes, loot tables).
-- `init/`: DeferredRegister registrations (blocks, items, block entities, etc.).
-- `item/`: Custom items (infinity sword replica, spawn eggs).
-- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing — `PbRecipeProcessor` coordinator delegating to `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`, `FactoryPbContextDelegate` composition class for factories, `RecipeCacheManager`, isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`).
-- `menu/`: Container menu definitions.
-- `mixin/`: Mixin classes (PB centrifuge, bee color, factory upgrade chain, Iris, recipe serializer fallbacks) with `CentrifugeMixinHelper` for DRY and `MixinConfigPlugin`/`IrisConfigPlugin` for conditional loading.
-- `recipe/`: Custom recipe types.
-- `screen/`: Server-side screen holders.
-- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `PerformanceMonitor`, `BeeConfigApplier`, `BeeIngredientFallback`, `PBConstants`.
+- `datagen/`: Data generation (block tags, recipes, loot tables, language provider).
+- `init/`: DeferredRegister registrations (blocks, items, block entities, menu types, creative tabs, stats).
+- `item/`: Custom items (infinity sword replica).
+- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing — `PbRecipeProcessor` coordinator delegating to `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`, `FactoryPbContextDelegate` composition class for factories, isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`).
+- `menu/`: Container menu definitions (Mek centrifuge and factory containers).
+- `mixin/`: Mixin classes with `MixinConfigPlugin` for conditional loading; sub-packages: `accessor/` (accessor mixins), `beehive/` (beehive/inventory debounce and cache mixins), `client/` (client-side mixins — bee color, cosmic item renderer), `iris/` (Iris shader compat with `IrisConfigPlugin`), `mek/` (Mekanism centrifuge/factory/ejector mixins), `recipe/` (recipe serializer fallback mixins).
+- `network/`: Network communication — `ModPayloads` (payload registration), `FilterConfigSyncPayload` (filter config sync).
+- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `PerformanceMonitor`, `BeeConfigApplier`, `BeeIngredientFallback`, `CentrifugeMixinHelper`, `CentrifugeRecipeIndex`, `InputOutputCompatibilityCache`, `InputValidationCache`, `BeeRecipeReloader`, `PBConstants`.
 
 ### Key Abstractions
 

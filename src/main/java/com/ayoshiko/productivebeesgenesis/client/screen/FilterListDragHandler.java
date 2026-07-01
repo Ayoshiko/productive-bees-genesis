@@ -120,9 +120,9 @@ final class FilterListDragHandler {
 		int listBottom = screen.height - FilterListScreen.LIST_BOTTOM_MARGIN;
 		int scrollX = getScrollBarX();
 		graphics.fill(scrollX, FilterListScreen.LIST_TOP_Y,
-				scrollX + FilterListScreen.SCROLL_BAR_WIDTH, listBottom, 0xFF404040);
+				scrollX + FilterListScreen.SCROLL_BAR_WIDTH, listBottom, GuiColors.SCROLLBAR_TRACK);
 		graphics.fill(scrollX, thumb.y,
-				scrollX + FilterListScreen.SCROLL_BAR_WIDTH, thumb.y + thumb.height, 0xFFA0A0A0);
+				scrollX + FilterListScreen.SCROLL_BAR_WIDTH, thumb.y + thumb.height, GuiColors.SCROLLBAR_THUMB);
 	}
 
 	// ========== 滚动条交互 ==========

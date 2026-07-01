@@ -14,11 +14,14 @@ import net.minecraft.resources.ResourceLocation;
  */
 public class CosmicRenderTypes {
 
+	/** 2MB 顶点缓冲区大小 */
+	private static final int BUFFER_SIZE_2MB = 0x200000;
+
 	public static final RenderType COSMIC = RenderType.create(
 			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
-			0x200000,
+			BUFFER_SIZE_2MB,
 			true,
 			false,
 			RenderType.CompositeState.builder()
@@ -36,7 +39,7 @@ public class CosmicRenderTypes {
 			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic_armor").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
-			0x200000,
+			BUFFER_SIZE_2MB,
 			true,
 			false,
 			RenderType.CompositeState.builder()
@@ -54,7 +57,7 @@ public class CosmicRenderTypes {
 			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "hell").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
-			0x200000,
+			BUFFER_SIZE_2MB,
 			true,
 			false,
 			RenderType.CompositeState.builder()

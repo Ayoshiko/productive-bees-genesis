@@ -1,6 +1,0 @@
-{
-  "gui.productivebeesgenesis.energy_per_tick": "Energy: %d FE/t",
-  "gui.productivebeesgenesis.mek_centrifuge_recipes": "MEK Centrifuge Recipes",
-  "gui.productivebeesgenesis.processing_time": "Time: %dt",
-  "itemGroup.productivebeesgenesis": "MEK Centrifuge"
-}

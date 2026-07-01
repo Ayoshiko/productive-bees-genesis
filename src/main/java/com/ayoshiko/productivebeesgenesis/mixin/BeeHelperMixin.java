@@ -44,6 +44,9 @@ import net.minecraft.world.level.Level;
 @Mixin(BeeHelper.class)
 public class BeeHelperMixin {
 
+	/** 完整 32 位掩码，用于节流计数器重置 */
+	private static final long FULL_32_BIT_MASK = 0xffffffffL;
+
 	/** 每 (tick, beeId) 的调用计数，用于可选节流 */
 	private static final ConcurrentHashMap<Long, AtomicInteger> THROTTLE_COUNTERS = new ConcurrentHashMap<>();
 	/** 上次节流统计的游戏刻 */
@@ -53,7 +56,7 @@ public class BeeHelperMixin {
 	 * 将游戏刻与蜜蜂 ID 组合为节流 key
 	 */
 	private static long makeKey(long gameTick, int beeId) {
-		return (gameTick << 32) | (beeId & 0xffffffffL);
+		return (gameTick << 32) | (beeId & FULL_32_BIT_MASK);
 	}
 
 	/**

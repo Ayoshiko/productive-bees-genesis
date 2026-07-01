@@ -122,6 +122,31 @@ public final class FactoryLayoutHelper {
 	}
 
 	/**
+	 * 工厂方块实体 energySlot 的X坐标
+	 * <br/>
+	 * 原版4等级保持父类默认(7)；EM高等级使用EM原版Mixin公式（红石槽在物品栏左侧下方）。
+	 * 供 {@link TileEntityMekCentrifugeFactory#getInitialInventory} 使用。
+	 */
+	public static int getFactoryEnergySlotX(FactoryTier tier) {
+		if (isEMHighTier(tier)) {
+			int imageWidth = BASE_IMAGE_WIDTH + getImageWidthAddition(tier);
+			int inventorySize = 9 * INVENTORY_SLOT_PITCH; // 180
+			int startInventory = 8 + (imageWidth / 2 - inventorySize / 2);
+			return startInventory - 22;
+		}
+		return 7;
+	}
+
+	/**
+	 * 工厂方块实体 energySlot 的Y坐标
+	 * <br/>
+	 * 原版4等级保持父类默认(13)；EM高等级为193（红石槽在物品栏左侧下方）。
+	 */
+	public static int getFactoryEnergySlotY(FactoryTier tier) {
+		return isEMHighTier(tier) ? 193 : 13;
+	}
+
+	/**
 	 * 流体槽X坐标
 	 * <br/>
 	 * 原版4等级：流体槽在左侧，与能源槽(X=7)对齐。

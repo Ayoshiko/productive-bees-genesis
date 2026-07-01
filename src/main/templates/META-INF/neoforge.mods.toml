@@ -12,7 +12,7 @@ issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
-displayName="Productive Bees Genesis"
+displayName="${mod_name}"
 authors="${mod_authors}"
 description='''
 资源蜜蜂：创世 / Productive Bees Genesis
@@ -99,6 +99,7 @@ config="${mod_id}.iris.mixins.json"
     type="optional"
     ordering="AFTER"
     side="CLIENT"
+    versionRange="[1.8.8,)"
 
 # Super Factory Manager 可选依赖（仅保证加载顺序）
 # 离心机继承 Mekanism 的 TileEntityElectricMachine，自动暴露 IItemHandler/IEnergyStorage/IFluidHandler，

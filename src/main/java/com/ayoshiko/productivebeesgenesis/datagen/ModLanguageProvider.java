@@ -35,9 +35,6 @@ public class ModLanguageProvider extends LanguageProvider {
 	}
 
 	private void addEnglish() {
-		add("gui.productivebeesgenesis.mek_centrifuge_recipes", "MEK Centrifuge Recipes");
-		add("gui.productivebeesgenesis.processing_time", "Time: %dt");
-		add("gui.productivebeesgenesis.energy_per_tick", "Energy: %d FE/t");
 		add("itemGroup.productivebeesgenesis", "MEK Centrifuge");
 
 		add("productivebeesgenesis.configuration.advanced_beehive", "Advanced Beehive");
@@ -225,9 +222,6 @@ public class ModLanguageProvider extends LanguageProvider {
 	}
 
 	private void addChinese() {
-		add("gui.productivebeesgenesis.mek_centrifuge_recipes", "MEK离心机配方");
-		add("gui.productivebeesgenesis.processing_time", "时间: %dt");
-		add("gui.productivebeesgenesis.energy_per_tick", "能量: %d FE/t");
 		add("itemGroup.productivebeesgenesis", "MEK离心机");
 
 		add("productivebeesgenesis.configuration.advanced_beehive", "高级蜂箱");

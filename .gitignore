@@ -48,11 +48,6 @@ Thumbs.db
 *~
 
 # 开发辅助文件
-run_output.txt
-config_bee.txt
-bee_creator.txt
-bee_attr.txt
-dependencies.txt
 run_output*.txt
 *.tmp
 *.temp
@@ -62,6 +57,8 @@ run_output*.txt
 # 开发辅助脚本（一次性使用，不入库）
 apply_perf_patch.ps1
 fix_debug_logs.py
+check_indent.ps1
+fix_slot.py
 
 # Trae spec 文件目录（内部使用，不入库）
 .trae/
