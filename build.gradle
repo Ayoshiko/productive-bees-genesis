@@ -8,6 +8,10 @@ group = mod_group_id
 
 repositories {
     mavenLocal()
+    maven { url "https://maven.aliyun.com/repository/public/" }
+    maven { url "https://maven.aliyun.com/repository/google/" }
+    maven { url "https://repo.huaweicloud.com/repository/maven/" }
+    maven { url "https://mirrors.cloud.tencent.com/nexus/repository/maven-public/" }
     maven {
         url "https://www.cursemaven.com"
     }
@@ -17,7 +21,6 @@ repositories {
     maven {
         url "https://modmaven.dev/mekanism/Mekanism/"
     }
-    // Modrinth Maven — 用于获取 Iris 光影模组编译时依赖
     exclusiveContent {
         forRepository {
             maven {
@@ -32,6 +35,7 @@ repositories {
     flatDir {
         dir 'libs'
     }
+    mavenCentral()
 }
 
 base {

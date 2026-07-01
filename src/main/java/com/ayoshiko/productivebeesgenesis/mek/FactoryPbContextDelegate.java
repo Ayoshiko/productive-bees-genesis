@@ -70,7 +70,7 @@ public class FactoryPbContextDelegate {
 	}
 
 	/**
-	 * @param context PB配方处理上下文（工厂自身，提供槽位访问和进程数）
+	 * 完整构造函数 — 在 addSlots() 中调用（此时 tier.processes 和 this 都可用）
 	 */
 	public FactoryPbContextDelegate(PbRecipeContext context) {
 		this.outputSlotFlagManager = new OutputSlotFlagManager(context);

@@ -84,7 +84,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	 * 三个工厂继承不同 Mekanism 父类，无法通过继承抽取公共逻辑，
 	 * 采用组合模式委托给 {@link FactoryPbContextDelegate}，消除约 100 行重复代码。
 	 */
-	private final FactoryPbContextDelegate delegate;
+	private FactoryPbContextDelegate delegate;
 
 	// ===== Task 12: SFM/AE2 高频探测缓存（避免每 tick 反复查配方和 hashItemAndComponents） =====
 	/** 输入槽有效性校验缓存（isItemValidForSlot / isValidInputItem） */
@@ -96,8 +96,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		super(blockProvider, pos, state);
 		// 初始化PB配方处理器（tier在super()中已通过presetVariables设置）
 		pbProcessor = new PbRecipeProcessor(this, "ME工厂离心机");
-		// Task 10: 初始化 PB 上下文委托（封装输出槽标志位、激活计数器、版本号、去抖等公共状态）
-		delegate = new FactoryPbContextDelegate(this);
+		// delegate 在 addSlots() 中初始化（此时 tier 和 this 都可用）
 
 		// energySlot通过Accessor Mixin访问，副输出槽2注册、IO配置、流体侧面配置、FLUID弹出器由Helper统一处理
 		EnergyInventorySlot energySlot = ((TileEntityExtraFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
@@ -121,6 +120,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		outputHandlers = new IOutputHandler[tier.processes];
 		processInfoSlots = new ProcessInfo[tier.processes];
 		tertiaryOutputSlots = new ExtraFactoryOutputInventorySlot[tier.processes];
+		// Task 10: 初始化委托（在 addSlots 中，此时 tier 和 this 都可用）
+		delegate = new FactoryPbContextDelegate(this);
 		// Task 10: 设置委托的排序监听器和 unpause 回调（输出槽变更时去抖触发排序/解除配方缓存暂停）
 		delegate.setUpdateSortingListener(updateSortingListener);
 		delegate.setUnpauseCallback(process -> {
