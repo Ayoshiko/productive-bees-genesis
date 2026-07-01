@@ -106,6 +106,10 @@ public class MyriadCreationsHandler {
 	 * <p>
 	 * 能量和操作数使用调用方（tryProcessPbRecipeInternal）已缓存的 cachedEnergyPerTick 和 cachedOperationsPerTick，
 	 * 避免在此方法中重复调用 getEnergyPerTick/operationsPerTick（可能涉及 Math.pow 计算）。
+	 * <p>
+	 * 能量采用批量扣除策略：循环内用局部变量追踪可用能量，循环结束后一次性 extract，
+	 * 避免每次 operation 都触发 BasicEnergyContainer.onContentsChanged 造成 listener 连锁开销
+	 * （与 PbRecipeProcessor 的批量提取优化保持一致）。
 	 *
 	 * @param processIndex            进程索引
 	 * @param input                   万象创世蜜脾或蜜脾块
@@ -126,7 +130,8 @@ public class MyriadCreationsHandler {
 		}
 
 		// 检查能量是否足够
-		if (context.energyContainer().getEnergy() < cachedEnergyPerTick) {
+		long availableEnergy = context.energyContainer().getEnergy();
+		if (availableEnergy < cachedEnergyPerTick) {
 			pbProcessing[processIndex] = true;
 			return true;
 		}
@@ -134,12 +139,14 @@ public class MyriadCreationsHandler {
 		// 累加进度并消耗能量
 		pbProcessing[processIndex] = true;
 		// MU扩展下每tick可处理多次（operationsPerTick>1），未加载MU时返回1
+		int opsRun = 0;
 		for (int op = 0; op < cachedOperationsPerTick; op++) {
-			if (context.energyContainer().getEnergy() < cachedEnergyPerTick) {
+			if (availableEnergy < cachedEnergyPerTick) {
 				break;
 			}
 			pbOperatingTicks[processIndex]++;
-			context.energyContainer().extract(cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+			availableEnergy -= cachedEnergyPerTick;
+			opsRun++;
 
 			if (pbOperatingTicks[processIndex] >= processingTime) {
 				// 输出槽物理满时暂停处理，避免产物丢失；万象创世不再做类型数量预检
@@ -178,6 +185,13 @@ public class MyriadCreationsHandler {
 					break;
 				}
 			}
+		}
+
+		// 批量扣除能量 — 将本 tick 所有操作的能量一次性提取，
+		// 避免每次 operation 都触发 BasicEnergyContainer.onContentsChanged 造成 listener 连锁开销。
+		// 与 PbRecipeProcessor.tryProcessPbRecipeInternal 的批量提取优化保持一致。
+		if (opsRun > 0 && cachedEnergyPerTick > 0) {
+			context.energyContainer().extract((long) opsRun * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
 		}
 
 		return true;
