@@ -1,11 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -105,8 +102,13 @@ public final class FilterListScreen extends Screen {
 	private final Screen parent;
 	/** 本地编辑副本（用户修改后点击保存才写入配置） */
 	final List<String> beeTypes = new ArrayList<>();
-	/** 批量删除复选框选中的蜜蜂类型集合 */
-	private final Set<String> selectedTypes = new HashSet<>();
+	/** 选择管理器（委托模式，SRP） */
+	private final FilterListSelectionManager selectionManager = new FilterListSelectionManager();
+
+	/** @return 选中的类型集合（供渲染层读取） */
+	Set<String> getSelectedTypes() {
+		return selectionManager.getSelectedTypes();
+	}
 	private ModConfig.FilterMode filterMode;
 	/** 滚动偏移（以条目为单位） */
 	int scrollOffset = 0;
@@ -120,12 +122,8 @@ public final class FilterListScreen extends Screen {
 	 * 首次 init() 加载配置后置为 true，后续 rebuildWidgets() 触发的 init() 跳过 loadFromConfig()。
 	 */
 	private boolean initialized = false;
-	/** 蜜蜂图标缓存，按类型ID字符串缓存避免每帧创建 ItemStack */
-	private final Map<String, ItemStack> beeIconCache = new ConcurrentHashMap<>();
-	/** 蜜蜂显示名称缓存（避免每帧重复解析翻译键） */
-	private final Map<String, Component> beeDisplayNameCache = new ConcurrentHashMap<>();
-	/** 蜜蜂产物信息缓存（避免每帧遍历配方） */
-	private final Map<String, Component> beeProductInfoCache = new ConcurrentHashMap<>();
+	/** 蜜蜂信息缓存（图标/名称/产物），委托给独立缓存类（SRP） */
+	final FilterListBeeInfoCache beeInfoCache = new FilterListBeeInfoCache();
 	/**
 	 * Task 16.2: 导入操作结果提示（限时显示）。
 	 * <p>
@@ -216,7 +214,7 @@ public final class FilterListScreen extends Screen {
 				Component.translatable("productivebeesgenesis.config.delete_selected"),
 				button -> deleteSelected()
 		).bounds(deleteSelectedX, bottomY, deleteSelectedW, 20).build();
-		deleteSelectedButton.active = !selectedTypes.isEmpty();
+		deleteSelectedButton.active = selectionManager.hasSelection();
 		addRenderableWidget(deleteSelectedButton);
 
 		// 输入框 — 默认隐藏
@@ -361,7 +359,7 @@ public final class FilterListScreen extends Screen {
 	 */
 	private void performResetToDefault() {
 		beeTypes.clear();
-		selectedTypes.clear();
+		selectionManager.clear();
 		filterMode = ModConfig.FilterMode.DISABLED;
 		clampScrollOffset();
 	}
@@ -415,7 +413,7 @@ public final class FilterListScreen extends Screen {
 
 	private void loadFromConfig() {
 		beeTypes.clear();
-		selectedTypes.clear();
+		selectionManager.clear();
 		try {
 			if (ModConfig.SERVER_SPEC.isLoaded()) {
 				beeTypes.addAll(ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get());
@@ -506,11 +504,11 @@ public final class FilterListScreen extends Screen {
 		// 避免第一行蜜蜂类型 ID 下方出现重复横线。
 
 		// 渲染列表表头
-		renderer.renderHeader(graphics, beeTypes, selectedTypes, scrollOffset);
+		renderer.renderHeader(graphics, beeTypes, getSelectedTypes(), scrollOffset);
 
 		// 启用裁剪区域
 		graphics.enableScissor(SCREEN_MARGIN, LIST_TOP_Y, width - SCREEN_MARGIN, listBottom);
-		renderer.renderEntries(graphics, beeTypes, selectedTypes, scrollOffset, mouseX, mouseY);
+		renderer.renderEntries(graphics, beeTypes, getSelectedTypes(), scrollOffset, mouseX, mouseY);
 		graphics.disableScissor();
 
 		// 渲染滚动条
@@ -646,69 +644,31 @@ public final class FilterListScreen extends Screen {
 	}
 
 	private void toggleHeaderCheckbox() {
-		int visibleCount = getVisibleEntryCount();
-		int end = Math.min(scrollOffset + visibleCount, beeTypes.size());
-		boolean allSelected = true;
-		for (int i = scrollOffset; i < end; i++) {
-			if (!selectedTypes.contains(beeTypes.get(i))) {
-				allSelected = false;
-				break;
-			}
-		}
-		for (int i = scrollOffset; i < end; i++) {
-			if (allSelected) {
-				selectedTypes.remove(beeTypes.get(i));
-			} else {
-				selectedTypes.add(beeTypes.get(i));
-			}
-		}
-		updateDeleteSelectedButton();
+		selectionManager.toggleHeaderCheckbox(beeTypes, scrollOffset, getVisibleEntryCount());
+		selectionManager.updateButtonState(deleteSelectedButton);
 	}
 
 	private void toggleSelection(int index) {
-		String type = beeTypes.get(index);
-		if (!selectedTypes.remove(type)) {
-			selectedTypes.add(type);
-		}
-		updateDeleteSelectedButton();
+		selectionManager.toggleSelection(beeTypes, index);
+		selectionManager.updateButtonState(deleteSelectedButton);
 	}
 
 	private void selectAllVisible() {
-		int visibleCount = getVisibleEntryCount();
-		int end = Math.min(scrollOffset + visibleCount, beeTypes.size());
-		for (int i = scrollOffset; i < end; i++) {
-			selectedTypes.add(beeTypes.get(i));
-		}
-		updateDeleteSelectedButton();
+		selectionManager.selectAllVisible(beeTypes, scrollOffset, getVisibleEntryCount());
+		selectionManager.updateButtonState(deleteSelectedButton);
 	}
 
 	private void invertVisible() {
-		int visibleCount = getVisibleEntryCount();
-		int end = Math.min(scrollOffset + visibleCount, beeTypes.size());
-		for (int i = scrollOffset; i < end; i++) {
-			String type = beeTypes.get(i);
-			if (!selectedTypes.remove(type)) {
-				selectedTypes.add(type);
-			}
-		}
-		updateDeleteSelectedButton();
-	}
-
-	private void updateDeleteSelectedButton() {
-		if (deleteSelectedButton != null) {
-			deleteSelectedButton.active = !selectedTypes.isEmpty();
-		}
+		selectionManager.invertVisible(beeTypes, scrollOffset, getVisibleEntryCount());
+		selectionManager.updateButtonState(deleteSelectedButton);
 	}
 
 	private void deleteSelected() {
-		if (selectedTypes.isEmpty()) {
-			return;
+		if (selectionManager.deleteSelected(beeTypes)) {
+			clampScrollOffset();
+			selectionManager.updateButtonState(deleteSelectedButton);
+			rebuildWidgets();
 		}
-		beeTypes.removeIf(selectedTypes::contains);
-		selectedTypes.clear();
-		clampScrollOffset();
-		updateDeleteSelectedButton();
-		rebuildWidgets();
 	}
 
 	private void toggleInputVisibility(boolean visible) {
@@ -737,10 +697,10 @@ public final class FilterListScreen extends Screen {
 
 	private void deleteEntry(int index) {
 		if (index < 0 || index >= beeTypes.size()) return;
-		selectedTypes.remove(beeTypes.get(index));
+		selectionManager.onEntryDeleted(beeTypes.get(index));
 		beeTypes.remove(index);
 		clampScrollOffset();
-		updateDeleteSelectedButton();
+		selectionManager.updateButtonState(deleteSelectedButton);
 		rebuildWidgets();
 	}
 
@@ -804,66 +764,23 @@ public final class FilterListScreen extends Screen {
 	}
 
 	/**
-	 * 获取蜜蜂代表图标（带缓存）
-	 * <p>
-	 * 首次渲染时查询配方并创建 ItemStack，后续从缓存读取。
+	 * 获取蜜蜂代表图标（委托给缓存类）
 	 *
 	 * @param beeTypeId 蜜蜂类型ID字符串
 	 * @return 图标 ItemStack，无法解析或世界未加载时返回空栈
 	 */
 	ItemStack getBeeIcon(String beeTypeId) {
-		ItemStack cached = beeIconCache.get(beeTypeId);
-		if (cached != null) {
-			return cached;
-		}
-		ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
-		if (beeType == null) {
-			return ItemStack.EMPTY;
-		}
-		Level level = Minecraft.getInstance().level;
-		if (level == null) {
-			return ItemStack.EMPTY;
-		}
-		ItemStack icon = BeeInfoHelper.resolveBeeIcon(level, beeType);
-		beeIconCache.put(beeTypeId, icon);
-		return icon;
+		return beeInfoCache.getBeeIcon(beeTypeId);
 	}
 
-	/**
-	 * 获取蜜蜂显示名称（带缓存，避免每帧重复解析翻译键）
-	 */
+	/** 获取蜜蜂显示名称（委托给缓存类） */
 	Component getBeeDisplayName(String beeTypeId) {
-		Component cached = beeDisplayNameCache.get(beeTypeId);
-		if (cached != null) {
-			return cached;
-		}
-		ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
-		if (beeType == null) {
-			return Component.literal(beeTypeId);
-		}
-		Component displayName = BeeInfoHelper.getBeeDisplayName(beeType);
-		beeDisplayNameCache.put(beeTypeId, displayName);
-		return displayName;
+		return beeInfoCache.getBeeDisplayName(beeTypeId);
 	}
 
-	/**
-	 * 获取蜜蜂产物信息（带缓存，避免每帧遍历配方）
-	 */
+	/** 获取蜜蜂产物信息（委托给缓存类） */
 	Component getBeeProductInfo(String beeTypeId) {
-		Component cached = beeProductInfoCache.get(beeTypeId);
-		if (cached != null) {
-			return cached;
-		}
-		ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
-		if (beeType == null) {
-			return Component.empty();
-		}
-		Level level = Minecraft.getInstance().level;
-		Component productInfo = level != null
-				? BeeInfoHelper.getBeeProductInfo(level, beeType)
-				: Component.empty();
-		beeProductInfoCache.put(beeTypeId, productInfo);
-		return productInfo;
+		return beeInfoCache.getBeeProductInfo(beeTypeId);
 	}
 
 	int getVisibleEntryCount() {

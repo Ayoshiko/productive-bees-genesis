@@ -30,27 +30,27 @@ import java.util.concurrent.CompletableFuture;
  */
 public class ModBlockTagsProvider extends BlockTagsProvider {
 
-    public ModBlockTagsProvider(PackOutput output,
-                                CompletableFuture<HolderLookup.Provider> lookupProvider,
-                                ExistingFileHelper existingFileHelper) {
-        super(output, lookupProvider, ProductiveBeesGenesis.MOD_ID, existingFileHelper);
-    }
+	public ModBlockTagsProvider(PackOutput output,
+								CompletableFuture<HolderLookup.Provider> lookupProvider,
+								ExistingFileHelper existingFileHelper) {
+		super(output, lookupProvider, ProductiveBeesGenesis.MOD_ID, existingFileHelper);
+	}
 
-    @Override
-    protected void addTags(HolderLookup.Provider provider) {
-        // 缓存蜜脾块的注册ID，用于在遍历中识别（引用而非硬编码字符串，改名时自动跟随）
-        var combBlockId = ModBlocks.INFINITY_CREATION_COMB_BLOCK.getId();
+	@Override
+	protected void addTags(HolderLookup.Provider provider) {
+		// 缓存蜜脾块的注册ID，用于在遍历中识别（引用而非硬编码字符串，改名时自动跟随）
+		var combBlockId = ModBlocks.INFINITY_CREATION_COMB_BLOCK.getId();
 
-        // 遍历所有已注册方块，按用途分配挖掘工具标签
-        for (var entry : ModBlocks.BLOCKS.getEntries()) {
-            Block block = entry.get();
-            if (entry.getId().equals(combBlockId)) {
-                // 无尽·创世蜜脾块 — 用锄挖掘更快（参考PB蜜脾块）
-                this.tag(BlockTags.MINEABLE_WITH_HOE).add(block);
-            } else {
-                // 所有离心机方块（基础+原版4工厂+EM5工厂+ME4工厂+EME4工厂）— 用镐挖掘
-                this.tag(BlockTags.MINEABLE_WITH_PICKAXE).add(block);
-            }
-        }
-    }
+		// 遍历所有已注册方块，按用途分配挖掘工具标签
+		for (var entry : ModBlocks.BLOCKS.getEntries()) {
+			Block block = entry.get();
+			if (entry.getId().equals(combBlockId)) {
+				// 无尽·创世蜜脾块 — 用锄挖掘更快（参考PB蜜脾块）
+				this.tag(BlockTags.MINEABLE_WITH_HOE).add(block);
+			} else {
+				// 所有离心机方块（基础+原版4工厂+EM5工厂+ME4工厂+EME4工厂）— 用镐挖掘
+				this.tag(BlockTags.MINEABLE_WITH_PICKAXE).add(block);
+			}
+		}
+	}
 }

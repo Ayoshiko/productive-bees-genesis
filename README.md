@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.3.2-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
@@ -140,7 +140,7 @@ The configuration interface supports multiple languages (English/Chinese) and au
 - **`PbRecipeProcessor`**: PB recipe processing coordinator holding shared state arrays and delegating to specialized components — `PbRecipeFinder` (double-layer cached recipe lookup), `PbRecipeCompleter` (output aggregation and batch insertion), `MyriadCreationsHandler` (Myriad Creations special path).
 - **`FactoryPbContextDelegate`**: Composition class eliminating ~293 lines of duplicated PB recipe context logic across the three factory tile entities.
 - **`BeeSelectionSorter`**: Composition class extracted from `BeeSelectionScreen` handling bee type sorting/filtering logic with cached display items.
-- **`FilterListDragHandler`/`FilterListClipboardHelper`**: Composition helpers extracted from `FilterListScreen` for drag/scroll interaction and clipboard import/export respectively.
+- **`FilterListDragHandler`/`FilterListClipboardHelper`/`FilterListBeeInfoCache`/`FilterListSelectionManager`**: Composition helpers extracted from `FilterListScreen` for drag/scroll interaction, clipboard import/export, bee info caching, and selection management respectively.
 
 ### Thread Safety
 

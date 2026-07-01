@@ -60,124 +60,124 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
 public class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
-    /** 上次执行农夫作物扫描时的游戏刻 */
-    @Unique
-    private long productivebeesgenesis$lastFarmerTick = -1L;
+	/** 上次执行农夫作物扫描时的游戏刻 */
+	@Unique
+	private long productivebeesgenesis$lastFarmerTick = -1L;
 
-    /** 上次执行囤积/收集掉落物扫描时的游戏刻 */
-    @Unique
-    private long productivebeesgenesis$lastHoarderTick = -1L;
+	/** 上次执行囤积/收集掉落物扫描时的游戏刻 */
+	@Unique
+	private long productivebeesgenesis$lastHoarderTick = -1L;
 
-    /**
-     * 当前 simulateBee 调用是否跳过农夫作物扫描。
-     * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
-     */
-    @Unique
-    private boolean productivebeesgenesis$skipFarmer = false;
+	/**
+	 * 当前 simulateBee 调用是否跳过农夫作物扫描。
+	 * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
+	 */
+	@Unique
+	private boolean productivebeesgenesis$skipFarmer = false;
 
-    /**
-     * 当前 simulateBee 调用是否跳过囤积/收集掉落物扫描。
-     * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
-     */
-    @Unique
-    private boolean productivebeesgenesis$skipHoarder = false;
+	/**
+	 * 当前 simulateBee 调用是否跳过囤积/收集掉落物扫描。
+	 * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
+	 */
+	@Unique
+	private boolean productivebeesgenesis$skipHoarder = false;
 
-    /**
-     * 当前 simulateBee 调用对应的 BlockEntity 弱引用。
-     * <p>simulateBee 是静态方法，{@code @Redirect} 无法通过参数获取 BlockEntity，
-     * 故通过 ThreadLocal 传递。使用 {@link WeakReference} 避免蜂箱被破坏后 BlockEntity 无法 GC。
-     */
-    @Unique
-    private static final ThreadLocal<WeakReference<AdvancedBeehiveBlockEntityAbstract>> productivebeesgenesis$CURRENT_BLOCK_ENTITY = new ThreadLocal<>();
+	/**
+	 * 当前 simulateBee 调用对应的 BlockEntity 弱引用。
+	 * <p>simulateBee 是静态方法，{@code @Redirect} 无法通过参数获取 BlockEntity，
+	 * 故通过 ThreadLocal 传递。使用 {@link WeakReference} 避免蜂箱被破坏后 BlockEntity 无法 GC。
+	 */
+	@Unique
+	private static final ThreadLocal<WeakReference<AdvancedBeehiveBlockEntityAbstract>> productivebeesgenesis$CURRENT_BLOCK_ENTITY = new ThreadLocal<>();
 
-    @Inject(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At("HEAD"),
-            remap = false
-    )
-    private static void productivebeesgenesis$onSimulateBeeHead(
-            ServerLevel pLevel, BlockPos pPos, BlockState state,
-            AdvancedBeehiveBlockEntityAbstract blockEntity, BeehiveBlockEntity.Occupant inhabitant,
-            CallbackInfoReturnable<Entity> cir) {
-        // 设置 ThreadLocal，供 redirect 定位当前 BlockEntity（WeakReference 避免 GC 泄漏）
-        productivebeesgenesis$CURRENT_BLOCK_ENTITY.set(new WeakReference<>(blockEntity));
-        if (blockEntity == null) {
-            return;
-        }
-        AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self =
-                (AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
-        // 先重置实例字段，避免上次异常未清理时的残值污染本次判断
-        self.productivebeesgenesis$skipFarmer = false;
-        self.productivebeesgenesis$skipHoarder = false;
-        int cooldown = ModConfig.SERVER.advancedBeehiveSimulateCooldown.get();
-        if (cooldown <= 0) {
-            return;
-        }
-        long gameTime = pLevel.getGameTime();
-        if (gameTime - self.productivebeesgenesis$lastFarmerTick < cooldown) {
-            self.productivebeesgenesis$skipFarmer = true;
-        } else {
-            self.productivebeesgenesis$lastFarmerTick = gameTime;
-        }
-        if (gameTime - self.productivebeesgenesis$lastHoarderTick < cooldown) {
-            self.productivebeesgenesis$skipHoarder = true;
-        } else {
-            self.productivebeesgenesis$lastHoarderTick = gameTime;
-        }
-    }
+	@Inject(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At("HEAD"),
+			remap = false
+	)
+	private static void productivebeesgenesis$onSimulateBeeHead(
+			ServerLevel pLevel, BlockPos pPos, BlockState state,
+			AdvancedBeehiveBlockEntityAbstract blockEntity, BeehiveBlockEntity.Occupant inhabitant,
+			CallbackInfoReturnable<Entity> cir) {
+		// 设置 ThreadLocal，供 redirect 定位当前 BlockEntity（WeakReference 避免 GC 泄漏）
+		productivebeesgenesis$CURRENT_BLOCK_ENTITY.set(new WeakReference<>(blockEntity));
+		if (blockEntity == null) {
+			return;
+		}
+		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self =
+				(AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
+		// 先重置实例字段，避免上次异常未清理时的残值污染本次判断
+		self.productivebeesgenesis$skipFarmer = false;
+		self.productivebeesgenesis$skipHoarder = false;
+		int cooldown = ModConfig.SERVER.advancedBeehiveSimulateCooldown.get();
+		if (cooldown <= 0) {
+			return;
+		}
+		long gameTime = pLevel.getGameTime();
+		if (gameTime - self.productivebeesgenesis$lastFarmerTick < cooldown) {
+			self.productivebeesgenesis$skipFarmer = true;
+		} else {
+			self.productivebeesgenesis$lastFarmerTick = gameTime;
+		}
+		if (gameTime - self.productivebeesgenesis$lastHoarderTick < cooldown) {
+			self.productivebeesgenesis$skipHoarder = true;
+		} else {
+			self.productivebeesgenesis$lastHoarderTick = gameTime;
+		}
+	}
 
-    @Inject(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "RETURN"),
-            remap = false
-    )
-    private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
-        // 正常返回时清理 ThreadLocal；异常返回时由下次 HEAD 覆盖，WeakReference 保证可 GC
-        productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
-    }
+	@Inject(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "RETURN"),
+			remap = false
+	)
+	private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
+		// 正常返回时清理 ThreadLocal；异常返回时由下次 HEAD 覆盖，WeakReference 保证可 GC
+		productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
+	}
 
-    @Redirect(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;"),
-            remap = false
-    )
-    private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range) {
-        AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
-        if (self != null && self.productivebeesgenesis$skipFarmer) {
-            return List.of();
-        }
-        return FarmerBee.findHarvestablesNearby(level, pos, range);
-    }
+	@Redirect(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;"),
+			remap = false
+	)
+	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range) {
+		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
+		if (self != null && self.productivebeesgenesis$skipFarmer) {
+			return List.of();
+		}
+		return FarmerBee.findHarvestablesNearby(level, pos, range);
+	}
 
-    @SuppressWarnings("unchecked")
-    @Redirect(
-            method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
-            remap = true
-    )
-    private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb) {
-        AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
-        if (self != null && self.productivebeesgenesis$skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
-            return List.of();
-        }
-        return level.getEntitiesOfClass(clazz, aabb);
-    }
+	@SuppressWarnings("unchecked")
+	@Redirect(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
+			remap = true
+	)
+	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb) {
+		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
+		if (self != null && self.productivebeesgenesis$skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
+			return List.of();
+		}
+		return level.getEntitiesOfClass(clazz, aabb);
+	}
 
-    /**
-     * 从 ThreadLocal 获取当前 simulateBee 调用的 BlockEntity，并转换为 Mixin 类型以访问实例字段。
-     * <p>返回 null 表示无有效上下文（ThreadLocal 未设置或 WeakReference 已被 GC 回收），
-     * 此时 redirect 走默认不跳过路径，逻辑安全。
-     */
-    @Unique
-    private static AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin productivebeesgenesis$getCurrentSelf() {
-        WeakReference<AdvancedBeehiveBlockEntityAbstract> ref = productivebeesgenesis$CURRENT_BLOCK_ENTITY.get();
-        if (ref == null) {
-            return null;
-        }
-        AdvancedBeehiveBlockEntityAbstract blockEntity = ref.get();
-        if (blockEntity == null) {
-            return null;
-        }
-        return (AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
-    }
+	/**
+	 * 从 ThreadLocal 获取当前 simulateBee 调用的 BlockEntity，并转换为 Mixin 类型以访问实例字段。
+	 * <p>返回 null 表示无有效上下文（ThreadLocal 未设置或 WeakReference 已被 GC 回收），
+	 * 此时 redirect 走默认不跳过路径，逻辑安全。
+	 */
+	@Unique
+	private static AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin productivebeesgenesis$getCurrentSelf() {
+		WeakReference<AdvancedBeehiveBlockEntityAbstract> ref = productivebeesgenesis$CURRENT_BLOCK_ENTITY.get();
+		if (ref == null) {
+			return null;
+		}
+		AdvancedBeehiveBlockEntityAbstract blockEntity = ref.get();
+		if (blockEntity == null) {
+			return null;
+		}
+		return (AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
+	}
 }

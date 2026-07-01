@@ -19,13 +19,13 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
  */
 public final class CustomConfigScreenFactory implements IConfigScreenFactory {
 
-    @Override
-    public Screen createScreen(ModContainer container, Screen modListScreen) {
-        return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
-            if (type == ModConfig.Type.SERVER) {
-                return new ServerConfigScreen(screen, modConfig);
-            }
-            return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
-        });
-    }
+	@Override
+	public Screen createScreen(ModContainer container, Screen modListScreen) {
+		return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
+			if (type == ModConfig.Type.SERVER) {
+				return new ServerConfigScreen(screen, modConfig);
+			}
+			return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
+		});
+	}
 }

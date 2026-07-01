@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.2] - 2026-07-01
+
+### 修复
+
+- **P0 吞异常修复**：4 处 `catch (Exception e)` 块未记录日志直接返回，已全部补充 debug 级别日志
+  - `AbstractCombEventHandler.hasCentrifugeRecipe` — 检查异常时保守返回 true，补充日志
+  - `BeeRecipeReloader.isMyriadcreations` — 万象创世类型检查异常，补充日志
+  - `BeeInfoHelper.isBeeTypeExists` — 蜜蜂类型存在性检查异常，补充日志
+  - `BeeInfoHelper.parseBeeType` — ResourceLocation 解析异常，补充日志
+
+### 变更
+
+- **代码风格统一**：5 个文件的空格缩进统一为 Tab 缩进，符合 minecraft-code-standards 规范
+  - `CustomConfigScreenFactory`、`ServerConfigScreen`、`ModBlockTagsProvider`、`ModLanguageProvider`、`AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin`
+- **文件超长拆分**：`FilterListScreen`（900→722 行）进一步抽取两个组合类
+  - `FilterListBeeInfoCache`（98 行）— 蜜蜂图标/名称/产物信息缓存
+  - `FilterListSelectionManager`（120 行）— 批量选择与删除逻辑
+- **全量代码审计**：完成 163 个 Java 文件的深度审查，覆盖 7 大维度（风格/架构/线程安全/性能/异常处理/MC规范/合规性），审查发现记录在 `docs/findings.md`
+- **合规性审查通过**：MIT 许可证完整、无禁止内容、无 Minecraft 原版资产、无恶意代码、无用户数据收集
+
 ## [1.3.1] - 2026-07-01
 
 ### 修复

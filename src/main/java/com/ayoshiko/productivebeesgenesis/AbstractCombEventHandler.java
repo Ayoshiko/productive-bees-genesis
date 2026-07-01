@@ -126,6 +126,7 @@ public abstract class AbstractCombEventHandler {
 					.orElse(null);
 			return recipe != null;
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.debug("hasCentrifugeRecipe 检查异常，保守返回 true", e);
 			return true;
 		}
 	}

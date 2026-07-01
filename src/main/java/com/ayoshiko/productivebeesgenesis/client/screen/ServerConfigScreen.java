@@ -25,56 +25,56 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
  */
 public final class ServerConfigScreen extends OptionsSubScreen {
 
-    private final ModConfig modConfig;
+	private final ModConfig modConfig;
 
-    public ServerConfigScreen(Screen parent, ModConfig modConfig) {
-        super(parent, Minecraft.getInstance().options, Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
-        this.modConfig = modConfig;
-        // Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
-        // 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
-    }
+	public ServerConfigScreen(Screen parent, ModConfig modConfig) {
+		super(parent, Minecraft.getInstance().options, Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
+		this.modConfig = modConfig;
+		// Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
+		// 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
+	}
 
-    // NeoForge 原生配置节屏幕的按钮/标签后缀（如“彩虹特效...”）
-    private static final String SECTION_SUFFIX_KEY = "neoforge.configuration.uitext.section";
+	// NeoForge 原生配置节屏幕的按钮/标签后缀（如“彩虹特效...”）
+	private static final String SECTION_SUFFIX_KEY = "neoforge.configuration.uitext.section";
 
-    @Override
-    protected void addOptions() {
-        // 1. 万象创世过滤 — 自定义编辑器
-        Component filterLabel = Component.translatable(SECTION_SUFFIX_KEY,
-                Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter"));
-        StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel, font).alignLeft();
-        filterLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
+	@Override
+	protected void addOptions() {
+		// 1. 万象创世过滤 — 自定义编辑器
+		Component filterLabel = Component.translatable(SECTION_SUFFIX_KEY,
+				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter"));
+		StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel, font).alignLeft();
+		filterLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
 
-        Component filterButtonText = Component.translatable(SECTION_SUFFIX_KEY,
-                Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.button"));
-        Button filterButton = Button.builder(filterButtonText, button -> minecraft.setScreen(new FilterListScreen(this)))
-                .tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")))
-                .width(Button.DEFAULT_WIDTH)
-                .build();
+		Component filterButtonText = Component.translatable(SECTION_SUFFIX_KEY,
+				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.button"));
+		Button filterButton = Button.builder(filterButtonText, button -> minecraft.setScreen(new FilterListScreen(this)))
+				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")))
+				.width(Button.DEFAULT_WIDTH)
+				.build();
 
-        list.addSmall(filterLabelWidget, filterButton);
+		list.addSmall(filterLabelWidget, filterButton);
 
-        // 2. 其他服务端配置 — 原生 NeoForge 配置界面
-        Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
-                Component.translatable("productivebeesgenesis.configuration.server.other"));
-        StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel, font).alignLeft();
-        otherLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
+		// 2. 其他服务端配置 — 原生 NeoForge 配置界面
+		Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
+				Component.translatable("productivebeesgenesis.configuration.server.other"));
+		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel, font).alignLeft();
+		otherLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
 
-        Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
-                Component.translatable("productivebeesgenesis.configuration.server.other.button"));
-        Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
-                        new ConfigurationScreen.ConfigurationSectionScreen(
-                                this, ModConfig.Type.SERVER, modConfig,
-                                Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"))))
-                .tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")))
-                .width(Button.DEFAULT_WIDTH)
-                .build();
+		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
+				Component.translatable("productivebeesgenesis.configuration.server.other.button"));
+		Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
+						new ConfigurationScreen.ConfigurationSectionScreen(
+								this, ModConfig.Type.SERVER, modConfig,
+								Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"))))
+				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")))
+				.width(Button.DEFAULT_WIDTH)
+				.build();
 
-        list.addSmall(otherLabelWidget, otherButton);
-    }
+		list.addSmall(otherLabelWidget, otherButton);
+	}
 
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-    }
+	@Override
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		super.render(graphics, mouseX, mouseY, partialTick);
+	}
 }

@@ -263,6 +263,7 @@ public final class BeeInfoHelper {
 			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
 			return beeData != null && beeData.containsKey(beeType);
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.debug("isBeeTypeExists 检查异常: {}", beeType, e);
 			return false;
 		}
 	}
@@ -280,6 +281,7 @@ public final class BeeInfoHelper {
 			if (trimmed.isEmpty()) return null;
 			return ResourceLocation.parse(trimmed);
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.debug("parseBeeType 解析异常: {}", id, e);
 			return null;
 		}
 	}

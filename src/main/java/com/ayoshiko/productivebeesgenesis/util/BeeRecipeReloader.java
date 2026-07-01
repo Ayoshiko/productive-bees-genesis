@@ -208,6 +208,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			BeeIngredient ing = supplier.get();
 			return ing != null && PBConstants.MYRIADCREATIONS_TYPE.equals(ing.getBeeType());
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.debug("isMyriadcreations 检查异常", e);
 			return false;
 		}
 	}

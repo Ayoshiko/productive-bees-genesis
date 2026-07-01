@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.3.2-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 资源蜜蜂（Productive Bees）和通用机械（Mekanism）附属模组，添加了通用机械（Mekanism）风格的离心机，可处理蜜脾和蜜脾块。添加了万象创世蜜蜂，其蜜脾可转化为整合包内所有资源蜜蜂的蜜脾。蜜脾转化功能拥有详细可配置的过滤名单。万象创世蜜蜂的数据包可以在配置文件里自定义修改。
 万象创世蜜脾拥有无尽贪婪（Re:Avaritia）模组的寰宇支配之剑（Sword of the Cosmos）同款的星空遮罩材质。
@@ -137,7 +137,7 @@
 - **`PbRecipeProcessor`**：PB配方处理协调器，持有共享状态数组并委托给专门组件 — `PbRecipeFinder`（双层缓存配方查找）、`PbRecipeCompleter`（输出聚合与批量插入）、`MyriadCreationsHandler`（万象创世特殊路径）。
 - **`FactoryPbContextDelegate`**：组合类，消除三个工厂方块实体中约 293 行重复的 PB 配方上下文逻辑。
 - **`BeeSelectionSorter`**：从 `BeeSelectionScreen` 抽取的组合类，处理蜜蜂类型排序/过滤逻辑及缓存显示项。
-- **`FilterListDragHandler`/`FilterListClipboardHelper`**：从 `FilterListScreen` 抽取的组合助手，分别负责拖拽/滚动交互和剪贴板导入/导出。
+- **`FilterListDragHandler`/`FilterListClipboardHelper`/`FilterListBeeInfoCache`/`FilterListSelectionManager`**：从 `FilterListScreen` 抽取的组合助手，分别负责拖拽/滚动交互、剪贴板导入/导出、蜜蜂信息缓存和选择管理。
 
 ### 线程安全
 
