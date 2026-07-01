@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.3] - 2026-07-01
+
+### 修复
+
+- **CRITICAL: 可选依赖类加载崩溃**：未安装 ME/EME 时直接引用其 `.class` 触发 `NoClassDefFoundError`
+  - `MekCentrifugeContainerRegistrar` — 为 ME/EME 类引用添加 `isXxxLoaded()` 模组加载状态守卫
+  - `MekCompatHooks` — 实现反射类缓存（`volatile` + 双重检查锁），修复 `isConfigurationDataCompatible` 中 EME 类加载崩溃
+  - `ItemBlockMekCentrifuge` — 修复 Tooltip 和 DataComponent 初始化中的 EME 类加载崩溃
+- **MEDIUM: 多进程 unpause 恢复延迟**：`FactoryPbContextDelegate` 中 `sortingMarkedThisTick` 错误抑制了不同进程的 `unpause` 调用
+  - 修复：将 `unpause` 移出去抖块，使其每进程独立触发
+- **MEDIUM: 万象创世能量提取未批量化**：`MyriadCreationsHandler` 循环内逐次 `extract` 触发大量 listener 回调
+  - 修复：引入局部 `availableEnergy` + `opsRun` 计数器，循环后批量 `extract`，与 `PbRecipeProcessor` 优化一致
+
+### 变更
+
+- **LOW: GUI 布局常量提取**：`FactoryLayoutHelper` 提取 `INVENTORY_SLOT_PITCH = 20` 常量区分槽位宽度与间距
+- **LOW: Javadoc 术语修正**：`MekCentrifugeFactoryHelper` 中 "CAS" 术语修正为 "状态守卫"
+
 ## [1.3.2] - 2026-07-01
 
 ### 修复
