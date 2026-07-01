@@ -63,20 +63,24 @@ public class MekCentrifugeContainerRegistrar {
 		}
 
 		// ITEM — 根据工厂类型获取进程数
-		FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
-		ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
-		EMExtraAttributeTier<?> emeAttrTier = Attribute.get(block, EMExtraAttributeTier.class);
-
+		// 可选依赖守卫：ME/EME 类字面量在对应模组未加载时会触发 NoClassDefFoundError，
+		// 必须用 isXxxLoaded() 守卫将类引用包裹在条件块内，JVM 不会加载未到达路径中的类。
 		int processes = 0;
+		FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
 		if (factoryTier != null) {
 			processes = factoryTier.processes;
-		} else if (extraAttrTier != null) {
-			if (extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
-				processes = eft.processes;
+		} else {
+			if (MekCompatHooks.isMekanismExtrasLoaded()) {
+				ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
+				if (extraAttrTier != null && extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
+					processes = eft.processes;
+				}
 			}
-		} else if (emeAttrTier != null) {
-			if (emeAttrTier.tier() instanceof EMExtraFactoryTier emeft) {
-				processes = emeft.processes;
+			if (processes == 0 && MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+				EMExtraAttributeTier<?> emeAttrTier = Attribute.get(block, EMExtraAttributeTier.class);
+				if (emeAttrTier != null && emeAttrTier.tier() instanceof EMExtraFactoryTier emeft) {
+					processes = emeft.processes;
+				}
 			}
 		}
 

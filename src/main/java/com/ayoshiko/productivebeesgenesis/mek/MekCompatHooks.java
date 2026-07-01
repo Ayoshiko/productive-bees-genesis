@@ -13,6 +13,8 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Mekanism兼容性检测工具类
  * <br/>
@@ -62,6 +64,14 @@ public final class MekCompatHooks {
 	private static final List<String> EME_TIER_FIELD_NAMES = List.of(
 			EME_ABSOLUTE_OVERCLOCKED_FIELD, EME_SUPREME_QUANTUM_FIELD,
 			EME_COSMIC_DENSE_FIELD, EME_INFINITE_MULTIVERSAL_FIELD);
+
+	// ===== 反射缓存 — volatile + 双重检查，避免重复 Class.forName() =====
+	/** EM FactoryTier 类缓存 */
+	private static volatile Class<?> cachedEMFactoryTierClass;
+	/** ME ExtraFactoryTier 类缓存 */
+	private static volatile Class<?> cachedMEFactoryTierClass;
+	/** EME EMExtraFactoryTier 类缓存 */
+	private static volatile Class<?> cachedEMEFactoryTierClass;
 
 	private final boolean evolvedMekanismLoaded;
 	private final boolean mekanismExtrasLoaded;
@@ -128,9 +138,8 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			// 反射加载EM的可选类，避免编译期硬依赖
-			Class<?> emFactoryTierClass = Class.forName(EM_FACTORY_TIER_CLASS);
-			// OVERCLOCKED是public static字段，使用getField获取
+			Class<?> emFactoryTierClass = getCachedEMFactoryTierClass();
+			if (emFactoryTierClass == null) return false;
 			Field field = emFactoryTierClass.getField(OVERCLOCKED_FIELD);
 			FactoryTier overclocked = (FactoryTier) field.get(null);
 			return overclocked != null && tier.ordinal() >= overclocked.ordinal();
@@ -158,7 +167,8 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			Class<?> emFactoryTierClass = Class.forName(EM_FACTORY_TIER_CLASS);
+			Class<?> emFactoryTierClass = getCachedEMFactoryTierClass();
+			if (emFactoryTierClass == null) return List.of();
 			List<FactoryTier> tiers = new ArrayList<>(EM_TIER_FIELD_NAMES.size());
 			for (String fieldName : EM_TIER_FIELD_NAMES) {
 				Field field = emFactoryTierClass.getField(fieldName);
@@ -194,8 +204,8 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			// 反射加载ME的可选类，避免编译期硬依赖
-			Class<?> meFactoryTierClass = Class.forName(ME_FACTORY_TIER_CLASS);
+			Class<?> meFactoryTierClass = getCachedMEFactoryTierClass();
+			if (meFactoryTierClass == null) return List.of();
 			List<Object> tiers = new ArrayList<>(ME_TIER_FIELD_NAMES.size());
 			for (String fieldName : ME_TIER_FIELD_NAMES) {
 				Field field = meFactoryTierClass.getField(fieldName);
@@ -231,8 +241,8 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			// 反射加载ME的可选类，避免编译期硬依赖
-			Class<?> meFactoryTierClass = Class.forName(ME_FACTORY_TIER_CLASS);
+			Class<?> meFactoryTierClass = getCachedMEFactoryTierClass();
+			if (meFactoryTierClass == null) return false;
 			return meFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
 			// ME类路径变更或类未加载，记录trace日志并安全降级返回false
@@ -258,8 +268,8 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			// 反射加载EME的可选类，避免编译期硬依赖
-			Class<?> emeFactoryTierClass = Class.forName(EME_FACTORY_TIER_CLASS);
+			Class<?> emeFactoryTierClass = getCachedEMEFactoryTierClass();
+			if (emeFactoryTierClass == null) return List.of();
 			List<Object> tiers = new ArrayList<>(EME_TIER_FIELD_NAMES.size());
 			for (String fieldName : EME_TIER_FIELD_NAMES) {
 				Field field = emeFactoryTierClass.getField(fieldName);
@@ -295,8 +305,8 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			// 反射加载EME的可选类，避免编译期硬依赖
-			Class<?> emeFactoryTierClass = Class.forName(EME_FACTORY_TIER_CLASS);
+			Class<?> emeFactoryTierClass = getCachedEMEFactoryTierClass();
+			if (emeFactoryTierClass == null) return false;
 			return emeFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
 			// EME类路径变更或类未加载，记录trace日志并安全降级返回false
@@ -316,7 +326,7 @@ public final class MekCompatHooks {
 	 * @return 进程数，反射失败时返回-1
 	 */
 	public static int getEMETierProcesses(Object tier) {
-		if (tier == null) {
+		if (tier == null || !isEvolvedMekanismExtrasLoaded()) {
 			return -1;
 		}
 		try {
@@ -340,7 +350,7 @@ public final class MekCompatHooks {
 	 * @return GUI宽度，反射失败时返回0
 	 */
 	public static int getEMETierImageWidth(Object tier) {
-		if (tier == null) {
+		if (tier == null || !isEvolvedMekanismExtrasLoaded()) {
 			return 0;
 		}
 		try {
@@ -363,7 +373,7 @@ public final class MekCompatHooks {
 	 * @return 库存标签X坐标，反射失败时返回0
 	 */
 	public static int getEMETierInventoryLabelX(Object tier) {
-		if (tier == null) {
+		if (tier == null || !isEvolvedMekanismExtrasLoaded()) {
 			return 0;
 		}
 		try {
@@ -404,14 +414,66 @@ public final class MekCompatHooks {
 				return true;
 			}
 		}
-		// EME工厂同类型检查
-		EMExtraAttributeFactoryType emeType = Attribute.get(selfHolder, EMExtraAttributeFactoryType.class);
-		if (emeType != null) {
-			EMExtraAttributeFactoryType otherType = Attribute.get(blockType, EMExtraAttributeFactoryType.class);
-			if (otherType != null && emeType.getFactoryType() == otherType.getFactoryType()) {
-				return true;
+		// EME工厂同类型检查 — 仅在 EME 已加载时执行，避免 NoClassDefFoundError
+		if (isEvolvedMekanismExtrasLoaded()) {
+			EMExtraAttributeFactoryType emeType = Attribute.get(selfHolder, EMExtraAttributeFactoryType.class);
+			if (emeType != null) {
+				EMExtraAttributeFactoryType otherType = Attribute.get(blockType, EMExtraAttributeFactoryType.class);
+				if (otherType != null && emeType.getFactoryType() == otherType.getFactoryType()) {
+					return true;
+				}
 			}
 		}
 		return false;
+	}
+
+	// ======================== 反射类缓存辅助方法 ========================
+
+	/** 获取缓存的 EM FactoryTier 类（双重检查 + volatile） */
+	@Nullable
+	private static Class<?> getCachedEMFactoryTierClass() throws ClassNotFoundException {
+		Class<?> clazz = cachedEMFactoryTierClass;
+		if (clazz == null) {
+			synchronized (MekCompatHooks.class) {
+				clazz = cachedEMFactoryTierClass;
+				if (clazz == null) {
+					clazz = Class.forName(EM_FACTORY_TIER_CLASS);
+					cachedEMFactoryTierClass = clazz;
+				}
+			}
+		}
+		return clazz;
+	}
+
+	/** 获取缓存的 ME ExtraFactoryTier 类（双重检查 + volatile） */
+	@Nullable
+	private static Class<?> getCachedMEFactoryTierClass() throws ClassNotFoundException {
+		Class<?> clazz = cachedMEFactoryTierClass;
+		if (clazz == null) {
+			synchronized (MekCompatHooks.class) {
+				clazz = cachedMEFactoryTierClass;
+				if (clazz == null) {
+					clazz = Class.forName(ME_FACTORY_TIER_CLASS);
+					cachedMEFactoryTierClass = clazz;
+				}
+			}
+		}
+		return clazz;
+	}
+
+	/** 获取缓存的 EME EMExtraFactoryTier 类（双重检查 + volatile） */
+	@Nullable
+	private static Class<?> getCachedEMEFactoryTierClass() throws ClassNotFoundException {
+		Class<?> clazz = cachedEMEFactoryTierClass;
+		if (clazz == null) {
+			synchronized (MekCompatHooks.class) {
+				clazz = cachedEMEFactoryTierClass;
+				if (clazz == null) {
+					clazz = Class.forName(EME_FACTORY_TIER_CLASS);
+					cachedEMEFactoryTierClass = clazz;
+				}
+			}
+		}
+		return clazz;
 	}
 }

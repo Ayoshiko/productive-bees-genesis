@@ -40,7 +40,7 @@ public class FactoryPbContextDelegate {
 	/** 激活进程计数器 — O(1) 判断整体激活状态，替代 O(processes) 遍历 */
 	private final AtomicInteger activeProcessCount = new AtomicInteger(0);
 
-	/** 每进程 PB 激活状态跟踪（CAS 防重复计数） */
+	/** 每进程 PB 激活状态跟踪（状态守卫防重复计数） */
 	private final boolean[] pbActiveStates;
 
 	/** 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否跳过 outputItems） */
@@ -102,7 +102,8 @@ public class FactoryPbContextDelegate {
 	 * <ol>
 	 *   <li>通知 {@link OutputSlotFlagManager} 槽位变更（批量模式下只标记 dirty）</li>
 	 *   <li>递增 {@link #outputContentsVersion}（通知 Ejector Mixin 需要重新尝试输出）</li>
-	 *   <li>去抖触发排序 + unpause（同 tick 内只触发一次，避免 AE2 高频拉取触发全量排序）</li>
+	 *   <li>去抖触发排序（同 tick 内只触发一次，避免 AE2 高频拉取触发全量排序）</li>
+	 *   <li>独立触发 unpause（每进程独立，不被 sorting 去抖抑制）</li>
 	 * </ol>
 	 *
 	 * @param process 进程索引（用于 unpause 对应进程的 lookupMonitor）
@@ -116,8 +117,10 @@ public class FactoryPbContextDelegate {
 	}
 
 	/**
-	 * 通知输出槽内容变更（递增版本号 + 去抖触发排序/unpause）
+	 * 通知输出槽内容变更（递增版本号 + 去抖触发排序 + 独立触发 unpause）
 	 * <br/>
+	 * sorting 去抖：同 tick 内只标记一次 sortingNeeded，避免 AE2 高频拉取触发全量排序。
+	 * unpause 独立于 sorting 去抖：每进程独立触发，确保多进程同 tick 输出时都能恢复配方查找。
 	 * 用于 listener 和 {@link #endOutputBatch} 的公共逻辑。
 	 */
 	private void notifyOutputChanged(int process) {
@@ -127,9 +130,10 @@ public class FactoryPbContextDelegate {
 			if (updateSortingListener != null) {
 				updateSortingListener.onContentsChanged();
 			}
-			if (unpauseCallback != null) {
-				unpauseCallback.unpause(process);
-			}
+		}
+		// unpause 独立于 sorting 去抖，每进程独立触发
+		if (unpauseCallback != null) {
+			unpauseCallback.unpause(process);
 		}
 	}
 
@@ -168,7 +172,7 @@ public class FactoryPbContextDelegate {
 	/**
 	 * 结束批量输出插入
 	 * <br/>
-	 * 批量结束时统一更新标志位、递增版本号、去抖触发排序/unpause。
+	 * 批量结束时统一更新标志位、递增版本号、去抖触发排序 + 独立触发 unpause。
 	 *
 	 * @param process 发生变化的进程索引
 	 */
@@ -188,7 +192,7 @@ public class FactoryPbContextDelegate {
 	/**
 	 * 进程激活时调用（递增计数器）
 	 * <br/>
-	 * 使用 CAS 逻辑防止重复递增：仅状态 false→true 时递增计数器。
+	 * 使用状态守卫防止重复递增：仅状态 false→true 时递增计数器。
 	 */
 	public void onProcessActivated(int process) {
 		MekCentrifugeFactoryHelper.onProcessActivated(process, pbActiveStates, activeProcessCount);
@@ -197,7 +201,7 @@ public class FactoryPbContextDelegate {
 	/**
 	 * 进程失活时调用（递减计数器）
 	 * <br/>
-	 * 使用 CAS 逻辑防止重复递减：仅状态 true→false 时递减计数器。
+	 * 使用状态守卫防止重复递减：仅状态 true→false 时递减计数器。
 	 */
 	public void onProcessDeactivated(int process) {
 		MekCentrifugeFactoryHelper.onProcessDeactivated(process, pbActiveStates, activeProcessCount);

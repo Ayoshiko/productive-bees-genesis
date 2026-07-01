@@ -31,6 +31,8 @@ public final class FactoryLayoutHelper {
 
 	/** 物品栏槽位高度 */
 	private static final int SLOT_HEIGHT = 18;
+	/** 物品栏槽位间距（槽宽18 + 间隔2 = 20像素） */
+	private static final int INVENTORY_SLOT_PITCH = 20;
 	/** 物品栏Y偏移（Container getInventoryYOffset返回135） */
 	private static final int INVENTORY_Y_OFFSET = 135;
 	/** 物品栏第一排Y坐标 */
@@ -114,7 +116,7 @@ public final class FactoryLayoutHelper {
 		}
 		// EM原版公式: energySlotX = startInventory - 22（左侧）
 		int imageWidth = BASE_IMAGE_WIDTH + getImageWidthAddition(tier);
-		int inventorySize = 9 * 20; // 180
+		int inventorySize = 9 * INVENTORY_SLOT_PITCH; // 180
 		int startInventory = 8 + (imageWidth / 2 - inventorySize / 2);
 		return startInventory - 22;
 	}
@@ -129,7 +131,7 @@ public final class FactoryLayoutHelper {
 		if (isEMHighTier(tier)) {
 			// EM高等级：流体槽在物品栏右侧，间距=ENERGY_SLOT_GAP(4像素)
 			int imageWidth = BASE_IMAGE_WIDTH + getImageWidthAddition(tier);
-			int inventorySize = 9 * 20; // 180
+			int inventorySize = 9 * INVENTORY_SLOT_PITCH; // 180
 			int startInventory = 8 + (imageWidth / 2 - inventorySize / 2);
 			return startInventory + INVENTORY_WIDTH + ENERGY_SLOT_GAP;
 		}

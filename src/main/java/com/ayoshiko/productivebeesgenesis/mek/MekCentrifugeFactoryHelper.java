@@ -237,9 +237,9 @@ public final class MekCentrifugeFactoryHelper {
 		for (int i = 0; i < processes; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
 			if (input.isEmpty()) {
-				// 空输入：重置缓存并跳过
-				pbProcessor.resetSmeltingCache(i);
-				// Task 11: 空输入确保 PB 进程失活（CAS 防重复，super 已重置 activeStates）
+			// 空输入：重置缓存并跳过
+			pbProcessor.resetSmeltingCache(i);
+			// Task 11: 空输入确保 PB 进程失活（状态守卫防重复，super 已重置 activeStates）
 				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;
 			}
@@ -251,11 +251,11 @@ public final class MekCentrifugeFactoryHelper {
 				continue;
 			}
 			if (pbProcessor.tryProcessPbRecipe(i)) {
-				// Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部 CAS 防重复 + setActiveState）
+				// Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部状态守卫防重复 + setActiveState）
 				context.productivebeesgenesis$onProcessActivated(i);
 				context.setPbActiveState(true, i);
 			} else {
-				// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处 CAS 防重复）
+				// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）
 				context.productivebeesgenesis$onProcessDeactivated(i);
 			}
 		}
@@ -376,6 +376,7 @@ public final class MekCentrifugeFactoryHelper {
 		configComponent.setupOutputConfig(TransmissionType.FLUID, fluidOutputTank, RelativeSide.RIGHT);
 		// 重写ejectorComponent添加FLUID弹出（父类TileEntityFactory只配置了ITEM）
 		// 使用自定义流体弹出速率，并把物品弹出 tickDelay 设为 1 tick
+		// 注：chemicalAutoEjectRate 在此作为物品弹出速率参数，与 Mekanism 原版 TileEntityFactory 一致
 		TileComponentEjector ejector = new TileComponentEjector(factory, MekanismConfig.general.chemicalAutoEjectRate, fluidEjectRate);
 		((TileEntityEjectorAccessor) ejector).productivebeesgenesis$setTickDelay(1);
 		ejector.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
@@ -451,7 +452,7 @@ public final class MekCentrifugeFactoryHelper {
 	 * 进程激活时调用（递增计数器）
 	 * <br/>
 	 * 抽取自三个工厂的 productivebeesgenesis$onProcessActivated 方法。
-	 * 使用 CAS 逻辑防止重复递增：仅状态 false→true 时递增计数器。
+	 * 使用状态守卫防止重复递增：仅状态 false→true 时递增计数器。
 	 *
 	 * @param process             进程索引
 	 * @param pbActiveStates      PB激活状态数组（每进程一个）
@@ -469,7 +470,7 @@ public final class MekCentrifugeFactoryHelper {
 	 * 进程失活时调用（递减计数器）
 	 * <br/>
 	 * 抽取自三个工厂的 productivebeesgenesis$onProcessDeactivated 方法。
-	 * 使用 CAS 逻辑防止重复递减：仅状态 true→false 时递减计数器。
+	 * 使用状态守卫防止重复递减：仅状态 true→false 时递减计数器。
 	 *
 	 * @param process             进程索引
 	 * @param pbActiveStates      PB激活状态数组（每进程一个）

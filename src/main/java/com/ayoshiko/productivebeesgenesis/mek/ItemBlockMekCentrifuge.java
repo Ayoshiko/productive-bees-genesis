@@ -50,8 +50,9 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			// EJECTOR和SIDE_CONFIG已在machineItemProperties中设置，此处不再覆盖
 			// 避免覆盖离心机专用侧面配置（MEK_CENTRIFUGE_SIDE_CONFIG包含流体右侧输出）
 		}
-		// EME工厂使用EMExtraAttributeFactoryType
-		else if (Attribute.has(block, EMExtraAttributeFactoryType.class)) {
+		// EME工厂使用EMExtraAttributeFactoryType — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
+		else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()
+				&& Attribute.has(block, EMExtraAttributeFactoryType.class)) {
 			properties.component(MekanismDataComponents.SORTING, false);
 			// EJECTOR和SIDE_CONFIG已在machineItemProperties中设置，此处不再覆盖
 		}
@@ -86,8 +87,8 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
 					EnumColor.INDIGO, EnumColor.GRAY, factoryType.getFactoryType()));
 		}
-		// EME工厂
-		else {
+		// EME工厂 — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
+		else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
 			EMExtraAttributeFactoryType emeFactoryType = Attribute.get(getBlock(), EMExtraAttributeFactoryType.class);
 			if (emeFactoryType != null) {
 				tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
