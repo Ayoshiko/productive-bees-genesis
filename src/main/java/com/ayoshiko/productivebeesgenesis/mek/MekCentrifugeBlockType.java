@@ -56,7 +56,7 @@ public final class MekCentrifugeBlockType {
 
 	/** 基础MEK离心机BlockType — 不设置AttributeTier，使Basic Tier Installer能正确升级（fromTier=null匹配） */
 	public static final BlockTypeTile<TileEntityMekCentrifuge> MEK_CENTRIFUGE = Machine.MachineBuilder
-			.createMachine(() -> ModBlockEntitiesHolder.MEK_CENTRIFUGE, lang("mek_centrifuge"))
+			.createMachine(() -> ModBlockEntitiesHolder.MEK_CENTRIFUGE, descriptionLang("mek_centrifuge"))
 			.withEnergyConfig(() -> 50L, () -> 20_000L)
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(Attributes.SECURITY)

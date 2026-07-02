@@ -7,8 +7,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
@@ -42,17 +44,29 @@ import net.minecraft.world.level.biome.Biome;
  * 蜜蜂配方重载器
  * <br/>
  * 在数据包重载（/reload、服务器启动、数据包变更）后根据 {@link ModConfig} 动态修改
- * ProductiveBees 的 bee_fishing / bee_breeding / bee_spawning 配方，
+ * ProductiveBees 的 bee_fishing / bee_breeding / bee_spawning / bee_conversion 配方，
  * 实现万象创世蜜蜂获得方式的运行时配置。
  * <p>
  * 原理：通过 {@link PreparableReloadListener} 在 RecipeManager 完成加载后介入，
  * 收集全部配方并替换其中万象创世相关的条目，最后调用 {@link RecipeManager#replaceRecipes}
  * 全量替换。线程安全：reload 的 apply 阶段在 gameExecutor（主线程）执行，无并发问题。
+ * <p>
+ * 首次世界加载问题修复：配置可能在配方重载时未完全加载，此时会安排延迟重试任务，
+ * 在服务器 tick 中检查配置就绪后再次尝试应用配方修改。
  */
 public final class BeeRecipeReloader implements PreparableReloadListener {
 
 	private final RecipeManager recipeManager;
 	private final HolderLookup.Provider registryAccess;
+
+	/**
+	 * 延迟重试标志 — 当配置未加载时设置为 true，在服务器 tick 事件中重试
+	 */
+	private static volatile boolean pendingRetry = false;
+	private static volatile RecipeManager pendingRecipeManager = null;
+	private static volatile HolderLookup.Provider pendingRegistryAccess = null;
+	private static final AtomicInteger retryCount = new AtomicInteger(0);
+	private static final int MAX_RETRY_COUNT = 60; // 最多重试60次（约3秒）
 
 	/**
 	 * @param recipeManager 配方管理器（来自 ReloadableServerResources）
@@ -77,41 +91,125 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	}
 
 	/**
+	 * 服务器 tick 回调 — 处理延迟重试逻辑
+	 * <br/>
+	 * 当首次进入世界时配置可能未加载，此时会在后续 tick 中重试应用配方修改。
+	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis} 注册到事件总线。
+	 * <p>
+	 * 性能优化：使用 volatile 标志快速检查，避免不必要的配置加载检查。
+	 * 仅在 pendingRetry 为 true 时执行，正常游戏过程中此标志为 false，几乎零开销。
+	 */
+	public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+		// 快速路径：使用 volatile 读取，无锁开销
+		// 99.9% 的情况下 pendingRetry 为 false，直接返回
+		if (!pendingRetry) {
+			return;
+		}
+
+		// 慢速路径：需要重试
+		onServerTickSlowPath();
+	}
+
+	/**
+	 * 慢速路径处理 — 仅在需要重试时执行
+	 * <br/>
+	 * 从 onServerTick 分离，避免影响正常 tick 性能。
+	 */
+	private static void onServerTickSlowPath() {
+		// 双重检查，防止并发问题
+		if (pendingRecipeManager == null) {
+			clearPendingRetry();
+			return;
+		}
+
+		// 检查配置是否已加载
+		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+			int currentRetry = retryCount.incrementAndGet();
+			if (currentRetry >= MAX_RETRY_COUNT) {
+				ProductiveBeesGenesis.LOGGER.warn("配方重载重试次数超过上限({})，放弃应用万象创世配方修改", MAX_RETRY_COUNT);
+				clearPendingRetry();
+			}
+			return;
+		}
+
+		// 配置已加载，执行配方修改
+		try {
+			ProductiveBeesGenesis.LOGGER.info("配置已就绪，执行延迟配方重载...");
+			BeeRecipeReloader reloader = new BeeRecipeReloader(pendingRecipeManager, pendingRegistryAccess);
+			reloader.overrideRecipesInternal();
+			ProductiveBeesGenesis.LOGGER.info("延迟配方重载完成");
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.error("延迟配方重载失败", e);
+		} finally {
+			clearPendingRetry();
+		}
+	}
+
+	private static void clearPendingRetry() {
+		pendingRetry = false;
+		pendingRecipeManager = null;
+		pendingRegistryAccess = null;
+		retryCount.set(0);
+	}
+
+	/**
 	 * 收集全部配方，处理万象创世相关条目，若有修改则全量替换
 	 */
 	private void overrideRecipes() {
 		try {
-			// 就绪检查：BeeIngredientFactory 必须已加载 myriadcreations，否则 toNetwork 序列化时会 NPE
-			if (!BeeIngredientFactory.getOrCreateList().containsKey(PBConstants.MYRIADCREATIONS_TYPE_STRING)) {
-				ProductiveBeesGenesis.LOGGER.warn("BeeIngredientFactory 未就绪（缺少 myriadcreations），跳过配方替换");
+			// 配置未加载时安排延迟重试（首次进入世界时常见）
+			if (!ModConfig.SERVER_SPEC.isLoaded()) {
+				ProductiveBeesGenesis.LOGGER.debug("SERVER 配置未加载，安排延迟配方重载");
+				pendingRetry = true;
+				pendingRecipeManager = this.recipeManager;
+				pendingRegistryAccess = this.registryAccess;
+				retryCount.set(0);
 				return;
 			}
-			List<RecipeHolder<?>> sourceRecipes = new ArrayList<>(recipeManager.getRecipes());
-			// 构建新列表，避免在遍历中通过索引 remove(i)/i-- 造成的易错写法
-			List<RecipeHolder<?>> processedRecipes = new ArrayList<>(sourceRecipes.size());
-			boolean modified = false;
-
-			for (RecipeHolder<?> holder : sourceRecipes) {
-				RecipeHolder<?> processed = processRecipe(holder);
-				if (processed == null) {
-					// processRecipe 返回 null 表示移除该配方
-					modified = true;
-				} else {
-					if (processed != holder) {
-						modified = true;
-					}
-					processedRecipes.add(processed);
-				}
-			}
-
-			if (modified) {
-				recipeManager.replaceRecipes(processedRecipes);
-				clearBeeFishingCaches();
-				ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂配方已根据配置重载");
-			}
+			overrideRecipesInternal();
 		} catch (Exception e) {
 			// 任何异常都不应导致整体崩溃
 			ProductiveBeesGenesis.LOGGER.error("重载万象创世蜜蜂配方时发生错误", e);
+		}
+	}
+
+	/**
+	 * 内部配方覆盖逻辑 — 假设配置已加载
+	 */
+	private void overrideRecipesInternal() {
+		// 防御性检查：确保配置已加载
+		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+			ProductiveBeesGenesis.LOGGER.warn("配置未加载，跳过配方覆盖");
+			return;
+		}
+
+		// 就绪检查：BeeIngredientFactory 必须已加载 myriadcreations，否则 toNetwork 序列化时会 NPE
+		if (!BeeIngredientFactory.getOrCreateList().containsKey(PBConstants.MYRIADCREATIONS_TYPE_STRING)) {
+			ProductiveBeesGenesis.LOGGER.warn("BeeIngredientFactory 未就绪（缺少 myriadcreations），跳过配方替换");
+			return;
+		}
+		List<RecipeHolder<?>> sourceRecipes = new ArrayList<>(recipeManager.getRecipes());
+		// 构建新列表，避免在遍历中通过索引 remove(i)/i-- 造成的易错写法
+		List<RecipeHolder<?>> processedRecipes = new ArrayList<>(sourceRecipes.size());
+		boolean modified = false;
+
+		for (RecipeHolder<?> holder : sourceRecipes) {
+			RecipeHolder<?> processed = processRecipe(holder);
+			if (processed == null) {
+				// processRecipe 返回 null 表示移除该配方
+				modified = true;
+			} else {
+				if (processed != holder) {
+					modified = true;
+				}
+				processedRecipes.add(processed);
+			}
+		}
+
+		if (modified) {
+			recipeManager.replaceRecipes(processedRecipes);
+			clearBeeFishingCaches();
+			ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂配方已根据配置重载");
 		}
 	}
 
@@ -127,6 +225,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!isMyriadcreations(fishing.output)) {
 				return holder;
 			}
+			// 总开关禁用时移除所有万象创世配方
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+				return null;
+			}
 			if (!ModConfig.SERVER.fishingEnabled.get()) {
 				return null;
 			}
@@ -138,6 +240,18 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 
 		// 繁殖配方：修改亲代，或禁用
 		if (recipe instanceof BeeBreedingRecipe breeding) {
+			// 检查 offspring、parent1 或 parent2 是否涉及万象创世蜜蜂
+			boolean involvesMyriadCreations = isMyriadcreations(breeding.offspring)
+					|| isMyriadcreations(breeding.parent1)
+					|| isMyriadcreations(breeding.parent2);
+			if (!involvesMyriadCreations) {
+				return holder;
+			}
+			// 总开关禁用时移除所有涉及万象创世的繁殖配方
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+				return null;
+			}
+			// 只有 offspring 是万象创世时才修改亲代配置
 			if (!isMyriadcreations(breeding.offspring)) {
 				return holder;
 			}
@@ -155,6 +269,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			if (!containsMyriadcreations(spawning.output)) {
 				return holder;
 			}
+			// 总开关禁用时移除所有万象创世配方
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+				return null;
+			}
 			if (!ModConfig.SERVER.spawningEnabled.get()) {
 				return null;
 			}
@@ -168,6 +286,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		if (recipe instanceof BeeConversionRecipe conversion) {
 			if (!isMyriadcreations(conversion.result)) {
 				return holder;
+			}
+			// 总开关禁用时移除所有万象创世配方
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+				return null;
 			}
 			if (!ModConfig.SERVER.conversionEnabled.get()) {
 				return null;
@@ -184,6 +306,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		if (recipe instanceof AdvancedBeehiveRecipe produce) {
 			if (!isMyriadcreations(produce.ingredient)) {
 				return holder;
+			}
+			// 总开关禁用时移除所有万象创世配方
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+				return null;
 			}
 			if (!ModConfig.SERVER.produceEnabled.get()) {
 				return null;

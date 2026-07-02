@@ -85,6 +85,8 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	/** 服务器tick事件 — 定期更新蜜蜂类型缓存 */
 	@SubscribeEvent
 	public static void onServerTick(ServerTickEvent.Post event) {
+		// 万象创世功能被禁用时，跳过缓存更新
+		if (!isMyriadCreationsEnabled()) return;
 		if (lastCacheUpdateTick.incrementAndGet() >= CACHE_UPDATE_INTERVAL) {
 			lastCacheUpdateTick.set(0);
 			updateBeeTypeCache(event.getServer().overworld());
@@ -243,9 +245,10 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 *
 	 * @param totalCount 总数量
 	 * @param random     随机源
-	 * @return 聚合后的随机蜜脾列表
+	 * @return 聚合后的随机蜜脾列表，如果万象创世被禁用则返回空列表
 	 */
 	public static List<ItemStack> getAggregatedRandomHoneycombs(int totalCount, RandomSource random) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return RandomHoneycombSelector.generateAggregatedStacks(
 				totalCount,
 				ModItems.CONFIGURABLE_HONEYCOMB.get(),
@@ -259,9 +262,10 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 *
 	 * @param totalCount 总数量
 	 * @param random     随机源
-	 * @return 聚合后的随机蜜脾块列表
+	 * @return 聚合后的随机蜜脾块列表，如果万象创世被禁用则返回空列表
 	 */
 	public static List<ItemStack> getAggregatedRandomCombBlocks(int totalCount, RandomSource random) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return RandomHoneycombSelector.generateAggregatedStacks(
 				totalCount,
 				ModItems.CONFIGURABLE_COMB_BLOCK.get(),
@@ -281,6 +285,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 向输出列表追加指定数量的万象创世蜜脾（聚合为不超过 64 的 stack）
 	 */
 	public static void appendMyriadHoneycombStacks(List<ItemStack> out, int count) {
+		if (!isMyriadCreationsEnabled()) return;
 		if (count <= 0) return;
 		Item item = ModItems.CONFIGURABLE_HONEYCOMB.get();
 		while (count > 0) {
@@ -295,6 +300,36 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	// ========== 类型判断 ==========
 
 	/**
+	 * 检查万象创世蜜蜂功能是否启用
+	 * <p>
+	 * 用于配方、事件处理器等判断是否应该处理万象创世蜜蜂相关逻辑。
+	 * <p>
+	 * 注意：此方法在客户端和服务端都可以调用。NeoForge 会自动同步 SERVER 配置到客户端，
+	 * 所以在客户端调用此方法时，配置应该已经加载（玩家加入后）。
+	 * 如果配置未加载（如客户端刚启动尚未连接服务端），默认返回 true（启用状态），
+	 * 这是为了在单人游戏或配置同步前保持向后兼容。
+	 *
+	 * @return true 如果万象创世蜜蜂功能已启用
+	 */
+	public static boolean isMyriadCreationsEnabled() {
+		// 配置未加载时默认启用（向后兼容）
+		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+			return true;
+		}
+		return ModConfig.SERVER.myriadCreationsEnabled.get();
+	}
+
+	/**
+	 * 检查是否为万象创世蜜蜂类型
+	 *
+	 * @param beeType 蜜蜂类型 ResourceLocation
+	 * @return true 如果是万象创世蜜蜂类型
+	 */
+	public static boolean isMyriadCreationsBeeType(ResourceLocation beeType) {
+		return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
+	}
+
+	/**
 	 * 检查是否为万象创世蜜脾
 	 * <p>
 	 * 万象创世蜜脾使用PB的CONFIGURABLE_HONEYCOMB + bee_type=myriadcreations，
@@ -304,12 +339,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 禁用万象创世蜜蜂的所有功能。
 	 */
 	public static boolean isMyriadCreationsHoneycomb(ItemStack stack) {
-		if (!ModConfig.SERVER.myriadCreationsEnabled.get()) return false;
+		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()) {
 				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
-				return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
+				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾类型时发生错误", e);
@@ -323,12 +358,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 当配置 {@code myriadCreationsEnabled} 为 false 时，始终返回 false。
 	 */
 	public static boolean isMyriadCreationsCombBlock(ItemStack stack) {
-		if (!ModConfig.SERVER.myriadCreationsEnabled.get()) return false;
+		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
 				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
-				return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
+				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾块类型时发生错误", e);

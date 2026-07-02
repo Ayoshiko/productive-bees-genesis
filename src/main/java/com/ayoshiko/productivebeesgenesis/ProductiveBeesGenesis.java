@@ -136,8 +136,11 @@ public final class ProductiveBeesGenesis {
 		NeoForge.EVENT_BUS.addListener(this::onTagsReload);
 
 		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后根据 ModConfig
-		// 动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning 配方
+		// 动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning/bee_conversion 配方
 		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+
+		// 注册配方重载器的延迟重试 tick 处理器 — 处理首次进入世界时配置未加载的情况
+		NeoForge.EVENT_BUS.addListener(BeeRecipeReloader::onServerTick);
 
 		// 服务器停止时注销 JMX MBean，防止重复加载时注册失败
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);

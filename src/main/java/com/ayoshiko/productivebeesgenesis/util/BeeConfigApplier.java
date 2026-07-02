@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
@@ -18,6 +19,14 @@ public final class BeeConfigApplier {
 
 	/** 应用配置覆盖到万象创世蜜蜂数据 */
 	public static void applyOverrides() {
+		// 配置未加载时跳过（首次启动时常见）
+		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+			ProductiveBeesGenesis.LOGGER.debug("蜜蜂配置尚未加载，跳过属性覆盖（首次启动正常行为）");
+			return;
+		}
+
+		// 万象创世功能被禁用时，跳过配置覆盖
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 		var config = ModConfig.SERVER;
 		CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
 		if (data == null) {

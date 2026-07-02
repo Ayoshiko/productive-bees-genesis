@@ -109,9 +109,13 @@ public class BeeHelperMixin {
 			double modifier,
 			CallbackInfoReturnable<List<ItemStack>> cir) {
 		try {
+			// 配置未加载时跳过（避免客户端调用时崩溃）
+			if (!ModConfig.SERVER_SPEC.isLoaded()) return;
+			// 万象创世功能被禁用时，不追加额外产出
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 			if (!(beeEntity instanceof ConfigurableBee configurableBee)) return;
 			ResourceLocation beeType = configurableBee.getBeeType();
-			if (!PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) return;
+			if (!MyriadCreationsEventHandler.isMyriadCreationsBeeType(beeType)) return;
 
 			List<ItemStack> original = cir.getReturnValue();
 			if (original == null) return;

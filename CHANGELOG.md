@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.1] - 2026-07-02
+
+### 修复
+
+- **配方禁用失效（首次启动）**：修复首次进入世界时木棍转化配方依然有效的问题
+  - 新增延迟重试机制：当配置未加载时，在服务器 tick 中等待配置就绪后自动应用配方修改
+  - 使用 `volatile` 标志位实现 O(1) 快速检查，正常游戏过程中几乎零开销
+  - 最多重试 60 次（约 3 秒），超时后放弃并记录警告
+- **代码规范**：`MekCentrifugeContainerRegistrar` 移除已弃用的 `bus = EventBusSubscriber.Bus.MOD` 参数（NeoForge 1.21+ 不再需要）
+
+### 变更
+
+- **ME/EME 等级机器名称颜色同步**：MEK Extra 和 Evolved MEK Extra 等级的离心机工厂在物品栏中显示的名称颜色与原模组对应等级特效一致
+  - ME ABSOLUTE: 黄绿色 (237, 238, 70)
+  - ME SUPREME: 红色 (166, 0, 2)
+  - ME COSMIC: 青色 (75, 248, 255)
+  - ME INFINITE: 品红色 (247, 135, 255)
+  - EME 等级使用动态 RGB 渐变效果
+
 ## [1.4.0] - 2026-07-01
 
 ### 修复

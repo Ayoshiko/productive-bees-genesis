@@ -35,7 +35,7 @@ import net.minecraft.core.registries.Registries;
 /**
  * MEK离心机ContainerType默认创建器注册器
  */
-@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public class MekCentrifugeContainerRegistrar {
 
 	private MekCentrifugeContainerRegistrar() {}

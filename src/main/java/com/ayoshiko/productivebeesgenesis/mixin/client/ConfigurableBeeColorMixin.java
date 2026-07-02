@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin.client;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
@@ -31,6 +32,9 @@ public abstract class ConfigurableBeeColorMixin {
 	 */
 	@Inject(method = "getColor", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$onGetColor(int tintIndex, float partialTicks, CallbackInfoReturnable<Integer> cir) {
+		// 服务端配置禁用万象创世时，使用原始逻辑
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
+
 		ConfigurableBee self = productivebeesgenesis$getSelf();
 		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
 			return; // 非万象创世蜜蜂，使用原始逻辑
@@ -47,6 +51,9 @@ public abstract class ConfigurableBeeColorMixin {
 	 */
 	@Inject(method = "getTertiaryColor", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$onGetTertiaryColor(float partialTicks, CallbackInfoReturnable<Integer> cir) {
+		// 服务端配置禁用万象创世时，使用原始逻辑
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
+
 		ConfigurableBee self = productivebeesgenesis$getSelf();
 		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
 			return;
@@ -65,6 +72,9 @@ public abstract class ConfigurableBeeColorMixin {
 	 */
 	@Inject(method = "getParticleColor", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$onGetParticleColor(CallbackInfoReturnable<Integer> cir) {
+		// 服务端配置禁用万象创世时，使用原始逻辑
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
+
 		ConfigurableBee self = productivebeesgenesis$getSelf();
 		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
 			return;

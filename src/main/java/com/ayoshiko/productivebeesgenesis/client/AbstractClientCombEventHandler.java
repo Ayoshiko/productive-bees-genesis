@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import net.minecraft.client.Minecraft;
@@ -101,6 +102,8 @@ public abstract class AbstractClientCombEventHandler {
 	 * @param event LevelTick.Post 事件
 	 */
 	protected void handleClientTick(LevelTickEvent.Post event) {
+		// 服务端配置禁用万象创世时，客户端不渲染特效
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 		if (!ModConfig.CLIENT.particleEffectEnabled.get()) return;
 
 		Level level = event.getLevel();
@@ -162,6 +165,9 @@ public abstract class AbstractClientCombEventHandler {
 	 * @param event RenderLivingEvent.Post 事件
 	 */
 	protected void handleRenderLivingPost(RenderLivingEvent.Post<LivingEntity, ?> event) {
+		// 服务端配置禁用万象创世时，客户端不渲染特效
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
+
 		LivingEntity entity = event.getEntity();
 
 		if (!(entity instanceof ConfigurableBee bee)) return;
@@ -215,6 +221,9 @@ public abstract class AbstractClientCombEventHandler {
 	 * @param event EntityJoinLevelEvent 事件
 	 */
 	protected void handleEntityJoinLevel(EntityJoinLevelEvent event) {
+		// 服务端配置禁用万象创世时，客户端不渲染特效
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
+
 		Entity entity = event.getEntity();
 		if (!(entity instanceof ConfigurableBee bee)) return;
 		if (!getBeeType().equals(bee.getBeeType())) return;

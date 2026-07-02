@@ -2,7 +2,13 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.List;
 
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+
+import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
+import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.api.text.EnumColor;
+import mekanism.api.text.TextComponentUtil;
 import mekanism.common.MekanismLang;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
 import mekanism.common.block.attribute.Attribute;
@@ -13,6 +19,7 @@ import mekanism.common.item.block.ItemBlockTooltip;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -69,6 +76,49 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	@Override
 	public FactoryTier getTier() {
 		return Attribute.getTier(getBlock(), FactoryTier.class);
+	}
+
+	/**
+	 * 获取物品名称 — 为ME和EME等级添加颜色特效
+	 * <br/>
+	 * 原理：原版Mekanism工厂通过getTier()返回的BaseTier获取颜色。
+	 * ME和EME使用独立的等级系统，需要在此方法中手动添加颜色。
+	 * <p>
+	 * 颜色对应：
+	 * <ul>
+	 *   <li>ME ABSOLUTE: 黄绿色 (237, 238, 70)</li>
+	 *   <li>ME SUPREME: 红色 (166, 0, 2)</li>
+	 *   <li>ME COSMIC: 青色 (75, 248, 255)</li>
+	 *   <li>ME INFINITE: 品红色 (247, 135, 255)</li>
+	 *   <li>EME ABSOLUTE_OVERCLOCKED: 动态黄绿色</li>
+	 *   <li>EME SUPREME_QUANTUM: 动态红色</li>
+	 *   <li>EME COSMIC_DENSE: 动态青色</li>
+	 *   <li>EME INFINITE_MULTIVERSAL: 动态品红色</li>
+	 * </ul>
+	 */
+	@NotNull
+	@Override
+	public Component getName(@NotNull ItemStack stack) {
+		// 检查ME等级（Mekanism Extras）
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			ExtraAttributeTier<ExtraFactoryTier> meTier = Attribute.get(getBlock(), ExtraAttributeTier.class);
+			if (meTier != null) {
+				TextColor color = meTier.tier().getAdvanceTier().getColor();
+				return TextComponentUtil.build(color, super.getName(stack));
+			}
+		}
+
+		// 检查EME等级（Evolved Mekanism Extras）
+		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			EMExtraAttributeTier<EMExtraFactoryTier> emeTier = Attribute.get(getBlock(), EMExtraAttributeTier.class);
+			if (emeTier != null) {
+				TextColor color = TextColor.fromRgb(emeTier.tier().getEMExtraTier().getRgbSupplier().getAsInt());
+				return TextComponentUtil.build(color, super.getName(stack));
+			}
+		}
+
+		// 原版/EM等级使用默认行为（通过getTier()获取颜色）
+		return super.getName(stack);
 	}
 
 	/**
