@@ -21,11 +21,12 @@ The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as th
 
 | Feature | Description |
 | --- | --- |
-| Myriad Creations Bee | 8-second rainbow gradient with rainbow particle effects; its honeycomb randomly produces honeycombs from other resource bees. |
+| Myriad Creations Bee | 8-second rainbow gradient with rainbow particle effects; its honeycomb randomly produces honeycombs from other resource bees. Can be completely disabled via config. |
 | Starfield Honeycomb Texture | The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia. |
 | Mek Centrifuge | Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes. |
-| Factory Tiers | 17 tiers across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras. |
+| Factory Tiers | 17 tiers across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras. Factory item names show tier colors matching original mods. |
 | Bee Filter UI | In-game bee blacklist/whitelist editor with search, sort, and collapse controls. |
+| JEI Integration | Full JEI support with recipe hiding when Myriad Creations Bee is disabled. |
 
 ### Mekanism Addon: Productive Bees Centrifuge
 
@@ -38,7 +39,7 @@ The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as th
 
 - **Client Config**: Performance monitor toggle, bee filter UI settings.
 - **Common Config**: Myriad Creations Bee attributes (appearance, pollination, PB attributes, basic attributes, breeding, environment).
-- **Server Config**: Bee type filtering (blacklist/whitelist), Mek centrifuge parameters (including active/idle ejection delay).
+- **Server Config**: Bee type filtering (blacklist/whitelist), Mek centrifuge parameters (including active/idle ejection delay), Myriad Creations Bee enable/disable toggle.
 
 ### Bee Filter Configuration UI
 
