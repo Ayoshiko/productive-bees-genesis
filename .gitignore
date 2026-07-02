@@ -24,6 +24,9 @@ libs/
 decompiled-productivebees/
 pb-original-textures/
 
+# 运行时依赖模组（不入库）
+mods/
+
 # 反编译与构建产物（开发参考，不入库）
 cy/
 mezz/
