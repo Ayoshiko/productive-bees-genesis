@@ -21,7 +21,7 @@ public final class BeeConfigApplier {
 	public static void applyOverrides() {
 		// 配置未加载时跳过（首次启动时常见）
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
-			ProductiveBeesGenesis.LOGGER.debug("蜜蜂配置尚未加载，跳过属性覆盖（首次启动正常行为）");
+			ProductiveBeesGenesis.LOGGER.info("蜜蜂配置尚未加载，跳过属性覆盖（首次启动正常行为）");
 			return;
 		}
 

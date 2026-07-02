@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.2] - 2026-07-02
+
+### 修复
+
+- **P0: 7 处 LOGGER.debug 违规**：违反项目硬约束"生产代码无 debug 级日志"
+  - `BeeRecipeReloader` — 配置未加载提示从 `debug` 改为 `info`（启动阶段信息）
+  - `BeeConfigApplier` — 配置未加载提示从 `debug` 改为 `info`（启动阶段信息）
+  - `ProductiveBeesGenesisJEI`（5 处）— 反射隐藏配方失败从 `debug` 改为 `warn`（潜在兼容性问题）
+- **P1: JEI 静默异常吞没**：`ProductiveBeesGenesisJEI.isMyriadCreationsRecipe` 中 `catch(Exception e)` 仅注释 `// 忽略反射错误` 未记录日志，补充 `warn` 级别日志便于排障
+- **P1: 缩进不一致**：`MekCentrifugeFactoryHelper.processPbRecipesAndUpdate` 中 `if (input.isEmpty())` 块内注释和代码缩进层级错误，统一为正确 Tab 缩进
+- **P2: 无用恒等映射**：`BeeRecipeReloader.createBiomeHolderSetFromString` 中 `.map(named -> named).orElse(...)` 简化为 `.orElse(...)` 直接调用
+- **P2: 残留测试文件清理**：删除 `mek/test_write.txt`（开发遗留文件）
+
+
 ## [1.4.1] - 2026-07-02
 
 ### 修复

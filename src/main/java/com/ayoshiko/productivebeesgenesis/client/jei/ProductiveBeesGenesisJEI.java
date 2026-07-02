@@ -326,7 +326,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("无法隐藏万象创世钓鱼配方: {}", e.getMessage());
+			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世钓鱼配方: {}", e.getMessage());
 		}
 
 		try {
@@ -336,7 +336,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("无法隐藏万象创世繁殖配方: {}", e.getMessage());
+			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世繁殖配方: {}", e.getMessage());
 		}
 
 		try {
@@ -346,7 +346,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("无法隐藏万象创世转化配方: {}", e.getMessage());
+			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世转化配方: {}", e.getMessage());
 		}
 
 		try {
@@ -356,7 +356,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("无法隐藏万象创世蜂巢生成配方: {}", e.getMessage());
+			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世蜂巢生成配方: {}", e.getMessage());
 		}
 	}
 
@@ -383,7 +383,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				recipeManager.hideRecipes(recipeType, recipesToHide);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.debug("隐藏配方时出错: {}", e.getMessage());
+			ProductiveBeesGenesis.LOGGER.warn("隐藏配方时出错: {}", e.getMessage());
 		}
 	}
 
@@ -420,7 +420,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				}
 			}
 		} catch (Exception e) {
-			// 忽略反射错误
+			ProductiveBeesGenesis.LOGGER.warn("isMyriadCreationsRecipe 反射检查异常", e);
 		}
 
 		return false;

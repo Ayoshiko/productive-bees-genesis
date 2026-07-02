@@ -237,9 +237,9 @@ public final class MekCentrifugeFactoryHelper {
 		for (int i = 0; i < processes; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
 			if (input.isEmpty()) {
-			// 空输入：重置缓存并跳过
-			pbProcessor.resetSmeltingCache(i);
-			// Task 11: 空输入确保 PB 进程失活（状态守卫防重复，super 已重置 activeStates）
+				// 空输入：重置缓存并跳过
+				pbProcessor.resetSmeltingCache(i);
+				// Task 11: 空输入确保 PB 进程失活（状态守卫防重复，super 已重置 activeStates）
 				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;
 			}

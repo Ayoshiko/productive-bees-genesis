@@ -159,7 +159,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		try {
 			// 配置未加载时安排延迟重试（首次进入世界时常见）
 			if (!ModConfig.SERVER_SPEC.isLoaded()) {
-				ProductiveBeesGenesis.LOGGER.debug("SERVER 配置未加载，安排延迟配方重载");
+				ProductiveBeesGenesis.LOGGER.info("SERVER 配置未加载，安排延迟配方重载");
 				pendingRetry = true;
 				pendingRecipeManager = this.recipeManager;
 				pendingRegistryAccess = this.registryAccess;
@@ -387,7 +387,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 				TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagLoc);
 				Optional<HolderSet.Named<Biome>> tag = registryAccess.lookup(Registries.BIOME)
 						.flatMap(reg -> reg.get(tagKey));
-				return tag.<HolderSet<Biome>>map(named -> named).orElse(HolderSet.empty());
+				return tag.orElse(HolderSet.empty());
 			} catch (Exception e) {
 				ProductiveBeesGenesis.LOGGER.warn("解析群系标签 '{}' 失败", biomeSpec, e);
 				return HolderSet.empty();
