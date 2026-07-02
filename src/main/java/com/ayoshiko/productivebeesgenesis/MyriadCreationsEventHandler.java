@@ -299,8 +299,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * <p>
 	 * 万象创世蜜脾使用PB的CONFIGURABLE_HONEYCOMB + bee_type=myriadcreations，
 	 * 需要同时检查物品和bee_type数据组件。
+	 * <p>
+	 * 当配置 {@code myriadCreationsEnabled} 为 false 时，始终返回 false，
+	 * 禁用万象创世蜜蜂的所有功能。
 	 */
 	public static boolean isMyriadCreationsHoneycomb(ItemStack stack) {
+		if (!ModConfig.SERVER.myriadCreationsEnabled.get()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()) {
@@ -313,8 +317,13 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		return false;
 	}
 
-	/** 检查是否为万象创世蜜脾块 */
+	/**
+	 * 检查是否为万象创世蜜脾块
+	 * <p>
+	 * 当配置 {@code myriadCreationsEnabled} 为 false 时，始终返回 false。
+	 */
 	public static boolean isMyriadCreationsCombBlock(ItemStack stack) {
+		if (!ModConfig.SERVER.myriadCreationsEnabled.get()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {

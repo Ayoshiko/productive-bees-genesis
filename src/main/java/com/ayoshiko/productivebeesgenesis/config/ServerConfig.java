@@ -36,6 +36,9 @@ public final class ServerConfig {
 	// ========== 开发者模式（服务端控制）==========
 	public final ModConfigSpec.BooleanValue devMode;
 
+	// ========== 万象创世蜜蜂总开关（存档级别）==========
+	public final ModConfigSpec.BooleanValue myriadCreationsEnabled;
+
 	// ========== 万象创世过滤配置（存档级别）==========
 	// 使用枚举类型，ConfigurationScreen自动渲染循环切换按钮
 	public final ModConfigSpec.EnumValue<ModConfig.FilterMode> myriadCreationsFilterMode;
@@ -122,6 +125,11 @@ public final class ServerConfig {
 		devMode = builder
 				.comment("开发者模式", "模组开发者用来调试模组正常功能不会用到的物品和调试配置日志等，用户无需开启此设置。")
 				.define("devMode", false);
+
+		// 万象创世蜜蜂总开关
+		myriadCreationsEnabled = builder
+				.comment("启用万象创世蜜蜂", "设置为false可完全禁用万象创世蜜蜂及其相关功能，仅保留MEK离心机功能。", "适合只想使用MEK离心机而不需要万象创世蜜蜂的玩家。")
+				.define("myriadCreationsEnabled", true);
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
 
