@@ -12,7 +12,7 @@ issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
-displayName="\u8d44\u6e90\u871c\u8702\uff1a\u521b\u4e16"
+displayName="Productive Bees Genesis"
 authors="${mod_authors}"
 description='''
 资源蜜蜂：创世 / Productive Bees Genesis
