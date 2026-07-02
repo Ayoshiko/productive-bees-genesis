@@ -387,7 +387,8 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 				TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagLoc);
 				Optional<HolderSet.Named<Biome>> tag = registryAccess.lookup(Registries.BIOME)
 						.flatMap(reg -> reg.get(tagKey));
-				return tag.orElse(HolderSet.empty());
+				// 显式宽化 Named<Biome> → HolderSet<Biome>，使 orElse 类型匹配
+				return tag.<HolderSet<Biome>>map(n -> n).orElse(HolderSet.empty());
 			} catch (Exception e) {
 				ProductiveBeesGenesis.LOGGER.warn("解析群系标签 '{}' 失败", biomeSpec, e);
 				return HolderSet.empty();

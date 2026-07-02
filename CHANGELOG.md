@@ -15,7 +15,7 @@
   - `ProductiveBeesGenesisJEI`（5 处）— 反射隐藏配方失败从 `debug` 改为 `warn`（潜在兼容性问题）
 - **P1: JEI 静默异常吞没**：`ProductiveBeesGenesisJEI.isMyriadCreationsRecipe` 中 `catch(Exception e)` 仅注释 `// 忽略反射错误` 未记录日志，补充 `warn` 级别日志便于排障
 - **P1: 缩进不一致**：`MekCentrifugeFactoryHelper.processPbRecipesAndUpdate` 中 `if (input.isEmpty())` 块内注释和代码缩进层级错误，统一为正确 Tab 缩进
-- **P2: 无用恒等映射**：`BeeRecipeReloader.createBiomeHolderSetFromString` 中 `.map(named -> named).orElse(...)` 简化为 `.orElse(...)` 直接调用
+- **P2: 类型宽化映射澄清**：`BeeRecipeReloader.createBiomeHolderSetFromString` 中 `.map(named -> named)` 并非恒等映射，而是将 `Optional<Named<Biome>>` 宽化为 `Optional<HolderSet<Biome>>` 以使 `orElse` 类型匹配，添加显式类型见证和注释说明
 - **P2: 残留测试文件清理**：删除 `mek/test_write.txt`（开发遗留文件）
 
 
