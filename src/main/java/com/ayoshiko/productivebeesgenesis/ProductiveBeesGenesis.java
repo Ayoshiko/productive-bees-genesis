@@ -247,6 +247,8 @@ public final class ProductiveBeesGenesis {
 		CentrifugeRecipeIndex.clear();
 		BeeInfoHelper.invalidateCache();
 		MyriadCreationsEventHandler.clearAllCaches();
+		// 清理 BeeRecipeReloader 延迟重试上下文 — 防止持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC
+		BeeRecipeReloader.clearPendingRetryContext();
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {

@@ -83,9 +83,15 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		return pendingRetryContext != PendingRetryContext.EMPTY;
 	}
 
-	/** 清空待重试上下文（原子替换为空） */
-	private static void clearPendingRetryContext() {
+	/**
+	 * 清空待重试上下文（原子替换为空）
+	 * <p>
+	 * 公开访问：供 {@link ProductiveBeesGenesis#onServerStopped} 在服务器停止时调用，
+	 * 防止 pendingRetryContext 持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC。
+	 */
+	public static void clearPendingRetryContext() {
 		pendingRetryContext = PendingRetryContext.EMPTY;
+		retryCount.set(0);
 	}
 
 	/**
