@@ -10,7 +10,7 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 /**
  * AE2 输出宿主接口
  * <br/>
- * 定义离心机向 AE2 网络推送输出所需的依赖。<b>不引用任何 AE2 类</b>，
+ * 定义离心机向 AE2 网格推送输出所需的依赖。<b>不引用任何 AE2 类</b>，
  * 网格节点使用 {@code Object} 类型，确保 AE2 未安装时离心机类仍可正常加载。
  * <p>
  * 继承 {@link PbRecipeContext} 以暴露输出槽访问方法（primaryOutputSlot 等），
@@ -19,9 +19,11 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  * 所有方法使用 {@code productivebeesgenesis$} 前缀，避免与其他模组的 Mixin 冲突。
  * <p>
  * <b>组合模式</b>：纯字段访问的 getter/setter 委托给
- * {@link Ae2OutputStateHolder}（通过 {@link #productivebeesgenesis$getAe2StateHolder()}），
- * 消除三个工厂类的字段/方法重复。委托给宿主 {@code this} 的方法（能量源、世界、坐标）
+ * {@link Ae2OutputStateHolder}（通过 {@link MekAe2LifecycleHandler}），
+ * 消除四个 TileEntity 类的字段/方法重复。委托给宿主 {@code this} 的方法（能量源、世界、坐标）
  * 仍由实现类提供。
+ *
+ * @since 1.0.0
  */
 public interface IAe2OutputHost extends PbRecipeContext {
 
@@ -29,14 +31,24 @@ public interface IAe2OutputHost extends PbRecipeContext {
 	String AE2_NODE_TAG = "productivebeesgenesis_ae2_node";
 
 	/**
-	 * 获取 AE2 状态持有者（子类必须实现）
+	 * 获取 AE2 生命周期处理器（子类必须实现）
 	 * <br/>
-	 * 返回由工厂类持有的 {@link Ae2OutputStateHolder} 实例，
-	 * 供本接口的 default 方法委托字段访问。
+	 * 返回由 TileEntity 持有的 {@link MekAe2LifecycleHandler} 实例，
+	 * 供本接口的 default 方法委托字段访问和生命周期管理。
+	 *
+	 * @return 生命周期处理器实例，不应为 null
+	 * @since 1.7.0
+	 */
+	MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler();
+
+	/**
+	 * 获取 AE2 状态持有者 — 委托给生命周期处理器
 	 *
 	 * @return 状态持有者实例，不应为 null
 	 */
-	Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder();
+	default Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return productivebeesgenesis$getAe2LifecycleHandler().getStateHolder();
+	}
 
 	/**
 	 * 获取 AE2 网格节点

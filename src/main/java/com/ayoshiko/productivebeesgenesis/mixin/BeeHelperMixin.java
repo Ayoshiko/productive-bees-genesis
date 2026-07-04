@@ -161,7 +161,7 @@ public abstract class BeeHelperMixin {
 			int throttle = ModConfig.SERVER.myriadProduceThrottlePerTick.get();
 			if (throttle > 0) {
 				productivebeesgenesis$clearThrottleIfTickChanged(currentTick);
-			long key = productivebeesgenesis$makeKey(currentTick, beeId);
+				long key = productivebeesgenesis$makeKey(currentTick, beeId);
 				AtomicInteger counter = productivebeesgenesis$THROTTLE_COUNTERS.computeIfAbsent(key, k -> new AtomicInteger(0));
 				if (counter.incrementAndGet() > throttle) {
 					// 超过节流限制时不追加额外产物，原版产物保持不变

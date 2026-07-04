@@ -23,6 +23,92 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [1.6.1] - 2026-07-05
+
+### 修复
+
+#### P1 — 重要问题（5 项）
+
+- **P1-1: PBReflectionCacheCleaner 单 try-catch 导致部分失败状态不一致** — 反射清理操作部分失败时静态缓存处于半清理状态
+  - **问题**：`cachedBiomes` 和 `cachedRecipes` 共用同一个 try-catch 块，若 `cachedRecipes` 字段名在 PB 版本变更后被重命名，`cachedBiomes` 已被成功清理但 `cachedRecipes` 仍保留旧 Recipe 引用
+  - **修复**：抽取私有方法 `clearField(String fieldName)`，每个字段独立 try-catch，单个失败不影响另一个
+- **P1-2: onServerStopped 缺乏异常隔离** — 任一清理方法抛出异常会中断后续清理
+  - **问题**：`onServerStopped` 中 4 个清理方法串联调用无 try/catch 隔离，静态缓存残留并泄漏到新存档
+  - **修复**：抽取 `safeClear(Runnable, String)` 私有方法，每个清理操作独立 try/catch
+- **P1-3: MekAe2LifecycleHandler 同步策略不一致** — `ae2NodePending` 标志的 check-then-set 非原子
+  - **问题**：`Ae2GridNodeManager.prepareNode`/`connectNode`/`destroyNode` 都使用 `synchronized(host)` 保护 check-then-act，但 `MekAe2LifecycleHandler` 对 `ae2NodePending` 标志的读写不在该锁内
+  - **修复**：将 `prepareForLoad`、`tryConnectNode`、`destroyForRemoval`、`destroyForChunkUnload` 整体放入 `synchronized(host)` 块
+- **P1-4: Ae2GridNodeManager.saveNodeNBT/loadNodeNBT 未同步** — 与其它三个方法同步策略不一致
+  - **问题**：`saveNodeNBT` 读取 `getAe2GridNode()` 后调用 `node.saveToNBT(tag)` 未加锁，若 `destroyNode` 并发执行可能在 `node.saveToNBT` 执行期间节点被销毁
+  - **修复**：为 `saveNodeNBT` 和 `loadNodeNBT` 添加 `synchronized(host)` 包裹
+- **P1-5: BakedModelHalo pushPose/popPose 未 try/finally 保护** — 异常路径 PoseStack 栈深度永久 +1
+  - **问题**：`renderHalo` 的 `try/finally` 只恢复 RenderSystem 状态，未保证 `poseStack` 栈平衡，若 `putBulkData` 抛异常，`popPose` 不会执行
+  - **修复**：每个 `pushPose` 都用独立 try/finally 包裹 `popPose`
+
+#### P2 — 线程安全 / 正确性（10 项）
+
+- **P2-1: MyriadBeeTypeCache 模板数组未防御性拷贝** — API 契约脆弱
+  - **修复**：在 Javadoc 中明确标注"返回数组不可修改，调用方必须 copy 后再修改"的契约约束
+- **P2-2: BeeTypeCacheSnapshot.EMPTY 持有可变 CopyOnWriteArrayList** — 共享可变实例污染风险
+  - **问题**：EMPTY 快照中的 `CopyOnWriteArrayList` 是可变列表，若消费者在 EMPTY 状态下调用 `add(...)` 会污染所有后续 EMPTY 状态的读取
+  - **修复**：将 EMPTY 的 beeTypes 改为 `List.of()`（真正不可变），record 字段类型改为 `List<ResourceLocation>`
+- **P2-3: connectNode 缺少"已连接"幂等检查** — 竞态发生时 `create()` 可能被重复调用
+  - **修复**：在 `synchronized` 块内、`node.create()` 调用前增加 `if (node.getNode() != null) return;` 防御性检查
+- **P2-4: Ae2OutputStateHolder.clear() 非原子** — 并发读取方可能观察到中间状态
+  - **修复**：通过 P1-3 的 `synchronized(host)` 间接解决，`clear()` 自身无需加锁
+- **P2-5: BeeIngredientFactory 未就绪不安排重试** — 配方永远不会被修改且无恢复路径
+  - **问题**：`overrideRecipesInternal` 检查 `BeeIngredientFactory.getOrCreateList().containsKey(MYRIADCREATIONS_TYPE_STRING)`，若未就绪仅记录 warn 并 return
+  - **修复**：调用 `RecipeReloadRetryManager.rescheduleRetry` 安排延迟重试（不重置 retryCount，避免无限重试）
+- **P2-6: RecipeReloadRetryManager 理论竞态** — 新的 context 会被误清除
+  - **问题**：`onServerTickSlowPath` 读取 `pendingRetryContext` 后才调用 `clearPendingRetryContext()`，若期间 `scheduleRetry` 被并发调用，新的 context 会被误清除
+  - **修复**：将 `pendingRetryContext` 改为 `AtomicReference<PendingRetryContext>`，使用 `compareAndSet(ctx, EMPTY)` CAS 模式确保只清除自己读取的 context 实例
+- **P2-7: MyriadBeeTypeCache.onServerTick 计数器非原子** — `incrementAndGet` 与 `set` 非原子
+  - **修复**：使用 `getAndUpdate` 实现原子的"递增并按需重置"
+- **P2-8: MyriadSelectionCache.invalidate 不清理 selected 列表** — 服务器停止后仍持有旧引用
+  - **修复**：在 `invalidate()` 的 synchronized 块中增加 `e.selected = List.of();`
+- **P2-9: BakedModelCosmic/Hell setupShaderUniforms 缺少 uniform null 检查** — 依赖 MC 内部实现细节
+  - **问题**：仅 `cosmicUVs` 有 null 检查，其余 5 个 uniform 直接 `.set()`，依赖 `safeGetUniform` 不返回 null 的内部实现
+  - **修复**：所有 6 个 uniform 都添加 null 检查
+- **P2-10: AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin RETURN 与 TAIL 注入冗余** — 同一返回点做了两次同样清理
+  - **问题**：`@At("TAIL")` 等同于 finally 块，覆盖正常返回和异常抛出路径；`@At("RETURN")` 仅匹配正常返回，两者注入方法体完全相同
+  - **修复**：删除 `@At("RETURN")` 注入方法，保留 `@At("TAIL")` 注入方法
+
+#### P3 — 规范 / 完善（4 项修复）
+
+- **P3-1: AbstractCombEventHandler ThreadLocal 未清理** — 线程池场景下可能泄漏
+  - **修复**：添加 `clearThreadLocals()` 公共静态方法，在 `ProductiveBeesGenesis.onServerStopped` 中调用
+- **P3-2: RecipeReloadRetryManager 超上限仅 warn** — 严重配置错误应记录 error
+  - **修复**：将 `LOGGER.warn` 改为 `LOGGER.error`
+- **P3-3: BeeHelperMixin 缩进错误** — 影响可读性
+  - **修复**：统一缩进为 4 级
+- **P3-4: onServerStopped 使用完全限定类名** — 与其他事件类型风格不一致
+  - **修复**：添加 `import net.neoforged.neoforge.event.server.ServerStoppedEvent;` 并修改方法签名
+
+### 完善
+
+- **P3-5: Ae2OutputStateHolder.clear 未清空 reusableBuffers 内部集合** — 评估后保持现状
+  - **决策**：`Ae2OutputStateHolder` 不引用 `ReusableBuffers`（包级可见 + 类型隔离），实现需通过反射或清理回调破坏隔离设计，当前无外部引用持有 `ReusableBuffers`，不构成实际泄漏
+- **P3-6: MyriadCreationsEventHandler @EventBusSubscriber 未限制 Dist** — 评估后保持现状
+  - **决策**：该类被 Mixin 静态引用（`isMyriadCreationsHoneycomb` 等），不能直接限制为 `Dist.DEDICATED_SERVER`，拆分到独立内部类会增加复杂度，收益不抵成本
+- **P3-7: MixinExtraFactory / MixinFactoryForME / MixinEMExtraFactory 死代码** — 评估后保持现状
+  - **决策**：作为扩展点保留，符合开闭原则，若未来切换到 Factory 基类，这些 Mixin 可立即生效
+
+### 变更
+
+- **连锁类型变更**：由于 P2-2 将 `BeeTypeCacheSnapshot.beeTypes` 类型从 `CopyOnWriteArrayList<ResourceLocation>` 改为 `List<ResourceLocation>`，同步修改了以下文件的参数类型：
+  - `RandomHoneycombSelector.java` — 6 个方法参数
+  - `MyriadSelectionCache.java` — `selectDistinctBeeTypesCached` 参数
+  - `AbstractCombEventHandler.java` — `buildBeeTypeCache` 返回类型 + `appendRandomCombsInternal` 参数
+  - `MyriadBeeTypeCache.java` — `updateBeeTypeCache` 中 `newCache` 变量类型
+- **统一模式**：
+  - 引入"CAS 清除自己读取的 context 实例"作为 reloader 调用 scheduleRetry/rescheduleRetry 后不被误清除的标准模式
+  - 引入"rescheduleRetry 不重置 retryCount"作为子重试场景避免无限重试的标准模式
+  - 引入"try/finally 保护 PoseStack 栈平衡"作为渲染层 pushPose 的标准模式
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布全部为 bug 修复 + 内部架构加固 + 规范完善，没有用户可见的新功能，没有不兼容变更，按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **PATCH** 级别（v1.6.0 → v1.6.1）
+
 ## [1.6.0] - 2026-07-05
 
 ### 新增

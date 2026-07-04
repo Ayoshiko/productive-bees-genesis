@@ -125,16 +125,17 @@ public class BakedModelHalo extends WrappedItemModel {
 				boolean usePulse = context == ItemDisplayContext.GUI && (this.type == 0 || this.pulse);
 				if (usePulse) {
 					poseStack.pushPose();
-					float scale = ThreadLocalRandom.current().nextFloat() * 0.10F + 0.95F;
-					double translate = (1.0D - scale) / 2.0D;
-					poseStack.scale(scale, scale, 1.0001F);
-					poseStack.translate(translate, translate, 0.0F);
-				}
-
-				itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack, vertexConsumer);
-
-				if (usePulse) {
-					poseStack.popPose();
+					try {
+						float scale = ThreadLocalRandom.current().nextFloat() * 0.10F + 0.95F;
+						double translate = (1.0D - scale) / 2.0D;
+						poseStack.scale(scale, scale, 1.0001F);
+						poseStack.translate(translate, translate, 0.0F);
+						itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack, vertexConsumer);
+					} finally {
+						poseStack.popPose();
+					}
+				} else {
+					itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack, vertexConsumer);
 				}
 			}
 		}
@@ -159,24 +160,30 @@ public class BakedModelHalo extends WrappedItemModel {
 				RenderSystem.disableDepthTest();
 
 				poseStack.pushPose();
-				PoseStack.Pose pose = poseStack.last();
-				poseStack.scale(2.25F, 2.25F, 1.0F);
-				poseStack.translate(-0.295F, -0.265F, 0.0F);
-				List<BakedQuad> quads = getHaloQuads(textureAtlas);
-				for (BakedQuad quad : quads) {
-					vertexConsumer.putBulkData(pose, quad, 0.0F, 0.0F, 0.0F, this.alpha, packedLight, packedOverlay, true);
+				try {
+					PoseStack.Pose pose = poseStack.last();
+					poseStack.scale(2.25F, 2.25F, 1.0F);
+					poseStack.translate(-0.295F, -0.265F, 0.0F);
+					List<BakedQuad> quads = getHaloQuads(textureAtlas);
+					for (BakedQuad quad : quads) {
+						vertexConsumer.putBulkData(pose, quad, 0.0F, 0.0F, 0.0F, this.alpha, packedLight, packedOverlay, true);
+					}
+				} finally {
+					poseStack.popPose();
 				}
-				poseStack.popPose();
 			} else if (this.type == 1) {
 				poseStack.pushPose();
-				PoseStack.Pose pose = poseStack.last();
-				poseStack.scale(2.0F, 2.0F, 1.0F);
-				poseStack.translate(-0.25F, -0.255F, 0.0F);
-				List<BakedQuad> quads = getHaloNoiseQuads(textureAtlas);
-				for (BakedQuad quad : quads) {
-					vertexConsumer.putBulkData(pose, quad, 1.0F, 1.0F, 1.0F, this.alpha, packedLight, packedOverlay, true);
+				try {
+					PoseStack.Pose pose = poseStack.last();
+					poseStack.scale(2.0F, 2.0F, 1.0F);
+					poseStack.translate(-0.25F, -0.255F, 0.0F);
+					List<BakedQuad> quads = getHaloNoiseQuads(textureAtlas);
+					for (BakedQuad quad : quads) {
+						vertexConsumer.putBulkData(pose, quad, 1.0F, 1.0F, 1.0F, this.alpha, packedLight, packedOverlay, true);
+					}
+				} finally {
+					poseStack.popPose();
 				}
-				poseStack.popPose();
 			} else if (this.type == 2) {
 				// type==2 复用 cachedHaloQuads（与 type==0 共用 HALO_TEXTURE），仅缩放参数不同
 				blendEnabled = true;
@@ -186,14 +193,17 @@ public class BakedModelHalo extends WrappedItemModel {
 				RenderSystem.disableDepthTest();
 
 				poseStack.pushPose();
-				PoseStack.Pose pose = poseStack.last();
-				poseStack.scale(1.5F, 1.5F, 1.0F);
-				poseStack.translate(-0.17F, -0.155F, 0.0F);
-				List<BakedQuad> quads = getHaloQuads(textureAtlas);
-				for (BakedQuad quad : quads) {
-					vertexConsumer.putBulkData(pose, quad, 0.0F, 0.0F, 0.0F, this.alpha, packedLight, packedOverlay, true);
+				try {
+					PoseStack.Pose pose = poseStack.last();
+					poseStack.scale(1.5F, 1.5F, 1.0F);
+					poseStack.translate(-0.17F, -0.155F, 0.0F);
+					List<BakedQuad> quads = getHaloQuads(textureAtlas);
+					for (BakedQuad quad : quads) {
+						vertexConsumer.putBulkData(pose, quad, 0.0F, 0.0F, 0.0F, this.alpha, packedLight, packedOverlay, true);
+					}
+				} finally {
+					poseStack.popPose();
 				}
-				poseStack.popPose();
 			}
 		} finally {
 			// 恢复渲染状态，防止影响后续物品渲染

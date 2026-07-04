@@ -21,11 +21,23 @@ public class BakedModelHell extends AbstractBakedModelCosmic {
 
 	@Override
 	protected void setupShaderUniforms(float time, float yaw, float pitch, float scale) {
-		CosmicShaders.hellTime.set(time);
-		CosmicShaders.hellYaw.set(yaw);
-		CosmicShaders.hellPitch.set(pitch);
-		CosmicShaders.hellExternalScale.set(scale);
-		CosmicShaders.hellOpacity.set(1.0F);
+		// 防御性 null 检查：shader 注册失败或 uniform 名称不匹配时 safeGetUniform 返回 null，
+		// 直接调用 set 会 NPE 导致渲染崩溃。所有 uniform 都需要检查。
+		if (CosmicShaders.hellTime != null) {
+			CosmicShaders.hellTime.set(time);
+		}
+		if (CosmicShaders.hellYaw != null) {
+			CosmicShaders.hellYaw.set(yaw);
+		}
+		if (CosmicShaders.hellPitch != null) {
+			CosmicShaders.hellPitch.set(pitch);
+		}
+		if (CosmicShaders.hellExternalScale != null) {
+			CosmicShaders.hellExternalScale.set(scale);
+		}
+		if (CosmicShaders.hellOpacity != null) {
+			CosmicShaders.hellOpacity.set(1.0F);
+		}
 		if (CosmicShaders.hellUVs != null) {
 			CosmicShaders.hellUVs.set(CosmicShaders.getCosmicUvs());
 		}

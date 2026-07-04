@@ -52,7 +52,7 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 public abstract class AbstractCombEventHandler {
 
 	/** 缓存更新间隔（tick） */
-	protected static final int CACHE_UPDATE_INTERVAL = 20;
+	public static final int CACHE_UPDATE_INTERVAL = 20;
 
 	/**
 	 * hasCentrifugeRecipe 测试输入复用（ThreadLocal）
@@ -71,6 +71,17 @@ public abstract class AbstractCombEventHandler {
 	private static final ThreadLocal<ItemStack> THREAD_LOCAL_TEST_COMB =
 			ThreadLocal.withInitial(() -> new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get()));
 
+	/**
+	 * 清理 ThreadLocal（服务器停止时调用）
+	 * <br/>
+	 * 防止线程池场景下 ThreadLocal 持有的 ItemStack/Handler 引用残留。
+	 * 虽然当前 Handler 不持有世界引用（blockEntity=null），但 ThreadLocal 在线程池复用场景下仍可能泄漏。
+	 */
+	public static void clearThreadLocals() {
+		THREAD_LOCAL_HANDLER.remove();
+		THREAD_LOCAL_TEST_COMB.remove();
+	}
+
 	// ========== 缓存更新 ==========
 
 	/**
@@ -87,9 +98,9 @@ public abstract class AbstractCombEventHandler {
 	 * @param level         服务端世界
 	 * @param excludedTypes 需要排除的蜜蜂类型集合
 	 * @param extraFilter   额外过滤谓词（可为null表示无额外过滤），返回true保留该类型
-	 * @return 新的缓存列表
+	 * @return 新的缓存列表（{@link CopyOnWriteArrayList} 保证读安全遍历）
 	 */
-	protected static CopyOnWriteArrayList<ResourceLocation> buildBeeTypeCache(
+	public static List<ResourceLocation> buildBeeTypeCache(
 			ServerLevel level,
 			Set<ResourceLocation> excludedTypes,
 			Predicate<ResourceLocation> extraFilter) {
@@ -175,7 +186,7 @@ public abstract class AbstractCombEventHandler {
 			int productivityModifier,
 			Predicate<ItemStack> isTargetComb,
 			Predicate<ItemStack> isTargetBlock,
-			CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+			List<ResourceLocation> cachedBeeTypes) {
 		if (!isTargetComb.test(input) && !isTargetBlock.test(input)) return;
 		if (!CombBlockCheckCache.hasOutputSpace(invHandler)) return;
 

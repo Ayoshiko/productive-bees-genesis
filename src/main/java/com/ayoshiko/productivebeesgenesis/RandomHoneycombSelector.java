@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -33,8 +32,8 @@ import net.minecraft.world.item.ItemStack;
  *   <li>均匀分配与随机分配（Stars-and-Bars 算法）</li>
  * </ul>
  * <p>
- * <b>线程安全</b>：所有方法均为无状态静态方法，使用 {@link ThreadLocalRandom} 与
- * {@link CopyOnWriteArrayList} 保证并发安全。
+ * <b>线程安全</b>：所有方法均为无状态静态方法，使用 {@link ThreadLocalRandom} 保证并发安全。
+ * 传入的 {@code cachedBeeTypes} 列表由调用方保证线程安全（如 {@link CopyOnWriteArrayList} 或 {@link List#of()}）。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
@@ -57,7 +56,7 @@ public final class RandomHoneycombSelector {
 	 * @param cachedBeeTypes 蜜蜂类型缓存
 	 * @return 随机蜜脾ItemStack
 	 */
-	public static ItemStack generateRandomHoneycomb(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+	public static ItemStack generateRandomHoneycomb(List<ResourceLocation> cachedBeeTypes) {
 		try {
 			if (cachedBeeTypes.isEmpty()) return createFallbackHoneycomb();
 
@@ -74,7 +73,7 @@ public final class RandomHoneycombSelector {
 	/**
 	 * 从预构建的蜜脾模板数组中随机选取一个并复制，生成蜜脾
 	 * <p>
-	 * 相比 {@link #generateRandomHoneycomb(CopyOnWriteArrayList)}，此方法避免在每次调用时
+	 * 相比 {@link #generateRandomHoneycomb(List)}，此方法避免在每次调用时
 	 * 都创建新的 {@link ItemStack} 并设置数据组件，显著降低256倍加速等高频场景下的GC压力。
 	 *
 	 * @param templates 蜜脾模板数组（每个元素已预设 bee_type 组件）
@@ -96,7 +95,7 @@ public final class RandomHoneycombSelector {
 	 * @param cachedBeeTypes 蜜蜂类型缓存
 	 * @return 随机蜜脾块ItemStack
 	 */
-	public static ItemStack generateRandomCombBlock(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+	public static ItemStack generateRandomCombBlock(List<ResourceLocation> cachedBeeTypes) {
 		try {
 			if (cachedBeeTypes.isEmpty()) return createFallbackCombBlock();
 
@@ -213,7 +212,7 @@ public final class RandomHoneycombSelector {
 	public static List<ItemStack> generateAggregatedStacks(
 			int totalCount,
 			Item baseItem,
-			CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes,
+			List<ResourceLocation> cachedBeeTypes,
 			ItemStack[] templates,
 			RandomSource random) {
 		if (totalCount <= 0) {
@@ -284,7 +283,7 @@ public final class RandomHoneycombSelector {
 	 * @param cachedBeeTypes 蜜蜂类型缓存
 	 * @return 蜜脾模板数组
 	 */
-	public static ItemStack[] buildHoneycombTemplates(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+	public static ItemStack[] buildHoneycombTemplates(List<ResourceLocation> cachedBeeTypes) {
 		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) return new ItemStack[0];
 		ItemStack[] templates = new ItemStack[cachedBeeTypes.size()];
 		for (int i = 0; i < cachedBeeTypes.size(); i++) {
@@ -301,7 +300,7 @@ public final class RandomHoneycombSelector {
 	 * @param cachedBeeTypes 蜜蜂类型缓存
 	 * @return 蜜脾块模板数组
 	 */
-	public static ItemStack[] buildCombBlockTemplates(CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+	public static ItemStack[] buildCombBlockTemplates(List<ResourceLocation> cachedBeeTypes) {
 		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) return new ItemStack[0];
 		ItemStack[] templates = new ItemStack[cachedBeeTypes.size()];
 		for (int i = 0; i < cachedBeeTypes.size(); i++) {
@@ -318,7 +317,7 @@ public final class RandomHoneycombSelector {
 	 * 从蜜蜂缓存中随机选取指定数量的不同类型（零拷贝优化）
 	 * <p>
 	 * 使用索引集合追踪已选元素，避免每次调用时完整拷贝列表。
-	 * 缓存列表由 {@link CopyOnWriteArrayList} 保证读安全，无需加锁。
+	 * 缓存列表由调用方保证线程安全（如 {@link CopyOnWriteArrayList} 或 {@link List#of()}），无需加锁。
 	 * <p>
 	 * 算法选择：
 	 * <ul>
@@ -332,7 +331,7 @@ public final class RandomHoneycombSelector {
 	 * @return 选中的蜜蜂类型列表
 	 */
 	public static List<ResourceLocation> selectDistinctBeeTypes(
-			int count, RandomSource random, CopyOnWriteArrayList<ResourceLocation> cache) {
+			int count, RandomSource random, List<ResourceLocation> cache) {
 		int poolSize = cache.size();
 		if (poolSize == 0) return List.of();
 		if (count >= poolSize) return List.copyOf(cache);

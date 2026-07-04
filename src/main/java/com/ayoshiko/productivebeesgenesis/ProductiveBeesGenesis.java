@@ -16,6 +16,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
+import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
@@ -237,18 +239,35 @@ public final class ProductiveBeesGenesis {
 	 *   <li>{@link CentrifugeRecipeIndex} — 离心配方索引（持有 ServerLevel 引用）</li>
 	 *   <li>{@link BeeInfoHelper} — 蜜蜂类型缓存和配方索引（可能持有过期配方引用）</li>
 	 *   <li>{@link MyriadCreationsEventHandler} — 万象创世类型缓存与模板数组</li>
-	 *   <li>{@link BeeRecipeReloader} — 延迟重试上下文</li>
+	 *   <li>{@link RecipeReloadRetryManager} — 延迟重试上下文</li>
 	 * </ul>
 	 * 这些静态缓存在服务器停止后不再有用，主动清理可防止：
 	 * 1) 旧存档的数据泄漏到新存档（例如配方/蜜蜂类型列表）
 	 * 2) 持有的 ServerLevel/RecipeManager 引用阻碍 GC
 	 */
-	private void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
-		CentrifugeRecipeIndex.clear();
-		BeeInfoHelper.invalidateCache();
-		MyriadCreationsEventHandler.clearAllCaches();
+	private void onServerStopped(ServerStoppedEvent event) {
+		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
+		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
+		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
+		safeClear(MyriadCreationsEventHandler::clearAllCaches, "MyriadCreationsEventHandler");
 		// 清理 BeeRecipeReloader 延迟重试上下文 — 防止持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC
-		BeeRecipeReloader.clearPendingRetryContext();
+		safeClear(RecipeReloadRetryManager::clearPendingRetryContext, "RecipeReloadRetryManager");
+		// 清理 AbstractCombEventHandler 的 ThreadLocal — 防止线程池复用场景下引用残留
+		safeClear(AbstractCombEventHandler::clearThreadLocals, "AbstractCombEventHandler.ThreadLocals");
+	}
+
+	/**
+	 * 安全清理包装 — 单个清理操作失败不影响其他清理
+	 *
+	 * @param action 清理操作
+	 * @param name   清理目标名称（用于日志）
+	 */
+	private void safeClear(Runnable action, String name) {
+		try {
+			action.run();
+		} catch (Exception e) {
+			LOGGER.error("清理 {} 时发生异常", name, e);
+		}
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {

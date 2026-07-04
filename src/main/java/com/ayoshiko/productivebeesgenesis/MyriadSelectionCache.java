@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -70,10 +69,14 @@ public final class MyriadSelectionCache {
 	/**
 	 * 失效所有类型选择缓存条目（配置重载时调用）。
 	 * <p>
-	 * 递增版本号并重置所有缓存条目的 tick/version，强制下次随机采样重新执行。
+	 * 递增版本号并重置所有缓存条目的 tick/version/selected，强制下次随机采样重新执行。
 	 * <p>
 	 * 使用类级锁保护整个重置循环，避免与 {@link #selectDistinctBeeTypesCached}
 	 * 中的"判断+批量预生成"循环交叉执行导致部分索引位版本回退。
+	 * <p>
+	 * 同时清空 selected 列表：避免在版本号递增后，selectDistinctBeeTypesCached 的双重检查
+	 * 命中旧 tick 但新 version 之前的过渡窗口读到已过期的 selected（虽然 cachedVersion 已重置，
+	 * 但清空 selected 为 List.of() 可作为额外防御，保证失效后任何读都返回空列表触发重新采样）。
 	 */
 	static void invalidate() {
 		BEE_TYPES_VERSION.incrementAndGet();
@@ -83,6 +86,8 @@ public final class MyriadSelectionCache {
 			for (SelectionCache entry : SELECTION_CACHES) {
 				entry.cachedTick = -1L;
 				entry.cachedVersion = -1;
+				// 清空 selected 列表，防止失效后读到过期数据
+				entry.selected = List.of();
 			}
 		}
 	}
@@ -105,7 +110,7 @@ public final class MyriadSelectionCache {
 	 * @return 选中的蜜蜂类型列表
 	 */
 	static List<ResourceLocation> selectDistinctBeeTypesCached(
-			int count, Level level, CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes) {
+			int count, Level level, List<ResourceLocation> cachedBeeTypes) {
 		if (count <= 0 || level == null) {
 			return List.of();
 		}

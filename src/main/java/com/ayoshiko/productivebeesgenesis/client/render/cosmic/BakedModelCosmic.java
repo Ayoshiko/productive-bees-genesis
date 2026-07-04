@@ -21,11 +21,23 @@ public class BakedModelCosmic extends AbstractBakedModelCosmic {
 
 	@Override
 	protected void setupShaderUniforms(float time, float yaw, float pitch, float scale) {
-		CosmicShaders.cosmicTime.set(time);
-		CosmicShaders.cosmicYaw.set(yaw);
-		CosmicShaders.cosmicPitch.set(pitch);
-		CosmicShaders.cosmicExternalScale.set(scale);
-		CosmicShaders.cosmicOpacity.set(1.0F);
+		// 防御性 null 检查：shader 注册失败或 uniform 名称不匹配时 safeGetUniform 返回 null，
+		// 直接调用 set 会 NPE 导致渲染崩溃。所有 uniform 都需要检查。
+		if (CosmicShaders.cosmicTime != null) {
+			CosmicShaders.cosmicTime.set(time);
+		}
+		if (CosmicShaders.cosmicYaw != null) {
+			CosmicShaders.cosmicYaw.set(yaw);
+		}
+		if (CosmicShaders.cosmicPitch != null) {
+			CosmicShaders.cosmicPitch.set(pitch);
+		}
+		if (CosmicShaders.cosmicExternalScale != null) {
+			CosmicShaders.cosmicExternalScale.set(scale);
+		}
+		if (CosmicShaders.cosmicOpacity != null) {
+			CosmicShaders.cosmicOpacity.set(1.0F);
+		}
 		if (CosmicShaders.cosmicUVs != null) {
 			CosmicShaders.cosmicUVs.set(CosmicShaders.getCosmicUvs());
 		}

@@ -24,25 +24,32 @@ public final class PBReflectionCacheCleaner {
 	 * <br/>
 	 * 清理 cachedBiomes 和 cachedRecipes 两个静态 Map，防止替换配方后引用过期 Recipe 实例。
 	 * 反射失败时仅记录警告，不抛出异常（PB 版本变更可能导致字段名变化）。
+	 * <p>
+	 * 每个字段独立 try-catch：单个字段清理失败不影响另一个，避免半清理状态。
+	 */
+	public static void clearBeeFishingCaches() {
+		clearField("cachedBiomes");
+		clearField("cachedRecipes");
+	}
+
+	/**
+	 * 清理 BeeFishingRecipe 的指定静态 Map 字段
+	 * <br/>
+	 * 独立 try-catch 隔离失败：字段名变更或字段类型变化时仅影响该字段，不污染其他字段的清理结果。
+	 *
+	 * @param fieldName 待清理的静态 Map 字段名
 	 */
 	@SuppressWarnings("unchecked")
-	public static void clearBeeFishingCaches() {
+	private static void clearField(String fieldName) {
 		try {
-			Field cachedBiomesField = BeeFishingRecipe.class.getDeclaredField("cachedBiomes");
-			cachedBiomesField.setAccessible(true);
-			Map<?, ?> cachedBiomes = (Map<?, ?>) cachedBiomesField.get(null);
-			if (cachedBiomes != null) {
-				cachedBiomes.clear();
-			}
-
-			Field cachedRecipesField = BeeFishingRecipe.class.getDeclaredField("cachedRecipes");
-			cachedRecipesField.setAccessible(true);
-			Map<?, ?> cachedRecipes = (Map<?, ?>) cachedRecipesField.get(null);
-			if (cachedRecipes != null) {
-				cachedRecipes.clear();
+			Field field = BeeFishingRecipe.class.getDeclaredField(fieldName);
+			field.setAccessible(true);
+			Map<?, ?> cache = (Map<?, ?>) field.get(null);
+			if (cache != null) {
+				cache.clear();
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("清理 BeeFishingRecipe 静态缓存失败", e);
+			ProductiveBeesGenesis.LOGGER.warn("清理 BeeFishingRecipe.{} 失败", fieldName, e);
 		}
 	}
 }

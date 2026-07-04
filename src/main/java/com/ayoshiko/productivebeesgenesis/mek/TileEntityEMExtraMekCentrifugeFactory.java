@@ -42,10 +42,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEMExtraFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -80,12 +79,12 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	private final PbRecipeProcessor pbProcessor;
 
 	/**
-	 * AE2 输出状态持有者 — 封装网格节点、AEItemKey 缓存和待连接标志
+	 * AE2 生命周期处理器 — 封装网格节点、AEItemKey 缓存、待连接标志和复用缓冲区
 	 * <br/>
-	 * 消除三个工厂类的 AE2 字段/方法重复，通过 {@link IAe2OutputHost} 接口的
-	 * default 方法委托访问。
+	 * 通过 {@link IAe2OutputHost} 接口的 default 方法委托访问，
+	 * 消除四个 TileEntity 类的 AE2 字段/方法重复。
 	 */
-	private final Ae2OutputStateHolder productivebeesgenesis$ae2StateHolder = new Ae2OutputStateHolder();
+	private final MekAe2LifecycleHandler productivebeesgenesis$ae2LifecycleHandler = new MekAe2LifecycleHandler();
 
 	/**
 	 * Task 10: 工厂 PB 上下文委托 — 封装 Task 5/7/11/16 公共状态和方法
@@ -325,10 +324,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	@Override
 	protected boolean onUpdateServer() {
 		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出）
-		if (productivebeesgenesis$ae2StateHolder.isAe2NodePending()) {
-			productivebeesgenesis$ae2StateHolder.setAe2NodePending(false);
-			Ae2GridNodeManager.connectNode(this);
-		}
+		productivebeesgenesis$ae2LifecycleHandler.tryConnectNode(this);
 		// Task 7: 重置去抖标志，允许本 tick 重新标记 sortingNeeded（在 super 与 PB 处理前重置）
 		delegate.resetSortingMark();
 		// super前保存能量，由Helper基于能量差计算总消耗（SMELTING + PB）
@@ -373,7 +369,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.saveAdditional(nbt, provider);
 		pbProcessor.saveAdditional(nbt);
-		Ae2GridNodeManager.saveNodeNBT(this, nbt);
+		productivebeesgenesis$ae2LifecycleHandler.saveNodeNBT(this, nbt);
 	}
 
 	/** 加载PB配方处理进度。Task 3-5：同时加载 AE2 网格节点。 */
@@ -381,7 +377,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.loadAdditional(nbt, provider);
 		pbProcessor.loadAdditional(nbt);
-		Ae2GridNodeManager.loadNodeNBT(this, nbt);
+		productivebeesgenesis$ae2LifecycleHandler.loadNodeNBT(this, nbt);
 	}
 
 	// ===== Task 3-5: AE2 网格节点生命周期与 IAe2OutputHost 实现 =====
@@ -390,28 +386,25 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	public void clearRemoved() {
 		super.clearRemoved();
 		// 仅准备节点（不接入网格），避免区块加载时 AE2 连接扫描递归栈溢出
-		Ae2GridNodeManager.prepareNode(this);
-		productivebeesgenesis$ae2StateHolder.setAe2NodePending(true);
+		productivebeesgenesis$ae2LifecycleHandler.prepareForLoad(this);
 	}
 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		Ae2GridNodeManager.destroyNode(this);
-		productivebeesgenesis$ae2StateHolder.clear();
+		productivebeesgenesis$ae2LifecycleHandler.destroyForRemoval(this);
 	}
 
 	@Override
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
-		Ae2GridNodeManager.destroyNode(this);
-		productivebeesgenesis$ae2StateHolder.clear();
+		productivebeesgenesis$ae2LifecycleHandler.destroyForChunkUnload(this);
 	}
 
-	/** 获取 AE2 状态持有者 — 供 IAe2OutputHost default 方法委托使用 */
+	/** 获取 AE2 生命周期处理器 — 供 IAe2OutputHost default 方法委托使用 */
 	@Override
-	public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
-		return productivebeesgenesis$ae2StateHolder;
+	public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler() {
+		return productivebeesgenesis$ae2LifecycleHandler;
 	}
 
 	@Override

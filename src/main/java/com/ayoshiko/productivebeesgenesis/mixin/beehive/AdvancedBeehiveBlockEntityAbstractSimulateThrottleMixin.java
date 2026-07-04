@@ -126,25 +126,15 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 		}
 	}
 
-	@Inject(
-			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-			at = @At(value = "RETURN"),
-			remap = false
-	)
-	private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
-		// 正常返回时清理 ThreadLocal
-		productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
-	}
-
 	/**
-	 * 异常路径清理 ThreadLocal
+	 * 方法退出时清理 ThreadLocal（覆盖正常返回和异常抛出路径）
 	 * <br/>
-	 * 原方案只在 RETURN 注入，原方法抛异常时 RETURN 不触发，ThreadLocal 残留上一次的 WeakReference。
-	 * 虽然下次 HEAD 会覆盖，但服务端主线程长期运行下残值可能间歇性影响判断。
-	 * 增加 TAIL 注入点保证异常路径也清理 ThreadLocal，消除潜在残值。
-	 * <p>
-	 * 实现说明：使用 {@code @At(value="TAIL")} 在方法退出时触发，
+	 * 使用 {@code @At(value="TAIL")} 在方法退出时触发，等同于 finally 块，
 	 * 无论正常返回还是抛出异常都会执行，保证 ThreadLocal 被清理。
+	 * <p>
+	 * 历史说明：原方案同时使用 @At("RETURN") 和 @At("TAIL") 两个注入点，
+	 * 但 TAIL 已覆盖 RETURN 的语义（RETURN 仅在正常返回时触发，TAIL 在 RETURN 和 ATHROW 都触发），
+	 * RETURN 注入为冗余，已删除。仅保留 TAIL 注入。
 	 */
 	@Inject(
 			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",

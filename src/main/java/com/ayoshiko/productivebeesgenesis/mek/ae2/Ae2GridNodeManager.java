@@ -108,11 +108,14 @@ public final class Ae2GridNodeManager {
 			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 			if (!(nodeObj instanceof IManagedGridNode node)) return;
 
+			// 幂等检查：节点已连接则跳过，避免重复调用 create() 触发 AE2 内部状态混乱
+			if (node.getNode() != null) return;
+
 			Level level = host.productivebeesgenesis$getAe2Level();
 			BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 			if (level == null || pos == null) return;
 
-			// 接入 AE2 网格（触发连接扫描）
+			// 接入 AE2 网络（触发连接扫描）
 			node.create(level, pos);
 		}
 	}
@@ -185,14 +188,19 @@ public final class Ae2GridNodeManager {
 	 * 保存网格节点 NBT
 	 * <br/>
 	 * 节点不存在时安全短路。AE2 会在 tag 中以 {@code setTagName} 指定的键名写入子标签。
+	 * <p>
+	 * 线程安全：使用宿主级锁保护 save 操作，与 destroyNode 互斥，
+	 * 避免在 saveToNBT 执行期间节点被销毁产生不完整 NBT。
 	 *
 	 * @param host 输出宿主
 	 * @param tag 方块实体的 NBT 根标签
 	 */
 	public static void saveNodeNBT(IAe2OutputHost host, CompoundTag tag) {
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode node)) return;
-		node.saveToNBT(tag);
+		synchronized (host) {
+			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+			if (!(nodeObj instanceof IManagedGridNode node)) return;
+			node.saveToNBT(tag);
+		}
 	}
 
 	/**
@@ -203,19 +211,23 @@ public final class Ae2GridNodeManager {
 	 * <p>
 	 * 注意：此处只调用 {@link #prepareNode} 而非 {@code createNode}，
 	 * 避免区块加载阶段触发 AE2 连接扫描导致递归栈溢出。
+	 * <p>
+	 * 线程安全：使用宿主级锁保护 load 操作，与 destroyNode 互斥。
 	 *
 	 * @param host 输出宿主
 	 * @param tag  方块实体的 NBT 根标签
 	 */
 	public static void loadNodeNBT(IAe2OutputHost host, CompoundTag tag) {
 		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
-		// 节点未创建时先准备（不连接，避免区块加载递归）
-		if (host.productivebeesgenesis$getAe2GridNode() == null) {
-			prepareNode(host);
+		synchronized (host) {
+			// 节点未创建时先准备（不连接，避免区块加载递归）
+			if (host.productivebeesgenesis$getAe2GridNode() == null) {
+				prepareNode(host);
+			}
+			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+			if (!(nodeObj instanceof IManagedGridNode node)) return;
+			node.loadFromNBT(tag);
 		}
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode node)) return;
-		node.loadFromNBT(tag);
 	}
 
 	/**
