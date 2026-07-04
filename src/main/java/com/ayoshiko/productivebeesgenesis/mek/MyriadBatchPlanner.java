@@ -312,11 +312,16 @@ public final class MyriadBatchPlanner {
 
 	// ===== 规划 =====
 
-	/** 规划批量插入（兼容旧签名：内部自动拍摄快照） */
+	/**
+	 * 规划批量插入（兼容旧签名：内部自动拍摄快照）
+	 * <br/>
+	 * 传入真实 tick 值以保证与批量路径 {@link #takeSnapshot(List, Item, long)} 的缓存键一致，
+	 * 使同一 tick 内同一 slots 实例的快照可跨路径复用，避免 256× 加速场景下的冗余快照拍摄。
+	 */
 	@NotNull
 	public static Plan plan(List<IInventorySlot> slots, Item baseItem,
-							Map<ResourceLocation, Integer> allocation) {
-		return plan(takeSnapshot(slots, baseItem, -1L), baseItem, allocation);
+							Map<ResourceLocation, Integer> allocation, long tick) {
+		return plan(takeSnapshot(slots, baseItem, tick), baseItem, allocation);
 	}
 
 	/**

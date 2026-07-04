@@ -53,6 +53,8 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  *       减少 extendedae_plus InfinityBigIntegerCellInventory.getUUID 等昂贵操作的调用次数</li>
  *   <li>空输出短路：标志位 O(1) 检查，避免遍历 {@code processes × 3} 个槽位</li>
  *   <li>AEItemKey 缓存：通过 {@link AeItemKeyCache} 避免重复调用 AEItemKey.of(stack)</li>
+ *   <li>对象复用：{@link ReusableBuffers} 由 {@link Ae2OutputStateHolder} 持有，
+ *       MekEnergyToAeAdapter、ArrayList、HashMap 跨 tick 复用，避免 256× 加速场景下高频分配</li>
  * </ul>
  * 此前曾尝试 tick 级节流（每游戏刻只推送 1 次），但导致离心机输出槽积压 →
  * areOutputSlotsFull → MyriadCreationsHandler 暂停 → 产出链停滞的 bug，已移除。
@@ -79,6 +81,11 @@ public final class Ae2OutputPusher {
 	 */
 	private static final int BATCH_MERGE_THRESHOLD = 3;
 
+	/**
+	 * 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例
+	 */
+	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
+
 	private Ae2OutputPusher() {}
 
 	/**
@@ -90,6 +97,9 @@ public final class Ae2OutputPusher {
 	 * 批量合并：扫描所有槽位后按 AEItemKey 分组，对每个 key 调用一次 poweredInsert。
 	 * 在万象创世蜜脾离心场景下，多进程的输出槽常有相同类型蜜脾，合并后可大幅减少
 	 * extendedae_plus InfinityBigIntegerCellInventory.getUUID 等昂贵操作的调用次数。
+	 * <p>
+	 * 对象复用：MekEnergyToAeAdapter、ArrayList、HashMap 由 {@link ReusableBuffers} 跨 tick 持有，
+	 * 避免每次调用分配 5+ 个临时对象。BaseActionSource 全局单例。
 	 *
 	 * @param host 输出宿主（离心机方块实体）
 	 */
@@ -113,17 +123,18 @@ public final class Ae2OutputPusher {
 		IStorageService storageService = grid.getService(IStorageService.class);
 		MEStorage meStorage = storageService.getInventory();
 
-		// 6. 创建能量适配器和操作源
-		IEnergySource energySource = new MekEnergyToAeAdapter(host.productivebeesgenesis$getAe2EnergySource());
-		IActionSource actionSource = new BaseActionSource() {};
+		// 6. 获取复用缓冲区（MekEnergyToAeAdapter + ArrayList + HashMap 跨 tick 复用）
+		ReusableBuffers buffers = getReusableBuffers(host);
+		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
 
 		// 7. 获取 AEItemKey 缓存（Task 7：减少 AEItemKey.of(stack) 重复调用）
 		Object cacheObj = host.productivebeesgenesis$getAeItemKeyCache();
 		AeItemKeyCache keyCache = cacheObj instanceof AeItemKeyCache ? (AeItemKeyCache) cacheObj : null;
 
-		// 8. 第一遍扫描：收集所有非空槽位
+		// 8. 第一遍扫描：收集所有非空槽位（复用 ArrayList，clear 而非新建）
 		int processes = host.processes();
-		List<SlotEntry> entries = new ArrayList<>(processes * 3);
+		List<SlotEntry> entries = buffers.entries;
+		entries.clear();
 		for (int i = 0; i < processes; i++) {
 			collectSlot(entries, i, 0, host.primaryOutputSlot(i), keyCache);
 			collectSlot(entries, i, 1, host.secondaryOutputSlot(i), keyCache);
@@ -132,11 +143,11 @@ public final class Ae2OutputPusher {
 
 		if (entries.isEmpty()) return;
 
-		// 9. 少量槽位时直接逐槽推送，避免 HashMap 分配开销
+		// 9. 少量槽位时直接逐槽推送，避免 HashMap 开销
 		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
 			int pushedItems = 0;
 			for (SlotEntry entry : entries) {
-				pushedItems += tryPushSlotDirect(entry, energySource, meStorage, actionSource);
+				pushedItems += tryPushSlotDirect(entry, energySource, meStorage, ACTION_SOURCE);
 			}
 			if (pushedItems > 0) {
 				host.productivebeesgenesis$onAe2PushComplete(pushedItems);
@@ -144,10 +155,13 @@ public final class Ae2OutputPusher {
 			return;
 		}
 
-		// 10. 批量合并：按 AEItemKey 分组
-		Map<AEItemKey, List<SlotEntry>> keyToEntries = new HashMap<>(entries.size());
-		Map<AEItemKey, Long> keyToTotalCount = new HashMap<>(entries.size());
+		// 10. 批量合并：按 AEItemKey 分组（复用 HashMap，clear 而非新建）
+		Map<AEItemKey, List<SlotEntry>> keyToEntries = buffers.keyToEntries;
+		Map<AEItemKey, Long> keyToTotalCount = buffers.keyToTotalCount;
+		keyToEntries.clear();
+		keyToTotalCount.clear();
 		for (SlotEntry entry : entries) {
+			// computeIfAbsent 中 lambda 可能新建子 ArrayList，复用收益有限故保持原逻辑
 			keyToEntries.computeIfAbsent(entry.key, k -> new ArrayList<>()).add(entry);
 			keyToTotalCount.merge(entry.key, (long) entry.count, Long::sum);
 		}
@@ -158,12 +172,27 @@ public final class Ae2OutputPusher {
 			AEItemKey key = keyEntry.getKey();
 			long totalCount = keyEntry.getValue();
 			pushedItems += pushBatchKey(key, totalCount, keyToEntries.get(key),
-					energySource, meStorage, actionSource);
+					energySource, meStorage, ACTION_SOURCE);
 		}
 
 		if (pushedItems > 0) {
 			host.productivebeesgenesis$onAe2PushComplete(pushedItems);
 		}
+	}
+
+	/**
+	 * 获取宿主的复用缓冲区（懒初始化）
+	 * <br/>
+	 * 缓冲区存储在 {@link Ae2OutputStateHolder} 中，生命周期与宿主一致。
+	 * 方块销毁时由 {@link Ae2OutputStateHolder#clear()} 自动释放。
+	 */
+	private static ReusableBuffers getReusableBuffers(IAe2OutputHost host) {
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		Object obj = holder.getReusableBuffers();
+		if (obj instanceof ReusableBuffers buffers) return buffers;
+		ReusableBuffers buffers = new ReusableBuffers();
+		holder.setReusableBuffers(buffers);
+		return buffers;
 	}
 
 	/**
@@ -305,6 +334,42 @@ public final class Ae2OutputPusher {
 			this.count = count;
 			this.process = process;
 			this.slotIdx = slotIdx;
+		}
+	}
+
+	/**
+	 * 跨 tick 复用的缓冲区
+	 * <br/>
+	 * 存储 MekEnergyToAeAdapter、ArrayList、HashMap 等可复用对象，
+	 * 由 {@link Ae2OutputStateHolder} 持有，生命周期与宿主一致。
+	 * <p>
+	 * <b>线程安全</b>：由离心机服务端 tick 线程独占访问，无需同步。
+	 * 若未来 AE2 网络事件从其他线程触发推送，需重新评估。
+	 */
+	static final class ReusableBuffers {
+		/** 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变 */
+		private MekEnergyToAeAdapter energyAdapter;
+
+		/** 复用的槽位条目列表 — 容量自动增长到峰值后零扩容 */
+		final List<SlotEntry> entries = new ArrayList<>();
+
+		/** 复用的 key → 槽位列表映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
+		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new HashMap<>();
+
+		/** 复用的 key → 总数量映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
+		final Map<AEItemKey, Long> keyToTotalCount = new HashMap<>();
+
+		/**
+		 * 获取能量适配器（懒初始化）
+		 * <br/>
+		 * MekEnergyToAeAdapter 完全无状态（仅持有 final container 字段），
+		 * container 引用来自宿主且在宿主生命周期内固定不变，故可安全复用。
+		 */
+		IEnergySource getEnergyAdapter(MachineEnergyContainer<?> container) {
+			if (energyAdapter == null) {
+				energyAdapter = new MekEnergyToAeAdapter(container);
+			}
+			return energyAdapter;
 		}
 	}
 

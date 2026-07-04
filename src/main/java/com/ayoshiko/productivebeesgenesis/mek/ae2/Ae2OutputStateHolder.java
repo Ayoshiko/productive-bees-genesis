@@ -25,6 +25,15 @@ public final class Ae2OutputStateHolder {
 	private volatile boolean ae2NodePending;
 
 	/**
+	 * AE2 推送器复用缓冲区（实际类型为 Ae2OutputPusher.ReusableBuffers）
+	 * <br/>
+	 * 存储 MekEnergyToAeAdapter、ArrayList、HashMap 等可复用对象，
+	 * 避免 256× 加速场景下每 tick 重复分配。字段类型为 Object 以保持 AE2 依赖隔离
+	 * （Ae2OutputStateHolder 不直接引用 AE2 类）。
+	 */
+	private Object reusableBuffers;
+
+	/**
 	 * 获取 AE2 网格节点
 	 *
 	 * @return 网格节点对象，未创建时返回 null
@@ -87,5 +96,24 @@ public final class Ae2OutputStateHolder {
 		ae2GridNode = null;
 		aeItemKeyCache = null;
 		ae2NodePending = false;
+		reusableBuffers = null;
+	}
+
+	/**
+	 * 获取 AE2 推送器复用缓冲区
+	 *
+	 * @return 复用缓冲区对象（实际类型为 Ae2OutputPusher.ReusableBuffers），或 null
+	 */
+	public Object getReusableBuffers() {
+		return reusableBuffers;
+	}
+
+	/**
+	 * 设置 AE2 推送器复用缓冲区
+	 *
+	 * @param buffers 复用缓冲区对象（实际类型为 Ae2OutputPusher.ReusableBuffers），可为 null
+	 */
+	public void setReusableBuffers(Object buffers) {
+		this.reusableBuffers = buffers;
 	}
 }

@@ -63,47 +63,92 @@ public final class ProductiveBeesGenesis {
 	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
 
-		// EM扩展初始化 — 必须在DeferredRegister.register()之前完成所有动态注册
-		// 顺序依赖：initEMTiers(创建BlockType，使用懒加载Supplier) → registerEMFactories(需要BlockType)
-		// → registerEMFactoryTiles(需要DeferredBlock) → registerEMFactoryItems(需要DeferredBlock)
+		// 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 DeferredRegister.register() 之前
+		initMekCentrifugeExtensions();
+
+		// 注册 DeferredRegister 到 mod 事件总线
+		registerDeferredRegisters(eventBus);
+
+		// 注册配置文件
+		registerConfigs(modContainer);
+
+		// 注册配置加载/重载监听器（跨字段校验 + 蜜蜂属性覆盖 + 缓存失效）
+		registerConfigListeners(eventBus);
+
+		// 注册 mod 事件总线监听器（FML 生命周期）
+		registerModEventBusListeners(eventBus);
+
+		// 注册 NeoForge 事件总线监听器（运行时事件）
+		registerNeoForgeEventBusListeners();
+
+		LOGGER.info("资源蜜蜂：创世模组初始化完成");
+	}
+
+	/**
+	 * 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）
+	 * <br/>
+	 * 必须在 {@link #registerDeferredRegisters(IEventBus)} 之前完成所有动态注册，
+	 * 因为 registerXxxFactories 等方法会动态向 ModBlocks.BLOCKS 等 DeferredRegister 添加条目，
+	 * 必须在 BLOCKS.register(eventBus) 之前完成。
+	 * <p>
+	 * 顺序依赖（每层）：
+	 * initXxxTiers(创建BlockType，使用懒加载Supplier) → registerXxxFactories(需要BlockType)
+	 * → registerXxxFactoryTiles(需要DeferredBlock) → registerXxxFactoryItems(需要DeferredBlock)
+	 */
+	private void initMekCentrifugeExtensions() {
+		// EM 扩展
 		MekCentrifugeBlockType.initEMTiers();
 		ModBlocks.registerEMFactories();
 		ModBlockEntities.registerEMFactoryTiles();
 		ModItems.registerEMFactoryItems();
 
-		// ME扩展初始化 — 必须在DeferredRegister.register()之前完成所有动态注册
-		// 顺序依赖：initMETiers(创建BlockType+为ULTIMATE添加ExtraAttributeUpgradeable) → registerMEFactories(需要BlockType)
-		// → registerMEFactoryTiles(需要DeferredBlock) → registerMEFactoryItems(需要DeferredBlock)
+		// ME 扩展（initMETiers 为 ULTIMATE 添加 ExtraAttributeUpgradeable）
 		MekCentrifugeBlockType.initMETiers();
 		ModBlocks.registerMEFactories();
 		ModBlockEntities.registerMEFactoryTiles();
 		ModItems.registerMEFactoryItems();
 
-		// EME扩展初始化 — 必须在DeferredRegister.register()之前完成所有动态注册
-		// 顺序依赖：initEMETiers(创建BlockType+为ULTIMATE/ME ABSOLUTE添加EMExtraAttributeUpgradeable) → registerEMEFactories(需要BlockType)
-		// → registerEMEFactoryTiles(需要DeferredBlock) → registerEMEFactoryItems(需要DeferredBlock)
+		// EME 扩展（initEMETiers 为 ULTIMATE/ME ABSOLUTE 添加 EMExtraAttributeUpgradeable）
 		MekCentrifugeBlockType.initEMETiers();
 		ModBlocks.registerEMEFactories();
 		ModBlockEntities.registerEMEFactoryTiles();
 		ModItems.registerEMEFactoryItems();
+	}
 
-		// 注册DeferredRegister到事件总线
+	/**
+	 * 注册 DeferredRegister 到 mod 事件总线
+	 */
+	private void registerDeferredRegisters(IEventBus eventBus) {
 		ModBlocks.BLOCKS.register(eventBus);
 		ModBlockEntities.register(eventBus);
 		ModItems.ITEMS.register(eventBus);
 		ModCreativeTabs.CREATIVE_MODE_TABS.register(eventBus);
 		ModStats.register(eventBus);
 		ModMenuTypes.register(eventBus);
+	}
 
-		// 注册配置文件
+	/**
+	 * 注册配置文件（CLIENT / COMMON / SERVER）
+	 */
+	private void registerConfigs(ModContainer modContainer) {
 		modContainer.registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
 		modContainer.registerConfig(Type.COMMON, ModConfig.COMMON_SPEC);
 		modContainer.registerConfig(Type.SERVER, ModConfig.SERVER_SPEC);
+	}
 
-		// 配置文件加载/重载时重新应用蜜蜂属性覆盖（服务端配置，按存档生效）
+	/**
+	 * 注册配置加载/重载监听器
+	 * <br/>
+	 * 服务端配置加载/重载时：
+	 * <ol>
+	 *   <li>跨字段联合校验并自动修正无效组合（Task 13）</li>
+	 *   <li>应用蜜蜂属性覆盖（按存档生效）</li>
+	 *   <li>重载时额外失效万象创世过滤缓存（Task 15）</li>
+	 * </ol>
+	 */
+	private void registerConfigListeners(IEventBus eventBus) {
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
-				// Task 13: 跨字段联合校验 — 在配置加载时主动修正无效组合，避免运行时反复触发被动防御
 				if (ModConfig.validateAndFixCrossFields()) {
 					ModConfig.SERVER_SPEC.save();
 				}
@@ -112,42 +157,40 @@ public final class ProductiveBeesGenesis {
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
-				// Task 13: 配置重载时同样执行联合校验
 				if (ModConfig.validateAndFixCrossFields()) {
 					ModConfig.SERVER_SPEC.save();
 				}
 				BeeConfigApplier.applyOverrides();
-				// Task 15: 失效万象创世过滤缓存，让下次 tick 重建反映最新过滤配置
 				MyriadCreationsEventHandler.invalidateFilterCache();
 			}
 		});
+	}
 
+	/**
+	 * 注册 mod 事件总线监听器（FML 生命周期事件）
+	 */
+	private void registerModEventBusListeners(IEventBus eventBus) {
 		eventBus.addListener(this::onCommonSetup);
-
-		// 注册MEK离心机的Capability（安全、能量等）— 使tooltip能正确显示拥有者/安全等级/储能
+		// 注册 MEK 离心机的 Capability（安全、能量等）— 使 tooltip 能正确显示拥有者/安全等级/储能
 		eventBus.addListener(this::onRegisterCapabilities);
-
 		// 注册数据生成器
 		eventBus.addListener(this::gatherData);
+	}
 
+	/**
+	 * 注册 NeoForge 事件总线监听器（游戏运行时事件）
+	 */
+	private void registerNeoForgeEventBusListeners() {
 		// 监听数据重载事件（/reload、数据包变更、服务器启动）— 递增 recipeVersion，
-		// 通知所有 PB 配方处理器（基础离心机和工厂版）清空 SMELTING/PB 配方缓存，
-		// 避免重载后仍使用旧的缓存结果。
-		// 使用 TagsUpdatedEvent：它在所有 reload listener（含配方重载）完成后触发，
-		// 是 Mekanism 等模组用于重置缓存的可靠信号。
+		// 通知所有 PB 配方处理器清空 SMELTING/PB 配方缓存。
+		// TagsUpdatedEvent 在所有 reload listener（含配方重载）完成后触发，是重置缓存的可靠信号。
 		NeoForge.EVENT_BUS.addListener(this::onTagsReload);
-
-		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后根据 ModConfig
-		// 动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning/bee_conversion 配方
+		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning/bee_conversion 配方
 		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
-
 		// 注册配方重载器的延迟重试 tick 处理器 — 处理首次进入世界时配置未加载的情况
 		NeoForge.EVENT_BUS.addListener(BeeRecipeReloader::onServerTick);
-
-		// 服务器停止时注销 JMX MBean，防止重复加载时注册失败
+		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
-
-		LOGGER.info("资源蜜蜂：创世模组初始化完成");
 	}
 
 	/**

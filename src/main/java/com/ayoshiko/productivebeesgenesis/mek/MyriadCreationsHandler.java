@@ -73,8 +73,9 @@ public class MyriadCreationsHandler {
 	 * getTicksForBase 内部涉及升级组件遍历与 Math.pow 计算，在升级未变更时结果稳定，
 	 * 通过时间窗口缓存避免每 tick 每进程重复计算。升级变更后最多 20 tick（1秒）内自动反映新值。
 	 * <p>
-	 * 线程安全：cachedTicksForBase 和 cachedTicksForBaseAt 为 volatile，读写原子；
-	 * 方块实体在服务端单线程执行，多进程共享同一缓存（升级组件为工厂级共享）。
+	 * 线程安全：cachedTicksForBase 和 cachedTicksForBaseAt 单字段读写原子，
+	 * 但字段对的复合读写非原子（{@link #getCachedTicksForBase()} 中的两次写入之间存在窗口）。
+	 * 方块实体在服务端单线程执行，多进程共享同一缓存（升级组件为工厂级共享），无跨线程竞态风险。
 	 */
 	private volatile int cachedTicksForBase = -1;
 
@@ -245,7 +246,10 @@ public class MyriadCreationsHandler {
 
 		// 用 MyriadBatchPlanner 规划插入（纯模拟，不复制 ItemStack、不触发 listener）
 		// 修复原实现"部分插入后失败导致产物丢失"的 bug：plan 失败时不 apply，不扣输入
-		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(reusableOutputSlots, baseItem, allocation);
+		// 传入真实 tick 值以匹配批量路径的快照缓存键，提升跨路径缓存复用率
+		Level level = context.level();
+		long currentTick = level != null ? level.getGameTime() : 0L;
+		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(reusableOutputSlots, baseItem, allocation, currentTick);
 		if (!plan.isSuccess()) {
 			if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
 				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世产物无法完全插入，暂停", logPrefix, processIndex);

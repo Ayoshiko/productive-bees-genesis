@@ -74,6 +74,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * 懒初始化：super() 构造期间会通过虚方法调用触发 getInitialInventory()，
 	 * 此时 pbProcessor 等字段尚未初始化，slotManager 必须能独立完成槽位构建。
 	 * 非声明为 final 以支持懒初始化模式。
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，Ejector Mixin 通过同线程读取，
+	 * 无需 volatile。super() 构造期间通过 getInitialInventory() 虚方法调用初始化。
 	 */
 	private MekCentrifugeSlotManager slotManager;
 

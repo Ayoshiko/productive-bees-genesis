@@ -95,20 +95,26 @@ public final class Ae2GridNodeManager {
 	 * 否则 AE2 连接扫描会触发邻近方块实体懒加载导致递归栈溢出。
 	 * <p>
 	 * 节点不存在或集成未启用时安全短路。
+	 * <p>
+	 * 线程安全：使用宿主级锁保护 check-then-act 块，与 {@link #prepareNode} /
+	 * {@link #destroyNode} 使用同一把锁保证互斥，避免未来跨上下文调用产生竞态。
 	 *
 	 * @param host 输出宿主
 	 */
 	public static void connectNode(IAe2OutputHost host) {
 		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode node)) return;
+		// 宿主级锁保护 check-then-act，与 prepareNode/destroyNode 保持一致的锁粒度
+		synchronized (host) {
+			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+			if (!(nodeObj instanceof IManagedGridNode node)) return;
 
-		Level level = host.productivebeesgenesis$getAe2Level();
-		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
-		if (level == null || pos == null) return;
+			Level level = host.productivebeesgenesis$getAe2Level();
+			BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
+			if (level == null || pos == null) return;
 
-		// 接入 AE2 网格（触发连接扫描）
-		node.create(level, pos);
+			// 接入 AE2 网格（触发连接扫描）
+			node.create(level, pos);
+		}
 	}
 
 	/**

@@ -23,6 +23,46 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [1.6.0] - 2026-07-05
+
+### 新增
+
+- **P0: Ae2OutputPusher 对象复用** — 256× 加速场景下高频对象分配优化
+  - **问题**：每次 `pushOutputs` 调用分配 5+ 个临时对象（MekEnergyToAeAdapter、BaseActionSource、ArrayList、HashMap×2），256× 加速 + 14 台离心机场景下每 tick 70+ 对象分配
+  - **修复**：引入 `ReusableBuffers` 内部类，由 `Ae2OutputStateHolder` 持有，跨 tick 复用
+    - `BaseActionSource` 提升为 `private static final` 全局单例（无状态）
+    - `MekEnergyToAeAdapter` 懒初始化，宿主生命周期内仅创建一次
+    - `ArrayList<SlotEntry>` + `HashMap` 跨 tick 复用，`clear()` 而非新建
+    - 方块销毁时由 `Ae2OutputStateHolder.clear()` 自动释放
+  - **性能收益**：稳态下每 tick 临时对象分配从 70+ 降至 0
+
+### 变更
+
+- **P1: ProductiveBeesGenesis 主类构造函数拆分** — 88 行构造函数拆分为 6 个私有方法
+  - `initMekCentrifugeExtensions()` — EM/ME/EME 三层工厂初始化
+  - `registerDeferredRegisters(IEventBus)` — 注册 DeferredRegister
+  - `registerConfigs(ModContainer)` — 注册配置文件
+  - `registerConfigListeners(IEventBus)` — 配置加载/重载监听器
+  - `registerModEventBusListeners(IEventBus)` — mod 事件总线监听器
+  - `registerNeoForgeEventBusListeners()` — NeoForge 事件总线监听器
+  - 构造函数从 88 行降至 22 行，职责分离更清晰
+
+### 修复
+
+- **P3: Ae2GridNodeManager.connectNode 缺失 synchronized(host) 锁保护** — 锁一致性隐患
+  - **问题**：`prepareNode` 和 `destroyNode` 均使用 `synchronized(host)` 保护 check-then-act 块，但 `connectNode` 未使用，锁保护不一致
+  - **修复**：为 `connectNode` 添加 `synchronized(host)` 保护，与 `prepareNode`/`destroyNode` 保持一致的锁粒度
+- **P3: MyriadBatchPlanner.plan() tick=-1L 导致快照缓存失效** — 跨路径缓存无法复用
+  - **问题**：`plan(List, Item, Map)` 重载方法内部调用 `takeSnapshot(slots, baseItem, -1L)`，与批量路径的真实 tick 值不匹配，导致同一 tick 内同一 slots 实例的快照无法跨路径复用
+  - **修复**：为 `plan(List, Item, Map)` 添加 `long tick` 参数，调用方 `MyriadCreationsHandler.completeMyriadCreations` 传入 `context.level().getGameTime()`
+
+### 完善
+
+- **P3: TileEntityMekCentrifuge.slotManager 非 volatile** — 评估后保持现状
+  - **决策**：与 v1.5.5 P3-3 决策一致，在字段 Javadoc 中标注线程安全约束："方块实体在服务端单线程执行，Ejector Mixin 通过同线程读取，无需 volatile"
+- **P3: MyriadCreationsHandler.cachedTicksForBase 双 volatile 非原子对** — 评估后保持现状
+  - **决策**：单线程访问无竞态风险，修正 Javadoc 描述为"单字段读写原子，字段对非原子复合更新；方块实体服务端单线程执行，无跨线程竞态风险"
+
 ## [1.5.5] - 2026-07-04
 
 ### 修复
