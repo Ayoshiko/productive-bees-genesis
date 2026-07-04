@@ -95,16 +95,22 @@ public class PbRecipeProcessor {
 	private int cachedOperationsPerTick;
 
 	/**
-	 * 本 tick 内 getTicksForBase(baseTime) 的结果缓存 — 用于PB配方处理时间计算
+	 * getTicksForBase(baseTime) 的结果缓存 — 用于PB配方处理时间计算
 	 * <br/>
-	 * 不同配方的 baseTime 不同，但同一 tick 内升级组件不变，计算结果只与 baseTime 有关。
-	 * 使用按 tick 清空的 Map 缓存，避免每进程每 tick 都重复执行升级遍历与 Math.pow。
+	 * 不同配方的 baseTime 不同，但同一时间窗口内升级组件不变，计算结果只与 baseTime 有关。
+	 * 使用 20 tick（1 秒）时间窗口缓存，替代旧版"每 tick clear+重建"模式，
+	 * 避免 256× 加速下每 tick 都重新分配 HashMap 桶数组。
+	 * 升级变更后最多 20 tick 内自动反映新值（与 {@link MyriadCreationsHandler#TICKS_CACHE_INTERVAL} 一致）。
+	 * <p>
+	 * 单线程上下文，使用 HashMap 即可（方块实体在服务端单线程执行，无需同步锁）。
 	 */
-	// 单线程上下文，使用 HashMap 即可（方块实体在服务端单线程执行，无需同步锁，避免不必要的 segment 锁开销）
 	private final HashMap<Integer, Integer> ticksForBaseCache = new HashMap<>(8);
 
-	/** 当前 ticksForBaseCache 对应的游戏刻，变化时清空缓存 */
-	private long ticksForBaseCacheAt = -1L;
+	/** ticksForBaseCache 失效时间窗口（tick） — 与 MyriadCreationsHandler 保持一致 */
+	private static final int TICKS_FOR_BASE_CACHE_WINDOW = 20;
+
+	/** 当前 ticksForBaseCache 对应的失效游戏刻，过期时清空缓存 */
+	private long ticksForBaseCacheExpireAt = -1L;
 
 	/**
 	 * @param context   PB配方处理上下文（由Factory TileEntity提供）
@@ -139,14 +145,17 @@ public class PbRecipeProcessor {
 	 * （/reload、数据包变更）立即失效旧缓存，避免使用过期的配方检查结果。
 	 */
 	private void checkRecipeVersion() {
-		if (lastRecipeVersion != ProductiveBeesGenesis.recipeVersion) {
+		long currentVersion = ProductiveBeesGenesis.recipeVersion.get();
+		if (lastRecipeVersion != currentVersion) {
 			clearSmeltingCacheAll();
 			// 清空每进程的当前PB配方引用，防止使用过期配方（配方重载后旧引用可能已失效）
 			Arrays.fill(cachedPbRecipes, null);
 			recipeFinder.clearCaches();
+			// 失效 ticksForBaseCache（配方重载可能伴随升级配置变化，强制下次重新计算）
+			clearTicksForBaseCache();
 			// 失效万象处理器的 getTicksForBase 缓存（配方重载可能伴随升级配置变化，强制下次重新计算）
 			myriadHandler.clearCachedTicksForBase();
-			lastRecipeVersion = ProductiveBeesGenesis.recipeVersion;
+			lastRecipeVersion = currentVersion;
 		}
 	}
 
@@ -352,11 +361,17 @@ public class PbRecipeProcessor {
 		return getCachedTicksForBase(baseTime, currentGameTime);
 	}
 
-	/** 本 tick 内 getTicksForBase(baseTime) 结果缓存（同 tick 内升级不变，避免重复 Math.pow） */
+	/**
+	 * 时间窗口内 getTicksForBase(baseTime) 结果缓存
+	 * <br/>
+	 * 同一 20 tick 时间窗口内升级组件不变，计算结果只与 baseTime 有关。
+	 * 替代旧版每 tick clear+重建模式，避免 256× 加速下 HashMap 桶数组的频繁分配。
+	 * 时间窗口过期时清空并重新填充，升级变更后最多 20 tick 内反映新值。
+	 */
 	private int getCachedTicksForBase(int baseTime, long currentGameTime) {
-		if (currentGameTime != ticksForBaseCacheAt) {
+		if (currentGameTime >= ticksForBaseCacheExpireAt) {
 			ticksForBaseCache.clear();
-			ticksForBaseCacheAt = currentGameTime;
+			ticksForBaseCacheExpireAt = currentGameTime + TICKS_FOR_BASE_CACHE_WINDOW;
 		}
 		Integer cached = ticksForBaseCache.get(baseTime);
 		if (cached == null) {
@@ -364,6 +379,12 @@ public class PbRecipeProcessor {
 			ticksForBaseCache.put(baseTime, cached);
 		}
 		return cached;
+	}
+
+	/** 失效 ticksForBaseCache（配方重载或外部调用时强制下次重新计算） */
+	public void clearTicksForBaseCache() {
+		ticksForBaseCache.clear();
+		ticksForBaseCacheExpireAt = -1L;
 	}
 
 	/**

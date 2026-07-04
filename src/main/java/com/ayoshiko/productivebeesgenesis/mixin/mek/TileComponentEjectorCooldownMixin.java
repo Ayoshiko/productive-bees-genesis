@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * TileComponentEjector 输出阻塞冷却与内容未变化跳过 Mixin。
@@ -82,9 +83,10 @@ public abstract class TileComponentEjectorCooldownMixin {
 	@Unique
 	private static final int PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL = 100;
 
-	/** 上次刷新配置的游戏刻 */
+	/** 上次刷新配置的游戏刻 — AtomicLong 配合 CAS 防止多线程同时通过检查导致重复刷新 */
 	@Unique
-	private volatile long productivebeesgenesis$lastConfigRefreshTick = -PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL;
+	private final AtomicLong productivebeesgenesis$lastConfigRefreshTick =
+			new AtomicLong(-PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL);
 
 	/** 缓存的最大速度模式标志 */
 	@Unique
@@ -132,13 +134,21 @@ public abstract class TileComponentEjectorCooldownMixin {
 	 * 256× 加速下 14 台离心机每 tick 调用 outputItems 3584 次，每次读取 9 项配置
 	 * 共 32256 次配置读取/tick。缓存后降至 3584 次方法调用 + 0 次配置读取（命中缓存时），
 	 * 每 100 tick 才刷新一次配置（14 次配置读取/tick）。
+	 * <p>
+	 * 线程安全：使用 AtomicLong + CAS（compareAndSet）保证「检查时间戳 + 写入新值 + 加载配置」的原子性。
+	 * 即使 Mekanism 异步线程与主线程同时调用 tickServer，CAS 也只有一个线程能成功推进时间戳，
+	 * 另一个线程会被短路返回，避免重复读取配置和覆盖缓存。
 	 */
 	@Unique
 	private void productivebeesgenesis$refreshConfigCache(long currentTick) {
-		if (currentTick - productivebeesgenesis$lastConfigRefreshTick < PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL) {
+		long lastRefresh = productivebeesgenesis$lastConfigRefreshTick.get();
+		if (currentTick - lastRefresh < PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL) {
 			return;
 		}
-		productivebeesgenesis$lastConfigRefreshTick = currentTick;
+		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
+		if (!productivebeesgenesis$lastConfigRefreshTick.compareAndSet(lastRefresh, currentTick)) {
+			return;
+		}
 		productivebeesgenesis$cachedMaxSpeedMode = ModConfig.SERVER.mekCentrifugeEjectMaxSpeedMode.get();
 		productivebeesgenesis$cachedSkipUnchanged = ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get();
 		productivebeesgenesis$cachedSkipTicks = ModConfig.SERVER.mekCentrifugeEjectSkipTicks.get();

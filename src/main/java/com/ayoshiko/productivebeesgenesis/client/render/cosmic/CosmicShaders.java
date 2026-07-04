@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.shaders.AbstractUniform;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -17,11 +19,31 @@ import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
  * <br/>
  * 注册 cosmic 物品与护甲两套着色器，缓存 uniform 句柄；
  * 在 TextureAtlasStitchedEvent 中采集 misc/cosmic/cosmic_0..9 的 UV 坐标。
+ * <p>
+ * 线程安全：UV/Sprite 数组通过 {@link AtomicReference} 整体替换保证可见性。
+ * 资源加载线程（TextureAtlasStitchedEvent）写入，渲染线程读取。原数组元素修改无 happens-before 保证，
+ * 可能导致渲染线程读到部分更新的 UV 坐标。改为构建完整快照后原子替换引用，渲染线程要么看到旧快照，
+ * 要么看到新快照，不会看到中间状态。
  */
 public class CosmicShaders {
 
-	public static final float[] COSMIC_UVS = new float[40];
-	public static volatile TextureAtlasSprite[] COSMIC_SPRITES = new TextureAtlasSprite[10];
+	/** UV 坐标快照（不可变，含 10 个 sprite × 4 个 float = 40 个元素） */
+	private record CosmicUvSnapshot(float[] uvs, TextureAtlasSprite[] sprites) {
+		static final CosmicUvSnapshot EMPTY = new CosmicUvSnapshot(new float[40], new TextureAtlasSprite[10]);
+	}
+
+	/** 当前 UV 快照 — AtomicReference 保证原子替换，渲染线程读到的要么是旧快照要么是新快照 */
+	private static final AtomicReference<CosmicUvSnapshot> cosmicUvSnapshot = new AtomicReference<>(CosmicUvSnapshot.EMPTY);
+
+	/** 兼容旧调用：返回当前快照的 UV 数组引用（快照不可变，引用安全） */
+	public static float[] getCosmicUvs() {
+		return cosmicUvSnapshot.get().uvs();
+	}
+
+	/** 兼容旧调用：返回当前快照的 sprite 数组引用（快照不可变，引用安全） */
+	public static TextureAtlasSprite[] getCosmicSprites() {
+		return cosmicUvSnapshot.get().sprites();
+	}
 
 	/** 着色器实例，由 RegisterShadersEvent 回调（资源加载线程）写入，渲染线程读取，必须 volatile 保证可见性 */
 	public static volatile ShaderInstance COSMIC_SHADER;
@@ -104,13 +126,17 @@ public class CosmicShaders {
 	@SubscribeEvent
 	public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
 		if (event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
-			for (int i = 0; i < COSMIC_SPRITES.length; i++) {
-				COSMIC_SPRITES[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "misc/cosmic/cosmic_" + i));
-				COSMIC_UVS[i * 4 + 0] = COSMIC_SPRITES[i].getU0();
-				COSMIC_UVS[i * 4 + 1] = COSMIC_SPRITES[i].getV0();
-				COSMIC_UVS[i * 4 + 2] = COSMIC_SPRITES[i].getU1();
-				COSMIC_UVS[i * 4 + 3] = COSMIC_SPRITES[i].getV1();
+			// 构建完整快照后原子替换：避免渲染线程读到部分更新的数组元素
+			float[] newUvs = new float[40];
+			TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
+			for (int i = 0; i < newSprites.length; i++) {
+				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "misc/cosmic/cosmic_" + i));
+				newUvs[i * 4 + 0] = newSprites[i].getU0();
+				newUvs[i * 4 + 1] = newSprites[i].getV0();
+				newUvs[i * 4 + 2] = newSprites[i].getU1();
+				newUvs[i * 4 + 3] = newSprites[i].getV1();
 			}
+			cosmicUvSnapshot.set(new CosmicUvSnapshot(newUvs, newSprites));
 		}
 	}
 }

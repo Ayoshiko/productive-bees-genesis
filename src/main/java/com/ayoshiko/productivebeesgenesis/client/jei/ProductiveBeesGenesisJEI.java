@@ -158,7 +158,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				Minecraft.getInstance().level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get());
 
 		// 检查缓存：配方版本号未变化时复用已生成的蜜脾块配方
-		long currentVersion = ProductiveBeesGenesis.recipeVersion;
+		long currentVersion = ProductiveBeesGenesis.recipeVersion.get();
 		List<CentrifugeRecipe> blockRecipes;
 		if (cachedCombBlockRecipes != null && cachedRecipeVersion == currentVersion) {
 			blockRecipes = cachedCombBlockRecipes;

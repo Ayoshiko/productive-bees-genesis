@@ -34,6 +34,9 @@ import net.minecraft.core.registries.Registries;
 
 /**
  * MEK离心机ContainerType默认创建器注册器
+ * <br/>
+ * {@code RegisterEvent} 是模组总线事件，NeoForge 1.21.1 自动判定总线，
+ * 不显式声明 {@code bus} 参数（该参数在 1.21.1 已过时）。
  */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public class MekCentrifugeContainerRegistrar {

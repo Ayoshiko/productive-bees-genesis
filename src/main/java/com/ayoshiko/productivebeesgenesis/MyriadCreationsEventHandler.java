@@ -56,14 +56,45 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 @MethodsReturnNonnullByDefault
 public final class MyriadCreationsEventHandler extends AbstractCombEventHandler {
 
-	/** 缓存排除万象创世自身后的所有蜜蜂类型（volatile保证跨线程可见性） */
-	private static volatile CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes = new CopyOnWriteArrayList<>();
-	/** 预构建的蜜脾模板数组，与 cachedBeeTypes 同步更新，避免高频生成时重复创建ItemStack */
-	private static volatile ItemStack[] cachedHoneycombTemplates = new ItemStack[0];
-	/** 预构建的蜜脾块模板数组 */
-	private static volatile ItemStack[] cachedCombBlockTemplates = new ItemStack[0];
+	/**
+	 * 不可变快照：封装蜜蜂类型缓存和预构建模板数组
+	 * <p>
+	 * 通过单一 volatile 引用原子替换，避免多 volatile 字段在 rebuild 期间出现
+	 * "类型已更新但模板仍为旧值"的不一致状态。
+	 */
+	private record BeeTypeCacheSnapshot(
+			CopyOnWriteArrayList<ResourceLocation> beeTypes,
+			ItemStack[] honeycombTemplates,
+			ItemStack[] combBlockTemplates) {
+		static final BeeTypeCacheSnapshot EMPTY = new BeeTypeCacheSnapshot(
+				new CopyOnWriteArrayList<>(), new ItemStack[0], new ItemStack[0]);
+	}
+
+	/** 当前快照 — volatile 引用保证原子替换 */
+	private static volatile BeeTypeCacheSnapshot beeTypeCacheSnapshot = BeeTypeCacheSnapshot.EMPTY;
+
 	private static final AtomicBoolean CACHE_VALID = new AtomicBoolean(false);
 	private static final AtomicInteger LAST_CACHE_UPDATE_TICK = new AtomicInteger(0);
+
+	/** 读取当前快照（volatile 读保证可见性） */
+	private static BeeTypeCacheSnapshot snapshot() {
+		return beeTypeCacheSnapshot;
+	}
+
+	/** 兼容性访问：返回当前的蜜蜂类型列表 */
+	private static CopyOnWriteArrayList<ResourceLocation> cachedBeeTypes() {
+		return snapshot().beeTypes;
+	}
+
+	/** 兼容性访问：返回当前的蜜脾模板数组 */
+	private static ItemStack[] cachedHoneycombTemplates() {
+		return snapshot().honeycombTemplates;
+	}
+
+	/** 兼容性访问：返回当前的蜜脾块模板数组 */
+	private static ItemStack[] cachedCombBlockTemplates() {
+		return snapshot().combBlockTemplates;
+	}
 
 	/**
 	 * 按 handler 实例存储空转拦截缓存，避免多机器场景下缓存互相覆盖
@@ -96,13 +127,31 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	/** 服务器停止事件 — 清理static缓存防止内存泄漏 */
 	@SubscribeEvent
 	public static void onServerStopped(ServerStoppedEvent event) {
+		clearAllCaches();
+	}
+
+	/**
+	 * 清理所有静态缓存 — 服务器停止或外部需要主动清理时调用
+	 * <br/>
+	 * 公开方法供 {@link ProductiveBeesGenesis#onServerStopped} 显式调用，
+	 * 确保即使 @SubscribeEvent 注解失效（例如类未注册到事件总线）也能清理。
+	 * <p>
+	 * 清理范围：
+	 * <ul>
+	 *   <li>{@link CombBlockCheckCache} — 蜜脾块检查缓存</li>
+	 *   <li>{@link #CACHE_VALID} — 缓存有效标志置为 false</li>
+	 *   <li>{@link #beeTypeCacheSnapshot} — 蜜蜂类型与模板快照置为 EMPTY</li>
+	 *   <li>{@link #LAST_CACHE_UPDATE_TICK} — 缓存更新计数器重置</li>
+	 *   <li>{@link MyriadSelectionCache} — 类型选择缓存失效</li>
+	 * </ul>
+	 * 不清理会导致：旧存档的蜜蜂类型在新存档不存在时仍被使用，产生无效产物。
+	 */
+	public static void clearAllCaches() {
 		CombBlockCheckCache.clearCaches(BLOCK_CHECK_CACHES);
 		CACHE_VALID.set(false);
 		// 清理蜜蜂类型缓存和预构建模板，防止跨存档切换时旧存档数据残留
 		// 不清理会导致：旧存档的蜜蜂类型在新存档不存在时仍被使用，产生无效产物
-		cachedBeeTypes = new CopyOnWriteArrayList<>();
-		cachedHoneycombTemplates = new ItemStack[0];
-		cachedCombBlockTemplates = new ItemStack[0];
+		beeTypeCacheSnapshot = BeeTypeCacheSnapshot.EMPTY;
 		LAST_CACHE_UPDATE_TICK.set(0);
 		MyriadSelectionCache.invalidate();
 	}
@@ -159,10 +208,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 			// 首次构建且为空时不更新，保留旧缓存
 			return;
 		}
-		cachedBeeTypes = newCache;
 		// 同步预构建模板数组，256倍加速下通过copy()替代new ItemStack+set组件，显著降低GC压力
-		cachedHoneycombTemplates = RandomHoneycombSelector.buildHoneycombTemplates(newCache);
-		cachedCombBlockTemplates = RandomHoneycombSelector.buildCombBlockTemplates(newCache);
+		ItemStack[] newHoneycombTemplates = RandomHoneycombSelector.buildHoneycombTemplates(newCache);
+		ItemStack[] newCombBlockTemplates = RandomHoneycombSelector.buildCombBlockTemplates(newCache);
+		// 原子替换：使用不可变快照封装三个相关字段，保证读线程看到一致状态
+		beeTypeCacheSnapshot = new BeeTypeCacheSnapshot(newCache, newHoneycombTemplates, newCombBlockTemplates);
 		CACHE_VALID.set(!newCache.isEmpty());
 		// Task 23: 递增版本号使类型选择缓存自动失效
 		MyriadSelectionCache.onBeeTypesUpdated();
@@ -199,12 +249,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 获取随机蜜脾（排除万象创世自身） */
 	public static ItemStack getRandomHoneycomb() {
-		return RandomHoneycombSelector.generateRandomHoneycomb(cachedHoneycombTemplates);
+		return RandomHoneycombSelector.generateRandomHoneycomb(cachedHoneycombTemplates());
 	}
 
 	/** 获取随机蜜脾块 */
 	public static ItemStack getRandomCombBlock() {
-		return RandomHoneycombSelector.generateRandomCombBlock(cachedCombBlockTemplates);
+		return RandomHoneycombSelector.generateRandomCombBlock(cachedCombBlockTemplates());
 	}
 
 	/**
@@ -214,7 +264,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * @return 包含 count 个随机蜜脾的可变列表
 	 */
 	public static List<ItemStack> getRandomHoneycombs(int count) {
-		return RandomHoneycombSelector.generateRandomHoneycombs(count, cachedHoneycombTemplates);
+		return RandomHoneycombSelector.generateRandomHoneycombs(count, cachedHoneycombTemplates());
 	}
 
 	/**
@@ -224,7 +274,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * @return 包含 count 个随机蜜脾块的可变列表
 	 */
 	public static List<ItemStack> getRandomCombBlocks(int count) {
-		return RandomHoneycombSelector.generateRandomCombBlocks(count, cachedCombBlockTemplates);
+		return RandomHoneycombSelector.generateRandomCombBlocks(count, cachedCombBlockTemplates());
 	}
 
 	/**
@@ -234,7 +284,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * @param count 生成数量
 	 */
 	public static void appendRandomHoneycombs(List<ItemStack> out, int count) {
-		RandomHoneycombSelector.appendRandomHoneycombs(out, count, cachedHoneycombTemplates);
+		RandomHoneycombSelector.appendRandomHoneycombs(out, count, cachedHoneycombTemplates());
 	}
 
 	/**
@@ -244,7 +294,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * @param count 生成数量
 	 */
 	public static void appendRandomCombBlocks(List<ItemStack> out, int count) {
-		RandomHoneycombSelector.appendRandomCombBlocks(out, count, cachedCombBlockTemplates);
+		RandomHoneycombSelector.appendRandomCombBlocks(out, count, cachedCombBlockTemplates());
 	}
 
 	/**
@@ -256,11 +306,13 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 */
 	public static List<ItemStack> getAggregatedRandomHoneycombs(int totalCount, RandomSource random) {
 		if (!isMyriadCreationsEnabled()) return List.of();
+		// 单次快照读取保证三个字段一致性（避免读到类型已更新但模板仍为旧值的状态）
+		BeeTypeCacheSnapshot snap = snapshot();
 		return RandomHoneycombSelector.generateAggregatedStacks(
 				totalCount,
 				ModItems.CONFIGURABLE_HONEYCOMB.get(),
-				cachedBeeTypes,
-				cachedHoneycombTemplates,
+				snap.beeTypes,
+				snap.honeycombTemplates,
 				random);
 	}
 
@@ -273,11 +325,13 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 */
 	public static List<ItemStack> getAggregatedRandomCombBlocks(int totalCount, RandomSource random) {
 		if (!isMyriadCreationsEnabled()) return List.of();
+		// 单次快照读取保证三个字段一致性（避免读到类型已更新但模板仍为旧值的状态）
+		BeeTypeCacheSnapshot snap = snapshot();
 		return RandomHoneycombSelector.generateAggregatedStacks(
 				totalCount,
 				ModItems.CONFIGURABLE_COMB_BLOCK.get(),
-				cachedBeeTypes,
-				cachedCombBlockTemplates,
+				snap.beeTypes,
+				snap.combBlockTemplates,
 				random);
 	}
 
@@ -425,7 +479,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 				input, invHandler, random, productivityModifier,
 				MyriadCreationsEventHandler::isMyriadCreationsHoneycomb,
 				MyriadCreationsEventHandler::isMyriadCreationsCombBlock,
-				cachedBeeTypes);
+				cachedBeeTypes());
 	}
 
 	/**
@@ -434,7 +488,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 委托给基类方法，保持public static API兼容。
 	 */
 	public static List<ResourceLocation> selectDistinctBeeTypes(int count, RandomSource random) {
-		return RandomHoneycombSelector.selectDistinctBeeTypes(count, random, cachedBeeTypes);
+		return RandomHoneycombSelector.selectDistinctBeeTypes(count, random, cachedBeeTypes());
 	}
 
 	/**
@@ -456,7 +510,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * @return 选中的蜜蜂类型列表
 	 */
 	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level) {
-		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, cachedBeeTypes);
+		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, cachedBeeTypes());
 	}
 
 	/**

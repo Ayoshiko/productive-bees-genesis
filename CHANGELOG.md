@@ -20,10 +20,92 @@
 > | v1.6.0 | v1.5.2 | 内部架构重构 → PATCH |
 > | v1.7.0 | v1.5.3 | bug 修复 + 安全加固 → PATCH |
 >
-> 已发布的 jar 文件名保持原版本号（内部 `mod_version` 无法回溯修改），
-> 但 git tag 和 GitHub Release 标题已同步重新编号。
+> v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
+> git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
-## [1.6.0] - 2026-07-04
+## [1.5.5] - 2026-07-04
+
+### 修复
+
+- **P2: TileComponentEjectorCooldownMixin refreshConfigCache check-then-act 竞态**：多线程同时通过冷却检查时可能重复刷新配置缓存
+  - **问题**：`volatile long lastConfigRefreshTick` 的 check-then-act 非原子，多线程同时通过时间窗口检查时可能同时进入刷新逻辑
+  - **修复**：改为 `AtomicLong` + CAS 模式，先读 lastRefresh 检查时间窗口，再 `compareAndSet(lastRefresh, currentTick)` 推进时间戳，CAS 失败则直接返回
+- **P2: CosmicShaders 数组元素非 volatile**：UV 坐标和精灵数组元素修改的可见性无保证
+  - **问题**：`COSMIC_UVS` 和 `COSMIC_SPRITES` 数组元素修改在渲染线程可能读到部分更新的状态
+  - **修复**：引入 `CosmicUvSnapshot` 不可变 record 封装 `float[] uvs` 和 `TextureAtlasSprite[] sprites`，通过单一 `AtomicReference<CosmicUvSnapshot>` 原子替换；新增 `getCosmicUvs()` 和 `getCosmicSprites()` 兼容性访问方法
+- **P2: CosmicRenderQueue 静态复用 Matrix4f/PoseStack 未同步**：Iris 并行渲染时可能并发访问
+  - **问题**：静态复用的 `Matrix4f`、`PoseStack`、`List` 在 Iris 并行渲染线程间可能被并发访问，导致矩阵数据损坏
+  - **修复**：将 4 个静态复用字段改为 `ThreadLocal` 隔离（`REUSABLE_OLD_PROJECTION`、`REUSABLE_OLD_MODEL_VIEW`、`RENDER_SNAPSHOT`、`REUSABLE_POSE_STACK`），每个线程持有独立的实例
+- **P2: MekCentrifugeFactoryHelper 计数器状态守卫非原子**：`pbActiveStates[process]` check-then-act 可能多次递增
+  - **问题**：`boolean[] pbActiveStates` 的 check-then-act 非原子，多线程同时调用 `onProcessActivated` 时可能多次递增 `activeProcessCount`
+  - **修复**：参数 `boolean[] pbActiveStates` 改为 `AtomicIntegerArray`，使用 `compareAndSet(process, 0, 1)` 和 `compareAndSet(process, 1, 0)` 的 CAS 模式，CAS 成功才递增/递减计数器；`FactoryPbContextDelegate` 同步修改字段类型
+- **P2: FilterListBeeInfoCache 跨多 map 复合操作未整体加锁**：clear 过程中可能观察到不一致状态
+  - **问题**：跨 `iconCache`、`displayNameCache`、`productInfoCache` 三个 map 的复合操作未整体加锁，使用 `Collections.synchronizedMap` 的 per-map 锁无法保证复合操作原子性
+  - **修复**：删除 `Collections.synchronizedMap` 包装，新增单一 `LOCK` 对象，所有 `getBeeIcon`/`getBeeDisplayName`/`getBeeProductInfo`/`clear` 方法体包裹在 `synchronized (LOCK)` 中
+- **P2: AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin ThreadLocal 异常路径泄漏**：原方法抛异常时 RETURN 注入不触发
+  - **问题**：`@Inject` with `@At("RETURN")` 在原方法抛异常时不触发，ThreadLocal 残留导致后续 tick 误用上次 block entity 引用
+  - **修复**：新增 `@At(value = "THROW")` 注入点，在异常路径清理 `productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove()`
+- **P3: BeeHelperMixin THROTTLE_COUNTERS 内存泄漏风险**：极端场景下 map 容量可能持续膨胀
+  - **问题**：节流 tick 推进失败或大量蜜蜂 ID 重建时，`THROTTLE_COUNTERS` map 容量可能持续膨胀导致内存压力
+  - **修复**：增加 `PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT = 10_000` 硬上限，超过阈值时强制 `clear()` 释放桶数组，最坏影响仅是本 tick 内节流失效一次
+- **P3: ProductiveBeesGenesis recipeVersion 非原子自增**：volatile long 自增非原子
+  - **问题**：`public static volatile long recipeVersion = 0L` 的 `recipeVersion++` 非原子，虽然 TagsUpdatedEvent 在主线程触发，但部分模组可能在异步上下文触发重载事件
+  - **修复**：改为 `AtomicLong`，`onTagsReload` 中 `recipeVersion.incrementAndGet()`；`ProductiveBeesGenesisJEI` 和 `PbRecipeProcessor.checkRecipeVersion` 配套修改
+- **P3: onServerStopped 空实现**：服务器停止时未清理静态缓存
+  - **问题**：`onServerStopped` 方法体为空，未清理 `CentrifugeRecipeIndex`、`BeeInfoHelper`、`MyriadCreationsEventHandler` 等静态缓存
+  - **修复**：调用 `CentrifugeRecipeIndex.clear()`、`BeeInfoHelper.invalidateCache()`、`MyriadCreationsEventHandler.clearAllCaches()`；`CentrifugeRecipeIndex` 新增 `clear()` 方法；`MyriadCreationsEventHandler` 新增 `clearAllCaches()` 公开方法
+- **P3: SFM 依赖 versionRange 过于宽泛**：`[0,)` 会匹配到老版 Forge 上的不兼容版本
+  - **修复**：改为 `[0.3.0,)`，0.3.0+ 为 NeoForge 1.21.1 分支首个稳定版本
+
+### 完善
+
+- **P3: mixins.json 缺 refmap 字段**：与 `productivebeesgenesis.iris.mixins.json` 不一致
+  - **修复**：添加 `refmap`、`minVersion`、`target` 字段，保持两个 mixins.json 配置一致
+- **P3: @EventBusSubscriber 显式声明 bus**：评估后保持原状
+  - **决策**：NeoForge 1.21.1 中 `bus` 参数已被标记为 `@Deprecated`，自动判定机制取代显式声明，添加 `bus = Bus.MOD` 会触发编译警告，故保持原状并在 Javadoc 中说明决策
+- **P3: 客户端实例字段非 volatile**：评估后保持现状
+  - **决策**：`BeeSelectionCache`、`AeItemKeyCache`、`MekCentrifugeSlotManager` 已在 Javadoc 中清楚标注线程安全约束（"客户端 GUI 单线程访问"、"服务端 tick 线程独占访问"），无需添加 volatile
+- **P3: PacketDistributor.sendToAllPlayers 范围过广**：评估后保持现状
+  - **决策**：`MekCentrifugeBlock.setPlacedBy` 中调用 `PacketSyncSecurity` 同步安全拥有者信息，参考 Mekanism 自身实现，安全信息需要所有可能看到的玩家都知道（玩家从远处走来时也需正确判断权限），放置方块是低频事件，保持现状
+- **P3: javax.annotation 过时包**：评估后保持现状
+  - **决策**：`javax.annotation.ParametersAreNonnullByDefault` 是 JSR-305 标准，被 Minecraft 自身大量使用，`org.jetbrains.annotations` 不提供包级非空注解，迁移会导致与 Minecraft API 不一致
+- **P3: ModLanguageProvider 未使用**：评估后保持现状
+  - **决策**：`package-info.java` 已明确说明"保留类供未来参考"，作为 datagen 包中的参考实现，不增加运行时开销
+
+## [1.5.4] - 2026-07-04
+
+### 修复
+
+- **P1: CentrifugeRecipeIndex 多 volatile 字段非原子替换**：蜜脾索引和蜜脾块索引在 rebuild 时非原子写入
+  - **问题**：两个 volatile 字段依次写入存在可见性窗口，其他线程可能读到 `index` 已更新但 `combBlockIndex` 仍为旧值的状态
+  - **修复**：引入 `RecipeIndexSnapshot` 不可变 record 封装两个 Map，通过单一 volatile 引用原子替换，使用 `Map.copyOf()` 创建不可变 Map
+- **P1: MyriadCreationsEventHandler 多 volatile 字段非原子更新**：蜜蜂类型缓存与模板数组在 rebuild 时非原子写入
+  - **问题**：`cachedBeeTypes`、`cachedHoneycombTemplates`、`cachedCombBlockTemplates` 三个 volatile 字段依次写入，跨字段一致性无保证
+  - **修复**：引入 `BeeTypeCacheSnapshot` 不可变 record 封装三个字段，通过单一 volatile 引用原子替换；聚合生成方法使用单次 `snapshot()` 读取
+- **P1: BeeRecipeReloader 多 volatile 字段非原子写入**：延迟重试上下文非原子清空
+  - **问题**：`pendingRetry`、`pendingRecipeManager`、`pendingRegistryAccess` 三个 volatile 字段非原子写入，`clearPendingRetry` 清空字段间存在不一致窗口
+  - **修复**：引入 `PendingRetryContext` 不可变 record 封装 recipeManager 和 registryAccess，通过单一 volatile 引用原子替换
+- **P1: MyriadSelectionCache 循环更新多索引位竞态**：缓存重建循环无锁保护
+  - **问题**：多线程同时触发缓存重建时，循环内对不同索引位的写入非原子，可能部分索引位版本回退
+  - **修复**：对整个重建循环使用 `synchronized(MyriadSelectionCache.class)` 保护，配合双重检查模式避免无竞争时的同步开销
+- **P0: BeeInfoHelper.getBeeProduce O(N²) 性能问题**：GUI 打开时全量遍历配方
+  - **问题**：N 个蜜蜂 × N 个配方的 O(N²) 复杂度，蜜蜂类型数百时 GUI 卡顿
+  - **修复**：引入 `AdvancedBeehiveRecipeIndex` 不可变 record 封装 `beeType -> recipe` 静态索引，首次查询时遍历所有配方并从 `BeeIngredient.getBeeType()` 提取 beeType 建立索引，后续查询 O(1) 命中，GUI 打开从 O(N²) 降为 O(N)
+- **P0: PbRecipeProcessor.ticksForBaseCache 每 tick 清空重建**：HashMap 桶数组频繁分配
+  - **问题**：256× 加速场景下每 tick clear + 重新 put 产生高频 GC 压力
+  - **修复**：改为 20 tick（1 秒）时间窗口缓存模式，时间窗口过期时才 clear + 重新填充，升级变更后最多 20 tick 内自动反映新值
+- **P2: Ae2GridNodeManager check-then-act 竞态**：节点创建和销毁的竞态条件
+  - **问题**：`prepareNode` 和 `destroyNode` 均存在 check-then-act 竞态，多线程同时调用时可能创建重复节点导致 AE2 网格泄漏
+  - **修复**：对 check-then-act 块加宿主级锁 `synchronized(host)`，两个方法使用同一把锁保证互斥
+- **P2: JadeAe2StatusProvider NBT key 命名不一致**：使用缩写前缀
+  - **问题**：`NBT_STATE = "pbg_grid_node_state"` 使用缩写 `pbg_` 前缀，违反项目统一的 `productivebeesgenesis_` 命名约定
+  - **修复**：改为 `"productivebeesgenesis_grid_node_state"`，与其他 NBT key 保持一致
+- **P2: BeeHelperMixin 辅助方法缺失 modid$ 前缀和 @Unique**：违反 Mixin 命名规范
+  - **问题**：3 个辅助方法（`makeKey`、`clearThrottleIfTickChanged`、`mergeItemStacks`）未标注 `@Unique` 且未使用 `productivebeesgenesis$` 前缀
+  - **修复**：重命名方法添加前缀，添加 `@Unique` 注解，所有调用点同步更新
+- **P2: TileComponentEjectorMixin configMismatchWarned 非原子复合操作**：volatile boolean 的 check-then-act 非原子
+  - **问题**：多线程同时通过 if 检查后可能多个线程都执行日志记录，导致日志重复输出
+  - **修复**：改为 `AtomicBoolean` + `compareAndSet(false, true)` 模式，保证"只警告一次"语义
 
 ### 删除
 
@@ -37,12 +119,18 @@
 
 - **THIRD_PARTY_LICENSES.md 更新**：移除 Productive Bees 条目中"重写了离心机方块的部分模型和纹理"的描述
   - 原描述引用的 `assets/productivebees/` 目录已删除，本模组不再修改 PB 资产，仅引用其 API
+- **统一不可变快照模式**：引入"不可变 record + 单一 volatile 引用原子替换"作为多 volatile 字段的标准修复模式
+  - 适用于 `CentrifugeRecipeIndex`、`MyriadCreationsEventHandler`、`BeeRecipeReloader`、`BeeInfoHelper` 等多处
+  - 保证读线程看到一致状态，重建期间旧快照仍可服务读请求
 
 ### SemVer 合规性
 
 - **版本号重新编号**：按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则重新编号 v1.4.0 起的所有版本
   - 详见 CHANGELOG 顶部"版本号重新编号说明"
   - git tag 和 GitHub Release 已同步重新编号
+- **JAR 文件名修复**：重新构建 7 个历史版本（v1.3.4 ~ v1.5.3）的 JAR 文件
+  - 修复 Release 标题版本号与 JAR 文件名版本号不匹配的问题（例如 v1.3.4 附带的 jar 名为 `productivebeesgenesis-1.4.0.jar`）
+  - 在对应历史 commit 上重新构建，保证 JAR 内部 `mod_version` 与文件名一致
 
 ## [1.5.3] - 2026-07-04
 

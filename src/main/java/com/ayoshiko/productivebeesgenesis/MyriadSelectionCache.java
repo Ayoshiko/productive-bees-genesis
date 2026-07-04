@@ -71,13 +71,19 @@ public final class MyriadSelectionCache {
 	 * 失效所有类型选择缓存条目（配置重载时调用）。
 	 * <p>
 	 * 递增版本号并重置所有缓存条目的 tick/version，强制下次随机采样重新执行。
+	 * <p>
+	 * 使用类级锁保护整个重置循环，避免与 {@link #selectDistinctBeeTypesCached}
+	 * 中的"判断+批量预生成"循环交叉执行导致部分索引位版本回退。
 	 */
 	static void invalidate() {
 		BEE_TYPES_VERSION.incrementAndGet();
-		// 重置类型选择缓存条目，强制下次 selectDistinctBeeTypesCached 重新随机采样
-		for (SelectionCache entry : SELECTION_CACHES) {
-			entry.cachedTick = -1L;
-			entry.cachedVersion = -1;
+		// 类级锁保护整个循环，防止与重建循环交叉
+		synchronized (MyriadSelectionCache.class) {
+			// 重置类型选择缓存条目，强制下次 selectDistinctBeeTypesCached 重新随机采样
+			for (SelectionCache entry : SELECTION_CACHES) {
+				entry.cachedTick = -1L;
+				entry.cachedVersion = -1;
+			}
 		}
 	}
 
@@ -118,23 +124,32 @@ public final class MyriadSelectionCache {
 		long currentTick = level.getGameTime();
 		int currentVersion = BEE_TYPES_VERSION.get();
 		SelectionCache entry = SELECTION_CACHES[count];
+		// 双重检查：进入同步块前先尝试读
 		if (entry.cachedTick == currentTick && entry.cachedVersion == currentVersion) {
 			return entry.selected;
 		}
 
-		// 缓存失效时一次性预生成 1..MAX_SELECTION_CACHE 的候选列表，
-		// 避免同一 tick 内多个 count 各自触发随机采样（高倍加速下仍可能每 tick 多次完成万象配方）
-		RandomSource random = level.getRandom();
-		for (int i = 1; i <= MAX_SELECTION_CACHE; i++) {
-			SelectionCache e = SELECTION_CACHES[i];
-			if (poolSize <= i) {
-				e.selected = List.copyOf(cachedBeeTypes);
-			} else {
-				e.selected = List.copyOf(RandomHoneycombSelector.selectDistinctBeeTypes(i, random, cachedBeeTypes));
+		// 类级锁保护"判断+批量预生成"循环，避免与 invalidate 交叉执行导致部分索引位版本回退
+		synchronized (MyriadSelectionCache.class) {
+			// 进入同步块后再次检查（可能已被其他线程填充）
+			if (entry.cachedTick == currentTick && entry.cachedVersion == currentVersion) {
+				return entry.selected;
 			}
-			e.cachedTick = currentTick;
-			e.cachedVersion = currentVersion;
+
+			// 缓存失效时一次性预生成 1..MAX_SELECTION_CACHE 的候选列表，
+			// 避免同一 tick 内多个 count 各自触发随机采样（高倍加速下仍可能每 tick 多次完成万象配方）
+			RandomSource random = level.getRandom();
+			for (int i = 1; i <= MAX_SELECTION_CACHE; i++) {
+				SelectionCache e = SELECTION_CACHES[i];
+				if (poolSize <= i) {
+					e.selected = List.copyOf(cachedBeeTypes);
+				} else {
+					e.selected = List.copyOf(RandomHoneycombSelector.selectDistinctBeeTypes(i, random, cachedBeeTypes));
+				}
+				e.cachedTick = currentTick;
+				e.cachedVersion = currentVersion;
+			}
+			return entry.selected;
 		}
-		return entry.selected;
 	}
 }

@@ -40,7 +40,7 @@ public final class JadeAe2StatusProvider
 	static final JadeAe2StatusProvider INSTANCE = new JadeAe2StatusProvider();
 
 	/** NBT 键：AE2 节点状态 ordinal（与 AE2 原版 GridNodeState 一致），-1 = 不显示 */
-	private static final String NBT_STATE = "pbg_grid_node_state";
+	private static final String NBT_STATE = "productivebeesgenesis_grid_node_state";
 
 	/** AE2 原版翻译键 */
 	private static final String KEY_DEVICE_OFFLINE = "waila.ae2.DeviceOffline";

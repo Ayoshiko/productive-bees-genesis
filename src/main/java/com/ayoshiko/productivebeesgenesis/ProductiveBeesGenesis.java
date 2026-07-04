@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
@@ -52,10 +54,11 @@ public final class ProductiveBeesGenesis {
 	 * 用于通知所有 PB 配方处理器（基础离心机和工厂版）清空 SMELTING/PB 配方缓存，
 	 * 避免重载后仍使用旧的缓存结果（例如新增/删除配方后缓存未失效导致输入被错误处理）。
 	 * <p>
-	 * 使用 volatile 保证可见性：主线程（重载事件）写入后，方块实体线程（服务端tick）能立即读到新值。
-	 * 写入操作原子（long 在64位JVM上单次写入原子），递增操作在事件回调中单线程执行，无需 AtomicLong。
+	 * 使用 {@link AtomicLong} 保证原子递增：虽然 TagsUpdatedEvent 在主线程触发，
+	 * 但部分模组或自定义集成可能在异步上下文触发重载事件。AtomicLong 防御性地保证
+	 * 递增操作在所有场景下都是原子的，避免丢失更新。
 	 */
-	public static volatile long recipeVersion = 0L;
+	public static final AtomicLong recipeVersion = new AtomicLong(0L);
 
 	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
@@ -160,14 +163,14 @@ public final class ProductiveBeesGenesis {
 	 * 的 O(1) 索引查找使用最新的配方数据。仅服务端重建（客户端无离心配方处理）。
 	 */
 	private void onTagsReload(TagsUpdatedEvent event) {
-		recipeVersion++;
+		long newVersion = recipeVersion.incrementAndGet();
 		BeeInfoHelper.invalidateCache();
 		// 重建离心配方索引（仅服务端，客户端无 ServerLevel）
 		var server = ServerLifecycleHooks.getCurrentServer();
 		if (server != null) {
 			CentrifugeRecipeIndex.rebuild(server.overworld());
 		}
-		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", recipeVersion);
+		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", newVersion);
 	}
 
 	/**
@@ -185,9 +188,22 @@ public final class ProductiveBeesGenesis {
 
 	/**
 	 * 服务器停止回调
+	 * <br/>
+	 * 清理静态缓存防止跨存档数据泄漏：
+	 * <ul>
+	 *   <li>{@link CentrifugeRecipeIndex} — 离心配方索引（持有 ServerLevel 引用）</li>
+	 *   <li>{@link BeeInfoHelper} — 蜜蜂类型缓存和配方索引（可能持有过期配方引用）</li>
+	 *   <li>{@link MyriadCreationsEventHandler} — 万象创世类型缓存与模板数组</li>
+	 *   <li>{@link BeeRecipeReloader} — 延迟重试上下文</li>
+	 * </ul>
+	 * 这些静态缓存在服务器停止后不再有用，主动清理可防止：
+	 * 1) 旧存档的数据泄漏到新存档（例如配方/蜜蜂类型列表）
+	 * 2) 持有的 ServerLevel/RecipeManager 引用阻碍 GC
 	 */
 	private void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
-		// 无需额外清理
+		CentrifugeRecipeIndex.clear();
+		BeeInfoHelper.invalidateCache();
+		MyriadCreationsEventHandler.clearAllCaches();
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {

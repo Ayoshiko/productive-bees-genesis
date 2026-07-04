@@ -27,7 +27,7 @@ public class BakedModelCosmic extends AbstractBakedModelCosmic {
 		CosmicShaders.cosmicExternalScale.set(scale);
 		CosmicShaders.cosmicOpacity.set(1.0F);
 		if (CosmicShaders.cosmicUVs != null) {
-			CosmicShaders.cosmicUVs.set(CosmicShaders.COSMIC_UVS);
+			CosmicShaders.cosmicUVs.set(CosmicShaders.getCosmicUvs());
 		}
 	}
 

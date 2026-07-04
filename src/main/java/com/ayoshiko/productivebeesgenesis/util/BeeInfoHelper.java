@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -9,6 +10,7 @@ import javax.annotation.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 
+import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
@@ -37,6 +39,7 @@ import net.minecraft.world.level.Level;
  * 设计原则：单一职责（SRP），仅负责蜜蜂信息查询，不涉及配置读写。
  * <br/>
  * 线程安全：所有查询方法均为只读操作，BeeReloadListener 内部使用 Map 替换保证读安全。
+ * 配方索引使用 volatile 不可变快照，重载时整体原子替换。
  */
 public final class BeeInfoHelper {
 
@@ -48,6 +51,23 @@ public final class BeeInfoHelper {
 	 * 缓存值为不可变列表，发布后安全共享。
 	 */
 	private static volatile List<ResourceLocation> cachedAllBeeTypes = null;
+
+	/**
+	 * 不可变快照：封装 AdvancedBeehiveRecipe 索引
+	 * <p>
+	 * 通过单一 volatile 引用原子替换，保证读线程看到一致状态。
+	 * 替代旧版 getBeeProduce 中的 O(N) 全量遍历，将 GUI 打开时 N 个蜜蜂的产物查询
+	 * 从 O(N²) 降为 O(N)。
+	 */
+	private record AdvancedBeehiveRecipeIndex(
+			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> byBeeType) {
+		static final AdvancedBeehiveRecipeIndex EMPTY =
+				new AdvancedBeehiveRecipeIndex(Map.of());
+	}
+
+	/** 当前配方索引 — volatile 引用保证原子替换 */
+	private static volatile AdvancedBeehiveRecipeIndex beehiveRecipeIndex =
+			AdvancedBeehiveRecipeIndex.EMPTY;
 
 	private BeeInfoHelper() {
 		// 工具类禁止实例化
@@ -93,9 +113,11 @@ public final class BeeInfoHelper {
 	 * <p>
 	 * 应在 BeeReloadListener 重载完成或数据包变更时调用，确保下次查询返回最新数据。
 	 * 由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 中统一调用。
+	 * 同步失效 AdvancedBeehiveRecipe 索引，保证下次 getBeeProduce 重建索引。
 	 */
 	public static void invalidateCache() {
 		cachedAllBeeTypes = null;
+		beehiveRecipeIndex = AdvancedBeehiveRecipeIndex.EMPTY;
 	}
 
 	/**
@@ -159,7 +181,12 @@ public final class BeeInfoHelper {
 	/**
 	 * 查询指定蜜蜂类型的产物 ItemStack 列表
 	 * <p>
-	 * 遍历 AdvancedBeehiveRecipe 配方，匹配 beeType 后返回产物。
+	 * 优先通过静态索引 O(1) 查找配方；索引未建立时回退到全量遍历并构建索引。
+	 * <p>
+	 * 性能优化：原版每次调用都 O(N) 遍历所有 AdvancedBeehiveRecipe，
+	 * GUI 打开时若有数百个蜜蜂类型会形成 O(N²) 复杂度。
+	 * 改为首次调用时构建 {@code beeType -> recipe} 索引并发布为不可变快照，
+	 * 后续调用 O(1) 命中，索引在 {@link #invalidateCache()} 时整体原子替换为空。
 	 *
 	 * @param level   客户端世界（用于配方查询）
 	 * @param beeType 蜜蜂类型ID
@@ -168,19 +195,18 @@ public final class BeeInfoHelper {
 	@Nonnull
 	public static List<ItemStack> getBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
 		try {
-			List<RecipeHolder<AdvancedBeehiveRecipe>> recipes = level.getRecipeManager()
-					.getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get());
-			// 使用 PB 自身的 IdentifierInventory 进行配方匹配，避免手动比较遗漏
-			BeeHelper.IdentifierInventory beeInv = new BeeHelper.IdentifierInventory(beeType.toString());
-			RecipeHolder<AdvancedBeehiveRecipe> matched = null;
-			for (RecipeHolder<AdvancedBeehiveRecipe> recipe : recipes) {
-				if (recipe.value().matches(beeInv, level)) {
-					matched = recipe;
-					break;
-				}
-			}
+			String beeTypeKey = beeType.toString();
+			// 1. 优先走索引（O(1)）
+			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
 			if (matched == null) {
-				return List.of();
+				// 2. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
+				if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) {
+					rebuildBeehiveRecipeIndex(level);
+					matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
+				}
+				if (matched == null) {
+					return List.of();
+				}
 			}
 			List<ItemStack> result = new ArrayList<>();
 			matched.value().getRecipeOutputs().forEach((stack, chancedOutput) -> {
@@ -192,6 +218,40 @@ public final class BeeInfoHelper {
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("查询蜜蜂产物配方失败: {}", beeType, e);
 			return List.of();
+		}
+	}
+
+	/**
+	 * 重建 AdvancedBeehiveRecipe 索引
+	 * <p>
+	 * 遍历全部配方，从每个配方的 ingredient（{@code Supplier<BeeIngredient>}）中提取 beeType，
+	 * 构建 {@code beeType -> recipe} 映射。完成后发布为不可变快照，保证后续读取的线程安全。
+	 * 单条配方解析失败不影响整体索引。
+	 *
+	 * @param level 世界实例
+	 */
+	private static void rebuildBeehiveRecipeIndex(@Nonnull Level level) {
+		try {
+			List<RecipeHolder<AdvancedBeehiveRecipe>> recipes = level.getRecipeManager()
+					.getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get());
+			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> newIndex = new HashMap<>(recipes.size() * 2);
+			for (RecipeHolder<AdvancedBeehiveRecipe> recipe : recipes) {
+				try {
+					// AdvancedBeehiveRecipe.ingredient 是 Supplier<BeeIngredient>，
+					// 通过 supplier.get() 获取 BeeIngredient 后调用 getBeeType() 提取 beeType
+					BeeIngredient ing = recipe.value().ingredient.get();
+					if (ing == null) continue;
+					ResourceLocation beeType = ing.getBeeType();
+					if (beeType == null) continue;
+					newIndex.putIfAbsent(beeType.toString(), recipe);
+				} catch (Exception e) {
+					ProductiveBeesGenesis.LOGGER.warn("构建 AdvancedBeehiveRecipe 索引时跳过无法解析的配方 {}", recipe.id(), e);
+				}
+			}
+			// 原子替换：发布不可变快照
+			beehiveRecipeIndex = new AdvancedBeehiveRecipeIndex(Map.copyOf(newIndex));
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("重建 AdvancedBeehiveRecipe 索引失败", e);
 		}
 	}
 

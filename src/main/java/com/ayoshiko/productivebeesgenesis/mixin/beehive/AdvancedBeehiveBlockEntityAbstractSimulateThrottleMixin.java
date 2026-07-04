@@ -132,7 +132,26 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 			remap = false
 	)
 	private static void productivebeesgenesis$onSimulateBeeReturn(CallbackInfoReturnable<Entity> cir) {
-		// 正常返回时清理 ThreadLocal；异常返回时由下次 HEAD 覆盖，WeakReference 保证可 GC
+		// 正常返回时清理 ThreadLocal
+		productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
+	}
+
+	/**
+	 * 异常路径清理 ThreadLocal
+	 * <br/>
+	 * 原方案只在 RETURN 注入，原方法抛异常时 RETURN 不触发，ThreadLocal 残留上一次的 WeakReference。
+	 * 虽然下次 HEAD 会覆盖，但服务端主线程长期运行下残值可能间歇性影响判断。
+	 * 增加 THROW 注入点保证异常路径也清理 ThreadLocal，消除潜在残值。
+	 * <p>
+	 * 实现说明：使用 {@code @At(value="THROW")} 拦截方法内的所有 ATHROW 字节码指令，
+	 * 即所有 throw 语句抛出异常的位置都会触发本注入，保证无论异常类型如何都能清理 ThreadLocal。
+	 */
+	@Inject(
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "THROW"),
+			remap = false
+	)
+	private static void productivebeesgenesis$onSimulateBeeThrow(CallbackInfoReturnable<Entity> cir) {
 		productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
 	}
 

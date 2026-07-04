@@ -28,6 +28,10 @@ import org.joml.Matrix4fc;
  * </ul>
  * 线程安全：enqueue 与 renderAll 的快照+清空均在 synchronized(CosmicRenderQueue.class) 内原子完成；
  * 队列大小上限 {@link #MAX_QUEUE_SIZE}，超出时丢弃最旧条目并记录警告，防止内存溢出。
+ * <p>
+ * 复用对象线程安全：原 static 复用的 {@link Matrix4f}/{@link PoseStack}/{@link List} 在 Iris 并行渲染时
+ * 可能被多个渲染线程并发访问，导致矩阵数据损坏。改为 {@link ThreadLocal}，每线程持有独立实例，
+ * 既避免每帧分配又保证线程隔离。线程销毁时 ThreadLocal 自动清理，无内存泄漏风险。
  */
 public final class CosmicRenderQueue {
 
@@ -37,15 +41,15 @@ public final class CosmicRenderQueue {
 	/** 使用 CopyOnWriteArrayList 保证入队与渲染的并发安全（读多写少场景，快照迭代无锁） */
 	private static final List<CosmicRenderCall> QUEUE = new CopyOnWriteArrayList<>();
 
-	/** 渲染线程复用的投影矩阵快照，避免每帧分配 Matrix4f */
-	private static final Matrix4f REUSABLE_OLD_PROJECTION = new Matrix4f();
-	/** 渲染线程复用的模型视图矩阵快照，避免每帧分配 Matrix4f */
-	private static final Matrix4f REUSABLE_OLD_MODEL_VIEW = new Matrix4f();
+	/** 渲染线程复用的投影矩阵快照（ThreadLocal 隔离 Iris 并行渲染线程） */
+	private static final ThreadLocal<Matrix4f> REUSABLE_OLD_PROJECTION = ThreadLocal.withInitial(Matrix4f::new);
+	/** 渲染线程复用的模型视图矩阵快照（ThreadLocal 隔离 Iris 并行渲染线程） */
+	private static final ThreadLocal<Matrix4f> REUSABLE_OLD_MODEL_VIEW = ThreadLocal.withInitial(Matrix4f::new);
 
-	/** 渲染线程复用的快照列表，避免每帧 new ArrayList 分配 */
-	private static final List<CosmicRenderCall> RENDER_SNAPSHOT = new ArrayList<>();
-	/** 渲染线程复用的 PoseStack，避免每次循环 new 分配；push/pop 保证栈状态隔离 */
-	private static final PoseStack REUSABLE_POSE_STACK = new PoseStack();
+	/** 渲染线程复用的快照列表（ThreadLocal 隔离 Iris 并行渲染线程） */
+	private static final ThreadLocal<List<CosmicRenderCall>> RENDER_SNAPSHOT = ThreadLocal.withInitial(ArrayList::new);
+	/** 渲染线程复用的 PoseStack（ThreadLocal 隔离 Iris 并行渲染线程；push/pop 保证栈状态隔离） */
+	private static final ThreadLocal<PoseStack> REUSABLE_POSE_STACK = ThreadLocal.withInitial(PoseStack::new);
 
 	private CosmicRenderQueue() {
 	}
@@ -99,29 +103,31 @@ public final class CosmicRenderQueue {
 			if (QUEUE.isEmpty()) {
 				return;
 			}
-			RENDER_SNAPSHOT.clear();
-			RENDER_SNAPSHOT.addAll(QUEUE);
+			List<CosmicRenderCall> localSnapshot = RENDER_SNAPSHOT.get();
+			localSnapshot.clear();
+			localSnapshot.addAll(QUEUE);
 			QUEUE.clear();
-			snapshot = RENDER_SNAPSHOT;
+			snapshot = localSnapshot;
 		}
 		Minecraft mc = Minecraft.getInstance();
 		MultiBufferSource.BufferSource source = mc.renderBuffers().bufferSource();
-		// 保存当前矩阵状态作为快照（REUSABLE_OLD_* 为复用 Matrix4f，避免每帧分配）
-		Matrix4f savedProjection = REUSABLE_OLD_PROJECTION.set((Matrix4fc) RenderSystem.getProjectionMatrix());
-		Matrix4f savedModelView = REUSABLE_OLD_MODEL_VIEW.set((Matrix4fc) RenderSystem.getModelViewMatrix());
+		// 保存当前矩阵状态作为快照（ThreadLocal 复用 Matrix4f，避免每帧分配且隔离 Iris 并行渲染线程）
+		Matrix4f savedProjection = REUSABLE_OLD_PROJECTION.get().set((Matrix4fc) RenderSystem.getProjectionMatrix());
+		Matrix4f savedModelView = REUSABLE_OLD_MODEL_VIEW.get().set((Matrix4fc) RenderSystem.getModelViewMatrix());
+		PoseStack localPoseStack = REUSABLE_POSE_STACK.get();
 		try {
 			for (CosmicRenderCall call : snapshot) {
 				RenderSystem.setProjectionMatrix((Matrix4f) call.projection, (VertexSorting) RenderSystem.getVertexSorting());
 				RenderSystem.getModelViewStack().set((Matrix4fc) call.modelView);
 				RenderSystem.applyModelViewMatrix();
-				// 复用 REUSABLE_POSE_STACK 避免每次循环分配；push/pop 隔离状态，try/finally 保证异常时栈平衡
-				REUSABLE_POSE_STACK.pushPose();
+				// 复用 ThreadLocal PoseStack 避免每次循环分配；push/pop 隔离状态，try/finally 保证异常时栈平衡
+				localPoseStack.pushPose();
 				try {
-					REUSABLE_POSE_STACK.last().pose().set((Matrix4fc) call.pose);
-					REUSABLE_POSE_STACK.last().normal().set((Matrix3fc) call.normal);
-					call.model.renderCosmicLayer(call.stack, call.context, REUSABLE_POSE_STACK, source, call.light, call.overlay);
+					localPoseStack.last().pose().set((Matrix4fc) call.pose);
+					localPoseStack.last().normal().set((Matrix3fc) call.normal);
+					call.model.renderCosmicLayer(call.stack, call.context, localPoseStack, source, call.light, call.overlay);
 				} finally {
-					REUSABLE_POSE_STACK.popPose();
+					localPoseStack.popPose();
 				}
 			}
 			source.endBatch();

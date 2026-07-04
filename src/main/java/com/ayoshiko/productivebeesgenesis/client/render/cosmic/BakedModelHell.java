@@ -27,7 +27,7 @@ public class BakedModelHell extends AbstractBakedModelCosmic {
 		CosmicShaders.hellExternalScale.set(scale);
 		CosmicShaders.hellOpacity.set(1.0F);
 		if (CosmicShaders.hellUVs != null) {
-			CosmicShaders.hellUVs.set(CosmicShaders.COSMIC_UVS);
+			CosmicShaders.hellUVs.set(CosmicShaders.getCosmicUvs());
 		}
 	}
 

@@ -49,6 +49,16 @@ public abstract class BeeHelperMixin {
 	@Unique
 	private static final long PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK = 0xffffffffL;
 
+	/**
+	 * 节流计数器强制清理阈值
+	 * <p>
+	 * 防御性上限：极端场景下（如节流 tick 推进失败、大量蜜蜂 ID 重建），
+	 * map 容量可能持续膨胀导致内存压力。超过阈值时强制全量清空，牺牲一次节流精度换取内存安全。
+	 * 阈值按"每 tick 最多 1000 只活跃蜜蜂 × 容忍 10 tick 延迟"估算。
+	 */
+	@Unique
+	private static final int PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT = 10_000;
+
 	/** 每 (tick, beeId) 的调用计数，用于可选节流 */
 	@Unique
 	private static final ConcurrentHashMap<Long, AtomicInteger> productivebeesgenesis$THROTTLE_COUNTERS = new ConcurrentHashMap<>();
@@ -60,14 +70,31 @@ public abstract class BeeHelperMixin {
 	/**
 	 * 将游戏刻与蜜蜂 ID 组合为节流 key
 	 */
-	private static long makeKey(long gameTick, int beeId) {
+	@Unique
+	private static long productivebeesgenesis$makeKey(long gameTick, int beeId) {
 		return (gameTick << 32) | (beeId & PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK);
 	}
 
 	/**
 	 * 当游戏刻变更时清空节流计数器
+	 * <p>
+	 * 双层清理策略：
+	 * <ol>
+	 *   <li>常规清理：tick 变更时通过 CAS 推进时间戳，仅移除过期 tick 的条目</li>
+	 *   <li>强制清理：map 容量超过 {@link #PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT} 时，
+	 *       无论 tick 是否变更都强制 clear()，防止极端场景下内存膨胀</li>
+	 * </ol>
+	 * 强制清理使用 clear() 而非 removeIf，保证 O(1) 释放桶数组；
+	 * 即使清空当前 tick 的活跃条目，最坏影响也仅是本 tick 内节流失效一次（多追加一次产物）。
 	 */
-	private static void clearThrottleIfTickChanged(long currentTick) {
+	@Unique
+	private static void productivebeesgenesis$clearThrottleIfTickChanged(long currentTick) {
+		// 强制清理：超过硬上限时直接清空，防御内存泄漏
+		if (productivebeesgenesis$THROTTLE_COUNTERS.size() >= PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT) {
+			productivebeesgenesis$THROTTLE_COUNTERS.clear();
+			productivebeesgenesis$LAST_THROTTLE_TICK.set(currentTick);
+			return;
+		}
 		long lastTick = productivebeesgenesis$LAST_THROTTLE_TICK.get();
 		if (currentTick != lastTick && productivebeesgenesis$LAST_THROTTLE_TICK.compareAndSet(lastTick, currentTick)) {
 			// 仅清理过期 tick 的条目，保留当前 tick 的，避免与并发 computeIfAbsent 冲突导致数据丢失
@@ -83,7 +110,8 @@ public abstract class BeeHelperMixin {
 	 * @param source 原始物品列表
 	 * @return 合并后的新列表
 	 */
-	private static List<ItemStack> mergeItemStacks(List<ItemStack> source) {
+	@Unique
+	private static List<ItemStack> productivebeesgenesis$mergeItemStacks(List<ItemStack> source) {
 		List<ItemStack> merged = new ArrayList<>(source.size());
 		for (ItemStack stack : source) {
 			if (stack.isEmpty()) continue;
@@ -132,8 +160,8 @@ public abstract class BeeHelperMixin {
 			// 可选节流：限制每 tick 每只蜜蜂的产物事件数
 			int throttle = ModConfig.SERVER.myriadProduceThrottlePerTick.get();
 			if (throttle > 0) {
-				clearThrottleIfTickChanged(currentTick);
-				long key = makeKey(currentTick, beeId);
+				productivebeesgenesis$clearThrottleIfTickChanged(currentTick);
+			long key = productivebeesgenesis$makeKey(currentTick, beeId);
 				AtomicInteger counter = productivebeesgenesis$THROTTLE_COUNTERS.computeIfAbsent(key, k -> new AtomicInteger(0));
 				if (counter.incrementAndGet() > throttle) {
 					// 超过节流限制时不追加额外产物，原版产物保持不变
@@ -157,7 +185,7 @@ public abstract class BeeHelperMixin {
 				result.addAll(MyriadCreationsEventHandler.getAggregatedRandomHoneycombs(1, level.random));
 			}
 
-			cir.setReturnValue(mergeItemStacks(result));
+			cir.setReturnValue(productivebeesgenesis$mergeItemStacks(result));
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.error("BeeHelper Mixin 异常", e);
 		}

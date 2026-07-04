@@ -455,16 +455,20 @@ public final class MekCentrifugeFactoryHelper {
 	 * 进程激活时调用（递增计数器）
 	 * <br/>
 	 * 抽取自三个工厂的 productivebeesgenesis$onProcessActivated 方法。
-	 * 使用状态守卫防止重复递增：仅状态 false→true 时递增计数器。
+	 * 使用 CAS 状态守卫防止重复递增：仅状态 false→true 时递增计数器。
+	 * <p>
+	 * 线程安全：原 boolean[] + check-then-act 在并发场景下可能多个线程同时通过 if 检查后递增计数器，
+	 * 导致 activeProcessCount 超过实际激活进程数。改为 {@link java.util.concurrent.atomic.AtomicIntegerArray}
+	 * + CAS 模式，CAS 保证「比较 + 设置」原子性，只有一个线程能成功推进状态 0→1 并递增计数器。
 	 *
 	 * @param process             进程索引
-	 * @param pbActiveStates      PB激活状态数组（每进程一个）
+	 * @param pbActiveStates      PB激活状态数组（每进程一个，0=false/1=true）
 	 * @param activeProcessCount  激活进程计数器
 	 */
-	public static void onProcessActivated(int process, boolean[] pbActiveStates,
+	public static void onProcessActivated(int process, @NotNull java.util.concurrent.atomic.AtomicIntegerArray pbActiveStates,
 										  @NotNull AtomicInteger activeProcessCount) {
-		if (!pbActiveStates[process]) {
-			pbActiveStates[process] = true;
+		// CAS 0→1：成功表示本线程是状态转换的获胜者，负责递增计数器
+		if (pbActiveStates.compareAndSet(process, 0, 1)) {
 			activeProcessCount.incrementAndGet();
 		}
 	}
@@ -473,16 +477,16 @@ public final class MekCentrifugeFactoryHelper {
 	 * 进程失活时调用（递减计数器）
 	 * <br/>
 	 * 抽取自三个工厂的 productivebeesgenesis$onProcessDeactivated 方法。
-	 * 使用状态守卫防止重复递减：仅状态 true→false 时递减计数器。
+	 * 使用 CAS 状态守卫防止重复递减：仅状态 true→false 时递减计数器。
 	 *
 	 * @param process             进程索引
-	 * @param pbActiveStates      PB激活状态数组（每进程一个）
+	 * @param pbActiveStates      PB激活状态数组（每进程一个，0=false/1=true）
 	 * @param activeProcessCount  激活进程计数器
 	 */
-	public static void onProcessDeactivated(int process, boolean[] pbActiveStates,
+	public static void onProcessDeactivated(int process, @NotNull java.util.concurrent.atomic.AtomicIntegerArray pbActiveStates,
 											@NotNull AtomicInteger activeProcessCount) {
-		if (pbActiveStates[process]) {
-			pbActiveStates[process] = false;
+		// CAS 1→0：成功表示本线程是状态转换的获胜者，负责递减计数器
+		if (pbActiveStates.compareAndSet(process, 1, 0)) {
 			activeProcessCount.decrementAndGet();
 		}
 	}

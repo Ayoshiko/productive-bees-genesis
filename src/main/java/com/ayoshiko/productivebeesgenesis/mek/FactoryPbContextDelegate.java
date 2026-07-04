@@ -41,8 +41,8 @@ public class FactoryPbContextDelegate {
 	/** 激活进程计数器 — O(1) 判断整体激活状态，替代 O(processes) 遍历 */
 	private final AtomicInteger activeProcessCount = new AtomicInteger(0);
 
-	/** 每进程 PB 激活状态跟踪（状态守卫防重复计数） */
-	private final boolean[] pbActiveStates;
+	/** 每进程 PB 激活状态跟踪（CAS 状态守卫防重复计数；0=false/1=true） */
+	private final java.util.concurrent.atomic.AtomicIntegerArray pbActiveStates;
 
 	/** 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否跳过 outputItems） */
 	private volatile long outputContentsVersion = 0L;
@@ -75,7 +75,7 @@ public class FactoryPbContextDelegate {
 	 */
 	public FactoryPbContextDelegate(PbRecipeContext context) {
 		this.outputSlotFlagManager = new OutputSlotFlagManager(context);
-		this.pbActiveStates = new boolean[context.processes()];
+		this.pbActiveStates = new java.util.concurrent.atomic.AtomicIntegerArray(context.processes());
 	}
 
 	/**

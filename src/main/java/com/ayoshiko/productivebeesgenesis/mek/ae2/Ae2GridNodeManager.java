@@ -50,35 +50,41 @@ public final class Ae2GridNodeManager {
 	 * AE2 连接扫描触发邻近方块实体懒加载，导致 clearRemoved 递归栈溢出。
 	 * <p>
 	 * 幂等：节点已存在则直接返回。集成未启用时安全短路。
+	 * <p>
+	 * 线程安全：使用宿主级锁保护 check-then-act 块，避免多线程同时调用 prepareNode
+	 * 时创建重复节点导致 AE2 网格泄漏。
 	 *
 	 * @param host 输出宿主（离心机方块实体）
 	 */
 	public static void prepareNode(IAe2OutputHost host) {
 		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
-		// 幂等：节点已存在则不重复创建
-		if (host.productivebeesgenesis$getAe2GridNode() != null) return;
+		// 宿主级锁保护 check-then-act，避免并发创建重复节点
+		synchronized (host) {
+			// 幂等：节点已存在则不重复创建
+			if (host.productivebeesgenesis$getAe2GridNode() != null) return;
 
-		Level level = host.productivebeesgenesis$getAe2Level();
-		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
-		if (level == null || pos == null) return;
+			Level level = host.productivebeesgenesis$getAe2Level();
+			BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
+			if (level == null || pos == null) return;
 
-		IGridNodeListener<IAe2OutputHost> listener = new CentrifugeGridNodeListener();
-		IManagedGridNode node = GridHelper.createManagedNode(host, listener);
-		// 节点配置
-		node.setExposedOnSides(EnumSet.allOf(Direction.class));
-		node.setInWorldNode(true);
-		node.setFlags(GridFlags.REQUIRE_CHANNEL);
-		node.setIdlePowerUsage(IDLE_POWER_USAGE);
-		node.setTagName(IAe2OutputHost.AE2_NODE_TAG);
-		// 视觉表现：用离心机方块本身（便于 AE2 网络工具识别）
-		if (host instanceof BlockEntity be) {
-			node.setVisualRepresentation(be.getBlockState().getBlock());
+			IGridNodeListener<IAe2OutputHost> listener = new CentrifugeGridNodeListener();
+			IManagedGridNode node = GridHelper.createManagedNode(host, listener);
+			// 节点配置
+			node.setExposedOnSides(EnumSet.allOf(Direction.class));
+			node.setInWorldNode(true);
+			node.setFlags(GridFlags.REQUIRE_CHANNEL);
+			node.setIdlePowerUsage(IDLE_POWER_USAGE);
+			node.setTagName(IAe2OutputHost.AE2_NODE_TAG);
+			// 视觉表现：用离心机方块本身（便于 AE2 网络工具识别）
+			if (host instanceof BlockEntity be) {
+				node.setVisualRepresentation(be.getBlockState().getBlock());
+			}
+			// 注意：不调用 node.create()，延迟到 connectNode 避免区块加载递归栈溢出
+			host.productivebeesgenesis$setAe2GridNode(node);
+			// 创建 AEItemKey 缓存，减少推送时 AEItemKey.of(stack) 的重复调用（Task 7）
+			host.productivebeesgenesis$setAeItemKeyCache(
+					new AeItemKeyCache(host.processes() * AeItemKeyCache.SLOTS_PER_PROCESS));
 		}
-		// 注意：不调用 node.create()，延迟到 connectNode 避免区块加载递归栈溢出
-		host.productivebeesgenesis$setAe2GridNode(node);
-		// 创建 AEItemKey 缓存，减少推送时 AEItemKey.of(stack) 的重复调用（Task 7）
-		host.productivebeesgenesis$setAeItemKeyCache(
-				new AeItemKeyCache(host.processes() * AeItemKeyCache.SLOTS_PER_PROCESS));
 	}
 
 	/**
@@ -147,20 +153,26 @@ public final class Ae2GridNodeManager {
 	 * 销毁网格节点
 	 * <br/>
 	 * 节点不存在时安全短路。销毁后清空宿主持有的引用，避免内存泄漏。
+	 * <p>
+	 * 线程安全：使用宿主级锁保护 check-then-act 块，避免与 prepareNode 并发执行
+	 * 时出现"节点已销毁但引用仍非空"或"节点已创建但被立即销毁"的竞态。
 	 *
 	 * @param host 输出宿主
 	 */
 	public static void destroyNode(IAe2OutputHost host) {
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode node)) return;
-		node.destroy();
-		// 清空 AEItemKey 缓存，释放 ItemStack 引用（Task 7）
-		Object cacheObj = host.productivebeesgenesis$getAeItemKeyCache();
-		if (cacheObj instanceof AeItemKeyCache cache) {
-			cache.clear();
+		// 宿主级锁保护 check-then-act，与 prepareNode 使用同一把锁
+		synchronized (host) {
+			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+			if (!(nodeObj instanceof IManagedGridNode node)) return;
+			node.destroy();
+			// 清空 AEItemKey 缓存，释放 ItemStack 引用（Task 7）
+			Object cacheObj = host.productivebeesgenesis$getAeItemKeyCache();
+			if (cacheObj instanceof AeItemKeyCache cache) {
+				cache.clear();
+			}
+			host.productivebeesgenesis$setAeItemKeyCache(null);
+			host.productivebeesgenesis$setAe2GridNode(null);
 		}
-		host.productivebeesgenesis$setAeItemKeyCache(null);
-		host.productivebeesgenesis$setAe2GridNode(null);
 	}
 
 	/**

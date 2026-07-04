@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * TileComponentEjector Mixin — 输出槽弹出速度优化
@@ -45,9 +46,10 @@ public abstract class TileComponentEjectorMixin {
 
 	/**
 	 * 配置不匹配警告标志位（仅首次触发时记录日志，避免每次 outputItems 刷屏）
+	 * 使用 AtomicBoolean + CAS 模式，保证多线程下"只警告一次"语义
 	 */
 	@Unique
-	private static volatile boolean productivebeesgenesis$configMismatchWarned = false;
+	private static final AtomicBoolean productivebeesgenesis$configMismatchWarned = new AtomicBoolean(false);
 
 	/**
 	 * 在outputItems方法末尾注入，对MEK离心机使用动态延迟值
@@ -67,9 +69,8 @@ public abstract class TileComponentEjectorMixin {
 				int activeDelay = ModConfig.SERVER.mekCentrifugeEjectDelayActive.get();
 				// 约束：活动延迟不应超过空闲延迟，避免 active > idle 的反直觉组合
 				if (activeDelay > idleDelay) {
-					// 仅首次触发时记录 warn，避免每次 outputItems 刷屏日志
-					if (!productivebeesgenesis$configMismatchWarned) {
-						productivebeesgenesis$configMismatchWarned = true;
+					// CAS 模式保证多线程下只记录一次 warn，避免刷屏日志
+					if (productivebeesgenesis$configMismatchWarned.compareAndSet(false, true)) {
 						ProductiveBeesGenesis.LOGGER.warn("mekCentrifugeEjectDelayActive({}) > mekCentrifugeEjectDelay({})，已自动调整为 idleDelay", activeDelay, idleDelay);
 					}
 					activeDelay = idleDelay;

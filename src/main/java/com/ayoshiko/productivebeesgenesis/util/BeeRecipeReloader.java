@@ -60,13 +60,33 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	private final HolderLookup.Provider registryAccess;
 
 	/**
-	 * 延迟重试标志 — 当配置未加载时设置为 true，在服务器 tick 事件中重试
+	 * 不可变快照：封装延迟重试所需的所有上下文
+	 * <p>
+	 * 通过单一 volatile 引用原子替换，避免多 volatile 字段在 clear/set 期间
+	 * 出现 "recipeManager 已清空但 registryAccess 仍为旧值" 的不一致状态。
 	 */
-	private static volatile boolean pendingRetry = false;
-	private static volatile RecipeManager pendingRecipeManager = null;
-	private static volatile HolderLookup.Provider pendingRegistryAccess = null;
+	private record PendingRetryContext(
+			RecipeManager recipeManager,
+			HolderLookup.Provider registryAccess) {
+		// 空上下文表示无待重试任务
+		static final PendingRetryContext EMPTY = new PendingRetryContext(null, null);
+	}
+
+	/** 当前待重试上下文 — volatile 引用保证原子替换；非 EMPTY 即表示有待重试任务 */
+	private static volatile PendingRetryContext pendingRetryContext = PendingRetryContext.EMPTY;
+
 	private static final AtomicInteger retryCount = new AtomicInteger(0);
 	private static final int MAX_RETRY_COUNT = 60; // 最多重试60次（约3秒）
+
+	/** 是否有待重试任务（ volatile 读保证可见性） */
+	private static boolean hasPendingRetry() {
+		return pendingRetryContext != PendingRetryContext.EMPTY;
+	}
+
+	/** 清空待重试上下文（原子替换为空） */
+	private static void clearPendingRetryContext() {
+		pendingRetryContext = PendingRetryContext.EMPTY;
+	}
 
 	/**
 	 * @param recipeManager 配方管理器（来自 ReloadableServerResources）
@@ -101,8 +121,8 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 */
 	public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
 		// 快速路径：使用 volatile 读取，无锁开销
-		// 99.9% 的情况下 pendingRetry 为 false，直接返回
-		if (!pendingRetry) {
+		// 99.9% 的情况下无待重试任务，直接返回
+		if (!hasPendingRetry()) {
 			return;
 		}
 
@@ -116,9 +136,11 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 * 从 onServerTick 分离，避免影响正常 tick 性能。
 	 */
 	private static void onServerTickSlowPath() {
-		// 双重检查，防止并发问题
-		if (pendingRecipeManager == null) {
-			clearPendingRetry();
+		// 单次快照读取保证 recipeManager 和 registryAccess 一致性
+		PendingRetryContext ctx = pendingRetryContext;
+		if (ctx == PendingRetryContext.EMPTY || ctx.recipeManager() == null) {
+			clearPendingRetryContext();
+			retryCount.set(0);
 			return;
 		}
 
@@ -127,7 +149,8 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			int currentRetry = retryCount.incrementAndGet();
 			if (currentRetry >= MAX_RETRY_COUNT) {
 				ProductiveBeesGenesis.LOGGER.warn("配方重载重试次数超过上限({})，放弃应用万象创世配方修改", MAX_RETRY_COUNT);
-				clearPendingRetry();
+				clearPendingRetryContext();
+				retryCount.set(0);
 			}
 			return;
 		}
@@ -135,21 +158,15 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		// 配置已加载，执行配方修改
 		try {
 			ProductiveBeesGenesis.LOGGER.info("配置已就绪，执行延迟配方重载...");
-			BeeRecipeReloader reloader = new BeeRecipeReloader(pendingRecipeManager, pendingRegistryAccess);
+			BeeRecipeReloader reloader = new BeeRecipeReloader(ctx.recipeManager(), ctx.registryAccess());
 			reloader.overrideRecipesInternal();
 			ProductiveBeesGenesis.LOGGER.info("延迟配方重载完成");
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.error("延迟配方重载失败", e);
 		} finally {
-			clearPendingRetry();
+			clearPendingRetryContext();
+			retryCount.set(0);
 		}
-	}
-
-	private static void clearPendingRetry() {
-		pendingRetry = false;
-		pendingRecipeManager = null;
-		pendingRegistryAccess = null;
-		retryCount.set(0);
 	}
 
 	/**
@@ -160,9 +177,9 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			// 配置未加载时安排延迟重试（首次进入世界时常见）
 			if (!ModConfig.SERVER_SPEC.isLoaded()) {
 				ProductiveBeesGenesis.LOGGER.info("SERVER 配置未加载，安排延迟配方重载");
-				pendingRetry = true;
-				pendingRecipeManager = this.recipeManager;
-				pendingRegistryAccess = this.registryAccess;
+				// 原子替换：使用不可变快照封装 recipeManager 和 registryAccess，
+				// 保证 onServerTickSlowPath 读取时两个字段一致
+				pendingRetryContext = new PendingRetryContext(this.recipeManager, this.registryAccess);
 				retryCount.set(0);
 				return;
 			}

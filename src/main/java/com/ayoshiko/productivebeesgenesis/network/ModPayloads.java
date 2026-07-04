@@ -35,6 +35,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * <p>
  * 注：NeoForge 1.21.1 的 {@code @EventBusSubscriber} 会根据事件类型自动判定总线，
  * {@code RegisterPayloadHandlersEvent} 实现 {@code IModBusEvent}，自动挂载到模组事件总线。
+ * 显式声明 {@code bus} 参数在 1.21.1 已被标记为过时（自动判定机制取代），保持不声明以避免警告。
  */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public final class ModPayloads {

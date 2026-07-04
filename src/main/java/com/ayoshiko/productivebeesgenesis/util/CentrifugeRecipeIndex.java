@@ -1,9 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.Nullable;
 
@@ -30,8 +30,8 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
  * （min/max/流体按 {@link com.ayoshiko.productivebeesgenesis.config.ServerConfig#mekCentrifugeCombBlockMultiplier} 缩放），
  * 消除首次遇到新 bee_type 蜜脾块时的动态构建开销。
  * <p>
- * <b>线程安全</b>：使用 {@link ConcurrentHashMap} 存储索引，{@code volatile} 引用保证原子替换。
- * 重建期间旧索引仍可服务读请求，重建完成后整体替换为新索引。
+ * <b>线程安全</b>：使用不可变快照 + 单一 volatile 引用，保证读线程看到一致状态。
+ * 重建期间旧快照仍可服务读请求，重建完成后整体替换为新快照。
  * <p>
  * <b>重建时机</b>：由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 后调用，
  * 与 recipeVersion 递增同步，确保配方重载后索引立即更新。
@@ -40,14 +40,32 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
  */
 public final class CentrifugeRecipeIndex {
 
-	/** 蜜脾配方索引 — 全服务端共享 */
-	private static volatile Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> index = new ConcurrentHashMap<>();
+	/** 不可变快照：封装蜜脾索引和蜜脾块索引，保证原子替换 */
+	private record RecipeIndexSnapshot(
+			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> index,
+			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> combBlockIndex) {
+		static final RecipeIndexSnapshot EMPTY = new RecipeIndexSnapshot(Map.of(), Map.of());
+	}
 
-	/** 蜜脾块配方索引 — rebuild 时由蜜脾配方静态生成，消除运行时动态构建开销 */
-	private static volatile Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> combBlockIndex = Map.of();
+	/** 当前快照 — volatile 引用保证原子替换 */
+	private static volatile RecipeIndexSnapshot snapshot = RecipeIndexSnapshot.EMPTY;
 
 	private CentrifugeRecipeIndex() {
 		// 工具类禁止实例化
+	}
+
+	/**
+	 * 清空索引 — 服务器停止时调用，防止跨存档数据泄漏
+	 * <br/>
+	 * 将快照原子替换为 EMPTY，释放蜜脾/蜜脾块配方索引引用。
+	 * 服务器停止后这些索引不再有用，主动清空可：
+	 * <ul>
+	 *   <li>防止旧存档的配方数据泄漏到新存档</li>
+	 *   <li>释放对 RecipeManager/ServerLevel 的间接引用，便于 GC</li>
+	 * </ul>
+	 */
+	public static void clear() {
+		snapshot = RecipeIndexSnapshot.EMPTY;
 	}
 
 	/**
@@ -62,8 +80,8 @@ public final class CentrifugeRecipeIndex {
 	 */
 	public static void rebuild(ServerLevel level) {
 		try {
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newIndex = new ConcurrentHashMap<>();
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newCombBlockIndex = new ConcurrentHashMap<>();
+			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newIndex = new HashMap<>();
+			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newCombBlockIndex = new HashMap<>();
 			int multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
 
 			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
@@ -89,9 +107,9 @@ public final class CentrifugeRecipeIndex {
 					ProductiveBeesGenesis.LOGGER.warn("离心配方索引：跳过无法解析的配方 {}", holder.id(), e);
 				}
 			}
-			// 原子替换，确保读线程看到一致状态
-			index = newIndex;
-			combBlockIndex = newCombBlockIndex;
+			// 原子替换：使用不可变快照，保证读线程看到一致状态
+			snapshot = new RecipeIndexSnapshot(
+					Map.copyOf(newIndex), Map.copyOf(newCombBlockIndex));
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("重建离心配方索引失败", e);
 		}
@@ -138,7 +156,7 @@ public final class CentrifugeRecipeIndex {
 	 */
 	@Nullable
 	public static RecipeHolder<CentrifugeRecipe> get(ResourceLocation beeType) {
-		return index.get(beeType);
+		return snapshot.index.get(beeType);
 	}
 
 	/**
@@ -151,11 +169,11 @@ public final class CentrifugeRecipeIndex {
 	 */
 	@Nullable
 	public static RecipeHolder<CentrifugeRecipe> getCombBlock(ResourceLocation beeType) {
-		return combBlockIndex.get(beeType);
+		return snapshot.combBlockIndex.get(beeType);
 	}
 
 	/** 索引是否为空（未构建或配方列表为空） */
 	public static boolean isEmpty() {
-		return index.isEmpty();
+		return snapshot.index.isEmpty();
 	}
 }

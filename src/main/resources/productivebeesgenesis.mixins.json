@@ -2,6 +2,7 @@
   "required": true,
   "package": "com.ayoshiko.productivebeesgenesis.mixin",
   "plugin": "com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin",
+  "refmap": "mixins.productivebeesgenesis.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "accessor.CentrifugeBlockEntityAccessor",
@@ -39,5 +40,7 @@
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "minVersion": "0.8",
+  "target": "@env(DEFAULT)"
 }
