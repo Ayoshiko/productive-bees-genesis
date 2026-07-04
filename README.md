@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.6.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.7.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 

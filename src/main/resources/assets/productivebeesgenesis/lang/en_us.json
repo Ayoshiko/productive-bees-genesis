@@ -114,6 +114,7 @@
   "productivebeesgenesis.config.import.result.invalid": "Imported %s, skipped %s invalid",
   "productivebeesgenesis.config.import.result.mixed": "Imported %s, skipped %s duplicate(s) and %s invalid",
   "productivebeesgenesis.config.sync.permission_denied": "Insufficient permission to modify server config (operator required)",
+  "productivebeesgenesis.config.sync.rate_limited": "Please wait %s seconds before syncing the filter config again",
   "productivebeesgenesis.config.sync.not_loaded": "Server config not loaded yet, please try again later",
   "productivebeesgenesis.config.sync.invalid_mode": "Invalid filter mode: %s",
   "productivebeesgenesis.config.sync.invalid_type": "Invalid bee type: %s",

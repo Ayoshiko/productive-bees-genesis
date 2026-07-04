@@ -5,6 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.7.0] - 2026-07-04
+
+### 修复
+
+- **P1: AE2 节点销毁调用顺序错误**：4 个 TileEntity 文件 8 处 `setRemoved`/`onChunkUnloaded` 方法
+  - **问题**：`holder.clear()` 在 `destroyNode()` 之前执行，导致 holder 中 `ae2GridNode` 和 `aeItemKeyCache` 被置 null，随后 `destroyNode` 通过 `getAe2GridNode()` 获取时返回 null，在 instanceof 检查处短路返回
+  - **影响**：`node.destroy()` 未执行导致 AE2 网格泄漏（幽灵节点、频道计数错误），`cache.clear()` 未执行导致 AeItemKeyCache 内存泄漏
+  - **修复**：调整调用顺序为 `destroyNode(this)` → `holder.clear()`，确保节点销毁和缓存清理真正执行
+  - 涉及文件：`TileEntityMekCentrifuge`、`TileEntityMekCentrifugeFactory`、`TileEntityExtraMekCentrifugeFactory`、`TileEntityEMExtraMekCentrifugeFactory`
+
+### 安全加固
+
+- **网络包频率限制**：为 `FilterConfigSyncPayload` 添加每玩家 3 秒冷却
+  - 采用 `ConcurrentHashMap<UUID, AtomicLong>` + CAS 模式，借鉴 `RateLimitedItemHandler` 的并发安全思路
+  - CAS 推进时间戳防止并发包穿透冷却窗口
+  - 惰性清理策略：每处理 64 个包清理一次超过 5 分钟未活动的条目，不依赖玩家退出事件 API
+  - 拒绝时通过 `sendSystemMessage` 通知玩家剩余秒数
+  - 补充中英文语言文件 `productivebeesgenesis.config.sync.rate_limited`
+
+### 文档
+
+- 新增 `findings-v6.md`：v6 调查阶段发现的 2 项关键问题及修复方案
+- 更新 `future-optimization.md`：标记用户排除项（API 暴露、配置扩展、多语言、JEI 增强），标记频率限制已完成
+
 ## [1.6.0] - 2026-07-04
 
 ### 新增

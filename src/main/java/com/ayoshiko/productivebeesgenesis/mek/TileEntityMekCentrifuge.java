@@ -486,16 +486,16 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
+		productivebeesgenesis$ae2StateHolder.clear();
 	}
 
 	/** 区块卸载时销毁 AE2 网格节点（destroyNode 幂等，与 setRemoved 重复调用安全） */
 	@Override
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
-		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
+		productivebeesgenesis$ae2StateHolder.clear();
 	}
 
 	/** 获取 AE2 状态持有者 — 供 IAe2OutputHost default 方法委托使用 */

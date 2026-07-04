@@ -3,6 +3,10 @@ package com.ayoshiko.productivebeesgenesis.network;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
@@ -22,6 +26,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * 职责：
  * <ol>
  *   <li>注册 {@link FilterConfigSyncPayload} 为 play 阶段 Client→Server 数据包</li>
+ *   <li>频率限制：每玩家 3 秒冷却，防止恶意高频发包</li>
  *   <li>服务端处理：权限校验 → 数据校验 → 写入配置 → 持久化 → 失效缓存</li>
  * </ol>
  * 原理：NeoForge 的 SERVER 配置在客户端是只读同步副本，客户端修改不会回传服务端。
@@ -36,6 +41,21 @@ public final class ModPayloads {
 
 	/** 修改服务端配置所需权限等级（与原版配置界面一致：OP 2 级） */
 	private static final int REQUIRED_PERMISSION_LEVEL = 2;
+
+	/** 频率限制：玩家 UUID → 上次接受配置同步包的时间戳（毫秒） */
+	private static final ConcurrentHashMap<UUID, AtomicLong> FILTER_SYNC_LAST_ACCEPT = new ConcurrentHashMap<>();
+
+	/** 配置同步包冷却时间：3 秒（3000ms），防止恶意客户端高频发包导致磁盘 I/O 风暴 */
+	private static final long FILTER_SYNC_COOLDOWN_MS = 3000L;
+
+	/** 惰性清理触发阈值：每处理 64 个包清理一次过期条目 */
+	private static final int LAZY_CLEANUP_THRESHOLD = 64;
+
+	/** 条目过期时间：5 分钟（300000ms）未活动则视为可清理 */
+	private static final long ENTRY_EXPIRATION_MS = 5 * 60 * 1000L;
+
+	/** 包处理计数器，用于触发惰性清理 */
+	private static final AtomicInteger packetCounter = new AtomicInteger(0);
 
 	private ModPayloads() {
 	}
@@ -73,6 +93,29 @@ public final class ModPayloads {
 	private static void handleFilterConfigSync(FilterConfigSyncPayload payload, IPayloadContext context) {
 		// 仅服务端处理（playToServer 保证方向，防御性 instanceof 检查）
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
+			return;
+		}
+
+		// 0. 频率限制：每玩家 3 秒冷却，防止恶意客户端高频发包
+		// 采用 ConcurrentHashMap + AtomicLong + CAS 模式，借鉴 RateLimitedItemHandler 的并发安全思路
+		UUID playerId = serverPlayer.getUUID();
+		long now = System.currentTimeMillis();
+		// 惰性清理：每处理 64 个包清理一次过期条目，防止离线玩家条目累积导致内存泄漏
+		// 不依赖玩家退出事件 API（NeoForge 1.21.1 事件包路径不稳定），采用被动清理策略
+		if (packetCounter.incrementAndGet() % LAZY_CLEANUP_THRESHOLD == 0) {
+			cleanupExpiredEntries(now);
+		}
+		AtomicLong lastAccept = FILTER_SYNC_LAST_ACCEPT.computeIfAbsent(playerId, k -> new AtomicLong(0));
+		long last = lastAccept.get();
+		if (now - last < FILTER_SYNC_COOLDOWN_MS) {
+			long remainingSeconds = (FILTER_SYNC_COOLDOWN_MS - (now - last) + 999) / 1000;
+			serverPlayer.sendSystemMessage(Component.translatable(
+					"productivebeesgenesis.config.sync.rate_limited", remainingSeconds));
+			return;
+		}
+		// CAS 推进时间戳，防止并发包穿透冷却窗口
+		if (!lastAccept.compareAndSet(last, now)) {
+			// CAS 失败说明已被其他线程更新，本包拒绝（保守策略，让客户端稍后重试）
 			return;
 		}
 
@@ -152,5 +195,21 @@ public final class ModPayloads {
 			validated.add(trimmed);
 		}
 		return new ArrayList<>(validated);
+	}
+
+	/**
+	 * 清理过期的频率限制条目
+	 * <p>
+	 * 采用惰性清理策略：每处理 {@link #LAZY_CLEANUP_THRESHOLD} 个包触发一次，
+	 * 移除超过 {@link #ENTRY_EXPIRATION_MS} 未活动的条目。
+	 * <p>
+	 * 此策略不依赖玩家退出事件 API，避免 NeoForge 版本间事件包路径差异导致的编译问题。
+	 * ConcurrentHashMap.entrySet().removeIf 是线程安全的迭代器移除操作。
+	 *
+	 * @param now 当前时间戳（毫秒）
+	 */
+	private static void cleanupExpiredEntries(long now) {
+		FILTER_SYNC_LAST_ACCEPT.entrySet().removeIf(entry ->
+				now - entry.getValue().get() > ENTRY_EXPIRATION_MS);
 	}
 }

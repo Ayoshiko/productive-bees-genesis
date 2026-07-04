@@ -397,15 +397,15 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
+		productivebeesgenesis$ae2StateHolder.clear();
 	}
 
 	@Override
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
-		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
+		productivebeesgenesis$ae2StateHolder.clear();
 	}
 
 	/** 获取 AE2 状态持有者 — 供 IAe2OutputHost default 方法委托使用 */

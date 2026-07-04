@@ -114,6 +114,7 @@
   "productivebeesgenesis.config.import.result.invalid": "已导入 %s 个，跳过 %s 个无效项",
   "productivebeesgenesis.config.import.result.mixed": "已导入 %s 个，跳过 %s 个重复项和 %s 个无效项",
   "productivebeesgenesis.config.sync.permission_denied": "权限不足，无法修改服务端配置（需要管理员权限）",
+  "productivebeesgenesis.config.sync.rate_limited": "请等待 %s 秒后再同步过滤配置",
   "productivebeesgenesis.config.sync.not_loaded": "服务端配置尚未加载，请稍后再试",
   "productivebeesgenesis.config.sync.invalid_mode": "无效的过滤模式: %s",
   "productivebeesgenesis.config.sync.invalid_type": "无效的蜜蜂类型: %s",
