@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 
@@ -23,38 +25,123 @@ import net.minecraft.world.item.ItemStack;
  * 将“按 bee_type 分配的数量”转换为“槽位索引 → 增长数量/是否空槽/模板”的执行计划，
  * 避免传统 insertItem 路径中反复的 ItemStack.copy()、DataComponentMap 派生与 listener 扫描。
  * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：只负责规划与执行插入，不参与类型选择/分配</li>
- *   <li>零模拟副本：plan 阶段只读取槽位 beeType/count/limit，不复制 ItemStack</li>
- *   <li>直接操作：确认容量足够后，空槽直接 setStack，同类型槽直接 grow</li>
- * </ul>
- * <p>
- * 线程安全：plan 与 apply 在服务端主线程执行，无并发竞争。
+ * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存、直接操作。
+ * <br/>
+ * 线程安全：plan 与 apply 在服务端主线程执行，对象池无需并发安全；
+ * Snapshot 缓存使用 ThreadLocal 避免跨线程污染。
  */
 public final class MyriadBatchPlanner {
+
+	/** 对象池上限：超过则丢弃由 GC 回收 */
+	private static final int POOL_CAPACITY = 256;
+
+	/** SlotPlan 对象池（主线程使用，无需并发安全） */
+	private static final Deque<SlotPlan> slotPlanPool = new ArrayDeque<>(POOL_CAPACITY);
+
+	/** Plan 对象池 */
+	private static final Deque<Plan> planPool = new ArrayDeque<>(POOL_CAPACITY);
+
+	/** Snapshot 跨 tick 缓存：按 tick + slots identity 复用 */
+	private static final ThreadLocal<SnapshotCache> snapshotCache = ThreadLocal.withInitial(SnapshotCache::new);
 
 	private MyriadBatchPlanner() {
 	}
 
-	/** 单个槽位的执行计划 */
-	public record SlotPlan(int slotIndex, int amount, boolean wasEmpty, ItemStack template) {
+	// ===== SlotPlan：可复用的槽位计划 =====
+
+	/** 单个槽位的执行计划（可复用，访问器风格保留 record 语义） */
+	public static final class SlotPlan {
+		private int slotIndex;
+		private int amount;
+		private boolean wasEmpty;
+		@Nullable
+		private ItemStack template;
+
+		private SlotPlan() {
+		}
+
+		public int slotIndex() {
+			return slotIndex;
+		}
+
+		public int amount() {
+			return amount;
+		}
+
+		public boolean wasEmpty() {
+			return wasEmpty;
+		}
+
+		@Nullable
+		public ItemStack template() {
+			return template;
+		}
+
+		private void set(int slotIndex, int amount, boolean wasEmpty, @Nullable ItemStack template) {
+			this.slotIndex = slotIndex;
+			this.amount = amount;
+			this.wasEmpty = wasEmpty;
+			this.template = template;
+		}
+
+		/** 清理引用，避免内存泄漏 */
+		private void reset() {
+			slotIndex = 0;
+			amount = 0;
+			wasEmpty = false;
+			template = null;
+		}
 	}
 
-	/** 批量插入计划 */
-	public record Plan(@Nullable List<SlotPlan> plans) {
+	// ===== Plan：可复用的批量插入计划 =====
+
+	/**
+	 * 批量插入计划（可复用）
+	 * <br/>
+	 * {@link #FAILURE} 为失败单例，不归还池中；
+	 * 成功的 Plan 在 {@link #apply(Plan, List)} 后由内部自动回收。
+	 */
+	public static final class Plan {
+		/** 失败单例（不归还） */
 		private static final Plan FAILURE = new Plan(null);
+
+		@Nullable
+		private List<SlotPlan> plans;
+
+		private Plan(@Nullable List<SlotPlan> plans) {
+			this.plans = plans;
+		}
 
 		public boolean isSuccess() {
 			return plans != null;
 		}
 
+		@Nullable
 		public List<SlotPlan> getPlans() {
 			return plans;
 		}
 
+		private void reset(@Nullable List<SlotPlan> plans) {
+			this.plans = plans;
+		}
+
+		/** 回收：归还 plans 中所有 SlotPlan，再归还自身 */
+		private void recycle() {
+			List<SlotPlan> p = plans;
+			if (p != null) {
+				for (SlotPlan sp : p) {
+					returnSlotPlan(sp);
+				}
+				p.clear();
+				plans = null;
+			}
+			returnPlan(this);
+		}
+
 		public static Plan success(List<SlotPlan> plans) {
-			return new Plan(plans);
+			Plan plan = borrowPlan();
+			plan.reset(plans);
+			return plan;
 		}
 
 		public static Plan failure() {
@@ -62,12 +149,60 @@ public final class MyriadBatchPlanner {
 		}
 	}
 
+	// ===== 对象池 API =====
+
+	/** 借用 SlotPlan，池空则新建（不阻塞） */
+	private static SlotPlan borrowSlotPlan() {
+		SlotPlan sp = slotPlanPool.pollLast();
+		return sp != null ? sp : new SlotPlan();
+	}
+
+	/** 归还 SlotPlan，清理引用；超上限则丢弃由 GC 回收 */
+	private static void returnSlotPlan(@Nullable SlotPlan plan) {
+		if (plan == null) return;
+		plan.reset();
+		if (slotPlanPool.size() < POOL_CAPACITY) {
+			slotPlanPool.offerLast(plan);
+		}
+	}
+
+	/** 借用 Plan，池空则新建 */
+	private static Plan borrowPlan() {
+		Plan p = planPool.pollLast();
+		return p != null ? p : new Plan(null);
+	}
+
+	/** 归还 Plan，清理引用 */
+	private static void returnPlan(@Nullable Plan plan) {
+		if (plan == null) return;
+		plan.reset(null);
+		if (planPool.size() < POOL_CAPACITY) {
+			planPool.offerLast(plan);
+		}
+	}
+
+	/** 回收 Plan：仅非 FAILURE 实例回收，供调用方在未走 apply 路径时手动回收 */
+	public static void recyclePlan(@Nullable Plan plan) {
+		if (plan == null || !plan.isSuccess()) return;
+		plan.recycle();
+	}
+
+	// ===== Snapshot 缓存与拍摄 =====
+
+	/** Snapshot 缓存条目：按 tick + slots identity 复用 */
+	private static final class SnapshotCache {
+		private long tick = -1L;
+		private int slotsIdentity = 0;
+		@Nullable
+		private SlotCapacitySnapshot snapshot;
+	}
+
 	/**
-	 * 槽位容量快照
+	 * 槽位容量快照（只读）
 	 * <br/>
 	 * 一次性读取每个输出槽的 limit/count/bee_type，避免批量规划过程中反复调用
 	 * {@link IInventorySlot#getLimit(ItemStack)} 等可能开销较大的方法。
-	 * 同一 tick 内同一进程的输出槽 limit 不变，因此一次 complete 调用只需拍一张快照。
+	 * 同一 tick 内同一 slots 实例的 limit 不变，因此一次 complete 调用只需拍一张快照。
 	 */
 	public static final class SlotCapacitySnapshot {
 		public final long tick;
@@ -93,19 +228,31 @@ public final class MyriadBatchPlanner {
 	}
 
 	/**
-	 * 拍摄输出槽容量快照
+	 * 拍摄输出槽容量快照（带跨 tick 缓存）
+	 * <br/>
+	 * 同 tick 内同一 slots 实例的多次调用直接返回缓存，避免重复拍摄；
+	 * 不同 slots 或 tick 变化时重新拍摄并缓存。snapshot 只读，跨工厂复用安全。
 	 * <br/>
 	 * 空槽容量优先使用 {@link IInventorySlot#getLimit(ItemStack)}（传入基础物品模板），
 	 * 若调用异常或返回非正数则回退到 {@link Item#getMaxStackSize(ItemStack)}；
-	 * 非空槽容量使用 {@code slot.getLimit(stack) - stack.getCount()}，准确反映槽位自定义上限。
-	 *
-	 * @param slots    输出槽列表
-	 * @param baseItem 基础物品（configurable_honeycomb 或 configurable_comb_block）
-	 * @param tick     当前游戏刻，用于缓存标识
-	 * @return 容量快照
+	 * 非空槽容量使用 {@code slot.getLimit(stack) - stack.getCount()}。
 	 */
 	@NotNull
 	public static SlotCapacitySnapshot takeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
+		SnapshotCache cache = snapshotCache.get();
+		int identity = System.identityHashCode(slots);
+		if (cache.snapshot != null && cache.tick == tick && cache.slotsIdentity == identity) {
+			return cache.snapshot;
+		}
+		SlotCapacitySnapshot snapshot = doTakeSnapshot(slots, baseItem, tick);
+		cache.tick = tick;
+		cache.slotsIdentity = identity;
+		cache.snapshot = snapshot;
+		return snapshot;
+	}
+
+	/** 实际拍摄快照（无缓存） */
+	private static SlotCapacitySnapshot doTakeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
 		int slotCount = slots.size();
 		boolean[] empty = new boolean[slotCount];
 		ResourceLocation[] slotBeeTypes = new ResourceLocation[slotCount];
@@ -127,7 +274,7 @@ public final class MyriadBatchPlanner {
 				empty[i] = true;
 				int limit = safeGetSlotLimit(slot, emptyTemplate);
 				if (limit <= 0) {
-					// 修正：使用基础物品模板的默认最大堆叠数，避免 ItemStack.EMPTY 无 bee_type 组件导致 maxStack 计算错误
+					// 回退到基础物品模板的默认最大堆叠数，避免 ItemStack.EMPTY 无 bee_type 组件导致 maxStack 计算错误
 					limit = emptyTemplate.getMaxStackSize();
 				}
 				slotLimits[i] = limit;
@@ -163,14 +310,9 @@ public final class MyriadBatchPlanner {
 		}
 	}
 
-	/**
-	 * 规划批量插入（兼容旧签名：内部自动拍摄快照）
-	 *
-	 * @param slots      输出槽列表（允许 null 元素，会被忽略）
-	 * @param baseItem   基础物品
-	 * @param allocation 蜜蜂类型 → 数量的分配映射
-	 * @return 可成功插入的计划；失败返回 failure
-	 */
+	// ===== 规划 =====
+
+	/** 规划批量插入（兼容旧签名：内部自动拍摄快照） */
 	@NotNull
 	public static Plan plan(List<IInventorySlot> slots, Item baseItem,
 							Map<ResourceLocation, Integer> allocation) {
@@ -180,17 +322,8 @@ public final class MyriadBatchPlanner {
 	/**
 	 * 基于容量快照规划批量插入
 	 * <br/>
-	 * 按以下优先级分配：
-	 * <ol>
-	 *   <li>已有相同 bee_type 的槽位（优先堆叠）</li>
-	 *   <li>空槽</li>
-	 * </ol>
+	 * 优先级：1) 已有相同 bee_type 的槽位（grow 路径）；2) 空槽（setStack 路径）。
 	 * 任一 bee_type 无法完整放下时返回 {@link Plan#failure()}，保证原子性。
-	 *
-	 * @param snapshot   槽位容量快照
-	 * @param baseItem   基础物品
-	 * @param allocation 蜜蜂类型 → 数量的分配映射
-	 * @return 可成功插入的计划；失败返回 failure
 	 */
 	@NotNull
 	public static Plan plan(SlotCapacitySnapshot snapshot, Item baseItem,
@@ -207,7 +340,7 @@ public final class MyriadBatchPlanner {
 				continue;
 			}
 
-			// 第一优先级：已有同类型槽位（走 grow 路径，不需要 template）
+			// 第一优先级：已有同类型槽位（grow 路径，不需要 template）
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
 				if (snapshot.empty[i] || snapshot.slotBeeTypes[i] == null
 						|| !snapshot.slotBeeTypes[i].equals(beeType)) {
@@ -247,28 +380,23 @@ public final class MyriadBatchPlanner {
 			}
 		}
 
+		// 构建可复用 SlotPlan 列表：从对象池借用
 		List<SlotPlan> plans = new ArrayList<>(slotCount);
 		for (int i = 0; i < slotCount; i++) {
 			if (addAmounts[i] > 0) {
-				plans.add(new SlotPlan(i, addAmounts[i], wasEmpty[i], templates[i]));
+				SlotPlan sp = borrowSlotPlan();
+				sp.set(i, addAmounts[i], wasEmpty[i], templates[i]);
+				plans.add(sp);
 			}
 		}
 		return Plan.success(plans);
 	}
 
 	/**
-	 * 计算输出槽能容纳的最大输入数量
+	 * 计算输出槽能容纳的最大输入数量（二分搜索）
 	 * <br/>
-	 * 根据容量快照的 {@code totalRemainingCapacity} 与产物倍率 {@code multiplier} 确定初始上界，
-	 * 再用二分搜索在该上界内找到能够完整插入的最大 batch size。相比原代码从
-	 * {@code operationsPerTick} 开始逐级减半，这里直接按“输出槽剩余总容量”定位可行区间，
-	 * 在 Mekanism Unleashed 高 opsPerTick 场景下可一次处理 64 甚至更多输入。
-	 *
-	 * @param snapshot      容量快照
-	 * @param multiplier    单个输入产出的物品数量（蜜脾=1，蜜脾块=4）
-	 * @param selectedTypes 候选蜜蜂类型列表（通常 1~3 个）
-	 * @param maxRequested  调用方允许的最大 batch size（如 operationsPerTick 与输入数量的较小值）
-	 * @return 最大可容纳的输入数量；0 表示完全放不下
+	 * 根据 {@code totalRemainingCapacity} 与 {@code multiplier} 确定上界，二分查找最大可行 batch size。
+	 * 内部循环产生的 Plan 在每次迭代后回收，避免对象泄漏。
 	 */
 	public static int planOrFindMaxBatch(SlotCapacitySnapshot snapshot, Item baseItem, int multiplier,
 										 List<ResourceLocation> selectedTypes, int maxRequested) {
@@ -294,49 +422,59 @@ public final class MyriadBatchPlanner {
 					totalCount, selectedTypes.subList(0, typesToUse));
 
 			Plan plan = plan(snapshot, baseItem, allocation);
-			if (plan.isSuccess()) {
-				best = mid;
-				low = mid + 1;
-			} else {
-				high = mid - 1;
+			try {
+				if (plan.isSuccess()) {
+					best = mid;
+					low = mid + 1;
+				} else {
+					high = mid - 1;
+				}
+			} finally {
+				// 二分搜索每次迭代的 plan 必须回收，否则会随迭代次数泄漏
+				recyclePlan(plan);
 			}
 		}
 		return best;
 	}
 
+	// ===== 执行 =====
+
 	/**
-	 * 执行插入计划
+	 * 执行插入计划，使用后自动归还对象池
 	 * <br/>
-	 * 应在 {@link PbRecipeContext#productivebeesgenesis$beginOutputBatch()} /
-	 * {@link PbRecipeContext#productivebeesgenesis$endOutputBatch(int)} 之间调用，
+	 * 调用后 plan 不可再使用（已归还池中）。FAILURE 单例不归还。
+	 * 应在 {@code productivebeesgenesis$beginOutputBatch()} /
+	 * {@code productivebeesgenesis$endOutputBatch(int)} 之间调用，
 	 * 或基础机的等效批量包装内调用，以避免每次插入都触发 listener 扫描。
-	 *
-	 * @param plan  执行计划
-	 * @param slots 输出槽列表
 	 */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots) {
 		if (!plan.isSuccess()) {
 			return;
 		}
-		for (SlotPlan slotPlan : plan.getPlans()) {
-			IInventorySlot slot = slots.get(slotPlan.slotIndex());
-			if (slot == null) {
-				continue;
+		try {
+			List<SlotPlan> plans = plan.getPlans();
+			if (plans == null) {
+				return;
 			}
-			if (slotPlan.wasEmpty()) {
-				ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
-				slot.setStack(toSet);
-			} else {
-				slot.getStack().grow(slotPlan.amount());
+			for (SlotPlan slotPlan : plans) {
+				IInventorySlot slot = slots.get(slotPlan.slotIndex());
+				if (slot == null) {
+					continue;
+				}
+				if (slotPlan.wasEmpty()) {
+					ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
+					slot.setStack(toSet);
+				} else {
+					slot.getStack().grow(slotPlan.amount());
+				}
 			}
+		} finally {
+			// 借用/归还路径在 try/finally 中执行：成功 Plan 与其中 SlotPlan 一并归还
+			recyclePlan(plan);
 		}
 	}
 
-	/**
-	 * 执行插入计划（重载：指定 begin/end 回调）
-	 * <br/>
-	 * 供基础机使用，避免调用方手动包装批量。
-	 */
+	/** 执行插入计划（重载：指定 begin/end 回调），供基础机使用 */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots,
 							 @NotNull Runnable beginBatch, @NotNull Runnable endBatch) {
 		beginBatch.run();

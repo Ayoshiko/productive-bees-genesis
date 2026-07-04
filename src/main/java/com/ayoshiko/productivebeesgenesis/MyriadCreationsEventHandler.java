@@ -98,6 +98,13 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	public static void onServerStopped(ServerStoppedEvent event) {
 		CombBlockCheckCache.clearCaches(BLOCK_CHECK_CACHES);
 		CACHE_VALID.set(false);
+		// 清理蜜蜂类型缓存和预构建模板，防止跨存档切换时旧存档数据残留
+		// 不清理会导致：旧存档的蜜蜂类型在新存档不存在时仍被使用，产生无效产物
+		CACHED_BEE_TYPES = new CopyOnWriteArrayList<>();
+		CACHED_HONEYCOMB_TEMPLATES = new ItemStack[0];
+		CACHED_COMB_BLOCK_TEMPLATES = new ItemStack[0];
+		lastCacheUpdateTick.set(0);
+		MyriadSelectionCache.invalidate();
 	}
 
 	/**

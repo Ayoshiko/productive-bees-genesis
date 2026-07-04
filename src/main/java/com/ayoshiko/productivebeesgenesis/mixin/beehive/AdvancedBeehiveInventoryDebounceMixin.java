@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
 import com.ayoshiko.productivebeesgenesis.capability.IInventoryDirtyDebouncer;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -20,6 +21,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * 实现 {@link IInventoryDirtyDebouncer}，把每个游戏刻内可能多次触发的 setChanged 合并为一次，
  * 在 {@code AdvancedBeehiveBlockEntity.tick} 尾部统一 flush。
  * 只保留尾部注入点，避免每 tick 两次 Mixin 回调带来的额外开销。
+ * <p>
+ * 高倍加速（如 256×）下每 tick 仍可能产生脏标记，进一步通过可配置的 saveInterval
+ * 限制实际 setChanged 频率：仅当距上次 flush 达到间隔 tick 且存在脏标记时才执行，
+ * 未达间隔时保留脏标记延后到下次满足条件时 flush。
  */
 @Mixin(AdvancedBeehiveBlockEntity.class)
 public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventoryDirtyDebouncer {
@@ -33,6 +38,14 @@ public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventor
 	@Unique
 	private final AtomicLong productivebeesgenesis$dirtyInventoryTick = new AtomicLong(-1L);
 
+	/**
+	 * 上次执行 flush（setChanged）的游戏刻。
+	 * <p>
+	 * 用于配合 {@code saveInterval} 限制实际序列化频率，初始 -1L 保证首次脏标记即可触发。
+	 */
+	@Unique
+	private final AtomicLong productivebeesgenesis$lastFlushTick = new AtomicLong(-1L);
+
 	@Override
 	public void productivebeesgenesis$markInventoryDirty(long gameTime) {
 		// 同一 tick 内多次写入覆盖相同值即可，无需 CAS 判断
@@ -41,8 +54,19 @@ public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventor
 
 	@Override
 	public void productivebeesgenesis$flushInventoryDirty(long gameTime) {
+		// 无脏标记直接返回，未变化的 tick 不产生任何开销
+		if (productivebeesgenesis$dirtyInventoryTick.get() == -1L) {
+			return;
+		}
+		// 距上次 flush 未达 saveInterval，保留脏标记延后处理
+		int saveInterval = ModConfig.SERVER.advancedBeehiveSaveInterval.get();
+		long lastFlush = productivebeesgenesis$lastFlushTick.get();
+		if (lastFlush != -1L && (gameTime - lastFlush) < saveInterval) {
+			return;
+		}
+		// 满足间隔且存在脏标记，原子清除脏标记并执行一次 setChanged
 		if (productivebeesgenesis$dirtyInventoryTick.getAndSet(-1L) != -1L) {
-			// 统一刷新一次 setChanged，触发 NBT 保存与客户端同步
+			productivebeesgenesis$lastFlushTick.set(gameTime);
 			((AdvancedBeehiveBlockEntity) (Object) this).setChanged();
 		}
 	}

@@ -267,6 +267,8 @@
   "productivebeesgenesis.configuration.advanced_beehive": "Advanced Beehive",
   "productivebeesgenesis.configuration.advanced_beehive.button": "Advanced Beehive",
   "productivebeesgenesis.configuration.advanced_beehive.tooltip": "Advanced beehive performance optimizations",
+  "productivebeesgenesis.configuration.saveInterval": "NBT Save Interval (ticks)",
+  "productivebeesgenesis.configuration.saveInterval.tooltip": "Advanced beehive NBT save interval (ticks). Reduces CompoundTag serialization overhead under high acceleration. Default 20 (1s), range 1-200. Higher values improve performance but risk data loss on crash.",
   "productivebeesgenesis.configuration.simulateCooldown": "Simulate Query Cooldown (ticks)",
   "productivebeesgenesis.configuration.simulateCooldown.tooltip": "Cooldown between farmer/hoarder/collector queries in simulateBee(). 0 = no limit (vanilla behavior). Recommended 1-5 under high load.",
   "productivebeesgenesis.configuration.mek_centrifuge": "MEK Centrifuge",
@@ -286,8 +288,6 @@
   "productivebeesgenesis.configuration.mekCentrifugeFluidEjectRate.tooltip": "Rate at which fluid is auto-ejected from MEK centrifuges. Default 16384 mB/tick, overrides Mekanism default 1024.",
   "productivebeesgenesis.configuration.combBlockMultiplier": "Comb Block Output Multiplier",
   "productivebeesgenesis.configuration.combBlockMultiplier.tooltip": "Multiplier for item and fluid output when centrifuging comb blocks (comb block = N combs)",
-  "productivebeesgenesis.configuration.enablePerformanceMonitor": "Performance Monitor",
-  "productivebeesgenesis.configuration.enablePerformanceMonitor.tooltip": "Enable performance monitoring (Spark compatible, JMX exposed)",
   "productivebeesgenesis.configuration.mekCentrifugeMaxExtractPerTick": "Max Extract Per Tick",
   "productivebeesgenesis.configuration.mekCentrifugeMaxExtractPerTick.tooltip": "Max items extractable per game tick via pipes/AE2 (0=unlimited). Prevents ME interface overload.",
   "productivebeesgenesis.configuration.mekCentrifugeEjectBlockedThreshold": "Blocked Eject Threshold",
@@ -307,5 +307,7 @@
   "productivebeesgenesis.configuration.ejectBusyCooldown": "Busy Eject Cooldown (ticks)",
   "productivebeesgenesis.configuration.ejectBusyCooldown.tooltip": "Ticks to skip outputItems when output ejection is busy but not fully blocked. Default 40 (2s). 0 disables.",
   "productivebeesgenesis.configuration.ejectMaxPerTick": "Max Eject Calls Per Tick",
-  "productivebeesgenesis.configuration.ejectMaxPerTick.tooltip": "Max outputItems calls per tick (0=unlimited). Limits repeated outputItems calls under 256x acceleration. Default 64; skipped in max speed mode."
+  "productivebeesgenesis.configuration.ejectMaxPerTick.tooltip": "Max outputItems calls per tick (0=unlimited). Limits repeated outputItems calls under 256x acceleration. Default 64; skipped in max speed mode.",
+  "productivebeesgenesis.configuration.aeOutputEnabled": "Enable AE2 Direct Output",
+  "productivebeesgenesis.configuration.aeOutputEnabled.tooltip": "When AE2 is installed, centrifuge acts as a grid node and actively pushes outputs to the AE2 network, bypassing SFM and reducing high-frequency AEItemKey creation. No effect without AE2. Default off."
 }

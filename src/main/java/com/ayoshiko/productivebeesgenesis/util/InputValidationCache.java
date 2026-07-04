@@ -5,8 +5,12 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
@@ -17,21 +21,57 @@ import net.minecraft.world.level.Level;
  * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
  * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用。
  * <p>
+ * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
+ * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
+ * 和 {@code PatchedDataComponentMap.hashCode()} 的高昂开销。
+ * 对于 configurable_honeycomb / configurable_comb_block，只需比较 Item + bee_type 即可唯一确定身份；
+ * 其他物品退化为 Item identity 比较（与 isSameItemSameComponents 中 Item 检查等价）。
+ * <p>
  * 支持两种缓存粒度：
  * <ul>
  *   <li>{@link #get} — 仅缓存 boolean（兼容旧调用方）</li>
  *   <li>{@link #getResult} — 缓存完整 {@link ValidationResult}（包含配方/蜜蜂类型/是否蜜脾块），
  *       供 {@code tryProcessPbRecipe} 等需要配方信息的路径直接复用，避免重复 {@code findPbRecipe}</li>
  * </ul>
- * 缓存有效期默认 20 tick（约 1 秒），升级/配方重载等导致的语义变化会在下次 tick 后自动反映。
+ * 缓存有效期默认 100 tick（约 5 秒），升级/配方重载等导致的语义变化会在下次 tick 后自动反映。
  * 线程安全：方块实体在服务端单线程执行，无需同步锁。
  *
  * @author ayoshiko
  */
 public class InputValidationCache {
 
-	/** 默认缓存有效期（tick） */
-	public static final int DEFAULT_TTL = 20;
+	/**
+	 * 默认缓存有效期（tick）— 100 tick（5 秒）
+	 * <p>
+	 * 原 20 tick 在 SFM 高频探测下仍导致频繁 validator 调用，
+	 * 延长到 100 tick 可减少 80% 的配方查找调用，对配置变化的反应延迟可接受。
+	 */
+	public static final int DEFAULT_TTL = 100;
+
+	/**
+	 * 输入指纹 — Item + beeType，不含 count 和其他组件
+	 * <br/>
+	 * 与 {@link ItemStack#isSameItemSameComponents} 语义近似（不比较 count），
+	 * 但对 configurable_honeycomb / configurable_comb_block 只比较 bee_type，
+	 * 跳过其他数据组件的哈希计算（这些物品除 bee_type 外组件固定）。
+	 * 其他物品退化为 Item identity 比较。
+	 */
+	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType) {
+		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null);
+
+		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
+		static InputFingerprint of(ItemStack stack) {
+			if (stack.isEmpty()) {
+				return EMPTY;
+			}
+			Item item = stack.getItem();
+			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
+			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+				return new InputFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
+			}
+			return new InputFingerprint(item, null);
+		}
+	}
 
 	/**
 	 * 输入校验结果 — 扩展 boolean 为包含配方/蜜蜂类型/是否蜜脾块的完整结果
@@ -50,18 +90,14 @@ public class InputValidationCache {
 
 	private final int ttlTicks;
 
-	/**
-	 * 上次缓存的输入物品（复制件，避免外部修改）
-	 * <br/>
-	 * 与 {@link #cachedInputIdentity} 配合使用：复制件用于内容比对，原引用用于 identity 短路。
-	 */
-	private ItemStack cachedInput = ItemStack.EMPTY;
+	/** 上次缓存的输入指纹（轻量 key，避免完整组件哈希） */
+	private InputFingerprint cachedFingerprint = InputFingerprint.EMPTY;
 
 	/**
 	 * 上次缓存的输入物品原引用（identity 短路用）
 	 * <br/>
 	 * SFM / AE2 等自动化模组高频探测同一槽位时，往往传入同一个 ItemStack 实例，
-	 * 此时可直接返回缓存结果，跳过 {@link ItemStack#isSameItemSameComponents} 的组件哈希计算。
+	 * 此时可直接返回缓存结果，跳过指纹提取。
 	 */
 	private ItemStack cachedInputIdentity = ItemStack.EMPTY;
 
@@ -96,12 +132,19 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// identity 短路，同一引用且未过期时直接返回缓存结果
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks
-				&& (input == cachedInputIdentity || ItemStack.isSameItemSameComponents(input, cachedInput))) {
+		// identity 短路：同一引用且未过期时直接返回，跳过指纹提取
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks && input == cachedInputIdentity) {
 			return cachedResultValue;
 		}
-		cachedInput = input.copy();
+		// 指纹比对（轻量 key，避免 isSameItemSameComponents 的全组件哈希）
+		InputFingerprint fp = InputFingerprint.of(input);
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
+			// 指纹命中时更新 identity 引用，加速下次 identity 短路
+			cachedInputIdentity = input;
+			return cachedResultValue;
+		}
+		// 未命中 — 重新校验并缓存指纹
+		cachedFingerprint = fp;
 		cachedInputIdentity = input;
 		cachedResultValue = validator.get();
 		cachedAt = now;
@@ -124,13 +167,18 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// identity 短路，同一引用且未过期时直接返回缓存结果
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks
-				&& (input == cachedInputIdentity || ItemStack.isSameItemSameComponents(input, cachedInput))) {
+		// identity 短路
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks && input == cachedInputIdentity) {
+			return cachedResultValue.valid();
+		}
+		// 指纹比对
+		InputFingerprint fp = InputFingerprint.of(input);
+		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
+			cachedInputIdentity = input;
 			return cachedResultValue.valid();
 		}
 		boolean result = validator.get();
-		cachedInput = input.copy();
+		cachedFingerprint = fp;
 		cachedInputIdentity = input;
 		cachedResultValue = new ValidationResult(result, null, null, false);
 		cachedAt = now;
@@ -139,7 +187,7 @@ public class InputValidationCache {
 
 	/** 清空缓存（配方重载等场景调用） */
 	public void clear() {
-		cachedInput = ItemStack.EMPTY;
+		cachedFingerprint = InputFingerprint.EMPTY;
 		cachedInputIdentity = ItemStack.EMPTY;
 		cachedResultValue = ValidationResult.INVALID;
 		cachedAt = -1L;

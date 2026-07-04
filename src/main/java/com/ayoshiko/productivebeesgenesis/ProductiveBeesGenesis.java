@@ -15,7 +15,6 @@ import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
-import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -185,21 +184,16 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 服务器停止回调 — 注销 JMX MBean，防止重复加载时注册失败
+	 * 服务器停止回调
 	 */
 	private void onServerStopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
-		if (ModConfig.COMMON.enablePerformanceMonitor.get()) {
-			PerformanceMonitor.getInstance().unregisterJMX();
-		}
+		// 无需额外清理
 	}
 
 	private void onCommonSetup(FMLCommonSetupEvent event) {
 		event.enqueueWork(() -> {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
-			if (ModConfig.COMMON.enablePerformanceMonitor.get()) {
-				PerformanceMonitor.getInstance().registerJMX();
-			}
 		});
 	}
 

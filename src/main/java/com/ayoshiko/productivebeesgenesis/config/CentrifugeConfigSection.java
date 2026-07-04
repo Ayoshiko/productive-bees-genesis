@@ -47,6 +47,9 @@ public final class CentrifugeConfigSection {
 	// Step 5: 单 tick 最大弹出次数上限（0=无限制），限制 256× 加速下高频 outputItems 调用
 	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 
+	// AE2 直接输出集成：离心机作为 AE2 网格节点主动推送输出
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
+
 	private CentrifugeConfigSection(ModConfigSpec.Builder builder) {
 		builder.comment("MEK离心机设置").push("mek_centrifuge");
 
@@ -139,6 +142,15 @@ public final class CentrifugeConfigSection {
 						"tickServer 每 tick 对 ITEM + FLUID 各调用一次 outputItems，上限应 ≥ 2",
 						"默认 64；最大速度模式下跳过此上限")
 				.defineInRange("ejectMaxPerTick", 64, 0, 4096);
+
+		// AE2 直接输出集成：离心机作为 AE2 网格节点主动推送输出
+		mekCentrifugeAeOutputEnabled = builder
+				.comment("启用 AE2 直接输出集成",
+						"开启后离心机在 AE2 已安装时作为 AE2 网格节点，主动将输出槽物品推送到 AE2 网络",
+						"绕过 SFM 中介，减少 AEItemKey.of() 与 ItemStack.hashItemAndComponents 的高频调用",
+						"未安装 AE2 时此配置无效，完全回退到 SFM/Ejector 路径",
+						"默认关闭，需手动开启")
+				.define("aeOutputEnabled", false);
 
 		builder.pop(); // mek_centrifuge
 	}

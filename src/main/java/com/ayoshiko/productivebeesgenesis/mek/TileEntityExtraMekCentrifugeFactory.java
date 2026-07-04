@@ -40,6 +40,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityExtraFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -65,7 +68,7 @@ import com.jerry.mekextras.api.recipes.outputs.ExtraOutputHelper;
  * PB配方处理逻辑委托给 {@link PbRecipeProcessor}，通过实现 {@link PbRecipeContext} 提供依赖。
  */
 public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStackToItemStackFactory
-		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown {
+		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown, IAe2OutputHost {
 
 	/** 副输出槽2 — 每进程第3个物品输出槽（ProcessInfo只支持1个secondary，第3个单独管理） */
 	private ExtraFactoryOutputInventorySlot[] tertiaryOutputSlots;
@@ -75,6 +78,15 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 	/** PB配方处理器 — 封装所有PB离心配方处理逻辑 */
 	private final PbRecipeProcessor pbProcessor;
+
+	/** AE2 网格节点（Object 类型避免 AE2 未安装时类加载失败，实际类型为 IManagedGridNode） */
+	private Object productivebeesgenesis$ae2GridNode;
+
+	/** AE2 节点待连接标志 — clearRemoved 时置 true，首个 server tick 时执行 connectNode */
+	private boolean ae2NodePending = false;
+
+	/** Task 7: AEItemKey 缓存（Object 类型保持依赖隔离，实际为 AeItemKeyCache） */
+	private Object productivebeesgenesis$aeItemKeyCache;
 
 	/**
 	 * Task 10: 工厂 PB 上下文委托 — 封装 Task 5/7/11/16 公共状态和方法
@@ -304,16 +316,23 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	 * 激活状态重算和总能量消耗计算（基于super前后能量差，避免SMELTING消耗被双重计算）。
 	 * <p>
 	 * SMELTING配方检查结果缓存优化（输入变更时才重新查询）由PbRecipeProcessor管理。
+	 * <p>
+	 * Task 3-5：tick 末尾尝试将输出槽物品推送到 AE2 网络（绕过 SFM 中介）。
 	 */
 	@Override
 	protected boolean onUpdateServer() {
+		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出）
+		if (ae2NodePending) {
+			ae2NodePending = false;
+			Ae2GridNodeManager.connectNode(this);
+		}
 		// Task 7: 重置去抖标志，允许本 tick 重新标记 sortingNeeded（在 super 与 PB 处理前重置）
 		delegate.resetSortingMark();
 		// super前保存能量，由Helper基于能量差计算总消耗（SMELTING + PB）
 		TileEntityExtraFactoryAccessor accessor = (TileEntityExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
 		boolean sendUpdatePacket = super.onUpdateServer();
-		return MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
+		boolean result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 				sendUpdatePacket,
 				energyBeforeSuper,
 				energyContainer,
@@ -325,6 +344,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 				this::setActive,
 				v -> accessor.productivebeesgenesis$setLastUsage(v)
 		);
+		Ae2OutputPusher.pushOutputs(this);
+		return result;
 	}
 
 	/**
@@ -344,18 +365,79 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		pbProcessor.addContainerTrackers(container);
 	}
 
-	/** 持久化PB配方处理进度 */
+	/** 持久化PB配方处理进度。Task 3-5：同时持久化 AE2 网格节点状态。 */
 	@Override
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.saveAdditional(nbt, provider);
 		pbProcessor.saveAdditional(nbt);
+		Ae2GridNodeManager.saveNodeNBT(this, nbt);
 	}
 
-	/** 加载PB配方处理进度 */
+	/** 加载PB配方处理进度。Task 3-5：同时加载 AE2 网格节点。 */
 	@Override
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.loadAdditional(nbt, provider);
 		pbProcessor.loadAdditional(nbt);
+		Ae2GridNodeManager.loadNodeNBT(this, nbt);
+	}
+
+	// ===== Task 3-5: AE2 网格节点生命周期与 IAe2OutputHost 实现 =====
+
+	@Override
+	public void clearRemoved() {
+		super.clearRemoved();
+		// 仅准备节点（不接入网格），避免区块加载时 AE2 连接扫描递归栈溢出
+		Ae2GridNodeManager.prepareNode(this);
+		ae2NodePending = true;
+	}
+
+	@Override
+	public void setRemoved() {
+		super.setRemoved();
+		ae2NodePending = false;
+		Ae2GridNodeManager.destroyNode(this);
+	}
+
+	@Override
+	public void onChunkUnloaded() {
+		super.onChunkUnloaded();
+		ae2NodePending = false;
+		Ae2GridNodeManager.destroyNode(this);
+	}
+
+	@Override
+	public Object productivebeesgenesis$getAe2GridNode() {
+		return productivebeesgenesis$ae2GridNode;
+	}
+
+	@Override
+	public void productivebeesgenesis$setAe2GridNode(Object node) {
+		productivebeesgenesis$ae2GridNode = node;
+	}
+
+	@Override
+	public Object productivebeesgenesis$getAeItemKeyCache() {
+		return productivebeesgenesis$aeItemKeyCache;
+	}
+
+	@Override
+	public void productivebeesgenesis$setAeItemKeyCache(Object cache) {
+		this.productivebeesgenesis$aeItemKeyCache = cache;
+	}
+
+	@Override
+	public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() {
+		return energyContainer;
+	}
+
+	@Override
+	public Level productivebeesgenesis$getAe2Level() {
+		return level;
+	}
+
+	@Override
+	public BlockPos productivebeesgenesis$getAe2BlockPos() {
+		return getBlockPos();
 	}
 
 	@NotNull

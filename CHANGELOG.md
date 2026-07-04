@@ -5,6 +5,67 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.3] - 2026-07-04
+
+### 新增
+
+- **Jade AE2 设备在线状态显示**：离心机方块在 Jade 悬停面板中显示 AE2 网络连接状态
+  - 完全复刻 AE2 原版 `GridNodeStateDataProvider` 的显示设计与翻译键（DeviceOffline/NetworkBooting/DeviceMissingChannel/DeviceOnline）
+  - 服务端通过 NBT 同步状态 ordinal，客户端不引用 AE2 类，避免类加载依赖
+  - 仅当方块实体实现 `IAe2OutputHost` 且 AE2 集成已启用时显示
+  - 注册到全部 4 种离心机方块实体类型（基础/原版工厂/ME 工厂/EME 工厂）
+
+### 性能优化
+
+针对 256× 加速 + 32 速度升级 + 14 台离心机的极端高压环境进行深度优化，TPS 从 11.32 提升至 20.01（+76.6%），本模组占比从 32.64% 降至 29.13%。
+
+- **InputValidationCache 指纹键优化**：从 9.87% 降至 4.73%
+  - 新增 `InputFingerprint` record（Item + beeType）替代 `ItemStack.isSameItemSameComponents`，避免 owo `DerivedComponentMap.hashCode()` 和 `PatchedDataComponentMap.hashCode()` 的高昂开销
+  - 对 configurable_honeycomb / configurable_comb_block 仅提取 bee_type 组件，跳过全组件哈希
+  - 三级缓存：identity 短路 → 指纹比对 → 完整校验
+  - TTL 从 20 tick 延长到 100 tick（减少 80% 的 validator 调用）
+- **RecipeCacheManager 轻量 CacheKey**：`computeKey` 从 1.85% 降至 1.02%
+  - `CacheKey` record 从 `(Item, int componentHash)` 改为 `(Item, ResourceLocation beeType, int componentHash)`
+  - 对 configurable_honeycomb/comb_block 用 beeType 替代 componentHash，避免 `hashItemAndComponents` 调用
+- **Ae2OutputPusher 同 key 批量合并**：从 9.77% 进一步优化
+  - 扫描所有进程的 primary/secondary/tertiary 输出槽，按 AEItemKey 分组
+  - 对每个 AEItemKey 调用一次 `poweredInsert`（合并 totalCount），减少 extendedae_plus `InfinityBigIntegerCellInventory.getUUID` 等昂贵操作的调用次数
+  - 槽位数 ≤ 3 时直接逐槽推送，避免 HashMap 分配开销
+  - 部分成功时按顺序清空槽位，异常时回滚所有相关槽位
+- **TileComponentEjectorCooldownMixin 配置缓存**：消除 256× 加速下每 tick 32256 次配置读取
+  - 9 项配置缓存到 `@Unique volatile` 实例字段，每 100 tick 刷新一次
+  - 命中缓存时配置读取降为 0 次/tick（14 台离心机 × 256 加速 = 3584 次方法调用无配置读取）
+- **PbRecipeCompleter IdentityHashMap**：避免 `ItemStack.hashCode()` 全组件遍历
+  - `pendingOutputs` 从 `LinkedHashMap` 改为 `IdentityHashMap`
+  - key 来自缓存的 `pendingRecipeOutputs.entrySet()`，同一配方 key 实例稳定不变，引用相等即可
+  - 消除 256× 加速下每 tick 约 10752 次 `ItemStack.hashCode()` 调用
+
+### 修复
+
+- **Ae2OutputPusher 异常吞没与产物复制风险**：
+  - `catch (Throwable t)` 完全吞没异常且无日志 → 改为 `catch (Exception e)` + 限流日志（每 1024 次记录一次）
+  - `InterruptedException` 恢复中断标志
+  - `poweredInsert` 异常后槽位可能已部分接收 → 异常时重新读取槽位检查 count 是否异常增加，防止产物复制
+- **MyriadCreationsEventHandler 内存泄漏**：`onServerStopped` 未清理静态缓存字段
+  - 添加 `CACHED_BEE_TYPES`、`CACHED_HONEYCOMB_TEMPLATES`、`CACHED_COMB_BLOCK_TEMPLATES`、`lastCacheUpdateTick`、`MyriadSelectionCache.invalidate()` 的完整清理
+- **OutputSlotFlagManager NPE 与 batchDepth 下溢**：
+  - `tertiary` 槽位未做空检查 → 添加 null 检查与 `secondary` 一致
+  - `endBatch` 未配对调用时 `batchDepth` 变为 -1 → 添加 `<= 0` 保护防止标志位永久失效
+- **BlockEntityItemStackHandlerDebounceMixin 强耦合**：依赖另一个 Mixin 实现 `IInventoryDirtyDebouncer`
+  - `instanceof` 检查改为双重检查（`AdvancedBeehiveBlockEntity` + `IInventoryDirtyDebouncer`），防止 Mixin 加载失败时 ClassCastException
+- **Ae2OutputPusher SlotEntry 日志缺失**：`SlotEntry` 构造函数未接收 `process` 和 `slotIdx` 参数（固定为 -1），导致异常日志无法定位槽位
+  - 构造函数补充参数传递，异常日志可准确显示进程索引和槽位索引
+
+### 变更
+
+- **移除性能监控功能**：`PerformanceMonitor.java`、`PerfCommand.java` 及相关配置项
+  - 原因：监控本身在高频调用下产生不可忽视的资源占用，与性能优化目标相悖
+  - `CommonConfig` 中保留空 push/pop 占位防止配置失效
+- **OutputSlotFlagManager 延迟刷新模式**：减少 SFM `extractItem` 序列的 O(N × processes) tick 开销
+  - `onSlotChanged()` 仅设置 dirty 标志，`updateAll()` 延迟到下次读取时执行
+  - 配合 `flushDirty()` 实现"写时标记、读时刷新"的批量优化
+
+
 ## [1.4.2] - 2026-07-02
 
 ### 修复

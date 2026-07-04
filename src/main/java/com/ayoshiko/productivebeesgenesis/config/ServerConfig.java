@@ -93,6 +93,8 @@ public final class ServerConfig {
 	// 注意：isSim() / hasNectar() 缓存是默认开启且不可关闭的内部优化，
 	// 不在配置界面暴露，避免玩家误操作导致性能回退。
 	public final ModConfigSpec.IntValue advancedBeehiveSimulateCooldown;
+	// 高级蜂箱 NBT 保存间隔（tick），降低高倍加速下的 CompoundTag 序列化开销
+	public final ModConfigSpec.IntValue advancedBeehiveSaveInterval;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段 ==========
 	public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
@@ -119,6 +121,8 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue mekCentrifugeEjectBusyCooldown;
 	// Step 5: 单 tick 最大弹出次数上限（0=无限制），限制 256× 加速下高频 outputItems 调用
 	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
+	// AE2 直接输出集成开关
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
 
 	ServerConfig(ModConfigSpec.Builder builder) {
 		// 开发者模式：模组开发者用来调试正常功能不会用到的物品和调试配置日志等，用户无需开启此设置
@@ -265,6 +269,12 @@ public final class ServerConfig {
 						"0 = 不限制（原版行为）")
 				.defineInRange("simulateCooldown", 0, 0, 20);
 
+		advancedBeehiveSaveInterval = builder
+				.comment("高级蜂箱 NBT 保存间隔(tick)",
+						"降低高倍加速下的 CompoundTag 序列化开销，仅在物品栏存在脏标记时触发 setChanged",
+						"默认 20 tick（1秒），范围 1-200，值越大性能越好但宕机时数据丢失风险越高")
+				.defineInRange("saveInterval", 20, 1, 200);
+
 		builder.pop(); // advanced_beehive
 
 		// MEK离心机配置（抽取至 CentrifugeConfigSection）
@@ -287,5 +297,6 @@ public final class ServerConfig {
 		this.mekCentrifugeEjectBusyThreshold = this.centrifuge.mekCentrifugeEjectBusyThreshold;
 		this.mekCentrifugeEjectBusyCooldown = this.centrifuge.mekCentrifugeEjectBusyCooldown;
 		this.mekCentrifugeEjectMaxPerTick = this.centrifuge.mekCentrifugeEjectMaxPerTick;
+		this.mekCentrifugeAeOutputEnabled = this.centrifuge.mekCentrifugeAeOutputEnabled;
 	}
 }

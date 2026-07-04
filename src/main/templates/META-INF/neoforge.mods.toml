@@ -110,3 +110,22 @@ config="${mod_id}.iris.mixins.json"
     versionRange="[0,)"
     ordering="AFTER"
     side="BOTH"
+
+# Applied Energistics 2 可选依赖（提供直接 AE2 网络输出集成）
+# 当 AE2 存在且配置开启时，离心机可作为 AE2 网格节点主动推送输出，绕过 SFM 中介
+# 未安装 AE2 时 mek.ae2 包类永不加载（反射隔离），完全回退到 SFM/Ejector 路径
+[[dependencies.${mod_id}]]
+    modId="ae2"
+    type="optional"
+    versionRange="[19.2.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Jade 可选依赖（提供方块实体信息悬停显示，显示 AE2 网络连接状态）
+# @WailaPlugin 注解确保仅 Jade 安装时才加载集成类，未安装时无影响
+[[dependencies.${mod_id}]]
+    modId="jade"
+    type="optional"
+    versionRange="[15.10.0,)"
+    ordering="AFTER"
+    side="CLIENT"

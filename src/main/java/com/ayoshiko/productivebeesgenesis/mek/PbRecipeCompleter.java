@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -40,8 +40,14 @@ public class PbRecipeCompleter {
 	/** 可复用的输出槽列表（避免每次完成配方都创建新ArrayList） */
 	private final List<IInventorySlot> reusableOutputSlots = new ArrayList<>(3);
 
-	/** 本 tick 尚未插入的 PB 配方输出（按 ItemStack key 累加数量） */
-	private final Map<ItemStack, Integer> pendingOutputs = new LinkedHashMap<>(4);
+	/**
+	 * 本 tick 尚未插入的 PB 配方输出（按 ItemStack key 累加数量）
+	 * <p>
+	 * 使用 {@link IdentityHashMap}：key 来自 {@code pendingRecipeOutputs.entrySet()} 的
+	 * {@code entry.getKey()}，同一配方的 key 实例稳定不变，引用相等即可。
+	 * 避免每次 merge/get 调用 {@link ItemStack#hashCode()}（需遍历全部数据组件，开销高）。
+	 */
+	private final Map<ItemStack, Integer> pendingOutputs = new IdentityHashMap<>(4);
 
 	/** 当前聚合输出对应的 PB 配方（用于 flush 时按原顺序插入） */
 	@Nullable

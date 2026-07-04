@@ -9,7 +9,6 @@ import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
@@ -243,14 +242,7 @@ public class PbRecipeProcessor {
 			}
 
 			// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方
-			// 性能监控：记录查找耗时和缓存命中，仅启用时产生nanoTime开销
-			boolean monitor = PerformanceMonitor.isEnabled();
-			long lookupStart = monitor ? System.nanoTime() : 0L;
 			RecipeHolder<CentrifugeRecipe> pbRecipe = recipeFinder.findPbRecipe(input);
-			if (monitor) {
-				PerformanceMonitor.getInstance().recordRecipeLookup(
-						System.nanoTime() - lookupStart, recipeFinder.wasLastGetHit());
-			}
 			if (pbRecipe == null) {
 				// 找不到PB配方：清空PB状态并关闭激活位
 				clearPbState(processIndex);

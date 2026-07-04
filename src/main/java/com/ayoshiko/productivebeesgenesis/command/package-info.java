@@ -1,10 +1,7 @@
 /**
  * 命令注册包
  * <br/>
- * 注册自定义服务端命令：
- * <ol>
- *   <li>{@code PerfCommand} — 性能监控数据查询命令</li>
- * </ol>
+ * 当前无已注册命令（性能监控命令已移除）。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault

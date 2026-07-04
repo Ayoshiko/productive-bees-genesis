@@ -42,6 +42,7 @@ dependencies.txt
 
 # 审查文档（内部使用，不入库）
 docs/
+CODE_WIKI.md
 
 # OS
 .DS_Store

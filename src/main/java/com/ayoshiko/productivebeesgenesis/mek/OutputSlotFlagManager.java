@@ -4,7 +4,7 @@ import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 工厂离心机输出槽标志位批量/增量管理器
+ * 工厂离心机输出槽标志位批量/增量/延迟管理器
  * <p>
  * 原实现：每次 insertItem 触发 {@link IContentsListener}， listener 中调用全量
  * {@code updateOutputSlotFlags()} 扫描所有进程，复杂度 O(processes) / 每次插入。
@@ -16,7 +16,8 @@ import net.minecraft.world.item.ItemStack;
  * <ul>
  *   <li>批量模式（begin/end）下 listener 只标记 dirty，不扫描；</li>
  *   <li>批量结束时只重新计算受影响的那一个进程，O(1)；</li>
- *   <li>非批量外部插入（SFM/AE2/漏斗）仍立即全量扫描，保持行为兼容。</li>
+ *   <li>非批量外部插入/提取（SFM/AE2/漏斗）也只标记 dirty，延迟到下次读取标志位时才全量扫描，
+ *       将 SFM 连续 N 次 extractItem 的 O(N × processes) 降为 O(processes)。</li>
  * </ul>
  * 同时维护每进程 {@code hasItems} 与 {@code full} 状态，通过计数器 O(1) 给出全局标志。
  */
@@ -64,40 +65,45 @@ public final class OutputSlotFlagManager {
 
 	/** 是否有任意输出槽含物品 */
 	public boolean hasOutputItems() {
+		flushDirty();
 		return hasItemsProcessCount > 0;
 	}
 
 	/** 是否有任意进程的所有物品输出槽已满 */
 	public boolean outputSlotsFull() {
+		flushDirty();
 		return fullProcessCount > 0;
 	}
 
 	/** 指定进程的所有物品输出槽是否已满 */
 	public boolean outputSlotsFull(int process) {
+		flushDirty();
 		return process >= 0 && process < processFull.length && processFull[process];
 	}
 
 	/**
-	 * 所有输出槽的物品总数（O(1) 读取）
+	 * 所有输出槽的物品总数（O(1) 读取，dirty 时触发一次全量刷新）
 	 * <br/>
 	 * Step 5: 供 Ejector Mixin 替代 O(processes×3) 遍历的 countOutputItems。
 	 * 在 {@link #updateProcessInternal} / {@link #updateProcess} / {@link #updateAll} 中维护。
 	 */
 	public long outputItemCount() {
+		flushDirty();
 		return outputItemCount;
 	}
 
 	/** 输出槽内容变化时调用（由 IContentsListener 回调） */
 	public void onSlotChanged() {
-		if (batchDepth > 0) {
-			dirty = true;
-		} else {
-			updateAll();
-		}
+		dirty = true;
 	}
 
 	/** 开始批量输出插入；嵌套调用安全 */
 	public void beginBatch() {
+		// 进入批量模式前，先消费非批量模式积累的 dirty，避免 endBatch 仅更新单进程时丢失其他进程的外部变更
+		if (batchDepth == 0 && dirty) {
+			dirty = false;
+			updateAll();
+		}
 		batchDepth++;
 	}
 
@@ -108,6 +114,11 @@ public final class OutputSlotFlagManager {
 	 * @return true 表示本批次确实更新了标志位（调用方需要执行 sorting/unpause）
 	 */
 	public boolean endBatch(int process) {
+		// 防御 batchDepth 下溢：未配对调用 endBatch 时保持为 0，避免标志位永久失效
+		if (batchDepth <= 0) {
+			batchDepth = 0;
+			return false;
+		}
 		if (--batchDepth == 0 && dirty) {
 			dirty = false;
 			if (process >= 0 && process < processHasItems.length) {
@@ -118,6 +129,14 @@ public final class OutputSlotFlagManager {
 			return true;
 		}
 		return false;
+	}
+
+	/** 若 dirty 标志被设置，执行一次全量扫描并清除标志 */
+	private void flushDirty() {
+		if (dirty) {
+			dirty = false;
+			updateAll();
+		}
 	}
 
 	/** 全量扫描并初始化计数器（初始化时或降级回退用） */
@@ -156,16 +175,18 @@ public final class OutputSlotFlagManager {
 
 		ItemStack primaryStack = primary.getStack();
 		ItemStack secondaryStack = secondary == null ? ItemStack.EMPTY : secondary.getStack();
-		ItemStack tertiaryStack = tertiary.getStack();
+		// tertiary 也可能为 null（部分工厂未配置第三输出槽），与 secondary 处理保持一致
+		ItemStack tertiaryStack = tertiary == null ? ItemStack.EMPTY : tertiary.getStack();
 
 		boolean primaryEmpty = primaryStack.isEmpty();
 		boolean secondaryEmpty = secondaryStack.isEmpty();
 		boolean tertiaryEmpty = tertiaryStack.isEmpty();
 
 		processHasItems[process] = !primaryEmpty || !secondaryEmpty || !tertiaryEmpty;
+		// tertiary 为 null 时视为"已满"（不影响 processFull 判断），与 secondary 处理逻辑一致
 		processFull[process] = isFullCached(process, 0, primary)
 				&& (secondary == null || isFullCached(process, 1, secondary))
-				&& isFullCached(process, 2, tertiary);
+				&& (tertiary == null || isFullCached(process, 2, tertiary));
 
 		// 累加本进程三槽位的物品数量（空槽为 0）
 		long count = 0;

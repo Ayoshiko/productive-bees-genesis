@@ -89,6 +89,8 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.ejectDelayActive.tooltip", "Eject delay when output slots still contain items (active state). Default 1 (0.05s) for high-throughput scenarios. Lower=faster ejection, higher server load.");
 		add("productivebeesgenesis.configuration.ejectMaxPerTick", "Max Eject Calls Per Tick");
 		add("productivebeesgenesis.configuration.ejectMaxPerTick.tooltip", "Max outputItems calls per tick (0=unlimited). Limits repeated outputItems calls under 256x acceleration. Default 64; skipped in max speed mode.");
+		add("productivebeesgenesis.configuration.aeOutputEnabled", "Enable AE2 Direct Output");
+		add("productivebeesgenesis.configuration.aeOutputEnabled.tooltip", "When AE2 is installed, centrifuge acts as a grid node and actively pushes outputs to the AE2 network, bypassing SFM and reducing high-frequency AEItemKey creation. No effect without AE2. Default off.");
 		add("productivebeesgenesis.configuration.ejectMaxSpeedMode", "Max Ejection Speed Mode");
 		add("productivebeesgenesis.configuration.ejectMaxSpeedMode.tooltip", "Disables Ejector throttling (skip/interval/busy cooldown) while keeping blocked cooldown, maximizing item ejection speed. Use only when the target container has ample space and server headroom.");
 		add("productivebeesgenesis.configuration.ejectMinInterval", "Ejector Min Interval (ticks)");
@@ -97,9 +99,7 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.ejectSkipTicks.tooltip", "Consecutive ticks to skip ejector output attempts when output slots are unchanged. 0 = never skip. Default 1.");
 		add("productivebeesgenesis.configuration.ejectSkipUnchanged", "Skip Ejector When Unchanged");
 		add("productivebeesgenesis.configuration.ejectSkipUnchanged.tooltip", "Skip ejector output attempts when output slots have not changed, reducing CPU cost under high acceleration.");
-		add("productivebeesgenesis.configuration.enablePerformanceMonitor", "Performance Monitor");
-		add("productivebeesgenesis.configuration.enablePerformanceMonitor.tooltip", "Enable performance monitoring (Spark compatible, JMX exposed)");
-		add("productivebeesgenesis.configuration.enabled", "Enabled");
+	add("productivebeesgenesis.configuration.enabled", "Enabled");
 		add("productivebeesgenesis.configuration.enabled.tooltip", "Enable this acquisition method");
 		add("productivebeesgenesis.configuration.endurance", "Endurance");
 		add("productivebeesgenesis.configuration.endurance.tooltip", "Endurance: weak/normal/medium/strong");
@@ -196,6 +196,8 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.server.other.tooltip", "Server-side parameters such as bee attributes, acquisition, conversion, produce, advanced beehive, and MEK centrifuge");
 		add("productivebeesgenesis.configuration.showPortColors", "Show Port Colors");
 		add("productivebeesgenesis.configuration.showPortColors.tooltip", "Show port configuration colors on MEK centrifuge blocks when holding a Configurator or Configuration Card");
+		add("productivebeesgenesis.configuration.saveInterval", "NBT Save Interval (ticks)");
+		add("productivebeesgenesis.configuration.saveInterval.tooltip", "Advanced beehive NBT save interval (ticks). Reduces CompoundTag serialization overhead under high acceleration. Default 20 (1s), range 1-200. Higher values improve performance but risk data loss on crash.");
 		add("productivebeesgenesis.configuration.simulateCooldown", "Simulate Query Cooldown (ticks)");
 		add("productivebeesgenesis.configuration.simulateCooldown.tooltip", "Cooldown between farmer/hoarder/collector queries in simulateBee(). 0 = no limit (vanilla behavior). Recommended 1-5 under high load.");
 		add("productivebeesgenesis.configuration.size", "Size");
@@ -276,6 +278,8 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.ejectDelayActive.tooltip", "输出槽仍有物品时（活动状态）的弹出延迟。默认1（0.05秒），适用于高产出场景。值越小弹出越快，服务器负载越高。");
 		add("productivebeesgenesis.configuration.ejectMaxPerTick", "单tick最大弹出次数");
 		add("productivebeesgenesis.configuration.ejectMaxPerTick.tooltip", "单 tick 内 outputItems 的最大调用次数上限（0=无限制）。限制 256× 加速下单 tick 产生海量物品时反复调用 outputItems。默认 64；最大速度模式下跳过此上限。");
+		add("productivebeesgenesis.configuration.aeOutputEnabled", "启用AE2直接输出");
+		add("productivebeesgenesis.configuration.aeOutputEnabled.tooltip", "开启后离心机在 AE2 已安装时作为网格节点主动推送输出到 AE2 网络，绕过 SFM 中介，减少 AEItemKey 高频创建。未安装 AE2 时无效，默认关闭。");
 		add("productivebeesgenesis.configuration.ejectMaxSpeedMode", "最大弹出速度模式");
 		add("productivebeesgenesis.configuration.ejectMaxSpeedMode.tooltip", "关闭 Ejector 的未变化跳过、最小调用间隔和高负载长冷却等节流逻辑，仅保留阻塞冷却，以最大化物品弹出速度。仅推荐目标容器空间充足且服务器性能冗余时使用。");
 		add("productivebeesgenesis.configuration.ejectMinInterval", "弹出最小间隔（tick）");
@@ -284,9 +288,7 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.ejectSkipTicks.tooltip", "输出槽内容未变化时连续跳过 outputItems 的 tick 数。0 = 不跳过。默认值：1。");
 		add("productivebeesgenesis.configuration.ejectSkipUnchanged", "输出未变化时跳过弹出");
 		add("productivebeesgenesis.configuration.ejectSkipUnchanged.tooltip", "当输出槽内容未变化时跳过 Ejector 输出尝试，降低高倍加速下的 CPU 开销。");
-		add("productivebeesgenesis.configuration.enablePerformanceMonitor", "性能监控");
-		add("productivebeesgenesis.configuration.enablePerformanceMonitor.tooltip", "启用性能监控（兼容Spark，通过JMX暴露数据）");
-		add("productivebeesgenesis.configuration.enabled", "启用");
+	add("productivebeesgenesis.configuration.enabled", "启用");
 		add("productivebeesgenesis.configuration.enabled.tooltip", "启用此获得方式");
 		add("productivebeesgenesis.configuration.endurance", "耐力");
 		add("productivebeesgenesis.configuration.endurance.tooltip", "耐力: weak/normal/medium/strong");
@@ -383,6 +385,8 @@ public class ModLanguageProvider extends LanguageProvider {
 		add("productivebeesgenesis.configuration.server.other.tooltip", "蜜蜂属性、获得方式、转化产出、高级蜂箱、MEK离心机等服务端参数");
 		add("productivebeesgenesis.configuration.showPortColors", "显示端口颜色");
 		add("productivebeesgenesis.configuration.showPortColors.tooltip", "手持Mekanism配置器或配置卡时在MEK离心机方块上显示端口配置颜色");
+		add("productivebeesgenesis.configuration.saveInterval", "NBT保存间隔（tick）");
+		add("productivebeesgenesis.configuration.saveInterval.tooltip", "高级蜂箱 NBT 保存间隔（tick），降低高倍加速下的 CompoundTag 序列化开销。默认 20（1秒），范围 1-200，值越大性能越好但宕机时数据丢失风险越高。");
 		add("productivebeesgenesis.configuration.simulateCooldown", "模拟查询冷却（tick）");
 		add("productivebeesgenesis.configuration.simulateCooldown.tooltip", "simulateBee() 中农夫/囤积/收集行为扫描附近作物或掉落物的冷却。0=不限制（原版行为），高负载场景建议 1-5。");
 		add("productivebeesgenesis.configuration.size", "大小");

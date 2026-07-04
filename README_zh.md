@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-1.4.2-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.4.3-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 资源蜜蜂（Productive Bees）和通用机械（Mekanism）附属模组，添加了通用机械（Mekanism）风格的离心机，可处理蜜脾和蜜脾块。添加了万象创世蜜蜂，其蜜脾可转化为整合包内所有资源蜜蜂的蜜脾。蜜脾转化功能拥有详细可配置的过滤名单。万象创世蜜蜂的数据包可以在配置文件里自定义修改。
 万象创世蜜脾拥有无尽贪婪（Re:Avaritia）模组的寰宇支配之剑（Sword of the Cosmos）同款的星空遮罩材质。
@@ -22,6 +22,8 @@
 | 工厂等级 | 覆盖Mekanism、Mekanism Extras 、Evolved Mekanism、Evolved Mekanism Extras 共17个等级。工厂物品名称显示与原模组对应的颜色特效。 |
 | 蜜蜂过滤界面 | 游戏内蜜蜂黑白名单编辑器，支持搜索、排序、折叠。 |
 | JEI集成 | 完整的JEI支持，禁用万象创世蜜蜂时自动隐藏相关配方。 |
+| AE2集成 | 离心机可作为AE2网格节点，直接将产物推送到ME网络，绕过外部物流。 |
+| Jade集成 | 离心机在Jade悬停面板中显示AE2网络连接状态（离线/加载中/缺少频道/在线）。 |
 
 
 ### Mekanism 附属 资源蜜蜂离心机
@@ -33,7 +35,7 @@
 
 ### 配置系统
 
-- 客户端配置：性能监控开关、蜜蜂过滤UI设置
+- 客户端配置：蜜蜂过滤UI设置
 - 通用配置：万象创世蜜蜂属性（外观、授粉、PB属性、基础属性、繁殖、环境）
 - 服务端配置：蜜蜂类型过滤（黑名单/白名单）、Mek离心机参数（含弹出延迟活动/空闲）、万象创世蜜蜂启用/禁用开关
 
@@ -90,6 +92,8 @@
 | Evolved Mekanism | EM等级工厂。 |
 | Evolved Mekanism Extras | EME等级工厂。 |
 | Mekanism Unleashed | 扩展升级上限。 |
+| Applied Energistics 2 | 直接ME网络产物输出集成。 |
+| Jade | AE2网络状态悬停显示。 |
 | Iris | 宇宙渲染光影兼容。 |
 | JEI | 配方查看。 |
 
@@ -108,19 +112,21 @@
 - `capability/`：能力辅助类 — `RateLimitedItemHandler`（限流物品处理器）、`IInventoryDirtyDebouncer`（库存标记防抖）
 - `client/`：客户端事件处理器（`AbstractClientCombEventHandler`、`MyriadCreationsClientEventHandler`）
 - `client/jei/`：JEI配方类别（PB离心机配方）
+- `client/jade/`：Jade插件 — AE2网络状态显示（`JadePlugin`、`JadeAe2StatusProvider`）
 - `client/render/cosmic/`：宇宙着色器系统、烘焙模型（`AbstractBakedModelCosmic`、`BakedModelCosmic`、`BakedModelHell`、`BakedModelHalo`）、渲染队列、Iris兼容、`AbstractMaskGeometryLoader`基类
 - `client/screen/`：配置和Mek离心机GUI界面 — 主屏幕（`FilterListScreen`、`BeeSelectionScreen`）配合组合助手（`FilterListDragHandler`、`FilterListClipboardHelper`、`BeeSelectionSorter`）和渲染器（`FilterListRenderer`、`BeeSelectionRenderer`）；Mek离心机GUI（`GuiMekCentrifuge`、`GuiMekCentrifugeFactory` 及工厂变体）
 - `client/screen/state/`：界面状态管理（`BeeSelectionState`、`BeeSelectionCache`）
-- `command/`：指令 — `PerfCommand`（性能监控指令）
+- `command/`：指令（包保留供未来扩展）
 - `config/`：配置定义拆分为 `ClientConfig`/`CommonConfig`/`ServerConfig`，`ModConfig` 作为聚合入口，支持中英文双语
 - `datagen/`：数据生成（方块标签、配方、战利品表、语言文件）
 - `init/`：DeferredRegister注册（方块、物品、方块实体、菜单类型、创造模式标签、统计）
 - `item/`：自定义物品（无尽之剑复刻）
-- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理 — `PbRecipeProcessor` 协调器委托给 `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`，`FactoryPbContextDelegate` 工厂组合类，隔离的可选依赖BlockType（`MekCentrifugeMEBlockType`、`MekCentrifugeEMEBlockType`）
+- `mek/`：Mekanism离心机方块、方块实体、容器、配方处理 — `PbRecipeProcessor` 协调器委托给 `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`，`FactoryPbContextDelegate` 工厂组合类，隔离的可选依赖BlockType（`MekCentrifugeMEBlockType`、`MekCentrifugeEMEBlockType`），`OutputSlotFlagManager`（延迟刷新输出槽标志位），`MyriadBatchPlanner`（零拷贝批量插入规划器）
+- `mek/ae2/`：AE2集成 — `Ae2OutputPusher`（批量合并产物推送），`Ae2GridNodeManager`（网格节点生命周期），`AeItemKeyCache`（AEItemKey identity缓存），`IAe2OutputHost`（宿主接口）
 - `menu/`：容器菜单定义（Mek离心机及工厂容器）
 - `mixin/`：Mixin类，含 `MixinConfigPlugin` 条件加载；子包：`accessor/`（访问器）、`beehive/`（蜂箱/库存防抖与缓存）、`client/`（客户端 — 蜜蜂颜色、宇宙物品渲染）、`iris/`（Iris着色器兼容，含 `IrisConfigPlugin`）、`mek/`（Mekanism离心机/工厂/弹出器）、`recipe/`（配方序列化兜底）
 - `network/`：网络通信 — `ModPayloads`（载荷注册）、`FilterConfigSyncPayload`（过滤配置同步）
-- `util/`：`BeeInfoHelper`、`RecipeCacheManager`、`PerformanceMonitor`、`BeeConfigApplier`、`BeeIngredientFallback`、`CentrifugeMixinHelper`、`CentrifugeRecipeIndex`、`InputOutputCompatibilityCache`、`InputValidationCache`、`BeeRecipeReloader`、`PBConstants`
+- `util/`：`BeeInfoHelper`、`RecipeCacheManager`、`BeeConfigApplier`、`BeeIngredientFallback`、`CentrifugeMixinHelper`、`CentrifugeRecipeIndex`、`InputOutputCompatibilityCache`、`InputValidationCache`（指纹键输入缓存）、`BeeRecipeReloader`、`PBConstants`
 
 ### 关键抽象
 

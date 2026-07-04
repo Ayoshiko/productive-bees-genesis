@@ -6,6 +6,9 @@ import java.util.Optional;
 
 import javax.annotation.Nullable;
 
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -17,6 +20,11 @@ import net.minecraft.world.item.ItemStack;
  * <p>
  * 缓存策略：使用 {@link Optional} 包装值，支持缓存"无配方"结果（{@link Optional#empty()}），
  * 避免对没有配方的输入物品每tick重复全量遍历配方。
+ * <p>
+ * <b>缓存键优化</b>：对 configurable_honeycomb / configurable_comb_block 使用
+ * {@code Item + bee_type} 作为轻量 key，避免 {@link ItemStack#hashItemAndComponents}
+ * 触发 owo {@code DerivedComponentMap.hashCode()} 和 {@code PatchedDataComponentMap.hashCode()}
+ * 的高昂开销。其他物品仍使用 {@link ItemStack#hashItemAndComponents} 保证正确性。
  *
  * @param <T> 缓存的配方类型
  */
@@ -25,20 +33,29 @@ public class RecipeCacheManager<T> {
 	/**
 	 * 缓存键 — record 自动生成基于字段的 hashCode/equals，避免 String 拼接的 GC 开销
 	 * <p>
-	 * Item 为注册单例，identity equals/hashCode 在 JVM 内稳定；componentHash 覆盖数据组件差异。
+	 * 对 configurable_honeycomb / configurable_comb_block：使用 {@code (Item, beeType)} 作为键，
+	 * 跳过全组件哈希计算。其他物品：使用 {@code (Item, componentHash)} 作为键，保证组件差异区分。
 	 */
-	private record CacheKey(Item item, int componentHash) {
+	private record CacheKey(Item item, @Nullable ResourceLocation beeType, int componentHash) {
+		/**
+		 * 从 ItemStack 构建缓存键
+		 * <p>
+		 * configurable_honeycomb / configurable_comb_block 物品除 bee_type 外无其他可变组件，
+		 * 用 beeType 替代 componentHash 可避免 owo 组件哈希计算。
+		 */
+		static CacheKey of(ItemStack stack) {
+			Item item = stack.getItem();
+			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+				// 轻量路径：只提取 bee_type，跳过 hashItemAndComponents
+				return new CacheKey(item, stack.get(ModDataComponents.BEE_TYPE.get()), 0);
+			}
+			// 通用路径：使用官方 hashItemAndComponents 覆盖物品与数据组件
+			return new CacheKey(item, null, ItemStack.hashItemAndComponents(stack));
+		}
 	}
 
 	private final LinkedHashMap<CacheKey, Optional<T>> cache;
 	private final int maxSize;
-
-	/** 缓存命中次数 */
-	private long hitCount;
-	/** 缓存未命中次数 */
-	private long missCount;
-	/** 上次get操作是否命中缓存（volatile保证可见性，供PerformanceMonitor精确记录cacheHit） */
-	private volatile boolean lastGetHit;
 
 	/**
 	 * @param maxSize 最大缓存条目数，超出后按LRU淘汰，必须为正数
@@ -58,18 +75,6 @@ public class RecipeCacheManager<T> {
 	}
 
 	/**
-	 * 生成缓存键，使用官方 {@link ItemStack#hashItemAndComponents(ItemStack)} 覆盖物品与数据组件，避免手工拼接 hashCode 的碰撞风险
-	 * <p>
-	 * 返回 {@link CacheKey}（record）而非 String，避免高频查找时的字符串拼接 GC 开销。
-	 *
-	 * @param stack 输入物品
-	 * @return 缓存键
-	 */
-	private static CacheKey computeKey(ItemStack stack) {
-		return new CacheKey(stack.getItem(), ItemStack.hashItemAndComponents(stack));
-	}
-
-	/**
 	 * 查询缓存
 	 * <p>
 	 * 返回 {@link Optional} 包装的结果：
@@ -84,26 +89,8 @@ public class RecipeCacheManager<T> {
 	 */
 	@Nullable
 	public Optional<T> get(ItemStack input) {
-		CacheKey key = computeKey(input);
-		Optional<T> cached = cache.get(key);
-		if (cached != null) {
-			hitCount++;
-			lastGetHit = true;
-		} else {
-			missCount++;
-			lastGetHit = false;
-		}
-		return cached;
-	}
-
-	/**
-	 * 返回上次 {@link #get(ItemStack)} 操作是否命中缓存
-	 * <br/>
-	 * 供 PerformanceMonitor 在 findPbRecipe 调用后精确记录 cacheHit，
-	 * 避免修改 findPbRecipe 签名（保持单一职责）。
-	 */
-	public boolean wasLastGetHit() {
-		return lastGetHit;
+		CacheKey key = CacheKey.of(input);
+		return cache.get(key);
 	}
 
 	/**
@@ -116,21 +103,13 @@ public class RecipeCacheManager<T> {
 	 * @param recipe 配方对象，为 null 时缓存为"无配方"
 	 */
 	public void put(ItemStack input, @Nullable T recipe) {
-		CacheKey key = computeKey(input);
+		CacheKey key = CacheKey.of(input);
 		cache.put(key, recipe != null ? Optional.of(recipe) : Optional.empty());
 	}
 
 	/** 清空缓存 */
 	public void clear() {
 		cache.clear();
-		hitCount = 0;
-		missCount = 0;
-	}
-
-	/** 获取缓存命中率 */
-	public double getHitRate() {
-		long total = hitCount + missCount;
-		return total > 0 ? (double) hitCount / total : 0.0;
 	}
 
 	/** 获取当前缓存条目数 */

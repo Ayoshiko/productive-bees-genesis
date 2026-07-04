@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import net.minecraft.world.item.ItemStack;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
 
 /**
  * 基础MEK离心机服务端tick处理器
@@ -17,7 +16,6 @@ import com.ayoshiko.productivebeesgenesis.util.PerformanceMonitor;
  *       触发 Mekanism SMELTING 管线与 ejector tick</li>
  *   <li>独立处理 PB 离心配方（不走 Mekanism CachedRecipe 管线）</li>
  *   <li>管理 active 状态切换（pbWasProcessing 标志位）</li>
- *   <li>性能监控：记录 tick 耗时和总能量消耗</li>
  * </ul>
  * <p>
  * 线程安全：方块实体在服务端单线程执行，无需同步锁。
@@ -49,19 +47,12 @@ class MekCentrifugeTickHandler {
 	 * 声音控制：基础机器只有1个输入槽，不可能同时处理SMELTING和PB配方。
 	 * PB停止时直接setActive(false)，如果SMELTING有配方在处理，下一tick的super会重新setActive(true)。
 	 * <p>
-	 * 能量追踪：super前保存能量，PB处理后计算总消耗（SMELTING + PB），
-	 * 与工厂版 MekCentrifugeFactoryHelper#processPbRecipesAndUpdate 逻辑对齐。
-	 * <p>
 	 * 注意：父类 TileEntityElectricMachine.onUpdateServer() 已经调用 energySlot.fillContainerOrConvert()，
 	 * 子类不应重复调用，否则每tick会执行两次能量容器填充（造成无意义的性能开销）。
 	 *
 	 * @return 是否需要发送客户端同步包（由 super 返回）
 	 */
 	boolean onUpdateServer() {
-		// 性能监控：默认关闭，isEnabled()为false时不产生System.nanoTime开销
-		boolean monitor = PerformanceMonitor.isEnabled();
-		long tickStartNanos = monitor ? System.nanoTime() : 0L;
-
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
 		long energyBefore = energyContainer.getEnergy();
@@ -79,18 +70,6 @@ class MekCentrifugeTickHandler {
 			// 如果SMELTING有配方，下一tick的super.onUpdateServer()会重新setActive(true)
 			tile.callSetActive(false);
 			pbWasProcessing = false;
-		}
-
-		// 计算总能量消耗（SMELTING + PB），基于实际能量差
-		long totalUsage = energyBefore - energyContainer.getEnergy();
-
-		// 性能监控：记录tick耗时和能量消耗（仅启用时）
-		if (monitor) {
-			PerformanceMonitor monitorInst = PerformanceMonitor.getInstance();
-			monitorInst.recordTickTime(System.nanoTime() - tickStartNanos);
-			if (totalUsage > 0) {
-				monitorInst.recordEnergyConsumed(totalUsage);
-			}
 		}
 
 		// 不再重复调用 energySlot.fillContainerOrConvert() — 父类 super.onUpdateServer() 已处理

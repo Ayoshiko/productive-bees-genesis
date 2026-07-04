@@ -155,9 +155,4 @@ public class PbRecipeFinder {
 		pbRecipeCache.clear();
 		inputRecipeCache.clear();
 	}
-
-	/** 上次 pbRecipeCache.get 是否命中（供性能监控使用） */
-	public boolean wasLastGetHit() {
-		return pbRecipeCache.wasLastGetHit();
-	}
 }

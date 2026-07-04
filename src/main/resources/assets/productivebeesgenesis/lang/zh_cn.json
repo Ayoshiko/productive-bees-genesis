@@ -267,6 +267,8 @@
   "productivebeesgenesis.configuration.advanced_beehive": "高级蜂箱",
   "productivebeesgenesis.configuration.advanced_beehive.button": "高级蜂箱",
   "productivebeesgenesis.configuration.advanced_beehive.tooltip": "高级蜂箱性能优化设置",
+  "productivebeesgenesis.configuration.saveInterval": "NBT保存间隔（tick）",
+  "productivebeesgenesis.configuration.saveInterval.tooltip": "高级蜂箱 NBT 保存间隔（tick），降低高倍加速下的 CompoundTag 序列化开销。默认 20（1秒），范围 1-200，值越大性能越好但宕机时数据丢失风险越高。",
   "productivebeesgenesis.configuration.simulateCooldown": "模拟查询冷却（tick）",
   "productivebeesgenesis.configuration.simulateCooldown.tooltip": "simulateBee() 中农夫/囤积/收集行为扫描附近作物或掉落物的冷却。0=不限制（原版行为），高负载场景建议 1-5。",
   "productivebeesgenesis.configuration.mek_centrifuge": "MEK离心机",
@@ -286,8 +288,6 @@
   "productivebeesgenesis.configuration.mekCentrifugeFluidEjectRate.tooltip": "MEK离心机流体自动弹出速率。默认16384 mB/tick，覆盖Mekanism默认的1024。",
   "productivebeesgenesis.configuration.combBlockMultiplier": "蜜脾块产出倍率",
   "productivebeesgenesis.configuration.combBlockMultiplier.tooltip": "离心蜜脾块时物品和流体产出的倍数（蜜脾块 = N个蜜脾）",
-  "productivebeesgenesis.configuration.enablePerformanceMonitor": "性能监控",
-  "productivebeesgenesis.configuration.enablePerformanceMonitor.tooltip": "启用性能监控（兼容Spark，通过JMX暴露数据）",
   "productivebeesgenesis.configuration.mekCentrifugeMaxExtractPerTick": "每刻最大拉取量",
   "productivebeesgenesis.configuration.mekCentrifugeMaxExtractPerTick.tooltip": "每游戏刻外部通过管道/AE2从离心机输出槽拉取的最大物品总数（0=无限制）。防止ME接口过载拉取导致主线程卡顿。",
   "productivebeesgenesis.configuration.mekCentrifugeEjectBlockedThreshold": "输出阻塞阈值",
@@ -307,5 +307,7 @@
   "productivebeesgenesis.configuration.ejectBusyCooldown": "高负载弹出冷却（tick）",
   "productivebeesgenesis.configuration.ejectBusyCooldown.tooltip": "输出侧高负载但未完全阻塞时跳过 outputItems 的 tick 数。默认40 tick（2秒），0=关闭。",
   "productivebeesgenesis.configuration.ejectMaxPerTick": "单tick最大弹出次数",
-  "productivebeesgenesis.configuration.ejectMaxPerTick.tooltip": "单 tick 内 outputItems 的最大调用次数上限（0=无限制）。限制 256× 加速下单 tick 产生海量物品时反复调用 outputItems。默认 64；最大速度模式下跳过此上限。"
+  "productivebeesgenesis.configuration.ejectMaxPerTick.tooltip": "单 tick 内 outputItems 的最大调用次数上限（0=无限制）。限制 256× 加速下单 tick 产生海量物品时反复调用 outputItems。默认 64；最大速度模式下跳过此上限。",
+  "productivebeesgenesis.configuration.aeOutputEnabled": "启用AE2直接输出",
+  "productivebeesgenesis.configuration.aeOutputEnabled.tooltip": "开启后离心机在 AE2 已安装时作为网格节点主动推送输出到 AE2 网络，绕过 SFM 中介，减少 AEItemKey 高频创建。未安装 AE2 时无效，默认关闭。"
 }

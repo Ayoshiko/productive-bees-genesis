@@ -34,6 +34,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 
@@ -62,7 +65,7 @@ import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachi
  * </ul>
  */
 public class TileEntityMekCentrifuge extends TileEntityElectricMachine
-		implements PbRecipeContext, IMekCentrifugeTile {
+		implements IAe2OutputHost, IMekCentrifugeTile {
 
 	/**
 	 * 输出槽/流体槽管理器
@@ -81,6 +84,15 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 
 	/** 服务端 tick 处理器 — 封装 onUpdateServer/PB配方处理逻辑 */
 	private final MekCentrifugeTickHandler tickHandler;
+
+	/** AE2 网格节点（Object 类型避免 AE2 未安装时类加载失败，实际类型为 IManagedGridNode） */
+	private Object productivebeesgenesis$ae2GridNode;
+
+	/** AE2 节点待连接标志 — clearRemoved 时置 true，首个 server tick 时执行 connectNode */
+	private boolean ae2NodePending = false;
+
+	/** Task 7: AEItemKey 缓存（Object 类型保持依赖隔离，实际为 AeItemKeyCache） */
+	private Object productivebeesgenesis$aeItemKeyCache;
 
 	public TileEntityMekCentrifuge(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, BASE_TICKS_REQUIRED);
@@ -244,10 +256,20 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * <br/>
 	 * 总是调用super以确保ejector被tick；PB配方在tryProcessPbRecipe中独立处理。
 	 * 详细逻辑（能量追踪、性能监控、PB状态管理）见 tickHandler。
+	 * <p>
+	 * Task 3-5：tick 末尾尝试将输出槽物品推送到 AE2 网络（绕过 SFM 中介）。
+	 * AE2 未安装或配置关闭时 pushOutputs 内部安全短路。
 	 */
 	@Override
 	protected boolean onUpdateServer() {
-		return tickHandler.onUpdateServer();
+		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出）
+		if (ae2NodePending) {
+			ae2NodePending = false;
+			Ae2GridNodeManager.connectNode(this);
+		}
+		boolean result = tickHandler.onUpdateServer();
+		Ae2OutputPusher.pushOutputs(this);
+		return result;
 	}
 
 	// ===== IMekCentrifugeTile 接口实现（委托给 slotManager） =====
@@ -433,17 +455,82 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * 委托给 {@link MekCentrifugeSaveHandler#save}。
 	 * 注意：NBT 格式从 putInt 改为 putIntArray（数组长度1），旧存档（putInt）无法加载，
 	 * 但模组暂未发布，无需兼容旧存档。
+	 * <p>
+	 * Task 3-5：同时持久化 AE2 网格节点状态（连接信息等）。
 	 */
 	@Override
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.saveAdditional(nbt, provider);
 		saveHandler.save(nbt);
+		Ae2GridNodeManager.saveNodeNBT(this, nbt);
 	}
 
-	/** 加载PB配方处理进度 — 委托给 saveHandler */
+	/** 加载PB配方处理进度 — 委托给 saveHandler。Task 3-5：同时加载 AE2 网格节点。 */
 	@Override
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.loadAdditional(nbt, provider);
 		saveHandler.load(nbt);
+		Ae2GridNodeManager.loadNodeNBT(this, nbt);
+	}
+
+	// ===== Task 3-5: AE2 网格节点生命周期与 IAe2OutputHost 实现 =====
+
+	/** 方块实体加载完成时准备 AE2 网格节点（不接入网格，避免递归栈溢出） */
+	@Override
+	public void clearRemoved() {
+		super.clearRemoved();
+		Ae2GridNodeManager.prepareNode(this);
+		ae2NodePending = true;
+	}
+
+	/** 方块被移除时销毁 AE2 网格节点，避免内存泄漏 */
+	@Override
+	public void setRemoved() {
+		super.setRemoved();
+		ae2NodePending = false;
+		Ae2GridNodeManager.destroyNode(this);
+	}
+
+	/** 区块卸载时销毁 AE2 网格节点（destroyNode 幂等，与 setRemoved 重复调用安全） */
+	@Override
+	public void onChunkUnloaded() {
+		super.onChunkUnloaded();
+		ae2NodePending = false;
+		Ae2GridNodeManager.destroyNode(this);
+	}
+
+	@Override
+	public Object productivebeesgenesis$getAe2GridNode() {
+		return productivebeesgenesis$ae2GridNode;
+	}
+
+	@Override
+	public void productivebeesgenesis$setAe2GridNode(Object node) {
+		productivebeesgenesis$ae2GridNode = node;
+	}
+
+	@Override
+	public Object productivebeesgenesis$getAeItemKeyCache() {
+		return productivebeesgenesis$aeItemKeyCache;
+	}
+
+	@Override
+	public void productivebeesgenesis$setAeItemKeyCache(Object cache) {
+		this.productivebeesgenesis$aeItemKeyCache = cache;
+	}
+
+	@Override
+	public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() {
+		return energyContainer();
+	}
+
+	@Override
+	public Level productivebeesgenesis$getAe2Level() {
+		return level;
+	}
+
+	@Override
+	public BlockPos productivebeesgenesis$getAe2BlockPos() {
+		return getBlockPos();
 	}
 }

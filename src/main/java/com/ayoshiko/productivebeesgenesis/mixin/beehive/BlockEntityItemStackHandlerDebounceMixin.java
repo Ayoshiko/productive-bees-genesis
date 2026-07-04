@@ -40,11 +40,13 @@ public class BlockEntityItemStackHandlerDebounceMixin {
 	 */
 	@Inject(method = "onContentsChanged", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$debounceSetChanged(int slot, CallbackInfo ci) {
-		if (this.blockEntity instanceof AdvancedBeehiveBlockEntity) {
+		// 双重检查：blockEntity 必须同时是 AdvancedBeehiveBlockEntity 和 IInventoryDirtyDebouncer
+		// 防御 AdvancedBeehiveInventoryDebounceMixin 加载失败时 ClassCastException
+		if (this.blockEntity instanceof AdvancedBeehiveBlockEntity
+				&& this.blockEntity instanceof IInventoryDirtyDebouncer debouncer) {
 			Level level = this.blockEntity.getLevel();
 			if (level != null) {
-				((IInventoryDirtyDebouncer) this.blockEntity)
-						.productivebeesgenesis$markInventoryDirty(level.getGameTime());
+				debouncer.productivebeesgenesis$markInventoryDirty(level.getGameTime());
 				// 取消本次 setChanged，统一在 tick 尾部刷新
 				ci.cancel();
 			}

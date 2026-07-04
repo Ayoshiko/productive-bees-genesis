@@ -1,0 +1,83 @@
+package com.ayoshiko.productivebeesgenesis.mek.ae2;
+
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+
+/**
+ * AE2 集成加载器
+ * <br/>
+ * 使用 Holder 模式实现线程安全的懒加载单例，通过反射 + FML 双重检测判断 AE2 是否安装。
+ * <p>
+ * <b>检测策略</b>：
+ * <ol>
+ *   <li>优先通过 {@code FMLLoader.getLoadingModList().getModFileById("ae2")} 检测（准确且快速）</li>
+ *   <li>FML 不可用时回退到反射检测 {@code appeng.api.AEApi} 类是否存在</li>
+ * </ol>
+ * <p>
+ * <b>集成开关</b>：AE2 已安装 <b>且</b> {@code ModConfig.SERVER.mekCentrifugeAeOutputEnabled=true} 时才启用。
+ * 配置未加载（SERVER 为 null）时视为关闭，避免启动早期 NPE。
+ */
+public final class Ae2IntegrationLoader {
+
+	/** Holder 模式：JVM 类加载时保证线程安全的延迟初始化 */
+	private static final class Holder {
+		static final Ae2IntegrationLoader INSTANCE = new Ae2IntegrationLoader();
+	}
+
+	/** AE2 是否已安装（运行时检测，仅检测一次） */
+	private final boolean ae2Loaded;
+
+	private Ae2IntegrationLoader() {
+		this.ae2Loaded = detectAe2();
+	}
+
+	/** 获取单例实例 */
+	public static Ae2IntegrationLoader getInstance() {
+		return Holder.INSTANCE;
+	}
+
+	/** AE2 是否已安装 */
+	public static boolean isAe2Loaded() {
+		return getInstance().ae2Loaded;
+	}
+
+	/**
+	 * AE2 集成是否启用
+	 * <br/>
+	 * AE2 已安装 <b>且</b> 配置开启时返回 true。
+	 * 配置未加载时返回 false，避免启动早期 NPE。
+	 */
+	public static boolean isIntegrationEnabled() {
+		if (!isAe2Loaded()) return false;
+		// ModConfig.SERVER 在配置加载前为 null，需 null 检查
+		if (ModConfig.SERVER == null) return false;
+		try {
+			return ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
+		} catch (Throwable t) {
+			// 配置项异常时安全回退
+			ProductiveBeesGenesis.LOGGER.warn("AE2 集成配置读取失败，回退为关闭", t);
+			return false;
+		}
+	}
+
+	/**
+	 * 检测 AE2 是否安装
+	 * <br/>
+	 * 优先用 FML 检测（准确），失败则反射检测 AEApi 类。
+	 */
+	private static boolean detectAe2() {
+		// 1. 优先通过 FML 检测
+		try {
+			return net.neoforged.fml.loading.FMLLoader.getLoadingModList().getModFileById("ae2") != null;
+		} catch (Throwable t) {
+			// FML 不可用（如测试环境），回退到反射检测
+		}
+		// 2. 反射检测 AEApi 类
+		try {
+			Class.forName("appeng.api.AEApi");
+			return true;
+		} catch (ClassNotFoundException e) {
+			return false;
+		}
+	}
+}

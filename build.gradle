@@ -147,6 +147,15 @@ dependencies {
     // 用于编译 Iris Mixin 中引用的 net.irisshaders.iris.* 类
     compileOnly("maven.modrinth:iris:1.8.8+1.21.1-neoforge")
 
+    // Applied Energistics 2（可选依赖，编译时需要访问 AE2 网格 API）
+    // 用于 mek.ae2 包的 IGridNode / StorageHelper.poweredInsert 集成
+    // 运行时通过反射隔离，未安装 AE2 时 mek.ae2 包类永不加载
+    compileOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
+
+    // Jade（可选依赖，编译时需要访问 Jade API 显示 AE2 网络状态）
+    // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
+    compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'
+
     // 单元测试依赖（JUnit 5）
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
