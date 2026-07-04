@@ -44,6 +44,12 @@ import java.util.List;
 public abstract class TileComponentEjectorMixin {
 
 	/**
+	 * 配置不匹配警告标志位（仅首次触发时记录日志，避免每次 outputItems 刷屏）
+	 */
+	@Unique
+	private static volatile boolean productivebeesgenesis$configMismatchWarned = false;
+
+	/**
 	 * 在outputItems方法末尾注入，对MEK离心机使用动态延迟值
 	 * <br/>
 	 * 输出槽仍有物品时（活动状态）使用 mekCentrifugeEjectDelayActive 配置（默认1，最大化弹出速度），
@@ -61,7 +67,11 @@ public abstract class TileComponentEjectorMixin {
 				int activeDelay = ModConfig.SERVER.mekCentrifugeEjectDelayActive.get();
 				// 约束：活动延迟不应超过空闲延迟，避免 active > idle 的反直觉组合
 				if (activeDelay > idleDelay) {
-					ProductiveBeesGenesis.LOGGER.warn("mekCentrifugeEjectDelayActive({}) > mekCentrifugeEjectDelay({})，已自动调整为 idleDelay", activeDelay, idleDelay);
+					// 仅首次触发时记录 warn，避免每次 outputItems 刷屏日志
+					if (!productivebeesgenesis$configMismatchWarned) {
+						productivebeesgenesis$configMismatchWarned = true;
+						ProductiveBeesGenesis.LOGGER.warn("mekCentrifugeEjectDelayActive({}) > mekCentrifugeEjectDelay({})，已自动调整为 idleDelay", activeDelay, idleDelay);
+					}
 					activeDelay = idleDelay;
 				}
 				// 输出槽仍有物品时（活动状态）使用active延迟配置，否则使用空闲延迟配置

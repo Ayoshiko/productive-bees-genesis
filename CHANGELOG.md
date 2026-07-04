@@ -5,6 +5,57 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.6.0] - 2026-07-04
+
+### 新增
+
+- **第三方素材授权完善**：补充 Re:Avaritia 的真实授权信息
+  - 作者: Nova-Committee 团队（cnlimiter、Asek3、MikhailTapio）
+  - 许可证: 代码 MIT，资产 CC BY-NC-SA 4.0
+  - 源码: https://github.com/Nova-Committee/Re-Avaritia/tree/neo/1.21.1
+  - 合规说明: 本模组仅参考渲染参数而未复制资产，不触发 CC BY-NC-SA 4.0 传染条款
+
+### 重构
+
+- **架构优化: Ae2OutputStateHolder 组合类**：消除三个工厂类约 60 行 AE2 字段/方法重复
+  - 新增 `Ae2OutputStateHolder` 封装 3 个 AE2 字段（`ae2GridNode`、`aeItemKeyCache`、`ae2NodePending`）
+  - `IAe2OutputHost` 接口的 4 个纯字段访问方法改为 default 委托实现
+  - 三个工厂类 + `TileEntityMekCentrifuge` 各删除 3 字段 + 4 方法实现，新增 1 holder 字段
+- **架构优化: AbstractVerticalScrollBar 基类**：消除滚动条逻辑约 115 行重复
+  - 新增 `AbstractVerticalScrollBar` 抽象基类（229 行），采用模板方法模式
+  - `BeeSelectionScrollBar` 从 175 行降至 108 行（减少 67 行）
+  - `FilterListDragHandler` 从 262 行降至 214 行（减少 48 行）
+  - 差异点通过抽象方法处理（`getMinThumbHeight` 16 vs 20、`getScrollBarMargin` 命名差异）
+- **架构优化: JeiRecipeHider 工具类**：消除 JEI 反射隐藏逻辑约 118 行重复
+  - 新增 `JeiRecipeHider` 工具类（162 行），抽取 3 个反射隐藏方法
+  - `ProductiveBeesGenesisJEI` 从 442 行降至 324 行（减少 118 行）
+  - 4 个重复 try-catch 块改为循环 + 参数化调用
+
+### 性能优化
+
+- **FilterListBeeInfoCache LRU + clear**：防止长期运行内存累积
+  - 三个 Map 改为 LRU LinkedHashMap（容量上限 256，自动淘汰最久未访问条目）
+  - 新增 `clear()` 方法，在 `FilterListScreen.onClose()` 中调用主动释放内存
+- **JEI 反射缓存**：`isRecipeForBeeType` 的 `Class.getMethods()` 结果缓存到 `ConcurrentHashMap`
+  - 避免每个配方重复反射获取方法数组
+- **集合容量优化**：多处 `new HashMap<>()` / `new ArrayList<>()` 指定初始容量
+  - `Ae2OutputPusher`：`new HashMap<>(entries.size())`
+  - `AbstractCombEventHandler`：`new ArrayList<>(beeData.size())`
+  - `TransformUtils`：改用 `EnumMap<>(ItemDisplayContext.class)`（枚举键专用）
+  - `RandomHoneycombSelector`：`new HashMap<>(types.size() * 2)`（乘 2 避免 0.75 扩容）
+
+### 修复
+
+- **BeeConfigReloadMixin 日志级别不当**：`info` + 完整异常栈过重
+  - 改为 `warn` 级别且仅传 `e.getMessage()`，保留日志可见性同时避免异常栈刷屏
+- **TileComponentEjectorMixin 配置警告刷屏**：配置错误时每次 `outputItems` 都打印 warn
+  - 添加 `static volatile boolean` 标志位，仅在首次触发时记录 warn，后续静默调整
+
+### 删除
+
+- **MekCompatHooks 死代码**：删除 3 个无调用方的方法
+  - `getEMETierProcesses`、`getEMETierImageWidth`、`getEMETierInventoryLabelX`
+
 ## [1.5.0] - 2026-07-04
 
 ### 新增

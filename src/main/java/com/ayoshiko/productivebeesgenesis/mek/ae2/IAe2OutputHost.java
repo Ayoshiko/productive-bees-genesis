@@ -17,11 +17,26 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  * 供 {@link Ae2OutputPusher} 遍历所有进程的输出槽进行推送。
  * <p>
  * 所有方法使用 {@code productivebeesgenesis$} 前缀，避免与其他模组的 Mixin 冲突。
+ * <p>
+ * <b>组合模式</b>：纯字段访问的 getter/setter 委托给
+ * {@link Ae2OutputStateHolder}（通过 {@link #productivebeesgenesis$getAe2StateHolder()}），
+ * 消除三个工厂类的字段/方法重复。委托给宿主 {@code this} 的方法（能量源、世界、坐标）
+ * 仍由实现类提供。
  */
 public interface IAe2OutputHost extends PbRecipeContext {
 
 	/** NBT 中保存 AE2 网格节点的标签名 */
 	String AE2_NODE_TAG = "productivebeesgenesis_ae2_node";
+
+	/**
+	 * 获取 AE2 状态持有者（子类必须实现）
+	 * <br/>
+	 * 返回由工厂类持有的 {@link Ae2OutputStateHolder} 实例，
+	 * 供本接口的 default 方法委托字段访问。
+	 *
+	 * @return 状态持有者实例，不应为 null
+	 */
+	Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder();
 
 	/**
 	 * 获取 AE2 网格节点
@@ -31,14 +46,18 @@ public interface IAe2OutputHost extends PbRecipeContext {
 	 *
 	 * @return 网格节点对象，未创建时返回 null
 	 */
-	Object productivebeesgenesis$getAe2GridNode();
+	default Object productivebeesgenesis$getAe2GridNode() {
+		return productivebeesgenesis$getAe2StateHolder().getAe2GridNode();
+	}
 
 	/**
 	 * 设置 AE2 网格节点
 	 *
 	 * @param node 网格节点对象（实际类型为 IManagedGridNode），可为 null
 	 */
-	void productivebeesgenesis$setAe2GridNode(Object node);
+	default void productivebeesgenesis$setAe2GridNode(Object node) {
+		productivebeesgenesis$getAe2StateHolder().setAe2GridNode(node);
+	}
 
 	/**
 	 * 获取能量源 — 用于 AE2 poweredInsert 的能量消耗
@@ -62,14 +81,18 @@ public interface IAe2OutputHost extends PbRecipeContext {
 	 *
 	 * @return AeItemKeyCache 实例，或 null
 	 */
-	Object productivebeesgenesis$getAeItemKeyCache();
+	default Object productivebeesgenesis$getAeItemKeyCache() {
+		return productivebeesgenesis$getAe2StateHolder().getAeItemKeyCache();
+	}
 
 	/**
 	 * 设置 AEItemKey 缓存
 	 *
 	 * @param cache AeItemKeyCache 实例（实际类型），可为 null
 	 */
-	void productivebeesgenesis$setAeItemKeyCache(Object cache);
+	default void productivebeesgenesis$setAeItemKeyCache(Object cache) {
+		productivebeesgenesis$getAe2StateHolder().setAeItemKeyCache(cache);
+	}
 
 	/**
 	 * 推送完成回调

@@ -145,8 +145,8 @@ public final class Ae2OutputPusher {
 		}
 
 		// 10. 批量合并：按 AEItemKey 分组
-		Map<AEItemKey, List<SlotEntry>> keyToEntries = new HashMap<>();
-		Map<AEItemKey, Long> keyToTotalCount = new HashMap<>();
+		Map<AEItemKey, List<SlotEntry>> keyToEntries = new HashMap<>(entries.size());
+		Map<AEItemKey, Long> keyToTotalCount = new HashMap<>(entries.size());
 		for (SlotEntry entry : entries) {
 			keyToEntries.computeIfAbsent(entry.key, k -> new ArrayList<>()).add(entry);
 			keyToTotalCount.merge(entry.key, (long) entry.count, Long::sum);

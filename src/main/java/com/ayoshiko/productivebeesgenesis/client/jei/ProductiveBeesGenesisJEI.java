@@ -306,123 +306,20 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			}
 		}
 
-		// 2. 隐藏所有获取万象创世蜜蜂的配方
-		hideMyriadCreationsRecipes(recipeManager);
-	}
-
-	/**
-	 * 隐藏所有获取万象创世蜜蜂的配方
-	 * <br/>
-	 * 包括：钓鱼、繁殖、转化、蜂巢生成等配方类型
-	 */
-	private void hideMyriadCreationsRecipes(mezz.jei.api.recipe.IRecipeManager recipeManager) {
-		// 获取ProductiveBees的配方类型
-		var pbPlugin = cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin.class;
-
-		try {
-			// 隐藏钓鱼配方 (BeeFishingRecipe)
-			var fishingType = pbPlugin.getField("BEE_FISHING_TYPE").get(null);
-			if (fishingType instanceof mezz.jei.api.recipe.RecipeType<?> type) {
-				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世钓鱼配方: {}", e.getMessage());
+		// 2. 隐藏所有获取万象创世蜜蜂的配方（钓鱼、繁殖、转化、蜂巢生成）
+		String[][] fields = {
+				{"BEE_FISHING_TYPE", "钓鱼"},
+				{"BEE_BREEDING_TYPE", "繁殖"},
+				{"BEE_CONVERSION_TYPE", "转化"},
+				{"BEE_SPAWNING_TYPE", "蜂巢生成"}
+		};
+		for (String[] f : fields) {
+			JeiRecipeHider.hideRecipesByReflection(
+					recipeManager,
+					cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin.class,
+					f[0], f[1],
+					PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		}
-
-		try {
-			// 隐藏繁殖配方 (BeeBreedingRecipe)
-			var breedingType = pbPlugin.getField("BEE_BREEDING_TYPE").get(null);
-			if (breedingType instanceof mezz.jei.api.recipe.RecipeType<?> type) {
-				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世繁殖配方: {}", e.getMessage());
-		}
-
-		try {
-			// 隐藏转化配方 (BeeConversionRecipe)
-			var conversionType = pbPlugin.getField("BEE_CONVERSION_TYPE").get(null);
-			if (conversionType instanceof mezz.jei.api.recipe.RecipeType<?> type) {
-				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世转化配方: {}", e.getMessage());
-		}
-
-		try {
-			// 隐藏蜂巢生成配方 (BeeSpawningRecipe)
-			var spawningType = pbPlugin.getField("BEE_SPAWNING_TYPE").get(null);
-			if (spawningType instanceof mezz.jei.api.recipe.RecipeType<?> type) {
-				hideRecipesByBeeType(recipeManager, type, PBConstants.MYRIADCREATIONS_TYPE_STRING);
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世蜂巢生成配方: {}", e.getMessage());
-		}
-	}
-
-	/**
-	 * 根据蜜蜂类型隐藏配方
-	 * <br/>
-	 * 遍历指定类型的所有配方，如果配方的输出是目标蜜蜂类型，则隐藏该配方
-	 */
-	@SuppressWarnings("unchecked")
-	private <T> void hideRecipesByBeeType(mezz.jei.api.recipe.IRecipeManager recipeManager,
-			mezz.jei.api.recipe.RecipeType<T> recipeType, String beeTypeString) {
-		try {
-			// 获取该类型的所有配方
-			var recipeLookup = recipeManager.createRecipeLookup(recipeType);
-			if (recipeLookup == null) return;
-
-			List<T> recipesToHide = recipeLookup.get()
-					.filter(recipe -> isMyriadCreationsRecipe(recipe, beeTypeString))
-					.map(recipe -> (T) recipe)
-					.toList();
-
-			// 隐藏匹配的配方
-			if (!recipesToHide.isEmpty()) {
-				recipeManager.hideRecipes(recipeType, recipesToHide);
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("隐藏配方时出错: {}", e.getMessage());
-		}
-	}
-
-	/**
-	 * 检查配方是否涉及万象创世蜜蜂
-	 * <br/>
-	 * 通过反射检查配方的输出或输入是否包含万象创世蜜蜂类型
-	 */
-	private boolean isMyriadCreationsRecipe(Object recipe, String beeTypeString) {
-		if (recipe == null) return false;
-
-		try {
-			// 检查是否有getResultBee或getOutputBee方法
-			for (var method : recipe.getClass().getMethods()) {
-				String methodName = method.getName();
-				if (methodName.equals("getResultBee") || methodName.equals("getOutputBee")
-						|| methodName.equals("getBee") || methodName.equals("result")
-						|| methodName.equals("output")) {
-					Object result = method.invoke(recipe);
-					if (result instanceof BeeIngredient beeIngredient) {
-						if (beeTypeString.equals(beeIngredient.getBeeType().toString())) {
-							return true;
-						}
-					}
-					// 检查Supplier<BeeIngredient>
-					if (result instanceof java.util.function.Supplier<?> supplier) {
-						Object supplied = supplier.get();
-						if (supplied instanceof BeeIngredient beeIngredient) {
-							if (beeTypeString.equals(beeIngredient.getBeeType().toString())) {
-								return true;
-							}
-						}
-					}
-				}
-			}
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("isMyriadCreationsRecipe 反射检查异常", e);
-		}
-
-		return false;
 	}
 }
+

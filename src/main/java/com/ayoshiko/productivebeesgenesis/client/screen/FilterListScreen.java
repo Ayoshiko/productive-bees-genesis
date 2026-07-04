@@ -371,7 +371,7 @@ public final class FilterListScreen extends Screen {
 		}
 
 		// 滚动条交互：左键拖动滑块，点击轨道空白处快速跳转到对应位置
-		if (dragHandler.handleScrollbarClick(mouseX, mouseY, button)) {
+		if (dragHandler.handleMouseClicked(mouseX, mouseY, button)) {
 			return true;
 		}
 
@@ -454,6 +454,8 @@ public final class FilterListScreen extends Screen {
 
 	@Override
 	public void onClose() {
+		// 关闭屏幕时清空蜜蜂信息缓存，立即释放图标/名称/产物占用的内存
+		beeInfoCache.clear();
 		minecraft.setScreen(parent);
 	}
 

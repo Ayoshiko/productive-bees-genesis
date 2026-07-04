@@ -371,7 +371,7 @@ public final class RandomHoneycombSelector {
 	 * @return 类型→数量的映射
 	 */
 	public static Map<ResourceLocation, Integer> allocateEvenly(int total, List<ResourceLocation> types) {
-		Map<ResourceLocation, Integer> result = new HashMap<>();
+		Map<ResourceLocation, Integer> result = new HashMap<>(types.size() * 2);
 		int buckets = types.size();
 		if (buckets <= 0 || total <= 0) return result;
 
@@ -397,7 +397,7 @@ public final class RandomHoneycombSelector {
 	 * @return 类型→数量的映射
 	 */
 	public static Map<ResourceLocation, Integer> allocateRandomly(int total, List<ResourceLocation> types, RandomSource random) {
-		Map<ResourceLocation, Integer> result = new HashMap<>();
+		Map<ResourceLocation, Integer> result = new HashMap<>(types.size() * 2);
 		int buckets = types.size();
 		if (buckets <= 0 || total <= 0) return result;
 

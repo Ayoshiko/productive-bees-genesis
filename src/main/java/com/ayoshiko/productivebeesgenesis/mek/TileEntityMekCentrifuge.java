@@ -36,6 +36,7 @@ import org.jetbrains.annotations.NotNull;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
@@ -85,14 +86,12 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	/** 服务端 tick 处理器 — 封装 onUpdateServer/PB配方处理逻辑 */
 	private final MekCentrifugeTickHandler tickHandler;
 
-	/** AE2 网格节点（Object 类型避免 AE2 未安装时类加载失败，实际类型为 IManagedGridNode） */
-	private Object productivebeesgenesis$ae2GridNode;
-
-	/** AE2 节点待连接标志 — clearRemoved 时置 true，首个 server tick 时执行 connectNode */
-	private boolean ae2NodePending = false;
-
-	/** Task 7: AEItemKey 缓存（Object 类型保持依赖隔离，实际为 AeItemKeyCache） */
-	private Object productivebeesgenesis$aeItemKeyCache;
+	/**
+	 * AE2 输出状态持有者 — 封装网格节点、AEItemKey 缓存和待连接标志
+	 * <br/>
+	 * 消除 IAe2OutputHost 实现类的 AE2 字段/方法重复，通过接口的 default 方法委托访问。
+	 */
+	private final Ae2OutputStateHolder productivebeesgenesis$ae2StateHolder = new Ae2OutputStateHolder();
 
 	public TileEntityMekCentrifuge(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, BASE_TICKS_REQUIRED);
@@ -263,8 +262,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	protected boolean onUpdateServer() {
 		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出）
-		if (ae2NodePending) {
-			ae2NodePending = false;
+		if (productivebeesgenesis$ae2StateHolder.isAe2NodePending()) {
+			productivebeesgenesis$ae2StateHolder.setAe2NodePending(false);
 			Ae2GridNodeManager.connectNode(this);
 		}
 		boolean result = tickHandler.onUpdateServer();
@@ -480,14 +479,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void clearRemoved() {
 		super.clearRemoved();
 		Ae2GridNodeManager.prepareNode(this);
-		ae2NodePending = true;
+		productivebeesgenesis$ae2StateHolder.setAe2NodePending(true);
 	}
 
 	/** 方块被移除时销毁 AE2 网格节点，避免内存泄漏 */
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		ae2NodePending = false;
+		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
 	}
 
@@ -495,28 +494,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
-		ae2NodePending = false;
+		productivebeesgenesis$ae2StateHolder.clear();
 		Ae2GridNodeManager.destroyNode(this);
 	}
 
+	/** 获取 AE2 状态持有者 — 供 IAe2OutputHost default 方法委托使用 */
 	@Override
-	public Object productivebeesgenesis$getAe2GridNode() {
-		return productivebeesgenesis$ae2GridNode;
-	}
-
-	@Override
-	public void productivebeesgenesis$setAe2GridNode(Object node) {
-		productivebeesgenesis$ae2GridNode = node;
-	}
-
-	@Override
-	public Object productivebeesgenesis$getAeItemKeyCache() {
-		return productivebeesgenesis$aeItemKeyCache;
-	}
-
-	@Override
-	public void productivebeesgenesis$setAeItemKeyCache(Object cache) {
-		this.productivebeesgenesis$aeItemKeyCache = cache;
+	public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return productivebeesgenesis$ae2StateHolder;
 	}
 
 	@Override

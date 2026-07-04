@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -25,20 +26,43 @@ import net.minecraft.world.level.Level;
  *   <li>缓存产物配方遍历结果</li>
  * </ul>
  * <p>
- * <b>线程安全</b>：使用 {@link ConcurrentHashMap}，客户端渲染线程单线程访问，
- * 并发集合作为防御性措施。
+ * <b>容量限制</b>：基于 LRU {@link LinkedHashMap}，超出 {@link #MAX_CACHE_SIZE} 自动淘汰最久未访问条目，
+ * 防止长时间运行内存累积。
+ * <p>
+ * <b>线程安全</b>：客户端 GUI 单线程访问，使用 {@link Collections#synchronizedMap(Map)} 包装作为防御性措施。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault
 final class FilterListBeeInfoCache {
 
-	/** 蜜蜂图标缓存 */
-	private final Map<String, ItemStack> iconCache = new ConcurrentHashMap<>();
-	/** 蜜蜂显示名称缓存 */
-	private final Map<String, Component> displayNameCache = new ConcurrentHashMap<>();
-	/** 蜜蜂产物信息缓存 */
-	private final Map<String, Component> productInfoCache = new ConcurrentHashMap<>();
+	/** 缓存最大条目数，超出后按 LRU 淘汰最久未访问条目 */
+	private static final int MAX_CACHE_SIZE = 256;
+
+	/** 蜜蜂图标缓存（LRU，容量受限） */
+	private final Map<String, ItemStack> iconCache = Collections.synchronizedMap(
+			new LinkedHashMap<String, ItemStack>(16, 0.75f, true) {
+				@Override
+				protected boolean removeEldestEntry(Map.Entry<String, ItemStack> eldest) {
+					return size() > MAX_CACHE_SIZE;
+				}
+			});
+	/** 蜜蜂显示名称缓存（LRU，容量受限） */
+	private final Map<String, Component> displayNameCache = Collections.synchronizedMap(
+			new LinkedHashMap<String, Component>(16, 0.75f, true) {
+				@Override
+				protected boolean removeEldestEntry(Map.Entry<String, Component> eldest) {
+					return size() > MAX_CACHE_SIZE;
+				}
+			});
+	/** 蜜蜂产物信息缓存（LRU，容量受限） */
+	private final Map<String, Component> productInfoCache = Collections.synchronizedMap(
+			new LinkedHashMap<String, Component>(16, 0.75f, true) {
+				@Override
+				protected boolean removeEldestEntry(Map.Entry<String, Component> eldest) {
+					return size() > MAX_CACHE_SIZE;
+				}
+			});
 
 	/**
 	 * 获取蜜蜂代表图标（带缓存）
@@ -105,5 +129,23 @@ final class FilterListBeeInfoCache {
 				: Component.empty();
 		productInfoCache.put(beeTypeId, productInfo);
 		return productInfo;
+	}
+
+	/**
+	 * 清空所有缓存
+	 * <p>
+	 * 在屏幕关闭（{@link FilterListScreen#onClose()}）时调用，释放图标/名称/产物缓存占用内存。
+	 * 虽 LRU 已限制上限，但屏幕关闭后缓存不再有用，主动清空可立即释放内存。
+	 */
+	void clear() {
+		synchronized (iconCache) {
+			iconCache.clear();
+		}
+		synchronized (displayNameCache) {
+			displayNameCache.clear();
+		}
+		synchronized (productInfoCache) {
+			productInfoCache.clear();
+		}
 	}
 }

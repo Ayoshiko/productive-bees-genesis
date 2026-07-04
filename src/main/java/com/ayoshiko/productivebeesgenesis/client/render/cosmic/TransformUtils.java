@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 import org.joml.Quaternionf;
@@ -41,7 +41,7 @@ public final class TransformUtils {
 		if (itemTransforms == ItemTransforms.NO_TRANSFORMS) {
 			return IDENTITY;
 		}
-		Map<ItemDisplayContext, Transformation> map = new HashMap<>();
+		Map<ItemDisplayContext, Transformation> map = new EnumMap<>(ItemDisplayContext.class);
 		for (ItemDisplayContext value : ItemDisplayContext.values()) {
 			map.put(value, create(itemTransforms.getTransform(value)));
 		}

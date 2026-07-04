@@ -99,7 +99,7 @@ public abstract class AbstractCombEventHandler {
 				return new CopyOnWriteArrayList<>();
 			}
 
-			List<ResourceLocation> newTypes = new ArrayList<>();
+			List<ResourceLocation> newTypes = new ArrayList<>(beeData.size());
 			for (ResourceLocation beeType : beeData.keySet()) {
 				if (excludedTypes.contains(beeType)) continue;
 				if (!hasCentrifugeRecipe(level, beeType)) continue;

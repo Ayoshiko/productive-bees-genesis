@@ -13,11 +13,14 @@
 
 ## Re:Avaritia
 
-- **项目**: Re:Avaritia
-- **作者**: （请补充）
-- **许可证**: （请补充）
-- **使用方式**: 引用了 mask 纹理用于宇宙渲染效果
-- **源码**: （请补充）
+- **项目**: Re:Avaritia（Avaritia 的非官方重制版）
+- **作者**: Nova-Committee 团队（程序员：cnlimiter、Asek3、MikhailTapio）
+- **许可证**:
+  - 代码：[MIT License](https://opensource.org/license/mit)
+  - 资产：[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+- **使用方式**: 参考了 Re:Avaritia 的宇宙渲染参数（COSMIC/COSMIC_ARMOR 渲染类型的参数配置），并在 `MixinShaderInstance` 中参考其着色器处理逻辑。本项目未直接打包或分发 Re:Avaritia 的资产文件，所有渲染逻辑基于参考实现独立编写。
+- **源码**: https://github.com/Nova-Committee/Re-Avaritia/tree/neo/1.21.1
+- **合规说明**: Re:Avaritia 资产采用 CC BY-NC-SA 4.0（非商业、相同方式共享），本模组仅参考其渲染参数而未复制资产，不触发 CC BY-NC-SA 4.0 的传染条款。
 
 ## Minecraft
 

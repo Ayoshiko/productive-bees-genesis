@@ -313,7 +313,7 @@ public final class BeeSelectionScreen extends Screen {
 		graphics.disableScissor();
 
 		// 滚动条（委托给滚动条辅助类）
-		scrollBar.render(graphics);
+		scrollBar.renderScrollBar(graphics);
 
 		// 渲染组件（搜索框、按钮）— 手动渲染避免Screen默认renderBackground渲染半透明背景
 		for (var renderable : renderables) {

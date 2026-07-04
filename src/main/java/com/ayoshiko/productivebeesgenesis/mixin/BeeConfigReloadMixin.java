@@ -27,8 +27,9 @@ public abstract class BeeConfigReloadMixin {
 			BeeConfigApplier.applyOverrides();
 		} catch (Exception e) {
 			// 捕获所有异常（包括配置未加载的 IllegalStateException 及其他意外异常），
-			// 跳过本次覆盖，后续由 ModConfigEvent 触发
-			ProductiveBeesGenesis.LOGGER.info("蜜蜂配置尚未加载或应用失败，跳过属性覆盖（首次启动正常行为）", e);
+			// 跳过本次覆盖，后续由 ModConfigEvent 触发。
+			// 使用 warn 级别仅记录消息（不传异常栈），避免首次启动正常行为刷屏日志。
+			ProductiveBeesGenesis.LOGGER.warn("蜜蜂配置尚未加载或应用失败，跳过属性覆盖（首次启动正常行为）: {}", e.getMessage());
 		}
 	}
 }
