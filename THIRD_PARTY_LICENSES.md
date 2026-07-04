@@ -7,8 +7,7 @@
 - **项目**: Productive Bees
 - **作者**: cy.jdkdigital
 - **许可证**: MIT License
-- **使用方式**: 本模组作为 Productive Bees 的附属模组，引用了其 API 和部分纹理/模型资源
-- **修改内容**: 重写了离心机方块的部分模型和纹理（位于 `assets/productivebees/`）
+- **使用方式**: 本模组作为 Productive Bees 的附属模组，引用了其 API
 - **源码**: https://github.com/cyjdkdigital/productivebees
 
 ## Re:Avaritia

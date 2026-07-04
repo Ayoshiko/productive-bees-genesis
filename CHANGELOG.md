@@ -5,7 +5,46 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [1.7.0] - 2026-07-04
+> **版本号重新编号说明**（2026-07-04）
+>
+> 经审查发现 v1.4.0 起的版本号递增不符合 [SemVer](https://semver.org/lang/zh-CN/) 严格规则：
+> 主要是 bug 修复的版本错误使用了 MINOR 级别递增。现已按 SemVer 规则重新编号：
+>
+> | 原版本 | 新版本 | 原因 |
+> |--------|--------|------|
+> | v1.4.0 | v1.3.4 | 综合审查修复 → PATCH |
+> | v1.4.1 | v1.4.0 | 含新功能（ME/EME 颜色） → MINOR |
+> | v1.4.2 | v1.4.1 | 代码审查修复 → PATCH |
+> | v1.4.3 | v1.5.0 | 含新功能（Jade AE2 状态） → MINOR |
+> | v1.5.0 | v1.5.1 | 综合审计修复 → PATCH |
+> | v1.6.0 | v1.5.2 | 内部架构重构 → PATCH |
+> | v1.7.0 | v1.5.3 | bug 修复 + 安全加固 → PATCH |
+>
+> 已发布的 jar 文件名保持原版本号（内部 `mod_version` 无法回溯修改），
+> 但 git tag 和 GitHub Release 标题已同步重新编号。
+
+## [1.6.0] - 2026-07-04
+
+### 删除
+
+- **遗留 PB 风格离心机资源**：删除 `assets/productivebees/` 下全部 14 个遗留资源文件
+  - 6 个模型 JSON：`idle.json`、`running.json`、`heated_idle.json`、`heated_running.json`、`powered_idle.json`、`powered_running.json`
+  - 8 个纹理文件：`bottom.png`、`grindstone_side.png`（含 `.mcmeta`）、`heated_top.png`、`inner.png`、`powered_side.png`、`side.png`、`top.png`
+  - **原因**：早期开发版本测试制作的 PB 原版风格离心机资源，后改为 Mek 风格机器，这些遗留资源已完全孤立（代码和 blockstate 均引用 `productivebeesgenesis:block/mekanism_centrifuge`），不再需要
+  - 项目未来只实现 Mek 风格机器
+
+### 变更
+
+- **THIRD_PARTY_LICENSES.md 更新**：移除 Productive Bees 条目中"重写了离心机方块的部分模型和纹理"的描述
+  - 原描述引用的 `assets/productivebees/` 目录已删除，本模组不再修改 PB 资产，仅引用其 API
+
+### SemVer 合规性
+
+- **版本号重新编号**：按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则重新编号 v1.4.0 起的所有版本
+  - 详见 CHANGELOG 顶部"版本号重新编号说明"
+  - git tag 和 GitHub Release 已同步重新编号
+
+## [1.5.3] - 2026-07-04
 
 ### 修复
 
@@ -29,7 +68,7 @@
 - 新增 `findings-v6.md`：v6 调查阶段发现的 2 项关键问题及修复方案
 - 更新 `future-optimization.md`：标记用户排除项（API 暴露、配置扩展、多语言、JEI 增强），标记频率限制已完成
 
-## [1.6.0] - 2026-07-04
+## [1.5.2] - 2026-07-04
 
 ### 新增
 
@@ -80,7 +119,7 @@
 - **MekCompatHooks 死代码**：删除 3 个无调用方的方法
   - `getEMETierProcesses`、`getEMETierImageWidth`、`getEMETierInventoryLabelX`
 
-## [1.5.0] - 2026-07-04
+## [1.5.1] - 2026-07-04
 
 ### 新增
 
@@ -138,7 +177,7 @@
 
 - **gradle.properties 开发者配置**：移除 `org.gradle.user.home=E:/Gradle/.gradle` 绝对路径
 
-## [1.4.3] - 2026-07-04
+## [1.5.0] - 2026-07-04
 
 ### 新增
 
@@ -199,7 +238,7 @@
   - 配合 `flushDirty()` 实现"写时标记、读时刷新"的批量优化
 
 
-## [1.4.2] - 2026-07-02
+## [1.4.1] - 2026-07-02
 
 ### 修复
 
@@ -213,7 +252,7 @@
 - **P2: 残留测试文件清理**：删除 `mek/test_write.txt`（开发遗留文件）
 
 
-## [1.4.1] - 2026-07-02
+## [1.4.0] - 2026-07-02
 
 ### 修复
 
@@ -245,7 +284,7 @@
   - "寰宇致密" → "宇宙致密"
   - "悖论多元宇宙" → "无限多元"
 
-## [1.4.0] - 2026-07-01
+## [1.3.4] - 2026-07-01
 
 ### 修复
 

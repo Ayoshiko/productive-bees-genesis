@@ -1,6 +1,0 @@
-{
-  "parent": "productivebees:block/centrifuge/heated_idle",
-  "textures": {
-    "side": "productivebees:block/centrifuge/powered_side"
-  }
-}
