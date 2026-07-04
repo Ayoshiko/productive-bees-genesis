@@ -25,6 +25,7 @@ import net.neoforged.neoforge.common.extensions.IBlockEntityExtension;
 @Mixin(IBlockEntityExtension.class)
 public interface IBlockEntityExtensionMixin {
 
+	// remap = false：getModelData() 是 NeoForge IBlockEntityExtension 的 default 方法，非原生 MC 方法，无需 SRG 重映射
 	@Inject(method = "getModelData", at = @At("HEAD"), cancellable = true, remap = false)
 	private void productivebeesgenesis$getModelData(CallbackInfoReturnable<ModelData> cir) {
 		if ((Object) this instanceof CombBlockBlockEntity self) {

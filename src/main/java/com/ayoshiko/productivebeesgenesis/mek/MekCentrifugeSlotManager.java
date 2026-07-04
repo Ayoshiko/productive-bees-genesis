@@ -14,6 +14,7 @@ import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.world.item.ItemStack;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 /**
@@ -249,9 +250,20 @@ class MekCentrifugeSlotManager {
 		outputBatchDepth++;
 	}
 
-	/** 结束批量输出插入，统一触发一次标志位更新和 recipe cache unpause */
+	/**
+	 * 结束批量输出插入，统一触发一次标志位更新和 recipe cache unpause
+	 * <br/>
+	 * 包含下溢保护：若 endOutputBatch 调用次数多于 beginOutputBatch（配对错误），
+	 * batchDepth 会变为负值，导致后续 begin/end 永久失配（depth 始终 < 0，== 0 永不成立）。
+	 * 检测到下溢时重置为 0 并记录 warn 日志，使批量逻辑可自恢复。
+	 */
 	void endOutputBatch() {
-		if (--outputBatchDepth == 0 && outputBatchDirty) {
+		if (--outputBatchDepth < 0) {
+			outputBatchDepth = 0;
+			ProductiveBeesGenesis.LOGGER.warn("endOutputBatch 调用次数多于 beginOutputBatch，batchDepth 已重置为 0（配对错误）");
+			return;
+		}
+		if (outputBatchDepth == 0 && outputBatchDirty) {
 			outputBatchDirty = false;
 			if (recipeCacheUnpauseListener != null) {
 				recipeCacheUnpauseListener.onContentsChanged();

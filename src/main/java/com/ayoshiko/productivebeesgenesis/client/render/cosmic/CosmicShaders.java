@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.shaders.AbstractUniform;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 
@@ -54,6 +55,8 @@ public class CosmicShaders {
 
 	@SubscribeEvent
 	public static void onRegisterShaders(RegisterShadersEvent event) {
+		// 三个 shader 独立 try-catch：单个 shader 注册失败只记录 warn，不影响其他 shader 注册
+		// 原共用 try-catch 会导致首个失败时后续 shader 全部跳过（如 cosmic 失败则 armor/hell 均不注册）
 		try {
 			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic"), DefaultVertexFormat.BLOCK), shader -> {
 				COSMIC_SHADER = shader;
@@ -65,6 +68,10 @@ public class CosmicShaders {
 				cosmicUVs = COSMIC_SHADER.safeGetUniform("cosmicuvs");
 				COSMIC_SHADER.apply();
 			});
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 方块着色器失败", e);
+		}
+		try {
 			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic"), DefaultVertexFormat.NEW_ENTITY), shader -> {
 				COSMIC_ARMOR_SHADER = shader;
 				cosmicArmorTime = COSMIC_ARMOR_SHADER.safeGetUniform("time");
@@ -75,6 +82,10 @@ public class CosmicShaders {
 				cosmicArmorUVs = COSMIC_ARMOR_SHADER.safeGetUniform("cosmicuvs");
 				COSMIC_ARMOR_SHADER.apply();
 			});
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 护甲着色器失败", e);
+		}
+		try {
 			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "hell"), DefaultVertexFormat.BLOCK), shader -> {
 				HELL_SHADER = shader;
 				hellTime = HELL_SHADER.safeGetUniform("time");
@@ -86,7 +97,7 @@ public class CosmicShaders {
 				HELL_SHADER.apply();
 			});
 		} catch (Exception e) {
-			throw new RuntimeException("Failed to register cosmic shaders", e);
+			ProductiveBeesGenesis.LOGGER.warn("注册 hell 着色器失败", e);
 		}
 	}
 

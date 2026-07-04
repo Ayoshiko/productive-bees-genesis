@@ -474,13 +474,13 @@ public class PbRecipeProcessor {
 
 	/** 持久化PB配方处理进度（防止重启后PB处理进度丢失） */
 	public void saveAdditional(CompoundTag nbt) {
-		nbt.putIntArray("PbProgress", pbOperatingTicks);
+		nbt.putIntArray("productivebeesgenesis_pb_progress", pbOperatingTicks);
 	}
 
 	/** 加载PB配方处理进度 */
 	public void loadAdditional(CompoundTag nbt) {
-		if (nbt.contains("PbProgress", Tag.TAG_INT_ARRAY)) {
-			int[] saved = nbt.getIntArray("PbProgress");
+		if (nbt.contains("productivebeesgenesis_pb_progress", Tag.TAG_INT_ARRAY)) {
+			int[] saved = nbt.getIntArray("productivebeesgenesis_pb_progress");
 			for (int i = 0; i < pbOperatingTicks.length && i < saved.length; i++) {
 				pbOperatingTicks[i] = saved[i];
 			}

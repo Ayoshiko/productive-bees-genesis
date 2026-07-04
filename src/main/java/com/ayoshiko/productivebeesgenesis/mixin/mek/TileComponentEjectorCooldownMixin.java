@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 判断“是否弹出”通过比较调用前后 {@link IMekCentrifugeTile} 输出槽物品总数（O(1) 读取），无需侵入 Mekanism 内部返回值。
  */
 @Mixin(value = TileComponentEjector.class, remap = false)
-public class TileComponentEjectorCooldownMixin {
+public abstract class TileComponentEjectorCooldownMixin {
 
 	/** 连续未弹出物品次数（Atomic 保证服务端主线程与异步回调的可见性） */
 	@Unique
@@ -57,7 +57,7 @@ public class TileComponentEjectorCooldownMixin {
 
 	/** 内容未变化时剩余可跳过的 tick 数 */
 	@Unique
-	private volatile int productivebeesgenesis$skipTicksRemaining = 0;
+	private final AtomicInteger productivebeesgenesis$skipTicksRemaining = new AtomicInteger(0);
 
 	// ===== Task 23: Ejector 持续高负载下降频 =====
 	/** 长冷却剩余 tick 数，大于 0 时跳过 outputItems */
@@ -70,20 +70,21 @@ public class TileComponentEjectorCooldownMixin {
 
 	/** 最小调用间隔剩余 tick 数 */
 	@Unique
-	private volatile int productivebeesgenesis$minIntervalRemaining = 0;
+	private final AtomicInteger productivebeesgenesis$minIntervalRemaining = new AtomicInteger(0);
 
 	// ===== Step 5: 单 tick 最大弹出次数上限 =====
 	/** 当前 tick 剩余可调用 outputItems 的次数（<=0=已耗尽；Integer.MAX_VALUE=无限制） */
 	@Unique
-	private volatile int productivebeesgenesis$ejectsRemainingThisTick = 0;
+	private final AtomicInteger productivebeesgenesis$ejectsRemainingThisTick = new AtomicInteger(0);
 
 	// ===== 配置缓存：避免每 tick 高频读取 ModConfig（256× 加速下每 tick 3584 次配置读取） =====
 	/** 配置缓存刷新间隔（tick） */
-	private static final int CONFIG_REFRESH_INTERVAL = 100;
+	@Unique
+	private static final int PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL = 100;
 
 	/** 上次刷新配置的游戏刻 */
 	@Unique
-	private volatile long productivebeesgenesis$lastConfigRefreshTick = -CONFIG_REFRESH_INTERVAL;
+	private volatile long productivebeesgenesis$lastConfigRefreshTick = -PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL;
 
 	/** 缓存的最大速度模式标志 */
 	@Unique
@@ -126,7 +127,7 @@ public class TileComponentEjectorCooldownMixin {
 	}
 
 	/**
-	 * 刷新配置缓存 — 每 {@link #CONFIG_REFRESH_INTERVAL} tick 刷新一次。
+	 * 刷新配置缓存 — 每 {@link #PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL} tick 刷新一次。
 	 * <p>
 	 * 256× 加速下 14 台离心机每 tick 调用 outputItems 3584 次，每次读取 9 项配置
 	 * 共 32256 次配置读取/tick。缓存后降至 3584 次方法调用 + 0 次配置读取（命中缓存时），
@@ -134,7 +135,7 @@ public class TileComponentEjectorCooldownMixin {
 	 */
 	@Unique
 	private void productivebeesgenesis$refreshConfigCache(long currentTick) {
-		if (currentTick - productivebeesgenesis$lastConfigRefreshTick < CONFIG_REFRESH_INTERVAL) {
+		if (currentTick - productivebeesgenesis$lastConfigRefreshTick < PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL) {
 			return;
 		}
 		productivebeesgenesis$lastConfigRefreshTick = currentTick;
@@ -171,12 +172,12 @@ public class TileComponentEjectorCooldownMixin {
 				productivebeesgenesis$busyCooldown.decrementAndGet();
 			}
 			// Task 23: 递减最小调用间隔计数器
-			if (productivebeesgenesis$minIntervalRemaining > 0) {
-				productivebeesgenesis$minIntervalRemaining--;
+			if (productivebeesgenesis$minIntervalRemaining.get() > 0) {
+				productivebeesgenesis$minIntervalRemaining.decrementAndGet();
 			}
 			// Step 5: 每 tick 重置弹出次数上限（配置 0=无限制 → Integer.MAX_VALUE）
 			int maxPerTick = productivebeesgenesis$cachedMaxPerTick;
-			productivebeesgenesis$ejectsRemainingThisTick = (maxPerTick > 0) ? maxPerTick : Integer.MAX_VALUE;
+			productivebeesgenesis$ejectsRemainingThisTick.set((maxPerTick > 0) ? maxPerTick : Integer.MAX_VALUE);
 		}
 	}
 
@@ -221,22 +222,22 @@ public class TileComponentEjectorCooldownMixin {
 				// 输出槽满时强制重置跳过计数器，避免产物因跳过 outputItems 而积压停机
 				if (outputFull) {
 					productivebeesgenesis$lastOutputContentsVersion = currentVersion;
-					productivebeesgenesis$skipTicksRemaining = 0;
-					productivebeesgenesis$minIntervalRemaining = 0;
+					productivebeesgenesis$skipTicksRemaining.set(0);
+					productivebeesgenesis$minIntervalRemaining.set(0);
 				} else if (currentVersion == productivebeesgenesis$lastOutputContentsVersion) {
-					if (productivebeesgenesis$skipTicksRemaining > 0) {
-						productivebeesgenesis$skipTicksRemaining--;
+					if (productivebeesgenesis$skipTicksRemaining.get() > 0) {
+						productivebeesgenesis$skipTicksRemaining.decrementAndGet();
 						return;
 					}
 				} else {
 					// 输出槽内容发生变化：立即重置跳过计数器，确保物品能第一时间弹出
 					productivebeesgenesis$lastOutputContentsVersion = currentVersion;
-					productivebeesgenesis$skipTicksRemaining = 0;
+					productivebeesgenesis$skipTicksRemaining.set(0);
 				}
 			}
 			// Task 23: 最小调用间隔兜底（仅在输出槽未满时生效）
-			if (!outputFull && productivebeesgenesis$minIntervalRemaining > 0) {
-				productivebeesgenesis$minIntervalRemaining--;
+			if (!outputFull && productivebeesgenesis$minIntervalRemaining.get() > 0) {
+				productivebeesgenesis$minIntervalRemaining.decrementAndGet();
 				return;
 			}
 		}
@@ -244,10 +245,10 @@ public class TileComponentEjectorCooldownMixin {
 		// Step 5: 单 tick 弹出次数上限（最大速度模式下跳过此上限）
 		// ejectsRemainingThisTick <= 0 表示本 tick 配额已耗尽；Integer.MAX_VALUE 表示无限制（配置 0）
 		if (!maxSpeedMode) {
-			if (productivebeesgenesis$ejectsRemainingThisTick <= 0) {
+			if (productivebeesgenesis$ejectsRemainingThisTick.get() <= 0) {
 				return;
 			}
-			productivebeesgenesis$ejectsRemainingThisTick--;
+			productivebeesgenesis$ejectsRemainingThisTick.decrementAndGet();
 		}
 
 		long before = productivebeesgenesis$getOutputItemCount(tile);
@@ -258,11 +259,11 @@ public class TileComponentEjectorCooldownMixin {
 		// 最大速度模式下不维护跳过状态
 		if (!maxSpeedMode && productivebeesgenesis$cachedSkipUnchanged) {
 			productivebeesgenesis$lastOutputContentsVersion = productivebeesgenesis$getOutputContentsVersion(tile);
-			productivebeesgenesis$skipTicksRemaining = productivebeesgenesis$cachedSkipTicks;
+			productivebeesgenesis$skipTicksRemaining.set(productivebeesgenesis$cachedSkipTicks);
 		}
 		// Task 23: 每次调用后强制进入最小间隔（最大速度模式下关闭）
 		if (!maxSpeedMode) {
-			productivebeesgenesis$minIntervalRemaining = productivebeesgenesis$cachedMinInterval;
+			productivebeesgenesis$minIntervalRemaining.set(productivebeesgenesis$cachedMinInterval);
 		}
 
 		// 输出槽原本无物品或成功减少：本轮没有实际工作或已弹出，重置失败计数

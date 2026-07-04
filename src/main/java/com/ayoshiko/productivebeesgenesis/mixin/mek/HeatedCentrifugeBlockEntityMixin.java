@@ -22,7 +22,7 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  * 公共逻辑委托给 {@link CentrifugeMixinHelper}。
  */
 @Mixin(HeatedCentrifugeBlockEntity.class)
-public class HeatedCentrifugeBlockEntityMixin {
+public abstract class HeatedCentrifugeBlockEntityMixin {
 
 	/** canOperate RETURN — 输出满时阻止启动 */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)

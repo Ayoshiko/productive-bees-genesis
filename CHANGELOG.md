@@ -5,6 +5,64 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本管理遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-07-04
+
+### 新增
+
+- **第三方素材授权声明**：新增 `THIRD_PARTY_LICENSES.md`，声明所有引用的第三方资产与代码授权
+  - 涵盖 Productive Bees、Re:Avaritia、Minecraft、NeoForge、Mekanism、AE2、Iris、Jade、JEI、SFM 共 10 个项目
+  - 标注 PB 离心机模型/纹理覆盖的授权来源
+  - 标注 Re:Avaritia mask 纹理的使用授权
+- **network 包 package-info**：补充 `network/package-info.java`，完善包级 Javadoc 文档
+
+### 修复
+
+- **P0: AbstractCombEventHandler 线程安全 Bug**：`CentrifugeRecipeTestInputHolder` 静态共享实例竞态条件
+  - `TEST_COMB` 和 `HANDLER` 是静态共享实例，多线程同时调用 `hasCentrifugeRecipe` 时同时修改 `bee_type` 组件和槽位
+  - 改为 `ThreadLocal` 模式，每线程持有独立的 Handler 与 ItemStack 实例
+- **P1: BeeHelperMixin 静态字段缺少 Mixin 前缀**：3 个静态字段添加 `productivebeesgenesis$` 前缀和 `@Unique` 注解
+  - `FULL_32_BIT_MASK` → `PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK`
+  - `THROTTLE_COUNTERS` → `productivebeesgenesis$THROTTLE_COUNTERS`
+  - `LAST_THROTTLE_TICK` → `productivebeesgenesis$LAST_THROTTLE_TICK`
+- **P1: BeeHelperMixin THROTTLE_COUNTERS.clear() 并发不安全**：改为 `entrySet().removeIf(...)` 仅清理过期 tick 条目
+  - 原 `clear()` 与并发 `computeIfAbsent` 冲突会导致刚插入的条目被清空
+  - 新逻辑保留当前 tick 数据，仅清理高 32 位 ≠ 当前 tick 的条目
+- **P1: TileComponentEjectorCooldownMixin 字段前缀 + 原子操作**
+  - `CONFIG_REFRESH_INTERVAL` 添加前缀和 `@Unique` 注解
+  - 3 个 `volatile int` 字段改为 `final AtomicInteger`，`++`/`--` 改为 `decrementAndGet()`
+- **P1: ItemInfinitySwordReplica NBT key 缺少模组前缀**
+  - `MODE_TAG = "mode"` → `"productivebeesgenesis_mode"`
+  - `KILL_MODE = "infinity_sword_kill"` → `"productivebeesgenesis_kill_mode"`
+- **P1: FilterConfigSyncPayload 单条字符串长度未限制**：限制每条字符串最大 256 字符，防止恶意客户端 OOM
+- **P1: PbRecipeProcessor NBT key 违反命名规范**：`"PbProgress"` → `"productivebeesgenesis_pb_progress"`
+- **P1: gradle.properties 包含开发者绝对路径**：移除 `org.gradle.user.home=E:/Gradle/.gradle`
+- **P1: BeeConfigApplier TOCTOU 竞态**：`data` 引用获取移入 `synchronized` 块内
+- **P1: MyriadCreationsEventHandler 字段命名违规**：3 个 `static volatile` 字段改为 camelCase，1 个 `static final` 改为 UPPER_SNAKE
+- **P1: CreativeTabEventHandler 注释与实现不符**：改为真正遍历副本（`new ArrayList<>(entries)`）
+- **P1: IrisConfigPlugin LoadingModList.get() 缺少异常保护**：添加 try-catch，异常时返回 `Boolean.FALSE`
+- **P1: 16 个 Mixin 类缺少 abstract 修饰符**：全部添加 `abstract`
+- **P1: 4 个 datagen 类未声明 final**：`ModRecipes`、`ModLootTables`、`ModBlockTagsProvider`、`ModLanguageProvider` 添加 `final`
+- **P2: PbRecipeCompleter slotIndex 跳过零输出时不递增**：在 `continue` 前增加 `slotIndex++`
+  - 修复副产物可能错误占据主输出槽的 bug
+- **P2: TileEntityMekCentrifugeFactory 能量计算可能负值**：添加 `Math.max(0, ...)` 保护
+  - 修复 `super.onUpdateServer()` 内部回填能量导致负值的 bug
+- **P2: MekCentrifugeSlotManager endOutputBatch 下溢保护**：`batchDepth < 0` 时重置为 0 并记录 warn 日志
+- **P2: 多处 isValidInputItem 未检查 level == null**：三个工厂类添加 `level == null` 检查
+- **P2: AbstractClientCombEventHandler poseStack.popPose() 不在 finally 块**：移到 finally 块
+  - 修复异常时 GL 栈状态泄漏的 bug
+- **P2: CosmicShaders 三个 shader 注册共用 try-catch**：拆分为独立 try-catch，单个失败不影响其他
+- **P2: ModPayloads validateAndDeduplicate O(N²) 性能**：改用 `LinkedHashSet`，O(N²)→O(N)
+
+### 变更
+
+- **Mixin 命名规范统一**：所有 Mixin 新增字段使用 `productivebeesgenesis$` 前缀 + `@Unique` 注解
+- **资源文件缩进统一**：11 个 JSON/mcmeta 文件统一为 2 空格缩进
+- **IBlockEntityExtensionMixin remap 评估**：保留 `remap = false`，添加注释说明原因（NeoForge 接口 default 方法非 Mojang 映射）
+
+### 删除
+
+- **gradle.properties 开发者配置**：移除 `org.gradle.user.home=E:/Gradle/.gradle` 绝对路径
+
 ## [1.4.3] - 2026-07-04
 
 ### 新增

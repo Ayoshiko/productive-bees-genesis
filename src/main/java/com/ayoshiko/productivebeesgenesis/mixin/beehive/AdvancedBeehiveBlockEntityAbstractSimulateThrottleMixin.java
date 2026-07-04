@@ -58,7 +58,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * </ul>
  */
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
-public class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
+public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
 	/** 上次执行农夫作物扫描时的游戏刻 */
 	@Unique

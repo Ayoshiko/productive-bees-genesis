@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 其他方块（离心机、升级栏等）保持原版行为不变。
  */
 @Mixin(InventoryHandlerHelper.BlockEntityItemStackHandler.class)
-public class BlockEntityItemStackHandlerDebounceMixin {
+public abstract class BlockEntityItemStackHandlerDebounceMixin {
 
 	@Shadow
 	protected BlockEntity blockEntity;

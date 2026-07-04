@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  *       该方块设置了 requiresCorrectToolForDrops，必须加入正确工具标签才能掉落</li>
  * </ul>
  */
-public class ModBlockTagsProvider extends BlockTagsProvider {
+public final class ModBlockTagsProvider extends BlockTagsProvider {
 
 	public ModBlockTagsProvider(PackOutput output,
 								CompletableFuture<HolderLookup.Provider> lookupProvider,

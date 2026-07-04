@@ -267,7 +267,10 @@ public final class MekCentrifugeFactoryHelper {
 		}
 
 		// 计算总能量消耗（SMELTING + PB），基于实际能量差，不依赖getLastUsage
-		long totalUsage = energyBeforeSuper - energyContainer.getEnergy();
+		// super.onUpdateServer() 可能从能量槽回填能量（EnergyInventorySlot.fillOrConvert），
+		// 导致当前能量高于 energyBeforeSuper，差值为负。使用 Math.max(0, ...) 保护，
+		// 避免负值传递给 setLastUsage（lastUsage 用于 GUI 显示能耗，负值无意义）
+		long totalUsage = Math.max(0, energyBeforeSuper - energyContainer.getEnergy());
 		if (totalUsage > 0) {
 			setLastUsage.accept(totalUsage);
 		}

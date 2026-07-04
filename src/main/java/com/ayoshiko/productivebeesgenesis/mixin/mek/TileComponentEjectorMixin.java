@@ -41,7 +41,7 @@ import java.util.List;
  * - 非MEK离心机保持原版行为（10 tick延迟）
  */
 @Mixin(value = TileComponentEjector.class, remap = false)
-public class TileComponentEjectorMixin {
+public abstract class TileComponentEjectorMixin {
 
 	/**
 	 * 在outputItems方法末尾注入，对MEK离心机使用动态延迟值

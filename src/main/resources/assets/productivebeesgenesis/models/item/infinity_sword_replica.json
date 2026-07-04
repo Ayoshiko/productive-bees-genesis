@@ -1,21 +1,21 @@
 {
-	"parent": "minecraft:item/handheld",
-	"textures": {
-		"layer0": "productivebeesgenesis:item/infinity_sword_replica_layer_0",
-		"layer1": "productivebeesgenesis:item/infinity_sword_replica_layer_1"
-	},
-	"loader": "productivebeesgenesis:cosmic",
-	"cosmic": {
-		"mask": [
-			"productivebeesgenesis:item/infinity_sword_replica_mask"
-		]
-	},
-	"overrides": [
-		{
-			"predicate": {
-				"productivebeesgenesis:kill": 1
-			},
-			"model": "productivebeesgenesis:item/infinity_sword_replica_kill"
-		}
-	]
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "productivebeesgenesis:item/infinity_sword_replica_layer_0",
+    "layer1": "productivebeesgenesis:item/infinity_sword_replica_layer_1"
+  },
+  "loader": "productivebeesgenesis:cosmic",
+  "cosmic": {
+    "mask": [
+      "productivebeesgenesis:item/infinity_sword_replica_mask"
+    ]
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "productivebeesgenesis:kill": 1
+      },
+      "model": "productivebeesgenesis:item/infinity_sword_replica_kill"
+    }
+  ]
 }

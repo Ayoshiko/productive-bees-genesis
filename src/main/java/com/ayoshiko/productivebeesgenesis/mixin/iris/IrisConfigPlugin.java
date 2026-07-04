@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mixin.iris;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -23,6 +25,9 @@ public class IrisConfigPlugin implements IMixinConfigPlugin {
 
 	/** Iris 模组 ID */
 	private static final String IRIS_MOD_ID = "iris";
+
+	/** 配置插件专属日志器，避免早期加载阶段依赖主模组类 */
+	private static final Logger LOGGER = LogManager.getLogger("ProductiveBeesGenesis");
 
 	/**
 	 * Iris 加载状态缓存
@@ -68,8 +73,14 @@ public class IrisConfigPlugin implements IMixinConfigPlugin {
 		synchronized (IrisConfigPlugin.class) {
 			cached = irisLoadedCache;
 			if (cached == null) {
-				cached = LoadingModList.get().getMods().stream()
-						.anyMatch(modInfo -> IRIS_MOD_ID.equals(modInfo.getModId()));
+				try {
+					cached = LoadingModList.get().getMods().stream()
+							.anyMatch(modInfo -> IRIS_MOD_ID.equals(modInfo.getModId()));
+				} catch (Exception e) {
+					// 加载早期阶段 LoadingModList 可能尚未初始化，默认不应用 Iris Mixin
+					LOGGER.warn("无法读取 LoadingModList，跳过 Iris Mixin 应用", e);
+					cached = Boolean.FALSE;
+				}
 				irisLoadedCache = cached;
 			}
 		}

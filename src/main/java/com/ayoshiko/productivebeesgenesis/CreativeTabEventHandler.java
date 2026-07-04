@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
@@ -72,7 +73,8 @@ public final class CreativeTabEventHandler {
 			net.minecraft.world.item.Item myriadSpawnEgg,
 			BuildCreativeModeTabContentsEvent event,
 			CreativeModeTab.TabVisibility visibility) {
-		for (ItemStack stack : entries) {
+		// 遍历副本，避免 event.remove() 触发 ConcurrentModificationException
+		for (ItemStack stack : new ArrayList<>(entries)) {
 			if (stack.isEmpty()) continue;
 			if (isMyriadCreationsSpawnEgg(stack, myriadSpawnEgg)) {
 				event.remove(stack, visibility);

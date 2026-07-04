@@ -25,8 +25,9 @@ import net.minecraft.world.level.Level;
  */
 public class ItemInfinitySwordReplica extends SwordItem {
 
-	public static final String MODE_TAG = "mode";
-	public static final String KILL_MODE = "infinity_sword_kill";
+	// NBT key 使用 snake_case + 模组前缀，避免与其他模组冲突
+	public static final String MODE_TAG = "productivebeesgenesis_mode";
+	public static final String KILL_MODE = "productivebeesgenesis_kill_mode";
 
 	public ItemInfinitySwordReplica(Properties properties) {
 		super(Tiers.NETHERITE, properties.attributes(SwordItem.createAttributes(Tiers.NETHERITE, 2, -2.4F)));

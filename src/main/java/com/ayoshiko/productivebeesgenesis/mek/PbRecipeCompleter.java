@@ -154,6 +154,9 @@ public class PbRecipeCompleter {
 			}
 			reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
 
+			// slotIndex 语义：按配方输出表的原始顺序映射到输出槽（0=主, 1=副1, 2=副2）
+			// 即使某项输出因随机概率/聚合后为 0 被跳过，也必须递增 slotIndex，
+			// 否则后续副产物会错误占据主输出槽（如第1项为0时，第2项填入 slotIndex=0 主槽）
 			int slotIndex = 0;
 			Map<ItemStack, ChancedOutput> recipeOutputs = pendingRecipeOutputs != null
 					? pendingRecipeOutputs
@@ -161,6 +164,7 @@ public class PbRecipeCompleter {
 			for (Map.Entry<ItemStack, ChancedOutput> entry : recipeOutputs.entrySet()) {
 				Integer count = pendingOutputs.get(entry.getKey());
 				if (count == null || count <= 0) {
+					slotIndex++;
 					continue;
 				}
 				ItemStack output = entry.getKey().copyWithCount(count);

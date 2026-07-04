@@ -1,19 +1,19 @@
 {
-    "sources": [
-        {
-            "type": "directory",
-            "source": "block",
-            "prefix": "block/"
-        },
-        {
-            "type": "directory",
-            "source": "item",
-            "prefix": "item/"
-        },
-        {
-            "type": "directory",
-            "source": "misc",
-            "prefix": "misc/"
-        }
-    ]
+  "sources": [
+    {
+      "type": "directory",
+      "source": "block",
+      "prefix": "block/"
+    },
+    {
+      "type": "directory",
+      "source": "item",
+      "prefix": "item/"
+    },
+    {
+      "type": "directory",
+      "source": "misc",
+      "prefix": "misc/"
+    }
+  ]
 }

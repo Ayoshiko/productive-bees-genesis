@@ -192,25 +192,27 @@ public abstract class AbstractClientCombEventHandler {
 		model.setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
 
 		poseStack.pushPose();
-
-		float scale = getScaleMultiplier();
-		poseStack.scale(scale, scale, scale);
-
-		// 半透明渲染类型，避免触发完整渲染管线导致无限递归
-		var renderType = RenderType.entityTranslucent(renderer.getTextureLocation(entity));
-		var vertexConsumer = multiBufferSource.getBuffer(renderType);
-		int overlay = OverlayTexture.pack(OverlayTexture.u(0.0F), OverlayTexture.v(false));
-
-		float alpha = getGlowAlpha();
-		RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
 		try {
-			model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
-		} finally {
-			// 无论 renderToBuffer 是否抛异常都重置 RenderSystem 状态，避免污染后续渲染
-			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-		}
+			float scale = getScaleMultiplier();
+			poseStack.scale(scale, scale, scale);
 
-		poseStack.popPose();
+			// 半透明渲染类型，避免触发完整渲染管线导致无限递归
+			var renderType = RenderType.entityTranslucent(renderer.getTextureLocation(entity));
+			var vertexConsumer = multiBufferSource.getBuffer(renderType);
+			int overlay = OverlayTexture.pack(OverlayTexture.u(0.0F), OverlayTexture.v(false));
+
+			float alpha = getGlowAlpha();
+			RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
+			try {
+				model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
+			} finally {
+				// 无论 renderToBuffer 是否抛异常都重置 RenderSystem 状态，避免污染后续渲染
+				RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+			}
+		} finally {
+			// 无论 pushPose 后任何步骤是否抛异常都恢复 GL 栈，避免 poseStack 状态泄漏
+			poseStack.popPose();
+		}
 	}
 
 	/**

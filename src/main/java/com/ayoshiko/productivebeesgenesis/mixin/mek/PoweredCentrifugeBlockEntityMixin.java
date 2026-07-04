@@ -22,7 +22,7 @@ import cy.jdkdigital.productivebees.common.block.entity.PoweredCentrifugeBlockEn
  * 公共逻辑委托给 {@link CentrifugeMixinHelper}。
  */
 @Mixin(PoweredCentrifugeBlockEntity.class)
-public class PoweredCentrifugeBlockEntityMixin {
+public abstract class PoweredCentrifugeBlockEntityMixin {
 
 	/** canOperate RETURN — 能量充足但输出满时阻止启动 */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)

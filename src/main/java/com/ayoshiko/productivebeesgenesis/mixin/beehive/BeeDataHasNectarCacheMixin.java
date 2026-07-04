@@ -28,7 +28,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 该缓存为默认开启且不可关闭的内部性能优化，不再提供配置项。
  */
 @Mixin(targets = "net.minecraft.world.level.block.entity.BeehiveBlockEntity$BeeData")
-public class BeeDataHasNectarCacheMixin {
+public abstract class BeeDataHasNectarCacheMixin {
 
 	/** 当前 tick 是否已经缓存过 hasNectar 结果 */
 	@Unique

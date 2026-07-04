@@ -23,6 +23,9 @@ import net.minecraft.resources.ResourceLocation;
  * <p>
  * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 128 字符，
  * 实际承载能力远超需求（列表上限 512 条）。
+ * <p>
+ * <b>输入校验</b>：单条字符串长度上限 {@value #MAX_STRING_LENGTH} 字符，
+ * 超长时解码抛出异常，由网络层拒绝该数据包，防止恶意客户端发送超长字符串导致 OOM。
  *
  * @param filterModeName 过滤模式枚举名称（DISABLED/BLACKLIST/WHITELIST）
  * @param beeTypes       蜜蜂类型 ID 列表（不可变拷贝）
@@ -40,16 +43,22 @@ public record FilterConfigSyncPayload(
 	/** 蜜蜂类型列表上限 — 防止恶意/异常数据包导致 OOM */
 	private static final int MAX_BEE_TYPES = 512;
 
+	/** 单条字符串长度上限 — 防止恶意客户端发送超长字符串导致 OOM */
+	private static final int MAX_STRING_LENGTH = 256;
+
 	/**
 	 * 流编解码器：过滤模式名称（String）+ 蜜蜂类型列表（List&lt;String&gt;）
 	 * <p>
 	 * 列表使用 {@code ByteBufCodecs.list(MAX_BEE_TYPES)} 限制解码上限，
 	 * 超过 512 条时解码抛出异常，由网络层拒绝该数据包。
+	 * <p>
+	 * 单条字符串使用 {@code ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH)} 限制解码上限，
+	 * 超过 {@value #MAX_STRING_LENGTH} 字符时解码抛出异常。
 	 */
 	public static final StreamCodec<ByteBuf, FilterConfigSyncPayload> STREAM_CODEC =
 			StreamCodec.composite(
-					ByteBufCodecs.STRING_UTF8, FilterConfigSyncPayload::filterModeName,
-					ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list(MAX_BEE_TYPES)),
+					ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH), FilterConfigSyncPayload::filterModeName,
+					ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH).apply(ByteBufCodecs.list(MAX_BEE_TYPES)),
 					FilterConfigSyncPayload::beeTypes,
 					FilterConfigSyncPayload::new
 			);

@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  * <br/>
  * 所有MEK离心机方块掉落自身
  */
-public class ModLootTables {
+public final class ModLootTables {
 
 	public static LootTableProvider create(net.minecraft.data.PackOutput output,
 										   CompletableFuture<HolderLookup.Provider> lookupProvider) {

@@ -59,7 +59,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * 所有配方使用ModLoadedCondition条件，仅在对应模组加载时生成。
  */
-public class ModRecipes extends RecipeProvider {
+public final class ModRecipes extends RecipeProvider {
 
 	public ModRecipes(PackOutput output, CompletableFuture<HolderLookup.Provider> registries) {
 		super(output, registries);

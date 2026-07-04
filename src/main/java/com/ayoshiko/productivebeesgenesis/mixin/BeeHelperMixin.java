@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -42,30 +43,35 @@ import net.minecraft.world.level.Level;
  * </ul>
  */
 @Mixin(BeeHelper.class)
-public class BeeHelperMixin {
+public abstract class BeeHelperMixin {
 
 	/** 完整 32 位掩码，用于节流计数器重置 */
-	private static final long FULL_32_BIT_MASK = 0xffffffffL;
+	@Unique
+	private static final long PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK = 0xffffffffL;
 
 	/** 每 (tick, beeId) 的调用计数，用于可选节流 */
-	private static final ConcurrentHashMap<Long, AtomicInteger> THROTTLE_COUNTERS = new ConcurrentHashMap<>();
+	@Unique
+	private static final ConcurrentHashMap<Long, AtomicInteger> productivebeesgenesis$THROTTLE_COUNTERS = new ConcurrentHashMap<>();
+
 	/** 上次节流统计的游戏刻 */
-	private static final AtomicLong LAST_THROTTLE_TICK = new AtomicLong(-1L);
+	@Unique
+	private static final AtomicLong productivebeesgenesis$LAST_THROTTLE_TICK = new AtomicLong(-1L);
 
 	/**
 	 * 将游戏刻与蜜蜂 ID 组合为节流 key
 	 */
 	private static long makeKey(long gameTick, int beeId) {
-		return (gameTick << 32) | (beeId & FULL_32_BIT_MASK);
+		return (gameTick << 32) | (beeId & PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK);
 	}
 
 	/**
 	 * 当游戏刻变更时清空节流计数器
 	 */
 	private static void clearThrottleIfTickChanged(long currentTick) {
-		long lastTick = LAST_THROTTLE_TICK.get();
-		if (currentTick != lastTick && LAST_THROTTLE_TICK.compareAndSet(lastTick, currentTick)) {
-			THROTTLE_COUNTERS.clear();
+		long lastTick = productivebeesgenesis$LAST_THROTTLE_TICK.get();
+		if (currentTick != lastTick && productivebeesgenesis$LAST_THROTTLE_TICK.compareAndSet(lastTick, currentTick)) {
+			// 仅清理过期 tick 的条目，保留当前 tick 的，避免与并发 computeIfAbsent 冲突导致数据丢失
+			productivebeesgenesis$THROTTLE_COUNTERS.entrySet().removeIf(entry -> entry.getKey() >>> 32 != currentTick);
 		}
 	}
 
@@ -128,7 +134,7 @@ public class BeeHelperMixin {
 			if (throttle > 0) {
 				clearThrottleIfTickChanged(currentTick);
 				long key = makeKey(currentTick, beeId);
-				AtomicInteger counter = THROTTLE_COUNTERS.computeIfAbsent(key, k -> new AtomicInteger(0));
+				AtomicInteger counter = productivebeesgenesis$THROTTLE_COUNTERS.computeIfAbsent(key, k -> new AtomicInteger(0));
 				if (counter.incrementAndGet() > throttle) {
 					// 超过节流限制时不追加额外产物，原版产物保持不变
 					return;

@@ -21,7 +21,7 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  * 公共逻辑委托给 {@link CentrifugeMixinHelper}，本类仅保留 @Inject 注解与方法签名。
  */
 @Mixin(CentrifugeBlockEntity.class)
-public class CentrifugeBlockEntityMixin {
+public abstract class CentrifugeBlockEntityMixin {
 
 	/** canOperate RETURN — 输出满时阻止机器启动（修复PB原版空转耗能） */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)

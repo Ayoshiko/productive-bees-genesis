@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
@@ -134,7 +135,9 @@ public final class ModPayloads {
 	 * @return 校验通过的去重列表；校验失败返回 null（已发送错误提示）
 	 */
 	private static List<String> validateAndDeduplicate(List<String> beeTypes, ServerPlayer serverPlayer) {
-		List<String> validated = new ArrayList<>(beeTypes.size());
+		// 使用 LinkedHashSet 去重：O(1) 查询替代 ArrayList.contains() 的 O(N)，整体从 O(N²) 降为 O(N)
+		// 同时保持插入顺序（与原 ArrayList 行为一致），最后转为 ArrayList 返回保持可变性
+		LinkedHashSet<String> validated = new LinkedHashSet<>(beeTypes.size());
 		for (String raw : beeTypes) {
 			if (raw == null || raw.isBlank()) {
 				continue;
@@ -146,10 +149,8 @@ public final class ModPayloads {
 				ProductiveBeesGenesis.LOGGER.warn("收到无效的蜜蜂类型: {}", trimmed);
 				return null;
 			}
-			if (!validated.contains(trimmed)) {
-				validated.add(trimmed);
-			}
+			validated.add(trimmed);
 		}
-		return validated;
+		return new ArrayList<>(validated);
 	}
 }

@@ -16,7 +16,7 @@ import net.neoforged.neoforge.common.data.LanguageProvider;
  *       （productivebeesgenesis.configuration.*），由 NeoForge 配置界面自动消费。</li>
  * </ul>
  */
-public class ModLanguageProvider extends LanguageProvider {
+public final class ModLanguageProvider extends LanguageProvider {
 
 	private final String locale;
 

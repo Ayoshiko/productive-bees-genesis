@@ -28,16 +28,18 @@ public final class BeeConfigApplier {
 		// 万象创世功能被禁用时，跳过配置覆盖
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 		var config = ModConfig.SERVER;
-		CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
-		if (data == null) {
-			// 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
-			ProductiveBeesGenesis.LOGGER.warn("无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
-					PBConstants.MYRIADCREATIONS_TYPE);
-			return;
-		}
 
-		// 同步修改 CompoundTag，防止并发调用（如重载事件与启动事件并发）导致数据竞争
+		// 同步获取 data 引用并修改，防止 TOCTOU 竞态
+		// （重载事件可能在 getData 之后、synchronized 之前替换数据，导致修改写入旧数据）
 		synchronized (BeeConfigApplier.class) {
+			CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
+			if (data == null) {
+				// 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
+				ProductiveBeesGenesis.LOGGER.warn("无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
+						PBConstants.MYRIADCREATIONS_TYPE);
+				return;
+			}
+
 			// 外观
 			data.putInt("primaryColor", parseHexColor(config.primaryColor.get()));
 			data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));

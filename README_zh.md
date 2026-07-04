@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-1.4.3-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.5.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 资源蜜蜂（Productive Bees）和通用机械（Mekanism）附属模组，添加了通用机械（Mekanism）风格的离心机，可处理蜜脾和蜜脾块。添加了万象创世蜜蜂，其蜜脾可转化为整合包内所有资源蜜蜂的蜜脾。蜜脾转化功能拥有详细可配置的过滤名单。万象创世蜜蜂的数据包可以在配置文件里自定义修改。
 万象创世蜜脾拥有无尽贪婪（Re:Avaritia）模组的寰宇支配之剑（Sword of the Cosmos）同款的星空遮罩材质。

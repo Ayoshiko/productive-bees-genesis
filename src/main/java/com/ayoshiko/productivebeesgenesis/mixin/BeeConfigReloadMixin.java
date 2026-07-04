@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 执行 /reload 时两个事件都会触发，保证配置生效。
  */
 @Mixin(BeeReloadListener.class)
-public class BeeConfigReloadMixin {
+public abstract class BeeConfigReloadMixin {
 
 	@Inject(method = "apply", at = @At("TAIL"))
 	private void productivebeesgenesis$applyConfigOverrides(CallbackInfo ci) {

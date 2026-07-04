@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
  */
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeConversionRecipe$Serializer")
-public class BeeConversionRecipeSerializerMixin {
+public abstract class BeeConversionRecipeSerializerMixin {
 
 	@Inject(method = "toNetwork", at = @At("HEAD"), cancellable = true, remap = false)
 	private static void productivebeesgenesis$fallbackOnNullIngredient(

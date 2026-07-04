@@ -54,12 +54,22 @@ public abstract class AbstractCombEventHandler {
 	/** 缓存更新间隔（tick） */
 	protected static final int CACHE_UPDATE_INTERVAL = 20;
 
-	/** hasCentrifugeRecipe 测试输入复用 — Handler 单参构造时 blockEntity=null，onContentsChanged 空操作；matches() 仅读 getItem，无世界状态依赖，可静态复用 */
-	private static final class CentrifugeRecipeTestInputHolder {
-		static final InventoryHandlerHelper.BlockEntityItemStackHandler HANDLER =
-				new InventoryHandlerHelper.BlockEntityItemStackHandler(2);
-		static final ItemStack TEST_COMB = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-	}
+	/**
+	 * hasCentrifugeRecipe 测试输入复用（ThreadLocal）
+	 * <p>
+	 * 原静态共享实例在多线程同时调用 {@link #hasCentrifugeRecipe} 时会同时修改
+	 * TEST_COMB 的 bee_type 组件和 HANDLER 的槽位，导致竞态。
+	 * 改为 ThreadLocal：每线程持有独立的 Handler 与 ItemStack 实例，
+	 * 既避免竞态又保持每线程内复用（仅首次分配）。
+	 * <p>
+	 * Handler 单参构造时 blockEntity=null，onContentsChanged 空操作；
+	 * matches() 仅读 getItem，无世界状态依赖，可在线程内复用。
+	 */
+	private static final ThreadLocal<InventoryHandlerHelper.BlockEntityItemStackHandler> THREAD_LOCAL_HANDLER =
+			ThreadLocal.withInitial(() -> new InventoryHandlerHelper.BlockEntityItemStackHandler(2));
+
+	private static final ThreadLocal<ItemStack> THREAD_LOCAL_TEST_COMB =
+			ThreadLocal.withInitial(() -> new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get()));
 
 	// ========== 缓存更新 ==========
 
@@ -115,14 +125,16 @@ public abstract class AbstractCombEventHandler {
 	 */
 	protected static boolean hasCentrifugeRecipe(ServerLevel level, ResourceLocation beeType) {
 		try {
-			// 复用静态 Handler 与 ItemStack，仅重置 bee_type 组件，消除每调用的对象分配
-			CentrifugeRecipeTestInputHolder.TEST_COMB.set(ModDataComponents.BEE_TYPE.get(), beeType);
-			CentrifugeRecipeTestInputHolder.HANDLER.setStackInSlot(
-					InventoryHandlerHelper.INPUT_SLOT, CentrifugeRecipeTestInputHolder.TEST_COMB);
+			// 每线程独立的 Handler 与 ItemStack，避免多线程竞态
+			ItemStack testComb = THREAD_LOCAL_TEST_COMB.get();
+			InventoryHandlerHelper.BlockEntityItemStackHandler handler = THREAD_LOCAL_HANDLER.get();
+			// 重置 bee_type 组件（线程内复用时上次写入的值仍残留）
+			testComb.set(ModDataComponents.BEE_TYPE.get(), beeType);
+			handler.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, testComb);
 
 			RecipeHolder<CentrifugeRecipe> recipe = level.getRecipeManager()
 					.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(),
-							(RecipeInput) CentrifugeRecipeTestInputHolder.HANDLER, level)
+							(RecipeInput) handler, level)
 					.orElse(null);
 			return recipe != null;
 		} catch (Exception e) {

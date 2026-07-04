@@ -211,9 +211,13 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 
 	/**
 	 * 重写isValidInputItem — 同时查找SMELTING和PB CentrifugeRecipe（带缓存）
+	 * <br/>
+	 * 客户端（level为null）返回false避免NPE：InputValidationCache 在 level==null 时
+	 * 直接调用 validator，会将 null 传入 containsSmeltingInput → containsInput(level,...) 导致 NPE。
 	 */
 	@Override
 	public boolean isValidInputItem(@NotNull ItemStack stack) {
+		if (level == null) return false;
 		return validInputCache.getResult(level, stack,
 				() -> MekCentrifugeFactoryHelper.getInputValidationResult(getRecipeType(), level, stack, pbProcessor)).valid();
 	}

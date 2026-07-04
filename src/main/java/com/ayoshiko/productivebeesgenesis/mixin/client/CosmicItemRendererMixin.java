@@ -29,7 +29,7 @@ import net.minecraft.world.item.ItemStack;
  * 兼容性，允许未来通过 IClientItemExtensions 扩展装饰渲染。
  */
 @Mixin(ItemRenderer.class)
-public class CosmicItemRendererMixin {
+public abstract class CosmicItemRendererMixin {
 
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", ordinal = 0))
 	private void productivebeesgenesis$onRenderItem(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, int packedLight, int packedOverlay, BakedModel modelIn, CallbackInfo callbackInfo) {

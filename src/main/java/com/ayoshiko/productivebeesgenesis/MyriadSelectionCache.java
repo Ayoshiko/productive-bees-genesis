@@ -30,7 +30,7 @@ import net.minecraft.world.level.Level;
 @MethodsReturnNonnullByDefault
 public final class MyriadSelectionCache {
 
-	/** 蜜蜂类型缓存版本号，每次成功更新 CACHED_BEE_TYPES 后递增 */
+	/** 蜜蜂类型缓存版本号，每次成功更新 cachedBeeTypes 后递增 */
 	private static final AtomicInteger BEE_TYPES_VERSION = new AtomicInteger(0);
 
 	/** 每 count 每 tick 的类型选择缓存（工厂中 count 通常为 1–3，预留到 9 覆盖蜂箱聚合路径） */
