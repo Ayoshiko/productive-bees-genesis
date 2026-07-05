@@ -1,152 +1,216 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.8.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.8.1-blue?style=flat-square)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
+![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![Java](https://img.shields.io/badge/Java-21+-red?style=flat-square)
 
-An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
+> An addon for **Productive Bees** and **Mekanism** that adds the *Myriad Creations Bee* — a rainbow-gradient bee whose honeycombs randomly transform into honeycombs of other resource bees — plus a full **Mekanism-style centrifuge** family with deep **Applied Energistics 2** integration.
 
-目前模组仍处于开发阶段，更新频繁，可能存在大量bug，崩溃，不稳定和兼容性问题，感谢理解。
+**Languages**: [English](README.md) · [中文](README_zh.md)
 
-This mod is under active development – expect bugs, crashes, instability, and compatibility problems. Thanks for your patience!
+> ⚠️ This mod is under active development — expect bugs, crashes, and compatibility issues. Feedback is welcome.
 
-For a full list of changes, see the [CHANGELOG](CHANGELOG.md).
+---
 
-The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia.
+## Table of Contents
 
-## Languages
+- [About](#about)
+- [Features](#features)
+  - [Myriad Creations Bee](#myriad-creations-bee)
+  - [Mek Centrifuge](#mek-centrifuge)
+  - [AE2 Integration](#ae2-integration)
+  - [Bee Filter UI](#bee-filter-ui)
+- [Required Dependencies](#required-dependencies)
+- [Compatible Mods](#compatible-mods)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Building](#building)
+- [Architecture](#architecture)
+- [Support](#support)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-- [English](README.md)
-- [中文](README_zh.md)
+## About
+
+**Productive Bees Genesis** is a NeoForge addon that bridges **Productive Bees** and **Mekanism**. It introduces:
+
+- The **Myriad Creations Bee** — a special bee whose honeycomb randomly produces honeycombs from other resource bees via a configurable filter.
+- The **MEK Centrifuge** — a Mekanism-style machine that processes Productive Bees honeycombs and honeycomb blocks, with **17 factory tiers** spanning four Mekanism-family mods.
+- Deep **AE2 integration** — centrifuges act as AE2 grid nodes, push outputs directly into ME networks, and optionally drain FE from ME networks to power themselves.
+- A full **in-game bee filter UI** with search, sort, drag-and-drop, and clipboard import/export.
+
+The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the **Sword of the Cosmos** from Re:Avaritia — see [Acknowledgments](#acknowledgments).
+
+For the full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
 ## Features
 
-| Feature | Description |
+### Myriad Creations Bee
+
+| Capability | Description |
 | --- | --- |
-| Myriad Creations Bee | 8-second rainbow gradient with rainbow particle effects; its honeycomb randomly produces honeycombs from other resource bees. Can be completely disabled via config. |
-| Starfield Honeycomb Texture | The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as the Sword of the Cosmos from Re:Avaritia. |
-| Mek Centrifuge | Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes. |
-| Factory Tiers | 17 tiers across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras. Factory item names show tier colors matching original mods. |
-| Bee Filter UI | In-game bee blacklist/whitelist editor with search, sort, and collapse controls. |
-| JEI Integration | Full JEI support with recipe hiding when Myriad Creations Bee is disabled. |
-| AE2 Integration | Centrifuges act as AE2 grid nodes: connect directly with AE2 smart cables, adjacent centrifuges, and addon-mod cables (ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux) via the standard `IN_WORLD_GRID_NODE_HOST` capability. Push outputs directly into the ME network, bypassing external logistics. When AppliedFlux is installed, optionally drain FE stored in the ME network to power the centrifuge (5-tier priority: local FE → external supply → ME FE → other → AE2 native energy). |
-| Jade Integration | Centrifuges display AE2 network connection status (Offline/Booting/Missing Channel/Online) in the Jade tooltip. |
+| Rainbow gradient | 8-second color cycle with soft, low-saturation colors matching the "creation of all things" theme |
+| Rainbow particles | Optional particle effects (`particleEffectEnabled`, `particleCount`) |
+| Glow effect | Optional glow halo (`glowEnabled`, `glowColor`) |
+| Random honeycomb | Produces a random honeycomb from any resource bee in the pack |
+| Filter list | Blacklist/whitelist mode with in-game editor |
+| Fully configurable | All PB datapack attributes (colors, pollination, breeding, environment, etc.) |
+| Acquisition | Fishing, breeding, nest spawning, or bee conversion — all configurable |
+| Disable switch | `myriadCreationsEnabled = false` keeps only MEK centrifuge features |
 
-### Mekanism Addon: Productive Bees Centrifuge
+### Mek Centrifuge
 
-- **Mek Centrifuge**: Adds a Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes.
-- **Factory Upgrade Compatibility**: Compatible with factory upgrades from Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras.
-- **Output Safety**: Output slots merge identical stacks; the centrifuge pauses when full to avoid wasting energy.
-- **Ejection Speed Optimization**: All Mek centrifuge types use optimized configurable ejection delay for faster output transfer to adjacent containers.
+- **MEK Centrifuge**: Mekanism-style centrifuge processing Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes.
+- **17 factory tiers** across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras:
+  - **Mekanism**: Basic / Advanced / Elite / Ultimate
+  - **Mekanism Extras**: Absolute / Supreme / Cosmic / Infinite
+  - **Evolved Mekanism**: Overclocked / Quantum / Dense / Multiversal / Creative
+  - **Evolved Mekanism Extras**: Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal
+- **Output safety**: Identical stacks are merged; the centrifuge pauses when full to avoid wasting energy.
+- **Ejection optimization**: All variants use optimized configurable ejection delay (active/idle/blocked/busy states).
+- **Fluid auto-eject**: Default 16384 mB/tick, overriding Mekanism's 1024 mB/tick.
 
-### Configuration System
+### AE2 Integration
 
-- **Client Config**: Bee filter UI settings.
-- **Common Config**: Myriad Creations Bee attributes (appearance, pollination, PB attributes, basic attributes, breeding, environment).
-- **Server Config**: Bee type filtering (blacklist/whitelist), Mek centrifuge parameters (including active/idle ejection delay), Myriad Creations Bee enable/disable toggle.
+Centrifuges act as **AE2 grid nodes** via the standard `IN_WORLD_GRID_NODE_HOST` capability:
 
-### Bee Filter Configuration UI
+- Connect directly with AE2 smart cables and adjacent centrifuges.
+- Auto-discovered by addon-mod cables (ExtendedAE, AdvancedAE, ae2cs, ae2lt, Glodium, AppliedFlux).
+- **Direct ME output** (`aeOutputEnabled`): push output slot items into the ME network, bypassing external logistics.
+- **ME energy input** (`aeEnergyInputEnabled`): drain FE stored in the ME network to power the centrifuge. Supports 5-tier energy priority:
+  1. Local FE cache
+  2. External direct supply (Mekanism configComponent + EnergyInventorySlot)
+  3. ME network stored FE (AppliedFlux)
+  4. Other energy (handled by Mekanism parent)
+  5. AE2 native network energy (converted to FE)
+- **Jade tooltip**: Shows AE2 network status (Offline / Booting / Missing Channel / Online).
+- Node lifecycle is decoupled from `aeOutputEnabled` — closing output push does not disconnect the machine, allowing ME energy input to continue.
 
-- Full bee selection screen with search, sort, and group collapse.
-- Filter list supports blacklist/whitelist modes.
+### Bee Filter UI
+
+- In-game blacklist/whitelist editor with search, sort, and collapse.
+- Drag-and-drop reorder, clipboard import/export (JSON array).
 - Visual distinction between added and unadded bees.
-- Numeric indices for filter list entries.
-- Dynamic product info display for special bees.
-- Sort mode and collapse state persistence.
+- Numeric indices, dynamic product info for special bees.
+- Sort mode and collapse state persist across sessions.
+
+## Required Dependencies
+
+| Mod | Version | Purpose |
+| --- | --- | --- |
+| [Minecraft](https://www.minecraft.net/) | 1.21.1 | Game version |
+| [NeoForge](https://neoforged.net/) | 21.1.214+ | Mod loader |
+| [Productive Bees](https://www.curseforge.com/minecraft/mc-mods/productive-bees) | 1.21.1-13.13.5+ | Bee system and honeycomb mechanics |
+| [Mekanism](https://www.curseforge.com/minecraft/mc-mods/mekanism) | 1.21.1-10.7.14.79+ | Required for MEK centrifuge features |
+
+## Compatible Mods
+
+These mods are **optional**. When present, the corresponding features activate automatically.
+
+| Mod | Integration |
+| --- | --- |
+| [Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/mekanism-extras) | ME-tier factories (Absolute / Supreme / Cosmic / Infinite) |
+| [Evolved Mekanism](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism) | EM-tier factories (Overclocked / Quantum / Dense / Multiversal / Creative) |
+| [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | EME-tier factories (Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal) |
+| [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | Extended upgrade limits |
+| [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection + ME network output + ME energy input |
+| [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for centrifuges |
+| [ExtendedAE](https://www.curseforge.com/minecraft/mc-mods/ex-pattern-provider) | Auto-discovered cable connection |
+| [AdvancedAE](https://www.curseforge.com/minecraft/mc-mods/advanced-ae) | Auto-discovered cable connection |
+| [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 network status tooltip |
+| [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | Shader compatibility for cosmic rendering |
+| [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | Recipe viewing + recipe hiding when bee disabled |
 
 ## Configuration
 
-The mod provides an in-game configuration interface accessible through the mod menu. Players can modify:
+The mod ships a trilingual configuration system (English / Chinese / auto-detect) accessible through the in-game Mods → Config screen. Configuration is split into three files:
 
-- **Appearance**: Primary color, secondary color, particle color, glow color.
-- **Pollination**: Flower item.
-- **Productive Bees Attributes**: Weather tolerance, temper, behavior, endurance, productivity.
-- **Basic Attributes**: Honeycomb creation, size, speed, attack damage.
-- **Breeding**: Breeding item, breeding item count, self-breeding.
-- **Environment**: Waterproof, fireproof.
-- **Bee Filtering**: Blacklist/whitelist mode, filtered bee types list.
-- **Mek Centrifuge**: Fluid tank capacity, ejection delay, processing parameters.
+| File | Scope | Highlights |
+| --- | --- | --- |
+| `client.toml` | Client | Bee filter UI settings, port color visualization, rainbow effects |
+| `common.toml` | Common | Myriad Creations Bee attributes (appearance, pollination, PB attributes, breeding, environment, acquisition, produce, advanced beehive) |
+| `server.toml` | Server | Bee type filtering, MEK centrifuge parameters (basic / ejection / io_limit / ae2 sub-sections) |
+
+### MEK Centrifuge Sub-sections
+
+The 21 MEK centrifuge options are grouped for clarity:
+
+- **basic** — energyPerTick, processingTime, fluidTankCapacity, fluidEjectRate, combBlockMultiplier
+- **ejection** — ejectDelay, ejectDelayActive, ejectSkipUnchanged, ejectSkipTicks, ejectMaxSpeedMode, ejectMinInterval, ejectBusyThreshold, ejectBusyCooldown, ejectMaxPerTick, ejectBlockedThreshold, ejectBlockedCooldown
+- **io_limit** — maxExtractPerTick
+- **ae2** — aeOutputEnabled, aeEnergyInputEnabled, preferAppliedFluxOverAeEnergy (only registered when AE2 is loaded)
 
 ### Accessing Configuration
 
 1. Open the Minecraft main menu.
-2. Click "Mods".
-3. Find "Productive Bees Genesis".
-4. Click the "Config" button.
+2. Click **Mods**.
+3. Find **Productive Bees Genesis**.
+4. Click **Config**.
 
-Configuration changes take effect after restarting the game or running `/reload`.
-
-### Language Support
-
-The configuration interface supports multiple languages (English/Chinese) and automatically adapts to your client's language settings.
-
-## Required Dependencies
-
-| Mod | Version | Description |
-| --- | --- | --- |
-| Minecraft | 1.21.1 | Game version. |
-| NeoForge | 21.1.214+ | Mod loader. |
-| Productive Bees | 1.21.1-13.13.5+ | Bee system and honeycomb mechanics. |
-| Mekanism | 1.21.1-10.7.14.79+ | Required for Mek centrifuge features. |
-
-## Compatible Mods
-
-| Mod | Integration |
-| --- | --- |
-| Mekanism Extras | ME-tier factories. |
-| Evolved Mekanism | EM-tier factories. |
-| Evolved Mekanism Extras | EME-tier factories. |
-| Mekanism Unleashed | Extended upgrade limits. |
-| Applied Energistics 2 | Full cable connection compatibility (smart cable + addon cables) and direct ME network output integration via `IN_WORLD_GRID_NODE_HOST` capability. With AppliedFlux, optionally drain FE stored in the ME network to power the centrifuge (configurable, disabled by default). |
-| Jade | AE2 network status tooltip. |
-| Iris | Shader compatibility for cosmic rendering. |
-| JEI | Recipe viewing support. |
+Changes take effect after restarting the game or running `/reload`.
 
 ## Usage
 
 1. Install NeoForge and the required dependencies.
 2. Place the mod jar in your `mods` folder.
-3. Launch the game and obtain the Myriad Creations Bee through the Productive Bees hive system.
-4. Process Myriad Creations Honeycombs in the Mek Centrifuge or its factory variants.
+3. Launch the game and obtain the **Myriad Creations Bee** through any configured acquisition method (fishing, breeding, nest spawning, or bee conversion).
+4. Process Myriad Creations Honeycombs in the **MEK Centrifuge** or any of its factory variants.
+5. (Optional) Connect the centrifuge to an AE2 network via smart cables to enable direct ME output and ME energy input.
+
+## Building
+
+```bash
+git clone https://github.com/Ayoshiko/productive-bees-genesis.git
+cd productive-bees-genesis
+./gradlew build
+```
+
+The built jar will be at `build/libs/productivebeesgenesis-<version>.jar`.
+
+> Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 
 ## Architecture
 
-### Package Structure
+### Package Layout
 
-- (root): Main mod classes (`ProductiveBeesGenesis`, `ProductiveBeesGenesisClient`), comb event handlers (`AbstractCombEventHandler`, `MyriadCreationsEventHandler`), `RandomHoneycombSelector` (random comb allocation algorithms), `CombBlockCheckCache` (idle operation interception cache).
-- `capability/`: Capability helpers — `RateLimitedItemHandler` (rate-limited item handler), `IInventoryDirtyDebouncer` (inventory dirty debouncer).
-- `client/`: Client event handlers (`AbstractClientCombEventHandler`, `MyriadCreationsClientEventHandler`).
-- `client/jei/`: JEI recipe categories for PB centrifuge recipes.
-- `client/jade/`: Jade plugin — AE2 network status display (`JadePlugin`, `JadeAe2StatusProvider`).
-- `client/render/cosmic/`: Cosmic shader system, baked models (`AbstractBakedModelCosmic`, `BakedModelCosmic`, `BakedModelHell`, `BakedModelHalo`), render queue, Iris compat, `AbstractMaskGeometryLoader` base class.
-- `client/screen/`: GUI screens for configuration and Mek centrifuge — main screens (`FilterListScreen`, `BeeSelectionScreen`) with composition helpers (`FilterListDragHandler`, `FilterListClipboardHelper`, `BeeSelectionSorter`) and renderers (`FilterListRenderer`, `BeeSelectionRenderer`); Mek centrifuge GUIs (`GuiMekCentrifuge`, `GuiMekCentrifugeFactory`, factory variants).
-- `client/screen/state/`: Screen state management (`BeeSelectionState`, `BeeSelectionCache`).
-- `command/`: Commands (package reserved for future commands).
-- `config/`: Configuration definitions split into `ClientConfig`/`CommonConfig`/`ServerConfig` with `ModConfig` as aggregation entry, bilingual support.
-- `datagen/`: Data generation (block tags, recipes, loot tables, language provider).
-- `init/`: DeferredRegister registrations (blocks, items, block entities, menu types, creative tabs, stats).
-- `item/`: Custom items (infinity sword replica).
-- `mek/`: Mekanism centrifuge blocks, tile entities, containers, recipe processing — `PbRecipeProcessor` coordinator delegating to `PbRecipeFinder`/`PbRecipeCompleter`/`MyriadCreationsHandler`, `FactoryPbContextDelegate` composition class for factories, isolated optional-dependency BlockTypes (`MekCentrifugeMEBlockType`, `MekCentrifugeEMEBlockType`), `OutputSlotFlagManager` (delayed-refresh output slot flags), `MyriadBatchPlanner` (zero-copy batch insertion planner).
-- `mek/ae2/`: AE2 integration — `Ae2OutputPusher` (batch-merge output pushing), `Ae2GridNodeManager` (grid node lifecycle), `AeItemKeyCache` (AEItemKey identity cache), `IAe2OutputHost` (host interface).
-- `menu/`: Container menu definitions (Mek centrifuge and factory containers).
-- `mixin/`: Mixin classes with `MixinConfigPlugin` for conditional loading; sub-packages: `accessor/` (accessor mixins), `beehive/` (beehive/inventory debounce and cache mixins), `client/` (client-side mixins — bee color, cosmic item renderer), `iris/` (Iris shader compat with `IrisConfigPlugin`), `mek/` (Mekanism centrifuge/factory/ejector mixins), `recipe/` (recipe serializer fallback mixins).
-- `network/`: Network communication — `ModPayloads` (payload registration), `FilterConfigSyncPayload` (filter config sync).
-- `util/`: `BeeInfoHelper`, `RecipeCacheManager`, `BeeConfigApplier`, `BeeIngredientFallback`, `CentrifugeMixinHelper`, `CentrifugeRecipeIndex`, `InputOutputCompatibilityCache`, `InputValidationCache` (fingerprint-keyed input cache), `BeeRecipeReloader`, `PBConstants`.
+```
+com.ayoshiko.productivebeesgenesis/
+├── (root)              Main mod classes, comb event handlers, random comb selector
+├── capability/         Rate-limited item handler, inventory dirty debouncer
+├── client/             Client event handlers, JEI/Jade plugins, cosmic render, GUI screens
+│   ├── jei/             JEI recipe category for PB centrifuge
+│   ├── jade/            Jade plugin — AE2 status display
+│   ├── render/cosmic/   Cosmic shader system, baked models, Iris compat
+│   └── screen/          Configuration and Mek centrifuge GUIs + state
+├── command/            (Reserved for future commands)
+├── config/             ClientConfig / CommonConfig / ServerConfig, bilingual
+├── datagen/            Block tags, recipes, loot tables, language provider
+├── init/               DeferredRegister registrations
+├── item/               Custom items (infinity sword replica)
+├── mek/                Mekanism centrifuge blocks, tile entities, recipe processing
+│   └── ae2/            AE2 integration (output pusher, grid node manager, energy injector)
+├── menu/               Container menu definitions
+├── mixin/              Mixin classes with MixinConfigPlugin conditional loader
+│   ├── accessor/       Accessor mixins
+│   ├── beehive/        Beehive inventory debounce and cache mixins
+│   ├── client/         Client-side mixins (bee color, cosmic item renderer)
+│   ├── iris/           Iris shader compat with IrisConfigPlugin
+│   ├── mek/            Mekanism centrifuge / factory / ejector mixins
+│   └── recipe/         Recipe serializer fallback mixins
+├── network/            Network payloads (filter config sync)
+└── util/               BeeInfoHelper, RecipeCacheManager, CentrifugeRecipeIndex, etc.
+```
 
 ### Key Abstractions
 
-- **`AbstractCombEventHandler`**: Base class for `MyriadCreationsEventHandler`, extracting common bee type cache, random comb generation, and centrifuge block logic. Delegates random comb allocation to `RandomHoneycombSelector` and idle interception to `CombBlockCheckCache`.
-- **`RandomHoneycombSelector`**: Static utility for random comb allocation algorithms (Fisher-Yates shuffle, Stars-and-Bars distribution, even allocation), used by both event handlers and the Mekanism batch planner.
-- **`CombBlockCheckCache`**: Idle operation interception cache preventing redundant block state checks when output is full.
-- **`AbstractBakedModelCosmic`**: Base class for `BakedModelCosmic` and `BakedModelHell`, extracting the cosmic render pipeline (shader uniforms, mask sprites, Iris defer).
-- **`AbstractMaskGeometryLoader`**: Base class for `GeometryLoaderCosmic` and `GeometryLoaderHell`, extracting common mask parsing and parent resolution logic.
-- **`CentrifugeMixinHelper`**: Utility class extracting common logic from 6 centrifuge Mixin classes (canOperate check, canProcessRecipe check, completeRecipeProcessing append).
-- **`BeeIngredientFallback`**: Utility class providing fallback serialization for 5 recipe Serializer Mixins, preventing NPE when BeeIngredientFactory is not ready.
-- **`PBConstants`**: Common constants class unifying `MYRIADCREATIONS_TYPE` and other shared constants across the codebase.
-- **`MekCentrifugeMEBlockType`/`MekCentrifugeEMEBlockType`**: Isolated BlockType definitions for optional ME/EME dependencies, loaded only when those mods are present to prevent `NoClassDefFoundError`.
-- **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent, preventing crashes.
-- **`PbRecipeProcessor`**: PB recipe processing coordinator holding shared state arrays and delegating to specialized components — `PbRecipeFinder` (double-layer cached recipe lookup), `PbRecipeCompleter` (output aggregation and batch insertion), `MyriadCreationsHandler` (Myriad Creations special path).
-- **`FactoryPbContextDelegate`**: Composition class eliminating ~293 lines of duplicated PB recipe context logic across the three factory tile entities.
-- **`BeeSelectionSorter`**: Composition class extracted from `BeeSelectionScreen` handling bee type sorting/filtering logic with cached display items.
-- **`FilterListDragHandler`/`FilterListClipboardHelper`/`FilterListBeeInfoCache`/`FilterListSelectionManager`**: Composition helpers extracted from `FilterListScreen` for drag/scroll interaction, clipboard import/export, bee info caching, and selection management respectively.
+- **`AbstractCombEventHandler`** / **`MyriadCreationsEventHandler`**: Random honeycomb allocation via `RandomHoneycombSelector` (Fisher-Yates, Stars-and-Bars, even allocation).
+- **`PbRecipeProcessor`**: PB recipe coordinator delegating to `PbRecipeFinder` (double-layer cache), `PbRecipeCompleter` (batch insertion), and `MyriadCreationsHandler`.
+- **`FactoryPbContextDelegate`**: Composition class eliminating ~293 lines of duplicated PB recipe context logic across factory tile entities.
+- **`AbstractBakedModelCosmic`**: Cosmic render pipeline (shader uniforms, mask sprites, Iris defer) for `BakedModelCosmic` / `BakedModelHell` / `BakedModelHalo`.
+- **`Ae2GridNodeManager`** / **`Ae2OutputPusher`** / **`Ae2EnergyInjector`**: AE2 node lifecycle, output push, and ME-network energy injection (5-tier priority).
+- **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent.
 
 ### Thread Safety
 
@@ -154,28 +218,29 @@ The configuration interface supports multiple languages (English/Chinese) and au
 - Concurrent collections: `ConcurrentHashMap`, `CopyOnWriteArrayList`.
 - Atomic counters: `AtomicInteger`, `AtomicLong`.
 - Holder pattern for thread-safe lazy initialization.
-- Per-instance caches instead of global static caches.
-- `synchronized` blocks for compound operations on non-concurrent collections.
-- Server stop event clears static caches and unregisters JMX MBeans to prevent memory leaks.
+- `synchronized` blocks for compound operations.
+- Server stop event clears static caches and unregisters JMX MBeans.
 
 ### Mixin Naming Convention
 
-All Mixin methods and fields use the `productivebeesgenesis$` prefix (e.g., `productivebeesgenesis$onInit`, `productivebeesgenesis$getProductivityModifier`).
+All Mixin methods and fields use the `productivebeesgenesis$` prefix (e.g., `productivebeesgenesis$onInit`).
 
 ## Support
 
-If you encounter issues or have feature suggestions, please contact us through:
-
-- GitHub Issues: https://github.com/Ayoshiko/productive-bees-genesis/issues
+If you encounter issues or have feature suggestions, please file them at [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+Third-party assets and code references are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Acknowledgments
 
-- Productive Bees development team
-- Mekanism development team
-- NeoForge development team
-- Re:Avaritia (cosmic shader reference)
-- Mek-Energistics (AppliedFlux + AE2 energy input integration reference)
+- **Productive Bees** development team — base bee and honeycomb system.
+- **Mekanism** development team — machine and factory framework.
+- **NeoForge** development team — modding platform.
+- **Re:Avaritia** (Nova-Committee) — cosmic shader reference for the starfield texture.
+- **Mek-Energistics** (beipuo) — AppliedFlux + AE2 network energy input integration pattern.
+- **Applied Energistics 2** — `IN_WORLD_GRID_NODE_HOST` capability API.
+- **AppliedFlux** — FE storage API in ME networks.
