@@ -272,10 +272,11 @@ public class PbRecipeProcessor {
 			// 是否有物品输出：每 tick 只计算一次，避免 completion 路径反复调用 getRecipeOutputs().isEmpty()
 			boolean hasItemOutputs = !recipeValue.getRecipeOutputs().isEmpty();
 
-			// 检查能量是否足够
+			// v1.8.1 修复：能量不足时不激活材质，但保留进度（pbOperatingTicks 不重置）
+			// 避免能量不足时仍切换到加工中材质（发光），能量恢复后从保留的进度继续处理
 			if (availableEnergy < cachedEnergyPerTick) {
-				pbProcessing[processIndex] = true;
-				return true;
+				pbProcessing[processIndex] = false;
+				return false;
 			}
 
 			// 累加进度并消耗能量

@@ -21,6 +21,21 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置（mek_centrifuge.*）</li>
  * </ul>
  * 配置键名、层级、注册顺序与抽取前完全一致，纯重构无行为变更。
+ * <p>
+ * <b>v1.8.1 条件化注册与 null 守卫</b>：AE2 相关委托字段
+ * （{@code mekCentrifugeAeOutputEnabled}、{@code mekCentrifugeAeEnergyInputEnabled}、
+ * {@code mekCentrifugePreferAppliedFluxOverAeEnergy}）在对应附属未加载时为 null。
+ * 访问处需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫避免 NPE：
+ * <ul>
+ *   <li>{@link com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost#productivebeesgenesis$injectAe2Energy}
+ *       — 已守卫 {@code mekCentrifugeAeEnergyInputEnabled} 非 null</li>
+ *   <li>{@link com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader#isIntegrationEnabled}
+ *       — 已守卫 {@code isAe2Loaded()} 在前</li>
+ *   <li>{@link com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2EnergyInjector#readPreferAppliedFlux}
+ *       — 已守卫 {@code mekCentrifugePreferAppliedFluxOverAeEnergy} 非 null</li>
+ * </ul>
+ * <b>v1.8.1 删除</b>：移除 {@code mekCentrifugeAeEnergyInjectionPerTick} 委托字段
+ * （Mek-Energistics 调研确认无此配置，按需差额提取）。
  */
 public final class ServerConfig {
 
@@ -126,27 +141,26 @@ public final class ServerConfig {
 	// v1.8.0: AE 网络能量输入集成 — 向后兼容委托字段
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
-	public final ModConfigSpec.IntValue mekCentrifugeAeEnergyInjectionPerTick;
 
 	ServerConfig(ModConfigSpec.Builder builder) {
-		// 开发者模式：模组开发者用来调试正常功能不会用到的物品和调试配置日志等，用户无需开启此设置
+		// 开发者模式：调试用，用户无需开启
 		devMode = builder
-				.comment("开发者模式", "模组开发者用来调试模组正常功能不会用到的物品和调试配置日志等，用户无需开启此设置。")
+				.comment("开发者模式", "调试用，用户无需开启")
 				.define("devMode", false);
 
 		// 万象创世蜜蜂总开关
 		myriadCreationsEnabled = builder
-				.comment("启用万象创世蜜蜂", "设置为false可完全禁用万象创世蜜蜂及其相关功能，仅保留MEK离心机功能。", "适合只想使用MEK离心机而不需要万象创世蜜蜂的玩家。")
+				.comment("启用万象创世蜜蜂", "false时禁用蜜蜂相关功能，仅保留MEK离心机")
 				.define("myriadCreationsEnabled", true);
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
 
 		myriadCreationsFilterMode = builder
-				.comment("过滤模式", "DISABLED - 不过滤，万象创世可转化为所有蜜蜂类型", "BLACKLIST - 黑名单，排除列表中的蜜蜂类型", "WHITELIST - 白名单，仅允许列表中的蜜蜂类型")
+				.comment("过滤模式", "DISABLED/BLOCKLIST/WHITELIST")
 				.defineEnum("filterMode", ModConfig.FilterMode.DISABLED);
 
 		myriadCreationsFilteredBeeTypes = builder
-				.comment("过滤的蜜蜂类型列表", "格式: 模组ID:蜜蜂类型，如 productivebees:iron", "黑名单模式下排除这些类型，白名单模式下仅允许这些类型")
+				.comment("过滤的蜜蜂类型列表", "格式: modID:beeType")
 				.defineList("filteredBeeTypes", List.of(), () -> "productivebees:iron", ModConfig::validateResourceLocationElement);
 
 		builder.pop();
@@ -247,7 +261,7 @@ public final class ServerConfig {
 				.comment("是否启用万象创世的蜜脾产出")
 				.define("enabled", true);
 		produceOutputItem = builder
-				.comment("产出物品ID（如 productivebees:configurable_honeycomb）", "使用 configurable_honeycomb 时会自动附加 bee_type 组件")
+				.comment("产出物品ID")
 				.define("outputItem", "productivebees:configurable_honeycomb", ModConfig::validateResourceLocation);
 		produceOutputMin = builder
 				.comment("最小产出数量")
@@ -260,23 +274,18 @@ public final class ServerConfig {
 				.defineInRange("outputChance", 1.0D, 0.0D, 1.0D);
 
 		myriadProduceThrottlePerTick = builder
-				.comment("每游戏刻每只万象创世蜜蜂的最大产物事件数（0=无限制）",
-						"在高倍加速/ME接口高频拉取场景下限制调用次数，降低CPU负载")
+				.comment("每tick每只蜜蜂最大产物事件数", "0=无限制，高倍加速时降低CPU")
 				.defineInRange("myriadProduceThrottlePerTick", 0, 0, 20);
 		builder.pop(); // bee_produce
 
 		builder.comment("高级蜂箱性能优化（缓解大量模拟蜂箱导致的CPU压力）").push("advanced_beehive");
 
 		advancedBeehiveSimulateCooldown = builder
-				.comment("模拟蜜蜂中农夫/囤积/收集行为的查询冷却(tick)",
-						"simulateBee() 每 tick 都会扫描附近作物或可拾取物品，设置 1-5 可显著降低高倍加速下的 CPU 开销",
-						"0 = 不限制（原版行为）")
+				.comment("模拟行为查询冷却(tick)", "0=原版，1-5降低高倍加速CPU开销")
 				.defineInRange("simulateCooldown", 0, 0, 20);
 
 		advancedBeehiveSaveInterval = builder
-				.comment("高级蜂箱 NBT 保存间隔(tick)",
-						"降低高倍加速下的 CompoundTag 序列化开销，仅在物品栏存在脏标记时触发 setChanged",
-						"默认 20 tick（1秒），范围 1-200，值越大性能越好但宕机时数据丢失风险越高")
+				.comment("NBT保存间隔(tick)", "默认20，值越大性能越好但宕机风险增加")
 				.defineInRange("saveInterval", 20, 1, 200);
 
 		builder.pop(); // advanced_beehive
@@ -305,6 +314,5 @@ public final class ServerConfig {
 		// v1.8.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
 		this.mekCentrifugeAeEnergyInputEnabled = this.centrifuge.mekCentrifugeAeEnergyInputEnabled;
 		this.mekCentrifugePreferAppliedFluxOverAeEnergy = this.centrifuge.mekCentrifugePreferAppliedFluxOverAeEnergy;
-		this.mekCentrifugeAeEnergyInjectionPerTick = this.centrifuge.mekCentrifugeAeEnergyInjectionPerTick;
 	}
 }

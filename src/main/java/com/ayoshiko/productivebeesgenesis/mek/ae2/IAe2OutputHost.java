@@ -206,9 +206,14 @@ public interface IAe2OutputHost extends PbRecipeContext, IInWorldGridNodeHost {
 	 * 守卫条件（按顺序检查，任一不满足则直接返回）：
 	 * <ol>
 	 *   <li>{@link Ae2IntegrationLoader#isAe2Loaded()} — AE2 未安装时不执行</li>
+	 *   <li>{@code ModConfig.SERVER} 非 null — 配置已加载</li>
+	 *   <li>{@code mekCentrifugeAeEnergyInputEnabled} 非 null — 配置段已注册（防御性检查）</li>
 	 *   <li>配置项 {@code aeEnergyInputEnabled} — 默认关闭，向后兼容 v1.7.0</li>
 	 *   <li>离心机已连接到 AE 网格（grid 非 null，由 {@link Ae2EnergyInjector} 内部检查）</li>
 	 * </ol>
+	 * <p>
+	 * <b>v1.8.1 变更</b>：移除 {@code mekCentrifugeAeEnergyInjectionPerTick} 参数传递，
+	 * 注入量由 {@link Ae2EnergyInjector} 内部按容器剩余容量差额提取，与 Mek-Energistics 对齐。
 	 * <p>
 	 * <b>迪米特法则</b>：本方法仅调用 {@link Ae2EnergyInjector#injectEnergy}，
 	 * 不直接访问 AE2 网络或能量容器，所有底层操作委托给注入器协调器。
@@ -222,15 +227,12 @@ public interface IAe2OutputHost extends PbRecipeContext, IInWorldGridNodeHost {
 	default void productivebeesgenesis$injectAe2Energy() {
 		// 守卫1：AE2 未安装
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
-		// 守卫2：配置未启用（ModConfig.SERVER 在配置加载前为 null）
+		// 守卫2：配置未注册（AE2 加载但配置段未注册的边缘情况）
 		if (ModConfig.SERVER == null) return;
-		try {
-			if (!ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get()) return;
-		} catch (Throwable t) {
-			// 配置项异常时安全回退为不注入
-			return;
-		}
-		// 委托给注入器协调器
-		Ae2EnergyInjector.injectEnergy(this, ModConfig.SERVER.mekCentrifugeAeEnergyInjectionPerTick.get());
+		if (ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled == null) return;
+		// 守卫3：配置未启用
+		if (!ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get()) return;
+		// 委托给注入器协调器（v1.8.1：不再传递 perTick 上限，按需差额提取）
+		Ae2EnergyInjector.injectEnergy(this);
 	}
 }

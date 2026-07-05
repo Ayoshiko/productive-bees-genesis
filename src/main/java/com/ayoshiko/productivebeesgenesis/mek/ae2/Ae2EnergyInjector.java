@@ -26,14 +26,18 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  *   <li>tick 时机控制（由调用方 tick 处理器负责）</li>
  * </ul>
  * <p>
- * <b>提取流程</b>：
+ * <b>提取流程（v1.8.1 按需差额提取，与 Mek-Energistics 对齐）</b>：
  * <ol>
  *   <li>双重守卫：AE2 已安装 + grid 非 null</li>
- *   <li>获取容器并计算剩余容量（maxEnergy - currentEnergy）</li>
- *   <li>实际注入量 = min(maxAmount, remainingCapacity)</li>
+ *   <li>获取容器并计算剩余容量（maxEnergy - currentEnergy）作为本次提取上限</li>
  *   <li>按优先级先 SIMULATE 模拟提取确定可获取量，再 MODULATE 实际提取</li>
  *   <li>用 setEnergy 注入到容器（clamp 到 maxEnergy 防止溢出）</li>
  * </ol>
+ * <p>
+ * <b>v1.8.1 设计意图</b>：移除 perTick 注入上限配置（{@code aeEnergyInjectionPerTick}），
+ * 改为按容器剩余容量差额提取——容器差多少就补多少，最终注入量由
+ * {@code min(容器剩余容量, ME 网络可提取量)} 决定。避免人为 perTick 上限导致
+ * 高耗能场景下能量补充速度跟不上消耗，与 Mek-Energistics 的能量注入策略对齐。
  * <p>
  * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 网络操作在主线程进行，
  * MachineEnergyContainer 内部使用原子类型保证线程安全。
@@ -50,9 +54,14 @@ public final class Ae2EnergyInjector {
 	 * <br/>
 	 * 按 {@link ModConfig#SERVER} 的优先级配置决定 AppliedFlux 与 AE2 原生能量的提取顺序。
 	 * <p>
+	 * <b>v1.8.1 变更</b>：移除 {@code maxAmount} 参数，注入量由容器剩余容量
+	 * （{@code maxEnergy - currentEnergy}）决定。SIMULATE 模式确定 ME 网络实际可提取量，
+	 * 最终注入量 = {@code min(容器剩余容量, ME 网络可提取量)}，与 Mek-Energistics 对齐。
+	 * <p>
 	 * <b>守卫</b>：
 	 * <ul>
 	 *   <li>AE2 未安装时返回 0（双重防御，调用方应已守卫）</li>
+	 *   <li>host 为 null 时返回 0</li>
 	 *   <li>grid 为 null 时返回 0</li>
 	 *   <li>容器为 null 时返回 0</li>
 	 *   <li>容器已满（remainingCapacity <= 0）时返回 0</li>
@@ -66,14 +75,15 @@ public final class Ae2EnergyInjector {
 	 * </ul>
 	 * 注入到容器使用 setEnergy + clamp，避免依赖 canInsert 谓词。
 	 *
-	 * @param host      AE2 输出宿主（离心机方块实体）
-	 * @param maxAmount 单 tick 最大注入量（FE），<= 0 时返回 0
+	 * @param host AE2 输出宿主（离心机方块实体）
 	 * @return 实际注入到容器的 FE 总量
+	 *
+	 * @since 1.8.1
 	 */
-	public static long injectEnergy(IAe2OutputHost host, long maxAmount) {
+	public static long injectEnergy(IAe2OutputHost host) {
 		// 守卫1：AE2 未安装（双重防御，调用方应已守卫）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
-		if (host == null || maxAmount <= 0) return 0;
+		if (host == null) return 0;
 
 		// 获取已连接的网格
 		IGrid grid = getConnectedGrid(host);
@@ -83,14 +93,14 @@ public final class Ae2EnergyInjector {
 		MachineEnergyContainer<?> container = host.productivebeesgenesis$getAe2EnergySource();
 		if (container == null) return 0;
 
-		// 计算剩余容量
+		// 计算剩余容量（v1.8.1：按需差额提取，剩余容量即为本次提取上限）
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
 		long remainingCapacity = maxEnergy - currentEnergy;
 		if (remainingCapacity <= 0) return 0;
 
-		// 实际注入量 = min(请求量, 剩余容量)
-		long toExtract = Math.min(maxAmount, remainingCapacity);
+		// 实际提取量目标 = 容器剩余容量（SIMULATE 模式会进一步限制为 ME 网络可提取量）
+		long toExtract = remainingCapacity;
 
 		// 读取优先级配置
 		boolean preferAppliedFlux = readPreferAppliedFlux();
@@ -164,11 +174,17 @@ public final class Ae2EnergyInjector {
 	 * <br/>
 	 * 配置未加载或读取异常时默认为 true（优先 AppliedFlux），因为 AppliedFlux 是
 	 * FE 原生存储，提取效率更高（无需 AE↔FE 转换）。
+	 * <p>
+	 * <b>v1.8.1 null 守卫</b>：{@code mekCentrifugePreferAppliedFluxOverAeEnergy} 在
+	 * AppliedFlux 未加载时为 null（条件化注册）。此时 AE 网络中无 AppliedFlux FE 存储，
+	 * 应直接使用 AE2 原生能量，返回 false。
 	 *
 	 * @return true 优先从 AppliedFlux 提取，false 优先从 AE2 原生能量提取
 	 */
 	private static boolean readPreferAppliedFlux() {
 		if (ModConfig.SERVER == null) return true;
+		// v1.8.1：AppliedFlux 未加载时配置项为 null，返回 false 直接使用 AE2 原生能量
+		if (ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy == null) return false;
 		try {
 			return ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy.get();
 		} catch (Throwable t) {

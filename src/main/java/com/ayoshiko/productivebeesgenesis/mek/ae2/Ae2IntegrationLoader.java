@@ -14,8 +14,14 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
  *   <li>FML 不可用时回退到反射检测 {@code appeng.api.AEApi} 类是否存在</li>
  * </ol>
  * <p>
- * <b>集成开关</b>：AE2 已安装 <b>且</b> {@code ModConfig.SERVER.mekCentrifugeAeOutputEnabled=true} 时才启用。
- * 配置未加载（SERVER 为 null）时视为关闭，避免启动早期 NPE。
+ * <b>方法分工</b>（v1.8.2 解耦）：
+ * <ul>
+ *   <li>{@link #isAe2Loaded()} — AE2 是否安装，用于节点创建/连接/销毁/NBT 守卫
+ *       （与 Mek-Energistics 对齐：节点无条件创建）</li>
+ *   <li>{@link #isIntegrationEnabled()} — AE2 已安装 <b>且</b> {@code aeOutputEnabled=true}，
+ *       仅用于 {@link Ae2OutputPusher} 输出推送守卫</li>
+ * </ul>
+ * 配置未加载（SERVER 为 null）时 {@code isIntegrationEnabled} 返回 false，避免启动早期 NPE。
  */
 public final class Ae2IntegrationLoader {
 
@@ -42,9 +48,10 @@ public final class Ae2IntegrationLoader {
 	}
 
 	/**
-	 * AE2 集成是否启用
+	 * AE2 输出推送是否启用
 	 * <br/>
-	 * AE2 已安装 <b>且</b> 配置开启时返回 true。
+	 * AE2 已安装 <b>且</b> {@code aeOutputEnabled=true} 时返回 true。
+	 * v1.8.2：仅用于 {@link Ae2OutputPusher} 输出推送守卫，不再控制节点创建。
 	 * 配置未加载时返回 false，避免启动早期 NPE。
 	 */
 	public static boolean isIntegrationEnabled() {

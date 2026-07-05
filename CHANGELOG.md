@@ -23,6 +23,98 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [1.8.1] - 2026-07-05
+
+### 修复
+
+- **AE 能量注入上限移除** — 解决 32 速度升级下 AE 网络供能跟不上消耗的问题
+  - **问题**：v1.8.0 引入的 `mekCentrifugeAeEnergyInjectionPerTick` 配置项（默认 1000 FE/tick）作为 AE 网络能量注入上限，导致 32 速度升级（每 tick 消耗约 1600 FE）下供能跟不上
+  - **根因**：经反编译调研 Mek-Energistics 1.0.7，其 `MeMekanismMachineBlockEntity.hasEnergyForRecipe()` 方法每次按需差额提取（提取量 = `energyPerTick - energyContainer.getEnergy()`），无 perTick 上限。本模组原实现引入的 perTick 上限属于过度设计，与参考模组不一致
+  - **修复**：
+    1. 删除 `mekCentrifugeAeEnergyInjectionPerTick` 配置项（含字段、注册、委托、翻译键）
+    2. 修改 `Ae2EnergyInjector.injectEnergy()` 方法签名移除 `maxAmount` 参数，注入量改为按容器剩余容量差额提取（`toExtract = maxEnergy - currentEnergy`），由 SIMULATE 模式进一步限制为 ME 网络可提取量
+    3. 最终注入量 = `min(容器剩余容量, ME 网络可提取量)`，与 Mek-Energistics 完全对齐
+  - **影响范围**：7 个文件修改（`CentrifugeConfigSection.java`、`ServerConfig.java`、`IAe2OutputHost.java`、`Ae2EnergyInjector.java`、`en_us.json`、`zh_cn.json`）
+
+- **能量不足时机器仍发光材质 bug** — 修复离心机能量不足但有输入物品时切换到加工中材质（发光）的问题
+  - **问题**：用户反馈离心机能量不足但有输入物品时仍切换到加工中材质（发光），取走输出物后几秒恢复，与预期行为不符
+  - **根因**：`PbRecipeProcessor.tryProcessPbRecipeInternal` 第 275-279 行能量不足时执行 `pbProcessing[processIndex] = true; return true;`，导致 `MekCentrifugeTickHandler.onUpdateServer` 调用 `tile.callSetActive(true)` 触发加工中材质；工厂版同理通过 `tryProcessPbRecipe` 返回 true 触发 `onProcessActivated` 递增计数器，`hasActiveProcess()` 返回 true，`setActive(true)`
+  - **修复**：将能量不足分支改为 `pbProcessing[processIndex] = false; return false;`，让上层判定机器未在加工，不切换到加工中材质
+  - **设计权衡**：保留 `pbOperatingTicks` 进度（不重置），能量恢复后从保留的进度继续处理，避免能量波动导致进度丢失
+  - **影响范围**：1 个文件修改（`PbRecipeProcessor.java`）
+
+- **AE2 节点创建与 aeOutputEnabled 配置解耦** — 修复关闭 AE2 直接输出时设备离线导致 ME 网络能量输入也失效的问题
+  - **问题**：用户反馈关闭 `aeOutputEnabled` 配置时设备直接离线，此时即使启用 `aeEnergyInputEnabled`，机器也无法从 ME 网络获取能量
+  - **根因**：`Ae2GridNodeManager` 中的节点创建/连接/销毁/NBT 守卫使用 `isIntegrationEnabled()`（要求 AE2 已安装且 `aeOutputEnabled=true`），导致关闭输出推送时节点不创建，机器与 ME 网络完全断开
+  - **参考模组调研**：反编译 Mek-Energistics 1.0.7 的 `MeMekanismMachineBlockEntity` 构造函数，其 `mainNode` 创建是**无条件**的（不依赖任何配置开关），仅输出推送行为受配置控制
+  - **修复**：
+    1. 将 `Ae2GridNodeManager` 中 `prepareNode`/`connectNode`/`loadNodeNBT`/`getGridNodeState` 的守卫从 `isIntegrationEnabled()` 改为 `isAe2Loaded()`（仅检测 AE2 是否安装）
+    2. 保留 `Ae2OutputPusher.pushOutputs()` 中的 `isIntegrationEnabled()` 检查，仅用于输出推送守卫
+    3. 更新 `Ae2IntegrationLoader` Javadoc 明确两个方法的语义边界
+  - **设计原则**：
+    - **SRP**：`isAe2Loaded()` 仅负责检测 AE2 加载状态（用于节点生命周期），`isIntegrationEnabled()` 仅负责检测输出推送功能启用状态
+    - **LoD**：配置访问点通过抽象方法守卫，不直接耦合具体配置项
+  - **影响范围**：2 个文件修改（`Ae2GridNodeManager.java`、`Ae2IntegrationLoader.java`）
+
+- **子分类翻译键格式修复** — 修复 v1.8.1 引入的 MEK 离心机子 section 翻译键格式错误
+  - **问题**：v1.8.1 引入的 4 个子 section 翻译键格式错误，使用了 `productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.basic` 形式（含文件名前缀、父 section 路径和 `.title` 后缀），导致 NeoForge 配置界面无法正确显示子分类标题
+  - **根因**：NeoForge 子 section 翻译键格式应为 `modId.configuration.<section_key>`，不含文件名前缀、父 section 路径和 `.title` 后缀
+  - **修复**：
+    1. 删除 8 个错误翻译键
+    2. 添加 12 个正确翻译键（格式为 `productivebeesgenesis.configuration.<section_key>`，覆盖 `.button` 和 `.tooltip` 变体）
+    3. 4 个子 section：`basic`、`ejection`、`io_limit`、`ae2`
+  - **影响范围**：2 个文件修改（`ModLanguageProvider.java`、`en_us.json` + `zh_cn.json`）
+
+### 新增
+
+- **AE2/AppliedFlux 配置项条件化注册** — 附属模组未加载时对应配置项不显示在配置文件和界面
+  - **问题**：v1.8.0 注册的 AE2 配置项（`aeOutputEnabled`、`aeEnergyInputEnabled`、`preferAppliedFluxOverAeEnergy`）在 AE2/AppliedFlux 未加载时仍出现在配置文件和 NeoForge 配置界面，给用户造成困惑
+  - **修复**：
+    1. 在 `CentrifugeConfigSection` 构造时检查 `Ae2IntegrationLoader.isAe2Loaded()`，未加载则跳过整个 `ae2` 子 section 注册（`builder.push("ae2")` 不执行）
+    2. 在 `ae2` section 内检查 `AppliedFluxIntegrationLoader.isAppliedFluxLoaded()`，未加载则跳过 `preferAppliedFluxOverAeEnergy` 注册
+    3. 未加载时对应字段为 `null`，访问处通过 `Ae2IntegrationLoader.isAe2Loaded()` 守卫避免 NPE
+    4. `IAe2OutputHost.productivebeesgenesis$injectAe2Energy()` 添加 `mekCentrifugeAeEnergyInputEnabled` 非 null 守卫（防御性检查）
+    5. `Ae2EnergyInjector.readPreferAppliedFlux()` 添加 `mekCentrifugePreferAppliedFluxOverAeEnergy` 非 null 守卫，AppliedFlux 未加载时返回 false 直接使用 AE2 原生能量
+  - **设计原则**：
+    - **LoD**：配置访问点通过 `Ae2IntegrationLoader.isAe2Loaded()` 守卫，不直接检查 mod 加载状态
+    - **OCP**：通过条件化 push/pop 实现配置项可选注册，不修改配置项定义逻辑
+  - **影响范围**：3 个文件修改（`CentrifugeConfigSection.java`、`IAe2OutputHost.java`、`Ae2EnergyInjector.java`）
+
+- **MEK 离心机配置子分类** — 提升 NeoForge 配置界面的可读性与导航效率
+  - **问题**：v1.8.0 之前 MEK 离心机的 21 个配置项全部位于 `mek_centrifuge` 单一 section，配置界面单页过长，难以快速定位
+  - **修复**：将 21 个配置项按功能分为 4 个子 section：
+    - `mek_centrifuge.basic` — 基础参数（5 项：energyPerTick、processingTime、fluidTankCapacity、fluidEjectRate、combBlockMultiplier）
+    - `mek_centrifuge.ejection` — 弹出策略（11 项：ejectDelay、ejectDelayActive、ejectSkipUnchanged、ejectSkipTicks、ejectMaxSpeedMode、ejectMinInterval、ejectBusyThreshold、ejectBusyCooldown、ejectMaxPerTick、ejectBlockedThreshold、ejectBlockedCooldown）
+    - `mek_centrifuge.io_limit` — IO 限流（1 项：maxExtractPerTick）
+    - `mek_centrifuge.ae2` — AE2 集成（条件化注册，2-3 项：aeOutputEnabled、aeEnergyInputEnabled、preferAppliedFluxOverAeEnergy）
+  - **BREAKING 配置结构变更**：配置文件从 `[mek_centrifuge]` 扁平结构变为 `[mek_centrifuge.basic]` / `[mek_centrifuge.ejection]` 等嵌套结构，旧配置文件中的扁平键会被 NeoForge 视为未注册键发出 warning 但不影响功能（根据用户规则 16"模组暂未发布，无需在乎版本升级兼容"可接受）
+  - **影响范围**：3 个文件修改（`CentrifugeConfigSection.java`、`en_us.json`、`zh_cn.json`）
+
+### 改进
+
+- **全配置项描述精简** — 精简所有配置项的 comment 与 tooltip，提升配置界面可读性
+  - **问题**：v1.8.0/v1.8.1 新增的 AE2 与附属相关配置描述过于啰嗦，其他历史配置项描述也存在冗长问题，配置界面单页信息密度过高
+  - **精简原则**：
+    - 每个配置项 comment 不超过 3 行
+    - tooltip 精简到 1-2 句核心信息
+    - 保留关键默认值/单位/格式说明（如 `0=无限制`、`格式: modID:beeType`）
+    - 枚举值用 `/` 分隔（如 `DISABLED/BLOCKLIST/WHITELIST`）
+  - **精简范围**：
+    1. **MEK 离心机配置**（`CentrifugeConfigSection.java`）：21 个配置项 comment 全部精简到 ≤3 行
+    2. **服务端其他配置**（`ServerConfig.java`）：`devMode`、`myriadCreationsEnabled`、`myriadCreationsFilterMode`、`myriadCreationsFilteredBeeTypes`、`produceOutputItem`、`myriadProduceThrottlePerTick`、`advancedBeehiveSimulateCooldown`、`advancedBeehiveSaveInterval` 等 8 项精简
+    3. **蜜蜂属性配置**（`BeeAttributeConfigSection.java`）：`createComb` 精简
+    4. **客户端配置**（`ClientConfig.java`）：`showPortColors` 精简
+    5. **语言文件**（`ModLanguageProvider.java` + `en_us.json` + `zh_cn.json`）：英文与中文 tooltip 同步精简，覆盖 `devMode`、`combBlockMultiplier`、`fluidTankCapacity`、`myriadProduceThrottlePerTick`、`showPortColors`、`saveInterval`、`simulateCooldown`、`filterMode`、`colors`、`mekCentrifugeEjectBlockedCooldown`、`mekCentrifugeFluidEjectRate`、`mekCentrifugeMaxExtractPerTick`、`server.other` 等
+  - **影响范围**：6 个文件修改（`CentrifugeConfigSection.java`、`ServerConfig.java`、`BeeAttributeConfigSection.java`、`ClientConfig.java`、`ModLanguageProvider.java`、`en_us.json` + `zh_cn.json`）
+
+### 文档
+
+- 更新 `future-optimization.md`：记录 v1.8.1 完成情况与下个版本（v1.9.0）建议
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布为 bug 修复（4 项：AE 能量注入上限移除、能量不足机器仍发光、AE2 节点与配置解耦、子分类翻译键格式修复）+ 新增功能（2 项：AE2/AppliedFlux 配置条件化注册、MEK 离心机配置子分类）+ 改进（1 项：全配置项描述精简），含 BREAKING 配置结构变更。根据用户规则 16"模组暂未发布，无需在乎版本升级兼容"，BREAKING 配置结构变更不影响版本号定级。按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则，bug 修复为主 + 配置体验改进定为 **PATCH** 级别（v1.8.0 → v1.8.1）
+
 ## [1.8.0] - 2026-07-05
 
 ### 新增

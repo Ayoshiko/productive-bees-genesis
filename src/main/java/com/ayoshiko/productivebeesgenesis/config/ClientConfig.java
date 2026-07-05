@@ -46,7 +46,7 @@ public final class ClientConfig {
 		builder.comment("MEK离心机端口可视化设置").push("mek_port_visualization");
 
 		showPortColors = builder
-				.comment("手持Mekanism配置器或配置卡时显示MEK离心机的端口颜色")
+				.comment("手持配置器时显示端口颜色")
 				.define("showPortColors", true);
 
 		portColorRenderRange = builder

@@ -91,7 +91,7 @@ public final class BeeAttributeConfigSection {
 		builder.pop();
 
 		createComb = builder
-				.comment("是否能产出蜜脾", "默认关闭：万象创世使用 PB 的 configurable_honeycomb + bee_type 数据组件（不自动生成 configurable_honeycomb，createComb: false）")
+				.comment("是否能产出蜜脾", "默认关闭，使用 PB configurable_honeycomb")
 				.define("createComb", false);
 
 		size = builder

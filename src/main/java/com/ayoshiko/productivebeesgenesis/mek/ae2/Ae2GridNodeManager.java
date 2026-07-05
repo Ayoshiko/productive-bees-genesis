@@ -21,7 +21,11 @@ import appeng.api.networking.IManagedGridNode;
  * AE2 网格节点生命周期管理器
  * <br/>
  * 封装 {@link IManagedGridNode} 的创建、销毁、NBT 持久化逻辑。
- * 所有方法都进行空检查和集成开关检查，AE2 未安装时安全短路返回。
+ * 所有方法都进行空检查和 AE2 加载状态检查，AE2 未安装时安全短路返回。
+ * <p>
+ * <b>v1.8.2 解耦</b>：节点创建只受 {@link Ae2IntegrationLoader#isAe2Loaded()} 控制，
+ * 不再受 {@code aeOutputEnabled} 配置影响。与 Mek-Energistics 对齐（节点无条件创建）。
+ * {@code aeOutputEnabled} 仅控制 {@link Ae2OutputPusher} 的输出推送行为。
  * <p>
  * <b>节点配置</b>：
  * <ul>
@@ -57,7 +61,7 @@ public final class Ae2GridNodeManager {
 	 * @param host 输出宿主（离心机方块实体）
 	 */
 	public static void prepareNode(IAe2OutputHost host) {
-		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 宿主级锁保护 check-then-act，避免并发创建重复节点
 		synchronized (host) {
 			// 幂等：节点已存在则不重复创建
@@ -102,7 +106,7 @@ public final class Ae2GridNodeManager {
 	 * @param host 输出宿主
 	 */
 	public static void connectNode(IAe2OutputHost host) {
-		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 宿主级锁保护 check-then-act，与 prepareNode/destroyNode 保持一致的锁粒度
 		synchronized (host) {
 			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
@@ -138,7 +142,7 @@ public final class Ae2GridNodeManager {
 	 * @return 状态 ordinal（0-3），对应 AE2 GridNodeState
 	 */
 	public static int getGridNodeState(IAe2OutputHost host) {
-		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return 0;
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 		if (!(nodeObj instanceof IManagedGridNode managedNode)) return 0;
 
@@ -218,7 +222,7 @@ public final class Ae2GridNodeManager {
 	 * @param tag  方块实体的 NBT 根标签
 	 */
 	public static void loadNodeNBT(IAe2OutputHost host, CompoundTag tag) {
-		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			// 节点未创建时先准备（不连接，避免区块加载递归）
 			if (host.productivebeesgenesis$getAe2GridNode() == null) {
