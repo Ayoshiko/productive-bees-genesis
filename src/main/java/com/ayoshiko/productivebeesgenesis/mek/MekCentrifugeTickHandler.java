@@ -53,6 +53,11 @@ class MekCentrifugeTickHandler {
 	 * @return 是否需要发送客户端同步包（由 super 返回）
 	 */
 	boolean onUpdateServer() {
+		// v1.8.0: 在 super 调用前从 AE 网络注入 FE 能量
+		// 让父类 super.onUpdateServer() 处理 SMELTING 配方消耗时已有注入的能量可用
+		// 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理
+		tile.productivebeesgenesis$injectAe2Energy();
+
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
 		long energyBefore = energyContainer.getEnergy();

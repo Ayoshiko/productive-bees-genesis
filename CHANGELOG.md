@@ -23,6 +23,56 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [1.8.0] - 2026-07-05
+
+### 新增
+
+- **AppliedFlux + AE2 网络能量输入集成** — 离心机现在可以直接使用 ME 网络中存储的 FE 能量
+  - **问题**：v1.7.0 已实现离心机作为 AE2 网格节点连接 ME 网络，但离心机只能通过外部线缆供能或内部 FE 缓存运行，无法直接使用 ME 网络中存储的能量
+  - **根因**：离心机的 `MachineEnergyContainer` 仅接受 Mekanism `EnergyInventorySlot.fillContainerOrConvert()` 注入的外部 FE，未实现从 AE2 网络提取能量的通道
+  - **修复**：
+    1. 新建 `AppliedFluxIntegrationLoader` 软依赖检测类（SRP），通过 `ModList.get().isLoaded("appflux")` 检测 AppliedFlux 加载状态，使用 Holder 模式实现线程安全懒加载
+    2. 新建 `Ae2EnergyBridge` 类（SRP），封装从 AE 网络提取能量的两个静态方法：
+       - `extractAppliedFluxFe`：通过 `IStorageService.getInventory().extract(FluxKey.of(EnergyType.FE), ...)` 提取 AppliedFlux 存储的 FE
+       - `extractAeEnergyAsFe`：通过 `grid.getEnergyService().extractAEPower()` 提取 AE2 原生能量，按 2 FE = 1 AE 比例转换
+    3. 新建 `Ae2EnergyInjector` 类（SRP + DIP），协调从 AE 网络提取能量并注入到 `MachineEnergyContainer`：
+       - 使用 `Action.SIMULATE` 先模拟提取确定可提取量，再实际提取（MODULATE），避免实际提取后容器已满导致 ME 网络能量浪费
+       - 依赖 `IAe2OutputHost` 抽象，不直接引用具体 TileEntity
+       - 容器已满时（剩余容量 ≤ 0）直接返回 0
+    4. `IAe2OutputHost` 接口扩展 `productivebeesgenesis$injectAe2Energy()` default 方法（OCP），三重守卫：① `Ae2IntegrationLoader.isAe2Loaded()` ② `ModConfig.SERVER` 非 null + `mekCentrifugeAeEnergyInputEnabled` 配置 ③ 委托 `Ae2EnergyInjector.injectEnergy()`
+    5. `MekCentrifugeTickHandler` 和 3 个工厂类在 `super.onUpdateServer()` 调用**前**注入 AE 网络能量，让父类处理 SMELTING 配方消耗时已有注入的能量可用
+  - **能量优先级策略（5 层）**：
+    1. 机器内部缓存 FE（`MachineEnergyContainer.getEnergy()`）
+    2. 外部直接供能（Mekanism `configComponent` + `EnergyInventorySlot.fillContainerOrConvert()`，由 `super.onUpdateServer()` 处理）
+    3. AE 网络存储的 FE（AppliedFlux）— 新增
+    4. 其他能量（由 Mekanism 父类处理）
+    5. AE2 原生网络能量（转换为 FE）— 新增
+  - **注入时机设计**：在 `super.onUpdateServer()` 调用**前**注入，让父类处理 SMELTING 配方消耗时已有注入的能量可用；工厂版在 `energyBeforeSuper` 快照**前**注入，保证能量差计算正确
+  - **配置开关**（3 项，默认关闭保证向后兼容 v1.7.0 行为）：
+    - `mekCentrifugeAeEnergyInputEnabled`（默认 false）：是否启用 AE 网络能量输入
+    - `mekCentrifugePreferAppliedFluxOverAeEnergy`（默认 true）：优先使用 AppliedFlux FE 而非 AE2 原生能量
+    - `mekCentrifugeAeEnergyInjectionPerTick`（默认 1000，范围 1-100000）：每 tick 最大注入量
+  - **AE2 类引用控制**：
+    - 所有 AE2 类引用通过 `Ae2IntegrationLoader.isAe2Loaded()` 守卫
+    - 所有 AppliedFlux 类引用通过 `AppliedFluxIntegrationLoader.isAppliedFluxLoaded()` 守卫
+    - AppliedFlux jar 配置为 `compileOnly` 依赖，运行时通过守卫短路，未安装时不触发类加载
+  - **设计原则**：
+    - **SRP**：新建 `AppliedFluxIntegrationLoader`（仅负责加载检测）、`Ae2EnergyBridge`（仅负责能量提取）、`Ae2EnergyInjector`（仅负责注入协调），三个类职责分离
+    - **OCP**：通过 `IAe2OutputHost` 接口扩展 default 方法，不修改现有实现类
+    - **DIP**：`Ae2EnergyInjector` 依赖 `IAe2OutputHost` 抽象，不直接引用具体 TileEntity
+    - **LoD**：Tick 处理器仅调用 `host.injectAe2Energy()`，不直接访问 AE2 网络或 AppliedFlux API
+  - **参考模组**：[Mek-Energistics](https://github.com/beipuo/Mek-Energistics) 的三层能量优先级模式（本地 FE → AE 网络能量 → AppliedFlux/AE 原生）
+
+### 文档
+
+- 更新 `README.md` 与 `README_zh.md`：扩展 AE2 Integration 描述，添加 AppliedFlux 能量输入兼容；致谢部分新增 Mek-Energistics
+- 更新 `THIRD_PARTY_LICENSES.md`：添加 AppliedFlux 与 Mek-Energistics 许可证信息
+- 更新 `future-optimization.md`：记录 v13（1.8.0）完成情况与后续优化方向
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布为新增功能（AppliedFlux + AE2 网络能量输入），向后兼容无破坏性变更（默认配置关闭，行为与 v1.7.0 一致），按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **MINOR** 级别（v1.7.0 → v1.8.0）
+
 ## [1.7.0] - 2026-07-05
 
 ### 新增

@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-1.7.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.8.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 资源蜜蜂（Productive Bees）和通用机械（Mekanism）附属模组，添加了通用机械（Mekanism）风格的离心机，可处理蜜脾和蜜脾块。添加了万象创世蜜蜂，其蜜脾可转化为整合包内所有资源蜜蜂的蜜脾。蜜脾转化功能拥有详细可配置的过滤名单。万象创世蜜蜂的数据包可以在配置文件里自定义修改。
 万象创世蜜脾拥有无尽贪婪（Re:Avaritia）模组的寰宇支配之剑（Sword of the Cosmos）同款的星空遮罩材质。
@@ -22,7 +22,7 @@
 | 工厂等级 | 覆盖Mekanism、Mekanism Extras 、Evolved Mekanism、Evolved Mekanism Extras 共17个等级。工厂物品名称显示与原模组对应的颜色特效。 |
 | 蜜蜂过滤界面 | 游戏内蜜蜂黑白名单编辑器，支持搜索、排序、折叠。 |
 | JEI集成 | 完整的JEI支持，禁用万象创世蜜蜂时自动隐藏相关配方。 |
-| AE2集成 | 离心机作为AE2网格节点：通过标准 `IN_WORLD_GRID_NODE_HOST` capability，可直接与AE2智能线缆、相邻离心机、以及附属扩展模组线缆（ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux）自动连接。直接将产物推送到ME网络，绕过外部物流。 |
+| AE2集成 | 离心机作为AE2网格节点：通过标准 `IN_WORLD_GRID_NODE_HOST` capability，可直接与AE2智能线缆、相邻离心机、以及附属扩展模组线缆（ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux）自动连接。直接将产物推送到ME网络，绕过外部物流。安装 AppliedFlux 后，可选地抽取 ME 网络中存储的 FE 能量为离心机供能（5层优先级：本地FE → 外部供能 → ME网络FE → 其他能量 → AE2原生能量）。 |
 | Jade集成 | 离心机在Jade悬停面板中显示AE2网络连接状态（离线/加载中/缺少频道/在线）。 |
 
 
@@ -92,7 +92,7 @@
 | Evolved Mekanism | EM等级工厂。 |
 | Evolved Mekanism Extras | EME等级工厂。 |
 | Mekanism Unleashed | 扩展升级上限。 |
-| Applied Energistics 2 | 完整线缆连接兼容（智能线缆 + 附属扩展模组线缆）+ 通过 `IN_WORLD_GRID_NODE_HOST` capability 直接ME网络产物输出集成。 |
+| Applied Energistics 2 | 完整线缆连接兼容（智能线缆 + 附属扩展模组线缆）+ 通过 `IN_WORLD_GRID_NODE_HOST` capability 直接ME网络产物输出集成。安装 AppliedFlux 后，可选地抽取 ME 网络中存储的 FE 能量为离心机供能（可配置，默认关闭）。 |
 | Jade | AE2网络状态悬停显示。 |
 | Iris | 宇宙渲染光影兼容。 |
 | JEI | 配方查看。 |
@@ -173,3 +173,4 @@
 - Mekanism 开发团队
 - NeoForge 开发团队
 - Re:Avaritia（宇宙着色器参考）
+- Mek-Energistics（AppliedFlux + AE2 能量输入集成参考）

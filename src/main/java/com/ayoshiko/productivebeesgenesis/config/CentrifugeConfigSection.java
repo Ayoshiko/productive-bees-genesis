@@ -50,6 +50,11 @@ public final class CentrifugeConfigSection {
 	// AE2 直接输出集成：离心机作为 AE2 网格节点主动推送输出
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
 
+	// v1.8.0: AE 网络能量输入集成 — 离心机从 ME 网络提取 FE/AE 能量注入本地容器
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
+	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	public final ModConfigSpec.IntValue mekCentrifugeAeEnergyInjectionPerTick;
+
 	private CentrifugeConfigSection(ModConfigSpec.Builder builder) {
 		builder.comment("MEK离心机设置").push("mek_centrifuge");
 
@@ -151,6 +156,31 @@ public final class CentrifugeConfigSection {
 						"未安装 AE2 时此配置无效，完全回退到 SFM/Ejector 路径",
 						"默认关闭，需手动开启")
 				.define("aeOutputEnabled", false);
+
+		// v1.8.0: AE 网络能量输入集成 — 从 ME 网络提取 FE 注入离心机能量容器
+		mekCentrifugeAeEnergyInputEnabled = builder
+				.comment("启用 AE 网络能量输入",
+						"开启后离心机在 AE2 已安装且已连接到 AE 网格时，可从 ME 网络提取 FE 能量注入本地能量容器",
+						"支持 AppliedFlux 存储的 FE 和 AE2 原生能量（自动转换）",
+						"默认关闭，需手动开启",
+						"能量优先级：本地缓存 FE > 外部直接供能 > AE 网络存储 FE > AE2 原生能量")
+				.define("aeEnergyInputEnabled", false);
+
+		mekCentrifugePreferAppliedFluxOverAeEnergy = builder
+				.comment("AE 网络能量中优先使用 AppliedFlux FE",
+						"true：先消耗 AppliedFlux 存储的 FE，不足时再消耗 AE2 原生能量（默认）",
+						"false：先消耗 AE2 原生能量，不足时再消耗 AppliedFlux 存储的 FE",
+						"仅在 aeEnergyInputEnabled=true 时生效",
+						"参考 Mek-Energistics 的 Prefer Applied Flux FE 配置（默认值相反，本项目默认 true）")
+				.define("preferAppliedFluxOverAeEnergy", true);
+
+		mekCentrifugeAeEnergyInjectionPerTick = builder
+				.comment("每 tick 从 AE 网络注入 FE 的上限",
+						"防止瞬间抽干 ME 网络能量存储",
+						"默认值：1000 FE/tick",
+						"范围：1-100000",
+						"仅在 aeEnergyInputEnabled=true 时生效")
+				.defineInRange("aeEnergyInjectionPerTick", 1000, 1, 100000);
 
 		builder.pop(); // mek_centrifuge
 	}

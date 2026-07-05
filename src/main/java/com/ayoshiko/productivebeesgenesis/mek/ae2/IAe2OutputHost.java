@@ -12,6 +12,7 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.util.AECableType;
 import appeng.me.InWorldGridNode;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -21,6 +22,12 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  * <br/>
  * 定义离心机向 AE2 网格推送输出所需的依赖，并实现 AE2 19.x 标准的
  * {@link IInWorldGridNodeHost} 契约，使离心机能被 AE2 线缆发现并自动建立网格连接。
+ * <p>
+ * <b>v1.8.0 新增：AE2 网络能量输入</b>：通过 {@link #productivebeesgenesis$injectAe2Energy()}
+ * default 方法，离心机可从 AE2 网络提取 FE 能量（AppliedFlux 存储 + AE2 原生能量）
+ * 注入到自身 {@link MachineEnergyContainer}，由 {@link Ae2EnergyInjector} 协调提取顺序，
+ * {@link Ae2EnergyBridge} 执行底层提取。默认关闭，由 {@code aeEnergyInputEnabled} 配置控制，
+ * 向后兼容 v1.7.0 行为。
  * <p>
  * <b>AE2 类引用控制</b>：本接口自 v1.7.0 起强引用 AE2 API 类（{@code IInWorldGridNodeHost}、
  * {@code IGridNode}、{@code AECableType} 等），这是实现 AE2 cable 连接的必要设计权衡。
@@ -186,5 +193,44 @@ public interface IAe2OutputHost extends PbRecipeContext, IInWorldGridNodeHost {
 	@Override
 	default AECableType getCableConnectionType(Direction dir) {
 		return AECableType.SMART;
+	}
+
+	// ===== v1.8.0 新增：AE2 网络能量输入 =====
+
+	/**
+	 * 从 AE 网络注入能量到离心机的能量容器
+	 * <br/>
+	 * 在 super.onUpdateServer() 调用前由 tick 处理器调用，让父类的 SMELTING 配方消耗
+	 * 也能使用注入的能量。
+	 * <p>
+	 * 守卫条件（按顺序检查，任一不满足则直接返回）：
+	 * <ol>
+	 *   <li>{@link Ae2IntegrationLoader#isAe2Loaded()} — AE2 未安装时不执行</li>
+	 *   <li>配置项 {@code aeEnergyInputEnabled} — 默认关闭，向后兼容 v1.7.0</li>
+	 *   <li>离心机已连接到 AE 网格（grid 非 null，由 {@link Ae2EnergyInjector} 内部检查）</li>
+	 * </ol>
+	 * <p>
+	 * <b>迪米特法则</b>：本方法仅调用 {@link Ae2EnergyInjector#injectEnergy}，
+	 * 不直接访问 AE2 网络或能量容器，所有底层操作委托给注入器协调器。
+	 * <p>
+	 * <b>类加载安全</b>：default 方法内的 {@link Ae2EnergyInjector} 引用仅在方法被调用时
+	 * 解析，AE2 未安装时 {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫先行返回，
+	 * 不会触发后续类的加载。
+	 *
+	 * @since 1.8.0
+	 */
+	default void productivebeesgenesis$injectAe2Energy() {
+		// 守卫1：AE2 未安装
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
+		// 守卫2：配置未启用（ModConfig.SERVER 在配置加载前为 null）
+		if (ModConfig.SERVER == null) return;
+		try {
+			if (!ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get()) return;
+		} catch (Throwable t) {
+			// 配置项异常时安全回退为不注入
+			return;
+		}
+		// 委托给注入器协调器
+		Ae2EnergyInjector.injectEnergy(this, ModConfig.SERVER.mekCentrifugeAeEnergyInjectionPerTick.get());
 	}
 }

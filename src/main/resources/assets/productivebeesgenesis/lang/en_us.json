@@ -310,5 +310,11 @@
   "productivebeesgenesis.configuration.ejectMaxPerTick": "Max Eject Calls Per Tick",
   "productivebeesgenesis.configuration.ejectMaxPerTick.tooltip": "Max outputItems calls per tick (0=unlimited). Limits repeated outputItems calls under 256x acceleration. Default 64; skipped in max speed mode.",
   "productivebeesgenesis.configuration.aeOutputEnabled": "Enable AE2 Direct Output",
-  "productivebeesgenesis.configuration.aeOutputEnabled.tooltip": "When AE2 is installed, centrifuge acts as a grid node and actively pushes outputs to the AE2 network, bypassing SFM and reducing high-frequency AEItemKey creation. No effect without AE2. Default off."
+  "productivebeesgenesis.configuration.aeOutputEnabled.tooltip": "When AE2 is installed, centrifuge acts as a grid node and actively pushes outputs to the AE2 network, bypassing SFM and reducing high-frequency AEItemKey creation. No effect without AE2. Default off.",
+  "productivebeesgenesis.configuration.aeEnergyInputEnabled": "Enable AE Network Energy Input",
+  "productivebeesgenesis.configuration.aeEnergyInputEnabled.tooltip": "When enabled and AE2 is installed and connected to an AE grid, the centrifuge can extract FE energy from the ME network and inject it into the local energy buffer. Supports AppliedFlux-stored FE and AE2 native energy (auto-converted). Default off. Energy priority: local cached FE > external direct supply > AE network stored FE > AE2 native energy.",
+  "productivebeesgenesis.configuration.preferAppliedFluxOverAeEnergy": "Prefer AppliedFlux FE",
+  "productivebeesgenesis.configuration.preferAppliedFluxOverAeEnergy.tooltip": "Among AE network energy sources, prefer consuming AppliedFlux-stored FE first, then AE2 native energy when insufficient (default). When false, consume AE2 native energy first, then AppliedFlux FE. Only effective when aeEnergyInputEnabled=true. Opposite default to Mek-Energistics.",
+  "productivebeesgenesis.configuration.aeEnergyInjectionPerTick": "AE Energy Injection Per Tick",
+  "productivebeesgenesis.configuration.aeEnergyInjectionPerTick.tooltip": "Max FE injected from the AE network per tick to prevent instantly draining ME network energy storage. Default: 1000 FE/tick. Range: 1-100000. Only effective when aeEnergyInputEnabled=true."
 }

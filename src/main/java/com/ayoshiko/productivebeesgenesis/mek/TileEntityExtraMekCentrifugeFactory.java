@@ -328,6 +328,10 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		productivebeesgenesis$ae2LifecycleHandler.tryConnectNode(this);
 		// Task 7: 重置去抖标志，允许本 tick 重新标记 sortingNeeded（在 super 与 PB 处理前重置）
 		delegate.resetSortingMark();
+		// v1.8.0: 在 super 调用前从 AE 网络注入 FE 能量
+		// 让父类 super.onUpdateServer() 处理 SMELTING 配方消耗时已有注入的能量可用
+		// 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理
+		productivebeesgenesis$injectAe2Energy();
 		// super前保存能量，由Helper基于能量差计算总消耗（SMELTING + PB）
 		TileEntityExtraFactoryAccessor accessor = (TileEntityExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();

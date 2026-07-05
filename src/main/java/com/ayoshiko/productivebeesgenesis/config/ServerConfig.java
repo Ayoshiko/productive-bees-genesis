@@ -123,6 +123,10 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 	// AE2 直接输出集成开关
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
+	// v1.8.0: AE 网络能量输入集成 — 向后兼容委托字段
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
+	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	public final ModConfigSpec.IntValue mekCentrifugeAeEnergyInjectionPerTick;
 
 	ServerConfig(ModConfigSpec.Builder builder) {
 		// 开发者模式：模组开发者用来调试正常功能不会用到的物品和调试配置日志等，用户无需开启此设置
@@ -298,5 +302,9 @@ public final class ServerConfig {
 		this.mekCentrifugeEjectBusyCooldown = this.centrifuge.mekCentrifugeEjectBusyCooldown;
 		this.mekCentrifugeEjectMaxPerTick = this.centrifuge.mekCentrifugeEjectMaxPerTick;
 		this.mekCentrifugeAeOutputEnabled = this.centrifuge.mekCentrifugeAeOutputEnabled;
+		// v1.8.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
+		this.mekCentrifugeAeEnergyInputEnabled = this.centrifuge.mekCentrifugeAeEnergyInputEnabled;
+		this.mekCentrifugePreferAppliedFluxOverAeEnergy = this.centrifuge.mekCentrifugePreferAppliedFluxOverAeEnergy;
+		this.mekCentrifugeAeEnergyInjectionPerTick = this.centrifuge.mekCentrifugeAeEnergyInjectionPerTick;
 	}
 }

@@ -152,6 +152,12 @@ dependencies {
     // 运行时通过反射隔离，未安装 AE2 时 mek.ae2 包类永不加载
     compileOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
 
+    // AppliedFlux（可选依赖，编译时需要访问 FluxKey / EnergyType 类）
+    // 用于 v1.8.0 AE2 网络能量输入集成：从 ME 网络提取存储的 FE 能量
+    // 运行时通过 AppliedFluxIntegrationLoader.isAppliedFluxLoaded() 守卫，
+    // 未安装 AppliedFlux 时 extractAppliedFluxFe 方法入口即返回 0，不触发类加载
+    compileOnly files('libs/AppliedFlux-1.21-2.1.5-neoforge.jar')
+
     // Jade（可选依赖，编译时需要访问 Jade API 显示 AE2 网络状态）
     // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
     compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'

@@ -46,6 +46,21 @@
 - **许可证**: LGPL-3.0
 - **使用方式**: 集成 ME 网络接口
 
+## Applied Flux
+
+- **项目**: Applied Flux
+- **许可证**: MIT License
+- **使用方式**: 集成 ME 网络中存储的 FE 能量提取（通过 `FluxKey.of(EnergyType.FE)` 从 `IStorageService` 提取）
+- **依赖方式**: `compileOnly` 软依赖，运行时通过 `AppliedFluxIntegrationLoader.isAppliedFluxLoaded()` 守卫，未安装时不触发类加载
+
+## Mek-Energistics
+
+- **项目**: Mek-Energistics
+- **作者**: beipuo
+- **许可证**: MIT License
+- **使用方式**: 参考其三层能量优先级模式（本地 FE → AE 网络能量 → AppliedFlux/AE 原生）设计本项目的 5 层能量优先级策略
+- **源码**: https://github.com/beipuo/Mek-Energistics
+
 ## Iris
 
 - **项目**: Iris Shaders
