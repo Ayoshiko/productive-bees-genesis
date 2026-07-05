@@ -4,16 +4,19 @@
  * 让 MEK 离心机作为 AE2 网格节点，主动将输出槽物品推送到 AE2 网络，
  * 绕过 SFM 中介，减少 AEItemKey.of() 与 ItemStack.hashItemAndComponents 的高频调用。
  * <p>
- * <b>optional 依赖隔离</b>：本包内的类引用 AE2 API，但仅在本包内使用。
- * 离心机类通过 {@link IAe2OutputHost} 接口（不引用 AE2 类）与本包通信，
- * 网格节点字段使用 {@code Object} 类型，确保 AE2 未安装时离心机类仍可加载。
+ * <b>AE2 类引用控制（v1.7.0 起）</b>：本包内的类引用 AE2 API，这是实现 cable 连接的
+ * 必要设计权衡。{@link IAe2OutputHost} 自 v1.7.0 起扩展 {@code IInWorldGridNodeHost}，
+ * 强引用 AE2 类。AE2 未安装时通过 {@link Ae2IntegrationLoader#isAe2Loaded()} 在所有调用点短路保护，
+ * 防止类加载失败；capability 注册也仅在 AE2 已安装时执行（参见 {@link Ae2CapabilityRegistrar}）。
+ * 网格节点字段仍使用 {@code Object} 类型存储，避免在状态持有者层强引用 AE2 类。
  * <p>
  * <b>核心类</b>：
  * <ul>
  *   <li>{@link Ae2IntegrationLoader} — AE2 是否加载的检测与集成开关</li>
- *   <li>{@link IAe2OutputHost} — 离心机向 AE2 推送输出的宿主接口（不引用 AE2 类）</li>
+ *   <li>{@link IAe2OutputHost} — 离心机向 AE2 推送输出的宿主接口，扩展 IInWorldGridNodeHost</li>
  *   <li>{@link Ae2GridNodeManager} — 网格节点生命周期管理（创建/销毁/NBT 持久化）</li>
  *   <li>{@link Ae2OutputPusher} — 输出推送逻辑，封装 StorageHelper.poweredInsert</li>
+ *   <li>{@link Ae2CapabilityRegistrar} — 注册 IN_WORLD_GRID_NODE_HOST capability（v1.7.0 新增）</li>
  * </ul>
  */
 @ParametersAreNonnullByDefault

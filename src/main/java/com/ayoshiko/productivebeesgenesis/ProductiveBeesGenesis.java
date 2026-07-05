@@ -13,6 +13,8 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CapabilityRegistrar;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
@@ -294,12 +296,17 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 注册MEK离心机物品的Capability
+	 * 注册 MEK 离心机物品与方块的 Capability
 	 * <br/>
-	 * 原理：ItemBlockTooltip实现了ICapabilityAware接口，需要通过RegisterCapabilitiesEvent
-	 * 注册安全Capability（拥有者/安全等级tooltip）和能量Capability（储能tooltip）。
-	 * Mekanism原版在Mekanism主类中遍历自己的物品注册表调用addCapabilities，
+	 * 原理：ItemBlockTooltip 实现了 ICapabilityAware 接口，需要通过 RegisterCapabilitiesEvent
+	 * 注册安全 Capability（拥有者/安全等级 tooltip）和能量 Capability（储能 tooltip）。
+	 * Mekanism 原版在 Mekanism 主类中遍历自己的物品注册表调用 addCapabilities，
 	 * 我们需要对自己的物品做同样的事。
+	 * <p>
+	 * v1.7.0 新增：AE2 已安装时委托 {@link Ae2CapabilityRegistrar#register} 为全部 18 个离心机
+	 * BlockEntityType 注册 {@code AECapabilities.IN_WORLD_GRID_NODE_HOST} capability，
+	 * 使 AE2 线缆（含 ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux 等附属模组线缆）
+	 * 能自动发现并连接离心机。AE2 未安装时安全跳过，不触发类加载失败。
 	 */
 	private void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
 		for (var entry : ModItems.ITEMS.getEntries()) {
@@ -307,6 +314,10 @@ public final class ProductiveBeesGenesis {
 			if (item instanceof ICapabilityAware aware) {
 				aware.attachCapabilities(event);
 			}
+		}
+		// AE2 capability 注册（仅在 AE2 已安装时执行）
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			Ae2CapabilityRegistrar.register(event);
 		}
 	}
 

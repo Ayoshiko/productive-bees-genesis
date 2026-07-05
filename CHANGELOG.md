@@ -23,6 +23,35 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [1.7.0] - 2026-07-05
+
+### 新增
+
+- **AE2 线缆及附属联动连接适配** — 离心机现在可被 AE2 线缆直接发现并连接
+  - **问题**：离心机已能通过 ME 接口连接 ME 网络，但离心机与离心机之间、离心机与 AE2 其他线缆（含 ExtendedAE / AdvancedAE / ae2cs / ae2lt / Glodium / AppliedFlux 等附属扩展模组）之间无法连接到 ME 网络
+  - **根因**：AE2 19.x（1.21.1）将旧 `IGridNodeHost` 重构为 `appeng.api.networking.IInWorldGridNodeHost`，通过 NeoForge `BlockCapability`（`AECapabilities.IN_WORLD_GRID_NODE_HOST`）发现相邻方块上的网格节点。本项目仅调用了 `setExposedOnSides` 和 `setInWorldNode(true)`，但未实现该接口、也未注册 capability，导致 AE2 线缆在 `GridHelper.getExposedNode` 中查找时返回 null
+  - **修复**：
+    1. `IAe2OutputHost` 接口扩展 `extends IInWorldGridNodeHost`，新增 `getGridNode(Direction)` 和 `getCableConnectionType(Direction)` 默认方法
+       - `getGridNode` 从 `productivebeesgenesis$getAe2GridNode()` 取 `IManagedGridNode`，校验 `InWorldGridNode.isExposedOnSide(dir)` 后返回节点
+       - `getCableConnectionType` 返回 `AECableType.SMART`，让 AE2 渲染智能线缆连接纹理
+    2. 新建 `Ae2CapabilityRegistrar` 类（SRP 单一职责），封装 `IN_WORLD_GRID_NODE_HOST` capability 注册，覆盖全部 18 个离心机 BlockEntityType（基础 1 + 原版 4 + EM 5 + ME 4 + EME 4）
+    3. `ProductiveBeesGenesis.onRegisterCapabilities` 通过 `Ae2IntegrationLoader.isAe2Loaded()` 守卫调用 `Ae2CapabilityRegistrar.register`
+  - **通用适配机制**：通过 `IN_WORLD_GRID_NODE_HOST` capability 通用发现机制，所有 AE2 生态模组（ExtendedAE / AdvancedAE / ae2cs / ae2lt / Glodium / AppliedFlux）的线缆都能自动发现并连接离心机，无需为每个附属模组单独适配代码
+  - **设计原则**：
+    - **SRP**：新建 `Ae2CapabilityRegistrar` 仅负责 capability 注册，不处理节点生命周期
+    - **OCP**：接口扩展（新增 default 方法）不修改现有实现类
+    - **DIP**：capability provider lambda 通过 `IAe2OutputHost` 抽象访问
+  - **AE2 类引用控制**：所有 AE2 类引用通过 `Ae2IntegrationLoader.isAe2Loaded()` 在调用点短路保护，AE2 未安装时不会触发类加载
+
+### 文档
+
+- 更新 `README.md` 与 `README_zh.md`：扩展 AE2 Integration 描述，明确线缆连接兼容性
+- 更新 `future-optimization.md`：记录 v12（1.7.0）完成情况与后续优化方向
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布为新增功能（AE2 线缆连接适配），向后兼容无破坏性变更，按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **MINOR** 级别（v1.6.1 → v1.7.0）
+
 ## [1.6.1] - 2026-07-05
 
 ### 修复

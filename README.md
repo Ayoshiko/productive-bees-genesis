@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.6.1-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
+![Version](https://img.shields.io/badge/version-1.7.0-blue) ![MC Version](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Loader](https://img.shields.io/badge/NeoForge-21.1.214-orange)
 
 An addon for Productive Bees and Mekanism that adds Mekanism-style centrifuges capable of processing honeycombs and honeycomb blocks. Also adds the Myriad Creations Bee, whose honeycomb can transform into honeycombs from all other resource bees. The honeycomb transformation supports a detailed configurable filter list. Myriad Creations Bee datapack values can be customized in the config files.
 
@@ -27,7 +27,7 @@ The Myriad Creations Honeycomb uses the same cosmic starfield mask texture as th
 | Factory Tiers | 17 tiers across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras. Factory item names show tier colors matching original mods. |
 | Bee Filter UI | In-game bee blacklist/whitelist editor with search, sort, and collapse controls. |
 | JEI Integration | Full JEI support with recipe hiding when Myriad Creations Bee is disabled. |
-| AE2 Integration | Centrifuges can act as AE2 grid nodes to push outputs directly into the ME network, bypassing external logistics. |
+| AE2 Integration | Centrifuges act as AE2 grid nodes: connect directly with AE2 smart cables, adjacent centrifuges, and addon-mod cables (ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux) via the standard `IN_WORLD_GRID_NODE_HOST` capability. Push outputs directly into the ME network, bypassing external logistics. |
 | Jade Integration | Centrifuges display AE2 network connection status (Offline/Booting/Missing Channel/Online) in the Jade tooltip. |
 
 ### Mekanism Addon: Productive Bees Centrifuge
@@ -95,7 +95,7 @@ The configuration interface supports multiple languages (English/Chinese) and au
 | Evolved Mekanism | EM-tier factories. |
 | Evolved Mekanism Extras | EME-tier factories. |
 | Mekanism Unleashed | Extended upgrade limits. |
-| Applied Energistics 2 | Direct ME network output integration. |
+| Applied Energistics 2 | Full cable connection compatibility (smart cable + addon cables) and direct ME network output integration via `IN_WORLD_GRID_NODE_HOST` capability. |
 | Jade | AE2 network status tooltip. |
 | Iris | Shader compatibility for cosmic rendering. |
 | JEI | Recipe viewing support. |
