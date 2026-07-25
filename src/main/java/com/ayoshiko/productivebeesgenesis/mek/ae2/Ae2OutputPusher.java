@@ -1,19 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 import org.jetbrains.annotations.Nullable;
 
 import appeng.api.config.Actionable;
-import appeng.api.config.PowerMultiplier;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.energy.IEnergySource;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
@@ -23,67 +23,35 @@ import appeng.api.storage.StorageHelper;
 import appeng.me.helpers.BaseActionSource;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
+import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
-import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
 /**
- * AE2 输出推送器
- * <br/>
- * 封装 {@link StorageHelper#poweredInsert} 调用逻辑，将离心机输出槽物品推送到 AE2 网络。
+ * AE2 输出推送器 — 将离心机输出槽物品通过 {@link StorageHelper#poweredInsert} 推送到 AE2 网络。
  * <p>
- * <b>推送流程</b>：
- * <ol>
- *   <li>检查集成启用 + 网格节点非空 + 网格已连接</li>
- *   <li>空输出短路：{@link IAe2OutputHost#productivebeesgenesis$hasOutputItems()} 为 false 时直接返回</li>
- *   <li>获取 {@link IStorageService} 的 {@link MEStorage} 作为目标存储</li>
- *   <li>创建 {@link MekEnergyToAeAdapter} 包装离心机能量容器为 AE2 能量源</li>
- *   <li>扫描所有进程的 primary/secondary/tertiary 输出槽，按 AEItemKey 分组</li>
- *   <li>对每个 AEItemKey 调用一次 poweredInsert（批量合并，减少 AE2 网络调用次数）</li>
- *   <li>按比例清空对应槽位</li>
- * </ol>
+ * <b>推送流程</b>：集成检查 → 空输出短路 → 获取 MEStorage → 扫描输出槽按 AEItemKey 分组 →
+ * 批量 poweredInsert → 按比例清空槽位。
  * <p>
- * <b>容错策略</b>：推送失败（网络无空间或能量不足）时不阻塞，由 Ejector 兜底输出。
- * 单个 key 异常不影响其他 key 推送。
+ * <b>容错策略</b>：推送失败时不阻塞，由 Ejector 兜底；首次失败触发 {@link Ae2LeftoverReturner} 回送。
  * <p>
- * <b>性能优化</b>：
- * <ul>
- *   <li>同 key 批量合并：多个槽位有相同 AEItemKey 时合并为一次 poweredInsert 调用，
- *       减少 extendedae_plus InfinityBigIntegerCellInventory.getUUID 等昂贵操作的调用次数</li>
- *   <li>空输出短路：标志位 O(1) 检查，避免遍历 {@code processes × 3} 个槽位</li>
- *   <li>AEItemKey 缓存：通过 {@link AeItemKeyCache} 避免重复调用 AEItemKey.of(stack)</li>
- *   <li>对象复用：{@link ReusableBuffers} 由 {@link Ae2OutputStateHolder} 持有，
- *       MekEnergyToAeAdapter、ArrayList、HashMap 跨 tick 复用，避免 256× 加速场景下高频分配</li>
- * </ul>
- * 此前曾尝试 tick 级节流（每游戏刻只推送 1 次），但导致离心机输出槽积压 →
- * areOutputSlotsFull → MyriadCreationsHandler 暂停 → 产出链停滞的 bug，已移除。
+ * <b>性能优化</b>：同 key 批量合并、空输出短路、AEItemKey 缓存、{@link ReusableBuffers} 跨 tick 复用。
  */
 public final class Ae2OutputPusher {
 
-	/** AE2 到 Mekanism 能量转换比例：1 AE = 2 FE（AE2 标准比例） */
-	private static final double AE_TO_FE_RATIO = 2.0;
-
-	/**
-	 * 异常日志限流计数器 — 避免高频异常导致日志洪水
-	 * <p>
-	 * 256× 加速下若 AE2 网络持续异常，每 tick 可能触发数千次异常。
-	 * 使用 AtomicLong 计数，仅在首次异常和每 1024 次异常时记录一次日志。
-	 */
+	/** 异常日志限流计数器 — 256× 加速下每 tick 可能触发数千次异常，仅在首次和每 1024 次记录日志 */
 	private static final AtomicLong PUSH_EXCEPTION_COUNTER = new AtomicLong(0);
 	private static final long LOG_INTERVAL = 1024L;
 
-	/**
-	 * 批量合并的最小槽位数阈值
-	 * <p>
-	 * 当非空槽位数 <= 此阈值时，直接逐槽推送，避免 HashMap 分配开销。
-	 * 仅当有足够多相同 key 的槽位时，批量合并才有收益。
-	 */
+	/** 批量合并的最小槽位数阈值 — 非空槽位数 <= 此阈值时直接逐槽推送，避免 Map 分配开销 */
 	private static final int BATCH_MERGE_THRESHOLD = 3;
 
-	/**
-	 * 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例
-	 */
+	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例 */
 	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
 
 	private Ae2OutputPusher() {}
@@ -91,39 +59,56 @@ public final class Ae2OutputPusher {
 	/**
 	 * 推送宿主所有输出槽的物品到 AE2 网络
 	 * <br/>
-	 * 集成未启用、节点未创建或网格未连接时安全短路。
-	 * 输出槽全空时通过 {@code hasOutputItems()} 短路，避免遍历 {@code processes × 3} 个槽位。
+	 * 集成未启用、节点未创建或网格未连接时安全短路。输出槽全空时通过 {@code hasOutputItems()} 短路。
 	 * <p>
-	 * 批量合并：扫描所有槽位后按 AEItemKey 分组，对每个 key 调用一次 poweredInsert。
-	 * 在万象创世蜜脾离心场景下，多进程的输出槽常有相同类型蜜脾，合并后可大幅减少
-	 * extendedae_plus InfinityBigIntegerCellInventory.getUUID 等昂贵操作的调用次数。
-	 * <p>
-	 * 对象复用：MekEnergyToAeAdapter、ArrayList、HashMap 由 {@link ReusableBuffers} 跨 tick 持有，
-	 * 避免每次调用分配 5+ 个临时对象。BaseActionSource 全局单例。
+	 * 批量合并：按 AEItemKey 分组后对每个 key 调用一次 poweredInsert，减少昂贵操作调用次数。
+	 * 对象复用：MekEnergyToAeAdapter、ArrayList、ConcurrentHashMap 由 {@link ReusableBuffers} 跨 tick 持有。
 	 *
 	 * @param host 输出宿主（离心机方块实体）
 	 */
-	public static void pushOutputs(IAe2OutputHost host) {
-		// 1. 集成开关检查
-		if (!Ae2IntegrationLoader.isIntegrationEnabled()) return;
+	public static void pushOutputs(IAe2OutputHostBase host) {
+		// 1. 集成开关检查（由宿主决定配置源：离心机读 aeOutputEnabled，蜂箱读 apiaryAeOutputEnabled）
+		if (!host.productivebeesgenesis$isOutputPushEnabled()) return;
+		// 1.1 per-tile 物品输出开关检查（与全局配置 AND 关系）
+		if (!host.productivebeesgenesis$isAeItemOutputEnabled()) return;
+
+		// 1.2 TPS 自适应 — 服务器严重卡顿（TPS<10，对应 avgMspt>100ms）时跳过推送，
+		//     避免加剧卡顿（与 Ae2FluidPusher 对称）。由 MEK Ejector 兜底输出。
+		//     null level 守卫：仅在 tile 初始化阶段 getAe2Level() 返回 null，直接返回安全
+		Level level = host.productivebeesgenesis$getAe2Level();
+		if (level == null) return;
+		double currentTps = ServerTickTimeMonitor.getInstance().getTps(level.getGameTime());
+		if (currentTps < 10.0) {
+			return;
+		}
+
+		// 1.3 退避检查 — 输出失败后进入指数退避窗口（1s→30s）跳过推送，基于 System.nanoTime() 单调时钟，不受 JDTE 加速影响
+		long pushCounter = host.productivebeesgenesis$incrementItemPushCallCounter();
+		Ae2PushBackoff itemBackoff = host.productivebeesgenesis$getItemBackoff();
+		if (itemBackoff.shouldSkip(System.nanoTime())) return;
+
+		// 1.4 批量推送短路 — 高加速倍率 M 下每 M 次调用才实际推送一次，减少 AE2 API 调用次数
+		TickAccelTracker tracker = host.productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		int M = (tracker != null) ? tracker.getMultiplier() : 1;
+		if (pushCounter - host.productivebeesgenesis$getLastItemPushCounter() < M) return;
+		host.productivebeesgenesis$updateLastItemPushCounter(pushCounter);
 
 		// 2. 空输出短路：标志位由 OutputSlotFlagManager/MekCentrifugeSlotManager O(1) 维护，
 		//    AE2 推送清空槽位后 onAe2PushComplete 已调用 updateOutputSlotFlags() 保证同步
 		if (!host.productivebeesgenesis$hasOutputItems()) return;
 
-		// 3. 获取网格节点
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode managedNode)) return;
-
-		// 4. 获取已连接的网格
-		IGrid grid = managedNode.getGrid();
+		// 3. 获取已连接的网格（Task 12：使用 holder 缓存，gridChanged 回调失效；
+		//    getCachedGrid 内部完成节点 instanceof 检查 + getGrid 查询 + 缓存回填）
+		IGrid grid = Ae2GridNodeManager.getCachedGrid(host);
 		if (grid == null) return;
 
-		// 5. 获取存储服务
-		IStorageService storageService = grid.getService(IStorageService.class);
-		MEStorage meStorage = storageService.getInventory();
+		// 4. 获取存储服务和 ME 存储（Task 12：使用 holder 缓存，避免重复 getService/getInventory）
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(host);
+		if (storageService == null) return;
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(host);
+		if (meStorage == null) return;
 
-		// 6. 获取复用缓冲区（MekEnergyToAeAdapter + ArrayList + HashMap 跨 tick 复用）
+		// 6. 获取复用缓冲区（MekEnergyToAeAdapter + ArrayList + ConcurrentHashMap 跨 tick 复用）
 		ReusableBuffers buffers = getReusableBuffers(host);
 		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
 
@@ -143,7 +128,7 @@ public final class Ae2OutputPusher {
 
 		if (entries.isEmpty()) return;
 
-		// 9. 少量槽位时直接逐槽推送，避免 HashMap 开销
+		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
 		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
 			int pushedItems = 0;
 			for (SlotEntry entry : entries) {
@@ -151,11 +136,17 @@ public final class Ae2OutputPusher {
 			}
 			if (pushedItems > 0) {
 				host.productivebeesgenesis$onAe2PushComplete(pushedItems);
+				itemBackoff.recordSuccess();
+			} else {
+				// 完全失败 — 记录退避 + 诊断 + 首次失败兜底回送（取首个 key 作为代表）
+				SlotEntry first = entries.get(0);
+				handleCompleteFailure(host, itemBackoff, grid, storageService, meStorage,
+						energySource, first.key, first.count);
 			}
 			return;
 		}
 
-		// 10. 批量合并：按 AEItemKey 分组（复用 HashMap，clear 而非新建）
+		// 10. 批量合并：按 AEItemKey 分组（复用 ConcurrentHashMap，clear 而非新建）
 		Map<AEItemKey, List<SlotEntry>> keyToEntries = buffers.keyToEntries;
 		Map<AEItemKey, Long> keyToTotalCount = buffers.keyToTotalCount;
 		keyToEntries.clear();
@@ -168,7 +159,9 @@ public final class Ae2OutputPusher {
 
 		// 11. 对每个 key 调用一次 poweredInsert，按比例清空槽位
 		int pushedItems = 0;
+		Map.Entry<AEItemKey, Long> firstKeyEntry = null;
 		for (Map.Entry<AEItemKey, Long> keyEntry : keyToTotalCount.entrySet()) {
+			if (firstKeyEntry == null) firstKeyEntry = keyEntry;
 			AEItemKey key = keyEntry.getKey();
 			long totalCount = keyEntry.getValue();
 			pushedItems += pushBatchKey(key, totalCount, keyToEntries.get(key),
@@ -177,7 +170,113 @@ public final class Ae2OutputPusher {
 
 		if (pushedItems > 0) {
 			host.productivebeesgenesis$onAe2PushComplete(pushedItems);
+			itemBackoff.recordSuccess();
+		} else if (firstKeyEntry != null) {
+			// 完全失败 — 记录退避 + 诊断 + 首次失败兜底回送（取首个 key 作为代表）
+			handleCompleteFailure(host, itemBackoff, grid, storageService, meStorage,
+					energySource, firstKeyEntry.getKey(), firstKeyEntry.getValue());
 		}
+	}
+
+	/**
+	 * 完全失败处理 — 退避（nanoTime 墙钟）+ 节流日志 + 深度诊断 + 首次失败兜底回送。
+	 * Task 3: 首次失败立即 30s 长退避；Task 4: 空存储检测升级到 30s。
+	 */
+	private static void handleCompleteFailure(IAe2OutputHostBase host, Ae2PushBackoff itemBackoff,
+			IGrid grid, IStorageService storageService, MEStorage meStorage,
+			IEnergySource energySource, AEItemKey itemKey, long requestedAmount) {
+		// 在 recordFailure 之前判断首次失败（此时 backoffExponent 仍为 0）
+		boolean firstFailure = (itemBackoff.getBackoffExponent() == 0);
+		// Task 3: 256× 加速下首次失败立即 30s 长退避，跳过 1s→2s→4s→8s→16s 渐进过程
+		// 原理：Grid 不稳定时渐进退避的前 5 次失败（共 31s）全部无效重试，加剧 TPS 负载
+		if (firstFailure) {
+			itemBackoff.recordFailureAggressive(System.nanoTime());
+			LogThrottle.warn("ae2_output_long_backoff",
+					"AE2 物品推送首次失败，触发 30s 长退避 item={}, count={}", itemKey, requestedAmount);
+		} else {
+			itemBackoff.recordFailure(System.nanoTime());
+			LogThrottle.warn("ae2_output_backoff",
+					"AE2 物品输出推送完全失败，进入指数退避 item={}, count={}", itemKey, requestedAmount);
+		}
+		// Task 19: 保留临时诊断 + 深度诊断链路（project_memory 约束）
+		Ae2PushTempDiagnostics.diagnoseItemFailure(host, grid, storageService, meStorage,
+				energySource, itemKey, requestedAmount, null);
+		Ae2PushDiagnostics.diagnoseItemFailure(grid, storageService, meStorage,
+				energySource, itemKey, requestedAmount);
+		// DEEP-DEBUG: 反射访问 NetworkStorage 内部状态，定位 priorityInventory 是否为空
+		Ae2PushDeepDiagnostics.diagnoseItemPushDeep(host, grid, storageService, meStorage,
+				energySource, itemKey, requestedAmount, ACTION_SOURCE);
+		// Task 4: 空存储检测退避 — priorityInventory 无真实存储时升级到 30s 长退避
+		// 原理：Grid 分裂导致 priorityInventory 仅含 CraftingServiceStorage 占位，重试无意义
+		if (!Ae2PushDeepDiagnostics.hasRealStorage(meStorage)
+				&& itemBackoff.getBackoffExponent() < 5) {
+			itemBackoff.recordFailureAggressive(System.nanoTime());
+			LogThrottle.warn("ae2_output_empty_storage",
+					"AE2 Grid 无真实存储单元，升级到 30s 长退避 item={}", itemKey);
+		}
+		// 首次失败时触发兜底回送，避免输出槽积压导致产出链停滞
+		if (firstFailure) {
+			returnOutputSlotsToMeOrDrop(host, meStorage, energySource);
+		}
+	}
+
+	/**
+	 * 输出兜底 — 遍历所有输出槽，通过 {@link Ae2LeftoverReturner} 回送到 ME 网络。
+	 * 仅首次失败时调用，回插输入槽让下一轮加工消耗，避免永久积压。
+	 */
+	private static void returnOutputSlotsToMeOrDrop(IAe2OutputHostBase host,
+			MEStorage meStorage, IEnergySource energySource) {
+		Level level = host.productivebeesgenesis$getAe2Level();
+		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
+		if (level == null || pos == null) return;
+
+		// 收集输入槽列表（回插目标）
+		int processes = host.processes();
+		List<IInventorySlot> inputSlots = new ArrayList<>(processes);
+		for (int i = 0; i < processes; i++) {
+			IInventorySlot inputSlot = host.inputSlot(i);
+			if (inputSlot != null) inputSlots.add(inputSlot);
+		}
+
+		// 获取 AEItemKey 缓存
+		Object cacheObj = host.productivebeesgenesis$getAeItemKeyCache();
+		AeItemKeyCache keyCache = cacheObj instanceof AeItemKeyCache ? (AeItemKeyCache) cacheObj : null;
+
+		// 遍历所有输出槽（primary/secondary/tertiary × processes）
+		for (int i = 0; i < processes; i++) {
+			for (int slotType = 0; slotType < 3; slotType++) {
+				IInventorySlot outputSlot = getOutputSlot(host, i, slotType);
+				if (outputSlot == null) continue;
+				ItemStack stack = outputSlot.getStack();
+				if (stack.isEmpty()) continue;
+
+				// 获取 AEItemKey（优先使用缓存）
+				AEItemKey key;
+				if (keyCache != null) {
+					key = keyCache.get(i * AeItemKeyCache.SLOTS_PER_PROCESS + slotType, stack);
+				} else {
+					key = AEItemKey.of(stack);
+				}
+				if (key == null) continue;
+
+				// 调用 Ae2LeftoverReturner 回送（returnBackoff 传 null，输出侧仅由 itemBackoff 控制）
+				// 注意：returnLeftoverToMe 不修改 leftover 栈的 count（内部用局部 remaining 跟踪），
+				// 回送后必须清空输出槽，否则物品会复制（ME/输入槽/世界中已有 + 输出槽残留）
+				Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack,
+						ACTION_SOURCE, null, energySource, level, pos, inputSlots);
+				outputSlot.setStack(ItemStack.EMPTY);
+			}
+		}
+	}
+
+	/** 获取输出槽：slotType 0=primary, 1=secondary, 2=tertiary */
+	private static IInventorySlot getOutputSlot(IAe2OutputHostBase host, int process, int slotType) {
+		return switch (slotType) {
+			case 0 -> host.primaryOutputSlot(process);
+			case 1 -> host.secondaryOutputSlot(process);
+			case 2 -> host.tertiaryOutputSlot(process);
+			default -> null;
+		};
 	}
 
 	/**
@@ -185,8 +284,10 @@ public final class Ae2OutputPusher {
 	 * <br/>
 	 * 缓冲区存储在 {@link Ae2OutputStateHolder} 中，生命周期与宿主一致。
 	 * 方块销毁时由 {@link Ae2OutputStateHolder#clear()} 自动释放。
+	 * <p>
+	 * 包级可见：供 {@link Ae2FluidPusher} 复用能量适配器，避免每 tick 创建临时对象。
 	 */
-	private static ReusableBuffers getReusableBuffers(IAe2OutputHost host) {
+	static ReusableBuffers getReusableBuffers(IAe2OutputHostBase host) {
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		Object obj = holder.getReusableBuffers();
 		if (obj instanceof ReusableBuffers buffers) return buffers;
@@ -216,16 +317,22 @@ public final class Ae2OutputPusher {
 	}
 
 	/**
-	 * 直接推送单个槽位（少量槽位场景，避免 HashMap 开销）
+	 * 直接推送单个槽位（少量槽位场景，避免 Map 开销）
 	 */
 	private static int tryPushSlotDirect(SlotEntry entry, IEnergySource energySource,
-										 MEStorage meStorage, IActionSource actionSource) {
+			MEStorage meStorage, IActionSource actionSource) {
 		IInventorySlot slot = entry.slot;
 		int originalCount = entry.count;
+		long inserted = 0;
 		try {
-			long inserted = StorageHelper.poweredInsert(
+			inserted = StorageHelper.poweredInsert(
 					energySource, meStorage, entry.key, originalCount, actionSource, Actionable.MODULATE);
-			if (inserted <= 0) return 0;
+			// Task 19: 保留临时诊断链路（project_memory 约束）
+			if (inserted <= 0) {
+				Ae2PushTempDiagnostics.diagnoseItemFailure(null, null, null, meStorage,
+						energySource, entry.key, originalCount, null);
+				return 0;
+			}
 
 			if (inserted >= originalCount) {
 				slot.setStack(ItemStack.EMPTY);
@@ -238,7 +345,9 @@ public final class Ae2OutputPusher {
 			return (int) inserted;
 		} catch (Exception e) {
 			handlePushException(e, entry.process, entry.slotIdx, entry.stack, originalCount);
-			return 0;
+			// v9-L4 修复：poweredInsert 已成功但 setStack 异常时，物品已进入 AE2 不可撤回。
+			// 返回已插入量防止调用方重试导致物品复制；未插入时返回 0
+			return SaturatingMath.saturatingToInt(inserted);
 		}
 	}
 
@@ -249,12 +358,17 @@ public final class Ae2OutputPusher {
 	 * 部分成功时从第一个槽位开始依次清空，直到分配完 inserted 数量。
 	 */
 	private static int pushBatchKey(AEItemKey key, long totalCount, List<SlotEntry> slotEntries,
-									 IEnergySource energySource, MEStorage meStorage,
-									 IActionSource actionSource) {
+			IEnergySource energySource, MEStorage meStorage,
+			IActionSource actionSource) {
 		try {
 			long inserted = StorageHelper.poweredInsert(
 					energySource, meStorage, key, totalCount, actionSource, Actionable.MODULATE);
-			if (inserted <= 0) return 0;
+			// Task 19: 保留临时诊断链路（project_memory 约束）
+			if (inserted <= 0) {
+				Ae2PushTempDiagnostics.diagnoseItemFailure(null, null, null, meStorage,
+						energySource, key, totalCount, null);
+				return 0;
+			}
 
 			// 按顺序清空槽位
 			long remaining = inserted;
@@ -278,21 +392,10 @@ public final class Ae2OutputPusher {
 					handlePushException(e, entry.process, entry.slotIdx, entry.stack, entry.count);
 				}
 			}
-			return (int) inserted;
+			return SaturatingMath.saturatingToInt(inserted);
 		} catch (Exception e) {
-			// 整个 key 推送异常，回滚所有槽位（防御性检查）
-			for (SlotEntry entry : slotEntries) {
-				try {
-					ItemStack current = entry.slot.getStack();
-					if (current.getCount() > entry.count) {
-						current.setCount(entry.count);
-						entry.slot.setStack(current);
-					}
-				} catch (Exception ignored) {
-					// 回滚失败不影响其他槽位
-				}
-			}
-			// 记录第一个槽位的信息作为日志代表
+			// v9-L1 修复：外层 catch 仅在 poweredInsert 抛出时触发（内层循环异常已被内层 catch 处理），
+			// 此时槽位尚未被修改，无需回滚。移除死回滚代码避免误导。
 			SlotEntry first = slotEntries.get(0);
 			handlePushException(e, first.process, first.slotIdx, first.stack, first.count);
 			return 0;
@@ -300,20 +403,20 @@ public final class Ae2OutputPusher {
 	}
 
 	/**
-	 * 异常处理：限流日志 + InterruptedException 恢复中断
+	 * 异常处理：限流日志 + NPE→ERROR/其他→WARN + 恢复中断状态。
 	 */
 	private static void handlePushException(Exception e, int process, int slotIdx,
 											ItemStack stack, int originalCount) {
 		long count = PUSH_EXCEPTION_COUNTER.incrementAndGet();
+		// NPE→ERROR（代码缺陷），其他→WARN（transient 异常可恢复）；首次+每 LOG_INTERVAL 次记录
 		if (count == 1 || count % LOG_INTERVAL == 0) {
-			ProductiveBeesGenesis.LOGGER.error(
-					"AE2 推送异常 (第 {} 次，每 {} 次记录一次) - process={}, slotIdx={}, item={}, count={}",
-					count, LOG_INTERVAL, process, slotIdx,
-					stack.getItem(), originalCount, e);
+			String msg = "AE2 推送 {} (第 {} 次，每 {} 次记录一次) - process={}, slotIdx={}, item={}, count={}";
+			Object[] args = {(e instanceof NullPointerException) ? "NPE 异常" : "异常",
+					count, LOG_INTERVAL, process, slotIdx, stack.getItem(), originalCount, e};
+			if (e instanceof NullPointerException) ProductiveBeesGenesis.LOGGER.error(msg, args);
+			else ProductiveBeesGenesis.LOGGER.warn(msg, args);
 		}
-		if (e instanceof InterruptedException) {
-			Thread.currentThread().interrupt();
-		}
+		if (e instanceof InterruptedException) Thread.currentThread().interrupt();
 	}
 
 	/**
@@ -338,77 +441,56 @@ public final class Ae2OutputPusher {
 	}
 
 	/**
-	 * 跨 tick 复用的缓冲区
-	 * <br/>
-	 * 存储 MekEnergyToAeAdapter、ArrayList、HashMap 等可复用对象，
-	 * 由 {@link Ae2OutputStateHolder} 持有，生命周期与宿主一致。
-	 * <p>
-	 * <b>线程安全</b>：由离心机服务端 tick 线程独占访问，无需同步。
-	 * 若未来 AE2 网络事件从其他线程触发推送，需重新评估。
+	 * 跨 tick 复用的缓冲区 — 由 {@link Ae2OutputStateHolder} 持有。
+	 * energyAdapter 使用 volatile + double-checked locking 保证线程安全。
 	 */
 	static final class ReusableBuffers {
-		/** 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变 */
-		private MekEnergyToAeAdapter energyAdapter;
+		/**
+		 * 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变
+		 * <p>
+		 * volatile 保证多线程可见性，配合 {@link #getEnergyAdapter} 的 double-checked locking
+		 * 确保仅创建一个实例。
+		 */
+		private volatile MekEnergyToAeSource energyAdapter;
 
 		/** 复用的槽位条目列表 — 容量自动增长到峰值后零扩容 */
 		final List<SlotEntry> entries = new ArrayList<>();
 
 		/** 复用的 key → 槽位列表映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
-		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new HashMap<>();
+		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new ConcurrentHashMap<>();
 
 		/** 复用的 key → 总数量映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
-		final Map<AEItemKey, Long> keyToTotalCount = new HashMap<>();
+		final Map<AEItemKey, Long> keyToTotalCount = new ConcurrentHashMap<>();
+
+		/** 拉取列表缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 使用） */
+		final List<Ae2InputPuller.PullEntry> pullList = new ArrayList<>();
 
 		/**
-		 * 获取能量适配器（懒初始化）
+		 * 获取能量适配器（懒初始化，volatile + double-checked locking 保证线程安全）
 		 * <br/>
-		 * MekEnergyToAeAdapter 完全无状态（仅持有 final container 字段），
-		 * container 引用来自宿主且在宿主生命周期内固定不变，故可安全复用。
+		 * MekEnergyToAeSource 无状态，container 引用在宿主生命周期内固定不变，可安全复用。
+		 * 物品推送和流体推送共享同一适配器实例。
+		 *
+		 * @param container 宿主的 Mekanism 能量容器
+		 * @return 复用的能量适配器（包装为 AE2 {@link IEnergySource}）
 		 */
 		IEnergySource getEnergyAdapter(MachineEnergyContainer<?> container) {
-			if (energyAdapter == null) {
-				energyAdapter = new MekEnergyToAeAdapter(container);
+			MekEnergyToAeSource local = energyAdapter;
+			if (local == null) {
+				synchronized (this) {
+					local = energyAdapter;
+					if (local == null) {
+						local = new MekEnergyToAeSource(container);
+						energyAdapter = local;
+					}
+				}
 			}
-			return energyAdapter;
-		}
-	}
-
-	/**
-	 * Mekanism 能量容器到 AE2 能量源的适配器
-	 * <br/>
-	 * 将 {@link MachineEnergyContainer}（实现 Mekanism {@code IEnergyContainer}）
-	 * 包装为 AE2 的 {@link IEnergySource}，供 {@link StorageHelper#poweredInsert} 使用。
-	 * <p>
-	 * <b>能量转换</b>：AE2 的 1 AE = {@link #AE_TO_FE_RATIO} FE（Mekanism 能量单位）。
-	 * poweredInsert 每次插入消耗的能量很少（主要为传输成本），离心机自身 FE 供能。
-	 * <p>
-	 * <b>线程安全</b>：适配器本身无状态，所有操作委托给 {@link MachineEnergyContainer}
-	 * （其内部使用原子类型保证线程安全）。
-	 */
-	private static final class MekEnergyToAeAdapter implements IEnergySource {
-
-		private final MachineEnergyContainer<?> container;
-
-		MekEnergyToAeAdapter(MachineEnergyContainer<?> container) {
-			this.container = container;
+			return local;
 		}
 
-		@Override
-		public double extractAEPower(double amount, Actionable mode, PowerMultiplier multiplier) {
-			// AE 能量 → FE 能量（应用 multiplier 和转换比例）
-			double scaled = multiplier.multiply(amount);
-			long feAmount = (long) Math.ceil(scaled * AE_TO_FE_RATIO);
-			if (feAmount <= 0) return 0;
-
-			// Mekanism Action：MODULATE → EXECUTE，SIMULATE → SIMULATE
-			mekanism.api.Action mekAction = mode.isSimulate()
-					? mekanism.api.Action.SIMULATE
-					: mekanism.api.Action.EXECUTE;
-			long extracted = container.extract(feAmount, mekAction, AutomationType.INTERNAL);
-			if (extracted <= 0) return 0;
-
-			// FE 能量 → AE 能量（反向转换并应用 multiplier 除法）
-			return multiplier.divide(extracted / AE_TO_FE_RATIO);
+		/** 借用拉取列表（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
+		List<Ae2InputPuller.PullEntry> borrowPullList() {
+			return pullList;
 		}
 	}
 }
