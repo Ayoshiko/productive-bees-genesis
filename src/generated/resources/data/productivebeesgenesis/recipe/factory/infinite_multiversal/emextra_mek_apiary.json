@@ -1,0 +1,52 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:and",
+      "values": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "emextras"
+        },
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "mekanism_extras"
+        },
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "evolvedmekanism"
+        }
+      ]
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/spectrum"
+    },
+    "C": {
+      "tag": "c:circuits/infinite_multiversal"
+    },
+    "P": {
+      "item": "productivebeesgenesis:infinite_extra_mek_apiary_factory"
+    },
+    "Q": {
+      "item": "productivebeesgenesis:multiversal_mek_centrifuge_factory"
+    },
+    "T": {
+      "tag": "evolvedmekanism:alloys/exoversal"
+    },
+    "X": {
+      "item": "mekanism:steel_casing"
+    }
+  },
+  "pattern": [
+    "ACT",
+    "PXQ",
+    "TCA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:infinite_multiversal_emextra_mek_apiary_factory"
+  }
+}

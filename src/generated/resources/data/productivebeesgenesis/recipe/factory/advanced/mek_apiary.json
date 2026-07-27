@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism:alloys/infused"
+    },
+    "C": {
+      "tag": "c:circuits/advanced"
+    },
+    "I": {
+      "tag": "c:ingots/osmium"
+    },
+    "P": {
+      "item": "productivebeesgenesis:basic_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:advanced_mek_apiary_factory"
+  }
+}

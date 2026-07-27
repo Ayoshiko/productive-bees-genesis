@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism_extras"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/thermonuclear"
+    },
+    "C": {
+      "tag": "c:circuits/supreme"
+    },
+    "I": {
+      "tag": "c:ingots/netherite"
+    },
+    "P": {
+      "item": "productivebeesgenesis:absolute_extra_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:supreme_extra_mek_apiary_factory"
+  }
+}

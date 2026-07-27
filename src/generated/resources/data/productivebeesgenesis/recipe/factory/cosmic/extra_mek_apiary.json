@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism_extras"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/shining"
+    },
+    "C": {
+      "tag": "c:circuits/cosmic"
+    },
+    "I": {
+      "tag": "c:ingots/refined_obsidian"
+    },
+    "P": {
+      "item": "productivebeesgenesis:supreme_extra_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:cosmic_extra_mek_apiary_factory"
+  }
+}

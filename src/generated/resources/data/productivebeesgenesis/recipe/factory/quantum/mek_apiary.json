@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "evolvedmekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "evolvedmekanism:alloys/subatomic"
+    },
+    "C": {
+      "tag": "c:circuits/quantum"
+    },
+    "I": {
+      "tag": "c:ingots/tin"
+    },
+    "P": {
+      "item": "productivebeesgenesis:overclocked_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:quantum_mek_apiary_factory"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "productivebeesgenesis:multiversal_mek_apiary_factory"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "productivebeesgenesis:blocks/multiversal_mek_apiary_factory"
+}

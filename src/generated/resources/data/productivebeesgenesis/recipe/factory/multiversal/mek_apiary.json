@@ -1,0 +1,33 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "evolvedmekanism"
+    }
+  ],
+  "type": "mekanism:mek_data",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "evolvedmekanism:alloys/exoversal"
+    },
+    "C": {
+      "tag": "c:circuits/multiversal"
+    },
+    "I": {
+      "tag": "c:ingots/netherite"
+    },
+    "P": {
+      "item": "productivebeesgenesis:dense_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:multiversal_mek_apiary_factory"
+  }
+}

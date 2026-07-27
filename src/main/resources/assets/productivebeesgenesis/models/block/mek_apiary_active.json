@@ -1,0 +1,6 @@
+{
+  "parent": "productivebeesgenesis:block/mek_apiary",
+  "textures": {
+    "front": "productivebeesgenesis:block/mek_apiary/mek_apiary_front_active"
+  }
+}

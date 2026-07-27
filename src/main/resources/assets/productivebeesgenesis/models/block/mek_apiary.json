@@ -1,0 +1,12 @@
+{
+  "parent": "mekanism:block/machine",
+  "textures": {
+    "sides": "productivebeesgenesis:block/mek_apiary/mek_apiary_side",
+    "front": "productivebeesgenesis:block/mek_apiary/mek_apiary_front",
+    "west": "productivebeesgenesis:block/mek_apiary/mek_apiary_side",
+    "east": "productivebeesgenesis:block/mek_apiary/mek_apiary_side",
+    "south": "productivebeesgenesis:block/mek_apiary/mek_apiary_back",
+    "up": "productivebeesgenesis:block/mek_apiary/mek_apiary_top",
+    "down": "productivebeesgenesis:block/mek_apiary/mek_apiary_bottom"
+  }
+}
