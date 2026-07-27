@@ -21,7 +21,7 @@
     }
   ],
   "fluid": {
-    "amount": 250,
+    "amount": 100,
     "fluid": "productivebees:honey"
   },
   "processingTime": 200

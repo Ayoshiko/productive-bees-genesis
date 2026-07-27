@@ -2,8 +2,11 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
+import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.component.config.ConfigInfo;
@@ -14,7 +17,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,21 +26,23 @@ import java.util.concurrent.atomic.AtomicLong;
  * TileComponentEjector 输出阻塞冷却与内容未变化跳过 Mixin。
  * <p>
  * 当 TimeWand 加速或目标容器已满时，Mekanism 原版的 outputItems 会每 tick 全量尝试插入，
- * 导致 TransitResponse.isEmpty() 反复失败，TPS 暴跌。此 Mixin 仅对实现 {@link IHasEjectorCooldown}
- * 的 ProductiveBeesGenesis 离心机生效：
+ * 导致 TransitResponse.isEmpty() 反复失败，TPS 暴跌。此 Mixin 对实现 {@link IHasEjectorCooldown}
+ * 的 ProductiveBeesGenesis 离心机工厂和通用机械蜂箱生效：
  * <ul>
  *   <li>连续多次未弹出物品后，进入可配置冷却期，跳过 outputItems 调用；</li>
  *   <li>冷却结束后会再次尝试，不会导致物品永久卡死；</li>
  *   <li>一旦成功弹出物品，计数器立即清零，恢复正常频率。</li>
- *   <li>Task 16: 输出槽内容未变化时额外跳过指定 tick 数，避免重复调用 outputItems 时
- *       反复执行 ItemStack.hashItemAndComponents 造成 CPU 浪费。</li>
- *   <li>Step 5: 单 tick 弹出次数上限（{@code ejectMaxPerTick}），限制 256× 加速下高频 outputItems 调用；
- *       输出槽物品总数改为 O(1) 读取 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()}，
- *       替代 O(processes×3) 遍历。</li>
- *   <li>配置缓存：将 9 项配置读取缓存到实例字段，每 100 tick 刷新一次，
- *       避免 256× 加速 × 14 台离心机下每 tick 3584 次配置读取。</li>
+ *   <li>Task 16: 输出槽内容未变化时额外跳过指定 tick 数（仅离心机，蜂箱无此配置自动关闭）。</li>
+ *   <li>Step 5: 单 tick 弹出次数上限（{@code ejectMaxPerTick}），限制高频 outputItems 调用；
+ *       输出槽物品总数改为 O(1)/O(n) 读取 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()}
+ *       或 {@link IMekApiaryTile#productivebeesgenesis$outputItemCount()}。</li>
+ *   <li>配置缓存：将配置读取缓存到实例字段，每 100 tick 刷新一次，
+ *       按方块类型（离心机/蜂箱）读取各自独立的配置段。</li>
  * </ul>
- * 判断“是否弹出”通过比较调用前后 {@link IMekCentrifugeTile} 输出槽物品总数（O(1) 读取），无需侵入 Mekanism 内部返回值。
+ * 判断"是否弹出"通过比较调用前后输出槽物品总数，无需侵入 Mekanism 内部返回值。
+ * <p>
+ * 蜂箱与离心机的配置独立：蜂箱不支持 skipUnchanged/skipTicks/minInterval/busyThreshold/busyCooldown，
+ * 这些节流特性在蜂箱上自动关闭（cachedSkipUnchanged=false 等），仅保留阻塞冷却与单 tick 上限。
  */
 @Mixin(value = TileComponentEjector.class, remap = false)
 public abstract class TileComponentEjectorCooldownMixin {
@@ -81,12 +85,12 @@ public abstract class TileComponentEjectorCooldownMixin {
 	// ===== 配置缓存：避免每 tick 高频读取 ModConfig（256× 加速下每 tick 3584 次配置读取） =====
 	/** 配置缓存刷新间隔（tick） */
 	@Unique
-	private static final int PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL = 100;
+	private static final int productivebeesgenesis$CONFIG_REFRESH_INTERVAL = 100;
 
 	/** 上次刷新配置的游戏刻 — AtomicLong 配合 CAS 防止多线程同时通过检查导致重复刷新 */
 	@Unique
 	private final AtomicLong productivebeesgenesis$lastConfigRefreshTick =
-			new AtomicLong(-PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL);
+			new AtomicLong(-productivebeesgenesis$CONFIG_REFRESH_INTERVAL);
 
 	/** 缓存的最大速度模式标志 */
 	@Unique
@@ -129,50 +133,63 @@ public abstract class TileComponentEjectorCooldownMixin {
 	}
 
 	/**
-	 * 刷新配置缓存 — 每 {@link #PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL} tick 刷新一次。
+	 * 刷新配置缓存 — 每 {@link #productivebeesgenesis$CONFIG_REFRESH_INTERVAL} tick 刷新一次。
 	 * <p>
-	 * 256× 加速下 14 台离心机每 tick 调用 outputItems 3584 次，每次读取 9 项配置
-	 * 共 32256 次配置读取/tick。缓存后降至 3584 次方法调用 + 0 次配置读取（命中缓存时），
-	 * 每 100 tick 才刷新一次配置（14 次配置读取/tick）。
-	 * <p>
+	 * 按方块类型读取各自独立的配置段：
+	 * <ul>
+	 *   <li>离心机（IMekCentrifugeTile）：读取 mekCentrifugeEject* 配置（9 项）</li>
+	 *   <li>蜂箱（IMekApiaryTile）：读取 apiaryEject* 配置（4 项），不支持的特性自动关闭</li>
+	 * </ul>
 	 * 线程安全：使用 AtomicLong + CAS（compareAndSet）保证「检查时间戳 + 写入新值 + 加载配置」的原子性。
-	 * 即使 Mekanism 异步线程与主线程同时调用 tickServer，CAS 也只有一个线程能成功推进时间戳，
-	 * 另一个线程会被短路返回，避免重复读取配置和覆盖缓存。
 	 */
 	@Unique
-	private void productivebeesgenesis$refreshConfigCache(long currentTick) {
+	private void productivebeesgenesis$refreshConfigCache(long currentTick, TileEntityMekanism tile) {
 		long lastRefresh = productivebeesgenesis$lastConfigRefreshTick.get();
-		if (currentTick - lastRefresh < PRODUCTIVEBEESGENESIS$CONFIG_REFRESH_INTERVAL) {
+		if (currentTick - lastRefresh < productivebeesgenesis$CONFIG_REFRESH_INTERVAL) {
 			return;
 		}
 		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
 		if (!productivebeesgenesis$lastConfigRefreshTick.compareAndSet(lastRefresh, currentTick)) {
 			return;
 		}
-		productivebeesgenesis$cachedMaxSpeedMode = ModConfig.SERVER.mekCentrifugeEjectMaxSpeedMode.get();
-		productivebeesgenesis$cachedSkipUnchanged = ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get();
-		productivebeesgenesis$cachedSkipTicks = ModConfig.SERVER.mekCentrifugeEjectSkipTicks.get();
-		productivebeesgenesis$cachedMinInterval = ModConfig.SERVER.mekCentrifugeEjectMinInterval.get();
-		productivebeesgenesis$cachedMaxPerTick = ModConfig.SERVER.mekCentrifugeEjectMaxPerTick.get();
-		productivebeesgenesis$cachedBlockedThreshold = ModConfig.SERVER.mekCentrifugeEjectBlockedThreshold.get();
-		productivebeesgenesis$cachedBlockedCooldown = ModConfig.SERVER.mekCentrifugeEjectBlockedCooldown.get();
-		productivebeesgenesis$cachedBusyThreshold = ModConfig.SERVER.mekCentrifugeEjectBusyThreshold.get();
-		productivebeesgenesis$cachedBusyCooldown = ModConfig.SERVER.mekCentrifugeEjectBusyCooldown.get();
+		if (tile instanceof IMekApiaryTile) {
+			// 蜂箱配置：仅 maxSpeedMode/maxPerTick/blockedThreshold/blockedCooldown
+			productivebeesgenesis$cachedMaxSpeedMode = ModConfig.SERVER.apiaryEjectMaxSpeedMode.get();
+			productivebeesgenesis$cachedSkipUnchanged = false;
+			productivebeesgenesis$cachedSkipTicks = 0;
+			productivebeesgenesis$cachedMinInterval = 0;
+			productivebeesgenesis$cachedMaxPerTick = ModConfig.SERVER.apiaryEjectMaxPerTick.get();
+			productivebeesgenesis$cachedBlockedThreshold = ModConfig.SERVER.apiaryEjectBlockedThreshold.get();
+			productivebeesgenesis$cachedBlockedCooldown = ModConfig.SERVER.apiaryEjectBlockedCooldown.get();
+			productivebeesgenesis$cachedBusyThreshold = Integer.MAX_VALUE;
+			productivebeesgenesis$cachedBusyCooldown = 0;
+		} else {
+			// 离心机配置（原逻辑）
+			productivebeesgenesis$cachedMaxSpeedMode = ModConfig.SERVER.mekCentrifugeEjectMaxSpeedMode.get();
+			productivebeesgenesis$cachedSkipUnchanged = ModConfig.SERVER.mekCentrifugeEjectSkipUnchanged.get();
+			productivebeesgenesis$cachedSkipTicks = ModConfig.SERVER.mekCentrifugeEjectSkipTicks.get();
+			productivebeesgenesis$cachedMinInterval = ModConfig.SERVER.mekCentrifugeEjectMinInterval.get();
+			productivebeesgenesis$cachedMaxPerTick = ModConfig.SERVER.mekCentrifugeEjectMaxPerTick.get();
+			productivebeesgenesis$cachedBlockedThreshold = ModConfig.SERVER.mekCentrifugeEjectBlockedThreshold.get();
+			productivebeesgenesis$cachedBlockedCooldown = ModConfig.SERVER.mekCentrifugeEjectBlockedCooldown.get();
+			productivebeesgenesis$cachedBusyThreshold = ModConfig.SERVER.mekCentrifugeEjectBusyThreshold.get();
+			productivebeesgenesis$cachedBusyCooldown = ModConfig.SERVER.mekCentrifugeEjectBusyCooldown.get();
+		}
 	}
 
 	/**
 	 * 每 tick 开始时递减冷却计数器，使冷却以真实 tick 为单位。
 	 * <p>
-	 * 仅对目标工厂生效；非目标方块实体的冷却字段始终为 0，不会产生影响。
+	 * 仅对目标方块生效；非目标方块实体的冷却字段始终为 0，不会产生影响。
 	 */
 	@Inject(method = "tickServer", at = @At("HEAD"))
 	private void productivebeesgenesis$decrementCooldownAtTickStart(CallbackInfo ci) {
 		TileEntityMekanism tile = ((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$getTile();
 		if (tile instanceof IHasEjectorCooldown) {
-			// 刷新配置缓存（每 100 tick 一次）
+			// 刷新配置缓存（每 100 tick 一次），按方块类型读取独立配置段
 			Level level = tile.getLevel();
 			if (level != null) {
-				productivebeesgenesis$refreshConfigCache(level.getGameTime());
+				productivebeesgenesis$refreshConfigCache(level.getGameTime(), tile);
 			}
 			if (productivebeesgenesis$ejectCooldown.get() > 0) {
 				productivebeesgenesis$ejectCooldown.decrementAndGet();
@@ -197,17 +214,18 @@ public abstract class TileComponentEjectorCooldownMixin {
 	 * 非目标方块实体保持原行为；目标方块实体在冷却期内直接跳过 outputItems，
 	 * 否则执行 outputItems，并根据输出槽物品总量变化更新阻塞计数器。
 	 */
-	@Redirect(
+	@WrapOperation(
 			method = "tickServer",
 			at = @At(
 					value = "INVOKE",
 					target = "Lmekanism/common/tile/component/TileComponentEjector;outputItems(Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V"
-			)
+			),
+			require = 0
 	)
-	private void productivebeesgenesis$redirectOutputItems(TileComponentEjector ejector, Direction facing, ConfigInfo info) {
+	private void productivebeesgenesis$redirectOutputItems(TileComponentEjector ejector, Direction facing, ConfigInfo info, Operation<Void> original) {
 		TileEntityMekanism tile = ((TileEntityEjectorAccessor) ejector).productivebeesgenesis$getTile();
 		if (!(tile instanceof IHasEjectorCooldown)) {
-			outputItems(facing, info);
+			original.call(ejector, facing, info);
 			return;
 		}
 
@@ -262,7 +280,7 @@ public abstract class TileComponentEjectorCooldownMixin {
 		}
 
 		long before = productivebeesgenesis$getOutputItemCount(tile);
-		outputItems(facing, info);
+		original.call(ejector, facing, info);
 		long after = productivebeesgenesis$getOutputItemCount(tile);
 
 		// Task 16: 调用 outputItems 后缓存版本号并设置下次可跳过的 tick 数
@@ -311,10 +329,10 @@ public abstract class TileComponentEjectorCooldownMixin {
 	}
 
 	/**
-	 * 读取输出槽物品总数（O(1)）。
+	 * 读取输出槽物品总数。
 	 * <p>
-	 * 通过 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()} 读取由输出槽 listener
-	 * 增量维护的计数，替代 O(processes×3) 遍历的 countOutputItems，降低高频弹出时的 CPU 开销。
+	 * 离心机通过 {@link IMekCentrifugeTile} 读取 O(1) 增量计数；
+	 * 蜂箱通过 {@link IMekApiaryTile} 读取 O(n) 遍历计数（输出槽少，足够高效）。
 	 * 非目标机器返回 0。
 	 */
 	@Unique
@@ -322,19 +340,26 @@ public abstract class TileComponentEjectorCooldownMixin {
 		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
 			return mekCentrifuge.productivebeesgenesis$outputItemCount();
 		}
+		if (tile instanceof IMekApiaryTile mekApiary) {
+			return mekApiary.productivebeesgenesis$outputItemCount();
+		}
 		return 0;
 	}
 
 	/**
 	 * 获取输出槽内容版本号。
 	 * <p>
-	 * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 -1，使跳过逻辑失效，
-	 * 保持原行为。
+	 * 离心机通过 {@link IMekCentrifugeTile} 读取版本号；
+	 * 蜂箱通过 {@link IMekApiaryTile} 读取（固定 0，因蜂箱 skipUnchanged=false 不使用此值）。
+	 * 非目标机器返回 -1，使跳过逻辑失效，保持原行为。
 	 */
 	@Unique
 	private static long productivebeesgenesis$getOutputContentsVersion(TileEntityMekanism tile) {
 		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
 			return mekCentrifuge.productivebeesgenesis$outputContentsVersion();
+		}
+		if (tile instanceof IMekApiaryTile mekApiary) {
+			return mekApiary.productivebeesgenesis$outputContentsVersion();
 		}
 		return -1L;
 	}
@@ -342,12 +367,16 @@ public abstract class TileComponentEjectorCooldownMixin {
 	/**
 	 * 获取输出槽是否已满。
 	 * <p>
-	 * 仅对实现 {@link IMekCentrifugeTile} 的离心机生效；非目标机器返回 false，保持跳过逻辑原行为。
+	 * 离心机通过 {@link IMekCentrifugeTile} 读取；蜂箱通过 {@link IMekApiaryTile} 读取。
+	 * 非目标机器返回 false，保持跳过逻辑原行为。
 	 */
 	@Unique
 	private static boolean productivebeesgenesis$outputSlotsFull(TileEntityMekanism tile) {
 		if (tile instanceof IMekCentrifugeTile mekCentrifuge) {
 			return mekCentrifuge.productivebeesgenesis$outputSlotsFull();
+		}
+		if (tile instanceof IMekApiaryTile mekApiary) {
+			return mekApiary.productivebeesgenesis$outputSlotsFull();
 		}
 		return false;
 	}

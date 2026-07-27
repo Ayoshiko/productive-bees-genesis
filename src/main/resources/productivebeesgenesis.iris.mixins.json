@@ -3,9 +3,10 @@
 	"package": "com.ayoshiko.productivebeesgenesis.mixin.iris",
 	"compatibilityLevel": "JAVA_21",
 	"plugin": "com.ayoshiko.productivebeesgenesis.mixin.iris.IrisConfigPlugin",
-	"refmap": "mixins.productivebeesgenesis.refmap.json",
 	"mixins": [
-		"MixinShaderInstance"
+	],
+	"client": [
+		"ShaderInstanceMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
