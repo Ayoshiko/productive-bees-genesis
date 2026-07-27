@@ -4,9 +4,6 @@ import org.jetbrains.annotations.Nullable;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.IManagedGridNode;
-
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
@@ -16,13 +13,13 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  * 协调从 AE 网络提取能量并注入到离心机的 {@link MachineEnergyContainer}，
  * 按配置优先级决定 AppliedFlux 与 AE2 原生能量的提取顺序。
  * <p>
- * <b>职责（DIP）</b>：依赖 {@link IAe2OutputHost} 抽象获取网格节点与能量容器，
- * 不直接引用具体 TileEntity，保证任何实现 IAe2OutputHost 的类均可复用本注入器。
+ * <b>职责（DIP）</b>：依赖 {@link IAe2OutputHostBase} 抽象获取网格节点与能量容器，
+ * 不直接引用具体 TileEntity，保证任何实现 IAe2OutputHostBase 的类均可复用本注入器。
  * <p>
  * <b>职责（SRP）</b>：仅负责"协调提取与注入"流程，不负责：
  * <ul>
  *   <li>能量提取的底层实现（由 {@link Ae2EnergyBridge} 负责）</li>
- *   <li>是否启用的配置守卫（由 {@link IAe2OutputHost#productivebeesgenesis$injectAe2Energy} 入口负责）</li>
+ *   <li>是否启用的配置守卫（由 {@link IAe2OutputHostBase#productivebeesgenesis$injectAe2Energy} 入口负责）</li>
  *   <li>tick 时机控制（由调用方 tick 处理器负责）</li>
  * </ul>
  * <p>
@@ -80,7 +77,7 @@ public final class Ae2EnergyInjector {
 	 *
 	 * @since 1.8.1
 	 */
-	public static long injectEnergy(IAe2OutputHost host) {
+	public static long injectEnergy(IAe2OutputHostBase host) {
 		// 守卫1：AE2 未安装（双重防御，调用方应已守卫）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		if (host == null) return 0;
@@ -102,8 +99,8 @@ public final class Ae2EnergyInjector {
 		// 实际提取量目标 = 容器剩余容量（SIMULATE 模式会进一步限制为 ME 网络可提取量）
 		long toExtract = remainingCapacity;
 
-		// 读取优先级配置
-		boolean preferAppliedFlux = readPreferAppliedFlux();
+		// Bug 7：读取优先级配置 — 由宿主提供，蜂箱与离心机相互独立
+		boolean preferAppliedFlux = host.productivebeesgenesis$getPreferAppliedFluxOverAeEnergy();
 
 		// 按优先级提取
 		long firstExtracted;
@@ -156,40 +153,14 @@ public final class Ae2EnergyInjector {
 	/**
 	 * 获取宿主已连接的 AE2 网格
 	 * <br/>
-	 * 通过 {@link IAe2OutputHost#productivebeesgenesis$getAe2GridNode()} 获取节点对象，
-	 * 转换为 {@link IManagedGridNode} 后调用 {@code getGrid()} 取已连接网格。
+	 * Task 12：通过 {@link Ae2GridNodeManager#getCachedGrid} 使用 holder 缓存，
+	 * gridChanged 回调失效，避免高频注入能量时重复调用 managedNode.getGrid()。
 	 *
 	 * @param host 输出宿主
 	 * @return 已连接的网格，未连接或节点不存在时返回 null
 	 */
 	@Nullable
-	private static IGrid getConnectedGrid(IAe2OutputHost host) {
-		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode managedNode)) return null;
-		return managedNode.getGrid();
-	}
-
-	/**
-	 * 读取优先级配置
-	 * <br/>
-	 * 配置未加载或读取异常时默认为 true（优先 AppliedFlux），因为 AppliedFlux 是
-	 * FE 原生存储，提取效率更高（无需 AE↔FE 转换）。
-	 * <p>
-	 * <b>v1.8.1 null 守卫</b>：{@code mekCentrifugePreferAppliedFluxOverAeEnergy} 在
-	 * AppliedFlux 未加载时为 null（条件化注册）。此时 AE 网络中无 AppliedFlux FE 存储，
-	 * 应直接使用 AE2 原生能量，返回 false。
-	 *
-	 * @return true 优先从 AppliedFlux 提取，false 优先从 AE2 原生能量提取
-	 */
-	private static boolean readPreferAppliedFlux() {
-		if (ModConfig.SERVER == null) return true;
-		// v1.8.1：AppliedFlux 未加载时配置项为 null，返回 false 直接使用 AE2 原生能量
-		if (ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy == null) return false;
-		try {
-			return ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy.get();
-		} catch (Throwable t) {
-			// 配置项异常时安全回退为默认值
-			return true;
-		}
+	private static IGrid getConnectedGrid(IAe2OutputHostBase host) {
+		return Ae2GridNodeManager.getCachedGrid(host);
 	}
 }

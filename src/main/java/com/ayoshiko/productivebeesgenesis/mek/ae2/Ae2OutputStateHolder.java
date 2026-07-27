@@ -1,91 +1,128 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import net.minecraft.nbt.CompoundTag;
+
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+
 /**
- * AE2 输出状态持有者
- * <br/>
- * 封装三个工厂类共有的 AE2 网格节点和缓存状态，
- * 消除约 90 行字段/方法重复。
+ * AE2 输出状态持有者 — 封装三个工厂类共有的 AE2 网格节点和缓存状态，消除约 90 行重复。
  * <p>
- * <b>线程安全</b>：字段使用 volatile 保证可见性，适用于主线程读写场景。
- * <p>
- * <b>依赖隔离</b>：字段使用 {@code Object} 类型避免强引用 AE2 类，
+ * <b>线程安全</b>：volatile 字段保证可见性。<b>依赖隔离</b>：Object 类型避免强引用 AE2 类，
  * 实际类型由 {@link Ae2GridNodeManager} 强制转换。
  *
  * @since 1.0.0
  */
 public final class Ae2OutputStateHolder {
 
-	/** AE2 网格节点（实际类型为 IManagedGridNode，AE2 未安装时为 null） */
+	/** AE2 网格节点（IManagedGridNode，AE2 未安装时为 null） */
 	private volatile Object ae2GridNode;
 
-	/** AEItemKey 缓存（实际类型为 AeItemKeyCache，AE2 未安装时为 null） */
+	/** AEItemKey 缓存（AeItemKeyCache，AE2 未安装时为 null） */
 	private volatile Object aeItemKeyCache;
 
 	/** 节点是否待创建（clearRemoved 时置 true，首个 server tick 时执行 connectNode） */
 	private volatile boolean ae2NodePending;
 
+	/** AE2 推送器复用缓冲区（ReusableBuffers）— Object 类型保持依赖隔离，volatile 保证可见性 */
+	private volatile Object reusableBuffers;
+
+	/** Task 21: AE2 流体推送批处理缓冲（Ae2PendingBatchBuffer）— 10 tick 累积 + AEFluidKey 合并 */
+	private volatile Object pendingBatchBuffer;
+
+	// ===== Task 12：AE2 网格/存储缓存（gridChanged 回调失效，减少 256× 下高频 AE2 API 查询） =====
+	/** 缓存的 AE2 网格（IGrid）/ 存储服务（IStorageService）/ ME 存储（MEStorage）。
+	 *  字段类型为 Object 保持依赖隔离；由 {@link Ae2GridNodeManager#onGridChanged} 失效，
+	 *  {@link Ae2GridNodeManager#getCachedGrid} 等方法未命中时查询并回填。volatile 保证跨线程可见性。 */
+	private volatile Object cachedGrid;
+	private volatile Object cachedStorage;
+	private volatile Object cachedMeStorage;
+
+	// ===== AE2 配置缓存：避免高频读取 ModConfig.SERVER（5 秒刷新一次） =====
+	/** 配置缓存刷新间隔（毫秒） — wall clock 避免 JDTE 加速下 getGameTime 不变导致缓存永不过期；原值 100 tick ≈ 5000 ms */
+	private static final long CONFIG_REFRESH_INTERVAL_MS = 5000L;
+
+	/** 拉取触发间隔默认初始值 — 实际拉取间隔由全局配置 {@code mekCentrifugeAeInputIntervalTicks} 决定（默认 20） */
+	private static final long PULL_INTERVAL_DEFAULT = 20L;
+
+	/** 上次刷新配置的墙钟时间戳（ms） — AtomicLong + CAS 防止多线程重复刷新；JDTE 加速下使用 wall clock 保证正常过期 */
+	private final AtomicLong lastConfigRefreshMs = new AtomicLong(-CONFIG_REFRESH_INTERVAL_MS);
+
+	/** 缓存的 AE2 输出推送开关（默认 false，与 isIntegrationEnabled 行为一致） */
+	private volatile boolean cachedOutputPushEnabled = false;
+
+	/** 缓存的 AE2 流体推送开关（默认 true，与原 isFluidPushEnabled 配置未加载时回退一致） */
+	private volatile boolean cachedFluidPushEnabled = true;
+
+	/** 缓存的 AppliedFlux 优先开关（默认 false，AppliedFlux 未加载时回退 false — 与 refreshConfigCache 一致） */
+	private volatile boolean cachedPreferAppliedFluxOverAeEnergy = false;
+
+	/** 缓存的 AE2 输入拉取开关（默认 false，AE2 未加载或全局关闭时为 false） */
+	private volatile boolean cachedInputPullEnabled = false;
+
+	/** 配置缓存刷新异常日志冷却器（ms 模式，避免高频刷新下刷屏） */
+	private final LogThrottle configReadThrottle = new LogThrottle();
+
+	// ===== per-tile AE2 输出开关（与全局配置 AND 关系） =====
+	/** per-tile AE2 物品输出开关（默认 true，与全局配置 AND 关系） */
+	private volatile boolean aeItemOutputEnabled = true;
+
+	/** per-tile AE2 流体输出开关（默认 true，与全局配置 AND 关系） */
+	private volatile boolean aeFluidOutputEnabled = true;
+
+	// ===== per-tile AE2 输入拉取开关与状态（与全局配置 AND 关系） =====
+	/** per-tile AE2 输入拉取开关（默认 false，与全局配置 AND 关系） */
+	private volatile boolean aeItemInputEnabled = false;
+
+	/** per-tile NBT 忽略开关（默认 true） — 拉取场景下聚合所有种类更实用，故默认开启忽略 NBT 差异 */
+	private volatile boolean aeInputNbtIgnore = true;
+
+	/** 上次拉取游戏刻（AtomicLong，初始 -PULL_INTERVAL_DEFAULT 保证首次 tick 即可触发） */
+	private final AtomicLong lastPullTick = new AtomicLong(-PULL_INTERVAL_DEFAULT);
+
 	/**
-	 * AE2 推送器复用缓冲区（实际类型为 Ae2OutputPusher.ReusableBuffers）
+	 * Task 12：内部调用计数器 — 替代 getGameTime 作为节流依据。
+	 * JDTE Time Accelerator 不修改 {@code level.getGameTime()} 但多次调用 tick，导致基于 getGameTime 的节流失效。
+	 * <p>
+	 * 节流公式：{@code pullCallCounter - lastPullCounter >= effectiveInterval}（{@code effectiveInterval = max(intervalTicks, M)}）
+	 * 才触发拉取。volatile 保证可见性，服务端单线程无需 CAS。
+	 */
+	private volatile long pullCallCounter = 0L;
+
+	/** 上次实际拉取时的 pullCallCounter 值（初始 Long.MIN_VALUE/2 保证首次调用即可触发） */
+	private volatile long lastPullCounter = Long.MIN_VALUE / 2;
+
+	/**
+	 * 加速倍率检测器 — 跟踪同一游戏刻内被调用的次数作为加速倍率 M。
 	 * <br/>
-	 * 存储 MekEnergyToAeAdapter、ArrayList、HashMap 等可复用对象，
-	 * 避免 256× 加速场景下每 tick 重复分配。字段类型为 Object 以保持 AE2 依赖隔离
-	 * （Ae2OutputStateHolder 不直接引用 AE2 类）。
+	 * 兼容所有加速模组（JDT、加速火把、IF:Souls、JDTE、EAEP 等），无需检测具体模组。
+	 * 用于自适应节流 AE2 输入拉取逻辑：间隔缩短 ×M、速率放大 ×M×processes。
+	 * <p>
+	 * final 字段在构造时初始化，避免每次 onUpdateServer 重新分配。
 	 */
-	private Object reusableBuffers;
+	private final TickAccelTracker tickAccelTracker = new TickAccelTracker();
 
-	/**
-	 * 获取 AE2 网格节点
-	 *
-	 * @return 网格节点对象，未创建时返回 null
-	 */
-	public Object getAe2GridNode() {
-		return ae2GridNode;
-	}
+	/** per-tile 输入过滤器实例（懒初始化，避免 AE2 未加载时创建） */
+	private volatile Ae2InputFilter aeInputFilter;
 
-	/**
-	 * 设置 AE2 网格节点
-	 *
-	 * @param node 网格节点对象（实际类型为 IManagedGridNode），可为 null
-	 */
-	public void setAe2GridNode(Object node) {
-		this.ae2GridNode = node;
-	}
+	/** 类型轮转索引（用于 N > processCount 时按周期轮转拉取类型） */
+	private volatile int typeRotationIndex = 0;
 
-	/**
-	 * 获取 AEItemKey 缓存
-	 *
-	 * @return AeItemKeyCache 实例，或 null
-	 */
-	public Object getAeItemKeyCache() {
-		return aeItemKeyCache;
-	}
+	// ===== AE2 推送退避和计数器状态（Task 2 新增，封装到独立类以控制主类行数 ≤ 500） =====
+	/** 推送退避和计数器状态（per-tile 独立，封装 fluid/item backoff 与计数器） */
+	private final Ae2PushStateHolder pushState = new Ae2PushStateHolder();
 
-	/**
-	 * 设置 AEItemKey 缓存
-	 *
-	 * @param cache AeItemKeyCache 实例（实际类型），可为 null
-	 */
-	public void setAeItemKeyCache(Object cache) {
-		this.aeItemKeyCache = cache;
-	}
-
-	/**
-	 * 节点是否待创建
-	 *
-	 * @return true 表示 clearRemoved 已调用但节点尚未连接
-	 */
-	public boolean isAe2NodePending() {
-		return ae2NodePending;
-	}
-
-	/**
-	 * 设置节点待创建标志
-	 *
-	 * @param pending true 表示待创建
-	 */
-	public void setAe2NodePending(boolean pending) {
-		this.ae2NodePending = pending;
-	}
+	// ===== 基础 getter/setter =====
+	public Object getAe2GridNode() { return ae2GridNode; }
+	public void setAe2GridNode(Object node) { this.ae2GridNode = node; }
+	public Object getAeItemKeyCache() { return aeItemKeyCache; }
+	public void setAeItemKeyCache(Object cache) { this.aeItemKeyCache = cache; }
+	public boolean isAe2NodePending() { return ae2NodePending; }
+	public void setAe2NodePending(boolean pending) { this.ae2NodePending = pending; }
 
 	/**
 	 * 清空所有状态（方块销毁时调用）
@@ -97,23 +134,280 @@ public final class Ae2OutputStateHolder {
 		aeItemKeyCache = null;
 		ae2NodePending = false;
 		reusableBuffers = null;
+		// Task 12：清空 AE2 网格/存储缓存，避免方块重建后残留旧网格引用
+		cachedGrid = null;
+		cachedStorage = null;
+		cachedMeStorage = null;
+		// 重置配置缓存为初始默认值，确保方块重建后不会残留旧配置
+		// P0-4 修复：cachedPreferAppliedFluxOverAeEnergy 必须与字段声明默认值 (false) 一致，
+		// 原代码重置为 true 会导致方块重建后首次配置读取前误判 AppliedFlux 优先（与 refreshConfigCache 中
+		// AppliedFlux 未加载时回退 false 的语义冲突）
+		cachedOutputPushEnabled = false;
+		cachedFluidPushEnabled = true;
+		cachedPreferAppliedFluxOverAeEnergy = false;
+		cachedInputPullEnabled = false;
+		lastConfigRefreshMs.set(-CONFIG_REFRESH_INTERVAL_MS);
+		// 重置 per-tile 开关为默认值（与字段声明一致，参考 Mek-Energistics 默认全开）
+		aeItemOutputEnabled = true;
+		aeFluidOutputEnabled = true;
+		// 重置 per-tile 输入拉取状态为默认值（与字段声明一致）
+		aeItemInputEnabled = false;
+		aeInputNbtIgnore = true;
+		lastPullTick.set(-PULL_INTERVAL_DEFAULT);
+		// Task 12：重置内部调用计数器，方块重建后从初始状态开始节流
+		pullCallCounter = 0L;
+		lastPullCounter = Long.MIN_VALUE / 2;
+		// 修复 #4：重置加速倍率检测器，方块重建后从初始状态重新统计 multiplier
+		tickAccelTracker.reset();
+		// 重置过滤器实例，方块重建后通过懒初始化重新创建
+		aeInputFilter = null;
+		// 重置类型轮转索引，方块重建后从 0 开始轮转
+		typeRotationIndex = 0;
+		// Task 21：清空 PendingBatchBuffer（若存在），避免方块重建后残留旧累积量
+		if (pendingBatchBuffer instanceof Ae2PendingBatchBuffer batchBuffer) {
+			batchBuffer.reset();
+		}
+		pendingBatchBuffer = null;
+		// Task 2：重置 AE2 推送退避和计数器状态（fluid/item backoff + 计数器全部归零）
+		pushState.reset();
+	}
+
+	// ===== ReusableBuffers / 网格缓存访问 =====
+	public Object getReusableBuffers() { return reusableBuffers; }
+	public void setReusableBuffers(Object buffers) { this.reusableBuffers = buffers; }
+
+	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
+	public void onGridChanged() {
+		cachedGrid = null;
+		cachedStorage = null;
+		cachedMeStorage = null;
+	}
+
+	public Object getCachedGrid() { return cachedGrid; }
+	public void setCachedGrid(Object grid) { this.cachedGrid = grid; }
+	public Object getCachedStorage() { return cachedStorage; }
+	public void setCachedStorage(Object storage) { this.cachedStorage = storage; }
+	public Object getCachedMeStorage() { return cachedMeStorage; }
+	public void setCachedMeStorage(Object meStorage) { this.cachedMeStorage = meStorage; }
+
+	// ===== AE2 配置缓存方法 =====
+
+	/**
+	 * 检查配置缓存是否过期 — wall clock(System.currentTimeMillis)避免 JDTE 加速下 getGameTime 不变导致永不过期。
+	 * @param currentTick 已弃用,仅保留签名以避免破坏 ABI
+	 * @return true 表示缓存已过期,需要刷新
+	 */
+	public boolean isConfigCacheStale(long currentTick) {
+		return System.currentTimeMillis() - lastConfigRefreshMs.get() >= CONFIG_REFRESH_INTERVAL_MS;
 	}
 
 	/**
-	 * 获取 AE2 推送器复用缓冲区
-	 *
-	 * @return 复用缓冲区对象（实际类型为 Ae2OutputPusher.ReusableBuffers），或 null
+	 * 刷新 AE2 配置缓存 — 每 CONFIG_REFRESH_INTERVAL_MS ms 刷新一次。
+	 * AtomicLong + CAS 保证「检查时间戳 + 写入新值 + 加载配置」原子性;配置字段 null 时按原方法默认值回退。
+	 * wall clock 避免 JDTE 加速下 getGameTime 在同一 gameTick 内不变导致缓存永不过期。
+	 * @param currentTick 已弃用,仅保留签名以避免破坏 ABI
 	 */
-	public Object getReusableBuffers() {
-		return reusableBuffers;
+	public void refreshConfigCache(long currentTick) {
+		long currentTimeMs = System.currentTimeMillis();
+		long lastRefresh = lastConfigRefreshMs.get();
+		if (currentTimeMs - lastRefresh < CONFIG_REFRESH_INTERVAL_MS) {
+			return;
+		}
+		// 审查问题修复：ModConfig.SERVER 为 null 时（reload 期间）不推进时间戳，
+		// 允许下次调用立即重试，避免最长 5 秒的配置不可见窗口
+		if (ModConfig.SERVER == null) return;
+		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
+		if (!lastConfigRefreshMs.compareAndSet(lastRefresh, currentTimeMs)) {
+			return;
+		}
+		try {
+			// mekCentrifugeAeOutputEnabled 为 null（AE2 未加载）时回退 false
+			cachedOutputPushEnabled = ModConfig.SERVER.mekCentrifugeAeOutputEnabled != null
+					&& ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
+			// mekCentrifugeAeFluidOutputEnabled 为 null（AE2 未加载）时回退 true
+			cachedFluidPushEnabled = ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled == null
+					|| ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled.get();
+			// mekCentrifugePreferAppliedFluxOverAeEnergy 为 null（AppliedFlux 未加载）时回退 false
+			cachedPreferAppliedFluxOverAeEnergy = ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy != null
+					&& ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy.get();
+			// mekCentrifugeAeInputEnabled 为 null（AE2 未加载）时回退 false
+			cachedInputPullEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
+					&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
+		} catch (LinkageError | RuntimeException t) {
+			// LinkageError 覆盖配置版本不兼容；RuntimeException 覆盖配置读取异常。
+			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
+			// 配置读取异常，保持当前缓存值，节流记录 WARN 便于调试
+			final Throwable cause = t;
+			configReadThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
+				ProductiveBeesGenesis.LOGGER.warn("AE2 配置缓存刷新异常，保持当前缓存值"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
+			});
+		}
+	}
+
+	// ===== 配置缓存 getter =====
+	public boolean isCachedOutputPushEnabled() { return cachedOutputPushEnabled; }
+	public boolean isCachedFluidPushEnabled() { return cachedFluidPushEnabled; }
+	public boolean isCachedPreferAppliedFluxOverAeEnergy() { return cachedPreferAppliedFluxOverAeEnergy; }
+	public boolean isCachedInputPullEnabled() { return cachedInputPullEnabled; }
+
+	// ===== per-tile AE2 输出开关方法 =====
+	public boolean isAeItemOutputEnabled() { return aeItemOutputEnabled; }
+	public void setAeItemOutputEnabled(boolean enabled) { this.aeItemOutputEnabled = enabled; }
+	public boolean isAeFluidOutputEnabled() { return aeFluidOutputEnabled; }
+	public void setAeFluidOutputEnabled(boolean enabled) { this.aeFluidOutputEnabled = enabled; }
+
+	// ===== per-tile AE2 输入拉取开关方法 =====
+
+	/**
+	 * 判断输入拉取是否启用（全局 AND per-tile）。
+	 * <br/>
+	 * 全局开关由配置缓存 {@link #cachedInputPullEnabled} 提供（每 100 tick 刷新），
+	 * per-tile 开关由 {@link #aeItemInputEnabled} 提供，两者同时为 true 时才允许拉取。
+	 *
+	 * @return true 表示输入拉取已启用
+	 */
+	public boolean isInputPullEnabled() {
+		return cachedInputPullEnabled && aeItemInputEnabled;
+	}
+
+	/** 获取 per-tile AE2 输入拉取开关 */
+	public boolean isAeItemInputEnabled() { return aeItemInputEnabled; }
+	public void setAeItemInputEnabled(boolean enabled) { this.aeItemInputEnabled = enabled; }
+	public void toggleAeItemInputEnabled() { this.aeItemInputEnabled = !this.aeItemInputEnabled; }
+
+	/** 获取/设置/取反 per-tile NBT 忽略开关 */
+	public boolean isAeInputNbtIgnore() { return aeInputNbtIgnore; }
+	public void setAeInputNbtIgnore(boolean ignore) { this.aeInputNbtIgnore = ignore; }
+	public void toggleAeInputNbtIgnore() { this.aeInputNbtIgnore = !this.aeInputNbtIgnore; }
+
+	public long getLastPullTick() { return lastPullTick.get(); }
+	public void updateLastPullTick(long tick) { lastPullTick.set(tick); }
+
+	/** Task 12：递增内部调用计数器（替代 getGameTime，兼容 JDTE 加速） */
+	public long incrementPullCallCounter() { return ++pullCallCounter; }
+	public long getPullCallCounter() { return pullCallCounter; }
+	public long getLastPullCounter() { return lastPullCounter; }
+	public void updateLastPullCounter(long counter) { lastPullCounter = counter; }
+
+	// ===== Task 21: PendingBatchBuffer 访问方法（AE2 流体推送批处理缓冲） =====
+
+	/**
+	 * 获取 AE2 流体推送批处理缓冲（懒初始化）
+	 * <br/>
+	 * 字段类型为 Object 保持 AE2 依赖隔离，调用方需 instanceof 检查后强转为
+	 * {@link Ae2PendingBatchBuffer}。AE2 未安装时返回 null。
+	 *
+	 * @return Ae2PendingBatchBuffer 实例，或 null（未初始化或 AE2 未安装）
+	 */
+	public Object getPendingBatchBuffer() { return pendingBatchBuffer; }
+
+	/**
+	 * 设置 AE2 流体推送批处理缓冲
+	 *
+	 * @param buffer Ae2PendingBatchBuffer 实例（实际类型），可为 null
+	 */
+	public void setPendingBatchBuffer(Object buffer) { this.pendingBatchBuffer = buffer; }
+
+	// ===== AE2 推送状态访问方法（Task 2 新增） =====
+
+	/**
+	 * 获取推送退避和计数器状态（per-tile 独立）
+	 * <br/>
+	 * 外部访问示例：{@code stateHolder.getPushState().getFluidBackoff()}
+	 *
+	 * @return Ae2PushStateHolder 实例（永不为 null）
+	 */
+	public Ae2PushStateHolder getPushState() { return pushState; }
+
+	/**
+	 * 获取加速倍率检测器
+	 * <br/>
+	 * 用于跟踪方块实体在同一游戏刻内被调用的次数作为加速倍率 M。
+	 * 调用方需在 onUpdateServer 入口处调用 tracker.onTick(level)。
+	 *
+	 * @return TickAccelTracker 实例（永不为 null）
+	 */
+	public TickAccelTracker getTickAccelTracker() {
+		return tickAccelTracker;
 	}
 
 	/**
-	 * 设置 AE2 推送器复用缓冲区
+	 * 获取并递增类型轮转索引
+	 * <br/>
+	 * 用于 N > processCount 时按周期轮转拉取类型，确保所有类型都有机会被拉取。
+	 * <p>
+	 * Task 10：去除 {@code synchronized} — 服务端单线程执行无需锁，{@link #typeRotationIndex}
+	 * 已声明为 {@code volatile} 保证可见性。256× 加速下每 tick 多次调用无锁开销。
 	 *
-	 * @param buffers 复用缓冲区对象（实际类型为 Ae2OutputPusher.ReusableBuffers），可为 null
+	 * @param processCount 进程数（每次轮转处理的类型数）
+	 * @param total 可用类型总数
+	 * @return 当前轮转起始索引（范围 [0, total)）
 	 */
-	public void setReusableBuffers(Object buffers) {
-		this.reusableBuffers = buffers;
+	public int getAndIncrementTypeRotation(int processCount, int total) {
+		if (total <= 0) return 0;
+		int current = typeRotationIndex % total;
+		typeRotationIndex = (current + processCount) % total;
+		return current;
+	}
+
+	/** 获取输入过滤器实例(懒初始化,DCL 保证多线程下仅创建一个) */
+	public Ae2InputFilter getOrCreateInputFilter() {
+		Ae2InputFilter local = aeInputFilter;
+		if (local == null) {
+			synchronized (this) {
+				local = aeInputFilter;
+				if (local == null) {
+					local = new Ae2InputFilter();
+					aeInputFilter = local;
+				}
+			}
+		}
+		return local;
+	}
+
+	/**
+	 * 保存 per-tile 状态到 NBT
+	 * <br/>
+	 * 使用 productivebeesgenesis_ 前缀避免与其他模组 NBT 键冲突。
+	 *
+	 * @param tag 目标 NBT 标签
+	 */
+	public void savePerTileState(CompoundTag tag) {
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_OUTPUT, aeItemOutputEnabled);
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_FLUID_OUTPUT, aeFluidOutputEnabled);
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_INPUT, aeItemInputEnabled);
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_INPUT_NBT_IGNORE, aeInputNbtIgnore);
+		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
+		if (aeInputFilter != null) {
+			CompoundTag filterTag = new CompoundTag();
+			aeInputFilter.save(filterTag);
+			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, filterTag);
+		}
+	}
+
+	/**
+	 * 从 NBT 加载 per-tile 状态
+	 * <br/>
+	 * 注意：getBoolean 在键不存在时返回 false，但物品/流体输出默认值均为 true，
+	 * 故对两个键均使用 contains 检查回退默认值 true。
+	 *
+	 * @param tag 源 NBT 标签
+	 */
+	public void loadPerTileState(CompoundTag tag) {
+		aeItemOutputEnabled = tag.contains("productivebeesgenesis_ae_item_output")
+				? tag.getBoolean("productivebeesgenesis_ae_item_output") : true;
+		aeFluidOutputEnabled = tag.contains("productivebeesgenesis_ae_fluid_output")
+				? tag.getBoolean("productivebeesgenesis_ae_fluid_output") : true;
+		// 输入拉取开关默认 false（与字段声明一致），旧存档无此键时回退 false
+		aeItemInputEnabled = tag.contains("productivebeesgenesis_ae_item_input")
+				? tag.getBoolean("productivebeesgenesis_ae_item_input") : false;
+		// NBT 忽略开关默认 true（与字段声明一致），旧存档无此键时回退 true
+		aeInputNbtIgnore = tag.contains("productivebeesgenesis_ae_input_nbt_ignore")
+				? tag.getBoolean("productivebeesgenesis_ae_input_nbt_ignore") : true;
+		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
+		CompoundTag filterTag = tag.contains("productivebeesgenesis_ae_input_filter")
+				? tag.getCompound("productivebeesgenesis_ae_input_filter") : new CompoundTag();
+		getOrCreateInputFilter().load(filterTag);
 	}
 }

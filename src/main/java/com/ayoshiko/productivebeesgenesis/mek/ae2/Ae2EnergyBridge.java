@@ -11,6 +11,7 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.glodblock.github.appflux.common.me.key.FluxKey;
 import com.glodblock.github.appflux.common.me.key.type.EnergyType;
 
@@ -86,8 +87,12 @@ public final class Ae2EnergyBridge {
 			// 此行仅在 AppliedFlux 已安装时执行（守卫已保证），不会触发类加载失败
 			FluxKey feKey = FluxKey.of(EnergyType.FE);
 			return meStorage.extract(feKey, amount, mode, actionSource);
-		} catch (Throwable t) {
-			// 版本不兼容或运行时异常时安全回退，避免离心机 tick 崩溃
+		} catch (LinkageError | RuntimeException e) {
+			// LinkageError 覆盖 NoSuchMethodError/NoClassDefFoundError（AE2/AppliedFlux 版本不兼容）；
+			// RuntimeException 覆盖 NPE/IllegalStateException 等运行时异常。
+			// 不捕获 Throwable 以避免吞没 OutOfMemoryError/StackOverflowError 等严重错误。
+			LogThrottle.warn("ae2_energy_extract_flux",
+					"AE2 AppliedFlux 能量提取异常, 安全回退 0: {}", e.toString());
 			return 0;
 		}
 	}
@@ -121,8 +126,11 @@ public final class Ae2EnergyBridge {
 			double extractedAe = energyService.extractAEPower(aeAmount, mode, PowerMultiplier.ONE);
 			// AE → FE 转换：extractedAe AE = extractedAe * 2.0 FE
 			return (long) (extractedAe * AE_TO_FE_RATIO);
-		} catch (Throwable t) {
-			// 异常时安全回退，避免离心机 tick 崩溃
+		} catch (LinkageError | RuntimeException e) {
+			// LinkageError 覆盖 AE2 版本不兼容场景；RuntimeException 覆盖运行时异常。
+			// 不捕获 Throwable 以避免吞没 OutOfMemoryError/StackOverflowError 等严重错误。
+			LogThrottle.warn("ae2_energy_extract_ae",
+					"AE2 原生能量提取异常, 安全回退 0: {}", e.toString());
 			return 0;
 		}
 	}

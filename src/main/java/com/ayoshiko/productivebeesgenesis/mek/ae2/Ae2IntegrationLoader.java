@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
 /**
  * AE2 集成加载器
@@ -33,6 +34,9 @@ public final class Ae2IntegrationLoader {
 	/** AE2 是否已安装（运行时检测，仅检测一次） */
 	private final boolean ae2Loaded;
 
+	/** 配置读取失败日志冷却器（静态上下文使用 ms 模式，避免高频推送下刷屏） */
+	private static final LogThrottle configLoadThrottle = new LogThrottle();
+
 	private Ae2IntegrationLoader() {
 		this.ae2Loaded = detectAe2();
 	}
@@ -60,9 +64,15 @@ public final class Ae2IntegrationLoader {
 		if (ModConfig.SERVER == null) return false;
 		try {
 			return ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
-		} catch (Throwable t) {
-			// 配置项异常时安全回退
-			ProductiveBeesGenesis.LOGGER.warn("AE2 集成配置读取失败，回退为关闭", t);
+		} catch (LinkageError | RuntimeException t) {
+			// LinkageError 覆盖配置版本不兼容；RuntimeException 覆盖配置读取异常。
+			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
+			// 节流避免高频推送下刷屏
+			final Throwable cause = t;
+			configLoadThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
+				ProductiveBeesGenesis.LOGGER.warn("AE2 集成配置读取失败，回退为关闭"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
+			});
 			return false;
 		}
 	}
@@ -76,8 +86,10 @@ public final class Ae2IntegrationLoader {
 		// 1. 优先通过 FML 检测
 		try {
 			return net.neoforged.fml.loading.FMLLoader.getLoadingModList().getModFileById("ae2") != null;
-		} catch (Throwable t) {
-			// FML 不可用（如测试环境），回退到反射检测
+		} catch (LinkageError | RuntimeException t) {
+			// FML 不可用（如测试环境），回退到反射检测（节流日志便于排查）
+			LogThrottle.warn("ae2_detect_fml",
+					"AE2 FML 检测失败, 回退到反射检测: {}", t.toString());
 		}
 		// 2. 反射检测 AEApi 类
 		try {

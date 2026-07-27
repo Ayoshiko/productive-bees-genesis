@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+
 import net.neoforged.fml.ModList;
 
 /**
@@ -56,8 +58,12 @@ public final class AppliedFluxIntegrationLoader {
 	private static boolean detectAppliedFlux() {
 		try {
 			return ModList.get().isLoaded("appflux");
-		} catch (Throwable t) {
-			// ModList 不可用（如测试环境）时安全回退为未安装
+		} catch (LinkageError | RuntimeException t) {
+			// LinkageError 覆盖 ModList 版本不兼容；RuntimeException 覆盖 NPE（如测试环境 ModList 未初始化）。
+			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
+			// 一次性 WARN 日志（Holder 静态初始化仅执行一次，无需节流）
+			ProductiveBeesGenesis.LOGGER.warn(
+					"AppliedFlux 检测失败, 视为未安装: {}", t.toString());
 			return false;
 		}
 	}

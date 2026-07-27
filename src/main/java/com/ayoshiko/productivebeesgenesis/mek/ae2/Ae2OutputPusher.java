@@ -22,7 +22,6 @@ import appeng.api.storage.MEStorage;
 import appeng.api.storage.StorageHelper;
 import appeng.me.helpers.BaseActionSource;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
@@ -44,9 +43,8 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
  */
 public final class Ae2OutputPusher {
 
-	/** 异常日志限流计数器 — 256× 加速下每 tick 可能触发数千次异常，仅在首次和每 1024 次记录日志 */
+	/** 异常累计计数器 — 用于日志显示总次数（节流由 LogThrottle 时间维度处理） */
 	private static final AtomicLong PUSH_EXCEPTION_COUNTER = new AtomicLong(0);
-	private static final long LOG_INTERVAL = 1024L;
 
 	/** 批量合并的最小槽位数阈值 — 非空槽位数 <= 此阈值时直接逐槽推送，避免 Map 分配开销 */
 	private static final int BATCH_MERGE_THRESHOLD = 3;
@@ -198,22 +196,6 @@ public final class Ae2OutputPusher {
 			LogThrottle.warn("ae2_output_backoff",
 					"AE2 物品输出推送完全失败，进入指数退避 item={}, count={}", itemKey, requestedAmount);
 		}
-		// Task 19: 保留临时诊断 + 深度诊断链路（project_memory 约束）
-		Ae2PushTempDiagnostics.diagnoseItemFailure(host, grid, storageService, meStorage,
-				energySource, itemKey, requestedAmount, null);
-		Ae2PushDiagnostics.diagnoseItemFailure(grid, storageService, meStorage,
-				energySource, itemKey, requestedAmount);
-		// DEEP-DEBUG: 反射访问 NetworkStorage 内部状态，定位 priorityInventory 是否为空
-		Ae2PushDeepDiagnostics.diagnoseItemPushDeep(host, grid, storageService, meStorage,
-				energySource, itemKey, requestedAmount, ACTION_SOURCE);
-		// Task 4: 空存储检测退避 — priorityInventory 无真实存储时升级到 30s 长退避
-		// 原理：Grid 分裂导致 priorityInventory 仅含 CraftingServiceStorage 占位，重试无意义
-		if (!Ae2PushDeepDiagnostics.hasRealStorage(meStorage)
-				&& itemBackoff.getBackoffExponent() < 5) {
-			itemBackoff.recordFailureAggressive(System.nanoTime());
-			LogThrottle.warn("ae2_output_empty_storage",
-					"AE2 Grid 无真实存储单元，升级到 30s 长退避 item={}", itemKey);
-		}
 		// 首次失败时触发兜底回送，避免输出槽积压导致产出链停滞
 		if (firstFailure) {
 			returnOutputSlotsToMeOrDrop(host, meStorage, energySource);
@@ -260,11 +242,20 @@ public final class Ae2OutputPusher {
 				if (key == null) continue;
 
 				// 调用 Ae2LeftoverReturner 回送（returnBackoff 传 null，输出侧仅由 itemBackoff 控制）
-				// 注意：returnLeftoverToMe 不修改 leftover 栈的 count（内部用局部 remaining 跟踪），
-				// 回送后必须清空输出槽，否则物品会复制（ME/输入槽/世界中已有 + 输出槽残留）
-				Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack,
-						ACTION_SOURCE, null, energySource, level, pos, inputSlots);
+			// 注意：returnLeftoverToMe 不修改 leftover 栈的 count（内部用局部 remaining 跟踪）
+			// M4-2 修复：根据返回值决定是否清空输出槽，避免部分回送失败时物品消失
+			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack,
+					ACTION_SOURCE, null, energySource, level, pos, inputSlots);
+			if (leftoverRemaining <= 0) {
+				// 全部回送成功，清空输出槽
 				outputSlot.setStack(ItemStack.EMPTY);
+			} else {
+				// 部分回送失败，保留未回送部分在输出槽，避免物品消失
+				// 下一轮 pushOutputs 会再次尝试推送或回送
+				ItemStack remainingStack = stack.copy();
+				remainingStack.setCount(leftoverRemaining);
+				outputSlot.setStack(remainingStack);
+			}
 			}
 		}
 	}
@@ -326,11 +317,8 @@ public final class Ae2OutputPusher {
 		long inserted = 0;
 		try {
 			inserted = StorageHelper.poweredInsert(
-					energySource, meStorage, entry.key, originalCount, actionSource, Actionable.MODULATE);
-			// Task 19: 保留临时诊断链路（project_memory 约束）
+				energySource, meStorage, entry.key, originalCount, actionSource, Actionable.MODULATE);
 			if (inserted <= 0) {
-				Ae2PushTempDiagnostics.diagnoseItemFailure(null, null, null, meStorage,
-						energySource, entry.key, originalCount, null);
 				return 0;
 			}
 
@@ -362,11 +350,8 @@ public final class Ae2OutputPusher {
 			IActionSource actionSource) {
 		try {
 			long inserted = StorageHelper.poweredInsert(
-					energySource, meStorage, key, totalCount, actionSource, Actionable.MODULATE);
-			// Task 19: 保留临时诊断链路（project_memory 约束）
+				energySource, meStorage, key, totalCount, actionSource, Actionable.MODULATE);
 			if (inserted <= 0) {
-				Ae2PushTempDiagnostics.diagnoseItemFailure(null, null, null, meStorage,
-						energySource, key, totalCount, null);
 				return 0;
 			}
 
@@ -404,17 +389,23 @@ public final class Ae2OutputPusher {
 
 	/**
 	 * 异常处理：限流日志 + NPE→ERROR/其他→WARN + 恢复中断状态。
+	 * <br/>
+	 * M9 修复：原原子计数器节流（1+1024n 触发）在 256× 加速下单 tick 可达 1024 次异常，
+	 * 导致每 tick 刷屏。改用 LogThrottle 时间维度节流（5 秒内同 key 仅首条）。
+	 * NPE 用 error key，其他异常用 warn key，分别节流避免相互覆盖。
 	 */
 	private static void handlePushException(Exception e, int process, int slotIdx,
 											ItemStack stack, int originalCount) {
 		long count = PUSH_EXCEPTION_COUNTER.incrementAndGet();
-		// NPE→ERROR（代码缺陷），其他→WARN（transient 异常可恢复）；首次+每 LOG_INTERVAL 次记录
-		if (count == 1 || count % LOG_INTERVAL == 0) {
-			String msg = "AE2 推送 {} (第 {} 次，每 {} 次记录一次) - process={}, slotIdx={}, item={}, count={}";
-			Object[] args = {(e instanceof NullPointerException) ? "NPE 异常" : "异常",
-					count, LOG_INTERVAL, process, slotIdx, stack.getItem(), originalCount, e};
-			if (e instanceof NullPointerException) ProductiveBeesGenesis.LOGGER.error(msg, args);
-			else ProductiveBeesGenesis.LOGGER.warn(msg, args);
+		// M9: 时间维度节流替代计数器节流，避免高频刷屏
+		if (e instanceof NullPointerException) {
+			LogThrottle.error("ae2_push_npe_exception",
+					"AE2 推送 NPE 异常 (累计 {} 次,5秒内仅首条输出) - process={}, slotIdx={}, item={}: {}",
+					count, process, slotIdx, stack.getItem(), e.toString());
+		} else {
+			LogThrottle.warn("ae2_push_exception",
+					"AE2 推送异常 (累计 {} 次,5秒内仅首条输出) - process={}, slotIdx={}, item={}, count={}: {}",
+					count, process, slotIdx, stack.getItem(), originalCount, e.toString());
 		}
 		if (e instanceof InterruptedException) Thread.currentThread().interrupt();
 	}

@@ -16,6 +16,8 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.networking.storage.IStorageService;
+import appeng.api.storage.MEStorage;
 
 /**
  * AE2 网格节点生命周期管理器
@@ -60,7 +62,7 @@ public final class Ae2GridNodeManager {
 	 *
 	 * @param host 输出宿主（离心机方块实体）
 	 */
-	public static void prepareNode(IAe2OutputHost host) {
+	public static void prepareNode(IAe2OutputHostBase host) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 宿主级锁保护 check-then-act，避免并发创建重复节点
 		synchronized (host) {
@@ -71,14 +73,14 @@ public final class Ae2GridNodeManager {
 			BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 			if (level == null || pos == null) return;
 
-			IGridNodeListener<IAe2OutputHost> listener = new CentrifugeGridNodeListener();
+			IGridNodeListener<IAe2OutputHostBase> listener = new CentrifugeGridNodeListener();
 			IManagedGridNode node = GridHelper.createManagedNode(host, listener);
 			// 节点配置
 			node.setExposedOnSides(EnumSet.allOf(Direction.class));
 			node.setInWorldNode(true);
 			node.setFlags(GridFlags.REQUIRE_CHANNEL);
 			node.setIdlePowerUsage(IDLE_POWER_USAGE);
-			node.setTagName(IAe2OutputHost.AE2_NODE_TAG);
+			node.setTagName(IAe2OutputHostBase.AE2_NODE_TAG);
 			// 视觉表现：用离心机方块本身（便于 AE2 网络工具识别）
 			if (host instanceof BlockEntity be) {
 				node.setVisualRepresentation(be.getBlockState().getBlock());
@@ -105,7 +107,7 @@ public final class Ae2GridNodeManager {
 	 *
 	 * @param host 输出宿主
 	 */
-	public static void connectNode(IAe2OutputHost host) {
+	public static void connectNode(IAe2OutputHostBase host) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 宿主级锁保护 check-then-act，与 prepareNode/destroyNode 保持一致的锁粒度
 		synchronized (host) {
@@ -141,7 +143,7 @@ public final class Ae2GridNodeManager {
 	 * @param host 输出宿主
 	 * @return 状态 ordinal（0-3），对应 AE2 GridNodeState
 	 */
-	public static int getGridNodeState(IAe2OutputHost host) {
+	public static int getGridNodeState(IAe2OutputHostBase host) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 		if (!(nodeObj instanceof IManagedGridNode managedNode)) return 0;
@@ -172,7 +174,7 @@ public final class Ae2GridNodeManager {
 	 *
 	 * @param host 输出宿主
 	 */
-	public static void destroyNode(IAe2OutputHost host) {
+	public static void destroyNode(IAe2OutputHostBase host) {
 		// 宿主级锁保护 check-then-act，与 prepareNode 使用同一把锁
 		synchronized (host) {
 			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
@@ -185,7 +187,84 @@ public final class Ae2GridNodeManager {
 			}
 			host.productivebeesgenesis$setAeItemKeyCache(null);
 			host.productivebeesgenesis$setAe2GridNode(null);
+			// Task 12：销毁节点时同步失效 AE2 网格/存储缓存，避免持有已销毁节点的旧 grid 引用
+			host.productivebeesgenesis$getAe2StateHolder().onGridChanged();
 		}
+	}
+
+	// ===== Task 12：AE2 网格/存储缓存访问方法 =====
+	// 缓存字段存储在 Ae2OutputStateHolder（Object 类型保持依赖隔离），
+	// 本类负责类型转换 + 缓存未命中时查询 AE2 API 并回填。
+	// gridChanged 回调（见 CentrifugeGridNodeListener）和 destroyNode 都会失效缓存。
+
+	/**
+	 * 获取宿主缓存的 AE2 网格，未命中时查询并回填
+	 * <br/>
+	 * 缓存由 {@link CentrifugeGridNodeListener#onGridChanged} 在 grid 变化时失效，
+	 * 256× 加速场景下避免每 tick 重复调用 {@code managedNode.getGrid()}（约 768 次/gameTick）。
+	 * <p>
+	 * 线程安全：cache 字段为 volatile，check-then-set 最多导致重复查询一次（无正确性问题），
+	 * 主线程独占 tick 路径下无并发。
+	 *
+	 * @param host 输出宿主
+	 * @return 已连接的网格，未连接或节点不存在时返回 null
+	 */
+	@Nullable
+	public static IGrid getCachedGrid(IAe2OutputHostBase host) {
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return null;
+		Object cached = holder.getCachedGrid();
+		if (cached instanceof IGrid grid) return grid;
+		// 缓存未命中 — 查询 AE2 API
+		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+		if (!(nodeObj instanceof IManagedGridNode managedNode)) return null;
+		IGrid grid = managedNode.getGrid();
+		if (grid != null) holder.setCachedGrid(grid);
+		return grid;
+	}
+
+	/**
+	 * 获取宿主缓存的 AE2 存储服务，未命中时查询并回填
+	 * <br/>
+	 * 依赖 {@link #getCachedGrid} 提供的网格缓存，避免重复 getService 调用。
+	 *
+	 * @param host 输出宿主
+	 * @return 存储服务，网格未连接或服务不存在时返回 null
+	 */
+	@Nullable
+	public static IStorageService getCachedStorage(IAe2OutputHostBase host) {
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return null;
+		Object cached = holder.getCachedStorage();
+		if (cached instanceof IStorageService storage) return storage;
+		// 缓存未命中 — 通过 grid 缓存查询
+		IGrid grid = getCachedGrid(host);
+		if (grid == null) return null;
+		IStorageService storage = grid.getService(IStorageService.class);
+		if (storage != null) holder.setCachedStorage(storage);
+		return storage;
+	}
+
+	/**
+	 * 获取宿主缓存的 ME 存储，未命中时查询并回填
+	 * <br/>
+	 * 依赖 {@link #getCachedStorage} 提供的存储服务缓存。
+	 *
+	 * @param host 输出宿主
+	 * @return ME 存储，存储服务不存在时返回 null
+	 */
+	@Nullable
+	public static MEStorage getCachedMeStorage(IAe2OutputHostBase host) {
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return null;
+		Object cached = holder.getCachedMeStorage();
+		if (cached instanceof MEStorage meStorage) return meStorage;
+		// 缓存未命中 — 通过 storage 缓存查询
+		IStorageService storage = getCachedStorage(host);
+		if (storage == null) return null;
+		MEStorage meStorage = storage.getInventory();
+		if (meStorage != null) holder.setCachedMeStorage(meStorage);
+		return meStorage;
 	}
 
 	/**
@@ -199,7 +278,7 @@ public final class Ae2GridNodeManager {
 	 * @param host 输出宿主
 	 * @param tag 方块实体的 NBT 根标签
 	 */
-	public static void saveNodeNBT(IAe2OutputHost host, CompoundTag tag) {
+	public static void saveNodeNBT(IAe2OutputHostBase host, CompoundTag tag) {
 		synchronized (host) {
 			Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 			if (!(nodeObj instanceof IManagedGridNode node)) return;
@@ -221,7 +300,7 @@ public final class Ae2GridNodeManager {
 	 * @param host 输出宿主
 	 * @param tag  方块实体的 NBT 根标签
 	 */
-	public static void loadNodeNBT(IAe2OutputHost host, CompoundTag tag) {
+	public static void loadNodeNBT(IAe2OutputHostBase host, CompoundTag tag) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			// 节点未创建时先准备（不连接，避免区块加载递归）
@@ -238,16 +317,48 @@ public final class Ae2GridNodeManager {
 	 * 离心机网格节点监听器
 	 * <br/>
 	 * 实现 {@link IGridNodeListener}，在节点状态变化时通知宿主方块实体保存。
-	 * 其他事件（gridChanged/stateChanged）使用默认实现，避免不必要的逻辑。
+	 * <p>
+	 * Task 12：重写 {@link #onGridChanged} 失效 {@link Ae2OutputStateHolder} 中的
+	 * cachedGrid/cachedStorage/cachedMeStorage 三个缓存，避免持有旧网格的存储服务引用。
+	 * onInWorldConnectionChanged/onOwnerChanged/onStateChanged 仍使用默认实现。
 	 */
-	private static final class CentrifugeGridNodeListener implements IGridNodeListener<IAe2OutputHost> {
+	private static final class CentrifugeGridNodeListener implements IGridNodeListener<IAe2OutputHostBase> {
 
 		@Override
-		public void onSaveChanges(IAe2OutputHost host, IGridNode node) {
+		public void onSaveChanges(IAe2OutputHostBase host, IGridNode node) {
 			// 节点状态变化时标记方块实体为 dirty，确保持久化
 			if (host instanceof BlockEntity be) {
 				be.setChanged();
 			}
 		}
+
+		@Override
+		public void onGridChanged(IAe2OutputHostBase host, IGridNode node) {
+			// Task 12：grid 变化时失效 AE2 网格/存储缓存，下次访问时重新查询
+			// 避免持有旧网格的 IGrid/IStorageService/MEStorage 引用导致操作到错误网络
+			// M4-3 + M11 修复：onGridChanged 可能在 AE2 网格线程调用，原方案 post 到主线程
+			//   执行失效以避免竞态。但 executeIfPossible 在服务器关闭期间会通过 CompletableFuture
+			//   抛出 CompletionException(RejectedExecutionException)，同步传播到 ChunkMap.processUnloads
+			//   导致 "Failed to save chunk" ERROR（区块数据丢失风险）。
+			//
+			// 综合权衡后采用"直接同步失效"方案：
+			// 1. invalidateGridCache 仅写 3 个 volatile 字段，单字段写本身原子
+			// 2. 竞态影响有限：主线程 push 可能读到 grid=null 但 storage!=null 的不一致状态，
+			//    最多导致一次 push 失败（getCachedStorage 会再次校验 grid），无数据损坏
+			// 3. 服务器关闭期间 push 不会再被调用，无竞态风险
+			// 4. 避免所有异步异常传播路径，根治 "Failed to save chunk" 问题
+			invalidateGridCache(host);
+		}
+	}
+
+	/**
+	 * 失效 AE2 网格/存储缓存（封装供 onGridChanged 回调复用）
+	 * <br/>
+	 * 仅失效 cachedGrid/cachedStorage/cachedMeStorage 三个字段，
+	 * 下次 getCachedGrid/getCachedStorage/getCachedMeStorage 调用时重新查询 AE2 API。
+	 */
+	private static void invalidateGridCache(IAe2OutputHostBase host) {
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder != null) holder.onGridChanged();
 	}
 }
