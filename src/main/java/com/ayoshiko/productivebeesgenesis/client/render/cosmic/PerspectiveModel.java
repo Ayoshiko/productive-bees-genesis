@@ -34,6 +34,7 @@ public interface PerspectiveModel extends BakedModel {
 
 	void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay);
 
+	@SuppressWarnings("deprecation") // BakedModel 接口要求实现 deprecated 的 3 参数版本
 	@NotNull
 	@Override
 	default List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, @NotNull RandomSource rand) {

@@ -3,7 +3,7 @@
  * <br/>
  * Iris 光影兼容相关的 Mixin 和配置插件：
  * <ol>
- *   <li>{@code MixinShaderInstance} — 着色器实例注入</li>
+ *   <li>{@code ShaderInstanceMixin} — 着色器实例注入</li>
  *   <li>{@code IrisConfigPlugin} — Iris Mixin 条件加载插件</li>
  * </ol>
  */

@@ -2,6 +2,9 @@ package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import java.lang.reflect.Method;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+
 import net.minecraft.world.item.ItemDisplayContext;
 
 /**
@@ -48,8 +51,12 @@ public final class IrisCompat {
 				getInstance = irisApi.getMethod("getInstance");
 				isShaderPackInUse = irisApi.getMethod("isShaderPackInUse");
 				initialized = true;
-			} catch (Throwable ignored) {
-				// Iris 未安装或API变更，初始化失败
+			} catch (Throwable t) {
+				// 此处需捕获 Throwable 而非 Exception：Iris API 不兼容变更会抛出
+				// LinkageError/NoClassDefFoundError 等 Error 子类；静态初始化块若不捕获会导致类初始化失败
+				// 一次性 ERROR 日志（静态初始化仅执行一次，无需节流）
+				ProductiveBeesGenesis.LOGGER.warn(
+						"Iris 光影兼容初始化失败, cosmic 光晕将不延迟渲染: {}", t.toString());
 			}
 			INITIALIZED = initialized;
 			GET_INSTANCE = getInstance;
@@ -93,7 +100,13 @@ public final class IrisCompat {
 		try {
 			Object api = Holder.GET_INSTANCE.invoke(null);
 			return (Boolean) Holder.IS_SHADER_PACK_IN_USE.invoke(api);
-		} catch (Throwable ignored) {
+		} catch (LinkageError | ReflectiveOperationException | RuntimeException e) {
+			// LinkageError 覆盖 Iris 版本不兼容场景；
+			// ReflectiveOperationException 覆盖反射调用受检异常（InvocationTargetException 等）；
+			// RuntimeException 覆盖 NPE/ClassCastException 等运行时异常。
+			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
+			LogThrottle.warn("iris_shader_pack_query",
+					"Iris 光影包状态查询异常, 视为未启用: {}", e.toString());
 			return false;
 		}
 	}

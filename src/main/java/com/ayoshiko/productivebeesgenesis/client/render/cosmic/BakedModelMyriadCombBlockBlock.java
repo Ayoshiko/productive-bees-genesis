@@ -49,6 +49,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 		this.infinityModel = infinityModel;
 	}
 
+	@SuppressWarnings("deprecation") // BakedModel 接口要求实现 deprecated 的 3 参数版本
 	@Override
 	@NotNull
 	public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, @NotNull RandomSource rand) {
@@ -60,7 +61,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, @NotNull RandomSource rand,
 									@Nullable ModelData data, @Nullable RenderType renderType) {
 		if (data == null) {
-			return originalPbModel.getQuads(state, side, rand);
+			return originalPbModel.getQuads(state, side, rand, ModelData.EMPTY, null);
 		}
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
@@ -89,6 +90,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 		return false;
 	}
 
+	@SuppressWarnings("deprecation") // BakedModel 接口要求实现 deprecated 的无参版本
 	@Override
 	@NotNull
 	public TextureAtlasSprite getParticleIcon() {
@@ -99,7 +101,7 @@ public class BakedModelMyriadCombBlockBlock implements BakedModel {
 	@NotNull
 	public TextureAtlasSprite getParticleIcon(@NotNull ModelData data) {
 		if (data == null) {
-			return originalPbModel.getParticleIcon();
+			return originalPbModel.getParticleIcon(ModelData.EMPTY);
 		}
 		ResourceLocation combType = data.get(MyriadCombModelData.COMB_TYPE);
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {

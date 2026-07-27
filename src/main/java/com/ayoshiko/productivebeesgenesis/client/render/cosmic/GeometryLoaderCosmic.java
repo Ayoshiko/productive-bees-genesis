@@ -51,8 +51,8 @@ public class GeometryLoaderCosmic
 		@NotNull
 		@Override
 		public BakedModel bake(@NotNull IGeometryBakingContext context, @NotNull ModelBaker baker,
-							   @NotNull Function<Material, TextureAtlasSprite> spriteGetter,
-							   @NotNull ModelState modelState, @NotNull ItemOverrides overrides) {
+				@NotNull Function<Material, TextureAtlasSprite> spriteGetter,
+				@NotNull ModelState modelState, @NotNull ItemOverrides overrides) {
 			BakedModel baseBakedModel = bakeBaseModel(baker, modelState, spriteGetter);
 			return new BakedModelCosmic(baseBakedModel, this.maskTextures);
 		}

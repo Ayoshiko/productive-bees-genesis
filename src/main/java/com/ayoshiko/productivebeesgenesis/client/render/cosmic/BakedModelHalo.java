@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -31,8 +31,8 @@ import net.minecraft.world.item.ItemStack;
  */
 public class BakedModelHalo extends WrappedItemModel {
 
-	private static final ResourceLocation HALO_TEXTURE = ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "item/halo");
-	private static final ResourceLocation HALO_NOISE_TEXTURE = ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "item/halo_noise");
+	private static final ResourceLocation HALO_TEXTURE = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo");
+	private static final ResourceLocation HALO_NOISE_TEXTURE = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo_noise");
 
 	private final int type;
 	private final float alpha;
@@ -126,7 +126,8 @@ public class BakedModelHalo extends WrappedItemModel {
 				if (usePulse) {
 					poseStack.pushPose();
 					try {
-						float scale = ThreadLocalRandom.current().nextFloat() * 0.10F + 0.95F;
+						// 基于时间的正弦波缩放，替代随机数消除每帧闪烁
+						float scale = 1.0F + 0.05F * (float) Math.sin(System.nanoTime() / 300_000_000.0);
 						double translate = (1.0D - scale) / 2.0D;
 						poseStack.scale(scale, scale, 1.0001F);
 						poseStack.translate(translate, translate, 0.0F);
@@ -172,6 +173,8 @@ public class BakedModelHalo extends WrappedItemModel {
 					poseStack.popPose();
 				}
 			} else if (this.type == 1) {
+				// type==1 使用不透明噪声纹理（HALO_NOISE_TEXTURE），故不启用 blend、不禁用深度测试，
+				// 与 type==0/2 的半透明光晕（HALO_TEXTURE）设计不同：噪声为实体覆盖层，需保留深度测试确保遮挡正确
 				poseStack.pushPose();
 				try {
 					PoseStack.Pose pose = poseStack.last();

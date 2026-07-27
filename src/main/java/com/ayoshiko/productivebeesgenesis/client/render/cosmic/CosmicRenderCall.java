@@ -63,8 +63,8 @@ public class CosmicRenderCall {
 	 * @return 已填充的 CosmicRenderCall 实例
 	 */
 	public static CosmicRenderCall obtain(CosmicRenderable model, ItemStack stack, ItemDisplayContext context,
-										  PoseStack poseStack, int light, int overlay,
-										  Matrix4f projection, Matrix4f modelView) {
+			PoseStack poseStack, int light, int overlay,
+			Matrix4f projection, Matrix4f modelView) {
 		CosmicRenderCall call;
 		synchronized (POOL) {
 			call = POOL.poll();

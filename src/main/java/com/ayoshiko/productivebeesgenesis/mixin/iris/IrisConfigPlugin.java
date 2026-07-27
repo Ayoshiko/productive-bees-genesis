@@ -3,13 +3,11 @@ package com.ayoshiko.productivebeesgenesis.mixin.iris;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import net.neoforged.fml.loading.LoadingModList;
+import net.neoforged.fml.loading.FMLLoader;
 
 /**
  * Iris 光影兼容 Mixin 配置插件
@@ -18,31 +16,44 @@ import net.neoforged.fml.loading.LoadingModList;
  * LoadingModList 是否包含 "iris" 模组。仅当 Iris 已安装时才应用
  * 本配置中的所有 Mixin，避免在无 Iris 环境下因缺少依赖类而崩溃。
  * <p>
- * 性能优化：使用 volatile 字段缓存 iris 加载状态，避免每次 shouldApplyMixin
- * 调用都遍历 LoadingModList。首次调用时计算，后续直接返回缓存值。
+ * 与主 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 风格一致：
+ * 使用 Holder 模式（JVM 类初始化保证线程安全）+ FMLLoader.getLoadingModList() 检测。
  */
 public class IrisConfigPlugin implements IMixinConfigPlugin {
 
 	/** Iris 模组 ID */
 	private static final String IRIS_MOD_ID = "iris";
 
-	/** 配置插件专属日志器，避免早期加载阶段依赖主模组类 */
-	private static final Logger LOGGER = LogManager.getLogger("ProductiveBeesGenesis");
+	/**
+	 * Holder 模式 — 线程安全的懒加载
+	 * <br/>
+	 * JVM 类初始化阶段保证原子性，检测结果在 Mixin 阶段计算一次后常驻，
+	 * 避免 shouldApplyMixin 每次调用都重复访问 FMLLoader。
+	 */
+	private static final class Holder {
+		/** Iris 是否加载（Mixin 阶段检测，仅计算一次） */
+		static final boolean IRIS_LOADED = isIrisLoaded();
+	}
 
 	/**
-	 * Iris 加载状态缓存
+	 * 在 Mixin 加载阶段检测 Iris 是否已加载
 	 * <br/>
-	 * 使用 volatile 保证可见性：在 Mixin 应用阶段（早期加载线程）写入后，
-	 * 后续 shouldApplyMixin 调用线程能立即读到最新值。
-	 * <p>
-	 * 使用 Boolean 包装类型的 Holder 模式：
-	 * <ul>
-	 *   <li>null：尚未计算</li>
-	 *   <li>Boolean.TRUE/FALSE：已计算的结果</li>
-	 * </ul>
-	 * 同步块保证首次计算只执行一次（双重检查锁定）。
+	 * 原理：FMLLoader.getLoadingModList() 返回当前正在加载的 mod 列表，
+	 * 此阶段早于 ModList.get() 可用时机。getModFileById 返回 null 表示该 mod 未加载。
+	 * 异常时安全降级为 false，避免 FMLLoader 状态异常导致 Mixin 阶段崩溃。
 	 */
-	private static volatile Boolean irisLoadedCache = null;
+	private static boolean isIrisLoaded() {
+		try {
+			return FMLLoader.getLoadingModList().getModFileById(IRIS_MOD_ID) != null;
+		} catch (LinkageError | RuntimeException t) {
+			// LinkageError 覆盖 FMLLoader 版本不兼容；RuntimeException 覆盖状态异常。
+			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
+			// 防御性：FMLLoader 状态异常时安全降级，不应用 Iris Mixin
+			// Mixin 早期阶段日志系统可能未就绪，使用 System.err 输出（单次检测不会刷屏）
+			System.err.println("[ProductiveBeesGenesis] Mixin 阶段检测 Iris 失败, 视为未加载: " + t);
+			return false;
+		}
+	}
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -61,30 +72,11 @@ public class IrisConfigPlugin implements IMixinConfigPlugin {
 	/**
 	 * 仅当已加载 Iris 模组时才应用 Mixin
 	 * <br/>
-	 * 原理：使用 anyMatch 流式判断 LoadingModList 中是否存在 modId 为 "iris" 的条目，
-	 * 结果缓存到 {@link #irisLoadedCache}，避免每次调用都遍历模组列表。
+	 * 原理：通过 Holder 模式缓存 Iris 加载状态，避免每次调用都访问 FMLLoader。
 	 */
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		Boolean cached = irisLoadedCache;
-		if (cached != null) {
-			return cached;
-		}
-		synchronized (IrisConfigPlugin.class) {
-			cached = irisLoadedCache;
-			if (cached == null) {
-				try {
-					cached = LoadingModList.get().getMods().stream()
-							.anyMatch(modInfo -> IRIS_MOD_ID.equals(modInfo.getModId()));
-				} catch (Exception e) {
-					// 加载早期阶段 LoadingModList 可能尚未初始化，默认不应用 Iris Mixin
-					LOGGER.warn("无法读取 LoadingModList，跳过 Iris Mixin 应用", e);
-					cached = Boolean.FALSE;
-				}
-				irisLoadedCache = cached;
-			}
-		}
-		return cached;
+		return Holder.IRIS_LOADED;
 	}
 
 	@Override

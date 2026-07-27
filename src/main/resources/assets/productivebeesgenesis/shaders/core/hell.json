@@ -28,8 +28,8 @@
     { "name": "time", "type": "float", "count": 1, "values": [ 0.0 ] },
     { "name": "yaw", "type": "float", "count": 1, "values": [ 0.0 ] },
     { "name": "pitch", "type": "float", "count": 1, "values": [ 0.0 ] },
-    { "name": "externalScale", "type": "float", "count": 1, "values": [ 0.0 ] },
-    { "name": "opacity", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "externalScale", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "opacity", "type": "float", "count": 1, "values": [ 1.0 ] },
     { "name": "cosmicuvs", "type": "matrix2x2", "count": 40, "values": [ 0.0 ] }
   ]
 }

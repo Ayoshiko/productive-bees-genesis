@@ -4,6 +4,7 @@ import java.util.List;
 
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
 
@@ -46,6 +47,11 @@ public class BakedModelCosmic extends AbstractBakedModelCosmic {
 	@Override
 	protected RenderType getRenderType() {
 		return CosmicRenderTypes.COSMIC;
+	}
+
+	@Override
+	protected ShaderInstance getShader() {
+		return CosmicShaders.COSMIC_SHADER;
 	}
 
 	@Override

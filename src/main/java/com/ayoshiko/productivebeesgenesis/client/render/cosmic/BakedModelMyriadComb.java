@@ -34,7 +34,7 @@ public class BakedModelMyriadComb extends WrappedItemModel {
 
 	@Override
 	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
-						   MultiBufferSource buffers, int packedLight, int packedOverlay) {
+			MultiBufferSource buffers, int packedLight, int packedOverlay) {
 		ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(beeType) && cosmicModel instanceof PerspectiveModel cosmicPerspective) {
 			cosmicPerspective.renderItem(stack, context, poseStack, buffers, packedLight, packedOverlay);

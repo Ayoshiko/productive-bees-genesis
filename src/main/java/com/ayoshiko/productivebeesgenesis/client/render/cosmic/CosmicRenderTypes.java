@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
@@ -18,7 +19,7 @@ public class CosmicRenderTypes {
 	private static final int BUFFER_SIZE_2MB = 0x200000;
 
 	public static final RenderType COSMIC = RenderType.create(
-			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic").toString(),
+			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
 			BUFFER_SIZE_2MB,
@@ -36,7 +37,7 @@ public class CosmicRenderTypes {
 
 	public static final RenderType COSMIC_ARMOR = RenderType.create(
 			// 名称使用 "cosmic_armor" 区别于 COSMIC，便于调试与 profiler 阶段区分两套渲染类型
-			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic_armor").toString(),
+			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic_armor").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
 			BUFFER_SIZE_2MB,
@@ -54,7 +55,7 @@ public class CosmicRenderTypes {
 					.createCompositeState(true));
 
 	public static final RenderType HELL = RenderType.create(
-			ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "hell").toString(),
+			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell").toString(),
 			DefaultVertexFormat.NEW_ENTITY,
 			VertexFormat.Mode.QUADS,
 			BUFFER_SIZE_2MB,

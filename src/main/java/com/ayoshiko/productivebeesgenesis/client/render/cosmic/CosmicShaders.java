@@ -40,11 +40,6 @@ public class CosmicShaders {
 		return cosmicUvSnapshot.get().uvs();
 	}
 
-	/** 兼容旧调用：返回当前快照的 sprite 数组引用（快照不可变，引用安全） */
-	public static TextureAtlasSprite[] getCosmicSprites() {
-		return cosmicUvSnapshot.get().sprites();
-	}
-
 	/** 着色器实例，由 RegisterShadersEvent 回调（资源加载线程）写入，渲染线程读取，必须 volatile 保证可见性 */
 	public static volatile ShaderInstance COSMIC_SHADER;
 	public static volatile ShaderInstance COSMIC_ARMOR_SHADER;
@@ -80,7 +75,7 @@ public class CosmicShaders {
 		// 三个 shader 独立 try-catch：单个 shader 注册失败只记录 warn，不影响其他 shader 注册
 		// 原共用 try-catch 会导致首个失败时后续 shader 全部跳过（如 cosmic 失败则 armor/hell 均不注册）
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic"), DefaultVertexFormat.BLOCK), shader -> {
+			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.BLOCK), shader -> {
 				COSMIC_SHADER = shader;
 				cosmicTime = COSMIC_SHADER.safeGetUniform("time");
 				cosmicYaw = COSMIC_SHADER.safeGetUniform("yaw");
@@ -94,7 +89,7 @@ public class CosmicShaders {
 			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 方块着色器失败", e);
 		}
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "cosmic"), DefaultVertexFormat.NEW_ENTITY), shader -> {
+			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.NEW_ENTITY), shader -> {
 				COSMIC_ARMOR_SHADER = shader;
 				cosmicArmorTime = COSMIC_ARMOR_SHADER.safeGetUniform("time");
 				cosmicArmorYaw = COSMIC_ARMOR_SHADER.safeGetUniform("yaw");
@@ -108,7 +103,7 @@ public class CosmicShaders {
 			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 护甲着色器失败", e);
 		}
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "hell"), DefaultVertexFormat.BLOCK), shader -> {
+			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), DefaultVertexFormat.BLOCK), shader -> {
 				HELL_SHADER = shader;
 				hellTime = HELL_SHADER.safeGetUniform("time");
 				hellYaw = HELL_SHADER.safeGetUniform("yaw");
@@ -130,7 +125,7 @@ public class CosmicShaders {
 			float[] newUvs = new float[40];
 			TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
 			for (int i = 0; i < newSprites.length; i++) {
-				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "misc/cosmic/cosmic_" + i));
+				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "misc/cosmic/cosmic_" + i));
 				newUvs[i * 4 + 0] = newSprites[i].getU0();
 				newUvs[i * 4 + 1] = newSprites[i].getV0();
 				newUvs[i * 4 + 2] = newSprites[i].getU1();

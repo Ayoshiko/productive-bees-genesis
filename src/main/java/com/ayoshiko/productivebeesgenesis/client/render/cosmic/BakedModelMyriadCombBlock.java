@@ -4,10 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -37,7 +34,7 @@ public class BakedModelMyriadCombBlock extends WrappedItemModel {
 
 	@Override
 	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
-						   MultiBufferSource buffers, int packedLight, int packedOverlay) {
+			MultiBufferSource buffers, int packedLight, int packedOverlay) {
 		ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) {
 			renderModelDirect(infinityCombBlockModel, stack, poseStack, buffers, packedLight, packedOverlay);
@@ -49,17 +46,11 @@ public class BakedModelMyriadCombBlock extends WrappedItemModel {
 	/**
 	 * 直接渲染指定 BakedModel 的 quads（不经过 PerspectiveModel 接口）
 	 * <p>
-	 * 复用 {@link WrappedItemModel#renderWrapped} 的内部逻辑，但传入任意 BakedModel
-	 * 而非 this.wrapped，使子类可以切换渲染目标模型。
+	 * 委托基类 {@link WrappedItemModel#renderBakedModel} 公共渲染核心，
+	 * 传入任意 BakedModel 而非 this.wrapped，使子类可以切换渲染目标模型。
 	 */
 	private void renderModelDirect(BakedModel modelToRender, ItemStack stack, PoseStack poseStack,
-								   MultiBufferSource buffers, int packedLight, int packedOverlay) {
-		BakedModel resolved = modelToRender.getOverrides().resolve(modelToRender, stack, this.world, this.entity, 0);
-		ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
-		for (BakedModel bakedModel : resolved.getRenderPasses(stack, true)) {
-			for (RenderType renderType : bakedModel.getRenderTypes(stack, true)) {
-				itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack, buffers.getBuffer(renderType));
-			}
-		}
+			MultiBufferSource buffers, int packedLight, int packedOverlay) {
+		renderBakedModel(modelToRender, stack, poseStack, buffers, packedLight, packedOverlay, true);
 	}
 }

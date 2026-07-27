@@ -134,7 +134,7 @@ public abstract class AbstractMaskGeometryLoader<T extends AbstractMaskGeometryL
 
 		@Override
 		public void resolveParents(@NotNull Function<ResourceLocation, UnbakedModel> modelGetter,
-								   @NotNull IGeometryBakingContext context) {
+				@NotNull IGeometryBakingContext context) {
 			this.baseModel.resolveParents(modelGetter);
 		}
 
@@ -150,7 +150,7 @@ public abstract class AbstractMaskGeometryLoader<T extends AbstractMaskGeometryL
 		 */
 		@NotNull
 		protected BakedModel bakeBaseModel(@NotNull ModelBaker baker, @NotNull ModelState modelState,
-										  @NotNull Function<Material, TextureAtlasSprite> spriteGetter) {
+				@NotNull Function<Material, TextureAtlasSprite> spriteGetter) {
 			return this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, true);
 		}
 	}

@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
@@ -39,16 +40,31 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	 */
 	private static volatile long globalCacheGeneration = 0L;
 
-	/** 本实例缓存的图集精灵列表 — maskSprites 固定不变，仅图集重建时需刷新 */
-	private volatile List<TextureAtlasSprite> cachedAtlasSprites;
 	/**
-	 * 本实例缓存的烘焙四边形列表 — 由 atlasSprites 经 {@link RenderUtils#bakeItem} 烘焙而成。
+	 * 缓存快照 — 将 atlasSprites、bakedQuads、generation 合并为单个不可变对象，
+	 * 通过单个 volatile 引用替换保证三者的原子可见性，避免分开写入导致的短暂不一致。
 	 * <br/>
-	 * bakeItem 涉及 FaceBakery.bakeQuad，开销较大，缓存后避免每帧重新烘焙。
+	 * 原三个 volatile 字段分开写入时，渲染线程可能读到新 atlasSprites 但旧 bakedQuads/generation
+	 * 的中间状态。合并为快照后，引用替换是原子操作，渲染线程要么看到旧快照要么看到新快照。
 	 */
-	private volatile List<BakedQuad> cachedBakedQuads;
-	/** 本实例缓存对应的代数 — 与 globalCacheGeneration 不一致时重建 */
-	private volatile long cachedGeneration = -1L;
+	private volatile CacheSnapshot cacheSnapshot;
+
+	/**
+	 * 缓存快照（不可变）— 保证 atlasSprites、bakedQuads、generation 三者原子可见。
+	 */
+	private static final class CacheSnapshot {
+		final List<TextureAtlasSprite> atlasSprites;
+		/** 由 atlasSprites 经 {@link RenderUtils#bakeItem} 烘焙而成，bakeItem 涉及 FaceBakery.bakeQuad 开销较大 */
+		final List<BakedQuad> bakedQuads;
+		/** 本快照对应的代数 — 与 globalCacheGeneration 不一致时需重建 */
+		final long generation;
+
+		CacheSnapshot(List<TextureAtlasSprite> atlasSprites, List<BakedQuad> bakedQuads, long generation) {
+			this.atlasSprites = atlasSprites;
+			this.bakedQuads = bakedQuads;
+			this.generation = generation;
+		}
+	}
 
 	protected AbstractBakedModelCosmic(BakedModel wrapped, List<ResourceLocation> maskSprites) {
 		super(wrapped);
@@ -87,6 +103,13 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	protected abstract RenderType getRenderType();
 
 	/**
+	 * 获取本类型对应的着色器实例，注册失败时返回 null
+	 * <br/>
+	 * 用于在渲染前检查 shader 是否就绪，避免供应器返回 null 导致渲染管线 NPE。
+	 */
+	protected abstract ShaderInstance getShader();
+
+	/**
 	 * 结束本类型 RenderType 的批次，确保 cosmic 层立即刷新到 GPU
 	 */
 	protected abstract void endBatch(MultiBufferSource.BufferSource bufferSource);
@@ -115,6 +138,10 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		if (mc.level == null || mc.player == null) {
 			return;
 		}
+		// 着色器注册失败时跳过 cosmic 层渲染，避免 RenderType 供应器返回 null 导致渲染管线 NPE
+		if (getShader() == null) {
+			return;
+		}
 		float yaw = 0.0F;
 		float pitch = 0.0F;
 		float scale = 1.0F;
@@ -129,19 +156,21 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		setupShaderUniforms((float) (mc.level.getGameTime() % Integer.MAX_VALUE), yaw, pitch, scale);
 		// 获取本类型 RenderType 对应的 VertexConsumer
 		VertexConsumer consumer = buffers.getBuffer(getRenderType());
-		// 获取缓存的烘焙四边形 — maskSprites 固定不变，仅图集重建时需重新烘焙
+		// 读取缓存快照 — maskSprites 固定不变，仅图集重建时需重新烘焙
 		// 缓存命中时跳过 atlasSprites 查找和 bakeItem 烘焙（FaceBakery.bakeQuad 开销较大）
-		List<BakedQuad> bakedQuads = cachedBakedQuads;
-		if (bakedQuads == null || cachedGeneration != globalCacheGeneration) {
+		CacheSnapshot snapshot = cacheSnapshot;
+		List<BakedQuad> bakedQuads;
+		if (snapshot == null || snapshot.generation != globalCacheGeneration) {
 			// 缓存未命中或图集已重建 — 重建 atlasSprites 并烘焙四边形
 			List<TextureAtlasSprite> atlasSprites = new ArrayList<>(this.maskSprites.size());
 			for (ResourceLocation mask : this.maskSprites) {
 				atlasSprites.add(mc.getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(mask));
 			}
-			cachedAtlasSprites = atlasSprites;
 			bakedQuads = RenderUtils.bakeItem(atlasSprites);
-			cachedBakedQuads = bakedQuads;
-			cachedGeneration = globalCacheGeneration;
+			// 整体替换快照：构造完整对象后单次 volatile 写入发布，保证三者原子可见
+			cacheSnapshot = new CacheSnapshot(atlasSprites, bakedQuads, globalCacheGeneration);
+		} else {
+			bakedQuads = snapshot.bakedQuads;
 		}
 		mc.getItemRenderer().renderQuadList(poseStack, consumer, bakedQuads, stack, packedLight, packedOverlay);
 		// 立即刷新本类型批次，确保 cosmic 层在后续渲染前提交
