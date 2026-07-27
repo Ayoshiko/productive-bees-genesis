@@ -21,7 +21,7 @@ import net.minecraft.resources.ResourceLocation;
  * 数据后写入 SERVER 配置并持久化，再由 NeoForge 原生 {@code ConfigSync} 机制
  * 自动将变更同步到所有客户端（包括发起者）。
  * <p>
- * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 128 字符，
+ * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 256 字符，
  * 实际承载能力远超需求（列表上限 512 条）。
  * <p>
  * <b>输入校验</b>：单条字符串长度上限 {@value #MAX_STRING_LENGTH} 字符，

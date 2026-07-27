@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,17 +22,21 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * 模组网络数据包注册与服务端处理（Task 12）
+ * 模组网络数据包注册与服务端处理入口（Task 12）
  * <p>
  * 职责：
  * <ol>
- *   <li>注册 {@link FilterConfigSyncPayload} 为 play 阶段 Client→Server 数据包</li>
+ *   <li>注册所有 play 阶段数据包（Client→Server 与 Server→Client）</li>
  *   <li>频率限制：每玩家 3 秒冷却，防止恶意高频发包</li>
- *   <li>服务端处理：权限校验 → 数据校验 → 写入配置 → 持久化 → 失效缓存</li>
+ *   <li>万象创世过滤配置同步包的服务端处理：权限校验 → 数据校验 → 写入配置 → 持久化 → 失效缓存</li>
  * </ol>
  * 原理：NeoForge 的 SERVER 配置在客户端是只读同步副本，客户端修改不会回传服务端。
  * 通过自定义数据包将修改请求发送到服务端，服务端写入后由 NeoForge 原生 ConfigSync
  * 自动同步到所有客户端。单机模式下集成服务器同样走此流程（内存连接，无额外网络开销）。
+ * <p>
+ * 处理逻辑拆分：蜂箱相关 handler 委托给 {@link ApiaryPayloadHandlers}，
+ * AE2 相关 handler 委托给 {@link Ae2PayloadHandlers}，
+ * 本类仅保留配置同步包的专属处理逻辑（含频率限制状态）。
  * <p>
  * 注：NeoForge 1.21.1 的 {@code @EventBusSubscriber} 会根据事件类型自动判定总线，
  * {@code RegisterPayloadHandlersEvent} 实现 {@code IModBusEvent}，自动挂载到模组事件总线。
@@ -63,14 +68,102 @@ public final class ModPayloads {
 
 	/**
 	 * 注册数据包 — 由 {@code @EventBusSubscriber} 自动挂载到模组事件总线
+	 * <p>
+	 * handler 方法引用指向各专门处理类：
+	 * <ul>
+	 *   <li>蜂箱类（选中 / 蜂笼 / 排序 / PB 升级）→ {@link ApiaryPayloadHandlers}</li>
+	 *   <li>AE2 类（输出 / 输入 / 过滤 / 同步）→ {@link Ae2PayloadHandlers}</li>
+	 *   <li>万象创世配置同步 → 本类 {@link #handleFilterConfigSync}</li>
+	 * </ul>
 	 */
 	@SubscribeEvent
 	public static void register(RegisterPayloadHandlersEvent event) {
 		PayloadRegistrar registrar = event.registrar("1");
+		// 万象创世过滤配置同步包 — 由客户端配置界面发送
 		registrar.playToServer(
 				FilterConfigSyncPayload.TYPE,
 				FilterConfigSyncPayload.STREAM_CODEC,
 				ModPayloads::handleFilterConfigSync
+		);
+		// 工厂版蜂箱排序切换包 — 由 GuiApiarySortingTab 发送
+		registrar.playToServer(
+				ApiaryToggleSortingPayload.TYPE,
+				ApiaryToggleSortingPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleApiaryToggleSorting
+		);
+		// PB升级物品提取包 — 由 GuiPbUpgradeWindow 卸载按钮发送
+		registrar.playToServer(
+				PbUpgradeExtractPayload.TYPE,
+				PbUpgradeExtractPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handlePbUpgradeExtract
+		);
+		// Bug 9：蜜蜂槽位选择包 — 由 GuiMekApiary 点击蜜蜂槽发送
+		registrar.playToServer(
+				ApiarySelectBeePayload.TYPE,
+				ApiarySelectBeePayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleApiarySelectBee
+		);
+		// 桶式蜂笼操作包 — 由 GuiMekApiary 右键点击蜜蜂槽发送
+		registrar.playToServer(
+				ApiaryCageOperationPayload.TYPE,
+				ApiaryCageOperationPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleApiaryCageOperation
+		);
+		// per-tile AE2 输出切换包 — 由 AeOutputButton 点击发送
+		registrar.playToServer(
+				CycleAeOutputPayload.TYPE,
+				CycleAeOutputPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleCycleAeOutput
+		);
+		// per-tile AE2 输入拉取开关包 — 由 AeInputButton 点击发送
+		registrar.playToServer(
+				ToggleAeInputPayload.TYPE,
+				ToggleAeInputPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleToggleAeInput
+		);
+		// per-tile AE2 输入 NBT 忽略开关包 — 由 AeInputNbtIgnoreButton 点击发送
+		registrar.playToServer(
+				ToggleAeInputNbtIgnorePayload.TYPE,
+				ToggleAeInputNbtIgnorePayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleToggleAeInputNbtIgnore
+		);
+		// per-tile AE2 输入过滤模式循环切换包 — 由 AeInputFilterModeButton 点击发送
+		registrar.playToServer(
+				CycleAeInputFilterModePayload.TYPE,
+				CycleAeInputFilterModePayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleCycleAeInputFilterMode
+		);
+		// V13: per-tile AE2 输入精确模式切换包 — 区分蜜脾/蜜脾块
+		registrar.playToServer(
+				ToggleAeInputPreciseModePayload.TYPE,
+				ToggleAeInputPreciseModePayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleToggleAeInputPreciseMode
+		);
+		// per-tile AE2 输入过滤条目增删包 — 由过滤列表 GUI 发送
+		registrar.playToServer(
+				SetAeInputFilterEntryPayload.TYPE,
+				SetAeInputFilterEntryPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleSetAeInputFilterEntry
+		);
+		// per-tile AE2 输入配置窗口打开请求包 — 由 AeInputOverlay 按钮点击发送
+		// 服务端不直接打开 Screen（NeoForge 限制），而是推送最新过滤器状态到客户端，
+		// 客户端按钮点击时已立即打开 GuiAeInputConfig，此包仅用于状态同步
+		registrar.playToServer(
+				OpenAeInputConfigPayload.TYPE,
+				OpenAeInputConfigPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleOpenAeInputConfig
+		);
+		// 服务端 → 客户端：同步完整过滤器条目列表（tracker 无法同步集合数据）
+		registrar.playToClient(
+				SyncAeInputFilterEntriesPayload.TYPE,
+				SyncAeInputFilterEntriesPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleSyncAeInputFilterEntries
+		);
+		// 服务端 → 客户端：开发者模式状态同步包（玩家登录时推送 + 命令切换时广播）
+		registrar.playToClient(
+				DevModeStateSyncPacket.TYPE,
+				DevModeStateSyncPacket.STREAM_CODEC,
+				DevModeStateSyncPacket::handleClient
 		);
 	}
 
@@ -102,7 +195,7 @@ public final class ModPayloads {
 		UUID playerId = serverPlayer.getUUID();
 		long now = System.currentTimeMillis();
 		// 惰性清理：每处理 64 个包清理一次过期条目，防止离线玩家条目累积导致内存泄漏
-		// 不依赖玩家退出事件 API（NeoForge 1.21.1 事件包路径不稳定），采用被动清理策略
+		// 三层防护：1) PlayerLoggedOutEvent 主动清理 2) ServerStoppedEvent 全量清理 3) 惰性清理兜底
 		if (packetCounter.incrementAndGet() % LAZY_CLEANUP_THRESHOLD == 0) {
 			cleanupExpiredEntries(now);
 		}
@@ -124,7 +217,7 @@ public final class ModPayloads {
 		if (!serverPlayer.hasPermissions(REQUIRED_PERMISSION_LEVEL)) {
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.permission_denied"));
-			ProductiveBeesGenesis.LOGGER.warn("玩家 {} 尝试修改服务端过滤配置但权限不足",
+			LogThrottle.warn("filter_sync_permission", "玩家 {} 尝试修改服务端过滤配置但权限不足",
 					serverPlayer.getName().getString());
 			return;
 		}
@@ -133,18 +226,33 @@ public final class ModPayloads {
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.not_loaded"));
-			ProductiveBeesGenesis.LOGGER.warn("收到过滤配置同步包但 SERVER_SPEC 未加载");
+			// 热路径日志：多玩家场景下可累积刷屏（10 玩家 × 3 次/秒 = 30 条/秒），使用 LogThrottle 全局节流
+			LogThrottle.warn("filter_sync_spec_not_loaded", "收到过滤配置同步包但 SERVER_SPEC 未加载");
+			return;
+		}
+
+		// 2.5 防御性输入长度校验：StreamCodec 已限制字符串与列表上限，此处冗余校验防止协议层变更后绕过
+		String filterModeName = payload.filterModeName();
+		if (filterModeName == null
+				|| filterModeName.length() > NetworkSecurityConstants.MAX_FILTER_MODE_NAME_LENGTH) {
+			LogThrottle.warn("filter_sync_mode_too_long", "收到过长的过滤模式名称：长度 {}",
+					filterModeName == null ? "null" : filterModeName.length());
+			return;
+		}
+		List<String> rawBeeTypes = payload.beeTypes();
+		if (rawBeeTypes != null && rawBeeTypes.size() > NetworkSecurityConstants.MAX_BEE_TYPES_LIST_SIZE) {
+			LogThrottle.warn("filter_sync_list_too_long", "收到过长的蜜蜂类型列表：大小 {}", rawBeeTypes.size());
 			return;
 		}
 
 		// 3. 过滤模式校验
 		ModConfig.FilterMode filterMode;
 		try {
-			filterMode = ModConfig.FilterMode.valueOf(payload.filterModeName());
+			filterMode = ModConfig.FilterMode.valueOf(filterModeName);
 		} catch (IllegalArgumentException e) {
 			serverPlayer.sendSystemMessage(Component.translatable(
-					"productivebeesgenesis.config.sync.invalid_mode", payload.filterModeName()));
-			ProductiveBeesGenesis.LOGGER.warn("收到无效的过滤模式: {}", payload.filterModeName());
+					"productivebeesgenesis.config.sync.invalid_mode", filterModeName));
+			LogThrottle.warn("filter_sync_invalid_mode", "收到无效的过滤模式: {}", filterModeName);
 			return;
 		}
 
@@ -162,10 +270,10 @@ public final class ModPayloads {
 			ModConfig.SERVER_SPEC.save();
 			// 6. 失效过滤缓存
 			MyriadCreationsEventHandler.invalidateFilterCache();
-			ProductiveBeesGenesis.LOGGER.info("已通过同步包保存万象创世过滤配置：模式={}, 条目数={}",
-					filterMode, validated.size());
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("处理过滤配置同步包时发生异常", e);
+			// 异常路径日志使用 LogThrottle.error 节流；
+			// SLF4J 会将最后一个 Throwable 参数识别为堆栈打印对象，保留完整堆栈输出
+			LogThrottle.error("filter_sync_exception", "处理过滤配置同步包时发生异常", e);
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.error"));
 		}
@@ -187,10 +295,17 @@ public final class ModPayloads {
 				continue;
 			}
 			String trimmed = raw.trim();
+			// 防御性长度校验：StreamCodec 已限制单条 256 字符，此处冗余校验防止协议层变更后绕过
+			if (trimmed.length() > NetworkSecurityConstants.MAX_BEE_TYPE_KEY_LENGTH) {
+				serverPlayer.sendSystemMessage(Component.translatable(
+						"productivebeesgenesis.config.sync.invalid_type", trimmed));
+				LogThrottle.warn("filter_sync_bee_too_long", "收到过长的蜜蜂类型：长度 {}", trimmed.length());
+				return null;
+			}
 			if (!ModConfig.isValidBeeTypeEntry(trimmed)) {
 				serverPlayer.sendSystemMessage(Component.translatable(
 						"productivebeesgenesis.config.sync.invalid_type", trimmed));
-				ProductiveBeesGenesis.LOGGER.warn("收到无效的蜜蜂类型: {}", trimmed);
+				LogThrottle.warn("filter_sync_invalid_bee", "收到无效的蜜蜂类型: {}", trimmed);
 				return null;
 			}
 			validated.add(trimmed);
@@ -212,5 +327,17 @@ public final class ModPayloads {
 	private static void cleanupExpiredEntries(long now) {
 		FILTER_SYNC_LAST_ACCEPT.entrySet().removeIf(entry ->
 				now - entry.getValue().get() > ENTRY_EXPIRATION_MS);
+	}
+
+	/**
+	 * 清理指定玩家的过滤同步频率限制记录（玩家下线时调用）
+	 * <br/>
+	 * 与 {@link PayloadRateLimiter#clear} 配合，统一在玩家退出时释放频次限制状态。
+	 * 即使玩家很快重新上线，旧记录也无意义（冷却窗口已重置），主动清理可减少长期运行服务器的内存占用。
+	 *
+	 * @param uuid 玩家 UUID
+	 */
+	public static void clearFilterSyncRateLimit(UUID uuid) {
+		FILTER_SYNC_LAST_ACCEPT.remove(uuid);
 	}
 }
