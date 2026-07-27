@@ -35,7 +35,13 @@ public abstract class AdvancedBeehiveRecipeSerializerMixin {
 				ci.cancel();
 			}
 		} catch (Exception e) {
+			// 修复 v15 P1: catch 块必须 ci.cancel()，否则原版 toNetwork 继续执行
+			// 会再次访问 recipe.ingredient.get() 并抛出异常，导致玩家加入世界崩溃。
+			// 写入 fallback 数据保证 buffer 格式完整，客户端能正确反序列化。
 			BeeIngredientFallback.logSerializationError("AdvancedBeehiveRecipe", e);
+			BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+			buffer.writeInt(0); // 空输出列表
+			ci.cancel();
 		}
 	}
 }

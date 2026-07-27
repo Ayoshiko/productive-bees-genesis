@@ -14,7 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
@@ -47,7 +49,7 @@ public abstract class BeeHelperMixin {
 
 	/** 完整 32 位掩码，用于节流计数器重置 */
 	@Unique
-	private static final long PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK = 0xffffffffL;
+	private static final long productivebeesgenesis$FULL_32_BIT_MASK = 0xffffffffL;
 
 	/**
 	 * 节流计数器强制清理阈值
@@ -57,7 +59,7 @@ public abstract class BeeHelperMixin {
 	 * 阈值按"每 tick 最多 1000 只活跃蜜蜂 × 容忍 10 tick 延迟"估算。
 	 */
 	@Unique
-	private static final int PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT = 10_000;
+	private static final int productivebeesgenesis$THROTTLE_HARD_LIMIT = 10_000;
 
 	/** 每 (tick, beeId) 的调用计数，用于可选节流 */
 	@Unique
@@ -67,12 +69,16 @@ public abstract class BeeHelperMixin {
 	@Unique
 	private static final AtomicLong productivebeesgenesis$LAST_THROTTLE_TICK = new AtomicLong(-1L);
 
+	/** Mixin 异常日志冷却器（tick 模式，level 参数可用） */
+	@Unique
+	private static final LogThrottle productivebeesgenesis$mixinErrorThrottle = new LogThrottle();
+
 	/**
 	 * 将游戏刻与蜜蜂 ID 组合为节流 key
 	 */
 	@Unique
 	private static long productivebeesgenesis$makeKey(long gameTick, int beeId) {
-		return (gameTick << 32) | (beeId & PRODUCTIVEBEESGENESIS$FULL_32_BIT_MASK);
+		return (gameTick << 32) | (beeId & productivebeesgenesis$FULL_32_BIT_MASK);
 	}
 
 	/**
@@ -81,7 +87,7 @@ public abstract class BeeHelperMixin {
 	 * 双层清理策略：
 	 * <ol>
 	 *   <li>常规清理：tick 变更时通过 CAS 推进时间戳，仅移除过期 tick 的条目</li>
-	 *   <li>强制清理：map 容量超过 {@link #PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT} 时，
+	 *   <li>强制清理：map 容量超过 {@link #productivebeesgenesis$THROTTLE_HARD_LIMIT} 时，
 	 *       无论 tick 是否变更都强制 clear()，防止极端场景下内存膨胀</li>
 	 * </ol>
 	 * 强制清理使用 clear() 而非 removeIf，保证 O(1) 释放桶数组；
@@ -90,7 +96,7 @@ public abstract class BeeHelperMixin {
 	@Unique
 	private static void productivebeesgenesis$clearThrottleIfTickChanged(long currentTick) {
 		// 强制清理：超过硬上限时直接清空，防御内存泄漏
-		if (productivebeesgenesis$THROTTLE_COUNTERS.size() >= PRODUCTIVEBEESGENESIS$THROTTLE_HARD_LIMIT) {
+		if (productivebeesgenesis$THROTTLE_COUNTERS.size() >= productivebeesgenesis$THROTTLE_HARD_LIMIT) {
 			productivebeesgenesis$THROTTLE_COUNTERS.clear();
 			productivebeesgenesis$LAST_THROTTLE_TICK.set(currentTick);
 			return;
@@ -103,36 +109,16 @@ public abstract class BeeHelperMixin {
 	}
 
 	/**
-	 * 合并可堆叠物品，保证总数量不变且不超过最大堆叠数
+	 * 合并可堆叠物品（委托 ItemStackMergeHelper，复用 O(n) 两级分桶算法）
 	 * <p>
-	 * 由于输入已经过聚合，列表长度很小，简单的 O(n²) 比较即可。
+	 * 保留方法签名以维持 Mixin 调用链稳定，实际逻辑统一走工具类。
 	 *
 	 * @param source 原始物品列表
 	 * @return 合并后的新列表
 	 */
 	@Unique
 	private static List<ItemStack> productivebeesgenesis$mergeItemStacks(List<ItemStack> source) {
-		List<ItemStack> merged = new ArrayList<>(source.size());
-		for (ItemStack stack : source) {
-			if (stack.isEmpty()) continue;
-
-			int remaining = stack.getCount();
-			for (ItemStack target : merged) {
-				if (ItemStack.isSameItemSameComponents(target, stack)) {
-					int canAdd = Math.min(target.getMaxStackSize() - target.getCount(), remaining);
-					if (canAdd > 0) {
-						target.grow(canAdd);
-						remaining -= canAdd;
-					}
-					if (remaining == 0) break;
-				}
-			}
-			if (remaining > 0) {
-				// 若未完全合并，追加剩余部分
-				merged.add(remaining == stack.getCount() ? stack : stack.copyWithCount(remaining));
-			}
-		}
-		return merged;
+		return ItemStackMergeHelper.mergeStacks(source);
 	}
 
 	@Inject(method = "getBeeProduce", at = @At("RETURN"), cancellable = true)
@@ -187,7 +173,12 @@ public abstract class BeeHelperMixin {
 
 			cir.setReturnValue(productivebeesgenesis$mergeItemStacks(result));
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("BeeHelper Mixin 异常", e);
+			// 节流避免高频异常刷屏，level 为方法参数始终可用
+			final Exception cause = e;
+			productivebeesgenesis$mixinErrorThrottle.tryLog(level.getGameTime(), suppressed -> {
+				ProductiveBeesGenesis.LOGGER.error("BeeHelper Mixin 异常"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
+			});
 		}
 	}
 }

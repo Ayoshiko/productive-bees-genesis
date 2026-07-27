@@ -19,8 +19,10 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 /**
  * 高级蜂箱 simulateBee() 中农夫/囤积/收集行为查询冷却 Mixin。
@@ -37,9 +39,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * <h3>线程安全与 ThreadLocal 泄漏修复说明</h3>
  * <p>
- * {@code simulateBee} 是 {@code public static} 方法，{@code @Redirect} 注入方法必须为 static，
+ * {@code simulateBee} 是 {@code public static} 方法，{@code @WrapOperation} 注入方法保持为 static，
  * 且拦截的目标（{@code FarmerBee.findHarvestablesNearby} / {@code ServerLevel.getEntitiesOfClass}）
- * 参数中不含 BlockEntity，因此 redirect 无法通过 this 或参数直接访问实例字段。
+ * 参数中不含 BlockEntity，因此 wrapper 无法通过 this 或参数直接访问实例字段。
  * <p>
  * 旧方案使用 {@code SimulateContext} ThreadLocal 持有 skipFarmer/skipHoarder，配合 HEAD/RETURN
  * 注入设置与清理。问题在于 {@code @Inject(at=RETURN)} 只在正常返回时触发，原方法抛异常时
@@ -84,7 +86,7 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
 	/**
 	 * 当前 simulateBee 调用对应的 BlockEntity 弱引用。
-	 * <p>simulateBee 是静态方法，{@code @Redirect} 无法通过参数获取 BlockEntity，
+	 * <p>simulateBee 是静态方法，{@code @WrapOperation} 无法通过参数获取 BlockEntity，
 	 * 故通过 ThreadLocal 传递。使用 {@link WeakReference} 避免蜂箱被破坏后 BlockEntity 无法 GC。
 	 */
 	@Unique
@@ -127,13 +129,15 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 	}
 
 	/**
-	 * 方法退出时清理 ThreadLocal（覆盖正常返回和异常抛出路径）
+	 * 方法正常返回前清理 ThreadLocal。
 	 * <br/>
-	 * 使用 {@code @At(value="TAIL")} 在方法退出时触发，等同于 finally 块，
-	 * 无论正常返回还是抛出异常都会执行，保证 ThreadLocal 被清理。
+	 * <b>语义说明</b>：{@code @At("TAIL")} 不是 finally 块，仅在方法正常返回前触发；
+	 * 如果 {@code simulateBee} 抛出异常，本注入不会执行，ThreadLocal 不会被清理。
+	 * 这是有意设计：异常路径下 ThreadLocal 残留 WeakReference，但下次 HEAD 调用会覆盖，
+	 * 且 WeakReference 的 referent 在 BlockEntity 被 GC 后自动释放，不会内存泄漏。
 	 * <p>
 	 * 历史说明：原方案同时使用 @At("RETURN") 和 @At("TAIL") 两个注入点，
-	 * 但 TAIL 已覆盖 RETURN 的语义（RETURN 仅在正常返回时触发，TAIL 在 RETURN 和 ATHROW 都触发），
+	 * 但两者语义等价（都仅在正常返回路径触发，不覆盖 ATHROW 异常路径），
 	 * RETURN 注入为冗余，已删除。仅保留 TAIL 注入。
 	 */
 	@Inject(
@@ -145,31 +149,31 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 		productivebeesgenesis$CURRENT_BLOCK_ENTITY.remove();
 	}
 
-	@Redirect(
+	@WrapOperation(
 			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;"),
-			remap = false
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;", remap = false),
+			require = 0
 	)
-	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range) {
+	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range, Operation<List<BlockPos>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipFarmer) {
 			return List.of();
 		}
-		return FarmerBee.findHarvestablesNearby(level, pos, range);
+		return original.call(level, pos, range);
 	}
 
 	@SuppressWarnings("unchecked")
-	@Redirect(
+	@WrapOperation(
 			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
-			remap = true
+			require = 0
 	)
-	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb) {
+	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb, Operation<List<T>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
 			return List.of();
 		}
-		return level.getEntitiesOfClass(clazz, aabb);
+		return original.call(level, clazz, aabb);
 	}
 
 	/**

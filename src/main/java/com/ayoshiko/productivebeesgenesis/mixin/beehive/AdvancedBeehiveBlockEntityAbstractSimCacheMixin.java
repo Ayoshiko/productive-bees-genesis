@@ -6,7 +6,9 @@ import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 /**
  * 高级蜂箱 isSim() 每 tick 缓存 Mixin。
@@ -30,19 +32,19 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 	@Unique
 	private boolean productivebeesgenesis$isSimCacheValue;
 
-	@Redirect(
+	@WrapOperation(
 			method = "tickBees(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;)V",
-			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z"),
-			remap = false
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z", remap = false),
+			require = 0
 	)
-	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity) {
+	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity, Operation<Boolean> original) {
 		Level level = blockEntity.getLevel();
 		long gameTime = level != null ? level.getGameTime() : -1L;
 		AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =
 				(AdvancedBeehiveBlockEntityAbstractSimCacheMixin) (Object) blockEntity;
 		if (gameTime != mixin.productivebeesgenesis$isSimCacheTick) {
 			mixin.productivebeesgenesis$isSimCacheTick = gameTime;
-			mixin.productivebeesgenesis$isSimCacheValue = blockEntity.isSim();
+			mixin.productivebeesgenesis$isSimCacheValue = original.call(blockEntity);
 		}
 		return mixin.productivebeesgenesis$isSimCacheValue;
 	}

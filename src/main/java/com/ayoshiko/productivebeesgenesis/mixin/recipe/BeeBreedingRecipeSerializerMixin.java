@@ -33,7 +33,22 @@ public abstract class BeeBreedingRecipeSerializerMixin {
 				ci.cancel();
 			}
 		} catch (Exception e) {
+			// 修复 v15 P1: catch 块必须 ci.cancel()，否则原版 toNetwork 继续执行
+			// 会再次访问 recipe.parent1/parent2/offspring.get() 并抛出异常，导致玩家加入世界崩溃。
+			// 写入 fallback 数据保证 buffer 格式完整（3 个 BeeIngredient + parentDeathChance），
+			// 客户端能正确反序列化。parentDeathChance 反射读取失败时用 0.0f 兜底。
 			BeeIngredientFallback.logSerializationError("BeeBreedingRecipe", e);
+			BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+			BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+			BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+			float deathChance = 0.0f;
+			try {
+				deathChance = recipe.parentDeathChance;
+			} catch (RuntimeException ignored) {
+				// recipe 字段访问失败时使用默认值 0.0f（外层 catch 已记录序列化错误日志）
+			}
+			buffer.writeFloat(deathChance);
+			ci.cancel();
 		}
 	}
 }

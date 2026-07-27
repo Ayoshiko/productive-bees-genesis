@@ -52,6 +52,14 @@ public abstract class BeeSpawningRecipeSerializerMixin {
 			}
 		} catch (Exception e) {
 			BeeIngredientFallback.logSerializationError("BeeSpawningRecipe", e);
+			// 防御性 fallback：异常时写入完整 fallback 数据包并取消原方法，
+			// 避免原 toNetwork 继续执行导致二次异常或返回部分填充的 Recipe。
+			Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.ingredient);
+			Ingredient.CONTENTS_STREAM_CODEC.encode(buffer, recipe.spawnItem);
+			buffer.writeInt(1); // 单个 fallback 输出
+			BeeIngredientFallback.writeFallbackBeeIngredient(buffer);
+			ByteBufCodecs.holderSet(Registries.BIOME).encode(buffer, recipe.biomes);
+			ci.cancel();
 		}
 	}
 }
