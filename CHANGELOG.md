@@ -23,6 +23,78 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.0] - 2026-07-27
+
+v2.0.0 是 SemVer MAJOR 版本，标志 MEK 蜂箱系统正式发布。本次更新引入 MEK 蜂箱系统、MEK 离心机系统重构、KubeJS 集成、ME/EME 蜂箱与离心机工厂扩展、配置系统模块化重构、网络包与安全限流系统、万象创世物品与宇宙渲染系统、客户端基础事件与渲染系统等重大功能。
+
+### 新增
+
+- **MEK 蜂箱系统**（apiary 包，71 个新文件）
+  - 基础蜂箱 + 17 个工厂等级（与离心机工厂一一对应）
+    - 原版 4 等级：Basic / Advanced / Elite / Ultimate
+    - ME 扩展 4 等级：Absolute / Supreme / Cosmic / Infinite
+    - EM 进化 5 等级：Overclocked / Quantum / Dense / Multiversal / Creative
+    - EME 扩展进化 4 等级：Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal
+  - 槽位体系：蜜蜂槽 / 输出槽 / 蜂笼槽 / 能量槽 / 流体罐 / PB 升级槽
+  - 喂食器系统：花朵槽矩阵管理，基础 3×3=9 槽，工厂版按蜂数动态扩展
+  - PB 升级系统：9 种升级类型（4 产量 + 2 时间 + 基因 + 蜜脾块 + 模拟）
+  - AE2 集成：物品/流体/能量输出，AppliedFlux 优先级切换
+  - 直接弹出：蜂箱相邻离心机时绕过 MEK Ejector 节流直连
+  - Jade 集成：显示蜜蜂状态、生产进度、AE2 网络状态
+  - GUI 标签页：排序 / 喂食器 / PB 升级 / 多流体罐
+
+- **MEK 离心机系统重构**（mek 包，85 个文件）
+  - 配方处理层：PbRecipeContext / PbRecipeProcessor / PbRecipeFinder / PbRecipeCompleter
+  - 万象创世：MyriadBatchPlanner / MyriadCreationsCache / MyriadCreationsHandler
+  - 升级支持：MekEmpUpgradeSupport / MekExtraUpgradeSupport
+  - AE2 集成：Ae2EnergyBridge / Ae2FluidPusher / Ae2OutputPusher（22 个文件）
+  - 多流体罐：MultiFluidTankHolder / MultiFluidSideConfigHandler / MultiFluidTankNbtCodec
+  - DevMode 管理：DevModeManager + DevModeCommand + DevModeStateSyncPacket
+
+- **KubeJS 集成**（compat/kubejs 包）
+  - ProductiveBeesGenesisKubeJSPlugin
+  - MyriadBeeEvents.REGISTER 事件
+  - 脚本可调用 addBreeding / addCentrifuge / addBeeProduce / addMekData
+
+- **ME/EME 蜂箱与离心机工厂扩展**（compat/mekanism_extras + compat/emextras）
+  - ME：4 个蜂箱工厂 + 4 个离心机工厂
+  - EME：4 个蜂箱工厂 + 4 个离心机工厂
+
+- **配置系统模块化重构**
+  - ConfigSectionRegistry + 5 个子类（Apiary / Centrifuge / FluidTankMultiplier / StackMultiplier / WindowPosition）
+
+- **网络包与安全限流系统**（network 包，19 个文件）
+  - ApiaryPayloadHandlers / Ae2PayloadHandlers
+  - PayloadRateLimiter（语义别名 + 玩家登出清理）
+  - NetworkSecurityConstants（集中字符串/列表长度限制）
+
+- **万象创世物品与宇宙渲染系统**
+  - ItemInfinityCreationComb / ItemInfinityCreationCombBlock / ItemInfinitySwordReplica
+  - CosmicRenderQueue / CosmicRenderTypes / BakedModelHalo / PerspectiveModel
+  - Iris 兼容：ShaderInstanceMixin
+  - 自定义 GLSL 着色器：cosmic.fsh/vsh/json + hell.fsh/vsh/json
+
+- **客户端基础事件与渲染系统**
+  - Jade 插件：JadeApiaryComponentProvider / JadeAe2StatusProvider
+  - JEI 集成：PbCentrifugeRecipeCategory
+  - Screen 系统：GuiMekCentrifuge / GuiMekCentrifugeFactory / FilterListScreen
+  - 蜂箱 GUI：GuiMekApiary / GuiApiarySortingTab / GuiFeederTab / GuiPbUpgradeTab / GuiMultiFluidTanksTab
+
+### 删除
+
+- **遗留 PB 风格离心机资源**：移除 335 个 textures + 10 个 models + 10 个 java 旧文件
+- **旧版 config/fml.toml**：已迁移到 neoforge.mods.toml
+
+### 变更
+
+- **BREAKING**：v2.0.0 是 SemVer MAJOR 版本
+- **BREAKING**：配置系统模块化重构（ConfigSectionRegistry + 5 个子类）
+- **BREAKING**：删除遗留 PB 风格离心机资源
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布为 SemVer MAJOR 版本（v1.8.1 → v2.0.0），包含 MEK 蜂箱系统、MEK 离心机系统重构、KubeJS 集成、ME/EME 工厂扩展、配置系统模块化重构、网络包与安全限流系统、万象创世物品与宇宙渲染系统、客户端基础事件与渲染系统等重大功能新增，并包含 BREAKING 变更（配置系统模块化重构、删除遗留 PB 风格离心机资源）。按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **MAJOR** 级别
+
 ## [1.8.1] - 2026-07-05
 
 ### 修复
