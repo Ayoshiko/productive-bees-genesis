@@ -177,7 +177,7 @@ public class RateLimitedItemHandler implements IItemHandler {
 	}
 
 	/** 测试/调试用：获取本 tick 已提取数量 */
-	public int getExtractedThisTick() {
+	int getExtractedThisTick() {
 		return extractedThisTick.get();
 	}
 }
