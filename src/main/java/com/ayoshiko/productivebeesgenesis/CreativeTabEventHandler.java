@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.ProductiveBees;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -20,10 +21,15 @@ import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 /**
  * 创造模式物品栏事件处理器
  * <br/>
- * 负责在万象创世蜜蜂被禁用时，从创造模式物品栏中隐藏其刷怪蛋。
+ * 根据万象创世蜜蜂的启用状态动态调整创造模式物品栏内容：
+ * <ul>
+ *   <li>启用时：向 PB 创造栏添加万象创世蜜脾和蜜脾块（createComb=false 时 PB 不会自动添加）</li>
+ *   <li>禁用时：从 PB 标签页和刷怪蛋标签页移除万象创世刷怪蛋</li>
+ * </ul>
  * <p>
- * 原理：拦截 {@link BuildCreativeModeTabContentsEvent} 事件，使用 {@link BuildCreativeModeTabContentsEvent#remove}
- * 方法从父标签页和搜索标签页中移除万象创世蜜蜂的刷怪蛋。
+ * 原理：拦截 {@link BuildCreativeModeTabContentsEvent} 事件，
+ * 启用时使用 {@link BuildCreativeModeTabContentsEvent#accept} 添加物品，
+ * 禁用时使用 {@link BuildCreativeModeTabContentsEvent#remove} 移除物品。
  */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public final class CreativeTabEventHandler {
@@ -33,20 +39,28 @@ public final class CreativeTabEventHandler {
 	/**
 	 * 拦截创造模式物品栏内容构建事件
 	 * <br/>
-	 * 当万象创世蜜蜂被禁用时，从创造模式物品栏中移除其刷怪蛋。
-	 * 使用 {@link BuildCreativeModeTabContentsEvent#remove} 方法同时从父标签页和搜索标签页中移除。
+	 * 根据配置决定操作：
+	 * <ul>
+	 *   <li>万象创世启用：向 PB 创造栏添加蜜脾和蜜脾块</li>
+	 *   <li>万象创世禁用：从创造栏移除万象创世刷怪蛋</li>
+	 * </ul>
 	 */
 	@SubscribeEvent
 	public static void onBuildCreativeModeTabContents(BuildCreativeModeTabContentsEvent event) {
-		// 检查配置是否加载以及万象创世是否被禁用
+		// 检查配置是否加载
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
 			return; // 配置未加载，不干预（保持默认行为）
 		}
+
 		if (ModConfig.SERVER.myriadCreationsEnabled.get()) {
-			return; // 万象创世已启用，无需隐藏
+			// 万象创世启用：向 PB 创造栏添加蜜脾和蜜脾块
+			if (event.getTabKey().equals(ProductiveBees.TAB_KEY)) {
+				addMyriadCreationsCombs(event);
+			}
+			return; // 启用时不执行移除逻辑
 		}
 
-		// 只处理 ProductiveBees 的标签页和刷怪蛋标签页
+		// 万象创世禁用：只处理 ProductiveBees 的标签页和刷怪蛋标签页
 		if (!event.getTabKey().equals(ProductiveBees.TAB_KEY)
 				&& !event.getTabKey().equals(net.minecraft.world.item.CreativeModeTabs.SPAWN_EGGS)) {
 			return;
@@ -61,6 +75,50 @@ public final class CreativeTabEventHandler {
 		removeSpawnEggsFromList(event.getParentEntries(), myriadSpawnEgg, event, CreativeModeTab.TabVisibility.PARENT_TAB_ONLY);
 		// 从搜索标签页中移除万象创世刷怪蛋
 		removeSpawnEggsFromList(event.getSearchEntries(), myriadSpawnEgg, event, CreativeModeTab.TabVisibility.SEARCH_TAB_ONLY);
+	}
+
+	/**
+	 * 向 PB 创造栏添加万象创世蜜脾和蜜脾块
+	 * <br/>
+	 * 当 createComb=false 时，PB 不会自动将万象创世蜜脾加入创造栏，需在此手动构造
+	 * 携带 bee_type 数据组件的物品栈并添加。PB 的 configurable_honeycomb /
+	 * configurable_comb_block 物品据此组件识别蜜脾种类，使其在创造栏和 JEI 中正确显示。
+	 * <p>
+	 * 重复添加保护：PB 创造栏可能已包含同物品但不同 bee_type 的条目（或相同 bee_type），
+	 * 直接 event.accept 会触发 "already exists in the tab's list" 异常。
+	 * 此处先遍历已有条目，匹配 ItemStack.matches（含组件比较），仅在不存在时添加。
+	 */
+	private static void addMyriadCreationsCombs(BuildCreativeModeTabContentsEvent event) {
+		ItemStack honeycomb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+		honeycomb.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+		safeAccept(event, honeycomb);
+
+		ItemStack combBlock = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
+		combBlock.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+		safeAccept(event, combBlock);
+	}
+
+	/**
+	 * 安全添加物品栈到创造栏 — 先检查是否已存在相同条目（含数据组件），避免重复添加异常
+	 */
+	private static void safeAccept(BuildCreativeModeTabContentsEvent event, ItemStack stack) {
+		// 检查父标签页和搜索标签页是否已存在相同条目
+		if (containsStack(event.getParentEntries(), stack) || containsStack(event.getSearchEntries(), stack)) {
+			return;
+		}
+		event.accept(stack);
+	}
+
+	/**
+	 * 检查条目列表是否已包含指定物品栈（含数据组件精确匹配）
+	 */
+	private static boolean containsStack(Collection<ItemStack> entries, ItemStack target) {
+		for (ItemStack entry : entries) {
+			if (ItemStack.matches(entry, target)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -100,7 +158,7 @@ public final class CreativeTabEventHandler {
 			if (stack.getItem() == ModItems.CONFIGURABLE_SPAWN_EGG.get()) {
 				var entityData = stack.get(net.minecraft.core.component.DataComponents.ENTITY_DATA);
 				if (entityData != null) {
-					var nbt = entityData.getUnsafe();
+					var nbt = entityData.copyTag();
 					if (nbt != null) {
 						String beeType = nbt.getString("type");
 						if (PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(beeType)) {

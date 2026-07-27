@@ -15,6 +15,10 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
+
+import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
+import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -120,7 +124,9 @@ public abstract class AbstractCombEventHandler {
 
 			return new CopyOnWriteArrayList<>(newTypes);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("更新蜜蜂类型缓存时发生错误", e);
+			// M9: LogThrottle 节流，避免缓存更新异常时刷屏
+			LogThrottle.warn("bee_type_cache_update",
+					"更新蜜蜂类型缓存时发生错误 (5秒内仅首条输出): {}", e.toString());
 			return new CopyOnWriteArrayList<>();
 		}
 	}
@@ -149,8 +155,33 @@ public abstract class AbstractCombEventHandler {
 					.orElse(null);
 			return recipe != null;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("hasCentrifugeRecipe 检查异常，保守返回 true", e);
+			// M9: LogThrottle 节流（for 循环内高频调用，异常持续时每秒触发 N 次）
+			LogThrottle.warn("has_centrifuge_recipe",
+					"hasCentrifugeRecipe 检查异常，保守返回 true (5秒内仅首条输出): {}", e.toString());
 			return true;
+		}
+	}
+
+	/**
+	 * 检查 BeeReloadListener 是否已加载数据（SubTask 1.3 + 1.4）
+	 * <p>
+	 * 用于区分 cachedBeeTypes 为 EMPTY 的两种原因：
+	 * <ul>
+	 *   <li>{@code false} — BeeReloadListener 未加载（缓存未就绪，短暂状态）</li>
+	 *   <li>{@code true} — BeeReloadListener 已加载但缓存为空（配置过滤过严，永久状态）</li>
+	 * </ul>
+	 *
+	 * @return true 如果 BeeReloadListener 已加载且数据非空
+	 */
+	public static boolean isBeeReloadListenerReady() {
+		try {
+			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
+			return beeData != null && !beeData.isEmpty();
+		} catch (Exception e) {
+			// M9: LogThrottle 节流，避免周期性检查异常时刷屏
+			LogThrottle.warn("bee_reload_check",
+					"检查 BeeReloadListener 状态时发生错误 (5秒内仅首条输出): {}", e.toString());
+			return false;
 		}
 	}
 
@@ -198,8 +229,11 @@ public abstract class AbstractCombEventHandler {
 				RandomHoneycombSelector.selectDistinctBeeTypes(maxTypes, random, cachedBeeTypes);
 		if (selectedTypes.isEmpty()) return;
 
+		// SubTask 6.1: 按权重比例分配 totalCount（替代 allocateEvenly），与工厂离心机路径统一
+		// SubTask 6.2: 保留 maxTypes = Math.min(9, totalCount) 限制（基础离心机无 STACK 升级）
+		double[] weights = WeightedTypeSelector.getInstance().getWeightsFor(selectedTypes);
 		Map<ResourceLocation, Integer> allocation =
-				RandomHoneycombSelector.allocateEvenly(totalCount, selectedTypes);
+				WeightedAllocation.allocateByWeight(totalCount, selectedTypes, weights);
 
 		Item baseItem = isCombBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
 		if (invHandler instanceof InventoryHandlerHelper.BlockEntityItemStackHandler outputHandler) {
@@ -209,10 +243,14 @@ public abstract class AbstractCombEventHandler {
 					output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
 					outputHandler.addOutput(output);
 				} catch (Exception e) {
-					ProductiveBeesGenesis.LOGGER.warn("追加随机蜜脾产出异常", e);
+					// M9: LogThrottle 节流（for 循环内，离心机完成配方时高频触发）
+					LogThrottle.warn("append_random_comb",
+							"追加随机蜜脾产出异常 (5秒内仅首条输出): {}", e.toString());
 					break;
 				}
 			}
+			// SubTask 6.3: 基础离心机路径同样记录产出,共用 WeightedTypeSelector 权重表
+			WeightedTypeSelector.getInstance().recordOutputs(allocation);
 		}
 	}
 }

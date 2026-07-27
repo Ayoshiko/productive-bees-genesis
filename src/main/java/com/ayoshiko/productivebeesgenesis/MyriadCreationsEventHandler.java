@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
@@ -74,6 +75,9 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	private static final Map<IItemHandlerModifiable, CombBlockCheckCache.BlockCheckCache> BLOCK_CHECK_CACHES =
 			Collections.synchronizedMap(new WeakHashMap<>());
 
+	/** 类型检查异常日志冷却器（静态上下文使用 ms 模式，避免高频类型判断异常刷屏） */
+	private static final LogThrottle typeCheckThrottle = new LogThrottle();
+
 	// ========== 事件订阅 ==========
 
 	/** 服务器tick事件 — 定期更新蜜蜂类型缓存 */
@@ -101,6 +105,21 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	public static void clearAllCaches() {
 		CombBlockCheckCache.clearCaches(BLOCK_CHECK_CACHES);
 		MyriadBeeTypeCache.clearAll();
+	}
+
+	/**
+	 * 查询万象创世类型缓存预热是否完成（SubTask 1.2 + 1.4）
+	 * <br/>
+	 * 供 {@link com.ayoshiko.productivebeesgenesis.mek.MyriadCreationsHandler} 在缓存为空时区分：
+	 * <ul>
+	 *   <li>{@code false} — 预热未完成，"缓存未就绪"（info 级别日志）</li>
+	 *   <li>{@code true} — 预热完成但仍为空，"配置过滤过严"（warn 级别日志）</li>
+	 * </ul>
+	 *
+	 * @return true 如果预热阶段已完成（无论缓存是否非空）
+	 */
+	public static boolean isBeeTypeCacheWarmupComplete() {
+		return MyriadBeeTypeCache.isWarmupComplete();
 	}
 
 	/**
@@ -157,6 +176,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 				ModItems.CONFIGURABLE_HONEYCOMB.get(),
 				snap.beeTypes(),
 				snap.honeycombTemplates(),
+				snap.honeycombTemplateByType(),
 				random);
 	}
 
@@ -171,6 +191,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 				ModItems.CONFIGURABLE_COMB_BLOCK.get(),
 				snap.beeTypes(),
 				snap.combBlockTemplates(),
+				snap.combBlockTemplateByType(),
 				random);
 	}
 
@@ -197,12 +218,31 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		return isMyriadCreationsHoneycomb(stack) || isMyriadCreationsCombBlock(stack);
 	}
 
+	/**
+	 * 万象创世功能是否启用的缓存值（volatile 读取避免重复配置查询）
+	 * <br/>
+	 * processPbRecipesAndUpdate 每 tick 调 32 次（16 myraid + 16 comb）isMyriadCreationsEnabled()，
+	 * 每次需 2 次 volatile read（ModConfigSpec.isLoaded + myraidConfigValue.get()）。
+	 * 缓存到 volatile 字段后单次访问仅 1 次 volatile read，
+	 * ModConfigEvent.Reloading 时通过 {@link #invalidateEnabledCache()} 同步更新。
+	 */
+	private static volatile boolean cachedMyriadEnabled = true;
+
 	/** 检查万象创世蜜蜂功能是否启用（配置未加载时默认启用，向后兼容） */
 	public static boolean isMyriadCreationsEnabled() {
+		// 单次 volatile 读 — 启动时默认 true，配置重载时由 invalidateEnabledCache 同步
+		return cachedMyriadEnabled;
+	}
+
+	/**
+	 * 同步万象创世启用状态缓存值 — 由 {@link ProductiveBeesGenesis} 在 ModConfigEvent.Reloading 中调用
+	 */
+	public static void invalidateEnabledCache() {
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
-			return true;
+			cachedMyriadEnabled = true;
+		} else {
+			cachedMyriadEnabled = ModConfig.SERVER.myriadCreationsEnabled.get();
 		}
-		return ModConfig.SERVER.myriadCreationsEnabled.get();
 	}
 
 	/** 检查是否为万象创世蜜蜂类型 */
@@ -220,7 +260,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾类型时发生错误", e);
+			final Exception cause = e;
+			typeCheckThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
+				ProductiveBeesGenesis.LOGGER.warn("检查蜜脾类型时发生错误"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
+			});
 		}
 		return false;
 	}
@@ -235,7 +279,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("检查蜜脾块类型时发生错误", e);
+			final Exception cause = e;
+			typeCheckThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
+				ProductiveBeesGenesis.LOGGER.warn("检查蜜脾块类型时发生错误"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
+			});
 		}
 		return false;
 	}
@@ -254,6 +302,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 判断两个物品是否为相同的 bee_type */
 	public static boolean isSameBeeType(ItemStack a, ItemStack b) {
+		if (a == null || b == null) return false;
 		if (a.isEmpty() || b.isEmpty()) return false;
 		ResourceLocation typeA = getBeeTypeFromStack(a);
 		ResourceLocation typeB = getBeeTypeFromStack(b);

@@ -6,6 +6,7 @@ import java.util.function.Predicate;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.FieldsAreNonnullByDefault;
@@ -35,6 +36,12 @@ public final class CombBlockCheckCache {
 
 	/** 空转拦截冷却时间：50ms ≈ 1游戏刻，加速环境下可覆盖多次tick调用 */
 	public static final long BLOCK_CHECK_COOLDOWN_NS = 50_000_000L;
+
+	/** shouldBlockOperation 异常日志节流器（ms 模式，5 秒冷却，避免加速环境刷屏） */
+	private static final LogThrottle blockCheckErrorThrottle = new LogThrottle();
+
+	/** hasOutputSpace 异常日志节流器（ms 模式，5 秒冷却，避免加速环境刷屏） */
+	private static final LogThrottle outputSpaceErrorThrottle = new LogThrottle();
 
 	/** 测试用ItemStack — Holder 类模式保证线程安全的延迟初始化 */
 	private static final class TestOutputStackHolder {
@@ -106,7 +113,11 @@ public final class CombBlockCheckCache {
 				return blocked;
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("shouldBlockOperation 检查异常", e);
+			// 实例节流（tryLogMs）+ 全局节流（LogThrottle.warn 静态方法，5 秒冷却）
+			// 使用 LogThrottle.warn 静态方法封装 logger 引用，避免直接暴露模组主类 logger
+			blockCheckErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+					LogThrottle.warn("comb_block_check_error", "shouldBlockOperation 检查异常"
+							+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), e));
 			return false;
 		}
 	}
@@ -143,7 +154,11 @@ public final class CombBlockCheckCache {
 			}
 			return false;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("检查输出空间时异常，回退为 false", e);
+			// 实例节流（tryLogMs）+ 全局节流（LogThrottle.warn 静态方法，5 秒冷却）
+			// 使用 LogThrottle.warn 静态方法封装 logger 引用，避免直接暴露模组主类 logger
+			outputSpaceErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+					LogThrottle.warn("comb_output_space_error", "检查输出空间时异常，回退为 false"
+							+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), e));
 			return false;
 		}
 	}

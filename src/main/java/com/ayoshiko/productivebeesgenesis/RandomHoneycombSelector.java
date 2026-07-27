@@ -13,6 +13,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -65,7 +66,9 @@ public final class RandomHoneycombSelector {
 			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(randomIndex));
 			return stack;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾时发生错误", e);
+			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
+			LogThrottle.error("random_honeycomb_gen_list",
+					"生成随机蜜脾时发生错误 (5秒内仅首条输出): {}", e.toString());
 			return createFallbackHoneycomb();
 		}
 	}
@@ -84,7 +87,9 @@ public final class RandomHoneycombSelector {
 			if (templates == null || templates.length == 0) return createFallbackHoneycomb();
 			return templates[ThreadLocalRandom.current().nextInt(templates.length)].copy();
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾时发生错误", e);
+			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
+			LogThrottle.error("random_honeycomb_gen_tpl",
+					"生成随机蜜脾时发生错误 (5秒内仅首条输出): {}", e.toString());
 			return createFallbackHoneycomb();
 		}
 	}
@@ -104,7 +109,9 @@ public final class RandomHoneycombSelector {
 			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(randomIndex));
 			return stack;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾块时发生错误", e);
+			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
+			LogThrottle.error("random_comb_block_gen_list",
+					"生成随机蜜脾块时发生错误 (5秒内仅首条输出): {}", e.toString());
 			return createFallbackCombBlock();
 		}
 	}
@@ -120,7 +127,9 @@ public final class RandomHoneycombSelector {
 			if (templates == null || templates.length == 0) return createFallbackCombBlock();
 			return templates[ThreadLocalRandom.current().nextInt(templates.length)].copy();
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error("生成随机蜜脾块时发生错误", e);
+			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
+			LogThrottle.error("random_comb_block_gen_tpl",
+					"生成随机蜜脾块时发生错误 (5秒内仅首条输出): {}", e.toString());
 			return createFallbackCombBlock();
 		}
 	}
@@ -201,12 +210,16 @@ public final class RandomHoneycombSelector {
 	 * <p>
 	 * 用于蜂箱高倍加速场景：先随机选取最多 9 种不同 bee_type，再把 totalCount
 	 * 按 {@link #allocateEvenly} 均匀分配，避免生成大量 count=1 的 ItemStack。
+	 * <p>
+	 * 性能优化：优先使用 {@code templateByType} Map 做 O(1) 模板查找，避免对大模板数组
+	 * 的 O(N) 线性扫描。Spark 显示 findTemplate 是 5.13ms 热点。
 	 *
-	 * @param totalCount     总数量
-	 * @param baseItem       物品类型（蜜脾/蜜脾块）
-	 * @param cachedBeeTypes 蜜蜂类型缓存
-	 * @param templates      预构建模板数组（与缓存顺序一致，用于 copyWithCount）
-	 * @param random         随机源
+	 * @param totalCount        总数量
+	 * @param baseItem          物品类型（蜜脾/蜜脾块）
+	 * @param cachedBeeTypes    蜜蜂类型缓存
+	 * @param templates         预构建模板数组（fallback 用，Map 缺失时回退）
+	 * @param templateByType    模板 Map（ResourceLocation → ItemStack），不可变快照
+	 * @param random            随机源
 	 * @return 聚合后的 ItemStack 列表
 	 */
 	public static List<ItemStack> generateAggregatedStacks(
@@ -214,6 +227,7 @@ public final class RandomHoneycombSelector {
 			Item baseItem,
 			List<ResourceLocation> cachedBeeTypes,
 			ItemStack[] templates,
+			Map<ResourceLocation, ItemStack> templateByType,
 			RandomSource random) {
 		if (totalCount <= 0) {
 			return List.of();
@@ -238,7 +252,10 @@ public final class RandomHoneycombSelector {
 				continue;
 			}
 			int remaining = count;
-			ItemStack template = findTemplate(templates, type);
+			// O(1) Map 查找优先；Map 为空（向后兼容）时回退到 O(N) 数组扫描
+			ItemStack template = (templateByType != null && !templateByType.isEmpty())
+					? templateByType.get(type)
+					: findTemplate(templates, type);
 			while (remaining > 0) {
 				int stackSize = Math.min(64, remaining);
 				if (template != null) {

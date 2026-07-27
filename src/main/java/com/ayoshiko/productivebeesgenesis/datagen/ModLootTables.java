@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 public final class ModLootTables {
 
 	public static LootTableProvider create(net.minecraft.data.PackOutput output,
-										   CompletableFuture<HolderLookup.Provider> lookupProvider) {
+			CompletableFuture<HolderLookup.Provider> lookupProvider) {
 		return new LootTableProvider(output, Collections.emptySet(),
 				List.of(new LootTableProvider.SubProviderEntry(ModBlockLootSubProvider::new, LootContextParamSets.BLOCK)),
 				lookupProvider);

@@ -12,14 +12,33 @@ import com.ayoshiko.productivebeesgenesis.init.ModCreativeTabs;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
+import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.MekApiaryEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryBlockType;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekApiaryMEBlockType;
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
+import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
+import com.ayoshiko.productivebeesgenesis.mek.MyriadBatchPlanner;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
+import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CapabilityRegistrar;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
+import com.ayoshiko.productivebeesgenesis.network.ModPayloads;
+import com.ayoshiko.productivebeesgenesis.network.PayloadRateLimiter;
+import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
+
+import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +54,9 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
@@ -52,23 +73,17 @@ public final class ProductiveBeesGenesis {
 
 	private static final String PRODUCTIVE_BEES_MOD_ID = "productivebees";
 
-	/**
-	 * 配方版本号 — 每次 /reload 或数据包重载时递增
-	 * <br/>
-	 * 用于通知所有 PB 配方处理器（基础离心机和工厂版）清空 SMELTING/PB 配方缓存，
-	 * 避免重载后仍使用旧的缓存结果（例如新增/删除配方后缓存未失效导致输入被错误处理）。
-	 * <p>
-	 * 使用 {@link AtomicLong} 保证原子递增：虽然 TagsUpdatedEvent 在主线程触发，
-	 * 但部分模组或自定义集成可能在异步上下文触发重载事件。AtomicLong 防御性地保证
-	 * 递增操作在所有场景下都是原子的，避免丢失更新。
-	 */
-	public static final AtomicLong recipeVersion = new AtomicLong(0L);
+	/** 配方版本号 — 每次 /reload 或数据包重载时递增,通知所有 PB 配方处理器清空缓存。AtomicLong 保证原子递增。 */
+	public static final AtomicLong RECIPE_VERSION = new AtomicLong(0L);
 
 	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
 
 		// 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 DeferredRegister.register() 之前
 		initMekCentrifugeExtensions();
+
+		// 初始化 Mek 蜂箱扩展（ME/EME 两层工厂蜂箱）— 必须在 DeferredRegister.register() 之前
+		initMekApiaryExtensions();
 
 		// 注册 DeferredRegister 到 mod 事件总线
 		registerDeferredRegisters(eventBus);
@@ -89,15 +104,8 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）
-	 * <br/>
-	 * 必须在 {@link #registerDeferredRegisters(IEventBus)} 之前完成所有动态注册，
-	 * 因为 registerXxxFactories 等方法会动态向 ModBlocks.BLOCKS 等 DeferredRegister 添加条目，
-	 * 必须在 BLOCKS.register(eventBus) 之前完成。
-	 * <p>
-	 * 顺序依赖（每层）：
-	 * initXxxTiers(创建BlockType，使用懒加载Supplier) → registerXxxFactories(需要BlockType)
-	 * → registerXxxFactoryTiles(需要DeferredBlock) → registerXxxFactoryItems(需要DeferredBlock)
+	 * 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 registerDeferredRegisters 之前完成。
+	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems
 	 */
 	private void initMekCentrifugeExtensions() {
 		// EM 扩展
@@ -117,6 +125,82 @@ public final class ProductiveBeesGenesis {
 		ModBlocks.registerEMEFactories();
 		ModBlockEntities.registerEMEFactoryTiles();
 		ModItems.registerEMEFactoryItems();
+	}
+
+	/**
+	 * 初始化 Mek 蜂箱扩展（ME/EME 两层工厂蜂箱）— 必须在 registerDeferredRegisters 之前完成。
+	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems
+	 * EME 依赖 ME：initEMETiers 需要 ME ABSOLUTE BlockType;ME 未加载时传 null,EME 仍可独立注册。
+	 */
+	private void initMekApiaryExtensions() {
+		// EM 扩展（EvolvedMekanism）— EM 优先于 ME，ULTIMATE 升级到 EM OVERCLOCKED 蜂箱工厂
+		// EM 通过 Mixin 扩展 FactoryTier 枚举，复用 TileEntityMekApiaryFactory，不需要独立 BlockType 类
+		if (MekCompatHooks.isEvolvedMekanismLoaded()) {
+			MekApiaryFactoryBlockType.initEMTiers();
+			ModBlocks.registerEMApiaryFactories();
+			ModBlockEntities.registerEMApiaryFactoryTiles();
+			ModItems.registerEMApiaryFactoryItems();
+		}
+
+		// ME 扩展 — 守卫避免 MekApiaryMEBlockType 类加载触发 NoClassDefFoundError
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			MekApiaryMEBlockType.initMETiers(MekApiaryFactoryBlockType.ULTIMATE_MEK_APIARY_FACTORY);
+			ModBlocks.registerMEApiaryFactories();
+			ModBlockEntities.registerMEApiaryFactoryTiles();
+			ModItems.registerMEApiaryFactoryItems();
+		}
+
+		// EME 扩展 — 守卫避免 MekApiaryEMEBlockType 类加载触发 NoClassDefFoundError
+		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			// 获取 ME ABSOLUTE 蜂箱工厂 BlockType（ME 未加载时为 null，EME 仍可独立注册）
+			// 通过反射获取 ExtraFactoryTier.ABSOLUTE，避免主类编译期硬依赖 ME 模组
+			BlockTypeTile<?> meAbsoluteApiaryFactory = resolveMEAbsoluteTierAndApiaryFactory();
+			// 传入 ULTIMATE 蜂箱工厂，为其添加 EME 升级链（指向 EME ABSOLUTE_OVERCLOCKED 蜂箱）
+			MekApiaryEMEBlockType.initEMETiers(
+					MekApiaryFactoryBlockType.ULTIMATE_MEK_APIARY_FACTORY,
+					meAbsoluteApiaryFactory);
+			ModBlocks.registerEMEApiaryFactories();
+			ModBlockEntities.registerEMEApiaryFactoryTiles();
+			ModItems.registerEMEApiaryFactoryItems();
+		}
+	}
+
+	/**
+	 * 反射获取 ME 的 ABSOLUTE 蜂箱工厂 BlockType
+	 * <br/>
+	 * 主类不能直接引用 {@code ExtraFactoryTier}（ME 可选依赖），否则 ME 未加载时
+	 * 主类方法字节码验证会触发 NoClassDefFoundError。此方法通过反射读取
+	 * {@code ExtraFactoryTier.ABSOLUTE} 静态字段，再调用
+	 * {@link MekApiaryMEBlockType#getMEApiaryFactoryType(Object)}（参数为 Object）。
+	 * ME 未加载或反射失败时返回 null，EME 蜂箱升级链将不包含 ME ABSOLUTE 跨系统升级（安全降级）。
+	 *
+	 * @return ME ABSOLUTE 蜂箱工厂 BlockType，ME 未加载或反射失败时返回 null
+	 */
+	@org.jetbrains.annotations.Nullable
+	private BlockTypeTile<?> resolveMEAbsoluteTierAndApiaryFactory() {
+		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
+			return null;
+		}
+		try {
+			Class<?> tierClass = Class.forName("com.jerry.mekextras.common.tier.ExtraFactoryTier");
+			Object meAbsoluteTier = tierClass.getField("ABSOLUTE").get(null);
+			if (meAbsoluteTier == null) {
+				return null;
+			}
+			return MekApiaryMEBlockType.getMEApiaryFactoryType(meAbsoluteTier);
+		} catch (ClassNotFoundException e) {
+			// ME 已加载但类路径异常（理论上不应发生），安全降级
+			LOGGER.warn("反射加载 ExtraFactoryTier 失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
+			return null;
+		} catch (NoSuchFieldException | IllegalAccessException e) {
+			// ABSOLUTE 字段被移除/重命名/访问受限，安全降级
+			LOGGER.warn("反射读取 ExtraFactoryTier.ABSOLUTE 失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
+			return null;
+		} catch (LinkageError e) {
+			// ME 模组类初始化失败（ExceptionInInitializerError 等），安全降级
+			LOGGER.warn("ExtraFactoryTier 类初始化失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
+			return null;
+		}
 	}
 
 	/**
@@ -148,6 +232,7 @@ public final class ProductiveBeesGenesis {
 	 *   <li>跨字段联合校验并自动修正无效组合（Task 13）</li>
 	 *   <li>应用蜜蜂属性覆盖（按存档生效）</li>
 	 *   <li>重载时额外失效万象创世过滤缓存（Task 15）</li>
+	 *   <li>重载时失效蜂箱槽位上限缓存（Task 3 — stackMultiplier 依赖配置，需主动失效）</li>
 	 * </ol>
 	 */
 	private void registerConfigListeners(IEventBus eventBus) {
@@ -166,7 +251,19 @@ public final class ProductiveBeesGenesis {
 				}
 				BeeConfigApplier.applyOverrides();
 				MyriadCreationsEventHandler.invalidateFilterCache();
+				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
+				MyriadCreationsEventHandler.invalidateEnabledCache();
+				// 槽位倍率配置不采用热更新 — 输入/输出槽倍率（apiaryStackXxx、
+				// mekCentrifugeStackXxx、mekCentrifugeInputStackXxx）仅在游戏重启后生效。
+				// 槽位首次 getLimit 时读取配置并永久缓存（MULTIPLIER_VERSION 永不递增），
+				// 配置文件修改不影响已运行的槽位实例，避免热重载导致的性能抖动。
 			}
+			// 通知 RecipeReloadRetryManager 检测 EM/ME 配置死循环（Task 8）
+			// 注：放在 SERVER_SPEC 判断之外 — EM/ME 配置重载事件不匹配我们的 spec，
+			// 但仍需通知死循环检测器进行死循环判定
+			RecipeReloadRetryManager.onConfigFileChanged(
+					event.getConfig().getFullPath().toString(),
+					event.getConfig().getModId());
 		});
 	}
 
@@ -185,7 +282,7 @@ public final class ProductiveBeesGenesis {
 	 * 注册 NeoForge 事件总线监听器（游戏运行时事件）
 	 */
 	private void registerNeoForgeEventBusListeners() {
-		// 监听数据重载事件（/reload、数据包变更、服务器启动）— 递增 recipeVersion，
+		// 监听数据重载事件（/reload、数据包变更、服务器启动）— 递增 RECIPE_VERSION，
 		// 通知所有 PB 配方处理器清空 SMELTING/PB 配方缓存。
 		// TagsUpdatedEvent 在所有 reload listener（含配方重载）完成后触发，是重置缓存的可靠信号。
 		NeoForge.EVENT_BUS.addListener(this::onTagsReload);
@@ -193,31 +290,74 @@ public final class ProductiveBeesGenesis {
 		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
 		// 注册配方重载器的延迟重试 tick 处理器 — 处理首次进入世界时配置未加载的情况
 		NeoForge.EVENT_BUS.addListener(BeeRecipeReloader::onServerTick);
+		// 注册服务端 tick 时间监测器 — 通过 Pre/Post 监听器记录每 tick 实际耗时（MSPT），
+		// 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用
+		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPre);
+		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPost);
+		// 注册开发者模式命令 — /productivebeesgenesis dev on|off|status|<feature> on|off
+		// 使用内存状态而非配置文件，避免生产环境意外持久化
+		NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+		// 玩家登录时同步开发者模式状态到客户端（控制创造标签页开发物品可见性）
+		NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+		// 玩家下线时清理 PayloadRateLimiter 与 ModPayloads 频次限制缓存（防止离线玩家 UUID 残留）（Task 9）
+		NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
+			PayloadRateLimiter.onPlayerLogout(event.getEntity().getUUID());
+			ModPayloads.clearFilterSyncRateLimit(event.getEntity().getUUID());
+		});
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
 	}
 
 	/**
-	 * 标签/配方重载完成回调 — 递增配方版本号、失效缓存、重建离心配方索引
-	 * <br/>
-	 * TagsUpdatedEvent 在所有 reload listener（包括 RecipeManager 和标签重载）完成后触发，
-	 * 无论是 /reload 命令、数据包变更还是服务器启动都会触发。
-	 * 递增 recipeVersion 使所有 PbRecipeProcessor 和 TileEntityMekCentrifuge 在下次 tick 时
-	 * 检测到版本号变化，从而清空 SMELTING/PB 配方缓存，确保使用最新的配方数据。
-	 * 同时失效 BeeInfoHelper 的蜜蜂类型缓存，使下次 GUI 查询返回最新注册的蜜蜂类型。
-	 * <p>
-	 * 重建 {@link CentrifugeRecipeIndex} 离心配方索引，使 findPbRecipe 和 createCombBlockRecipe
-	 * 的 O(1) 索引查找使用最新的配方数据。仅服务端重建（客户端无离心配方处理）。
+	 * 标签/配方重载完成回调 — 递增配方版本号、失效缓存、重建离心配方索引。
+	 * 失效 BeeInfoHelper/BeeProduceProcessor/PbRecipeCompleter/MyriadBatchPlanner/CombFuzzyMatcher 缓存。
+	 * Task 16.3 同步失效 BeeProduceProcessor 产出配方缓存(静态共享)。
 	 */
 	private void onTagsReload(TagsUpdatedEvent event) {
-		long newVersion = recipeVersion.incrementAndGet();
+		long newVersion = RECIPE_VERSION.incrementAndGet();
 		BeeInfoHelper.invalidateCache();
+		// 失效机械蜂箱产出配方缓存（Task 16.3 — 静态缓存全局失效）
+		BeeProduceProcessor.invalidateCache();
+		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
+		PbRecipeCompleter.invalidateRecipeOutputsCache();
+		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
+		MyriadBatchPlanner.clearTemplateCache();
+		// 失效 AE2 蜜脾模糊匹配缓存（AE2 未加载时跳过，避免 NoClassDefFoundError）（Task 20）
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			CombFuzzyMatcher.clearCache();
+		}
 		// 重建离心配方索引（仅服务端，客户端无 ServerLevel）
 		var server = ServerLifecycleHooks.getCurrentServer();
 		if (server != null) {
 			CentrifugeRecipeIndex.rebuild(server.overworld());
 		}
 		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", newVersion);
+	}
+
+	/**
+	 * 注册命令 — 开发者模式命令树
+	 * <br/>
+	 * 提供统一的开发调试入口，命令树详见 {@link DevModeCommand#register}。
+	 */
+	private void onRegisterCommands(RegisterCommandsEvent event) {
+		DevModeCommand.register(event);
+	}
+
+	/**
+	 * 玩家登录回调 — 同步开发者模式状态到新加入的客户端
+	 * <br/>
+	 * 由于 DevModeManager 状态仅存在于服务端内存，新加入的客户端默认 masterEnabled=false。
+	 * 通过登录事件推送当前状态，确保创造标签页开发物品可见性与服务端一致。
+	 */
+	private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+		if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+			return;
+		}
+		DevModeStateSyncPacket packet = new DevModeStateSyncPacket(
+				DevModeManager.isEnabled(),
+				DevModeManager.getFeatureStates()
+		);
+		net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer, packet);
 	}
 
 	/**
@@ -234,28 +374,37 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 服务器停止回调
-	 * <br/>
-	 * 清理静态缓存防止跨存档数据泄漏：
-	 * <ul>
-	 *   <li>{@link CentrifugeRecipeIndex} — 离心配方索引（持有 ServerLevel 引用）</li>
-	 *   <li>{@link BeeInfoHelper} — 蜜蜂类型缓存和配方索引（可能持有过期配方引用）</li>
-	 *   <li>{@link MyriadCreationsEventHandler} — 万象创世类型缓存与模板数组</li>
-	 *   <li>{@link RecipeReloadRetryManager} — 延迟重试上下文</li>
-	 * </ul>
-	 * 这些静态缓存在服务器停止后不再有用，主动清理可防止：
-	 * 1) 旧存档的数据泄漏到新存档（例如配方/蜜蜂类型列表）
-	 * 2) 持有的 ServerLevel/RecipeManager 引用阻碍 GC
+	 * 服务器停止回调 — 清理静态缓存防止跨存档数据泄漏:
+	 * CentrifugeRecipeIndex/BeeInfoHelper/BeeProduceProcessor/MyriadCreationsEventHandler/
+	 * RecipeReloadRetryManager/AbstractCombEventHandler.ThreadLocals/PayloadRateLimiter/MyriadBatchPlanner/
+	 * CombFuzzyMatcher/ServerTickTimeMonitor。每个清理独立 try-catch,单个失败不中断后续。
 	 */
 	private void onServerStopped(ServerStoppedEvent event) {
 		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
 		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
+		// 清理机械蜂箱产出配方缓存（Task 16.3 — 静态缓存防止跨存档泄漏）
+		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
 		safeClear(MyriadCreationsEventHandler::clearAllCaches, "MyriadCreationsEventHandler");
 		// 清理 BeeRecipeReloader 延迟重试上下文 — 防止持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC
 		safeClear(RecipeReloadRetryManager::clearPendingRetryContext, "RecipeReloadRetryManager");
 		// 清理 AbstractCombEventHandler 的 ThreadLocal — 防止线程池复用场景下引用残留
 		safeClear(AbstractCombEventHandler::clearThreadLocals, "AbstractCombEventHandler.ThreadLocals");
+		// 清理网络包频次限制器映射 — 防止跨存档玩家数据残留
+		safeClear(PayloadRateLimiter::clearAll, "PayloadRateLimiter");
+		// 清理万象批量规划器模板缓存 — 防止跨存档 bee_type 模板残留（Task 19）
+		safeClear(MyriadBatchPlanner::clearTemplateCache, "MyriadBatchPlanner.TEMPLATE_CACHE");
+		// 清理万象批量规划器 ThreadLocal 快照缓存 — 防止线程池复用场景下的引用残留
+		safeClear(MyriadBatchPlanner::clearThreadLocals, "MyriadBatchPlanner.snapshotCache");
+		// 清理 AE2 蜜脾模糊匹配缓存（AE2 未加载时跳过，避免 NoClassDefFoundError）（Task 20）
+		safeClear(() -> {
+			if (Ae2IntegrationLoader.isAe2Loaded()) {
+				CombFuzzyMatcher.clearCache();
+			}
+		}, "CombFuzzyMatcher.aeItemKeyToBeeTypeCache");
+		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
+		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
+		safeClear(LogThrottle::clearAll, "LogThrottle");
 	}
 
 	/**

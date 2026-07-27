@@ -1,5 +1,8 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainer;
+import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiary;
+import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.AbstractBakedModelCosmic;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.BakedModelHalo;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.CosmicRenderQueue;
@@ -12,19 +15,17 @@ import com.ayoshiko.productivebeesgenesis.client.screen.GuiEMExtraMekCentrifugeF
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import com.ayoshiko.productivebeesgenesis.item.ItemInfinitySwordReplica;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityEMExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.factory.TileEntityFactory;
 import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraft.client.renderer.item.ItemProperties;
-import net.minecraft.client.renderer.item.ItemPropertyFunction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -32,7 +33,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -69,6 +69,14 @@ public final class ProductiveBeesGenesisClient {
 		public static void registerScreens(RegisterMenuScreensEvent event) {
 			// 基础MEK离心机Screen
 			event.register(ModMenuTypes.MEK_CENTRIFUGE.get(), GuiMekCentrifuge::new);
+
+			// MEK通用机械蜂箱Screen
+			// 使用 lambda 而非方法引用：GuiMekApiary 已泛型化，方法引用无法推断类型参数
+			event.register(ModMenuTypes.MEK_APIARY.get(),
+					(MekApiaryContainer menu, Inventory inv, Component title) -> new GuiMekApiary<>(menu, inv, title));
+
+			// 工厂版MEK通用机械蜂箱Screen（4个等级共用，运行时根据 tile.getTier() 区分）
+			event.register(ModMenuTypes.MEK_APIARY_FACTORY.get(), GuiMekApiaryFactory::new);
 
 			// 工厂版MEK离心机Screen  需要类型转换
 			event.register((MenuType) ModMenuTypes.MEK_CENTRIFUGE_FACTORY.get(),
@@ -148,25 +156,6 @@ public final class ProductiveBeesGenesisClient {
 		@SubscribeEvent
 		public static void onScreenRenderPost(ScreenEvent.Render.Post event) {
 			CosmicShaders.cosmicInventoryRender = false;
-		}
-	}
-
-	/**
-	 * 客户端初始化事件处理器
-	 * <br/>
-	 * 注册物品 property override，用于模型根据 NBT 切换。
-	 */
-	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
-	public static final class ClientSetupRegistry {
-		@SubscribeEvent
-		public static void onClientSetup(FMLClientSetupEvent event) {
-			event.enqueueWork(() -> {
-				ItemProperties.register(
-						ModItems.INFINITY_SWORD_REPLICA.get(),
-						ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "kill"),
-						(ItemPropertyFunction) (stack, level, entity, seed) ->
-								ItemInfinitySwordReplica.isKillModeActive(stack) ? 1.0F : 0.0F);
-			});
 		}
 	}
 }
