@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 
@@ -72,7 +72,7 @@ public final class JeiRecipeHider {
 				hideRecipesByBeeType(recipeManager, type, beeTypeString);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("无法隐藏万象创世{}配方: {}", recipeLabel, e.getMessage());
+			DevLog.warn("jei", "无法隐藏万象创世{}配方: {}", recipeLabel, e.getMessage());
 		}
 	}
 
@@ -106,7 +106,7 @@ public final class JeiRecipeHider {
 				recipeManager.hideRecipes(recipeType, recipesToHide);
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("隐藏配方时出错: {}", e.getMessage());
+			DevLog.warn("jei", "隐藏配方时出错: {}", e.getMessage());
 		}
 	}
 
@@ -154,7 +154,8 @@ public final class JeiRecipeHider {
 				}
 			}
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("isRecipeForBeeType 反射检查异常", e);
+			// DevLog 节流日志便于排查（JEI 反射路径，避免刷屏）
+			DevLog.warn("jei", "isRecipeForBeeType 反射检查异常: {}", e.toString());
 		}
 
 		return false;

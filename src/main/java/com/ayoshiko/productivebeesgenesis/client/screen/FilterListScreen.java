@@ -274,34 +274,17 @@ public final class FilterListScreen extends Screen {
 		}
 	}
 
-	/**
-	 * 包级桥接方法：移除指定组件。
-	 * <p>
-	 * {@code Screen.removeWidget} 为 protected 访问，组合式辅助类（如 {@link FilterListDragHandler}）
-	 * 非 Screen 子类无法直接调用，故通过此包级方法转发。
-	 */
+	/** 包级桥接：转发 protected removeWidget，供组合辅助类（如 FilterListDragHandler）调用 */
 	void removeWidgetBridge(Button btn) {
 		removeWidget(btn);
 	}
 
-	/**
-	 * 包级桥接方法：重建全部控件。
-	 * <p>
-	 * {@code Screen.rebuildWidgets} 为 protected 访问，需通过此包级方法转发给辅助类。
-	 */
+	/** 包级桥接：转发 protected rebuildWidgets，供组合辅助类调用 */
 	void rebuildWidgetsBridge() {
 		rebuildWidgets();
 	}
 
-	/**
-	 * 包级桥接方法：添加可渲染组件。
-	 * <p>
-	 * {@code Screen.addRenderableWidget} 为 protected 访问，组合式辅助类
-	 * （{@link FilterListInputHelper}、{@link FilterListActionBar}）非 Screen 子类无法直接调用，
-	 * 故通过此包级方法转发。
-	 *
-	 * @param widget 待添加的可渲染组件（Button、EditBox 等）
-	 */
+	/** 包级桥接：转发 protected addRenderableWidget，供 FilterListInputHelper/FilterListActionBar 调用 */
 	void addRenderableWidgetBridge(AbstractWidget widget) {
 		addRenderableWidget(widget);
 	}
@@ -355,10 +338,11 @@ public final class FilterListScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
 		if (scrollY > 0) {
-			scrollOffset = Math.max(0, scrollOffset - 1);
+			scrollOffset = scrollOffset - 1;
 		} else if (scrollY < 0) {
-			scrollOffset = Math.min(Math.max(0, beeTypes.size() - getVisibleEntryCount()), scrollOffset + 1);
+			scrollOffset = scrollOffset + 1;
 		}
+		clampScrollOffset();
 		// 仅重建条目删除按钮，避免全量 rebuildWidgets 重建搜索框/模式按钮等无关组件
 		dragHandler.rebuildEntryButtonsOnly();
 		return true;
@@ -459,12 +443,7 @@ public final class FilterListScreen extends Screen {
 		minecraft.setScreen(parent);
 	}
 
-	/**
-	 * 获取蜜蜂代表图标（委托给缓存类）
-	 *
-	 * @param beeTypeId 蜜蜂类型ID字符串
-	 * @return 图标 ItemStack，无法解析或世界未加载时返回空栈
-	 */
+	/** 获取蜜蜂代表图标（委托给缓存类，无法解析或世界未加载时返回空栈） */
 	ItemStack getBeeIcon(String beeTypeId) {
 		return beeInfoCache.getBeeIcon(beeTypeId);
 	}

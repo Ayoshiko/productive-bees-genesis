@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
@@ -71,10 +70,5 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 				.build();
 
 		list.addSmall(otherLabelWidget, otherButton);
-	}
-
-	@Override
-	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		super.render(graphics, mouseX, mouseY, partialTick);
 	}
 }

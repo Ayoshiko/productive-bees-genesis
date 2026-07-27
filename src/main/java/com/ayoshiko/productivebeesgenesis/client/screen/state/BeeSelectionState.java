@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -20,7 +19,9 @@ import net.minecraft.MethodsReturnNonnullByDefault;
  * <p>
  * 设计原则：单一职责（SRP），仅维护选择界面的运行时状态，不处理渲染或配置。
  * <br/>
- * 线程安全：客户端 GUI 单线程访问；折叠状态集合使用并发集合以符合项目线程安全规范。
+ * 线程安全：仅限客户端渲染线程（主线程）单线程访问。所有字段（含 Set 集合）
+ * 均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
+ * 及其组合组件在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
@@ -38,9 +39,9 @@ public final class BeeSelectionState {
 	private int scrollOffset = 0;
 	private boolean showOnlyUnadded = false;
 	private SortMode sortMode = SortMode.NAME;
-	private final Set<String> collapsedGroups = ConcurrentHashMap.newKeySet();
-	/** 已选蜜蜂类型集合 — 使用并发集合以符合项目线程安全规范，与 collapsedGroups 保持一致 */
-	private final Set<String> selectedBeeTypes = ConcurrentHashMap.newKeySet();
+	private final Set<String> collapsedGroups = new HashSet<>();
+	/** 已选蜜蜂类型集合 — 仅客户端主线程访问，使用普通 HashSet */
+	private final Set<String> selectedBeeTypes = new HashSet<>();
 
 	public String getSearchText() {
 		return searchText;

@@ -38,7 +38,7 @@ final class BeeSelectionRenderer {
 	 * 渲染可见的分组标题与蜜蜂条目。
 	 */
 	void renderDisplayList(GuiGraphics graphics, List<DisplayItem> displayItems,
-						   int scrollOffset, int mouseX, int mouseY, BeeSelectionState state) {
+			int scrollOffset, int mouseX, int mouseY, BeeSelectionState state) {
 		int visibleCount = screen.getVisibleEntryCount();
 		int endIndex = Math.min(scrollOffset + visibleCount, displayItems.size());
 
@@ -102,11 +102,11 @@ final class BeeSelectionRenderer {
 
 		String arrow = header.collapsed ? COLLAPSED_ARROW : EXPANDED_ARROW;
 		String text = arrow + " " + header.namespace + " (" + header.count + ")";
-		graphics.drawString(screen.getMinecraft().font, Component.literal(text), x + 4, y + 8, GuiColors.TEXT_WHITE);
+		graphics.drawString(screen.getMinecraft().font, text, x + 4, y + 8, GuiColors.TEXT_WHITE);
 	}
 
 	private void renderEntry(GuiGraphics graphics, BeeSelectionScreen.BeeEntry entry, int y,
-							 boolean hovered, BeeSelectionState state) {
+			boolean hovered, BeeSelectionState state) {
 		boolean added = screen.isAlreadyAdded(entry);
 		boolean selected = !added && state.isSelected(entry.typeId);
 
@@ -130,7 +130,7 @@ final class BeeSelectionRenderer {
 
 		if (!added) {
 			String checkbox = selected ? CHECKBOX_CHECKED : CHECKBOX_EMPTY;
-			graphics.drawString(screen.getMinecraft().font, Component.literal(checkbox), x + 2, y + 9, GuiColors.TEXT_WHITE);
+			graphics.drawString(screen.getMinecraft().font, checkbox, x + 2, y + 9, GuiColors.TEXT_WHITE);
 		}
 
 		if (!entry.icon.isEmpty()) {
@@ -153,12 +153,12 @@ final class BeeSelectionRenderer {
 		int productMaxWidth = listRight - productX;
 		if (productMaxWidth > 0) {
 			String productText = screen.getMinecraft().font.plainSubstrByWidth(entry.productInfo.getString(), productMaxWidth);
-			graphics.drawString(screen.getMinecraft().font, Component.literal(productText), productX, y + 10, GuiColors.TEXT_PRODUCT_LIGHT);
+			graphics.drawString(screen.getMinecraft().font, productText, productX, y + 10, GuiColors.TEXT_PRODUCT_LIGHT);
 		}
 
 		if (added) {
 			int checkX = x + width - 12;
-			graphics.drawString(screen.getMinecraft().font, Component.literal(ADDED_MARK), checkX, y + 9, GuiColors.TEXT_ADDED_MARK);
+			graphics.drawString(screen.getMinecraft().font, ADDED_MARK, checkX, y + 9, GuiColors.TEXT_ADDED_MARK);
 		}
 	}
 

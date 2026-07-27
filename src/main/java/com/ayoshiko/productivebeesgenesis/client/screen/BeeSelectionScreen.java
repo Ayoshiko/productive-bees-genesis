@@ -282,8 +282,8 @@ public final class BeeSelectionScreen extends Screen {
 
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		// 全屏纯色不透明背景，彻底消除后方世界虚化/透视对可读性的影响
-		graphics.fill(0, 0, width, height, GuiColors.BG_SCREEN_DARK);
+		// v9-L2 修复：复用 renderBackground 避免重复 fill 调用
+		renderBackground(graphics, mouseX, mouseY, partialTick);
 		// 标题
 		graphics.drawCenteredString(font, this.title, width / 2, 8, GuiColors.TEXT_TITLE);
 
@@ -315,7 +315,7 @@ public final class BeeSelectionScreen extends Screen {
 		// 滚动条（委托给滚动条辅助类）
 		scrollBar.renderScrollBar(graphics);
 
-		// 渲染组件（搜索框、按钮）— 手动渲染避免Screen默认renderBackground渲染半透明背景
+		// 渲染组件（搜索框、按钮）— 因未调用 super.render() 需手动渲染 renderables
 		for (var renderable : renderables) {
 			renderable.render(graphics, mouseX, mouseY, partialTick);
 		}
@@ -374,13 +374,19 @@ public final class BeeSelectionScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+		// v9-L3 修复：仅当鼠标在列表区域内时才处理滚动，避免悬停在按钮上时误滚列表
+		int listBottom = height - LIST_BOTTOM_MARGIN;
+		if (mouseY < LIST_TOP_Y || mouseY > listBottom) {
+			return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+		}
 		if (scrollY > 0) {
 			state.setScrollOffset(state.getScrollOffset() - 1);
 		} else if (scrollY < 0) {
-			int maxScroll = Math.max(0, sorter.getDisplayItems().size() - getVisibleEntryCount());
 			state.setScrollOffset(state.getScrollOffset() + 1);
-			state.clampScrollOffset(maxScroll);
 		}
+		// 统一钳制滚动偏移：搜索过滤可能使 maxScroll 缩小，两个方向滚动后均需校验上界，避免显示空白行
+		int maxScroll = Math.max(0, sorter.getDisplayItems().size() - getVisibleEntryCount());
+		state.clampScrollOffset(maxScroll);
 		updateScrollToTopButton();
 		return true;
 	}

@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.jei;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
@@ -17,9 +18,11 @@ import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.RecipeTypes;
 import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
+import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -72,7 +75,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 * <p>
 	 * registerRecipes 在 JEI 初始化和配方重载时调用，蜜脾块配方由蜜脾配方派生，
 	 * 缓存避免在重载时重复遍历所有蜜脾配方并创建大量 CentrifugeRecipe 对象。
-	 * 缓存键为 {@link ProductiveBeesGenesis#recipeVersion}，每次标签/配方重载时递增，
+	 * 缓存键为 {@link ProductiveBeesGenesis#RECIPE_VERSION}，每次标签/配方重载时递增，
 	 * 自动触发缓存失效。使用 volatile 保证跨线程可见性。
 	 */
 	private static volatile List<CentrifugeRecipe> cachedCombBlockRecipes = null;
@@ -145,7 +148,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 * 从PB的RecipeManager获取所有CentrifugeRecipe注册到JEI，
 	 * 并为每个有bee_type的蜜脾配方动态生成对应的蜜脾块配方（4倍产出）。
 	 * <p>
-	 * 蜜脾块配方生成结果会被缓存，缓存键为 {@link ProductiveBeesGenesis#recipeVersion}，
+	 * 蜜脾块配方生成结果会被缓存，缓存键为 {@link ProductiveBeesGenesis#RECIPE_VERSION}，
 	 * 配方重载时版本号递增自动失效，避免重复遍历蜜脾配方并创建大量派生对象。
 	 */
 	@Override
@@ -158,7 +161,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				Minecraft.getInstance().level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get());
 
 		// 检查缓存：配方版本号未变化时复用已生成的蜜脾块配方
-		long currentVersion = ProductiveBeesGenesis.recipeVersion.get();
+		long currentVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		List<CentrifugeRecipe> blockRecipes;
 		if (cachedCombBlockRecipes != null && cachedRecipeVersion == currentVersion) {
 			blockRecipes = cachedCombBlockRecipes;
@@ -180,7 +183,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 * 失效蜜脾块配方缓存
 	 * <p>
 	 * 通常由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 中间接触发
-	 * （recipeVersion 递增后，下次 registerRecipes 自动重建）。
+	 * （RECIPE_VERSION 递增后，下次 registerRecipes 自动重建）。
 	 * 此方法提供手动失效入口，供特殊场景使用。
 	 */
 	public static void invalidateCache() {
@@ -250,6 +253,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 */
 	@Override
 	public void registerRecipeCatalysts(IRecipeCatalystRegistration registry) {
+		// ===== 离心机催化剂 =====
 		// 基础MEK离心机 — 同时注册PB离心配方和SMELTING配方催化剂
 		registry.addRecipeCatalyst(new ItemStack(ModBlocks.MEK_CENTRIFUGE.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
 
@@ -272,6 +276,40 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		// EME扩展等级工厂（仅EME加载时，Map为空则跳过）
 		for (var entry : ModBlocks.EME_FACTORIES.entrySet()) {
 			registry.addRecipeCatalyst(new ItemStack(entry.getValue().get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
+		}
+
+		// ===== 蜂箱催化剂 =====
+		// 将所有MEK通用机械蜂箱注册为PB原版蜂箱配方的催化剂
+		// 玩家点击蜂箱的"Show Recipes"可跳转到PB蜂箱配方界面，查看可容纳的蜜蜂种类和产物
+		// 通过 PbCompatRefs 反射获取 PB compat 包的字段，避免直接引用 PB compat 类（软依赖隔离）
+		Object advBeehiveTypeObj = PbCompatRefs.getAdvancedBeehiveType();
+		if (!(advBeehiveTypeObj instanceof mezz.jei.api.recipe.RecipeType<?> advBeehiveType)) {
+			DevLog.warn("jei", "无法获取 PB ADVANCED_BEEHIVE_TYPE，跳过蜂箱催化剂注册");
+			return;
+		}
+
+		// 基础MEK蜂箱
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.MEK_APIARY.get()), advBeehiveType);
+
+		// 原版4等级蜂箱工厂
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.BASIC_MEK_APIARY_FACTORY.get()), advBeehiveType);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get()), advBeehiveType);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ELITE_MEK_APIARY_FACTORY.get()), advBeehiveType);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get()), advBeehiveType);
+
+		// EM扩展等级蜂箱工厂（仅EM加载时，Map为空则跳过）
+		for (var entry : ModBlocks.EM_APIARY_FACTORIES.entrySet()) {
+			registry.addRecipeCatalyst(new ItemStack(entry.getValue().get()), advBeehiveType);
+		}
+
+		// ME扩展等级蜂箱工厂（仅ME加载时，Map为空则跳过）
+		for (var entry : ModBlocks.ME_APIARY_FACTORIES.entrySet()) {
+			registry.addRecipeCatalyst(new ItemStack(entry.getValue().get()), advBeehiveType);
+		}
+
+		// EME扩展等级蜂箱工厂（仅EME加载时，Map为空则跳过）
+		for (var entry : ModBlocks.EME_APIARY_FACTORIES.entrySet()) {
+			registry.addRecipeCatalyst(new ItemStack(entry.getValue().get()), advBeehiveType);
 		}
 	}
 
@@ -300,9 +338,10 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		// 1. 隐藏万象创世蜜蜂的BeeIngredient
 		BeeIngredient myriadIngredient = BeeIngredientFactory.getOrCreateList().get(PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		if (myriadIngredient != null) {
-			var beeIngredientType = cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin.BEE_INGREDIENT;
-			if (beeIngredientType != null) {
-				ingredientManager.removeIngredientsAtRuntime(beeIngredientType, List.of(myriadIngredient));
+			// 通过 PbCompatRefs 反射获取 PB compat 包的字段，避免直接引用 PB compat 类（软依赖隔离）
+			Object beeIngredientTypeObj = PbCompatRefs.getBeeIngredientType();
+			if (beeIngredientTypeObj != null) {
+				removeBeeIngredientAtRuntime(ingredientManager, beeIngredientTypeObj, myriadIngredient);
 			}
 		}
 
@@ -313,13 +352,40 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				{"BEE_CONVERSION_TYPE", "转化"},
 				{"BEE_SPAWNING_TYPE", "蜂巢生成"}
 		};
+		// 通过 PbCompatRefs 反射获取 PB compat 包的类，避免直接引用 PB compat 类（软依赖隔离）
+		Class<?> pbJeiPluginClass = PbCompatRefs.getPbJeiPluginClass();
+		if (pbJeiPluginClass == null) {
+			return;
+		}
 		for (String[] f : fields) {
 			JeiRecipeHider.hideRecipesByReflection(
 					recipeManager,
-					cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin.class,
+					pbJeiPluginClass,
 					f[0], f[1],
 					PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		}
+	}
+
+	/**
+	 * 通过反射类型转换调用 ingredientManager.removeIngredientsAtRuntime
+	 * <br/>
+	 * PB 的 BEE_INGREDIENT 字段类型为 {@code IIngredientType<BeeIngredient>}，反射获取后为 Object。
+	 * 通过 unchecked cast 将 Object 转换为 {@code IIngredientType<T>}，并将 BeeIngredient 作为 T 传入。
+	 * 类型擦除保证运行时安全。
+	 *
+	 * @param manager    JEI ingredient 管理器
+	 * @param typeObj    反射获取的 IIngredientType 实例
+	 * @param ingredient 要移除的 ingredient（BeeIngredient）
+	 * @param <T>        ingredient 类型参数（运行时由 typeObj 决定，编译期无法确定）
+	 */
+	@SuppressWarnings("unchecked")
+	private static <T> void removeBeeIngredientAtRuntime(
+			IIngredientManager manager,
+			Object typeObj,
+			Object ingredient) {
+		IIngredientType<T> type = (IIngredientType<T>) typeObj;
+		T castIngredient = (T) ingredient;
+		manager.removeIngredientsAtRuntime(type, List.of(castIngredient));
 	}
 }
 

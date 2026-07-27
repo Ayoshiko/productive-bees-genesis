@@ -43,7 +43,7 @@ public record PbCentrifugeRecipeViewerType(
 	 * @param id            配方类型ID（用于JEI内部标识）
 	 * @param iconItem      图标物品（显示在JEI分类标签上）
 	 * @param textComponent 分类标题文本
-	 * @param iconItem2     工作站物品（作为催化剂注册）
+	 * @param altWorkstations 工作站物品（作为催化剂注册）
 	 */
 	public PbCentrifugeRecipeViewerType(ResourceLocation id, ItemLike iconItem, Component textComponent,
 										ItemLike... altWorkstations) {

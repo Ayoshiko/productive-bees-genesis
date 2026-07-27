@@ -34,8 +34,8 @@ public final class GuiColors {
 
 	// ========== 文本色 ==========
 
-	/** 标题文本色（保留原 6 位色值 0xFFFFFF，避免 alpha 差异导致行为变化） */
-	public static final int TEXT_TITLE = 0xFFFFFF;
+	/** 标题文本色（白色不透明，alpha=255） */
+	public static final int TEXT_TITLE = 0xFFFFFFFF;
 
 	/** 白色文本（复选框、表头、分组标题、模式高亮边框等） */
 	public static final int TEXT_WHITE = 0xFFFFFFFF;
@@ -125,6 +125,9 @@ public final class GuiColors {
 
 	/** 滚动条滑块灰色 */
 	public static final int SCROLLBAR_THUMB = 0xFFA0A0A0;
+
+	/** 滚动条边框暗灰（1:1复刻MEK原版scroll_list.png边框） */
+	public static final int SCROLLBAR_BORDER = 0xFF202020;
 
 	// ========== 指示色 ==========
 

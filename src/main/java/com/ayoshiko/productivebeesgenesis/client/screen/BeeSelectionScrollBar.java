@@ -50,11 +50,6 @@ final class BeeSelectionScrollBar extends AbstractVerticalScrollBar {
 	}
 
 	@Override
-	protected int getScreenHeight() {
-		return screen.height;
-	}
-
-	@Override
 	protected int getScrollBarWidth() {
 		return BeeSelectionScreen.SCROLL_BAR_WIDTH;
 	}

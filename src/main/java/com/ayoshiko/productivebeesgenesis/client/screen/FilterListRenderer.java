@@ -91,7 +91,7 @@ final class FilterListRenderer {
 	 * 渲染可见条目，包括拖拽手柄、复选框、序号、图标、类型ID与名称。
 	 */
 	void renderEntries(GuiGraphics graphics, List<String> beeTypes, Set<String> selectedTypes,
-					   int scrollOffset, int mouseX, int mouseY) {
+			int scrollOffset, int mouseX, int mouseY) {
 		int visibleCount = screen.getVisibleEntryCount();
 		int endIndex = Math.min(scrollOffset + visibleCount, beeTypes.size());
 
@@ -113,7 +113,7 @@ final class FilterListRenderer {
 	 * 在裁剪区域外渲染拖放指示线与被拖拽条目的半透明幽灵，避免被 scissor 裁剪。
 	 */
 	void renderDragOverlay(GuiGraphics graphics, List<String> beeTypes, int scrollOffset,
-						   int dragSourceIndex, int dragInsertIndex, int mouseX, int mouseY) {
+			int dragSourceIndex, int dragInsertIndex, int mouseX, int mouseY) {
 		if (dragSourceIndex < 0 || dragSourceIndex >= beeTypes.size()) {
 			return;
 		}

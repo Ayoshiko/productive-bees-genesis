@@ -36,9 +36,6 @@ abstract class AbstractVerticalScrollBar {
 	/** 屏幕高度（用于计算列表底部 Y 坐标，对应 {@code screen.height}） */
 	protected abstract int getScreenY();
 
-	/** 屏幕高度（保留扩展点，当前与 {@link #getScreenY()} 一致） */
-	protected abstract int getScreenHeight();
-
 	/** 滚动条宽度 */
 	protected abstract int getScrollBarWidth();
 

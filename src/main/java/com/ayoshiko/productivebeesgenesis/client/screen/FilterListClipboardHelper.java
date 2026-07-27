@@ -47,8 +47,9 @@ final class FilterListClipboardHelper {
 	 * @return JSON 数组格式字符串
 	 */
 	static String exportToJson(List<String> beeTypes) {
+		// v9-I2 修复：转义 JSON 特殊字符（引号、反斜杠），防止 beeTypeId 含特殊字符时生成非法 JSON
 		return beeTypes.stream()
-				.map(s -> "\"" + s + "\"")
+				.map(s -> "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
 				.collect(Collectors.joining(", ", "[", "]"));
 	}
 

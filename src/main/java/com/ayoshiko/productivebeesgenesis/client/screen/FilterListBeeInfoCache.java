@@ -29,8 +29,8 @@ import net.minecraft.world.level.Level;
  * <b>容量限制</b>：基于 LRU {@link LinkedHashMap}，超出 {@link #MAX_CACHE_SIZE} 自动淘汰最久未访问条目，
  * 防止长时间运行内存累积。
  * <p>
- * <b>线程安全</b>：客户端 GUI 单线程访问，使用单一锁对象 {@link #LOCK} 保护所有 map 的复合操作
- * （如 clear 跨多个 map），避免 clear 过程中其他线程观察到不一致状态。
+ * <b>线程安全</b>：客户端 GUI 主线程访问，使用单一锁对象 {@link #lock} 为跨 map 的复合操作
+ * 提供防御性同步，避免未来扩展时引入的潜在并发访问问题。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
@@ -41,7 +41,7 @@ final class FilterListBeeInfoCache {
 	private static final int MAX_CACHE_SIZE = 256;
 
 	/** 单一锁对象 — 保护跨多个 map 的复合操作（如 clear） */
-	private final Object LOCK = new Object();
+	private final Object lock = new Object();
 
 	/** 蜜蜂图标缓存（LRU，容量受限） */
 	private final Map<String, ItemStack> iconCache =
@@ -75,7 +75,7 @@ final class FilterListBeeInfoCache {
 	 * @return 图标 ItemStack，无法解析或世界未加载时返回空栈
 	 */
 	ItemStack getBeeIcon(String beeTypeId) {
-		synchronized (LOCK) {
+		synchronized (lock) {
 			ItemStack cached = iconCache.get(beeTypeId);
 			if (cached != null) {
 				return cached;
@@ -101,7 +101,7 @@ final class FilterListBeeInfoCache {
 	 * @return 显示名称组件
 	 */
 	Component getBeeDisplayName(String beeTypeId) {
-		synchronized (LOCK) {
+		synchronized (lock) {
 			Component cached = displayNameCache.get(beeTypeId);
 			if (cached != null) {
 				return cached;
@@ -123,7 +123,7 @@ final class FilterListBeeInfoCache {
 	 * @return 产物信息组件
 	 */
 	Component getBeeProductInfo(String beeTypeId) {
-		synchronized (LOCK) {
+		synchronized (lock) {
 			Component cached = productInfoCache.get(beeTypeId);
 			if (cached != null) {
 				return cached;
@@ -147,11 +147,11 @@ final class FilterListBeeInfoCache {
 	 * 在屏幕关闭（{@link FilterListScreen#onClose()}）时调用，释放图标/名称/产物缓存占用内存。
 	 * 虽 LRU 已限制上限，但屏幕关闭后缓存不再有用，主动清空可立即释放内存。
 	 * <p>
-	 * 线程安全：使用单一锁对象 {@link #LOCK} 保护跨多个 map 的清空操作，避免 clear 过程中
+	 * 线程安全：使用单一锁对象 {@link #lock} 保护跨多个 map 的清空操作，避免 clear 过程中
 	 * 其他线程观察到部分 map 已清空、部分未清空的不一致状态。
 	 */
 	void clear() {
-		synchronized (LOCK) {
+		synchronized (lock) {
 			iconCache.clear();
 			displayNameCache.clear();
 			productInfoCache.clear();

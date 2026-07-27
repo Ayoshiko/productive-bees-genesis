@@ -55,11 +55,6 @@ final class FilterListDragHandler extends AbstractVerticalScrollBar {
 	}
 
 	@Override
-	protected int getScreenHeight() {
-		return screen.height;
-	}
-
-	@Override
 	protected int getScrollBarWidth() {
 		return FilterListScreen.SCROLL_BAR_WIDTH;
 	}

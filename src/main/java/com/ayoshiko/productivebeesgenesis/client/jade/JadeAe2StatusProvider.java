@@ -14,7 +14,7 @@ import snownee.jade.api.config.IPluginConfig;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 
 /**
  * Jade AE2 网络状态显示组件
@@ -31,7 +31,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  * <b>数据同步</b>：服务端通过 {@link #appendServerData} 将状态 ordinal 写入 NBT（与 AE2 一致），
  * 客户端通过 {@link #appendTooltip} 读取并显示。避免客户端直接引用 AE2 类。
  * <p>
- * <b>显示条件</b>：仅当方块实体实现 {@link IAe2OutputHost} 且 AE2 集成已启用时显示。
+ * <b>显示条件</b>：仅当方块实体实现 {@link IAe2OutputHostBase} 且 AE2 集成已启用时显示。
  */
 public final class JadeAe2StatusProvider
 		implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
@@ -62,7 +62,7 @@ public final class JadeAe2StatusProvider
 	@Override
 	public void appendServerData(CompoundTag tag, BlockAccessor accessor) {
 		BlockEntity be = accessor.getBlockEntity();
-		if (!(be instanceof IAe2OutputHost host)) {
+		if (!(be instanceof IAe2OutputHostBase host)) {
 			tag.putByte(NBT_STATE, (byte) -1);
 			return;
 		}

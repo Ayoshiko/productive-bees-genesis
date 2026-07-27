@@ -7,6 +7,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.network.FilterConfigSyncPayload;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
@@ -120,7 +121,6 @@ final class FilterListActionBar {
 		if (screen.getMinecraft() == null) return;
 		String json = FilterListClipboardHelper.exportToJson(screen.beeTypes);
 		screen.getMinecraft().keyboardHandler.setClipboard(json);
-		ProductiveBeesGenesis.LOGGER.info("已将 {} 个蜜蜂类型导出到剪贴板", screen.beeTypes.size());
 	}
 
 	/**
@@ -151,9 +151,6 @@ final class FilterListActionBar {
 		if (message != null) {
 			showImportResult(message, result.buildColor());
 		}
-
-		ProductiveBeesGenesis.LOGGER.info("从剪贴板导入过滤列表：新增 {} 个，重复 {} 个，无效 {} 个",
-				result.getAdded().size(), result.getDuplicates(), result.getInvalid());
 	}
 
 	/**
@@ -233,8 +230,6 @@ final class FilterListActionBar {
 					screen.filterMode.name(),
 					screen.beeTypes
 			));
-			ProductiveBeesGenesis.LOGGER.info("已发送万象创世过滤配置同步包：模式={}, 条目数={}",
-					screen.filterMode, screen.beeTypes.size());
 		} catch (Exception e) {
 			// 数据包发送失败时记录日志，不阻断关闭
 			ProductiveBeesGenesis.LOGGER.error("发送过滤配置同步包失败", e);

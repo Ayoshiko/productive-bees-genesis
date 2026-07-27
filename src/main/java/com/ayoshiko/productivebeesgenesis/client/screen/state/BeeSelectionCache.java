@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.state;
 
+import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -17,8 +17,9 @@ import net.minecraft.MethodsReturnNonnullByDefault;
  * 不保存已选蜜蜂集合，避免下次打开界面时误操作。
  * 数据仅存于客户端内存，不写服务端配置。
  * <p>
- * 实现为静态单例，客户端 GUI 单线程访问即可保证安全；
- * 折叠状态集合使用并发集合以符合项目线程安全规范。
+ * 实现为静态单例，仅限客户端渲染线程（主线程）单线程访问即可保证安全；
+ * 所有字段（含 Set 集合）均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
+ * 在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
@@ -31,7 +32,7 @@ public final class BeeSelectionCache {
 	private int scrollOffset = 0;
 	private boolean showOnlyUnadded = false;
 	private String sortMode = BeeSelectionState.SortMode.NAME.name();
-	private final Set<String> collapsedGroups = ConcurrentHashMap.newKeySet();
+	private final Set<String> collapsedGroups = new HashSet<>();
 
 	private BeeSelectionCache() {
 		// 单例禁止外部实例化
