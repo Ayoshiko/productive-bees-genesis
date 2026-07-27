@@ -4,11 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.api.AutomationType;
 import mekanism.api.functions.ConstantPredicates;
 import mekanism.common.attachments.containers.ContainerType;
@@ -66,24 +64,18 @@ public class MekCentrifugeContainerRegistrar {
 		}
 
 		// ITEM — 根据工厂类型获取进程数
-		// 可选依赖守卫：ME/EME 类字面量在对应模组未加载时会触发 NoClassDefFoundError，
-		// 必须用 isXxxLoaded() 守卫将类引用包裹在条件块内，JVM 不会加载未到达路径中的类。
+		// 可选依赖隔离：ME/EME 类引用封装在 compat 包的辅助类中，
+		// 通过 isXxxLoaded() 守卫调用，本类不直接 import ME/EME 类，实现软依赖完全隔离。
 		int processes = 0;
 		FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
 		if (factoryTier != null) {
 			processes = factoryTier.processes;
 		} else {
 			if (MekCompatHooks.isMekanismExtrasLoaded()) {
-				ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
-				if (extraAttrTier != null && extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
-					processes = eft.processes;
-				}
+				processes = MEContainerSlotHelper.getProcesses(block);
 			}
 			if (processes == 0 && MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-				EMExtraAttributeTier<?> emeAttrTier = Attribute.get(block, EMExtraAttributeTier.class);
-				if (emeAttrTier != null && emeAttrTier.tier() instanceof EMExtraFactoryTier emeft) {
-					processes = emeft.processes;
-				}
+				processes = EMEContainerSlotHelper.getProcesses(block);
 			}
 		}
 

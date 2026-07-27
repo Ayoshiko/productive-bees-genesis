@@ -1,12 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -20,25 +20,27 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 /**
- * 万象创世处理器 — 封装万象创世蜜脾/蜜脾块的特殊处理路径
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责万象创世产物向随机
- * 蜜脾/蜜脾块的转化与插入，不涉及普通 PB CentrifugeRecipe 的处理流程。
+ * 万象创世处理器 — 封装万象创世蜜脾/蜜脾块的特殊处理路径。
+ * 从 {@link PbRecipeProcessor} 抽取，只负责万象创世产物向随机蜜脾/蜜脾块的转化与插入。
+ * 共享状态通过构造时传入的数组引用直接读写，线程安全由服务端单线程执行保证。
  * <p>
- * 共享状态：每进程的 {@code pbOperatingTicks}、{@code pbProcessing}、
- * {@code pbProcessingTime}、{@code cachedPbRecipes} 数组由 {@link PbRecipeProcessor} 持有，
- * 本类通过构造时传入的数组引用直接读写（Java 数组为引用语义，变更对协调器可见）。
- * 每 tick 缓存的能量/操作数由调用方作为方法参数传入，避免本类持有易变的每 tick 状态。
- * <p>
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+ * 职责分离（SRP）：
+ * <ul>
+ *   <li>本类：配方处理流程（能量计算、并行操作、批次完成）</li>
+ *   <li>{@link MyriadCreationsCache}：ticksForBase / maxOpsPerTick 缓存与输出空间判断</li>
+ *   <li>{@link MyriadCreationsLogger}：日志节流与洪水治理</li>
+ * </ul>
  */
 public class MyriadCreationsHandler {
 
-	/** 万象创世日志冷却间隔（tick） — 避免输出阻塞时 WARN 刷屏 */
-	private static final int MYRIAD_LOG_COOLDOWN = 100;
+	/** 万象创世输出槽总数（主+副1+副2 = 3，必须与 MekCentrifugeSlotManager 实际输出槽数一致，与 MyriadBatchPlanner 硬编码上限 3 匹配） */
+	private static final int OUTPUT_SLOT_COUNT = 3;
 
-	/** getTicksForBase 缓存失效间隔（tick） — 升级变更后最多 1 秒内反映新值 */
-	private static final int TICKS_CACHE_INTERVAL = 20;
+	/** 批量降级重试最大次数（每次减半） */
+	private static final int MAX_DEGRADATION_ATTEMPTS = 3;
+
+	/** 高 STACK 路径阈值：batchSize ≥ 此值时走 WeightedTypeSelector 工厂级共享选型 */
+	private static final int WEIGHTED_SELECTOR_THRESHOLD = 1024;
 
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
@@ -58,33 +60,26 @@ public class MyriadCreationsHandler {
 	/** PB离心配方缓存 — 每进程独立，与协调器共享（万象路径设为 null） */
 	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
 
-	/** 每进程上次打印"万象产物无法插入"日志的游戏刻 */
-	private final long[] lastMyriadFullLogTick;
+	/** 流体输出处理器 — 委托处理配方定义的流体输出与流体槽满载缓存 */
+	private final MyriadFluidOutputHandler fluidOutputHandler;
 
-	/** 每进程上次打印"万象类型缓存为空"日志的游戏刻 */
-	private final long[] lastMyriadEmptyCacheLogTick;
+	/** 每进程的万象创世概率池 — Task 3 简化为委托 WeightedTypeSelector */
+	private final MyriadProductPool[] myriadProductPools;
 
 	/** 可复用的输出槽列表（避免每次完成配方都创建新ArrayList） */
 	private final List<IInventorySlot> reusableOutputSlots = new ArrayList<>(3);
 
-	/**
-	 * 缓存的 getTicksForBase(baseTicksRequired) 结果 — 用于万象创世处理时间计算
-	 * <br/>
-	 * getTicksForBase 内部涉及升级组件遍历与 Math.pow 计算，在升级未变更时结果稳定，
-	 * 通过时间窗口缓存避免每 tick 每进程重复计算。升级变更后最多 20 tick（1秒）内自动反映新值。
-	 * <p>
-	 * 线程安全：cachedTicksForBase 和 cachedTicksForBaseAt 单字段读写原子，
-	 * 但字段对的复合读写非原子（{@link #getCachedTicksForBase()} 中的两次写入之间存在窗口）。
-	 * 方块实体在服务端单线程执行，多进程共享同一缓存（升级组件为工厂级共享），无跨线程竞态风险。
-	 */
-	private volatile int cachedTicksForBase = -1;
+	/** 缓存与过滤管理器（ticksForBase / maxOpsPerTick 缓存 + 输出槽满载判断） */
+	private final MyriadCreationsCache cache = new MyriadCreationsCache();
 
-	/** 上次计算 cachedTicksForBase 时的游戏刻（-1 表示未计算） */
-	private volatile long cachedTicksForBaseAt = -1L;
+	/** 日志管理器（带冷却和抑制计数的日志输出） */
+	private final MyriadCreationsLogger logger;
 
+	/** 构造万象创世处理器 */
 	public MyriadCreationsHandler(PbRecipeContext context, String logPrefix,
-								  int[] pbOperatingTicks, boolean[] pbProcessing,
-								  int[] pbProcessingTime, RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes) {
+			int[] pbOperatingTicks, boolean[] pbProcessing,
+			int[] pbProcessingTime, RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
+			PbRecipeFinder recipeFinder) {
 		this.context = context;
 		this.logPrefix = logPrefix;
 		this.pbOperatingTicks = pbOperatingTicks;
@@ -92,36 +87,25 @@ public class MyriadCreationsHandler {
 		this.pbProcessingTime = pbProcessingTime;
 		this.cachedPbRecipes = cachedPbRecipes;
 		int processes = context.processes();
-		this.lastMyriadFullLogTick = new long[processes];
-		this.lastMyriadEmptyCacheLogTick = new long[processes];
-		Arrays.fill(lastMyriadFullLogTick, -1L);
-		Arrays.fill(lastMyriadEmptyCacheLogTick, -1L);
+		this.fluidOutputHandler = new MyriadFluidOutputHandler(context, recipeFinder, logPrefix, processes);
+		this.logger = new MyriadCreationsLogger(logPrefix, context, processes);
+		this.myriadProductPools = new MyriadProductPool[processes];
+		for (int i = 0; i < processes; i++) {
+			// factoryKey = context（工厂实例），用于 WeightedTypeSelector 工厂级 tick 缓存的 WeakHashMap key
+			this.myriadProductPools[i] = new MyriadProductPool(context);
+		}
 	}
 
 	/**
-	 * 尝试处理万象创世蜜脾/蜜脾块（单进程）
-	 * <br/>
-	 * 万象创世蜜脾转化为随机蜜脾（最多3种，总数=生产力倍率）。
-	 * 万象创世蜜脾块转化为随机蜜脾块（最多3种，总数=生产力倍率*4）。
-	 * 使用PB原版离心机的标准处理时间。
-	 * <p>
-	 * 能量和操作数使用调用方（tryProcessPbRecipeInternal）已缓存的 cachedEnergyPerTick 和 cachedOperationsPerTick，
-	 * 避免在此方法中重复调用 getEnergyPerTick/operationsPerTick（可能涉及 Math.pow 计算）。
-	 * <p>
-	 * 能量采用批量扣除策略：循环内用局部变量追踪可用能量，循环结束后一次性 extract，
-	 * 避免每次 operation 都触发 BasicEnergyContainer.onContentsChanged 造成 listener 连锁开销
-	 * （与 PbRecipeProcessor 的批量提取优化保持一致）。
-	 *
-	 * @param processIndex            进程索引
-	 * @param input                   万象创世蜜脾或蜜脾块
-	 * @param cachedEnergyPerTick     本 tick 缓存的每 tick 能量消耗
-	 * @param cachedOperationsPerTick 本 tick 缓存的每 tick 操作数
-	 * @return true 正在处理万象创世配方
+	 * 尝试处理万象创世蜜脾/蜜脾块（单进程，使用调用方已缓存的能量和操作数）
 	 */
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
-											 long cachedEnergyPerTick, int cachedOperationsPerTick) {
+			long cachedEnergyPerTick, int cachedOperationsPerTick) {
+		// Task 3 性能优化：每 tick 缓存流体槽满载状态
+		fluidOutputHandler.initFluidTankFullCache();
+
 		// 万象创世使用固定的处理时间（参考PB原版离心机）
-		int processingTime = getCachedTicksForBase();
+		int processingTime = cache.getCachedTicksForBase(context);
 		pbProcessingTime[processIndex] = processingTime;
 
 		// 配方变更时重置进度
@@ -130,166 +114,167 @@ public class MyriadCreationsHandler {
 			pbOperatingTicks[processIndex] = 0;
 		}
 
-		// 检查能量是否足够
 		long availableEnergy = context.energyContainer().getEnergy();
-		if (availableEnergy < cachedEnergyPerTick) {
-			pbProcessing[processIndex] = true;
+		Level level = context.level();
+
+		// 计算每tick并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
+		// 并行处理：每tick进度+1，但每tick消耗effectiveOps倍能量和输入，完成时处理effectiveOps个输入
+		// SubTask 5.1: maxOpsPerTick 配置 100-tick CAS 缓存，对齐 PbRecipeProcessor:261-264
+		int maxOpsPerTick = cache.refreshAndGetMaxOps(level);
+		int effectiveOps = (maxOpsPerTick > 0 && cachedOperationsPerTick > 1)
+				? Math.min(cachedOperationsPerTick, maxOpsPerTick)
+				: cachedOperationsPerTick;
+
+		int inputCount = context.inputSlot(processIndex).getStack().getCount();
+		effectiveOps = Math.min(effectiveOps, inputCount);
+
+		// 能量检查：cachedEnergyPerTick 是 per-op 能量（不含 STACK 倍率，参考 PbRecipeProcessor 标准路径）
+		// 需按 effectiveOps 限流，避免 STACK 升级满级时只扣 50 FE/t（实际应扣 65536 * 50 = 3.27M FE/t）
+		if (cachedEnergyPerTick > 0) {
+			int energyLimitedOps = (int) Math.min(effectiveOps, availableEnergy / cachedEnergyPerTick);
+			if (energyLimitedOps <= 0) {
+				pbProcessing[processIndex] = false;
+				return false;
+			}
+			effectiveOps = energyLimitedOps;
+		}
+
+		if (effectiveOps <= 0) {
+			pbProcessing[processIndex] = false;
+			return false;
+		}
+
+		// 输出受阻且进度已满时不消耗能量
+		// Task 4 根因修复：流体满载不阻塞处理（万象创世流体是副产物，可跳过）
+		if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)
+				&& pbOperatingTicks[processIndex] >= processingTime) {
+			pbOperatingTicks[processIndex] = processingTime;
 			return true;
 		}
 
-		// 累加进度并消耗能量
+		// 激活处理
 		pbProcessing[processIndex] = true;
-		// MU扩展下每tick可处理多次（operationsPerTick>1），未加载MU时返回1
-		int opsRun = 0;
-		for (int op = 0; op < cachedOperationsPerTick; op++) {
-			if (availableEnergy < cachedEnergyPerTick) {
-				break;
+
+		// 并行处理：每tick进度只+1，完成时处理effectiveOps个输入
+		pbOperatingTicks[processIndex]++;
+
+		if (pbOperatingTicks[processIndex] >= processingTime) {
+			// 输出受阻时暂停处理（仅物品槽满载才阻塞，流体满载可跳过）
+			if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)) {
+				pbOperatingTicks[processIndex] = processingTime;
+				return true;
 			}
-			pbOperatingTicks[processIndex]++;
-			availableEnergy -= cachedEnergyPerTick;
-			opsRun++;
 
-			if (pbOperatingTicks[processIndex] >= processingTime) {
-				// 输出槽物理满时暂停处理，避免产物丢失；万象创世不再做类型数量预检
-				if (areOutputSlotsFull(processIndex)) {
-					pbOperatingTicks[processIndex] = processingTime;
-					break;
-				}
-
-				boolean success;
-				boolean usedBatchPath = false;
-				// 未安装 MU 速度升级或本批次仅 1 个输入时，回退到原单件处理路径
-				if (cachedOperationsPerTick <= 1) {
-					success = completeMyriadCreations(input, processIndex, context.productivityModifier());
-				} else {
-					int inputCount = context.inputSlot(processIndex).getStack().getCount();
-					int batchSize = Math.min(cachedOperationsPerTick, inputCount);
-					if (batchSize <= 1) {
-						success = completeMyriadCreations(input, processIndex, context.productivityModifier());
-					} else {
-						success = completeMyriadCreationsBatch(input, processIndex, batchSize);
-						usedBatchPath = success;
-					}
-				}
-
-				if (!success) {
-					pbOperatingTicks[processIndex] = processingTime;
-					break;
-				}
-				pbOperatingTicks[processIndex] = 0;
-				if (context.inputSlot(processIndex).getStack().isEmpty()) {
-					context.setPbActiveState(false, processIndex);
-					break;
-				}
-				// 批量路径一次性消耗了本 tick 全部 operationsPerTick 配额，直接结束本轮循环
-				if (usedBatchPath) {
-					break;
-				}
+			int actualOps;
+			if (effectiveOps <= 1) {
+				actualOps = completeMyriadCreations(input, processIndex, context.productivityModifier());
+			} else {
+				actualOps = completeMyriadCreationsBatch(input, processIndex, effectiveOps);
 			}
-		}
 
-		// 批量扣除能量 — 将本 tick 所有操作的能量一次性提取，
-		// 避免每次 operation 都触发 BasicEnergyContainer.onContentsChanged 造成 listener 连锁开销。
-		// 与 PbRecipeProcessor.tryProcessPbRecipeInternal 的批量提取优化保持一致。
-		if (opsRun > 0 && cachedEnergyPerTick > 0) {
-			context.energyContainer().extract((long) opsRun * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+			if (actualOps <= 0) {
+				// plan 失败时不卡死进度，保留当前进度下一 tick 重试（期间 Ejector 会自动弹出产物腾出空间）
+				// 不扣能量（无操作完成）
+				return true;
+			}
+			// 修复：按实际完成的操作数扣能量（与 PbRecipeProcessor 标准路径一致）
+			// 而非按 effectiveOps 扣（currentBatch 可能远小于 effectiveOps 导致能量过度扣除）
+			if (cachedEnergyPerTick > 0) {
+				context.energyContainer().extract((long) actualOps * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+			}
+			pbOperatingTicks[processIndex] = 0;
+			if (context.inputSlot(processIndex).getStack().isEmpty()) {
+				context.setPbActiveState(false, processIndex);
+			}
+		} else {
+			// 进度未满，本 tick 不完成操作但仍消耗能量（保持并行语义，参考 PbRecipeProcessor opsRun=effectiveOps 路径）
+			if (cachedEnergyPerTick > 0) {
+				context.energyContainer().extract((long) effectiveOps * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+			}
 		}
 
 		return true;
 	}
 
 	/**
-	 * 完成万象创世蜜脾/蜜脾块处理 — 转化为随机蜜脾/蜜脾块
+	 * 完成万象创世蜜脾/蜜脾块处理 — 按 bee_type 聚合后统一插入
 	 * <br/>
-	 * 万象创世蜜脾转化为随机蜜脾（最多3种，总数=生产力倍率）。
-	 * 万象创世蜜脾块转化为随机蜜脾块（最多3种，总数=生产力倍率*4）。
-	 * 使用MyriadCreationsEventHandler的随机类型选择和均匀分配算法。
-	 * <p>
-	 * 关键修复：
-	 * <ul>
-	 *   <li>按 bee_type 聚合产物后统一插入，同类型优先堆叠到同一槽</li>
-	 *   <li>不再预检输出槽类型数量，只以物理上能否完整插入作为暂停依据</li>
-	 *   <li>无法完全插入时返回 false，由调用方暂停；输入在全部产物插入成功后才会扣除</li>
-	 * </ul>
-	 *
-	 * @param input                万象创世蜜脾或蜜脾块
-	 * @param processIndex         进程索引
-	 * @param productivityModifier 生产力倍率
-	 * @return true 处理成功，false 应暂停等待输出槽空间
+	 * 返回实际完成的操作数（0 表示失败，1 表示单次操作成功）。
+	 * 调用方根据返回值扣除能量：0 不扣能量（保留进度重试），1 扣 1 * cachedEnergyPerTick。
 	 */
-	private boolean completeMyriadCreations(ItemStack input, int processIndex, int productivityModifier) {
+	private int completeMyriadCreations(ItemStack input, int processIndex, int productivityModifier) {
 		boolean isCombBlock = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		int modifier = Math.max(1, productivityModifier);
 
 		// 万象创世蜜脾块 = 4个蜜脾，输出总数乘以4
-		int totalCount = isCombBlock ? modifier * 4 : modifier;
+		int totalCount = isCombBlock ? (int) Math.min((long) modifier * 4, Integer.MAX_VALUE) : modifier;
 
-		// 限制种类数不超过3（输出槽数）和总数量
-		int maxTypes = Math.min(3, totalCount);
+		// 限制种类数不超过输出槽数和总数量
+		int maxTypes = Math.min(OUTPUT_SLOT_COUNT, totalCount);
 		// Task 23: 使用带缓存的类型选择，降低 256x 加速下每 tick 多次随机采样的开销
 		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(maxTypes, context.level());
 		if (selectedTypes.isEmpty()) {
-			// 缓存为空：不消耗输入，等待缓存重建后重试；按冷却期打印避免刷屏
-			if (canLogMyriad(processIndex, lastMyriadEmptyCacheLogTick)) {
-				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次处理（不消耗输入）", logPrefix, processIndex);
-			}
-			return true;
+			// 缓存为空时保留进度等待预热完成（不扣能量、不扣输入）
+			logger.logEmptyCacheAndPreserve(processIndex);
+			return 0;
 		}
 
-		// 均匀分配totalCount到selectedTypes，已按 bee_type 聚合
-		Map<ResourceLocation, Integer> allocation = MyriadCreationsEventHandler.allocateEvenly(totalCount, selectedTypes);
+		// SubTask 4.6: 概率池模式 — effectiveOps=1（本路径仅单次操作）时池返回原列表保留原版语义
+		Level level = context.level();
+		long currentTick = level != null ? level.getGameTime() : 0L;
+		selectedTypes = myriadProductPools[processIndex].getOrRefresh(selectedTypes, currentTick, 1, level);
+
+		// SubTask 5.4: 按权重比例分配 totalCount，权重高的类型获得较多产出（替代 allocateEvenly）
+		double[] weights = WeightedTypeSelector.getInstance().getWeightsFor(selectedTypes);
+		Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(totalCount, selectedTypes, weights);
 
 		Item baseItem = isCombBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
 
-		// 构建输出槽列表
 		buildOutputSlots(processIndex);
 
-		// 用 MyriadBatchPlanner 规划插入（纯模拟，不复制 ItemStack、不触发 listener）
-		// 修复原实现"部分插入后失败导致产物丢失"的 bug：plan 失败时不 apply，不扣输入
-		// 传入真实 tick 值以匹配批量路径的快照缓存键，提升跨路径缓存复用率
-		Level level = context.level();
-		long currentTick = level != null ? level.getGameTime() : 0L;
+		// 用 MyriadBatchPlanner 规划插入（纯模拟），plan 失败时不 apply 不扣输入
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(reusableOutputSlots, baseItem, allocation, currentTick);
 		if (!plan.isSuccess()) {
-			if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
-				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世产物无法完全插入，暂停", logPrefix, processIndex);
-			}
-			return false;
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{}", logPrefix, processIndex);
+			return 0;
 		}
 
-		// 执行计划：空槽 setStack、同类型槽 grow（零拷贝），由 endOutputBatch 统一触发标志位更新
+		// 执行计划 + 插入流体 + 扣除输入，全部在 begin/endOutputBatch 之内
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
+			// Task 4 根因修复：流体是万象创世的副产物，满载时跳过，不阻塞物品产出
+			// 检查流体槽是否已满，满载时跳过流体插入
+			boolean fluidFull = fluidOutputHandler.isFluidTankFull();
+			if (!fluidFull) {
+				// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
+				if (!fluidOutputHandler.insertFluidOutput(input, modifier, processIndex)) {
+					// v9-P2 修复：回收成功的 plan 防止对象池泄漏
+					MyriadBatchPlanner.recyclePlan(plan);
+					return 0;
+				}
+			}
 			MyriadBatchPlanner.apply(plan, reusableOutputSlots);
+			// 修复：每次操作只消耗1个输入，productivityModifier只影响输出数量不影响输入消耗
+			context.inputSlot(processIndex).shrinkStack(1, Action.EXECUTE);
+			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
+			WeightedTypeSelector.getInstance().recordOutputs(allocation);
 		} finally {
 			context.productivebeesgenesis$endOutputBatch(processIndex);
 		}
-
-		// 全部产物成功插入后才消耗输入（乘以生产力倍率）
-		context.inputSlot(processIndex).shrinkStack(modifier, Action.EXECUTE);
-		return true;
+		// Task 3 性能优化：insertFluidOutput 改变了流体槽内容，更新满载缓存避免循环内使用 stale 值
+		fluidOutputHandler.refreshFluidTankFullCache();
+		return 1;
 	}
 
 	/**
-	 * 批量完成万象创世蜜脾/蜜脾块处理
+	 * 批量完成万象创世蜜脾/蜜脾块处理 — 使用 MyriadBatchPlanner 计算最大可行 batch size，仅在所有产物成功插入后才扣除输入
 	 * <br/>
-	 * 在 Mekanism Unleashed 速度升级下，本 tick 已到达处理时间时一次性处理 batchSize 个输入，
-	 * 避免原循环每次只消耗 1 个输入导致的随机采样与插入开销。
-	 * 输出总数 = batchSize × 倍率（蜜脾块为 4，蜜脾为 1），均匀分配到最多 3 种蜜蜂类型上，
-	 * 使同类型产物更易堆叠，提高高倍加速下的吞吐。
-	 * <p>
-	 * 关键修复：不再从 {@code operationsPerTick} 开始逐级减半，而是先用
-	 * {@link MyriadBatchPlanner#planOrFindMaxBatch} 计算输出槽剩余容量能容纳的最大输入数，
-	 * 直接尝试该 batch size；若因类型分布导致 plan 失败，再按剩余容量比例保守降级。
-	 * 仅在所有产物成功插入后才扣除输入，batchSize 本身已体现速度升级，不再额外乘以生产力倍率。
-	 *
-	 * @param input        万象创世蜜脾或蜜脾块
-	 * @param processIndex 进程索引
-	 * @param batchSize    本批次期望处理的输入数量
-	 * @return true 处理成功，false 应暂停等待输出槽空间
+	 * 返回实际完成的操作数（0 表示失败，>0 表示成功完成的批次大小 currentBatch）。
+	 * 调用方根据返回值扣除能量：0 不扣能量（保留进度重试），N 扣 N * cachedEnergyPerTick。
+	 * 修复：原实现返回 boolean 且调用方按 effectiveOps 扣能量，导致 currentBatch < effectiveOps 时能量过度扣除。
 	 */
-	private boolean completeMyriadCreationsBatch(ItemStack input, int processIndex, int batchSize) {
-		if (batchSize <= 0) return true;
+	private int completeMyriadCreationsBatch(ItemStack input, int processIndex, int batchSize) {
+		if (batchSize <= 0) return 0;
 
 		boolean isCombBlock = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		int multiplier = isCombBlock ? 4 : 1;
@@ -299,77 +284,119 @@ public class MyriadCreationsHandler {
 		buildOutputSlots(processIndex);
 
 		Level level = context.level();
-		if (level == null) return false;
+		if (level == null) return 0;
 
 		// 一次性拍摄容量快照：同一 tick 内同一进程的输出槽 limit 不变，避免 plan 反复调用 getLimit
 		MyriadBatchPlanner.SlotCapacitySnapshot snapshot =
 				MyriadBatchPlanner.takeSnapshot(reusableOutputSlots, baseItem, level.getGameTime());
 
-		// 候选蜜蜂类型在 tick 内缓存，减少批量路径下每轮都随机采样的开销
-		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(3, level);
-		if (selectedTypes.isEmpty()) {
-			// 缓存为空时不消耗输入，等待缓存重建后重试
-			if (canLogMyriad(processIndex, lastMyriadEmptyCacheLogTick)) {
-				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世类型缓存为空，跳过本次批量处理（不消耗输入）", logPrefix, processIndex);
+		// 候选蜜蜂类型选择 — SubTask 5.3 + 5.10 工厂级共享选型
+		// 高 STACK（batchSize ≥ 1024）走 WeightedTypeSelector.selectForProcess：
+		//   一次 selectWeighted(processCount × 3, ...) 后切片分发，19 进程独立 3 类型（覆盖 EM CREATIVE 最高等级）
+		// 低 STACK（batchSize < 1024）走原版 selectDistinctBeeTypesCached + MyriadProductPool 委托
+		List<ResourceLocation> selectedTypes;
+		if (batchSize >= WEIGHTED_SELECTOR_THRESHOLD) {
+			List<ResourceLocation> allBeeTypes = MyriadBeeTypeCache.cachedBeeTypes();
+			if (allBeeTypes.isEmpty()) {
+				logger.logEmptyCacheAndPreserve(processIndex);
+				return 0;
 			}
-			return true;
+			selectedTypes = WeightedTypeSelector.getInstance().selectForProcess(
+					processIndex, context.processes(), level, allBeeTypes, context);
+		} else {
+			selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(
+					Math.min(OUTPUT_SLOT_COUNT, 9), level);
+			if (selectedTypes.isEmpty()) {
+				logger.logEmptyCacheAndPreserve(processIndex);
+				return 0;
+			}
+			selectedTypes = myriadProductPools[processIndex].getOrRefresh(
+					selectedTypes, level.getGameTime(), batchSize, level);
+		}
+		if (selectedTypes.isEmpty()) {
+			// 防御性兜底（selectForProcess 返回空列表的极端场景）
+			logger.logEmptyCacheAndPreserve(processIndex);
+			return 0;
 		}
 
+		// Task 2 修复：batchSize 限制为流体槽可容纳的最大操作数（原实现仅考虑物品槽导致 STACK 升级下流体失败）
+		// Task 4 根因修复：万象创世的主要产出是随机蜜脾物品，流体（蜂蜜）是副产物。
+		// 流体槽满载时不应阻塞物品产出，跳过流体输出继续处理物品。
+		int productivityMod = Math.max(1, context.productivityModifier());
+		int maxFluidBatch = fluidOutputHandler.getMaxBatchForFluid(input, productivityMod);
+		boolean skipFluid = false;
+		if (maxFluidBatch <= 0) {
+			// 流体槽已满或类型不匹配 — 跳过流体输出，不阻塞物品产出
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世流体槽已满，跳过流体输出：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			skipFluid = true;
+		}
+		int effectiveBatchSize = skipFluid ? batchSize : Math.min(batchSize, maxFluidBatch);
+
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
-		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes, batchSize);
+		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes, effectiveBatchSize);
 		if (maxBatch <= 0) {
-			if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
-				ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世批量产物无法完全插入，暂停：batchSize={}", logPrefix, processIndex, batchSize);
-			}
-			return false;
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			return 0;
 		}
 
 		int currentBatch = maxBatch;
-		int totalCount = currentBatch * multiplier;
-		int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
-		Map<ResourceLocation, Integer> allocation = MyriadCreationsEventHandler.allocateEvenly(
-				totalCount, selectedTypes.subList(0, typesToUse));
+		// 修复：产量需要乘以productivityModifier，原实现遗漏导致产量升级在批量模式下无效
+		// productivityMod 已在上方 Task 2 修复中提前计算（用于流体空间约束）
+		int totalCount = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(currentBatch, multiplier, productivityMod));
+		int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, OUTPUT_SLOT_COUNT)));
+		// SubTask 5.5: 按权重比例分配 totalCount（替代 allocateEvenly）
+		List<ResourceLocation> activeTypes = selectedTypes.subList(0, typesToUse);
+		double[] activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
+		Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
 
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation);
-		if (!plan.isSuccess()) {
-			// planOrFindMaxBatch 已按均匀分配保证成功；若因实现差异仍失败，按剩余容量比例保守降级
-			long remainingCapacity = snapshot.totalRemainingCapacity;
-			int fallbackBatch = totalCount > 0
-					? (int) Math.max(1, currentBatch * remainingCapacity / (long) totalCount)
-					: 1;
-			if (fallbackBatch >= currentBatch) {
-				fallbackBatch = currentBatch - 1;
-			}
-			if (fallbackBatch <= 0) {
-				if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
-					ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世批量产物无法完全插入，暂停：batchSize={}", logPrefix, processIndex, batchSize);
-				}
-				return false;
-			}
-			currentBatch = fallbackBatch;
-			totalCount = currentBatch * multiplier;
-			typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
-			allocation = MyriadCreationsEventHandler.allocateEvenly(totalCount, selectedTypes.subList(0, typesToUse));
+		// v9-L3 修复：逐步降级重试（MAX_DEGRADATION_ATTEMPTS 次，每次减半），替代原先仅尝试一次的保守降级
+		int degradationAttempts = 0;
+		while (!plan.isSuccess() && currentBatch > 1 && degradationAttempts < MAX_DEGRADATION_ATTEMPTS) {
+			currentBatch = Math.max(1, currentBatch / 2);
+			totalCount = (int) Math.min((long) currentBatch * multiplier * productivityMod, Integer.MAX_VALUE);
+			typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, OUTPUT_SLOT_COUNT)));
+			// SubTask 5.6: 降级重试同样用 allocateByWeight
+			activeTypes = selectedTypes.subList(0, typesToUse);
+			activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
+			allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
 			plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation);
-			if (!plan.isSuccess()) {
-				if (canLogMyriad(processIndex, lastMyriadFullLogTick)) {
-					ProductiveBeesGenesis.LOGGER.warn("{}进程{}万象创世批量产物无法完全插入，暂停：batchSize={}", logPrefix, processIndex, batchSize);
-				}
-				return false;
-			}
+			degradationAttempts++;
+		}
+		if (!plan.isSuccess()) {
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			return 0;
 		}
 
+		// 修复：流体插入和输入扣除在批次内执行，与正常 PB 路径保持一致
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
+			// Task 4 根因修复：流体是万象创世的副产物，满载时跳过，不阻塞物品产出
+			if (!skipFluid) {
+				// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
+				// 审查问题修复：使用 long 提升避免 int 溢出（STACK=16 + productivityMod 时可能溢出）
+				long fluidAmount = (long) currentBatch * productivityMod;
+				int fluidAmountClamped = (int) Math.min(fluidAmount, Integer.MAX_VALUE);
+				if (!fluidOutputHandler.insertFluidOutput(input, fluidAmountClamped, processIndex)) {
+					// v9-P2 修复：回收成功的 plan 防止对象池泄漏
+					MyriadBatchPlanner.recyclePlan(plan);
+					return 0;
+				}
+			}
 			MyriadBatchPlanner.apply(plan, reusableOutputSlots);
+			context.inputSlot(processIndex).shrinkStack(currentBatch, Action.EXECUTE);
+			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
+			WeightedTypeSelector.getInstance().recordOutputs(allocation);
 		} finally {
 			context.productivebeesgenesis$endOutputBatch(processIndex);
 		}
-		context.inputSlot(processIndex).shrinkStack(currentBatch, Action.EXECUTE);
-		return true;
+		// Task 3 性能优化：insertFluidOutput 改变了流体槽内容，更新满载缓存避免循环内使用 stale 值
+		fluidOutputHandler.refreshFluidTankFullCache();
+		return currentBatch;
 	}
 
-	/** 构建指定进程的输出槽列表（主+副1+副2） */
+	/** 构建指定进程的输出槽列表（主+副1+副2，跳过 null 槽位） */
 	private void buildOutputSlots(int processIndex) {
 		reusableOutputSlots.clear();
 		reusableOutputSlots.add(context.primaryOutputSlot(processIndex));
@@ -377,62 +404,14 @@ public class MyriadCreationsHandler {
 		if (secondary != null) {
 			reusableOutputSlots.add(secondary);
 		}
-		reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
-	}
-
-	/**
-	 * 检查指定进程的万象创世日志是否已超过冷却间隔
-	 * <br/>
-	 * 输出阻塞时同一条 WARN 每 tick 打印会严重拖慢 TPS（Spark 显示 Log4jLogger.warn 占 78%），
-	 * 通过 100 tick（5秒）冷却期抑制高频重复日志，同时保留问题诊断能力。
-	 *
-	 * @param processIndex 进程索引
-	 * @param lastLogTicks 各进程上次打印日志的游戏刻数组
-	 * @return true 如果当前可以打印日志
-	 */
-	private boolean canLogMyriad(int processIndex, long[] lastLogTicks) {
-		Level level = context.level();
-		if (level == null) return false;
-		long now = level.getGameTime();
-		long last = lastLogTicks[processIndex];
-		if (last < 0 || now - last >= MYRIAD_LOG_COOLDOWN) {
-			lastLogTicks[processIndex] = now;
-			return true;
+		IInventorySlot tertiary = context.tertiaryOutputSlot(processIndex);
+		if (tertiary != null) {
+			reusableOutputSlots.add(tertiary);
 		}
-		return false;
 	}
 
-	/**
-	 * 获取缓存的 getTicksForBase(baseTicksRequired) 结果（时间窗口缓存）
-	 * <br/>
-	 * 升级组件哈希计算开销较大且升级变更不频繁，采用"每 N tick 重新计算一次"策略，
-	 * 与 TileEntityMekCentrifuge.getCachedTicks 模式一致。
-	 * 升级变更后最多 {@link #TICKS_CACHE_INTERVAL} tick（1秒）内自动反映新值，可接受。
-	 *
-	 * @return 受速度升级影响的 baseTicksRequired 处理时间
-	 */
-	private int getCachedTicksForBase() {
-		Level level = context.level();
-		long currentTick = level != null ? level.getGameTime() : 0L;
-		if (cachedTicksForBase < 0 || (currentTick - cachedTicksForBaseAt) >= TICKS_CACHE_INTERVAL) {
-			cachedTicksForBase = context.getTicksForBase(context.baseTicksRequired());
-			cachedTicksForBaseAt = currentTick;
-		}
-		return cachedTicksForBase;
-	}
-
-	/** 配方重载时失效 cachedTicksForBase（由 PbRecipeProcessor.checkRecipeVersion 调用） */
+	/** 配方重载时失效 cachedTicksForBase（由 PbRecipeProcessor.checkRecipeVersion 调用） — 委托至缓存管理器 */
 	public void clearCachedTicksForBase() {
-		cachedTicksForBase = -1;
-	}
-
-	/**
-	 * 检查指定进程的所有物品输出槽是否已满
-	 * <br/>
-	 * 满时暂停处理，避免物品丢失（与MEK原版NOT_ENOUGH_OUTPUT_SPACE行为一致）。
-	 * 仅检查物品槽，流体槽满时不暂停。
-	 */
-	private boolean areOutputSlotsFull(int process) {
-		return context.productivebeesgenesis$outputSlotsFull(process);
+		cache.clearCachedTicksForBase();
 	}
 }

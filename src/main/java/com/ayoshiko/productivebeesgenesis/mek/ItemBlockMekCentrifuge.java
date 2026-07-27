@@ -1,28 +1,44 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.List;
+import java.util.Map;
 
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
+import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
+
+import mekanism.api.Upgrade;
 import mekanism.api.text.EnumColor;
 import mekanism.api.text.TextComponentUtil;
 import mekanism.common.MekanismLang;
+import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
+import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
 import mekanism.common.block.interfaces.IHasDescription;
 import mekanism.common.item.block.ItemBlockTooltip;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
+import mekanism.common.util.text.UpgradeDisplay;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -122,30 +138,228 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	}
 
 	/**
-	 * 添加类型特定详情 — 显示配方类型
+	 * 默认tooltip统计信息 — 显示PB升级总数
 	 * <br/>
-	 * 原理：一比一复制ItemBlockFactory.addTypeDetails()，
-	 * 从AttributeFactoryType读取工厂的配方类型（如Smelting），
-	 * 显示为"Recipe type: Smelting"。
+	 * 原理：appendHoverText在未按Shift时调用addStats，
+	 * 此处从BLOCK_ENTITY_DATA读取扳手拆卸时保存的离心机自定义数据，
+	 * 统计PB升级总数，让玩家无需按Shift即可了解离心机升级状态。
+	 * <p>
+	 * 数据来源：getDrops()写入BLOCK_ENTITY_DATA的saveCustomDataForItem()NBT。
 	 */
 	@Override
-	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
-								   @NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
-		// 原版/EM/ME工厂
-		AttributeFactoryType factoryType = Attribute.get(getBlock(), AttributeFactoryType.class);
-		if (factoryType != null) {
-			tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
-					EnumColor.INDIGO, EnumColor.GRAY, factoryType.getFactoryType()));
+	protected void addStats(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+							@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
+		super.addStats(stack, context, tooltip, flag);
+		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
+		if (customNbt == null) return;
+		int pbUpgradeTotal = countPbUpgradesFromNbt(customNbt);
+		if (pbUpgradeTotal > 0) {
+			tooltip.add(Component.translatable("tooltip.productivebeesgenesis.pb_upgrade_count",
+					NumberFormatter.format(pbUpgradeTotal))
+					.withStyle(ChatFormatting.GRAY));
 		}
-		// EME工厂 — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
-		else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-			EMExtraAttributeFactoryType emeFactoryType = Attribute.get(getBlock(), EMExtraAttributeFactoryType.class);
-			if (emeFactoryType != null) {
-				tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
-						EnumColor.INDIGO, EnumColor.GRAY, emeFactoryType.getFactoryType()));
+	}
+
+	/**
+	 * Bug 6：重写 addDetails 添加 try-catch 防御 + 追加PB升级详情 + 流体槽详情
+	 * <br/>
+	 * 扳手拆卸后 DataComponents 可能不完整，super.addDetails 中的
+	 * SecurityTooltip/FluidAttachment/UpgradeAware 等读取可能抛出异常。
+	 * 在 super 调用后追加离心机专属 Shift 详情：
+	 * <ul>
+	 *   <li>各 PB 升级类型的具体安装数量（addCentrifugeSpecificDetails）</li>
+	 *   <li>MultiFluidTankHolder 中所有非空流体槽内容（addCentrifugeFluidDetails，修复 5）</li>
+	 * </ul>
+	 * 修复 5：工厂离心机使用 MultiFluidTankHolder（非标准流体附件），
+	 * super.addDetails 中的 StorageUtils.addStoredFluid 无法找到流体，需独立读取 NBT。
+	 * <p>
+	 * 修复 v14：super 抛异常时独立渲染 UPGRADES tooltip（防重复：super 成功时不重复调用）。
+	 * super.addDetails 成功时已通过 MEK 原版逻辑渲染 UPGRADES，无需重复；
+	 * super 失败（被 try-catch 吞掉）时调用 addMekUpgradesDetails 独立渲染升级信息。
+	 */
+	@Override
+	protected void addDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
+		boolean superSucceeded = false;
+		try {
+			super.addDetails(stack, context, tooltip, flag);
+			superSucceeded = true;
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("显示离心机Shift详情时异常（可能为拆卸后组件缺失）", e);
+		}
+		// 修复 v14：super 抛异常时独立渲染 UPGRADES tooltip（防重复：super 成功时不重复渲染）
+		if (!superSucceeded) {
+			addMekUpgradesDetails(stack, tooltip);
+		}
+		// 追加离心机专属 Shift 详情 — 各 PB 升级类型安装数量
+		addCentrifugeSpecificDetails(stack, tooltip);
+		// 修复 5：追加工厂离心机 MultiFluidTankHolder 中的流体详情
+		addCentrifugeFluidDetails(stack, context, tooltip);
+	}
+
+	/**
+	 * 独立渲染 MEK 升级 tooltip — 模仿 MEK 原版 ItemBlockTooltip.addDetails 中的升级渲染逻辑
+	 * <br/>
+	 * 修复 v14：当 super.addDetails() 抛异常被 try-catch 吞掉时，UPGRADES tooltip 仍能独立渲染。
+	 * 渲染逻辑与 MEK 原版 {@link ItemBlockTooltip#addDetails} 完全一致：
+	 * <ul>
+	 *   <li>检查 {@link AttributeUpgradeSupport} 属性</li>
+	 *   <li>读取 {@link MekanismDataComponents#UPGRADES} 获取 {@link UpgradeAware}</li>
+	 *   <li>遍历 {@code upgradeAware.upgrades().entrySet()}，使用
+	 *       {@link UpgradeDisplay#of(Upgrade, int)} 渲染每个升级类型和数量</li>
+	 * </ul>
+	 * 格式与 MEK 原版完全一致（使用相同的 UpgradeDisplay），保持风格统一。
+	 *
+	 * @param stack    物品栈
+	 * @param tooltip  tooltip 列表
+	 */
+	private void addMekUpgradesDetails(@NotNull ItemStack stack, @NotNull List<Component> tooltip) {
+		try {
+			if (!Attribute.has(getBlock(), AttributeUpgradeSupport.class)) return;
+			UpgradeAware upgradeAware = stack.get(MekanismDataComponents.UPGRADES);
+			if (upgradeAware == null) return;
+			for (Map.Entry<Upgrade, Integer> entry : upgradeAware.upgrades().entrySet()) {
+				tooltip.add(UpgradeDisplay.of(entry.getKey(), entry.getValue()).getTextComponent());
+			}
+		} catch (Exception e) {
+			// 防御：UPGRADES 组件缺失或格式异常时跳过，不影响其他 tooltip 渲染
+			ProductiveBeesGenesis.LOGGER.warn("渲染离心机 MEK 升级 tooltip 时异常", e);
+		}
+	}
+
+	/**
+	 * 离心机专属 Shift 详情 — 显示各 PB 升级类型的具体安装数量
+	 * <br/>
+	 * 原理：从 BLOCK_ENTITY_DATA 读取离心机自定义 NBT，
+	 * 遍历 PB 升级数量映射，按类型显示名称和数量。
+	 * 与蜂箱 ItemBlockMekApiary.addApiarySpecificDetails 实现一致。
+	 */
+	private void addCentrifugeSpecificDetails(@NotNull ItemStack stack, @NotNull List<Component> tooltip) {
+		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
+		if (customNbt == null) return;
+		if (customNbt.contains(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, Tag.TAG_COMPOUND)) {
+			CompoundTag countsTag = customNbt.getCompound(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS);
+			if (!countsTag.getAllKeys().isEmpty()) {
+				tooltip.add(Component.translatable("tooltip.productivebeesgenesis.pb_upgrade_detail_header")
+						.withStyle(ChatFormatting.LIGHT_PURPLE));
+				for (String typeId : countsTag.getAllKeys()) {
+					PbUpgradeType type = PbUpgradeType.byId(typeId);
+					if (type != null) {
+						int count = countsTag.getInt(typeId);
+						tooltip.add(Component.literal(" ")
+								.append(Component.translatable(type.getNameKey()))
+								.append(Component.literal(": " + NumberFormatter.format(count))
+										.withStyle(ChatFormatting.GRAY)));
+					}
+				}
 			}
 		}
-		super.addTypeDetails(stack, context, tooltip, flag);
+	}
+
+	/**
+	 * 工厂离心机流体 Shift 详情 — 显示 MultiFluidTankHolder 中所有非空流体槽内容（修复 5）
+	 * <br/>
+	 * <b>背景：</b>工厂离心机使用 {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder}
+	 * （非标准流体附件），super.addDetails 中的 {@code StorageUtils.addStoredFluid} 无法找到流体，
+	 * 导致扳手拆卸后 Shift tooltip 不显示内部流体。
+	 * <p>
+	 * <b>原理：</b>从 BLOCK_ENTITY_DATA 读取 {@code productivebeesgenesis_multi_fluid_tanks} NBT，
+	 * 直接遍历 ListTag 中的 fluidStack 字段，解析 FluidStack 并显示流体名称和数量。
+	 * 不创建临时 MultiFluidTankHolder，避免不必要的对象创建（SRP + 性能）。
+	 * <p>
+	 * <b>边界处理：</b>
+	 * <ul>
+	 *   <li>NBT 不存在或无流体条目：直接返回，不显示 header（避免空 header）</li>
+	 *   <li>FluidStack 解析失败：跳过该条目，不影响其他流体显示</li>
+	 *   <li>异常：由 addDetails 外层 try-catch 兜底，仅记录警告日志</li>
+	 * </ul>
+	 */
+	private void addCentrifugeFluidDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+			@NotNull List<Component> tooltip) {
+		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
+		if (customNbt == null) return;
+		if (!customNbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, Tag.TAG_COMPOUND)) return;
+
+		CompoundTag root = customNbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
+		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
+		if (list.isEmpty()) return;
+
+		// 第一遍扫描确定是否有非空流体，避免显示空 header
+		boolean hasNonEmptyFluid = false;
+		for (int i = 0; i < list.size(); i++) {
+			CompoundTag entry = list.getCompound(i);
+			FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
+			if (!fluid.isEmpty()) {
+				hasNonEmptyFluid = true;
+				break;
+			}
+		}
+		if (!hasNonEmptyFluid) return;
+
+		// 显示 header + 每个非空流体的名称和数量
+		tooltip.add(Component.translatable("tooltip.productivebeesgenesis.fluid_stored_header")
+				.withStyle(ChatFormatting.DARK_AQUA));
+		for (int i = 0; i < list.size(); i++) {
+			CompoundTag entry = list.getCompound(i);
+			FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
+			if (!fluid.isEmpty()) {
+				tooltip.add(Component.literal(" ")
+						.append(Component.translatable("tooltip.productivebeesgenesis.fluid_entry",
+								fluid.getHoverName(), fluid.getAmount()))
+						.withStyle(ChatFormatting.GRAY));
+			}
+		}
+	}
+
+	/** 从 NBT 统计 PB 升级总数（所有类型数量之和） */
+	private static int countPbUpgradesFromNbt(CompoundTag nbt) {
+		if (!nbt.contains(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, Tag.TAG_COMPOUND)) return 0;
+		CompoundTag countsTag = nbt.getCompound(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS);
+		int total = 0;
+		for (String typeId : countsTag.getAllKeys()) {
+			total += countsTag.getInt(typeId);
+		}
+		return total;
+	}
+
+	/**
+ * 添加类型特定详情 — 显示配方类型；储能与流体由基类统一处理
+ * <br/>
+ * 原理：一比一复制ItemBlockFactory.addTypeDetails()的配方类型显示，
+ * 从AttributeFactoryType读取工厂的配方类型（如Smelting），
+ * 显示为"Recipe type: Smelting"。
+ * <p>
+ * 储能与内部流体显示由 super.addTypeDetails 内部统一处理
+ * （基类通过 StorageUtils.addStoredEnergy / addStoredFluid 实现），
+ * 与 MEK 原版机器行为完全一致；空流体显示"没有流体被存储"为标准行为。
+ * <p>
+ * Bug 6：添加 try-catch 防御扳手拆卸后 DataComponents 不完整导致 NPE 崩溃，
+ * 由外层 try-catch 兜底，仅记录警告日志而不影响客户端 tooltip 渲染。
+ */
+	@Override
+	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
+		try {
+			// 原版/EM/ME工厂
+			AttributeFactoryType factoryType = Attribute.get(getBlock(), AttributeFactoryType.class);
+			if (factoryType != null) {
+				tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
+						EnumColor.INDIGO, EnumColor.GRAY, factoryType.getFactoryType()));
+			}
+			// EME工厂 — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
+			else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+				EMExtraAttributeFactoryType emeFactoryType = Attribute.get(getBlock(), EMExtraAttributeFactoryType.class);
+				if (emeFactoryType != null) {
+					tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
+							EnumColor.INDIGO, EnumColor.GRAY, emeFactoryType.getFactoryType()));
+				}
+			}
+			// 储能与流体显示由 super.addTypeDetails 内部统一处理（MEK原版行为）
+			super.addTypeDetails(stack, context, tooltip, flag);
+		} catch (Exception e) {
+			// Bug 6：防御扳手拆卸后组件缺失导致 NPE
+			ProductiveBeesGenesis.LOGGER.warn("离心机tooltip类型详情显示异常（可能为拆卸后组件缺失）", e);
+		}
 	}
 
 	/** 公开父类protected方法，供MekCentrifugeContainerRegistrar调用 */

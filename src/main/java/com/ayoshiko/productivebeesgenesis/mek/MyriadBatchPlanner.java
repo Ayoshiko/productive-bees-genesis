@@ -5,30 +5,29 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.Nullable;
 
 import org.jetbrains.annotations.NotNull;
 
 import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
+import mekanism.api.Action;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 万象创世产物批量插入规划器
- * <br/>
- * 将“按 bee_type 分配的数量”转换为“槽位索引 → 增长数量/是否空槽/模板”的执行计划，
- * 避免传统 insertItem 路径中反复的 ItemStack.copy()、DataComponentMap 派生与 listener 扫描。
+ * 万象创世产物批量插入规划器：将按 bee_type 分配的数量转换为槽位索引执行计划，
+ * 避免传统 insertItem 路径的 copy/组件派生/listener 扫描开销。
  * <p>
- * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存、直接操作。
- * <br/>
- * 线程安全：plan 与 apply 在服务端主线程执行，对象池无需并发安全；
- * Snapshot 缓存使用 ThreadLocal 避免跨线程污染。
+ * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存。
+ * 线程安全：plan/apply 主线程执行，对象池无需并发安全；Snapshot 缓存用 ThreadLocal 隔离。
  */
 public final class MyriadBatchPlanner {
 
@@ -43,6 +42,16 @@ public final class MyriadBatchPlanner {
 
 	/** Snapshot 跨 tick 缓存：按 tick + slots identity 复用 */
 	private static final ThreadLocal<SnapshotCache> snapshotCache = ThreadLocal.withInitial(SnapshotCache::new);
+
+	/**
+	 * bee_type 模板缓存（按 baseItem + beeType）。高倍加速下高频创建仅 bee_type 不同的模板，
+	 * 用静态有界缓存避免重复构造与组件派生。模板仅用于 {@link #apply} 的 copyWithCount，不修改。
+	 */
+	private static final int TEMPLATE_CACHE_CAPACITY = 512;
+	private static final Map<TemplateKey, ItemStack> TEMPLATE_CACHE = new ConcurrentHashMap<>(TEMPLATE_CACHE_CAPACITY);
+
+	private record TemplateKey(Item item, ResourceLocation beeType) {
+	}
 
 	private MyriadBatchPlanner() {
 	}
@@ -95,12 +104,7 @@ public final class MyriadBatchPlanner {
 
 	// ===== Plan：可复用的批量插入计划 =====
 
-	/**
-	 * 批量插入计划（可复用）
-	 * <br/>
-	 * {@link #FAILURE} 为失败单例，不归还池中；
-	 * 成功的 Plan 在 {@link #apply(Plan, List)} 后由内部自动回收。
-	 */
+	/** 批量插入计划（可复用）。{@link #FAILURE} 失败单例不归还；成功 Plan 在 apply 后自动回收 */
 	public static final class Plan {
 		/** 失败单例（不归还） */
 		private static final Plan FAILURE = new Plan(null);
@@ -215,8 +219,8 @@ public final class MyriadBatchPlanner {
 		public final long totalRemainingCapacity;
 
 		private SlotCapacitySnapshot(long tick, int slotCount, boolean[] empty,
-									 ResourceLocation[] slotBeeTypes, int[] slotCounts,
-									 int[] slotLimits, long totalRemainingCapacity) {
+				ResourceLocation[] slotBeeTypes, int[] slotCounts,
+				int[] slotLimits, long totalRemainingCapacity) {
 			this.tick = tick;
 			this.slotCount = slotCount;
 			this.empty = empty;
@@ -228,14 +232,10 @@ public final class MyriadBatchPlanner {
 	}
 
 	/**
-	 * 拍摄输出槽容量快照（带跨 tick 缓存）
+	 * 拍摄输出槽容量快照（带跨 tick 缓存）。同 tick+同一 slots 直接返回缓存；snapshot 只读可跨工厂复用。
 	 * <br/>
-	 * 同 tick 内同一 slots 实例的多次调用直接返回缓存，避免重复拍摄；
-	 * 不同 slots 或 tick 变化时重新拍摄并缓存。snapshot 只读，跨工厂复用安全。
-	 * <br/>
-	 * 空槽容量优先使用 {@link IInventorySlot#getLimit(ItemStack)}（传入基础物品模板），
-	 * 若调用异常或返回非正数则回退到 {@link Item#getMaxStackSize(ItemStack)}；
-	 * 非空槽容量使用 {@code slot.getLimit(stack) - stack.getCount()}。
+	 * 空槽容量用 {@link IInventorySlot#getLimit(ItemStack)}，异常/非正回退到 {@link Item#getMaxStackSize(ItemStack)}；
+	 * 非空槽用 {@code slot.getLimit(stack) - stack.getCount()}。
 	 */
 	@NotNull
 	public static SlotCapacitySnapshot takeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
@@ -312,24 +312,14 @@ public final class MyriadBatchPlanner {
 
 	// ===== 规划 =====
 
-	/**
-	 * 规划批量插入（兼容旧签名：内部自动拍摄快照）
-	 * <br/>
-	 * 传入真实 tick 值以保证与批量路径 {@link #takeSnapshot(List, Item, long)} 的缓存键一致，
-	 * 使同一 tick 内同一 slots 实例的快照可跨路径复用，避免 256× 加速场景下的冗余快照拍摄。
-	 */
+	/** 规划批量插入（兼容旧签名：内部自动拍快照）。传 tick 保证与批量路径快照缓存键一致以跨路径复用 */
 	@NotNull
 	public static Plan plan(List<IInventorySlot> slots, Item baseItem,
 							Map<ResourceLocation, Integer> allocation, long tick) {
 		return plan(takeSnapshot(slots, baseItem, tick), baseItem, allocation);
 	}
 
-	/**
-	 * 基于容量快照规划批量插入
-	 * <br/>
-	 * 优先级：1) 已有相同 bee_type 的槽位（grow 路径）；2) 空槽（setStack 路径）。
-	 * 任一 bee_type 无法完整放下时返回 {@link Plan#failure()}，保证原子性。
-	 */
+	/** 基于快照规划批量插入。优先级：1) 同 bee_type 槽（grow）；2) 空槽（setStack）。放不下返回 {@link Plan#failure()} */
 	@NotNull
 	public static Plan plan(SlotCapacitySnapshot snapshot, Item baseItem,
 							Map<ResourceLocation, Integer> allocation) {
@@ -397,14 +387,9 @@ public final class MyriadBatchPlanner {
 		return Plan.success(plans);
 	}
 
-	/**
-	 * 计算输出槽能容纳的最大输入数量（二分搜索）
-	 * <br/>
-	 * 根据 {@code totalRemainingCapacity} 与 {@code multiplier} 确定上界，二分查找最大可行 batch size。
-	 * 内部循环产生的 Plan 在每次迭代后回收，避免对象泄漏。
-	 */
+	/** 计算输出槽能容纳的最大输入数量（二分搜索）。据容量与 multiplier 定上界；每次迭代回收 Plan 防泄漏 */
 	public static int planOrFindMaxBatch(SlotCapacitySnapshot snapshot, Item baseItem, int multiplier,
-										 List<ResourceLocation> selectedTypes, int maxRequested) {
+			List<ResourceLocation> selectedTypes, int maxRequested) {
 		if (snapshot == null || baseItem == null || selectedTypes == null || selectedTypes.isEmpty()
 				|| maxRequested <= 0 || multiplier <= 0) {
 			return 0;
@@ -420,7 +405,8 @@ public final class MyriadBatchPlanner {
 		int low = 1;
 		while (low <= high) {
 			int mid = (low + high) >>> 1;
-			int totalCount = mid * multiplier;
+			int totalCount = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(mid, multiplier));
 			// 类型数不超过总数量（避免 allocateEvenly 出现大量 0 分配），也不超过 3 种
 			int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
 			Map<ResourceLocation, Integer> allocation = RandomHoneycombSelector.allocateEvenly(
@@ -445,12 +431,14 @@ public final class MyriadBatchPlanner {
 	// ===== 执行 =====
 
 	/**
-	 * 执行插入计划，使用后自动归还对象池
+	 * 执行插入计划，使用后自动归还对象池。调用后 plan 不可再用，FAILURE 不归还。
 	 * <br/>
-	 * 调用后 plan 不可再使用（已归还池中）。FAILURE 单例不归还。
-	 * 应在 {@code productivebeesgenesis$beginOutputBatch()} /
-	 * {@code productivebeesgenesis$endOutputBatch(int)} 之间调用，
-	 * 或基础机的等效批量包装内调用，以避免每次插入都触发 listener 扫描。
+	 * 应在 beginOutputBatch/endOutputBatch 之间或基础机等效批量包装内调用，避免每次插入触发 listener 扫描。
+	 * <p>
+	 * <b>Task 4 关键修复：</b>原实现 {@code slot.getStack().grow(n)} 违反 IInventorySlot 契约
+	 * （IInventorySlot.java 明确禁止修改 getStack 返回的 ItemStack），导致 onContentsChanged 不被调用
+	 * → outputBatchDirty 不被设置 → endOutputBatch 不更新标志位 → 后续 tick 无效重试。
+	 * 改用 {@link IInventorySlot#growStack}（default 方法，内部走 setStack → onContentsChanged）。
 	 */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots) {
 		if (!plan.isSuccess()) {
@@ -470,7 +458,8 @@ public final class MyriadBatchPlanner {
 					ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
 					slot.setStack(toSet);
 				} else {
-					slot.getStack().grow(slotPlan.amount());
+					// Task 4 修复：growStack 触发 listener，替代直接修改 getStack 返回值
+					slot.growStack(slotPlan.amount(), Action.EXECUTE);
 				}
 			}
 		} finally {
@@ -481,7 +470,7 @@ public final class MyriadBatchPlanner {
 
 	/** 执行插入计划（重载：指定 begin/end 回调），供基础机使用 */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots,
-							 @NotNull Runnable beginBatch, @NotNull Runnable endBatch) {
+			@NotNull Runnable beginBatch, @NotNull Runnable endBatch) {
 		beginBatch.run();
 		try {
 			apply(plan, slots);
@@ -490,10 +479,31 @@ public final class MyriadBatchPlanner {
 		}
 	}
 
-	/** 创建带 bee_type 的模板（不设置 count） */
+	/** 创建带 bee_type 的模板（不设置 count），优先从静态缓存读取 */
 	private static ItemStack createTemplate(Item baseItem, ResourceLocation beeType) {
+		TemplateKey key = new TemplateKey(baseItem, beeType);
+		ItemStack cached = TEMPLATE_CACHE.get(key);
+		if (cached != null) {
+			return cached;
+		}
 		ItemStack template = new ItemStack(baseItem);
 		template.set(ModDataComponents.BEE_TYPE.get(), beeType);
+		// 有界缓存：超过容量时直接丢弃，由 GC 回收
+		if (TEMPLATE_CACHE.size() < TEMPLATE_CACHE_CAPACITY) {
+			TEMPLATE_CACHE.put(key, template);
+		}
 		return template;
+	}
+
+	/** 清空模板缓存（配置重载/数据包变更时调用），防止 bee_type 变化后旧模板残留导致泄漏 */
+	public static void clearTemplateCache() {
+		TEMPLATE_CACHE.clear();
+	}
+
+	/**
+	 * 清理 ThreadLocal 快照缓存（服务端停止时调用，防止线程池复用场景下的引用残留）
+	 */
+	public static void clearThreadLocals() {
+		snapshotCache.remove();
 	}
 }

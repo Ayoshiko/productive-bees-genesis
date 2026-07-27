@@ -5,6 +5,9 @@ import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
+
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 /**
  * PB配方处理上下文接口
@@ -15,6 +18,9 @@ import net.minecraft.world.level.Level;
  * <p>
  * 遵循依赖倒置原则：PbRecipeProcessor 依赖此抽象而非具体 TileEntity，
  * 降低耦合度，便于后续扩展新的工厂类型。
+ * <p>
+ * <b>诊断优先(Task 3):</b>default 方法添加 DEV 日志,确认 SINGLE 模式下的流体槽查找行为。
+ * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
  */
 public interface PbRecipeContext {
 
@@ -28,6 +34,21 @@ public interface PbRecipeContext {
 	 * 因为 PB 处理需要调用 getEnergyPerTick() 获取每 tick 能量消耗。
 	 */
 	MachineEnergyContainer<?> energyContainer();
+
+	/**
+	 * 是否安装了 MEKExtras 创造升级
+	 * <br/>
+	 * Task 1.3 修复：CREATIVE 升级提供零能量消耗。PB 配方处理路径
+	 * （{@link PbRecipeProcessor}）不依赖 MEKExtras Mixin 自动清零
+	 * {@code getEnergyPerTick}（Mixin 加载时序可能失效），
+	 * 改为手动检查作为兜底，与蜂箱的 {@code ApiaryUpgradeHandler.getEnergyMultiplier} 一致。
+	 * <p>
+	 * 通过 {@link MekUpgradeSupport#hasCreativeUpgrade} 门面间接访问，
+	 * MEKExtras 未加载时安全返回 false。
+	 *
+	 * @return true 如果安装了 CREATIVE 升级
+	 */
+	boolean hasCreativeUpgrade();
 
 	/** 获取指定进程的输入槽 */
 	IInventorySlot inputSlot(int process);
@@ -43,6 +64,141 @@ public interface PbRecipeContext {
 
 	/** 获取共享流体输出槽 */
 	IExtendedFluidTank fluidOutputTank();
+
+	// ===== Task 9: 多槽流体输出路由（MULTI_PER_FLUID 模式） =====
+
+	/**
+	 * 返回适合插入指定流体的输出槽
+	 * <br/>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式（默认）：使用此默认实现，等价于 {@link #fluidOutputTank()}，
+	 *       行为与修改前完全一致</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法，委托给
+	 *       {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#getTankForInsert}
+	 *       实现按流体类型路由</li>
+	 *   <li>基础机器（{@link TileEntityMekCentrifuge}）/ 蜂箱（{@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbRecipeContextAdapter}）：
+	 *       单槽场景，使用默认实现</li>
+	 * </ul>
+	 *
+	 * @param stack 待插入流体（仅取类型信息，不修改）
+	 * @return 目标槽；默认实现始终返回主槽
+	 */
+	default IExtendedFluidTank fluidOutputTankForInsert(FluidStack stack) {
+		IExtendedFluidTank result = fluidOutputTank();
+		// 诊断优先(Task 3):SINGLE 模式查找插入槽日志(MULTI 模式由工厂类重写记录)
+		if (result == null) {
+			DevLog.warn("fluid_tank", "找不到合适槽位(SINGLE) incoming={}", stack.getFluid());
+		}
+		return result;
+	}
+
+	/**
+	 * 返回流体输出槽总数
+	 * <br/>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式：使用此默认实现，返回 1</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法，返回
+	 *       {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#getTankCount}</li>
+	 * </ul>
+	 *
+	 * @return 流体输出槽总数（默认 1）
+	 */
+	default int fluidOutputTankCount() {
+		return 1;
+	}
+
+	/**
+	 * 按索引返回流体输出槽
+	 * <br/>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式：使用此默认实现，忽略 index 返回主槽，
+	 *       行为与 {@link #fluidOutputTank()} 一致</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法，返回
+	 *       {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#getTanks()}
+	 *       中指定索引的槽位（供 Ejector / AE2 推送遍历）</li>
+	 * </ul>
+	 *
+	 * @param index 槽位索引（0-based）
+	 * @return 指定索引的槽位；默认实现忽略 index 返回主槽
+	 */
+	default IExtendedFluidTank fluidOutputTank(int index) {
+		return fluidOutputTank();
+	}
+
+	/**
+	 * 检查指定流体是否与当前流体输出槽类型不匹配（无法插入）
+	 * <br/>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式：默认实现返回 false（不检查），由工厂类重写为
+	 *       "主槽非空且类型不匹配 → true"，避免无限重试浪费 TPS</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法，委托给
+	 *       {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#isTypeMismatch}
+	 *       判断"无匹配槽且已达槽位上限 → true"</li>
+	 * </ul>
+	 * <p>
+	 * 供 {@link PbRecipeOutputChecker#isOutputBlocked} 判断是否因类型不匹配
+	 * 触发暂停（Task 12 方案 F）。
+	 *
+	 * @param stack 待检查流体（仅取类型信息，不修改）
+	 * @return true 若类型不匹配且无法插入；默认 false
+	 */
+	default boolean isFluidTankTypeMismatch(FluidStack stack) {
+		return false;
+	}
+
+	/**
+	 * 检查所有已分配的流体输出槽是否都已满载
+	 * <br/>
+	 * <b>Task 4 修复背景：</b>原 {@code PbRecipeProcessor.cachedFluidTankFull} 仅检查主槽,
+	 * 在 MULTI_PER_FLUID 模式下其他槽可能仍有空间但被错误判定为满,导致机器暂停。
+	 * <p>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式（默认）：使用此默认实现,等价于检查主槽
+	 *       {@code fluidOutputTank().getFluidAmount() >= fluidOutputTank().getCapacity()},
+	 *       行为与修改前完全一致</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法,遍历所有已分配槽检查满载状态</li>
+	 * </ul>
+	 * <p>
+	 * <b>暂停语义：</b>仅"所有槽都满载"为 true,仍需配合
+	 * {@link #canAllocateNewFluidTank()} 判断是否还能分配新槽接收新流体类型。
+	 *
+	 * @return true 如果所有已分配的流体输出槽都满载;默认实现仅检查主槽
+	 */
+	default boolean areAllFluidTanksFull() {
+		IExtendedFluidTank tank = fluidOutputTank();
+		boolean result = tank != null && tank.getFluidAmount() >= tank.getCapacity();
+		// 诊断优先(Task 3):SINGLE 模式所有槽满检查(MULTI 模式由工厂类重写记录)
+		return result;
+	}
+
+	/**
+	 * 检查是否还能分配新槽位接收新流体类型
+	 * <br/>
+	 * <b>Task 4 修复背景：</b>MULTI_PER_FLUID 模式下即使所有已分配槽都满载,
+	 * 只要还能分配新槽（未达 maxTanks 上限）,机器也不应暂停 — 新流体类型可写入新槽。
+	 * <p>
+	 * <b>向后兼容设计：</b>
+	 * <ul>
+	 *   <li>SINGLE 模式（默认）：返回 false,无扩展能力,主槽满即暂停</li>
+	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法,返回
+	 *       {@code holder.getTankCount() < holder.getMaxTanks()}</li>
+	 * </ul>
+	 * <p>
+	 * <b>暂停语义：</b>"所有槽满载 且 无法分配新槽" 才触发暂停,
+	 * 即 {@code areAllFluidTanksFull() && !canAllocateNewFluidTank()}。
+	 *
+	 * @return true 如果可以分配新槽;SINGLE 模式默认返回 false
+	 */
+	default boolean canAllocateNewFluidTank() {
+		boolean result = false;
+		// 诊断优先(Task 3):SINGLE 模式始终返回 false(MULTI 模式由工厂类重写记录)
+		return result;
+	}
 
 	/** 获取进程总数 */
 	int processes();
@@ -98,7 +254,7 @@ public interface PbRecipeContext {
 	/** 输出槽是否有物品（供 EjectorMixin 读取，判断是否需要弹出） */
 	boolean productivebeesgenesis$hasOutputItems();
 
-	/** 输出槽是否已满（供 PbRecipeProcessor.areOutputSlotsFull 读取，存在任意进程满时为true） */
+	/** 输出槽是否已满（供 PbRecipeOutputChecker.isOutputBlocked 读取，存在任意进程满时为true） */
 	boolean productivebeesgenesis$outputSlotsFull();
 
 	/**
@@ -131,6 +287,24 @@ public interface PbRecipeContext {
 	 * @param process 发生变化的进程索引
 	 */
 	void productivebeesgenesis$endOutputBatch(int process);
+
+	/**
+	 * 仅重算单个槽位的状态缓存（Task 7 增量更新）
+	 * <br/>
+	 * 由 {@link PbRecipeCompleter#planAndExecute} 在每次 setStack/growStack 后调用，
+	 * 标记该槽位为已知状态，{@code endOutputBatch} 时复用缓存避免重复扫描。
+	 * <p>
+	 * 默认 no-op：基础机器（{@link TileEntityMekCentrifuge}）和蜂箱适配器
+	 * （{@link ApiaryPbRecipeContextAdapter}）不使用此优化，endBatch 时走全量扫描路径。
+	 * 工厂类通过 {@link IFactoryPbDelegateAccess} 委托到 {@link FactoryPbContextDelegate}。
+	 *
+	 * @param process  进程索引
+	 * @param slotIdx  槽位索引（0=主输出，1=副输出1，2=副输出2）
+	 * @param slot     输出槽
+	 */
+	default void productivebeesgenesis$updateSlotOnly(int process, int slotIdx, IInventorySlot slot) {
+		// no-op：由工厂委托实现优化
+	}
 
 	// ===== Task 11: 激活状态计数器 =====
 

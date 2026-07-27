@@ -1,5 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.world.item.ItemStack;
+
 /**
  * MEK 离心机统一标记接口。
  * 用于 TileComponentEjectorMixin 通过 instanceof 统一判断所有离心机类型，
@@ -10,6 +13,9 @@ package com.ayoshiko.productivebeesgenesis.mek;
  * <p>
  * Step 5: 暴露输出槽物品总数（O(1) 读取），供 Ejector Mixin 替代
  * O(processes×3) 遍历的 {@code countOutputItems}，进一步降低高频弹出时的 CPU 开销。
+ * <p>
+ * 新增：输入槽访问方法，供蜂箱→离心机直连快速通道使用，
+ * 绕过 Ejector 节流和 Capability 系统开销，最大化直连弹出效率。
  */
 public interface IMekCentrifugeTile {
 
@@ -37,5 +43,42 @@ public interface IMekCentrifugeTile {
 	 */
 	default long productivebeesgenesis$outputItemCount() {
 		return 0L;
+	}
+
+	/**
+	 * 返回输入槽数量（基础机=1，工厂机=tier.processes）。
+	 * <br/>
+	 * 供蜂箱→离心机直连快速通道使用，用于并行分配不同类型的蜜脾到不同输入槽，
+	 * 最大化离心机并行处理效率。
+	 *
+	 * @return 输入槽总数
+	 */
+	default int productivebeesgenesis$getInputSlotCount() {
+		return 0;
+	}
+
+	/**
+	 * 获取指定索引的输入槽。
+	 * <br/>
+	 * 索引范围：0 ~ {@link #productivebeesgenesis$getInputSlotCount()} - 1。
+	 * 供蜂箱→离心机直连快速通道直接向输入槽插入物品，绕过 Capability 系统开销。
+	 *
+	 * @param index 输入槽索引
+	 * @return 输入槽引用，越界返回 null
+	 */
+	default IInventorySlot productivebeesgenesis$getInputSlot(int index) {
+		return null;
+	}
+
+	/**
+	 * 检查物品是否为有效的离心配方输入。
+	 * <br/>
+	 * 供蜂箱→离心机直连快速通道过滤无效物品，避免无效插入尝试。
+	 *
+	 * @param stack 待检查的物品栈
+	 * @return true 如果该物品可以在离心机中加工
+	 */
+	default boolean productivebeesgenesis$isValidInput(ItemStack stack) {
+		return false;
 	}
 }

@@ -8,6 +8,7 @@
  *   <li>TileEntityExtraMekCentrifugeFactory — ME扩展工厂（8个等级）</li>
  *   <li>TileEntityEMExtraMekCentrifugeFactory — EME扩展工厂（4个等级）</li>
  *   <li>PbRecipeProcessor — PB配方处理辅助类（消除三工厂代码重复）</li>
+ *   <li>PbRecipeEnergyCache — PB配方能量缓存与ticks计算（从PbRecipeProcessor抽取）</li>
  *   <li>FactoryLayoutHelper — 工厂GUI布局计算</li>
  * </ol>
  */

@@ -5,8 +5,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeSideConfig;
 import mekanism.common.block.attribute.AttributeTier;
@@ -26,6 +24,9 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.MekCentrifugeEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeMEBlockType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 
@@ -57,12 +58,15 @@ public final class MekCentrifugeBlockType {
 	/** 基础MEK离心机BlockType — 不设置AttributeTier，使Basic Tier Installer能正确升级（fromTier=null匹配） */
 	public static final BlockTypeTile<TileEntityMekCentrifuge> MEK_CENTRIFUGE = Machine.MachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_CENTRIFUGE, descriptionLang("mek_centrifuge"))
-			.withEnergyConfig(() -> 50L, () -> 20_000L)
+			.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
+					() -> ModConfig.SERVER.mekCentrifugeEnergyStorage.get())
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE)
 			.withSound(MekanismSounds.ENERGIZED_SMELTER)
 			.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY)))
+			// 替换默认升级支持：MEKExtras加载时额外支持STACK/CREATIVE，始终支持SPEED/ENERGY/MUFFLING
+			.with(MekUpgradeSupport.forMachine())
 			.build();
 
 	/** 基础工厂BlockType（3并行） */
@@ -105,11 +109,12 @@ public final class MekCentrifugeBlockType {
 			FactoryTier tier, mekanism.api.text.ILangEntry description) {
 		var builder = Machine.MachineBuilder
 				.createFactoryMachine(() -> getFactoryTileEntityType(tier), description, FactoryType.SMELTING)
-				// Energy: 与Mekanism原版工厂一致，usage=50L/tick，storage=20000L（不随等级变化）
+				// Energy: 与Mekanism原版工厂一致，usage/storage 从 config 读取（不随等级变化）
 				// 原版Mekanism工厂所有等级（BASIC/ADVANCED/ELITE/ULTIMATE）使用相同的20000L存储
 				// EM等级也遵循此规则（EM的FactoryMixin只调整energySlot位置，不修改容量）
 				// ME/EME等级才乘以processes（遵循ME的ExtraFactory.setMachineData模式）
-				.withEnergyConfig(() -> 50L, () -> 20_000L)
+				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
+						() -> ModConfig.SERVER.mekCentrifugeEnergyStorage.get())
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE_FACTORY)
@@ -119,8 +124,14 @@ public final class MekCentrifugeBlockType {
 		// 移除FactoryMachine构造器添加的原版AttributeUpgradeable
 		builder.without(AttributeUpgradeable.class);
 		// 添加自定义AttributeUpgradeable，指向下一等级的离心机工厂
-		// 使用非匿名实例确保getClass()=AttributeUpgradeable.class
-		builder.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(getNextTierBlock(tier))));
+		// CREATIVE是最高级，getNextTierBlock返回null，不添加（避免自指导致ItemMaxTierInstaller死循环）
+		DeferredHolder<Block, ?> nextTierBlock = getNextTierBlock(tier);
+		if (nextTierBlock != null) {
+			// 使用非匿名实例确保getClass()=AttributeUpgradeable.class
+			builder.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(nextTierBlock)));
+		}
+		// 替换默认升级支持：MEKExtras加载时额外支持STACK/CREATIVE，始终支持SPEED/ENERGY/MUFFLING
+		builder.with(MekUpgradeSupport.forMachine());
 
 		return builder.build();
 	}
@@ -131,6 +142,11 @@ public final class MekCentrifugeBlockType {
 	 * 原版4等级走固定映射；EM加载时ULTIMATE指向OVERCLOCKED（EM优先），
 	 * 仅ME加载时ULTIMATE指向ABSOLUTE；EM等级走getEMNextTierBlock。
 	 * 必须有default分支：EM通过Mixin在运行时扩展FactoryTier枚举。
+	 * <p>
+	 * 修复 v14 ULTIMATE 自指死循环：当 EM 和 ME 都未加载时，ULTIMATE 是最高级，
+	 * 返回 null 表示无下一级（createFactoryBlockType 会跳过添加 AttributeUpgradeable）。
+	 * 原实现返回 ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY（自指），
+	 * 导致 ItemMaxTierInstaller 的 while 循环无法终止，游戏卡死。
 	 */
 	private static DeferredHolder<Block, ?> getNextTierBlock(FactoryTier currentTier) {
 		return switch (currentTier) {
@@ -139,11 +155,12 @@ public final class MekCentrifugeBlockType {
 			case ELITE -> ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY;
 			// EM优先于ME：AttributeUpgradeable供EM/Mekanism installer使用，必须指向EM链的OVERCLOCKED；
 			// ME链通过initMETiers()添加的ExtraAttributeUpgradeable实现（ME installer使用ExtraAttributeUpgradeable）
+			// 修复 v14: EM 和 ME 都未加载时返回 null，避免自指导致 ItemMaxTierInstaller 死循环
 			case ULTIMATE -> MekCompatHooks.isEvolvedMekanismLoaded()
 					? getEMFactoryBlock("overclocked")
 					: MekCompatHooks.isMekanismExtrasLoaded()
 					? getMEFactoryBlock("absolute")
-					: ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY;
+					: null;
 			// EM运行时扩展的等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 			default -> getEMNextTierBlock(currentTier);
 		};
@@ -153,7 +170,8 @@ public final class MekCentrifugeBlockType {
 	 * 获取EM等级的下一级方块Holder
 	 * <br/>
 	 * EM等级在编译时不存在，通过name()字符串匹配确定当前等级，返回下一级的DeferredHolder。
-	 * CREATIVE是最高级，返回自身（避免null导致AttributeUpgradeable构造失败）。
+	 * CREATIVE是最高级，返回null表示无下一级（与EME的INFINITE_MULTIVERSAL一致，不添加升级属性，
+	 * 避免AttributeUpgradeable自指导致ItemMaxTierInstaller的while循环死循环）。
 	 */
 	private static DeferredHolder<Block, ?> getEMNextTierBlock(FactoryTier currentTier) {
 		String name = currentTier.name();
@@ -162,8 +180,8 @@ public final class MekCentrifugeBlockType {
 			case "QUANTUM" -> getEMFactoryBlock("dense");
 			case "DENSE" -> getEMFactoryBlock("multiversal");
 			case "MULTIVERSAL" -> getEMFactoryBlock("creative");
-			// CREATIVE是最高级，返回自身
-			default -> getEMFactoryBlock("creative");
+			// CREATIVE是最高级，返回null（createFactoryBlockType会跳过添加AttributeUpgradeable）
+			default -> null;
 		};
 	}
 
@@ -300,16 +318,18 @@ public final class MekCentrifugeBlockType {
 	 * 先检测EME加载状态，再委托给MekCentrifugeEMEBlockType。EME未加载时直接返回，
 	 * 避免触发对EME类的加载导致NoClassDefFoundError。
 	 * <p>
-	 * 注意：包装方法中引用了ExtraFactoryTier.ABSOLUTE，但此引用只在方法被调用时解析（lazy）。
-	 * 由于EME依赖ME，调用此方法时ME必然已加载，ExtraFactoryTier可用。
+	 * 修复 v15 软依赖隔离：原实现直接引用 {@code ExtraFactoryTier.ABSOLUTE}，
+	 * 虽然方法体在守卫之后执行（惰性解析），但 import 语句和直接引用违反软依赖隔离原则。
+	 * 现通过 {@link MekCentrifugeMEBlockType#getAbsoluteFactoryType()} 封装，
+	 * 本类完全不再引用 ME 类，符合"软依赖完全隔离"规范。
 	 */
 	public static void initEMETiers() {
 		if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
 			return;
 		}
-		// EME依赖ME，所以ME此时已加载
+		// EME依赖ME，所以ME此时已加载；通过封装方法获取 ABSOLUTE BlockType，避免直接引用 ExtraFactoryTier
 		MekCentrifugeEMEBlockType.initEMETiers(ULTIMATE_MEK_CENTRIFUGE_FACTORY,
-				MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE));
+				MekCentrifugeMEBlockType.getAbsoluteFactoryType());
 	}
 
 	/**

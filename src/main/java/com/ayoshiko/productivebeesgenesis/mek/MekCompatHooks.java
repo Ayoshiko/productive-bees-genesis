@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.tier.FactoryTier;
@@ -10,22 +9,17 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.fml.ModList;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Mekanism兼容性检测工具类
  * <br/>
- * 检测EvolvedMekanism及其附属mod的加载状态，用于运行时按需启用兼容功能。
- * 使用Holder模式实现线程安全的懒加载（JVM类加载机制保证单例初始化原子性）。
+ * 检测EvolvedMekanism及其附属mod的加载状态，使用Holder模式实现线程安全的懒加载。
  * 反射访问EM的可选类，避免编译期硬依赖导致ClassNotFoundException。
  */
 public final class MekCompatHooks {
-
-	/** EM的EMFactoryTier全限定类名（可选依赖，反射访问） */
-	private static final String EM_FACTORY_TIER_CLASS = "fr.iglee42.evolvedmekanism.tiers.EMFactoryTier";
 
 	/** EMFactoryTier的5个静态字段名（按等级升序） */
 	private static final String OVERCLOCKED_FIELD = "OVERCLOCKED";
@@ -38,9 +32,6 @@ public final class MekCompatHooks {
 	private static final List<String> EM_TIER_FIELD_NAMES = List.of(
 			OVERCLOCKED_FIELD, QUANTUM_FIELD, DENSE_FIELD, MULTIVERSAL_FIELD, CREATIVE_FIELD);
 
-	/** ME的ExtraFactoryTier全限定类名（可选依赖，反射访问） */
-	private static final String ME_FACTORY_TIER_CLASS = "com.jerry.mekextras.common.tier.ExtraFactoryTier";
-
 	/** ExtraFactoryTier的4个静态字段名（按等级升序：ABSOLUTE(11)→SUPREME(13)→COSMIC(15)→INFINITE(17)） */
 	private static final String ME_ABSOLUTE_FIELD = "ABSOLUTE";
 	private static final String ME_SUPREME_FIELD = "SUPREME";
@@ -50,9 +41,6 @@ public final class MekCompatHooks {
 	/** ME工厂等级字段名列表（升序，用于反射批量读取） */
 	private static final List<String> ME_TIER_FIELD_NAMES = List.of(
 			ME_ABSOLUTE_FIELD, ME_SUPREME_FIELD, ME_COSMIC_FIELD, ME_INFINITE_FIELD);
-
-	/** EME的EMExtraFactoryTier全限定类名（可选依赖，反射访问） */
-	private static final String EME_FACTORY_TIER_CLASS = "io.github.masyumero.emextras.common.tier.EMExtraFactoryTier";
 
 	/** EMExtraFactoryTier的4个静态字段名（按等级升序：ABSOLUTE_OVERCLOCKED(12)→SUPREME_QUANTUM(14)→COSMIC_DENSE(16)→INFINITE_MULTIVERSAL(18)） */
 	private static final String EME_ABSOLUTE_OVERCLOCKED_FIELD = "ABSOLUTE_OVERCLOCKED";
@@ -65,18 +53,10 @@ public final class MekCompatHooks {
 			EME_ABSOLUTE_OVERCLOCKED_FIELD, EME_SUPREME_QUANTUM_FIELD,
 			EME_COSMIC_DENSE_FIELD, EME_INFINITE_MULTIVERSAL_FIELD);
 
-	// ===== 反射缓存 — volatile + 双重检查，避免重复 Class.forName() =====
-	/** EM FactoryTier 类缓存 */
-	private static volatile Class<?> cachedEMFactoryTierClass;
-	/** ME ExtraFactoryTier 类缓存 */
-	private static volatile Class<?> cachedMEFactoryTierClass;
-	/** EME EMExtraFactoryTier 类缓存 */
-	private static volatile Class<?> cachedEMEFactoryTierClass;
-
 	private final boolean evolvedMekanismLoaded;
 	private final boolean mekanismExtrasLoaded;
 	private final boolean evolvedMekanismExtrasLoaded;
-	private final boolean mekanismUnleashedLoaded;
+	private final boolean mekanismEmpoweredLoaded;
 
 	private MekCompatHooks() {
 		ModList modList = ModList.get();
@@ -85,12 +65,12 @@ public final class MekCompatHooks {
 			evolvedMekanismLoaded = false;
 			mekanismExtrasLoaded = false;
 			evolvedMekanismExtrasLoaded = false;
-			mekanismUnleashedLoaded = false;
+			mekanismEmpoweredLoaded = false;
 		} else {
 			evolvedMekanismLoaded = modList.isLoaded("evolvedmekanism");
 			mekanismExtrasLoaded = modList.isLoaded("mekanism_extras");
 			evolvedMekanismExtrasLoaded = modList.isLoaded("emextras");
-			mekanismUnleashedLoaded = modList.isLoaded("mekanism_unleashed");
+			mekanismEmpoweredLoaded = modList.isLoaded("mekanism_empowered");
 		}
 	}
 
@@ -119,16 +99,15 @@ public final class MekCompatHooks {
 		return Holder.INSTANCE.evolvedMekanismExtrasLoaded;
 	}
 
-	/** 检测MekanismUnleashed是否加载 */
-	public static boolean isMekanismUnleashedLoaded() {
-		return Holder.INSTANCE.mekanismUnleashedLoaded;
+	/** 检测MekanismEmpowered是否加载 */
+	public static boolean isMekanismEmpoweredLoaded() {
+		return Holder.INSTANCE.mekanismEmpoweredLoaded;
 	}
 
 	/**
 	 * 判断给定tier是否高于或等于EM的OVERCLOCKED等级
 	 * <br/>
-	 * EM未加载时返回false。EM加载时通过反射读取EMFactoryTier.OVERCLOCKED（FactoryTier类型），
-	 * 比较ordinal值。反射失败（类路径变更/字段缺失/访问受限）时返回false，保证调用方安全。
+	 * EM未加载或反射失败时返回false，保证调用方安全。
 	 *
 	 * @param tier 待比较的Mekanism工厂等级
 	 * @return true 如果EM已加载且tier.ordinal >= OVERCLOCKED.ordinal
@@ -138,27 +117,22 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			Class<?> emFactoryTierClass = getCachedEMFactoryTierClass();
+			Class<?> emFactoryTierClass = MekReflectionCache.getCachedEMFactoryTierClass();
 			if (emFactoryTierClass == null) return false;
-			Field field = emFactoryTierClass.getField(OVERCLOCKED_FIELD);
+			Field field = MekReflectionCache.getCachedField(emFactoryTierClass, OVERCLOCKED_FIELD);
 			FactoryTier overclocked = (FactoryTier) field.get(null);
 			return overclocked != null && tier.ordinal() >= overclocked.ordinal();
-		} catch (ClassNotFoundException e) {
-			// EM类路径变更或类未加载，安全降级返回false
-			return false;
-		} catch (NoSuchFieldException | IllegalAccessException e) {
-			// 字段访问失败（字段被移除/重命名/访问限制），记录trace日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.trace("EMFactoryTier反射访问失败，isEMTierAboveOverclocked降级返回false", e);
+		} catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
+			// 类未加载或字段访问失败，安全降级返回false
 			return false;
 		}
 	}
 
-	/**
-	 * 获取EM的5个工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
+/**
+ * 获取EM的5个工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 	 * <br/>
 	 * EM未加载时返回空列表。EM加载时通过反射读取EMFactoryTier的5个静态字段，
-	 * 返回按等级升序排列的FactoryTier列表（EM通过Mixin在运行时扩展FactoryTier枚举）。
-	 * 反射失败时记录error日志并返回空列表，保证调用方安全。
+	 * 返回升序FactoryTier列表（EM通过Mixin扩展FactoryTier枚举），反射失败返回空列表。
 	 *
 	 * @return EM工厂等级列表（升序），EM未加载或反射失败时返回空列表
 	 */
@@ -167,11 +141,11 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			Class<?> emFactoryTierClass = getCachedEMFactoryTierClass();
+			Class<?> emFactoryTierClass = MekReflectionCache.getCachedEMFactoryTierClass();
 			if (emFactoryTierClass == null) return List.of();
 			List<FactoryTier> tiers = new ArrayList<>(EM_TIER_FIELD_NAMES.size());
 			for (String fieldName : EM_TIER_FIELD_NAMES) {
-				Field field = emFactoryTierClass.getField(fieldName);
+				Field field = MekReflectionCache.getCachedField(emFactoryTierClass, fieldName);
 				FactoryTier tier = (FactoryTier) field.get(null);
 				if (tier != null) {
 					tiers.add(tier);
@@ -193,9 +167,7 @@ public final class MekCompatHooks {
 	 * 获取ME的4个工厂等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）
 	 * <br/>
 	 * ME未加载时返回空列表。ME加载时通过反射读取ExtraFactoryTier的4个静态字段，
-	 * 返回按等级升序排列的ExtraFactoryTier列表（ME使用独立枚举，不扩展Mekanism的FactoryTier）。
-	 * 由于ExtraFactoryTier在编译时不存在，返回类型为List<Object>，调用方需自行类型转换。
-	 * 反射失败时记录error日志并返回空列表，保证调用方安全。
+	 * 返回升序ExtraFactoryTier列表（ME使用独立枚举）。返回类型为List<Object>，调用方需自行类型转换。
 	 *
 	 * @return ME工厂等级列表（升序，元素类型为ExtraFactoryTier），ME未加载或反射失败时返回空列表
 	 */
@@ -204,11 +176,11 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			Class<?> meFactoryTierClass = getCachedMEFactoryTierClass();
+			Class<?> meFactoryTierClass = MekReflectionCache.getCachedMEFactoryTierClass();
 			if (meFactoryTierClass == null) return List.of();
 			List<Object> tiers = new ArrayList<>(ME_TIER_FIELD_NAMES.size());
 			for (String fieldName : ME_TIER_FIELD_NAMES) {
-				Field field = meFactoryTierClass.getField(fieldName);
+				Field field = MekReflectionCache.getCachedField(meFactoryTierClass, fieldName);
 				Object tier = field.get(null);
 				if (tier != null) {
 					tiers.add(tier);
@@ -241,12 +213,11 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			Class<?> meFactoryTierClass = getCachedMEFactoryTierClass();
+			Class<?> meFactoryTierClass = MekReflectionCache.getCachedMEFactoryTierClass();
 			if (meFactoryTierClass == null) return false;
 			return meFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
-			// ME类路径变更或类未加载，记录trace日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.trace("ExtraFactoryTier类未找到，isMETier降级返回false", e);
+			// ME类路径变更或类未加载，安全降级返回false（调用方已有降级处理）
 			return false;
 		}
 	}
@@ -268,11 +239,11 @@ public final class MekCompatHooks {
 			return List.of();
 		}
 		try {
-			Class<?> emeFactoryTierClass = getCachedEMEFactoryTierClass();
+			Class<?> emeFactoryTierClass = MekReflectionCache.getCachedEMEFactoryTierClass();
 			if (emeFactoryTierClass == null) return List.of();
 			List<Object> tiers = new ArrayList<>(EME_TIER_FIELD_NAMES.size());
 			for (String fieldName : EME_TIER_FIELD_NAMES) {
-				Field field = emeFactoryTierClass.getField(fieldName);
+				Field field = MekReflectionCache.getCachedField(emeFactoryTierClass, fieldName);
 				Object tier = field.get(null);
 				if (tier != null) {
 					tiers.add(tier);
@@ -305,12 +276,11 @@ public final class MekCompatHooks {
 			return false;
 		}
 		try {
-			Class<?> emeFactoryTierClass = getCachedEMEFactoryTierClass();
+			Class<?> emeFactoryTierClass = MekReflectionCache.getCachedEMEFactoryTierClass();
 			if (emeFactoryTierClass == null) return false;
 			return emeFactoryTierClass.isInstance(tier);
 		} catch (ClassNotFoundException e) {
-			// EME类路径变更或类未加载，记录trace日志并安全降级返回false
-			ProductiveBeesGenesis.LOGGER.trace("EMExtraFactoryTier类未找到，isEMETier降级返回false", e);
+			// EME类路径变更或类未加载，安全降级返回false（调用方已有降级处理）
 			return false;
 		}
 	}
@@ -344,66 +314,34 @@ public final class MekCompatHooks {
 				return true;
 			}
 		}
-		// EME工厂同类型检查 — 仅在 EME 已加载时执行，避免 NoClassDefFoundError
+		// EME工厂同类型检查 — 仅在 EME 已加载时通过反射执行，避免编译期硬依赖 EMExtraAttributeFactoryType
+		// 反射调用 Attribute.get(selfHolder, emeAttrClass) 和 getFactoryType()，异常时安全降级返回 false
 		if (isEvolvedMekanismExtrasLoaded()) {
-			EMExtraAttributeFactoryType emeType = Attribute.get(selfHolder, EMExtraAttributeFactoryType.class);
-			if (emeType != null) {
-				EMExtraAttributeFactoryType otherType = Attribute.get(blockType, EMExtraAttributeFactoryType.class);
-				if (otherType != null && emeType.getFactoryType() == otherType.getFactoryType()) {
-					return true;
+			try {
+				Class<?> emeAttrClass = MekReflectionCache.getCachedEMEAttributeFactoryTypeClass();
+				Method attributeGet = MekReflectionCache.getCachedAttributeGetMethod();
+				if (emeAttrClass != null && attributeGet != null) {
+					Object emeType = attributeGet.invoke(null, selfHolder, emeAttrClass);
+					if (emeType != null) {
+						Object otherType = attributeGet.invoke(null, blockType, emeAttrClass);
+						if (otherType != null) {
+							Method getFactoryType = MekReflectionCache.getCachedEMEGetFactoryTypeMethod(emeType.getClass());
+							if (getFactoryType != null) {
+								Object emeFactoryType = getFactoryType.invoke(emeType);
+								Object otherFactoryType = getFactoryType.invoke(otherType);
+								// 反射返回 Object，用 equals 比较枚举值（而非 ==）
+								if (emeFactoryType != null && emeFactoryType.equals(otherFactoryType)) {
+									return true;
+								}
+							}
+						}
+					}
 				}
+			} catch (Exception e) {
+				// EME 类路径变更或反射失败，安全降级返回 false
+				ProductiveBeesGenesis.LOGGER.error("EME Attribute 反射检查失败，配置卡兼容性检查降级", e);
 			}
 		}
 		return false;
-	}
-
-	// ======================== 反射类缓存辅助方法 ========================
-
-	/** 获取缓存的 EM FactoryTier 类（双重检查 + volatile） */
-	@Nullable
-	private static Class<?> getCachedEMFactoryTierClass() throws ClassNotFoundException {
-		Class<?> clazz = cachedEMFactoryTierClass;
-		if (clazz == null) {
-			synchronized (MekCompatHooks.class) {
-				clazz = cachedEMFactoryTierClass;
-				if (clazz == null) {
-					clazz = Class.forName(EM_FACTORY_TIER_CLASS);
-					cachedEMFactoryTierClass = clazz;
-				}
-			}
-		}
-		return clazz;
-	}
-
-	/** 获取缓存的 ME ExtraFactoryTier 类（双重检查 + volatile） */
-	@Nullable
-	private static Class<?> getCachedMEFactoryTierClass() throws ClassNotFoundException {
-		Class<?> clazz = cachedMEFactoryTierClass;
-		if (clazz == null) {
-			synchronized (MekCompatHooks.class) {
-				clazz = cachedMEFactoryTierClass;
-				if (clazz == null) {
-					clazz = Class.forName(ME_FACTORY_TIER_CLASS);
-					cachedMEFactoryTierClass = clazz;
-				}
-			}
-		}
-		return clazz;
-	}
-
-	/** 获取缓存的 EME EMExtraFactoryTier 类（双重检查 + volatile） */
-	@Nullable
-	private static Class<?> getCachedEMEFactoryTierClass() throws ClassNotFoundException {
-		Class<?> clazz = cachedEMEFactoryTierClass;
-		if (clazz == null) {
-			synchronized (MekCompatHooks.class) {
-				clazz = cachedEMEFactoryTierClass;
-				if (clazz == null) {
-					clazz = Class.forName(EME_FACTORY_TIER_CLASS);
-					cachedEMEFactoryTierClass = clazz;
-				}
-			}
-		}
-		return clazz;
 	}
 }

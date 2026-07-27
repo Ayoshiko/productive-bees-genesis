@@ -1,10 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.jetbrains.annotations.Nullable;
 
 import mekanism.api.IContentsListener;
+import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
 
 /**
@@ -31,7 +33,8 @@ import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
  * </ul>
  * <p>
  * 线程安全：方块实体在服务端单线程执行，字段无需同步锁；
- * volatile 用于保证可见性（outputContentsVersion 可能被 Ejector Mixin 读取）。
+ * outputContentsVersion 使用 AtomicLong 保证原子自增（可能被 Ejector Mixin 跨线程读取）；
+ * sortingMarkedThisTick 为 volatile boolean，单线程 check-then-set 安全。
  */
 public class FactoryPbContextDelegate {
 
@@ -45,7 +48,7 @@ public class FactoryPbContextDelegate {
 	private final java.util.concurrent.atomic.AtomicIntegerArray pbActiveStates;
 
 	/** 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否跳过 outputItems） */
-	private volatile long outputContentsVersion = 0L;
+	private final AtomicLong outputContentsVersion = new AtomicLong(0L);
 
 	/** sortInventory 去抖标志（同 tick 内只标记一次 sortingNeeded，避免 AE2 高频拉取触发全量排序） */
 	private volatile boolean sortingMarkedThisTick = false;
@@ -154,7 +157,7 @@ public class FactoryPbContextDelegate {
 	 * 用于 listener 和 {@link #endOutputBatch} 的公共逻辑。
 	 */
 	private void notifyOutputChanged(int process) {
-		outputContentsVersion++;
+		outputContentsVersion.incrementAndGet();
 		if (!sortingMarkedThisTick) {
 			sortingMarkedThisTick = true;
 			if (updateSortingListener != null) {
@@ -200,6 +203,20 @@ public class FactoryPbContextDelegate {
 	}
 
 	/**
+	 * 仅重算单个槽位的状态缓存（Task 7 增量更新）
+	 * <br/>
+	 * 委托到 {@link OutputSlotFlagManager#updateSlotOnly}，由 {@link PbRecipeCompleter}
+	 * 在每次 setStack/growStack 后调用，标记该槽位为已知状态。
+	 *
+	 * @param process  进程索引
+	 * @param slotIdx  槽位索引（0=主输出，1=副输出1，2=副输出2）
+	 * @param slot     输出槽
+	 */
+	public void updateSlotOnly(int process, int slotIdx, IInventorySlot slot) {
+		outputSlotFlagManager.updateSlotOnly(process, slotIdx, slot);
+	}
+
+	/**
 	 * 结束批量输出插入
 	 * <br/>
 	 * 批量结束时统一更新标志位、递增版本号、去抖触发排序 + 独立触发 unpause。
@@ -214,7 +231,7 @@ public class FactoryPbContextDelegate {
 
 	/** 输出槽内容版本号（供 Ejector Mixin 判断是否跳过 outputItems） */
 	public long outputContentsVersion() {
-		return outputContentsVersion;
+		return outputContentsVersion.get();
 	}
 
 	// ===== Task 11: 激活状态计数器方法 =====
@@ -225,7 +242,7 @@ public class FactoryPbContextDelegate {
 	 * 使用状态守卫防止重复递增：仅状态 false→true 时递增计数器。
 	 */
 	public void onProcessActivated(int process) {
-		MekCentrifugeFactoryHelper.onProcessActivated(process, pbActiveStates, activeProcessCount);
+		FactoryProcessStateGuard.onProcessActivated(process, pbActiveStates, activeProcessCount);
 	}
 
 	/**
@@ -234,7 +251,7 @@ public class FactoryPbContextDelegate {
 	 * 使用状态守卫防止重复递减：仅状态 true→false 时递减计数器。
 	 */
 	public void onProcessDeactivated(int process) {
-		MekCentrifugeFactoryHelper.onProcessDeactivated(process, pbActiveStates, activeProcessCount);
+		FactoryProcessStateGuard.onProcessDeactivated(process, pbActiveStates, activeProcessCount);
 	}
 
 	/** 是否有任意 PB 进程激活（O(1) 计数器读取，替代 O(processes) 遍历） */

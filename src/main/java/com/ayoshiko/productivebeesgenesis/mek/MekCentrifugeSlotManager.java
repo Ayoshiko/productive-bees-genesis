@@ -1,5 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.IntSupplier;
+
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -8,6 +11,7 @@ import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
 import mekanism.common.capabilities.holder.slot.InventorySlotHelper;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.inventory.slot.InputInventorySlot;
 import mekanism.common.inventory.slot.OutputInventorySlot;
@@ -16,6 +20,10 @@ import net.minecraft.world.item.ItemStack;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 /**
  * 基础MEK离心机输出槽与流体槽管理器
@@ -35,11 +43,11 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 class MekCentrifugeSlotManager {
 
 	// ===== 槽位引用 =====
-	/** 副输出槽1 — PB配方第2个物品输出 */
-	private OutputInventorySlot secondaryOutputSlot;
+	/** 副输出槽1 — PB配方第2个物品输出（分等级堆叠倍率） */
+	private TieredOutputInventorySlot secondaryOutputSlot;
 
-	/** 副输出槽2 — PB配方第3个物品输出 */
-	private OutputInventorySlot tertiaryOutputSlot;
+	/** 副输出槽2 — PB配方第3个物品输出（分等级堆叠倍率） */
+	private TieredOutputInventorySlot tertiaryOutputSlot;
 
 	/** 流体输出槽 — 接收PB配方的流体输出 */
 	private IExtendedFluidTank fluidOutputTank;
@@ -52,7 +60,7 @@ class MekCentrifugeSlotManager {
 	private volatile boolean outputSlotsFull = false;
 
 	/** Task 16: 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否需要跳过 outputItems） */
-	private volatile long outputContentsVersion = 0L;
+	private final AtomicLong outputContentsVersion = new AtomicLong(0L);
 
 	/**
 	 * Step 5: 输出槽物品总数（主+副1+副2）
@@ -111,6 +119,8 @@ class MekCentrifugeSlotManager {
 
 		// 输入槽 — 与父类相同位置
 		InputInventorySlot inputSlot = InputInventorySlot.at(tile::containsRecipe, recipeCacheListener, 64, 17);
+		// Task 7: 注入输入槽分等级堆叠倍率（基础离心机使用 basic 配置）
+		((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(CentrifugeInputStackMultipliers.forBasic());
 		builder.addSlot(inputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_INPUT)));
@@ -125,12 +135,15 @@ class MekCentrifugeSlotManager {
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
 
+		// 副输出槽1/2 — 使用 TieredOutputInventorySlot 支持分等级堆叠倍率
+		// 倍率由 getStackMultiplierForTier 动态提供，基础版使用 basic 倍率
+		IntSupplier stackMultiplier = getStackMultiplierForTier();
 		// 副输出槽1 — 竖排第2个（x=134, y=35）
-		secondaryOutputSlot = OutputInventorySlot.at(outputListener, 134, 35);
+		secondaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener, 134, 35);
 		builder.addSlot(secondaryOutputSlot);
 
 		// 副输出槽2 — 竖排第3个（x=134, y=53）
-		tertiaryOutputSlot = OutputInventorySlot.at(outputListener, 134, 53);
+		tertiaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener, 134, 53);
 		builder.addSlot(tertiaryOutputSlot);
 
 		// 能量槽 — 与父类相同位置
@@ -156,12 +169,28 @@ class MekCentrifugeSlotManager {
 	 * 需要重写3参数版本。TileEntityElectricMachine默认没有FluidTank，重写此方法添加。
 	 */
 	IFluidTankHolder buildFluidTanks(IContentsListener listener,
-									 IContentsListener recipeCacheListener,
-									 IContentsListener recipeCacheUnpauseListener) {
+			IContentsListener recipeCacheListener,
+			IContentsListener recipeCacheUnpauseListener) {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
 		fluidOutputTank = BasicFluidTank.output(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(), listener);
 		helper.addTank(fluidOutputTank);
 		return helper.build();
+	}
+
+	// ===== 等级堆叠倍率 =====
+
+	/**
+	 * 获取基础版离心机的堆叠倍率供应商
+	 * <br/>
+	 * 基础版离心机使用 {@code mekCentrifugeStackBasic} 配置值(通过子段访问)。
+	 * 工厂版离心机（TileEntityMekCentrifugeFactory 等）有自己的 addSlots() 实现，
+	 * 不使用本管理器，其堆叠倍率需在各工厂子类中独立实现。
+	 *
+	 * @return 堆叠倍率供应商，传入 TieredOutputInventorySlot
+	 */
+	private IntSupplier getStackMultiplierForTier() {
+		// v1.13.0 子段抽取后,通过 centrifuge().stackMultiplier 访问
+		return () -> ModConfig.SERVER.centrifuge().stackMultiplier.mekCentrifugeStackBasic.get();
 	}
 
 	/**
@@ -181,7 +210,7 @@ class MekCentrifugeSlotManager {
 			}
 			updateOutputSlotFlags();
 			// Task 16: 输出槽内容变化时递增版本号，通知 Ejector Mixin 需要重新尝试输出
-			outputContentsVersion++;
+			outputContentsVersion.incrementAndGet();
 		};
 	}
 
@@ -195,7 +224,8 @@ class MekCentrifugeSlotManager {
 	 * volatile 保证可见性：服务端tick线程写入，EjectorMixin 同线程读取。
 	 */
 	void updateOutputSlotFlags() {
-		OutputInventorySlot[] slots = {
+		// 主输出槽（OutputInventorySlot）和副输出槽（TieredOutputInventorySlot）的公共父类为 BasicInventorySlot
+		BasicInventorySlot[] slots = {
 				tile.accessor().productivebeesgenesis$getOutputSlot(),
 				secondaryOutputSlot,
 				tertiaryOutputSlot
@@ -204,7 +234,7 @@ class MekCentrifugeSlotManager {
 		boolean full = true;
 		long itemCount = 0;
 		for (int i = 0; i < slots.length; i++) {
-			OutputInventorySlot slot = slots[i];
+			BasicInventorySlot slot = slots[i];
 			if (slot == null) continue;
 			ItemStack stack = slot.getStack();
 			if (!stack.isEmpty()) {
@@ -233,7 +263,7 @@ class MekCentrifugeSlotManager {
 	 * @param stack 当前栈（非空）
 	 * @return 槽位上限
 	 */
-	private int getCachedSlotLimit(int index, OutputInventorySlot slot, ItemStack stack) {
+	private int getCachedSlotLimit(int index, BasicInventorySlot slot, ItemStack stack) {
 		if (stack == cachedLimitStacks[index]) {
 			return cachedLimits[index];
 		}
@@ -260,7 +290,7 @@ class MekCentrifugeSlotManager {
 	void endOutputBatch() {
 		if (--outputBatchDepth < 0) {
 			outputBatchDepth = 0;
-			ProductiveBeesGenesis.LOGGER.warn("endOutputBatch 调用次数多于 beginOutputBatch，batchDepth 已重置为 0（配对错误）");
+			DevLog.warn("centrifuge_batch", "endOutputBatch 调用次数多于 beginOutputBatch，batchDepth 已重置为 0（配对错误）");
 			return;
 		}
 		if (outputBatchDepth == 0 && outputBatchDirty) {
@@ -269,7 +299,7 @@ class MekCentrifugeSlotManager {
 				recipeCacheUnpauseListener.onContentsChanged();
 			}
 			updateOutputSlotFlags();
-			outputContentsVersion++;
+			outputContentsVersion.incrementAndGet();
 		}
 	}
 
@@ -284,18 +314,18 @@ class MekCentrifugeSlotManager {
 	}
 
 	long outputContentsVersion() {
-		return outputContentsVersion;
+		return outputContentsVersion.get();
 	}
 
 	long outputItemCount() {
 		return outputItemCount;
 	}
 
-	OutputInventorySlot getSecondaryOutputSlot() {
+	TieredOutputInventorySlot getSecondaryOutputSlot() {
 		return secondaryOutputSlot;
 	}
 
-	OutputInventorySlot getTertiaryOutputSlot() {
+	TieredOutputInventorySlot getTertiaryOutputSlot() {
 		return tertiaryOutputSlot;
 	}
 
