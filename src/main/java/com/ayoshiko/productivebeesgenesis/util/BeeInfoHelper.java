@@ -18,6 +18,7 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import cy.jdkdigital.productivebees.util.BeeHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -29,12 +30,7 @@ import net.minecraft.world.level.Level;
 /**
  * 蜜蜂信息查询工具类
  * <br/>
- * 封装对 ProductiveBees 注册表和配方的访问，提供：
- * <ol>
- *   <li>获取所有已注册的蜜蜂类型</li>
- *   <li>通过蜜蜂类型ID获取显示名称</li>
- *   <li>通过蜜蜂类型ID获取产物信息</li>
- * </ol>
+ * 封装对 ProductiveBees 注册表和配方的访问：获取蜜蜂类型、显示名称、产物信息。
  * <p>
  * 设计原则：单一职责（SRP），仅负责蜜蜂信息查询，不涉及配置读写。
  * <br/>
@@ -65,9 +61,57 @@ public final class BeeInfoHelper {
 				new AdvancedBeehiveRecipeIndex(Map.of());
 	}
 
+	/**
+	 * 蜜蜂花朵偏好数据（Task E-1）
+	 * <br/>
+	 * 从 PB 的 CompoundTag 提取的花朵相关字段，供 {@link com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager}
+	 * 进行喂食器花朵有效性精确匹配。字段含义与 PB ConfigurableBee 一致：
+	 * flowerType（"blocks"/"items"/"entity_types"）、flowerTag、flowerItem、flowerFluid、inverseFlower。
+	 */
+	public record FlowerPreference(
+			String flowerType,
+			String flowerTag,
+			String flowerItem,
+			String flowerFluid,
+			boolean inverseFlower
+	) {
+		/** flowerType 常量：方块型花朵（默认） */
+		public static final String TYPE_BLOCKS = "blocks";
+
+		/** flowerType 常量：实体型花朵 */
+		public static final String TYPE_ENTITY_TYPES = "entity_types";
+
+		/** 空偏好（无花朵定义） */
+		public static final FlowerPreference EMPTY =
+				new FlowerPreference(TYPE_BLOCKS, "", "", "", false);
+
+		/**
+		 * 是否有花朵定义
+		 *
+		 * @return true 如果任一花朵字段非空
+		 */
+		public boolean hasFlowerDefinition() {
+			return !flowerTag.isEmpty() || !flowerItem.isEmpty() || !flowerFluid.isEmpty();
+		}
+	}
+
 	/** 当前配方索引 — volatile 引用保证原子替换 */
 	private static volatile AdvancedBeehiveRecipeIndex beehiveRecipeIndex =
 			AdvancedBeehiveRecipeIndex.EMPTY;
+
+	/**
+	 * 花朵偏好缓存 — 高频调用（每tick每只蜜蜂）性能优化
+	 * <p>
+	 * 使用普通 {@link HashMap}（非 ConcurrentHashMap）+ volatile 引用原子替换实现线程安全：
+	 * <ul>
+	 * <li>{@link #invalidateCache()} 创建新的空 HashMap 原子替换引用，避免 put/clear 与 get 并发冲突</li>
+	 * <li>{@link #getFlowerPreference} 读取时拿到引用副本，无锁访问，HashMap.get 比 ConcurrentHashMap.get 快 3-4 倍</li>
+	 * <li>绝大多数调用是 cache hit（256× 加速下每 tick 数十次）</li>
+	 * <li>cache miss 时（仅首次访问新蜜蜂类型）write-on-copy 复制整张 map 后原子替换引用，
+	 *     与 invalidate 的引用替换通过 synchronized 互斥，保证写入不丢失</li>
+	 * </ul>
+	 */
+	private static volatile Map<ResourceLocation, FlowerPreference> flowerPreferenceCache = new HashMap<>();
 
 	private BeeInfoHelper() {
 		// 工具类禁止实例化
@@ -114,10 +158,26 @@ public final class BeeInfoHelper {
 	 * 应在 BeeReloadListener 重载完成或数据包变更时调用，确保下次查询返回最新数据。
 	 * 由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 中统一调用。
 	 * 同步失效 AdvancedBeehiveRecipe 索引，保证下次 getBeeProduce 重建索引。
+	 * <p>
+	 * flowerPreferenceCache 通过 volatile 引用原子替换实现失效：
+	 * 创建新的空 HashMap 替换引用，避免与 getFlowerPreference 的 write-on-copy 写操作
+	 * 产生 HashMap 结构损坏。getFlowerPreference 的 cache hit 无锁访问无需保护。
 	 */
 	public static void invalidateCache() {
 		cachedAllBeeTypes = null;
 		beehiveRecipeIndex = AdvancedBeehiveRecipeIndex.EMPTY;
+		// 用 synchronized 保护 invalidate 与 getFlowerPreference 的 write-on-copy 互斥，
+		// 避免新条目被 replace 覆盖造成 cache 写入丢失
+		synchronized (BeeInfoHelper.class) {
+			flowerPreferenceCache = new HashMap<>();
+		}
+		// 同步清空客户端蜜蜂实体缓存（spec 要求监听重载事件）
+		// BeeEntityCache 仅引用通用 MC 类，服务端加载安全；try-catch 防御性保护
+		try {
+			com.ayoshiko.productivebeesgenesis.apiary.client.BeeEntityCache.clearCache();
+		} catch (Exception | LinkageError e) {
+			// 客户端类未加载时忽略（NoClassDefFoundError 是 LinkageError 子类，服务端无渲染实体缓存）
+		}
 	}
 
 	/**
@@ -256,10 +316,9 @@ public final class BeeInfoHelper {
 	}
 
 	/**
-	 * 解析蜜蜂的代表物品图标
+	 * 解析蜜蜂的代表物品图标（默认蜜脾形态）
 	 * <p>
-	 * 优先取配方首个产物；无产物时回退到 PB 可配置蜜脾并绑定 bee_type 数据组件；
-	 * PB 可配置蜜脾不可用时退化到原版蜜脾。返回堆叠数量固定为 1，避免渲染遮挡。
+	 * 委托给 {@link #resolveBeeIcon(Level, ResourceLocation, boolean)}，isBlock=false。
 	 *
 	 * @param level   客户端世界（用于配方查询）
 	 * @param beeType 蜜蜂类型ID
@@ -267,22 +326,52 @@ public final class BeeInfoHelper {
 	 */
 	@Nonnull
 	public static ItemStack resolveBeeIcon(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		return resolveBeeIcon(level, beeType, false);
+	}
+
+	/**
+	 * 解析蜜蜂的代表物品图标（区分蜜脾和蜜脾块）
+	 * <p>
+	 * isBlock=true 时直接返回绑定 bee_type 的 CONFIGURABLE_COMB_BLOCK；
+	 * isBlock=false 时优先取配方首个产物，无产物时回退到 CONFIGURABLE_HONEYCOMB。
+	 * PB 物品不可用时退化到原版蜜脾。返回堆叠数量固定为 1，避免渲染遮挡。
+	 *
+	 * @param level   客户端世界（用于配方查询）
+	 * @param beeType 蜜蜂类型ID
+	 * @param isBlock 是否为蜜脾块（true 返回 CONFIGURABLE_COMB_BLOCK，false 返回 CONFIGURABLE_HONEYCOMB）
+	 * @return 代表该蜜蜂的图标 ItemStack（不会为空）
+	 */
+	@Nonnull
+	public static ItemStack resolveBeeIcon(@Nonnull Level level, @Nonnull ResourceLocation beeType, boolean isBlock) {
 		try {
+			// V16: isBlock=true 时直接返回蜜脾块图标，不再忽略 isBlock 参数
+			if (isBlock) {
+				Item blockItem = ModItems.CONFIGURABLE_COMB_BLOCK.get();
+				if (blockItem != null) {
+					ItemStack stack = new ItemStack(blockItem);
+					stack.set(ModDataComponents.BEE_TYPE.get(), beeType);
+					return stack;
+				}
+				return new ItemStack(Items.HONEYCOMB);
+			}
+			// isBlock=false 时保持原逻辑：优先返回配方首个产物
 			List<ItemStack> outputs = getBeeProduce(level, beeType);
 			for (ItemStack output : outputs) {
 				if (!output.isEmpty()) {
 					return output.copyWithCount(1);
 				}
 			}
-			Item honeycombItem = ModItems.CONFIGURABLE_HONEYCOMB.get();
-			if (honeycombItem != null) {
-				ItemStack stack = new ItemStack(honeycombItem);
+			// 无配方产物时 fallback 到蜜脾物品
+			Item combItem = ModItems.CONFIGURABLE_HONEYCOMB.get();
+			if (combItem != null) {
+				ItemStack stack = new ItemStack(combItem);
 				stack.set(ModDataComponents.BEE_TYPE.get(), beeType);
 				return stack;
 			}
 			return new ItemStack(Items.HONEYCOMB);
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("解析蜜蜂图标失败: {}", beeType, e);
+		} catch (RuntimeException e) {
+			// DevLog 节流日志便于排查（渲染路径，避免刷屏）
+			DevLog.warn("bee_info", "解析蜜蜂图标失败: {} - {}", beeType, e.toString());
 			return new ItemStack(Items.HONEYCOMB);
 		}
 	}
@@ -322,8 +411,9 @@ public final class BeeInfoHelper {
 		try {
 			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
 			return beeData != null && beeData.containsKey(beeType);
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("isBeeTypeExists 检查异常: {}", beeType, e);
+		} catch (RuntimeException e) {
+			// DevLog 节流日志便于排查（渲染路径，避免刷屏）
+			DevLog.warn("bee_info", "isBeeTypeExists 检查异常: {} - {}", beeType, e.toString());
 			return false;
 		}
 	}
@@ -343,6 +433,63 @@ public final class BeeInfoHelper {
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("parseBeeType 解析异常: {}", id, e);
 			return null;
+		}
+	}
+
+	/**
+	 * 获取指定蜜蜂类型的花朵偏好（Task E-1）
+	 * <br/>
+	 * 从 {@link BeeReloadListener} 查询蜜蜂的 CompoundTag 数据，提取花朵相关字段。
+	 * 数据缺失时返回 {@link FlowerPreference#EMPTY}。
+	 * <p>
+	 * 原理：BeeReloadListener 存储的 CompoundTag 直接包含 flowerTag/flowerItem/flowerFluid/
+	 * flowerType/inverseFlower 字段（由 BeeCreator.create 写入），无需反射。
+	 *
+	 * @param beeType 蜜蜂类型 ID
+	 * @return 花朵偏好数据，永不为 null
+	 */
+	@Nonnull
+	public static FlowerPreference getFlowerPreference(@Nonnull ResourceLocation beeType) {
+		// 优先查缓存（高频调用性能优化）
+		// volatile 读取获取引用副本，后续访问无锁，避免 ConcurrentHashMap 的 volatile 读开销
+		Map<ResourceLocation, FlowerPreference> cache = flowerPreferenceCache;
+		FlowerPreference cached = cache.get(beeType);
+		if (cached != null) {
+			return cached;
+		}
+		try {
+			CompoundTag nbt = BeeReloadListener.INSTANCE.getData(beeType);
+			FlowerPreference preference;
+			if (nbt == null) {
+				preference = FlowerPreference.EMPTY;
+			} else {
+				String flowerType = nbt.getString("flowerType");
+				if (flowerType.isEmpty()) {
+					flowerType = FlowerPreference.TYPE_BLOCKS;
+				}
+				preference = new FlowerPreference(
+						flowerType,
+						nbt.getString("flowerTag"),
+						nbt.getString("flowerItem"),
+						nbt.getString("flowerFluid"),
+						nbt.getBoolean("inverseFlower")
+				);
+			}
+			// 缓存查询结果（含 EMPTY，避免重复查询不存在的蜜蜂类型）
+			// cache miss 是稀有事件（仅首次访问新蜜蜂类型），用 synchronized 保护写操作
+			// write-on-copy 模式：复制当前 map 添加新条目后原子替换引用
+			synchronized (BeeInfoHelper.class) {
+				Map<ResourceLocation, FlowerPreference> current = flowerPreferenceCache;
+				if (!current.containsKey(beeType)) {
+					Map<ResourceLocation, FlowerPreference> newCache = new HashMap<>(current);
+					newCache.put(beeType, preference);
+					flowerPreferenceCache = newCache;
+				}
+			}
+			return preference;
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("获取蜜蜂花朵偏好失败: {}", beeType, e);
+			return FlowerPreference.EMPTY;
 		}
 	}
 }

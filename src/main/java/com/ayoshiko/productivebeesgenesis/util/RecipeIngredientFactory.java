@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
@@ -59,7 +58,8 @@ public final class RecipeIngredientFactory {
 			if (holder != null) {
 				holders.add(holder);
 			} else {
-				ProductiveBeesGenesis.LOGGER.warn("钓鱼群系 '{}' 未找到，已跳过", id);
+				// DevLog 节流日志便于排查（数据重载路径，统一门面）
+				DevLog.warn("recipe_reload", "钓鱼群系 '{}' 未找到，已跳过", id);
 			}
 		}
 		return holders.isEmpty() ? HolderSet.empty() : HolderSet.direct(holders);
@@ -82,14 +82,16 @@ public final class RecipeIngredientFactory {
 				// 显式宽化 Named<Biome> → HolderSet<Biome>，使 orElse 类型匹配
 				return tag.<HolderSet<Biome>>map(n -> n).orElse(HolderSet.empty());
 			} catch (Exception e) {
-				ProductiveBeesGenesis.LOGGER.warn("解析群系标签 '{}' 失败", biomeSpec, e);
+				// DevLog 节流日志便于排查（数据重载路径，统一门面）
+				DevLog.warn("recipe_reload", "解析群系标签 '{}' 失败: {}", biomeSpec, e.toString());
 				return HolderSet.empty();
 			}
 		}
 		// 单个群系 ID
 		Holder<Biome> holder = resolveBiome(biomeSpec);
 		if (holder == null) {
-			ProductiveBeesGenesis.LOGGER.warn("生成群系 '{}' 未找到", biomeSpec);
+			// DevLog 节流日志便于排查（数据重载路径，统一门面）
+			DevLog.warn("recipe_reload", "生成群系 '{}' 未找到", biomeSpec);
 			return HolderSet.empty();
 		}
 		return HolderSet.direct(List.of(holder));
@@ -107,7 +109,8 @@ public final class RecipeIngredientFactory {
 					.map(h -> (Holder<Biome>) h)
 					.orElse(null);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("解析群系 '{}' 失败", biomeId, e);
+			// DevLog 节流日志便于排查（数据重载路径，统一门面）
+			DevLog.warn("recipe_reload", "解析群系 '{}' 失败: {}", biomeId, e.toString());
 			return null;
 		}
 	}
@@ -121,7 +124,8 @@ public final class RecipeIngredientFactory {
 			Optional<Item> item = BuiltInRegistries.ITEM.getOptional(rl);
 			return item.<Ingredient>map(i -> Ingredient.of(i)).orElse(Ingredient.EMPTY);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("解析蜂巢物品 '{}' 失败，使用空 Ingredient", itemId, e);
+			// DevLog 节流日志便于排查（数据重载路径，统一门面）
+			DevLog.warn("recipe_reload", "解析蜂巢物品 '{}' 失败，使用空 Ingredient: {}", itemId, e.toString());
 			return Ingredient.EMPTY;
 		}
 	}
@@ -138,7 +142,8 @@ public final class RecipeIngredientFactory {
 			return BeeIngredientFactory.getIngredient("minecraft:bee");
 		}
 		if (!BeeIngredientFactory.getOrCreateList().containsKey(name)) {
-			ProductiveBeesGenesis.LOGGER.warn("蜜蜂类型 '{}' 未在 BeeIngredientFactory 中找到，回退到 minecraft:bee", name);
+			// DevLog 节流日志便于排查（数据重载路径，统一门面）
+			DevLog.warn("recipe_reload", "蜜蜂类型 '{}' 未在 BeeIngredientFactory 中找到，回退到 minecraft:bee", name);
 			return BeeIngredientFactory.getIngredient("minecraft:bee");
 		}
 		return BeeIngredientFactory.getIngredient(name);
@@ -155,11 +160,9 @@ public final class RecipeIngredientFactory {
 		int min = ModConfig.SERVER.produceOutputMin.get();
 		int max = ModConfig.SERVER.produceOutputMax.get();
 		// 防御性处理：当配置出现 min > max 时自动纠正，避免 ChancedOutput 行为异常
+		// 注：min > max 的告警由 ModConfig 交叉校验统一输出，此处不重复记录
 		int finalMin = Math.min(min, max);
 		int finalMax = Math.max(min, max);
-		if (finalMin != min || finalMax != max) {
-			ProductiveBeesGenesis.LOGGER.warn("produceOutputMin({}) > produceOutputMax({})，已自动交换", min, max);
-		}
 		float chance = ModConfig.SERVER.produceOutputChance.get().floatValue();
 		List<TagOutputRecipe.ChancedOutput> outputs = new ArrayList<>(1);
 		outputs.add(new TagOutputRecipe.ChancedOutput(ingredient, finalMin, finalMax, chance));

@@ -6,6 +6,7 @@ import java.util.function.BiConsumer;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.crafting.RecipeManager;
@@ -63,6 +64,19 @@ public final class RecipeReloadRetryManager {
 	private static final AtomicInteger retryCount = new AtomicInteger(0);
 	private static final int MAX_RETRY_COUNT = 60; // 最多重试60次（约3秒）
 
+	// ===== EM 配置死循环检测（Task 8）=====
+	// FileWatcher 线程与主线程并发访问，使用 volatile 保证可见性。
+	// 注：configChangeCount 已改为 AtomicInteger 保证原子自增（Task 12）。
+	
+	/** 最近配置变化时间戳（ms） */
+	private static volatile long lastConfigChangeTimeMs = 0L;
+	/** 5 秒窗口内配置变化次数 */
+	private static final AtomicInteger configChangeCount = new AtomicInteger(0);
+	/** 死循环已检测标志 — 检测后 30 秒内暂停安排配方重载 */
+	private static volatile boolean deadLoopDetected = false;
+	/** 死循环首次告警标志 — 避免重复输出 WARN 日志 */
+	private static volatile boolean deadLoopWarned = false;
+
 	private RecipeReloadRetryManager() {}
 
 	/** 是否有待重试任务（原子读保证可见性） */
@@ -79,6 +93,10 @@ public final class RecipeReloadRetryManager {
 	 * 重置 retryCount：用于外部首次 reload 事件（如配置未加载），新的 reload 事件应重新开始计数。
 	 */
 	public static void scheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess) {
+		// 死循环检测：EM 配置死循环时暂停安排配方重载（Task 8）
+		if (deadLoopDetected) {
+			return;
+		}
 		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess));
 		retryCount.set(0);
 	}
@@ -93,6 +111,10 @@ public final class RecipeReloadRetryManager {
 	 * 与 {@link #scheduleRetry} 的区别仅在于不重置计数器。
 	 */
 	public static void rescheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess) {
+		// 死循环检测：EM 配置死循环时暂停重新安排配方重载（Task 8）
+		if (deadLoopDetected) {
+			return;
+		}
 		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess));
 	}
 
@@ -105,6 +127,66 @@ public final class RecipeReloadRetryManager {
 	public static void clearPendingRetryContext() {
 		pendingRetryContext.set(PendingRetryContext.EMPTY);
 		retryCount.set(0);
+	}
+
+	/**
+	 * 配置文件变化通知 — 由 {@link ModConfigEvent.Reloading} 监听器调用。
+	 * <br/>
+	 * 检测 EvolvedMekanism / Mekanism-Extras 模组配置死循环：5 秒内变化超过 3 次则
+	 * 设置 {@link #deadLoopDetected} 标志，30 秒内暂停安排配方重载，避免 ConfigTracker
+	 * 反复纠正 + FileWatcher 重载导致的配方重载风暴。
+	 * <p>
+	 * 背景：EM 模组 {@code registerConfigs} 在 {@code initEnums} 之前调用，导致
+	 * {@code general.toml} 的 {@code maxInstallerTier} spec 验证失败，触发 NeoForge
+	 * ConfigTracker 反复纠正 + FileWatcher 重载的死循环（5 秒内 24 次纠正）。
+	 * 本模组无法修复 EM bug，仅缓解其对配方重载的影响。
+	 * <p>
+	 * 线程安全：FileWatcher 线程与主线程并发访问，使用 volatile 字段保证可见性。
+	 * 计数采用非原子自增为有意的启发式设计 — 死循环频率远超阈值，偶发竞争不影响判定。
+	 *
+	 * @param path  配置文件路径（保留供未来日志扩展使用）
+	 * @param modId 配置所属 modId
+	 */
+	public static void onConfigFileChanged(String path, String modId) {
+		// 仅缓解 EvolvedMekanism 和 Mekanism-Extras 模组的死循环
+		if (!"evolvedmekanism".equals(modId) && !"mekanism_extras".equals(modId)) {
+			return;
+		}
+
+		long now = System.currentTimeMillis();
+
+		// 死循环已检测：检查是否可解除（30 秒后自动解除）
+		if (deadLoopDetected) {
+			if (now - lastConfigChangeTimeMs > 30000L) {
+				deadLoopDetected = false;
+				deadLoopWarned = false;
+				configChangeCount.set(0);
+				lastConfigChangeTimeMs = now;
+				return;
+			}
+			// 仍在死循环窗口内，刷新时间戳
+			lastConfigChangeTimeMs = now;
+			return;
+		}
+
+		// 5 秒窗口内计数
+		if (now - lastConfigChangeTimeMs < 5000L) {
+			configChangeCount.incrementAndGet();
+			if (configChangeCount.get() >= 3) {
+				// 触发死循环检测
+				deadLoopDetected = true;
+				lastConfigChangeTimeMs = now;
+				if (!deadLoopWarned) {
+					deadLoopWarned = true;
+					ProductiveBeesGenesis.LOGGER.warn(
+							"检测到 {} 配置死循环，暂停配方重载 30 秒（EM 模组初始化时序 bug，非本模组责任）", modId);
+				}
+			}
+		} else {
+			// 超过 5 秒窗口，重置计数
+			configChangeCount.set(1);
+			lastConfigChangeTimeMs = now;
+		}
 	}
 
 	/**
@@ -175,9 +257,7 @@ public final class RecipeReloadRetryManager {
 
 		// 执行配方修改
 		try {
-			ProductiveBeesGenesis.LOGGER.info("配置已就绪，执行延迟配方重载...");
 			reloader.accept(ctx.recipeManager(), ctx.registryAccess());
-			ProductiveBeesGenesis.LOGGER.info("延迟配方重载完成");
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.error("延迟配方重载失败", e);
 		} finally {

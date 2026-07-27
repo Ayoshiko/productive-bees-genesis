@@ -5,7 +5,6 @@ import java.util.function.Function;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.CentrifugeBlockEntityAccessor;
 
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
@@ -52,9 +51,11 @@ public final class CentrifugeMixinHelper {
 			if (shouldBlock.apply(entity.inventoryHandler)) {
 				cir.setReturnValue(false);
 			}
-		} catch (Exception e) {
-			// 异常时不阻止机器运行（默认 false），让 PB 原逻辑继续，仅记录 warn 日志
-			ProductiveBeesGenesis.LOGGER.warn("CentrifugeMixinHelper.checkCanOperate 执行异常，跳过空转拦截", e);
+		} catch (RuntimeException e) {
+			// 异常时不阻止机器运行（默认 false），让 PB 原逻辑继续
+			// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
+			DevLog.warn("centrifuge_mixin", "CentrifugeMixinHelper.checkCanOperate 执行异常, 跳过空转拦截: {}",
+					e.toString());
 		}
 	}
 
@@ -74,9 +75,11 @@ public final class CentrifugeMixinHelper {
 			if (shouldBlock.apply(invHandler)) {
 				cir.setReturnValue(false);
 			}
-		} catch (Exception e) {
-			// 异常时不阻止配方处理（默认 false），让 PB 原逻辑继续，仅记录 warn 日志
-			ProductiveBeesGenesis.LOGGER.warn("CentrifugeMixinHelper.checkCanProcessRecipe 执行异常，跳过空转拦截", e);
+		} catch (RuntimeException e) {
+			// 异常时不阻止配方处理（默认 false），让 PB 原逻辑继续
+			// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
+			DevLog.warn("centrifuge_mixin", "CentrifugeMixinHelper.checkCanProcessRecipe 执行异常, 跳过空转拦截: {}",
+					e.toString());
 		}
 	}
 
@@ -100,7 +103,9 @@ public final class CentrifugeMixinHelper {
 			int modifier = ((CentrifugeBlockEntityAccessor) entity).productivebeesgenesis$getProductivityModifier();
 			appendFunc.accept(input, invHandler, random, modifier);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.error(errorMessage, e);
+			// M9: LogThrottle 节流，避免 completeRecipeProcessing TAIL 高频触发刷屏
+			LogThrottle.error("centrifuge_append_combs",
+					"{} (5秒内仅首条输出): {}", errorMessage, e.toString());
 		}
 	}
 

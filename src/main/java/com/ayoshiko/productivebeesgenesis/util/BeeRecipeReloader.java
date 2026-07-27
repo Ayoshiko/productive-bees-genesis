@@ -7,6 +7,7 @@ import java.util.concurrent.Executor;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import net.minecraft.core.HolderLookup;
@@ -91,11 +92,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	private void overrideRecipes() {
 		try {
 			// 配置未加载时安排延迟重试（首次进入世界时常见）
-			if (!ModConfig.SERVER_SPEC.isLoaded()) {
-				ProductiveBeesGenesis.LOGGER.info("SERVER 配置未加载，安排延迟配方重载");
-				RecipeReloadRetryManager.scheduleRetry(this.recipeManager, this.registryAccess);
-				return;
-			}
+		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+			RecipeReloadRetryManager.scheduleRetry(this.recipeManager, this.registryAccess);
+			return;
+		}
 			overrideRecipesInternal();
 		} catch (Exception e) {
 			// 任何异常都不应导致整体崩溃
@@ -109,7 +109,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	private void overrideRecipesInternal() {
 		// 防御性检查：确保配置已加载
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
-			ProductiveBeesGenesis.LOGGER.warn("配置未加载，跳过配方覆盖");
+			DevLog.warn("recipe_reload", "配置未加载，跳过配方覆盖");
 			return;
 		}
 
@@ -120,7 +120,6 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			// 避免配方永远不被替换。使用 rescheduleRetry 而非 scheduleRetry，
 			// 让 retryCount 累积，达到 MAX_RETRY_COUNT 后放弃，避免无限重试。
 			// 此场景常见于首次进入世界时 PB 注册顺序晚于本模组的 reload listener。
-			ProductiveBeesGenesis.LOGGER.info("BeeIngredientFactory 未就绪（缺少 myriadcreations），重新安排延迟配方重载");
 			RecipeReloadRetryManager.rescheduleRetry(this.recipeManager, this.registryAccess);
 			return;
 		}
@@ -145,7 +144,6 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		if (modified) {
 			recipeManager.replaceRecipes(processedRecipes);
 			PBReflectionCacheCleaner.clearBeeFishingCaches();
-			ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂配方已根据配置重载");
 		}
 	}
 }

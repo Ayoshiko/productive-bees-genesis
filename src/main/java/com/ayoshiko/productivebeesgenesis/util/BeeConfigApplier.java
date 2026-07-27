@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.FastColor;
@@ -21,7 +22,6 @@ public final class BeeConfigApplier {
 	public static void applyOverrides() {
 		// 配置未加载时跳过（首次启动时常见）
 		if (!ModConfig.SERVER_SPEC.isLoaded()) {
-			ProductiveBeesGenesis.LOGGER.info("蜜蜂配置尚未加载，跳过属性覆盖（首次启动正常行为）");
 			return;
 		}
 
@@ -35,7 +35,7 @@ public final class BeeConfigApplier {
 			CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
 			if (data == null) {
 				// 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
-				ProductiveBeesGenesis.LOGGER.warn("无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
+				DevLog.warn("config_apply", "无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
 						PBConstants.MYRIADCREATIONS_TYPE);
 				return;
 			}
@@ -71,15 +71,13 @@ public final class BeeConfigApplier {
 			data.putBoolean("waterproof", config.waterproof.get());
 			data.putBoolean("fireproof", config.fireproof.get());
 		}
-
-		ProductiveBeesGenesis.LOGGER.info("万象创世蜜蜂属性已从配置文件覆盖");
 	}
 
 	private static int parseHexColor(String hex) {
 		try {
 			String hexStr = hex.replace("#", "");
 			if (hexStr.length() < 6) {
-				ProductiveBeesGenesis.LOGGER.warn("无效的颜色值 '{}'，长度不足6位，使用默认金色", hex);
+				DevLog.warn("config_apply", "无效的颜色值 '{}'，长度不足6位，使用默认金色", hex);
 				return 0xFFFFD700; // 默认金色
 			}
 			int r = Integer.parseInt(hexStr.substring(0, 2), 16);

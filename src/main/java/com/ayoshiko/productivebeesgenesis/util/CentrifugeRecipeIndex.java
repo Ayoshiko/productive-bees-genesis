@@ -34,7 +34,7 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
  * 重建期间旧快照仍可服务读请求，重建完成后整体替换为新快照。
  * <p>
  * <b>重建时机</b>：由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 后调用，
- * 与 recipeVersion 递增同步，确保配方重载后索引立即更新。
+ * 与 RECIPE_VERSION 递增同步，确保配方重载后索引立即更新。
  * <p>
  * <b>回退策略</b>：索引未命中时调用方回退到全量遍历（防御性），避免索引构建遗漏导致配方丢失。
  */

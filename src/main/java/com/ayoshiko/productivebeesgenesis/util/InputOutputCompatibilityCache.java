@@ -100,8 +100,8 @@ public class InputOutputCompatibilityCache {
 	 * @return 校验结果
 	 */
 	public boolean get(@Nullable Level level, @Nullable ItemStack input,
-					   @Nullable ItemStack output, @Nullable ItemStack secondary,
-					   Supplier<Boolean> validator) {
+			@Nullable ItemStack output, @Nullable ItemStack secondary,
+			Supplier<Boolean> validator) {
 		if (level == null || input == null || output == null) {
 			return validator.get();
 		}

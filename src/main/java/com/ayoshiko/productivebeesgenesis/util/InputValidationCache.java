@@ -127,7 +127,7 @@ public class InputValidationCache {
 	 * @return 校验结果
 	 */
 	public ValidationResult getResult(@Nullable Level level, @Nullable ItemStack input,
-									   Supplier<ValidationResult> validator) {
+			Supplier<ValidationResult> validator) {
 		if (level == null || input == null) {
 			return validator.get();
 		}

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
@@ -196,6 +197,7 @@ public final class MyriadRecipeProcessor {
 			BeeIngredient ing = supplier.get();
 			return ing != null && PBConstants.MYRIADCREATIONS_TYPE.equals(ing.getBeeType());
 		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.debug("解析蜜蜂类型供应商失败，返回 false", e);
 			return false;
 		}
 	}
