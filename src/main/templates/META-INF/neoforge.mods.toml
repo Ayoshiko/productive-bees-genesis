@@ -8,6 +8,8 @@ modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
 issueTrackerURL="https://github.com/Ayoshiko/productive-bees-genesis/issues"
+displayURL="https://github.com/Ayoshiko/productive-bees-genesis"
+credits="Thanks to: Productive Bees, Mekanism, NeoForge, Re:Avaritia, Applied Energistics 2, KubeJS, Jade, Just Enough Items, Super Factory Manager, Mekanism Unleashed, Mekanism Empowered, EvolvedMekanism, EvolvedMekanismExtras, Applied Flux, Mek-Energistics, Iris teams"
 
 [[mods]]
 modId="${mod_id}"
@@ -18,9 +20,9 @@ description='''
 资源蜜蜂：创世 / Productive Bees Genesis
 一个资源蜜蜂（Productive Bees）附属模组。
 
-中文：添加万象创世蜜蜂，可产出整合包内所有资源蜜蜂的蜜脾；万象创世蜜脾/蜜脾块拥有星空材质特效；深度集成 Mekanism 离心机，覆盖基础机器与 Mekanism / Mekanism Extras / Evolved Mekanism / Evolved Mekanism Extras 全工厂等级，并优化产物弹出速度；附带宇宙星空渲染系统与蜜蜂过滤配置界面。
+中文：添加万象创世蜜蜂，可产出整合包内所有资源蜜蜂的蜜脾；万象创世蜜脾/蜜脾块拥有星空材质特效；深度集成 Mekanism 蜂箱与离心机，覆盖基础机器与 Mekanism / Mekanism Extras / Evolved Mekanism / Evolved Mekanism Extras 全工厂等级（17 等级一一对应），并优化产物弹出速度；蜂箱支持 PB 升级系统（9 种升级）、喂食器花朵槽、AE2 网络集成、直连离心机、Jade 状态显示；支持 KubeJS 脚本动态注册蜜蜂配方；附带宇宙星空渲染系统与蜜蜂过滤配置界面。
 
-English: A Productive Bees addon featuring the Myriad Creations Bee with cosmic starfield-textured honeycombs and honeycomb blocks. Includes deep Mekanism centrifuge integration with optimized ejection speed across all factory tiers (Mekanism, ME, EM, EME), cosmic shader rendering system with Iris compatibility, and a configurable bee filter UI.
+English: A Productive Bees addon featuring the Myriad Creations Bee with cosmic starfield-textured honeycombs and honeycomb blocks. Includes deep Mekanism apiary and centrifuge integration with optimized ejection speed across all factory tiers (Mekanism, ME, EM, EME), PB upgrade system (9 types), feeder flower slots, AE2 network integration, direct centrifuge ejection, Jade status display, KubeJS scriptable bee recipe registration, cosmic shader rendering system with Iris compatibility, and a configurable bee filter UI.
 '''
 
 [[mixins]]
@@ -78,17 +80,18 @@ config="${mod_id}.iris.mixins.json"
 
 # EvolvedMekanismExtras 可选依赖（提供交叉等级，后续任务支持）
 [[dependencies.${mod_id}]]
-    modId="evolvedmekanism_extras"
+    modId="emextras"
     type="optional"
     versionRange="[1.2.1,)"
     ordering="AFTER"
     side="BOTH"
 
-# Mekanism Unleashed 可选依赖（扩展升级上限，支持每tick多次操作）
+# MekanismEmpowered 可选依赖（提供强化速度/能量、IO容量、自动插入器、快速物品插入/弹出升级）
+# 通过反射访问 MekEmpUpgrade API，未安装时安全降级为基础升级集合
 [[dependencies.${mod_id}]]
-    modId="mekanism_unleashed"
+    modId="mekanism_empowered"
     type="optional"
-    versionRange="[0.3.0,)"
+    versionRange="[21.1-1.2.2,)"
     ordering="AFTER"
     side="BOTH"
 
@@ -128,5 +131,33 @@ config="${mod_id}.iris.mixins.json"
     modId="jade"
     type="optional"
     versionRange="[15.10.0,)"
+    ordering="AFTER"
+    side="CLIENT"
+
+# KubeJS 可选依赖（提供脚本化蜜蜂配方注册能力）
+# 通过 kubejs.plugins.txt 声明插件，仅 KubeJS 安装时加载兼容类
+[[dependencies.${mod_id}]]
+    modId="kubejs"
+    type="optional"
+    versionRange="[2101.7.2,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Applied Flux 可选依赖（提供 AE2 网络中 FE 能量提取能力）
+# 通过 AppliedFluxIntegrationLoader.isAppliedFluxLoaded() 守卫，未安装时不触发类加载
+# versionRange 使用 1.21-2.1.5-neoforge 格式匹配作者实际版本号（前缀 1.21- 表明 MC 版本）
+[[dependencies.${mod_id}]]
+    modId="appflux"
+    type="optional"
+    versionRange="[1.21-2.1.5-neoforge,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Just Enough Items 可选依赖（提供配方查看集成）
+# JEI 集成通过 @JeiPlugin 注解自动加载，JeiRecipeHider 通过反射隐藏冲突配方
+[[dependencies.${mod_id}]]
+    modId="jei"
+    type="optional"
+    versionRange="[19.0.0,)"
     ordering="AFTER"
     side="CLIENT"

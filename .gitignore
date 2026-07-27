@@ -23,6 +23,7 @@ crash-reports/
 libs/
 decompiled-productivebees/
 pb-original-textures/
+.tmp_*/
 
 # 运行时依赖模组（不入库）
 mods/
@@ -66,3 +67,9 @@ fix_slot.py
 
 # Trae spec 文件目录（内部使用，不入库）
 .trae/
+
+# 寰宇支配之剑相关文件（已禁用，不推送至仓库）
+src/main/java/com/ayoshiko/productivebeesgenesis/item/ItemInfinitySwordReplica.java
+src/main/resources/assets/productivebeesgenesis/models/item/infinity_sword_replica*.json
+src/main/resources/assets/productivebeesgenesis/textures/item/infinity_sword_replica*
+disabled_features/

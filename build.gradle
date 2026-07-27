@@ -115,10 +115,8 @@ dependencies {
     // cosmic 渲染特效将采用自研 shader 方案实现，无需外部依赖
 
     // Mekanism完整类路径（开发时需要访问Mekanism内部类，如GUI基类、槽位等）
+    // implementation 已包含 runtimeOnly，无需重复声明
     implementation name: 'Mekanism-1.21.1-10.7.19.85'
-
-    // Mekanism本体（运行时依赖，用于游戏测试环境）
-    runtimeOnly name: 'Mekanism-1.21.1-10.7.19.85'
 
     // Mekanism Extras（可选依赖，编译时需要访问ME的ExtraFactory等类）
     compileOnly name: 'mekanism_extras-1.21.1-1.4.0'
@@ -135,13 +133,17 @@ dependencies {
     // EME本体（测试环境运行时依赖）
     runtimeOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
 
+    // MekanismEmpowered（可选依赖，通过反射访问MekEmpUpgrade，编译时无需jar）
+    // 注意：不添加 runtimeOnly 依赖 — MekanismEmpowered 的 NeoForge 版本与开发环境不兼容，
+    // 且与 MekanismUnleashed 冲突，无法在开发环境运行时测试。反射访问在用户生产环境自动生效。
+
     // Mixin 编译时依赖（运行时由 NeoForge 提供）
     compileOnly files('libs/sponge-mixin.jar')
 
     // JEI API（仅编译时需要，运行时由JEI提供）
-    compileOnly files('libs/jei-1.21.1-neoforge-19.27.0.340.jar')
+    compileOnly files('libs/jei-1.21.1-neoforge-19.36.0.360.jar')
     // JEI本体（测试环境运行时依赖）
-    runtimeOnly files('libs/jei-1.21.1-neoforge-19.27.0.340.jar')
+    runtimeOnly files('libs/jei-1.21.1-neoforge-19.36.0.360.jar')
 
     // Iris 光影兼容（仅编译时需要，运行时由 Iris 提供）
     // 用于编译 Iris Mixin 中引用的 net.irisshaders.iris.* 类
@@ -162,6 +164,12 @@ dependencies {
     // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
     compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'
 
+    // KubeJS（可选依赖，编译时需要访问 KubeJSPlugin/EventGroup 等 API）
+    // 运行时通过 kubejs.plugins.txt 声明插件，未安装 KubeJS 时插件类不会被加载
+    compileOnly name: 'kubejs-neoforge-2101.7.2-build.368'
+    // Rhino（KubeJS 的 JS 引擎依赖，编译时 KubeJS API 类签名引用 Rhino 类型）
+    compileOnly name: 'rhino-2101.2.7-build.85'
+
     // 单元测试依赖（JUnit 5）
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -169,6 +177,8 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // 启用弃用警告详细输出，便于持续监控 API 迁移
+    options.compilerArgs << '-Xlint:deprecation'
 }
 
 tasks.withType(ProcessResources).configureEach {
