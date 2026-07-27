@@ -154,6 +154,8 @@ public final class ModConfig {
 	 *   <li>{@code produceOutputMin} > {@code produceOutputMax}：交换两者，保证 min <= max</li>
 	 *   <li>{@code mekCentrifugeEjectDelayActive} > {@code mekCentrifugeEjectDelay}：
 	 *       将 active 降为 idle，避免活动延迟大于空闲延迟的反直觉组合</li>
+	 *   <li>{@code apiaryEjectDelayActive} > {@code apiaryEjectDelay}：
+	 *       将 active 降为 idle（蜂箱独立配置，与离心机互不影响）</li>
 	 * </ul>
 	 * <p>
 	 * 线程安全：仅在配置加载/重载事件回调（主线程）中调用，ConfigValue.get/set 内部已对配置读写加锁，
@@ -194,6 +196,34 @@ public final class ModConfig {
 			}
 		} catch (Exception e) {
 			CROSS_FIELD_LOGGER.error("校验 ejectDelay/ejectDelayActive 时发生异常", e);
+		}
+
+		// 校验3：apiaryEjectDelayActive <= apiaryEjectDelay（蜂箱独立配置）
+		try {
+			int idleDelay = SERVER.apiaryEjectDelay.get();
+			int activeDelay = SERVER.apiaryEjectDelayActive.get();
+			if (activeDelay > idleDelay) {
+				CROSS_FIELD_LOGGER.warn("配置交叉校验：apiaryEjectDelayActive({}) > apiaryEjectDelay({})，已将 active 降为 idle",
+						activeDelay, idleDelay);
+				SERVER.apiaryEjectDelayActive.set(idleDelay);
+				fixed = true;
+			}
+		} catch (Exception e) {
+			CROSS_FIELD_LOGGER.error("校验 apiaryEjectDelay/apiaryEjectDelayActive 时发生异常", e);
+		}
+
+		// 校验4：ejectSkipUnchanged=false 时 ejectSkipTicks 配置不生效（仅警告，不强制重置）
+		// 依赖关系：ejectSkipTicks 仅在 ejectSkipUnchanged=true 时有意义（用于跳过未变更物品的弹出冷却）。
+		// 当 ejectSkipUnchanged=false 时，离心机不会跳过未变更物品，ejectSkipTicks 配置项无作用。
+		// 此处仅输出警告提示用户配置不一致，不强制重置以尊重用户显式配置的值（便于后续切换 ejectSkipUnchanged 时复用）。
+		try {
+			if (Boolean.FALSE.equals(SERVER.mekCentrifugeEjectSkipUnchanged.get())
+					&& SERVER.mekCentrifugeEjectSkipTicks.get() > 0) {
+				CROSS_FIELD_LOGGER.warn("配置交叉校验：ejectSkipUnchanged=false 时 ejectSkipTicks({}) 配置不生效",
+						SERVER.mekCentrifugeEjectSkipTicks.get());
+			}
+		} catch (Exception e) {
+			CROSS_FIELD_LOGGER.error("校验 ejectSkipUnchanged/ejectSkipTicks 时发生异常", e);
 		}
 
 		return fixed;

@@ -20,6 +20,9 @@ public final class ClientConfig {
 	public final ModConfigSpec.BooleanValue showPortColors;
 	public final ModConfigSpec.IntValue portColorRenderRange;
 
+	// ========== 窗口位置持久化（独立于 MEK 配置系统）==========
+	public final WindowPositionConfigSection windowPositions = new WindowPositionConfigSection();
+
 	ClientConfig(ModConfigSpec.Builder builder) {
 		// 彩虹特效配置（仅客户端可见的粒子/光晕开关）
 		builder.push("rainbow_effects").comment("万象创世蜜蜂彩虹特效配置（仅客户端生效）");
@@ -37,13 +40,13 @@ public final class ClientConfig {
 				.defineInRange("particleCount", 1, 1, 20);
 
 		glowEnabled = builder
-				.comment("启发光晕效果")
+				.comment("启用光晕效果")
 				.define("glowEnabled", true);
 
 		builder.pop(); // rainbow_effects
 
 		// MEK离心机端口可视化配置
-		builder.comment("MEK离心机端口可视化设置").push("mek_port_visualization");
+		builder.comment("通用机械离心机端口可视化设置").push("mek_port_visualization");
 
 		showPortColors = builder
 				.comment("手持配置器时显示端口颜色")
@@ -54,5 +57,8 @@ public final class ClientConfig {
 				.defineInRange("portColorRenderRange", 16, 4, 32);
 
 		builder.pop(); // mek_port_visualization
+
+		// PB 自定义窗口位置持久化
+		windowPositions.registerAll(builder);
 	}
 }

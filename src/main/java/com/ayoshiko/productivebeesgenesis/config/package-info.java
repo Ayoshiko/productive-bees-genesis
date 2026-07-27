@@ -1,8 +1,14 @@
 /**
- * 模组配置系统
+ * 配置包 — 模组配置定义与聚合
  * <br/>
- * 使用 NeoForge 内置 ModConfigSpec 实现服务器端配置，
- * 允许整合包作者通过配置文件修改万象创世蜜蜂属性。
+ * 负责：
+ * <ol>
+ *   <li>客户端/通用/服务端配置定义（{@link com.ayoshiko.productivebeesgenesis.config.ModConfig}）</li>
+ *   <li>配置段抽取与聚合（{@link com.ayoshiko.productivebeesgenesis.config.ConfigSectionRegistry}、
+ *       {@link com.ayoshiko.productivebeesgenesis.config.ServerConfig}）</li>
+ *   <li>独立配置段（蜜蜂属性、离心机、蜂箱）</li>
+ *   <li>配置校验逻辑（validator 与跨字段联合校验）</li>
+ * </ol>
  */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
