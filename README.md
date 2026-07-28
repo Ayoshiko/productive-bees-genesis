@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-21+-red?style=flat-square)
 
-> An addon for **Productive Bees** and **Mekanism** that adds the *Myriad Creations Bee* — a rainbow-gradient bee whose honeycombs randomly transform into honeycombs of other resource bees — a full **Mekanism-style centrifuge** family with deep **Applied Energistics 2** integration, and the all-new **MEK Apiary** — an industrialized bee production system built on Mekanism's electric machine framework.
+> An addon for **Productive Bees** and **Mekanism** that adds the **Myriad Creations Bee** (rainbow-gradient, honeycombs randomly transform into other resource bees' honeycombs), the **MEK Centrifuge**, and the **MEK Apiary** — machines that preserve Mekanism's native processing logic, GUI style, side configuration, and upgrade system, while deeply integrating **Applied Energistics 2** for output pushback, honeycomb pulling, and network-powered energy. The machines also implement Resource Bees' upgrade components via Mekanism's upgrade installation system, offering an efficient new way to raise bees and process honeycombs.
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
@@ -19,7 +19,7 @@
 - [About](#about)
 - [Features](#features)
   - [Myriad Creations Bee](#myriad-creations-bee)
-  - [Mek Centrifuge](#mek-centrifuge)
+  - [MEK Centrifuge](#mek-centrifuge)
   - [MEK Apiary](#mek-apiary)
   - [Direct Centrifuge Connection](#direct-centrifuge-connection)
   - [AE2 Integration](#ae2-integration)
@@ -37,16 +37,16 @@
 
 ## About
 
-**Productive Bees Genesis** is a NeoForge addon that bridges **Productive Bees** and **Mekanism**. It introduces:
+**Productive Bees Genesis** is a NeoForge addon that bridges **Productive Bees** and **Mekanism**. It provides:
 
-- The **Myriad Creations Bee** — a special bee whose honeycomb randomly produces honeycombs from other resource bees via a configurable filter.
-- The **MEK Centrifuge** — a Mekanism-style machine that processes Productive Bees honeycombs and honeycomb blocks, with **17 factory tiers** spanning four Mekanism-family mods.
-- The **MEK Apiary** — an industrialized bee production system that migrates the vanilla Productive Bees hive logic onto Mekanism's electric machine framework (`TileEntityElectricMachine`), reusing Mekanism's energy, side configuration, upgrades, safety, and GUI infrastructure. Ships with the same **17 factory tiers** plus a base variant.
-- Deep **AE2 integration** — centrifuges and apiaries act as AE2 grid nodes, push outputs directly into ME networks, and optionally drain FE from ME networks to power themselves.
-- A full **in-game bee filter UI** with search, sort, drag-and-drop, and clipboard import/export.
-- **KubeJS** script hooks for dynamic bee recipe registration at runtime.
-
-The Myriad Creations Honeycomb uses a cosmic starfield rendering technique inspired by the **Sword of the Cosmos** from Re:Avaritia (shader code derived from Re:Avaritia's MIT-licensed source; textures are original) — see [Acknowledgments](#acknowledgments).
+- **Myriad Creations Bee** — a special bee whose honeycomb randomly produces honeycombs from other resource bees via a configurable filter.
+- **MEK Centrifuge** — a Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks, and also supports Energized Smelter recipes.
+- **MEK Apiary** — an electrified apiary with built-in simulation, housing multiple bees working simultaneously. Its internal feeder slots hold various flowers bees need for pollination without consuming them.
+- Deep **AE2 integration** — both centrifuges and apiaries can join AE network connections, supporting AE default channel transmission. Outputs can be pushed directly into the ME network, with AE output toggles for items and fluids in the Mekanism config screen. Supports using FE energy stored in the linked ME network, while also retaining AE network native energy. Energy priority is configurable. The centrifuge can also pull honeycombs from the linked ME network for processing, with pulling behavior configurable.
+- Preserves Mekanism's native GUI, side configuration, auto-ejection config, upgrade buttons, safety system, redstone control, and config-tool interaction.
+- Jade support for displaying machine AE online status, internal items, fluids, energy, etc.
+- Fully configurable Myriad Creations Bee honeycomb conversion filter UI — supports blacklist/whitelist, search, sort, drag-and-drop, clipboard import/export.
+- **KubeJS** support for dynamic bee recipe registration at runtime.
 
 For the full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
@@ -56,19 +56,19 @@ For the full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
 | Capability | Description |
 | --- | --- |
-| Rainbow gradient | 8-second color cycle with soft, low-saturation colors matching the "creation of all things" theme |
-| Rainbow particles | Optional particle effects (`particleEffectEnabled`, `particleCount`) |
-| Glow effect | Optional glow halo (`glowEnabled`, `glowColor`) |
+| Rainbow gradient | 8-second color cycle with soft, low-saturation colors |
+| Rainbow particles | Optional particle effects |
+| Glow effect | Optional glow halo |
 | Random honeycomb | Produces a random honeycomb from any resource bee in the pack |
 | Filter list | Blacklist/whitelist mode with in-game editor |
 | Fully configurable | All PB datapack attributes (colors, pollination, breeding, environment, etc.) |
 | Acquisition | Fishing, breeding, nest spawning, or bee conversion — all configurable |
-| Disable switch | `myriadCreationsEnabled = false` keeps only MEK centrifuge features |
+| Disable switch | When disabled, only MEK centrifuge and apiary features remain |
 
-### Mek Centrifuge
+### MEK Centrifuge
 
 - **MEK Centrifuge**: Mekanism-style centrifuge processing Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes.
-- **17 factory tiers** across Mekanism, Mekanism Extras, Evolved Mekanism, and Evolved Mekanism Extras:
+- **Adapts to MEK expansion mods**, covering four Mekanism-family addons:
   - **Mekanism**: Basic / Advanced / Elite / Ultimate
   - **Mekanism Extras**: Absolute / Supreme / Cosmic / Infinite
   - **Evolved Mekanism**: Overclocked / Quantum / Dense / Multiversal / Creative
@@ -79,17 +79,17 @@ For the full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
 ### MEK Apiary
 
-An electrified bee production system built on the **Mekanism** universal machine framework. By extending `TileEntityElectricMachine`, the apiary fully reuses Mekanism's energy storage, side configuration, upgrade cards, safety interlocks, and GUI framework — migrating Productive Bees' vanilla hive logic into a MEK industrialized pipeline.
+An electrified bee production system built on the **Mekanism** universal machine framework. By extending Mekanism's electric machine base class, the apiary fully reuses Mekanism's energy storage, side configuration, upgrade cards, safety interlocks, and GUI framework — migrating Productive Bees' vanilla hive logic into a MEK industrialized pipeline.
 
 #### Apiary Tiers (17 factory tiers + 1 base variant)
 
 | Tier family | Tier names | Bee slots | Output slots | Fluid tank capacity |
 | --- | --- | --- | --- | --- |
 | Base | MEK Apiary | 3 | 9 | 256,000 mB |
-| Mekanism (4) | Basic / Advanced / Elite / Ultimate | 5–20 | 9–18 | 256K–1024K mB |
-| Mekanism Extras (4) | Absolute / Supreme / Cosmic / Infinite | 26–42 | 21–30 | 1280K–2048K mB |
-| Evolved Mekanism (5) | Overclocked / Quantum / Dense / Multiversal / Creative | 26–45 | 21–33 | 1280K–2304K mB |
-| Evolved Mekanism Extras (4) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 45–60 | 33–42 | 2304K–3072K mB |
+| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 5–20 | 9–18 | 256K–1024K mB |
+| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 26–42 | 21–30 | 1280K–2048K mB |
+| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 26–45 | 21–33 | 1280K–2304K mB |
+| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 45–60 | 33–42 | 2304K–3072K mB |
 
 #### Core Features
 
@@ -116,19 +116,20 @@ This short-circuit eliminates the throughput bottleneck introduced by the MEK Ej
 
 ### AE2 Integration
 
-Centrifuges act as **AE2 grid nodes** via the standard `IN_WORLD_GRID_NODE_HOST` capability:
+Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME network:
 
-- Connect directly with AE2 smart cables and adjacent centrifuges.
+- Connect directly with AE2 smart cables and adjacent machines.
 - Auto-discovered by addon-mod cables (ExtendedAE, AdvancedAE, ae2cs, ae2lt, Glodium, AppliedFlux).
-- **Direct ME output** (`aeOutputEnabled`): push output slot items into the ME network, bypassing external logistics.
-- **ME energy input** (`aeEnergyInputEnabled`): drain FE stored in the ME network to power the centrifuge. Supports 5-tier energy priority:
+- **Direct ME output**: push output slot items into the ME network, bypassing external logistics. Toggleable in the Mekanism config screen.
+- **ME energy input**: drain FE stored in the ME network to power the machine. Supports 5-tier energy priority:
   1. Local FE cache
-  2. External direct supply (Mekanism configComponent + EnergyInventorySlot)
+  2. External direct supply (Mekanism config component + energy slot)
   3. ME network stored FE (AppliedFlux)
   4. Other energy (handled by Mekanism parent)
   5. AE2 native network energy (converted to FE)
+- **Honeycomb pulling** (centrifuge only): the centrifuge can actively pull honeycombs from the connected ME network for processing, with pulling behavior configurable.
 - **Jade tooltip**: Shows AE2 network status (Offline / Booting / Missing Channel / Online).
-- Node lifecycle is decoupled from `aeOutputEnabled` — closing output push does not disconnect the machine, allowing ME energy input to continue.
+- Node lifecycle is decoupled from the output toggle — closing output push does not disconnect the machine, allowing ME energy input to continue.
 
 ### Bee Filter UI
 
@@ -173,7 +174,7 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | EME-tier factories (Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal) |
 | [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | Extended upgrade limits |
 | [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection + ME network output + ME energy input |
-| [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for centrifuges |
+| [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for machines |
 | [ExtendedAE](https://www.curseforge.com/minecraft/mc-mods/ex-pattern-provider) | Auto-discovered cable connection |
 | [AdvancedAE](https://www.curseforge.com/minecraft/mc-mods/advanced-ae) | Auto-discovered cable connection |
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 network status tooltip + MEK apiary bee count / production progress |
@@ -187,29 +188,121 @@ The mod ships a trilingual configuration system (English / Chinese / auto-detect
 
 | File | Scope | Highlights |
 | --- | --- | --- |
-| `client.toml` | Client | Bee filter UI settings, port color visualization, rainbow effects |
-| `common.toml` | Common | Myriad Creations Bee attributes (appearance, pollination, PB attributes, breeding, environment, acquisition, produce, advanced beehive) |
-| `server.toml` | Server | Bee type filtering, MEK centrifuge parameters (basic / ejection / io_limit / ae2 sub-sections), MEK apiary parameters (basic / ejection / stack_multiplier / ae2 / pb_upgrade / window_positions sub-sections) |
+| Client config | Client | Bee filter UI, port color visualization, rainbow effects, custom window positions |
+| Common config | Common | Myriad Creations Bee attributes (appearance, pollination, breeding, environment, acquisition, produce, advanced beehive) |
+| Server config | Server | Bee type filtering, MEK centrifuge parameters, MEK apiary parameters |
 
-### MEK Centrifuge Sub-sections
+### Client Configuration
 
-The 21 MEK centrifuge options are grouped for clarity:
+Client config manages UI display and visual effects:
 
-- **basic** — energyPerTick, processingTime, fluidTankCapacity, fluidEjectRate, combBlockMultiplier
-- **ejection** — ejectDelay, ejectDelayActive, ejectSkipUnchanged, ejectSkipTicks, ejectMaxSpeedMode, ejectMinInterval, ejectBusyThreshold, ejectBusyCooldown, ejectMaxPerTick, ejectBlockedThreshold, ejectBlockedCooldown
-- **io_limit** — maxExtractPerTick
-- **ae2** — aeOutputEnabled, aeEnergyInputEnabled, preferAppliedFluxOverAeEnergy (only registered when AE2 is loaded)
+- **Bee Filter UI**: display options, collapse state, sort mode.
+- **Port color visualization**: machine side config port colors.
+- **Rainbow effects**: Myriad Creations Bee rainbow gradient, particle effects, glow toggle.
+- **Custom window positions**: persisted positions for PB upgrade, AE input config, feeder windows; can be pinned independently of the main UI.
 
-### MEK Apiary Sub-sections
+### Common Configuration
 
-The MEK apiary options mirror the centrifuge's structure and add apiary-specific tuning:
+Common config manages Myriad Creations Bee core attributes, grouped into:
 
-- **basic** — `energyPerTick` (per-bee, per-tick energy cost, default 50 FE), `processingTime` (base processing time, default 1200 ticks), `fluidTankCapacity` (base variant fluid tank capacity, default 256,000 mB).
-- **ejection** — `ejection.*` (eject delay / speed / blocked cooldown, mirroring the centrifuge's ejection sub-section).
-- **stack_multiplier** — `stack_multiplier.*` (per-tier output slot stack multiplier across the 17 factory tiers).
-- **ae2** — `ae2.*` (AE2 output toggle + AppliedFlux priority switch, only registered when AE2 is loaded).
-- **pb_upgrade** — `pb_upgrade.*` (PB upgrade card stack limits — productivity / time / gene sampling / honeycomb block / simulation).
-- **window_positions** — `window_positions.*` (persisted positions for the four customizable GUI tabs: Sorting / Feeder / PB Upgrades / Multi-fluid tank).
+- **Appearance**: rainbow gradient cycle, particle effects (toggle, count), glow (toggle, color).
+- **Pollination**: pollination chance, flower range.
+- **Breeding**: breeding parents config, breeding toggle.
+- **Environment**: active biomes, time range.
+- **Acquisition**: fishing (toggle, chance, biomes), breeding, nest spawning (nest type, biomes), bee conversion (source bee, conversion item, chance).
+- **Produce**: Myriad Creations honeycomb output config, honeycomb block conversion multiplier.
+- **Advanced beehive**: simulation cooldown, NBT save interval, and other performance tuning.
+
+### Server Configuration
+
+Server config is the mod's core, managing machine behavior, split into two main modules:
+
+#### MEK Centrifuge Configuration
+
+Centrifuge config is grouped by function, with 21 options total:
+
+**Basic parameters**:
+- Energy per tick: energy cost per processing slot per tick (FE).
+- Processing time: base processing time per operation (tick).
+- Fluid tank capacity: base fluid tank capacity (mB); factory variants scale with parallelism.
+- Fluid ejection rate: fluid ejection rate per tick for factory centrifuges (mB), range 1-10240, default 256.
+- Honeycomb block multiplier: output multiplier when centrifuging honeycomb blocks.
+- Multi-fluid tank mode: dynamically allocates independent slots per fluid type when enabled.
+
+**Ejection policy**:
+- Eject delay: output slot auto-eject delay (tick), recommended 2 (0.1s).
+- Active eject delay: eject delay when output slot still has items, default 1 (0.05s).
+- Skip eject when output unchanged: reduces CPU overhead under high-speed acceleration.
+- Skip ticks when unchanged: consecutive ticks to skip when output unchanged, default 1.
+- Max speed ejection mode: skips throttling logic, keeps only blocked cooldown; requires sufficient target container space.
+- Min eject interval: minimum interval between calls when output continuously changes, default 0 (disabled).
+- Busy eject threshold: consecutive times output total fails to decrease before entering long cooldown, default 5.
+- Busy eject cooldown: ticks to skip when busy but not blocked, default 40 (2s).
+- Max ejects per tick: max eject calls per tick, default 64.
+- Blocked eject threshold: consecutive times no item is ejected before entering cooldown.
+- Blocked eject cooldown: ticks to skip during blocked cooldown, 0 to disable.
+
+**IO limit**:
+- Max extract per tick: max items external pipes/AE2 can extract per tick, 0 for unlimited.
+
+**AE2 integration** (only registered when AE2 is loaded):
+- Enable AE2 direct output: push output slot items to AE2 network, default on.
+- Enable AE2 fluid output: push honey fluid to AE2 network, default on.
+- Enable AE energy input: extract FE from ME network into local energy container, default on.
+- Enable AE2 input pulling: centrifuge actively pulls input items from ME network.
+- Max items per pull: 1-16384; too high may increase CPU overhead.
+- Pull trigger interval: game ticks; higher values reduce CPU overhead but slow response.
+- AE2 input min pages: AE2 input filter window minimum pages (1-16).
+- AE energy priority: prefer AppliedFlux or AE2 native energy.
+
+**Output slot stack multiplier**: per-tier output slot stack multiplier across 17 factory tiers, default 1× to 4096×.
+
+**Input slot stack multiplier**: honeycomb processing multiplier; input slot default is 1/4 of output slot.
+
+**PB upgrade limits**: max install count for productivity, time, gene sampling, honeycomb block upgrades.
+
+**ME upgrade limits**: max stack upgrade count, 2^N parallel, only applies to this mod's centrifuge factories.
+
+**Fluid tank multiplier**: per-tier fluid tank capacity multiplier.
+
+#### MEK Apiary Configuration
+
+Apiary config mirrors the centrifuge structure and adds apiary-specific tuning:
+
+**Basic parameters**:
+- Apiary energy per tick: energy cost per processing slot per tick (FE), default 50.
+- Apiary processing time: base processing time (tick), default 1200.
+- Apiary fluid tank capacity: base variant fluid tank capacity (mB), default 256,000; factory variants are hardcoded per tier.
+
+**Ejection policy**: mirrors the centrifuge's ejection policy, with "apiary" prefix.
+
+**Output slot stack multiplier**: per-tier output slot stack multiplier across 17 factory tiers:
+- Basic apiary (3 processes, 9 output slots) default 1×
+- Advanced apiary (5 processes, 12 output slots) default 2×
+- Elite apiary (7 processes, 15 output slots) default 4×
+- Ultimate apiary (9 processes, 18 output slots) default 8×
+- Mekanism Extras Absolute apiary (11 processes, 21 output slots) default 16×
+- Mekanism Extras Supreme apiary (13 processes, 24 output slots) default 32×
+- Mekanism Extras Cosmic apiary (15 processes, 27 output slots) default 64×
+- Mekanism Extras Infinite apiary (17 processes, 30 output slots) default 128×
+- Evolved Mekanism Overclocked apiary (11 processes, 21 output slots) default 16×
+- Evolved Mekanism Quantum apiary (13 processes, 24 output slots) default 32×
+- Evolved Mekanism Dense apiary (15 processes, 27 output slots) default 64×
+- Evolved Mekanism Multiversal apiary (17 processes, 30 output slots) default 128×
+- Evolved Mekanism Creative apiary (19 processes, 33 output slots) default 256×
+- Evolved Mekanism Extras Absolute Overclocked apiary (12 processes, 33 output slots) default 256×
+- Evolved Mekanism Extras Supreme Quantum apiary (14 processes, 36 output slots) default 512×
+- Evolved Mekanism Extras Cosmic Dense apiary (16 processes, 39 output slots) default 1024×
+- Evolved Mekanism Extras Infinite Multiversal apiary (18 processes, 42 output slots) default 4096×
+
+**AE2 integration** (only registered when AE2 is loaded): AE2 output toggle + AppliedFlux priority switch, mirroring the centrifuge's AE2 integration.
+
+**PB upgrade limits**: PB upgrade card stack limits — productivity / time / gene sampling / honeycomb block / simulation.
+
+#### Myriad Creations Bee Filter Configuration
+
+- Filter mode: Disabled / Blocklist / Whitelist.
+- Filtered bee types: list of filtered bee types (format: modID:beeType).
 
 ### Accessing Configuration
 
@@ -224,10 +317,10 @@ Changes take effect after restarting the game or running `/reload`.
 
 1. Install NeoForge and the required dependencies.
 2. Place the mod jar in your `mods` folder.
-3. Launch the game and obtain the **Myriad Creations Bee** through any configured acquisition method (fishing, breeding, nest spawning, or bee conversion).
-4. Process Myriad Creations Honeycombs in the **MEK Centrifuge** or any of its factory variants.
-5. (Optional) Place a **MEK Apiary** adjacent to a centrifuge to build a "produce → process" pipeline — bees produce honeycombs in the apiary, the apiary pushes them directly into the centrifuge's input slot, and the centrifuge outputs the bee products. Insert PB upgrade cards into the apiary to scale productivity and processing speed.
-6. (Optional) Connect the centrifuge and/or apiary to an AE2 network via smart cables to enable direct ME output and ME energy input.
+3. Launch the game and obtain the **Myriad Creations Bee** through any configured acquisition method (fishing, breeding, nest spawning, or bee conversion). Raise and process Myriad Creations honeycombs and honeycomb blocks.
+4. Process honeycombs or honeycomb blocks in the **MEK Centrifuge** or any of its factory variants.
+5. Place bees in the **MEK Apiary** or any of its factory variants, put bee foraging materials in the feeder slots, and bees will produce honeycombs.
+6. Connect the centrifuge/apiary to an AE2 network via smart cables to enable direct ME output and FE energy input.
 7. (Optional) Use a **KubeJS** server script listening on `MyriadBeeEvents.REGISTER` to dynamically register custom bee recipes at runtime.
 
 ## Building
@@ -258,12 +351,12 @@ com.ayoshiko.productivebeesgenesis/
 │   ├── jei/             JEI recipe category for PB centrifuge
 │   ├── jade/            Jade plugin — AE2 status + apiary bee/progress display
 │   ├── render/cosmic/   Cosmic shader system, baked models, Iris compat
-│   └── screen/          Configuration and Mek centrifuge GUIs + state
+│   └── screen/          Configuration and MEK centrifuge GUIs + state
 ├── command/            (Reserved for future commands)
 ├── compat/             Optional mod integrations
 │   ├── kubejs/          KubeJS plugin — MyriadBeeEvents.REGISTER + recipe serializers
 │   └── emextras/        Evolved Mekanism Extras block / block-entity registration
-├── config/             ClientConfig / CommonConfig / ServerConfig, bilingual
+├── config/             Client / Common / Server config, bilingual
 ├── datagen/            Block tags, recipes, loot tables, language provider
 ├── init/               DeferredRegister registrations
 ├── item/               Custom items
@@ -286,7 +379,7 @@ com.ayoshiko.productivebeesgenesis/
 - **`AbstractCombEventHandler`** / **`MyriadCreationsEventHandler`**: Random honeycomb allocation via `RandomHoneycombSelector` (Fisher-Yates, Stars-and-Bars, even allocation).
 - **`PbRecipeProcessor`**: PB recipe coordinator delegating to `PbRecipeFinder` (double-layer cache), `PbRecipeCompleter` (batch insertion), and `MyriadCreationsHandler`.
 - **`FactoryPbContextDelegate`**: Composition class eliminating ~293 lines of duplicated PB recipe context logic across factory tile entities.
-- **`TileEntityMekApiary`** / **`TileEntityMekApiaryFactory`**: MEK apiary tile entities extending Mekanism's `TileEntityElectricMachine`; compose `ApiarySlotManager`, `ApiaryPbUpgradeHandler`, `ApiaryDirectEjectHandler`, `ApiaryCageHandler`, `BeeProduceProcessor`, and `ApiaryAe2HostAdapter` to migrate PB hive logic into the MEK industrial pipeline.
+- **`TileEntityMekApiary`** / **`TileEntityMekApiaryFactory`**: MEK apiary tile entities extending Mekanism's electric machine base class; compose slot manager, PB upgrade handler, direct eject handler, cage handler, bee produce processor, and AE2 host adapter to migrate PB hive logic into the MEK industrial pipeline.
 - **`ApiaryDirectEjectHandler`**: Short-circuit ejector that bypasses the MEK Ejector throttling when an adjacent centrifuge is detected.
 - **`ApiaryTierMultiplierResolver`** + per-family delegates (`MEDelegate`, …): resolve per-tier bee slot count, output slot count, fluid tank capacity, and stack multiplier across the 17 factory tiers.
 - **`MyriadBeeRegisterEventJS`** / **`MyriadBeeEvents`**: KubeJS event group + event object exposing `addBreeding` / `addFishing` / `addConversion` / `addSpawning` / `addCentrifuge` / `addBeeProduce` / `addMekData` recipe builders.
@@ -325,7 +418,7 @@ This mod **does not collect, store, or transmit any player data**. There is no t
 
 ### Age Rating & Health Reminder
 
-This mod is suitable for all ages (content theme: beekeeping and industrial automation, no violence/blood/adult content). For players in mainland China, please observe reasonable play time — moderation is good, excess harms.
+This mod is suitable for all ages (content theme: beekeeping and industrial automation, no violence/blood/adult content).
 
 ### Community Guidelines
 
@@ -333,12 +426,13 @@ We are committed to providing a friendly and inclusive community. Harassment, di
 
 ## Acknowledgments
 
-- **Productive Bees** development team — base bee and honeycomb system.
-- **Mekanism** development team — machine and factory framework.
-- **NeoForge** development team — modding platform.
-- **Re:Avaritia** (Nova-Committee) — cosmic shader reference for the starfield texture.
-- **Mek-Energistics** (beipuo) — AppliedFlux + AE2 network energy input integration pattern.
-- **Applied Energistics 2** — `IN_WORLD_GRID_NODE_HOST` capability API.
-- **AppliedFlux** — FE storage API in ME networks.
-- **KubeJS** — runtime script hook and event group API.
-- **Jade** — block tooltip component plugin API.
+- **Productive Bees** development team
+- **Mekanism** development team
+- **NeoForge** development team
+- **Re:Avaritia** (Nova-Committee) — cosmic shader reference for the starfield texture
+- **Applied Energistics 2** development team
+- **Mek-Energistics** (beipuo) — AE2 integration reference
+- **UselessMod** development team — partial optimization reference
+- **AppliedFlux** — FE storage API in ME networks
+- **KubeJS** — runtime script hook and event group API
+- **Jade** — block tooltip component plugin API
