@@ -86,10 +86,10 @@ An industrialized Mekanism-style centrifuge that extends Mekanism's native elect
 | Tier family | Tier names | Parallel processes | Input slots | Output slots |
 | --- | --- | --- | --- | --- |
 | Base | MEK Centrifuge | 1 | 1 | 3 |
-| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 2–5 | 2–5 | 6–12 |
-| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 6–9 | 6–9 | 15–21 |
-| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 6–10 | 6–10 | 15–24 |
-| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 7–11 | 7–11 | 18–27 |
+| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 3 / 5 / 7 / 9 | 3 / 5 / 7 / 9 | 9 / 15 / 21 / 27 |
+| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 11 / 13 / 15 / 17 | 11 / 13 / 15 / 17 | 33 / 39 / 45 / 51 |
+| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 11 / 13 / 15 / 17 / 19 | 11 / 13 / 15 / 17 / 19 | 33 / 39 / 45 / 51 / 57 |
+| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 12 / 14 / 16 / 18 | 12 / 14 / 16 / 18 | 36 / 42 / 48 / 54 |
 
 #### MEK Expansion Mod Support
 
