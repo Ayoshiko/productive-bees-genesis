@@ -16,8 +16,10 @@ import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
 import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.MekApiaryEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryBlockType;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekApiaryMEBlockType;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
@@ -105,7 +107,7 @@ public final class ProductiveBeesGenesis {
 
 	/**
 	 * 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 registerDeferredRegisters 之前完成。
-	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems
+	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems → registerXxxMenuType
 	 */
 	private void initMekCentrifugeExtensions() {
 		// EM 扩展
@@ -119,12 +121,16 @@ public final class ProductiveBeesGenesis {
 		ModBlocks.registerMEFactories();
 		ModBlockEntities.registerMEFactoryTiles();
 		ModItems.registerMEFactoryItems();
+		// ME MenuType 注册（内部守卫，ME 未加载时安全跳过）
+		MECompatLoader.registerCentrifugeMenuType();
 
 		// EME 扩展（initEMETiers 为 ULTIMATE/ME ABSOLUTE 添加 EMExtraAttributeUpgradeable）
 		MekCentrifugeBlockType.initEMETiers();
 		ModBlocks.registerEMEFactories();
 		ModBlockEntities.registerEMEFactoryTiles();
 		ModItems.registerEMEFactoryItems();
+		// EME MenuType 注册（内部守卫，EME 未加载时安全跳过）
+		EMECompatLoader.registerCentrifugeMenuType();
 	}
 
 	/**

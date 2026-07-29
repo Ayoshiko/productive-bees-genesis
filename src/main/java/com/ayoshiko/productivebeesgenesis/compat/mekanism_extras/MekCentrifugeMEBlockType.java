@@ -16,7 +16,6 @@ import mekanism.common.registries.MekanismSounds;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
@@ -111,7 +110,7 @@ public final class MekCentrifugeMEBlockType {
 								ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue()) * tier.processes)
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
-				.withGui(() -> ModMenuTypes.EXTRA_MEK_CENTRIFUGE_FACTORY)
+				.withGui(() -> MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY)
 				.withSound(MekanismSounds.ENERGIZED_SMELTER)
 				.with(new ExtraAttributeTier<>(tier));
 

@@ -1,9 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.menu;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeSlotContainer;
-import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEFactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
@@ -20,8 +20,12 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * 重写偏移方法以适配3行输出槽布局和EME等级的宽GUI：
  * - Y偏移135（对应inventoryLabelY=125+10），避免与副输出槽2(y=97)重叠
- * - X偏移通过FactoryLayoutHelper的EMExtraFactoryTier重载方法动态计算，
+ * - X偏移通过 {@link EMEFactoryLayoutHelper} 动态计算，
  *   使用tier.inventoryLabelX（EME枚举直接存储了计算好的值）
+ * <p>
+ * <b>类加载安全</b>：本类引用 {@link EMEFactoryLayoutHelper}（compat 隔离类）和
+ * {@link TileEntityEMExtraMekCentrifugeFactory}（compat 隔离类），
+ * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration} 注册实例化。
  */
 public class EMExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>
 		implements IPbUpgradeSlotContainer {
@@ -72,7 +76,7 @@ public class EMExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<
 	/** X偏移 — 使用EME tier直接存储的inventoryLabelX值 */
 	@Override
 	protected int getInventoryXOffset() {
-		int labelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
+		int labelX = EMEFactoryLayoutHelper.getInventoryLabelX(tile.tier);
 		if (labelX > 0) {
 			return labelX;
 		}

@@ -73,6 +73,19 @@ public final class MECompatLoader {
 	}
 
 	/**
+	 * 注册 ME 等级的离心机工厂 MenuType
+	 * <br/>
+	 * 委托至 {@link MEMenuTypeRegistration#registerFactoryMenuType()}，结果存入 {@link MEMenuTypeRegistration#ME_CENTRIFUGE_FACTORY}。
+	 * 必须在 {@code ModMenuTypes.register(eventBus)} 之前调用。
+	 * ME 未加载时安全跳过，避免触发 {@link MEMenuTypeRegistration} 类加载导致 NoClassDefFoundError。
+	 */
+	public static void registerCentrifugeMenuType() {
+		if (com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks.isMekanismExtrasLoaded()) {
+			MEMenuTypeRegistration.registerFactoryMenuType();
+		}
+	}
+
+	/**
 	 * 注册全部 ME 相关内容（方块 + 物品 + 方块实体）
 	 * <br/>
 	 * 调用顺序：方块 → 物品 → 方块实体（物品依赖方块的 DeferredBlock，方块实体依赖方块的 DeferredBlock）。

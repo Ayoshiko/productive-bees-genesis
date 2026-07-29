@@ -23,6 +23,57 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.1] - 2026-07-30
+
+v2.0.1 是 SemVer PATCH 版本，修复 v2.0.0 发布后发现的 EME/ME 附属模组未安装时的启动崩溃问题、蜂箱工厂 EM 等级翻译错误，并将 EME 布局参数和 GUI 类迁移至 compat 隔离包以强化可选依赖隔离规范。
+
+### 修复
+
+- **EME/ME 附属模组未安装时启动崩溃** — 解决未安装 Evolved Mekanism Extras / MekanismExtras 时 NoClassDefFoundError 导致游戏启动失败的问题
+  - **问题**：`ModMenuTypes.java` 在静态字段中直接引用 EME/ME 的 TileEntity 类，模组加载阶段即触发类加载，未安装对应附属时抛出 `NoClassDefFoundError`
+  - **根因**：静态字段在类加载时立即解析，不受运行时守卫保护，违反了可选依赖隔离规范
+  - **修复**：
+    1. 从 `ModMenuTypes.java` 移除所有 EME/ME 静态字段
+    2. 新建 `compat/emextras/EMEMenuTypeRegistration.java` 和 `compat/mekanism_extras/MEMenuTypeRegistration.java` 隔离类，承载 EME/ME MenuType 注册逻辑
+    3. 在 `EMECompatLoader.java` / `MECompatLoader.java` 中添加 `registerCentrifugeMenuType()` 方法，内部通过 `MekCompatHooks.isXxxLoaded()` 守卫
+    4. `MekCentrifugeEMEBlockType.java` / `MekCentrifugeMEBlockType.java` 改为引用 compat 包的 Holder
+    5. `ProductiveBeesGenesis.java` 在工厂注册流程末尾调用 compat loader 的注册方法
+    6. `ProductiveBeesGenesisClient.java` 在 Screen 注册处添加 `isXxxLoaded()` 守卫
+  - **设计原则**：SRP（compat 包专注单一附属的注册）、LoD（基础类不直接引用可选依赖类）、类加载安全（JVM 延迟加载隔离类）
+  - **影响范围**：9 个文件修改 + 2 个新增文件
+
+- **蜂箱工厂 EM 等级中文翻译错误** — 修正扩展进化蜂箱工厂等级的中文译名
+  - **问题**：`cosmic_extra_mek_apiary_factory` 显示为"寰宇通用机械蜂箱工厂"，`infinite_extra_mek_apiary_factory` 显示为"无限通用机械蜂箱工厂"，与离心机翻译不一致
+  - **修复**：
+    1. `cosmic_extra_mek_apiary_factory` → "寰宇支配通用机械蜂箱工厂"
+    2. `infinite_extra_mek_apiary_factory` → "悖论无限通用机械蜂箱工厂"
+    3. 同步更新对应的 container 翻译键
+    4. README_zh.md 中的等级表和配置项描述同步更新
+  - **影响范围**：2 个文件修改（`zh_cn.json`、`README_zh.md`）
+
+### 重构
+
+- **EME 布局参数隔离** — 将 EME 专属布局方法从基础类抽取至 compat 隔离类
+  - **问题**：`FactoryLayoutHelper.java` 的 6 个 EME 方法签名直接引用 `EMExtraFactoryTier`，虽然 JVM 延迟解析方法签名保证运行时安全，但方法签名级别的可选依赖是"隐式依赖"，未来维护者误调用 EME 重载会触发 `NoClassDefFoundError`
+  - **修复**：
+    1. 新建 `compat/emextras/EMEFactoryLayoutHelper.java` 隔离类，承载 EME 4 等级的 6 个布局参数方法（imageWidthAddition / inventoryLabelX / baseX / baseXMult / fluidTankX / fluidTankY）
+    2. `FactoryLayoutHelper.java` 移除 EME import 和 6 个 EME 方法重载，更新 javadoc 说明 EME 隔离
+    3. `EMExtraMekCentrifugeFactoryContainer.java` 改用 `EMEFactoryLayoutHelper` 获取布局参数
+  - **设计原则**：OCP（通过新增隔离类扩展 EME 支持，不修改基础类）、LoD（基础类不再"知道" EME 的存在）
+  - **影响范围**：2 个文件修改 + 1 个新增文件
+
+- **EME 离心机 GUI 类迁移至 compat 包** — 将直接引用 EME 类的 GUI 类从 `client/screen/` 移至 `compat/emextras/client/gui/`
+  - **问题**：`GuiEMExtraMekCentrifugeFactory.java` 直接 import EME 的 `EMExtraGuiSortingTab`，虽然通过注册守卫和方法引用延迟加载保证运行时安全，但包位置不符合隔离规范
+  - **修复**：
+    1. 将 `GuiEMExtraMekCentrifugeFactory.java` 从 `client/screen/` 移至 `compat/emextras/client/gui/`
+    2. 更新 `ProductiveBeesGenesisClient.java` 的 import 路径
+    3. GUI 类内部改用 `EMEFactoryLayoutHelper` 获取布局参数（配合上述布局参数隔离）
+  - **影响范围**：2 个文件修改 + 1 个新增文件 + 1 个文件删除
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布为 bug 修复（2 项：EME/ME 启动崩溃、蜂箱翻译错误）+ 内部重构（2 项：EME 布局参数隔离、EME GUI 类迁移），无 API 变更，无 BREAKING 变更。按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **PATCH** 级别（v2.0.0 → v2.0.1）
+
 ## [2.0.0] - 2026-07-27
 
 v2.0.0 是 SemVer MAJOR 版本，标志 MEK 蜂箱系统正式发布。本次更新引入 MEK 蜂箱系统、MEK 离心机系统重构、KubeJS 集成、ME/EME 蜂箱与离心机工厂扩展、配置系统模块化重构、网络包与安全限流系统、万象创世物品与宇宙渲染系统、客户端基础事件与渲染系统等重大功能。

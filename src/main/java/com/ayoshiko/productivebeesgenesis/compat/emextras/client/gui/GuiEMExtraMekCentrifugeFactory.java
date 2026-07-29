@@ -1,12 +1,16 @@
-package com.ayoshiko.productivebeesgenesis.client.screen;
+package com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
-import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactoryHelper;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksWindow;
+import com.ayoshiko.productivebeesgenesis.client.screen.MultiFluidTabSyncWatcher;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEFactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import io.github.masyumero.emextras.client.gui.element.tab.EMExtraGuiSortingTab;
 
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -27,12 +31,22 @@ import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * EME扩展版离心机工厂Screen
+ * EME扩展版离心机工厂Screen（隔离类）
  * <br/>
  * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
  * 每进程：1红色输入槽 + 3蓝色输出槽（主/副1/副2）+ 共享流体槽。
  * <p>
- * 布局参数通过 {@link FactoryLayoutHelper} 的EMExtraFactoryTier重载方法动态计算，
+ * <b>类加载安全</b>：本类直接引用 {@link EMExtraGuiSortingTab}（EME 的 GUI 类）和
+ * {@link TileEntityEMExtraMekCentrifugeFactory}（compat 隔离类），
+ * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient}
+ * 通过 {@code MekCompatHooks.isEvolvedMekanismExtrasLoaded()} 守卫注册。
+ * 未安装 EME 时本类不会被加载，避免 {@link NoClassDefFoundError}。
+ * <p>
+ * <b>隔离迁移（v2.1.0）</b>：从 {@code client/screen} 包移至 {@code compat/emextras/client/gui} 包，
+ * 与其他 EME 专属类保持隔离。布局参数通过 {@link EMEFactoryLayoutHelper} 调用，
+ * 不再依赖基础类 {@link com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper}。
+ * <p>
+ * 布局参数通过 {@link EMEFactoryLayoutHelper} 动态计算，
  * 支持EME 4等级（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL）。
  * <p>
  * 与原版/ME工厂GUI的差异：
@@ -58,10 +72,10 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 		inventoryLabelY = 125;
 
 		// EME tier直接存储imageWidth增量值
-		imageWidth += FactoryLayoutHelper.getImageWidthAddition(tile.tier);
+		imageWidth += EMEFactoryLayoutHelper.getImageWidthAddition(tile.tier);
 
 		// EME tier直接存储inventoryLabelX值
-		inventoryLabelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
+		inventoryLabelX = EMEFactoryLayoutHelper.getInventoryLabelX(tile.tier);
 		titleLabelY = 4;
 		dynamicSlots = true;
 	}
@@ -88,8 +102,8 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 		}
 
 		// 进度条循环（输入槽与主输出槽之间，双配方跳转）
-		int baseX = FactoryLayoutHelper.getBaseX(tile.tier);
-		int baseXMult = FactoryLayoutHelper.getBaseXMult(tile.tier);
+		int baseX = EMEFactoryLayoutHelper.getBaseX(tile.tier);
+		int baseXMult = EMEFactoryLayoutHelper.getBaseXMult(tile.tier);
 		for (GuiProgress bar : GuiMekCentrifugeFactoryHelper.createProgressBars(
 				this, tile.tier.processes,
 				i -> tile.getScaledProgress(1, i),
@@ -98,13 +112,13 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 			addRenderableWidget(bar);
 		}
 
-		// 共享流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
+		// 共享流体输出槽 — 位置通过EMEFactoryLayoutHelper动态计算，避免与输出槽重叠
 		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createFluidGauge(
 				this,
 				tile::getFluidOutputTank,
 				() -> tile.getFluidTanks(null),
-				FactoryLayoutHelper.getFluidTankX(tile.tier),
-				FactoryLayoutHelper.getFluidTankY(tile.tier)));
+				EMEFactoryLayoutHelper.getFluidTankX(tile.tier),
+				EMEFactoryLayoutHelper.getFluidTankY(tile.tier)));
 		// Tab 显示条件基于 isMultiFluidModeSynced 同步值(选项 A 决策,放弃旧存档隐藏约束):
 		// GUI 构造期 tile.getLevel() 可能为 null,isMultiFluidMode() 会走 holder 类型判断导致 Tab 不显示
 		if (tile instanceof IMultiFluidTankHost host && host.isMultiFluidModeSynced()) {

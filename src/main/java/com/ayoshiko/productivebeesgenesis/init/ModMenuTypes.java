@@ -5,11 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.menu.EMExtraMekCentrifugeFactoryContainer;
-import com.ayoshiko.productivebeesgenesis.menu.ExtraMekCentrifugeFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.menu.MekCentrifugeContainer;
-import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 
@@ -25,10 +21,16 @@ import net.neoforged.bus.api.IEventBus;
  * <br/>
  * 使用Mekanism的ContainerTypeDeferredRegister注册MenuType。
  * 基础机器和工厂版使用不同的ContainerType，因为它们的Screen不同。
+ * <p>
+ * ME/EME扩展版离心机工厂的MenuType不在此类直接注册，而是通过
+ * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader} 和
+ * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader} 在对应模组加载时
+ * 委托至 compat 包下的隔离注册类完成，避免编译期类加载导致 NoClassDefFoundError。
  */
 public final class ModMenuTypes {
 
-	private static final ContainerTypeDeferredRegister MENU_TYPES =
+	/** MenuType 延迟注册器 — public 供 compat 包隔离注册类访问 */
+	public static final ContainerTypeDeferredRegister MENU_TYPES =
 			new ContainerTypeDeferredRegister(ProductiveBeesGenesis.MOD_ID);
 
 	/** 基础MEK离心机MenuType */
@@ -57,14 +59,6 @@ public final class ModMenuTypes {
 	/** 工厂版MEK离心机MenuType（所有等级共用） */
 	public static final ContainerTypeRegistryObject<MekanismTileContainer<TileEntityFactory<?>>> MEK_CENTRIFUGE_FACTORY =
 			registerFactoryContainer();
-
-	/** ME扩展版离心机工厂MenuType（ABSOLUTE/SUPREME/COSMIC/INFINITE共用） */
-	public static final ContainerTypeRegistryObject<MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> EXTRA_MEK_CENTRIFUGE_FACTORY =
-			registerExtraFactoryContainer();
-
-	/** EME扩展版离心机工厂MenuType（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL共用） */
-	public static final ContainerTypeRegistryObject<MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> EMEXTRA_MEK_CENTRIFUGE_FACTORY =
-			registerEMExtraFactoryContainer();
 
 	private ModMenuTypes() {}
 
@@ -115,26 +109,6 @@ public final class ModMenuTypes {
 				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
 		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(TileEntityFactory.class,
 				(id, inv, tile) -> new MekCentrifugeContainer<>(holder, id, inv, tile)));
-		return holder;
-	}
-
-	/** 注册ME扩展版工厂Container — 使用TileEntityExtraMekCentrifugeFactory.class */
-	private static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> registerExtraFactoryContainer() {
-		String name = "extra_mek_centrifuge_factory";
-		ContainerTypeRegistryObject<MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(TileEntityExtraMekCentrifugeFactory.class,
-				(id, inv, tile) -> new ExtraMekCentrifugeFactoryContainer(holder, id, inv, tile)));
-		return holder;
-	}
-
-	/** 注册EME扩展版工厂Container — 使用TileEntityEMExtraMekCentrifugeFactory.class */
-	private static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> registerEMExtraFactoryContainer() {
-		String name = "emextra_mek_centrifuge_factory";
-		ContainerTypeRegistryObject<MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(TileEntityEMExtraMekCentrifugeFactory.class,
-				(id, inv, tile) -> new EMExtraMekCentrifugeFactoryContainer(holder, id, inv, tile)));
 		return holder;
 	}
 

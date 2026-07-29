@@ -11,13 +11,14 @@ import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderCos
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderHalo;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderHell;
 import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactory;
-import com.ayoshiko.productivebeesgenesis.client.screen.GuiEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
@@ -85,11 +86,15 @@ public final class ProductiveBeesGenesisClient {
 									(MekanismTileContainer<TileEntityFactory<?>>) (MekanismTileContainer<?>) menu,
 									inv, title));
 
-			// ME扩展版离心机工厂Screen
-			event.register(ModMenuTypes.EXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
+			// ME扩展版离心机工厂Screen — 仅当 MekanismExtras 加载时注册
+			if (MekCompatHooks.isMekanismExtrasLoaded()) {
+				event.register(MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
+			}
 
-			// EME扩展版离心机工厂Screen
-			event.register(ModMenuTypes.EMEXTRA_MEK_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
+			// EME扩展版离心机工厂Screen — 仅当 EvolvedMekanismExtras 加载时注册
+			if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+				event.register(EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
+			}
 		}
 	}
 

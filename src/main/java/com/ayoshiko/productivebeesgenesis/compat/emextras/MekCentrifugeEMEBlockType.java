@@ -22,7 +22,6 @@ import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
@@ -140,7 +139,7 @@ public final class MekCentrifugeEMEBlockType {
 								ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue()) * tier.processes)
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
-				.withGui(() -> ModMenuTypes.EMEXTRA_MEK_CENTRIFUGE_FACTORY)
+				.withGui(() -> EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY)
 				.withSound(MekanismSounds.ENERGIZED_SMELTER)
 				// 添加原版AttributeFactoryType(SMELTING)，使EME方块能被MekanismUtils.isSameTypeFactory()
 				// 识别，从而支持配置卡在EME工厂与原版/EM/ME工厂之间跨等级粘贴

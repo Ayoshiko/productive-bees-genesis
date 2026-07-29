@@ -100,4 +100,17 @@ public final class EMECompatLoader {
 	public static void registerApiaryBlockEntities() {
 		EMEBlockEntityRegistration.registerApiaryFactoryTiles();
 	}
+
+	/**
+	 * 注册 EME 等级的离心机工厂 MenuType
+	 * <br/>
+	 * 委托 {@link EMEMenuTypeRegistration#registerFactoryMenuType()}，结果存入 {@link EMEMenuTypeRegistration#EME_CENTRIFUGE_FACTORY}。
+	 * 必须在 {@code ModMenuTypes.register(eventBus)} 之前调用。
+	 * EME 未加载时安全跳过，避免触发 {@link EMEMenuTypeRegistration} 类加载导致 NoClassDefFoundError。
+	 */
+	public static void registerCentrifugeMenuType() {
+		if (com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			EMEMenuTypeRegistration.registerFactoryMenuType();
+		}
+	}
 }
