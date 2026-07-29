@@ -267,6 +267,66 @@ public final class Ae2GridNodeManager {
 		return meStorage;
 	}
 
+	// ===== holder 感知重载（Spark 优化：消除高频路径冗余 getAe2StateHolder() 接口分发） =====
+
+	/**
+	 * 获取宿主缓存的 AE2 网格（holder 感知重载）
+	 * <br/>
+	 * 与 {@link #getCachedGrid(IAe2OutputHostBase)} 功能一致，但跳过冗余的
+	 * {@code host.productivebeesgenesis$getAe2StateHolder()} 接口分发，
+	 * 直接使用调用方已缓存的 holder 引用。Spark 热力图优化：减少每 tick ~73,000 次冗余接口分发。
+	 *
+	 * @param holder 已缓存的 AE2 状态持有者（非 null）
+	 * @param host   输出宿主（用于获取网格节点引用）
+	 * @return 已连接的网格，未连接或节点不存在时返回 null
+	 */
+	@Nullable
+	public static IGrid getCachedGrid(Ae2OutputStateHolder holder, IAe2OutputHostBase host) {
+		Object cached = holder.getCachedGrid();
+		if (cached instanceof IGrid grid) return grid;
+		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
+		if (!(nodeObj instanceof IManagedGridNode managedNode)) return null;
+		IGrid grid = managedNode.getGrid();
+		if (grid != null) holder.setCachedGrid(grid);
+		return grid;
+	}
+
+	/**
+	 * 获取宿主缓存的 AE2 存储服务（holder 感知重载）
+	 *
+	 * @param holder 已缓存的 AE2 状态持有者（非 null）
+	 * @param host   输出宿主
+	 * @return 存储服务，网格未连接或服务不存在时返回 null
+	 */
+	@Nullable
+	public static IStorageService getCachedStorage(Ae2OutputStateHolder holder, IAe2OutputHostBase host) {
+		Object cached = holder.getCachedStorage();
+		if (cached instanceof IStorageService storage) return storage;
+		IGrid grid = getCachedGrid(holder, host);
+		if (grid == null) return null;
+		IStorageService storage = grid.getService(IStorageService.class);
+		if (storage != null) holder.setCachedStorage(storage);
+		return storage;
+	}
+
+	/**
+	 * 获取宿主缓存的 ME 存储（holder 感知重载）
+	 *
+	 * @param holder 已缓存的 AE2 状态持有者（非 null）
+	 * @param host   输出宿主
+	 * @return ME 存储，存储服务不存在时返回 null
+	 */
+	@Nullable
+	public static MEStorage getCachedMeStorage(Ae2OutputStateHolder holder, IAe2OutputHostBase host) {
+		Object cached = holder.getCachedMeStorage();
+		if (cached instanceof MEStorage meStorage) return meStorage;
+		IStorageService storage = getCachedStorage(holder, host);
+		if (storage == null) return null;
+		MEStorage meStorage = storage.getInventory();
+		if (meStorage != null) holder.setCachedMeStorage(meStorage);
+		return meStorage;
+	}
+
 	/**
 	 * 保存网格节点 NBT
 	 * <br/>

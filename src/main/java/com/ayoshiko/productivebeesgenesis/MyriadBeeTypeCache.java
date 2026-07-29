@@ -147,7 +147,7 @@ public final class MyriadBeeTypeCache {
 	 * 每 {@link AbstractCombEventHandler#CACHE_UPDATE_INTERVAL} tick 更新一次。
 	 * <p>
 	 * <b>预热阶段（SubTask 1.3）</b>：服务器启动后首次成功构建缓存前，每 tick 都触发更新尝试，
-	 * 不等待 20 tick 常规间隔。首次构建失败时持续每 tick 重试直到成功或判定为配置过滤过严。
+	 * 不等待常规间隔（100 tick）。首次构建失败时持续每 tick 重试直到成功或判定为配置过滤过严。
 	 * <p>
 	 * 原子性：使用 {@link AtomicInteger#getAndUpdate} 实现"递增并按需重置"原子操作，
 	 * 避免 incrementAndGet + set 之间的竞态窗口。

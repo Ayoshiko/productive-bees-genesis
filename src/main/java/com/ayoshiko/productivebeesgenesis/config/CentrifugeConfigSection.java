@@ -91,7 +91,7 @@ public final class CentrifugeConfigSection {
 		mekCentrifugeMultiFluidTank = builder
 				.comment("是否启用多流体槽模式(按流体类型动态分配独立槽位)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.multiFluidTank")
-				.define("multiFluidTank", false);
+				.define("multiFluidTank", true);
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 配置,maxTanks 直接使用 tier.processes(作为上限,按需创建)
 		// 原理:MultiFluidTankHolder 的 maxTanks 是上限,槽位通过 getTankForInsert 按需创建
 		// Tab 窗口显示当前已分配槽位数(通过同步值 fluidOutputTankCount),而非 tier.processes

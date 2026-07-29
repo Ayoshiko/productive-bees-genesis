@@ -55,8 +55,10 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 @MethodsReturnNonnullByDefault
 public abstract class AbstractCombEventHandler {
 
-	/** 缓存更新间隔（tick） */
-	public static final int CACHE_UPDATE_INTERVAL = 20;
+	/** 缓存更新间隔（tick）— Spark优化：从20tick增大到100tick(5秒)
+	 *  原理：蜜蜂类型和离心配方在游戏运行中很少变化（仅/reload或数据包更新时变），
+	 *  5秒间隔完全可以接受，减少FastSuite配方查询开销（无加速下占0.55%） */
+	public static final int CACHE_UPDATE_INTERVAL = 100;
 
 	/**
 	 * hasCentrifugeRecipe 测试输入复用（ThreadLocal）

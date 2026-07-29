@@ -66,9 +66,15 @@ public final class Ae2OutputPusher {
 	 */
 	public static void pushOutputs(IAe2OutputHostBase host) {
 		// 1. 集成开关检查（由宿主决定配置源：离心机读 aeOutputEnabled，蜂箱读 apiaryAeOutputEnabled）
+		//    注意：这两个接口方法可能被蜂箱子类覆盖，保持原调用方式（各内部调用1次 getAe2StateHolder）
 		if (!host.productivebeesgenesis$isOutputPushEnabled()) return;
 		// 1.1 per-tile 物品输出开关检查（与全局配置 AND 关系）
 		if (!host.productivebeesgenesis$isAeItemOutputEnabled()) return;
+
+		// Spark 优化：缓存 holder 和 pushState，消除后续 9 次冗余 getAe2StateHolder() 接口分发
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return;
+		Ae2PushStateHolder pushState = holder.getPushState();
 
 		// 1.2 TPS 自适应 — 服务器严重卡顿（TPS<10，对应 avgMspt>100ms）时跳过推送，
 		//     避免加剧卡顿（与 Ae2FluidPusher 对称）。由 MEK Ejector 兜底输出。
@@ -80,34 +86,33 @@ public final class Ae2OutputPusher {
 			return;
 		}
 
-		// 1.3 退避检查 — 输出失败后进入指数退避窗口（1s→30s）跳过推送，基于 System.nanoTime() 单调时钟，不受 JDTE 加速影响
-		long pushCounter = host.productivebeesgenesis$incrementItemPushCallCounter();
-		Ae2PushBackoff itemBackoff = host.productivebeesgenesis$getItemBackoff();
+		// 1.3 退避检查 — 使用缓存的 pushState（消除2次冗余 getAe2StateHolder）
+		long pushCounter = pushState.incrementItemPushCallCounter();
+		Ae2PushBackoff itemBackoff = pushState.getItemBackoff();
 		if (itemBackoff.shouldSkip(System.nanoTime())) return;
 
-		// 1.4 批量推送短路 — 高加速倍率 M 下每 M 次调用才实际推送一次，减少 AE2 API 调用次数
-		TickAccelTracker tracker = host.productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		// 1.4 批量推送短路 — 使用缓存的 holder 和 pushState（消除3次冗余 getAe2StateHolder）
+		TickAccelTracker tracker = holder.getTickAccelTracker();
 		int M = (tracker != null) ? tracker.getMultiplier() : 1;
-		if (pushCounter - host.productivebeesgenesis$getLastItemPushCounter() < M) return;
-		host.productivebeesgenesis$updateLastItemPushCounter(pushCounter);
+		if (pushCounter - pushState.getLastItemPushCounter() < M) return;
+		pushState.updateLastItemPushCounter(pushCounter);
 
 		// 2. 空输出短路：标志位由 OutputSlotFlagManager/MekCentrifugeSlotManager O(1) 维护，
 		//    AE2 推送清空槽位后 onAe2PushComplete 已调用 updateOutputSlotFlags() 保证同步
 		if (!host.productivebeesgenesis$hasOutputItems()) return;
 
-		// 3. 获取已连接的网格（Task 12：使用 holder 缓存，gridChanged 回调失效；
-		//    getCachedGrid 内部完成节点 instanceof 检查 + getGrid 查询 + 缓存回填）
-		IGrid grid = Ae2GridNodeManager.getCachedGrid(host);
+		// 3. 获取已连接的网格（holder 感知重载，跳过冗余 getAe2StateHolder）
+		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
 		if (grid == null) return;
 
-		// 4. 获取存储服务和 ME 存储（Task 12：使用 holder 缓存，避免重复 getService/getInventory）
-		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(host);
+		// 4. 获取存储服务和 ME 存储（holder 感知重载，跳过冗余 getAe2StateHolder）
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
 		if (storageService == null) return;
-		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(host);
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
 
-		// 6. 获取复用缓冲区（MekEnergyToAeAdapter + ArrayList + ConcurrentHashMap 跨 tick 复用）
-		ReusableBuffers buffers = getReusableBuffers(host);
+		// 6. 获取复用缓冲区（holder 感知重载，跳过冗余 getAe2StateHolder）
+		ReusableBuffers buffers = getReusableBuffers(holder, host);
 		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
 
 		// 7. 获取 AEItemKey 缓存（Task 7：减少 AEItemKey.of(stack) 重复调用）
@@ -279,7 +284,18 @@ public final class Ae2OutputPusher {
 	 * 包级可见：供 {@link Ae2FluidPusher} 复用能量适配器，避免每 tick 创建临时对象。
 	 */
 	static ReusableBuffers getReusableBuffers(IAe2OutputHostBase host) {
-		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		return getReusableBuffers(host.productivebeesgenesis$getAe2StateHolder(), host);
+	}
+
+	/**
+	 * 获取宿主的复用缓冲区（holder 感知重载）
+	 * <br/>
+	 * Spark 优化：跳过冗余 {@code getAe2StateHolder()} 接口分发，直接使用调用方已缓存的 holder。
+	 *
+	 * @param holder 已缓存的 AE2 状态持有者
+	 * @param host   输出宿主（保留参数以与 {@link Ae2GridNodeManager} 重载模式一致）
+	 */
+	static ReusableBuffers getReusableBuffers(Ae2OutputStateHolder holder, IAe2OutputHostBase host) {
 		Object obj = holder.getReusableBuffers();
 		if (obj instanceof ReusableBuffers buffers) return buffers;
 		ReusableBuffers buffers = new ReusableBuffers();

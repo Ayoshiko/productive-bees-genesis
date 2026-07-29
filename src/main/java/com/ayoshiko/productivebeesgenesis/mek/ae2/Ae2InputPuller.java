@@ -54,8 +54,13 @@ public final class Ae2InputPuller {
 	 * @param host 输入宿主（离心机方块实体）
 	 */
 	public static void pullInputs(IAe2InputHost host) {
-		// 1. 拉取开关检查（全局 AND per-tile）
-		if (!host.productivebeesgenesis$isInputPullEnabled()) return;
+		// Spark 优化：缓存 holder 到局部变量，消除后续 10+ 次冗余 getAe2StateHolder() 接口分发
+		// （每次2层接口分发：getLifecycleHandler→getStateHolder，热力图显示为热点）
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return;
+
+		// 1. 拉取开关检查（全局 AND per-tile）— 直接使用 holder 替代 host 接口分发
+		if (!holder.isInputPullEnabled()) return;
 
 		// 1.5 TPS 自适应检查 — TPS 严重下降时跳过整个 pullInputs，由 MEK Ejector 兜底
 		//    TPS < 10(对应 avgMspt > 100ms)时跳过；null 守卫防初始化阶段空指针
@@ -69,19 +74,20 @@ public final class Ae2InputPuller {
 
 		// 2. 回送退避检查（Task 10：3 次重试失败后进入退避窗口，跳过整个拉取流程减少循环频率）
 		//    入口级别跳过实现深度退避（Task 4）：避免进入 getAvailableStacks 遍历前的无效开销
-		Ae2PushBackoff returnBackoff = host.productivebeesgenesis$getReturnBackoff();
-		if (returnBackoff != null && returnBackoff.shouldSkip(System.nanoTime())) {
+		//    holder 已非 null，getPushState() 永不返回 null（final 字段构造时初始化）
+		Ae2PushBackoff returnBackoff = holder.getPushState().getReturnBackoff();
+		if (returnBackoff.shouldSkip(System.nanoTime())) {
 			return;
 		}
 
-		// 3. 网格节点 + 已连接网格检查（Task 12：使用 holder 缓存，gridChanged 回调失效）
-		IGrid grid = Ae2GridNodeManager.getCachedGrid(host);
+		// 3. 网格节点 + 已连接网格检查（Task 12：holder 感知重载，跳过冗余 getAe2StateHolder）
+		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
 		if (grid == null) return;
 
-		// 4. 存储服务和 ME 存储检查（Task 12：使用 holder 缓存，避免重复 getService/getInventory）
-		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(host);
+		// 4. 存储服务和 ME 存储检查（Task 12：holder 感知重载，避免重复 getService/getInventory）
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
 		if (storageService == null) return;
-		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(host);
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
 
 		// 5. Level null 守卫（已在 1.5 节获取，复用避免重复调用）
@@ -91,19 +97,22 @@ public final class Ae2InputPuller {
 		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 
 		// 6. 加速倍率检测 — multiplier 已在调用方 onUpdateServer 入口处通过 tracker.onTick(level) 更新
-		TickAccelTracker tracker = host.productivebeesgenesis$getTickAccelTracker();
+		//    直接使用 holder 替代 host 接口分发
+		TickAccelTracker tracker = holder.getTickAccelTracker();
 		int M = (tracker != null) ? tracker.getMultiplier() : 1;
 
 		// 7. Task 12：内部计数器节流 — 替代 getGameTime 节流，兼容 JDTE 加速
 		//    新公式：effectiveInterval = max(intervalTicks, M)，配合 counter-based 节流
-		long pullCounter = host.productivebeesgenesis$incrementPullCallCounter();
-		long lastPull = host.productivebeesgenesis$getLastPullCounter();
+		//    直接使用 holder 替代 host 接口分发
+		long pullCounter = holder.incrementPullCallCounter();
+		long lastPull = holder.getLastPullCounter();
 		int intervalTicks = getAeInputIntervalTicks();
 		long effectiveInterval = Math.max(intervalTicks, M);
 		if (pullCounter - lastPull < effectiveInterval) return;
 
 		// 8. 获取复用缓冲区（与推送共享 ReusableBuffers，避免每 tick 创建临时对象）
-		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(host);
+		//    holder 感知重载，跳过冗余 getAe2StateHolder
+		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
 		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
 
 		// 9. 获取输入槽列表
@@ -123,15 +132,17 @@ public final class Ae2InputPuller {
 		long inputCapacity = calculateInputCapacity(inputSlots);
 		if (inputCapacity <= 0) {
 			// 输入槽已满，刷新 lastPullTick 避免下一 tick 重复扫描
-			host.productivebeesgenesis$updateLastPullTick(currentTick);
-			host.productivebeesgenesis$updateLastPullCounter(pullCounter);
+			// Spark 优化：直接使用 holder 替代 host 接口分发
+			holder.updateLastPullTick(currentTick);
+			holder.updateLastPullCounter(pullCounter);
 			return;
 		}
 		// 总限额取 effectiveRate 与输入槽剩余容量的较小值，避免 pullList 总量超过输入槽容量
 		long remainingQuota = Math.min(effectiveRate, inputCapacity);
 
 		// 12. 获取 per-tile 过滤器（filter 为 null 时不过滤，向后兼容 Phase 1）
-		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
+		//     Spark 优化：直接使用 holder 替代 host 接口分发
+		Ae2InputFilter filter = holder.getOrCreateInputFilter();
 
 		// 13. 遍历 MEStorage 可用栈，收集待拉取类型（不消耗 quota，由执行阶段按 round-robin 分配）
 		//     V13 修复：收集所有可用类型，单类型走原版顺序填充，多类型走 round-robin 跨进程分发
@@ -157,8 +168,9 @@ public final class Ae2InputPuller {
 
 		if (pullList.isEmpty()) {
 			// 无可拉取物品，仍刷新 lastPullTick 避免下一 tick 重复扫描
-			host.productivebeesgenesis$updateLastPullTick(currentTick);
-			host.productivebeesgenesis$updateLastPullCounter(pullCounter);
+			// Spark 优化：直接使用 holder 替代 host 接口分发
+			holder.updateLastPullTick(currentTick);
+			holder.updateLastPullCounter(pullCounter);
 			return;
 		}
 
@@ -212,29 +224,36 @@ public final class Ae2InputPuller {
 			}
 		} else {
 			// 多类型场景 (N > processCount)：类型轮转 — 每次只处理 processCount 种类型
+			// Spark 优化：直接使用 holder 替代 host 接口分发
 			int totalTypes = pullList.size();
-			int startIndex = host.productivebeesgenesis$getAndIncrementTypeRotation(processCount, totalTypes);
+			int startIndex = holder.getAndIncrementTypeRotation(processCount, totalTypes);
 			long perTypeQuota = remainingQuota / processCount;
 			int targetProcessIndex = 0;
 			for (int i = 0; i < processCount; i++) {
 				if (totalPulled >= effectiveRate) break;
 				if (perTypeQuota <= 0) break;
 				PullEntry entry = pullList.get((startIndex + i) % totalTypes);
+				// Spark 优化：合并 getSlotRemainingCapacity 重复调用
+				// 原代码先在 while 循环中调用 > 0 检查，再在循环外重新调用获取剩余量
+				// 现合并为一次调用，缓存 slotRemaining 供后续 toPull 计算复用
 				int probed = 0;
+				long slotRemaining = -1L;
 				while (probed < processCount) {
 					IInventorySlot slot = inputSlots.get(targetProcessIndex);
-					if (slot != null && getSlotRemainingCapacity(slot, entry.key) > 0) break;
+					if (slot != null) {
+						slotRemaining = getSlotRemainingCapacity(slot, entry.key);
+						if (slotRemaining > 0) break;
+					}
 					targetProcessIndex = (targetProcessIndex + 1) % processCount;
 					probed++;
 				}
-				if (probed >= processCount) {
+				if (probed >= processCount || slotRemaining <= 0) {
 					// 审查问题修复：原 break 会放弃后续所有轮转条目。
 					// 当前条目在所有槽位都不匹配（槽已满或类型不同），但下一个轮转条目可能匹配。
 					// 改为 continue 推进到下一个轮转条目，仅当所有轮转条目都无法匹配时整个 for 循环自然结束。
 					targetProcessIndex = (targetProcessIndex + 1) % processCount;
 					continue;
 				}
-				long slotRemaining = getSlotRemainingCapacity(inputSlots.get(targetProcessIndex), entry.key);
 				int toPull = (int) Math.min(perTypeQuota, slotRemaining);
 				toPull = Math.min(toPull, entry.amount);
 				toPull = (int) Math.min(toPull, effectiveRate - totalPulled);
@@ -252,8 +271,9 @@ public final class Ae2InputPuller {
 		}
 
 		// 16. 更新上次拉取游戏刻（无论是否拉取成功，只要触发过就更新，避免下一 tick 重复扫描）
-		host.productivebeesgenesis$updateLastPullTick(currentTick);
-		host.productivebeesgenesis$updateLastPullCounter(pullCounter);
+		//     Spark 优化：直接使用 holder 替代 host 接口分发
+		holder.updateLastPullTick(currentTick);
+		holder.updateLastPullCounter(pullCounter);
 
 		// 拉取列表已使用完毕，clear 而非新建（复用 ReusableBuffers）
 		pullList.clear();
