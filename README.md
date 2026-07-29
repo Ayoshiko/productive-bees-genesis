@@ -22,6 +22,7 @@
   - [MEK Centrifuge](#mek-centrifuge)
   - [MEK Apiary](#mek-apiary)
   - [Direct Centrifuge Connection](#direct-centrifuge-connection)
+  - [PB Upgrade System](#pb-upgrade-system)
   - [AE2 Integration](#ae2-integration)
   - [Bee Filter UI](#bee-filter-ui)
   - [KubeJS Integration](#kubejs-integration)
@@ -67,15 +68,44 @@ For the full list of changes, see the [CHANGELOG](CHANGELOG.md).
 
 ### MEK Centrifuge
 
-- **MEK Centrifuge**: Mekanism-style centrifuge processing Productive Bees honeycombs and honeycomb blocks. Also supports Energized Smelter recipes.
-- **Adapts to MEK expansion mods**, covering four Mekanism-family addons:
-  - **Mekanism**: Basic / Advanced / Elite / Ultimate
-  - **Mekanism Extras**: Absolute / Supreme / Cosmic / Infinite
-  - **Evolved Mekanism**: Overclocked / Quantum / Dense / Multiversal / Creative
-  - **Evolved Mekanism Extras**: Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal
-- **Output safety**: Identical stacks are merged; the centrifuge pauses when full to avoid wasting energy.
-- **Ejection optimization**: All variants use optimized configurable ejection delay (active/idle/blocked/busy states).
-- **Fluid auto-eject**: Default 16384 mB/tick, overriding Mekanism's 1024 mB/tick.
+An industrialized Mekanism-style centrifuge that extends Mekanism's native electric machine base class, fully preserving its GUI style, side configuration, upgrade system, safety interlocks, and redstone control, while deeply optimizing the honeycomb and honeycomb block processing pipeline.
+
+#### Core Capabilities
+
+- **Multi-recipe support**: Processes Productive Bees honeycombs and honeycomb blocks, and also supports Energized Smelter recipes.
+- **Factory parallel processing**: Base variant processes a single recipe; factory variants provide multi-process parallel processing (2–18 processes) scaling with tier.
+- **Output safety**: Identical output stacks are auto-merged; processing pauses when output slots are full to avoid wasting energy.
+- **Ejection optimization**: All variants use a configurable four-state ejection policy (active/idle/blocked/busy) with fine-grained controls like skip-unchanged-ticks, max-speed mode, and busy cooldown.
+- **Fluid auto-eject**: Default 16384 mB/tick, overriding Mekanism's native 1024 mB/tick.
+- **Multi-fluid tank mode**: Configurable dynamic slot allocation per fluid type, preventing different honey types from mixing.
+- **AE2 integration**: Acts as an AE2 grid node — direct output push, honeycomb pulling, and ME-network energy input (5-tier priority).
+- **Jade tooltip**: Shows AE2 network status, internal items/fluids/energy, etc.
+
+#### Centrifuge Tiers (17 factory tiers + 1 base variant)
+
+| Tier family | Tier names | Parallel processes | Input slots | Output slots |
+| --- | --- | --- | --- | --- |
+| Base | MEK Centrifuge | 1 | 1 | 3 |
+| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 2–5 | 2–5 | 6–12 |
+| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 6–9 | 6–9 | 15–21 |
+| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 6–10 | 6–10 | 15–24 |
+| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 7–11 | 7–11 | 18–27 |
+
+#### MEK Expansion Mod Support
+
+Covers four Mekanism-family addon mods, with factory tiers mapped one-to-one:
+- **Mekanism**: Basic / Advanced / Elite / Ultimate
+- **Mekanism Extras**: Absolute / Supreme / Cosmic / Infinite
+- **Evolved Mekanism**: Overclocked / Quantum / Dense / Multiversal / Creative
+- **Evolved Mekanism Extras**: Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal
+
+#### Upgrade Support
+
+The centrifuge supports three independent upgrade systems that can coexist:
+- **Mekanism native upgrades**: Speed (SPEED), Energy (ENERGY), Muffling (MUFFLING)
+- **Mekanism Extras upgrades**: Stack (STACK, 2^N parallel), Creative (CREATIVE, infinite energy) — only when MEKExtras is installed
+- **Mekanism Empowered upgrades**: Empowered Speed, Empowered Energy, IO Capacity, Auto Inserter, Fast Item Insert, Fast Item Eject — only when MekanismEmpowered is installed
+- **PB Upgrade System**: see [PB Upgrade System](#pb-upgrade-system) section
 
 ### MEK Apiary
 
@@ -95,10 +125,7 @@ An electrified bee production system built on the **Mekanism** universal machine
 
 - **Slot layout**: bee slots / output slots / cage slots (bidirectional transfer) / energy slot / honey fluid tank / PB upgrade slots.
 - **Feeder system**: dedicated window managing flower items. Base variant uses a fixed 3×3 = 9-slot grid; factory variants use a dynamic layout scaling with bee slot count.
-- **PB upgrade cards (9 types)**:
-  - Productivity α / β / γ / Ω — production multipliers 1.2 / 1.5 / 2.0 / 2.6.
-  - Time I / II — per-tier processing time reduction of −15% / −30%.
-  - Gene Sampling, Honeycomb Block, Simulation Upgrade.
+- **PB upgrade system**: 9 self-developed upgrade cards applicable to both centrifuge and apiary — see [PB Upgrade System](#pb-upgrade-system) section.
 - **AE2 integration**: outputs (items / fluids / energy) push into the ME network; AppliedFlux priority switching supported.
 - **Direct ejection**: when a centrifuge is adjacent to the apiary, the apiary bypasses the MEK Ejector throttling and pushes honeycombs straight into the centrifuge's input slot — see [Direct Centrifuge Connection](#direct-centrifuge-connection).
 - **Jade tooltip**: shows bee count, production progress, and AE2 network status.
@@ -113,6 +140,53 @@ The apiary and the centrifuge form an industrialized **"produce → process"** p
 3. The centrifuge processes the honeycombs and outputs the bee products.
 
 This short-circuit eliminates the throughput bottleneck introduced by the MEK Ejector's per-tick limits and busy/block cooldowns, allowing full-rate industrial production when machines are placed back-to-back.
+
+### PB Upgrade System
+
+The mod's self-developed **PB Upgrade System** is independent from Mekanism's native upgrade system. It uses Mekanism's upgrade card installation mechanism, but all effect calculations are handled by this mod. The system applies to both the **MEK Centrifuge** (6 types) and the **MEK Apiary** (all 9 types), and upgrades can coexist.
+
+#### Upgrade Types
+
+| Upgrade type | Identifier | Effect | Default limit | Applies to |
+| --- | --- | --- | --- | --- |
+| Productivity α | PRODUCTIVITY | Output multiplier +1.2× (per card) | 8 | Centrifuge + Apiary |
+| Productivity β | PRODUCTIVITY_2 | Output multiplier +1.5× (per card) | 8 | Centrifuge + Apiary |
+| Productivity γ | PRODUCTIVITY_3 | Output multiplier +2.0× (per card) | 8 | Centrifuge + Apiary |
+| Productivity Ω | PRODUCTIVITY_4 | Output multiplier +2.6× (per card) | 8 | Centrifuge + Apiary |
+| Time I | TIME | Processing time reduction (1× weight per card) | 8 | Centrifuge + Apiary |
+| Time II | TIME_2 | Processing time reduction (2× weight per card) | 8 | Centrifuge + Apiary |
+| Gene Sampler | GENE_SAMPLER | Gene sampling upgrade | 4 | Apiary only |
+| Honeycomb Block | BLOCK | Honeycomb block processing upgrade | 1 | Apiary only |
+| Simulation | SIMULATION | Simulation upgrade | 8 | Apiary only |
+
+#### Effect Calculation
+
+Unlike Productive Bees' native additive model, this mod's PB upgrades use a **weighted additive** model — more cards mean stronger effects:
+
+**Productivity upgrades** (shared by centrifuge and apiary):
+- Total output multiplier = `1 + Σ(factor × count)`, where factors are 1.2 / 1.5 / 2.0 / 2.6
+- Example: 4× Productivity α + 2× Productivity γ = `1 + (1.2×4 + 2.0×2) = 1 + 8.8 = 9.8×` output
+- The apiary applies an extra 1.22 compensation factor (to balance output pacing between apiary and centrifuge); the centrifuge has no compensation factor
+
+**Time upgrades** (shared by centrifuge and apiary):
+- Time multiplier = `1 / (1 + 0.15 × (Time I count + Time II count × 2))`
+- Time II contributes 2× weight per card, making it stronger
+- Example: 2× Time I + 1× Time II = `1 / (1 + 0.15 × (2 + 1×2)) = 1 / 1.6 = 0.625`, i.e. processing time reduced to 62.5%
+
+#### Per-Type Install Limits
+
+Different upgrade types have different default install limits; all limits are adjustable in the server config:
+- **Productivity / Time upgrades**: default 8 cards (shared by centrifuge and apiary, coexist, configurable)
+- **Simulation upgrade**: default 8 cards (apiary only)
+- **Gene Sampler upgrade**: default 4 cards (apiary only)
+- **Honeycomb Block upgrade**: fixed 1 card (apiary only)
+
+#### Relationship with Mekanism Native Upgrades
+
+The PB Upgrade System is fully independent from Mekanism native upgrades (SPEED / ENERGY / MUFFLING) and can be installed simultaneously:
+- **Mekanism native upgrades**: effects handled by Mekanism itself (speed boost, energy capacity, muffling)
+- **PB Upgrade System**: effects handled by this mod (output multiplier, processing time, gene sampling, etc.)
+- The two systems do not interfere; players can freely combine them
 
 ### AE2 Integration
 
@@ -173,6 +247,7 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Evolved Mekanism](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism) | EM-tier factories (Overclocked / Quantum / Dense / Multiversal / Creative) |
 | [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | EME-tier factories (Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal) |
 | [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | Extended upgrade limits |
+| [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | Empowered Speed / Empowered Energy / IO Capacity / Auto Inserter / Fast Item Insert / Fast Item Eject upgrades (centrifuge 6 types, apiary 5 types) |
 | [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection + ME network output + ME energy input |
 | [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for machines |
 | [ExtendedAE](https://www.curseforge.com/minecraft/mc-mods/ex-pattern-provider) | Auto-discovered cable connection |
