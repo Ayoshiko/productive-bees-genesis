@@ -50,6 +50,9 @@ public enum PbUpgradeType {
 	/** 蜜脾块升级 — 将蜜脾产出转换为蜜脾块形式（功能型，1 个即满，独立于 Ω） */
 	BLOCK("block", 0xFF8D6E63, 0f, 1),
 
+	/** 稳定性升级 — 提升离心机非保底产物的产出概率（每级 +0.15，上限 7，仅离心机生效） */
+	STABILITY("stability", 0xFF42A5F5, 0f, 7),
+
 	/** 模拟升级 — 模拟生产（机械蜂箱内置，不占槽位） */
 	SIMULATION("simulation", 0xFF607D8B, 0f, 8);
 

@@ -72,6 +72,14 @@ public class BeeSlot {
 	private volatile boolean cachedFlowerValid;
 
 	/**
+	 * F5: 缓存的 productivity 基因纯度
+	 * <br/>
+	 * -1.0f 表示未缓存，[0.0, 1.0] 为有效值。首次调用 {@link #getProductivityPurity} 时解析并缓存，
+	 * {@link #setBeeData} 时重置为 -1.0f。volatile 保证跨线程可见性。
+	 */
+	private volatile float cachedProductivityPurity = -1.0f;
+
+	/**
 	 * 消费缓存的花朵有效性（cache miss 返回 {@code null}，避免哨兵值歧义）
 	 * <br/>
 	 * processBeeSlots 在循环内对每只蜜蜂调用：同 tick 内同蜜蜂 cache hit，
@@ -132,6 +140,8 @@ public class BeeSlot {
 		// 内容比较：若 NBT 数据实质相同则跳过（防止 copy() 产生的新引用误触发）
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
+		// F5: 蜜蜂更换后重置 productivity 纯度缓存
+		this.cachedProductivityPurity = -1.0f;
 		this.dirty = true;
 	}
 
@@ -218,6 +228,52 @@ public class BeeSlot {
 	}
 
 	/**
+	 * F5: 获取蜜蜂 productivity 基因纯度
+	 * <br/>
+	 * 从 beeData 的 {@code neoforge:attachments.productivebees:attributes_handler.attributes.productivebees:productivity.purity}
+	 * 读取纯度值。解析失败或无属性时返回 0.0f（无加成）。首次解析后缓存，
+	 * {@link #setBeeData} 时重置缓存。
+	 * <p>
+	 * 线程安全：cachedProductivityPurity 为 volatile，单次赋值原子。
+	 * 多线程竞争时最坏情况重复解析一次，无正确性问题。
+	 *
+	 * @return productivity 纯度 [0.0, 1.0]，解析失败返回 0.0
+	 */
+	public float getProductivityPurity() {
+		if (cachedProductivityPurity >= 0.0f) {
+			return cachedProductivityPurity;
+		}
+		cachedProductivityPurity = parseProductivityPurity();
+		return cachedProductivityPurity;
+	}
+
+	/**
+	 * 从 beeData NBT 解析 productivity 纯度
+	 * <br/>
+	 * NBT 路径：{@code neoforge:attachments → productivebees:attributes_handler → attributes → productivebees:productivity → purity}
+	 * 任一层缺失返回 0.0f，异常时返回 0.0f 不抛出。
+	 */
+	private float parseProductivityPurity() {
+		CompoundTag data = this.beeData;
+		if (data == null) return 0.0f;
+		try {
+			CompoundTag attachments = data.getCompound("neoforge:attachments");
+			if (attachments.isEmpty()) return 0.0f;
+			CompoundTag handler = attachments.getCompound("productivebees:attributes_handler");
+			if (handler.isEmpty()) return 0.0f;
+			CompoundTag attributes = handler.getCompound("attributes");
+			if (attributes.isEmpty()) return 0.0f;
+			CompoundTag productivity = attributes.getCompound("productivebees:productivity");
+			if (productivity.isEmpty()) return 0.0f;
+			float purity = productivity.getFloat("purity");
+			// 截断到 [0.0, 1.0] 防止异常值
+			return Math.max(0.0f, Math.min(1.0f, purity));
+		} catch (RuntimeException e) {
+			return 0.0f;
+		}
+	}
+
+	/**
 	 * 槽位是否为空（无蜜蜂数据）
 	 *
 	 * @return true 表示空槽可装入新蜜蜂
@@ -238,6 +294,8 @@ public class BeeSlot {
 		this.hasNectar = false;
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
+		// F5: 清空蜜蜂时重置 productivity 纯度缓存
+		this.cachedProductivityPurity = -1.0f;
 		this.dirty = true;
 	}
 }

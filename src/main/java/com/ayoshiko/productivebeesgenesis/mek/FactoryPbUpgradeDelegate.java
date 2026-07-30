@@ -187,6 +187,11 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 		return pbUpgradeHandler.getTimeMultiplier();
 	}
 
+	/** 获取稳定性概率加成 — 提升非保底产物的产出概率 [0.0, 1.0] */
+	public float getStabilityBonus() {
+		return pbUpgradeHandler.getStabilityBonus();
+	}
+
 	// ===== 容器同步 =====
 
 	/**

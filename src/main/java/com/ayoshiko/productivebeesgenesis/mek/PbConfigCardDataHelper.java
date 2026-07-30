@@ -285,16 +285,18 @@ public final class PbConfigCardDataHelper {
 
 	/**
 	 * 判断升级类型是否被机器支持
+	 * <br/>
+	 * STABILITY 仅离心机生效（对齐 PB 原版），蜂箱不接受。
 	 */
 	private static boolean isSupported(@NotNull PbUpgradeType type, @NotNull MachineType machineType) {
 		if (type.isBuiltin()) return false;
 		return switch (machineType) {
 			case CENTRIFUGE -> switch (type) {
 				case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-						TIME, TIME_2 -> true;
+						TIME, TIME_2, STABILITY -> true;
 				default -> false;
 			};
-			case APIARY -> true;
+			case APIARY -> type != PbUpgradeType.STABILITY;
 		};
 	}
 }

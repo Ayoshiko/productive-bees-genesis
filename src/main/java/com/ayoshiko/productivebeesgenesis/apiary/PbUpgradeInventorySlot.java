@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import cy.jdkdigital.productivelib.registry.LibItems;
 import mekanism.api.AutomationType;
@@ -19,8 +20,6 @@ import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-
-import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 
 /**
  * PB 升级物品槽 — 物理槽位实现(非 DataSlot 注册)。
@@ -67,8 +66,9 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			((CustomWindowData) (Object) PB_UPGRADE_WINDOW_DATA)
 					.productivebeesgenesis$setCustomSaveName("window_pb_upgrade");
 		} catch (ClassCastException e) {
-			// 服务端未加载客户端 Mixin，跳过
-			ProductiveBeesGenesis.LOGGER.warn("PbUpgradeInventorySlot Mixin 应用失败，升级窗口位置不持久化", e);
+			// F7: 服务端未加载客户端 Mixin，降级处理（预期行为，不打印 40+ 行堆栈）
+			ProductiveBeesGenesis.LOGGER.warn("PbUpgradeInventorySlot Mixin 服务端降级（升级窗口位置不持久化）");
+			DevLog.debug("pb_upgrade_slot", "SelectedWindowDataMixin 未在服务端应用: {}", e.toString());
 		}
 	}
 
@@ -105,7 +105,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	/**
 	 * 离心机支持的 PB 升级物品校验
 	 * <br/>
-	 * 仅接受产量（α/β/γ/Ω）与时间（TIME/TIME_2）系列，拒绝 GENE_SAMPLER/BLOCK/SIMULATOR。
+	 * 接受产量（α/β/γ/Ω）、时间（TIME/TIME_2）和稳定性（STABILITY）系列，
+	 * 拒绝 GENE_SAMPLER/BLOCK/SIMULATOR。STABILITY 仅离心机生效（对齐 PB 原版）。
 	 */
 	public static boolean isCentrifugeSupportedUpgradeItem(ItemStack stack) {
 		if (stack.isEmpty()) return false;
@@ -115,7 +116,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_PRODUCTIVITY_3.get()
 				|| item == LibItems.UPGRADE_PRODUCTIVITY_4.get()
 				|| item == LibItems.UPGRADE_TIME.get()
-				|| item == LibItems.UPGRADE_TIME_2.get();
+				|| item == LibItems.UPGRADE_TIME_2.get()
+				|| item == LibItems.UPGRADE_STABILITY.get();
 	}
 
 	/**
@@ -204,6 +206,10 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 		if (item == LibItems.UPGRADE_GENE_SAMPLER.get()) {
 			return PbUpgradeType.GENE_SAMPLER;
 		}
+		// STABILITY 升级 — 仅离心机支持（蜂箱不接受）
+		if (item == LibItems.UPGRADE_STABILITY.get()) {
+			return PbUpgradeType.STABILITY;
+		}
 		return null;
 	}
 
@@ -227,6 +233,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case GENE_SAMPLER -> new ItemStack(LibItems.UPGRADE_GENE_SAMPLER.get());
 			case BLOCK -> new ItemStack(LibItems.UPGRADE_BLOCK.get());
 			case SIMULATION -> new ItemStack(LibItems.UPGRADE_SIMULATOR.get());
+			case STABILITY -> new ItemStack(LibItems.UPGRADE_STABILITY.get());
 			default -> ItemStack.EMPTY;
 		};
 	}
@@ -254,6 +261,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case GENE_SAMPLER -> item == LibItems.UPGRADE_GENE_SAMPLER.get();
 			case BLOCK -> item == LibItems.UPGRADE_BLOCK.get();
 			case SIMULATION -> item == LibItems.UPGRADE_SIMULATOR.get();
+			case STABILITY -> item == LibItems.UPGRADE_STABILITY.get();
 			default -> false;
 		};
 	}

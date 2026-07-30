@@ -79,6 +79,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** PB原版安装桥接器 — 使PB原版潜行右键安装委托给自定义升级系统 */
 	private final PbUpgradeInstallHandler pbUpgradeInstallHandler;
 	private final ApiaryNbtSerializer nbtSerializer;
+	/** F4: 产物溢出缓冲区 — 缓存输出槽满载时的剩余产物，下 tick 重试注入 */
+	private final ApiaryOutputBuffer outputBuffer = new ApiaryOutputBuffer(this);
+	/** F4: 标记是否因区块卸载而移除 — 避免 setRemoved 中 dumpToWorld 在区块卸载时执行（缓冲区已通过 saveAdditional 持久化） */
+	private boolean chunkUnloading = false;
 	/** Bug 9：选中的蜜蜂槽位索引（-1=未选择），跨线程访问需 volatile 保证可见性 */
 	private volatile int selectedBeeSlot = -1;
 	/** 客户端同步用：选中蜜蜂槽位（仅服务端同步回调写入，GUI 通过 getter 读取），跨线程访问需 volatile */
@@ -113,6 +117,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** 包私有 — 供同包组件访问 */
 	ApiarySlotManager getSlotManager() { return slotManager; }
+
+	/** F4: 获取产物溢出缓冲区 — 供同包组件（NbtSerializer/TickHandler/SlotTickProcessor）访问 */
+	ApiaryOutputBuffer getOutputBuffer() { return outputBuffer; }
 
 	/** 失效所有蜂箱槽位上限缓存 — 委托 ApiarySlotManager.invalidateCache()，配置 reload 时调用 */
 	public static void invalidateSlotManagerCache() {
@@ -344,7 +351,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override
 	public int getPbUpgradeInstalledCount(PbUpgradeType type) { return getPbUpgradeCount(type); }
 	@Override
-	public boolean isPbUpgradeSupported(PbUpgradeType type) { return type != null && !type.isBuiltin(); }
+	public boolean isPbUpgradeSupported(PbUpgradeType type) {
+		// STABILITY 仅离心机生效，蜂箱不接受（对齐 PB 原版 AdvancedBeehiveBlockEntity 不含 stability 白名单）
+		return type != null && !type.isBuiltin() && type != PbUpgradeType.STABILITY;
+	}
 
 	// ===== 选中蜜蜂槽位 + 桶式操作 =====
 
@@ -430,8 +440,22 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	// ===== AE2 生命周期与 IAe2OutputHostBase 实现 — 委托给 ae2HostAdapter =====
 
 	@Override public void clearRemoved() { super.clearRemoved(); ae2HostAdapter.prepareForLoad(); }
-	@Override public void setRemoved() { super.setRemoved(); ae2HostAdapter.destroyForRemoval(); }
-	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); ae2HostAdapter.destroyForChunkUnload(); }
+	@Override public void setRemoved() {
+		super.setRemoved();
+		// F4: 方块破坏时掉落缓冲区产物（区块卸载时跳过，缓冲区已通过 saveAdditional 持久化）
+		if (!chunkUnloading) {
+			try {
+				Level level = getLevel();
+				if (level != null && !level.isClientSide) {
+					outputBuffer.dumpToWorld(level, getBlockPos());
+				}
+			} catch (Exception e) {
+				ProductiveBeesGenesis.LOGGER.warn("ApiaryOutputBuffer dumpToWorld 异常", e);
+			}
+		}
+		ae2HostAdapter.destroyForRemoval();
+	}
+	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); chunkUnloading = true; ae2HostAdapter.destroyForChunkUnload(); }
 	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler() { return ae2HostAdapter.getAe2LifecycleHandler(); }
 	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return ae2HostAdapter.getAe2EnergySource(); }
 	@Override public Level productivebeesgenesis$getAe2Level() { return ae2HostAdapter.getAe2Level(); }

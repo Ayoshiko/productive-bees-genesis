@@ -222,6 +222,21 @@ public interface PbRecipeContext {
 	int productivityModifier();
 
 	/**
+	 * 获取稳定性概率加成 — 提升非保底产物的产出概率
+	 * <br/>
+	 * 仅离心机生效（蜂箱不支持 STABILITY 升级）。加成公式：{@code (已装数+1) × 0.15}，
+	 * 截断到 1.0。默认 0.0 表示未安装 stability 升级，不影响概率判定。
+	 * <p>
+	 * <b>性能</b>：由 {@link PbRecipeCompleter} 在每次 accumulate 入口调用一次（循环外），
+	 * 不在概率判定循环内重复查询。
+	 *
+	 * @return 稳定性概率加成 [0.0, 1.0]，默认 0.0
+	 */
+	default float stabilityBonus() {
+		return 0.0f;
+	}
+
+	/**
 	 * 获取每tick操作次数（受速度升级影响）
 	 * <br/>
 	 * 对应 MekanismUtils.getOperationsPerTick(this, BASE_TICKS_REQUIRED, 1)，

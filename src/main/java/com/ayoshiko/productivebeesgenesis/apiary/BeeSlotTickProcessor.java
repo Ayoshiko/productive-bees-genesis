@@ -409,8 +409,9 @@ class BeeSlotTickProcessor {
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取
 				// Bug 10: 传入 level 用于万象创世随机蜜脾生成
 				// Bug 3: 传入 entry.getValue() 限定仅处理当前组的槽位索引，避免混养串组
+				// F4: 传入 outputBuffer，输出槽满载时剩余产物送入缓冲区下 tick 重试
 				produceProcessor.processBatchProduce(beeSlots, pendingProductions, entry.getValue(),
-						typeKey, produceList, slotManager, level);
+						typeKey, produceList, slotManager, level, tile.getOutputBuffer());
 			}
 		} finally {
 			// 清零所有累积计数（含 accumulatedProgress），异常时也执行，防止产出翻倍

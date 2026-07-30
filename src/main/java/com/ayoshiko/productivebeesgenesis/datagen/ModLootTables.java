@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.loot.BlockLootSubProvider;
 import net.minecraft.data.loot.LootTableProvider;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -35,13 +36,22 @@ public final class ModLootTables {
 		@Override
 		protected void generate() {
 			for (var blockHolder : ModBlocks.BLOCKS.getEntries()) {
+				ResourceLocation id = blockHolder.getKey().location();
+				// F9: 跳过 EM/ME/EME 条件方块 — 由 ConditionalBlockLootProvider 生成带条件的战利品表
+				if (ModLoadedConditionResolver.resolveModId(id) != null) {
+					continue;
+				}
 				this.dropSelf(blockHolder.get());
 			}
 		}
 
 		@Override
 		protected Iterable<Block> getKnownBlocks() {
-			return ModBlocks.BLOCKS.getEntries().stream().map(sup -> (Block) sup.get())::iterator;
+			// F9: 排除 EM/ME/EME 条件方块 — 其战利品表由 ConditionalBlockLootProvider 生成，
+			// 基类 generate() 会校验 getKnownBlocks() 中每个方块是否生成了战利品表，必须同步过滤
+			return ModBlocks.BLOCKS.getEntries().stream()
+					.filter(holder -> ModLoadedConditionResolver.resolveModId(holder.getKey().location()) == null)
+					.map(sup -> (Block) sup.get())::iterator;
 		}
 	}
 }

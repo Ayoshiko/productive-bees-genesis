@@ -24,7 +24,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * 注册策略（按方块实体类型差异化）：
  * <ul>
  *   <li>蜂箱：8种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器）</li>
- *   <li>离心机（含工厂版）：6种（产量×4 + 时间×2，不支持蜜脾块和基因采样器）</li>
+ *   <li>离心机（含工厂版）：7种（产量×4 + 时间×2 + 稳定性，不支持蜜脾块和基因采样器）</li>
  * </ul>
  * <p>
  * 注：ANTI_TELEPORT（防传送）和 RANGE（范围）升级对机械蜂箱模拟模式无效，已移除支持。
@@ -58,7 +58,7 @@ public final class CollectValidUpgradesEventHandler {
 	 * 升级注册策略（按方块实体类型差异化）：
 	 * <ul>
 	 *   <li>蜂箱：8种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器）</li>
-	 *   <li>离心机（含工厂版）：6种（产量×4 + 时间×2，不支持蜜脾块和基因采样器）</li>
+	 *   <li>离心机（含工厂版）：7种（产量×4 + 时间×2 + 稳定性，不支持蜜脾块和基因采样器）</li>
 	 * </ul>
 	 * <p>
 	 * 蜂箱/离心机区分：{@link IPbUpgradeProvider} 的实现者只有蜂箱和离心机两类，
@@ -89,6 +89,9 @@ public final class CollectValidUpgradesEventHandler {
 			// 蜜脾块升级 + 基因采样器升级 — 仅蜂箱支持
 			event.addValidUpgrade(LibItems.UPGRADE_BLOCK.get());
 			event.addValidUpgrade(LibItems.UPGRADE_GENE_SAMPLER.get());
+		} else {
+			// 稳定性升级 — 仅离心机支持（对齐 PB 原版 CentrifugeBlockEntity 升级白名单）
+			event.addValidUpgrade(LibItems.UPGRADE_STABILITY.get());
 		}
 	}
 }

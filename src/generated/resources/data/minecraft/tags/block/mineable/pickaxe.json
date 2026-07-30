@@ -10,31 +10,110 @@
     "productivebeesgenesis:advanced_mek_centrifuge_factory",
     "productivebeesgenesis:elite_mek_centrifuge_factory",
     "productivebeesgenesis:ultimate_mek_centrifuge_factory",
-    "productivebeesgenesis:overclocked_mek_centrifuge_factory",
-    "productivebeesgenesis:quantum_mek_centrifuge_factory",
-    "productivebeesgenesis:dense_mek_centrifuge_factory",
-    "productivebeesgenesis:multiversal_mek_centrifuge_factory",
-    "productivebeesgenesis:creative_mek_centrifuge_factory",
-    "productivebeesgenesis:absolute_extra_mek_centrifuge_factory",
-    "productivebeesgenesis:supreme_extra_mek_centrifuge_factory",
-    "productivebeesgenesis:cosmic_extra_mek_centrifuge_factory",
-    "productivebeesgenesis:infinite_extra_mek_centrifuge_factory",
-    "productivebeesgenesis:absolute_overclocked_emextra_mek_centrifuge_factory",
-    "productivebeesgenesis:supreme_quantum_emextra_mek_centrifuge_factory",
-    "productivebeesgenesis:cosmic_dense_emextra_mek_centrifuge_factory",
-    "productivebeesgenesis:infinite_multiversal_emextra_mek_centrifuge_factory",
-    "productivebeesgenesis:overclocked_mek_apiary_factory",
-    "productivebeesgenesis:quantum_mek_apiary_factory",
-    "productivebeesgenesis:dense_mek_apiary_factory",
-    "productivebeesgenesis:multiversal_mek_apiary_factory",
-    "productivebeesgenesis:creative_mek_apiary_factory",
-    "productivebeesgenesis:absolute_extra_mek_apiary_factory",
-    "productivebeesgenesis:supreme_extra_mek_apiary_factory",
-    "productivebeesgenesis:cosmic_extra_mek_apiary_factory",
-    "productivebeesgenesis:infinite_extra_mek_apiary_factory",
-    "productivebeesgenesis:absolute_overclocked_emextra_mek_apiary_factory",
-    "productivebeesgenesis:supreme_quantum_emextra_mek_apiary_factory",
-    "productivebeesgenesis:cosmic_dense_emextra_mek_apiary_factory",
-    "productivebeesgenesis:infinite_multiversal_emextra_mek_apiary_factory"
+    "productivebeesgenesis:infinitycreation_comb_block",
+    {
+      "id": "productivebeesgenesis:overclocked_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:quantum_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:dense_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:multiversal_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:creative_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:absolute_extra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:supreme_extra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:cosmic_extra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:infinite_extra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:absolute_overclocked_emextra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:supreme_quantum_emextra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:cosmic_dense_emextra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:infinite_multiversal_emextra_mek_centrifuge_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:overclocked_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:quantum_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:dense_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:multiversal_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:creative_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:absolute_extra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:supreme_extra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:cosmic_extra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:infinite_extra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:absolute_overclocked_emextra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:supreme_quantum_emextra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:cosmic_dense_emextra_mek_apiary_factory",
+      "required": false
+    },
+    {
+      "id": "productivebeesgenesis:infinite_multiversal_emextra_mek_apiary_factory",
+      "required": false
+    }
   ]
 }

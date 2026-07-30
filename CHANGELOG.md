@@ -23,6 +23,66 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.2] - 2026-07-30
+
+v2.0.2 是 SemVer PATCH 版本，修复两位玩家独立报告的"工具挖掘等级失效"CRITICAL bug（标签加载失败级联影响 paxel/hammer/drill/aio 等工具），以及战利品表解析失败、服务端 Mixin 降级日志噪音、蜂箱产物丢失等问题，并新增蜜蜂 productivity 基因应用。
+
+### 修复
+
+- **工具挖掘等级失效（CRITICAL）** — 解决未安装 EM/ME/EME 附属模组时 `minecraft:mineable/pickaxe` 标签加载失败，级联影响所有 paxel/hammer/drill/aio/staff 工具标签，导致下界合金多功能工具等挖掘速度异常
+  - **问题**：`ModBlockTagsProvider` 为 EM/ME/EME 条件注册的工厂方块生成必需标签条目，未安装对应模组时方块 ID 未注册，整个 `mineable/pickaxe` 标签加载失败
+  - **根因**：必需条目（`required:true`）引用未注册方块 ID 时，原版标签解析器拒绝整个标签，级联影响所有引用 `#minecraft:mineable/pickaxe` 的工具标签（cucumber paxel、mekanismtools paxel、ftbstuff hammer、actuallyadditions drill/aio、draconicevolution staff）
+  - **修复**：使用 `addOptional(id)` 为条件方块生成可选条目（`required:false`），未注册时静默跳过，不影响标签整体加载
+  - **影响范围**：1 个文件修改（`ModBlockTagsProvider.java`）
+
+- **战利品表解析失败** — 解决未安装 EM/ME/EME 附属模组时战利品表引用未注册物品 ID 导致解析错误
+  - **问题**：`ModLootTables` 无条件为所有方块生成 dropSelf 战利品表，EM/ME/EME 方块的 BlockItem 未注册时触发 `Unknown registry key` 错误
+  - **修复**：
+    1. `ModLootTables` 过滤 EM/ME/EME 方块，仅为基础方块生成无条件战利品表
+    2. 新建 `ConditionalBlockLootProvider` 为 EM/ME/EME 方块生成带 `neoforge:mod_loaded` 条件的 dropSelf 战利品表 JSON
+    3. `ProductiveBeesGenesis` 注册新 provider 到数据生成器
+  - **影响范围**：3 个文件修改 + 1 个新增文件
+
+- **蜜脾块 hoe 标签错误** — 移除 `infinitycreation_comb_block` 的 `mineable/hoe` 标签
+  - **问题**：蜜脾块为金属/装饰方块，锄不应作为有效挖掘工具
+  - **修复**：统一加入 `mineable/pickaxe`，不再为任何方块添加 hoe 标签
+
+- **服务端 Mixin 降级日志噪音** — 优化 `PbUpgradeInventorySlot` 服务端 Mixin 降级时的日志输出
+  - **问题**：服务端首次放置蜂箱时 `static {}` 块 ClassCastException 打印 40+ 行堆栈 WARN
+  - **修复**：WARN 不再带异常堆栈（从 40+ 行降为 1 行），堆栈信息降级到 DEBUG 级别
+  - **影响范围**：1 个文件修改（`PbUpgradeInventorySlot.java`）
+
+- **蜂箱产物丢失** — 解决输出槽满载时剩余产物被静默丢弃的问题
+  - **问题**：`BeeProduceProcessor.distributeToOutput` 输出槽满载时直接丢弃剩余产物，导致高产量蜜蜂产物损失
+  - **修复**：
+    1. 新建 `ApiaryOutputBuffer` 缓存溢出产物，每 tick 重试注入输出槽（FIFO）
+    2. `distributeToOutput` 返回 `List<ItemStack>` 剩余产物，`processBatchProduce` 送入缓冲区
+    3. `ApiaryTickHandler.onUpdateServer` 每 tick 调用 `tickRedistribute`（Tick 加速模式下也执行）
+    4. `ApiaryNbtSerializer` 序列化/反序列化缓冲区状态（向后兼容）
+    5. 方块破坏时 `dumpToWorld` 掉落缓冲产物（区块卸载时跳过，避免重复）
+    6. `getDrops` 保存 NBT 后清除缓冲区，避免 `dumpToWorld` 与 `BLOCK_ENTITY_DATA` 重复掉落
+    7. `ArrayDeque` 替代 `ArrayList` 实现 FIFO 淘汰 O(1)，复用 `remainingBuffer` 避免每 tick 分配
+  - **设计原则**：SRP（缓冲区独立类）、线程安全（synchronized）、内存安全（MAX_BUFFER_GROUPS=64 上限）、性能优化（O(1) 淘汰 + 零分配重试）
+  - **影响范围**：6 个文件修改 + 1 个新增文件
+
+### 新增
+
+- **蜜蜂 productivity 基因应用** — 应用 PB 原版第五层公式提升蜂箱产物产量
+  - **背景**：机械蜂箱此前不应用蜜蜂 productivity 基因，高纯度蜜蜂与普通蜜蜂产量相同
+  - **公式**：`finalMultiplier = upgradeMultiplier × (1 + 0.2 × purity)`
+  - **实现**：
+    1. `BeeSlot` 新增 `cachedProductivityPurity` 字段（volatile），从 `beeData` NBT 解析 purity 值并缓存
+    2. `setBeeData` 时重置缓存
+    3. `BeeProduceProcessor.buildAdjustedItems` 应用第五层公式
+    4. `processBatchProduce` 计算同组蜜蜂加权平均纯度
+  - **NBT 路径**：`neoforge:attachments.productivebees:attributes_handler.attributes.productivebees:productivity.purity`
+  - **影响范围**：2 个文件修改（`BeeSlot.java`、`BeeProduceProcessor.java`）
+
+- **蜜蜂属性应用设计文档** — 记录 BEHAVIOR/WEATHER_TOLERANCE 属性的未来实现设计
+  - **内容**：PB 原版逻辑分析、机械蜂箱差异、类设计（`BeeWorkConditionChecker`、`WAITING_CONDITION` 状态）、NBT 路径、tick 流程修改、GUI 显示、边界处理、性能考虑、测试用例
+  - **本迭代不实现代码**，作为下一迭代参考
+  - **影响范围**：1 个新增文件（`docs/bee-attributes-future-design.md`）
+
 ## [2.0.1] - 2026-07-30
 
 v2.0.1 是 SemVer PATCH 版本，修复 v2.0.0 发布后发现的 EME/ME 附属模组未安装时的启动崩溃问题、蜂箱工厂 EM 等级翻译错误，并将 EME 布局参数和 GUI 类迁移至 compat 隔离包以强化可选依赖隔离规范。

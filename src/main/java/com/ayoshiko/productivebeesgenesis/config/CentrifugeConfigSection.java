@@ -69,6 +69,8 @@ public final class CentrifugeConfigSection {
 	// ========== PB/ME 升级上限 ==========
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
+	/** 稳定性升级最大安装数量（仅离心机生效，对齐 PB 原版上限 7） */
+	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
 	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
 
 	private CentrifugeConfigSection(ModConfigSpec.Builder builder) {
@@ -212,6 +214,11 @@ public final class CentrifugeConfigSection {
 		mekCentrifugePbUpgradeTimeMaxCount = builder
 				.comment("时间升级最大安装数量")
 				.defineInRange("timeMaxCount", 8, 1, 64);
+		mekCentrifugePbUpgradeStabilityMaxCount = builder
+				.comment("稳定性升级最大安装数量（仅离心机生效，对齐 PB 原版上限 7）",
+						"每级 +0.15 非保底产物概率加成，满槽（7个）时所有概率产物变保底")
+				.translation("productivebeesgenesis.configuration.stabilityMaxCount")
+				.defineInRange("stabilityMaxCount", 7, 1, 7);
 		builder.pop(); // pb_upgrade
 
 		// ===== 通用机械:扩展 升级上限 =====

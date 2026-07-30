@@ -170,11 +170,13 @@ public class BeeProduceProcessor {
 	 * @param produceList 共享的产出配方列表（已查询缓存）
 	 * @param slotManager 槽位管理器
 	 * @param level       世界实例（万象创世随机产物生成用，可为 null）
+	 * @param outputBuffer F4 产物溢出缓冲区（null 时剩余产物丢弃，与原版行为一致）
 	 */
 	public void processBatchProduce(BeeSlot[] beeSlots, int[] pendingCounts,
 									List<Integer> groupSlotIndices,
 									ResourceLocation beeTypeKey, List<ItemStack> produceList,
-									ApiarySlotManager slotManager, Level level) {
+									ApiarySlotManager slotManager, Level level,
+									ApiaryOutputBuffer outputBuffer) {
 		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
 				|| produceList == null || produceList.isEmpty()) {
 			return;
@@ -188,6 +190,8 @@ public class BeeProduceProcessor {
 		int aggregatedCount = 0;  // Task 2: 累积同组产出次数，循环外统一调用 buildAdjustedItems（聚合取整修复）
 		// 累积总产出次数 — 基因采样器按每次产出独立判定概率（与 PB 原版语义一致）
 		int totalProduceCount = 0;
+		// F5: 累加 productivity 基因纯度（按产出次数加权），用于加权平均后应用 PB 原版第五层公式
+		float weightedPuritySum = 0.0f;
 		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
 
 		// 循环外预算生产力倍率 — 升级安装数量不随蜜蜂槽变化，
@@ -204,6 +208,8 @@ public class BeeProduceProcessor {
 			aggregatedCount += count;
 			totalFluidAmount += (long) HONEY_FLUID_AMOUNT_PER_PRODUCE * count;
 			totalProduceCount += count;
+			// F5: 累加当前蜜蜂的 productivity 纯度（按产出次数加权，后续除以 aggregatedCount 得加权平均）
+			weightedPuritySum += slot.getProductivityPurity() * count;
 			// 万象创世蜜蜂累积产出次数（按 count 线性缩放随机产物）
 			if (isMyriad) {
 				myriadCount += count;
@@ -213,8 +219,10 @@ public class BeeProduceProcessor {
 		}
 
 		// Task 2: 聚合取整修复 — 循环外统一 buildAdjustedItems 替代每槽独立 round
+		// F5: 计算同组蜜蜂的加权平均 productivity 纯度，应用 PB 原版第五层公式
 		if (aggregatedCount > 0) {
-			allItems.addAll(buildAdjustedItems(produceList, aggregatedCount, productivityMultiplier));
+			float avgPurity = weightedPuritySum / aggregatedCount;
+			allItems.addAll(buildAdjustedItems(produceList, aggregatedCount, productivityMultiplier, avgPurity));
 		}
 		// Task 1: 万象创世随机蜜脾应用 PB 生产力倍率
 		myriadCount = (int)(myriadCount * productivityMultiplier);
@@ -249,8 +257,10 @@ public class BeeProduceProcessor {
 		}
 
 		// 基因采样器产出 TYPE 基因 — 复刻 PB 原版 AdvancedBeehiveBlockEntity#beeReleasePostAction 逻辑
-		// 机械蜂箱仅存储蜜蜂 NBT（无实体），无法获取 GeneAttribute 属性类基因（PRODUCTIVITY/ENDURANCE 等），
-		// 仅生成 TYPE 基因，与 PB 原版 Gene.getStack(type, purity) 格式完全兼容。
+		// 机械蜂箱虽无实体蜜蜂，但可从蜜蜂 NBT 的 neoforge:attachments.productivebees:attributes_handler 读取属性
+		// （参考 BeeTooltipRenderer.getAttributesCompound）。当前仅生成 TYPE 基因，
+		// PRODUCTIVITY 基因加成已在 buildAdjustedItems 中应用，ENDURANCE/TEMPER 不适用（无实体蜜蜂）。
+		// 与 PB 原版 Gene.getStack(type, purity) 格式完全兼容。
 		// 概率公式：SAMPLER_BASE_CHANCE × 采样器数量 × 累积产出次数（独立伯努利判定）
 		if (totalProduceCount > 0 && beeTypeKey != null && level != null
 				&& upgradeHandler.hasGeneSamplerUpgrade()) {
@@ -270,7 +280,11 @@ public class BeeProduceProcessor {
 		}
 
 		// 批量插入合并后的物品到输出槽
-		distributeToOutput(slotManager.getOutputSlots(), allItems);
+		List<ItemStack> leftovers = distributeToOutput(slotManager.getOutputSlots(), allItems);
+		// F4: 将未成功插入的剩余产物送入缓冲区，下 tick 重试注入
+		if (!leftovers.isEmpty() && outputBuffer != null) {
+			outputBuffer.offer(leftovers);
+		}
 
 		// 批量注入累积流体
 		if (totalFluidAmount > 0) {
@@ -318,22 +332,32 @@ public class BeeProduceProcessor {
 	}
 
 	/**
-	 * 按累积次数构建该蜜蜂的产出物品（应用生产力倍率）
+	 * 按累积次数构建该蜜蜂的产出物品（应用生产力倍率 + productivity 基因）
 	 * <p>
 	 * 循环外预算 productivityMultiplier 后传入，避免 {@link #applyProductivityMultiplier}
 	 * 每个 ItemStack 重新查询升级计数（Spark 优化：buildAdjustedItems 2.31ms 热点）。
-	 * 倍率 = 1.0 时直接 copyWithCount 跳过浮点乘法和取整。
+	 * <p>
+	 * F5: 应用 PB 原版第五层公式 — 蜜蜂 productivity 基因纯度加成：
+	 * {@code finalMultiplier = upgradeMultiplier × (1 + 0.2 × purity)}
+	 * 纯度 0.0 时无加成，纯度 1.0 时额外 +20% 产出（与 PB 原版 GeneAttribute.PRODUCTIVITY 一致）。
+	 * <p>
+	 * 倍率 == 1.0 且 purity == 0.0 时直接 copyWithCount 跳过浮点乘法和取整。
 	 *
 	 * @param produceList           配方模板列表
 	 * @param count                 产出次数（累积的待产出次数）
 	 * @param productivityMultiplier 复用生产力倍率（外层预算，避免重复查询升级）
+	 * @param beeProductivityPurity 同组蜜蜂加权平均 productivity 纯度 [0.0, 1.0]
 	 * @return 调整后的物品列表
 	 */
-	private List<ItemStack> buildAdjustedItems(List<ItemStack> produceList, int count, float productivityMultiplier) {
+	private List<ItemStack> buildAdjustedItems(List<ItemStack> produceList, int count,
+											   float productivityMultiplier, float beeProductivityPurity) {
 		if (produceList == null || produceList.isEmpty() || count <= 0) return List.of();
 		List<ItemStack> result = new ArrayList<>(produceList.size());
+		// F5: 应用 PB 原版第五层公式 — upgradeMultiplier × (1 + 0.2 × purity)
+		float beeBonus = 1.0f + 0.2f * beeProductivityPurity;
+		float finalMultiplier = productivityMultiplier * beeBonus;
 		// 倍率 == 1.0 时跳过浮点乘法和取整，直接 copyWithCount
-		boolean skipMultiplier = (productivityMultiplier == 1.0f);
+		boolean skipMultiplier = (finalMultiplier == 1.0f);
 		for (ItemStack template : produceList) {
 			if (template.isEmpty()) continue;
 			int totalBase = template.getCount() * count;
@@ -341,7 +365,7 @@ public class BeeProduceProcessor {
 			if (skipMultiplier) {
 				adjusted = template.copyWithCount(totalBase);
 			} else {
-				int adjustedAmount = Math.max(1, Math.round(totalBase * productivityMultiplier));
+				int adjustedAmount = Math.max(1, Math.round(totalBase * finalMultiplier));
 				adjusted = template.copyWithCount(adjustedAmount);
 			}
 			if (!adjusted.isEmpty()) {
@@ -382,9 +406,10 @@ public class BeeProduceProcessor {
 	 *
 	 * @param outputSlots 输出槽列表
 	 * @param stacks      待插入物品栈列表（会被合并）
+	 * @return 未成功插入的剩余产物列表（F4：供调用方送入 ApiaryOutputBuffer）
 	 */
-	private void distributeToOutput(List<? extends IInventorySlot> outputSlots, List<ItemStack> stacks) {
-		if (stacks.isEmpty() || outputSlots.isEmpty()) return;
+	private List<ItemStack> distributeToOutput(List<? extends IInventorySlot> outputSlots, List<ItemStack> stacks) {
+		if (stacks.isEmpty() || outputSlots.isEmpty()) return new ArrayList<>();
 		// mergeStacks 条件化：小批量（≤8 stack）跳过合并（覆盖万象创世 9 stack 场景跳过；PB 原版蜜蜂 2-3 stack 跳过）
 		// 仅在 stacks.size() > MERGE_THRESHOLD 时调用，避免小批量场景的 hashCode 预分组纯开销
 		List<ItemStack> merged = (stacks.size() > MERGE_THRESHOLD)
@@ -392,6 +417,8 @@ public class BeeProduceProcessor {
 				: stacks;
 
 		int slotCount = outputSlots.size();
+		// F4: 收集未成功插入的剩余产物，返回给调用方送入 ApiaryOutputBuffer
+		List<ItemStack> leftovers = new ArrayList<>();
 		// 数组复用：槽位数不变时直接复用实例字段数组，避免每 20 tick × 类型数次分配 3 数组（对齐 PbRecipeCompleter 模式）
 		if (reusableSlotStacks.length != slotCount) {
 			// 防御性：槽位数变化时重新分配（正常场景不触发）
@@ -456,8 +483,12 @@ public class BeeProduceProcessor {
 				remaining -= actualGrown;
 			}
 			}
-			// remaining > 0 时溢出静默丢弃（与原版行为一致）
+			// F4: 收集未成功插入的剩余产物，返回给调用方送入 ApiaryOutputBuffer
+			if (remaining > 0) {
+				leftovers.add(stack.copyWithCount(remaining));
+			}
 		}
+		return leftovers;
 	}
 
 	/**

@@ -146,6 +146,15 @@ class ApiaryTickHandler {
 			}
 		}
 
+		// F4: 每 tick 重试将缓冲区产物注入输出槽
+		// 放在 if (!skipBeeProcessing) 之外：Tick 加速模式（skipBeeProcessing=true）下仍需重试，
+		// 因为上一 tick 的产物可能还在缓冲区；输出槽被弹出后腾出空间应立即被缓冲区利用
+		try {
+			tile.getOutputBuffer().tickRedistribute(tile.getSlotManager().getOutputSlots());
+		} catch (Exception e) {
+			ProductiveBeesGenesis.LOGGER.warn("ApiaryOutputBuffer tickRedistribute 异常", e);
+		}
+
 		// active 状态管理 — O(1) 计数器读取
 		boolean isWorking = activationCounter.hasActiveBee();
 		if (isWorking) {

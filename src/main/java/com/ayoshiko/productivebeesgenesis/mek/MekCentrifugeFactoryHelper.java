@@ -205,6 +205,9 @@ public final class MekCentrifugeFactoryHelper {
 			if (input.isEmpty()) {
 				// 空输入：重置缓存并跳过
 				pbProcessor.resetSmeltingCache(i);
+				// 修复：空输入时必须重置 PB 状态（pbOperatingTicks/pbProcessing/cachedPbRecipes）
+				// 否则进度条残留、配方缓存残留导致切换异常（与基础机器 MekCentrifugeTickHandler 对齐）
+				pbProcessor.resetPbState(i);
 				// Task 11: 空输入确保 PB 进程失活（状态守卫防重复，super 已重置 activeStates）
 				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;
@@ -225,6 +228,9 @@ public final class MekCentrifugeFactoryHelper {
 			// 缓存SMELTING配方检查结果，输入变更时才重新查询
 			if (pbProcessor.hasSmeltingRecipe(i, input)) {
 				// SMELTING配方由super处理，跳过PB路径
+				// 修复：SMELTING 命中时必须重置 PB 状态，否则进度条显示旧 PB 进度而非 SMELTING 进度
+				// （与基础机器 MekCentrifugeTickHandler 对齐）
+				pbProcessor.resetPbState(i);
 				// Task 11: SMELTING 配方占用，PB 进程失活
 				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;

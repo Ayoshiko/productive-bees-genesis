@@ -93,7 +93,13 @@ public abstract class AbstractUpgradeItemMixin {
 
 		// 6. 批量安装 — 由具体 tile 实现决定实际安装数（受类型上限限制）
 		int added = provider.installPbUpgradeBulk(type, stack.getCount());
-		if (added <= 0) return;
+		if (added <= 0) {
+			// 已达上限或无法安装 — 必须取消原 useOn，防止 PB 上游 bug 无条件消耗物品
+			// PB 原版 useOn 调用 insertItem(false) 后无视返回值，无条件设置 hasInsertedUpgrade=true 并 shrink(1)
+			// 此处返回 PASS 不消耗物品、不挥手，规避物品丢失
+			cir.setReturnValue(InteractionResult.PASS);
+			return;
+		}
 
 		// 7. 消耗物品 — 非创造模式按实际安装数缩减手持堆叠
 		if (!player.isCreative()) {

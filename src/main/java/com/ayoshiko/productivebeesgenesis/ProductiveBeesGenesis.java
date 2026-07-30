@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.datagen.ConditionalBlockLootProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
 import com.ayoshiko.productivebeesgenesis.datagen.ModRecipes;
@@ -444,6 +445,8 @@ public final class ProductiveBeesGenesis {
 		generator.addProvider(event.includeServer(), new ModRecipes(packOutput, lookupProvider));
 		// 战利品表
 		generator.addProvider(event.includeServer(), ModLootTables.create(packOutput, lookupProvider));
+		// F9: 条件战利品表 — 为 EM/ME/EME 方块生成带 neoforge:conditions 的 dropSelf 战利品表
+		generator.addProvider(event.includeServer(), new ConditionalBlockLootProvider(packOutput));
 		// 方块标签（镐/锄挖掘工具）
 		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider, event.getExistingFileHelper()));
 		// 语言文件：主 lang（src/main/resources）已包含全部键（GUI + configuration + config.*），

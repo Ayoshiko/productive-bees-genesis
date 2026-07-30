@@ -102,6 +102,8 @@ public class PbRecipeCompleter {
 	public void accumulatePbRecipeOutputs(CentrifugeRecipe recipe, int processIndex, int productivityModifier) {
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		int modifier = Math.max(1, productivityModifier);
+		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
+		float stabilityBonus = context.stabilityBonus();
 
 		// 每进程独立 completer,无需配方切换检测
 		this.pendingRecipe = recipe;
@@ -112,8 +114,10 @@ public class PbRecipeCompleter {
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
-			// chance >= 1.0 必定通过,跳过 nextFloat
-			if (chance < 1.0f && random.nextFloat() >= chance) {
+			// stability bonus 提升非保底产物概率，截断到 1.0
+			float adjustedChance = chance >= 1.0f ? chance : Math.min(1.0f, chance + stabilityBonus);
+			// adjustedChance >= 1.0 必定通过,跳过 nextFloat
+			if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) {
 				continue;
 			}
 			int count = chanced.min();
@@ -173,6 +177,8 @@ public class PbRecipeCompleter {
 		}
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		int modifier = Math.max(1, productivityModifier);
+		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
+		float stabilityBonus = context.stabilityBonus();
 
 		this.pendingRecipe = recipe;
 		if (pendingRecipeOutputs == null) {
@@ -186,15 +192,18 @@ public class PbRecipeCompleter {
 			int max = chanced.max();
 			if (max < min) max = min; // 防御性处理
 
+			// stability bonus 提升非保底产物概率，截断到 1.0
+			float adjustedChance = chance >= 1.0f ? chance : Math.min(1.0f, chance + stabilityBonus);
+
 			long totalCount;
-			if (chance >= 1.0f) {
+			if (adjustedChance >= 1.0f) {
 				// 必定通过 — 直接采样 N 次 [min, max] 之和
 				totalCount = SampleUniformSum.sample(random, min, max, batchCount, modifier);
 			} else {
-				// chance < 1.0 — 保底机制 + 自适应 Binomial 采样(SubTask 4.2/4.3/4.4)
+				// adjustedChance < 1.0 — 保底机制 + 自适应 Binomial 采样(SubTask 4.2/4.3/4.4)
 				// 委托 BatchProbabilitySampler:N≤30 精确 Binomial;N>30 且 λ<5 Poisson;否则 CLT
 				// 保底:guaranteed=floor(N×p) 确定性产量 + Binomial(remaining, adjustedP) 随机部分
-				long k = BatchProbabilitySampler.sampleBinomialWithGuarantee(random, batchCount, chance);
+				long k = BatchProbabilitySampler.sampleBinomialWithGuarantee(random, batchCount, adjustedChance);
 				if (k <= 0) {
 					continue;
 				}

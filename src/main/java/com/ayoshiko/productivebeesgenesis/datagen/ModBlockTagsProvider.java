@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.PackOutput;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.common.data.BlockTagsProvider;
@@ -14,19 +15,18 @@ import java.util.concurrent.CompletableFuture;
 /**
  * 方块标签数据生成器
  * <br/>
- * 自动为所有离心机方块添加 {@link BlockTags#MINEABLE_WITH_PICKAXE} 标签（镐可挖掘），
- * 为 infinitycreation_comb_block 添加 {@link BlockTags#MINEABLE_WITH_HOE} 标签（锄可挖掘）。
+ * 为所有方块添加 {@link BlockTags#MINEABLE_WITH_PICKAXE} 标签（镐可挖掘）。
  * <p>
- * 实现原理：遍历 {@link ModBlocks#BLOCKS} 的所有 entries，自动覆盖全部已注册方块，
- * 包括动态注册的 EM/ME/EME 工厂方块（仅在对应模组加载时才进入注册表）。
- * 这样可避免手动列举导致的遗漏或对未注册方块的 NPE，与 {@link ModLootTables} 的模式一致。
+ * Bug 修复：EM/ME/EME 条件注册的工厂方块使用 {@link TagsProvider.TagAppender#addOptional} 标记为可选条目，
+ * 生成的 JSON 中对应条目为 {"id":"...", "required":false}。
+ * 这样未安装对应模组的玩家不会因引用未注册方块 ID 而导致整个 mineable/pickaxe 标签加载失败，
+ * 级联影响所有 paxel/hammer/drill/aio 工具标签（挖掘等级失效）。
  * <p>
- * 标签用途：
- * <ul>
- *   <li>MINEABLE_WITH_PICKAXE：使玩家用镐挖掘时获得正常速度，离心机为金属机器方块</li>
- *   <li>MINEABLE_WITH_HOE：使玩家用锄挖掘蜜脾块时获得加速，参考原版 PB 蜜脾块设定；
- *       该方块设置了 requiresCorrectToolForDrops，必须加入正确工具标签才能掉落</li>
- * </ul>
+ * 原理：可选条目在原版标签解析时，若目标方块未注册则静默跳过，不影响标签整体加载。
+ * 相比 NeoForge 条件标签（neoforge:conditional_entries），此为原版机制，兼容性最佳。
+ * <p>
+ * F10 修复：移除 infinitycreation_comb_block 的 mineable/hoe 标签（锄不应用于金属/装饰方块），
+ * 统一加入 mineable/pickaxe。
  */
 public final class ModBlockTagsProvider extends BlockTagsProvider {
 
@@ -38,19 +38,20 @@ public final class ModBlockTagsProvider extends BlockTagsProvider {
 
 	@Override
 	protected void addTags(HolderLookup.Provider provider) {
-		// 缓存蜜脾块的注册ID，用于在遍历中识别（引用而非硬编码字符串，改名时自动跟随）
-		var combBlockId = ModBlocks.INFINITY_CREATION_COMB_BLOCK.getId();
-
-		// 遍历所有已注册方块，按用途分配挖掘工具标签
 		for (var entry : ModBlocks.BLOCKS.getEntries()) {
 			Block block = entry.get();
-			if (entry.getId().equals(combBlockId)) {
-				// 无尽·创世蜜脾块 — 用锄挖掘更快（参考PB蜜脾块）
-				this.tag(BlockTags.MINEABLE_WITH_HOE).add(block);
+			ResourceLocation id = entry.getId();
+			// 判断是否为 EM/ME/EME 条件注册的工厂方块
+			boolean isConditional = ModLoadedConditionResolver.resolveModId(id) != null;
+			if (isConditional) {
+				// EM/ME/EME 条件方块：标记为可选条目，未注册时静默跳过，不破坏标签加载
+				this.tag(BlockTags.MINEABLE_WITH_PICKAXE).addOptional(id);
 			} else {
-				// 所有离心机方块（基础+原版4工厂+EM5工厂+ME4工厂+EME4工厂）— 用镐挖掘
+				// 无条件方块（基础离心机/蜂箱 + 原版4工厂 + 蜜脾块）：必需条目
 				this.tag(BlockTags.MINEABLE_WITH_PICKAXE).add(block);
 			}
 		}
+		// F10: 不再为任何方块添加 MINEABLE_WITH_HOE 标签
+		// 蜜脾块统一用镐挖掘，与其它本模组方块一致
 	}
 }

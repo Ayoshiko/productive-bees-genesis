@@ -395,6 +395,9 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public int productivityModifier() { return CentrifugeFactoryCommonLogic.productivityModifier(pbUpgradeDelegate); }
 
 	@Override
+	public float stabilityBonus() { return pbUpgradeDelegate.getStabilityBonus(); }
+
+	@Override
 	public int operationsPerTick() { return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED); }
 
 	/** 重写recalculateUpgrades — 复刻MEKExtras，支持STACK升级并行和CREATIVE无限能量 */

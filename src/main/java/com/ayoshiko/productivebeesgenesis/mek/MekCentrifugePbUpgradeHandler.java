@@ -18,6 +18,9 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
+import mekanism.api.Upgrade;
+import mekanism.common.config.MekanismConfig;
+
 /**
  * 离心机 PB 升级安装/卸载处理器
  * <br/>
@@ -269,7 +272,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	/**
 	 * 获取指定类型的安装上限
 	 * <br/>
-	 * 离心机仅支持产量和时间系列，上限由离心机独立配置段控制，
+	 * 离心机支持产量系列、时间系列和稳定性升级，上限由离心机独立配置段控制，
 	 * 配置未加载时回退到枚举默认值。
 	 */
 	int getLimit(PbUpgradeType type) {
@@ -284,6 +287,10 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 					ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount != null
 							? ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.get()
 							: type.getMaxCount();
+			case STABILITY ->
+					ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount != null
+							? ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount.get()
+							: type.getMaxCount();
 			default -> type.getMaxCount();
 		};
 	}
@@ -291,13 +298,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	/**
 	 * 是否支持指定升级类型
 	 * <br/>
-	 * 离心机仅支持产量系列（PRODUCTIVITY α/β/γ/Ω）和时间系列（TIME/TIME_2）。
+	 * 离心机支持产量系列（PRODUCTIVITY α/β/γ/Ω）、时间系列（TIME/TIME_2）和稳定性（STABILITY）。
+	 * STABILITY 仅离心机生效，对齐 PB 原版 CentrifugeBlockEntity 的升级白名单。
 	 */
 	boolean isSupported(PbUpgradeType type) {
 		if (type == null || type.isBuiltin()) return false;
 		return switch (type) {
 			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-					TIME, TIME_2 -> true;
+					TIME, TIME_2, STABILITY -> true;
 			default -> false;
 		};
 	}
@@ -443,15 +451,58 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 获取时间倍率
 	 * <br/>
 	 * PB时间升级：TIME 每级权重 1，TIME_2 每级权重 2（双倍效果）。
-	 * 公式：{@code 1.0 / (1 + 0.15 × effectiveTimeUpgrades)}
+	 * 公式：{@code mekTimeMultiplier / (1 + 0.15 × effectiveTimeUpgrades)}
+	 * <br/>
+	 * 与蜂箱 {@code ApiaryUpgradeHandler.computeTimeMultiplier} 公式一致，
+	 * 同时叠加 MEK SPEED 升级和 PB TIME 升级，避免离心机 PB TIME 升级影响过小。
 	 *
 	 * @return 时间倍率（>0，越小越快）
 	 */
 	float getTimeMultiplier() {
+		float mekTimeMultiplier = getMekSpeedTimeMultiplier();
 		int timeCount = getInstalledCount(PbUpgradeType.TIME);
 		int time2Count = getInstalledCount(PbUpgradeType.TIME_2);
 		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		return 1.0f / (1.0f + 0.15f * effectiveTimeUpgrades);
+		float pbTimeDivisor = 1.0f + 0.15f * effectiveTimeUpgrades;
+		return mekTimeMultiplier / pbTimeDivisor;
+	}
+
+	/**
+	 * 获取 MEK SPEED 升级的时间倍率 — 与蜂箱 ApiaryUpgradeHandler.getMekSpeedTimeMultiplier 公式一致
+	 * <br/>
+	 * 公式：{@code maxUpgradeMultiplier ^ (-speedFraction)}
+	 * <ul>
+	 *   <li>无 SPEED 升级：1.0（无加速）</li>
+	 *   <li>满级 8 个 SPEED 升级：0.1（10 倍加速）</li>
+	 * </ul>
+	 *
+	 * @return MEK 速度升级的时间倍率（0~1，越小越快）
+	 */
+	private float getMekSpeedTimeMultiplier() {
+		int speedUpgrades = tile.getMekSpeedUpgrades();
+		int maxSpeed = Upgrade.SPEED.getMax();
+		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
+		float speedFraction = (float) speedUpgrades / maxSpeed;
+		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
+		return (float) Math.pow(maxMultiplier, -speedFraction);
+	}
+
+	/**
+	 * 获取稳定性概率加成 — 提升非保底产物的产出概率
+	 * <br/>
+	 * 对齐 PB 原版 {@code CentrifugeBlockEntity.completeRecipeProcessing} 的 stability 逻辑：
+	 * {@code bonus = (已装数 + 1) × 0.15}，截断到 1.0。
+	 * <ul>
+	 *   <li>0 个升级：bonus = 0.15（PB 原版基础就有）</li>
+	 *   <li>7 个升级（满槽）：bonus = 1.2 → 截断到 1.0（所有概率产物变保底）</li>
+	 * </ul>
+	 * 仅离心机支持 STABILITY 升级，蜂箱不接受。
+	 *
+	 * @return 稳定性概率加成 [0.0, 1.0]
+	 */
+	float getStabilityBonus() {
+		int count = getInstalledCount(PbUpgradeType.STABILITY);
+		return Math.min(1.0f, (count + 1) * 0.15f);
 	}
 
 	// ===== 内部辅助 =====

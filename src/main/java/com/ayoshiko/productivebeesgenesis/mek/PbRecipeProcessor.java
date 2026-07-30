@@ -410,13 +410,13 @@ public class PbRecipeProcessor {
 
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */
 	private void clearPbState(int processIndex) {
-		if (pbProcessing[processIndex]) {
-			pbProcessing[processIndex] = false;
-			pbOperatingTicks[processIndex] = 0;
-			pbProcessingTime[processIndex] = 0;
-			cachedPbRecipes[processIndex] = null;
-		}
-		// 无论 pbProcessing 状态如何，都关闭该进程的激活位，防止进度箭头残留
+		// 防御性：移除 pbProcessing 守卫，无条件清零所有 PB 状态字段
+		// 避免守卫导致 pbOperatingTicks/cachedPbRecipes 残留（与 resetPbState 行为统一）
+		pbProcessing[processIndex] = false;
+		pbOperatingTicks[processIndex] = 0;
+		pbProcessingTime[processIndex] = 0;
+		cachedPbRecipes[processIndex] = null;
+		// 关闭该进程的激活位，防止进度箭头残留
 		context.setPbActiveState(false, processIndex);
 	}
 

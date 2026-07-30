@@ -104,6 +104,11 @@ class ApiaryNbtSerializer {
 			fluidNbt.put("Fluid", fluid.save(provider));
 			nbt.put(NBT_KEY_APIARY_FLUID, fluidNbt);
 		}
+		// F4: 序列化产物溢出缓冲区（非空时写入，向后兼容旧存档）
+		CompoundTag bufferTag = tile.getOutputBuffer().save(provider);
+		if (!bufferTag.isEmpty()) {
+			nbt.put(ApiaryOutputBuffer.nbtKey(), bufferTag);
+		}
 	}
 
 	/**
@@ -142,6 +147,10 @@ class ApiaryNbtSerializer {
 					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
 			}
+		}
+		// F4: 反序列化产物溢出缓冲区（向后兼容：旧存档无此字段时跳过）
+		if (nbt.contains(ApiaryOutputBuffer.nbtKey(), Tag.TAG_COMPOUND)) {
+			tile.getOutputBuffer().load(provider, nbt.getCompound(ApiaryOutputBuffer.nbtKey()));
 		}
 	}
 

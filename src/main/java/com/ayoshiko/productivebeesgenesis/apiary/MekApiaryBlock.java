@@ -215,26 +215,31 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 					// Bug 6 + Task 10：写入自定义方块实体数据，确保扳手拆卸后蜜蜂/喂食器/PB升级数据不丢失
 					// 合并方案：避免覆盖 collectComponents 写入的 MEK 标准 BLOCK_ENTITY_DATA
 					if (updateable instanceof com.ayoshiko.productivebeesgenesis.ICustomDataPersistable persistable) {
-						CompoundTag customNbt = persistable.saveCustomDataForItem(provider);
-						if (!customNbt.isEmpty()) {
-							net.minecraft.world.item.component.CustomData existing = drop.get(DataComponents.BLOCK_ENTITY_DATA);
-							if (existing != null) {
-								// 合并方案：读取现有 BLOCK_ENTITY_DATA,将 customNbt 字段合并（跳过 id 避免覆盖方块实体类型）
-								CompoundTag merged = existing.copyTag();
-								for (String key : customNbt.getAllKeys()) {
-									if (!"id".equals(key)) {
-										merged.put(key, customNbt.get(key));
-									}
+					CompoundTag customNbt = persistable.saveCustomDataForItem(provider);
+					if (!customNbt.isEmpty()) {
+						net.minecraft.world.item.component.CustomData existing = drop.get(DataComponents.BLOCK_ENTITY_DATA);
+						if (existing != null) {
+							// 合并方案：读取现有 BLOCK_ENTITY_DATA,将 customNbt 字段合并（跳过 id 避免覆盖方块实体类型）
+							CompoundTag merged = existing.copyTag();
+							for (String key : customNbt.getAllKeys()) {
+								if (!"id".equals(key)) {
+									merged.put(key, customNbt.get(key));
 								}
-								drop.set(DataComponents.BLOCK_ENTITY_DATA,
-										net.minecraft.world.item.component.CustomData.of(merged));
-							} else {
-								// 现有为空,直接覆盖（无 MEK 标准数据需要保留）
-								drop.set(DataComponents.BLOCK_ENTITY_DATA,
-										net.minecraft.world.item.component.CustomData.of(customNbt));
 							}
+							drop.set(DataComponents.BLOCK_ENTITY_DATA,
+									net.minecraft.world.item.component.CustomData.of(merged));
+						} else {
+							// 现有为空,直接覆盖（无 MEK 标准数据需要保留）
+							drop.set(DataComponents.BLOCK_ENTITY_DATA,
+									net.minecraft.world.item.component.CustomData.of(customNbt));
 						}
 					}
+					// F4: 保存 NBT 后清除产物缓冲区，避免 setRemoved 的 dumpToWorld 重复掉落
+					// 产物已通过 BLOCK_ENTITY_DATA 保留在掉落物中，放置时自动恢复
+					if (updateable instanceof TileEntityMekApiary apiaryTile) {
+						apiaryTile.getOutputBuffer().clear();
+					}
+				}
 				}
 			}
 		}

@@ -155,6 +155,8 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputMinPages;
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
+	/** 稳定性升级最大安装数量(委托自 CentrifugeConfigSection,仅离心机生效,对齐 PB 原版上限 7) */
+	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
 	/** 通用机械:扩展 堆叠升级最大数量(委托自 CentrifugeConfigSection,由 ExtraUpgradeStackMixin 读取) */
 	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
 
@@ -203,7 +205,7 @@ public final class ServerConfig {
 
 		// 万象创世蜜蜂总开关
 		myriadCreationsEnabled = builder
-				.comment("启用万象创世蜜蜂", "false时禁用蜜蜂相关功能，仅保留MEK离心机")
+				.comment("启用万象创世蜜蜂", "false时禁用蜜蜂相关功能，仅保留通用机械资源蜜蜂机器")
 				.define("myriadCreationsEnabled", true);
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
@@ -381,6 +383,7 @@ public final class ServerConfig {
 		// PB升级上限委托字段赋值(指向同一 ConfigValue 实例,零开销)
 		this.mekCentrifugePbUpgradeProductivityMaxCount = centrifuge.mekCentrifugePbUpgradeProductivityMaxCount;
 		this.mekCentrifugePbUpgradeTimeMaxCount = centrifuge.mekCentrifugePbUpgradeTimeMaxCount;
+		this.mekCentrifugePbUpgradeStabilityMaxCount = centrifuge.mekCentrifugePbUpgradeStabilityMaxCount;
 		// 通用机械:扩展 堆叠升级上限委托字段赋值(Task 13,指向同一 ConfigValue 实例,零开销)
 		this.mekCentrifugeMaxStackUpgrades = centrifuge.mekCentrifugeMaxStackUpgrades;
 

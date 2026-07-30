@@ -21,8 +21,11 @@ import net.minecraft.world.level.Level;
  *   <li>基因物品格式：{@link Gene#getStack(String, int)}</li>
  * </ul>
  * <p>
- * 与 PB 原版的差异：机械蜂箱仅存储蜜蜂 NBT（无实体），无法获取 GeneAttribute 属性类基因
- * （PRODUCTIVITY/ENDURANCE/TEMPER/BEHAVIOR/WEATHER_TOLERANCE），仅生成 TYPE 基因。
+ * 与 PB 原版的差异：机械蜂箱虽无实体蜜蜂，但可从蜜蜂 NBT 的
+ * neoforge:attachments.productivebees:attributes_handler 读取 GeneAttribute 属性类基因
+ * （参考 BeeTooltipRenderer.getAttributesCompound）。当前 GeneSampler 仅生成 TYPE 基因，
+ * PRODUCTIVITY 基因加成已在 BeeProduceProcessor.buildAdjustedItems 中应用，
+ * ENDURANCE/TEMPER 不适用（无实体蜜蜂），BEHAVIOR/WEATHER_TOLERANCE 待后续实现。
  * TYPE 基因的 type 字段使用 {@link BeeNbtHelper#resolveBeeTypeKey} 解析的 ResourceLocation 字符串，
  * 与 PB 原版 {@code ConfigurableBee#getBeeType().toString()} 语义一致。
  * <p>

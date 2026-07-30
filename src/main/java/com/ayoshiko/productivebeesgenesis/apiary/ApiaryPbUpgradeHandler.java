@@ -269,10 +269,12 @@ class ApiaryPbUpgradeHandler {
 							? ModConfig.SERVER.apiaryPbUpgradeGeneSamplerMaxCount.get()
 							: type.getMaxCount();
 			case BLOCK ->
-					ModConfig.SERVER.apiaryPbUpgradeBlockMaxCount != null
-							? ModConfig.SERVER.apiaryPbUpgradeBlockMaxCount.get()
-							: type.getMaxCount();
-			default -> type.getMaxCount();
+				ModConfig.SERVER.apiaryPbUpgradeBlockMaxCount != null
+						? ModConfig.SERVER.apiaryPbUpgradeBlockMaxCount.get()
+						: type.getMaxCount();
+		// STABILITY 仅离心机生效，蜂箱一律拒绝（双保险：即使绕过 isPbUpgradeSupported 也无法安装）
+		case STABILITY -> 0;
+		default -> type.getMaxCount();
 		};
 	}
 
