@@ -26,6 +26,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.mek.MyriadBatchPlanner;
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CapabilityRegistrar;
@@ -53,6 +54,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig.Type;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
@@ -333,10 +335,25 @@ public final class ProductiveBeesGenesis {
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
 			CombFuzzyMatcher.clearCache();
 		}
-		// 重建离心配方索引（仅服务端，客户端无 ServerLevel）
+		// 失效万象创世 bee_type 缓存（标签重载可能变更 BeeReloadListener 数据，5 秒过期窗口消除）
+		MyriadBeeTypeCache.invalidate();
+		// 重建离心配方索引 — 服务端用 MinecraftServer，客户端用 ClientLevel
+		// Bug 1 修复：专用服务器客户端无本地服务器，此前跳过重建导致索引永远为 EMPTY，
+		// 客户端 containsRecipe 校验失败无法放入蜜脾。现在客户端也重建索引。
 		var server = ServerLifecycleHooks.getCurrentServer();
 		if (server != null) {
-			CentrifugeRecipeIndex.rebuild(server.overworld());
+			CentrifugeRecipeIndex.rebuild(server.getRecipeManager());
+		} else if (FMLEnvironment.dist.isClient()) {
+			// 客户端场景：通过反射安全调用客户端类方法，避免服务端加载 ProductiveBeesGenesisClient
+			// （该类引用 net.minecraft.client.Minecraft，服务端加载会导致 ClassNotFoundException）
+			try {
+				Class<?> clientClass = Class.forName(
+						"com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient");
+				java.lang.reflect.Method method = clientClass.getMethod("rebuildCentrifugeIndex");
+				method.invoke(null);
+			} catch (Exception e) {
+				LOGGER.warn("客户端离心配方索引重建失败，降级到全量遍历", e);
+			}
 		}
 		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", newVersion);
 	}

@@ -133,9 +133,13 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	 */
 	@Override
 	default boolean productivebeesgenesis$isValidInput(net.minecraft.world.item.ItemStack stack) {
-		// 同时检查 SMELTING 配方(containsSmeltingInput)和 PB CentrifugeRecipe(pbProcessor.findPbRecipe)
+		// Bug 2 修复：PB 蜜脾/蜜脾块强制走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配
 		// 与基础离心机 TileEntityMekCentrifuge.containsRecipe 语义一致
-		// 修复:原实现仅调用 containsSmeltingInput,导致 PB 蜜脾(无 SMELTING 配方)被误判为无效输入
+		if (productivebeesgenesis$isPbCombInput(stack)) {
+			PbRecipeProcessor processor = productivebeesgenesis$getPbProcessor();
+			return processor != null && processor.findPbRecipe(stack) != null;
+		}
+		// 非 PB 蜜脾：同时检查 SMELTING 配方和 PB CentrifugeRecipe
 		if (containsSmeltingInput(stack)) return true;
 		// NPE 防御:接口默认方法无法保证所有实现类都正确初始化 pbProcessor
 		PbRecipeProcessor processor = productivebeesgenesis$getPbProcessor();

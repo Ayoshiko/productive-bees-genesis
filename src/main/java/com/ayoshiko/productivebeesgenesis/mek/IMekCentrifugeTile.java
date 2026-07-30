@@ -3,6 +3,9 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
+
 /**
  * MEK 离心机统一标记接口。
  * 用于 TileComponentEjectorMixin 通过 instanceof 统一判断所有离心机类型，
@@ -80,5 +83,27 @@ public interface IMekCentrifugeTile {
 	 */
 	default boolean productivebeesgenesis$isValidInput(ItemStack stack) {
 		return false;
+	}
+
+	/**
+	 * 判断是否为 PB 蜜脾/蜜脾块输入
+	 * <br/>
+	 * Bug 2 修复：PB 蜜脾/蜜脾块必须走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配。
+	 * <ul>
+	 *   <li>PB 蜜脾块：CONFIGURABLE_COMB_BLOCK 物品</li>
+	 *   <li>PB 蜜脾：带 BEE_TYPE 组件的物品</li>
+	 * </ul>
+	 *
+	 * @param input 待检查的物品栈
+	 * @return true 如果是 PB 蜜脾/蜜脾块
+	 */
+	default boolean productivebeesgenesis$isPbCombInput(ItemStack input) {
+		if (input.isEmpty()) return false;
+		// PB 蜜脾块
+		if (input.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			return true;
+		}
+		// PB 蜜脾（带 BEE_TYPE 组件）
+		return input.has(ModDataComponents.BEE_TYPE.get());
 	}
 }

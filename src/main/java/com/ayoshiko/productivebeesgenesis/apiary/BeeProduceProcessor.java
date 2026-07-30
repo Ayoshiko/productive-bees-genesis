@@ -465,7 +465,8 @@ public class BeeProduceProcessor {
 				reusableSlotCounts[i] = actualCount;
 				reusableSlotLimits[i] = limit;
 				remaining -= actualCount;
-			} else if (ItemStack.isSameItemSameComponents(slotStack, stack)) {
+			} else if (slotStack.getItem() == stack.getItem()
+					&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
 				// Bug 2 修复：同 Item 同 BEE_TYPE 组件才可叠加，防止不同 bee_type 蜜脾互相覆盖
 				int space = reusableSlotLimits[i] - reusableSlotCounts[i];
 				if (space <= 0) continue;

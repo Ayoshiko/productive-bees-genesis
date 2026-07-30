@@ -145,5 +145,10 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			recipeManager.replaceRecipes(processedRecipes);
 			PBReflectionCacheCleaner.clearBeeFishingCaches();
 		}
+
+		// 重建离心配方索引 — 确保服务端配方重载完成后索引必定更新
+		// 修复：onTagsReload 触发时 ServerLifecycleHooks.getCurrentServer() 可能为 null（服务器启动早期），
+		// 导致服务端跳过索引重建，所有配方查找走 FALLBACK 全量遍历路径（性能 O(N) 而非 O(1)）
+		CentrifugeRecipeIndex.rebuild(recipeManager);
 	}
 }

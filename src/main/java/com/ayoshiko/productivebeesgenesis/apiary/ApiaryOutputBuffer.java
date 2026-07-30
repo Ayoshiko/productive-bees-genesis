@@ -2,13 +2,12 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -50,6 +49,21 @@ public final class ApiaryOutputBuffer {
 	/** 复用 remaining 列表避免每 tick 分配 ArrayList（256× 加速场景下减少 GC 压力） */
 	private final List<ItemStack> remainingBuffer = new ArrayList<>();
 
+	/** 退避计数器 — 连续重试失败后递增延迟，避免每 tick 无效调用 insertItem */
+	private int redistributeBackoffTicks = 0;
+
+	/** 退避上限 — 最多 8 tick 延迟重试（约 0.4s），平衡响应速度与 CPU 开销 */
+	private static final int MAX_BACKOFF_TICKS = 8;
+
+	/**
+	 * 预扫描槽位状态数组复用 — 与 {@link BeeProduceProcessor#distributeToOutput} 直写模式一致，
+	 * 避免每 tick 调用 insertItem 时内部重复查询 getLimit。
+	 * 槽位数不变时复用，仅清空引用。
+	 */
+	private ItemStack[] reusableRedistStacks = new ItemStack[0];
+	private int[] reusableRedistCounts = new int[0];
+	private int[] reusableRedistLimits = new int[0];
+
 	/** 所属方块实体（用于 setChanged） */
 	private final TileEntityMekApiary tile;
 
@@ -79,17 +93,62 @@ public final class ApiaryOutputBuffer {
 
 	/**
 	 * 每 tick 调用：尝试将缓冲区内的物品重新注入输出槽。
+	 * <br/>
+	 * 性能优化（Spark 分析 v2.0.2）：
+	 * <ol>
+	 *   <li><b>退避机制</b>：输出槽全满时递增退避计数器（1→2→...→8 tick），
+	 *       避免每 tick 无效调用 insertItem。退避期内直接返回，开销仅字段比较。</li>
+	 *   <li><b>预扫描直写</b>：与 {@link BeeProduceProcessor#distributeToOutput} 一致，
+	 *       先一次遍历获取所有槽位的 stack/count/limit，再用 setStack 替代 insertItem，
+	 *       将 getLimit 查询从 N(缓冲栈)×M(输出槽) 次降为 M 次。</li>
+	 * </ol>
 	 * 注入成功的物品从缓冲区移除，失败的保留至下 tick。
-	 * <p>
-	 * 使用 {@link IInventorySlot#insertItem} 与 {@link AutomationType#INTERNAL}，
-	 * 行为与蜂箱内部产物分发一致。缓冲区量小（通常 ≤ 几个 stack），
-	 * insertItem 开销可忽略。
 	 *
 	 * @param outputSlots 蜂箱输出槽列表
 	 */
 	public synchronized void tickRedistribute(List<? extends IInventorySlot> outputSlots) {
 		if (bufferedStacks.isEmpty() || outputSlots == null || outputSlots.isEmpty()) return;
-		// 复用实例字段避免每 tick 分配 ArrayList
+
+		// 退避检查 — 连续失败后延迟重试，避免每 tick 无效调用
+		if (redistributeBackoffTicks > 0) {
+			redistributeBackoffTicks--;
+			return;
+		}
+
+		int slotCount = outputSlots.size();
+		// 预扫描槽位状态（与 BeeProduceProcessor.distributeToOutput 直写模式一致）
+		if (reusableRedistStacks.length != slotCount) {
+			reusableRedistStacks = new ItemStack[slotCount];
+			reusableRedistCounts = new int[slotCount];
+			reusableRedistLimits = new int[slotCount];
+		} else {
+			Arrays.fill(reusableRedistStacks, null);
+		}
+
+		boolean hasSpace = false;
+		for (int i = 0; i < slotCount; i++) {
+			ItemStack current = outputSlots.get(i).getStack();
+			reusableRedistStacks[i] = current;
+			if (current.isEmpty()) {
+				reusableRedistCounts[i] = 0;
+				reusableRedistLimits[i] = 0;
+				hasSpace = true;
+			} else {
+				int count = current.getCount();
+				int limit = outputSlots.get(i).getLimit(current);
+				reusableRedistCounts[i] = count;
+				reusableRedistLimits[i] = limit;
+				if (count < limit) hasSpace = true;
+			}
+		}
+
+		// 输出槽全满 — 进入退避，避免每 tick 无效重试
+		if (!hasSpace) {
+			redistributeBackoffTicks = Math.min(MAX_BACKOFF_TICKS, redistributeBackoffTicks + 1);
+			return;
+		}
+
+		// 直写分发 — setStack 替代 insertItem，避免 getLimit 重复查询
 		remainingBuffer.clear();
 		boolean changed = false;
 		for (ItemStack stack : bufferedStacks) {
@@ -97,20 +156,55 @@ public final class ApiaryOutputBuffer {
 				changed = true;
 				continue;
 			}
-			ItemStack leftover = stack.copy();
-			for (int i = 0; i < outputSlots.size() && !leftover.isEmpty(); i++) {
-				leftover = outputSlots.get(i).insertItem(leftover, Action.EXECUTE, AutomationType.INTERNAL);
+			int remaining = stack.getCount();
+			for (int i = 0; i < slotCount && remaining > 0; i++) {
+				ItemStack slotStack = reusableRedistStacks[i];
+				if (slotStack.isEmpty()) {
+					// 空槽：查询 limit 并填入
+					int limit = outputSlots.get(i).getLimit(stack);
+					if (limit <= 0) continue;
+					int canFit = Math.min(remaining, limit);
+					outputSlots.get(i).setStack(stack.copyWithCount(canFit));
+					// 回读 actual stack 防止 slot 内部截断
+					ItemStack actual = outputSlots.get(i).getStack();
+					int actualCount = actual.isEmpty() ? 0 : actual.getCount();
+					reusableRedistStacks[i] = actual;
+					reusableRedistCounts[i] = actualCount;
+					reusableRedistLimits[i] = limit;
+					remaining -= actualCount;
+				} else if (slotStack.getItem() == stack.getItem()
+						&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
+					// 同类型槽：叠加
+					int space = reusableRedistLimits[i] - reusableRedistCounts[i];
+					if (space <= 0) continue;
+					int canFit = Math.min(remaining, space);
+					outputSlots.get(i).setStack(slotStack.copyWithCount(reusableRedistCounts[i] + canFit));
+					ItemStack actual = outputSlots.get(i).getStack();
+					int actualCount = actual.isEmpty() ? 0 : actual.getCount();
+					int actualGrown = Math.max(0, actualCount - reusableRedistCounts[i]);
+					reusableRedistStacks[i] = actual;
+					reusableRedistCounts[i] = actualCount;
+					remaining -= actualGrown;
+				}
 			}
-			if (leftover.isEmpty()) {
-				changed = true;
+			if (remaining > 0) {
+				remainingBuffer.add(stack.copyWithCount(remaining));
 			} else {
-				remainingBuffer.add(leftover);
+				changed = true;
 			}
 		}
+
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
 			tile.setChanged();
+		}
+
+		// 退避策略：部分失败时递增退避，全部成功时重置
+		if (!remainingBuffer.isEmpty()) {
+			redistributeBackoffTicks = Math.min(MAX_BACKOFF_TICKS, redistributeBackoffTicks + 1);
+		} else {
+			redistributeBackoffTicks = 0;
 		}
 	}
 

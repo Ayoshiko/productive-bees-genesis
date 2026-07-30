@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
+
+import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
@@ -48,14 +50,16 @@ final class ApiaryPayloadHandlers {
 		if (serverPlayer.containerMenu == null || serverPlayer.level() == null) {
 			return;
 		}
-		// 容器与目标坐标一致性校验：防止玩家打开自己的工厂蜂箱后操作附近 8 格内他人蜂箱
-		// 仅校验 MekApiaryFactoryContainer（基础蜂箱容器类型不同，无法获取 pos）
-		if (serverPlayer.containerMenu instanceof MekApiaryFactoryContainer factoryContainer
-				&& !factoryContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
+		// 防止玩家打开任意容器（如工作台、背包）后远程操作 8 格内他人蜂箱（IDOR 攻击）
+		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
+			return;
+		}
+		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
 			LogThrottle.warn("apiary_select_pos_mismatch",
 					"玩家 {} 当前打开容器位置 {} 与目标选中蜂箱位置 {} 不一致",
 					serverPlayer.getName().getString(),
-					factoryContainer.getTileEntity().getBlockPos(),
+					tileContainer.getTileEntity().getBlockPos(),
 					payload.pos());
 			return;
 		}
@@ -95,14 +99,18 @@ final class ApiaryPayloadHandlers {
 		if (serverPlayer.containerMenu == null || serverPlayer.level() == null) {
 			return;
 		}
-		// 容器与目标坐标一致性校验：防止玩家打开自己的工厂蜂箱后操作附近 8 格内他人蜂箱
-		// 仅校验 MekApiaryFactoryContainer（基础蜂箱容器类型不同，无法获取 pos）
-		if (serverPlayer.containerMenu instanceof MekApiaryFactoryContainer factoryContainer
-				&& !factoryContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
+		// 防止玩家打开任意容器（如工作台、背包）后远程操作 8 格内他人蜂箱（IDOR 攻击）
+		// 特别风险：本 Handler 访问 containerMenu.getCarried()（光标物品），
+		// 若容器非 MekanismTileContainer 可能导致物品逻辑混乱
+		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
+			return;
+		}
+		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
 			LogThrottle.warn("apiary_cage_pos_mismatch",
 					"玩家 {} 当前打开容器位置 {} 与目标蜂笼操作蜂箱位置 {} 不一致",
 					serverPlayer.getName().getString(),
-					factoryContainer.getTileEntity().getBlockPos(),
+					tileContainer.getTileEntity().getBlockPos(),
 					payload.pos());
 			return;
 		}
@@ -211,6 +219,9 @@ final class ApiaryPayloadHandlers {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
+		if (serverPlayer.level() == null) {
+			return;
+		}
 		// 安全校验：玩家当前打开的容器必须是工厂版蜂箱容器
 		if (!(serverPlayer.containerMenu instanceof MekApiaryFactoryContainer factoryContainer)) {
 			return;
@@ -222,10 +233,6 @@ final class ApiaryPayloadHandlers {
 					serverPlayer.getName().getString(),
 					factoryContainer.getTileEntity().getBlockPos(),
 					payload.pos());
-			return;
-		}
-		// 通过玩家所在 level 查找方块实体
-		if (serverPlayer.level() == null) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -271,6 +278,19 @@ final class ApiaryPayloadHandlers {
 		if (type == null || type.isBuiltin()) {
 			LogThrottle.warn("apiary_upgrade_invalid", "玩家 {} 尝试卸载无效PB升级类型：{}",
 					serverPlayer.getName().getString(), payload.upgradeTypeId());
+			return;
+		}
+		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
+		// 防止玩家打开任意容器（如工作台、背包）后远程卸载 8 格内他人方块升级（IDOR 攻击）
+		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
+			return;
+		}
+		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			LogThrottle.warn("pb_upgrade_extract_pos_mismatch",
+					"玩家 {} 当前打开容器位置 {} 与目标卸载升级方块位置 {} 不一致",
+					serverPlayer.getName().getString(),
+					tileContainer.getTileEntity().getBlockPos(),
+					payload.pos());
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());

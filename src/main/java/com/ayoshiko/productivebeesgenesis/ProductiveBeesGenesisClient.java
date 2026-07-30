@@ -42,6 +42,8 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
+
 /**
  * 资源蜜蜂：创世模组客户端专用初始化
  * <br/>
@@ -161,6 +163,28 @@ public final class ProductiveBeesGenesisClient {
 		@SubscribeEvent
 		public static void onScreenRenderPost(ScreenEvent.Render.Post event) {
 			CosmicShaders.cosmicInventoryRender = false;
+		}
+	}
+
+	/**
+	 * 客户端重建离心配方索引
+	 * <br/>
+	 * Bug 1 修复：专用服务器客户端无本地服务器，此前 {@code onTagsReload} 中
+	 * {@code ServerLifecycleHooks.getCurrentServer()} 返回 null 导致索引不重建。
+	 * 此方法在客户端从 {@link net.minecraft.client.Minecraft#getLevel()} 获取 RecipeManager 重建索引。
+	 * <p>
+	 * 通过 {@link net.neoforged.fml.loading.FMLEnvironment#dist()} 守卫调用，
+	 * 服务端不会加载此方法（DistExecutor 隔离），避免 {@code net.minecraft.client.Minecraft} 类加载。
+	 */
+	public static void rebuildCentrifugeIndex() {
+		try {
+			net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+			net.minecraft.world.level.Level level = mc.level;
+			if (level != null) {
+				CentrifugeRecipeIndex.rebuild(level.getRecipeManager());
+			}
+		} catch (Throwable t) {
+			ProductiveBeesGenesis.LOGGER.warn("客户端离心配方索引重建失败，降级到全量遍历", t);
 		}
 	}
 }

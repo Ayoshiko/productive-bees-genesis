@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.menu;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeSlotContainer;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
@@ -45,9 +47,16 @@ public class ExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<Ti
 	@Override
 	protected void addSlots() {
 		super.addSlots();
-		pbUpgradeInputSlot = tile.getPbUpgradeInputSlot().createContainerSlot();
+		// null 守卫：客户端 Container 构造时 pbUpgradeDelegate 可能尚未初始化
+		PbUpgradeInventorySlot inputSlot = tile.getPbUpgradeInputSlot();
+		PbUpgradeInventorySlot outputSlot = tile.getPbUpgradeOutputSlot();
+		if (inputSlot == null || outputSlot == null) {
+			ProductiveBeesGenesis.LOGGER.warn("ME 工厂离心机 Container 构造时 PB 升级槽位为 null，跳过虚拟槽注册");
+			return;
+		}
+		pbUpgradeInputSlot = inputSlot.createContainerSlot();
 		addSlot(pbUpgradeInputSlot);
-		pbUpgradeOutputSlot = tile.getPbUpgradeOutputSlot().createContainerSlot();
+		pbUpgradeOutputSlot = outputSlot.createContainerSlot();
 		addSlot(pbUpgradeOutputSlot);
 	}
 

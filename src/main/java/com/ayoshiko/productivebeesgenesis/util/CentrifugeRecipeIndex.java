@@ -76,15 +76,21 @@ public final class CentrifugeRecipeIndex {
 	 * 使用局部 Map 构建完成后整体替换 volatile 引用，保证原子性。
 	 * 单条配方解析失败不影响整体索引。
 	 *
-	 * @param level 服务端世界
+	 * @param recipeManager 配方管理器（服务端或客户端均可）
 	 */
-	public static void rebuild(ServerLevel level) {
+	public static void rebuild(net.minecraft.world.item.crafting.RecipeManager recipeManager) {
 		try {
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newIndex = new HashMap<>();
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newCombBlockIndex = new HashMap<>();
-			int multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
+			// Bug 1 修复：客户端可能无法访问 SERVER 配置，try-catch 降级到默认值 4
+			int multiplier;
+			try {
+				multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
+			} catch (Throwable ignored) {
+				multiplier = 4;
+			}
 
-			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
+			for (RecipeHolder<CentrifugeRecipe> holder : recipeManager
 					.getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get())) {
 				try {
 					ItemStack[] inputItems = holder.value().ingredient.getItems();

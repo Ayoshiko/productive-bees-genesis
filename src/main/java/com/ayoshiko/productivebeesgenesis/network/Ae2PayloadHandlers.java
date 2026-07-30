@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
+import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
 
 import net.minecraft.resources.ResourceLocation;
@@ -42,6 +43,37 @@ final class Ae2PayloadHandlers {
 	}
 
 	/**
+	 * 容器位置一致性校验 — 防止 IDOR 类权限提升
+	 * <br/>
+	 * 玩家当前打开的 containerMenu 必须是 MekanismTileContainer 且其绑定的方块坐标
+	 * 与 payload.pos() 一致。防止玩家打开任意容器（如工作台、背包）后，
+	 * 在 8 格交互距离内远程操作他人方块的 AE2 开关与过滤器（IDOR 攻击）。
+	 * <p>
+	 * 与 {@link ApiaryPayloadHandlers} 保持一致的强制校验策略。
+	 *
+	 * @param serverPlayer 服务端玩家
+	 * @param targetPos    payload 中的目标方块坐标
+	 * @param logKey       日志节流键
+	 * @return true 表示校验通过，false 表示校验失败（调用方应直接 return）
+	 */
+	private static boolean validateContainerMatch(ServerPlayer serverPlayer,
+			net.minecraft.core.BlockPos targetPos, String logKey) {
+		if (serverPlayer.containerMenu == null) return false;
+		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
+			return false;
+		}
+		if (!tileContainer.getTileEntity().getBlockPos().equals(targetPos)) {
+			LogThrottle.warn(logKey,
+					"玩家 {} 当前打开容器位置 {} 与目标 AE2 操作方块位置 {} 不一致",
+					serverPlayer.getName().getString(),
+					tileContainer.getTileEntity().getBlockPos(),
+					targetPos);
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * 服务端处理：切换 per-tile AE2 物品/流体输出开关
 	 * <br/>
 	 * 校验玩家身份、方块实体类型、8格交互距离后，按输出类型调用对应 toggle 方法。
@@ -54,6 +86,10 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		if (serverPlayer.level() == null) {
+			return;
+		}
+		// 强制容器一致性校验：防止 IDOR 攻击（打开自己方块后远程操作 8 格内他人方块）
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_output_pos_mismatch")) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -93,6 +129,10 @@ final class Ae2PayloadHandlers {
 		if (serverPlayer.level() == null) {
 			return;
 		}
+		// 强制容器一致性校验：防止 IDOR 攻击
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_pull_pos_mismatch")) {
+			return;
+		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
 		if (be == null) {
 			return;
@@ -122,6 +162,10 @@ final class Ae2PayloadHandlers {
 		if (serverPlayer.level() == null) {
 			return;
 		}
+		// 强制容器一致性校验：防止 IDOR 攻击
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_nbt_pos_mismatch")) {
+			return;
+		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
 		if (be == null) {
 			return;
@@ -149,6 +193,10 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		if (serverPlayer.level() == null) {
+			return;
+		}
+		// 强制容器一致性校验：防止 IDOR 攻击
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -200,6 +248,10 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		if (serverPlayer.level() == null) {
+			return;
+		}
+		// 强制容器一致性校验：防止 IDOR 攻击（特别重要：CLEAR 操作可清空他人过滤器）
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_filter_entry_pos_mismatch")) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -257,6 +309,10 @@ final class Ae2PayloadHandlers {
 		if (serverPlayer.level() == null) {
 			return;
 		}
+		// 强制容器一致性校验：防止 IDOR 攻击
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_precise_mode_pos_mismatch")) {
+			return;
+		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_precise_mode_toggle", NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
 			return;
@@ -301,6 +357,10 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		if (serverPlayer.level() == null) {
+			return;
+		}
+		// 强制容器一致性校验：防止 IDOR 攻击
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_config_pos_mismatch")) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）

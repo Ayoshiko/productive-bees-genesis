@@ -146,9 +146,19 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		return RecipeViewerRecipeType.SMELTING;
 	}
 
-	/** 重写containsRecipe — 同时查找Mekanism SMELTING和PB CentrifugeRecipe（默认实现只查SMELTING缓存） */
+	/**
+	 * 重写containsRecipe — 同时查找Mekanism SMELTING和PB CentrifugeRecipe。
+	 * <br/>
+	 * Bug 2 修复：PB 蜜脾/蜜脾块（带 BEE_TYPE 组件或 CONFIGURABLE_COMB_BLOCK 物品）只检查 PB 配方，
+	 * 避免 SMELTING 配方（c:honeycombs 标签）误匹配导致任意蜜脾都能放入并产出错误结果。
+	 * 非 PB 蜜脾（如 modularbees）走原逻辑，允许 SMELTING 处理。
+	 */
 	@Override
 	public boolean containsRecipe(@NotNull ItemStack input) {
+		// Bug 2: PB 蜜脾/蜜脾块强制走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配
+		if (productivebeesgenesis$isPbCombInput(input)) {
+			return pbProcessor.findPbRecipe(input) != null;
+		}
 		return super.containsRecipe(input) || pbProcessor.findPbRecipe(input) != null;
 	}
 

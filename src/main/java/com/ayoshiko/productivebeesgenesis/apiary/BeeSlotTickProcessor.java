@@ -42,6 +42,17 @@ class BeeSlotTickProcessor {
 	 */
 	private static final int BATCH_FLUSH_INTERVAL = 10;
 
+	/**
+	 * 累积产出阈值 — 达到此值时提前 flush，避免满升级时单次 flush 量过大导致 MSPT 尖刺。
+	 * <br/>
+	 * Spark 分析显示 v2.0.2 满升级场景 MSPT max=54.6ms，主因是每 10 tick 一次的
+	 * 批量 flush 瞬间处理数百次累积产出。提前触发将大批量拆为小批量，
+	 * 平滑 flush 负载到多个 tick。
+	 * <p>
+	 * 正常低升级场景 10 tick 内累积量通常 < 10，不受影响。
+	 */
+	private static final int FLUSH_ACCUMULATION_THRESHOLD = 64;
+
 	/** 配置缓存刷新间隔（tick） */
 	private static final int CONFIG_REFRESH_INTERVAL = 100;
 
@@ -209,9 +220,10 @@ class BeeSlotTickProcessor {
 		// Task 1.2：STACK 升级产出次数倍率 — 循环外计算一次，所有蜜蜂共享
 		int stackProductionCount = upgradeHandler.getStackProductionCount();
 
-		// 批量刷新周期判断
+		// 批量刷新周期判断 — 累积量阈值提前触发，避免满升级时单次 flush 量过大导致 MSPT 尖刺
 		tickCounter++;
-		boolean shouldFlush = (tickCounter >= BATCH_FLUSH_INTERVAL);
+		boolean shouldFlush = (tickCounter >= BATCH_FLUSH_INTERVAL)
+				|| (accumulatedProgress.get() >= FLUSH_ACCUMULATION_THRESHOLD);
 		if (shouldFlush) tickCounter = 0;
 
 		BeeSlot[] beeSlots = slotManager.getBeeSlots();
@@ -287,10 +299,15 @@ class BeeSlotTickProcessor {
 				// 使用配置缓存的基础处理时间（从 ModConfig.SERVER.apiaryProcessingTime 读取，默认1200）
 				baseMinTicks = cachedProcessingTime;
 			}
-			// 应用时间倍率（< 1.0 加速，> 1.0 减速），不修改持久化的 minOccupationTicks
+			// 应用时间倍率（< 1.0 加速，> 1.0 减速）
 			// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
 			int adjustedMinTicks = upgradeHandler.hasCreativeUpgrade() ? 1
 					: Math.max(1, Math.round(baseMinTicks * timeMultiplier));
+			// 同步 adjustedMinTicks 到 BeeSlot，确保 tooltip 工作进度显示正确的工作 tick 上限
+			// 修复：此前不更新 minOccupationTicks 导致 tooltip 始终显示 300/0 tick（0%）
+			if (slot.getMinOccupationTicks() != adjustedMinTicks) {
+				slot.setMinOccupationTicks(adjustedMinTicks);
+			}
 			int newTicks = currentTicks + 1;
 			slot.setTicksInHive(newTicks);
 			pendingEnergyCost += beeEnergyCost;

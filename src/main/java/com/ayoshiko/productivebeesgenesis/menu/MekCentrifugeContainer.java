@@ -59,8 +59,13 @@ public class MekCentrifugeContainer<TILE extends TileEntityMekanism> extends Mek
 		}
 	}
 
-	/** 创建并添加 PB 升级输入/输出虚拟槽 — 消除重复代码 */
+	/** 创建并添加 PB 升级输入/输出虚拟槽 — 消除重复代码；含 null 守卫防止客户端构造时 NPE */
 	private void addPbUpgradeSlots(PbUpgradeInventorySlot inputSlot, PbUpgradeInventorySlot outputSlot) {
+		if (inputSlot == null || outputSlot == null) {
+			com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.LOGGER
+					.warn("离心机 Container 构造时 PB 升级槽位为 null，跳过虚拟槽注册");
+			return;
+		}
 		pbUpgradeInputSlot = inputSlot.createContainerSlot();
 		addSlot(pbUpgradeInputSlot);
 		pbUpgradeOutputSlot = outputSlot.createContainerSlot();

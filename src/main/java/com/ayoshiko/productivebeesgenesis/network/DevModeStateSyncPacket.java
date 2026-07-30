@@ -56,6 +56,9 @@ public record DevModeStateSyncPacket(
 	 * 由 {@code ModPayloads.register} 通过方法引用挂载到本包的 playToClient 注册。
 	 * 调用 {@link ClientDevModeState#update} 后，{@code ModCreativeTabs} 下次刷新
 	 * 创造模式物品栏时会读取最新状态控制开发物品可见性。
+	 * <p>
+	 * ClientDevModeState 是纯 Java 状态管理类，不引用任何 net.minecraft.client.* 客户端专用类，
+	 * 因此服务端加载本类触发 ClientDevModeState 类初始化不会导致 ClassNotFoundException。
 	 */
 	public static void handleClient(DevModeStateSyncPacket payload, IPayloadContext context) {
 		ClientDevModeState.update(payload.masterEnabled(), payload.featureStates());

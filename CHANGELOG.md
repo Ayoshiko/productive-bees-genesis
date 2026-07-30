@@ -23,6 +23,91 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.3] - 2026-07-31
+
+v2.0.3 是 SemVer PATCH 版本，修复专用服务器客户端无法放入蜜脾、任意蜜脾块无视配方校验、网络包 IDOR 类权限提升漏洞、服务端离心配方索引为空、蜂箱 tooltip 工作进度显示异常等多个服务端兼容性和安全问题，并针对满升级+高加速场景进行了 Spark 热点分析驱动的深度性能优化。
+
+### 修复
+
+- **专用服务器客户端无法放入蜜脾（CRITICAL）** — 解决专用服务器环境下客户端无法将蜜脾/蜜脾块放入离心机输入槽的问题
+  - **问题**：`CentrifugeRecipeIndex` 作为 static 字段，仅在 `ServerLifecycleHooks.getCurrentServer() != null` 时重建。专用服务器客户端无本地服务器，`getCurrentServer()` 返回 null，索引永远为 `EMPTY`，客户端 `containsRecipe` 校验失败
+  - **根因**：`onTagsReload` 的服务端守卫在专用服务器客户端为 false，跳过 `CentrifugeRecipeIndex.rebuild`
+  - **修复**：
+    1. `CentrifugeRecipeIndex.rebuild` 改为接受 `RecipeManager` 而非 `ServerLevel`，解除对服务端的硬依赖
+    2. `onTagsReload` 中，客户端通过 `FMLEnvironment.dist.isClient()` 守卫 + 反射调用 `ProductiveBeesGenesisClient.rebuildCentrifugeIndex()`，从 `ClientLevel` 获取 `RecipeManager` 重建索引
+    3. 客户端 `ModConfig.SERVER` 访问用 try-catch 降级到默认值 4，避免配置未同步时崩溃
+  - **影响范围**：2 个文件修改（`CentrifugeRecipeIndex.java`、`ProductiveBeesGenesis.java`）
+
+- **任意蜜脾块无视配方校验放入并产出错误结果（CRITICAL）** — 解决输出槽有产物时，shift 左键任意蜜脾块都能放入输入槽，无视配方匹配，并以输出槽的物品为产物进行产出的问题
+  - **问题**：`containsRecipe` 中 `super.containsRecipe(input)` 匹配了 SMELTING 配方（`c:honeycombs` 标签），导致任意 PB 蜜脾/蜜脾块都能通过校验。随后 `getRecipe` 返回 SMELTING 配方，产出与输入蜜脾不匹配的错误结果
+  - **根因**：modularbees 为 `c:honeycombs` 标签注册了熔炉配方，SMELTING 配方缓存会匹配所有带该标签的物品，绕过 PB CentrifugeRecipe 校验
+  - **修复**：
+    1. `IMekCentrifugeTile` 新增 `productivebeesgenesis$isPbCombInput` default 方法，识别 PB 蜜脾（带 `BEE_TYPE` 组件）和蜜脾块（`CONFIGURABLE_COMB_BLOCK` 物品）
+    2. `TileEntityMekCentrifuge.containsRecipe` 对 PB 蜜脾/蜜脾块强制只检查 PB 配方，跳过 SMELTING
+    3. `IFactoryPbDelegateAccess.productivebeesgenesis$isValidInput` 同步修复，工厂版离心机也强制 PB 蜜脾走 PB 配方路径
+    4. 非 PB 蜜脾（如 modularbees）走原逻辑，允许 SMELTING 处理
+  - **影响范围**：3 个文件修改（`IMekCentrifugeTile.java`、`TileEntityMekCentrifuge.java`、`IFactoryPbDelegateAccess.java`）
+
+- **网络包 IDOR 类权限提升漏洞（CRITICAL）** — 修复 10 个服务端 Payload Handler 缺失或条件性容器位置一致性校验的问题
+  - **问题**：恶意客户端可打开任意容器（如工作台、背包）后，在 8 格交互距离内远程操作他人方块的 AE2 开关、过滤器、蜜蜂槽位、蜂笼操作和 PB 升级卸载
+  - **根因**：
+    1. AE2 系列 7 个 Handler（`handleCycleAeOutput`、`handleToggleAeInput`、`handleToggleAeInputNbtIgnore`、`handleCycleAeInputFilterMode`、`handleSetAeInputFilterEntry`、`handleToggleAeInputPreciseMode`、`handleOpenAeInputConfig`）完全缺失容器位置一致性校验
+    2. Apiary 系列 3 个 Handler（`handleApiarySelectBee`、`handleApiaryCageOperation`、`handlePbUpgradeExtract`）使用条件性校验（`instanceof MekanismTileContainer` 为 false 时跳过校验），存在绕过路径
+  - **修复**：
+    1. AE2 系列：新增 `validateContainerMatch` 辅助方法，7 个 Handler 统一调用，强制要求 `containerMenu` 为 `MekanismTileContainer<?>` 且坐标一致
+    2. Apiary 系列：将条件性校验改为强制校验，`containerMenu` 非 `MekanismTileContainer` 时直接拒绝
+    3. `handleApiaryToggleSorting` 校验顺序调整，`level()` null 检查提前到容器校验之前
+  - **影响范围**：2 个文件修改（`ApiaryPayloadHandlers.java`、`Ae2PayloadHandlers.java`）
+
+- **服务端离心配方索引为空（CRITICAL）** — 解决服务端启动后 `CentrifugeRecipeIndex` 为空，导致所有配方查找走 FALLBACK 全量遍历路径的问题
+  - **问题**：`onTagsReload` 触发时 `ServerLifecycleHooks.getCurrentServer()` 可能返回 null（服务器启动早期阶段），服务端环境跳过索引重建
+  - **修复**：在 `BeeRecipeReloader.overrideRecipesInternal()` 成功后调用 `CentrifugeRecipeIndex.rebuild(recipeManager)`，确保配方重载完成后索引必定重建
+  - **影响范围**：1 个文件修改（`BeeRecipeReloader.java`）
+
+- **蜂箱 tooltip 工作进度显示 300/0 tick（MEDIUM）** — 解决蜂箱内部 tooltip 中蜜蜂工作进度显示为 `300/0 tick（0%）`、工作 tick 上限为 0 的问题
+  - **问题**：`BeeSlotTickProcessor` 计算 `adjustedMinTicks` 后未同步回 `BeeSlot.setMinOccupationTicks()`，tooltip 始终读取初始值 0
+  - **修复**：在 `BeeSlotTickProcessor` 推进计时阶段，将计算后的 `adjustedMinTicks` 同步到 `slot.setMinOccupationTicks()`，确保 tooltip 显示正确的工作上限
+  - **影响范围**：1 个文件修改（`BeeSlotTickProcessor.java`）
+
+- **客户端 Container 构造时潜在 NPE（MEDIUM）** — 修复 ME/EME 工厂离心机和基础离心机 Container 在客户端构造时 PB 升级槽位可能为 null 导致的崩溃
+  - **问题**：`addSlots()` 直接调用 `tile.getPbUpgradeInputSlot().createContainerSlot()`，若 `getPbUpgradeInputSlot()` 返回 null（客户端 Container 构造时 `pbUpgradeDelegate` 可能尚未初始化）则 NPE
+  - **修复**：在 `addSlots()` 中添加 null 守卫，槽位为 null 时记录 warn 日志并跳过虚拟槽注册
+  - **影响范围**：3 个文件修改（`MekCentrifugeContainer.java`、`ExtraMekCentrifugeFactoryContainer.java`、`EMExtraMekCentrifugeFactoryContainer.java`）
+
+- **PB 升级插件中文翻译调整** — 将"时间"/"时间 II"调整为"速度"/"速度+"，从玩家视角理解"减少生产时间=提升生产速度"
+  - **影响范围**：1 个文件修改（`zh_cn.json`）
+
+- **移除临时调试日志** — 移除 v2.0.2 添加的 `[DEBUG-FIND]` 诊断日志
+  - **问题**：v2.0.2 为诊断专用服务器问题添加的临时日志已确认根因，无需保留
+  - **修复**：移除 `ProductiveBeesGenesis`、`CentrifugeRecipeIndex`、`TileEntityMekCentrifuge`、`PbRecipeFinder` 中的所有 `[DEBUG-FIND]` 日志
+  - **影响范围**：4 个文件修改
+
+### 安全
+
+- 统一所有服务端 Payload Handler 的容器一致性校验策略，与 `handleApiaryToggleSorting` 的强制校验模式保持一致
+- `handleSetAeInputFilterEntry` 的 `CLEAR` 操作特别危险（可清空他人过滤器），现已强制容器校验
+
+### 性能优化
+
+基于 Spark 性能分析报告（满升级+256×加速场景，MSPT max=54.6ms）进行的深度优化：
+
+- **蜂箱产物缓冲区退避机制** — 解决 v2.0.2 新增的 `ApiaryOutputBuffer.tickRedistribute` 每 tick 无效重试 `insertItem` 的问题
+  - **问题**：输出槽全满时每 tick 重复调用 `insertItem`（内部每次查询 `getLimit`），256×加速下加剧开销
+  - **修复**：输出槽全满时递增退避计数器（1→2→...→8 tick），退避期内直接返回，开销仅字段比较
+  - **预扫描直写**：与 `distributeToOutput` 直写模式一致，先一次遍历获取所有槽位状态，用 `setStack` 替代 `insertItem`，将 `getLimit` 查询从 N×M 次降为 M 次
+  - **加速模式降频**：256×加速模式（`skipBeeProcessing=true`）下 `tickRedistribute` 调用频率降为每 4 tick 一次，减少 75% 无效调用
+  - **影响范围**：2 个文件修改（`ApiaryOutputBuffer.java`、`ApiaryTickHandler.java`）
+
+- **蜂箱批量产出动态 flush 阈值** — 解决满升级时每 10 tick 一次的批量 flush 导致 MSPT 周期性尖刺的问题
+  - **问题**：固定 `BATCH_FLUSH_INTERVAL=10` 在满升级+256×加速时，单次 flush 累积产出量巨大（可达数百次×N蜜蜂），瞬间 `insertItem` 调用量是单 tick 的 10×
+  - **修复**：添加 `FLUSH_ACCUMULATION_THRESHOLD=64` 累积量阈值，达到阈值时提前 flush，将大批量拆为小批量，平滑 flush 负载到多个 tick
+  - **影响范围**：1 个文件修改（`BeeSlotTickProcessor.java`）
+
+- **ItemStack 比较快速筛选** — 减少 `isSameItemSameComponents` 的 `PatchedDataComponentMap.equals` 全量比较开销
+  - **问题**：批量 flush 时每个待插入栈×每个输出槽都调用 `isSameItemSameComponents`，内部涉及 DataComponentMap 全量比较
+  - **修复**：先 `getItem() ==` 比较（O(1) 指针比较），仅 Item 相同时才进入组件比较，短路求值确保不同 Item 直接跳过
+  - **影响范围**：2 个文件修改（`BeeProduceProcessor.java`、`ApiaryOutputBuffer.java`）
+
 ## [2.0.2] - 2026-07-30
 
 v2.0.2 是 SemVer PATCH 版本，修复两位玩家独立报告的"工具挖掘等级失效"CRITICAL bug（标签加载失败级联影响 paxel/hammer/drill/aio 等工具），以及战利品表解析失败、服务端 Mixin 降级日志噪音、蜂箱产物丢失等问题，并新增蜜蜂 productivity 基因应用。
