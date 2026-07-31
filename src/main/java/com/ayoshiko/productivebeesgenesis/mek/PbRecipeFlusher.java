@@ -186,9 +186,19 @@ public final class PbRecipeFlusher {
 		}
 
 		// 第一遍:模拟 + 生成执行计划
+		// v2.1.0 修复产物锁定 bug：防御性检查 pendingRecipeOutputs 与 pendingRecipe 一致性
+		CentrifugeRecipe pendingRecipe = completer.getPendingRecipe();
 		Map<ItemStack, ChancedOutput> recipeOutputs = completer.getPendingRecipeOutputs();
+		Map<ItemStack, ChancedOutput> expectedOutputs = pendingRecipe != null
+				? PbRecipeCompleter.getRecipeOutputsCached(pendingRecipe) : null;
+		// 引用比较：recipeOutputsCache 是 LRU 缓存，同一 CentrifugeRecipe 实例返回同一 Map 引用
+		// 若不一致说明 completer 状态被污染，使用 expectedOutputs 强制纠正
+		if (recipeOutputs != expectedOutputs) {
+			recipeOutputs = expectedOutputs;
+		}
+		// 防御性 null 检查：pendingRecipe 为 null 时 recipeOutputs 可能为 null
 		if (recipeOutputs == null) {
-			recipeOutputs = PbRecipeCompleter.getRecipeOutputsCached(completer.getPendingRecipe());
+			return false;
 		}
 		Map<ItemStack, Integer> pendingOutputs = completer.getPendingOutputs();
 		PbRecipeContext context = completer.getContext();

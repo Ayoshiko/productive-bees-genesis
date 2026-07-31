@@ -47,7 +47,7 @@ public class PbRecipeProcessor {
 	@Nullable
 	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
 
-	/** 配方查找器（双层缓存：inputRecipeCache + pbRecipeCache） */
+	/** 配方查找器（双层缓存：inputRecipeCache 指纹TTL + pbRecipeCache LRU） */
 	private final PbRecipeFinder recipeFinder;
 
 	/** 输出聚合器数组（每进程独立，批量插入减少 listener 触发次数） */
@@ -159,6 +159,11 @@ public class PbRecipeProcessor {
 			energyCache.clear();
 			// 失效万象处理器的 getTicksForBase 缓存
 			myriadHandler.clearCachedTicksForBase();
+			// v2.1.0 修复产物锁定 bug：配方版本变更时重置所有 completer
+			// 防止配方重载后 completer 持有旧配方的 pendingRecipeOutputs 引用
+			for (int i = 0; i < recipeCompleters.length; i++) {
+				recipeCompleters[i].resetPendingRecipe();
+			}
 			lastRecipeVersion = currentVersion;
 		}
 	}
@@ -235,17 +240,22 @@ public class PbRecipeProcessor {
 		}
 
 			// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方
-			RecipeHolder<CentrifugeRecipe> pbRecipe = recipeFinder.findPbRecipe(input);
-			if (pbRecipe == null) {
-				clearPbState(processIndex);
-				context.setPbActiveState(false, processIndex);
-				return false;
-			}
+		// 优先使用调用方预查找的配方（基础离心机 MekCentrifugeTickHandler 已查找过），
+		// 避免重复查找并减少 inputRecipeCache 单条目缓存的竞争压力
+		RecipeHolder<CentrifugeRecipe> pbRecipe = preFoundRecipe != null ? preFoundRecipe : recipeFinder.findPbRecipe(input);
+		if (pbRecipe == null) {
+			clearPbState(processIndex);
+			context.setPbActiveState(false, processIndex);
+			return false;
+		}
 
 			// 配方变更时重置进度
 			if (cachedPbRecipes[processIndex] != pbRecipe) {
 				cachedPbRecipes[processIndex] = pbRecipe;
 				pbOperatingTicks[processIndex] = 0;
+				// v2.1.0 修复产物锁定 bug：配方变更时重置 completer 的 pendingRecipeOutputs
+				// 防止上一个配方的 outputs 残留，导致新蜜脾沿用旧配方产出
+				recipeCompleters[processIndex].resetPendingRecipe();
 			}
 
 			CentrifugeRecipe recipeValue = pbRecipe.value();
@@ -416,6 +426,8 @@ public class PbRecipeProcessor {
 		pbOperatingTicks[processIndex] = 0;
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
+		// v2.1.0 修复产物锁定 bug：清除 PB 状态时同步重置 completer
+		recipeCompleters[processIndex].resetPendingRecipe();
 		// 关闭该进程的激活位，防止进度箭头残留
 		context.setPbActiveState(false, processIndex);
 	}
@@ -426,6 +438,8 @@ public class PbRecipeProcessor {
 		pbOperatingTicks[processIndex] = 0;
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
+		// v2.1.0 修复产物锁定 bug：重置 PB 状态时同步重置 completer
+		recipeCompleters[processIndex].resetPendingRecipe();
 	}
 
 	// ===== 客户端同步和持久化 =====

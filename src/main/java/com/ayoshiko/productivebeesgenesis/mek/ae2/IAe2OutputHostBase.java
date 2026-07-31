@@ -414,4 +414,20 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	default void productivebeesgenesis$updateLastItemPushCounter(long value) {
 		productivebeesgenesis$getAe2StateHolder().getPushState().updateLastItemPushCounter(value);
 	}
+
+	/**
+	 * 暂停输入（模块2.4：AE2 输出超限时调用，由实现类转发到 setActive(false)）
+	 * <br/>
+	 * 当 pendingOutputs 超过硬上限时，由 {@link Ae2OutputPusher} 调用此方法暂停该 tile 的输入，
+	 * 防止输出槽持续累积导致物品积压。默认空实现，由 {@link com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary}
+	 * 和 {@link com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory} 等实现类覆写转发到 Mekanism 的 setActive(false)。
+	 * <p>
+	 * <b>设计原则（OCP/DIP）</b>：通过接口默认方法扩展功能，不修改现有 tile 行为；
+	 * {@link Ae2OutputPusher} 依赖抽象接口而非具体 tile 类，符合依赖倒置原则。
+	 *
+	 * @since 2.1.0
+	 */
+	default void suspendInput() {
+		// 默认空实现，由实现类覆写转发到 setActive(false)
+	}
 }

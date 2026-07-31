@@ -300,6 +300,8 @@ class ApiaryCageHandler {
 		slot.setBeeData(copy);
 		slot.setTicksInHive(0);
 		slot.setMinOccupationTicks(0);
+		// 模块1修复：装入新蜜蜂时同步重置 base，触发 tick 处理器 fallback 到配置默认值
+		slot.setBaseMinOccupationTicks(0);
 		slot.setHasNectar(copy.getBoolean("HasNectar"));
 		slot.setState(BeeState.IDLE);
 		slot.setProgress(0.0f);

@@ -108,6 +108,25 @@ class ApiaryDirectEjectHandler {
 	private final List<List<BasicInventorySlot>> mergedSourceSlots = new ArrayList<>(9);
 
 	/**
+	 * 模块5：连续转移失败计数器 — 连续 20 tick 失败后 fallback 到 MEK Ejector
+	 * <br/>
+	 * 服务端单线程访问，无需原子操作。fallback 触发后重置为 0，让后续 AE2 推送和
+	 * MEK Ejector 接管输出槽物品，避免每 tick 无效重试消耗 CPU。
+	 */
+	private int consecutiveEjectFailures = 0;
+
+	/** 模块5：连续失败阈值 — 20 tick（1秒）后触发 fallback */
+	private static final int EJECT_FAILURE_THRESHOLD = 20;
+
+	/**
+	 * 模块5：复用的离心机输入槽列表 — 避免每 tick 分配 ArrayList
+	 * <br/>
+	 * 用于把 IMekCentrifugeTile.getInputSlot 逐个收集为 List 传给 ApiaryOutputBuffer。
+	 * ArrayList.clear() 不缩容，跨 tick 复用零扩容。
+	 */
+	private final List<IInventorySlot> bufferInputSlots = new ArrayList<>(8);
+
+	/**
 	 * 构造函数
 	 *
 	 * @param apiary 所属蜂箱方块实体
@@ -139,10 +158,18 @@ class ApiaryDirectEjectHandler {
 	}
 
 	/**
-	 * 执行直连弹出（Task 3/4 优化版）
+	 * 执行直连弹出（Task 3/4 优化版 + 模块5 缓冲区转移与 fallback）
 	 * <br/>
 	 * 查找相邻的离心机，将蜂箱输出槽中的有效离心配方输入物品直接转移到离心机输入槽。
 	 * 只处理离心机配方输入物品（蜜脾等），蜂笼等其他物品仍由 Ejector 处理。
+	 * <p>
+	 * 模块5 新增逻辑：
+	 * <ul>
+	 *   <li>缓冲区直连转移：输出槽转移后，从 ApiaryOutputBuffer 转移物品到离心机输入槽剩余空间</li>
+	 *   <li>退避重置：成功转移后调用 {@link ApiaryOutputBuffer#resetBackoff()} 立即下 tick 重试</li>
+	 *   <li>连续失败 fallback：连续 20 tick 无法转移到离心机时，跳过直连弹出，
+	 *       让后续 AE2 推送（{@link ApiaryAe2HostAdapter#pushOutputs()}）和 MEK Ejector 接管</li>
+	 * </ul>
 	 * <p>
 	 * 优化要点：
 	 * <ul>
@@ -162,6 +189,17 @@ class ApiaryDirectEjectHandler {
 
 		// needsEjectCheck 重置移到方法末尾，部分转移失败时保持脏标记下 tick 立即重试
 		lastCacheRefreshNanos = System.nanoTime();
+
+		// 模块5：连续失败 fallback — 离心机输入槽持续阻塞时，跳过直连弹出，
+		// 让后续 AE2 推送（pushOutputs）和 MEK Ejector 接管，避免每 tick 无效重试消耗 CPU。
+		// AE 协同：fallback 后 ae2HostAdapter.pushOutputs() 仍会在 tryDirectEject 之后执行，
+		// 若 AE 开启则优先通过 AE 推送，AE 失败再由 MEK Ejector 兜底。
+		if (consecutiveEjectFailures >= EJECT_FAILURE_THRESHOLD) {
+			consecutiveEjectFailures = 0;
+			// 保持脏标记，下 tick 重新尝试直连弹出（可能离心机已腾出空间）
+			needsEjectCheck = true;
+			return true;
+		}
 
 		// 查找相邻离心机
 		IMekCentrifugeTile centrifuge = findAdjacentCentrifuge(level);
@@ -184,11 +222,15 @@ class ApiaryDirectEjectHandler {
 		// Task 4: 合并蜂箱输出槽中相同类型的物品为虚拟栈
 		mergeOutputSlotsByType(outputSlots);
 
+		// 模块5：统计本次转移的物品总数（含输出槽+缓冲区），用于决定是否重置退避/递增失败计数
+		int transferredCount = 0;
+
 		// 对每个虚拟栈执行两轮分配
 		for (int vIdx = 0; vIdx < mergedVirtualStacks.size(); vIdx++) {
 			ItemStack virtualStack = mergedVirtualStacks.get(vIdx);
 			if (virtualStack.isEmpty()) continue;
 
+			int originalCount = virtualStack.getCount();
 			// 第一轮：填满同类型非空输入槽（堆叠合并优先）
 			List<Integer> sameTypeSlots = inputSlotManager.findSameTypeSlots(virtualStack, inputSlotCount);
 			for (int inputIdx : sameTypeSlots) {
@@ -198,7 +240,10 @@ class ApiaryDirectEjectHandler {
 
 			// 第二轮：使用空输入槽（按剩余空间降序，负载均衡）
 			// 若第一轮已排空虚拟栈，跳过第二轮避免不必要的 findEmptySlotsSortedByRemainingDesc 调用
-			if (virtualStack.isEmpty()) continue;
+			if (virtualStack.isEmpty()) {
+				transferredCount += originalCount;
+				continue;
+			}
 			List<Integer> emptySlots = inputSlotManager.findEmptySlotsSortedByRemainingDesc(centrifuge, virtualStack, inputSlotCount);
 			// 短路优化：findEmptySlotsSortedByRemainingDesc 返回降序排序列表，首项为最大空槽。
 			// 若虚拟栈数量 ≤ 首项剩余空间，一次插入即可排空虚拟栈，
@@ -207,12 +252,69 @@ class ApiaryDirectEjectHandler {
 				if (virtualStack.isEmpty()) break;
 				virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, true);
 			}
+			// 模块5：累计本次虚拟栈转移的物品数
+			transferredCount += originalCount - virtualStack.getCount();
 		}
 
-		// 检查所有输出槽是否已空，部分失败时保持脏标记下 tick 立即重试
-		needsEjectCheck = hasNonEmptyOutputSlot(outputSlots);
+		// 模块5：从 ApiaryOutputBuffer 转移物品到离心机输入槽剩余空间
+		// 解决缓冲区持续积压问题（输出槽满载时产物被困缓冲区）
+		transferredCount += tryEjectFromBuffer(centrifuge, inputSlotCount);
+
+		// 模块5：根据转移结果更新退避与失败计数
+		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
+		int bufferedGroupCount = outputBuffer.getBufferedGroupCount();
+		if (transferredCount > 0) {
+			// 成功转移 — 重置缓冲区退避，立即下 tick 重试注入蜂箱输出槽
+			outputBuffer.resetBackoff();
+			consecutiveEjectFailures = 0;
+		} else if (hasNonEmptyOutputSlot(outputSlots) || bufferedGroupCount > 0) {
+			// 有物品但未转移成功 — 递增失败计数，达阈值后下 tick 触发 fallback
+			consecutiveEjectFailures++;
+		}
+
+		// 检查所有输出槽与缓冲区是否已空，部分失败时保持脏标记下 tick 立即重试
+		needsEjectCheck = hasNonEmptyOutputSlot(outputSlots) || bufferedGroupCount > 0;
 
 		return true;
+	}
+
+	/**
+	 * 模块5：从 ApiaryOutputBuffer 转移物品到离心机输入槽
+	 * <br/>
+	 * 当蜂箱输出槽已通过直连弹出清空、缓冲区仍有积压时，复用离心机输入槽剩余空间
+	 * 直接转移缓冲区物品，绕过"缓冲区→蜂箱输出槽→离心机"的两跳路径。
+	 * <p>
+	 * 性能：
+	 * <ul>
+	 *   <li>缓冲区为空时通过 getBufferedGroupCount() O(1) 短路（synchronized 但开销极低）</li>
+	 *   <li>委托 {@link ApiaryOutputBuffer#tryRedistributeToExternalSlots}，内部使用预扫描直写</li>
+	 *   <li>bufferInputSlots 复用，避免每 tick 分配 ArrayList</li>
+	 * </ul>
+	 *
+	 * @param centrifuge     离心机接口
+	 * @param inputSlotCount 离心机输入槽数量
+	 * @return 实际转移的物品总数
+	 */
+	private int tryEjectFromBuffer(IMekCentrifugeTile centrifuge, int inputSlotCount) {
+		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
+		// O(1) 短路：缓冲区为空时直接返回，避免无效的输入槽收集与 synchronized 调用
+		if (outputBuffer.getBufferedGroupCount() <= 0) return 0;
+
+		// 收集离心机输入槽列表（复用 bufferInputSlots，clear 不缩容）
+		bufferInputSlots.clear();
+		for (int i = 0; i < inputSlotCount; i++) {
+			IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(i);
+			if (slot != null) {
+				bufferInputSlots.add(slot);
+			}
+		}
+
+		if (bufferInputSlots.isEmpty()) return 0;
+
+		// 委托 ApiaryOutputBuffer 转移，传入离心机输入验证器过滤非离心配方物品
+		return outputBuffer.tryRedistributeToExternalSlots(
+				bufferInputSlots,
+				centrifuge::productivebeesgenesis$isValidInput);
 	}
 
 	/**

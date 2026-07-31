@@ -116,6 +116,12 @@ public final class ServerConfig {
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
+	 * v2.1.0: 每种流体类型最大占用槽位数(委托自 CentrifugeConfigSection)
+	 * <br/>
+	 * 0=自动计算 maxTanks/2,>0=手动指定配额,防止高产出流体占用所有槽位
+	 */
+	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
+	/**
 	 * Task 6: 流体弹出速率(mB/tick),默认 256,范围 1-10240
 	 * <br/>
 	 * 委托自 CentrifugeConfigSection,由 AbstractMekCentrifugeFactory 构造函数注入 Ejector。
@@ -355,6 +361,8 @@ public final class ServerConfig {
 		this.mekCentrifugeEjectDelayActive = centrifuge.mekCentrifugeEjectDelayActive;
 		this.mekCentrifugeFluidTankCapacity = centrifuge.mekCentrifugeFluidTankCapacity;
 		this.mekCentrifugeMultiFluidTank = centrifuge.mekCentrifugeMultiFluidTank;
+		// v2.1.0: 每种流体类型最大占用槽位数(配额机制)
+		this.mekCentrifugeMaxTanksPerFluid = centrifuge.mekCentrifugeMaxTanksPerFluid;
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 委托字段(maxTanks 直接使用 tier.processes)
 		this.mekCentrifugeFluidEjectRate = centrifuge.mekCentrifugeFluidEjectRate;
 		this.mekCentrifugeCombBlockMultiplier = centrifuge.mekCentrifugeCombBlockMultiplier;

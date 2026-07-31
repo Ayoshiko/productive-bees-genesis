@@ -74,6 +74,8 @@ class ApiarySlotSerializer {
 			}
 			slotNbt.putInt("ticks_in_hive", slot.getTicksInHive());
 			slotNbt.putInt("min_occupation_ticks", slot.getMinOccupationTicks());
+			// 模块1修复：持久化基础最小 occupation ticks，避免 adjusted 值被回写后下一 tick 再次乘以倍率
+			slotNbt.putInt("base_min_occupation_ticks", slot.getBaseMinOccupationTicks());
 			slotNbt.putBoolean("has_nectar", slot.hasNectar());
 			slotNbt.putString("state", slot.getState().name());
 			slotNbt.putFloat("progress", slot.getProgress());
@@ -109,6 +111,24 @@ class ApiarySlotSerializer {
 			}
 			slot.setTicksInHive(slotNbt.getInt("ticks_in_hive"));
 			slot.setMinOccupationTicks(slotNbt.getInt("min_occupation_ticks"));
+			// 模块1修复：读取基础最小 occupation ticks，含老存档迁移逻辑
+			if (slotNbt.contains("base_min_occupation_ticks")) {
+				// 新存档：直接读取 base 值
+				slot.setBaseMinOccupationTicks(slotNbt.getInt("base_min_occupation_ticks"));
+			} else {
+				// 老存档迁移：无 base 字段时从 min_occupation_ticks 推断
+				// 代码审查修复：上界从配置读取（默认1200），而非硬编码10000
+				// 避免被bug污染的较低值（如500）被误迁移为base，导致卸载升级后无法恢复
+				int upperBound = 1200; // fallback 默认值
+				try {
+					upperBound = com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.apiaryProcessingTime.get();
+				} catch (NullPointerException e) {
+					// 配置未加载时使用默认值 1200
+				}
+				int oldMinTicks = slotNbt.getInt("min_occupation_ticks");
+				// 仅当值在合理范围（>0 且 <=配置值）时迁移，否则设为0触发fallback到配置默认值
+				slot.setBaseMinOccupationTicks((oldMinTicks > 0 && oldMinTicks <= upperBound) ? oldMinTicks : 0);
+			}
 			slot.setHasNectar(slotNbt.getBoolean("has_nectar"));
 			try {
 				slot.setState(BeeState.valueOf(slotNbt.getString("state")));

@@ -491,12 +491,18 @@ public final class CentrifugeFactoryCommonLogic {
 		return MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
 	}
 
-	/** 计算基础刻数 — CREATIVE 升级时返回 0 实现瞬间完成 */
+	/**
+	 * 计算基础刻数 — CREATIVE 升级时返回 0 实现瞬间完成
+	 * <br/>
+	 * 修复 SPEED 双重应用：timeMultiplier 已包含 SPEED 升级影响（见
+	 * {@link MekCentrifugePbUpgradeHandler#getMekSpeedTimeMultiplier}），不再调用
+	 * {@link MekanismUtils#getTicks}（其内部也会应用 SPEED 升级），否则 8 级 SPEED 实际加速 100 倍。
+	 * 与基础离心机 {@link MekCentrifugeUpgradeOps#calcTicksForBase} 和蜂箱公式对齐，只应用一次 SPEED。
+	 */
 	public static int getTicksForBase(@NotNull TileEntityMekanism tile,
 			int baseTime, @NotNull FactoryPbUpgradeDelegate pbUpgradeDelegate) {
 		if (MekUpgradeSupport.hasCreativeUpgrade(tile)) return 0;
-		int mekTicks = MekanismUtils.getTicks(tile, baseTime);
-		return Math.max(1, (int) Math.floor(mekTicks * pbUpgradeDelegate.getTimeMultiplier()));
+		return Math.max(1, (int) Math.floor(baseTime * pbUpgradeDelegate.getTimeMultiplier()));
 	}
 
 	/** 计算生产力修正 — 基于 PB 升级的生产力倍率 */

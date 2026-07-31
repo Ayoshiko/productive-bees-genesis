@@ -23,6 +23,83 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.4] - 2026-07-31
+
+v2.0.4 是 SemVer PATCH 版本，修复服务端实测发现的 5 个独立 bug：蜂箱速度升级卸载后工作时间不可逆递减、概率产物被错误地变为必产物、时间流体蜜脾错误产出蜂蜜、蜜蜂属性 tooltip 翻译与整合包不一致、蜂箱产物在离心机阻塞时被困缓冲区。所有修复均基于设计文档 v2.2.0，并经过代码审查与编译验证。
+
+### 修复
+
+- **蜂箱速度升级"不可逆递减"（CRITICAL）** — 解决安装 MEK 速度升级后蜜蜂工作时间指数衰减，卸载升级后仍无法恢复的问题
+  - **问题**：安装 1 个速度升级后工作时间从 1200 tick 暴跌到 27 tick，再装一个降到 7 tick，卸载后仍保持 7 tick 无法恢复
+  - **根因**：`BeeSlotTickProcessor.tick()` 将已乘以倍率的 `adjustedMinTicks` 写回 `slot.minOccupationTicks`，下一 tick 又把它当作基础值再次乘以倍率，形成指数衰减；该污染值还通过 NBT 持久化，导致卸载升级后 `timeMultiplier=1.0` 只能保持污染值不变
+  - **修复**：
+    1. `BeeSlot` 新增 `baseMinOccupationTicks` 字段存储基础值，`minOccupationTicks` 仅存显示用调整值
+    2. `BeeSlotTickProcessor` 从 `baseMinOccupationTicks` 读取基础值计算调整时间，永不回写基础值
+    3. `ApiarySlotSerializer` 新增 `base_min_occupation_ticks` NBT 字段，老存档迁移时上界从配置 `apiaryProcessingTime` 读取（默认 1200），避免被 bug 污染的较低值被误迁移
+    4. `ApiaryCageHandler` 装入新蜜蜂时重置 `baseMinOccupationTicks=0`，触发 fallback 到配置默认值（与 PB 原版行为一致）
+  - **影响范围**：4 个文件修改（`BeeSlot.java`、`BeeSlotTickProcessor.java`、`ApiarySlotSerializer.java`、`ApiaryCageHandler.java`）
+
+- **概率产物变必产物（CRITICAL）** — 解决幽匿蜜蜂 5% 概率产花粉球变为 100% 必产 10 个的问题
+  - **问题**：机械蜂箱中的幽匿蜜蜂每次产出必出 10 个花粉球，而非 PB 原版的 5% 概率
+  - **根因**：`BeeInfoHelper.getBeeProduce` 使用 `chancedOutput.max()` 完全忽略 `chance` 字段，概率产物变为 100% 必产出且取最大值；离心机路径 `PbRecipeCompleter` 正确实现了概率检查，机械蜂箱路径缺失
+  - **修复**：
+    1. 新增 `BeeProduceBatchSampler` 类，专门负责机械蜂箱批量概率采样，与离心机路径保持算法一致
+    2. 单次产出走 Bernoulli 概率检查，批量场景用 Binomial + CLT 近似替代 N 次独立判定
+    3. `BeeProduceProcessor` 缓存类型从 `List<ItemStack>` 改为 `Map<ItemStack, ChancedOutput>`，缓存配方原始数据而非随机结果
+    4. 保底机制确保低概率产物在批量场景下仍有机会产出
+  - **影响范围**：3 个文件修改 + 1 个新增文件（`BeeProduceBatchSampler.java`、`BeeProduceProcessor.java`、`BeeInfoHelper.java`）
+
+- **时间流体蜜脾错误产出蜂蜜（MAJOR）** — 解决时间流体蜜脾在机械蜂箱中产出蜂蜜，与 PB 原版配方冲突的问题
+  - **问题**：JDT 时间流体蜜脾在机械蜂箱中产出蜂蜜，但 PB 原版该蜜脾应产出时间流体（由离心机处理）
+  - **根因**：`BeeProduceProcessor` 硬编码 250mB 蜂蜜无条件注入所有蜜蜂，与 PB 原版蜂箱通过 `beeReleasePostAction` 硬编码注入蜂蜜的行为一致，但忽略了非蜂蜜流体蜜蜂的存在
+  - **修复**：
+    1. 新增 `BeeFluidOutputResolver` 类，从蜜蜂的离心机配方推断流体输出类型
+    2. 流体为蜂蜜：返回 `FluidStack(honey, 250)`，机械蜂箱注入蜂蜜
+    3. 流体为其他（如时间流体）：返回 `EMPTY`，不注入蜂蜜，该流体由离心机处理时产出
+    4. 无离心配方：默认返回蜂蜜（向后兼容）
+    5. `BeeProduceProcessor` 移除 `HONEY_FLUID_AMOUNT_PER_PRODUCE = 250` 硬编码常量
+  - **影响范围**：2 个文件修改 + 1 个新增文件（`BeeFluidOutputResolver.java`、`BeeProduceProcessor.java`）
+
+- **蜜蜂属性 tooltip 翻译与整合包不一致（MEDIUM）** — 修正 14 处蜜蜂属性翻译与宁纳汉化标准的差异
+  - **问题**：蜜蜂属性 tooltip（产量、天气适应性、昼夜习性等）翻译与整合包资源蜜蜂汉化不一致，玩家难以对照
+  - **修复**：修改 `zh_cn.json` 14 处翻译，与整合包标准对齐
+    - `productivity.normal`：普通 → 正常
+    - `productivity.medium`：中等 → 中
+    - `productivity.very_high`：极高 → 很高
+    - `endurance.weak`：虚弱 → 弱
+    - `endurance.normal`：普通 → 正常
+    - `endurance.medium`：中等 → 中
+    - `endurance.strong`：强健 → 强
+    - `temper.passive`：被动 → 友好
+    - `temper.hostile`：敌对 → 敌意
+    - `behavior.diurnal`：日行 → 昼行性
+    - `behavior.nocturnal`：夜行 → 夜行性
+    - `behavior.metaturnal`：全天 → 昼夜双行性
+    - `weather_tolerance.rain`：雨天 → 雨
+    - `weather_tolerance.any`：任意 → 任何
+  - **影响范围**：1 个文件修改（`zh_cn.json`）
+
+- **蜂箱产物被困缓冲区（MAJOR）** — 解决蜂箱紧挨离心机且离心机输出槽阻塞时，蜂箱产物无法弹出或推送到 AE 网络的问题
+  - **问题**：蜂箱紧挨离心机时，离心机输出槽阻塞会导致蜂箱输出槽满载，缓冲区持续积压，产物被困无法弹出，即使开启 MEK 弹出开关也无效
+  - **根因**：`ApiaryDirectEjectHandler` 仅处理蜂箱输出槽，不处理 `ApiaryOutputBuffer` 缓冲区；缓冲区退避机制未检测网络状态，导致无效重试和日志刷屏
+  - **修复**（组合修复，三管齐下 + AE 协同）：
+    1. **缓冲区直接转移**：`ApiaryDirectEjectHandler` 检测到离心机相邻且输入槽有空间时，除了从输出槽转移，也从缓冲区转移物品，绕过"缓冲区→蜂箱输出槽→离心机"的两跳路径
+    2. **退避重置**：成功转移后主动调用 `ApiaryOutputBuffer.resetBackoff()` 立即下 tick 重试，避免最长 8 tick 退避延迟
+    3. **阻塞检测 + fallback**：连续 20 tick（1秒）无法转移到离心机时，fallback 到 MEK Ejector 弹到其他方向容器
+    4. **AE 协同**：fallback 后 AE2 推送（`pushOutputs`）仍会执行，若 AE 开启则优先通过 AE 推送，AE 失败再由 MEK Ejector 兜底
+  - **影响范围**：2 个文件修改（`ApiaryDirectEjectHandler.java`、`ApiaryOutputBuffer.java`）
+
+### 性能优化
+
+- **ApiaryOutputBuffer 独立预扫描数组** — 解决离心机输入槽与蜂箱输出槽数不同时反复扩容的问题
+  - **问题**：`tryRedistributeToExternalSlots` 与 `tickRedistribute` 共享同一套预扫描数组，但两者槽位数不同（蜂箱 9 槽 vs 离心机 19 槽），导致每 tick 反复触发数组重新分配（3×2=6 个数组），256× 加速下加剧 GC 压力
+  - **修复**：为 `tryRedistributeToExternalSlots` 分配独立的 `reusableExternalStacks/Counts/Limits` 数组，两套数组各自按目标槽位数稳定复用，零扩容
+  - **影响范围**：1 个文件修改（`ApiaryOutputBuffer.java`）
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布全部为 bug 修复（5 项：速度升级不可逆、概率产物变必产物、蜂蜜流体硬编码、翻译不一致、虚拟槽位吞没产物）+ 性能优化（1 项：独立预扫描数组），无新功能，无 BREAKING 变更。按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **PATCH** 级别（v2.0.3 → v2.0.4）
+
 ## [2.0.3] - 2026-07-31
 
 v2.0.3 是 SemVer PATCH 版本，修复专用服务器客户端无法放入蜜脾、任意蜜脾块无视配方校验、网络包 IDOR 类权限提升漏洞、服务端离心配方索引为空、蜂箱 tooltip 工作进度显示异常等多个服务端兼容性和安全问题，并针对满升级+高加速场景进行了 Spark 热点分析驱动的深度性能优化。

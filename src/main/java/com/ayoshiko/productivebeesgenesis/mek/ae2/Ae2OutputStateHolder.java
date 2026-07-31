@@ -181,6 +181,8 @@ public final class Ae2OutputStateHolder {
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
+		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
+		pushState.invalidateNodeStateCache();
 	}
 
 	public Object getCachedGrid() { return cachedGrid; }

@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek.fluid;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,11 +61,24 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		}
 	}
 
-	/** 按流体类型索引的槽位映射(防御性并发容器) */
-	private final Map<FluidKey, IExtendedFluidTank> tanksByFluidKey = new ConcurrentHashMap<>();
+	/**
+	 * 按流体类型索引的槽位映射(防御性并发容器)
+	 * <br/>
+	 * v2.1.0: 改为 Map<FluidKey, List<IExtendedFluidTank>>，允许一种流体占用多个槽（溢出场景）
+	 * 原单槽映射导致同种类流体满载后无法分配新槽，被迫返回 null 阻塞产出
+	 */
+	private final Map<FluidKey, List<IExtendedFluidTank>> tanksByFluidKey = new ConcurrentHashMap<>();
 
 	/** 按预分配顺序排列的槽位列表(构造时预分配 maxTanks 个,固定不变) */
 	private final List<IExtendedFluidTank> tanksInOrder = new CopyOnWriteArrayList<>();
+
+	/**
+	 * 已映射槽位反向索引 — O(1) 判断槽位是否已分配
+	 * <br/>
+	 * v2.1.0: 替代原 createTankIfNeeded 中的 tanksByFluidKey.values().contains(tank) O(N) 扫描
+	 * 在 17 进程工厂（maxTanks=17）下，每次分配从 O(17) 降至 O(1)
+	 */
+	private final Set<IExtendedFluidTank> mappedTanks = ConcurrentHashMap.newKeySet();
 
 	/** 不可变视图 — 避免每次 getTanks() 创建新 ArrayList */
 	private final List<IExtendedFluidTank> unmodifiableTanksView;
@@ -82,22 +96,28 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	private final AtomicInteger emptyTankCount;
 
 	/**
+	 * 每种流体类型最大占用槽位数
+	 * <br/>
+	 * v2.1.0: 防止高产出流体（如蜂蜜）占用所有槽位，为其他流体预留空位
+	 * 配置值 0 表示自动计算为 Math.max(1, maxTanks / 2)
+	 */
+	private final int maxTanksPerFluid;
+
+	/**
 	 * 构造多流体槽管理器,预分配全部 maxTanks 个空槽
 	 * <br/>
 	 * 预分配确保客户端/服务端槽位数量始终一致(= maxTanks),
 	 * 消除 MEK addContainerTrackers 注册的 SyncableFluidStack 数量差异导致的 DataSlot 索引偏移。
 	 * <p>
-	 * <b>预分配 vs 按需分配：</b>
-	 * <ul>
-	 *   <li>预分配:构造时创建 maxTanks 个空槽,槽位数量固定,客户端/服务端一致</li>
-	 *   <li>按需分配(已废弃):getTankForInsert 时动态创建,导致客户端/服务端槽位数量不一致</li>
-	 * </ul>
+	 * v2.1.0: 新增 maxTanksPerFluidConfig 参数，支持每种流体类型槽位配额
 	 *
-	 * @param maxTanks     最大槽位数(预分配数量,= tier.processes)
-	 * @param tankCapacity 单槽容量(mB)
-	 * @param listener     槽位内容变更监听器
+	 * @param maxTanks              最大槽位数(预分配数量,= tier.processes)
+	 * @param tankCapacity          单槽容量(mB)
+	 * @param listener              槽位内容变更监听器
+	 * @param maxTanksPerFluidConfig 每种流体最大槽位数配置（0=自动计算 maxTanks/2）
 	 */
-	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener) {
+	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
+			int maxTanksPerFluidConfig) {
 		if (maxTanks < 1) {
 			throw new IllegalArgumentException("maxTanks 必须 >= 1，实际: " + maxTanks);
 		}
@@ -108,6 +128,10 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		this.tankCapacity = tankCapacity;
 		this.listener = listener;
 		this.emptyTankCount = new AtomicInteger(maxTanks);
+		// v2.1.0: 解析 maxTanksPerFluid 配置，0 表示自动计算为 maxTanks/2
+		this.maxTanksPerFluid = (maxTanksPerFluidConfig <= 0)
+				? Math.max(1, maxTanks / 2)
+				: maxTanksPerFluidConfig;
 		// 预分配 maxTanks 个空槽,直接使用原始 listener(预分配后槽位固定,无需脏标记机制)
 		// output 模式:可提取不可外部插入,符合离心机输出槽语义
 		for (int i = 0; i < maxTanks; i++) {
@@ -119,11 +143,12 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 返回适合插入指定流体的槽
 	 * <br/>
-	 * 路由策略:
+	 * v2.1.0 路由策略:
 	 * <ol>
-	 *   <li>若已有同类型槽(FluidKey 匹配),返回该槽</li>
-	 *   <li>若无同类型槽,路由到第一个未映射空槽(预分配)</li>
-	 *   <li>若无可用空槽,返回 null(类型不匹配且无法分配)</li>
+	 *   <li>若已有同类型槽(FluidKey 匹配),返回有空间的已映射槽</li>
+	 *   <li>已映射槽都满了,检查 maxTanksPerFluid 配额后分配新槽</li>
+	 *   <li>若无同类型槽,检查配额后分配新槽</li>
+	 *   <li>若无可用空槽或配额已满,返回 null</li>
 	 * </ol>
 	 * <p>
 	 * <b>线程安全：</b>快路径无锁查询(ConcurrentHashMap),慢路径 synchronized 保护原子检查-分配。
@@ -137,21 +162,43 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 			return null;
 		}
 		FluidKey key = FluidKey.of(stack);
-		// 快路径:无锁查询,命中则直接返回
-		IExtendedFluidTank existing = tanksByFluidKey.get(key);
+		// 快路径:无锁查询,命中则返回有空间的已映射槽
+		List<IExtendedFluidTank> existing = tanksByFluidKey.get(key);
 		if (existing != null) {
-			return existing;
+			// 优先返回有空间的已映射槽
+			for (IExtendedFluidTank tank : existing) {
+				if (tank.getFluidAmount() < tank.getCapacity()) {
+					return tank;
+				}
+			}
+			// 已映射槽都满了，检查配额后分配新槽
+			if (countTanksForFluid(key) < maxTanksPerFluid) {
+				return createTankIfNeeded(key);
+			}
+			return null; // 配额已满
 		}
 		// 慢路径:从预分配空槽中分配,synchronized 防止并发下重复分配
 		return createTankIfNeeded(key);
 	}
 
 	/**
+	 * 统计某种流体已映射的槽位数
+	 * <br/>
+	 * v2.1.0: 用于 maxTanksPerFluid 配额检查，防止高产出流体占用所有槽位
+	 *
+	 * @param key 流体类型标识
+	 * @return 已映射槽位数（0 表示无映射）
+	 */
+	public int countTanksForFluid(FluidKey key) {
+		List<IExtendedFluidTank> tanks = tanksByFluidKey.get(key);
+		return tanks != null ? tanks.size() : 0;
+	}
+
+	/**
 	 * 从预分配空槽中分配一个映射到新 FluidKey(synchronized 保护原子检查-分配)
 	 * <br/>
-	 * 预分配后不再创建新槽,改为遍历 tanksInOrder 找第一个未映射空槽
-	 * (getFluidAmount()==0 且 tanksByFluidKey.values() 中不包含该槽实例)。
-	 * 分配时 emptyTankCount.decrementAndGet();无可用空槽返回 null。
+	 * v2.1.0: 使用 mappedTanks 反向索引替代 tanksByFluidKey.values().contains(tank) O(N) 扫描
+	 * 在 17 进程工厂（maxTanks=17）下，每次分配从 O(17) 降至 O(1)
 	 * <p>
 	 * <b>线程安全：</b>synchronized 保护"检查-分配-注册"原子操作,防止并发下同一 FluidKey 分配到不同槽。
 	 *
@@ -160,14 +207,23 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 */
 	private synchronized IExtendedFluidTank createTankIfNeeded(FluidKey key) {
 		// 双重检查:进入锁后再次确认(防止并发下其他线程已分配)
-		IExtendedFluidTank existing = tanksByFluidKey.get(key);
-		if (existing != null) {
-			return existing;
+		List<IExtendedFluidTank> existing = tanksByFluidKey.get(key);
+		if (existing != null && !existing.isEmpty()) {
+			// 已有映射，返回第一个有空间的槽
+			for (IExtendedFluidTank tank : existing) {
+				if (tank.getFluidAmount() < tank.getCapacity()) {
+					return tank;
+				}
+			}
 		}
-		// 遍历预分配槽位找第一个未映射空槽
+		// 遍历预分配槽位找第一个未映射空槽（O(1) via mappedTanks）
 		for (IExtendedFluidTank tank : tanksInOrder) {
-			if (tank.getFluidAmount() == 0 && !tanksByFluidKey.values().contains(tank)) {
-				tanksByFluidKey.put(key, tank);
+			if (tank.getFluidAmount() == 0 && !mappedTanks.contains(tank)) {
+				// List 结构：添加到 FluidKey 对应的 List 中
+				// v2.1.0: 使用 CopyOnWriteArrayList 替代 ArrayList,防止 reclaimEmptyTanks 的 removeIf
+				// 与 getTankForInsert 快路径的 for-each 遍历并发修改触发 ConcurrentModificationException
+				tanksByFluidKey.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>()).add(tank);
+				mappedTanks.add(tank);
 				emptyTankCount.decrementAndGet();
 				return tank;
 			}
@@ -232,8 +288,8 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 检查是否存在类型不匹配且无空槽可分配
 	 * <br/>
-	 * O(1) 判断:无同类型槽且未映射空槽数为 0 时返回 true。
-	 * 预分配后 tanksInOrder.size() == maxTanks 恒成立,原条件会误判,改用 emptyTankCount。
+	 * v2.1.0: 改用 List 结构判断，containsKey 仅检查 key 存在，需额外检查 List 非空
+	 * O(1) 判断:无同类型槽(或 List 为空)且未映射空槽数为 0 时返回 true
 	 *
 	 * @param stack 待检查流体
 	 * @return true 若类型不匹配且无空槽可分配
@@ -243,7 +299,9 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 			return false;
 		}
 		FluidKey key = FluidKey.of(stack);
-		boolean hasMatchingTank = tanksByFluidKey.containsKey(key);
+		// v2.1.0: List 结构下 containsKey 可能为 true 但 List 为空（回收后）
+		List<IExtendedFluidTank> tanks = tanksByFluidKey.get(key);
+		boolean hasMatchingTank = tanks != null && !tanks.isEmpty();
 		boolean result = !hasMatchingTank && emptyTankCount.get() == 0;
 		return result;
 	}
@@ -267,13 +325,47 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	}
 
 	/**
-	 * 回收空槽(预分配后槽位固定,不再回收)
+	 * 返回未映射空槽数量
 	 * <br/>
-	 * 保留方法签名兼容性。预分配的槽位固定不可回收,空槽保留供后续新流体类型使用。
-	 * 回收会导致槽位数量不一致,再次引发 DataSlot 偏移。
+	 * v2.1.0: 供 MultiFluidTankHostHelper.canAllocateNewFluidTank 使用
+	 * 修复 BUG #1：原实现检查 getTankCount() < getMaxTanks()，预分配后永远为 false
+	 *
+	 * @return 未映射空槽数量
 	 */
-	private synchronized void reclaimEmptyTanks() {
-		// 预分配后槽位固定不可回收,空槽保留供后续新流体类型使用
+	public int getEmptyTankCount() {
+		return emptyTankCount.get();
+	}
+
+	/**
+	 * 回收空槽映射（v2.1.0 修复 BUG #2）
+	 * <br/>
+	 * <b>原误解澄清：</b>原注释说"预分配后槽位固定不可回收，回收会导致槽位数量不一致"。
+	 * 实际上回收的是 tanksByFluidKey 中的映射关系（FluidKey → Tank），不是从 tanksInOrder 中移除槽位。
+	 * tanksInOrder 始终保持 maxTanks 个槽位，DataSlot 偏移不会发生。回收映射后，空槽可以被其他流体类型重新使用。
+	 * <p>
+	 * <b>线程安全：</b>synchronized 保护回收过程，防止与 getTankForInsert 并发冲突
+	 */
+	public synchronized void reclaimEmptyTanks() {
+		// 回收 tanksByFluidKey 中的空映射（tanksInOrder 槽位固定不变）
+		var it = tanksByFluidKey.entrySet().iterator();
+		while (it.hasNext()) {
+			var entry = it.next();
+			List<IExtendedFluidTank> tanks = entry.getValue();
+			// CopyOnWriteArrayList.removeIf 线程安全,遍历快照执行移除
+			// 即使 getTankForInsert 快路径正在无锁遍历同一 List,也基于快照不会抛 ConcurrentModificationException
+			tanks.removeIf(tank -> {
+				if (tank.getFluidAmount() == 0) {
+					mappedTanks.remove(tank);  // 同步移除反向索引
+					emptyTankCount.incrementAndGet();
+					return true;
+				}
+				return false;
+			});
+			// 若 List 为空，移除整个 FluidKey 条目
+			if (tanks.isEmpty()) {
+				it.remove();
+			}
+		}
 	}
 
 	// ===== NBT 序列化(扳手拆卸持久化)— 委托给 MultiFluidTankNbtCodec =====
@@ -312,7 +404,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	}
 
 	/** 供 NbtCodec 访问流体映射(用于 clear 重置映射) */
-	Map<FluidKey, IExtendedFluidTank> getTanksByFluidKeyForCodec() {
+	Map<FluidKey, List<IExtendedFluidTank>> getTanksByFluidKeyForCodec() {
 		return tanksByFluidKey;
 	}
 

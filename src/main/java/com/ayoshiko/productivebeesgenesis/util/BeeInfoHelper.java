@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -18,6 +20,7 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import cy.jdkdigital.productivebees.util.BeeHelper;
+import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -66,13 +69,15 @@ public final class BeeInfoHelper {
 	 * <br/>
 	 * 从 PB 的 CompoundTag 提取的花朵相关字段，供 {@link com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager}
 	 * 进行喂食器花朵有效性精确匹配。字段含义与 PB ConfigurableBee 一致：
-	 * flowerType（"blocks"/"items"/"entity_types"）、flowerTag、flowerItem、flowerFluid、inverseFlower。
+	 * flowerType（"blocks"/"items"/"entity_types"）、flowerTag、flowerItem、flowerFluid、
+	 * flowerBlock（方块ID，如 sculk_bee 对应 minecraft:sculk_catalyst）、inverseFlower。
 	 */
 	public record FlowerPreference(
 			String flowerType,
 			String flowerTag,
 			String flowerItem,
 			String flowerFluid,
+			String flowerBlock,
 			boolean inverseFlower
 	) {
 		/** flowerType 常量：方块型花朵（默认） */
@@ -83,7 +88,7 @@ public final class BeeInfoHelper {
 
 		/** 空偏好（无花朵定义） */
 		public static final FlowerPreference EMPTY =
-				new FlowerPreference(TYPE_BLOCKS, "", "", "", false);
+				new FlowerPreference(TYPE_BLOCKS, "", "", "", "", false);
 
 		/**
 		 * 是否有花朵定义
@@ -91,13 +96,27 @@ public final class BeeInfoHelper {
 		 * @return true 如果任一花朵字段非空
 		 */
 		public boolean hasFlowerDefinition() {
-			return !flowerTag.isEmpty() || !flowerItem.isEmpty() || !flowerFluid.isEmpty();
+			return !flowerTag.isEmpty() || !flowerItem.isEmpty()
+					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty();
 		}
 	}
 
 	/** 当前配方索引 — volatile 引用保证原子替换 */
 	private static volatile AdvancedBeehiveRecipeIndex beehiveRecipeIndex =
 			AdvancedBeehiveRecipeIndex.EMPTY;
+
+	/**
+	 * 配方输出表缓存 — 缓存 AdvancedBeehiveRecipe.getRecipeOutputs() 结果
+	 * <br/>
+	 * PB 的 getRecipeOutputs() 每次新建 LinkedHashMap，缓存避免重复创建。
+	 * Key: 蜜蜂类型键 ResourceLocation；Value: 不可变的 ItemStack -> ChancedOutput 映射
+	 * <p>
+	 * 模块 2+3：getBeeProduce 返回原始配方数据（不执行概率检查），概率判定统一由
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler} 处理。
+	 * 缓存值为 {@link Collections#unmodifiableMap} 包装，防止外部修改污染静态共享缓存。
+	 */
+	private static final Map<ResourceLocation, Map<ItemStack, ChancedOutput>> recipeOutputsCache =
+			new ConcurrentHashMap<>();
 
 	/**
 	 * 花朵偏好缓存 — 高频调用（每tick每只蜜蜂）性能优化
@@ -166,6 +185,8 @@ public final class BeeInfoHelper {
 	public static void invalidateCache() {
 		cachedAllBeeTypes = null;
 		beehiveRecipeIndex = AdvancedBeehiveRecipeIndex.EMPTY;
+		// 模块 2+3：清空配方输出表缓存，防止配方重载后返回过期 LinkedHashMap
+		recipeOutputsCache.clear();
 		// 用 synchronized 保护 invalidate 与 getFlowerPreference 的 write-on-copy 互斥，
 		// 避免新条目被 replace 覆盖造成 cache 写入丢失
 		synchronized (BeeInfoHelper.class) {
@@ -217,7 +238,8 @@ public final class BeeInfoHelper {
 	@Nonnull
 	public static Component getBeeProductInfo(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
 		try {
-			List<ItemStack> outputs = getBeeProduce(level, beeType);
+			// 模块 2+3：getBeeProduce 返回原始配方 Map，显示用途改用 getBeeProduceStacks（取 max 代表值）
+			List<ItemStack> outputs = getBeeProduceStacks(level, beeType);
 			if (outputs.isEmpty()) {
 				// 部分蜜蜂没有 AdvancedBeehiveRecipe，产物由花朵/琥珀等环境决定
 				Component specialInfo = getSpecialBeeProductInfo(beeType);
@@ -239,46 +261,75 @@ public final class BeeInfoHelper {
 	}
 
 	/**
-	 * 查询指定蜜蜂类型的产物 ItemStack 列表
+	 * 查询指定蜜蜂类型的产物配方输出表
 	 * <p>
 	 * 优先通过静态索引 O(1) 查找配方；索引未建立时回退到全量遍历并构建索引。
 	 * <p>
-	 * 性能优化：原版每次调用都 O(N) 遍历所有 AdvancedBeehiveRecipe，
-	 * GUI 打开时若有数百个蜜蜂类型会形成 O(N²) 复杂度。
-	 * 改为首次调用时构建 {@code beeType -> recipe} 索引并发布为不可变快照，
-	 * 后续调用 O(1) 命中，索引在 {@link #invalidateCache()} 时整体原子替换为空。
+	 * 模块 2+3：返回 {@code Map<ItemStack, ChancedOutput>} 原始配方数据，不执行概率检查。
+	 * 原 {@code chancedOutput.max()} 硬编码忽略 chance 字段导致概率产物变必产物，
+	 * 现概率判定统一由 {@link com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler} 处理。
+	 * <p>
+	 * 性能优化：缓存 {@code getRecipeOutputs()} 结果避免每次新建 LinkedHashMap，
+	 * 缓存值为不可变视图防止外部修改污染。
 	 *
 	 * @param level   客户端世界（用于配方查询）
 	 * @param beeType 蜜蜂类型ID
-	 * @return 产物列表（可能为空）
+	 * @return 配方输出表（ItemStack -> ChancedOutput），可能为空
 	 */
 	@Nonnull
-	public static List<ItemStack> getBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+	public static Map<ItemStack, ChancedOutput> getBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
 		try {
+			// 1. 优先查配方输出表缓存（避免 getRecipeOutputs() 每次新建 LinkedHashMap）
+			Map<ItemStack, ChancedOutput> cached = recipeOutputsCache.get(beeType);
+			if (cached != null) return cached;
+
 			String beeTypeKey = beeType.toString();
-			// 1. 优先走索引（O(1)）
+			// 2. 优先走索引（O(1)）
 			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
 			if (matched == null) {
-				// 2. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
+				// 3. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
 				if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) {
 					rebuildBeehiveRecipeIndex(level);
 					matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
 				}
 				if (matched == null) {
-					return List.of();
+					return Map.of();
 				}
 			}
-			List<ItemStack> result = new ArrayList<>();
-			matched.value().getRecipeOutputs().forEach((stack, chancedOutput) -> {
-				ItemStack copy = stack.copy();
-				copy.setCount(Math.max(1, (int) chancedOutput.max()));
-				result.add(copy);
-			});
-			return result;
+			// 返回配方原始输出表，不执行概率检查（由 BeeProduceBatchSampler 统一处理）
+			Map<ItemStack, ChancedOutput> outputs = matched.value().getRecipeOutputs();
+			// 缓存不可变视图，防止外部修改污染静态共享缓存
+			Map<ItemStack, ChancedOutput> immutable = Collections.unmodifiableMap(outputs);
+			recipeOutputsCache.put(beeType, immutable);
+			return immutable;
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("查询蜜蜂产物配方失败: {}", beeType, e);
-			return List.of();
+			return Map.of();
 		}
+	}
+
+	/**
+	 * 查询指定蜜蜂类型的产物 ItemStack 列表（显示用途）
+	 * <p>
+	 * 模块 2+3：从 {@link #getBeeProduce} 返回的原始配方 Map 转换为 ItemStack 列表，
+	 * 取 {@code chancedOutput.max()} 作为代表数量（与原 getBeeProduce 显示逻辑一致）。
+	 * 仅供 GUI 显示（tooltip、图标）使用，不参与实际产出计算。
+	 *
+	 * @param level   客户端世界（用于配方查询）
+	 * @param beeType 蜜蜂类型ID
+	 * @return 产物列表（取 max 代表值），可能为空
+	 */
+	@Nonnull
+	public static List<ItemStack> getBeeProduceStacks(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		Map<ItemStack, ChancedOutput> outputs = getBeeProduce(level, beeType);
+		if (outputs.isEmpty()) return List.of();
+		List<ItemStack> result = new ArrayList<>(outputs.size());
+		outputs.forEach((stack, chancedOutput) -> {
+			ItemStack copy = stack.copy();
+			copy.setCount(Math.max(1, (int) chancedOutput.max()));
+			result.add(copy);
+		});
+		return result;
 	}
 
 	/**
@@ -355,7 +406,8 @@ public final class BeeInfoHelper {
 				return new ItemStack(Items.HONEYCOMB);
 			}
 			// isBlock=false 时保持原逻辑：优先返回配方首个产物
-			List<ItemStack> outputs = getBeeProduce(level, beeType);
+			// 模块 2+3：getBeeProduce 返回原始配方 Map，显示用途改用 getBeeProduceStacks
+			List<ItemStack> outputs = getBeeProduceStacks(level, beeType);
 			for (ItemStack output : outputs) {
 				if (!output.isEmpty()) {
 					return output.copyWithCount(1);
@@ -468,12 +520,13 @@ public final class BeeInfoHelper {
 					flowerType = FlowerPreference.TYPE_BLOCKS;
 				}
 				preference = new FlowerPreference(
-						flowerType,
-						nbt.getString("flowerTag"),
-						nbt.getString("flowerItem"),
-						nbt.getString("flowerFluid"),
-						nbt.getBoolean("inverseFlower")
-				);
+					flowerType,
+					nbt.getString("flowerTag"),
+					nbt.getString("flowerItem"),
+					nbt.getString("flowerFluid"),
+					nbt.getString("flowerBlock"),
+					nbt.getBoolean("inverseFlower")
+			);
 			}
 			// 缓存查询结果（含 EMPTY，避免重复查询不存在的蜜蜂类型）
 			// cache miss 是稀有事件（仅首次访问新蜜蜂类型），用 synchronized 保护写操作

@@ -46,6 +46,16 @@ public final class Ae2GridNodeManager {
 	/** 空闲功耗：0，离心机不消耗 AE2 网络空闲能量 */
 	private static final double IDLE_POWER_USAGE = 0.0;
 
+	// ===== Grid Node 状态常量（与 AE2 GridNodeState 枚举 ordinal 对齐） =====
+	/** 设备离线（节点为空或未供电） */
+	public static final int STATE_OFFLINE = 0;
+	/** 网络加载中（已供电但网格未启动完成） */
+	public static final int STATE_NETWORK_BOOTING = 1;
+	/** 设备缺少频道（网格已启动但不满足频道需求） */
+	public static final int STATE_MISSING_CHANNEL = 2;
+	/** 设备在线（已供电、网格已启动、频道满足）— 唯一允许推送/拉取的状态 */
+	public static final int STATE_ONLINE = 3;
+
 	private Ae2GridNodeManager() {}
 
 	/**
@@ -144,24 +154,24 @@ public final class Ae2GridNodeManager {
 	 * @return 状态 ordinal（0-3），对应 AE2 GridNodeState
 	 */
 	public static int getGridNodeState(IAe2OutputHostBase host) {
-		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return STATE_OFFLINE;
 		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
-		if (!(nodeObj instanceof IManagedGridNode managedNode)) return 0;
+		if (!(nodeObj instanceof IManagedGridNode managedNode)) return STATE_OFFLINE;
 
 		IGridNode node = managedNode.getNode();
-		if (node == null) return 0;
+		if (node == null) return STATE_OFFLINE;
 
 		// 未供电 → OFFLINE
-		if (!node.isPowered()) return 0;
+		if (!node.isPowered()) return STATE_OFFLINE;
 
 		// 网格未启动 → NETWORK_BOOTING
-		if (!node.hasGridBooted()) return 1;
+		if (!node.hasGridBooted()) return STATE_NETWORK_BOOTING;
 
 		// 频道不满足 → MISSING_CHANNEL
-		if (!node.meetsChannelRequirements()) return 2;
+		if (!node.meetsChannelRequirements()) return STATE_MISSING_CHANNEL;
 
 		// 全部满足 → ONLINE
-		return 3;
+		return STATE_ONLINE;
 	}
 
 	/**

@@ -105,10 +105,12 @@ public class PbRecipeCompleter {
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
 		float stabilityBonus = context.stabilityBonus();
 
-		// 每进程独立 completer,无需配方切换检测
-		this.pendingRecipe = recipe;
-		if (pendingRecipeOutputs == null) {
-			pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
+		// v2.1.0 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
+		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
+		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
+		if (this.pendingRecipe != recipe) {
+			this.pendingRecipe = recipe;
+			this.pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
 		}
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
@@ -180,9 +182,10 @@ public class PbRecipeCompleter {
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
 		float stabilityBonus = context.stabilityBonus();
 
-		this.pendingRecipe = recipe;
-		if (pendingRecipeOutputs == null) {
-			pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
+		// v2.1.0 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
+		if (this.pendingRecipe != recipe) {
+			this.pendingRecipe = recipe;
+			this.pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
 		}
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {

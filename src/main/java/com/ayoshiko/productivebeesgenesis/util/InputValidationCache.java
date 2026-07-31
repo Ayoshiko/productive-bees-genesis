@@ -93,14 +93,6 @@ public class InputValidationCache {
 	/** 上次缓存的输入指纹（轻量 key，避免完整组件哈希） */
 	private InputFingerprint cachedFingerprint = InputFingerprint.EMPTY;
 
-	/**
-	 * 上次缓存的输入物品原引用（identity 短路用）
-	 * <br/>
-	 * SFM / AE2 等自动化模组高频探测同一槽位时，往往传入同一个 ItemStack 实例，
-	 * 此时可直接返回缓存结果，跳过指纹提取。
-	 */
-	private ItemStack cachedInputIdentity = ItemStack.EMPTY;
-
 	/** 上次缓存的完整结果（兼容 boolean 路径时 recipe/beeType/isCombBlock 为默认值） */
 	private ValidationResult cachedResultValue = ValidationResult.INVALID;
 
@@ -120,6 +112,10 @@ public class InputValidationCache {
 	 * <br/>
 	 * 命中时直接返回 {@link ValidationResult}，调用方可读取 {@code recipe()} / {@code beeType()} 等，
 	 * 避免 {@code findPbRecipe} 重复调用。
+	 * <p>
+	 * 仅使用指纹比对（Item + bee_type）作为缓存命中条件，不再使用引用相等短路。
+	 * 修复产物锁定 bug：Mekanism 槽位 ItemStack 引用可能不变但内容变化（自动化模组修改 bee_type），
+	 * 引用相等短路会错误返回缓存结果。指纹提取开销极低（仅读取 Item 和 bee_type 组件），可接受。
 	 *
 	 * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
 	 * @param input     输入物品
@@ -132,20 +128,13 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// identity 短路：同一引用且未过期时直接返回，跳过指纹提取
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks && input == cachedInputIdentity) {
-			return cachedResultValue;
-		}
 		// 指纹比对（轻量 key，避免 isSameItemSameComponents 的全组件哈希）
 		InputFingerprint fp = InputFingerprint.of(input);
 		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
-			// 指纹命中时更新 identity 引用，加速下次 identity 短路
-			cachedInputIdentity = input;
 			return cachedResultValue;
 		}
 		// 未命中 — 重新校验并缓存指纹
 		cachedFingerprint = fp;
-		cachedInputIdentity = input;
 		cachedResultValue = validator.get();
 		cachedAt = now;
 		return cachedResultValue;
@@ -167,19 +156,13 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// identity 短路
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks && input == cachedInputIdentity) {
-			return cachedResultValue.valid();
-		}
 		// 指纹比对
 		InputFingerprint fp = InputFingerprint.of(input);
 		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
-			cachedInputIdentity = input;
 			return cachedResultValue.valid();
 		}
 		boolean result = validator.get();
 		cachedFingerprint = fp;
-		cachedInputIdentity = input;
 		cachedResultValue = new ValidationResult(result, null, null, false);
 		cachedAt = now;
 		return result;
@@ -188,7 +171,6 @@ public class InputValidationCache {
 	/** 清空缓存（配方重载等场景调用） */
 	public void clear() {
 		cachedFingerprint = InputFingerprint.EMPTY;
-		cachedInputIdentity = ItemStack.EMPTY;
 		cachedResultValue = ValidationResult.INVALID;
 		cachedAt = -1L;
 	}

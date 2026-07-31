@@ -211,15 +211,17 @@ public final class MultiFluidTankHostHelper {
 	/**
 	 * 检查是否还能分配新槽接收新流体类型(PbRecipeContext.canAllocateNewFluidTank)
 	 * <br/>
-	 * MULTI_PER_FLUID 模式比较当前槽位数与 maxTanks;SINGLE 模式始终返回 false。
-	 * Task 4 修复:即使所有已分配槽都满载,只要未达 maxTanks 上限,仍可创建新槽接收新流体类型。
+	 * MULTI_PER_FLUID 模式检查未映射空槽数量;SINGLE 模式始终返回 false。
+	 * v2.1.0 修复 BUG #1:原实现 `getTankCount() < getMaxTanks()` 永远返回 false,
+	 * 因为 tanksInOrder 构造时预分配了 maxTanks 个槽,getTankCount() 始终等于 getMaxTanks()。
+	 * 改用 getEmptyTankCount() 检查未映射空槽数,正确反映可分配状态。
 	 *
 	 * @param holder 流体槽持有者(可为 null)
-	 * @return true 如果可以分配新槽;SINGLE 模式返回 false
+	 * @return true 如果有未映射空槽可分配;SINGLE 模式返回 false
 	 */
 	public static boolean canAllocateNewFluidTank(IFluidTankHolder holder) {
 		if (holder instanceof MultiFluidTankHolder multiHolder) {
-			return multiHolder.getTankCount() < multiHolder.getMaxTanks();
+			return multiHolder.getEmptyTankCount() > 0;
 		}
 		return false;
 	}

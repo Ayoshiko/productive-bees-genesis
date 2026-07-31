@@ -469,6 +469,12 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override public void productivebeesgenesis$setAeItemOutputEnabled(boolean enabled) { ae2HostAdapter.setAeItemOutputEnabled(enabled); }
 	@Override public void productivebeesgenesis$setAeFluidOutputEnabled(boolean enabled) { ae2HostAdapter.setAeFluidOutputEnabled(enabled); }
 
+	/** 模块2.4：AE2 输出超限时暂停蜂箱输入 — 转发到 Mekanism 的 setActive(false) */
+	@Override
+	public void suspendInput() {
+		setActive(false);
+	}
+
 	/** 切换 per-tile AE2 物品输出开关（供网络包 handler 调用） */
 	public void toggleAeItemOutput() { ae2HostAdapter.toggleAeItemOutput(); markForSave(); }
 	/** 切换 per-tile AE2 流体输出开关（供网络包 handler 调用） */

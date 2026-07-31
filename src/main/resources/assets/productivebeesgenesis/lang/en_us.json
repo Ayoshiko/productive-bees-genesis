@@ -657,6 +657,8 @@
   "productivebeesgenesis.configuration.aeInputMinPages.tooltip": "Minimum number of pages in the AE2 input filter window (1-16).",
   "productivebeesgenesis.configuration.mek_centrifuge.basic.multiFluidTank": "Multi-Fluid Tank Mode",
   "productivebeesgenesis.configuration.mek_centrifuge.basic.multiFluidTank.tooltip": "When enabled, dynamically allocates independent tanks per fluid type",
+  "productivebeesgenesis.configuration.mek_centrifuge.basic.maxTanksPerFluid": "Max Tanks Per Fluid Type",
+  "productivebeesgenesis.configuration.mek_centrifuge.basic.maxTanksPerFluid.tooltip": "Maximum number of tanks a single fluid type can occupy. 0 = auto-calculate (maxTanks/2, ensures at least 2 fluid types can coexist). >0 = manual quota to prevent high-yield fluids from occupying all tanks.",
   "productivebeesgenesis.configuration.mek_centrifuge.basic.fluidEjectRate": "Fluid Eject Rate",
   "productivebeesgenesis.configuration.mek_centrifuge.basic.fluidEjectRate.tooltip": "Fluid ejection rate per tick from centrifuge factory (mB), range 1-10240, default 256",
   "productivebeesgenesis.configuration.mek_centrifuge.ae2.aeEnergyInputEnabled": "AE Energy Input",

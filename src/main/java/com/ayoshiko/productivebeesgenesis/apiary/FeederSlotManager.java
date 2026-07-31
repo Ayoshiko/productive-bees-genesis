@@ -19,6 +19,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -227,6 +228,7 @@ public class FeederSlotManager {
 	 * <ol>
 	 *   <li>flowerTag：ItemStack.is(TagKey&lt;Item&gt;)</li>
 	 *   <li>flowerItem：ItemStack.is(Item)</li>
+	 *   <li>flowerBlock：BlockItem 对应方块的注册表 ID 精确匹配</li>
 	 *   <li>flowerFluid：BucketItem.content 匹配流体或流体标签</li>
 	 * </ol>
 	 * 任一匹配即返回 true。不检查 inverseFlower（与 PB isFlowerItem 行为一致）。
@@ -246,6 +248,14 @@ public class FeederSlotManager {
 		if (!pref.flowerItem().isEmpty()) {
 			Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(pref.flowerItem()));
 			if (stack.is(item)) return true;
+		}
+		// flowerBlock：检查方块物品（如 sculk_bee 对应 minecraft:sculk_catalyst）
+		// 仅当 stack 为 BlockItem 时通过方块注册表 ID 精确比对
+		if (!pref.flowerBlock().isEmpty()) {
+			if (stack.getItem() instanceof BlockItem blockItem) {
+				ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
+				if (blockId.toString().equals(pref.flowerBlock())) return true;
+			}
 		}
 		// flowerFluid：检查流体桶
 		if (!pref.flowerFluid().isEmpty() && stack.getItem() instanceof BucketItem bucket) {

@@ -26,7 +26,7 @@ import net.minecraft.world.level.Level;
  * <p>
  * 双层缓存策略：
  * <ul>
- *   <li>上层 {@link #inputRecipeCache}：TTL 20 tick + identity 短路，减少每 tick 重复查找</li>
+ *   <li>上层 {@link #inputRecipeCache}：TTL 100 tick + 指纹比对（Item + bee_type），减少每 tick 重复查找</li>
  *   <li>下层 {@link #pbRecipeCache}：LRU 长期缓存，支持缓存"无配方"结果，避免重复全量遍历</li>
  * </ul>
  * 配方重载时由 {@link PbRecipeProcessor#checkRecipeVersion()} 调用 {@link #clearCaches()} 失效。
@@ -48,10 +48,10 @@ public class PbRecipeFinder {
 	private final RecipeCacheManager<RecipeHolder<CentrifugeRecipe>> pbRecipeCache;
 
 	/**
-	 * PB配方查找的短期缓存（TTL 20 tick + identity 短路）
+	 * PB配方查找的短期缓存（TTL 100 tick + 指纹比对）
 	 * <br/>
 	 * 作为 {@link #pbRecipeCache} 的上层缓存：tryProcessPbRecipe 每 tick 调用 findPbRecipe 时，
-	 * 若输入引用未变（Mekanism 槽位缓存）则 identity 短路直接返回，跳过 pbRecipeCache 的
+	 * 通过指纹（Item + bee_type）快速命中缓存，跳过 pbRecipeCache 的
 	 * {@link ItemStack#hashItemAndComponents} 计算。配方重载时由 {@link #clearCaches()} 清空。
 	 */
 	private final InputValidationCache inputRecipeCache = new InputValidationCache();
@@ -64,7 +64,7 @@ public class PbRecipeFinder {
 	/**
 	 * 查找匹配输入物品的PB离心配方（双层缓存：inputRecipeCache + pbRecipeCache）
 	 * <br/>
-	 * 上层 {@link #inputRecipeCache}（TTL 20 tick + identity 短路）减少每 tick 重复查找；
+	 * 上层 {@link #inputRecipeCache}（TTL 100 tick + 指纹比对）减少每 tick 重复查找；
 	 * 下层 {@link #pbRecipeCache}（LRU，配方重载时清空）提供长期缓存。
 	 * 普通蜜脾路径优先用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再回退到全量遍历（防御性）。
 	 * 蜜脾块路径优先用 {@link CentrifugeRecipeIndex#getCombBlock} O(1) 查找静态预生成配方，
@@ -78,7 +78,7 @@ public class PbRecipeFinder {
 		Level level = context.level();
 		if (level == null) return null;
 
-		// 上层短期缓存（TTL + identity 短路），减少 pbRecipeCache 的 hashItemAndComponents 开销
+		// 上层短期缓存（TTL + 指纹比对），减少 pbRecipeCache 的 hashItemAndComponents 开销
 		InputValidationCache.ValidationResult cached = inputRecipeCache.getResult(level, input,
 				() -> {
 					RecipeHolder<CentrifugeRecipe> recipe = findPbRecipeUncached(input);

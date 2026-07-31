@@ -2,11 +2,14 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import mekanism.api.Upgrade;
 import mekanism.common.config.MekanismConfig;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
 /**
@@ -59,6 +62,9 @@ public class ApiaryUpgradeHandler {
 	/** MEK 升级查询异常日志冷却器（ms 模式，避免高频异常刷屏） */
 	private final LogThrottle upgradeErrorThrottle = new LogThrottle();
 
+	/** 模块1：启动诊断仅打印一次的守卫（CAS 保证线程安全） */
+	private static final AtomicBoolean speedDiagnosticPrinted = new AtomicBoolean(false);
+
 	/**
 	 * 升级倍率缓存 — 100 tick 刷新一次，避免每 tick 重复 Math.pow 与 EnumMap 查询。
 	 * <p>
@@ -75,6 +81,8 @@ public class ApiaryUpgradeHandler {
 	public ApiaryUpgradeHandler(TileEntityMekApiary tile) {
 		this.tile = tile;
 		this.upgradeCache = new ApiaryUpgradeCache(this);
+		// 模块1：启动时打印蜂箱速度配置诊断（仅一次，受 apiary_speed feature 开关控制）
+		logSpeedConfigDiagnosticOnce();
 	}
 
 	/**
@@ -134,7 +142,7 @@ public class ApiaryUpgradeHandler {
 	 *
 	 * @return 速度升级数量（0-8），tile 未就绪时返回 0
 	 */
-	private int getMekSpeedUpgrades() {
+	public int getMekSpeedUpgrades() {
 		if (tile == null) return 0;
 		try {
 			var component = tile.getComponent();
@@ -212,11 +220,11 @@ public class ApiaryUpgradeHandler {
 	 * <p>
 	 * Task 1.2 修复：移除 STACK 升级的生产力倍率影响。
 	 * <p>
-	 * Task 2 补偿系数:返回值乘以 1.22f,补偿 {@link BeeProduceProcessor#processBatchProduce}
-	 * 聚合取整修复后的平均产出损失(原每槽独立 round 平均多产出约 22%,聚合后单次 round 损失此部分)。
-	 * 场景:9 槽×count=1×mod=1.5,原版每槽 round(1.5)=2 共 18,聚合后 round(9×1×1.5)=14,补偿后接近 18。
+	 * v2.1.0: 移除 1.22f 补偿系数
+	 * 原补偿用于 processBatchProduce 聚合取整损失，但被升级放大导致满级加成过高（87×）
+	 * 移除后满级加成 71.28×（降 18%），与原版 PB 一致
 	 *
-	 * @return 生产力倍率(≥1.22,基础 1.0 × 1.22 补偿系数)
+	 * @return 生产力倍率(基础 1.0)
 	 */
 	float computeProductivityMultiplier() {
 		float mod = 1.0f;
@@ -224,9 +232,7 @@ public class ApiaryUpgradeHandler {
 		mod += PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_2);
 		mod += PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3);
 		mod += PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4);
-		// Task 2: 应用补偿系数 1.22f — 补偿 processBatchProduce 聚合取整后的平均产出损失(约 18-22%)
-		// 修复前(每槽独立取整)平均多产出约 22%,聚合取整(单次 round)后损失此部分,补偿系数恢复原产出量级
-		return mod * 1.22f;
+		return mod;
 	}
 
 	/**
@@ -319,7 +325,7 @@ public class ApiaryUpgradeHandler {
 	 *
 	 * @return MEK 速度升级的时间倍率（0~1，越小越快）
 	 */
-	private float getMekSpeedTimeMultiplier() {
+	public float getMekSpeedTimeMultiplier() {
 		int speedUpgrades = getMekSpeedUpgrades();
 		int maxSpeed = Upgrade.SPEED.getMax();
 		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
@@ -343,6 +349,84 @@ public class ApiaryUpgradeHandler {
 		float speedFraction = (float) speedUpgrades / maxSpeed;
 		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
 		return (float) Math.pow(maxMultiplier, speedFraction);
+	}
+
+	// ===== 诊断用 getter（模块1：蜂箱速度调试日志） =====
+
+	/**
+	 * 获取 MEK 速度升级的最大安装数量
+	 * <br/>
+	 * 来源：{@link Upgrade#SPEED#getMax()}。MEK 原版返回 8，Mekanism Unleashed 扩展到 32。
+	 *
+	 * @return 速度升级最大数量
+	 */
+	public int getMaxSpeedUpgrades() {
+		return Upgrade.SPEED.getMax();
+	}
+
+	/**
+	 * 获取 MEK 升级倍率上限
+	 * <br/>
+	 * 来源：{@code MekanismConfig.general.maxUpgradeMultiplier}。默认 10.0，
+	 * Mekanism Unleashed (MU) 可能修改为 1200+。
+	 *
+	 * @return 升级倍率上限
+	 */
+	public float getMaxUpgradeMultiplier() {
+		return MekanismConfig.general.maxUpgradeMultiplier.get();
+	}
+
+	/**
+	 * 获取 PB 时间升级的除数分量
+	 * <br/>
+	 * 公式：{@code 1.0 + PB_TIME_FACTOR × effectiveTimeUpgrades}，
+	 * 其中 {@code effectiveTimeUpgrades = timeCount + time2Count × 2}。
+	 * 与 {@link #computeTimeMultiplier()} 中的计算保持一致，供运行时诊断日志调用。
+	 *
+	 * @return PB 时间升级除数（≥1.0）
+	 */
+	public float getPbTimeDivisor() {
+		int timeCount = getInstalledUpgrades(PbUpgradeType.TIME);
+		int time2Count = getInstalledUpgrades(PbUpgradeType.TIME_2);
+		int effectiveTimeUpgrades = timeCount + time2Count * 2;
+		return 1.0f + PB_TIME_FACTOR * effectiveTimeUpgrades;
+	}
+
+	/**
+	 * 模块1：启动时打印蜂箱速度配置诊断信息（仅一次）
+	 * <br/>
+	 * 输出关键配置值与 8 级 SPEED 升级预期值，用于诊断
+	 * "8 级 SPEED 升级导致 adjustedMinTicks=1（预期 120）"问题。
+	 * 通过 {@link DevLog#info} 输出，受 apiary_speed feature 开关控制。
+	 * <p>
+	 * 触发时机：ApiaryUpgradeHandler 首次构造时。用户启用 dev 模式后
+	 * 放置或重新放置蜂箱即可触发。
+	 */
+	private void logSpeedConfigDiagnosticOnce() {
+		if (!speedDiagnosticPrinted.compareAndSet(false, true)) {
+			return;
+		}
+		try {
+			float maxMul = getMaxUpgradeMultiplier();
+			int maxSpeed = getMaxSpeedUpgrades();
+			int processingTime = ModConfig.SERVER.apiaryProcessingTime.get();
+			// 8级满速预期: mekTimeMul = maxMul^(-1) = 1/maxMul
+			float expectedMekMul = (float) Math.pow(maxMul, -1.0f);
+			int expectedAdjusted = Math.max(1, Math.round(processingTime * expectedMekMul));
+			float expectedSeconds = expectedAdjusted / 20.0f;
+			DevLog.info("apiary_speed",
+					"蜂箱速度配置诊断:\n"
+							+ "  maxUpgradeMultiplier = {} (来源: MekanismConfig.general.maxUpgradeMultiplier)\n"
+							+ "  maxSpeedUpgrades = {} (来源: Upgrade.SPEED.getMax())\n"
+							+ "  apiaryProcessingTime = {} (来源: ModConfig.SERVER.apiaryProcessingTime)\n"
+							+ "  pbTimeFactor = {}\n"
+							+ "  公式: mekTimeMultiplier = maxUpgradeMultiplier ^ (-speedUpgrades / maxSpeedUpgrades)\n"
+							+ "  8级SPEED预期: adjustedMinTicks = round({} × {}) = {} tick ({}秒)",
+					maxMul, maxSpeed, processingTime, PB_TIME_FACTOR,
+					processingTime, expectedMekMul, expectedAdjusted, expectedSeconds);
+		} catch (Exception e) {
+			DevLog.warn("apiary_speed", "蜂箱速度配置诊断输出失败: {}", e.getMessage());
+		}
 	}
 
 	/**

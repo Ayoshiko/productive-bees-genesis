@@ -315,8 +315,10 @@ public final class MekCentrifugeFactoryHelper {
 		// Task 12: ModConfig.SERVER 未加载时(客户端构造期间)默认创建 MULTI,匹配服务端可能的 MULTI
 		boolean configAvailable = false;
 		boolean multiFluidEnabled = false;
+		int maxTanksPerFluidConfig = 0; // v2.1.0: 默认自动计算
 		try {
 			multiFluidEnabled = ModConfig.SERVER.mekCentrifugeMultiFluidTank.get();
+			maxTanksPerFluidConfig = ModConfig.SERVER.mekCentrifugeMaxTanksPerFluid.get();
 			configAvailable = true;
 		} catch (NullPointerException e) {
 			DevLog.warn("fluid_tank", "createFluidOutputHolder 调用时 ModConfig.SERVER 未加载(潜在问题 9)");
@@ -329,7 +331,8 @@ public final class MekCentrifugeFactoryHelper {
 			// 每子槽容量 = Integer.MAX_VALUE，256× 加速下单进程每 tick 约 100 万 mB，可容纳 2140 tick 产出
 			int maxTanks = processes;
 			int tankCapacity = Integer.MAX_VALUE;
-			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener);
+			// v2.1.0: 传入 maxTanksPerFluidConfig（0=自动计算 maxTanks/2），由 Holder 构造时解析
+			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener, maxTanksPerFluidConfig);
 			// Task 2: 调用 tankSetter 设置主槽引用,修复 fluidOutputTank 字段为 null 的核心 bug
 			// Task 5: 构造时已预分配全部槽位,getTanks().get(0) 返回预分配的第 0 个槽
 			tankSetter.accept(multiHolder.getTanks().get(0));

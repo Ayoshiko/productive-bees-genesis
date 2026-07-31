@@ -222,6 +222,13 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		boolean result = FactoryUpgradeStateHelper.onUpdateServer(this, inputSlots, () -> super.onUpdateServer());
 		// Task 8: 同步流体槽位数到客户端(供 GUI 决定是否显示多流体槽 Tab)
 		fluidOutputTankCount = fluidOutputHolder instanceof MultiFluidTankHolder h ? h.getTankCount() : 1;
+		// v2.1.0: 每 100 tick 回收空槽映射,防止长时间运行槽位耗尽
+		// 触发条件:MultiFluidTankHolder 模式 + gameTime 为 100 的倍数
+		// 回收的是 tanksByFluidKey 映射关系,tanksInOrder 槽位固定不变(DataSlot 偏移不会发生)
+		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder
+				&& level != null && level.getGameTime() % 100 == 0) {
+			multiHolder.reclaimEmptyTanks();
+		}
 		return result;
 	}
 
@@ -291,6 +298,12 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	@Override
 	public BlockPos productivebeesgenesis$getAe2BlockPos() { return getBlockPos(); }
+
+	/** 模块2.4：AE2 输出超限时暂停离心机输入 — 转发到 Mekanism 的 setActive(false) */
+	@Override
+	public void suspendInput() {
+		setActive(false);
+	}
 
 	/** 构建升级数据 — 保存完整状态供等级切换时流转，含PB升级、AE2设置和多流体槽（Task 5） */
 	@NotNull

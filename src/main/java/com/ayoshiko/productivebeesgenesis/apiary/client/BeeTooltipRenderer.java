@@ -288,8 +288,8 @@ public class BeeTooltipRenderer {
 	/**
 	 * 解析花朵偏好为可读 Component
 	 * <br/>
-	 * 优先级：flowerTag → flowerItem → flowerFluid → 默认任意花朵。
-	 * flowerTag 无本地化名，显示 #标签ID；flowerItem/flowerFluid 解析注册表获取本地化名。
+	 * 优先级：flowerTag → flowerItem → flowerBlock → flowerFluid → 默认任意花朵。
+	 * flowerTag 无本地化名，显示 #标签ID；flowerItem/flowerBlock/flowerFluid 解析注册表获取本地化名。
 	 *
 	 * @param pref 花朵偏好
 	 * @return 可读的花朵组件
@@ -320,6 +320,20 @@ public class BeeTooltipRenderer {
 			}
 			return Component.literal(pref.flowerItem())
 					.withStyle(ChatFormatting.GRAY);
+		}
+		// flowerBlock — 解析为方块本地化名（如 sculk_bee 对应 minecraft:sculk_catalyst）
+		// 直接用 "block.<namespace>.<path>" 翻译键，与方块的 getDescriptionId() 等价
+		if (!pref.flowerBlock().isEmpty()) {
+			try {
+				ResourceLocation blockId = ResourceLocation.parse(pref.flowerBlock());
+				return Component.translatable("block." + blockId.getNamespace() + "." + blockId.getPath())
+						.withStyle(ChatFormatting.YELLOW);
+			} catch (RuntimeException e) {
+				// 解析失败回退为原始ID（DevLog 节流日志便于排查无效配置）
+				DevLog.warn("bee_tooltip", "花方块 ID 解析失败, 回退原始 ID: {}", pref.flowerBlock());
+				return Component.literal(pref.flowerBlock())
+						.withStyle(ChatFormatting.GRAY);
+			}
 		}
 		// flowerFluid — 解析注册表获取流体桶物品名
 		if (!pref.flowerFluid().isEmpty()) {

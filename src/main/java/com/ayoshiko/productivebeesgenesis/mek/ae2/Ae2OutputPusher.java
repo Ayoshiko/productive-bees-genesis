@@ -46,6 +46,15 @@ public final class Ae2OutputPusher {
 	/** 异常累计计数器 — 用于日志显示总次数（节流由 LogThrottle 时间维度处理） */
 	private static final AtomicLong PUSH_EXCEPTION_COUNTER = new AtomicLong(0);
 
+	/** 模块2.2：物品推送失败计数器 — 用于日志显示近5分钟累计触发次数（节流由 LogThrottle 时间维度处理） */
+	private static final AtomicLong itemPushFailureCount = new AtomicLong(0);
+
+	/** 模块2.2：流体推送失败计数器 — 预留供 Ae2FluidPusher 使用，当前模块未直接使用 */
+	private static final AtomicLong fluidPushFailureCount = new AtomicLong(0);
+
+	/** 模块2.4：单次推送物品数硬上限 — 超过此值强制回送 ME 网络，避免输出槽持续积压（与原版物品栈上限对齐） */
+	private static final long HARD_LIMIT = 64L;
+
 	/** 批量合并的最小槽位数阈值 — 非空槽位数 <= 此阈值时直接逐槽推送，避免 Map 分配开销 */
 	private static final int BATCH_MERGE_THRESHOLD = 3;
 
@@ -101,6 +110,14 @@ public final class Ae2OutputPusher {
 		//    AE2 推送清空槽位后 onAe2PushComplete 已调用 updateOutputSlotFlags() 保证同步
 		if (!host.productivebeesgenesis$hasOutputItems()) return;
 
+		// 模块2.1：强检测 grid node 状态，仅当 ONLINE(3) 时继续推送
+		// 状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入 poweredInsert 路径，不触发退避
+		// 使用 pushState 缓存（20 tick 刷新一次）避免每 tick 高频调用 getGridNodeState
+		int nodeState = pushState.getCachedNodeState(host);
+		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
+			return;
+		}
+
 		// 3. 获取已连接的网格（holder 感知重载，跳过冗余 getAe2StateHolder）
 		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
 		if (grid == null) return;
@@ -130,6 +147,23 @@ public final class Ae2OutputPusher {
 		}
 
 		if (entries.isEmpty()) return;
+
+		// 模块2.4：pendingOutputs 硬上限检查
+		// 统计本次推送的 totalRequested，超过 HARD_LIMIT 时强制走 returnOutputSlotsToMeOrDrop 路径
+		// 避免输出槽持续积压导致物品锁定（高频失败场景下输出槽物品会累积到数千个）
+		long totalRequested = 0;
+		for (SlotEntry entry : entries) {
+			totalRequested += entry.count;
+		}
+		if (totalRequested > HARD_LIMIT) {
+			// 强制回送输出槽物品到 ME 网络，无视 firstFailure 标志
+			returnOutputSlotsToMeOrDrop(host, meStorage, energySource);
+			LogThrottle.warnWithCooldown("ae2_output_overflow", 300_000L,
+					"AE2 输出超限，强制回送 item_count={}", totalRequested);
+			// 通过接口方法暂停该 tile 的输入，防止输出槽持续积压
+			host.suspendInput();
+			return;
+		}
 
 		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
 		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
@@ -184,22 +218,30 @@ public final class Ae2OutputPusher {
 	/**
 	 * 完全失败处理 — 退避（nanoTime 墙钟）+ 节流日志 + 深度诊断 + 首次失败兜底回送。
 	 * Task 3: 首次失败立即 30s 长退避；Task 4: 空存储检测升级到 30s。
+	 * <p>
+	 * 模块2.2：LogThrottle 5 分钟聚合 — 首次失败 30 秒节流，后续失败 5 分钟节流并显示近5分钟累计次数。
+	 * 原 5 秒节流在 30 秒退避窗口下偏短，导致 256× 加速场景下日志刷屏。
 	 */
 	private static void handleCompleteFailure(IAe2OutputHostBase host, Ae2PushBackoff itemBackoff,
 			IGrid grid, IStorageService storageService, MEStorage meStorage,
 			IEnergySource energySource, AEItemKey itemKey, long requestedAmount) {
 		// 在 recordFailure 之前判断首次失败（此时 backoffExponent 仍为 0）
 		boolean firstFailure = (itemBackoff.getBackoffExponent() == 0);
+		// 模块2.2：递增失败计数器，用于日志显示近5分钟累计触发次数
+		long failureCount = itemPushFailureCount.incrementAndGet();
 		// Task 3: 256× 加速下首次失败立即 30s 长退避，跳过 1s→2s→4s→8s→16s 渐进过程
 		// 原理：Grid 不稳定时渐进退避的前 5 次失败（共 31s）全部无效重试，加剧 TPS 负载
 		if (firstFailure) {
 			itemBackoff.recordFailureAggressive(System.nanoTime());
-			LogThrottle.warn("ae2_output_long_backoff",
+			// 模块2.2：首次失败 30 秒节流（与 30s 长退避窗口对齐）
+			LogThrottle.warnWithCooldown("ae2_output_long_backoff", 30_000L,
 					"AE2 物品推送首次失败，触发 30s 长退避 item={}, count={}", itemKey, requestedAmount);
 		} else {
 			itemBackoff.recordFailure(System.nanoTime());
-			LogThrottle.warn("ae2_output_backoff",
-					"AE2 物品输出推送完全失败，进入指数退避 item={}, count={}", itemKey, requestedAmount);
+			// 模块2.2：后续失败 5 分钟节流 + 近5分钟累计触发次数，避免 256× 加速下刷屏
+			LogThrottle.warnWithCooldown("ae2_output_backoff", 300_000L,
+					"AE2 物品输出推送完全失败，进入指数退避 item={}, count={}, 近5分钟累计 {} 次",
+					itemKey, requestedAmount, failureCount);
 		}
 		// 首次失败时触发兜底回送，避免输出槽积压导致产出链停滞
 		if (firstFailure) {

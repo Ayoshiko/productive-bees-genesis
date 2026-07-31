@@ -80,6 +80,14 @@ public final class Ae2InputPuller {
 			return;
 		}
 
+		// 模块2.5：强检测 grid node 状态，仅当 ONLINE(3) 时继续拉取
+		// 状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入拉取路径，避免无效的 getAvailableStacks 遍历
+		// 使用 pushState 缓存（20 tick 刷新一次）避免每 tick 高频调用 getGridNodeState
+		int nodeState = holder.getPushState().getCachedNodeState(host);
+		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
+			return;
+		}
+
 		// 3. 网格节点 + 已连接网格检查（Task 12：holder 感知重载，跳过冗余 getAe2StateHolder）
 		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
 		if (grid == null) return;

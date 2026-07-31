@@ -44,6 +44,15 @@ public class BeeSlot {
 	/** 需要的最小 tick（受升级影响，由 ApiaryUpgradeHandler 计算） */
 	private volatile int minOccupationTicks;
 
+	/**
+	 * 基础最小 occupation ticks（不受升级影响的原始值）
+	 * <br/>
+	 * 模块1修复：分离 base 与 adjusted，避免 adjustedMinTicks 被回写后
+	 * 下一 tick 再次作为 base 乘以倍率导致指数衰减。
+	 * 0 表示未初始化（fallback 到配置默认值 cachedProcessingTime）。
+	 */
+	private volatile int baseMinOccupationTicks;
+
 	/** 是否采集到蜜（影响产出种类） */
 	private volatile boolean hasNectar;
 
@@ -114,6 +123,7 @@ public class BeeSlot {
 		this.beeData = null;
 		this.ticksInHive = 0;
 		this.minOccupationTicks = 0;
+		this.baseMinOccupationTicks = 0;
 		this.hasNectar = false;
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
@@ -167,6 +177,31 @@ public class BeeSlot {
 	public void setMinOccupationTicks(int minOccupationTicks) {
 		if (this.minOccupationTicks == minOccupationTicks) return;
 		this.minOccupationTicks = minOccupationTicks;
+		this.dirty = true;
+	}
+
+	/**
+	 * 获取基础最小 occupation ticks（不受升级影响的原始值）
+	 * <br/>
+	 * 模块1修复：tick 处理器使用此值作为 base，避免读到已被倍率放大的 adjusted 值。
+	 * 返回 0 表示未初始化，调用方应 fallback 到配置默认值。
+	 *
+	 * @return 基础最小 tick 数，0 表示未初始化
+	 */
+	public int getBaseMinOccupationTicks() {
+		return baseMinOccupationTicks;
+	}
+
+	/**
+	 * 设置基础最小 occupation ticks
+	 * <br/>
+	 * 仅在值实际变化时标记 dirty，与 {@link #setMinOccupationTicks} 行为一致。
+	 *
+	 * @param baseMinOccupationTicks 基础最小 tick 数（0 表示未初始化）
+	 */
+	public void setBaseMinOccupationTicks(int baseMinOccupationTicks) {
+		if (this.baseMinOccupationTicks == baseMinOccupationTicks) return;
+		this.baseMinOccupationTicks = baseMinOccupationTicks;
 		this.dirty = true;
 	}
 
@@ -291,6 +326,7 @@ public class BeeSlot {
 		this.beeData = null;
 		this.ticksInHive = 0;
 		this.minOccupationTicks = 0;
+		this.baseMinOccupationTicks = 0;
 		this.hasNectar = false;
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;

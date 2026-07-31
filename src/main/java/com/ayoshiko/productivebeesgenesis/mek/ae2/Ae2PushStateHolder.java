@@ -33,6 +33,14 @@ public final class Ae2PushStateHolder {
 	/** 上次物品推送的 counter（批量短路用） */
 	private volatile long lastItemPushCounter = 0L;
 
+	// ===== Grid Node 状态缓存（模块2.1：避免每 tick 高频调用 getGridNodeState） =====
+	/** 缓存刷新间隔（纳秒）— 20 tick ≈ 1000ms = 1_000_000_000ns，使用 wall clock 避免 JDTE 加速下 getGameTime 不变 */
+	private static final long NODE_STATE_REFRESH_INTERVAL_NS = 1_000_000_000L;
+	/** 缓存的 grid node 状态（-1 表示未初始化，需重新查询；否则为 Ae2GridNodeManager.getGridNodeState 返回值 0-3） */
+	private volatile int cachedNodeState = -1;
+	/** 上次刷新缓存的时间戳（nanoTime），0L 表示从未刷新 */
+	private volatile long nodeStateRefreshAt = 0L;
+
 	/** 获取流体推送退避状态 */
 	public Ae2PushBackoff getFluidBackoff() { return fluidBackoff; }
 
@@ -66,6 +74,42 @@ public final class Ae2PushStateHolder {
 	/** 更新上次物品推送的计数器值 */
 	public void updateLastItemPushCounter(long value) { lastItemPushCounter = value; }
 
+	// ===== Grid Node 状态缓存方法（模块2.1） =====
+
+	/**
+	 * 获取 grid node 状态（带缓存）
+	 * <br/>
+	 * 每 20 tick（约 1 秒）刷新一次，避免 256× 加速场景下每 tick 高频调用
+	 * {@link Ae2GridNodeManager#getGridNodeState}（涉及 isPowered/hasGridBooted/meetsChannelRequirements 等查询）。
+	 * <p>
+	 * 缓存由 {@link #invalidateNodeStateCache()} 在 grid 变化时失效，
+	 * 由 {@link Ae2OutputStateHolder#onGridChanged()} 触发。
+	 * <p>
+	 * <b>线程安全</b>：volatile 字段保证可见性，check-then-update 最多导致重复查询一次（无正确性问题），
+	 * 服务端 tick 线程独占调用路径下无并发。
+	 *
+	 * @param host 输出宿主（用于查询 grid node 状态）
+	 * @return grid node 状态 ordinal（0-3），对应 Ae2GridNodeManager.STATE_OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL/ONLINE
+	 */
+	public int getCachedNodeState(IAe2OutputHostBase host) {
+		long now = System.nanoTime();
+		if (cachedNodeState < 0 || (now - nodeStateRefreshAt) >= NODE_STATE_REFRESH_INTERVAL_NS) {
+			cachedNodeState = Ae2GridNodeManager.getGridNodeState(host);
+			nodeStateRefreshAt = now;
+		}
+		return cachedNodeState;
+	}
+
+	/**
+	 * 失效 grid node 状态缓存
+	 * <br/>
+	 * 由 {@link Ae2OutputStateHolder#onGridChanged()} 在 grid 变化时调用，
+	 * 确保下次 {@link #getCachedNodeState} 重新查询 AE2 API。
+	 */
+	public void invalidateNodeStateCache() {
+		cachedNodeState = -1;
+	}
+
 	/**
 	 * 完全重置状态（方块销毁/重建时由 {@link Ae2OutputStateHolder#clear()} 调用）
 	 * <br/>
@@ -79,5 +123,8 @@ public final class Ae2PushStateHolder {
 		lastFluidPushCounter = 0L;
 		itemPushCallCounter = 0L;
 		lastItemPushCounter = 0L;
+		// 模块2.1：重置 grid node 状态缓存，方块重建后从初始状态重新查询
+		cachedNodeState = -1;
+		nodeStateRefreshAt = 0L;
 	}
 }

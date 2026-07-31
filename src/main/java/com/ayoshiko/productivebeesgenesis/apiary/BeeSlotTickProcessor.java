@@ -9,8 +9,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
+import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import net.minecraft.nbt.CompoundTag;
@@ -294,7 +297,10 @@ class BeeSlotTickProcessor {
 
 			// 推进计时
 			int currentTicks = slot.getTicksInHive();
-			int baseMinTicks = slot.getMinOccupationTicks();
+			// 模块1修复：从 baseMinOccupationTicks 读取原始基础值，而非 minOccupationTicks（adjusted 值）。
+			// 此前从 minOccupationTicks 读取会被上一 tick 回写的 adjustedMinTicks 污染，
+			// 导致下一 tick 再次乘以 timeMultiplier 形成指数衰减。
+			int baseMinTicks = slot.getBaseMinOccupationTicks();
 			if (baseMinTicks <= 0) {
 				// 使用配置缓存的基础处理时间（从 ModConfig.SERVER.apiaryProcessingTime 读取，默认1200）
 				baseMinTicks = cachedProcessingTime;
@@ -303,6 +309,22 @@ class BeeSlotTickProcessor {
 			// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
 			int adjustedMinTicks = upgradeHandler.hasCreativeUpgrade() ? 1
 					: Math.max(1, Math.round(baseMinTicks * timeMultiplier));
+			// 模块1：蜂箱速度调试日志 — 每 100 tick 采样一次，仅在 dev 模式开启时输出
+			// 外层 isEnabled() 守卫避免 dev 关闭时调用 DevLog.debug 的方法调用开销
+			// DevLog.debug 内部还会检查 apiary_speed feature 开关并做 1000ms 节流
+			if ((currentTick % 100) == 0 && DevModeManager.isEnabled()) {
+				DevLog.debug("apiary_speed",
+						"蜂箱速度诊断 slot={} baseMinTicks={} timeMultiplier={} "
+								+ "mekTimeMul={} pbTimeDivisor={} speedUpgrades={} maxSpeed={} "
+								+ "maxUpgradeMul={} adjustedMinTicks={}",
+						i, baseMinTicks, timeMultiplier,
+						upgradeHandler.getMekSpeedTimeMultiplier(),
+						upgradeHandler.getPbTimeDivisor(),
+						upgradeHandler.getMekSpeedUpgrades(),
+						upgradeHandler.getMaxSpeedUpgrades(),
+						upgradeHandler.getMaxUpgradeMultiplier(),
+						adjustedMinTicks);
+			}
 			// 同步 adjustedMinTicks 到 BeeSlot，确保 tooltip 工作进度显示正确的工作 tick 上限
 			// 修复：此前不更新 minOccupationTicks 导致 tooltip 始终显示 300/0 tick（0%）
 			if (slot.getMinOccupationTicks() != adjustedMinTicks) {
@@ -420,7 +442,8 @@ class BeeSlotTickProcessor {
 				ResourceLocation typeKey = entry.getKey();
 
 				// 同组共享一次配方查询（缓存命中 O(1)）
-				List<ItemStack> produceList = produceProcessor.getCachedProduce(typeKey, level);
+				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
+				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level);
 				if (produceList.isEmpty()) continue;
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取

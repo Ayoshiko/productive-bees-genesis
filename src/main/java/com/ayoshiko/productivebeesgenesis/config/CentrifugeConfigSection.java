@@ -30,6 +30,14 @@ public final class CentrifugeConfigSection {
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
+	 * v2.1.0: 每种流体类型最大占用槽位数
+	 * <br/>
+	 * 防止高产出流体（如蜂蜜）占用所有槽位,为其他流体预留空位。
+	 * 0=自动计算为 Math.max(1, maxTanks/2),确保至少 2 种流体可共存;
+	 * >0=手动指定配额。
+	 */
+	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
+	/**
 	 * Task 6: 流体弹出速率(mB/tick),控制 Ejector/侧面配置每次弹出的流体量上限
 	 * <br/>
 	 * 默认 256,范围 1-10240。允许玩家根据工厂等级调整弹出速率,
@@ -94,6 +102,13 @@ public final class CentrifugeConfigSection {
 				.comment("是否启用多流体槽模式(按流体类型动态分配独立槽位)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.multiFluidTank")
 				.define("multiFluidTank", true);
+		// v2.1.0: 每种流体类型最大占用槽位数（配额机制）
+		mekCentrifugeMaxTanksPerFluid = builder
+				.comment("每种流体类型最大占用槽位数",
+						"0=自动计算 maxTanks/2（推荐，确保至少 2 种流体可共存）",
+						">0=手动指定配额，防止高产出流体占用所有槽位")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.maxTanksPerFluid")
+				.defineInRange("maxTanksPerFluid", 0, 0, 64);
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 配置,maxTanks 直接使用 tier.processes(作为上限,按需创建)
 		// 原理:MultiFluidTankHolder 的 maxTanks 是上限,槽位通过 getTankForInsert 按需创建
 		// Tab 窗口显示当前已分配槽位数(通过同步值 fluidOutputTankCount),而非 tier.processes

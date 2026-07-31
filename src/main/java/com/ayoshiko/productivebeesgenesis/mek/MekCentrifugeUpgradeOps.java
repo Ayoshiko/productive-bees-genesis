@@ -56,17 +56,21 @@ final class MekCentrifugeUpgradeOps {
 	 * 计算 getTicksForBase — CREATIVE 升级时返回0瞬间完成，否则应用 PB 时间倍率
 	 * <br/>
 	 * CREATIVE 升级时 PB 路径瞬间完成（processingTime=0，pbOperatingTicks++后1>=0立即成立）。
-	 * 非 CREATIVE 时取 Mekanism 原版 ticks 与 PB 时间倍率的乘积，下限为1。
+	 * 非 CREATIVE 时直接用 baseTime × timeMultiplier，下限为1。
+	 * <p>
+	 * 修复 SPEED 双重应用：timeMultiplier 已包含 SPEED 升级影响（见
+	 * {@link MekCentrifugePbUpgradeHandler#getMekSpeedTimeMultiplier}），不再调用
+	 * {@link MekanismUtils#getTicks}（其内部也会应用 SPEED 升级），否则 8 级 SPEED 实际加速 100 倍。
+	 * 与蜂箱 {@code ApiaryUpgradeHandler.computeTimeMultiplier} 公式对齐，只应用一次 SPEED。
 	 *
 	 * @param tile            离心机方块实体
 	 * @param baseTime        基础处理时间
-	 * @param timeMultiplier  PB 时间倍率（来自 PB 升级处理器）
+	 * @param timeMultiplier  PB 时间倍率（来自 PB 升级处理器，已包含 SPEED 升级）
 	 * @return 受升级影响的实际处理时间
 	 */
 	static int calcTicksForBase(TileEntityMekCentrifuge tile, int baseTime, double timeMultiplier) {
 		if (MekUpgradeSupport.hasCreativeUpgrade(tile)) return 0;
-		int mekTicks = MekanismUtils.getTicks(tile, baseTime);
-		return Math.max(1, (int) Math.floor(mekTicks * timeMultiplier));
+		return Math.max(1, (int) Math.floor(baseTime * timeMultiplier));
 	}
 
 	/**
