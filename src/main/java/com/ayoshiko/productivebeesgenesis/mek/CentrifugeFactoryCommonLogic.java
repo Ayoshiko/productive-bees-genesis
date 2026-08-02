@@ -419,24 +419,44 @@ public final class CentrifugeFactoryCommonLogic {
 	}
 
 	/**
-	 * 应用升级数据 — 先委托父类恢复标准字段，再恢复 PB 升级和 AE2 per-tile 设置
+	 * 应用升级数据 — 先委托父类恢复标准字段，再恢复 PB 升级、AE2 per-tile 设置和深拷贝槽位内容
 	 * <br/>
 	 * Task 5: 传入 fluidOutputHolder 以恢复多流体槽内容;类型不匹配时记录 DevLog.warn 警告
+	 * <p>
+	 * 模块 3 Bug 2：传递新方块目标槽位列表（inputSlots/outputSlots/energySlot）给 helper，
+	 * 由 helper 从升级数据中的深拷贝字段恢复槽位内容。
+	 * 原理：旧方块的 getUpgradeData 调用 saveAllItemsForDrop 已清空槽位，
+	 * super.parseUpgradeData 通过引用列表读取到空栈，必须从深拷贝字段覆盖恢复。
+	 * 向后兼容：深拷贝字段为 null 时跳过（旧升级数据），由 super.parseUpgradeData 引用路径处理。
 	 * <p>
 	 * 修复 HIGH-7: 包裹 try-catch 防止单点异常导致整体崩溃。
 	 * 失败时记录 ERROR 日志并保留 upgradeData 对象引用（toString）便于管理员手动恢复。
 	 * 不重抛异常,允许新方块保持部分恢复状态,避免 super.parseUpgradeData 覆盖已恢复的字段。
+	 *
+	 * @param provider           注册表访问器
+	 * @param upgradeData        升级数据
+	 * @param pbUpgradeDelegate  PB 升级委托
+	 * @param ae2StateHolder     AE2 状态持有者
+	 * @param fluidOutputHolder  流体输出槽持有者
+	 * @param targetInputSlots   模块 3 Bug 2: 新方块输入槽列表（null 时跳过深拷贝恢复）
+	 * @param targetOutputSlots  模块 3 Bug 2: 新方块输出槽列表（null 时跳过深拷贝恢复）
+	 * @param targetEnergySlot   模块 3 Bug 2: 新方块能量槽（null 时跳过深拷贝恢复）
+	 * @param superParse         父类 parseUpgradeData 调用回调
 	 */
 	public static void parseUpgradeData(@NotNull HolderLookup.Provider provider,
 			@NotNull IUpgradeData upgradeData,
 			@NotNull FactoryPbUpgradeDelegate pbUpgradeDelegate,
 			@NotNull Ae2OutputStateHolder ae2StateHolder,
 			@Nullable IFluidTankHolder fluidOutputHolder,
+			@Nullable List<IInventorySlot> targetInputSlots,
+			@Nullable List<IInventorySlot> targetOutputSlots,
+			@Nullable IInventorySlot targetEnergySlot,
 			@NotNull Consumer<IUpgradeData> superParse) {
 		try {
 			if (upgradeData instanceof CentrifugeUpgradeData data) {
 				superParse.accept(upgradeData);
-				CentrifugeUpgradeDataHelper.applyUpgradeData(provider, data, pbUpgradeDelegate, ae2StateHolder, fluidOutputHolder);
+				CentrifugeUpgradeDataHelper.applyUpgradeData(provider, data, pbUpgradeDelegate, ae2StateHolder,
+						fluidOutputHolder, targetInputSlots, targetOutputSlots, targetEnergySlot);
 			} else {
 				superParse.accept(upgradeData);
 			}

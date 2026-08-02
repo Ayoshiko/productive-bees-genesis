@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import java.util.ArrayList;
 import java.util.List;
 
-import mekanism.api.security.IBlockSecurityUtils;
+import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
 import mekanism.common.block.attribute.AttributeStateFacing;
@@ -19,7 +19,6 @@ import mekanism.common.network.to_client.security.PacketSyncSecurity;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.base.TileEntityUpdateable;
-import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.WorldUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -155,7 +154,21 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 		return InteractionResult.PASS;
 	}
 
-	/** 右键物品 — 扳手拆卸 */
+	/**
+	 * 右键物品 — 扳手拆卸/旋转
+	 * <br/>
+	 * 模块 2 修复（v2.4 最终版）：shift+扳手拆卸由
+	 * {@link ApiaryWrenchDismantleHandler}（PlayerInteractEvent.RightClickBlock）优先接管，
+	 * 本方法作为兜底（MEK 配置器等非 omnitools 场景直接走 Block.useItemOn）。
+	 * <p>
+	 * <b>为何 Block.useItemOn 无法单独解决 omnitools</b>：omnitools 的 {@code OmniToolItem.useOn}
+	 * 在 shift+右键时通过 {@code WrenchHandlerRegistry} 调用 {@code IConfigurable.onSneakRightClick}
+	 * 打开配置 UI，且该 handler 在 {@code Item.useOn} 中执行，<b>先于 Block.useItemOn</b>，
+	 * 因此方块内的 shift+拆卸分支永远不会被执行（详见事件处理器的类注释）。
+	 * <p>
+	 * 非 shift 场景委托 tryWrench 处理旋转（omnitools 非 shift 时 WrenchHandlerRegistry
+	 * 返回 PASS，正常进入本方法）。
+	 */
 	@Override
 	protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
 			BlockPos pos, Player player, InteractionHand hand,
@@ -167,20 +180,23 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 		if (tile == null) {
 			return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
 		}
+		boolean isWrench = WrenchCapabilityHelper.canUseAsWrench(stack);
+		// 客户端：扳手返回 SUCCESS 阻止 GUI 打开，非扳手走默认交互
 		if (level.isClientSide) {
-			if (MekanismUtils.canUseAsWrench(stack)) {
+			if (isWrench) {
 				return ItemInteractionResult.SUCCESS;
 			}
 			return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
 		}
-		// 扳手拆卸
-		if (player.isShiftKeyDown() && MekanismUtils.canUseAsWrench(stack)) {
-			if (tile.getRadiationScale() <= 0 &&
-					IBlockSecurityUtils.INSTANCE.canAccess(player, level, pos, state, tile)) {
-				WorldUtils.dismantleBlock(state, level, pos, player, stack);
-				return ItemInteractionResult.CONSUME;
+		// 服务端兜底：shift+扳手直接拆卸（主要路径已由 ApiaryWrenchDismantleHandler 接管）
+		if (player.isShiftKeyDown() && isWrench) {
+			if (tile.getRadiationScale() <= 0) {
+				WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
+				return ItemInteractionResult.SUCCESS;
 			}
+			return ItemInteractionResult.FAIL;
 		}
+		// 非 shift 场景委托 tryWrench 处理旋转
 		return tile.tryWrench(state, player, stack).getInteractionResult();
 	}
 
@@ -215,32 +231,33 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 					// Bug 6 + Task 10：写入自定义方块实体数据，确保扳手拆卸后蜜蜂/喂食器/PB升级数据不丢失
 					// 合并方案：避免覆盖 collectComponents 写入的 MEK 标准 BLOCK_ENTITY_DATA
 					if (updateable instanceof com.ayoshiko.productivebeesgenesis.ICustomDataPersistable persistable) {
-					CompoundTag customNbt = persistable.saveCustomDataForItem(provider);
-					if (!customNbt.isEmpty()) {
-						net.minecraft.world.item.component.CustomData existing = drop.get(DataComponents.BLOCK_ENTITY_DATA);
-						if (existing != null) {
-							// 合并方案：读取现有 BLOCK_ENTITY_DATA,将 customNbt 字段合并（跳过 id 避免覆盖方块实体类型）
-							CompoundTag merged = existing.copyTag();
-							for (String key : customNbt.getAllKeys()) {
-								if (!"id".equals(key)) {
-									merged.put(key, customNbt.get(key));
+						CompoundTag customNbt = persistable.saveCustomDataForItem(provider);
+						if (!customNbt.isEmpty()) {
+							net.minecraft.world.item.component.CustomData existing = drop.get(DataComponents.BLOCK_ENTITY_DATA);
+							if (existing != null) {
+								// 合并方案：读取现有 BLOCK_ENTITY_DATA,将 customNbt 字段合并（跳过 id 避免覆盖方块实体类型）
+								CompoundTag merged = existing.copyTag();
+								for (String key : customNbt.getAllKeys()) {
+									if (!"id".equals(key)) {
+										merged.put(key, customNbt.get(key));
+									}
 								}
+								drop.set(DataComponents.BLOCK_ENTITY_DATA,
+										net.minecraft.world.item.component.CustomData.of(merged));
+							} else {
+								// 现有为空,直接覆盖（无 MEK 标准数据需要保留）
+								drop.set(DataComponents.BLOCK_ENTITY_DATA,
+										net.minecraft.world.item.component.CustomData.of(customNbt));
 							}
-							drop.set(DataComponents.BLOCK_ENTITY_DATA,
-									net.minecraft.world.item.component.CustomData.of(merged));
-						} else {
-							// 现有为空,直接覆盖（无 MEK 标准数据需要保留）
-							drop.set(DataComponents.BLOCK_ENTITY_DATA,
-									net.minecraft.world.item.component.CustomData.of(customNbt));
 						}
 					}
-					// F4: 保存 NBT 后清除产物缓冲区，避免 setRemoved 的 dumpToWorld 重复掉落
-					// 产物已通过 BLOCK_ENTITY_DATA 保留在掉落物中，放置时自动恢复
-					if (updateable instanceof TileEntityMekApiary apiaryTile) {
-						apiaryTile.getOutputBuffer().clear();
-					}
 				}
-				}
+			}
+			// 模块 4 修复：saveAllItemsForDrop 移到 for 循环外部，与 MekCentrifugeBlock.getDrops 保持一致
+			// 原位置在 for 循环内部 + ICustomDataPersistable instanceof 检查内部，可能导致重复调用或漏调
+			// 模块 2 修复：保存 BLOCK_ENTITY_DATA 后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
+			if (updateable instanceof TileEntityMekApiary apiaryTile) {
+				apiaryTile.saveAllItemsForDrop();
 			}
 		}
 		return drops;
@@ -263,5 +280,41 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 				}
 			}
 		}
+	}
+
+	/**
+	 * 方块被移除时清理 — 模块 2 修复（v2.4）
+	 * <br/>
+	 * 参考MEK原版 {@code BlockMekanism.onRemove}：调用 {@code tile.blockRemoved()} 触发清理。
+	 * <p>
+	 * 模块 2 根因修复：v2.3 的 {@code saveAllItemsForDrop} 仅在 {@code getDrops} 中调用，
+	 * 但创造模式左键破坏不走 {@code getDrops}，导致槽位未清空，{@code setRemoved} 触发
+	 * Ejector 组件 {@code popResource} 将物品弹出世界。
+	 * <p>
+	 * 修复方案：覆写 {@code onRemove}，在 {@code tile.blockRemoved()} 之前调用
+	 * {@code saveAllItemsForDrop} 清空所有槽位。这样无论是否走 {@code getDrops}，
+	 * {@code setRemoved} 时 Ejector 检测到空槽位，不执行 {@code popResource}。
+	 * <p>
+	 * 调用顺序保证：
+	 * <ul>
+	 *   <li>非创造模式：{@code getDrops}（保存数据到掉落物 + 清空槽位）→ {@code onRemove}（幂等清空）→ {@code setRemoved}</li>
+	 *   <li>创造模式：{@code onRemove}（清空槽位）→ {@code setRemoved}（不popResource）</li>
+	 *   <li>扳手拆卸：{@code WorldUtils.dismantleBlock} 内部 {@code getDrops} → {@code onRemove} → {@code setRemoved}</li>
+	 * </ul>
+	 * 性能：{@code saveAllItemsForDrop} 是幂等操作，重复调用无副作用，仅在槽位非空时执行清空。
+	 */
+	@Override
+	protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+		if (state.hasBlockEntity() && !state.is(newState.getBlock())) {
+			// 模块 2 修复：清空所有槽位，防止 setRemoved 触发 Ejector.popResource
+			if (!level.isClientSide && level.getBlockEntity(pos) instanceof TileEntityMekApiary apiaryTile) {
+				apiaryTile.saveAllItemsForDrop();
+			}
+			TileEntityUpdateable tile = WorldUtils.getTileEntity(TileEntityUpdateable.class, level, pos);
+			if (tile != null) {
+				tile.blockRemoved();
+			}
+		}
+		super.onRemove(state, level, pos, newState, isMoving);
 	}
 }

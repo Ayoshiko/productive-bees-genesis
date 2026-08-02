@@ -81,8 +81,6 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private final ApiaryNbtSerializer nbtSerializer;
 	/** F4: 产物溢出缓冲区 — 缓存输出槽满载时的剩余产物，下 tick 重试注入 */
 	private final ApiaryOutputBuffer outputBuffer = new ApiaryOutputBuffer(this);
-	/** F4: 标记是否因区块卸载而移除 — 避免 setRemoved 中 dumpToWorld 在区块卸载时执行（缓冲区已通过 saveAdditional 持久化） */
-	private boolean chunkUnloading = false;
 	/** Bug 9：选中的蜜蜂槽位索引（-1=未选择），跨线程访问需 volatile 保证可见性 */
 	private volatile int selectedBeeSlot = -1;
 	/** 客户端同步用：选中蜜蜂槽位（仅服务端同步回调写入，GUI 通过 getter 读取），跨线程访问需 volatile */
@@ -289,12 +287,95 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@NotNull @Override
 	public ApiaryUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		return nbtSerializer.buildUpgradeData(provider, redstone, getSortingForUpgradeData());
+		ApiaryUpgradeData data = nbtSerializer.buildUpgradeData(provider, redstone, getSortingForUpgradeData());
+		// 模块 3 Bug 2：构建升级数据后立即清空旧方块所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
+		// outputItems 字段已是深拷贝（独立于 outputSlots 引用），清空槽位不影响升级数据完整性
+		saveAllItemsForDrop();
+		return data;
 	}
 
 	@Override
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
 		if (!nbtSerializer.applyUpgradeData(provider, upgradeData)) super.parseUpgradeData(provider, upgradeData);
+	}
+
+	/**
+	 * 保存全部数据后清空所有槽位（模块 3 Bug 1 + Bug 2）
+	 * <br/>
+	 * 供 {@link MekApiaryBlock#getDrops}（镐子破坏/扳手拆卸）和 {@link #getUpgradeData}
+	 * （ItemTierInstaller 升级）在保存 BLOCK_ENTITY_DATA / 升级数据后调用，
+	 * 防止 {@link #setRemoved} 触发 Ejector 组件 {@code popResource} 重复掉落物品到世界。
+	 * <p>
+	 * 清空范围：蜜蜂槽、喂食槽、PB升级槽（输入+输出）、产物输出槽、蜂笼输入槽、蜂笼输出槽、
+	 * 能量槽、流体罐、产物缓冲区（outputBuffer）、选中槽位。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>性能：直接清空槽位，不重复序列化（数据已通过 BLOCK_ENTITY_DATA / 升级数据保存）</li>
+	 *   <li>安全：清空所有可能持有物品的槽位，避免遗漏导致 Ejector 重复 popResource</li>
+	 *   <li>异常处理：单点异常不影响其他槽位清空（防御性 try-catch）</li>
+	 * </ul>
+	 */
+	public void saveAllItemsForDrop() {
+		// 蜜蜂槽数组清空（BeeSlot.clear() 重置全部字段并标记 dirty）
+		try {
+			for (BeeSlot slot : slotManager.getBeeSlots()) {
+				slot.clear();
+			}
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空蜜蜂槽异常", e);
+		}
+		// 喂食槽清空
+		try {
+			for (FeederInventorySlot slot : feederSlotManager.getFeederInventorySlots()) {
+				slot.setStack(ItemStack.EMPTY);
+			}
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空喂食槽异常", e);
+		}
+		// PB 升级输入/输出槽清空
+		try {
+			pbUpgradeHandler.getInputSlot().setStack(ItemStack.EMPTY);
+			pbUpgradeHandler.getOutputSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空 PB 升级槽异常", e);
+		}
+		// 产物输出槽清空
+		try {
+			for (BasicInventorySlot slot : slotManager.getOutputSlots()) {
+				slot.setStack(ItemStack.EMPTY);
+			}
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空产物输出槽异常", e);
+		}
+		// 蜂笼输入/输出槽清空
+		try {
+			slotManager.getCageInSlot().setStack(ItemStack.EMPTY);
+			slotManager.getCageOutSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空蜂笼槽异常", e);
+		}
+		// 能量槽清空
+		try {
+			slotManager.getEnergySlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空能量槽异常", e);
+		}
+		// 流体罐清空（setEmpty 内部调用 setStack(FluidStack.EMPTY)，触发 onContentsChanged）
+		try {
+			slotManager.getFluidTank().setEmpty();
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空流体罐异常", e);
+		}
+		// 产物溢出缓冲区清空（不掉落，仅清空内存引用）
+		try {
+			outputBuffer.clear();
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空产物缓冲区异常", e);
+		}
+		// 选中蜜蜂槽位重置为未选择
+		setSelectedBeeSlot(-1);
+		setChanged();
 	}
 
 	// ===== GUI 访问接口（供 Container/Screen 使用） =====
@@ -442,20 +523,15 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override public void clearRemoved() { super.clearRemoved(); ae2HostAdapter.prepareForLoad(); }
 	@Override public void setRemoved() {
 		super.setRemoved();
-		// F4: 方块破坏时掉落缓冲区产物（区块卸载时跳过，缓冲区已通过 saveAdditional 持久化）
-		if (!chunkUnloading) {
-			try {
-				Level level = getLevel();
-				if (level != null && !level.isClientSide) {
-					outputBuffer.dumpToWorld(level, getBlockPos());
-				}
-			} catch (Exception e) {
-				ProductiveBeesGenesis.LOGGER.warn("ApiaryOutputBuffer dumpToWorld 异常", e);
-			}
-		}
+		// 模块 2 修复（v2.4 最终版）：移除 outputBuffer.dumpToWorld 调用
+		// v2.3 的 dumpToWorld 是项目中唯一的 Block.popResource 源，导致创造模式/镐子破坏时
+		// 缓冲区物品爆出到世界。缓冲区内容已通过 saveAdditional 序列化到 NBT，
+		// 方块破坏时随 BLOCK_ENTITY_DATA 保存到掉落物（生存模式）或销毁（创造模式），
+		// 不需要 popResource 兜底。与 MEK 原版 setRemoved 行为一致（不 popResource）。
+		// onRemove 中的 saveAllItemsForDrop 仍保留，作为防御性措施清空槽位，防止未来引入新的 popResource 路径。
 		ae2HostAdapter.destroyForRemoval();
 	}
-	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); chunkUnloading = true; ae2HostAdapter.destroyForChunkUnload(); }
+	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); ae2HostAdapter.destroyForChunkUnload(); }
 	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler() { return ae2HostAdapter.getAe2LifecycleHandler(); }
 	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return ae2HostAdapter.getAe2EnergySource(); }
 	@Override public Level productivebeesgenesis$getAe2Level() { return ae2HostAdapter.getAe2Level(); }

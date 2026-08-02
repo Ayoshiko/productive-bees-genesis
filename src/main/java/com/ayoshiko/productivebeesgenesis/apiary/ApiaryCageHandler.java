@@ -116,20 +116,25 @@ class ApiaryCageHandler {
 		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态）
 		populateBeeSlotFromData(emptySlot, beeData);
 
-		// 创建空蜂笼副本（移除 CUSTOM_DATA 中的蜜蜂数据）
-		ItemStack emptyCage = cageStack.copy();
-		emptyCage.setCount(1);
-		emptyCage.remove(DataComponents.CUSTOM_DATA);
+		// 模块 4 修复：区分普通蜂笼和加固蜂笼
+		// PB 原版 BeeCage.postItemUse（普通蜂笼）：shrink(1) 不返还空蜂笼（一次性消耗）
+		// PB 原版 SturdyBeeCage.postItemUse（加固蜂笼）：shrink(1) + 给玩家一个新空蜂笼（可反复使用）
+		boolean isSturdyCage = cageStack.is(ModItems.STURDY_BEE_CAGE.get());
+		if (isSturdyCage) {
+			// 加固蜂笼：创建空蜂笼副本（移除 CUSTOM_DATA 中的蜜蜂数据）并插入 cageOutSlot
+			ItemStack emptyCage = cageStack.copy();
+			emptyCage.setCount(1);
+			emptyCage.remove(DataComponents.CUSTOM_DATA);
 
-		// 尝试将空蜂笼插入输出槽
-		ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
-		if (!remainder.isEmpty()) {
-			// 输出槽已满，无法放入空蜂笼，回滚蜜蜂槽数据
-			emptySlot.clear();
-			return false;
+			ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
+			if (!remainder.isEmpty()) {
+				// 输出槽已满，无法放入空蜂笼，回滚蜜蜂槽数据
+				emptySlot.clear();
+				return false;
+			}
 		}
 
-		// 转移成功：从输入槽移除一个蜂笼
+		// 转移成功：从输入槽移除一个蜂笼（普通/加固蜂笼都消耗）
 		manager.getCageInSlot().shrinkStack(1, Action.EXECUTE);
 		// 标记方块实体需要保存
 		manager.getTile().setChanged();
@@ -268,17 +273,23 @@ class ApiaryCageHandler {
 		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态）
 		populateBeeSlotFromData(targetSlot, beeData);
 
-		// 创建空蜂笼并输出到 cageOutSlot
-		ItemStack emptyCage = cursorCage.copyWithCount(1);
-		emptyCage.remove(DataComponents.CUSTOM_DATA);
-		ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
-		if (!remainder.isEmpty()) {
-			// 输出槽已满，回滚蜜蜂槽数据
-			targetSlot.clear();
-			return false;
+		// 模块 4 修复：区分普通蜂笼和加固蜂笼
+		// 普通蜂笼：仅消耗（不返还空蜂笼，与 PB 原版 BeeCage.postItemUse 一致）
+		// 加固蜂笼：返还空蜂笼到 cageOutSlot（与 PB 原版 SturdyBeeCage.postItemUse 一致）
+		boolean isSturdyCage = cursorCage.is(ModItems.STURDY_BEE_CAGE.get());
+		if (isSturdyCage) {
+			// 加固蜂笼：创建空蜂笼并输出到 cageOutSlot
+			ItemStack emptyCage = cursorCage.copyWithCount(1);
+			emptyCage.remove(DataComponents.CUSTOM_DATA);
+			ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
+			if (!remainder.isEmpty()) {
+				// 输出槽已满，回滚蜜蜂槽数据
+				targetSlot.clear();
+				return false;
+			}
 		}
 
-		// 成功：消耗手持蜂笼1个
+		// 成功：消耗手持蜂笼1个（普通/加固蜂笼都消耗）
 		cursorCage.shrink(1);
 		manager.getTile().setChanged();
 		return true;

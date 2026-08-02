@@ -1,57 +1,135 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import java.util.List;
+import java.util.Map;
 
+import org.jetbrains.annotations.Nullable;
+
+import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
+
+import cy.jdkdigital.productivebees.init.ModTags;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 
 /**
- * 多花蜜脾蜜蜂适配器接口
+ * 多花蜜脾蜜蜂适配器（模块 1 修复）
  * <br/>
- * 适配 PB 原版的 lumber_bee/quarry_bee/dye_bee/wanna 等多花蜜脾蜜蜂。
- * 这些蜜蜂的产出依赖实体蜜蜂的 savedFlowerPos，万象创世蜂箱无实体无法直接支持。
- * 未来可通过实现此接口，从喂食器中的 BlockItem 推断产物。
- *
- * <h3>集成点（未来实施，当前仅记录）</h3>
+ * 适配 PB 原版的 lumber_bee/quarry_bee/dye_bee 等多花蜜脾蜜蜂。
+ * 这些蜜蜂的产出依赖实体蜜蜂的 savedFlowerPos，机械蜂箱无实体无法直接支持。
+ * 本适配器通过喂食槽内容推断产物，复刻 PB 原版 BeeHelper.getBeeProduce 的动态产物分支。
+ * <p>
+ * 设计原则：
  * <ul>
- *   <li>{@code BeeProduceProcessor.getCachedProduce} 查询 {@code MultiFlowerBeeAdapter}，
- *       若命中则使用适配器产出</li>
- *   <li>{@code BeeInfoHelper.getBeeProduce} 增加 {@code MultiFlowerBeeAdapter} 分支</li>
+ *   <li>单一职责：仅负责 multi-flower 蜜蜂的产物推断，不涉及配方查询或概率判定</li>
+ *   <li>开闭原则：新增 multi-flower 蜜蜂类型只需在 STRATEGIES 中注册新策略，无需修改调用方</li>
+ *   <li>依赖倒置：依赖 FeederSlotManager 抽象而非具体实现</li>
  * </ul>
- *
- * <p>设计原则（ISP 接口隔离）：仅暴露 2 个最小方法，调用方按需实现，不强制依赖其他能力。
  *
  * @since 2.1.0
  */
-public interface MultiFlowerBeeAdapter {
+public final class MultiFlowerBeeAdapter {
 
-	/** 默认无操作实现 — 未注册适配器时使用，避免 NPE 并保持调用路径统一 */
-	MultiFlowerBeeAdapter NOOP = new MultiFlowerBeeAdapter() {
-		@Override
-		public boolean isMultiFlowerBee(ResourceLocation beeTypeKey) {
-			return false;
-		}
+	/**
+	 * 多花蜜脾蜜蜂类型 → 策略映射
+	 * <br/>
+	 * PB 原版 BeeHelper.getBeeProduce 第 387-436 行的 if-else 链转为策略表，
+	 * 避免 if-else 链膨胀，新增蜜蜂类型只需添加策略。
+	 * <p>
+	 * 不含 wanna_bee：战利品表逻辑复杂（需读取琥珀中实体），机械蜂箱无实体架构差异大，单独任务处理。
+	 */
+	private static final Map<ResourceLocation, MultiFlowerStrategy> STRATEGIES = Map.of(
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"),
+			new LumberStrategy(),
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"),
+			new QuarryStrategy(),
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"),
+			new DyeStrategy()
+	);
 
-		@Override
-		public List<ItemStack> produceFromFeederItem(ResourceLocation beeTypeKey, ItemStack feederItem) {
-			return List.of();
-		}
-	};
+	private MultiFlowerBeeAdapter() {
+		// 工具类禁止实例化
+	}
 
 	/**
 	 * 该蜜蜂类型是否为多花蜜脾蜜蜂
 	 *
 	 * @param beeTypeKey 蜜蜂类型 ID
-	 * @return true 如果该蜜蜂为多花蜜蜂，需要走适配器产出路径
+	 * @return true 如果该蜜蜂为多花蜜蜂，需要走喂食槽推断产出路径
 	 */
-	boolean isMultiFlowerBee(ResourceLocation beeTypeKey);
+	public static boolean isMultiFlowerBee(ResourceLocation beeTypeKey) {
+		return STRATEGIES.containsKey(beeTypeKey);
+	}
 
 	/**
-	 * 根据喂食器中的 BlockItem 推断产物
+	 * 从喂食槽推断多花蜜脾蜜蜂的产物
+	 * <br/>
+	 * 复刻 PB 原版 BeeHelper.getBeeProduce 的 lumber/quarry/dye 分支：
+	 * 读取喂食槽中匹配标签的物品，随机返回一个作为产物。
+	 * <p>
+	 * 返回的 ItemStack 会被 BeeProduceProcessor 包装为 ChancedOutput（chance=1.0），
+	 * 由 BeeProduceBatchSampler 处理 rolls 倍率。
 	 *
-	 * @param beeTypeKey  蜜蜂类型 ID
-	 * @param feederItem  喂食器中的物品栈（通常为 BlockItem）
-	 * @return 产物列表，空列表表示无产物
+	 * @param beeTypeKey 蜜蜂类型 ID
+	 * @param feeder    喂食槽管理器（null 时返回空列表）
+	 * @return 产物列表（单个随机物品），喂食槽无匹配返回空列表
 	 */
-	List<ItemStack> produceFromFeederItem(ResourceLocation beeTypeKey, ItemStack feederItem);
+	public static List<ItemStack> sampleProduceFromFeeder(
+			ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder) {
+		if (feeder == null) return List.of();
+		MultiFlowerStrategy strategy = STRATEGIES.get(beeTypeKey);
+		if (strategy == null) return List.of();
+		ItemStack sample = strategy.sampleFromFeeder(feeder);
+		return sample.isEmpty() ? List.of() : List.of(sample);
+	}
+
+	/**
+	 * 多花蜜蜂策略接口
+	 * <br/>
+	 * 每种 multi-flower 蜜蜂对应一个策略，封装产物标签和采样方式。
+	 */
+	private interface MultiFlowerStrategy {
+		ItemStack sampleFromFeeder(FeederSlotManager feeder);
+	}
+
+	/**
+	 * Lumber Bee 策略 — 从喂食槽匹配 productivebees:flowers/lumber 方块标签
+	 * <br/>
+	 * 复刻 PB BeeHelper.getBeeProduce 第 387-390 行：
+	 * getFloweringBlockFromTag(level, flowerPos, ModTags.LUMBER, beeEntity)
+	 */
+	private static final class LumberStrategy implements MultiFlowerStrategy {
+		@Override
+		public ItemStack sampleFromFeeder(FeederSlotManager feeder) {
+			return feeder.getRandomBlockFromFeeder(ModTags.LUMBER);
+		}
+	}
+
+	/**
+	 * Quarry Bee 策略 — 从喂食槽匹配 productivebees:flowers/quarry 方块标签
+	 * <br/>
+	 * 复刻 PB BeeHelper.getBeeProduce 第 391-394 行：
+	 * getFloweringBlockFromTag(level, flowerPos, ModTags.QUARRY, beeEntity)
+	 */
+	private static final class QuarryStrategy implements MultiFlowerStrategy {
+		@Override
+		public ItemStack sampleFromFeeder(FeederSlotManager feeder) {
+			return feeder.getRandomBlockFromFeeder(ModTags.QUARRY);
+		}
+	}
+
+	/**
+	 * Dye Bee 策略 — 从喂食槽匹配 c:dyes 物品标签
+	 * <br/>
+	 * 复刻 PB BeeHelper.getBeeProduce 第 395-398 行：
+	 * dye 不一定是 BlockItem（如玫瑰红染料），使用物品标签查询
+	 */
+	private static final class DyeStrategy implements MultiFlowerStrategy {
+		@Override
+		public ItemStack sampleFromFeeder(FeederSlotManager feeder) {
+			return feeder.getRandomItemFromFeeder(ModTags.Common.DYES);
+		}
+	}
 }

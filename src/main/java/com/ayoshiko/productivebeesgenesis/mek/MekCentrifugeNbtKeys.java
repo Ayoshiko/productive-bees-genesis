@@ -34,4 +34,30 @@ public final class MekCentrifugeNbtKeys {
 	 * 工厂版离心机已通过 {@link #NBT_KEY_MULTI_FLUID_TANKS} 持久化，本键仅基础版使用。
 	 */
 	public static final String NBT_KEY_CENTRIFUGE_FLUID = "productivebeesgenesis_centrifuge_fluid";
+
+	// ===== 模块 3 Bug 1: 镐子破坏持久化 — 冗余槽位 NBT 键 =====
+	// 以下 key 仅在 saveCustomDataForItem（扳手/镐子拆卸）路径写入，作为 MEK ITEM_CONTAINER 组件的冗余备份，
+	// 确保 collectComponents 不完整时（如部分槽位未注册到 InventorySlotHolder）数据仍可恢复。
+
+	/**
+	 * NBT key — 输出槽列表（ListTag，包含主输出槽 + 副输出槽1 + 副输出槽2 的 serializeNBT）
+	 * <br/>
+	 * 模块 3 Bug 1：镐子破坏离心机时，输出槽物品通过 collectComponents 已写入 BLOCK_ENTITY_DATA，
+	 * 但作为冗余备份，额外保存到自定义 NBT 键，确保极端场景下数据可恢复。
+	 */
+	public static final String NBT_KEY_DROP_OUTPUT_SLOTS = "productivebeesgenesis_drop_output_slots";
+
+	/**
+	 * NBT key — 输入槽（蜜脾槽，BasicInventorySlot.serializeNBT）
+	 * <br/>
+	 * 模块 3 Bug 1：输入槽物品的冗余备份。
+	 */
+	public static final String NBT_KEY_DROP_INPUT_SLOT = "productivebeesgenesis_drop_input_slot";
+
+	/**
+	 * NBT key — 能量槽（EnergyInventorySlot.serializeNBT）
+	 * <br/>
+	 * 模块 3 Bug 1：能量槽物品（燃料）的冗余备份。
+	 */
+	public static final String NBT_KEY_DROP_ENERGY_SLOT = "productivebeesgenesis_drop_energy_slot";
 }

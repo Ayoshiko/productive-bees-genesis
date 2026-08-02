@@ -374,38 +374,10 @@ public final class ApiaryOutputBuffer {
 	}
 
 	/**
-	 * 方块破坏时调用：将缓冲区所有产物掉落到世界。
-	 * <br/>
-	 * F4 修复：防止方块破坏时缓冲区产物丢失。调用后清空缓冲区，
-	 * 避免与后续 NBT 序列化（如 getDrops）重复。
-	 * <p>
-	 * 调用时序说明：
-	 * <ul>
-	 *   <li>正常破坏/扳手拆卸：getDrops 先执行并保存 buffer NBT 到 BLOCK_ENTITY_DATA，
-	 *       随后调用 {@link #clear} 清空缓冲区，setRemoved 的 dumpToWorld 检测到空缓冲区跳过掉落 — 无重复</li>
-	 *   <li>爆炸：getDrops 可能不执行或返回空，setRemoved 的 dumpToWorld 兜底掉落 — 无丢失</li>
-	 *   <li>区块卸载：跳过此方法（由 TileEntityMekApiary.chunkUnloading 标志守卫），缓冲区通过 saveAdditional 持久化</li>
-	 * </ul>
-	 *
-	 * @param level 世界实例
-	 * @param pos   方块位置
-	 */
-	public synchronized void dumpToWorld(Level level, BlockPos pos) {
-		if (level == null || pos == null || bufferedStacks.isEmpty()) return;
-		for (ItemStack stack : bufferedStacks) {
-			if (!stack.isEmpty()) {
-				Block.popResource(level, pos, stack);
-			}
-		}
-		bufferedStacks.clear();
-		tile.setChanged();
-	}
-
-	/**
 	 * 清空缓冲区（不掉落）。
 	 * <br/>
-	 * 供 {@link MekApiaryBlock#getDrops} 在保存 buffer NBT 到 BLOCK_ENTITY_DATA 后调用，
-	 * 避免 setRemoved 的 dumpToWorld 重复掉落。
+	 * 供 {@link MekApiaryBlock#getDrops} 和 {@link MekApiaryBlock#onRemove} 在保存 buffer NBT 到 BLOCK_ENTITY_DATA 后调用，
+	 * 防御性清空槽位，避免未来引入新的 popResource 路径导致物品爆出。
 	 */
 	public synchronized void clear() {
 		if (!bufferedStacks.isEmpty()) {

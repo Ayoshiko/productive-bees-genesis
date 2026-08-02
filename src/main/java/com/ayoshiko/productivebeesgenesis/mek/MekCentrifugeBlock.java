@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import java.util.ArrayList;
 import java.util.List;
 
-import mekanism.api.security.IBlockSecurityUtils;
+import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
 import mekanism.common.block.attribute.AttributeStateFacing;
@@ -19,7 +19,6 @@ import mekanism.common.network.to_client.security.PacketSyncSecurity;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.base.TileEntityUpdateable;
-import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.WorldUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -154,7 +153,19 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 		return InteractionResult.PASS;
 	}
 
-	/** 右键物品 — 扳手拆卸 */
+	/**
+	 * 右键物品 — 扳手拆卸/旋转
+	 * <br/>
+	 * 模块 1 修复（v2.4 最终版）：客户端通过 {@link WrenchCapabilityHelper} 判定扳手后返回 SUCCESS
+	 * 阻止 GUI 打开，服务端委托 {@code tile.tryWrench} 处理（与 MEK 原版 {@code BlockTile.useItemOn} 一致）。
+	 * tryWrench 通过 {@link mekanism.common.tags.MekanismTags.Items#CONFIGURATORS} 标签判定扳手，
+	 * 该标签引用 {@code c:tools/wrench}，AE2/OmniTools 扳手均在此标签中。
+	 * <ul>
+	 *   <li>shift+右键：tryWrench → tryWrenchDismantle → dismantleBlock → 拆卸</li>
+	 *   <li>右键（非shift）：tryWrench → tryWrenchRotate → 旋转方向</li>
+	 * </ul>
+	 * 详见 {@link com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock#useItemOn} 的完整说明。
+	 */
 	@Override
 	protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
 			BlockPos pos, Player player, InteractionHand hand,
@@ -166,20 +177,24 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 		if (tile == null) {
 			return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
 		}
+		boolean isWrench = WrenchCapabilityHelper.canUseAsWrench(stack);
+		// 客户端：扳手返回 SUCCESS 阻止 GUI 打开，非扳手走默认交互
 		if (level.isClientSide) {
-			if (MekanismUtils.canUseAsWrench(stack)) {
+			if (isWrench) {
 				return ItemInteractionResult.SUCCESS;
 			}
 			return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
 		}
-		// 扳手拆卸
-		if (player.isShiftKeyDown() && MekanismUtils.canUseAsWrench(stack)) {
-			if (tile.getRadiationScale() <= 0 &&
-					IBlockSecurityUtils.INSTANCE.canAccess(player, level, pos, state, tile)) {
-				WorldUtils.dismantleBlock(state, level, pos, player, stack);
-				return ItemInteractionResult.CONSUME;
+		// 服务端：shift+扳手优先拆卸，直接返回 SUCCESS 阻止 omnitools 的 Item.useOn 拦截
+		// 详见 MekApiaryBlock.useItemOn 的根因说明
+		if (player.isShiftKeyDown() && isWrench) {
+			if (tile.getRadiationScale() <= 0) {
+				WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
+				return ItemInteractionResult.SUCCESS;
 			}
+			return ItemInteractionResult.FAIL;
 		}
+		// 非 shift 场景委托 tryWrench 处理旋转
 		return tile.tryWrench(state, player, stack).getInteractionResult();
 	}
 
@@ -199,6 +214,9 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 	 * 合并方案原理：读取 collectComponents 写入的现有 BLOCK_ENTITY_DATA,
 	 * 将 customNbt 字段逐个合并进去（跳过 "id" 键避免覆盖方块实体类型）,
 	 * 保证 MEK 标准数据 + 自定义数据同时保留。仅当现有 BLOCK_ENTITY_DATA 为 null 时直接覆盖。
+	 * <p>
+	 * 模块 3 Bug 1：保存 BLOCK_ENTITY_DATA 后调用 {@link TileEntityMekCentrifuge#saveAllItemsForDrop()}
+	 * 清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource 导致物品复制。
 	 */
 	@Override
 	protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
@@ -236,6 +254,10 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 					}
 				}
 			}
+			// 模块 3 Bug 1：所有数据保存到掉落物后清空槽位，防止 setRemoved 触发 Ejector 重复 popResource
+			if (updateable instanceof TileEntityMekCentrifuge centrifugeTile) {
+				centrifugeTile.saveAllItemsForDrop();
+			}
 		}
 		return drops;
 	}
@@ -257,5 +279,41 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 				}
 			}
 		}
+	}
+
+	/**
+	 * 方块被移除时清理 — 模块 2 修复（v2.4）
+	 * <br/>
+	 * 参考MEK原版 {@code BlockMekanism.onRemove}：调用 {@code tile.blockRemoved()} 触发清理。
+	 * <p>
+	 * 模块 2 根因修复：v2.3 的 {@code saveAllItemsForDrop} 仅在 {@code getDrops} 中调用，
+	 * 但创造模式左键破坏不走 {@code getDrops}，导致槽位未清空，{@code setRemoved} 触发
+	 * Ejector 组件 {@code popResource} 将物品弹出世界。
+	 * <p>
+	 * 修复方案：覆写 {@code onRemove}，在 {@code tile.blockRemoved()} 之前调用
+	 * {@code saveAllItemsForDrop} 清空所有槽位。这样无论是否走 {@code getDrops}，
+	 * {@code setRemoved} 时 Ejector 检测到空槽位，不执行 {@code popResource}。
+	 * <p>
+	 * 调用顺序保证：
+	 * <ul>
+	 *   <li>非创造模式：{@code getDrops}（保存数据到掉落物 + 清空槽位）→ {@code onRemove}（幂等清空）→ {@code setRemoved}</li>
+	 *   <li>创造模式：{@code onRemove}（清空槽位）→ {@code setRemoved}（不popResource）</li>
+	 *   <li>扳手拆卸：{@code WorldUtils.dismantleBlock} 内部 {@code getDrops} → {@code onRemove} → {@code setRemoved}</li>
+	 * </ul>
+	 * 性能：{@code saveAllItemsForDrop} 是幂等操作，重复调用无副作用，仅在槽位非空时执行清空。
+	 */
+	@Override
+	protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+		if (state.hasBlockEntity() && !state.is(newState.getBlock())) {
+			// 模块 2 修复：清空所有槽位，防止 setRemoved 触发 Ejector.popResource
+			if (!level.isClientSide && level.getBlockEntity(pos) instanceof TileEntityMekCentrifuge centrifugeTile) {
+				centrifugeTile.saveAllItemsForDrop();
+			}
+			TileEntityUpdateable tile = WorldUtils.getTileEntity(TileEntityUpdateable.class, level, pos);
+			if (tile != null) {
+				tile.blockRemoved();
+			}
+		}
+		super.onRemove(state, level, pos, newState, isMoving);
 	}
 }

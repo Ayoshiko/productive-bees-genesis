@@ -443,7 +443,8 @@ class BeeSlotTickProcessor {
 
 				// 同组共享一次配方查询（缓存命中 O(1)）
 				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
-				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level);
+				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
+				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
 				if (produceList.isEmpty()) continue;
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取

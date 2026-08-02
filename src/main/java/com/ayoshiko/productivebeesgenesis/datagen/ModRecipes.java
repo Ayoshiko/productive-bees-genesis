@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.datagen;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.recipe.ApiaryShapedRecipe;
 
-import mekanism.common.recipe.upgrade.MekanismShapedRecipe;
 import mekanism.common.registries.MekanismBlocks;
 
 import net.minecraft.advancements.Advancement;
@@ -69,11 +69,14 @@ public final class ModRecipes extends RecipeProvider {
 	// ======================== MekData配方构建器 ========================
 
 	/**
-	 * 构建mekanism:mek_data类型的有序配方
+	 * 构建 productivebeesgenesis:apiary_shaped 类型的有序配方
 	 * <br/>
-	 * MekanismShapedRecipe是ShapedRecipe的包装器，在合成时保留机器数据（能量、物品等）。
-	 * 由于Mekanism的MekDataShapedRecipeBuilder在datagen模块中（不在主jar中），
-	 * 这里手动构建ShapedRecipe并包装为MekanismShapedRecipe。
+	 * 使用 {@link ApiaryShapedRecipe}（继承 MekanismShapedRecipe）包装 ShapedRecipe，
+	 * 在合成时保留机器数据（能量、物品等）的同时转移自定义 NBT（蜜蜂/PB升级/喂食槽等），
+	 * 避免合成升级路径数据丢失。序列化器为 {@link ApiaryShapedRecipe#SERIALIZER}
+	 * （{@code productivebeesgenesis:apiary_shaped}），确保游戏加载配方时创建
+	 * ApiaryShapedRecipe 实例，使 assemble 覆盖（数据转移）真正生效。
+	 * JSON 格式与 vanilla ShapedRecipe 完全一致。
 	 */
 	static final class MekDataBuilder {
 		private final ItemStack result;
@@ -119,8 +122,9 @@ public final class ModRecipes extends RecipeProvider {
 					"", CraftingBookCategory.EQUIPMENT,
 					ShapedRecipePattern.of(key, pattern),
 					result, true);
-			// 包装为MekanismShapedRecipe，使用mekanism:mek_data序列化器
-			Recipe<?> mekRecipe = new MekanismShapedRecipe(shapedRecipe);
+			// 包装为ApiaryShapedRecipe，使用mekanism:mek_data序列化器
+			// ApiaryShapedRecipe继承MekanismShapedRecipe，重写assemble转移BLOCK_ENTITY_DATA中的自定义NBT
+			Recipe<?> mekRecipe = new ApiaryShapedRecipe(shapedRecipe);
 
 			net.minecraft.advancements.AdvancementHolder advancementHolder = null;
 			if (!criteria.isEmpty()) {

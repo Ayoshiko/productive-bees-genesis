@@ -5,6 +5,8 @@ import java.util.List;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.Upgrade;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -47,6 +49,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -389,6 +392,58 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		super.loadAdditional(nbt, provider);
 		saveHandler.loadAdditional(nbt, provider);
 	}
+
+	/**
+	 * 保存全部数据后清空所有槽位 — 防止 setRemoved 触发 Ejector 重复 popResource
+	 * <br/>
+	 * 模块 3 Bug 1：镐子破坏离心机时，{@code getDrops} 已将所有数据保存到掉落物的
+	 * BLOCK_ENTITY_DATA 组件后调用本方法，清空所有槽位，使 {@code setRemoved} 触发的
+	 * Ejector 组件检查到槽位为空，不执行 {@code popResource}，避免物品复制 bug。
+	 * <p>
+	 * 模块 3 Bug 2：工厂安装器升级时，{@code getUpgradeData} 已通过深拷贝保存槽位内容到
+	 * {@link CentrifugeUpgradeData} 后调用本方法，清空旧方块槽位，防止 Ejector 重复弹出。
+	 * <p>
+	 * 清空范围：主输出槽、副输出槽1、副输出槽2、输入槽、能量槽、流体罐、PB 升级输入/输出槽。
+	 * 性能：直接清空槽位，不需要先序列化（数据已通过 saveCustomDataForItem 或深拷贝保存）。
+	 */
+	public void saveAllItemsForDrop() {
+		// 异常隔离：每组清空操作独立 try-catch，防止单点异常导致后续槽位未清空（Ejector 仍 popResource）
+		try {
+			// 主输出槽 + 副输出槽1 + 副输出槽2
+			accessor().productivebeesgenesis$getOutputSlot().setStack(ItemStack.EMPTY);
+			slotManager.getSecondaryOutputSlot().setStack(ItemStack.EMPTY);
+			slotManager.getTertiaryOutputSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			DevLog.error("离心机 saveAllItemsForDrop: 清空输出槽失败", e);
+		}
+		try {
+			// 输入槽（蜜脾槽）
+			accessor().productivebeesgenesis$getInputSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			DevLog.error("离心机 saveAllItemsForDrop: 清空输入槽失败", e);
+		}
+		try {
+			// 能量槽
+			accessor().productivebeesgenesis$getEnergySlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			DevLog.error("离心机 saveAllItemsForDrop: 清空能量槽失败", e);
+		}
+		try {
+			// 流体罐（extract 清空所有流体，使用 MEK 3 参数版本与 insert 对称）
+			// IExtendedFluidTank.drain 只有 2 参数版本，extract 提供 Action + AutomationType 3 参数版本
+			slotManager.getFluidOutputTank().extract(Integer.MAX_VALUE, Action.EXECUTE, AutomationType.INTERNAL);
+		} catch (RuntimeException e) {
+			DevLog.error("离心机 saveAllItemsForDrop: 清空流体罐失败", e);
+		}
+		try {
+			// PB 升级输入/输出槽
+			pbUpgradeHandler.getInputSlot().setStack(ItemStack.EMPTY);
+			pbUpgradeHandler.getOutputSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			DevLog.error("离心机 saveAllItemsForDrop: 清空 PB 升级槽失败", e);
+		}
+		setChanged();
+	}
 	/** 写入配置卡数据 — 添加PB升级数量和AE2 per-tile状态 */
 	@Override
 	public void writeSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
@@ -415,6 +470,11 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * 构建升级数据 — 委托 {@link MekCentrifugeSaveHandler#buildUpgradeData}
 	 * <br/>
 	 * 返回 {@link CentrifugeUpgradeData} 保存完整状态供工厂安装器升级时流转。
+	 * <p>
+	 * 模块 3 Bug 2：buildUpgradeData 内部已通过 ItemStack.copy() 深拷贝槽位内容到
+	 * {@link CentrifugeUpgradeData} 的 outputItems/inputItems/energyItem 字段，
+	 * 此处调用 {@link #saveAllItemsForDrop()} 清空旧方块所有槽位，
+	 * 防止 setRemoved 触发 Ejector 重复 popResource 导致物品复制。
 	 *
 	 * @param provider 注册表访问器
 	 * @return 包含完整离心机状态的升级数据
@@ -422,8 +482,11 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@NotNull
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		return saveHandler.buildUpgradeData(provider, redstone, getControlType(),
+		CentrifugeUpgradeData data = saveHandler.buildUpgradeData(provider, redstone, getControlType(),
 				getOperatingTicks(), getComponents());
+		// 模块 3 Bug 2：深拷贝已保存到升级数据，清空旧方块槽位防 Ejector 重复 popResource
+		saveAllItemsForDrop();
+		return data;
 	}
 
 	/**

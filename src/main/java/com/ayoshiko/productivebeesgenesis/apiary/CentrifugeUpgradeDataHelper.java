@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -144,6 +146,20 @@ public final class CentrifugeUpgradeDataHelper {
 			}
 		}
 
+		// 模块 3 Bug 2: 深拷贝输出槽/输入槽/能量槽物品，独立于父类引用列表
+		// 原理：getUpgradeData 调用 buildUpgradeData 后会清空旧方块槽位（saveAllItemsForDrop），
+		// 父类 outputSlots/inputSlots/energySlot 引用指向空栈，applyUpgradeData 必须从深拷贝恢复。
+		// O(N) 复杂度可接受（N=输出槽+输入槽数量，基础机 4 个，工厂 2×processes+1 个）
+		List<ItemStack> outputItems = new ArrayList<>(outputSlots.size());
+		for (IInventorySlot slot : outputSlots) {
+			outputItems.add(slot.getStack().copy());
+		}
+		List<ItemStack> inputItems = new ArrayList<>(inputSlots.size());
+		for (IInventorySlot slot : inputSlots) {
+			inputItems.add(slot.getStack().copy());
+		}
+		ItemStack energyItem = energySlot.getStack().copy();
+
 		return new CentrifugeUpgradeData(provider, redstone, controlType,
 				energyContainer, progress, energySlot, inputSlots, outputSlots,
 				sorting, components,
@@ -152,7 +168,10 @@ public final class CentrifugeUpgradeDataHelper {
 				aeItemInputEnabled, aeInputNbtIgnore,
 				aeInputFilterMode, aeInputFilterEntries, preciseMode,
 				aeItemOutputEnabled, aeFluidOutputEnabled,
-				multiFluidTanksNbt);
+				multiFluidTanksNbt,
+				outputItems,
+				inputItems,
+				energyItem);
 	}
 
 	/**
@@ -191,19 +210,31 @@ public final class CentrifugeUpgradeDataHelper {
 	 *   <li>AE2 未加载时跳过 AE2 相关恢复，新方块使用默认值</li>
 	 *   <li>PB 升级映射为空或 null 时跳过 PB 恢复</li>
 	 * </ul>
+	 * <p>
+	 * 模块 3 Bug 2：追加从深拷贝字段恢复输出槽/输入槽/能量槽物品。
+	 * 由于 super.parseUpgradeData 通过父类引用列表读取槽位内容，
+	 * 而 getUpgradeData 调用 saveAllItemsForDrop 已清空旧方块槽位，
+	 * 引用指向空栈，必须从深拷贝恢复。
+	 * 向后兼容：深拷贝字段为 null 时跳过（旧升级数据，由 super.parseUpgradeData 引用路径处理）。
 	 *
-	 * @param provider          注册表访问器
-	 * @param data              离心机工厂升级数据
-	 * @param pbUpgradeAccess   PB 升级访问接口（接收升级数量恢复，基础机/工厂机均适用）
-	 * @param ae2StateHolder    AE2 状态持有者（接收 per-tile 设置恢复）
-	 * @param fluidOutputHolder Task 5: 流体输出槽持有者（MultiFluidTankHolder 时恢复多槽内容）
+	 * @param provider           注册表访问器
+	 * @param data               离心机工厂升级数据
+	 * @param pbUpgradeAccess    PB 升级访问接口（接收升级数量恢复，基础机/工厂机均适用）
+	 * @param ae2StateHolder     AE2 状态持有者（接收 per-tile 设置恢复）
+	 * @param fluidOutputHolder  Task 5: 流体输出槽持有者（MultiFluidTankHolder 时恢复多槽内容）
+	 * @param targetInputSlots   模块 3 Bug 2: 新方块输入槽列表（用于深拷贝恢复，null 时跳过）
+	 * @param targetOutputSlots  模块 3 Bug 2: 新方块输出槽列表（用于深拷贝恢复，null 时跳过）
+	 * @param targetEnergySlot   模块 3 Bug 2: 新方块能量槽（用于深拷贝恢复，null 时跳过）
 	 */
 	public static void applyUpgradeData(
 			HolderLookup.Provider provider,
 			CentrifugeUpgradeData data,
 			ICentrifugePbUpgradeAccess pbUpgradeAccess,
 			Ae2OutputStateHolder ae2StateHolder,
-			IFluidTankHolder fluidOutputHolder) {
+			IFluidTankHolder fluidOutputHolder,
+			@Nullable List<IInventorySlot> targetInputSlots,
+			@Nullable List<IInventorySlot> targetOutputSlots,
+			@Nullable IInventorySlot targetEnergySlot) {
 
 		// 恢复 PB 升级输入/输出槽内容（防止升级时槽内物品丢失，null 守卫）
 		// 修复 v14 loadSlots/loadCounts 顺序：必须先恢复槽位,再恢复数量。
@@ -271,6 +302,53 @@ public final class CentrifugeUpgradeDataHelper {
 				// 修复 MEDIUM-3: holder 类型不匹配（MULTI→SINGLE 降级）,合并多流体槽内容到单流体槽
 				mergeMultiFluidIntoSingleTank(data.multiFluidTanksNbt, provider, fluidOutputHolder);
 			}
+		}
+
+		// 模块 3 Bug 2: 从深拷贝字段恢复输出槽/输入槽/能量槽物品
+		// 原理：super.parseUpgradeData 通过父类引用列表读取槽位内容，
+		// 但 getUpgradeData 调用 saveAllItemsForDrop 已清空旧方块槽位，
+		// 引用指向空栈，必须从深拷贝字段恢复（覆盖 super.parseUpgradeData 写入的空栈）。
+		// 向后兼容：深拷贝字段为 null 时跳过（旧升级数据，super.parseUpgradeData 引用路径已处理）
+		restoreItemStackDeepCopies(data, targetInputSlots, targetOutputSlots, targetEnergySlot);
+	}
+
+	/**
+	 * 从深拷贝字段恢复输出槽/输入槽/能量槽物品到新方块
+	 * <br/>
+	 * 模块 3 Bug 2：applyUpgradeData 末尾调用，覆盖 super.parseUpgradeData 写入的空栈。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP：仅负责从深拷贝字段恢复槽位，不涉及 PB 升级/AE2/流体恢复</li>
+	 *   <li>OCP：通过参数传入目标槽位列表，不依赖具体 TileEntity 类型</li>
+	 *   <li>向后兼容：深拷贝字段或目标槽位为 null 时跳过（旧数据/未传入目标槽位）</li>
+	 * </ul>
+	 *
+	 * @param data              离心机工厂升级数据
+	 * @param targetInputSlots  新方块输入槽列表（null 时跳过输入槽恢复）
+	 * @param targetOutputSlots 新方块输出槽列表（null 时跳过输出槽恢复）
+	 * @param targetEnergySlot  新方块能量槽（null 时跳过能量槽恢复）
+	 */
+	private static void restoreItemStackDeepCopies(
+			CentrifugeUpgradeData data,
+			@Nullable List<IInventorySlot> targetInputSlots,
+			@Nullable List<IInventorySlot> targetOutputSlots,
+			@Nullable IInventorySlot targetEnergySlot) {
+		// 输出槽深拷贝恢复（顺序与 data.outputItems 一致）
+		if (data.outputItems != null && targetOutputSlots != null) {
+			for (int i = 0; i < data.outputItems.size() && i < targetOutputSlots.size(); i++) {
+				targetOutputSlots.get(i).setStack(data.outputItems.get(i));
+			}
+		}
+		// 输入槽深拷贝恢复
+		if (data.inputItems != null && targetInputSlots != null) {
+			for (int i = 0; i < data.inputItems.size() && i < targetInputSlots.size(); i++) {
+				targetInputSlots.get(i).setStack(data.inputItems.get(i));
+			}
+		}
+		// 能量槽深拷贝恢复
+		if (data.energyItem != null && targetEnergySlot != null) {
+			targetEnergySlot.setStack(data.energyItem);
 		}
 	}
 

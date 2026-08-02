@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
@@ -22,6 +23,7 @@ import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -334,7 +336,40 @@ public class BeeProduceProcessor {
 	 * @return 配方输出表（ItemStack -> ChancedOutput），无配方返回空 Map，永不为 null
 	 */
 	public Map<ItemStack, ChancedOutput> getCachedProduce(ResourceLocation beeTypeKey, Level level) {
+		return getCachedProduce(beeTypeKey, level, null);
+	}
+
+	/**
+	 * 获取指定蜜蜂类型键的缓存产出配方输出表（模块 1：支持 multi-flower 蜜蜂）
+	 * <br/>
+	 * 模块 1 修复：新增 feeder 参数，对 lumber_bee/quarry_bee/dye_bee 等 multi-flower 蜜蜂：
+	 * <ul>
+	 *   <li>跳过正/负缓存（产物依赖喂食槽实时状态，不能静态缓存）</li>
+	 *   <li>调用 MultiFlowerBeeAdapter.sampleProduceFromFeeder 从喂食槽推断产物</li>
+	 *   <li>喂食槽无匹配返回空 Map（不写入负缓存，下次喂食槽有内容时重新查询）</li>
+	 * </ul>
+	 * 非 multi-flower 蜜蜂走原有正/负缓存路径，行为不变。
+	 *
+	 * @param beeTypeKey 蜜蜂类型键
+	 * @param level      世界实例
+	 * @param feeder     喂食槽管理器（null 时 multi-flower 蜜蜂返回空 Map，普通蜜蜂不受影响）
+	 * @return 配方输出表，无配方返回空 Map，永不为 null
+	 */
+	public Map<ItemStack, ChancedOutput> getCachedProduce(ResourceLocation beeTypeKey, Level level,
+			FeederSlotManager feeder) {
 		if (beeTypeKey == null || level == null) return Map.of();
+
+		// 模块 1：multi-flower 蜜蜂走喂食槽推断路径，不经过缓存
+		if (MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey)) {
+			List<ItemStack> feederItems = MultiFlowerBeeAdapter.sampleProduceFromFeeder(beeTypeKey, feeder);
+			if (feederItems.isEmpty()) return Map.of();
+			// 包装为 ChancedOutput（min=max=1, chance=1.0 必产），由 BeeProduceBatchSampler 处理 rolls
+			Map<ItemStack, ChancedOutput> result = new LinkedHashMap<>(feederItems.size());
+			for (ItemStack stack : feederItems) {
+				result.put(stack, new ChancedOutput(Ingredient.of(stack), 1, 1, 1.0f));
+			}
+			return result;
+		}
 
 		// 1. 查正缓存（有产出配方的蜜蜂）
 		Map<ItemStack, ChancedOutput> cached = produceCache.get(beeTypeKey);

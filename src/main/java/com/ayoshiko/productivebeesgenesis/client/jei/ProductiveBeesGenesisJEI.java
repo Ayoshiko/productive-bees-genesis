@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.jei;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
@@ -25,17 +26,23 @@ import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 资源蜜蜂：创世模组的JEI插件
@@ -147,6 +154,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 * <br/>
 	 * 从PB的RecipeManager获取所有CentrifugeRecipe注册到JEI，
 	 * 并为每个有bee_type的蜜脾配方动态生成对应的蜜脾块配方（4倍产出）。
+	 * 模块 1：同时为特殊蜜脾块（ghostly/milky/powdery/vanilla）生成派生配方。
 	 * <p>
 	 * 蜜脾块配方生成结果会被缓存，缓存键为 {@link ProductiveBeesGenesis#RECIPE_VERSION}，
 	 * 配方重载时版本号递增自动失效，避免重复遍历蜜脾配方并创建大量派生对象。
@@ -167,6 +175,8 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			blockRecipes = cachedCombBlockRecipes;
 		} else {
 			blockRecipes = generateCombBlockRecipes(centrifugeRecipes);
+			// 模块 1：合并特殊蜜脾块配方（ghostly/milky/powdery/vanilla）
+			blockRecipes.addAll(generateSpecialCombBlockRecipes());
 			cachedCombBlockRecipes = blockRecipes;
 			cachedRecipeVersion = currentVersion;
 		}
@@ -192,15 +202,49 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	}
 
 	/**
+	 * Wax 物品标签 — 复刻 PB 热力离心机 stripWax 行为
+	 * <br/>
+	 * PB 原版 ModTags.Common.WAXES = c:waxes，蜜脾块离心时过滤此标签的产出。
+	 * 蜜脾离心保留 Wax（符合 PB 原版），仅蜜脾块配方派生时过滤。
+	 */
+	private static final TagKey<Item> WAXES_TAG = TagKey.create(
+			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "waxes"));
+
+	/**
 	 * 动态生成蜜脾块离心配方
 	 * <br/>
 	 * 原理：蜜脾块 = 4个蜜脾合成，所以蜜脾块的离心产出为蜜脾的4倍。
 	 * 遍历所有蜜脾离心配方，为每个有bee_type的蜜脾生成对应的蜜脾块配方。
 	 * 跳过没有bee_type的配方（如原版蜜脾）和已是蜜脾块配方的条目。
+	 * <p>
+	 * 模块 3 修复：复刻 PB 热力离心机 stripWax 行为，蜜脾块配方过滤 c:waxes 标签的产出。
+	 * PB 原版 HeatedCentrifugeBlockEntity 处理蜜脾块时 stripWax=true，蜜脾块离心不产出 Wax。
+	 * 蜜脾配方保留 Wax 不变（蜜脾离心产出 Wax 是正常的）。
+	 * <p>
+	 * 模块 6 修复（v2.4）：PB 原版有独立的蜜脾块配方（如 comb_blazing.json 产出 blaze_rod），
+	 * 与单蜜脾配方（honeycomb_blazing.json 产出 blaze_powder）产物不同。
+	 * 原生蜜脾块配方已在 centrifugeRecipes 中注册到 JEI，此处不能再为同一 bee_type 派生配方，
+	 * 否则 JEI 显示双配方且实际离心走派生路径产出错误（烈焰粉而非烈焰棒）。
+	 * 修复：第一遍扫描收集有原生蜜脾块配方的 bee_type 集合，第二遍派生时跳过这些 bee_type。
 	 */
 	private List<CentrifugeRecipe> generateCombBlockRecipes(List<RecipeHolder<CentrifugeRecipe>> honeycombRecipes) {
 		List<CentrifugeRecipe> blockRecipes = new ArrayList<>();
 
+		// 模块 6 修复：第一遍扫描 — 收集有 PB 原生蜜脾块配方的 bee_type
+		Set<ResourceLocation> nativeCombBlockBeeTypes = new HashSet<>();
+		for (RecipeHolder<CentrifugeRecipe> holder : honeycombRecipes) {
+			CentrifugeRecipe recipe = holder.value();
+			ItemStack[] inputItems = recipe.ingredient.getItems();
+			if (inputItems.length == 0) continue;
+			if (inputItems[0].getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+				ResourceLocation beeType = inputItems[0].get(ModDataComponents.BEE_TYPE.get());
+				if (beeType != null) {
+					nativeCombBlockBeeTypes.add(beeType);
+				}
+			}
+		}
+
+		// 第二遍 — 为无原生蜜脾块配方的 bee_type 派生
 		for (RecipeHolder<CentrifugeRecipe> holder : honeycombRecipes) {
 			CentrifugeRecipe recipe = holder.value();
 			ItemStack[] inputItems = recipe.ingredient.getItems();
@@ -213,6 +257,9 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			ResourceLocation beeType = inputItems[0].get(ModDataComponents.BEE_TYPE.get());
 			if (beeType == null) continue;
 
+			// 模块 6 修复：跳过有原生蜜脾块配方的 bee_type（原生配方已在 centrifugeRecipes 中注册）
+			if (nativeCombBlockBeeTypes.contains(beeType)) continue;
+
 			// 创建蜜脾块输入
 			ItemStack combBlock = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
 			combBlock.set(ModDataComponents.BEE_TYPE.get(), beeType);
@@ -221,6 +268,8 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			int multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
 			List<ChancedOutput> blockOutputs = new ArrayList<>();
 			for (ChancedOutput chanced : recipe.itemOutput) {
+				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
+				if (isWaxOutput(chanced)) continue;
 				blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier, chanced.chance()));
 			}
 
@@ -233,6 +282,52 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		}
 
 		return blockRecipes;
+	}
+
+	/**
+	 * 判断 ChancedOutput 是否为 Wax 产出（复刻 PB stripWax 行为）
+	 */
+	private static boolean isWaxOutput(ChancedOutput chanced) {
+		ItemStack[] items = chanced.ingredient().getItems();
+		for (ItemStack stack : items) {
+			if (stack.is(WAXES_TAG)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * 动态生成特殊蜜脾块离心配方 — 模块 1
+	 * <br/>
+	 * 为 4 种特殊蜜脾块（comb_ghostly/comb_milky/comb_powdery/vanilla honeycomb_block）
+	 * 从 {@link CentrifugeRecipeIndex} 静态索引获取派生配方（4倍产出 + 过滤 Wax），
+	 * 避免重复计算。索引在 rebuild 时一次性构建，JEI 注册时直接复用。
+	 * <p>
+	 * 与 {@link #generateCombBlockRecipes} 互补：后者处理有 bee_type 的 configurable_comb，
+	 * 本方法处理无 bee_type 的特殊蜜脾（ghostly/milky/powdery/vanilla）。
+	 */
+	private List<CentrifugeRecipe> generateSpecialCombBlockRecipes() {
+		List<CentrifugeRecipe> blockRecipes = new ArrayList<>();
+		// PB 特殊蜜脾块（ModBlocks 与本项目 ModBlocks 重名，使用全限定名避免冲突）
+		addSpecialBlockRecipeIfPresent(blockRecipes, cy.jdkdigital.productivebees.init.ModBlocks.COMB_GHOSTLY.get());
+		addSpecialBlockRecipeIfPresent(blockRecipes, cy.jdkdigital.productivebees.init.ModBlocks.COMB_MILKY.get());
+		addSpecialBlockRecipeIfPresent(blockRecipes, cy.jdkdigital.productivebees.init.ModBlocks.COMB_POWDERY.get());
+		// 原版蜜脾块
+		addSpecialBlockRecipeIfPresent(blockRecipes, Blocks.HONEYCOMB_BLOCK);
+		return blockRecipes;
+	}
+
+	/**
+	 * 从静态索引获取单个特殊蜜脾块配方并加入列表 — 模块 1 辅助方法
+	 *
+	 * @param recipes 配方收集列表
+	 * @param block   特殊蜜脾块对应的方块（ItemLike）
+	 */
+	private void addSpecialBlockRecipeIfPresent(List<CentrifugeRecipe> recipes, ItemLike block) {
+		ItemStack stack = new ItemStack(block);
+		RecipeHolder<CentrifugeRecipe> holder = CentrifugeRecipeIndex.getSpecialCombBlock(stack);
+		if (holder != null) {
+			recipes.add(holder.value());
+		}
 	}
 
 	/**

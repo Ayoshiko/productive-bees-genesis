@@ -42,12 +42,15 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 
+import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.capabilities.ICapabilityAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -63,6 +66,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
@@ -285,6 +289,38 @@ public final class ProductiveBeesGenesis {
 		eventBus.addListener(this::onRegisterCapabilities);
 		// 注册数据生成器
 		eventBus.addListener(this::gatherData);
+		// 模块 3 修复：在物品注册完成后调用 IAttachmentAware.attachAttachments，
+		// 补全 MEK 原版的附件注册流程（项目使用标准 DeferredRegister.Items，不会自动调用）
+		eventBus.addListener(EventPriority.LOWEST, (RegisterEvent event) -> onRegisterItemAttachments(event, eventBus));
+	}
+
+	/**
+	 * 物品注册完成后调用 IAttachmentAware.attachAttachments — 模块 3 修复
+	 * <br/>
+	 * 原理：MEK 原版 {@code ItemDeferredRegister.register} 在 {@code RegisterEvent(LOWEST)} 期间
+	 * 调用 {@code ItemRegistryObject.attachDefaultContainers(bus)}，进而调用
+	 * {@code IAttachmentAware.attachAttachments(eventBus)}。项目使用标准 {@code DeferredRegister.Items}
+	 * 不会自动调用，需手动补全。
+	 * <p>
+	 * {@code attachAttachments} 通过 {@code ContainerType.ENERGY.addDefaultCreators(eventBus, ...)}
+	 * 注册 {@code RegisterCapabilitiesEvent} 监听器，使 ENERGY capability 能在
+	 * {@code RegisterCapabilitiesEvent} 触发时注册到 ItemStack（合成升级后机器可被电缆充能）。
+	 * <p>
+	 * 顺序安全性：{@code addDefaultCreators} 使用 put 语义覆盖创建器，但监听器只注册一次。
+	 * 与 {@link com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainerRegistrar} 和
+	 * {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeContainerRegistrar} 的 ENERGY 创建器
+	 * 注册(传 null)互不冲突，无论执行顺序如何，ENERGY capability 监听器最终都会注册。
+	 */
+	private void onRegisterItemAttachments(RegisterEvent event, IEventBus eventBus) {
+		if (!event.getRegistryKey().equals(Registries.ITEM)) {
+			return;
+		}
+		for (var entry : ModItems.ITEMS.getEntries()) {
+			Item item = entry.get();
+			if (item instanceof IAttachmentAware aware) {
+				aware.attachAttachments(eventBus);
+			}
+		}
 	}
 
 	/**
@@ -313,6 +349,9 @@ public final class ProductiveBeesGenesis {
 			PayloadRateLimiter.onPlayerLogout(event.getEntity().getUUID());
 			ModPayloads.clearFilterSyncRateLimit(event.getEntity().getUUID());
 		});
+		// 合成升级数据转移已迁移至 ApiaryShapedRecipe.assemble（recipe 包），
+		// 通过重写 MekanismShapedRecipe.assemble 在输入消耗前转移 BLOCK_ENTITY_DATA，
+		// 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
 	}

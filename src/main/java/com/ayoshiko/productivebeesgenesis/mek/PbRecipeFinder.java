@@ -126,6 +126,27 @@ public class PbRecipeFinder {
 			return null;
 		}
 
+		// 模块 1：特殊蜜脾块（ghostly/milky/powdery/vanilla）— 通过 c:storage_blocks/honeycombs 标签识别
+		// PB 原版 HeatedCentrifugeBlockEntity 检测蜜脾块输入走 BeeHelper.getSingleComb 拆分逻辑，
+		// 这里通过 CentrifugeRecipeIndex 静态预生成的派生蜜脾块配方实现等价查找（O(1)）。
+		if (CentrifugeRecipeIndex.isStorageBlockHoneycomb(input)) {
+			RecipeHolder<CentrifugeRecipe> specialRecipe = CentrifugeRecipeIndex.getSpecialCombBlock(input);
+			if (specialRecipe != null) {
+				pbRecipeCache.put(input, specialRecipe);
+				return specialRecipe;
+			}
+			// 索引未命中 — 全量遍历回退（防御性）
+			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
+					.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
+				if (holder.value().ingredient.test(input)) {
+					pbRecipeCache.put(input, holder);
+					return holder;
+				}
+			}
+			pbRecipeCache.put(input, null);
+			return null;
+		}
+
 		// 普通蜜脾 — 优先从索引查找（O(1)），未命中再全量遍历（防御性回退）
 		ResourceLocation beeType = input.get(ModDataComponents.BEE_TYPE.get());
 		if (beeType != null) {

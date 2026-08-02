@@ -23,6 +23,91 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.5] - 2026-08-02
+
+v2.0.5 是 SemVer PATCH 版本，集中修复玩家实测反馈的多项问题：离心机处理流体蜜脾时偶发卡住、工作台合成升级工厂时蜜蜂与升级数据丢失并引发崩溃、AE2 与全能工具扳手无法拆卸机器、镐子破坏机器时物品复制与数据丢失、蜜脾块离心配方产出多余蜡与原生配方重复显示、Lumber Bee 不按喂食槽产出对应木头、喂食槽花朵名称超出 GUI 边框、普通蜂笼使用后错误返还空蜂笼等。所有修复均经过日志分析、代码审查与编译验证。
+
+### 修复
+
+- **离心机流体推送卡住——退避死循环（CRITICAL）** — 解决离心机处理产物为流体的蜜脾时偶发性停止加工，换一台离心机又正常的问题
+  - **问题**：离心机处理流体蜜脾时偶发卡住（机器停止加工），玩家报告为偶发性、换一台离心机又正常工作。日志分析显示 AE2 流体推送退避指数反复在 0→5→6→...→16→0 之间循环，形成无限退避
+  - **根因**（三重叠加）：
+    1. **缺少网格节点状态检查**：`Ae2FluidPusher` 未检查 Grid Node 是否为 `STATE_ONLINE` 就直接调用 `poweredInsert`（物品推送器 `Ae2OutputPusher` 有此检查）。当节点处于 `OFFLINE`/`NETWORK_BOOTING`/`MISSING_CHANNEL` 时，`poweredInsert` 必然失败并触发 30s 激进退避
+    2. **退避重置死循环**：原逻辑中 `anySuccess`（含部分成功）会调用 `recordSuccess()` 将退避指数重置为 0。网格间歇性不稳定时，30s 退避到期后部分成功重置退避，紧接着完全失败又触发 30s 激进退避，形成"30s退避→部分成功→重置→立即失败→30s退避"的无限循环
+    3. **误触退避**：`totalRequested` 包含 batch buffer 跨 tick 累积量，但 tank 可能在累积期间已被 Ejector 清空，此时 `totalRequested > 0` 但实际无流体可推送，仍会触发退避
+  - **修复**：
+    1. 在 TPS 检查后、获取网格前，添加与 `Ae2OutputPusher` 对称的 Grid Node 状态检查：仅 `STATE_ONLINE` 时继续，非 ONLINE 直接返回不触发退避
+    2. 新增 `hasLeftover` 标志区分完全成功与部分成功：仅完全成功（`anySuccess && !hasLeftover`）时重置退避；部分成功保持当前退避级别，不重置也不升级
+    3. 新增 `totalActualShrunk` 变量替代 `totalRequested` 判断退避触发条件：区分"推送失败"和"tank 已空无需推送"
+  - **影响范围**：1 个文件修改（`Ae2FluidPusher.java`）
+
+- **合成升级数据丢失与崩溃（CRITICAL）** — 解决在工作台合成升级蜂箱/离心机工厂时，内部蜜蜂、PB升级、MEK升级丢失，输出槽有物品时无法合成，以及合成结果放入背包后游戏崩溃的问题
+  - **问题**：玩家报告合成升级时"除了 MEK 升级都保留了"，随后鼠标移到合成升级后的精英蜂箱工厂上游戏崩溃（`Missing id for entity`）。进一步测试发现输出槽有物品时工作台不显示合成结果
+  - **根因**（三重叠加）：
+    1. **assemble 覆盖从未执行**：工厂升级配方使用 MEK 的 `MEK_DATA` 序列化器，反序列化时创建的是 `MekanismShapedRecipe` 实例而非本模组的 `ApiaryShapedRecipe`，重写的 `assemble` 从未被调用，蜜蜂/PB升级等存储在 `BLOCK_ENTITY_DATA` 中的自定义 NBT 字段全部丢失
+    2. **输出槽守卫返回 EMPTY**：`MekanismShapedRecipe.assemble` 在输入机器输出槽有物品时通过 `ItemRecipeData` 转移失败返回 `EMPTY`，导致输出槽有物品时无法合成
+    3. **BLOCK_ENTITY_DATA 缺少 id 字段**：合成转移 `BLOCK_ENTITY_DATA` 时 `remove("id")`，但该组件使用 `CustomData.CODEC_WITH_ID` 校验顶层 `id`（BlockEntityType 注册键），缺失时在物品编码/解码/保存玩家 NBT 时抛 `Missing id for entity` 崩溃
+  - **修复**：
+    1. 新增自定义配方序列化器 `productivebeesgenesis:apiary_shaped`，反序列化时创建 `ApiaryShapedRecipe` 实例使 `assemble` 覆盖生效；datagen 输出 36 个工厂升级配方 JSON 全部切换至新序列化器
+    2. 重写 `assemble`：先调用 `super.assemble` 处理 MEK 标准升级数据，再从 `CraftingInput` 转移/合并 `BLOCK_ENTITY_DATA`（蜜蜂槽取并集、PB升级累加上限截断、其他字段取首个非空）；`super` 返回 EMPTY 时走降级路径，复制输入全部组件（含 `mekanism:upgrades`）再覆盖 `BLOCK_ENTITY_DATA`
+    3. `remove("id")` 改为 `putString("id", targetTileId)`，通过 `IHasTileEntity.getTileType()` 解析目标方块 BlockEntityType 注册键，满足 CODEC_WITH_ID 校验
+    4. 配合修复：容器注册器能量槽新增 `INTERNAL` 模式允许合成路径插入能量物品；工厂离心机 `parseUpgradeData` 传递新方块槽位给 helper 深拷贝恢复；ME/EME 工厂蜂箱蜜蜂槽容量查询接口供合并时确定目标容量
+  - **影响范围**：4 个新增文件 + 21 个文件修改 + 36 个配方 JSON 重新生成
+
+- **AE2/全能工具扳手无法拆卸机器（MAJOR）** — 解决 AE2 赛特斯石英扳手、石英扳手和全能工具扳手模式下 shift+右键无法拆解蜂箱/离心机，只能旋转方向的问题
+  - **问题**：所有通用扳手 shift+右键只能旋转机器方向，无法像 MEK 原版配置卡那样拆卸
+  - **根因**：omnitools 的 `OmniToolItem.useOn` 总是先调用 `WrenchHandlerRegistry.handle`，其中 `MekanismTransmitterWrenchHandler.canHandle` 对任何暴露 `CONFIGURABLE` 能力的 MEK 方块（包括本模组机器）返回 true，其 `handle` 在服务端调用 `IConfigurable.onSneakRightClick` 打开配置 UI 并返回 consumesAction，先于 `Block.useItemOn` 执行，导致方块内的 shift+扳手拆卸分支从未触发
+  - **修复**：新增 `ApiaryWrenchDismantleHandler` 监听 `PlayerInteractEvent.RightClickBlock`（HIGHEST 优先级，仅服务端），在 shift+扳手+本模组机器时直接调用 `WorldUtils.dismantleBlock` 并取消事件；客户端不取消事件保证 `ServerboundUseItemOnPacket` 正常发送。同时新增 `WrenchCapabilityHelper` 统一扳手工具判定（优先 MEK 工具，其次 `c:tools/wrench` 标签 fallback）
+  - **影响范围**：2 个新增文件 + 2 个文件修改
+
+- **方块破坏物品复制与数据丢失（MAJOR）** — 解决用镐子破坏或创造模式左键拆除蜂箱/离心机时，部分输出槽物品作为实体弹出而另一部分保留在方块内（物品复制），以及工厂安装器升级时输出槽有物品导致物品弹出的问题
+  - **问题**：镐子破坏蜂箱/离心机时部分输出槽物品掉落为实体、部分保留在方块内；工厂安装器升级带物品的机器时物品弹出；破坏后方块内蜜蜂/喂食槽/PB升级数据丢失
+  - **根因**：`saveAllItemsForDrop` 仅在 `getDrops` 中调用，但创造模式左键破坏不走 `getDrops`，槽位未清空，`setRemoved` 触发 Ejector 组件 `popResource` 将物品弹出世界（物品复制）。同时镐子破坏路径下产物输出槽/蜂笼 I/O 槽/能量槽未通过 `saveCustomData` 持久化，破坏后丢失
+  - **修复**：
+    1. 覆写 `onRemove` 在 `tile.blockRemoved()` 前调用 `saveAllItemsForDrop` 清空槽位，覆盖创造/生存/扳手拆卸全部路径
+    2. `getUpgradeData` 构建升级数据后立即清空旧方块槽位，防止 `setRemoved` 重复弹出
+    3. 移除 `ApiaryOutputBuffer.dumpToWorld` 和 `setRemoved` 中的 popResource 兜底（消除唯一 popResource 源）
+    4. `saveCustomData` 追加冗余序列化产物输出槽/蜂笼 I/O 槽/能量槽到自定义 NBT 键，作为 `ITEM_CONTAINER` 组件的备份
+  - **影响范围**：8 个文件修改
+
+- **蜜脾块离心配方系统重构（MAJOR）** — 解决蜜脾块离心产出多余蜡、JEI 显示重复配方且产物错误、特殊蜜脾块无离心配方的问题
+  - **问题**：恶魂蜜脾块/烈焰蜜蜂蜜脾块等在 JEI 中显示重复配方且产物与 PB 原版不一致（如 4 倍产物而非 100mB 蜂蜜）；幽匿/牛奶等特殊蜜脾块无离心配方显示
+  - **根因**：
+    1. 派生蜜脾块配方时未过滤 `c:waxes` 标签的 `ChancedOutput`，导致离心额外产出蜡
+    2. PB 原版有独立的蜜脾块配方（如 `comb_blazing.json` 产出 blaze_rod），与单蜜脾配方产物不同，原 JEI 派生逻辑为所有 bee_type 派生蜜脾块配方，导致双显示且实际离心走派生路径产出错误
+    3. 4 种特殊蜜脾块（ghostly/milky/powdery/vanilla）无 bee_type，原索引和 JEI 不处理
+  - **修复**：
+    1. `CentrifugeRecipeIndex` 派生蜜脾块配方时静态过滤 `c:waxes` 标签的 `ChancedOutput`，仅保留矿物和蜂蜜
+    2. 两遍扫描消除 HashMap 迭代顺序依赖：第一遍收集有原生蜜脾块配方的 bee_type 集合，第二遍派生时跳过这些 bee_type
+    3. 新增 `SpecialCombBlockRecipeHandler` 和特殊蜜脾块索引，支持 ghostly/milky/powdery/vanilla 蜜脾块的 O(1) 配方查找
+    4. `PbRecipeFinder` 新增特殊蜜脾块配方查找分支；JEI 新增特殊蜜脾块离心配方注册
+  - **影响范围**：1 个新增文件 + 3 个文件修改
+
+- **Lumber Bee 不按喂食槽产出对应木头（MEDIUM）** — 解决 Lumber Bee 无论喂食槽放什么木头都产出相同产物的问题
+  - **问题**：喂食槽放入不同木头（橡木/白桦/樱花等），Lumber Bee 产出不随喂食槽变化
+  - **根因**：`BeeProduceProcessor` 缓存了固定产物列表，未根据喂食槽内容动态推断 multi-flower 蜜蜂（lumber_bee/quarry_bee/dye_bee）的产物
+  - **修复**：新增 `FeederSlotManager` 查询 API 获取喂食槽物品类型；`MultiFlowerBeeAdapter` 根据喂食槽物品推断对应产物；`BeeProduceProcessor` 新增 `getCachedProduce` 重载对 multi-flower 蜜蜂走喂食槽推断路径跳过缓存
+  - **影响范围**：4 个文件修改
+
+- **喂食槽花朵名称超出 GUI 边框（MEDIUM）** — 解决基础/高级/精英蜂箱工厂喂食槽放满 9 种不同物品时，花朵名称文字超出 UI 边框的问题
+  - **问题**：喂食槽 TAB 中放入 9 种不同物品后，信息面板的花朵名称列表高度超出窗口边界
+  - **根因**：`GuiFeederWindow` 窗口高度固定等于网格高度，未根据花朵数量动态计算信息面板所需高度
+  - **修复**：窗口高度改为 `标题 + max(网格高度, 信息面板内容高度) + 底部提示`，信息面板高度按花朵数量动态计算；`GuiFeederTab` 使用实际窗口宽度计算居中定位
+  - **影响范围**：2 个文件修改
+
+- **普通蜂笼使用后错误返还空蜂笼（MINOR）** — 解决普通蜂笼使用后与 PB 原版行为不一致的问题
+  - **问题**：本模组机械蜂箱中使用普通蜂笼装入/释放蜜蜂后，错误地返还空蜂笼，与 PB 原版一次性消耗行为冲突
+  - **根因**：`ApiaryCageHandler` 对所有蜂笼统一返还空蜂笼到 `cageOutSlot`，未区分普通蜂笼（一次性）和加固蜂笼（可反复使用）
+  - **修复**：通过 `is(ModItems.STURDY_BEE_CAGE.get())` 区分，仅加固蜂笼走返还路径，普通蜂笼仅消耗不返还
+  - **影响范围**：1 个文件修改（`ApiaryCageHandler.java`）
+
+- **PB 升级翻译对齐整合包** — 将产量α/β/γ/ω、基因采样器等翻译与整合包汉化标准对齐
+  - **影响范围**：1 个文件修改（`zh_cn.json`）
+
+### SemVer 合规性
+
+- **版本号定级**：本次发布全部为 bug 修复（9 项：流体推送退避死循环、合成升级数据丢失与崩溃、扳手无法拆卸、方块破坏物品复制、蜜脾块离心配方系统重构、Lumber Bee 产物、喂食槽 GUI 超边框、蜂笼返还行为、翻译对齐），无新功能，无 BREAKING 变更。按 [SemVer](https://semver.org/lang/zh-CN/) 严格规则定为 **PATCH** 级别（v2.0.4 → v2.0.5）
+
 ## [2.0.4] - 2026-07-31
 
 v2.0.4 是 SemVer PATCH 版本，修复服务端实测发现的 5 个独立 bug：蜂箱速度升级卸载后工作时间不可逆递减、概率产物被错误地变为必产物、时间流体蜜脾错误产出蜂蜜、蜜蜂属性 tooltip 翻译与整合包不一致、蜂箱产物在离心机阻塞时被困缓冲区。所有修复均基于设计文档 v2.2.0，并经过代码审查与编译验证。

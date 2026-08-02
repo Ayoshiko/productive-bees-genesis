@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * 离心机工厂升级数据
@@ -89,6 +90,44 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	 */
 	public final CompoundTag multiFluidTanksNbt;
 
+	// ===== 模块 3 Bug 2: 输出槽/输入槽/能量槽深拷贝（独立于父类引用列表） =====
+
+	/**
+	 * 输出槽物品深拷贝列表 — 独立于父类 {@code outputSlots}（{@code List<IInventorySlot>} 引用列表）
+	 * <br/>
+	 * 模块 3 Bug 2：用 ItemTierInstaller 升级机器时，{@code getUpgradeData} 通过父类
+	 * {@code outputSlots} 保存槽位引用，{@code setRemoved} 清空槽位后引用指向空栈，
+	 * {@code applyUpgradeData} 恢复时拿到空栈导致输出槽物品丢失。本字段通过 {@code ItemStack.copy()}
+	 * 在 buildUpgradeData 时深拷贝槽位内容，applyUpgradeData 优先从此字段恢复。
+	 * <p>
+	 * 顺序与 {@code outputSlots} 一致（基础机：[主输出, 副输出1, 副输出2]；工厂：[main_0, sec_0, main_1, sec_1, ...]）。
+	 * <p>
+	 * 向后兼容：null 表示旧升级数据（无深拷贝），applyUpgradeData 回退到 {@code outputSlots} 引用路径。
+	 */
+	@Nullable
+	public final List<ItemStack> outputItems;
+
+	/**
+	 * 输入槽物品深拷贝列表 — 独立于父类 {@code inputSlots}（{@code List<IInventorySlot>} 引用列表）
+	 * <br/>
+	 * 模块 3 Bug 2：输入槽（蜜脾）的深拷贝，防止升级时输入物品丢失。
+	 * 顺序与 {@code inputSlots} 一致。
+	 * <p>
+	 * 向后兼容：null 表示旧升级数据（无深拷贝），applyUpgradeData 回退到 {@code inputSlots} 引用路径。
+	 */
+	@Nullable
+	public final List<ItemStack> inputItems;
+
+	/**
+	 * 能量槽物品深拷贝 — 独立于父类 {@code energySlot}（{@code EnergyInventorySlot} 引用）
+	 * <br/>
+	 * 模块 3 Bug 2：能量槽（燃料）的深拷贝，防止升级时燃料丢失。
+	 * <p>
+	 * 向后兼容：null 表示旧升级数据（无深拷贝），applyUpgradeData 回退到 {@code energySlot} 引用路径。
+	 */
+	@Nullable
+	public final ItemStack energyItem;
+
 	/**
 	 * 离心机工厂升级数据构造函数
 	 *
@@ -113,6 +152,9 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	 * @param aeItemOutputEnabled   per-tile AE2 物品输出开关
 	 * @param aeFluidOutputEnabled  per-tile AE2 流体输出开关
 	 * @param multiFluidTanksNbt    Task 5: 多流体槽 NBT（null 表示无多槽数据,见字段注释）
+	 * @param outputItems           模块 3 Bug 2: 输出槽物品深拷贝列表（null 表示旧数据,回退到 outputSlots 引用）
+	 * @param inputItems            模块 3 Bug 2: 输入槽物品深拷贝列表（null 表示旧数据,回退到 inputSlots 引用）
+	 * @param energyItem            模块 3 Bug 2: 能量槽物品深拷贝（null 表示旧数据,回退到 energySlot 引用）
 	 */
 	public CentrifugeUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
 			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
@@ -123,7 +165,10 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 			boolean aeItemInputEnabled, boolean aeInputNbtIgnore,
 			int aeInputFilterMode, Map<Integer, String> aeInputFilterEntries, boolean preciseMode,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled,
-			@Nullable CompoundTag multiFluidTanksNbt) {
+			@Nullable CompoundTag multiFluidTanksNbt,
+			@Nullable List<ItemStack> outputItems,
+			@Nullable List<ItemStack> inputItems,
+			@Nullable ItemStack energyItem) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.pbUpgrades = pbUpgrades;
@@ -137,5 +182,8 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;
 		this.multiFluidTanksNbt = multiFluidTanksNbt;
+		this.outputItems = outputItems;
+		this.inputItems = inputItems;
+		this.energyItem = energyItem;
 	}
 }

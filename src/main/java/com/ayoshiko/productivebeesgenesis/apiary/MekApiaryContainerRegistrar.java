@@ -195,9 +195,14 @@ public class MekApiaryContainerRegistrar {
 	 */
 	private static IBasicContainerCreator<ComponentBackedInventorySlot> createEnergySlotCreator() {
 		return (type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+				// 模块 3 修复：INTERNAL 模式(合成升级路径)下允许能量物品插入能量槽，
+				// 使 MekanismShapedRecipe.assemble 中的 insertItemStacked 能成功转移内部能量物品
 				(stack, automationType) -> automationType == AutomationType.MANUAL
-						|| !EnergyCompatUtils.hasStrictEnergyHandler(stack)
-						&& EnergyInventorySlot.getPotentialConversion(null, stack) == 0L,
+						|| (automationType == AutomationType.INTERNAL
+								&& (EnergyCompatUtils.hasStrictEnergyHandler(stack)
+										|| EnergyInventorySlot.getPotentialConversion(null, stack) > 0L))
+						|| (!EnergyCompatUtils.hasStrictEnergyHandler(stack)
+								&& EnergyInventorySlot.getPotentialConversion(null, stack) == 0L),
 				(stack, automationType) -> EnergyCompatUtils.hasStrictEnergyHandler(stack)
 						|| EnergyInventorySlot.getPotentialConversion(null, stack) > 0L,
 				stack -> EnergyCompatUtils.hasStrictEnergyHandler(stack)

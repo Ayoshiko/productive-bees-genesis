@@ -44,9 +44,12 @@ import mekanism.api.fluid.IExtendedFluidTank;
  * <b>spec fix-ae2-push-backoff-and-jdte-adapt 自适应机制</b>:
  * <ul>
  *   <li><b>TPS 自适应</b>:服务器 MSPT 严重卡顿(tpsFactor &lt; 0.5)时跳过推送,让出 tick 资源</li>
- *   <li><b>退避</b>:所有非空 tank 推送失败时进入指数退避窗口(1s→2s→4s→8s→16s→30s),
+ *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
+ *       非 ONLINE 状态直接返回不触发退避(修复: 原缺少此检查导致网格不稳定时 poweredInsert 必然失败)</li>
+ *   <li><b>退避</b>:完全失败时进入指数退避窗口(1s→2s→4s→8s→16s→30s),
  *       基于 {@link System#nanoTime()} 墙钟单调时钟,窗口内跳过所有 AE2 存储操作,
- *       避免 JDTE 加速下 counter 退避失效(Task 5)</li>
+ *       避免 JDTE 加速下 counter 退避失效(Task 5)。
+ *       部分成功不重置退避(避免"部分成功→重置→立即失败→激进退避"死循环)</li>
  *   <li><b>JDTE M 自适应批量</b>:批量大小 = 1000000 × M mB(M=1 时 100万, M=256 时 2.56亿),
  *       配合 JDTE 加速倍数动态调整单批推送量,减少循环次数(Spark优化: 从100K提升到1M)</li>
  *   <li><b>批量推送短路</b>:同一"游戏刻"内(counter 差值 &lt; M)跳过 AE2 API 调用,
@@ -78,6 +81,7 @@ public final class Ae2FluidPusher {
 	 * <ol>
 	 *   <li>深度退避:退避窗口内入口直接返回</li>
 	 *   <li>TPS 自适应:严重卡顿时跳过,由 MEK Ejector 兜底</li>
+	 *   <li>网格节点状态检查:仅 ONLINE 时继续(与 Ae2OutputPusher 对称,不触发退避)</li>
 	 *   <li>批量短路:同一"游戏刻"内(counter 差值 &lt; M)跳过</li>
 	 *   <li>累积阶段:遍历流体罐,将 fluidKey+amount 累积到 batchBuffer</li>
 	 *   <li>刷新检查:isRipe()(20 tick 窗口) OR shouldFlushNow(超 50 亿 mB) 时刷新</li>
@@ -111,6 +115,15 @@ public final class Ae2FluidPusher {
 		long currentTick = level.getGameTime();
 		double currentTps = ServerTickTimeMonitor.getInstance().getTps(currentTick);
 		if (currentTps < 10.0) return;
+
+		// 3.1 模块2.1 对称：强检测 grid node 状态，仅当 ONLINE(3) 时继续推送
+		//     状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入 poweredInsert 路径，不触发退避
+		//     修复：原流体推送器缺少此检查（物品推送器有），导致网格不稳定时 poweredInsert
+		//     在节点非 ONLINE 状态下执行，必然失败并触发 30s 长退避
+		int nodeState = pushState.getCachedNodeState(host);
+		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
+			return;
+		}
 
 		// 4. 获取网格节点 + 已连接的网格（holder 感知重载，跳过冗余 getAe2StateHolder）
 		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
@@ -163,7 +176,9 @@ public final class Ae2FluidPusher {
 
 		boolean anySuccess = false;
 		boolean allFailed = true;
+		boolean hasLeftover = false; // 部分成功标志：有流体被 AE2 拒收返回 tank
 		long totalRequested = 0L;
+		long totalActualShrunk = 0L; // 实际从 tank shrink 的总量（区分 tank 已空和推送失败）
 
 		for (Map.Entry<AEFluidKey, Long> entry : pendingMap.entrySet()) {
 			AEFluidKey fluidKey = entry.getKey();
@@ -181,6 +196,7 @@ public final class Ae2FluidPusher {
 				//   守恒：tank 扣除 = AE2 接收 + 返回 tank，无复制无丢失
 				long actualShrunk = shrinkStackSafely(host, fluidKey, amount, tankCount);
 				if (actualShrunk <= 0) continue; // tank 已空，跳过推送
+				totalActualShrunk += actualShrunk;
 
 				long inserted = batchPush(energySource, meStorage, fluidKey, actualShrunk, M);
 
@@ -192,6 +208,7 @@ public final class Ae2FluidPusher {
 				// AE2 未接受的差额返回 tank（防止流体丢失）
 				long leftover = actualShrunk - inserted;
 				if (leftover > 0) {
+					hasLeftover = true;
 					returnFluidToTanks(host, fluidKey, leftover, tankCount);
 				}
 
@@ -201,9 +218,15 @@ public final class Ae2FluidPusher {
 			}
 		}
 
-		// 12. 退避触发:所有 key 都完全失败时进入退避;任一成功时重置退避（使用缓存的 pushState）
+		// 12. 退避触发逻辑（修复：消除"部分成功 → 重置 → 立即失败 → 激进退避"的死循环）
+		// - 完全失败（allFailed && totalActualShrunk > 0）：触发/升级退避
+		//   使用 totalActualShrunk 而非 totalRequested：区分"推送失败"和"tank 已空无需推送"
+		// - 完全成功（anySuccess && !hasLeftover）：重置退避
+		// - 部分成功（anySuccess && hasLeftover）：保持当前退避级别，不重置也不升级
+		//   原因：部分成功说明网格仍不稳定，重置退避会导致下一轮失败重新触发 30s 激进退避，
+		//   形成"30s退避 → 部分成功 → 重置 → 立即失败 → 30s退避"的无限循环
 		Ae2PushBackoff fluidBackoff = pushState.getFluidBackoff();
-		if (allFailed && totalRequested > 0) {
+		if (allFailed && totalActualShrunk > 0) {
 			boolean firstFailure = (fluidBackoff.getBackoffExponent() == 0);
 			if (firstFailure) {
 				fluidBackoff.recordFailureAggressive(System.nanoTime());
@@ -215,7 +238,8 @@ public final class Ae2FluidPusher {
 						"AE2 流体推送失败,进入退避 指数={}, 结束时间戳={}",
 						fluidBackoff.getBackoffExponent(), fluidBackoff.getBackoffEndNanos());
 			}
-		} else if (anySuccess) {
+		} else if (anySuccess && !hasLeftover) {
+			// 仅完全成功时重置退避；部分成功保持当前级别
 			fluidBackoff.recordSuccess();
 		}
 	}

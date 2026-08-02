@@ -83,6 +83,10 @@ public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFe
 	 * 创建喂食器窗口
 	 * <br/>
 	 * 窗口居中定位，y=15（与 MEK 标准窗口对齐），宽度根据喂食槽列数动态计算。
+	 * <p>
+	 * 模块 4 修复（v2.4 最终版）：使用 {@link GuiFeederWindow#calculateWidth} 计算实际窗口宽度，
+	 * 确保居中定位正确。原计算 {@code 11*2 + feederCols*20 - 2} 漏算信息面板宽度（59px），
+	 * 导致 windowWidth 比实际窗口窄 55px，居中定位偏右，文字超出 GUI 右边框。
 	 *
 	 * @param windowData 窗口数据（包含固定/位置记忆信息）
 	 * @return 新建的 {@link GuiFeederWindow}
@@ -90,7 +94,7 @@ public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFe
 	@Override
 	protected GuiWindow createWindow(SelectedWindowData windowData) {
 		int feederCols = dataSource.getFeederSlotManager().getFeederCols();
-		int windowWidth = 11 * 2 + feederCols * 20 - 2;
+		int windowWidth = GuiFeederWindow.calculateWidth(feederCols);
 		int x = Math.max(0, (getGuiWidth() - windowWidth) / 2);
 		return new GuiFeederWindow(gui(), x, 15, dataSource, windowData);
 	}

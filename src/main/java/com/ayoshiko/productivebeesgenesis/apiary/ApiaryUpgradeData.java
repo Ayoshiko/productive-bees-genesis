@@ -11,6 +11,8 @@ import mekanism.common.upgrade.MachineUpgradeData;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 蜂箱工厂升级数据
@@ -58,6 +60,17 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	/** 蜂笼输出槽 NBT（由 OutputInventorySlot.serializeNBT 序列化，独立于产物输出槽） */
 	public final CompoundTag cageOutSlotNbt;
 
+	/**
+	 * 产物输出槽的 ItemStack 深拷贝列表
+	 * <br/>
+	 * 模块 3 Bug 2 修复：独立于父类 {@code outputSlots}（{@code List<IInventorySlot>} 引用列表），
+	 * 防止 {@code setRemoved} 清空槽位后引用指向空栈导致升级数据丢失。
+	 * 由 {@link ApiaryNbtSerializer#buildUpgradeData} 通过 {@code ItemStack.copy()} 收集。
+	 * {@code null} 表示旧版本升级数据（向后兼容回退到 {@code outputSlots} 路径）。
+	 */
+	@Nullable
+	public final List<ItemStack> outputItems;
+
 	/** 选中的蜜蜂槽索引（-1=未选择） */
 	public final int selectedBeeSlot;
 
@@ -77,7 +90,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	 * @param progress             进度数组（蜂箱为单进度，传入长度1的数组）
 	 * @param energySlot           能量槽（含物品内容）
 	 * @param inputSlots           输入槽列表（蜂箱为蜂笼输入槽，单元素列表）
-	 * @param outputSlots          输出槽列表（蜂箱产物输出槽，多元素列表）
+	 * @param outputSlots          输出槽列表（蜂箱产物输出槽，多元素列表，父类引用）
 	 * @param sorting              排序开关状态
 	 * @param components           组件列表（ITileComponent，由父类序列化为 CompoundTag）
 	 * @param beeSlotsNbt          蜜蜂槽数组 NBT
@@ -87,6 +100,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	 * @param pbUpgradeOutputNbt   PB 升级输出槽 NBT
 	 * @param fluidNbt             蜂蜜流体罐内容 NBT
 	 * @param cageOutSlotNbt       蜂笼输出槽 NBT
+	 * @param outputItems          产物输出槽 ItemStack 深拷贝列表（模块 3 Bug 2 修复，null 表示旧版本回退）
 	 * @param selectedBeeSlot      选中的蜜蜂槽索引
 	 * @param aeItemOutputEnabled  per-tile AE2 物品输出开关
 	 * @param aeFluidOutputEnabled per-tile AE2 流体输出开关
@@ -97,7 +111,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			List<ITileComponent> components,
 			CompoundTag beeSlotsNbt, CompoundTag feederSlotsNbt, CompoundTag pbUpgradeCountsNbt,
 			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
-			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt, int selectedBeeSlot,
+			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
+			@Nullable List<ItemStack> outputItems, int selectedBeeSlot,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
@@ -108,6 +123,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.pbUpgradeOutputNbt = pbUpgradeOutputNbt;
 		this.fluidNbt = fluidNbt;
 		this.cageOutSlotNbt = cageOutSlotNbt;
+		this.outputItems = outputItems;
 		this.selectedBeeSlot = selectedBeeSlot;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;

@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -16,9 +17,11 @@ import org.jetbrains.annotations.Nullable;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
+import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableInt;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.upgrade.IUpgradeData;
@@ -139,6 +142,8 @@ class MekCentrifugeSaveHandler {
 		ae2Handler.loadPerTileState(nbt);
 		// 修复 v14：反序列化基础离心机单流体槽（DRY：复用 deserializeFluidTank）
 		deserializeFluidTank(provider, nbt);
+		// 模块 3 Bug 1：反序列化输出槽/输入槽/能量槽（冗余备份，向后兼容：旧存档无此键时跳过）
+		deserializeDropSlots(nbt, provider);
 	}
 
 	/**
@@ -160,8 +165,83 @@ class MekCentrifugeSaveHandler {
 		if (fluidNbt != null) {
 			nbt.put(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, fluidNbt);
 		}
+		// 模块 3 Bug 1：序列化输出槽/输入槽/能量槽到自定义 NBT 键（冗余备份）
+		serializeDropSlots(nbt, provider);
 		BlockEntity.addEntityType(nbt, tile.getType());
 		return nbt;
+	}
+
+	// ===== 模块 3 Bug 1: 冗余槽位 NBT 序列化（DRY） =====
+
+	/**
+	 * 序列化输出槽/输入槽/能量槽到自定义 NBT 键
+	 * <br/>
+	 * 模块 3 Bug 1：镐子破坏离心机时，输出槽/输入槽/能量槽物品通过 collectComponents 已写入
+	 * BLOCK_ENTITY_DATA，但作为冗余备份，额外保存到自定义 NBT 键，确保 collectComponents
+	 * 不完整时（如部分槽位未注册到 InventorySlotHolder）数据仍可恢复。
+	 * <p>
+	 * 结构：
+	 * <ul>
+	 *   <li>{@link MekCentrifugeNbtKeys#NBT_KEY_DROP_OUTPUT_SLOTS}：ListTag，元素为
+	 *       [主输出槽.serializeNBT, 副输出槽1.serializeNBT, 副输出槽2.serializeNBT]</li>
+	 *   <li>{@link MekCentrifugeNbtKeys#NBT_KEY_DROP_INPUT_SLOT}：输入槽.serializeNBT</li>
+	 *   <li>{@link MekCentrifugeNbtKeys#NBT_KEY_DROP_ENERGY_SLOT}：能量槽.serializeNBT</li>
+	 * </ul>
+	 *
+	 * @param nbt      目标 NBT（追加键）
+	 * @param provider 注册表访问器
+	 */
+	private void serializeDropSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		// 输出槽列表（主+副1+副2）
+		ListTag outputList = new ListTag();
+		outputList.add(tile.accessor().productivebeesgenesis$getOutputSlot().serializeNBT(provider));
+		outputList.add(tile.slotManager().getSecondaryOutputSlot().serializeNBT(provider));
+		outputList.add(tile.slotManager().getTertiaryOutputSlot().serializeNBT(provider));
+		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_OUTPUT_SLOTS, outputList);
+		// 输入槽
+		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT,
+				tile.accessor().productivebeesgenesis$getInputSlot().serializeNBT(provider));
+		// 能量槽
+		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT,
+				tile.accessor().productivebeesgenesis$getEnergySlot().serializeNBT(provider));
+	}
+
+	/**
+	 * 反序列化输出槽/输入槽/能量槽从自定义 NBT 键
+	 * <br/>
+	 * 模块 3 Bug 1：从冗余备份 NBT 恢复槽位内容。
+	 * 向后兼容：旧存档（无此键）时跳过，不抛 NPE。
+	 * <p>
+	 * 注意：此方法会覆盖 MEK 标准 loadAdditional 已恢复的槽位内容。
+	 * 由于冗余备份与 BLOCK_ENTITY_DATA 在同一时刻写入（saveCustomDataForItem），
+	 * 数据源一致，覆盖不会导致状态不一致。
+	 *
+	 * @param nbt      源 NBT
+	 * @param provider 注册表访问器
+	 */
+	private void deserializeDropSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		// 输出槽列表（主+副1+副2）
+		if (nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_DROP_OUTPUT_SLOTS, Tag.TAG_LIST)) {
+			ListTag outputList = nbt.getList(MekCentrifugeNbtKeys.NBT_KEY_DROP_OUTPUT_SLOTS, Tag.TAG_COMPOUND);
+			BasicInventorySlot[] outputSlots = {
+					tile.accessor().productivebeesgenesis$getOutputSlot(),
+					tile.slotManager().getSecondaryOutputSlot(),
+					tile.slotManager().getTertiaryOutputSlot()
+			};
+			for (int i = 0; i < outputList.size() && i < outputSlots.length; i++) {
+				outputSlots[i].deserializeNBT(provider, outputList.getCompound(i));
+			}
+		}
+		// 输入槽
+		if (nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT, Tag.TAG_COMPOUND)) {
+			tile.accessor().productivebeesgenesis$getInputSlot().deserializeNBT(
+					provider, nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT));
+		}
+		// 能量槽
+		if (nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT, Tag.TAG_COMPOUND)) {
+			tile.accessor().productivebeesgenesis$getEnergySlot().deserializeNBT(
+					provider, nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT));
+		}
 	}
 
 	// ===== 单流体槽序列化（DRY） =====
@@ -323,18 +403,41 @@ class MekCentrifugeSaveHandler {
 	}
 
 	/**
-	 * 应用升级数据 — 恢复 PB 升级和 AE2 per-tile 设置
+	 * 应用升级数据 — 恢复 PB 升级、AE2 per-tile 设置和深拷贝槽位内容
 	 * <br/>
 	 * 由 {@link TileEntityMekCentrifuge#parseUpgradeData} 在调用 super 后委托。
 	 * 仅对 {@link CentrifugeUpgradeData} 类型执行恢复，其他类型由 super 处理。
+	 * <p>
+	 * 模块 3 Bug 2：传递新方块（基础离心机自身）的输入/输出/能量槽列表给 helper，
+	 * 由 helper 从升级数据中的深拷贝字段恢复槽位内容。
+	 * 原理：旧方块的 getUpgradeData 调用 saveAllItemsForDrop 已清空槽位，
+	 * super.parseUpgradeData 通过引用列表读取到空栈，必须从深拷贝字段覆盖恢复。
+	 * <p>
+	 * 目标槽位列表与 {@link #buildUpgradeData} 中的源槽位列表结构一致：
+	 * <ul>
+	 *   <li>输入槽：singletonList(inputSlot)</li>
+	 *   <li>输出槽：[主输出槽, 副输出槽1, 副输出槽2]</li>
+	 *   <li>能量槽：energySlot</li>
+	 * </ul>
 	 */
 	void applyUpgradeData(@NotNull HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
 		if (upgradeData instanceof CentrifugeUpgradeData data) {
+			// 构建新方块（基础离心机自身）的目标槽位列表
+			List<IInventorySlot> targetInputSlots =
+					Collections.singletonList(tile.accessor().productivebeesgenesis$getInputSlot());
+			List<IInventorySlot> targetOutputSlots = List.of(
+					tile.accessor().productivebeesgenesis$getOutputSlot(),
+					tile.slotManager().getSecondaryOutputSlot(),
+					tile.slotManager().getTertiaryOutputSlot());
+			IInventorySlot targetEnergySlot = tile.accessor().productivebeesgenesis$getEnergySlot();
 			CentrifugeUpgradeDataHelper.applyUpgradeData(
 					provider, data,
 					pbUpgradeHandler,
 					ae2Handler.getStateHolder(),
-					null);
+					null,
+					targetInputSlots,
+					targetOutputSlots,
+					targetEnergySlot);
 		}
 	}
 }

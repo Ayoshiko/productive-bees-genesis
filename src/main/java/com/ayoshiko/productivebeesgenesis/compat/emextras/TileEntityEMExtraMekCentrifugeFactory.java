@@ -392,9 +392,20 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) { return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(), getEnergyContainer(), progress, getEnergySlot(), inputSlots, outputSlots, isSorting(), getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), multiFluidDelegate.getFluidOutputHolder()); }
 
-	/** 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级、AE2设置和多流体槽（Task 5） */
+	/**
+	 * 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级、AE2设置、多流体槽和深拷贝槽位内容
+	 * <br/>
+	 * 模块 3 Bug 2：传递新方块（本 EME 工厂）的输入槽/输出槽/能量槽给 helper，
+	 * 由 helper 从升级数据深拷贝字段覆盖恢复（super.parseUpgradeData 通过引用列表读取到空栈）。
+	 * energySlot 通过 getEnergySlot() 访问（与 getUpgradeData 一致）。
+	 */
 	@Override
-	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) { CentrifugeFactoryCommonLogic.parseUpgradeData(provider, upgradeData, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), multiFluidDelegate.getFluidOutputHolder(), data -> super.parseUpgradeData(provider, data)); }
+	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
+		CentrifugeFactoryCommonLogic.parseUpgradeData(provider, upgradeData, pbUpgradeDelegate,
+				productivebeesgenesis$getAe2StateHolder(), multiFluidDelegate.getFluidOutputHolder(),
+				inputSlots, outputSlots, getEnergySlot(),
+				data -> super.parseUpgradeData(provider, data));
+	}
 
 	// ===== PbRecipeContext 接口实现 =====
 

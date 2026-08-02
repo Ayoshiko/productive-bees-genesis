@@ -12,11 +12,13 @@ import mekanism.common.upgrade.IUpgradeData;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
@@ -50,6 +52,23 @@ class ApiaryNbtSerializer {
 	 * 保持 DRY（同一序列化格式在存档/拆卸/升级三个路径复用）。
 	 */
 	static final String NBT_KEY_APIARY_FLUID = "productivebeesgenesis_apiary_fluid";
+
+	// ===== 模块 3：镐子破坏持久化 — 补充 saveCustomData 缺失的槽位 =====
+	// 原 saveCustomData 通过 writeApiaryStateTo 已保存蜜蜂槽/喂食槽/PB升级/流体罐/outputBuffer/选中槽位，
+	// 但未保存产物输出槽/蜂笼输入槽/蜂笼输出槽/能量槽，导致镐子破坏时这些槽位物品丢失或爆出到世界。
+	// 以下 key 仅在 saveCustomData（扳手/镐子拆卸）路径写入，不写入存档（存档由 MEK ITEM_CONTAINER 保存）。
+
+	/** NBT key — 产物输出槽列表（ListTag，每个元素为 BasicInventorySlot.serializeNBT） */
+	private static final String NBT_KEY_DROP_OUTPUT_SLOTS = "productivebeesgenesis_drop_output_slots";
+
+	/** NBT key — 蜂笼输入槽（BasicInventorySlot.serializeNBT） */
+	private static final String NBT_KEY_DROP_CAGE_IN_SLOT = "productivebeesgenesis_drop_cage_in_slot";
+
+	/** NBT key — 蜂笼输出槽（BasicInventorySlot.serializeNBT） */
+	private static final String NBT_KEY_DROP_CAGE_OUT_SLOT = "productivebeesgenesis_drop_cage_out_slot";
+
+	/** NBT key — 能量槽（EnergyInventorySlot.serializeNBT） */
+	private static final String NBT_KEY_DROP_ENERGY_SLOT = "productivebeesgenesis_drop_energy_slot";
 
 	/** NBT key — schema 版本字段名，用于版本化数据完整性校验 */
 	private static final String NBT_KEY_SCHEMA_VERSION = "productivebeesgenesis_nbt_schema_version";
@@ -152,18 +171,62 @@ class ApiaryNbtSerializer {
 		if (nbt.contains(ApiaryOutputBuffer.nbtKey(), Tag.TAG_COMPOUND)) {
 			tile.getOutputBuffer().load(provider, nbt.getCompound(ApiaryOutputBuffer.nbtKey()));
 		}
+		// 模块 3 Bug 1：反序列化镐子破坏/扳手拆卸冗余保存的槽位（向后兼容：旧存档无此键时跳过）
+		// 这些键仅由 saveCustomData 写入，存档加载时通常不存在，由 MEK ITEM_CONTAINER 接管恢复
+		loadDropSlotsFromNbt(nbt, provider);
+	}
+
+	/**
+	 * 反序列化镐子破坏/扳手拆卸冗余保存的槽位 — 供 {@link #loadApiaryState} 调用
+	 * <br/>
+	 * 模块 3 Bug 1：与 {@link #writeDropSlotsToNbt} 配对，从自定义 NBT 键恢复产物输出槽/
+	 * 蜂笼输入槽/蜂笼输出槽/能量槽内容。向后兼容旧存档：缺失任一键时跳过对应槽位恢复，
+	 * 不抛 NPE 或 NoSuchFieldError。
+	 * <p>
+	 * 调用时机：放置机器方块时通过 BLOCK_ENTITY_DATA 组件自动调用 loadAdditional，
+	 * 此时 nbt 中包含 saveCustomData 写入的全部键。
+	 *
+	 * @param nbt      源 NBT 标签
+	 * @param provider 注册表访问器
+	 */
+	private void loadDropSlotsFromNbt(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		// 产物输出槽列表
+		if (nbt.contains(NBT_KEY_DROP_OUTPUT_SLOTS, Tag.TAG_LIST)) {
+			ListTag outputList = nbt.getList(NBT_KEY_DROP_OUTPUT_SLOTS, Tag.TAG_COMPOUND);
+			List<BasicInventorySlot> currentOutputs = tile.getOutputSlots();
+			for (int i = 0; i < outputList.size() && i < currentOutputs.size(); i++) {
+				currentOutputs.get(i).deserializeNBT(provider, outputList.getCompound(i));
+			}
+		}
+		// 蜂笼输入槽
+		if (nbt.contains(NBT_KEY_DROP_CAGE_IN_SLOT, Tag.TAG_COMPOUND)) {
+			tile.getCageInSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_CAGE_IN_SLOT));
+		}
+		// 蜂笼输出槽
+		if (nbt.contains(NBT_KEY_DROP_CAGE_OUT_SLOT, Tag.TAG_COMPOUND)) {
+			tile.getCageOutSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_CAGE_OUT_SLOT));
+		}
+		// 能量槽
+		if (nbt.contains(NBT_KEY_DROP_ENERGY_SLOT, Tag.TAG_COMPOUND)) {
+			tile.getEnergySlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_ENERGY_SLOT));
+		}
 	}
 
 	// ===== 扳手拆卸持久化 =====
 
 	/**
-	 * 保存自定义数据为 NBT — 供扳手拆卸持久化使用（Bug 6）
+	 * 保存自定义数据为 NBT — 供扳手拆卸/镐子破坏持久化使用（Bug 6 + 模块 3 Bug 1）
 	 * <br/>
 	 * 仅保存蜂箱特有数据，标准 MEK 数据由 collectComponents 通过 DataComponents 流转。
 	 * 放置时通过 BLOCK_ENTITY_DATA 组件自动调用 loadAdditional 恢复。
 	 * <p>
 	 * Bug 4修复：BLOCK_ENTITY_DATA 组件要求 NBT 顶层包含 id 字段（方块实体类型注册键），
 	 * 通过 BlockEntity.addEntityType 添加。
+	 * <p>
+	 * 模块 3 Bug 1 修复：在 {@link #writeApiaryStateTo} 之外追加序列化产物输出槽/蜂笼输入槽/
+	 * 蜂笼输出槽/能量槽，作为 MEK ITEM_CONTAINER 组件的冗余备份，确保 collectComponents 不完整
+	 * （如 PB 升级槽位未注册到 InventorySlotHolder）或镐子破坏路径下机器方块内保留全部数据。
+	 * 这些键仅在拆卸/破坏路径写入，不写入存档（存档由 MEK ITEM_CONTAINER 保存）。
 	 *
 	 * @param provider 注册表访问器
 	 * @return 包含自定义数据的 NBT
@@ -174,9 +237,37 @@ class ApiaryNbtSerializer {
 		writeApiaryStateTo(nbt, provider);
 		// 保存 AE2 per-tile 输出开关，避免扳手拆卸后丢失用户设置
 		tile.saveAe2PerTileState(nbt);
+		// 模块 3 Bug 1：冗余序列化 4 类槽位到自定义 NBT，作为 ITEM_CONTAINER 备份
+		writeDropSlotsToNbt(nbt, provider);
 		// Bug 4修复：在NBT顶层添加方块实体类型注册键id字段，通过CODEC_WITH_ID验证
 		BlockEntity.addEntityType(nbt, tile.getType());
 		return nbt;
+	}
+
+	/**
+	 * 序列化镐子破坏/扳手拆卸需要保留的槽位到自定义 NBT — 供 {@link #saveCustomData} 调用
+	 * <br/>
+	 * 模块 3 Bug 1：原 {@link #writeApiaryStateTo} 仅保存蜜蜂槽/喂食槽/PB升级/流体罐/outputBuffer，
+	 * 缺失产物输出槽/蜂笼输入槽/蜂笼输出槽/能量槽的序列化。
+	 * 通过独立键保存为 MEK ITEM_CONTAINER 组件的冗余备份，{@link #loadApiaryState} 反序列化时
+	 * 优先从此处恢复（向后兼容：旧存档无此键时跳过，由 MEK ITEM_CONTAINER 接管恢复）。
+	 *
+	 * @param nbt      目标 NBT 标签
+	 * @param provider 注册表访问器
+	 */
+	private void writeDropSlotsToNbt(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		// 产物输出槽列表（ListTag，每个元素为 BasicInventorySlot.serializeNBT 的结果）
+		ListTag outputList = new ListTag();
+		for (BasicInventorySlot slot : tile.getOutputSlots()) {
+			outputList.add(slot.serializeNBT(provider));
+		}
+		nbt.put(NBT_KEY_DROP_OUTPUT_SLOTS, outputList);
+		// 蜂笼输入槽
+		nbt.put(NBT_KEY_DROP_CAGE_IN_SLOT, tile.getCageInSlot().serializeNBT(provider));
+		// 蜂笼输出槽
+		nbt.put(NBT_KEY_DROP_CAGE_OUT_SLOT, tile.getCageOutSlot().serializeNBT(provider));
+		// 能量槽
+		nbt.put(NBT_KEY_DROP_ENERGY_SLOT, tile.getEnergySlot().serializeNBT(provider));
 	}
 
 	// ===== ItemTierInstaller 升级数据 =====
@@ -200,6 +291,14 @@ class ApiaryNbtSerializer {
 		List<mekanism.api.inventory.IInventorySlot> inputSlots =
 				Collections.singletonList(tile.getCageInSlot());
 		List<mekanism.api.inventory.IInventorySlot> outputSlots = new ArrayList<>(tile.getOutputSlots());
+
+		// 模块 3 Bug 2：深拷贝产物输出槽 ItemStack，独立于父类 outputSlots 引用列表
+		// 防止 setRemoved 清空槽位后引用指向空栈导致升级数据丢失
+		// O(N) 复杂度可接受（N=输出槽数，最多 18）
+		List<ItemStack> outputItems = new ArrayList<>(outputSlots.size());
+		for (mekanism.api.inventory.IInventorySlot slot : outputSlots) {
+			outputItems.add(slot.getStack().copy());
+		}
 
 		CompoundTag beeSlotsNbt = new CompoundTag();
 		tile.getSlotManager().saveBeeSlots(beeSlotsNbt);
@@ -233,7 +332,7 @@ class ApiaryNbtSerializer {
 				inputSlots, outputSlots, sorting, tile.getComponents(),
 				beeSlotsNbt, feederSlotsNbt, pbUpgradeCountsNbt,
 				pbUpgradeInputNbt, pbUpgradeOutputNbt,
-				fluidNbt, cageOutSlotNbt, tile.getSelectedBeeSlot(),
+				fluidNbt, cageOutSlotNbt, outputItems, tile.getSelectedBeeSlot(),
 				aeItemOutputEnabled, aeFluidOutputEnabled);
 	}
 
@@ -269,9 +368,18 @@ class ApiaryNbtSerializer {
 				tile.getCageInSlot().deserializeNBT(provider, data.inputSlots.get(0).serializeNBT(provider));
 			}
 			List<BasicInventorySlot> currentOutputs = tile.getOutputSlots();
-			for (int i = 0; i < data.outputSlots.size() && i < currentOutputs.size(); i++) {
-				// .copy() 防止共享 ItemStack 引用导致新旧方块状态联动
-				currentOutputs.get(i).setStack(data.outputSlots.get(i).getStack().copy());
+			// 模块 3 Bug 2：优先从 outputItems 深拷贝列表恢复（防止旧方块 setRemoved 后 outputSlots 引用指向空栈）
+			// 向后兼容：outputItems 为 null 时（旧版本升级数据）回退到 data.outputSlots 路径
+			if (data.outputItems != null) {
+				for (int i = 0; i < data.outputItems.size() && i < currentOutputs.size(); i++) {
+					// outputItems 已是深拷贝，再次 copy 防止新方块状态联动旧方块残留引用（安全冗余）
+					currentOutputs.get(i).setStack(data.outputItems.get(i).copy());
+				}
+			} else {
+				for (int i = 0; i < data.outputSlots.size() && i < currentOutputs.size(); i++) {
+					// .copy() 防止共享 ItemStack 引用导致新旧方块状态联动
+					currentOutputs.get(i).setStack(data.outputSlots.get(i).getStack().copy());
+				}
 			}
 			for (ITileComponent component : tile.getComponents()) {
 				component.read(data.components, provider);

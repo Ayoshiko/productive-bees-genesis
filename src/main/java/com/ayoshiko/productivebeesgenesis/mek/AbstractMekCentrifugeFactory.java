@@ -313,9 +313,22 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(), getEnergyContainer(), progress, energySlot, inputSlots, outputSlots, ((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(), getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder);
 	}
 
-	/** 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级、AE2设置和多流体槽（Task 5） */
+	/**
+	 * 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级、AE2设置、多流体槽和深拷贝槽位内容
+	 * <br/>
+	 * 模块 3 Bug 2：传递新方块（本工厂）的输入槽/输出槽/能量槽给 helper，
+	 * 由 helper 从升级数据深拷贝字段覆盖恢复（super.parseUpgradeData 通过引用列表读取到空栈）。
+	 * inputSlots/outputSlots 来自父类 TileEntityItemToItemFactory 字段；
+	 * energySlot 通过 TileEntityFactoryAccessor 访问（与 getUpgradeData 一致）。
+	 */
 	@Override
-	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) { CentrifugeFactoryCommonLogic.parseUpgradeData(provider, upgradeData, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder, data -> super.parseUpgradeData(provider, data)); }
+	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
+		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
+		CentrifugeFactoryCommonLogic.parseUpgradeData(provider, upgradeData, pbUpgradeDelegate,
+				productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder,
+				inputSlots, outputSlots, energySlot,
+				data -> super.parseUpgradeData(provider, data));
+	}
 
 	// ===== PbRecipeContext 接口实现 =====
 

@@ -69,4 +69,22 @@ public final class MEContainerSlotHelper {
 		}
 		return -1;
 	}
+
+	/**
+	 * 获取 ME 工厂蜂箱的蜜蜂槽位数量
+	 * <br/>
+	 * 通过 {@link ExtraAttributeTier} 识别 ME 工厂蜂箱，查询 {@link FactoryApiaryConfig#forMETier} 获取蜜蜂槽数量。
+	 * <p>
+	 * 用途：合成升级配方（ApiaryShapedRecipe）合并多输入蜜蜂时确定目标容量上限。
+	 *
+	 * @param block 方块实例
+	 * @return ME 工厂蜂箱的蜜蜂槽数量，非 ME 工厂蜂箱返回 0（调用方使用默认值）
+	 */
+	public static int getBeeSlotCount(Block block) {
+		ExtraAttributeTier<?> extraAttrTier = Attribute.get(block, ExtraAttributeTier.class);
+		if (extraAttrTier != null && extraAttrTier.tier() instanceof ExtraFactoryTier eft) {
+			return FactoryApiaryConfig.forMETier(eft).beeSlotCount;
+		}
+		return 0;
+	}
 }

@@ -167,7 +167,7 @@ public final class FactoryApiaryConfig {
 	 * @param tier 工厂等级（BASIC/ADVANCED/ELITE/ULTIMATE，或 EM 扩展的 OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 	 * @return 对应等级的参数配置，null 时回退到 Basic
 	 */
-	static FactoryApiaryConfig forTier(FactoryTier tier) {
+	public static FactoryApiaryConfig forTier(FactoryTier tier) {
 		if (tier == null) {
 			return forBasic();
 		}

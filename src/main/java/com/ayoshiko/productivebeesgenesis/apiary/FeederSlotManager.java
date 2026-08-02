@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
@@ -23,6 +24,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
 /**
@@ -291,6 +293,52 @@ public class FeederSlotManager {
 
 	/** NBT key — 喂食槽列表 */
 	private static final String NBT_KEY_FEEDER_SLOTS = "productivebeesgenesis_feeder_slots";
+
+	/**
+	 * 从喂食槽中随机获取一个匹配指定方块标签的 BlockItem（模块 1 修复）
+	 * <br/>
+	 * 复刻 PB 原版 FeederBlockEntity.getRandomBlockFromInventory 逻辑：
+	 * 遍历喂食槽，筛选 BlockItem 且对应方块在指定标签中的物品，随机返回一个。
+	 * 用于 lumber_bee/quarry_bee 等多花蜜脾蜜蜂从喂食槽推断产物。
+	 * <p>
+	 * 性能：仅在 multi-flower 蜜蜂产出时调用（低频），使用 ThreadLocalRandom 避免竞争。
+	 * 喂食槽数量固定（≤60），遍历 O(N) 开销可忽略。
+	 *
+	 * @param blockTag 方块标签（如 ModTags.LUMBER、ModTags.QUARRY）
+	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
+	 */
+	public ItemStack getRandomBlockFromFeeder(TagKey<Block> blockTag) {
+		List<Block> candidates = new ArrayList<>(feederSlots.size());
+		for (int i = 0; i < feederSlots.size(); i++) {
+			ItemStack stack = feederSlots.get(i).getStack();
+			if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) continue;
+			Block block = ((BlockItem) stack.getItem()).getBlock();
+			// 用 BlockState.is 替代废弃的 Block.builtInRegistryHolder().is()
+			if (!block.defaultBlockState().is(blockTag)) continue;
+			candidates.add(block);
+		}
+		return candidates.isEmpty() ? ItemStack.EMPTY
+				: new ItemStack(candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())));
+	}
+
+	/**
+	 * 从喂食槽中随机获取一个匹配指定物品标签的物品（模块 1 修复）
+	 * <br/>
+	 * 用于 dye_bee 等蜜蜂从喂食槽推断产物，dye 不一定是 BlockItem（如玫瑰红染料）。
+	 *
+	 * @param itemTag 物品标签（如 ModTags.DYES）
+	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
+	 */
+	public ItemStack getRandomItemFromFeeder(TagKey<Item> itemTag) {
+		List<ItemStack> candidates = new ArrayList<>(feederSlots.size());
+		for (int i = 0; i < feederSlots.size(); i++) {
+			ItemStack stack = feederSlots.get(i).getStack();
+			if (stack.isEmpty() || !stack.is(itemTag)) continue;
+			candidates.add(stack);
+		}
+		return candidates.isEmpty() ? ItemStack.EMPTY
+				: candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())).copy();
+	}
 
 	/** 获取喂食槽列表（IInventorySlot 只读视图，Collections.unmodifiableList 返回原 List 的只读视图而非副本） */
 	public List<IInventorySlot> getFeederSlots() {
