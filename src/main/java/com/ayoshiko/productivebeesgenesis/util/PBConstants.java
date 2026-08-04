@@ -29,6 +29,10 @@ public final class PBConstants {
 	public static final ResourceLocation MYRIADCREATIONS_TYPE =
 			ResourceLocation.fromNamespaceAndPath(PRODUCTIVE_BEES_MOD_ID, "myriadcreations");
 
+	/** 使用琥珀中封存生物战利品表的 Wanna Bee 类型。 */
+	public static final ResourceLocation WANNA_TYPE =
+			ResourceLocation.fromNamespaceAndPath(PRODUCTIVE_BEES_MOD_ID, "wanna");
+
 	/**
 	 * 万象创世蜜蜂类型字符串形式
 	 * <br/>

@@ -85,6 +85,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private volatile int selectedBeeSlot = -1;
 	/** 客户端同步用：选中蜜蜂槽位（仅服务端同步回调写入，GUI 通过 getter 读取），跨线程访问需 volatile */
 	private volatile int clientSelectedBeeSlot = -1;
+	/** 是否启用蜂箱到相邻离心机的特殊直连通道；默认开启以兼容旧存档。 */
+	private boolean directEjectEnabled = true;
 
 	public TileEntityMekApiary(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, APIARY_TICKS_REQUIRED);
@@ -214,6 +216,21 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		directEjectHandler.markEjectDirty();
 	}
 
+	public boolean isDirectEjectEnabled() {
+		return directEjectEnabled;
+	}
+
+	public void setDirectEjectEnabled(boolean enabled) {
+		if (directEjectEnabled == enabled) return;
+		directEjectEnabled = enabled;
+		directEjectHandler.markEjectDirty();
+		setChanged();
+	}
+
+	public void toggleDirectEject() {
+		setDirectEjectEnabled(!directEjectEnabled);
+	}
+
 	/** 容器数据同步 — 蜜蜂状态 + PB升级数量 + 安装计数器 + 选中槽位 */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
@@ -234,6 +251,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		container.track(SyncableBoolean.create(
 				ae2HostAdapter::isAeFluidOutputEnabled,
 				ae2HostAdapter::setAeFluidOutputEnabled));
+		container.track(SyncableBoolean.create(
+				this::isDirectEjectEnabled,
+				enabled -> directEjectEnabled = enabled));
 	}
 
 	// ===== NBT 持久化 — 委托给 nbtSerializer + pbUpgradeHandler =====

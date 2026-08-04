@@ -15,6 +15,7 @@ credits="Thanks to: Productive Bees, Mekanism, NeoForge, Re:Avaritia, Applied En
 modId="${mod_id}"
 version="${mod_version}"
 displayName="Productive Bees Genesis"
+logoFile="productivebeesgenesis.png"
 authors="${mod_authors}"
 description='''
 资源蜜蜂：创世 / Productive Bees Genesis

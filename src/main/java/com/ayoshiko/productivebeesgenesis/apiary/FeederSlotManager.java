@@ -9,11 +9,15 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
+import com.mojang.serialization.MapCodec;
+
+import cy.jdkdigital.productivebees.init.ModTags;
 
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
 
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -24,6 +28,8 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
@@ -42,6 +48,11 @@ import net.minecraft.world.level.material.Fluid;
  * 工厂版按 ceil(max(蜂蜂数,9)/3)*3 计算，最高 60 槽 3×20），保留 DEFAULT_FEEDER_SLOT_COUNT 作为初始版默认值。
  */
 public class FeederSlotManager {
+
+	private static final ResourceLocation RANCHER_BEE_TYPE =
+			ResourceLocation.fromNamespaceAndPath("productivebees", "rancher_bee");
+	private static final MapCodec<ResourceLocation> ENTITY_ID_CODEC =
+			ResourceLocation.CODEC.fieldOf("id");
 
 	/** 初始版喂食槽数量（3×3 矩形） */
 	public static final int DEFAULT_FEEDER_SLOT_COUNT = 9;
@@ -207,6 +218,14 @@ public class FeederSlotManager {
 	private boolean computeHasValidFlower(ResourceLocation beeTypeKey) {
 		FlowerPreference pref = BeeInfoHelper.getFlowerPreference(beeTypeKey);
 
+		// Rancher 是固定蜜蜂，不经过 BeeReloadListener 的 configurable flower 数据。
+		if (RANCHER_BEE_TYPE.equals(beeTypeKey)) {
+			return hasContainedEntityAmberMatching(ModTags.RANCHABLES, false);
+		}
+		// Butcher 等 configurable entity_types 蜜蜂使用数据包声明的实体 ID 或实体标签。
+		if (FlowerPreference.TYPE_ENTITY_TYPES.equals(pref.flowerType())) {
+			return hasContainedEntityAmberMatching(pref);
+		}
 		// 非 blocks 类型或无花朵定义：回退到任意花朵检查（向后兼容）
 		if (!FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) {
 			return hasAnyFlower();
@@ -340,6 +359,23 @@ public class FeederSlotManager {
 				: candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())).copy();
 	}
 
+	/**
+	 * 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照。
+	 * <p>
+	 * 快照按槽位保留候选（相同琥珀占用多个槽位时仍具有对应权重），且直接复用
+	 * ItemStack 中不可变的 {@link CustomData}，不在扫描阶段复制实体 NBT。
+	 */
+	public List<CustomData> getAmberEntityDataSnapshot() {
+		List<CustomData> candidates = null;
+		for (int i = 0; i < feederSlots.size(); i++) {
+			CustomData entityData = getAmberEntityData(feederSlots.get(i).getStack());
+			if (entityData == null || readEntityId(entityData) == null) continue;
+			if (candidates == null) candidates = new ArrayList<>(feederSlots.size());
+			candidates.add(entityData);
+		}
+		return candidates == null ? List.of() : candidates;
+	}
+
 	/** 获取喂食槽列表（IInventorySlot 只读视图，Collections.unmodifiableList 返回原 List 的只读视图而非副本） */
 	public List<IInventorySlot> getFeederSlots() {
 		return Collections.<IInventorySlot>unmodifiableList(feederSlots);
@@ -392,5 +428,78 @@ public class FeederSlotManager {
 		for (int i = 0; i < feederSlots.size() && i < list.size(); i++) {
 			feederSlots.get(i).deserializeNBT(provider, list.getCompound(i));
 		}
+	}
+
+	/**
+	 * 检查喂食器是否有琥珀封存的实体匹配指定的花朵偏好（entity_types 类型蜜蜂适用）
+	 * <br/>
+	 * Butcher / Rancher 等 entity_type 蜜蜂使用封存实体的琥珀方块作为花朵。
+	 * 从琥珀方块的 ItemStack 数据组件中提取封存实体 ID，
+	 * 与 FlowerPreference.flowerItem（实体 ID 字符串）或 flowerTag（实体类型标签）进行匹配。
+	 * <p>
+	 * 性能：只在 feedSlots 内容变化后首次调用时计算（由 invalidateFlowerCache 保证）。
+	 *
+	 * @param pref 花朵偏好
+	 * @return true 如果任意喂食槽包含匹配实体的琥珀方块
+	 */
+	private boolean hasContainedEntityAmberMatching(FlowerPreference pref) {
+		String entityId = pref.flowerItem();
+		if (!entityId.isEmpty()) {
+			boolean inverse = pref.inverseFlower();
+			ResourceLocation expected;
+			try {
+				expected = ResourceLocation.parse(entityId);
+			} catch (RuntimeException ignored) {
+				return false;
+			}
+			for (int i = 0; i < feederSlots.size(); i++) {
+				ResourceLocation contained = getAmberEntityId(feederSlots.get(i).getStack());
+				if (contained != null && expected.equals(contained) != inverse) return true;
+			}
+			return false;
+		}
+
+		String tagName = pref.flowerTag();
+		if (tagName.isEmpty()) return false;
+		boolean inverse = pref.inverseFlower();
+		if (tagName.charAt(0) == '!') {
+			inverse = true;
+			tagName = tagName.substring(1);
+		}
+		try {
+			TagKey<EntityType<?>> entityTag = TagKey.create(
+					BuiltInRegistries.ENTITY_TYPE.key(), ResourceLocation.parse(tagName));
+			return hasContainedEntityAmberMatching(entityTag, inverse);
+		} catch (RuntimeException ignored) {
+			return false;
+		}
+	}
+
+	private boolean hasContainedEntityAmberMatching(TagKey<EntityType<?>> entityTag, boolean inverse) {
+		for (int i = 0; i < feederSlots.size(); i++) {
+			ResourceLocation entityId = getAmberEntityId(feederSlots.get(i).getStack());
+			if (entityId == null) continue;
+			var entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(entityId);
+			if (entityType.isPresent()
+					&& BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entityType.get()).is(entityTag) != inverse) return true;
+		}
+		return false;
+	}
+
+	private static CustomData getAmberEntityData(ItemStack stack) {
+		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) return null;
+		ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
+		if (!"productivebees".equals(blockId.getNamespace()) || !blockId.getPath().contains("amber")) return null;
+		CustomData entityData = stack.get(DataComponents.ENTITY_DATA);
+		return entityData == null || entityData.isEmpty() ? null : entityData;
+	}
+
+	private static ResourceLocation getAmberEntityId(ItemStack stack) {
+		CustomData entityData = getAmberEntityData(stack);
+		return entityData == null ? null : readEntityId(entityData);
+	}
+
+	private static ResourceLocation readEntityId(CustomData entityData) {
+		return entityData.read(ENTITY_ID_CODEC).result().orElse(null);
 	}
 }

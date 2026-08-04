@@ -569,6 +569,8 @@
   "productivebeesgenesis.gui.ae2_output.fluid.status.on": "AE: ON",
   "productivebeesgenesis.gui.ae2_output.fluid.status.off": "AE: OFF",
   "productivebeesgenesis.gui.ae2_output.global_disabled": "Enable global AE2 output in config to use this feature",
+  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "Direct centrifuge transfer: ON",
+  "productivebeesgenesis.gui.apiary_direct_eject.disabled": "Direct centrifuge transfer: OFF",
   "productivebeesgenesis.gui.ae2_input.toggle": "Input Pull Toggle",
   "productivebeesgenesis.gui.ae2_input.nbt_ignore": "NBT Ignore Toggle",
   "productivebeesgenesis.gui.ae2_input.filter.disabled": "No Filter",

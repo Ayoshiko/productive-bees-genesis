@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -10,6 +11,7 @@ import net.minecraft.world.item.Items;
 import appeng.api.stacks.AEItemKey;
 
 import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModBlocks;
 import cy.jdkdigital.productivebees.init.ModItems;
 
 /**
@@ -32,6 +34,12 @@ public final class CombFuzzyMatcher {
 
 	/** 原版蜜脾固定保留键（无 BEE_TYPE 组件，使用此常量作为过滤键） */
 	public static final ResourceLocation VANILLA_HONEYCOMB_TYPE = ResourceLocation.parse("minecraft:honeycomb");
+	/** Feywild 蜜脾由 PB 自带离心配方直接处理，物品 ID 同时作为无 BEE_TYPE 组件的过滤键。 */
+	public static final ResourceLocation FEYWILD_HONEYCOMB_TYPE = ResourceLocation.fromNamespaceAndPath(
+			ExternalCentrifugeCombIds.FEYWILD_NAMESPACE, ExternalCentrifugeCombIds.FEYWILD_HONEYCOMB_PATH);
+	private static final ResourceLocation GHOSTLY_TYPE = ResourceLocation.parse("productivebees:ghostly");
+	private static final ResourceLocation MILKY_TYPE = ResourceLocation.parse("productivebees:milky");
+	private static final ResourceLocation POWDERY_TYPE = ResourceLocation.parse("productivebees:powdery");
 
 	/**
 	 * AEItemKey → BEE_TYPE 映射缓存
@@ -68,7 +76,11 @@ public final class CombFuzzyMatcher {
 		Item item = key.getItem();
 		return item == ModItems.CONFIGURABLE_HONEYCOMB.get()
 				|| item == ModItems.CONFIGURABLE_COMB_BLOCK.get()
-				|| item == Items.HONEYCOMB;
+				|| isFixedComb(item)
+				|| isFixedCombBlock(item)
+				|| item == Items.HONEYCOMB
+				|| item == Items.HONEYCOMB_BLOCK
+				|| isExternalCentrifugeComb(item);
 	}
 
 	/**
@@ -80,7 +92,8 @@ public final class CombFuzzyMatcher {
 	 * @return true 表示该 key 对应的是蜜脾块
 	 */
 	public static boolean isCombBlock(AEItemKey key) {
-		return key != null && key.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get();
+		return key != null && (key.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()
+				|| isFixedCombBlock(key.getItem()) || key.getItem() == Items.HONEYCOMB_BLOCK);
 	}
 
 	/**
@@ -90,7 +103,9 @@ public final class CombFuzzyMatcher {
 	 * @return true 表示该 stack 对应的是蜜脾块
 	 */
 	public static boolean isCombBlock(ItemStack stack) {
-		return stack != null && !stack.isEmpty() && stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get();
+		return stack != null && !stack.isEmpty()
+				&& (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()
+						|| isFixedCombBlock(stack.getItem()) || stack.getItem() == Items.HONEYCOMB_BLOCK);
 	}
 
 	/**
@@ -112,14 +127,82 @@ public final class CombFuzzyMatcher {
 	public static ResourceLocation getBeeType(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		Item item = stack.getItem();
-		if (item == Items.HONEYCOMB) {
+		if (item == Items.HONEYCOMB || item == Items.HONEYCOMB_BLOCK) {
 			return VANILLA_HONEYCOMB_TYPE;
+		}
+		if (isExternalCentrifugeComb(item)) {
+			return FEYWILD_HONEYCOMB_TYPE;
+		}
+		if (item == ModItems.HONEYCOMB_GHOSTLY.get() || item == ModBlocks.COMB_GHOSTLY.get().asItem()) {
+			return GHOSTLY_TYPE;
+		}
+		if (item == ModItems.HONEYCOMB_MILKY.get() || item == ModBlocks.COMB_MILKY.get().asItem()) {
+			return MILKY_TYPE;
+		}
+		if (item == ModItems.HONEYCOMB_POWDERY.get() || item == ModBlocks.COMB_POWDERY.get().asItem()) {
+			return POWDERY_TYPE;
 		}
 		if (item == ModItems.CONFIGURABLE_HONEYCOMB.get()
 				|| item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
 			return stack.get(ModDataComponents.BEE_TYPE.get());
 		}
 		return null;
+	}
+
+	/** 返回无 BEE_TYPE 组件的固定离心输入所对应的真实 GUI 图标。 */
+	public static ItemStack getFixedDisplayStack(ResourceLocation filterType, boolean block) {
+		if (VANILLA_HONEYCOMB_TYPE.equals(filterType)) {
+			return new ItemStack(block ? Items.HONEYCOMB_BLOCK : Items.HONEYCOMB);
+		}
+		if (GHOSTLY_TYPE.equals(filterType)) {
+			return new ItemStack(block ? ModBlocks.COMB_GHOSTLY.get() : ModItems.HONEYCOMB_GHOSTLY.get());
+		}
+		if (MILKY_TYPE.equals(filterType)) {
+			return new ItemStack(block ? ModBlocks.COMB_MILKY.get() : ModItems.HONEYCOMB_MILKY.get());
+		}
+		if (POWDERY_TYPE.equals(filterType)) {
+			return new ItemStack(block ? ModBlocks.COMB_POWDERY.get() : ModItems.HONEYCOMB_POWDERY.get());
+		}
+		if (!block && FEYWILD_HONEYCOMB_TYPE.equals(filterType)
+				&& ExternalCentrifugeCombItems.FEYWILD_HONEYCOMB != null) {
+			return new ItemStack(ExternalCentrifugeCombItems.FEYWILD_HONEYCOMB);
+		}
+		return ItemStack.EMPTY;
+	}
+
+	private static boolean isFixedComb(Item item) {
+		return item == ModItems.HONEYCOMB_GHOSTLY.get()
+				|| item == ModItems.HONEYCOMB_MILKY.get()
+				|| item == ModItems.HONEYCOMB_POWDERY.get();
+	}
+
+	private static boolean isFixedCombBlock(Item item) {
+		return item == ModBlocks.COMB_GHOSTLY.get().asItem()
+				|| item == ModBlocks.COMB_MILKY.get().asItem()
+				|| item == ModBlocks.COMB_POWDERY.get().asItem();
+	}
+
+	private static boolean isExternalCentrifugeComb(Item item) {
+		return ExternalCentrifugeCombItems.FEYWILD_HONEYCOMB != null
+				&& item == ExternalCentrifugeCombItems.FEYWILD_HONEYCOMB;
+	}
+
+	/**
+	 * PB 13.13.5 内置离心配方中唯一使用外部模组物品作为直接输入的蜜脾。
+	 * 保持精确白名单，避免把仅由其他模组机器处理的蜜脾误加入 AE 输入过滤。
+	 */
+	static boolean isExternalCentrifugeCombId(ResourceLocation itemId) {
+		return ExternalCentrifugeCombIds.contains(itemId.getNamespace(), itemId.getPath());
+	}
+
+	/** 首次实际匹配时解析可选模组物品，后续 AE 扫描只进行 Item 引用比较。 */
+	private static final class ExternalCentrifugeCombItems {
+		private static final Item FEYWILD_HONEYCOMB = resolve(FEYWILD_HONEYCOMB_TYPE);
+
+		private static Item resolve(ResourceLocation itemId) {
+			if (!isExternalCentrifugeCombId(itemId)) return null;
+			return BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
+		}
 	}
 
 	/**
@@ -157,5 +240,18 @@ public final class CombFuzzyMatcher {
 	 */
 	public static void clearCache() {
 		aeItemKeyToBeeTypeCache.clear();
+	}
+}
+
+/** 纯 Java 的外部蜜脾 ID 白名单，供无 Minecraft 运行时的单元测试直接覆盖。 */
+final class ExternalCentrifugeCombIds {
+	static final String FEYWILD_NAMESPACE = "feywild";
+	static final String FEYWILD_HONEYCOMB_PATH = "honeycomb";
+
+	private ExternalCentrifugeCombIds() {
+	}
+
+	static boolean contains(String namespace, String path) {
+		return FEYWILD_NAMESPACE.equals(namespace) && FEYWILD_HONEYCOMB_PATH.equals(path);
 	}
 }

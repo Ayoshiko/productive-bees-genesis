@@ -60,7 +60,9 @@ public class AeOutputButton extends MekanismButton {
 
 	@Override
 	protected int getButtonTextColor(int mouseX, int mouseY) {
-		return 0x232323;
+		return active && target != null
+				&& AeOutputOverlay.isPerTileEnabled(target.tile(), target.type())
+				? 0x009E45 : 0x232323;
 	}
 
 	@Override

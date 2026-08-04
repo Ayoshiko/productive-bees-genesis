@@ -117,7 +117,7 @@ public class PbRecipeCompleter {
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
 			// stability bonus 提升非保底产物概率，截断到 1.0
-			float adjustedChance = chance >= 1.0f ? chance : Math.min(1.0f, chance + stabilityBonus);
+			float adjustedChance = (float) PbOutputChance.adjustedChance(chance, stabilityBonus);
 			// adjustedChance >= 1.0 必定通过,跳过 nextFloat
 			if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) {
 				continue;
@@ -196,7 +196,7 @@ public class PbRecipeCompleter {
 			if (max < min) max = min; // 防御性处理
 
 			// stability bonus 提升非保底产物概率，截断到 1.0
-			float adjustedChance = chance >= 1.0f ? chance : Math.min(1.0f, chance + stabilityBonus);
+			float adjustedChance = (float) PbOutputChance.adjustedChance(chance, stabilityBonus);
 
 			long totalCount;
 			if (adjustedChance >= 1.0f) {

@@ -168,7 +168,8 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 		}
 		ItemStack icon = resolveIcon();
 		if (!icon.isEmpty()) {
-			gui().renderItem(guiGraphics, icon, relativeX + 1, relativeY + 1);
+			// 走 renderFakeItem 路径，使 3D 蜜脾块应用 MekGuiBlockItemDepthMixin 的深度修复。
+			guiGraphics.renderFakeItem(icon, relativeX + 1, relativeY + 1);
 		}
 	}
 
@@ -176,6 +177,10 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 		Level level = Minecraft.getInstance().level;
 		if (level == null) {
 			return ItemStack.EMPTY;
+		}
+		ItemStack fixed = CombFuzzyMatcher.getFixedDisplayStack(beeType, this.isBlock);
+		if (!fixed.isEmpty()) {
+			return fixed;
 		}
 		return BeeInfoHelper.resolveBeeIcon(level, beeType, this.isBlock);
 	}

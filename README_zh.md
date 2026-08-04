@@ -1,6 +1,6 @@
 # 资源蜜蜂：创世
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.0.6-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)

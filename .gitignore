@@ -64,6 +64,7 @@ apply_perf_patch.ps1
 fix_debug_logs.py
 check_indent.ps1
 fix_slot.py
+compose_logo_final.py
 
 # Trae spec 文件目录（内部使用，不入库）
 .trae/

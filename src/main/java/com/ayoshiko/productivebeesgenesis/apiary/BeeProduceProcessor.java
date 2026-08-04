@@ -14,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.ayoshiko.productivebeesgenesis.util.WannaBeeAmberAdapter;
 
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 
@@ -21,7 +22,9 @@ import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
@@ -179,16 +182,20 @@ public class BeeProduceProcessor {
 	 * @param beeTypeKey  组内共享的蜜蜂类型键（已由调用方分组，避免重复解析）
 	 * @param produceList 共享的产出配方输出表（ItemStack -> ChancedOutput，已查询缓存）
 	 * @param slotManager 槽位管理器
+	 * @param feederManager 喂食槽管理器（Wanna Bee 动态琥珀产出使用）
+	 * @param origin       蜂箱位置（动态战利品上下文使用）
 	 * @param level       世界实例（万象创世随机产物生成用，可为 null）
 	 * @param outputBuffer F4 产物溢出缓冲区（null 时剩余产物丢弃，与原版行为一致）
 	 */
 	public void processBatchProduce(BeeSlot[] beeSlots, int[] pendingCounts,
 									List<Integer> groupSlotIndices,
 									ResourceLocation beeTypeKey, Map<ItemStack, ChancedOutput> produceList,
-									ApiarySlotManager slotManager, Level level,
+									ApiarySlotManager slotManager, FeederSlotManager feederManager,
+									BlockPos origin, Level level,
 									ApiaryOutputBuffer outputBuffer) {
 		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
-				|| produceList == null || produceList.isEmpty()) {
+				|| produceList == null
+				|| (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(beeTypeKey))) {
 			return;
 		}
 
@@ -248,6 +255,10 @@ public class BeeProduceProcessor {
 			// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
 			allItems.addAll(BeeProduceBatchSampler.sample(
 					produceList, aggregatedCount, finalMultiplier, 0.0f));
+			if (PBConstants.WANNA_TYPE.equals(beeTypeKey) && level instanceof ServerLevel serverLevel) {
+				allItems.addAll(WannaBeeAmberAdapter.sampleBatch(
+						serverLevel, origin, feederManager, aggregatedCount, finalMultiplier));
+			}
 		}
 		// Task 1: 万象创世随机蜜脾应用 PB 生产力倍率
 		myriadCount = (int)(myriadCount * productivityMultiplier);

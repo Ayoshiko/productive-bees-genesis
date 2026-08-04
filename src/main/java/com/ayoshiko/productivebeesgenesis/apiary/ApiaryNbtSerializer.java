@@ -43,6 +43,7 @@ class ApiaryNbtSerializer {
 
 	/** NBT key — 选中蜜蜂槽位 */
 	static final String NBT_KEY_SELECTED_BEE = "productivebeesgenesis_selected_bee";
+	static final String NBT_KEY_DIRECT_EJECT = "productivebeesgenesis_direct_eject";
 
 	/**
 	 * NBT key — 蜂箱内部流体罐内容
@@ -116,6 +117,7 @@ class ApiaryNbtSerializer {
 		tile.pbUpgradeHandler.savePbUpgradeCounts(nbt);
 		tile.pbUpgradeHandler.saveSlots(nbt, provider);
 		nbt.putInt(NBT_KEY_SELECTED_BEE, tile.getSelectedBeeSlot());
+		nbt.putBoolean(NBT_KEY_DIRECT_EJECT, tile.isDirectEjectEnabled());
 		// 修复 v14：序列化流体罐内容（非空时写入，避免空标签）
 		FluidStack fluid = tile.getFluidTank().getFluid();
 		if (!fluid.isEmpty()) {
@@ -157,6 +159,10 @@ class ApiaryNbtSerializer {
 			selectedBeeSlot = -1;
 		}
 		tile.setSelectedBeeSlot(selectedBeeSlot);
+		// 旧存档没有该键，保留默认开启行为。
+		if (nbt.contains(NBT_KEY_DIRECT_EJECT, Tag.TAG_BYTE)) {
+			tile.setDirectEjectEnabled(nbt.getBoolean(NBT_KEY_DIRECT_EJECT));
+		}
 		// 修复 v14：反序列化流体罐内容（向后兼容：旧存档无此字段时跳过）
 		if (nbt.contains(NBT_KEY_APIARY_FLUID, Tag.TAG_COMPOUND)) {
 			CompoundTag fluidNbt = nbt.getCompound(NBT_KEY_APIARY_FLUID);
@@ -333,7 +339,7 @@ class ApiaryNbtSerializer {
 				beeSlotsNbt, feederSlotsNbt, pbUpgradeCountsNbt,
 				pbUpgradeInputNbt, pbUpgradeOutputNbt,
 				fluidNbt, cageOutSlotNbt, outputItems, tile.getSelectedBeeSlot(),
-				aeItemOutputEnabled, aeFluidOutputEnabled);
+				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled());
 	}
 
 	/**
@@ -414,6 +420,7 @@ class ApiaryNbtSerializer {
 				tile.productivebeesgenesis$setAeItemOutputEnabled(data.aeItemOutputEnabled);
 				tile.productivebeesgenesis$setAeFluidOutputEnabled(data.aeFluidOutputEnabled);
 			}
+			tile.setDirectEjectEnabled(data.directEjectEnabled);
 			// 修复 MEDIUM-2: 显式恢复 SORTING 字段（模板方法,基础蜂箱为 no-op,工厂版重写设置 sorting）
 			tile.setSortingFromUpgradeData(data.sorting);
 		} catch (RuntimeException e) {

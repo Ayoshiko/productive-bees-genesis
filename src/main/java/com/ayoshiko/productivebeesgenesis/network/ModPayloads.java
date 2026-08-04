@@ -109,6 +109,11 @@ public final class ModPayloads {
 				ApiaryCageOperationPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleApiaryCageOperation
 		);
+		registrar.playToServer(
+				ToggleApiaryDirectEjectPayload.TYPE,
+				ToggleApiaryDirectEjectPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleToggleApiaryDirectEject
+		);
 		// per-tile AE2 输出切换包 — 由 AeOutputButton 点击发送
 		registrar.playToServer(
 				CycleAeOutputPayload.TYPE,

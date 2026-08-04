@@ -529,6 +529,9 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 	@Override
 	public float getClientInstallingProgress() { return pbUpgradeDelegate.getClientInstallingProgress(); }
+	@Override
+	public float stabilityBonus() { return pbUpgradeDelegate.getStabilityBonus(); }
+
 
 	@Override
 	public float getClientUninstallingProgress() { return pbUpgradeDelegate.getClientUninstallingProgress(); }

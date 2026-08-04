@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
@@ -445,14 +446,15 @@ class BeeSlotTickProcessor {
 				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
 				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
 				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
-				if (produceList.isEmpty()) continue;
+				if (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取
 				// Bug 10: 传入 level 用于万象创世随机蜜脾生成
 				// Bug 3: 传入 entry.getValue() 限定仅处理当前组的槽位索引，避免混养串组
 				// F4: 传入 outputBuffer，输出槽满载时剩余产物送入缓冲区下 tick 重试
 				produceProcessor.processBatchProduce(beeSlots, pendingProductions, entry.getValue(),
-						typeKey, produceList, slotManager, level, tile.getOutputBuffer());
+						typeKey, produceList, slotManager, feederManager, tile.getBlockPos(),
+						level, tile.getOutputBuffer());
 			}
 		} finally {
 			// 清零所有累积计数（含 accumulatedProgress），异常时也执行，防止产出翻倍

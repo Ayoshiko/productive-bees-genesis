@@ -68,6 +68,11 @@ public final class Ae2PendingBatchBuffer {
 		return ripeTicksRemaining <= 0 && !pendingAmounts.isEmpty();
 	}
 
+	/** 仅检查时间窗是否成熟，供调度诊断与无 AE2 对象的单元测试使用。 */
+	boolean isWindowRipe() {
+		return ripeTicksRemaining <= 0;
+	}
+
 	/**
 	 * 判断是否应立即刷新（累积量超阈值）。
 	 * <br/>

@@ -820,6 +820,8 @@
   "productivebeesgenesis.gui.ae2_output.fluid.status.on": "AE：开",
   "productivebeesgenesis.gui.ae2_output.fluid.status.off": "AE：关",
   "productivebeesgenesis.gui.ae2_output.global_disabled": "需在配置中启用全局 AE2 输出才能使用此功能",
+  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "离心机特殊直连：开",
+  "productivebeesgenesis.gui.apiary_direct_eject.disabled": "离心机特殊直连：关",
   "productivebeesgenesis.gui.ae2_input.toggle": "输入拉取切换",
   "productivebeesgenesis.gui.ae2_input.nbt_ignore": "NBT 忽略切换",
   "productivebeesgenesis.gui.ae2_input.filter.disabled": "无过滤",

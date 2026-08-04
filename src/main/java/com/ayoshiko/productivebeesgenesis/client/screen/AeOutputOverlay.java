@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -13,7 +14,6 @@ import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
 import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
 import mekanism.client.gui.element.window.GuiWindow;
@@ -39,7 +39,7 @@ import org.lwjgl.glfw.GLFW;
  * <p>
  * <b>原理</b>：通过 NeoForge 的 {@link ScreenEvent} 监听客户端屏幕渲染和鼠标点击，
  * 在检测到 {@link GuiSideConfiguration} 窗口打开时，动态注入 {@link AeOutputButton}
- * 和 {@link AeOutputText} 作为窗口子元素。使用 {@link WeakHashMap} 缓存避免重复创建，
+ * 作为窗口子元素。使用弱 key 与弱 value 缓存避免重复创建且不保留已关闭窗口，
  * 同时在窗口关闭后自动回收。
  * <p>
  * <b>与 Mek-Energistics 的区别</b>：
@@ -56,7 +56,7 @@ import org.lwjgl.glfw.GLFW;
  * 事件在 Screen.mouseClicked 之前拦截点击，命中按钮后取消事件避免穿透。按钮自身的
  * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
  * <p>
- * <b>修复 v14 渲染阶段不修改状态</b>：按钮/文字创建（computeIfAbsent + children().add）
+	 * <b>修复 v14 渲染阶段不修改状态</b>：按钮创建与状态更新
  * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
  * 渲染阶段仅更新 visible/active/tooltip/message 状态，避免 ConcurrentModificationException
  * 和递归渲染风险。
@@ -75,23 +75,14 @@ public final class AeOutputOverlay {
 	private static final int BUTTON_Y_OFFSET = 6;
 	/** 按钮尺寸（宽=高） */
 	private static final int BUTTON_SIZE = 14;
-	/** 状态文字 X 偏移 */
-	private static final int AE_TEXT_X_OFFSET = 78;
-	/** 状态文字 Y 偏移 */
-	private static final int AE_TEXT_Y_OFFSET = 27;
-	/** 状态文字宽度 */
-	private static final int AE_TEXT_WIDTH = 38;
-
 	/** 按钮缓存：key=侧面配置窗口实例，value=按钮。WeakHashMap 在窗口 GC 后自动回收 */
-	private static final Map<GuiSideConfiguration<?>, MekanismButton> BUTTONS = new WeakHashMap<>();
-	/** 文字缓存：key=侧面配置窗口实例，value=文字元素 */
-	private static final Map<GuiSideConfiguration<?>, AeOutputText> TEXTS = new WeakHashMap<>();
+	private static final Map<GuiSideConfiguration<?>, WeakReference<AeOutputButton>> BUTTONS = new WeakHashMap<>();
 
 	private AeOutputOverlay() {
 	}
 
 	/**
-	 * 客户端 tick 事件：在非渲染阶段创建按钮和文字
+	 * 客户端 tick 事件：在非渲染阶段创建并更新按钮
 	 * <br/>
 	 * 修复 v14 渲染阶段不修改状态：原在 Render.Post 中通过 computeIfAbsent
 	 * 创建按钮/文字并调用 sideConfig.children().add() 修改子元素列表，
@@ -150,11 +141,10 @@ public final class AeOutputOverlay {
 		// 全局配置关闭时不响应点击，避免灰显状态下发送切换网络包
 		if (!isGlobalEnabled(target.tile(), target.type())) return;
 		// cacheHit 检查(与 AeInputOverlay 一致):按钮未创建时不处理点击,避免在无按钮时误判 bounds
-		if (!BUTTONS.containsKey(target.sideConfig())) return;
 		ButtonBounds bounds = bounds(target.gui(), target.sideConfig());
 		boolean triggered = bounds.contains(event.getMouseX(), event.getMouseY());
 		// 按钮可见性检查:仅按钮可见时才取消事件,避免不可见按钮阻止事件传递给 MEK Ejector 等原生按钮
-		MekanismButton button = BUTTONS.get(target.sideConfig());
+		AeOutputButton button = getButton(target.sideConfig());
 		boolean buttonVisible = button != null && button.visible;
 		// isCanceled 逻辑:仅按钮可见且点击命中时才取消事件,允许事件传递给 MEK Ejector
 		if (triggered && buttonVisible) {
@@ -164,47 +154,37 @@ public final class AeOutputOverlay {
 	}
 
 	/**
-	 * 创建按钮和文字元素并添加为窗口子元素（仅在非渲染阶段调用）
+	 * 创建按钮并添加为窗口子元素（仅在非渲染阶段调用）
 	 * <br/>
-	 * 修复 v14 渲染阶段不修改状态：使用 computeIfAbsent 保证每个窗口只创建一次按钮/文字，
+	 * 修复 v14 渲染阶段不修改状态：弱引用缓存保证每个存活窗口只创建一次按钮，
 	 * 创建后调用 sideConfig.children().add() 注入到 Mekanism GUI 渲染管线。
-	 * 此方法不更新元素状态，状态更新由 {@link #updateButton} 在渲染阶段处理。
+	 * 此方法不更新元素状态，状态更新由 {@link #updateButton} 在客户端 tick 处理。
 	 */
 	private static void ensureButton(OverlayTarget target) {
 		if (target == null) return;
-		BUTTONS.computeIfAbsent(target.sideConfig(), sideConfig -> {
-			AeOutputButton newButton = new AeOutputButton(
-					target.gui(),
-					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
-					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
-					target);
-			sideConfig.children().add(newButton);
-			return newButton;
-		});
-		TEXTS.computeIfAbsent(target.sideConfig(), sideConfig -> {
-			AeOutputText newText = new AeOutputText(
-					target.gui(),
-					sideConfig.getRelativeX() + AE_TEXT_X_OFFSET,
-					sideConfig.getRelativeY() + AE_TEXT_Y_OFFSET);
-			sideConfig.children().add(newText);
-			return newText;
-		});
+		GuiSideConfiguration<?> sideConfig = target.sideConfig();
+		if (getButton(sideConfig) != null) return;
+		AeOutputButton newButton = new AeOutputButton(
+				target.gui(),
+				sideConfig.getRelativeX() + BUTTON_X_OFFSET,
+				sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
+				target);
+		sideConfig.children().add(newButton);
+		BUTTONS.put(sideConfig, new WeakReference<>(newButton));
 	}
 
 	/**
-	 * 更新按钮和文字状态（仅在渲染阶段调用，不修改 children 列表）
+	 * 更新按钮状态（仅在客户端 tick 调用，不修改 children 列表）
 	 * <br/>
 	 * 修复 v14 渲染阶段不修改状态：仅更新 target 引用、visible、active、tooltip、message，
 	 * 保证状态与当前 TransmissionType 同步。元素不存在时（屏幕刚打开首帧）跳过。
 	 */
 	private static void updateButton(OverlayTarget target) {
 		if (target == null) return;
-		MekanismButton button = BUTTONS.get(target.sideConfig());
+		AeOutputButton button = getButton(target.sideConfig());
 		// 元素尚未创建（屏幕刚打开首帧，tick 尚未执行），跳过更新
 		if (button == null) return;
-		if (button instanceof AeOutputButton aeButton) {
-			aeButton.target = target;
-		}
+		button.target = target;
 		button.visible = shouldRender(target.type());
 		boolean globalEnabled = isGlobalEnabled(target.tile(), target.type());
 		button.active = canToggle(target.type()) && globalEnabled;
@@ -215,11 +195,11 @@ public final class AeOutputOverlay {
 		} else {
 			button.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae2_output.global_disabled")));
 		}
-		AeOutputText text = TEXTS.get(target.sideConfig());
-		if (text != null) {
-			text.target = target;
-			text.visible = shouldRender(target.type());
-		}
+	}
+
+	private static AeOutputButton getButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<AeOutputButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
 	}
 
 	/**
@@ -364,7 +344,7 @@ public final class AeOutputOverlay {
 	/**
 	 * 覆盖层目标 — 持有注入按钮所需的全部上下文
 	 * <br/>
-	 * 公开 record，供 {@link AeOutputButton} 和 {@link AeOutputText} 引用。
+	 * 公开 record，供 {@link AeOutputButton} 引用。
 	 *
 	 * @param gui      Mekanism GUI 实例
 	 * @param sideConfig 侧面配置窗口实例（按钮注入目标）

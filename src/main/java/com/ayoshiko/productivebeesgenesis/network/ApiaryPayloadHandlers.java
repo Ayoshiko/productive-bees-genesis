@@ -37,6 +37,19 @@ final class ApiaryPayloadHandlers {
 	private ApiaryPayloadHandlers() {
 	}
 
+	static void handleToggleApiaryDirectEject(ToggleApiaryDirectEjectPayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)
+				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
+				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			return;
+		}
+		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
+		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
+				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		apiary.toggleDirectEject();
+	}
+
 	/**
 	 * 服务端处理：选中蜜蜂槽位（Bug 9）
 	 * <br/>

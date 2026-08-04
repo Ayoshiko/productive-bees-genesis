@@ -18,6 +18,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
+import cy.jdkdigital.productivebees.ProductiveBeesConfig;
+
 import mekanism.api.Upgrade;
 import mekanism.common.config.MekanismConfig;
 
@@ -491,7 +493,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 获取稳定性概率加成 — 提升非保底产物的产出概率
 	 * <br/>
 	 * 对齐 PB 原版 {@code CentrifugeBlockEntity.completeRecipeProcessing} 的 stability 逻辑：
-	 * {@code bonus = (已装数 + 1) × 0.15}，截断到 1.0。
+	 * {@code bonus = (已装数 + 1) × PB配置加成}，截断到 1.0。
 	 * <ul>
 	 *   <li>0 个升级：bonus = 0.15（PB 原版基础就有）</li>
 	 *   <li>7 个升级（满槽）：bonus = 1.2 → 截断到 1.0（所有概率产物变保底）</li>
@@ -502,7 +504,8 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 */
 	float getStabilityBonus() {
 		int count = getInstalledCount(PbUpgradeType.STABILITY);
-		return Math.min(1.0f, (count + 1) * 0.15f);
+		return (float) PbOutputChance.stabilityBonus(
+				count, ProductiveBeesConfig.UPGRADES.stabilityChanceIncrease.get());
 	}
 
 	// ===== 内部辅助 =====

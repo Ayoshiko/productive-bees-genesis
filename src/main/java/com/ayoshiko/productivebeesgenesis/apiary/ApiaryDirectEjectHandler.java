@@ -184,6 +184,11 @@ class ApiaryDirectEjectHandler {
 	boolean tryDirectEject() {
 		Level level = apiary.getLevel();
 		if (level == null || level.isClientSide) return false;
+		if (!apiary.isDirectEjectEnabled()) {
+			needsEjectCheck = false;
+			consecutiveEjectFailures = 0;
+			return false;
+		}
 
 		if (!shouldCheck()) return false;
 

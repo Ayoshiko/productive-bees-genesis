@@ -80,6 +80,9 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	/** per-tile AE2 流体输出开关（升级时保留用户设置，AE2 未加载时为 false） */
 	public final boolean aeFluidOutputEnabled;
 
+	/** 蜂箱到相邻离心机的特殊直连通道开关。 */
+	public final boolean directEjectEnabled;
+
 	/**
 	 * 蜂箱工厂升级数据构造函数
 	 *
@@ -104,6 +107,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	 * @param selectedBeeSlot      选中的蜜蜂槽索引
 	 * @param aeItemOutputEnabled  per-tile AE2 物品输出开关
 	 * @param aeFluidOutputEnabled per-tile AE2 流体输出开关
+	 * @param directEjectEnabled   特殊直连通道开关
 	 */
 	public ApiaryUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
 			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
@@ -113,7 +117,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
 			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
 			@Nullable List<ItemStack> outputItems, int selectedBeeSlot,
-			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled) {
+			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -127,5 +131,6 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.selectedBeeSlot = selectedBeeSlot;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;
+		this.directEjectEnabled = directEjectEnabled;
 	}
 }
