@@ -105,6 +105,8 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 
 sourceSets.main.resources.srcDir generateModMetadata
 sourceSets.main.resources.srcDir 'src/generated/resources'
+// datagen 哈希缓存（.cache）仅用于增量生成，不进入运行时 JAR，减小模组体积
+sourceSets.main.resources.exclude '.cache/**'
 neoForge.ideSyncTask generateModMetadata
 
 dependencies {

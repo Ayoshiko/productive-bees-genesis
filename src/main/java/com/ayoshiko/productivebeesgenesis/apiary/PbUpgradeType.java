@@ -10,7 +10,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
  * <ul>
  *   <li>{@code id}：字符串标识，用于 NBT 序列化与翻译键生成</li>
  *   <li>{@code color}：ARGB 颜色，用于 GUI 显示区分</li>
- *   <li>{@code productivityFactor}：产量升级的系数（仅产量系列有值，其他为 0）</li>
+ *   <li>{@code productivityFactor}：产量升级系数的默认值（仅产量系列有值，其他为 0；
+ *       运行时实际值由 {@link PbUpgradeConfig} 从 PB 原版配置读取）</li>
  *   <li>{@code maxCount}：该类型可安装的最大数量（功能型=1，叠加型=8）</li>
  * </ul>
  * <p>
@@ -26,16 +27,16 @@ package com.ayoshiko.productivebeesgenesis.apiary;
  */
 public enum PbUpgradeType {
 
-	/** 生产力升级 α — 产出数量倍率（每级系数 1.2） */
+	/** 生产力升级 α — 产出数量倍率（PB 配置 productivityMultiplier，默认 1.2） */
 	PRODUCTIVITY("productivity", 0xFF4CAF50, 1.2f, 8),
 
-	/** 生产力升级 β — 产出数量倍率（每级系数 1.5） */
+	/** 生产力升级 β — 产出数量倍率（PB 配置 productivityMultiplier2，默认 1.5） */
 	PRODUCTIVITY_2("productivity_2", 0xFF66BB6A, 1.5f, 8),
 
-	/** 生产力升级 γ — 产出数量倍率（每级系数 2.0） */
+	/** 生产力升级 γ — 产出数量倍率（PB 配置 productivityMultiplier3，默认 2.0） */
 	PRODUCTIVITY_3("productivity_3", 0xFF42A5F5, 2.0f, 8),
 
-	/** 生产力升级 Ω — 产出数量倍率（每级系数 2.6），自带蜜脾块效果 */
+	/** 生产力升级 Ω — 产出数量倍率（PB 配置 productivityMultiplier4，默认 2.6），自带蜜脾块效果 */
 	PRODUCTIVITY_4("productivity_4", 0xFFEF5350, 2.6f, 8),
 
 	/** 时间升级 — 生产速度倍率（每级减少 15% 时间，与 PB 原版 timeBonus 一致） */
@@ -68,7 +69,7 @@ public enum PbUpgradeType {
 	/** ARGB 颜色（GUI 显示用） */
 	private final int color;
 
-	/** 产量升级系数（仅产量系列有值，其他为 0） */
+	/** 产量升级系数的默认值（仅产量系列有值，其他为 0；运行时由 PB 配置覆盖） */
 	private final float productivityFactor;
 
 	/** 该类型可安装的最大数量（功能型=1，叠加型=8） */
@@ -96,10 +97,22 @@ public enum PbUpgradeType {
 	 * <br/>
 	 * 仅产量系列（PRODUCTIVITY/PRODUCTIVITY_2/3/4）返回正数，其他类型返回 0。
 	 * 供 {@link ApiaryUpgradeHandler#getProductivityMultiplier} 按等级加权求和。
+	 * <p>
+	 * 值来源：PB 原版配置 {@code ProductiveBeesConfig.Upgrades.productivityMultiplier[1..4]}，
+	 * 玩家修改 PB 配置文件后自动生效；配置未就绪时回退枚举默认值。
 	 *
 	 * @return 产量系数，非产量升级返回 0
 	 */
 	public float getProductivityFactor() {
+		return PbUpgradeConfig.productivityMultiplier(this);
+	}
+
+	/**
+	 * 获取产量升级系数的默认值（配置未加载/异常时的回退值，与 PB 原版默认一致）。
+	 *
+	 * @return 默认产量系数，非产量升级返回 0
+	 */
+	float getDefaultProductivityFactor() {
 		return productivityFactor;
 	}
 

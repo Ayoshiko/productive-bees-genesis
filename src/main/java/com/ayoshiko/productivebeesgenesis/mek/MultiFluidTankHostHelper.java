@@ -125,6 +125,13 @@ public final class MultiFluidTankHostHelper {
 		return primary;
 	}
 
+	/** 预留一种活跃配方的流体槽，不会为已映射类型继续扩容。 */
+	public static void reserveFluidOutputType(IFluidTankHolder holder, FluidStack stack) {
+		if (holder instanceof MultiFluidTankHolder multiHolder) {
+			multiHolder.reserveTankForType(stack);
+		}
+	}
+
 	/**
 	 * 返回流体输出槽总数(PbRecipeContext.fluidOutputTankCount)
 	 * <br/>

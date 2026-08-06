@@ -359,6 +359,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** Task 9: MULTI_PER_FLUID 按流体类型路由到独立槽;SINGLE 模式 fallback 到主槽 */
 	@Override
 	public IExtendedFluidTank fluidOutputTankForInsert(FluidStack stack) { return MultiFluidTankHostHelper.fluidOutputTankForInsert(fluidOutputHolder, fluidOutputTank, stack); }
+	@Override
+	public void reserveFluidOutputType(FluidStack stack) { MultiFluidTankHostHelper.reserveFluidOutputType(fluidOutputHolder, stack); }
 	/** Task 9: MULTI_PER_FLUID 返回已分配槽位数;SINGLE 模式返回 1 */
 	@Override
 	public int fluidOutputTankCount() { return MultiFluidTankHostHelper.fluidOutputTankCount(fluidOutputHolder); }
@@ -419,6 +421,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	@Override
 	public int productivityModifier() { return CentrifugeFactoryCommonLogic.productivityModifier(pbUpgradeDelegate); }
+	@Override
+	public int productivityParallelModifier() { return pbUpgradeDelegate.getProductivityParallelModifier(); }
 
 	@Override
 	public float stabilityBonus() { return pbUpgradeDelegate.getStabilityBonus(); }
@@ -476,7 +480,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	/** 获取用于拉取的输入槽列表 — 工厂版每进程1个输入槽，按顺序填充 */
 	@Override
-	public List<IInventorySlot> productivebeesgenesis$getInputSlotsForPull() { return FactoryUpgradeStateHelper.getInputSlotsForPull(this); }
+	public List<IInventorySlot> productivebeesgenesis$getInputSlotsForPull() {
+		// 父类已维护稳定的输入槽列表；直接复用，避免 AE2 拉取路径每次分配 ArrayList。
+		return inputSlots;
+	}
 
 	/** 切换per-tile AE2输入拉取开关（供网络包handler调用） */
 	@Override

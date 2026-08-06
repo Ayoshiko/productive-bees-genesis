@@ -199,6 +199,12 @@ public final class MekCentrifugeFactoryHelper {
 		// 入口刷新缓存 — 替代原 tryProcessPbRecipe 内部的每次调用刷新
 		pbProcessor.refreshFluidTankFullCache(context);
 		pbProcessor.refreshEnergyAndOpsCache(context);
+		// 先为本 tick 的不同流体类型各预留一个槽，避免先处理的高产量流体占满所有空槽。
+		pbProcessor.reserveActiveFluidOutputTypes(inputSlots);
+		// 工厂的 tickMultiplier 属于整台机器而非单个进程。
+		// 必须在循环外消费一次，再为每个进程注入同一倍率；否则第一个输入槽
+		// 在 PbRecipeProcessor 内部重置共享字段，后续输入槽只能按 1x 处理。
+		int batchMultiplier = pbProcessor.consumeTickMultiplier();
 		// PB配方独立处理 — 只处理非SMELTING配方且输入不为空的进程
 		for (int i = 0; i < processes; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
@@ -217,6 +223,7 @@ public final class MekCentrifugeFactoryHelper {
 			if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)
 					|| pbProcessor.findPbRecipe(input) != null) {
+				pbProcessor.setTickMultiplier(batchMultiplier);
 				if (pbProcessor.tryProcessPbRecipe(i)) {
 					context.productivebeesgenesis$onProcessActivated(i);
 					context.setPbActiveState(true, i);
@@ -235,6 +242,7 @@ public final class MekCentrifugeFactoryHelper {
 				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;
 			}
+			pbProcessor.setTickMultiplier(batchMultiplier);
 			if (pbProcessor.tryProcessPbRecipe(i)) {
 				// Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部状态守卫防重复 + setActiveState）
 				context.productivebeesgenesis$onProcessActivated(i);

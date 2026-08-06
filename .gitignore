@@ -34,6 +34,9 @@ mezz/
 mekanism/
 bin/
 
+# datagen 增量哈希缓存（运行时不需要，不入库）
+src/generated/resources/.cache/
+
 # 临时调试输出
 *.txt
 run_output.txt

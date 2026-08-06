@@ -117,6 +117,10 @@ public final class MultiFluidTankHostDelegate {
 		return MultiFluidTankHostHelper.fluidOutputTankForInsert(fluidOutputHolder, fluidOutputTank, stack);
 	}
 
+	public void reserveFluidOutputType(FluidStack stack) {
+		MultiFluidTankHostHelper.reserveFluidOutputType(fluidOutputHolder, stack);
+	}
+
 	public int fluidOutputTankCount() {
 		return MultiFluidTankHostHelper.fluidOutputTankCount(fluidOutputHolder);
 	}

@@ -85,8 +85,8 @@ public final class Ae2FluidPusher {
 	 *   <li>批量短路:同一"游戏刻"内(counter 差值 &lt; M)跳过</li>
 	 *   <li>累积阶段:遍历流体罐,将 fluidKey+amount 累积到 batchBuffer</li>
 	 *   <li>刷新检查:isRipe()(20 tick 窗口) OR shouldFlushNow(超 50 亿 mB) 时刷新</li>
-	 *   <li>推送阶段:drain batchBuffer,对每个 key 调用 batchPush</li>
-	 *   <li>shrink 阶段:按比例从匹配 tank 分块 shrinkStack</li>
+	 *   <li>推送阶段:drain batchBuffer,对每个 key 先按当前 tank 实际总量 clamp 请求量,
+	 *       再执行批量推送,最后按实际接收量 shrink(网络拒绝时不触碰 tank,无丢失)</li>
 	 * </ol>
 	 *
 	 * @param host 输出宿主(蜂箱/离心机方块实体)
@@ -108,6 +108,16 @@ public final class Ae2FluidPusher {
 		//    基于 System.nanoTime() 墙钟单调时钟,不受 JDTE 加速影响(Task 5)
 		long pushCounter = pushState.incrementFluidPushCallCounter();
 		if (pushState.getFluidBackoff().shouldSkip(System.nanoTime())) return;
+
+		// 2.1 JDTE M 自适应 + 批量推送短路（提前到最前）
+		//     JDTE 256x 加速时同一 gameTick 内 pushFluids 被调用 256 次，
+		//     只有第 M 次才真正累积/推送。提前短路可让 255/256 次重复调用
+		//     只执行计数器判断即返回，跳过下方 TPS/node/grid/能量等检查。
+		//     getMultiplier() 为 O(1)（Math.min/max），提前调用无额外成本。
+		TickAccelTracker tracker = holder.getTickAccelTracker();
+		int M = (tracker != null) ? tracker.getMultiplier() : 1;
+		if (pushCounter - pushState.getLastFluidPushCounter() < M) return;
+		pushState.updateLastFluidPushCounter(pushCounter);
 
 		// 3. TPS 自适应:TPS 严重下降时跳过推送,让出服务器资源(spec Change 5)
 		Level level = host.productivebeesgenesis$getAe2Level();
@@ -139,12 +149,6 @@ public final class Ae2FluidPusher {
 		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
 		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
 
-		// 7. JDTE M 自适应 + 批量推送短路（使用缓存的 holder 和 pushState）
-		TickAccelTracker tracker = holder.getTickAccelTracker();
-		int M = (tracker != null) ? tracker.getMultiplier() : 1;
-		if (pushCounter - pushState.getLastFluidPushCounter() < M) return;
-		pushState.updateLastFluidPushCounter(pushCounter);
-
 		// 8. Task 21: 获取或创建批处理缓冲,递减成熟计数器（holder 感知重载）
 		Ae2PendingBatchBuffer batchBuffer = getOrCreatePendingBatchBuffer(holder);
 		batchBuffer.tick();
@@ -156,7 +160,8 @@ public final class Ae2FluidPusher {
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty()) continue;
-			AEFluidKey fluidKey = AEFluidKey.of(stack);
+			// Task 24：复用按槽缓存的 AEFluidKey，避免每 tick 重建（AEFluidKey.of 会分配新对象）
+			AEFluidKey fluidKey = getCachedFluidKey(holder, i, stack);
 			if (fluidKey == null) {
 				continue;
 			}
@@ -176,9 +181,9 @@ public final class Ae2FluidPusher {
 
 		boolean anySuccess = false;
 		boolean allFailed = true;
-		boolean hasLeftover = false; // 部分成功标志：有流体被 AE2 拒收返回 tank
 		long totalRequested = 0L;
 		long totalActualShrunk = 0L; // 实际从 tank shrink 的总量（区分 tank 已空和推送失败）
+		long rejectedCount = 0L; // 被网络完全拒绝的流体种类数（用于触发退避）
 
 		for (Map.Entry<AEFluidKey, Long> entry : pendingMap.entrySet()) {
 			AEFluidKey fluidKey = entry.getKey();
@@ -186,33 +191,35 @@ public final class Ae2FluidPusher {
 			totalRequested += amount;
 
 			try {
-				// M10 修复：先 shrink 后 push，消除累积与 shrink 之间的竞态导致的流体复制
-				// 原方案：先 push(amount) 后 shrink(inserted)
-				//   问题：amount 是多 tick 累积量(每次读取 tank.getAmount 累加)，
-				//         tank 当前实际量可能远小于 amount，导致 actualShrunk < inserted
-				//         (AE2 收到多于 tank 扣除，流体复制)
-				// 新方案：先 shrink(amount) 得到 actualShrunk(tank 实际可扣除量)，
-				//         再 push(actualShrunk)，AE2 未接受的差额返回 tank
-				//   守恒：tank 扣除 = AE2 接收 + 返回 tank，无复制无丢失
-				long actualShrunk = shrinkStackSafely(host, fluidKey, amount, tankCount);
-				if (actualShrunk <= 0) continue; // tank 已空，跳过推送
-				totalActualShrunk += actualShrunk;
+				// 无丢失推送：先快照当前 tank 中该流体的实际总量作为推送上限。
+				// 缓冲里的 amount 是窗口内最大采样，可能因 Ejector 弹出等已过期，
+				// clamp 到当前实际库存可保证「推入 AE 的量 ≤ 实际库存」，
+				// 之后按实际接收量 shrink 精确扣除，未接收部分天然留在 tank，
+				// 无需回填，杜绝"先 shrink 后推送失败再回填"路径中的流体丢失。
+				long tankTotal = currentTankAmount(host, fluidKey, tankCount);
+				if (tankTotal <= 0) continue; // tank 已空，跳过推送
+				long pushed = Math.min(amount, tankTotal);
 
-				long inserted = batchPush(energySource, meStorage, fluidKey, actualShrunk, M);
-
-				if (inserted > 0) {
-					anySuccess = true;
-					allFailed = false;
+				long inserted = batchPush(energySource, meStorage, fluidKey, pushed, M);
+				if (inserted <= 0) {
+					// 完全失败：不触碰 tank，触发退避
+					rejectedCount++;
+					continue;
+				}
+				anySuccess = true;
+				allFailed = false;
+				totalActualShrunk += inserted;
+				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
+				// 正常情况下 shrink 必然足额；不足仅可能出现在极端并发/异常，
+				// 记录 error 防止静默复制（防御性）。
+				long shrunk = shrinkStackSafely(host, fluidKey, inserted, tankCount);
+				if (shrunk < inserted) {
+					LogThrottle.error("ae2_fluid_shrink_mismatch",
+							"AE2 流体推送后 shrink 不足: fluid={}, inserted={}, shrunk={} (5秒内仅首条)",
+							fluidKey, inserted, shrunk);
 				}
 
-				// AE2 未接受的差额返回 tank（防止流体丢失）
-				long leftover = actualShrunk - inserted;
-				if (leftover > 0) {
-					hasLeftover = true;
-					returnFluidToTanks(host, fluidKey, leftover, tankCount);
-				}
-
-				logPushResult(fluidKey, actualShrunk, inserted);
+				logPushResult(fluidKey, pushed, inserted);
 			} catch (Exception e) {
 				handlePushException(e, fluidKey, amount);
 			}
@@ -220,13 +227,15 @@ public final class Ae2FluidPusher {
 
 		// 12. 退避触发逻辑（修复：消除"部分成功 → 重置 → 立即失败 → 激进退避"的死循环）
 		// - 完全失败（allFailed && totalActualShrunk > 0）：触发/升级退避
-		//   使用 totalActualShrunk 而非 totalRequested：区分"推送失败"和"tank 已空无需推送"
-		// - 完全成功（anySuccess && !hasLeftover）：重置退避
-		// - 部分成功（anySuccess && hasLeftover）：保持当前退避级别，不重置也不升级
+		//   totalActualShrunk > 0 表示有实际扣除了却未被任何 key 部分成功标记（仅全部失败时）；
+		//   rejectedCount > 0 表示存在被网络完全拒绝的 key（无扣除）。
+		//   两者都会触发退避；tank 已空（pushed==0）不计入。
+		// - 完全成功（anySuccess）：重置退避
+		// - 部分成功（inserted < pushed）：保持当前退避级别，不重置也不升级
 		//   原因：部分成功说明网格仍不稳定，重置退避会导致下一轮失败重新触发 30s 激进退避，
 		//   形成"30s退避 → 部分成功 → 重置 → 立即失败 → 30s退避"的无限循环
 		Ae2PushBackoff fluidBackoff = pushState.getFluidBackoff();
-		if (allFailed && totalActualShrunk > 0) {
+		if (allFailed && (totalActualShrunk > 0 || rejectedCount > 0)) {
 			boolean firstFailure = (fluidBackoff.getBackoffExponent() == 0);
 			if (firstFailure) {
 				fluidBackoff.recordFailureAggressive(System.nanoTime());
@@ -238,10 +247,58 @@ public final class Ae2FluidPusher {
 						"AE2 流体推送失败,进入退避 指数={}, 结束时间戳={}",
 						fluidBackoff.getBackoffExponent(), fluidBackoff.getBackoffEndNanos());
 			}
-		} else if (anySuccess && !hasLeftover) {
+		} else if (anySuccess) {
 			// 仅完全成功时重置退避；部分成功保持当前级别
 			fluidBackoff.recordSuccess();
 		}
+	}
+
+	/**
+	 * 快照当前所有匹配 tank 中该流体的实际总量。
+	 * <br/>
+	 * 与 {@link #shrinkStackSafely} 的匹配规则一致（Fluid 引用比较，AEFluidKey 无 NBT）。
+	 *
+	 * @param host      输出宿主
+	 * @param fluidKey  流体键
+	 * @param tankCount 流体罐总数
+	 * @return 当前实际总量(mB)；0 表示该流体当前不在任何 tank
+	 */
+	private static long currentTankAmount(IAe2OutputHostBase host, AEFluidKey fluidKey, int tankCount) {
+		net.minecraft.world.level.material.Fluid targetFluid = fluidKey.getFluid();
+		long total = 0L;
+		for (int i = 0; i < tankCount; i++) {
+			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			if (tank == null || tank.isEmpty()) continue;
+			FluidStack stack = tank.getFluid();
+			if (stack.isEmpty() || targetFluid != stack.getFluid()) continue;
+			total += stack.getAmount();
+		}
+		return total;
+	}
+
+	/**
+	 * 获取（或构建并缓存）指定流体槽的 AEFluidKey。
+	 * <br/>
+	 * Task 24：{@code AEFluidKey.of(FluidStack)} 每次分配 AEFluidKey + FluidStack，
+	 * 多槽高并行工厂在大量机器下每 tick 累积都会产生分配压力。
+	 * 按 (Fluid 引用 + components hash) 失效：流体类型不变时直接复用缓存对象。
+	 *
+	 * @param holder AE2 状态持有者（承载 per-tile 缓存）
+	 * @param index  流体槽索引
+	 * @param stack  当前槽位流体（仅读取，不修改）
+	 * @return 缓存的 AEFluidKey；栈为空返回 null
+	 */
+	private static AEFluidKey getCachedFluidKey(Ae2OutputStateHolder holder, int index, FluidStack stack) {
+		Object fluid = stack.getFluid();
+		int componentsHash = stack.getComponents().hashCode();
+		if (holder.getCachedFluidPushKeyFluid(index) == fluid
+				&& holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash
+				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing) {
+			return existing;
+		}
+		AEFluidKey created = AEFluidKey.of(stack);
+		holder.setCachedFluidPushKey(index, created, fluid, componentsHash);
+		return created;
 	}
 
 	/**
@@ -363,59 +420,6 @@ public final class Ae2FluidPusher {
 			if (actualShrunk < shrinkThisTank) break;
 		}
 		return totalShrunk;
-	}
-
-	/**
-	 * M10 修复：将 AE2 未接受的流体返回 tank，防止流体丢失
-	 * <br/>
-	 * 先 shrink 后 push 模式下，AE2 网络可能因容量不足只接受部分流体，
-	 * 未接受的差额需要返回 tank，否则构成流体丢失。
-	 * <p>
-	 * 原理：用 {@link AEFluidKey#getFluid()} 获取 Fluid 引用，创建 FluidStack insert 到匹配 tank。
-	 * 逆序遍历 tank（与 shrink 顺序相反），避免立即被下次推送再次消耗。
-	 * 如果所有匹配 tank 都满，剩余量记录 WARN（极少发生，表示 AE2 网络和 tank 同时满）。
-	 * <p>
-	 * <b>Spark 优化</b>:用 Fluid 引用比较替代 AEFluidKey.of(current) 重建。
-	 * 与 shrinkStackSafely 对称，AEFluidKey 无 NBT，equals 等价于 fluid 引用比较。
-	 *
-	 * @param host      输出宿主
-	 * @param fluidKey  流体键（用于匹配 tank 和获取 Fluid）
-	 * @param amount    返回量(mB)
-	 * @param tankCount 流体罐总数
-	 */
-	private static void returnFluidToTanks(IAe2OutputHostBase host, AEFluidKey fluidKey,
-			long amount, int tankCount) {
-		if (amount <= 0) return;
-		net.minecraft.world.level.material.Fluid fluid = fluidKey.getFluid();
-		long remaining = amount;
-
-		// 逆序遍历 tank（与 shrink 顺序相反），找到匹配 fluidKey 的 tank insert 返回
-		for (int i = tankCount - 1; i >= 0 && remaining > 0; i--) {
-			IExtendedFluidTank tank = host.fluidOutputTank(i);
-			if (tank == null) continue;
-			FluidStack current = tank.getFluid();
-			// 匹配 fluidKey 的非空 tank，或空 tank（可能接受该 fluid）
-			// Spark 优化：Fluid 引用比较等价于 AEFluidKey.equals（AEFluidKey 无 NBT），
-			// 避免每次循环重建 AEFluidKey.of(current)
-			if (!current.isEmpty() && fluid != current.getFluid()) continue;
-			// 创建返回 Stack（分块防 long→int 截断）
-			int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
-			FluidStack returnStack = new FluidStack(fluid, chunk);
-			// insert 返回未插入的剩余 Stack，actualInserted = chunk - leftover.getAmount()
-			FluidStack leftoverStack = tank.insert(returnStack,
-					mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL);
-			long leftoverAmount = (leftoverStack == null || leftoverStack.isEmpty()) ? 0 : leftoverStack.getAmount();
-			long actualInserted = chunk - leftoverAmount;
-			remaining -= actualInserted;
-			// tank 未接受任何量（已满或不接受该 fluid），继续尝试下一个
-			if (actualInserted == 0 && chunk > 0) continue;
-		}
-
-		// 所有 tank 都满，剩余流体无法返回（极少发生）
-		if (remaining > 0) {
-			LogThrottle.warn("ae2_fluid_return_overflow",
-					"AE2 未接受的流体返回 tank 失败(所有 tank 已满), 丢失 {} mB (5秒内仅首条)", remaining);
-		}
 	}
 
 	/**

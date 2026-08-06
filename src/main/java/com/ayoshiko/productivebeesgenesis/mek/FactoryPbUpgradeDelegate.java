@@ -182,6 +182,11 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 		return pbUpgradeHandler.getProductivityMultiplier();
 	}
 
+	/** 获取 PB 原版产量升级并行数（4/8/16/32），可与其他并行倍率叠加 */
+	public int getProductivityParallelModifier() {
+		return pbUpgradeHandler.getProductivityParallelModifier();
+	}
+
 	/** 获取时间倍率 — 影响配方处理速度（越小越快） */
 	public float getTimeMultiplier() {
 		return pbUpgradeHandler.getTimeMultiplier();

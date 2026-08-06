@@ -295,6 +295,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		return Math.max(1, (int) Math.floor(pbUpgradeHandler.getProductivityMultiplier()));
 	}
 	@Override
+	public int productivityParallelModifier() {
+		return pbUpgradeHandler.getProductivityParallelModifier();
+	}
+	@Override
 	public float stabilityBonus() { return pbUpgradeHandler.getStabilityBonus(); }
 	@Override
 	public int operationsPerTick() { return MekCentrifugeUpgradeOps.calcOperationsPerTick(this); }

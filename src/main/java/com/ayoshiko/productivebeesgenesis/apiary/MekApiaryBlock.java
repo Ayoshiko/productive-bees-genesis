@@ -201,21 +201,24 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 	}
 
 	/**
-	 * 掉落物 — 保留DataComponent + 自定义方块实体数据（Bug 6 + Task 10 合并方案）
+	 * 掉落物 — 使用 vanilla 标准 {@code saveToItem} 路径保留完整方块实体数据
 	 * <br/>
-	 * Bug 6原理：蜂箱自定义数据（蜜蜂槽/喂食槽/PB升级）不在MEK标准DataComponents体系中，
-	 * collectComponents无法序列化这些字段，导致扳手拆卸后蜜蜂/喂食器/PB升级内容全部丢失。
-	 * 修复：将自定义NBT写入BLOCK_ENTITY_DATA组件，放置时Minecraft自动调用loadAdditional恢复。
+	 * {@code BlockEntity.saveToItem} 内部执行：
+	 * <ol>
+	 *   <li>{@code saveCustomOnly} → {@code saveAdditional}：保存蜜蜂槽/喂食槽/PB升级/流体/缓冲区到 NBT</li>
+	 *   <li>{@code removeComponentsFromTag}：移除已被 collectImplicitComponents 处理的 MEK 标准字段</li>
+	 *   <li>{@code BlockItem.setBlockEntityData}：设置 BLOCK_ENTITY_DATA 组件（含 id）</li>
+	 *   <li>{@code collectComponents} → {@code collectImplicitComponents}：收集 ATTACHED_ITEMS/UPGRADES 等组件</li>
+	 *   <li>{@code stack.applyComponents}：设置组件到 ItemStack</li>
+	 * </ol>
+	 * 放置时 NeoForge 双路径恢复：
+	 * <ol>
+	 *   <li>{@code loadCustomOnly} → {@code loadAdditional}：从 BLOCK_ENTITY_DATA 恢复蜜蜂槽/喂食槽/PB升级</li>
+	 *   <li>{@code applyImplicitComponents}：从 ATTACHED_ITEMS/UPGRADES 恢复 MEK 标准槽位（输出槽/蜂笼槽/能量槽）</li>
+	 * </ol>
+	 * 蜜蜂槽/喂食槽/PB升级不在 ContainerType 中，不会被 applyImplicitComponents 覆盖。
 	 * <p>
-	 * Task 10 修复：完全覆盖 bug 根因
-	 * <br/>
-	 * 原 getDrops 中 {@code drop.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(customNbt))}
-	 * 完全覆盖了 {@code drop.applyComponents(updateable.collectComponents())} 写入的完整 BLOCK_ENTITY_DATA,
-	 * 导致 MEK 标准组件数据（如红石控制、能量、安全拥有者等）丢失,放置后方块实体状态不一致。
-	 * <p>
-	 * 合并方案原理：读取 collectComponents 写入的现有 BLOCK_ENTITY_DATA,
-	 * 将 customNbt 字段逐个合并进去（跳过 "id" 键避免覆盖方块实体类型）,
-	 * 保证 MEK 标准数据 + 自定义数据同时保留。仅当现有 BLOCK_ENTITY_DATA 为 null 时直接覆盖。
+	 * 此路径统一了镐子挖掘和扳手拆卸的数据保存方式，确保两者 NBT 结构一致、物品栏可合并。
 	 */
 	@Override
 	protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
@@ -224,38 +227,14 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 			HolderLookup.Provider provider = params.getLevel().registryAccess();
 			for (ItemStack drop : drops) {
 				if (drop.is(this.asItem())) {
-					drop.applyComponents(updateable.collectComponents());
+					// vanilla 标准路径：saveToItem 同时设置 BLOCK_ENTITY_DATA 和 DataComponents
+					updateable.saveToItem(drop, provider);
 					if (updateable instanceof TileEntityMekanism mekanismTile && mekanismTile.getCustomName() != null) {
 						drop.set(DataComponents.CUSTOM_NAME, mekanismTile.getCustomName());
 					}
-					// Bug 6 + Task 10：写入自定义方块实体数据，确保扳手拆卸后蜜蜂/喂食器/PB升级数据不丢失
-					// 合并方案：避免覆盖 collectComponents 写入的 MEK 标准 BLOCK_ENTITY_DATA
-					if (updateable instanceof com.ayoshiko.productivebeesgenesis.ICustomDataPersistable persistable) {
-						CompoundTag customNbt = persistable.saveCustomDataForItem(provider);
-						if (!customNbt.isEmpty()) {
-							net.minecraft.world.item.component.CustomData existing = drop.get(DataComponents.BLOCK_ENTITY_DATA);
-							if (existing != null) {
-								// 合并方案：读取现有 BLOCK_ENTITY_DATA,将 customNbt 字段合并（跳过 id 避免覆盖方块实体类型）
-								CompoundTag merged = existing.copyTag();
-								for (String key : customNbt.getAllKeys()) {
-									if (!"id".equals(key)) {
-										merged.put(key, customNbt.get(key));
-									}
-								}
-								drop.set(DataComponents.BLOCK_ENTITY_DATA,
-										net.minecraft.world.item.component.CustomData.of(merged));
-							} else {
-								// 现有为空,直接覆盖（无 MEK 标准数据需要保留）
-								drop.set(DataComponents.BLOCK_ENTITY_DATA,
-										net.minecraft.world.item.component.CustomData.of(customNbt));
-							}
-						}
-					}
 				}
 			}
-			// 模块 4 修复：saveAllItemsForDrop 移到 for 循环外部，与 MekCentrifugeBlock.getDrops 保持一致
-			// 原位置在 for 循环内部 + ICustomDataPersistable instanceof 检查内部，可能导致重复调用或漏调
-			// 模块 2 修复：保存 BLOCK_ENTITY_DATA 后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
+			// 保存数据后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
 			if (updateable instanceof TileEntityMekApiary apiaryTile) {
 				apiaryTile.saveAllItemsForDrop();
 			}
@@ -283,33 +262,28 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 	}
 
 	/**
-	 * 方块被移除时清理 — 模块 2 修复（v2.4）
+	 * 方块被移除时清理 — 对齐 MEK 原版 {@code BlockMekanism.onRemove}
 	 * <br/>
-	 * 参考MEK原版 {@code BlockMekanism.onRemove}：调用 {@code tile.blockRemoved()} 触发清理。
+	 * NeoForge 1.21.1 方块破坏顺序：
+	 * <ol>
+	 *   <li>{@code ServerPlayerGameMode.destroyBlock} 获取 BlockEntity 引用</li>
+	 *   <li>{@code playerWillDestroy}（仅粒子）</li>
+	 *   <li>{@code onRemove}（此处）— {@code level.setBlock(air)} 触发</li>
+	 *   <li>{@code playerDestroy} → {@code dropResources} → {@code getDrops}（读取 BlockEntity 数据）</li>
+	 *   <li>{@code setRemoved}（Ejector 清理）</li>
+	 * </ol>
+	 * {@code onRemove} 在 {@code getDrops} 之前调用，因此<strong>不能在此清空槽位</strong>，
+	 * 否则 {@code getDrops} 读到空数据，破坏持久化。
 	 * <p>
-	 * 模块 2 根因修复：v2.3 的 {@code saveAllItemsForDrop} 仅在 {@code getDrops} 中调用，
-	 * 但创造模式左键破坏不走 {@code getDrops}，导致槽位未清空，{@code setRemoved} 触发
-	 * Ejector 组件 {@code popResource} 将物品弹出世界。
+	 * 槽位清空由 {@code getDrops} 中的 {@code saveAllItemsForDrop} 在 {@code saveToItem}
+	 * 之后执行，{@code setRemoved} 时 Ejector 检测到空槽位不执行 popResource。
 	 * <p>
-	 * 修复方案：覆写 {@code onRemove}，在 {@code tile.blockRemoved()} 之前调用
-	 * {@code saveAllItemsForDrop} 清空所有槽位。这样无论是否走 {@code getDrops}，
-	 * {@code setRemoved} 时 Ejector 检测到空槽位，不执行 {@code popResource}。
-	 * <p>
-	 * 调用顺序保证：
-	 * <ul>
-	 *   <li>非创造模式：{@code getDrops}（保存数据到掉落物 + 清空槽位）→ {@code onRemove}（幂等清空）→ {@code setRemoved}</li>
-	 *   <li>创造模式：{@code onRemove}（清空槽位）→ {@code setRemoved}（不popResource）</li>
-	 *   <li>扳手拆卸：{@code WorldUtils.dismantleBlock} 内部 {@code getDrops} → {@code onRemove} → {@code setRemoved}</li>
-	 * </ul>
-	 * 性能：{@code saveAllItemsForDrop} 是幂等操作，重复调用无副作用，仅在槽位非空时执行清空。
+	 * 创造模式不走 {@code getDrops}，{@code setRemoved} 时 Ejector 会 popResource，
+	 * 但创造模式物品不保留数据（vanilla 设计），弹出物品不影响游戏体验。
 	 */
 	@Override
 	protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
 		if (state.hasBlockEntity() && !state.is(newState.getBlock())) {
-			// 模块 2 修复：清空所有槽位，防止 setRemoved 触发 Ejector.popResource
-			if (!level.isClientSide && level.getBlockEntity(pos) instanceof TileEntityMekApiary apiaryTile) {
-				apiaryTile.saveAllItemsForDrop();
-			}
 			TileEntityUpdateable tile = WorldUtils.getTileEntity(TileEntityUpdateable.class, level, pos);
 			if (tile != null) {
 				tile.blockRemoved();

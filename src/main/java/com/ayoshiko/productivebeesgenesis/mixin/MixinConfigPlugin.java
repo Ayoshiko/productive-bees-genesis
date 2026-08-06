@@ -40,6 +40,10 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final String EME_MOD_ID = "emextras";
 	/** AE2(AppliedEnergistics2)的 modId */
 	private static final String AE2_MOD_ID = "ae2";
+	/** Mek Energistics 的 modId */
+	private static final String MEKENERGISTICS_MOD_ID = "mekenergistics";
+	/** Building Gadgets 2 的 modId */
+	private static final String BUILDING_GADGETS_MOD_ID = "buildinggadgets2";
 
 	/**
 	 * 引用 ME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 ME 的类）
@@ -101,6 +105,16 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"Ae2EMExtraCentrifugeFactoryInputMixin"
 	);
 
+	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
+	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
+			"MekEnergisticsInstallerGuardMixin"
+	);
+
+	/** 引用 buildinggadgets2 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
+	private static final Set<String> BUILDING_GADGETS_MIXINS = Set.of(
+			"RenderBlockBeLoadFixMixin"
+	);
+
 	/**
 	 * Holder 模式 — 线程安全的懒加载
 	 * <br/>
@@ -114,6 +128,10 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean EME_LOADED = isModLoaded(EME_MOD_ID);
 		/** AE2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean AE2_LOADED = isModLoaded(AE2_MOD_ID);
+		/** Mek Energistics 是否加载（Mixin 阶段检测，仅计算一次） */
+		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
+		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
+		static final boolean BUILDING_GADGETS_LOADED = isModLoaded(BUILDING_GADGETS_MOD_ID);
 	}
 
 	/**
@@ -196,6 +214,12 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		// AE2 + EME Mixin — 目标类继承 EME 基类，需两者同时加载
 		if (AE2_EME_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.EME_LOADED;
+		}
+		if (MEKENERGISTICS_MIXINS.contains(simpleName)) {
+			return Holder.MEKENERGISTICS_LOADED;
+		}
+		if (BUILDING_GADGETS_MIXINS.contains(simpleName)) {
+			return Holder.BUILDING_GADGETS_LOADED;
 		}
 		return true;
 	}

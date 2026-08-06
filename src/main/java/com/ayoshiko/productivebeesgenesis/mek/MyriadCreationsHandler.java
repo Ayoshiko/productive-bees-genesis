@@ -286,6 +286,17 @@ public class MyriadCreationsHandler {
 		Level level = context.level();
 		if (level == null) return 0;
 
+		// 流体是配方产物的一部分。满载时在随机选型和物品规划之前快速暂停，
+		// 避免 256x 加速下每 tick 重做权重分配，同时防止静默丢弃蜂蜜。
+		int productivityMod = Math.max(1, context.productivityModifier());
+		int maxFluidBatch = fluidOutputHandler.getMaxBatchForFluid(input, productivityMod);
+		if (maxFluidBatch <= 0) {
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
+					"{}万象创世流体槽已满，暂停处理：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			return 0;
+		}
+		int effectiveBatchSize = Math.min(batchSize, maxFluidBatch);
+
 		// 一次性拍摄容量快照：同一 tick 内同一进程的输出槽 limit 不变，避免 plan 反复调用 getLimit
 		MyriadBatchPlanner.SlotCapacitySnapshot snapshot =
 				MyriadBatchPlanner.takeSnapshot(reusableOutputSlots, baseItem, level.getGameTime());
@@ -322,16 +333,6 @@ public class MyriadCreationsHandler {
 		// Task 2 修复：batchSize 限制为流体槽可容纳的最大操作数（原实现仅考虑物品槽导致 STACK 升级下流体失败）
 		// Task 4 根因修复：万象创世的主要产出是随机蜜脾物品，流体（蜂蜜）是副产物。
 		// 流体槽满载时不应阻塞物品产出，跳过流体输出继续处理物品。
-		int productivityMod = Math.max(1, context.productivityModifier());
-		int maxFluidBatch = fluidOutputHandler.getMaxBatchForFluid(input, productivityMod);
-		boolean skipFluid = false;
-		if (maxFluidBatch <= 0) {
-			// 流体槽已满或类型不匹配 — 跳过流体输出，不阻塞物品产出
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世流体槽已满，跳过流体输出：进程{} batchSize={}", logPrefix, processIndex, batchSize);
-			skipFluid = true;
-		}
-		int effectiveBatchSize = skipFluid ? batchSize : Math.min(batchSize, maxFluidBatch);
-
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
 		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes, effectiveBatchSize);
 		if (maxBatch <= 0) {
@@ -373,16 +374,12 @@ public class MyriadCreationsHandler {
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
 			// Task 4 根因修复：流体是万象创世的副产物，满载时跳过，不阻塞物品产出
-			if (!skipFluid) {
-				// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
-				// 审查问题修复：使用 long 提升避免 int 溢出（STACK=16 + productivityMod 时可能溢出）
-				long fluidAmount = (long) currentBatch * productivityMod;
-				int fluidAmountClamped = (int) Math.min(fluidAmount, Integer.MAX_VALUE);
-				if (!fluidOutputHandler.insertFluidOutput(input, fluidAmountClamped, processIndex)) {
-					// v9-P2 修复：回收成功的 plan 防止对象池泄漏
-					MyriadBatchPlanner.recyclePlan(plan);
-					return 0;
-				}
+			// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
+			long fluidAmount = (long) currentBatch * productivityMod;
+			int fluidAmountClamped = (int) Math.min(fluidAmount, Integer.MAX_VALUE);
+			if (!fluidOutputHandler.insertFluidOutput(input, fluidAmountClamped, processIndex)) {
+				MyriadBatchPlanner.recyclePlan(plan);
+				return 0;
 			}
 			MyriadBatchPlanner.apply(plan, reusableOutputSlots);
 			context.inputSlot(processIndex).shrinkStack(currentBatch, Action.EXECUTE);

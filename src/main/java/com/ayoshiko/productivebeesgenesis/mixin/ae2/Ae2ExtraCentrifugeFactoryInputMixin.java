@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.tile.base.TileEntityMekanism;
@@ -42,6 +43,8 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
  */
 @Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory", remap = false)
 public abstract class Ae2ExtraCentrifugeFactoryInputMixin implements IAe2InputHost {
+	@Unique
+	private List<IInventorySlot> productivebeesgenesis$cachedInputSlots;
 
 	/** 切换 per-tile AE2 输入拉取开关（取反当前状态） */
 	@Override
@@ -71,12 +74,13 @@ public abstract class Ae2ExtraCentrifugeFactoryInputMixin implements IAe2InputHo
 	 */
 	@Override
 	public List<IInventorySlot> productivebeesgenesis$getInputSlotsForPull() {
+		if (productivebeesgenesis$cachedInputSlots != null) return productivebeesgenesis$cachedInputSlots;
 		int processes = processes();
 		List<IInventorySlot> slots = new ArrayList<>(processes);
 		for (int i = 0; i < processes; i++) {
 			IInventorySlot slot = inputSlot(i);
 			if (slot != null) slots.add(slot);
 		}
-		return slots;
+		return productivebeesgenesis$cachedInputSlots = slots;
 	}
 }

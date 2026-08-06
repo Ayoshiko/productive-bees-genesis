@@ -13,6 +13,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
@@ -20,8 +21,8 @@ import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 
-import mekanism.api.Upgrade;
-import mekanism.common.config.MekanismConfig;
+import mekanism.common.tile.base.TileEntityMekanism;
+import mekanism.common.util.MekanismUtils;
 
 /**
  * 离心机 PB 升级安装/卸载处理器
@@ -450,10 +451,24 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	}
 
 	/**
+	 * PB 原版离心机并行倍率：PRODUCTIVITY/2/3/4 分别贡献 4/8/16/32。
+	 * 不对总并行额外设置上限，便于与 MEK STACK/JDT 倍率叠加；
+	 * PB 处理器仅按实际输入、能量和输出空间统一裁剪。
+	 */
+	int getProductivityParallelModifier() {
+		int modifier = getInstalledCount(PbUpgradeType.PRODUCTIVITY) * 4
+				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_2) * 8
+				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_3) * 16
+				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_4) * 32;
+		return Math.max(1, modifier);
+	}
+
+	/**
 	 * 获取时间倍率
 	 * <br/>
 	 * PB时间升级：TIME 每级权重 1，TIME_2 每级权重 2（双倍效果）。
-	 * 公式：{@code mekTimeMultiplier / (1 + 0.15 × effectiveTimeUpgrades)}
+	 * 公式：{@code mekTimeMultiplier / (1 + timeBonus × effectiveTimeUpgrades)}
+	 * 其中 {@code timeBonus} 运行时读取 PB 原版配置 {@code ProductiveBeesConfig.Upgrades.timeBonus}。
 	 * <br/>
 	 * 与蜂箱 {@code ApiaryUpgradeHandler.computeTimeMultiplier} 公式一致，
 	 * 同时叠加 MEK SPEED 升级和 PB TIME 升级，避免离心机 PB TIME 升级影响过小。
@@ -465,28 +480,20 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		int timeCount = getInstalledCount(PbUpgradeType.TIME);
 		int time2Count = getInstalledCount(PbUpgradeType.TIME_2);
 		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		float pbTimeDivisor = 1.0f + 0.15f * effectiveTimeUpgrades;
+		float pbTimeDivisor = 1.0f + PbUpgradeConfig.timeBonus() * effectiveTimeUpgrades;
 		return mekTimeMultiplier / pbTimeDivisor;
 	}
 
 	/**
-	 * 获取 MEK SPEED 升级的时间倍率 — 与蜂箱 ApiaryUpgradeHandler.getMekSpeedTimeMultiplier 公式一致
-	 * <br/>
-	 * 公式：{@code maxUpgradeMultiplier ^ (-speedFraction)}
-	 * <ul>
-	 *   <li>无 SPEED 升级：1.0（无加速）</li>
-	 *   <li>满级 8 个 SPEED 升级：0.1（10 倍加速）</li>
-	 * </ul>
+	 * 获取 MEK SPEED 升级的时间倍率 — 委托 MekanismUtils 运行时公式，
+	 * 自动承接 Mekanism Unleashed 和 MekanismEmpowered 的 mixin。
 	 *
 	 * @return MEK 速度升级的时间倍率（0~1，越小越快）
 	 */
 	private float getMekSpeedTimeMultiplier() {
-		int speedUpgrades = tile.getMekSpeedUpgrades();
-		int maxSpeed = Upgrade.SPEED.getMax();
-		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
-		float speedFraction = (float) speedUpgrades / maxSpeed;
-		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
-		return (float) Math.pow(maxMultiplier, -speedFraction);
+		// 由 MekanismUtils 统一承接 Mekanism Unleashed/MekanismEmpowered 的运行时 mixin。
+		if (!(tile instanceof TileEntityMekanism mekTile)) return 1.0f;
+		return (float) Math.max(0.0, MekanismUtils.getTicksD(mekTile, 1));
 	}
 
 	/**

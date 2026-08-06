@@ -222,6 +222,22 @@ public interface PbRecipeContext {
 	int productivityModifier();
 
 	/**
+	 * 获取 PB 原版产量升级带来的并行数。
+	 * <br/>
+	 * 原版离心机按升级等级使用 4/8/16/32 并行；本实现不设置额外并行上限，
+	 * 与 PB 原版 CentrifugeBlockEntity 的 getProductivityModifier 语义一致。
+	 * 蜂箱上下文不使用此接口。
+	 */
+	default int productivityParallelModifier() {
+		return 1;
+	}
+
+	/** 为当前活跃配方预留一个对应流体槽；单槽机器无需处理。 */
+	default void reserveFluidOutputType(FluidStack stack) {
+		// no-op
+	}
+
+	/**
 	 * 获取稳定性概率加成 — 提升非保底产物的产出概率
 	 * <br/>
 	 * 仅离心机生效（蜂箱不支持 STABILITY 升级）。加成公式：{@code (已装数+1) × 0.15}，

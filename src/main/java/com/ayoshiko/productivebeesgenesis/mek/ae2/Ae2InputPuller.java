@@ -18,7 +18,6 @@ import appeng.api.storage.MEStorage;
 import appeng.api.storage.StorageHelper;
 import appeng.me.helpers.BaseActionSource;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 
@@ -58,13 +57,16 @@ public final class Ae2InputPuller {
 		// （每次2层接口分发：getLifecycleHandler→getStateHolder，热力图显示为热点）
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
+		Level level = host.productivebeesgenesis$getAe2Level();
+		if (level != null && holder.isConfigCacheStale(level.getGameTime())) {
+			holder.refreshConfigCache(level.getGameTime());
+		}
 
 		// 1. 拉取开关检查（全局 AND per-tile）— 直接使用 holder 替代 host 接口分发
 		if (!holder.isInputPullEnabled()) return;
 
 		// 1.5 TPS 自适应检查 — TPS 严重下降时跳过整个 pullInputs，由 MEK Ejector 兜底
 		//    TPS < 10(对应 avgMspt > 100ms)时跳过；null 守卫防初始化阶段空指针
-		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level != null) {
 			double currentTps = ServerTickTimeMonitor.getInstance().getTps(level.getGameTime());
 			if (currentTps < 10.0) {
@@ -114,7 +116,7 @@ public final class Ae2InputPuller {
 		//    直接使用 holder 替代 host 接口分发
 		long pullCounter = holder.incrementPullCallCounter();
 		long lastPull = holder.getLastPullCounter();
-		int intervalTicks = getAeInputIntervalTicks();
+		int intervalTicks = holder.getCachedInputIntervalTicks();
 		long effectiveInterval = Math.max(intervalTicks, M);
 		if (pullCounter - lastPull < effectiveInterval) return;
 
@@ -130,7 +132,7 @@ public final class Ae2InputPuller {
 
 		// 10. TPS 自适应速率计算（baseRate × M × processCount × tpsFactor）
 		//     使用 SaturatingMath 饱和乘法防止高等级工厂 + 256× 加速下 long 溢出
-		long baseRate = getAeInputRatePerTick();
+		long baseRate = holder.getCachedInputRatePerTick();
 		double tpsFactor = ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
 		long baseProduct = SaturatingMath.saturatingMultiply(baseRate, M, processCount);
 		long effectiveRate = (long) (baseProduct * tpsFactor);
@@ -292,22 +294,14 @@ public final class Ae2InputPuller {
 	 * <br/>
 	 * null 守卫：AE2 未加载或配置段未注册时回退默认值 64。
 	 */
-	private static int getAeInputRatePerTick() {
-		if (ModConfig.SERVER == null) return 64;
-		if (ModConfig.SERVER.mekCentrifugeAeInputRatePerTick == null) return 64;
-		return ModConfig.SERVER.mekCentrifugeAeInputRatePerTick.get();
-	}
+
 
 	/**
 	 * 获取拉取触发间隔（游戏刻）
 	 * <br/>
 	 * null 守卫：AE2 未加载或配置段未注册时回退默认值 20。
 	 */
-	private static int getAeInputIntervalTicks() {
-		if (ModConfig.SERVER == null) return 20;
-		if (ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks == null) return 20;
-		return ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks.get();
-	}
+
 
 	/**
 	 * 计算输入槽总剩余容量

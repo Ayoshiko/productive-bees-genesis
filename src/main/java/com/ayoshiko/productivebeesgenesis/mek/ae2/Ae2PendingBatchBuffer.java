@@ -46,17 +46,47 @@ public final class Ae2PendingBatchBuffer {
 	private int ripeTicksRemaining = RIPE_TICKS;
 
 	/**
+	 * 当前总累积量（mB）— 增量维护，避免 {@link #getTotalAmount()} 每 tick 遍历 map。
+	 * <br/>
+	 * 服务端单线程独占调用（pushFluids 在 tick 线程串行执行），无需 volatile/CAS；
+	 * accumulate/drain/reset 均在同一线程内完成。
+	 */
+	private long totalPendingAmount = 0L;
+
+	/**
 	 * 累积待推送的流体量。
 	 * <br/>
-	 * 同一 AEFluidKey 的多次累积会合并（Long::sum），
-	 * 减少 AE2 poweredInsert 调用次数。
+	 * 同一 AEFluidKey 的多次采样保留最大当前库存，而不是累加。
+	 * 流体槽在 flush 前尚未 shrink，累加会把同一批库存重复计算 20 次，
+	 * 造成虚假的超大待推送量和不必要的 Long/Map 操作。
+	 * <p>
+	 * 增量维护 {@link #totalPendingAmount}：新 key 直接累加；已有 key 仅累加
+	 * 「新采样 - 旧值」的正差，采样未超过旧值时总额不变。
 	 *
 	 * @param fluidKey 流体键
 	 * @param amount   待推送量（mB，必须 > 0）
 	 */
 	public void accumulate(AEFluidKey fluidKey, long amount) {
 		if (fluidKey == null || amount <= 0) return;
-		pendingAmounts.merge(fluidKey, amount, Long::sum);
+		while (true) {
+			Long prev = pendingAmounts.get(fluidKey);
+			if (prev == null) {
+				Long existing = pendingAmounts.putIfAbsent(fluidKey, amount);
+				if (existing == null) {
+					totalPendingAmount += amount;
+					return;
+				}
+				prev = existing;
+			}
+			if (amount <= prev) {
+				return;
+			}
+			if (pendingAmounts.replace(fluidKey, prev, amount)) {
+				totalPendingAmount += amount - prev;
+				return;
+			}
+			// replace 失败（防御性并发修改）：重读重试
+		}
 	}
 
 	/**
@@ -110,6 +140,7 @@ public final class Ae2PendingBatchBuffer {
 		// 复制到新 Map 避免调用方遍历时内部 Map 被修改
 		ConcurrentMap<AEFluidKey, Long> snapshot = new ConcurrentHashMap<>(pendingAmounts);
 		pendingAmounts.clear();
+		totalPendingAmount = 0L;
 		ripeTicksRemaining = RIPE_TICKS;
 		return snapshot;
 	}
@@ -121,11 +152,7 @@ public final class Ae2PendingBatchBuffer {
 
 	/** 获取当前总累积量（mB，诊断用） */
 	public long getTotalAmount() {
-		long total = 0L;
-		for (long amount : pendingAmounts.values()) {
-			total += amount;
-		}
-		return total;
+		return totalPendingAmount;
 	}
 
 	/** 获取剩余成熟 tick 数（诊断用） */
@@ -141,6 +168,7 @@ public final class Ae2PendingBatchBuffer {
 	/** 完全重置（方块销毁时调用） */
 	public void reset() {
 		pendingAmounts.clear();
+		totalPendingAmount = 0L;
 		ripeTicksRemaining = RIPE_TICKS;
 	}
 }

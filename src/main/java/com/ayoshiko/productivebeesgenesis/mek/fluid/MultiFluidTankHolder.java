@@ -182,6 +182,19 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	}
 
 	/**
+	 * 为本 tick 活跃配方预留一个流体类型槽位。
+	 * 已有该类型映射时不扩容，避免预扫描把同一种流体占满全部槽位。
+	 */
+	public void reserveTankForType(FluidStack stack) {
+		if (stack.isEmpty()) return;
+		FluidKey key = FluidKey.of(stack);
+		List<IExtendedFluidTank> existing = tanksByFluidKey.get(key);
+		if (existing == null || existing.isEmpty()) {
+			createTankIfNeeded(key);
+		}
+	}
+
+	/**
 	 * 统计某种流体已映射的槽位数
 	 * <br/>
 	 * v2.1.0: 用于 maxTanksPerFluid 配额检查，防止高产出流体占用所有槽位
@@ -301,9 +314,17 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		FluidKey key = FluidKey.of(stack);
 		// v2.1.0: List 结构下 containsKey 可能为 true 但 List 为空（回收后）
 		List<IExtendedFluidTank> tanks = tanksByFluidKey.get(key);
-		boolean hasMatchingTank = tanks != null && !tanks.isEmpty();
-		boolean result = !hasMatchingTank && emptyTankCount.get() == 0;
-		return result;
+		if (tanks != null && !tanks.isEmpty()) {
+			for (IExtendedFluidTank tank : tanks) {
+				if (tank.getFluidAmount() < tank.getCapacity()) {
+					return false;
+				}
+			}
+			// 匹配槽全部满载且已达到单流体配额时，同样是稳定阻塞状态。
+			// 及早返回可避免高并行下每 tick 重做批量输出模拟和二分回退。
+			return tanks.size() >= maxTanksPerFluid || emptyTankCount.get() == 0;
+		}
+		return emptyTankCount.get() == 0;
 	}
 
 	/**

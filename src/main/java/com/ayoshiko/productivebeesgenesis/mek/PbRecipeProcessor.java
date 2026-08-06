@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -8,11 +9,13 @@ import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.container.MekanismContainer;
+import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
@@ -128,6 +131,18 @@ public class PbRecipeProcessor {
 		this.tickMultiplier = Math.max(1, multiplier);
 	}
 
+	/**
+	 * 取出当前批量倍率并重置为 1。
+	 * <p>
+	 * 工厂包含多个独立进程，倍率必须由工厂循环在入口处只消费一次，
+	 * 然后为每个进程分别设置；不能让第一个进程在内部消费掉共享字段。
+	 */
+	public int consumeTickMultiplier() {
+		int multiplier = tickMultiplier;
+		tickMultiplier = 1;
+		return multiplier;
+	}
+
 	// ===== 入口缓存刷新（由 processPbRecipesAndUpdate 调用）=====
 	/** 刷新流体槽满载状态缓存（入口调用一次，替代原 tryProcessPbRecipe 内的入口刷新；flush 后的刷新保留，finally 块刷新已移除以精简高频路径） */
 	public void refreshFluidTankFullCache(PbRecipeContext context) {
@@ -137,6 +152,28 @@ public class PbRecipeProcessor {
 	public void refreshEnergyAndOpsCache(PbRecipeContext context) {
 		cachedEnergyPerTick = context.hasCreativeUpgrade() ? 0L : context.energyContainer().getEnergyPerTick();
 		cachedOperationsPerTick = context.operationsPerTick();
+	}
+
+	/**
+	 * 在工厂处理各进程前为不同流体输出预留槽位。
+	 * 配方查找命中现有缓存，且只在多槽工厂启用；不会为同一种流体重复扩容。
+	 */
+	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
+		if (context.fluidOutputTankCount() <= 1) return;
+		for (int i = 0, size = inputSlots.size(); i < size; i++) {
+			ItemStack input = inputSlots.get(i).getStack();
+			if (input.isEmpty()
+					|| MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
+				continue;
+			}
+			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
+			if (recipe == null) continue;
+			var fluid = recipe.value().getFluidOutputs();
+			if (!fluid.isEmpty()) {
+				context.reserveFluidOutputType(fluid);
+			}
+		}
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -277,8 +314,13 @@ public class PbRecipeProcessor {
 			int baseOps = (maxOpsPerTick > 0 && operationsPerTick > 1)
 					? Math.min(operationsPerTick, maxOpsPerTick)
 					: operationsPerTick;
-			// Task 4: 批量倍率（baseOps 已受 maxOpsPerTick 限制，effectiveOps 还受能量/输入/输出约束）
-			int effectiveOps = baseOps * tickMultiplier;
+			// PB 原版产量升级同时提供并行：4/8/16/32，单次最多并行 64 个输入。
+			// 现有 productivityModifier 仍保留产量倍率，两者语义独立。
+			int productivityParallel = Math.max(1, context.productivityParallelModifier());
+			// Tick 批量倍率、MEK/STACK 并行和 PB 原版并行统一在此聚合，
+			// 饱和转换避免极端升级组合溢出成负数。
+			int effectiveOps = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(baseOps, tickMultiplier, productivityParallel));
 			tickMultiplier = 1; // 重置
 
 			int modifier = context.productivityModifier();
@@ -305,7 +347,7 @@ public class PbRecipeProcessor {
 			effectiveOps = energyLimitedOps;
 		}
 
-		// 输入不足时降低操作数（每次操作只消耗1个输入，modifier只影响输出数量）
+		// 输入不足时降低操作数（每次并行操作消耗1个输入，modifier只影响输出数量）
 		int remainingInput = inputCount - recipeCompleters[processIndex].pendingInputShrink();
 		if (remainingInput <= 0) {
 			// 输入不足以完成1次操作，保留进度但不激活

@@ -221,6 +221,8 @@ class BeeSlotTickProcessor {
 		long pendingEnergyCost = 0;
 		float energyMultiplier = upgradeHandler.getEnergyMultiplier();
 		float timeMultiplier = upgradeHandler.getTimeMultiplier();
+		// 这些值对本次 tick 内所有蜜蜂槽位相同，移出槽位循环避免重复算术和方法分派。
+		long beeEnergyCost = calculateBeeEnergyCost(energyMultiplier);
 		// Task 1.2：STACK 升级产出次数倍率 — 循环外计算一次，所有蜜蜂共享
 		int stackProductionCount = upgradeHandler.getStackProductionCount();
 
@@ -289,8 +291,10 @@ class BeeSlotTickProcessor {
 			}
 
 			// 能量检查 — 累计能耗超过当前能量时等待
-			long beeEnergyCost = calculateBeeEnergyCost(energyMultiplier);
-			if (energyContainer.getEnergy() < pendingEnergyCost + beeEnergyCost) {
+			long acceleratedEnergyCost = saturatingMultiply(beeEnergyCost, tickMultiplier);
+			long availableEnergy = energyContainer.getEnergy();
+			if (pendingEnergyCost > availableEnergy
+					|| acceleratedEnergyCost > availableEnergy - pendingEnergyCost) {
 				slot.setState(BeeState.WAITING_ENERGY);
 				activationCounter.onBeeDeactivated(i);
 				continue;
@@ -331,26 +335,26 @@ class BeeSlotTickProcessor {
 			if (slot.getMinOccupationTicks() != adjustedMinTicks) {
 				slot.setMinOccupationTicks(adjustedMinTicks);
 			}
-			int newTicks = currentTicks + 1;
+			// Tick 加速器会在同一 game tick 重复调用方块实体；后续调用被跳过时，
+			// 这里一次推进对应数量的虚拟 tick。这样进度和完成节奏真实加速，
+			// 不再等到周期结束后才一次性乘产出，同时总产量保持与原批处理策略一致。
+			long advancedTicks = (long) currentTicks + tickMultiplier;
+			int completedCycles = (int) Math.min(Integer.MAX_VALUE,
+					advancedTicks / adjustedMinTicks);
+			int newTicks = (int) (advancedTicks % adjustedMinTicks);
 			slot.setTicksInHive(newTicks);
-			pendingEnergyCost += beeEnergyCost;
+			pendingEnergyCost += acceleratedEnergyCost;
 
 			// 更新进度（供 GUI 进度条渲染）
 			slot.setProgress((float) newTicks / adjustedMinTicks);
 
 			// 完成累积 — 达到最小 occupation ticks 时累积待产出次数（不立即产出）
-			if (newTicks >= adjustedMinTicks) {
-				// 重置计时与进度，由 tick 处理器统一管理（SRP：产出处理器不再管理槽位状态）
-				slot.setTicksInHive(0);
-				slot.setProgress(0.0f);
-				if (i < pendingProductions.length) {
-					// Task 1.2：STACK 升级 — 一次完成多个产出周期（2^stackUpgrades 次）
-					// 每个产出周期独立触发随机概率（基因采样器、万象创世随机蜜脾）
-					// Task 6：批量收获模式 — 应用 tickMultiplier（N 倍产出跳过 N-1 次重复 tick）
-					int pendingCount = stackProductionCount * tickMultiplier;
-					pendingProductions[i] += pendingCount;
-					accumulatedProgress.addAndGet(pendingCount);
-				}
+			if (completedCycles > 0 && i < pendingProductions.length) {
+				// STACK 倍率作用于每个真实完成周期；概率产出仍由后续批量采样处理。
+				long pendingCountLong = (long) stackProductionCount * completedCycles;
+				int pendingCount = (int) Math.min(Integer.MAX_VALUE, pendingCountLong);
+				pendingProductions[i] = saturatingAdd(pendingProductions[i], pendingCount);
+				accumulatedProgress.addAndGet(pendingCount);
 			}
 
 			// 设置工作状态 — CAS 守卫仅在工作状态转换 0→1 时递增计数器
@@ -510,6 +514,20 @@ class BeeSlotTickProcessor {
 	private long calculateBeeEnergyCost(float energyMultiplier) {
 		if (energyMultiplier <= 0.0f) return 0L; // MEKExtras CREATIVE 升级：零能耗
 		return Math.max(1L, (long) (cachedEnergyPerTick * energyMultiplier));
+	}
+
+	/** 防止极端加速倍率下能耗/产出计数溢出为负数。 */
+	private static long saturatingMultiply(long value, int multiplier) {
+		if (value <= 0 || multiplier <= 0) return 0L;
+		if (value > Long.MAX_VALUE / multiplier) return Long.MAX_VALUE;
+		return value * multiplier;
+	}
+
+	/** 防止待产出计数溢出；溢出时保留可表示的最大值，避免负数导致永久跳过刷新。 */
+	private static int saturatingAdd(int value, int amount) {
+		if (amount <= 0) return value;
+		if (value > Integer.MAX_VALUE - amount) return Integer.MAX_VALUE;
+		return value + amount;
 	}
 
 	/**

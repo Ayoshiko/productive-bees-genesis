@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.Arrays;
 
 import net.minecraft.nbt.CompoundTag;
 
@@ -34,6 +35,17 @@ public final class Ae2OutputStateHolder {
 	/** Task 21: AE2 流体推送批处理缓冲（Ae2PendingBatchBuffer）— 10 tick 累积 + AEFluidKey 合并 */
 	private volatile Object pendingBatchBuffer;
 
+	/**
+	 * Task 24：按流体槽索引缓存的 AEFluidKey（Object 隔离 AE2 依赖）。
+	 * <br/>
+	 * {@code AEFluidKey.of(FluidStack)} 每次分配 AEFluidKey + FluidStack，
+	 * 高并行工厂（多槽）在大量机器下每 tick 累积都会产生分配压力。
+	 * 缓存键按 (Fluid 引用 + components hash) 失效，流体类型不变时直接复用。
+	 */
+	private volatile Object[] fluidPushKeyCache;
+	private volatile Object[] fluidPushKeyFluidRefs;
+	private volatile int[] fluidPushKeyComponentsHashes;
+
 	// ===== Task 12：AE2 网格/存储缓存（gridChanged 回调失效，减少 256× 下高频 AE2 API 查询） =====
 	/** 缓存的 AE2 网格（IGrid）/ 存储服务（IStorageService）/ ME 存储（MEStorage）。
 	 *  字段类型为 Object 保持依赖隔离；由 {@link Ae2GridNodeManager#onGridChanged} 失效，
@@ -63,6 +75,8 @@ public final class Ae2OutputStateHolder {
 
 	/** 缓存的 AE2 输入拉取开关（默认 false，AE2 未加载或全局关闭时为 false） */
 	private volatile boolean cachedInputPullEnabled = false;
+	private volatile int cachedInputRatePerTick = 64;
+	private volatile int cachedInputIntervalTicks = 20;
 
 	/** 配置缓存刷新异常日志冷却器（ms 模式，避免高频刷新下刷屏） */
 	private final LogThrottle configReadThrottle = new LogThrottle();
@@ -146,6 +160,8 @@ public final class Ae2OutputStateHolder {
 		cachedFluidPushEnabled = true;
 		cachedPreferAppliedFluxOverAeEnergy = false;
 		cachedInputPullEnabled = false;
+		cachedInputRatePerTick = 64;
+		cachedInputIntervalTicks = 20;
 		lastConfigRefreshMs.set(-CONFIG_REFRESH_INTERVAL_MS);
 		// 重置 per-tile 开关为默认值（与字段声明一致，参考 Mek-Energistics 默认全开）
 		aeItemOutputEnabled = true;
@@ -168,8 +184,51 @@ public final class Ae2OutputStateHolder {
 			batchBuffer.reset();
 		}
 		pendingBatchBuffer = null;
+		// Task 24：释放按槽 AEFluidKey 缓存，方块重建后从空缓存重新填充
+		fluidPushKeyCache = null;
+		fluidPushKeyFluidRefs = null;
+		fluidPushKeyComponentsHashes = null;
 		// Task 2：重置 AE2 推送退避和计数器状态（fluid/item backoff + 计数器全部归零）
 		pushState.reset();
+	}
+
+	// ===== 按槽 AEFluidKey 缓存（Task 24） =====
+
+	/** 获取槽位缓存的 AEFluidKey（Object 类型，实际为 appeng.api.stacks.AEFluidKey） */
+	public Object getCachedFluidPushKey(int index) {
+		Object[] keys = fluidPushKeyCache;
+		return keys != null && index < keys.length ? keys[index] : null;
+	}
+
+	/** 获取槽位缓存对应的 Fluid 引用（用于失效判断） */
+	public Object getCachedFluidPushKeyFluid(int index) {
+		Object[] fluids = fluidPushKeyFluidRefs;
+		return fluids != null && index < fluids.length ? fluids[index] : null;
+	}
+
+	/** 获取槽位缓存对应的 components hash（用于失效判断） */
+	public int getCachedFluidPushKeyComponentsHash(int index) {
+		int[] hashes = fluidPushKeyComponentsHashes;
+		return hashes != null && index < hashes.length ? hashes[index] : 0;
+	}
+
+	/** 更新槽位 AEFluidKey 缓存（数组不足时扩容） */
+	public void setCachedFluidPushKey(int index, Object key, Object fluid, int componentsHash) {
+		Object[] keys = fluidPushKeyCache;
+		Object[] fluids = fluidPushKeyFluidRefs;
+		int[] hashes = fluidPushKeyComponentsHashes;
+		if (keys == null || index >= keys.length) {
+			int length = Math.max(index + 1, 16);
+			keys = Arrays.copyOf(keys != null ? keys : new Object[0], length);
+			fluids = Arrays.copyOf(fluids != null ? fluids : new Object[0], length);
+			hashes = Arrays.copyOf(hashes != null ? hashes : new int[0], length);
+			fluidPushKeyCache = keys;
+			fluidPushKeyFluidRefs = fluids;
+			fluidPushKeyComponentsHashes = hashes;
+		}
+		keys[index] = key;
+		fluids[index] = fluid;
+		hashes[index] = componentsHash;
 	}
 
 	// ===== ReusableBuffers / 网格缓存访问 =====
@@ -235,6 +294,10 @@ public final class Ae2OutputStateHolder {
 			// mekCentrifugeAeInputEnabled 为 null（AE2 未加载）时回退 false
 			cachedInputPullEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
 					&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
+			cachedInputRatePerTick = ModConfig.SERVER.mekCentrifugeAeInputRatePerTick == null
+					? 64 : Math.max(1, ModConfig.SERVER.mekCentrifugeAeInputRatePerTick.get());
+			cachedInputIntervalTicks = ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks == null
+					? 20 : Math.max(1, ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks.get());
 		} catch (LinkageError | RuntimeException t) {
 			// LinkageError 覆盖配置版本不兼容；RuntimeException 覆盖配置读取异常。
 			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
@@ -252,6 +315,8 @@ public final class Ae2OutputStateHolder {
 	public boolean isCachedFluidPushEnabled() { return cachedFluidPushEnabled; }
 	public boolean isCachedPreferAppliedFluxOverAeEnergy() { return cachedPreferAppliedFluxOverAeEnergy; }
 	public boolean isCachedInputPullEnabled() { return cachedInputPullEnabled; }
+	public int getCachedInputRatePerTick() { return cachedInputRatePerTick; }
+	public int getCachedInputIntervalTicks() { return cachedInputIntervalTicks; }
 
 	// ===== per-tile AE2 输出开关方法 =====
 	public boolean isAeItemOutputEnabled() { return aeItemOutputEnabled; }

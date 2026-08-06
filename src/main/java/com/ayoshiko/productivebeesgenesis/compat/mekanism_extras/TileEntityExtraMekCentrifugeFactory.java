@@ -439,6 +439,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	@Override
 	public IExtendedFluidTank fluidOutputTankForInsert(FluidStack stack) { return getOrCreateDelegate().fluidOutputTankForInsert(stack); }
 	@Override
+	public void reserveFluidOutputType(FluidStack stack) { getOrCreateDelegate().reserveFluidOutputType(stack); }
+	@Override
 	public int fluidOutputTankCount() { return getOrCreateDelegate().fluidOutputTankCount(); }
 
 	// ===== IMultiFluidTankHost 实现(委托给 MultiFluidTankHostDelegate) =====
