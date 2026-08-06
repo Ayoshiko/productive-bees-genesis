@@ -2,6 +2,12 @@ package com.ayoshiko.productivebeesgenesis.mixin.ae2;
 
 import org.spongepowered.asm.mixin.Mixin;
 
+import net.minecraft.core.Direction;
+
+import appeng.api.networking.IGridNode;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 
@@ -12,10 +18,10 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  * {@link IAe2OutputHost} 接口（继承 {@code IInWorldGridNodeHost}），
  * 使 AE2 线缆能通过 {@code AECapabilities.IN_WORLD_GRID_NODE_HOST} capability 发现蜂箱。
  * <p>
- * <b>方法实现</b>：{@link IAe2OutputHost} 的 {@code getGridNode(Direction)} 和
- * {@code getCableConnectionType(Direction)} 均为 default 方法，委托给
- * {@code IAe2OutputHostBase.productivebeesgenesis$getAe2GridNode()}，
- * 该方法已在 {@link TileEntityMekApiary} 中实现。故 Mixin 类无需提供额外方法。
+ * <b>方法实现</b>：{@code getGridNode(Direction)} 为抽象方法（避免与 AE2
+ * {@code IGridConnectedBlockEntity} 的 default 方法冲突），本 Mixin 显式实现并委托
+ * {@link IAe2OutputHost#resolveGridNode}；{@code getCableConnectionType(Direction)}
+ * 仍为 default 实现。
  * <p>
  * <b>继承覆盖</b>：所有蜂箱工厂类（{@code TileEntityMekApiaryFactory}、
  * {@code TileEntityExtraMekApiaryFactory}、{@code TileEntityEMExtraMekApiaryFactory}）
@@ -30,6 +36,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  */
 @Mixin(value = TileEntityMekApiary.class, remap = false)
 public abstract class Ae2ApiaryMixin implements IAe2OutputHost {
-	// Mixin 接口注入：IAe2OutputHost 的 getGridNode/getCableConnectionType 为 default 方法，
-	// 委托给 TileEntityMekApiary 已实现的 IAe2OutputHostBase 方法，无需额外实现。
+	// Mixin 接口注入：显式实现 getGridNode，避免与 AE2 IGridConnectedBlockEntity default 冲突
+	@Override
+	public @Nullable IGridNode getGridNode(Direction dir) {
+		return IAe2OutputHost.resolveGridNode(this, dir);
+	}
 }

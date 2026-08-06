@@ -32,8 +32,17 @@ import appeng.me.InWorldGridNode;
  * AE2 未安装时通过 {@link Ae2IntegrationLoader#isAe2Loaded()} 在所有调用点短路保护，
  * 防止类加载失败。capability 注册也仅在 AE2 已安装时执行（参见 {@link Ae2CapabilityRegistrar}）。
  * <p>
- * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 和
- * {@code getCableConnectionType} 提供 default 实现，使实现类无需手动实现这两个方法。
+ * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 提供
+ * static 辅助实现 {@link #resolveGridNode}，由各 Mixin 注入类显式实现
+ * {@code getGridNode(Direction)} 并委托调用；{@code getCableConnectionType}
+ * 仍为 default 实现。
+ * <p>
+ * <b>为何不能是 default 方法</b>：AE2 的 {@code IGridConnectedBlockEntity}
+ * 已为 {@code getGridNode(Direction)} 提供 default 实现。若本接口也提供 default，
+ * 目标类（同时实现两个接口且未显式重写）会在类加载时触发
+ * {@code IncompatibleClassChangeError: Conflicting default methods}。
+ * 因此本接口声明为抽象方法，由 Mixin 注入显式实现，类中显式方法优先于接口 default。
+ * <p>
  * 实现细节：
  * <ol>
  *   <li>从状态持有者取出 {@link IManagedGridNode}（可能为 null）</li>
@@ -60,6 +69,10 @@ public interface IAe2OutputHost extends IAe2OutputHostBase, IInWorldGridNodeHost
 	 * AE2 线缆通过 {@code GridHelper.getExposedNode} 调用此方法发现相邻方块上的节点，
 	 * 建立 {@code GridConnection}。
 	 * <p>
+	 * <b>实现要求</b>：本方法为抽象方法，由注入 {@link IAe2OutputHost} 的 Mixin
+	 * 显式实现并委托 {@link #resolveGridNode}，避免与 AE2
+	 * {@code IGridConnectedBlockEntity} 的 default 实现冲突。
+	 * <p>
 	 * <b>AE2 未安装时</b>：本方法不会被调用（capability 注册时跳过，AE2 线缆也不会查询），
 	 * 即使被调用也会因 {@code productivebeesgenesis$getAe2GridNode()} 返回 null 而安全返回 null。
 	 *
@@ -67,8 +80,27 @@ public interface IAe2OutputHost extends IAe2OutputHostBase, IInWorldGridNodeHost
 	 * @return 该方向暴露的网格节点，未创建/未连接/方向未暴露时返回 null
 	 */
 	@Override
-	default @Nullable IGridNode getGridNode(Direction dir) {
-		Object nodeObj = productivebeesgenesis$getAe2GridNode();
+	@Nullable
+	IGridNode getGridNode(Direction dir);
+
+	/**
+	 * 解析指定方向暴露的 AE2 网格节点（static 辅助，供 Mixin 注入实现调用）。
+	 * <br/>
+	 * 逻辑：
+	 * <ol>
+	 *   <li>从状态持有者取出 {@link IManagedGridNode}（可能为 null）</li>
+	 *   <li>取已连接的 {@link IGridNode}（未连接时为 null）</li>
+	 *   <li>校验节点类型为 {@link InWorldGridNode}（与 {@link Ae2GridNodeManager#prepareNode} 中
+	 *       {@code setInWorldNode(true)} 设置一致）</li>
+	 *   <li>校验查询方向在 {@code setExposedOnSides(ALL)} 暴露的方向集合中</li>
+	 * </ol>
+	 *
+	 * @param host 输出宿主（提供 {@code productivebeesgenesis$getAe2GridNode()}）
+	 * @param dir  查询方向
+	 * @return 该方向暴露的网格节点，未创建/未连接/方向未暴露时返回 null
+	 */
+	static @Nullable IGridNode resolveGridNode(IAe2OutputHost host, Direction dir) {
+		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 		if (!(nodeObj instanceof IManagedGridNode managedNode)) return null;
 		IGridNode node = managedNode.getNode();
 		// 仅 InWorldGridNode 才暴露给线缆（与 prepareNode 中 setInWorldNode(true) 一致）

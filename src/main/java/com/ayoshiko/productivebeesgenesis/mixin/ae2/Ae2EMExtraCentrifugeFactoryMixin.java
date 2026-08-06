@@ -2,6 +2,12 @@ package com.ayoshiko.productivebeesgenesis.mixin.ae2;
 
 import org.spongepowered.asm.mixin.Mixin;
 
+import net.minecraft.core.Direction;
+
+import appeng.api.networking.IGridNode;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 
 /**
@@ -15,8 +21,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  * 继承自 EME 的 {@code TileEntityEMExtraItemStackToItemStackFactory}，仅在 EME 已加载时才可加载。
  * MixinConfigPlugin 确保仅在 AE2 + EME 同时加载时才应用此 Mixin。
  * <p>
- * <b>方法实现</b>：{@link IAe2OutputHost} 的两个方法均为 default 方法，
- * 委托给目标类已实现的 {@code IAe2OutputHostBase.productivebeesgenesis$getAe2GridNode()}。
+ * <b>方法实现</b>：{@code getGridNode(Direction)} 为抽象方法（避免与 AE2
+ * {@code IGridConnectedBlockEntity} 的 default 方法冲突），本 Mixin 显式实现并委托
+ * {@link IAe2OutputHost#resolveGridNode}。
  * <p>
  * <b>独立 Mixin 原因</b>：EME 工厂离心机不继承 {@code AbstractMekCentrifugeFactory}
  * （因 Java 单继承限制，继承自 EME 的工厂基类），故需单独 Mixin 注入接口。
@@ -26,5 +33,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  */
 @Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory", remap = false)
 public abstract class Ae2EMExtraCentrifugeFactoryMixin implements IAe2OutputHost {
-	// Mixin 接口注入：default 方法委托给已实现的 IAe2OutputHostBase 方法
+	// Mixin 接口注入：显式实现 getGridNode，避免与 AE2 IGridConnectedBlockEntity default 冲突
+	@Override
+	public @Nullable IGridNode getGridNode(Direction dir) {
+		return IAe2OutputHost.resolveGridNode(this, dir);
+	}
 }

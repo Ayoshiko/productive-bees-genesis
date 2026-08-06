@@ -2,6 +2,12 @@ package com.ayoshiko.productivebeesgenesis.mixin.ae2;
 
 import org.spongepowered.asm.mixin.Mixin;
 
+import net.minecraft.core.Direction;
+
+import appeng.api.networking.IGridNode;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
 
@@ -12,9 +18,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  * {@link IAe2OutputHost} 接口（继承 {@code IInWorldGridNodeHost}），
  * 使 AE2 线缆能通过 capability 发现基础离心机。
  * <p>
- * <b>方法实现</b>：{@link IAe2OutputHost} 的两个方法均为 default 方法，
- * 委托给 {@code TileEntityMekCentrifuge} 已实现的
- * {@code IAe2OutputHostBase.productivebeesgenesis$getAe2GridNode()}，无需额外实现。
+ * <b>方法实现</b>：{@code getGridNode(Direction)} 为抽象方法（避免与 AE2
+ * {@code IGridConnectedBlockEntity} 的 default 方法冲突），本 Mixin 显式实现并委托
+ * {@link IAe2OutputHost#resolveGridNode}。
  * <p>
  * <b>类加载安全</b>：由 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 控制，
  * 仅在 AE2 已安装时应用。
@@ -24,5 +30,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHost;
  */
 @Mixin(value = TileEntityMekCentrifuge.class, remap = false)
 public abstract class Ae2CentrifugeMixin implements IAe2OutputHost {
-	// Mixin 接口注入：default 方法委托给已实现的 IAe2OutputHostBase 方法
+	// Mixin 接口注入：显式实现 getGridNode，避免与 AE2 IGridConnectedBlockEntity default 冲突
+	@Override
+	public @Nullable IGridNode getGridNode(Direction dir) {
+		return IAe2OutputHost.resolveGridNode(this, dir);
+	}
 }

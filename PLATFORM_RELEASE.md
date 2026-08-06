@@ -8,7 +8,7 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 当前版本 | `2.0.7` |
+| 当前版本 | `2.0.7-hotfix` |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
 | 许可证 | MIT |

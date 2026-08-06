@@ -23,6 +23,18 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.7-hotfix] - 2026-08-06
+
+v2.0.7-hotfix 修复整合包实测发现的崩溃：AE2 线缆与离心机相邻时，机器方块实体加载会因接口默认方法冲突直接崩溃（`IncompatibleClassChangeError`）。修复后 AE2 线缆可正常发现并连接本模组蜂箱/离心机（含 ME / EME 工厂），原有网格连接行为不变。
+
+### 修复
+
+- **AE2 线缆相邻崩溃（CRITICAL）** — `IAe2OutputHost.getGridNode` 原为接口默认方法，与 AE2 `IGridConnectedBlockEntity` 的默认方法冲突；线缆方块 ready 时扫描相邻机器触发类加载校验即崩溃。现改为抽象方法并由五个接口注入 Mixin 显式实现（蜂箱、基础离心机、原版工厂、ME 工厂、EME 工厂），节点查询与方向暴露校验逻辑完全不变
+
+### SemVer 合规性
+
+- 本次为单一崩溃修复，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.7 → v2.0.7-hotfix）
+
 ## [2.0.7] - 2026-08-06
 
 v2.0.7 围绕整合包实测反馈继续打磨：让蜂箱与离心机的 PB 升级效果直接跟随资源蜜蜂原版配置，速度/能耗公式改走 Mekanism 运行时入口以承接 Unleashed 与 Empowered 的改动；为工厂补上 PB 原版产量并行倍率与多流体槽预分配；AE2 流体推送重构为"按实际库存推送、按实际接收扣除"的无丢失路径；同时新增 Building Gadgets 2 剪切粘贴与 Mek Energistics 安装器两项兼容修复，并统一了机器掉落物的数据保存方式。所有改动均经过代码审查、单元测试与编译验证。
