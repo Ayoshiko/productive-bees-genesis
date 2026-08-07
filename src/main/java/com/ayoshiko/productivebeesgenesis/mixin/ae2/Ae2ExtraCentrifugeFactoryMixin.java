@@ -5,6 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import net.minecraft.core.Direction;
 
 import appeng.api.networking.IGridNode;
+import appeng.api.util.AECableType;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -37,5 +38,10 @@ public abstract class Ae2ExtraCentrifugeFactoryMixin implements IAe2OutputHost {
 	@Override
 	public @Nullable IGridNode getGridNode(Direction dir) {
 		return IAe2OutputHost.resolveGridNode(this, dir);
+	}
+
+	@Override
+	public AECableType getCableConnectionType(Direction dir) {
+		return IAe2OutputHost.resolveCableConnectionType(dir);
 	}
 }

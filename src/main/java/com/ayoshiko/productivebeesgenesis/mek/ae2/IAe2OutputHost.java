@@ -32,16 +32,17 @@ import appeng.me.InWorldGridNode;
  * AE2 未安装时通过 {@link Ae2IntegrationLoader#isAe2Loaded()} 在所有调用点短路保护，
  * 防止类加载失败。capability 注册也仅在 AE2 已安装时执行（参见 {@link Ae2CapabilityRegistrar}）。
  * <p>
- * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 提供
- * static 辅助实现 {@link #resolveGridNode}，由各 Mixin 注入类显式实现
- * {@code getGridNode(Direction)} 并委托调用；{@code getCableConnectionType}
- * 仍为 default 实现。
+ * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 与
+ * {@code getCableConnectionType} 提供 static 辅助实现
+ * （{@link #resolveGridNode} / {@link #resolveCableConnectionType}），
+ * 由各 Mixin 注入类显式实现并委托调用。
  * <p>
  * <b>为何不能是 default 方法</b>：AE2 的 {@code IGridConnectedBlockEntity}
  * 已为 {@code getGridNode(Direction)} 提供 default 实现。若本接口也提供 default，
  * 目标类（同时实现两个接口且未显式重写）会在类加载时触发
  * {@code IncompatibleClassChangeError: Conflicting default methods}。
- * 因此本接口声明为抽象方法，由 Mixin 注入显式实现，类中显式方法优先于接口 default。
+ * 因此本接口将两个方法都声明为抽象方法，由 Mixin 注入显式实现，
+ * 类中显式方法优先于接口 default，彻底避免 AbstractMethodError/IncompatibleClassChangeError。
  * <p>
  * 实现细节：
  * <ol>
@@ -115,12 +116,24 @@ public interface IAe2OutputHost extends IAe2OutputHostBase, IInWorldGridNodeHost
 	 * <br/>
 	 * 返回 {@link AECableType#SMART}，与 Mek-Energistics 的 {@code MeSmartCableConnection} 一致。
 	 * 离心机作为高级机器接入智能线缆，AE2 线缆会根据此值决定连接渲染样式和连接优先级。
+	 * <p>
+	 * <b>实现要求</b>：本方法为抽象方法，由注入 {@link IAe2OutputHost} 的 Mixin
+	 * 显式实现并委托 {@link #resolveCableConnectionType}，避免与 AE2
+	 * {@code IInWorldGridNodeHost} 的 default 实现冲突（AbstractMethodError）。
 	 *
 	 * @param dir 查询方向（所有方向均返回 SMART）
 	 * @return {@link AECableType#SMART}
 	 */
 	@Override
-	default AECableType getCableConnectionType(Direction dir) {
+	AECableType getCableConnectionType(Direction dir);
+
+	/**
+	 * 解析 AE2 线缆连接类型（static 辅助，供 Mixin 注入实现调用）。
+	 *
+	 * @param dir 查询方向（未使用，所有方向均为 SMART）
+	 * @return {@link AECableType#SMART}
+	 */
+	static AECableType resolveCableConnectionType(Direction dir) {
 		return AECableType.SMART;
 	}
 }

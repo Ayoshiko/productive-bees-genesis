@@ -25,11 +25,16 @@
 
 ## [2.0.7-hotfix] - 2026-08-06
 
-v2.0.7-hotfix 修复整合包实测发现的崩溃：AE2 线缆与离心机相邻时，机器方块实体加载会因接口默认方法冲突直接崩溃（`IncompatibleClassChangeError`）。修复后 AE2 线缆可正常发现并连接本模组蜂箱/离心机（含 ME / EME 工厂），原有网格连接行为不变。
+v2.0.7-hotfix 修复整合包实测发现的 AE2 线缆兼容崩溃：
+服务端机器加载时因 `getGridNode` 接口默认方法冲突崩溃（`IncompatibleClassChangeError`）；
+客户端渲染时 ME 工厂蜂箱又因 `getCableConnectionType` 缺失实现崩溃
+（`AbstractMethodError`）。现两个方法均由五个接口注入 Mixin 显式实现，
+AE2 线缆可正常发现并连接本模组蜂箱/离心机（含 ME / EME 工厂），原有网格连接行为不变。
 
 ### 修复
 
 - **AE2 线缆相邻崩溃（CRITICAL）** — `IAe2OutputHost.getGridNode` 原为接口默认方法，与 AE2 `IGridConnectedBlockEntity` 的默认方法冲突；线缆方块 ready 时扫描相邻机器触发类加载校验即崩溃。现改为抽象方法并由五个接口注入 Mixin 显式实现（蜂箱、基础离心机、原版工厂、ME 工厂、EME 工厂），节点查询与方向暴露校验逻辑完全不变
+- **ME 工厂蜂箱渲染崩溃（CRITICAL）** — `getCableConnectionType` 同样依赖接口 default，在 ME 工厂蜂箱（`TileEntityExtraMekApiaryFactory`）上触发 `AbstractMethodError: getCableConnectionType`，Sodium 渲染线缆方块时崩溃。现与 `getGridNode` 一致，由五个接口注入 Mixin 显式实现并返回 SMART，消除接口方法表解析问题
 
 ### SemVer 合规性
 
