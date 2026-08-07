@@ -7,6 +7,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
+import mekanism.client.gui.GuiMekanism;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
@@ -30,8 +32,10 @@ import net.minecraft.world.level.Level;
  * 不拦截 {@code renderItem}：MEK 侧边配置等槽位用该路径渲染相邻机器图标，
  * 拦截会破坏这些图标的深度关系。
  * <p>
- * 触发条件：{@code renderFakeItem} + PoseStack z > 100（MEK 泄漏的高 Z）+
- * 物品是 BlockItem。vanilla GUI 的 poseZ 为 0，不受影响。
+ * 触发条件：当前屏幕是 {@link GuiMekanism} + {@code renderFakeItem} +
+ * PoseStack z > 100（MEK 泄漏的高 Z）+ 物品是 BlockItem。
+ * JEI 在普通容器屏幕中同样可能使用高 Z，因此不能只凭 Z 偏移判断；否则箱子、抽屉等
+ * 使用特殊物品渲染器的方块会在 {@code GL_ALWAYS} 下立即提交，背面覆盖正面而显示异常。
  * <p>
  * 线程安全：仅客户端渲染线程调用 GL 状态，无并发风险。
  */
@@ -56,7 +60,8 @@ public class MekGuiBlockItemDepthMixin {
 			Operation<Void> original) {
 		int originalDepthFunc = GL11.GL_LEQUAL;
 		boolean depthChanged = false;
-		if (stack.getItem() instanceof BlockItem
+		if (Minecraft.getInstance().screen instanceof GuiMekanism<?>
+				&& stack.getItem() instanceof BlockItem
 				&& instance.pose().last().pose().m32() > 100.0F) {
 			originalDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
 			GL11.glDepthFunc(GL11.GL_ALWAYS);

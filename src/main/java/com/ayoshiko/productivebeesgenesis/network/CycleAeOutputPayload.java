@@ -49,7 +49,9 @@ public record CycleAeOutputPayload(
 		/** 物品输出 */
 		ITEM,
 		/** 流体输出 */
-		FLUID;
+		FLUID,
+		APIARY_DIRECT,
+		CENTRIFUGE_DIRECT;
 
 		private static final OutputType[] VALUES = values();
 

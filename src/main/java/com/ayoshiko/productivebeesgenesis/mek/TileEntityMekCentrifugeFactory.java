@@ -19,6 +19,7 @@ import net.minecraft.core.Holder;
 
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 
 /**
@@ -68,6 +69,11 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 		IntSupplier inputMultiplier = isEMFactory
 				? CentrifugeInputStackMultipliers.forEMFactory(tier.ordinal() - 4)
 				: CentrifugeInputStackMultipliers.forVanillaFactory(tier.ordinal());
+		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
+				() -> level == null ? Long.MIN_VALUE : level.getGameTime(),
+				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
+						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
+						productivityParallelModifier()));
 
 		for (int i = 0; i < tier.processes; i++) {
 			int xPos = baseX + (i * baseXMult);
@@ -86,6 +92,7 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			FactoryInputInventorySlot inputSlot = FactoryInputInventorySlot.create(this, i, outputSlot, secondaryOutputSlot, lookupMonitor, xPos, 13);
 			// Task 7: 注入输入槽分等级堆叠倍率（按 FactoryTier.ordinal 索引配置）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(inputMultiplier);
+			externalInputPolicy.register(inputSlot);
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE, getWarningCheck(RecipeError.NOT_ENOUGH_INPUT, index)));

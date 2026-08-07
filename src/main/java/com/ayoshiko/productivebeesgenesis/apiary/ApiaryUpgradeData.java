@@ -82,6 +82,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 
 	/** 蜂箱到相邻离心机的特殊直连通道开关。 */
 	public final boolean directEjectEnabled;
+	public final boolean directAeOutputEnabled;
 
 	/**
 	 * 蜂箱工厂升级数据构造函数
@@ -117,7 +118,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
 			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
 			@Nullable List<ItemStack> outputItems, int selectedBeeSlot,
-			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled) {
+			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
+			boolean directAeOutputEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -132,5 +134,6 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;
 		this.directEjectEnabled = directEjectEnabled;
+		this.directAeOutputEnabled = directAeOutputEnabled;
 	}
 }

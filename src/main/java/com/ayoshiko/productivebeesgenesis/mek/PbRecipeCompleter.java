@@ -314,6 +314,43 @@ public class PbRecipeCompleter {
 		return pendingFluidAmount;
 	}
 
+	/** Direct-AE 路径按实际接收量减少 pending 物品总数。 */
+	void consumePendingItemCount(int accepted) {
+		if (accepted > 0) {
+			pendingItemCount = Math.max(0, pendingItemCount - accepted);
+		}
+	}
+
+	/** 本地槽已完整接收本轮 pending 物品。 */
+	void consumeAllPendingItems() {
+		pendingOutputs.clear();
+		pendingItemCount = 0;
+	}
+
+	/** Direct-AE 路径按实际接收量减少 pending 流体。 */
+	void consumePendingFluid(long accepted) {
+		if (accepted > 0) {
+			pendingFluidAmount = Math.max(0L, pendingFluidAmount - accepted);
+		}
+	}
+
+	/** Direct-AE 已提交部分产物后，标记对应输入已经且只会被扣除一次。 */
+	void markPendingInputConsumed() {
+		pendingInputShrink = 0;
+	}
+
+	/** @return 是否仍有尚未写入 AE 或本地槽的产物。 */
+	boolean hasPendingOutputs() {
+		return !pendingOutputs.isEmpty() || pendingFluidAmount > 0;
+	}
+
+	/**
+	 * @return true 表示输入已经提交，但仍有产物等待输出；失败时必须保留 pending 状态重试。
+	 */
+	boolean hasCommittedPendingOutputs() {
+		return pendingInputShrink == 0 && hasPendingOutputs();
+	}
+
 	/** @return 本 tick 尚未扣除的输入数量 */
 	int getPendingInputShrink() {
 		return pendingInputShrink;

@@ -22,6 +22,9 @@ import cy.jdkdigital.productivebees.init.ModItems;
  */
 public interface IMekCentrifugeTile {
 
+	/** Invalidates recipe and validation caches after the per-machine smelting mode changes. */
+	void productivebeesgenesis$onSmeltingCompatChanged();
+
 	/**
 	 * 输出槽内容版本号。
 	 * <br/>

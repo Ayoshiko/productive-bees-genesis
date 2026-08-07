@@ -9,19 +9,14 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.energy.IEnergySource;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.storage.MEStorage;
-import appeng.api.storage.StorageHelper;
 import appeng.me.helpers.BaseActionSource;
 
-import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
-import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 import mekanism.api.fluid.IExtendedFluidTank;
 
@@ -46,14 +41,13 @@ import mekanism.api.fluid.IExtendedFluidTank;
  *   <li><b>TPS 自适应</b>:服务器 MSPT 严重卡顿(tpsFactor &lt; 0.5)时跳过推送,让出 tick 资源</li>
  *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
  *       非 ONLINE 状态直接返回不触发退避(修复: 原缺少此检查导致网格不稳定时 poweredInsert 必然失败)</li>
- *   <li><b>退避</b>:完全失败时进入指数退避窗口(1s→2s→4s→8s→16s→30s),
+ *   <li><b>退避</b>:仅所有流体 key 都失败时进入 50ms→1s 的短指数退避,
  *       基于 {@link System#nanoTime()} 墙钟单调时钟,窗口内跳过所有 AE2 存储操作,
  *       避免 JDTE 加速下 counter 退避失效(Task 5)。
  *       部分成功不重置退避(避免"部分成功→重置→立即失败→激进退避"死循环)</li>
- *   <li><b>JDTE M 自适应批量</b>:批量大小 = 1000000 × M mB(M=1 时 100万, M=256 时 2.56亿),
- *       配合 JDTE 加速倍数动态调整单批推送量,减少循环次数(Spark优化: 从100K提升到1M)</li>
- *   <li><b>批量推送短路</b>:同一"游戏刻"内(counter 差值 &lt; M)跳过 AE2 API 调用,
- *       避免 JDTE 加速下 256× 重复推送同一 tank</li>
+	 *   <li><b>固定分批</b>:单次 MEStorage 请求最多 16,000,000 mB，限制第三方存储调用规模</li>
+	 *   <li><b>真实游戏刻窗口</b>:加速子 tick 在入口合并。低产量按 20 游戏刻批量，
+	 *       槽内总量达到 250,000 mB 时立即刷新</li>
  *   <li><b>分块 shrinkStack</b>:推送量超过 Integer.MAX_VALUE 时分块调用 tank.shrinkStack,
  *       防止 long→int 截断丢失流体(Task 21 新增)</li>
  * </ul>
@@ -70,7 +64,49 @@ public final class Ae2FluidPusher {
 	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态,全局只需 1 个实例 */
 	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
 
+	/** 进入"按子 tick 累积并立即刷新"模式的槽内流体阈值（mB）— 低于此值时只在窗口边界累积 */
+	private static final long SATURATION_ACCUMULATE_THRESHOLD_MB = 250_000L;
+
 	private Ae2FluidPusher() {}
+
+	/**
+	 * Inserts newly generated fluid before it enters a local tank.
+	 * The caller stores {@code requested - returned} locally, so rejection cannot lose fluid.
+	 */
+	public static long pushGeneratedFluid(IAe2OutputHostBase host, FluidStack template, long requested) {
+		return insertGeneratedFluid(host, template, requested, Actionable.MODULATE);
+	}
+
+	/** Returns the amount the network would accept without changing storage. */
+	public static long simulateGeneratedFluid(IAe2OutputHostBase host, FluidStack template, long requested) {
+		return insertGeneratedFluid(host, template, requested, Actionable.SIMULATE);
+	}
+
+	private static long insertGeneratedFluid(IAe2OutputHostBase host, FluidStack template, long requested,
+			Actionable action) {
+		if (template == null || template.isEmpty() || requested <= 0) return 0L;
+		if (!host.productivebeesgenesis$isFluidPushEnabled()
+				|| !host.productivebeesgenesis$isAeFluidOutputEnabled()) return 0L;
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return 0L;
+		Level level = host.productivebeesgenesis$getAe2Level();
+		if (level == null) return 0L;
+		if (holder.getPushState().getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return 0L;
+		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
+		if (grid == null) return 0L;
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
+		if (meStorage == null) return 0L;
+		AEFluidKey key = AEFluidKey.of(template);
+		if (key == null) return 0L;
+		try {
+			return meStorage.insert(key, requested, action, ACTION_SOURCE);
+		} catch (Exception e) {
+			LogThrottle.warnWithCooldown("ae2_direct_generated_fluid", 60_000L,
+					"AE2 direct generated-fluid insert failed: fluid={}, amount={}, error={}",
+					key, requested, e.toString());
+			return 0L;
+		}
+	}
 
 	/**
 	 * 推送宿主所有流体罐内容到 AE2 网络(Task 13 多槽遍历 + Task 21 批处理缓冲 + spec 自适应)
@@ -103,58 +139,34 @@ public final class Ae2FluidPusher {
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
 		Ae2PushStateHolder pushState = holder.getPushState();
+		Level level = host.productivebeesgenesis$getAe2Level();
+		if (level == null || !pushState.tryStartFluidPush(level.getGameTime())) return;
 
 		// 2. 深度退避检查(入口级别)— 退避期内跳过整个 pushFluids 路径(spec Change 3)
 		//    基于 System.nanoTime() 墙钟单调时钟,不受 JDTE 加速影响(Task 5)
 		long pushCounter = pushState.incrementFluidPushCallCounter();
 		if (pushState.getFluidBackoff().shouldSkip(System.nanoTime())) return;
 
-		// 2.1 JDTE M 自适应 + 批量推送短路（提前到最前）
-		//     JDTE 256x 加速时同一 gameTick 内 pushFluids 被调用 256 次，
-		//     只有第 M 次才真正累积/推送。提前短路可让 255/256 次重复调用
-		//     只执行计数器判断即返回，跳过下方 TPS/node/grid/能量等检查。
-		//     getMultiplier() 为 O(1)（Math.min/max），提前调用无额外成本。
-		TickAccelTracker tracker = holder.getTickAccelTracker();
-		int M = (tracker != null) ? tracker.getMultiplier() : 1;
-		if (pushCounter - pushState.getLastFluidPushCounter() < M) return;
 		pushState.updateLastFluidPushCounter(pushCounter);
 
-		// 3. TPS 自适应:TPS 严重下降时跳过推送,让出服务器资源(spec Change 5)
-		Level level = host.productivebeesgenesis$getAe2Level();
-		if (level == null) return;
-		long currentTick = level.getGameTime();
-		double currentTps = ServerTickTimeMonitor.getInstance().getTps(currentTick);
-		if (currentTps < 10.0) return;
+		// 8. Task 21: 获取批处理缓冲（holder 感知重载）
+		Ae2PendingBatchBuffer batchBuffer = getOrCreatePendingBatchBuffer(holder);
 
-		// 3.1 模块2.1 对称：强检测 grid node 状态，仅当 ONLINE(3) 时继续推送
-		//     状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入 poweredInsert 路径，不触发退避
-		//     修复：原流体推送器缺少此检查（物品推送器有），导致网格不稳定时 poweredInsert
-		//     在节点非 ONLINE 状态下执行，必然失败并触发 30s 长退避
-		int nodeState = pushState.getCachedNodeState(host);
-		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
-			return;
+		// 9. Task 21: 累积阶段
+		//     第一遍：廉价统计槽内流体总量（仅 getFluid/getAmount，不构建 AEFluidKey）
+		int tankCount = host.fluidOutputTankCount();
+		long totalInTanks = 0L;
+		for (int i = 0; i < tankCount; i++) {
+			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			if (tank == null || tank.isEmpty()) continue;
+			totalInTanks += tank.getFluid().getAmount();
 		}
 
-		// 4. 获取网格节点 + 已连接的网格（holder 感知重载，跳过冗余 getAe2StateHolder）
-		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
-		if (grid == null) return;
-
-		// 5. 获取存储服务和 ME 存储（holder 感知重载，跳过冗余 getAe2StateHolder）
-		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
-		if (storageService == null) return;
-		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
-		if (meStorage == null) return;
-
-		// 6. 复用物品推送的能量适配器(与物品推送共享同一实例，holder 感知重载)
-		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
-		IEnergySource energySource = buffers.getEnergyAdapter(host.productivebeesgenesis$getAe2EnergySource());
-
-		// 8. Task 21: 获取或创建批处理缓冲,递减成熟计数器（holder 感知重载）
-		Ae2PendingBatchBuffer batchBuffer = getOrCreatePendingBatchBuffer(holder);
+		// tryStartFluidPush 已将加速子 tick 合并为每个真实游戏刻一次。
 		batchBuffer.tick();
+		if (totalInTanks <= 0) return;
 
-		// 9. Task 21: 累积阶段 — 遍历所有流体罐,将 fluidKey+amount 累积到 buffer
-		int tankCount = host.fluidOutputTankCount();
+		// 第二遍：每个真实游戏刻采样一次。加速子 tick 已在入口合并，不会放大组件哈希开销。
 		for (int i = 0; i < tankCount; i++) {
 			IExtendedFluidTank tank = host.fluidOutputTank(i);
 			if (tank == null || tank.isEmpty()) continue;
@@ -170,10 +182,36 @@ public final class Ae2FluidPusher {
 			batchBuffer.accumulate(fluidKey, amount);
 		}
 
-		// 10. Task 21: 刷新检查 — 成熟(20 tick 窗口) OR 累积量超阈值(50 亿 mB)时刷新
+		// 10. 刷新检查：
+		//     - 成熟窗口（低产量批量，默认 20 游戏刻）
+		//     - 累积量达到自适应阈值：槽内流体总量（即首个采样采满整槽时立即刷新）
+		//       且至少 250,000 mB，避免极小罐在低产量下每子 tick 都调用 AE API
+		long adaptiveThreshold = Math.max(SATURATION_ACCUMULATE_THRESHOLD_MB, totalInTanks);
 		boolean shouldFlush = batchBuffer.isRipe()
-				|| batchBuffer.shouldFlushNow(batchBuffer.getTotalAmount(), Ae2PendingBatchBuffer.getFlushThresholdMb());
+				|| batchBuffer.shouldFlushNow(batchBuffer.getTotalAmount(), adaptiveThreshold);
 		if (!shouldFlush) return;
+
+		// 3. TPS 自适应:TPS 严重下降时跳过推送,让出服务器资源（阈值从 10 降到 5，
+		//     避免 256× 加速下常规高负载把推送整体关停导致流体槽打满停机）
+
+		// 3.1 模块2.1 对称：强检测 grid node 状态，仅当 ONLINE(3) 时继续推送
+		//     状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入 poweredInsert 路径，不触发退避
+		//     修复：原流体推送器缺少此检查（物品推送器有），导致网格不稳定时 poweredInsert
+		//     在节点非 ONLINE 状态下执行只会产生无效存储调用
+		int nodeState = pushState.getCachedNodeState(host);
+		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
+			return;
+		}
+
+		// 4. 获取网格节点 + 已连接的网格（holder 感知重载，跳过冗余 getAe2StateHolder）
+		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
+		if (grid == null) return;
+
+		// 5. 获取存储服务和 ME 存储（holder 感知重载，跳过冗余 getAe2StateHolder）
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
+		if (storageService == null) return;
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
+		if (meStorage == null) return;
 
 		// 11. Task 21: drain 并批量推送
 		ConcurrentMap<AEFluidKey, Long> pendingMap = batchBuffer.drain();
@@ -200,7 +238,7 @@ public final class Ae2FluidPusher {
 				if (tankTotal <= 0) continue; // tank 已空，跳过推送
 				long pushed = Math.min(amount, tankTotal);
 
-				long inserted = batchPush(energySource, meStorage, fluidKey, pushed, M);
+				long inserted = batchPush(meStorage, fluidKey, pushed);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发退避
 					rejectedCount++;
@@ -208,11 +246,11 @@ public final class Ae2FluidPusher {
 				}
 				anySuccess = true;
 				allFailed = false;
-				totalActualShrunk += inserted;
 				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
 				// 正常情况下 shrink 必然足额；不足仅可能出现在极端并发/异常，
 				// 记录 error 防止静默复制（防御性）。
 				long shrunk = shrinkStackSafely(host, fluidKey, inserted, tankCount);
+				totalActualShrunk += shrunk;
 				if (shrunk < inserted) {
 					LogThrottle.error("ae2_fluid_shrink_mismatch",
 							"AE2 流体推送后 shrink 不足: fluid={}, inserted={}, shrunk={} (5秒内仅首条)",
@@ -225,32 +263,18 @@ public final class Ae2FluidPusher {
 			}
 		}
 
-		// 12. 退避触发逻辑（修复：消除"部分成功 → 重置 → 立即失败 → 激进退避"的死循环）
-		// - 完全失败（allFailed && totalActualShrunk > 0）：触发/升级退避
-		//   totalActualShrunk > 0 表示有实际扣除了却未被任何 key 部分成功标记（仅全部失败时）；
-		//   rejectedCount > 0 表示存在被网络完全拒绝的 key（无扣除）。
-		//   两者都会触发退避；tank 已空（pushed==0）不计入。
-		// - 完全成功（anySuccess）：重置退避
-		// - 部分成功（inserted < pushed）：保持当前退避级别，不重置也不升级
-		//   原因：部分成功说明网格仍不稳定，重置退避会导致下一轮失败重新触发 30s 激进退避，
-		//   形成"30s退避 → 部分成功 → 重置 → 立即失败 → 30s退避"的无限循环
+		// 12. Only a batch where every attempted key was rejected enters short backoff.
+		// Any accepted key resets it so another fluid cannot hold the whole host offline.
 		Ae2PushBackoff fluidBackoff = pushState.getFluidBackoff();
 		if (allFailed && (totalActualShrunk > 0 || rejectedCount > 0)) {
-			boolean firstFailure = (fluidBackoff.getBackoffExponent() == 0);
-			if (firstFailure) {
-				fluidBackoff.recordFailureAggressive(System.nanoTime());
-				LogThrottle.warn("ae2_fluid_long_backoff",
-						"AE2 流体推送首次失败，触发 30s 长退避 totalRequested={}", totalRequested);
-			} else {
-				fluidBackoff.recordFailure(System.nanoTime());
-				LogThrottle.warn("ae2_fluid_backoff",
-						"AE2 流体推送失败,进入退避 指数={}, 结束时间戳={}",
-						fluidBackoff.getBackoffExponent(), fluidBackoff.getBackoffEndNanos());
-			}
+			fluidBackoff.recordFailure(System.nanoTime());
+			LogThrottle.warn("ae2_fluid_backoff",
+					"AE2 流体推送全部失败，进入短退避 totalRequested={}, 指数={}",
+					totalRequested, fluidBackoff.getBackoffExponent());
 		} else if (anySuccess) {
-			// 仅完全成功时重置退避；部分成功保持当前级别
 			fluidBackoff.recordSuccess();
 		}
+		if (totalActualShrunk > 0) host.productivebeesgenesis$onAe2FluidPushComplete();
 	}
 
 	/**
@@ -264,13 +288,12 @@ public final class Ae2FluidPusher {
 	 * @return 当前实际总量(mB)；0 表示该流体当前不在任何 tank
 	 */
 	private static long currentTankAmount(IAe2OutputHostBase host, AEFluidKey fluidKey, int tankCount) {
-		net.minecraft.world.level.material.Fluid targetFluid = fluidKey.getFluid();
 		long total = 0L;
 		for (int i = 0; i < tankCount; i++) {
 			IExtendedFluidTank tank = host.fluidOutputTank(i);
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
-			if (stack.isEmpty() || targetFluid != stack.getFluid()) continue;
+			if (stack.isEmpty() || !fluidKey.matches(stack)) continue;
 			total += stack.getAmount();
 		}
 		return total;
@@ -333,42 +356,15 @@ public final class Ae2FluidPusher {
 	 *   <li>若 inserted == batchSize,继续下一批,直到 remaining == 0</li>
 	 * </ol>
 	 *
-	 * @param energySource  AE2 能量源
 	 * @param meStorage     AE2 存储目标
 	 * @param fluidKey      流体键
 	 * @param amount        总推送量(mB)
-	 * @param M             JDTE 加速倍数(1=无加速)
 	 * @return 实际推送总量(mB);0 表示完全失败
 	 */
-	private static long batchPush(IEnergySource energySource, MEStorage meStorage,
-			AEFluidKey fluidKey, long amount, int M) {
-		// Spark优化：批大小从100K×M提升到1M×M，大幅减少ExtendedAE Plus无限单元NBT深拷贝次数
-		// ExtendedAE的InfinityBigIntegerCellInventory每次insert都调用getUUID()触发CompoundTag.copy()，
-		// 这是第三方模组性能缺陷（无加速占10.19%，256x加速占13.63%），我们通过增大批量减少调用次数
-		long batchSizeLimit = 1_000_000L * Math.max(1, M);
-		long totalInserted = 0;
-		long remaining = amount;
-
-		while (remaining > 0) {
-			long batchSize = Math.min(batchSizeLimit, remaining);
-			long inserted = StorageHelper.poweredInsert(
-					energySource, meStorage, fluidKey, batchSize, ACTION_SOURCE, Actionable.MODULATE);
-
-			if (inserted <= 0) {
-				// AE2 网络无法接收当前批次(容量不足/通道断开/能量不足/存储单元已满)
-				break;
-			}
-
-			totalInserted = SaturatingMath.saturatingAdd(totalInserted, inserted);
-			remaining -= inserted;
-
-			// 若本次推送量小于请求量,说明 AE2 网络容量已满,停止循环
-			if (inserted < batchSize) {
-				break;
-			}
-		}
-
-		return totalInserted;
+	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount) {
+		// 固定有限批量，避免 256× 时单次向第三方存储请求数亿 mB，同时保持较低调用次数。
+		long batchSizeLimit = 16_000_000L;
+		return Math.max(0L, meStorage.insert(fluidKey, amount, Actionable.MODULATE, ACTION_SOURCE));
 	}
 
 	/**
@@ -397,8 +393,6 @@ public final class Ae2FluidPusher {
 	private static long shrinkStackSafely(IAe2OutputHostBase host, AEFluidKey fluidKey,
 			long totalToShrink, int tankCount) {
 		if (totalToShrink <= 0) return 0;
-		// Spark 优化：缓存 Fluid 引用，避免循环内重复 AEFluidKey.of(stack) 重建
-		net.minecraft.world.level.material.Fluid targetFluid = fluidKey.getFluid();
 		long remaining = totalToShrink;
 		long totalShrunk = 0;
 
@@ -408,8 +402,7 @@ public final class Ae2FluidPusher {
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty()) continue;
-			// Spark 优化：Fluid 引用比较等价于 AEFluidKey.equals（AEFluidKey 无 NBT）
-			if (targetFluid != stack.getFluid()) continue;
+			if (!fluidKey.matches(stack)) continue;
 
 			long tankAmount = stack.getAmount();
 			long shrinkThisTank = Math.min(remaining, tankAmount);

@@ -33,8 +33,10 @@ public final class ApiaryDirectEjectOverlay {
 
 	private static final int BUTTON_X_OFFSET = 136;
 	private static final int BUTTON_Y_OFFSET = 24;
+	private static final int DIRECT_AE_BUTTON_X_OFFSET = 120;
 	private static final int BUTTON_SIZE = 14;
 	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectEjectButton>> BUTTONS = new WeakHashMap<>();
+	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectAeOutputButton>> DIRECT_AE_BUTTONS = new WeakHashMap<>();
 
 	private ApiaryDirectEjectOverlay() {
 	}
@@ -60,6 +62,23 @@ public final class ApiaryDirectEjectOverlay {
 		button.setTooltip(Tooltip.create(Component.translatable(enabled
 				? "productivebeesgenesis.gui.apiary_direct_eject.enabled"
 				: "productivebeesgenesis.gui.apiary_direct_eject.disabled")));
+
+		ApiaryDirectAeOutputButton directAeButton = getDirectAeButton(sideConfig);
+		if (directAeButton == null) {
+			directAeButton = new ApiaryDirectAeOutputButton(target.gui(),
+					sideConfig.getRelativeX() + DIRECT_AE_BUTTON_X_OFFSET,
+					sideConfig.getRelativeY() + BUTTON_Y_OFFSET, target);
+			sideConfig.children().add(directAeButton);
+			DIRECT_AE_BUTTONS.put(sideConfig, new WeakReference<>(directAeButton));
+		}
+		directAeButton.target = target;
+		directAeButton.visible = target.type() == TransmissionType.ITEM;
+		directAeButton.active = target.apiary().productivebeesgenesis$isAeItemOutputEnabled()
+				|| target.apiary().productivebeesgenesis$isAeFluidOutputEnabled();
+		directAeButton.setTooltip(Tooltip.create(Component.translatable(
+				target.apiary().isDirectAeOutputEnabled()
+						? "productivebeesgenesis.gui.apiary_direct_ae.enabled"
+						: "productivebeesgenesis.gui.apiary_direct_ae.disabled")));
 	}
 
 	@SubscribeEvent
@@ -69,6 +88,16 @@ public final class ApiaryDirectEjectOverlay {
 		if (target == null || target.type() != TransmissionType.ITEM) return;
 		ApiaryDirectEjectButton button = getButton(target.sideConfig());
 		if (button == null || !button.visible) return;
+		ApiaryDirectAeOutputButton directAeButton = getDirectAeButton(target.sideConfig());
+		ButtonBounds directAeBounds = bounds(target, DIRECT_AE_BUTTON_X_OFFSET);
+		if (directAeButton != null && directAeButton.visible && directAeButton.active
+				&& directAeBounds.contains(event.getMouseX(), event.getMouseY())) {
+			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
+					target.apiary().getBlockPos(),
+					com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload.OutputType.APIARY_DIRECT));
+			event.setCanceled(true);
+			return;
+		}
 		ButtonBounds bounds = bounds(target);
 		if (bounds.contains(event.getMouseX(), event.getMouseY())) {
 			PacketDistributor.sendToServer(new ToggleApiaryDirectEjectPayload(target.apiary().getBlockPos()));
@@ -78,6 +107,11 @@ public final class ApiaryDirectEjectOverlay {
 
 	private static ApiaryDirectEjectButton getButton(GuiSideConfiguration<?> sideConfig) {
 		WeakReference<ApiaryDirectEjectButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
+	}
+
+	private static ApiaryDirectAeOutputButton getDirectAeButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<ApiaryDirectAeOutputButton> reference = DIRECT_AE_BUTTONS.get(sideConfig);
 		return reference == null ? null : reference.get();
 	}
 
@@ -104,8 +138,12 @@ public final class ApiaryDirectEjectOverlay {
 	}
 
 	private static ButtonBounds bounds(OverlayTarget target) {
+		return bounds(target, BUTTON_X_OFFSET);
+	}
+
+	private static ButtonBounds bounds(OverlayTarget target, int xOffset) {
 		return new ButtonBounds(
-				target.gui().getGuiLeft() + target.sideConfig().getRelativeX() + BUTTON_X_OFFSET,
+				target.gui().getGuiLeft() + target.sideConfig().getRelativeX() + xOffset,
 				target.gui().getGuiTop() + target.sideConfig().getRelativeY() + BUTTON_Y_OFFSET,
 				BUTTON_SIZE);
 	}

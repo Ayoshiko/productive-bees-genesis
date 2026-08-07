@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +84,21 @@ public final class PbRecipeFlusher {
 		PbRecipeContext context = completer.getContext();
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
+			if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+				boolean committedToAe = pushPendingDirectToAe(completer, context);
+				if (committedToAe) {
+					// AE 写入不可回滚。先提交一次输入，剩余产物保留 pending 重试，
+					// 避免本地回退槽已满时保留原料并复制已经进入 AE 的产物。
+					consumePendingInput(completer, context, processIndex);
+				}
+			}
+
+			// AE 接收全部产物时不读取或写入本地输出槽。
+			if (completer.getPendingOutputs().isEmpty() && completer.getPendingFluidAmount() <= 0) {
+				consumeInputAndFinish(completer, context, processIndex);
+				return true;
+			}
+
 			// Task 7:构建 reusableOutputSlots 时同步填充 slotIdx 映射,
 			// 保证 secondary 为 null 时 updateSlotOnly 收到正确的 slotIdx
 			reusableOutputSlots.clear();
@@ -97,11 +113,17 @@ public final class PbRecipeFlusher {
 			reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
 			reusableSlotIdxMap[slotCount++] = 2; // tertiary
 
+			// 先验证流体回退空间，再执行任何本地物品写入，保持刷新操作的原子性。
+			if (!canStorePendingFluidLocally(completer, context)) {
+				return false;
+			}
+
 			// 单次直写:模拟 + 执行一体化
 			// planAndExecute 返回 false 表示空间不足,已不做任何修改
 			if (!planAndExecute(completer, processIndex, slotCount)) {
 				return false;
 			}
+			completer.consumeAllPendingItems();
 
 			// 流体输出 — Task 10: 使用 fluidOutputTankForInsert 实现多槽路由
 			// SINGLE: 等价于 fluidOutputTank();MULTI_PER_FLUID: 自动路由到对应类型槽,
@@ -116,32 +138,82 @@ public final class PbRecipeFlusher {
 				int scaledAmount = (int) Math.min(pendingFluidAmount, Integer.MAX_VALUE);
 				FluidStack scaledFluid = pendingFluidTemplate.copyWithAmount(scaledAmount);
 				IExtendedFluidTank tank = context.fluidOutputTankForInsert(pendingFluidTemplate);
-				if (tank == null) {
-					// 失败必须暂停:tank 为 null 表示无可用槽,静默跳过会丢失流体产物
-					DevLog.warn("pb_recipe", "流体插入失败: tank={}, needed={}, required={}, fluid={}",
-							tank, -1, scaledAmount, pendingFluidTemplate.getFluid());
+				FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
+				long inserted = scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
+				completer.consumePendingFluid(inserted);
+				if (inserted < scaledAmount || completer.getPendingFluidAmount() > 0) {
 					return false;
 				}
-				if (tank.getNeeded() < scaledAmount) {
-					// 失败必须暂停:空间不足,静默跳过会部分丢失流体产物
-					DevLog.warn("pb_recipe", "流体插入失败: tank={}, needed={}, required={}, fluid={}",
-							tank, tank.getNeeded(), scaledAmount, pendingFluidTemplate.getFluid());
-					return false;
-				}
-				tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 			}
 
-			// 修复:每次操作只消耗1个输入,productivityModifier只影响输出数量不影响输入消耗
-			// 原实现pendingInputShrink += modifier导致输入不足modifier时无法加工
-			int pendingInputShrink = completer.getPendingInputShrink();
-			if (pendingInputShrink > 0) {
-				context.inputSlot(processIndex).shrinkStack(pendingInputShrink, Action.EXECUTE);
-			}
-
-			completer.clearPendingOutputs();
+			consumeInputAndFinish(completer, context, processIndex);
 			return true;
 		} finally {
 			context.productivebeesgenesis$endOutputBatch(processIndex);
+		}
+	}
+
+	private static boolean pushPendingDirectToAe(PbRecipeCompleter completer, PbRecipeContext context) {
+		boolean acceptedAny = false;
+		Iterator<Map.Entry<ItemStack, Integer>> iterator = completer.getPendingOutputs().entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<ItemStack, Integer> entry = iterator.next();
+			int requested = Math.max(0, entry.getValue());
+			if (requested <= 0) {
+				iterator.remove();
+				continue;
+			}
+			ItemStack stack = entry.getKey().copyWithCount(requested);
+			int accepted = Math.max(0, Math.min(requested,
+					context.productivebeesgenesis$pushGeneratedItemToAe(stack)));
+			if (accepted <= 0) continue;
+			acceptedAny = true;
+			completer.consumePendingItemCount(accepted);
+			if (accepted >= requested) {
+				iterator.remove();
+			} else {
+				entry.setValue(requested - accepted);
+			}
+		}
+
+		FluidStack template = completer.getPendingFluidTemplate();
+		long requestedFluid = completer.getPendingFluidAmount();
+		if (template != null && !template.isEmpty() && requestedFluid > 0) {
+			long accepted = Math.max(0L, Math.min(requestedFluid,
+					context.productivebeesgenesis$pushGeneratedFluidToAe(template, requestedFluid)));
+			acceptedAny |= accepted > 0;
+			completer.consumePendingFluid(accepted);
+		}
+		return acceptedAny;
+	}
+
+	private static boolean canStorePendingFluidLocally(PbRecipeCompleter completer, PbRecipeContext context) {
+		FluidStack template = completer.getPendingFluidTemplate();
+		long pending = completer.getPendingFluidAmount();
+		if (template == null || template.isEmpty() || pending <= 0) return true;
+		// 本地 FluidStack 使用 int 数量。超大批次必须先由调用方减半，
+		// 不能先插入 Integer.MAX_VALUE 再返回失败，否则输入未提交会复制流体。
+		if (pending > Integer.MAX_VALUE) return false;
+		int required = (int) Math.min(pending, Integer.MAX_VALUE);
+		IExtendedFluidTank tank = context.fluidOutputTankForInsert(template);
+		if (tank == null || tank.getNeeded() < required) {
+			DevLog.warn("pb_recipe", "流体插入失败: tank={}, needed={}, required={}, fluid={}",
+					tank, tank == null ? -1 : tank.getNeeded(), required, template.getFluid());
+			return false;
+		}
+		return true;
+	}
+
+	private static void consumeInputAndFinish(PbRecipeCompleter completer, PbRecipeContext context, int processIndex) {
+		consumePendingInput(completer, context, processIndex);
+		completer.clearPendingOutputs();
+	}
+
+	private static void consumePendingInput(PbRecipeCompleter completer, PbRecipeContext context, int processIndex) {
+		int pendingInputShrink = completer.getPendingInputShrink();
+		if (pendingInputShrink > 0) {
+			context.inputSlot(processIndex).shrinkStack(pendingInputShrink, Action.EXECUTE);
+			completer.markPendingInputConsumed();
 		}
 	}
 

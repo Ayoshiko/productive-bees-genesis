@@ -74,6 +74,8 @@ public class MyriadCreationsHandler {
 
 	/** 日志管理器（带冷却和抑制计数的日志输出） */
 	private final MyriadCreationsLogger logger;
+	/** Coalesces all blocked processes into one diagnostic probe per real game tick. */
+	private long lastFluidBlockedProbeTick = Long.MIN_VALUE;
 
 	/** 构造万象创世处理器 */
 	public MyriadCreationsHandler(PbRecipeContext context, String logPrefix,
@@ -142,6 +144,18 @@ public class MyriadCreationsHandler {
 		if (effectiveOps <= 0) {
 			pbProcessing[processIndex] = false;
 			return false;
+		}
+
+		if (effectiveOps > 1 && fluidOutputHandler.isFluidTankFull()
+				&& pbOperatingTicks[processIndex] >= processingTime) {
+			long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
+			if (gameTick != lastFluidBlockedProbeTick) {
+				lastFluidBlockedProbeTick = gameTick;
+				logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
+						"{}万象创世流体槽已满，暂停完成批次：进程{} batchSize={}",
+						logPrefix, processIndex, effectiveOps);
+			}
+			return true;
 		}
 
 		// 输出受阻且进度已满时不消耗能量

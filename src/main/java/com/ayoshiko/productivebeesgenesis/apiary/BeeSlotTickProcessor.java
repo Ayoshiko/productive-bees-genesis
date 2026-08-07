@@ -95,6 +95,9 @@ class BeeSlotTickProcessor {
 	/** 当前 tick 的批量倍率（Tick 加速检测器设置，默认 1 表示无加速） — 由 ApiaryTickHandler 在 tick 入口设置，使用后自动重置 */
 	private int tickMultiplier = 1;
 
+	/** 每批蜜蜂遍历的起点，避免能量紧张时固定由前部槽位占满预算。 */
+	private int beeSlotRotationIndex = 0;
+
 	/**
 	 * 每只蜜蜂累积的待产出次数（Task 16.2）
 	 * <br/>
@@ -252,8 +255,10 @@ class BeeSlotTickProcessor {
 
 		// v9-P3 修复：try-finally 确保循环中途异常时已累积的能量仍被扣除，
 		// 避免 ticksInHive 已推进、pendingEnergyCost 已累积但能量未扣除的不一致状态
+		int slotStart = beeSlots.length == 0 ? 0 : Math.floorMod(beeSlotRotationIndex, beeSlots.length);
 		try {
-		for (int i = 0; i < beeSlots.length; i++) {
+		for (int slotOffset = 0; slotOffset < beeSlots.length; slotOffset++) {
+			int i = (slotStart + slotOffset) % beeSlots.length;
 			BeeSlot slot = beeSlots[i];
 			if (slot.isEmpty()) {
 				activationCounter.onBeeDeactivated(i);
@@ -290,14 +295,23 @@ class BeeSlotTickProcessor {
 				continue;
 			}
 
-			// 能量检查 — 累计能耗超过当前能量时等待
+			// 能量检查。当前容器预算不够时先结算已处理蜜蜂，再从 AE 补满并继续本批。
+			// 这样容器容量只需要覆盖一段工作，不需要一次容纳 32 只蜜蜂 × 256 虚拟 tick 的总能耗。
 			long acceleratedEnergyCost = saturatingMultiply(beeEnergyCost, tickMultiplier);
 			long availableEnergy = energyContainer.getEnergy();
 			if (pendingEnergyCost > availableEnergy
 					|| acceleratedEnergyCost > availableEnergy - pendingEnergyCost) {
-				slot.setState(BeeState.WAITING_ENERGY);
-				activationCounter.onBeeDeactivated(i);
-				continue;
+				if (pendingEnergyCost > 0) {
+					energyContainer.extract(pendingEnergyCost, Action.EXECUTE, AutomationType.INTERNAL);
+					pendingEnergyCost = 0;
+				}
+				tile.productivebeesgenesis$injectAe2Energy();
+				availableEnergy = energyContainer.getEnergy();
+				if (acceleratedEnergyCost > availableEnergy) {
+					slot.setState(BeeState.WAITING_ENERGY);
+					activationCounter.onBeeDeactivated(i);
+					continue;
+				}
 			}
 
 			// 推进计时
@@ -384,6 +398,9 @@ class BeeSlotTickProcessor {
 		// 统一提取能量 — 减少 IO 调用次数（v9-P3：finally 确保异常时也扣除已累积能量）
 		if (pendingEnergyCost > 0) {
 			energyContainer.extract(pendingEnergyCost, Action.EXECUTE, AutomationType.INTERNAL);
+		}
+		if (beeSlots.length > 0) {
+			beeSlotRotationIndex = (slotStart + 1) % beeSlots.length;
 		}
 		}
 	}

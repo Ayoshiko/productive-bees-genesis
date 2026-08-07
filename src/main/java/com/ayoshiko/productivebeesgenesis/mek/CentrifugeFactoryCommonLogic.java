@@ -105,10 +105,12 @@ public final class CentrifugeFactoryCommonLogic {
 	public static boolean isItemValidForSlot(@Nullable Level level, @NotNull ItemStack stack,
 			@NotNull InputValidationCache cache, @NotNull PbRecipeProcessor pbProcessor,
 			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
-					SingleItem<ItemStackToItemStackRecipe>> recipeType) {
+					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting) {
 		if (level == null) return false;
+		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
+		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
-				() -> MekCentrifugeFactoryHelper.getInputValidationResult(recipeType, level, stack, pbProcessor)).valid();
+				() -> MekCentrifugeFactoryHelper.getInputValidationResult(recipeType, level, stack, pbProcessor, allowSmelting)).valid();
 	}
 
 	/** 检查输入是否产出指定输出（支持 PB 配方回退），带缓存 */
@@ -127,7 +129,11 @@ public final class CentrifugeFactoryCommonLogic {
 	public static ItemStackToItemStackRecipe getRecipe(
 			@NotNull IInputHandler[] inputHandlers, int cacheIndex,
 			@NotNull PbRecipeProcessor pbProcessor,
-			@NotNull Function<IInputHandler, ItemStackToItemStackRecipe> findFirstRecipe) {
+			@NotNull Function<IInputHandler, ItemStackToItemStackRecipe> findFirstRecipe,
+			boolean allowSmelting) {
+		if (!allowSmelting) {
+			return null;
+		}
 		ItemStack input = (ItemStack) inputHandlers[cacheIndex].getInput();
 		if (!input.isEmpty() && pbProcessor.findPbRecipe(input) != null) {
 			return null;
@@ -291,6 +297,9 @@ public final class CentrifugeFactoryCommonLogic {
 		container.track(SyncableBoolean.create(ae2StateHolder::isAeFluidOutputEnabled, ae2StateHolder::setAeFluidOutputEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isAeItemInputEnabled, ae2StateHolder::setAeItemInputEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isAeInputNbtIgnore, ae2StateHolder::setAeInputNbtIgnore));
+		container.track(SyncableBoolean.create(ae2StateHolder::isSmeltingCompatEnabled, ae2StateHolder::setSmeltingCompatEnabled));
+		container.track(SyncableBoolean.create(ae2StateHolder::isCentrifugeDirectAeOutputEnabled,
+				ae2StateHolder::setCentrifugeDirectAeOutputEnabled));
 	}
 
 	/** DataSlot off-by-one 诊断日志 — 记录总数、TileEntity 类型、调用源（Task 9 已缓存反射字段） */

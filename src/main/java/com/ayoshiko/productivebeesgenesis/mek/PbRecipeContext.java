@@ -252,6 +252,34 @@ public interface PbRecipeContext {
 		return 0.0f;
 	}
 
+	/** 新产物是否优先直接写入 AE；默认关闭，保持原本地输出槽行为。 */
+	default boolean productivebeesgenesis$isDirectAeOutputEnabled() {
+		return false;
+	}
+
+	/**
+	 * 尝试将一项新生成的物品直接写入 AE。
+	 *
+	 * @return AE 实际接收数量；默认 0 表示全部回退本地输出槽
+	 */
+	default int productivebeesgenesis$pushGeneratedItemToAe(ItemStack stack) {
+		return 0;
+	}
+
+	/**
+	 * 尝试将新生成的流体直接写入 AE。
+	 *
+	 * @return AE 实际接收量；默认 0 表示全部回退本地流体槽
+	 */
+	default long productivebeesgenesis$pushGeneratedFluidToAe(FluidStack stack, long amount) {
+		return 0L;
+	}
+
+	/** Simulates direct AE fluid acceptance without mutating the network. */
+	default long productivebeesgenesis$simulateGeneratedFluidToAe(FluidStack stack, long amount) {
+		return 0L;
+	}
+
 	/**
 	 * 获取每tick操作次数（受速度升级影响）
 	 * <br/>

@@ -114,6 +114,10 @@ public final class CentrifugeUpgradeDataHelper {
 		boolean aeInputNbtIgnore = aeLoaded && ae2StateHolder.isAeInputNbtIgnore();
 		boolean aeItemOutputEnabled = aeLoaded && ae2StateHolder.isAeItemOutputEnabled();
 		boolean aeFluidOutputEnabled = aeLoaded && ae2StateHolder.isAeFluidOutputEnabled();
+		// smelting compat does not depend on AE2: always preserve the per-tile switch
+		boolean smeltingCompatEnabled = ae2StateHolder.isSmeltingCompatEnabled();
+		boolean centrifugeDirectAeOutputEnabled = aeLoaded
+				&& ae2StateHolder.isCentrifugeDirectAeOutputEnabled();
 		int aeInputFilterMode = 0;
 		Map<Integer, String> aeInputFilterEntries = new HashMap<>();
 		boolean preciseMode = false;
@@ -168,6 +172,7 @@ public final class CentrifugeUpgradeDataHelper {
 				aeItemInputEnabled, aeInputNbtIgnore,
 				aeInputFilterMode, aeInputFilterEntries, preciseMode,
 				aeItemOutputEnabled, aeFluidOutputEnabled,
+				smeltingCompatEnabled, centrifugeDirectAeOutputEnabled,
 				multiFluidTanksNbt,
 				outputItems,
 				inputItems,
@@ -267,7 +272,10 @@ public final class CentrifugeUpgradeDataHelper {
 		}
 
 		// 恢复 AE2 per-tile 设置（AE2 未加载时跳过，新方块使用默认值）
+		// Restore per-tile smelting compat (independent of AE2)
+		ae2StateHolder.setSmeltingCompatEnabled(data.smeltingCompatEnabled);
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			ae2StateHolder.setCentrifugeDirectAeOutputEnabled(data.centrifugeDirectAeOutputEnabled);
 			ae2StateHolder.setAeItemInputEnabled(data.aeItemInputEnabled);
 			ae2StateHolder.setAeInputNbtIgnore(data.aeInputNbtIgnore);
 			ae2StateHolder.setAeItemOutputEnabled(data.aeItemOutputEnabled);

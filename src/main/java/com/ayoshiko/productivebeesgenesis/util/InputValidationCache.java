@@ -99,12 +99,26 @@ public class InputValidationCache {
 	/** 上次缓存时的游戏刻 */
 	private long cachedAt = -1L;
 
+	/** Last smelting-compat flag seen by this cache; cleared on change so toggles take effect immediately. */
+	private boolean lastSmeltingAllowed = false;
+
 	public InputValidationCache() {
 		this(DEFAULT_TTL);
 	}
 
 	public InputValidationCache(int ttlTicks) {
 		this.ttlTicks = ttlTicks;
+	}
+
+	/**
+	 * Track the current smelting-compat flag and clear the validation cache when it changes.
+	 * Cost is a single boolean comparison per probe.
+	 */
+	public void setSmeltingAllowed(boolean allowed) {
+		if (allowed != lastSmeltingAllowed) {
+			lastSmeltingAllowed = allowed;
+			clear();
+		}
 	}
 
 	/**

@@ -81,6 +81,9 @@ public final class CentrifugeConfigSection {
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
 	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
 
+	// ========== 熔炉配方兼容（总开关） ==========
+	public final ModConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
+
 	private CentrifugeConfigSection(ModConfigSpec.Builder builder) {
 		builder.comment("通用机械离心机设置").push("mek_centrifuge");
 		// ===== 基础参数 =====
@@ -198,8 +201,9 @@ public final class CentrifugeConfigSection {
 				mekCentrifugePreferAppliedFluxOverAeEnergy = null;
 			}
 			mekCentrifugeAeInputEnabled = builder
-					.comment("启用 AE2 输入拉取（离心机主动从 ME 网络拉取输入物品）")
-					.define("aeInputEnabled", false);
+					.comment("启用 AE2 输入拉取（离心机主动从 ME 网络拉取输入物品）",
+							"默认开启；每台离心机默认关闭，需在机器上单独开启")
+					.define("aeInputEnabled", true);
 			mekCentrifugeAeInputRatePerTick = builder
 					.comment("每次拉取最大物品数量（1-16384，过大可能增加 CPU 开销）")
 					.defineInRange("aeInputRatePerTick", 1024, 1, 16384);
@@ -242,6 +246,15 @@ public final class CentrifugeConfigSection {
 				.comment("通用机械:扩展 堆叠升级最大数量（2^N 倍并行，仅作用于本模组离心机工厂）")
 				.defineInRange("maxStackUpgrades", 16, 8, 32);
 		builder.pop(); // me_upgrade
+
+		// ===== 熔炉配方兼容（总开关）=====
+		builder.comment("离心机电力熔炼炉配方兼容（总开关）").push("smelting_compat");
+		mekCentrifugeSmeltingCompatEnabled = builder
+				.comment("允许离心机处理电力熔炼炉（SMELTING）配方",
+						"默认开启；关闭后所有离心机的熔炉配方兼容开关无法使用",
+						"每台离心机是否兼容熔炉配方由 GUI 中的 per-tile 开关控制，默认关闭")
+				.define("smeltingCompatEnabled", true);
+		builder.pop(); // smelting_compat
 
 		builder.pop(); // mek_centrifuge
 	}

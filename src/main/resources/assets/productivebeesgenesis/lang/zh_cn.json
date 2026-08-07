@@ -820,7 +820,7 @@
   "productivebeesgenesis.gui.ae2_output.fluid.status.on": "AE：开",
   "productivebeesgenesis.gui.ae2_output.fluid.status.off": "AE：关",
   "productivebeesgenesis.gui.ae2_output.global_disabled": "需在配置中启用全局 AE2 输出才能使用此功能",
-  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "离心机特殊直连：开",
+  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "离心机特殊直连：开\n在物品侧面配置中把面设为输出来指定直连的离心机（可多台）",
   "productivebeesgenesis.gui.apiary_direct_eject.disabled": "离心机特殊直连：关",
   "productivebeesgenesis.gui.ae2_input.toggle": "输入拉取切换",
   "productivebeesgenesis.gui.ae2_input.nbt_ignore": "NBT 忽略切换",
@@ -864,5 +864,12 @@
   "productivebeesgenesis.gui.ae_input_config.info.precise_on": "精确：开",
   "productivebeesgenesis.gui.ae_input_config.info.precise_off": "精确：关",
   "productivebeesgenesis.gui.ae_input_config.status.precise_on": "精:开",
-  "productivebeesgenesis.gui.ae_input_config.status.precise_off": "精:关"
+  "productivebeesgenesis.gui.ae_input_config.status.precise_off": "精:关",
+  "productivebeesgenesis.gui.smelting_compat.on": "兼容电力熔炼炉配方：开",
+  "productivebeesgenesis.gui.smelting_compat.off": "兼容电力熔炼炉配方：关",
+  "productivebeesgenesis.gui.smelting_compat.global_disabled": "需在配置中启用熔炉配方兼容总开关才能使用此功能"
+  ,"productivebeesgenesis.gui.apiary_direct_ae.enabled": "产物直入 AE：开\nAE 接收的产物跳过本地输出槽，拒收部分保留在本地"
+  ,"productivebeesgenesis.gui.apiary_direct_ae.disabled": "产物直入 AE：关\n产物进入本地输出槽，可继续直连离心机"
+  ,"productivebeesgenesis.gui.centrifuge_direct_ae_output.on": "新产物直入 AE：开\nAE 接收的物品和流体跳过本地缓存，拒收部分回退到本地输出"
+  ,"productivebeesgenesis.gui.centrifuge_direct_ae_output.off": "新产物直入 AE：关\n产物进入本地输出槽和流体槽"
 }

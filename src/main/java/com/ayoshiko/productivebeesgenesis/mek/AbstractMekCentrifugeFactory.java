@@ -75,6 +75,16 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		IAe2InputHost, IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost {
 
+	@Override
+	public void productivebeesgenesis$onSmeltingCompatChanged() {
+		validInputCache.clear();
+		inputProducesOutputCache.clear();
+		for (int i = 0; i < tier.processes; i++) {
+			pbProcessor.resetSmeltingCache(i);
+			MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitors[i]);
+		}
+	}
+
 	/** 副输出槽2 — 每进程第3个物品输出槽（ProcessInfo 只支持1个 secondary） */
 	protected OutputInventorySlot[] tertiaryOutputSlots;
 	/** 流体输出槽 — 共享,接收 PB 配方的流体输出 */
@@ -158,11 +168,11 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	/** 同时查找SMELTING和PB CentrifugeRecipe，带缓存避免高频探测重复查配方 */
 	@Override
-	public boolean isItemValidForSlot(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType()); }
+	public boolean isItemValidForSlot(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType(), MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)); }
 
 	/** 同isItemValidForSlot，带缓存 */
 	@Override
-	public boolean isValidInputItem(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType()); }
+	public boolean isValidInputItem(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType(), MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)); }
 
 	@Override
 	protected int getNeededInput(ItemStackToItemStackRecipe recipe, ItemStack inputStack) { return MekCentrifugeFactoryHelper.getNeededInput(recipe, inputStack); }
@@ -172,7 +182,11 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	/** 只查SMELTING配方，PB配方由tryProcessPbRecipe独立处理 */
 	@Override
-	protected ItemStackToItemStackRecipe findRecipe(int process, @NotNull ItemStack fallbackInput, @NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) { return MekCentrifugeFactoryHelper.findSmeltingRecipe(getRecipeType(), level, fallbackInput, outputSlot); }
+	protected ItemStackToItemStackRecipe findRecipe(int process, @NotNull ItemStack fallbackInput, @NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) {
+		return MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)
+				? MekCentrifugeFactoryHelper.findSmeltingRecipe(getRecipeType(), level, fallbackInput, outputSlot)
+				: null;
+	}
 
 	/** 支持PB配方输出兼容性检查，带缓存避免SFM/AE2高频调用重复查配方 */
 	@Override
@@ -210,7 +224,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** PB配方存在时返回null，阻止SMELTING管线抢占输入 */
 	@Nullable
 	@Override
-	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) { return CentrifugeFactoryCommonLogic.getRecipe(inputHandlers, cacheIndex, pbProcessor, this::findFirstRecipe); }
+	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) {
+		return CentrifugeFactoryCommonLogic.getRecipe(inputHandlers, cacheIndex, pbProcessor, this::findFirstRecipe,
+				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this));
+	}
 
 	@NotNull
 	@Override
@@ -392,6 +409,14 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** Task 9: MULTI_PER_FLUID 按索引返回槽位;SINGLE 模式 fallback 到主槽 */
 	@Override
 	public IExtendedFluidTank fluidOutputTank(int index) { return MultiFluidTankHostHelper.fluidOutputTank(fluidOutputHolder, fluidOutputTank, index); }
+
+	@Override
+	public void productivebeesgenesis$onAe2FluidPushComplete() {
+		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
+			multiHolder.reclaimEmptyTanks();
+			fluidOutputTankCount = multiHolder.getTankCount();
+		}
+	}
 	/** Task 12: 检查流体槽类型不匹配 — SINGLE 主槽类型不同返回 true;MULTI_PER_FLUID 委托 MultiFluidTankHolder.isTypeMismatch */
 	@Override
 	public boolean isFluidTankTypeMismatch(FluidStack stack) { return MultiFluidTankHostHelper.isFluidTankTypeMismatch(fluidOutputHolder, fluidOutputTank, stack); }
@@ -447,7 +472,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public int getTicksForBase(int baseTime) { return CentrifugeFactoryCommonLogic.getTicksForBase(this, baseTime, pbUpgradeDelegate); }
 
 	@Override
-	public boolean containsSmeltingInput(ItemStack input) { return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input); }
+	public boolean containsSmeltingInput(ItemStack input) {
+		return MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)
+				&& MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
+	}
 
 	@Override
 	public FactoryPbContextDelegate productivebeesgenesis$getDelegate() { return delegate; }

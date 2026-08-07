@@ -22,6 +22,7 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 
@@ -123,7 +124,8 @@ public final class MekApiaryEMEBlockType {
 			EMExtraFactoryTier tier) {
 		// 能量配置：EME 模式，storage = max(origStorage, origUsage) * tier.processes
 		long usage = 50L;
-		long storage = Math.max(20_000L, usage) * tier.processes;
+		int beeSlots = FactoryApiaryConfig.forEMETier(tier).beeSlotCount;
+		long storage = Math.max(20_000L, usage) * Math.max(tier.processes, beeSlots);
 
 		var builder = Machine.MachineBuilder
 				.createMachine(() -> EME_APIARY_FACTORY_TILES.get(tier),

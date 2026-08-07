@@ -7,11 +7,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import appeng.api.config.Actionable;
-import appeng.api.networking.energy.IEnergySource;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
-import appeng.api.storage.StorageHelper;
 
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -32,7 +30,7 @@ public final class Ae2LeftoverReturner {
 	private Ae2LeftoverReturner() {}
 
 	/**
-	 * 将剩余物品回送到 ME 网络 — 改用 {@link StorageHelper#poweredInsert} + 两层兜底保证物品不丢失。
+	 * 将剩余物品回送到 ME 网络，并用两层兜底保证物品不丢失。
 	 * <p>
 	 * Task 2 数据完整性修复：
 	 * <ol>
@@ -52,7 +50,6 @@ public final class Ae2LeftoverReturner {
 	 * @param leftover       剩余物品栈（非空）
 	 * @param actionSource   AE2 操作源
 	 * @param returnBackoff  回送退避状态（Task 10，可为 null）
-	 * @param energySource   AE2 能量源（用于 poweredInsert 能量支付）
 	 * @param level          当前世界（Task 1 后保留参数兼容性，当前实现未使用）
 	 * @param pos            方块位置（Task 1 后保留参数兼容性，当前实现未使用）
 	 * @param inputSlots     输入槽列表（兜底回插目标）
@@ -60,7 +57,7 @@ public final class Ae2LeftoverReturner {
 	 */
 	public static int returnLeftoverToMe(MEStorage meStorage, AEItemKey key, ItemStack leftover,
 			IActionSource actionSource, Ae2PushBackoff returnBackoff,
-			IEnergySource energySource, Level level, BlockPos pos,
+			Level level, BlockPos pos,
 			List<IInventorySlot> inputSlots) {
 		int remaining = leftover.getCount();
 		if (remaining <= 0) return 0;
@@ -70,8 +67,7 @@ public final class Ae2LeftoverReturner {
 		for (int attempt = 1; attempt <= maxRetries; attempt++) {
 			if (remaining <= 0) break;
 			try {
-				long inserted = StorageHelper.poweredInsert(
-						energySource, meStorage, key, remaining, actionSource, Actionable.MODULATE);
+				long inserted = meStorage.insert(key, remaining, Actionable.MODULATE, actionSource);
 				remaining -= SaturatingMath.saturatingToInt(inserted);
 			} catch (LinkageError | RuntimeException e) {
 				// LinkageError 覆盖 AE2 版本不兼容；RuntimeException 覆盖运行时异常。

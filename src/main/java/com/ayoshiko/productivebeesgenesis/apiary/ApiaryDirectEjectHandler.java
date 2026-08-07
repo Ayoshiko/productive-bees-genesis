@@ -7,8 +7,12 @@ import org.jetbrains.annotations.Nullable;
 
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
+import mekanism.api.RelativeSide;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.tile.component.config.ConfigInfo;
+import mekanism.common.tile.component.config.DataType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
@@ -20,7 +24,8 @@ import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 /**
  * 蜂箱→离心机直连快速弹出通道
  * <br/>
- * 当蜂箱相邻方块是离心机时，直接将蜂箱输出槽中的蜜脾转移到离心机输入槽，
+ * 当蜂箱按物品侧面配置（输出面）指向的相邻方块是离心机时，直接将蜂箱输出槽中的蜜脾转移到离心机输入槽；
+ * 未配置任何输出面时回退到任意相邻离心机（兼容旧存档）。
  * 绕过 Mekanism Ejector 的节流逻辑（阻塞冷却、单 tick 次数上限等）
  * 和 Capability 系统调用开销，最大化直连弹出效率。
  * <p>
@@ -39,6 +44,7 @@ import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
  *   <li>第一轮：仅遍历同类型非空输入槽（堆叠合并优先），跳过无关槽位</li>
  *   <li>第二轮：按剩余空间降序遍历空槽（负载均衡），避免前几个空槽被优先填满</li>
  *   <li>短路优化：若虚拟栈数量 ≤ 最大空槽剩余空间，直接插入该空槽</li>
+ *   <li>跨机器路由：支持一台蜂箱直连多台离心机，round-robin 起播点轮转实现负载均衡</li>
  * </ol>
  * <p>
  * 性能优化（vs 旧版）：
@@ -57,13 +63,24 @@ class ApiaryDirectEjectHandler {
 	/** 所属蜂箱方块实体 */
 	private final TileEntityMekApiary apiary;
 
-	/** 缓存的相邻离心机位置 — 避免每 tick 遍历所有方向查找 */
+	/** 缓存的直连目标列表 — 避免每 tick 遍历所有方向查找 */
 	@Nullable
-	private BlockPos cachedCentrifugePos;
+	private List<Target> cachedTargets;
 
-	/** 缓存的离心机方向 — 从蜂箱指向离心机 */
-	@Nullable
-	private Direction cachedCentrifugeSide;
+	/** 跨机器轮转起始索引 — 用于多台离心机间的负载均衡 */
+	private int roundRobinIndex = 0;
+
+	/** 缓存对应的物品侧面配置签名（含朝向）— 配置或朝向变化时强制重建目标列表 */
+	private int cachedConfigVersion = -1;
+
+	/** 直连目标：相邻离心机的位置 */
+	private static final class Target {
+		final BlockPos pos;
+
+		Target(BlockPos pos) {
+			this.pos = pos;
+		}
+	}
 
 	/**
 	 * 脏标记 — 产出写入输出槽时设置，触发下一次 tick 立即执行直连弹出检测
@@ -206,23 +223,14 @@ class ApiaryDirectEjectHandler {
 			return true;
 		}
 
-		// 查找相邻离心机
-		IMekCentrifugeTile centrifuge = findAdjacentCentrifuge(level);
-		if (centrifuge == null) {
+		// 查找直连目标：优先按侧面配置的输出面路由；未配置任何输出面时回退到任意相邻离心机
+		List<Target> targets = findDirectEjectTargets(level);
+		if (targets.isEmpty()) {
 			needsEjectCheck = false;
 			return true;
 		}
 
 		List<BasicInventorySlot> outputSlots = apiary.getOutputSlots();
-		int inputSlotCount = centrifuge.productivebeesgenesis$getInputSlotCount();
-
-		if (inputSlotCount <= 0) {
-			needsEjectCheck = false;
-			return true;
-		}
-
-		// Task 3: 预扫描所有输入槽状态到复用数组
-		inputSlotManager.preScanInputSlots(centrifuge, inputSlotCount);
 
 		// Task 4: 合并蜂箱输出槽中相同类型的物品为虚拟栈
 		mergeOutputSlotsByType(outputSlots);
@@ -230,40 +238,54 @@ class ApiaryDirectEjectHandler {
 		// 模块5：统计本次转移的物品总数（含输出槽+缓冲区），用于决定是否重置退避/递增失败计数
 		int transferredCount = 0;
 
-		// 对每个虚拟栈执行两轮分配
+		// 对每个虚拟栈执行跨机器两轮分配（round-robin 起播点实现多台离心机负载均衡）
+		int start = roundRobinIndex % targets.size();
+		roundRobinIndex = (start + 1) % targets.size();
 		for (int vIdx = 0; vIdx < mergedVirtualStacks.size(); vIdx++) {
 			ItemStack virtualStack = mergedVirtualStacks.get(vIdx);
 			if (virtualStack.isEmpty()) continue;
 
 			int originalCount = virtualStack.getCount();
-			// 第一轮：填满同类型非空输入槽（堆叠合并优先）
-			List<Integer> sameTypeSlots = inputSlotManager.findSameTypeSlots(virtualStack, inputSlotCount);
-			for (int inputIdx : sameTypeSlots) {
-				if (virtualStack.isEmpty()) break;
-				virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, false);
-			}
+			for (int t = 0; t < targets.size() && !virtualStack.isEmpty(); t++) {
+				Target target = targets.get((start + t) % targets.size());
+				IMekCentrifugeTile centrifuge = resolveTarget(level, target);
+				if (centrifuge == null) {
+					// 缓存目标已失效（方块被移除/替换），下 tick 重新扫描
+					cachedTargets = null;
+					continue;
+				}
+				// 该机器不接受此类输入（如熔炉兼容关闭）时换下一台
+				if (!centrifuge.productivebeesgenesis$isValidInput(virtualStack)) continue;
 
-			// 第二轮：使用空输入槽（按剩余空间降序，负载均衡）
-			// 若第一轮已排空虚拟栈，跳过第二轮避免不必要的 findEmptySlotsSortedByRemainingDesc 调用
-			if (virtualStack.isEmpty()) {
-				transferredCount += originalCount;
-				continue;
-			}
-			List<Integer> emptySlots = inputSlotManager.findEmptySlotsSortedByRemainingDesc(centrifuge, virtualStack, inputSlotCount);
-			// 短路优化：findEmptySlotsSortedByRemainingDesc 返回降序排序列表，首项为最大空槽。
-			// 若虚拟栈数量 ≤ 首项剩余空间，一次插入即可排空虚拟栈，
-			// 后续 virtualStack.isEmpty() 触发 break，跳过剩余空槽遍历。
-			for (int inputIdx : emptySlots) {
+				int inputSlotCount = centrifuge.productivebeesgenesis$getInputSlotCount();
+				if (inputSlotCount <= 0) continue;
+
+				// Task 3: 预扫描当前机器输入槽状态到复用数组
+				inputSlotManager.preScanInputSlots(centrifuge, inputSlotCount);
+
+				// 第一轮：填满同类型非空输入槽（堆叠合并优先）
+				List<Integer> sameTypeSlots = inputSlotManager.findSameTypeSlots(virtualStack, inputSlotCount);
+				for (int inputIdx : sameTypeSlots) {
+					if (virtualStack.isEmpty()) break;
+					virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, false);
+				}
 				if (virtualStack.isEmpty()) break;
-				virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, true);
+
+				// 第二轮：使用空输入槽（按剩余空间降序，负载均衡）
+				List<Integer> emptySlots = inputSlotManager.findEmptySlotsSortedByRemainingDesc(
+						centrifuge, virtualStack, inputSlotCount);
+				for (int inputIdx : emptySlots) {
+					if (virtualStack.isEmpty()) break;
+					virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, true);
+				}
 			}
 			// 模块5：累计本次虚拟栈转移的物品数
 			transferredCount += originalCount - virtualStack.getCount();
 		}
 
-		// 模块5：从 ApiaryOutputBuffer 转移物品到离心机输入槽剩余空间
+		// 模块5：从 ApiaryOutputBuffer 转移物品到所有直连离心机输入槽剩余空间
 		// 解决缓冲区持续积压问题（输出槽满载时产物被困缓冲区）
-		transferredCount += tryEjectFromBuffer(centrifuge, inputSlotCount);
+		transferredCount += tryEjectFromBuffers(level, targets);
 
 		// 模块5：根据转移结果更新退避与失败计数
 		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
@@ -284,42 +306,53 @@ class ApiaryDirectEjectHandler {
 	}
 
 	/**
-	 * 模块5：从 ApiaryOutputBuffer 转移物品到离心机输入槽
+	 * 模块5：从 ApiaryOutputBuffer 转移物品到所有直连离心机输入槽
 	 * <br/>
-	 * 当蜂箱输出槽已通过直连弹出清空、缓冲区仍有积压时，复用离心机输入槽剩余空间
+	 * 当蜂箱输出槽已通过直连弹出清空、缓冲区仍有积压时，复用各离心机输入槽剩余空间
 	 * 直接转移缓冲区物品，绕过"缓冲区→蜂箱输出槽→离心机"的两跳路径。
 	 * <p>
 	 * 性能：
 	 * <ul>
 	 *   <li>缓冲区为空时通过 getBufferedGroupCount() O(1) 短路（synchronized 但开销极低）</li>
 	 *   <li>委托 {@link ApiaryOutputBuffer#tryRedistributeToExternalSlots}，内部使用预扫描直写</li>
-	 *   <li>bufferInputSlots 复用，避免每 tick 分配 ArrayList</li>
+	 *   <li>bufferInputSlots 复用，避免每次转移分配 ArrayList</li>
 	 * </ul>
 	 *
-	 * @param centrifuge     离心机接口
-	 * @param inputSlotCount 离心机输入槽数量
+	 * @param level   世界实例
+	 * @param targets 直连离心机目标列表
 	 * @return 实际转移的物品总数
 	 */
-	private int tryEjectFromBuffer(IMekCentrifugeTile centrifuge, int inputSlotCount) {
+	private int tryEjectFromBuffers(Level level, List<Target> targets) {
 		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
 		// O(1) 短路：缓冲区为空时直接返回，避免无效的输入槽收集与 synchronized 调用
 		if (outputBuffer.getBufferedGroupCount() <= 0) return 0;
 
-		// 收集离心机输入槽列表（复用 bufferInputSlots，clear 不缩容）
-		bufferInputSlots.clear();
-		for (int i = 0; i < inputSlotCount; i++) {
-			IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(i);
-			if (slot != null) {
-				bufferInputSlots.add(slot);
+		int total = 0;
+		for (Target target : targets) {
+			IMekCentrifugeTile centrifuge = resolveTarget(level, target);
+			if (centrifuge == null) {
+				cachedTargets = null;
+				continue;
 			}
+			int inputSlotCount = centrifuge.productivebeesgenesis$getInputSlotCount();
+			if (inputSlotCount <= 0) continue;
+
+			// 收集该离心机输入槽列表（复用 bufferInputSlots，clear 不缩容）
+			bufferInputSlots.clear();
+			for (int i = 0; i < inputSlotCount; i++) {
+				IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(i);
+				if (slot != null) {
+					bufferInputSlots.add(slot);
+				}
+			}
+			if (bufferInputSlots.isEmpty()) continue;
+
+			// 按各机器自己的输入验证器过滤（每台熔炉兼容开关可能不同）
+			total += outputBuffer.tryRedistributeToExternalSlots(
+					bufferInputSlots,
+					centrifuge::productivebeesgenesis$isValidInput);
 		}
-
-		if (bufferInputSlots.isEmpty()) return 0;
-
-		// 委托 ApiaryOutputBuffer 转移，传入离心机输入验证器过滤非离心配方物品
-		return outputBuffer.tryRedistributeToExternalSlots(
-				bufferInputSlots,
-				centrifuge::productivebeesgenesis$isValidInput);
+		return total;
 	}
 
 	/**
@@ -386,7 +419,8 @@ class ApiaryDirectEjectHandler {
 			int inputIdx, boolean requireEmpty) {
 
 		if (virtualStack.isEmpty()) return virtualStack;
-		if (!centrifuge.productivebeesgenesis$isValidInput(virtualStack)) return ItemStack.EMPTY;
+		// 该机器不接受时返回原栈，由调用方尝试下一台机器（不损耗虚拟栈）
+		if (!centrifuge.productivebeesgenesis$isValidInput(virtualStack)) return virtualStack;
 
 		// Task 3: 使用预扫描数组值，避免 targetSlot.getStack() API 调用
 		ItemStack targetStack = inputSlotManager.getInputStack(inputIdx);
@@ -469,41 +503,89 @@ class ApiaryDirectEjectHandler {
 	}
 
 	/**
-	 * 查找相邻的离心机
+	 * 查找直连目标离心机列表
 	 * <br/>
-	 * 使用缓存优化：若上次找到的位置仍有效则直接返回，
-	 * 否则遍历所有方向重新查找。
+	 * 路由规则：若蜂箱物品侧面配置存在输出面（OUTPUT/INPUT_OUTPUT），
+	 * 只直连这些面对应的相邻离心机；若未配置任何输出面，回退到任意相邻离心机（兼容旧存档）。
+	 * <p>
+	 * 缓存优化：缓存列表仍有效时直接返回；失效（方块被移除/替换）时重新扫描。
 	 *
 	 * @param level 世界实例
-	 * @return 离心机的 IMekCentrifugeTile 接口，未找到返回 null
+	 * @return 直连目标列表，可能为空
 	 */
-	@Nullable
-	private IMekCentrifugeTile findAdjacentCentrifuge(Level level) {
+	private List<Target> findDirectEjectTargets(Level level) {
 		BlockPos myPos = apiary.getBlockPos();
+		Direction facing = apiary.getDirection();
+		ConfigInfo itemConfig = apiary.getConfig().getConfig(TransmissionType.ITEM);
+		int configVersion = computeConfigVersion(facing, itemConfig);
 
-		// 优先使用缓存
-		if (cachedCentrifugePos != null && cachedCentrifugeSide != null) {
-			BlockEntity be = level.getBlockEntity(cachedCentrifugePos);
-			if (be instanceof IMekCentrifugeTile centrifuge && !be.isRemoved()) {
-				return centrifuge;
+		// 优先使用缓存：配置签名一致且所有方块仍有效时直接返回，不重复扫描全部方向
+		if (cachedTargets != null && configVersion == cachedConfigVersion) {
+			boolean allValid = true;
+			for (Target target : cachedTargets) {
+				BlockEntity be = level.getBlockEntity(target.pos);
+				if (!(be instanceof IMekCentrifugeTile) || be.isRemoved()) {
+					allValid = false;
+					break;
+				}
 			}
-			// 缓存失效，清空
-			cachedCentrifugePos = null;
-			cachedCentrifugeSide = null;
+			if (allValid) return cachedTargets;
+			cachedTargets = null;
 		}
 
-		// 遍历所有方向查找
+		boolean hasConfiguredOutput = hasConfiguredOutputSide(itemConfig);
+
+		List<Target> found = null;
 		for (Direction side : Direction.values()) {
+			if (hasConfiguredOutput) {
+				// 仅路由到配置为输出面的方向
+				if (itemConfig == null) continue;
+				RelativeSide relativeSide = RelativeSide.fromDirections(facing, side);
+				DataType dataType = itemConfig.getDataType(relativeSide);
+				if (!itemConfig.isSideEnabled(relativeSide) || dataType == null || !dataType.canOutput()) {
+					continue;
+				}
+			}
 			BlockPos adjacentPos = myPos.relative(side);
 			BlockEntity be = level.getBlockEntity(adjacentPos);
 			if (be instanceof IMekCentrifugeTile centrifuge && !be.isRemoved()) {
-				cachedCentrifugePos = adjacentPos;
-				cachedCentrifugeSide = side;
-				return centrifuge;
+				if (found == null) found = new ArrayList<>(4);
+				found.add(new Target(adjacentPos));
 			}
 		}
+		cachedConfigVersion = configVersion;
+		cachedTargets = found == null ? List.of() : found;
+		return cachedTargets;
+	}
 
-		return null;
+	/** 计算物品侧面配置 + 朝向的轻量签名，配置或旋转变化时目标缓存自动失效 */
+	private int computeConfigVersion(Direction facing, @Nullable ConfigInfo itemConfig) {
+		int version = facing.ordinal();
+		if (itemConfig != null) {
+			for (RelativeSide relativeSide : RelativeSide.values()) {
+				DataType dataType = itemConfig.getDataType(relativeSide);
+				version = version * 31 + (dataType == null ? 0 : dataType.ordinal());
+			}
+		}
+		return version;
+	}
+
+	/** 判断物品侧面配置是否存在任何输出面（OUTPUT/INPUT_OUTPUT 等 canOutput 类型） */
+	private boolean hasConfiguredOutputSide(@Nullable ConfigInfo itemConfig) {
+		if (itemConfig == null) return false;
+		for (RelativeSide relativeSide : RelativeSide.values()) {
+			if (!itemConfig.isSideEnabled(relativeSide)) continue;
+			DataType dataType = itemConfig.getDataType(relativeSide);
+			if (dataType != null && dataType.canOutput()) return true;
+		}
+		return false;
+	}
+
+	/** 按缓存目标解析离心机接口，目标失效时返回 null */
+	@Nullable
+	private IMekCentrifugeTile resolveTarget(Level level, Target target) {
+		BlockEntity be = level.getBlockEntity(target.pos);
+		return be instanceof IMekCentrifugeTile centrifuge && !be.isRemoved() ? centrifuge : null;
 	}
 
 	/**
@@ -513,7 +595,6 @@ class ApiaryDirectEjectHandler {
 	 * 确保下次弹出时重新查找。
 	 */
 	void clearCache() {
-		cachedCentrifugePos = null;
-		cachedCentrifugeSide = null;
+		cachedTargets = null;
 	}
 }

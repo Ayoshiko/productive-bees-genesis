@@ -33,7 +33,8 @@ final class MyriadCreationsLogger {
 	private final LogThrottle[] fullLogThrottles;
 
 	/** 全局"产物无法完全插入/流体槽已满"日志冷却器 — 所有进程共享，5 秒内仅输出首条 */
-	final LogThrottle globalFullLogThrottle = new LogThrottle();
+	/** Continuous output backpressure is expected; report it at most once per minute. */
+	final LogThrottle globalFullLogThrottle = new LogThrottle(1200L);
 
 	/** 每进程的"类型缓存为空"日志冷却器 */
 	private final LogThrottle[] emptyCacheLogThrottles;

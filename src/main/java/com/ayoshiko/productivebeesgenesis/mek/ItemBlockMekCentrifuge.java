@@ -16,18 +16,23 @@ import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import mekanism.api.Upgrade;
 import mekanism.api.text.EnumColor;
 import mekanism.api.text.TextComponentUtil;
+import mekanism.api.security.IItemSecurityUtils;
 import mekanism.common.MekanismLang;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
+import mekanism.common.attachments.containers.fluid.AttachedFluids;
+import mekanism.common.attachments.containers.item.AttachedItems;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
+import mekanism.common.block.attribute.Attributes.AttributeInventory;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
 import mekanism.common.block.interfaces.IHasDescription;
 import mekanism.common.item.block.ItemBlockTooltip;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import mekanism.common.util.text.UpgradeDisplay;
+import mekanism.common.util.text.BooleanStateDisplay.YesNo;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
@@ -180,21 +185,22 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	@Override
 	protected void addDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
-		boolean superSucceeded = false;
-		try {
-			super.addDetails(stack, context, tooltip, flag);
-			superSucceeded = true;
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("显示离心机Shift详情时异常（可能为拆卸后组件缺失）", e);
+		// Mekanism's implementation rebuilds attachment-backed fluid tanks through the
+		// registered creator. Factory items may carry N tanks while older creators only
+		// describe one, so read the immutable attachment data directly instead.
+		IItemSecurityUtils.INSTANCE.addSecurityTooltip(stack, tooltip);
+		addTypeDetails(stack, context, tooltip, flag);
+		addCentrifugeFluidDetails(stack, context, tooltip);
+		if (Attribute.has(getBlock(), AttributeInventory.class)) {
+			AttachedItems attachedItems = stack.get(MekanismDataComponents.ATTACHED_ITEMS);
+			boolean hasInventory = attachedItems != null
+					&& attachedItems.containers().stream().anyMatch(item -> !item.isEmpty());
+			tooltip.add(MekanismLang.HAS_INVENTORY.translateColored(
+					EnumColor.AQUA, EnumColor.GRAY, YesNo.of(hasInventory, true)));
 		}
-		// 修复 v14：super 抛异常时独立渲染 UPGRADES tooltip（防重复：super 成功时不重复渲染）
-		if (!superSucceeded) {
-			addMekUpgradesDetails(stack, tooltip);
-		}
+		addMekUpgradesDetails(stack, tooltip);
 		// 追加离心机专属 Shift 详情 — 各 PB 升级类型安装数量
 		addCentrifugeSpecificDetails(stack, tooltip);
-		// 修复 5：追加工厂离心机 MultiFluidTankHolder 中的流体详情
-		addCentrifugeFluidDetails(stack, context, tooltip);
 	}
 
 	/**
@@ -277,37 +283,34 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	private void addCentrifugeFluidDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
 			@NotNull List<Component> tooltip) {
 		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
-		if (customNbt == null) return;
-		if (!customNbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, Tag.TAG_COMPOUND)) return;
-
-		CompoundTag root = customNbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
-		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
-		if (list.isEmpty()) return;
-
-		// 第一遍扫描确定是否有非空流体，避免显示空 header
-		boolean hasNonEmptyFluid = false;
-		for (int i = 0; i < list.size(); i++) {
-			CompoundTag entry = list.getCompound(i);
-			FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
-			if (!fluid.isEmpty()) {
-				hasNonEmptyFluid = true;
-				break;
+		List<FluidStack> storedFluids = new java.util.ArrayList<>();
+		if (customNbt != null
+				&& customNbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, Tag.TAG_COMPOUND)) {
+			CompoundTag root = customNbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
+			ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
+			for (int i = 0; i < list.size(); i++) {
+				CompoundTag entry = list.getCompound(i);
+				FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
+				if (!fluid.isEmpty()) storedFluids.add(fluid);
 			}
 		}
-		if (!hasNonEmptyFluid) return;
+		if (storedFluids.isEmpty()) {
+			AttachedFluids attachedFluids = stack.get(MekanismDataComponents.ATTACHED_FLUIDS);
+			if (attachedFluids != null) {
+				for (FluidStack fluid : attachedFluids.containers()) {
+					if (!fluid.isEmpty()) storedFluids.add(fluid);
+				}
+			}
+		}
+		if (storedFluids.isEmpty()) return;
 
-		// 显示 header + 每个非空流体的名称和数量
 		tooltip.add(Component.translatable("tooltip.productivebeesgenesis.fluid_stored_header")
 				.withStyle(ChatFormatting.DARK_AQUA));
-		for (int i = 0; i < list.size(); i++) {
-			CompoundTag entry = list.getCompound(i);
-			FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
-			if (!fluid.isEmpty()) {
-				tooltip.add(Component.literal(" ")
-						.append(Component.translatable("tooltip.productivebeesgenesis.fluid_entry",
-								fluid.getHoverName(), fluid.getAmount()))
-						.withStyle(ChatFormatting.GRAY));
-			}
+		for (FluidStack fluid : storedFluids) {
+			tooltip.add(Component.literal(" ")
+					.append(Component.translatable("tooltip.productivebeesgenesis.fluid_entry",
+							fluid.getHoverName(), fluid.getAmount()))
+					.withStyle(ChatFormatting.GRAY));
 		}
 	}
 

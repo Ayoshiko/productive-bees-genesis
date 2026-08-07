@@ -102,11 +102,18 @@ public final class ApiaryOutputBuffer {
 			if (stack == null || stack.isEmpty()) continue;
 			// 模块2.3.2：拆分 count > 99 的栈为多个 ≤99 的子栈，避免 save 时 DataResult 范围校验异常
 			int remaining = stack.getCount();
-			while (remaining > 0) {
+			for (ItemStack existing : bufferedStacks) {
+				if (!ItemStack.isSameItemSameComponents(existing, stack)) continue;
+				long merged = (long) existing.getCount() + remaining;
+				existing.setCount((int) Math.min(Integer.MAX_VALUE, merged));
+				remaining = (int) Math.max(0L, merged - Integer.MAX_VALUE);
+				if (remaining == 0) break;
+			}
+			if (remaining <= 0) continue;
+			if (bufferedStacks.size() >= MAX_BUFFER_GROUPS) {
 				// 代码审查修复：每次 addLast 前检查缓冲区上限
 				// 原实现仅在 for 循环入口检查，while 循环内持续 addLast 会突破 MAX_BUFFER_GROUPS 上限
 				// 触发场景：高产基因满级 count=8808，拆分出 89 个子栈，远超 MAX_BUFFER_GROUPS=64
-				if (bufferedStacks.size() >= MAX_BUFFER_GROUPS) {
 					// FIFO 淘汰最旧组防止 OOM — ArrayDeque.pollFirst O(1)
 					bufferedStacks.pollFirst();
 					// 模块2.3.1：使用 LogThrottle 5分钟节流替代直接 LOGGER.warn，避免刷屏
@@ -114,11 +121,8 @@ public final class ApiaryOutputBuffer {
 					LogThrottle.warnWithCooldown("apiary_output_buffer_full", 300_000L,
 							"ApiaryOutputBuffer 已满（{}），丢弃最旧产物组，近5分钟累计丢弃 {} 组",
 							MAX_BUFFER_GROUPS, discardedCount.get());
-				}
-				int splitSize = Math.min(remaining, 99);
-				bufferedStacks.addLast(stack.copyWithCount(splitSize));
-				remaining -= splitSize;
 			}
+			bufferedStacks.addLast(stack.copyWithCount(remaining));
 		}
 		tile.setChanged();
 	}
@@ -371,6 +375,53 @@ public final class ApiaryOutputBuffer {
 		}
 
 		return totalTransferred;
+	}
+
+	/**
+	 * 模块6：将缓冲区物品直接推送到 AE2 网络（绕过输出槽中转）
+	 * <br/>
+	 * 当输出槽被待离心蜜脾占满、缓冲区里积压了非蜜脾物品或多余蜜脾时，
+	 * 直接调用回调逐组推送，避免等待输出槽腾出空间（最长 8 tick 退避）。
+	 * <p>
+	 * 回调返回该组实际被接收的数量（0=完全拒绝）；部分接收时剩余数量保留在缓冲区。
+	 * 与 {@link #tryRedistributeToExternalSlots} 共用 remainingBuffer，调用前已 clear。
+	 *
+	 * @param pushSingle 单组推送回调（返回实际接收数量，异常时按 0 处理）
+	 * @return 实际推送总量；0 表示未推送
+	 */
+	public synchronized int pushToAe(java.util.function.ToIntFunction<ItemStack> pushSingle) {
+		if (bufferedStacks.isEmpty()) return 0;
+		remainingBuffer.clear();
+		int totalPushed = 0;
+		boolean changed = false;
+		for (ItemStack stack : bufferedStacks) {
+			if (stack.isEmpty()) {
+				changed = true;
+				continue;
+			}
+			int pushed = 0;
+			try {
+				pushed = Math.max(0, pushSingle.applyAsInt(stack));
+			} catch (RuntimeException e) {
+				pushed = 0;
+			}
+			if (pushed <= 0) {
+				remainingBuffer.add(stack);
+				continue;
+			}
+			totalPushed += pushed;
+			changed = true;
+			int remaining = stack.getCount() - pushed;
+			if (remaining > 0) {
+				remainingBuffer.add(stack.copyWithCount(remaining));
+			}
+		}
+		if (changed) {
+			bufferedStacks.clear();
+			bufferedStacks.addAll(remainingBuffer);
+			tile.setChanged();
+		}
+		return totalPushed;
 	}
 
 	/**

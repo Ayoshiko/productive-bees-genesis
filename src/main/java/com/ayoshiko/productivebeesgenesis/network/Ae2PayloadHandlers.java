@@ -6,6 +6,7 @@ import java.util.List;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
@@ -112,6 +113,15 @@ final class Ae2PayloadHandlers {
 			host.toggleAeItemOutput();
 		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.FLUID) {
 			host.toggleAeFluidOutput();
+		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.APIARY_DIRECT
+				&& be instanceof com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary apiary) {
+			apiary.toggleDirectAeOutput();
+		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT
+				&& be instanceof com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile) {
+			host.productivebeesgenesis$getAe2StateHolder().toggleCentrifugeDirectAeOutputEnabled();
+			if (be instanceof TileEntityMekanism mekTile) {
+				mekTile.markForSave();
+			}
 		}
 	}
 
@@ -147,6 +157,48 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		host.productivebeesgenesis$toggleAeItemInput();
+	}
+
+	/**
+	 * 服务端处理：切换 per-tile 离心机电力熔炼炉配方兼容开关
+	 * <br/>
+	 * 校验玩家身份、容器匹配、8 格交互距离与全局总开关
+	 * （{@code mekCentrifugeSmeltingCompatEnabled} 关闭时拒绝切换）。
+	 */
+	static void handleToggleSmeltingCompat(ToggleSmeltingCompatPayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
+			return;
+		}
+		if (serverPlayer.level() == null) {
+			return;
+		}
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "smelting_compat_pos_mismatch")) {
+			return;
+		}
+		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
+		if (be == null) {
+			return;
+		}
+		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
+		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
+			LogThrottle.warn("smelting_compat_distance", "玩家 {} 尝试远距离切换熔炉配方兼容：距离 {} 格",
+					serverPlayer.getName().getString(), Math.sqrt(distance));
+			return;
+		}
+		if (!(be instanceof com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile centrifuge)
+				|| !(be instanceof IAe2OutputHostBase host)) {
+			return;
+		}
+		// 全局总开关关闭时不可切换（与 GUI active 状态一致）
+		if (ModConfig.SERVER == null || ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled == null
+				|| !ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled.get()) {
+			return;
+		}
+		host.productivebeesgenesis$getAe2StateHolder().toggleSmeltingCompatEnabled();
+		centrifuge.productivebeesgenesis$onSmeltingCompatChanged();
+		if (be instanceof TileEntityMekanism mekTile) {
+			mekTile.markForSave();
+		}
 	}
 
 	/**

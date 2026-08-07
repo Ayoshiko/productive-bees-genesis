@@ -105,7 +105,7 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 		int baseX = EMEFactoryLayoutHelper.getBaseX(tile.tier);
 		int baseXMult = EMEFactoryLayoutHelper.getBaseXMult(tile.tier);
 		for (GuiProgress bar : GuiMekCentrifugeFactoryHelper.createProgressBars(
-				this, tile.tier.processes,
+				this, tile, tile.tier.processes,
 				i -> tile.getScaledProgress(1, i),
 				i -> tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT, i),
 				baseX, baseXMult)) {

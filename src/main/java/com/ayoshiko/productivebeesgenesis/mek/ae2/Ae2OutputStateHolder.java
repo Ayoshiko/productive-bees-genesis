@@ -126,6 +126,15 @@ public final class Ae2OutputStateHolder {
 	/** 类型轮转索引（用于 N > processCount 时按周期轮转拉取类型） */
 	private volatile int typeRotationIndex = 0;
 
+	/** 上次候选扫描的最后一个 AEItemKey；Object 保持 AE2 可选隔离。 */
+	private volatile Object inputCandidateCursor;
+
+	/** 离心机 per-tile 电力熔炼炉配方兼容开关（默认 false，与全局总开关 AND 关系） */
+	private volatile boolean smeltingCompatEnabled = false;
+
+	/** 离心机新产物优先直接写入 AE；默认关闭以保留本地输出链路。 */
+	private volatile boolean centrifugeDirectAeOutputEnabled = false;
+
 	// ===== AE2 推送退避和计数器状态（Task 2 新增，封装到独立类以控制主类行数 ≤ 500） =====
 	/** 推送退避和计数器状态（per-tile 独立，封装 fluid/item backoff 与计数器） */
 	private final Ae2PushStateHolder pushState = new Ae2PushStateHolder();
@@ -179,6 +188,7 @@ public final class Ae2OutputStateHolder {
 		aeInputFilter = null;
 		// 重置类型轮转索引，方块重建后从 0 开始轮转
 		typeRotationIndex = 0;
+		inputCandidateCursor = null;
 		// Task 21：清空 PendingBatchBuffer（若存在），避免方块重建后残留旧累积量
 		if (pendingBatchBuffer instanceof Ae2PendingBatchBuffer batchBuffer) {
 			batchBuffer.reset();
@@ -188,8 +198,28 @@ public final class Ae2OutputStateHolder {
 		fluidPushKeyCache = null;
 		fluidPushKeyFluidRefs = null;
 		fluidPushKeyComponentsHashes = null;
+		// 熔炉兼容开关重置为默认关闭（与字段声明一致）
+		smeltingCompatEnabled = false;
+		centrifugeDirectAeOutputEnabled = false;
 		// Task 2：重置 AE2 推送退避和计数器状态（fluid/item backoff + 计数器全部归零）
 		pushState.reset();
+	}
+
+	// ===== 离心机熔炉配方兼容开关（per-tile） =====
+
+	/** 获取 per-tile 熔炉配方兼容开关 */
+	public boolean isSmeltingCompatEnabled() { return smeltingCompatEnabled; }
+
+	/** 设置 per-tile 熔炉配方兼容开关 */
+	public void setSmeltingCompatEnabled(boolean enabled) { this.smeltingCompatEnabled = enabled; }
+
+	/** 取反 per-tile 熔炉配方兼容开关 */
+	public void toggleSmeltingCompatEnabled() { this.smeltingCompatEnabled = !this.smeltingCompatEnabled; }
+
+	public boolean isCentrifugeDirectAeOutputEnabled() { return centrifugeDirectAeOutputEnabled; }
+	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) { centrifugeDirectAeOutputEnabled = enabled; }
+	public void toggleCentrifugeDirectAeOutputEnabled() {
+		centrifugeDirectAeOutputEnabled = !centrifugeDirectAeOutputEnabled;
 	}
 
 	// ===== 按槽 AEFluidKey 缓存（Task 24） =====
@@ -418,6 +448,9 @@ public final class Ae2OutputStateHolder {
 		return current;
 	}
 
+	public Object getInputCandidateCursor() { return inputCandidateCursor; }
+	public void setInputCandidateCursor(Object cursor) { inputCandidateCursor = cursor; }
+
 	/** 获取输入过滤器实例(懒初始化,DCL 保证多线程下仅创建一个) */
 	public Ae2InputFilter getOrCreateInputFilter() {
 		Ae2InputFilter local = aeInputFilter;
@@ -445,6 +478,8 @@ public final class Ae2OutputStateHolder {
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_FLUID_OUTPUT, aeFluidOutputEnabled);
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_INPUT, aeItemInputEnabled);
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_INPUT_NBT_IGNORE, aeInputNbtIgnore);
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT, smeltingCompatEnabled);
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT, centrifugeDirectAeOutputEnabled);
 		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
 		if (aeInputFilter != null) {
 			CompoundTag filterTag = new CompoundTag();
@@ -472,6 +507,11 @@ public final class Ae2OutputStateHolder {
 		// NBT 忽略开关默认 true（与字段声明一致），旧存档无此键时回退 true
 		aeInputNbtIgnore = tag.contains("productivebeesgenesis_ae_input_nbt_ignore")
 				? tag.getBoolean("productivebeesgenesis_ae_input_nbt_ignore") : true;
+		// 熔炉配方兼容开关默认 false（与字段声明一致），旧存档无此键时回退 false
+		smeltingCompatEnabled = tag.contains(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT)
+				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT) : false;
+		centrifugeDirectAeOutputEnabled = tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
+				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false;
 		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
 		CompoundTag filterTag = tag.contains("productivebeesgenesis_ae_input_filter")
 				? tag.getCompound("productivebeesgenesis_ae_input_filter") : new CompoundTag();

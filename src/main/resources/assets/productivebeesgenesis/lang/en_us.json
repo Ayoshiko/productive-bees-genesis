@@ -569,7 +569,7 @@
   "productivebeesgenesis.gui.ae2_output.fluid.status.on": "AE: ON",
   "productivebeesgenesis.gui.ae2_output.fluid.status.off": "AE: OFF",
   "productivebeesgenesis.gui.ae2_output.global_disabled": "Enable global AE2 output in config to use this feature",
-  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "Direct centrifuge transfer: ON",
+  "productivebeesgenesis.gui.apiary_direct_eject.enabled": "Direct centrifuge transfer: ON\nSet faces to Output in the item side config to choose which centrifuges to feed (multiple allowed)",
   "productivebeesgenesis.gui.apiary_direct_eject.disabled": "Direct centrifuge transfer: OFF",
   "productivebeesgenesis.gui.ae2_input.toggle": "Input Pull Toggle",
   "productivebeesgenesis.gui.ae2_input.nbt_ignore": "NBT Ignore Toggle",
@@ -864,5 +864,12 @@
   "productivebeesgenesis.configuration.myriad_creations_filter.filterMode": "Myriad Creations Filter Mode",
   "productivebeesgenesis.configuration.myriad_creations_filter.filterMode.tooltip": "Filter mode: DISABLED/BLOCKLIST/WHITELIST",
   "productivebeesgenesis.configuration.myriad_creations_filter.filteredBeeTypes": "Myriad Creations Filtered Bee Types",
-  "productivebeesgenesis.configuration.myriad_creations_filter.filteredBeeTypes.tooltip": "Filtered bee type list (format: modID:beeType)"
+  "productivebeesgenesis.configuration.myriad_creations_filter.filteredBeeTypes.tooltip": "Filtered bee type list (format: modID:beeType)",
+  "productivebeesgenesis.gui.smelting_compat.on": "Smelting recipe compat: ON",
+  "productivebeesgenesis.gui.smelting_compat.off": "Smelting recipe compat: OFF",
+  "productivebeesgenesis.gui.smelting_compat.global_disabled": "Enable global smelting compat toggle in config to use this feature",
+  "productivebeesgenesis.gui.apiary_direct_ae.enabled": "Direct product output to AE: ON\nAccepted products bypass local output slots; rejected products remain local",
+  "productivebeesgenesis.gui.apiary_direct_ae.disabled": "Direct product output to AE: OFF\nProducts use local output slots and can feed adjacent centrifuges",
+  "productivebeesgenesis.gui.centrifuge_direct_ae_output.on": "Direct new products to AE: ON\nAccepted items and fluids bypass local output storage; rejected amounts fall back locally",
+  "productivebeesgenesis.gui.centrifuge_direct_ae_output.off": "Direct new products to AE: OFF\nProducts use local output slots and fluid tanks"
 }

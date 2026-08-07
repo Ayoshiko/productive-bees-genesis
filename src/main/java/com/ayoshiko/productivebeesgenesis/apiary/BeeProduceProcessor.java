@@ -125,6 +125,7 @@ public class BeeProduceProcessor {
 
 	/** 升级处理器引用 — 用于应用生产力倍率 */
 	private final ApiaryUpgradeHandler upgradeHandler;
+	private final TileEntityMekApiary apiary;
 
 	/** 基因采样器产出处理器 — 委托生成 TYPE 基因物品 */
 	private final GeneSampler geneSampler = new GeneSampler();
@@ -150,8 +151,9 @@ public class BeeProduceProcessor {
 	 *
 	 * @param upgradeHandler 升级处理器（提供生产力倍率等）
 	 */
-	public BeeProduceProcessor(ApiaryUpgradeHandler upgradeHandler) {
+	public BeeProduceProcessor(ApiaryUpgradeHandler upgradeHandler, TileEntityMekApiary apiary) {
 		this.upgradeHandler = upgradeHandler;
+		this.apiary = apiary;
 	}
 
 	/**
@@ -316,6 +318,19 @@ public class BeeProduceProcessor {
 		}
 
 		// 批量插入合并后的物品到输出槽
+		if (apiary.isDirectAeOutputEnabled() && !allItems.isEmpty()) {
+			List<ItemStack> aeLeftovers = new ArrayList<>(allItems.size());
+			for (ItemStack stack : allItems) {
+				if (stack.isEmpty()) continue;
+				int accepted = apiary.pushGeneratedItemToAe(stack);
+				if (accepted < stack.getCount()) {
+					ItemStack remaining = stack.copy();
+					remaining.shrink(Math.max(0, accepted));
+					aeLeftovers.add(remaining);
+				}
+			}
+			allItems = aeLeftovers;
+		}
 		List<ItemStack> leftovers = distributeToOutput(slotManager.getOutputSlots(), allItems);
 		// F4: 将未成功插入的剩余产物送入缓冲区，下 tick 重试注入
 		if (!leftovers.isEmpty() && outputBuffer != null) {
@@ -325,7 +340,14 @@ public class BeeProduceProcessor {
 		// 模块 2+3：批量注入累积流体（类型由 BeeFluidOutputResolver 推断）
 		// fluidTemplate 为 EMPTY 时 totalFluidAmount 始终为 0，不会注入
 		if (totalFluidAmount > 0 && !fluidTemplate.isEmpty()) {
-			injectFluid(slotManager.getFluidTank(), fluidTemplate, totalFluidAmount);
+			long remainingFluid = totalFluidAmount;
+			if (apiary.isDirectAeOutputEnabled()) {
+				long accepted = apiary.pushGeneratedFluidToAe(fluidTemplate, remainingFluid);
+				remainingFluid -= Math.min(remainingFluid, Math.max(0L, accepted));
+			}
+			if (remainingFluid > 0) {
+				injectFluid(slotManager.getFluidTank(), fluidTemplate, remainingFluid);
+			}
 		}
 	}
 

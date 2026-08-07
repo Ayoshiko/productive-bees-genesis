@@ -33,6 +33,9 @@ public class TickAccelTracker {
 	/** 当前游戏刻内已调用的次数 — 即加速倍率 M 的原始值 */
 	private int callsInCurrentTick = 0;
 
+	/** Completed call count from the previous real game tick, used by first-call batch work. */
+	private int callsInPreviousTick = 1;
+
 	/**
 	 * 在方块实体 tick 时调用，统计同一游戏刻内的调用次数
 	 * <br/>
@@ -50,6 +53,9 @@ public class TickAccelTracker {
 		if (currentTick == lastGameTick) {
 			callsInCurrentTick++;
 		} else {
+			if (lastGameTick != Long.MIN_VALUE && callsInCurrentTick > 0) {
+				callsInPreviousTick = callsInCurrentTick;
+			}
 			lastGameTick = currentTick;
 			callsInCurrentTick = 1;
 		}
@@ -74,6 +80,9 @@ public class TickAccelTracker {
 		if (currentTick == lastGameTick) {
 			callsInCurrentTick++;
 		} else {
+			if (lastGameTick != Long.MIN_VALUE && callsInCurrentTick > 0) {
+				callsInPreviousTick = callsInCurrentTick;
+			}
 			lastGameTick = currentTick;
 			callsInCurrentTick = 1;
 		}
@@ -97,6 +106,14 @@ public class TickAccelTracker {
 	}
 
 	/**
+	 * Returns the last completed game tick's multiplier. Batch work runs on the first call of
+	 * a new tick, before {@link #getMultiplier()} can observe the later accelerated calls.
+	 */
+	public int getPreviousTickMultiplier() {
+		return Math.min(MAX_MULTIPLIER, Math.max(1, callsInPreviousTick));
+	}
+
+	/**
 	 * 获取未截断的原始调用次数（仅用于调试/测试）
 	 * <br/>
 	 * 返回当前游戏刻内的实际调用次数，未经过 MAX_MULTIPLIER 截断。
@@ -117,5 +134,6 @@ public class TickAccelTracker {
 	public void reset() {
 		lastGameTick = Long.MIN_VALUE;
 		callsInCurrentTick = 0;
+		callsInPreviousTick = 1;
 	}
 }

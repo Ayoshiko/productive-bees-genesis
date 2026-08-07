@@ -12,7 +12,9 @@ import org.jetbrains.annotations.Nullable;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.RecipeCacheLookupMonitorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -62,6 +64,41 @@ import net.neoforged.neoforge.common.util.TriPredicate;
 public final class MekCentrifugeFactoryHelper {
 
 	private MekCentrifugeFactoryHelper() {
+	}
+
+	/** Forces Mekanism to resolve the active recipe again after a per-tile recipe mode change. */
+	public static void invalidateRecipeMonitor(
+			mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor<?> monitor) {
+		if (monitor == null) return;
+		((RecipeCacheLookupMonitorAccessor) monitor).productivebeesgenesis$setCachedRecipe(null);
+		monitor.onChange();
+	}
+
+	/** Cached global smelting-compat master switch (refreshed on config load/reload, volatile read per probe). */
+	private static volatile boolean cachedSmeltingCompatGlobalEnabled = true;
+
+	/** Refresh the cached global smelting-compat master switch (called from ModConfigEvent listeners). */
+	public static void refreshSmeltingCompatConfig() {
+		cachedSmeltingCompatGlobalEnabled = ModConfig.SERVER != null
+				&& ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled != null
+				&& ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled.get();
+	}
+
+	/**
+	 * 判断离心机当前是否允许处理电力熔炼炉（SMELTING）配方。
+	 * <br/>
+	 * 全局总开关 {@code mekCentrifugeSmeltingCompatEnabled} 与 per-tile 开关 AND 关系：
+	 * 总开关关闭或该机器未开启时均不允许熔炉配方，只处理 PB 离心配方。
+	 *
+	 * @param host 离心机宿主（提供 per-tile 状态持有者）
+	 * @return true 表示允许熔炉配方
+	 */
+	public static boolean isSmeltingCompatEnabled(IAe2OutputHostBase host) {
+		if (!cachedSmeltingCompatGlobalEnabled) {
+			return false;
+		}
+		var holder = host.productivebeesgenesis$getAe2StateHolder();
+		return holder != null && holder.isSmeltingCompatEnabled();
 	}
 
 	// ===== 公共常量 =====
@@ -138,8 +175,8 @@ public final class MekCentrifugeFactoryHelper {
 			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack stack,
-			@NotNull PbRecipeProcessor pbProcessor) {
-		if (containsSmeltingInput(recipeType, level, stack)) {
+			@NotNull PbRecipeProcessor pbProcessor, boolean allowSmelting) {
+		if (allowSmelting && containsSmeltingInput(recipeType, level, stack)) {
 			return new InputValidationCache.ValidationResult(true, null, null, false);
 		}
 		RecipeHolder<CentrifugeRecipe> recipe = pbProcessor.findPbRecipe(stack);
@@ -197,7 +234,7 @@ public final class MekCentrifugeFactoryHelper {
 			@NotNull LongConsumer setLastUsage) {
 
 		// 入口刷新缓存 — 替代原 tryProcessPbRecipe 内部的每次调用刷新
-		pbProcessor.refreshFluidTankFullCache(context);
+		pbProcessor.refreshFluidTankFullCacheForTick(context);
 		pbProcessor.refreshEnergyAndOpsCache(context);
 		// 先为本 tick 的不同流体类型各预留一个槽，避免先处理的高产量流体占满所有空槽。
 		pbProcessor.reserveActiveFluidOutputTypes(inputSlots);
@@ -206,7 +243,9 @@ public final class MekCentrifugeFactoryHelper {
 		// 在 PbRecipeProcessor 内部重置共享字段，后续输入槽只能按 1x 处理。
 		int batchMultiplier = pbProcessor.consumeTickMultiplier();
 		// PB配方独立处理 — 只处理非SMELTING配方且输入不为空的进程
-		for (int i = 0; i < processes; i++) {
+		int processStart = pbProcessor.getAndAdvanceProcessStart(processes);
+		for (int processOffset = 0; processOffset < processes; processOffset++) {
+			int i = (processStart + processOffset) % processes;
 			ItemStack input = inputSlots.get(i).getStack();
 			if (input.isEmpty()) {
 				// 空输入：重置缓存并跳过

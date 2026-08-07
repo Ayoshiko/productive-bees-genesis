@@ -47,6 +47,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -85,6 +86,16 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
 		IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost {
+
+	@Override
+	public void productivebeesgenesis$onSmeltingCompatChanged() {
+		validInputCache.clear();
+		inputProducesOutputCache.clear();
+		for (int i = 0; i < tier.processes; i++) {
+			pbProcessor.resetSmeltingCache(i);
+			MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitors[i]);
+		}
+	}
 
 	/** 副输出槽2 — 每进程第3个物品输出槽 */
 	private ExtraFactoryOutputInventorySlot[] tertiaryOutputSlots;
@@ -155,6 +166,11 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 		int baseX = 27;
 		int baseXMult = 19;
+		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
+				() -> level == null ? Long.MIN_VALUE : level.getGameTime(),
+				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
+						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
+						productivityParallelModifier()));
 
 		for (int i = 0; i < tier.processes; i++) {
 			int xPos = baseX + (i * baseXMult);
@@ -177,6 +193,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 					this, i, outputSlot, secondaryOutputSlot, lookupMonitor, xPos, 13);
 			// Task 7: 注入输入槽分等级堆叠倍率（按 ExtraFactoryTier.ordinal 索引配置，替换 ME 默认 8<<tier 倍率）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(CentrifugeInputStackMultipliers.forMEFactory(tier.ordinal()));
+			externalInputPolicy.register(inputSlot);
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE, getWarningCheck(RecipeError.NOT_ENOUGH_INPUT, index)));
@@ -206,11 +223,11 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 	/** 同时查找SMELTING和PB配方，带缓存避免高频探测重复查配方 */
 	@Override
-	public boolean isItemValidForSlot(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType()); }
+	public boolean isItemValidForSlot(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType(), MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)); }
 
 	/** 同isItemValidForSlot，带缓存 */
 	@Override
-	public boolean isValidInputItem(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType()); }
+	public boolean isValidInputItem(@NotNull ItemStack stack) { return CentrifugeFactoryCommonLogic.isItemValidForSlot(level, stack, validInputCache, pbProcessor, getRecipeType(), MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)); }
 
 	@Override
 	protected int getNeededInput(ItemStackToItemStackRecipe recipe, ItemStack inputStack) { return MekCentrifugeFactoryHelper.getNeededInput(recipe, inputStack); }
@@ -220,7 +237,11 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 	/** 只查SMELTING配方，PB配方由tryProcessPbRecipe独立处理 */
 	@Override
-	protected ItemStackToItemStackRecipe findRecipe(int process, @NotNull ItemStack fallbackInput, @NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) { return MekCentrifugeFactoryHelper.findSmeltingRecipe(getRecipeType(), level, fallbackInput, outputSlot); }
+	protected ItemStackToItemStackRecipe findRecipe(int process, @NotNull ItemStack fallbackInput, @NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) {
+		return MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)
+				? MekCentrifugeFactoryHelper.findSmeltingRecipe(getRecipeType(), level, fallbackInput, outputSlot)
+				: null;
+	}
 
 	/** 支持PB配方输出兼容性检查，带缓存避免SFM/AE2高频调用重复查配方 */
 	@Override
@@ -277,7 +298,10 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	/** PB配方存在时返回null，阻止SMELTING管线抢占输入 */
 	@Nullable
 	@Override
-	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) { return CentrifugeFactoryCommonLogic.getRecipe(inputHandlers, cacheIndex, pbProcessor, this::findFirstRecipe); }
+	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) {
+		return CentrifugeFactoryCommonLogic.getRecipe(inputHandlers, cacheIndex, pbProcessor, this::findFirstRecipe,
+				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this));
+	}
 
 	@NotNull
 	@Override
@@ -457,6 +481,14 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	public boolean isMultiFluidModeSynced() { return getOrCreateDelegate().isMultiFluidModeSynced(); }
 	@Override
 	public IExtendedFluidTank fluidOutputTank(int index) { return getOrCreateDelegate().fluidOutputTank(index); }
+
+	@Override
+	public void productivebeesgenesis$onAe2FluidPushComplete() {
+		if (getOrCreateDelegate().getFluidOutputHolder() instanceof MultiFluidTankHolder multiHolder) {
+			multiHolder.reclaimEmptyTanks();
+			getOrCreateDelegate().setFluidOutputTankCount(multiHolder.getTankCount());
+		}
+	}
 	@Override
 	public boolean isFluidTankTypeMismatch(FluidStack stack) { return getOrCreateDelegate().isFluidTankTypeMismatch(stack); }
 	@Override
@@ -488,6 +520,9 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	public int productivityModifier() { return CentrifugeFactoryCommonLogic.productivityModifier(pbUpgradeDelegate); }
 
 	@Override
+	public int productivityParallelModifier() { return pbUpgradeDelegate.getProductivityParallelModifier(); }
+
+	@Override
 	public int operationsPerTick() { return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED); }
 
 	/** 重写getOperationsPerTick — 委托给动态计算的operationsPerTick()，使SMELTING路径支持STACK升级 */
@@ -498,7 +533,10 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	public int getTicksForBase(int baseTime) { return CentrifugeFactoryCommonLogic.getTicksForBase(this, baseTime, pbUpgradeDelegate); }
 
 	@Override
-	public boolean containsSmeltingInput(ItemStack input) { return MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input); }
+	public boolean containsSmeltingInput(ItemStack input) {
+		return MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)
+				&& MekCentrifugeFactoryHelper.containsSmeltingInput(getRecipeType(), level, input);
+	}
 
 	@Override
 	public FactoryPbContextDelegate productivebeesgenesis$getDelegate() { return delegate; }

@@ -126,6 +126,12 @@ public final class ModPayloads {
 				ToggleAeInputPayload.STREAM_CODEC,
 				Ae2PayloadHandlers::handleToggleAeInput
 		);
+		// per-tile 离心机熔炉配方兼容开关包 — 由 SmeltingCompatButton 点击发送
+		registrar.playToServer(
+				ToggleSmeltingCompatPayload.TYPE,
+				ToggleSmeltingCompatPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleToggleSmeltingCompat
+		);
 		// per-tile AE2 输入 NBT 忽略开关包 — 由 AeInputNbtIgnoreButton 点击发送
 		registrar.playToServer(
 				ToggleAeInputNbtIgnorePayload.TYPE,

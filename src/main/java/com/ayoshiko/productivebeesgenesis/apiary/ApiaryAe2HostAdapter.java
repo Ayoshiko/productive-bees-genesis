@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
@@ -100,9 +102,24 @@ class ApiaryAe2HostAdapter {
 	/** tick 末尾尝试将输出槽物品推送到 AE2 网络 */
 	void pushOutputs() {
 		Ae2OutputPusher.pushOutputs(tile);
+		// 模块6：输出缓冲区直推 AE —— 离心机处理不了的物品、或离心机来不及处理的
+		// 多余蜜脾，在输出槽被占满时也能直接回 AE，不再等待输出槽腾出空间
+		if (tile.getOutputBuffer().getBufferedGroupCount() > 0) {
+			tile.getOutputBuffer().pushToAe(stack -> Ae2OutputPusher.pushItemStack(tile, stack));
+		}
 		// Bug 7：流体罐非空时推送流体到 AE2 网络
 		// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽(蜂箱默认 1)
 		Ae2FluidPusher.pushFluids(tile);
+	}
+
+	int pushGeneratedItem(ItemStack stack) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
+		return Ae2OutputPusher.pushItemStack(tile, stack);
+	}
+
+	long pushGeneratedFluid(FluidStack stack, long amount) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0L;
+		return Ae2FluidPusher.pushGeneratedFluid(tile, stack, amount);
 	}
 
 	/** 持久化 AE2 网格节点状态 */

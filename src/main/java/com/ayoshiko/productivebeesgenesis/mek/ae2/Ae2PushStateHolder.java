@@ -16,10 +16,15 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 public final class Ae2PushStateHolder {
 
 	// ===== 推送退避状态（per-tile 独立） =====
-	/** 流体推送退避状态 */
-	private final Ae2PushBackoff fluidBackoff = new Ae2PushBackoff();
-	/** 物品推送退避状态（仅用于 Ae2OutputPusher 输出失败） */
-	private final Ae2PushBackoff itemBackoff = new Ae2PushBackoff();
+	/**
+	 * 流体推送退避状态 — 256× 加速下 30s 长退避会让离心机长时间停机（流体槽满→处理暂停）。
+	 * 改用 50ms→100ms→200ms→400ms→800ms→1s，网络恢复后能快速重新推送。
+	 */
+	private final Ae2PushBackoff fluidBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
+	/**
+	 * 物品推送退避状态使用同一短窗口，避免一个失败 key 长时间拖住并行工厂。
+	 */
+	private final Ae2PushBackoff itemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
 	/** 输入回送退避状态（Task 10：仅用于 Ae2InputPuller 回送失败） */
 	private final Ae2PushBackoff returnBackoff = new Ae2PushBackoff();
 
@@ -32,6 +37,11 @@ public final class Ae2PushStateHolder {
 	private volatile long itemPushCallCounter = 0L;
 	/** 上次物品推送的 counter（批量短路用） */
 	private volatile long lastItemPushCounter = 0L;
+	/** 输入槽轮转起点，避免每次都从最左侧输入槽开始分配。 */
+	private volatile int inputSlotRotationIndex = 0;
+	/** 最近执行物品/流体推送的真实游戏刻，用于合并同刻加速器重复调用。 */
+	private volatile long lastItemPushGameTick = Long.MIN_VALUE;
+	private volatile long lastFluidPushGameTick = Long.MIN_VALUE;
 
 	// ===== Grid Node 状态缓存（模块2.1：避免每 tick 高频调用 getGridNodeState） =====
 	/** 缓存刷新间隔（纳秒）— 20 tick ≈ 1000ms = 1_000_000_000ns，使用 wall clock 避免 JDTE 加速下 getGameTime 不变 */
@@ -73,6 +83,28 @@ public final class Ae2PushStateHolder {
 
 	/** 更新上次物品推送的计数器值 */
 	public void updateLastItemPushCounter(long value) { lastItemPushCounter = value; }
+
+	/**
+	 * 返回本轮输入分配起点，并将下一轮起点向后移动一个槽位。
+	 */
+	public int getAndAdvanceInputSlotRotation(int slotCount) {
+		if (slotCount <= 0) return 0;
+		int current = Math.floorMod(inputSlotRotationIndex, slotCount);
+		inputSlotRotationIndex = (current + 1) % slotCount;
+		return current;
+	}
+
+	public boolean tryStartItemPush(long gameTick) {
+		if (lastItemPushGameTick == gameTick) return false;
+		lastItemPushGameTick = gameTick;
+		return true;
+	}
+
+	public boolean tryStartFluidPush(long gameTick) {
+		if (lastFluidPushGameTick == gameTick) return false;
+		lastFluidPushGameTick = gameTick;
+		return true;
+	}
 
 	// ===== Grid Node 状态缓存方法（模块2.1） =====
 
@@ -123,6 +155,9 @@ public final class Ae2PushStateHolder {
 		lastFluidPushCounter = 0L;
 		itemPushCallCounter = 0L;
 		lastItemPushCounter = 0L;
+		inputSlotRotationIndex = 0;
+		lastItemPushGameTick = Long.MIN_VALUE;
+		lastFluidPushGameTick = Long.MIN_VALUE;
 		// 模块2.1：重置 grid node 状态缓存，方块重建后从初始状态重新查询
 		cachedNodeState = -1;
 		nodeStateRefreshAt = 0L;

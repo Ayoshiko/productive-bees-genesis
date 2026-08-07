@@ -101,6 +101,13 @@ public class PbRecipeProcessor {
 	/** 当前 tick 的批量倍率（Tick 加速检测器设置,默认 1 表示无加速） — 由调用方在 tick 入口设置,使用后自动重置 */
 	private int tickMultiplier = 1;
 
+	/** Rotating first process so shared output/energy constraints cannot permanently favor slot zero. */
+	private int processStartCursor = 0;
+	/** Prevents repeated factory-wide fluid scans during accelerated sub-ticks. */
+	private long lastFluidFullCacheTick = Long.MIN_VALUE;
+	/** Prevents repeated recipe scans used only to reserve multi-fluid lanes. */
+	private long lastFluidReservationTick = Long.MIN_VALUE;
+
 	/** @param context PB配方处理上下文 @param logPrefix 日志前缀 */
 	@SuppressWarnings("unchecked")
 	public PbRecipeProcessor(PbRecipeContext context, String logPrefix) {
@@ -143,10 +150,27 @@ public class PbRecipeProcessor {
 		return multiplier;
 	}
 
+	public int getAndAdvanceProcessStart(int processCount) {
+		if (processCount <= 1) return 0;
+		int start = Math.floorMod(processStartCursor, processCount);
+		processStartCursor = (start + 1) % processCount;
+		return start;
+	}
+
 	// ===== 入口缓存刷新（由 processPbRecipesAndUpdate 调用）=====
 	/** 刷新流体槽满载状态缓存（入口调用一次，替代原 tryProcessPbRecipe 内的入口刷新；flush 后的刷新保留，finally 块刷新已移除以精简高频路径） */
 	public void refreshFluidTankFullCache(PbRecipeContext context) {
 		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		Level level = context.level();
+		lastFluidFullCacheTick = level == null ? Long.MIN_VALUE : level.getGameTime();
+	}
+
+	/** Refreshes the full-tank snapshot once per real game tick. */
+	public void refreshFluidTankFullCacheForTick(PbRecipeContext context) {
+		Level level = context.level();
+		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		if (tick == lastFluidFullCacheTick) return;
+		refreshFluidTankFullCache(context);
 	}
 	/** 刷新能量和操作数缓存（入口调用一次，替代原 tryProcessPbRecipe 内的每次刷新；升级变更下次入口自动失效） */
 	public void refreshEnergyAndOpsCache(PbRecipeContext context) {
@@ -160,6 +184,10 @@ public class PbRecipeProcessor {
 	 */
 	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
 		if (context.fluidOutputTankCount() <= 1) return;
+		Level level = context.level();
+		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		if (tick == lastFluidReservationTick) return;
+		lastFluidReservationTick = tick;
 		for (int i = 0, size = inputSlots.size(); i < size; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
 			if (input.isEmpty()
@@ -327,8 +355,15 @@ public class PbRecipeProcessor {
 
 		// 先尝试flush上一tick遗留的pending（输出槽可能有空间了）
 		// 修复pendingInputShrink累积死锁：flush失败时清空pending（pending产物未实际插入槽位，清空不丢失物品）
-		if (recipeCompleters[processIndex].pendingItemCount() > 0 || recipeCompleters[processIndex].pendingInputShrink() > 0) {
+		if (recipeCompleters[processIndex].hasPendingOutputs()
+				|| recipeCompleters[processIndex].pendingInputShrink() > 0) {
 			if (!recipeCompleters[processIndex].flushPendingPbOutputs(processIndex)) {
+				if (recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
+					// 直输 AE 已经提交输入；保留剩余产物并阻塞本进程，直到后续成功输出。
+					pbProcessing[processIndex] = false;
+					pbOperatingTicks[processIndex] = processingTime;
+					return false;
+				}
 				recipeCompleters[processIndex].resetPendingRecipe();
 			}
 			cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
@@ -388,6 +423,10 @@ public class PbRecipeProcessor {
 						recipeValue, processIndex, modifier, actualOps);
 				if (recipeCompleters[processIndex].flushPendingPbOutputs(processIndex)) {
 					opsRun += actualOps;
+				} else if (recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
+					// 输入已因部分直输 AE 而提交，本批操作已经完成；剩余产物下 tick 重试。
+					opsRun += actualOps;
+					pbOperatingTicks[processIndex] = processingTime;
 				} else {
 					// 批量 flush 失败（输出空间不足）— 分批减半回退
 					recipeCompleters[processIndex].resetPendingRecipe();
@@ -439,6 +478,10 @@ public class PbRecipeProcessor {
 				opsSuccessfullyRun += trySize;
 				remaining -= trySize;
 			} else {
+				if (recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
+					opsSuccessfullyRun += trySize;
+					break;
+				}
 				recipeCompleters[processIndex].resetPendingRecipe();
 				if (batchSize <= 1) break; // 连单个 ops 都无法 flush — 输出槽完全满
 				batchSize /= 2;

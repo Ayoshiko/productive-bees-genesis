@@ -326,7 +326,20 @@ public class ApiaryUpgradeHandler {
 	public float getMekSpeedTimeMultiplier() {
 		// 直接走 MekanismUtils 运行时入口。Mekanism Unleashed 和
 		// MekanismEmpowered 都通过 mixin 修改该入口，手算公式会绕过它们。
-		return (float) Math.max(0.0, MekanismUtils.getTicksD(tile, 1));
+		// 注意：不能传 def=1。MU 的 getTicksD 在结果 < 1 tick 时返回负倒数（-1/ticks），
+		// 用 1 作为基数会得到负数再被 max(0) 截成 0，导致 1 个速度升级就把工作时间压到 1 tick。
+		// 改用大基数采样后还原为倍率：getTicksD(tile, 1_000_000) / 1_000_000。
+		int speedUpgrades = getMekSpeedUpgrades();
+		int maxSpeed = Upgrade.SPEED.getMax();
+		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
+		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
+		return computeMekSpeedTimeMultiplier(speedUpgrades, maxSpeed, maxMultiplier);
+	}
+
+	static float computeMekSpeedTimeMultiplier(int speedUpgrades, int maxSpeed, float maxMultiplier) {
+		if (maxSpeed <= 0 || speedUpgrades <= 0 || maxMultiplier <= 0) return 1.0f;
+		float speedFraction = (float) speedUpgrades / maxSpeed;
+		return (float) Math.pow(maxMultiplier, -speedFraction);
 	}
 
 	/**

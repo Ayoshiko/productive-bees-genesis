@@ -72,7 +72,9 @@ public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifug
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));
 		// 流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
 		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(), FactoryLayoutHelper.getCentrifugeFluidTankY()));
-		addRenderableWidget(new GuiProgress(tile::getScaledProgress, ProgressType.BAR, this, 86, 38)
+		addRenderableWidget(new GuiProgress(
+				() -> ProgressDisplaySmoother.smooth(tile, 0, tile.getScaledProgress()),
+				ProgressType.BAR, this, 86, 38)
 				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
 				.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
 	}

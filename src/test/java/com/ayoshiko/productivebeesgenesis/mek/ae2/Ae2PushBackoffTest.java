@@ -13,19 +13,29 @@ class Ae2PushBackoffTest {
 		long start = 10_000L;
 
 		backoff.recordFailure(start);
-		assertTrue(backoff.shouldSkip(start + 999_999_999L));
-		assertFalse(backoff.shouldSkip(start + 1_000_000_000L));
+		assertTrue(backoff.shouldSkip(start + 49_999_999L));
+		assertFalse(backoff.shouldSkip(start + 50_000_000L));
 
-		long secondFailure = start + 1_000_000_000L;
+		long secondFailure = start + 50_000_000L;
 		backoff.recordFailure(secondFailure);
-		assertTrue(backoff.shouldSkip(secondFailure + 1_999_999_999L));
-		assertFalse(backoff.shouldSkip(secondFailure + 2_000_000_000L));
+		assertTrue(backoff.shouldSkip(secondFailure + 99_999_999L));
+		assertFalse(backoff.shouldSkip(secondFailure + 100_000_000L));
 
 		backoff.recordSuccess();
 		assertFalse(backoff.shouldSkip(secondFailure));
 
 		backoff.recordFailure(secondFailure);
-		assertTrue(backoff.shouldSkip(secondFailure + 999_999_999L));
-		assertFalse(backoff.shouldSkip(secondFailure + 1_000_000_000L));
+		assertTrue(backoff.shouldSkip(secondFailure + 49_999_999L));
+		assertFalse(backoff.shouldSkip(secondFailure + 50_000_000L));
+	}
+
+	@Test
+	void aggressiveFailureDoesNotJumpToLongBackoff() {
+		Ae2PushBackoff backoff = new Ae2PushBackoff();
+		long start = 20_000L;
+
+		backoff.recordFailureAggressive(start);
+		assertTrue(backoff.shouldSkip(start + 49_999_999L));
+		assertFalse(backoff.shouldSkip(start + 50_000_000L));
 	}
 }

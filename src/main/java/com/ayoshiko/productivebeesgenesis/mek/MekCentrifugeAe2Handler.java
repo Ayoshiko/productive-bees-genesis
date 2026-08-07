@@ -163,6 +163,13 @@ class MekCentrifugeAe2Handler {
 		container.track(SyncableBoolean.create(
 				holder::isAeInputNbtIgnore,
 				holder::setAeInputNbtIgnore));
+		// per-tile 离心机熔炉配方兼容开关同步（供 GUI 按钮实时反映状态）
+		container.track(SyncableBoolean.create(
+				holder::isSmeltingCompatEnabled,
+				holder::setSmeltingCompatEnabled));
+		container.track(SyncableBoolean.create(
+				holder::isCentrifugeDirectAeOutputEnabled,
+				holder::setCentrifugeDirectAeOutputEnabled));
 		// per-tile AE2 输入过滤模式同步（ordinal：0=DISABLED, 1=WHITELIST, 2=BLACKLIST）
 		// 供 GUI 按钮实时反映模式切换；条目列表由 SyncAeInputFilterEntriesPayload 单独推送
 		container.track(SyncableInt.create(

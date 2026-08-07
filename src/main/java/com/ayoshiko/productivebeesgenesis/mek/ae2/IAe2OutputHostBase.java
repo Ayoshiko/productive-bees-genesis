@@ -1,7 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
@@ -249,6 +251,30 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		if (holder != null) holder.setAeFluidOutputEnabled(enabled);
 	}
 
+	@Override
+	default boolean productivebeesgenesis$isDirectAeOutputEnabled() {
+		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
+		return holder != null && holder.isCentrifugeDirectAeOutputEnabled();
+	}
+
+	@Override
+	default int productivebeesgenesis$pushGeneratedItemToAe(ItemStack stack) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
+		return Ae2OutputPusher.pushItemStack(this, stack);
+	}
+
+	@Override
+	default long productivebeesgenesis$pushGeneratedFluidToAe(FluidStack stack, long amount) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0L;
+		return Ae2FluidPusher.pushGeneratedFluid(this, stack, amount);
+	}
+
+	@Override
+	default long productivebeesgenesis$simulateGeneratedFluidToAe(FluidStack stack, long amount) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0L;
+		return Ae2FluidPusher.simulateGeneratedFluid(this, stack, amount);
+	}
+
 	/**
 	 * 切换 per-tile AE2 物品输出开关（取反当前状态）
 	 * <br/>
@@ -427,6 +453,9 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 *
 	 * @since 2.1.0
 	 */
+	default void productivebeesgenesis$onAe2FluidPushComplete() {
+	}
+
 	default void suspendInput() {
 		// 默认空实现，由实现类覆写转发到 setActive(false)
 	}

@@ -244,7 +244,9 @@ public final class MekApiaryFactoryBlockType {
 		}
 		for (FactoryTier tier : emTiers) {
 			EM_APIARY_FACTORY_TYPES.computeIfAbsent(tier,
-					t -> createFactoryBlockType(t, 50L, 20_000L,
+					t -> createFactoryBlockType(t, 50L,
+							Math.max(20_000L, 50L) * Math.max(t.processes,
+									FactoryApiaryConfig.forTier(t).beeSlotCount),
 							descriptionLang(t.name().toLowerCase() + "_mek_apiary_factory")));
 		}
 	}

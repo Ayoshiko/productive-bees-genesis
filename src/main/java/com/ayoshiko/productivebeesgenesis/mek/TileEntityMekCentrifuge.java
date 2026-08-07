@@ -69,6 +69,12 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		implements IAe2InputHost, IAe2OutputHostBase, IMekCentrifugeTile, IPbUpgradeProvider, IUpgradeableBlockEntity,
 		IMekCentrifugePbUpgradeHost, com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
 
+	@Override
+	public void productivebeesgenesis$onSmeltingCompatChanged() {
+		pbProcessor.resetSmeltingCache(0);
+		MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitor);
+	}
+
 	/** 输出槽/流体槽管理器 — 懒初始化（super() 构造期间通过 getInitialInventory() 触发） */
 	private MekCentrifugeSlotManager slotManager;
 	/** PB配方处理器 — 封装所有PB离心配方处理逻辑（与工厂版共用） */
@@ -158,6 +164,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 */
 	@Override
 	public boolean containsRecipe(@NotNull ItemStack input) {
+		// 熔炉配方兼容关闭时只接受 PB 离心配方输入
+		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
+			return pbProcessor.findPbRecipe(input) != null;
+		}
 		// Bug 2: PB 蜜脾/蜜脾块强制走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配
 		if (productivebeesgenesis$isPbCombInput(input)) {
 			return pbProcessor.findPbRecipe(input) != null;
@@ -169,6 +179,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Nullable
 	@Override
 	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) {
+		// 熔炉配方兼容关闭时阻止 SMELTING 管线处理
+		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
+			return null;
+		}
 		ItemStack input = accessor().productivebeesgenesis$getInputSlot().getStack();
 		if (!input.isEmpty() && pbProcessor.findPbRecipe(input) != null) return null;
 		return super.getRecipe(cacheIndex);

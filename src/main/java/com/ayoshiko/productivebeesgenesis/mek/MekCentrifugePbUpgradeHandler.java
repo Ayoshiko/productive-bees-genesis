@@ -493,7 +493,11 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	private float getMekSpeedTimeMultiplier() {
 		// 由 MekanismUtils 统一承接 Mekanism Unleashed/MekanismEmpowered 的运行时 mixin。
 		if (!(tile instanceof TileEntityMekanism mekTile)) return 1.0f;
-		return (float) Math.max(0.0, MekanismUtils.getTicksD(mekTile, 1));
+		// 不能传 def=1：MU 的 getTicksD 在结果 < 1 tick 时返回负倒数，会被 max(0) 截成 0，
+		// 导致 1 个速度升级就把处理时间压到 1 tick（回归问题）。用大基数采样后还原倍率。
+		final long sampleBase = 1_000_000L;
+		double scaled = MekanismUtils.getTicksD(mekTile, (int) sampleBase);
+		return scaled > 0 ? (float) Math.min(1.0, scaled / sampleBase) : 1.0f;
 	}
 
 	/**

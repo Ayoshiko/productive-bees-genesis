@@ -33,6 +33,7 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -87,6 +88,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private volatile int clientSelectedBeeSlot = -1;
 	/** 是否启用蜂箱到相邻离心机的特殊直连通道；默认开启以兼容旧存档。 */
 	private boolean directEjectEnabled = true;
+	private boolean directAeOutputEnabled = false;
 
 	public TileEntityMekApiary(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, APIARY_TICKS_REQUIRED);
@@ -98,7 +100,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		feederSlotManager = createFeederSlotManager();
 		feederSlotManager.buildFeederSlots(this::setChanged);
 		upgradeHandler = new ApiaryUpgradeHandler(this);
-		produceProcessor = new BeeProduceProcessor(upgradeHandler);
+		produceProcessor = new BeeProduceProcessor(upgradeHandler, this);
 		tickHandler = new ApiaryTickHandler(this, slotManager, produceProcessor, upgradeHandler, feederSlotManager);
 		setupSideConfig();
 	}
@@ -120,6 +122,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** F4: 获取产物溢出缓冲区 — 供同包组件（NbtSerializer/TickHandler/SlotTickProcessor）访问 */
 	ApiaryOutputBuffer getOutputBuffer() { return outputBuffer; }
+	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
+	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
+		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
+	}
 
 	/** 失效所有蜂箱槽位上限缓存 — 委托 ApiarySlotManager.invalidateCache()，配置 reload 时调用 */
 	public static void invalidateSlotManagerCache() {
@@ -153,6 +159,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		((TileEntityEjectorAccessor) ejectorComponent).productivebeesgenesis$setTickDelay(1);
 		// 同时弹出物品和流体
 		ejectorComponent.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
+		// 直连输出路由：侧面配置变化时立即标记直连检测，重新扫描目标离心机
+		configComponent.addConfigChangeListener(TransmissionType.ITEM, ignored -> markDirectEjectDirty());
 	}
 
 	/** 获取配方类型 — 占位返回SMELTING，蜂箱产出由 BeeProduceProcessor 处理 */
@@ -231,6 +239,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		setDirectEjectEnabled(!directEjectEnabled);
 	}
 
+	public boolean isDirectAeOutputEnabled() { return directAeOutputEnabled; }
+	public void setDirectAeOutputEnabled(boolean enabled) {
+		if (directAeOutputEnabled == enabled) return;
+		directAeOutputEnabled = enabled;
+		setChanged();
+	}
+	public void toggleDirectAeOutput() { setDirectAeOutputEnabled(!directAeOutputEnabled); }
+
 	/** 容器数据同步 — 蜜蜂状态 + PB升级数量 + 安装计数器 + 选中槽位 */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
@@ -254,6 +270,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		container.track(SyncableBoolean.create(
 				this::isDirectEjectEnabled,
 				enabled -> directEjectEnabled = enabled));
+		container.track(SyncableBoolean.create(
+				this::isDirectAeOutputEnabled,
+				enabled -> directAeOutputEnabled = enabled));
 	}
 
 	// ===== NBT 持久化 — 委托给 nbtSerializer + pbUpgradeHandler =====
@@ -489,6 +508,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 				PbConfigCardDataHelper.MachineType.APIARY);
 		PbConfigCardDataHelper.writeAe2PerTileState(data,
 				ae2HostAdapter.isAeItemOutputEnabled(), ae2HostAdapter.isAeFluidOutputEnabled());
+		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT, directAeOutputEnabled);
 	}
 
 	/** 从配置卡读取 — 恢复AE2 per-tile状态（PB升级粘贴在 setConfigurationData 中处理） */
@@ -499,6 +519,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		if (ae2State != null) {
 			ae2HostAdapter.setAeItemOutputEnabled(ae2State[0]);
 			ae2HostAdapter.setAeFluidOutputEnabled(ae2State[1]);
+		}
+		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT)) {
+			setDirectAeOutputEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT));
 		}
 	}
 

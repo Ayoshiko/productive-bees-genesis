@@ -55,6 +55,7 @@ public class MyriadFluidOutputHandler {
 	 * {@link #insertFluidOutput} 后通过 {@link #refreshFluidTankFullCache()} 更新。
 	 */
 	private volatile boolean cachedFluidTankFull = false;
+	private long lastFullCacheTick = Long.MIN_VALUE;
 
 	/**
 	 * 构造流体输出处理器
@@ -87,7 +88,11 @@ public class MyriadFluidOutputHandler {
 	 * 暂停语义:所有槽满载且无法分配新槽才暂停(新流体类型可写入新槽时不暂停)。
 	 */
 	public void initFluidTankFullCache() {
+		Level level = context.level();
+		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		if (tick == lastFullCacheTick) return;
 		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		lastFullCacheTick = tick;
 	}
 
 	/**
@@ -113,6 +118,8 @@ public class MyriadFluidOutputHandler {
 	 */
 	public void refreshFluidTankFullCache() {
 		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		Level level = context.level();
+		lastFullCacheTick = level == null ? Long.MIN_VALUE : level.getGameTime();
 	}
 
 	/**
@@ -147,10 +154,15 @@ public class MyriadFluidOutputHandler {
 			return 0; // 类型不匹配，无法插入任何流体
 		}
 		int space = tank.getCapacity() - tank.getFluidAmount();
-		if (space <= 0) return 0; // 流体槽已满
+		if (space < 0) space = 0;
 		long perBatch = (long) fluidOutput.getAmount() * productivityMod;
 		if (perBatch <= 0) return Integer.MAX_VALUE;
-		return (int) Math.min(space / perBatch, Integer.MAX_VALUE);
+		long directCapacity = context.productivebeesgenesis$isDirectAeOutputEnabled()
+				? context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, Integer.MAX_VALUE)
+				: 0L;
+		long available = Math.max(0L, space) + Math.max(0L, directCapacity);
+		long representableBatches = Integer.MAX_VALUE / perBatch;
+		return (int) Math.min(Math.min(available / perBatch, representableBatches), Integer.MAX_VALUE);
 	}
 
 	/**
@@ -186,6 +198,14 @@ public class MyriadFluidOutputHandler {
 		// 先按 amount 缩放流体栈，用于查询目标槽及后续插入
 		FluidStack scaledFluid = fluidOutput.copyWithAmount(
 				(int) Math.min((long) fluidOutput.getAmount() * amount, Integer.MAX_VALUE));
+		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			long accepted = Math.max(0L, Math.min((long) scaledFluid.getAmount(),
+					context.productivebeesgenesis$pushGeneratedFluidToAe(scaledFluid, scaledFluid.getAmount())));
+			if (accepted >= scaledFluid.getAmount()) return true;
+			if (accepted > 0) {
+				scaledFluid = scaledFluid.copyWithAmount((int) (scaledFluid.getAmount() - accepted));
+			}
+		}
 		// Task 11: 多槽路由 — 使用 fluidOutputTankForInsert 按流体类型查询目标槽
 		// SINGLE 模式：默认实现返回主槽，行为与修改前完全一致
 		// MULTI_PER_FLUID 模式：自动按流体类型路由到对应槽（已存在同类型槽返回该槽，否则分配新槽）

@@ -55,6 +55,12 @@ public interface TieredInputSlot {
 	 */
 	void productivebeesgenesis$setInputStackMultiplier(IntSupplier supplier);
 
+	/** Configure a limit that applies only to {@code AutomationType.EXTERNAL} insertion. */
+	void productivebeesgenesis$setExternalInsertPolicy(ExternalInsertPolicy policy);
+
+	/** Returns the external-only policy, or {@code null} when normal insertion is unchanged. */
+	ExternalInsertPolicy productivebeesgenesis$getExternalInsertPolicy();
+
 	/**
 	 * 获取输入槽堆叠倍率供应商
 	 *

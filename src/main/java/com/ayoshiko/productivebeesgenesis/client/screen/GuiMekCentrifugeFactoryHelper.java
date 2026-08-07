@@ -13,6 +13,7 @@ import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +61,7 @@ public final class GuiMekCentrifugeFactoryHelper {
 	 */
 	public static List<GuiProgress> createProgressBars(
 			IGuiWrapper gui,
+			BlockEntity tile,
 			int processes,
 			IntToDoubleFunction scaledProgress,
 			IntFunction<BooleanSupplier> warningCheck,
@@ -71,7 +73,7 @@ public final class GuiMekCentrifugeFactoryHelper {
 			// 进度条DOWN类型在输入槽与主输出槽之间
 			// 物品输出槽由dynamicSlots自动渲染蓝色边框，无需手动添加GuiSlot
 			GuiProgress progress = new GuiProgress(
-					() -> scaledProgress.applyAsDouble(cacheIndex),
+					() -> ProgressDisplaySmoother.smooth(tile, cacheIndex, scaledProgress.applyAsDouble(cacheIndex)),
 					ProgressType.DOWN, gui, 4 + xPos, 33);
 			progress.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
 					.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, warningCheck.apply(cacheIndex));

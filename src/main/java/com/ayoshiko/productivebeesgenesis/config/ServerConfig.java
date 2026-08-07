@@ -165,6 +165,8 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
 	/** 通用机械:扩展 堆叠升级最大数量(委托自 CentrifugeConfigSection,由 ExtraUpgradeStackMixin 读取) */
 	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
+	/** 离心机电力熔炼炉配方兼容总开关（委托自 CentrifugeConfigSection） */
+	public final ModConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
 
 	// ========== MEK通用机械蜂箱配置 —— 向后兼容委托字段 ==========
 	public final ModConfigSpec.LongValue apiaryEnergyPerTick;
@@ -394,6 +396,8 @@ public final class ServerConfig {
 		this.mekCentrifugePbUpgradeStabilityMaxCount = centrifuge.mekCentrifugePbUpgradeStabilityMaxCount;
 		// 通用机械:扩展 堆叠升级上限委托字段赋值(Task 13,指向同一 ConfigValue 实例,零开销)
 		this.mekCentrifugeMaxStackUpgrades = centrifuge.mekCentrifugeMaxStackUpgrades;
+		// 熔炉配方兼容总开关委托字段赋值（指向同一 ConfigValue 实例，零开销）
+		this.mekCentrifugeSmeltingCompatEnabled = centrifuge.mekCentrifugeSmeltingCompatEnabled;
 
 		// MEK通用机械蜂箱配置(抽取至 ApiaryConfigSection,Task 12 委托至 ConfigSectionRegistry)
 		ApiaryConfigSection apiary = this.sections.registerApiary(builder);

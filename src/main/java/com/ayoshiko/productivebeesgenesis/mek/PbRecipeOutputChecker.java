@@ -106,6 +106,11 @@ final class PbRecipeOutputChecker {
 	 */
 	public static boolean isOutputBlocked(PbRecipeContext context, int process, CentrifugeRecipe recipe,
 			boolean hasItemOutputs, boolean hasFluidOutputs, boolean isFluidTankFull) {
+		// Direct-AE 模式允许先完成一批并尝试写入 AE；拒收部分由 flusher 回退本地槽。
+		// 若 AE 与本地均不可接收，pending 输出会保留并自然暂停该进程。
+		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			return false;
+		}
 		if (hasItemOutputs && context.productivebeesgenesis$outputSlotsFull(process)) {
 			return true;
 		}

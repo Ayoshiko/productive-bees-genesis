@@ -4,14 +4,18 @@ import java.util.function.IntSupplier;
 
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
+import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 
@@ -45,11 +49,29 @@ import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
  * synchronized 守卫 check-then-update 临界区，避免并发线程读到版本号已更新但倍率值仍为旧值。
  */
 @Mixin(value = BasicInventorySlot.class, remap = false)
-public class BasicInventorySlotMixin implements TieredInputSlot {
+public abstract class BasicInventorySlotMixin implements TieredInputSlot {
+
+	@Shadow
+	protected ItemStack current;
+
+	@Shadow
+	public abstract int getLimit(ItemStack stack);
+
+	@Shadow
+	public abstract boolean isItemValidForInsertion(ItemStack stack, AutomationType automationType);
+
+	@Shadow
+	public abstract void setStackUnchecked(ItemStack stack);
+
+	@Shadow
+	public abstract void onContentsChanged();
 
 	/** 输入槽堆叠倍率供应商 — null 表示未设置，getLimit 行为不变 */
 	@Unique
 	private IntSupplier productivebeesgenesis$inputMultiplier = null;
+
+	@Unique
+	private ExternalInsertPolicy productivebeesgenesis$externalInsertPolicy = null;
 
 	/** 缓存的倍率值 — -1 表示未初始化 */
 	@Unique
@@ -73,6 +95,54 @@ public class BasicInventorySlotMixin implements TieredInputSlot {
 	@Override
 	public IntSupplier productivebeesgenesis$getInputStackMultiplier() {
 		return this.productivebeesgenesis$inputMultiplier;
+	}
+
+	@Override
+	public void productivebeesgenesis$setExternalInsertPolicy(ExternalInsertPolicy policy) {
+		this.productivebeesgenesis$externalInsertPolicy = policy;
+	}
+
+	@Override
+	public ExternalInsertPolicy productivebeesgenesis$getExternalInsertPolicy() {
+		return productivebeesgenesis$externalInsertPolicy;
+	}
+
+	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At("HEAD"), cancellable = true)
+	private void productivebeesgenesis$limitExternalInsert(ItemStack stack, Action action,
+			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		ExternalInsertPolicy policy = productivebeesgenesis$externalInsertPolicy;
+		if (policy == null || automationType != AutomationType.EXTERNAL) return;
+		if (stack.isEmpty()) {
+			cir.setReturnValue(ItemStack.EMPTY);
+			return;
+		}
+
+		int normalLimit = getLimit(stack);
+		int effectiveLimit = Math.min(normalLimit,
+				Math.max(0, policy.getInsertLimit((BasicInventorySlot) (Object) this, stack, normalLimit, action)));
+		int needed = effectiveLimit - current.getCount();
+		if (needed <= 0 || !isItemValidForInsertion(stack, automationType)) {
+			cir.setReturnValue(stack);
+			return;
+		}
+
+		boolean sameType = !current.isEmpty() && ItemStack.isSameItemSameComponents(current, stack);
+		if (!current.isEmpty() && !sameType) {
+			cir.setReturnValue(stack);
+			return;
+		}
+		int toAdd = Math.min(stack.getCount(), needed);
+		if (action.execute()) {
+			if (sameType) {
+				current.grow(toAdd);
+				onContentsChanged();
+			} else {
+				setStackUnchecked(stack.copyWithCount(toAdd));
+			}
+			policy.onInserted((BasicInventorySlot) (Object) this, stack, toAdd);
+		}
+		cir.setReturnValue(stack.copyWithCount(stack.getCount() - toAdd));
 	}
 
 	@Override
@@ -114,7 +184,8 @@ public class BasicInventorySlotMixin implements TieredInputSlot {
 	private void productivebeesgenesis$modifyGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		int multiplier = productivebeesgenesis$getCachedMultiplier();
 		if (multiplier > 1) {
-			cir.setReturnValue(cir.getReturnValue() * multiplier);
+			long scaled = (long) cir.getReturnValue() * multiplier;
+			cir.setReturnValue((int) Math.min(Integer.MAX_VALUE, Math.max(0L, scaled)));
 		}
 	}
 }

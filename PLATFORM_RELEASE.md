@@ -8,7 +8,7 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 当前版本 | `2.0.7-hotfix` |
+| 当前版本 | `2.0.8` |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
 | 许可证 | MIT |
@@ -23,7 +23,7 @@
 - 平台上传及模组内统一使用：`src/main/resources/productivebeesgenesis.png`
 - 格式：PNG
 - 尺寸：1024 x 1024
-- SHA-256：`7B08D114F045419C87DD49E429908C438520B6CFBDA21424D5276CE8AAB63ADD`
+- SHA-256：`D4ED2554E4A88A3EAEC43F224E80EB9CF8E0B1C542C96FAB2B7F4A75CE381DF6`
 - NeoForge 元数据：`logoFile="productivebeesgenesis.png"`
 
 不要另外压缩、截图或从 README 下载图标，避免不同平台出现不同版本。

@@ -20,6 +20,7 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
@@ -101,7 +102,8 @@ public final class MekApiaryMEBlockType {
 	private static BlockTypeTile<TileEntityExtraMekApiaryFactory> createMEApiaryFactoryBlockType(ExtraFactoryTier tier) {
 		// 能量配置：ME 模式，storage = max(origStorage, origUsage) * tier.processes
 		long usage = 50L;
-		long storage = Math.max(20_000L, usage) * tier.processes;
+		int beeSlots = FactoryApiaryConfig.forMETier(tier).beeSlotCount;
+		long storage = Math.max(20_000L, usage) * Math.max(tier.processes, beeSlots);
 
 		// 使用原版 Machine.MachineBuilder.createMachine 构建（非 ExtraFactoryMachine），
 		// 因为蜂箱不走 CachedRecipe 管线，不需要 AttributeFactoryType

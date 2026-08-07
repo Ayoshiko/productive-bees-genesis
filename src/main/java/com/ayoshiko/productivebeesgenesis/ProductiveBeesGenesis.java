@@ -25,6 +25,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MyriadBatchPlanner;
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
@@ -255,6 +256,7 @@ public final class ProductiveBeesGenesis {
 					ModConfig.SERVER_SPEC.save();
 				}
 				BeeConfigApplier.applyOverrides();
+				MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
@@ -263,6 +265,9 @@ public final class ProductiveBeesGenesis {
 					ModConfig.SERVER_SPEC.save();
 				}
 				BeeConfigApplier.applyOverrides();
+				MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
+				// The master recipe-mode switch can invalidate already cached Mekanism recipes.
+				mekanism.common.CommonWorldTickHandler.flushTagAndRecipeCaches = true;
 				MyriadCreationsEventHandler.invalidateFilterCache();
 				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
 				MyriadCreationsEventHandler.invalidateEnabledCache();

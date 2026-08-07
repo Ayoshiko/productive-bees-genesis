@@ -77,6 +77,12 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	/** per-tile AE2 流体输出开关（升级时保留用户设置，AE2 未加载时为 false） */
 	public final boolean aeFluidOutputEnabled;
 
+	/** per-tile smelting-compat switch (independent of AE2) */
+	public final boolean smeltingCompatEnabled;
+
+	/** 新产物优先直接写入 AE 的 per-tile 开关。 */
+	public final boolean centrifugeDirectAeOutputEnabled;
+
 	/**
 	 * Task 5: 多流体槽 NBT — 等级升级时持久化 MultiFluidTankHolder 内容
 	 * <br/>
@@ -165,6 +171,7 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 			boolean aeItemInputEnabled, boolean aeInputNbtIgnore,
 			int aeInputFilterMode, Map<Integer, String> aeInputFilterEntries, boolean preciseMode,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled,
+			boolean smeltingCompatEnabled, boolean centrifugeDirectAeOutputEnabled,
 			@Nullable CompoundTag multiFluidTanksNbt,
 			@Nullable List<ItemStack> outputItems,
 			@Nullable List<ItemStack> inputItems,
@@ -181,6 +188,8 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 		this.preciseMode = preciseMode;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;
+		this.smeltingCompatEnabled = smeltingCompatEnabled;
+		this.centrifugeDirectAeOutputEnabled = centrifugeDirectAeOutputEnabled;
 		this.multiFluidTanksNbt = multiFluidTanksNbt;
 		this.outputItems = outputItems;
 		this.inputItems = inputItems;
