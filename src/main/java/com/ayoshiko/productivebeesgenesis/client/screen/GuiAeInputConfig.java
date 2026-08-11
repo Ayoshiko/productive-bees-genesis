@@ -138,7 +138,8 @@ public final class GuiAeInputConfig extends GuiWindow {
 				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
 		preciseBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
 		btnX += TOGGLE_BTN_WIDTH + 2;
-		globalGearBtn = addChild(new GlobalGearButton(gui(), relativeX + btnX, relativeY + CTRL_Y,
+		// 与下方逐槽齿轮一致：16×16 方形按钮，垂直方向相对 14px 控制行居中
+		globalGearBtn = addChild(new GlobalGearButton(gui(), relativeX + btnX, relativeY + CTRL_Y - 1,
 				this::onOpenGlobalAmount,
 				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterUnlimitedPayload(pos))));
 		globalGearBtn.setTooltip(Tooltip.create(Component.translatable(
@@ -576,7 +577,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private static final class GlobalGearButton extends MekanismButton {
 
 		GlobalGearButton(IGuiWrapper gui, int x, int y, Runnable configureCallback, Runnable toggleCallback) {
-			super(gui, x, y, 18, 14, Component.empty(), (element, mouseX, mouseY) -> {
+			super(gui, x, y, GEAR_SIZE, GEAR_SIZE, Component.empty(), (element, mouseX, mouseY) -> {
 				if (Screen.hasShiftDown()) {
 					toggleCallback.run();
 				} else {
