@@ -1,15 +1,15 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 /**
- * AE2 相关 NBT 键集中常量类
- * <br/>
- * 统一管理 AE2 per-tile 状态相关的 NBT 键字面量，避免在多个文件中硬编码字符串，
- * 防止键名不一致导致的序列化/反序列化失败。
- * <p>
- * 所有键遵循 {@code productivebeesgenesis_ae_*} 命名约定，使用 snake_case + 模组前缀。
- *
- * @since 1.10.0
- */
+	 * AE2 相关 NBT 键集中常量类
+	 * <br/>
+	 * 统一管理 AE2 per-tile 状态相关的 NBT 键字面量，避免在多个文件中硬编码字符串，
+	 * 防止键名不一致导致的序列化/反序列化失败。
+	 * <p>
+	 * 所有键遵循 {@code productivebeesgenesis_ae_*} 命名约定，使用 snake_case + 模组前缀。
+	 *
+	 * @since 2.0.0
+	 */
 public final class Ae2NbtKeys {
 
 	/** AE2 per-tile 物品输出开关 */

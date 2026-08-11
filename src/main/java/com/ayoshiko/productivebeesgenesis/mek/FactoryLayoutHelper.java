@@ -4,20 +4,20 @@ import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import mekanism.common.tier.FactoryTier;
 
 /**
- * 工厂版MEK离心机GUI布局参数辅助类
- * <br/>
- * 统一管理原版4等级、EM高等级、ME 4等级的布局参数。
- * 布局公式来源：
- * <ul>
- *   <li>原版4等级：Mekanism GuiFactory / FactoryContainer</li>
- *   <li>EM高等级：EvolvedMekanism GuiFactoryMixin / FactoryContainerMixin</li>
- *   <li>ME 4等级：MekanismExtras GuiExtraFactory / ExtraFactoryContainer</li>
- * </ul>
- * <p>
- * <b>EME 隔离</b>：EME 4等级的布局参数已移至
- * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEFactoryLayoutHelper}，
- * 避免基础类方法签名直接引用 EME 类，降低未安装 EME 时的类加载风险。
- */
+	 * 工厂版MEK离心机GUI布局参数辅助类
+	 * <br/>
+	 * 统一管理原版4等级、EM高等级、ME 4等级的布局参数。
+	 * 布局公式来源：
+	 * <ul>
+	 *   <li>原版4等级：Mekanism GuiFactory / FactoryContainer</li>
+	 *   <li>EM高等级：EvolvedMekanism GuiFactoryMixin / FactoryContainerMixin</li>
+	 *   <li>ME 4等级：MekanismExtras GuiExtraFactory / ExtraFactoryContainer</li>
+	 * </ul>
+	 * <p>
+	 * <b>EME 隔离</b>：EME 4等级的布局参数已移至
+	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEFactoryLayoutHelper}，
+	 * 避免基础类方法签名直接引用 EME 类，降低未安装 EME 时的类加载风险。
+	 */
 public final class FactoryLayoutHelper {
 
 	private FactoryLayoutHelper() {}

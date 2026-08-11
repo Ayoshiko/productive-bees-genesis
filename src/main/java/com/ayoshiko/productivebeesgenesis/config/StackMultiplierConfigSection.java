@@ -1,25 +1,24 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 /**
- * MEK离心机堆叠倍率配置段 — 从 {@link CentrifugeConfigSection} 抽取的独立配置段。
- * <p>
- * 子分类:stack_multiplier(输出槽) + input_stack_multiplier(输入槽)。
- * EM 工厂配置项仅在 EM 加载时注册,未加载时对应字段为 null。
- * <p>
- * 容量公式:
- * <ul>
- *   <li>输出槽:单槽容量 = 64 × 倍率 | 工厂总容量 = 64 × 倍率 × processes × 3(每进程 3 输出槽)</li>
- *   <li>输入槽:单槽容量 = 64 × 倍率 | 工厂总容量 = 64 × 倍率 × processes</li>
- * </ul>
- * 输出槽倍率默认为输入槽的 4 倍(蜜脾处理成倍产出)。
- *
- * @since 1.13.0
- * @see CentrifugeConfigSection 父配置段
- */
+	 * MEK离心机堆叠倍率配置段 — 从 {@link CentrifugeConfigSection} 抽取的独立配置段。
+	 * <p>
+	 * 子分类:stack_multiplier(输出槽) + input_stack_multiplier(输入槽)。
+	 * EM 工厂配置项仅在 EM 加载时注册,未加载时对应字段为 null。
+	 * <p>
+	 * 容量公式:
+	 * <ul>
+	 *   <li>输出槽:单槽容量 = 64 × 倍率 | 工厂总容量 = 64 × 倍率 × processes × 3(每进程 3 输出槽)</li>
+	 *   <li>输入槽:单槽容量 = 64 × 倍率 | 工厂总容量 = 64 × 倍率 × processes</li>
+	 * </ul>
+	 * 输出槽倍率默认为输入槽的 4 倍(蜜脾处理成倍产出)。
+	 *
+	 * @since 2.0.0
+	 * @see CentrifugeConfigSection 父配置段
+	 */
 public final class StackMultiplierConfigSection {
 
 	// ========== 输出槽堆叠倍率(按离心机等级)==========

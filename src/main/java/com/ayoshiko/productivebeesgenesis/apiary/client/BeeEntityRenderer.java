@@ -4,11 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -18,26 +16,26 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 /**
- * 蜜蜂实体渲染器
- * <br/>
- * 在蜜蜂槽内渲染蜜蜂实体预览，通过 {@link BeeEntityCache} 缓存实体实例避免每帧创建。
- * 支持 PB 的 ConfigurableBee（按 type 字段渲染对应外观）和原版 Bee。
- * <p>
- * Bug 2修复：参考 PB 原版 {@code BeeRenderer.render}（JEI 中使用的渲染方式），
- * 使用三轴旋转产生 3/4 斜视角效果，调用 setRenderStatic() 暂停动画，
- * 使蜜蜂在槽位中呈现类似物品图标的静态预览。
- * <p>
- * 渲染特性：
- * <ul>
- *   <li>PB 风格三轴旋转（Z+190°/Y+20°/X+20°），3/4 斜视角</li>
- *   <li>静态渲染（ProductiveBee 调用 setRenderStatic，无翅膀扇动）</li>
- *   <li>缩放 18.0（大型蜜蜂 4.0），适配 18×18 槽位</li>
- *   <li>渲染后正确重置 GL 状态（depth test / blend / color）</li>
- *   <li>状态灯 2×2 像素（含 4×4 光晕），位于槽位右下角</li>
- * </ul>
- * <p>
- * 线程安全：仅从客户端渲染线程调用，无需同步。
- */
+	 * 蜜蜂实体渲染器
+	 * <br/>
+	 * 在蜜蜂槽内渲染蜜蜂实体预览，通过 {@link BeeEntityCache} 缓存实体实例避免每帧创建。
+	 * 支持 PB 的 ConfigurableBee（按 type 字段渲染对应外观）和原版 Bee。
+	 * <p>
+	 * Bug 2修复：参考 PB 原版 {@code BeeRenderer.render}（JEI 中使用的渲染方式），
+	 * 使用三轴旋转产生 3/4 斜视角效果，调用 setRenderStatic() 暂停动画，
+	 * 使蜜蜂在槽位中呈现类似物品图标的静态预览。
+	 * <p>
+	 * 渲染特性：
+	 * <ul>
+	 *   <li>PB 风格三轴旋转（Z+190°/Y+20°/X+20°），3/4 斜视角</li>
+	 *   <li>静态渲染（ProductiveBee 调用 setRenderStatic，无翅膀扇动）</li>
+	 *   <li>缩放 18.0（大型蜜蜂 4.0），适配 18×18 槽位</li>
+	 *   <li>渲染后正确重置 GL 状态（depth test / blend / color）</li>
+	 *   <li>状态灯 2×2 像素（含 4×4 光晕），位于槽位右下角</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：仅从客户端渲染线程调用，无需同步。
+	 */
 public class BeeEntityRenderer {
 
 	/** 槽位尺寸（18×18 像素） */

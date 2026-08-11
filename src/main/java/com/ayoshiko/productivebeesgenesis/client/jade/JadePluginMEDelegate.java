@@ -1,22 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.client.jade;
 
-import snownee.jade.api.IWailaCommonRegistration;
-
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
+import snownee.jade.api.IWailaCommonRegistration;
 
 /**
- * Jade 插件 ME 隔离注册器
- * <br/>
- * 集中引用 ME（mekanism_extras）可选依赖的 TileEntity 类，
- * 仅在 {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isMekanismExtrasLoaded()}
- * 守卫通过后由 {@link JadePlugin} 调用，利用 JVM 延迟类加载保证未安装 ME 时不会触发
- * {@code NoClassDefFoundError}。
- * <p>
- * 设计原则：单一职责（仅注册 ME 工厂版方块实体的 Jade 数据提供者）。
- *
- * @since 1.9.0
- */
+	 * Jade 插件 ME 隔离注册器
+	 * <br/>
+	 * 集中引用 ME（mekanism_extras）可选依赖的 TileEntity 类，
+	 * 仅在 {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isMekanismExtrasLoaded()}
+	 * 守卫通过后由 {@link JadePlugin} 调用，利用 JVM 延迟类加载保证未安装 ME 时不会触发
+	 * {@code NoClassDefFoundError}。
+	 * <p>
+	 * 设计原则：单一职责（仅注册 ME 工厂版方块实体的 Jade 数据提供者）。
+	 *
+	 * @since 2.0.0
+	 */
 final class JadePluginMEDelegate {
 
 	private JadePluginMEDelegate() {

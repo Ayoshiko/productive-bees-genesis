@@ -1,37 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryInputInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryInputInventorySlot;
-
-import mekanism.common.inventory.slot.BasicInventorySlot;
-import net.minecraft.world.item.ItemStack;
-
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
-
 /**
- * EME 工厂输入槽 getLimit 覆盖拦截 Mixin — 仅在 EME 加载时应用
- * <br/>
- * <b>背景</b>：EME 的 {@link EMExtraFactoryInputInventorySlot} 覆盖了
- * {@link BasicInventorySlot#getLimit}，按 tier 乘以 8/16/32/64。
- * 此硬编码倍率无法通过配置调整，且不与我们离心机的输入槽堆叠倍率配置联动。
- * <p>
- * <b>问题与策略</b>：与 {@link ExtraFactoryInputInventorySlotMixin} 相同 —
- * EME 覆盖了 getLimit，{@link BasicInventorySlotMixin} 的 RETURN 注入不生效，
- * 需在 HEAD 拦截。当我们的配置倍率已设置时完全替换 EME 的硬编码倍率。
- * <p>
- * <b>类加载安全</b>：本类引用 {@link EMExtraFactoryInputInventorySlot}（EME 类），
- * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 应用。
- *
- * @since 1.13.0
- * @author Ayoshiko
- * @see ExtraFactoryInputInventorySlotMixin ME 版本的同类实现
- */
+	 * EME 工厂输入槽 getLimit 覆盖拦截 Mixin — 仅在 EME 加载时应用
+	 * <br/>
+	 * <b>背景</b>：EME 的 {@link EMExtraFactoryInputInventorySlot} 覆盖了
+	 * {@link BasicInventorySlot#getLimit}，按 tier 乘以 8/16/32/64。
+	 * 此硬编码倍率无法通过配置调整，且不与我们离心机的输入槽堆叠倍率配置联动。
+	 * <p>
+	 * <b>问题与策略</b>：与 {@link ExtraFactoryInputInventorySlotMixin} 相同 —
+	 * EME 覆盖了 getLimit，{@link BasicInventorySlotMixin} 的 RETURN 注入不生效，
+	 * 需在 HEAD 拦截。当我们的配置倍率已设置时完全替换 EME 的硬编码倍率。
+	 * <p>
+	 * <b>类加载安全</b>：本类引用 {@link EMExtraFactoryInputInventorySlot}（EME 类），
+	 * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 应用。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 * @see ExtraFactoryInputInventorySlotMixin ME 版本的同类实现
+	 */
 @Mixin(value = EMExtraFactoryInputInventorySlot.class, remap = false)
 public abstract class EMExtraFactoryInputInventorySlotMixin {
 

@@ -1,38 +1,35 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import com.jerry.mekextras.common.inventory.slot.ExtraFactoryOutputInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.jerry.mekextras.common.inventory.slot.ExtraFactoryOutputInventorySlot;
-
-import mekanism.common.inventory.slot.BasicInventorySlot;
-import net.minecraft.world.item.ItemStack;
-
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
-
 /**
- * ME 工厂输出槽 getLimit 覆盖拦截 Mixin — 仅在 ME 加载时应用
- * <br/>
- * <b>背景</b>：ME 的 {@link ExtraFactoryOutputInventorySlot} 覆盖了
- * {@link BasicInventorySlot#getLimit}，乘以 {@code 8 << factory.tier.ordinal()}。
- * 需用我们的输出槽配置倍率（{@code stack_multiplier}）替代 ME 的硬编码倍率。
- * <p>
- * <b>策略</b>：与 {@link ExtraFactoryInputInventorySlotMixin} 相同 —
- * 在 HEAD 拦截，当 {@link TieredInputSlot} 倍率已设置时完全替换 ME 的倍率逻辑。
- * 倍率为 null 时（非我们的离心机工厂），ME 原逻辑正常运行。
- * <p>
- * <b>注意</b>：{@link TieredInputSlot} 接口名称虽含 "Input"，但实际是通用的
- * 堆叠倍率注入机制，对输出槽同样适用。
- *
- * @since 1.13.0
- * @author Ayoshiko
- * @see ExtraFactoryInputInventorySlotMixin 输入槽版本
- * @see com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers 输出槽倍率来源
- */
+	 * ME 工厂输出槽 getLimit 覆盖拦截 Mixin — 仅在 ME 加载时应用
+	 * <br/>
+	 * <b>背景</b>：ME 的 {@link ExtraFactoryOutputInventorySlot} 覆盖了
+	 * {@link BasicInventorySlot#getLimit}，乘以 {@code 8 << factory.tier.ordinal()}。
+	 * 需用我们的输出槽配置倍率（{@code stack_multiplier}）替代 ME 的硬编码倍率。
+	 * <p>
+	 * <b>策略</b>：与 {@link ExtraFactoryInputInventorySlotMixin} 相同 —
+	 * 在 HEAD 拦截，当 {@link TieredInputSlot} 倍率已设置时完全替换 ME 的倍率逻辑。
+	 * 倍率为 null 时（非我们的离心机工厂），ME 原逻辑正常运行。
+	 * <p>
+	 * <b>注意</b>：{@link TieredInputSlot} 接口名称虽含 "Input"，但实际是通用的
+	 * 堆叠倍率注入机制，对输出槽同样适用。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 * @see ExtraFactoryInputInventorySlotMixin 输入槽版本
+	 * @see com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers 输出槽倍率来源
+	 */
 @Mixin(value = ExtraFactoryOutputInventorySlot.class, remap = false)
 public abstract class ExtraFactoryOutputInventorySlotMixin {
 

@@ -1,66 +1,64 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import net.minecraft.core.Direction;
-
-import org.jetbrains.annotations.Nullable;
-
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.util.AECableType;
 import appeng.me.InWorldGridNode;
+import net.minecraft.core.Direction;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * AE2 输出宿主接口 — 仅包含 AE2 线缆连接契约
- * <br/>
- * 继承 {@link IAe2OutputHostBase}（无 AE2 引用的基础契约）和
- * {@link IInWorldGridNodeHost}（AE2 19.x 标准线缆发现契约），
- * 使离心机/蜂箱能被 AE2 线缆发现并自动建立网格连接。
- * <p>
- * <b>Task 3 拆分</b>：原接口拆分为 Base + AE2 专用两层：
- * <ul>
- *   <li>{@link IAe2OutputHostBase} — 无 import appeng，包含所有非 AE2 方法（生命周期、
- *       输出推送、能量注入、配置缓存等）。TileEntity 实现此接口即可在 AE2 未安装时正常加载。</li>
- *   <li>{@link IAe2OutputHost}（本接口）— 仅保留 {@link #getGridNode(Direction)} 和
- *       {@link #getCableConnectionType(Direction)} 两个 AE2 契约方法。
- *       由 Mixin（Task 4）在 AE2 已安装时动态添加到 TileEntity，避免 TileEntity
- *       类签名强引用 AE2 类。</li>
- * </ul>
- * <p>
- * <b>AE2 类引用控制</b>：本接口强引用 AE2 API 类（{@code IInWorldGridNodeHost}、
- * {@code IGridNode}、{@code AECableType} 等），这是实现 AE2 cable 连接的必要设计权衡。
- * AE2 未安装时通过 {@link Ae2IntegrationLoader#isAe2Loaded()} 在所有调用点短路保护，
- * 防止类加载失败。capability 注册也仅在 AE2 已安装时执行（参见 {@link Ae2CapabilityRegistrar}）。
- * <p>
- * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 与
- * {@code getCableConnectionType} 提供 static 辅助实现
- * （{@link #resolveGridNode} / {@link #resolveCableConnectionType}），
- * 由各 Mixin 注入类显式实现并委托调用。
- * <p>
- * <b>为何不能是 default 方法</b>：AE2 的 {@code IGridConnectedBlockEntity}
- * 已为 {@code getGridNode(Direction)} 提供 default 实现。若本接口也提供 default，
- * 目标类（同时实现两个接口且未显式重写）会在类加载时触发
- * {@code IncompatibleClassChangeError: Conflicting default methods}。
- * 因此本接口将两个方法都声明为抽象方法，由 Mixin 注入显式实现，
- * 类中显式方法优先于接口 default，彻底避免 AbstractMethodError/IncompatibleClassChangeError。
- * <p>
- * 实现细节：
- * <ol>
- *   <li>从状态持有者取出 {@link IManagedGridNode}（可能为 null）</li>
- *   <li>取已连接的 {@link IGridNode}（未连接时为 null）</li>
- *   <li>校验节点类型为 {@link InWorldGridNode}（与 {@link Ae2GridNodeManager#prepareNode} 中
- *       {@code setInWorldNode(true)} 设置一致）</li>
- *   <li>校验查询方向在 {@code setExposedOnSides(ALL)} 暴露的方向集合中</li>
- * </ol>
- * <p>
- * <b>AE2 未安装时</b>：本接口不会被加载（Mixin 仅在 AE2 已安装时应用），default 方法
- * 不会被调用。capability 注册时也会跳过。
- * <p>
- * <b>AE2 已安装但配置关闭时</b>：节点不会被创建（{@link Ae2GridNodeManager#prepareNode} 短路），
- * {@link #getGridNode} 返回 null，AE2 线缆看到的是"无节点方块"。
- *
- * @since 1.7.0
- */
+	 * AE2 输出宿主接口 — 仅包含 AE2 线缆连接契约
+	 * <br/>
+	 * 继承 {@link IAe2OutputHostBase}（无 AE2 引用的基础契约）和
+	 * {@link IInWorldGridNodeHost}（AE2 19.x 标准线缆发现契约），
+	 * 使离心机/蜂箱能被 AE2 线缆发现并自动建立网格连接。
+	 * <p>
+	 * <b>Task 3 拆分</b>：原接口拆分为 Base + AE2 专用两层：
+	 * <ul>
+	 *   <li>{@link IAe2OutputHostBase} — 无 import appeng，包含所有非 AE2 方法（生命周期、
+	 *       输出推送、能量注入、配置缓存等）。TileEntity 实现此接口即可在 AE2 未安装时正常加载。</li>
+	 *   <li>{@link IAe2OutputHost}（本接口）— 仅保留 {@link #getGridNode(Direction)} 和
+	 *       {@link #getCableConnectionType(Direction)} 两个 AE2 契约方法。
+	 *       由 Mixin（Task 4）在 AE2 已安装时动态添加到 TileEntity，避免 TileEntity
+	 *       类签名强引用 AE2 类。</li>
+	 * </ul>
+	 * <p>
+	 * <b>AE2 类引用控制</b>：本接口强引用 AE2 API 类（{@code IInWorldGridNodeHost}、
+	 * {@code IGridNode}、{@code AECableType} 等），这是实现 AE2 cable 连接的必要设计权衡。
+	 * AE2 未安装时通过 {@link Ae2IntegrationLoader#isAe2Loaded()} 在所有调用点短路保护，
+	 * 防止类加载失败。capability 注册也仅在 AE2 已安装时执行（参见 {@link Ae2CapabilityRegistrar}）。
+	 * <p>
+	 * <b>IInWorldGridNodeHost 契约实现</b>：本接口为 {@code getGridNode} 与
+	 * {@code getCableConnectionType} 提供 static 辅助实现
+	 * （{@link #resolveGridNode} / {@link #resolveCableConnectionType}），
+	 * 由各 Mixin 注入类显式实现并委托调用。
+	 * <p>
+	 * <b>为何不能是 default 方法</b>：AE2 的 {@code IGridConnectedBlockEntity}
+	 * 已为 {@code getGridNode(Direction)} 提供 default 实现。若本接口也提供 default，
+	 * 目标类（同时实现两个接口且未显式重写）会在类加载时触发
+	 * {@code IncompatibleClassChangeError: Conflicting default methods}。
+	 * 因此本接口将两个方法都声明为抽象方法，由 Mixin 注入显式实现，
+	 * 类中显式方法优先于接口 default，彻底避免 AbstractMethodError/IncompatibleClassChangeError。
+	 * <p>
+	 * 实现细节：
+	 * <ol>
+	 *   <li>从状态持有者取出 {@link IManagedGridNode}（可能为 null）</li>
+	 *   <li>取已连接的 {@link IGridNode}（未连接时为 null）</li>
+	 *   <li>校验节点类型为 {@link InWorldGridNode}（与 {@link Ae2GridNodeManager#prepareNode} 中
+	 *       {@code setInWorldNode(true)} 设置一致）</li>
+	 *   <li>校验查询方向在 {@code setExposedOnSides(ALL)} 暴露的方向集合中</li>
+	 * </ol>
+	 * <p>
+	 * <b>AE2 未安装时</b>：本接口不会被加载（Mixin 仅在 AE2 已安装时应用），default 方法
+	 * 不会被调用。capability 注册时也会跳过。
+	 * <p>
+	 * <b>AE2 已安装但配置关闭时</b>：节点不会被创建（{@link Ae2GridNodeManager#prepareNode} 短路），
+	 * {@link #getGridNode} 返回 null，AE2 线缆看到的是"无节点方块"。
+	 *
+	 * @since 1.5.3
+	 */
 public interface IAe2OutputHost extends IAe2OutputHostBase, IInWorldGridNodeHost {
 
 	/**

@@ -3,20 +3,20 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 
 /**
- * 多流体槽 Tab 同步监听器
- * <br/>
- * 在 GUI containerTick 中检测 {@link IMultiFluidTankHost#isMultiFluidModeSynced()} 变化,
- * 动态添加/移除 Tab,解决首次打开 GUI 时同步数据未到达导致 Tab 不显示的竞态问题。
- * <p>
- * <b>竞态根因</b>:客户端 GUI 构造(addGuiElements)发生在 Container 同步数据到达之前,
- * 首次打开 isMultiFluidModeSynced 默认 false → Tab 不添加;
- * 第二次打开字段保留上次同步值 true → Tab 显示。
- * <p>
- * <b>修复原理</b>:watcher 在 containerTick 中持续轮询同步值,检测到 false→true 变化时
- * 通过 addTab 回调动态添加 Tab,1-2 帧延迟(约 16-33ms)即可显示。
- *
- * @since Task 2
- */
+	 * 多流体槽 Tab 同步监听器
+	 * <br/>
+	 * 在 GUI containerTick 中检测 {@link IMultiFluidTankHost#isMultiFluidModeSynced()} 变化,
+	 * 动态添加/移除 Tab,解决首次打开 GUI 时同步数据未到达导致 Tab 不显示的竞态问题。
+	 * <p>
+	 * <b>竞态根因</b>:客户端 GUI 构造(addGuiElements)发生在 Container 同步数据到达之前,
+	 * 首次打开 isMultiFluidModeSynced 默认 false → Tab 不添加;
+	 * 第二次打开字段保留上次同步值 true → Tab 显示。
+	 * <p>
+	 * <b>修复原理</b>:watcher 在 containerTick 中持续轮询同步值,检测到 false→true 变化时
+	 * 通过 addTab 回调动态添加 Tab,1-2 帧延迟(约 16-33ms)即可显示。
+	 *
+	 * @since Task 2
+	 */
 public class MultiFluidTabSyncWatcher {
 
 	/** 上次同步值 — 用于检测变化,初始 false(SINGLE 模式默认) */

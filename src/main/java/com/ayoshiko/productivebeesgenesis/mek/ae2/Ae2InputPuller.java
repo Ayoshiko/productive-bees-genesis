@@ -1,36 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
-
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
-
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 
 /**
- * AE2 输入拉取器（与 {@link Ae2OutputPusher} 对称）— 将 AE2 网络中的蜜脾拉取到离心机输入槽。
- * 调用方需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫。
- * @since 1.13.0
- */
+	 * AE2 输入拉取器（与 {@link Ae2OutputPusher} 对称）— 将 AE2 网络中的蜜脾拉取到离心机输入槽。
+	 * 调用方需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫。
+	 * @since 2.0.0
+	 */
 public final class Ae2InputPuller {
 
 	/** 异常日志计数器 — 用于在日志中显示累计出现次数（LogThrottle 已负责节流） */
@@ -110,12 +107,12 @@ public final class Ae2InputPuller {
 				? Math.max(tracker.getMultiplier(), tracker.getPreviousTickMultiplier())
 				: 1;
 
-		// 7. 按游戏刻节流，同一游戏刻内的加速器重复调用只会触发一次。
-		//    加速倍率只缩短真实游戏刻间隔；不再把工厂调用间隔放大到 M，避免 256× 时数秒才拉取一次。
+		// 7. AE2LT-style adaptive cooldown (success: 1 tick unlimited / 5 normal, failures back off).
+		//    Driven by the pull call counter so acceleration mods that invoke multiple
+		//    ticks per game tick still converge; unlimited entries ignore the configured interval.
 		long pullCounter = holder.incrementPullCallCounter();
-		int intervalTicks = holder.getCachedInputIntervalTicks();
-		int effectiveInterval = Ae2PullFairnessPolicy.effectiveInterval(intervalTicks, M);
-		if (currentTick - holder.getLastPullTick() < effectiveInterval) return;
+		int cooldownTicks = holder.getInputPullCooldownTicks();
+		if (pullCounter - holder.getLastPullCounter() < cooldownTicks) return;
 
 		// 8. 获取复用缓冲区（与推送共享 ReusableBuffers，避免每 tick 创建临时对象）
 		//    holder 感知重载，跳过冗余 getAe2StateHolder
@@ -126,30 +123,33 @@ public final class Ae2InputPuller {
 		if (inputSlots == null || inputSlots.isEmpty()) return;
 		int processCount = inputSlots.size();
 
-		// 10. 将配置的常速预算按上一完整游戏刻测得的加速倍率扩展，再均分到各槽。
-		//     工厂只在每刻第一次调用执行 AE 拉取，因此不能使用此刻尚未累积的调用次数。
-		long baseRate = holder.getCachedInputRatePerTick();
-		double tpsFactor = ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
-		long perSlotQuota = Ae2PullFairnessPolicy.perSlotQuota(baseRate, M, processCount);
-		long baseProduct = SaturatingMath.saturatingMultiply(perSlotQuota, processCount);
-		long effectiveRate = Math.max(1L, (long) (baseProduct * tpsFactor));
-		if (effectiveRate <= 0) return;
-
-		// 11. 计算输入槽总剩余容量（long 类型防止高等级工厂累加溢出）
+		// 10. Unlimited entries bypass the rate budget entirely (AE2LT overloaded
+		//     interface semantics): pull as much as the input slots can hold,
+		//     ignoring both the configured interval and per-tick quantity.
+		Ae2InputFilter filter = holder.getOrCreateInputFilter();
+		boolean unlimitedMode = filter != null && filter.hasUnlimitedEntries();
 		long inputCapacity = calculateInputCapacity(inputSlots);
 		if (inputCapacity <= 0) {
-			// 输入槽已满，刷新 lastPullTick 避免下一 tick 重复扫描
-			// Spark 优化：直接使用 holder 替代 host 接口分发
+			// Input slots are full; treat as a failed attempt so the cooldown backs off.
+			holder.onInputPullFail(unlimitedMode);
 			holder.updateLastPullTick(currentTick);
 			holder.updateLastPullCounter(pullCounter);
 			return;
 		}
-		// 总限额取 effectiveRate 与输入槽剩余容量的较小值，避免 pullList 总量超过输入槽容量
-		long remainingQuota = Math.min(effectiveRate, inputCapacity);
-
-		// 12. 获取 per-tile 过滤器（filter 为 null 时不过滤，向后兼容 Phase 1）
-		//     Spark 优化：直接使用 holder 替代 host 接口分发
-		Ae2InputFilter filter = holder.getOrCreateInputFilter();
+		long remainingQuota;
+		long perSlotQuota;
+		if (unlimitedMode) {
+			remainingQuota = inputCapacity;
+			perSlotQuota = Long.MAX_VALUE;
+		} else {
+			long baseRate = holder.getCachedInputRatePerTick();
+			double tpsFactor = ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
+			perSlotQuota = Ae2PullFairnessPolicy.perSlotQuota(baseRate, M, processCount);
+			long baseProduct = SaturatingMath.saturatingMultiply(perSlotQuota, processCount);
+			long effectiveRate = Math.max(1L, (long) (baseProduct * tpsFactor));
+			remainingQuota = Math.min(effectiveRate, inputCapacity);
+		}
+		if (remainingQuota <= 0) return;
 
 		// 13. 遍历 MEStorage 可用栈，收集待拉取类型（不消耗 quota，由执行阶段按 round-robin 分配）
 		//     V13 修复：收集所有可用类型，单类型走原版顺序填充，多类型走 round-robin 跨进程分发
@@ -158,43 +158,104 @@ public final class Ae2InputPuller {
 		int maxTypesToCollect = Math.max(1, processCount * 2); // 上限避免海量类型拖慢分发
 		AEItemKey candidateCursor = holder.getInputCandidateCursor() instanceof AEItemKey key ? key : null;
 		boolean afterCursor = candidateCursor == null;
-		for (var entry : meStorage.getAvailableStacks()) {
-			if (pullList.size() >= maxTypesToCollect) break;
-			PullEntry candidate = createPullCandidate(entry.getKey(), entry.getLongValue(), filter);
-			if (candidate == null) continue;
-			if (!afterCursor) {
-				if (candidate.key.equals(candidateCursor)) afterCursor = true;
-				continue;
+		// AE2 已在 StorageService 中维护网格库存缓存。直接调用 MEStorage.getAvailableStacks()
+		// 会再次遍历每个存储单元；在大型 Omni Cell 网络中这正是 Spark 的主要热点。
+		// 单次拉取固定使用同一快照，游标回绕也不会触发第二次网络聚合。
+		var availableStacks = storageService.getCachedInventory();
+		List<Ae2InputFilter.DirectEntry> directEntries = filter != null && filter.hasDirectEntries()
+				? filter.getDirectEntries() : List.of();
+		if (!directEntries.isEmpty()) {
+			var resolvedKeys = Ae2ItemFingerprint.resolve(
+					directEntries, availableStacks, level.registryAccess());
+			for (Ae2InputFilter.DirectEntry direct : directEntries) {
+				if (direct.key() != null) continue;
+				AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
+				if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
 			}
-			pullList.add(candidate);
+			directEntries = filter.getDirectEntries();
 		}
-
-		// 游标不存在或已到列表尾部时从开头回绕。只在回绕边界多扫一次，
-		// 常态仍最多创建 processCount * 2 个候选对象。
-		if (candidateCursor != null && pullList.size() < maxTypesToCollect) {
-			for (var entry : meStorage.getAvailableStacks()) {
+		boolean directOnly = filter != null
+				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
+				&& filter.hasOnlyNetworkStockEntries()
+				&& !holder.isAeInputNbtIgnore();
+		if (directOnly) {
+			// Network-stock whitelist entries use exact keys and avoid a full inventory scan.
+			for (Ae2InputFilter.DirectEntry direct : directEntries) {
 				if (pullList.size() >= maxTypesToCollect) break;
-				PullEntry candidate = createPullCandidate(entry.getKey(), entry.getLongValue(), filter);
-				if (candidate == null) continue;
-				if (candidate.key.equals(candidateCursor)) break;
-				if (!containsPullKey(pullList, candidate.key)) pullList.add(candidate);
+				AEItemKey key = direct.key();
+				if (key == null || containsPullKey(pullList, key)
+						|| !CombFuzzyMatcher.isCombItem(key)) continue;
+				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+						availableStacks, meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
+				long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
+				if (!unlimitedMode && configuredLimit >= 0L) {
+					available = Math.min(available, configuredLimit);
+				}
+				if (available > 0) pullList.add(new PullEntry(key, SaturatingMath.saturatingToInt(available)));
+			}
+		} else {
+			// Mixed whitelists still honor network-stock entries that are extractable but absent from AE's cache.
+			if (filter != null && filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST) {
+				for (Ae2InputFilter.DirectEntry direct : directEntries) {
+					if (pullList.size() >= maxTypesToCollect) break;
+					AEItemKey key = direct.key();
+					if (!direct.networkStock() || key == null || containsPullKey(pullList, key)
+							|| !CombFuzzyMatcher.isCombItem(key)) continue;
+					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+							availableStacks, meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
+					long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
+					if (!unlimitedMode && configuredLimit >= 0L) {
+						available = Math.min(available, configuredLimit);
+					}
+					if (available > 0) {
+						pullList.add(new PullEntry(key, SaturatingMath.saturatingToInt(available)));
+					}
+				}
+			}
+			// 构建键序列并执行游标回绕扫描（纯逻辑抽离为 collectCursorScan，便于单测回归验证）。
+			// KeyCounter.keySet() 返回同一快照内的稳定引用序，游标定位与回绕语义一致。
+			List<AEItemKey> scanKeys = buffers.borrowScanKeys();
+			scanKeys.clear();
+			for (AEKey scanKey : availableStacks.keySet()) {
+				if (scanKey instanceof AEItemKey itemKey) scanKeys.add(itemKey);
+			}
+			List<AEItemKey> selectedKeys = buffers.borrowScanSelectedKeys();
+			selectedKeys.clear();
+			boolean ignoreNbt = holder.isAeInputNbtIgnore();
+			// 总收集上限与旧实现一致：whitelist 预置条目也计入 maxTypesToCollect
+			int scanCap = Math.max(0, maxTypesToCollect - pullList.size());
+			Ae2CursorScan.collect(selectedKeys, scanKeys, candidateCursor, scanCap,
+					key -> !containsPullKey(pullList, key)
+							&& createPullCandidate(key, availableStacks.get(key), filter, ignoreNbt, unlimitedMode) != null);
+			for (AEItemKey key : selectedKeys) {
+				pullList.add(createPullCandidate(key, availableStacks.get(key), filter, ignoreNbt, unlimitedMode));
 			}
 		}
 
 		if (pullList.isEmpty()) {
 			// 无可拉取物品，仍刷新 lastPullTick 避免下一 tick 重复扫描
 			// Spark 优化：直接使用 holder 替代 host 接口分发
+			// No pullable items: treat as a failed attempt so the cooldown backs off.
+			holder.onInputPullFail(unlimitedMode);
 			holder.updateLastPullTick(currentTick);
 			holder.updateLastPullCounter(pullCounter);
 			return;
 		}
 		holder.setInputCandidateCursor(pullList.getLast().key);
 
-		// 14. 按蜜脾块优先排序（蜜脾块产物倍率高，避免高价值原料在网络中堆积）
+		// 14. Marked-first ordering (AE2LT: pull what is marked first);
+		//      among marked entries comb blocks stay ahead (higher yield).
+		//      marked flags are pre-computed once per pull (matchesAnyEntry walks the
+		//      filter slots; doing it inside the comparator would cost N*logN walks).
+		boolean sortIgnoreNbt = holder.isAeInputNbtIgnore();
+		for (PullEntry entry : pullList) {
+			entry.marked = filter != null && filter.matchesAnyEntry(entry.key, sortIgnoreNbt);
+		}
 		pullList.sort((a, b) -> {
+			if (a.marked != b.marked) return Boolean.compare(b.marked, a.marked);
 			boolean aBlock = CombFuzzyMatcher.isCombBlock(a.key);
 			boolean bBlock = CombFuzzyMatcher.isCombBlock(b.key);
-			return Boolean.compare(bBlock, aBlock); // true (block) 排前
+			return Boolean.compare(bBlock, aBlock); // true (block) first
 		});
 
 		// 15. 槽位和类型双轮转。单类型也逐槽限额，不再从 slot 0 一次灌满。
@@ -230,6 +291,13 @@ public final class Ae2InputPuller {
 
 		// 16. 更新上次拉取游戏刻（无论是否拉取成功，只要触发过就更新，避免下一 tick 重复扫描）
 		//     Spark 优化：直接使用 holder 替代 host 接口分发
+		// 16. Update the adaptive cooldown: success shortens the next interval
+		//     (1 tick unlimited / 5 normal), failure backs off (AE2LT parity).
+		if (totalPulled > 0) {
+			holder.onInputPullSuccess(unlimitedMode, totalPulled, remainingQuota);
+		} else {
+			holder.onInputPullFail(unlimitedMode);
+		}
 		holder.updateLastPullTick(currentTick);
 		holder.updateLastPullCounter(pullCounter);
 
@@ -237,12 +305,19 @@ public final class Ae2InputPuller {
 		pullList.clear();
 	}
 
-	private static PullEntry createPullCandidate(Object rawKey, long available, Ae2InputFilter filter) {
+	private static PullEntry createPullCandidate(Object rawKey, long available, Ae2InputFilter filter,
+		boolean ignoreNbt, boolean unlimitedMode) {
 		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)) return null;
 		if (!CombFuzzyMatcher.isCombItem(itemKey)) return null;
-		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(itemKey);
-		boolean isBlock = CombFuzzyMatcher.isCombBlock(itemKey);
-		if (filter != null && !filter.isAllowed(beeType, isBlock)) return null;
+		boolean allowed = filter == null || filter.isAllowed(itemKey, ignoreNbt);
+		if (!allowed) {
+			return null;
+		}
+		if (filter != null && !unlimitedMode) {
+			long configuredLimit = filter.getDirectPullLimit(itemKey, available, ignoreNbt);
+			if (configuredLimit >= 0L) available = Math.min(available, configuredLimit);
+		}
+		if (available <= 0L) return null;
 		return new PullEntry(itemKey, SaturatingMath.saturatingToInt(available));
 	}
 
@@ -252,6 +327,7 @@ public final class Ae2InputPuller {
 		}
 		return false;
 	}
+
 
 	/**
 	 * 获取每次拉取的最大物品数量
@@ -353,7 +429,9 @@ public final class Ae2InputPuller {
 			MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, int targetSlotIndex, BlockPos pos, Ae2PushBackoff returnBackoff) {
 		long extracted = meStorage.extract(key, amount, Actionable.MODULATE, actionSource);
-		if (extracted <= 0) return 0;
+		if (extracted <= 0) {
+			return 0;
+		}
 
 		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
 		int originalCount = stack.getCount();
@@ -386,10 +464,11 @@ public final class Ae2InputPuller {
 		// Task 2 修复：剩余物品回送 ME 网络，使用 poweredInsert + 三层兜底保证物品不丢失
 		// 根因：原 meStorage.insert 在 ME 网络状态变化（storage 已满/cell 移除/网络断开）时失败即丢弃物品。
 		// 修复：poweredInsert 重试 + 回插输入槽 + popResource 三层兜底，绝不丢失物品。
+		int leftoverRemaining = stack.isEmpty() ? 0 : stack.getCount();
 		if (!stack.isEmpty()) {
 			// M4-2 修复：returnLeftoverToMe 返回剩余未回送数量，> 0 表示有物品丢失风险
 			// 这里 stack 是从 ME 拉取的局部变量，无源槽位可保留，仅记录 ERROR 等待人工排查
-			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource, returnBackoff,
+			leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource, returnBackoff,
 					level, pos, inputSlots);
 			if (leftoverRemaining > 0) {
 				// M9: LogThrottle.error 节流，5 秒内同 key 仅首条，避免 256× 加速刷屏
@@ -397,7 +476,6 @@ public final class Ae2InputPuller {
 						"AE2 拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
 			}
 		}
-
 		return insertedCount;
 	}
 
@@ -439,6 +517,8 @@ public final class Ae2InputPuller {
 	static final class PullEntry {
 		final AEItemKey key;
 		int remaining;
+		/** Pre-computed "matches a configured entry" flag used by the marked-first sort. */
+		boolean marked;
 
 		PullEntry(AEItemKey key, int amount) {
 			this.key = key;

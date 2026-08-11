@@ -1,34 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.MekanismRenderer;
-import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
+import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.function.Supplier;
+
 /**
- * 喂食器窗口创建Tab
- * <br/>
- * 位于 GUI 左侧 y=98（排序Tab在y=62-97，间距1px；不与 MEK 原版 Tab 冲突：左侧 y=6/34/62/137）。
- * 颜色：绿色 #00695c，点击后打开 {@link GuiFeederWindow}。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>继承 MEK {@link GuiWindowCreatorTab}，复用窗口创建/关闭/重新挂载的标准生命周期</li>
- *   <li>单一职责：仅负责创建窗口，不处理窗口内部逻辑</li>
- * </ul>
- */
+	 * 喂食器窗口创建Tab
+	 * <br/>
+	 * 位于 GUI 左侧 y=98（排序Tab在y=62-97，间距1px；不与 MEK 原版 Tab 冲突：左侧 y=6/34/62/137）。
+	 * 颜色：绿色 #00695c，点击后打开 {@link GuiFeederWindow}。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>继承 MEK {@link GuiWindowCreatorTab}，复用窗口创建/关闭/重新挂载的标准生命周期</li>
+	 *   <li>单一职责：仅负责创建窗口，不处理窗口内部逻辑</li>
+	 * </ul>
+	 */
 public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFeederTab> {
 
 	/** Tab 颜色 — 深青绿 #00695c（ARGB 格式） */

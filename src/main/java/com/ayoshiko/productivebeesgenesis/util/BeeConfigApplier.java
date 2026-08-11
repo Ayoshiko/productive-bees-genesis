@@ -9,11 +9,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.FastColor;
 
 /**
- * 蜜蜂属性配置覆盖工具类
- * <p>
- * 被 {@link com.ayoshiko.productivebeesgenesis.mixin.BeeConfigReloadMixin} 和主类事件处理器调用。
- * 将 ModConfig 中的值写入 BeeReloadListener 已加载的 CompoundTag 上。
- */
+	 * 蜜蜂属性配置覆盖工具类
+	 * <p>
+	 * 被 {@link com.ayoshiko.productivebeesgenesis.mixin.BeeConfigReloadMixin} 和主类事件处理器调用。
+	 * 将 ModConfig 中的值写入 BeeReloadListener 已加载的 CompoundTag 上。
+	 */
 public final class BeeConfigApplier {
 
 	private BeeConfigApplier() {}

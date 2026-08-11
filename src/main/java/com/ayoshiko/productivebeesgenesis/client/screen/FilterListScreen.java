@@ -1,14 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -18,22 +11,28 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
 /**
- * 万象创世过滤列表编辑屏幕
- * <br/>
- * 提供 GUI 界面编辑蜜蜂类型过滤列表，解决 NeoForge 默认 ConfigurationScreen
- * 不支持空列表添加项的问题。
- * <p>
- * 功能：
- * <ol>
- *   <li>过滤模式图标按钮切换（DISABLED/BLACKLIST/WHITELIST）</li>
- *   <li>蜜蜂类型列表展示（序号、复选框、类型ID、蜜蜂名称、产物信息）</li>
- *   <li>批量删除、单条删除、拖拽排序</li>
- *   <li>全选/反选当前可见条目</li>
- *   <li>输入验证（ResourceLocation 格式 + 存在性检查 + 去重）</li>
- *   <li>保存到配置文件</li>
- * </ol>
- */
+	 * 万象创世过滤列表编辑屏幕
+	 * <br/>
+	 * 提供 GUI 界面编辑蜜蜂类型过滤列表，解决 NeoForge 默认 ConfigurationScreen
+	 * 不支持空列表添加项的问题。
+	 * <p>
+	 * 功能：
+	 * <ol>
+	 *   <li>过滤模式图标按钮切换（DISABLED/BLACKLIST/WHITELIST）</li>
+	 *   <li>蜜蜂类型列表展示（序号、复选框、类型ID、蜜蜂名称、产物信息）</li>
+	 *   <li>批量删除、单条删除、拖拽排序</li>
+	 *   <li>全选/反选当前可见条目</li>
+	 *   <li>输入验证（ResourceLocation 格式 + 存在性检查 + 去重）</li>
+	 *   <li>保存到配置文件</li>
+	 * </ol>
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

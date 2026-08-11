@@ -1,8 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.IntSupplier;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -18,28 +21,24 @@ import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.world.item.ItemStack;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.IntSupplier;
 
 /**
- * 基础MEK离心机输出槽与流体槽管理器
- * <br/>
- * Task 11 重构：从 {@link TileEntityMekCentrifuge} 抽取输出槽/流体槽相关状态与逻辑，
- * 包括槽位初始化、输出槽标志位维护（hasOutputItems/outputSlotsFull/outputItemCount）、
- * 批量插入管理（beginOutputBatch/endOutputBatch）、槽位上限缓存等。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：只管理输出槽和流体槽的状态，不涉及配方处理或tick逻辑</li>
- *   <li>依赖倒置：持有 {@link TileEntityMekCentrifuge} 引用访问父类字段和回调</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行，volatile 字段保证可见性（标志位可能被 Ejector Mixin 读取）。
- */
+	 * 基础MEK离心机输出槽与流体槽管理器
+	 * <br/>
+	 * Task 11 重构：从 {@link TileEntityMekCentrifuge} 抽取输出槽/流体槽相关状态与逻辑，
+	 * 包括槽位初始化、输出槽标志位维护（hasOutputItems/outputSlotsFull/outputItemCount）、
+	 * 批量插入管理（beginOutputBatch/endOutputBatch）、槽位上限缓存等。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：只管理输出槽和流体槽的状态，不涉及配方处理或tick逻辑</li>
+	 *   <li>依赖倒置：持有 {@link TileEntityMekCentrifuge} 引用访问父类字段和回调</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，volatile 字段保证可见性（标志位可能被 Ejector Mixin 读取）。
+	 */
 class MekCentrifugeSlotManager {
 
 	// ===== 槽位引用 =====
@@ -189,7 +188,7 @@ class MekCentrifugeSlotManager {
 	 * @return 堆叠倍率供应商，传入 TieredOutputInventorySlot
 	 */
 	private IntSupplier getStackMultiplierForTier() {
-		// v1.13.0 子段抽取后,通过 centrifuge().stackMultiplier 访问
+		// v2.0.0 子段抽取后,通过 centrifuge().stackMultiplier 访问
 		return () -> ModConfig.SERVER.centrifuge().stackMultiplier.mekCentrifugeStackBasic.get();
 	}
 

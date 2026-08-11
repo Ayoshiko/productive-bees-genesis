@@ -4,10 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -20,7 +19,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
-
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -28,21 +26,21 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * 蜜蜂 Tooltip 渲染器
- * <br/>
- * 鼠标悬停在蜜蜂槽上时显示详细信息 tooltip。
- * <p>
- * 未按 Shift：显示蜜蜂名称 + "按住 Shift 查看更多信息"提示。
- * 按住 Shift：显示完整属性（年龄/血量/生产力/耐力/脾气/行为/天气耐受性）
- * 及生产进度、当前状态、花蜜信息。
- * <p>
- * 属性数据来源于 PB 原生 {@code neoforge:attachments} 中的
- * {@code productivebees:attributes_handler}，参考 BeeHelper.populateBeeInfoFromTag。
- * <p>
- * 设计原则：单一职责，仅负责 tooltip 渲染与 NBT 读取展示。
- * <br/>
- * 线程安全：仅从客户端渲染线程调用，无需同步。
- */
+	 * 蜜蜂 Tooltip 渲染器
+	 * <br/>
+	 * 鼠标悬停在蜜蜂槽上时显示详细信息 tooltip。
+	 * <p>
+	 * 未按 Shift：显示蜜蜂名称 + "按住 Shift 查看更多信息"提示。
+	 * 按住 Shift：显示完整属性（年龄/血量/生产力/耐力/脾气/行为/天气耐受性）
+	 * 及生产进度、当前状态、花蜜信息。
+	 * <p>
+	 * 属性数据来源于 PB 原生 {@code neoforge:attachments} 中的
+	 * {@code productivebees:attributes_handler}，参考 BeeHelper.populateBeeInfoFromTag。
+	 * <p>
+	 * 设计原则：单一职责，仅负责 tooltip 渲染与 NBT 读取展示。
+	 * <br/>
+	 * 线程安全：仅从客户端渲染线程调用，无需同步。
+	 */
 public class BeeTooltipRenderer {
 
 	/** ARGB 不透明前缀 */

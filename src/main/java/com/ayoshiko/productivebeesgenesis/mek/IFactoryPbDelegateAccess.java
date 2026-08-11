@@ -3,24 +3,24 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 
 /**
- * 工厂PB上下文委托访问接口 — 消除三个工厂的重复委托方法
- * <br/>
- * 三个工厂（{@link TileEntityMekCentrifugeFactory}、
- * {@link TileEntityExtraMekCentrifugeFactory}、
- * {@link TileEntityEMExtraMekCentrifugeFactory}）各自有约50行
- * 纯委托代码（{@code productivebeesgenesis$xxx} 方法全部转发给 {@link FactoryPbContextDelegate}）。
- * 本接口为这些方法提供默认实现，工厂只需实现 {@link #productivebeesgenesis$getDelegate()} 返回委托实例。
- * <p>
- * 继承 {@link IAe2OutputHostBase}（间接继承 {@link PbRecipeContext}）和 {@link IMekCentrifugeTile}
- * 保持接口契约不变。Task 3 后工厂类实现 {@link IAe2OutputHostBase} 而非 {@code IAe2OutputHost}，
- * AE2 线缆连接契约由 Task 4 的 Mixin 动态添加。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：只封装委托转发逻辑，不涉及槽位布局或配方处理</li>
- *   <li>开闭原则：新增工厂类型只需实现本接口 + 提供 delegate getter</li>
- * </ul>
- */
+	 * 工厂PB上下文委托访问接口 — 消除三个工厂的重复委托方法
+	 * <br/>
+	 * 三个工厂（{@link TileEntityMekCentrifugeFactory}、
+	 * {@link TileEntityExtraMekCentrifugeFactory}、
+	 * {@link TileEntityEMExtraMekCentrifugeFactory}）各自有约50行
+	 * 纯委托代码（{@code productivebeesgenesis$xxx} 方法全部转发给 {@link FactoryPbContextDelegate}）。
+	 * 本接口为这些方法提供默认实现，工厂只需实现 {@link #productivebeesgenesis$getDelegate()} 返回委托实例。
+	 * <p>
+	 * 继承 {@link IAe2OutputHostBase}（间接继承 {@link PbRecipeContext}）和 {@link IMekCentrifugeTile}
+	 * 保持接口契约不变。Task 3 后工厂类实现 {@link IAe2OutputHostBase} 而非 {@code IAe2OutputHost}，
+	 * AE2 线缆连接契约由 Task 4 的 Mixin 动态添加。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：只封装委托转发逻辑，不涉及槽位布局或配方处理</li>
+	 *   <li>开闭原则：新增工厂类型只需实现本接口 + 提供 delegate getter</li>
+	 * </ul>
+	 */
 public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentrifugeTile {
 
 	/** 获取工厂的PB上下文委托实例 — 供默认方法转发使用 */

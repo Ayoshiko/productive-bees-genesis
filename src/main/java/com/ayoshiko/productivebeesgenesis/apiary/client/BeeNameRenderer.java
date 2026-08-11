@@ -1,48 +1,45 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-
 import com.mojang.blaze3d.vertex.PoseStack;
-
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * 蜜蜂名称渲染器
- * <br/>
- * 在蜜蜂槽下方常驻显示蜜蜂名称，提供视觉识别。
- * <p>
- * 渲染特性：
- * <ul>
- *   <li>名称位于槽位下方居中，y 偏移 19px（槽高 18 + 1px 间距）</li>
- *   <li>使用 Minecraft 原生字体，9px 高度</li>
- *   <li>带 1px 黑色文字阴影（dropShadow=true）</li>
- *   <li>颜色对应蜜蜂状态（{@link com.ayoshiko.productivebeesgenesis.apiary.BeeState#getColor()}）</li>
- *   <li>长名称自动截断加省略号（超过槽宽 16px 时）</li>
- *   <li>空槽位不渲染</li>
- * </ul>
- * <p>
- * Task 16.6 性能优化：
- * <ul>
- *   <li>添加名称缓存（{@link #nameCache}），按槽位索引缓存解析结果</li>
- *   <li>仅在 beeData 引用变化时重新解析（避免每帧 NBT 解析与翻译键查找）</li>
- *   <li>20 只蜜蜂 × 60fps 场景下，将 1200 次/秒的 NBT 解析降为 0（稳态）</li>
- * </ul>
- * <p>
- * 设计原则：单一职责，仅负责名称渲染，不涉及实体或状态灯渲染。
- * <br/>
- * 线程安全：仅从客户端渲染线程调用，无需同步。
- */
+	 * 蜜蜂名称渲染器
+	 * <br/>
+	 * 在蜜蜂槽下方常驻显示蜜蜂名称，提供视觉识别。
+	 * <p>
+	 * 渲染特性：
+	 * <ul>
+	 *   <li>名称位于槽位下方居中，y 偏移 19px（槽高 18 + 1px 间距）</li>
+	 *   <li>使用 Minecraft 原生字体，9px 高度</li>
+	 *   <li>带 1px 黑色文字阴影（dropShadow=true）</li>
+	 *   <li>颜色对应蜜蜂状态（{@link com.ayoshiko.productivebeesgenesis.apiary.BeeState#getColor()}）</li>
+	 *   <li>长名称自动截断加省略号（超过槽宽 16px 时）</li>
+	 *   <li>空槽位不渲染</li>
+	 * </ul>
+	 * <p>
+	 * Task 16.6 性能优化：
+	 * <ul>
+	 *   <li>添加名称缓存（{@link #nameCache}），按槽位索引缓存解析结果</li>
+	 *   <li>仅在 beeData 引用变化时重新解析（避免每帧 NBT 解析与翻译键查找）</li>
+	 *   <li>20 只蜜蜂 × 60fps 场景下，将 1200 次/秒的 NBT 解析降为 0（稳态）</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则：单一职责，仅负责名称渲染，不涉及实体或状态灯渲染。
+	 * <br/>
+	 * 线程安全：仅从客户端渲染线程调用，无需同步。
+	 */
 public class BeeNameRenderer {
 
 	/** 槽位尺寸（18×18 像素） */

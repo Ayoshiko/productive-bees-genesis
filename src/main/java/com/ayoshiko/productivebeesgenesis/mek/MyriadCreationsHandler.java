@@ -1,13 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
@@ -19,18 +14,22 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 万象创世处理器 — 封装万象创世蜜脾/蜜脾块的特殊处理路径。
- * 从 {@link PbRecipeProcessor} 抽取，只负责万象创世产物向随机蜜脾/蜜脾块的转化与插入。
- * 共享状态通过构造时传入的数组引用直接读写，线程安全由服务端单线程执行保证。
- * <p>
- * 职责分离（SRP）：
- * <ul>
- *   <li>本类：配方处理流程（能量计算、并行操作、批次完成）</li>
- *   <li>{@link MyriadCreationsCache}：ticksForBase / maxOpsPerTick 缓存与输出空间判断</li>
- *   <li>{@link MyriadCreationsLogger}：日志节流与洪水治理</li>
- * </ul>
- */
+	 * 万象创世处理器 — 封装万象创世蜜脾/蜜脾块的特殊处理路径。
+	 * 从 {@link PbRecipeProcessor} 抽取，只负责万象创世产物向随机蜜脾/蜜脾块的转化与插入。
+	 * 共享状态通过构造时传入的数组引用直接读写，线程安全由服务端单线程执行保证。
+	 * <p>
+	 * 职责分离（SRP）：
+	 * <ul>
+	 *   <li>本类：配方处理流程（能量计算、并行操作、批次完成）</li>
+	 *   <li>{@link MyriadCreationsCache}：ticksForBase / maxOpsPerTick 缓存与输出空间判断</li>
+	 *   <li>{@link MyriadCreationsLogger}：日志节流与洪水治理</li>
+	 * </ul>
+	 */
 public class MyriadCreationsHandler {
 
 	/** 万象创世输出槽总数（主+副1+副2 = 3，必须与 MekCentrifugeSlotManager 实际输出槽数一致，与 MyriadBatchPlanner 硬编码上限 3 匹配） */
@@ -103,6 +102,12 @@ public class MyriadCreationsHandler {
 	 */
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
 			long cachedEnergyPerTick, int cachedOperationsPerTick) {
+		return tryProcessMyriadCreations(processIndex, input, cachedEnergyPerTick,
+				cachedOperationsPerTick, Long.MAX_VALUE);
+	}
+
+	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
+			long cachedEnergyPerTick, int cachedOperationsPerTick, long energyBudget) {
 		// Task 3 性能优化：每 tick 缓存流体槽满载状态
 		fluidOutputHandler.initFluidTankFullCache();
 
@@ -116,7 +121,7 @@ public class MyriadCreationsHandler {
 			pbOperatingTicks[processIndex] = 0;
 		}
 
-		long availableEnergy = context.energyContainer().getEnergy();
+		long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
 		Level level = context.level();
 
 		// 计算每tick并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）

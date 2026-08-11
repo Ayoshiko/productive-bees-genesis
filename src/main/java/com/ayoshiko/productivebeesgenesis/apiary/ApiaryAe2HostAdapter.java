@@ -1,15 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.concurrent.atomic.AtomicLong;
-
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
-
-import mekanism.common.capabilities.energy.MachineEnergyContainer;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2EnergyInjector;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
@@ -17,19 +7,27 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NbtKeys;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import mekanism.common.capabilities.energy.MachineEnergyContainer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * AE2 宿主适配器
- * <br/>
- * 将 {@link TileEntityMekApiary} 的 AE2 集成逻辑提取到独立适配器，降低主类代码量（SRP）。
- * 持有 AE2 生命周期处理器和 PbRecipeContext 适配器，封装网格节点管理、能量注入、输出推送等操作。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅负责 AE2 集成相关逻辑</li>
- *   <li>迪米特法则：主类仅依赖适配器，不直接访问 AE2 内部组件</li>
- * </ul>
- */
+	 * AE2 宿主适配器
+	 * <br/>
+	 * 将 {@link TileEntityMekApiary} 的 AE2 集成逻辑提取到独立适配器，降低主类代码量（SRP）。
+	 * 持有 AE2 生命周期处理器和 PbRecipeContext 适配器，封装网格节点管理、能量注入、输出推送等操作。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅负责 AE2 集成相关逻辑</li>
+	 *   <li>迪米特法则：主类仅依赖适配器，不直接访问 AE2 内部组件</li>
+	 * </ul>
+	 */
 class ApiaryAe2HostAdapter {
 
 	/** 所属方块实体引用 */

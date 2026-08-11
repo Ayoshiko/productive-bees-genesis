@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -26,7 +23,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -43,16 +39,20 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * MEK离心机方块
- * <br/>
- * 参考Mek-Energistics的MeMekanismMachineBlock，支持Mekanism的Attribute系统。
- * 实现IHasTileEntity/ITypeBlock/IHasDescription接口，与Mekanism的GUI/侧面配置/升级体系兼容。
- * <p>
- * 支持基础机器和工厂版，通过泛型TYPE参数区分BlockType类型。
- */
+	 * MEK离心机方块
+	 * <br/>
+	 * 参考Mek-Energistics的MeMekanismMachineBlock，支持Mekanism的Attribute系统。
+	 * 实现IHasTileEntity/ITypeBlock/IHasDescription接口，与Mekanism的GUI/侧面配置/升级体系兼容。
+	 * <p>
+	 * 支持基础机器和工厂版，通过泛型TYPE参数区分BlockType类型。
+	 */
 public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends BlockTypeTile<TILE>>
 		extends Block implements IHasDescription, ITypeBlock, IHasTileEntity<TILE> {
 

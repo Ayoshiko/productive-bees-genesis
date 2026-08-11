@@ -4,23 +4,23 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.world.level.Level;
 
 /**
- * 万象创世缓存与过滤管理器
- * <br/>
- * 从 {@link MyriadCreationsHandler} 抽离，遵循 SRP：
- * 主类聚焦配方处理流程，本类聚焦缓存生命周期与输出空间判断。
- * <p>
- * 管理两类缓存：
- * <ul>
- *   <li>ticksForBase 时间窗口缓存（1 秒失效，使用墙钟时间适配 JDTE 加速）</li>
- *   <li>maxOpsPerTick 配置缓存（100 tick 刷新，对齐 PbRecipeProcessor）</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：缓存值字段为 volatile（单字段读写原子，保证可见性）；
- * check-then-update 临界区使用 {@code synchronized(this)} 守卫，避免并发线程
- * 同时通过守卫导致重复计算/配置读取，或与 clear 交错导致脏值。
- *
- * @since 1.0.0
- */
+	 * 万象创世缓存与过滤管理器
+	 * <br/>
+	 * 从 {@link MyriadCreationsHandler} 抽离，遵循 SRP：
+	 * 主类聚焦配方处理流程，本类聚焦缓存生命周期与输出空间判断。
+	 * <p>
+	 * 管理两类缓存：
+	 * <ul>
+	 *   <li>ticksForBase 时间窗口缓存（1 秒失效，使用墙钟时间适配 JDTE 加速）</li>
+	 *   <li>maxOpsPerTick 配置缓存（100 tick 刷新，对齐 PbRecipeProcessor）</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：缓存值字段为 volatile（单字段读写原子，保证可见性）；
+	 * check-then-update 临界区使用 {@code synchronized(this)} 守卫，避免并发线程
+	 * 同时通过守卫导致重复计算/配置读取，或与 clear 交错导致脏值。
+	 *
+	 * @since 1.0.0
+	 */
 final class MyriadCreationsCache {
 
 	/** getTicksForBase 缓存失效间隔（毫秒） — 使用 wall clock 避免 JDTE 加速下 getGameTime 不变导致缓存失效 */

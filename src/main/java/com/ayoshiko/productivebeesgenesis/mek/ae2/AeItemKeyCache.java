@@ -1,24 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.Arrays;
-
+import appeng.api.stacks.AEItemKey;
 import net.minecraft.world.item.ItemStack;
 
-import appeng.api.stacks.AEItemKey;
+import java.util.Arrays;
 
 /**
- * AEItemKey 缓存
- * <br/>
- * 按 (槽位索引, ItemStack identity) 缓存 AEItemKey，避免每次推送都调用
- * {@link AEItemKey#of(ItemStack)}。AEItemKey.of 内部触发
- * {@code ItemStack.hashItemAndComponents} → DataComponentMap 查询，
- * 是 Spark 热力图中的主要热点（266-357 次）。
- * <p>
- * <b>缓存策略</b>：identity 匹配（{@code ==} 比较）。Mekanism BasicInventorySlot
- * 在 count 变化时不创建新 ItemStack 对象，仅 setStack 替换引用，故 identity 足以检测变化。
- * <p>
- * <b>线程安全</b>：缓存由离心机服务端 tick 线程独占访问，无需同步。
- */
+	 * AEItemKey 缓存
+	 * <br/>
+	 * 按 (槽位索引, ItemStack identity) 缓存 AEItemKey，避免每次推送都调用
+	 * {@link AEItemKey#of(ItemStack)}。AEItemKey.of 内部触发
+	 * {@code ItemStack.hashItemAndComponents} → DataComponentMap 查询，
+	 * 是 Spark 热力图中的主要热点（266-357 次）。
+	 * <p>
+	 * <b>缓存策略</b>：identity 匹配（{@code ==} 比较）。Mekanism BasicInventorySlot
+	 * 在 count 变化时不创建新 ItemStack 对象，仅 setStack 替换引用，故 identity 足以检测变化。
+	 * <p>
+	 * <b>线程安全</b>：缓存由离心机服务端 tick 线程独占访问，无需同步。
+	 */
 public final class AeItemKeyCache {
 
 	/** 单进程输出槽数量（主+副1+副2） */

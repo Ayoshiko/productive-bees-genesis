@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import appeng.api.stacks.AEFluidKey;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import appeng.api.stacks.AEFluidKey;
-
 /**
- * AE2 流体推送批处理缓冲（简化版 PendingAEBatch）
- * <br/>
- * 参考 uselessmod 的 PendingAEBatch 模式：20 tick 累积窗口 + 按 key 合并，
- * 减少 256× 加速 + 高堆叠升级下 AE2 poweredInsert API 调用次数。
- * <p>
- * <b>设计原理</b>：
- * <ul>
- *   <li><b>累积阶段</b>：每次 pushFluids 遍历流体罐时，将待推送量按 AEFluidKey 累积到 buffer</li>
- *   <li><b>成熟阶段</b>：累积满 20 tick 后 isRipe() 返回 true，触发 flush</li>
- *   <li><b>刷新阶段</b>：drain() 返回累积的所有 key→amount 映射并清空 buffer</li>
- *   <li><b>即时刷新</b>：累积量超过阈值时 shouldFlushNow 提前刷新，避免内存占用过高</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：使用 ConcurrentHashMap（防御性），实际由服务端单线程独占调用。
- * <p>
- * <b>性能收益</b>：256× 加速 + 16 STACK（65536 并行）下，原每 tick 每 tank 调用一次
- * poweredInsert（N×M 次/gameTick），批处理后降为每 20 tick 一次批量调用（N/20 次/gameTick），
- * API 调用次数降低 ≥ 99.8%。
- *
- * @since 1.8.2
- * @author Ayoshiko
- */
+	 * AE2 流体推送批处理缓冲（简化版 PendingAEBatch）
+	 * <br/>
+	 * 参考 uselessmod 的 PendingAEBatch 模式：20 tick 累积窗口 + 按 key 合并，
+	 * 减少 256× 加速 + 高堆叠升级下 AE2 poweredInsert API 调用次数。
+	 * <p>
+	 * <b>设计原理</b>：
+	 * <ul>
+	 *   <li><b>累积阶段</b>：每次 pushFluids 遍历流体罐时，将待推送量按 AEFluidKey 累积到 buffer</li>
+	 *   <li><b>成熟阶段</b>：累积满 20 tick 后 isRipe() 返回 true，触发 flush</li>
+	 *   <li><b>刷新阶段</b>：drain() 返回累积的所有 key→amount 映射并清空 buffer</li>
+	 *   <li><b>即时刷新</b>：累积量超过阈值时 shouldFlushNow 提前刷新，避免内存占用过高</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：使用 ConcurrentHashMap（防御性），实际由服务端单线程独占调用。
+	 * <p>
+	 * <b>性能收益</b>：256× 加速 + 16 STACK（65536 并行）下，原每 tick 每 tank 调用一次
+	 * poweredInsert（N×M 次/gameTick），批处理后降为每 20 tick 一次批量调用（N/20 次/gameTick），
+	 * API 调用次数降低 ≥ 99.8%。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 */
 public final class Ae2PendingBatchBuffer {
 
 	/** 累积窗口大小（tick）— Spark优化：从10 tick增大到20 tick（1秒真实时间）

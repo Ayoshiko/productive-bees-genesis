@@ -1,39 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
-
-import org.jetbrains.annotations.Nullable;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * PB配方输出聚合器 — 封装配方输出的批量聚合逻辑
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取,遵循单一职责原则:将多次配方完成的输出累加到内存缓冲,
- * 达到阈值或 tick 结束时由 {@link PbRecipeFlusher} 统一 flush 到输出槽,
- * 减少高倍加速下 insertItem/onContentsChanged 调用。
- * <p>
- * 职责拆分(M1-1):
- * <ul>
- *   <li>{@link PbRecipeCompleter} — 聚合缓冲区状态管理 + accumulate 方法</li>
- *   <li>{@link PbRecipeFlusher} — flush 执行(planAndExecute + 流体插入 + 输入扣除)</li>
- *   <li>{@link SampleUniformSum} — 均匀分布求和采样(CLT 数学工具)</li>
- * </ul>
- * <p>
- * 不持有进程级共享状态,仅管理自身 pending 缓冲区,可安全从协调器委托调用。
- * 配方变更时由调用方调用 {@link #resetPendingRecipe()}。
- * <p>
- * 线程安全:服务端单线程执行,无需同步锁。
- * 静态缓存 {@link #recipeOutputsCache} 使用 {@link ConcurrentHashMap} 保证 JEI 客户端
- * 与服务端 tick 并发访问安全。
- */
+	 * PB配方输出聚合器 — 封装配方输出的批量聚合逻辑
+	 * <br/>
+	 * 从 {@link PbRecipeProcessor} 抽取,遵循单一职责原则:将多次配方完成的输出累加到内存缓冲,
+	 * 达到阈值或 tick 结束时由 {@link PbRecipeFlusher} 统一 flush 到输出槽,
+	 * 减少高倍加速下 insertItem/onContentsChanged 调用。
+	 * <p>
+	 * 职责拆分(M1-1):
+	 * <ul>
+	 *   <li>{@link PbRecipeCompleter} — 聚合缓冲区状态管理 + accumulate 方法</li>
+	 *   <li>{@link PbRecipeFlusher} — flush 执行(planAndExecute + 流体插入 + 输入扣除)</li>
+	 *   <li>{@link SampleUniformSum} — 均匀分布求和采样(CLT 数学工具)</li>
+	 * </ul>
+	 * <p>
+	 * 不持有进程级共享状态,仅管理自身 pending 缓冲区,可安全从协调器委托调用。
+	 * 配方变更时由调用方调用 {@link #resetPendingRecipe()}。
+	 * <p>
+	 * 线程安全:服务端单线程执行,无需同步锁。
+	 * 静态缓存 {@link #recipeOutputsCache} 使用 {@link ConcurrentHashMap} 保证 JEI 客户端
+	 * 与服务端 tick 并发访问安全。
+	 */
 public class PbRecipeCompleter {
 
 	/** 触发 flush 的物品数量阈值(约一个栈),防止输出槽溢出 */
@@ -105,7 +104,7 @@ public class PbRecipeCompleter {
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
 		float stabilityBonus = context.stabilityBonus();
 
-		// v2.1.0 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
+		// v2.0.9 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
 		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
 		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
 		if (this.pendingRecipe != recipe) {
@@ -182,7 +181,7 @@ public class PbRecipeCompleter {
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
 		float stabilityBonus = context.stabilityBonus();
 
-		// v2.1.0 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
+		// v2.0.9 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
 		if (this.pendingRecipe != recipe) {
 			this.pendingRecipe = recipe;
 			this.pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);

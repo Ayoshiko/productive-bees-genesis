@@ -1,20 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;
+
 import java.lang.reflect.Field;
 import java.util.Map;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
-import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;
-
 /**
- * ProductiveBees 内部静态缓存反射清理器
- * <br/>
- * PB 在 {@link BeeFishingRecipe} 中维护了两个静态缓存（cachedBiomes、cachedRecipes），
- * 替换配方后旧缓存会引用过期的 Recipe 实例，必须清理避免数据不一致。
- * <p>
- * 抽离为独立类便于后续扩展清理其他 PB 静态缓存。
- */
+	 * ProductiveBees 内部静态缓存反射清理器
+	 * <br/>
+	 * PB 在 {@link BeeFishingRecipe} 中维护了两个静态缓存（cachedBiomes、cachedRecipes），
+	 * 替换配方后旧缓存会引用过期的 Recipe 实例，必须清理避免数据不一致。
+	 * <p>
+	 * 抽离为独立类便于后续扩展清理其他 PB 静态缓存。
+	 */
 public final class PBReflectionCacheCleaner {
 
 	private PBReflectionCacheCleaner() {}

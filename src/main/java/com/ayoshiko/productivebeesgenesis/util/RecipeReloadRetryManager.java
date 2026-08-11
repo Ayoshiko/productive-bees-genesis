@@ -1,40 +1,39 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.world.item.crafting.RecipeManager;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
-import net.minecraft.core.HolderLookup;
-import net.minecraft.world.item.crafting.RecipeManager;
-
 /**
- * 配方重载延迟重试管理器
- * <br/>
- * 从 {@link BeeRecipeReloader} 抽离，负责管理配方重载的延迟重试上下文。
- * <p>
- * 首次世界加载时配置可能未完全加载，或者 PB 的 BeeIngredientFactory 尚未加载 myriadcreations 类型，
- * 此时会安排延迟重试任务，在服务器 tick 中检查就绪后再次尝试应用配方修改。
- * <p>
- * <b>线程安全</b>：
- * <ul>
- *   <li>{@link #pendingRetryContext} 为 {@link AtomicReference}，保证原子替换与 CAS 清除</li>
- *   <li>{@link PendingRetryContext} 为不可变 record，封装 recipeManager 和 registryAccess</li>
- *   <li>通过单一 AtomicReference 原子替换，避免多 volatile 字段在 clear/set 期间的不一致状态</li>
- *   <li>使用 {@code compareAndSet(ctx, EMPTY)} 清除：保证只清除自己读取的 context 实例，
- *       不会覆盖 reloader 调用 {@link #scheduleRetry} / {@link #rescheduleRetry} 设置的新 ctx</li>
- * </ul>
- * <p>
- * <b>重试计数策略</b>：
- * <ul>
- *   <li>{@link #scheduleRetry} — 重置 retryCount，用于外部首次 reload 事件（配置未加载）</li>
- *   <li>{@link #rescheduleRetry} — 不重置 retryCount，用于已在重试流程中的子重试（BeeIngredientFactory 未就绪），
- *       让重试次数累积，达到 {@link #MAX_RETRY_COUNT} 后放弃，避免无限重试</li>
- * </ul>
- */
+	 * 配方重载延迟重试管理器
+	 * <br/>
+	 * 从 {@link BeeRecipeReloader} 抽离，负责管理配方重载的延迟重试上下文。
+	 * <p>
+	 * 首次世界加载时配置可能未完全加载，或者 PB 的 BeeIngredientFactory 尚未加载 myriadcreations 类型，
+	 * 此时会安排延迟重试任务，在服务器 tick 中检查就绪后再次尝试应用配方修改。
+	 * <p>
+	 * <b>线程安全</b>：
+	 * <ul>
+	 *   <li>{@link #pendingRetryContext} 为 {@link AtomicReference}，保证原子替换与 CAS 清除</li>
+	 *   <li>{@link PendingRetryContext} 为不可变 record，封装 recipeManager 和 registryAccess</li>
+	 *   <li>通过单一 AtomicReference 原子替换，避免多 volatile 字段在 clear/set 期间的不一致状态</li>
+	 *   <li>使用 {@code compareAndSet(ctx, EMPTY)} 清除：保证只清除自己读取的 context 实例，
+	 *       不会覆盖 reloader 调用 {@link #scheduleRetry} / {@link #rescheduleRetry} 设置的新 ctx</li>
+	 * </ul>
+	 * <p>
+	 * <b>重试计数策略</b>：
+	 * <ul>
+	 *   <li>{@link #scheduleRetry} — 重置 retryCount，用于外部首次 reload 事件（配置未加载）</li>
+	 *   <li>{@link #rescheduleRetry} — 不重置 retryCount，用于已在重试流程中的子重试（BeeIngredientFactory 未就绪），
+	 *       让重试次数累积，达到 {@link #MAX_RETRY_COUNT} 后放弃，避免无限重试</li>
+	 * </ul>
+	 */
 public final class RecipeReloadRetryManager {
 
 	/**

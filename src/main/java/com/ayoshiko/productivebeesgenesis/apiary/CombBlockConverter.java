@@ -1,27 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import cy.jdkdigital.productivebees.util.BeeHelper;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
+import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.world.item.HoneycombItem;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 蜜脾→蜜脾块转换器
- * <br/>
- * 从 {@link BeeProduceProcessor} 抽取的蜜脾块升级转换逻辑，负责将 {@link HoneycombItem}
- * 类型产出替换为对应的蜜脾块。
- * <p>
- * 复刻 PB 原版 {@code BeeHelper.getCombBlockFromHoneyComb} 的转换语义：
- * 将所有 {@link HoneycombItem} 类型的产出替换为对应的蜜脾块（1:1 替换，保持数量）。
- * <p>
- * 转换结果不写入静态缓存（不同蜂箱升级状态不同），每次调用动态转换。
- * 转换失败（PB 内部异常）时保留原始物品，避免产物丢失。
- */
+	 * 蜜脾→蜜脾块转换器
+	 * <br/>
+	 * 从 {@link BeeProduceProcessor} 抽取的蜜脾块升级转换逻辑，负责将 {@link HoneycombItem}
+	 * 类型产出替换为对应的蜜脾块。
+	 * <p>
+	 * 复刻 PB 原版 {@code BeeHelper.getCombBlockFromHoneyComb} 的转换语义：
+	 * 将所有 {@link HoneycombItem} 类型的产出替换为对应的蜜脾块（1:1 替换，保持数量）。
+	 * <p>
+	 * 转换结果不写入静态缓存（不同蜂箱升级状态不同），每次调用动态转换。
+	 * 转换失败（PB 内部异常）时保留原始物品，避免产物丢失。
+	 */
 public class CombBlockConverter {
 
 	/**

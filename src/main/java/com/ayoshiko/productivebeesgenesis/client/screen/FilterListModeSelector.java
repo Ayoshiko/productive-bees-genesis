@@ -1,9 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -11,20 +8,22 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
 /**
- * FilterListScreen 的过滤模式选择器
- * <p>
- * 将过滤模式图标按钮的创建、图标映射、模式标签渲染及激活按钮高亮等
- * 显示逻辑从屏幕类中剥离，降低 FilterListScreen 的复杂度（SRP）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责模式按钮的创建与渲染，不涉及配置读写或列表数据</li>
- *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * FilterListScreen 的过滤模式选择器
+	 * <p>
+	 * 将过滤模式图标按钮的创建、图标映射、模式标签渲染及激活按钮高亮等
+	 * 显示逻辑从屏幕类中剥离，降低 FilterListScreen 的复杂度（SRP）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责模式按钮的创建与渲染，不涉及配置读写或列表数据</li>
+	 *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

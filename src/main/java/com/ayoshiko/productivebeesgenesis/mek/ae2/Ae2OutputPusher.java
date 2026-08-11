@@ -1,15 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-
-import org.jetbrains.annotations.Nullable;
-
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.energy.IEnergySource;
@@ -19,24 +9,30 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import appeng.api.storage.StorageHelper;
 import appeng.me.helpers.BaseActionSource;
-
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * AE2 输出推送器 — 将离心机输出槽物品通过 {@link StorageHelper#poweredInsert} 推送到 AE2 网络。
- * <p>
- * <b>推送流程</b>：集成检查 → 空输出短路 → 获取 MEStorage → 扫描输出槽按 AEItemKey 分组 →
- * 批量 poweredInsert → 按比例清空槽位。
- * <p>
- * <b>容错策略</b>：只按 AE 实际接收量扣除；失败时物品留在原槽并进入短退避。
- * <p>
- * <b>性能优化</b>：同 key 批量合并、空输出短路、AEItemKey 缓存、{@link ReusableBuffers} 跨 tick 复用。
- */
+	 * AE2 输出推送器 — 将离心机输出槽物品通过 {@link StorageHelper#poweredInsert} 推送到 AE2 网络。
+	 * <p>
+	 * <b>推送流程</b>：集成检查 → 空输出短路 → 获取 MEStorage → 扫描输出槽按 AEItemKey 分组 →
+	 * 批量 poweredInsert → 按比例清空槽位。
+	 * <p>
+	 * <b>容错策略</b>：只按 AE 实际接收量扣除；失败时物品留在原槽并进入短退避。
+	 * <p>
+	 * <b>性能优化</b>：同 key 批量合并、空输出短路、AEItemKey 缓存、{@link ReusableBuffers} 跨 tick 复用。
+	 */
 public final class Ae2OutputPusher {
 
 	/** 异常累计计数器 — 用于日志显示总次数（节流由 LogThrottle 时间维度处理） */
@@ -135,7 +131,6 @@ public final class Ae2OutputPusher {
 		}
 
 		if (entries.isEmpty()) return;
-
 		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
 		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
 			int pushedItems = 0;
@@ -436,6 +431,12 @@ public final class Ae2OutputPusher {
 		/** 拉取列表缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 使用） */
 		final List<Ae2InputPuller.PullEntry> pullList = new ArrayList<>();
 
+		/** 拉取扫描键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
+		final List<AEItemKey> scanKeys = new ArrayList<>();
+
+		/** 游标扫描选中键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
+		final List<AEItemKey> scanSelectedKeys = new ArrayList<>();
+
 		/**
 		 * 获取能量适配器（懒初始化，volatile + double-checked locking 保证线程安全）
 		 * <br/>
@@ -462,6 +463,16 @@ public final class Ae2OutputPusher {
 		/** 借用拉取列表（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
 		List<Ae2InputPuller.PullEntry> borrowPullList() {
 			return pullList;
+		}
+
+		/** 借用拉取扫描键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
+		List<AEItemKey> borrowScanKeys() {
+			return scanKeys;
+		}
+
+		/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
+		List<AEItemKey> borrowScanSelectedKeys() {
+			return scanSelectedKeys;
 		}
 	}
 }

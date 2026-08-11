@@ -1,34 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.function.Function;
-
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.CentrifugeBlockEntityAccessor;
-
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.function.Function;
 
 /**
- * 离心机 Mixin 公共逻辑工具类
- * <br/>
- * 抽取 6 个离心机 Mixin（Centrifuge / HeatedCentrifuge / PoweredCentrifuge × Myriad/Infinity）
- * 中重复的以下逻辑：
- * <ol>
- *   <li>canOperate RETURN 输出满检查</li>
- *   <li>canProcessRecipe HEAD 输出满检查</li>
- *   <li>completeRecipeProcessing TAIL 追加随机蜜脾</li>
- * </ol>
- * Mixin 类必须针对不同目标类独立定义，但方法体可委托给本工具类的静态方法，
- * 通过函数式参数注入差异化的 EventHandler 调用，遵循 DRY 原则。
- * <p>
- * <b>注意</b>：本类必须放在 mixin 包之外（util 包），因为 Mixin 框架将 mixin 包下的
- * 所有类视为 Mixin 类，不允许直接引用非 Mixin 类，否则抛出 IllegalClassLoadError。
- */
+	 * 离心机 Mixin 公共逻辑工具类
+	 * <br/>
+	 * 抽取 6 个离心机 Mixin（Centrifuge / HeatedCentrifuge / PoweredCentrifuge × Myriad/Infinity）
+	 * 中重复的以下逻辑：
+	 * <ol>
+	 *   <li>canOperate RETURN 输出满检查</li>
+	 *   <li>canProcessRecipe HEAD 输出满检查</li>
+	 *   <li>completeRecipeProcessing TAIL 追加随机蜜脾</li>
+	 * </ol>
+	 * Mixin 类必须针对不同目标类独立定义，但方法体可委托给本工具类的静态方法，
+	 * 通过函数式参数注入差异化的 EventHandler 调用，遵循 DRY 原则。
+	 * <p>
+	 * <b>注意</b>：本类必须放在 mixin 包之外（util 包），因为 Mixin 框架将 mixin 包下的
+	 * 所有类视为 Mixin 类，不允许直接引用非 Mixin 类，否则抛出 IllegalClassLoadError。
+	 */
 public final class CentrifugeMixinHelper {
 
 	private CentrifugeMixinHelper() {

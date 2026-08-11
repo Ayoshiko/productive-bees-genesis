@@ -1,50 +1,48 @@
 package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.jetbrains.annotations.Nullable;
-
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Task 5: 多流体侧面配置路由处理器 — 封装"主流体槽优先 + 相同流体合并 + 不同流体不混入"路由策略
- * <br/>
- * <b>设计背景:</b>用户需求"通过 MEK 原版的流体侧面配置,可以对流体槽的输出方向进行控制"。
- * 主流体槽优先确保常见场景高效(单流体场景主槽先清空,避免遍历所有槽);
- * 相同流体合并避免分散(同种流体合并到主槽输出,减少目标容器碎片);
- * 不同流体不混入避免污染(目标容器已有不同流体时跳过,防止污染)。
- * <p>
- * <b>与现有架构的关系:</b>
- * <ul>
- *   <li>MEK 原生侧面配置已通过 {@code MekCentrifugeFactoryHelper.setupFluidOutputConfig} 实现,
- *       使用 {@link mekanism.common.tile.component.config.slot.IProxiedSlotInfo.FluidProxy}
- *       包装 {@link MultiFluidTankHolder},让 MEK Ejector 通过 {@code getTanks(side)} 动态获取槽列表</li>
- *   <li>AE 流体推送已通过 {@link Ae2FluidPusher#pushFluids} 实现,支持 MULTI_PER_FLUID 多槽遍历</li>
- *   <li>AE 输出按钮复用现有 {@link com.ayoshiko.productivebeesgenesis.client.screen.AeOutputOverlay} 按钮,
- *       不新增 UI 元素(用户在 MEK 侧面配置窗口切换 ITEM/FLUID Tab 时,自动显示 AE 流体输出按钮)</li>
- *   <li>本类作为<b>路由策略辅助层</b>,封装可复用的路由逻辑与 100-tick CAS 缓存,
- *       供未来扩展点(如自定义弹出策略、跨槽合并算法)调用,避免散落在 Ejector/Ae2FluidPusher 中</li>
- * </ul>
- * <p>
- * <b>线程安全:</b>服务端单线程 tick 调用,volatile + AtomicLong + CAS 提供防御性并发保护。
- * 100-tick CAS 缓存参考 {@code BeeSlotTickProcessor.refreshConfigCache} 模式,
- * 避免高倍加速场景下每 tick 高频读取 NeoForge 配置导致 TPS 退化。
- *
- * @since 1.0.0
- */
+	 * Task 5: 多流体侧面配置路由处理器 — 封装"主流体槽优先 + 相同流体合并 + 不同流体不混入"路由策略
+	 * <br/>
+	 * <b>设计背景:</b>用户需求"通过 MEK 原版的流体侧面配置,可以对流体槽的输出方向进行控制"。
+	 * 主流体槽优先确保常见场景高效(单流体场景主槽先清空,避免遍历所有槽);
+	 * 相同流体合并避免分散(同种流体合并到主槽输出,减少目标容器碎片);
+	 * 不同流体不混入避免污染(目标容器已有不同流体时跳过,防止污染)。
+	 * <p>
+	 * <b>与现有架构的关系:</b>
+	 * <ul>
+	 *   <li>MEK 原生侧面配置已通过 {@code MekCentrifugeFactoryHelper.setupFluidOutputConfig} 实现,
+	 *       使用 {@link mekanism.common.tile.component.config.slot.IProxiedSlotInfo.FluidProxy}
+	 *       包装 {@link MultiFluidTankHolder},让 MEK Ejector 通过 {@code getTanks(side)} 动态获取槽列表</li>
+	 *   <li>AE 流体推送已通过 {@link Ae2FluidPusher#pushFluids} 实现,支持 MULTI_PER_FLUID 多槽遍历</li>
+	 *   <li>AE 输出按钮复用现有 {@link com.ayoshiko.productivebeesgenesis.client.screen.AeOutputOverlay} 按钮,
+	 *       不新增 UI 元素(用户在 MEK 侧面配置窗口切换 ITEM/FLUID Tab 时,自动显示 AE 流体输出按钮)</li>
+	 *   <li>本类作为<b>路由策略辅助层</b>,封装可复用的路由逻辑与 100-tick CAS 缓存,
+	 *       供未来扩展点(如自定义弹出策略、跨槽合并算法)调用,避免散落在 Ejector/Ae2FluidPusher 中</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全:</b>服务端单线程 tick 调用,volatile + AtomicLong + CAS 提供防御性并发保护。
+	 * 100-tick CAS 缓存参考 {@code BeeSlotTickProcessor.refreshConfigCache} 模式,
+	 * 避免高倍加速场景下每 tick 高频读取 NeoForge 配置导致 TPS 退化。
+	 *
+	 * @since 1.0.0
+	 */
 public final class MultiFluidSideConfigHandler {
 
 	/** 配置缓存刷新间隔(tick) — 与 BeeSlotTickProcessor.CONFIG_REFRESH_INTERVAL 一致 */

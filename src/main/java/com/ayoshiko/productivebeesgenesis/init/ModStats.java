@@ -10,9 +10,9 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
- * 模组统计注册
- * NeoForge 1.21.1中，自定义统计通过DeferredRegister注册到CUSTOM统计类型
- */
+	 * 模组统计注册
+	 * NeoForge 1.21.1中，自定义统计通过DeferredRegister注册到CUSTOM统计类型
+	 */
 public final class ModStats {
 
 	private static final DeferredRegister<ResourceLocation> CUSTOM_STATS =

@@ -1,26 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.state;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.HashSet;
+import java.util.Set;
+
 /**
- * 蜜蜂选择屏幕的客户端状态缓存
- * <p>
- * 保存搜索与界面状态（searchText、scrollOffset、showOnlyUnadded、sortMode、collapsedGroups），
- * 不保存已选蜜蜂集合，避免下次打开界面时误操作。
- * 数据仅存于客户端内存，不写服务端配置。
- * <p>
- * 实现为静态单例，仅限客户端渲染线程（主线程）单线程访问即可保证安全；
- * 所有字段（含 Set 集合）均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
- * 在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
- */
+	 * 蜜蜂选择屏幕的客户端状态缓存
+	 * <p>
+	 * 保存搜索与界面状态（searchText、scrollOffset、showOnlyUnadded、sortMode、collapsedGroups），
+	 * 不保存已选蜜蜂集合，避免下次打开界面时误操作。
+	 * 数据仅存于客户端内存，不写服务端配置。
+	 * <p>
+	 * 实现为静态单例，仅限客户端渲染线程（主线程）单线程访问即可保证安全；
+	 * 所有字段（含 Set 集合）均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
+	 * 在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

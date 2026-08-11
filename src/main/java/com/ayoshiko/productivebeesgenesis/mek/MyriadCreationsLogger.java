@@ -1,26 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.function.BiConsumer;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
+import java.util.function.BiConsumer;
+
 /**
- * 万象创世日志管理器 — 封装带冷却和抑制计数的日志输出
- * <br/>
- * 从 {@link MyriadCreationsHandler} 抽离，遵循 SRP：
- * 主类聚焦配方处理流程，本类聚焦日志节流与洪水治理。
- * <p>
- * 两级节流：
- * <ul>
- *   <li>每进程节流（fullLogThrottles / emptyCacheLogThrottles）— 单进程日志冷却</li>
- *   <li>全局节流（{@link #globalFullLogThrottle}）— 所有进程共享，5 秒内仅输出首条，
- *       用于 EME 工厂多进程同时失败的日志洪水治理</li>
- * </ul>
- *
- * @since 1.0.0
- */
+	 * 万象创世日志管理器 — 封装带冷却和抑制计数的日志输出
+	 * <br/>
+	 * 从 {@link MyriadCreationsHandler} 抽离，遵循 SRP：
+	 * 主类聚焦配方处理流程，本类聚焦日志节流与洪水治理。
+	 * <p>
+	 * 两级节流：
+	 * <ul>
+	 *   <li>每进程节流（fullLogThrottles / emptyCacheLogThrottles）— 单进程日志冷却</li>
+	 *   <li>全局节流（{@link #globalFullLogThrottle}）— 所有进程共享，5 秒内仅输出首条，
+	 *       用于 EME 工厂多进程同时失败的日志洪水治理</li>
+	 * </ul>
+	 *
+	 * @since 1.0.0
+	 */
 final class MyriadCreationsLogger {
 
 	/** 日志前缀（区分原版/ME/EME 工厂） */

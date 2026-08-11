@@ -1,32 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.function.Function;
-
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
- * PB 升级 NBT 持久化与历史格式迁移器 — 从 {@link ApiaryPbUpgradeHandler} 拆分（SRP）
- * <br/>
- * 单一职责：负责 PB 升级数据的 NBT 历史格式迁移、超出部分注入与 v14 loadSlots/loadCounts
- * 顺序修复相关的暂存逻辑。不直接持有升级数量映射 pbUpgradeCounts，通过外部 Map 引用 +
- * 上限查询函数操作，避免与 {@link ApiaryPbUpgradeHandler} 形成重复状态。
- * <p>
- * <b>拆分动机</b>：原 ApiaryPbUpgradeHandler 行数超过 500 行限制，NBT 迁移/超出部分注入
- * 逻辑与升级数量管理/安装卸载逻辑耦合，违反 SRP。本类专注迁移与持久化边界处理。
- * <p>
- * <b>线程安全</b>：与 {@link ApiaryPbUpgradeHandler} 一致,仅服务端主线程访问
- * (loadSlots/loadPbUpgradeCounts 同在 BlockEntity 加载路径),使用 {@link EnumMap} 即可。
- * <p>
- * 包级可见 — 仅 {@link ApiaryPbUpgradeHandler} 持有使用。
- *
- * @since M1-4
- */
+	 * PB 升级 NBT 持久化与历史格式迁移器 — 从 {@link ApiaryPbUpgradeHandler} 拆分（SRP）
+	 * <br/>
+	 * 单一职责：负责 PB 升级数据的 NBT 历史格式迁移、超出部分注入与 v14 loadSlots/loadCounts
+	 * 顺序修复相关的暂存逻辑。不直接持有升级数量映射 pbUpgradeCounts，通过外部 Map 引用 +
+	 * 上限查询函数操作，避免与 {@link ApiaryPbUpgradeHandler} 形成重复状态。
+	 * <p>
+	 * <b>拆分动机</b>：原 ApiaryPbUpgradeHandler 行数超过 500 行限制，NBT 迁移/超出部分注入
+	 * 逻辑与升级数量管理/安装卸载逻辑耦合，违反 SRP。本类专注迁移与持久化边界处理。
+	 * <p>
+	 * <b>线程安全</b>：与 {@link ApiaryPbUpgradeHandler} 一致,仅服务端主线程访问
+	 * (loadSlots/loadPbUpgradeCounts 同在 BlockEntity 加载路径),使用 {@link EnumMap} 即可。
+	 * <p>
+	 * 包级可见 — 仅 {@link ApiaryPbUpgradeHandler} 持有使用。
+	 *
+	 * @since M1-4
+	 */
 class ApiaryPbUpgradeNbtMigrator {
 
 	/** NBT key — PB升级物品处理器（旧格式，迁移用） */

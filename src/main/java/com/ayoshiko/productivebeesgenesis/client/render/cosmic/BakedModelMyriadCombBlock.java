@@ -1,8 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.resources.model.BakedModel;
@@ -11,17 +10,17 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 万象创世蜜脾块物品 BakedModel 包装器
- * <br/>
- * 包装 PB 的 configurable_comb BlockItem 模型，在渲染时根据 ItemStack 的 bee_type 组件判断：
- * <ul>
- *   <li>bee_type = myriadcreations：使用无尽创世蜜脾块的 BakedModel 渲染（彩色纹理，无 tintIndex）</li>
- *   <li>其他蜜蜂：使用 PB 原始模型渲染（灰度纹理 + tintIndex 着色）</li>
- * </ul>
- * <p>
- * 无尽创世蜜脾块模型是普通 cube_all（非 PerspectiveModel），因此使用
- * {@link ItemRenderer#renderModelLists} 直接渲染 quads。
- */
+	 * 万象创世蜜脾块物品 BakedModel 包装器
+	 * <br/>
+	 * 包装 PB 的 configurable_comb BlockItem 模型，在渲染时根据 ItemStack 的 bee_type 组件判断：
+	 * <ul>
+	 *   <li>bee_type = myriadcreations：使用无尽创世蜜脾块的 BakedModel 渲染（彩色纹理，无 tintIndex）</li>
+	 *   <li>其他蜜蜂：使用 PB 原始模型渲染（灰度纹理 + tintIndex 着色）</li>
+	 * </ul>
+	 * <p>
+	 * 无尽创世蜜脾块模型是普通 cube_all（非 PerspectiveModel），因此使用
+	 * {@link ItemRenderer#renderModelLists} 直接渲染 quads。
+	 */
 public class BakedModelMyriadCombBlock extends WrappedItemModel {
 
 	/** 无尽创世蜜脾块的 BakedModel */

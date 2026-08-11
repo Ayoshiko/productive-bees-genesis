@@ -5,24 +5,23 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import io.github.masyumero.emextras.common.content.blocktype.EMExtraMachine;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import net.neoforged.neoforge.registries.DeferredBlock;
 
 /**
- * EvolvedMekanismExtras (EME) 方块注册隔离类
- * <br/>
- * 将 EME 工厂方块（离心机 + 蜂箱）的注册逻辑从 {@link ModBlocks} 中抽取至此，
- * 使 {@link ModBlocks} 不再直接 import EME 的类。
- * <br/>
- * 本类直接引用 EME 的 {@link EMExtraFactoryTier}、{@link EMExtraMachine} 等类，
- * 因为仅在 EME 加载时由 {@link EMECompatLoader} 调用，不会触发 EME 未加载时的类加载问题。
- * <p>
- * 注册结果填充到 {@link ModBlocks#EME_FACTORIES} 和 {@link ModBlocks#EME_APIARY_FACTORIES}，
- * 保持与原 ModBlocks 相同的 Map 键值类型。
- */
+	 * EvolvedMekanismExtras (EME) 方块注册隔离类
+	 * <br/>
+	 * 将 EME 工厂方块（离心机 + 蜂箱）的注册逻辑从 {@link ModBlocks} 中抽取至此，
+	 * 使 {@link ModBlocks} 不再直接 import EME 的类。
+	 * <br/>
+	 * 本类直接引用 EME 的 {@link EMExtraFactoryTier}、{@link EMExtraMachine} 等类，
+	 * 因为仅在 EME 加载时由 {@link EMECompatLoader} 调用，不会触发 EME 未加载时的类加载问题。
+	 * <p>
+	 * 注册结果填充到 {@link ModBlocks#EME_FACTORIES} 和 {@link ModBlocks#EME_APIARY_FACTORIES}，
+	 * 保持与原 ModBlocks 相同的 Map 键值类型。
+	 */
 public final class EMEBlockRegistration {
 
 	private EMEBlockRegistration() {}

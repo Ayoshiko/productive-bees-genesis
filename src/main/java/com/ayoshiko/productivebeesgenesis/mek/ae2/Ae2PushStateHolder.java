@@ -1,18 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 /**
- * AE2 推送退避和计数器状态持有者（per-tile 独立）
- * <br/>
- * 封装流体/物品推送的退避状态（{@link Ae2PushBackoff}）和独立计数器，
- * 替代 {@code level.getGameTime()} 作为节流依据以兼容 JDTE 加速。
- * <p>
- * <b>线程安全</b>：volatile long 字段，服务端 tick 线程独占调用，无需 CAS。
- * 与 {@code Ae2OutputStateHolder.pullCallCounter} 风格保持一致。
- * <p>
- * <b>行数控制</b>：从 {@link Ae2OutputStateHolder} 抽取以保证主类 ≤ 500 行。
- *
- * @since 1.0.0
- */
+	 * AE2 推送退避和计数器状态持有者（per-tile 独立）
+	 * <br/>
+	 * 封装流体/物品推送的退避状态（{@link Ae2PushBackoff}）和独立计数器，
+	 * 替代 {@code level.getGameTime()} 作为节流依据以兼容 JDTE 加速。
+	 * <p>
+	 * <b>线程安全</b>：volatile long 字段，服务端 tick 线程独占调用，无需 CAS。
+	 * 与 {@code Ae2OutputStateHolder.pullCallCounter} 风格保持一致。
+	 * <p>
+	 * <b>行数控制</b>：从 {@link Ae2OutputStateHolder} 抽取以保证主类 ≤ 500 行。
+	 *
+	 * @since 1.0.0
+	 */
 public final class Ae2PushStateHolder {
 
 	// ===== 推送退避状态（per-tile 独立） =====

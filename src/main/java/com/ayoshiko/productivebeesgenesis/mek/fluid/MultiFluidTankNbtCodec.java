@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeNbtKeys;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -9,21 +11,18 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeNbtKeys;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 /**
- * 多流体槽 NBT 序列化/反序列化 Codec
- * <br/>
- * <b>设计原则(SRP)：</b>将 NBT 持久化逻辑从 {@link MultiFluidTankHolder} 抽离,
- * 使 Holder 专注于槽位路由与生命周期管理,Codec 专注于序列化格式。
- * 控制 Holder 行数 ≤500,符合项目规范。
- * <p>
- * <b>访问权限：</b>通过 {@link MultiFluidTankHolder} 的 package-private getter
- * 访问内部字段(tanksInOrder / tanksByFluidKey / emptyTankCount),保持封装性。
- *
- * @since 1.0.0
- */
+	 * 多流体槽 NBT 序列化/反序列化 Codec
+	 * <br/>
+	 * <b>设计原则(SRP)：</b>将 NBT 持久化逻辑从 {@link MultiFluidTankHolder} 抽离,
+	 * 使 Holder 专注于槽位路由与生命周期管理,Codec 专注于序列化格式。
+	 * 控制 Holder 行数 ≤500,符合项目规范。
+	 * <p>
+	 * <b>访问权限：</b>通过 {@link MultiFluidTankHolder} 的 package-private getter
+	 * 访问内部字段(tanksInOrder / tanksByFluidKey / emptyTankCount),保持封装性。
+	 *
+	 * @since 1.0.0
+	 */
 public final class MultiFluidTankNbtCodec {
 
 	/** 工具类禁止实例化 */

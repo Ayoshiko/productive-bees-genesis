@@ -1,9 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.ArrayDeque;
-
 import com.mojang.blaze3d.vertex.PoseStack;
-
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3f;
@@ -11,18 +8,20 @@ import org.joml.Matrix3fc;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
+import java.util.ArrayDeque;
+
 /**
- * Iris 延迟渲染调用快照
- * <br/>
- * 保存一次 cosmic 光晕渲染所需的模型、物品栈、展示上下文、光照/覆盖层以及 pose/normal/projection/modelView 矩阵。
- * <p>
- * 性能优化：使用对象池避免每次入队分配 4 个 Matrix 对象（3 个 Matrix4f + 1 个 Matrix3f）。
- * obtain() 从池中获取或新建实例，release() 清空引用后归还池中复用。
- * 矩阵对象为 final 预分配字段，通过 set() 覆写内容而非重新分配。
- * <p>
- * 线程安全：入队（物品渲染）与消费（世界渲染）均在客户端渲染线程执行，
- * 池的 synchronized 为防御性保护，无实际争用开销（无竞争锁极快）。
- */
+	 * Iris 延迟渲染调用快照
+	 * <br/>
+	 * 保存一次 cosmic 光晕渲染所需的模型、物品栈、展示上下文、光照/覆盖层以及 pose/normal/projection/modelView 矩阵。
+	 * <p>
+	 * 性能优化：使用对象池避免每次入队分配 4 个 Matrix 对象（3 个 Matrix4f + 1 个 Matrix3f）。
+	 * obtain() 从池中获取或新建实例，release() 清空引用后归还池中复用。
+	 * 矩阵对象为 final 预分配字段，通过 set() 覆写内容而非重新分配。
+	 * <p>
+	 * 线程安全：入队（物品渲染）与消费（世界渲染）均在客户端渲染线程执行，
+	 * 池的 synchronized 为防御性保护，无实际争用开销（无竞争锁极快）。
+	 */
 public class CosmicRenderCall {
 
 	/** 对象池大小上限，防止异常场景下无限增长 */

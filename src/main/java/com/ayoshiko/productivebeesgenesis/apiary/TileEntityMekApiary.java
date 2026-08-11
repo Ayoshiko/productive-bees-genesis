@@ -1,5 +1,15 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
+import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
+import com.ayoshiko.productivebeesgenesis.mek.PbConfigCardDataHelper;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -23,7 +33,6 @@ import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.prefab.TileEntityElectricMachine;
 import mekanism.common.upgrade.IUpgradeData;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
@@ -38,28 +47,16 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
-
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
-import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
-import com.ayoshiko.productivebeesgenesis.mek.PbConfigCardDataHelper;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * MEK通用机械蜂箱方块实体 — 继承 TileEntityElectricMachine，复用能量/侧面/升级/GUI 体系。
- * 生产周期 1200 ticks。组件架构（SRP）：ApiarySlotManager、FeederSlotManager、ApiaryTickHandler、
- * BeeProduceProcessor、ApiaryUpgradeHandler、ApiaryAe2HostAdapter、ApiaryPbUpgradeHandler、ApiaryNbtSerializer。
- */
+	 * MEK通用机械蜂箱方块实体 — 继承 TileEntityElectricMachine，复用能量/侧面/升级/GUI 体系。
+	 * 生产周期 1200 ticks。组件架构（SRP）：ApiarySlotManager、FeederSlotManager、ApiaryTickHandler、
+	 * BeeProduceProcessor、ApiaryUpgradeHandler、ApiaryAe2HostAdapter、ApiaryPbUpgradeHandler、ApiaryNbtSerializer。
+	 */
 public class TileEntityMekApiary extends TileEntityElectricMachine implements IAe2OutputHostBase, IUpgradeableBlockEntity, IMekApiaryTile, IHasEjectorCooldown, IPbUpgradeProvider, com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
 
 	/** 生产周期：1200 ticks = 60秒（MEK原版标准） */
@@ -138,29 +135,26 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	boolean callSuperCanFunction() { return super.canFunction(); }
 	/** 包私有 — 供 NbtSerializer 设置父类 protected redstone 字段（boolean 类型） */
 	void setRedstoneControl(boolean value) { redstone = value; }
+	/** 包私有 — 供持久化桥接读取父类 protected redstone 字段 */
+	boolean getRedstoneControl() { return redstone; }
 	/** 包私有 — 供 NbtSerializer 调用父类 protected setOperatingTicks */
 	void callSetOperatingTicks(int value) { setOperatingTicks(value); }
 
-	/** 设置蜂箱侧面配置和弹出器 — 覆盖父类单输入/输出配置；蜂笼输出槽不参与弹出；tickDelay=1 由 Mixin 动态调整 */
+	/** 包私有 — 供 ApiaryTilePersistence 等同包组件访问 NBT 序列化器 */
+	ApiaryNbtSerializer nbtSerializer() { return nbtSerializer; }
+
+	/** 包私有 — 供 ApiaryTilePersistence 等同包组件访问 AE2 宿主适配器 */
+	ApiaryAe2HostAdapter ae2HostAdapter() { return ae2HostAdapter; }
+
+	/** 包私有 — 供 ApiaryTilePersistence 等同包组件访问 PB 升级处理器 */
+	ApiaryPbUpgradeHandler pbUpgradeHandler() { return pbUpgradeHandler; }
+
+	/** 包私有 — 供容器 tracker 写入客户端选中槽位镜像 */
+	void setClientSelectedBeeSlot(int index) { clientSelectedBeeSlot = index; }
+
+	/** 设置蜂箱侧面配置和弹出器 — 委托 {@link ApiarySideConfigSupport#setupSideConfig} */
 	private void setupSideConfig() {
-		// 物品 IO 配置：蜂笼输入槽作为输入，仅产物输出槽作为输出（蜂笼输出槽不参与 Ejector 弹出）
-		List<mekanism.api.inventory.IInventorySlot> outputSlots = new ArrayList<>();
-		outputSlots.addAll(slotManager.getOutputSlots());
-		configComponent.setupItemIOConfig(
-				Collections.singletonList(slotManager.getCageInSlot()),
-				outputSlots,
-				slotManager.getEnergySlot(), false);
-		// 能量输入配置
-		configComponent.setupInputConfig(TransmissionType.ENERGY, accessor().productivebeesgenesis$getEnergyContainer());
-		// 流体输出配置（右侧）
-		configComponent.setupOutputConfig(TransmissionType.FLUID, slotManager.getFluidTank(), RelativeSide.RIGHT);
-		// 创建弹出器组件，设置 tickDelay 为 1（实际延迟由 Mixin 动态调整）
-		ejectorComponent = new TileComponentEjector(this);
-		((TileEntityEjectorAccessor) ejectorComponent).productivebeesgenesis$setTickDelay(1);
-		// 同时弹出物品和流体
-		ejectorComponent.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
-		// 直连输出路由：侧面配置变化时立即标记直连检测，重新扫描目标离心机
-		configComponent.addConfigChangeListener(TransmissionType.ITEM, ignored -> markDirectEjectDirty());
+		ApiarySideConfigSupport.setupSideConfig(this);
 	}
 
 	/** 获取配方类型 — 占位返回SMELTING，蜂箱产出由 BeeProduceProcessor 处理 */
@@ -170,22 +164,11 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		return MekanismRecipeType.SMELTING;
 	}
 
-	/** 重写警告检查 — 蜂箱不走 CachedRecipe 管线，手动映射 BeeState 到 RecipeError（Bug 10/1/5） */
+	/** 重写警告检查 — 委托 {@link ApiarySideConfigSupport#getWarningCheck}，未映射项回退父类 */
 	@Override
 	public BooleanSupplier getWarningCheck(RecipeError error) {
-		if (error == RecipeError.NOT_ENOUGH_OUTPUT_SPACE) return () -> slotManager != null && slotManager.isOutputFull();
-		if (error == RecipeError.NOT_ENOUGH_ENERGY) return () -> hasBeeInState(BeeState.WAITING_ENERGY);
-		if (error == RecipeError.NOT_ENOUGH_INPUT) return () -> hasBeeInState(BeeState.WAITING_FLOWER);
-		return super.getWarningCheck(error);
-	}
-
-	/** 检查是否有蜜蜂处于指定状态 */
-	private boolean hasBeeInState(BeeState state) {
-		if (slotManager == null) return false;
-		for (BeeSlot slot : slotManager.getBeeSlots()) {
-			if (slot.getState() == state) return true;
-		}
-		return false;
+		BooleanSupplier mapped = ApiarySideConfigSupport.getWarningCheck(this, error);
+		return mapped != null ? mapped : super.getWarningCheck(error);
 	}
 
 	@Nullable @Override
@@ -252,27 +235,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void addContainerTrackers(MekanismContainer container) {
 		super.addContainerTrackers(container);
 		slotManager.addContainerTrackers(container);
-		for (PbUpgradeType type : PbUpgradeType.values()) {
-			if (type.isBuiltin()) continue;
-			container.track(SyncableInt.create(
-					() -> pbUpgradeHandler.getPbUpgradeCount(type),
-					count -> pbUpgradeHandler.setClientUpgradeCount(type, count)));
-		}
-		container.track(SyncableInt.create(pbUpgradeHandler::getInstallTicks, pbUpgradeHandler::setClientUpgradeTicks));
-		container.track(SyncableInt.create(() -> selectedBeeSlot, v -> clientSelectedBeeSlot = v));
-		// per-tile AE2 输出开关同步（无条件添加避免客户端/服务端 tracker 数量不一致）
-		container.track(SyncableBoolean.create(
-				ae2HostAdapter::isAeItemOutputEnabled,
-				ae2HostAdapter::setAeItemOutputEnabled));
-		container.track(SyncableBoolean.create(
-				ae2HostAdapter::isAeFluidOutputEnabled,
-				ae2HostAdapter::setAeFluidOutputEnabled));
-		container.track(SyncableBoolean.create(
-				this::isDirectEjectEnabled,
-				enabled -> directEjectEnabled = enabled));
-		container.track(SyncableBoolean.create(
-				this::isDirectAeOutputEnabled,
-				enabled -> directAeOutputEnabled = enabled));
+		ApiaryContainerTrackers.addTrackers(this, container);
 	}
 
 	// ===== NBT 持久化 — 委托给 nbtSerializer + pbUpgradeHandler =====
@@ -280,22 +243,18 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.saveAdditional(nbt, provider);
-		nbtSerializer.saveApiaryState(nbt, provider);
-		ae2HostAdapter.saveNodeNBT(nbt);
-		ae2HostAdapter.savePerTileState(nbt);
+		ApiaryTilePersistence.saveAdditional(this, nbt, provider);
 	}
 
 	@NotNull @Override
 	public CompoundTag saveCustomDataForItem(@NotNull HolderLookup.Provider provider) {
-		return nbtSerializer.saveCustomData(provider);
+		return ApiaryTilePersistence.saveCustomDataForItem(this, provider);
 	}
 
 	@Override
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		super.loadAdditional(nbt, provider);
-		nbtSerializer.loadApiaryState(nbt, provider);
-		ae2HostAdapter.loadNodeNBT(nbt);
-		ae2HostAdapter.loadPerTileState(nbt);
+		ApiaryTilePersistence.loadAdditional(this, nbt, provider);
 	}
 
 	/** 保存PB升级数量映射 — protected 供工厂版子类调用 */
@@ -326,95 +285,19 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@NotNull @Override
 	public ApiaryUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		ApiaryUpgradeData data = nbtSerializer.buildUpgradeData(provider, redstone, getSortingForUpgradeData());
-		// 模块 3 Bug 2：构建升级数据后立即清空旧方块所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
-		// outputItems 字段已是深拷贝（独立于 outputSlots 引用），清空槽位不影响升级数据完整性
-		saveAllItemsForDrop();
-		return data;
+		return ApiaryTilePersistence.getUpgradeData(this, provider);
 	}
 
 	@Override
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
-		if (!nbtSerializer.applyUpgradeData(provider, upgradeData)) super.parseUpgradeData(provider, upgradeData);
+		if (!ApiaryTilePersistence.applyUpgradeData(this, provider, upgradeData)) {
+			super.parseUpgradeData(provider, upgradeData);
+		}
 	}
 
-	/**
-	 * 保存全部数据后清空所有槽位（模块 3 Bug 1 + Bug 2）
-	 * <br/>
-	 * 供 {@link MekApiaryBlock#getDrops}（镐子破坏/扳手拆卸）和 {@link #getUpgradeData}
-	 * （ItemTierInstaller 升级）在保存 BLOCK_ENTITY_DATA / 升级数据后调用，
-	 * 防止 {@link #setRemoved} 触发 Ejector 组件 {@code popResource} 重复掉落物品到世界。
-	 * <p>
-	 * 清空范围：蜜蜂槽、喂食槽、PB升级槽（输入+输出）、产物输出槽、蜂笼输入槽、蜂笼输出槽、
-	 * 能量槽、流体罐、产物缓冲区（outputBuffer）、选中槽位。
-	 * <p>
-	 * 设计原则：
-	 * <ul>
-	 *   <li>性能：直接清空槽位，不重复序列化（数据已通过 BLOCK_ENTITY_DATA / 升级数据保存）</li>
-	 *   <li>安全：清空所有可能持有物品的槽位，避免遗漏导致 Ejector 重复 popResource</li>
-	 *   <li>异常处理：单点异常不影响其他槽位清空（防御性 try-catch）</li>
-	 * </ul>
-	 */
+	/** 保存全部数据后清空所有槽位 — 委托 {@link ApiaryTilePersistence#saveAllItemsForDrop} */
 	public void saveAllItemsForDrop() {
-		// 蜜蜂槽数组清空（BeeSlot.clear() 重置全部字段并标记 dirty）
-		try {
-			for (BeeSlot slot : slotManager.getBeeSlots()) {
-				slot.clear();
-			}
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空蜜蜂槽异常", e);
-		}
-		// 喂食槽清空
-		try {
-			for (FeederInventorySlot slot : feederSlotManager.getFeederInventorySlots()) {
-				slot.setStack(ItemStack.EMPTY);
-			}
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空喂食槽异常", e);
-		}
-		// PB 升级输入/输出槽清空
-		try {
-			pbUpgradeHandler.getInputSlot().setStack(ItemStack.EMPTY);
-			pbUpgradeHandler.getOutputSlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空 PB 升级槽异常", e);
-		}
-		// 产物输出槽清空
-		try {
-			for (BasicInventorySlot slot : slotManager.getOutputSlots()) {
-				slot.setStack(ItemStack.EMPTY);
-			}
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空产物输出槽异常", e);
-		}
-		// 蜂笼输入/输出槽清空
-		try {
-			slotManager.getCageInSlot().setStack(ItemStack.EMPTY);
-			slotManager.getCageOutSlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空蜂笼槽异常", e);
-		}
-		// 能量槽清空
-		try {
-			slotManager.getEnergySlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空能量槽异常", e);
-		}
-		// 流体罐清空（setEmpty 内部调用 setStack(FluidStack.EMPTY)，触发 onContentsChanged）
-		try {
-			slotManager.getFluidTank().setEmpty();
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空流体罐异常", e);
-		}
-		// 产物溢出缓冲区清空（不掉落，仅清空内存引用）
-		try {
-			outputBuffer.clear();
-		} catch (RuntimeException e) {
-			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空产物缓冲区异常", e);
-		}
-		// 选中蜜蜂槽位重置为未选择
-		setSelectedBeeSlot(-1);
-		setChanged();
+		ApiaryTilePersistence.saveAllItemsForDrop(this);
 	}
 
 	// ===== GUI 访问接口（供 Container/Screen 使用） =====
@@ -504,25 +387,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override
 	public void writeSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
 		super.writeSustainedData(provider, data);
-		PbConfigCardDataHelper.writePbUpgrades(data, pbUpgradeHandler.getPbUpgradeCounts(),
-				PbConfigCardDataHelper.MachineType.APIARY);
-		PbConfigCardDataHelper.writeAe2PerTileState(data,
-				ae2HostAdapter.isAeItemOutputEnabled(), ae2HostAdapter.isAeFluidOutputEnabled());
-		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT, directAeOutputEnabled);
+		ApiaryTilePersistence.writeSustainedData(this, provider, data);
 	}
 
 	/** 从配置卡读取 — 恢复AE2 per-tile状态（PB升级粘贴在 setConfigurationData 中处理） */
 	@Override
 	public void readSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
 		super.readSustainedData(provider, data);
-		boolean[] ae2State = PbConfigCardDataHelper.readAe2PerTileState(data);
-		if (ae2State != null) {
-			ae2HostAdapter.setAeItemOutputEnabled(ae2State[0]);
-			ae2HostAdapter.setAeFluidOutputEnabled(ae2State[1]);
-		}
-		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT)) {
-			setDirectAeOutputEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT));
-		}
+		ApiaryTilePersistence.readSustainedData(this, provider, data);
 	}
 
 	/** 设置配置卡数据 — 重写获取 Player 参数，处理PB升级粘贴（生存模式消耗物品，创造模式直接安装） */
@@ -531,34 +403,12 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 			@Nullable net.minecraft.world.entity.player.Player player,
 			@NotNull CompoundTag data) {
 		super.setConfigurationData(provider, player, data);
-		// 粘贴PB升级（生存模式消耗物品，创造模式直接安装）
-		PbConfigCardDataHelper.readAndApplyPbUpgrades(data, player,
-				this::installPbUpgrade,
-				this::clearAllPbUpgrades,
-				PbConfigCardDataHelper.MachineType.APIARY);
-	}
-
-	/**
-	 * 清空所有已安装PB升级 — 供配置卡粘贴前调用
-	 * <br/>
-	 * 修复物品守恒：removePbUpgrade 返回的 ItemStack 列表必须消费，
-	 * 由调用方（PbConfigCardDataHelper.readAndApplyPbUpgrades）注入玩家物品栏或掉落地面。
-	 *
-	 * @return 被清空的 PB 升级物品栈列表
-	 */
-	private java.util.List<ItemStack> clearAllPbUpgrades() {
-		java.util.List<ItemStack> dropped = new java.util.ArrayList<>();
-		for (PbUpgradeType type : PbUpgradeType.values()) {
-			if (!type.isBuiltin() && pbUpgradeHandler.getPbUpgradeCount(type) > 0) {
-				dropped.addAll(pbUpgradeHandler.removePbUpgrade(type, true));
-			}
-		}
-		return dropped;
+		ApiaryTilePersistence.setConfigurationData(this, provider, player, data);
 	}
 
 	/** 保存AE2 per-tile状态到NBT — 供 ApiaryNbtSerializer 扳手拆卸持久化调用 */
 	void saveAe2PerTileState(CompoundTag nbt) {
-		ae2HostAdapter.savePerTileState(nbt);
+		ApiaryTilePersistence.saveAe2PerTileState(this, nbt);
 	}
 
 	// ===== AE2 生命周期与 IAe2OutputHostBase 实现 — 委托给 ae2HostAdapter =====

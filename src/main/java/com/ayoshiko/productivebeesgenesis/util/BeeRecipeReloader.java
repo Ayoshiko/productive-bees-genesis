@@ -1,14 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -17,29 +11,34 @@ import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+
 /**
- * 蜜蜂配方重载器
- * <br/>
- * 在数据包重载（/reload、服务器启动、数据包变更）后根据 {@link ModConfig} 动态修改
- * ProductiveBees 的 bee_fishing / bee_breeding / bee_spawning / bee_conversion 配方，
- * 实现万象创世蜜蜂获得方式的运行时配置。
- * <p>
- * 原理：通过 {@link PreparableReloadListener} 在 RecipeManager 完成加载后介入，
- * 收集全部配方并替换其中万象创世相关的条目，最后调用 {@link RecipeManager#replaceRecipes}
- * 全量替换。线程安全：reload 的 apply 阶段在 gameExecutor（主线程）执行，无并发问题。
- * <p>
- * 首次世界加载问题修复：配置可能在配方重载时未完全加载，此时会安排延迟重试任务，
- * 在服务器 tick 中检查配置就绪后再次尝试应用配方修改。
- * <p>
- * <b>职责分离</b>（v1.7.0 拆分）：
- * <ul>
- *   <li>{@link RecipeReloadRetryManager} — 延迟重试上下文管理</li>
- *   <li>{@link RecipeIngredientFactory} — Ingredient 与 Biome 解析</li>
- *   <li>{@link MyriadRecipeProcessor} — 单配方处理逻辑</li>
- *   <li>{@link PBReflectionCacheCleaner} — PB 反射缓存清理</li>
- * </ul>
- * 本类仅作为 {@link PreparableReloadListener} 入口，协调上述 4 个组件。
- */
+	 * 蜜蜂配方重载器
+	 * <br/>
+	 * 在数据包重载（/reload、服务器启动、数据包变更）后根据 {@link ModConfig} 动态修改
+	 * ProductiveBees 的 bee_fishing / bee_breeding / bee_spawning / bee_conversion 配方，
+	 * 实现万象创世蜜蜂获得方式的运行时配置。
+	 * <p>
+	 * 原理：通过 {@link PreparableReloadListener} 在 RecipeManager 完成加载后介入，
+	 * 收集全部配方并替换其中万象创世相关的条目，最后调用 {@link RecipeManager#replaceRecipes}
+	 * 全量替换。线程安全：reload 的 apply 阶段在 gameExecutor（主线程）执行，无并发问题。
+	 * <p>
+	 * 首次世界加载问题修复：配置可能在配方重载时未完全加载，此时会安排延迟重试任务，
+	 * 在服务器 tick 中检查配置就绪后再次尝试应用配方修改。
+	 * <p>
+	 * <b>职责分离</b>（v1.5.3 拆分）：
+	 * <ul>
+	 *   <li>{@link RecipeReloadRetryManager} — 延迟重试上下文管理</li>
+	 *   <li>{@link RecipeIngredientFactory} — Ingredient 与 Biome 解析</li>
+	 *   <li>{@link MyriadRecipeProcessor} — 单配方处理逻辑</li>
+	 *   <li>{@link PBReflectionCacheCleaner} — PB 反射缓存清理</li>
+	 * </ul>
+	 * 本类仅作为 {@link PreparableReloadListener} 入口，协调上述 4 个组件。
+	 */
 public final class BeeRecipeReloader implements PreparableReloadListener {
 
 	private final RecipeManager recipeManager;

@@ -1,35 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.concurrent.ConcurrentHashMap;
-
+import appeng.api.stacks.AEItemKey;
+import cy.jdkdigital.productivebees.init.ModBlocks;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-import appeng.api.stacks.AEItemKey;
-
-import cy.jdkdigital.productivebees.init.ModDataComponents;
-import cy.jdkdigital.productivebees.init.ModBlocks;
-import cy.jdkdigital.productivebees.init.ModItems;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 蜜脾模糊匹配器
- * <br/>
- * 在 AE2 输入拉取场景下封装蜜脾类物品的识别与 BEE_TYPE 提取逻辑。
- * <ol>
- *   <li>{@link #isCombItem(AEItemKey)}：按物品类型判定是否为蜜脾（NBT 忽略开启路径）</li>
- *   <li>{@link #getBeeType(ItemStack)} / {@link #getBeeType(AEItemKey)}：提取蜜蜂类型 ID</li>
- *   <li>{@link #isCombBlock(AEItemKey)}：判定是否为蜜脾块（用于拉取排序优先级）</li>
- * </ol>
- * <p>
- * <b>可选依赖说明</b>：本类直接 import appeng 类（AEItemKey），编译期需要 AE2 API。
- * 调用方必须通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫，确保 AE2 未加载时不触发类加载。
- * <p>
- * <b>线程安全</b>：AEItemKey → BEE_TYPE 缓存使用 {@link ConcurrentHashMap}，防御性保证并发遍历安全。
- * 实际由离心机服务端 tick 线程独占访问，参考 {@link AeItemKeyCache} 的线程模型。
- */
+	 * 蜜脾模糊匹配器
+	 * <br/>
+	 * 在 AE2 输入拉取场景下封装蜜脾类物品的识别与 BEE_TYPE 提取逻辑。
+	 * <ol>
+	 *   <li>{@link #isCombItem(AEItemKey)}：按物品类型判定是否为蜜脾（NBT 忽略开启路径）</li>
+	 *   <li>{@link #getBeeType(ItemStack)} / {@link #getBeeType(AEItemKey)}：提取蜜蜂类型 ID</li>
+	 *   <li>{@link #isCombBlock(AEItemKey)}：判定是否为蜜脾块（用于拉取排序优先级）</li>
+	 * </ol>
+	 * <p>
+	 * <b>可选依赖说明</b>：本类直接 import appeng 类（AEItemKey），编译期需要 AE2 API。
+	 * 调用方必须通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫，确保 AE2 未加载时不触发类加载。
+	 * <p>
+	 * <b>线程安全</b>：AEItemKey → BEE_TYPE 缓存使用 {@link ConcurrentHashMap}，防御性保证并发遍历安全。
+	 * 实际由离心机服务端 tick 线程独占访问，参考 {@link AeItemKeyCache} 的线程模型。
+	 */
 public final class CombFuzzyMatcher {
 
 	/** 原版蜜脾固定保留键（无 BEE_TYPE 组件，使用此常量作为过滤键） */

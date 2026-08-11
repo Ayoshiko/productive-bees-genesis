@@ -5,10 +5,9 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.menu.MekCentrifugeContainer;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
-
+import com.ayoshiko.productivebeesgenesis.menu.MekCentrifugeContainer;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.container.type.MekanismContainerType;
 import mekanism.common.registration.impl.ContainerTypeDeferredRegister;
@@ -17,16 +16,16 @@ import mekanism.common.tile.factory.TileEntityFactory;
 import net.neoforged.bus.api.IEventBus;
 
 /**
- * MenuType注册类
- * <br/>
- * 使用Mekanism的ContainerTypeDeferredRegister注册MenuType。
- * 基础机器和工厂版使用不同的ContainerType，因为它们的Screen不同。
- * <p>
- * ME/EME扩展版离心机工厂的MenuType不在此类直接注册，而是通过
- * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader} 和
- * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader} 在对应模组加载时
- * 委托至 compat 包下的隔离注册类完成，避免编译期类加载导致 NoClassDefFoundError。
- */
+	 * MenuType注册类
+	 * <br/>
+	 * 使用Mekanism的ContainerTypeDeferredRegister注册MenuType。
+	 * 基础机器和工厂版使用不同的ContainerType，因为它们的Screen不同。
+	 * <p>
+	 * ME/EME扩展版离心机工厂的MenuType不在此类直接注册，而是通过
+	 * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader} 和
+	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader} 在对应模组加载时
+	 * 委托至 compat 包下的隔离注册类完成，避免编译期类加载导致 NoClassDefFoundError。
+	 */
 public final class ModMenuTypes {
 
 	/** MenuType 延迟注册器 — public 供 compat 包隔离注册类访问 */

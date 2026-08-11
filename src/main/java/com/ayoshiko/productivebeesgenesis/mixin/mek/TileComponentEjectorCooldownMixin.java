@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.GameTickGate;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -23,27 +25,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * TileComponentEjector 输出阻塞冷却与内容未变化跳过 Mixin。
- * <p>
- * 当 TimeWand 加速或目标容器已满时，Mekanism 原版的 outputItems 会每 tick 全量尝试插入，
- * 导致 TransitResponse.isEmpty() 反复失败，TPS 暴跌。此 Mixin 对实现 {@link IHasEjectorCooldown}
- * 的 ProductiveBeesGenesis 离心机工厂和通用机械蜂箱生效：
- * <ul>
- *   <li>连续多次未弹出物品后，进入可配置冷却期，跳过 outputItems 调用；</li>
- *   <li>冷却结束后会再次尝试，不会导致物品永久卡死；</li>
- *   <li>一旦成功弹出物品，计数器立即清零，恢复正常频率。</li>
- *   <li>Task 16: 输出槽内容未变化时额外跳过指定 tick 数（仅离心机，蜂箱无此配置自动关闭）。</li>
- *   <li>Step 5: 单 tick 弹出次数上限（{@code ejectMaxPerTick}），限制高频 outputItems 调用；
- *       输出槽物品总数改为 O(1)/O(n) 读取 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()}
- *       或 {@link IMekApiaryTile#productivebeesgenesis$outputItemCount()}。</li>
- *   <li>配置缓存：将配置读取缓存到实例字段，每 100 tick 刷新一次，
- *       按方块类型（离心机/蜂箱）读取各自独立的配置段。</li>
- * </ul>
- * 判断"是否弹出"通过比较调用前后输出槽物品总数，无需侵入 Mekanism 内部返回值。
- * <p>
- * 蜂箱与离心机的配置独立：蜂箱不支持 skipUnchanged/skipTicks/minInterval/busyThreshold/busyCooldown，
- * 这些节流特性在蜂箱上自动关闭（cachedSkipUnchanged=false 等），仅保留阻塞冷却与单 tick 上限。
- */
+	 * TileComponentEjector 输出阻塞冷却与内容未变化跳过 Mixin。
+	 * <p>
+	 * 当 TimeWand 加速或目标容器已满时，Mekanism 原版的 outputItems 会每 tick 全量尝试插入，
+	 * 导致 TransitResponse.isEmpty() 反复失败，TPS 暴跌。此 Mixin 对实现 {@link IHasEjectorCooldown}
+	 * 的 ProductiveBeesGenesis 离心机工厂和通用机械蜂箱生效：
+	 * <ul>
+	 *   <li>连续多次未弹出物品后，进入可配置冷却期，跳过 outputItems 调用；</li>
+	 *   <li>冷却结束后会再次尝试，不会导致物品永久卡死；</li>
+	 *   <li>一旦成功弹出物品，计数器立即清零，恢复正常频率。</li>
+	 *   <li>Task 16: 输出槽内容未变化时额外跳过指定 tick 数（仅离心机，蜂箱无此配置自动关闭）。</li>
+	 *   <li>Step 5: 单 tick 弹出次数上限（{@code ejectMaxPerTick}），限制高频 outputItems 调用；
+	 *       输出槽物品总数改为 O(1)/O(n) 读取 {@link IMekCentrifugeTile#productivebeesgenesis$outputItemCount()}
+	 *       或 {@link IMekApiaryTile#productivebeesgenesis$outputItemCount()}。</li>
+	 *   <li>配置缓存：将配置读取缓存到实例字段，每 100 tick 刷新一次，
+	 *       按方块类型（离心机/蜂箱）读取各自独立的配置段。</li>
+	 * </ul>
+	 * 判断"是否弹出"通过比较调用前后输出槽物品总数，无需侵入 Mekanism 内部返回值。
+	 * <p>
+	 * 蜂箱与离心机的配置独立：蜂箱不支持 skipUnchanged/skipTicks/minInterval/busyThreshold/busyCooldown，
+	 * 这些节流特性在蜂箱上自动关闭（cachedSkipUnchanged=false 等），仅保留阻塞冷却与单 tick 上限。
+	 */
 @Mixin(value = TileComponentEjector.class, remap = false)
 public abstract class TileComponentEjectorCooldownMixin {
 
@@ -81,6 +83,14 @@ public abstract class TileComponentEjectorCooldownMixin {
 	/** 当前 tick 剩余可调用 outputItems 的次数（<=0=已耗尽；Integer.MAX_VALUE=无限制） */
 	@Unique
 	private final AtomicInteger productivebeesgenesis$ejectsRemainingThisTick = new AtomicInteger(0);
+
+	/** Prevents accelerated sub-ticks from decrementing cooldowns or resetting quotas repeatedly. */
+	@Unique
+	private final GameTickGate productivebeesgenesis$realTickGate = new GameTickGate();
+
+	/** Avoids retrying a confirmed blocked target hundreds of times in the same JDTE execution batch. */
+	@Unique
+	private final SameTickFailureGate productivebeesgenesis$sameTickFailureGate = new SameTickFailureGate();
 
 	// ===== 配置缓存：避免每 tick 高频读取 ModConfig（256× 加速下每 tick 3584 次配置读取） =====
 	/** 配置缓存刷新间隔（tick） */
@@ -186,17 +196,19 @@ public abstract class TileComponentEjectorCooldownMixin {
 	private void productivebeesgenesis$decrementCooldownAtTickStart(CallbackInfo ci) {
 		TileEntityMekanism tile = ((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$getTile();
 		if (tile instanceof IHasEjectorCooldown) {
-			// 刷新配置缓存（每 100 tick 一次），按方块类型读取独立配置段
 			Level level = tile.getLevel();
-			if (level != null) {
-				productivebeesgenesis$refreshConfigCache(level.getGameTime(), tile);
-			}
+			if (level == null || !productivebeesgenesis$realTickGate.tryEnter(level.getGameTime())) return;
+			// 刷新配置缓存（每 100 个真实 tick 一次），按方块类型读取独立配置段
+			productivebeesgenesis$refreshConfigCache(level.getGameTime(), tile);
 			if (productivebeesgenesis$ejectCooldown.get() > 0) {
 				productivebeesgenesis$ejectCooldown.decrementAndGet();
 			}
 			// Task 23: 递减长冷却计数器
 			if (productivebeesgenesis$busyCooldown.get() > 0) {
 				productivebeesgenesis$busyCooldown.decrementAndGet();
+			}
+			if (productivebeesgenesis$skipTicksRemaining.get() > 0) {
+				productivebeesgenesis$skipTicksRemaining.decrementAndGet();
 			}
 			// Task 23: 递减最小调用间隔计数器
 			if (productivebeesgenesis$minIntervalRemaining.get() > 0) {
@@ -241,6 +253,24 @@ public abstract class TileComponentEjectorCooldownMixin {
 			return;
 		}
 
+		// 加速子 tick 之间通常没有新产物。空槽时调用 Mekanism outputItems 仍会解析
+		// 输出配置并探测外部目标，是 JDTE 256x 下最主要的 ejector 热点。
+		// A failed target probe cannot succeed again in the same JDTE batch unless local output contents change.
+		// This remains active in maximum-speed mode but never suppresses successful transfers or the next real tick.
+		Level level = tile.getLevel();
+		if (tile instanceof IMekCentrifugeTile && level != null
+				&& productivebeesgenesis$sameTickFailureGate.shouldSkip(level.getGameTime(),
+						productivebeesgenesis$getOutputContentsVersion(tile))) {
+			return;
+		}
+
+		long before = productivebeesgenesis$getOutputItemCount(tile);
+		if (before <= 0) {
+			productivebeesgenesis$consecutiveEmptyEjects.set(0);
+			productivebeesgenesis$consecutiveBusyEjects.set(0);
+			return;
+		}
+
 		// Task 16 + Task 23: 输出槽内容未变化或强制最小间隔时跳过 outputItems
 		// 最大速度模式下关闭这些节流逻辑，仅保留阻塞冷却兜底
 		boolean outputFull = productivebeesgenesis$outputSlotsFull(tile);
@@ -254,7 +284,6 @@ public abstract class TileComponentEjectorCooldownMixin {
 					productivebeesgenesis$minIntervalRemaining.set(0);
 				} else if (currentVersion == productivebeesgenesis$lastOutputContentsVersion) {
 					if (productivebeesgenesis$skipTicksRemaining.get() > 0) {
-						productivebeesgenesis$skipTicksRemaining.decrementAndGet();
 						return;
 					}
 				} else {
@@ -265,7 +294,6 @@ public abstract class TileComponentEjectorCooldownMixin {
 			}
 			// Task 23: 最小调用间隔兜底（仅在输出槽未满时生效）
 			if (!outputFull && productivebeesgenesis$minIntervalRemaining.get() > 0) {
-				productivebeesgenesis$minIntervalRemaining.decrementAndGet();
 				return;
 			}
 		}
@@ -279,7 +307,6 @@ public abstract class TileComponentEjectorCooldownMixin {
 			productivebeesgenesis$ejectsRemainingThisTick.decrementAndGet();
 		}
 
-		long before = productivebeesgenesis$getOutputItemCount(tile);
 		original.call(ejector, facing, info);
 		long after = productivebeesgenesis$getOutputItemCount(tile);
 
@@ -294,13 +321,18 @@ public abstract class TileComponentEjectorCooldownMixin {
 			productivebeesgenesis$minIntervalRemaining.set(productivebeesgenesis$cachedMinInterval);
 		}
 
-		// 输出槽原本无物品或成功减少：本轮没有实际工作或已弹出，重置失败计数
-		if (before == 0 || after < before) {
+		// 成功减少输出槽物品：重置失败计数
+		if (after < before) {
+			productivebeesgenesis$sameTickFailureGate.clear();
 			productivebeesgenesis$consecutiveEmptyEjects.set(0);
 			if (!maxSpeedMode) {
 				productivebeesgenesis$consecutiveBusyEjects.set(0);
 			}
 			return;
+		}
+		if (tile instanceof IMekCentrifugeTile && level != null) {
+			productivebeesgenesis$sameTickFailureGate.recordFailure(level.getGameTime(),
+					productivebeesgenesis$getOutputContentsVersion(tile));
 		}
 
 		// Task 14: 输出侧完全阻塞时进入冷却，最大速度模式下仍保留此兜底

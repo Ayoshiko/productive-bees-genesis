@@ -1,29 +1,28 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import net.neoforged.fml.ModList;
 
 /**
- * AppliedFlux 集成加载器
- * <br/>
- * 使用 Holder 模式实现线程安全的懒加载单例，检测 AppliedFlux 模组是否安装。
- * <p>
- * <b>检测策略</b>：通过 {@link ModList#get()} 的 {@code isLoaded("appflux")} 判断。
- * 不能使用 {@code FMLLoader.getLoadingModList()}，因为 AppliedFlux 不是 FML 早期
- * 可见的模组（其 mod 文件在 FML 列表构造阶段尚未注册），在 FML 早期阶段调用会
- * 返回 false 的负面结果，故必须使用运行时可用的 {@link ModList}。
- * <p>
- * <b>职责（SRP）</b>：仅负责检测 AppliedFlux 是否加载，不承担集成开关判断。
- * 应用层是否启用能量输入由 {@code ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled}
- * 控制，与本类解耦，便于后续任务接入配置界面时不受检测逻辑影响。
- * <p>
- * <b>线程安全</b>：Holder 模式由 JVM 类加载机制保证线程安全的延迟初始化，
- * {@link ModList} 内部使用并发集合保证线程安全读取。
- *
- * @since 1.8.0
- * @author Ayoshiko
- */
+	 * AppliedFlux 集成加载器
+	 * <br/>
+	 * 使用 Holder 模式实现线程安全的懒加载单例，检测 AppliedFlux 模组是否安装。
+	 * <p>
+	 * <b>检测策略</b>：通过 {@link ModList#get()} 的 {@code isLoaded("appflux")} 判断。
+	 * 不能使用 {@code FMLLoader.getLoadingModList()}，因为 AppliedFlux 不是 FML 早期
+	 * 可见的模组（其 mod 文件在 FML 列表构造阶段尚未注册），在 FML 早期阶段调用会
+	 * 返回 false 的负面结果，故必须使用运行时可用的 {@link ModList}。
+	 * <p>
+	 * <b>职责（SRP）</b>：仅负责检测 AppliedFlux 是否加载，不承担集成开关判断。
+	 * 应用层是否启用能量输入由 {@code ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled}
+	 * 控制，与本类解耦，便于后续任务接入配置界面时不受检测逻辑影响。
+	 * <p>
+	 * <b>线程安全</b>：Holder 模式由 JVM 类加载机制保证线程安全的延迟初始化，
+	 * {@link ModList} 内部使用并发集合保证线程安全读取。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 */
 public final class AppliedFluxIntegrationLoader {
 
 	/** Holder 模式：JVM 类加载时保证线程安全的延迟初始化 */

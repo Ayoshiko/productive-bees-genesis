@@ -3,22 +3,22 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 均匀分布求和采样工具 — 中心极限定理 (CLT) 实现
- * <br/>
- * 从 {@link PbRecipeCompleter} 抽取,遵循单一职责原则:仅负责 N 次 [min, max] 均匀分布之和的采样,
- * 不持有任何状态,纯函数式工具类。
- * <p>
- * 数学等价性:
- * <ul>
- *   <li>n=1: 走原版精确路径 (nextFloat),与单次采样完全一致</li>
- *   <li>min==max: 固定数量,无随机,返回 min * n * modifier</li>
- *   <li>n&gt;1 且 min&lt;max: Normal 近似 N 次均匀分布之和</li>
- * </ul>
- * 单次 U[min, max]: mean=(min+max)/2, var=((max-min+1)^2-1)/12;
- * N 次之和: mean=N*mean1, var=N*var1。
- * <br/>
- * 线程安全:无状态静态方法,所有依赖通过参数传入。
- */
+	 * 均匀分布求和采样工具 — 中心极限定理 (CLT) 实现
+	 * <br/>
+	 * 从 {@link PbRecipeCompleter} 抽取,遵循单一职责原则:仅负责 N 次 [min, max] 均匀分布之和的采样,
+	 * 不持有任何状态,纯函数式工具类。
+	 * <p>
+	 * 数学等价性:
+	 * <ul>
+	 *   <li>n=1: 走原版精确路径 (nextFloat),与单次采样完全一致</li>
+	 *   <li>min==max: 固定数量,无随机,返回 min * n * modifier</li>
+	 *   <li>n&gt;1 且 min&lt;max: Normal 近似 N 次均匀分布之和</li>
+	 * </ul>
+	 * 单次 U[min, max]: mean=(min+max)/2, var=((max-min+1)^2-1)/12;
+	 * N 次之和: mean=N*mean1, var=N*var1。
+	 * <br/>
+	 * 线程安全:无状态静态方法,所有依赖通过参数传入。
+	 */
 public final class SampleUniformSum {
 
 	private SampleUniformSum() {}

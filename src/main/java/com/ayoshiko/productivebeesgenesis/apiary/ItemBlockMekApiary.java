@@ -1,16 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
-
 import mekanism.api.Upgrade;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
@@ -31,34 +24,40 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 通用机械蜂箱 BlockItem — 五个等级（基础/工厂/EM/ME/EME）共用基类
- * <br/>
- * 继承 ItemBlockTooltip，复用 Mekanism 原版 tooltip 系统（统计信息 + Shift 详情 + Shift+N 描述）。
- * <p>
- * 等级结构与一致性保证：
- * <ul>
- *   <li>基础蜂箱：直接使用本类</li>
- *   <li>工厂蜂箱（Basic/Advanced/Elite/Ultimate）：使用 {@link ItemBlockMekApiaryFactory}（继承本类）</li>
- *   <li>EM 蜂箱（Overclocked/Quantum/Dense/Multiversal/Creative）：使用 {@link ItemBlockMekApiaryFactory}</li>
- *   <li>ME 蜂箱（Absolute/Supreme/Cosmic/Infinite）：使用 {@link ItemBlockMekApiaryFactory}</li>
- *   <li>EME 蜂箱（Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal）：使用 {@link ItemBlockMekApiaryFactory}</li>
- * </ul>
- * 工厂版子类不重写任何 tooltip 方法，五个等级的 tooltip 行为完全一致。
- * <p>
- * 设计原则：单一职责，本类仅负责物品 tooltip 行为；颜色处理与 SORTING 组件由子类负责。
- * DataComponents（EJECTOR/SIDE_CONFIG/SECURITY/REDSTONE/UPGRADES）由 ModItems.machineItemProperties() 统一添加。
- * <p>
- * Bug 5 修复：完整实现 tooltip 基类通用信息 + 蜂箱专属 Shift 详情：
- * <ul>
- *   <li>addStats：默认显示蜜蜂数量、PB升级总数、蜂箱类型（无需按 Shift）</li>
- *   <li>addDetails：Shift 显示 MEK 标准详情 + 蜂箱专属详情（蜜蜂种类列表、各 PB 升级类型数量、选中槽位、工作中蜜蜂数量）</li>
- * </ul>
- * Bug 7 修复：重写 addTypeDetails 防止扳手拆卸后 DataComponents 缺失导致 NPE 崩溃。
- * <p>
- * 蜜蜂种类详情：Shift 时按 bee_type 分组统计内部蜜蜂数量，通过 BeeNbtHelper 解析类型键、
- * BeeInfoHelper 获取本地化名称，按数量降序显示"蜜蜂种类名称: 数量"。
- */
+	 * 通用机械蜂箱 BlockItem — 五个等级（基础/工厂/EM/ME/EME）共用基类
+	 * <br/>
+	 * 继承 ItemBlockTooltip，复用 Mekanism 原版 tooltip 系统（统计信息 + Shift 详情 + Shift+N 描述）。
+	 * <p>
+	 * 等级结构与一致性保证：
+	 * <ul>
+	 *   <li>基础蜂箱：直接使用本类</li>
+	 *   <li>工厂蜂箱（Basic/Advanced/Elite/Ultimate）：使用 {@link ItemBlockMekApiaryFactory}（继承本类）</li>
+	 *   <li>EM 蜂箱（Overclocked/Quantum/Dense/Multiversal/Creative）：使用 {@link ItemBlockMekApiaryFactory}</li>
+	 *   <li>ME 蜂箱（Absolute/Supreme/Cosmic/Infinite）：使用 {@link ItemBlockMekApiaryFactory}</li>
+	 *   <li>EME 蜂箱（Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal）：使用 {@link ItemBlockMekApiaryFactory}</li>
+	 * </ul>
+	 * 工厂版子类不重写任何 tooltip 方法，五个等级的 tooltip 行为完全一致。
+	 * <p>
+	 * 设计原则：单一职责，本类仅负责物品 tooltip 行为；颜色处理与 SORTING 组件由子类负责。
+	 * DataComponents（EJECTOR/SIDE_CONFIG/SECURITY/REDSTONE/UPGRADES）由 ModItems.machineItemProperties() 统一添加。
+	 * <p>
+	 * Bug 5 修复：完整实现 tooltip 基类通用信息 + 蜂箱专属 Shift 详情：
+	 * <ul>
+	 *   <li>addStats：默认显示蜜蜂数量、PB升级总数、蜂箱类型（无需按 Shift）</li>
+	 *   <li>addDetails：Shift 显示 MEK 标准详情 + 蜂箱专属详情（蜜蜂种类列表、各 PB 升级类型数量、选中槽位、工作中蜜蜂数量）</li>
+	 * </ul>
+	 * Bug 7 修复：重写 addTypeDetails 防止扳手拆卸后 DataComponents 缺失导致 NPE 崩溃。
+	 * <p>
+	 * 蜜蜂种类详情：Shift 时按 bee_type 分组统计内部蜜蜂数量，通过 BeeNbtHelper 解析类型键、
+	 * BeeInfoHelper 获取本地化名称，按数量降序显示"蜜蜂种类名称: 数量"。
+	 */
 public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 
 	public ItemBlockMekApiary(MekApiaryBlock<?, ?> block, Item.Properties properties) {

@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mixin.client;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -12,18 +11,18 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 客户端Mixin：为万象创世蜜蜂提供慢速彩虹颜色循环
- * <p>
- * 原理：productivebees 内置的 colorCycle 使用硬编码的 25tick（1.25秒）周期，
- * 颜色闪烁过快。此 Mixin 拦截 getColor/getTertiaryColor/getParticleColor，
- * 使用我们的 RAINBOW_CYCLE_MS（8秒）周期代替。
- * <p>
- * 同时配合 myriadcreations.json 中 colorCycle=false，完全禁用PB内建颜色循环，
- * 所有颜色由本 Mixin 统一控制。
- * <p>
- * 注意：getParticleColor 控制采蜜后花粉层的颜色（renderNectarLayer），
- * 也用于粒子颜色。发光效果由 onRenderLivingPost 事件处理。
- */
+	 * 客户端Mixin：为万象创世蜜蜂提供慢速彩虹颜色循环
+	 * <p>
+	 * 原理：productivebees 内置的 colorCycle 使用硬编码的 25tick（1.25秒）周期，
+	 * 颜色闪烁过快。此 Mixin 拦截 getColor/getTertiaryColor/getParticleColor，
+	 * 使用我们的 RAINBOW_CYCLE_MS（8秒）周期代替。
+	 * <p>
+	 * 同时配合 myriadcreations.json 中 colorCycle=false，完全禁用PB内建颜色循环，
+	 * 所有颜色由本 Mixin 统一控制。
+	 * <p>
+	 * 注意：getParticleColor 控制采蜜后花粉层的颜色（renderNectarLayer），
+	 * 也用于粒子颜色。发光效果由 onRenderLivingPost 事件处理。
+	 */
 @Mixin(ConfigurableBee.class)
 public abstract class ConfigurableBeeColorMixin {
 

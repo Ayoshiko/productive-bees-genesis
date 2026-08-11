@@ -1,9 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.function.Supplier;
-
-import javax.annotation.Nullable;
-
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
@@ -12,26 +8,30 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.Nullable;
+
+import java.util.function.Supplier;
+
 /**
- * 输入-输出兼容性校验结果缓存
- * <br/>
- * Mekanism 工厂的 {@code inputProducesOutput} 在 sortInventory / 输入槽构造函数中被频繁调用，
- * 用于判断某个输入能否放入当前已有产物的进程。每次调用都要查 SMELTING + PB 配方并比对输出槽内容，
- * 在 SFM / AE2 等自动化模组高速探测时成为热点。
- * <p>
- * 此缓存按"输入物品 + 主输出槽 + 副输出槽 + tick 窗口"复用结果，输出槽内容变化时自动失效，
- * 避免同一状态下反复进行配方查找和 {@link ItemStack#hashItemAndComponents(ItemStack)}。
- * <p>
- * 缓存键使用 {@link SlotFingerprint}（Item + beeType，不含 count），替代完整 {@link ItemStack} 副本：
- * <ul>
- *   <li>与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），避免输出槽数量变化时的误失效</li>
- *   <li>消除完整 {@link ItemStack#hashItemAndComponents} 的组件哈希开销（3 次 → 3 次 fingerprint equals）</li>
- *   <li>内存占用更低（不缓存完整 ItemStack 副本）</li>
- * </ul>
- * 缓存有效期默认 20 tick（约 1 秒）。线程安全：方块实体在服务端单线程执行，无需同步锁。
- *
- * @author ayoshiko
- */
+	 * 输入-输出兼容性校验结果缓存
+	 * <br/>
+	 * Mekanism 工厂的 {@code inputProducesOutput} 在 sortInventory / 输入槽构造函数中被频繁调用，
+	 * 用于判断某个输入能否放入当前已有产物的进程。每次调用都要查 SMELTING + PB 配方并比对输出槽内容，
+	 * 在 SFM / AE2 等自动化模组高速探测时成为热点。
+	 * <p>
+	 * 此缓存按"输入物品 + 主输出槽 + 副输出槽 + tick 窗口"复用结果，输出槽内容变化时自动失效，
+	 * 避免同一状态下反复进行配方查找和 {@link ItemStack#hashItemAndComponents(ItemStack)}。
+	 * <p>
+	 * 缓存键使用 {@link SlotFingerprint}（Item + beeType，不含 count），替代完整 {@link ItemStack} 副本：
+	 * <ul>
+	 *   <li>与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），避免输出槽数量变化时的误失效</li>
+	 *   <li>消除完整 {@link ItemStack#hashItemAndComponents} 的组件哈希开销（3 次 → 3 次 fingerprint equals）</li>
+	 *   <li>内存占用更低（不缓存完整 ItemStack 副本）</li>
+	 * </ul>
+	 * 缓存有效期默认 20 tick（约 1 秒）。线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 *
+	 * @author ayoshiko
+	 */
 public class InputOutputCompatibilityCache {
 
 	/** 默认缓存有效期（tick） */

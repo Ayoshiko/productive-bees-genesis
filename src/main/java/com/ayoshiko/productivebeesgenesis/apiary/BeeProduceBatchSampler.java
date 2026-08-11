@@ -1,32 +1,31 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
+import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
+import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import net.minecraft.world.item.ItemStack;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
-import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
-
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
-import net.minecraft.world.item.ItemStack;
-
 /**
- * 机械蜂箱批量概率采样器
- * <br/>
- * SRP：专门负责机械蜂箱批量概率采样，与离心机路径 {@link com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter}
- * 保持算法一致。原 {@code BeeInfoHelper.getBeeProduce} 使用 {@code chancedOutput.max()} 忽略 chance 字段，
- * 导致概率产物变必产物。本类将概率判定统一到采样阶段，批量场景下用 Binomial/Poisson/CLT 替代 N 次 Bernoulli。
- * <p>
- * 算法参考：
- * <ul>
- *   <li>{@link BatchProbabilitySampler#sampleBinomialWithGuarantee} — 保底机制 + 自适应 Binomial 采样</li>
- *   <li>{@link SampleUniformSum#sample} — 均匀分布求和 CLT 近似</li>
- *   <li>{@code PbRecipeCompleter.accumulatePbRecipeOutputsBatch} — 离心机批量聚合参考实现</li>
- * </ul>
- * <p>
- * 线程安全：无状态静态方法，仅依赖 {@link ThreadLocalRandom}，可并发调用。
- */
+	 * 机械蜂箱批量概率采样器
+	 * <br/>
+	 * SRP：专门负责机械蜂箱批量概率采样，与离心机路径 {@link com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter}
+	 * 保持算法一致。原 {@code BeeInfoHelper.getBeeProduce} 使用 {@code chancedOutput.max()} 忽略 chance 字段，
+	 * 导致概率产物变必产物。本类将概率判定统一到采样阶段，批量场景下用 Binomial/Poisson/CLT 替代 N 次 Bernoulli。
+	 * <p>
+	 * 算法参考：
+	 * <ul>
+	 *   <li>{@link BatchProbabilitySampler#sampleBinomialWithGuarantee} — 保底机制 + 自适应 Binomial 采样</li>
+	 *   <li>{@link SampleUniformSum#sample} — 均匀分布求和 CLT 近似</li>
+	 *   <li>{@code PbRecipeCompleter.accumulatePbRecipeOutputsBatch} — 离心机批量聚合参考实现</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：无状态静态方法，仅依赖 {@link ThreadLocalRandom}，可并发调用。
+	 */
 public final class BeeProduceBatchSampler {
 
 	private BeeProduceBatchSampler() {

@@ -1,12 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
+import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
+import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
 import mekanism.api.SerializationConstants;
+import mekanism.api.Upgrade;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
-import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
+import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.inputs.IInputHandler;
 import mekanism.api.recipes.outputs.IOutputHandler;
 import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
@@ -24,7 +38,6 @@ import mekanism.common.recipe.lookup.ISingleRecipeLookupHandler.ItemRecipeLookup
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tile.factory.TileEntityItemToItemFactory;
-import mekanism.api.Upgrade;
 import mekanism.common.upgrade.IUpgradeData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -37,39 +50,24 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.IntSupplier;
 
-import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
-import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
-import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
-import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
-
-import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
-
 /**
- * 工厂版MEK离心机抽象基类 — 模板方法模式，封装原版工厂公共逻辑。
- * <br/>
- * 继承 Mekanism 的 {@link TileEntityItemToItemFactory}，复用多进程并行处理。
- * 双配方路径：SMELTING走Mekanism管线；PB CentrifugeRecipe独立处理（3输出槽+流体槽）。
- * 公共逻辑委托给 {@link CentrifugeFactoryCommonLogic}，消除三工厂间代码重复。
- *
- * @author ayoshiko
- * @since Task 21
- */
+	 * 工厂版MEK离心机抽象基类 — 模板方法模式，封装原版工厂公共逻辑。
+	 * <br/>
+	 * 继承 Mekanism 的 {@link TileEntityItemToItemFactory}，复用多进程并行处理。
+	 * 双配方路径：SMELTING走Mekanism管线；PB CentrifugeRecipe独立处理（3输出槽+流体槽）。
+	 * 公共逻辑委托给 {@link CentrifugeFactoryCommonLogic}，消除三工厂间代码重复。
+	 *
+	 * @author ayoshiko
+	 * @since Task 21
+	 */
 public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemFactory<ItemStackToItemStackRecipe>
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
 		IAe2InputHost, IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
@@ -239,7 +237,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		boolean result = FactoryUpgradeStateHelper.onUpdateServer(this, inputSlots, () -> super.onUpdateServer());
 		// Task 8: 同步流体槽位数到客户端(供 GUI 决定是否显示多流体槽 Tab)
 		fluidOutputTankCount = fluidOutputHolder instanceof MultiFluidTankHolder h ? h.getTankCount() : 1;
-		// v2.1.0: 每 100 tick 回收空槽映射,防止长时间运行槽位耗尽
+		// v2.0.9: 每 100 tick 回收空槽映射,防止长时间运行槽位耗尽
 		// 触发条件:MultiFluidTankHolder 模式 + gameTime 为 100 的倍数
 		// 回收的是 tanksByFluidKey 映射关系,tanksInOrder 槽位固定不变(DataSlot 偏移不会发生)
 		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder
@@ -276,8 +274,6 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		container.track(SyncableInt.create(() -> fluidOutputTankCount, v -> fluidOutputTankCount = v));
 		// Task 8: SyncableBoolean 同步多流体槽模式状态,确保客户端 Tab 显示与服务端一致
 		container.track(SyncableBoolean.create(() -> fluidOutputHolder instanceof MultiFluidTankHolder, v -> isMultiFluidModeSynced = v));
-		// Task 3: 诊断日志 — 记录总 DataSlot 数、TileEntity 类型、调用源(callerId 替代运行时堆栈)
-		CentrifugeFactoryCommonLogic.logTrackersDiagnostic(container, this, "AbstractMekCentrifugeFactory#addContainerTrackers");
 	}
 
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
@@ -459,7 +455,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	public void recalculateUpgrades(Upgrade upgrade) { super.recalculateUpgrades(upgrade); FactoryUpgradeStateHelper.recalculateUpgrades(this, upgrade); }
 
-	/** 重写getTicksRequired — CREATIVE安装时返回0实现瞬间完成 */
+	/** 重写getTicksRequired — CREATIVE 返回 0，对齐 Mekanism Extras 最大处理速率 */
 	@Override
 	public int getTicksRequired() { return FactoryUpgradeStateHelper.getTicksRequired(this); }
 

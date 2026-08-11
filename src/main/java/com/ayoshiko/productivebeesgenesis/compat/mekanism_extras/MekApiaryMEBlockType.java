@@ -1,47 +1,44 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
-import mekanism.api.text.ILangEntry;
-import mekanism.common.block.attribute.Attributes;
-import mekanism.common.content.blocktype.BlockTypeTile;
-import mekanism.common.content.blocktype.Machine;
-import mekanism.common.lib.transmitter.TransmissionType;
-import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import mekanism.api.text.ILangEntry;
+import mekanism.common.block.attribute.Attributes;
+import mekanism.common.content.blocktype.BlockTypeTile;
+import mekanism.common.content.blocktype.Machine;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Block;
+import net.neoforged.neoforge.registries.DeferredHolder;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Mekanism Extras (ME) 工厂版通用机械蜂箱 BlockType 定义
- * <br/>
- * 此类独立承载对 ME 模组的可选依赖，避免 ME 未加载时触发 NoClassDefFoundError。
- * 所有 ME 相关的 import、字段和方法集中在此类，仅当
- * {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isMekanismExtrasLoaded()} 为 true 时
- * 由 {@link MekApiaryFactoryBlockType} 的包装方法调用。
- * <p>
- * 关键设计：
- * 1. 蜂箱工厂不继承 ME 的 ExtraFactoryMachine（因为不走 CachedRecipe 管线），使用原版
- *    {@link Machine.MachineBuilder#createMachine} 构建，与 {@link MekApiaryFactoryBlockType} 模式一致。
- * 2. ME 等级通过 {@link ExtraAttributeTier} 标记，{@link ExtraAttributeUpgradeable} 支持升级链。
- * 3. 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiaryFactory} 的 ApiaryTickHandler。
- * 4. 能量配置遵循 ME 模式：storage = max(20000, 50) * tier.processes。
- * 5. GUI 关联 {@link ModMenuTypes#MEK_APIARY_FACTORY}（与原版工厂共用），由 TileEntity 运行时区分等级。
- */
+	 * Mekanism Extras (ME) 工厂版通用机械蜂箱 BlockType 定义
+	 * <br/>
+	 * 此类独立承载对 ME 模组的可选依赖，避免 ME 未加载时触发 NoClassDefFoundError。
+	 * 所有 ME 相关的 import、字段和方法集中在此类，仅当
+	 * {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isMekanismExtrasLoaded()} 为 true 时
+	 * 由 {@link MekApiaryFactoryBlockType} 的包装方法调用。
+	 * <p>
+	 * 关键设计：
+	 * 1. 蜂箱工厂不继承 ME 的 ExtraFactoryMachine（因为不走 CachedRecipe 管线），使用原版
+	 *    {@link Machine.MachineBuilder#createMachine} 构建，与 {@link MekApiaryFactoryBlockType} 模式一致。
+	 * 2. ME 等级通过 {@link ExtraAttributeTier} 标记，{@link ExtraAttributeUpgradeable} 支持升级链。
+	 * 3. 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiaryFactory} 的 ApiaryTickHandler。
+	 * 4. 能量配置遵循 ME 模式：storage = max(20000, 50) * tier.processes。
+	 * 5. GUI 关联 {@link ModMenuTypes#MEK_APIARY_FACTORY}（与原版工厂共用），由 TileEntity 运行时区分等级。
+	 */
 public final class MekApiaryMEBlockType {
 
 	/**

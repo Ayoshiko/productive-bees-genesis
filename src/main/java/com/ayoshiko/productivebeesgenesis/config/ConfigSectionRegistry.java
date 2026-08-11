@@ -3,30 +3,30 @@ package com.ayoshiko.productivebeesgenesis.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * 配置段注册表 — 聚合 {@link ServerConfig} 的全部子配置段并提供统一查找入口（Task 12 抽取）。
- * <p>
- * 遵循单一职责原则（SRP）：将配置段的创建调用、实例持有与按名查找逻辑从
- * {@link ServerConfig} 抽离，使 {@link ServerConfig} 仅保留 Builder 入口与基础配置定义。
- * <p>
- * 当前聚合的配置段：
- * <ul>
- *   <li>{@link BeeAttributeConfigSection} — 万象创世蜜蜂属性覆盖配置（bee_attributes.*）</li>
- *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置（mek_centrifuge.*）</li>
- *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置（mek_apiary.*）</li>
- * </ul>
- * <p>
- * 注册方法（{@link #registerBeeAttributes}、{@link #registerCentrifuge}、{@link #registerApiary}）
- * 由 {@link ServerConfig} 构造函数在对应 Builder 层级位置调用，以保持配置文件中节的顺序
- * 与抽取前完全一致。每个配置段内部自行管理 {@code builder.push/pop}，调用方需保证在合适的
- * 层级顺序中调用，以维持配置文件中节的顺序与抽取前一致。
- * <p>
- * 外部访问路径 {@code ModConfig.SERVER.xxx}（向后兼容委托字段）保持不变。
- *
- * @see ServerConfig
- * @see BeeAttributeConfigSection
- * @see CentrifugeConfigSection
- * @see ApiaryConfigSection
- */
+	 * 配置段注册表 — 聚合 {@link ServerConfig} 的全部子配置段并提供统一查找入口（Task 12 抽取）。
+	 * <p>
+	 * 遵循单一职责原则（SRP）：将配置段的创建调用、实例持有与按名查找逻辑从
+	 * {@link ServerConfig} 抽离，使 {@link ServerConfig} 仅保留 Builder 入口与基础配置定义。
+	 * <p>
+	 * 当前聚合的配置段：
+	 * <ul>
+	 *   <li>{@link BeeAttributeConfigSection} — 万象创世蜜蜂属性覆盖配置（bee_attributes.*）</li>
+	 *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置（mek_centrifuge.*）</li>
+	 *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置（mek_apiary.*）</li>
+	 * </ul>
+	 * <p>
+	 * 注册方法（{@link #registerBeeAttributes}、{@link #registerCentrifuge}、{@link #registerApiary}）
+	 * 由 {@link ServerConfig} 构造函数在对应 Builder 层级位置调用，以保持配置文件中节的顺序
+	 * 与抽取前完全一致。每个配置段内部自行管理 {@code builder.push/pop}，调用方需保证在合适的
+	 * 层级顺序中调用，以维持配置文件中节的顺序与抽取前一致。
+	 * <p>
+	 * 外部访问路径 {@code ModConfig.SERVER.xxx}（向后兼容委托字段）保持不变。
+	 *
+	 * @see ServerConfig
+	 * @see BeeAttributeConfigSection
+	 * @see CentrifugeConfigSection
+	 * @see ApiaryConfigSection
+	 */
 public final class ConfigSectionRegistry {
 
 	/** 万象创世蜜蜂属性配置段（注册后非 null） */

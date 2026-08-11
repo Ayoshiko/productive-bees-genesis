@@ -1,20 +1,20 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 /**
- * MEK 离心机 NBT 键名常量集中管理
- * <br/>
- * <b>设计原则：</b>
- * <ul>
- *   <li>SRP：仅负责 NBT 键名常量定义，不包含读写逻辑</li>
- *   <li>OCP：新增键名只需新增常量字段，不修改已使用常量的代码</li>
- *   <li>DRY：避免在多个文件中硬编码字符串字面量，防止拼写错误和不一致</li>
- * </ul>
- * <p>
- * 键名约定：使用 {@code productivebeesgenesis_} 前缀 + snake_case,
- * 与现有 PB 进度 / PB 升级 / AE2 状态等键名约定保持一致。
- *
- * @since Task 10
- */
+	 * MEK 离心机 NBT 键名常量集中管理
+	 * <br/>
+	 * <b>设计原则：</b>
+	 * <ul>
+	 *   <li>SRP：仅负责 NBT 键名常量定义，不包含读写逻辑</li>
+	 *   <li>OCP：新增键名只需新增常量字段，不修改已使用常量的代码</li>
+	 *   <li>DRY：避免在多个文件中硬编码字符串字面量，防止拼写错误和不一致</li>
+	 * </ul>
+	 * <p>
+	 * 键名约定：使用 {@code productivebeesgenesis_} 前缀 + snake_case,
+	 * 与现有 PB 进度 / PB 升级 / AE2 状态等键名约定保持一致。
+	 *
+	 * @since Task 10
+	 */
 public final class MekCentrifugeNbtKeys {
 
 	private MekCentrifugeNbtKeys() {

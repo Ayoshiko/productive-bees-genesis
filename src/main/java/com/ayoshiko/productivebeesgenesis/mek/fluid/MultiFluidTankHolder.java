@@ -1,16 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.fluid.BasicFluidTank;
@@ -20,28 +9,38 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 多流体槽管理器 — 构造时预分配全部 maxTanks 个空槽
- * <br/>
- * <b>设计背景：</b>离心机高并行工厂处理多种蜜脾时,不同蜜脾产出不同流体类型。
- * 原按需分配导致客户端(1 槽)与服务端(2+槽)槽位数量不一致,引发 MEK DataSlot 索引偏移。
- * 预分配全部 maxTanks 个空槽确保两端槽位数量始终一致(= maxTanks = tier.processes),
- * 消除 MEK addContainerTrackers 注册的 SyncableFluidStack 数量差异。
- * <p>
- * <b>设计原则：</b>
- * <ul>
- *   <li>SRP:仅负责多槽路由与生命周期管理,不涉及配方处理、侧面配置、弹出逻辑</li>
- *   <li>OCP:槽位分配策略调整仅需扩展本类内部实现</li>
- *   <li>线程安全:ConcurrentHashMap + CopyOnWriteArrayList + AtomicInteger 防御性并发容器</li>
- * </ul>
- * <p>
- * <b>Task 5 MEK 原生侧面配置集成：</b>实现 {@link IFluidTankHolder},
- * 通过 {@link #getTanks(Direction)} 暴露所有槽位给 MEK 原生 Ejector。
- * 路由策略由 {@link MultiFluidSideConfigHandler} 封装,本类仅负责槽位数据暴露。
- *
- * @since 1.0.0
- */
+	 * 多流体槽管理器 — 构造时预分配全部 maxTanks 个空槽
+	 * <br/>
+	 * <b>设计背景：</b>离心机高并行工厂处理多种蜜脾时,不同蜜脾产出不同流体类型。
+	 * 原按需分配导致客户端(1 槽)与服务端(2+槽)槽位数量不一致,引发 MEK DataSlot 索引偏移。
+	 * 预分配全部 maxTanks 个空槽确保两端槽位数量始终一致(= maxTanks = tier.processes),
+	 * 消除 MEK addContainerTrackers 注册的 SyncableFluidStack 数量差异。
+	 * <p>
+	 * <b>设计原则：</b>
+	 * <ul>
+	 *   <li>SRP:仅负责多槽路由与生命周期管理,不涉及配方处理、侧面配置、弹出逻辑</li>
+	 *   <li>OCP:槽位分配策略调整仅需扩展本类内部实现</li>
+	 *   <li>线程安全:ConcurrentHashMap + CopyOnWriteArrayList + AtomicInteger 防御性并发容器</li>
+	 * </ul>
+	 * <p>
+	 * <b>Task 5 MEK 原生侧面配置集成：</b>实现 {@link IFluidTankHolder},
+	 * 通过 {@link #getTanks(Direction)} 暴露所有槽位给 MEK 原生 Ejector。
+	 * 路由策略由 {@link MultiFluidSideConfigHandler} 封装,本类仅负责槽位数据暴露。
+	 *
+	 * @since 1.0.0
+	 */
 public class MultiFluidTankHolder implements IFluidTankHolder {
 
 	/** 流体类型标识 — Fluid + DataComponentMap 哈希,用作 Map key */
@@ -64,7 +63,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 按流体类型索引的槽位映射(防御性并发容器)
 	 * <br/>
-	 * v2.1.0: 改为 Map<FluidKey, List<IExtendedFluidTank>>，允许一种流体占用多个槽（溢出场景）
+	 * v2.0.9: 改为 Map<FluidKey, List<IExtendedFluidTank>>，允许一种流体占用多个槽（溢出场景）
 	 * 原单槽映射导致同种类流体满载后无法分配新槽，被迫返回 null 阻塞产出
 	 */
 	private final Map<FluidKey, List<IExtendedFluidTank>> tanksByFluidKey = new ConcurrentHashMap<>();
@@ -75,7 +74,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 已映射槽位反向索引 — O(1) 判断槽位是否已分配
 	 * <br/>
-	 * v2.1.0: 替代原 createTankIfNeeded 中的 tanksByFluidKey.values().contains(tank) O(N) 扫描
+	 * v2.0.9: 替代原 createTankIfNeeded 中的 tanksByFluidKey.values().contains(tank) O(N) 扫描
 	 * 在 17 进程工厂（maxTanks=17）下，每次分配从 O(17) 降至 O(1)
 	 */
 	private final Set<IExtendedFluidTank> mappedTanks = ConcurrentHashMap.newKeySet();
@@ -98,7 +97,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 每种流体类型最大占用槽位数
 	 * <br/>
-	 * v2.1.0: 防止高产出流体（如蜂蜜）占用所有槽位，为其他流体预留空位
+	 * v2.0.9: 防止高产出流体（如蜂蜜）占用所有槽位，为其他流体预留空位
 	 * 配置值 0 表示自动计算为 Math.max(1, maxTanks / 2)
 	 */
 	private final int maxTanksPerFluid;
@@ -109,7 +108,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * 预分配确保客户端/服务端槽位数量始终一致(= maxTanks),
 	 * 消除 MEK addContainerTrackers 注册的 SyncableFluidStack 数量差异导致的 DataSlot 索引偏移。
 	 * <p>
-	 * v2.1.0: 新增 maxTanksPerFluidConfig 参数，支持每种流体类型槽位配额
+	 * v2.0.9: 新增 maxTanksPerFluidConfig 参数，支持每种流体类型槽位配额
 	 *
 	 * @param maxTanks              最大槽位数(预分配数量,= tier.processes)
 	 * @param tankCapacity          单槽容量(mB)
@@ -128,7 +127,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		this.tankCapacity = tankCapacity;
 		this.listener = listener;
 		this.emptyTankCount = new AtomicInteger(maxTanks);
-		// v2.1.0: 解析 maxTanksPerFluid 配置，0 表示自动计算为 maxTanks/2
+		// v2.0.9: 解析 maxTanksPerFluid 配置，0 表示自动计算为 maxTanks/2
 		this.maxTanksPerFluid = (maxTanksPerFluidConfig <= 0)
 				? Math.max(1, maxTanks / 2)
 				: maxTanksPerFluidConfig;
@@ -143,7 +142,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 返回适合插入指定流体的槽
 	 * <br/>
-	 * v2.1.0 路由策略:
+	 * v2.0.9 路由策略:
 	 * <ol>
 	 *   <li>若已有同类型槽(FluidKey 匹配),返回有空间的已映射槽</li>
 	 *   <li>已映射槽都满了,检查 maxTanksPerFluid 配额后分配新槽</li>
@@ -197,7 +196,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 统计某种流体已映射的槽位数
 	 * <br/>
-	 * v2.1.0: 用于 maxTanksPerFluid 配额检查，防止高产出流体占用所有槽位
+	 * v2.0.9: 用于 maxTanksPerFluid 配额检查，防止高产出流体占用所有槽位
 	 *
 	 * @param key 流体类型标识
 	 * @return 已映射槽位数（0 表示无映射）
@@ -210,7 +209,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 从预分配空槽中分配一个映射到新 FluidKey(synchronized 保护原子检查-分配)
 	 * <br/>
-	 * v2.1.0: 使用 mappedTanks 反向索引替代 tanksByFluidKey.values().contains(tank) O(N) 扫描
+	 * v2.0.9: 使用 mappedTanks 反向索引替代 tanksByFluidKey.values().contains(tank) O(N) 扫描
 	 * 在 17 进程工厂（maxTanks=17）下，每次分配从 O(17) 降至 O(1)
 	 * <p>
 	 * <b>线程安全：</b>synchronized 保护"检查-分配-注册"原子操作,防止并发下同一 FluidKey 分配到不同槽。
@@ -233,7 +232,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		for (IExtendedFluidTank tank : tanksInOrder) {
 			if (tank.getFluidAmount() == 0 && !mappedTanks.contains(tank)) {
 				// List 结构：添加到 FluidKey 对应的 List 中
-				// v2.1.0: 使用 CopyOnWriteArrayList 替代 ArrayList,防止 reclaimEmptyTanks 的 removeIf
+				// v2.0.9: 使用 CopyOnWriteArrayList 替代 ArrayList,防止 reclaimEmptyTanks 的 removeIf
 				// 与 getTankForInsert 快路径的 for-each 遍历并发修改触发 ConcurrentModificationException
 				tanksByFluidKey.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>()).add(tank);
 				mappedTanks.add(tank);
@@ -301,7 +300,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 检查是否存在类型不匹配且无空槽可分配
 	 * <br/>
-	 * v2.1.0: 改用 List 结构判断，containsKey 仅检查 key 存在，需额外检查 List 非空
+	 * v2.0.9: 改用 List 结构判断，containsKey 仅检查 key 存在，需额外检查 List 非空
 	 * O(1) 判断:无同类型槽(或 List 为空)且未映射空槽数为 0 时返回 true
 	 *
 	 * @param stack 待检查流体
@@ -312,7 +311,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 			return false;
 		}
 		FluidKey key = FluidKey.of(stack);
-		// v2.1.0: List 结构下 containsKey 可能为 true 但 List 为空（回收后）
+		// v2.0.9: List 结构下 containsKey 可能为 true 但 List 为空（回收后）
 		List<IExtendedFluidTank> tanks = tanksByFluidKey.get(key);
 		if (tanks != null && !tanks.isEmpty()) {
 			for (IExtendedFluidTank tank : tanks) {
@@ -348,7 +347,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * 返回未映射空槽数量
 	 * <br/>
-	 * v2.1.0: 供 MultiFluidTankHostHelper.canAllocateNewFluidTank 使用
+	 * v2.0.9: 供 MultiFluidTankHostHelper.canAllocateNewFluidTank 使用
 	 * 修复 BUG #1：原实现检查 getTankCount() < getMaxTanks()，预分配后永远为 false
 	 *
 	 * @return 未映射空槽数量
@@ -358,7 +357,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	}
 
 	/**
-	 * 回收空槽映射（v2.1.0 修复 BUG #2）
+	 * 回收空槽映射（v2.0.9 修复 BUG #2）
 	 * <br/>
 	 * <b>原误解澄清：</b>原注释说"预分配后槽位固定不可回收，回收会导致槽位数量不一致"。
 	 * 实际上回收的是 tanksByFluidKey 中的映射关系（FluidKey → Tank），不是从 tanksInOrder 中移除槽位。

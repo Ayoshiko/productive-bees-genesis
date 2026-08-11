@@ -1,15 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeSlotContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.network.PbUpgradeExtractPayload;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiInnerScreen;
 import mekanism.client.gui.element.button.DigitalButton;
@@ -18,8 +12,8 @@ import mekanism.client.gui.element.progress.ProgressType;
 import mekanism.client.gui.element.slot.GuiVirtualSlot;
 import mekanism.client.gui.element.slot.SlotType;
 import mekanism.client.gui.element.window.GuiWindow;
-import mekanism.client.render.IFancyFontRenderer;
 import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import mekanism.client.render.IFancyFontRenderer;
 import mekanism.common.MekanismLang;
 import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.Util;
@@ -29,19 +23,24 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * PB 升级窗口
- * <br/>
- * 1:1 复刻 MEK {@code GuiUpgradeWindow} 的布局：左侧已安装列表 + 右侧信息屏 +
- * 输入/输出虚拟槽 + 卸载按钮。
- * <p>
- * Bug 7：未选择时使用 {@link IFancyFontRenderer.WrappedTextRenderer} 自动换行渲染
- * "未选择" 文字，与 MEK 原版行为一致，避免长文字溢出右屏。
- * <p>
- * 重构：将 {@code TileEntityMekApiary} 替换为 {@link IPbUpgradeProvider}，
- * 使本组件可被蜂箱与离心机共用。{@link GuiPbSupportedUpgrades} 的升级类型集合
- * 由 provider 的支持范围动态生成。
- */
+	 * PB 升级窗口
+	 * <br/>
+	 * 1:1 复刻 MEK {@code GuiUpgradeWindow} 的布局：左侧已安装列表 + 右侧信息屏 +
+	 * 输入/输出虚拟槽 + 卸载按钮。
+	 * <p>
+	 * Bug 7：未选择时使用 {@link IFancyFontRenderer.WrappedTextRenderer} 自动换行渲染
+	 * "未选择" 文字，与 MEK 原版行为一致，避免长文字溢出右屏。
+	 * <p>
+	 * 重构：将 {@code TileEntityMekApiary} 替换为 {@link IPbUpgradeProvider}，
+	 * 使本组件可被蜂箱与离心机共用。{@link GuiPbSupportedUpgrades} 的升级类型集合
+	 * 由 provider 的支持范围动态生成。
+	 */
 public class GuiPbUpgradeWindow extends GuiWindow {
 
 	public static final int WINDOW_WIDTH = 198;

@@ -1,15 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.Collections;
-import java.util.List;
-
-import javax.annotation.Nullable;
-
-import org.jetbrains.annotations.NotNull;
-
-import com.mojang.blaze3d.vertex.PoseStack;
-
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
@@ -22,20 +14,26 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
- * 万象创世蜜脾块方块 BakedModel 包装器
- * <br/>
- * 包装 PB 的 configurable_comb 方块模型，在 getQuads 中通过 ModelData 获取
- * CombBlockBlockEntity 的 combType：
- * <ul>
- *   <li>combType = myriadcreations：返回无尽创世蜜脾块模型的 quads（彩色纹理）</li>
- *   <li>其他蜜蜂：返回 PB 原始模型的 quads（灰度纹理 + tintIndex 着色）</li>
- * </ul>
- * <p>
- * 本类不实现 PerspectiveModel（方块渲染不需要自定义 renderItem），
- * 所有非 getQuads 方法委托给原始 PB 模型。
- */
+	 * 万象创世蜜脾块方块 BakedModel 包装器
+	 * <br/>
+	 * 包装 PB 的 configurable_comb 方块模型，在 getQuads 中通过 ModelData 获取
+	 * CombBlockBlockEntity 的 combType：
+	 * <ul>
+	 *   <li>combType = myriadcreations：返回无尽创世蜜脾块模型的 quads（彩色纹理）</li>
+	 *   <li>其他蜜蜂：返回 PB 原始模型的 quads（灰度纹理 + tintIndex 着色）</li>
+	 * </ul>
+	 * <p>
+	 * 本类不实现 PerspectiveModel（方块渲染不需要自定义 renderItem），
+	 * 所有非 getQuads 方法委托给原始 PB 模型。
+	 */
 public class BakedModelMyriadCombBlockBlock implements BakedModel {
 
 	/** PB 原始 configurable_comb 方块模型 */

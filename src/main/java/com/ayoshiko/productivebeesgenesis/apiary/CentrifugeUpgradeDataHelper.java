@@ -1,10 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import com.ayoshiko.productivebeesgenesis.mek.ICentrifugePbUpgradeAccess;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeNbtKeys;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.energy.IEnergyContainer;
@@ -14,7 +17,6 @@ import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
-
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -25,34 +27,30 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.mek.ICentrifugePbUpgradeAccess;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeNbtKeys;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
- * 离心机工厂升级数据构建/应用工具类
- * <br/>
- * 将 {@link com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory} 中
- * getUpgradeData/parseUpgradeData 的 PB 升级 + AE2 per-tile 状态保存/恢复逻辑提取为静态方法，
- * 供三个工厂体系（原版/ME/EME）复用，消除因 Java 单继承限制导致的逻辑重复。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅处理升级数据的构建与应用，不涉及 tick 处理或槽位管理</li>
- *   <li>开闭原则：通过参数传入委托和状态持有者，不依赖具体工厂类</li>
- *   <li>依赖倒置：参数类型使用 {@link com.ayoshiko.productivebeesgenesis.mek.ICentrifugePbUpgradeAccess}
- *       和 {@link Ae2OutputStateHolder}，而非具体工厂类</li>
- * </ul>
- * <p>
- * 线程安全：所有方法仅在服务端主线程的升级流程中调用，无需额外同步。
- *
- * @since Task 22
- */
+	 * 离心机工厂升级数据构建/应用工具类
+	 * <br/>
+	 * 将 {@link com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory} 中
+	 * getUpgradeData/parseUpgradeData 的 PB 升级 + AE2 per-tile 状态保存/恢复逻辑提取为静态方法，
+	 * 供三个工厂体系（原版/ME/EME）复用，消除因 Java 单继承限制导致的逻辑重复。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅处理升级数据的构建与应用，不涉及 tick 处理或槽位管理</li>
+	 *   <li>开闭原则：通过参数传入委托和状态持有者，不依赖具体工厂类</li>
+	 *   <li>依赖倒置：参数类型使用 {@link com.ayoshiko.productivebeesgenesis.mek.ICentrifugePbUpgradeAccess}
+	 *       和 {@link Ae2OutputStateHolder}，而非具体工厂类</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：所有方法仅在服务端主线程的升级流程中调用，无需额外同步。
+	 *
+	 * @since Task 22
+	 */
 public final class CentrifugeUpgradeDataHelper {
 
 	/** 过滤条目 index 合理上限 — 防止损坏数据触发过大数组分配（16页 × 9槽 = 144，取 256 余量） */

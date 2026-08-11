@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiTextureOnlyElement;
@@ -9,16 +7,18 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.function.Supplier;
+
 /**
- * 蜂笼槽纹理叠加层 — 仅渲染 modularbees 风格的 16×16 纹理
- * <br/>
- * 不渲染任何槽位边框，叠加在 MEK dynamicSlots 自动渲染的槽位边框之上。
- * 原理：dynamicSlots=true 时 MEK 的 addSlots() 已为 cageInSlot / cageOutSlot 自动创建
- * GuiSlot(SlotType.INPUT / SlotType.OUTPUT)，此处仅叠加 modularbees 纹理实现视觉区分，
- * 避免重复渲染槽位边框导致重叠。
- * <br/>
- * 渲染控制：仅当槽位为空时渲染纹理，避免遮挡槽位中的蜜蜂笼物品。
- */
+	 * 蜂笼槽纹理叠加层 — 仅渲染 modularbees 风格的 16×16 纹理
+	 * <br/>
+	 * 不渲染任何槽位边框，叠加在 MEK dynamicSlots 自动渲染的槽位边框之上。
+	 * 原理：dynamicSlots=true 时 MEK 的 addSlots() 已为 cageInSlot / cageOutSlot 自动创建
+	 * GuiSlot(SlotType.INPUT / SlotType.OUTPUT)，此处仅叠加 modularbees 纹理实现视觉区分，
+	 * 避免重复渲染槽位边框导致重叠。
+	 * <br/>
+	 * 渲染控制：仅当槽位为空时渲染纹理，避免遮挡槽位中的蜜蜂笼物品。
+	 */
 public class GuiCageSlotOverlay extends GuiTextureOnlyElement {
 
 	/** modularbees 输入蜂笼槽位纹理（16×16，含灰色边框和向下箭头图案） */

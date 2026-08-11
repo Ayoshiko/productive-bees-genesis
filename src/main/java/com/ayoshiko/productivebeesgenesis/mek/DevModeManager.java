@@ -4,23 +4,23 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 开发者模式服务端内存状态管理
- * <p>
- * 主开关 + 子功能开关。状态仅存在于内存，服务器重启后重置为关闭。
- * 通过 /productivebeesgenesis dev 命令控制。
- * <p>
- * 职责分离（日志 vs 非日志）：
- * <ul>
- *   <li>{@link #isEnabled()} / {@link #isEnabled(String)}：非日志场景（如创造标签页开发物品可见性），
- *       feature 默认关闭，需显式开启</li>
- *   <li>{@link #isLoggingEnabled()} / {@link #isLoggingEnabled(String)}：日志场景，
- *       feature 必须显式注册为 true 才输出日志，默认关闭以减少生产环境 I/O 开销</li>
- * </ul>
- * <p>
- * 粒度化 feature 设计：
- * 未来可通过 {@code /productivebeesgenesis dev <feature> on} 单独开启某个 feature 的日志
- * （例如开启 "recipe_reload" 但保留其他默认关闭），而不影响该 feature 的非日志行为。
- */
+	 * 开发者模式服务端内存状态管理
+	 * <p>
+	 * 主开关 + 子功能开关。状态仅存在于内存，服务器重启后重置为关闭。
+	 * 通过 /productivebeesgenesis dev 命令控制。
+	 * <p>
+	 * 职责分离（日志 vs 非日志）：
+	 * <ul>
+	 *   <li>{@link #isEnabled()} / {@link #isEnabled(String)}：非日志场景（如创造标签页开发物品可见性），
+	 *       feature 默认关闭，需显式开启</li>
+	 *   <li>{@link #isLoggingEnabled()} / {@link #isLoggingEnabled(String)}：日志场景，
+	 *       feature 必须显式注册为 true 才输出日志，默认关闭以减少生产环境 I/O 开销</li>
+	 * </ul>
+	 * <p>
+	 * 粒度化 feature 设计：
+	 * 未来可通过 {@code /productivebeesgenesis dev <feature> on} 单独开启某个 feature 的日志
+	 * （例如开启 "recipe_reload" 但保留其他默认关闭），而不影响该 feature 的非日志行为。
+	 */
 public final class DevModeManager {
 
 	/** 主开关（默认关闭） */

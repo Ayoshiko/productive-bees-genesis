@@ -10,22 +10,22 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ItemLike;
 
 /**
- * 特殊蜜脾块配方处理器 — 复刻 PB {@code BeeHelper.getSingleComb} 的拆分逻辑
- * <br/>
- * PB 原版 {@code HeatedCentrifugeBlockEntity} 处理蜜脾块时：
- * 调用 {@code BeeHelper.getSingleComb} 将蜜脾块拆分为单蜜脾，再查找单蜜脾离心配方。
- * 本类提供等价的拆分逻辑，供 {@link CentrifugeRecipeIndex} 派生特殊蜜脾块配方时使用。
- * <p>
- * <b>5 种映射</b>（与 PB {@code BeeHelper.getSingleComb} 完全一致）：
- * <ul>
- *   <li>{@link CombBlockItem}（configurable_comb）→ {@code configurable_honeycomb} + 保留 bee_type</li>
- *   <li>{@code comb_ghostly} → {@code honeycomb_ghostly}</li>
- *   <li>{@code comb_milky} → {@code honeycomb_milky}</li>
- *   <li>{@code comb_powdery} → {@code honeycomb_powdery}</li>
- *   <li>{@code minecraft:honeycomb_block} → {@code minecraft:honeycomb}</li>
- * </ul>
- * 其他物品返回 {@link ItemStack#EMPTY}。
- */
+	 * 特殊蜜脾块配方处理器 — 复刻 PB {@code BeeHelper.getSingleComb} 的拆分逻辑
+	 * <br/>
+	 * PB 原版 {@code HeatedCentrifugeBlockEntity} 处理蜜脾块时：
+	 * 调用 {@code BeeHelper.getSingleComb} 将蜜脾块拆分为单蜜脾，再查找单蜜脾离心配方。
+	 * 本类提供等价的拆分逻辑，供 {@link CentrifugeRecipeIndex} 派生特殊蜜脾块配方时使用。
+	 * <p>
+	 * <b>5 种映射</b>（与 PB {@code BeeHelper.getSingleComb} 完全一致）：
+	 * <ul>
+	 *   <li>{@link CombBlockItem}（configurable_comb）→ {@code configurable_honeycomb} + 保留 bee_type</li>
+	 *   <li>{@code comb_ghostly} → {@code honeycomb_ghostly}</li>
+	 *   <li>{@code comb_milky} → {@code honeycomb_milky}</li>
+	 *   <li>{@code comb_powdery} → {@code honeycomb_powdery}</li>
+	 *   <li>{@code minecraft:honeycomb_block} → {@code minecraft:honeycomb}</li>
+	 * </ul>
+	 * 其他物品返回 {@link ItemStack#EMPTY}。
+	 */
 public final class SpecialCombBlockRecipeHandler {
 
 	private SpecialCombBlockRecipeHandler() {

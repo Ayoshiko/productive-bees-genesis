@@ -1,23 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
-
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.AppliedFluxIntegrationLoader;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * MEK离心机配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
- * <p>
- * 子分类:basic / ejection / io_limit / ae2 / pb_upgrade / me_upgrade。
- * 堆叠倍率和流体罐倍率已抽取至 {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
- * <p>
- * 条件化注册:AE2 子 section 仅在 AE2 加载时注册;EM 工厂配置项仅在 EM 加载时注册,
- * 访问处通过模组守卫避免 NPE。
- *
- * @since 1.13.0
- * @see StackMultiplierConfigSection 堆叠倍率子段
- * @see FluidTankMultiplierConfigSection 流体罐倍率子段
- */
+	 * MEK离心机配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
+	 * <p>
+	 * 子分类:basic / ejection / io_limit / ae2 / pb_upgrade / me_upgrade。
+	 * 堆叠倍率和流体罐倍率已抽取至 {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
+	 * <p>
+	 * 条件化注册:AE2 子 section 仅在 AE2 加载时注册;EM 工厂配置项仅在 EM 加载时注册,
+	 * 访问处通过模组守卫避免 NPE。
+	 *
+	 * @since 2.0.0
+	 * @see StackMultiplierConfigSection 堆叠倍率子段
+	 * @see FluidTankMultiplierConfigSection 流体罐倍率子段
+	 */
 public final class CentrifugeConfigSection {
 
 	// ========== MEK离心机基础配置 ==========
@@ -30,7 +29,7 @@ public final class CentrifugeConfigSection {
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
-	 * v2.1.0: 每种流体类型最大占用槽位数
+	 * v2.0.9: 每种流体类型最大占用槽位数
 	 * <br/>
 	 * 防止高产出流体（如蜂蜜）占用所有槽位,为其他流体预留空位。
 	 * 0=自动计算为 Math.max(1, maxTanks/2),确保至少 2 种流体可共存;
@@ -105,7 +104,7 @@ public final class CentrifugeConfigSection {
 				.comment("是否启用多流体槽模式(按流体类型动态分配独立槽位)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.multiFluidTank")
 				.define("multiFluidTank", true);
-		// v2.1.0: 每种流体类型最大占用槽位数（配额机制）
+		// v2.0.9: 每种流体类型最大占用槽位数（配额机制）
 		mekCentrifugeMaxTanksPerFluid = builder
 				.comment("每种流体类型最大占用槽位数",
 						"0=自动计算 maxTanks/2（推荐，确保至少 2 种流体可共存）",
@@ -253,6 +252,7 @@ public final class CentrifugeConfigSection {
 				.comment("允许离心机处理电力熔炼炉（SMELTING）配方",
 						"默认开启；关闭后所有离心机的熔炉配方兼容开关无法使用",
 						"每台离心机是否兼容熔炉配方由 GUI 中的 per-tile 开关控制，默认关闭")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.smeltingCompatEnabled")
 				.define("smeltingCompatEnabled", true);
 		builder.pop(); // smelting_compat
 

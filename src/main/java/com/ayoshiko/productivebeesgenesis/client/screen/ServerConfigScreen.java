@@ -11,17 +11,17 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 
 /**
- * 服务端配置中间页
- * <br/>
- * 与 NeoForge {@link ConfigurationScreen.ConfigurationSectionScreen}
- * 保持一致的 {@link OptionsSubScreen} 风格：左侧标签、右侧操作按钮、底部“完成”按钮。
- * <p>
- * 该页面同时提供两个入口：
- * <ul>
- *   <li>“万象创世过滤” — 打开自定义 {@link FilterListScreen}，支持搜索、多选、滚动、全选</li>
- *   <li>“其他服务端配置” — 打开 NeoForge 原生服务端分组列表（蜜蜂属性、获得方式、转化产出等）</li>
- * </ul>
- */
+	 * 服务端配置中间页
+	 * <br/>
+	 * 与 NeoForge {@link ConfigurationScreen.ConfigurationSectionScreen}
+	 * 保持一致的 {@link OptionsSubScreen} 风格：左侧标签、右侧操作按钮、底部“完成”按钮。
+	 * <p>
+	 * 该页面同时提供两个入口：
+	 * <ul>
+	 *   <li>“万象创世过滤” — 打开自定义 {@link FilterListScreen}，支持搜索、多选、滚动、全选</li>
+	 *   <li>“其他服务端配置” — 打开 NeoForge 原生服务端分组列表（蜜蜂属性、获得方式、转化产出等）</li>
+	 * </ul>
+	 */
 public final class ServerConfigScreen extends OptionsSubScreen {
 
 	private final ModConfig modConfig;

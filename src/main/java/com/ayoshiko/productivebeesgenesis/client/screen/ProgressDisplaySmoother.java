@@ -1,32 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import net.minecraft.world.level.block.entity.BlockEntity;
+
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import net.minecraft.world.level.block.entity.BlockEntity;
-
 /**
- * 离心机加工进度条显示限流器（纯客户端渲染辅助）
- * <br/>
- * 256× tick 加速下真实进度会在 0↔1 之间高频跳变，直接渲染会闪烁，
- * 让用户误以为机器卡顿。本类对进度值做帧间平滑：
- * <ul>
- *   <li>上升限速：满条至少需要 {@link #MIN_FILL_SECONDS} 秒，处理再快也保持可读的填充动画</li>
- *   <li>下降快速：新循环开始时以较快速度回落，避免旧进度残留造成"卡在满条"的错觉</li>
- * </ul>
- * 仅用于显示，不修改服务端真实进度。状态按方块实体弱引用持有，GUI 关闭后自动回收。
- * 渲染线程单线程访问，无需同步。
- */
+	 * 离心机加工进度条显示限流器（纯客户端渲染辅助）
+	 * <br/>
+	 * 256× tick 加速下真实进度会在 0↔1 之间高频跳变，直接渲染会闪烁，
+	 * 让用户误以为机器卡顿。本类对进度值做帧间平滑：
+	 * <ul>
+	 *   <li>上升限速：满条至少需要 {@link #MIN_FILL_SECONDS} 秒，处理再快也保持可读的填充动画</li>
+	 *   <li>下降快速：新循环开始时以较快速度回落，避免旧进度残留造成"卡在满条"的错觉</li>
+	 * </ul>
+	 * 仅用于显示，不修改服务端真实进度。状态按方块实体弱引用持有，GUI 关闭后自动回收。
+	 * 渲染线程单线程访问，无需同步。
+	 */
 public final class ProgressDisplaySmoother {
 
 	/** 满条所需最小时间（秒）— 0.35s 填充完整进度条 */
 	private static final double MIN_FILL_SECONDS = 0.35;
 
-	/** 进度回落速度（单位/秒）— 新循环开始后约 0.33s 归零 */
-	private static final double RESET_SPEED_PER_SECOND = 3.0;
-
 	/** 单帧最小步进 — 防止高帧率下 dt 过小导致进度几乎不动 */
 	private static final double MIN_STEP_PER_FRAME = 0.015;
+
+	/** 进度条回落最小时间（秒）— 加工完成后平滑下降，避免看起来在跳动 */
+	private static final double MIN_DRAIN_SECONDS = 0.25;
 
 	/** 预分配进度槽位（EME 最高 18 进程，留余量） */
 	private static final int DEFAULT_PROCESS_CAPACITY = 24;
@@ -79,16 +79,22 @@ public final class ProgressDisplaySmoother {
 		if (dt <= 0.0) {
 			return displayed;
 		}
-		if (clamped >= displayed) {
-			// 上升：限速填充
-			double maxDelta = Math.max(MIN_STEP_PER_FRAME, dt / MIN_FILL_SECONDS);
-			displayed = Math.min(clamped, displayed + maxDelta);
-		} else {
-			// 下降：快速回落（新循环）
-			double maxDelta = Math.max(MIN_STEP_PER_FRAME, dt * RESET_SPEED_PER_SECOND);
-			displayed = Math.max(clamped, displayed - maxDelta);
-		}
+		displayed = nextValue(displayed, clamped, dt);
 		state.displayed[process] = displayed;
 		return displayed;
+	}
+
+	static double nextValue(double displayed, double target, double dt) {
+		double safeDisplayed = Math.max(0.0, Math.min(1.0, displayed));
+		double safeTarget = Math.max(0.0, Math.min(1.0, target));
+		if (dt <= 0.0) return safeDisplayed;
+		if (safeTarget >= safeDisplayed) {
+			double maxDelta = Math.max(MIN_STEP_PER_FRAME, dt / MIN_FILL_SECONDS);
+			return Math.min(safeTarget, safeDisplayed + maxDelta);
+		}
+		// A lower value marks a completed recipe and the next cycle: drain the bar
+		// smoothly so it never snaps back to the start in a single frame.
+		double maxDownDelta = Math.max(MIN_STEP_PER_FRAME * 2.0, dt / MIN_DRAIN_SECONDS);
+		return Math.max(safeTarget, safeDisplayed - maxDownDelta);
 	}
 }

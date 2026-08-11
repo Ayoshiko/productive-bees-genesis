@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
 import com.ayoshiko.productivebeesgenesis.capability.IInventoryDirtyDebouncer;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -16,16 +15,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * AdvancedBeehiveBlockEntity 物品栏脏标记去抖 Mixin。
- * <p>
- * 实现 {@link IInventoryDirtyDebouncer}，把每个游戏刻内可能多次触发的 setChanged 合并为一次，
- * 在 {@code AdvancedBeehiveBlockEntity.tick} 尾部统一 flush。
- * 只保留尾部注入点，避免每 tick 两次 Mixin 回调带来的额外开销。
- * <p>
- * 高倍加速（如 256×）下每 tick 仍可能产生脏标记，进一步通过可配置的 saveInterval
- * 限制实际 setChanged 频率：仅当距上次 flush 达到间隔 tick 且存在脏标记时才执行，
- * 未达间隔时保留脏标记延后到下次满足条件时 flush。
- */
+	 * AdvancedBeehiveBlockEntity 物品栏脏标记去抖 Mixin。
+	 * <p>
+	 * 实现 {@link IInventoryDirtyDebouncer}，把每个游戏刻内可能多次触发的 setChanged 合并为一次，
+	 * 在 {@code AdvancedBeehiveBlockEntity.tick} 尾部统一 flush。
+	 * 只保留尾部注入点，避免每 tick 两次 Mixin 回调带来的额外开销。
+	 * <p>
+	 * 高倍加速（如 256×）下每 tick 仍可能产生脏标记，进一步通过可配置的 saveInterval
+	 * 限制实际 setChanged 频率：仅当距上次 flush 达到间隔 tick 且存在脏标记时才执行，
+	 * 未达间隔时保留脏标记延后到下次满足条件时 flush。
+	 */
 @Mixin(AdvancedBeehiveBlockEntity.class)
 public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventoryDirtyDebouncer {
 

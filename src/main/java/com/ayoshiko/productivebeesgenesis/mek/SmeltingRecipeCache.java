@@ -1,21 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import net.minecraft.world.item.ItemStack;
+
 import java.util.Arrays;
 import java.util.function.Predicate;
 
-import net.minecraft.world.item.ItemStack;
-
 /**
- * SMELTING 配方缓存 — 封装每进程的 SMELTING 配方检查结果缓存
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责缓存输入到 SMELTING
- * 配方存在性的映射，避免每 tick 每进程都调用 containsSmeltingInput。
- * 输入变更时才重新查询，配方重载时通过 {@link #clearAll} 失效全部缓存。
- * <p>
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
- *
- * @since 1.0.0
- */
+	 * SMELTING 配方缓存 — 封装每进程的 SMELTING 配方检查结果缓存
+	 * <br/>
+	 * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责缓存输入到 SMELTING
+	 * 配方存在性的映射，避免每 tick 每进程都调用 containsSmeltingInput。
+	 * 输入变更时才重新查询，配方重载时通过 {@link #clearAll} 失效全部缓存。
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 *
+	 * @since 1.0.0
+	 */
 public class SmeltingRecipeCache {
 
 	/** 每进程的上次检查输入物品（用于缓存SMELTING配方检查结果） */

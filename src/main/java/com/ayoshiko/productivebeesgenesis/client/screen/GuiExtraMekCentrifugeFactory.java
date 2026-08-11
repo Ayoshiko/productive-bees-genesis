@@ -1,14 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.jerry.mekextras.client.gui.element.tab.ExtraGuiSortingTab;
-
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.client.gui.GuiConfigurableTile;
 import mekanism.client.gui.element.progress.GuiProgress;
@@ -19,28 +15,30 @@ import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.warning.IWarningTracker;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
-
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * ME扩展版离心机工厂Screen
- * <br/>
- * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
- * 每进程：1红色输入槽 + 3蓝色输出槽（主/副1/副2）+ 共享流体槽。
- * <p>
- * 布局参数通过 {@link FactoryLayoutHelper} 的ExtraFactoryTier重载方法动态计算，
- * 支持ME 4等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）。
- * <p>
- * 与原版工厂GUI的差异：
- * - 使用ME的ExtraGuiSortingTab（而非原版GuiSortingTab）
- * - 3行输出槽需要额外高度（+40），inventoryLabelY=125
- * - 流体输出槽在左侧固定位置
- * - 进度条使用SMELTING + PB离心配方的双配方跳转
- */
+	 * ME扩展版离心机工厂Screen
+	 * <br/>
+	 * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
+	 * 每进程：1红色输入槽 + 3蓝色输出槽（主/副1/副2）+ 共享流体槽。
+	 * <p>
+	 * 布局参数通过 {@link FactoryLayoutHelper} 的ExtraFactoryTier重载方法动态计算，
+	 * 支持ME 4等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）。
+	 * <p>
+	 * 与原版工厂GUI的差异：
+	 * - 使用ME的ExtraGuiSortingTab（而非原版GuiSortingTab）
+	 * - 3行输出槽需要额外高度（+40），inventoryLabelY=125
+	 * - 流体输出槽在左侧固定位置
+	 * - 进度条使用SMELTING + PB离心配方的双配方跳转
+	 */
 public class GuiExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEntityExtraMekCentrifugeFactory, MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> {
 
 	/** PB升级TAB */

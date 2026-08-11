@@ -1,5 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeConfig;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import cy.jdkdigital.productivebees.ProductiveBeesConfig;
+import mekanism.common.tile.base.TileEntityMekanism;
+import mekanism.common.util.MekanismUtils;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -7,39 +21,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.NotNull;
-
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeConfig;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
-import cy.jdkdigital.productivebees.ProductiveBeesConfig;
-
-import mekanism.common.tile.base.TileEntityMekanism;
-import mekanism.common.util.MekanismUtils;
-
 /**
- * 离心机 PB 升级安装/卸载处理器
- * <br/>
- * 参考 {@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler}，
- * 为离心机管理 PB 专属升级的状态与逻辑。与蜂箱版的差异：
- * <ul>
- *   <li>输入槽仅接受产量系列（PRODUCTIVITY α/β/γ/Ω）和时间系列（TIME/TIME_2）</li>
- *   <li>不支持基因采样（GENE_SAMPLER）、蜜脾块（BLOCK）、模拟（SIMULATION）</li>
- *   <li>无历史格式迁移（离心机为新增功能）</li>
- *   <li>客户端升级数量缓存内置（蜂箱版由 ApiaryUpgradeHandler 管理）</li>
- * </ul>
- * <p>
- * 线程安全：{@code pbUpgradeCounts} 仅服务端主线程访问（tick 处理与 Container
- * 网络包处理同在服务端主线程）。客户端通过 SyncableInt 同步至
- * {@link #clientUpgradeCounts}，使用 AtomicIntegerArray 保证可见性。
- */
+	 * 离心机 PB 升级安装/卸载处理器
+	 * <br/>
+	 * 参考 {@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler}，
+	 * 为离心机管理 PB 专属升级的状态与逻辑。与蜂箱版的差异：
+	 * <ul>
+	 *   <li>输入槽仅接受产量系列（PRODUCTIVITY α/β/γ/Ω）和时间系列（TIME/TIME_2）</li>
+	 *   <li>不支持基因采样（GENE_SAMPLER）、蜜脾块（BLOCK）、模拟（SIMULATION）</li>
+	 *   <li>无历史格式迁移（离心机为新增功能）</li>
+	 *   <li>客户端升级数量缓存内置（蜂箱版由 ApiaryUpgradeHandler 管理）</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：{@code pbUpgradeCounts} 仅服务端主线程访问（tick 处理与 Container
+	 * 网络包处理同在服务端主线程）。客户端通过 SyncableInt 同步至
+	 * {@link #clientUpgradeCounts}，使用 AtomicIntegerArray 保证可见性。
+	 */
 public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess {
 
 	/** NBT key — 离心机PB升级安装数量（public 供 CentrifugeUpgradeDataHelper 跨包访问） */

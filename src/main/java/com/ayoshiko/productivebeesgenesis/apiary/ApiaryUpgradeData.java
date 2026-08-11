@@ -1,42 +1,41 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.List;
-
 import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.upgrade.MachineUpgradeData;
-
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+
 /**
- * 蜂箱工厂升级数据
- * <br/>
- * 继承 {@link MachineUpgradeData}，在标准机器升级数据基础上增加蜂箱特有状态，
- * 用于 ItemTierInstaller 升级蜂箱工厂时完整保存/恢复所有状态。
- * <p>
- * 蜂箱相比普通 Mekanism 机器多出以下状态：
- * <ul>
- *   <li>蜜蜂槽（BeeSlot[]，非 IInventorySlot，无法通过 MachineUpgradeData 的 inputSlots/outputSlots 传递）</li>
- *   <li>喂食槽（花朵物品，独立于主物品槽位体系）</li>
- *   <li>PB 升级数量映射（EnumMap，非物品槽位）</li>
- *   <li>PB 升级输入/输出槽（PbUpgradeInventorySlot，独立于主物品槽位体系）</li>
- *   <li>蜂蜜流体罐内容（IExtendedFluidTank 的 FluidStack）</li>
- *   <li>蜂笼输出槽（OutputInventorySlot，独立于产物输出槽，不注册到ejector）</li>
- *   <li>选中的蜜蜂槽索引（GUI 高亮状态）</li>
- * </ul>
- * <p>
- * 设计原则：
- * <ul>
- *   <li>开闭原则：继承 MachineUpgradeData 扩展字段，不修改父类</li>
- *   <li>单一职责：仅承载数据，不包含序列化/反序列化逻辑（由 TileEntity 的 getUpgradeData/parseUpgradeData 负责）</li>
- * </ul>
- */
+	 * 蜂箱工厂升级数据
+	 * <br/>
+	 * 继承 {@link MachineUpgradeData}，在标准机器升级数据基础上增加蜂箱特有状态，
+	 * 用于 ItemTierInstaller 升级蜂箱工厂时完整保存/恢复所有状态。
+	 * <p>
+	 * 蜂箱相比普通 Mekanism 机器多出以下状态：
+	 * <ul>
+	 *   <li>蜜蜂槽（BeeSlot[]，非 IInventorySlot，无法通过 MachineUpgradeData 的 inputSlots/outputSlots 传递）</li>
+	 *   <li>喂食槽（花朵物品，独立于主物品槽位体系）</li>
+	 *   <li>PB 升级数量映射（EnumMap，非物品槽位）</li>
+	 *   <li>PB 升级输入/输出槽（PbUpgradeInventorySlot，独立于主物品槽位体系）</li>
+	 *   <li>蜂蜜流体罐内容（IExtendedFluidTank 的 FluidStack）</li>
+	 *   <li>蜂笼输出槽（OutputInventorySlot，独立于产物输出槽，不注册到ejector）</li>
+	 *   <li>选中的蜜蜂槽索引（GUI 高亮状态）</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>开闭原则：继承 MachineUpgradeData 扩展字段，不修改父类</li>
+	 *   <li>单一职责：仅承载数据，不包含序列化/反序列化逻辑（由 TileEntity 的 getUpgradeData/parseUpgradeData 负责）</li>
+	 * </ul>
+	 */
 public class ApiaryUpgradeData extends MachineUpgradeData {
 
 	/** 蜜蜂槽数组 NBT（由 ApiarySlotManager.saveBeeSlots 序列化） */

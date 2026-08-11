@@ -1,45 +1,42 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
-import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactoryType;
-import io.github.masyumero.emextras.common.content.blocktype.EMExtraMachine;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
-import mekanism.common.block.attribute.AttributeFactoryType;
-import mekanism.common.block.attribute.Attributes;
-import mekanism.common.content.blocktype.FactoryType;
-import mekanism.common.content.blocktype.Machine;
-import mekanism.common.lib.transmitter.TransmissionType;
-import mekanism.common.registries.MekanismSounds;
-import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
+import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
+import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactoryType;
+import io.github.masyumero.emextras.common.content.blocktype.EMExtraMachine;
+import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
+import mekanism.common.block.attribute.AttributeFactoryType;
+import mekanism.common.block.attribute.Attributes;
+import mekanism.common.content.blocktype.FactoryType;
+import mekanism.common.content.blocktype.Machine;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import mekanism.common.registries.MekanismSounds;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * EvolvedMekanismExtras (EME) 离心机工厂BlockType定义
- * <br/>
- * 此类独立承载对EME模组的可选依赖，避免EME未加载时MekCentrifugeBlockType触发NoClassDefFoundError。
- * 所有EME相关的import、字段和方法集中在此类，仅当MekCompatHooks.isEvolvedMekanismExtrasLoaded()为true时
- * 由MekCentrifugeBlockType.initEMETiers()包装方法调用。
- * <p>
- * 关键设计：
- * 1. EME等级使用EMExtraFactoryMachine基类，手动添加所有属性
- * 2. 能量配置遵循EME的EMExtraFactory.setMachineData模式（storage=max(origStorage,usage)*processes）
- * 3. 使用without(EMExtraAttributeUpgradeable.class)移除EME Mixin注入的错误升级目标，
- *    然后添加自己的EMExtraAttributeUpgradeable指向下一级离心机工厂
- * 4. 额外添加AttributeFactoryType(SMELTING)使EME方块能被MekanismUtils.isSameTypeFactory()识别
- */
+	 * EvolvedMekanismExtras (EME) 离心机工厂BlockType定义
+	 * <br/>
+	 * 此类独立承载对EME模组的可选依赖，避免EME未加载时MekCentrifugeBlockType触发NoClassDefFoundError。
+	 * 所有EME相关的import、字段和方法集中在此类，仅当MekCompatHooks.isEvolvedMekanismExtrasLoaded()为true时
+	 * 由MekCentrifugeBlockType.initEMETiers()包装方法调用。
+	 * <p>
+	 * 关键设计：
+	 * 1. EME等级使用EMExtraFactoryMachine基类，手动添加所有属性
+	 * 2. 能量配置遵循EME的EMExtraFactory.setMachineData模式（storage=max(origStorage,usage)*processes）
+	 * 3. 使用without(EMExtraAttributeUpgradeable.class)移除EME Mixin注入的错误升级目标，
+	 *    然后添加自己的EMExtraAttributeUpgradeable指向下一级离心机工厂
+	 * 4. 额外添加AttributeFactoryType(SMELTING)使EME方块能被MekanismUtils.isSameTypeFactory()识别
+	 */
 public final class MekCentrifugeEMEBlockType {
 
 	/**

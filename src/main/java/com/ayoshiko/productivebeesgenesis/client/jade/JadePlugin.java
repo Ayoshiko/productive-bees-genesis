@@ -1,10 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.jade;
 
-import snownee.jade.api.IWailaClientRegistration;
-import snownee.jade.api.IWailaCommonRegistration;
-import snownee.jade.api.IWailaPlugin;
-import snownee.jade.api.WailaPlugin;
-
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
@@ -12,25 +7,29 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import snownee.jade.api.IWailaClientRegistration;
+import snownee.jade.api.IWailaCommonRegistration;
+import snownee.jade.api.IWailaPlugin;
+import snownee.jade.api.WailaPlugin;
 
 /**
- * Jade 插件注册入口
- * <br/>
- * 使用 {@link WailaPlugin} 注解，Jade 启动时自动扫描并加载此类。
- * <p>
- * <b>注册项</b>：
- * <ul>
- *   <li>AE2 网络状态显示组件 — 基础离心机 + 原版工厂离心机 + {@link MekCentrifugeBlock}</li>
- *   <li>蜂箱运行状态显示组件 — {@link TileEntityMekApiary} + {@link MekApiaryBlock}
- *       （显示能量/蜜蜂/状态/进度）</li>
- * </ul>
- * <p>
- * <b>类加载安全</b>：此类仅被 Jade 加载（Jade 未安装时不加载），
- * 不引用任何 ME/EME 可选依赖类。ME/EME 工厂版的注册委托给隔离类
- * （{@link JadePluginMEDelegate}/{@link JadePluginEMEDelegate}），
- * 仅在对应模组加载时通过 {@link MekCompatHooks} 守卫调用，
- * 利用 JVM 延迟类加载保证未安装 ME/EME 时不会触发 {@code NoClassDefFoundError}。
- */
+	 * Jade 插件注册入口
+	 * <br/>
+	 * 使用 {@link WailaPlugin} 注解，Jade 启动时自动扫描并加载此类。
+	 * <p>
+	 * <b>注册项</b>：
+	 * <ul>
+	 *   <li>AE2 网络状态显示组件 — 基础离心机 + 原版工厂离心机 + {@link MekCentrifugeBlock}</li>
+	 *   <li>蜂箱运行状态显示组件 — {@link TileEntityMekApiary} + {@link MekApiaryBlock}
+	 *       （显示能量/蜜蜂/状态/进度）</li>
+	 * </ul>
+	 * <p>
+	 * <b>类加载安全</b>：此类仅被 Jade 加载（Jade 未安装时不加载），
+	 * 不引用任何 ME/EME 可选依赖类。ME/EME 工厂版的注册委托给隔离类
+	 * （{@link JadePluginMEDelegate}/{@link JadePluginEMEDelegate}），
+	 * 仅在对应模组加载时通过 {@link MekCompatHooks} 守卫调用，
+	 * 利用 JVM 延迟类加载保证未安装 ME/EME 时不会触发 {@code NoClassDefFoundError}。
+	 */
 @WailaPlugin
 public final class JadePlugin implements IWailaPlugin {
 

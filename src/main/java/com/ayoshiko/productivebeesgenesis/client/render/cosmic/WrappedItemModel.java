@@ -1,14 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.function.Function;
-
-import javax.annotation.Nullable;
-
-import org.jetbrains.annotations.NotNull;
-
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -20,15 +13,20 @@ import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
+
+import java.util.function.Function;
 
 /**
- * 包装普通 BakedModel 的抽象基类
- * <br/>
- * 实现 PerspectiveModel，从被包装模型提取 ItemTransforms 构造 PerspectiveModelState；
- * 提供 renderWrapped 委托原模型渲染。
- * <p>
- * 物品模型烘焙工具方法已统一到 {@link RenderUtils#bakeItem}，本类不再持有副本。
- */
+	 * 包装普通 BakedModel 的抽象基类
+	 * <br/>
+	 * 实现 PerspectiveModel，从被包装模型提取 ItemTransforms 构造 PerspectiveModelState；
+	 * 提供 renderWrapped 委托原模型渲染。
+	 * <p>
+	 * 物品模型烘焙工具方法已统一到 {@link RenderUtils#bakeItem}，本类不再持有副本。
+	 */
 public abstract class WrappedItemModel implements PerspectiveModel {
 
 	protected final BakedModel wrapped;

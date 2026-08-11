@@ -3,18 +3,18 @@ package com.ayoshiko.productivebeesgenesis.datagen;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * 可选模组条件解析工具
- * <br/>
- * 根据方块注册 ID 判断所属可选模组（EM/ME/EME）。
- * 供 {@link ModBlockTagsProvider} 共用（DRY），用于决定方块是否需要标记为可选标签条目。
- * <p>
- * 命名规则（与 ModBlocks 注册名一致）：
- * <ul>
- *   <li>_emextra_ 前缀 → emextras（EME）</li>
- *   <li>_extra_ 前缀 → mekanism_extras（ME）</li>
- *   <li>overclocked_/quantum_/dense_/multiversal_/creative_ 前缀 → evolvedmekanism（EM）</li>
- * </ul>
- */
+	 * 可选模组条件解析工具
+	 * <br/>
+	 * 根据方块注册 ID 判断所属可选模组（EM/ME/EME）。
+	 * 供 {@link ModBlockTagsProvider} 共用（DRY），用于决定方块是否需要标记为可选标签条目。
+	 * <p>
+	 * 命名规则（与 ModBlocks 注册名一致）：
+	 * <ul>
+	 *   <li>_emextra_ 前缀 → emextras（EME）</li>
+	 *   <li>_extra_ 前缀 → mekanism_extras（ME）</li>
+	 *   <li>overclocked_/quantum_/dense_/multiversal_/creative_ 前缀 → evolvedmekanism（EM）</li>
+	 * </ul>
+	 */
 public final class ModLoadedConditionResolver {
 
 	private ModLoadedConditionResolver() {}

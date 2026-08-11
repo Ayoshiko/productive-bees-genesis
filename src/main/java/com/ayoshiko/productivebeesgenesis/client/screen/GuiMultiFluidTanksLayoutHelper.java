@@ -1,19 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 /**
- * 多流体槽窗口布局工具类(SRP:仅负责动态布局计算,不涉及渲染)
- * <br/>
- * 所有公式均为纯函数,基于 tankCount 动态计算窗口尺寸和槽位坐标。
- * <p>
- * <b>布局原理(单行横排):</b>
- * <ul>
- *   <li>GaugeType.SMALL 实际像素:18×30,槽位步进 20px(18+2 gap)</li>
- *   <li>所有槽位在同一行横排显示(1 行 N 列),无翻页</li>
- *   <li>窗口宽度随 tankCount 线性增长,窗口高度固定</li>
- * </ul>
- *
- * @since Task 8
- */
+	 * 多流体槽窗口布局工具类(SRP:仅负责动态布局计算,不涉及渲染)
+	 * <br/>
+	 * 所有公式均为纯函数,基于 tankCount 动态计算窗口尺寸和槽位坐标。
+	 * <p>
+	 * <b>布局原理(单行横排):</b>
+	 * <ul>
+	 *   <li>GaugeType.SMALL 实际像素:18×30,槽位步进 20px(18+2 gap)</li>
+	 *   <li>所有槽位在同一行横排显示(1 行 N 列),无翻页</li>
+	 *   <li>窗口宽度随 tankCount 线性增长,窗口高度固定</li>
+	 * </ul>
+	 *
+	 * @since Task 8
+	 */
 public final class GuiMultiFluidTanksLayoutHelper {
 
 	/** Gauge 像素宽(GaugeType.SMALL) */

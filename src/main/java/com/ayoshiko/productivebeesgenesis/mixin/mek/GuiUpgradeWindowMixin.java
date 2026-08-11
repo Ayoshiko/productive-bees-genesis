@@ -2,41 +2,38 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.jerry.mekextras.api.ExtraUpgrade;
-
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import mekanism.api.Upgrade;
 import mekanism.client.gui.element.window.GuiUpgradeWindow;
 import mekanism.common.tile.base.TileEntityMekanism;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-
 /**
- * MEK 升级窗口 Tab 显示修复 Mixin — 修复 STACK 升级显示 "16/8" 应为 "16/16" 的 bug
- * <br/>
- * <b>背景</b>：{@link ExtraUpgradeStackMixin} 已将离心机工厂的 STACK 升级安装上限从 8 提升到 16
- * （受 {@code ModConfig.SERVER.mekCentrifugeMaxStackUpgrades} 控制），但
- * {@code GuiUpgradeWindow.renderForeground} 渲染升级数量时直接调用
- * {@code selectedType.getMax()}，返回 Upgrade 静态字段值（8），未受 Mixin 影响，
- * 导致 Tab 显示 "16/8" 而非 "16/16"。
- * <p>
- * <b>方案</b>：拦截 {@code renderForeground} 中 {@code Upgrade.getMax()} 调用，
- * 当升级为 {@link ExtraUpgrade#STACK} 且宿主为离心机工厂时返回配置值（16），
- * 与 {@link ExtraUpgradeStackMixin} 的安装上限保持一致。
- * <p>
- * <b>类加载安全</b>：本类引用 {@link ExtraUpgrade}（ME API 类），仅在 ME 已加载时由
- * {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 应用。
- * 未安装 ME 时本 Mixin 不会被加载，避免 NoClassDefFoundError。
- * <p>
- * <b>线程安全</b>：本 Mixin 仅在客户端渲染线程执行，ModConfig.SERVER 在模组加载后只读，无并发问题。
- * <p>
- * <b>优先级</b>：priority=500（低优先级），让其他模组的高优先级 Mixin 先应用。
- */
+	 * MEK 升级窗口 Tab 显示修复 Mixin — 修复 STACK 升级显示 "16/8" 应为 "16/16" 的 bug
+	 * <br/>
+	 * <b>背景</b>：{@link ExtraUpgradeStackMixin} 已将离心机工厂的 STACK 升级安装上限从 8 提升到 16
+	 * （受 {@code ModConfig.SERVER.mekCentrifugeMaxStackUpgrades} 控制），但
+	 * {@code GuiUpgradeWindow.renderForeground} 渲染升级数量时直接调用
+	 * {@code selectedType.getMax()}，返回 Upgrade 静态字段值（8），未受 Mixin 影响，
+	 * 导致 Tab 显示 "16/8" 而非 "16/16"。
+	 * <p>
+	 * <b>方案</b>：拦截 {@code renderForeground} 中 {@code Upgrade.getMax()} 调用，
+	 * 当升级为 {@link ExtraUpgrade#STACK} 且宿主为离心机工厂时返回配置值（16），
+	 * 与 {@link ExtraUpgradeStackMixin} 的安装上限保持一致。
+	 * <p>
+	 * <b>类加载安全</b>：本类引用 {@link ExtraUpgrade}（ME API 类），仅在 ME 已加载时由
+	 * {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 应用。
+	 * 未安装 ME 时本 Mixin 不会被加载，避免 NoClassDefFoundError。
+	 * <p>
+	 * <b>线程安全</b>：本 Mixin 仅在客户端渲染线程执行，ModConfig.SERVER 在模组加载后只读，无并发问题。
+	 * <p>
+	 * <b>优先级</b>：priority=500（低优先级），让其他模组的高优先级 Mixin 先应用。
+	 */
 @Mixin(value = GuiUpgradeWindow.class, remap = false, priority = 500)
 public class GuiUpgradeWindowMixin {
 

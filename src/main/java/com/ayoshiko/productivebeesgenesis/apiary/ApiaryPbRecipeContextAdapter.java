@@ -1,42 +1,39 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.inventory.slot.BasicInventorySlot;
-
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
+import java.util.List;
 
 /**
- * 蜂箱 PbRecipeContext 适配器
- * <br/>
- * 将 {@link TileEntityMekApiary} 的 {@link PbRecipeContext} 接口实现委托到此适配器，
- * 降低主类代码量，遵循单一职责原则。
- * <p>
- * 蜂箱不走 PbRecipeProcessor 管线，此处实现仅为满足 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase}
- * 继承的 PbRecipeContext 契约，供 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher} 遍历输出槽。
- * <p>
- * 输出槽映射：processes() = outputSlots.size() / 3，每进程暴露3个输出槽。
- * 蜂笼槽和喂食器槽不通过这些方法暴露，实现"AE2隐藏"。
- * <p>
- * no-op 方法（7个）：
- * <ul>
- *   <li>{@link #setPbActiveState} — 蜂箱 active 状态由 ApiaryTickHandler 管理</li>
- *   <li>{@link #productivebeesgenesis$beginOutputBatch} — 蜂箱不使用批量插入优化</li>
- *   <li>{@link #productivebeesgenesis$endOutputBatch} — 蜂箱不使用批量插入优化</li>
- *   <li>{@link #productivebeesgenesis$onProcessActivated} — 激活状态由 ApiaryTickHandler 管理</li>
- *   <li>{@link #productivebeesgenesis$onProcessDeactivated} — 激活状态由 ApiaryTickHandler 管理</li>
- *   <li>{@link #productivebeesgenesis$hasActiveProcess} — 蜂箱不走 PbRecipeProcessor，始终 false</li>
- *   <li>{@link #containsSmeltingInput} — 蜂箱不处理 SMELTING 配方</li>
- * </ul>
- */
+	 * 蜂箱 PbRecipeContext 适配器
+	 * <br/>
+	 * 将 {@link TileEntityMekApiary} 的 {@link PbRecipeContext} 接口实现委托到此适配器，
+	 * 降低主类代码量，遵循单一职责原则。
+	 * <p>
+	 * 蜂箱不走 PbRecipeProcessor 管线，此处实现仅为满足 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase}
+	 * 继承的 PbRecipeContext 契约，供 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher} 遍历输出槽。
+	 * <p>
+	 * 输出槽映射：processes() = outputSlots.size() / 3，每进程暴露3个输出槽。
+	 * 蜂笼槽和喂食器槽不通过这些方法暴露，实现"AE2隐藏"。
+	 * <p>
+	 * no-op 方法（7个）：
+	 * <ul>
+	 *   <li>{@link #setPbActiveState} — 蜂箱 active 状态由 ApiaryTickHandler 管理</li>
+	 *   <li>{@link #productivebeesgenesis$beginOutputBatch} — 蜂箱不使用批量插入优化</li>
+	 *   <li>{@link #productivebeesgenesis$endOutputBatch} — 蜂箱不使用批量插入优化</li>
+	 *   <li>{@link #productivebeesgenesis$onProcessActivated} — 激活状态由 ApiaryTickHandler 管理</li>
+	 *   <li>{@link #productivebeesgenesis$onProcessDeactivated} — 激活状态由 ApiaryTickHandler 管理</li>
+	 *   <li>{@link #productivebeesgenesis$hasActiveProcess} — 蜂箱不走 PbRecipeProcessor，始终 false</li>
+	 *   <li>{@link #containsSmeltingInput} — 蜂箱不处理 SMELTING 配方</li>
+	 * </ul>
+	 */
 class ApiaryPbRecipeContextAdapter implements PbRecipeContext {
 
 	/** 所属方块实体引用 — 用于访问 slotManager、level、energyContainer 等 */

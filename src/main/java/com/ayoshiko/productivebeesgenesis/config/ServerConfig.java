@@ -1,38 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import java.util.List;
-
 import net.neoforged.neoforge.common.ModConfigSpec;
 
+import java.util.List;
+
 /**
- * 服务端配置 — 存档级别配置
- * <p>
- * 从 {@link ModConfig} 抽取的独立配置类(Task 21),遵循单一职责原则(SRP)。
- * 随存档保存,不同存档可拥有不同配置。世界加载时自动生效,无需执行 /reload。
- * 实例由 {@link ModConfig#SERVER} 聚合持有,外部访问路径 {@code ModConfig.SERVER.xxx} 保持不变。
- * <p>
- * 校验逻辑(颜色、ResourceLocation、枚举值集合)复用 {@link ModConfig} 中的 package-private
- * validator 方法与常量,保证配置文件 validator 与网络包服务端校验逻辑单一来源(SRP)。
- * <p>
- * <b>职责拆分(Task 12 / Task 19)</b>:本类作为聚合入口持有 {@link ConfigSectionRegistry},
- * 子配置段创建/查找逻辑委托至注册表,本类仅保留 Builder 入口与基础配置定义。
- * 为向后兼容保留 public final 委托字段(指向同一 ConfigValue 实例,零开销):
- * <ul>
- *   <li>{@link BeeAttributeConfigSection} — 万象创世蜜蜂属性覆盖配置(bee_attributes.*)</li>
- *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置(mek_centrifuge.*)</li>
- *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置(mek_apiary.*,Task 18 新增)</li>
- * </ul>
- * 配置键名、层级、注册顺序与抽取前完全一致,纯重构无行为变更。
- * <p>
- * <b>v1.8.1 条件化注册与 null 守卫</b>:AE2/EM 相关委托字段在对应附属未加载时为 null。
- * 访问处需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 或
- * {@code MekCompatHooks.isEvolvedMekanismLoaded()} 守卫避免 NPE。
- * <p>
- * <b>v1.13.0 子段抽取</b>:离心机堆叠倍率/流体罐倍率已抽取至
- * {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
- * 外部访问需通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.xxx.get()}
- * 或 {@code ModConfig.SERVER.centrifuge().fluidTankMultiplier.xxx.get()}。
- */
+	 * 服务端配置 — 存档级别配置
+	 * <p>
+	 * 从 {@link ModConfig} 抽取的独立配置类(Task 21),遵循单一职责原则(SRP)。
+	 * 随存档保存,不同存档可拥有不同配置。世界加载时自动生效,无需执行 /reload。
+	 * 实例由 {@link ModConfig#SERVER} 聚合持有,外部访问路径 {@code ModConfig.SERVER.xxx} 保持不变。
+	 * <p>
+	 * 校验逻辑(颜色、ResourceLocation、枚举值集合)复用 {@link ModConfig} 中的 package-private
+	 * validator 方法与常量,保证配置文件 validator 与网络包服务端校验逻辑单一来源(SRP)。
+	 * <p>
+	 * <b>职责拆分(Task 12 / Task 19)</b>:本类作为聚合入口持有 {@link ConfigSectionRegistry},
+	 * 子配置段创建/查找逻辑委托至注册表,本类仅保留 Builder 入口与基础配置定义。
+	 * 为向后兼容保留 public final 委托字段(指向同一 ConfigValue 实例,零开销):
+	 * <ul>
+	 *   <li>{@link BeeAttributeConfigSection} — 万象创世蜜蜂属性覆盖配置(bee_attributes.*)</li>
+	 *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置(mek_centrifuge.*)</li>
+	 *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置(mek_apiary.*,Task 18 新增)</li>
+	 * </ul>
+	 * 配置键名、层级、注册顺序与抽取前完全一致,纯重构无行为变更。
+	 * <p>
+	 * <b>v2.0.0 条件化注册与 null 守卫</b>:AE2/EM 相关委托字段在对应附属未加载时为 null。
+	 * 访问处需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 或
+	 * {@code MekCompatHooks.isEvolvedMekanismLoaded()} 守卫避免 NPE。
+	 * <p>
+	 * <b>v2.0.0 子段抽取</b>:离心机堆叠倍率/流体罐倍率已抽取至
+	 * {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
+	 * 外部访问需通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.xxx.get()}
+	 * 或 {@code ModConfig.SERVER.centrifuge().fluidTankMultiplier.xxx.get()}。
+	 */
 public final class ServerConfig {
 
 	// ========== 配置段注册表(Task 12 抽取)==========
@@ -116,7 +116,7 @@ public final class ServerConfig {
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
-	 * v2.1.0: 每种流体类型最大占用槽位数(委托自 CentrifugeConfigSection)
+	 * v2.0.9: 每种流体类型最大占用槽位数(委托自 CentrifugeConfigSection)
 	 * <br/>
 	 * 0=自动计算 maxTanks/2,>0=手动指定配额,防止高产出流体占用所有槽位
 	 */
@@ -151,7 +151,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
 	// AE2 流体输出集成开关(独立于物品输出)— AE2 未加载时为 null
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
-	// v1.8.0: AE 网络能量输入集成 — AE2/AppliedFlux 未加载时为 null(条件化注册)
+	// v2.0.0: AE 网络能量输入集成 — AE2/AppliedFlux 未加载时为 null(条件化注册)
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
 	// AE2 输入拉取集成 — AE2 未加载时为 null(条件化注册)
@@ -363,7 +363,7 @@ public final class ServerConfig {
 		this.mekCentrifugeEjectDelayActive = centrifuge.mekCentrifugeEjectDelayActive;
 		this.mekCentrifugeFluidTankCapacity = centrifuge.mekCentrifugeFluidTankCapacity;
 		this.mekCentrifugeMultiFluidTank = centrifuge.mekCentrifugeMultiFluidTank;
-		// v2.1.0: 每种流体类型最大占用槽位数(配额机制)
+		// v2.0.9: 每种流体类型最大占用槽位数(配额机制)
 		this.mekCentrifugeMaxTanksPerFluid = centrifuge.mekCentrifugeMaxTanksPerFluid;
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 委托字段(maxTanks 直接使用 tier.processes)
 		this.mekCentrifugeFluidEjectRate = centrifuge.mekCentrifugeFluidEjectRate;
@@ -382,7 +382,7 @@ public final class ServerConfig {
 		// 堆叠倍率/流体罐倍率已迁移至子段,外部访问通过 centrifuge().stackMultiplier.xxx / centrifuge().fluidTankMultiplier.xxx
 		this.mekCentrifugeAeOutputEnabled = centrifuge.mekCentrifugeAeOutputEnabled;
 		this.mekCentrifugeAeFluidOutputEnabled = centrifuge.mekCentrifugeAeFluidOutputEnabled;
-		// v1.8.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
+		// v2.0.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
 		this.mekCentrifugeAeEnergyInputEnabled = centrifuge.mekCentrifugeAeEnergyInputEnabled;
 		this.mekCentrifugePreferAppliedFluxOverAeEnergy = centrifuge.mekCentrifugePreferAppliedFluxOverAeEnergy;
 		// AE2 输入拉取集成 — 向后兼容委托字段赋值(指向同一 ConfigValue 实例,零开销)

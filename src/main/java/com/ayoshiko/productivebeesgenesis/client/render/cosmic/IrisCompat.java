@@ -1,24 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.lang.reflect.Method;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import net.minecraft.world.item.ItemDisplayContext;
 
+import java.lang.reflect.Method;
+
 /**
- * Iris 光影兼容工具类
- * <br/>
- * 通过反射检测 Iris 是否启用光影包；若启用则将第一/第三人称手持视角的 cosmic 光晕渲染延迟到世界渲染结束后执行。
- * <p>
- * 性能优化：
- * <ul>
- *   <li>反射获取的 Method 对象在 Holder 中缓存，避免每帧重复查找。</li>
- *   <li>isShaderPackEnabled 结果带 1 秒 TTL 缓存，避免每帧通过反射 invoke IrisApi。
- *       光影开关状态变化频率极低（用户手动切换），1 秒延迟可接受。</li>
- * </ul>
- */
+	 * Iris 光影兼容工具类
+	 * <br/>
+	 * 通过反射检测 Iris 是否启用光影包；若启用则将第一/第三人称手持视角的 cosmic 光晕渲染延迟到世界渲染结束后执行。
+	 * <p>
+	 * 性能优化：
+	 * <ul>
+	 *   <li>反射获取的 Method 对象在 Holder 中缓存，避免每帧重复查找。</li>
+	 *   <li>isShaderPackEnabled 结果带 1 秒 TTL 缓存，避免每帧通过反射 invoke IrisApi。
+	 *       光影开关状态变化频率极低（用户手动切换），1 秒延迟可接受。</li>
+	 * </ul>
+	 */
 public final class IrisCompat {
 
 	/** 反射结果缓存 — null 表示未缓存，避免 Boolean 装箱歧义 */

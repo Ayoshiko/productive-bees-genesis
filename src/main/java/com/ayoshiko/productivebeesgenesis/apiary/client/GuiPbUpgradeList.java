@@ -1,13 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
@@ -15,8 +11,8 @@ import mekanism.client.gui.element.GuiTexturedElement;
 import mekanism.client.gui.tooltip.TooltipUtils;
 import mekanism.client.render.IFancyFontRenderer.TextAlignment;
 import mekanism.client.render.MekanismRenderer;
-import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.MekanismUtils.ResourceType;
+import mekanism.common.util.MekanismUtils;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
@@ -26,46 +22,49 @@ import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * PB升级类型点击列表
- * <br/>
- * 1:1复刻MEK原版 {@link mekanism.client.gui.element.scroll.GuiUpgradeScrollList} 的滚动条和元素渲染风格，
- * 显示已安装的PB升级类型，支持点击选择和高亮。
- * <p>
- * <b>滚动条贴图</b>：使用MEK原版 {@code scroll_list.png}（6×6像素），1:1复刻
- * {@link mekanism.client.gui.element.scroll.GuiScrollableElement#drawScrollBar} 的blit渲染：
- * <ul>
- *   <li>顶部边框：6×1像素（barX-1, barY-1）</li>
- *   <li>中间背景：1×maxBarHeight像素纵向平铺（barX-1, barY）</li>
- *   <li>底部边框：6×1像素（barX-1, barY+maxBarHeight）</li>
- *   <li>滑块：4×4像素（barX, barY+getScroll()）</li>
- * </ul>
- * <p>
- * <b>滚动条位置</b>（1:1对齐MEK原版）：
- * <ul>
- *   <li>barXShift = width - 6（滚动条在列表最右侧，留2px右边距）</li>
- *   <li>barYShift = 2</li>
- *   <li>barWidth = 4, barHeight = 4（滑块固定高度）</li>
- *   <li>maxBarHeight = height - 4</li>
- * </ul>
- * <p>
- * <b>元素渲染</b>（1:1对齐MEK原版GuiInstallableScrollList）：
- * <ul>
- *   <li>物品图标X偏移=3，Y偏移=3，缩放=0.5F</li>
- *   <li>文字X偏移=13，Y偏移=3，缩放=1.0F，颜色=titleTextColor</li>
- *   <li>文字最大宽度 = barXShift - 16 = width - 22</li>
- * </ul>
- * <p>
- * <b>滚动交互</b>（1:1复刻MEK原版GuiScrollableElement）：
- * <ul>
- *   <li>使用 {@code scroll}（double 0-1）表示滚动比例</li>
- *   <li>使用 {@code dragOffset} 保留鼠标在滑块上的初始偏移</li>
- *   <li>{@code syncFrom} 仅在双方都需要滚动条时复制scroll值</li>
- * </ul>
- * <p>
- * 重构：将 {@code TileEntityMekApiary} 替换为 {@link IPbUpgradeProvider}，
- * 使本组件可被蜂箱与离心机共用，遵循依赖倒置原则。
- */
+	 * PB升级类型点击列表
+	 * <br/>
+	 * 1:1复刻MEK原版 {@link mekanism.client.gui.element.scroll.GuiUpgradeScrollList} 的滚动条和元素渲染风格，
+	 * 显示已安装的PB升级类型，支持点击选择和高亮。
+	 * <p>
+	 * <b>滚动条贴图</b>：使用MEK原版 {@code scroll_list.png}（6×6像素），1:1复刻
+	 * {@link mekanism.client.gui.element.scroll.GuiScrollableElement#drawScrollBar} 的blit渲染：
+	 * <ul>
+	 *   <li>顶部边框：6×1像素（barX-1, barY-1）</li>
+	 *   <li>中间背景：1×maxBarHeight像素纵向平铺（barX-1, barY）</li>
+	 *   <li>底部边框：6×1像素（barX-1, barY+maxBarHeight）</li>
+	 *   <li>滑块：4×4像素（barX, barY+getScroll()）</li>
+	 * </ul>
+	 * <p>
+	 * <b>滚动条位置</b>（1:1对齐MEK原版）：
+	 * <ul>
+	 *   <li>barXShift = width - 6（滚动条在列表最右侧，留2px右边距）</li>
+	 *   <li>barYShift = 2</li>
+	 *   <li>barWidth = 4, barHeight = 4（滑块固定高度）</li>
+	 *   <li>maxBarHeight = height - 4</li>
+	 * </ul>
+	 * <p>
+	 * <b>元素渲染</b>（1:1对齐MEK原版GuiInstallableScrollList）：
+	 * <ul>
+	 *   <li>物品图标X偏移=3，Y偏移=3，缩放=0.5F</li>
+	 *   <li>文字X偏移=13，Y偏移=3，缩放=1.0F，颜色=titleTextColor</li>
+	 *   <li>文字最大宽度 = barXShift - 16 = width - 22</li>
+	 * </ul>
+	 * <p>
+	 * <b>滚动交互</b>（1:1复刻MEK原版GuiScrollableElement）：
+	 * <ul>
+	 *   <li>使用 {@code scroll}（double 0-1）表示滚动比例</li>
+	 *   <li>使用 {@code dragOffset} 保留鼠标在滑块上的初始偏移</li>
+	 *   <li>{@code syncFrom} 仅在双方都需要滚动条时复制scroll值</li>
+	 * </ul>
+	 * <p>
+	 * 重构：将 {@code TileEntityMekApiary} 替换为 {@link IPbUpgradeProvider}，
+	 * 使本组件可被蜂箱与离心机共用，遵循依赖倒置原则。
+	 */
 public class GuiPbUpgradeList extends GuiTexturedElement {
 
 	private static final int ELEMENT_HEIGHT = 12;

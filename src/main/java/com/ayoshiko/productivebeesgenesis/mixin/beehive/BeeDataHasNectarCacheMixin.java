@@ -7,26 +7,26 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * BeehiveBlockEntity$BeeData 的 hasNectar() 结果缓存 Mixin。
- * <p>
- * 原实现每次调用 {@code hasNectar()} 都会从 Occupant 的 entityData NBT 中读取 {@code HasNectar} 布尔值。
- * {@code AdvancedBeehiveBlockEntityAbstract.tickBees()} 对同一只蜜蜂可能在一 tick 内多次调用
- * {@code hasNectar()}，成为热点。
- * <p>
- * 本 Mixin 直接作用于 {@code BeeData}（通过 {@code targets} 避免在代码中引用包私有类），
- * 在每个 BeeData 实例中缓存最近一次 {@code hasNectar()} 的返回值，并在 {@link #tick()} 开始时失效，
- * 保证结果新鲜的同时把每个 BeeData 每 tick 的 hasNectar 调用从多次降为一次。
- * <p>
- * 实现方式：
- * <ul>
- *   <li>在 {@code tick()Z} 头部将缓存标记置为失效；</li>
- *   <li>在 {@code hasNectar()Z} 头部命中缓存时直接返回；</li>
- *   <li>在 {@code hasNectar()Z} 返回时捕获原方法结果并写入缓存。</li>
- * </ul>
- * 这样无需访问 BeeData 内部的 {@code occupant} 字段或 {@code Occupant} 记录，避免混淆字段名问题。
- * <p>
- * 该缓存为默认开启且不可关闭的内部性能优化，不再提供配置项。
- */
+	 * BeehiveBlockEntity$BeeData 的 hasNectar() 结果缓存 Mixin。
+	 * <p>
+	 * 原实现每次调用 {@code hasNectar()} 都会从 Occupant 的 entityData NBT 中读取 {@code HasNectar} 布尔值。
+	 * {@code AdvancedBeehiveBlockEntityAbstract.tickBees()} 对同一只蜜蜂可能在一 tick 内多次调用
+	 * {@code hasNectar()}，成为热点。
+	 * <p>
+	 * 本 Mixin 直接作用于 {@code BeeData}（通过 {@code targets} 避免在代码中引用包私有类），
+	 * 在每个 BeeData 实例中缓存最近一次 {@code hasNectar()} 的返回值，并在 {@link #tick()} 开始时失效，
+	 * 保证结果新鲜的同时把每个 BeeData 每 tick 的 hasNectar 调用从多次降为一次。
+	 * <p>
+	 * 实现方式：
+	 * <ul>
+	 *   <li>在 {@code tick()Z} 头部将缓存标记置为失效；</li>
+	 *   <li>在 {@code hasNectar()Z} 头部命中缓存时直接返回；</li>
+	 *   <li>在 {@code hasNectar()Z} 返回时捕获原方法结果并写入缓存。</li>
+	 * </ul>
+	 * 这样无需访问 BeeData 内部的 {@code occupant} 字段或 {@code Occupant} 记录，避免混淆字段名问题。
+	 * <p>
+	 * 该缓存为默认开启且不可关闭的内部性能优化，不再提供配置项。
+	 */
 @Mixin(targets = "net.minecraft.world.level.block.entity.BeehiveBlockEntity$BeeData")
 public abstract class BeeDataHasNectarCacheMixin {
 

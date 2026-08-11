@@ -15,10 +15,10 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 战利品表数据生成器
- * <br/>
- * 所有MEK离心机方块掉落自身
- */
+	 * 战利品表数据生成器
+	 * <br/>
+	 * 所有MEK离心机方块掉落自身
+	 */
 public final class ModLootTables {
 
 	public static LootTableProvider create(net.minecraft.data.PackOutput output,

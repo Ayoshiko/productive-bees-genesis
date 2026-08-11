@@ -1,14 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Function;
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
@@ -23,28 +18,32 @@ import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
 import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
+
 /**
- * Mask 几何加载器抽象基类
- * <br/>
- * 抽取 {@link GeometryLoaderCosmic} 与 {@link GeometryLoaderHell} 的公共逻辑：
- * <ul>
- *   <li>{@link #clearLoaderKeys}：清除 loader 与 type 键，得到纯 BlockModel JSON</li>
- *   <li>{@link #parseMasks}：解析 mask 字段（字符串或数组），含 ResourceLocation.tryParse null 检查</li>
- *   <li>{@link AbstractMaskGeometry}：持有 baseModel 与 maskTextures 的公共 IUnbakedGeometry 基类</li>
- * </ul>
- * 子类只需实现 {@link IGeometryLoader#read} 构造具体 Geometry，
- * 以及 {@link AbstractMaskGeometry#bake} 返回具体的 BakedModel 类型。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>DRY：消除 clear/parseMasks 的重复实现</li>
- *   <li>OCP：新增 mask 类型 loader 时只需继承基类，不修改基类</li>
- *   <li>SRP：基类仅负责 JSON 解析与公共数据持有，子类负责具体烘焙</li>
- * </ul>
- *
- * @param <T> 具体的 Geometry 子类型
- * @since 1.0.0
- */
+	 * Mask 几何加载器抽象基类
+	 * <br/>
+	 * 抽取 {@link GeometryLoaderCosmic} 与 {@link GeometryLoaderHell} 的公共逻辑：
+	 * <ul>
+	 *   <li>{@link #clearLoaderKeys}：清除 loader 与 type 键，得到纯 BlockModel JSON</li>
+	 *   <li>{@link #parseMasks}：解析 mask 字段（字符串或数组），含 ResourceLocation.tryParse null 检查</li>
+	 *   <li>{@link AbstractMaskGeometry}：持有 baseModel 与 maskTextures 的公共 IUnbakedGeometry 基类</li>
+	 * </ul>
+	 * 子类只需实现 {@link IGeometryLoader#read} 构造具体 Geometry，
+	 * 以及 {@link AbstractMaskGeometry#bake} 返回具体的 BakedModel 类型。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>DRY：消除 clear/parseMasks 的重复实现</li>
+	 *   <li>OCP：新增 mask 类型 loader 时只需继承基类，不修改基类</li>
+	 *   <li>SRP：基类仅负责 JSON 解析与公共数据持有，子类负责具体烘焙</li>
+	 * </ul>
+	 *
+	 * @param <T> 具体的 Geometry 子类型
+	 * @since 1.0.0
+	 */
 public abstract class AbstractMaskGeometryLoader<T extends AbstractMaskGeometryLoader.AbstractMaskGeometry<T>>
 		implements IGeometryLoader<T> {
 

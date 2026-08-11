@@ -1,13 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
 import mekanism.api.text.ILangEntry;
 import mekanism.common.block.attribute.Attributes;
 import mekanism.common.content.blocktype.BlockTypeTile;
@@ -21,31 +20,30 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
- * EvolvedMekanismExtras (EME) 工厂蜂箱 BlockType 定义
- * <br/>
- * 此类独立承载对 EME 模组的可选依赖，避免 EME 未加载时触发 NoClassDefFoundError。
- * 所有 EME 相关的 import、字段和方法集中在此类，仅当
- * {@code MekCompatHooks.isEvolvedMekanismExtrasLoaded()} 为 true 时由调用方加载。
- * <p>
- * 关键设计（与离心机 EME 的差异）：
- * 1. 蜂箱不继承 ME/EME 工厂基类，不走 Mekanism CachedRecipe 管线
- * 2. 蜜蜂生产逻辑由 ApiaryTickHandler 处理，与原版蜂箱工厂一致
- * 3. 仅用 {@link EMExtraAttributeTier} 标记等级，{@link EMExtraAttributeUpgradeable} 支持升级链
- * 4. {@code EMExtraMachineBuilder} 无 createMachine 方法（仅有 createEMExtraFactoryMachine，
- *    会注入 EMExtraAttributeFactoryType），不适用于蜂箱。改用 {@link Machine.MachineBuilder#createMachine}
- *    构建 BlockTypeTile，手动添加 EME 属性
- * 5. GUI 与原版工厂共用 {@link ModMenuTypes#MEK_APIARY_FACTORY}
- * <p>
- * 能量配置遵循 EME 的 EMExtraFactory.setMachineData 模式：
- * storage = max(origStorage, origUsage) * tier.processes
- * 原版蜂箱工厂基础能耗 usage=50L, storage=20000L
- */
+	 * EvolvedMekanismExtras (EME) 工厂蜂箱 BlockType 定义
+	 * <br/>
+	 * 此类独立承载对 EME 模组的可选依赖，避免 EME 未加载时触发 NoClassDefFoundError。
+	 * 所有 EME 相关的 import、字段和方法集中在此类，仅当
+	 * {@code MekCompatHooks.isEvolvedMekanismExtrasLoaded()} 为 true 时由调用方加载。
+	 * <p>
+	 * 关键设计（与离心机 EME 的差异）：
+	 * 1. 蜂箱不继承 ME/EME 工厂基类，不走 Mekanism CachedRecipe 管线
+	 * 2. 蜜蜂生产逻辑由 ApiaryTickHandler 处理，与原版蜂箱工厂一致
+	 * 3. 仅用 {@link EMExtraAttributeTier} 标记等级，{@link EMExtraAttributeUpgradeable} 支持升级链
+	 * 4. {@code EMExtraMachineBuilder} 无 createMachine 方法（仅有 createEMExtraFactoryMachine，
+	 *    会注入 EMExtraAttributeFactoryType），不适用于蜂箱。改用 {@link Machine.MachineBuilder#createMachine}
+	 *    构建 BlockTypeTile，手动添加 EME 属性
+	 * 5. GUI 与原版工厂共用 {@link ModMenuTypes#MEK_APIARY_FACTORY}
+	 * <p>
+	 * 能量配置遵循 EME 的 EMExtraFactory.setMachineData 模式：
+	 * storage = max(origStorage, origUsage) * tier.processes
+	 * 原版蜂箱工厂基础能耗 usage=50L, storage=20000L
+	 */
 public final class MekApiaryEMEBlockType {
 
 	/**

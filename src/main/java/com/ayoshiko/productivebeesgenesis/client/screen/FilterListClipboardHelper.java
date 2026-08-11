@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.BeeTypeNormalizer;
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-
 /**
- * FilterListScreen 的剪贴板导入导出工具类
- * <p>
- * 将 JSON 格式导出、剪贴板文本解析与导入校验等无状态操作从屏幕类中剥离。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责剪贴板数据格式转换与校验，不持有状态、不操作 GUI</li>
- *   <li>静态工具方法 — 所有操作无状态，输入决定输出，便于单元测试与复用</li>
- * </ul>
- * <br/>
- * 线程安全：纯函数式工具类，无共享状态，天然线程安全。
- */
+	 * FilterListScreen 的剪贴板导入导出工具类
+	 * <p>
+	 * 将 JSON 格式导出、剪贴板文本解析与导入校验等无状态操作从屏幕类中剥离。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责剪贴板数据格式转换与校验，不持有状态、不操作 GUI</li>
+	 *   <li>静态工具方法 — 所有操作无状态，输入决定输出，便于单元测试与复用</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：纯函数式工具类，无共享状态，天然线程安全。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault
@@ -125,7 +125,7 @@ final class FilterListClipboardHelper {
 	 * 校验单个 token 是否为合法且存在的蜜蜂类型。
 	 */
 	private static boolean isValidBeeType(String token) {
-		ResourceLocation beeType = BeeInfoHelper.parseBeeType(token);
+		ResourceLocation beeType = BeeTypeNormalizer.parseBeeType(token);
 		return beeType != null && BeeInfoHelper.isBeeTypeExists(beeType);
 	}
 

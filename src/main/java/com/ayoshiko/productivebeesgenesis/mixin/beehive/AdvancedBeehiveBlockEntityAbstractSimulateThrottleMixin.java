@@ -1,10 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
-import java.lang.ref.WeakReference;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntityAbstract;
 import cy.jdkdigital.productivebees.common.entity.bee.hive.FarmerBee;
 import net.minecraft.core.BlockPos;
@@ -21,44 +19,44 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import java.lang.ref.WeakReference;
+import java.util.List;
 
 /**
- * 高级蜂箱 simulateBee() 中农夫/囤积/收集行为查询冷却 Mixin。
- * <p>
- * {@code AdvancedBeehiveBlockEntityAbstract.simulateBee()} 每次被调用时都会：
- * <ul>
- *   <li>农夫蜂：调用 {@link FarmerBee#findHarvestablesNearby(Level, BlockPos, int)} 扫描附近可收获作物；</li>
- *   <li>囤积蜂/收集蜂：调用 {@link ServerLevel#getEntitiesOfClass(Class, AABB)} 扫描附近掉落物。</li>
- * </ul>
- * 在 256x 加速或大量模拟蜂箱场景下，这些查询每 tick 都会执行，成为 CPU 显著开销。
- * <p>
- * 本 Mixin 在每个高级蜂箱实例中直接维护冷却字段与跳过标志，避免 {@link java.util.WeakHashMap}
- * 查找与 synchronized 开销，同时消除 Map 中 BeeData/Occupant 哈希计算带来的间接热点。
- *
- * <h3>线程安全与 ThreadLocal 泄漏修复说明</h3>
- * <p>
- * {@code simulateBee} 是 {@code public static} 方法，{@code @WrapOperation} 注入方法保持为 static，
- * 且拦截的目标（{@code FarmerBee.findHarvestablesNearby} / {@code ServerLevel.getEntitiesOfClass}）
- * 参数中不含 BlockEntity，因此 wrapper 无法通过 this 或参数直接访问实例字段。
- * <p>
- * 旧方案使用 {@code SimulateContext} ThreadLocal 持有 skipFarmer/skipHoarder，配合 HEAD/RETURN
- * 注入设置与清理。问题在于 {@code @Inject(at=RETURN)} 只在正常返回时触发，原方法抛异常时
- * {@code exit()} 不会调用，ThreadLocal 残留上一次的 skipFarmer/skipHoarder 残值，
- * 服务端主线程长期运行下可能导致间歇性逻辑错误。
- * <p>
- * 本方案重构为「实例字段 + WeakReference ThreadLocal」混合方案：
- * <ul>
- *   <li>{@code skipFarmer}/{@code skipHoarder} 改为 {@code @Unique} 实例字段，生命周期与 BlockEntity
- *       一致，不会跨实例污染。即使异常未清理，下次 HEAD 会先重置为 {@code false}，残值不会被
- *       redirect 读到。</li>
- *   <li>{@link ThreadLocal} 只持有 BlockEntity 的 {@link WeakReference}（小对象），用于 redirect
- *       定位当前实例字段。蜂箱被破坏后 BlockEntity 可被 GC 回收，不会发生内存泄漏。</li>
- *   <li>异常返回时 ThreadLocal 残留 WeakReference，但下次 HEAD 会覆盖；WeakReference 的 referent
- *       为 null 后 redirect 走默认不跳过路径，逻辑安全。</li>
- * </ul>
- */
+	 * 高级蜂箱 simulateBee() 中农夫/囤积/收集行为查询冷却 Mixin。
+	 * <p>
+	 * {@code AdvancedBeehiveBlockEntityAbstract.simulateBee()} 每次被调用时都会：
+	 * <ul>
+	 *   <li>农夫蜂：调用 {@link FarmerBee#findHarvestablesNearby(Level, BlockPos, int)} 扫描附近可收获作物；</li>
+	 *   <li>囤积蜂/收集蜂：调用 {@link ServerLevel#getEntitiesOfClass(Class, AABB)} 扫描附近掉落物。</li>
+	 * </ul>
+	 * 在 256x 加速或大量模拟蜂箱场景下，这些查询每 tick 都会执行，成为 CPU 显著开销。
+	 * <p>
+	 * 本 Mixin 在每个高级蜂箱实例中直接维护冷却字段与跳过标志，避免 {@link java.util.WeakHashMap}
+	 * 查找与 synchronized 开销，同时消除 Map 中 BeeData/Occupant 哈希计算带来的间接热点。
+	 *
+	 * <h3>线程安全与 ThreadLocal 泄漏修复说明</h3>
+	 * <p>
+	 * {@code simulateBee} 是 {@code public static} 方法，{@code @WrapOperation} 注入方法保持为 static，
+	 * 且拦截的目标（{@code FarmerBee.findHarvestablesNearby} / {@code ServerLevel.getEntitiesOfClass}）
+	 * 参数中不含 BlockEntity，因此 wrapper 无法通过 this 或参数直接访问实例字段。
+	 * <p>
+	 * 旧方案使用 {@code SimulateContext} ThreadLocal 持有 skipFarmer/skipHoarder，配合 HEAD/RETURN
+	 * 注入设置与清理。问题在于 {@code @Inject(at=RETURN)} 只在正常返回时触发，原方法抛异常时
+	 * {@code exit()} 不会调用，ThreadLocal 残留上一次的 skipFarmer/skipHoarder 残值，
+	 * 服务端主线程长期运行下可能导致间歇性逻辑错误。
+	 * <p>
+	 * 本方案重构为「实例字段 + WeakReference ThreadLocal」混合方案：
+	 * <ul>
+	 *   <li>{@code skipFarmer}/{@code skipHoarder} 改为 {@code @Unique} 实例字段，生命周期与 BlockEntity
+	 *       一致，不会跨实例污染。即使异常未清理，下次 HEAD 会先重置为 {@code false}，残值不会被
+	 *       redirect 读到。</li>
+	 *   <li>{@link ThreadLocal} 只持有 BlockEntity 的 {@link WeakReference}（小对象），用于 redirect
+	 *       定位当前实例字段。蜂箱被破坏后 BlockEntity 可被 GC 回收，不会发生内存泄漏。</li>
+	 *   <li>异常返回时 ThreadLocal 残留 WeakReference，但下次 HEAD 会覆盖；WeakReference 的 referent
+	 *       为 null 后 redirect 走默认不跳过路径，逻辑安全。</li>
+	 * </ul>
+	 */
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
 public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 

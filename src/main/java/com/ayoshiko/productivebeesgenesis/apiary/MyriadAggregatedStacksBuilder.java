@@ -1,52 +1,51 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 万象创世蜜蜂产出预聚合器
- * <br/>
- * 将万象创世蜜蜂的随机产出预聚合为 ≤9 个聚合 ItemStack（每种 bee_type 1 个 stack，
- * count &gt; 64 时按 64 拆分），替代原 576 个独立 ItemStack 设计，
- * 将 {@code BeeProduceProcessor.distributeToOutput} 迭代次数从 576 降为 ≤9。
- * <p>
- * <b>设计要点</b>：
- * <ul>
- *   <li>蜂箱视为单进程工厂，调用 {@link WeightedTypeSelector#selectForProcess}
- *       选取 3 种 bee_type（{@code processIndex=0, processCount=1}）</li>
- *   <li>调用 {@link WeightedAllocation#allocateByWeight} 按动态权重分配 totalCount</li>
- *   <li>使用 {@link MyriadBeeTypeCache.BeeTypeCacheSnapshot#honeycombTemplateByType} /
- *       {@link MyriadBeeTypeCache.BeeTypeCacheSnapshot#combBlockTemplateByType}
- *       O(1) 查找预构建模板，{@link ItemStack#copyWithCount} 构造聚合 stack</li>
- *   <li>蜜脾块路径按 4× 缩放 totalCount（与原 Mixin 单次产出 4 个蜜脾块语义一致）</li>
- * </ul>
- * <p>
- * <b>降级路径</b>：任一异常时退化为 {@link MyriadCreationsEventHandler#getAggregatedRandomHoneycombs} /
- * {@link MyriadCreationsEventHandler#getAggregatedRandomCombBlocks}（原 576 路径），
- * 通过 {@link LogThrottle} 节流警告日志，避免高频异常刷屏。
- * 二次异常时返回 {@link List#of()}，确保不影响 flush 主流程。
- * <p>
- * <b>线程安全</b>：无状态对象，依赖 {@link WeightedTypeSelector} 与 {@link MyriadBeeTypeCache}
- * 的线程安全保证。服务端单线程 tick 场景下无需额外同步。
- *
- * @since 1.0.0
- */
+	 * 万象创世蜜蜂产出预聚合器
+	 * <br/>
+	 * 将万象创世蜜蜂的随机产出预聚合为 ≤9 个聚合 ItemStack（每种 bee_type 1 个 stack，
+	 * count &gt; 64 时按 64 拆分），替代原 576 个独立 ItemStack 设计，
+	 * 将 {@code BeeProduceProcessor.distributeToOutput} 迭代次数从 576 降为 ≤9。
+	 * <p>
+	 * <b>设计要点</b>：
+	 * <ul>
+	 *   <li>蜂箱视为单进程工厂，调用 {@link WeightedTypeSelector#selectForProcess}
+	 *       选取 3 种 bee_type（{@code processIndex=0, processCount=1}）</li>
+	 *   <li>调用 {@link WeightedAllocation#allocateByWeight} 按动态权重分配 totalCount</li>
+	 *   <li>使用 {@link MyriadBeeTypeCache.BeeTypeCacheSnapshot#honeycombTemplateByType} /
+	 *       {@link MyriadBeeTypeCache.BeeTypeCacheSnapshot#combBlockTemplateByType}
+	 *       O(1) 查找预构建模板，{@link ItemStack#copyWithCount} 构造聚合 stack</li>
+	 *   <li>蜜脾块路径按 4× 缩放 totalCount（与原 Mixin 单次产出 4 个蜜脾块语义一致）</li>
+	 * </ul>
+	 * <p>
+	 * <b>降级路径</b>：任一异常时退化为 {@link MyriadCreationsEventHandler#getAggregatedRandomHoneycombs} /
+	 * {@link MyriadCreationsEventHandler#getAggregatedRandomCombBlocks}（原 576 路径），
+	 * 通过 {@link LogThrottle} 节流警告日志，避免高频异常刷屏。
+	 * 二次异常时返回 {@link List#of()}，确保不影响 flush 主流程。
+	 * <p>
+	 * <b>线程安全</b>：无状态对象，依赖 {@link WeightedTypeSelector} 与 {@link MyriadBeeTypeCache}
+	 * 的线程安全保证。服务端单线程 tick 场景下无需额外同步。
+	 *
+	 * @since 1.0.0
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

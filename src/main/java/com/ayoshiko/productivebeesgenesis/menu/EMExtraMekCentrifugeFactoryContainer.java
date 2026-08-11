@@ -14,21 +14,21 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * EME扩展版离心机工厂Container
- * <br/>
- * 继承MekanismTileContainer，槽位由基类自动从方块实体提取。
- * <p>
- * 额外添加PB升级虚拟槽位（输入/输出），供 GuiPbUpgradeWindow 绑定。
- * <p>
- * 重写偏移方法以适配3行输出槽布局和EME等级的宽GUI：
- * - Y偏移135（对应inventoryLabelY=125+10），避免与副输出槽2(y=97)重叠
- * - X偏移通过 {@link EMEFactoryLayoutHelper} 动态计算，
- *   使用tier.inventoryLabelX（EME枚举直接存储了计算好的值）
- * <p>
- * <b>类加载安全</b>：本类引用 {@link EMEFactoryLayoutHelper}（compat 隔离类）和
- * {@link TileEntityEMExtraMekCentrifugeFactory}（compat 隔离类），
- * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration} 注册实例化。
- */
+	 * EME扩展版离心机工厂Container
+	 * <br/>
+	 * 继承MekanismTileContainer，槽位由基类自动从方块实体提取。
+	 * <p>
+	 * 额外添加PB升级虚拟槽位（输入/输出），供 GuiPbUpgradeWindow 绑定。
+	 * <p>
+	 * 重写偏移方法以适配3行输出槽布局和EME等级的宽GUI：
+	 * - Y偏移135（对应inventoryLabelY=125+10），避免与副输出槽2(y=97)重叠
+	 * - X偏移通过 {@link EMEFactoryLayoutHelper} 动态计算，
+	 *   使用tier.inventoryLabelX（EME枚举直接存储了计算好的值）
+	 * <p>
+	 * <b>类加载安全</b>：本类引用 {@link EMEFactoryLayoutHelper}（compat 隔离类）和
+	 * {@link TileEntityEMExtraMekCentrifugeFactory}（compat 隔离类），
+	 * 仅在 EME 加载时由 {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration} 注册实例化。
+	 */
 public class EMExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>
 		implements IPbUpgradeSlotContainer {
 
@@ -42,9 +42,6 @@ public class EMExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<
 
 	public EMExtraMekCentrifugeFactoryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv, @NotNull TileEntityEMExtraMekCentrifugeFactory tile) {
 		super(type, id, inv, tile);
-		// Task 3: 诊断日志 — 记录 Container 构造时 TileEntity 类型、pbProcessor/pbUpgradeDelegate 是否 null
-		// 原理:客户端 Container 构造时 pbProcessor/pbUpgradeDelegate 可能为 null,影响 DataSlot 注册
-		CentrifugeFactoryCommonLogic.logContainerConstructionDiagnostic(tile);
 	}
 
 	/** 添加槽位 — 添加PB升级输入/输出虚拟槽 */

@@ -1,18 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Set;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.IntSupplier;
-import java.util.function.ObjIntConsumer;
-import java.util.function.Supplier;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
+import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputPuller;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -33,7 +37,6 @@ import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.upgrade.IUpgradeData;
 import mekanism.common.util.MekanismUtils;
-
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
@@ -42,59 +45,33 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
-import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputPuller;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
-import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import java.util.List;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
+import java.util.function.ObjIntConsumer;
+import java.util.function.Supplier;
 
 /**
- * 离心机工厂公共逻辑静态工具类
- * <br/>
- * 封装三个工厂（{@link AbstractMekCentrifugeFactory}、
- * {@link TileEntityExtraMekCentrifugeFactory}、
- * {@link TileEntityEMExtraMekCentrifugeFactory}）的公共方法实现，
- * 消除因 Java 单继承限制导致的代码重复。
- * <p>
- * 与 {@link MekCentrifugeFactoryHelper} 的分工：Helper 侧重配方查找和 IO 配置，
- * 本类侧重 NBT 序列化、配置卡数据、AE2 生命周期、容器同步等横切逻辑。
- *
- * @author ayoshiko
- * @since Task 23
- */
-public final class CentrifugeFactoryCommonLogic {
-
-	/**
-	 * MekanismContainer.trackedData 反射字段缓存
+	 * 离心机工厂公共逻辑静态工具类
 	 * <br/>
-	 * 原理:目标类与字段名固定,类初始化阶段(JVM 保证单线程加锁)一次性获取并 setAccessible,
-	 * 避免每次诊断日志都重复反射查找。final 保证初始化后不可变,线程安全。
+	 * 封装三个工厂（{@link AbstractMekCentrifugeFactory}、
+	 * {@link TileEntityExtraMekCentrifugeFactory}、
+	 * {@link TileEntityEMExtraMekCentrifugeFactory}）的公共方法实现，
+	 * 消除因 Java 单继承限制导致的代码重复。
+	 * <p>
+	 * 与 {@link MekCentrifugeFactoryHelper} 的分工：Helper 侧重配方查找和 IO 配置，
+	 * 本类侧重 NBT 序列化、配置卡数据、AE2 生命周期、容器同步等横切逻辑。
+	 *
+	 * @author ayoshiko
+	 * @since Task 23
 	 */
-	private static final Field TRACKED_DATA_FIELD;
-	static {
-		try {
-			TRACKED_DATA_FIELD = MekanismContainer.class.getDeclaredField("trackedData");
-			TRACKED_DATA_FIELD.setAccessible(true);
-		} catch (NoSuchFieldException e) {
-			// 字段不存在说明 Mekanism 版本变更,无法进行 DataSlot 诊断,直接失败快速暴露
-			ExceptionInInitializerError err = new ExceptionInInitializerError("无法获取 MekanismContainer.trackedData 字段");
-			err.initCause(e);
-			throw err;
-		}
-	}
+public final class CentrifugeFactoryCommonLogic {
 
 	private CentrifugeFactoryCommonLogic() {
 	}
@@ -302,45 +279,6 @@ public final class CentrifugeFactoryCommonLogic {
 				ae2StateHolder::setCentrifugeDirectAeOutputEnabled));
 	}
 
-	/** DataSlot off-by-one 诊断日志 — 记录总数、TileEntity 类型、调用源（Task 9 已缓存反射字段） */
-	public static void logTrackersDiagnostic(@NotNull MekanismContainer container, @NotNull Object tile,
-			@NotNull String callerId) {
-		int total = -1;
-		try {
-			Object list = TRACKED_DATA_FIELD.get(container);
-			if (list instanceof java.util.List<?> l) {
-				total = l.size();
-			}
-		} catch (ReflectiveOperationException | RuntimeException e) {
-			// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
-			DevLog.warn("centrifuge_diag", "反射访问诊断字段失败: {}", e.toString());
-		}
-	}
-
-	/** Container 构造诊断日志 — 记录 pbProcessor/pbUpgradeDelegate 是否 null（反射访问 private 字段） */
-	public static void logContainerConstructionDiagnostic(@NotNull Object tile) {
-		boolean pbProcessorNull = true;
-		boolean pbUpgradeDelegateNull = true;
-		if (tile instanceof IFactoryPbDelegateAccess access) {
-			try {
-				pbProcessorNull = access.productivebeesgenesis$getPbProcessor() == null;
-			} catch (RuntimeException e) {
-				// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
-				DevLog.warn("centrifuge_diag", "反射访问诊断字段失败: {}", e.toString());
-			}
-		}
-		// 通过反射访问 pbUpgradeDelegate 字段(private final),不修改业务接口
-		try {
-			java.lang.reflect.Field f = tile.getClass().getDeclaredField("pbUpgradeDelegate");
-			f.setAccessible(true);
-			pbUpgradeDelegateNull = f.get(tile) == null;
-		} catch (ReflectiveOperationException | RuntimeException e) {
-			// 字段不存在或不可访问(非工厂类)
-			// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
-			DevLog.warn("centrifuge_diag", "反射访问诊断字段失败: {}", e.toString());
-		}
-	}
-
 	// ===== AE2 生命周期 =====
 
 	/** clearRemoved 回调 — 准备 AE2 节点加载 */
@@ -500,7 +438,8 @@ public final class CentrifugeFactoryCommonLogic {
 				.setErrorsChanged(errors -> errorsChanged.accept((Set<CachedRecipe.OperationTracker.RecipeError>) errors, cacheIndex))
 				.setCanHolderFunction(canFunction)
 				.setActive(active -> setActiveState.accept(active, cacheIndex))
-				.setEnergyRequirements(() -> hasCreativeUpgrade.getAsBoolean() ? 0L : energyContainer.getEnergyPerTick(), energyContainer)
+				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
+						hasCreativeUpgrade.getAsBoolean(), energyContainer.getEnergyPerTick()), energyContainer)
 				.setRequiredTicks(ticksRequired)
 				.setOnFinish(markForSave)
 				.setBaselineMaxOperations(operationsPerTick)
@@ -517,11 +456,13 @@ public final class CentrifugeFactoryCommonLogic {
 			// 位运算替代 Math.pow：stackUpgrades 最大 16，1 << 16 = 65536 不会溢出
 			maxOps = 1 << stackUpgrades;
 		}
-		return MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
+		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
+		return MekExtrasUpgradeSemantics.operationsPerTick(
+				MekUpgradeSupport.hasCreativeUpgrade(tile), maxOps, speedAdjustedOps);
 	}
 
 	/**
-	 * 计算基础刻数 — CREATIVE 升级时返回 0 实现瞬间完成
+	 * 计算基础刻数。CREATIVE 返回 0；其他情况应用 SPEED/PB 时间倍率。
 	 * <br/>
 	 * 修复 SPEED 双重应用：timeMultiplier 已包含 SPEED 升级影响（见
 	 * {@link MekCentrifugePbUpgradeHandler#getMekSpeedTimeMultiplier}），不再调用
@@ -530,8 +471,8 @@ public final class CentrifugeFactoryCommonLogic {
 	 */
 	public static int getTicksForBase(@NotNull TileEntityMekanism tile,
 			int baseTime, @NotNull FactoryPbUpgradeDelegate pbUpgradeDelegate) {
-		if (MekUpgradeSupport.hasCreativeUpgrade(tile)) return 0;
-		return Math.max(1, (int) Math.floor(baseTime * pbUpgradeDelegate.getTimeMultiplier()));
+		return MekExtrasUpgradeSemantics.processingTicks(MekUpgradeSupport.hasCreativeUpgrade(tile),
+				baseTime, pbUpgradeDelegate.getTimeMultiplier());
 	}
 
 	/** 计算生产力修正 — 基于 PB 升级的生产力倍率 */

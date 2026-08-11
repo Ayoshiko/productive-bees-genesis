@@ -14,11 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Mekanism兼容性检测工具类
- * <br/>
- * 检测EvolvedMekanism及其附属mod的加载状态，使用Holder模式实现线程安全的懒加载。
- * 反射访问EM的可选类，避免编译期硬依赖导致ClassNotFoundException。
- */
+	 * Mekanism兼容性检测工具类
+	 * <br/>
+	 * 检测EvolvedMekanism及其附属mod的加载状态，使用Holder模式实现线程安全的懒加载。
+	 * 反射访问EM的可选类，避免编译期硬依赖导致ClassNotFoundException。
+	 */
 public final class MekCompatHooks {
 
 	/** EMFactoryTier的5个静态字段名（按等级升序） */
@@ -129,7 +129,7 @@ public final class MekCompatHooks {
 	}
 
 /**
- * 获取EM的5个工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
+	 * 获取EM的5个工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 	 * <br/>
 	 * EM未加载时返回空列表。EM加载时通过反射读取EMFactoryTier的5个静态字段，
 	 * 返回升序FactoryTier列表（EM通过Mixin扩展FactoryTier枚举），反射失败返回空列表。

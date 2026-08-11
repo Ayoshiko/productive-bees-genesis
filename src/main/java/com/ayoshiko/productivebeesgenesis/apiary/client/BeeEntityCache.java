@@ -1,34 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * 蜜蜂实体缓存层（单例）
- * <br/>
- * 缓存蜜蜂类型到渲染实体的映射，避免每帧为每个蜜蜂槽重复创建实体。
- * 相同蜜蜂类型（相同的 EntityType + ConfigurableBee type 字段）共享同一实体实例。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅管理实体缓存的生命周期，不涉及实体创建（委托 {@link BeeEntityFactory}）</li>
- *   <li>线程安全：使用 {@link ConcurrentHashMap}，适配客户端渲染线程与可能的异步加载场景</li>
- * </ul>
- * <p>
- * 线程安全契约：{@link #getOrCreate} 中的世界切换检测与容量检测为 check-then-clear-then-set
- * 非原子序列，理论上在并发访问下存在竞态。但本类仅由客户端渲染线程调用（单线程），
- * 实际无并发风险，故未加锁。若未来改为多线程访问，需引入同步保护。
- * <p>
- * 缓存策略：
- * <ul>
- *   <li>容量上限 {@link #MAX_CACHE_SIZE}，超过时清空全部缓存（防止内存泄漏）</li>
- *   <li>世界切换时自动清空（实体绑定 Level，跨世界复用会导致渲染异常）</li>
- *   <li>数据重载时由 {@link com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper#invalidateCache()} 调用 {@link #clearCache()} 清空</li>
- * </ul>
- */
+	 * 蜜蜂实体缓存层（单例）
+	 * <br/>
+	 * 缓存蜜蜂类型到渲染实体的映射，避免每帧为每个蜜蜂槽重复创建实体。
+	 * 相同蜜蜂类型（相同的 EntityType + ConfigurableBee type 字段）共享同一实体实例。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅管理实体缓存的生命周期，不涉及实体创建（委托 {@link BeeEntityFactory}）</li>
+	 *   <li>线程安全：使用 {@link ConcurrentHashMap}，适配客户端渲染线程与可能的异步加载场景</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全契约：{@link #getOrCreate} 中的世界切换检测与容量检测为 check-then-clear-then-set
+	 * 非原子序列，理论上在并发访问下存在竞态。但本类仅由客户端渲染线程调用（单线程），
+	 * 实际无并发风险，故未加锁。若未来改为多线程访问，需引入同步保护。
+	 * <p>
+	 * 缓存策略：
+	 * <ul>
+	 *   <li>容量上限 {@link #MAX_CACHE_SIZE}，超过时清空全部缓存（防止内存泄漏）</li>
+	 *   <li>世界切换时自动清空（实体绑定 Level，跨世界复用会导致渲染异常）</li>
+	 *   <li>数据重载时由 {@link com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper#invalidateCache()} 调用 {@link #clearCache()} 清空</li>
+	 * </ul>
+	 */
 public final class BeeEntityCache {
 
 	/** 单例实例 — 全局共享，便于外部清理 */

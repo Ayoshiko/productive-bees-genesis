@@ -1,10 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElementHolder;
 import mekanism.client.gui.element.button.GuiPinButton;
@@ -16,28 +12,31 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 多流体槽状态窗口(SRP:仅负责渲染,数据查询通过 {@link IMultiFluidTankHost} 抽象)
- * <br/>
- * 继承 MEK {@link GuiWindow},单行横排布局(1 行 N 列),无翻页。
- * <p>
- * <b>单行横排设计 + tankCount 动态更新</b>
- * <ul>
- *   <li>所有槽位在同一行横排显示,窗口宽度随 tankCount 线性增长</li>
- *   <li>tankCount 不快照,每 tick 动态读取 {@code host.getFluidTankCount()}(修复 v14:渲染阶段不修改状态)</li>
- *   <li>tankCount 变化时自动重建 Gauge(支持服务端运行时分配新槽位)</li>
- *   <li>窗口高度固定,布局简洁</li>
- * </ul>
- * <p>
- * <b>使用的 MEK 现成元素:</b>
- * <ul>
- *   <li>{@link GuiPinButton} — 固定按钮</li>
- *   <li>{@link GuiElementHolder} — 灰色背景</li>
- *   <li>{@link GuiFluidGauge} — 流体槽 gauge(GaugeType.SMALL)</li>
- * </ul>
- *
- * @since Task 8
- */
+	 * 多流体槽状态窗口(SRP:仅负责渲染,数据查询通过 {@link IMultiFluidTankHost} 抽象)
+	 * <br/>
+	 * 继承 MEK {@link GuiWindow},单行横排布局(1 行 N 列),无翻页。
+	 * <p>
+	 * <b>单行横排设计 + tankCount 动态更新</b>
+	 * <ul>
+	 *   <li>所有槽位在同一行横排显示,窗口宽度随 tankCount 线性增长</li>
+	 *   <li>tankCount 不快照,每 tick 动态读取 {@code host.getFluidTankCount()}(修复 v14:渲染阶段不修改状态)</li>
+	 *   <li>tankCount 变化时自动重建 Gauge(支持服务端运行时分配新槽位)</li>
+	 *   <li>窗口高度固定,布局简洁</li>
+	 * </ul>
+	 * <p>
+	 * <b>使用的 MEK 现成元素:</b>
+	 * <ul>
+	 *   <li>{@link GuiPinButton} — 固定按钮</li>
+	 *   <li>{@link GuiElementHolder} — 灰色背景</li>
+	 *   <li>{@link GuiFluidGauge} — 流体槽 gauge(GaugeType.SMALL)</li>
+	 * </ul>
+	 *
+	 * @since Task 8
+	 */
 public class GuiMultiFluidTanksWindow extends GuiWindow {
 
 	/** PinButton X 偏移(标题栏左侧) */

@@ -3,22 +3,22 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import net.minecraft.world.level.Level;
 
 /**
- * Per-tile 批量收获状态管理器 — 封装 skipPb 的"延迟一 tick"策略。
- * <br/>
- * 由 AbstractMekCentrifugeFactory 持有实例，所有工厂变体（原版/ME/EME）共用。
- * 逻辑镜像 ApiaryTickHandler.skipBeeProcessing 和 MekCentrifugeTickHandler.skipPb。
- * <p>
- * 策略说明：
- * <ul>
- *   <li>multiplier == 1（本 gameTick 第一次调用）：使用上一 gameTick 的 lastTickMultiplier 作为批量倍率，返回 false（执行 PB）</li>
- *   <li>multiplier &gt; 1（本 gameTick 后续调用）：更新 lastTickMultiplier，返回 true（跳过 PB）</li>
- * </ul>
- *
- * @author ayoshiko
- * @since 1.13.0
- * @see TickAccelTracker
- * @see AbstractMekCentrifugeFactory#productivebeesgenesis$getTickBatchSkipState()
- */
+	 * Per-tile 批量收获状态管理器 — 封装 skipPb 的"延迟一 tick"策略。
+	 * <br/>
+	 * 由 AbstractMekCentrifugeFactory 持有实例，所有工厂变体（原版/ME/EME）共用。
+	 * 逻辑镜像 ApiaryTickHandler.skipBeeProcessing 和 MekCentrifugeTickHandler.skipPb。
+	 * <p>
+	 * 策略说明：
+	 * <ul>
+	 *   <li>multiplier == 1（本 gameTick 第一次调用）：使用上一 gameTick 的 lastTickMultiplier 作为批量倍率，返回 false（执行 PB）</li>
+	 *   <li>multiplier &gt; 1（本 gameTick 后续调用）：更新 lastTickMultiplier，返回 true（跳过 PB）</li>
+	 * </ul>
+	 *
+	 * @author ayoshiko
+	 * @since 2.0.0
+	 * @see TickAccelTracker
+	 * @see AbstractMekCentrifugeFactory#productivebeesgenesis$getTickBatchSkipState()
+	 */
 public class TickBatchSkipState {
 
 	/** 上一 gameTick 的最终加速倍率 — 用于本 gameTick 第一次调用时的批量倍率（延迟一 tick 策略） */

@@ -1,26 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.Optional;
-import java.util.function.IntSupplier;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import mekanism.common.tier.FactoryTier;
 
+import java.util.Optional;
+import java.util.function.IntSupplier;
+
 /**
- * 蜂箱等级堆叠倍率解析器
- * <br/>
- * 根据蜂箱类型（EME/ME/原版工厂/基础版）返回对应 IntSupplier 动态读取配置值，
- * 确保配置变更后无需重启即生效。构造期单次调用，线程安全。
- * <p>
- * <b>兼容性隔离设计</b>：ME/EME 等级的 instanceof 检查和 tier 字段访问会触发可选依赖类
- * （{@code ExtraFactoryTier}/{@code EMExtraFactoryTier}）的解析。为避免未安装对应模组时
- * {@code NoClassDefFoundError}，ME/EME 的具体逻辑移至隔离类
- * （{@link ApiaryTierMultiplierResolverMEDelegate}/{@link ApiaryTierMultiplierResolverDelegate}），
- * 仅在 {@link MekCompatHooks} 模组守卫通过后才调用，利用 JVM 延迟类加载保证安全。
- *
- * @since 1.9.0
- */
+	 * 蜂箱等级堆叠倍率解析器
+	 * <br/>
+	 * 根据蜂箱类型（EME/ME/原版工厂/基础版）返回对应 IntSupplier 动态读取配置值，
+	 * 确保配置变更后无需重启即生效。构造期单次调用，线程安全。
+	 * <p>
+	 * <b>兼容性隔离设计</b>：ME/EME 等级的 instanceof 检查和 tier 字段访问会触发可选依赖类
+	 * （{@code ExtraFactoryTier}/{@code EMExtraFactoryTier}）的解析。为避免未安装对应模组时
+	 * {@code NoClassDefFoundError}，ME/EME 的具体逻辑移至隔离类
+	 * （{@link ApiaryTierMultiplierResolverMEDelegate}/{@link ApiaryTierMultiplierResolverDelegate}），
+	 * 仅在 {@link MekCompatHooks} 模组守卫通过后才调用，利用 JVM 延迟类加载保证安全。
+	 *
+	 * @since 2.0.0
+	 */
 final class ApiaryTierMultiplierResolver {
 
 	private ApiaryTierMultiplierResolver() {

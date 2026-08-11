@@ -1,14 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.network.FilterConfigSyncPayload;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -16,23 +10,27 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
-
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * FilterListScreen 的操作栏辅助类
- * <p>
- * 将保存/返回/从列表选择、重置/导入/导出等操作按钮及其点击处理逻辑从屏幕类中剥离，
- * 降低 FilterListScreen 的复杂度（SRP）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责操作按钮的创建与点击动作，不涉及列表渲染或输入校验</li>
- *   <li>组合模式 — 持有 FilterListScreen 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * FilterListScreen 的操作栏辅助类
+	 * <p>
+	 * 将保存/返回/从列表选择、重置/导入/导出等操作按钮及其点击处理逻辑从屏幕类中剥离，
+	 * 降低 FilterListScreen 的复杂度（SRP）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责操作按钮的创建与点击动作，不涉及列表渲染或输入校验</li>
+	 *   <li>组合模式 — 持有 FilterListScreen 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

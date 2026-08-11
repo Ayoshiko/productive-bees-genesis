@@ -1,28 +1,28 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 /**
- * MEK 通用机械蜂箱统一标记接口。
- * <br/>
- * 参照 {@link IMekCentrifugeTile} 的设计模式，用于 TileComponentEjectorMixin 和
- * TileComponentEjectorCooldownMixin 通过 instanceof 统一识别所有蜂箱类型，
- * 避免硬依赖工厂版子类引发 ClassNotFoundException。
- * <p>
- * 覆盖范围（通过基类 {@code TileEntityMekApiary} 实现此接口自动覆盖所有子类）：
- * <ul>
- *   <li>TileEntityMekApiary（基础蜂箱）</li>
- *   <li>TileEntityMekApiaryFactory（原版工厂蜂箱）</li>
- *   <li>TileEntityExtraMekApiaryFactory（ME扩展工厂蜂箱）</li>
- *   <li>TileEntityEMExtraMekApiaryFactory（EME扩展工厂蜂箱）</li>
- * </ul>
- * <p>
- * 与离心机的差异：蜂箱配置项不含 skipUnchanged/skipTicks/minInterval/busyThreshold/busyCooldown，
- * 这些节流特性在蜂箱上自动关闭（cachedSkipUnchanged=false 等），仅保留阻塞冷却与单 tick 上限。
- * <p>
- * 设计原则（OCP）：通过新增标记接口扩展蜂箱弹出优化，不修改离心机现有行为。
- * 蜂箱的 ejection 配置与离心机独立，互不共享配置值。
- *
- * @since 1.12.0
- */
+	 * MEK 通用机械蜂箱统一标记接口。
+	 * <br/>
+	 * 参照 {@link IMekCentrifugeTile} 的设计模式，用于 TileComponentEjectorMixin 和
+	 * TileComponentEjectorCooldownMixin 通过 instanceof 统一识别所有蜂箱类型，
+	 * 避免硬依赖工厂版子类引发 ClassNotFoundException。
+	 * <p>
+	 * 覆盖范围（通过基类 {@code TileEntityMekApiary} 实现此接口自动覆盖所有子类）：
+	 * <ul>
+	 *   <li>TileEntityMekApiary（基础蜂箱）</li>
+	 *   <li>TileEntityMekApiaryFactory（原版工厂蜂箱）</li>
+	 *   <li>TileEntityExtraMekApiaryFactory（ME扩展工厂蜂箱）</li>
+	 *   <li>TileEntityEMExtraMekApiaryFactory（EME扩展工厂蜂箱）</li>
+	 * </ul>
+	 * <p>
+	 * 与离心机的差异：蜂箱配置项不含 skipUnchanged/skipTicks/minInterval/busyThreshold/busyCooldown，
+	 * 这些节流特性在蜂箱上自动关闭（cachedSkipUnchanged=false 等），仅保留阻塞冷却与单 tick 上限。
+	 * <p>
+	 * 设计原则（OCP）：通过新增标记接口扩展蜂箱弹出优化，不修改离心机现有行为。
+	 * 蜂箱的 ejection 配置与离心机独立，互不共享配置值。
+	 *
+	 * @since 2.0.0
+	 */
 public interface IMekApiaryTile {
 
 	/**

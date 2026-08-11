@@ -32,30 +32,30 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * MEK 蜂箱 GUI 渲染主类
- * <br/>
- * 基于 Mekanism 的 {@link GuiConfigurableTile}，负责 MEK 蜂箱的客户端 GUI 渲染职责：
- * <ul>
- *   <li>蜜蜂实体展示：通过 {@link BeeEntityRenderer} 在槽位内渲染蜜蜂模型与状态灯</li>
- *   <li>蜜蜂名称展示：通过 {@link BeeNameRenderer} 渲染蜜蜂显示名（紧凑模式跳过）</li>
- *   <li>蜜蜂 Tooltip：通过 {@link BeeTooltipRenderer} 在鼠标悬停时显示蜜蜂信息</li>
- *   <li>Tab 管理：喂食 Tab（{@link GuiFeederTab}）、PB 升级 Tab（{@link GuiPbUpgradeTab}）、
- *       能量 Tab、红石 Tab、警告 Tab 的布局创建与位移调整</li>
- *   <li>槽位交互：左键选中蜜蜂槽位、右键桶式蜂笼操作（取出/放入）</li>
- * </ul>
- * <p>
- * 子类扩展点（protected 方法，子类可覆盖以适配不同规模的蜂箱）：
- * <ul>
- *   <li>{@link #getBeeCols()} / {@link #getBeeRows()} / {@link #getOutputCols()}：蜜蜂与输出槽位规模</li>
- *   <li>{@link #getBeeRowH()}：蜜蜂行高（紧凑模式返回较小值）</li>
- *   <li>{@link #addBeeSlotBackgrounds()}：蜜蜂槽位背景渲染</li>
- *   <li>{@link #renderBeeVisuals(GuiGraphics, int, int)}：蜜蜂可视化内容渲染</li>
- *   <li>{@link #renderBeeTooltipIfHovered(GuiGraphics, int, int)}：蜜蜂 Tooltip 渲染</li>
- * </ul>
- *
- * @param <TILE>      蜂箱方块实体类型，必须继承 {@link TileEntityMekApiary}
- * @param <CONTAINER> 蜂箱容器类型，必须继承 {@link MekanismTileContainer}
- */
+	 * MEK 蜂箱 GUI 渲染主类
+	 * <br/>
+	 * 基于 Mekanism 的 {@link GuiConfigurableTile}，负责 MEK 蜂箱的客户端 GUI 渲染职责：
+	 * <ul>
+	 *   <li>蜜蜂实体展示：通过 {@link BeeEntityRenderer} 在槽位内渲染蜜蜂模型与状态灯</li>
+	 *   <li>蜜蜂名称展示：通过 {@link BeeNameRenderer} 渲染蜜蜂显示名（紧凑模式跳过）</li>
+	 *   <li>蜜蜂 Tooltip：通过 {@link BeeTooltipRenderer} 在鼠标悬停时显示蜜蜂信息</li>
+	 *   <li>Tab 管理：喂食 Tab（{@link GuiFeederTab}）、PB 升级 Tab（{@link GuiPbUpgradeTab}）、
+	 *       能量 Tab、红石 Tab、警告 Tab 的布局创建与位移调整</li>
+	 *   <li>槽位交互：左键选中蜜蜂槽位、右键桶式蜂笼操作（取出/放入）</li>
+	 * </ul>
+	 * <p>
+	 * 子类扩展点（protected 方法，子类可覆盖以适配不同规模的蜂箱）：
+	 * <ul>
+	 *   <li>{@link #getBeeCols()} / {@link #getBeeRows()} / {@link #getOutputCols()}：蜜蜂与输出槽位规模</li>
+	 *   <li>{@link #getBeeRowH()}：蜜蜂行高（紧凑模式返回较小值）</li>
+	 *   <li>{@link #addBeeSlotBackgrounds()}：蜜蜂槽位背景渲染</li>
+	 *   <li>{@link #renderBeeVisuals(GuiGraphics, int, int)}：蜜蜂可视化内容渲染</li>
+	 *   <li>{@link #renderBeeTooltipIfHovered(GuiGraphics, int, int)}：蜜蜂 Tooltip 渲染</li>
+	 * </ul>
+	 *
+	 * @param <TILE>      蜂箱方块实体类型，必须继承 {@link TileEntityMekApiary}
+	 * @param <CONTAINER> 蜂箱容器类型，必须继承 {@link MekanismTileContainer}
+	 */
 public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends MekanismTileContainer<TILE>>
 		extends GuiConfigurableTile<TILE, CONTAINER> {
 

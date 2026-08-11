@@ -1,30 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.compat.kubejs;
 
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import java.util.List;
 
 /**
- * KubeJS 蜜蜂配方注册事件的 JSON 序列化工具类
- * <br/>
- * 负责将脚本传入的字符串/列表参数转换为 Productive Bees 配方 JSON 结构：
- * <ul>
- *   <li>{@link #parseChancedOutput(String)} — 离心机产出（item|chance 或 #tag|chance）</li>
- *   <li>{@link #parseBeeProduceResult(String, String)} — 蜂箱产出（item|chance，configurable_honeycomb 自动附加 bee_type 组件）</li>
- *   <li>{@link #toJsonElement(Object)} — 群系规格转 JSON（字符串或列表）</li>
- * </ul>
- * <p>
- * <b>异常处理</b>：解析概率值失败时捕获 {@link NumberFormatException}，使用默认值 1.0 并记录 WARN 日志，
- * 避免单个错误概率值导致整体配方解析崩溃（v5 M-13 修复）。
- * <p>
- * <b>线程语义</b>：所有方法为纯函数式工具方法，无共享可变状态，线程安全。
- */
+	 * KubeJS 蜜蜂配方注册事件的 JSON 序列化工具类
+	 * <br/>
+	 * 负责将脚本传入的字符串/列表参数转换为 Productive Bees 配方 JSON 结构：
+	 * <ul>
+	 *   <li>{@link #parseChancedOutput(String)} — 离心机产出（item|chance 或 #tag|chance）</li>
+	 *   <li>{@link #parseBeeProduceResult(String, String)} — 蜂箱产出（item|chance，configurable_honeycomb 自动附加 bee_type 组件）</li>
+	 *   <li>{@link #toJsonElement(Object)} — 群系规格转 JSON（字符串或列表）</li>
+	 * </ul>
+	 * <p>
+	 * <b>异常处理</b>：解析概率值失败时捕获 {@link NumberFormatException}，使用默认值 1.0 并记录 WARN 日志，
+	 * 避免单个错误概率值导致整体配方解析崩溃（v5 M-13 修复）。
+	 * <p>
+	 * <b>线程语义</b>：所有方法为纯函数式工具方法，无共享可变状态，线程安全。
+	 */
 public final class MyriadBeeJsonSerializer {
 
 	/**

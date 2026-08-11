@@ -1,32 +1,30 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.Map;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.util.InventoryUtils;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Map;
 
 /**
- * PB 配方输出检查器 — 封装配方输出兼容性、流体输出存在性、输出受阻判定等纯检查逻辑
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责配方输出的只读检查，
- * 不涉及状态变更、进度推进或能量扣除。所有方法均为静态，无实例状态。
- * <p>
- * 线程安全：所有方法均为无状态纯函数，依赖传入参数，线程安全由调用方保证。
- *
- * @since 1.8.1
- * @see PbRecipeProcessor
- */
+	 * PB 配方输出检查器 — 封装配方输出兼容性、流体输出存在性、输出受阻判定等纯检查逻辑
+	 * <br/>
+	 * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责配方输出的只读检查，
+	 * 不涉及状态变更、进度推进或能量扣除。所有方法均为静态，无实例状态。
+	 * <p>
+	 * 线程安全：所有方法均为无状态纯函数，依赖传入参数，线程安全由调用方保证。
+	 *
+	 * @since 2.0.0
+	 * @see PbRecipeProcessor
+	 */
 final class PbRecipeOutputChecker {
 
 	/** 工具类，禁止实例化 */

@@ -1,30 +1,31 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import java.util.Set;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
+
 /**
- * 模组配置文件入口 — 万象创世蜜蜂属性覆盖
- * <p>
- * 允许整合包作者通过配置文件修改蜜蜂属性，无需编辑数据包JSON。
- * 客户端配置（CLIENT）仅影响本地渲染/显示；服务端配置（SERVER）按存档生效，
- * 世界加载时自动生效，无需执行 /reload。
- * <p>
- * <b>职责拆分（Task 21）</b>：原文件 551 行，已将三类配置抽取为独立顶级类，
- * 本类作为聚合入口持有三个 {@link ModConfigSpec} 与配置实例：
- * <ul>
- *   <li>{@link ClientConfig} — 客户端渲染/显示配置</li>
- *   <li>{@link CommonConfig} — 跨端同步配置</li>
- *   <li>{@link ServerConfig} — 存档级别配置</li>
- * </ul>
- * 外部访问路径 {@code ModConfig.CLIENT.xxx} / {@code ModConfig.SERVER.xxx} 保持不变。
- * <p>
- * 本类同时保留配置校验逻辑（validator 与跨字段联合校验），作为配置文件 validator
- * 与网络包服务端校验逻辑的单一来源（SRP）。
- */
+	 * 模组配置文件入口 — 万象创世蜜蜂属性覆盖
+	 * <p>
+	 * 允许整合包作者通过配置文件修改蜜蜂属性，无需编辑数据包JSON。
+	 * 客户端配置（CLIENT）仅影响本地渲染/显示；服务端配置（SERVER）按存档生效，
+	 * 世界加载时自动生效，无需执行 /reload。
+	 * <p>
+	 * <b>职责拆分（Task 21）</b>：原文件 551 行，已将三类配置抽取为独立顶级类，
+	 * 本类作为聚合入口持有三个 {@link ModConfigSpec} 与配置实例：
+	 * <ul>
+	 *   <li>{@link ClientConfig} — 客户端渲染/显示配置</li>
+	 *   <li>{@link CommonConfig} — 跨端同步配置</li>
+	 *   <li>{@link ServerConfig} — 存档级别配置</li>
+	 * </ul>
+	 * 外部访问路径 {@code ModConfig.CLIENT.xxx} / {@code ModConfig.SERVER.xxx} 保持不变。
+	 * <p>
+	 * 本类同时保留配置校验逻辑（validator 与跨字段联合校验），作为配置文件 validator
+	 * 与网络包服务端校验逻辑的单一来源（SRP）。
+	 */
 public final class ModConfig {
 
 	/**

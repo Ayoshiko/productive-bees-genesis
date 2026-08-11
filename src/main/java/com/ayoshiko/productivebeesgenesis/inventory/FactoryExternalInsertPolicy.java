@@ -1,5 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
+import mekanism.api.AutomationType;
+import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -7,18 +13,14 @@ import java.util.Map;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 
-import mekanism.api.AutomationType;
-import mekanism.common.inventory.slot.BasicInventorySlot;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-
 /**
- * Fair external-input policy shared by all process slots in one centrifuge factory.
- * Each item type gets one stable target slot per game tick. This prevents an AE external
- * storage facade from filling every process slot with its first oversized request while
- * still allowing a single type to spread across the factory over subsequent ticks.
- */
+	 * Fair external-input policy shared by all process slots in one centrifuge factory.
+	 * Each item type gets one stable target slot per game tick. This prevents an AE external
+	 * storage facade from filling every process slot with its first oversized request while
+	 * still allowing a single type to spread across the factory over subsequent ticks.
+	 * The policy never changes the slot's real capacity: external capability simulations must
+	 * see the same limit as execution, otherwise pipes and storage buses cache a false 16-item cap.
+	 */
 public final class FactoryExternalInsertPolicy implements ExternalInsertPolicy {
 
 	static final int MIN_WORKING_SET = 64;
@@ -57,10 +59,14 @@ public final class FactoryExternalInsertPolicy implements ExternalInsertPolicy {
 		if (target < 0 || target >= slots.size() || slots.get(target) != slot) return 0;
 
 		int workingSet = Math.max(MIN_WORKING_SET, workingSetSupplier.getAsInt());
-		int remainingBudget = Math.max(0, insertionQuantum(workingSet) - admission.inserted);
-		if (remainingBudget <= 0) return 0;
-		long effectiveLimit = (long) slot.getStack().getCount() + remainingBudget;
-		return (int) Math.min(normalLimit, Math.min(workingSet, effectiveLimit));
+		int currentCount = slot.getStack().getCount();
+		long effectiveLimit = effectiveSlotLimit(normalLimit, currentCount);
+		return (int) Math.min(Integer.MAX_VALUE, effectiveLimit);
+	}
+
+	/** Keeps external simulation aligned with the slot's actual, possibly upgraded, capacity. */
+	static long effectiveSlotLimit(int normalLimit, int currentCount) {
+		return Math.max((long) Math.max(0, currentCount), Math.max(0, normalLimit));
 	}
 
 	@Override

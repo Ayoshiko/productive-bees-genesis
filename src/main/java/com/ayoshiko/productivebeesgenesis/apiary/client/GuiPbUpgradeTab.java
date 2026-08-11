@@ -1,11 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
 import mekanism.client.gui.element.window.GuiWindow;
@@ -16,15 +13,17 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.function.Supplier;
+
 /**
- * PB 升级 TAB 按钮
- * <br/>
- * 重构：泛型化 {@code TILE extends IPbUpgradeProvider}，使蜂箱与离心机可共用本组件。
- * 蜂箱传入 {@code GuiPbUpgradeTab<TileEntityMekApiary>}，离心机传入
- * {@code GuiPbUpgradeTab<TileEntityMekCentrifuge>}，两者均实现 {@link IPbUpgradeProvider}。
- *
- * @param <TILE> 方块实体类型，必须实现 IPbUpgradeProvider
- */
+	 * PB 升级 TAB 按钮
+	 * <br/>
+	 * 重构：泛型化 {@code TILE extends IPbUpgradeProvider}，使蜂箱与离心机可共用本组件。
+	 * 蜂箱传入 {@code GuiPbUpgradeTab<TileEntityMekApiary>}，离心机传入
+	 * {@code GuiPbUpgradeTab<TileEntityMekCentrifuge>}，两者均实现 {@link IPbUpgradeProvider}。
+	 *
+	 * @param <TILE> 方块实体类型，必须实现 IPbUpgradeProvider
+	 */
 public class GuiPbUpgradeTab<TILE extends IPbUpgradeProvider> extends GuiWindowCreatorTab<TILE, GuiPbUpgradeTab<TILE>> {
 
 	private static final int TAB_COLOR = 0xFFF57F17;

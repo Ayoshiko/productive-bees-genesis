@@ -1,12 +1,12 @@
 /**
- * 界面状态管理包
- * <br/>
- * 管理客户端界面的状态缓存：
- * <ol>
- *   <li>{@code BeeSelectionCache} — 蜜蜂选择缓存</li>
- *   <li>{@code BeeSelectionState} — 蜜蜂选择状态管理</li>
- * </ol>
- */
+	 * 界面状态管理包
+	 * <br/>
+	 * 管理客户端界面的状态缓存：
+	 * <ol>
+	 *   <li>{@code BeeSelectionCache} — 蜜蜂选择缓存</li>
+	 *   <li>{@code BeeSelectionState} — 蜜蜂选择状态管理</li>
+	 * </ol>
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

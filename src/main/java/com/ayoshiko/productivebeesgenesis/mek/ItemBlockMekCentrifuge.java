@@ -1,22 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-import java.util.Map;
-
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
-
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
+import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
+import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.api.Upgrade;
+import mekanism.api.security.IItemSecurityUtils;
 import mekanism.api.text.EnumColor;
 import mekanism.api.text.TextComponentUtil;
-import mekanism.api.security.IItemSecurityUtils;
 import mekanism.common.MekanismLang;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
@@ -26,37 +22,39 @@ import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.block.attribute.Attributes.AttributeInventory;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
 import mekanism.common.block.interfaces.IHasDescription;
 import mekanism.common.item.block.ItemBlockTooltip;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
-import mekanism.common.util.text.UpgradeDisplay;
 import mekanism.common.util.text.BooleanStateDisplay.YesNo;
+import mekanism.common.util.text.UpgradeDisplay;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * MEK离心机BlockItem — 一比一复制Mekanism原版tooltip系统
- * <br/>
- * 继承ItemBlockTooltip，实现与Mekanism原版机器完全一致的tooltip行为：
- * <ul>
- *   <li>默认：显示统计信息 + "按住Shift查看详情" + "按住Shift+N查看描述"</li>
- *   <li>按住Shift：显示拥有者、安全等级、配方类型、已储能、存有物品、升级</li>
- *   <li>按住Shift+N：显示方块描述</li>
- * </ul>
- * 工厂版额外添加SORTING DataComponent和配方类型显示。
- */
+	 * MEK离心机BlockItem — 一比一复制Mekanism原版tooltip系统
+	 * <br/>
+	 * 继承ItemBlockTooltip，实现与Mekanism原版机器完全一致的tooltip行为：
+	 * <ul>
+	 *   <li>默认：显示统计信息 + "按住Shift查看详情" + "按住Shift+N查看描述"</li>
+	 *   <li>按住Shift：显示拥有者、安全等级、配方类型、已储能、存有物品、升级</li>
+	 *   <li>按住Shift+N：显示方块描述</li>
+	 * </ul>
+	 * 工厂版额外添加SORTING DataComponent和配方类型显示。
+	 */
 public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<?, ?>> {
 
 	public ItemBlockMekCentrifuge(MekCentrifugeBlock<?, ?> block, Item.Properties properties) {
@@ -326,19 +324,19 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	}
 
 	/**
- * 添加类型特定详情 — 显示配方类型；储能与流体由基类统一处理
- * <br/>
- * 原理：一比一复制ItemBlockFactory.addTypeDetails()的配方类型显示，
- * 从AttributeFactoryType读取工厂的配方类型（如Smelting），
- * 显示为"Recipe type: Smelting"。
- * <p>
- * 储能与内部流体显示由 super.addTypeDetails 内部统一处理
- * （基类通过 StorageUtils.addStoredEnergy / addStoredFluid 实现），
- * 与 MEK 原版机器行为完全一致；空流体显示"没有流体被存储"为标准行为。
- * <p>
- * Bug 6：添加 try-catch 防御扳手拆卸后 DataComponents 不完整导致 NPE 崩溃，
- * 由外层 try-catch 兜底，仅记录警告日志而不影响客户端 tooltip 渲染。
- */
+	 * 添加类型特定详情 — 显示配方类型；储能与流体由基类统一处理
+	 * <br/>
+	 * 原理：一比一复制ItemBlockFactory.addTypeDetails()的配方类型显示，
+	 * 从AttributeFactoryType读取工厂的配方类型（如Smelting），
+	 * 显示为"Recipe type: Smelting"。
+	 * <p>
+	 * 储能与内部流体显示由 super.addTypeDetails 内部统一处理
+	 * （基类通过 StorageUtils.addStoredEnergy / addStoredFluid 实现），
+	 * 与 MEK 原版机器行为完全一致；空流体显示"没有流体被存储"为标准行为。
+	 * <p>
+	 * Bug 6：添加 try-catch 防御扳手拆卸后 DataComponents 不完整导致 NPE 崩溃，
+	 * 由外层 try-catch 兜底，仅记录警告日志而不影响客户端 tooltip 渲染。
+	 */
 	@Override
 	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {

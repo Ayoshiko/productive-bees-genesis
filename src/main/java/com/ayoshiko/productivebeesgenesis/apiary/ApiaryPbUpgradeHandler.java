@@ -1,12 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicIntegerArray;
-
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -15,27 +9,32 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
 /**
- * PB 升级安装/卸载处理器
- * <br/>
- * 从 {@link TileEntityMekApiary} 拆分，单一职责管理 PB 专属升级的状态与逻辑：
- * <ul>
- *   <li>升级数量映射 {@link #pbUpgradeCounts}（Bug 6 核心数据结构）</li>
- *   <li>输入槽自动安装（正向计数机制，Bug 3）</li>
- *   <li>输出槽手动卸载</li>
- *   <li>NBT 持久化（历史格式迁移委托给 {@link #nbtMigrator}）</li>
- *   <li>客户端进度同步</li>
- * </ul>
- * <p>
- * 通过组合关系持有 {@link TileEntityMekApiary} 引用，访问 level/setChanged 等。
- * <p>
- * 线程安全：{@code pbUpgradeCounts} 仅服务端主线程访问（tick 处理与 Container
- * 网络包处理同在服务端主线程，无并发）。所有写操作均有 {@code isClientSide} 守卫，
- * 客户端通过 SyncableInt 同步至 {@link #clientUpgradeCounts}，
- * 不直接访问本字段。故保留 {@link EnumMap} 以获得枚举键的性能优势。
- */
+	 * PB 升级安装/卸载处理器
+	 * <br/>
+	 * 从 {@link TileEntityMekApiary} 拆分，单一职责管理 PB 专属升级的状态与逻辑：
+	 * <ul>
+	 *   <li>升级数量映射 {@link #pbUpgradeCounts}（Bug 6 核心数据结构）</li>
+	 *   <li>输入槽自动安装（正向计数机制，Bug 3）</li>
+	 *   <li>输出槽手动卸载</li>
+	 *   <li>NBT 持久化（历史格式迁移委托给 {@link #nbtMigrator}）</li>
+	 *   <li>客户端进度同步</li>
+	 * </ul>
+	 * <p>
+	 * 通过组合关系持有 {@link TileEntityMekApiary} 引用，访问 level/setChanged 等。
+	 * <p>
+	 * 线程安全：{@code pbUpgradeCounts} 仅服务端主线程访问（tick 处理与 Container
+	 * 网络包处理同在服务端主线程，无并发）。所有写操作均有 {@code isClientSide} 守卫，
+	 * 客户端通过 SyncableInt 同步至 {@link #clientUpgradeCounts}，
+	 * 不直接访问本字段。故保留 {@link EnumMap} 以获得枚举键的性能优势。
+	 */
 class ApiaryPbUpgradeHandler {
 
 	/** NBT key — PB升级安装数量（Bug 6 新格式，EnumMap 序列化为 CompoundTag） */

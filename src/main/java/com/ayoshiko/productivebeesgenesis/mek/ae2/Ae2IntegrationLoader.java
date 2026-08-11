@@ -5,25 +5,25 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
 /**
- * AE2 集成加载器
- * <br/>
- * 使用 Holder 模式实现线程安全的懒加载单例，通过反射 + FML 双重检测判断 AE2 是否安装。
- * <p>
- * <b>检测策略</b>：
- * <ol>
- *   <li>优先通过 {@code FMLLoader.getLoadingModList().getModFileById("ae2")} 检测（准确且快速）</li>
- *   <li>FML 不可用时回退到反射检测 {@code appeng.api.AEApi} 类是否存在</li>
- * </ol>
- * <p>
- * <b>方法分工</b>（v1.8.2 解耦）：
- * <ul>
- *   <li>{@link #isAe2Loaded()} — AE2 是否安装，用于节点创建/连接/销毁/NBT 守卫
- *       （与 Mek-Energistics 对齐：节点无条件创建）</li>
- *   <li>{@link #isIntegrationEnabled()} — AE2 已安装 <b>且</b> {@code aeOutputEnabled=true}，
- *       仅用于 {@link Ae2OutputPusher} 输出推送守卫</li>
- * </ul>
- * 配置未加载（SERVER 为 null）时 {@code isIntegrationEnabled} 返回 false，避免启动早期 NPE。
- */
+	 * AE2 集成加载器
+	 * <br/>
+	 * 使用 Holder 模式实现线程安全的懒加载单例，通过反射 + FML 双重检测判断 AE2 是否安装。
+	 * <p>
+	 * <b>检测策略</b>：
+	 * <ol>
+	 *   <li>优先通过 {@code FMLLoader.getLoadingModList().getModFileById("ae2")} 检测（准确且快速）</li>
+	 *   <li>FML 不可用时回退到反射检测 {@code appeng.api.AEApi} 类是否存在</li>
+	 * </ol>
+	 * <p>
+	 * <b>方法分工</b>（v2.0.0 解耦）：
+	 * <ul>
+	 *   <li>{@link #isAe2Loaded()} — AE2 是否安装，用于节点创建/连接/销毁/NBT 守卫
+	 *       （与 Mek-Energistics 对齐：节点无条件创建）</li>
+	 *   <li>{@link #isIntegrationEnabled()} — AE2 已安装 <b>且</b> {@code aeOutputEnabled=true}，
+	 *       仅用于 {@link Ae2OutputPusher} 输出推送守卫</li>
+	 * </ul>
+	 * 配置未加载（SERVER 为 null）时 {@code isIntegrationEnabled} 返回 false，避免启动早期 NPE。
+	 */
 public final class Ae2IntegrationLoader {
 
 	/** Holder 模式：JVM 类加载时保证线程安全的延迟初始化 */
@@ -55,7 +55,7 @@ public final class Ae2IntegrationLoader {
 	 * AE2 输出推送是否启用
 	 * <br/>
 	 * AE2 已安装 <b>且</b> {@code aeOutputEnabled=true} 时返回 true。
-	 * v1.8.2：仅用于 {@link Ae2OutputPusher} 输出推送守卫，不再控制节点创建。
+	 * v2.0.0：仅用于 {@link Ae2OutputPusher} 输出推送守卫，不再控制节点创建。
 	 * 配置未加载时返回 false，避免启动早期 NPE。
 	 */
 	public static boolean isIntegrationEnabled() {

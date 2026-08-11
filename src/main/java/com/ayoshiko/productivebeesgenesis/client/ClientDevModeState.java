@@ -3,13 +3,13 @@ package com.ayoshiko.productivebeesgenesis.client;
 import java.util.Map;
 
 /**
- * 客户端开发者模式镜像状态
- * <p>
- * 由 DevModeStateSyncPacket 更新。供 ModCreativeTabs 读取以控制开发物品可见性。
- * <p>
- * 原子性设计：将 masterEnabled 与 featureStates 封装为单个不可变 {@link State} record，
- * 通过单个 volatile 引用读写保证可见性与原子性，避免双字段 TOCTOU。
- */
+	 * 客户端开发者模式镜像状态
+	 * <p>
+	 * 由 DevModeStateSyncPacket 更新。供 ModCreativeTabs 读取以控制开发物品可见性。
+	 * <p>
+	 * 原子性设计：将 masterEnabled 与 featureStates 封装为单个不可变 {@link State} record，
+	 * 通过单个 volatile 引用读写保证可见性与原子性，避免双字段 TOCTOU。
+	 */
 public final class ClientDevModeState {
 
 	/**

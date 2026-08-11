@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.apiary.IFeederSlotContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
@@ -22,35 +18,38 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 喂食器窗口 — MEK标准复杂实现（5×6=30 翻页版）
- * <br/>
- * 1:1复刻MEK窗口设计规范：
- * <ul>
- *   <li>左侧：GuiElementHolder背景的喂食槽网格，支持虚拟槽位完整交互</li>
- *   <li>右侧：GuiInnerScreen信息面板，显示槽位统计、页码和喂食器状态</li>
- *   <li>标题栏：固定按钮(Pin) + 翻页按钮(◀▶) + 关闭按钮 + 标题文字</li>
- *   <li>底部：使用提示文字</li>
- *   <li>动态尺寸：根据喂食槽列数自适应窗口大小</li>
- * </ul>
- * <p>
- * 翻页机制（高等级蜂箱喂食槽位数 &gt; 30 时启用）：
- * <ul>
- *   <li>每页固定 {@value #MAX_ROWS_PER_PAGE} 行 × feederCols 列槽位（高等级 5×6=30）</li>
- *   <li>标题栏右侧 ◀/▶ 翻页按钮，鼠标滚轮也可翻页</li>
- *   <li>页码显示在右侧信息面板</li>
- *   <li>低等级（feederRows ≤ 6）不显示翻页按钮，行为与原版一致</li>
- *   <li>槽位总数 = feederRows × feederCols（严格矩形，多出空槽保持布局）</li>
- * </ul>
- * <p>
- * 布局参数（以窗口左上角为原点）：
- * <ul>
- *   <li>左侧网格区：x=6, y=18, 宽=cols×20-2, 高=visibleRows×20-2</li>
- *   <li>右侧信息面板：x=gridRight+gap, y=18, 宽=INFO_PANEL_WIDTH, 高=gridHeight</li>
- *   <li>翻页按钮：y=4, x=width-N*(btnWidth+gap)-8（标题栏右侧）</li>
- *   <li>底部提示：y=gridBottom+4</li>
- * </ul>
- */
+	 * 喂食器窗口 — MEK标准复杂实现（5×6=30 翻页版）
+	 * <br/>
+	 * 1:1复刻MEK窗口设计规范：
+	 * <ul>
+	 *   <li>左侧：GuiElementHolder背景的喂食槽网格，支持虚拟槽位完整交互</li>
+	 *   <li>右侧：GuiInnerScreen信息面板，显示槽位统计、页码和喂食器状态</li>
+	 *   <li>标题栏：固定按钮(Pin) + 翻页按钮(◀▶) + 关闭按钮 + 标题文字</li>
+	 *   <li>底部：使用提示文字</li>
+	 *   <li>动态尺寸：根据喂食槽列数自适应窗口大小</li>
+	 * </ul>
+	 * <p>
+	 * 翻页机制（高等级蜂箱喂食槽位数 &gt; 30 时启用）：
+	 * <ul>
+	 *   <li>每页固定 {@value #MAX_ROWS_PER_PAGE} 行 × feederCols 列槽位（高等级 5×6=30）</li>
+	 *   <li>标题栏右侧 ◀/▶ 翻页按钮，鼠标滚轮也可翻页</li>
+	 *   <li>页码显示在右侧信息面板</li>
+	 *   <li>低等级（feederRows ≤ 6）不显示翻页按钮，行为与原版一致</li>
+	 *   <li>槽位总数 = feederRows × feederCols（严格矩形，多出空槽保持布局）</li>
+	 * </ul>
+	 * <p>
+	 * 布局参数（以窗口左上角为原点）：
+	 * <ul>
+	 *   <li>左侧网格区：x=6, y=18, 宽=cols×20-2, 高=visibleRows×20-2</li>
+	 *   <li>右侧信息面板：x=gridRight+gap, y=18, 宽=INFO_PANEL_WIDTH, 高=gridHeight</li>
+	 *   <li>翻页按钮：y=4, x=width-N*(btnWidth+gap)-8（标题栏右侧）</li>
+	 *   <li>底部提示：y=gridBottom+4</li>
+	 * </ul>
+	 */
 public class GuiFeederWindow extends GuiWindow {
 
 	/** 槽位步进（18+2=20px） */

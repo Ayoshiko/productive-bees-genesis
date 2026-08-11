@@ -1,31 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
-import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.container.MekanismContainer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
- * PB配方处理器 — 主协调器，委托子组件处理配方查找/输出聚合/万象创世/能量缓存/输出检查。
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
- */
+	 * PB配方处理器 — 主协调器，委托子组件处理配方查找/输出聚合/万象创世/能量缓存/输出检查。
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 */
 public class PbRecipeProcessor {
 
 	/** PB配方处理上下文 — 由Factory TileEntity提供 */
@@ -174,7 +172,8 @@ public class PbRecipeProcessor {
 	}
 	/** 刷新能量和操作数缓存（入口调用一次，替代原 tryProcessPbRecipe 内的每次刷新；升级变更下次入口自动失效） */
 	public void refreshEnergyAndOpsCache(PbRecipeContext context) {
-		cachedEnergyPerTick = context.hasCreativeUpgrade() ? 0L : context.energyContainer().getEnergyPerTick();
+		cachedEnergyPerTick = MekExtrasUpgradeSemantics.energyPerTick(
+				context.hasCreativeUpgrade(), context.energyContainer().getEnergyPerTick());
 		cachedOperationsPerTick = context.operationsPerTick();
 	}
 
@@ -224,7 +223,7 @@ public class PbRecipeProcessor {
 			energyCache.clear();
 			// 失效万象处理器的 getTicksForBase 缓存
 			myriadHandler.clearCachedTicksForBase();
-			// v2.1.0 修复产物锁定 bug：配方版本变更时重置所有 completer
+			// v2.0.9 修复产物锁定 bug：配方版本变更时重置所有 completer
 			// 防止配方重载后 completer 持有旧配方的 pendingRecipeOutputs 引用
 			for (int i = 0; i < recipeCompleters.length; i++) {
 				recipeCompleters[i].resetPendingRecipe();
@@ -259,8 +258,14 @@ public class PbRecipeProcessor {
 
 	/** 尝试PB离心配方处理（单进程，接受外部预查找的 PB 配方） */
 	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe) {
+		return tryProcessPbRecipe(processIndex, preFoundRecipe, Long.MAX_VALUE);
+	}
+
+	/** Processes one lane without allowing it to consume another lane's reserved energy. */
+	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
+			long energyBudget) {
 		try {
-			return tryProcessPbRecipeInternal(processIndex, preFoundRecipe);
+			return tryProcessPbRecipeInternal(processIndex, preFoundRecipe, energyBudget);
 		} catch (Exception e) {
 			// 捕获异常防止tick崩溃，记录错误日志并重置PB状态（节流避免刷屏，Task 15 ms 时间源）
 			final Exception cause = e;
@@ -273,7 +278,8 @@ public class PbRecipeProcessor {
 		}
 	}
 
-	private boolean tryProcessPbRecipeInternal(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe) {
+	private boolean tryProcessPbRecipeInternal(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
+			long energyBudget) {
 		try {
 			Level level = context.level();
 			if (level == null || level.isClientSide) return false;
@@ -284,7 +290,7 @@ public class PbRecipeProcessor {
 
 			// 能量/操作数/流体槽满载缓存由入口统一刷新（Task 1.3 CREATIVE 兜底 + Task 4 暂停语义）
 			long currentGameTime = level.getGameTime();
-			long availableEnergy = context.energyContainer().getEnergy();
+			long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
 
 			ItemStack input = context.inputSlot(processIndex).getStack();
 			if (input.isEmpty()) {
@@ -294,14 +300,17 @@ public class PbRecipeProcessor {
 				return false;
 			}
 
+		int virtualTicks = Math.max(1, tickMultiplier);
+		tickMultiplier = 1;
+
 		// 万象创世蜜脾/蜜脾块 — 委托给万象处理器（走特殊路径，不走PB CentrifugeRecipe）
 		if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 				|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
 			// Task 5: 批量倍率（加速模组 N 倍产出跳过 N-1 次重复 tick）
-			int myriadOps = cachedOperationsPerTick * tickMultiplier;
-			tickMultiplier = 1; // 重置
+			int myriadOps = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(cachedOperationsPerTick, virtualTicks));
 			return myriadHandler.tryProcessMyriadCreations(processIndex, input,
-					cachedEnergyPerTick, myriadOps);
+					cachedEnergyPerTick, myriadOps, availableEnergy);
 		}
 
 			// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方
@@ -318,7 +327,7 @@ public class PbRecipeProcessor {
 			if (cachedPbRecipes[processIndex] != pbRecipe) {
 				cachedPbRecipes[processIndex] = pbRecipe;
 				pbOperatingTicks[processIndex] = 0;
-				// v2.1.0 修复产物锁定 bug：配方变更时重置 completer 的 pendingRecipeOutputs
+				// v2.0.9 修复产物锁定 bug：配方变更时重置 completer 的 pendingRecipeOutputs
 				// 防止上一个配方的 outputs 残留，导致新蜜脾沿用旧配方产出
 				recipeCompleters[processIndex].resetPendingRecipe();
 			}
@@ -345,11 +354,11 @@ public class PbRecipeProcessor {
 			// PB 原版产量升级同时提供并行：4/8/16/32，单次最多并行 64 个输入。
 			// 现有 productivityModifier 仍保留产量倍率，两者语义独立。
 			int productivityParallel = Math.max(1, context.productivityParallelModifier());
-			// Tick 批量倍率、MEK/STACK 并行和 PB 原版并行统一在此聚合，
-			// 饱和转换避免极端升级组合溢出成负数。
+			// MEK/STACK 与 PB 原版并行在同一个处理周期内聚合。JDTE 的倍率代表
+			// 虚拟 tick 数，由 PbVirtualTickPlan 推进进度和完成周期，不能直接乘到
+			// 单次完成的并行数，否则少量输入会失去加速效果。
 			int effectiveOps = SaturatingMath.saturatingToInt(
-					SaturatingMath.saturatingMultiply(baseOps, tickMultiplier, productivityParallel));
-			tickMultiplier = 1; // 重置
+					SaturatingMath.saturatingMultiply(baseOps, productivityParallel));
 
 			int modifier = context.productivityModifier();
 
@@ -372,16 +381,6 @@ public class PbRecipeProcessor {
 		// flush可能扣除了输入，重新读取当前输入数量
 		int inputCount = context.inputSlot(processIndex).getStack().getCount();
 
-		// 能量不足时降低操作数（参考MEK原版calculateOperationsThisTick）
-		if (cachedEnergyPerTick > 0) {
-			int energyLimitedOps = (int) Math.min(effectiveOps, availableEnergy / cachedEnergyPerTick);
-			if (energyLimitedOps <= 0) {
-				pbProcessing[processIndex] = false; // 能量不足，保留进度但不激活
-				return false;
-			}
-			effectiveOps = energyLimitedOps;
-		}
-
 		// 输入不足时降低操作数（每次并行操作消耗1个输入，modifier只影响输出数量）
 		int remainingInput = inputCount - recipeCompleters[processIndex].pendingInputShrink();
 		if (remainingInput <= 0) {
@@ -396,42 +395,42 @@ public class PbRecipeProcessor {
 			return false;
 		}
 
-			// 输出受阻且进度已满时不消耗能量（参考MEK原版NOT_ENOUGH_OUTPUT_SPACE）
-			if (PbRecipeOutputChecker.isOutputBlocked(context, processIndex, recipeValue, hasItemOutputs, hasFluidOutputs, cachedFluidTankFull)
-					&& pbOperatingTicks[processIndex] >= processingTime) {
-				pbOperatingTicks[processIndex] = processingTime;
-				return true;
+			// 输出已经受阻时最多推进到本周期完成边界，不能把后续虚拟 tick
+			// 也计入能耗或多个完成周期。零 tick CREATIVE 在此直接等待输出空间。
+			boolean outputBlocked = PbRecipeOutputChecker.isOutputBlocked(context, processIndex,
+					recipeValue, hasItemOutputs, hasFluidOutputs, cachedFluidTankFull);
+			if (outputBlocked) {
+				if (pbOperatingTicks[processIndex] >= processingTime) {
+					pbOperatingTicks[processIndex] = processingTime;
+					return true;
+				}
+				virtualTicks = Math.min(virtualTicks,
+						Math.max(1, processingTime - pbOperatingTicks[processIndex]));
 			}
 
-			// 激活处理
+			PbVirtualTickPlan tickPlan = PbVirtualTickPlan.create(
+					pbOperatingTicks[processIndex], virtualTicks, processingTime, effectiveOps,
+					remainingInput, cachedEnergyPerTick, availableEnergy);
+			if (tickPlan.executedTicks() <= 0) {
+				pbProcessing[processIndex] = false;
+				return false;
+			}
+
 			pbProcessing[processIndex] = true;
-
-			// 并行处理：每tick进度只+1，完成时逐次操作+逐次flush
-			pbOperatingTicks[processIndex]++;
-			int opsRun = 0;
-
-			if (pbOperatingTicks[processIndex] >= processingTime) {
-			// 进度满，完成effectiveOps次操作
-			// Task 4 TPS 优化：批量 accumulate 替代 65536 次循环（O(outputs) 而非 O(actualOps)）
-			pbOperatingTicks[processIndex] = 0;
-			// 先确定实际可完成的 ops 数（受输入限制）
-			int currentInputCount = context.inputSlot(processIndex).getStack().getCount();
-			int currentPending = recipeCompleters[processIndex].pendingInputShrink();
-			int actualOps = Math.min(effectiveOps, Math.max(0, currentInputCount - currentPending));
-		if (actualOps > 0) {
+			pbOperatingTicks[processIndex] = tickPlan.remainingProgress();
+			int actualOps = tickPlan.completedOperations();
+			// Task 4 TPS 优化：批量 accumulate 替代逐操作循环（O(outputs) 而非 O(actualOps)）
+			if (actualOps > 0) {
 				recipeCompleters[processIndex].accumulatePbRecipeOutputsBatch(
 						recipeValue, processIndex, modifier, actualOps);
 				if (recipeCompleters[processIndex].flushPendingPbOutputs(processIndex)) {
-					opsRun += actualOps;
 				} else if (recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
 					// 输入已因部分直输 AE 而提交，本批操作已经完成；剩余产物下 tick 重试。
-					opsRun += actualOps;
 					pbOperatingTicks[processIndex] = processingTime;
 				} else {
 					// 批量 flush 失败（输出空间不足）— 分批减半回退
 					recipeCompleters[processIndex].resetPendingRecipe();
 					int successfulOps = retryBatchedFlush(recipeValue, processIndex, modifier, actualOps);
-					opsRun += successfulOps;
 					if (successfulOps < actualOps) {
 						// 中途输出空间不足 — 保留进度下个 tick 重试
 						pbOperatingTicks[processIndex] = processingTime;
@@ -441,14 +440,8 @@ public class PbRecipeProcessor {
 			// flush后更新流体槽缓存
 			// Task 4: 使用复合判断,与初始化保持一致
 			cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
-		} else {
-			// 进度未满，本tick不完成操作，但仍消耗能量（保持并行语义）
-			opsRun = effectiveOps;
-		}
-
-			// 批量扣除能量 — 每tick消耗opsRun次操作的能量
-			if (opsRun > 0 && cachedEnergyPerTick > 0) {
-				context.energyContainer().extract((long) opsRun * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+			if (tickPlan.energyUsed() > 0L) {
+				context.energyContainer().extract(tickPlan.energyUsed(), Action.EXECUTE, AutomationType.INTERNAL);
 			}
 
 			return true;
@@ -511,7 +504,7 @@ public class PbRecipeProcessor {
 		pbOperatingTicks[processIndex] = 0;
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
-		// v2.1.0 修复产物锁定 bug：清除 PB 状态时同步重置 completer
+		// v2.0.9 修复产物锁定 bug：清除 PB 状态时同步重置 completer
 		recipeCompleters[processIndex].resetPendingRecipe();
 		// 关闭该进程的激活位，防止进度箭头残留
 		context.setPbActiveState(false, processIndex);
@@ -523,7 +516,7 @@ public class PbRecipeProcessor {
 		pbOperatingTicks[processIndex] = 0;
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
-		// v2.1.0 修复产物锁定 bug：重置 PB 状态时同步重置 completer
+		// v2.0.9 修复产物锁定 bug：重置 PB 状态时同步重置 completer
 		recipeCompleters[processIndex].resetPendingRecipe();
 	}
 

@@ -1,18 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -21,27 +12,35 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * 模组网络数据包注册与服务端处理入口（Task 12）
- * <p>
- * 职责：
- * <ol>
- *   <li>注册所有 play 阶段数据包（Client→Server 与 Server→Client）</li>
- *   <li>频率限制：每玩家 3 秒冷却，防止恶意高频发包</li>
- *   <li>万象创世过滤配置同步包的服务端处理：权限校验 → 数据校验 → 写入配置 → 持久化 → 失效缓存</li>
- * </ol>
- * 原理：NeoForge 的 SERVER 配置在客户端是只读同步副本，客户端修改不会回传服务端。
- * 通过自定义数据包将修改请求发送到服务端，服务端写入后由 NeoForge 原生 ConfigSync
- * 自动同步到所有客户端。单机模式下集成服务器同样走此流程（内存连接，无额外网络开销）。
- * <p>
- * 处理逻辑拆分：蜂箱相关 handler 委托给 {@link ApiaryPayloadHandlers}，
- * AE2 相关 handler 委托给 {@link Ae2PayloadHandlers}，
- * 本类仅保留配置同步包的专属处理逻辑（含频率限制状态）。
- * <p>
- * 注：NeoForge 1.21.1 的 {@code @EventBusSubscriber} 会根据事件类型自动判定总线，
- * {@code RegisterPayloadHandlersEvent} 实现 {@code IModBusEvent}，自动挂载到模组事件总线。
- * 显式声明 {@code bus} 参数在 1.21.1 已被标记为过时（自动判定机制取代），保持不声明以避免警告。
- */
+	 * 模组网络数据包注册与服务端处理入口（Task 12）
+	 * <p>
+	 * 职责：
+	 * <ol>
+	 *   <li>注册所有 play 阶段数据包（Client→Server 与 Server→Client）</li>
+	 *   <li>频率限制：每玩家 3 秒冷却，防止恶意高频发包</li>
+	 *   <li>万象创世过滤配置同步包的服务端处理：权限校验 → 数据校验 → 写入配置 → 持久化 → 失效缓存</li>
+	 * </ol>
+	 * 原理：NeoForge 的 SERVER 配置在客户端是只读同步副本，客户端修改不会回传服务端。
+	 * 通过自定义数据包将修改请求发送到服务端，服务端写入后由 NeoForge 原生 ConfigSync
+	 * 自动同步到所有客户端。单机模式下集成服务器同样走此流程（内存连接，无额外网络开销）。
+	 * <p>
+	 * 处理逻辑拆分：蜂箱相关 handler 委托给 {@link ApiaryPayloadHandlers}，
+	 * AE2 相关 handler 委托给 {@link Ae2PayloadHandlers}，
+	 * 本类仅保留配置同步包的专属处理逻辑（含频率限制状态）。
+	 * <p>
+	 * 注：NeoForge 1.21.1 的 {@code @EventBusSubscriber} 会根据事件类型自动判定总线，
+	 * {@code RegisterPayloadHandlersEvent} 实现 {@code IModBusEvent}，自动挂载到模组事件总线。
+	 * 显式声明 {@code bus} 参数在 1.21.1 已被标记为过时（自动判定机制取代），保持不声明以避免警告。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public final class ModPayloads {
 
@@ -148,13 +147,24 @@ public final class ModPayloads {
 		registrar.playToServer(
 				ToggleAeInputPreciseModePayload.TYPE,
 				ToggleAeInputPreciseModePayload.STREAM_CODEC,
-				Ae2PayloadHandlers::handleToggleAeInputPreciseMode
+				Ae2FilterPayloadHandlers::handleToggleAeInputPreciseMode
 		);
 		// per-tile AE2 输入过滤条目增删包 — 由过滤列表 GUI 发送
 		registrar.playToServer(
 				SetAeInputFilterEntryPayload.TYPE,
 				SetAeInputFilterEntryPayload.STREAM_CODEC,
-				Ae2PayloadHandlers::handleSetAeInputFilterEntry
+				Ae2FilterPayloadHandlers::handleSetAeInputFilterEntry
+		);
+		registrar.playToServer(
+				SetAeInputFilterAmountPayload.TYPE,
+				SetAeInputFilterAmountPayload.STREAM_CODEC,
+				Ae2FilterPayloadHandlers::handleSetAeInputFilterAmount
+		);
+		// AE2LT-style virtual output slot interaction (take out / put back)
+		registrar.playToServer(
+				AeInputOutputSlotPayload.TYPE,
+				AeInputOutputSlotPayload.STREAM_CODEC,
+				Ae2PayloadHandlers::handleAeInputOutputSlot
 		);
 		// per-tile AE2 输入配置窗口打开请求包 — 由 AeInputOverlay 按钮点击发送
 		// 服务端不直接打开 Screen（NeoForge 限制），而是推送最新过滤器状态到客户端，
@@ -162,13 +172,13 @@ public final class ModPayloads {
 		registrar.playToServer(
 				OpenAeInputConfigPayload.TYPE,
 				OpenAeInputConfigPayload.STREAM_CODEC,
-				Ae2PayloadHandlers::handleOpenAeInputConfig
+				Ae2FilterPayloadHandlers::handleOpenAeInputConfig
 		);
 		// 服务端 → 客户端：同步完整过滤器条目列表（tracker 无法同步集合数据）
 		registrar.playToClient(
 				SyncAeInputFilterEntriesPayload.TYPE,
 				SyncAeInputFilterEntriesPayload.STREAM_CODEC,
-				Ae2PayloadHandlers::handleSyncAeInputFilterEntries
+				Ae2FilterPayloadHandlers::handleSyncAeInputFilterEntries
 		);
 		// 服务端 → 客户端：开发者模式状态同步包（玩家登录时推送 + 命令切换时广播）
 		registrar.playToClient(

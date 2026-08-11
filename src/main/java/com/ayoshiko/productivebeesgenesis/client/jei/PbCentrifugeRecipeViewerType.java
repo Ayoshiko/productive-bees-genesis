@@ -12,19 +12,19 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * PB离心配方的Mekanism配方查看器类型
- * <br/>
- * 实现IRecipeViewerRecipeType接口，使GuiProgress能通过recipeViewerCategories
- * 同时注册SMELTING和PB离心配方两种类型，实现双配方JEI跳转。
- * <p>
- * 原理：Mekanism的GuiProgress.recipeViewerCategories接受IRecipeViewerRecipeType可变参数，
- * 鼠标悬停进度条时JEI会显示所有注册类型的"Show Recipes"提示，点击可跳转到对应分类。
- * <p>
- * 与RVRecipeTypeWrapper的区别：
- * - RVRecipeTypeWrapper要求RECIPE extends MekanismRecipe，PB的CentrifugeRecipe不满足
- * - 本类直接实现IRecipeViewerRecipeType，不依赖MekanismRecipe
- * - requiresHolder()返回false，因为PB配方不使用RecipeHolder包装
- */
+	 * PB离心配方的Mekanism配方查看器类型
+	 * <br/>
+	 * 实现IRecipeViewerRecipeType接口，使GuiProgress能通过recipeViewerCategories
+	 * 同时注册SMELTING和PB离心配方两种类型，实现双配方JEI跳转。
+	 * <p>
+	 * 原理：Mekanism的GuiProgress.recipeViewerCategories接受IRecipeViewerRecipeType可变参数，
+	 * 鼠标悬停进度条时JEI会显示所有注册类型的"Show Recipes"提示，点击可跳转到对应分类。
+	 * <p>
+	 * 与RVRecipeTypeWrapper的区别：
+	 * - RVRecipeTypeWrapper要求RECIPE extends MekanismRecipe，PB的CentrifugeRecipe不满足
+	 * - 本类直接实现IRecipeViewerRecipeType，不依赖MekanismRecipe
+	 * - requiresHolder()返回false，因为PB配方不使用RecipeHolder包装
+	 */
 public record PbCentrifugeRecipeViewerType(
 		ResourceLocation id,
 		ItemLike iconItem,

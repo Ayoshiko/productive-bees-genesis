@@ -19,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import javax.annotation.Nonnull;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,19 +27,19 @@ import java.util.Map;
 import java.util.stream.IntStream;
 
 /**
- * PB离心配方的JEI分类
- * <br/>
- * 在JEI中展示PB CentrifugeRecipe的输入物品、概率输出物品和流体输出。
- * 与PB原版CentrifugeRecipeCategory的区别：
- * - 使用独立的RecipeType（productivebeesgenesis:pb_centrifuge）
- * - 复用PB原版的centrifuge_recipe.png纹理作为背景
- * - 作为MEK离心机的JEI跳转目标
- * <p>
- * 布局参考PB原版（126x70）：
- * - 输入槽(5,27)
- * - 输出槽起始(68,26)，每3个换行
- * - 流体输出槽（与物品输出共享槽位区域）
- */
+	 * PB离心配方的JEI分类
+	 * <br/>
+	 * 在JEI中展示PB CentrifugeRecipe的输入物品、概率输出物品和流体输出。
+	 * 与PB原版CentrifugeRecipeCategory的区别：
+	 * - 使用独立的RecipeType（productivebeesgenesis:pb_centrifuge）
+	 * - 复用PB原版的centrifuge_recipe.png纹理作为背景
+	 * - 作为MEK离心机的JEI跳转目标
+	 * <p>
+	 * 布局参考PB原版（126x70）：
+	 * - 输入槽(5,27)
+	 * - 输出槽起始(68,26)，每3个换行
+	 * - 流体输出槽（与物品输出共享槽位区域）
+	 */
 public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRecipe> {
 
 	/** JEI分类背景纹理路径（复用PB原版纹理） */

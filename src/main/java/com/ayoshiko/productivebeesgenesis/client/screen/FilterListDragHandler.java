@@ -1,29 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.List;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.components.Button;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+
 /**
- * FilterListScreen 的条目拖拽排序处理器，兼承 {@link AbstractVerticalScrollBar} 复用滚动条逻辑。
- * <p>
- * 滚动条几何计算、渲染与鼠标交互由基类统一处理；本类仅保留条目拖拽排序逻辑
- * （startDrag/finishDrag/rebuildEntryButtonsOnly）与滚动变化时的按钮重建钩子。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 拖拽排序与滚动条交互职责清晰分离：滚动条由基类负责，条目拖拽由本类负责</li>
- *   <li>OCP — 通过重写 {@link #handleMouseDragged}/{@link #handleMouseReleased} 扩展条目拖拽，
- *       不修改基类滚动条逻辑</li>
- *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * FilterListScreen 的条目拖拽排序处理器，兼承 {@link AbstractVerticalScrollBar} 复用滚动条逻辑。
+	 * <p>
+	 * 滚动条几何计算、渲染与鼠标交互由基类统一处理；本类仅保留条目拖拽排序逻辑
+	 * （startDrag/finishDrag/rebuildEntryButtonsOnly）与滚动变化时的按钮重建钩子。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 拖拽排序与滚动条交互职责清晰分离：滚动条由基类负责，条目拖拽由本类负责</li>
+	 *   <li>OCP — 通过重写 {@link #handleMouseDragged}/{@link #handleMouseReleased} 扩展条目拖拽，
+	 *       不修改基类滚动条逻辑</li>
+	 *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

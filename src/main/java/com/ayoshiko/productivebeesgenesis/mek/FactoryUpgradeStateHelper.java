@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
 import mekanism.api.Upgrade;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -7,26 +8,23 @@ import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.UpgradeUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.ObjIntConsumer;
 
-import org.jetbrains.annotations.NotNull;
-
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
-
 /**
- * 工厂升级状态与运行时辅助类 — 封装升级重算、ticks计算、信息显示、
- * 进程激活、输入槽拉取和服务器tick更新逻辑。
- * <br/>
- * 抽自 {@link AbstractMekCentrifugeFactory}，降低单文件行数（Task 11）。
- * 所有方法为静态，通过传入工厂实例操作，避免引入额外状态。
- *
- * @author ayoshiko
- * @since Task 11
- */
+	 * 工厂升级状态与运行时辅助类 — 封装升级重算、ticks计算、信息显示、
+	 * 进程激活、输入槽拉取和服务器tick更新逻辑。
+	 * <br/>
+	 * 抽自 {@link AbstractMekCentrifugeFactory}，降低单文件行数（Task 11）。
+	 * 所有方法为静态，通过传入工厂实例操作，避免引入额外状态。
+	 *
+	 * @author ayoshiko
+	 * @since Task 11
+	 */
 public final class FactoryUpgradeStateHelper {
 
 	private FactoryUpgradeStateHelper() {
@@ -44,21 +42,20 @@ public final class FactoryUpgradeStateHelper {
 	 * @param upgrade	触发的升级类型
 	 */
 	public static void recalculateUpgrades(@NotNull AbstractMekCentrifugeFactory factory, @NotNull Upgrade upgrade) {
-		if (MekUpgradeSupport.isCreativeUpgrade(upgrade) && MekUpgradeSupport.hasCreativeUpgrade(factory)) {
-			MekCreativeEnergyHelper.applyCreativeMaxEnergy(factory.energyContainer());
-			return;
-		}
-		if (MekUpgradeSupport.hasCreativeUpgrade(factory)) {
-			MekCreativeEnergyHelper.applyCreativeMaxEnergy(factory.energyContainer());
-			return;
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			MekCreativeEnergyHelper.recalculateCreativeEnergy(factory.energyContainer(), upgrade,
+					MekUpgradeSupport.hasCreativeUpgrade(factory));
 		}
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		if (upgrade == Upgrade.SPEED) {
 			accessor.productivebeesgenesis$setTicksRequired(MekanismUtils.getTicks(factory, factory.baseTicksRequired()));
 		}
 		int maxOps = getUpgradeMaxOperations(factory);
+		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(
+				factory, factory.baseTicksRequired(), maxOps);
 		accessor.productivebeesgenesis$setOperationsPerTick(
-				MekanismUtils.getOperationsPerTick(factory, factory.baseTicksRequired(), maxOps));
+				MekExtrasUpgradeSemantics.operationsPerTick(
+						MekUpgradeSupport.hasCreativeUpgrade(factory), maxOps, speedAdjustedOps));
 	}
 
 	/**
@@ -74,7 +71,7 @@ public final class FactoryUpgradeStateHelper {
 	}
 
 	/**
-	 * 获取处理所需ticks — CREATIVE安装时返回0实现瞬间完成。
+	 * 获取处理所需 ticks。对齐 Mekanism Extras：CREATIVE 返回 0，实现最大处理速率。
 	 *
 	 * @param factory	工厂实例
 	 * @return 所需ticks
@@ -160,7 +157,7 @@ public final class FactoryUpgradeStateHelper {
 	 * 后续 255 次调用跳过 PB 处理，仅保留 super 与 AE2 推送。shouldSkipPb 内部已调用
 	 * tracker.onTick(level)，故此处不再单独调用（避免重复计数）。
 	 * <p>
-	 * AE2 推送/拉取批处理（v1.14.0+）：{@link CentrifugeFactoryCommonLogic#pushAe2OutputsAndPullInputs}
+	 * AE2 推送/拉取批处理（v2.0.0+）：{@link CentrifugeFactoryCommonLogic#pushAe2OutputsAndPullInputs}
 	 * 已移入 if (!skipPb) 块内,与 PB 一致地批处理。256x 加速下仅第 1 次 tick 执行完整 AE2 操作,
 	 * 第 2-256 次 tick 跳过 AE2 推送/拉取（但仍执行 tryConnectNode 和 injectAe2Energy 保证能量供应）。
 	 * 进度累加和能量消耗由 superCall.getAsBoolean() 处理,不损失产出速率。

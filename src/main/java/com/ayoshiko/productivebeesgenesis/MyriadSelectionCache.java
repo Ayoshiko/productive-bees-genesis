@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
 /**
- * 万象创世蜜蜂类型选择缓存（Task 23 + Task 4 锁优化）
- * <p>
- * 从 {@link MyriadCreationsEventHandler} 抽取的类型选择缓存逻辑，遵循单一职责原则（SRP）：
- * <ul>
- *   <li>按 {@code (count, gameTime, beeTypesVersion)} 复用随机选择结果</li>
- *   <li>同 tick 同 count 的多次选择合并为一次随机采样，显著降低 CPU 占用</li>
- *   <li>缓存版本号在蜜蜂类型缓存更新或配置重载时递增，自动失效旧结果</li>
- * </ul>
- * <p>
- * <b>Task 4 锁优化</b>：移除 {@code synchronized(MyriadSelectionCache.class)} 类级锁，
- * 改为 volatile 字段双检查模式。服务端单线程执行实际无竞争，锁纯属性能损耗。
- * volatile 字段保证跨区块可见性，最坏情况下多线程可能重复计算（不导致数据损坏）。
- * <p>
- * <b>线程安全</b>：{@code BEE_TYPES_VERSION} 使用 {@link AtomicInteger}，
- * {@link SelectionCache} 字段为 volatile，多工厂实例共享静态数组时交叉访问安全。
- */
+	 * 万象创世蜜蜂类型选择缓存（Task 23 + Task 4 锁优化）
+	 * <p>
+	 * 从 {@link MyriadCreationsEventHandler} 抽取的类型选择缓存逻辑，遵循单一职责原则（SRP）：
+	 * <ul>
+	 *   <li>按 {@code (count, gameTime, beeTypesVersion)} 复用随机选择结果</li>
+	 *   <li>同 tick 同 count 的多次选择合并为一次随机采样，显著降低 CPU 占用</li>
+	 *   <li>缓存版本号在蜜蜂类型缓存更新或配置重载时递增，自动失效旧结果</li>
+	 * </ul>
+	 * <p>
+	 * <b>Task 4 锁优化</b>：移除 {@code synchronized(MyriadSelectionCache.class)} 类级锁，
+	 * 改为 volatile 字段双检查模式。服务端单线程执行实际无竞争，锁纯属性能损耗。
+	 * volatile 字段保证跨区块可见性，最坏情况下多线程可能重复计算（不导致数据损坏）。
+	 * <p>
+	 * <b>线程安全</b>：{@code BEE_TYPES_VERSION} 使用 {@link AtomicInteger}，
+	 * {@link SelectionCache} 字段为 volatile，多工厂实例共享静态数组时交叉访问安全。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

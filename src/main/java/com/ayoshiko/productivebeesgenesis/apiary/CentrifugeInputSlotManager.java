@@ -1,25 +1,24 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
-
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 离心机输入槽状态管理器 — 封装蜂箱直连弹出的输入槽预扫描、类型缓存、按负载排序
- * <br/>
- * 设计原则:
- * <ul>
- *   <li>SRP:仅负责输入槽状态管理,不涉及物品转移逻辑(由 ApiaryDirectEjectHandler 负责)</li>
- *   <li>数组复用:槽数不变时复用数组,避免每 tick 分配(参考 BeeProduceProcessor.reusableSlotStacks 模式)</li>
- *   <li>性能优化:19 输入槽场景下,预扫描 + 类型查找 + 按负载排序总开销 < 5μs/tick</li>
- * </ul>
- * <p>
- * 线程安全:服务端单线程调用,无需同步。
- */
+	 * 离心机输入槽状态管理器 — 封装蜂箱直连弹出的输入槽预扫描、类型缓存、按负载排序
+	 * <br/>
+	 * 设计原则:
+	 * <ul>
+	 *   <li>SRP:仅负责输入槽状态管理,不涉及物品转移逻辑(由 ApiaryDirectEjectHandler 负责)</li>
+	 *   <li>数组复用:槽数不变时复用数组,避免每 tick 分配(参考 BeeProduceProcessor.reusableSlotStacks 模式)</li>
+	 *   <li>性能优化:19 输入槽场景下,预扫描 + 类型查找 + 按负载排序总开销 < 5μs/tick</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全:服务端单线程调用,无需同步。
+	 */
 class CentrifugeInputSlotManager {
 
 	/** 预扫描的输入槽 ItemStack 数组(复用,槽数不变时不重新分配) */

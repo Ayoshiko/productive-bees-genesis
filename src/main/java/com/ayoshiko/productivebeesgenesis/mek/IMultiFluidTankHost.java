@@ -1,22 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+
 /**
- * 多流体槽查询接口
- * <br/>
- * SRP:仅暴露 tank 查询能力,供客户端 GUI 通过 IMultiFluidTankHost 抽象访问多流体槽,
- * 不依赖具体 TileEntity 类型(原版/ME/EME 工厂),遵循依赖倒置原则。
- * <p>
- * 与 {@link PbRecipeContext} 的区别:PbRecipeContext 面向配方处理逻辑,
- * 本接口面向 GUI 渲染层,仅暴露必要的查询能力。
- *
- * @since Task 8
- */
+	 * 多流体槽查询接口
+	 * <br/>
+	 * SRP:仅暴露 tank 查询能力,供客户端 GUI 通过 IMultiFluidTankHost 抽象访问多流体槽,
+	 * 不依赖具体 TileEntity 类型(原版/ME/EME 工厂),遵循依赖倒置原则。
+	 * <p>
+	 * 与 {@link PbRecipeContext} 的区别:PbRecipeContext 面向配方处理逻辑,
+	 * 本接口面向 GUI 渲染层,仅暴露必要的查询能力。
+	 *
+	 * @since Task 8
+	 */
 public interface IMultiFluidTankHost {
 
 	/**

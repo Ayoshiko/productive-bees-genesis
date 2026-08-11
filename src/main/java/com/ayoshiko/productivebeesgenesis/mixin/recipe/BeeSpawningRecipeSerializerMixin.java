@@ -15,15 +15,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.function.Supplier;
 
 /**
- * 修复 BeeSpawningRecipe 序列化崩溃
- * <p>
- * 原理：BeeSpawningRecipe.Serializer.toNetwork 对 output 中 null 的处理是跳过不写入，
- * 这会导致客户端读取的 output 数量与实际不符，引发 buffer 错乱或崩溃。
- * 此 Mixin 在 toNetwork 头部拦截，只要 output 列表中存在任何 null，
- * 就将全部 output 替换为单个 minecraft:bee fallback，并保留原 ingredient/spawnItem/biomes。
- * <p>
- * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
- */
+	 * 修复 BeeSpawningRecipe 序列化崩溃
+	 * <p>
+	 * 原理：BeeSpawningRecipe.Serializer.toNetwork 对 output 中 null 的处理是跳过不写入，
+	 * 这会导致客户端读取的 output 数量与实际不符，引发 buffer 错乱或崩溃。
+	 * 此 Mixin 在 toNetwork 头部拦截，只要 output 列表中存在任何 null，
+	 * 就将全部 output 替换为单个 minecraft:bee fallback，并保留原 ingredient/spawnItem/biomes。
+	 * <p>
+	 * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
+	 */
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeSpawningRecipe$Serializer")
 public abstract class BeeSpawningRecipeSerializerMixin {
 

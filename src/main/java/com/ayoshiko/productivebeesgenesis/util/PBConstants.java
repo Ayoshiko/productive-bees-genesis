@@ -3,15 +3,15 @@ package com.ayoshiko.productivebeesgenesis.util;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Productive Bees 模组相关公共常量
- * <br/>
- * 统一存放与 ProductiveBees 交互中重复使用的字符串与 ResourceLocation 常量，
- * 消除多处重复定义造成的维护成本与不一致风险。
- * <p>
- * 设计原则：单一职责（SRP），仅存放常量，不包含逻辑方法。
- *
- * @since 1.0.0
- */
+	 * Productive Bees 模组相关公共常量
+	 * <br/>
+	 * 统一存放与 ProductiveBees 交互中重复使用的字符串与 ResourceLocation 常量，
+	 * 消除多处重复定义造成的维护成本与不一致风险。
+	 * <p>
+	 * 设计原则：单一职责（SRP），仅存放常量，不包含逻辑方法。
+	 *
+	 * @since 1.0.0
+	 */
 public final class PBConstants {
 
 	/** Productive Bees 模组 ID */

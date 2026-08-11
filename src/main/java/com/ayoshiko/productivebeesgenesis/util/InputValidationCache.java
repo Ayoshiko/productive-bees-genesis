@@ -1,9 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.function.Supplier;
-
-import javax.annotation.Nullable;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -14,30 +10,34 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.Nullable;
+
+import java.util.function.Supplier;
+
 /**
- * 输入有效性校验结果缓存
- * <br/>
- * SFM / AE2 等自动化模组会每 tick 多次探测输入槽有效性（{@code isItemValidForSlot} / {@code isValidInputItem}），
- * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
- * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用。
- * <p>
- * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
- * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
- * 和 {@code PatchedDataComponentMap.hashCode()} 的高昂开销。
- * 对于 configurable_honeycomb / configurable_comb_block，只需比较 Item + bee_type 即可唯一确定身份；
- * 其他物品退化为 Item identity 比较（与 isSameItemSameComponents 中 Item 检查等价）。
- * <p>
- * 支持两种缓存粒度：
- * <ul>
- *   <li>{@link #get} — 仅缓存 boolean（兼容旧调用方）</li>
- *   <li>{@link #getResult} — 缓存完整 {@link ValidationResult}（包含配方/蜜蜂类型/是否蜜脾块），
- *       供 {@code tryProcessPbRecipe} 等需要配方信息的路径直接复用，避免重复 {@code findPbRecipe}</li>
- * </ul>
- * 缓存有效期默认 100 tick（约 5 秒），升级/配方重载等导致的语义变化会在下次 tick 后自动反映。
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
- *
- * @author ayoshiko
- */
+	 * 输入有效性校验结果缓存
+	 * <br/>
+	 * SFM / AE2 等自动化模组会每 tick 多次探测输入槽有效性（{@code isItemValidForSlot} / {@code isValidInputItem}），
+	 * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
+	 * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用。
+	 * <p>
+	 * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
+	 * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
+	 * 和 {@code PatchedDataComponentMap.hashCode()} 的高昂开销。
+	 * 对于 configurable_honeycomb / configurable_comb_block，只需比较 Item + bee_type 即可唯一确定身份；
+	 * 其他物品退化为 Item identity 比较（与 isSameItemSameComponents 中 Item 检查等价）。
+	 * <p>
+	 * 支持两种缓存粒度：
+	 * <ul>
+	 *   <li>{@link #get} — 仅缓存 boolean（兼容旧调用方）</li>
+	 *   <li>{@link #getResult} — 缓存完整 {@link ValidationResult}（包含配方/蜜蜂类型/是否蜜脾块），
+	 *       供 {@code tryProcessPbRecipe} 等需要配方信息的路径直接复用，避免重复 {@code findPbRecipe}</li>
+	 * </ul>
+	 * 缓存有效期默认 100 tick（约 5 秒），升级/配方重载等导致的语义变化会在下次 tick 后自动反映。
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 *
+	 * @author ayoshiko
+	 */
 public class InputValidationCache {
 
 	/**

@@ -1,11 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.function.Function;
-
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -20,12 +17,14 @@ import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
 import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.function.Function;
+
 /**
- * Halo 光晕几何加载器
- * <br/>
- * 解析 loader: "productivebeesgenesis:halo"，提取 type/alpha/pulse 参数，
- * 委托 baseModel 解析父模型，烘焙为 BakedModelHalo。
- */
+	 * Halo 光晕几何加载器
+	 * <br/>
+	 * 解析 loader: "productivebeesgenesis:halo"，提取 type/alpha/pulse 参数，
+	 * 委托 baseModel 解析父模型，烘焙为 BakedModelHalo。
+	 */
 public class GeometryLoaderHalo implements IGeometryLoader<GeometryLoaderHalo.HaloGeometry> {
 
 	@Override

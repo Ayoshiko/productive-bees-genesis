@@ -1,21 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
 /**
- * EvolvedMekanismExtras (EME) 兼容注册统一入口
- * <br/>
- * 供主注册类（{@link com.ayoshiko.productivebeesgenesis.init.ModBlocks}、
- * {@link com.ayoshiko.productivebeesgenesis.init.ModItems}、
- * {@link com.ayoshiko.productivebeesgenesis.init.ModBlockEntities}）调用，
- * 集中触发 EME 相关的方块/物品/方块实体注册。
- * 仅在 EvolvedMekanismExtras 加载时被调用，避免 EME 未加载时触发 EME 类的类加载。
- * <p>
- * 本包下的类可直接 import EME 的类（EMExtraFactoryTier、EMExtraMachine 等），
- * 因为这些类仅在 EME 已加载时才会被加载和执行。
- * <p>
- * 设计说明：提供细粒度方法（{@link #registerCentrifugeBlocks()}、{@link #registerApiaryBlocks()} 等）
- * 而非仅一个 {@link #registerAll()}，是为了保持主类中离心机和蜂箱的初始化顺序依赖
- * （initEMETiers 必须在对应 register 方法之前调用）。
- */
+	 * EvolvedMekanismExtras (EME) 兼容注册统一入口
+	 * <br/>
+	 * 供主注册类（{@link com.ayoshiko.productivebeesgenesis.init.ModBlocks}、
+	 * {@link com.ayoshiko.productivebeesgenesis.init.ModItems}、
+	 * {@link com.ayoshiko.productivebeesgenesis.init.ModBlockEntities}）调用，
+	 * 集中触发 EME 相关的方块/物品/方块实体注册。
+	 * 仅在 EvolvedMekanismExtras 加载时被调用，避免 EME 未加载时触发 EME 类的类加载。
+	 * <p>
+	 * 本包下的类可直接 import EME 的类（EMExtraFactoryTier、EMExtraMachine 等），
+	 * 因为这些类仅在 EME 已加载时才会被加载和执行。
+	 * <p>
+	 * 设计说明：提供细粒度方法（{@link #registerCentrifugeBlocks()}、{@link #registerApiaryBlocks()} 等）
+	 * 而非仅一个 {@link #registerAll()}，是为了保持主类中离心机和蜂箱的初始化顺序依赖
+	 * （initEMETiers 必须在对应 register 方法之前调用）。
+	 */
 public final class EMECompatLoader {
 
 	private EMECompatLoader() {}

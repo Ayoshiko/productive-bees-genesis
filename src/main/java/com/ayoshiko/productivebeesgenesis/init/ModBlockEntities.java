@@ -13,31 +13,30 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
-
 import mekanism.common.capabilities.Capabilities;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.registration.impl.TileEntityTypeDeferredRegister;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tier.FactoryTier;
+import mekanism.common.tile.base.TileEntityMekanism;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 
 /**
- * 方块实体注册类
- * <br/>
- * 使用Mekanism的TileEntityTypeDeferredRegister注册BlockEntityType，
- * 自动配置server/client ticker和Mekanism标准Capability。
- * 每个工厂等级拥有独立的BlockEntityType，避免方块类型不匹配崩溃。
- * <p>
- * EM扩展：当EvolvedMekanism加载时，通过registerEMFactoryTiles()为5个EM等级
- * 动态注册BlockEntityType，填充MekCentrifugeBlockType.ModBlockEntitiesHolder.EM_FACTORY_TILES Map。
- * 该Map被MekCentrifugeBlockType.getFactoryTileEntityType()的懒加载Supplier使用。
- * <p>
- * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂 BlockEntityType 注册，
- * 填充 MekCentrifugeEMEBlockType.EME_FACTORY_TILES 和 MekApiaryEMEBlockType.EME_APIARY_FACTORY_TILES。
- */
+	 * 方块实体注册类
+	 * <br/>
+	 * 使用Mekanism的TileEntityTypeDeferredRegister注册BlockEntityType，
+	 * 自动配置server/client ticker和Mekanism标准Capability。
+	 * 每个工厂等级拥有独立的BlockEntityType，避免方块类型不匹配崩溃。
+	 * <p>
+	 * EM扩展：当EvolvedMekanism加载时，通过registerEMFactoryTiles()为5个EM等级
+	 * 动态注册BlockEntityType，填充MekCentrifugeBlockType.ModBlockEntitiesHolder.EM_FACTORY_TILES Map。
+	 * 该Map被MekCentrifugeBlockType.getFactoryTileEntityType()的懒加载Supplier使用。
+	 * <p>
+	 * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂 BlockEntityType 注册，
+	 * 填充 MekCentrifugeEMEBlockType.EME_FACTORY_TILES 和 MekApiaryEMEBlockType.EME_APIARY_FACTORY_TILES。
+	 */
 public final class ModBlockEntities {
 
 	public static final TileEntityTypeDeferredRegister BLOCK_ENTITIES =

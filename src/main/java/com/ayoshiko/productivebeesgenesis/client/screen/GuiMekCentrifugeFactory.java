@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
 import com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
@@ -30,27 +27,30 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 工厂版MEK离心机Screen
- * <br/>
- * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
- * 每进程：1红色输入槽 + 3蓝色输出槽（主/副1/副2）+ 共享流体槽。
- * <p>
- * 布局参数通过 {@link FactoryLayoutHelper} 动态计算，统一支持原版4等级
- * （BASIC/ADVANCED/ELITE/ULTIMATE）与EvolvedMekanism扩展高等级
- * （OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）。
- * <p>
- * 布局参考：
- * - 原版4等级：mekmm GuiMoreMachineFactory（baseX/baseXMult）+ Mekanism GuiFactory（ULTIMATE imageWidth+=34）
- * - EM高等级：EvolvedMekanism GuiFactoryMixin（imageWidthAddition公式、baseX=9、inventoryLabelX动态居中）
- * - 输入槽 y=13, 主输出 y=57, 副输出1 y=77, 副输出2 y=97
- * - 进度条DOWN类型在输入与主输出之间
- * - 原版4等级：垂直能量条在右侧，流体槽在左侧副输出2行
- * - EM高等级：能量条在左侧（GuiEnergyTab下边框与物品栏最下面一排对齐，GuiVerticalPowerBar上边框与物品栏最上面一排对齐），
- *   流体槽在右侧物品栏右边（间距与红石能量槽一致）
- * <p>
- * dynamicSlots=true自动根据侧面配置渲染红/蓝边框，无需手动添加GuiSlot。
- */
+	 * 工厂版MEK离心机Screen
+	 * <br/>
+	 * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
+	 * 每进程：1红色输入槽 + 3蓝色输出槽（主/副1/副2）+ 共享流体槽。
+	 * <p>
+	 * 布局参数通过 {@link FactoryLayoutHelper} 动态计算，统一支持原版4等级
+	 * （BASIC/ADVANCED/ELITE/ULTIMATE）与EvolvedMekanism扩展高等级
+	 * （OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）。
+	 * <p>
+	 * 布局参考：
+	 * - 原版4等级：mekmm GuiMoreMachineFactory（baseX/baseXMult）+ Mekanism GuiFactory（ULTIMATE imageWidth+=34）
+	 * - EM高等级：EvolvedMekanism GuiFactoryMixin（imageWidthAddition公式、baseX=9、inventoryLabelX动态居中）
+	 * - 输入槽 y=13, 主输出 y=57, 副输出1 y=77, 副输出2 y=97
+	 * - 进度条DOWN类型在输入与主输出之间
+	 * - 原版4等级：垂直能量条在右侧，流体槽在左侧副输出2行
+	 * - EM高等级：能量条在左侧（GuiEnergyTab下边框与物品栏最下面一排对齐，GuiVerticalPowerBar上边框与物品栏最上面一排对齐），
+	 *   流体槽在右侧物品栏右边（间距与红石能量槽一致）
+	 * <p>
+	 * dynamicSlots=true自动根据侧面配置渲染红/蓝边框，无需手动添加GuiSlot。
+	 */
 public class GuiMekCentrifugeFactory extends GuiConfigurableTile<TileEntityFactory<?>, MekanismTileContainer<TileEntityFactory<?>>> {
 
 	/** PB升级TAB — 仅当 tile 为 AbstractMekCentrifugeFactory 时创建 */

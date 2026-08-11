@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -10,17 +9,17 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * 客户端 → 服务端：切换指定方块实体的 per-tile AE2 物品/流体输出开关
- * <br/>
- * 携带 {@link BlockPos} 和输出类型（物品/流体），服务端校验玩家距离（8格）
- * 和方块实体类型后执行切换。切换后通过 SyncableBoolean tracker 自动同步到客户端。
- * <p>
- * 设计原因：GUI 中点击 AE2 输出按钮时发送此包，服务端执行实际的状态切换
- * 并持久化到 NBT，避免客户端直接修改造成的状态不一致。
- *
- * @param pos        方块坐标
- * @param outputType 输出类型（物品/流体）
- */
+	 * 客户端 → 服务端：切换指定方块实体的 per-tile AE2 物品/流体输出开关
+	 * <br/>
+	 * 携带 {@link BlockPos} 和输出类型（物品/流体），服务端校验玩家距离（8格）
+	 * 和方块实体类型后执行切换。切换后通过 SyncableBoolean tracker 自动同步到客户端。
+	 * <p>
+	 * 设计原因：GUI 中点击 AE2 输出按钮时发送此包，服务端执行实际的状态切换
+	 * 并持久化到 NBT，避免客户端直接修改造成的状态不一致。
+	 *
+	 * @param pos        方块坐标
+	 * @param outputType 输出类型（物品/流体）
+	 */
 public record CycleAeOutputPayload(
 		BlockPos pos,
 		OutputType outputType

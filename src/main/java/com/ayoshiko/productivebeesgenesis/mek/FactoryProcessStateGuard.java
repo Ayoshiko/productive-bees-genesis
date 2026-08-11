@@ -1,17 +1,17 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
-import org.jetbrains.annotations.NotNull;
-
 /**
- * 工厂进程激活状态守卫
- * <br/>
- * 管理 PB 进程的 CAS 激活状态转换和计数器，确保并发场景下计数器的正确性。
- * 从 {@link MekCentrifugeFactoryHelper} 拆分，遵循单一职责原则：
- * Helper 聚焦配方处理逻辑，本类专注原子状态转换。
- */
+	 * 工厂进程激活状态守卫
+	 * <br/>
+	 * 管理 PB 进程的 CAS 激活状态转换和计数器，确保并发场景下计数器的正确性。
+	 * 从 {@link MekCentrifugeFactoryHelper} 拆分，遵循单一职责原则：
+	 * Helper 聚焦配方处理逻辑，本类专注原子状态转换。
+	 */
 public final class FactoryProcessStateGuard {
 
 	private FactoryProcessStateGuard() {

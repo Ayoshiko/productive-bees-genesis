@@ -1,14 +1,14 @@
 /**
- * 客户端 Mixin 包
- * <br/>
- * 仅在客户端应用的 Mixin：
- * <ol>
- *   <li>{@code ConfigurableBeeColorMixin} — 蜜蜂颜色配置覆盖</li>
- *   <li>{@code CosmicItemRendererMixin} — 宇宙物品渲染拦截</li>
- *   <li>{@code GuiGraphicsMixin} — GUI 物品数量大数字格式化（K/M/G/T）</li>
- *   <li>{@code IBlockEntityExtensionMixin} — 方块实体模型数据注入</li>
- * </ol>
- */
+	 * 客户端 Mixin 包
+	 * <br/>
+	 * 仅在客户端应用的 Mixin：
+	 * <ol>
+	 *   <li>{@code ConfigurableBeeColorMixin} — 蜜蜂颜色配置覆盖</li>
+	 *   <li>{@code CosmicItemRendererMixin} — 宇宙物品渲染拦截</li>
+	 *   <li>{@code GuiGraphicsMixin} — GUI 物品数量大数字格式化（K/M/G/T）</li>
+	 *   <li>{@code IBlockEntityExtensionMixin} — 方块实体模型数据注入</li>
+	 * </ol>
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

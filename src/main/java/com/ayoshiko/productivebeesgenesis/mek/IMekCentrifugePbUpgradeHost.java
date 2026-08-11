@@ -1,27 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import mekanism.api.Upgrade;
+import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-import mekanism.api.Upgrade;
-import mekanism.common.tile.base.TileEntityMekanism;
-
 /**
- * 离心机 PB 升级处理器宿主接口
- * <br/>
- * 抽象 {@link MekCentrifugePbUpgradeHandler} 所需的最小访问能力，
- * 使基础离心机（{@link TileEntityMekCentrifuge}）与三个工厂版离心机
- * （{@link AbstractMekCentrifugeFactory}、
- * {@link TileEntityExtraMekCentrifugeFactory}、
- * {@link TileEntityEMExtraMekCentrifugeFactory}）
- * 可共用同一个 handler，遵循依赖倒置原则。
- * <p>
- * {@link BlockEntity} 子类自动满足
- * {@link #getLevel()} 和 {@link #setChanged()} 方法签名，只需声明 implements。
- * <p>
- * F3 修复：新增 {@link #getMekSpeedUpgrades()} 默认方法，
- * 通过 cast 到 {@link TileEntityMekanism} 访问升级组件，避免 4 个实现类重复编写相同代码。
- */
+	 * 离心机 PB 升级处理器宿主接口
+	 * <br/>
+	 * 抽象 {@link MekCentrifugePbUpgradeHandler} 所需的最小访问能力，
+	 * 使基础离心机（{@link TileEntityMekCentrifuge}）与三个工厂版离心机
+	 * （{@link AbstractMekCentrifugeFactory}、
+	 * {@link TileEntityExtraMekCentrifugeFactory}、
+	 * {@link TileEntityEMExtraMekCentrifugeFactory}）
+	 * 可共用同一个 handler，遵循依赖倒置原则。
+	 * <p>
+	 * {@link BlockEntity} 子类自动满足
+	 * {@link #getLevel()} 和 {@link #setChanged()} 方法签名，只需声明 implements。
+	 * <p>
+	 * F3 修复：新增 {@link #getMekSpeedUpgrades()} 默认方法，
+	 * 通过 cast 到 {@link TileEntityMekanism} 访问升级组件，避免 4 个实现类重复编写相同代码。
+	 */
 public interface IMekCentrifugePbUpgradeHost {
 
 	/** 获取方块实体所在世界 */

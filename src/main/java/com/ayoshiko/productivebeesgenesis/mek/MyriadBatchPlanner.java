@@ -1,19 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import javax.annotation.Nullable;
-
-import org.jetbrains.annotations.NotNull;
-
 import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
@@ -21,14 +9,24 @@ import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 万象创世产物批量插入规划器：将按 bee_type 分配的数量转换为槽位索引执行计划，
- * 避免传统 insertItem 路径的 copy/组件派生/listener 扫描开销。
- * <p>
- * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存。
- * 线程安全：plan/apply 主线程执行，对象池无需并发安全；Snapshot 缓存用 ThreadLocal 隔离。
- */
+	 * 万象创世产物批量插入规划器：将按 bee_type 分配的数量转换为槽位索引执行计划，
+	 * 避免传统 insertItem 路径的 copy/组件派生/listener 扫描开销。
+	 * <p>
+	 * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存。
+	 * 线程安全：plan/apply 主线程执行，对象池无需并发安全；Snapshot 缓存用 ThreadLocal 隔离。
+	 */
 public final class MyriadBatchPlanner {
 
 	/** 对象池上限：超过则丢弃由 GC 回收 */

@@ -6,23 +6,23 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * TileEntityFactory 访问器：暴露包私有/私有字段供外部包访问
- * <br/>
- * TileEntityFactory中的energySlot是包私有的，activeStates和lastUsage是私有的，
- * 无法从外部包直接访问。通过Accessor Mixin暴露getter/setter。
- *
- * <p>
- * <b>版本敏感性</b>：本 @Accessor 依赖 Mekanism 10.7.19.85+ 的字段名稳定性。
- * 通过 {@code @Accessor} 访问 {@code TileEntityFactory#energySlot}（包私有 EnergyInventorySlot）、
- * {@code TileEntityFactory#activeStates}（private final boolean[]）、
- * {@code TileEntityFactory#lastUsage}（private long）、
- * {@code TileEntityFactory#sortingNeeded}（private boolean）、
- * {@code TileEntityFactory#operationsPerTick}（private int）、
- * {@code TileEntityFactory#ticksRequired}（private int）字段。
- * 如果 Mekanism 重命名上述任一字段，本 Mixin 将无法应用，需同步更新本类对应的 @Accessor target。
- *
- * @since 1.0.0
- */
+	 * TileEntityFactory 访问器：暴露包私有/私有字段供外部包访问
+	 * <br/>
+	 * TileEntityFactory中的energySlot是包私有的，activeStates和lastUsage是私有的，
+	 * 无法从外部包直接访问。通过Accessor Mixin暴露getter/setter。
+	 *
+	 * <p>
+	 * <b>版本敏感性</b>：本 @Accessor 依赖 Mekanism 10.7.19.85+ 的字段名稳定性。
+	 * 通过 {@code @Accessor} 访问 {@code TileEntityFactory#energySlot}（包私有 EnergyInventorySlot）、
+	 * {@code TileEntityFactory#activeStates}（private final boolean[]）、
+	 * {@code TileEntityFactory#lastUsage}（private long）、
+	 * {@code TileEntityFactory#sortingNeeded}（private boolean）、
+	 * {@code TileEntityFactory#operationsPerTick}（private int）、
+	 * {@code TileEntityFactory#ticksRequired}（private int）字段。
+	 * 如果 Mekanism 重命名上述任一字段，本 Mixin 将无法应用，需同步更新本类对应的 @Accessor target。
+	 *
+	 * @since 1.0.0
+	 */
 @Mixin(value = TileEntityFactory.class, remap = false)
 public interface TileEntityFactoryAccessor {
 

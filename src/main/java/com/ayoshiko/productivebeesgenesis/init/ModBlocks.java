@@ -13,7 +13,6 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
-
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.tier.FactoryTier;
@@ -28,18 +27,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 方块注册类
- * <br/>
- * 注册5个MEK离心机方块（1基础+4工厂），使用MekCentrifugeBlock泛型方块。
- * BlockType通过MekCentrifugeBlockType定义，包含Mekanism的Attribute系统。
- * <p>
- * EM扩展：当EvolvedMekanism加载时，通过registerEMFactories()动态注册5个EM等级
- * （OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）的工厂方块，存入EM_FACTORIES Map。
- * EM等级在编译时不存在（通过Mixin运行时扩展枚举），必须通过MekCompatHooks反射获取。
- * <p>
- * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂方块注册，
- * 结果存入 EME_FACTORIES 和 EME_APIARY_FACTORIES（通配类型，避免编译期依赖 EME 类）。
- */
+	 * 方块注册类
+	 * <br/>
+	 * 注册5个MEK离心机方块（1基础+4工厂），使用MekCentrifugeBlock泛型方块。
+	 * BlockType通过MekCentrifugeBlockType定义，包含Mekanism的Attribute系统。
+	 * <p>
+	 * EM扩展：当EvolvedMekanism加载时，通过registerEMFactories()动态注册5个EM等级
+	 * （OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）的工厂方块，存入EM_FACTORIES Map。
+	 * EM等级在编译时不存在（通过Mixin运行时扩展枚举），必须通过MekCompatHooks反射获取。
+	 * <p>
+	 * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂方块注册，
+	 * 结果存入 EME_FACTORIES 和 EME_APIARY_FACTORIES（通配类型，避免编译期依赖 EME 类）。
+	 */
 public final class ModBlocks {
 
 	public static final DeferredRegister.Blocks BLOCKS =

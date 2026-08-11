@@ -1,24 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.EnumMap;
-import java.util.Map;
-
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
-
 import com.google.common.collect.ImmutableMap;
 import com.mojang.math.Transformation;
-
 import net.minecraft.client.renderer.block.model.ItemTransform;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.world.item.ItemDisplayContext;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
- * 模型变换工具类
- * <br/>
- * 将 ItemTransforms / ItemTransform 转换为 PerspectiveModelState / Transformation，
- * 供 WrappedItemModel 与 PerspectiveModel.applyTransform 使用。
- */
+	 * 模型变换工具类
+	 * <br/>
+	 * 将 ItemTransforms / ItemTransform 转换为 PerspectiveModelState / Transformation，
+	 * 供 WrappedItemModel 与 PerspectiveModel.applyTransform 使用。
+	 */
 public final class TransformUtils {
 
 	public static final PerspectiveModelState IDENTITY = PerspectiveModelState.IDENTITY;

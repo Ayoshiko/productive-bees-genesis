@@ -1,22 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.function.Consumer;
-
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.button.MekanismButton;
 import net.minecraft.network.chat.Component;
 
+import java.util.function.Consumer;
+
 /**
- * 离心机电力熔炼炉配方兼容开关按钮 — 注入到 MEK 侧面配置窗口
- * <br/>
- * 14×14 像素按钮，样式与 {@link AeInputButton} 完全一致
- * （{@link GuiElement.ButtonBackground#DEFAULT} 灰色背景、单字符文字、无阴影）。
- * 点击时通过回调发送 {@link com.ayoshiko.productivebeesgenesis.network.ToggleSmeltingCompatPayload}
- * 到服务端切换 per-tile 熔炉配方兼容开关。
- */
+	 * 离心机电力熔炼炉配方兼容开关按钮 — 注入到 MEK 侧面配置窗口
+	 * <br/>
+	 * 14×14 像素按钮，样式与 {@link AeInputButton} 完全一致
+	 * （{@link GuiElement.ButtonBackground#DEFAULT} 灰色背景、单字符文字、无阴影）。
+	 * 点击时通过回调发送 {@link com.ayoshiko.productivebeesgenesis.network.ToggleSmeltingCompatPayload}
+	 * 到服务端切换 per-tile 熔炉配方兼容开关。
+	 */
 public class SmeltingCompatButton extends MekanismButton {
 
 	/** 按钮尺寸（宽=高） */

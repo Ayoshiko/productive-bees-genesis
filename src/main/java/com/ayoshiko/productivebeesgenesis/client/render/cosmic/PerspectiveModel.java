@@ -1,16 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.Collections;
-import java.util.List;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3f;
-
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mojang.math.Transformation;
-
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
@@ -20,13 +12,19 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
- * 自定义物品 BakedModel 顶层接口
- * <br/>
- * 继承 BakedModel，提供 renderItem 与 applyTransform 默认实现；
- * getQuads 返回空列表，isCustomRenderer=true，用于接管 ItemRenderer 默认流程。
- */
+	 * 自定义物品 BakedModel 顶层接口
+	 * <br/>
+	 * 继承 BakedModel，提供 renderItem 与 applyTransform 默认实现；
+	 * getQuads 返回空列表，isCustomRenderer=true，用于接管 ItemRenderer 默认流程。
+	 */
 public interface PerspectiveModel extends BakedModel {
 
 	@Nullable

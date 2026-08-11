@@ -1,14 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import mekanism.api.AutomationType;
 import mekanism.api.functions.ConstantPredicates;
 import mekanism.common.attachments.containers.ContainerType;
@@ -24,34 +20,37 @@ import mekanism.common.config.MekanismConfig;
 import mekanism.common.integration.energy.EnergyCompatUtils;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.tier.FactoryTier;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
-import net.minecraft.core.registries.Registries;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 通用机械蜂箱 ContainerType 默认创建器注册器
- * <br/>
- * Task 2：参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeContainerRegistrar} 实现，
- * 为蜂箱注册 ENERGY/FLUID/ITEM 三种容器创建器，使 Shift tooltip 能显示电量、流体、物品栏信息。
- * <p>
- * 原理：MEK 的 {@link mekanism.common.item.block.ItemBlockTooltip#addDetails} 通过
- * {@link mekanism.common.util.StorageUtils#getStoredFluidFromAttachment} 和
- * {@link mekanism.common.util.StorageUtils#addStoredEnergy} 读取 ItemStack 上的
- * ATTACHED_FLUIDS / ATTACHED_ENERGY DataComponent。
- * 若未注册容器创建器，扳手拆卸后这些组件不存在，tooltip 无法显示存储信息。
- * <p>
- * 注册流程：
- * <ol>
- *   <li>{@link #registerContainers} — RegisterEvent 期间注册容器创建器到 knownDefaultCreators</li>
- *   <li>{@link #modifyDefaultComponents} — ModifyDefaultComponentsEvent 期间添加默认 DataComponents</li>
- * </ol>
- * 扳手拆卸时 {@link mekanism.common.tile.base.TileEntityMekanism#collectImplicitComponents}
- * 自动将 TileEntity 中的容器数据复制到 ItemStack 的 attachment 组件。
- */
+	 * 通用机械蜂箱 ContainerType 默认创建器注册器
+	 * <br/>
+	 * Task 2：参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeContainerRegistrar} 实现，
+	 * 为蜂箱注册 ENERGY/FLUID/ITEM 三种容器创建器，使 Shift tooltip 能显示电量、流体、物品栏信息。
+	 * <p>
+	 * 原理：MEK 的 {@link mekanism.common.item.block.ItemBlockTooltip#addDetails} 通过
+	 * {@link mekanism.common.util.StorageUtils#getStoredFluidFromAttachment} 和
+	 * {@link mekanism.common.util.StorageUtils#addStoredEnergy} 读取 ItemStack 上的
+	 * ATTACHED_FLUIDS / ATTACHED_ENERGY DataComponent。
+	 * 若未注册容器创建器，扳手拆卸后这些组件不存在，tooltip 无法显示存储信息。
+	 * <p>
+	 * 注册流程：
+	 * <ol>
+	 *   <li>{@link #registerContainers} — RegisterEvent 期间注册容器创建器到 knownDefaultCreators</li>
+	 *   <li>{@link #modifyDefaultComponents} — ModifyDefaultComponentsEvent 期间添加默认 DataComponents</li>
+	 * </ol>
+	 * 扳手拆卸时 {@link mekanism.common.tile.base.TileEntityMekanism#collectImplicitComponents}
+	 * 自动将 TileEntity 中的容器数据复制到 ItemStack 的 attachment 组件。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public class MekApiaryContainerRegistrar {
 

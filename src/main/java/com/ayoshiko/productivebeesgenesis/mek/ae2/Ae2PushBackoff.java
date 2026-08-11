@@ -1,25 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 /**
- * Per-tile 指数退避状态管理器（AE2 推送器），基于 {@link System#nanoTime()} 单调时钟。
- * <br/>
- * 每个 tile 独立持有 fluidBackoff 和 itemBackoff 两个实例。
- * 失败时进入短指数退避窗口（50ms→100ms→200ms→400ms→800ms→1s），
- * 窗口内跳过 AE2 存储操作。
- * 成功时重置退避，立即恢复推送。
- * <p>
- * <b>JDTE 兼容</b>：退避基于 {@link System#nanoTime()} 墙钟单调时钟，
- * 而非 level.getGameTime() 或内部 counter（JDTE 256x 加速下 MAX_BACKOFF_TICKS(200) < M(256)，
- * counter 差值退避完全失效）。nanoTime 不受游戏刻加速影响。
- * <p>
- * <b>线程模型</b>：仅限服务端 tick 线程访问，跨线程使用未定义。
- * 假设服务端 tick 线程独占调用（与现有源码注释一致，Ae2FluidPusher.java 第 56 行）。
- * 在此假设下 nanoTime 在同一线程内单调递增（HotSpot 实现：
- * Windows QueryPerformanceCounter / Linux CLOCK_MONOTONIC）。
- * 若未来支持异步推送，需用 AtomicReference&lt;BackoffState&gt; 重构。
- *
- * @since 1.0.0
- */
+	 * Per-tile 指数退避状态管理器（AE2 推送器），基于 {@link System#nanoTime()} 单调时钟。
+	 * <br/>
+	 * 每个 tile 独立持有 fluidBackoff 和 itemBackoff 两个实例。
+	 * 失败时进入短指数退避窗口（50ms→100ms→200ms→400ms→800ms→1s），
+	 * 窗口内跳过 AE2 存储操作。
+	 * 成功时重置退避，立即恢复推送。
+	 * <p>
+	 * <b>JDTE 兼容</b>：退避基于 {@link System#nanoTime()} 墙钟单调时钟，
+	 * 而非 level.getGameTime() 或内部 counter（JDTE 256x 加速下 MAX_BACKOFF_TICKS(200) < M(256)，
+	 * counter 差值退避完全失效）。nanoTime 不受游戏刻加速影响。
+	 * <p>
+	 * <b>线程模型</b>：仅限服务端 tick 线程访问，跨线程使用未定义。
+	 * 假设服务端 tick 线程独占调用（与现有源码注释一致，Ae2FluidPusher.java 第 56 行）。
+	 * 在此假设下 nanoTime 在同一线程内单调递增（HotSpot 实现：
+	 * Windows QueryPerformanceCounter / Linux CLOCK_MONOTONIC）。
+	 * 若未来支持异步推送，需用 AtomicReference&lt;BackoffState&gt; 重构。
+	 *
+	 * @since 1.0.0
+	 */
 public final class Ae2PushBackoff {
 
 	/** 初始退避纳秒（默认 50 毫秒） */

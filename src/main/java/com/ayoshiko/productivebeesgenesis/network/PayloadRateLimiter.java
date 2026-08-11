@@ -1,32 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
+import net.minecraft.server.level.ServerPlayer;
+
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import net.minecraft.server.level.ServerPlayer;
-
 /**
- * 网络包频次限制器 — 防止恶意客户端高频触发服务端广播
- * <br/>
- * 针对 {@link Ae2PayloadHandlers} 中触发 {@code syncFilterToClients} 广播的 payload，
- * 按 per-player per-payload-type 维度限制最小调用间隔。
- * <br/>
- * <b>设计原因</b>：恶意客户端可高频发送触发服务端全量广播的 payload，
- * 导致流量放大攻击（一个客户端请求 → 服务端向所有在线玩家广播）。
- * 500ms 间隔足以满足正常 GUI 交互响应，同时阻止恶意高频请求。
- * <p>
- * <b>数据结构</b>：使用 {@link ConcurrentHashMap} 嵌套结构，外层 key 为玩家 UUID，
- * 内层 key 为限制器标识。per-key 结构使不同 payload 类型独立限流，
- * 允许玩家在 500ms 内连续执行不同类型的 GUI 操作（如先添加条目再切换模式）。
- * <p>
- * <b>线程安全</b>：服务端网络包处理在主线程执行，{@link ConcurrentHashMap} 作为
- * 可见性与并发安全冗余，与 {@link com.ayoshiko.productivebeesgenesis.util.LogThrottle} 的设计风格一致。
- * <p>
- * <b>内存管理</b>：服务器停止时通过 {@link #clearAll()} 清理整个映射，
- * 防止跨存档数据残留。
- *
- * @since 1.0.0
- */
+	 * 网络包频次限制器 — 防止恶意客户端高频触发服务端广播
+	 * <br/>
+	 * 针对 {@link Ae2PayloadHandlers} 中触发 {@code syncFilterToClients} 广播的 payload，
+	 * 按 per-player per-payload-type 维度限制最小调用间隔。
+	 * <br/>
+	 * <b>设计原因</b>：恶意客户端可高频发送触发服务端全量广播的 payload，
+	 * 导致流量放大攻击（一个客户端请求 → 服务端向所有在线玩家广播）。
+	 * 500ms 间隔足以满足正常 GUI 交互响应，同时阻止恶意高频请求。
+	 * <p>
+	 * <b>数据结构</b>：使用 {@link ConcurrentHashMap} 嵌套结构，外层 key 为玩家 UUID，
+	 * 内层 key 为限制器标识。per-key 结构使不同 payload 类型独立限流，
+	 * 允许玩家在 500ms 内连续执行不同类型的 GUI 操作（如先添加条目再切换模式）。
+	 * <p>
+	 * <b>线程安全</b>：服务端网络包处理在主线程执行，{@link ConcurrentHashMap} 作为
+	 * 可见性与并发安全冗余，与 {@link com.ayoshiko.productivebeesgenesis.util.LogThrottle} 的设计风格一致。
+	 * <p>
+	 * <b>内存管理</b>：服务器停止时通过 {@link #clearAll()} 清理整个映射，
+	 * 防止跨存档数据残留。
+	 *
+	 * @since 1.0.0
+	 */
 public final class PayloadRateLimiter {
 
 	/**

@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import mekanism.common.block.attribute.AttributeUpgradeable;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 
-import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
-import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
-
 /**
- * MEK通用机械蜂箱BlockType定义
- * <br/>
- * 参考MekCentrifugeBlockType模式，使用Machine.MachineBuilder构建基础机器BlockType。
- * 通过createMachine()自动添加以下Attribute（由Mekanism内部完成）：
- * <ul>
- *   <li>AttributeElectricMachine — 标识电力机器（自动）</li>
- *   <li>Attributes.ACTIVE_LIGHT — 活跃状态指示灯（自动）</li>
- *   <li>AttributeUpgradeSupport.DEFAULT_MACHINE_UPGRADES — 支持速度+能量+消音升级（自动，随后被替换）</li>
- *   <li>AttributeGui — GUI关联（通过withGui添加）</li>
- * </ul>
- * <p>
- * 升级支持：通过{@link MekUpgradeSupport#forMachine()}替换默认的AttributeUpgradeSupport，
- * MEKExtras加载时额外支持STACK/CREATIVE升级。
- * <p>
- * 设计原则：单一职责，本类仅负责BlockType定义，方块/方块实体/物品注册由init包负责。
- * TileEntityType引用通过lazy supplier延迟解析，避免循环类加载依赖。
- */
+	 * MEK通用机械蜂箱BlockType定义
+	 * <br/>
+	 * 参考MekCentrifugeBlockType模式，使用Machine.MachineBuilder构建基础机器BlockType。
+	 * 通过createMachine()自动添加以下Attribute（由Mekanism内部完成）：
+	 * <ul>
+	 *   <li>AttributeElectricMachine — 标识电力机器（自动）</li>
+	 *   <li>Attributes.ACTIVE_LIGHT — 活跃状态指示灯（自动）</li>
+	 *   <li>AttributeUpgradeSupport.DEFAULT_MACHINE_UPGRADES — 支持速度+能量+消音升级（自动，随后被替换）</li>
+	 *   <li>AttributeGui — GUI关联（通过withGui添加）</li>
+	 * </ul>
+	 * <p>
+	 * 升级支持：通过{@link MekUpgradeSupport#forMachine()}替换默认的AttributeUpgradeSupport，
+	 * MEKExtras加载时额外支持STACK/CREATIVE升级。
+	 * <p>
+	 * 设计原则：单一职责，本类仅负责BlockType定义，方块/方块实体/物品注册由init包负责。
+	 * TileEntityType引用通过lazy supplier延迟解析，避免循环类加载依赖。
+	 */
 public final class MekApiaryBlockType {
 
 	/**
@@ -41,7 +41,8 @@ public final class MekApiaryBlockType {
 	 */
 	public static final BlockTypeTile<TileEntityMekApiary> MEK_APIARY = Machine.MachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_APIARY, descriptionLang("mek_apiary"))
-			.withEnergyConfig(() -> 50L, () -> 20_000L)
+			// 基础蜂箱能耗由服务器配置提供；工厂版在 MekApiaryFactoryBlockType 中使用各等级固定基础值。
+			.withEnergyConfig(() -> ModConfig.SERVER.apiaryEnergyPerTick.get(), () -> 20_000L)
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(mekanism.common.block.attribute.Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_APIARY)

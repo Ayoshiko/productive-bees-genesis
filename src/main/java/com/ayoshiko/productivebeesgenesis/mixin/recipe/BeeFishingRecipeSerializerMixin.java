@@ -11,13 +11,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 修复 BeeFishingRecipe 序列化崩溃
- * <p>
- * 原理：BeeFishingRecipe.Serializer.toNetwork 无 null 检查，当 output.get() 返回 null 时 NPE。
- * 此 Mixin 在 toNetwork 头部拦截，用 minecraft:bee 作为 fallback 安全序列化，保留原 biomes 和 chance。
- * <p>
- * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
- */
+	 * 修复 BeeFishingRecipe 序列化崩溃
+	 * <p>
+	 * 原理：BeeFishingRecipe.Serializer.toNetwork 无 null 检查，当 output.get() 返回 null 时 NPE。
+	 * 此 Mixin 在 toNetwork 头部拦截，用 minecraft:bee 作为 fallback 安全序列化，保留原 biomes 和 chance。
+	 * <p>
+	 * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
+	 */
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe$Serializer")
 public abstract class BeeFishingRecipeSerializerMixin {
 

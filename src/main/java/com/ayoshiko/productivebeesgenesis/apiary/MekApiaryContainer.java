@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
@@ -10,24 +7,27 @@ import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * MEK 通用机械蜂箱 Container
- * <br/>
- * 继承 MekanismTileContainer，槽位由基类自动从方块实体提取（dynamicSlots=true 由 Screen 设置）。
- * <p>
- * 基类自动处理：
- * <ul>
- *   <li>升级槽、能量槽、蜂笼 I/O 槽、输出槽的 ContainerSlot 创建</li>
- *   <li>侧面配置同步、红石控制同步</li>
- *   <li>快速移动（shift-click）逻辑</li>
- * </ul>
- * <p>
- * 本类：
- * <ul>
- *   <li>重写 addSlots() 添加喂食器虚拟槽位（VirtualInventoryContainerSlot）</li>
- *   <li>重写玩家物品栏偏移，使物品栏定位在输出区下方</li>
- * </ul>
- */
+	 * MEK 通用机械蜂箱 Container
+	 * <br/>
+	 * 继承 MekanismTileContainer，槽位由基类自动从方块实体提取（dynamicSlots=true 由 Screen 设置）。
+	 * <p>
+	 * 基类自动处理：
+	 * <ul>
+	 *   <li>升级槽、能量槽、蜂笼 I/O 槽、输出槽的 ContainerSlot 创建</li>
+	 *   <li>侧面配置同步、红石控制同步</li>
+	 *   <li>快速移动（shift-click）逻辑</li>
+	 * </ul>
+	 * <p>
+	 * 本类：
+	 * <ul>
+	 *   <li>重写 addSlots() 添加喂食器虚拟槽位（VirtualInventoryContainerSlot）</li>
+	 *   <li>重写玩家物品栏偏移，使物品栏定位在输出区下方</li>
+	 * </ul>
+	 */
 public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiary> implements IFeederSlotContainer, IPbUpgradeSlotContainer {
 
 	/** 初始版蜜蜂列数 */

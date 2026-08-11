@@ -1,30 +1,30 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * PB 配方能量缓存与 ticks 计算器
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责
- * {@code getTicksForBase(baseTime)} 结果的时间窗口缓存和 PB 配方处理时间计算，
- * 不涉及配方查找、输出聚合或能量扣除等逻辑。
- * <p>
- * <b>缓存策略</b>：使用 20 tick（1 秒）时间窗口缓存，替代旧版"每 tick clear+重建"模式，
- * 避免 MU 256× 加速下每 tick 重新分配 HashMap 桶数组。升级变更后最多 20 tick 内自动反映新值
- * （与 {@link MyriadCreationsHandler#TICKS_CACHE_INTERVAL} 一致）。
- * <p>
- * <b>线程安全</b>：缓存底层使用 {@link ConcurrentHashMap}，过期判断与失效时间戳使用
- * {@code volatile} 字段保证跨线程可见性。"get-or-compute" 通过
- * {@link ConcurrentHashMap#computeIfAbsent} 原子完成，避免两个线程同时 miss 同一 key
- * 导致的重复计算。方块实体在服务端单线程执行，tags reload 或 JEI 异步查询等并发场景下
- * 最坏情况仅为重复计算一次（无更新丢失风险）。
- * 取消 synchronized 关键字以消除 monitorenter/exit 在高频调用路径上的开销。
- *
- * @since 1.7.0
- * @see PbRecipeProcessor
- */
+	 * PB 配方能量缓存与 ticks 计算器
+	 * <br/>
+	 * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责
+	 * {@code getTicksForBase(baseTime)} 结果的时间窗口缓存和 PB 配方处理时间计算，
+	 * 不涉及配方查找、输出聚合或能量扣除等逻辑。
+	 * <p>
+	 * <b>缓存策略</b>：使用 20 tick（1 秒）时间窗口缓存，替代旧版"每 tick clear+重建"模式，
+	 * 避免 MU 256× 加速下每 tick 重新分配 HashMap 桶数组。升级变更后最多 20 tick 内自动反映新值
+	 * （与 {@link MyriadCreationsHandler#TICKS_CACHE_INTERVAL} 一致）。
+	 * <p>
+	 * <b>线程安全</b>：缓存底层使用 {@link ConcurrentHashMap}，过期判断与失效时间戳使用
+	 * {@code volatile} 字段保证跨线程可见性。"get-or-compute" 通过
+	 * {@link ConcurrentHashMap#computeIfAbsent} 原子完成，避免两个线程同时 miss 同一 key
+	 * 导致的重复计算。方块实体在服务端单线程执行，tags reload 或 JEI 异步查询等并发场景下
+	 * 最坏情况仅为重复计算一次（无更新丢失风险）。
+	 * 取消 synchronized 关键字以消除 monitorenter/exit 在高频调用路径上的开销。
+	 *
+	 * @since 1.5.3
+	 * @see PbRecipeProcessor
+	 */
 public class PbRecipeEnergyCache {
 
 	/** ticksForBaseCache 失效时间窗口（毫秒） — 使用 wall clock 避免 JDTE 加速下 getGameTime 不变导致缓存失效 */

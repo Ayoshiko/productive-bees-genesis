@@ -1,8 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableBoolean;
 import mekanism.common.inventory.container.sync.SyncableByteArray;
@@ -15,24 +13,25 @@ import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 
 /**
- * 蜜蜂槽序列化器
- * <br/>
- * 从 {@link ApiarySlotManager} 拆分，负责蜜蜂槽数组的 NBT 持久化与客户端网络同步：
- * <ul>
- *   <li>{@link #saveBeeSlots} / {@link #loadBeeSlots} — 存档序列化/反序列化</li>
- *   <li>{@link #addContainerTrackers} — 容器追踪器同步蜜蜂状态到客户端</li>
- *   <li>{@link #serializeBeeData} / {@link #deserializeBeeData} — beeData 字节数组编解码（网络同步用）</li>
- * </ul>
- * <p>
- * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问蜜蜂槽数组。
- * 无自有可变状态，NBT key 为静态常量。
- * <p>
- * 线程安全：序列化在服务端主线程执行；网络同步的 dirty 检查基于数组 hashCode，
- * SyncableByteArray 内部保证同步线程安全。
- */
+	 * 蜜蜂槽序列化器
+	 * <br/>
+	 * 从 {@link ApiarySlotManager} 拆分，负责蜜蜂槽数组的 NBT 持久化与客户端网络同步：
+	 * <ul>
+	 *   <li>{@link #saveBeeSlots} / {@link #loadBeeSlots} — 存档序列化/反序列化</li>
+	 *   <li>{@link #addContainerTrackers} — 容器追踪器同步蜜蜂状态到客户端</li>
+	 *   <li>{@link #serializeBeeData} / {@link #deserializeBeeData} — beeData 字节数组编解码（网络同步用）</li>
+	 * </ul>
+	 * <p>
+	 * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问蜜蜂槽数组。
+	 * 无自有可变状态，NBT key 为静态常量。
+	 * <p>
+	 * 线程安全：序列化在服务端主线程执行；网络同步的 dirty 检查基于数组 hashCode，
+	 * SyncableByteArray 内部保证同步线程安全。
+	 */
 class ApiarySlotSerializer {
 
 	/** NBT key — 蜜蜂槽数组（带模组前缀避免冲突） */

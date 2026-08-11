@@ -1,12 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
+import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
+import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.Upgrade;
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -40,31 +49,17 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
-
-import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
-import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
+import java.util.List;
 
 /**
- * 基础MEK离心机方块实体 — 继承TileEntityElectricMachine，复用能量/侧面配置/升级/GUI体系。
- * 扩展PB离心配方查找：先查PB CentrifugeRecipe，未找到则回退到Mekanism SMELTING。额外添加2个副输出槽+FluidTank。
- * 职责拆分：{@link MekCentrifugeSlotManager}（槽位）、{@link MekCentrifugeSaveHandler}（NBT/同步/配置卡/升级数据）、
- * {@link MekCentrifugeTickHandler}（tick/PB配方）、{@link MekCentrifugeAe2Handler}（AE2）、
- * {@link MekCentrifugePbUpgradeHandler}（PB升级）、{@link PbRecipeProcessor}（PB配方）、
- * {@link MekUpgradeSupport}（升级查询）、{@link MekCentrifugeUpgradeOps}（STACK/CREATIVE 升级运算）。
- * 单进程（processes()=1），active 由 onUpdateServer 管理，setPbActiveState 为 no-op。
- */
+	 * 基础MEK离心机方块实体 — 继承TileEntityElectricMachine，复用能量/侧面配置/升级/GUI体系。
+	 * 扩展PB离心配方查找：先查PB CentrifugeRecipe，未找到则回退到Mekanism SMELTING。额外添加2个副输出槽+FluidTank。
+	 * 职责拆分：{@link MekCentrifugeSlotManager}（槽位）、{@link MekCentrifugeSaveHandler}（NBT/同步/配置卡/升级数据）、
+	 * {@link MekCentrifugeTickHandler}（tick/PB配方）、{@link MekCentrifugeAe2Handler}（AE2）、
+	 * {@link MekCentrifugePbUpgradeHandler}（PB升级）、{@link PbRecipeProcessor}（PB配方）、
+	 * {@link MekUpgradeSupport}（升级查询）、{@link MekCentrifugeUpgradeOps}（STACK/CREATIVE 升级运算）。
+	 * 单进程（processes()=1），active 由 onUpdateServer 管理，setPbActiveState 为 no-op。
+	 */
 public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		implements IAe2InputHost, IAe2OutputHostBase, IMekCentrifugeTile, IPbUpgradeProvider, IUpgradeableBlockEntity,
 		IMekCentrifugePbUpgradeHost, com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
@@ -234,7 +229,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 
 	@Override
 	public int getTicksRequired() {
-		return MekCentrifugeUpgradeOps.hasCreativeZeroTicks(this) ? 0 : super.getTicksRequired();
+		return MekUpgradeSupport.hasCreativeUpgrade(this) ? 0 : super.getTicksRequired();
 	}
 
 	@Override
@@ -411,56 +406,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		saveHandler.loadAdditional(nbt, provider);
 	}
 
-	/**
-	 * 保存全部数据后清空所有槽位 — 防止 setRemoved 触发 Ejector 重复 popResource
-	 * <br/>
-	 * 模块 3 Bug 1：镐子破坏离心机时，{@code getDrops} 已将所有数据保存到掉落物的
-	 * BLOCK_ENTITY_DATA 组件后调用本方法，清空所有槽位，使 {@code setRemoved} 触发的
-	 * Ejector 组件检查到槽位为空，不执行 {@code popResource}，避免物品复制 bug。
-	 * <p>
-	 * 模块 3 Bug 2：工厂安装器升级时，{@code getUpgradeData} 已通过深拷贝保存槽位内容到
-	 * {@link CentrifugeUpgradeData} 后调用本方法，清空旧方块槽位，防止 Ejector 重复弹出。
-	 * <p>
-	 * 清空范围：主输出槽、副输出槽1、副输出槽2、输入槽、能量槽、流体罐、PB 升级输入/输出槽。
-	 * 性能：直接清空槽位，不需要先序列化（数据已通过 saveCustomDataForItem 或深拷贝保存）。
-	 */
+	/** 保存全部数据后清空所有槽位 — 委托 {@link MekCentrifugeSaveHandler#saveAllItemsForDrop} */
 	public void saveAllItemsForDrop() {
-		// 异常隔离：每组清空操作独立 try-catch，防止单点异常导致后续槽位未清空（Ejector 仍 popResource）
-		try {
-			// 主输出槽 + 副输出槽1 + 副输出槽2
-			accessor().productivebeesgenesis$getOutputSlot().setStack(ItemStack.EMPTY);
-			slotManager.getSecondaryOutputSlot().setStack(ItemStack.EMPTY);
-			slotManager.getTertiaryOutputSlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			DevLog.error("离心机 saveAllItemsForDrop: 清空输出槽失败", e);
-		}
-		try {
-			// 输入槽（蜜脾槽）
-			accessor().productivebeesgenesis$getInputSlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			DevLog.error("离心机 saveAllItemsForDrop: 清空输入槽失败", e);
-		}
-		try {
-			// 能量槽
-			accessor().productivebeesgenesis$getEnergySlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			DevLog.error("离心机 saveAllItemsForDrop: 清空能量槽失败", e);
-		}
-		try {
-			// 流体罐（extract 清空所有流体，使用 MEK 3 参数版本与 insert 对称）
-			// IExtendedFluidTank.drain 只有 2 参数版本，extract 提供 Action + AutomationType 3 参数版本
-			slotManager.getFluidOutputTank().extract(Integer.MAX_VALUE, Action.EXECUTE, AutomationType.INTERNAL);
-		} catch (RuntimeException e) {
-			DevLog.error("离心机 saveAllItemsForDrop: 清空流体罐失败", e);
-		}
-		try {
-			// PB 升级输入/输出槽
-			pbUpgradeHandler.getInputSlot().setStack(ItemStack.EMPTY);
-			pbUpgradeHandler.getOutputSlot().setStack(ItemStack.EMPTY);
-		} catch (RuntimeException e) {
-			DevLog.error("离心机 saveAllItemsForDrop: 清空 PB 升级槽失败", e);
-		}
-		setChanged();
+		saveHandler.saveAllItemsForDrop();
 	}
 	/** 写入配置卡数据 — 添加PB升级数量和AE2 per-tile状态 */
 	@Override

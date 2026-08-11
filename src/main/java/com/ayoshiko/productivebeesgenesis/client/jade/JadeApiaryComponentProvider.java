@@ -1,43 +1,41 @@
 package com.ayoshiko.productivebeesgenesis.client.jade;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
-
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
-import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-
 /**
- * Jade 通用机械蜂箱状态显示组件
- * <br/>
- * 显示蜂箱运行关键信息：
- * <ul>
- *   <li>蜜蜂：活跃蜜蜂数 / 总蜜蜂槽位</li>
- *   <li>状态：各状态蜜蜂数量汇总（工作中 / 等待能量 / 等待花朵 / 等待输出）</li>
- *   <li>进度：所有非空蜜蜂槽的平均生产进度百分比</li>
- * </ul>
- * <p>
- * <b>注意</b>：能量（FE）信息由 Mekanism 父类 {@code TileEntityElectricMachine} 的 Jade 插件
- * 自动提供，此处不重复显示。
- * <p>
- * <b>数据同步</b>：服务端 {@link #appendServerData} 将汇总数据写入 NBT，
- * 客户端 {@link #appendTooltip} 读取并渲染。仅传递数量与状态汇总，
- * 不传递蜜蜂 NBT 数据，避免泄露未加载蜜蜂的类型/名称等信息。
- * <p>
- * <b>显示条件</b>：仅当方块实体为 {@link TileEntityMekApiary} 时显示。
- * 复用 {@link JadeAe2StatusProvider} 的服务端/客户端双端单例模式。
- */
+	 * Jade 通用机械蜂箱状态显示组件
+	 * <br/>
+	 * 显示蜂箱运行关键信息：
+	 * <ul>
+	 *   <li>蜜蜂：活跃蜜蜂数 / 总蜜蜂槽位</li>
+	 *   <li>状态：各状态蜜蜂数量汇总（工作中 / 等待能量 / 等待花朵 / 等待输出）</li>
+	 *   <li>进度：所有非空蜜蜂槽的平均生产进度百分比</li>
+	 * </ul>
+	 * <p>
+	 * <b>注意</b>：能量（FE）信息由 Mekanism 父类 {@code TileEntityElectricMachine} 的 Jade 插件
+	 * 自动提供，此处不重复显示。
+	 * <p>
+	 * <b>数据同步</b>：服务端 {@link #appendServerData} 将汇总数据写入 NBT，
+	 * 客户端 {@link #appendTooltip} 读取并渲染。仅传递数量与状态汇总，
+	 * 不传递蜜蜂 NBT 数据，避免泄露未加载蜜蜂的类型/名称等信息。
+	 * <p>
+	 * <b>显示条件</b>：仅当方块实体为 {@link TileEntityMekApiary} 时显示。
+	 * 复用 {@link JadeAe2StatusProvider} 的服务端/客户端双端单例模式。
+	 */
 public final class JadeApiaryComponentProvider
 		implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
 

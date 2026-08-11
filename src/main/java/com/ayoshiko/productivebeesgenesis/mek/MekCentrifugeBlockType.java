@@ -1,10 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.compat.emextras.MekCentrifugeEMEBlockType;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeMEBlockType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeSideConfig;
 import mekanism.common.block.attribute.AttributeTier;
@@ -23,36 +24,34 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.compat.emextras.MekCentrifugeEMEBlockType;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeMEBlockType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
- * MEK离心机BlockType定义
- * <br/>
- * 使用静态初始化，所有BlockType在类加载时创建。
- * TileEntityType引用通过lazy supplier延迟解析，避免循环类加载依赖。
- * <p>
- * 关键设计：工厂版使用without(AttributeUpgradeable.class)移除FactoryMachine构造器
- * 添加的原版AttributeUpgradeable（指向Mekanism原版电力熔炼炉），然后添加自定义的
- * AttributeUpgradeable（非匿名子类，确保getClass()返回AttributeUpgradeable.class），
- * 使ItemTierInstaller能通过Attribute.get(block, AttributeUpgradeable.class)找到正确的升级属性。
- * <p>
- * 升级链优先级：EM优先于ME。AttributeUpgradeable供EM/Mekanism installer使用，
- * 必须指向EM链（OVERCLOCKED）；ME链通过initMETiers()添加的ExtraAttributeUpgradeable实现
- * （ME installer使用ExtraAttributeUpgradeable）。两者共存，互不干扰。
- * <p>
- * EM扩展：当EvolvedMekanism加载时，通过initEMTiers()为5个EM等级（OVERCLOCKED/QUANTUM/
- * DENSE/MULTIVERSAL/CREATIVE）动态创建BlockType，存入EM_FACTORY_TYPES。
- * EM等级的FactoryTier在编译时不存在（EM通过Mixin在运行时扩展枚举），必须反射获取。
- * <p>
- * ME/EME扩展：ME和EME为可选依赖，相关代码已拆分到独立的MekCentrifugeMEBlockType和
- * MekCentrifugeEMEBlockType类中，避免未安装时触发NoClassDefFoundError。本类仅保留
- * initMETiers()/initEMETiers()包装方法，先检测模组加载状态再委托给独立类。
- */
+	 * MEK离心机BlockType定义
+	 * <br/>
+	 * 使用静态初始化，所有BlockType在类加载时创建。
+	 * TileEntityType引用通过lazy supplier延迟解析，避免循环类加载依赖。
+	 * <p>
+	 * 关键设计：工厂版使用without(AttributeUpgradeable.class)移除FactoryMachine构造器
+	 * 添加的原版AttributeUpgradeable（指向Mekanism原版电力熔炼炉），然后添加自定义的
+	 * AttributeUpgradeable（非匿名子类，确保getClass()返回AttributeUpgradeable.class），
+	 * 使ItemTierInstaller能通过Attribute.get(block, AttributeUpgradeable.class)找到正确的升级属性。
+	 * <p>
+	 * 升级链优先级：EM优先于ME。AttributeUpgradeable供EM/Mekanism installer使用，
+	 * 必须指向EM链（OVERCLOCKED）；ME链通过initMETiers()添加的ExtraAttributeUpgradeable实现
+	 * （ME installer使用ExtraAttributeUpgradeable）。两者共存，互不干扰。
+	 * <p>
+	 * EM扩展：当EvolvedMekanism加载时，通过initEMTiers()为5个EM等级（OVERCLOCKED/QUANTUM/
+	 * DENSE/MULTIVERSAL/CREATIVE）动态创建BlockType，存入EM_FACTORY_TYPES。
+	 * EM等级的FactoryTier在编译时不存在（EM通过Mixin在运行时扩展枚举），必须反射获取。
+	 * <p>
+	 * ME/EME扩展：ME和EME为可选依赖，相关代码已拆分到独立的MekCentrifugeMEBlockType和
+	 * MekCentrifugeEMEBlockType类中，避免未安装时触发NoClassDefFoundError。本类仅保留
+	 * initMETiers()/initEMETiers()包装方法，先检测模组加载状态再委托给独立类。
+	 */
 public final class MekCentrifugeBlockType {
 
 	/** 基础MEK离心机BlockType — 不设置AttributeTier，使Basic Tier Installer能正确升级（fromTier=null匹配） */

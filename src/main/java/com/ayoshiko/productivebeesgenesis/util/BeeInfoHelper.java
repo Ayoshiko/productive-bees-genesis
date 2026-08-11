@@ -1,17 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
@@ -30,16 +19,26 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * 蜜蜂信息查询工具类
- * <br/>
- * 封装对 ProductiveBees 注册表和配方的访问：获取蜜蜂类型、显示名称、产物信息。
- * <p>
- * 设计原则：单一职责（SRP），仅负责蜜蜂信息查询，不涉及配置读写。
- * <br/>
- * 线程安全：所有查询方法均为只读操作，BeeReloadListener 内部使用 Map 替换保证读安全。
- * 配方索引使用 volatile 不可变快照，重载时整体原子替换。
- */
+	 * 蜜蜂信息查询工具类
+	 * <br/>
+	 * 封装对 ProductiveBees 注册表和配方的访问：获取蜜蜂类型、显示名称、产物信息。
+	 * <p>
+	 * 设计原则：单一职责（SRP），仅负责蜜蜂信息查询，不涉及配置读写。
+	 * <br/>
+	 * 线程安全：所有查询方法均为只读操作，BeeReloadListener 内部使用 Map 替换保证读安全。
+	 * 配方索引使用 volatile 不可变快照，重载时整体原子替换。
+	 */
 public final class BeeInfoHelper {
 
 	/**
@@ -50,19 +49,6 @@ public final class BeeInfoHelper {
 	 * 缓存值为不可变列表，发布后安全共享。
 	 */
 	private static volatile List<ResourceLocation> cachedAllBeeTypes = null;
-
-	/**
-	 * 不可变快照：封装 AdvancedBeehiveRecipe 索引
-	 * <p>
-	 * 通过单一 volatile 引用原子替换，保证读线程看到一致状态。
-	 * 替代旧版 getBeeProduce 中的 O(N) 全量遍历，将 GUI 打开时 N 个蜜蜂的产物查询
-	 * 从 O(N²) 降为 O(N)。
-	 */
-	private record AdvancedBeehiveRecipeIndex(
-			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> byBeeType) {
-		static final AdvancedBeehiveRecipeIndex EMPTY =
-				new AdvancedBeehiveRecipeIndex(Map.of());
-	}
 
 	/**
 	 * 蜜蜂花朵偏好数据（Task E-1）
@@ -100,23 +86,6 @@ public final class BeeInfoHelper {
 					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty();
 		}
 	}
-
-	/** 当前配方索引 — volatile 引用保证原子替换 */
-	private static volatile AdvancedBeehiveRecipeIndex beehiveRecipeIndex =
-			AdvancedBeehiveRecipeIndex.EMPTY;
-
-	/**
-	 * 配方输出表缓存 — 缓存 AdvancedBeehiveRecipe.getRecipeOutputs() 结果
-	 * <br/>
-	 * PB 的 getRecipeOutputs() 每次新建 LinkedHashMap，缓存避免重复创建。
-	 * Key: 蜜蜂类型键 ResourceLocation；Value: 不可变的 ItemStack -> ChancedOutput 映射
-	 * <p>
-	 * 模块 2+3：getBeeProduce 返回原始配方数据（不执行概率检查），概率判定统一由
-	 * {@link com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler} 处理。
-	 * 缓存值为 {@link Collections#unmodifiableMap} 包装，防止外部修改污染静态共享缓存。
-	 */
-	private static final Map<ResourceLocation, Map<ItemStack, ChancedOutput>> recipeOutputsCache =
-			new ConcurrentHashMap<>();
 
 	/**
 	 * 花朵偏好缓存 — 高频调用（每tick每只蜜蜂）性能优化
@@ -184,9 +153,8 @@ public final class BeeInfoHelper {
 	 */
 	public static void invalidateCache() {
 		cachedAllBeeTypes = null;
-		beehiveRecipeIndex = AdvancedBeehiveRecipeIndex.EMPTY;
-		// 模块 2+3：清空配方输出表缓存，防止配方重载后返回过期 LinkedHashMap
-		recipeOutputsCache.clear();
+		// 模块 2+3：清空配方索引与输出表缓存，防止配方重载后返回过期数据
+		BeeProduceQueries.invalidate();
 		// 用 synchronized 保护 invalidate 与 getFlowerPreference 的 write-on-copy 互斥，
 		// 避免新条目被 replace 覆盖造成 cache 写入丢失
 		synchronized (BeeInfoHelper.class) {
@@ -261,109 +229,19 @@ public final class BeeInfoHelper {
 	}
 
 	/**
-	 * 查询指定蜜蜂类型的产物配方输出表
-	 * <p>
-	 * 优先通过静态索引 O(1) 查找配方；索引未建立时回退到全量遍历并构建索引。
-	 * <p>
-	 * 模块 2+3：返回 {@code Map<ItemStack, ChancedOutput>} 原始配方数据，不执行概率检查。
-	 * 原 {@code chancedOutput.max()} 硬编码忽略 chance 字段导致概率产物变必产物，
-	 * 现概率判定统一由 {@link com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler} 处理。
-	 * <p>
-	 * 性能优化：缓存 {@code getRecipeOutputs()} 结果避免每次新建 LinkedHashMap，
-	 * 缓存值为不可变视图防止外部修改污染。
-	 *
-	 * @param level   客户端世界（用于配方查询）
-	 * @param beeType 蜜蜂类型ID
-	 * @return 配方输出表（ItemStack -> ChancedOutput），可能为空
+	 * 查询指定蜜蜂类型的产物配方输出表 — 委托 {@link BeeProduceQueries#getBeeProduce}
 	 */
 	@Nonnull
 	public static Map<ItemStack, ChancedOutput> getBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
-		try {
-			// 1. 优先查配方输出表缓存（避免 getRecipeOutputs() 每次新建 LinkedHashMap）
-			Map<ItemStack, ChancedOutput> cached = recipeOutputsCache.get(beeType);
-			if (cached != null) return cached;
-
-			String beeTypeKey = beeType.toString();
-			// 2. 优先走索引（O(1)）
-			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
-			if (matched == null) {
-				// 3. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
-				if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) {
-					rebuildBeehiveRecipeIndex(level);
-					matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
-				}
-				if (matched == null) {
-					return Map.of();
-				}
-			}
-			// 返回配方原始输出表，不执行概率检查（由 BeeProduceBatchSampler 统一处理）
-			Map<ItemStack, ChancedOutput> outputs = matched.value().getRecipeOutputs();
-			// 缓存不可变视图，防止外部修改污染静态共享缓存
-			Map<ItemStack, ChancedOutput> immutable = Collections.unmodifiableMap(outputs);
-			recipeOutputsCache.put(beeType, immutable);
-			return immutable;
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("查询蜜蜂产物配方失败: {}", beeType, e);
-			return Map.of();
-		}
+		return BeeProduceQueries.getBeeProduce(level, beeType);
 	}
 
 	/**
-	 * 查询指定蜜蜂类型的产物 ItemStack 列表（显示用途）
-	 * <p>
-	 * 模块 2+3：从 {@link #getBeeProduce} 返回的原始配方 Map 转换为 ItemStack 列表，
-	 * 取 {@code chancedOutput.max()} 作为代表数量（与原 getBeeProduce 显示逻辑一致）。
-	 * 仅供 GUI 显示（tooltip、图标）使用，不参与实际产出计算。
-	 *
-	 * @param level   客户端世界（用于配方查询）
-	 * @param beeType 蜜蜂类型ID
-	 * @return 产物列表（取 max 代表值），可能为空
+	 * 查询指定蜜蜂类型的产物 ItemStack 列表（显示用途）— 委托 {@link BeeProduceQueries#getBeeProduceStacks}
 	 */
 	@Nonnull
 	public static List<ItemStack> getBeeProduceStacks(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
-		Map<ItemStack, ChancedOutput> outputs = getBeeProduce(level, beeType);
-		if (outputs.isEmpty()) return List.of();
-		List<ItemStack> result = new ArrayList<>(outputs.size());
-		outputs.forEach((stack, chancedOutput) -> {
-			ItemStack copy = stack.copy();
-			copy.setCount(Math.max(1, (int) chancedOutput.max()));
-			result.add(copy);
-		});
-		return result;
-	}
-
-	/**
-	 * 重建 AdvancedBeehiveRecipe 索引
-	 * <p>
-	 * 遍历全部配方，从每个配方的 ingredient（{@code Supplier<BeeIngredient>}）中提取 beeType，
-	 * 构建 {@code beeType -> recipe} 映射。完成后发布为不可变快照，保证后续读取的线程安全。
-	 * 单条配方解析失败不影响整体索引。
-	 *
-	 * @param level 世界实例
-	 */
-	private static void rebuildBeehiveRecipeIndex(@Nonnull Level level) {
-		try {
-			List<RecipeHolder<AdvancedBeehiveRecipe>> recipes = level.getRecipeManager()
-					.getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get());
-			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> newIndex = new HashMap<>(recipes.size() * 2);
-			for (RecipeHolder<AdvancedBeehiveRecipe> recipe : recipes) {
-				try {
-					// AdvancedBeehiveRecipe.ingredient 是 Supplier<BeeIngredient>，
-					// 通过 supplier.get() 获取 BeeIngredient 后调用 getBeeType() 提取 beeType
-					BeeIngredient ing = recipe.value().ingredient.get();
-					if (ing == null) continue;
-					ResourceLocation beeType = ing.getBeeType();
-					if (beeType == null) continue;
-					newIndex.putIfAbsent(beeType.toString(), recipe);
-				} catch (Exception e) {
-					ProductiveBeesGenesis.LOGGER.warn("构建 AdvancedBeehiveRecipe 索引时跳过无法解析的配方 {}", recipe.id(), e);
-				}
-			}
-			// 原子替换：发布不可变快照
-			beehiveRecipeIndex = new AdvancedBeehiveRecipeIndex(Map.copyOf(newIndex));
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("重建 AdvancedBeehiveRecipe 索引失败", e);
-		}
+		return BeeProduceQueries.getBeeProduceStacks(level, beeType);
 	}
 
 	/**
@@ -407,7 +285,7 @@ public final class BeeInfoHelper {
 			}
 			// isBlock=false 时保持原逻辑：优先返回配方首个产物
 			// 模块 2+3：getBeeProduce 返回原始配方 Map，显示用途改用 getBeeProduceStacks
-			List<ItemStack> outputs = getBeeProduceStacks(level, beeType);
+			List<ItemStack> outputs = BeeProduceQueries.getBeeProduceStacks(level, beeType);
 			for (ItemStack output : outputs) {
 				if (!output.isEmpty()) {
 					return output.copyWithCount(1);
@@ -471,24 +349,6 @@ public final class BeeInfoHelper {
 	}
 
 	/**
-	 * 将字符串解析为 ResourceLocation
-	 *
-	 * @param id 字符串ID（如 "productivebees:iron"）
-	 * @return 解析后的 ResourceLocation，解析失败返回 null
-	 */
-	@Nullable
-	public static ResourceLocation parseBeeType(@Nonnull String id) {
-		try {
-			String trimmed = id.trim();
-			if (trimmed.isEmpty()) return null;
-			return ResourceLocation.parse(trimmed);
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("parseBeeType 解析异常: {}", id, e);
-			return null;
-		}
-	}
-
-	/**
 	 * 获取指定蜜蜂类型的花朵偏好（Task E-1）
 	 * <br/>
 	 * 从 {@link BeeReloadListener} 查询蜜蜂的 CompoundTag 数据，提取花朵相关字段。
@@ -510,7 +370,7 @@ public final class BeeInfoHelper {
 			return cached;
 		}
 		try {
-			CompoundTag nbt = BeeReloadListener.INSTANCE.getData(beeType);
+			CompoundTag nbt = BeeReloadListener.INSTANCE.getData(BeeTypeNormalizer.resolveLoadedBeeType(beeType));
 			FlowerPreference preference;
 			if (nbt == null) {
 				preference = FlowerPreference.EMPTY;

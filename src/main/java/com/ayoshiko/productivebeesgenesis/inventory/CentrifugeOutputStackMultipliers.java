@@ -1,37 +1,37 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
-import java.util.function.IntSupplier;
-
 import com.ayoshiko.productivebeesgenesis.config.CentrifugeConfigSection;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.StackMultiplierConfigSection;
 
+import java.util.function.IntSupplier;
+
 /**
- * 离心机输出槽堆叠倍率助手
- * <br/>
- * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
- * 供 {@link TieredInputSlot#productivebeesgenesis$setInputStackMultiplier} 使用。
- * <p>
- * 与 {@link CentrifugeInputStackMultipliers} 对称，但使用输出槽的 {@code stack_multiplier}
- * 配置值（而非 {@code input_stack_multiplier}）。输出槽倍率默认为输入槽的 4 倍，
- * 因为蜜脾处理有成倍产物产出。
- * <p>
- * <b>注意</b>：{@link TieredInputSlot} 接口名称虽含 "Input"，但实际是通用的堆叠倍率
- * 注入机制，对输入槽和输出槽均适用。输出槽使用同一接口设置倍率，避免引入冗余的
- * 接口和 Mixin。
- * <p>
- * 四类工厂使用不同的 tier 枚举：
- * <ul>
- *   <li>原版工厂 — {@code FactoryTier}（BASIC/ADVANCED/ELITE/ULTIMATE，ordinal 0-3）</li>
- *   <li>ME 工厂 — {@code ExtraFactoryTier}（ABSOLUTE/SUPREME/COSMIC/INFINITE，ordinal 0-3）</li>
- *   <li>EME 工厂 — {@code EMExtraFactoryTier}（ABSOLUTE_OVERCLOCKED/...，ordinal 0-3）</li>
- *   <li>EM 工厂 — {@code FactoryTier}（Mixin 扩展，OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE，ordinal 4-8）</li>
- * </ul>
- *
- * @since 1.13.0
- * @author Ayoshiko
- * @see CentrifugeInputStackMultipliers 输入槽版本
- */
+	 * 离心机输出槽堆叠倍率助手
+	 * <br/>
+	 * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
+	 * 供 {@link TieredInputSlot#productivebeesgenesis$setInputStackMultiplier} 使用。
+	 * <p>
+	 * 与 {@link CentrifugeInputStackMultipliers} 对称，但使用输出槽的 {@code stack_multiplier}
+	 * 配置值（而非 {@code input_stack_multiplier}）。输出槽倍率默认为输入槽的 4 倍，
+	 * 因为蜜脾处理有成倍产物产出。
+	 * <p>
+	 * <b>注意</b>：{@link TieredInputSlot} 接口名称虽含 "Input"，但实际是通用的堆叠倍率
+	 * 注入机制，对输入槽和输出槽均适用。输出槽使用同一接口设置倍率，避免引入冗余的
+	 * 接口和 Mixin。
+	 * <p>
+	 * 四类工厂使用不同的 tier 枚举：
+	 * <ul>
+	 *   <li>原版工厂 — {@code FactoryTier}（BASIC/ADVANCED/ELITE/ULTIMATE，ordinal 0-3）</li>
+	 *   <li>ME 工厂 — {@code ExtraFactoryTier}（ABSOLUTE/SUPREME/COSMIC/INFINITE，ordinal 0-3）</li>
+	 *   <li>EME 工厂 — {@code EMExtraFactoryTier}（ABSOLUTE_OVERCLOCKED/...，ordinal 0-3）</li>
+	 *   <li>EM 工厂 — {@code FactoryTier}（Mixin 扩展，OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE，ordinal 4-8）</li>
+	 * </ul>
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 * @see CentrifugeInputStackMultipliers 输入槽版本
+	 */
 public final class CentrifugeOutputStackMultipliers {
 
 	private CentrifugeOutputStackMultipliers() {
@@ -40,7 +40,7 @@ public final class CentrifugeOutputStackMultipliers {
 	/**
 	 * 获取离心机堆叠倍率子段(从 ServerConfig 委托链中查询)。
 	 * <p>
-	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeStackXxx} 在 v1.13.0 子段抽取后,
+	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeStackXxx} 在 v2.0.0 子段抽取后,
 	 * 改为通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.mekCentrifugeStackXxx} 访问。
 	 */
 	private static StackMultiplierConfigSection stackMultiplier() {

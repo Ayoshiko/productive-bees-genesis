@@ -1,32 +1,31 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 
-import org.jetbrains.annotations.NotNull;
-
-import net.minecraft.world.item.ItemStack;
-
 /**
- * 输入槽分等级堆叠倍率标记接口
- * <br/>
- * 由 {@link com.ayoshiko.productivebeesgenesis.mixin.mek.BasicInventorySlotMixin}
- * 注入到 {@link mekanism.common.inventory.slot.BasicInventorySlot} 及其所有子类。
- * <p>
- * 通过此接口可在槽位创建后注入 {@link IntSupplier}，运行时由 getLimit 乘以该倍率，
- * 实现不同等级离心机/工厂输入槽的独立堆叠上限配置。
- * <p>
- * 倍率缓存采用版本号机制：配置 reload 时递增 {@link #MULTIPLIER_VERSION}，
- * 各槽位实例检测到版本号不匹配时重新从 IntSupplier 读取倍率值。
- * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis} 在
- * {@code ModConfigEvent.Reloading} 事件中调用 {@link #invalidateMultiplierCache()}。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>OCP：通过 Mixin + 接口扩展 BasicInventorySlot 行为，不修改其源码</li>
- *   <li>DIP：倍率来源抽象为 IntSupplier，调用方按等级从配置注入</li>
- * </ul>
- */
+	 * 输入槽分等级堆叠倍率标记接口
+	 * <br/>
+	 * 由 {@link com.ayoshiko.productivebeesgenesis.mixin.mek.BasicInventorySlotMixin}
+	 * 注入到 {@link mekanism.common.inventory.slot.BasicInventorySlot} 及其所有子类。
+	 * <p>
+	 * 通过此接口可在槽位创建后注入 {@link IntSupplier}，运行时由 getLimit 乘以该倍率，
+	 * 实现不同等级离心机/工厂输入槽的独立堆叠上限配置。
+	 * <p>
+	 * 倍率缓存采用版本号机制：配置 reload 时递增 {@link #MULTIPLIER_VERSION}，
+	 * 各槽位实例检测到版本号不匹配时重新从 IntSupplier 读取倍率值。
+	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis} 在
+	 * {@code ModConfigEvent.Reloading} 事件中调用 {@link #invalidateMultiplierCache()}。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>OCP：通过 Mixin + 接口扩展 BasicInventorySlot 行为，不修改其源码</li>
+	 *   <li>DIP：倍率来源抽象为 IntSupplier，调用方按等级从配置注入</li>
+	 * </ul>
+	 */
 public interface TieredInputSlot {
 
 	/** 全局倍率缓存版本号 — 配置 reload 时递增，触发所有实例重新读取倍率 */

@@ -2,9 +2,7 @@ package com.ayoshiko.productivebeesgenesis.datagen;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.recipe.ApiaryShapedRecipe;
-
 import mekanism.common.registries.MekanismBlocks;
-
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementRequirements;
 import net.minecraft.advancements.AdvancementRewards;
@@ -34,26 +32,26 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 配方数据生成器
- * <br/>
- * 为MEK离心机/蜂箱工厂方块生成合成配方，使用Mekanism的mekanism:mek_data类型配方
- * （合成时保留机器数据，如能量、物品等）。
- * <p>
- * 配方模式遵循各模组原版：
- * - Mekanism基础：基础离心机/蜂箱(RBR/ICI/RBR)，4级工厂TIER_PATTERN（ACA/IPI/ACA）
- * - EM 5等级：TIER_PATTERN，使用EM的合金/电路/锭标签
- * - ME 4等级：TIER_PATTERN，使用ME的合金/电路/锭标签（INFINITE特殊模式）
- * - EME 4等级：EMEXTRA_PATTERN（ACT/PXQ/TCA），组合ME+EM材料
- * <p>
- * 所有配方使用ModLoadedCondition条件，仅在对应模组加载时生成。
- * <p>
- * 配方按内容拆分到独立辅助类：
- * <ul>
- *   <li>{@link ModRecipesCentrifuge} — 离心机相关配方</li>
- *   <li>{@link ModRecipesApiary} — 蜂箱相关配方</li>
- * </ul>
- * 本类保留共享的 MekDataBuilder 构建器与通用工具方法（addTierRecipe、addEMETierRecipe、rl）。
- */
+	 * 配方数据生成器
+	 * <br/>
+	 * 为MEK离心机/蜂箱工厂方块生成合成配方，使用Mekanism的mekanism:mek_data类型配方
+	 * （合成时保留机器数据，如能量、物品等）。
+	 * <p>
+	 * 配方模式遵循各模组原版：
+	 * - Mekanism基础：基础离心机/蜂箱(RBR/ICI/RBR)，4级工厂TIER_PATTERN（ACA/IPI/ACA）
+	 * - EM 5等级：TIER_PATTERN，使用EM的合金/电路/锭标签
+	 * - ME 4等级：TIER_PATTERN，使用ME的合金/电路/锭标签（INFINITE特殊模式）
+	 * - EME 4等级：EMEXTRA_PATTERN（ACT/PXQ/TCA），组合ME+EM材料
+	 * <p>
+	 * 所有配方使用ModLoadedCondition条件，仅在对应模组加载时生成。
+	 * <p>
+	 * 配方按内容拆分到独立辅助类：
+	 * <ul>
+	 *   <li>{@link ModRecipesCentrifuge} — 离心机相关配方</li>
+	 *   <li>{@link ModRecipesApiary} — 蜂箱相关配方</li>
+	 * </ul>
+	 * 本类保留共享的 MekDataBuilder 构建器与通用工具方法（addTierRecipe、addEMETierRecipe、rl）。
+	 */
 public final class ModRecipes extends RecipeProvider {
 
 	public ModRecipes(PackOutput output, CompletableFuture<HolderLookup.Provider> registries) {

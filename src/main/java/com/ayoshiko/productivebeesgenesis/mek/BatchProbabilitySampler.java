@@ -3,25 +3,25 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 批量概率采样器 — 封装 Binomial/Poisson/CLT 三路采样与保底机制
- * <br/>
- * 用于 {@link PbRecipeCompleter#accumulatePbRecipeOutputsBatch} 中
- * chance &lt; 1.0 的概率产物批量采样。根据 N（批量次数）与 λ=N×p（期望通过次数）
- * 自动选择最优算法：
- * <ul>
- *   <li>N=1：原版 Bernoulli 路径（调用方处理）</li>
- *   <li>2 ≤ N ≤ 30：精确 Binomial 逆变换采样（O(N) 时间，CLT 在小 N 下误差较大）</li>
- *   <li>N &gt; 30 且 λ &lt; 5：Poisson 近似（Knuth 算法 O(λ)，二项分布退化场景）</li>
- *   <li>N &gt; 30 且 λ ≥ 5：CLT 正态近似（原有路径，O(1)）</li>
- * </ul>
- * <p>
- * 保底机制（SubTask 4.4）：将期望产量 N×p 拆分为确定性部分 floor(N×p) 与
- * 随机部分剩余 N-floor(N×p) 次 Binomial 采样，调整概率保持期望一致。
- * 数学等价性：E[guaranteed + Binomial(remaining, adjustedP)]
- * = floor(Np) + remaining × (Np - floor(Np))/remaining = Np。
- * <p>
- * 线程安全：所有方法为静态、无状态、仅依赖 {@link ThreadLocalRandom}，可并发调用。
- */
+	 * 批量概率采样器 — 封装 Binomial/Poisson/CLT 三路采样与保底机制
+	 * <br/>
+	 * 用于 {@link PbRecipeCompleter#accumulatePbRecipeOutputsBatch} 中
+	 * chance &lt; 1.0 的概率产物批量采样。根据 N（批量次数）与 λ=N×p（期望通过次数）
+	 * 自动选择最优算法：
+	 * <ul>
+	 *   <li>N=1：原版 Bernoulli 路径（调用方处理）</li>
+	 *   <li>2 ≤ N ≤ 30：精确 Binomial 逆变换采样（O(N) 时间，CLT 在小 N 下误差较大）</li>
+	 *   <li>N &gt; 30 且 λ &lt; 5：Poisson 近似（Knuth 算法 O(λ)，二项分布退化场景）</li>
+	 *   <li>N &gt; 30 且 λ ≥ 5：CLT 正态近似（原有路径，O(1)）</li>
+	 * </ul>
+	 * <p>
+	 * 保底机制（SubTask 4.4）：将期望产量 N×p 拆分为确定性部分 floor(N×p) 与
+	 * 随机部分剩余 N-floor(N×p) 次 Binomial 采样，调整概率保持期望一致。
+	 * 数学等价性：E[guaranteed + Binomial(remaining, adjustedP)]
+	 * = floor(Np) + remaining × (Np - floor(Np))/remaining = Np。
+	 * <p>
+	 * 线程安全：所有方法为静态、无状态、仅依赖 {@link ThreadLocalRandom}，可并发调用。
+	 */
 public final class BatchProbabilitySampler {
 
 	/** 精确 Binomial 采样的 N 上限（含），N ≤ 此值走逆变换采样 */

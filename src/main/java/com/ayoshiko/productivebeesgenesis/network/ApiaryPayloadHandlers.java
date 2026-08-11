@@ -2,36 +2,33 @@ package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
-
-import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
-
+import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * 蜂箱相关数据包的服务端处理集合
- * <p>
- * 从 {@link ModPayloads} 拆分而来，职责：
- * <ol>
- *   <li>处理蜜蜂槽位选中（{@link ApiarySelectBeePayload}）</li>
- *   <li>处理桶式蜂笼操作（{@link ApiaryCageOperationPayload}）</li>
- *   <li>处理工厂蜂箱排序切换（{@link ApiaryToggleSortingPayload}）</li>
- *   <li>处理 PB 升级卸载（{@link PbUpgradeExtractPayload}）</li>
- * </ol>
- * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
- * <p>
- * 安全模型：每个 handler 均校验玩家身份（{@link ServerPlayer}）、
- * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
- */
+	 * 蜂箱相关数据包的服务端处理集合
+	 * <p>
+	 * 从 {@link ModPayloads} 拆分而来，职责：
+	 * <ol>
+	 *   <li>处理蜜蜂槽位选中（{@link ApiarySelectBeePayload}）</li>
+	 *   <li>处理桶式蜂笼操作（{@link ApiaryCageOperationPayload}）</li>
+	 *   <li>处理工厂蜂箱排序切换（{@link ApiaryToggleSortingPayload}）</li>
+	 *   <li>处理 PB 升级卸载（{@link PbUpgradeExtractPayload}）</li>
+	 * </ol>
+	 * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
+	 * <p>
+	 * 安全模型：每个 handler 均校验玩家身份（{@link ServerPlayer}）、
+	 * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
+	 */
 final class ApiaryPayloadHandlers {
 
 	private ApiaryPayloadHandlers() {

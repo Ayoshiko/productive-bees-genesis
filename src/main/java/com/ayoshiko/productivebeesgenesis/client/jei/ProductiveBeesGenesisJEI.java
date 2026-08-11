@@ -6,7 +6,6 @@ import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
@@ -45,19 +44,19 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 资源蜜蜂：创世模组的JEI插件
- * <br/>
- * 注册PB离心配方的JEI分类，使MEK离心机的GuiProgress能跳转到PB离心配方界面。
- * <p>
- * 双配方跳转机制：
- * - SMELTING配方：通过Mekanism原生的recipeViewerType()返回RecipeViewerRecipeType.SMELTING
- * - PB离心配方：通过recipeViewerCategories()额外注册PB_CENTRIFUGE_VIEWER_TYPE
- * - JEI会同时显示两种配方的"Show Recipes"提示，玩家可选择跳转目标
- * <p>
- * 催化剂注册：
- * - 所有等级的MEK离心机方块（基础+4原版工厂+EM扩展工厂）都注册为PB离心配方的催化剂
- * - 在JEI中点击PB离心配方时，左侧会显示所有可执行该配方的机器
- */
+	 * 资源蜜蜂：创世模组的JEI插件
+	 * <br/>
+	 * 注册PB离心配方的JEI分类，使MEK离心机的GuiProgress能跳转到PB离心配方界面。
+	 * <p>
+	 * 双配方跳转机制：
+	 * - SMELTING配方：通过Mekanism原生的recipeViewerType()返回RecipeViewerRecipeType.SMELTING
+	 * - PB离心配方：通过recipeViewerCategories()额外注册PB_CENTRIFUGE_VIEWER_TYPE
+	 * - JEI会同时显示两种配方的"Show Recipes"提示，玩家可选择跳转目标
+	 * <p>
+	 * 催化剂注册：
+	 * - 所有等级的MEK离心机方块（基础+4原版工厂+EM扩展工厂）都注册为PB离心配方的催化剂
+	 * - 在JEI中点击PB离心配方时，左侧会显示所有可执行该配方的机器
+	 */
 @JeiPlugin
 public class ProductiveBeesGenesisJEI implements IModPlugin {
 

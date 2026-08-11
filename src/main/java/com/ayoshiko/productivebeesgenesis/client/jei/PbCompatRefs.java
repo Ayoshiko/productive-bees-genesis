@@ -1,25 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
-import java.lang.reflect.Field;
-
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 
+import java.lang.reflect.Field;
+
 /**
- * ProductiveBees (PB) compat 包引用封装类
- * <br/>
- * PB 的 {@code cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin} 类位于 compat 包，
- * 非稳定 API。直接引用会在 PB 重构 compat 包时触发 {@link NoClassDefFoundError}。
- * 本类通过反射获取相关字段和类，缓存结果，异常时降级处理（返回 null）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责 PB compat 包的反射访问，不涉及业务逻辑</li>
- *   <li>DIP — 调用方通过本类间接访问 PB compat 类，降低耦合</li>
- *   <li>性能 — 反射结果缓存，避免重复反射</li>
- * </ul>
- * <p>
- * 线程安全：使用 volatile + 双重检查锁定保证反射结果缓存的安全。
- */
+	 * ProductiveBees (PB) compat 包引用封装类
+	 * <br/>
+	 * PB 的 {@code cy.jdkdigital.productivebees.compat.jei.ProductiveBeesJeiPlugin} 类位于 compat 包，
+	 * 非稳定 API。直接引用会在 PB 重构 compat 包时触发 {@link NoClassDefFoundError}。
+	 * 本类通过反射获取相关字段和类，缓存结果，异常时降级处理（返回 null）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责 PB compat 包的反射访问，不涉及业务逻辑</li>
+	 *   <li>DIP — 调用方通过本类间接访问 PB compat 类，降低耦合</li>
+	 *   <li>性能 — 反射结果缓存，避免重复反射</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：使用 volatile + 双重检查锁定保证反射结果缓存的安全。
+	 */
 public final class PbCompatRefs {
 
 	/** PB ProductiveBeesJeiPlugin 类的全限定名 */

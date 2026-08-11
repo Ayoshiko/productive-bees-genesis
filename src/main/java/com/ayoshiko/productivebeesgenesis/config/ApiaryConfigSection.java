@@ -1,17 +1,16 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
-
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.AppliedFluxIntegrationLoader;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * MEK 通用机械蜂箱配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
- * <p>
- * 子分类：basic / ejection / stack_multiplier / ae2 / pb_upgrade。
- * 条件化注册：AE2 子 section 仅在 AE2 加载时注册；EM 工厂堆叠倍率仅在 EM 加载时注册。
- * 未加载时对应字段为 null，访问处通过模组守卫避免 NPE。
- */
+	 * MEK 通用机械蜂箱配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
+	 * <p>
+	 * 子分类：basic / ejection / stack_multiplier / ae2 / pb_upgrade。
+	 * 条件化注册：AE2 子 section 仅在 AE2 加载时注册；EM 工厂堆叠倍率仅在 EM 加载时注册。
+	 * 未加载时对应字段为 null，访问处通过模组守卫避免 NPE。
+	 */
 public final class ApiaryConfigSection {
 
 	// ========== 基础参数 ==========

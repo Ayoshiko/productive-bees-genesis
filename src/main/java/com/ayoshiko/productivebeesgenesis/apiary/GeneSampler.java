@@ -1,40 +1,39 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import cy.jdkdigital.productivebees.common.item.Gene;
-
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 基因采样器产出处理器
- * <br/>
- * 从 {@link BeeProduceProcessor} 抽取的基因采样逻辑，负责生成 TYPE 基因物品。
- * <p>
- * 复刻 PB 原版 {@code AdvancedBeehiveBlockEntity#beeReleasePostAction} 的基因采样语义：
- * <ul>
- *   <li>每次蜜蜂产出独立判定，命中概率 = {@link #SAMPLER_BASE_CHANCE} × 采样器数量</li>
- *   <li>命中时生成 1 个 TYPE 基因，purity = random.nextInt(4) + 1（范围 1-4）</li>
- *   <li>基因物品格式：{@link Gene#getStack(String, int)}</li>
- * </ul>
- * <p>
- * 与 PB 原版的差异：机械蜂箱虽无实体蜜蜂，但可从蜜蜂 NBT 的
- * neoforge:attachments.productivebees:attributes_handler 读取 GeneAttribute 属性类基因
- * （参考 BeeTooltipRenderer.getAttributesCompound）。当前 GeneSampler 仅生成 TYPE 基因，
- * PRODUCTIVITY 基因加成已在 BeeProduceProcessor.buildAdjustedItems 中应用，
- * ENDURANCE/TEMPER 不适用（无实体蜜蜂），BEHAVIOR/WEATHER_TOLERANCE 待后续实现。
- * TYPE 基因的 type 字段使用 {@link BeeNbtHelper#resolveBeeTypeKey} 解析的 ResourceLocation 字符串，
- * 与 PB 原版 {@code ConfigurableBee#getBeeType().toString()} 语义一致。
- * <p>
- * 性能保护：当 produceCount 超过 {@link #GENE_SAMPLER_MAX_LOOP} 时，改用批量概率聚合计算，
- * 避免高倍加速场景下（STACK满级+多蜜蜂+20tick累积）循环暴增导致服务端假死。
- * 批量计算公式：expectedHits = produceCount * chance，使用正态分布近似添加随机扰动。
- * <p>
- * 线程安全：仅服务端 tick 线程调用，level.getRandom() 单线程访问无需同步。
- */
+	 * 基因采样器产出处理器
+	 * <br/>
+	 * 从 {@link BeeProduceProcessor} 抽取的基因采样逻辑，负责生成 TYPE 基因物品。
+	 * <p>
+	 * 复刻 PB 原版 {@code AdvancedBeehiveBlockEntity#beeReleasePostAction} 的基因采样语义：
+	 * <ul>
+	 *   <li>每次蜜蜂产出独立判定，命中概率 = {@link #SAMPLER_BASE_CHANCE} × 采样器数量</li>
+	 *   <li>命中时生成 1 个 TYPE 基因，purity = random.nextInt(4) + 1（范围 1-4）</li>
+	 *   <li>基因物品格式：{@link Gene#getStack(String, int)}</li>
+	 * </ul>
+	 * <p>
+	 * 与 PB 原版的差异：机械蜂箱虽无实体蜜蜂，但可从蜜蜂 NBT 的
+	 * neoforge:attachments.productivebees:attributes_handler 读取 GeneAttribute 属性类基因
+	 * （参考 BeeTooltipRenderer.getAttributesCompound）。当前 GeneSampler 仅生成 TYPE 基因，
+	 * PRODUCTIVITY 基因加成已在 BeeProduceProcessor.buildAdjustedItems 中应用，
+	 * ENDURANCE/TEMPER 不适用（无实体蜜蜂），BEHAVIOR/WEATHER_TOLERANCE 待后续实现。
+	 * TYPE 基因的 type 字段使用 {@link BeeNbtHelper#resolveBeeTypeKey} 解析的 ResourceLocation 字符串，
+	 * 与 PB 原版 {@code ConfigurableBee#getBeeType().toString()} 语义一致。
+	 * <p>
+	 * 性能保护：当 produceCount 超过 {@link #GENE_SAMPLER_MAX_LOOP} 时，改用批量概率聚合计算，
+	 * 避免高倍加速场景下（STACK满级+多蜜蜂+20tick累积）循环暴增导致服务端假死。
+	 * 批量计算公式：expectedHits = produceCount * chance，使用正态分布近似添加随机扰动。
+	 * <p>
+	 * 线程安全：仅服务端 tick 线程调用，level.getRandom() 单线程访问无需同步。
+	 */
 public class GeneSampler {
 
 	/**

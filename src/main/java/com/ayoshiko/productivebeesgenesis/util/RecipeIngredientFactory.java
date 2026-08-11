@@ -1,12 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe;
@@ -22,18 +16,23 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.biome.Biome;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+
 /**
- * 配方 Ingredient 与 Biome 解析工具
- * <br/>
- * 从 {@link BeeRecipeReloader} 抽离，负责根据配置解析：
- * <ul>
- *   <li>群系 ID / 标签 → {@link HolderSet}（钓鱼、生成配方使用）</li>
- *   <li>物品 ID → {@link Ingredient}（蜂巢、转化物品使用）</li>
- *   <li>蜜蜂类型名 → {@link BeeIngredient} 供应商（繁殖、转化亲代使用）</li>
- *   <li>产出配置 → {@link TagOutputRecipe.ChancedOutput} 列表</li>
- * </ul>
- * 实例类（持有 {@link HolderLookup.Provider}），一次注入多次使用，符合 SRP。
- */
+	 * 配方 Ingredient 与 Biome 解析工具
+	 * <br/>
+	 * 从 {@link BeeRecipeReloader} 抽离，负责根据配置解析：
+	 * <ul>
+	 *   <li>群系 ID / 标签 → {@link HolderSet}（钓鱼、生成配方使用）</li>
+	 *   <li>物品 ID → {@link Ingredient}（蜂巢、转化物品使用）</li>
+	 *   <li>蜜蜂类型名 → {@link BeeIngredient} 供应商（繁殖、转化亲代使用）</li>
+	 *   <li>产出配置 → {@link TagOutputRecipe.ChancedOutput} 列表</li>
+	 * </ul>
+	 * 实例类（持有 {@link HolderLookup.Provider}），一次注入多次使用，符合 SRP。
+	 */
 public final class RecipeIngredientFactory {
 
 	private final HolderLookup.Provider registryAccess;

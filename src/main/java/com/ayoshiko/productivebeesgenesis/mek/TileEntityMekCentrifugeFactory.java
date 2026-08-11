@@ -1,8 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.function.IntSupplier;
-
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import mekanism.api.IContentsListener;
+import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.api.recipes.inputs.IInputHandler;
 import mekanism.api.recipes.inputs.InputHelper;
 import mekanism.api.recipes.outputs.IOutputHandler;
@@ -11,30 +14,26 @@ import mekanism.common.capabilities.holder.slot.InventorySlotHelper;
 import mekanism.common.inventory.slot.FactoryInputInventorySlot;
 import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
-import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.core.Holder;
 
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import java.util.function.IntSupplier;
 
 /**
- * 原版工厂版MEK离心机方块实体 — 继承 {@link AbstractMekCentrifugeFactory}
- * <br/>
- * 仅实现原版 Mekanism 工厂的 tier 差异逻辑：
- * <ul>
- *   <li>构造函数：调用抽象基类构造（传入 TRACKED_ERROR_TYPES / GLOBAL_ERROR_TYPES）</li>
- *   <li>{@link #addSlots}：使用原版 OutputInventorySlot / FactoryInputInventorySlot，
- *       布局通过 {@link FactoryLayoutHelper} 动态计算（支持原版4等级）</li>
- *   <li>{@link #getPbProcessorName}：返回 "工厂离心机" 用于日志标识</li>
- * </ul>
- * 所有公共逻辑（配方查找、PB处理、AE2生命周期、NBT序列化、CAS状态管理等）
- * 由 {@link AbstractMekCentrifugeFactory} 提供。
- */
+	 * 原版工厂版MEK离心机方块实体 — 继承 {@link AbstractMekCentrifugeFactory}
+	 * <br/>
+	 * 仅实现原版 Mekanism 工厂的 tier 差异逻辑：
+	 * <ul>
+	 *   <li>构造函数：调用抽象基类构造（传入 TRACKED_ERROR_TYPES / GLOBAL_ERROR_TYPES）</li>
+	 *   <li>{@link #addSlots}：使用原版 OutputInventorySlot / FactoryInputInventorySlot，
+	 *       布局通过 {@link FactoryLayoutHelper} 动态计算（支持原版4等级）</li>
+	 *   <li>{@link #getPbProcessorName}：返回 "工厂离心机" 用于日志标识</li>
+	 * </ul>
+	 * 所有公共逻辑（配方查找、PB处理、AE2生命周期、NBT序列化、CAS状态管理等）
+	 * 由 {@link AbstractMekCentrifugeFactory} 提供。
+	 */
 public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory {
 
 	public TileEntityMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {

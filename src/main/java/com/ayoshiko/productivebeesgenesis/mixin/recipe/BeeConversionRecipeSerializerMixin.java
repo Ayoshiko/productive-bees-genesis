@@ -10,14 +10,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 修复 BeeConversionRecipe 序列化崩溃
- * <p>
- * 原理：BeeConversionRecipe.Serializer.toNetwork 无 null 检查，当 source.get()
- * 或 result.get() 返回 null 时会 NPE。此 Mixin 在 toNetwork 头部拦截，若 source
- * 或 result 为 null 则用 minecraft:bee 作为 fallback 安全序列化，保留原 item 和 chance。
- * <p>
- * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
- */
+	 * 修复 BeeConversionRecipe 序列化崩溃
+	 * <p>
+	 * 原理：BeeConversionRecipe.Serializer.toNetwork 无 null 检查，当 source.get()
+	 * 或 result.get() 返回 null 时会 NPE。此 Mixin 在 toNetwork 头部拦截，若 source
+	 * 或 result 为 null 则用 minecraft:bee 作为 fallback 安全序列化，保留原 item 和 chance。
+	 * <p>
+	 * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
+	 */
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.BeeConversionRecipe$Serializer")
 public abstract class BeeConversionRecipeSerializerMixin {
 

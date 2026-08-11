@@ -1,23 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.Arrays;
-
-import net.minecraft.nbt.CompoundTag;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.nbt.CompoundTag;
+
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * AE2 输出状态持有者 — 封装三个工厂类共有的 AE2 网格节点和缓存状态，消除约 90 行重复。
- * <p>
- * <b>线程安全</b>：volatile 字段保证可见性。<b>依赖隔离</b>：Object 类型避免强引用 AE2 类，
- * 实际类型由 {@link Ae2GridNodeManager} 强制转换。
- *
- * @since 1.0.0
- */
+	 * AE2 输出状态持有者 — 封装三个工厂类共有的 AE2 网格节点和缓存状态，消除约 90 行重复。
+	 * <p>
+	 * <b>线程安全</b>：volatile 字段保证可见性。<b>依赖隔离</b>：Object 类型避免强引用 AE2 类，
+	 * 实际类型由 {@link Ae2GridNodeManager} 强制转换。
+	 *
+	 * @since 1.0.0
+	 */
 public final class Ae2OutputStateHolder {
 
 	/** AE2 网格节点（IManagedGridNode，AE2 未安装时为 null） */
@@ -53,33 +52,11 @@ public final class Ae2OutputStateHolder {
 	private volatile Object cachedGrid;
 	private volatile Object cachedStorage;
 	private volatile Object cachedMeStorage;
+	/** Per-game-tick direct-input stock cache; Object keeps AE2 optional at class load time. */
+	private volatile Object inputInventoryViewCache;
 
-	// ===== AE2 配置缓存：避免高频读取 ModConfig.SERVER（5 秒刷新一次） =====
-	/** 配置缓存刷新间隔（毫秒） — wall clock 避免 JDTE 加速下 getGameTime 不变导致缓存永不过期；原值 100 tick ≈ 5000 ms */
-	private static final long CONFIG_REFRESH_INTERVAL_MS = 5000L;
-
-	/** 拉取触发间隔默认初始值 — 实际拉取间隔由全局配置 {@code mekCentrifugeAeInputIntervalTicks} 决定（默认 20） */
-	private static final long PULL_INTERVAL_DEFAULT = 20L;
-
-	/** 上次刷新配置的墙钟时间戳（ms） — AtomicLong + CAS 防止多线程重复刷新；JDTE 加速下使用 wall clock 保证正常过期 */
-	private final AtomicLong lastConfigRefreshMs = new AtomicLong(-CONFIG_REFRESH_INTERVAL_MS);
-
-	/** 缓存的 AE2 输出推送开关（默认 false，与 isIntegrationEnabled 行为一致） */
-	private volatile boolean cachedOutputPushEnabled = false;
-
-	/** 缓存的 AE2 流体推送开关（默认 true，与原 isFluidPushEnabled 配置未加载时回退一致） */
-	private volatile boolean cachedFluidPushEnabled = true;
-
-	/** 缓存的 AppliedFlux 优先开关（默认 false，AppliedFlux 未加载时回退 false — 与 refreshConfigCache 一致） */
-	private volatile boolean cachedPreferAppliedFluxOverAeEnergy = false;
-
-	/** 缓存的 AE2 输入拉取开关（默认 false，AE2 未加载或全局关闭时为 false） */
-	private volatile boolean cachedInputPullEnabled = false;
-	private volatile int cachedInputRatePerTick = 64;
-	private volatile int cachedInputIntervalTicks = 20;
-
-	/** 配置缓存刷新异常日志冷却器（ms 模式，避免高频刷新下刷屏） */
-	private final LogThrottle configReadThrottle = new LogThrottle();
+	/** AE2 全局配置缓存（输出/流体/输入/能量注入开关，墙钟 5 秒刷新） */
+	private final Ae2ConfigCache configCache = new Ae2ConfigCache();
 
 	// ===== per-tile AE2 输出开关（与全局配置 AND 关系） =====
 	/** per-tile AE2 物品输出开关（默认 true，与全局配置 AND 关系） */
@@ -95,6 +72,9 @@ public final class Ae2OutputStateHolder {
 	/** per-tile NBT 忽略开关（默认 true） — 拉取场景下聚合所有种类更实用，故默认开启忽略 NBT 差异 */
 	private volatile boolean aeInputNbtIgnore = true;
 
+	/** 拉取触发间隔默认初始值 — 实际拉取间隔由全局配置 {@code mekCentrifugeAeInputIntervalTicks} 决定（默认 20） */
+	private static final long PULL_INTERVAL_DEFAULT = 20L;
+
 	/** 上次拉取游戏刻（AtomicLong，初始 -PULL_INTERVAL_DEFAULT 保证首次 tick 即可触发） */
 	private final AtomicLong lastPullTick = new AtomicLong(-PULL_INTERVAL_DEFAULT);
 
@@ -109,6 +89,12 @@ public final class Ae2OutputStateHolder {
 
 	/** 上次实际拉取时的 pullCallCounter 值（初始 Long.MIN_VALUE/2 保证首次调用即可触发） */
 	private volatile long lastPullCounter = Long.MIN_VALUE / 2;
+	/**
+	 * AE2LT-style input pull cooldown: success shortens the next interval
+	 * (1 tick with an unlimited entry, 5 otherwise), failures back off.
+	 * Advanced via pullCallCounter so acceleration mods still converge.
+	 */
+	private final Ae2InputCooldown inputPullCooldown = new Ae2InputCooldown();
 
 	/**
 	 * 加速倍率检测器 — 跟踪同一游戏刻内被调用的次数作为加速倍率 M。
@@ -161,17 +147,9 @@ public final class Ae2OutputStateHolder {
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
+		inputInventoryViewCache = null;
 		// 重置配置缓存为初始默认值，确保方块重建后不会残留旧配置
-		// P0-4 修复：cachedPreferAppliedFluxOverAeEnergy 必须与字段声明默认值 (false) 一致，
-		// 原代码重置为 true 会导致方块重建后首次配置读取前误判 AppliedFlux 优先（与 refreshConfigCache 中
-		// AppliedFlux 未加载时回退 false 的语义冲突）
-		cachedOutputPushEnabled = false;
-		cachedFluidPushEnabled = true;
-		cachedPreferAppliedFluxOverAeEnergy = false;
-		cachedInputPullEnabled = false;
-		cachedInputRatePerTick = 64;
-		cachedInputIntervalTicks = 20;
-		lastConfigRefreshMs.set(-CONFIG_REFRESH_INTERVAL_MS);
+		configCache.reset();
 		// 重置 per-tile 开关为默认值（与字段声明一致，参考 Mek-Energistics 默认全开）
 		aeItemOutputEnabled = true;
 		aeFluidOutputEnabled = true;
@@ -182,6 +160,7 @@ public final class Ae2OutputStateHolder {
 		// Task 12：重置内部调用计数器，方块重建后从初始状态开始节流
 		pullCallCounter = 0L;
 		lastPullCounter = Long.MIN_VALUE / 2;
+		inputPullCooldown.reset();
 		// 修复 #4：重置加速倍率检测器，方块重建后从初始状态重新统计 multiplier
 		tickAccelTracker.reset();
 		// 重置过滤器实例，方块重建后通过懒初始化重新创建
@@ -270,6 +249,7 @@ public final class Ae2OutputStateHolder {
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
+		inputInventoryViewCache = null;
 		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
 		pushState.invalidateNodeStateCache();
 	}
@@ -280,6 +260,8 @@ public final class Ae2OutputStateHolder {
 	public void setCachedStorage(Object storage) { this.cachedStorage = storage; }
 	public Object getCachedMeStorage() { return cachedMeStorage; }
 	public void setCachedMeStorage(Object meStorage) { this.cachedMeStorage = meStorage; }
+	public Object getInputInventoryViewCache() { return inputInventoryViewCache; }
+	public void setInputInventoryViewCache(Object cache) { this.inputInventoryViewCache = cache; }
 
 	// ===== AE2 配置缓存方法 =====
 
@@ -289,7 +271,7 @@ public final class Ae2OutputStateHolder {
 	 * @return true 表示缓存已过期,需要刷新
 	 */
 	public boolean isConfigCacheStale(long currentTick) {
-		return System.currentTimeMillis() - lastConfigRefreshMs.get() >= CONFIG_REFRESH_INTERVAL_MS;
+		return configCache.isStale();
 	}
 
 	/**
@@ -299,54 +281,16 @@ public final class Ae2OutputStateHolder {
 	 * @param currentTick 已弃用,仅保留签名以避免破坏 ABI
 	 */
 	public void refreshConfigCache(long currentTick) {
-		long currentTimeMs = System.currentTimeMillis();
-		long lastRefresh = lastConfigRefreshMs.get();
-		if (currentTimeMs - lastRefresh < CONFIG_REFRESH_INTERVAL_MS) {
-			return;
-		}
-		// 审查问题修复：ModConfig.SERVER 为 null 时（reload 期间）不推进时间戳，
-		// 允许下次调用立即重试，避免最长 5 秒的配置不可见窗口
-		if (ModConfig.SERVER == null) return;
-		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
-		if (!lastConfigRefreshMs.compareAndSet(lastRefresh, currentTimeMs)) {
-			return;
-		}
-		try {
-			// mekCentrifugeAeOutputEnabled 为 null（AE2 未加载）时回退 false
-			cachedOutputPushEnabled = ModConfig.SERVER.mekCentrifugeAeOutputEnabled != null
-					&& ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
-			// mekCentrifugeAeFluidOutputEnabled 为 null（AE2 未加载）时回退 true
-			cachedFluidPushEnabled = ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled == null
-					|| ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled.get();
-			// mekCentrifugePreferAppliedFluxOverAeEnergy 为 null（AppliedFlux 未加载）时回退 false
-			cachedPreferAppliedFluxOverAeEnergy = ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy != null
-					&& ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy.get();
-			// mekCentrifugeAeInputEnabled 为 null（AE2 未加载）时回退 false
-			cachedInputPullEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
-					&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
-			cachedInputRatePerTick = ModConfig.SERVER.mekCentrifugeAeInputRatePerTick == null
-					? 64 : Math.max(1, ModConfig.SERVER.mekCentrifugeAeInputRatePerTick.get());
-			cachedInputIntervalTicks = ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks == null
-					? 20 : Math.max(1, ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks.get());
-		} catch (LinkageError | RuntimeException t) {
-			// LinkageError 覆盖配置版本不兼容；RuntimeException 覆盖配置读取异常。
-			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
-			// 配置读取异常，保持当前缓存值，节流记录 WARN 便于调试
-			final Throwable cause = t;
-			configReadThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-				ProductiveBeesGenesis.LOGGER.warn("AE2 配置缓存刷新异常，保持当前缓存值"
-						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
-			});
-		}
+		configCache.refresh();
 	}
 
 	// ===== 配置缓存 getter =====
-	public boolean isCachedOutputPushEnabled() { return cachedOutputPushEnabled; }
-	public boolean isCachedFluidPushEnabled() { return cachedFluidPushEnabled; }
-	public boolean isCachedPreferAppliedFluxOverAeEnergy() { return cachedPreferAppliedFluxOverAeEnergy; }
-	public boolean isCachedInputPullEnabled() { return cachedInputPullEnabled; }
-	public int getCachedInputRatePerTick() { return cachedInputRatePerTick; }
-	public int getCachedInputIntervalTicks() { return cachedInputIntervalTicks; }
+	public boolean isCachedOutputPushEnabled() { return configCache.isOutputPushEnabled(); }
+	public boolean isCachedFluidPushEnabled() { return configCache.isFluidPushEnabled(); }
+	public boolean isCachedPreferAppliedFluxOverAeEnergy() { return configCache.isPreferAppliedFluxOverAeEnergy(); }
+	public boolean isCachedInputPullEnabled() { return configCache.isInputPullEnabled(); }
+	public int getCachedInputRatePerTick() { return configCache.getInputRatePerTick(); }
+	public int getCachedInputIntervalTicks() { return configCache.getInputIntervalTicks(); }
 
 	// ===== per-tile AE2 输出开关方法 =====
 	public boolean isAeItemOutputEnabled() { return aeItemOutputEnabled; }
@@ -365,7 +309,7 @@ public final class Ae2OutputStateHolder {
 	 * @return true 表示输入拉取已启用
 	 */
 	public boolean isInputPullEnabled() {
-		return cachedInputPullEnabled && aeItemInputEnabled;
+		return configCache.isInputPullEnabled() && aeItemInputEnabled;
 	}
 
 	/** 获取 per-tile AE2 输入拉取开关 */
@@ -386,6 +330,16 @@ public final class Ae2OutputStateHolder {
 	public long getPullCallCounter() { return pullCallCounter; }
 	public long getLastPullCounter() { return lastPullCounter; }
 	public void updateLastPullCounter(long counter) { lastPullCounter = counter; }
+
+	/** Current input pull cooldown in pull-call counts (AE2LT-style adaptive). */
+	public int getInputPullCooldownTicks() { return inputPullCooldown.current(); }
+	public void onInputPullSuccess(boolean unlimited) { inputPullCooldown.onSuccess(unlimited); }
+
+	/** Supply-aware success overload: lengthens the interval when a normal pull missed its quota. */
+	public void onInputPullSuccess(boolean unlimited, long pulledAmount, long expectedQuota) {
+		inputPullCooldown.onSuccess(unlimited, pulledAmount, expectedQuota);
+	}
+	public void onInputPullFail(boolean unlimited) { inputPullCooldown.onFail(unlimited); }
 
 	// ===== Task 21: PendingBatchBuffer 访问方法（AE2 流体推送批处理缓冲） =====
 
@@ -466,6 +420,11 @@ public final class Ae2OutputStateHolder {
 		return local;
 	}
 
+	/** 包私有 — 仅读取现有过滤器（不创建），供 NBT 编解码使用 */
+	Ae2InputFilter getAeInputFilter() {
+		return aeInputFilter;
+	}
+
 	/**
 	 * 保存 per-tile 状态到 NBT
 	 * <br/>
@@ -474,18 +433,7 @@ public final class Ae2OutputStateHolder {
 	 * @param tag 目标 NBT 标签
 	 */
 	public void savePerTileState(CompoundTag tag) {
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_OUTPUT, aeItemOutputEnabled);
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_FLUID_OUTPUT, aeFluidOutputEnabled);
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_INPUT, aeItemInputEnabled);
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_INPUT_NBT_IGNORE, aeInputNbtIgnore);
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT, smeltingCompatEnabled);
-		tag.putBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT, centrifugeDirectAeOutputEnabled);
-		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
-		if (aeInputFilter != null) {
-			CompoundTag filterTag = new CompoundTag();
-			aeInputFilter.save(filterTag);
-			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, filterTag);
-		}
+		Ae2PerTileStateNbtCodec.save(this, tag);
 	}
 
 	/**
@@ -497,24 +445,6 @@ public final class Ae2OutputStateHolder {
 	 * @param tag 源 NBT 标签
 	 */
 	public void loadPerTileState(CompoundTag tag) {
-		aeItemOutputEnabled = tag.contains("productivebeesgenesis_ae_item_output")
-				? tag.getBoolean("productivebeesgenesis_ae_item_output") : true;
-		aeFluidOutputEnabled = tag.contains("productivebeesgenesis_ae_fluid_output")
-				? tag.getBoolean("productivebeesgenesis_ae_fluid_output") : true;
-		// 输入拉取开关默认 false（与字段声明一致），旧存档无此键时回退 false
-		aeItemInputEnabled = tag.contains("productivebeesgenesis_ae_item_input")
-				? tag.getBoolean("productivebeesgenesis_ae_item_input") : false;
-		// NBT 忽略开关默认 true（与字段声明一致），旧存档无此键时回退 true
-		aeInputNbtIgnore = tag.contains("productivebeesgenesis_ae_input_nbt_ignore")
-				? tag.getBoolean("productivebeesgenesis_ae_input_nbt_ignore") : true;
-		// 熔炉配方兼容开关默认 false（与字段声明一致），旧存档无此键时回退 false
-		smeltingCompatEnabled = tag.contains(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT)
-				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT) : false;
-		centrifugeDirectAeOutputEnabled = tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
-				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false;
-		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
-		CompoundTag filterTag = tag.contains("productivebeesgenesis_ae_input_filter")
-				? tag.getCompound("productivebeesgenesis_ae_input_filter") : new CompoundTag();
-		getOrCreateInputFilter().load(filterTag);
+		Ae2PerTileStateNbtCodec.load(this, tag);
 	}
 }

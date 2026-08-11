@@ -1,38 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.client.jade;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
-
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-
 /**
- * Jade AE2 网络状态显示组件
- * <br/>
- * 完全复刻 AE2 原版 {@code GridNodeStateDataProvider} 的显示设计，
- * 使用 AE2 原版翻译键和 {@link ChatFormatting#GRAY} 颜色：
- * <ul>
- *   <li>waila.ae2.DeviceOffline — 设备离线</li>
- *   <li>waila.ae2.NetworkBooting — 网络加载中</li>
- *   <li>waila.ae2.DeviceMissingChannel — 设备缺少频道</li>
- *   <li>waila.ae2.DeviceOnline — 设备在线</li>
- * </ul>
- * <p>
- * <b>数据同步</b>：服务端通过 {@link #appendServerData} 将状态 ordinal 写入 NBT（与 AE2 一致），
- * 客户端通过 {@link #appendTooltip} 读取并显示。避免客户端直接引用 AE2 类。
- * <p>
- * <b>显示条件</b>：仅当方块实体实现 {@link IAe2OutputHostBase} 且 AE2 集成已启用时显示。
- */
+	 * Jade AE2 网络状态显示组件
+	 * <br/>
+	 * 完全复刻 AE2 原版 {@code GridNodeStateDataProvider} 的显示设计，
+	 * 使用 AE2 原版翻译键和 {@link ChatFormatting#GRAY} 颜色：
+	 * <ul>
+	 *   <li>waila.ae2.DeviceOffline — 设备离线</li>
+	 *   <li>waila.ae2.NetworkBooting — 网络加载中</li>
+	 *   <li>waila.ae2.DeviceMissingChannel — 设备缺少频道</li>
+	 *   <li>waila.ae2.DeviceOnline — 设备在线</li>
+	 * </ul>
+	 * <p>
+	 * <b>数据同步</b>：服务端通过 {@link #appendServerData} 将状态 ordinal 写入 NBT（与 AE2 一致），
+	 * 客户端通过 {@link #appendTooltip} 读取并显示。避免客户端直接引用 AE2 类。
+	 * <p>
+	 * <b>显示条件</b>：仅当方块实体实现 {@link IAe2OutputHostBase} 且 AE2 集成已启用时显示。
+	 */
 public final class JadeAe2StatusProvider
 		implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
 

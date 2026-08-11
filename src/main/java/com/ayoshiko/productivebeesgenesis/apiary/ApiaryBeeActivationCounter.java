@@ -4,16 +4,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 /**
- * 蜜蜂激活状态 O(1) 计数器
- * <br/>
- * 参考离心机 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper} 的 CAS 模式，
- * 使用 {@link AtomicIntegerArray} + CAS 守卫每槽位状态转换，workingCount 通过增量维护而非每 tick 重置+重计。
- * <p>
- * 设计原因：工厂版蜂箱槽位最多 20，旧实现每 tick 执行 {@code workingCount.set(0)} 后遍历全部槽位重计，
- * 复杂度 O(n)。改为 CAS 增量维护后，稳态下绝大多数槽位 CAS 失败为 no-op，仅状态转换时递增/递减。
- * <p>
- * 线程安全：CAS 保证「比较+设置」原子性，避免多线程重复递增/递减计数器。
- */
+	 * 蜜蜂激活状态 O(1) 计数器
+	 * <br/>
+	 * 参考离心机 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper} 的 CAS 模式，
+	 * 使用 {@link AtomicIntegerArray} + CAS 守卫每槽位状态转换，workingCount 通过增量维护而非每 tick 重置+重计。
+	 * <p>
+	 * 设计原因：工厂版蜂箱槽位最多 20，旧实现每 tick 执行 {@code workingCount.set(0)} 后遍历全部槽位重计，
+	 * 复杂度 O(n)。改为 CAS 增量维护后，稳态下绝大多数槽位 CAS 失败为 no-op，仅状态转换时递增/递减。
+	 * <p>
+	 * 线程安全：CAS 保证「比较+设置」原子性，避免多线程重复递增/递减计数器。
+	 */
 final class ApiaryBeeActivationCounter {
 
 	/** 每槽位激活状态（0=未工作, 1=工作） */

@@ -1,5 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen.BeeEntry;
+import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState.SortMode;
+import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -9,44 +23,29 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen.BeeEntry;
-import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState.SortMode;
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-
 /**
- * BeeSelectionScreen 的排序与过滤逻辑处理器
- * <p>
- * 将蜜蜂条目的加载、排序、过滤（搜索/仅未添加）及按 namespace 分组构建等
- * 数据处理逻辑从屏幕类中剥离，使 BeeSelectionScreen 专注于事件调度与渲染。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责列表数据的排序、过滤与分组，不处理渲染或 GUI 交互</li>
- *   <li>组合模式 — 持有 {@link BeeSelectionScreen} 与 {@link BeeSelectionState} 引用，
- *       通过包级访问共享必要状态</li>
- *   <li>DIP — 依赖 {@link BeeInfoHelper} 抽象获取蜜蜂信息</li>
- * </ul>
- * <p>
- * 缓存策略：
- * <ul>
- *   <li>排序缓存 — 仅在 sortMode 或 allEntries 规模变化时重新排序</li>
- *   <li>displayItems 缓存 — 仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建</li>
- * </ul>
- * 避免 rebuildWidgets 触发的 init() 中重复排序/构建，提升滚动与搜索性能。
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * BeeSelectionScreen 的排序与过滤逻辑处理器
+	 * <p>
+	 * 将蜜蜂条目的加载、排序、过滤（搜索/仅未添加）及按 namespace 分组构建等
+	 * 数据处理逻辑从屏幕类中剥离，使 BeeSelectionScreen 专注于事件调度与渲染。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责列表数据的排序、过滤与分组，不处理渲染或 GUI 交互</li>
+	 *   <li>组合模式 — 持有 {@link BeeSelectionScreen} 与 {@link BeeSelectionState} 引用，
+	 *       通过包级访问共享必要状态</li>
+	 *   <li>DIP — 依赖 {@link BeeInfoHelper} 抽象获取蜜蜂信息</li>
+	 * </ul>
+	 * <p>
+	 * 缓存策略：
+	 * <ul>
+	 *   <li>排序缓存 — 仅在 sortMode 或 allEntries 规模变化时重新排序</li>
+	 *   <li>displayItems 缓存 — 仅在 filteredEntries 规模、搜索文本或折叠状态变化时重建</li>
+	 * </ul>
+	 * 避免 rebuildWidgets 触发的 init() 中重复排序/构建，提升滚动与搜索性能。
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

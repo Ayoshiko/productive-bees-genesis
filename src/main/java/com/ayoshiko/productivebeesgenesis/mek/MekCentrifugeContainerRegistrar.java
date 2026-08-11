@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlotHelper;
@@ -22,20 +19,23 @@ import mekanism.common.config.MekanismConfig;
 import mekanism.common.integration.energy.EnergyCompatUtils;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.tier.FactoryTier;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
-import net.minecraft.core.registries.Registries;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * MEK离心机ContainerType默认创建器注册器
- * <br/>
- * {@code RegisterEvent} 是模组总线事件，NeoForge 1.21.1 自动判定总线，
- * 不显式声明 {@code bus} 参数（该参数在 1.21.1 已过时）。
- */
+	 * MEK离心机ContainerType默认创建器注册器
+	 * <br/>
+	 * {@code RegisterEvent} 是模组总线事件，NeoForge 1.21.1 自动判定总线，
+	 * 不显式声明 {@code bus} 参数（该参数在 1.21.1 已过时）。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public class MekCentrifugeContainerRegistrar {
 

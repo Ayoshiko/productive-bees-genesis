@@ -1,15 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.upgrade.IUpgradeData;
-
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,25 +17,26 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * 蜂箱 NBT 序列化器
- * <br/>
- * 从 {@link TileEntityMekApiary} 拆分，单一职责管理蜂箱数据的持久化与升级数据流转：
- * <ul>
- *   <li>{@link #saveApiaryState} / {@link #loadApiaryState} — 存档读写（蜜蜂槽/喂食槽/PB升级/选中槽）</li>
- *   <li>{@link #saveCustomData} — 扳手拆卸持久化（BLOCK_ENTITY_DATA 组件）</li>
- *   <li>{@link #buildUpgradeData} — ItemTierInstaller 升级时保存完整状态</li>
- *   <li>{@link #applyUpgradeData} — 升级后恢复状态到新方块</li>
- * </ul>
- * <p>
- * 通过组合关系持有 {@link TileEntityMekApiary} 引用。super.saveAdditional/loadAdditional
- * 由调用方（@Override 方法）负责，本类仅处理蜂箱特有数据。
- * <p>
- * 线程安全：序列化在服务端主线程执行。
- */
+	 * 蜂箱 NBT 序列化器
+	 * <br/>
+	 * 从 {@link TileEntityMekApiary} 拆分，单一职责管理蜂箱数据的持久化与升级数据流转：
+	 * <ul>
+	 *   <li>{@link #saveApiaryState} / {@link #loadApiaryState} — 存档读写（蜜蜂槽/喂食槽/PB升级/选中槽）</li>
+	 *   <li>{@link #saveCustomData} — 扳手拆卸持久化（BLOCK_ENTITY_DATA 组件）</li>
+	 *   <li>{@link #buildUpgradeData} — ItemTierInstaller 升级时保存完整状态</li>
+	 *   <li>{@link #applyUpgradeData} — 升级后恢复状态到新方块</li>
+	 * </ul>
+	 * <p>
+	 * 通过组合关系持有 {@link TileEntityMekApiary} 引用。super.saveAdditional/loadAdditional
+	 * 由调用方（@Override 方法）负责，本类仅处理蜂箱特有数据。
+	 * <p>
+	 * 线程安全：序列化在服务端主线程执行。
+	 */
 class ApiaryNbtSerializer {
 
 	/** NBT key — 选中蜜蜂槽位 */

@@ -1,38 +1,37 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+import net.minecraft.resources.ResourceLocation;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.resources.ResourceLocation;
-
 /**
- * 按权重比例分配产物的静态工具（Task 2）
- * <p>
- * 设计动机：替代 {@link RandomHoneycombSelector#allocateEvenly} 的均匀分配，
- * 与 {@link WeightedTypeSelector} 的动态权重策略联动 — 权重高的类型获得较多产出，
- * 权重低（近期产出少）的类型获得较少但下次权重升高被优先选中。
- * <p>
- * <b>分配算法</b>：
- * <ol>
- *   <li>归一化权重：{@code weight[i] / sum(weights)}</li>
- *   <li>初始分配：{@code floor(total × weight[i] / sum(weights))}</li>
- *   <li>余数分配：剩余数量按权重从高到低分配 1 个，直到分配完</li>
- * </ol>
- * <p>
- * 保证：所有类型分配数量 ≥ 0 且总和严格等于 {@code total}。
- * <p>
- * <b>退化安全</b>：异常时退化为 {@link RandomHoneycombSelector#allocateEvenly}，记录 WARN 日志（限流）。
- */
+	 * 按权重比例分配产物的静态工具（Task 2）
+	 * <p>
+	 * 设计动机：替代 {@link RandomHoneycombSelector#allocateEvenly} 的均匀分配，
+	 * 与 {@link WeightedTypeSelector} 的动态权重策略联动 — 权重高的类型获得较多产出，
+	 * 权重低（近期产出少）的类型获得较少但下次权重升高被优先选中。
+	 * <p>
+	 * <b>分配算法</b>：
+	 * <ol>
+	 *   <li>归一化权重：{@code weight[i] / sum(weights)}</li>
+	 *   <li>初始分配：{@code floor(total × weight[i] / sum(weights))}</li>
+	 *   <li>余数分配：剩余数量按权重从高到低分配 1 个，直到分配完</li>
+	 * </ol>
+	 * <p>
+	 * 保证：所有类型分配数量 ≥ 0 且总和严格等于 {@code total}。
+	 * <p>
+	 * <b>退化安全</b>：异常时退化为 {@link RandomHoneycombSelector#allocateEvenly}，记录 WARN 日志（限流）。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

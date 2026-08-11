@@ -1,16 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionCache;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,33 +11,41 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
 /**
- * 蜜蜂选择屏幕
- * <br/>
- * 显示所有已注册的 ProductiveBees 蜜蜂列表，供用户批量勾选并添加到过滤列表。
- * <p>
- * 功能：
- * <ol>
- *   <li>展示所有已注册蜜蜂（名称、类型ID、产物信息）</li>
- *   <li>搜索框实时过滤（匹配类型ID或显示名称）</li>
- *   <li>按 namespace 分组显示，支持折叠/展开</li>
- *   <li>按名称/类型ID/模组排序</li>
- *   <li>全选/反选当前过滤结果</li>
- *   <li>滚动列表支持大量蜜蜂类型</li>
- *   <li>未添加蜜蜂条目左侧复选框，点击切换选中状态</li>
- *   <li>底部“添加选中”按钮一次性将勾选蜜蜂批量回调给父屏幕</li>
- * </ol>
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP：仅负责蜜蜂选择，不涉及配置读写；状态管理委托给 {@link BeeSelectionState}，
- *       排序/过滤逻辑委托给 {@link BeeSelectionSorter}</li>
- *   <li>DIP：依赖 {@code Consumer<List<String>>} 批量回调，蜜蜂信息获取由排序器间接依赖 BeeInfoHelper</li>
- *   <li>性能：预计算 BeeEntry 缓存，避免渲染时重复查询</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问。
- */
+	 * 蜜蜂选择屏幕
+	 * <br/>
+	 * 显示所有已注册的 ProductiveBees 蜜蜂列表，供用户批量勾选并添加到过滤列表。
+	 * <p>
+	 * 功能：
+	 * <ol>
+	 *   <li>展示所有已注册蜜蜂（名称、类型ID、产物信息）</li>
+	 *   <li>搜索框实时过滤（匹配类型ID或显示名称）</li>
+	 *   <li>按 namespace 分组显示，支持折叠/展开</li>
+	 *   <li>按名称/类型ID/模组排序</li>
+	 *   <li>全选/反选当前过滤结果</li>
+	 *   <li>滚动列表支持大量蜜蜂类型</li>
+	 *   <li>未添加蜜蜂条目左侧复选框，点击切换选中状态</li>
+	 *   <li>底部“添加选中”按钮一次性将勾选蜜蜂批量回调给父屏幕</li>
+	 * </ol>
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP：仅负责蜜蜂选择，不涉及配置读写；状态管理委托给 {@link BeeSelectionState}，
+	 *       排序/过滤逻辑委托给 {@link BeeSelectionSorter}</li>
+	 *   <li>DIP：依赖 {@code Consumer<List<String>>} 批量回调，蜜蜂信息获取由排序器间接依赖 BeeInfoHelper</li>
+	 *   <li>性能：预计算 BeeEntry 缓存，避免渲染时重复查询</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

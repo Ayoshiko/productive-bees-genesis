@@ -3,20 +3,19 @@ package com.ayoshiko.productivebeesgenesis.apiary.client;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
 /**
- * MEK 蜂箱工厂版 GUI
- * <br/>
- * 继承 {@link GuiMekApiary}，针对工厂级蜂箱（多槽位、宽 GUI）进行扩展：
- * <ul>
- *   <li>从 tile 动态读取蜜蜂列数/行数与输出列数，覆盖父类的固定值</li>
- *   <li>根据槽位规模计算并设置 GUI 宽度/高度与物品栏标签位置</li>
- *   <li>追加排序 Tab（{@link GuiApiarySortingTab}）</li>
- * </ul>
- */
+	 * MEK 蜂箱工厂版 GUI
+	 * <br/>
+	 * 继承 {@link GuiMekApiary}，针对工厂级蜂箱（多槽位、宽 GUI）进行扩展：
+	 * <ul>
+	 *   <li>从 tile 动态读取蜜蜂列数/行数与输出列数，覆盖父类的固定值</li>
+	 *   <li>根据槽位规模计算并设置 GUI 宽度/高度与物品栏标签位置</li>
+	 *   <li>追加排序 Tab（{@link GuiApiarySortingTab}）</li>
+	 * </ul>
+	 */
 public class GuiMekApiaryFactory extends GuiMekApiary<TileEntityMekApiaryFactory, MekApiaryFactoryContainer> {
 
 	private final int beeCols;

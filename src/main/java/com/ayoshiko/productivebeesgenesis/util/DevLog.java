@@ -8,35 +8,35 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 开发者模式日志门面
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP（单一职责）：仅负责日志输出门面，不持有任何业务状态</li>
- *   <li>DIP（依赖倒置）：依赖 {@link DevModeManager} 抽象判断是否输出，
- *       而非直接读取 volatile 字段，便于未来替换状态源</li>
- * </ul>
- * <p>
- * 性能考量：
- * <ul>
- *   <li>开发者模式关闭时，{@code "[DEV][" + feature + "] "} 字符串拼接仍会发生（轻量），
- *       但 SLF4J 参数化避免 message 内 args 的 toString 调用</li>
- *   <li>错误日志（{@link #error(String, Object...)} / {@link #error(String, Throwable)}）
- *       无条件输出，确保异常不被静默吞没；错误级别独立于 {@link LogThrottle}，不参与节流</li>
- *   <li>节流机制：相同 feature+message 在 {@link #THROTTLE_MS} 内只输出首次，
- *       避免高频 tick 日志（如 resolveFluidOutput）刷屏卡顿</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：节流判定使用 {@link ConcurrentHashMap#compute(Object, java.util.function.BiFunction)}
- * 保证 check-and-update 原子性，避免并发线程同时通过节流守卫导致重复输出。
- * <p>
- * <b>message 参数约束（重要）</b>：{@code message} 参数必须为常量模板字符串，
- * 禁止包含动态拼接内容（如坐标、UUID、时间戳等），否则 {@link #lastLogTime} map
- * 将因 key 无限增长而内存泄漏。动态内容请通过 SLF4J {@code {}} 占位符传入 args。
- * <p>
- * feature 参数示例："recipe_reload"、"config_apply"、"filter_list"、"bee_register" 等。
- * 与 {@link DevModeManager#isLoggingEnabled(String)} 配合实现粒度化日志开关。
- */
+	 * 开发者模式日志门面
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP（单一职责）：仅负责日志输出门面，不持有任何业务状态</li>
+	 *   <li>DIP（依赖倒置）：依赖 {@link DevModeManager} 抽象判断是否输出，
+	 *       而非直接读取 volatile 字段，便于未来替换状态源</li>
+	 * </ul>
+	 * <p>
+	 * 性能考量：
+	 * <ul>
+	 *   <li>开发者模式关闭时，{@code "[DEV][" + feature + "] "} 字符串拼接仍会发生（轻量），
+	 *       但 SLF4J 参数化避免 message 内 args 的 toString 调用</li>
+	 *   <li>错误日志（{@link #error(String, Object...)} / {@link #error(String, Throwable)}）
+	 *       无条件输出，确保异常不被静默吞没；错误级别独立于 {@link LogThrottle}，不参与节流</li>
+	 *   <li>节流机制：相同 feature+message 在 {@link #THROTTLE_MS} 内只输出首次，
+	 *       避免高频 tick 日志（如 resolveFluidOutput）刷屏卡顿</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：节流判定使用 {@link ConcurrentHashMap#compute(Object, java.util.function.BiFunction)}
+	 * 保证 check-and-update 原子性，避免并发线程同时通过节流守卫导致重复输出。
+	 * <p>
+	 * <b>message 参数约束（重要）</b>：{@code message} 参数必须为常量模板字符串，
+	 * 禁止包含动态拼接内容（如坐标、UUID、时间戳等），否则 {@link #lastLogTime} map
+	 * 将因 key 无限增长而内存泄漏。动态内容请通过 SLF4J {@code {}} 占位符传入 args。
+	 * <p>
+	 * feature 参数示例："recipe_reload"、"config_apply"、"filter_list"、"bee_register" 等。
+	 * 与 {@link DevModeManager#isLoggingEnabled(String)} 配合实现粒度化日志开关。
+	 */
 public final class DevLog {
 
 	/** 节流时间窗口(ms) — 相同 feature+message 在此时间内只输出首次 */

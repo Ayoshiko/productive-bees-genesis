@@ -1,37 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.util.UpgradeUtils;
-
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 机器升级支持工具类
- * <br/>
- * 根据MEKExtras和MekanismEmpowered加载状态返回对应的{@link AttributeUpgradeSupport}：
- * <ul>
- *   <li>MEKExtras已加载：SPEED/ENERGY/MUFFLING + STACK/CREATIVE</li>
- *   <li>MekanismEmpowered已加载：追加 EMPOWERED_SPEED/ENERGY + IO_CAPACITY + AUTO_INSERTER + FAST_ITEM_INSERT/EJECT</li>
- *   <li>两者都未加载：SPEED/ENERGY/MUFFLING（即{@link AttributeUpgradeSupport#DEFAULT_MACHINE_UPGRADES}）</li>
- * </ul>
- * <p>
- * 设计原理：MUFFLING是Mekanism原版升级，{@code Machine}构造函数通过
- * {@code DEFAULT_MACHINE_UPGRADES}已默认包含。MEKExtras的STACK/CREATIVE
- * 通过Mixin注入{@code mekanism.api.Upgrade}枚举，仅在MEKExtras加载时可用。
- * MekanismEmpowered的升级为运行时注册的标准Upgrade实例，通过反射获取。
- * <p>
- * 类加载安全：本类不直接引用任何MEKExtras或MekanismEmpowered类，
- * {@link MekExtraUpgradeSupport}和{@link MekEmpUpgradeSupport}仅在对应模组加载时
- * 通过懒加载委托调用，避免未安装时触发NoClassDefFoundError。
- * <p>
- * 升级查询门面：{@link #getStackUpgrades}和{@link #hasCreativeUpgrade}提供
- * 线程安全的间接查询入口，调用方（蜂箱/离心机）无需直接引用MEKExtras类。
- */
+	 * 机器升级支持工具类
+	 * <br/>
+	 * 根据MEKExtras和MekanismEmpowered加载状态返回对应的{@link AttributeUpgradeSupport}：
+	 * <ul>
+	 *   <li>MEKExtras已加载：SPEED/ENERGY/MUFFLING + STACK/CREATIVE</li>
+	 *   <li>MekanismEmpowered已加载：追加 EMPOWERED_SPEED/ENERGY + IO_CAPACITY + AUTO_INSERTER + FAST_ITEM_INSERT/EJECT</li>
+	 *   <li>两者都未加载：SPEED/ENERGY/MUFFLING（即{@link AttributeUpgradeSupport#DEFAULT_MACHINE_UPGRADES}）</li>
+	 * </ul>
+	 * <p>
+	 * 设计原理：MUFFLING是Mekanism原版升级，{@code Machine}构造函数通过
+	 * {@code DEFAULT_MACHINE_UPGRADES}已默认包含。MEKExtras的STACK/CREATIVE
+	 * 通过Mixin注入{@code mekanism.api.Upgrade}枚举，仅在MEKExtras加载时可用。
+	 * MekanismEmpowered的升级为运行时注册的标准Upgrade实例，通过反射获取。
+	 * <p>
+	 * 类加载安全：本类不直接引用任何MEKExtras或MekanismEmpowered类，
+	 * {@link MekExtraUpgradeSupport}和{@link MekEmpUpgradeSupport}仅在对应模组加载时
+	 * 通过懒加载委托调用，避免未安装时触发NoClassDefFoundError。
+	 * <p>
+	 * 升级查询门面：{@link #getStackUpgrades}和{@link #hasCreativeUpgrade}提供
+	 * 线程安全的间接查询入口，调用方（蜂箱/离心机）无需直接引用MEKExtras类。
+	 */
 public final class MekUpgradeSupport {
 
 	private MekUpgradeSupport() {}

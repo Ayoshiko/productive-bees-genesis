@@ -1,43 +1,41 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import mekanism.api.Upgrade;
+import mekanism.common.block.attribute.AttributeUpgradeSupport;
+import org.jetbrains.annotations.Nullable;
+
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jetbrains.annotations.Nullable;
-
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
-import mekanism.api.Upgrade;
-import mekanism.common.block.attribute.AttributeUpgradeSupport;
-
 /**
- * MekanismEmpowered 升级支持构建器
- * <br/>
- * <b>类加载安全</b>：本类通过反射访问 MekanismEmpowered 的 API 类
- * {@code dev.lapis256.mekanism_empowered.api.MekEmpUpgrade}，
- * 仅在 {@link MekCompatHooks#isMekanismEmpoweredLoaded()} 为 true 时由
- * {@link MekUpgradeSupport} 委托加载。
- * 未安装 MekanismEmpowered 时本类不会被加载，避免 NoClassDefFoundError。
- * <p>
- * MekanismEmpowered 提供 6 种升级（均为标准 {@link Upgrade} 类型，通过反射获取实例）：
- * <ul>
- *   <li>EMPOWERED_SPEED — 强化速度</li>
- *   <li>EMPOWERED_ENERGY — 强化能量</li>
- *   <li>IO_CAPACITY — IO 容量</li>
- *   <li>AUTO_INSERTER — 自动插入器</li>
- *   <li>FAST_ITEM_INSERT — 快速物品插入</li>
- *   <li>FAST_ITEM_EJECT — 快速物品弹出</li>
- * </ul>
- * <p>
- * 升级集合分层（与 MekEmp 的 MekEmpUpgrades 一致）：
- * <ul>
- *   <li>机器基础：EMPOWERED_SPEED + EMPOWERED_ENERGY + IO_CAPACITY + AUTO_INSERTER</li>
- *   <li>物品输入机器：机器基础 + FAST_ITEM_INSERT</li>
- *   <li>物品输出机器：机器基础 + FAST_ITEM_EJECT</li>
- *   <li>物品输入输出机器：机器基础 + FAST_ITEM_INSERT + FAST_ITEM_EJECT（全 6 种）</li>
- * </ul>
- */
+	 * MekanismEmpowered 升级支持构建器
+	 * <br/>
+	 * <b>类加载安全</b>：本类通过反射访问 MekanismEmpowered 的 API 类
+	 * {@code dev.lapis256.mekanism_empowered.api.MekEmpUpgrade}，
+	 * 仅在 {@link MekCompatHooks#isMekanismEmpoweredLoaded()} 为 true 时由
+	 * {@link MekUpgradeSupport} 委托加载。
+	 * 未安装 MekanismEmpowered 时本类不会被加载，避免 NoClassDefFoundError。
+	 * <p>
+	 * MekanismEmpowered 提供 6 种升级（均为标准 {@link Upgrade} 类型，通过反射获取实例）：
+	 * <ul>
+	 *   <li>EMPOWERED_SPEED — 强化速度</li>
+	 *   <li>EMPOWERED_ENERGY — 强化能量</li>
+	 *   <li>IO_CAPACITY — IO 容量</li>
+	 *   <li>AUTO_INSERTER — 自动插入器</li>
+	 *   <li>FAST_ITEM_INSERT — 快速物品插入</li>
+	 *   <li>FAST_ITEM_EJECT — 快速物品弹出</li>
+	 * </ul>
+	 * <p>
+	 * 升级集合分层（与 MekEmp 的 MekEmpUpgrades 一致）：
+	 * <ul>
+	 *   <li>机器基础：EMPOWERED_SPEED + EMPOWERED_ENERGY + IO_CAPACITY + AUTO_INSERTER</li>
+	 *   <li>物品输入机器：机器基础 + FAST_ITEM_INSERT</li>
+	 *   <li>物品输出机器：机器基础 + FAST_ITEM_EJECT</li>
+	 *   <li>物品输入输出机器：机器基础 + FAST_ITEM_INSERT + FAST_ITEM_EJECT（全 6 种）</li>
+	 * </ul>
+	 */
 final class MekEmpUpgradeSupport {
 
 	/** MekEmpUpgrade 全限定类名（可选依赖，反射访问） */

@@ -1,21 +1,20 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import mekanism.common.block.attribute.Attribute;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.jetbrains.annotations.Nullable;
-
 /**
- * Mekanism 反射类/方法/Field 缓存工具类
- * <br/>
- * 缓存反射获取的 Class、Method、Field 对象，避免重复 Class.forName() 和 getField() 调用。
- * 使用 volatile + 双重检查锁保证线程安全，Field 缓存使用 ConcurrentHashMap。
- * 仅供 {@link MekCompatHooks} 包内使用。
- */
+	 * Mekanism 反射类/方法/Field 缓存工具类
+	 * <br/>
+	 * 缓存反射获取的 Class、Method、Field 对象，避免重复 Class.forName() 和 getField() 调用。
+	 * 使用 volatile + 双重检查锁保证线程安全，Field 缓存使用 ConcurrentHashMap。
+	 * 仅供 {@link MekCompatHooks} 包内使用。
+	 */
 final class MekReflectionCache {
 
 	/** EM的EMFactoryTier全限定类名（可选依赖，反射访问） */

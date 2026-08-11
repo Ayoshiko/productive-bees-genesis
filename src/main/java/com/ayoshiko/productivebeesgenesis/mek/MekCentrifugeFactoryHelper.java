@@ -1,15 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.DoubleSupplier;
-import java.util.function.IntSupplier;
-import java.util.function.LongConsumer;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
@@ -18,7 +8,6 @@ import com.ayoshiko.productivebeesgenesis.mixin.accessor.RecipeCacheLookupMonito
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -28,15 +17,15 @@ import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.math.MathUtils;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
-import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
+import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
 import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.capabilities.fluid.BasicFluidTank;
-import mekanism.common.config.MekanismConfig;
 import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
+import mekanism.common.config.MekanismConfig;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
@@ -56,11 +45,20 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.common.util.TriPredicate;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.DoubleSupplier;
+import java.util.function.IntSupplier;
+import java.util.function.LongConsumer;
 
 /**
- * MEK 离心机工厂公共逻辑辅助工具类 — 抽取三工厂公共方法,采用静态工具类模式。
- * 设计原则:SRP(仅工厂公共逻辑)、DIP(函数式接口)、OCP(新增工厂不修改 Helper)。
- */
+	 * MEK 离心机工厂公共逻辑辅助工具类 — 抽取三工厂公共方法,采用静态工具类模式。
+	 * 设计原则:SRP(仅工厂公共逻辑)、DIP(函数式接口)、OCP(新增工厂不修改 Helper)。
+	 */
 public final class MekCentrifugeFactoryHelper {
 
 	private MekCentrifugeFactoryHelper() {
@@ -244,6 +242,13 @@ public final class MekCentrifugeFactoryHelper {
 		int batchMultiplier = pbProcessor.consumeTickMultiplier();
 		// PB配方独立处理 — 只处理非SMELTING配方且输入不为空的进程
 		int processStart = pbProcessor.getAndAdvanceProcessStart(processes);
+		int remainingInputLanes = 0;
+		for (int i = 0; i < processes; i++) {
+			if (!inputSlots.get(i).getStack().isEmpty()) remainingInputLanes++;
+		}
+		// Remaining PB energy budget for this tick; debit only actual consumption so
+		// a shared buffer cannot be over-committed across parallel lanes.
+		long remainingEnergy = Math.max(0L, energyContainer.getEnergy());
 		for (int processOffset = 0; processOffset < processes; processOffset++) {
 			int i = (processStart + processOffset) % processes;
 			ItemStack input = inputSlots.get(i).getStack();
@@ -259,16 +264,23 @@ public final class MekCentrifugeFactoryHelper {
 			}
 			// PB配方短路 — 万象创世蜜脾/蜜脾块或有PB离心配方的物品跳过 SMELTING 检查
 			// 原因：modularbees 为 c:honeycombs tag 注册了熔炼配方，导致所有 PB 蜜脾被 hasSmeltingRecipe 误判
-			if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)
-					|| pbProcessor.findPbRecipe(input) != null) {
+			long processEnergyBudget = PbProcessFairness.energyBudget(
+					remainingEnergy, remainingInputLanes);
+			remainingInputLanes--;
+			boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
+			RecipeHolder<CentrifugeRecipe> preFoundRecipe = isMyriad ? null : pbProcessor.findPbRecipe(input);
+			if (isMyriad || preFoundRecipe != null) {
 				pbProcessor.setTickMultiplier(batchMultiplier);
-				if (pbProcessor.tryProcessPbRecipe(i)) {
+				long energyBeforeProcess = energyContainer.getEnergy();
+				if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
 					context.productivebeesgenesis$onProcessActivated(i);
 					context.setPbActiveState(true, i);
 				} else {
 					context.productivebeesgenesis$onProcessDeactivated(i);
 				}
+				remainingEnergy = Math.max(0L,
+						remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
 				continue;
 			}
 			// 缓存SMELTING配方检查结果，输入变更时才重新查询
@@ -282,7 +294,8 @@ public final class MekCentrifugeFactoryHelper {
 				continue;
 			}
 			pbProcessor.setTickMultiplier(batchMultiplier);
-			if (pbProcessor.tryProcessPbRecipe(i)) {
+			long energyBeforeProcess = energyContainer.getEnergy();
+			if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
 				// Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部状态守卫防重复 + setActiveState）
 				context.productivebeesgenesis$onProcessActivated(i);
 				context.setPbActiveState(true, i);
@@ -290,6 +303,8 @@ public final class MekCentrifugeFactoryHelper {
 				// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）
 				context.productivebeesgenesis$onProcessDeactivated(i);
 			}
+			remainingEnergy = Math.max(0L,
+					remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
 		}
 
 		// Task 11: 整体激活 = SMELTING 激活（super 后 currentActive）|| PB 激活（计数器 O(1)，替代 O(processes) 遍历）
@@ -362,7 +377,7 @@ public final class MekCentrifugeFactoryHelper {
 		// Task 12: ModConfig.SERVER 未加载时(客户端构造期间)默认创建 MULTI,匹配服务端可能的 MULTI
 		boolean configAvailable = false;
 		boolean multiFluidEnabled = false;
-		int maxTanksPerFluidConfig = 0; // v2.1.0: 默认自动计算
+		int maxTanksPerFluidConfig = 0; // v2.0.9: 默认自动计算
 		try {
 			multiFluidEnabled = ModConfig.SERVER.mekCentrifugeMultiFluidTank.get();
 			maxTanksPerFluidConfig = ModConfig.SERVER.mekCentrifugeMaxTanksPerFluid.get();
@@ -378,7 +393,7 @@ public final class MekCentrifugeFactoryHelper {
 			// 每子槽容量 = Integer.MAX_VALUE，256× 加速下单进程每 tick 约 100 万 mB，可容纳 2140 tick 产出
 			int maxTanks = processes;
 			int tankCapacity = Integer.MAX_VALUE;
-			// v2.1.0: 传入 maxTanksPerFluidConfig（0=自动计算 maxTanks/2），由 Holder 构造时解析
+			// v2.0.9: 传入 maxTanksPerFluidConfig（0=自动计算 maxTanks/2），由 Holder 构造时解析
 			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener, maxTanksPerFluidConfig);
 			// Task 2: 调用 tankSetter 设置主槽引用,修复 fluidOutputTank 字段为 null 的核心 bug
 			// Task 5: 构造时已预分配全部槽位,getTanks().get(0) 返回预分配的第 0 个槽

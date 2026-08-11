@@ -1,30 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
 /**
- * 蜜蜂选择屏幕的搜索框与排序按钮管理器
- * <p>
- * 将搜索框的布局计算、创建配置、搜索文本状态管理及实时过滤回调从屏幕类中剥离，
- * 同时管理与之位置关联的排序按钮，使 BeeSelectionScreen 专注于事件调度与整体布局。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责搜索框与排序按钮的创建、状态及交互逻辑</li>
- *   <li>组合模式 — 持有 {@link BeeSelectionScreen}、{@link BeeSelectionState} 与
- *       {@link BeeSelectionSorter} 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问。
- */
+	 * 蜜蜂选择屏幕的搜索框与排序按钮管理器
+	 * <p>
+	 * 将搜索框的布局计算、创建配置、搜索文本状态管理及实时过滤回调从屏幕类中剥离，
+	 * 同时管理与之位置关联的排序按钮，使 BeeSelectionScreen 专注于事件调度与整体布局。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责搜索框与排序按钮的创建、状态及交互逻辑</li>
+	 *   <li>组合模式 — 持有 {@link BeeSelectionScreen}、{@link BeeSelectionState} 与
+	 *       {@link BeeSelectionSorter} 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

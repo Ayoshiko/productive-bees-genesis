@@ -1,15 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.Map;
-import java.util.WeakHashMap;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.tab.GuiConfigTypeTab;
@@ -31,36 +27,39 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Map;
+import java.util.WeakHashMap;
+
 /**
- * AE2 输入拉取覆盖层 — 将 per-tile AE2 输入拉取控制注入 MEK 侧面配置窗口
- * <br/>
- * 参考 {@link AeOutputOverlay} 的模式，适配 {@link IAe2InputHost} 接口。
- * 注入 1 个按钮：打开 AE2 输入拉取配置窗口（{@link GuiAeInputConfig}）。
- * <p>
- * <b>与输出覆盖层的区别</b>：
- * <ul>
- *   <li>宿主判断：使用 {@link IAe2InputHost} 接口而非 {@code IAe2OutputHostBase}</li>
- *   <li>仅 ITEM 类型显示（输入拉取只处理物品）</li>
- *   <li>1 个打开窗口按钮而非 1 按钮 + 1 文字</li>
- *   <li>全局配置检查 {@code mekCentrifugeAeInputEnabled}</li>
- *   <li>网络包：{@link OpenAeInputConfigPayload}（请求服务端推送过滤器状态）</li>
- * </ul>
- * <p>
- * <b>按钮交互</b>：点击时在 MEK GUI 上添加 {@link GuiAeInputConfig} 窗口，
- * 同时发送 {@link OpenAeInputConfigPayload} 请求服务端推送最新过滤器状态到客户端。
- * 客户端通过 {@code SyncAeInputFilterEntriesPayload} 接收最新状态并刷新窗口显示。
- * <p>
- * <b>线程安全</b>：客户端 GUI 渲染单线程，WeakHashMap 无需同步。
- * <p>
- * <b>事件驱动点击检测原理</b>：通过 NeoForge 的 {@link ScreenEvent.MouseButtonPressed.Pre}
- * 事件在 Screen.mouseClicked 之前拦截点击，命中按钮后取消事件避免穿透。按钮自身的
- * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
- * <p>
- * <b>修复 v14 渲染阶段不修改状态</b>：按钮创建（computeIfAbsent + children().add）
- * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
- * 渲染阶段仅更新 visible/active/tooltip 状态，避免 ConcurrentModificationException
- * 和递归渲染风险。
- */
+	 * AE2 输入拉取覆盖层 — 将 per-tile AE2 输入拉取控制注入 MEK 侧面配置窗口
+	 * <br/>
+	 * 参考 {@link AeOutputOverlay} 的模式，适配 {@link IAe2InputHost} 接口。
+	 * 注入 1 个按钮：打开 AE2 输入拉取配置窗口（{@link GuiAeInputConfig}）。
+	 * <p>
+	 * <b>与输出覆盖层的区别</b>：
+	 * <ul>
+	 *   <li>宿主判断：使用 {@link IAe2InputHost} 接口而非 {@code IAe2OutputHostBase}</li>
+	 *   <li>仅 ITEM 类型显示（输入拉取只处理物品）</li>
+	 *   <li>1 个打开窗口按钮而非 1 按钮 + 1 文字</li>
+	 *   <li>全局配置检查 {@code mekCentrifugeAeInputEnabled}</li>
+	 *   <li>网络包：{@link OpenAeInputConfigPayload}（请求服务端推送过滤器状态）</li>
+	 * </ul>
+	 * <p>
+	 * <b>按钮交互</b>：点击时在 MEK GUI 上添加 {@link GuiAeInputConfig} 窗口，
+	 * 同时发送 {@link OpenAeInputConfigPayload} 请求服务端推送最新过滤器状态到客户端。
+	 * 客户端通过 {@code SyncAeInputFilterEntriesPayload} 接收最新状态并刷新窗口显示。
+	 * <p>
+	 * <b>线程安全</b>：客户端 GUI 渲染单线程，WeakHashMap 无需同步。
+	 * <p>
+	 * <b>事件驱动点击检测原理</b>：通过 NeoForge 的 {@link ScreenEvent.MouseButtonPressed.Pre}
+	 * 事件在 Screen.mouseClicked 之前拦截点击，命中按钮后取消事件避免穿透。按钮自身的
+	 * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
+	 * <p>
+	 * <b>修复 v14 渲染阶段不修改状态</b>：按钮创建（computeIfAbsent + children().add）
+	 * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
+	 * 渲染阶段仅更新 visible/active/tooltip 状态，避免 ConcurrentModificationException
+	 * 和递归渲染风险。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class AeInputOverlay {
 

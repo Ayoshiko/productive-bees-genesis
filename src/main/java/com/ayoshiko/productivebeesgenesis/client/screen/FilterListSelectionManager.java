@@ -1,26 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.components.Button;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
- * 过滤列表选择管理器
- * <p>
- * 从 {@link FilterListScreen} 抽取的批量选择与删除逻辑（SRP）：
- * <ul>
- *   <li>维护选中的蜜蜂类型集合</li>
- *   <li>全选/反选/切换选中状态</li>
- *   <li>批量删除选中条目</li>
- *   <li>更新删除按钮的可用状态</li>
- * </ul>
- */
+	 * 过滤列表选择管理器
+	 * <p>
+	 * 从 {@link FilterListScreen} 抽取的批量选择与删除逻辑（SRP）：
+	 * <ul>
+	 *   <li>维护选中的蜜蜂类型集合</li>
+	 *   <li>全选/反选/切换选中状态</li>
+	 *   <li>批量删除选中条目</li>
+	 *   <li>更新删除按钮的可用状态</li>
+	 * </ul>
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

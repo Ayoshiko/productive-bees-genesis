@@ -1,13 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-
+import com.ayoshiko.productivebeesgenesis.util.BeeTypeNormalizer;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.Minecraft;
@@ -16,22 +10,28 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * 过滤列表屏幕的蜜蜂信息缓存
- * <p>
- * 从 {@link FilterListScreen} 抽取的蜜蜂图标/名称/产物信息缓存逻辑（SRP）：
- * <ul>
- *   <li>按类型ID字符串缓存 ItemStack 图标，避免每帧创建</li>
- *   <li>缓存显示名称翻译键解析结果</li>
- *   <li>缓存产物配方遍历结果</li>
- * </ul>
- * <p>
- * <b>容量限制</b>：基于 LRU {@link LinkedHashMap}，超出 {@link #MAX_CACHE_SIZE} 自动淘汰最久未访问条目，
- * 防止长时间运行内存累积。
- * <p>
- * <b>线程安全</b>：客户端 GUI 主线程访问，使用单一锁对象 {@link #lock} 为跨 map 的复合操作
- * 提供防御性同步，避免未来扩展时引入的潜在并发访问问题。
- */
+	 * 过滤列表屏幕的蜜蜂信息缓存
+	 * <p>
+	 * 从 {@link FilterListScreen} 抽取的蜜蜂图标/名称/产物信息缓存逻辑（SRP）：
+	 * <ul>
+	 *   <li>按类型ID字符串缓存 ItemStack 图标，避免每帧创建</li>
+	 *   <li>缓存显示名称翻译键解析结果</li>
+	 *   <li>缓存产物配方遍历结果</li>
+	 * </ul>
+	 * <p>
+	 * <b>容量限制</b>：基于 LRU {@link LinkedHashMap}，超出 {@link #MAX_CACHE_SIZE} 自动淘汰最久未访问条目，
+	 * 防止长时间运行内存累积。
+	 * <p>
+	 * <b>线程安全</b>：客户端 GUI 主线程访问，使用单一锁对象 {@link #lock} 为跨 map 的复合操作
+	 * 提供防御性同步，避免未来扩展时引入的潜在并发访问问题。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault
@@ -80,7 +80,7 @@ final class FilterListBeeInfoCache {
 			if (cached != null) {
 				return cached;
 			}
-			ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
+		ResourceLocation beeType = BeeTypeNormalizer.parseBeeType(beeTypeId);
 			if (beeType == null) {
 				return ItemStack.EMPTY;
 			}
@@ -106,7 +106,7 @@ final class FilterListBeeInfoCache {
 			if (cached != null) {
 				return cached;
 			}
-			ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
+		ResourceLocation beeType = BeeTypeNormalizer.parseBeeType(beeTypeId);
 			if (beeType == null) {
 				return Component.literal(beeTypeId);
 			}
@@ -128,7 +128,7 @@ final class FilterListBeeInfoCache {
 			if (cached != null) {
 				return cached;
 			}
-			ResourceLocation beeType = BeeInfoHelper.parseBeeType(beeTypeId);
+		ResourceLocation beeType = BeeTypeNormalizer.parseBeeType(beeTypeId);
 			if (beeType == null) {
 				return Component.empty();
 			}

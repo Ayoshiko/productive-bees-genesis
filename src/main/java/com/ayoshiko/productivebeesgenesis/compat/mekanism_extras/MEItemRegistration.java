@@ -7,7 +7,6 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -15,21 +14,21 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import java.util.Map;
 
 /**
- * Mekanism Extras (ME) 物品注册隔离类
- * <br/>
- * 将 ME 工厂 BlockItem（离心机 + 蜂箱）的注册逻辑从 {@link ModItems} 中抽取至此，
- * 使 {@link ModItems} 不再直接 import ME 的类。
- * <br/>
- * 本类直接引用 ME 的 {@link ExtraFactoryTier} 等类，
- * 因为仅在 ME 加载时由 {@link MECompatLoader} 调用。
- * <p>
- * 注册结果填充到 {@link ModItems#ME_FACTORY_ITEMS} 和 {@link ModItems#ME_APIARY_FACTORY_ITEMS}
- * （通配类型 {@code Map<Object, DeferredItem<?>>}，由主注册类定义），
- * 使用 {@link ModItems#machineItemProperties} 添加 Mekanism DataComponents。
- * <p>
- * 适配说明：{@link ModBlocks#ME_FACTORIES} 为通配类型 {@code Map<Object, DeferredBlock<?>>}，
- * 遍历时需将 {@code deferredBlock.get()} 强制转换为 {@link MekCentrifugeBlock} 或 {@link MekApiaryBlock}。
- */
+	 * Mekanism Extras (ME) 物品注册隔离类
+	 * <br/>
+	 * 将 ME 工厂 BlockItem（离心机 + 蜂箱）的注册逻辑从 {@link ModItems} 中抽取至此，
+	 * 使 {@link ModItems} 不再直接 import ME 的类。
+	 * <br/>
+	 * 本类直接引用 ME 的 {@link ExtraFactoryTier} 等类，
+	 * 因为仅在 ME 加载时由 {@link MECompatLoader} 调用。
+	 * <p>
+	 * 注册结果填充到 {@link ModItems#ME_FACTORY_ITEMS} 和 {@link ModItems#ME_APIARY_FACTORY_ITEMS}
+	 * （通配类型 {@code Map<Object, DeferredItem<?>>}，由主注册类定义），
+	 * 使用 {@link ModItems#machineItemProperties} 添加 Mekanism DataComponents。
+	 * <p>
+	 * 适配说明：{@link ModBlocks#ME_FACTORIES} 为通配类型 {@code Map<Object, DeferredBlock<?>>}，
+	 * 遍历时需将 {@code deferredBlock.get()} 强制转换为 {@link MekCentrifugeBlock} 或 {@link MekApiaryBlock}。
+	 */
 public final class MEItemRegistration {
 
 	private MEItemRegistration() {}

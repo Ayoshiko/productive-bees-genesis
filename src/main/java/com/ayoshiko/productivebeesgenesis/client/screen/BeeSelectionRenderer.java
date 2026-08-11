@@ -1,22 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.List;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+
 /**
- * BeeSelectionScreen 的列表渲染与命中测试辅助类
- * <p>
- * 负责分组标题、蜜蜂条目、复选框、图标等绘制，以及鼠标点击位置到列表项的映射，
- * 使 BeeSelectionScreen 专注于状态管理与事件调度。
- */
+	 * BeeSelectionScreen 的列表渲染与命中测试辅助类
+	 * <p>
+	 * 负责分组标题、蜜蜂条目、复选框、图标等绘制，以及鼠标点击位置到列表项的映射，
+	 * 使 BeeSelectionScreen 专注于状态管理与事件调度。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

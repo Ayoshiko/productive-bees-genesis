@@ -1,37 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
-import java.util.List;
-import java.util.Set;
-
+import net.neoforged.fml.loading.FMLLoader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import net.neoforged.fml.loading.FMLLoader;
+import java.util.List;
+import java.util.Set;
 
 /**
- * ProductiveBeesGenesis 主 Mixin 配置插件
- * <br/>
- * 原理：实现 IMixinConfigPlugin 接口，在 Mixin 加载阶段（早于 ModList 完整初始化）
- * 通过 FMLLoader.getLoadingModList() 检测可选依赖 mod 的加载状态，
- * 条件性地应用引用了 ME/EME/AE2 类的 Mixin，避免因依赖类缺失导致类加载失败或 Mixin 应用崩溃。
- * <br/>
- * 受控的 Mixin（@Mixin 目标或类体 import 引用了可选 mod 的类）：
- * <ul>
- *   <li>ExtraFactoryMixin / FactoryForMEMixin / TileEntityExtraFactoryAccessor — 引用 ME(mekanism_extras)的类，仅当 ME 加载时应用</li>
- *   <li>ExtraFactoryForEMEMixin / EMExtraFactoryMixin / TileEntityEMExtraFactoryAccessor — 引用 EME(emextras)的类，仅当 EME 加载时应用</li>
- *   <li>Ae2ApiaryMixin / Ae2CentrifugeMixin / Ae2CentrifugeFactoryMixin — 引用 AE2 的 IAe2OutputHost 接口，仅当 AE2 加载时应用</li>
- *   <li>Ae2ExtraCentrifugeFactoryMixin / Ae2ExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 ME 基类，仅当 AE2+ME 加载时应用</li>
- *   <li>Ae2EMExtraCentrifugeFactoryMixin / Ae2EMExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 EME 基类，仅当 AE2+EME 加载时应用</li>
- * </ul>
- * 其他 Mixin（离心机/PB原版类等）不依赖可选 mod，始终应用。
- * <br/>
- * <b>注意</b>：不要在 {@link #onLoad(String)} 中通过 {@code Class.forName} 反射加载 Mekanism 类，
- * 因为 Mixin 加载阶段是 JVM 类加载的敏感窗口期，强制加载 Mekanism 类会触发其父类/接口链的早期链接，
- * 可能导致其他模组（如 Re:Avaritia 的 IItemStackExtensionMixin）的 Mixin 目标被提前加载，
- * 报错 {@code target was loaded too early}。@Accessor 字段校验若需要，应在 ASM 字节码层面或
- * mod 完成加载后的事件中执行，不在 Mixin 加载阶段触发任何类加载。
- */
+	 * ProductiveBeesGenesis 主 Mixin 配置插件
+	 * <br/>
+	 * 原理：实现 IMixinConfigPlugin 接口，在 Mixin 加载阶段（早于 ModList 完整初始化）
+	 * 通过 FMLLoader.getLoadingModList() 检测可选依赖 mod 的加载状态，
+	 * 条件性地应用引用了 ME/EME/AE2 类的 Mixin，避免因依赖类缺失导致类加载失败或 Mixin 应用崩溃。
+	 * <br/>
+	 * 受控的 Mixin（@Mixin 目标或类体 import 引用了可选 mod 的类）：
+	 * <ul>
+	 *   <li>ExtraFactoryMixin / FactoryForMEMixin / TileEntityExtraFactoryAccessor — 引用 ME(mekanism_extras)的类，仅当 ME 加载时应用</li>
+	 *   <li>ExtraFactoryForEMEMixin / EMExtraFactoryMixin / TileEntityEMExtraFactoryAccessor — 引用 EME(emextras)的类，仅当 EME 加载时应用</li>
+	 *   <li>Ae2ApiaryMixin / Ae2CentrifugeMixin / Ae2CentrifugeFactoryMixin — 引用 AE2 的 IAe2OutputHost 接口，仅当 AE2 加载时应用</li>
+	 *   <li>Ae2ExtraCentrifugeFactoryMixin / Ae2ExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 ME 基类，仅当 AE2+ME 加载时应用</li>
+	 *   <li>Ae2EMExtraCentrifugeFactoryMixin / Ae2EMExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 EME 基类，仅当 AE2+EME 加载时应用</li>
+	 * </ul>
+	 * 其他 Mixin（离心机/PB原版类等）不依赖可选 mod，始终应用。
+	 * <br/>
+	 * <b>注意</b>：不要在 {@link #onLoad(String)} 中通过 {@code Class.forName} 反射加载 Mekanism 类，
+	 * 因为 Mixin 加载阶段是 JVM 类加载的敏感窗口期，强制加载 Mekanism 类会触发其父类/接口链的早期链接，
+	 * 可能导致其他模组（如 Re:Avaritia 的 IItemStackExtensionMixin）的 Mixin 目标被提前加载，
+	 * 报错 {@code target was loaded too early}。@Accessor 字段校验若需要，应在 ASM 字节码层面或
+	 * mod 完成加载后的事件中执行，不在 Mixin 加载阶段触发任何类加载。
+	 */
 public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	/** ME(MekanismExtras)的 modId */
@@ -107,7 +106,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
-			"MekEnergisticsInstallerGuardMixin"
+			"MekEnergisticsInstallerGuardMixin",
+			"MekEnergisticsTargetResolverGuardMixin"
 	);
 
 	/** 引用 buildinggadgets2 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */

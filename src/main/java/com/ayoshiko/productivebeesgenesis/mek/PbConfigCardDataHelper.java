@@ -1,42 +1,40 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NbtKeys;
-
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
- * 配置卡数据复制工具 — PB升级和AE2 per-tile状态的序列化/反序列化
- * <br/>
- * MEK原版配置卡通过 {@code writeSustainedData}/{@code readSustainedData} 复制配置数据，
- * 但模组未重写这两个方法，导致PB升级和AE2 per-tile状态无法通过配置卡复制。
- * <p>
- * 本工具类封装配置卡数据中PB升级和AE2状态的读写逻辑，供各机器的
- * {@code writeSustainedData}/{@code readSustainedData} 调用。
- * <p>
- * <b>生存模式物品消耗</b>：粘贴时若玩家非创造模式，需要从玩家背包消耗对应数量的PB升级物品。
- * 消耗失败（物品不足）的类型跳过安装，不影响其他类型。
- * <p>
- * 设计原则：单一职责（只处理配置卡数据复制）、开闭原则（新增机器类型只需调用本工具类）。
- *
- * @since 1.9.0
- */
+	 * 配置卡数据复制工具 — PB升级和AE2 per-tile状态的序列化/反序列化
+	 * <br/>
+	 * MEK原版配置卡通过 {@code writeSustainedData}/{@code readSustainedData} 复制配置数据，
+	 * 但模组未重写这两个方法，导致PB升级和AE2 per-tile状态无法通过配置卡复制。
+	 * <p>
+	 * 本工具类封装配置卡数据中PB升级和AE2状态的读写逻辑，供各机器的
+	 * {@code writeSustainedData}/{@code readSustainedData} 调用。
+	 * <p>
+	 * <b>生存模式物品消耗</b>：粘贴时若玩家非创造模式，需要从玩家背包消耗对应数量的PB升级物品。
+	 * 消耗失败（物品不足）的类型跳过安装，不影响其他类型。
+	 * <p>
+	 * 设计原则：单一职责（只处理配置卡数据复制）、开闭原则（新增机器类型只需调用本工具类）。
+	 *
+	 * @since 2.0.0
+	 */
 public final class PbConfigCardDataHelper {
 
 	/** 配置卡数据中PB升级数量的NBT键 */

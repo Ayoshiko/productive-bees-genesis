@@ -1,41 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
+import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
+import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttribute;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
 import mekanism.api.tier.BaseTier;
 import mekanism.common.tier.FactoryTier;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
-import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
-import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-
 /**
- * EME 扩展版工厂蜂箱方块实体
- * <br/>
- * 继承 {@link TileEntityMekApiaryFactory}，复用蜜蜂生产逻辑（ApiaryTickHandler）。
- * 不继承 EME 工厂基类（{@code TileEntityEMExtraFactory}），因为蜂箱不走 Mekanism CachedRecipe 管线。
- * <p>
- * 关键设计：
- * 1. 仅用 {@link EMExtraFactoryTier} 标记等级（通过 {@link EMExtraAttribute#getEMExtraTier} 从 BlockType 读取）
- * 2. 父类的 {@code tier} 字段（FactoryTier）在 EME 版本中为 null，所有等级逻辑通过 {@code emeTier} 字段处理
- * 3. 槽位配置使用 {@link FactoryApiaryConfig#forEMETier(EMExtraFactoryTier)} 获取 EME 等级参数
- * 4. GUI 与原版工厂共用 {@code ModMenuTypes.MEK_APIARY_FACTORY}
- * <p>
- * EME 工厂蜂箱参数表（{@link FactoryApiaryConfig}）：
- * <ul>
- *   <li>Absolute Overclocked: 45 蜜蜂(9×5)/33 输出(3×11)/45 喂食(3×15)/2,304,000 mB</li>
- *   <li>Supreme Quantum: 51 蜜蜂(17×3)/36 输出(3×12)/51 喂食(3×17)/2,560,000 mB</li>
- *   <li>Cosmic Dense: 55 蜜蜂(11×5)/39 输出(3×13)/57 喂食(3×19)/2,816,000 mB</li>
- *   <li>Infinite Multiversal: 60 蜜蜂(12×5)/42 输出(3×14)/60 喂食(3×20)/3,072,000 mB</li>
- * </ul>
- */
+	 * EME 扩展版工厂蜂箱方块实体
+	 * <br/>
+	 * 继承 {@link TileEntityMekApiaryFactory}，复用蜜蜂生产逻辑（ApiaryTickHandler）。
+	 * 不继承 EME 工厂基类（{@code TileEntityEMExtraFactory}），因为蜂箱不走 Mekanism CachedRecipe 管线。
+	 * <p>
+	 * 关键设计：
+	 * 1. 仅用 {@link EMExtraFactoryTier} 标记等级（通过 {@link EMExtraAttribute#getEMExtraTier} 从 BlockType 读取）
+	 * 2. 父类的 {@code tier} 字段（FactoryTier）在 EME 版本中为 null，所有等级逻辑通过 {@code emeTier} 字段处理
+	 * 3. 槽位配置使用 {@link FactoryApiaryConfig#forEMETier(EMExtraFactoryTier)} 获取 EME 等级参数
+	 * 4. GUI 与原版工厂共用 {@code ModMenuTypes.MEK_APIARY_FACTORY}
+	 * <p>
+	 * EME 工厂蜂箱参数表（{@link FactoryApiaryConfig}）：
+	 * <ul>
+	 *   <li>Absolute Overclocked: 45 蜜蜂(9×5)/33 输出(3×11)/45 喂食(3×15)/2,304,000 mB</li>
+	 *   <li>Supreme Quantum: 51 蜜蜂(17×3)/36 输出(3×12)/51 喂食(3×17)/2,560,000 mB</li>
+	 *   <li>Cosmic Dense: 55 蜜蜂(11×5)/39 输出(3×13)/57 喂食(3×19)/2,816,000 mB</li>
+	 *   <li>Infinite Multiversal: 60 蜜蜂(12×5)/42 输出(3×14)/60 喂食(3×20)/3,072,000 mB</li>
+	 * </ul>
+	 */
 public class TileEntityEMExtraMekApiaryFactory extends TileEntityMekApiaryFactory {
 
 	/** EME 工厂等级 — 在 presetVariables() 中从 BlockType 的 EMExtraAttributeTier 读取 */

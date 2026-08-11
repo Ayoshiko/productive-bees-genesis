@@ -1,33 +1,31 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map.Entry;
-
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.math.Transformation;
-
+import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockElement;
 import net.minecraft.client.renderer.block.model.BlockElementFace;
 import net.minecraft.client.renderer.block.model.FaceBakery;
 import net.minecraft.client.renderer.block.model.ItemModelGenerator;
-import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.neoforged.neoforge.client.model.SimpleModelState;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 
 /**
- * 渲染工具类
- * <br/>
- * 提供物品模型烘焙功能，将 TextureAtlasSprite 转换为 BakedQuad 列表。
- * 用于 cosmic 渲染系统中生成 mask 纹理的方块面四边形。
- * <p>
- * 设计原则：单一职责（SRP），仅负责物品模型烘焙工具方法与 RenderStateShard 常量。
- * 所有 bakeItem 实现统一在此类，其他类（如 {@link WrappedItemModel}）通过此类调用。
- */
+	 * 渲染工具类
+	 * <br/>
+	 * 提供物品模型烘焙功能，将 TextureAtlasSprite 转换为 BakedQuad 列表。
+	 * 用于 cosmic 渲染系统中生成 mask 纹理的方块面四边形。
+	 * <p>
+	 * 设计原则：单一职责（SRP），仅负责物品模型烘焙工具方法与 RenderStateShard 常量。
+	 * 所有 bakeItem 实现统一在此类，其他类（如 {@link WrappedItemModel}）通过此类调用。
+	 */
 public class RenderUtils {
 
 	public static final ItemModelGenerator ITEM_MODEL_GENERATOR = new ItemModelGenerator();

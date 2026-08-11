@@ -1,28 +1,28 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
 /**
- * 窗口位置独立持久化标记接口
- * <br/>
- * 由 {@link com.ayoshiko.productivebeesgenesis.mixin.SelectedWindowDataMixin}
- * 注入到 {@link mekanism.common.inventory.container.SelectedWindowData}。
- * <p>
- * 仅客户端可用，服务端 instanceof 检查永远返回 false。
- * 该接口通过客户端 Mixin 注入到 common 路径类，服务端不实现。
- * <p>
- * 通过此接口可为 {@code SelectedWindowData} 实例设置自定义 saveName，
- * 使其位置和固定状态持久化到 PB 自己的客户端配置中，
- * 避免与 MEK 原版窗口（如升级窗口 saveName="upgrade"）共享同一份持久化数据。
- * <p>
- * <b>解决的问题</b>：PB 升级窗口使用 {@code WindowType.UPGRADE}（与 MEK 原版升级窗口相同），
- * 导致两者 {@code equals()} 返回 true，共享 MEK 配置中 "upgrade" 的位置/固定状态，
- * 固定一个窗口会联动影响另一个。设置 customSaveName 后，持久化完全独立。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>OCP：通过 Mixin + 接口扩展 SelectedWindowData 行为，不修改其源码</li>
- *   <li>DIP：持久化目标由 saveName 参数化，调用方按窗口类型注入</li>
- * </ul>
- */
+	 * 窗口位置独立持久化标记接口
+	 * <br/>
+	 * 由 {@link com.ayoshiko.productivebeesgenesis.mixin.SelectedWindowDataMixin}
+	 * 注入到 {@link mekanism.common.inventory.container.SelectedWindowData}。
+	 * <p>
+	 * 仅客户端可用，服务端 instanceof 检查永远返回 false。
+	 * 该接口通过客户端 Mixin 注入到 common 路径类，服务端不实现。
+	 * <p>
+	 * 通过此接口可为 {@code SelectedWindowData} 实例设置自定义 saveName，
+	 * 使其位置和固定状态持久化到 PB 自己的客户端配置中，
+	 * 避免与 MEK 原版窗口（如升级窗口 saveName="upgrade"）共享同一份持久化数据。
+	 * <p>
+	 * <b>解决的问题</b>：PB 升级窗口使用 {@code WindowType.UPGRADE}（与 MEK 原版升级窗口相同），
+	 * 导致两者 {@code equals()} 返回 true，共享 MEK 配置中 "upgrade" 的位置/固定状态，
+	 * 固定一个窗口会联动影响另一个。设置 customSaveName 后，持久化完全独立。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>OCP：通过 Mixin + 接口扩展 SelectedWindowData 行为，不修改其源码</li>
+	 *   <li>DIP：持久化目标由 saveName 参数化，调用方按窗口类型注入</li>
+	 * </ul>
+	 */
 public interface CustomWindowData {
 
 	/**

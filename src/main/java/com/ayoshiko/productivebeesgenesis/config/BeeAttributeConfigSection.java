@@ -3,19 +3,19 @@ package com.ayoshiko.productivebeesgenesis.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * 万象创世蜜蜂属性配置段 — 从 {@link ServerConfig} 抽取的独立配置段（Task 19）。
- * <p>
- * 遵循单一职责原则（SRP）：将万象创世蜜蜂的属性覆盖配置（颜色、PB 独有属性、
- * 体型/速度/攻击、繁殖/防火/防水等）集中管理。
- * <p>
- * 通过 {@link #create(ModConfigSpec.Builder)} 工厂方法注册所有配置项并返回实例，
- * 由 {@link ServerConfig} 聚合持有。外部访问路径 {@code ModConfig.SERVER.primaryColor}
- * 等（向后兼容委托字段）保持不变。
- * <p>
- * 配置键名与层级（bee_attributes.* 含 colors / pb_attributes 子段）与抽取前完全一致，
- * 纯重构无行为变更。校验逻辑复用 {@link ModConfig} 中的 package-private validator
- * 与常量集合，保证配置文件 validator 与网络包服务端校验单一来源（SRP）。
- */
+	 * 万象创世蜜蜂属性配置段 — 从 {@link ServerConfig} 抽取的独立配置段（Task 19）。
+	 * <p>
+	 * 遵循单一职责原则（SRP）：将万象创世蜜蜂的属性覆盖配置（颜色、PB 独有属性、
+	 * 体型/速度/攻击、繁殖/防火/防水等）集中管理。
+	 * <p>
+	 * 通过 {@link #create(ModConfigSpec.Builder)} 工厂方法注册所有配置项并返回实例，
+	 * 由 {@link ServerConfig} 聚合持有。外部访问路径 {@code ModConfig.SERVER.primaryColor}
+	 * 等（向后兼容委托字段）保持不变。
+	 * <p>
+	 * 配置键名与层级（bee_attributes.* 含 colors / pb_attributes 子段）与抽取前完全一致，
+	 * 纯重构无行为变更。校验逻辑复用 {@link ModConfig} 中的 package-private validator
+	 * 与常量集合，保证配置文件 validator 与网络包服务端校验单一来源（SRP）。
+	 */
 public final class BeeAttributeConfigSection {
 
 	// ========== 颜色配置（写入蜜蜂数据并在客户端渲染）==========

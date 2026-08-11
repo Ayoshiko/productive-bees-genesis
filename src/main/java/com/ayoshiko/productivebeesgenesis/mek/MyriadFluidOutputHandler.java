@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import mekanism.api.Action;
@@ -16,23 +15,23 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
 /**
- * 万象创世流体输出处理器 — 封装配方定义流体（蜂蜜）的输出逻辑
- * <br/>
- * 从 {@link MyriadCreationsHandler} 抽取，遵循单一职责原则：
- * 只负责将 PB 离心配方定义的流体输出按输入数量缩放后写入流体槽，
- * 不涉及随机蜜脾/蜜脾块物品的产出。
- * <p>
- * <b>修复背景：</b>原 MyriadCreationsHandler 仅产出随机蜜脾/蜜脾块物品，
- * 未产出配方定义的蜂蜜流体。此处理器查找输入对应的 PB 离心配方，
- * 将配方流体输出按输入消耗数量缩放后写入流体槽。
- * <p>
- * <b>性能优化：</b>缓存流体槽满载状态，避免循环内重复调用
- * {@link IExtendedFluidTank#getFluidAmount()} 和 {@link IExtendedFluidTank#getCapacity()}。
- * <p>
- * <b>线程安全：</b>方块实体在服务端单线程执行，volatile 保证可见性即可，无需 synchronized。
- *
- * @since 1.0.0
- */
+	 * 万象创世流体输出处理器 — 封装配方定义流体（蜂蜜）的输出逻辑
+	 * <br/>
+	 * 从 {@link MyriadCreationsHandler} 抽取，遵循单一职责原则：
+	 * 只负责将 PB 离心配方定义的流体输出按输入数量缩放后写入流体槽，
+	 * 不涉及随机蜜脾/蜜脾块物品的产出。
+	 * <p>
+	 * <b>修复背景：</b>原 MyriadCreationsHandler 仅产出随机蜜脾/蜜脾块物品，
+	 * 未产出配方定义的蜂蜜流体。此处理器查找输入对应的 PB 离心配方，
+	 * 将配方流体输出按输入消耗数量缩放后写入流体槽。
+	 * <p>
+	 * <b>性能优化：</b>缓存流体槽满载状态，避免循环内重复调用
+	 * {@link IExtendedFluidTank#getFluidAmount()} 和 {@link IExtendedFluidTank#getCapacity()}。
+	 * <p>
+	 * <b>线程安全：</b>方块实体在服务端单线程执行，volatile 保证可见性即可，无需 synchronized。
+	 *
+	 * @since 1.0.0
+	 */
 public class MyriadFluidOutputHandler {
 
 	/** PB配方处理上下文 */

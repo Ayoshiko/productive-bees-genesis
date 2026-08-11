@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import org.jetbrains.annotations.Nullable;
-
 import appeng.api.config.Actionable;
 import appeng.api.config.PowerMultiplier;
 import appeng.api.networking.IGrid;
@@ -10,41 +8,41 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
-
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.glodblock.github.appflux.common.me.key.FluxKey;
 import com.glodblock.github.appflux.common.me.key.type.EnergyType;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * AE 网络能量提取桥
- * <br/>
- * 封装从 AE2 网络提取能量的两类来源，对外提供统一的 FE 单位接口。
- * <p>
- * <b>两个能量来源</b>：
- * <ul>
- *   <li>{@link #extractAppliedFluxFe} — 从 AppliedFlux 在 ME 网络中存储的 FE 提取，
- *       通过 {@link FluxKey} 索引 MEStorage</li>
- *   <li>{@link #extractAeEnergyAsFe} — 从 AE2 原生网络能量提取 AE 并转换为 FE</li>
- * </ul>
- * <p>
- * <b>职责（SRP）</b>：仅负责"提取能量"这一原子操作，不参与优先级决策、容量计算、
- * 注入容器等上层逻辑。优先级策略由 {@link Ae2EnergyInjector} 根据配置项决定调用顺序。
- * <p>
- * <b>能量转换比例</b>：AE2 标准 1 AE = 2 FE，{@link #extractAeEnergyAsFe} 内部
- * 将请求的 FE 量除以 2 转换为 AE 量，提取后再乘以 2 转回 FE 返回。
- * <p>
- * <b>类加载安全</b>：本类直接 import {@link FluxKey} 和 {@link EnergyType}
- * （编译时为 compileOnly 依赖）。运行时当 AppliedFlux 未安装时，
- * {@link #extractAppliedFluxFe} 在方法入口通过 {@link AppliedFluxIntegrationLoader#isAppliedFluxLoaded()}
- * 守卫立即返回 0，不会执行到引用 FluxKey 的字节码，故 JVM 不会触发 FluxKey 类的加载
- * （方法入口的 boolean 检查不依赖未加载的类）。
- * <p>
- * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 的 IGrid / MEStorage / IEnergyService
- * 内部自带线程安全保证（AE2 网络在主线程处理 tick）。
- *
- * @since 1.8.0
- * @author Ayoshiko
- */
+	 * AE 网络能量提取桥
+	 * <br/>
+	 * 封装从 AE2 网络提取能量的两类来源，对外提供统一的 FE 单位接口。
+	 * <p>
+	 * <b>两个能量来源</b>：
+	 * <ul>
+	 *   <li>{@link #extractAppliedFluxFe} — 从 AppliedFlux 在 ME 网络中存储的 FE 提取，
+	 *       通过 {@link FluxKey} 索引 MEStorage</li>
+	 *   <li>{@link #extractAeEnergyAsFe} — 从 AE2 原生网络能量提取 AE 并转换为 FE</li>
+	 * </ul>
+	 * <p>
+	 * <b>职责（SRP）</b>：仅负责"提取能量"这一原子操作，不参与优先级决策、容量计算、
+	 * 注入容器等上层逻辑。优先级策略由 {@link Ae2EnergyInjector} 根据配置项决定调用顺序。
+	 * <p>
+	 * <b>能量转换比例</b>：AE2 标准 1 AE = 2 FE，{@link #extractAeEnergyAsFe} 内部
+	 * 将请求的 FE 量除以 2 转换为 AE 量，提取后再乘以 2 转回 FE 返回。
+	 * <p>
+	 * <b>类加载安全</b>：本类直接 import {@link FluxKey} 和 {@link EnergyType}
+	 * （编译时为 compileOnly 依赖）。运行时当 AppliedFlux 未安装时，
+	 * {@link #extractAppliedFluxFe} 在方法入口通过 {@link AppliedFluxIntegrationLoader#isAppliedFluxLoaded()}
+	 * 守卫立即返回 0，不会执行到引用 FluxKey 的字节码，故 JVM 不会触发 FluxKey 类的加载
+	 * （方法入口的 boolean 检查不依赖未加载的类）。
+	 * <p>
+	 * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 的 IGrid / MEStorage / IEnergyService
+	 * 内部自带线程安全保证（AE2 网络在主线程处理 tick）。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 */
 public final class Ae2EnergyBridge {
 
 	/** AE2 到 FE 的能量转换比例：1 AE = 2 FE（AE2 标准比例） */
@@ -86,7 +84,8 @@ public final class Ae2EnergyBridge {
 			// FluxKey.of(EnergyType.FE) 返回表示 FE 能量的 AEKey
 			// 此行仅在 AppliedFlux 已安装时执行（守卫已保证），不会触发类加载失败
 			FluxKey feKey = FluxKey.of(EnergyType.FE);
-			return meStorage.extract(feKey, amount, mode, actionSource);
+			long extracted = meStorage.extract(feKey, amount, mode, actionSource);
+			return Ae2EnergyMath.clampExtracted(extracted, amount);
 		} catch (LinkageError | RuntimeException e) {
 			// LinkageError 覆盖 NoSuchMethodError/NoClassDefFoundError（AE2/AppliedFlux 版本不兼容）；
 			// RuntimeException 覆盖 NPE/IllegalStateException 等运行时异常。
@@ -125,7 +124,7 @@ public final class Ae2EnergyBridge {
 			double aeAmount = amount / AE_TO_FE_RATIO;
 			double extractedAe = energyService.extractAEPower(aeAmount, mode, PowerMultiplier.ONE);
 			// AE → FE 转换：extractedAe AE = extractedAe * 2.0 FE
-			return (long) (extractedAe * AE_TO_FE_RATIO);
+			return Ae2EnergyMath.aeToFe(extractedAe, amount, AE_TO_FE_RATIO);
 		} catch (LinkageError | RuntimeException e) {
 			// LinkageError 覆盖 AE2 版本不兼容场景；RuntimeException 覆盖运行时异常。
 			// 不捕获 Throwable 以避免吞没 OutOfMemoryError/StackOverflowError 等严重错误。

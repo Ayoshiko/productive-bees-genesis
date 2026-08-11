@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -7,21 +8,19 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 /**
- * PB配方处理上下文接口
- * <br/>
- * 定义 Factory TileEntity 需要向 {@link PbRecipeProcessor} 提供的依赖。
- * 三个 Factory TileEntity 实现此接口，将 PB 配方处理委托给 PbRecipeProcessor，
- * 消除约400行重复代码。
- * <p>
- * 遵循依赖倒置原则：PbRecipeProcessor 依赖此抽象而非具体 TileEntity，
- * 降低耦合度，便于后续扩展新的工厂类型。
- * <p>
- * <b>诊断优先(Task 3):</b>default 方法添加 DEV 日志,确认 SINGLE 模式下的流体槽查找行为。
- * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
- */
+	 * PB配方处理上下文接口
+	 * <br/>
+	 * 定义 Factory TileEntity 需要向 {@link PbRecipeProcessor} 提供的依赖。
+	 * 三个 Factory TileEntity 实现此接口，将 PB 配方处理委托给 PbRecipeProcessor，
+	 * 消除约400行重复代码。
+	 * <p>
+	 * 遵循依赖倒置原则：PbRecipeProcessor 依赖此抽象而非具体 TileEntity，
+	 * 降低耦合度，便于后续扩展新的工厂类型。
+	 * <p>
+	 * <b>诊断优先(Task 3):</b>default 方法添加 DEV 日志,确认 SINGLE 模式下的流体槽查找行为。
+	 * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
+	 */
 public interface PbRecipeContext {
 
 	/** 获取世界实例（用于配方查找和随机数） */

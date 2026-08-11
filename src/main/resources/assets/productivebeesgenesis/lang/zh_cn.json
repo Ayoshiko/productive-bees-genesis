@@ -1,4 +1,8 @@
 {
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.smeltingCompatEnabled": "熔炉配方兼容",
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.smeltingCompatEnabled.tooltip": "允许离心机处理熔炉配方",
+  "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat": "熔炉配方兼容",
+  "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat.title": "熔炉配方兼容",
   "productivebeesgenesis.configuration.title": "资源蜜蜂：创世配置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.client.toml": "客户端设置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.client.toml.title": "客户端配置",
@@ -860,16 +864,34 @@
   "productivebeesgenesis.gui.ae_input_config.prev_page.tooltip": "上一页",
   "productivebeesgenesis.gui.ae_input_config.next_page.tooltip": "下一页",
   "productivebeesgenesis.gui.ae_input_config.clear.tooltip": "清空所有过滤条目",
+  "productivebeesgenesis.gui.ae_input_config.direct_stock": "AE 网络库存：%s",
+  "productivebeesgenesis.gui.ae_input_config.direct_unlimited_on": "无限提供：开",
+  "productivebeesgenesis.gui.ae_input_config.direct_unlimited_off": "无限提供：关",
+  "productivebeesgenesis.gui.ae_input_config.stock_button.on": "无限拉取：开\nAE 网络库存：%s\n点击：设置数量\nShift+点击：关闭无限拉取",
+  "productivebeesgenesis.gui.ae_input_config.stock_button.off": "拉取数量：%s\n点击：设置数量\nShift+点击：开启无限拉取",
+  "productivebeesgenesis.gui.ae_input_amount.title": "设置拉取数量",
+  "productivebeesgenesis.gui.ae_input_amount.value": "每次拉取数量",
+  "productivebeesgenesis.gui.ae_input_amount.range": "每次拉取数量（0-%s）",
+  "productivebeesgenesis.gui.ae_input_amount.invalid": "数量表达式无效",
+  "productivebeesgenesis.gui.ae_input_amount.integer_required": "数量必须是整数",
+  "productivebeesgenesis.gui.ae_input_amount.too_small": "数量不能小于 %s",
+  "productivebeesgenesis.gui.ae_input_amount.too_large": "数量不能超过 %s",
+  "productivebeesgenesis.gui.ae_input_amount.apply": "设置",
   "productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip": "精确模式：开时区分蜜脾与蜜脾块（仅拉取标记物品）；关时共享过滤（蜜脾/蜜脾块一起拉取）",
   "productivebeesgenesis.gui.ae_input_config.info.precise_on": "精确：开",
   "productivebeesgenesis.gui.ae_input_config.info.precise_off": "精确：关",
+  "productivebeesgenesis.gui.ae_input_config.info.rate": "速率: %s/刻",
+  "productivebeesgenesis.gui.ae_input_config.info.interval": "间隔: %s刻",
   "productivebeesgenesis.gui.ae_input_config.status.precise_on": "精:开",
   "productivebeesgenesis.gui.ae_input_config.status.precise_off": "精:关",
   "productivebeesgenesis.gui.smelting_compat.on": "兼容电力熔炼炉配方：开",
   "productivebeesgenesis.gui.smelting_compat.off": "兼容电力熔炼炉配方：关",
-  "productivebeesgenesis.gui.smelting_compat.global_disabled": "需在配置中启用熔炉配方兼容总开关才能使用此功能"
-  ,"productivebeesgenesis.gui.apiary_direct_ae.enabled": "产物直入 AE：开\nAE 接收的产物跳过本地输出槽，拒收部分保留在本地"
-  ,"productivebeesgenesis.gui.apiary_direct_ae.disabled": "产物直入 AE：关\n产物进入本地输出槽，可继续直连离心机"
-  ,"productivebeesgenesis.gui.centrifuge_direct_ae_output.on": "新产物直入 AE：开\nAE 接收的物品和流体跳过本地缓存，拒收部分回退到本地输出"
-  ,"productivebeesgenesis.gui.centrifuge_direct_ae_output.off": "新产物直入 AE：关\n产物进入本地输出槽和流体槽"
+  "productivebeesgenesis.gui.smelting_compat.global_disabled": "需在配置中启用熔炉配方兼容总开关才能使用此功能",
+  "productivebeesgenesis.gui.apiary_direct_ae.enabled": "产物直入 AE：开\nAE 接收的产物跳过本地输出槽，拒收部分保留在本地",
+  "productivebeesgenesis.gui.apiary_direct_ae.disabled": "产物直入 AE：关\n产物进入本地输出槽，可继续直连离心机",
+  "productivebeesgenesis.gui.centrifuge_direct_ae_output.on": "新产物直入 AE：开\nAE 接收的物品和流体跳过本地缓存，拒收部分回退到本地输出",
+  "productivebeesgenesis.gui.centrifuge_direct_ae_output.off": "新产物直入 AE：关\n产物进入本地输出槽和流体槽",
+  "productivebeesgenesis.gui.ae_input_config.info.cooldown": "冷却: %s刻",
+  "productivebeesgenesis.gui.ae_input_config.info.unlimited_count": "无限: %s",
+  "productivebeesgenesis.gui.ae_input_config.output_slot.tooltip": "网络输出：%s\n左键：取出到光标/放入全部\n右键：取出半数/放入 1 个\nShift+左键：取出到背包"
 }

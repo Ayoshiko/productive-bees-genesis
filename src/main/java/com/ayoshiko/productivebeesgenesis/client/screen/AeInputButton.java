@@ -1,29 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.function.Consumer;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.button.MekanismButton;
 import net.minecraft.network.chat.Component;
 
+import java.util.function.Consumer;
+
 /**
- * AE2 输入拉取按钮 — 注入到 MEK 侧面配置窗口
- * <br/>
- * 14×14 像素按钮，复用于 3 个输入控制按钮（拉取开关/NBT忽略/过滤模式）。
- * 点击时通过回调发送对应网络包到服务端。
- * <p>
- * 继承 {@link MekanismButton} 复用渲染管线，使用 DEFAULT 灰色背景
- * （{@link GuiElement.ButtonBackground#DEFAULT}），与 GuiAeInputConfig 中的
- * CtrlButton 视觉一致，避免与 MEK SideConfig 窗口原版按钮风格冲突。
- * <p>
- * <b>target 字段</b>：由 {@link AeInputOverlay#ensureButtons} 每帧更新，
- * 指向当前侧面配置窗口的上下文。点击回调通过 target 获取方块坐标发送网络包。
- * <p>
- * <b>双重点击处理</b>：{@link AeInputOverlay#mouseClicked} 事件处理器在 Pre 阶段
- * 拦截点击，按钮自身的 onPress 回调作为后备路径，确保即使事件被其他模组取消也能响应。
- * 两者不会同时执行（事件取消后按钮不接收点击）。
- */
+	 * AE2 输入拉取按钮 — 注入到 MEK 侧面配置窗口
+	 * <br/>
+	 * 14×14 像素按钮，复用于 3 个输入控制按钮（拉取开关/NBT忽略/过滤模式）。
+	 * 点击时通过回调发送对应网络包到服务端。
+	 * <p>
+	 * 继承 {@link MekanismButton} 复用渲染管线，使用 DEFAULT 灰色背景
+	 * （{@link GuiElement.ButtonBackground#DEFAULT}），与 GuiAeInputConfig 中的
+	 * CtrlButton 视觉一致，避免与 MEK SideConfig 窗口原版按钮风格冲突。
+	 * <p>
+	 * <b>target 字段</b>：由 {@link AeInputOverlay#ensureButtons} 每帧更新，
+	 * 指向当前侧面配置窗口的上下文。点击回调通过 target 获取方块坐标发送网络包。
+	 * <p>
+	 * <b>双重点击处理</b>：{@link AeInputOverlay#mouseClicked} 事件处理器在 Pre 阶段
+	 * 拦截点击，按钮自身的 onPress 回调作为后备路径，确保即使事件被其他模组取消也能响应。
+	 * 两者不会同时执行（事件取消后按钮不接收点击）。
+	 */
 public class AeInputButton extends MekanismButton {
 
 	/** 按钮尺寸（宽=高） */

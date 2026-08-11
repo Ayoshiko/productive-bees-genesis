@@ -1,19 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
 /**
- * Mekanism Extras (ME) 兼容注册统一入口
- * <br/>
- * 供主注册类（{@code ModBlocks}/{@code ModItems}/{@code ModBlockEntities}）调用，
- * 集中触发 ME 相关的方块/物品/方块实体注册。
- * <p>
- * 本类本身不直接 import ME 的类，只调用同包下的隔离注册类。
- * 仅在 MekanismExtras 加载时由主注册类通过运行时守卫调用，
- * 避免 ME 未加载时触发 ME 类的类加载。
- * <p>
- * 分步方法（{@link #registerFactories()} 等）保留与原主注册类相同的调用粒度，
- * 确保主类调用顺序（方块 → 方块实体 → 物品）不被破坏；
- * {@link #registerAll()} 提供统一入口，供需要一次性注册所有内容的场景使用。
- */
+	 * Mekanism Extras (ME) 兼容注册统一入口
+	 * <br/>
+	 * 供主注册类（{@code ModBlocks}/{@code ModItems}/{@code ModBlockEntities}）调用，
+	 * 集中触发 ME 相关的方块/物品/方块实体注册。
+	 * <p>
+	 * 本类本身不直接 import ME 的类，只调用同包下的隔离注册类。
+	 * 仅在 MekanismExtras 加载时由主注册类通过运行时守卫调用，
+	 * 避免 ME 未加载时触发 ME 类的类加载。
+	 * <p>
+	 * 分步方法（{@link #registerFactories()} 等）保留与原主注册类相同的调用粒度，
+	 * 确保主类调用顺序（方块 → 方块实体 → 物品）不被破坏；
+	 * {@link #registerAll()} 提供统一入口，供需要一次性注册所有内容的场景使用。
+	 */
 public final class MECompatLoader {
 
 	private MECompatLoader() {}

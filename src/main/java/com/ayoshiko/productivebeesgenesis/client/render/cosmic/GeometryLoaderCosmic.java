@@ -1,12 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.List;
-import java.util.function.Function;
-
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -18,15 +14,18 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+import java.util.function.Function;
+
 /**
- * Cosmic 几何加载器
- * <br/>
- * 解析 loader: "productivebeesgenesis:cosmic"，读取 cosmic.mask（字符串或数组），
- * 委托 baseModel 解析父模型，烘焙为 BakedModelCosmic。
- * <p>
- * 公共 JSON 解析逻辑继承自 {@link AbstractMaskGeometryLoader}，
- * 本类仅提供 type 名与具体 Geometry 的 bake 实现。
- */
+	 * Cosmic 几何加载器
+	 * <br/>
+	 * 解析 loader: "productivebeesgenesis:cosmic"，读取 cosmic.mask（字符串或数组），
+	 * 委托 baseModel 解析父模型，烘焙为 BakedModelCosmic。
+	 * <p>
+	 * 公共 JSON 解析逻辑继承自 {@link AbstractMaskGeometryLoader}，
+	 * 本类仅提供 type 名与具体 Geometry 的 bake 实现。
+	 */
 public class GeometryLoaderCosmic
 		extends AbstractMaskGeometryLoader<GeometryLoaderCosmic.CosmicGeometry> {
 

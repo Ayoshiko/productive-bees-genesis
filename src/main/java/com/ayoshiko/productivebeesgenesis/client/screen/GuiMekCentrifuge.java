@@ -24,22 +24,22 @@ import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * 基础MEK离心机Screen
- * <br/>
- * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
- * <p>
- * 布局（imageWidth=176, imageHeight=178）：
- * - 流体输出槽(8,35) 位置通过FactoryLayoutHelper动态计算
- * - 输入槽(64,17) 红色边框（dynamicSlots自动渲染）
- * - 能量槽(64,53) POWER样式（dynamicSlots自动渲染）
- * - 主输出槽(134,17) 蓝色边框（dynamicSlots自动渲染）
- * - 副输出槽1(134,35) 蓝色边框（dynamicSlots自动渲染）
- * - 副输出槽2(134,53) 蓝色边框（dynamicSlots自动渲染）
- * - 进度条(86,38) BAR类型
- * - 能量条(164,15) 垂直
- * <p>
- * imageHeight增加12以容纳流体槽（底部到83），背包标签下移到84。
- */
+	 * 基础MEK离心机Screen
+	 * <br/>
+	 * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
+	 * <p>
+	 * 布局（imageWidth=176, imageHeight=178）：
+	 * - 流体输出槽(8,35) 位置通过FactoryLayoutHelper动态计算
+	 * - 输入槽(64,17) 红色边框（dynamicSlots自动渲染）
+	 * - 能量槽(64,53) POWER样式（dynamicSlots自动渲染）
+	 * - 主输出槽(134,17) 蓝色边框（dynamicSlots自动渲染）
+	 * - 副输出槽1(134,35) 蓝色边框（dynamicSlots自动渲染）
+	 * - 副输出槽2(134,53) 蓝色边框（dynamicSlots自动渲染）
+	 * - 进度条(86,38) BAR类型
+	 * - 能量条(164,15) 垂直
+	 * <p>
+	 * imageHeight增加12以容纳流体槽（底部到83），背包标签下移到84。
+	 */
 public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
 
 	private GuiPbUpgradeTab<TileEntityMekCentrifuge> pbUpgradeTab;

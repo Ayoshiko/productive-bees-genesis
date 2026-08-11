@@ -1,25 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 /**
- * 饱和运算工具类 — 防止 long/int 在大数值乘法/加法中溢出。
- * <br/>
- * <b>设计动机</b>：256× 加速 + 堆叠插件场景下，{@code baseRate * M * processCount * tpsFactor}
- * 等链式乘法极易溢出 long 范围（如 64 × 256 × 19 × 1.0 ≈ 311k，看似安全，但叠加
- * 多级因子后 {@code baseRate * M * processCount * tpsFactor * extraFactor} 可达 10^18+，
- * 接近 long 上限 9.2×10^18）。溢出后会变成负数，导致下游槽位容量计算错误、
- * 物品/流体丢失等严重数据完整性问题。
- * <p>
- * <b>饱和语义</b>：运算结果溢出时返回类型的最大值（{@link Long#MAX_VALUE} 或
- * {@link Integer#MAX_VALUE}），而非环绕为负数。下游消费者（如 {@code Math.min}、
- * 槽位容量限制）天然能处理 "极大值" 的语义，从而保证正确性。
- * <p>
- * <b>参考</b>：参考自 Useless Mod 的 {@code saturatingMultiply} 实现，剔除其针对
- * HighStack 的特化逻辑，仅保留通用的 long/int 饱和运算。
- * <p>
- * <b>线程安全</b>：所有方法为纯函数（无状态），任意线程并发调用安全。
- *
- * @since 1.8.2
- */
+	 * 饱和运算工具类 — 防止 long/int 在大数值乘法/加法中溢出。
+	 * <br/>
+	 * <b>设计动机</b>：256× 加速 + 堆叠插件场景下，{@code baseRate * M * processCount * tpsFactor}
+	 * 等链式乘法极易溢出 long 范围（如 64 × 256 × 19 × 1.0 ≈ 311k，看似安全，但叠加
+	 * 多级因子后 {@code baseRate * M * processCount * tpsFactor * extraFactor} 可达 10^18+，
+	 * 接近 long 上限 9.2×10^18）。溢出后会变成负数，导致下游槽位容量计算错误、
+	 * 物品/流体丢失等严重数据完整性问题。
+	 * <p>
+	 * <b>饱和语义</b>：运算结果溢出时返回类型的最大值（{@link Long#MAX_VALUE} 或
+	 * {@link Integer#MAX_VALUE}），而非环绕为负数。下游消费者（如 {@code Math.min}、
+	 * 槽位容量限制）天然能处理 "极大值" 的语义，从而保证正确性。
+	 * <p>
+	 * <b>参考</b>：参考自 Useless Mod 的 {@code saturatingMultiply} 实现，剔除其针对
+	 * HighStack 的特化逻辑，仅保留通用的 long/int 饱和运算。
+	 * <p>
+	 * <b>线程安全</b>：所有方法为纯函数（无状态），任意线程并发调用安全。
+	 *
+	 * @since 2.0.0
+	 */
 public final class SaturatingMath {
 
 	private SaturatingMath() {}

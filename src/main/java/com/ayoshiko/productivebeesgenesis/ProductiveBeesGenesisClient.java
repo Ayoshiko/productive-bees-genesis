@@ -20,7 +20,7 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegis
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
-
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.factory.TileEntityFactory;
 import net.minecraft.client.gui.screens.MenuScreens;
@@ -29,11 +29,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -42,14 +42,12 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
-import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
-
 /**
- * 资源蜜蜂：创世模组客户端专用初始化
- * <br/>
- * 注册配置屏幕工厂和MEK离心机Screen映射。
- * Screen注册使用RegisterMenuScreensEvent，与Mekanism的注册方式一致。
- */
+	 * 资源蜜蜂：创世模组客户端专用初始化
+	 * <br/>
+	 * 注册配置屏幕工厂和MEK离心机Screen映射。
+	 * Screen注册使用RegisterMenuScreensEvent，与Mekanism的注册方式一致。
+	 */
 @Mod(value = ProductiveBeesGenesis.MOD_ID, dist = Dist.CLIENT)
 public final class ProductiveBeesGenesisClient {
 

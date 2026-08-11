@@ -1,5 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import net.minecraft.core.component.DataComponents;
@@ -7,25 +10,21 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import cy.jdkdigital.productivebees.init.ModItems;
-
 /**
- * 蜂笼操作处理器
- * <br/>
- * 从 {@link ApiarySlotManager} 拆分，专门负责蜂笼与蜜蜂槽之间的双向转移逻辑：
- * <ul>
- *   <li>tick 驱动的自动装入/取出（{@link #processCageInput}）</li>
- *   <li>玩家右键触发的桶式操作（{@link #tryCageBeeAtSlot} / {@link #tryReleaseBeeAtSlot}）</li>
- * </ul>
- * <p>
- * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问槽位数据与方块实体回调。
- * 不持有自有可变状态，所有数据仍由 ApiarySlotManager 管理，保持单一数据源。
- * <p>
- * 线程安全：与 ApiarySlotManager 相同，服务端单线程执行；
- * BeeSlot 内部 synchronized 保证客户端同步线程与服务端 tick 线程并发读写安全。
- */
+	 * 蜂笼操作处理器
+	 * <br/>
+	 * 从 {@link ApiarySlotManager} 拆分，专门负责蜂笼与蜜蜂槽之间的双向转移逻辑：
+	 * <ul>
+	 *   <li>tick 驱动的自动装入/取出（{@link #processCageInput}）</li>
+	 *   <li>玩家右键触发的桶式操作（{@link #tryCageBeeAtSlot} / {@link #tryReleaseBeeAtSlot}）</li>
+	 * </ul>
+	 * <p>
+	 * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问槽位数据与方块实体回调。
+	 * 不持有自有可变状态，所有数据仍由 ApiarySlotManager 管理，保持单一数据源。
+	 * <p>
+	 * 线程安全：与 ApiarySlotManager 相同，服务端单线程执行；
+	 * BeeSlot 内部 synchronized 保证客户端同步线程与服务端 tick 线程并发读写安全。
+	 */
 class ApiaryCageHandler {
 
 	/** 蜂笼输入异常日志节流（避免持续异常时每 tick 刷屏） */

@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
-
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
@@ -16,18 +15,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * MEK离心机Container
- * <br/>
- * 继承MekanismTileContainer，槽位由基类自动从方块实体提取。
- * 基类自动处理：升级槽、输入/输出/能量槽、侧面配置同步、红石控制同步。
- * <p>
- * 基础离心机和原版工厂离心机均添加PB升级虚拟槽位（输入/输出），供 GuiPbUpgradeWindow 绑定。
- * 原版工厂离心机通过 {@link AbstractMekCentrifugeFactory} 暴露槽位访问方法。
- * <p>
- * 工厂版重写偏移方法以适配3行输出槽布局：
- * - Y偏移135（对应inventoryLabelY=125+10），避免与副输出槽2(y=97)重叠
- * - X偏移通过FactoryLayoutHelper动态计算，支持原版ULTIMATE与EM高等级
- */
+	 * MEK离心机Container
+	 * <br/>
+	 * 继承MekanismTileContainer，槽位由基类自动从方块实体提取。
+	 * 基类自动处理：升级槽、输入/输出/能量槽、侧面配置同步、红石控制同步。
+	 * <p>
+	 * 基础离心机和原版工厂离心机均添加PB升级虚拟槽位（输入/输出），供 GuiPbUpgradeWindow 绑定。
+	 * 原版工厂离心机通过 {@link AbstractMekCentrifugeFactory} 暴露槽位访问方法。
+	 * <p>
+	 * 工厂版重写偏移方法以适配3行输出槽布局：
+	 * - Y偏移135（对应inventoryLabelY=125+10），避免与副输出槽2(y=97)重叠
+	 * - X偏移通过FactoryLayoutHelper动态计算，支持原版ULTIMATE与EM高等级
+	 */
 public class MekCentrifugeContainer<TILE extends TileEntityMekanism> extends MekanismTileContainer<TILE>
 		implements IPbUpgradeSlotContainer {
 

@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.common.capabilities.Capabilities;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
@@ -12,20 +11,20 @@ import mekanism.common.tile.base.TileEntityMekanism;
 import net.neoforged.neoforge.registries.DeferredBlock;
 
 /**
- * EvolvedMekanismExtras (EME) 方块实体注册隔离类
- * <br/>
- * 将 EME 工厂 BlockEntityType（离心机 + 蜂箱）的注册逻辑从 {@link ModBlockEntities} 中抽取至此，
- * 使 {@link ModBlockEntities} 不再直接 import EME 的类。
- * <br/>
- * 本类直接引用 EME 的 {@link EMExtraFactoryTier} 等类，
- * 因为仅在 EME 加载时由 {@link EMECompatLoader} 调用。
- * <p>
- * 注册结果填充到 {@link MekCentrifugeEMEBlockType#EME_FACTORY_TILES} 和
- * {@link MekApiaryEMEBlockType#EME_APIARY_FACTORY_TILES}，供 BlockType 的懒加载 Supplier 使用。
- * <p>
- * 适配说明：{@link ModBlocks#getEMEFactoryBlock(Object)} 返回通配类型 {@code DeferredBlock<?>}，
- * 本类调用 mekBuilder 时由 Mekanism API 接受 {@code DeferredHolder<Block, ?>}，无需强制类型转换。
- */
+	 * EvolvedMekanismExtras (EME) 方块实体注册隔离类
+	 * <br/>
+	 * 将 EME 工厂 BlockEntityType（离心机 + 蜂箱）的注册逻辑从 {@link ModBlockEntities} 中抽取至此，
+	 * 使 {@link ModBlockEntities} 不再直接 import EME 的类。
+	 * <br/>
+	 * 本类直接引用 EME 的 {@link EMExtraFactoryTier} 等类，
+	 * 因为仅在 EME 加载时由 {@link EMECompatLoader} 调用。
+	 * <p>
+	 * 注册结果填充到 {@link MekCentrifugeEMEBlockType#EME_FACTORY_TILES} 和
+	 * {@link MekApiaryEMEBlockType#EME_APIARY_FACTORY_TILES}，供 BlockType 的懒加载 Supplier 使用。
+	 * <p>
+	 * 适配说明：{@link ModBlocks#getEMEFactoryBlock(Object)} 返回通配类型 {@code DeferredBlock<?>}，
+	 * 本类调用 mekBuilder 时由 Mekanism API 接受 {@code DeferredHolder<Block, ?>}，无需强制类型转换。
+	 */
 public final class EMEBlockEntityRegistration {
 
 	private EMEBlockEntityRegistration() {}

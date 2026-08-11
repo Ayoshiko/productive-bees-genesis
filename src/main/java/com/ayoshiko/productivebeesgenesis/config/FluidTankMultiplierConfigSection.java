@@ -1,20 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 /**
- * MEK离心机流体罐倍率配置段 — 从 {@link CentrifugeConfigSection} 抽取的独立配置段。
- * <p>
- * 子分类：fluid_tank_multiplier。EM 工厂配置项仅在 EM 加载时注册,未加载时对应字段为 null。
- * <p>
- * 容量公式：{@code fluidTankCapacity × processes × fluidTankMultiplier}
- * （最终容量被 {@link Integer#MAX_VALUE} 截断）。
- *
- * @since 1.13.0
- * @see CentrifugeConfigSection 父配置段
- */
+	 * MEK离心机流体罐倍率配置段 — 从 {@link CentrifugeConfigSection} 抽取的独立配置段。
+	 * <p>
+	 * 子分类：fluid_tank_multiplier。EM 工厂配置项仅在 EM 加载时注册,未加载时对应字段为 null。
+	 * <p>
+	 * 容量公式：{@code fluidTankCapacity × processes × fluidTankMultiplier}
+	 * （最终容量被 {@link Integer#MAX_VALUE} 截断）。
+	 *
+	 * @since 2.0.0
+	 * @see CentrifugeConfigSection 父配置段
+	 */
 public final class FluidTankMultiplierConfigSection {
 
 	// ========== 流体罐倍率(按离心机等级)==========

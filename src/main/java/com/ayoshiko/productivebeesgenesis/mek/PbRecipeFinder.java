@@ -1,13 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.Optional;
-
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -17,22 +12,25 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 /**
- * PB离心配方查找器 — 封装双层缓存的配方查找逻辑
- * <br/>
- * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责配方查找与缓存管理，
- * 不涉及进度推进、能量消耗、输出插入等处理流程。
- * <p>
- * 双层缓存策略：
- * <ul>
- *   <li>上层 {@link #inputRecipeCache}：TTL 100 tick + 指纹比对（Item + bee_type），减少每 tick 重复查找</li>
- *   <li>下层 {@link #pbRecipeCache}：LRU 长期缓存，支持缓存"无配方"结果，避免重复全量遍历</li>
- * </ul>
- * 配方重载时由 {@link PbRecipeProcessor#checkRecipeVersion()} 调用 {@link #clearCaches()} 失效。
- * <p>
- * 线程安全：方块实体在服务端单线程执行，无需同步锁（参考 {@link RecipeCacheManager} 的设计）。
- */
+	 * PB离心配方查找器 — 封装双层缓存的配方查找逻辑
+	 * <br/>
+	 * 从 {@link PbRecipeProcessor} 抽取，遵循单一职责原则：只负责配方查找与缓存管理，
+	 * 不涉及进度推进、能量消耗、输出插入等处理流程。
+	 * <p>
+	 * 双层缓存策略：
+	 * <ul>
+	 *   <li>上层 {@link #inputRecipeCache}：TTL 100 tick + 指纹比对（Item + bee_type），减少每 tick 重复查找</li>
+	 *   <li>下层 {@link #pbRecipeCache}：LRU 长期缓存，支持缓存"无配方"结果，避免重复全量遍历</li>
+	 * </ul>
+	 * 配方重载时由 {@link PbRecipeProcessor#checkRecipeVersion()} 调用 {@link #clearCaches()} 失效。
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁（参考 {@link RecipeCacheManager} 的设计）。
+	 */
 public class PbRecipeFinder {
 
 	/** PB离心配方类型 */

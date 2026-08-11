@@ -1,23 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
-
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
-import com.mojang.serialization.MapCodec;
-
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import cy.jdkdigital.productivebees.init.ModTags;
-
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
-
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -29,30 +17,34 @@ import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+
 /**
- * 喂食器槽位管理器
- * <br/>
- * 管理喂食器窗口内的喂食槽矩阵，用于放置花朵物品供蜜蜂采集。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅管理喂食槽数据结构，不涉及蜜蜂生产逻辑或 tick 处理</li>
- *   <li>开闭原则：花朵有效性检测通过 {@link #hasValidFlower} 按 PB 花朵配方系统精确匹配（Task E-2）</li>
- * </ul>
- * <p>
- * 阶段五改造：喂食槽数量改为构造参数传入，支持工厂版动态数量（初始版9=3×3，
- * 工厂版按 ceil(max(蜂蜂数,9)/3)*3 计算，最高 60 槽 3×20），保留 DEFAULT_FEEDER_SLOT_COUNT 作为初始版默认值。
- */
+	 * 喂食器槽位管理器
+	 * <br/>
+	 * 管理喂食器窗口内的喂食槽矩阵，用于放置花朵物品供蜜蜂采集。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅管理喂食槽数据结构，不涉及蜜蜂生产逻辑或 tick 处理</li>
+	 *   <li>开闭原则：花朵有效性检测通过 {@link #hasValidFlower} 按 PB 花朵配方系统精确匹配（Task E-2）</li>
+	 * </ul>
+	 * <p>
+	 * 阶段五改造：喂食槽数量改为构造参数传入，支持工厂版动态数量（初始版9=3×3，
+	 * 工厂版按 ceil(max(蜂蜂数,9)/3)*3 计算，最高 60 槽 3×20），保留 DEFAULT_FEEDER_SLOT_COUNT 作为初始版默认值。
+	 */
 public class FeederSlotManager {
 
 	private static final ResourceLocation RANCHER_BEE_TYPE =
 			ResourceLocation.fromNamespaceAndPath("productivebees", "rancher_bee");
-	private static final MapCodec<ResourceLocation> ENTITY_ID_CODEC =
-			ResourceLocation.CODEC.fieldOf("id");
 
 	/** 初始版喂食槽数量（3×3 矩形） */
 	public static final int DEFAULT_FEEDER_SLOT_COUNT = 9;
@@ -66,9 +58,6 @@ public class FeederSlotManager {
 	/** 喂食槽尺寸（像素） */
 	public static final int SLOT_SIZE = 18;
 
-	/** 花朵有效性缓存的初始容量（HashMap 初始桶数，减少 256× 加速下的 rehash） */
-	private static final int FLOWER_CACHE_INITIAL_CAPACITY = 64;
-
 	/** 喂食槽数量 */
 	private final int feederSlotCount;
 
@@ -81,20 +70,8 @@ public class FeederSlotManager {
 	/** 喂食槽列表（FeederInventorySlot 类型，支持 VirtualInventoryContainerSlot 创建） */
 	private final List<FeederInventorySlot> feederSlots;
 
-	/**
-	 * 花朵有效性缓存（按蜜蜂类型键）。
-	 * <br/>
-	 * 喂食槽内容变化频率远低于 tick 频率，缓存每只蜜蜂类型的花朵匹配结果可显著降低
-	 * 256× 加速场景下每 tick 每只蜜蜂都遍历喂食槽的开销。
-	 * <p>
-	 * 使用普通 HashMap（非 LinkedHashMap access-order）以避免每次 get 触发
-	 * afterNodeAccess 重新链接节点的开销（Spark 显示此处 23.68ms HashMap.get 热点）。
-	 * 容量增长时通过 {@link #invalidateFlowerCache()} 在喂食槽变化时主动清空。
-	 */
-	private final Map<ResourceLocation, Boolean> flowerValidityCache = new HashMap<>(FLOWER_CACHE_INITIAL_CAPACITY);
-
-	/** 上次失效缓存的版本号（监听器递增触发失效） */
-	private int flowerCacheVersion = 0;
+	/** 花朵有效性缓存（按蜜蜂类型键，喂食槽变化时主动失效） */
+	private final FlowerValidityCache flowerValidityCache = new FlowerValidityCache();
 
 	/**
 	 * 默认构造（初始版参数：3×3=9 个喂食槽）
@@ -154,9 +131,9 @@ public class FeederSlotManager {
 	 *   <li>flowerType 为 "blocks" 且有花朵定义：遍历喂食槽精确匹配</li>
 	 *   <li>其他情况（entity_types / 无定义）：回退到任意花朵检查（向后兼容）</li>
 	 * </ul>
-	 * 精确匹配逻辑参考 PB ConfigurableBee.isFlowerItem：
+	 * 精确匹配逻辑参考 PB ConfigurableBee.isFlowerBlock / isFlowerItem：
 	 * <ul>
-	 *   <li>flowerTag：检查 ItemStack 是否在物品标签中</li>
+	 *   <li>flowerTag：检查物品标签，BlockItem 同时检查方块标签（兼容仅创建方块标签的模组）</li>
 	 *   <li>flowerItem：检查 ItemStack 是否为指定物品</li>
 	 *   <li>flowerFluid：检查 ItemStack 是否为指定流体的桶</li>
 	 * </ul>
@@ -199,6 +176,9 @@ public class FeederSlotManager {
 		return result;
 	}
 
+
+
+
 	/**
 	 * 失效花朵有效性缓存 — 喂食槽内容变化时由外部调用
 	 * <br/>
@@ -206,13 +186,13 @@ public class FeederSlotManager {
 	 * 确保缓存与喂食槽实际内容保持一致。
 	 */
 	public void invalidateFlowerCache() {
-		flowerValidityCache.clear();
-		flowerCacheVersion++;
+		flowerValidityCache.invalidate();
 	}
+
 
 	/** 当前花朵缓存版本号（供外部缓存层判断失效） */
 	public int getFlowerCacheVersion() {
-		return flowerCacheVersion;
+		return flowerValidityCache.version();
 	}
 
 	private boolean computeHasValidFlower(ResourceLocation beeTypeKey) {
@@ -220,11 +200,11 @@ public class FeederSlotManager {
 
 		// Rancher 是固定蜜蜂，不经过 BeeReloadListener 的 configurable flower 数据。
 		if (RANCHER_BEE_TYPE.equals(beeTypeKey)) {
-			return hasContainedEntityAmberMatching(ModTags.RANCHABLES, false);
+			return AmberEntityFlowerHelper.hasContainedEntityAmberMatching(feederSlots, ModTags.RANCHABLES, false);
 		}
 		// Butcher 等 configurable entity_types 蜜蜂使用数据包声明的实体 ID 或实体标签。
 		if (FlowerPreference.TYPE_ENTITY_TYPES.equals(pref.flowerType())) {
-			return hasContainedEntityAmberMatching(pref);
+			return AmberEntityFlowerHelper.hasContainedEntityAmberMatching(feederSlots, pref);
 		}
 		// 非 blocks 类型或无花朵定义：回退到任意花朵检查（向后兼容）
 		if (!FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) {
@@ -245,25 +225,36 @@ public class FeederSlotManager {
 	/**
 	 * 检查物品栈是否匹配花朵偏好
 	 * <br/>
-	 * 参考 PB ConfigurableBee.isFlowerItem 的匹配逻辑：
+	 * 参考 PB ConfigurableBee.isFlowerBlock / isFlowerItem 和 JDTE matchesConfiguredBlockFlower 的匹配逻辑：
 	 * <ol>
-	 *   <li>flowerTag：ItemStack.is(TagKey&lt;Item&gt;)</li>
+	 *   <li>flowerTag：先检查物品标签（TagKey&lt;Item&gt;），若不匹配且物品为 BlockItem，再检查方块标签（TagKey&lt;Block&gt;）</li>
 	 *   <li>flowerItem：ItemStack.is(Item)</li>
 	 *   <li>flowerBlock：BlockItem 对应方块的注册表 ID 精确匹配</li>
 	 *   <li>flowerFluid：BucketItem.content 匹配流体或流体标签</li>
 	 * </ol>
 	 * 任一匹配即返回 true。不检查 inverseFlower（与 PB isFlowerItem 行为一致）。
+	 * <p>
+	 * flowerTag 双重检查原理：PB 的 flowerTag 字段在 isFlowerBlock 中检查方块标签（TagKey&lt;Block&gt;），
+	 * 在 isFlowerItem 中检查物品标签（TagKey&lt;Item&gt;）。部分模组（如 JDTE）仅创建方块标签而无对应物品标签，
+	 * 例如 jdte:life_fluid_bee_flowers 仅包含 jdte:advanced_life_extractor 和 jdte:extended_life_extractor 两个方块。
+	 * 当玩家将此类方块作为物品放入采蜜槽时，仅检查物品标签会漏匹配，必须同时检查方块标签。
 	 *
 	 * @param stack 待检查的物品栈
 	 * @param pref  花朵偏好
 	 * @return true 如果物品匹配任一花朵定义
 	 */
 	private boolean matchesFlowerPreference(ItemStack stack, FlowerPreference pref) {
-		// flowerTag：检查物品标签
+		// flowerTag：先检查物品标签，再检查方块标签（BlockItem 场景）
 		if (!pref.flowerTag().isEmpty()) {
-			TagKey<Item> tag = TagKey.create(BuiltInRegistries.ITEM.key(),
-					ResourceLocation.parse(pref.flowerTag()));
-			if (stack.is(tag)) return true;
+			ResourceLocation tagId = ResourceLocation.parse(pref.flowerTag());
+			// 1. 检查物品标签（与 PB isFlowerItem 一致）
+			TagKey<Item> itemTag = TagKey.create(BuiltInRegistries.ITEM.key(), tagId);
+			if (stack.is(itemTag)) return true;
+			// 2. 当物品为 BlockItem 时，同时检查方块标签（与 PB isFlowerBlock / JDTE matchesConfiguredBlockFlower 一致）
+			if (stack.getItem() instanceof BlockItem blockItem) {
+				TagKey<Block> blockTag = TagKey.create(BuiltInRegistries.BLOCK.key(), tagId);
+				if (blockItem.getBlock().defaultBlockState().is(blockTag)) return true;
+			}
 		}
 		// flowerItem：检查具体物品
 		if (!pref.flowerItem().isEmpty()) {
@@ -359,21 +350,9 @@ public class FeederSlotManager {
 				: candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())).copy();
 	}
 
-	/**
-	 * 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照。
-	 * <p>
-	 * 快照按槽位保留候选（相同琥珀占用多个槽位时仍具有对应权重），且直接复用
-	 * ItemStack 中不可变的 {@link CustomData}，不在扫描阶段复制实体 NBT。
-	 */
+	/** 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照（委托琥珀工具类） */
 	public List<CustomData> getAmberEntityDataSnapshot() {
-		List<CustomData> candidates = null;
-		for (int i = 0; i < feederSlots.size(); i++) {
-			CustomData entityData = getAmberEntityData(feederSlots.get(i).getStack());
-			if (entityData == null || readEntityId(entityData) == null) continue;
-			if (candidates == null) candidates = new ArrayList<>(feederSlots.size());
-			candidates.add(entityData);
-		}
-		return candidates == null ? List.of() : candidates;
+		return AmberEntityFlowerHelper.getAmberEntityDataSnapshot(feederSlots);
 	}
 
 	/** 获取喂食槽列表（IInventorySlot 只读视图，Collections.unmodifiableList 返回原 List 的只读视图而非副本） */
@@ -430,76 +409,4 @@ public class FeederSlotManager {
 		}
 	}
 
-	/**
-	 * 检查喂食器是否有琥珀封存的实体匹配指定的花朵偏好（entity_types 类型蜜蜂适用）
-	 * <br/>
-	 * Butcher / Rancher 等 entity_type 蜜蜂使用封存实体的琥珀方块作为花朵。
-	 * 从琥珀方块的 ItemStack 数据组件中提取封存实体 ID，
-	 * 与 FlowerPreference.flowerItem（实体 ID 字符串）或 flowerTag（实体类型标签）进行匹配。
-	 * <p>
-	 * 性能：只在 feedSlots 内容变化后首次调用时计算（由 invalidateFlowerCache 保证）。
-	 *
-	 * @param pref 花朵偏好
-	 * @return true 如果任意喂食槽包含匹配实体的琥珀方块
-	 */
-	private boolean hasContainedEntityAmberMatching(FlowerPreference pref) {
-		String entityId = pref.flowerItem();
-		if (!entityId.isEmpty()) {
-			boolean inverse = pref.inverseFlower();
-			ResourceLocation expected;
-			try {
-				expected = ResourceLocation.parse(entityId);
-			} catch (RuntimeException ignored) {
-				return false;
-			}
-			for (int i = 0; i < feederSlots.size(); i++) {
-				ResourceLocation contained = getAmberEntityId(feederSlots.get(i).getStack());
-				if (contained != null && expected.equals(contained) != inverse) return true;
-			}
-			return false;
-		}
-
-		String tagName = pref.flowerTag();
-		if (tagName.isEmpty()) return false;
-		boolean inverse = pref.inverseFlower();
-		if (tagName.charAt(0) == '!') {
-			inverse = true;
-			tagName = tagName.substring(1);
-		}
-		try {
-			TagKey<EntityType<?>> entityTag = TagKey.create(
-					BuiltInRegistries.ENTITY_TYPE.key(), ResourceLocation.parse(tagName));
-			return hasContainedEntityAmberMatching(entityTag, inverse);
-		} catch (RuntimeException ignored) {
-			return false;
-		}
-	}
-
-	private boolean hasContainedEntityAmberMatching(TagKey<EntityType<?>> entityTag, boolean inverse) {
-		for (int i = 0; i < feederSlots.size(); i++) {
-			ResourceLocation entityId = getAmberEntityId(feederSlots.get(i).getStack());
-			if (entityId == null) continue;
-			var entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(entityId);
-			if (entityType.isPresent()
-					&& BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entityType.get()).is(entityTag) != inverse) return true;
-		}
-		return false;
-	}
-
-	private static CustomData getAmberEntityData(ItemStack stack) {
-		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) return null;
-		ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
-		if (!"productivebees".equals(blockId.getNamespace()) || !blockId.getPath().contains("amber")) return null;
-		CustomData entityData = stack.get(DataComponents.ENTITY_DATA);
-		return entityData == null || entityData.isEmpty() ? null : entityData;
-	}
-
-	private static ResourceLocation getAmberEntityId(ItemStack stack) {
-		CustomData entityData = getAmberEntityData(stack);
-		return entityData == null ? null : readEntityId(entityData);
-	}
-
-	private static ResourceLocation readEntityId(CustomData entityData) {
-		return entityData.read(ENTITY_ID_CODEC).result().orElse(null);
-	}
 }

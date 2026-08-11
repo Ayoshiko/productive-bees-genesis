@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import net.minecraft.world.level.block.entity.BlockEntityType;
-
 import appeng.api.AECapabilities;
 import appeng.api.networking.IInWorldGridNodeHost;
-
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryBlockType;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.MekApiaryEMEBlockType;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.MekCentrifugeEMEBlockType;
@@ -13,38 +10,37 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeME
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 /**
- * AE2 capability 注册器
- * <br/>
- * 单一职责：在 {@link RegisterCapabilitiesEvent} 中为全部离心机和通用机械蜂箱的 BlockEntityType 注册
- * {@link AECapabilities#IN_WORLD_GRID_NODE_HOST} capability，使 AE2 线缆能通过 NeoForge
- * 的 BlockCapability 机制发现并连接这些方块实体。
- * <p>
- * <b>设计原则（SRP）</b>：本类仅负责 capability 注册，不处理网格节点的生命周期
- * （由 {@link Ae2GridNodeManager} / {@link MekAe2LifecycleHandler} 负责）。
- * 将注册逻辑独立成类避免主类 {@code ProductiveBeesGenesis} 膨胀。
- * <p>
- * <b>覆盖范围</b>：
- * <ul>
- *   <li>离心机 18 个 BlockEntityType（基础+原版4+EM5+ME4+EME4）</li>
- *   <li>通用机械蜂箱 18 个 BlockEntityType（基础1+原版工厂4+EM5+ME4+EME4）</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：注册在 mod 事件总线 {@link RegisterCapabilitiesEvent} 中执行，单线程，无需同步。
- * capability provider lambda 无状态（仅做类型转换），跨线程调用安全。
- * <p>
- * <b>AE2 未安装</b>：本类不会被加载（调用方 {@code ProductiveBeesGenesis} 已通过
- * {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫跳过），即使被加载也会因 AE2 类引用触发
- * {@code NoClassDefFoundError}——这是预期的，因为本类是 AE2 集成的一部分。
- *
- * @since 1.7.0
- * @author Ayoshiko
- */
+	 * AE2 capability 注册器
+	 * <br/>
+	 * 单一职责：在 {@link RegisterCapabilitiesEvent} 中为全部离心机和通用机械蜂箱的 BlockEntityType 注册
+	 * {@link AECapabilities#IN_WORLD_GRID_NODE_HOST} capability，使 AE2 线缆能通过 NeoForge
+	 * 的 BlockCapability 机制发现并连接这些方块实体。
+	 * <p>
+	 * <b>设计原则（SRP）</b>：本类仅负责 capability 注册，不处理网格节点的生命周期
+	 * （由 {@link Ae2GridNodeManager} / {@link MekAe2LifecycleHandler} 负责）。
+	 * 将注册逻辑独立成类避免主类 {@code ProductiveBeesGenesis} 膨胀。
+	 * <p>
+	 * <b>覆盖范围</b>：
+	 * <ul>
+	 *   <li>离心机 18 个 BlockEntityType（基础+原版4+EM5+ME4+EME4）</li>
+	 *   <li>通用机械蜂箱 18 个 BlockEntityType（基础1+原版工厂4+EM5+ME4+EME4）</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：注册在 mod 事件总线 {@link RegisterCapabilitiesEvent} 中执行，单线程，无需同步。
+	 * capability provider lambda 无状态（仅做类型转换），跨线程调用安全。
+	 * <p>
+	 * <b>AE2 未安装</b>：本类不会被加载（调用方 {@code ProductiveBeesGenesis} 已通过
+	 * {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫跳过），即使被加载也会因 AE2 类引用触发
+	 * {@code NoClassDefFoundError}——这是预期的，因为本类是 AE2 集成的一部分。
+	 *
+	 * @since 1.5.3
+	 * @author Ayoshiko
+	 */
 public final class Ae2CapabilityRegistrar {
 
 	private Ae2CapabilityRegistrar() {}

@@ -1,5 +1,17 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -9,33 +21,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import cy.jdkdigital.productivebees.init.ModDataComponents;
-import cy.jdkdigital.productivebees.init.ModItems;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-
 /**
- * 随机蜜脾/蜜脾块选择与分配算法工具类
- * <p>
- * 从 {@link AbstractCombEventHandler} 抽取的纯算法逻辑，遵循单一职责原则（SRP）：
- * <ul>
- *   <li>单个/批量随机蜜脾与蜜脾块生成</li>
- *   <li>预构建模板数组（高频场景下用 copy() 替代 new + set 组件）</li>
- *   <li>聚合生成（高倍加速下将总数聚合为少量堆叠）</li>
- *   <li>不同类型随机选择（Fisher-Yates 洗牌 / do-while 重试自适应）</li>
- *   <li>均匀分配与随机分配（Stars-and-Bars 算法）</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：所有方法均为无状态静态方法，使用 {@link ThreadLocalRandom} 保证并发安全。
- * 传入的 {@code cachedBeeTypes} 列表由调用方保证线程安全（如 {@link CopyOnWriteArrayList} 或 {@link List#of()}）。
- */
+	 * 随机蜜脾/蜜脾块选择与分配算法工具类
+	 * <p>
+	 * 从 {@link AbstractCombEventHandler} 抽取的纯算法逻辑，遵循单一职责原则（SRP）：
+	 * <ul>
+	 *   <li>单个/批量随机蜜脾与蜜脾块生成</li>
+	 *   <li>预构建模板数组（高频场景下用 copy() 替代 new + set 组件）</li>
+	 *   <li>聚合生成（高倍加速下将总数聚合为少量堆叠）</li>
+	 *   <li>不同类型随机选择（Fisher-Yates 洗牌 / do-while 重试自适应）</li>
+	 *   <li>均匀分配与随机分配（Stars-and-Bars 算法）</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：所有方法均为无状态静态方法，使用 {@link ThreadLocalRandom} 保证并发安全。
+	 * 传入的 {@code cachedBeeTypes} 列表由调用方保证线程安全（如 {@link CopyOnWriteArrayList} 或 {@link List#of()}）。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

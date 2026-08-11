@@ -3,16 +3,15 @@ package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
-
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Cosmic 渲染类型定义
- * <br/>
- * 定义 COSMIC 与 COSMIC_ARMOR 两套渲染类型，参数与新版 Re:Avaritia 一致。
- */
+	 * Cosmic 渲染类型定义
+	 * <br/>
+	 * 定义 COSMIC 与 COSMIC_ARMOR 两套渲染类型，参数与新版 Re:Avaritia 一致。
+	 */
 public class CosmicRenderTypes {
 
 	/** 2MB 顶点缓冲区大小 */

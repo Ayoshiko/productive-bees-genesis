@@ -1,39 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexSorting;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import org.joml.Matrix3fc;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 /**
- * Iris 延迟渲染队列
- * <br/>
- * 当 Iris 启用光影包时，手持视角的 cosmic 光晕被入队，在 RenderLevelStageEvent.AFTER_LEVEL 阶段统一恢复矩阵后执行。
- * <br/>
- * 数据结构选型：保留 {@link CopyOnWriteArrayList} 而非改用 ArrayDeque，原因：
- * <ul>
- *   <li>队列通常很小（每帧 &lt; 10 条），写时复制 O(n) 开销可忽略</li>
- *   <li>renderAll 的快照迭代器无锁，GPU 渲染期间不阻塞 enqueue</li>
- *   <li>ArrayDeque 迭代需持锁，渲染耗时较长会阻塞入队线程</li>
- * </ul>
- * 线程安全：enqueue 与 renderAll 的快照+清空均在 synchronized(CosmicRenderQueue.class) 内原子完成；
- * 队列大小上限 {@link #MAX_QUEUE_SIZE}，超出时丢弃最旧条目并记录警告，防止内存溢出。
- * <p>
- * 复用对象线程安全：原 static 复用的 {@link Matrix4f}/{@link PoseStack}/{@link List} 在 Iris 并行渲染时
- * 可能被多个渲染线程并发访问，导致矩阵数据损坏。改为 {@link ThreadLocal}，每线程持有独立实例，
- * 既避免每帧分配又保证线程隔离。线程销毁时 ThreadLocal 自动清理，无内存泄漏风险。
- */
+	 * Iris 延迟渲染队列
+	 * <br/>
+	 * 当 Iris 启用光影包时，手持视角的 cosmic 光晕被入队，在 RenderLevelStageEvent.AFTER_LEVEL 阶段统一恢复矩阵后执行。
+	 * <br/>
+	 * 数据结构选型：保留 {@link CopyOnWriteArrayList} 而非改用 ArrayDeque，原因：
+	 * <ul>
+	 *   <li>队列通常很小（每帧 &lt; 10 条），写时复制 O(n) 开销可忽略</li>
+	 *   <li>renderAll 的快照迭代器无锁，GPU 渲染期间不阻塞 enqueue</li>
+	 *   <li>ArrayDeque 迭代需持锁，渲染耗时较长会阻塞入队线程</li>
+	 * </ul>
+	 * 线程安全：enqueue 与 renderAll 的快照+清空均在 synchronized(CosmicRenderQueue.class) 内原子完成；
+	 * 队列大小上限 {@link #MAX_QUEUE_SIZE}，超出时丢弃最旧条目并记录警告，防止内存溢出。
+	 * <p>
+	 * 复用对象线程安全：原 static 复用的 {@link Matrix4f}/{@link PoseStack}/{@link List} 在 Iris 并行渲染时
+	 * 可能被多个渲染线程并发访问，导致矩阵数据损坏。改为 {@link ThreadLocal}，每线程持有独立实例，
+	 * 既避免每帧分配又保证线程隔离。线程销毁时 ThreadLocal 自动清理，无内存泄漏风险。
+	 */
 public final class CosmicRenderQueue {
 
 	/** 队列大小上限，防止异常时无限增长导致内存溢出 */

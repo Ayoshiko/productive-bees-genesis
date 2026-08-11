@@ -1,9 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.lang.ref.WeakReference;
-import java.util.Map;
-import java.util.WeakHashMap;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
@@ -11,7 +7,6 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.tab.GuiConfigTypeTab;
@@ -32,35 +27,39 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.ref.WeakReference;
+import java.util.Map;
+import java.util.WeakHashMap;
+
 /**
- * AE2 输出按钮覆盖层 — 将 per-tile AE2 输出开关注入 MEK 侧面配置窗口
- * <br/>
- * 参考 Mek-Energistics 的 AeOutputConfigOverlay，适配我们的 {@link IAe2OutputHostBase} 接口。
- * <p>
- * <b>原理</b>：通过 NeoForge 的 {@link ScreenEvent} 监听客户端屏幕渲染和鼠标点击，
- * 在检测到 {@link GuiSideConfiguration} 窗口打开时，动态注入 {@link AeOutputButton}
- * 作为窗口子元素。使用弱 key 与弱 value 缓存避免重复创建且不保留已关闭窗口，
- * 同时在窗口关闭后自动回收。
- * <p>
- * <b>与 Mek-Energistics 的区别</b>：
- * <ul>
- *   <li>宿主判断：使用 {@link IAe2OutputHostBase} 接口而非 MeAeMachine</li>
- *   <li>支持流体切换：canToggle 包含 ITEM 和 FLUID（Mek-Energistics 不支持 FLUID 切换）</li>
- *   <li>全局配置按方块类型区分：蜂箱与离心机使用独立配置项</li>
- *   <li>网络包：使用 {@link CycleAeOutputPayload}（OutputType 枚举）</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：客户端 GUI 渲染单线程，WeakHashMap 无需同步。
- * <p>
- * <b>事件驱动点击检测原理</b>：通过 NeoForge 的 {@link ScreenEvent.MouseButtonPressed.Pre}
- * 事件在 Screen.mouseClicked 之前拦截点击，命中按钮后取消事件避免穿透。按钮自身的
- * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
- * <p>
+	 * AE2 输出按钮覆盖层 — 将 per-tile AE2 输出开关注入 MEK 侧面配置窗口
+	 * <br/>
+	 * 参考 Mek-Energistics 的 AeOutputConfigOverlay，适配我们的 {@link IAe2OutputHostBase} 接口。
+	 * <p>
+	 * <b>原理</b>：通过 NeoForge 的 {@link ScreenEvent} 监听客户端屏幕渲染和鼠标点击，
+	 * 在检测到 {@link GuiSideConfiguration} 窗口打开时，动态注入 {@link AeOutputButton}
+	 * 作为窗口子元素。使用弱 key 与弱 value 缓存避免重复创建且不保留已关闭窗口，
+	 * 同时在窗口关闭后自动回收。
+	 * <p>
+	 * <b>与 Mek-Energistics 的区别</b>：
+	 * <ul>
+	 *   <li>宿主判断：使用 {@link IAe2OutputHostBase} 接口而非 MeAeMachine</li>
+	 *   <li>支持流体切换：canToggle 包含 ITEM 和 FLUID（Mek-Energistics 不支持 FLUID 切换）</li>
+	 *   <li>全局配置按方块类型区分：蜂箱与离心机使用独立配置项</li>
+	 *   <li>网络包：使用 {@link CycleAeOutputPayload}（OutputType 枚举）</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：客户端 GUI 渲染单线程，WeakHashMap 无需同步。
+	 * <p>
+	 * <b>事件驱动点击检测原理</b>：通过 NeoForge 的 {@link ScreenEvent.MouseButtonPressed.Pre}
+	 * 事件在 Screen.mouseClicked 之前拦截点击，命中按钮后取消事件避免穿透。按钮自身的
+	 * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
+	 * <p>
 	 * <b>修复 v14 渲染阶段不修改状态</b>：按钮创建与状态更新
- * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
- * 渲染阶段仅更新 visible/active/tooltip/message 状态，避免 ConcurrentModificationException
- * 和递归渲染风险。
- */
+	 * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
+	 * 渲染阶段仅更新 visible/active/tooltip/message 状态，避免 ConcurrentModificationException
+	 * 和递归渲染风险。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class AeOutputOverlay {
 

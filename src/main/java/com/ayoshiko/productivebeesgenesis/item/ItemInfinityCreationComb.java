@@ -1,17 +1,17 @@
 package com.ayoshiko.productivebeesgenesis.item;
 
-import java.util.List;
-
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 
+import java.util.List;
+
 /**
- * 无尽创世蜜脾 — 仅为万象创世蜜脾提供材质
- * <br/>
- * 自定义 Item 子类，添加 tooltip 提示该物品无实际作用。
- */
+	 * 无尽创世蜜脾 — 仅为万象创世蜜脾提供材质
+	 * <br/>
+	 * 自定义 Item 子类，添加 tooltip 提示该物品无实际作用。
+	 */
 public class ItemInfinityCreationComb extends Item {
 
 	public ItemInfinityCreationComb(Properties properties) {

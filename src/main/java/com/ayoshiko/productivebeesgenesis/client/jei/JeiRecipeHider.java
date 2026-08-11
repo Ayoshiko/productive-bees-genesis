@@ -1,34 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
-import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
-
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * JEI 配方隐藏工具类
- * <p>
- * 将 {@link ProductiveBeesGenesisJEI} 中通过反射隐藏蜜蜂相关配方的逻辑抽取为独立工具类，
- * 消除 4 个高度重复的 try-catch 块，遵循下述设计原则：
- * <ul>
- *   <li>SRP — 仅负责配方隐藏的反射逻辑，不涉及 JEI 插件生命周期</li>
- *   <li>DIP — 通过参数传入 {@link IRecipeManager}、插件类与字段名，不依赖具体插件实现</li>
- *   <li>性能 — 使用 {@link #METHODS_CACHE} 缓存反射方法数组，避免每个配方重复调用 {@link Class#getMethods()}</li>
- * </ul>
- * <br/>
- * 线程安全：{@link #METHODS_CACHE} 使用 {@link ConcurrentHashMap}，JEI 初始化与配方重载并发安全。
- */
+	 * JEI 配方隐藏工具类
+	 * <p>
+	 * 将 {@link ProductiveBeesGenesisJEI} 中通过反射隐藏蜜蜂相关配方的逻辑抽取为独立工具类，
+	 * 消除 4 个高度重复的 try-catch 块，遵循下述设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责配方隐藏的反射逻辑，不涉及 JEI 插件生命周期</li>
+	 *   <li>DIP — 通过参数传入 {@link IRecipeManager}、插件类与字段名，不依赖具体插件实现</li>
+	 *   <li>性能 — 使用 {@link #METHODS_CACHE} 缓存反射方法数组，避免每个配方重复调用 {@link Class#getMethods()}</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：{@link #METHODS_CACHE} 使用 {@link ConcurrentHashMap}，JEI 初始化与配方重载并发安全。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

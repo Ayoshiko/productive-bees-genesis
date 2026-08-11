@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.resources.ResourceLocation;
@@ -13,23 +11,25 @@ import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 /**
- * 万象创世蜜蜂客户端事件处理器
- * <p>
- * 负责：
- * <ol>
- *   <li>彩虹粒子特效</li>
- *   <li>发光轮廓渲染</li>
- * </ol>
- * <p>
- * 颜色控制：由 {@link com.ayoshiko.productivebeesgenesis.mixin.client.ConfigurableBeeColorMixin}
- * 直接注入 ConfigurableBee.getColor()，使用自定义 8秒 彩虹循环，
- * 不操作 RenderSystem 全局状态，避免影响其他实体。
- * <p>
- * 公共流程继承自 {@link AbstractClientCombEventHandler}，本类仅提供差异化参数与彩虹颜色逻辑。
- * 静态 {@code @SubscribeEvent} 方法委托给单例 {@link #INSTANCE} 的模板方法，
- * 以兼容 {@code @EventBusSubscriber} 静态注册要求。
- */
+	 * 万象创世蜜蜂客户端事件处理器
+	 * <p>
+	 * 负责：
+	 * <ol>
+	 *   <li>彩虹粒子特效</li>
+	 *   <li>发光轮廓渲染</li>
+	 * </ol>
+	 * <p>
+	 * 颜色控制：由 {@link com.ayoshiko.productivebeesgenesis.mixin.client.ConfigurableBeeColorMixin}
+	 * 直接注入 ConfigurableBee.getColor()，使用自定义 8秒 彩虹循环，
+	 * 不操作 RenderSystem 全局状态，避免影响其他实体。
+	 * <p>
+	 * 公共流程继承自 {@link AbstractClientCombEventHandler}，本类仅提供差异化参数与彩虹颜色逻辑。
+	 * 静态 {@code @SubscribeEvent} 方法委托给单例 {@link #INSTANCE} 的模板方法，
+	 * 以兼容 {@code @EventBusSubscriber} 静态注册要求。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class MyriadCreationsClientEventHandler extends AbstractClientCombEventHandler {
 

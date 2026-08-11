@@ -1,8 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
-import java.util.function.IntSupplier;
-
+import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
+import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
+import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -10,49 +16,47 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
-import mekanism.common.inventory.slot.BasicInventorySlot;
-import net.minecraft.world.item.ItemStack;
-
-import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
-import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import java.util.function.BiPredicate;
+import java.util.function.IntSupplier;
 
 /**
- * BasicInventorySlot 输入槽分等级堆叠倍率 Mixin
- * <br/>
- * 通过 {@link TieredInputSlot} 接口为 {@link BasicInventorySlot} 注入可配置的堆叠倍率。
- * 当倍率已设置时，{@code getLimit} 返回 {@code baseLimit × multiplier}。
- * <p>
- * 性能优化：倍率值使用版本号缓存，配置 reload 时递增
- * {@link TieredInputSlot#MULTIPLIER_VERSION}，本实例检测到版本号不匹配时重新读取。
- * 无 reload 期间零 ModConfig 读取开销。
- * <p>
- * 生效范围：
- * <ul>
- *   <li>{@link mekanism.common.inventory.slot.InputInventorySlot} — 基础离心机输入槽（未覆盖 getLimit）</li>
- *   <li>{@link mekanism.common.inventory.slot.FactoryInputInventorySlot} — 原版工厂输入槽（未覆盖 getLimit）</li>
- *   <li>其他未覆盖 getLimit 的 BasicInventorySlot 子类</li>
- * </ul>
- * <b>不生效</b>于已覆盖 getLimit 的子类（如 ExtraFactoryInputInventorySlot、EMExtraFactoryInputInventorySlot、
- * TieredOutputInventorySlot），这些类有自己的 Mixin 或直接覆盖实现。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>OCP：通过 Mixin 扩展 BasicInventorySlot 行为，不修改其源码</li>
- *   <li>SRP：仅负责输入槽倍率注入，不涉及输出槽或配方逻辑</li>
- * </ul>
- * <p>
- * 线程安全：cachedInputMultiplier / cachedInputVersion 使用 volatile 保证跨线程可见性
- * （getLimit 可能从同步线程调用）。{@link #productivebeesgenesis$getCachedMultiplier} 使用
- * synchronized 守卫 check-then-update 临界区，避免并发线程读到版本号已更新但倍率值仍为旧值。
- */
+	 * BasicInventorySlot 输入槽分等级堆叠倍率 Mixin
+	 * <br/>
+	 * 通过 {@link TieredInputSlot} 接口为 {@link BasicInventorySlot} 注入可配置的堆叠倍率。
+	 * 当倍率已设置时，{@code getLimit} 返回 {@code baseLimit × multiplier}。
+	 * <p>
+	 * 性能优化：倍率值使用版本号缓存，配置 reload 时递增
+	 * {@link TieredInputSlot#MULTIPLIER_VERSION}，本实例检测到版本号不匹配时重新读取。
+	 * 无 reload 期间零 ModConfig 读取开销。
+	 * <p>
+	 * 生效范围：
+	 * <ul>
+	 *   <li>{@link mekanism.common.inventory.slot.InputInventorySlot} — 基础离心机输入槽（未覆盖 getLimit）</li>
+	 *   <li>{@link mekanism.common.inventory.slot.FactoryInputInventorySlot} — 原版工厂输入槽（未覆盖 getLimit）</li>
+	 *   <li>其他未覆盖 getLimit 的 BasicInventorySlot 子类</li>
+	 * </ul>
+	 * <b>不生效</b>于已覆盖 getLimit 的子类（如 ExtraFactoryInputInventorySlot、EMExtraFactoryInputInventorySlot、
+	 * TieredOutputInventorySlot），这些类有自己的 Mixin 或直接覆盖实现。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>OCP：通过 Mixin 扩展 BasicInventorySlot 行为，不修改其源码</li>
+	 *   <li>SRP：仅负责输入槽倍率注入，不涉及输出槽或配方逻辑</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：cachedInputMultiplier / cachedInputVersion 使用 volatile 保证跨线程可见性
+	 * （getLimit 可能从同步线程调用）。{@link #productivebeesgenesis$getCachedMultiplier} 使用
+	 * synchronized 守卫 check-then-update 临界区，避免并发线程读到版本号已更新但倍率值仍为旧值。
+	 */
 @Mixin(value = BasicInventorySlot.class, remap = false)
 public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	@Shadow
 	protected ItemStack current;
+
+	@Shadow
+	@Final
+	private BiPredicate<ItemStack, AutomationType> canExtract;
 
 	@Shadow
 	public abstract int getLimit(ItemStack stack);
@@ -105,6 +109,24 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	@Override
 	public ExternalInsertPolicy productivebeesgenesis$getExternalInsertPolicy() {
 		return productivebeesgenesis$externalInsertPolicy;
+	}
+
+	@Inject(method = "extractItem(ILmekanism/api/Action;Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At("HEAD"), cancellable = true, order = 1000)
+	private void productivebeesgenesis$bulkExtractOverstackedOutput(int amount, Action action,
+			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		if (automationType != AutomationType.EXTERNAL || productivebeesgenesis$inputMultiplier == null
+				|| current.isEmpty() || amount < 1 || current.getCount() <= current.getMaxStackSize()
+				|| !canExtract.test(current, automationType)) {
+			return;
+		}
+		int extractedAmount = Math.min(amount, current.getCount());
+		ItemStack extracted = current.copyWithCount(extractedAmount);
+		if (action.execute()) {
+			current.shrink(extractedAmount);
+			onContentsChanged();
+		}
+		cir.setReturnValue(extracted);
 	}
 
 	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",

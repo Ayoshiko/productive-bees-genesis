@@ -1,10 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.BeeTypeNormalizer;
 import com.mojang.datafixers.util.Pair;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,20 +11,22 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
 /**
- * FilterListScreen 的输入框与添加验证辅助类
- * <p>
- * 将新增蜜蜂类型的输入框、确认/取消按钮、输入校验与提示渲染等逻辑从屏幕类中剥离，
- * 降低 FilterListScreen 的复杂度（SRP）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责输入框交互与输入校验，不涉及列表数据语义或配置持久化</li>
- *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * FilterListScreen 的输入框与添加验证辅助类
+	 * <p>
+	 * 将新增蜜蜂类型的输入框、确认/取消按钮、输入校验与提示渲染等逻辑从屏幕类中剥离，
+	 * 降低 FilterListScreen 的复杂度（SRP）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责输入框交互与输入校验，不涉及列表数据语义或配置持久化</li>
+	 *   <li>组合模式 — 持有 {@link FilterListScreen} 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault
@@ -135,7 +135,7 @@ final class FilterListInputHelper {
 		if (trimmed.isEmpty()) {
 			return Pair.of(false, Component.translatable("productivebeesgenesis.config.error.empty"));
 		}
-		ResourceLocation beeType = BeeInfoHelper.parseBeeType(trimmed);
+		ResourceLocation beeType = BeeTypeNormalizer.parseBeeType(trimmed);
 		if (beeType == null) {
 			return Pair.of(false, Component.translatable("productivebeesgenesis.config.error.invalid_format"));
 		}

@@ -1,27 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
 /**
- * BeeSelectionScreen 的滚动条交互与渲染辅助类
- * <p>
- * 继承 {@link AbstractVerticalScrollBar}，仅提供数据源（屏幕尺寸、列表状态）与
- * 滚动变化钩子，滚动条几何计算、渲染与鼠标交互由基类统一处理（SRP/OCP）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责向基类提供 BeeSelectionScreen 的布局与状态数据</li>
- *   <li>组合模式 — 持有 {@link BeeSelectionScreen}、{@link BeeSelectionState} 与
- *       {@link BeeSelectionSorter} 引用，通过包级访问共享必要状态</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * BeeSelectionScreen 的滚动条交互与渲染辅助类
+	 * <p>
+	 * 继承 {@link AbstractVerticalScrollBar}，仅提供数据源（屏幕尺寸、列表状态）与
+	 * 滚动变化钩子，滚动条几何计算、渲染与鼠标交互由基类统一处理（SRP/OCP）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责向基类提供 BeeSelectionScreen 的布局与状态数据</li>
+	 *   <li>组合模式 — 持有 {@link BeeSelectionScreen}、{@link BeeSelectionState} 与
+	 *       {@link BeeSelectionSorter} 引用，通过包级访问共享必要状态</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

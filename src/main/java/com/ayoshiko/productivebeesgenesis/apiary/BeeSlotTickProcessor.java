@@ -1,19 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -22,19 +14,26 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * 蜜蜂槽位 tick 处理器 — 从 {@link ApiaryTickHandler} 拆分，负责蜜蜂槽位的服务端 tick 处理逻辑。
- * <br/>
- * 职责：遍历蜜蜂槽推进生产计时、累积产出按 EntityType 分组批量刷新（Task 16）、
- * 统一提取能量（v9-P3 try-finally）、配置缓存（每 100 tick 刷新）。
- * <p>
- * 由 {@link ApiaryTickHandler} 在每服务端 tick 委托调用，蜂笼输入由 {@link CageTickProcessor}
- * 在本处理器之前执行，确保蜜蜂从蜂笼转移到蜂槽后再推进生产逻辑。
- * <p>
- * 线程安全：方块实体在服务端单线程执行，AtomicInteger 提供防御性原子计数。
- *
- * @since 1.0.0
- */
+	 * 蜜蜂槽位 tick 处理器 — 从 {@link ApiaryTickHandler} 拆分，负责蜜蜂槽位的服务端 tick 处理逻辑。
+	 * <br/>
+	 * 职责：遍历蜜蜂槽推进生产计时、累积产出按 EntityType 分组批量刷新（Task 16）、
+	 * 统一提取能量（v9-P3 try-finally）、配置缓存（每 100 tick 刷新）。
+	 * <p>
+	 * 由 {@link ApiaryTickHandler} 在每服务端 tick 委托调用，蜂笼输入由 {@link CageTickProcessor}
+	 * 在本处理器之前执行，确保蜜蜂从蜂笼转移到蜂槽后再推进生产逻辑。
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，AtomicInteger 提供防御性原子计数。
+	 *
+	 * @since 1.0.0
+	 */
 class BeeSlotTickProcessor {
 
 	/**
@@ -136,9 +135,6 @@ class BeeSlotTickProcessor {
 	private final HashMap<ResourceLocation, List<Integer>> pendingProductionsBuffer = new HashMap<>();
 
 	// ----- basic 配置缓存 -----
-	/** 缓存的每槽每 tick 能耗（FE） */
-	private volatile long cachedEnergyPerTick = 50L;
-
 	/** 缓存的基础处理时间（tick） */
 	private volatile int cachedProcessingTime = 200;
 
@@ -222,10 +218,10 @@ class BeeSlotTickProcessor {
 			return;
 		}
 		long pendingEnergyCost = 0;
-		float energyMultiplier = upgradeHandler.getEnergyMultiplier();
 		float timeMultiplier = upgradeHandler.getTimeMultiplier();
-		// 这些值对本次 tick 内所有蜜蜂槽位相同，移出槽位循环避免重复算术和方法分派。
-		long beeEnergyCost = calculateBeeEnergyCost(energyMultiplier);
+		// MachineEnergyContainer 已按 Mekanism 官方公式实时应用速度/能量升级，
+		// 直接读取可同时保留普通蜂箱配置和各工厂等级的基础能耗。
+		long beeEnergyCost = calculateBeeEnergyCost(energyContainer.getEnergyPerTick());
 		// Task 1.2：STACK 升级产出次数倍率 — 循环外计算一次，所有蜜蜂共享
 		int stackProductionCount = upgradeHandler.getStackProductionCount();
 
@@ -297,7 +293,7 @@ class BeeSlotTickProcessor {
 
 			// 能量检查。当前容器预算不够时先结算已处理蜜蜂，再从 AE 补满并继续本批。
 			// 这样容器容量只需要覆盖一段工作，不需要一次容纳 32 只蜜蜂 × 256 虚拟 tick 的总能耗。
-			long acceleratedEnergyCost = saturatingMultiply(beeEnergyCost, tickMultiplier);
+			long acceleratedEnergyCost = calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
 			long availableEnergy = energyContainer.getEnergy();
 			if (pendingEnergyCost > availableEnergy
 					|| acceleratedEnergyCost > availableEnergy - pendingEnergyCost) {
@@ -338,10 +334,10 @@ class BeeSlotTickProcessor {
 								+ "maxUpgradeMul={} adjustedMinTicks={}",
 						i, baseMinTicks, timeMultiplier,
 						upgradeHandler.getMekSpeedTimeMultiplier(),
-						upgradeHandler.getPbTimeDivisor(),
+						ApiaryUpgradeMath.getPbTimeDivisor(upgradeHandler),
 						upgradeHandler.getMekSpeedUpgrades(),
-						upgradeHandler.getMaxSpeedUpgrades(),
-						upgradeHandler.getMaxUpgradeMultiplier(),
+						ApiaryUpgradeMath.getMaxSpeedUpgrades(),
+						ApiaryUpgradeMath.getMaxUpgradeMultiplier(),
 						adjustedMinTicks);
 			}
 			// 同步 adjustedMinTicks 到 BeeSlot，确保 tooltip 工作进度显示正确的工作 tick 上限
@@ -468,6 +464,14 @@ class BeeSlotTickProcessor {
 				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
 				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
 				if (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
+				// 花朵校验：喂食槽无匹配花朵时清零该组 pending 并跳过 flush，
+				// 避免"蜜蜂无有效花朵时仍产出/吸蜜"导致产出异常
+				if (!feederManager.hasValidFlower(typeKey)) {
+					for (int idx : entry.getValue()) {
+						if (idx >= 0 && idx < pendingProductions.length) pendingProductions[idx] = 0;
+					}
+					continue;
+				}
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取
 				// Bug 10: 传入 level 用于万象创世随机蜜脾生成
@@ -516,21 +520,27 @@ class BeeSlotTickProcessor {
 	/**
 	 * 计算单只蜜蜂每 tick 能耗
 	 * <br/>
-	 * = 配置能耗 × 能耗倍率（由 {@link ApiaryUpgradeHandler#getEnergyMultiplier} 提供，
-	 * 已综合 MEK 速度升级的影响：每级速度升级增加 10% 能耗）。
+	 * = MachineEnergyContainer 当前每槽每 tick 能耗。
+	 * Mekanism 已按 {@code ceil(base × multiplier)} 公式应用 SPEED/ENERGY 升级，
+	 * 因此这里不能再次用浮点倍率计算，否则会丢失工厂等级并产生截断误差。
 	 * <p>
-	 * 使用 {@link #cachedEnergyPerTick}（从 ModConfig.SERVER.apiaryEnergyPerTick 读取，每 100 tick 刷新）
-	 * 替代硬编码常量，让配置实际生效。
-	 * <p>
-	 * MEKExtras CREATIVE 升级：能耗倍率为 0.0f 时直接返回 0，跳过 Math.max(1L, ...) 的最小值保护，
-	 * 实现零能量消耗。
 	 *
-	 * @param energyMultiplier 能耗倍率（来自升级处理器，CREATIVE 安装时为 0.0f）
-	 * @return 单只蜜蜂每 tick 能耗（FE），CREATIVE 安装时返回 0
+	 * @param energyPerTick MachineEnergyContainer 当前每槽每 tick 能耗
+	 * @return 单只蜜蜂每 tick 能耗（FE）
 	 */
-	private long calculateBeeEnergyCost(float energyMultiplier) {
-		if (energyMultiplier <= 0.0f) return 0L; // MEKExtras CREATIVE 升级：零能耗
-		return Math.max(1L, (long) (cachedEnergyPerTick * energyMultiplier));
+	static long calculateBeeEnergyCost(long energyPerTick) {
+		return Math.max(0L, energyPerTick);
+	}
+
+	/** 计算单只蜜蜂在当前真实游戏刻内（含加速批量）应扣除的能量。 */
+	static long calculateAcceleratedEnergyCost(long energyPerTick, int tickMultiplier) {
+		return saturatingMultiply(calculateBeeEnergyCost(energyPerTick), tickMultiplier);
+	}
+
+	/** 计算一个真实游戏刻内所有 active 蜜蜂槽位的总能耗。 */
+	static long calculateBatchEnergyCost(long energyPerTick, int activeSlots, int tickMultiplier) {
+		if (activeSlots <= 0) return 0L;
+		return saturatingMultiply(calculateAcceleratedEnergyCost(energyPerTick, tickMultiplier), activeSlots);
 	}
 
 	/** 防止极端加速倍率下能耗/产出计数溢出为负数。 */
@@ -568,8 +578,7 @@ class BeeSlotTickProcessor {
 		if (!lastConfigRefreshTick.compareAndSet(lastRefresh, currentTick)) {
 			return;
 		}
-		// basic 配置
-		cachedEnergyPerTick = ModConfig.SERVER.apiaryEnergyPerTick.get();
+		// basic 配置（能耗由 MachineEnergyContainer 按 BlockType 的 usage 提供）
 		cachedProcessingTime = ModConfig.SERVER.apiaryProcessingTime.get();
 	}
 }

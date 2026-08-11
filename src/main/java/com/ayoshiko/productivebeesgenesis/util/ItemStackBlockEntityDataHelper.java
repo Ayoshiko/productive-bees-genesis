@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -7,17 +8,15 @@ import net.minecraft.world.item.component.CustomData;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 /**
- * ItemStack BLOCK_ENTITY_DATA 组件读取工具
- * <br/>
- * 提取自 {@link com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge} 和
- * {@link com.ayoshiko.productivebeesgenesis.apiary.ItemBlockMekApiary} 中重复的
- * readCustomBlockEntityData 方法，消除跨包代码重复。
- *
- * @since V17 代码审查修复
- */
+	 * ItemStack BLOCK_ENTITY_DATA 组件读取工具
+	 * <br/>
+	 * 提取自 {@link com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge} 和
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.ItemBlockMekApiary} 中重复的
+	 * readCustomBlockEntityData 方法，消除跨包代码重复。
+	 *
+	 * @since V17 代码审查修复
+	 */
 public final class ItemStackBlockEntityDataHelper {
 
 	private ItemStackBlockEntityDataHelper() {

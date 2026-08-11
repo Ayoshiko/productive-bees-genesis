@@ -3,20 +3,20 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import net.minecraft.core.BlockPos;
 
 /**
- * PB 升级提供者接口
- * <br/>
- * 抽象蜂箱与离心机共同的 PB 升级访问能力，使
- * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab}、
- * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeWindow}、
- * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeList}
- * 等通用 GUI 组件可跨方块实体复用，遵循依赖倒置原则。
- * <p>
- * 实现方需保证：
- * <ul>
- *   <li>{@link #getPbUpgradeInstalledCount} 在客户端返回同步缓存值，服务端返回真实值</li>
- *   <li>{@link #getBlockPos} 返回方块坐标（用于网络包发送，BlockEntity 子类自动满足）</li>
- * </ul>
- */
+	 * PB 升级提供者接口
+	 * <br/>
+	 * 抽象蜂箱与离心机共同的 PB 升级访问能力，使
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab}、
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeWindow}、
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeList}
+	 * 等通用 GUI 组件可跨方块实体复用，遵循依赖倒置原则。
+	 * <p>
+	 * 实现方需保证：
+	 * <ul>
+	 *   <li>{@link #getPbUpgradeInstalledCount} 在客户端返回同步缓存值，服务端返回真实值</li>
+	 *   <li>{@link #getBlockPos} 返回方块坐标（用于网络包发送，BlockEntity 子类自动满足）</li>
+	 * </ul>
+	 */
 public interface IPbUpgradeProvider {
 
 	/**
@@ -83,7 +83,7 @@ public interface IPbUpgradeProvider {
 	 *
 	 * @param type 升级类型
 	 * @return true 如果成功卸载一个升级；false 如果无升级可卸载或输出槽已满
-	 * @since 1.9.0
+	 * @since 2.0.0
 	 */
 	boolean extractPbUpgradeByType(PbUpgradeType type);
 
@@ -101,7 +101,7 @@ public interface IPbUpgradeProvider {
 	 * @param type         升级类型
 	 * @param maxAvailable 手上持有的最大数量（{@code stack.getCount()}）
 	 * @return 实际安装数量（0 表示未安装）
-	 * @since 1.10.0
+	 * @since 2.0.0
 	 */
 	default int installPbUpgradeBulk(PbUpgradeType type, int maxAvailable) {
 		return 0;

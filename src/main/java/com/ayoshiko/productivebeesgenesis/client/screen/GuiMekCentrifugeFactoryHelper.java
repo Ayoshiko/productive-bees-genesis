@@ -24,22 +24,22 @@ import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
- * MEK离心机工厂GUI辅助工具类
- * <br/>
- * 抽取三个工厂GUI（原版/ME/EME）的公共widget创建逻辑，消除进度条、流体槽、
- * 能量条与能量标签的重复代码。
- * <p>
- * 设计说明：
- * <ul>
- *   <li>三个GUI继承不同的Mekanism父类且泛型参数不同，无法通过继承抽取公共基类</li>
- *   <li>addRenderableWidget是protected方法，工具类无法直接调用，因此本类只负责
- *       创建并配置widget，由GUI自行调用addRenderableWidget添加</li>
- *   <li>drawForegroundText调用了protected的renderTitleText/renderInventoryText，
- *       无法抽取到工具类，由各GUI自行实现（实现完全相同）</li>
- * </ul>
- * 布局参数通过 {@link com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper} 动态计算，
- * 工具类只负责widget的创建与链式配置。
- */
+	 * MEK离心机工厂GUI辅助工具类
+	 * <br/>
+	 * 抽取三个工厂GUI（原版/ME/EME）的公共widget创建逻辑，消除进度条、流体槽、
+	 * 能量条与能量标签的重复代码。
+	 * <p>
+	 * 设计说明：
+	 * <ul>
+	 *   <li>三个GUI继承不同的Mekanism父类且泛型参数不同，无法通过继承抽取公共基类</li>
+	 *   <li>addRenderableWidget是protected方法，工具类无法直接调用，因此本类只负责
+	 *       创建并配置widget，由GUI自行调用addRenderableWidget添加</li>
+	 *   <li>drawForegroundText调用了protected的renderTitleText/renderInventoryText，
+	 *       无法抽取到工具类，由各GUI自行实现（实现完全相同）</li>
+	 * </ul>
+	 * 布局参数通过 {@link com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper} 动态计算，
+	 * 工具类只负责widget的创建与链式配置。
+	 */
 public final class GuiMekCentrifugeFactoryHelper {
 
 	private GuiMekCentrifugeFactoryHelper() {

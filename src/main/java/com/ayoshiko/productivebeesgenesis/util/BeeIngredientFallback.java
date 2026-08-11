@@ -1,27 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * BeeIngredient fallback 序列化工具类
- * <br/>
- * 抽取 5 个 Serializer Mixin（AdvancedBeehiveRecipe / BeeConversionRecipe /
- * BeeBreedingRecipe / BeeFishingRecipe / BeeSpawningRecipe）中重复的 fallback 序列化逻辑，
- * 消除代码重复，遵循 DRY 原则。
- * <p>
- * 应用场景：当 PB 的 configurable bees 在配方网络同步时刻尚未填充时，
- * BeeIngredient supplier 返回 null，原版 toNetwork 会 NPE。
- * 此工具类提供用 minecraft:bee 作为安全 fallback 的序列化方法。
- * <p>
- * 线程安全：所有方法为静态方法，仅依赖参数与不可变静态状态，无并发问题。
- *
- * @since 1.0.0
- */
+	 * BeeIngredient fallback 序列化工具类
+	 * <br/>
+	 * 抽取 5 个 Serializer Mixin（AdvancedBeehiveRecipe / BeeConversionRecipe /
+	 * BeeBreedingRecipe / BeeFishingRecipe / BeeSpawningRecipe）中重复的 fallback 序列化逻辑，
+	 * 消除代码重复，遵循 DRY 原则。
+	 * <p>
+	 * 应用场景：当 PB 的 configurable bees 在配方网络同步时刻尚未填充时，
+	 * BeeIngredient supplier 返回 null，原版 toNetwork 会 NPE。
+	 * 此工具类提供用 minecraft:bee 作为安全 fallback 的序列化方法。
+	 * <p>
+	 * 线程安全：所有方法为静态方法，仅依赖参数与不可变静态状态，无并发问题。
+	 *
+	 * @since 1.0.0
+	 */
 public final class BeeIngredientFallback {
 
 	/** fallback 用的原版蜜蜂 ResourceLocation */

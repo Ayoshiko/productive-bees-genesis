@@ -1,22 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+
 import java.util.Optional;
 import java.util.function.IntSupplier;
 
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
 /**
- * ME 蜂箱等级堆叠倍率解析器（隔离类）
- * <br/>
- * 集中引用 ME 可选依赖（{@link ExtraFactoryTier}），仅在 {@code mekanism_extras} 模组加载后
- * 由 {@link ApiaryTierMultiplierResolver} 通过模组守卫调用，避免 ME 未加载时触发
- * {@code NoClassDefFoundError}。
- *
- * @since 1.9.0
- */
+	 * ME 蜂箱等级堆叠倍率解析器（隔离类）
+	 * <br/>
+	 * 集中引用 ME 可选依赖（{@link ExtraFactoryTier}），仅在 {@code mekanism_extras} 模组加载后
+	 * 由 {@link ApiaryTierMultiplierResolver} 通过模组守卫调用，避免 ME 未加载时触发
+	 * {@code NoClassDefFoundError}。
+	 *
+	 * @since 2.0.0
+	 */
 final class ApiaryTierMultiplierResolverMEDelegate {
 
 	private ApiaryTierMultiplierResolverMEDelegate() {

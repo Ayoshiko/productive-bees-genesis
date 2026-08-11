@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
 import com.ayoshiko.productivebeesgenesis.capability.IInventoryDirtyDebouncer;
-
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.world.level.Level;
@@ -13,14 +12,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * BlockEntityItemStackHandler 去抖 Mixin。
- * <p>
- * 仅对 {@link AdvancedBeehiveBlockEntity} 的物品栏生效：
- * 当内容变化时不再立即调用 {@code blockEntity.setChanged()}，
- * 而是把脏标记委托给 {@link AdvancedBeehiveInventoryDebounceMixin}，
- * 由 AdvancedBeehiveBlockEntity 的 tick 在 tick 尾部统一 flush。
- * 其他方块（离心机、升级栏等）保持原版行为不变。
- */
+	 * BlockEntityItemStackHandler 去抖 Mixin。
+	 * <p>
+	 * 仅对 {@link AdvancedBeehiveBlockEntity} 的物品栏生效：
+	 * 当内容变化时不再立即调用 {@code blockEntity.setChanged()}，
+	 * 而是把脏标记委托给 {@link AdvancedBeehiveInventoryDebounceMixin}，
+	 * 由 AdvancedBeehiveBlockEntity 的 tick 在 tick 尾部统一 flush。
+	 * 其他方块（离心机、升级栏等）保持原版行为不变。
+	 */
 @Mixin(InventoryHandlerHelper.BlockEntityItemStackHandler.class)
 public abstract class BlockEntityItemStackHandlerDebounceMixin {
 

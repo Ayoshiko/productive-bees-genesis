@@ -1,35 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import appeng.api.stacks.AEItemKey;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.resources.ResourceLocation;
-
 /**
- * AE2 输入过滤器 — 蜜脾种类的白名单/黑名单数据模型（位置固定 + 精确模式）
- * <br/>
- * 提供 per-tile 的蜜蜂类型过滤能力，独立于全局配置，由 {@link Ae2OutputStateHolder} 持有引用。
- * <p>
- * <b>V15 变更</b>：
- * <ul>
- *   <li>filterEntries 从 {@code List<String>} 改为固定大小 {@code String[]} 数组，
- *       支持"空槽位"表达，实现真正的"位置固定"语义（参考 AE2 GenericStackInv）</li>
- *   <li>removeEntryAt 仅清空目标位，不再移位，保证其他条目位置不变</li>
- *   <li>新增 ensureCapacity / setEntryAtIndex / getCapacity / getNonEmptyEntries / IndexedEntry</li>
- *   <li>序列化改为带 index 的 CompoundTag 列表，向后兼容旧 StringTag 紧凑格式</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：filterMode/preciseMode/slots 均使用 volatile 发布，
- * 每次修改都 clone→set→publish（CopyOnWrite 语义），遍历弱一致。
- * 写方法使用 synchronized 互斥，防止并发 clone→modify→publish 丢失修改。
- * 设计上保证 AE2 拉取 tick 线程与 GUI 配置线程并发访问安全。
- *
- * @since 1.0.0
- */
+	 * AE2 输入过滤器 — 蜜脾种类的白名单/黑名单数据模型（位置固定 + 精确模式）
+	 * <br/>
+	 * 提供 per-tile 的蜜蜂类型过滤能力，独立于全局配置，由 {@link Ae2OutputStateHolder} 持有引用。
+	 * <p>
+	 * <b>V15 变更</b>：
+	 * <ul>
+	 *   <li>filterEntries 从 {@code List<String>} 改为固定大小 {@code String[]} 数组，
+	 *       支持"空槽位"表达，实现真正的"位置固定"语义（参考 AE2 GenericStackInv）</li>
+	 *   <li>removeEntryAt 仅清空目标位，不再移位，保证其他条目位置不变</li>
+	 *   <li>新增 ensureCapacity / setEntryAtIndex / getCapacity / getNonEmptyEntries / IndexedEntry</li>
+	 *   <li>序列化改为带 index 的 CompoundTag 列表，向后兼容旧 StringTag 紧凑格式</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：filterMode/preciseMode/slots 均使用 volatile 发布，
+	 * 每次修改都 clone→set→publish（CopyOnWrite 语义），遍历弱一致。
+	 * 写方法使用 synchronized 互斥，防止并发 clone→modify→publish 丢失修改。
+	 * 设计上保证 AE2 拉取 tick 线程与 GUI 配置线程并发访问安全。
+	 *
+	 * @since 1.0.0
+	 */
 public final class Ae2InputFilter {
 
 	/** 过滤模式枚举 */
@@ -42,11 +43,42 @@ public final class Ae2InputFilter {
 		BLACKLIST
 	}
 
-	/** 默认容量：4 页 × 24 槽位 */
-	private static final int DEFAULT_CAPACITY = 96;
+	/** Default persistent capacity; the client may paginate it with a different column count. */
+	private static final int DEFAULT_CAPACITY = 36;
 
-	/** 过滤槽位最大容量上界（防止恶意 index 导致 OOM） */
-	private static final int MAX_FILTER_SLOTS = 1024;
+	/** 过滤槽位最大数量（合法索引 0..MAX_FILTER_SLOTS-1，排他上限，防止恶意 index 导致 OOM） */
+	static final int MAX_FILTER_SLOTS = 1024;
+	static final String DIRECT_ENTRY_PREFIX = "@";
+	/** Default per-entry pull request before the amount editor is used. */
+	public static final long DEFAULT_DIRECT_AMOUNT = 64L;
+	/** Fallback used while the server configuration is still unavailable. */
+	public static final long MAX_DIRECT_AMOUNT = 8_192L;
+
+	/**
+	 * Returns the configured per-pull cap. The same value is used by the puller,
+	 * amount editor, NBT persistence and network validation so a client cannot
+	 * configure an amount that the server will silently clamp differently.
+	 */
+	public static long getMaxDirectAmount() {
+		try {
+			if (ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeAeInputRatePerTick != null) {
+				return Math.max(1L, ModConfig.SERVER.mekCentrifugeAeInputRatePerTick.get());
+			}
+		} catch (LinkageError | RuntimeException ignored) {
+			// Client screens can be constructed before the server config is attached.
+		}
+		return MAX_DIRECT_AMOUNT;
+	}
+
+	/** 默认持久化容量（供 NBT 编解码等内部模块使用） */
+	static int getDefaultCapacity() {
+		return DEFAULT_CAPACITY;
+	}
+
+	/** 最大槽位数（供 NBT 编解码等内部模块使用） */
+	static int getMaxFilterSlots() {
+		return MAX_FILTER_SLOTS;
+	}
 
 	/** 过滤模式（默认 DISABLED） */
 	private volatile FilterMode filterMode = FilterMode.DISABLED;
@@ -69,6 +101,13 @@ public final class Ae2InputFilter {
 	 * 非精确模式下，条目仅为 {@code beeType}，蜜脾和蜜脾块共享同一过滤条目。
 	 */
 	private volatile String[] slots = new String[DEFAULT_CAPACITY];
+	private volatile AEItemKey[] resolvedDirectKeys = new AEItemKey[DEFAULT_CAPACITY];
+	private volatile long[] directAmounts = new long[DEFAULT_CAPACITY];
+	/** Client-side network stock snapshot; this is never persisted or trusted for pulls. */
+	private volatile long[] directVisibleAmounts = new long[DEFAULT_CAPACITY];
+	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
+	/** Immutable direct-entry snapshot; invalidated only by configuration changes. */
+	private volatile List<DirectEntry> directEntriesCache;
 
 	public FilterMode getFilterMode() {
 		return filterMode;
@@ -88,13 +127,29 @@ public final class Ae2InputFilter {
 		return preciseMode;
 	}
 
-	public void setPreciseMode(boolean precise) {
+	public synchronized void setPreciseMode(boolean precise) {
+		if (this.preciseMode == precise) return;
 		this.preciseMode = precise;
+		// Normalize old precise entries when returning to fuzzy mode.
+		if (!precise) {
+			String[] current = slots;
+			String[] normalized = current.clone();
+			boolean changed = false;
+			for (int i = 0; i < normalized.length; i++) {
+				String entry = normalized[i];
+				if (entry != null && !isDirectFingerprint(entry) && entry.endsWith("#block")) {
+					normalized[i] = entry.substring(0, entry.length() - 6);
+					changed = true;
+				}
+			}
+			if (changed) slots = normalized;
+		}
+		invalidateDirectEntries();
 	}
 
 	/** 切换精确模式 */
 	public synchronized void togglePreciseMode() {
-		this.preciseMode = !this.preciseMode;
+		setPreciseMode(!this.preciseMode);
 	}
 
 	/**
@@ -108,12 +163,25 @@ public final class Ae2InputFilter {
 	 * @param isBlock 是否为蜜脾块（仅 preciseMode 时区分）
 	 */
 	public synchronized void setEntryAt(int index, ResourceLocation beeType, boolean isBlock) {
-		if (beeType == null || index < 0 || index > MAX_FILTER_SLOTS) return;
+		if (beeType == null || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
-		String entry = preciseMode ? formatEntry(beeType, isBlock) : beeType.toString();
+		String entry = preciseMode ? Ae2FilterEntrySupport.formatEntry(beeType, isBlock) : beeType.toString();
 		String[] arr = slots.clone(); // CopyOnWrite
+		AEItemKey[] keys = resolvedDirectKeys.clone();
 		arr[index] = entry;
+		keys[index] = null;
+		long[] amounts = directAmounts.clone();
+		amounts[index] = DEFAULT_DIRECT_AMOUNT;
+		long[] visible = directVisibleAmounts.clone();
+		visible[index] = 0L;
+		boolean[] unlimited = directUnlimited.clone();
+		unlimited[index] = false;
+		resolvedDirectKeys = keys;
+		directAmounts = amounts;
+		directVisibleAmounts = visible;
+		directUnlimited = unlimited;
 		slots = arr; // volatile 发布
+		invalidateDirectEntries();
 	}
 
 	/**
@@ -124,11 +192,24 @@ public final class Ae2InputFilter {
 	 * @param index 目标位置
 	 */
 	public synchronized void removeEntryAt(int index) {
+		AEItemKey[] keys = resolvedDirectKeys.clone();
 		if (index < 0 || index >= slots.length) return;
 		if (slots[index] == null) return;
 		String[] arr = slots.clone();
+		keys[index] = null;
+		long[] amounts = directAmounts.clone();
+		amounts[index] = 0L;
+		long[] visible = directVisibleAmounts.clone();
+		visible[index] = 0L;
+		boolean[] unlimited = directUnlimited.clone();
+		unlimited[index] = false;
+		resolvedDirectKeys = keys;
+		directAmounts = amounts;
+		directVisibleAmounts = visible;
+		directUnlimited = unlimited;
 		arr[index] = null; // 仅清该位，不移位
 		slots = arr;
+		invalidateDirectEntries();
 	}
 
 	/**
@@ -139,14 +220,27 @@ public final class Ae2InputFilter {
 	 */
 	public EntryInfo getEntryAt(int index) {
 		if (index < 0 || index >= slots.length || slots[index] == null) return null;
-		return parseEntry(slots[index]);
+		return Ae2FilterEntrySupport.parseEntry(slots[index]);
 	}
 
 	/** 清空所有过滤条目（保留容量，全部置 null） */
 	public synchronized void clearEntries() {
+		AEItemKey[] keys = resolvedDirectKeys.clone();
 		String[] arr = slots.clone();
 		Arrays.fill(arr, null);
+		Arrays.fill(keys, null);
+		long[] amounts = directAmounts.clone();
+		Arrays.fill(amounts, 0L);
+		long[] visible = directVisibleAmounts.clone();
+		Arrays.fill(visible, 0L);
+		boolean[] unlimited = directUnlimited.clone();
+		Arrays.fill(unlimited, false);
+		resolvedDirectKeys = keys;
+		directAmounts = amounts;
+		directVisibleAmounts = visible;
+		directUnlimited = unlimited;
 		slots = arr;
+		invalidateDirectEntries();
 	}
 
 	/**
@@ -166,23 +260,21 @@ public final class Ae2InputFilter {
 	 */
 	public boolean isAllowed(ResourceLocation beeType, boolean isBlock) {
 		if (beeType == null) return true;
-		String entry = preciseMode ? formatEntry(beeType, isBlock) : beeType.toString();
-		String[] arr = slots; // volatile 读
-		switch (filterMode) {
-			case WHITELIST:
-				for (String s : arr) {
-					if (entry.equals(s)) return true;
-				}
-				return false;
-			case BLACKLIST:
-				for (String s : arr) {
-					if (entry.equals(s)) return false;
-				}
-				return true;
-			case DISABLED:
-			default:
-				return true;
+		FilterMode mode = filterMode;
+		boolean precise = preciseMode;
+		String[] arr = slots; // volatile read
+		boolean matched = false;
+		for (String configured : arr) {
+			if (Ae2FilterEntrySupport.matchesFuzzyEntry(configured, beeType, isBlock, precise)) {
+				matched = true;
+				break;
+			}
 		}
+		return switch (mode) {
+			case WHITELIST -> matched;
+			case BLACKLIST -> !matched;
+			case DISABLED -> true;
+		};
 	}
 
 	/**
@@ -191,11 +283,24 @@ public final class Ae2InputFilter {
 	 * @param minCapacity 最小需要的容量
 	 */
 	public synchronized void ensureCapacity(int minCapacity) {
-		if (minCapacity > MAX_FILTER_SLOTS + 1) return;
+		if (minCapacity > MAX_FILTER_SLOTS) return;
 		if (slots.length >= minCapacity) return;
 		String[] newArr = new String[minCapacity];
 		System.arraycopy(slots, 0, newArr, 0, slots.length);
+		AEItemKey[] newKeys = new AEItemKey[minCapacity];
+		System.arraycopy(resolvedDirectKeys, 0, newKeys, 0, resolvedDirectKeys.length);
+		long[] newAmounts = new long[minCapacity];
+		System.arraycopy(directAmounts, 0, newAmounts, 0, directAmounts.length);
+		long[] newVisible = new long[minCapacity];
+		System.arraycopy(directVisibleAmounts, 0, newVisible, 0, directVisibleAmounts.length);
+		boolean[] newUnlimited = new boolean[minCapacity];
+		System.arraycopy(directUnlimited, 0, newUnlimited, 0, directUnlimited.length);
 		slots = newArr;
+		resolvedDirectKeys = newKeys;
+		directAmounts = newAmounts;
+		directVisibleAmounts = newVisible;
+		directUnlimited = newUnlimited;
+		invalidateDirectEntries();
 	}
 
 	/**
@@ -207,11 +312,24 @@ public final class Ae2InputFilter {
 	 * @param rawEntry 原始条目字符串（null/空白视为清空该位）
 	 */
 	public synchronized void setEntryAtIndex(int index, String rawEntry) {
-		if (index < 0 || index > MAX_FILTER_SLOTS) return;
+		if (index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
 		String[] arr = slots.clone();
+		AEItemKey[] keys = resolvedDirectKeys.clone();
 		arr[index] = (rawEntry == null || rawEntry.isBlank()) ? null : rawEntry;
+		keys[index] = null;
+		long[] amounts = directAmounts.clone();
+		amounts[index] = isDirectFingerprint(arr[index]) ? DEFAULT_DIRECT_AMOUNT : 0L;
+		long[] visible = directVisibleAmounts.clone();
+		visible[index] = 0L;
+		boolean[] unlimited = directUnlimited.clone();
+		unlimited[index] = false;
+		resolvedDirectKeys = keys;
+		directAmounts = amounts;
+		directVisibleAmounts = visible;
+		directUnlimited = unlimited;
 		slots = arr;
+		invalidateDirectEntries();
 	}
 
 	/** 返回当前数组容量 */
@@ -235,13 +353,294 @@ public final class Ae2InputFilter {
 		return result;
 	}
 
-	/** 格式化条目字符串（精确模式下蜜脾块添加 #block 后缀） */
+	/** Stores a component-aware fingerprint supplied by {@link Ae2ItemFingerprint}. */
+	public synchronized void setDirectEntryFingerprintAt(int index, String fingerprint) {
+		if (fingerprint == null || fingerprint.isBlank() || index < 0 || index >= MAX_FILTER_SLOTS) return;
+		ensureCapacity(index + 1);
+		String[] arr = slots.clone();
+		AEItemKey[] keys = resolvedDirectKeys.clone();
+		arr[index] = DIRECT_ENTRY_PREFIX + fingerprint;
+		keys[index] = null;
+		long[] amounts = directAmounts.clone();
+		amounts[index] = DEFAULT_DIRECT_AMOUNT;
+		long[] visible = directVisibleAmounts.clone();
+		visible[index] = 0L;
+		boolean[] unlimited = directUnlimited.clone();
+		unlimited[index] = false;
+		resolvedDirectKeys = keys;
+		directAmounts = amounts;
+		directVisibleAmounts = visible;
+		directUnlimited = unlimited;
+		slots = arr;
+		invalidateDirectEntries();
+	}
+
+	public AEItemKey getResolvedDirectKey(int index) {
+		return index >= 0 && index < resolvedDirectKeys.length ? resolvedDirectKeys[index] : null;
+	}
+
+	public synchronized void resolveDirectKey(int index, AEItemKey key) {
+		if (index < 0 || index >= resolvedDirectKeys.length || !isDirectEntry(index) || key == null) return;
+		AEItemKey[] keys = resolvedDirectKeys.clone();
+		keys[index] = key;
+		resolvedDirectKeys = keys;
+		invalidateDirectEntries();
+	}
+
+	public long getDirectAmountAt(int index) {
+		return index >= 0 && index < directAmounts.length ? directAmounts[index] : 0L;
+	}
+
+	public synchronized void setDirectAmountAt(int index, long amount) {
+		if (index < 0 || index >= directAmounts.length) return;
+		long[] amounts = directAmounts.clone();
+		amounts[index] = Math.max(0L, Math.min(getMaxDirectAmount(), amount));
+		directAmounts = amounts;
+		invalidateDirectEntries();
+	}
+
+	/** Returns the last server-provided visible AE stock for a direct entry. */
+	public long getDirectVisibleAmountAt(int index) {
+		return index >= 0 && index < directVisibleAmounts.length ? directVisibleAmounts[index] : 0L;
+	}
+
+	/** Updates the client stock snapshot without changing the configured request amount. */
+	public synchronized void setDirectVisibleAmountAt(int index, long amount) {
+		if (index < 0 || index >= directVisibleAmounts.length) return;
+		long[] visible = directVisibleAmounts.clone();
+		visible[index] = Math.max(0L, amount);
+		directVisibleAmounts = visible;
+	}
+
+	/** 是否将指定直连条目标记为无限提供。 */
+	public boolean isDirectUnlimitedAt(int index) {
+		return index >= 0 && index < directUnlimited.length && directUnlimited[index];
+	}
+
+	/** 切换指定直连条目的无限提供状态；非直连条目不会改变。 */
+	public synchronized void toggleDirectUnlimitedAt(int index) {
+		if (index < 0 || index >= slots.length || !isDirectFingerprint(slots[index])) return;
+		boolean[] unlimited = directUnlimited.clone();
+		unlimited[index] = !unlimited[index];
+		directUnlimited = unlimited;
+		invalidateDirectEntries();
+	}
+
+	public boolean isAllowed(AEItemKey key) {
+		return isAllowed(key, false);
+	}
+
+	/**
+	 * Direct entries match an exact AE key while NBT matching is enabled. With NBT
+	 * ignored they retain bee type and, when precise mode is enabled, block form.
+	 */
+	public boolean isAllowed(AEItemKey key, boolean ignoreNbt) {
+		return isAllowed(key, ignoreNbt, null);
+	}
+
+	public boolean isAllowed(AEItemKey key, boolean ignoreNbt, HolderLookup.Provider registries) {
+		if (key == null) return false;
+		FilterMode mode = filterMode;
+		boolean precise = preciseMode;
+		if (mode == FilterMode.DISABLED) return true;
+		String[] arr = slots;
+		AEItemKey[] keys = resolvedDirectKeys;
+		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(key);
+		boolean isBlock = CombFuzzyMatcher.isCombBlock(key);
+		for (int i = 0; i < arr.length; i++) {
+			String entry = arr[i];
+			boolean matches = false;
+			if (isDirectFingerprint(entry)) {
+				AEItemKey configured = i < keys.length ? keys[i] : null;
+				if (configured == null && registries != null) {
+					configured = Ae2ItemFingerprint.decode(
+							entry.substring(DIRECT_ENTRY_PREFIX.length()), registries);
+				}
+				matches = Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key, beeType, isBlock,
+						ignoreNbt, precise);
+			} else if (beeType != null) {
+				matches = Ae2FilterEntrySupport.matchesFuzzyEntry(entry, beeType, isBlock, precise);
+			}
+			if (!matches) continue;
+			return mode == FilterMode.WHITELIST;
+		}
+		return switch (mode) {
+			case WHITELIST -> false;
+			case BLACKLIST -> true;
+			case DISABLED -> true;
+		};
+	}
+
+	public boolean isDirectEntry(int index) {
+		return index >= 0 && index < slots.length && isDirectFingerprint(slots[index]);
+	}
+
+	public boolean hasDirectEntries() {
+		return !getDirectEntries().isEmpty();
+	}
+
+	/** Returns true when at least one exact entry uses live network stock. */
+	public boolean hasNetworkStockEntries() {
+		String[] arr = slots;
+		boolean[] unlimited = directUnlimited;
+		for (int i = 0; i < arr.length; i++) {
+			if (isDirectFingerprint(arr[i]) && unlimited[i]) return true;
+		}
+		return false;
+	}
+
+	/** True when at least one direct entry has unlimited provide enabled. */
+	public boolean hasUnlimitedEntries() {
+		String[] arr = slots;
+		boolean[] unlimited = directUnlimited;
+		for (int i = 0; i < arr.length; i++) {
+			if (isDirectFingerprint(arr[i]) && unlimited[i]) return true;
+		}
+		return false;
+	}
+
+	public boolean hasFuzzyEntries() {
+		for (String entry : slots) if (entry != null && !isDirectFingerprint(entry)) return true;
+		return false;
+	}
+
+	/** True when every configured entry has opted into exact network-stock mode. */
+	public boolean hasOnlyNetworkStockEntries() {
+		String[] arr = slots;
+		boolean[] unlimited = directUnlimited;
+		boolean found = false;
+		for (int i = 0; i < arr.length; i++) {
+			if (arr[i] == null) continue;
+			if (!isDirectFingerprint(arr[i]) || !unlimited[i]) return false;
+			found = true;
+		}
+		return found;
+	}
+
+	public List<DirectEntry> getDirectEntries() {
+		List<DirectEntry> cached = directEntriesCache;
+		if (cached != null) return cached;
+		synchronized (this) {
+			cached = directEntriesCache;
+			if (cached != null) return cached;
+			List<DirectEntry> result = new ArrayList<>();
+			String[] arr = slots;
+			AEItemKey[] keys = resolvedDirectKeys;
+			for (int i = 0; i < arr.length; i++) {
+				if (isDirectFingerprint(arr[i])) {
+					result.add(new DirectEntry(i, arr[i].substring(DIRECT_ENTRY_PREFIX.length()), keys[i],
+							directAmounts[i], directUnlimited[i]));
+				}
+			}
+			List<DirectEntry> snapshot = List.copyOf(result);
+			directEntriesCache = snapshot;
+			return snapshot;
+		}
+	}
+
+	/** Replaces a client-side synchronized snapshot with one set of array publications. */
+	public synchronized void replaceClientSnapshot(FilterMode mode, boolean precise,
+			List<Integer> indices, List<String> entries, List<Long> amounts,
+			List<Long> visibleAmounts, List<Boolean> unlimitedFlags) {
+		Ae2InputFilterSnapshot.Snapshot snapshot = Ae2InputFilterSnapshot.build(
+				mode, precise, indices, entries, amounts, visibleAmounts, unlimitedFlags, slots.length);
+		filterMode = snapshot.mode();
+		preciseMode = snapshot.precise();
+		resolvedDirectKeys = snapshot.keys();
+		directAmounts = snapshot.amounts();
+		directVisibleAmounts = snapshot.visible();
+		directUnlimited = snapshot.unlimited();
+		slots = snapshot.slots();
+		invalidateDirectEntries();
+	}
+
+	private void invalidateDirectEntries() {
+		directEntriesCache = null;
+	}
+
+	/**
+	 * Returns true when the key matches at least one configured entry (direct or
+	 * fuzzy), regardless of whitelist/blacklist mode. The puller uses this to rank
+	 * marked entries ahead of unmarked ones ("mark first" AE2LT semantics).
+	 */
+	public boolean matchesAnyEntry(AEItemKey key, boolean ignoreNbt) {
+		if (key == null) return false;
+		String[] arr = slots;
+		AEItemKey[] keys = resolvedDirectKeys;
+		boolean precise = preciseMode;
+		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(key);
+		boolean isBlock = CombFuzzyMatcher.isCombBlock(key);
+		for (int i = 0; i < arr.length; i++) {
+			String entry = arr[i];
+			if (entry == null || entry.isBlank()) continue;
+			if (isDirectFingerprint(entry)) {
+				AEItemKey configured = i < keys.length ? keys[i] : null;
+				if (Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key, beeType, isBlock,
+						ignoreNbt, precise)) return true;
+			} else if (beeType != null && Ae2FilterEntrySupport.matchesFuzzyEntry(entry, beeType, isBlock, precise)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Returns the pull cap for a configured key, using the same NBT/precise matching
+	 * rules as {@link #isAllowed(AEItemKey, boolean)}. Duplicate matching entries are
+	 * summed; any network-stock entry uses the current visible stock instead.
+	 */
+	public long getDirectPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt) {
+		return getDirectPullLimit(key, visibleStock, ignoreNbt, null);
+	}
+
+	public long getDirectPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			HolderLookup.Provider registries) {
+		if (key == null) return -1L;
+		String[] arr = slots;
+		AEItemKey[] keys = resolvedDirectKeys;
+		long[] amounts = directAmounts;
+		boolean[] unlimited = directUnlimited;
+		boolean precise = preciseMode;
+		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
+		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
+		boolean found = false;
+		boolean liveStock = false;
+		long requested = 0L;
+		for (int i = 0; i < arr.length; i++) {
+			if (!isDirectFingerprint(arr[i])) continue;
+			AEItemKey configured = i < keys.length ? keys[i] : null;
+			if (configured == null && registries != null) {
+				configured = Ae2ItemFingerprint.decode(
+						arr[i].substring(DIRECT_ENTRY_PREFIX.length()), registries);
+			}
+			if (!Ae2FilterEntrySupport.matchesDirectEntry(arr[i], configured, key, candidateBeeType,
+					candidateBlock, ignoreNbt, precise)) continue;
+			found = true;
+			if (unlimited[i]) {
+				liveStock = true;
+				continue;
+			}
+			requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
+		}
+		if (!found) return -1L;
+		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock,
+				getMaxDirectAmount());
+	}
+
+	/** Exact-key compatibility overload used by older integrations. */
+	public long getDirectPullLimit(AEItemKey key, long visibleStock) {
+		return getDirectPullLimit(key, visibleStock, false);
+	}
+
 	private static String formatEntry(ResourceLocation beeType, boolean isBlock) {
 		return isBlock ? beeType.toString() + "#block" : beeType.toString();
 	}
 
 	/** 解析条目字符串为 EntryInfo */
 	private static EntryInfo parseEntry(String entry) {
+		if (isDirectFingerprint(entry)) {
+			return new EntryInfo(null, false, entry.substring(DIRECT_ENTRY_PREFIX.length()));
+		}
 		if (entry.endsWith("#block")) {
 			String beeTypeStr = entry.substring(0, entry.length() - 6);
 			ResourceLocation beeType = ResourceLocation.tryParse(beeTypeStr);
@@ -252,111 +651,59 @@ public final class Ae2InputFilter {
 		}
 	}
 
+	static boolean isDirectFingerprint(String entry) {
+		return entry != null && entry.startsWith(DIRECT_ENTRY_PREFIX) && entry.length() > DIRECT_ENTRY_PREFIX.length();
+	}
+
 	/**
-	 * 序列化到 NBT
-	 * <br/>
-	 * NBT 结构（V15 新格式）：
-	 * <ul>
-	 *   <li>mode (Byte): 0=DISABLED, 1=WHITELIST, 2=BLACKLIST</li>
-	 *   <li>precise (Byte): 0=非精确模式, 1=精确模式</li>
-	 *   <li>entries (ListTag of CompoundTag): 含 index(i) 和 entry(v)，
-	 *       写入 0..lastNonNull（含中间 null，用空字符串表示）</li>
-	 * </ul>
+	 * 序列化到 NBT — 委托 {@link Ae2InputFilterNbtCodec#save}
 	 *
 	 * @param tag 目标 NBT 标签
 	 */
 	public void save(CompoundTag tag) {
-		tag.putByte("mode", (byte) filterMode.ordinal());
-		tag.putByte("precise", (byte) (preciseMode ? 1 : 0));
-		String[] arr = slots; // volatile 读
-		ListTag entriesTag = new ListTag();
-		// 找到最后一个非 null 槽位
-		int lastNonNull = -1;
-		for (int i = arr.length - 1; i >= 0; i--) {
-			if (arr[i] != null) {
-				lastNonNull = i;
-				break;
-			}
-		}
-		// 写入 0..lastNonNull（含中间 null，用空字符串表示）
-		for (int i = 0; i <= lastNonNull; i++) {
-			CompoundTag entryTag = new CompoundTag();
-			entryTag.putInt("i", i);
-			entryTag.putString("v", arr[i] == null ? "" : arr[i]);
-			entriesTag.add(entryTag);
-		}
-		tag.put("entries", entriesTag);
+		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directUnlimited);
 	}
 
 	/**
-	 * 从 NBT 加载
-	 * <br/>
-	 * 向后兼容策略：
-	 * <ul>
-	 *   <li>V15 新格式：entries 为 CompoundTag 列表（含 i + v），按 index 写入数组</li>
-	 *   <li>V12/V13 旧格式：entries 为 StringTag 列表，按顺序填入 0,1,2...</li>
-	 * </ul>
+	 * 从 NBT 加载 — 委托 {@link Ae2InputFilterNbtCodec#load} 后一次性 volatile 发布
 	 *
 	 * @param tag 源 NBT 标签
 	 */
 	public synchronized void load(CompoundTag tag) {
-		if (tag.contains("mode")) {
-			int ordinal = tag.getByte("mode");
-			FilterMode[] modes = FilterMode.values();
-			if (ordinal >= 0 && ordinal < modes.length) {
-				filterMode = modes[ordinal];
-			}
-		}
-		preciseMode = tag.contains("precise") && tag.getByte("precise") == 1;
-		if (tag.contains("entries", Tag.TAG_LIST)) {
-			// 局部构建新数组，最后一次性 volatile 发布，避免 load 期间并发读到部分加载的快照
-			String[] newSlots = new String[DEFAULT_CAPACITY];
-			ListTag entriesTag = tag.getList("entries", Tag.TAG_COMPOUND);
-			if (!entriesTag.isEmpty()) {
-				// V15 新格式：CompoundTag 含 index
-				for (int i = 0; i < entriesTag.size(); i++) {
-					CompoundTag entryTag = entriesTag.getCompound(i);
-					int idx = entryTag.getInt("i");
-					String val = entryTag.getString("v");
-					// 防御恶意 index 导致 OOM
-					if (idx < 0 || idx > MAX_FILTER_SLOTS) continue;
-					// 局部扩容
-					if (idx >= newSlots.length) {
-						String[] grown = new String[idx + 1];
-						System.arraycopy(newSlots, 0, grown, 0, newSlots.length);
-						newSlots = grown;
-					}
-					newSlots[idx] = val.isEmpty() ? null : val;
-				}
-			} else {
-				// 向后兼容：旧紧凑 StringTag 格式，按顺序填入 0,1,2...
-				ListTag oldEntries = tag.getList("entries", Tag.TAG_STRING);
-				if (!oldEntries.isEmpty()) {
-					if (oldEntries.size() > newSlots.length) {
-						newSlots = new String[oldEntries.size()];
-					}
-					for (int i = 0; i < oldEntries.size(); i++) {
-						String val = oldEntries.getString(i);
-						newSlots[i] = val.isEmpty() ? null : val;
-					}
-				}
-			}
+		Ae2InputFilterNbtCodec.LoadResult result = Ae2InputFilterNbtCodec.load(tag);
+		// 模式与精确标记始终应用（与历史行为一致）
+		filterMode = result.filterMode();
+		preciseMode = result.preciseMode();
+		if (result.entriesPresent()) {
 			// 一次性发布完整数组
-			slots = newSlots;
+			resolvedDirectKeys = new AEItemKey[result.slots().length];
+			directAmounts = result.directAmounts();
+			directVisibleAmounts = new long[result.slots().length];
+			directUnlimited = result.directUnlimited();
+			slots = result.slots();
 		}
+		invalidateDirectEntries();
 	}
 
 	/** 条目信息 — 解析后的过滤条目 */
 	public static final class EntryInfo {
 		public final ResourceLocation beeType;
 		public final boolean isBlock;
+		public final String directFingerprint;
 
 		EntryInfo(ResourceLocation beeType, boolean isBlock) {
+			this(beeType, isBlock, null);
+		}
+
+		EntryInfo(ResourceLocation beeType, boolean isBlock, String directFingerprint) {
 			this.beeType = beeType;
 			this.isBlock = isBlock;
+			this.directFingerprint = directFingerprint;
 		}
 	}
 
 	/** 带位置索引的条目记录 — 用于网络同步 */
 	public record IndexedEntry(int index, String entry) {}
+
+	public record DirectEntry(int index, String fingerprint, AEItemKey key, long amount, boolean networkStock) {}
 }

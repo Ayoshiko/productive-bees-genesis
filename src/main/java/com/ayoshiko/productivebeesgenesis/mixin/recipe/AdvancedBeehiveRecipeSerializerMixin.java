@@ -9,18 +9,18 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 修复 AdvancedBeehiveRecipe 序列化崩溃
- * <p>
- * 原理：当 BeeIngredientFactory 在配方网络同步时刻未填充 configurable bees 时，
- * AdvancedBeehiveRecipe.ingredient.get() 返回 null，原版 toNetwork 抛出
- * RuntimeException("Bee produce recipe ingredient missing") 导致玩家加入世界崩溃。
- * <p>
- * 此 Mixin 在 toNetwork 头部拦截，若 ingredient 为 null 则用 minecraft:bee 作为
- * fallback 安全序列化（写入空输出列表），保证 buffer 格式完整，客户端能正确反序列化。
- * 服务端的配方对象本身不受影响，当 BeeIngredientFactory 就绪后 matches() 仍正常工作。
- * <p>
- * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
- */
+	 * 修复 AdvancedBeehiveRecipe 序列化崩溃
+	 * <p>
+	 * 原理：当 BeeIngredientFactory 在配方网络同步时刻未填充 configurable bees 时，
+	 * AdvancedBeehiveRecipe.ingredient.get() 返回 null，原版 toNetwork 抛出
+	 * RuntimeException("Bee produce recipe ingredient missing") 导致玩家加入世界崩溃。
+	 * <p>
+	 * 此 Mixin 在 toNetwork 头部拦截，若 ingredient 为 null 则用 minecraft:bee 作为
+	 * fallback 安全序列化（写入空输出列表），保证 buffer 格式完整，客户端能正确反序列化。
+	 * 服务端的配方对象本身不受影响，当 BeeIngredientFactory 就绪后 matches() 仍正常工作。
+	 * <p>
+	 * fallback 序列化逻辑统一抽取到 {@link BeeIngredientFallback} 工具类。
+	 */
 @Mixin(targets = "cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe$Serializer")
 public abstract class AdvancedBeehiveRecipeSerializerMixin {
 

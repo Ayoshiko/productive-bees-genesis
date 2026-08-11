@@ -1,36 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import mekanism.common.inventory.container.MekanismContainer;
+import mekanism.common.inventory.container.sync.SyncableInt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 
-import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-
-import mekanism.common.inventory.container.MekanismContainer;
-import mekanism.common.inventory.container.sync.SyncableInt;
-
 /**
- * 工厂版离心机 PB 升级委托 — 封装三个工厂类的 PB 升级公共逻辑
- * <br/>
- * 因 Java 单继承限制，ME/EME 工厂无法继承 {@link AbstractMekCentrifugeFactory}，
- * 通过组合本类复用 PB 升级处理器的初始化、NBT 持久化、容器同步和倍率计算逻辑，
- * 消除三个工厂约 90 行重复代码。工厂类通过委托调用本类方法。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅管理 PB 升级状态，不涉及配方处理或槽位布局</li>
- *   <li>依赖倒置：通过 {@link IMekCentrifugePbUpgradeHost} 接口访问宿主，不依赖具体类</li>
- *   <li>开闭原则：新增工厂类型时只需创建本类实例，不修改本类</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行；客户端通过 SyncableInt 同步，
- * {@link MekCentrifugePbUpgradeHandler} 内部使用 AtomicIntegerArray 保证可见性。
- */
+	 * 工厂版离心机 PB 升级委托 — 封装三个工厂类的 PB 升级公共逻辑
+	 * <br/>
+	 * 因 Java 单继承限制，ME/EME 工厂无法继承 {@link AbstractMekCentrifugeFactory}，
+	 * 通过组合本类复用 PB 升级处理器的初始化、NBT 持久化、容器同步和倍率计算逻辑，
+	 * 消除三个工厂约 90 行重复代码。工厂类通过委托调用本类方法。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅管理 PB 升级状态，不涉及配方处理或槽位布局</li>
+	 *   <li>依赖倒置：通过 {@link IMekCentrifugePbUpgradeHost} 接口访问宿主，不依赖具体类</li>
+	 *   <li>开闭原则：新增工厂类型时只需创建本类实例，不修改本类</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行；客户端通过 SyncableInt 同步，
+	 * {@link MekCentrifugePbUpgradeHandler} 内部使用 AtomicIntegerArray 保证可见性。
+	 */
 public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifugePbUpgradeAccess {
 
 	/** PB 升级处理器 — 管理安装/卸载/数量/倍率 */

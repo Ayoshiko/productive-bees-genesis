@@ -1,12 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
-
-import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.fluids.FluidStack;
-
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
@@ -14,48 +7,52 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
-
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import mekanism.api.fluid.IExtendedFluidTank;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * AE2 流体输出推送器(Bug 7)
- * <br/>
- * 将宿主的流体罐内容推送到 AE2 网络,与 {@link Ae2OutputPusher} 物品推送并行工作。
- * <p>
- * <b>Task 21 批处理缓冲集成</b>:引入 {@link Ae2PendingBatchBuffer} 实现 20 tick 累积窗口,
- * 相同 AEFluidKey 跨 tick 合并,256× 加速 + 16 STACK(65536 并行)下 AE2 API 调用次数降低 ≥ 99.8%。
- * <p>
- * <b>Task 13 多槽推送策略</b>:
- * <ul>
- *   <li><b>SINGLE 模式</b>(默认):{@code host.fluidOutputTankCount()} 返回 1,
- *       遍历单槽,行为与修改前完全一致</li>
- *   <li><b>MULTI_PER_FLUID 模式</b>:遍历所有已分配槽位(上限 tier.processes),
- *       每个非空槽独立推送。能量适配器和操作源全局共享,避免每槽重复创建</li>
- * </ul>
- * <p>
- * <b>spec fix-ae2-push-backoff-and-jdte-adapt 自适应机制</b>:
- * <ul>
- *   <li><b>TPS 自适应</b>:服务器 MSPT 严重卡顿(tpsFactor &lt; 0.5)时跳过推送,让出 tick 资源</li>
- *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
- *       非 ONLINE 状态直接返回不触发退避(修复: 原缺少此检查导致网格不稳定时 poweredInsert 必然失败)</li>
- *   <li><b>退避</b>:仅所有流体 key 都失败时进入 50ms→1s 的短指数退避,
- *       基于 {@link System#nanoTime()} 墙钟单调时钟,窗口内跳过所有 AE2 存储操作,
- *       避免 JDTE 加速下 counter 退避失效(Task 5)。
- *       部分成功不重置退避(避免"部分成功→重置→立即失败→激进退避"死循环)</li>
+	 * AE2 流体输出推送器(Bug 7)
+	 * <br/>
+	 * 将宿主的流体罐内容推送到 AE2 网络,与 {@link Ae2OutputPusher} 物品推送并行工作。
+	 * <p>
+	 * <b>Task 21 批处理缓冲集成</b>:引入 {@link Ae2PendingBatchBuffer} 实现 20 tick 累积窗口,
+	 * 相同 AEFluidKey 跨 tick 合并,256× 加速 + 16 STACK(65536 并行)下 AE2 API 调用次数降低 ≥ 99.8%。
+	 * <p>
+	 * <b>Task 13 多槽推送策略</b>:
+	 * <ul>
+	 *   <li><b>SINGLE 模式</b>(默认):{@code host.fluidOutputTankCount()} 返回 1,
+	 *       遍历单槽,行为与修改前完全一致</li>
+	 *   <li><b>MULTI_PER_FLUID 模式</b>:遍历所有已分配槽位(上限 tier.processes),
+	 *       每个非空槽独立推送。能量适配器和操作源全局共享,避免每槽重复创建</li>
+	 * </ul>
+	 * <p>
+	 * <b>spec fix-ae2-push-backoff-and-jdte-adapt 自适应机制</b>:
+	 * <ul>
+	 *   <li><b>TPS 自适应</b>:服务器 MSPT 严重卡顿(tpsFactor &lt; 0.5)时跳过推送,让出 tick 资源</li>
+	 *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
+	 *       非 ONLINE 状态直接返回不触发退避(修复: 原缺少此检查导致网格不稳定时 poweredInsert 必然失败)</li>
+	 *   <li><b>退避</b>:仅所有流体 key 都失败时进入 50ms→1s 的短指数退避,
+	 *       基于 {@link System#nanoTime()} 墙钟单调时钟,窗口内跳过所有 AE2 存储操作,
+	 *       避免 JDTE 加速下 counter 退避失效(Task 5)。
+	 *       部分成功不重置退避(避免"部分成功→重置→立即失败→激进退避"死循环)</li>
 	 *   <li><b>固定分批</b>:单次 MEStorage 请求最多 16,000,000 mB，限制第三方存储调用规模</li>
 	 *   <li><b>真实游戏刻窗口</b>:加速子 tick 在入口合并。低产量按 20 游戏刻批量，
 	 *       槽内总量达到 250,000 mB 时立即刷新</li>
- *   <li><b>分块 shrinkStack</b>:推送量超过 Integer.MAX_VALUE 时分块调用 tank.shrinkStack,
- *       防止 long→int 截断丢失流体(Task 21 新增)</li>
- * </ul>
- * <p>
- * <b>设计原则</b>(SRP):与 {@link Ae2OutputPusher} 分离,独立负责流体推送。
- * <p>
- * <b>线程安全</b>:由服务端 tick 线程独占调用,无需同步。
- */
+	 *   <li><b>分块 shrinkStack</b>:推送量超过 Integer.MAX_VALUE 时分块调用 tank.shrinkStack,
+	 *       防止 long→int 截断丢失流体(Task 21 新增)</li>
+	 * </ul>
+	 * <p>
+	 * <b>设计原则</b>(SRP):与 {@link Ae2OutputPusher} 分离,独立负责流体推送。
+	 * <p>
+	 * <b>线程安全</b>:由服务端 tick 线程独占调用,无需同步。
+	 */
 public final class Ae2FluidPusher {
 
 	/** 异常累计计数器 — 用于日志显示总次数（节流由 LogThrottle 时间维度处理） */

@@ -1,24 +1,24 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+import java.util.Set;
+
 /**
- * FilterListScreen 的列表渲染与命中测试辅助类
- * <p>
- * 将列表表头、条目、复选框、拖拽手柄、拖放指示线等绘制逻辑从屏幕类中剥离，
- * 避免 FilterListScreen 因功能叠加而过度膨胀，便于后续维护与扩展。
- * <p>
- * 本类不持有业务状态，所有数据均由 {@link FilterListScreen} 提供。
- */
+	 * FilterListScreen 的列表渲染与命中测试辅助类
+	 * <p>
+	 * 将列表表头、条目、复选框、拖拽手柄、拖放指示线等绘制逻辑从屏幕类中剥离，
+	 * 避免 FilterListScreen 因功能叠加而过度膨胀，便于后续维护与扩展。
+	 * <p>
+	 * 本类不持有业务状态，所有数据均由 {@link FilterListScreen} 提供。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

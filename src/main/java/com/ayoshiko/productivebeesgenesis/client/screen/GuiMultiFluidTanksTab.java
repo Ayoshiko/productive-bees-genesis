@@ -1,42 +1,41 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.MekanismRenderer;
-import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
+import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.function.Supplier;
+
 /**
- * 多流体槽窗口创建 Tab(SRP:仅负责触发窗口创建,不处理窗口内部逻辑)
- * <br/>
- * 位于 GUI 左侧 y=131,在 GuiWarningTab(y=101,底部127)下方(间距4px),与右侧 GuiRedstoneControlTab(y=131)对称。
- * 颜色:MEK 灰阶 #232323(参考 GuiFeederTab/GuiPbUpgradeTab 的 MEK 原生 Tab 图标风格),
- * 点击后打开 {@link GuiMultiFluidTanksWindow}。
- * <p>
- * 仅在 {@link IMultiFluidTankHost#isMultiFluidModeSynced()} 返回 true 时由 GUI 类添加(Task 1:基于同步值而非 holder 类型),
- * SINGLE 模式不显示此 Tab。
- * <p>
- * 设计原则:
- * <ul>
- *   <li>继承 MEK {@link GuiWindowCreatorTab},复用窗口创建/关闭/重新挂载的标准生命周期</li>
- *   <li>单一职责:仅负责创建窗口,窗口布局由 {@link GuiMultiFluidTanksLayoutHelper} 计算</li>
- *   <li>OCP:通过泛型参数支持任意 IMultiFluidTankHost 子类(原版/ME/EME 工厂)</li>
- * </ul>
- *
- * @param <TILE> 方块实体类型,必须实现 IMultiFluidTankHost
- * @since Task 8
- */
+	 * 多流体槽窗口创建 Tab(SRP:仅负责触发窗口创建,不处理窗口内部逻辑)
+	 * <br/>
+	 * 位于 GUI 左侧 y=131,在 GuiWarningTab(y=101,底部127)下方(间距4px),与右侧 GuiRedstoneControlTab(y=131)对称。
+	 * 颜色:MEK 灰阶 #232323(参考 GuiFeederTab/GuiPbUpgradeTab 的 MEK 原生 Tab 图标风格),
+	 * 点击后打开 {@link GuiMultiFluidTanksWindow}。
+	 * <p>
+	 * 仅在 {@link IMultiFluidTankHost#isMultiFluidModeSynced()} 返回 true 时由 GUI 类添加(Task 1:基于同步值而非 holder 类型),
+	 * SINGLE 模式不显示此 Tab。
+	 * <p>
+	 * 设计原则:
+	 * <ul>
+	 *   <li>继承 MEK {@link GuiWindowCreatorTab},复用窗口创建/关闭/重新挂载的标准生命周期</li>
+	 *   <li>单一职责:仅负责创建窗口,窗口布局由 {@link GuiMultiFluidTanksLayoutHelper} 计算</li>
+	 *   <li>OCP:通过泛型参数支持任意 IMultiFluidTankHost 子类(原版/ME/EME 工厂)</li>
+	 * </ul>
+	 *
+	 * @param <TILE> 方块实体类型,必须实现 IMultiFluidTankHost
+	 * @since Task 8
+	 */
 public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost> extends GuiWindowCreatorTab<TILE, GuiMultiFluidTanksTab<TILE>> {
 
 	/** Tab 颜色 — MEK 灰阶基色 #232323 RGB(35,35,35)(ARGB 格式) */

@@ -1,34 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import appeng.api.networking.IManagedGridNode;
 import net.minecraft.nbt.CompoundTag;
 
-import appeng.api.networking.IManagedGridNode;
-
 /**
- * MEK 离心机 AE2 生命周期处理器
- * <br/>
- * 封装 {@link Ae2OutputStateHolder} 和 AE2 网格节点的生命周期管理逻辑，
- * 消除 4 个 TileEntity 类（基础离心机 + 3 个工厂）的 AE2 代码重复（约 120 行）。
- * <p>
- * <b>职责</b>：
- * <ul>
- *   <li>持有 {@link Ae2OutputStateHolder} 实例（网格节点、AEItemKey 缓存、待连接标志、复用缓冲区）</li>
- *   <li>提供节点准备、连接、销毁、NBT 持久化方法</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：所有 public 方法使用宿主级锁 {@code synchronized(host)} 保护，
- * 与 {@link Ae2GridNodeManager} 的 prepareNode/connectNode/destroyNode 使用同一把锁保证互斥。
- * Java 的 synchronized 是可重入锁，handler 方法调用 Ae2GridNodeManager 的 synchronized 方法不会自死锁。
- * <p>
- * <b>设计原则</b>：
- * <ul>
- *   <li>单一职责：只负责 AE2 生命周期管理，不涉及输出推送或配方处理</li>
- *   <li>依赖倒置：通过 {@link IAe2OutputHostBase} 抽象访问宿主，不依赖具体 TileEntity</li>
- *   <li>开闭原则：新增 TileEntity 类型只需持有本类实例并实现 getter</li>
- * </ul>
- *
- * @since 1.7.0
- */
+	 * MEK 离心机 AE2 生命周期处理器
+	 * <br/>
+	 * 封装 {@link Ae2OutputStateHolder} 和 AE2 网格节点的生命周期管理逻辑，
+	 * 消除 4 个 TileEntity 类（基础离心机 + 3 个工厂）的 AE2 代码重复（约 120 行）。
+	 * <p>
+	 * <b>职责</b>：
+	 * <ul>
+	 *   <li>持有 {@link Ae2OutputStateHolder} 实例（网格节点、AEItemKey 缓存、待连接标志、复用缓冲区）</li>
+	 *   <li>提供节点准备、连接、销毁、NBT 持久化方法</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：所有 public 方法使用宿主级锁 {@code synchronized(host)} 保护，
+	 * 与 {@link Ae2GridNodeManager} 的 prepareNode/connectNode/destroyNode 使用同一把锁保证互斥。
+	 * Java 的 synchronized 是可重入锁，handler 方法调用 Ae2GridNodeManager 的 synchronized 方法不会自死锁。
+	 * <p>
+	 * <b>设计原则</b>：
+	 * <ul>
+	 *   <li>单一职责：只负责 AE2 生命周期管理，不涉及输出推送或配方处理</li>
+	 *   <li>依赖倒置：通过 {@link IAe2OutputHostBase} 抽象访问宿主，不依赖具体 TileEntity</li>
+	 *   <li>开闭原则：新增 TileEntity 类型只需持有本类实例并实现 getter</li>
+	 * </ul>
+	 *
+	 * @since 1.5.3
+	 */
 public final class MekAe2LifecycleHandler {
 
 	/** AE2 状态持有者 — 封装网格节点、AEItemKey 缓存、待连接标志、复用缓冲区 */
@@ -180,7 +179,7 @@ public final class MekAe2LifecycleHandler {
 	 * 详见 {@link #prepareForLoad}。
 	 *
 	 * @param host 输出宿主
-	 * @since 1.7.0
+	 * @since 1.5.3
 	 */
 	public void handleLoad(IAe2OutputHostBase host) {
 		prepareForLoad(host);
@@ -193,7 +192,7 @@ public final class MekAe2LifecycleHandler {
 	 * 详见 {@link #destroyForRemoval}。
 	 *
 	 * @param host 输出宿主
-	 * @since 1.7.0
+	 * @since 1.5.3
 	 */
 	public void handleRemove(IAe2OutputHostBase host) {
 		destroyForRemoval(host);
@@ -206,7 +205,7 @@ public final class MekAe2LifecycleHandler {
 	 * 详见 {@link #destroyForChunkUnload}。
 	 *
 	 * @param host 输出宿主
-	 * @since 1.7.0
+	 * @since 1.5.3
 	 */
 	public void handleChunkUnload(IAe2OutputHostBase host) {
 		destroyForChunkUnload(host);

@@ -2,23 +2,21 @@ package com.ayoshiko.productivebeesgenesis.apiary.client;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
-
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
-
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
 /**
- * 蜜蜂实体工厂
- * <br/>
- * 从蜜蜂 NBT 数据创建对应的渲染用实体实例。
- * 支持 PB 的 ConfigurableBee（按 type 字段配置外观）和原版 Bee。
- * <p>
- * 设计原则：单一职责，仅负责实体创建与初始化，不涉及缓存或渲染。
- * 工厂模式便于后续扩展其他蜜蜂类型（如附属模组自定义蜜蜂）。
- */
+	 * 蜜蜂实体工厂
+	 * <br/>
+	 * 从蜜蜂 NBT 数据创建对应的渲染用实体实例。
+	 * 支持 PB 的 ConfigurableBee（按 type 字段配置外观）和原版 Bee。
+	 * <p>
+	 * 设计原则：单一职责，仅负责实体创建与初始化，不涉及缓存或渲染。
+	 * 工厂模式便于后续扩展其他蜜蜂类型（如附属模组自定义蜜蜂）。
+	 */
 public final class BeeEntityFactory {
 
 	/** 工具类禁止实例化 */

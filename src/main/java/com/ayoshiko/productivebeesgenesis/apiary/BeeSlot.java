@@ -1,38 +1,37 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import net.minecraft.nbt.CompoundTag;
-
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 蜜蜂居住槽位数据模型
- * <br/>
- * 复用 PB 原生 Occupant NBT 格式存储蜜蜂完整数据（beeData），
- * 同时维护生产计时、状态、进度等机械蜂箱专属字段。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅承载单只蜜蜂的运行时状态，不涉及 tick 逻辑或槽位管理</li>
- *   <li>脏标志优化：setter 写入时仅在值实际变化时设置 dirty=true，
- *       避免冗余的 NBT 同步与 setChanged 调用（Task 16.4 性能优化）</li>
- * </ul>
- * <p>
- * 线程安全（volatile 字段 + dirty 同步点并发模型）：
- * <ul>
- *   <li>所有可变状态字段（beeData / ticksInHive / minOccupationTicks / hasNectar /
- *       state / progress）均声明为 {@code volatile}，依赖 volatile 的跨线程可见性
- *       保证服务端 tick 线程的写入对 NBT 序列化线程可见</li>
- *   <li>getter / setter 不使用 {@code synchronized}，避免单线程 tick 主循环中
- *       每只蜜蜂产生 100+ 次冗余 monitorenter / monitorexit（详见 spec Task 3）</li>
- *   <li>仅在 {@link #consumeDirty()} 序列化点使用 {@code synchronized(this)} 保护
- *       "读取 dirty → 写入 false" 原子性，防止 NBT 同步线程与 tick 线程并发调用
- *       导致脏标志丢失</li>
- *   <li>{@code dirty} 字段本身也声明为 {@code volatile}，与 synchronized 协同保证
- *       可见性</li>
- *   <li>{@code cachedFlowerValidTick} / {@code cachedFlowerValid} 已是 volatile，
- *       仅在同一 server tick 线程内读写，volatile 足够</li>
- * </ul>
- */
+	 * 蜜蜂居住槽位数据模型
+	 * <br/>
+	 * 复用 PB 原生 Occupant NBT 格式存储蜜蜂完整数据（beeData），
+	 * 同时维护生产计时、状态、进度等机械蜂箱专属字段。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅承载单只蜜蜂的运行时状态，不涉及 tick 逻辑或槽位管理</li>
+	 *   <li>脏标志优化：setter 写入时仅在值实际变化时设置 dirty=true，
+	 *       避免冗余的 NBT 同步与 setChanged 调用（Task 16.4 性能优化）</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全（volatile 字段 + dirty 同步点并发模型）：
+	 * <ul>
+	 *   <li>所有可变状态字段（beeData / ticksInHive / minOccupationTicks / hasNectar /
+	 *       state / progress）均声明为 {@code volatile}，依赖 volatile 的跨线程可见性
+	 *       保证服务端 tick 线程的写入对 NBT 序列化线程可见</li>
+	 *   <li>getter / setter 不使用 {@code synchronized}，避免单线程 tick 主循环中
+	 *       每只蜜蜂产生 100+ 次冗余 monitorenter / monitorexit（详见 spec Task 3）</li>
+	 *   <li>仅在 {@link #consumeDirty()} 序列化点使用 {@code synchronized(this)} 保护
+	 *       "读取 dirty → 写入 false" 原子性，防止 NBT 同步线程与 tick 线程并发调用
+	 *       导致脏标志丢失</li>
+	 *   <li>{@code dirty} 字段本身也声明为 {@code volatile}，与 synchronized 协同保证
+	 *       可见性</li>
+	 *   <li>{@code cachedFlowerValidTick} / {@code cachedFlowerValid} 已是 volatile，
+	 *       仅在同一 server tick 线程内读写，volatile 足够</li>
+	 * </ul>
+	 */
 public class BeeSlot {
 
 	/** 蜜蜂完整 NBT（复用 PB 原生 Occupant 格式，包含 EntityType、EntityTag 等） */

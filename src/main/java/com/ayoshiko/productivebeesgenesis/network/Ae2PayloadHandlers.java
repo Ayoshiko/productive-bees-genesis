@@ -1,44 +1,48 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.networking.storage.IStorageService;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.storage.MEStorage;
+import appeng.me.helpers.BaseActionSource;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NetworkInventoryView;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
-
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * AE2 相关数据包的服务端与客户端处理集合
- * <p>
- * 从 {@link ModPayloads} 拆分而来，职责：
- * <ol>
- *   <li>切换 per-tile AE2 输出开关（{@link CycleAeOutputPayload}）</li>
- *   <li>切换 per-tile AE2 输入拉取 / NBT 忽略 / 精确模式（{@link ToggleAeInputPayload} 等）</li>
- *   <li>循环切换输入过滤模式（{@link CycleAeInputFilterModePayload}）</li>
- *   <li>增删过滤条目（{@link SetAeInputFilterEntryPayload}）</li>
- *   <li>请求打开配置窗口（{@link OpenAeInputConfigPayload}）</li>
- *   <li>同步过滤器条目到客户端（{@link SyncAeInputFilterEntriesPayload}）</li>
- * </ol>
- * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
- * <p>
- * 安全模型：每个 handler 均校验玩家身份（{@link ServerPlayer}）、
- * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
- * <p>
- * 依赖倒置：通过 {@link IAe2InputHost} / {@link IAe2OutputHostBase} 接口多态判定，
- * 避免直接引用 ME/EME 可选依赖的具体子类（其中 IAe2InputHost 由 Mixin 运行时注入）。
- */
+	 * AE2 相关数据包的服务端与客户端处理集合
+	 * <p>
+	 * 从 {@link ModPayloads} 拆分而来，职责：
+	 * <ol>
+	 *   <li>切换 per-tile AE2 输出开关（{@link CycleAeOutputPayload}）</li>
+	 *   <li>切换 per-tile AE2 输入拉取 / NBT 忽略 / 精确模式（{@link ToggleAeInputPayload} 等）</li>
+	 *   <li>循环切换输入过滤模式（{@link CycleAeInputFilterModePayload}）</li>
+	 *   <li>增删过滤条目（{@link SetAeInputFilterEntryPayload}）</li>
+	 *   <li>请求打开配置窗口（{@link OpenAeInputConfigPayload}）</li>
+	 *   <li>同步过滤器条目到客户端（{@link SyncAeInputFilterEntriesPayload}）</li>
+	 * </ol>
+	 * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
+	 * <p>
+	 * 安全模型：每个 handler 均校验玩家身份（{@link ServerPlayer}）、
+	 * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
+	 * <p>
+	 * 依赖倒置：通过 {@link IAe2InputHost} / {@link IAe2OutputHostBase} 接口多态判定，
+	 * 避免直接引用 ME/EME 可选依赖的具体子类（其中 IAe2InputHost 由 Mixin 运行时注入）。
+	 */
 final class Ae2PayloadHandlers {
+	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
 
 	private Ae2PayloadHandlers() {
 	}
@@ -57,7 +61,7 @@ final class Ae2PayloadHandlers {
 	 * @param logKey       日志节流键
 	 * @return true 表示校验通过，false 表示校验失败（调用方应直接 return）
 	 */
-	private static boolean validateContainerMatch(ServerPlayer serverPlayer,
+	static boolean validateContainerMatch(ServerPlayer serverPlayer,
 			net.minecraft.core.BlockPos targetPos, String logKey) {
 		if (serverPlayer.containerMenu == null) return false;
 		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
@@ -282,248 +286,96 @@ final class Ae2PayloadHandlers {
 		}
 		// 推送完整条目列表到客户端（filterMode 已有 SyncableInt 同步，
 		// 但 entries 也需要确保一致，合并推送）
-		syncFilterToClients(be);
+		Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
 	}
 
 	/**
-	 * 服务端处理：添加、移除或清空 per-tile AE2 输入过滤条目
-	 * <br/>
-	 * 过滤器为 null 时（基础离心机未启用过滤）安全返回，不执行任何操作。
-	 * CLEAR 操作忽略 beeType，清空所有条目。
-	 * V15：ADD 使用 setEntryAt 直接覆盖目标位置（位置固定语义，不做交换），REMOVE 使用 removeEntryAt（仅清空不移位）。
-	 * 修改后调用 markForSave 持久化，并推送 SyncAeInputFilterEntriesPayload 同步完整条目列表到客户端。
+	 * Server handling for AE2LT-style virtual output slots: extract into the
+	 * player cursor/inventory or insert the carried stack into the ME network.
+	 * Mirrors OverloadedInterfaceMenu#handlePickup / handleQuickMove.
 	 */
-	static void handleSetAeInputFilterEntry(SetAeInputFilterEntryPayload payload, IPayloadContext context) {
-		// slotIndex 边界校验：防止恶意客户端发送越界索引导致数组访问异常
-		if (payload.slotIndex() < 0 || payload.slotIndex() > NetworkSecurityConstants.MAX_AE_INPUT_FILTER_SLOTS) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.level() == null) {
-			return;
-		}
-		// 强制容器一致性校验：防止 IDOR 攻击（特别重要：CLEAR 操作可清空他人过滤器）
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_filter_entry_pos_mismatch")) {
-			return;
-		}
-		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
-		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_set", NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
-			return;
-		}
+	static void handleAeInputOutputSlot(AeInputOutputSlotPayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
+		if (serverPlayer.level() == null) return;
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_output_slot_pos_mismatch")) return;
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (be == null) {
-			return;
-		}
+		if (be == null) return;
 		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
 		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("ae2_input_filter_entry_distance", "玩家 {} 尝试远距离修改 AE2 输入过滤条目：距离 {} 格",
+			LogThrottle.warn("ae2_output_slot_distance",
+					"玩家 {} 尝试远距离操作 AE2 输入输出槽：距离 {} 格",
 					serverPlayer.getName().getString(), Math.sqrt(distance));
 			return;
 		}
-		if (!(be instanceof IAe2InputHost host)) {
-			return;
+		if (!(be instanceof IAe2InputHost host)) return;
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return;
+		Ae2InputFilter filter = holder.getOrCreateInputFilter();
+		int slot = payload.slotIndex();
+		if (filter == null || !filter.isDirectEntry(slot)) return;
+		AEItemKey key = filter.getResolvedDirectKey(slot);
+		if (key == null && serverPlayer.level().registryAccess() != null) {
+			Ae2InputFilter.EntryInfo entryInfo = filter.getEntryAt(slot);
+			if (entryInfo == null || entryInfo.directFingerprint == null) return;
+			key = Ae2ItemFingerprint.decode(
+					entryInfo.directFingerprint,
+					serverPlayer.level().registryAccess());
+			if (key != null) filter.resolveDirectKey(slot, key);
 		}
-		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
-		if (filter == null) {
-			return; // 基础离心机未启用过滤，安全返回
-		}
-		ResourceLocation beeType = payload.beeType().orElse(null);
-		// 防御性字符串长度校验：StreamCodec 已限制 256 字节，此处冗余校验防止协议层变更后绕过
-		if (beeType != null && beeType.toString().length() > NetworkSecurityConstants.MAX_BEE_TYPE_KEY_LENGTH) {
-			LogThrottle.warn("ae2_filter_bee_too_long", "玩家 {} 尝试设置过长的蜜蜂类型键：长度 {}",
-					serverPlayer.getName().getString(), beeType.toString().length());
-			return;
-		}
-		switch (payload.operation()) {
-			// V15: setEntryAt 直接覆盖目标位置（位置固定语义，拖到哪格放哪格）
-			case ADD -> filter.setEntryAt(payload.slotIndex(), beeType, payload.isBlock());
-			case REMOVE -> filter.removeEntryAt(payload.slotIndex());
-			case CLEAR -> filter.clearEntries();
-		}
-		// 标记 dirty 确保过滤器条目修改持久化
-		if (be instanceof TileEntityMekanism mek) {
-			mek.markForSave();
-		}
-		// 推送完整条目列表到客户端（tracker 无法同步集合数据）
-		syncFilterToClients(be);
-	}
-
-	/**
-	 * 服务端处理：切换 per-tile AE2 输入精确模式
-	 * <br/>
-	 * 精确模式开启时区分蜜脾和蜜脾块（同种 beeType 但物品类型不同），
-	 * 关闭时同种 beeType 的蜜脾和蜜脾块一起拉取。
-	 */
-	static void handleToggleAeInputPreciseMode(ToggleAeInputPreciseModePayload payload, IPayloadContext context) {
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.level() == null) {
-			return;
-		}
-		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_precise_mode_pos_mismatch")) {
-			return;
-		}
-		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
-		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_precise_mode_toggle", NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (be == null) {
-			return;
-		}
-		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("ae2_input_exact_distance", "玩家 {} 尝试远距离切换 AE2 输入精确模式：距离 {} 格",
-					serverPlayer.getName().getString(), Math.sqrt(distance));
-			return;
-		}
-		if (!(be instanceof IAe2InputHost host)) {
-			return;
-		}
-		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
-		if (filter == null) {
-			return;
-		}
-		filter.togglePreciseMode();
-		if (be instanceof TileEntityMekanism mek) {
-			mek.markForSave();
-		}
-		syncFilterToClients(be);
-	}
-
-	/**
-	 * 服务端处理：请求打开 per-tile AE2 输入配置窗口
-	 * <br/>
-	 * 校验玩家身份、8 格交互距离、方块实体是否为 {@link IAe2InputHost} 后，
-	 * 调用 {@link #syncFilterToClients} 推送当前过滤器状态到客户端。
-	 * <p>
-	 * <b>设计原因</b>：NeoForge 中服务端无法直接打开客户端 Screen，故客户端按钮点击时
-	 * 已立即在客户端打开 {@link com.ayoshiko.productivebeesgenesis.client.screen.GuiAeInputConfig}，
-	 * 此 handler 仅负责推送最新过滤器状态，确保客户端 Screen 显示与服务端一致。
-	 * 客户端 Screen 通过 {@link SyncAeInputFilterEntriesPayload} 接收推送并刷新本地副本。
-	 */
-	static void handleOpenAeInputConfig(OpenAeInputConfigPayload payload, IPayloadContext context) {
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.level() == null) {
-			return;
-		}
-		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_config_pos_mismatch")) {
-			return;
-		}
-		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
-		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_config_open", NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (be == null) {
-			return;
-		}
-		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("ae2_input_config_distance", "玩家 {} 尝试远距离打开 AE2 输入配置：距离 {} 格",
-					serverPlayer.getName().getString(), Math.sqrt(distance));
-			return;
-		}
-		if (!(be instanceof IAe2InputHost)) {
-			return;
-		}
-		// 推送当前过滤器状态到客户端，确保打开 Screen 时显示最新数据
-		// syncFilterToClients 内部会再次校验 be instanceof IAe2InputHost，此处显式校验仅为防御性编程
-		syncFilterToClients(be);
-	}
-
-	/**
-	 * 客户端处理：接收服务端推送的完整过滤器条目列表
-	 * <br/>
-	 * V15：indices + entries 为平行数组，仅包含非空槽位。
-	 * 客户端先 clearEntries，再按 index 调用 setEntryAtIndex 保留位置固定语义。
-	 * 同时同步 preciseMode 和 filterMode。
-	 */
-	static void handleSyncAeInputFilterEntries(SyncAeInputFilterEntriesPayload payload, IPayloadContext context) {
-		if (context.player().level() == null) {
-			return;
-		}
-		BlockEntity be = context.player().level().getBlockEntity(payload.pos());
-		if (!(be instanceof IAe2InputHost host)) {
-			return;
-		}
-		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
-		if (filter == null) {
-			return;
-		}
-		// 清空并按 index 重建客户端过滤器条目（保留位置固定语义）
-		filter.clearEntries();
-		List<Integer> indices = payload.indices();
-		List<String> entries = payload.entries();
-		// 平行数组防御性校验：防止恶意服务端发送不一致的 indices/entries
-		if (indices.size() != entries.size()) return;
-		int count = Math.min(indices.size(), entries.size());
-		for (int i = 0; i < count; i++) {
-			int idx = indices.get(i);
-			String entry = entries.get(i);
-			// 防御性校验：防止恶意服务端发送越界索引（与 handleSetAeInputFilterEntry 上限一致）
-			if (idx < 0 || idx > NetworkSecurityConstants.MAX_AE_INPUT_FILTER_SLOTS) continue;
-			// 防御性校验：防止恶意服务端推送过长条目占用客户端内存（StreamCodec 已限制 256 字符，冗余校验）
-			if (entry != null && entry.length() > NetworkSecurityConstants.MAX_FILTER_ENTRY_LENGTH) {
-				LogThrottle.warn("ae2_sync_entry_too_long", "收到服务端推送的过长过滤条目：长度 {}", entry.length());
-				continue;
+		if (key == null) return;
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
+		if (storageService == null) return;
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
+		if (meStorage == null) return;
+		net.minecraft.server.level.ServerLevel sl = (net.minecraft.server.level.ServerLevel) serverPlayer.level();
+		long now = sl.getGameTime();
+		boolean ignoreNbt = holder.isAeInputNbtIgnore();
+		long visible = Ae2NetworkInventoryView.visibleAmount(holder, now,
+				storageService.getCachedInventory(), meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
+		long cap = filter.getDirectPullLimit(key, visible, ignoreNbt,
+				serverPlayer.level().registryAccess());
+		if (cap >= 0L) visible = Math.min(visible, cap);
+		if (payload.shift()) {
+			// Quick move: extract up to a full stack into the player inventory.
+			long maxExtract = Math.min(visible, key.getMaxStackSize());
+			if (maxExtract > 0L) {
+				long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
+				if (extracted > 0L) {
+					net.minecraft.world.item.ItemStack stack = key.toStack(
+							(int) Math.min(extracted, Integer.MAX_VALUE));
+					if (!serverPlayer.getInventory().add(stack)) {
+						serverPlayer.drop(stack, false);
+					}
+				}
 			}
-			filter.setEntryAtIndex(idx, entry);
+		} else {
+			net.minecraft.world.item.ItemStack carried = serverPlayer.containerMenu.getCarried();
+			if (carried.isEmpty()) {
+				// Extract into the cursor (right click = half).
+				long maxExtract = Math.min(visible, key.getMaxStackSize());
+				if (payload.rightClick()) maxExtract = Math.max(1L, (maxExtract + 1L) / 2L);
+				if (maxExtract > 0L) {
+					long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
+					if (extracted > 0L) {
+						serverPlayer.containerMenu.setCarried(key.toStack(
+								(int) Math.min(extracted, Integer.MAX_VALUE)));
+					}
+				}
+			} else {
+				// Insert the carried stack into the network (right click = one).
+				AEItemKey carriedKey = AEItemKey.of(carried);
+				if (carriedKey == null) return;
+				int toInsert = payload.rightClick() ? 1 : carried.getCount();
+				long inserted = meStorage.insert(carriedKey, toInsert, Actionable.MODULATE, ACTION_SOURCE);
+				if (inserted > 0L) {
+					carried.shrink((int) inserted);
+					if (carried.isEmpty()) {
+						serverPlayer.containerMenu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
+					}
+				}
+			}
 		}
-		// 设置 filterMode（幂等，与 SyncableInt 的 setter 重复设置安全）
-		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
-		if (payload.filterMode() >= 0 && payload.filterMode() < modes.length) {
-			filter.setFilterMode(modes[payload.filterMode()]);
-		}
-		// V13: 同步 preciseMode
-		filter.setPreciseMode(payload.preciseMode());
-	}
-
-	/**
-	 * 推送完整过滤器条目列表到所有客户端
-	 * <br/>
-	 * V15：使用 getNonEmptyEntries() 获取非空槽位（index + entry），
-	 * 构建平行数组 indices + entries 同步位置信息，同步 preciseMode。
-	 * <p>
-	 * Task 6：使用 {@link PacketDistributor#sendToPlayersTrackingChunk} 定向发送给
-	 * 跟踪该区块的玩家，替代 {@code sendToAllPlayers} 全服广播，减少无关玩家的网络包开销。
-	 *
-	 * @param be 目标方块实体，必须实现 {@link IAe2InputHost}
-	 */
-	public static void syncFilterToClients(BlockEntity be) {
-		if (be == null || be.getLevel() == null || be.getLevel().isClientSide) {
-			return;
-		}
-		if (!(be instanceof IAe2InputHost host)) {
-			return;
-		}
-		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
-		if (filter == null) {
-			return;
-		}
-		// V15: 使用非空条目（含 index），构建平行数组同步位置信息
-		List<Ae2InputFilter.IndexedEntry> nonEmpty = filter.getNonEmptyEntries();
-		List<Integer> indices = new ArrayList<>(nonEmpty.size());
-		List<String> entries = new ArrayList<>(nonEmpty.size());
-		for (Ae2InputFilter.IndexedEntry ie : nonEmpty) {
-			indices.add(ie.index());
-			entries.add(ie.entry());
-		}
-		SyncAeInputFilterEntriesPayload payload = new SyncAeInputFilterEntriesPayload(
-				be.getBlockPos(),
-				filter.getFilterMode().ordinal(),
-				filter.isPreciseMode(),
-				indices,
-				entries
-		);
-		// Task 6：定向发送给跟踪该区块的玩家，避免全服广播
-		net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) be.getLevel();
-		net.minecraft.world.level.ChunkPos chunkPos = new net.minecraft.world.level.ChunkPos(be.getBlockPos());
-		PacketDistributor.sendToPlayersTrackingChunk(serverLevel, chunkPos, payload);
+		// Refresh the GUI stock display after a successful mutation.
+		Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
 	}
 }

@@ -26,4 +26,10 @@ class FactoryExternalInsertPolicyTest {
 		assertEquals(1_024, FactoryExternalInsertPolicy.insertionQuantum(4_096));
 		assertEquals(262_144, FactoryExternalInsertPolicy.insertionQuantum(1_048_576));
 	}
+
+	@Test
+	void externalSimulationUsesRealSlotCapacityInsteadOfSixteenItemQuantum() {
+		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(4_096, 0));
+		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(4_096, 512));
+	}
 }

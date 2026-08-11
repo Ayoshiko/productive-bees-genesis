@@ -1,12 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -19,15 +15,18 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Cosmic 烘焙模型抽象基类
- * <br/>
- * 提取 {@link BakedModelCosmic} 与 {@link BakedModelHell} 的公共渲染逻辑：
- * 基础物品渲染、Iris 延迟入队、mask 光晕层渲染框架。
- * <br/>
- * 子类只需通过三个抽象方法提供差异化的着色器 uniform、RenderType 与批次收尾逻辑，
- * 遵循 DRY（消除重复）与 OCP（对扩展开放）原则。
- */
+	 * Cosmic 烘焙模型抽象基类
+	 * <br/>
+	 * 提取 {@link BakedModelCosmic} 与 {@link BakedModelHell} 的公共渲染逻辑：
+	 * 基础物品渲染、Iris 延迟入队、mask 光晕层渲染框架。
+	 * <br/>
+	 * 子类只需通过三个抽象方法提供差异化的着色器 uniform、RenderType 与批次收尾逻辑，
+	 * 遵循 DRY（消除重复）与 OCP（对扩展开放）原则。
+	 */
 public abstract class AbstractBakedModelCosmic extends WrappedItemModel implements CosmicRenderable {
 
 	/** mask 纹理资源位置列表，子类共享 */

@@ -1,15 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.EnumSet;
-
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-
-import org.jetbrains.annotations.Nullable;
-
 import appeng.api.networking.GridFlags;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGrid;
@@ -17,30 +7,39 @@ import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.storage.IStorageService;
+import appeng.api.networking.ticking.IGridTickable;
 import appeng.api.storage.MEStorage;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.EnumSet;
 
 /**
- * AE2 网格节点生命周期管理器
- * <br/>
- * 封装 {@link IManagedGridNode} 的创建、销毁、NBT 持久化逻辑。
- * 所有方法都进行空检查和 AE2 加载状态检查，AE2 未安装时安全短路返回。
- * <p>
- * <b>v1.8.2 解耦</b>：节点创建只受 {@link Ae2IntegrationLoader#isAe2Loaded()} 控制，
- * 不再受 {@code aeOutputEnabled} 配置影响。与 Mek-Energistics 对齐（节点无条件创建）。
- * {@code aeOutputEnabled} 仅控制 {@link Ae2OutputPusher} 的输出推送行为。
- * <p>
- * <b>节点配置</b>：
- * <ul>
- *   <li>{@code setExposedOnSides(ALL)} — 六面暴露，便于从任意方向接入 AE2 网络</li>
- *   <li>{@code setInWorldNode(true)} — 作为世界内节点（非仅逻辑节点）</li>
- *   <li>{@code setFlags(REQUIRE_CHANNEL)} — 要求 AE2 频道才能工作</li>
- *   <li>{@code setTagName} — 指定 NBT 持久化键名，配合单参数 saveToNBT/loadFromNBT</li>
- *   <li>{@code setIdlePowerUsage(0)} — 不消耗 AE2 网络空闲能量（离心机自身供能）</li>
- * </ul>
- * <p>
- * <b>NBT 持久化</b>：AE2 的 {@code saveToNBT/loadFromNBT} 是单参数版本，
- * 通过 {@code setTagName} 预设键名后，AE2 会在给定的 CompoundTag 中以该键名存取子标签。
- */
+	 * AE2 网格节点生命周期管理器
+	 * <br/>
+	 * 封装 {@link IManagedGridNode} 的创建、销毁、NBT 持久化逻辑。
+	 * 所有方法都进行空检查和 AE2 加载状态检查，AE2 未安装时安全短路返回。
+	 * <p>
+	 * <b>v2.0.0 解耦</b>：节点创建只受 {@link Ae2IntegrationLoader#isAe2Loaded()} 控制，
+	 * 不再受 {@code aeOutputEnabled} 配置影响。与 Mek-Energistics 对齐（节点无条件创建）。
+	 * {@code aeOutputEnabled} 仅控制 {@link Ae2OutputPusher} 的输出推送行为。
+	 * <p>
+	 * <b>节点配置</b>：
+	 * <ul>
+	 *   <li>{@code setExposedOnSides(ALL)} — 六面暴露，便于从任意方向接入 AE2 网络</li>
+	 *   <li>{@code setInWorldNode(true)} — 作为世界内节点（非仅逻辑节点）</li>
+	 *   <li>{@code setFlags(REQUIRE_CHANNEL)} — 要求 AE2 频道才能工作</li>
+	 *   <li>{@code setTagName} — 指定 NBT 持久化键名，配合单参数 saveToNBT/loadFromNBT</li>
+	 *   <li>{@code setIdlePowerUsage(0)} — 不消耗 AE2 网络空闲能量（离心机自身供能）</li>
+	 * </ul>
+	 * <p>
+	 * <b>NBT 持久化</b>：AE2 的 {@code saveToNBT/loadFromNBT} 是单参数版本，
+	 * 通过 {@code setTagName} 预设键名后，AE2 会在给定的 CompoundTag 中以该键名存取子标签。
+	 */
 public final class Ae2GridNodeManager {
 
 	/** 空闲功耗：0，离心机不消耗 AE2 网络空闲能量 */
@@ -96,6 +95,11 @@ public final class Ae2GridNodeManager {
 				node.setVisualRepresentation(be.getBlockState().getBlock());
 			}
 			// 注意：不调用 node.create()，延迟到 connectNode 避免区块加载递归栈溢出
+			// JDTE Time Accelerator 兼容：注册 IGridTickable 服务以支持 AE2 网格 tick
+			// 通过 AE2_GRID 事件，JDTE 会高频调用 tickingRequest(node, 1) 推进虚拟刻
+			// tickingRequest 内仅更新 TickAccelTracker 计数（AE2 刻计数 + 工作检查缓存）
+			// 避免在每次加速调用中重复执行 AE IO 守卫链
+			node.addService(IGridTickable.class, new JdteGridTickable(host));
 			host.productivebeesgenesis$setAe2GridNode(node);
 			// 创建 AEItemKey 缓存，减少推送时 AEItemKey.of(stack) 的重复调用（Task 7）
 			host.productivebeesgenesis$setAeItemKeyCache(

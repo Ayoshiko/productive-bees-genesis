@@ -1,47 +1,45 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import org.jetbrains.annotations.Nullable;
-
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
-
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * AE2 能量注入协调器
- * <br/>
- * 协调从 AE 网络提取能量并注入到离心机的 {@link MachineEnergyContainer}，
- * 按配置优先级决定 AppliedFlux 与 AE2 原生能量的提取顺序。
- * <p>
- * <b>职责（DIP）</b>：依赖 {@link IAe2OutputHostBase} 抽象获取网格节点与能量容器，
- * 不直接引用具体 TileEntity，保证任何实现 IAe2OutputHostBase 的类均可复用本注入器。
- * <p>
- * <b>职责（SRP）</b>：仅负责"协调提取与注入"流程，不负责：
- * <ul>
- *   <li>能量提取的底层实现（由 {@link Ae2EnergyBridge} 负责）</li>
- *   <li>是否启用的配置守卫（由 {@link IAe2OutputHostBase#productivebeesgenesis$injectAe2Energy} 入口负责）</li>
- *   <li>tick 时机控制（由调用方 tick 处理器负责）</li>
- * </ul>
- * <p>
- * <b>提取流程（v1.8.1 按需差额提取，与 Mek-Energistics 对齐）</b>：
- * <ol>
- *   <li>双重守卫：AE2 已安装 + grid 非 null</li>
- *   <li>获取容器并计算剩余容量（maxEnergy - currentEnergy）作为本次提取上限</li>
- *   <li>按优先级先 SIMULATE 模拟提取确定可获取量，再 MODULATE 实际提取</li>
- *   <li>用 setEnergy 注入到容器（clamp 到 maxEnergy 防止溢出）</li>
- * </ol>
- * <p>
- * <b>v1.8.1 设计意图</b>：移除 perTick 注入上限配置（{@code aeEnergyInjectionPerTick}），
- * 改为按容器剩余容量差额提取——容器差多少就补多少，最终注入量由
- * {@code min(容器剩余容量, ME 网络可提取量)} 决定。避免人为 perTick 上限导致
- * 高耗能场景下能量补充速度跟不上消耗，与 Mek-Energistics 的能量注入策略对齐。
- * <p>
- * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 网络操作在主线程进行，
- * MachineEnergyContainer 内部使用原子类型保证线程安全。
- *
- * @since 1.8.0
- * @author Ayoshiko
- */
+	 * AE2 能量注入协调器
+	 * <br/>
+	 * 协调从 AE 网络提取能量并注入到离心机的 {@link MachineEnergyContainer}，
+	 * 按配置优先级决定 AppliedFlux 与 AE2 原生能量的提取顺序。
+	 * <p>
+	 * <b>职责（DIP）</b>：依赖 {@link IAe2OutputHostBase} 抽象获取网格节点与能量容器，
+	 * 不直接引用具体 TileEntity，保证任何实现 IAe2OutputHostBase 的类均可复用本注入器。
+	 * <p>
+	 * <b>职责（SRP）</b>：仅负责"协调提取与注入"流程，不负责：
+	 * <ul>
+	 *   <li>能量提取的底层实现（由 {@link Ae2EnergyBridge} 负责）</li>
+	 *   <li>是否启用的配置守卫（由 {@link IAe2OutputHostBase#productivebeesgenesis$injectAe2Energy} 入口负责）</li>
+	 *   <li>tick 时机控制（由调用方 tick 处理器负责）</li>
+	 * </ul>
+	 * <p>
+	 * <b>提取流程（v2.0.0 按需差额提取，与 Mek-Energistics 对齐）</b>：
+	 * <ol>
+	 *   <li>双重守卫：AE2 已安装 + grid 非 null</li>
+	 *   <li>获取容器并计算剩余容量（maxEnergy - currentEnergy）作为本次提取上限</li>
+	 *   <li>按优先级先 SIMULATE 模拟提取确定可获取量，再 MODULATE 实际提取</li>
+	 *   <li>用 setEnergy 注入到容器（clamp 到 maxEnergy 防止溢出）</li>
+	 * </ol>
+	 * <p>
+	 * <b>v2.0.0 设计意图</b>：移除 perTick 注入上限配置（{@code aeEnergyInjectionPerTick}），
+	 * 改为按容器剩余容量差额提取——容器差多少就补多少，最终注入量由
+	 * {@code min(容器剩余容量, ME 网络可提取量)} 决定。避免人为 perTick 上限导致
+	 * 高耗能场景下能量补充速度跟不上消耗，与 Mek-Energistics 的能量注入策略对齐。
+	 * <p>
+	 * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 网络操作在主线程进行，
+	 * MachineEnergyContainer 内部使用原子类型保证线程安全。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 */
 public final class Ae2EnergyInjector {
 
 	private Ae2EnergyInjector() {}
@@ -51,7 +49,7 @@ public final class Ae2EnergyInjector {
 	 * <br/>
 	 * 按 {@link ModConfig#SERVER} 的优先级配置决定 AppliedFlux 与 AE2 原生能量的提取顺序。
 	 * <p>
-	 * <b>v1.8.1 变更</b>：移除 {@code maxAmount} 参数，注入量由容器剩余容量
+	 * <b>v2.0.0 变更</b>：移除 {@code maxAmount} 参数，注入量由容器剩余容量
 	 * （{@code maxEnergy - currentEnergy}）决定。SIMULATE 模式确定 ME 网络实际可提取量，
 	 * 最终注入量 = {@code min(容器剩余容量, ME 网络可提取量)}，与 Mek-Energistics 对齐。
 	 * <p>
@@ -75,26 +73,26 @@ public final class Ae2EnergyInjector {
 	 * @param host AE2 输出宿主（离心机方块实体）
 	 * @return 实际注入到容器的 FE 总量
 	 *
-	 * @since 1.8.1
+	 * @since 2.0.0
 	 */
 	public static long injectEnergy(IAe2OutputHostBase host) {
 		// 守卫1：AE2 未安装（双重防御，调用方应已守卫）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		if (host == null) return 0;
 
-		// 获取已连接的网格
-		IGrid grid = getConnectedGrid(host);
-		if (grid == null) return 0;
-
-		// 获取能量容器
+		// 先检查本地容器，满能量机器无需访问 AE 网格。
 		MachineEnergyContainer<?> container = host.productivebeesgenesis$getAe2EnergySource();
 		if (container == null) return 0;
 
-		// 计算剩余容量（v1.8.1：按需差额提取，剩余容量即为本次提取上限）
+		// 计算剩余容量（v2.0.0：按需差额提取，剩余容量即为本次提取上限）
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
-		long remainingCapacity = maxEnergy - currentEnergy;
+		long remainingCapacity = Ae2EnergyMath.remainingCapacity(currentEnergy, maxEnergy);
 		if (remainingCapacity <= 0) return 0;
+
+		// 仅在机器确实需要能量时访问已连接的网格。
+		IGrid grid = getConnectedGrid(host);
+		if (grid == null) return 0;
 
 		// 实际提取量目标 = 容器剩余容量（SIMULATE 模式会进一步限制为 ME 网络可提取量）
 		long toExtract = remainingCapacity;
@@ -107,27 +105,29 @@ public final class Ae2EnergyInjector {
 		long secondExtracted = 0;
 		if (preferAppliedFlux) {
 			// 先 AppliedFlux，再 AE2 原生
-			firstExtracted = extractFromAppliedFlux(grid, toExtract);
+			firstExtracted = Ae2EnergyMath.clampExtracted(extractFromAppliedFlux(grid, toExtract), toExtract);
 			long remaining = toExtract - firstExtracted;
 			if (remaining > 0) {
-				secondExtracted = Ae2EnergyBridge.extractAeEnergyAsFe(grid, remaining, Actionable.MODULATE);
+				secondExtracted = Ae2EnergyMath.clampExtracted(
+						Ae2EnergyBridge.extractAeEnergyAsFe(grid, remaining, Actionable.MODULATE), remaining);
 			}
 		} else {
 			// 先 AE2 原生，再 AppliedFlux
-			firstExtracted = Ae2EnergyBridge.extractAeEnergyAsFe(grid, toExtract, Actionable.MODULATE);
+			firstExtracted = Ae2EnergyMath.clampExtracted(
+					Ae2EnergyBridge.extractAeEnergyAsFe(grid, toExtract, Actionable.MODULATE), toExtract);
 			long remaining = toExtract - firstExtracted;
 			if (remaining > 0) {
-				secondExtracted = extractFromAppliedFlux(grid, remaining);
+				secondExtracted = Ae2EnergyMath.clampExtracted(extractFromAppliedFlux(grid, remaining), remaining);
 			}
 		}
 
 		// 注入到容器（clamp 防止溢出，虽然 remainingCapacity 已保证）
-		long totalInjected = firstExtracted + secondExtracted;
-		if (totalInjected > 0) {
-			long newEnergy = Math.min(currentEnergy + totalInjected, maxEnergy);
-			container.setEnergy(newEnergy);
+		Ae2EnergyMath.InjectionResult result = Ae2EnergyMath.apply(
+				currentEnergy, maxEnergy, firstExtracted, secondExtracted);
+		if (result.injected() > 0L) {
+			container.setEnergy(result.energy());
 		}
-		return totalInjected;
+		return result.injected();
 	}
 
 	/**

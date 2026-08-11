@@ -1,15 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.annotation.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -27,23 +19,30 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
+import javax.annotation.Nullable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 离心配方索引 — O(1) 蜜脾/蜜脾块配方查找
- * <br/>
- * 替代 findPbRecipe 和 createCombBlockRecipe 中的全量遍历 (O(N))，
- * 通过 bee_type -> 配方 的索引实现 O(1) 查找。
- * 同时维护蜜脾块配方索引：rebuild 时根据蜜脾配方静态生成对应的蜜脾块配方
- * （min/max/流体按 {@link com.ayoshiko.productivebeesgenesis.config.ServerConfig#mekCentrifugeCombBlockMultiplier} 缩放），
- * 消除首次遇到新 bee_type 蜜脾块时的动态构建开销。
- * <p>
- * <b>线程安全</b>：使用不可变快照 + 单一 volatile 引用，保证读线程看到一致状态。
- * 重建期间旧快照仍可服务读请求，重建完成后整体替换为新快照。
- * <p>
- * <b>重建时机</b>：由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 后调用，
- * 与 RECIPE_VERSION 递增同步，确保配方重载后索引立即更新。
- * <p>
- * <b>回退策略</b>：索引未命中时调用方回退到全量遍历（防御性），避免索引构建遗漏导致配方丢失。
- */
+	 * 离心配方索引 — O(1) 蜜脾/蜜脾块配方查找
+	 * <br/>
+	 * 替代 findPbRecipe 和 createCombBlockRecipe 中的全量遍历 (O(N))，
+	 * 通过 bee_type -> 配方 的索引实现 O(1) 查找。
+	 * 同时维护蜜脾块配方索引：rebuild 时根据蜜脾配方静态生成对应的蜜脾块配方
+	 * （min/max/流体按 {@link com.ayoshiko.productivebeesgenesis.config.ServerConfig#mekCentrifugeCombBlockMultiplier} 缩放），
+	 * 消除首次遇到新 bee_type 蜜脾块时的动态构建开销。
+	 * <p>
+	 * <b>线程安全</b>：使用不可变快照 + 单一 volatile 引用，保证读线程看到一致状态。
+	 * 重建期间旧快照仍可服务读请求，重建完成后整体替换为新快照。
+	 * <p>
+	 * <b>重建时机</b>：由 {@link ProductiveBeesGenesis#onTagsReload} 在 TagsUpdatedEvent 后调用，
+	 * 与 RECIPE_VERSION 递增同步，确保配方重载后索引立即更新。
+	 * <p>
+	 * <b>回退策略</b>：索引未命中时调用方回退到全量遍历（防御性），避免索引构建遗漏导致配方丢失。
+	 */
 public final class CentrifugeRecipeIndex {
 
 	/** 不可变快照：封装蜜脾索引、蜜脾块索引和特殊蜜脾块索引，保证原子替换 */

@@ -1,27 +1,26 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import mekanism.api.inventory.IInventorySlot;
 
-import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
+import java.util.List;
 
 /**
- * AE2 输入拉取宿主接口 — 离心机从 AE2 网络拉取蜜脾到输入槽的契约
- * <br/>
- * 继承 {@link IAe2OutputHostBase} 复用网格节点、状态持有者、能量源等基础方法，
- * 不继承 {@link IAe2OutputHost}（避免强引用 AE2 的 IInWorldGridNodeHost）。
- * <p>
- * <b>类加载安全</b>：本接口无任何 import appeng 语句，TileEntity 实现本接口后
- * 即使 AE2 未安装也能正常加载。AE2 网格访问通过 Object 类型 + instanceof 检查完成。
- * <p>
- * <b>对称设计</b>：与 IAe2OutputHost 平级，由同一 TileEntity 同时实现。
- * 推送用 poweredInsert，拉取用 poweredExtraction；推送遍历输出槽，拉取遍历 MEStorage。
- * <p>
- * 所有方法使用 productivebeesgenesis$ 前缀避免 Mixin 冲突。
- *
- * @since 1.13.0
- */
+	 * AE2 输入拉取宿主接口 — 离心机从 AE2 网络拉取蜜脾到输入槽的契约
+	 * <br/>
+	 * 继承 {@link IAe2OutputHostBase} 复用网格节点、状态持有者、能量源等基础方法，
+	 * 不继承 {@link IAe2OutputHost}（避免强引用 AE2 的 IInWorldGridNodeHost）。
+	 * <p>
+	 * <b>类加载安全</b>：本接口无任何 import appeng 语句，TileEntity 实现本接口后
+	 * 即使 AE2 未安装也能正常加载。AE2 网格访问通过 Object 类型 + instanceof 检查完成。
+	 * <p>
+	 * <b>对称设计</b>：与 IAe2OutputHost 平级，由同一 TileEntity 同时实现。
+	 * 推送用 poweredInsert，拉取用 poweredExtraction；推送遍历输出槽，拉取遍历 MEStorage。
+	 * <p>
+	 * 所有方法使用 productivebeesgenesis$ 前缀避免 Mixin 冲突。
+	 *
+	 * @since 2.0.0
+	 */
 public interface IAe2InputHost extends IAe2OutputHostBase {
 
 	/**

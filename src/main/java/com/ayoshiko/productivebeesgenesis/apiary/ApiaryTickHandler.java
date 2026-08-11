@@ -3,39 +3,38 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import net.minecraft.world.level.Level;
 
 /**
- * 通用机械蜂箱服务端 tick 处理器
- * <br/>
- * 参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeTickHandler} 模式，
- * 负责服务端 tick 逻辑编排，让主类聚焦于槽位/接口实现。
- * <p>
- * 职责（编排器角色）：
- * <ul>
- *   <li>调用 super.onUpdateServer() 触发 Mekanism 能量填充管线</li>
- *   <li>委托 {@link CageTickProcessor} 处理蜂笼输入（蜜蜂在蜂笼与蜂槽间双向转移）</li>
- *   <li>委托 {@link BeeSlotTickProcessor} 处理蜜蜂生产周期（花朵检查/输出空间检查/能量检查/推进计时/完成累积）</li>
- *   <li>管理 active 状态切换与工作声音播放</li>
- * </ul>
- * <p>
- * tick 完整流程：
- * <ol>
- *   <li>AE2 能量注入 — {@link TileEntityMekApiary#productivebeesgenesis$injectAe2Energy}</li>
- *   <li>调用 super.onUpdateServer() — 能量填充管线 + ejector tick</li>
- *   <li>蜂笼输入处理 — {@link CageTickProcessor#tick}（在生产逻辑前执行）</li>
- *   <li>蜜蜂槽位处理 — {@link BeeSlotTickProcessor#tick}（含批量产出刷新与能量扣除）</li>
- *   <li>PB 升级输入槽自动安装 + 动画计数器递减</li>
- *   <li>active 状态管理 — 有蜜蜂工作时设为 true</li>
- *   <li>工作声音播放 — 按概率播放 PB 蜜蜂嗡嗡声</li>
- * </ol>
- * <p>
- * Task 17：super.onUpdateServer() 前调用 AE2 能量注入，让蜜蜂生产消耗也能使用注入的能量。
- * 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理。
- * <p>
- * 线程安全：方块实体在服务端单线程执行，AtomicInteger 提供防御性原子计数。
- */
+	 * 通用机械蜂箱服务端 tick 处理器
+	 * <br/>
+	 * 参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeTickHandler} 模式，
+	 * 负责服务端 tick 逻辑编排，让主类聚焦于槽位/接口实现。
+	 * <p>
+	 * 职责（编排器角色）：
+	 * <ul>
+	 *   <li>调用 super.onUpdateServer() 触发 Mekanism 能量填充管线</li>
+	 *   <li>委托 {@link CageTickProcessor} 处理蜂笼输入（蜜蜂在蜂笼与蜂槽间双向转移）</li>
+	 *   <li>委托 {@link BeeSlotTickProcessor} 处理蜜蜂生产周期（花朵检查/输出空间检查/能量检查/推进计时/完成累积）</li>
+	 *   <li>管理 active 状态切换与工作声音播放</li>
+	 * </ul>
+	 * <p>
+	 * tick 完整流程：
+	 * <ol>
+	 *   <li>AE2 能量注入 — {@link TileEntityMekApiary#productivebeesgenesis$injectAe2Energy}</li>
+	 *   <li>调用 super.onUpdateServer() — 能量填充管线 + ejector tick</li>
+	 *   <li>蜂笼输入处理 — {@link CageTickProcessor#tick}（在生产逻辑前执行）</li>
+	 *   <li>蜜蜂槽位处理 — {@link BeeSlotTickProcessor#tick}（含批量产出刷新与能量扣除）</li>
+	 *   <li>PB 升级输入槽自动安装 + 动画计数器递减</li>
+	 *   <li>active 状态管理 — 有蜜蜂工作时设为 true</li>
+	 *   <li>工作声音播放 — 按概率播放 PB 蜜蜂嗡嗡声</li>
+	 * </ol>
+	 * <p>
+	 * Task 17：super.onUpdateServer() 前调用 AE2 能量注入，让蜜蜂生产消耗也能使用注入的能量。
+	 * 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理。
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，AtomicInteger 提供防御性原子计数。
+	 */
 class ApiaryTickHandler {
 
 	/** 所属方块实体引用 */

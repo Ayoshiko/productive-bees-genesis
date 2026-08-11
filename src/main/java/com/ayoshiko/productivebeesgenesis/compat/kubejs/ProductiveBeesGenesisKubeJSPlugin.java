@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.kubejs;
 
-import java.util.Map;
-
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.google.gson.JsonElement;
-
 import dev.latvian.mods.kubejs.core.RecipeManagerKJS;
 import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.plugin.ClassFilter;
@@ -15,23 +12,25 @@ import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.Map;
+
 /**
- * 资源蜜蜂：创世 KubeJS 插件
- * <br/>
- * 通过 {@link KubeJSPlugin} 接口注册自定义事件和全局绑定，使整合包作者能够
- * 通过 KubeJS 脚本动态添加 ProductiveBees 的蜜蜂配方。
- * <p>
- * <b>类加载安全</b>：本类仅在被 KubeJS 框架通过 kubejs.plugins.txt 发现时加载，
- * 即 KubeJS 已安装且初始化。未安装 KubeJS 时，本类不会被加载，模组正常工作。
- * <p>
- * <b>职责</b>：
- * <ul>
- *   <li>注册自定义事件组 {@link MyriadBeeEvents}，供脚本监听蜜蜂配方注册事件</li>
- *   <li>注册全局绑定，暴露万象创世蜜蜂类型常量</li>
- *   <li>在 beforeRecipeLoading 阶段触发事件，允许脚本注入配方 JSON</li>
- *   <li>允许脚本访问 compat.kubejs 包下的所有类</li>
- * </ul>
- */
+	 * 资源蜜蜂：创世 KubeJS 插件
+	 * <br/>
+	 * 通过 {@link KubeJSPlugin} 接口注册自定义事件和全局绑定，使整合包作者能够
+	 * 通过 KubeJS 脚本动态添加 ProductiveBees 的蜜蜂配方。
+	 * <p>
+	 * <b>类加载安全</b>：本类仅在被 KubeJS 框架通过 kubejs.plugins.txt 发现时加载，
+	 * 即 KubeJS 已安装且初始化。未安装 KubeJS 时，本类不会被加载，模组正常工作。
+	 * <p>
+	 * <b>职责</b>：
+	 * <ul>
+	 *   <li>注册自定义事件组 {@link MyriadBeeEvents}，供脚本监听蜜蜂配方注册事件</li>
+	 *   <li>注册全局绑定，暴露万象创世蜜蜂类型常量</li>
+	 *   <li>在 beforeRecipeLoading 阶段触发事件，允许脚本注入配方 JSON</li>
+	 *   <li>允许脚本访问 compat.kubejs 包下的所有类</li>
+	 * </ul>
+	 */
 public class ProductiveBeesGenesisKubeJSPlugin implements KubeJSPlugin {
 
 	/**

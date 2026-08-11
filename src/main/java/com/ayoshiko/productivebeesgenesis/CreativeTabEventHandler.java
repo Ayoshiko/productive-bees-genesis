@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivebees.ProductiveBees;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -18,19 +14,22 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 
+import java.util.ArrayList;
+import java.util.Collection;
+
 /**
- * 创造模式物品栏事件处理器
- * <br/>
- * 根据万象创世蜜蜂的启用状态动态调整创造模式物品栏内容：
- * <ul>
- *   <li>启用时：向 PB 创造栏添加万象创世蜜脾和蜜脾块（createComb=false 时 PB 不会自动添加）</li>
- *   <li>禁用时：从 PB 标签页和刷怪蛋标签页移除万象创世刷怪蛋</li>
- * </ul>
- * <p>
- * 原理：拦截 {@link BuildCreativeModeTabContentsEvent} 事件，
- * 启用时使用 {@link BuildCreativeModeTabContentsEvent#accept} 添加物品，
- * 禁用时使用 {@link BuildCreativeModeTabContentsEvent#remove} 移除物品。
- */
+	 * 创造模式物品栏事件处理器
+	 * <br/>
+	 * 根据万象创世蜜蜂的启用状态动态调整创造模式物品栏内容：
+	 * <ul>
+	 *   <li>启用时：向 PB 创造栏添加万象创世蜜脾和蜜脾块（createComb=false 时 PB 不会自动添加）</li>
+	 *   <li>禁用时：从 PB 标签页和刷怪蛋标签页移除万象创世刷怪蛋</li>
+	 * </ul>
+	 * <p>
+	 * 原理：拦截 {@link BuildCreativeModeTabContentsEvent} 事件，
+	 * 启用时使用 {@link BuildCreativeModeTabContentsEvent#accept} 添加物品，
+	 * 禁用时使用 {@link BuildCreativeModeTabContentsEvent#remove} 移除物品。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public final class CreativeTabEventHandler {
 

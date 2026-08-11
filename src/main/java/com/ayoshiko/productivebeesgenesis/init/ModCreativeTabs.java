@@ -18,11 +18,11 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import java.util.function.Supplier;
 
 /**
- * 创造模式标签页注册
- * <br/>
- * 条件性添加MEK离心机方块（仅当Mekanism加载时显示）。
- * EM加载时额外添加5个EM等级工厂方块到标签页。
- */
+	 * 创造模式标签页注册
+	 * <br/>
+	 * 条件性添加MEK离心机方块（仅当Mekanism加载时显示）。
+	 * EM加载时额外添加5个EM等级工厂方块到标签页。
+	 */
 public final class ModCreativeTabs {
 
 	public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =

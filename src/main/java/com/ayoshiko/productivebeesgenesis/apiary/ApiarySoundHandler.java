@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.concurrent.ThreadLocalRandom;
-
+import com.ayoshiko.productivebeesgenesis.mek.GameTickGate;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import mekanism.api.Upgrade;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 /**
- * 蜂箱工作声音处理器 — 播放 PB 原版蜂箱的蜜蜂嗡嗡声
- * <br/>
- * Task 4：机器方块工作声音使用 PB 蜂箱的蜜蜂声音（SoundEvents.BEEHIVE_WORK）。
- * <p>
- * 参考 PB 原版 {@code AdvancedBeehiveBlockEntityAbstract.tick()} 的声音播放逻辑：
- * 蜂箱非空时按概率播放 BEEHIVE_WORK 声音。
- * <p>
- * 与 PB 原版的差异：
- * <ul>
- *   <li>概率从 0.5% 降至 0.3%，避免多台机械蜂箱同时工作时声音叠加吵闹</li>
- *   <li>仅在服务端 tick 且有蜜蜂工作时播放（由调用方判断 workingCount > 0）</li>
- * </ul>
- * <p>
- * 设计原则（SRP）：独立负责声音播放逻辑，不参与 tick 编排，由 {@link ApiaryTickHandler} 委托调用。
- * <p>
- * 线程安全：服务端单线程调用，使用 {@link ThreadLocalRandom} 保证随机数线程安全。
- */
+	 * 蜂箱工作声音处理器 — 播放 PB 原版蜂箱的蜜蜂嗡嗡声
+	 * <br/>
+	 * Task 4：机器方块工作声音使用 PB 蜂箱的蜜蜂声音（SoundEvents.BEEHIVE_WORK）。
+	 * <p>
+	 * 参考 PB 原版 {@code AdvancedBeehiveBlockEntityAbstract.tick()} 的声音播放逻辑：
+	 * 蜂箱非空时按概率播放 BEEHIVE_WORK 声音。
+	 * <p>
+	 * 与 PB 原版的差异：
+	 * <ul>
+	 *   <li>概率从 0.5% 降至 0.3%，避免多台机械蜂箱同时工作时声音叠加吵闹</li>
+	 *   <li>仅在服务端 tick 且有蜜蜂工作时播放（由调用方判断 workingCount > 0）</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则（SRP）：独立负责声音播放逻辑，不参与 tick 编排，由 {@link ApiaryTickHandler} 委托调用。
+	 * <p>
+	 * 线程安全：服务端单线程调用，使用 {@link ThreadLocalRandom} 保证随机数线程安全。
+	 */
 public class ApiarySoundHandler {
 
 	/** 播放概率（每 tick），低于 PB 原版 0.005 避免多机器叠加 */
@@ -35,6 +35,8 @@ public class ApiarySoundHandler {
 
 	/** 所属方块实体引用 — 用于获取世界和坐标 */
 	private final TileEntityMekApiary tile;
+	/** 时间加速器会在同一 gameTime 重复调用，只允许一次随机声音尝试。 */
+	private final GameTickGate soundAttemptGate = new GameTickGate();
 
 	/**
 	 * 构造声音处理器
@@ -62,6 +64,7 @@ public class ApiarySoundHandler {
 		if (workingCount <= 0) return;
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide) return;
+		if (!soundAttemptGate.tryEnter(level.getGameTime())) return;
 
 		if (ThreadLocalRandom.current().nextDouble() < SOUND_CHANCE) {
 			// MUFFLING 升级音量因子（0.0=静音，1.0=原音量）

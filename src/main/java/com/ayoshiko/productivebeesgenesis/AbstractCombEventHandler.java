@@ -1,24 +1,14 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Predicate;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
+import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
+import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
-
-import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
-import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -30,26 +20,35 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeInput;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
+
 /**
- * 蜜蜂事件处理器公共逻辑基类
- * <br/>
- * 提供 万象创世 与 无尽·创世 两个事件处理器的共享逻辑：
- * <ol>
- *   <li>蜜蜂类型缓存更新（子类提供排除规则与额外过滤）</li>
- *   <li>离心机追加产出（预分配算法，保证总产出=消耗数且不溢出）</li>
- * </ol>
- * <p>
- * <b>职责拆分（Task 20）</b>：原文件 624 行，已将纯算法逻辑抽取到独立工具类，
- * 本类仅保留与 PB 数据源/配方管理器交互的核心逻辑：
- * <ul>
- *   <li>{@link RandomHoneycombSelector} — 随机蜜脾/蜜脾块选择与分配算法</li>
- *   <li>{@link CombBlockCheckCache} — 离心机空转拦截缓存</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：所有公共方法均为线程安全，使用 {@link CopyOnWriteArrayList}。
- * <p>
- * <b>设计说明</b>：基类不持有任何状态字段，缓存由子类各自持有，确保两个处理器互不干扰。
- */
+	 * 蜜蜂事件处理器公共逻辑基类
+	 * <br/>
+	 * 提供 万象创世 与 无尽·创世 两个事件处理器的共享逻辑：
+	 * <ol>
+	 *   <li>蜜蜂类型缓存更新（子类提供排除规则与额外过滤）</li>
+	 *   <li>离心机追加产出（预分配算法，保证总产出=消耗数且不溢出）</li>
+	 * </ol>
+	 * <p>
+	 * <b>职责拆分（Task 20）</b>：原文件 624 行，已将纯算法逻辑抽取到独立工具类，
+	 * 本类仅保留与 PB 数据源/配方管理器交互的核心逻辑：
+	 * <ul>
+	 *   <li>{@link RandomHoneycombSelector} — 随机蜜脾/蜜脾块选择与分配算法</li>
+	 *   <li>{@link CombBlockCheckCache} — 离心机空转拦截缓存</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：所有公共方法均为线程安全，使用 {@link CopyOnWriteArrayList}。
+	 * <p>
+	 * <b>设计说明</b>：基类不持有任何状态字段，缓存由子类各自持有，确保两个处理器互不干扰。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

@@ -1,57 +1,53 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Upgrade;
 import mekanism.common.config.MekanismConfig;
 import mekanism.common.util.MekanismUtils;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * 蜂箱升级效果计算处理器
- * <br/>
- * 统一管理 MEK 原版升级与 PB 专属升级的效果计算，供 {@link BeeProduceProcessor} 和
- * {@link ApiaryTickHandler} 在生产流程中应用。
- * <p>
- * MEK 升级（通过 {@link mekanism.common.tile.component.TileComponentUpgrade}）：
- * <ul>
- *   <li>速度升级（Upgrade.SPEED）：减少蜜蜂生产时间，增加每 tick 能耗</li>
- *   <li>能量升级（Upgrade.ENERGY）：增加能量容量（由 MachineEnergyContainer 自动处理）</li>
- * </ul>
- * <p>
- * PB 升级（由 {@link ApiaryPbUpgradeHandler} 管理 EnumMap 存储，通过
- * {@link TileEntityMekApiary#getPbUpgradeCount} 暴露）：
- * <ul>
- *   <li>生产力升级 α/β/γ/Ω（PRODUCTIVITY/2/3/4）：每级按对应系数累加产出倍率，
- *       系数运行时读取 PB 原版配置（默认 1.2/1.5/2.0/2.6）</li>
- *   <li>时间升级（UPGRADE_TIME/2）：减少生产时间（比例运行时读取 PB 原版 timeBonus，默认 15%）</li>
- *   <li>蜜脾块升级（BLOCK）：将蜜脾产出转换为蜜脾块形式</li>
- *   <li>模拟升级：机械蜂箱内置，始终启用</li>
- *   <li>Ω 升级自带蜜脾块效果（{@link #hasCombBlockUpgrade}，BLOCK 或 Ω 任一即生效）</li>
- * </ul>
- * <p>
- * Bug 5：产量升级按等级独立加权，{@link #getProductivityMultiplier} 使用
- * {@link PbUpgradeType#getProductivityFactor()} 求和。
- * <p>
- * Bug 6：从"槽位遍历"重构为"EnumMap 数量查询"，服务端直接读
- * {@link ApiaryPbUpgradeHandler} 的 EnumMap，客户端通过 SyncableInt 同步至其 clientUpgradeCounts。
- * <p>
- * Bug 2修复：速度升级和能耗倍率改用 MEK 原版公式，与 MEK 机器加速效果一致。
+	 * 蜂箱升级效果计算处理器
+	 * <br/>
+	 * 统一管理 MEK 原版升级与 PB 专属升级的效果计算，供 {@link BeeProduceProcessor} 和
+	 * {@link ApiaryTickHandler} 在生产流程中应用。
+	 * <p>
+	 * MEK 升级（通过 {@link mekanism.common.tile.component.TileComponentUpgrade}）：
+	 * <ul>
+	 *   <li>速度升级（Upgrade.SPEED）：减少蜜蜂生产时间，增加每 tick 能耗</li>
+	 *   <li>能量升级（Upgrade.ENERGY）：增加能量容量（由 MachineEnergyContainer 自动处理）</li>
+	 * </ul>
+	 * <p>
+	 * PB 升级（由 {@link ApiaryPbUpgradeHandler} 管理 EnumMap 存储，通过
+	 * {@link TileEntityMekApiary#getPbUpgradeCount} 暴露）：
+	 * <ul>
+	 *   <li>生产力升级 α/β/γ/Ω（PRODUCTIVITY/2/3/4）：每级按对应系数累加产出倍率，
+	 *       系数运行时读取 PB 原版配置（默认 1.2/1.5/2.0/2.6）</li>
+	 *   <li>时间升级（UPGRADE_TIME/2）：减少生产时间（比例运行时读取 PB 原版 timeBonus，默认 15%）</li>
+	 *   <li>蜜脾块升级（BLOCK）：将蜜脾产出转换为蜜脾块形式</li>
+	 *   <li>模拟升级：机械蜂箱内置，始终启用</li>
+	 *   <li>Ω 升级自带蜜脾块效果（{@link #hasCombBlockUpgrade}，BLOCK 或 Ω 任一即生效）</li>
+	 * </ul>
+	 * <p>
+	 * Bug 5：产量升级按等级独立加权，{@link #getProductivityMultiplier} 使用
+	 * {@link PbUpgradeType#getProductivityFactor()} 求和。
+	 * <p>
+	 * Bug 6：从"槽位遍历"重构为"EnumMap 数量查询"，服务端直接读
+	 * {@link ApiaryPbUpgradeHandler} 的 EnumMap，客户端通过 SyncableInt 同步至其 clientUpgradeCounts。
+	 * <p>
+	 * Bug 2修复：速度升级和能耗倍率改用 MEK 原版公式，与 MEK 机器加速效果一致。
 	 * 公式由 {@link MekanismUtils} 在运行时计算；这会自动承接 Mekanism
 	 * Unleashed 与 MekanismEmpowered 对升级公式的 mixin 修改。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅负责升级倍率计算，不管理升级物品存储</li>
- *   <li>开闭原则：新增升级类型仅需扩展映射方法，调用方不变</li>
- * </ul>
- */
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅负责升级倍率计算，不管理升级物品存储</li>
+	 *   <li>开闭原则：新增升级类型仅需扩展映射方法，调用方不变</li>
+	 * </ul>
+	 */
 public class ApiaryUpgradeHandler {
 
 	/** 所属方块实体引用 — 用于查询 MEK 升级组件和 PB 升级数量 */
@@ -59,9 +55,6 @@ public class ApiaryUpgradeHandler {
 
 	/** MEK 升级查询异常日志冷却器（ms 模式，避免高频异常刷屏） */
 	private final LogThrottle upgradeErrorThrottle = new LogThrottle();
-
-	/** 模块1：启动诊断仅打印一次的守卫（CAS 保证线程安全） */
-	private static final AtomicBoolean speedDiagnosticPrinted = new AtomicBoolean(false);
 
 	/**
 	 * 升级倍率缓存 — 100 tick 刷新一次，避免每 tick 重复 Math.pow 与 EnumMap 查询。
@@ -79,8 +72,6 @@ public class ApiaryUpgradeHandler {
 	public ApiaryUpgradeHandler(TileEntityMekApiary tile) {
 		this.tile = tile;
 		this.upgradeCache = new ApiaryUpgradeCache(this);
-		// 模块1：启动时打印蜂箱速度配置诊断（仅一次，受 apiary_speed feature 开关控制）
-		logSpeedConfigDiagnosticOnce();
 	}
 
 	/**
@@ -157,7 +148,7 @@ public class ApiaryUpgradeHandler {
 	 *
 	 * @return 能量升级数量（0-8），tile 未就绪时返回 0
 	 */
-	private int getMekEnergyUpgrades() {
+	int getMekEnergyUpgrades() {
 		if (tile == null) return 0;
 		try {
 			var component = tile.getComponent();
@@ -218,7 +209,7 @@ public class ApiaryUpgradeHandler {
 	 * <p>
 	 * Task 1.2 修复：移除 STACK 升级的生产力倍率影响。
 	 * <p>
-	 * v2.1.0: 移除 1.22f 补偿系数
+	 * v2.0.9: 移除 1.22f 补偿系数
 	 * 原补偿用于 processBatchProduce 聚合取整损失，但被升级放大导致满级加成过高（87×）
 	 * 移除后满级加成 71.28×（降 18%），与原版 PB 一致
 	 *
@@ -231,6 +222,34 @@ public class ApiaryUpgradeHandler {
 		mod += PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3);
 		mod += PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4);
 		return mod;
+	}
+
+	/**
+	 * 获取 MEK 速度升级时间倍率
+	 * <br/>
+	 * 公式委托 {@link ApiaryUpgradeMath#computeMekSpeedTimeMultiplier}（纯公式），
+	 * 运行时入口语义由 {@code MekanismUtils} 承接可选模组 mixin。
+	 */
+	public float getMekSpeedTimeMultiplier() {
+		int speedUpgrades = getMekSpeedUpgrades();
+		int maxSpeed = Upgrade.SPEED.getMax();
+		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
+		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
+		return ApiaryUpgradeMath.computeMekSpeedTimeMultiplier(speedUpgrades, maxSpeed, maxMultiplier);
+	}
+
+	/**
+	 * 获取 MEK 速度升级的能耗倍率 — 委托运行时
+	 * {@code MekanismUtils#getEnergyPerTick}，包括 ENERGY、Unleashed 和 MekEmp 修改。
+	 *
+	 * @return MEK 原版速度/能量组合的能耗倍率（>0）
+	 */
+	private float getMekSpeedEnergyMultiplier() {
+		// 使用较大的基数保留 ENERGY 减速带来的小数倍率；
+		// getEnergyPerTick 返回 long，基数 1,000,000 可将舍入误差压到百万分之一。
+		final long sampleBase = 1_000_000L;
+		long scaled = MekanismUtils.getEnergyPerTick(tile, sampleBase);
+		return scaled > 0 ? (float) scaled / sampleBase : 1.0f;
 	}
 
 	/**
@@ -315,144 +334,6 @@ public class ApiaryUpgradeHandler {
 	 */
 	float computeEnergyMultiplier() {
 		return getMekSpeedEnergyMultiplier();
-	}
-
-	/**
-	 * Bug 2：计算 MEK 速度升级的时间倍率 — 委托运行时
-	 * {@link MekanismUtils#getTicksD}，避免绕过可选模组的公式 mixin。
-	 *
-	 * @return MEK 速度升级的时间倍率（0~1，越小越快）
-	 */
-	public float getMekSpeedTimeMultiplier() {
-		// 直接走 MekanismUtils 运行时入口。Mekanism Unleashed 和
-		// MekanismEmpowered 都通过 mixin 修改该入口，手算公式会绕过它们。
-		// 注意：不能传 def=1。MU 的 getTicksD 在结果 < 1 tick 时返回负倒数（-1/ticks），
-		// 用 1 作为基数会得到负数再被 max(0) 截成 0，导致 1 个速度升级就把工作时间压到 1 tick。
-		// 改用大基数采样后还原为倍率：getTicksD(tile, 1_000_000) / 1_000_000。
-		int speedUpgrades = getMekSpeedUpgrades();
-		int maxSpeed = Upgrade.SPEED.getMax();
-		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
-		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
-		return computeMekSpeedTimeMultiplier(speedUpgrades, maxSpeed, maxMultiplier);
-	}
-
-	static float computeMekSpeedTimeMultiplier(int speedUpgrades, int maxSpeed, float maxMultiplier) {
-		if (maxSpeed <= 0 || speedUpgrades <= 0 || maxMultiplier <= 0) return 1.0f;
-		float speedFraction = (float) speedUpgrades / maxSpeed;
-		return (float) Math.pow(maxMultiplier, -speedFraction);
-	}
-
-	/**
-	 * Bug 2：计算 MEK 速度升级的能耗倍率 — 委托运行时
-	 * {@link MekanismUtils#getEnergyPerTick}，包括 ENERGY、Unleashed 和 MekEmp 修改。
-	 *
-	 * @return MEK 原版速度/能量组合的能耗倍率（>0）
-	 */
-	private float getMekSpeedEnergyMultiplier() {
-		// 使用较大的基数保留 ENERGY 减速带来的小数倍率；
-		// getEnergyPerTick 返回 long，基数 1,000,000 可将舍入误差压到百万分之一。
-		final long sampleBase = 1_000_000L;
-		long scaled = MekanismUtils.getEnergyPerTick(tile, sampleBase);
-		return scaled > 0 ? (float) scaled / sampleBase : 1.0f;
-	}
-
-	// ===== 诊断用 getter（模块1：蜂箱速度调试日志） =====
-
-	/**
-	 * 获取 MEK 速度升级的最大安装数量
-	 * <br/>
-	 * 来源：{@link Upgrade#SPEED#getMax()}。MEK 原版返回 8，Mekanism Unleashed 扩展到 32。
-	 *
-	 * @return 速度升级最大数量
-	 */
-	public int getMaxSpeedUpgrades() {
-		return Upgrade.SPEED.getMax();
-	}
-
-	/**
-	 * 获取 MEK 升级倍率上限
-	 * <br/>
-	 * 来源：{@code MekanismConfig.general.maxUpgradeMultiplier}。默认 10.0，
-	 * Mekanism Unleashed (MU) 可能修改为 1200+。
-	 *
-	 * @return 升级倍率上限
-	 */
-	public float getMaxUpgradeMultiplier() {
-		return MekanismConfig.general.maxUpgradeMultiplier.get();
-	}
-
-	/**
-	 * 获取 PB 时间升级的除数分量
-	 * <br/>
-	 * 公式：{@code 1.0 + timeBonus × effectiveTimeUpgrades}（timeBonus 读取 PB 原版配置），
-	 * 其中 {@code effectiveTimeUpgrades = timeCount + time2Count × 2}。
-	 * 与 {@link #computeTimeMultiplier()} 中的计算保持一致，供运行时诊断日志调用。
-	 *
-	 * @return PB 时间升级除数（≥1.0）
-	 */
-	public float getPbTimeDivisor() {
-		int timeCount = getInstalledUpgrades(PbUpgradeType.TIME);
-		int time2Count = getInstalledUpgrades(PbUpgradeType.TIME_2);
-		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		return 1.0f + PbUpgradeConfig.timeBonus() * effectiveTimeUpgrades;
-	}
-
-	/**
-	 * 模块1：启动时打印蜂箱速度配置诊断信息（仅一次）
-	 * <br/>
-	 * 输出关键配置值与 8 级 SPEED 升级预期值，用于诊断
-	 * "8 级 SPEED 升级导致 adjustedMinTicks=1（预期 120）"问题。
-	 * 通过 {@link DevLog#info} 输出，受 apiary_speed feature 开关控制。
-	 * <p>
-	 * 触发时机：ApiaryUpgradeHandler 首次构造时。用户启用 dev 模式后
-	 * 放置或重新放置蜂箱即可触发。
-	 */
-	private void logSpeedConfigDiagnosticOnce() {
-		if (!speedDiagnosticPrinted.compareAndSet(false, true)) {
-			return;
-		}
-		try {
-			float maxMul = getMaxUpgradeMultiplier();
-			int maxSpeed = getMaxSpeedUpgrades();
-			int processingTime = ModConfig.SERVER.apiaryProcessingTime.get();
-			// 8级满速预期: mekTimeMul = maxMul^(-1) = 1/maxMul
-			float expectedMekMul = (float) Math.pow(maxMul, -1.0f);
-			int expectedAdjusted = Math.max(1, Math.round(processingTime * expectedMekMul));
-			float expectedSeconds = expectedAdjusted / 20.0f;
-			DevLog.info("apiary_speed",
-					"蜂箱速度配置诊断:\n"
-							+ "  maxUpgradeMultiplier = {} (来源: MekanismConfig.general.maxUpgradeMultiplier)\n"
-							+ "  maxSpeedUpgrades = {} (来源: Upgrade.SPEED.getMax())\n"
-							+ "  apiaryProcessingTime = {} (来源: ModConfig.SERVER.apiaryProcessingTime)\n"
-							+ "  pbTimeFactor = {} (来源: ProductiveBeesConfig.Upgrades.timeBonus)\n"
-							+ "  公式: mekTimeMultiplier = maxUpgradeMultiplier ^ (-speedUpgrades / maxSpeedUpgrades)\n"
-							+ "  8级SPEED预期: adjustedMinTicks = round({} × {}) = {} tick ({}秒)",
-					maxMul, maxSpeed, processingTime, PbUpgradeConfig.timeBonus(),
-					processingTime, expectedMekMul, expectedAdjusted, expectedSeconds);
-		} catch (Exception e) {
-			DevLog.warn("apiary_speed", "蜂箱速度配置诊断输出失败: {}", e.getMessage());
-		}
-	}
-
-	/**
-	 * 获取能量容量倍率
-	 * <br/>
-	 * 公式：{@code Math.pow(2, energyUpgrades)}。仅供 GUI 显示参考。
-	 *
-	 * @return 能量容量倍率（≥1.0）
-	 */
-	public float getEnergyCapacityMultiplier() {
-		int energyUpgrades = getMekEnergyUpgrades();
-		return (float) Math.pow(2, energyUpgrades);
-	}
-
-	/**
-	 * 模拟升级是否内置
-	 *
-	 * @return true（机械蜂箱原生支持模拟生产）
-	 */
-	public boolean isSimulationBuiltin() {
-		return true;
 	}
 
 	// ===== PB 升级查询接口（供GUI渲染） =====
@@ -566,3 +447,5 @@ public class ApiaryUpgradeHandler {
 		return computeGeneSamplerCount() > 0;
 	}
 }
+
+	

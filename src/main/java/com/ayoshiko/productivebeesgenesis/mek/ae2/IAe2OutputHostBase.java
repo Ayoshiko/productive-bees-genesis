@@ -1,49 +1,47 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
+import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
+import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
-import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
-
-import mekanism.common.capabilities.energy.MachineEnergyContainer;
-
 /**
- * AE2 输出宿主基础接口（无 AE2 类引用）
- * <br/>
- * 定义离心机/蜂箱向 AE2 网格推送输出所需的依赖契约，<b>不引用任何 AE2 API 类</b>，
- * 使 TileEntity 实现本接口后即使 AE2 未安装也能正常加载。
- * <p>
- * <b>Task 3 拆分</b>：原 {@link IAe2OutputHost} 接口拆分为：
- * <ul>
- *   <li>{@link IAe2OutputHostBase}（本接口）— 无 import appeng，包含所有非 AE2 方法</li>
- *   <li>{@link IAe2OutputHost} — 继承本接口 + {@code IInWorldGridNodeHost}，
- *       仅保留 {@code getGridNode(Direction)} 和 {@code getCableConnectionType(Direction)}</li>
- * </ul>
- * <p>
- * <b>类加载安全</b>：本接口无任何 {@code import appeng.xxx} 语句，default 方法中引用的
- * {@link Ae2IntegrationLoader}、{@link Ae2OutputStateHolder}、{@link Ae2EnergyInjector} 等
- * 同包类虽然自身 import 了 AE2 类，但 default 方法内的类引用是延迟解析的
- * （方法未被调用时不会触发类加载），故本接口本身不会因 AE2 未安装而加载失败。
- * 会触发 AE2 类加载的 default 方法（如调用 {@link Ae2EnergyInjector} 或访问配置缓存）
- * 首行均有 {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫；纯字段访问的 default 方法
- * （如 getter/setter）不引用 AE2 类，无需守卫。
- * <p>
- * 继承 {@link PbRecipeContext} 以暴露输出槽访问方法（primaryOutputSlot 等），
- * 供 {@link Ae2OutputPusher} 遍历所有进程的输出槽进行推送。
- * <p>
- * 所有方法使用 {@code productivebeesgenesis$} 前缀，避免与其他模组的 Mixin 冲突。
- * <p>
- * <b>组合模式</b>：纯字段访问的 getter/setter 委托给
- * {@link Ae2OutputStateHolder}（通过 {@link MekAe2LifecycleHandler}），
- * 消除四个 TileEntity 类的字段/方法重复。委托给宿主 {@code this} 的方法（能量源、世界、坐标）
- * 仍由实现类提供。
- *
- * @since 1.7.0
- */
+	 * AE2 输出宿主基础接口（无 AE2 类引用）
+	 * <br/>
+	 * 定义离心机/蜂箱向 AE2 网格推送输出所需的依赖契约，<b>不引用任何 AE2 API 类</b>，
+	 * 使 TileEntity 实现本接口后即使 AE2 未安装也能正常加载。
+	 * <p>
+	 * <b>Task 3 拆分</b>：原 {@link IAe2OutputHost} 接口拆分为：
+	 * <ul>
+	 *   <li>{@link IAe2OutputHostBase}（本接口）— 无 import appeng，包含所有非 AE2 方法</li>
+	 *   <li>{@link IAe2OutputHost} — 继承本接口 + {@code IInWorldGridNodeHost}，
+	 *       仅保留 {@code getGridNode(Direction)} 和 {@code getCableConnectionType(Direction)}</li>
+	 * </ul>
+	 * <p>
+	 * <b>类加载安全</b>：本接口无任何 {@code import appeng.xxx} 语句，default 方法中引用的
+	 * {@link Ae2IntegrationLoader}、{@link Ae2OutputStateHolder}、{@link Ae2EnergyInjector} 等
+	 * 同包类虽然自身 import 了 AE2 类，但 default 方法内的类引用是延迟解析的
+	 * （方法未被调用时不会触发类加载），故本接口本身不会因 AE2 未安装而加载失败。
+	 * 会触发 AE2 类加载的 default 方法（如调用 {@link Ae2EnergyInjector} 或访问配置缓存）
+	 * 首行均有 {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫；纯字段访问的 default 方法
+	 * （如 getter/setter）不引用 AE2 类，无需守卫。
+	 * <p>
+	 * 继承 {@link PbRecipeContext} 以暴露输出槽访问方法（primaryOutputSlot 等），
+	 * 供 {@link Ae2OutputPusher} 遍历所有进程的输出槽进行推送。
+	 * <p>
+	 * 所有方法使用 {@code productivebeesgenesis$} 前缀，避免与其他模组的 Mixin 冲突。
+	 * <p>
+	 * <b>组合模式</b>：纯字段访问的 getter/setter 委托给
+	 * {@link Ae2OutputStateHolder}（通过 {@link MekAe2LifecycleHandler}），
+	 * 消除四个 TileEntity 类的字段/方法重复。委托给宿主 {@code this} 的方法（能量源、世界、坐标）
+	 * 仍由实现类提供。
+	 *
+	 * @since 1.5.3
+	 */
 public interface IAe2OutputHostBase extends PbRecipeContext {
 
 	/** NBT 中保存 AE2 网格节点的标签名 */
@@ -56,7 +54,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 供本接口的 default 方法委托字段访问和生命周期管理。
 	 *
 	 * @return 生命周期处理器实例，不应为 null
-	 * @since 1.7.0
+	 * @since 1.5.3
 	 */
 	MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler();
 
@@ -156,7 +154,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 新增 host 类型只需覆盖此方法即可接入自己的配置源。
 	 *
 	 * @return true 表示启用输出推送
-	 * @since 1.9.0
+	 * @since 2.0.0
 	 */
 	default boolean productivebeesgenesis$isOutputPushEnabled() {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return false;
@@ -186,7 +184,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 配置未加载时回退 true（与原逻辑一致），保持向后兼容。
 	 *
 	 * @return true 表示启用流体推送
-	 * @since 1.11.0
+	 * @since 2.0.0
 	 */
 	default boolean productivebeesgenesis$isFluidPushEnabled() {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return false;
@@ -211,7 +209,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 蜂箱实现类覆盖此方法委托给 ApiaryAe2HostAdapter。
 	 *
 	 * @return true 表示 per-tile 物品输出已启用
-	 * @since 1.12.0
+	 * @since 2.0.0
 	 */
 	default boolean productivebeesgenesis$isAeItemOutputEnabled() {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -222,7 +220,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * per-tile AE2 流体输出开关 — 默认委托给状态持有者
 	 *
 	 * @return true 表示 per-tile 流体输出已启用
-	 * @since 1.12.0
+	 * @since 2.0.0
 	 */
 	default boolean productivebeesgenesis$isAeFluidOutputEnabled() {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -233,7 +231,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 设置 per-tile AE2 物品输出开关
 	 *
 	 * @param enabled true 启用，false 禁用
-	 * @since 1.12.0
+	 * @since 2.0.0
 	 */
 	default void productivebeesgenesis$setAeItemOutputEnabled(boolean enabled) {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -244,7 +242,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 设置 per-tile AE2 流体输出开关
 	 *
 	 * @param enabled true 启用，false 禁用
-	 * @since 1.12.0
+	 * @since 2.0.0
 	 */
 	default void productivebeesgenesis$setAeFluidOutputEnabled(boolean enabled) {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -282,7 +280,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 消除对 ME/EME 具体子类的 instanceof 硬引用（依赖倒置原则）。
 	 * 实现类需在切换后调用 {@code markForSave()} 持久化状态。
 	 *
-	 * @since 1.9.0
+	 * @since 2.0.0
 	 */
 	void toggleAeItemOutput();
 
@@ -292,7 +290,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 所有蜂箱和离心机实现类均已提供此方法，将其提升到接口以支持多态调用。
 	 * 实现类需在切换后调用 {@code markForSave()} 持久化状态。
 	 *
-	 * @since 1.9.0
+	 * @since 2.0.0
 	 */
 	void toggleAeFluidOutput();
 
@@ -317,7 +315,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 配置未加载时回退 true（与原逻辑一致），AppliedFlux 未加载时缓存回退 false。
 	 *
 	 * @return true 优先从 AppliedFlux 提取，false 优先从 AE2 原生能量提取
-	 * @since 1.10.0
+	 * @since 2.0.0
 	 */
 	default boolean productivebeesgenesis$getPreferAppliedFluxOverAeEnergy() {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -331,7 +329,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		return holder.isCachedPreferAppliedFluxOverAeEnergy();
 	}
 
-	// ===== v1.8.0 新增：AE2 网络能量输入 =====
+	// ===== v2.0.0 新增：AE2 网络能量输入 =====
 
 	/**
 	 * 从 AE 网络注入能量到离心机的能量容器
@@ -344,11 +342,11 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 *   <li>{@link Ae2IntegrationLoader#isAe2Loaded()} — AE2 未安装时不执行</li>
 	 *   <li>{@code ModConfig.SERVER} 非 null — 配置已加载</li>
 	 *   <li>{@code mekCentrifugeAeEnergyInputEnabled} 非 null — 配置段已注册（防御性检查）</li>
-	 *   <li>配置项 {@code aeEnergyInputEnabled} — 默认关闭，向后兼容 v1.7.0</li>
+	 *   <li>配置项 {@code aeEnergyInputEnabled} — 默认关闭，向后兼容 v1.5.3</li>
 	 *   <li>离心机已连接到 AE 网格（grid 非 null，由 {@link Ae2EnergyInjector} 内部检查）</li>
 	 * </ol>
 	 * <p>
-	 * <b>v1.8.1 变更</b>：移除 {@code mekCentrifugeAeEnergyInjectionPerTick} 参数传递，
+	 * <b>v2.0.0 变更</b>：移除 {@code mekCentrifugeAeEnergyInjectionPerTick} 参数传递，
 	 * 注入量由 {@link Ae2EnergyInjector} 内部按容器剩余容量差额提取，与 Mek-Energistics 对齐。
 	 * <p>
 	 * <b>迪米特法则</b>：本方法仅调用 {@link Ae2EnergyInjector#injectEnergy}，
@@ -358,7 +356,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 解析，AE2 未安装时 {@link Ae2IntegrationLoader#isAe2Loaded()} 守卫先行返回，
 	 * 不会触发后续类的加载。
 	 *
-	 * @since 1.8.0
+	 * @since 2.0.0
 	 */
 	default void productivebeesgenesis$injectAe2Energy() {
 		// 守卫1：AE2 未安装
@@ -368,7 +366,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		if (ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled == null) return;
 		// 守卫3：配置未启用
 		if (!ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get()) return;
-		// 委托给注入器协调器（v1.8.1：不再传递 perTick 上限，按需差额提取）
+		// 委托给注入器协调器（v2.0.0：不再传递 perTick 上限，按需差额提取）
 		Ae2EnergyInjector.injectEnergy(this);
 	}
 
@@ -386,7 +384,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * <b>性能约束</b>：与 {@code TickAccelTracker.onTick} 一致（仅 long == 比较 + int++），
 	 * 单次调用开销 &lt; 10ns。holder 或 level 为 null 时短路返回。
 	 *
-	 * @since 1.13.0
+	 * @since 2.0.0
 	 */
 	default void productivebeesgenesis$onAe2Tick() {
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
@@ -451,7 +449,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * <b>设计原则（OCP/DIP）</b>：通过接口默认方法扩展功能，不修改现有 tile 行为；
 	 * {@link Ae2OutputPusher} 依赖抽象接口而非具体 tile 类，符合依赖倒置原则。
 	 *
-	 * @since 2.1.0
+	 * @since 2.0.9
 	 */
 	default void productivebeesgenesis$onAe2FluidPushComplete() {
 	}

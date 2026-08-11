@@ -1,62 +1,61 @@
 package com.ayoshiko.productivebeesgenesis.compat.kubejs;
 
-import java.util.List;
-import java.util.Map;
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * 蜜蜂配方注册事件
- * <br/>
- * 在 KubeJS 配方加载阶段（beforeRecipeLoading）触发，允许整合包作者通过脚本
- * 动态添加 ProductiveBees 的蜜蜂相关配方：
- * <ul>
- *   <li>繁殖配方（bee_breeding）— 两只亲代蜜蜂繁殖出子代</li>
- *   <li>钓鱼配方（bee_fishing）— 在特定群系钓鱼获得蜜蜂</li>
- *   <li>转化配方（bee_conversion）— 用物品将源蜜蜂转化为目标蜜蜂</li>
- *   <li>生成配方（bee_spawning）— 在特定群系的蜂巢中生成蜜蜂</li>
- *   <li>离心机配方（centrifuge）— 离心蜂蜜comb获得产物</li>
- *   <li>蜂箱产出配方（advanced_beehive）— 蜜蜂在蜂箱中产出comb</li>
- *   <li>mek_data 合成配方（mekanism:mek_data）— Mekanism 数据合成</li>
- * </ul>
- * <p>
- * 原理：通过 {@link KubeJSPlugin#beforeRecipeLoading} 钩子获取原版配方 JSON 映射，
- * 将脚本构建的配方 JSON 直接注入该映射，由 RecipeManager 统一解析。
- * <p>
- * 用法示例（server_scripts）：
- * <pre>{@code
- * MyriadBeeEvents.REGISTER.register(event => {
- *     // 繁殖配方
- *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee', 'productivebees:myriadcreations')
- *
- *     // 钓鱼配方（群系列表或标签）
- *     event.addFishing('mymod:custom_fishing', 'productivebees:myriadcreations', ['minecraft:ocean'], 0.15)
- *
- *     // 转化配方
- *     event.addConversion('mymod:custom_conversion', 'minecraft:bee', 'productivebees:myriadcreations', 'minecraft:stick', 1.0)
- *
- *     // 生成配方
- *     event.addSpawning('mymod:custom_spawning', 'productivebees:stone_nest', 'productivebees:myriadcreations', '#c:is_plains')
- *
- *     // 离心机配方（使用默认流体和 processingTime）
- *     event.addCentrifuge('mymod:custom_centrifuge', 'productivebees:myriadcreations', ['productivebees:wax|1.0', '#productivebees:configurable_honeycombs|1.0'])
- *
- *     // 离心机配方（自定义流体和 processingTime）
- *     event.addCentrifuge('mymod:custom_centrifuge2', 'productivebees:myriadcreations', ['productivebees:wax|0.5'], 500, 'minecraft:water', 100)
- *
- *     // 蜂箱产出配方
- *     event.addBeeProduce('mymod:custom_produce', 'productivebees:myriadcreations', ['productivebees:configurable_honeycomb|1.0'])
- *
- *     // mek_data 合成配方
- *     event.addMekData('mymod:custom_mek_data', ['ABC', 'DEF', 'GHI'], {A: 'minecraft:iron_ingot', B: 'minecraft:gold_ingot'}, 'mymod:custom_item')
- * })
- * }</pre>
- */
+	 * 蜜蜂配方注册事件
+	 * <br/>
+	 * 在 KubeJS 配方加载阶段（beforeRecipeLoading）触发，允许整合包作者通过脚本
+	 * 动态添加 ProductiveBees 的蜜蜂相关配方：
+	 * <ul>
+	 *   <li>繁殖配方（bee_breeding）— 两只亲代蜜蜂繁殖出子代</li>
+	 *   <li>钓鱼配方（bee_fishing）— 在特定群系钓鱼获得蜜蜂</li>
+	 *   <li>转化配方（bee_conversion）— 用物品将源蜜蜂转化为目标蜜蜂</li>
+	 *   <li>生成配方（bee_spawning）— 在特定群系的蜂巢中生成蜜蜂</li>
+	 *   <li>离心机配方（centrifuge）— 离心蜂蜜comb获得产物</li>
+	 *   <li>蜂箱产出配方（advanced_beehive）— 蜜蜂在蜂箱中产出comb</li>
+	 *   <li>mek_data 合成配方（mekanism:mek_data）— Mekanism 数据合成</li>
+	 * </ul>
+	 * <p>
+	 * 原理：通过 {@link KubeJSPlugin#beforeRecipeLoading} 钩子获取原版配方 JSON 映射，
+	 * 将脚本构建的配方 JSON 直接注入该映射，由 RecipeManager 统一解析。
+	 * <p>
+	 * 用法示例（server_scripts）：
+	 * <pre>{@code
+	 * MyriadBeeEvents.REGISTER.register(event => {
+	 *     // 繁殖配方
+	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee', 'productivebees:myriadcreations')
+	 *
+	 *     // 钓鱼配方（群系列表或标签）
+	 *     event.addFishing('mymod:custom_fishing', 'productivebees:myriadcreations', ['minecraft:ocean'], 0.15)
+	 *
+	 *     // 转化配方
+	 *     event.addConversion('mymod:custom_conversion', 'minecraft:bee', 'productivebees:myriadcreations', 'minecraft:stick', 1.0)
+	 *
+	 *     // 生成配方
+	 *     event.addSpawning('mymod:custom_spawning', 'productivebees:stone_nest', 'productivebees:myriadcreations', '#c:is_plains')
+	 *
+	 *     // 离心机配方（使用默认流体和 processingTime）
+	 *     event.addCentrifuge('mymod:custom_centrifuge', 'productivebees:myriadcreations', ['productivebees:wax|1.0', '#productivebees:configurable_honeycombs|1.0'])
+	 *
+	 *     // 离心机配方（自定义流体和 processingTime）
+	 *     event.addCentrifuge('mymod:custom_centrifuge2', 'productivebees:myriadcreations', ['productivebees:wax|0.5'], 500, 'minecraft:water', 100)
+	 *
+	 *     // 蜂箱产出配方
+	 *     event.addBeeProduce('mymod:custom_produce', 'productivebees:myriadcreations', ['productivebees:configurable_honeycomb|1.0'])
+	 *
+	 *     // mek_data 合成配方
+	 *     event.addMekData('mymod:custom_mek_data', ['ABC', 'DEF', 'GHI'], {A: 'minecraft:iron_ingot', B: 'minecraft:gold_ingot'}, 'mymod:custom_item')
+	 * })
+	 * }</pre>
+	 */
 public class MyriadBeeRegisterEventJS implements KubeEvent {
 
 	private final Map<ResourceLocation, JsonElement> recipeJsons;

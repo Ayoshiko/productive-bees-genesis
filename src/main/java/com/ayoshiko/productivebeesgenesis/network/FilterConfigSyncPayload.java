@@ -1,35 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.List;
+
 /**
- * 客户端 → 服务端：万象创世过滤配置同步数据包（Task 12）
- * <p>
- * 多人游戏下客户端无法直接修改 SERVER 配置 — 客户端的 SERVER 配置只是
- * NeoForge 在配置阶段下发的只读同步副本。直接 {@code ConfigValue.set()} 仅修改
- * 客户端本地副本，不会同步到服务端，下次同步还会被覆盖。
- * <p>
- * 此数据包将 {@code FilterListScreen} 的编辑结果发送到服务端，由服务端校验权限与
- * 数据后写入 SERVER 配置并持久化，再由 NeoForge 原生 {@code ConfigSync} 机制
- * 自动将变更同步到所有客户端（包括发起者）。
- * <p>
- * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 256 字符，
- * 实际承载能力远超需求（列表上限 512 条）。
- * <p>
- * <b>输入校验</b>：单条字符串长度上限 {@value #MAX_STRING_LENGTH} 字符，
- * 超长时解码抛出异常，由网络层拒绝该数据包，防止恶意客户端发送超长字符串导致 OOM。
- *
- * @param filterModeName 过滤模式枚举名称（DISABLED/BLACKLIST/WHITELIST）
- * @param beeTypes       蜜蜂类型 ID 列表（不可变拷贝）
- */
+	 * 客户端 → 服务端：万象创世过滤配置同步数据包（Task 12）
+	 * <p>
+	 * 多人游戏下客户端无法直接修改 SERVER 配置 — 客户端的 SERVER 配置只是
+	 * NeoForge 在配置阶段下发的只读同步副本。直接 {@code ConfigValue.set()} 仅修改
+	 * 客户端本地副本，不会同步到服务端，下次同步还会被覆盖。
+	 * <p>
+	 * 此数据包将 {@code FilterListScreen} 的编辑结果发送到服务端，由服务端校验权限与
+	 * 数据后写入 SERVER 配置并持久化，再由 NeoForge 原生 {@code ConfigSync} 机制
+	 * 自动将变更同步到所有客户端（包括发起者）。
+	 * <p>
+	 * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 256 字符，
+	 * 实际承载能力远超需求（列表上限 512 条）。
+	 * <p>
+	 * <b>输入校验</b>：单条字符串长度上限 {@value #MAX_STRING_LENGTH} 字符，
+	 * 超长时解码抛出异常，由网络层拒绝该数据包，防止恶意客户端发送超长字符串导致 OOM。
+	 *
+	 * @param filterModeName 过滤模式枚举名称（DISABLED/BLACKLIST/WHITELIST）
+	 * @param beeTypes       蜜蜂类型 ID 列表（不可变拷贝）
+	 */
 public record FilterConfigSyncPayload(
 		String filterModeName,
 		List<String> beeTypes

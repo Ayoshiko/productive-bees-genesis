@@ -1,11 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.concurrent.ConcurrentHashMap;
-
-import javax.annotation.Nonnull;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import net.minecraft.resources.ResourceLocation;
@@ -14,23 +9,27 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
+import javax.annotation.Nonnull;
+
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * 蜜蜂流体输出解析器 — 从离心配方推断流体输出类型
- * <br/>
- * SRP：专门负责从蜜蜂的离心机配方推断流体输出类型，与产出物品处理解耦。
- * <p>
- * 模块 2+3：原 {@code BeeProduceProcessor} 硬编码 250mB 蜂蜜无条件注入所有蜜蜂，
- * 导致时间流体蜜脾等非蜂蜜蜜蜂也产出蜂蜜。本类通过 {@link CentrifugeRecipeIndex}
- * 查询蜜蜂对应的离心配方，从配方流体输出推断是否为蜂蜜：
- * <ul>
- *   <li>流体为蜂蜜：返回 {@code FluidStack(honey, 250)}（机械蜂箱注入蜂蜜）</li>
- *   <li>流体为其他（如时间流体）：返回 {@code FluidStack.EMPTY}（不注入蜂蜜，流体由离心机处理）</li>
- *   <li>无离心配方：返回 {@code FluidStack(honey, 250)}（默认蜂蜜，向后兼容）</li>
- * </ul>
- * <p>
- * 线程安全：使用 {@link ConcurrentHashMap} 缓存查询结果，方块实体在服务端单线程执行，
- * ConcurrentHashMap 提供防御性保护。缓存失效通过 {@link #invalidateCache()} 在配方重载时清空。
- */
+	 * 蜜蜂流体输出解析器 — 从离心配方推断流体输出类型
+	 * <br/>
+	 * SRP：专门负责从蜜蜂的离心机配方推断流体输出类型，与产出物品处理解耦。
+	 * <p>
+	 * 模块 2+3：原 {@code BeeProduceProcessor} 硬编码 250mB 蜂蜜无条件注入所有蜜蜂，
+	 * 导致时间流体蜜脾等非蜂蜜蜜蜂也产出蜂蜜。本类通过 {@link CentrifugeRecipeIndex}
+	 * 查询蜜蜂对应的离心配方，从配方流体输出推断是否为蜂蜜：
+	 * <ul>
+	 *   <li>流体为蜂蜜：返回 {@code FluidStack(honey, 250)}（机械蜂箱注入蜂蜜）</li>
+	 *   <li>流体为其他（如时间流体）：返回 {@code FluidStack.EMPTY}（不注入蜂蜜，流体由离心机处理）</li>
+	 *   <li>无离心配方：返回 {@code FluidStack(honey, 250)}（默认蜂蜜，向后兼容）</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：使用 {@link ConcurrentHashMap} 缓存查询结果，方块实体在服务端单线程执行，
+	 * ConcurrentHashMap 提供防御性保护。缓存失效通过 {@link #invalidateCache()} 在配方重载时清空。
+	 */
 public final class BeeFluidOutputResolver {
 
 	/** 机械蜂箱每次产出注入的蜂蜜量（mB）— 与 PB 原版蜂箱行为一致 */

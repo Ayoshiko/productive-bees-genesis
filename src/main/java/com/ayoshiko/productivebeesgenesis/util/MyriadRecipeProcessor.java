@@ -1,12 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.List;
-import java.util.function.Supplier;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeBreedingRecipe;
@@ -20,26 +16,29 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.biome.Biome;
 
+import java.util.List;
+import java.util.function.Supplier;
+
 /**
- * 万象创世单配方处理器
- * <br/>
- * 从 {@link BeeRecipeReloader} 抽离，负责处理单个配方的修改/移除决策。
- * <p>
- * 处理 5 种 PB 配方类型：
- * <ul>
- *   <li>{@link BeeFishingRecipe} — 钓鱼配方：修改概率与群系，或禁用</li>
- *   <li>{@link BeeBreedingRecipe} — 繁殖配方：修改亲代，或禁用</li>
- *   <li>{@link BeeSpawningRecipe} — 蜂巢生成配方：修改蜂巢物品与群系，或禁用</li>
- *   <li>{@link BeeConversionRecipe} — 蜜蜂转化配方：用其他物品转化获得万象创世，或禁用</li>
- *   <li>{@link AdvancedBeehiveRecipe} — 蜜蜂产出配方：万象创世蜜脾产出参数，或禁用</li>
- * </ul>
- * 返回值约定：
- * <ul>
- *   <li>null — 移除该配方</li>
- *   <li>原 holder — 保留该配方不变</li>
- *   <li>新 holder — 替换为新配方</li>
- * </ul>
- */
+	 * 万象创世单配方处理器
+	 * <br/>
+	 * 从 {@link BeeRecipeReloader} 抽离，负责处理单个配方的修改/移除决策。
+	 * <p>
+	 * 处理 5 种 PB 配方类型：
+	 * <ul>
+	 *   <li>{@link BeeFishingRecipe} — 钓鱼配方：修改概率与群系，或禁用</li>
+	 *   <li>{@link BeeBreedingRecipe} — 繁殖配方：修改亲代，或禁用</li>
+	 *   <li>{@link BeeSpawningRecipe} — 蜂巢生成配方：修改蜂巢物品与群系，或禁用</li>
+	 *   <li>{@link BeeConversionRecipe} — 蜜蜂转化配方：用其他物品转化获得万象创世，或禁用</li>
+	 *   <li>{@link AdvancedBeehiveRecipe} — 蜜蜂产出配方：万象创世蜜脾产出参数，或禁用</li>
+	 * </ul>
+	 * 返回值约定：
+	 * <ul>
+	 *   <li>null — 移除该配方</li>
+	 *   <li>原 holder — 保留该配方不变</li>
+	 *   <li>新 holder — 替换为新配方</li>
+	 * </ul>
+	 */
 public final class MyriadRecipeProcessor {
 
 	private final RecipeIngredientFactory ingredientFactory;

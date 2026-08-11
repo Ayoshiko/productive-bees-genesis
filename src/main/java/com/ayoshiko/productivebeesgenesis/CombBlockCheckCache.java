@@ -1,11 +1,5 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.List;
-import java.util.Map;
-import java.util.function.Predicate;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
@@ -15,20 +9,26 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
+
 /**
- * 离心机空转拦截缓存工具类
- * <p>
- * 从 {@link AbstractCombEventHandler} 抽取的空转拦截逻辑，遵循单一职责原则（SRP）：
- * <ul>
- *   <li>按 handler 实例缓存"输出已满"判断结果，避免加速环境下重复扫描输出槽</li>
- *   <li>50ms 冷却窗口复用缓存，覆盖多次 tick 调用</li>
- *   <li>WeakHashMap 弱引用 key，BlockEntity 被 GC 时缓存条目自动回收</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：cacheMap 由调用方提供 {@link java.util.Collections#synchronizedMap} 包装的
- * {@link java.util.WeakHashMap}，复合操作（get + put）在 synchronized 块内执行，
- * 确保线程安全。
- */
+	 * 离心机空转拦截缓存工具类
+	 * <p>
+	 * 从 {@link AbstractCombEventHandler} 抽取的空转拦截逻辑，遵循单一职责原则（SRP）：
+	 * <ul>
+	 *   <li>按 handler 实例缓存"输出已满"判断结果，避免加速环境下重复扫描输出槽</li>
+	 *   <li>50ms 冷却窗口复用缓存，覆盖多次 tick 调用</li>
+	 *   <li>WeakHashMap 弱引用 key，BlockEntity 被 GC 时缓存条目自动回收</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：cacheMap 由调用方提供 {@link java.util.Collections#synchronizedMap} 包装的
+	 * {@link java.util.WeakHashMap}，复合操作（get + put）在 synchronized 块内执行，
+	 * 确保线程安全。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

@@ -1,9 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.mojang.blaze3d.systems.RenderSystem;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
@@ -19,32 +18,32 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.joml.Vector3f;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 客户端创世蜜蜂事件处理器抽象基类
- * <br/>
- * 使用模板方法模式封装 万象创世 与 无尽·创世 两个客户端处理器的公共流程：
- * <ol>
- *   <li>{@link #handleClientTick} — 跳帧粒子生成框架</li>
- *   <li>{@link #handleRenderLivingPost} — 发光轮廓渲染框架（含 RenderSystem 状态重置）</li>
- *   <li>{@link #handleEntityJoinLevel} — 实体加入世界粒子爆发框架</li>
- *   <li>{@link #hsvToRgb} — HSV→RGB 公共转换</li>
- * </ol>
- * <p>
- * 差异化参数与颜色逻辑由子类通过抽象方法提供，确保两者视觉效果完全独立：
- * <ul>
- *   <li>万象创世：8秒彩虹循环、轻柔不饱和</li>
- *   <li>无尽·创世：10秒宇宙色循环、星尘调色板</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：所有方法仅在客户端 tick/render 线程调用，单线程访问，无需同步。
- * 跳帧计数器为实例字段，由各子类单例独享，互不干扰。
- * <p>
- * <b>使用方式</b>：子类声明单例 {@code INSTANCE}，静态 {@code @SubscribeEvent} 方法委托给
- * {@code INSTANCE.handleXxx(event)}，以兼容 {@code @EventBusSubscriber} 的静态注册要求，
- * 同时保留各自被 Mixin 静态引用的颜色方法。
- */
+	 * 客户端创世蜜蜂事件处理器抽象基类
+	 * <br/>
+	 * 使用模板方法模式封装 万象创世 与 无尽·创世 两个客户端处理器的公共流程：
+	 * <ol>
+	 *   <li>{@link #handleClientTick} — 跳帧粒子生成框架</li>
+	 *   <li>{@link #handleRenderLivingPost} — 发光轮廓渲染框架（含 RenderSystem 状态重置）</li>
+	 *   <li>{@link #handleEntityJoinLevel} — 实体加入世界粒子爆发框架</li>
+	 *   <li>{@link #hsvToRgb} — HSV→RGB 公共转换</li>
+	 * </ol>
+	 * <p>
+	 * 差异化参数与颜色逻辑由子类通过抽象方法提供，确保两者视觉效果完全独立：
+	 * <ul>
+	 *   <li>万象创世：8秒彩虹循环、轻柔不饱和</li>
+	 *   <li>无尽·创世：10秒宇宙色循环、星尘调色板</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：所有方法仅在客户端 tick/render 线程调用，单线程访问，无需同步。
+	 * 跳帧计数器为实例字段，由各子类单例独享，互不干扰。
+	 * <p>
+	 * <b>使用方式</b>：子类声明单例 {@code INSTANCE}，静态 {@code @SubscribeEvent} 方法委托给
+	 * {@code INSTANCE.handleXxx(event)}，以兼容 {@code @EventBusSubscriber} 的静态注册要求，
+	 * 同时保留各自被 Mixin 静态引用的颜色方法。
+	 */
 public abstract class AbstractClientCombEventHandler {
 
 	/** 主粒子（tick/加入世界）Dust 粒子缩放 */

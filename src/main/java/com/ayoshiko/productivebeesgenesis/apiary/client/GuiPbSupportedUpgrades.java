@@ -1,18 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
 import mekanism.client.gui.tooltip.TooltipUtils;
-import mekanism.client.render.IFancyFontRenderer;
 import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import mekanism.client.render.IFancyFontRenderer;
 import mekanism.common.lib.Color;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
@@ -22,20 +17,24 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
- * PB支持的升级显示组件
- * <br/>
- * 1:1复刻MEK GuiSupportedUpgrades的布局：
- * <ul>
- *   <li>"Supported:"文字标签在左侧</li>
- *   <li>12x12图标在0.75F缩放下排列</li>
- *   <li>不支持的升级半透明灰显</li>
- *   <li>鼠标悬停显示tooltip</li>
- * </ul>
- * <p>
- * 重构：将 UPGRADE_TYPES 与 SUPPORTED_TYPES 改为实例字段，由构造函数注入。
- * 蜂箱版传入 8 种升级类型，离心机版仅传入 6 种（无 GENE_SAMPLER/BLOCK）。
- */
+	 * PB支持的升级显示组件
+	 * <br/>
+	 * 1:1复刻MEK GuiSupportedUpgrades的布局：
+	 * <ul>
+	 *   <li>"Supported:"文字标签在左侧</li>
+	 *   <li>12x12图标在0.75F缩放下排列</li>
+	 *   <li>不支持的升级半透明灰显</li>
+	 *   <li>鼠标悬停显示tooltip</li>
+	 * </ul>
+	 * <p>
+	 * 重构：将 UPGRADE_TYPES 与 SUPPORTED_TYPES 改为实例字段，由构造函数注入。
+	 * 蜂箱版传入 8 种升级类型，离心机版仅传入 6 种（无 GENE_SAMPLER/BLOCK）。
+	 */
 public class GuiPbSupportedUpgrades extends GuiElement {
 
 	private static final Component SUPPORTED = Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.supported");

@@ -1,28 +1,28 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.state;
 
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-
 /**
- * 蜜蜂选择屏幕的状态容器
- * <p>
- * 将搜索文本、滚动偏移、过滤开关、排序规则、分组折叠状态及已选蜜蜂集合从 Screen 中剥离，
- * 便于状态持久化、单元测试以及后续全选/反选等批量操作的扩展。
- * <p>
- * 设计原则：单一职责（SRP），仅维护选择界面的运行时状态，不处理渲染或配置。
- * <br/>
- * 线程安全：仅限客户端渲染线程（主线程）单线程访问。所有字段（含 Set 集合）
- * 均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
- * 及其组合组件在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
- */
+	 * 蜜蜂选择屏幕的状态容器
+	 * <p>
+	 * 将搜索文本、滚动偏移、过滤开关、排序规则、分组折叠状态及已选蜜蜂集合从 Screen 中剥离，
+	 * 便于状态持久化、单元测试以及后续全选/反选等批量操作的扩展。
+	 * <p>
+	 * 设计原则：单一职责（SRP），仅维护选择界面的运行时状态，不处理渲染或配置。
+	 * <br/>
+	 * 线程安全：仅限客户端渲染线程（主线程）单线程访问。所有字段（含 Set 集合）
+	 * 均由 {@link com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen}
+	 * 及其组合组件在主线程读写，不存在跨线程访问，故使用普通非并发容器即可。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

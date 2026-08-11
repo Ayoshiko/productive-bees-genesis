@@ -1,15 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
-
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -20,22 +11,30 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
+
 /**
- * 蜂箱产物溢出缓冲区
- * <br/>
- * 缓存 distributeToOutput 失败的剩余 ItemStack，下次 tick 重试注入输出槽。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅缓存与重试注入，不涉及产出计算或槽位管理</li>
- *   <li>线程安全：synchronized 保护 offer/tickRedistribute/save/load，与 NBT 同步线程互斥</li>
- *   <li>容量上限：MAX_BUFFER_GROUPS=64，超出时丢弃最旧组并 WARN（防 OOM）</li>
- *   <li>FIFO 淘汰：ArrayDeque 实现，pollFirst/addLast 均 O(1)</li>
- * </ul>
- * <p>
- * F4 修复：解决 BeeProduceProcessor.distributeToOutput 输出槽满载时丢弃剩余产物的问题。
- * 产物守恒：缓冲区内容通过 saveApiaryState 序列化到 NBT，方块破坏时随 BLOCK_ENTITY_DATA 保留。
- */
+	 * 蜂箱产物溢出缓冲区
+	 * <br/>
+	 * 缓存 distributeToOutput 失败的剩余 ItemStack，下次 tick 重试注入输出槽。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅缓存与重试注入，不涉及产出计算或槽位管理</li>
+	 *   <li>线程安全：synchronized 保护 offer/tickRedistribute/save/load，与 NBT 同步线程互斥</li>
+	 *   <li>容量上限：MAX_BUFFER_GROUPS=64，超出时丢弃最旧组并 WARN（防 OOM）</li>
+	 *   <li>FIFO 淘汰：ArrayDeque 实现，pollFirst/addLast 均 O(1)</li>
+	 * </ul>
+	 * <p>
+	 * F4 修复：解决 BeeProduceProcessor.distributeToOutput 输出槽满载时丢弃剩余产物的问题。
+	 * 产物守恒：缓冲区内容通过 saveApiaryState 序列化到 NBT，方块破坏时随 BLOCK_ENTITY_DATA 保留。
+	 */
 public final class ApiaryOutputBuffer {
 
 	/** 缓冲区容量上限（组数） — 防止输出槽长期满载时缓冲区无限增长导致 OOM */
@@ -282,7 +281,6 @@ public final class ApiaryOutputBuffer {
 			List<? extends IInventorySlot> externalSlots,
 			Predicate<ItemStack> validator) {
 		if (bufferedStacks.isEmpty() || externalSlots == null || externalSlots.isEmpty()) return 0;
-
 		int slotCount = externalSlots.size();
 		// 使用独立预扫描数组（与 tickRedistribute 分离，避免槽位数不同时反复扩容）
 		if (reusableExternalStacks.length != slotCount) {
@@ -373,7 +371,6 @@ public final class ApiaryOutputBuffer {
 			bufferedStacks.addAll(remainingBuffer);
 			tile.setChanged();
 		}
-
 		return totalTransferred;
 	}
 

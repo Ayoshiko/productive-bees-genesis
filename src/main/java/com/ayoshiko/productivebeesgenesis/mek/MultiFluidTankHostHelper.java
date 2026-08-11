@@ -1,28 +1,27 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.Collections;
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * 多流体槽查询委托 Helper(SRP:集中 IMultiFluidTankHost 与 PbRecipeContext 流体槽相关实现)
- * <br/>
- * 抽取三个工厂类({@link AbstractMekCentrifugeFactory} / {@link TileEntityExtraMekCentrifugeFactory} /
- * {@link TileEntityEMExtraMekCentrifugeFactory})中重复的流体槽查询/状态检查逻辑,
- * 消除代码重复,遵循 DRY 原则,同时降低工厂文件行数至 500 以内。
- * <p>
- * <b>线程安全:</b>所有方法均为无状态静态方法,依赖入参的线程安全性。
- * {@link MultiFluidTankHolder} 内部使用 ConcurrentHashMap + CopyOnWriteArrayList 保证并发安全。
- * <p>
- * <b>NPE 防御:</b>所有方法对 holder/primary 入参均做 null 检查,避免 NPE。
- *
- * @since Task 11
- */
+	 * 多流体槽查询委托 Helper(SRP:集中 IMultiFluidTankHost 与 PbRecipeContext 流体槽相关实现)
+	 * <br/>
+	 * 抽取三个工厂类({@link AbstractMekCentrifugeFactory} / {@link TileEntityExtraMekCentrifugeFactory} /
+	 * {@link TileEntityEMExtraMekCentrifugeFactory})中重复的流体槽查询/状态检查逻辑,
+	 * 消除代码重复,遵循 DRY 原则,同时降低工厂文件行数至 500 以内。
+	 * <p>
+	 * <b>线程安全:</b>所有方法均为无状态静态方法,依赖入参的线程安全性。
+	 * {@link MultiFluidTankHolder} 内部使用 ConcurrentHashMap + CopyOnWriteArrayList 保证并发安全。
+	 * <p>
+	 * <b>NPE 防御:</b>所有方法对 holder/primary 入参均做 null 检查,避免 NPE。
+	 *
+	 * @since Task 11
+	 */
 public final class MultiFluidTankHostHelper {
 
 	/** 工具类禁止实例化 */
@@ -219,7 +218,7 @@ public final class MultiFluidTankHostHelper {
 	 * 检查是否还能分配新槽接收新流体类型(PbRecipeContext.canAllocateNewFluidTank)
 	 * <br/>
 	 * MULTI_PER_FLUID 模式检查未映射空槽数量;SINGLE 模式始终返回 false。
-	 * v2.1.0 修复 BUG #1:原实现 `getTankCount() < getMaxTanks()` 永远返回 false,
+	 * v2.0.9 修复 BUG #1:原实现 `getTankCount() < getMaxTanks()` 永远返回 false,
 	 * 因为 tanksInOrder 构造时预分配了 maxTanks 个槽,getTankCount() 始终等于 getMaxTanks()。
 	 * 改用 getEmptyTankCount() 检查未映射空槽数,正确反映可分配状态。
 	 *

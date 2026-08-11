@@ -1,25 +1,24 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
-import cy.jdkdigital.productivebees.init.ModDataComponents;
-import cy.jdkdigital.productivebees.init.ModItems;
-
 /**
- * MEK 离心机统一标记接口。
- * 用于 TileComponentEjectorMixin 通过 instanceof 统一判断所有离心机类型，
- * 避免硬依赖 ME/EME 可选模组类引发 ClassNotFoundException。
- * <p>
- * Task 16: 暴露输出槽内容版本号，供 Ejector Mixin 在输出槽内容未变化时跳过
- * 高频的 outputItems 调用，降低 TimeWand 高倍加速下的 CPU 开销。
- * <p>
- * Step 5: 暴露输出槽物品总数（O(1) 读取），供 Ejector Mixin 替代
- * O(processes×3) 遍历的 {@code countOutputItems}，进一步降低高频弹出时的 CPU 开销。
- * <p>
- * 新增：输入槽访问方法，供蜂箱→离心机直连快速通道使用，
- * 绕过 Ejector 节流和 Capability 系统开销，最大化直连弹出效率。
- */
+	 * MEK 离心机统一标记接口。
+	 * 用于 TileComponentEjectorMixin 通过 instanceof 统一判断所有离心机类型，
+	 * 避免硬依赖 ME/EME 可选模组类引发 ClassNotFoundException。
+	 * <p>
+	 * Task 16: 暴露输出槽内容版本号，供 Ejector Mixin 在输出槽内容未变化时跳过
+	 * 高频的 outputItems 调用，降低 TimeWand 高倍加速下的 CPU 开销。
+	 * <p>
+	 * Step 5: 暴露输出槽物品总数（O(1) 读取），供 Ejector Mixin 替代
+	 * O(processes×3) 遍历的 {@code countOutputItems}，进一步降低高频弹出时的 CPU 开销。
+	 * <p>
+	 * 新增：输入槽访问方法，供蜂箱→离心机直连快速通道使用，
+	 * 绕过 Ejector 节流和 Capability 系统开销，最大化直连弹出效率。
+	 */
 public interface IMekCentrifugeTile {
 
 	/** Invalidates recipe and validation caches after the per-machine smelting mode changes. */

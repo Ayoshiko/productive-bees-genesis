@@ -1,41 +1,41 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-
 /**
- * 物品栈合并工具类
- * <br/>
- * 将多个相同物品+组件的栈合并为更少的栈（不超过最大堆叠数），
- * 用于批量产出场景下减少 insertItem 调用次数。
- * <p>
- * 性能优化（基于 Spark 分析 35.54% CPU 热点）：
- * <br/>
- * 旧版"全同质快速路径"仍需 N-1 次 {@link ItemStack#isSameItemSameComponents} 调用，
- * 每次调用经过 GeckoLib 拦截 → {@code PatchedDataComponentMap.equals()} →
- * {@code Reference2ObjectMap.equals()} → {@code containsAll()}，复杂度 O(n²)（n=组件数）。
- * <p>
- * 新版改为 <b>hashCode 预分组</b>策略：
- * <ol>
- *   <li>对每个 stack 计算一次 {@code getComponents().hashCode()}（O(n) 复杂度）</li>
- *   <li>以 (Item identity, componentHash) 为 key 分组到 HashMap</li>
- *   <li>同组 stack 几乎必然完全相同（hash 冲突概率极低）</li>
- *   <li>仅在 hash 冲突时才回退到 {@code isSameItemSameComponents} 线性合并</li>
- * </ol>
- * 总复杂度从 O(N²×n²) 降为 O(N×n)。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅做物品栈合并，不涉及槽位或配方逻辑</li>
- *   <li>无状态：纯静态方法，线程安全</li>
- * </ul>
- */
+	 * 物品栈合并工具类
+	 * <br/>
+	 * 将多个相同物品+组件的栈合并为更少的栈（不超过最大堆叠数），
+	 * 用于批量产出场景下减少 insertItem 调用次数。
+	 * <p>
+	 * 性能优化（基于 Spark 分析 35.54% CPU 热点）：
+	 * <br/>
+	 * 旧版"全同质快速路径"仍需 N-1 次 {@link ItemStack#isSameItemSameComponents} 调用，
+	 * 每次调用经过 GeckoLib 拦截 → {@code PatchedDataComponentMap.equals()} →
+	 * {@code Reference2ObjectMap.equals()} → {@code containsAll()}，复杂度 O(n²)（n=组件数）。
+	 * <p>
+	 * 新版改为 <b>hashCode 预分组</b>策略：
+	 * <ol>
+	 *   <li>对每个 stack 计算一次 {@code getComponents().hashCode()}（O(n) 复杂度）</li>
+	 *   <li>以 (Item identity, componentHash) 为 key 分组到 HashMap</li>
+	 *   <li>同组 stack 几乎必然完全相同（hash 冲突概率极低）</li>
+	 *   <li>仅在 hash 冲突时才回退到 {@code isSameItemSameComponents} 线性合并</li>
+	 * </ol>
+	 * 总复杂度从 O(N²×n²) 降为 O(N×n)。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅做物品栈合并，不涉及槽位或配方逻辑</li>
+	 *   <li>无状态：纯静态方法，线程安全</li>
+	 * </ul>
+	 */
 public final class ItemStackMergeHelper {
 
 	/** 工具类禁止实例化 */

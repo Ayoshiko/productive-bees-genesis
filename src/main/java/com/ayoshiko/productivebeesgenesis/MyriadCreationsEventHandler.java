@@ -1,60 +1,59 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 /**
- * 万象创世蜜蜂事件处理器
- * <br/>
- * 负责：
- * <ol>
- *   <li>蜜蜂类型缓存管理（定期从PB数据源刷新，应用配置过滤）— 委托给 {@link MyriadBeeTypeCache}</li>
- *   <li>随机蜜脾/蜜脾块生成（供Mixin调用）— 委托给 {@link RandomHoneycombSelector}</li>
- *   <li>离心机追加产出逻辑 + 空转拦截 — 委托给 {@link CombBlockCheckCache}</li>
- * </ol>
- * <p>
- * 公共逻辑继承自 {@link AbstractCombEventHandler}，本类仅保留万象创世特有的：
- * <ul>
- *   <li>配置文件黑白名单过滤（在 {@link MyriadBeeTypeCache} 中实现）</li>
- *   <li>基于 bee_type 数据组件的类型判断</li>
- * </ul>
- * <p>
- * 注：万象创世蜜蜂使用 PB 的 configurable_honeycomb + bee_type 数据组件携带类型信息，
- * 不自动生成 configurable_honeycomb（createComb: false），与原 PB 体系兼容。
- * <p>
- * <b>职责分离</b>（v1.7.0 拆分）：
- * <ul>
- *   <li>{@link MyriadBeeTypeCache} — 蜜蜂类型缓存生命周期管理</li>
- *   <li>{@link RandomHoneycombSelector} — 随机蜜脾/蜜脾块生成</li>
- *   <li>{@link MyriadSelectionCache} — 类型选择缓存</li>
- *   <li>{@link CombBlockCheckCache} — 空转拦截缓存</li>
- * </ul>
- * 本类仅作为事件订阅入口 + 公共 API 转发层。
- */
+	 * 万象创世蜜蜂事件处理器
+	 * <br/>
+	 * 负责：
+	 * <ol>
+	 *   <li>蜜蜂类型缓存管理（定期从PB数据源刷新，应用配置过滤）— 委托给 {@link MyriadBeeTypeCache}</li>
+	 *   <li>随机蜜脾/蜜脾块生成（供Mixin调用）— 委托给 {@link RandomHoneycombSelector}</li>
+	 *   <li>离心机追加产出逻辑 + 空转拦截 — 委托给 {@link CombBlockCheckCache}</li>
+	 * </ol>
+	 * <p>
+	 * 公共逻辑继承自 {@link AbstractCombEventHandler}，本类仅保留万象创世特有的：
+	 * <ul>
+	 *   <li>配置文件黑白名单过滤（在 {@link MyriadBeeTypeCache} 中实现）</li>
+	 *   <li>基于 bee_type 数据组件的类型判断</li>
+	 * </ul>
+	 * <p>
+	 * 注：万象创世蜜蜂使用 PB 的 configurable_honeycomb + bee_type 数据组件携带类型信息，
+	 * 不自动生成 configurable_honeycomb（createComb: false），与原 PB 体系兼容。
+	 * <p>
+	 * <b>职责分离</b>（v1.5.3 拆分）：
+	 * <ul>
+	 *   <li>{@link MyriadBeeTypeCache} — 蜜蜂类型缓存生命周期管理</li>
+	 *   <li>{@link RandomHoneycombSelector} — 随机蜜脾/蜜脾块生成</li>
+	 *   <li>{@link MyriadSelectionCache} — 类型选择缓存</li>
+	 *   <li>{@link CombBlockCheckCache} — 空转拦截缓存</li>
+	 * </ul>
+	 * 本类仅作为事件订阅入口 + 公共 API 转发层。
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault

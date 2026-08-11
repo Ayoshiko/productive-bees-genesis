@@ -1,36 +1,35 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.List;
-import java.util.function.Supplier;
-
-import org.jetbrains.annotations.Nullable;
-
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
- * 多流体槽委托 — 封装 {@link IMultiFluidTankHost} 和 {@link PbRecipeContext} 流体相关方法
- * <br/>
- * 从 {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory}
- * 和 {@link com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory} 抽取,
- * 遵循单一职责原则:集中管理多流体槽状态字段与查询逻辑,降低工厂方块实体的行数至 500 以内。
- * <p>
- * 设计原则:
- * <ul>
- *   <li>SRP — 仅负责多流体槽状态管理与查询,不涉及配方处理或 GUI 逻辑</li>
- *   <li>DIP — 通过 {@link Supplier}&lt;{@link Level}&gt; 依赖抽象,不直接持有 TileEntity 引用</li>
- *   <li>DRY — 消除 ME/EME 两个工厂类中重复的多流体槽方法实现</li>
- * </ul>
- * <p>
- * 线程安全:服务端单线程执行,字段无需同步。
- * {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder} 内部使用
- * ConcurrentHashMap + CopyOnWriteArrayList 保证并发安全。
- *
- * @since M1-2/M1-3 文件拆分
- */
+	 * 多流体槽委托 — 封装 {@link IMultiFluidTankHost} 和 {@link PbRecipeContext} 流体相关方法
+	 * <br/>
+	 * 从 {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory}
+	 * 和 {@link com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory} 抽取,
+	 * 遵循单一职责原则:集中管理多流体槽状态字段与查询逻辑,降低工厂方块实体的行数至 500 以内。
+	 * <p>
+	 * 设计原则:
+	 * <ul>
+	 *   <li>SRP — 仅负责多流体槽状态管理与查询,不涉及配方处理或 GUI 逻辑</li>
+	 *   <li>DIP — 通过 {@link Supplier}&lt;{@link Level}&gt; 依赖抽象,不直接持有 TileEntity 引用</li>
+	 *   <li>DRY — 消除 ME/EME 两个工厂类中重复的多流体槽方法实现</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全:服务端单线程执行,字段无需同步。
+	 * {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder} 内部使用
+	 * ConcurrentHashMap + CopyOnWriteArrayList 保证并发安全。
+	 *
+	 * @since M1-2/M1-3 文件拆分
+	 */
 public final class MultiFluidTankHostDelegate {
 
 	/** 流体输出槽 — 共享,接收 PB 配方的流体输出 */

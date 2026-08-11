@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -26,7 +23,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -43,17 +39,21 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * MEK通用机械蜂箱方块
- * <br/>
- * 参考MekCentrifugeBlock模式，支持Mekanism的Attribute系统。
- * 实现IHasTileEntity/ITypeBlock/IHasDescription接口，与Mekanism的GUI/侧面配置/升级体系兼容。
- * <p>
- * 设计原则：单一职责，本类仅负责方块行为（状态、交互、掉落、放置），
- * 方块实体逻辑由TileEntityMekApiary负责，BlockType定义由MekApiaryBlockType负责。
- */
+	 * MEK通用机械蜂箱方块
+	 * <br/>
+	 * 参考MekCentrifugeBlock模式，支持Mekanism的Attribute系统。
+	 * 实现IHasTileEntity/ITypeBlock/IHasDescription接口，与Mekanism的GUI/侧面配置/升级体系兼容。
+	 * <p>
+	 * 设计原则：单一职责，本类仅负责方块行为（状态、交互、掉落、放置），
+	 * 方块实体逻辑由TileEntityMekApiary负责，BlockType定义由MekApiaryBlockType负责。
+	 */
 public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockTypeTile<TILE>>
 		extends Block implements IHasDescription, ITypeBlock, IHasTileEntity<TILE> {
 

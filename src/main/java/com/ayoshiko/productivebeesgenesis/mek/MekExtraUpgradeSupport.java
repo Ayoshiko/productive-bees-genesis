@@ -3,24 +3,23 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.jerry.mekextras.api.ExtraUpgrade;
-
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentUpgrade;
 
 /**
- * MEKExtras升级支持构建器
- * <br/>
- * <b>类加载安全</b>：本类直接引用{@link ExtraUpgrade}（MEKExtras的API类），
- * 仅在{@link MekCompatHooks#isMekanismExtrasLoaded()}为true时由
- * {@link MekUpgradeSupport#forMachine()}委托加载。
- * 未安装MEKExtras时本类不会被加载，避免NoClassDefFoundError。
- * <p>
- * MEKExtras通过Mixin向{@link Upgrade}枚举注入STACK/CREATIVE，
- * 并在{@code Upgrade.<clinit>}的TAIL回调中设置{@link ExtraUpgrade}的静态字段。
- * 本类调用时Mixin已应用，ExtraUpgrade字段已填充。
- */
+	 * MEKExtras升级支持构建器
+	 * <br/>
+	 * <b>类加载安全</b>：本类直接引用{@link ExtraUpgrade}（MEKExtras的API类），
+	 * 仅在{@link MekCompatHooks#isMekanismExtrasLoaded()}为true时由
+	 * {@link MekUpgradeSupport#forMachine()}委托加载。
+	 * 未安装MEKExtras时本类不会被加载，避免NoClassDefFoundError。
+	 * <p>
+	 * MEKExtras通过Mixin向{@link Upgrade}枚举注入STACK/CREATIVE，
+	 * 并在{@code Upgrade.<clinit>}的TAIL回调中设置{@link ExtraUpgrade}的静态字段。
+	 * 本类调用时Mixin已应用，ExtraUpgrade字段已填充。
+	 */
 final class MekExtraUpgradeSupport {
 
 	/** 升级查询异常日志限流器（ms 模式，5 秒冷却）— 静态工具类无 Level 访问 */

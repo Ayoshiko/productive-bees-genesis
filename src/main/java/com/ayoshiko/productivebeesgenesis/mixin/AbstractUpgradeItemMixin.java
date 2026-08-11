@@ -1,14 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-
 import cy.jdkdigital.productivelib.common.item.AbstractUpgradeItem;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -16,39 +10,43 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * AbstractUpgradeItem Mixin — shift+右键对机器安装 PB 升级时一次填满到上限
- * <br/>
- * <b>问题背景</b>：PB 原版 {@link AbstractUpgradeItem#useOn} 在 shift+右键安装升级时
- * 强制 {@code stack.setCount(1)} 后调用 {@code insertItem}，每次仅安装 1 个，
- * 即使玩家手持 64 个升级也需右键 64 次。
- * <p>
- * <b>修复方案</b>：参照 MEK 原版 {@code ItemUpgrade.useOn} 传入 {@code stack.getCount()}
- * 给 {@code addUpgrades(upgrade, count)}，由 {@code Math.min(max-installed, maxAvailable)}
- * 决定实际安装数，实现"一次装满到上限"。
- * <p>
- * <b>实现原理</b>：
- * <ul>
- *   <li>在 {@code useOn} 方法 HEAD 处注入，cancellable = true</li>
- *   <li>仅当玩家潜行 + 服务端 + 方块实体为 {@link IPbUpgradeProvider} 时拦截</li>
- *   <li>通过 {@link PbUpgradeInventorySlot#getUpgradeType} 提取升级类型</li>
- *   <li>调用 {@link IPbUpgradeProvider#installPbUpgradeBulk} 批量安装</li>
- *   <li>安装成功时 {@code stack.shrink(added)} 消耗物品，返回 {@link InteractionResult#SUCCESS}</li>
- *   <li>不满足条件时不干预，让 PB 原版 useOn 逻辑执行</li>
- * </ul>
- * <p>
- * <b>类加载安全</b>：本 Mixin 仅引用 {@link IPbUpgradeProvider}（本模组接口）和
- * {@link PbUpgradeInventorySlot}/{@link PbUpgradeType}（本模组类），不依赖 ME/EME 可选 mod。
- * 通过 {@code instanceof IPbUpgradeProvider} 多态调用避免引用具体子类
- * （如 {@code TileEntityExtraMekCentrifugeFactory} 引用 ME 类），
- * 故本 Mixin 始终应用，无需在 {@link MixinConfigPlugin} 中条件过滤。
- * <p>
- * <b>线程安全</b>：useOn 在服务端主线程被调用（玩家右键交互），无并发。
- *
- * @since 1.10.0
- * @author Ayoshiko
- */
+	 * AbstractUpgradeItem Mixin — shift+右键对机器安装 PB 升级时一次填满到上限
+	 * <br/>
+	 * <b>问题背景</b>：PB 原版 {@link AbstractUpgradeItem#useOn} 在 shift+右键安装升级时
+	 * 强制 {@code stack.setCount(1)} 后调用 {@code insertItem}，每次仅安装 1 个，
+	 * 即使玩家手持 64 个升级也需右键 64 次。
+	 * <p>
+	 * <b>修复方案</b>：参照 MEK 原版 {@code ItemUpgrade.useOn} 传入 {@code stack.getCount()}
+	 * 给 {@code addUpgrades(upgrade, count)}，由 {@code Math.min(max-installed, maxAvailable)}
+	 * 决定实际安装数，实现"一次装满到上限"。
+	 * <p>
+	 * <b>实现原理</b>：
+	 * <ul>
+	 *   <li>在 {@code useOn} 方法 HEAD 处注入，cancellable = true</li>
+	 *   <li>仅当玩家潜行 + 服务端 + 方块实体为 {@link IPbUpgradeProvider} 时拦截</li>
+	 *   <li>通过 {@link PbUpgradeInventorySlot#getUpgradeType} 提取升级类型</li>
+	 *   <li>调用 {@link IPbUpgradeProvider#installPbUpgradeBulk} 批量安装</li>
+	 *   <li>安装成功时 {@code stack.shrink(added)} 消耗物品，返回 {@link InteractionResult#SUCCESS}</li>
+	 *   <li>不满足条件时不干预，让 PB 原版 useOn 逻辑执行</li>
+	 * </ul>
+	 * <p>
+	 * <b>类加载安全</b>：本 Mixin 仅引用 {@link IPbUpgradeProvider}（本模组接口）和
+	 * {@link PbUpgradeInventorySlot}/{@link PbUpgradeType}（本模组类），不依赖 ME/EME 可选 mod。
+	 * 通过 {@code instanceof IPbUpgradeProvider} 多态调用避免引用具体子类
+	 * （如 {@code TileEntityExtraMekCentrifugeFactory} 引用 ME 类），
+	 * 故本 Mixin 始终应用，无需在 {@link MixinConfigPlugin} 中条件过滤。
+	 * <p>
+	 * <b>线程安全</b>：useOn 在服务端主线程被调用（玩家右键交互），无并发。
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 */
 @Mixin(value = AbstractUpgradeItem.class, remap = false)
 public abstract class AbstractUpgradeItemMixin {
 

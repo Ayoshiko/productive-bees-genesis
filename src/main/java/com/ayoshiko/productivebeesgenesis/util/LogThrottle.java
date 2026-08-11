@@ -10,27 +10,27 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
- * 通用日志冷却器 — 限流高频日志，避免输出阻塞时刷屏拖慢 TPS
- * <br/>
- * 支持两种时间源：
- * <ul>
- *   <li><b>tick 模式</b>：基于 {@code Level.getGameTime()}，适用于方块实体 tick 逻辑</li>
- *   <li><b>ms 模式</b>：基于 {@code System.currentTimeMillis()}，适用于静态上下文无法获取 Level 的场景</li>
- * </ul>
- * 单个实例应只使用一种模式（tick 或 ms），共享的抑制计数仅在该模式下语义有效。
- * <p>
- * <b>线程安全</b>：使用 {@link AtomicLong} 记录上次日志时间与抑制计数，
- * 单字段读写原子。服务端单线程执行场景下 AtomicLong 作为可见性保证与安全冗余。
- * <p>
- * <b>静态便捷方法</b>：{@link #warn(String, String, Object...)} / {@link #error(String, String, Object...)}
- * 使用全局静态 {@link ConcurrentHashMap} 按 key 节流，实现多 tile 全局节流（非实例级）。
- * 使用 {@link System#nanoTime()} 单调时钟计时（与 Ae2PushBackoff 一致）。
- * <p>
- * <b>静态 API 线程安全</b>：节流判定使用 {@link ConcurrentHashMap#compute} 保证 check-and-update 原子性，
- * 避免并发线程同时通过守卫导致重复输出。日志 I/O 在 compute 之外执行，不持有 bin 锁。
- *
- * @since 1.0.0
- */
+	 * 通用日志冷却器 — 限流高频日志，避免输出阻塞时刷屏拖慢 TPS
+	 * <br/>
+	 * 支持两种时间源：
+	 * <ul>
+	 *   <li><b>tick 模式</b>：基于 {@code Level.getGameTime()}，适用于方块实体 tick 逻辑</li>
+	 *   <li><b>ms 模式</b>：基于 {@code System.currentTimeMillis()}，适用于静态上下文无法获取 Level 的场景</li>
+	 * </ul>
+	 * 单个实例应只使用一种模式（tick 或 ms），共享的抑制计数仅在该模式下语义有效。
+	 * <p>
+	 * <b>线程安全</b>：使用 {@link AtomicLong} 记录上次日志时间与抑制计数，
+	 * 单字段读写原子。服务端单线程执行场景下 AtomicLong 作为可见性保证与安全冗余。
+	 * <p>
+	 * <b>静态便捷方法</b>：{@link #warn(String, String, Object...)} / {@link #error(String, String, Object...)}
+	 * 使用全局静态 {@link ConcurrentHashMap} 按 key 节流，实现多 tile 全局节流（非实例级）。
+	 * 使用 {@link System#nanoTime()} 单调时钟计时（与 Ae2PushBackoff 一致）。
+	 * <p>
+	 * <b>静态 API 线程安全</b>：节流判定使用 {@link ConcurrentHashMap#compute} 保证 check-and-update 原子性，
+	 * 避免并发线程同时通过守卫导致重复输出。日志 I/O 在 compute 之外执行，不持有 bin 锁。
+	 *
+	 * @since 1.0.0
+	 */
 public class LogThrottle {
 
 	// ===== 静态全局节流 API（多 tile 共享） =====

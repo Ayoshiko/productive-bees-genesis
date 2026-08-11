@@ -1,24 +1,24 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 /**
- * 通用机械蜂箱 GUI 布局参数辅助类
- * <br/>
- * 统一管理蜂箱 GUI 各元素的坐标与尺寸计算，遵循 MEK 标准布局规范。
- * <p>
- * 布局结构（自上而下）：
- * <ul>
- *   <li>蜜蜂区（beeY=16）：蜂笼输入槽 | 蜜蜂居住槽 | 蜂笼输出槽，水平居中</li>
- *   <li>输出区（outputY=beeBottom+8）：3×3 输出槽矩阵，与蜜蜂区水平对齐</li>
- *   <li>玩家物品栏（inventoryY=outputBottom+8）：标准 9×3 + 快捷栏</li>
- * </ul>
- * <p>
- * 左侧固定区域：能量槽(7,13)、流体罐(7,35)。
- * 右侧固定区域：垂直电力条(imageWidth-12, 16)。
- * <p>
- * 初始版参数：3 蜜蜂(1行3列) / 9 输出(3行3列) / imageWidth=176 / imageHeight=203。
- * <p>
- * MEK Tab 位置动态计算已抽取至 {@link ApiaryTabLayoutHelper}，本类仅保留委托方法。
- */
+	 * 通用机械蜂箱 GUI 布局参数辅助类
+	 * <br/>
+	 * 统一管理蜂箱 GUI 各元素的坐标与尺寸计算，遵循 MEK 标准布局规范。
+	 * <p>
+	 * 布局结构（自上而下）：
+	 * <ul>
+	 *   <li>蜜蜂区（beeY=16）：蜂笼输入槽 | 蜜蜂居住槽 | 蜂笼输出槽，水平居中</li>
+	 *   <li>输出区（outputY=beeBottom+8）：3×3 输出槽矩阵，与蜜蜂区水平对齐</li>
+	 *   <li>玩家物品栏（inventoryY=outputBottom+8）：标准 9×3 + 快捷栏</li>
+	 * </ul>
+	 * <p>
+	 * 左侧固定区域：能量槽(7,13)、流体罐(7,35)。
+	 * 右侧固定区域：垂直电力条(imageWidth-12, 16)。
+	 * <p>
+	 * 初始版参数：3 蜜蜂(1行3列) / 9 输出(3行3列) / imageWidth=176 / imageHeight=203。
+	 * <p>
+	 * MEK Tab 位置动态计算已抽取至 {@link ApiaryTabLayoutHelper}，本类仅保留委托方法。
+	 */
 public final class ApiaryGuiLayoutHelper {
 
 	private ApiaryGuiLayoutHelper() {}

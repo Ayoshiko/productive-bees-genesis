@@ -1,13 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.List;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -21,14 +18,16 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 /**
- * Halo 光晕烘焙模型
- * <br/>
- * 继承 WrappedItemModel，在 GUI 下为基础物品叠加光晕效果。
- * <p>
- * 性能优化：baked quads 按类型缓存，避免每帧重新烘焙。
- * 渲染状态安全：blend/depthTest 在绘制后恢复，脉冲缩放在 pushPose 块内执行。
- */
+	 * Halo 光晕烘焙模型
+	 * <br/>
+	 * 继承 WrappedItemModel，在 GUI 下为基础物品叠加光晕效果。
+	 * <p>
+	 * 性能优化：baked quads 按类型缓存，避免每帧重新烘焙。
+	 * 渲染状态安全：blend/depthTest 在绘制后恢复，脉冲缩放在 pushPose 块内执行。
+	 */
 public class BakedModelHalo extends WrappedItemModel {
 
 	private static final ResourceLocation HALO_TEXTURE = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo");

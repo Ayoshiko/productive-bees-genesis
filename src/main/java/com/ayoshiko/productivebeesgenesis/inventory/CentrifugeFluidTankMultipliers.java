@@ -1,36 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
-import java.util.function.IntSupplier;
-
 import com.ayoshiko.productivebeesgenesis.config.CentrifugeConfigSection;
 import com.ayoshiko.productivebeesgenesis.config.FluidTankMultiplierConfigSection;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
+import java.util.function.IntSupplier;
+
 /**
- * 离心机流体罐容量倍率助手
- * <br/>
- * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
- * 供 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper#createFluidOutputHolder} 使用。
- * <p>
- * 与 {@link CentrifugeOutputStackMultipliers} / {@link CentrifugeInputStackMultipliers} 对称，
- * 但用于流体输出罐的容量倍率，而非输入/输出槽堆叠倍率。
- * <p>
- * 容量公式：{@code fluidTankCapacity × processes × fluidTankMultiplier}
- * （最终容量被 {@link Integer#MAX_VALUE} 截断）。
- * <p>
- * 默认倍率按 2^N 递增以匹配 STACK 升级的 2^16 倍并行：
- * <ul>
- *   <li>原版工厂：BASIC=1, ADVANCED=2, ELITE=4, ULTIMATE=8</li>
- *   <li>ME 工厂：ABSOLUTE=16, SUPREME=32, COSMIC=64, INFINITE=128</li>
- *   <li>EM 工厂：OVERCLOCKED=256, QUANTUM=512, DENSE=1024, MULTIVERSAL=2048, CREATIVE=4096</li>
- *   <li>EME 工厂：ABSOLUTE_OVERCLOCKED=4096, SUPREME_QUANTUM=8192, COSMIC_DENSE=16384, INFINITE_MULTIVERSAL=32768</li>
- * </ul>
- *
- * @since 1.13.0
- * @author Ayoshiko
- * @see CentrifugeOutputStackMultipliers 输出槽堆叠倍率版本
- * @see CentrifugeInputStackMultipliers 输入槽堆叠倍率版本
- */
+	 * 离心机流体罐容量倍率助手
+	 * <br/>
+	 * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
+	 * 供 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper#createFluidOutputHolder} 使用。
+	 * <p>
+	 * 与 {@link CentrifugeOutputStackMultipliers} / {@link CentrifugeInputStackMultipliers} 对称，
+	 * 但用于流体输出罐的容量倍率，而非输入/输出槽堆叠倍率。
+	 * <p>
+	 * 容量公式：{@code fluidTankCapacity × processes × fluidTankMultiplier}
+	 * （最终容量被 {@link Integer#MAX_VALUE} 截断）。
+	 * <p>
+	 * 默认倍率按 2^N 递增以匹配 STACK 升级的 2^16 倍并行：
+	 * <ul>
+	 *   <li>原版工厂：BASIC=1, ADVANCED=2, ELITE=4, ULTIMATE=8</li>
+	 *   <li>ME 工厂：ABSOLUTE=16, SUPREME=32, COSMIC=64, INFINITE=128</li>
+	 *   <li>EM 工厂：OVERCLOCKED=256, QUANTUM=512, DENSE=1024, MULTIVERSAL=2048, CREATIVE=4096</li>
+	 *   <li>EME 工厂：ABSOLUTE_OVERCLOCKED=4096, SUPREME_QUANTUM=8192, COSMIC_DENSE=16384, INFINITE_MULTIVERSAL=32768</li>
+	 * </ul>
+	 *
+	 * @since 2.0.0
+	 * @author Ayoshiko
+	 * @see CentrifugeOutputStackMultipliers 输出槽堆叠倍率版本
+	 * @see CentrifugeInputStackMultipliers 输入槽堆叠倍率版本
+	 */
 public final class CentrifugeFluidTankMultipliers {
 
 	private CentrifugeFluidTankMultipliers() {
@@ -39,7 +39,7 @@ public final class CentrifugeFluidTankMultipliers {
 	/**
 	 * 获取离心机流体罐倍率子段(从 ServerConfig 委托链中查询)。
 	 * <p>
-	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeFluidTankXxx} 在 v1.13.0 子段抽取后,
+	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeFluidTankXxx} 在 v2.0.0 子段抽取后,
 	 * 改为通过 {@code ModConfig.SERVER.centrifuge().fluidTankMultiplier.mekCentrifugeFluidTankXxx} 访问。
 	 */
 	private static FluidTankMultiplierConfigSection fluidTankMultiplier() {

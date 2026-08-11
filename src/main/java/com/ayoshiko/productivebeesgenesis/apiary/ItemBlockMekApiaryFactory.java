@@ -1,40 +1,35 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import mekanism.api.text.TextComponentUtil;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
-
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-
 import org.jetbrains.annotations.NotNull;
 
 /**
- * 工厂版通用机械蜂箱 BlockItem
- * <br/>
- * 继承 {@link ItemBlockMekApiary}（而非直接继承 ItemBlockTooltip），
- * 共享基础版的 tooltip 防御性修复（Bug 7：addTypeDetails/addDetails 的 try-catch 包装），
- * 额外添加 {@link MekanismDataComponents#SORTING} 组件以支持工厂排序开关。
- * <p>
- * 与离心机工厂 {@code ItemBlockMekCentrifuge} 不同：
- * 蜂箱工厂使用 {@code createMachine()} 而非 {@code createFactoryMachine()}，
- * 因此 BlockType 没有 AttributeFactoryType，无法通过 Attribute 检查区分工厂。
- * 本类直接为所有蜂箱工厂方块添加 SORTING 组件。
- * <p>
- * 重写 {@link #getTier()} 返回 {@link FactoryTier}，供 MEK 原版名称颜色渲染使用
- * （Basic 绿/Advanced 橙/Elite 青/Ultimate 品红，颜色来自 BaseTier 源码）。
- */
+	 * 工厂版通用机械蜂箱 BlockItem
+	 * <br/>
+	 * 继承 {@link ItemBlockMekApiary}（而非直接继承 ItemBlockTooltip），
+	 * 共享基础版的 tooltip 防御性修复（Bug 7：addTypeDetails/addDetails 的 try-catch 包装），
+	 * 额外添加 {@link MekanismDataComponents#SORTING} 组件以支持工厂排序开关。
+	 * <p>
+	 * 与离心机工厂 {@code ItemBlockMekCentrifuge} 不同：
+	 * 蜂箱工厂使用 {@code createMachine()} 而非 {@code createFactoryMachine()}，
+	 * 因此 BlockType 没有 AttributeFactoryType，无法通过 Attribute 检查区分工厂。
+	 * 本类直接为所有蜂箱工厂方块添加 SORTING 组件。
+	 * <p>
+	 * 重写 {@link #getTier()} 返回 {@link FactoryTier}，供 MEK 原版名称颜色渲染使用
+	 * （Basic 绿/Advanced 橙/Elite 青/Ultimate 品红，颜色来自 BaseTier 源码）。
+	 */
 public class ItemBlockMekApiaryFactory extends ItemBlockMekApiary {
 
 	public ItemBlockMekApiaryFactory(MekApiaryBlock<?, ?> block, Item.Properties properties) {

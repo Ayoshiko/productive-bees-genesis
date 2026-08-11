@@ -2,13 +2,11 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactory;
 import io.github.masyumero.emextras.common.content.blocktype.EMExtraMachine;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
 import mekanism.common.content.blocktype.BlockType;
 import mekanism.common.registration.impl.BlockRegistryObject;
 import net.minecraft.core.registries.Registries;
@@ -16,7 +14,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,16 +22,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.function.Supplier;
 
 /**
- * 注入EME的EMExtraFactory构造器，覆盖离心机相关的升级链
- * <br/>
- * EME的EMExtraFactory构造器为非最高等级添加EMExtraAttributeUpgradeable指向EME原版下一级工厂。
- * 当FactoryType为SMELTING且origMachine是我们的离心机工厂时（通过description前缀判断），
- * 移除EME添加的EMExtraAttributeUpgradeable（指向EME原版电力熔炼炉工厂），
- * 替换为指向我们的EME离心机工厂的升级属性。
- * <p>
- * 注意：当前我们的离心机工厂使用EMExtraFactoryMachine基类直接创建，不经过EMExtraFactory构造器，
- * 所以此Mixin在当前实现中不会被触发。保留此Mixin作为扩展点，若将来改用EMExtraFactory基类则自动生效。
- */
+	 * 注入EME的EMExtraFactory构造器，覆盖离心机相关的升级链
+	 * <br/>
+	 * EME的EMExtraFactory构造器为非最高等级添加EMExtraAttributeUpgradeable指向EME原版下一级工厂。
+	 * 当FactoryType为SMELTING且origMachine是我们的离心机工厂时（通过description前缀判断），
+	 * 移除EME添加的EMExtraAttributeUpgradeable（指向EME原版电力熔炼炉工厂），
+	 * 替换为指向我们的EME离心机工厂的升级属性。
+	 * <p>
+	 * 注意：当前我们的离心机工厂使用EMExtraFactoryMachine基类直接创建，不经过EMExtraFactory构造器，
+	 * 所以此Mixin在当前实现中不会被触发。保留此Mixin作为扩展点，若将来改用EMExtraFactory基类则自动生效。
+	 */
 @Mixin(value = EMExtraFactory.class, remap = false, priority = 1100)
 public abstract class EMExtraFactoryMixin extends BlockType {
 

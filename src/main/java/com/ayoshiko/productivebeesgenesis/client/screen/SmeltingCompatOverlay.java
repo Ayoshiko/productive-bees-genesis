@@ -1,14 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.Map;
-import java.util.WeakHashMap;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.ToggleSmeltingCompatPayload;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.tab.GuiConfigTypeTab;
@@ -29,18 +25,21 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Map;
+import java.util.WeakHashMap;
+
 /**
- * 离心机电力熔炼炉配方兼容开关覆盖层 — 注入到 MEK 侧面配置窗口
- * <br/>
- * 仿 {@link AeInputOverlay}：在侧面配置窗口（ITEM 页）注入 "F" 按钮，
- * 点击发送 {@link ToggleSmeltingCompatPayload} 切换 per-tile 熔炉配方兼容开关。
- * <ul>
- *   <li>仅离心机（{@link IMekCentrifugeTile}）显示</li>
- *   <li>按钮 active 受全局总开关 {@code mekCentrifugeSmeltingCompatEnabled} 控制，
- *       总开关关闭时灰显且不可点击</li>
- *   <li>tooltip 显示当前 per-tile 开关状态（经容器 SyncableBoolean 同步）</li>
- * </ul>
- */
+	 * 离心机电力熔炼炉配方兼容开关覆盖层 — 注入到 MEK 侧面配置窗口
+	 * <br/>
+	 * 仿 {@link AeInputOverlay}：在侧面配置窗口（ITEM 页）注入 "F" 按钮，
+	 * 点击发送 {@link ToggleSmeltingCompatPayload} 切换 per-tile 熔炉配方兼容开关。
+	 * <ul>
+	 *   <li>仅离心机（{@link IMekCentrifugeTile}）显示</li>
+	 *   <li>按钮 active 受全局总开关 {@code mekCentrifugeSmeltingCompatEnabled} 控制，
+	 *       总开关关闭时灰显且不可点击</li>
+	 *   <li>tooltip 显示当前 per-tile 开关状态（经容器 SyncableBoolean 同步）</li>
+	 * </ul>
+	 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class SmeltingCompatOverlay {
 

@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import mekanism.common.block.attribute.AttributeTier;
 import mekanism.common.block.attribute.AttributeUpgradeable;
 import mekanism.common.block.attribute.Attributes;
@@ -18,33 +20,30 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
-import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 工厂版通用机械蜂箱 BlockType 定义
- * <br/>
- * 参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType} 的工厂版模式，
- * 但使用 {@link Machine.MachineBuilder#createMachine} 而非 {@code createFactoryMachine}。
- * <p>
- * 关键设计决策：蜂箱工厂不继承 {@code TileEntityFactory}，因此不走 MEK 的 CachedRecipe 管线。
- * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@code ApiaryTickHandler}。
- * 工厂等级仅通过 {@link AttributeTier} 区分（LED 颜色 + 物品名称颜色），不通过边框或材质区分。
- * <p>
- * 能量配置按 spec.md 表 2.1 等级递增：
- * <ul>
- *   <li>Basic: usage=20 FE/t（每蜜蜂），storage=128,000 FE</li>
- *   <li>Advanced: usage=22 FE/t，storage=256,000 FE</li>
- *   <li>Elite: usage=25 FE/t，storage=512,000 FE</li>
- *   <li>Ultimate: usage=30 FE/t，storage=1,024,000 FE</li>
- * </ul>
- * <p>
- * 设计原则：单一职责，本类仅负责 BlockType 定义，方块/方块实体/物品注册由 init 包负责。
- */
+	 * 工厂版通用机械蜂箱 BlockType 定义
+	 * <br/>
+	 * 参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType} 的工厂版模式，
+	 * 但使用 {@link Machine.MachineBuilder#createMachine} 而非 {@code createFactoryMachine}。
+	 * <p>
+	 * 关键设计决策：蜂箱工厂不继承 {@code TileEntityFactory}，因此不走 MEK 的 CachedRecipe 管线。
+	 * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@code ApiaryTickHandler}。
+	 * 工厂等级仅通过 {@link AttributeTier} 区分（LED 颜色 + 物品名称颜色），不通过边框或材质区分。
+	 * <p>
+	 * 能量配置按 spec.md 表 2.1 等级递增：
+	 * <ul>
+	 *   <li>Basic: usage=20 FE/t（每蜜蜂），storage=128,000 FE</li>
+	 *   <li>Advanced: usage=22 FE/t，storage=256,000 FE</li>
+	 *   <li>Elite: usage=25 FE/t，storage=512,000 FE</li>
+	 *   <li>Ultimate: usage=30 FE/t，storage=1,024,000 FE</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则：单一职责，本类仅负责 BlockType 定义，方块/方块实体/物品注册由 init 包负责。
+	 */
 public final class MekApiaryFactoryBlockType {
 
 	/** 基础工厂 BlockType（5 蜜蜂 / 9 输出 / 128,000 FE） */

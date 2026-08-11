@@ -1,11 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.mojang.blaze3d.shaders.AbstractUniform;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
@@ -14,17 +11,19 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
- * Cosmic 渲染着色器管理
- * <br/>
- * 注册 cosmic 物品与护甲两套着色器，缓存 uniform 句柄；
- * 在 TextureAtlasStitchedEvent 中采集 misc/cosmic/cosmic_0..9 的 UV 坐标。
- * <p>
- * 线程安全：UV/Sprite 数组通过 {@link AtomicReference} 整体替换保证可见性。
- * 资源加载线程（TextureAtlasStitchedEvent）写入，渲染线程读取。原数组元素修改无 happens-before 保证，
- * 可能导致渲染线程读到部分更新的 UV 坐标。改为构建完整快照后原子替换引用，渲染线程要么看到旧快照，
- * 要么看到新快照，不会看到中间状态。
- */
+	 * Cosmic 渲染着色器管理
+	 * <br/>
+	 * 注册 cosmic 物品与护甲两套着色器，缓存 uniform 句柄；
+	 * 在 TextureAtlasStitchedEvent 中采集 misc/cosmic/cosmic_0..9 的 UV 坐标。
+	 * <p>
+	 * 线程安全：UV/Sprite 数组通过 {@link AtomicReference} 整体替换保证可见性。
+	 * 资源加载线程（TextureAtlasStitchedEvent）写入，渲染线程读取。原数组元素修改无 happens-before 保证，
+	 * 可能导致渲染线程读到部分更新的 UV 坐标。改为构建完整快照后原子替换引用，渲染线程要么看到旧快照，
+	 * 要么看到新快照，不会看到中间状态。
+	 */
 public class CosmicShaders {
 
 	/** UV 坐标快照（不可变，含 10 个 sprite × 4 个 float = 40 个元素） */

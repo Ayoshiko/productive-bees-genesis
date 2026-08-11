@@ -1,39 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.Collections;
-import java.util.List;
-
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableBoolean;
 import mekanism.common.inventory.container.sync.SyncableInt;
 import net.minecraft.nbt.CompoundTag;
 
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * 基础MEK离心机AE2集成处理器
- * <br/>
- * 从 {@link TileEntityMekCentrifuge} 抽取的 AE2 相关逻辑，包括：
- * <ul>
- *   <li>持有 {@link MekAe2LifecycleHandler} 实例（网格节点、AEItemKey 缓存、待连接标志）</li>
- *   <li>生命周期委托（加载/移除/区块卸载/连接）</li>
- *   <li>per-tile AE2 输出/输入开关切换</li>
- *   <li>AE2 状态的 NBT 持久化</li>
- *   <li>AE2 相关容器同步器注册</li>
- *   <li>输入槽列表供 AE2 拉取器使用</li>
- * </ul>
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：只管理 AE2 集成，不涉及配方处理或槽位管理</li>
- *   <li>依赖倒置：持有 {@link TileEntityMekCentrifuge} 引用访问父类字段和回调</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
- */
+	 * 基础MEK离心机AE2集成处理器
+	 * <br/>
+	 * 从 {@link TileEntityMekCentrifuge} 抽取的 AE2 相关逻辑，包括：
+	 * <ul>
+	 *   <li>持有 {@link MekAe2LifecycleHandler} 实例（网格节点、AEItemKey 缓存、待连接标志）</li>
+	 *   <li>生命周期委托（加载/移除/区块卸载/连接）</li>
+	 *   <li>per-tile AE2 输出/输入开关切换</li>
+	 *   <li>AE2 状态的 NBT 持久化</li>
+	 *   <li>AE2 相关容器同步器注册</li>
+	 *   <li>输入槽列表供 AE2 拉取器使用</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：只管理 AE2 集成，不涉及配方处理或槽位管理</li>
+	 *   <li>依赖倒置：持有 {@link TileEntityMekCentrifuge} 引用访问父类字段和回调</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 */
 class MekCentrifugeAe2Handler {
 
 	/** 所属方块实体引用 */

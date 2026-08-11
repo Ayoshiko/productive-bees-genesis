@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
-import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.api.Action;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
 /** Limits automated external insertion without changing a slot's real capacity. */

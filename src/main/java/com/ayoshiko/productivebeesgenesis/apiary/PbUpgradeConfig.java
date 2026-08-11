@@ -3,21 +3,21 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 
 /**
- * PB 原版升级配置读取器 — 让本模组的升级效果跟随资源蜜蜂原版配置文件。
- * <br/>
- * PB 原版 {@code ProductiveBeesConfig.Upgrades} 定义了：
- * <ul>
- *   <li>{@code productivityMultiplier[1..4]}：α/β/γ/Ω 产量升级每级加成（默认 1.2/1.5/2.0/2.6）</li>
- *   <li>{@code timeBonus}：时间升级每级缩短比例（默认 0.15）</li>
- *   <li>{@code stabilityChanceIncrease}：稳定性升级概率加成（默认 0.15，离心机已直接读取）</li>
- * </ul>
- * 玩家修改 PB 配置文件后，本模组蜂箱/离心机的升级效果会同步生效。
- * <p>
- * 性能：{@code ModConfigSpec.DoubleValue.get()} 是内存值读取（config 加载时解析一次），
- * 开销约等于 volatile 读，可在升级倍率计算路径直接调用；上游倍率已有 100-tick 缓存。
- * <p>
- * 线程安全：PB 配置在服务端/客户端各自持有同步值，get() 线程安全。
- */
+	 * PB 原版升级配置读取器 — 让本模组的升级效果跟随资源蜜蜂原版配置文件。
+	 * <br/>
+	 * PB 原版 {@code ProductiveBeesConfig.Upgrades} 定义了：
+	 * <ul>
+	 *   <li>{@code productivityMultiplier[1..4]}：α/β/γ/Ω 产量升级每级加成（默认 1.2/1.5/2.0/2.6）</li>
+	 *   <li>{@code timeBonus}：时间升级每级缩短比例（默认 0.15）</li>
+	 *   <li>{@code stabilityChanceIncrease}：稳定性升级概率加成（默认 0.15，离心机已直接读取）</li>
+	 * </ul>
+	 * 玩家修改 PB 配置文件后，本模组蜂箱/离心机的升级效果会同步生效。
+	 * <p>
+	 * 性能：{@code ModConfigSpec.DoubleValue.get()} 是内存值读取（config 加载时解析一次），
+	 * 开销约等于 volatile 读，可在升级倍率计算路径直接调用；上游倍率已有 100-tick 缓存。
+	 * <p>
+	 * 线程安全：PB 配置在服务端/客户端各自持有同步值，get() 线程安全。
+	 */
 public final class PbUpgradeConfig {
 
 	/** PB 原版 timeBonus 默认值（配置未加载/读取异常时回退） */

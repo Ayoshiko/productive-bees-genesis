@@ -1,5 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.config.WindowPositionConfigSection;
+import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
+import mekanism.common.inventory.container.SelectedWindowData.WindowPosition;
+import mekanism.common.inventory.container.SelectedWindowData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -7,39 +13,31 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.config.WindowPositionConfigSection;
-import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
-
-import mekanism.common.inventory.container.SelectedWindowData;
-import mekanism.common.inventory.container.SelectedWindowData.WindowPosition;
-
 /**
- * SelectedWindowData 窗口位置独立持久化 Mixin（仅客户端加载）
- * <br/>
- * 为标记了 customSaveName 的 {@link SelectedWindowData} 实例提供独立的持久化机制，
- * 将位置和固定状态保存到 PB 自己的客户端配置中，避免与 MEK 原版窗口共享 saveName。
- * <p>
- * <b>解决的问题</b>：PB 升级窗口使用 {@code WindowType.UPGRADE}（与 MEK 原版升级窗口相同），
- * 两者 {@code equals()} 返回 true，共享 MEK 配置中 "upgrade" 的持久化数据，
- * 导致固定一个窗口会联动影响另一个。
- * <p>
- * <b>原理</b>：
- * <ul>
- *   <li>拦截 {@code getLastPosition}：customSaveName 非 null 时先 flush 未保存变更，再从 PB 配置读取</li>
- *   <li>拦截 {@code updateLastPosition}：customSaveName 非 null 时写入 PB 配置（防抖 save）</li>
- *   <li>customSaveName 为 null 时不干预，MEK 原有逻辑正常执行</li>
- * </ul>
- * <p>
- * <b>防抖机制</b>：窗口拖拽时 updateLastPosition 每像素移动触发一次，
- * 直接调用 {@code ModConfigSpec.save()} 会导致高频磁盘 IO。
- * 采用 dirty 标记 + 500ms 防抖：拖拽中每 500ms 最多 save 一次，
- * 拖拽结束后下次 getLastPosition 调用时（窗口重新打开）flush 未保存变更。
- * <p>
- * <b>线程安全</b>：{@code getLastPosition} 和 {@code updateLastPosition} 仅在客户端渲染线程调用，
- * dirty/lastSaveTime 静态字段无需同步。
- */
+	 * SelectedWindowData 窗口位置独立持久化 Mixin（仅客户端加载）
+	 * <br/>
+	 * 为标记了 customSaveName 的 {@link SelectedWindowData} 实例提供独立的持久化机制，
+	 * 将位置和固定状态保存到 PB 自己的客户端配置中，避免与 MEK 原版窗口共享 saveName。
+	 * <p>
+	 * <b>解决的问题</b>：PB 升级窗口使用 {@code WindowType.UPGRADE}（与 MEK 原版升级窗口相同），
+	 * 两者 {@code equals()} 返回 true，共享 MEK 配置中 "upgrade" 的持久化数据，
+	 * 导致固定一个窗口会联动影响另一个。
+	 * <p>
+	 * <b>原理</b>：
+	 * <ul>
+	 *   <li>拦截 {@code getLastPosition}：customSaveName 非 null 时先 flush 未保存变更，再从 PB 配置读取</li>
+	 *   <li>拦截 {@code updateLastPosition}：customSaveName 非 null 时写入 PB 配置（防抖 save）</li>
+	 *   <li>customSaveName 为 null 时不干预，MEK 原有逻辑正常执行</li>
+	 * </ul>
+	 * <p>
+	 * <b>防抖机制</b>：窗口拖拽时 updateLastPosition 每像素移动触发一次，
+	 * 直接调用 {@code ModConfigSpec.save()} 会导致高频磁盘 IO。
+	 * 采用 dirty 标记 + 500ms 防抖：拖拽中每 500ms 最多 save 一次，
+	 * 拖拽结束后下次 getLastPosition 调用时（窗口重新打开）flush 未保存变更。
+	 * <p>
+	 * <b>线程安全</b>：{@code getLastPosition} 和 {@code updateLastPosition} 仅在客户端渲染线程调用，
+	 * dirty/lastSaveTime 静态字段无需同步。
+	 */
 @Mixin(value = SelectedWindowData.class, remap = false)
 public abstract class SelectedWindowDataMixin implements CustomWindowData {
 

@@ -1,24 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.mixin.iris;
 
-import java.util.List;
-import java.util.Set;
-
+import net.neoforged.fml.loading.FMLLoader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import net.neoforged.fml.loading.FMLLoader;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Iris 光影兼容 Mixin 配置插件
- * <br/>
- * 原理：实现 IMixinConfigPlugin 接口，在 shouldApplyMixin 中检查
- * LoadingModList 是否包含 "iris" 模组。仅当 Iris 已安装时才应用
- * 本配置中的所有 Mixin，避免在无 Iris 环境下因缺少依赖类而崩溃。
- * <p>
- * 与主 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 风格一致：
- * 使用 Holder 模式（JVM 类初始化保证线程安全）+ FMLLoader.getLoadingModList() 检测。
- */
+	 * Iris 光影兼容 Mixin 配置插件
+	 * <br/>
+	 * 原理：实现 IMixinConfigPlugin 接口，在 shouldApplyMixin 中检查
+	 * LoadingModList 是否包含 "iris" 模组。仅当 Iris 已安装时才应用
+	 * 本配置中的所有 Mixin，避免在无 Iris 环境下因缺少依赖类而崩溃。
+	 * <p>
+	 * 与主 {@link com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin} 风格一致：
+	 * 使用 Holder 模式（JVM 类初始化保证线程安全）+ FMLLoader.getLoadingModList() 检测。
+	 */
 public class IrisConfigPlugin implements IMixinConfigPlugin {
 
 	/** Iris 模组 ID */

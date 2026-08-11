@@ -1,30 +1,27 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.List;
-
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
-
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 /**
- * AE2 剩余物品回送器 — 从 {@link Ae2InputPuller} 抽取的回送兜底逻辑，保证拉取后剩余物品不丢失。
- * <br/>
- * 职责单一（SRP）：仅负责将 {@link Ae2InputPuller#pullAndInsert} 执行后未能插入输入槽的剩余物品
- * 通过两层兜底 + 静默退避（poweredInsert 重试 → 回插输入槽 → 退避等待）安全回送，与拉取主流程解耦。
- * @since 1.13.0
- */
+	 * AE2 剩余物品回送器 — 从 {@link Ae2InputPuller} 抽取的回送兜底逻辑，保证拉取后剩余物品不丢失。
+	 * <br/>
+	 * 职责单一（SRP）：仅负责将 {@link Ae2InputPuller#pullAndInsert} 执行后未能插入输入槽的剩余物品
+	 * 通过两层兜底 + 静默退避（poweredInsert 重试 → 回插输入槽 → 退避等待）安全回送，与拉取主流程解耦。
+	 * @since 2.0.0
+	 */
 public final class Ae2LeftoverReturner {
 
 	private Ae2LeftoverReturner() {}
@@ -40,7 +37,6 @@ public final class Ae2LeftoverReturner {
 	 * </ol>
 	 * Task 10：兜底触发后由调用方记录 returnBackoff 进入退避窗口。
 	 * Task 1：移除 popResource 掉落世界兜底，避免物品在世界中滞留导致脏乱。
-	 * Task 6：在阶段 1 失败和阶段 2 部分失败处添加 TEMP-DEBUG 临时诊断日志。
 	 * <p>
 	 * M4-2 修复：方法改为返回剩余未回送数量，调用方据此决定是否清空源槽位，
 	 * 避免无条件清空导致部分回送失败时物品消失。
@@ -63,12 +59,18 @@ public final class Ae2LeftoverReturner {
 		if (remaining <= 0) return 0;
 
 		// 阶段 1：1-3 次重试全部使用 poweredInsert（与 tryPushSlotDirect 对齐，带能量支付和 SIMULATE 预检）
-		int maxRetries = 3;
+		// AE2LT-compatible fast path: one simulation followed by one bounded write.
+		int maxRetries = 1;
 		for (int attempt = 1; attempt <= maxRetries; attempt++) {
 			if (remaining <= 0) break;
 			try {
-				long inserted = meStorage.insert(key, remaining, Actionable.MODULATE, actionSource);
-				remaining -= SaturatingMath.saturatingToInt(inserted);
+				long simulated = meStorage.insert(key, remaining, Actionable.SIMULATE, actionSource);
+				long target = Math.min(remaining, Math.max(0L, simulated));
+				if (target <= 0L) continue;
+				long inserted = meStorage.insert(key, target, Actionable.MODULATE, actionSource);
+				int accepted = Math.min(remaining,
+						SaturatingMath.saturatingToInt(Math.max(0L, inserted)));
+				remaining -= accepted;
 			} catch (LinkageError | RuntimeException e) {
 				// LinkageError 覆盖 AE2 版本不兼容；RuntimeException 覆盖运行时异常。
 				// 单次异常不中断重试，避免瞬时故障导致物品丢失（节流日志便于排查）
@@ -79,7 +81,10 @@ public final class Ae2LeftoverReturner {
 		}
 
 		// 阶段 2-3：poweredInsert 失败后保证物品不丢失
-		if (remaining <= 0) return 0;
+		if (remaining <= 0) {
+			if (returnBackoff != null) returnBackoff.recordSuccess();
+			return 0;
+		}
 
 		// 阶段 2：回插输入槽（避免物品丢失，留待下一轮加工）
 		ItemStack leftoverStack = key.toStack(remaining);

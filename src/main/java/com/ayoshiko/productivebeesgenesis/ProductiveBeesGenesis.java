@@ -1,7 +1,9 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import java.util.concurrent.atomic.AtomicLong;
-
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.datagen.ConditionalBlockLootProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
@@ -14,41 +16,25 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
-import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
-import com.ayoshiko.productivebeesgenesis.compat.emextras.MekApiaryEMEBlockType;
-import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
-import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryBlockType;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekApiaryMEBlockType;
-import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MyriadBatchPlanner;
-import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CapabilityRegistrar;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
+import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.ayoshiko.productivebeesgenesis.network.ModPayloads;
 import com.ayoshiko.productivebeesgenesis.network.PayloadRateLimiter;
-import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
-import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
-
 import mekanism.common.attachments.IAttachmentAware;
-import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.capabilities.ICapabilityAware;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.EventPriority;
@@ -69,13 +55,17 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 资源蜜蜂：创世模组主类
- * <br/>
- * 为资源蜜蜂模组添加万象创世蜜蜂，可产出所有其他蜜蜂的蜜脾
- * 通过Mixin注入原版离心机实现随机蜜脾产出
- */
+	 * 资源蜜蜂：创世模组主类
+	 * <br/>
+	 * 为资源蜜蜂模组添加万象创世蜜蜂，可产出所有其他蜜蜂的蜜脾
+	 * 通过Mixin注入原版离心机实现随机蜜脾产出
+	 */
 @Mod(ProductiveBeesGenesis.MOD_ID)
 public final class ProductiveBeesGenesis {
 	public static final String MOD_ID = "productivebeesgenesis";
@@ -115,106 +105,16 @@ public final class ProductiveBeesGenesis {
 
 	/**
 	 * 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 registerDeferredRegisters 之前完成。
-	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems → registerXxxMenuType
 	 */
 	private void initMekCentrifugeExtensions() {
-		// EM 扩展
-		MekCentrifugeBlockType.initEMTiers();
-		ModBlocks.registerEMFactories();
-		ModBlockEntities.registerEMFactoryTiles();
-		ModItems.registerEMFactoryItems();
-
-		// ME 扩展（initMETiers 为 ULTIMATE 添加 ExtraAttributeUpgradeable）
-		MekCentrifugeBlockType.initMETiers();
-		ModBlocks.registerMEFactories();
-		ModBlockEntities.registerMEFactoryTiles();
-		ModItems.registerMEFactoryItems();
-		// ME MenuType 注册（内部守卫，ME 未加载时安全跳过）
-		MECompatLoader.registerCentrifugeMenuType();
-
-		// EME 扩展（initEMETiers 为 ULTIMATE/ME ABSOLUTE 添加 EMExtraAttributeUpgradeable）
-		MekCentrifugeBlockType.initEMETiers();
-		ModBlocks.registerEMEFactories();
-		ModBlockEntities.registerEMEFactoryTiles();
-		ModItems.registerEMEFactoryItems();
-		// EME MenuType 注册（内部守卫，EME 未加载时安全跳过）
-		EMECompatLoader.registerCentrifugeMenuType();
+		MekCompatInitializer.initMekCentrifugeExtensions();
 	}
 
 	/**
 	 * 初始化 Mek 蜂箱扩展（ME/EME 两层工厂蜂箱）— 必须在 registerDeferredRegisters 之前完成。
-	 * 顺序：initXxxTiers → registerXxxFactories → registerXxxFactoryTiles → registerXxxFactoryItems
-	 * EME 依赖 ME：initEMETiers 需要 ME ABSOLUTE BlockType;ME 未加载时传 null,EME 仍可独立注册。
 	 */
 	private void initMekApiaryExtensions() {
-		// EM 扩展（EvolvedMekanism）— EM 优先于 ME，ULTIMATE 升级到 EM OVERCLOCKED 蜂箱工厂
-		// EM 通过 Mixin 扩展 FactoryTier 枚举，复用 TileEntityMekApiaryFactory，不需要独立 BlockType 类
-		if (MekCompatHooks.isEvolvedMekanismLoaded()) {
-			MekApiaryFactoryBlockType.initEMTiers();
-			ModBlocks.registerEMApiaryFactories();
-			ModBlockEntities.registerEMApiaryFactoryTiles();
-			ModItems.registerEMApiaryFactoryItems();
-		}
-
-		// ME 扩展 — 守卫避免 MekApiaryMEBlockType 类加载触发 NoClassDefFoundError
-		if (MekCompatHooks.isMekanismExtrasLoaded()) {
-			MekApiaryMEBlockType.initMETiers(MekApiaryFactoryBlockType.ULTIMATE_MEK_APIARY_FACTORY);
-			ModBlocks.registerMEApiaryFactories();
-			ModBlockEntities.registerMEApiaryFactoryTiles();
-			ModItems.registerMEApiaryFactoryItems();
-		}
-
-		// EME 扩展 — 守卫避免 MekApiaryEMEBlockType 类加载触发 NoClassDefFoundError
-		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-			// 获取 ME ABSOLUTE 蜂箱工厂 BlockType（ME 未加载时为 null，EME 仍可独立注册）
-			// 通过反射获取 ExtraFactoryTier.ABSOLUTE，避免主类编译期硬依赖 ME 模组
-			BlockTypeTile<?> meAbsoluteApiaryFactory = resolveMEAbsoluteTierAndApiaryFactory();
-			// 传入 ULTIMATE 蜂箱工厂，为其添加 EME 升级链（指向 EME ABSOLUTE_OVERCLOCKED 蜂箱）
-			MekApiaryEMEBlockType.initEMETiers(
-					MekApiaryFactoryBlockType.ULTIMATE_MEK_APIARY_FACTORY,
-					meAbsoluteApiaryFactory);
-			ModBlocks.registerEMEApiaryFactories();
-			ModBlockEntities.registerEMEApiaryFactoryTiles();
-			ModItems.registerEMEApiaryFactoryItems();
-		}
-	}
-
-	/**
-	 * 反射获取 ME 的 ABSOLUTE 蜂箱工厂 BlockType
-	 * <br/>
-	 * 主类不能直接引用 {@code ExtraFactoryTier}（ME 可选依赖），否则 ME 未加载时
-	 * 主类方法字节码验证会触发 NoClassDefFoundError。此方法通过反射读取
-	 * {@code ExtraFactoryTier.ABSOLUTE} 静态字段，再调用
-	 * {@link MekApiaryMEBlockType#getMEApiaryFactoryType(Object)}（参数为 Object）。
-	 * ME 未加载或反射失败时返回 null，EME 蜂箱升级链将不包含 ME ABSOLUTE 跨系统升级（安全降级）。
-	 *
-	 * @return ME ABSOLUTE 蜂箱工厂 BlockType，ME 未加载或反射失败时返回 null
-	 */
-	@org.jetbrains.annotations.Nullable
-	private BlockTypeTile<?> resolveMEAbsoluteTierAndApiaryFactory() {
-		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
-			return null;
-		}
-		try {
-			Class<?> tierClass = Class.forName("com.jerry.mekextras.common.tier.ExtraFactoryTier");
-			Object meAbsoluteTier = tierClass.getField("ABSOLUTE").get(null);
-			if (meAbsoluteTier == null) {
-				return null;
-			}
-			return MekApiaryMEBlockType.getMEApiaryFactoryType(meAbsoluteTier);
-		} catch (ClassNotFoundException e) {
-			// ME 已加载但类路径异常（理论上不应发生），安全降级
-			LOGGER.warn("反射加载 ExtraFactoryTier 失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
-			return null;
-		} catch (NoSuchFieldException | IllegalAccessException e) {
-			// ABSOLUTE 字段被移除/重命名/访问受限，安全降级
-			LOGGER.warn("反射读取 ExtraFactoryTier.ABSOLUTE 失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
-			return null;
-		} catch (LinkageError e) {
-			// ME 模组类初始化失败（ExceptionInInitializerError 等），安全降级
-			LOGGER.warn("ExtraFactoryTier 类初始化失败，EME 蜂箱升级链不包含 ME ABSOLUTE", e);
-			return null;
-		}
+		MekCompatInitializer.initMekApiaryExtensions();
 	}
 
 	/**
@@ -522,7 +422,7 @@ public final class ProductiveBeesGenesis {
 	 * Mekanism 原版在 Mekanism 主类中遍历自己的物品注册表调用 addCapabilities，
 	 * 我们需要对自己的物品做同样的事。
 	 * <p>
-	 * v1.7.0 新增：AE2 已安装时委托 {@link Ae2CapabilityRegistrar#register} 为全部 18 个离心机
+	 * v1.5.3 新增：AE2 已安装时委托 {@link Ae2CapabilityRegistrar#register} 为全部 18 个离心机
 	 * BlockEntityType 注册 {@code AECapabilities.IN_WORLD_GRID_NODE_HOST} capability，
 	 * 使 AE2 线缆（含 ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux 等附属模组线缆）
 	 * 能自动发现并连接离心机。AE2 未安装时安全跳过，不触发类加载失败。

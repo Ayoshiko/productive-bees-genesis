@@ -1,23 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 /**
- * MEK Apiary Tab 位置动态计算辅助类
- * <br/>
- * 从 {@link ApiaryGuiLayoutHelper} 抽取，专职负责 MEK 标准 Tab（警告/能量/红石）的 Y 坐标动态计算。
- * <p>
- * 设计原理：
- * <ul>
- *   <li>MEK 原版 Tab 的 Y 坐标在 GuiXxxTab 构造函数中硬编码（警告=109、能量=137、红石=137），
- *       仅适配标准 176×166 GUI</li>
- *   <li>本模组蜂箱 GUI 高度随蜜蜂行数动态变化，需根据玩家物品栏 Y 坐标动态调整 Tab 位置</li>
- *   <li>计算规则：警告 Tab Y = max(物品栏Y, 喂食Tab底部+间距)，能量/红石 Tab 依次递增</li>
- * </ul>
- * <p>
- * 调用方需先通过 {@link ApiaryGuiLayoutHelper#getInventoryYForBeeRows(int)} 计算物品栏 Y，
- * 再传入本类方法获取 Tab 坐标，实现职责分离（蜜蜂布局 ⟂ Tab 布局）。
- *
- * @see ApiaryGuiLayoutHelper
- */
+	 * MEK Apiary Tab 位置动态计算辅助类
+	 * <br/>
+	 * 从 {@link ApiaryGuiLayoutHelper} 抽取，专职负责 MEK 标准 Tab（警告/能量/红石）的 Y 坐标动态计算。
+	 * <p>
+	 * 设计原理：
+	 * <ul>
+	 *   <li>MEK 原版 Tab 的 Y 坐标在 GuiXxxTab 构造函数中硬编码（警告=109、能量=137、红石=137），
+	 *       仅适配标准 176×166 GUI</li>
+	 *   <li>本模组蜂箱 GUI 高度随蜜蜂行数动态变化，需根据玩家物品栏 Y 坐标动态调整 Tab 位置</li>
+	 *   <li>计算规则：警告 Tab Y = max(物品栏Y, 喂食Tab底部+间距)，能量/红石 Tab 依次递增</li>
+	 * </ul>
+	 * <p>
+	 * 调用方需先通过 {@link ApiaryGuiLayoutHelper#getInventoryYForBeeRows(int)} 计算物品栏 Y，
+	 * 再传入本类方法获取 Tab 坐标，实现职责分离（蜜蜂布局 ⟂ Tab 布局）。
+	 *
+	 * @see ApiaryGuiLayoutHelper
+	 */
 public final class ApiaryTabLayoutHelper {
 
 	private ApiaryTabLayoutHelper() {}

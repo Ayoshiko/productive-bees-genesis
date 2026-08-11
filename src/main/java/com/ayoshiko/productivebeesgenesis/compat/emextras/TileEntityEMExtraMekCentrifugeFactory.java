@@ -1,8 +1,37 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
-import java.util.List;
-import java.util.function.IntSupplier;
-
+import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
+import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
+import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
+import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugePbUpgradeHost;
+import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.mek.MultiFluidTankHostDelegate;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
+import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
+import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEMExtraFactoryAccessor;
+import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import com.jerry.mekextras.api.recipes.outputs.ExtraOutputHelper;
+import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryInputInventorySlot;
 import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryOutputInventorySlot;
 import io.github.masyumero.emextras.common.tile.factory.TileEntityEMExtraItemStackToItemStackFactory;
@@ -10,8 +39,8 @@ import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
-import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
+import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.inputs.IInputHandler;
 import mekanism.api.recipes.inputs.InputHelper;
 import mekanism.api.recipes.outputs.IOutputHandler;
@@ -38,52 +67,21 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
-import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
-import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
-import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
-import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
-import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugePbUpgradeHost;
-import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
-import com.ayoshiko.productivebeesgenesis.mek.MultiFluidTankHostDelegate;
-import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
-import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
-import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEMExtraFactoryAccessor;
-import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
-import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
-import com.jerry.mekextras.api.recipes.outputs.ExtraOutputHelper;
-
-import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import java.util.List;
+import java.util.function.IntSupplier;
 
 /**
- * EME扩展版MEK离心机工厂方块实体 — 继承EME的 TileEntityEMExtraItemStackToItemStackFactory。
- * <br/>
- * 因 Java 单继承限制无法继承 {@link AbstractMekCentrifugeFactory}，
- * 通过组合模式（PbRecipeProcessor、FactoryPbContextDelegate、IAe2OutputHostBase）复用公共逻辑。
- * 双配方路径：SMELTING走Mekanism管线（主输出槽）；PB CentrifugeRecipe独立处理（3输出槽+流体槽）。
- * 公共逻辑委托给 {@link CentrifugeFactoryCommonLogic}，与 {@link TileEntityExtraMekCentrifugeFactory} 复用同一份实现。
- */
+	 * EME扩展版MEK离心机工厂方块实体 — 继承EME的 TileEntityEMExtraItemStackToItemStackFactory。
+	 * <br/>
+	 * 因 Java 单继承限制无法继承 {@link AbstractMekCentrifugeFactory}，
+	 * 通过组合模式（PbRecipeProcessor、FactoryPbContextDelegate、IAe2OutputHostBase）复用公共逻辑。
+	 * 双配方路径：SMELTING走Mekanism管线（主输出槽）；PB CentrifugeRecipe独立处理（3输出槽+流体槽）。
+	 * 公共逻辑委托给 {@link CentrifugeFactoryCommonLogic}，与 {@link TileEntityExtraMekCentrifugeFactory} 复用同一份实现。
+	 */
 public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItemStackToItemStackFactory
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
 		IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
@@ -312,7 +310,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	 * 先走SMELTING管线，再处理PB配方，末尾推送输出到AE2网络。
 	 * <br/>
 	 * skipPb 批量收获（镜像 AbstractMekCentrifugeFactory）：256x JDTE 加速下每 gameTick 调用 256 次,
-	 * 第一次执行 PB（用上一 gameTick 倍率），后续 255 次跳过 PB 仅保留 super + AE2 推送。shouldSkipPb 内部已调用 tracker.onTick。
+	 * 第一次执行 PB、升级槽与 AE I/O（使用上一 gameTick 倍率），后续 255 次仅保留 super 与能量注入。
+	 * shouldSkipPb 内部已调用 tracker.onTick。
 	 */
 	@Override
 	protected boolean onUpdateServer() {
@@ -323,8 +322,10 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		boolean skipPb = skipState.shouldSkipPb(tracker, level);
 
 		productivebeesgenesis$ae2LifecycleHandler.tryConnectNode(this);
-		pbUpgradeDelegate.processPbUpgradeInput();
-		delegate.resetSortingMark();
+		if (!skipPb) {
+			pbUpgradeDelegate.processPbUpgradeInput();
+			delegate.resetSortingMark();
+		}
 		productivebeesgenesis$injectAe2Energy();
 		TileEntityEMExtraFactoryAccessor accessor = (TileEntityEMExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
@@ -340,13 +341,13 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 					v -> accessor.productivebeesgenesis$setLastUsage(v));
 			// 同步流体槽位数到客户端 — 仅执行 PB 时同步,跳过 255 次冗余赋值
 			multiFluidDelegate.setFluidOutputTankCount(multiFluidDelegate.getFluidOutputHolder() instanceof MultiFluidTankHolder h ? h.getTankCount() : 1);
+			// AE I/O 与 PB 批处理共用真实游戏刻门控，避免 256x 子 tick 重复进入短路链。
+			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(this);
 		} else {
 			// 跳过 PB：本 gameTick 后续调用,仅保留 super 返回值
 			result = sendUpdatePacket;
 		}
 
-		// AE2 推送器有自己的批量短路 + 退避,每次调用都执行
-		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(this);
 		return result;
 	}
 
@@ -365,8 +366,6 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		container.track(SyncableInt.create(multiFluidDelegate::getFluidOutputTankCount, multiFluidDelegate::setFluidOutputTankCount));
 		// Task 8: SyncableBoolean 同步多流体槽模式状态 — 确保客户端 Tab 显示与服务端一致
 		container.track(SyncableBoolean.create(() -> multiFluidDelegate.getFluidOutputHolder() instanceof MultiFluidTankHolder, multiFluidDelegate::setMultiFluidModeSynced));
-		// Task 3: 诊断日志 — 记录总 DataSlot 数、TileEntity 类型、调用源(callerId 替代运行时堆栈)
-		CentrifugeFactoryCommonLogic.logTrackersDiagnostic(container, this, "TileEntityEMExtraMekCentrifugeFactory#addContainerTrackers");
 	}
 
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */

@@ -1,9 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.level.Level;
-
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
@@ -11,36 +7,38 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputPuller;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.Level;
 
 /**
- * 基础MEK离心机服务端tick处理器
- * <br/>
- * Task 11 重构：从 {@link TileEntityMekCentrifuge} 抽取 onUpdateServer 与 tryProcessPbRecipe 逻辑，
- * 让主类聚焦于槽位/接口实现，tick流程独立维护。
- * <p>
- * Task 12 扩展：承接原 {@link TileEntityMekCentrifuge#onUpdateServer} 中的 AE2 节点连接、
- * PB 升级输入槽自动安装、AE2 输出推送（物品+流体）逻辑，使主类 onUpdateServer 完全委托。
- * <p>
- * Task 4 扩展：批量收获模式 — 通过 {@link TickAccelTracker} 检测加速模组（JDT/加速火把/JDTE 等），
- * 采用"延迟一 tick"策略：本 gameTick 第一次 tick 时使用上一 gameTick 的最终 multiplier 作为批量倍率，
- * 后续重复 tick 跳过 PB 处理（仍调用 super 让 ejector 工作），实现 N 倍产出跳过 N-1 次重复处理。
- * <p>
- * 职责：
- * <ul>
- *   <li>延迟连接 AE2 网格节点（{@link MekCentrifugeAe2Handler#tryConnectNode}）</li>
- *   <li>PB 升级输入槽自动安装（{@link MekCentrifugePbUpgradeHandler#processPbUpgradeInput}）</li>
- *   <li>调用 super.onUpdateServer()（通过 {@link TileEntityMekCentrifuge#callSuperOnUpdateServer}）
- *       触发 Mekanism SMELTING 管线与 ejector tick</li>
- *   <li>独立处理 PB 离心配方（不走 Mekanism CachedRecipe 管线）</li>
- *   <li>管理 active 状态切换（pbWasProcessing 标志位）</li>
- *   <li>AE2 输入拉取 + 输出推送（物品 {@link Ae2OutputPusher} + 流体 {@link Ae2FluidPusher}）</li>
- *   <li>批量收获模式：Tick 加速检测 + 延迟一 tick 策略（Task 4）</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行，无需同步锁。
- */
+	 * 基础MEK离心机服务端tick处理器
+	 * <br/>
+	 * Task 11 重构：从 {@link TileEntityMekCentrifuge} 抽取 onUpdateServer 与 tryProcessPbRecipe 逻辑，
+	 * 让主类聚焦于槽位/接口实现，tick流程独立维护。
+	 * <p>
+	 * Task 12 扩展：承接原 {@link TileEntityMekCentrifuge#onUpdateServer} 中的 AE2 节点连接、
+	 * PB 升级输入槽自动安装、AE2 输出推送（物品+流体）逻辑，使主类 onUpdateServer 完全委托。
+	 * <p>
+	 * Task 4 扩展：批量收获模式 — 通过 {@link TickAccelTracker} 检测加速模组（JDT/加速火把/JDTE 等），
+	 * 采用"延迟一 tick"策略：本 gameTick 第一次 tick 时使用上一 gameTick 的最终 multiplier 作为批量倍率，
+	 * 后续重复 tick 跳过 PB 处理（仍调用 super 让 ejector 工作），实现 N 倍产出跳过 N-1 次重复处理。
+	 * <p>
+	 * 职责：
+	 * <ul>
+	 *   <li>延迟连接 AE2 网格节点（{@link MekCentrifugeAe2Handler#tryConnectNode}）</li>
+	 *   <li>PB 升级输入槽自动安装（{@link MekCentrifugePbUpgradeHandler#processPbUpgradeInput}）</li>
+	 *   <li>调用 super.onUpdateServer()（通过 {@link TileEntityMekCentrifuge#callSuperOnUpdateServer}）
+	 *       触发 Mekanism SMELTING 管线与 ejector tick</li>
+	 *   <li>独立处理 PB 离心配方（不走 Mekanism CachedRecipe 管线）</li>
+	 *   <li>管理 active 状态切换（pbWasProcessing 标志位）</li>
+	 *   <li>AE2 输入拉取 + 输出推送（物品 {@link Ae2OutputPusher} + 流体 {@link Ae2FluidPusher}）</li>
+	 *   <li>批量收获模式：Tick 加速检测 + 延迟一 tick 策略（Task 4）</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
+	 */
 class MekCentrifugeTickHandler {
 
 	/** 所属方块实体引用 */
@@ -127,10 +125,12 @@ class MekCentrifugeTickHandler {
 		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出；内部有 isAe2Loaded 守卫）
 		tile.ae2Handler().tryConnectNode();
 
-		// PB 升级输入槽自动安装（与工厂版一致；内部有 level/clientSide/空输入守卫）
-		tile.pbUpgradeHandler().processPbUpgradeInput();
+		// 升级槽与 PB 批处理使用相同的真实游戏刻门控，避免 JDTE 子 tick 重复扫描。
+		if (!skipPb) {
+			tile.pbUpgradeHandler().processPbUpgradeInput();
+		}
 
-		// v1.8.0: 在 super 调用前从 AE 网络注入 FE 能量
+		// v2.0.0: 在 super 调用前从 AE 网络注入 FE 能量
 		// 让父类 super.onUpdateServer() 处理 SMELTING 配方消耗时已有注入的能量可用
 		// 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理
 		tile.productivebeesgenesis$injectAe2Energy();
@@ -172,7 +172,7 @@ class MekCentrifugeTickHandler {
 		// AE2 输入拉取 + 输出推送（AE2 未加载时短路，避免触发 appeng 类加载）
 		// 拉取间隔由 Ae2InputPuller 内部基于 lastPullTick 和配置 aeInputIntervalTicks 控制
 		// 输出推送内部有 per-tile 开关和网格连接守卫，未启用时安全短路
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
+		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
 			Ae2InputPuller.pullInputs(tile);
 			Ae2OutputPusher.pushOutputs(tile);
 			// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽

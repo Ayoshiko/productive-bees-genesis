@@ -1,22 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.Optional;
-
+import appeng.api.stacks.AEItemKey;
+import appeng.client.gui.Icon;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter.EntryInfo;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeInputFilterModePayload;
-import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload;
+import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload.OperationType;
+import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputNbtIgnorePayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPreciseModePayload;
-import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
@@ -25,11 +26,12 @@ import mekanism.client.gui.element.button.GuiPinButton;
 import mekanism.client.gui.element.button.MekanismButton;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.IFancyFontRenderer.TextAlignment;
-import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
+import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -37,28 +39,31 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Optional;
+import java.util.function.IntConsumer;
+
 /**
- * AE2 输入拉取配置窗口 — MEK GuiWindow 子类
- * <br/>
- * <b>V13 变更</b>：
- * <ul>
- *   <li>右键取消过滤（GhostItemWidget.mouseClicked 修复）</li>
- *   <li>左键右键都可标记，位置固定不重排（slotIndex + setEntryAt）</li>
- *   <li>精确模式开关按钮（P），区分蜜脾和蜜脾块</li>
- *   <li>修复 ghost slot 下方文字渲染不可见问题（重写 renderForeground）</li>
- *   <li>翻页使用全局 slotIndex，支持跨页位置固定</li>
- * </ul>
- */
+	 * AE2 input pull configuration window.
+	 * <p>
+	 * Layout mirrors the AE2LT overloaded ME interface (OverloadedInterfaceScreen):
+	 * a 9 x 2 grid where each cell stacks the amount/unlimited gear button on top,
+	 * the marker (ghost) slot 18px below and a network output slot 18px further
+	 * down. The output slot shows the pullable network stock and lets the player
+	 * take items from / put items back into the ME network directly, matching the
+	 * ProxiedStorageInv behaviour of AE2LT (gear on top, marker row, output row).
+	 */
 public final class GuiAeInputConfig extends GuiWindow {
 
-	private static final int WINDOW_WIDTH = 198;
-	private static final int WINDOW_HEIGHT = 170;
-	private static final int GRID_COLS = 4;
-	private static final int GRID_ROWS = 6;
+	private static final int WINDOW_WIDTH = 260;
+	private static final int WINDOW_HEIGHT = 200;
+	private static final int GRID_COLS = 9;
+	private static final int GRID_ROWS = 2;
 	private static final int SLOTS_PER_PAGE = GRID_COLS * GRID_ROWS;
-	private static final int SLOT_PITCH = 20;
-	private static final int GRID_WIDTH = GRID_COLS * SLOT_PITCH - 2;
-	private static final int GRID_HEIGHT = GRID_ROWS * SLOT_PITCH - 2;
+	private static final int CELL_PITCH_X = 18;
+	private static final int CELL_PITCH_Y = 60;
+	private static final int GEAR_SIZE = 16;
+	private static final int GRID_WIDTH = GRID_COLS * CELL_PITCH_X;
+	private static final int GRID_HEIGHT = GRID_ROWS * CELL_PITCH_Y;
 	private static final int GRID_X = 8;
 	private static final int GRID_Y = 44;
 	private static final int INFO_X = GRID_X + GRID_WIDTH + 4;
@@ -78,13 +83,15 @@ public final class GuiAeInputConfig extends GuiWindow {
 			((CustomWindowData) (Object) AE_INPUT_WINDOW_DATA)
 				.productivebeesgenesis$setCustomSaveName("window_ae_input");
 		} catch (ClassCastException e) {
-			ProductiveBeesGenesis.LOGGER.warn("GuiAeInputConfig Mixin 应用失败，AE 输入窗口位置不持久化", e);
+			ProductiveBeesGenesis.LOGGER.warn("GuiAeInputConfig window position persistence mixin unavailable", e);
 		}
 	}
 
 	private final IAe2InputHost host;
 	private final BlockPos pos;
 	private final GhostItemWidget[] ghostSlots;
+	private final StockGearButton[] stockButtons;
+	private final OutputSlotWidget[] outputSlots;
 	private final MekanismButton toggleBtn;
 	private final MekanismButton nbtBtn;
 	private final MekanismButton filterModeBtn;
@@ -94,8 +101,9 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private final MekanismButton clearBtn;
 	private final GuiInnerScreen infoScreen;
 	private int currentPage;
-	/** 最小页数（从配置读取，默认 4），保证位置固定模式下有足够的空页供放置 */
-	private int minPages = 4;
+	private int stockSyncTicks;
+	/** Minimum page count (from config), guarantees spare pages in fixed-position mode. */
+	private int minPages = 2;
 
 	public GuiAeInputConfig(IGuiWrapper gui, int x, int y, IAe2InputHost host, SelectedWindowData windowData) {
 		super(gui, x, y, WINDOW_WIDTH, WINDOW_HEIGHT,
@@ -103,13 +111,14 @@ public final class GuiAeInputConfig extends GuiWindow {
 		this.host = host;
 		this.pos = host.productivebeesgenesis$getAe2BlockPos();
 		this.currentPage = 0;
+		this.stockSyncTicks = 0;
 		this.interactionStrategy = InteractionStrategy.ALL;
 
 		addChild(new GuiPinButton(gui(), relativeX + PIN_X_OFFSET, relativeY + PIN_Y_OFFSET, this));
 		addChild(new GuiElementHolder(gui(), relativeX + GRID_X, relativeY + GRID_Y, GRID_WIDTH, GRID_HEIGHT));
 		infoScreen = addChild(new GuiInnerScreen(gui(), relativeX + INFO_X, relativeY + GRID_Y, INFO_WIDTH, INFO_HEIGHT));
 
-		// 控件按钮（I/N/F/P）— 缩小宽度避免与翻页按钮重叠
+		// Control buttons (I/N/F/P)
 		int btnX = 8;
 		toggleBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + CTRL_Y, TOGGLE_BTN_WIDTH, CTRL_BTN_HEIGHT,
 				"I", (e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPayload(pos)); return true; }));
@@ -123,12 +132,11 @@ public final class GuiAeInputConfig extends GuiWindow {
 				(e, mx, my) -> { PacketDistributor.sendToServer(new CycleAeInputFilterModePayload(pos)); return true; }));
 		filterModeBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.tooltip")));
 		btnX += TOGGLE_BTN_WIDTH + 2;
-		// V13: 精确模式切换按钮（P）
 		preciseBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + CTRL_Y, TOGGLE_BTN_WIDTH, CTRL_BTN_HEIGHT, "P",
 				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
 		preciseBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
 
-		// 翻页按钮（◀C▶）
+		// Page buttons (prev / clear / next)
 		prevPageBtn = addChild(new CtrlButton(gui(), relativeX + WINDOW_WIDTH - 3 * (PAGE_BTN_WIDTH + 2) - 8,
 				relativeY + CTRL_Y, PAGE_BTN_WIDTH, CTRL_BTN_HEIGHT, "\u25C0", (e, mx, my) -> { changePage(-1); return true; }));
 		prevPageBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.prev_page.tooltip")));
@@ -139,16 +147,23 @@ public final class GuiAeInputConfig extends GuiWindow {
 				relativeY + CTRL_Y, PAGE_BTN_WIDTH, CTRL_BTN_HEIGHT, "\u25B6", (e, mx, my) -> { changePage(1); return true; }));
 		nextPageBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.next_page.tooltip")));
 
-		// 创建 ghost slot 网格 — V13: 使用新构造函数（slotIndex + 回调）
+		// AE2LT overloaded-interface cells: gear (top) / marker (middle) / output (bottom)
 		ghostSlots = new GhostItemWidget[SLOTS_PER_PAGE];
+		stockButtons = new StockGearButton[SLOTS_PER_PAGE];
+		outputSlots = new OutputSlotWidget[SLOTS_PER_PAGE];
 		for (int i = 0; i < SLOTS_PER_PAGE; i++) {
-			int row = i / GRID_COLS;
 			int col = i % GRID_COLS;
-			int slotX = GRID_X + 1 + col * SLOT_PITCH;
-			int slotY = GRID_Y + 1 + row * SLOT_PITCH;
-			// slotIndex 为页面内索引，回调中转换为全局索引
-			ghostSlots[i] = addChild(new GhostItemWidget(gui(), relativeX + slotX, relativeY + slotY, i,
+			int row = i / GRID_COLS;
+			int cellX = GRID_X + col * CELL_PITCH_X;
+			int cellY = GRID_Y + row * CELL_PITCH_Y;
+			ghostSlots[i] = addChild(new GhostItemWidget(gui(), relativeX + cellX,
+					relativeY + cellY + 18, i,
 					null, false, this::onSlotPlaced, this::onSlotRemoved));
+			stockButtons[i] = addChild(new StockGearButton(gui(), relativeX + cellX,
+					relativeY + cellY, GEAR_SIZE, i,
+					this::onSlotConfigureAmount, this::onSlotToggleUnlimited));
+			outputSlots[i] = addChild(new OutputSlotWidget(gui(), relativeX + cellX,
+					relativeY + cellY + 36, pos, i));
 		}
 	}
 
@@ -162,25 +177,29 @@ public final class GuiAeInputConfig extends GuiWindow {
 		super.renderForeground(guiGraphics, mouseX, mouseY);
 		drawTitleText(guiGraphics, Component.translatable("productivebeesgenesis.gui.ae_input_config.title"), 5);
 
-		// 修复 v14 渲染阶段不修改状态：renderForeground 仅执行只读渲染
-		// 状态修改（clampCurrentPage/refreshGhostSlots/updateButtonStates）已迁移至 tick()
+		// Read-only rendering: state updates (clampCurrentPage/refreshGhostSlots/
+		// updateButtonStates) happen in tick() to avoid recursive rendering.
 		Ae2InputFilter filter = getFilter();
-		// V15: 显示用非空条目数，分页用容量（位置固定模式下条目可在任意槽位）
 		int entryCount = filter == null ? 0 : filter.getNonEmptyEntries().size();
 		renderInfoPanel(guiGraphics, filter, entryCount);
 	}
 
 	/**
-	 * 修复 v14 渲染阶段不修改状态：状态更新统一在 tick 中执行
-	 * <br/>
-	 * 原 renderForeground 中调用 clampCurrentPage/refreshGhostSlots/updateButtonStates
-	 * 会修改 currentPage、ghost slot 内容、按钮文案，存在递归渲染与状态不一致风险。
-	 * 迁移至 tick() 后，状态变更与渲染解耦，每 tick 更新一次，渲染阶段只读。
+	 * State refresh moved to tick(): avoids recursive rendering and keeps the
+	 * ghost/output slots and buttons in sync with the server filter snapshot.
 	 */
 	@Override
 	public void tick() {
 		super.tick();
 		Ae2InputFilter filter = getFilter();
+		if (filter != null && filter.hasNetworkStockEntries()) {
+			if (++stockSyncTicks >= 10) {
+				stockSyncTicks = 0;
+				PacketDistributor.sendToServer(new OpenAeInputConfigPayload(pos));
+			}
+		} else {
+			stockSyncTicks = 0;
+		}
 		int slotCount = filter == null ? 0 : filter.getCapacity();
 		clampCurrentPage(slotCount);
 		refreshGhostSlots(filter);
@@ -192,62 +211,87 @@ public final class GuiAeInputConfig extends GuiWindow {
 		int startY = GRID_Y + 4;
 		int panelWidth = INFO_WIDTH - 8;
 
-		Component modeLabel = Component.translatable("productivebeesgenesis.gui.ae_input_config.mode");
-		drawScaledScrollingString(guiGraphics, modeLabel, startX, startY, TextAlignment.LEFT,
-				screenTextColor(), panelWidth, 3, false, 0.7F);
-
+		// Right info panel mirrors the two-row grid height (INFO_HEIGHT = GRID_HEIGHT).
 		Component modeText = filter == null
-				? Component.literal("--")
+				? Component.translatable("productivebeesgenesis.gui.ae_input_config.mode")
+						.copy().append(" --")
 				: switch (filter.getFilterMode()) {
-					case DISABLED -> Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.disabled");
-					case WHITELIST -> Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.whitelist");
-					case BLACKLIST -> Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.blacklist");
+					case DISABLED -> Component.translatable("productivebeesgenesis.gui.ae_input_config.mode")
+							.copy().append(" ").append(Component.translatable(
+									"productivebeesgenesis.gui.ae_input_config.filter_mode.disabled"));
+					case WHITELIST -> Component.translatable("productivebeesgenesis.gui.ae_input_config.mode")
+							.copy().append(" ").append(Component.translatable(
+									"productivebeesgenesis.gui.ae_input_config.filter_mode.whitelist"));
+					case BLACKLIST -> Component.translatable("productivebeesgenesis.gui.ae_input_config.mode")
+							.copy().append(" ").append(Component.translatable(
+									"productivebeesgenesis.gui.ae_input_config.filter_mode.blacklist"));
 				};
-		drawScaledScrollingString(guiGraphics, modeText, startX, startY + 8, TextAlignment.LEFT,
+		drawScaledScrollingString(guiGraphics, modeText, startX, startY, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean inputEnabled = host.productivebeesgenesis$isAeItemInputEnabled();
 		Component inputText = Component.translatable(inputEnabled
 				? "productivebeesgenesis.gui.ae_input_config.info.input_on"
 				: "productivebeesgenesis.gui.ae_input_config.info.input_off");
-		drawScaledScrollingString(guiGraphics, inputText, startX, startY + 20, TextAlignment.LEFT,
+		drawScaledScrollingString(guiGraphics, inputText, startX, startY + 9, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean nbtIgnore = host.productivebeesgenesis$isAeInputNbtIgnore();
 		Component nbtText = Component.translatable(nbtIgnore
 				? "productivebeesgenesis.gui.ae_input_config.info.nbt_ignore"
 				: "productivebeesgenesis.gui.ae_input_config.info.nbt_match");
-		drawScaledScrollingString(guiGraphics, nbtText, startX, startY + 30, TextAlignment.LEFT,
+		drawScaledScrollingString(guiGraphics, nbtText, startX, startY + 18, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
-		// V13: 精确模式状态
 		boolean precise = filter != null && filter.isPreciseMode();
 		Component preciseText = Component.translatable(precise
 				? "productivebeesgenesis.gui.ae_input_config.info.precise_on"
 				: "productivebeesgenesis.gui.ae_input_config.info.precise_off");
-		drawScaledScrollingString(guiGraphics, preciseText, startX, startY + 40, TextAlignment.LEFT,
+		drawScaledScrollingString(guiGraphics, preciseText, startX, startY + 27, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
-		// 页码显示（移入信息栏，原顶部中央渲染已移除）
 		int slotCount = filter == null ? 0 : filter.getCapacity();
 		int total = computeTotalPages(slotCount);
-		Component pageLabel = Component.translatable("productivebeesgenesis.gui.ae_input_config.page");
-		drawScaledScrollingString(guiGraphics, pageLabel, startX, startY + 52, TextAlignment.LEFT,
-				screenTextColor(), panelWidth, 3, false, 0.7F);
-		Component pageText = Component.literal((currentPage + 1) + "/" + total);
-		drawScaledScrollingString(guiGraphics, pageText, startX, startY + 60, TextAlignment.LEFT,
+		Component pageText = Component.translatable("productivebeesgenesis.gui.ae_input_config.page")
+				.copy().append(" ").append((currentPage + 1) + "/" + total);
+		drawScaledScrollingString(guiGraphics, pageText, startX, startY + 36, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
-		Component countLabel = Component.translatable("productivebeesgenesis.gui.ae_input_config.entries");
-		drawScaledScrollingString(guiGraphics, countLabel, startX, startY + 72, TextAlignment.LEFT,
-				screenTextColor(), panelWidth, 3, false, 0.7F);
-		Component countText = Component.literal(String.valueOf(entryCount));
-		drawScaledScrollingString(guiGraphics, countText, startX, startY + 80, TextAlignment.LEFT,
+		Component countText = Component.translatable("productivebeesgenesis.gui.ae_input_config.entries")
+				.copy().append(" ").append(Integer.toString(entryCount));
+		drawScaledScrollingString(guiGraphics, countText, startX, startY + 45, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
-		Component hintLabel = Component.translatable("productivebeesgenesis.gui.ae_input_config.hint");
-		drawScaledScrollingString(guiGraphics, hintLabel, startX, startY + 94, TextAlignment.LEFT,
-				screenTextColor(), panelWidth, 3, false, 0.6F);
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder != null) {
+			Component rateText = Component.translatable("productivebeesgenesis.gui.ae_input_config.info.rate",
+					Integer.toString(holder.getCachedInputRatePerTick()));
+			drawScaledScrollingString(guiGraphics, rateText, startX, startY + 54, TextAlignment.LEFT,
+					screenTextColor(), panelWidth, 3, false, 0.7F);
+
+			Component intervalText = Component.translatable("productivebeesgenesis.gui.ae_input_config.info.interval",
+					Integer.toString(holder.getCachedInputIntervalTicks()));
+			drawScaledScrollingString(guiGraphics, intervalText, startX, startY + 63, TextAlignment.LEFT,
+					screenTextColor(), panelWidth, 3, false, 0.7F);
+
+			Component cooldownText = Component.translatable(
+					"productivebeesgenesis.gui.ae_input_config.info.cooldown",
+					Integer.toString(holder.getInputPullCooldownTicks()));
+			drawScaledScrollingString(guiGraphics, cooldownText, startX, startY + 72, TextAlignment.LEFT,
+					screenTextColor(), panelWidth, 3, false, 0.7F);
+		}
+
+		int unlimitedCount = 0;
+		if (filter != null) {
+			for (Ae2InputFilter.IndexedEntry ie : filter.getNonEmptyEntries()) {
+				if (filter.isDirectUnlimitedAt(ie.index())) unlimitedCount++;
+			}
+		}
+		Component unlimitedText = Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.info.unlimited_count",
+				Integer.toString(unlimitedCount));
+		drawScaledScrollingString(guiGraphics, unlimitedText, startX, startY + 81, TextAlignment.LEFT,
+				screenTextColor(), panelWidth, 3, false, 0.7F);
 	}
 
 	@Override
@@ -261,20 +305,55 @@ public final class GuiAeInputConfig extends GuiWindow {
 	}
 
 	/**
-	 * 按当前页填充 24 个 ghost slot — V13: 使用 getEntryAt 获取 beeType + isBlock
+	 * Fills the current page's ghost slots from the fixed-position filter array.
 	 * <br/>
-	 * 位置固定模式：条目在 filter 中的位置 = 全局 slotIndex = currentPage * SLOTS_PER_PAGE + 页内索引。
-	 * 空 slot 显示为空，用户可在任意空 slot 放置物品。
+	 * Position-fixed mode: entry index = currentPage * SLOTS_PER_PAGE + page index.
 	 */
 	private void refreshGhostSlots(Ae2InputFilter filter) {
 		int start = currentPage * SLOTS_PER_PAGE;
 		for (int i = 0; i < SLOTS_PER_PAGE; i++) {
 			int globalIdx = start + i;
+			outputSlots[i].clear();
+			outputSlots[i].setTooltip((Tooltip) null);
+			stockButtons[i].visible = false;
+			stockButtons[i].setTooltip((Tooltip) null);
 			if (filter != null) {
 				EntryInfo info = filter.getEntryAt(globalIdx);
+				if (info != null && info.directFingerprint != null) {
+					AEItemKey key = filter.getResolvedDirectKey(globalIdx);
+					if (key == null && Minecraft.getInstance().level != null) {
+						key = Ae2ItemFingerprint.decode(info.directFingerprint,
+								Minecraft.getInstance().level.registryAccess());
+					}
+					if (key != null) filter.resolveDirectKey(globalIdx, key);
+					long amount = filter.getDirectAmountAt(globalIdx);
+					long visibleAmount = filter.getDirectVisibleAmountAt(globalIdx);
+					boolean networkStock = filter.isDirectUnlimitedAt(globalIdx);
+					if (key != null) {
+						ItemStack icon = key.toStack(1);
+						ghostSlots[i].setDirectEntry(icon, info.directFingerprint);
+						ghostSlots[i].setTooltip(Tooltip.create(icon.getHoverName()));
+						outputSlots[i].setDirectEntry(icon,
+								networkStock ? visibleAmount : amount, networkStock, globalIdx);
+						outputSlots[i].setTooltip(Tooltip.create(Component.translatable(
+								"productivebeesgenesis.gui.ae_input_config.output_slot.tooltip",
+								formatCompactAmount(networkStock ? visibleAmount : amount))));
+					} else {
+						ghostSlots[i].setDirectFingerprint(info.directFingerprint);
+						ghostSlots[i].setTooltip(Tooltip.create(Component.literal(info.directFingerprint)));
+					}
+					stockButtons[i].visible = true;
+					stockButtons[i].active = true;
+					stockButtons[i].setNetworkStock(networkStock);
+					String tooltipKey = networkStock
+							? "productivebeesgenesis.gui.ae_input_config.stock_button.on"
+							: "productivebeesgenesis.gui.ae_input_config.stock_button.off";
+					stockButtons[i].setTooltip(Tooltip.create(Component.translatable(
+							tooltipKey, networkStock ? visibleAmount : amount)));
+					continue;
+				}
 				if (info != null && info.beeType != null) {
 					ghostSlots[i].setEntry(info.beeType, info.isBlock);
-					// 设置 tooltip 显示物品名称（按 isBlock 解析对应形态的图标）
 					ItemStack icon = BeeInfoHelper.resolveBeeIcon(
 							Minecraft.getInstance().level, info.beeType, info.isBlock);
 					if (!icon.isEmpty()) {
@@ -302,7 +381,6 @@ public final class GuiAeInputConfig extends GuiWindow {
 					case BLACKLIST -> "productivebeesgenesis.gui.ae_input_config.status.filter_blk";
 				};
 		filterModeBtn.setMessage(Component.translatable(modeKey));
-		// V13: 精确模式按钮标签
 		boolean precise = filter != null && filter.isPreciseMode();
 		preciseBtn.setMessage(Component.translatable(precise
 				? "productivebeesgenesis.gui.ae_input_config.status.precise_on"
@@ -323,49 +401,74 @@ public final class GuiAeInputConfig extends GuiWindow {
 	}
 
 	/**
-	 * 计算总页数 — 取容量所需页数与配置最小页数的较大值
-	 * <p>
-	 * V15：位置固定模式下分页基于数组容量（非条目数），
-	 * 保证用户可在任意槽位放置条目，即使条目很少也至少保留 minPages 页。
-	 * 下限保护为 1，避免 minPages 被错误配置为 0 时触发除零异常。
-	 *
-	 * @param slotCount 当前数组容量
-	 * @return 总页数（至少为 1）
+	 * Total pages = max(config minimum pages, capacity pages).
+	 * Fixed-position mode pages are based on the array capacity so entries can
+	 * be placed in any slot; at least minPages pages are kept.
 	 */
 	private int computeTotalPages(int slotCount) {
 		int capPages = (int) Math.ceil((double) slotCount / SLOTS_PER_PAGE);
 		return Math.max(1, Math.max(minPages, capPages));
 	}
 
-	/**
-	 * 设置最小页数（从配置读取后调用）
-	 *
-	 * @param minPages 最小页数（小于 1 会被修正为 1）
-	 */
 	public void setMinPages(int minPages) {
 		this.minPages = Math.max(1, minPages);
 	}
 
-	/**
-	 * V13: 放置物品到指定 slot — 发送 ADD 操作（含 isBlock 和全局 slotIndex）
-	 */
+	/** Sends an ADD operation (with isBlock and global slot index) for a placed item. */
 	private void onSlotPlaced(int pageSlotIndex, ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return;
 		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(stack);
 		if (beeType == null) return;
 		boolean isBlock = CombFuzzyMatcher.isCombBlock(stack);
 		int globalSlotIndex = currentPage * SLOTS_PER_PAGE + pageSlotIndex;
+		Optional<String> directKey = Optional.empty();
+		try {
+			if (Minecraft.getInstance().level != null) {
+				String fingerprint = Ae2ItemFingerprint.encode(AEItemKey.of(stack),
+						Minecraft.getInstance().level.registryAccess());
+				if (!fingerprint.isBlank()) directKey = Optional.of(fingerprint);
+			}
+		} catch (RuntimeException ignored) {
+			// Keep the legacy bee-type entry when an AE key cannot be created.
+		}
 		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
-				pos, Optional.of(beeType), isBlock, globalSlotIndex, OperationType.ADD));
+				pos, Optional.of(beeType), directKey, isBlock, globalSlotIndex, OperationType.ADD));
+		if (directKey.isPresent()) {
+			ghostSlots[pageSlotIndex].setDirectEntry(stack, directKey.get());
+		}
 	}
 
-	/**
-	 * V13: 移除指定 slot 的条目 — 发送 REMOVE 操作（含全局 slotIndex）
-	 */
+	/** Sends a REMOVE operation for the given page-local slot. */
 	private void onSlotRemoved(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * SLOTS_PER_PAGE + pageSlotIndex;
 		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, globalSlotIndex, OperationType.REMOVE));
+	}
+
+	/** Opens the MEK amount editor for one exact AE entry. */
+	private void onSlotConfigureAmount(int pageSlotIndex) {
+		Ae2InputFilter filter = getFilter();
+		int globalSlotIndex = currentPage * SLOTS_PER_PAGE + pageSlotIndex;
+		if (filter == null || !filter.isDirectEntry(globalSlotIndex)) return;
+
+		AEItemKey key = filter.getResolvedDirectKey(globalSlotIndex);
+		EntryInfo info = filter.getEntryAt(globalSlotIndex);
+		if (key == null && info != null && info.directFingerprint != null
+				&& Minecraft.getInstance().level != null) {
+			key = Ae2ItemFingerprint.decode(info.directFingerprint,
+					Minecraft.getInstance().level.registryAccess());
+			if (key != null) filter.resolveDirectKey(globalSlotIndex, key);
+		}
+		ItemStack icon = key == null ? ItemStack.EMPTY : key.toStack(1);
+		gui().addWindow(new GuiAeInputAmountConfig(gui(), relativeX + 38, relativeY + 18,
+				pos, globalSlotIndex, icon, filter.getDirectAmountAt(globalSlotIndex)));
+	}
+
+	/** Toggle the unlimited-provide marker for a direct AE2 entry. */
+	private void onSlotToggleUnlimited(int pageSlotIndex) {
+		int globalSlotIndex = currentPage * SLOTS_PER_PAGE + pageSlotIndex;
+		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+				pos, Optional.empty(), false, globalSlotIndex, OperationType.TOGGLE_UNLIMITED));
 	}
 
 	private void sendClear() {
@@ -374,9 +477,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		currentPage = 0;
 	}
 
-	/**
-	 * 接收幽灵物品并路由到鼠标下方的 ghost slot — 编程式集成入口
-	 */
+	/** Routes ghost ingredients (e.g. JEI) to the marker slot under the cursor. */
 	public boolean acceptGhostIngredient(ItemStack stack, double mouseX, double mouseY) {
 		for (GhostItemWidget slot : ghostSlots) {
 			if (slot.contains(mouseX, mouseY)) {
@@ -387,9 +488,62 @@ public final class GuiAeInputConfig extends GuiWindow {
 		return false;
 	}
 
-	/**
-	 * AE2 输入配置窗口内的控制按钮
-	 */
+	private static String formatCompactAmount(long amount) {
+		long safeAmount = Math.max(0L, amount);
+		if (safeAmount < 1_000L) return Long.toString(safeAmount);
+		long divisor = 1_000L;
+		char[] suffixes = {'K', 'M', 'G', 'T', 'P', 'E'};
+		for (char suffix : suffixes) {
+			if (divisor > Long.MAX_VALUE / 1_000L || safeAmount < divisor * 1_000L) {
+				long whole = safeAmount / divisor;
+				if (whole >= 100L) return whole + Character.toString(suffix);
+				long tenth = (safeAmount % divisor) / Math.max(1L, divisor / 10L);
+				return whole + "." + tenth + suffix;
+			}
+			divisor *= 1_000L;
+		}
+		return Long.toString(safeAmount);
+	}
+
+	/** Compact MEK-style gear button using AE2's familiar stock-configuration icon. */
+	private static final class StockGearButton extends MekanismButton {
+		private boolean networkStock;
+
+		StockGearButton(IGuiWrapper gui, int x, int y, int size, int slotIndex,
+				IntConsumer configureCallback, IntConsumer toggleCallback) {
+			super(gui, x, y, size, size, Component.empty(), (element, mouseX, mouseY) -> {
+				if (Screen.hasShiftDown()) {
+					toggleCallback.accept(slotIndex);
+				} else {
+					configureCallback.accept(slotIndex);
+				}
+				return true;
+			});
+			setButtonBackground(GuiElement.ButtonBackground.DEFAULT);
+			visible = false;
+		}
+
+		void setNetworkStock(boolean networkStock) {
+			this.networkStock = networkStock;
+		}
+
+		@Override
+		public void renderWidget(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+			if (!visible) return;
+			super.renderWidget(guiGraphics, mouseX, mouseY, partialTicks);
+			Icon icon = networkStock || isMouseOver(mouseX, mouseY) ? Icon.COG : Icon.COG_DISABLED;
+			icon.getBlitter()
+					.dest(relativeX + 1, relativeY + 1, width - 2, height - 2)
+					.zOffset(4)
+					.blit(guiGraphics);
+			if (networkStock) {
+				guiGraphics.drawString(Minecraft.getInstance().font, "\u221E",
+						relativeX + 9, relativeY + 7, 0x00FF00, true);
+			}
+		}
+	}
+
+	/** Compact text button used for the AE2 input control row. */
 	private static final class CtrlButton extends MekanismButton {
 		CtrlButton(IGuiWrapper gui, int x, int y, int width, int height, String initialText,
 				IClickable onClick) {

@@ -3,25 +3,25 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import net.minecraft.world.level.Level;
 
 /**
- * 加速倍率自动检测器 — 自动检测方块实体在同一游戏刻内被调用的次数作为加速倍率 M
- * <br/>
- * 兼容所有加速模组（JDT、加速火把、Industrial Foregoing: Souls、JDTE、EAEP 等），无需检测具体模组。
- * 被 IAe2InputHost 实现类持有（通过 Ae2OutputStateHolder），用于自适应节流 AE2 输入拉取逻辑。
- * <p>
- * <b>检测原理</b>：服务端单线程下，正常游戏刻内方块实体每 tick 仅被调用一次；
- * 当安装加速模组时，加速模组会在同一 gameTick 内多次调用方块实体的 tick 方法，
- * 通过统计同一 gameTick 内的调用次数即可得到加速倍率 M。
- * <p>
- * <b>线程安全</b>：本类不使用 synchronized 或 volatile，方块实体在服务端单线程执行，
- * 跨线程访问无需同步。reset() 仅在主线程调用（服务器停止/维度切换时）。
- * <p>
- * <b>性能约束</b>：onTick() 单次调用开销必须 &lt; 10ns（仅 long == 比较 + int++），
- * getMultiplier() 单次调用开销必须 &lt; 5ns（仅 Math.min/max）。
- *
- * @since 1.13.0
- * @see com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost
- * @see com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder
- */
+	 * 加速倍率自动检测器 — 自动检测方块实体在同一游戏刻内被调用的次数作为加速倍率 M
+	 * <br/>
+	 * 兼容所有加速模组（JDT、加速火把、Industrial Foregoing: Souls、JDTE、EAEP 等），无需检测具体模组。
+	 * 被 IAe2InputHost 实现类持有（通过 Ae2OutputStateHolder），用于自适应节流 AE2 输入拉取逻辑。
+	 * <p>
+	 * <b>检测原理</b>：服务端单线程下，正常游戏刻内方块实体每 tick 仅被调用一次；
+	 * 当安装加速模组时，加速模组会在同一 gameTick 内多次调用方块实体的 tick 方法，
+	 * 通过统计同一 gameTick 内的调用次数即可得到加速倍率 M。
+	 * <p>
+	 * <b>线程安全</b>：本类不使用 synchronized 或 volatile，方块实体在服务端单线程执行，
+	 * 跨线程访问无需同步。reset() 仅在主线程调用（服务器停止/维度切换时）。
+	 * <p>
+	 * <b>性能约束</b>：onTick() 单次调用开销必须 &lt; 10ns（仅 long == 比较 + int++），
+	 * getMultiplier() 单次调用开销必须 &lt; 5ns（仅 Math.min/max）。
+	 *
+	 * @since 2.0.0
+	 * @see com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost
+	 * @see com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder
+	 */
 public class TickAccelTracker {
 
 	/** 加速倍率上限 — 防止极端值导致 long/int 溢出 */

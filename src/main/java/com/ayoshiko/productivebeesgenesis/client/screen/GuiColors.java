@@ -1,14 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 /**
- * GUI 渲染颜色常量集中管理
- * <p>
- * 所有 GUI 屏幕与渲染器应引用这些常量，避免硬编码颜色值。
- * 本类仅存放 ARGB 颜色常量，不包含任何逻辑（SRP）。
- * <br/>
- * 注意：部分常量值相同但语义不同（如 {@link #STATUS_INVALID} 与 {@link #STATUS_ERROR_HINT}），
- * 拆分为独立常量以便后续按语义单独调整。
- */
+	 * GUI 渲染颜色常量集中管理
+	 * <p>
+	 * 所有 GUI 屏幕与渲染器应引用这些常量，避免硬编码颜色值。
+	 * 本类仅存放 ARGB 颜色常量，不包含任何逻辑（SRP）。
+	 * <br/>
+	 * 注意：部分常量值相同但语义不同（如 {@link #STATUS_INVALID} 与 {@link #STATUS_ERROR_HINT}），
+	 * 拆分为独立常量以便后续按语义单独调整。
+	 */
 public final class GuiColors {
 
 	private GuiColors() {}

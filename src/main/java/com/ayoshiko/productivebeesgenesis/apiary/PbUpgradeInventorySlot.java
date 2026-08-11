@@ -1,49 +1,47 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.function.BiPredicate;
-import java.util.function.Predicate;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import cy.jdkdigital.productivelib.registry.LibItems;
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.functions.ConstantPredicates;
-import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
+import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 
 /**
- * PB 升级物品槽 — 物理槽位实现(非 DataSlot 注册)。
- * <br/>
- * <b>诊断优先(Task 2):DataSlot 注册位置说明</b>
- * <br/>
- * 本类仅负责物理槽位的物品插入/提取校验,不涉及 DataSlot(SyncableInt)注册。
- * DataSlot 实际注册位置:{@link com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate#addContainerTrackers}
- * <br/>
- * 注册顺序(与 PbUpgradeType 枚举序数对应,跳过 SIMULATION=8):
- * <ol>
- *   <li>idx=0 → PRODUCTIVITY (ordinal=0)</li>
- *   <li>idx=1 → PRODUCTIVITY_2 (ordinal=1)</li>
- *   <li>idx=2 → PRODUCTIVITY_3 (ordinal=2)</li>
- *   <li>idx=3 → PRODUCTIVITY_4 (ordinal=3)</li>
- *   <li>idx=4 → TIME (ordinal=4)</li>
- *   <li>idx=5 → TIME_2 (ordinal=5)</li>
- *   <li>idx=6 → GENE_SAMPLER (ordinal=6)</li>
- *   <li>idx=7 → BLOCK (ordinal=7)</li>
- *   <li>idx=8 → INSTALL_TICKS (非枚举,安装进度计数器)</li>
- * </ol>
- * 共 9 个 SyncableInt。17 条越界警告(117/123/126)的根因需通过 DEV 日志确认,
- * 可能是 MEK broadcastChanges 使用了错误的索引范围,或子类 addContainerTrackers 重写顺序不一致。
- */
+	 * PB 升级物品槽 — 物理槽位实现(非 DataSlot 注册)。
+	 * <br/>
+	 * <b>诊断优先(Task 2):DataSlot 注册位置说明</b>
+	 * <br/>
+	 * 本类仅负责物理槽位的物品插入/提取校验,不涉及 DataSlot(SyncableInt)注册。
+	 * DataSlot 实际注册位置:{@link com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate#addContainerTrackers}
+	 * <br/>
+	 * 注册顺序(与 PbUpgradeType 枚举序数对应,跳过 SIMULATION=8):
+	 * <ol>
+	 *   <li>idx=0 → PRODUCTIVITY (ordinal=0)</li>
+	 *   <li>idx=1 → PRODUCTIVITY_2 (ordinal=1)</li>
+	 *   <li>idx=2 → PRODUCTIVITY_3 (ordinal=2)</li>
+	 *   <li>idx=3 → PRODUCTIVITY_4 (ordinal=3)</li>
+	 *   <li>idx=4 → TIME (ordinal=4)</li>
+	 *   <li>idx=5 → TIME_2 (ordinal=5)</li>
+	 *   <li>idx=6 → GENE_SAMPLER (ordinal=6)</li>
+	 *   <li>idx=7 → BLOCK (ordinal=7)</li>
+	 *   <li>idx=8 → INSTALL_TICKS (非枚举,安装进度计数器)</li>
+	 * </ol>
+	 * 共 9 个 SyncableInt。17 条越界警告(117/123/126)的根因需通过 DEV 日志确认,
+	 * 可能是 MEK broadcastChanges 使用了错误的索引范围,或子类 addContainerTrackers 重写顺序不一致。
+	 */
 public class PbUpgradeInventorySlot extends BasicInventorySlot {
 
 	/**

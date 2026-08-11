@@ -1,13 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.IntSupplier;
-
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import cy.jdkdigital.productivebees.init.ModItems;
-
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -22,32 +18,33 @@ import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.inventory.slot.InputInventorySlot;
 import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
-
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.IntSupplier;
 
 /**
- * 通用机械蜂箱槽位管理器
- * <br/>
- * 管理 BeeSlot 数组、蜂笼 I/O 槽、输出槽、能量槽、流体罐，
- * 通过组合委托 NBT 序列化至 {@link ApiarySlotSerializer}、蜂笼操作至 {@link ApiaryCageHandler}。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅管理槽位数据结构与初始化，不涉及序列化或蜂笼转移细节</li>
- *   <li>依赖倒置：持有 {@link TileEntityMekApiary} 引用访问父类字段和回调</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行，BeeSlot 内部使用 synchronized 保证
- * 客户端同步线程与服务端 tick 线程并发读写安全。
- * <p>
- * 阶段五改造：蜜蜂槽/输出槽/流体罐容量改为构造参数传入，支持工厂版动态数量，
- * 同时保留静态常量作为初始版默认值（向后兼容）。
- */
+	 * 通用机械蜂箱槽位管理器
+	 * <br/>
+	 * 管理 BeeSlot 数组、蜂笼 I/O 槽、输出槽、能量槽、流体罐，
+	 * 通过组合委托 NBT 序列化至 {@link ApiarySlotSerializer}、蜂笼操作至 {@link ApiaryCageHandler}。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅管理槽位数据结构与初始化，不涉及序列化或蜂笼转移细节</li>
+	 *   <li>依赖倒置：持有 {@link TileEntityMekApiary} 引用访问父类字段和回调</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，BeeSlot 内部使用 synchronized 保证
+	 * 客户端同步线程与服务端 tick 线程并发读写安全。
+	 * <p>
+	 * 阶段五改造：蜜蜂槽/输出槽/流体罐容量改为构造参数传入，支持工厂版动态数量，
+	 * 同时保留静态常量作为初始版默认值（向后兼容）。
+	 */
 public class ApiarySlotManager {
 
 	// ===== 初始版默认常量（向后兼容） =====

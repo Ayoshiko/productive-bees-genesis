@@ -1,5 +1,16 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.FieldsAreNonnullByDefault;
+import net.minecraft.MethodsReturnNonnullByDefault;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -9,30 +20,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
-import java.lang.ref.WeakReference;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-
-import net.minecraft.FieldsAreNonnullByDefault;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.Level;
 
 /**
- * 跨工厂共享的动态权重类型选择器（Task 1）
- * <p>
- * 替代 MyriadProductPool 的 200-tick 固定窗口，实现每 tick 动态权重选型。
- * 产出少的类型权重升高被优先选中，10 分钟内所有类型累计产出在 ±15% 范围内。
- * <p>
- * 选型算法：累积权重二分查找 + 位图去重（long[]，单次调用内去重，跨工厂允许重复）。
- * 工厂级调用计数缓存（WeakReference 弱引用 key，工厂卸载自动清理，避免内存泄漏）。
- * <p>
- * <b>线程安全</b>：服务端单线程执行，无锁竞争。volatile 字段保证跨区块可见性。
- */
+	 * 跨工厂共享的动态权重类型选择器（Task 1）
+	 * <p>
+	 * 替代 MyriadProductPool 的 200-tick 固定窗口，实现每 tick 动态权重选型。
+	 * 产出少的类型权重升高被优先选中，10 分钟内所有类型累计产出在 ±15% 范围内。
+	 * <p>
+	 * 选型算法：累积权重二分查找 + 位图去重（long[]，单次调用内去重，跨工厂允许重复）。
+	 * 工厂级调用计数缓存（WeakReference 弱引用 key，工厂卸载自动清理，避免内存泄漏）。
+	 * <p>
+	 * <b>线程安全</b>：服务端单线程执行，无锁竞争。volatile 字段保证跨区块可见性。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

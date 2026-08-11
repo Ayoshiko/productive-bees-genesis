@@ -1,37 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
+import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
+import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.jerry.mekextras.common.block.attribute.ExtraAttribute;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
 import mekanism.api.tier.BaseTier;
 import mekanism.common.tier.FactoryTier;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
-import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
-import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-
 /**
- * ME 扩展版工厂蜂箱方块实体
- * <br/>
- * 继承 {@link TileEntityMekApiaryFactory}（不是 ME 的工厂基类），因为蜂箱不走 Mekanism CachedRecipe 管线，
- * 蜜蜂生产逻辑完全复用父类的 {@link ApiaryTickHandler}。
- * <p>
- * 关键设计：
- * 1. 仅用 {@link ExtraAttributeTier} 标记 ME 等级（ABSOLUTE/SUPREME/COSMIC/INFINITE），
- *    不使用 Mekanism 的 {@code AttributeTier}/{@code FactoryTier}。
- * 2. {@link ExtraAttributeUpgradeable} 支持升级链（由 {@link MekApiaryMEBlockType} 配置）。
- * 3. 父类的 {@code tier} 字段（{@link FactoryTier} 类型）在 ME 版本中为 null，
- *    所有等级相关逻辑通过 {@code meTier} 字段处理。
- * <p>
- * 模板方法模式：通过重写 {@link #createSlotManager()} 和 {@link #createFeederSlotManager()}
- * 返回 ME 等级参数的槽位管理器，父类核心逻辑无需修改。
- */
+	 * ME 扩展版工厂蜂箱方块实体
+	 * <br/>
+	 * 继承 {@link TileEntityMekApiaryFactory}（不是 ME 的工厂基类），因为蜂箱不走 Mekanism CachedRecipe 管线，
+	 * 蜜蜂生产逻辑完全复用父类的 {@link ApiaryTickHandler}。
+	 * <p>
+	 * 关键设计：
+	 * 1. 仅用 {@link ExtraAttributeTier} 标记 ME 等级（ABSOLUTE/SUPREME/COSMIC/INFINITE），
+	 *    不使用 Mekanism 的 {@code AttributeTier}/{@code FactoryTier}。
+	 * 2. {@link ExtraAttributeUpgradeable} 支持升级链（由 {@link MekApiaryMEBlockType} 配置）。
+	 * 3. 父类的 {@code tier} 字段（{@link FactoryTier} 类型）在 ME 版本中为 null，
+	 *    所有等级相关逻辑通过 {@code meTier} 字段处理。
+	 * <p>
+	 * 模板方法模式：通过重写 {@link #createSlotManager()} 和 {@link #createFeederSlotManager()}
+	 * 返回 ME 等级参数的槽位管理器，父类核心逻辑无需修改。
+	 */
 public class TileEntityExtraMekApiaryFactory extends TileEntityMekApiaryFactory {
 
 	/** ME 工厂等级 — 在 presetVariables() 中从 BlockType 的 ExtraAttributeTier 读取 */

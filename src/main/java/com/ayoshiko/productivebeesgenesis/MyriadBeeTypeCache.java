@@ -1,5 +1,14 @@
 package com.ayoshiko.productivebeesgenesis;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -9,33 +18,23 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.ItemStack;
-
 /**
- * 万象创世蜜蜂类型缓存管理器
- * <br/>
- * 从 {@link MyriadCreationsEventHandler} 抽离，负责：
- * <ul>
- *   <li>蜜蜂类型缓存的定期刷新（从 PB 数据源读取，应用配置过滤）</li>
- *   <li>预构建蜜脾/蜜脾块模板数组（避免高频路径重复构造 ItemStack）</li>
- *   <li>缓存的失效与清理（服务器停止、配置重载时）</li>
- * </ul>
- * <p>
- * <b>线程安全</b>：
- * <ul>
- *   <li>{@link #beeTypeCacheSnapshot} 为 volatile 引用，通过不可变 {@link BeeTypeCacheSnapshot} 原子替换</li>
- *   <li>{@link #CACHE_VALID} 和 {@link #LAST_CACHE_UPDATE_TICK} 使用 AtomicBoolean/AtomicInteger</li>
- *   <li>读写模式：服务端 tick 线程单写，GUI 线程/Mixin 线程多读</li>
- * </ul>
- */
+	 * 万象创世蜜蜂类型缓存管理器
+	 * <br/>
+	 * 从 {@link MyriadCreationsEventHandler} 抽离，负责：
+	 * <ul>
+	 *   <li>蜜蜂类型缓存的定期刷新（从 PB 数据源读取，应用配置过滤）</li>
+	 *   <li>预构建蜜脾/蜜脾块模板数组（避免高频路径重复构造 ItemStack）</li>
+	 *   <li>缓存的失效与清理（服务器停止、配置重载时）</li>
+	 * </ul>
+	 * <p>
+	 * <b>线程安全</b>：
+	 * <ul>
+	 *   <li>{@link #beeTypeCacheSnapshot} 为 volatile 引用，通过不可变 {@link BeeTypeCacheSnapshot} 原子替换</li>
+	 *   <li>{@link #CACHE_VALID} 和 {@link #LAST_CACHE_UPDATE_TICK} 使用 AtomicBoolean/AtomicInteger</li>
+	 *   <li>读写模式：服务端 tick 线程单写，GUI 线程/Mixin 线程多读</li>
+	 * </ul>
+	 */
 public final class MyriadBeeTypeCache {
 
 	/**

@@ -1,37 +1,35 @@
 package com.ayoshiko.productivebeesgenesis.command;
 
-import java.util.Map;
-
-import com.mojang.brigadier.arguments.StringArgumentType;
-import com.mojang.brigadier.context.CommandContext;
-
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
-
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.Map;
+
 /**
- * 开发者模式命令 — 运行时控制开发者模式开关与子功能
- * <br/>
- * 用法：
- * <ul>
- *   <li>{@code /productivebeesgenesis dev on} — 开启主开关</li>
- *   <li>{@code /productivebeesgenesis dev off} — 关闭主开关</li>
- *   <li>{@code /productivebeesgenesis dev status} — 查看当前状态</li>
- *   <li>{@code /productivebeesgenesis dev <feature> on|off} — 切换子功能（框架预留）</li>
- * </ul>
- * 需要 OP 权限等级 2（与原版管理命令一致）。
- * <p>
- * 状态仅存在于内存（{@link DevModeManager}），服务器重启后重置为关闭。
- * 每次状态变更后广播 {@link DevModeStateSyncPacket} 给所有在线玩家，
- * 同步客户端镜像状态（{@code ClientDevModeState}）以控制创造标签页开发物品可见性。
- *
- * @since 1.14.0
- */
+	 * 开发者模式命令 — 运行时控制开发者模式开关与子功能
+	 * <br/>
+	 * 用法：
+	 * <ul>
+	 *   <li>{@code /productivebeesgenesis dev on} — 开启主开关</li>
+	 *   <li>{@code /productivebeesgenesis dev off} — 关闭主开关</li>
+	 *   <li>{@code /productivebeesgenesis dev status} — 查看当前状态</li>
+	 *   <li>{@code /productivebeesgenesis dev <feature> on|off} — 切换子功能（框架预留）</li>
+	 * </ul>
+	 * 需要 OP 权限等级 2（与原版管理命令一致）。
+	 * <p>
+	 * 状态仅存在于内存（{@link DevModeManager}），服务器重启后重置为关闭。
+	 * 每次状态变更后广播 {@link DevModeStateSyncPacket} 给所有在线玩家，
+	 * 同步客户端镜像状态（{@code ClientDevModeState}）以控制创造标签页开发物品可见性。
+	 *
+	 * @since 2.0.0
+	 */
 public final class DevModeCommand {
 
 	/** 命令根字面量名称 */

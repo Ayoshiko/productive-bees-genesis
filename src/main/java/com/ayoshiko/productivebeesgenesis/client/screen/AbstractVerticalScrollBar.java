@@ -1,25 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
 /**
- * 垂直滚动条基类，封装滚动条几何计算、命中测试、渲染与鼠标交互。
- * <p>
- * 将 {@link FilterListDragHandler} 与 {@link BeeSelectionScrollBar} 中约 90 行
- * 重复度 80%-100% 的滚动条逻辑抽取为公共基类，遵循下述设计原则：
- * <ul>
- *   <li>SRP — 仅负责滚动条几何、渲染与交互，不涉及列表数据语义或条目拖拽</li>
- *   <li>OCP/DIP — 通过抽象方法获取屏幕数据，子类只需提供数据源即可扩展</li>
- *   <li>钩子方法 — {@link #onScrollChanged}/{@link #onThumbClicked}/{@link #onThumbReleased}
- *       供子类在滚动偏移变化、滑块点击/释放时执行附加逻辑（如重建按钮、更新状态）</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问，无需同步。
- */
+	 * 垂直滚动条基类，封装滚动条几何计算、命中测试、渲染与鼠标交互。
+	 * <p>
+	 * 将 {@link FilterListDragHandler} 与 {@link BeeSelectionScrollBar} 中约 90 行
+	 * 重复度 80%-100% 的滚动条逻辑抽取为公共基类，遵循下述设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责滚动条几何、渲染与交互，不涉及列表数据语义或条目拖拽</li>
+	 *   <li>OCP/DIP — 通过抽象方法获取屏幕数据，子类只需提供数据源即可扩展</li>
+	 *   <li>钩子方法 — {@link #onScrollChanged}/{@link #onThumbClicked}/{@link #onThumbReleased}
+	 *       供子类在滚动偏移变化、滑块点击/释放时执行附加逻辑（如重建按钮、更新状态）</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问，无需同步。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

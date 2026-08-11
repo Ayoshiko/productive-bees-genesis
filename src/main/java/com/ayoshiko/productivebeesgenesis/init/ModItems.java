@@ -14,15 +14,12 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-
 import cy.jdkdigital.productivebees.init.ModDataComponents;
-
+import mekanism.api.RelativeSide;
 import mekanism.api.security.SecurityMode;
 import mekanism.common.attachments.component.AttachedEjector;
-import mekanism.api.RelativeSide;
-import mekanism.common.attachments.component.AttachedSideConfig;
 import mekanism.common.attachments.component.AttachedSideConfig.LightConfigInfo;
-import mekanism.common.tile.component.config.DataType;
+import mekanism.common.attachments.component.AttachedSideConfig;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
@@ -32,8 +29,9 @@ import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registries.MekanismDataComponents;
-import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.tier.FactoryTier;
+import mekanism.common.tile.component.config.DataType;
+import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import net.minecraft.Util;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -46,19 +44,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 物品注册类
- * <br/>
- * 注册5个MEK离心机BlockItem，添加MekanismDataComponents实现数据持久化。
- * DataComponents包括：EJECTOR（弹出器）、SIDE_CONFIG（侧面配置）、
- * SECURITY（安全模式）、REDSTONE_CONTROL（红石控制）、UPGRADES（升级）。
- * <p>
- * EM扩展：当EvolvedMekanism加载时，通过registerEMFactoryItems()动态注册5个EM等级
- * 的BlockItem，存入EM_FACTORY_ITEMS Map。注册名与对应方块一致，确保
- * MekCentrifugeBlockType.wrapAsBlockRegistryObject()中的Item DeferredHolder能正确解析。
- * <p>
- * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂 BlockItem 注册，
- * 结果存入 EME_FACTORY_ITEMS 和 EME_APIARY_FACTORY_ITEMS（通配类型，避免编译期依赖 EME 类）。
- */
+	 * 物品注册类
+	 * <br/>
+	 * 注册5个MEK离心机BlockItem，添加MekanismDataComponents实现数据持久化。
+	 * DataComponents包括：EJECTOR（弹出器）、SIDE_CONFIG（侧面配置）、
+	 * SECURITY（安全模式）、REDSTONE_CONTROL（红石控制）、UPGRADES（升级）。
+	 * <p>
+	 * EM扩展：当EvolvedMekanism加载时，通过registerEMFactoryItems()动态注册5个EM等级
+	 * 的BlockItem，存入EM_FACTORY_ITEMS Map。注册名与对应方块一致，确保
+	 * MekCentrifugeBlockType.wrapAsBlockRegistryObject()中的Item DeferredHolder能正确解析。
+	 * <p>
+	 * EME扩展：当EvolvedMekanismExtras加载时，委托 {@link EMECompatLoader} 完成 EME 工厂 BlockItem 注册，
+	 * 结果存入 EME_FACTORY_ITEMS 和 EME_APIARY_FACTORY_ITEMS（通配类型，避免编译期依赖 EME 类）。
+	 */
 public final class ModItems {
 
 	public static final DeferredRegister.Items ITEMS =

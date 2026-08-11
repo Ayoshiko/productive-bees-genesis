@@ -1,38 +1,36 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-
-import mekanism.common.block.attribute.Attributes;
-import mekanism.common.content.blocktype.FactoryType;
-import mekanism.common.content.blocktype.Machine;
-import mekanism.common.lib.transmitter.TransmissionType;
-import mekanism.common.registries.MekanismSounds;
-import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
+import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import mekanism.common.block.attribute.Attributes;
+import mekanism.common.content.blocktype.FactoryType;
+import mekanism.common.content.blocktype.Machine;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import mekanism.common.registries.MekanismSounds;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Mekanism Extras (ME) 离心机工厂BlockType定义
- * <br/>
- * 此类独立承载对ME模组的可选依赖，避免ME未加载时MekCentrifugeBlockType触发NoClassDefFoundError。
- * 所有ME相关的import、字段和方法集中在此类，仅当MekCompatHooks.isMekanismExtrasLoaded()为true时
- * 由MekCentrifugeBlockType.initMETiers()包装方法调用。
- * <p>
- * 关键设计：
- * 1. ME等级使用ExtraFactoryMachine基类+ExtraAttributeTier/ExtraAttributeUpgradeable属性
- * 2. 能量配置遵循ME的ExtraFactory.setMachineData模式（storage=max(origStorage,usage)*processes）
- * 3. 使用without(ExtraAttributeUpgradeable.class)移除ME Mixin注入的错误升级目标，
- *    然后添加自己的ExtraAttributeUpgradeable指向下一级离心机工厂
- */
+	 * Mekanism Extras (ME) 离心机工厂BlockType定义
+	 * <br/>
+	 * 此类独立承载对ME模组的可选依赖，避免ME未加载时MekCentrifugeBlockType触发NoClassDefFoundError。
+	 * 所有ME相关的import、字段和方法集中在此类，仅当MekCompatHooks.isMekanismExtrasLoaded()为true时
+	 * 由MekCentrifugeBlockType.initMETiers()包装方法调用。
+	 * <p>
+	 * 关键设计：
+	 * 1. ME等级使用ExtraFactoryMachine基类+ExtraAttributeTier/ExtraAttributeUpgradeable属性
+	 * 2. 能量配置遵循ME的ExtraFactory.setMachineData模式（storage=max(origStorage,usage)*processes）
+	 * 3. 使用without(ExtraAttributeUpgradeable.class)移除ME Mixin注入的错误升级目标，
+	 *    然后添加自己的ExtraAttributeUpgradeable指向下一级离心机工厂
+	 */
 public final class MekCentrifugeMEBlockType {
 
 	/**

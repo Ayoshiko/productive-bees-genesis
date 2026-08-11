@@ -13,21 +13,21 @@ import net.neoforged.neoforge.common.data.ExistingFileHelper;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 方块标签数据生成器
- * <br/>
- * 为所有方块添加 {@link BlockTags#MINEABLE_WITH_PICKAXE} 标签（镐可挖掘）。
- * <p>
- * Bug 修复：EM/ME/EME 条件注册的工厂方块使用 {@link TagsProvider.TagAppender#addOptional} 标记为可选条目，
- * 生成的 JSON 中对应条目为 {"id":"...", "required":false}。
- * 这样未安装对应模组的玩家不会因引用未注册方块 ID 而导致整个 mineable/pickaxe 标签加载失败，
- * 级联影响所有 paxel/hammer/drill/aio 工具标签（挖掘等级失效）。
- * <p>
- * 原理：可选条目在原版标签解析时，若目标方块未注册则静默跳过，不影响标签整体加载。
- * 相比 NeoForge 条件标签（neoforge:conditional_entries），此为原版机制，兼容性最佳。
- * <p>
- * F10 修复：移除 infinitycreation_comb_block 的 mineable/hoe 标签（锄不应用于金属/装饰方块），
- * 统一加入 mineable/pickaxe。
- */
+	 * 方块标签数据生成器
+	 * <br/>
+	 * 为所有方块添加 {@link BlockTags#MINEABLE_WITH_PICKAXE} 标签（镐可挖掘）。
+	 * <p>
+	 * Bug 修复：EM/ME/EME 条件注册的工厂方块使用 {@link TagsProvider.TagAppender#addOptional} 标记为可选条目，
+	 * 生成的 JSON 中对应条目为 {"id":"...", "required":false}。
+	 * 这样未安装对应模组的玩家不会因引用未注册方块 ID 而导致整个 mineable/pickaxe 标签加载失败，
+	 * 级联影响所有 paxel/hammer/drill/aio 工具标签（挖掘等级失效）。
+	 * <p>
+	 * 原理：可选条目在原版标签解析时，若目标方块未注册则静默跳过，不影响标签整体加载。
+	 * 相比 NeoForge 条件标签（neoforge:conditional_entries），此为原版机制，兼容性最佳。
+	 * <p>
+	 * F10 修复：移除 infinitycreation_comb_block 的 mineable/hoe 标签（锄不应用于金属/装饰方块），
+	 * 统一加入 mineable/pickaxe。
+	 */
 public final class ModBlockTagsProvider extends BlockTagsProvider {
 
 	public ModBlockTagsProvider(PackOutput output,

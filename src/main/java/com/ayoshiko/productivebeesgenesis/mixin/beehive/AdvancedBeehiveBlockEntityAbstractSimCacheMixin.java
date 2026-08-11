@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntityAbstract;
 import net.minecraft.world.level.Level;
@@ -7,20 +9,17 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-
 /**
- * 高级蜂箱 isSim() 每 tick 缓存 Mixin。
- * <p>
- * {@code AdvancedBeehiveBlockEntityAbstract.tickBees()} 会对每只存活的蜜蜂判断
- * {@code blockEntity instanceof AdvancedBeehiveBlockEntity && advancedBeehive.isSim()}。
- * 在蜜蜂数量多或安装模拟升级的高级蜂箱密集场景下，isSim() 内部会多次读取升级栏与配置，
- * 成为热点。
- * <p>
- * 本 Mixin 在目标抽象类中注入两个字段，直接以方块实体自身存储每 tick 的缓存结果，
- * 避免 WeakHashMap / synchronizedMap 的查找与同步开销。
- */
+	 * 高级蜂箱 isSim() 每 tick 缓存 Mixin。
+	 * <p>
+	 * {@code AdvancedBeehiveBlockEntityAbstract.tickBees()} 会对每只存活的蜜蜂判断
+	 * {@code blockEntity instanceof AdvancedBeehiveBlockEntity && advancedBeehive.isSim()}。
+	 * 在蜜蜂数量多或安装模拟升级的高级蜂箱密集场景下，isSim() 内部会多次读取升级栏与配置，
+	 * 成为热点。
+	 * <p>
+	 * 本 Mixin 在目标抽象类中注入两个字段，直接以方块实体自身存储每 tick 的缓存结果，
+	 * 避免 WeakHashMap / synchronizedMap 的查找与同步开销。
+	 */
 @Mixin(AdvancedBeehiveBlockEntityAbstract.class)
 public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 

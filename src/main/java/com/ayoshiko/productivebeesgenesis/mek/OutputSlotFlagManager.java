@@ -4,23 +4,23 @@ import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 工厂离心机输出槽标志位批量/增量/延迟管理器
- * <p>
- * 原实现：每次 insertItem 触发 {@link IContentsListener}， listener 中调用全量
- * {@code updateOutputSlotFlags()} 扫描所有进程，复杂度 O(processes) / 每次插入。
- * 在 256 倍时间手杖下，一个进程一次 completePbRecipe 可能产生数十个物品插入事件，
- * 导致 O(processes × inserts) 的级联开销（热力图中表现为 BasicInventorySlot.insertItem
- * → onContentsChanged → updateOutputSlotFlags → isSlotFull → getLimit 占比 8~13%）。
- * <p>
- * 本管理器改为：
- * <ul>
- *   <li>批量模式（begin/end）下 listener 只标记 dirty，不扫描；</li>
- *   <li>批量结束时只重新计算受影响的那一个进程，O(1)；</li>
- *   <li>非批量外部插入/提取（SFM/AE2/漏斗）也只标记 dirty，延迟到下次读取标志位时才全量扫描，
- *       将 SFM 连续 N 次 extractItem 的 O(N × processes) 降为 O(processes)。</li>
- * </ul>
- * 同时维护每进程 {@code hasItems} 与 {@code full} 状态，通过计数器 O(1) 给出全局标志。
- */
+	 * 工厂离心机输出槽标志位批量/增量/延迟管理器
+	 * <p>
+	 * 原实现：每次 insertItem 触发 {@link IContentsListener}， listener 中调用全量
+	 * {@code updateOutputSlotFlags()} 扫描所有进程，复杂度 O(processes) / 每次插入。
+	 * 在 256 倍时间手杖下，一个进程一次 completePbRecipe 可能产生数十个物品插入事件，
+	 * 导致 O(processes × inserts) 的级联开销（热力图中表现为 BasicInventorySlot.insertItem
+	 * → onContentsChanged → updateOutputSlotFlags → isSlotFull → getLimit 占比 8~13%）。
+	 * <p>
+	 * 本管理器改为：
+	 * <ul>
+	 *   <li>批量模式（begin/end）下 listener 只标记 dirty，不扫描；</li>
+	 *   <li>批量结束时只重新计算受影响的那一个进程，O(1)；</li>
+	 *   <li>非批量外部插入/提取（SFM/AE2/漏斗）也只标记 dirty，延迟到下次读取标志位时才全量扫描，
+	 *       将 SFM 连续 N 次 extractItem 的 O(N × processes) 降为 O(processes)。</li>
+	 * </ul>
+	 * 同时维护每进程 {@code hasItems} 与 {@code full} 状态，通过计数器 O(1) 给出全局标志。
+	 */
 public final class OutputSlotFlagManager {
 
 	private final PbRecipeContext context;

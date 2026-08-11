@@ -1,12 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
-
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
 import com.mojang.authlib.GameProfile;
-
 import cy.jdkdigital.productivebees.common.block.entity.AmberBlockEntity;
 import cy.jdkdigital.productivebees.init.ModEntities;
 import cy.jdkdigital.productivebees.init.ModTags;
@@ -24,6 +19,10 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** Reproduces Productive Bees' dynamic Wanna Bee loot path for a simulated apiary. */
 public final class WannaBeeAmberAdapter {

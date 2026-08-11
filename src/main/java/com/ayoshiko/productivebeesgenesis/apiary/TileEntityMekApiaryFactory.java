@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.List;
-
 import mekanism.api.tier.BaseTier;
 import mekanism.api.tier.ITier;
 import mekanism.common.block.attribute.Attribute;
@@ -13,39 +11,39 @@ import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.upgrade.IUpgradeData;
 import mekanism.common.upgrade.MachineUpgradeData;
-
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 /**
- * 工厂版通用机械蜂箱方块实体
- * <br/>
- * 继承 {@link TileEntityMekApiary}，实现 {@link ITier} 接口获取工厂等级。
- * <p>
- * 关键设计决策：蜂箱工厂不继承 {@code TileEntityFactory}，不走 MEK CachedRecipe 管线。
- * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@link ApiaryTickHandler}。
- * 工厂等级仅通过 {@link AttributeTier} 区分（LED 颜色 + 物品名称颜色）。
- * <p>
- * 模板方法模式：通过重写 {@link #createSlotManager()} 和 {@link #createFeederSlotManager()}
- * 返回工厂版参数的槽位管理器，父类核心逻辑无需修改。
- * <p>
- * 工厂版参数表（spec.md 表 2.1）：
- * <ul>
- *   <li>Basic: 5 蜂蜂(1×5)/9 输出(3×3)/9 喂食(3×3)/256,000 mB/128,000 FE</li>
- *   <li>Advanced: 10 蜂蜂(2×5)/12 输出(3×4)/12 喂食(3×4)/512,000 mB/256,000 FE</li>
- *   <li>Elite: 15 蜂蜂(3×5)/15 输出(3×5)/15 喂食(3×5)/768,000 mB/512,000 FE</li>
- *   <li>Ultimate: 20 蜂蜂(4×5)/18 输出(3×6)/21 喂食(3×7)/1,024,000 mB/1,024,000 FE</li>
- * </ul>
- * <p>
- * 排序功能：实现 sorting 字段和 {@link #toggleSorting()}/{@link #isSorting()} 方法，
- * 供自定义 {@code GuiApiarySortingTab} 使用（不依赖 MEK 的 PacketGuiInteract.AUTO_SORT_BUTTON，
- * 因为后者检查 {@code tile instanceof TileEntityFactory}）。
- */
+	 * 工厂版通用机械蜂箱方块实体
+	 * <br/>
+	 * 继承 {@link TileEntityMekApiary}，实现 {@link ITier} 接口获取工厂等级。
+	 * <p>
+	 * 关键设计决策：蜂箱工厂不继承 {@code TileEntityFactory}，不走 MEK CachedRecipe 管线。
+	 * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@link ApiaryTickHandler}。
+	 * 工厂等级仅通过 {@link AttributeTier} 区分（LED 颜色 + 物品名称颜色）。
+	 * <p>
+	 * 模板方法模式：通过重写 {@link #createSlotManager()} 和 {@link #createFeederSlotManager()}
+	 * 返回工厂版参数的槽位管理器，父类核心逻辑无需修改。
+	 * <p>
+	 * 工厂版参数表（spec.md 表 2.1）：
+	 * <ul>
+	 *   <li>Basic: 5 蜂蜂(1×5)/9 输出(3×3)/9 喂食(3×3)/256,000 mB/128,000 FE</li>
+	 *   <li>Advanced: 10 蜂蜂(2×5)/12 输出(3×4)/12 喂食(3×4)/512,000 mB/256,000 FE</li>
+	 *   <li>Elite: 15 蜂蜂(3×5)/15 输出(3×5)/15 喂食(3×5)/768,000 mB/512,000 FE</li>
+	 *   <li>Ultimate: 20 蜂蜂(4×5)/18 输出(3×6)/21 喂食(3×7)/1,024,000 mB/1,024,000 FE</li>
+	 * </ul>
+	 * <p>
+	 * 排序功能：实现 sorting 字段和 {@link #toggleSorting()}/{@link #isSorting()} 方法，
+	 * 供自定义 {@code GuiApiarySortingTab} 使用（不依赖 MEK 的 PacketGuiInteract.AUTO_SORT_BUTTON，
+	 * 因为后者检查 {@code tile instanceof TileEntityFactory}）。
+	 */
 public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements ITier {
 
 	/** NBT key — sorting 状态 */

@@ -1,14 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 /**
- * 服务端 tick 时间监测器 — 通过 ServerTickEvent.Pre/Post 监听器记录每 tick 实际耗时（MSPT），
- * 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用。
- * 单例模式（服务端单线程无需并发安全）。
- * TPS 自适应：健康服务器 avgMspt ≤ 50ms → factor = 1.0；
- * 轻微卡顿 50-100ms → 线性降级到 0.1；
- * 严重卡顿 > 100ms → factor = 0.1（最低保护，避免完全停止）。
- * 滞回机制：上升沿 60ms 触发降级，下降沿 45ms 触发升级，避免在阈值附近震荡。
- */
+	 * 服务端 tick 时间监测器 — 通过 ServerTickEvent.Pre/Post 监听器记录每 tick 实际耗时（MSPT），
+	 * 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用。
+	 * 单例模式（服务端单线程无需并发安全）。
+	 * TPS 自适应：健康服务器 avgMspt ≤ 50ms → factor = 1.0；
+	 * 轻微卡顿 50-100ms → 线性降级到 0.1；
+	 * 严重卡顿 > 100ms → factor = 0.1（最低保护，避免完全停止）。
+	 * 滞回机制：上升沿 60ms 触发降级，下降沿 45ms 触发升级，避免在阈值附近震荡。
+	 */
 public class ServerTickTimeMonitor {
 
 	/** 滚动数组大小 — 最近 100 tick 的耗时样本 */

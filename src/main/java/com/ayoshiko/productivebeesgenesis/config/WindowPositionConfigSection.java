@@ -1,37 +1,37 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
+import net.neoforged.neoforge.common.ModConfigSpec;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
-
 /**
- * 窗口位置持久化配置段
- * <br/>
- * 为 PB 自定义窗口（PB 升级窗口、AE 输入配置窗口、喂食槽窗口）提供独立的
- * 位置和固定状态持久化，避免与 MEK 原版窗口共享 saveName 导致联动。
- * <p>
- * 每个窗口通过 saveName（如 "window_pb_upgrade"）索引，包含 x、y、pinned 三个配置项。
- * <p>
- * <b>Breaking change</b>：自本版本起 WINDOW_NAMES 由 {"pb_upgrade", "ae_input", "feeder"}
- * 重命名为 {"window_pb_upgrade", "window_ae_input", "window_feeder"}。
- * 原因：NeoForge 1.21.1 配置项翻译键使用 SIMPLE 格式 {@code modid.configuration.<local_name>}，
- * 不使用完整路径；旧 saveName "pb_upgrade" 与 mek_centrifuge 段的同名 local_name 在
- * SIMPLE 翻译键上发生冲突（均映射到 {@code productivebeesgenesis.configuration.pb_upgrade}）。
- * 加前缀 "window_" 既消除冲突，又保证 toml 子节名称可读。
- * <p>
- * <b>toml 持久化迁移</b>：saveName 作为 {@link ModConfigSpec.Builder#push(String)} 的参数，
- * 会成为 toml 子节标题。旧 toml 中的 {@code [window_positions.pb_upgrade]} 等子节在新版本中
- * 会被 NeoForge 默认忽略（unknown key），用户需要重新设置窗口位置。位置持久化仅为便利功能，
- * 不影响功能正确性，故不提供自动迁移代码。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP：仅负责窗口位置配置的注册和查询</li>
- *   <li>OCP：新增窗口只需在 {@link #registerAll} 中添加一行</li>
- *   <li>封装：positions Map 为 private，外部通过 {@link #getEntry} 查询，避免误修改</li>
- * </ul>
- */
+	 * 窗口位置持久化配置段
+	 * <br/>
+	 * 为 PB 自定义窗口（PB 升级窗口、AE 输入配置窗口、喂食槽窗口）提供独立的
+	 * 位置和固定状态持久化，避免与 MEK 原版窗口共享 saveName 导致联动。
+	 * <p>
+	 * 每个窗口通过 saveName（如 "window_pb_upgrade"）索引，包含 x、y、pinned 三个配置项。
+	 * <p>
+	 * <b>Breaking change</b>：自本版本起 WINDOW_NAMES 由 {"pb_upgrade", "ae_input", "feeder"}
+	 * 重命名为 {"window_pb_upgrade", "window_ae_input", "window_feeder"}。
+	 * 原因：NeoForge 1.21.1 配置项翻译键使用 SIMPLE 格式 {@code modid.configuration.<local_name>}，
+	 * 不使用完整路径；旧 saveName "pb_upgrade" 与 mek_centrifuge 段的同名 local_name 在
+	 * SIMPLE 翻译键上发生冲突（均映射到 {@code productivebeesgenesis.configuration.pb_upgrade}）。
+	 * 加前缀 "window_" 既消除冲突，又保证 toml 子节名称可读。
+	 * <p>
+	 * <b>toml 持久化迁移</b>：saveName 作为 {@link ModConfigSpec.Builder#push(String)} 的参数，
+	 * 会成为 toml 子节标题。旧 toml 中的 {@code [window_positions.pb_upgrade]} 等子节在新版本中
+	 * 会被 NeoForge 默认忽略（unknown key），用户需要重新设置窗口位置。位置持久化仅为便利功能，
+	 * 不影响功能正确性，故不提供自动迁移代码。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP：仅负责窗口位置配置的注册和查询</li>
+	 *   <li>OCP：新增窗口只需在 {@link #registerAll} 中添加一行</li>
+	 *   <li>封装：positions Map 为 private，外部通过 {@link #getEntry} 查询，避免误修改</li>
+	 * </ul>
+	 */
 public final class WindowPositionConfigSection {
 
 	/**

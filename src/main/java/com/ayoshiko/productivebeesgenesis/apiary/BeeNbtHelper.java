@@ -1,28 +1,27 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 
 /**
- * 蜜蜂 NBT 数据解析工具类
- * <br/>
- * 从蜜蜂 NBT 数据解析 EntityType 和蜜蜂类型键，供蜂箱各组件统一调用。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：仅做蜜蜂 NBT 解析，不涉及槽位或产出逻辑</li>
- *   <li>无状态：纯静态方法，线程安全</li>
- * </ul>
- * <p>
- * NBT 格式兼容：
- * <ul>
- *   <li>PB Occupant 格式："id" 字段存储实体类型注册名</li>
- *   <li>PB 蜂笼格式："entity" 字段存储实体类型注册名字符串，"type" 字段存储 ConfigurableBee 具体类型</li>
- * </ul>
- */
+	 * 蜜蜂 NBT 数据解析工具类
+	 * <br/>
+	 * 从蜜蜂 NBT 数据解析 EntityType 和蜜蜂类型键，供蜂箱各组件统一调用。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：仅做蜜蜂 NBT 解析，不涉及槽位或产出逻辑</li>
+	 *   <li>无状态：纯静态方法，线程安全</li>
+	 * </ul>
+	 * <p>
+	 * NBT 格式兼容：
+	 * <ul>
+	 *   <li>PB Occupant 格式："id" 字段存储实体类型注册名</li>
+	 *   <li>PB 蜂笼格式："entity" 字段存储实体类型注册名字符串，"type" 字段存储 ConfigurableBee 具体类型</li>
+	 * </ul>
+	 */
 public final class BeeNbtHelper {
 
 	/** 工具类禁止实例化 */

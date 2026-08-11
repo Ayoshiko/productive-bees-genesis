@@ -1,32 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
-import java.util.function.IntSupplier;
-
 import com.ayoshiko.productivebeesgenesis.config.CentrifugeConfigSection;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.StackMultiplierConfigSection;
 
+import java.util.function.IntSupplier;
+
 /**
- * 离心机输入槽堆叠倍率助手
- * <br/>
- * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
- * 供 {@link TieredInputSlot#productivebeesgenesis$setInputStackMultiplier} 使用。
- * <p>
- * 四类工厂使用不同的 tier 枚举：
- * <ul>
- *   <li>原版工厂 — {@code FactoryTier}（BASIC/ADVANCED/ELITE/ULTIMATE，ordinal 0-3）</li>
- *   <li>ME 工厂 — {@code ExtraFactoryTier}（ABSOLUTE/SUPREME/COSMIC/INFINITE，ordinal 0-3）</li>
- *   <li>EME 工厂 — {@code EMExtraFactoryTier}（ABSOLUTE_OVERCLOCKED/...，ordinal 0-3）</li>
- *   <li>EM 工厂 — {@code FactoryTier}（Mixin 扩展，OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE，ordinal 4-8）</li>
- * </ul>
- * 通过 ordinal 索引统一映射，避免在核心类中引用 ME/EME 的 tier 枚举类。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP：仅负责 tier→config 的映射，不涉及槽位创建或 Mixin 逻辑</li>
- *   <li>DIP：返回 IntSupplier 而非固定值，支持配置热重载</li>
- * </ul>
- */
+	 * 离心机输入槽堆叠倍率助手
+	 * <br/>
+	 * 按离心机等级和工厂类型提供对应的 {@link IntSupplier}，
+	 * 供 {@link TieredInputSlot#productivebeesgenesis$setInputStackMultiplier} 使用。
+	 * <p>
+	 * 四类工厂使用不同的 tier 枚举：
+	 * <ul>
+	 *   <li>原版工厂 — {@code FactoryTier}（BASIC/ADVANCED/ELITE/ULTIMATE，ordinal 0-3）</li>
+	 *   <li>ME 工厂 — {@code ExtraFactoryTier}（ABSOLUTE/SUPREME/COSMIC/INFINITE，ordinal 0-3）</li>
+	 *   <li>EME 工厂 — {@code EMExtraFactoryTier}（ABSOLUTE_OVERCLOCKED/...，ordinal 0-3）</li>
+	 *   <li>EM 工厂 — {@code FactoryTier}（Mixin 扩展，OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE，ordinal 4-8）</li>
+	 * </ul>
+	 * 通过 ordinal 索引统一映射，避免在核心类中引用 ME/EME 的 tier 枚举类。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP：仅负责 tier→config 的映射，不涉及槽位创建或 Mixin 逻辑</li>
+	 *   <li>DIP：返回 IntSupplier 而非固定值，支持配置热重载</li>
+	 * </ul>
+	 */
 public final class CentrifugeInputStackMultipliers {
 
 	private CentrifugeInputStackMultipliers() {
@@ -35,7 +35,7 @@ public final class CentrifugeInputStackMultipliers {
 	/**
 	 * 获取离心机堆叠倍率子段(从 ServerConfig 委托链中查询)。
 	 * <p>
-	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeInputStackXxx} 在 v1.13.0 子段抽取后,
+	 * 历史访问路径 {@code ModConfig.SERVER.mekCentrifugeInputStackXxx} 在 v2.0.0 子段抽取后,
 	 * 改为通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.mekCentrifugeInputStackXxx} 访问。
 	 */
 	private static StackMultiplierConfigSection stackMultiplier() {

@@ -2,16 +2,13 @@ package com.ayoshiko.productivebeesgenesis.datagen;
 
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import com.jerry.mekextras.common.tags.ExtraTags;
+import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import fr.iglee42.evolvedmekanism.registries.EMTags;
 import io.github.masyumero.emextras.common.tags.EMExtraTags;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-
-import fr.iglee42.evolvedmekanism.registries.EMTags;
 import mekanism.common.tags.MekanismTags;
 import mekanism.common.tier.FactoryTier;
-
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.resources.ResourceLocation;
@@ -26,17 +23,17 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import java.util.List;
 
 /**
- * 离心机配方辅助类
- * <br/>
- * 从 ModRecipes 拆分，负责所有 MEK 离心机及其工厂升级配方的生成：
- * <ul>
- *   <li>Mek 基础离心机 + 4 级工厂（Basic/Advanced/Elite/Ultimate）</li>
- *   <li>EM 5 级离心机工厂（Overclocked/Quantum/Dense/Multiversal/Creative）</li>
- *   <li>ME 4 级离心机工厂（Absolute/Supreme/Cosmic/Infinite）</li>
- *   <li>EME 4 级离心机工厂（AbsoluteOverclocked/SupremeQuantum/CosmicDense/InfiniteMultiversal）</li>
- * </ul>
- * 共享的 MekDataBuilder、addTierRecipe、addEMETierRecipe、rl 由 {@link ModRecipes} 提供。
- */
+	 * 离心机配方辅助类
+	 * <br/>
+	 * 从 ModRecipes 拆分，负责所有 MEK 离心机及其工厂升级配方的生成：
+	 * <ul>
+	 *   <li>Mek 基础离心机 + 4 级工厂（Basic/Advanced/Elite/Ultimate）</li>
+	 *   <li>EM 5 级离心机工厂（Overclocked/Quantum/Dense/Multiversal/Creative）</li>
+	 *   <li>ME 4 级离心机工厂（Absolute/Supreme/Cosmic/Infinite）</li>
+	 *   <li>EME 4 级离心机工厂（AbsoluteOverclocked/SupremeQuantum/CosmicDense/InfiniteMultiversal）</li>
+	 * </ul>
+	 * 共享的 MekDataBuilder、addTierRecipe、addEMETierRecipe、rl 由 {@link ModRecipes} 提供。
+	 */
 final class ModRecipesCentrifuge {
 
 	private ModRecipesCentrifuge() {

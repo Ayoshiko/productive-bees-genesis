@@ -1,30 +1,30 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 /**
- * PB 升级类型枚举
- * <br/>
- * 定义 Productive Bees 专属升级的类别，用于 {@link ApiaryUpgradeHandler} 管理安装状态
- * 及 {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeWindow} 渲染升级列表。
- * <p>
- * 每种升级包含：
- * <ul>
- *   <li>{@code id}：字符串标识，用于 NBT 序列化与翻译键生成</li>
- *   <li>{@code color}：ARGB 颜色，用于 GUI 显示区分</li>
- *   <li>{@code productivityFactor}：产量升级系数的默认值（仅产量系列有值，其他为 0；
- *       运行时实际值由 {@link PbUpgradeConfig} 从 PB 原版配置读取）</li>
- *   <li>{@code maxCount}：该类型可安装的最大数量（功能型=1，叠加型=8）</li>
- * </ul>
- * <p>
- * 设计原则：单一职责，仅定义类型元数据，不包含升级效果计算（效果计算由
- * {@link ApiaryUpgradeHandler} 根据已安装数量完成）。
- * <p>
- * Bug 5：产量升级区分为 α/β/γ/Ω 四个等级，每个等级有独立系数与颜色。
- * BLOCK 为独立的蜜脾块升级类型，Ω（PRODUCTIVITY_4）亦自带蜜脾块效果
- *（由 {@link ApiaryUpgradeHandler#hasCombBlockUpgrade} 判定，二者任一安装即生效）。
- * <p>
- * 按类型差异化上限：GENE_SAMPLER 上限由配置驱动（默认4，最大20），
- * BLOCK 为功能型升级 1 个即满；其他叠加型升级保持 8 个上限。
- */
+	 * PB 升级类型枚举
+	 * <br/>
+	 * 定义 Productive Bees 专属升级的类别，用于 {@link ApiaryUpgradeHandler} 管理安装状态
+	 * 及 {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeWindow} 渲染升级列表。
+	 * <p>
+	 * 每种升级包含：
+	 * <ul>
+	 *   <li>{@code id}：字符串标识，用于 NBT 序列化与翻译键生成</li>
+	 *   <li>{@code color}：ARGB 颜色，用于 GUI 显示区分</li>
+	 *   <li>{@code productivityFactor}：产量升级系数的默认值（仅产量系列有值，其他为 0；
+	 *       运行时实际值由 {@link PbUpgradeConfig} 从 PB 原版配置读取）</li>
+	 *   <li>{@code maxCount}：该类型可安装的最大数量（功能型=1，叠加型=8）</li>
+	 * </ul>
+	 * <p>
+	 * 设计原则：单一职责，仅定义类型元数据，不包含升级效果计算（效果计算由
+	 * {@link ApiaryUpgradeHandler} 根据已安装数量完成）。
+	 * <p>
+	 * Bug 5：产量升级区分为 α/β/γ/Ω 四个等级，每个等级有独立系数与颜色。
+	 * BLOCK 为独立的蜜脾块升级类型，Ω（PRODUCTIVITY_4）亦自带蜜脾块效果
+	 *（由 {@link ApiaryUpgradeHandler#hasCombBlockUpgrade} 判定，二者任一安装即生效）。
+	 * <p>
+	 * 按类型差异化上限：GENE_SAMPLER 上限由配置驱动（默认4，最大20），
+	 * BLOCK 为功能型升级 1 个即满；其他叠加型升级保持 8 个上限。
+	 */
 public enum PbUpgradeType {
 
 	/** 生产力升级 α — 产出数量倍率（PB 配置 productivityMultiplier，默认 1.2） */

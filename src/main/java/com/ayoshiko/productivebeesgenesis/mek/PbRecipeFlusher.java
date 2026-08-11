@@ -1,15 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import org.jetbrains.annotations.Nullable;
-
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
@@ -18,21 +9,28 @@ import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
- * PB配方输出执行器 — 封装聚合输出的实际插入与输入扣除逻辑
- * <br/>
- * 从 {@link PbRecipeCompleter} 抽取,遵循单一职责原则:
- * <ul>
- *   <li>{@link PbRecipeCompleter} — 仅负责聚合缓冲(accumulate)</li>
- *   <li>{@code PbRecipeFlusher} — 仅负责执行 flush(planAndExecute + 流体插入 + 输入扣除)</li>
- * </ul>
- * <p>
- * 性能优化(Task 4):复用实例字段数组(simStacks/simCounts 等),避免每次 flush 分配 5 个数组。
- * 单进程独立实例,单线程执行,可安全复用。数组大小固定 3(主+副1+副2)。
- * <p>
- * 线程安全:服务端单线程执行,无需同步锁。
- */
+	 * PB配方输出执行器 — 封装聚合输出的实际插入与输入扣除逻辑
+	 * <br/>
+	 * 从 {@link PbRecipeCompleter} 抽取,遵循单一职责原则:
+	 * <ul>
+	 *   <li>{@link PbRecipeCompleter} — 仅负责聚合缓冲(accumulate)</li>
+	 *   <li>{@code PbRecipeFlusher} — 仅负责执行 flush(planAndExecute + 流体插入 + 输入扣除)</li>
+	 * </ul>
+	 * <p>
+	 * 性能优化(Task 4):复用实例字段数组(simStacks/simCounts 等),避免每次 flush 分配 5 个数组。
+	 * 单进程独立实例,单线程执行,可安全复用。数组大小固定 3(主+副1+副2)。
+	 * <p>
+	 * 线程安全:服务端单线程执行,无需同步锁。
+	 */
 public final class PbRecipeFlusher {
 
 	/**
@@ -258,7 +256,7 @@ public final class PbRecipeFlusher {
 		}
 
 		// 第一遍:模拟 + 生成执行计划
-		// v2.1.0 修复产物锁定 bug：防御性检查 pendingRecipeOutputs 与 pendingRecipe 一致性
+		// v2.0.9 修复产物锁定 bug：防御性检查 pendingRecipeOutputs 与 pendingRecipe 一致性
 		CentrifugeRecipe pendingRecipe = completer.getPendingRecipe();
 		Map<ItemStack, ChancedOutput> recipeOutputs = completer.getPendingRecipeOutputs();
 		Map<ItemStack, ChancedOutput> expectedOutputs = pendingRecipe != null

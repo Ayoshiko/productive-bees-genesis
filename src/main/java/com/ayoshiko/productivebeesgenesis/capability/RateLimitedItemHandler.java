@@ -1,33 +1,34 @@
 package com.ayoshiko.productivebeesgenesis.capability;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.IntSupplier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.IntSupplier;
+
 /**
- * 限流 IItemHandler 包装器（Task 13）
- * <br/>
- * 包装一个内部 IItemHandler，对外部通过 Capability 拉取物品的行为进行每 tick 总量限制。
- * <p>
- * 背景：AE2 ME 接口高频拉取离心机输出槽时，会触发 IContentsListener → setSortingNeeded(true)
- * → 全量排序扫描，导致主线程卡顿。此包装器在 extractItem 路径上限制单 tick 内可拉取的物品总数。
- * <p>
- * 线程模型与并发安全：
- * <ul>
- *   <li>extractItem 可被 AE2 异步线程并发调用，resetTick 由服务端主线程每 tick 调用一次</li>
- *   <li>{@code extractedThisTick} 使用 AtomicInteger 维护本 tick 已提取计数</li>
- *   <li>{@code lastResetTick} 使用 AtomicLong，配合 CAS 保证重置仅发生一次</li>
- *   <li>extractItem 采用 "CAS 占用配额 + 差额回退" 模式，原子地完成"读-判定-累加"，
- *       杜绝多线程穿插导致的超额提取</li>
- *   <li>回退配额使用 safeRelease，防止跨 tick 重置使计数器变为负值</li>
- * </ul>
- * <p>
- * 使用方式：由 BlockEntity 在 tick 时调用 {@link #resetTick(long)} 更新当前游戏刻。
- * 默认 limit=0 表示无限制（兼容现有行为，不影响正常游戏）。
- */
+	 * 限流 IItemHandler 包装器（Task 13）
+	 * <br/>
+	 * 包装一个内部 IItemHandler，对外部通过 Capability 拉取物品的行为进行每 tick 总量限制。
+	 * <p>
+	 * 背景：AE2 ME 接口高频拉取离心机输出槽时，会触发 IContentsListener → setSortingNeeded(true)
+	 * → 全量排序扫描，导致主线程卡顿。此包装器在 extractItem 路径上限制单 tick 内可拉取的物品总数。
+	 * <p>
+	 * 线程模型与并发安全：
+	 * <ul>
+	 *   <li>extractItem 可被 AE2 异步线程并发调用，resetTick 由服务端主线程每 tick 调用一次</li>
+	 *   <li>{@code extractedThisTick} 使用 AtomicInteger 维护本 tick 已提取计数</li>
+	 *   <li>{@code lastResetTick} 使用 AtomicLong，配合 CAS 保证重置仅发生一次</li>
+	 *   <li>extractItem 采用 "CAS 占用配额 + 差额回退" 模式，原子地完成"读-判定-累加"，
+	 *       杜绝多线程穿插导致的超额提取</li>
+	 *   <li>回退配额使用 safeRelease，防止跨 tick 重置使计数器变为负值</li>
+	 * </ul>
+	 * <p>
+	 * 使用方式：由 BlockEntity 在 tick 时调用 {@link #resetTick(long)} 更新当前游戏刻。
+	 * 默认 limit=0 表示无限制（兼容现有行为，不影响正常游戏）。
+	 */
 public class RateLimitedItemHandler implements IItemHandler {
 
 	/** 被包装的原始 handler */

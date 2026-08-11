@@ -1,33 +1,33 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-
-import javax.annotation.Nullable;
-
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import javax.annotation.Nullable;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
 /**
- * 泛型配方缓存管理器 — 基于LRU淘汰策略的实例级缓存
- * <p>
- * 每个方块实体维护独立实例，避免多世界环境下的缓存污染。
- * 不使用同步锁（Minecraft方块实体在服务端单线程执行），消除不必要的性能开销。
- * <p>
- * 缓存策略：使用 {@link Optional} 包装值，支持缓存"无配方"结果（{@link Optional#empty()}），
- * 避免对没有配方的输入物品每tick重复全量遍历配方。
- * <p>
- * <b>缓存键优化</b>：对 configurable_honeycomb / configurable_comb_block 使用
- * {@code Item + bee_type} 作为轻量 key，避免 {@link ItemStack#hashItemAndComponents}
- * 触发 owo {@code DerivedComponentMap.hashCode()} 和 {@code PatchedDataComponentMap.hashCode()}
- * 的高昂开销。其他物品仍使用 {@link ItemStack#hashItemAndComponents} 保证正确性。
- *
- * @param <T> 缓存的配方类型
- */
+	 * 泛型配方缓存管理器 — 基于LRU淘汰策略的实例级缓存
+	 * <p>
+	 * 每个方块实体维护独立实例，避免多世界环境下的缓存污染。
+	 * 不使用同步锁（Minecraft方块实体在服务端单线程执行），消除不必要的性能开销。
+	 * <p>
+	 * 缓存策略：使用 {@link Optional} 包装值，支持缓存"无配方"结果（{@link Optional#empty()}），
+	 * 避免对没有配方的输入物品每tick重复全量遍历配方。
+	 * <p>
+	 * <b>缓存键优化</b>：对 configurable_honeycomb / configurable_comb_block 使用
+	 * {@code Item + bee_type} 作为轻量 key，避免 {@link ItemStack#hashItemAndComponents}
+	 * 触发 owo {@code DerivedComponentMap.hashCode()} 和 {@code PatchedDataComponentMap.hashCode()}
+	 * 的高昂开销。其他物品仍使用 {@link ItemStack#hashItemAndComponents} 保证正确性。
+	 *
+	 * @param <T> 缓存的配方类型
+	 */
 public class RecipeCacheManager<T> {
 
 	/**

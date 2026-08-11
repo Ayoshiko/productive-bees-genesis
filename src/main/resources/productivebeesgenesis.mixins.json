@@ -41,6 +41,7 @@
     "mek.TileComponentEjectorCooldownMixin",
     "mek.TileComponentEjectorMixin",
     "mekenergistics.MekEnergisticsInstallerGuardMixin",
+    "mekenergistics.MekEnergisticsTargetResolverGuardMixin",
     "recipe.AdvancedBeehiveRecipeSerializerMixin",
     "recipe.BeeBreedingRecipeSerializerMixin",
     "recipe.BeeConversionRecipeSerializerMixin",

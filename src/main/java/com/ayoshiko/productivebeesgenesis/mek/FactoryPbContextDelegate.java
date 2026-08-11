@@ -1,41 +1,40 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.jetbrains.annotations.Nullable;
-
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 工厂离心机 PB 上下文委托 — 组合封装三个工厂的公共状态和方法
- * <br/>
- * Task 10 重构：三个工厂类（{@link TileEntityMekCentrifugeFactory}、
- * {@link TileEntityExtraMekCentrifugeFactory}、{@link TileEntityEMExtraMekCentrifugeFactory}）
- * 继承不同的 Mekanism 父类，无法通过继承抽取公共逻辑。本类采用组合模式封装：
- * <ul>
- *   <li>Task 5 输出槽状态标志位（{@link OutputSlotFlagManager}）</li>
- *   <li>Task 11 激活状态计数器（{@link AtomicInteger} + boolean[]）</li>
- *   <li>Task 16 输出槽内容版本号</li>
- *   <li>Task 7 sortInventory 去抖标志</li>
- *   <li>输出槽 listener 创建（统一递增版本号 + 去抖触发排序/unpause）</li>
- * </ul>
- * 消除三个工厂约 300 行重复代码。工厂类通过委托调用本类方法，
- * 自身只保留槽位布局、配方查找、构造函数等工厂特有逻辑。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>单一职责：只负责工厂公共状态管理，不涉及槽位布局、配方查找</li>
- *   <li>依赖倒置：通过回调接口（{@link UnpauseCallback}）访问工厂的 lookupMonitor，不依赖具体类型</li>
- *   <li>开闭原则：新增工厂类型时只需创建本类实例并设置回调，不修改本类</li>
- * </ul>
- * <p>
- * 线程安全：方块实体在服务端单线程执行，字段无需同步锁；
- * outputContentsVersion 使用 AtomicLong 保证原子自增（可能被 Ejector Mixin 跨线程读取）；
- * sortingMarkedThisTick 为 volatile boolean，单线程 check-then-set 安全。
- */
+	 * 工厂离心机 PB 上下文委托 — 组合封装三个工厂的公共状态和方法
+	 * <br/>
+	 * Task 10 重构：三个工厂类（{@link TileEntityMekCentrifugeFactory}、
+	 * {@link TileEntityExtraMekCentrifugeFactory}、{@link TileEntityEMExtraMekCentrifugeFactory}）
+	 * 继承不同的 Mekanism 父类，无法通过继承抽取公共逻辑。本类采用组合模式封装：
+	 * <ul>
+	 *   <li>Task 5 输出槽状态标志位（{@link OutputSlotFlagManager}）</li>
+	 *   <li>Task 11 激活状态计数器（{@link AtomicInteger} + boolean[]）</li>
+	 *   <li>Task 16 输出槽内容版本号</li>
+	 *   <li>Task 7 sortInventory 去抖标志</li>
+	 *   <li>输出槽 listener 创建（统一递增版本号 + 去抖触发排序/unpause）</li>
+	 * </ul>
+	 * 消除三个工厂约 300 行重复代码。工厂类通过委托调用本类方法，
+	 * 自身只保留槽位布局、配方查找、构造函数等工厂特有逻辑。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>单一职责：只负责工厂公共状态管理，不涉及槽位布局、配方查找</li>
+	 *   <li>依赖倒置：通过回调接口（{@link UnpauseCallback}）访问工厂的 lookupMonitor，不依赖具体类型</li>
+	 *   <li>开闭原则：新增工厂类型时只需创建本类实例并设置回调，不修改本类</li>
+	 * </ul>
+	 * <p>
+	 * 线程安全：方块实体在服务端单线程执行，字段无需同步锁；
+	 * outputContentsVersion 使用 AtomicLong 保证原子自增（可能被 Ejector Mixin 跨线程读取）；
+	 * sortingMarkedThisTick 为 volatile boolean，单线程 check-then-set 安全。
+	 */
 public class FactoryPbContextDelegate {
 
 	/** 输出槽标志位管理器 — 维护 hasOutputItems/outputSlotsFull/outputItemCount */

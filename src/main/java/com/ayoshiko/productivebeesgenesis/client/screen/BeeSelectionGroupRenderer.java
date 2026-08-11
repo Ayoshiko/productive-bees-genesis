@@ -1,31 +1,30 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import java.util.List;
-
-import javax.annotation.ParametersAreNonnullByDefault;
-
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
-
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import java.util.List;
+
 /**
- * 蜜蜂选择屏幕的分组折叠与显示切换管理器
- * <p>
- * 将分组折叠状态切换、"仅显示未添加"过滤切换及分组标题点击检测等逻辑从屏幕类中剥离，
- * 使 BeeSelectionScreen 专注于事件调度与整体布局。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP — 仅负责分组折叠协调与显示切换逻辑</li>
- *   <li>组合模式 — 持有 {@link BeeSelectionState}、{@link BeeSelectionSorter}
- *       与 {@link BeeSelectionRenderer} 引用</li>
- * </ul>
- * <br/>
- * 线程安全：客户端 GUI 单线程访问。
- */
+	 * 蜜蜂选择屏幕的分组折叠与显示切换管理器
+	 * <p>
+	 * 将分组折叠状态切换、"仅显示未添加"过滤切换及分组标题点击检测等逻辑从屏幕类中剥离，
+	 * 使 BeeSelectionScreen 专注于事件调度与整体布局。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP — 仅负责分组折叠协调与显示切换逻辑</li>
+	 *   <li>组合模式 — 持有 {@link BeeSelectionState}、{@link BeeSelectionSorter}
+	 *       与 {@link BeeSelectionRenderer} 引用</li>
+	 * </ul>
+	 * <br/>
+	 * 线程安全：客户端 GUI 单线程访问。
+	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault

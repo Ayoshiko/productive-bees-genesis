@@ -1,18 +1,18 @@
 package com.ayoshiko.productivebeesgenesis;
 
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * 自定义数据持久化接口（Bug 6）
- * <br/>
- * 供扳手拆卸时保存机器特有数据到 BLOCK_ENTITY_DATA 组件。
- * 实现此接口的 TileEntity 在 {@code getDrops} 中被识别，
- * 调用 {@link #saveCustomDataForItem} 保存非 MEK 标准体系的数据。
- * <p>
- * 设计原则：接口隔离（ISP），仅包含扳手持久化所需的最小方法集。
- */
+	 * 自定义数据持久化接口（Bug 6）
+	 * <br/>
+	 * 供扳手拆卸时保存机器特有数据到 BLOCK_ENTITY_DATA 组件。
+	 * 实现此接口的 TileEntity 在 {@code getDrops} 中被识别，
+	 * 调用 {@link #saveCustomDataForItem} 保存非 MEK 标准体系的数据。
+	 * <p>
+	 * 设计原则：接口隔离（ISP），仅包含扳手持久化所需的最小方法集。
+	 */
 public interface ICustomDataPersistable {
 
 	/**

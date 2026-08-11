@@ -17,13 +17,13 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 条件战利品表生成器
- * <br/>
- * 为 EM/ME/EME 条件注册的工厂方块生成带 {@code neoforge:conditions} 的 dropSelf 战利品表 JSON。
- * 未安装对应模组时，NeoForge 条件系统跳过该战利品表，避免 Unknown registry key 解析错误。
- * <p>
- * F9 修复：解决 ModLootTables 无条件生成 EM/ME/EME 方块战利品表导致的解析失败。
- */
+	 * 条件战利品表生成器
+	 * <br/>
+	 * 为 EM/ME/EME 条件注册的工厂方块生成带 {@code neoforge:conditions} 的 dropSelf 战利品表 JSON。
+	 * 未安装对应模组时，NeoForge 条件系统跳过该战利品表，避免 Unknown registry key 解析错误。
+	 * <p>
+	 * F9 修复：解决 ModLootTables 无条件生成 EM/ME/EME 方块战利品表导致的解析失败。
+	 */
 public final class ConditionalBlockLootProvider implements DataProvider {
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();

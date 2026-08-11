@@ -1,25 +1,25 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.jerry.mekextras.api.mixin.IMixinMachineEnergyContainer;
-
+import mekanism.api.Upgrade;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
 /**
- * CREATIVE升级能量容器辅助类
- * <br/>
- * 1:1复刻MEKExtras {@code MixinMachineEnergyContainer.mekanism_Extras$extraRecalculateUpgrades} 中
- * CREATIVE安装时的无限电容量逻辑：
- * <ul>
- *   <li>{@code setMaxEnergy(Long.MAX_VALUE)} — 设置最大电容量为无限</li>
- *   <li>{@code setEnergy(Long.MAX_VALUE)} — 设置当前能量为满</li>
- * </ul>
- * <p>
- * <b>类加载安全</b>：本类直接引用{@link IMixinMachineEnergyContainer}（MEKExtras的API类），
- * 仅在MEKExtras加载时由{@link AbstractMekCentrifugeFactory#recalculateUpgrades}委托调用。
- * 未安装MEKExtras时本类不会被加载。
- *
- * @see com.jerry.mekextras.mixin.MixinMachineEnergyContainer#mekanism_Extras$extraRecalculateUpgrades
- */
+	 * CREATIVE升级能量容器辅助类
+	 * <br/>
+	 * 1:1复刻MEKExtras {@code MixinMachineEnergyContainer.mekanism_Extras$extraRecalculateUpgrades} 中
+	 * CREATIVE安装时的无限电容量逻辑：
+	 * <ul>
+	 *   <li>{@code setMaxEnergy(Long.MAX_VALUE)} — 设置最大电容量为无限</li>
+	 *   <li>{@code setEnergy(Long.MAX_VALUE)} — 设置当前能量为满</li>
+	 * </ul>
+	 * <p>
+	 * <b>类加载安全</b>：本类直接引用{@link IMixinMachineEnergyContainer}（MEKExtras的API类），
+	 * 仅在MEKExtras加载时由{@link AbstractMekCentrifugeFactory#recalculateUpgrades}委托调用。
+	 * 未安装MEKExtras时本类不会被加载。
+	 *
+	 * @see com.jerry.mekextras.mixin.MixinMachineEnergyContainer#mekanism_Extras$extraRecalculateUpgrades
+	 */
 public final class MekCreativeEnergyHelper {
 
 	private MekCreativeEnergyHelper() {}
@@ -45,6 +45,24 @@ public final class MekCreativeEnergyHelper {
 			if (energyContainer.getMaxEnergy() == Long.MAX_VALUE) {
 				energyContainer.setEnergy(Long.MAX_VALUE);
 			}
+		}
+	}
+
+	/**
+	 * Reconciles the creative capacity after Mekanism has handled an upgrade change.
+	 * Installing creative must restore the unlimited capacity that a SPEED/ENERGY
+	 * recalculation may overwrite. Removing creative delegates to Mekanism Extras so
+	 * the normal energy-upgrade capacity is restored immediately.
+	 */
+	public static void recalculateCreativeEnergy(MachineEnergyContainer<?> energyContainer,
+			Upgrade upgrade, boolean creativeInstalled) {
+		if (!(energyContainer instanceof IMixinMachineEnergyContainer mixin)) {
+			return;
+		}
+		if (creativeInstalled) {
+			applyCreativeMaxEnergy(energyContainer);
+		} else if (MekUpgradeSupport.isCreativeUpgrade(upgrade)) {
+			mixin.mekanism_Extras$extraRecalculateUpgrades(upgrade);
 		}
 	}
 }

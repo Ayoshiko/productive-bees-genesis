@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
-
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.button.MekanismButton;
@@ -10,24 +9,24 @@ import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * AE2 输出切换按钮 — 注入到 MEK 侧面配置窗口
- * <br/>
- * 14×14 像素按钮，显示 "A" 文字，点击时发送 {@link CycleAeOutputPayload} 到服务端，
- * 切换 per-tile AE2 物品/流体输出开关。
- * <p>
- * 继承 {@link MekanismButton} 以复用 Mekanism 的按钮渲染管线（纹理、悬停效果等），
- * 使用 DEFAULT 灰色背景（{@link GuiElement.ButtonBackground#DEFAULT}），
- * 与 GuiAeInputConfig 中的 CtrlButton 视觉一致，避免与 MEK SideConfig
- * 窗口原版按钮风格冲突。
- * <p>
- * <b>target 字段</b>：由 {@link AeOutputOverlay#ensureButton} 每帧更新，
- * 指向当前侧面配置窗口的上下文（GUI、方块实体、传输类型）。
- * 点击回调通过 target 获取方块坐标和传输类型，发送对应的网络包。
- * <p>
- * <b>双重点击处理</b>：{@link AeOutputOverlay#mouseClicked} 事件处理器在事件阶段
- * 拦截点击（Pre 阶段优先于屏幕 mouseClicked），按钮自身的 onPress 回调作为后备路径，
- * 确保即使事件被其他模组取消也能响应。两者不会同时执行（事件取消后按钮不接收点击）。
- */
+	 * AE2 输出切换按钮 — 注入到 MEK 侧面配置窗口
+	 * <br/>
+	 * 14×14 像素按钮，显示 "A" 文字，点击时发送 {@link CycleAeOutputPayload} 到服务端，
+	 * 切换 per-tile AE2 物品/流体输出开关。
+	 * <p>
+	 * 继承 {@link MekanismButton} 以复用 Mekanism 的按钮渲染管线（纹理、悬停效果等），
+	 * 使用 DEFAULT 灰色背景（{@link GuiElement.ButtonBackground#DEFAULT}），
+	 * 与 GuiAeInputConfig 中的 CtrlButton 视觉一致，避免与 MEK SideConfig
+	 * 窗口原版按钮风格冲突。
+	 * <p>
+	 * <b>target 字段</b>：由 {@link AeOutputOverlay#ensureButton} 每帧更新，
+	 * 指向当前侧面配置窗口的上下文（GUI、方块实体、传输类型）。
+	 * 点击回调通过 target 获取方块坐标和传输类型，发送对应的网络包。
+	 * <p>
+	 * <b>双重点击处理</b>：{@link AeOutputOverlay#mouseClicked} 事件处理器在事件阶段
+	 * 拦截点击（Pre 阶段优先于屏幕 mouseClicked），按钮自身的 onPress 回调作为后备路径，
+	 * 确保即使事件被其他模组取消也能响应。两者不会同时执行（事件取消后按钮不接收点击）。
+	 */
 public class AeOutputButton extends MekanismButton {
 
 	/** 按钮尺寸（宽=高） */

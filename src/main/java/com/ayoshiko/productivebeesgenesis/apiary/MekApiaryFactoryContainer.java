@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
@@ -10,21 +7,24 @@ import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 工厂版通用机械蜂箱 Container
- * <br/>
- * 继承 MekanismTileContainer，根据工厂等级动态计算玩家物品栏偏移。
- * 槽位由基类自动从方块实体提取（dynamicSlots=true 由 Screen 设置）。
- * <p>
- * 与初始版 {@link MekApiaryContainer} 的差异：
- * <ul>
- *   <li>蜜蜂列数固定 5（工厂版 FACTORY_BEE_COLS）</li>
- *   <li>蜜蜂行数随等级递增（Basic=1/Advanced=2/Elite=3/Ultimate=4）</li>
- *   <li>输出列数随等级递增（Basic=3/Advanced=4/Elite=5/Ultimate=6）</li>
- *   <li>imageWidth 动态：Ultimate=210px，其他=176px</li>
- *   <li>喂食槽数量随等级递增（Basic=9, Advanced=12, Elite=15, Ultimate=21），由 FeederSlotManager 动态创建</li>
- * </ul>
- */
+	 * 工厂版通用机械蜂箱 Container
+	 * <br/>
+	 * 继承 MekanismTileContainer，根据工厂等级动态计算玩家物品栏偏移。
+	 * 槽位由基类自动从方块实体提取（dynamicSlots=true 由 Screen 设置）。
+	 * <p>
+	 * 与初始版 {@link MekApiaryContainer} 的差异：
+	 * <ul>
+	 *   <li>蜜蜂列数固定 5（工厂版 FACTORY_BEE_COLS）</li>
+	 *   <li>蜜蜂行数随等级递增（Basic=1/Advanced=2/Elite=3/Ultimate=4）</li>
+	 *   <li>输出列数随等级递增（Basic=3/Advanced=4/Elite=5/Ultimate=6）</li>
+	 *   <li>imageWidth 动态：Ultimate=210px，其他=176px</li>
+	 *   <li>喂食槽数量随等级递增（Basic=9, Advanced=12, Elite=15, Ultimate=21），由 FeederSlotManager 动态创建</li>
+	 * </ul>
+	 */
 public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityMekApiaryFactory> implements IFeederSlotContainer, IPbUpgradeSlotContainer {
 
 	/** 喂食器虚拟槽位列表（Popup Window 交互用） */

@@ -1,40 +1,38 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import java.util.concurrent.atomic.AtomicLong;
-
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
-
 import net.minecraft.world.item.ItemStack;
 
-import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 输出槽位堆叠上限缓存（按索引 identity 缓存 + 版本号失效）
- * <br/>
- * 缓存每个输出槽位的 {@link BasicInventorySlot#getLimit} 结果，避免高频
- * getLimit 调用（{@code isOutputFull} 每次遍历所有输出槽都会触发）。
- * <p>
- * 从 {@link ApiarySlotManager} 拆分而来，原 v5 L-13 identity 缓存与
- * v5 CP-59 配置不可变性约束在此处保留。
- * <p>
- * 缓存命中条件：
- * <ul>
- *   <li>ItemStack 引用未变（identity {@code ==} 比较，非 {@code equals}）</li>
- *   <li>实例缓存版本号与全局版本号一致</li>
- * </ul>
- * <p>
- * 缓存约束说明（v5 CP-59）：
- * <ul>
- *   <li>ItemStack 为可变对象，count 增减不改变引用 identity，故 count 变化时缓存仍有效</li>
- *   <li>limit 值依赖 {@link TieredOutputInventorySlot} 的 stackMultiplier（动态读取
- *       {@code ModConfig}），NeoForge 配置运行时可通过 reload 变更</li>
- *   <li>配置 reload 时通过 {@link #invalidateCache()} 递增 {@link #CACHE_VERSION}，
- *       本类检测到版本号不匹配时主动重新计算 limit，确保配置变更后缓存立即失效</li>
- *   <li>线程安全：{@code CACHE_VERSION} 为 AtomicLong，{@code cachedVersion} 为实例字段，
- *       {@link #getCachedSlotLimit} 使用 synchronized 守卫 check-then-update 临界区，
- *       避免并发线程读到 cachedVersion 已更新但 cachedLimits 仍为旧值</li>
- * </ul>
- */
+	 * 输出槽位堆叠上限缓存（按索引 identity 缓存 + 版本号失效）
+	 * <br/>
+	 * 缓存每个输出槽位的 {@link BasicInventorySlot#getLimit} 结果，避免高频
+	 * getLimit 调用（{@code isOutputFull} 每次遍历所有输出槽都会触发）。
+	 * <p>
+	 * 从 {@link ApiarySlotManager} 拆分而来，原 v5 L-13 identity 缓存与
+	 * v5 CP-59 配置不可变性约束在此处保留。
+	 * <p>
+	 * 缓存命中条件：
+	 * <ul>
+	 *   <li>ItemStack 引用未变（identity {@code ==} 比较，非 {@code equals}）</li>
+	 *   <li>实例缓存版本号与全局版本号一致</li>
+	 * </ul>
+	 * <p>
+	 * 缓存约束说明（v5 CP-59）：
+	 * <ul>
+	 *   <li>ItemStack 为可变对象，count 增减不改变引用 identity，故 count 变化时缓存仍有效</li>
+	 *   <li>limit 值依赖 {@link TieredOutputInventorySlot} 的 stackMultiplier（动态读取
+	 *       {@code ModConfig}），NeoForge 配置运行时可通过 reload 变更</li>
+	 *   <li>配置 reload 时通过 {@link #invalidateCache()} 递增 {@link #CACHE_VERSION}，
+	 *       本类检测到版本号不匹配时主动重新计算 limit，确保配置变更后缓存立即失效</li>
+	 *   <li>线程安全：{@code CACHE_VERSION} 为 AtomicLong，{@code cachedVersion} 为实例字段，
+	 *       {@link #getCachedSlotLimit} 使用 synchronized 守卫 check-then-update 临界区，
+	 *       避免并发线程读到 cachedVersion 已更新但 cachedLimits 仍为旧值</li>
+	 * </ul>
+	 */
 final class SlotLimitCache {
 
 	/**
