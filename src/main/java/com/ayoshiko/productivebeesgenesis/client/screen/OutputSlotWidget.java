@@ -80,7 +80,7 @@ public final class OutputSlotWidget extends GuiElement {
 	/**
 	 * 绘制槽位数量数字（基于 AE2LT 过载接口 LargeStackCountRenderer 调整）
 	 * <br/>
-	 * 固定 0.7 缩放（数字比原版更小、不会超出格子）、水平居中于槽位、
+	 * 固定 0.7 缩放（数字比原版更小、不会超出格子）、右对齐到槽位右缘、
 	 * K/M/B 紧凑缩写（1 位小数仅在单位值 < 10 时显示）、z=300 阴影文字。
 	 */
 	private void drawAmount(GuiGraphics guiGraphics, Font font, long amount) {
@@ -88,8 +88,8 @@ public final class OutputSlotWidget extends GuiElement {
 			return;
 		}
 		String text = formatCount(amount);
-		// 水平居中：文字中点对齐槽位水平中心（缩放前坐标）
-		int drawX = (int) ((relativeX + 9.0F - font.width(text) * COUNT_SCALE * 0.5F) * COUNT_INVERSE_SCALE);
+		// 右对齐：文字右缘对齐槽位右缘（缩放前坐标）
+		int drawX = (int) ((relativeX + 18.0F - font.width(text) * COUNT_SCALE) * COUNT_INVERSE_SCALE);
 		int drawY = (int) ((relativeY + 16.0F - 3.75F) * COUNT_INVERSE_SCALE);
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(0.0F, 0.0F, 300.0F);
