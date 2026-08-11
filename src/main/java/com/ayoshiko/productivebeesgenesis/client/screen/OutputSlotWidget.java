@@ -8,13 +8,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
-
-import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 
 /**
 	 * AE2LT overloaded-interface style third-row output slot.
@@ -79,71 +78,72 @@ public final class OutputSlotWidget extends GuiElement {
 	}
 
 	/**
-	 * 绘制槽位数量数字（过载 ME 接口风格：固定字号、右对齐、底部阴影）
+	 * 绘制槽位数量数字（复刻 AE2LT 过载接口 LargeStackCountRenderer）
 	 * <br/>
-	 * 与 Minecraft 原版/AE2 的「超宽时缩小字号」不同，这里所有数字始终以完整字号绘制：
-	 * 先取紧凑缩写（K/M/G/T/P/E），仍超宽时逐级取整到更大单位，
-	 * 保证不同长度、不同数量的数字字体大小完全一致（较长文本向左延伸）。
-	 * z=200 保证盖在物品图标上方且不被遮挡。
+	 * 固定 0.75 缩放（数字比原版更小、不会超出格子）、右对齐到槽位右缘、
+	 * K/M/B 紧凑缩写（1 位小数仅在单位值 < 10 时显示）、z=300 阴影文字。
 	 */
 	private void drawAmount(GuiGraphics guiGraphics, Font font, long amount) {
-		String text = formatSlotAmount(amount, font);
-		int textWidth = font.width(text);
+		if (amount <= 1L) {
+			return;
+		}
+		String text = formatCount(amount);
+		int drawX = (int) ((relativeX + 18.0F - font.width(text) * COUNT_SCALE) * COUNT_INVERSE_SCALE);
+		int drawY = (int) ((relativeY + 16.0F - 3.75F) * COUNT_INVERSE_SCALE);
 		guiGraphics.pose().pushPose();
-		guiGraphics.pose().translate(relativeX + 1 + 16.0F, relativeY + 1 + 16.0F, 200.0F);
-		guiGraphics.drawString(font, text, -textWidth, -font.lineHeight, 0xFFFFFF, true);
+		guiGraphics.pose().translate(0.0F, 0.0F, 300.0F);
+		guiGraphics.pose().scale(COUNT_SCALE, COUNT_SCALE, COUNT_SCALE);
+		drawShadowedText(guiGraphics, font, drawX, drawY, text);
 		guiGraphics.pose().popPose();
 	}
 
 	/**
-	 * 生成固定字号下尽量短小的紧凑数量文本
+	 * 数量紧凑格式化（与 AE2LT LargeStackCountRenderer.formatCount 一致）
 	 * <br/>
-	 * 先尝试 NumberFormatter 的 1 位小数缩写（如 "1.5K"），仍偏长时逐级取整
-	 * （含进位，如 "999.9K" → "1M"），返回最短候选以保证统一字号下视觉一致。
+	 * 千以下原样显示；K/M/B 分级：单位值 < 10 时保留 1 位小数（如 "1.5K"），
+	 * >= 10 时取整（如 "123K"）。
 	 */
-	private static String formatSlotAmount(long amount, Font font) {
-		long safe = Math.max(1L, amount);
-		String compact = NumberFormatter.formatCompact(safe);
-		if (font.width(compact) <= 16) {
-			return compact;
+	private static String formatCount(long count) {
+		if (count < 1000L) {
+			return Long.toString(count);
 		}
-		// 逐级取整到更大单位：K → M → G → T → P → E
-		final String[] suffixes = {"K", "M", "G", "T", "P", "E"};
-		long divisor = 1_000L;
-		String best = compact;
-		int bestWidth = font.width(best);
-		for (String suffix : suffixes) {
-			long whole = safe / divisor;
-			if (whole <= 0) {
-				break;
-			}
-			// 向下取整候选（如 123K）
-			String floorText = whole + suffix;
-			int floorWidth = font.width(floorText);
-			if (floorWidth <= 16) {
-				return floorText;
-			}
-			if (floorWidth < bestWidth) {
-				best = floorText;
-				bestWidth = floorWidth;
-			}
-			// 进位候选（如 999K → 1M），避免“999.9K 超宽但下一级向下取整为 0”的死角
-			String ceilText = (whole + 1) + suffix;
-			int ceilWidth = font.width(ceilText);
-			if (ceilWidth <= 16) {
-				return ceilText;
-			}
-			if (ceilWidth < bestWidth) {
-				best = ceilText;
-				bestWidth = ceilWidth;
-			}
-			if (divisor > Long.MAX_VALUE / 1_000L) {
-				break;
-			}
-			divisor *= 1_000L;
+		if (count < 1_000_000L) {
+			return formatWithSuffix(count, 1_000L, "K");
 		}
-		return best;
+		if (count < 1_000_000_000L) {
+			return formatWithSuffix(count, 1_000_000L, "M");
+		}
+		return formatWithSuffix(count, 1_000_000_000L, "B");
 	}
+
+	private static String formatWithSuffix(long count, long divisor, String suffix) {
+		double value = (double) count / (double) divisor;
+		if (value < 10.0) {
+			String formatted = String.format("%.1f", value);
+			if (formatted.endsWith(".0")) {
+				formatted = formatted.substring(0, formatted.length() - 2);
+			}
+			return formatted + suffix;
+		}
+		return Math.round(value) + suffix;
+	}
+
+	/** 在缩放后的坐标绘制阴影 + 白色文字（与 AE2LT 相同的渲染顺序与阴影色） */
+	private static void drawShadowedText(GuiGraphics guiGraphics, Font font, int x, int y, String text) {
+		MultiBufferSource.BufferSource buffer = Minecraft.getInstance().renderBuffers().bufferSource();
+		org.joml.Matrix4f matrix = guiGraphics.pose().last().pose();
+		font.drawInBatch(text, x + 1, y + 1, 0x414141, false, matrix, buffer,
+				Font.DisplayMode.NORMAL, 0, 0xF000F0);
+		font.drawInBatch(text, x, y, 0xFFFFFF, false, matrix, buffer,
+				Font.DisplayMode.NORMAL, 0, 0xF000F0);
+		buffer.endBatch();
+	}
+
+	/** 数量文字固定缩放（与 AE2LT 一致，保证不超出 18px 槽位） */
+	private static final float COUNT_SCALE = 0.75F;
+
+	/** 1 / COUNT_SCALE — 用于把槽位坐标换算到缩放前坐标 */
+	private static final float COUNT_INVERSE_SCALE = 1.0F / COUNT_SCALE;
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {

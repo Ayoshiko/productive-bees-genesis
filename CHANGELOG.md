@@ -35,7 +35,7 @@ v2.0.9 是 SemVer PATCH 版本，围绕 AE2LT 过载接口与 JDTE 时间加速�
 - **AE2LT CooldownTracker/KeyModel 节奏对齐（MEDIUM）** — 输入拉取冷却改为：无限提供条目成功 1 tick、普通条目成功 5 tick；失败退避（普通模式折半、无限模式线性 +1，上限 40 tick），避免网络补货缓慢时高频空扫
 - **AE2 蜜脾拉取模块重构（MAJOR）** — 拉取调度从「游戏刻间隔 + TPS 因子」改为 AE2LT 风格的拉取调用计数器冷却；候选列表从逐次遍历 `meStorage.getAvailableStacks()` 改为缓存库存快照扫描 + 游标回绕（Ae2CursorScan），命中游标键自身也可拉取，修复单蜜脾类型网络"只拉一次"后停摆的问题；白名单 + 全直连条目的机器走「仅直连条目」快照路径，按可见库存逐键配额，不再扫描无关键；拉取前按标记条目优先排序（marked-first）
 - **AE2 输入过滤精确 NBT 语义修复（MAJOR）** — 直连条目使用组件级指纹（SNBT）持久化与匹配，旧版 `ItemStack.toString` 指纹自动兼容迁移；精确模式严格区分蜜脾与蜜脾块，NBT 忽略开关与 fuzzy 匹配按 AE2 语义重新定义（同基础物品 + 忽略 NBT 才可模糊匹配、有类型蜜脾不与无类型物品互配）；`matchesAnyEntry` 统一直连/模糊判定，避免过滤器漏拉与误拉
-- **AE2 拉取 GUI 数量数字统一字号（MEDIUM）** — 第三行虚拟槽数量改为过载 ME 接口风格：所有数字固定完整字号、右对齐、底部阴影，先 K/M/G/T 紧凑缩写，仍偏长时逐级取整到更大单位（含进位），不同长度、不同数量视觉大小完全一致；同步修复 `NumberFormatter` 999999 显示为 "1000.0K" 的四舍五入进位缺陷并新增单元测试
+- **AE2 拉取 GUI 数量数字显示（MEDIUM）** — 第三行虚拟槽数量完全复刻 AE2LT 过载接口 `LargeStackCountRenderer`：固定 0.75 缩放、右对齐到槽位右缘、K/M/B 紧凑缩写（单位值 < 10 时保留 1 位小数，如 1.5K），数字不再超出格子且各数量视觉一致；同步修复 `NumberFormatter` 999999 显示为 "1000.0K" 的四舍五入进位缺陷并新增单元测试
 - **Wanna Bee 花朵判定热路径（MEDIUM）** — 花朵有效性改为缓存判定集（O(1) 成员查询），256× 加速下不再反复遍历喂食槽；琥珀封存生物 ID 读取兼容旧版本 `ModBlocks.AMBER` 判定
 - **方块标签花朵兼容（MEDIUM）** — `flowerTag` 匹配升级为双重检查：先查物品标签（对齐 PB `isFlowerItem`），物品为 BlockItem 时再查方块标签（对齐 PB `isFlowerBlock` 与 JDTE `matchesConfiguredBlockFlower`），修复 JDTE `life_fluid` 等仅声明方块标签（`jdte:life_fluid_bee_flowers`）的蜜蜂无法采蜜的问题
 - **染料蜜蜂产物修复（MEDIUM）** — 喂食槽随机取一朵花（`minecraft:flowers` 方块标签），经单原料合成配方转换为对应染料（复刻 PB 原版语义）；Botania 神秘花/神秘蘑菇直接映射为对应颜色神秘花瓣；无花时回退旧行为（直接取 `c:dyes` 染料）
