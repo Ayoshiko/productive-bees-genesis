@@ -877,6 +877,8 @@
   "productivebeesgenesis.gui.ae_input_amount.too_small": "数量不能小于 %s",
   "productivebeesgenesis.gui.ae_input_amount.too_large": "数量不能超过 %s",
   "productivebeesgenesis.gui.ae_input_amount.apply": "设置",
+  "productivebeesgenesis.gui.ae_input_amount.title_all": "设置全部拉取数量",
+  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "点击：设置全部已标记条目的拉取数量\nShift+点击：一键切换全部已标记条目的无限拉取",
   "productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip": "精确模式：开时区分蜜脾与蜜脾块（仅拉取标记物品）；关时共享过滤（蜜脾/蜜脾块一起拉取）",
   "productivebeesgenesis.gui.ae_input_config.info.precise_on": "精确：开",
   "productivebeesgenesis.gui.ae_input_config.info.precise_off": "精确：关",

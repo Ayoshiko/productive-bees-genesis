@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.network.SetAllAeInputFilterAmountPayload;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterAmountPayload;
 import com.ayoshiko.productivebeesgenesis.util.Ae2AmountExpressionParser;
 import mekanism.client.gui.IGuiWrapper;
@@ -40,6 +41,7 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 	private final BlockPos pos;
 	private final int slotIndex;
 	private final ItemStack icon;
+	private final boolean applyToAll;
 	private final GuiTextField amountField;
 	private final AmountButton[] increaseButtons = new AmountButton[NORMAL_STEPS.length];
 	private final AmountButton[] decreaseButtons = new AmountButton[NORMAL_STEPS.length];
@@ -48,10 +50,22 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 
 	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos, int slotIndex,
 			ItemStack icon, long amount) {
+		this(gui, x, y, pos, slotIndex, icon, amount, false);
+	}
+
+	/** 全局模式构造：应用于全部直连条目，不需要 slotIndex 与图标。 */
+	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos,
+			ItemStack icon, long amount) {
+		this(gui, x, y, pos, 0, icon, amount, true);
+	}
+
+	private GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos, int slotIndex,
+			ItemStack icon, long amount, boolean applyToAll) {
 		super(gui, x, y, WINDOW_WIDTH, WINDOW_HEIGHT, new SelectedWindowData(WindowType.UNSPECIFIED));
 		this.pos = pos;
 		this.slotIndex = slotIndex;
 		this.icon = icon == null ? ItemStack.EMPTY : icon.copyWithCount(1);
+		this.applyToAll = applyToAll;
 		this.interactionStrategy = InteractionStrategy.NONE;
 
 		for (int i = 0; i < NORMAL_STEPS.length; i++) {
@@ -87,7 +101,9 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 	public void renderForeground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		super.renderForeground(guiGraphics, mouseX, mouseY);
 		drawTitleText(guiGraphics,
-				Component.translatable("productivebeesgenesis.gui.ae_input_amount.title"), 5);
+				Component.translatable(applyToAll
+						? "productivebeesgenesis.gui.ae_input_amount.title_all"
+						: "productivebeesgenesis.gui.ae_input_amount.title"), 5);
 		drawScaledScrollingString(guiGraphics,
 				Component.translatable("productivebeesgenesis.gui.ae_input_amount.range", maxAmount()),
 				55, 51, TextAlignment.LEFT, screenTextColor(), 116, 3, false, 0.75F);
@@ -143,7 +159,11 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 			updateValidation();
 			return;
 		}
-		PacketDistributor.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong()));
+		if (applyToAll) {
+			PacketDistributor.sendToServer(new SetAllAeInputFilterAmountPayload(pos, parsed.getAsLong()));
+		} else {
+			PacketDistributor.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong()));
+		}
 		close();
 	}
 

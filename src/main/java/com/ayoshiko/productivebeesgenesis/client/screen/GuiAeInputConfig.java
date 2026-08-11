@@ -14,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.network.CycleAeInputFilterModePayload;
 import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload.OperationType;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload;
+import com.ayoshiko.productivebeesgenesis.network.ToggleAllAeInputFilterUnlimitedPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputNbtIgnorePayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPreciseModePayload;
@@ -96,6 +97,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private final MekanismButton nbtBtn;
 	private final MekanismButton filterModeBtn;
 	private final MekanismButton preciseBtn;
+	private final MekanismButton globalGearBtn;
 	private final MekanismButton prevPageBtn;
 	private final MekanismButton nextPageBtn;
 	private final MekanismButton clearBtn;
@@ -135,6 +137,12 @@ public final class GuiAeInputConfig extends GuiWindow {
 		preciseBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + CTRL_Y, TOGGLE_BTN_WIDTH, CTRL_BTN_HEIGHT, "P",
 				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
 		preciseBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
+		btnX += TOGGLE_BTN_WIDTH + 2;
+		globalGearBtn = addChild(new GlobalGearButton(gui(), relativeX + btnX, relativeY + CTRL_Y,
+				this::onOpenGlobalAmount,
+				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterUnlimitedPayload(pos))));
+		globalGearBtn.setTooltip(Tooltip.create(Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.global_gear.tooltip")));
 
 		// Page buttons (prev / clear / next)
 		prevPageBtn = addChild(new CtrlButton(gui(), relativeX + WINDOW_WIDTH - 3 * (PAGE_BTN_WIDTH + 2) - 8,
@@ -464,6 +472,22 @@ public final class GuiAeInputConfig extends GuiWindow {
 				pos, globalSlotIndex, icon, filter.getDirectAmountAt(globalSlotIndex)));
 	}
 
+	/** Opens the global amount editor applied to all direct entries (no marker required). */
+	private void onOpenGlobalAmount() {
+		Ae2InputFilter filter = getFilter();
+		long initial = 0L;
+		if (filter != null) {
+			for (int i = 0; i < filter.getCapacity(); i++) {
+				if (filter.isDirectEntry(i)) {
+					initial = filter.getDirectAmountAt(i);
+					break;
+				}
+			}
+		}
+		gui().addWindow(new GuiAeInputAmountConfig(gui(), relativeX + 38, relativeY + 18,
+				pos, ItemStack.EMPTY, initial));
+	}
+
 	/** Toggle the unlimited-provide marker for a direct AE2 entry. */
 	private void onSlotToggleUnlimited(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * SLOTS_PER_PAGE + pageSlotIndex;
@@ -540,6 +564,40 @@ public final class GuiAeInputConfig extends GuiWindow {
 				guiGraphics.drawString(Minecraft.getInstance().font, "\u221E",
 						relativeX + 9, relativeY + 7, 0x00FF00, true);
 			}
+		}
+	}
+
+	/**
+	 * 全配置页全局齿轮按钮（无需标记物品即可使用）
+	 * <br/>
+	 * 普通点击：打开应用到全部直连条目的数量编辑器；
+	 * Shift+点击：一键切换全部直连条目的无限拉取状态。
+	 */
+	private static final class GlobalGearButton extends MekanismButton {
+
+		GlobalGearButton(IGuiWrapper gui, int x, int y, Runnable configureCallback, Runnable toggleCallback) {
+			super(gui, x, y, 18, 14, Component.empty(), (element, mouseX, mouseY) -> {
+				if (Screen.hasShiftDown()) {
+					toggleCallback.run();
+				} else {
+					configureCallback.run();
+				}
+				return true;
+			});
+			setButtonBackground(GuiElement.ButtonBackground.DEFAULT);
+			visible = true;
+			active = true;
+		}
+
+		@Override
+		public void renderWidget(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+			if (!visible) return;
+			super.renderWidget(guiGraphics, mouseX, mouseY, partialTicks);
+			Icon icon = isMouseOver(mouseX, mouseY) ? Icon.COG : Icon.COG_DISABLED;
+			icon.getBlitter()
+					.dest(relativeX + 1, relativeY + 1, width - 2, height - 2)
+					.zOffset(4)
+					.blit(guiGraphics);
 		}
 	}
 

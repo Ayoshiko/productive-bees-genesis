@@ -65,6 +65,67 @@ final class Ae2FilterPayloadHandlers {
 	}
 
 	/**
+	 * 服务端处理：批量设置全部直连条目的单次拉取数量
+	 * <br/>
+	 * 由全局齿轮按钮（无需标记物品）调用，安全校验与单条数量编辑一致。
+	 */
+	static void handleSetAllAeInputFilterAmount(SetAllAeInputFilterAmountPayload payload, IPayloadContext context) {
+		if (payload.amount() < 0L || payload.amount() > Ae2InputFilter.getMaxDirectAmount()) return;
+		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+				"ae2_input_all_amount_pos_mismatch")) return;
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_amount",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(be instanceof IAe2InputHost host)
+				|| serverPlayer.distanceToSqr(payload.pos().getCenter())
+						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
+		if (filter == null) return;
+		if (filter.setAllDirectAmounts(payload.amount()) > 0 && be instanceof TileEntityMekanism mek) {
+			mek.markForSave();
+		}
+		syncFilterToClient(be, serverPlayer);
+	}
+
+	/**
+	 * 服务端处理：一键切换全部直连条目的无限拉取状态
+	 * <br/>
+	 * 任一直连条目未开启无限 → 全部开启；全部已开启 → 全部关闭。
+	 * 由全局齿轮按钮 Shift+点击调用（无需标记物品）。
+	 */
+	static void handleToggleAllAeInputFilterUnlimited(ToggleAllAeInputFilterUnlimitedPayload payload,
+			IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+				"ae2_input_all_unlimited_pos_mismatch")) return;
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_unlimited",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(be instanceof IAe2InputHost host)
+				|| serverPlayer.distanceToSqr(payload.pos().getCenter())
+						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
+		if (filter == null) return;
+		// 目标状态：任一直连条目未开启无限 → 全部开启；全部已开启 → 全部关闭
+		boolean anyDirect = false;
+		boolean allUnlimited = true;
+		for (int i = 0; i < filter.getCapacity(); i++) {
+			if (filter.isDirectEntry(i)) {
+				anyDirect = true;
+				if (!filter.isDirectUnlimitedAt(i)) {
+					allUnlimited = false;
+				}
+			}
+		}
+		if (!anyDirect) return;
+		if (filter.setAllDirectUnlimited(!allUnlimited) > 0 && be instanceof TileEntityMekanism mek) {
+			mek.markForSave();
+		}
+		syncFilterToClient(be, serverPlayer);
+	}
+
+	/**
 	 * 服务端处理：添加、移除或清空 per-tile AE2 输入过滤条目
 	 * <br/>
 	 * 过滤器为 null 时（基础离心机未启用过滤）安全返回，不执行任何操作。

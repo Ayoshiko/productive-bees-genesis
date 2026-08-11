@@ -426,6 +426,43 @@ public final class Ae2InputFilter {
 		invalidateDirectEntries();
 	}
 
+	/** 批量设置全部直连条目的单次拉取数量；返回实际修改的条目数 */
+	public synchronized int setAllDirectAmounts(long amount) {
+		long clamped = Math.max(0L, Math.min(getMaxDirectAmount(), amount));
+		String[] arr = slots;
+		long[] amounts = directAmounts.clone();
+		int changed = 0;
+		for (int i = 0; i < arr.length; i++) {
+			if (isDirectFingerprint(arr[i]) && amounts[i] != clamped) {
+				amounts[i] = clamped;
+				changed++;
+			}
+		}
+		if (changed > 0) {
+			directAmounts = amounts;
+			invalidateDirectEntries();
+		}
+		return changed;
+	}
+
+	/** 批量设置全部直连条目的无限提供状态；返回实际修改的条目数 */
+	public synchronized int setAllDirectUnlimited(boolean unlimited) {
+		String[] arr = slots;
+		boolean[] flags = directUnlimited.clone();
+		int changed = 0;
+		for (int i = 0; i < arr.length; i++) {
+			if (isDirectFingerprint(arr[i]) && flags[i] != unlimited) {
+				flags[i] = unlimited;
+				changed++;
+			}
+		}
+		if (changed > 0) {
+			directUnlimited = flags;
+			invalidateDirectEntries();
+		}
+		return changed;
+	}
+
 	public boolean isAllowed(AEItemKey key) {
 		return isAllowed(key, false);
 	}

@@ -626,6 +626,8 @@
   "productivebeesgenesis.gui.ae_input_amount.too_small": "Amount must be at least %s",
   "productivebeesgenesis.gui.ae_input_amount.too_large": "Amount cannot exceed %s",
   "productivebeesgenesis.gui.ae_input_amount.apply": "Set",
+  "productivebeesgenesis.gui.ae_input_amount.title_all": "Set Amount for All",
+  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "Click: set pull amount for all marked entries\nShift-click: toggle unlimited pull for all marked entries",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.basic": "Basic Parameters",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.ejection": "Ejection",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.io_limit": "IO Limit",
