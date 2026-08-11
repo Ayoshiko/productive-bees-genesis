@@ -1,0 +1,9 @@
+# 统一文本文件行尾为 LF，避免 Windows CRLF 与仓库内 LF 混用
+* text=auto eol=lf
+
+# 二进制文件不做文本规范化
+*.png binary
+*.jar binary
+*.class binary
+*.ttf binary
+*.otf binary

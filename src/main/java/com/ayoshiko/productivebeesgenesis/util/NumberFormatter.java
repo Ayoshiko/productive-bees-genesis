@@ -1,32 +1,32 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import java.util.Locale;
-
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 
+import java.util.Locale;
+
 /**
- * 大数字格式化工具 — 支持 K/M/G/T/P/E 缩写与千分位分隔两种模式
- * <p>
- * 格式化规则（缩写模式）：
- * <ul>
- *   <li>0~999：显示原始数字（如 "999"）</li>
- *   <li>1K~999K：保留1位小数，整数千不显示小数（如 "1.5K"、"1K"）</li>
- *   <li>1M~999M：如 "2.5M"</li>
- *   <li>1G~999G：如 "3.5G"</li>
- *   <li>1T~999T：如 "4.5T"</li>
- *   <li>1P~999P：如 "5.5P"</li>
- *   <li>1E+：如 "6.5E"</li>
- * </ul>
- * 非缩写模式：使用千分位分隔（如 "1,234,567"）。
- * <p>
- * 设计原则：
- * <ul>
- *   <li>SRP：仅负责数字到字符串的格式化转换</li>
- *   <li>线程安全：纯静态方法、无可变状态，所有格式化均使用线程安全的 {@link String#format}</li>
- *   <li>DIP：格式化模式由 {@link ModConfig#COMMON} 注入，不硬编码开关逻辑</li>
- * </ul>
- */
+	 * 大数字格式化工具 — 支持 K/M/G/T/P/E 缩写与千分位分隔两种模式
+	 * <p>
+	 * 格式化规则（缩写模式）：
+	 * <ul>
+	 *   <li>0~999：显示原始数字（如 "999"）</li>
+	 *   <li>1K~999K：保留1位小数，整数千不显示小数（如 "1.5K"、"1K"）</li>
+	 *   <li>1M~999M：如 "2.5M"</li>
+	 *   <li>1G~999G：如 "3.5G"</li>
+	 *   <li>1T~999T：如 "4.5T"</li>
+	 *   <li>1P~999P：如 "5.5P"</li>
+	 *   <li>1E+：如 "6.5E"</li>
+	 * </ul>
+	 * 非缩写模式：使用千分位分隔（如 "1,234,567"）。
+	 * <p>
+	 * 设计原则：
+	 * <ul>
+	 *   <li>SRP：仅负责数字到字符串的格式化转换</li>
+	 *   <li>线程安全：纯静态方法、无可变状态，所有格式化均使用线程安全的 {@link String#format}</li>
+	 *   <li>DIP：格式化模式由 {@link ModConfig#COMMON} 注入，不硬编码开关逻辑</li>
+	 * </ul>
+	 */
 public final class NumberFormatter {
 
 	/** 缩写单位 — 索引对应幂次（0=无、1=K、2=M、3=G、4=T、5=P、6=E） */
@@ -68,6 +68,11 @@ public final class NumberFormatter {
 	 */
 	public static String format(int value) {
 		return format((long) value);
+	}
+
+	/** Always uses a compact suffix form suitable for a narrow item slot. */
+	public static String formatCompact(long value) {
+		return formatAbbreviated(value);
 	}
 
 	/**
@@ -142,13 +147,20 @@ public final class NumberFormatter {
 			suffixIndex++;
 		}
 
-		// 整数倍不显示小数（如 2000 → "2K" 而非 "2.0K"）
-		if (isWholeNumber(scaled)) {
-			return (long) scaled + SUFFIXES[suffixIndex];
+		// 先按 1 位小数四舍五入，再处理进位（如 999999 → 999.999K → "1M" 而非 "1000.0K"）
+		double rounded = Math.round(scaled * 10.0) / 10.0;
+		if (rounded >= UNIT && suffixIndex < MAX_SUFFIX_INDEX) {
+			rounded /= UNIT;
+			suffixIndex++;
 		}
 
-		// 非整数倍保留 1 位小数（如 1500 → "1.5K"）
-		return String.format(Locale.US, "%.1f%s", scaled, SUFFIXES[suffixIndex]);
+		// 整数不显示小数（如 2000 → "2K" 而非 "2.0K"）
+		if (isWholeNumber(rounded)) {
+			return (long) rounded + SUFFIXES[suffixIndex];
+		}
+
+		// 非整数保留 1 位小数（如 1500 → "1.5K"）
+		return String.format(Locale.US, "%.1f%s", rounded, SUFFIXES[suffixIndex]);
 	}
 
 	/**
