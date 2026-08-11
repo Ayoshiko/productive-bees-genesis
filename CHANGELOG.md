@@ -23,6 +23,19 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.9-hotfix] - 2026-08-12
+
+v2.0.9-hotfix 修复 issue #6 报告的崩溃：给非蜂箱/离心工厂机器安装 ME 工厂升级时，
+Mixin 注入代码引用了 mixin 包内的非 Mixin 工具类，触发 `IllegalClassLoadError` 直接崩溃。
+
+### 修复
+
+- **ME 工厂升级安装崩溃（CRITICAL）** — 将 `MekEnergisticsBlockGuard` 从 `mixin.mekenergistics` 包迁出到普通 `compat.mekenergistics` 包：Mixin 包内的非 Mixin 类被注入到第三方目标类（mekenergistics 安装器解析器）后，Mixin 类加载器会拒绝该引用并抛出 `IllegalClassLoadError`。迁出后注入代码可安全引用守卫谓词，非本模组机器安装 ME 工厂升级不再崩溃，本模组离心机/蜂箱的防误转保护保持不变
+
+### SemVer 合规性
+
+- 本次为单一崩溃修复，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.9 → v2.0.9-hotfix）
+
 ## [2.0.9] - 2026-08-11
 
 v2.0.9 是 SemVer PATCH 版本，围绕 AE2LT 过载接口与 JDTE 时间加速器的实测反馈继续打磨：新增 AE2LT 风格的虚拟输出槽交互（取出到光标/物品栏、放入网络），输入拉取的冷却节奏与无限提供语义对齐 AE2LT CooldownTracker/KeyModel；AE2 蜜脾拉取模块整体重构（快照扫描 + 直连优先 + 精确 NBT 过滤）；JDTE 通过 AE2_GRID 网格 tick 驱动的机器现在能按真实加速倍率扩展拉取配额；同时修复染料蜜蜂/以太气体蜜蜂/琥珀封存实体蜜蜂的花与产物问题、大数字数量渲染、Mek-Energistics 安装器误转，并完成两轮全量代码审查与规范打磨。

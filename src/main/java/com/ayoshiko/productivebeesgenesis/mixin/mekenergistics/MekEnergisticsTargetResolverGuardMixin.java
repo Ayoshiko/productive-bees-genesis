@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mekenergistics;
 
+import com.ayoshiko.productivebeesgenesis.compat.mekenergistics.MekEnergisticsBlockGuard;
+
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
