@@ -23,6 +23,69 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.9] - 2026-08-11
+
+v2.0.9 是 SemVer PATCH 版本，围绕 AE2LT 过载接口与 JDTE 时间加速器的实测反馈继续打磨：新增 AE2LT 风格的虚拟输出槽交互（取出到光标/物品栏、放入网络），输入拉取的冷却节奏与无限提供语义对齐 AE2LT CooldownTracker/KeyModel；AE2 蜜脾拉取模块整体重构（快照扫描 + 直连优先 + 精确 NBT 过滤）；JDTE 通过 AE2_GRID 网格 tick 驱动的机器现在能按真实加速倍率扩展拉取配额；同时修复染料蜜蜂/以太气体蜜蜂/琥珀封存实体蜜蜂的花与产物问题、大数字数量渲染、Mek-Energistics 安装器误转，并完成两轮全量代码审查与规范打磨。
+
+### 修复
+
+- **AE2 输入配置虚拟输出槽（CRITICAL）** — AE2LT 过载接口风格第三行虚拟槽：左键空手从 ME 网络取出到光标、右键取半、Shift+左键整组取到物品栏；手持物品时左键全部放入网络、右键放入 1 个。所有操作均经过容器一致性、8 格交互距离与频次限制校验，杜绝 IDOR 与流量放大
+- **JDTE 加速下 AE2 拉取配额失真（MAJOR）** — JDTE 的 Time Accelerator 不经过方块 tick，而是通过 AE2 网格的 `IGridTickable.tickingRequest` 驱动，原倍率检测失效导致拉取按 1x 计算；现注册网格 tick 服务并在每个游戏刻内用 TickAccelTracker 记录 AE2 刻计数（单次 <10ns），按真实倍率 M 扩展 per-slot 配额
+- **物品数量文字溢出（MEDIUM）** — 修复 `renderItemDecorations` 在高倍计数下文字溢出与 z 序错误：超过 18px 宽度先使用 K/M/G/T 紧凑格式，仍超宽则按 18px 等比缩放并以 z=200 渲染，结束后恢复深度状态
+- **AE2LT CooldownTracker/KeyModel 节奏对齐（MEDIUM）** — 输入拉取冷却改为：无限提供条目成功 1 tick、普通条目成功 5 tick；失败退避（普通模式折半、无限模式线性 +1，上限 40 tick），避免网络补货缓慢时高频空扫
+- **AE2 蜜脾拉取模块重构（MAJOR）** — 拉取调度从「游戏刻间隔 + TPS 因子」改为 AE2LT 风格的拉取调用计数器冷却；候选列表从逐次遍历 `meStorage.getAvailableStacks()` 改为缓存库存快照扫描 + 游标回绕（Ae2CursorScan），命中游标键自身也可拉取，修复单蜜脾类型网络"只拉一次"后停摆的问题；白名单 + 全直连条目的机器走「仅直连条目」快照路径，按可见库存逐键配额，不再扫描无关键；拉取前按标记条目优先排序（marked-first）
+- **AE2 输入过滤精确 NBT 语义修复（MAJOR）** — 直连条目使用组件级指纹（SNBT）持久化与匹配，旧版 `ItemStack.toString` 指纹自动兼容迁移；精确模式严格区分蜜脾与蜜脾块，NBT 忽略开关与 fuzzy 匹配按 AE2 语义重新定义（同基础物品 + 忽略 NBT 才可模糊匹配、有类型蜜脾不与无类型物品互配）；`matchesAnyEntry` 统一直连/模糊判定，避免过滤器漏拉与误拉
+- **AE2 拉取 GUI 数量数字统一字号（MEDIUM）** — 第三行虚拟槽数量改为过载 ME 接口风格：所有数字固定完整字号、右对齐、底部阴影，先 K/M/G/T 紧凑缩写，仍偏长时逐级取整到更大单位（含进位），不同长度、不同数量视觉大小完全一致；同步修复 `NumberFormatter` 999999 显示为 "1000.0K" 的四舍五入进位缺陷并新增单元测试
+- **Wanna Bee 花朵判定热路径（MEDIUM）** — 花朵有效性改为缓存判定集（O(1) 成员查询），256× 加速下不再反复遍历喂食槽；琥珀封存生物 ID 读取兼容旧版本 `ModBlocks.AMBER` 判定
+- **方块标签花朵兼容（MEDIUM）** — `flowerTag` 匹配升级为双重检查：先查物品标签（对齐 PB `isFlowerItem`），物品为 BlockItem 时再查方块标签（对齐 PB `isFlowerBlock` 与 JDTE `matchesConfiguredBlockFlower`），修复 JDTE `life_fluid` 等仅声明方块标签（`jdte:life_fluid_bee_flowers`）的蜜蜂无法采蜜的问题
+- **染料蜜蜂产物修复（MEDIUM）** — 喂食槽随机取一朵花（`minecraft:flowers` 方块标签），经单原料合成配方转换为对应染料（复刻 PB 原版语义）；Botania 神秘花/神秘蘑菇直接映射为对应颜色神秘花瓣；无花时回退旧行为（直接取 `c:dyes` 染料）
+- **以太气体蜜蜂 ID 规范化（MEDIUM）** — PB 注册的 `productivebees:industrialforegoing/ether_gas` 与简化 ID `productivebees:ether_gas` 现在等价匹配，修复 KubeJS/旧数据以简化 ID 引用时花朵与产物查询漏配
+- **琥珀封存实体蜜蜂采蜜与产物（MEDIUM）** — Butcher / Rancher / Wanna Bee 等以琥珀方块为花朵的蜜蜂：花朵校验支持实体 ID 与实体类型标签（含 `!` 反义与 `inverseFlower`），琥珀实体数据按槽位权重生成快照供批次采样，Wanna Bee 按封存生物战利品表产出对应掉落物，不再"有琥珀却无法采蜜/无产物"
+- **蜂箱直连离心机吞产物（MAJOR）** — 直连弹出增加产物守恒记账：输出槽转移后缓冲区剩余产物直接注入相邻离心机输入槽（绕过两跳路径）；提取、拒收、缓冲三者净额精确结算（`netRemovedFromSources`），异常拒收自动归还源槽；连续 20 tick 转移失败自动回退 Ejector/AE2 接管，部分失败保持脏标记下刻重试，产物不丢失不重复
+- **大数量产物防溢出与防淘汰（MEDIUM）** — 万象创世与批量路径的 ops/能耗改用饱和乘法与饱和加法（PbVirtualTickPlan / SaturatingMath），避免 256× 以上加速计数溢出；大产物栈同物品同组件先合并再入队，避免单次 19K+ 数量（如 pollen_puff 场景）拆组触发缓冲 64 组上限淘汰
+- **Mek-Energistics 安装器误转（MEDIUM）** — 在 `MeInstallerTargetResolver.resolve` 单点增加守卫，拦截所有 provider 路径，本模组离心机/蜂箱（含 ME/EME 工厂）永远不会被转换为 ME 机器
+- **超堆叠产物批量提取（MEDIUM）** — 输出槽因倍率超堆叠（count > 最大堆叠）时，外部自动化（管道/AE2）可直接按请求量整组提取，不再受 64 上限逐次拆分
+- **加速下弹出器/声音重复执行（MEDIUM）** — 直连弹出、Ejector 弹出与蜂箱工作声音在 JDTE 同一游戏刻多次调用下，通过真实刻门控（GameTickGate）只执行一次随机尝试/冷却推进；输出内容未变化时同刻失败不再重复尝试（SameTickFailureGate）
+- **工厂 PB 处理能量预算公平（MAJOR）** — 高并行工厂各输入通道按剩余能量与通道数分配预算（PbProcessFairness），任意通道不会耗尽全部能量挤占其他通道；万象创世与普通 PB 配方路径统一受预算约束
+- **ME Extras CREATIVE 语义统一（MEDIUM）** — 创意升级下加工耗时归零、能耗归零、并行数取 STACK 语义，公式收敛到 MekExtrasUpgradeSemantics；创意能量容量重算改为经 Mixin 接口安全路径
+- **AE 能量提取/注入边界防护（MEDIUM）** — 从 ME 网络提取与注入容器的能量全部经过饱和运算与 clamp（Ae2EnergyMath），消除溢出与超容量注入风险
+- **进度条回落平滑（MEDIUM）** — 进度显示回落改为独立排水速率（最小 0.25 秒排空），避免高倍加速下进度回跳突兀
+- **创意升级能量容量重算（MEDIUM）** — ME Extras 创意升级的能量容量重算改走 Mixin 接口安全路径（`IMixinMachineEnergyContainer`），并以 `isMekanismExtrasLoaded()` 守卫，未安装 ME 时不再走反射/强转路径
+
+### 新增
+
+- **AE2 输入过滤直连条目增强** — 新增「无限提供」开关（Shift+点击）与单次拉取数量编辑器（支持 `1k`/`1.5k` 等表达式），实时显示 AE 网络库存、当前冷却、速率与间隔状态
+- **JDTE Time Accelerator 网格兼容** — AE2 节点注册 `IGridTickable` 服务，`TickingRequest(1,20)` 空闲自动降频，与 AE2LT ProxyTicker 调度节奏对齐
+- **蜂箱能耗运行时化** — 蜂箱每槽能耗直接读取能量容器运行时 `getEnergyPerTick`（承接 MEK 公式 mixin），不再缓存配置值乘倍率；加速能耗与批量能耗使用饱和运算纯公式
+- **AE2 拉取直连优先扫描** — 白名单 + 全部直连条目的机器走「仅直连条目」快照路径（按可见库存逐键配额）；普通机器改为缓存库存快照扫描 + 标记条目优先（marked-first）排序，与 AE2LT 拉取语义一致
+- **过滤 GUI 直连条目图标** — Ghost slot 直接持有直连条目图标与指纹，不依赖蜜蜂类型解析即可显示
+- **AE2 网络库存实时显示** — 虚拟输出槽与无限提供按钮实时显示 ME 网络可见库存，按每游戏刻缓存避免重复模拟提取
+
+### 性能优化
+
+- **虚拟刻批次规划** — 新增 `PbVirtualTickPlan` / `PbProcessFairness` / `SameTickFailureGate` / `GameTickGate`，把同一游戏刻内的重复加速 tick 合并为一次 PB 配方推进，进度、输入与能量消耗与逐 tick 执行等价
+- **标记集合查询** — 花朵判定、类型标记集合由线性扫描改为哈希/缓存查询（O(N) → O(1)）
+- **过滤器槽位写入** — 条目按槽位索引直写并同步位置信息，避免整表重排
+- **移除调试诊断** — 删除容器 tracker/构造反射诊断日志与一次性速度配置诊断输出，降低运行期反射开销
+- **AE2 配置与库存缓存** — 全局 AE2 配置改为墙钟 5 秒缓存（Ae2ConfigCache，JDTE 下不过期）；网络库存视图按游戏刻缓存（Ae2NetworkInventoryView）；流体键按槽缓存；网格/存储/ME 存储缓存随 gridChanged 失效；holder 感知重载消除高频路径冗余接口分发
+
+### 审查打磨（2026-08-11 全量代码审查）
+
+- 修复 4 个 Java 文件 28 处中文注释乱码（`?` 替换）与 CHANGELOG 本节乱码
+- 补充缺失翻译键：`tooltip.productivebeesgenesis.sword_kill_mode.active/inactive`（中英双语）
+- 统一 449 个 Java 文件导入顺序（项目/第三方 → javax → java，组内字母升序）
+- 统一 501 个源码文件行尾为 LF（新增 `.gitattributes` 固化）并修复 457 个文件的 Javadoc 缩进为 Tab
+- 规范化 `@since` 与 Javadoc 中 126 处与公开版本不一致的内部版本号
+- 修正 AE2 输入过滤器槽位边界 off-by-one（合法索引 0..1023，排他上限）
+- 清理根目录 19 个开发遗留调试文件
+- **删除杀戮模式测试剑** — 移除 `ItemInfinitySwordReplica` 及 `sword_kill_mode` 中英文 tooltip、模型/纹理引用与 `disabled_features` 归档（该剑为星空遮罩早期测试物品，不再需要）
+- **继续文件拆分（第二轮）** — 新增 10 个职责单一类：ApiaryTilePersistence、ApiarySideConfigSupport、ApiaryContainerTrackers、ApiaryUpgradeMath、ApiaryOutputMerger、BeeProduceCache、BeeProduceOutputDispatcher、BeeProduceQueries、Ae2ConfigCache、Ae2PerTileStateNbtCodec；TileEntityMekApiary、BeeProduceProcessor、BeeInfoHelper、Ae2OutputStateHolder、ApiaryUpgradeHandler、ApiaryDirectEjectHandler 等文件降至 500 行以下
+- **第三轮审查** — AE2 拉取 GUI 数量数字统一字号；`NumberFormatter` 进位修复并新增单元测试；核对两轮拆分/修复文件无回归（构建与全部单元测试通过）
+
+### SemVer 合规性
+
+- 本次以修复、兼容适配与性能优化为主，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.8 → v2.0.9）
+
 ## [2.0.8] - 2026-08-07
 
 v2.0.8 是 SemVer PATCH 版本，围绕高等级工厂与 AE2 实测反馈继续打磨：多流体槽在 256 倍加速下的推送和满载阻塞得到根因性优化；AE2LT 过载接口按固定顺序把蜜脾集中发给少数机器的问题，改由工厂侧按机器、按物品、按游戏刻的公平额度缓解；蜂箱与离心机新增「产物直输 AE」开关，万象创世流体在 AE 有空间时也能继续产出；绝对蜂箱能量容量按实际蜜蜂槽位扩展，32 个 MEK 速度升级恢复到旧版 26 tick 的工作节奏；电炉兼容开关切换后配方缓存立即失效。
