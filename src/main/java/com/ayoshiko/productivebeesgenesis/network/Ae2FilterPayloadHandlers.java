@@ -181,7 +181,8 @@ final class Ae2FilterPayloadHandlers {
 		}
 		if (directFingerprint != null
 				&& directFingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH) {
-			LogThrottle.warn("ae2_filter_direct_too_long", "AE2 direct item fingerprint is too long: {}", directFingerprint.length());
+			LogThrottle.warn("ae2_filter_direct_too_long", "AE2 direct item fingerprint is too long: {}",
+				directFingerprint.length());
 			return;
 		}
 		AEItemKey directKey = null;

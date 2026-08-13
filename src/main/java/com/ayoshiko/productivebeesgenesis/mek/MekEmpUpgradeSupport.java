@@ -162,7 +162,9 @@ final class MekEmpUpgradeSupport {
 				}
 			}
 			return (Upgrade) method.invoke(null);
-		} catch (Exception e) {
+		} catch (LinkageError | Exception e) {
+			// LinkageError 覆盖 NoClassDefFoundError/ExceptionInInitializerError：
+			// MekanismEmpowered 版本 API 不兼容时反射链会抛 Error，漏捕会导致模组加载崩溃
 			ProductiveBeesGenesis.LOGGER.warn("MekanismEmpowered 升级 {} 反射获取失败", upgradeName, e);
 			return null;
 		}

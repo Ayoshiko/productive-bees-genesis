@@ -36,7 +36,8 @@ public class ExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<Ti
 	@Nullable
 	private VirtualInventoryContainerSlot pbUpgradeOutputSlot;
 
-	public ExtraMekCentrifugeFactoryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv, @NotNull TileEntityExtraMekCentrifugeFactory tile) {
+	public ExtraMekCentrifugeFactoryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv,
+		@NotNull TileEntityExtraMekCentrifugeFactory tile) {
 		super(type, id, inv, tile);
 	}
 

@@ -29,6 +29,7 @@ class FeederInventorySlot extends BasicInventorySlot {
 	@NotNull
 	@Override
 	public VirtualInventoryContainerSlot createContainerSlot() {
-		return new VirtualInventoryContainerSlot(this, SelectedWindowData.UNSPECIFIED, getSlotOverlay(), this::setStackUnchecked);
+		return new VirtualInventoryContainerSlot(this, SelectedWindowData.UNSPECIFIED, getSlotOverlay(),
+			this::setStackUnchecked);
 	}
 }

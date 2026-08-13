@@ -147,11 +147,11 @@ class MekCentrifugeSaveHandler {
 	}
 
 	/**
-	 * 保存自定义数据为 NBT — 供扳手拆卸持久化使用
+	 * 保存自定义数据为 NBT（防御性 API）
 	 * <br/>
-	 * 仅保存 PB 配方处理进度和 PB 升级，AE2 节点状态不保存（拆卸后重置）。
-	 * 保存 AE2 per-tile 输出开关，避免扳手拆卸后丢失用户设置。
-	 * 修复 v14：追加基础离心机单流体槽序列化，确保扳手拆卸后流体不丢失。
+	 * 说明：NeoForge 21.1.214 的 saveToItem 实际只调用 saveAdditional + collectComponents，
+	 * 本方法保留供未来迁移/外部调用使用；实际掉落持久化由 saveAdditional 保证。
+	 * 内容：PB 配方处理进度、PB 升级、AE2 per-tile 状态（含过滤器）、单流体槽与冗余槽位备份。
 	 */
 	@NotNull
 	CompoundTag saveCustomDataForItem(@NotNull HolderLookup.Provider provider) {

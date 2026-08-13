@@ -58,7 +58,9 @@ public record SetAeInputFilterEntryPayload(
 	 */
 	private static final StreamCodec<ByteBuf, ResourceLocation> BEE_TYPE_CODEC =
 			ByteBufCodecs.stringUtf8(256).map(
-					str -> ResourceLocation.parse(str),
+					// tryParse 而非 parse：非法字符串返回 null（由 Optional 包装为空），
+					// 避免解码阶段抛 ResourceLocationException 导致网络层断开连接
+					str -> ResourceLocation.tryParse(str),
 					rl -> rl.toString()
 			);
 

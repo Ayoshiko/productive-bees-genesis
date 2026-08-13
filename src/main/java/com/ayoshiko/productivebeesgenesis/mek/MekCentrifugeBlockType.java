@@ -244,7 +244,9 @@ public final class MekCentrifugeBlockType {
 	 * 原版4等级走固定映射；EM等级从ModBlockEntitiesHolder.EM_FACTORY_TILES获取。
 	 * 必须有default分支：EM运行时扩展的枚举值会落入default。
 	 */
-	private static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> getFactoryTileEntityType(FactoryTier tier) {
+	private static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> getFactoryTileEntityType(
+		FactoryTier tier
+	) {
 		return switch (tier) {
 			case BASIC -> ModBlockEntitiesHolder.BASIC_MEK_CENTRIFUGE_FACTORY;
 			case ADVANCED -> ModBlockEntitiesHolder.ADVANCED_MEK_CENTRIFUGE_FACTORY;

@@ -49,7 +49,7 @@ public class ApiarySlotManager {
 
 	// ===== 初始版默认常量（向后兼容） =====
 	/** 初始版蜜蜂居住槽位数 */
-	static final int DEFAULT_BEE_SLOT_COUNT = 3;
+	public static final int DEFAULT_BEE_SLOT_COUNT = 3;
 
 	/** 初始版蜜蜂列数（1 行 3 列） */
 	static final int DEFAULT_BEE_COLS = 3;

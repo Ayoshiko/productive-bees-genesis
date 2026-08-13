@@ -94,7 +94,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		pbUpgradeHandler = new MekCentrifugePbUpgradeHandler(this);
 		saveHandler = new MekCentrifugeSaveHandler(pbProcessor, this, pbUpgradeHandler, ae2Handler);
 		// Task 4: 通过 IAe2InputHost.productivebeesgenesis$getTickAccelTracker() 获取加速检测器引用,
-		// 传入 TickHandler 用于批量收获模式（延迟一 tick 策略）
+		// 传入 TickHandler 用于批量收获模式（虚拟 tick 银行 + 每 tick 预算）
 		tickHandler = new MekCentrifugeTickHandler(this, pbProcessor,
 				this.productivebeesgenesis$getTickAccelTracker());
 		pbUpgradeInstallHandler = new PbUpgradeInstallHandler(this, pbUpgradeHandler::installPbUpgrade);
@@ -126,6 +126,20 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 
 	/** 供 TickHandler 调用父类 onUpdateServer（protected 跨包不可直接访问） */
 	boolean callSuperOnUpdateServer() { return super.onUpdateServer(); }
+
+	/**
+	 * JDTE {@code CoalescedAcceleratedMachine} 合并接口委托（仅 JDTE 加载时经 Mixin 生效）。
+	 * <br/>
+	 * accumulate：仅入账虚拟 tick 银行；flush：强制执行一次完整批量（super + PB 配方 + AE2 推送）。
+	 */
+	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
+		tickHandler.accumulateAcceleratedTicks(ticks);
+	}
+
+	/** JDTE 合并接口 flush 委托（见 {@link #productivebeesgenesis$accumulateAcceleratedTicks}） */
+	public void productivebeesgenesis$flushAcceleratedTicks() {
+		tickHandler.flushAcceleratedTicks();
+	}
 
 	/** 供 TickHandler 调用 setActive（protected 跨包不可直接访问） */
 	void callSetActive(boolean active) { setActive(active); }

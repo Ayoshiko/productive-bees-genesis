@@ -42,7 +42,8 @@ public final class MekUpgradeSupport {
 	 * <ul>
 	 *   <li>原版：SPEED/ENERGY/MUFFLING</li>
 	 *   <li>MEKExtras（若加载）：STACK/CREATIVE</li>
-	 *   <li>MekanismEmpowered（若加载）：全部 6 种（EMPOWERED_SPEED/ENERGY + IO_CAPACITY + AUTO_INSERTER + FAST_ITEM_INSERT/EJECT）</li>
+	 *   <li>MekanismEmpowered（若加载）：全部 6 种（EMPOWERED_SPEED/ENERGY + IO_CAPACITY + AUTO_INSERTER +
+	 * FAST_ITEM_INSERT/EJECT）</li>
 	 * </ul>
 	 * <p>
 	 * 调用时机：BlockType静态初始化时调用。此时Mixin已应用，

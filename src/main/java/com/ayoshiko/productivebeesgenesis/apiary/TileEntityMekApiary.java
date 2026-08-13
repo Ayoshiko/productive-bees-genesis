@@ -57,7 +57,9 @@ import java.util.function.BooleanSupplier;
 	 * 生产周期 1200 ticks。组件架构（SRP）：ApiarySlotManager、FeederSlotManager、ApiaryTickHandler、
 	 * BeeProduceProcessor、ApiaryUpgradeHandler、ApiaryAe2HostAdapter、ApiaryPbUpgradeHandler、ApiaryNbtSerializer。
 	 */
-public class TileEntityMekApiary extends TileEntityElectricMachine implements IAe2OutputHostBase, IUpgradeableBlockEntity, IMekApiaryTile, IHasEjectorCooldown, IPbUpgradeProvider, com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
+public class TileEntityMekApiary extends TileEntityElectricMachine implements IAe2OutputHostBase,
+		IUpgradeableBlockEntity, IMekApiaryTile, IHasEjectorCooldown, IPbUpgradeProvider,
+		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
 
 	/** 生产周期：1200 ticks = 60秒（MEK原版标准） */
 	public static final int APIARY_TICKS_REQUIRED = 1200;
@@ -260,7 +262,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** 保存PB升级数量映射 — protected 供工厂版子类调用 */
 	protected void savePbUpgradeCounts(@NotNull CompoundTag nbt) { pbUpgradeHandler.savePbUpgradeCounts(nbt); }
 	/** 加载PB升级数量 — protected 供工厂版子类调用，兼容历史格式 */
-	protected void loadPbUpgradeCounts(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) { pbUpgradeHandler.loadPbUpgradeCounts(nbt, provider); }
+	protected void loadPbUpgradeCounts(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		pbUpgradeHandler.loadPbUpgradeCounts(nbt, provider);
+	}
 
 	// ===== 升级数据保存/恢复 — 委托给 nbtSerializer =====
 
@@ -325,7 +329,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@NotNull public ApiaryUpgradeHandler getApiaryUpgradeHandler() { return upgradeHandler; }
 	/** 已废弃 — 返回 null 保持兼容性 */
 	@Nullable
-	public cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.UpgradeHandler getPbUpgradeHandler() { return null; }
+	public cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.UpgradeHandler getPbUpgradeHandler() {
+		return null;
+	}
 	@NotNull public PbUpgradeInventorySlot getPbUpgradeInputSlot() { return pbUpgradeHandler.getInputSlot(); }
 	@NotNull public PbUpgradeInventorySlot getPbUpgradeOutputSlot() { return pbUpgradeHandler.getOutputSlot(); }
 
@@ -339,8 +345,15 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 * @param maxAvailable 手上持有的最大数量（{@code stack.getCount()}）
 	 * @return 实际安装数量（0 表示未安装）
 	 */
-	public int installPbUpgradeBulk(PbUpgradeType type, int maxAvailable) { return pbUpgradeHandler.installPbUpgradeBulk(type, maxAvailable); }
-	@NotNull public List<ItemStack> removePbUpgrade(PbUpgradeType type, boolean removeAll) { return pbUpgradeHandler.removePbUpgrade(type, removeAll); }
+	public int installPbUpgradeBulk(PbUpgradeType type, int maxAvailable) {
+		return pbUpgradeHandler.installPbUpgradeBulk(type, maxAvailable);
+	}
+	public List<ItemStack> removePbUpgrade(
+		PbUpgradeType type,
+		boolean removeAll
+	) {
+		return pbUpgradeHandler.removePbUpgrade(type, removeAll);
+	}
 	public int getPbUpgradeCount(PbUpgradeType type) { return pbUpgradeHandler.getPbUpgradeCount(type); }
 	public void processPbUpgradeInput() { pbUpgradeHandler.processPbUpgradeInput(); }
 	public boolean extractPbUpgradeByType(PbUpgradeType type) { return pbUpgradeHandler.extractPbUpgradeByType(type); }
@@ -370,9 +383,13 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 			setChanged();
 		}
 	}
-	public ItemStack cageBeeAtSlot(int slotIndex, ItemStack cursorCage) { return slotManager.tryCageBeeAtSlot(slotIndex, cursorCage); }
+	public ItemStack cageBeeAtSlot(int slotIndex, ItemStack cursorCage) {
+		return slotManager.tryCageBeeAtSlot(slotIndex, cursorCage);
+	}
 	public void confirmCageExtraction(int slotIndex) { slotManager.confirmCageExtraction(slotIndex); }
-	public boolean releaseBeeAtSlot(int slotIndex, ItemStack cursorCage) { return slotManager.tryReleaseBeeAtSlot(slotIndex, cursorCage); }
+	public boolean releaseBeeAtSlot(int slotIndex, ItemStack cursorCage) {
+		return slotManager.tryReleaseBeeAtSlot(slotIndex, cursorCage);
+	}
 	@NotNull public BeeProduceProcessor getProduceProcessor() { return produceProcessor; }
 
 	/**
@@ -425,18 +442,41 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		ae2HostAdapter.destroyForRemoval();
 	}
 	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); ae2HostAdapter.destroyForChunkUnload(); }
-	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler() { return ae2HostAdapter.getAe2LifecycleHandler(); }
-	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return ae2HostAdapter.getAe2EnergySource(); }
+	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler(
+	) {
+		return ae2HostAdapter.getAe2LifecycleHandler();
+	}
+	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource(
+	) {
+		return ae2HostAdapter.getAe2EnergySource();
+	}
 	@Override public Level productivebeesgenesis$getAe2Level() { return ae2HostAdapter.getAe2Level(); }
 	@Override public BlockPos productivebeesgenesis$getAe2BlockPos() { return ae2HostAdapter.getAe2BlockPos(); }
 	@Override public boolean productivebeesgenesis$isOutputPushEnabled() { return ae2HostAdapter.isOutputPushEnabled(); }
 	@Override public boolean productivebeesgenesis$isFluidPushEnabled() { return ae2HostAdapter.isFluidPushEnabled(); }
 	@Override public void productivebeesgenesis$injectAe2Energy() { ae2HostAdapter.injectAe2Energy(); }
-	@Override public boolean productivebeesgenesis$getPreferAppliedFluxOverAeEnergy() { return ae2HostAdapter.getPreferAppliedFluxOverAeEnergy(); }
-	@Override public boolean productivebeesgenesis$isAeItemOutputEnabled() { return ae2HostAdapter.isAeItemOutputEnabled(); }
-	@Override public boolean productivebeesgenesis$isAeFluidOutputEnabled() { return ae2HostAdapter.isAeFluidOutputEnabled(); }
-	@Override public void productivebeesgenesis$setAeItemOutputEnabled(boolean enabled) { ae2HostAdapter.setAeItemOutputEnabled(enabled); }
-	@Override public void productivebeesgenesis$setAeFluidOutputEnabled(boolean enabled) { ae2HostAdapter.setAeFluidOutputEnabled(enabled); }
+	@Override public boolean productivebeesgenesis$getPreferAppliedFluxOverAeEnergy(
+	) {
+		return ae2HostAdapter.getPreferAppliedFluxOverAeEnergy();
+	}
+	@Override public boolean productivebeesgenesis$isAeItemOutputEnabled(
+	) {
+		return ae2HostAdapter.isAeItemOutputEnabled();
+	}
+	@Override public boolean productivebeesgenesis$isAeFluidOutputEnabled(
+	) {
+		return ae2HostAdapter.isAeFluidOutputEnabled();
+	}
+	@Override public void productivebeesgenesis$setAeItemOutputEnabled(
+		boolean enabled
+	) {
+		ae2HostAdapter.setAeItemOutputEnabled(enabled);
+	}
+	@Override public void productivebeesgenesis$setAeFluidOutputEnabled(
+		boolean enabled
+	) {
+		ae2HostAdapter.setAeFluidOutputEnabled(enabled);
+	}
 
 	/** 模块2.4：AE2 输出超限时暂停蜂箱输入 — 转发到 Mekanism 的 setActive(false) */
 	@Override
@@ -452,33 +492,77 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	// ===== PbRecipeContext 接口实现 — 委托给 ae2HostAdapter =====
 
 	@Override public Level level() { return ae2HostAdapter.getPbRecipeAdapter().level(); }
-	@Override public MachineEnergyContainer<?> energyContainer() { return ae2HostAdapter.getPbRecipeAdapter().energyContainer(); }
+	@Override public MachineEnergyContainer<?> energyContainer() {
+		return ae2HostAdapter.getPbRecipeAdapter().energyContainer();
+	}
 	@Override public boolean hasCreativeUpgrade() { return false; }
 
 	@Override public int processes() { return ae2HostAdapter.getPbRecipeAdapter().processes(); }
-	@Override public IInventorySlot inputSlot(int process) { return ae2HostAdapter.getPbRecipeAdapter().inputSlot(process); }
-	@Override public IInventorySlot primaryOutputSlot(int process) { return ae2HostAdapter.getPbRecipeAdapter().primaryOutputSlot(process); }
-	@Override public IInventorySlot secondaryOutputSlot(int process) { return ae2HostAdapter.getPbRecipeAdapter().secondaryOutputSlot(process); }
-	@Override public IInventorySlot tertiaryOutputSlot(int process) { return ae2HostAdapter.getPbRecipeAdapter().tertiaryOutputSlot(process); }
+	@Override public IInventorySlot inputSlot(int process) {
+		return ae2HostAdapter.getPbRecipeAdapter().inputSlot(process);
+	}
+	@Override public IInventorySlot primaryOutputSlot(int process) {
+		return ae2HostAdapter.getPbRecipeAdapter().primaryOutputSlot(process);
+	}
+	@Override public IInventorySlot secondaryOutputSlot(int process) {
+		return ae2HostAdapter.getPbRecipeAdapter().secondaryOutputSlot(process);
+	}
+	@Override public IInventorySlot tertiaryOutputSlot(int process) {
+		return ae2HostAdapter.getPbRecipeAdapter().tertiaryOutputSlot(process);
+	}
 	@Override public IExtendedFluidTank fluidOutputTank() { return ae2HostAdapter.getPbRecipeAdapter().fluidOutputTank(); }
 	@Override public int baseTicksRequired() { return ae2HostAdapter.getPbRecipeAdapter().baseTicksRequired(); }
 	@Override public boolean canFunction() { return ae2HostAdapter.getPbRecipeAdapter().canFunction(); }
-	@Override public void setPbActiveState(boolean active, int process) { ae2HostAdapter.getPbRecipeAdapter().setPbActiveState(active, process); }
+	@Override public void setPbActiveState(boolean active, int process) {
+		ae2HostAdapter.getPbRecipeAdapter().setPbActiveState(active, process);
+	}
 	@Override public int productivityModifier() { return ae2HostAdapter.getPbRecipeAdapter().productivityModifier(); }
 	@Override public int operationsPerTick() { return ae2HostAdapter.getPbRecipeAdapter().operationsPerTick(); }
-	@Override public int getTicksForBase(int baseTime) { return ae2HostAdapter.getPbRecipeAdapter().getTicksForBase(baseTime); }
-	@Override public boolean containsSmeltingInput(ItemStack input) { return ae2HostAdapter.getPbRecipeAdapter().containsSmeltingInput(input); }
+	@Override public int getTicksForBase(int baseTime) {
+		return ae2HostAdapter.getPbRecipeAdapter().getTicksForBase(baseTime);
+	}
+	@Override public boolean containsSmeltingInput(ItemStack input) {
+		return ae2HostAdapter.getPbRecipeAdapter().containsSmeltingInput(input);
+	}
 	@Override public boolean productivebeesgenesis$hasOutputItems() { return ae2HostAdapter.hasOutputItems(); }
 	@Override public void productivebeesgenesis$updateOutputSlotFlags() { ae2HostAdapter.updateOutputSlotFlags(); }
 	@Override public void productivebeesgenesis$beginOutputBatch() { ae2HostAdapter.beginOutputBatch(); }
 	@Override public void productivebeesgenesis$endOutputBatch(int process) { ae2HostAdapter.endOutputBatch(process); }
-	@Override public void productivebeesgenesis$onProcessActivated(int process) { ae2HostAdapter.onProcessActivated(process); }
-	@Override public void productivebeesgenesis$onProcessDeactivated(int process) { ae2HostAdapter.onProcessDeactivated(process); }
+	@Override public void productivebeesgenesis$onProcessActivated(
+		int process
+	) {
+		ae2HostAdapter.onProcessActivated(process);
+	}
+	@Override public void productivebeesgenesis$onProcessDeactivated(
+		int process
+	) {
+		ae2HostAdapter.onProcessDeactivated(process);
+	}
 	@Override public boolean productivebeesgenesis$hasActiveProcess() { return ae2HostAdapter.hasActiveProcess(); }
 
 	// ===== IMekApiaryTile — 供 Ejector Mixin 读取蜂箱输出槽状态 =====
 
-	@Override public long productivebeesgenesis$outputContentsVersion() { return 0L; }
-	@Override public boolean productivebeesgenesis$outputSlotsFull() { return slotManager != null && slotManager.isOutputFull(); }
-	@Override public long productivebeesgenesis$outputItemCount() { return slotManager != null ? slotManager.outputItemCount() : 0L; }
+	@Override public long productivebeesgenesis$outputContentsVersion() { return outputBuffer.getOutputVersion(); }
+
+	/**
+	 * JDTE {@code CoalescedAcceleratedMachine} 合并接口委托（仅 JDTE 加载时经 Mixin 生效）。
+	 * <br/>
+	 * accumulate：仅入账虚拟 tick 银行；flush：强制执行一次完整批量（能量 + super + 蜜蜂生产）。
+	 */
+	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
+		tickHandler.accumulateAcceleratedTicks(ticks);
+	}
+
+	/** JDTE 合并接口 flush 委托（见 {@link #productivebeesgenesis$accumulateAcceleratedTicks}） */
+	public void productivebeesgenesis$flushAcceleratedTicks() {
+		tickHandler.flushAcceleratedTicks();
+	}
+	@Override public boolean productivebeesgenesis$outputSlotsFull(
+	) {
+		return slotManager != null && slotManager.isOutputFull();
+	}
+	@Override public long productivebeesgenesis$outputItemCount(
+	) {
+		return slotManager != null ? slotManager.outputItemCount() : 0L;
+	}
 }

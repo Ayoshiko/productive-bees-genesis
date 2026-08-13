@@ -234,7 +234,12 @@ public abstract class TileComponentEjectorCooldownMixin {
 			),
 			require = 0
 	)
-	private void productivebeesgenesis$redirectOutputItems(TileComponentEjector ejector, Direction facing, ConfigInfo info, Operation<Void> original) {
+	private void productivebeesgenesis$redirectOutputItems(
+		TileComponentEjector ejector,
+		Direction facing,
+		ConfigInfo info,
+		Operation<Void> original
+	) {
 		TileEntityMekanism tile = ((TileEntityEjectorAccessor) ejector).productivebeesgenesis$getTile();
 		if (!(tile instanceof IHasEjectorCooldown)) {
 			original.call(ejector, facing, info);
@@ -382,7 +387,8 @@ public abstract class TileComponentEjectorCooldownMixin {
 	 * 获取输出槽内容版本号。
 	 * <p>
 	 * 离心机通过 {@link IMekCentrifugeTile} 读取版本号；
-	 * 蜂箱通过 {@link IMekApiaryTile} 读取（固定 0，因蜂箱 skipUnchanged=false 不使用此值）。
+	 * 蜂箱通过 {@link IMekApiaryTile} 读取 {@code ApiaryOutputBuffer.getOutputVersion()}
+	 * 的真实版本号（输出缓冲入队/分发/推送成功时递增），驱动 ejector 版本号重试判定。
 	 * 非目标机器返回 -1，使跳过逻辑失效，保持原行为。
 	 */
 	@Unique

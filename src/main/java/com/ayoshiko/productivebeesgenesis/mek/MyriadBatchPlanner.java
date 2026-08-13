@@ -194,7 +194,9 @@ public final class MyriadBatchPlanner {
 	/** Snapshot 缓存条目：按 tick + slots identity 复用 */
 	private static final class SnapshotCache {
 		private long tick = -1L;
-		private int slotsIdentity = 0;
+		// 直接持有 slots 实例引用（== 比较）：identityHashCode 可能碰撞（对象被 GC 后地址复用），
+		// 同一 gameTick 内不同 List 若 hash 相同会静默复用错误的容量快照
+		private List<IInventorySlot> slots;
 		@Nullable
 		private SlotCapacitySnapshot snapshot;
 	}
@@ -238,13 +240,12 @@ public final class MyriadBatchPlanner {
 	@NotNull
 	public static SlotCapacitySnapshot takeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
 		SnapshotCache cache = snapshotCache.get();
-		int identity = System.identityHashCode(slots);
-		if (cache.snapshot != null && cache.tick == tick && cache.slotsIdentity == identity) {
+		if (cache.snapshot != null && cache.tick == tick && cache.slots == slots) {
 			return cache.snapshot;
 		}
 		SlotCapacitySnapshot snapshot = doTakeSnapshot(slots, baseItem, tick);
 		cache.tick = tick;
-		cache.slotsIdentity = identity;
+		cache.slots = slots;
 		cache.snapshot = snapshot;
 		return snapshot;
 	}

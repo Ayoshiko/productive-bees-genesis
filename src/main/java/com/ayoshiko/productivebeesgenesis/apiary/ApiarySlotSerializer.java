@@ -32,10 +32,10 @@ import java.io.ByteArrayOutputStream;
 	 * 线程安全：序列化在服务端主线程执行；网络同步的 dirty 检查基于数组 hashCode，
 	 * SyncableByteArray 内部保证同步线程安全。
 	 */
-class ApiarySlotSerializer {
+public class ApiarySlotSerializer {
 
 	/** NBT key — 蜜蜂槽数组（带模组前缀避免冲突） */
-	static final String NBT_KEY_BEE_SLOTS = "productivebeesgenesis_apiary_bee_slots";
+	public static final String NBT_KEY_BEE_SLOTS = "productivebeesgenesis_apiary_bee_slots";
 
 	/** 所属槽位管理器 — 访问蜜蜂槽数组与数量 */
 	private final ApiarySlotManager manager;
@@ -68,6 +68,9 @@ class ApiarySlotSerializer {
 			BeeSlot slot = beeSlots[i];
 			if (slot.isEmpty()) continue;
 			CompoundTag slotNbt = new CompoundTag();
+			// 保存绝对槽位索引：列表会跳过空槽压缩存储，加载时按索引还原
+			// 修复：selectedBeeSlot 等绝对索引在压缩/还原后不再错位
+			slotNbt.putInt("slot_index", i);
 			if (slot.getBeeData() != null) {
 				slotNbt.put("entity_data", slot.getBeeData());
 			}
@@ -101,9 +104,16 @@ class ApiarySlotSerializer {
 		}
 		if (!nbt.contains(NBT_KEY_BEE_SLOTS, Tag.TAG_LIST)) return;
 		ListTag list = nbt.getList(NBT_KEY_BEE_SLOTS, Tag.TAG_COMPOUND);
-		for (int i = 0; i < beeSlotCount && i < list.size(); i++) {
+		for (int i = 0; i < list.size(); i++) {
 			CompoundTag slotNbt = list.getCompound(i);
-			BeeSlot slot = beeSlots[i];
+			// 优先按保存的绝对索引还原（防止压缩存储导致槽位左移、绝对索引错位）；
+			// 旧存档无 slot_index 键时回退到顺序填充
+			int target = slotNbt.contains("slot_index", Tag.TAG_ANY_NUMERIC)
+					? slotNbt.getInt("slot_index") : i;
+			if (target < 0 || target >= beeSlotCount) {
+				continue;
+			}
+			BeeSlot slot = beeSlots[target];
 			if (slotNbt.contains("entity_data", Tag.TAG_COMPOUND)) {
 				// .copy() 防止共享 NBT 引用导致意外修改
 				slot.setBeeData(slotNbt.getCompound("entity_data").copy());

@@ -130,7 +130,8 @@ public final class MekCentrifugeEMEBlockType {
 		// key格式：description.productivebeesgenesis.{tier小写}_emextra_mek_centrifuge_factory
 		var builder = EMExtraMachine.EMExtraMachineBuilder
 				.createEMExtraFactoryMachine(() -> EME_FACTORY_TILES.get(tier),
-						MekCentrifugeBlockType.descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory"), EMExtraFactoryType.SMELTING)
+				MekCentrifugeBlockType.descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory"),
+							EMExtraFactoryType.SMELTING)
 				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
 						() -> Math.max(ModConfig.SERVER.mekCentrifugeEnergyStorage.get(),
 								ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue()) * tier.processes)
@@ -166,7 +167,9 @@ public final class MekCentrifugeEMEBlockType {
 	 * @param tier EME工厂等级（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL）
 	 * @return 对应的EMExtraFactoryMachine BlockType，不存在时返回null
 	 */
-	public static EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> getEMEFactoryType(EMExtraFactoryTier tier) {
+	public static EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> getEMEFactoryType(
+		EMExtraFactoryTier tier
+	) {
 		return EME_FACTORY_TYPES.get(tier);
 	}
 }

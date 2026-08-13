@@ -24,11 +24,11 @@ class ApiaryUpgradeFormulaTest {
 	@ParameterizedTest(name = "{0} apiary: {1} FE/t per slot and {2} slots")
 	@MethodSource("factoryEnergyTable")
 	void factoryTiersScaleEnergyBySlotsAnd256Acceleration(String tier, long baseEnergy, int slots) {
-		assertEquals(baseEnergy, BeeSlotTickProcessor.calculateBeeEnergyCost(baseEnergy));
+		assertEquals(baseEnergy, ApiaryEnergyMath.calculateBeeEnergyCost(baseEnergy));
 		assertEquals(baseEnergy * slots,
-				BeeSlotTickProcessor.calculateBatchEnergyCost(baseEnergy, slots, 1));
+				ApiaryEnergyMath.calculateBatchEnergyCost(baseEnergy, slots, 1));
 		assertEquals(baseEnergy * slots * 256L,
-				BeeSlotTickProcessor.calculateBatchEnergyCost(baseEnergy, slots, 256));
+				ApiaryEnergyMath.calculateBatchEnergyCost(baseEnergy, slots, 256));
 	}
 
 	@Test

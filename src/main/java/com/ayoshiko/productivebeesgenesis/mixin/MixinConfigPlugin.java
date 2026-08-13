@@ -17,11 +17,19 @@ import java.util.Set;
 	 * <br/>
 	 * 受控的 Mixin（@Mixin 目标或类体 import 引用了可选 mod 的类）：
 	 * <ul>
-	 *   <li>ExtraFactoryMixin / FactoryForMEMixin / TileEntityExtraFactoryAccessor — 引用 ME(mekanism_extras)的类，仅当 ME 加载时应用</li>
-	 *   <li>ExtraFactoryForEMEMixin / EMExtraFactoryMixin / TileEntityEMExtraFactoryAccessor — 引用 EME(emextras)的类，仅当 EME 加载时应用</li>
+	 *   <li>ExtraFactoryMixin / FactoryForMEMixin / TileEntityExtraFactoryAccessor — 引用
+	 * ME(mekanism_extras)的类，仅当 ME 加载时应用</li>
+	 *   <li>ExtraFactoryForEMEMixin / EMExtraFactoryMixin / TileEntityEMExtraFactoryAccessor — 引用
+	 * EME(emextras)的类，仅当 EME 加载时应用</li>
 	 *   <li>Ae2ApiaryMixin / Ae2CentrifugeMixin / Ae2CentrifugeFactoryMixin — 引用 AE2 的 IAe2OutputHost 接口，仅当 AE2 加载时应用</li>
-	 *   <li>Ae2ExtraCentrifugeFactoryMixin / Ae2ExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 ME 基类，仅当 AE2+ME 加载时应用</li>
-	 *   <li>Ae2EMExtraCentrifugeFactoryMixin / Ae2EMExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 EME 基类，仅当 AE2+EME 加载时应用</li>
+	 *   <li>Ae2ExtraCentrifugeFactoryMixin / Ae2ExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 ME
+	 * 基类，仅当 AE2+ME 加载时应用</li>
+	 *   <li>Ae2EMExtraCentrifugeFactoryMixin / Ae2EMExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 EME
+	 * 基类，仅当 AE2+EME 加载时应用</li>
+	 *   <li>JdteApiaryCoalescedMixin / JdteCentrifugeCoalescedMixin / JdteCentrifugeFactoryCoalescedMixin —
+	 *       引用 JDTE 的 {@code CoalescedAcceleratedMachine} 接口（类声明 implements），仅当 jdte 加载时应用。
+	 *       目标类均为本模组自有方块实体；接口由应用类加载器（NeoForge mod classloader）加载，
+	 *       MixinClassLoader 委托父加载器解析，与目标类看到的是同一 Class 实例，无类加载约束冲突。</li>
 	 * </ul>
 	 * 其他 Mixin（离心机/PB原版类等）不依赖可选 mod，始终应用。
 	 * <br/>
@@ -43,6 +51,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final String MEKENERGISTICS_MOD_ID = "mekenergistics";
 	/** Building Gadgets 2 的 modId */
 	private static final String BUILDING_GADGETS_MOD_ID = "buildinggadgets2";
+
+	/** Just Dire Things Extras 的 modId（CoalescedAcceleratedMachine 合并接口注入） */
+	private static final String JDTE_MOD_ID = "jdte";
 
 	/**
 	 * 引用 ME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 ME 的类）
@@ -68,6 +79,13 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"GuiUpgradeWindowMixin",
 			"ExtraFactoryInputInventorySlotMixin",
 			"ExtraFactoryOutputInventorySlotMixin"
+	);
+
+	/** 引用 JDTE 接口的 Mixin 简单类名集合（CoalescedAcceleratedMachine，仅 JDTE 加载时应用） */
+	private static final Set<String> JDTE_MIXINS = Set.of(
+			"JdteApiaryCoalescedMixin",
+			"JdteCentrifugeCoalescedMixin",
+			"JdteCentrifugeFactoryCoalescedMixin"
 	);
 
 	/** 引用 EME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 EME 的类）
@@ -132,6 +150,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean BUILDING_GADGETS_LOADED = isModLoaded(BUILDING_GADGETS_MOD_ID);
+
+		/** JDTE 是否加载（Mixin 阶段检测，仅计算一次） */
+		static final boolean JDTE_LOADED = isModLoaded(JDTE_MOD_ID);
 	}
 
 	/**
@@ -220,6 +241,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 		if (BUILDING_GADGETS_MIXINS.contains(simpleName)) {
 			return Holder.BUILDING_GADGETS_LOADED;
+		}
+		if (JDTE_MIXINS.contains(simpleName)) {
+			return Holder.JDTE_LOADED;
 		}
 		return true;
 	}

@@ -45,7 +45,8 @@ public final class EMEBlockRegistration {
 				ProductiveBeesGenesis.LOGGER.warn("EME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
 				continue;
 			}
-			DeferredBlock<MekCentrifugeBlock<TileEntityEMExtraMekCentrifugeFactory, EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory>>> deferredBlock =
+			DeferredBlock<MekCentrifugeBlock<TileEntityEMExtraMekCentrifugeFactory,
+				EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory>>> deferredBlock =
 					ModBlocks.BLOCKS.register(registryName, () -> new MekCentrifugeBlock<>(blockType));
 			ModBlocks.EME_FACTORIES.put(tier, deferredBlock);
 		}
@@ -70,7 +71,8 @@ public final class EMEBlockRegistration {
 				ProductiveBeesGenesis.LOGGER.warn("EME 蜂箱工厂 BlockType 未初始化，跳过方块注册: {}", tier.name());
 				continue;
 			}
-			DeferredBlock<MekApiaryBlock<TileEntityEMExtraMekApiaryFactory, BlockTypeTile<TileEntityEMExtraMekApiaryFactory>>> deferredBlock =
+			DeferredBlock<MekApiaryBlock<TileEntityEMExtraMekApiaryFactory,
+				BlockTypeTile<TileEntityEMExtraMekApiaryFactory>>> deferredBlock =
 					ModBlocks.BLOCKS.register(registryName, () -> new MekApiaryBlock<>(blockType));
 			ModBlocks.EME_APIARY_FACTORIES.put(tier, deferredBlock);
 		}

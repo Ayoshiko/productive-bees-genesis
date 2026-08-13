@@ -410,6 +410,13 @@ cd productive-bees-genesis
 构建产物位于 `build/libs/productivebeesgenesis-<version>.jar`。
 
 > 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
+>
+> **开发环境依赖（`libs/` 本地 jar）**：仓库不包含 `libs/` 下的二进制 jar，全新环境编译前需手动放置：
+> `productivebees-1.21.1-13.13.5.jar`、`productivelib-1.21.1-0.2.0.jar`、`Mekanism-1.21.1-10.7.19.85.jar`、
+> `mekanism_extras-1.21.1-1.4.0.jar`、`Evolved Mekanism-1.21.1-1.2.1-fix3.jar`、`EvolvedMekanismExtras-1.21.1-1.2.1.jar`、
+> `jdte-0.5.9-alpha1.jar`、`sponge-mixin.jar`、`jei-1.21.1-neoforge-19.36.0.360.jar`、
+> `appliedenergistics2-1.21.1-19.2.17.jar`、`AppliedFlux-1.21-2.1.5-neoforge.jar`、`Jade-1.21.1-NeoForge-15.10.5.jar`、
+> `kubejs-neoforge-2101.7.2-build.368.jar`、`rhino-2101.2.7-build.85.jar`。
 
 ## 架构
 

@@ -29,6 +29,7 @@ import com.ayoshiko.productivebeesgenesis.network.ModPayloads;
 import com.ayoshiko.productivebeesgenesis.network.PayloadRateLimiter;
 import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -271,6 +272,8 @@ public final class ProductiveBeesGenesis {
 		BeeInfoHelper.invalidateCache();
 		// 失效机械蜂箱产出配方缓存（Task 16.3 — 静态缓存全局失效）
 		BeeProduceProcessor.invalidateCache();
+		// 失效物品/方块转化配方索引（配方重载后转化原料花朵判定需重建）
+		BeeConversionQueries.invalidate();
 		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
@@ -353,6 +356,8 @@ public final class ProductiveBeesGenesis {
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
 		// 清理机械蜂箱产出配方缓存（Task 16.3 — 静态缓存防止跨存档泄漏）
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
+		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
+		safeClear(BeeConversionQueries::invalidate, "BeeConversionQueries");
 		safeClear(MyriadCreationsEventHandler::clearAllCaches, "MyriadCreationsEventHandler");
 		// 清理 BeeRecipeReloader 延迟重试上下文 — 防止持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC
 		safeClear(RecipeReloadRetryManager::clearPendingRetryContext, "RecipeReloadRetryManager");
@@ -409,7 +414,8 @@ public final class ProductiveBeesGenesis {
 		// F9: 条件战利品表 — 为 EM/ME/EME 方块生成带 neoforge:conditions 的 dropSelf 战利品表
 		generator.addProvider(event.includeServer(), new ConditionalBlockLootProvider(packOutput));
 		// 方块标签（镐/锄挖掘工具）
-		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider, event.getExistingFileHelper()));
+		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider,
+			event.getExistingFileHelper()));
 		// 语言文件：主 lang（src/main/resources）已包含全部键（GUI + configuration + config.*），
 		// 不再通过 ModLanguageProvider 生成，避免 generated lang 与主 lang 键重叠触发 DuplicatesStrategy.EXCLUDE。
 	}

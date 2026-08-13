@@ -65,7 +65,7 @@ public class BeeProduceProcessor {
 	 */
 	private static final int MYRIAD_RANDOM_CAP = 576;
 
-	
+
 	/**
 
 	/** 升级处理器引用 — 用于应用生产力倍率 */

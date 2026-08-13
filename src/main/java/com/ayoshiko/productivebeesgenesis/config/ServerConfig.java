@@ -91,6 +91,8 @@ public final class ServerConfig {
 	public final ModConfigSpec.ConfigValue<String> conversionResult;
 	public final ModConfigSpec.ConfigValue<String> conversionItem;
 	public final ModConfigSpec.DoubleValue conversionChance;
+	public final ModConfigSpec.BooleanValue apiaryItemConversionEnabled;
+	public final ModConfigSpec.BooleanValue apiaryBlockConversionEnabled;
 	public final ModConfigSpec.BooleanValue produceEnabled;
 	public final ModConfigSpec.ConfigValue<String> produceOutputItem;
 	public final ModConfigSpec.IntValue produceOutputMin;
@@ -104,6 +106,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue advancedBeehiveSimulateCooldown;
 	// 高级蜂箱 NBT 保存间隔(tick),降低高倍加速下的 CompoundTag 序列化开销
 	public final ModConfigSpec.IntValue advancedBeehiveSaveInterval;
+	public final ModConfigSpec.IntValue maxBatchTicksPerTick;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段(基础参数,堆叠/流体倍率已迁移至子段)==========
 	public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
@@ -317,6 +320,12 @@ public final class ServerConfig {
 		conversionChance = builder
 				.comment("转化概率（0.0~1.0）")
 				.defineInRange("chance", 1.0D, 0.0D, 1.0D);
+		apiaryItemConversionEnabled = builder
+				.comment("是否允许机械蜂箱（蜂箱工厂）通过饲养板进行物品转化（PB item_conversion 配方，如烈焰蜜蜂 + 黑曜石蜜蜂刷怪蛋 → 无限蜜蜂刷怪蛋）")
+				.define("apiaryItemConversionEnabled", true);
+		apiaryBlockConversionEnabled = builder
+				.comment("是否允许机械蜂箱（蜂箱工厂）通过饲养板中的方块物品进行方块转化（PB block_conversion 配方）")
+				.define("apiaryBlockConversionEnabled", true);
 		builder.pop(); // bee_conversion
 
 		builder.comment("蜜蜂产出配方配置（万象创世蜜脾产出参数）").push("bee_produce");
@@ -350,6 +359,11 @@ public final class ServerConfig {
 		advancedBeehiveSaveInterval = builder
 				.comment("NBT保存间隔(tick)", "默认20，值越大性能越好但宕机风险增加")
 				.defineInRange("saveInterval", 20, 1, 200);
+
+		maxBatchTicksPerTick = builder
+				.comment("批量收获每真实tick虚拟tick预算", "上限值，实际预算按服务器TPS自适应降级（50ms健康=满额，100ms=10%）",
+						"无批次限制加速器（如1024x时间杖）下防止MSPT尖峰，余量挂账后续tick消化")
+				.defineInRange("maxBatchTicksPerTick", 256, 1, 1024);
 
 		builder.pop(); // advanced_beehive
 

@@ -66,6 +66,19 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	/** per-tile AE2 输入过滤条目（键为槽位 index，值为条目字符串，V15 位置固定语义） */
 	public final Map<Integer, String> aeInputFilterEntries;
 
+	/**
+	 * per-tile AE2 直连条目拉取配额（键为槽位 index，值为配额）
+	 * <br/>
+	 * 修复：升级/拆机路径此前只保存条目字符串，恢复时配额回退为默认 64，
+	 * 可能超配额拉取；与 {@link Ae2InputFilterNbtCodec} 主链路的 a/u 持久化保持一致。
+	 */
+	@Nullable
+	public final Map<Integer, Long> aeInputFilterAmounts;
+
+	/** per-tile AE2 直连条目无限提供标志（键为槽位 index） */
+	@Nullable
+	public final Map<Integer, Boolean> aeInputFilterUnlimited;
+
 	/** per-tile AE2 输入精确模式开关（true 时蜜脾和蜜脾块分别匹配，AE2 未加载时为 false） */
 	public final boolean preciseMode;
 
@@ -152,6 +165,8 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	 * @param aeInputNbtIgnore      per-tile AE2 输入 NBT 忽略开关
 	 * @param aeInputFilterMode     per-tile AE2 输入过滤模式 ordinal
 	 * @param aeInputFilterEntries  per-tile AE2 输入过滤条目（键为槽位 index，值为条目字符串）
+	 * @param aeInputFilterAmounts  per-tile AE2 直连条目拉取配额（键为槽位 index，null 表示旧数据回退默认 64）
+	 * @param aeInputFilterUnlimited per-tile AE2 直连条目无限提供标志（键为槽位 index，null 表示旧数据回退 false）
 	 * @param preciseMode           per-tile AE2 输入精确模式开关
 	 * @param aeItemOutputEnabled   per-tile AE2 物品输出开关
 	 * @param aeFluidOutputEnabled  per-tile AE2 流体输出开关
@@ -167,7 +182,9 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 			Map<String, Integer> pbUpgrades,
 			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
 			boolean aeItemInputEnabled, boolean aeInputNbtIgnore,
-			int aeInputFilterMode, Map<Integer, String> aeInputFilterEntries, boolean preciseMode,
+			int aeInputFilterMode, Map<Integer, String> aeInputFilterEntries,
+			@Nullable Map<Integer, Long> aeInputFilterAmounts,
+			@Nullable Map<Integer, Boolean> aeInputFilterUnlimited, boolean preciseMode,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled,
 			boolean smeltingCompatEnabled, boolean centrifugeDirectAeOutputEnabled,
 			@Nullable CompoundTag multiFluidTanksNbt,
@@ -183,6 +200,8 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 		this.aeInputNbtIgnore = aeInputNbtIgnore;
 		this.aeInputFilterMode = aeInputFilterMode;
 		this.aeInputFilterEntries = aeInputFilterEntries;
+		this.aeInputFilterAmounts = aeInputFilterAmounts;
+		this.aeInputFilterUnlimited = aeInputFilterUnlimited;
 		this.preciseMode = preciseMode;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;

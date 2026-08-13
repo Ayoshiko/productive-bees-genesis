@@ -30,8 +30,10 @@ import java.util.List;
 	 */
 public class BakedModelHalo extends WrappedItemModel {
 
-	private static final ResourceLocation HALO_TEXTURE = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo");
-	private static final ResourceLocation HALO_NOISE_TEXTURE = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo_noise");
+	private static final ResourceLocation HALO_TEXTURE =
+		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo");
+	private static final ResourceLocation HALO_NOISE_TEXTURE =
+		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo_noise");
 
 	private final int type;
 	private final float alpha;
@@ -104,7 +106,14 @@ public class BakedModelHalo extends WrappedItemModel {
 	}
 
 	@Override
-	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay) {
+	public void renderItem(
+		ItemStack stack,
+		ItemDisplayContext context,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay
+	) {
 		Minecraft mc = Minecraft.getInstance();
 		ItemRenderer itemRenderer = mc.getItemRenderer();
 		TextureAtlas textureAtlas = mc.getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS);
@@ -147,7 +156,13 @@ public class BakedModelHalo extends WrappedItemModel {
 	 * 统一处理blend启用/恢复，确保渲染状态不泄漏。
 	 * 所有缩放操作都在 pushPose/popPose 块内执行。
 	 */
-	private void renderHalo(PoseStack poseStack, VertexConsumer vertexConsumer, int packedLight, int packedOverlay, TextureAtlas textureAtlas) {
+	private void renderHalo(
+		PoseStack poseStack,
+		VertexConsumer vertexConsumer,
+		int packedLight,
+		int packedOverlay,
+		TextureAtlas textureAtlas
+	) {
 		boolean blendEnabled = false;
 		boolean depthTestDisabled = false;
 

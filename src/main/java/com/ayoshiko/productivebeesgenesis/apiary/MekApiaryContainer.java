@@ -51,7 +51,8 @@ public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiar
 	@Nullable
 	private VirtualInventoryContainerSlot pbUpgradeOutputSlot;
 
-	public MekApiaryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv, @NotNull TileEntityMekApiary tile) {
+	public MekApiaryContainer(ContainerTypeRegistryObject<?> type, int id, Inventory inv,
+		@NotNull TileEntityMekApiary tile) {
 		super(type, id, inv, tile);
 	}
 

@@ -301,7 +301,8 @@ public final class FactoryApiaryConfig {
 	 * 修复 v15 软依赖隔离：方法签名改为 {@code Object}，避免本类直接 import EME 的 {@code EMExtraFactoryTier}。
 	 * 内部通过 {@code tier.toString()} 匹配枚举名，性能影响可忽略（配置查询不在热路径）。
 	 *
-	 * @param tier EME 工厂等级（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL），运行时类型为 EMExtraFactoryTier
+	 * @param tier EME 工厂等级（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL），运行时类型为
+	 * EMExtraFactoryTier
 	 * @return 对应等级的参数配置，未知等级返回 Basic 配置
 	 */
 	public static FactoryApiaryConfig forEMETier(Object tier) {

@@ -31,28 +31,35 @@ import java.util.Map;
 	 * <pre>{@code
 	 * MyriadBeeEvents.REGISTER.register(event => {
 	 *     // 繁殖配方
-	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee', 'productivebees:myriadcreations')
+	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee',
+	 * 'productivebees:myriadcreations')
 	 *
 	 *     // 钓鱼配方（群系列表或标签）
 	 *     event.addFishing('mymod:custom_fishing', 'productivebees:myriadcreations', ['minecraft:ocean'], 0.15)
 	 *
 	 *     // 转化配方
-	 *     event.addConversion('mymod:custom_conversion', 'minecraft:bee', 'productivebees:myriadcreations', 'minecraft:stick', 1.0)
+	 *     event.addConversion('mymod:custom_conversion', 'minecraft:bee',
+	 * 'productivebees:myriadcreations', 'minecraft:stick', 1.0)
 	 *
 	 *     // 生成配方
-	 *     event.addSpawning('mymod:custom_spawning', 'productivebees:stone_nest', 'productivebees:myriadcreations', '#c:is_plains')
+	 *     event.addSpawning('mymod:custom_spawning', 'productivebees:stone_nest',
+	 * 'productivebees:myriadcreations', '#c:is_plains')
 	 *
 	 *     // 离心机配方（使用默认流体和 processingTime）
-	 *     event.addCentrifuge('mymod:custom_centrifuge', 'productivebees:myriadcreations', ['productivebees:wax|1.0', '#productivebees:configurable_honeycombs|1.0'])
+	 *     event.addCentrifuge('mymod:custom_centrifuge', 'productivebees:myriadcreations',
+	 * ['productivebees:wax|1.0', '#productivebees:configurable_honeycombs|1.0'])
 	 *
 	 *     // 离心机配方（自定义流体和 processingTime）
-	 *     event.addCentrifuge('mymod:custom_centrifuge2', 'productivebees:myriadcreations', ['productivebees:wax|0.5'], 500, 'minecraft:water', 100)
+	 *     event.addCentrifuge('mymod:custom_centrifuge2', 'productivebees:myriadcreations',
+	 * ['productivebees:wax|0.5'], 500, 'minecraft:water', 100)
 	 *
 	 *     // 蜂箱产出配方
-	 *     event.addBeeProduce('mymod:custom_produce', 'productivebees:myriadcreations', ['productivebees:configurable_honeycomb|1.0'])
+	 *     event.addBeeProduce('mymod:custom_produce', 'productivebees:myriadcreations',
+	 * ['productivebees:configurable_honeycomb|1.0'])
 	 *
 	 *     // mek_data 合成配方
-	 *     event.addMekData('mymod:custom_mek_data', ['ABC', 'DEF', 'GHI'], {A: 'minecraft:iron_ingot', B: 'minecraft:gold_ingot'}, 'mymod:custom_item')
+	 *     event.addMekData('mymod:custom_mek_data', ['ABC', 'DEF', 'GHI'], {A: 'minecraft:iron_ingot', B:
+	 * 'minecraft:gold_ingot'}, 'mymod:custom_item')
 	 * })
 	 * }</pre>
 	 */

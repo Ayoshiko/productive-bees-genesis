@@ -114,7 +114,11 @@ public final class MultiFluidTankHostHelper {
 	 * @param stack   待插入流体(仅取类型信息)
 	 * @return 目标槽;MULTI 模式无匹配槽且达上限时返回 primary
 	 */
-	public static IExtendedFluidTank fluidOutputTankForInsert(IFluidTankHolder holder, IExtendedFluidTank primary, FluidStack stack) {
+	public static IExtendedFluidTank fluidOutputTankForInsert(
+		IFluidTankHolder holder,
+		IExtendedFluidTank primary,
+		FluidStack stack
+	) {
 		if (holder instanceof MultiFluidTankHolder multiHolder) {
 			IExtendedFluidTank tank = multiHolder.getTankForInsert(stack);
 			if (tank != null) {

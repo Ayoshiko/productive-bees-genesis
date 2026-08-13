@@ -15,7 +15,8 @@ import java.util.List;
 	 * 负责将脚本传入的字符串/列表参数转换为 Productive Bees 配方 JSON 结构：
 	 * <ul>
 	 *   <li>{@link #parseChancedOutput(String)} — 离心机产出（item|chance 或 #tag|chance）</li>
-	 *   <li>{@link #parseBeeProduceResult(String, String)} — 蜂箱产出（item|chance，configurable_honeycomb 自动附加 bee_type 组件）</li>
+	 *   <li>{@link #parseBeeProduceResult(String, String)} — 蜂箱产出（item|chance，configurable_honeycomb 自动附加
+	 * bee_type 组件）</li>
 	 *   <li>{@link #toJsonElement(Object)} — 群系规格转 JSON（字符串或列表）</li>
 	 * </ul>
 	 * <p>

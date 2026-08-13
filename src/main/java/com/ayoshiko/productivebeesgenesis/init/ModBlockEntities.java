@@ -166,7 +166,8 @@ public final class ModBlockEntities {
 			return;
 		}
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory, Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> deferredBlock = ModBlocks.getEMFactoryBlock(tier);
+			DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+				Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> deferredBlock = ModBlocks.getEMFactoryBlock(tier);
 			if (deferredBlock == null) {
 				// 方块未注册（registerEMFactories未调用或失败），跳过并记录警告
 				ProductiveBeesGenesis.LOGGER.warn("EM工厂方块未注册，跳过TileEntity注册: {}", tier.name());
@@ -239,7 +240,8 @@ public final class ModBlockEntities {
 			return;
 		}
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory, BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock = ModBlocks.getEMApiaryFactoryBlock(tier);
+			DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+				BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock = ModBlocks.getEMApiaryFactoryBlock(tier);
 			if (deferredBlock == null) {
 				ProductiveBeesGenesis.LOGGER.warn("EM 蜂箱工厂方块未注册，跳过 TileEntity 注册: {}", tier.name());
 				continue;

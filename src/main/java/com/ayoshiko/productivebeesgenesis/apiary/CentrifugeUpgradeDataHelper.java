@@ -118,6 +118,8 @@ public final class CentrifugeUpgradeDataHelper {
 				&& ae2StateHolder.isCentrifugeDirectAeOutputEnabled();
 		int aeInputFilterMode = 0;
 		Map<Integer, String> aeInputFilterEntries = new HashMap<>();
+		Map<Integer, Long> aeInputFilterAmounts = new HashMap<>();
+		Map<Integer, Boolean> aeInputFilterUnlimited = new HashMap<>();
 		boolean preciseMode = false;
 		if (aeLoaded) {
 			Ae2InputFilter filter = ae2StateHolder.getOrCreateInputFilter();
@@ -126,6 +128,9 @@ public final class CentrifugeUpgradeDataHelper {
 			// V15: 使用 getNonEmptyEntries() 获取带位置索引的条目（保留位置固定语义）
 			for (Ae2InputFilter.IndexedEntry ie : filter.getNonEmptyEntries()) {
 				aeInputFilterEntries.put(ie.index(), ie.entry());
+				// 修复：同步保存直连条目的拉取配额与无限提供标志（否则升级后配额回退默认 64）
+				aeInputFilterAmounts.put(ie.index(), filter.getDirectAmountAt(ie.index()));
+				aeInputFilterUnlimited.put(ie.index(), filter.isDirectUnlimitedAt(ie.index()));
 			}
 		}
 
@@ -168,7 +173,7 @@ public final class CentrifugeUpgradeDataHelper {
 				pbUpgrades,
 				pbUpgradeInputNbt, pbUpgradeOutputNbt,
 				aeItemInputEnabled, aeInputNbtIgnore,
-				aeInputFilterMode, aeInputFilterEntries, preciseMode,
+				aeInputFilterMode, aeInputFilterEntries, aeInputFilterAmounts, aeInputFilterUnlimited, preciseMode,
 				aeItemOutputEnabled, aeFluidOutputEnabled,
 				smeltingCompatEnabled, centrifugeDirectAeOutputEnabled,
 				multiFluidTanksNbt,
@@ -190,7 +195,10 @@ public final class CentrifugeUpgradeDataHelper {
 	 * @param provider 注册表访问器(FluidStack.save 需要)
 	 * @return 兼容 multiFluidTanksNbt 格式的 NBT
 	 */
-	private static CompoundTag serializeSingleFluidTank(@NotNull FluidStack fluid, @NotNull HolderLookup.Provider provider) {
+	private static CompoundTag serializeSingleFluidTank(
+		@NotNull FluidStack fluid,
+		@NotNull HolderLookup.Provider provider
+	) {
 		CompoundTag root = new CompoundTag();
 		CompoundTag multiRoot = new CompoundTag();
 		ListTag tanksList = new ListTag();
@@ -293,6 +301,19 @@ public final class CentrifugeUpgradeDataHelper {
 					int idx = entry.getKey();
 					if (idx >= 0 && idx < MAX_FILTER_INDEX) {
 						filter.setEntryAtIndex(idx, entry.getValue());
+						// 修复：恢复直连条目的拉取配额与无限提供标志
+						// （setEntryAtIndex 对直连条目固定写默认 64/false，必须显式覆盖）
+						if (data.aeInputFilterAmounts != null) {
+							Long amount = data.aeInputFilterAmounts.get(idx);
+							if (amount != null) {
+								filter.setDirectAmountAt(idx, amount);
+							}
+						}
+						if (data.aeInputFilterUnlimited != null
+								&& Boolean.TRUE.equals(data.aeInputFilterUnlimited.get(idx))) {
+							// setEntryAtIndex 后 unlimited=false，toggle 到 true 恢复无限提供
+							filter.toggleDirectUnlimitedAt(idx);
+						}
 					}
 				}
 			}

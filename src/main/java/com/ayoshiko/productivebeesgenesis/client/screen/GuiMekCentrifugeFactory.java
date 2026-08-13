@@ -109,15 +109,18 @@ public class GuiMekCentrifugeFactory extends GuiConfigurableTile<TileEntityFacto
 					.findFirst()
 					.map(slot -> slot.x)
 					.orElse(FactoryLayoutHelper.getEnergySlotX(tile.tier));
-			addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), energySlotX + 5, this.inventoryLabelY + 9, 52))
+			addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), energySlotX + 5, this.inventoryLabelY + 9,
+				52))
 					.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
 		} else {
 			// 原版4等级：标准能量条（右侧布局）
-			addRenderableWidget(GuiMekCentrifugeFactoryHelper.createStandardPowerBar(this, tile.getEnergyContainer(), imageWidth))
+			addRenderableWidget(GuiMekCentrifugeFactoryHelper.createStandardPowerBar(this, tile.getEnergyContainer(),
+				imageWidth))
 					.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
 		}
 		// GuiEnergyTab使用默认构造（左侧 x=-26, Y=137），与EM原版一致
-		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(), tile::getLastUsage));
+		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(),
+			tile::getLastUsage));
 		// Tab 布局重排:所有等级 GuiEnergyTab 下移 Δ=+24(y=137→161),与 GuiMultiFluidTanksTab(y=131,底部157)间距4px
 		// 修复 EM 高等级 GuiEnergyTab 不移动导致与 GuiMultiFluidTanksTab 重叠的问题(潜在问题1)
 		for (GuiEventListener child : children()) {

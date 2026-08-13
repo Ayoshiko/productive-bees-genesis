@@ -156,7 +156,11 @@ public final class BeeSelectionScreen extends Screen {
 	 * @param onSelectBee       选择单个蜜蜂后的回调
 	 * @return 配置为单选模式的选择屏幕实例
 	 */
-	public static BeeSelectionScreen forSingleSelection(Screen parent, List<String> existingBeeTypes, Consumer<String> onSelectBee) {
+	public static BeeSelectionScreen forSingleSelection(
+		Screen parent,
+		List<String> existingBeeTypes,
+		Consumer<String> onSelectBee
+	) {
 		return new BeeSelectionScreen(parent, existingBeeTypes, selected -> {
 			if (selected != null && !selected.isEmpty()) {
 				onSelectBee.accept(selected.get(0));

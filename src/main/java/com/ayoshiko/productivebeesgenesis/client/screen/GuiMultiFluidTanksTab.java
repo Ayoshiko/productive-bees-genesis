@@ -42,7 +42,8 @@ public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost> extends Gui
 	private static final int TAB_COLOR = 0xFF232323;
 
 	/** Tab 图标资源路径(18×18 像素) */
-	private static final ResourceLocation ICON = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/multi_fluid_tanks_tab.png");
+	private static final ResourceLocation ICON =
+		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/multi_fluid_tanks_tab.png");
 
 	/**
 	 * 窗口数据 — UNSPECIFIED 类型(自定义窗口,不与 MEK 内置窗口冲突)
@@ -74,7 +75,8 @@ public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost> extends Gui
 	 */
 	public GuiMultiFluidTanksTab(IGuiWrapper gui, TILE tile, Supplier<GuiMultiFluidTanksTab<TILE>> elementSupplier) {
 		// 左侧 Tab,y=131 位于 GuiWarningTab(101,底部127)下方(间距4px),与右侧 GuiRedstoneControlTab(131)对称
-		// y 坐标链审计:GuiSortingTab(62,h=35,底97) → GuiWarningTab(101,h=26,底127) → 本Tab(131,h=26,底157) → GuiEnergyTab(161,h=26,底187)
+		// y 坐标链审计:GuiSortingTab(62,h=35,底97) → GuiWarningTab(101,h=26,底127) → 本Tab(131,h=26,底157) →
+				// GuiEnergyTab(161,h=26,底187)
 		super(ICON, gui, tile, -26, 131, 26, 18, true, elementSupplier);
 		setTooltip(Tooltip.create(Component.translatable("gui.productivebeesgenesis.multi_fluid_tanks_tab.tooltip")));
 	}

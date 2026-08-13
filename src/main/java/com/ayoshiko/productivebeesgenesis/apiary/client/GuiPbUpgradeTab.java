@@ -28,7 +28,8 @@ public class GuiPbUpgradeTab<TILE extends IPbUpgradeProvider> extends GuiWindowC
 
 	private static final int TAB_COLOR = 0xFFF57F17;
 
-	private static final ResourceLocation ICON = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/pb_upgrade_tab.png");
+	private static final ResourceLocation ICON =
+		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/pb_upgrade_tab.png");
 
 	public GuiPbUpgradeTab(IGuiWrapper gui, TILE tile, Supplier<GuiPbUpgradeTab<TILE>> elementSupplier) {
 		super(ICON, gui, tile, gui.getXSize(), 98, 26, 18, false, elementSupplier);

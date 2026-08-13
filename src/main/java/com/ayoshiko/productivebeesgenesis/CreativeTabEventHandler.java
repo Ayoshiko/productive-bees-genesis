@@ -71,9 +71,11 @@ public final class CreativeTabEventHandler {
 		var myriadSpawnEgg = BuiltInRegistries.ITEM.get(myriadSpawnEggId);
 
 		// 从父标签页中移除万象创世刷怪蛋
-		removeSpawnEggsFromList(event.getParentEntries(), myriadSpawnEgg, event, CreativeModeTab.TabVisibility.PARENT_TAB_ONLY);
+		removeSpawnEggsFromList(event.getParentEntries(), myriadSpawnEgg, event,
+			CreativeModeTab.TabVisibility.PARENT_TAB_ONLY);
 		// 从搜索标签页中移除万象创世刷怪蛋
-		removeSpawnEggsFromList(event.getSearchEntries(), myriadSpawnEgg, event, CreativeModeTab.TabVisibility.SEARCH_TAB_ONLY);
+		removeSpawnEggsFromList(event.getSearchEntries(), myriadSpawnEgg, event,
+			CreativeModeTab.TabVisibility.SEARCH_TAB_ONLY);
 	}
 
 	/**

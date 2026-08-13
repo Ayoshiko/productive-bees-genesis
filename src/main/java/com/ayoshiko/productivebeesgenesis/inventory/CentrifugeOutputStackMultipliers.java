@@ -79,7 +79,8 @@ public final class CentrifugeOutputStackMultipliers {
 	/**
 	 * EME 工厂输出槽倍率（按 EMExtraFactoryTier.ordinal 索引）
 	 *
-	 * @param ordinal EMExtraFactoryTier 序号（0=ABSOLUTE_OVERCLOCKED, 1=SUPREME_QUANTUM, 2=COSMIC_DENSE, 3=INFINITE_MULTIVERSAL）
+	 * @param ordinal EMExtraFactoryTier 序号（0=ABSOLUTE_OVERCLOCKED, 1=SUPREME_QUANTUM, 2=COSMIC_DENSE,
+	 * 3=INFINITE_MULTIVERSAL）
 	 */
 	public static IntSupplier forEMEFactory(int ordinal) {
 		return switch (ordinal) {

@@ -31,8 +31,10 @@ public class RenderUtils {
 	public static final ItemModelGenerator ITEM_MODEL_GENERATOR = new ItemModelGenerator();
 	public static final FaceBakery FACE_BAKERY = new FaceBakery();
 
-	public static final RenderStateShard.TextureStateShard COSMIC_TEXTURE_ISOLATED = new RenderStateShard.TextureStateShard(InventoryMenu.BLOCK_ATLAS, false, false);
-	public static final RenderStateShard.LayeringStateShard POLYGON_OFFSET_LAYERING = new RenderStateShard.LayeringStateShard("polygon_offset_layering", () -> {
+	public static final RenderStateShard.TextureStateShard COSMIC_TEXTURE_ISOLATED =
+		new RenderStateShard.TextureStateShard(InventoryMenu.BLOCK_ATLAS, false, false);
+	public static final RenderStateShard.LayeringStateShard POLYGON_OFFSET_LAYERING = new RenderStateShard.LayeringStateShard("polygon_offset_layering",
+		() -> {
 		RenderSystem.polygonOffset(-1.0F, -10.0F);
 		RenderSystem.enablePolygonOffset();
 	}, () -> {
@@ -80,7 +82,8 @@ public class RenderUtils {
 
 			for (BlockElement element : unbaked) {
 				for (Entry<Direction, BlockElementFace> directionBlockElementFaceEntry : element.faces.entrySet()) {
-					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, directionBlockElementFaceEntry.getValue(), sprite, directionBlockElementFaceEntry.getKey(), new SimpleModelState(state), element.rotation, element.shade));
+					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, directionBlockElementFaceEntry.getValue(), sprite, directionBlockElementFaceEntry.getKey(), new SimpleModelState(state), element.rotation,
+						element.shade));
 				}
 			}
 		}

@@ -36,7 +36,8 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z", remap = false),
 			require = 0
 	)
-	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity, Operation<Boolean> original) {
+	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity,
+		Operation<Boolean> original) {
 		Level level = blockEntity.getLevel();
 		long gameTime = level != null ? level.getGameTime() : -1L;
 		AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =

@@ -85,7 +85,14 @@ final class MyriadCreationsLogger {
 	}
 
 	/** 记录带冷却和抑制计数的日志（通过 logger 参数区分 WARN 与 INFO 级别）— 使用 ms 时间源避免 JDTE 加速下节流失效 */
-	private void logThrottled(BiConsumer<String, Object[]> logger, LogThrottle[] throttles, int processIndex, String pattern, Object... args) {
+	private void logThrottled(
+		BiConsumer<String,
+		Object[]> logger,
+		LogThrottle[] throttles,
+		int processIndex,
+		String pattern,
+		Object... args
+	) {
 		long currentTimeMs = System.currentTimeMillis();
 		LogThrottle throttle = throttles[processIndex];
 		if (!throttle.canLogMs(currentTimeMs)) {

@@ -139,6 +139,9 @@ dependencies {
     // 注意：不添加 runtimeOnly 依赖 — MekanismEmpowered 的 NeoForge 版本与开发环境不兼容，
     // 且与 MekanismUnleashed 冲突，无法在开发环境运行时测试。反射访问在用户生产环境自动生效。
 
+    // JDTE（可选联动：CoalescedAcceleratedMachine 合并接口，仅编译期引用；运行时经 MixinConfigPlugin 条件应用）
+    compileOnly files('libs/jdte-0.5.9-alpha1.jar')
+
     // Mixin 编译时依赖（运行时由 NeoForge 提供）
     compileOnly files('libs/sponge-mixin.jar')
 

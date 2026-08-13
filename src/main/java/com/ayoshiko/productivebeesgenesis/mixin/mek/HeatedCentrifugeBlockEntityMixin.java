@@ -25,7 +25,8 @@ public abstract class HeatedCentrifugeBlockEntityMixin {
 	/** canOperate RETURN — 输出满时阻止启动 */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)
 	private void productivebeesgenesis$checkOutputSpace(CallbackInfoReturnable<Boolean> cir) {
-		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this, MyriadCreationsEventHandler::shouldBlockOperation);
+		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this,
+			MyriadCreationsEventHandler::shouldBlockOperation);
 	}
 
 	/** completeRecipeProcessing TAIL — 追加随机蜜脾产出（支持Omega升级倍率） */

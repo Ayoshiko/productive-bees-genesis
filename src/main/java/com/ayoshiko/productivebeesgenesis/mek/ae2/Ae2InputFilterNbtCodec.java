@@ -96,6 +96,11 @@ final class Ae2InputFilterNbtCodec {
 			// V15 新格式：CompoundTag 含 index
 			for (int i = 0; i < entriesTag.size(); i++) {
 				CompoundTag entryTag = entriesTag.getCompound(i);
+				// 损坏 NBT 容错：缺失/类型不符的 i 键直接跳过该条目，
+				// 避免 getInt 默认返回 0 导致条目错误覆盖索引 0 的既有条目
+				if (!entryTag.contains("i", Tag.TAG_ANY_NUMERIC)) {
+					continue;
+				}
 				int idx = entryTag.getInt("i");
 				String val = entryTag.getString("v");
 				// 防御恶意 index 导致 OOM
@@ -116,19 +121,20 @@ final class Ae2InputFilterNbtCodec {
 			}
 		} else {
 			// 向后兼容：旧紧凑 StringTag 格式，按顺序填入 0,1,2...
+			// 注意：条目数受 MAX_FILTER_SLOTS 上限约束（与新格式 index 守卫一致），
+			// 防止损坏/恶意 NBT 触发远超预期的数组分配
 			ListTag oldEntries = tag.getList("entries", Tag.TAG_STRING);
-			if (!oldEntries.isEmpty()) {
-				if (oldEntries.size() > newSlots.length) {
-					newSlots = new String[oldEntries.size()];
-					newAmounts = new long[oldEntries.size()];
-					newUnlimited = new boolean[oldEntries.size()];
-				}
-				for (int i = 0; i < oldEntries.size(); i++) {
-					String val = oldEntries.getString(i);
-					newSlots[i] = val.isEmpty() ? null : val;
-					newAmounts[i] = Ae2InputFilter.isDirectFingerprint(newSlots[i])
-							? Ae2InputFilter.DEFAULT_DIRECT_AMOUNT : 0L;
-				}
+			int oldCount = Math.min(oldEntries.size(), Ae2InputFilter.getMaxFilterSlots());
+			if (oldCount > newSlots.length) {
+				newSlots = new String[oldCount];
+				newAmounts = new long[oldCount];
+				newUnlimited = new boolean[oldCount];
+			}
+			for (int i = 0; i < oldCount; i++) {
+				String val = oldEntries.getString(i);
+				newSlots[i] = val.isEmpty() ? null : val;
+				newAmounts[i] = Ae2InputFilter.isDirectFingerprint(newSlots[i])
+						? Ae2InputFilter.DEFAULT_DIRECT_AMOUNT : 0L;
 			}
 		}
 		return new LoadResult(filterMode, preciseMode, true, newSlots, newAmounts, newUnlimited);

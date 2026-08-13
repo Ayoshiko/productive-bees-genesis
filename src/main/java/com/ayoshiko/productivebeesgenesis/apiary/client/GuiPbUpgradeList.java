@@ -218,7 +218,12 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 	@Override
 	public void drawBackground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		super.drawBackground(guiGraphics, mouseX, mouseY, partialTicks);
-		renderBackgroundTexture(guiGraphics, GuiElementHolder.HOLDER, GuiElementHolder.HOLDER_SIZE, GuiElementHolder.HOLDER_SIZE);
+		renderBackgroundTexture(
+			guiGraphics,
+			GuiElementHolder.HOLDER,
+			GuiElementHolder.HOLDER_SIZE,
+			GuiElementHolder.HOLDER_SIZE
+		);
 		// 1:1对齐MEK原版GuiScrollList.drawBackground — 滚动条在元素之前渲染
 		drawScrollBar(guiGraphics);
 

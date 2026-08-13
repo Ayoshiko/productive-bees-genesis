@@ -21,6 +21,7 @@ import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.fml.ModList;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -71,12 +72,33 @@ public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifug
 		}
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));
 		// 流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
-		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(), FactoryLayoutHelper.getCentrifugeFluidTankY()));
+		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(),
+			FactoryLayoutHelper.getCentrifugeFluidTankY()));
 		addRenderableWidget(new GuiProgress(
 				() -> ProgressDisplaySmoother.smooth(tile, 0, tile.getScaledProgress()),
 				ProgressType.BAR, this, 86, 38)
-				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
+				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING,
+						jeiViewerTypeOrNull())
 				.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
+	}
+
+
+	/**
+	 * 返回 JEI 的 PB 离心配方查看器类型；JEI 未安装时返回 null。
+	 * <br/>
+	 * 原理：ProductiveBeesGenesisJEI implements mezz.jei.api.IModPlugin（硬引用 JEI 类），
+	 * 直接调用其静态方法会在 JEI 未安装时触发 NoClassDefFoundError；
+	 * 通过 ModList 守卫确保仅 JEI 已加载时才触达该类引用（JVM 惰性类加载）。
+	 *
+	 * @return JEI 配方查看器类型，JEI 未安装时为 null
+	 */
+	@org.jetbrains.annotations.Nullable
+	private static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
+	) {
+		if (ModList.get() != null && ModList.get().isLoaded("jei")) {
+			return ProductiveBeesGenesisJEI.getPbCentrifugeViewerType();
+		}
+		return null;
 	}
 
 	/**

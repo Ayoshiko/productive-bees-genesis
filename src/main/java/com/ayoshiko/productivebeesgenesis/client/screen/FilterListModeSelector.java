@@ -70,7 +70,8 @@ final class FilterListModeSelector {
 		Component modeLabel = Component.translatable("productivebeesgenesis.config.filter_mode");
 		int modeLabelWidth = screen.getMinecraft().font.width(modeLabel);
 		int firstModeX = modeButtons[0] != null ? modeButtons[0].getX() : screen.width - FilterListScreen.SCREEN_MARGIN - 64;
-		graphics.drawString(screen.getMinecraft().font, modeLabel, firstModeX - modeLabelWidth - 8, 29, GuiColors.TEXT_DIM_GRAY);
+		graphics.drawString(screen.getMinecraft().font, modeLabel, firstModeX - modeLabelWidth - 8, 29,
+			GuiColors.TEXT_DIM_GRAY);
 	}
 
 	/**

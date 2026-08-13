@@ -409,6 +409,13 @@ cd productive-bees-genesis
 The built jar will be at `build/libs/productivebeesgenesis-<version>.jar`.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
+>
+> **Development-only local jars (`libs/`)**: the repository does not ship the binary jars under `libs/`. Before compiling from a fresh clone, manually place:
+> `productivebees-1.21.1-13.13.5.jar`, `productivelib-1.21.1-0.2.0.jar`, `Mekanism-1.21.1-10.7.19.85.jar`,
+> `mekanism_extras-1.21.1-1.4.0.jar`, `Evolved Mekanism-1.21.1-1.2.1-fix3.jar`, `EvolvedMekanismExtras-1.21.1-1.2.1.jar`,
+> `jdte-0.5.9-alpha1.jar`, `sponge-mixin.jar`, `jei-1.21.1-neoforge-19.36.0.360.jar`,
+> `appliedenergistics2-1.21.1-19.2.17.jar`, `AppliedFlux-1.21-2.1.5-neoforge.jar`, `Jade-1.21.1-NeoForge-15.10.5.jar`,
+> `kubejs-neoforge-2101.7.2-build.368.jar`, `rhino-2101.2.7-build.85.jar`.
 
 ## Architecture
 

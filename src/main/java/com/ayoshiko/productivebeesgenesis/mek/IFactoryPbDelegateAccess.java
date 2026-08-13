@@ -59,7 +59,8 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	}
 
 	@Override
-	default void productivebeesgenesis$updateSlotOnly(int process, int slotIdx, mekanism.api.inventory.IInventorySlot slot) {
+	default void productivebeesgenesis$updateSlotOnly(int process, int slotIdx,
+		mekanism.api.inventory.IInventorySlot slot) {
 		productivebeesgenesis$getDelegate().updateSlotOnly(process, slotIdx, slot);
 	}
 

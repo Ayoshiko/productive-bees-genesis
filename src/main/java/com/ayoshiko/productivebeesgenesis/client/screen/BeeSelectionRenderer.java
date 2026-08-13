@@ -97,7 +97,8 @@ final class BeeSelectionRenderer {
 		// 分组标题背景
 		int bgColor = hovered ? GuiColors.GROUP_HEADER_BG_HOVER : GuiColors.GROUP_HEADER_BG;
 		graphics.fill(x, y, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, bgColor);
-		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.BORDER_GROUP_HEADER);
+		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT,
+			GuiColors.BORDER_GROUP_HEADER);
 
 		String arrow = header.collapsed ? COLLAPSED_ARROW : EXPANDED_ARROW;
 		String text = arrow + " " + header.namespace + " (" + header.count + ")";
@@ -121,7 +122,8 @@ final class BeeSelectionRenderer {
 		}
 		graphics.fill(x, y, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, bgColor);
 		graphics.fill(x, y, x + width, y + 1, GuiColors.BORDER_DARK);
-		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.BORDER_DARK);
+		graphics.fill(x, y + BeeSelectionScreen.ENTRY_HEIGHT - 1, x + width, y + BeeSelectionScreen.ENTRY_HEIGHT,
+			GuiColors.BORDER_DARK);
 
 		if (added) {
 			graphics.fill(x, y, x + 2, y + BeeSelectionScreen.ENTRY_HEIGHT, GuiColors.ADDED_INDICATOR_BAR);

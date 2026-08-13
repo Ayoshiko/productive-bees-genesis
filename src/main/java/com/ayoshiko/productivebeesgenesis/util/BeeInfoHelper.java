@@ -314,7 +314,8 @@ public final class BeeInfoHelper {
 			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "wanna"), "productivebeesgenesis.config.product.wanna",
 			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "farmer_bee"), "productivebeesgenesis.config.product.farmer_bee",
 			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "collector_bee"), "productivebeesgenesis.config.product.collector_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "hoarder_bee"), "productivebeesgenesis.config.product.hoarder_bee");
+			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "hoarder_bee"),
+				"productivebeesgenesis.config.product.hoarder_bee");
 
 	/**
 	 * 获取特殊蜜蜂的动态产物描述

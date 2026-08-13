@@ -60,6 +60,36 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	public final CompoundTag cageOutSlotNbt;
 
 	/**
+	 * 蜂笼输入槽 NBT 快照（由 serializeNBT 序列化）
+	 * <br/>
+	 * 修复：父类 {@code inputSlots} 持有旧槽位对象引用，getUpgradeData 后的
+	 * saveAllItemsForDrop 会清空旧槽位，恢复时必须从快照读取而非旧引用。
+	 * null 表示旧版本升级数据（向后兼容回退到 inputSlots 路径）。
+	 */
+	@Nullable
+	public final CompoundTag cageInSlotNbt;
+
+	/**
+	 * 能量槽 NBT 快照（由 serializeNBT 序列化）
+	 * <br/>
+	 * 修复：父类 {@code energySlot} 持有旧槽位对象引用，saveAllItemsForDrop 清空后
+	 * 恢复时会读到空栈；改用快照确保升级后能量物品不丢失。
+	 * null 表示旧版本升级数据（向后兼容回退到 energySlot 路径）。
+	 */
+	@Nullable
+	public final CompoundTag energySlotNbt;
+
+	/**
+	 * 产物溢出缓冲区 NBT 快照（由 ApiaryOutputBuffer.save 序列化）
+	 * <br/>
+	 * 修复：输出缓冲区不在任何槽位体系内，升级数据此前无字段承载，
+	 * 且 saveAllItemsForDrop 会 clear 缓冲区，导致积压产物在升级时凭空消失。
+	 * null 表示旧版本升级数据（无缓冲区恢复）。
+	 */
+	@Nullable
+	public final CompoundTag outputBufferNbt;
+
+	/**
 	 * 产物输出槽的 ItemStack 深拷贝列表
 	 * <br/>
 	 * 模块 3 Bug 2 修复：独立于父类 {@code outputSlots}（{@code List<IInventorySlot>} 引用列表），
@@ -104,6 +134,9 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	 * @param fluidNbt             蜂蜜流体罐内容 NBT
 	 * @param cageOutSlotNbt       蜂笼输出槽 NBT
 	 * @param outputItems          产物输出槽 ItemStack 深拷贝列表（模块 3 Bug 2 修复，null 表示旧版本回退）
+	 * @param cageInSlotNbt        蜂笼输入槽 NBT 快照（null 表示旧版本回退到 inputSlots）
+	 * @param energySlotNbt        能量槽 NBT 快照（null 表示旧版本回退到 energySlot）
+	 * @param outputBufferNbt      产物溢出缓冲区 NBT 快照（null 表示旧版本无缓冲区数据）
 	 * @param selectedBeeSlot      选中的蜜蜂槽索引
 	 * @param aeItemOutputEnabled  per-tile AE2 物品输出开关
 	 * @param aeFluidOutputEnabled per-tile AE2 流体输出开关
@@ -116,7 +149,9 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			CompoundTag beeSlotsNbt, CompoundTag feederSlotsNbt, CompoundTag pbUpgradeCountsNbt,
 			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
 			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
-			@Nullable List<ItemStack> outputItems, int selectedBeeSlot,
+			@Nullable List<ItemStack> outputItems,
+			@Nullable CompoundTag cageInSlotNbt, @Nullable CompoundTag energySlotNbt,
+			@Nullable CompoundTag outputBufferNbt, int selectedBeeSlot,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
 			boolean directAeOutputEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
@@ -129,6 +164,9 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.fluidNbt = fluidNbt;
 		this.cageOutSlotNbt = cageOutSlotNbt;
 		this.outputItems = outputItems;
+		this.cageInSlotNbt = cageInSlotNbt;
+		this.energySlotNbt = energySlotNbt;
+		this.outputBufferNbt = outputBufferNbt;
 		this.selectedBeeSlot = selectedBeeSlot;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;

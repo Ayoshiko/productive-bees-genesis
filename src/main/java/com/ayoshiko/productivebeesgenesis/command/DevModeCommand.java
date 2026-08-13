@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
 import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -11,6 +13,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
 	 * 开发者模式命令 — 运行时控制开发者模式开关与子功能
@@ -46,6 +49,19 @@ public final class DevModeCommand {
 	/** 子功能名称参数 */
 	private static final String FEATURE_ARG = "feature";
 
+	/** 已知子功能白名单 — 与 {@code DevLog} 各调用点的 feature 名保持一致；未知名称直接拒绝 */
+	private static final Set<String> KNOWN_FEATURES = Set.of(
+			"ae2_fluid_push", "apiary_speed", "bee_cache", "bee_info", "bee_nbt",
+			"bee_renderer", "bee_tooltip", "centrifuge_batch", "centrifuge_mixin",
+			"config_apply", "fluid_eject", "fluid_tank", "jei", "nbt_serialize",
+			"pb_recipe", "pb_upgrade_slot", "pb_upgrade_truncated", "recipe_reload",
+			"crafting_upgrade"
+	);
+
+	/** feature 参数补全建议器 */
+	private static final SuggestionProvider<CommandSourceStack> FEATURE_SUGGESTIONS =
+			(context, builder) -> SharedSuggestionProvider.suggest(KNOWN_FEATURES, builder);
+
 	private DevModeCommand() {
 		// 工具类禁止实例化
 	}
@@ -70,6 +86,7 @@ public final class DevModeCommand {
 								.then(Commands.literal(STATUS_LITERAL)
 										.executes(DevModeCommand::onStatus))
 								.then(Commands.argument(FEATURE_ARG, StringArgumentType.string())
+										.suggests(FEATURE_SUGGESTIONS)
 										.then(Commands.literal(ON_LITERAL)
 												.executes(DevModeCommand::onFeatureEnable))
 										.then(Commands.literal(OFF_LITERAL)
@@ -122,6 +139,10 @@ public final class DevModeCommand {
 	 */
 	private static int onFeatureEnable(CommandContext<CommandSourceStack> ctx) {
 		String feature = StringArgumentType.getString(ctx, FEATURE_ARG);
+		if (!KNOWN_FEATURES.contains(feature)) {
+			ctx.getSource().sendFailure(Component.literal("未知子功能：" + feature + "（可用功能见补全列表）"));
+			return 0;
+		}
 		DevModeManager.setEnabled(feature, true);
 		broadcastState();
 		ctx.getSource().sendSuccess(() -> Component.literal("子功能 " + feature + " 已开启"), true);
@@ -133,6 +154,10 @@ public final class DevModeCommand {
 	 */
 	private static int onFeatureDisable(CommandContext<CommandSourceStack> ctx) {
 		String feature = StringArgumentType.getString(ctx, FEATURE_ARG);
+		if (!KNOWN_FEATURES.contains(feature)) {
+			ctx.getSource().sendFailure(Component.literal("未知子功能：" + feature + "（可用功能见补全列表）"));
+			return 0;
+		}
 		DevModeManager.setEnabled(feature, false);
 		broadcastState();
 		ctx.getSource().sendSuccess(() -> Component.literal("子功能 " + feature + " 已关闭"), true);

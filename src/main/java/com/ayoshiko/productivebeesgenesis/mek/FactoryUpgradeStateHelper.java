@@ -152,10 +152,11 @@ public final class FactoryUpgradeStateHelper {
 	 * <p>
 	 * skipPb 批量收获机制（镜像 MekCentrifugeTickHandler / ApiaryTickHandler）：
 	 * 在 256x JDTE 加速下，onUpdateServer 每游戏刻会被调用 256 次，若每次都完整执行
-	 * PB 配方处理将导致服务器冻结。通过 {@link TickBatchSkipState#shouldSkipPb} 采用
-	 * "延迟一 tick"策略：本 gameTick 第一次调用执行 PB（使用上一 gameTick 的倍率），
-	 * 后续 255 次调用跳过 PB 处理，仅保留 super 与 AE2 推送。shouldSkipPb 内部已调用
-	 * tracker.onTick(level)，故此处不再单独调用（避免重复计数）。
+	 * PB 配方处理将导致服务器冻结。通过 {@link TickBatchSkipState#decideAction} 采用
+	 * "虚拟 tick 银行 + 每 tick 预算"策略：本 gameTick 第一个入口执行 PB（从共享预算取批量倍率），
+	 * 后续调用跳过 PB 处理，仅保留 super 与 AE2 推送；同 gameTick 已由 JDTE flush 完整处理时
+	 * 完全跳过（含 super，避免双跑）。decideAction 内部已调用 tracker.onTick(level)，
+	 * 故此处不再单独调用（避免重复计数）。
 	 * <p>
 	 * AE2 推送/拉取批处理（v2.0.0+）：{@link CentrifugeFactoryCommonLogic#pushAe2OutputsAndPullInputs}
 	 * 已移入 if (!skipPb) 块内,与 PB 一致地批处理。256x 加速下仅第 1 次 tick 执行完整 AE2 操作,
@@ -173,7 +174,12 @@ public final class FactoryUpgradeStateHelper {
 		TickAccelTracker tracker = factory.productivebeesgenesis$getTickAccelTracker();
 		Level level = factory.productivebeesgenesis$getAe2Level();
 		TickBatchSkipState skipState = factory.productivebeesgenesis$getTickBatchSkipState();
-		boolean skipPb = skipState.shouldSkipPb(tracker, level);
+		TickBatchSkipState.TickAction action = skipState.decideAction(tracker, level);
+		if (action == TickBatchSkipState.TickAction.ALREADY_HANDLED) {
+			// 同 gameTick 已由 JDTE flush 完整处理：完全跳过（含 super，避免双跑）
+			return false;
+		}
+		boolean skipPb = action == TickBatchSkipState.TickAction.SKIP;
 
 		// tryConnectNode 由 Task 13 volatile 门控优化,保留每 tick 调用
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
@@ -188,7 +194,7 @@ public final class FactoryUpgradeStateHelper {
 			// 输入槽状态变化频率低,每 gameTick 1 次足够,跳过 256x 下 255 次无意义操作
 			factory.pbUpgradeDelegate.processPbUpgradeInput();
 			factory.delegate.resetSortingMark();
-			// 执行 PB：设置批量倍率（延迟一 tick 策略,本 gameTick 第一次调用使用上一 gameTick 的倍率）
+			// 执行 PB：设置批量倍率（虚拟 tick 银行取款,本 gameTick 第一次调用）
 			factory.pbProcessor.setTickMultiplier(skipState.getBatchMultiplier());
 			result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 				sendUpdatePacket, energyBeforeSuper, factory.energyContainer(), factory.processes(),
@@ -203,5 +209,39 @@ public final class FactoryUpgradeStateHelper {
 		}
 
 		return result;
+	}
+
+	/**
+	 * JDTE {@code CoalescedAcceleratedMachine.flushAcceleratedTicks} 工厂版入口。
+	 * <br/>
+	 * JDTE 批量 pass 结束时调用一次：从共享预算取批量倍率并执行一次<b>完整 tick</b>
+	 * （tryConnectNode + 能量注入 + super + PB 配方处理 + AE2 推送/拉取），
+	 * 与基础机/蜂箱的 flush 语义一致；同一 gameTick 的去重由调用方
+	 * （{@link AbstractMekCentrifugeFactory#productivebeesgenesis$flushAcceleratedTicks}）的门控负责。
+	 *
+	 * @param factory    工厂方块实体
+	 * @param inputSlots 工厂输入槽
+	 * @param batchMultiplier 批量倍率（调用方已从共享预算取出）
+	 * @param superCall  super.onUpdateServer() 的回调（SMELTING 管线 + ejector）
+	 */
+	public static void onCoalescedFlush(@NotNull AbstractMekCentrifugeFactory factory,
+			@NotNull List<IInventorySlot> inputSlots, int batchMultiplier,
+			@NotNull BooleanSupplier superCall) {
+		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
+		// 与 onUpdateServer 的 !skipPb 分支对齐：tryConnectNode 与能量注入在 super 前执行
+		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
+		factory.productivebeesgenesis$injectAe2Energy();
+		long energyBeforeSuper = factory.energyContainer().getEnergy();
+		boolean sendUpdatePacket = superCall.getAsBoolean();
+		// 升级输入、排序重置、PB 配方处理（批量倍率由调用方传入）
+		factory.pbUpgradeDelegate.processPbUpgradeInput();
+		factory.delegate.resetSortingMark();
+		factory.pbProcessor.setTickMultiplier(batchMultiplier);
+		MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
+				sendUpdatePacket, energyBeforeSuper, factory.energyContainer(), factory.processes(),
+				inputSlots, factory.pbProcessor, factory, factory.getActive(), factory::setActive,
+				v -> accessor.productivebeesgenesis$setLastUsage(v));
+		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
+		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory);
 	}
 }

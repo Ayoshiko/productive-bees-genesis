@@ -412,7 +412,11 @@ public final class RandomHoneycombSelector {
 	 * @param random 随机源
 	 * @return 类型→数量的映射
 	 */
-	public static Map<ResourceLocation, Integer> allocateRandomly(int total, List<ResourceLocation> types, RandomSource random) {
+	public static Map<ResourceLocation, Integer> allocateRandomly(
+		int total,
+		List<ResourceLocation> types,
+		RandomSource random
+	) {
 		Map<ResourceLocation, Integer> result = new HashMap<>(types.size() * 2);
 		int buckets = types.size();
 		if (buckets <= 0 || total <= 0) return result;

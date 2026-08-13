@@ -41,7 +41,8 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 		// 1. 万象创世过滤 — 自定义编辑器
 		Component filterLabel = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter"));
-		StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel, font).alignLeft();
+		StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel,
+			font).alignLeft();
 		filterLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
 
 		Component filterButtonText = Component.translatable(SECTION_SUFFIX_KEY,
@@ -56,7 +57,8 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 		// 2. 其他服务端配置 — 原生 NeoForge 配置界面
 		Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.server.other"));
-		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel, font).alignLeft();
+		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel,
+			font).alignLeft();
 		otherLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
 
 		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,

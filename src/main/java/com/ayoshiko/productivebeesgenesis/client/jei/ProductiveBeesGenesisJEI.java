@@ -269,7 +269,8 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			for (ChancedOutput chanced : recipe.itemOutput) {
 				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
 				if (isWaxOutput(chanced)) continue;
-				blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier, chanced.chance()));
+				blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier,
+					chanced.chance()));
 			}
 
 			// 生成按配置倍率缩放的流体输出
@@ -352,10 +353,14 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		registry.addRecipeCatalyst(new ItemStack(ModBlocks.MEK_CENTRIFUGE.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
 
 		// 原版4等级工厂
-		registry.addRecipeCatalyst(new ItemStack(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
-		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
-		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
-		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE, RecipeTypes.SMELTING);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE,
+			RecipeTypes.SMELTING);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE,
+			RecipeTypes.SMELTING);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE,
+			RecipeTypes.SMELTING);
+		registry.addRecipeCatalyst(new ItemStack(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get()), PB_CENTRIFUGE_TYPE,
+			RecipeTypes.SMELTING);
 
 		// EM扩展等级工厂（仅EM加载时，Map为空则跳过）
 		for (var entry : ModBlocks.EM_FACTORIES.entrySet()) {
@@ -482,4 +487,3 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		manager.removeIngredientsAtRuntime(type, List.of(castIngredient));
 	}
 }
-

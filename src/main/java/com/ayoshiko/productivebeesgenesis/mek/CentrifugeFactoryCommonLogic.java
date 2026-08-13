@@ -87,7 +87,8 @@ public final class CentrifugeFactoryCommonLogic {
 		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
 		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
-				() -> MekCentrifugeFactoryHelper.getInputValidationResult(recipeType, level, stack, pbProcessor, allowSmelting)).valid();
+				() -> MekCentrifugeFactoryHelper.getInputValidationResult(recipeType, level, stack, pbProcessor,
+					allowSmelting)).valid();
 	}
 
 	/** 检查输入是否产出指定输出（支持 PB 配方回退），带缓存 */
@@ -270,11 +271,14 @@ public final class CentrifugeFactoryCommonLogic {
 	/** 添加 AE2 per-tile 状态追踪器（输出/输入开关 + NBT 忽略开关） */
 	private static void addAe2StateTrackers(@NotNull MekanismContainer container,
 			@NotNull Ae2OutputStateHolder ae2StateHolder) {
-		container.track(SyncableBoolean.create(ae2StateHolder::isAeItemOutputEnabled, ae2StateHolder::setAeItemOutputEnabled));
-		container.track(SyncableBoolean.create(ae2StateHolder::isAeFluidOutputEnabled, ae2StateHolder::setAeFluidOutputEnabled));
+		container.track(SyncableBoolean.create(ae2StateHolder::isAeItemOutputEnabled,
+			ae2StateHolder::setAeItemOutputEnabled));
+		container.track(SyncableBoolean.create(ae2StateHolder::isAeFluidOutputEnabled,
+			ae2StateHolder::setAeFluidOutputEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isAeItemInputEnabled, ae2StateHolder::setAeItemInputEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isAeInputNbtIgnore, ae2StateHolder::setAeInputNbtIgnore));
-		container.track(SyncableBoolean.create(ae2StateHolder::isSmeltingCompatEnabled, ae2StateHolder::setSmeltingCompatEnabled));
+		container.track(SyncableBoolean.create(ae2StateHolder::isSmeltingCompatEnabled,
+			ae2StateHolder::setSmeltingCompatEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isCentrifugeDirectAeOutputEnabled,
 				ae2StateHolder::setCentrifugeDirectAeOutputEnabled));
 	}
@@ -323,7 +327,10 @@ public final class CentrifugeFactoryCommonLogic {
 	}
 
 	/** 切换 per-tile AE2 输入 NBT 忽略开关 */
-	public static void toggleAeInputNbtIgnore(@NotNull Ae2OutputStateHolder ae2StateHolder, @NotNull Runnable markForSave) {
+	public static void toggleAeInputNbtIgnore(
+		@NotNull Ae2OutputStateHolder ae2StateHolder,
+		@NotNull Runnable markForSave
+	) {
 		ae2StateHolder.toggleAeInputNbtIgnore();
 		markForSave.run();
 	}
@@ -435,7 +442,8 @@ public final class CentrifugeFactoryCommonLogic {
 		return OneInputCachedRecipe.itemToItem(
 				recipe, recheckAllRecipeErrors[cacheIndex],
 				inputHandlers[cacheIndex], outputHandlers[cacheIndex])
-				.setErrorsChanged(errors -> errorsChanged.accept((Set<CachedRecipe.OperationTracker.RecipeError>) errors, cacheIndex))
+				.setErrorsChanged(errors -> errorsChanged.accept((Set<CachedRecipe.OperationTracker.RecipeError>) errors,
+					cacheIndex))
 				.setCanHolderFunction(canFunction)
 				.setActive(active -> setActiveState.accept(active, cacheIndex))
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(

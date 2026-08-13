@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
+import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
 import cy.jdkdigital.productivebees.init.ModTags;
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
@@ -72,6 +73,9 @@ public class FeederSlotManager {
 
 	/** 花朵有效性缓存（按蜜蜂类型键，喂食槽变化时主动失效） */
 	private final FlowerValidityCache flowerValidityCache = new FlowerValidityCache();
+
+	/** 上次同步的转化配方版本号 — 配方重载后失效花朵缓存（转化原料作为花朵来源） */
+	private int lastConversionQueriesVersion = -1;
 
 	/**
 	 * 默认构造（初始版参数：3×3=9 个喂食槽）
@@ -166,6 +170,11 @@ public class FeederSlotManager {
 	 * @return true 如果喂食槽中有匹配的花朵物品
 	 */
 	public boolean hasValidFlower(ResourceLocation beeTypeKey) {
+		// 配方重载后转化配方可能变化，失效花朵缓存保证转化花朵判定不过期
+		if (lastConversionQueriesVersion != BeeConversionQueries.getVersion()) {
+			flowerValidityCache.invalidate();
+			lastConversionQueriesVersion = BeeConversionQueries.getVersion();
+		}
 		Boolean cached = flowerValidityCache.get(beeTypeKey);
 		if (cached != null) {
 			return cached;
@@ -196,6 +205,14 @@ public class FeederSlotManager {
 	}
 
 	private boolean computeHasValidFlower(ResourceLocation beeTypeKey) {
+		// PB isFlowerItem/isFlowerBlock 语义：转化原料（物品转化 / 方块转化 BlockItem）
+		// 对任意花朵类型（blocks/entity_types/Rancher）都是有效花朵，与 flowerType 无关——
+		// 必须在 Rancher/实体早退分支之前检查，否则 entity_types 类蜜蜂放入转化原料
+		// 会因花朵判定失败导致 pending 清零、转化永不执行。
+		if (BeeConversionQueries.hasAnyConversionRecipe(beeTypeKey)
+				&& hasConversionFlowerInFeeder(beeTypeKey)) {
+			return true;
+		}
 		FlowerPreference pref = BeeInfoHelper.getFlowerPreference(beeTypeKey);
 
 		// Rancher 是固定蜜蜂，不经过 BeeReloadListener 的 configurable flower 数据。
@@ -211,11 +228,32 @@ public class FeederSlotManager {
 			return hasAnyFlower();
 		}
 
-		// 精确匹配：遍历喂食槽检查是否有匹配的花朵物品
+		// 精确匹配：遍历喂食槽检查是否有匹配的花朵物品（转化原料已在函数开头统一检查）
 		for (int i = 0; i < feederSlots.size(); i++) {
 			ItemStack stack = feederSlots.get(i).getStack();
 			if (stack.isEmpty()) continue;
 			if (matchesFlowerPreference(stack, pref)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 遍历饲养板检查是否存在该蜜蜂的转化原料（物品转化 / 方块转化 BlockItem）
+	 * <br/>
+	 * 结果由 {@link #flowerValidityCache} 按蜜蜂类型缓存，仅在喂食槽内容变化时重算。
+	 *
+	 * @param beeTypeKey 蜜蜂类型键
+	 * @return true 如果饲养板中存在转化原料
+	 */
+	private boolean hasConversionFlowerInFeeder(ResourceLocation beeTypeKey) {
+		for (int i = 0; i < feederSlots.size(); i++) {
+			ItemStack stack = feederSlots.get(i).getStack();
+			if (stack.isEmpty()) {
+				continue;
+			}
+			if (BeeConversionQueries.hasFeederConversionFlower(beeTypeKey, stack)) {
 				return true;
 			}
 		}

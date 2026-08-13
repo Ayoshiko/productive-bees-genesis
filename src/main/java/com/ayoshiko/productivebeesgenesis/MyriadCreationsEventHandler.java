@@ -321,7 +321,8 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 空转拦截统一检查方法 */
 	public static boolean shouldBlockOperation(IItemHandlerModifiable handler) {
-		return CombBlockCheckCache.checkBlockOperation(handler, MyriadCreationsEventHandler::isConfigurableItem, BLOCK_CHECK_CACHES);
+		return CombBlockCheckCache.checkBlockOperation(handler, MyriadCreationsEventHandler::isConfigurableItem,
+			BLOCK_CHECK_CACHES);
 	}
 
 	/** 判断物品是否为可配置蜜脾或蜜脾块（用于空转拦截） */
@@ -331,7 +332,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	}
 
 	/** 离心机追加随机蜜脾产出（万象核心机制：转化） */
-	public static void appendRandomCombs(ItemStack input, IItemHandlerModifiable invHandler, RandomSource random, int productivityModifier) {
+	public static void appendRandomCombs(
+		ItemStack input,
+		IItemHandlerModifiable invHandler,
+		RandomSource random,
+		int productivityModifier
+	) {
 		appendRandomCombsInternal(
 				input, invHandler, random, productivityModifier,
 				MyriadCreationsEventHandler::isMyriadCreationsHoneycomb,
@@ -355,7 +361,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	}
 
 	/** 将 total 随机分配到各蜜蜂类型上（允许某些类型为0） */
-	public static Map<ResourceLocation, Integer> allocateRandomly(int total, List<ResourceLocation> types, RandomSource random) {
+	public static Map<ResourceLocation, Integer> allocateRandomly(
+		int total,
+		List<ResourceLocation> types,
+		RandomSource random
+	) {
 		return RandomHoneycombSelector.allocateRandomly(total, types, random);
 	}
 

@@ -37,7 +37,8 @@ import java.util.List;
 	 */
 public class GuiPbSupportedUpgrades extends GuiElement {
 
-	private static final Component SUPPORTED = Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.supported");
+	private static final Component SUPPORTED =
+		Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.supported");
 	private static final int ELEMENT_WIDTH = 167;
 	private static final int PADDED_ELEMENT_WIDTH = ELEMENT_WIDTH - 2;
 	private static final int ELEMENT_SIZE = 12;
@@ -136,7 +137,12 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	@Override
 	public void drawBackground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		super.drawBackground(guiGraphics, mouseX, mouseY, partialTicks);
-		renderBackgroundTexture(guiGraphics, GuiElementHolder.HOLDER, GuiElementHolder.HOLDER_SIZE, GuiElementHolder.HOLDER_SIZE);
+		renderBackgroundTexture(
+			guiGraphics,
+			GuiElementHolder.HOLDER,
+			GuiElementHolder.HOLDER_SIZE,
+			GuiElementHolder.HOLDER_SIZE
+		);
 		int backgroundColor = Color.argb(GuiElementHolder.getBackgroundColor()).alpha(0.5).argb();
 		for (int i = 0; i < upgradeTypes.length; i++) {
 			PbUpgradeType upgrade = upgradeTypes[i];
@@ -148,7 +154,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 				gui().renderItem(guiGraphics, stack, xPos, yPos, 0.75F);
 			}
 			if (!supportedTypes.contains(upgrade) || stack.isEmpty()) {
-				guiGraphics.fill(RenderType.guiGhostRecipeOverlay(), xPos, yPos, xPos + ELEMENT_SIZE, yPos + ELEMENT_SIZE, backgroundColor);
+				guiGraphics.fill(RenderType.guiGhostRecipeOverlay(), xPos, yPos, xPos + ELEMENT_SIZE, yPos + ELEMENT_SIZE,
+					backgroundColor);
 			}
 		}
 	}
@@ -178,7 +185,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 					info = List.of(upgradeName, Component.translatable(upgrade.getDescriptionKey()));
 				} else {
 					info = List.of(
-							Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.not_supported", upgradeName).withColor(0xFFFF0000),
+							Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.not_supported",
+									upgradeName).withColor(0xFFFF0000),
 							Component.translatable(upgrade.getDescriptionKey())
 					);
 				}

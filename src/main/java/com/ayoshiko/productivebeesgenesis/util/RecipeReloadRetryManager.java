@@ -66,7 +66,7 @@ public final class RecipeReloadRetryManager {
 	// ===== EM 配置死循环检测（Task 8）=====
 	// FileWatcher 线程与主线程并发访问，使用 volatile 保证可见性。
 	// 注：configChangeCount 已改为 AtomicInteger 保证原子自增（Task 12）。
-	
+
 	/** 最近配置变化时间戳（ms） */
 	private static volatile long lastConfigChangeTimeMs = 0L;
 	/** 5 秒窗口内配置变化次数 */

@@ -113,9 +113,12 @@ public final class ProductiveBeesGenesisClient {
 	public static final class CosmicRenderRegistry {
 		@SubscribeEvent
 		public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), new GeometryLoaderCosmic());
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "halo"), new GeometryLoaderHalo());
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), new GeometryLoaderHell());
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
+				new GeometryLoaderCosmic());
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "halo"),
+				new GeometryLoaderHalo());
+			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"),
+				new GeometryLoaderHell());
 		}
 
 		@SubscribeEvent

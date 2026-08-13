@@ -22,7 +22,7 @@ import net.minecraft.world.level.Level;
 	 * PB 升级输入槽自动安装、AE2 输出推送（物品+流体）逻辑，使主类 onUpdateServer 完全委托。
 	 * <p>
 	 * Task 4 扩展：批量收获模式 — 通过 {@link TickAccelTracker} 检测加速模组（JDT/加速火把/JDTE 等），
-	 * 采用"延迟一 tick"策略：本 gameTick 第一次 tick 时使用上一 gameTick 的最终 multiplier 作为批量倍率，
+	 * 采用"虚拟 tick 银行 + 每 tick 预算"策略：每次 tick 调用向银行入账，本 gameTick 第一次 tick 时取出批量预算，
 	 * 后续重复 tick 跳过 PB 处理（仍调用 super 让 ejector 工作），实现 N 倍产出跳过 N-1 次重复处理。
 	 * <p>
 	 * 职责：
@@ -34,7 +34,7 @@ import net.minecraft.world.level.Level;
 	 *   <li>独立处理 PB 离心配方（不走 Mekanism CachedRecipe 管线）</li>
 	 *   <li>管理 active 状态切换（pbWasProcessing 标志位）</li>
 	 *   <li>AE2 输入拉取 + 输出推送（物品 {@link Ae2OutputPusher} + 流体 {@link Ae2FluidPusher}）</li>
-	 *   <li>批量收获模式：Tick 加速检测 + 延迟一 tick 策略（Task 4）</li>
+	 *   <li>批量收获模式：Tick 加速检测 + 虚拟 tick 银行（Task 4）</li>
 	 * </ul>
 	 * <p>
 	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
@@ -50,11 +50,8 @@ class MekCentrifugeTickHandler {
 	/** TickAccelTracker 引用 — 用于检测加速模组的加速倍率,为 null 时不启用批量收获 */
 	private final TickAccelTracker tickAccelTracker;
 
-	/** 上一 gameTick 的最终加速倍率 — 用于本 gameTick 第一次 tick 时的批量倍率（延迟一 tick 策略） */
-	private int lastTickMultiplier = 1;
-
-	/** 本 gameTick 是否已处理过 — 用于跳过同一 gameTick 内后续重复 tick（调试用,逻辑上 multiplier>1 即可判断） */
-	private long lastProcessedGameTick = Long.MIN_VALUE;
+	/** 批量收获状态（同 gameTick 门控 + 共享预算）— ticker 与 JDTE flush 共用 */
+	private final TickBatchSkipState skipState = new TickBatchSkipState();
 
 	/** 上一tick是否在处理PB配方 — 用于检测PB停止时恢复SMELTING激活状态 */
 	private boolean pbWasProcessing;
@@ -83,45 +80,78 @@ class MekCentrifugeTickHandler {
 	 * 注意：父类 TileEntityElectricMachine.onUpdateServer() 已经调用 energySlot.fillContainerOrConvert()，
 	 * 子类不应重复调用，否则每tick会执行两次能量容器填充（造成无意义的性能开销）。
 	 * <p>
-	 * Task 4 批量收获模式：在 tick 入口检测加速倍率,采用"延迟一 tick"策略：
+	 * Task 4 批量收获模式：在 tick 入口检测加速倍率,采用"虚拟 tick 银行 + 每 tick 预算"策略：
 	 * <ul>
-	 *   <li>multiplier == 1（本 gameTick 第一次调用）：使用 lastTickMultiplier 作为批量倍率,
+	 *   <li>multiplier == 1（本 gameTick 第一次调用）：从虚拟 tick 银行取出批量预算（每真实 tick 上限受配置与 TPS 因子约束）,
 	 *       设置到 pbProcessor,正常处理（产出 N 倍）</li>
-	 *   <li>multiplier > 1（本 gameTick 后续调用）：更新 lastTickMultiplier,跳过 PB 处理,
+	 *   <li>multiplier > 1（本 gameTick 后续调用）：仅入账（onTick 内完成）,跳过 PB 处理,
 	 *       但仍调用 super 让 ejector 工作（避免产物滞留）</li>
 	 * </ul>
 	 *
 	 * @return 是否需要发送客户端同步包（由 super 返回）
 	 */
 	boolean onUpdateServer() {
-		// Task 4 批量收获模式：Tick 加速检测（延迟一 tick 策略）
-		// TickAccelTracker 是事后统计的：同一 gameTick 内第一次调用时 multiplier=1,
-		// 后续调用时 multiplier 才递增。因此使用上一 gameTick 的最终 multiplier 作为本 gameTick 的批量倍率。
+		// Task 4 批量收获模式：虚拟 tick 银行 + 每 tick 预算（对齐 JDTE 调度器哲学）
+		// decideAction 内部完成 onTick 计数、同 gameTick 门控与共享预算取款
 		boolean skipPb = false;
+		int batchMultiplier = 1;
 		if (tickAccelTracker != null) {
 			Level level = tile.getLevel();
 			if (level != null && !level.isClientSide) {
-				tickAccelTracker.onTick(level);
-				int multiplier = tickAccelTracker.getMultiplier();
-				long currentGameTick = level.getGameTime();
-
-				if (multiplier > 1) {
-					// 本 gameTick 后续调用：持续更新 lastTickMultiplier,跳过 PB 处理
-					// 仍调用 super 让 ejector 工作（避免产物滞留）,方案 A
-					lastTickMultiplier = multiplier;
-					skipPb = true;
-				} else {
-					// multiplier == 1：本 gameTick 第一次调用
-					// 使用 lastTickMultiplier 作为批量倍率（延迟一 tick 策略）
-					int batchMultiplier = lastTickMultiplier;
-					lastTickMultiplier = 1; // 重置,本 gameTick 后续调用会更新
-					lastProcessedGameTick = currentGameTick;
-					// 设置 PbRecipeProcessor 的批量倍率（应用到 effectiveOps 和万象路径）
-					pbProcessor.setTickMultiplier(batchMultiplier);
+				TickBatchSkipState.TickAction action = skipState.decideAction(tickAccelTracker, level);
+				if (action == TickBatchSkipState.TickAction.ALREADY_HANDLED) {
+					// 同 gameTick 已由 JDTE flush 完整处理：完全跳过（含 super，避免双跑）
+					return false;
+				}
+				skipPb = action == TickBatchSkipState.TickAction.SKIP;
+				if (!skipPb) {
+					batchMultiplier = skipState.getBatchMultiplier();
 				}
 			}
 		}
+		return runTick(skipPb, batchMultiplier);
+	}
 
+	/**
+	 * JDTE {@code CoalescedAcceleratedMachine.accumulateAcceleratedTicks} 委托入口
+	 * <br/>
+	 * 仅入账虚拟 tick 银行，不执行处理（flush 时统一执行一次完整批量）。
+	 */
+	void accumulateAcceleratedTicks(int ticks) {
+		if (tickAccelTracker != null) {
+			tickAccelTracker.addVirtualTicks(ticks);
+		}
+	}
+
+	/**
+	 * JDTE {@code CoalescedAcceleratedMachine.flushAcceleratedTicks} 委托入口
+	 * <br/>
+	 * JDTE 对实现合并接口的目标不再循环调用 ticker，而是在批量 pass 结束时调用一次本方法：
+	 * 从共享预算取本 tick 批量倍率并强制执行一次完整批量（super + PB 配方 + AE2 推送）。
+	 * <p>
+	 * 与 {@link #onUpdateServer} 共享同 gameTick 门控（{@link TickBatchSkipState#tryBeginGameTick}）：
+	 * 无论 JDTE flush 在 ticker 之前还是之后调用，同一 gameTick 只执行一次完整处理，避免双跑。
+	 */
+	void flushAcceleratedTicks() {
+		Level level = tile.getLevel();
+		if (level == null || level.isClientSide || tickAccelTracker == null) {
+			return;
+		}
+		long gameTick = level.getGameTime();
+		if (!skipState.tryBeginGameTick(gameTick)) {
+			// 同 gameTick 已由 ticker 完整处理：跳过，避免双跑
+			return;
+		}
+		int batchMultiplier = skipState.takeSharedBatchMultiplier(tickAccelTracker, gameTick);
+		runTick(false, batchMultiplier);
+	}
+
+	/**
+	 * 完整 tick 主体 — 由 {@link #onUpdateServer()} 与 {@link #flushAcceleratedTicks()} 共享。
+	 * <br/>
+	 * 批量倍率在进入前已从虚拟 tick 银行取出，skip 时仍执行 super 保证 ejector/能量管线工作。
+	 */
+	private boolean runTick(boolean skipPb, int batchMultiplier) {
 		// 延迟连接 AE2 网格节点（避免在 clearRemoved 中连接导致递归栈溢出；内部有 isAe2Loaded 守卫）
 		tile.ae2Handler().tryConnectNode();
 
@@ -131,8 +161,6 @@ class MekCentrifugeTickHandler {
 		}
 
 		// v2.0.0: 在 super 调用前从 AE 网络注入 FE 能量
-		// 让父类 super.onUpdateServer() 处理 SMELTING 配方消耗时已有注入的能量可用
-		// 守卫（AE2 加载 / 配置启用 / grid 非 null）由 injectAe2Energy() 内部处理
 		tile.productivebeesgenesis$injectAe2Energy();
 
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
@@ -142,13 +170,9 @@ class MekCentrifugeTickHandler {
 		boolean sendUpdatePacket = tile.callSuperOnUpdateServer();
 
 		// PB配方独立处理（不走Mekanism管线）
-		// Task 4: 批量收获模式下,本 gameTick 后续 tick 跳过 PB 处理（super 仍调用让 ejector 工作）
 		if (!skipPb) {
+			pbProcessor.setTickMultiplier(batchMultiplier);
 			// 入口缓存刷新 — 与工厂版 MekCentrifugeFactoryHelper.processPbRecipesAndUpdate 保持一致
-			// 修复重构遗漏:未刷新时 cachedEnergyPerTick/cachedOperationsPerTick 保持默认 0,
-			// 导致 PbRecipeProcessor 内 effectiveOps = cachedOps * multiplier = 0 * 1 = 0,
-			// 永远命中 (effectiveOps <= 0) 提前返回,基础离心机无法处理任何蜜脾。
-			// skipPb 为 true 时（批量收获模式跳过 PB）不刷新,避免无谓刷新开销。
 			pbProcessor.refreshFluidTankFullCache(tile);
 			pbProcessor.refreshEnergyAndOpsCache(tile);
 			boolean pbResult = tryProcessPbRecipe();
@@ -156,22 +180,14 @@ class MekCentrifugeTickHandler {
 				tile.callSetActive(true);
 				pbWasProcessing = true;
 			} else if (pbWasProcessing) {
-				// PB刚停止 — 直接设为false
-				// 基础机器只有1个输入槽，PB停止时不可能有SMELTING在处理
-				// 如果SMELTING有配方，下一tick的super.onUpdateServer()会重新setActive(true)
 				tile.callSetActive(false);
 				pbWasProcessing = false;
 			}
-			// 修复 v13: 同步 PB 处理进度到客户端,使 GUI 进度条正确显示
-			// tickProgressSync 内部有节流:低进程每 tick 同步,高进程(≥9)每 5 tick 同步
+			// 修复 v13: 同步 PB 处理进度到客户端
 			pbProcessor.tickProgressSync();
 		}
 
-		// 不再重复调用 energySlot.fillContainerOrConvert() — 父类 super.onUpdateServer() 已处理
-
 		// AE2 输入拉取 + 输出推送（AE2 未加载时短路，避免触发 appeng 类加载）
-		// 拉取间隔由 Ae2InputPuller 内部基于 lastPullTick 和配置 aeInputIntervalTicks 控制
-		// 输出推送内部有 per-tile 开关和网格连接守卫，未启用时安全短路
 		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
 			Ae2InputPuller.pullInputs(tile);
 			Ae2OutputPusher.pushOutputs(tile);
@@ -181,6 +197,7 @@ class MekCentrifugeTickHandler {
 
 		return sendUpdatePacket;
 	}
+
 
 	/**
 	 * 尝试PB离心配方处理

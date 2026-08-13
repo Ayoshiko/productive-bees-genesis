@@ -55,13 +55,24 @@ public class GeometryLoaderHalo implements IGeometryLoader<GeometryLoaderHalo.Ha
 		}
 
 		@Override
-		public void resolveParents(@NotNull Function<ResourceLocation, UnbakedModel> modelGetter, @NotNull IGeometryBakingContext context) {
+		public void resolveParents(
+			@NotNull Function<ResourceLocation,
+			UnbakedModel> modelGetter,
+			@NotNull IGeometryBakingContext context
+		) {
 			this.baseModel.resolveParents(modelGetter);
 		}
 
 		@NotNull
 		@Override
-		public BakedModel bake(@NotNull IGeometryBakingContext context, @NotNull ModelBaker baker, @NotNull Function<Material, TextureAtlasSprite> spriteGetter, @NotNull ModelState modelState, @NotNull ItemOverrides overrides) {
+		public BakedModel bake(
+			@NotNull IGeometryBakingContext context,
+			@NotNull ModelBaker baker,
+			@NotNull Function<Material,
+			TextureAtlasSprite> spriteGetter,
+			@NotNull ModelState modelState,
+			@NotNull ItemOverrides overrides
+		) {
 			BakedModel bakedModel = this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, true);
 			return new BakedModelHalo(bakedModel, this.type, this.alpha, this.pulse);
 		}

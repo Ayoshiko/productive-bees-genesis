@@ -47,7 +47,8 @@ public class PbRecipeCompleter {
 	 * CentrifugeRecipe 未重写 equals/hashCode,ConcurrentHashMap 默认使用 Object.equals/hashCode
 	 * (引用相等语义),与原 IdentityHashMap 行为一致,无性能损失。
 	 */
-	private static final ConcurrentHashMap<CentrifugeRecipe, Map<ItemStack, ChancedOutput>> recipeOutputsCache = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<CentrifugeRecipe, Map<ItemStack,
+		ChancedOutput>> recipeOutputsCache = new ConcurrentHashMap<>();
 
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;

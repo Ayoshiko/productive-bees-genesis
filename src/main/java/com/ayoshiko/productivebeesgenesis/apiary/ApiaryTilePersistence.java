@@ -33,7 +33,13 @@ final class ApiaryTilePersistence {
 		tile.ae2HostAdapter().savePerTileState(nbt);
 	}
 
-	/** 保存到物品的自定义数据 */
+	/**
+	 * 保存到物品的自定义数据（防御性 API）
+	 * <br/>
+	 * 说明：NeoForge 21.1.214 的 BlockEntity.saveToItem 实际只调用 saveAdditional
+	 * + collectComponents（ATTACHED_ITEMS 组件），不调用本方法；
+	 * 完整掉落持久化由 saveAdditional 保证。本方法保留供未来迁移/外部调用使用。
+	 */
 	@NotNull
 	static CompoundTag saveCustomDataForItem(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider) {
 		return tile.nbtSerializer().saveCustomData(provider);

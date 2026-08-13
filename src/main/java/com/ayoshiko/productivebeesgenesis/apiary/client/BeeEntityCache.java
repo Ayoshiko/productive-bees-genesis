@@ -26,7 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * <ul>
 	 *   <li>容量上限 {@link #MAX_CACHE_SIZE}，超过时清空全部缓存（防止内存泄漏）</li>
 	 *   <li>世界切换时自动清空（实体绑定 Level，跨世界复用会导致渲染异常）</li>
-	 *   <li>数据重载时由 {@link com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper#invalidateCache()} 调用 {@link #clearCache()} 清空</li>
+	 *   <li>数据重载时由 {@link com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper#invalidateCache()} 调用
+	 * {@link #clearCache()} 清空</li>
 	 * </ul>
 	 */
 public final class BeeEntityCache {

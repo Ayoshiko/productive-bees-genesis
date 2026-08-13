@@ -284,7 +284,8 @@ public class BeeSlot {
 	/**
 	 * 从 beeData NBT 解析 productivity 纯度
 	 * <br/>
-	 * NBT 路径：{@code neoforge:attachments → productivebees:attributes_handler → attributes → productivebees:productivity → purity}
+	 * NBT 路径：{@code neoforge:attachments → productivebees:attributes_handler → attributes →
+	 * productivebees:productivity → purity}
 	 * 任一层缺失返回 0.0f，异常时返回 0.0f 不抛出。
 	 */
 	private float parseProductivityPurity() {

@@ -44,7 +44,8 @@ public final class MyriadCombModelRegistry {
 		BakedModel pbHoneycomb = models.get(pbHoneycombKey);
 		// 无尽创世蜜脾物品模型（已使用 cosmic loader 烘焙为 BakedModelCosmic）
 		ModelResourceLocation infinityCombKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "infinitycreation_comb"));
+				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+					"infinitycreation_comb"));
 		BakedModel infinityComb = models.get(infinityCombKey);
 		if (pbHoneycomb != null && infinityComb != null) {
 			models.put(pbHoneycombKey, new BakedModelMyriadComb(pbHoneycomb, infinityComb));
@@ -56,7 +57,8 @@ public final class MyriadCombModelRegistry {
 		BakedModel pbCombItem = models.get(pbCombItemKey);
 		// 无尽创世蜜脾块物品模型
 		ModelResourceLocation infinityCombBlockItemKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "infinitycreation_comb_block"));
+				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+					"infinitycreation_comb_block"));
 		BakedModel infinityCombBlockItem = models.get(infinityCombBlockItemKey);
 		if (pbCombItem != null && infinityCombBlockItem != null) {
 			models.put(pbCombItemKey, new BakedModelMyriadCombBlock(pbCombItem, infinityCombBlockItem));

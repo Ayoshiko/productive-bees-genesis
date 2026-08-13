@@ -40,7 +40,8 @@ public final class WindowPositionConfigSection {
 	 * Task 10.11: 新增 {@code "window_multi_fluid_tanks"} — MULTI_PER_FLUID 模式下
 	 * 多流体槽 GUI 窗口（GuiMultiFluidTanksWindow）的位置持久化 saveName。
 	 */
-	private static final String[] WINDOW_NAMES = {"window_pb_upgrade", "window_ae_input", "window_feeder", "window_multi_fluid_tanks"};
+	private static final String[] WINDOW_NAMES =
+		{"window_pb_upgrade", "window_ae_input", "window_feeder", "window_multi_fluid_tanks"};
 
 	/** saveName → 配置条目映射（private 封装，外部通过 {@link #getEntry} 查询；线程安全） */
 	private final Map<String, Entry> positions = new ConcurrentHashMap<>();

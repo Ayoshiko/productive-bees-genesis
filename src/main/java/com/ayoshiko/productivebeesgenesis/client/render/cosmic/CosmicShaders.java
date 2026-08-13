@@ -71,38 +71,40 @@ public class CosmicShaders {
 
 	@SubscribeEvent
 	public static void onRegisterShaders(RegisterShadersEvent event) {
-		// 三个 shader 独立 try-catch：单个 shader 注册失败只记录 warn，不影响其他 shader 注册
+		// 两个 shader 独立 try-catch：单个 shader 注册失败只记录 warn，不影响其他 shader 注册
 		// 原共用 try-catch 会导致首个失败时后续 shader 全部跳过（如 cosmic 失败则 armor/hell 均不注册）
+		//
+		// 顶点格式说明（v2.0.9 修复）：cosmic/hell 的 RenderType 均使用 NEW_ENTITY 顶点格式，
+		// 此前 cosmic 以 BLOCK 格式注册会把 Position/Normal/Color 属性布局错位（Color/Normal 互换），
+		// 且同一路径 "cosmic" 以两种格式注册两次会导致 GameRenderer.shaders 同名覆盖、
+		// 旧实例永不 close（每次资源重载泄漏一个 GL 程序）。
+		// 修复：cosmic 仅以 NEW_ENTITY 注册一次，COSMIC_SHADER 与 COSMIC_ARMOR_SHADER 共用同一实例
+		// （两者的 shader 文件与 uniform 完全相同，仅 RenderType 的纹理/混合状态不同）。
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.BLOCK), shader -> {
+			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.NEW_ENTITY),
+				shader -> {
 				COSMIC_SHADER = shader;
-				cosmicTime = COSMIC_SHADER.safeGetUniform("time");
-				cosmicYaw = COSMIC_SHADER.safeGetUniform("yaw");
-				cosmicPitch = COSMIC_SHADER.safeGetUniform("pitch");
-				cosmicExternalScale = COSMIC_SHADER.safeGetUniform("externalScale");
-				cosmicOpacity = COSMIC_SHADER.safeGetUniform("opacity");
-				cosmicUVs = COSMIC_SHADER.safeGetUniform("cosmicuvs");
-				COSMIC_SHADER.apply();
-			});
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 方块着色器失败", e);
-		}
-		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.NEW_ENTITY), shader -> {
 				COSMIC_ARMOR_SHADER = shader;
-				cosmicArmorTime = COSMIC_ARMOR_SHADER.safeGetUniform("time");
-				cosmicArmorYaw = COSMIC_ARMOR_SHADER.safeGetUniform("yaw");
-				cosmicArmorPitch = COSMIC_ARMOR_SHADER.safeGetUniform("pitch");
-				cosmicArmorExternalScale = COSMIC_ARMOR_SHADER.safeGetUniform("externalScale");
-				cosmicArmorOpacity = COSMIC_ARMOR_SHADER.safeGetUniform("opacity");
-				cosmicArmorUVs = COSMIC_ARMOR_SHADER.safeGetUniform("cosmicuvs");
-				COSMIC_ARMOR_SHADER.apply();
+				cosmicTime = shader.safeGetUniform("time");
+				cosmicYaw = shader.safeGetUniform("yaw");
+				cosmicPitch = shader.safeGetUniform("pitch");
+				cosmicExternalScale = shader.safeGetUniform("externalScale");
+				cosmicOpacity = shader.safeGetUniform("opacity");
+				cosmicUVs = shader.safeGetUniform("cosmicuvs");
+				cosmicArmorTime = cosmicTime;
+				cosmicArmorYaw = cosmicYaw;
+				cosmicArmorPitch = cosmicPitch;
+				cosmicArmorExternalScale = cosmicExternalScale;
+				cosmicArmorOpacity = cosmicOpacity;
+				cosmicArmorUVs = cosmicUVs;
+				shader.apply();
 			});
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 护甲着色器失败", e);
+			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 着色器失败", e);
 		}
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), DefaultVertexFormat.BLOCK), shader -> {
+			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), DefaultVertexFormat.NEW_ENTITY),
+				shader -> {
 				HELL_SHADER = shader;
 				hellTime = HELL_SHADER.safeGetUniform("time");
 				hellYaw = HELL_SHADER.safeGetUniform("yaw");
@@ -124,7 +126,8 @@ public class CosmicShaders {
 			float[] newUvs = new float[40];
 			TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
 			for (int i = 0; i < newSprites.length; i++) {
-				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "misc/cosmic/cosmic_" + i));
+				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+					"misc/cosmic/cosmic_" + i));
 				newUvs[i * 4 + 0] = newSprites[i].getU0();
 				newUvs[i * 4 + 1] = newSprites[i].getV0();
 				newUvs[i * 4 + 2] = newSprites[i].getU1();

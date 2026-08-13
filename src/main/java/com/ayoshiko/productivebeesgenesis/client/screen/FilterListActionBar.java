@@ -239,7 +239,8 @@ final class FilterListActionBar {
 	 * 打开蜜蜂选择屏幕，将当前列表副本传入，选中结果通过回调批量添加。
 	 */
 	private void openBeeSelection() {
-		screen.getMinecraft().setScreen(new BeeSelectionScreen(screen, new ArrayList<>(screen.beeTypes), this::addBeesFromSelection));
+		screen.getMinecraft().setScreen(new BeeSelectionScreen(screen, new ArrayList<>(screen.beeTypes),
+			this::addBeesFromSelection));
 	}
 
 	/**

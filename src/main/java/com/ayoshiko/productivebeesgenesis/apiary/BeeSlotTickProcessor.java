@@ -1,9 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
@@ -19,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
 	 * 蜜蜂槽位 tick 处理器 — 从 {@link ApiaryTickHandler} 拆分，负责蜜蜂槽位的服务端 tick 处理逻辑。
@@ -56,9 +53,6 @@ class BeeSlotTickProcessor {
 	 */
 	private static final int FLUSH_ACCUMULATION_THRESHOLD = 64;
 
-	/** 配置缓存刷新间隔（tick） */
-	private static final int CONFIG_REFRESH_INTERVAL = 100;
-
 	/** 所属方块实体引用 */
 	private final TileEntityMekApiary tile;
 
@@ -74,11 +68,17 @@ class BeeSlotTickProcessor {
 	/** 喂食器管理器引用 — 花朵检查 */
 	private final FeederSlotManager feederManager;
 
+	/** 转化处理器引用 — 物品转化与方块转化（均以饲养板 BlockItem 为转化目标） */
+	private final ApiaryConversionProcessor conversionProcessor;
+
 	/** O(1) 激活状态计数器 — 封装每槽位 CAS 守卫与 workingCount 增量维护 */
 	private final ApiaryBeeActivationCounter activationCounter;
 
 	/** 蜜蜂槽位处理异常日志冷却器（tick 模式） */
 	private final LogThrottle slotErrorThrottle;
+
+	/** 配置缓存 — basic 配置值（每 100 tick 刷新一次） */
+	private final ApiaryConfigCache configCache;
 
 	/**
 	 * 累积产出计数器（Task 16.2）
@@ -134,13 +134,6 @@ class BeeSlotTickProcessor {
 	 */
 	private final HashMap<ResourceLocation, List<Integer>> pendingProductionsBuffer = new HashMap<>();
 
-	// ----- basic 配置缓存 -----
-	/** 缓存的基础处理时间（tick） */
-	private volatile int cachedProcessingTime = 200;
-
-	/** 上次刷新配置的游戏刻 — AtomicLong + CAS 防止多线程重复刷新 */
-	private final AtomicLong lastConfigRefreshTick = new AtomicLong(-CONFIG_REFRESH_INTERVAL);
-
 	/**
 	 * 构造蜜蜂槽位 tick 处理器
 	 *
@@ -151,11 +144,12 @@ class BeeSlotTickProcessor {
 	 * @param feederManager     喂食器管理器（花朵检查）
 	 * @param activationCounter 激活状态计数器（与 {@link ApiaryTickHandler} 共享同一实例）
 	 * @param slotErrorThrottle 异常日志冷却器（与 {@link ApiaryTickHandler} 共享同一实例）
+	 * @param conversionProcessor 转化处理器（饲养板 BlockItem 物品/方块转化）
 	 */
 	BeeSlotTickProcessor(TileEntityMekApiary tile, ApiarySlotManager slotManager,
 			BeeProduceProcessor produceProcessor, ApiaryUpgradeHandler upgradeHandler,
 			FeederSlotManager feederManager, ApiaryBeeActivationCounter activationCounter,
-			LogThrottle slotErrorThrottle) {
+			LogThrottle slotErrorThrottle, ApiaryConversionProcessor conversionProcessor) {
 		this.tile = tile;
 		this.slotManager = slotManager;
 		this.produceProcessor = produceProcessor;
@@ -163,6 +157,8 @@ class BeeSlotTickProcessor {
 		this.feederManager = feederManager;
 		this.activationCounter = activationCounter;
 		this.slotErrorThrottle = slotErrorThrottle;
+		this.configCache = ApiaryConfigCache.create();
+		this.conversionProcessor = conversionProcessor;
 		this.pendingProductions = new int[slotManager.getBeeSlotCount()];
 		this.lastCheckedBeeData = new CompoundTag[slotManager.getBeeSlotCount()];
 		this.cachedBeeTypeKeys = new ResourceLocation[slotManager.getBeeSlotCount()];
@@ -210,6 +206,9 @@ class BeeSlotTickProcessor {
 		upgradeHandler.tickRefresh();
 		Level level = slotManager.getLevel();
 
+		// 预加载转化配方索引（幂等，仅首次全量遍历）— 供花朵有效性判定中的转化原料检查使用
+		BeeConversionQueries.ensureLoaded(level);
+
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
 		// 防御性 null 检查 — 极少数情况下（如方块实体早期构造期或测试环境）energyContainer 可能为 null
 		// 此时直接失活所有蜜蜂并返回，避免 NPE 中断 tick 处理
@@ -221,7 +220,7 @@ class BeeSlotTickProcessor {
 		float timeMultiplier = upgradeHandler.getTimeMultiplier();
 		// MachineEnergyContainer 已按 Mekanism 官方公式实时应用速度/能量升级，
 		// 直接读取可同时保留普通蜂箱配置和各工厂等级的基础能耗。
-		long beeEnergyCost = calculateBeeEnergyCost(energyContainer.getEnergyPerTick());
+		long beeEnergyCost = ApiaryEnergyMath.calculateBeeEnergyCost(energyContainer.getEnergyPerTick());
 		// Task 1.2：STACK 升级产出次数倍率 — 循环外计算一次，所有蜜蜂共享
 		int stackProductionCount = upgradeHandler.getStackProductionCount();
 
@@ -235,7 +234,7 @@ class BeeSlotTickProcessor {
 
 		// 刷新配置缓存（每 100 tick 一次，参考离心机 TileComponentEjectorCooldownMixin）
 		if (level != null) {
-			refreshConfigCache(level.getGameTime());
+			configCache.refresh(level.getGameTime());
 		}
 
 		// 缓存输出空间状态 — 避免循环内重复调用 isOutputFull()（O(N×M) → O(N+M)）
@@ -272,11 +271,7 @@ class BeeSlotTickProcessor {
 			}
 			// 每只蜜蜂内部缓存（volatile 字段）：同 tick 内同种蜜蜂 cache hit，
 			// 避免对 LinkedHashMap (access-order) 的 get + afterNodeAccess 调用（Spark HashMap.get 23.68ms 热点）
-			Boolean flowerValid = slot.consumeCachedFlowerValid(currentTick);
-			if (flowerValid == null) {
-				flowerValid = feederManager.hasValidFlower(beeTypeKey);
-				slot.setCachedFlowerValid(currentTick, flowerValid);
-			}
+			boolean flowerValid = ApiaryFlowerValidation.check(slot, beeTypeKey, currentTick, feederManager);
 			if (!flowerValid) {
 				slot.setState(BeeState.WAITING_FLOWER);
 				activationCounter.onBeeDeactivated(i);
@@ -293,7 +288,7 @@ class BeeSlotTickProcessor {
 
 			// 能量检查。当前容器预算不够时先结算已处理蜜蜂，再从 AE 补满并继续本批。
 			// 这样容器容量只需要覆盖一段工作，不需要一次容纳 32 只蜜蜂 × 256 虚拟 tick 的总能耗。
-			long acceleratedEnergyCost = calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
+			long acceleratedEnergyCost = ApiaryEnergyMath.calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
 			long availableEnergy = energyContainer.getEnergy();
 			if (pendingEnergyCost > availableEnergy
 					|| acceleratedEnergyCost > availableEnergy - pendingEnergyCost) {
@@ -310,63 +305,10 @@ class BeeSlotTickProcessor {
 				}
 			}
 
-			// 推进计时
-			int currentTicks = slot.getTicksInHive();
-			// 模块1修复：从 baseMinOccupationTicks 读取原始基础值，而非 minOccupationTicks（adjusted 值）。
-			// 此前从 minOccupationTicks 读取会被上一 tick 回写的 adjustedMinTicks 污染，
-			// 导致下一 tick 再次乘以 timeMultiplier 形成指数衰减。
-			int baseMinTicks = slot.getBaseMinOccupationTicks();
-			if (baseMinTicks <= 0) {
-				// 使用配置缓存的基础处理时间（从 ModConfig.SERVER.apiaryProcessingTime 读取，默认1200）
-				baseMinTicks = cachedProcessingTime;
-			}
-			// 应用时间倍率（< 1.0 加速，> 1.0 减速）
-			// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
-			int adjustedMinTicks = upgradeHandler.hasCreativeUpgrade() ? 1
-					: Math.max(1, Math.round(baseMinTicks * timeMultiplier));
-			// 模块1：蜂箱速度调试日志 — 每 100 tick 采样一次，仅在 dev 模式开启时输出
-			// 外层 isEnabled() 守卫避免 dev 关闭时调用 DevLog.debug 的方法调用开销
-			// DevLog.debug 内部还会检查 apiary_speed feature 开关并做 1000ms 节流
-			if ((currentTick % 100) == 0 && DevModeManager.isEnabled()) {
-				DevLog.debug("apiary_speed",
-						"蜂箱速度诊断 slot={} baseMinTicks={} timeMultiplier={} "
-								+ "mekTimeMul={} pbTimeDivisor={} speedUpgrades={} maxSpeed={} "
-								+ "maxUpgradeMul={} adjustedMinTicks={}",
-						i, baseMinTicks, timeMultiplier,
-						upgradeHandler.getMekSpeedTimeMultiplier(),
-						ApiaryUpgradeMath.getPbTimeDivisor(upgradeHandler),
-						upgradeHandler.getMekSpeedUpgrades(),
-						ApiaryUpgradeMath.getMaxSpeedUpgrades(),
-						ApiaryUpgradeMath.getMaxUpgradeMultiplier(),
-						adjustedMinTicks);
-			}
-			// 同步 adjustedMinTicks 到 BeeSlot，确保 tooltip 工作进度显示正确的工作 tick 上限
-			// 修复：此前不更新 minOccupationTicks 导致 tooltip 始终显示 300/0 tick（0%）
-			if (slot.getMinOccupationTicks() != adjustedMinTicks) {
-				slot.setMinOccupationTicks(adjustedMinTicks);
-			}
-			// Tick 加速器会在同一 game tick 重复调用方块实体；后续调用被跳过时，
-			// 这里一次推进对应数量的虚拟 tick。这样进度和完成节奏真实加速，
-			// 不再等到周期结束后才一次性乘产出，同时总产量保持与原批处理策略一致。
-			long advancedTicks = (long) currentTicks + tickMultiplier;
-			int completedCycles = (int) Math.min(Integer.MAX_VALUE,
-					advancedTicks / adjustedMinTicks);
-			int newTicks = (int) (advancedTicks % adjustedMinTicks);
-			slot.setTicksInHive(newTicks);
-			pendingEnergyCost += acceleratedEnergyCost;
-
-			// 更新进度（供 GUI 进度条渲染）
-			slot.setProgress((float) newTicks / adjustedMinTicks);
-
-			// 完成累积 — 达到最小 occupation ticks 时累积待产出次数（不立即产出）
-			if (completedCycles > 0 && i < pendingProductions.length) {
-				// STACK 倍率作用于每个真实完成周期；概率产出仍由后续批量采样处理。
-				long pendingCountLong = (long) stackProductionCount * completedCycles;
-				int pendingCount = (int) Math.min(Integer.MAX_VALUE, pendingCountLong);
-				pendingProductions[i] = saturatingAdd(pendingProductions[i], pendingCount);
-				accumulatedProgress.addAndGet(pendingCount);
-			}
-
+			// 推进计时 — 委托 ApiaryProgressAdvancer（纯代码移动：计算完成周期、更新进度、累积待产出次数）
+			pendingEnergyCost += ApiaryProgressAdvancer.advance(slot, i, tickMultiplier, currentTick,
+					timeMultiplier, beeEnergyCost, stackProductionCount, configCache.getProcessingTime(),
+					upgradeHandler, pendingProductions, accumulatedProgress);
 			// 设置工作状态 — CAS 守卫仅在工作状态转换 0→1 时递增计数器
 			slot.setState(BeeState.WORKING);
 			activationCounter.onBeeActivated(i);
@@ -459,12 +401,7 @@ class BeeSlotTickProcessor {
 			for (Map.Entry<ResourceLocation, List<Integer>> entry : pendingProductionsBuffer.entrySet()) {
 				ResourceLocation typeKey = entry.getKey();
 
-				// 同组共享一次配方查询（缓存命中 O(1)）
-				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
-				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
-				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
-				if (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
-				// 花朵校验：喂食槽无匹配花朵时清零该组 pending 并跳过 flush，
+				// 花朵校验：喂食槽无匹配花朵（含转化原料花朵）时清零该组 pending 并跳过 flush，
 				// 避免"蜜蜂无有效花朵时仍产出/吸蜜"导致产出异常
 				if (!feederManager.hasValidFlower(typeKey)) {
 					for (int idx : entry.getValue()) {
@@ -472,6 +409,17 @@ class BeeSlotTickProcessor {
 					}
 					continue;
 				}
+
+				// 转化处理（在产出前执行）：饲养板 BlockItem 物品/方块转化（PB item_conversion / block_conversion 适配）
+				// pollinates=false 的转化周期会扣减 pendingProductions，该周期不产出蜜脾（对齐 PB hasConverted 语义）
+				conversionProcessor.processGroupConversions(typeKey, level, beeSlots,
+						entry.getValue(), pendingProductions);
+
+				// 同组共享一次配方查询（缓存命中 O(1)）
+				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
+				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
+				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
+				if (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取
 				// Bug 10: 传入 level 用于万象创世随机蜜脾生成
@@ -517,68 +465,4 @@ class BeeSlotTickProcessor {
 		return key;
 	}
 
-	/**
-	 * 计算单只蜜蜂每 tick 能耗
-	 * <br/>
-	 * = MachineEnergyContainer 当前每槽每 tick 能耗。
-	 * Mekanism 已按 {@code ceil(base × multiplier)} 公式应用 SPEED/ENERGY 升级，
-	 * 因此这里不能再次用浮点倍率计算，否则会丢失工厂等级并产生截断误差。
-	 * <p>
-	 *
-	 * @param energyPerTick MachineEnergyContainer 当前每槽每 tick 能耗
-	 * @return 单只蜜蜂每 tick 能耗（FE）
-	 */
-	static long calculateBeeEnergyCost(long energyPerTick) {
-		return Math.max(0L, energyPerTick);
-	}
-
-	/** 计算单只蜜蜂在当前真实游戏刻内（含加速批量）应扣除的能量。 */
-	static long calculateAcceleratedEnergyCost(long energyPerTick, int tickMultiplier) {
-		return saturatingMultiply(calculateBeeEnergyCost(energyPerTick), tickMultiplier);
-	}
-
-	/** 计算一个真实游戏刻内所有 active 蜜蜂槽位的总能耗。 */
-	static long calculateBatchEnergyCost(long energyPerTick, int activeSlots, int tickMultiplier) {
-		if (activeSlots <= 0) return 0L;
-		return saturatingMultiply(calculateAcceleratedEnergyCost(energyPerTick, tickMultiplier), activeSlots);
-	}
-
-	/** 防止极端加速倍率下能耗/产出计数溢出为负数。 */
-	private static long saturatingMultiply(long value, int multiplier) {
-		if (value <= 0 || multiplier <= 0) return 0L;
-		if (value > Long.MAX_VALUE / multiplier) return Long.MAX_VALUE;
-		return value * multiplier;
-	}
-
-	/** 防止待产出计数溢出；溢出时保留可表示的最大值，避免负数导致永久跳过刷新。 */
-	private static int saturatingAdd(int value, int amount) {
-		if (amount <= 0) return value;
-		if (value > Integer.MAX_VALUE - amount) return Integer.MAX_VALUE;
-		return value + amount;
-	}
-
-	/**
-	 * 刷新配置缓存 — 每 {@link #CONFIG_REFRESH_INTERVAL} tick 刷新一次
-	 * <br/>
-	 * 参考离心机 {@link com.ayoshiko.productivebeesgenesis.mixin.mek.TileComponentEjectorCooldownMixin}
-	 * 的配置缓存模式，将 {@link ApiaryConfigSection} 的 basic 和 ejection 配置值缓存到 volatile 字段，
-	 * 避免 256× 加速场景下每 tick 高频读取 NeoForge 配置。
-	 * <p>
-	 * 线程安全：使用 AtomicLong + CAS（compareAndSet）保证「检查时间戳 + 写入新值 + 加载配置」的原子性。
-	 * 即使异步线程与主线程同时调用，CAS 也只有一个线程能成功推进时间戳，另一个线程短路返回。
-	 *
-	 * @param currentTick 当前游戏刻
-	 */
-	private void refreshConfigCache(long currentTick) {
-		long lastRefresh = lastConfigRefreshTick.get();
-		if (currentTick - lastRefresh < CONFIG_REFRESH_INTERVAL) {
-			return;
-		}
-		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
-		if (!lastConfigRefreshTick.compareAndSet(lastRefresh, currentTick)) {
-			return;
-		}
-		// basic 配置（能耗由 MachineEnergyContainer 按 BlockType 的 usage 提供）
-		cachedProcessingTime = ModConfig.SERVER.apiaryProcessingTime.get();
-	}
 }

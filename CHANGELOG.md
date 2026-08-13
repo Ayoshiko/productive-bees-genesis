@@ -32,9 +32,48 @@ Mixin 注入代码引用了 mixin 包内的非 Mixin 工具类，触发 `Illegal
 
 - **ME 工厂升级安装崩溃（CRITICAL）** — 将 `MekEnergisticsBlockGuard` 从 `mixin.mekenergistics` 包迁出到普通 `compat.mekenergistics` 包：Mixin 包内的非 Mixin 类被注入到第三方目标类（mekenergistics 安装器解析器）后，Mixin 类加载器会拒绝该引用并抛出 `IllegalClassLoadError`。迁出后注入代码可安全引用守卫谓词，非本模组机器安装 ME 工厂升级不再崩溃，本模组离心机/蜂箱的防误转保护保持不变
 
+### 拆分正确性验证（2026-08-12 追加）
+
+- 3 路并行子代理对全部 9 个拆分文件（21 个新辅助类 + ApiaryCraftingDataTransfer）做方法级逐字对比：**纯代码移动，无行为变化**（Ae2InputFilter 的 synchronized/volatile 发布顺序、JDTE flush 门控语义、tick 异常隔离时序、GUI 委托签名均完整保留）
+- 修复验证中发现的问题：PbRecipeProcessor 死字段、ME/EME 工厂 `@Override`/`@Nullable` 注解补回、`{@link}` 写法、续行缩进等 10 处
+- 超宽行再处理 270+ 处（安全模式折行），剩余 240 处复杂长语句记录为后续任务
+- `gradlew build` 全绿：22 套件 / 85 用例 0 失败
+
+### 持久化专项审查修复（2026-08-13）
+
+基于 3 路并行子代理的 AE2 拉取模块与机器持久化专项审查 + 全量未提交改动审查，修复以下问题：
+
+- **蜂箱等级升级丢失 3 类物品（CRITICAL，物品丢失）** — 安装器升级路径（基础蜂箱→工厂、工厂→高级/ME/EME 全链）中，`ApiaryUpgradeData` 对蜂笼输入槽/能量槽只持有旧槽位引用、对产物溢出缓冲区无字段；`getUpgradeData` 后的 `saveAllItemsForDrop` 清空旧方块后，新方块恢复读到空栈，蜂笼（含蜜蜂）、能量物品、积压产物凭空消失。修复：升级数据增加蜂笼输入槽/能量槽 NBT 快照与输出缓冲区 NBT 快照（`cageInSlotNbt`/`energySlotNbt`/`outputBufferNbt`），恢复时从快照读取（含旧数据回退）
+- **离心机等级升级丢失过滤器配额（MAJOR）** — `CentrifugeUpgradeDataHelper` 升级数据只保存过滤器条目字符串，恢复时直连条目拉取配额回退默认 64、无限提供标志丢失（可能超配额拉取）。修复：同步保存/恢复 `aeInputFilterAmounts` 与 `aeInputFilterUnlimited`
+- **AE2 Shift 提取容量高估（MEDIUM）** — 背包容量预计算遍历 41 槽（含盔甲/副手），而 `Inventory.add` 只放 36 主槽，容量不足时剩余物品意外掉落。修复：只遍历主背包 36 槽
+- **可见库存显示滞后一拍（LOW）** — 虚拟输出槽提取成功后同 gameTick 的 visible 缓存未失效。修复：`Ae2OutputStateHolder.invalidateInputInventoryViewCache()` 提取后调用
+- **持久化健壮性（LOW）** — `Ae2InputFilter.save()` 加 synchronized（防撕裂读 AIOOBE）；`Ae2InputFilterNbtCodec` 对缺失 `i` 键的损坏条目跳过（防错位覆盖）；蜂箱蜜蜂槽序列化保存绝对槽位索引（修复压缩存储后 `selectedBeeSlot` 错位）
+- **杂项（LOW）** — `MixinConfigPlugin` JDTE/EME Mixin 注释错位修复；`DevModeCommand` 白名单补 `crafting_upgrade`；`TickBatchSkipState.reset` 死代码删除；"正面方块"过时注释统一为"饲养板 BlockItem"；`saveCustomDataForItem`/`ICustomDataPersistable` Javadoc 修正（NeoForge 实际不调用，标注为防御性 API）
+- **文档修正** — 超 500 行文件表述改为准确状态（9 个高风险文件拆分完成；折行后 3 个文件轻微超限 503-531 行列入后续任务）
+
 ### SemVer 合规性
 
 - 本次为单一崩溃修复，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.9 → v2.0.9-hotfix）
+
+### 审查打磨（2026-08-12 全量深度审查批次）
+
+基于 5 路并行子代理全量审查 + 主代理逐行复核，修复以下问题：
+
+- **JDTE 合并加速语义统一（CRITICAL）** — 工厂版 `flushAcceleratedTicks` 与基础机/蜂箱统一为完整 tick（能量注入 + super + PB + AE2 + 槽位回收），消除"工厂加速期间 SMELTING 管线/ejector/AE2 交互整体失效"的回归；ticker 与 flush 共享同一 gameTick 门控（`TickBatchSkipState.tryBeginGameTick`）与批量预算（`takeSharedBatchMultiplier`），无论 JDTE 时序先后只执行一次完整处理，杜绝双倍产出/双倍扣能/双份预算
+- **AE2 网格 tick 计数污染修复（CRITICAL）** — `onAe2Tick`（JDTE 每 gameTick 最多 4096 次网格调用）不再参与加速倍率计数，只入账虚拟 tick 银行，避免真实 ticker 被误判为"后续调用"而跳过整个处理周期
+- **转化系统异常隔离（MAJOR）** — 物品/方块转化匹配与应用阶段逐配方 try-catch：第三方畸形配方（`ingredient.test`/`stateTo` 为空等）只跳过该配方，不再中止整箱产出 flush 且不再清空已累积产出；`BeeConversionQueries.ensureLoaded` 构建失败按 100 tick 节流重试并走 `LogThrottle` 防刷屏
+- **转化匹配缓存补全（MEDIUM）** — 负结果（无匹配）同样缓存，42 蜜蜂 × 60 槽无配方原料场景每 flush 不再重复 O(N×M) 扫描；缓存键纳入配置开关状态，运行中改配置即时生效；`ConversionMatch.isBlock` 死字段清除
+- **转化原料花朵判定修复（MAJOR）** — 转化原料（物品/方块）对任意花朵类型（blocks/entity_types/Rancher）都是有效花朵，entity_types 类蜜蜂放入转化原料不再因花朵判定失败而永不转化
+- **AE2 虚拟输出槽 Shift 快速移动物品丢失（CRITICAL）** — 先从背包容量预计算可放入数量再提取，剩余零丢失（1.21.1 无 `addAndReturnRemainder`，原 `Inventory.add` 部分放入时剩余物品凭空消失）
+- **未安装 JEI 打开离心机 GUI 崩溃（CRITICAL）** — `ProductiveBeesGenesisJEI`（硬引用 mezz.jei）调用点加 `ModList.isLoaded("jei")` 守卫，未装 JEI 时仅传 Mekanism 原生配方查看器类型
+- **Cosmic 着色器重复注册与顶点错位（MAJOR）** — `cosmic` 仅以 NEW_ENTITY 格式注册一次（COSMIC/COSMIC_ARMOR 共用），`hell` 改 NEW_ENTITY：消除同路径双格式注册导致的 GL 程序泄漏（每次资源重载泄漏一个程序）与 Position/Normal/Color 属性布局错位
+- **配置界面问号占位（MEDIUM）** — zh_cn.json 40 个新增键值（配置分区标题/工具提示）由字面 "?" 补全为中文翻译，配置界面不再显示问号
+- **跨存档缓存泄漏（MEDIUM）** — `BeeConversionQueries.invalidate()` 接入 `onServerStopped` 清理清单，配方索引随存档切换释放旧 RecipeHolder 引用
+- **可选依赖守卫补全（MEDIUM）** — `MekEmpUpgradeSupport` 反射链改捕 `LinkageError | Exception`（MekanismEmpowered API 不兼容时不再崩模组加载）；`ModRecipesCentrifuge` datagen 三个可选模组配方方法加加载守卫；`Ae2InputFilterNbtCodec` 旧格式 NBT 槽位上限对齐新格式（防恶意 NBT 超量分配）
+- **网络与命令安全（MEDIUM）** — `SetAeInputFilterEntryPayload` 蜜蜂类型解码改 `ResourceLocation.tryParse`（非法串不再断连）；`DevModeCommand` feature 参数加白名单校验与补全提示，未知名称拒绝执行
+- **命名/文档合规（MEDIUM）** — `THIRD_PARTY_LICENSES.md` 补 JDTE/ProductiveLib/KubeJS/Building Gadgets 2 声明；`neoforge.mods.toml` 补 jdte/buildinggadgets2/mekenergistics optional 依赖；README 中英补 `libs/` 开发依赖清单；`.release_body_*.md` 纳入 .gitignore
+- **规范打磨（LOW）** — 9 个高风险超 500 行文件拆分至 500 行以下（新增 21 个职责单一辅助类：Ae2InputFilterQuerySupport/SlotOps、ApiaryEnergyMath/ConfigCache/ProgressAdvancer/FlowerValidation、TileEntityExtraFactoryDelegates/EMExtraFactoryDelegates、AbstractMekCentrifugeFactoryJdteSupport/SetupHelper、MekCentrifugeIoConfigHelper、PbRecipeFlushHelper/StateHelper、ApiaryCraftingDataTransfer、AeInputConfigLayout/WindowData/Text、CtrlButton/StockGearButton/GlobalGearButton、FeederWindowLayoutSupport/FeederPageButton 等）；200+ 处超 120 字符行折行；全部 Java 文件 LF 行尾与 EOF 换行统一；ApiaryShapedRecipe NBT 常量提升为 apiary 包 public 常量（消除跨包魔法字符串）；BeeConversionQueries 导入顺序/长行/尾部空行修正；`MyriadBatchPlanner` 快照缓存改对象引用（消除 identityHashCode 碰撞风险）；`TickAccelTracker` 银行饱和输出节流告警并修正"总产出不丢失"文档表述；`GameTickGate` 语义检查通过
+
 
 ## [2.0.9] - 2026-08-11
 

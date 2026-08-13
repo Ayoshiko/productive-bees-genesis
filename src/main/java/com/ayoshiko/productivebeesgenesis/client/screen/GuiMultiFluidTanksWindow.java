@@ -64,7 +64,8 @@ public class GuiMultiFluidTanksWindow extends GuiWindow {
 	 * @param host       数据源(提供 tank 查询)
 	 * @param windowData 窗口数据(含持久化信息)
 	 */
-	public GuiMultiFluidTanksWindow(IGuiWrapper gui, int x, int y, IMultiFluidTankHost host, SelectedWindowData windowData) {
+	public GuiMultiFluidTanksWindow(IGuiWrapper gui, int x, int y, IMultiFluidTankHost host,
+		SelectedWindowData windowData) {
 		super(gui, x, y,
 				GuiMultiFluidTanksLayoutHelper.calculateWindowWidth(host.getFluidTankCount() - 1),
 				GuiMultiFluidTanksLayoutHelper.calculateWindowHeight(host.getFluidTankCount() - 1),

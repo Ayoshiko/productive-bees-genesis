@@ -127,3 +127,34 @@
 - **许可证**: MIT License
 - **使用方式**: 可选依赖，提供交叉等级的蜂箱与离心机工厂扩展（Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal），通过反射访问 FactoryTier 枚举。`libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar` 仅用于开发编译，不分发给终端玩家
 - **源码**: https://github.com/Nova-Committee/EvolvedMekanismExtras
+
+## ProductiveLib
+
+- **项目**: ProductiveLib（Productive Bees 附属通用库）
+- **作者**: Copyright (c) 2024-2026 cy.jdkdigital and contributors
+- **许可证**: MIT License
+- **使用方式**: Productive Bees 附属开发库，为蜂箱/蜜蜂配方 API 提供基础类型（implementation 依赖）
+- **源码**: https://github.com/JDKDigital/productive-bees
+
+## Just Dire Things Extras (JDTE)
+
+- **项目**: Just Dire Things Extras
+- **作者**: JustDireThings 社区
+- **许可证**: 以 Modrinth 页面声明为准（库内未附带独立许可证文本）
+- **使用方式**: 可选联动，编译期引用 `CoalescedAcceleratedMachine` 合并加速接口（`libs/jdte-0.5.9-alpha1.jar`，仅开发编译用，不分发给终端玩家）；运行时经 `MixinConfigPlugin` 条件应用，未安装 JDTE 时完全不加载相关代码
+- **来源**: https://modrinth.com/mod/just-dire-things-extras
+
+## KubeJS
+
+- **项目**: KubeJS（NeoForge）
+- **作者**: KubeJS 团队
+- **许可证**: [LGPL-3.0](https://www.gnu.org/licenses/lgpl-3.0.html)
+- **使用方式**: 可选联动，通过 `kubejs.plugins.txt` 声明脚本化蜜蜂配方注册插件（`@KubeJSPlugin`），未安装 KubeJS 时插件类不会被加载
+- **源码**: https://github.com/KubeJS-Mods/KubeJS
+
+## Building Gadgets 2
+
+- **项目**: Building Gadgets 2
+- **许可证**: MIT
+- **使用方式**: 可选联动，`RenderBlockBeLoadFixMixin` 修复建筑小工具渲染方块实体加载时序问题；未安装时经 `MixinConfigPlugin` 跳过该 Mixin
+- **来源**: https://modrinth.com/mod/building-gadgets-2

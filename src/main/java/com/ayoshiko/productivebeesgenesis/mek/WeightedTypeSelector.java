@@ -160,8 +160,10 @@ public final class WeightedTypeSelector {
 	 * <br/>
 	 * 由 {@link #selectWeighted} 在每次调用时触发，保证 tick 内至少 flush 一次。
 	 * <ul>
-	 *   <li>flush EMA：每 tick 一次，公式 {@code recentEMA[i] = (recentEMA[i] * (EMA_WINDOW-1) + pendingOutputs[i]) / EMA_WINDOW}</li>
-	 *   <li>重建权重：每 {@link #REBUILD_INTERVAL} tick 一次，公式 {@code weight[i] = max(MIN_WEIGHT, 1.0 + ALPHA * (avgRecent - recentEMA[i]) / max(avgRecent, 1.0))}</li>
+	 *   <li>flush EMA：每 tick 一次，公式 {@code recentEMA[i] = (recentEMA[i] * (EMA_WINDOW-1) +
+	 * pendingOutputs[i]) / EMA_WINDOW}</li>
+	 *   <li>重建权重：每 {@link #REBUILD_INTERVAL} tick 一次，公式 {@code weight[i] = max(MIN_WEIGHT, 1.0 + ALPHA *
+	 * (avgRecent - recentEMA[i]) / max(avgRecent, 1.0))}</li>
 	 * </ul>
 	 */
 	public synchronized void rebuildWeightsIfNeeded(Level level) {

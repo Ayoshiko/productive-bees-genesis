@@ -43,7 +43,13 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 
 	protected final ItemOverrides overrideList = new ItemOverrides() {
 		@Override
-		public BakedModel resolve(@NotNull BakedModel originalModel, @NotNull ItemStack stack, @Nullable ClientLevel level, @Nullable LivingEntity entity, int seed) {
+		public BakedModel resolve(
+			@NotNull BakedModel originalModel,
+			@NotNull ItemStack stack,
+			@Nullable ClientLevel level,
+			@Nullable LivingEntity entity,
+			int seed
+		) {
 			WrappedItemModel.this.entity = entity;
 			// 使用 instanceof 检查避免 ClassCastException：entity.level() 在非客户端环境可能非 ClientLevel
 			// 转换失败时 world 为 null，下游 resolve 接受 @Nullable ClientLevel，可安全降级
@@ -100,11 +106,27 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 		return this.wrapped.usesBlockLight();
 	}
 
-	protected void renderWrapped(ItemStack stack, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay, boolean fabulous) {
+	protected void renderWrapped(
+		ItemStack stack,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay,
+		boolean fabulous
+	) {
 		renderWrapped(stack, poseStack, buffers, packedLight, packedOverlay, fabulous, Function.identity());
 	}
 
-	protected void renderWrapped(ItemStack stack, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay, boolean fabulous, Function<VertexConsumer, VertexConsumer> consumerOverride) {
+	protected void renderWrapped(
+		ItemStack stack,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay,
+		boolean fabulous,
+		Function<VertexConsumer,
+		VertexConsumer> consumerOverride
+	) {
 		renderBakedModel(this.wrapped, stack, poseStack, buffers, packedLight, packedOverlay, fabulous, consumerOverride);
 	}
 
@@ -123,18 +145,37 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 	 * @param fabulous         是否启用 fabulous 图形模式
 	 * @param consumerOverride VertexConsumer 转换函数
 	 */
-	protected void renderBakedModel(BakedModel model, ItemStack stack, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay, boolean fabulous, Function<VertexConsumer, VertexConsumer> consumerOverride) {
+	protected void renderBakedModel(
+		BakedModel model,
+		ItemStack stack,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay,
+		boolean fabulous,
+		Function<VertexConsumer,
+		VertexConsumer> consumerOverride
+	) {
 		BakedModel resolved = model.getOverrides().resolve(model, stack, this.world, this.entity, 0);
 		ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
 		for (BakedModel bakedModel : resolved.getRenderPasses(stack, fabulous)) {
 			for (RenderType renderType : bakedModel.getRenderTypes(stack, fabulous)) {
-				itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack, consumerOverride.apply(buffers.getBuffer(renderType)));
+				itemRenderer.renderModelLists(bakedModel, stack, packedLight, packedOverlay, poseStack,
+					consumerOverride.apply(buffers.getBuffer(renderType)));
 			}
 		}
 	}
 
 	/** renderBakedModel 的便捷重载，使用 identity 作为 consumerOverride */
-	protected void renderBakedModel(BakedModel model, ItemStack stack, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay, boolean fabulous) {
+	protected void renderBakedModel(
+		BakedModel model,
+		ItemStack stack,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay,
+		boolean fabulous
+	) {
 		renderBakedModel(model, stack, poseStack, buffers, packedLight, packedOverlay, fabulous, Function.identity());
 	}
 }

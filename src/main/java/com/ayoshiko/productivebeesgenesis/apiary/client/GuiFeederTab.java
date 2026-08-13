@@ -34,7 +34,8 @@ public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFe
 	private static final int TAB_COLOR = 0xFF00695C;
 
 	/** 花朵图标资源 */
-	private static final ResourceLocation ICON = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/feeder_tab.png");
+	private static final ResourceLocation ICON =
+		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/feeder_tab.png");
 
 	/**
 	 * 窗口数据 — 使用 UNSPECIFIED 类型（自定义窗口，不与 MEK 内置窗口冲突）

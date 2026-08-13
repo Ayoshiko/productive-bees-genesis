@@ -48,6 +48,9 @@ dependencies.txt
 docs/
 CODE_WIKI.md
 
+# 发布说明草稿（与 CHANGELOG 重复，不入库）
+.release_body_*.md
+
 # OS
 .DS_Store
 Thumbs.db

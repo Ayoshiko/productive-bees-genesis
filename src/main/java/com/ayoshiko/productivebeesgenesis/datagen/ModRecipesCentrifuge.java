@@ -46,10 +46,17 @@ final class ModRecipesCentrifuge {
 		addMekCentrifugeRecipe(output, mekCondition);
 		// Mek 4级离心机工厂
 		addMekCentrifugeFactoryRecipes(output, mekCondition);
-		// EM/ME/EME 离心机工厂
-		addEMFactoryRecipes(output);
-		addMEFactoryRecipes(output);
-		addEMEFactoryRecipes(output);
+		// EM/ME/EME 离心机工厂 — 运行时守卫：未安装对应可选模组时跳过，
+		// 避免 runData 环境缺失可选模组类导致 NoClassDefFoundError（与运行时注册逻辑一致）
+		if (MekCompatHooks.isEvolvedMekanismLoaded()) {
+			addEMFactoryRecipes(output);
+		}
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			addMEFactoryRecipes(output);
+		}
+		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			addEMEFactoryRecipes(output);
+		}
 	}
 
 	/**

@@ -42,7 +42,8 @@ public abstract class ShaderInstanceMixin implements ShaderInstanceInterface {
 		at = { @At("TAIL") },
 		order = 1001
 	)
-	private void productivebeesgenesis$onShaderInit(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat, CallbackInfo callbackInfo) {
+	private void productivebeesgenesis$onShaderInit(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat,
+		CallbackInfo callbackInfo) {
 		// 防御性null检查：部分模组可能传入null shaderLocation
 		if (shaderLocation != null && ProductiveBeesGenesis.MOD_ID.equals(shaderLocation.getNamespace())) {
 			this.setShouldSkip(SkipList.NONE);

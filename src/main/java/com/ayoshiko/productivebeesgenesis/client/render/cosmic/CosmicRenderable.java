@@ -12,5 +12,6 @@ import net.minecraft.world.item.ItemStack;
 	 */
 public interface CosmicRenderable {
 
-	void renderCosmicLayer(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay);
+	void renderCosmicLayer(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight,
+		int packedOverlay);
 }

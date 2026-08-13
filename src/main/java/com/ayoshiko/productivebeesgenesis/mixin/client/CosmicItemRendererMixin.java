@@ -28,8 +28,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemRenderer.class)
 public abstract class CosmicItemRendererMixin {
 
-	@Inject(method = "render(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", ordinal = 0))
-	private void productivebeesgenesis$onRenderItem(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, int packedLight, int packedOverlay, BakedModel modelIn, CallbackInfo callbackInfo) {
+	@Inject(method = "render(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;)V",
+		at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", ordinal = 0))
+	private void productivebeesgenesis$onRenderItem(
+		ItemStack stack,
+		ItemDisplayContext context,
+		boolean leftHand,
+		PoseStack poseStack,
+		MultiBufferSource multiBufferSource,
+		int packedLight,
+		int packedOverlay,
+		BakedModel modelIn,
+		CallbackInfo callbackInfo
+	) {
 		if (modelIn instanceof PerspectiveModel renderer) {
 			try {
 				try {

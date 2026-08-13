@@ -208,7 +208,8 @@ public class MyriadCreationsHandler {
 		} else {
 			// 进度未满，本 tick 不完成操作但仍消耗能量（保持并行语义，参考 PbRecipeProcessor opsRun=effectiveOps 路径）
 			if (cachedEnergyPerTick > 0) {
-				context.energyContainer().extract((long) effectiveOps * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
+				context.energyContainer().extract((long) effectiveOps * cachedEnergyPerTick, Action.EXECUTE,
+					AutomationType.INTERNAL);
 			}
 		}
 
@@ -231,7 +232,8 @@ public class MyriadCreationsHandler {
 		// 限制种类数不超过输出槽数和总数量
 		int maxTypes = Math.min(OUTPUT_SLOT_COUNT, totalCount);
 		// Task 23: 使用带缓存的类型选择，降低 256x 加速下每 tick 多次随机采样的开销
-		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(maxTypes, context.level());
+		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(maxTypes,
+			context.level());
 		if (selectedTypes.isEmpty()) {
 			// 缓存为空时保留进度等待预热完成（不扣能量、不扣输入）
 			logger.logEmptyCacheAndPreserve(processIndex);
@@ -353,9 +355,11 @@ public class MyriadCreationsHandler {
 		// Task 4 根因修复：万象创世的主要产出是随机蜜脾物品，流体（蜂蜜）是副产物。
 		// 流体槽满载时不应阻塞物品产出，跳过流体输出继续处理物品。
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
-		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes, effectiveBatchSize);
+		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes,
+			effectiveBatchSize);
 		if (maxBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex,
+				batchSize);
 			return 0;
 		}
 
@@ -368,7 +372,8 @@ public class MyriadCreationsHandler {
 		// SubTask 5.5: 按权重比例分配 totalCount（替代 allocateEvenly）
 		List<ResourceLocation> activeTypes = selectedTypes.subList(0, typesToUse);
 		double[] activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
-		Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
+		Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes,
+			activeWeights);
 
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation);
 		// v9-L3 修复：逐步降级重试（MAX_DEGRADATION_ATTEMPTS 次，每次减半），替代原先仅尝试一次的保守降级
@@ -385,7 +390,8 @@ public class MyriadCreationsHandler {
 			degradationAttempts++;
 		}
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex,
+				batchSize);
 			return 0;
 		}
 

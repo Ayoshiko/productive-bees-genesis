@@ -22,6 +22,7 @@ import java.util.function.IntFunction;
 import java.util.function.IntToDoubleFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
+import net.neoforged.fml.ModList;
 
 /**
 	 * MEK离心机工厂GUI辅助工具类
@@ -75,11 +76,30 @@ public final class GuiMekCentrifugeFactoryHelper {
 			GuiProgress progress = new GuiProgress(
 					() -> ProgressDisplaySmoother.smooth(tile, cacheIndex, scaledProgress.applyAsDouble(cacheIndex)),
 					ProgressType.DOWN, gui, 4 + xPos, 33);
-			progress.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, ProductiveBeesGenesisJEI.getPbCentrifugeViewerType())
+			progress.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, jeiViewerTypeOrNull())
 					.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, warningCheck.apply(cacheIndex));
 			bars.add(progress);
 		}
 		return bars;
+	}
+
+
+	/**
+	 * 返回 JEI 的 PB 离心配方查看器类型；JEI 未安装时返回 null。
+	 * <br/>
+	 * 原理：ProductiveBeesGenesisJEI implements mezz.jei.api.IModPlugin（硬引用 JEI 类），
+	 * 直接调用其静态方法会在 JEI 未安装时触发 NoClassDefFoundError；
+	 * 通过 ModList 守卫确保仅 JEI 已加载时才触达该类引用（JVM 惰性类加载）。
+	 *
+	 * @return JEI 配方查看器类型，JEI 未安装时为 null
+	 */
+	@org.jetbrains.annotations.Nullable
+	public static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
+	) {
+		if (ModList.get() != null && ModList.get().isLoaded("jei")) {
+			return ProductiveBeesGenesisJEI.getPbCentrifugeViewerType();
+		}
+		return null;
 	}
 
 	/**

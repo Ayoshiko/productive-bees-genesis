@@ -50,14 +50,28 @@ public final class ApiaryOutputBuffer {
 	/** 复用 remaining 列表避免每 tick 分配 ArrayList（256× 加速场景下减少 GC 压力） */
 	private final List<ItemStack> remainingBuffer = new ArrayList<>();
 
-	/** 退避计数器 — 连续重试失败后递增延迟，避免每 tick 无效调用 insertItem */
-	private int redistributeBackoffTicks = 0;
+	/** 退避墙钟到期时间（nanoTime）— 连续失败后延迟重试，避免每 tick 无效调用 insertItem */
+	private long redistributeBackoffUntilNanos = 0L;
 
-	/** 退避上限 — 最多 8 tick 延迟重试（约 0.4s），平衡响应速度与 CPU 开销 */
-	private static final int MAX_BACKOFF_TICKS = 8;
+	/** 当前退避时长（nanoTime）— 指数递增，50ms 起步、1s 封顶 */
+	private long redistributeBackoffNanos = 0L;
+
+	/** 退避初始时长 — 50ms（墙钟对 tick 加速免疫，加速下真实时间恒定） */
+	private static final long INITIAL_BACKOFF_NANOS = 50_000_000L;
+
+	/** 退避上限 — 1s，平衡响应速度与 CPU 开销 */
+	private static final long MAX_BACKOFF_NANOS = 1_000_000_000L;
 
 	/** 模块2.3.1：缓冲区满丢弃计数器 — 统计近5分钟丢弃次数，用于日志聚合（AtomicLong 保证线程安全） */
 	private final AtomicLong discardedCount = new AtomicLong(0);
+
+	/**
+	 * 输出内容版本号 — 缓冲区入队或成功注入输出槽时递增。
+	 * <br/>
+	 * 供 {@code TileEntityMekApiary.productivebeesgenesis$outputContentsVersion()} 返回，
+	 * 驱动 Ejector 冷却 Mixin 在产物变化后立即重试弹出（对齐离心机 FactoryPbContextDelegate 版本号机制）。
+	 */
+	private final AtomicLong outputVersion = new AtomicLong(0L);
 
 	/**
 	 * 预扫描槽位状态数组复用 — 与 {@link BeeProduceProcessor#distributeToOutput} 直写模式一致，
@@ -123,6 +137,7 @@ public final class ApiaryOutputBuffer {
 			}
 			bufferedStacks.addLast(stack.copyWithCount(remaining));
 		}
+		outputVersion.incrementAndGet();
 		tile.setChanged();
 	}
 
@@ -131,8 +146,8 @@ public final class ApiaryOutputBuffer {
 	 * <br/>
 	 * 性能优化（Spark 分析 v2.0.2）：
 	 * <ol>
-	 *   <li><b>退避机制</b>：输出槽全满时递增退避计数器（1→2→...→8 tick），
-	 *       避免每 tick 无效调用 insertItem。退避期内直接返回，开销仅字段比较。</li>
+	 *   <li><b>退避机制</b>：输出槽全满时进入 nanoTime 墙钟指数退避（50ms→1s），
+	 *       避免每 tick 无效调用 insertItem；墙钟对 tick 加速免疫，退避期内直接返回。</li>
 	 *   <li><b>预扫描直写</b>：与 {@link BeeProduceProcessor#distributeToOutput} 一致，
 	 *       先一次遍历获取所有槽位的 stack/count/limit，再用 setStack 替代 insertItem，
 	 *       将 getLimit 查询从 N(缓冲栈)×M(输出槽) 次降为 M 次。</li>
@@ -144,9 +159,8 @@ public final class ApiaryOutputBuffer {
 	public synchronized void tickRedistribute(List<? extends IInventorySlot> outputSlots) {
 		if (bufferedStacks.isEmpty() || outputSlots == null || outputSlots.isEmpty()) return;
 
-		// 退避检查 — 连续失败后延迟重试，避免每 tick 无效调用
-		if (redistributeBackoffTicks > 0) {
-			redistributeBackoffTicks--;
+		// 退避检查 — 墙钟退避（nanoTime），tick 加速下依然按真实时间延迟重试
+		if (redistributeBackoffUntilNanos > System.nanoTime()) {
 			return;
 		}
 
@@ -177,9 +191,9 @@ public final class ApiaryOutputBuffer {
 			}
 		}
 
-		// 输出槽全满 — 进入退避，避免每 tick 无效重试
+		// 输出槽全满 — 进入墙钟退避（指数递增），避免每 tick 无效重试
 		if (!hasSpace) {
-			redistributeBackoffTicks = Math.min(MAX_BACKOFF_TICKS, redistributeBackoffTicks + 1);
+			enterBackoff();
 			return;
 		}
 
@@ -232,14 +246,16 @@ public final class ApiaryOutputBuffer {
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			outputVersion.incrementAndGet();
 			tile.setChanged();
 		}
 
-		// 退避策略：部分失败时递增退避，全部成功时重置
+		// 退避策略：部分失败时进入墙钟退避（指数递增），全部成功时重置
 		if (!remainingBuffer.isEmpty()) {
-			redistributeBackoffTicks = Math.min(MAX_BACKOFF_TICKS, redistributeBackoffTicks + 1);
+			enterBackoff();
 		} else {
-			redistributeBackoffTicks = 0;
+			redistributeBackoffNanos = 0L;
+			redistributeBackoffUntilNanos = 0L;
 		}
 	}
 
@@ -247,12 +263,20 @@ public final class ApiaryOutputBuffer {
 	 * 模块5：重置退避计数器 — 供 ApiaryDirectEjectHandler 成功转移后调用
 	 * <br/>
 	 * 当直连弹出成功转移缓冲区物品到离心机后，主动重置退避，使下一次 {@link #tickRedistribute}
-	 * 立即尝试将剩余缓冲区产物注入蜂箱输出槽（避免最长 8 tick 退避延迟）。
+	 * 立即尝试将剩余缓冲区产物注入蜂箱输出槽（避免墙钟指数退避延迟：50ms 起步、倍增、1s 封顶）。
 	 * <p>
 	 * 设计原则：暴露最小接口，不暴露内部退避状态字段。
 	 */
 	public synchronized void resetBackoff() {
-		redistributeBackoffTicks = 0;
+		redistributeBackoffNanos = 0L;
+		redistributeBackoffUntilNanos = 0L;
+	}
+
+	/** 进入墙钟指数退避（50ms 起步、倍增、1s 封顶） */
+	private void enterBackoff() {
+		redistributeBackoffNanos = Math.min(MAX_BACKOFF_NANOS,
+				Math.max(INITIAL_BACKOFF_NANOS, redistributeBackoffNanos * 2));
+		redistributeBackoffUntilNanos = System.nanoTime() + redistributeBackoffNanos;
 	}
 
 	/**
@@ -369,6 +393,7 @@ public final class ApiaryOutputBuffer {
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			outputVersion.incrementAndGet();
 			tile.setChanged();
 		}
 		return totalTransferred;
@@ -378,7 +403,7 @@ public final class ApiaryOutputBuffer {
 	 * 模块6：将缓冲区物品直接推送到 AE2 网络（绕过输出槽中转）
 	 * <br/>
 	 * 当输出槽被待离心蜜脾占满、缓冲区里积压了非蜜脾物品或多余蜜脾时，
-	 * 直接调用回调逐组推送，避免等待输出槽腾出空间（最长 8 tick 退避）。
+	 * 直接调用回调逐组推送，避免等待输出槽腾出空间（墙钟退避，加速免疫）。
 	 * <p>
 	 * 回调返回该组实际被接收的数量（0=完全拒绝）；部分接收时剩余数量保留在缓冲区。
 	 * 与 {@link #tryRedistributeToExternalSlots} 共用 remainingBuffer，调用前已 clear。
@@ -400,7 +425,10 @@ public final class ApiaryOutputBuffer {
 			try {
 				pushed = Math.max(0, pushSingle.applyAsInt(stack));
 			} catch (RuntimeException e) {
+				// 单物品推送异常隔离：不影响其余缓冲物品，但需记录日志便于定位
 				pushed = 0;
+				LogThrottle.warn("apiary_buffer_push_ae",
+						"缓冲区物品推送 AE2 异常，该物品保留待重试: {}", stack, e);
 			}
 			if (pushed <= 0) {
 				remainingBuffer.add(stack);
@@ -416,6 +444,7 @@ public final class ApiaryOutputBuffer {
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			outputVersion.incrementAndGet();
 			tile.setChanged();
 		}
 		return totalPushed;
@@ -484,5 +513,10 @@ public final class ApiaryOutputBuffer {
 	/** 客户端同步用：返回缓冲区当前组数 */
 	public synchronized int getBufferedGroupCount() {
 		return bufferedStacks.size();
+	}
+
+	/** 输出内容版本号（见 {@link #outputVersion}） */
+	public long getOutputVersion() {
+		return outputVersion.get();
 	}
 }

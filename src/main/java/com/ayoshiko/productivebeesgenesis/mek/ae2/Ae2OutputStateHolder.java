@@ -82,7 +82,8 @@ public final class Ae2OutputStateHolder {
 	 * Task 12：内部调用计数器 — 替代 getGameTime 作为节流依据。
 	 * JDTE Time Accelerator 不修改 {@code level.getGameTime()} 但多次调用 tick，导致基于 getGameTime 的节流失效。
 	 * <p>
-	 * 节流公式：{@code pullCallCounter - lastPullCounter >= effectiveInterval}（{@code effectiveInterval = max(intervalTicks, M)}）
+	 * 节流公式：{@code pullCallCounter - lastPullCounter >= effectiveInterval}（{@code effectiveInterval =
+	 * max(intervalTicks, M)}）
 	 * 才触发拉取。volatile 保证可见性，服务端单线程无需 CAS。
 	 */
 	private volatile long pullCallCounter = 0L;
@@ -423,6 +424,16 @@ public final class Ae2OutputStateHolder {
 	/** 包私有 — 仅读取现有过滤器（不创建），供 NBT 编解码使用 */
 	Ae2InputFilter getAeInputFilter() {
 		return aeInputFilter;
+	}
+
+	/**
+	 * 失效网络库存视图缓存（提取物品后调用）
+	 * <br/>
+	 * 修复：玩家从虚拟输出槽取出物品后，同 gameTick 内的 visibleAmount 缓存
+	 * 仍返回提取前的库存值，导致客户端显示滞后一拍；失效后下次查询重新探测。
+	 */
+	public void invalidateInputInventoryViewCache() {
+		setInputInventoryViewCache(null);
 	}
 
 	/**

@@ -32,7 +32,8 @@ public class GeometryLoaderCosmic
 	private static final String TYPE = "cosmic";
 
 	@Override
-	public CosmicGeometry read(JsonObject modelContents, JsonDeserializationContext deserializationContext) throws JsonParseException {
+	public CosmicGeometry read(JsonObject modelContents,
+		JsonDeserializationContext deserializationContext) throws JsonParseException {
 		BlockModel baseModel = deserializationContext.deserialize(clearLoaderKeys(modelContents, TYPE), BlockModel.class);
 		List<ResourceLocation> maskTextures = parseMasks(modelContents, TYPE);
 		return new CosmicGeometry(baseModel, maskTextures);

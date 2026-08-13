@@ -76,7 +76,8 @@ public interface PbRecipeContext {
 	 *   <li>MULTI_PER_FLUID 模式：工厂类重写此方法，委托给
 	 *       {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#getTankForInsert}
 	 *       实现按流体类型路由</li>
-	 *   <li>基础机器（{@link TileEntityMekCentrifuge}）/ 蜂箱（{@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbRecipeContextAdapter}）：
+	 * <li>基础机器（{@link TileEntityMekCentrifuge}）/
+	 * 蜂箱（{@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbRecipeContextAdapter}）：
 	 *       单槽场景，使用默认实现</li>
 	 * </ul>
 	 *

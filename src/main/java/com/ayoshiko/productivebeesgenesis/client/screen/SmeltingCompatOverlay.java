@@ -126,7 +126,8 @@ public final class SmeltingCompatOverlay {
 		if (screenTarget == null) return null;
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				return new AeInputOverlay.OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(), getCurrentType(sideConfig));
+				return new AeInputOverlay.OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(),
+					getCurrentType(sideConfig));
 			}
 		}
 		return null;

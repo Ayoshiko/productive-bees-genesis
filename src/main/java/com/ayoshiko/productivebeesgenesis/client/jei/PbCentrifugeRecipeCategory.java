@@ -85,7 +85,13 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 	 * JEI 会在 (0,0) 起始的区域绘制，blit 直接映射纹理的 (0,0)~(126,70) 区域。
 	 */
 	@Override
-	public void draw(CentrifugeRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
+	public void draw(
+		CentrifugeRecipe recipe,
+		IRecipeSlotsView recipeSlotsView,
+		GuiGraphics guiGraphics,
+		double mouseX,
+		double mouseY
+	) {
 		guiGraphics.blit(BACKGROUND_TEXTURE, 0, 0, 0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 	}
 

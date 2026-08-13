@@ -114,7 +114,14 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	protected abstract void endBatch(MultiBufferSource.BufferSource bufferSource);
 
 	@Override
-	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay) {
+	public void renderItem(
+		ItemStack stack,
+		ItemDisplayContext context,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay
+	) {
 		// 先渲染被包装的基础物品模型
 		renderWrapped(stack, poseStack, buffers, packedLight, packedOverlay, true);
 		// 立即刷新基础层，避免 cosmic 层深度测试异常
@@ -123,14 +130,22 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		}
 		// Iris 光影启用时延迟到世界渲染后执行，避免光影破坏 cosmic 着色器状态
 		if (IrisCompat.shouldDefer(context)) {
-			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay, RenderSystem.getProjectionMatrix(), RenderSystem.getModelViewMatrix()));
+			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay, RenderSystem.getProjectionMatrix(),
+				RenderSystem.getModelViewMatrix()));
 			return;
 		}
 		renderCosmicLayer(stack, context, poseStack, buffers, packedLight, packedOverlay);
 	}
 
 	@Override
-	public void renderCosmicLayer(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay) {
+	public void renderCosmicLayer(
+		ItemStack stack,
+		ItemDisplayContext context,
+		PoseStack poseStack,
+		MultiBufferSource buffers,
+		int packedLight,
+		int packedOverlay
+	) {
 		Minecraft mc = Minecraft.getInstance();
 		// 防御性检查：主菜单或世界未加载时 mc.level/mc.player 可能为 null
 		// 必须在调用 mc.level.getGameTime() 之前完成，否则会 NPE

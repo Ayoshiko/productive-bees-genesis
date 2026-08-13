@@ -30,7 +30,8 @@ public interface PerspectiveModel extends BakedModel {
 	@Nullable
 	PerspectiveModelState getModelState();
 
-	void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight, int packedOverlay);
+	void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack, MultiBufferSource buffers, int packedLight,
+		int packedOverlay);
 
 	@SuppressWarnings("deprecation") // BakedModel 接口要求实现 deprecated 的 3 参数版本
 	@NotNull
@@ -52,7 +53,8 @@ public interface PerspectiveModel extends BakedModel {
 
 	@NotNull
 	@Override
-	default BakedModel applyTransform(@NotNull ItemDisplayContext context, @NotNull PoseStack poseStack, boolean leftFlip) {
+	default BakedModel applyTransform(@NotNull ItemDisplayContext context, @NotNull PoseStack poseStack,
+		boolean leftFlip) {
 		PerspectiveModelState modelState = getModelState();
 		if (modelState != null) {
 			Transformation transform = modelState.getTransform(context);

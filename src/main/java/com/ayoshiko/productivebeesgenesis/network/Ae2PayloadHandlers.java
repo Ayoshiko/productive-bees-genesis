@@ -256,7 +256,8 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
-		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_cycle", NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_cycle",
+			NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -339,12 +340,22 @@ final class Ae2PayloadHandlers {
 			// Quick move: extract up to a full stack into the player inventory.
 			long maxExtract = Math.min(visible, key.getMaxStackSize());
 			if (maxExtract > 0L) {
-				long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
-				if (extracted > 0L) {
-					net.minecraft.world.item.ItemStack stack = key.toStack(
-							(int) Math.min(extracted, Integer.MAX_VALUE));
-					if (!serverPlayer.getInventory().add(stack)) {
-						serverPlayer.drop(stack, false);
+				// 先计算背包实际可容纳数量，只提取能全部放入的量：
+				// Inventory.add 只返回"是否放入至少 1 件"（且 1.21.1 无 addAndReturnRemainder），
+				// 若先扣减 ME 库存再处理剩余会造成物品凭空消失（ME extract 不可回滚）
+				int capacity = freeInventoryCapacity(serverPlayer, key.toStack(1));
+				maxExtract = Math.min(maxExtract, capacity);
+				if (maxExtract > 0L) {
+					long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
+					if (extracted > 0L) {
+						// 库存已扣减：失效同 tick 可见库存缓存，避免客户端显示提取前旧值
+						holder.invalidateInputInventoryViewCache();
+						net.minecraft.world.item.ItemStack stack = key.toStack(
+								(int) Math.min(extracted, Integer.MAX_VALUE));
+						if (!serverPlayer.getInventory().add(stack)) {
+							// 防御：容量预计算与实际放入不一致（极端并发）时掉落兜底，保证零丢失
+							serverPlayer.drop(stack, false);
+						}
 					}
 				}
 			}
@@ -357,6 +368,8 @@ final class Ae2PayloadHandlers {
 				if (maxExtract > 0L) {
 					long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
 					if (extracted > 0L) {
+						// 库存已扣减：失效同 tick 可见库存缓存
+						holder.invalidateInputInventoryViewCache();
 						serverPlayer.containerMenu.setCarried(key.toStack(
 								(int) Math.min(extracted, Integer.MAX_VALUE)));
 					}
@@ -377,5 +390,34 @@ final class Ae2PayloadHandlers {
 		}
 		// Refresh the GUI stock display after a successful mutation.
 		Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
+	}
+
+	/**
+	 * 计算玩家背包（36 主槽）可容纳指定物品的数量
+	 * <br/>
+	 * 遍历主背包与快捷栏：空槽按整组容量计，同物品同组件槽按剩余空间计。
+	 *
+	 * @param player 服务器玩家
+	 * @param probe  用于比较的物品栈（count 无关）
+	 * @return 可容纳总数（0 表示无空间）
+	 */
+	private static int freeInventoryCapacity(net.minecraft.world.entity.player.Player player,
+			net.minecraft.world.item.ItemStack probe) {
+		net.minecraft.world.entity.player.Inventory inventory = player.getInventory();
+		int capacity = 0;
+		// 只遍历主背包 items（36 槽）：Inventory.add() 只向主背包槽放入物品，
+		// 不包含盔甲（4）与副手（1），遍历 getContainerSize()（41）会高估容量
+		for (int i = 0; i < inventory.items.size(); i++) {
+			net.minecraft.world.item.ItemStack slotStack = inventory.getItem(i);
+			if (slotStack.isEmpty()) {
+				capacity += probe.getMaxStackSize();
+			} else if (net.minecraft.world.item.ItemStack.isSameItemSameComponents(slotStack, probe)) {
+				capacity += Math.max(0, slotStack.getMaxStackSize() - slotStack.getCount());
+			}
+			if (capacity >= probe.getMaxStackSize()) {
+				break;
+			}
+		}
+		return capacity;
 	}
 }

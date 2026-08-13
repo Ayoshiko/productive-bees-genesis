@@ -11,7 +11,6 @@ import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.container.MekanismContainer;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
@@ -87,8 +86,6 @@ public class PbRecipeProcessor {
 	/** 上次刷新 maxOpsPerTick 配置缓存的游戏刻 — volatile 保证跨线程可见性 */
 	private volatile long lastMaxOpsRefreshTick = 0L;
 
-	/** Task 23: 进度同步节流间隔（tick） — 高进程时每 5 tick 同步一次降低网络包频率 80% */
-	private static final int PROGRESS_SYNC_INTERVAL = 5;
 
 	/** Task 23: 进度同步计数器（每 tick 递增，% 5 == 0 时同步） */
 	private int progressSyncCounter = 0;
@@ -170,6 +167,7 @@ public class PbRecipeProcessor {
 		if (tick == lastFluidFullCacheTick) return;
 		refreshFluidTankFullCache(context);
 	}
+
 	/** 刷新能量和操作数缓存（入口调用一次，替代原 tryProcessPbRecipe 内的每次刷新；升级变更下次入口自动失效） */
 	public void refreshEnergyAndOpsCache(PbRecipeContext context) {
 		cachedEnergyPerTick = MekExtrasUpgradeSemantics.energyPerTick(
@@ -177,30 +175,10 @@ public class PbRecipeProcessor {
 		cachedOperationsPerTick = context.operationsPerTick();
 	}
 
-	/**
-	 * 在工厂处理各进程前为不同流体输出预留槽位。
-	 * 配方查找命中现有缓存，且只在多槽工厂启用；不会为同一种流体重复扩容。
-	 */
+	/** Reserves active multi-fluid output types once per real game tick (implementation moved to {@link PbRecipeProcessorStateHelper#reserveActiveFluidOutputTypes}). */
 	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
-		if (context.fluidOutputTankCount() <= 1) return;
-		Level level = context.level();
-		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
-		if (tick == lastFluidReservationTick) return;
-		lastFluidReservationTick = tick;
-		for (int i = 0, size = inputSlots.size(); i < size; i++) {
-			ItemStack input = inputSlots.get(i).getStack();
-			if (input.isEmpty()
-					|| MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
-				continue;
-			}
-			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
-			if (recipe == null) continue;
-			var fluid = recipe.value().getFluidOutputs();
-			if (!fluid.isEmpty()) {
-				context.reserveFluidOutputType(fluid);
-			}
-		}
+		lastFluidReservationTick = PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
+			lastFluidReservationTick);
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -430,7 +408,8 @@ public class PbRecipeProcessor {
 				} else {
 					// 批量 flush 失败（输出空间不足）— 分批减半回退
 					recipeCompleters[processIndex].resetPendingRecipe();
-					int successfulOps = retryBatchedFlush(recipeValue, processIndex, modifier, actualOps);
+					int successfulOps = PbRecipeFlushHelper.retryBatchedFlush(
+							recipeCompleters[processIndex], recipeValue, processIndex, modifier, actualOps);
 					if (successfulOps < actualOps) {
 						// 中途输出空间不足 — 保留进度下个 tick 重试
 						pbOperatingTicks[processIndex] = processingTime;
@@ -451,38 +430,6 @@ public class PbRecipeProcessor {
 		}
 	}
 
-	/**
-	 * 分批减半回退 — O(log N) 次减半尝试 + 批量执行（替代 N 次逐次重试）。成功：batchSize 不变；失败：batchSize /= 2；batchSize=1 失败时跳出。
-	 */
-	private int retryBatchedFlush(CentrifugeRecipe recipe, int processIndex, int modifier, int totalOps) {
-		int opsSuccessfullyRun = 0;
-		int remaining = totalOps;
-		int batchSize = totalOps;
-		while (remaining > 0) {
-			if (batchSize <= 0) batchSize = 1;
-			int trySize = Math.min(batchSize, remaining);
-			recipeCompleters[processIndex].resetPendingRecipe();
-			if (trySize == 1) {
-				recipeCompleters[processIndex].accumulatePbRecipeOutputs(recipe, processIndex, modifier);
-			} else {
-				recipeCompleters[processIndex].accumulatePbRecipeOutputsBatch(recipe, processIndex, modifier, trySize);
-			}
-			if (recipeCompleters[processIndex].flushPendingPbOutputs(processIndex)) {
-				opsSuccessfullyRun += trySize;
-				remaining -= trySize;
-			} else {
-				if (recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
-					opsSuccessfullyRun += trySize;
-					break;
-				}
-				recipeCompleters[processIndex].resetPendingRecipe();
-				if (batchSize <= 1) break; // 连单个 ops 都无法 flush — 输出槽完全满
-				batchSize /= 2;
-			}
-		}
-		return opsSuccessfullyRun;
-	}
-
 	/** 查找匹配输入物品的PB离心配方 — 委托给 {@link PbRecipeFinder}，保留为公共方法供外部调用方使用 */
 	@Nullable
 	public RecipeHolder<CentrifugeRecipe> findPbRecipe(ItemStack input) {
@@ -496,97 +443,50 @@ public class PbRecipeProcessor {
 		energyCache.clear();
 	}
 
-	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */
+	/** Clears all per-process PB state (implementation moved to {@link PbRecipeProcessorStateHelper#clearPbState}). */
 	private void clearPbState(int processIndex) {
-		// 防御性：移除 pbProcessing 守卫，无条件清零所有 PB 状态字段
-		// 避免守卫导致 pbOperatingTicks/cachedPbRecipes 残留（与 resetPbState 行为统一）
-		pbProcessing[processIndex] = false;
-		pbOperatingTicks[processIndex] = 0;
-		pbProcessingTime[processIndex] = 0;
-		cachedPbRecipes[processIndex] = null;
-		// v2.0.9 修复产物锁定 bug：清除 PB 状态时同步重置 completer
-		recipeCompleters[processIndex].resetPendingRecipe();
-		// 关闭该进程的激活位，防止进度箭头残留
-		context.setPbActiveState(false, processIndex);
+		PbRecipeProcessorStateHelper.clearPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime, cachedPbRecipes, recipeCompleters[processIndex],
+			context);
 	}
 
-	/** 强制重置指定进程的 PB 处理状态（不调用 setPbActiveState，供基础机器 SMELTING 检查命中时使用） */
+	/** Resets per-process PB progress without touching the active-state flag (implementation moved to {@link PbRecipeProcessorStateHelper#resetPbState}). */
 	public void resetPbState(int processIndex) {
-		pbProcessing[processIndex] = false;
-		pbOperatingTicks[processIndex] = 0;
-		pbProcessingTime[processIndex] = 0;
-		cachedPbRecipes[processIndex] = null;
-		// v2.0.9 修复产物锁定 bug：重置 PB 状态时同步重置 completer
-		recipeCompleters[processIndex].resetPendingRecipe();
+		PbRecipeProcessorStateHelper.resetPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime, cachedPbRecipes,
+			recipeCompleters[processIndex]);
 	}
 
 	// ===== 客户端同步和持久化 =====
 
-	/** 检查指定进程是否正在处理PB配方 */
+	/** Returns whether the given process is currently PB-processing (implementation moved to {@link PbRecipeProcessorStateHelper#isPbProcessing}). */
 	public boolean isPbProcessing(int process) {
-		return pbProcessing[process];
+		return PbRecipeProcessorStateHelper.isPbProcessing(pbProcessing, process);
 	}
 
-	/**
-	 * 获取PB处理的缩放进度（0.0~1.0） — 读 syncedOperatingTicks（与 trackArray 监控一致）。
-	 * 修复 #9：processingTime <= 0 守卫，避免除零（CREATIVE 升级下 baseTicksRequired 可能为 0）。
-	 */
+	/** PB progress 0.0~1.0 (implementation moved to {@link PbRecipeProcessorStateHelper#getPbScaledProgress}). */
 	public double getPbScaledProgress(int i, int process) {
-		int processingTime = pbProcessingTime[process] > 0 ? pbProcessingTime[process] : context.baseTicksRequired();
-		if (processingTime <= 0) return 0.0;
-		return Math.min(1.0, (double) syncedOperatingTicks[process] * i / processingTime);
+		return PbRecipeProcessorStateHelper.getPbScaledProgress(i, process, pbProcessingTime, syncedOperatingTicks,
+			context.baseTicksRequired());
 	}
 
-	/**
-	 * Task 23: 每 tick 调用，高进程时节流进度同步。
-	 * 高进程（≥9）时每 5 tick 将 pbOperatingTicks 复制到 syncedOperatingTicks，
-	 * trackArray 检测到变化才发网络包，频率降低 80%。低进程（<9）时每 tick 同步。
-	 */
+	/** Syncs PB progress to the tracked arrays (implementation moved to {@link PbRecipeProcessorStateHelper#tickProgressSync}). */
 	public void tickProgressSync() {
-		if (context.processes() < 9 || ++progressSyncCounter % PROGRESS_SYNC_INTERVAL == 0) {
-			System.arraycopy(pbOperatingTicks, 0, syncedOperatingTicks, 0, pbOperatingTicks.length);
-		}
+		progressSyncCounter = PbRecipeProcessorStateHelper.tickProgressSync(progressSyncCounter, context.processes(), pbOperatingTicks,
+			syncedOperatingTicks);
 	}
 
-	/**
-	 * 同步PB进度到客户端。syncedOperatingTicks/pbProcessing/pbProcessingTime 同步给客户端用于GUI显示。
-	 */
+	/** Adds PB progress DataSlot trackers (implementation moved to {@link PbRecipeProcessorStateHelper#addContainerTrackers}). */
 	public void addContainerTrackers(MekanismContainer container) {
-		// DataSlot 越界守卫：数组长度与 processes 不一致时跳过注册（防御性检查）
-		if (syncedOperatingTicks.length != context.processes()) {
-			return;
-		}
-		container.trackArray(syncedOperatingTicks);
-		container.trackArray(pbProcessing);
-		container.trackArray(pbProcessingTime);
+		PbRecipeProcessorStateHelper.addContainerTrackers(container, context.processes(), syncedOperatingTicks, pbProcessing,
+			pbProcessingTime);
 	}
 
-	/**
-	 * 持久化PB配方处理状态（修复 #10：pbProcessing/pbProcessingTime 同步持久化避免重启后 GUI 状态不一致）。
-	 * pbProcessing 以 byte 数组持久化（boolean 数组 NBT 支持不一致）。
-	 */
+	/** Persists PB progress to NBT (implementation moved to {@link PbRecipeProcessorStateHelper#saveAdditional}). */
 	public void saveAdditional(CompoundTag nbt) {
-		nbt.putIntArray("productivebeesgenesis_pb_progress", pbOperatingTicks);
-		byte[] processingBytes = new byte[pbProcessing.length];
-		for (int i = 0; i < pbProcessing.length; i++) processingBytes[i] = (byte) (pbProcessing[i] ? 1 : 0);
-		nbt.putByteArray("productivebeesgenesis_pb_processing", processingBytes);
-		nbt.putIntArray("productivebeesgenesis_pb_processing_time", pbProcessingTime);
+		PbRecipeProcessorStateHelper.saveAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 	}
 
-	/** 加载PB配方处理状态（兼容旧存档仅含 pb_progress 的情形） */
+	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt) {
-		if (nbt.contains("productivebeesgenesis_pb_progress", Tag.TAG_INT_ARRAY)) {
-			int[] saved = nbt.getIntArray("productivebeesgenesis_pb_progress");
-			System.arraycopy(saved, 0, pbOperatingTicks, 0, Math.min(pbOperatingTicks.length, saved.length));
-		}
-		if (nbt.contains("productivebeesgenesis_pb_processing", Tag.TAG_BYTE_ARRAY)) {
-			byte[] saved = nbt.getByteArray("productivebeesgenesis_pb_processing");
-			int len = Math.min(pbProcessing.length, saved.length);
-			for (int i = 0; i < len; i++) pbProcessing[i] = saved[i] != 0;
-		}
-		if (nbt.contains("productivebeesgenesis_pb_processing_time", Tag.TAG_INT_ARRAY)) {
-			int[] saved = nbt.getIntArray("productivebeesgenesis_pb_processing_time");
-			System.arraycopy(saved, 0, pbProcessingTime, 0, Math.min(pbProcessingTime.length, saved.length));
-		}
+		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 	}
 }

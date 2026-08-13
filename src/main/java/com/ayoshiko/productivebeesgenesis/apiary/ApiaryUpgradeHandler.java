@@ -447,5 +447,3 @@ public class ApiaryUpgradeHandler {
 		return computeGeneSamplerCount() > 0;
 	}
 }
-
-	

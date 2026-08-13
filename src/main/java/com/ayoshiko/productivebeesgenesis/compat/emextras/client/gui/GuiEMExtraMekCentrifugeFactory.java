@@ -63,7 +63,8 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 	/** 多流体槽 Tab 同步监听器 — containerTick 中检测同步值变化动态添加/移除 Tab */
 	private MultiFluidTabSyncWatcher multiFluidTabWatcher;
 
-	public GuiEMExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory> container, Inventory inv, Component title) {
+	public GuiEMExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory> container, Inventory inv,
+		Component title) {
 		super(container, inv, title);
 		// 3行输出槽需要额外高度：标准187 + 副输出1(20) + 副输出2(20) = 227
 		imageHeight = 187 + 40;
@@ -89,7 +90,8 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 		// 标准能量条（右侧布局）+ 能量标签
 		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createStandardPowerBar(this, tile.getEnergyContainer(), imageWidth))
 				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
-		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(), tile::getLastUsage));
+		addRenderableWidget(GuiMekCentrifugeFactoryHelper.createEnergyTab(this, tile.getEnergyContainer(),
+			tile::getLastUsage));
 		// Tab 布局重排:GuiEnergyTab 下移 Δ=+24(y=137→161),与 GuiMultiFluidTanksTab(y=131,底部157)间距4px
 		// y 坐标链审计修复:统一所有等级 y 坐标链为 62/101/131/161,确保间距≥4px
 		for (GuiEventListener child : children()) {

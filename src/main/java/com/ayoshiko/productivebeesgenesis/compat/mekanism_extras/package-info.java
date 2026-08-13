@@ -11,7 +11,8 @@
 	 *   <li>{@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader} — 统一入口，供主类反射调用</li>
 	 *   <li>{@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEBlockRegistration} — ME 工厂方块注册</li>
 	 *   <li>{@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEItemRegistration} — ME 工厂 BlockItem 注册</li>
-	 *   <li>{@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEBlockEntityRegistration} — ME 工厂 BlockEntityType 注册</li>
+	 *   <li>{@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEBlockEntityRegistration} —
+	 * ME 工厂 BlockEntityType 注册</li>
 	 * </ul>
 	 * <p>
 	 * <b>类加载安全</b>：本包下的类直接 import ME 的类，但仅在 MekanismExtras 已加载时

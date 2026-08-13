@@ -41,7 +41,8 @@ import java.util.Map;
 	 *   <li>工厂蜂箱（Basic/Advanced/Elite/Ultimate）：使用 {@link ItemBlockMekApiaryFactory}（继承本类）</li>
 	 *   <li>EM 蜂箱（Overclocked/Quantum/Dense/Multiversal/Creative）：使用 {@link ItemBlockMekApiaryFactory}</li>
 	 *   <li>ME 蜂箱（Absolute/Supreme/Cosmic/Infinite）：使用 {@link ItemBlockMekApiaryFactory}</li>
-	 *   <li>EME 蜂箱（Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal）：使用 {@link ItemBlockMekApiaryFactory}</li>
+	 *   <li>EME 蜂箱（Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal）：使用 {@link
+	 * ItemBlockMekApiaryFactory}</li>
 	 * </ul>
 	 * 工厂版子类不重写任何 tooltip 方法，五个等级的 tooltip 行为完全一致。
 	 * <p>

@@ -35,10 +35,10 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 	 * 客户端通过 SyncableInt 同步至 {@link #clientUpgradeCounts}，
 	 * 不直接访问本字段。故保留 {@link EnumMap} 以获得枚举键的性能优势。
 	 */
-class ApiaryPbUpgradeHandler {
+public class ApiaryPbUpgradeHandler {
 
 	/** NBT key — PB升级安装数量（Bug 6 新格式，EnumMap 序列化为 CompoundTag） */
-	static final String NBT_KEY_PB_UPGRADE_COUNTS = "productivebeesgenesis_pb_upgrade_counts";
+	public static final String NBT_KEY_PB_UPGRADE_COUNTS = "productivebeesgenesis_pb_upgrade_counts";
 
 	/** NBT key — PB升级输入槽 */
 	static final String NBT_KEY_PB_UPGRADE_INPUT = "productivebeesgenesis_pb_upgrade_input";

@@ -14,7 +14,8 @@ import dev.latvian.mods.kubejs.event.EventHandler;
 	 * 用法示例（server_scripts）：
 	 * <pre>{@code
 	 * MyriadBeeEvents.REGISTER.register(event => {
-	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee', 'productivebees:myriadcreations')
+	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee',
+	 * 'productivebees:myriadcreations')
 	 * })
 	 * }</pre>
 	 */

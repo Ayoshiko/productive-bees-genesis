@@ -130,7 +130,8 @@ final class FilterListRenderer {
 
 		// 被拖拽条目的幽灵（半透明背景 + 类型ID）
 		int ghostY = mouseY - FilterListScreen.ENTRY_HEIGHT / 2;
-		graphics.fill(listLeft + 1, ghostY, listRight - 1, ghostY + FilterListScreen.ENTRY_HEIGHT, GuiColors.OVERLAY_DRAG_GHOST_BG);
+		graphics.fill(listLeft + 1, ghostY, listRight - 1, ghostY + FilterListScreen.ENTRY_HEIGHT,
+			GuiColors.OVERLAY_DRAG_GHOST_BG);
 		graphics.drawString(screen.getMinecraft().font, Component.literal(beeTypes.get(dragSourceIdIndexSafe(beeTypes, dragSourceIndex))),
 				listLeft + 10, ghostY + 7, GuiColors.OVERLAY_DRAG_GHOST_TEXT);
 	}
@@ -203,7 +204,8 @@ final class FilterListRenderer {
 		// 拖拽手柄
 		int handleTextWidth = screen.getMinecraft().font.width(DRAG_HANDLE);
 		int handleX = getDragHandleX() + (FilterListScreen.DRAG_HANDLE_WIDTH - handleTextWidth) / 2;
-		graphics.drawString(screen.getMinecraft().font, Component.literal(DRAG_HANDLE), handleX, y + 5, GuiColors.TEXT_DARK_GRAY);
+		graphics.drawString(screen.getMinecraft().font, Component.literal(DRAG_HANDLE), handleX, y + 5,
+			GuiColors.TEXT_DARK_GRAY);
 
 		// 复选框
 		String checkbox = selected ? CHECKBOX_CHECKED : CHECKBOX_EMPTY;
@@ -228,12 +230,16 @@ final class FilterListRenderer {
 
 		// 显示名称和产物信息 — 使用screen缓存避免每帧重复解析
 		Component displayName = screen.getBeeDisplayName(beeTypeId);
-		String trimmedName = screen.getMinecraft().font.plainSubstrByWidth(displayName.getString(), Math.max(20, nameColumnMaxWidth));
-		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmedName), nameColumnX, y + 2, GuiColors.TEXT_NAME_YELLOW);
+		String trimmedName = screen.getMinecraft().font.plainSubstrByWidth(displayName.getString(),
+			Math.max(20, nameColumnMaxWidth));
+		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmedName), nameColumnX, y + 2,
+			GuiColors.TEXT_NAME_YELLOW);
 
 		Component productInfo = screen.getBeeProductInfo(beeTypeId);
-		String trimmed = screen.getMinecraft().font.plainSubstrByWidth(productInfo.getString(), Math.max(20, nameColumnMaxWidth));
-		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmed), nameColumnX, y + 14, GuiColors.TEXT_PRODUCT_GRAY);
+		String trimmed = screen.getMinecraft().font.plainSubstrByWidth(productInfo.getString(),
+			Math.max(20, nameColumnMaxWidth));
+		graphics.drawString(screen.getMinecraft().font, Component.literal(trimmed), nameColumnX, y + 14,
+			GuiColors.TEXT_PRODUCT_GRAY);
 	}
 
 	private boolean isRowHovered(int mouseX, int mouseY, int entryY) {

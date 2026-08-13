@@ -152,7 +152,8 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;", remap = false),
 			require = 0
 	)
-	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range, Operation<List<BlockPos>> original) {
+	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range,
+		Operation<List<BlockPos>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipFarmer) {
 			return List.of();
@@ -166,7 +167,8 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
 			require = 0
 	)
-	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb, Operation<List<T>> original) {
+	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb,
+		Operation<List<T>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {
 			return List.of();

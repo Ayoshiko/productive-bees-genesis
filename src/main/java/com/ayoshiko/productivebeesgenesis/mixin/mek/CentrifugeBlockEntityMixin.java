@@ -24,7 +24,8 @@ public abstract class CentrifugeBlockEntityMixin {
 	/** canOperate RETURN — 输出满时阻止机器启动（修复PB原版空转耗能） */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)
 	private void productivebeesgenesis$checkOutputSpaceBeforeStart(CallbackInfoReturnable<Boolean> cir) {
-		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this, MyriadCreationsEventHandler::shouldBlockOperation);
+		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this,
+			MyriadCreationsEventHandler::shouldBlockOperation);
 	}
 
 	/** canProcessRecipe HEAD — 双重保险 */

@@ -162,3 +162,26 @@ config="${mod_id}.iris.mixins.json"
     versionRange="[19.0.0,)"
     ordering="AFTER"
     side="CLIENT"
+
+# Just Dire Things Extras 可选依赖（提供 CoalescedAcceleratedMachine 合并加速接口）
+# 运行时经 MixinConfigPlugin 条件应用，未安装时跳过 3 个 JDTE Mixin
+[[dependencies.${mod_id}]]
+    modId="jdte"
+    type="optional"
+    versionRange="[0.5.9-alpha1,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Building Gadgets 2 可选依赖（渲染方块实体加载时序修复 Mixin）
+[[dependencies.${mod_id}]]
+    modId="buildinggadgets2"
+    type="optional"
+    ordering="AFTER"
+    side="CLIENT"
+
+# Mek Energistics 可选依赖（ME 网络能量优先级集成守卫）
+[[dependencies.${mod_id}]]
+    modId="mekenergistics"
+    type="optional"
+    ordering="AFTER"
+    side="BOTH"

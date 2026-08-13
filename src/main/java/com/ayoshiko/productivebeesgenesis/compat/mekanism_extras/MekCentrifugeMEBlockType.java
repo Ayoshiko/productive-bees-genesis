@@ -102,7 +102,8 @@ public final class MekCentrifugeMEBlockType {
 		// key格式：description.productivebeesgenesis.{tier小写}_extra_mek_centrifuge_factory
 		var builder = ExtraMachine.ExtraMachineBuilder
 				.createExtraFactoryMachine(() -> ME_FACTORY_TILES.get(tier),
-						MekCentrifugeBlockType.descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory"), FactoryType.SMELTING)
+				MekCentrifugeBlockType.descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory"),
+							FactoryType.SMELTING)
 				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
 						() -> Math.max(ModConfig.SERVER.mekCentrifugeEnergyStorage.get(),
 								ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue()) * tier.processes)
@@ -134,7 +135,9 @@ public final class MekCentrifugeMEBlockType {
 	 * @param tier ME工厂等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）
 	 * @return 对应的ExtraFactoryMachine BlockType，不存在时返回null
 	 */
-	public static ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> getMEFactoryType(ExtraFactoryTier tier) {
+	public static ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> getMEFactoryType(
+		ExtraFactoryTier tier
+	) {
 		return ME_FACTORY_TYPES.get(tier);
 	}
 
