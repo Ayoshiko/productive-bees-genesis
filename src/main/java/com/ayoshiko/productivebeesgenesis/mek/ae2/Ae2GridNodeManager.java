@@ -7,7 +7,6 @@ import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.storage.IStorageService;
-import appeng.api.networking.ticking.IGridTickable;
 import appeng.api.storage.MEStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -95,11 +94,13 @@ public final class Ae2GridNodeManager {
 				node.setVisualRepresentation(be.getBlockState().getBlock());
 			}
 			// 注意：不调用 node.create()，延迟到 connectNode 避免区块加载递归栈溢出
-			// JDTE Time Accelerator 兼容：注册 IGridTickable 服务以支持 AE2 网格 tick
-			// 通过 AE2_GRID 事件，JDTE 会高频调用 tickingRequest(node, 1) 推进虚拟刻
-			// tickingRequest 内仅更新 TickAccelTracker 计数（AE2 刻计数 + 工作检查缓存）
-			// 避免在每次加速调用中重复执行 AE IO 守卫链
-			node.addService(IGridTickable.class, new JdteGridTickable(host));
+			// NOTE: do NOT register an IGridTickable service on this node.
+			// JDTE 0.5.9-alpha1 classifies blocks exposing IGridTickable as AE2_GRID targets and only
+			// accelerates them when the accelerator carries the AE_ACCELERATION upgrade; without it the
+			// target is skipped entirely (no fallback to the BLOCK_ENTITY path), so the JDTE Time
+			// Accelerator could not speed up apiaries/centrifuges. Without the service, our machines use
+			// JDTE's CoalescedAcceleratedMachine path (accumulate + flush) and every accelerator tier
+			// works out of the box.
 			host.productivebeesgenesis$setAe2GridNode(node);
 			// 创建 AEItemKey 缓存，减少推送时 AEItemKey.of(stack) 的重复调用（Task 7）
 			host.productivebeesgenesis$setAeItemKeyCache(

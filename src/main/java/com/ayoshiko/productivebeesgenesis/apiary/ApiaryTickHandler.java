@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.world.level.Level;
 
@@ -59,8 +60,8 @@ class ApiaryTickHandler {
 	/** 蜜蜂槽位处理异常日志冷却器（tick 模式，与 {@link BeeSlotTickProcessor} 共享） */
 	private final LogThrottle slotErrorThrottle = new LogThrottle();
 
-	/** TickAccelTracker 实例 — 蜂箱不通过 IAe2InputHost 获取，自建实例用于检测加速模组（JDT/JDTE/加速火把等） */
-	private final TickAccelTracker tickAccelTracker = new TickAccelTracker();
+	/** Shared TickAccelTracker (tile AE2 state holder) - same virtual-tick bank credited by JDTE coalesced/legacy paths */
+	private final TickAccelTracker tickAccelTracker;
 
 	/** 批量收获状态（同 gameTick 门控 + 共享预算）— ticker 与 JDTE flush 共用 */
 	private final TickBatchSkipState skipState = new TickBatchSkipState();
@@ -81,6 +82,7 @@ class ApiaryTickHandler {
 			BeeProduceProcessor produceProcessor, ApiaryUpgradeHandler upgradeHandler,
 			FeederSlotManager feederManager) {
 		this.tile = tile;
+		this.tickAccelTracker = resolveSharedTickAccelTracker(tile);
 		this.activationCounter = new ApiaryBeeActivationCounter(slotManager.getBeeSlotCount());
 		this.soundHandler = new ApiarySoundHandler(tile);
 		this.conversionProcessor = new ApiaryConversionProcessor(tile, slotManager, feederManager);
@@ -88,6 +90,32 @@ class ApiaryTickHandler {
 				upgradeHandler, feederManager, activationCounter, slotErrorThrottle,
 				conversionProcessor);
 		this.cageProcessor = new CageTickProcessor(slotManager);
+	}
+
+	/**
+	 * Resolves the shared {@link TickAccelTracker} held by the tile's {@link Ae2OutputStateHolder}.
+	 * <br/>
+	 * The JDTE Time Accelerator (0.5.9-alpha1) drives our machines through the
+	 * {@code CoalescedAcceleratedMachine} path: {@code accumulateAcceleratedTicks} credits virtual ticks into
+	 * the tracker held by the tile's AE2 state holder, and the production tick must consume that exact tracker.
+	 * Using a self-built instance made the credited ticks invisible to the production logic, so the JDTE Time
+	 * Accelerator could not speed up the apiary (while the JDT Time Wand kept working because it directly loops
+	 * the block entity ticker).
+	 *
+	 * @param tile owning apiary block entity
+	 * @return the shared tracker, or a private fallback when the AE2 state holder is unavailable
+	 */
+	private static TickAccelTracker resolveSharedTickAccelTracker(TileEntityMekApiary tile) {
+		try {
+			Ae2OutputStateHolder holder = tile.productivebeesgenesis$getAe2StateHolder();
+			TickAccelTracker tracker = holder == null ? null : holder.getTickAccelTracker();
+			if (tracker != null) {
+				return tracker;
+			}
+		} catch (RuntimeException ignored) {
+			// AE2 state holder unavailable: fall back to a private tracker (legacy behavior)
+		}
+		return new TickAccelTracker();
 	}
 
 	/**

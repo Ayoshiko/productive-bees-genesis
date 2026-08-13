@@ -23,6 +23,25 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.9-hotfix.jdte] - 2026-08-13
+
+修复 JDTE 0.5.9-alpha1 时间加速器（初级/高级/扩展高级）无法加速本模组蜂箱与离心机的问题。
+
+### 修复
+
+- **JDTE 时间加速器无法加速蜂箱/离心机（CRITICAL）** — 根因：JDTE 0.5.9-alpha1 的时间加速管理器会把注册了
+  `IGridTickable` 服务的方块归类为 AE2_GRID 目标，且仅当加速器装有 AE_ACCELERATION 升级时才对其加速；
+  未装升级时这些方块被直接跳过（不回落普通方块实体路径）。本模组为 JDTE AE2 网格联动在 AE2 节点上注册了
+  `IGridTickable` 服务，导致蜂箱/离心机被 JDTE 跳过，而 JDT 原版时间手杖直接循环调用方块实体 ticker 不受影响。
+  修复：不再注册 `IGridTickable` 服务（删除 `JdteGridTickable`），使本模组方块走 JDTE 的
+  `CoalescedAcceleratedMachine` 合并加速路径（accumulate + flush + 虚拟 tick 银行），所有等级时间加速器
+  无需 AE 升级即可正常工作。
+- **蜂箱 TickAccelTracker 双实例错接（MAJOR）** — `ApiaryTickHandler` 此前自建 `TickAccelTracker`，
+  与 JDTE 合并接口/AE2 网格路径入账的 tile AE2 状态持有者 tracker 不是同一实例，加速入账永远不会被
+  生产逻辑读取。修复：蜂箱改为消费 tile AE2 状态持有者持有的共享 tracker（与离心机/工厂一致），
+  AE2 状态持有者不可用时回退独立实例。
+- **回归测试** — 新增 `TickAccelBankWiringTest` 覆盖虚拟 tick 银行入账/消费语义与双实例错接场景。
+
 ## [2.0.9-hotfix] - 2026-08-12
 
 v2.0.9-hotfix 修复 issue #6 报告的崩溃：给非蜂箱/离心工厂机器安装 ME 工厂升级时，
