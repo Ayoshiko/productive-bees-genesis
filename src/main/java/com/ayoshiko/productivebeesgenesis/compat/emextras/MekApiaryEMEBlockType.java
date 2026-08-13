@@ -52,7 +52,8 @@ public final class MekApiaryEMEBlockType {
 	 * Key=EMExtraFactoryTier（EME 独立枚举），Value=对应的 BlockTypeTile。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	private static final Map<EMExtraFactoryTier, BlockTypeTile<TileEntityEMExtraMekApiaryFactory>> EME_APIARY_FACTORY_TYPES =
+	private static final Map<EMExtraFactoryTier, BlockTypeTile<TileEntityEMExtraMekApiaryFactory>>
+			EME_APIARY_FACTORY_TYPES =
 			new ConcurrentHashMap<>();
 
 	/**
@@ -65,7 +66,8 @@ public final class MekApiaryEMEBlockType {
 	 * 通过此 Map 延迟绑定，打破循环。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<EMExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityEMExtraMekApiaryFactory>> EME_APIARY_FACTORY_TILES =
+	public static final Map<EMExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityEMExtraMekApiaryFactory>>
+			EME_APIARY_FACTORY_TILES =
 			new ConcurrentHashMap<>();
 
 	private MekApiaryEMEBlockType() {}

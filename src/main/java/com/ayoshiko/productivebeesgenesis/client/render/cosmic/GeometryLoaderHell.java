@@ -32,7 +32,8 @@ public class GeometryLoaderHell
 	private static final String TYPE = "hell";
 
 	@Override
-	public HellGeometry read(JsonObject modelContents, JsonDeserializationContext deserializationContext) throws JsonParseException {
+	public HellGeometry read(JsonObject modelContents, JsonDeserializationContext deserializationContext)
+			throws JsonParseException {
 		BlockModel baseModel = deserializationContext.deserialize(clearLoaderKeys(modelContents, TYPE), BlockModel.class);
 		List<ResourceLocation> maskTextures = parseMasks(modelContents, TYPE);
 		return new HellGeometry(baseModel, maskTextures);

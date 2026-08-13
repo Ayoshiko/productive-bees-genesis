@@ -4,10 +4,10 @@ import appeng.api.stacks.AEItemKey;
 import java.util.Arrays;
 
 /**
-	 * Pure array manipulation for {@link Ae2InputFilter} slot state (split from the filter, SRP).
+	 * {@link Ae2InputFilter} 槽位状态数组操作工具（从过滤器拆分，SRP）
 	 * <br/>
-	 * Each method performs the clone-modify step and returns the new arrays; the filter keeps
-	 * the {@code synchronized} guard, volatile publication and cache invalidation.
+	 * 每个方法执行 clone-modify 并返回新数组；过滤器保留
+	 * {@code synchronized} 互斥、volatile 发布与缓存失效职责。
 	 */
 final class Ae2InputFilterSlotOps {
 

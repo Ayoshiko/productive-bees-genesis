@@ -4,8 +4,10 @@ import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import org.jetbrains.annotations.NotNull;
 
 /**
-	 * PB output flush fallback: binary-search batch retry when a batched flush cannot
-	 * fully commit (split from {@link PbRecipeProcessor}, SRP). Stateless helper.
+	 * PB 批量输出回退处理器
+	 * <br/>
+	 * 批量输出无法完整提交时，按二分回退批量大小重试（从 {@link PbRecipeProcessor} 拆分，SRP）。
+	 * 无状态静态辅助类。
 	 */
 final class PbRecipeFlushHelper {
 

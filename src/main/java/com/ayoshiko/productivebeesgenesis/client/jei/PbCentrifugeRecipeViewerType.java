@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import mekanism.api.text.IHasTextComponent;
 import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;

@@ -119,19 +119,26 @@ public class GuiFeederWindow extends GuiWindow {
 		this.interactionStrategy = InteractionStrategy.ALL;
 
 		// 固定按钮（标题栏左侧）
-		addChild(new GuiPinButton(gui(), relativeX + FeederWindowLayoutSupport.PIN_X_OFFSET, relativeY + FeederWindowLayoutSupport.PIN_Y_OFFSET,
-			this));
+		addChild(new GuiPinButton(gui(), relativeX + FeederWindowLayoutSupport.PIN_X_OFFSET,
+				relativeY + FeederWindowLayoutSupport.PIN_Y_OFFSET,
+				this));
 
 		// 翻页按钮（仅 paginated 时添加，位于标题栏右侧）
 		if (paginated) {
-			int prevX = relativeX + width - 2 * (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP) - FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
-			int nextX = relativeX + width - (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP) - FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
+			int prevX = relativeX + width
+					- 2 * (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP)
+					- FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
+			int nextX = relativeX + width
+					- (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP)
+					- FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
 			int btnY = relativeY + FeederWindowLayoutSupport.PAGE_BTN_Y_OFFSET;
-			FeederPageButton prevBtn = new FeederPageButton(gui(), prevX, btnY, FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
+			FeederPageButton prevBtn = new FeederPageButton(gui(), prevX, btnY,
+					FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
 					"\u25C0", () -> changePage(-1));
 			prevBtn.setTooltip(Tooltip.create(Component.translatable(
 					"gui.productivebeesgenesis.feeder_window.prev_page.tooltip")));
-			FeederPageButton nextBtn = new FeederPageButton(gui(), nextX, btnY, FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
+			FeederPageButton nextBtn = new FeederPageButton(gui(), nextX, btnY,
+					FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
 					"\u25B6", () -> changePage(1));
 			nextBtn.setTooltip(Tooltip.create(Component.translatable(
 					"gui.productivebeesgenesis.feeder_window.next_page.tooltip")));
@@ -140,7 +147,8 @@ public class GuiFeederWindow extends GuiWindow {
 		}
 
 		// 左侧喂食槽网格背景（GuiElementHolder）
-		addChild(new GuiElementHolder(gui(), relativeX + FeederWindowLayoutSupport.LEFT_PADDING, relativeY + FeederWindowLayoutSupport.TITLE_HEIGHT,
+		addChild(new GuiElementHolder(gui(), relativeX + FeederWindowLayoutSupport.LEFT_PADDING,
+				relativeY + FeederWindowLayoutSupport.TITLE_HEIGHT,
 				gridWidth, gridHeight));
 
 		// 右侧信息面板（GuiInnerScreen）— 模块 4 修复：高度自适应内容

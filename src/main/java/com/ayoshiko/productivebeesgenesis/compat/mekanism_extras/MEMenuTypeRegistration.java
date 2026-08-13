@@ -24,7 +24,8 @@ import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 public final class MEMenuTypeRegistration {
 
 	/** ME 扩展版离心机工厂 MenuType（ABSOLUTE/SUPREME/COSMIC/INFINITE 共用） */
-	public static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> ME_CENTRIFUGE_FACTORY;
+	public static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>>
+			ME_CENTRIFUGE_FACTORY;
 
 	private MEMenuTypeRegistration() {}
 

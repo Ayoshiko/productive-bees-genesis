@@ -88,10 +88,15 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 	 * 故通过 ThreadLocal 传递。使用 {@link WeakReference} 避免蜂箱被破坏后 BlockEntity 无法 GC。
 	 */
 	@Unique
-	private static final ThreadLocal<WeakReference<AdvancedBeehiveBlockEntityAbstract>> productivebeesgenesis$CURRENT_BLOCK_ENTITY = new ThreadLocal<>();
+	private static final ThreadLocal<WeakReference<AdvancedBeehiveBlockEntityAbstract>>
+			productivebeesgenesis$CURRENT_BLOCK_ENTITY = new ThreadLocal<>();
 
 	@Inject(
-			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;"
+					+ "Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
 			at = @At("HEAD"),
 			remap = false
 	)
@@ -139,7 +144,11 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 	 * RETURN 注入为冗余，已删除。仅保留 TAIL 注入。
 	 */
 	@Inject(
-			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;"
+					+ "Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
 			at = @At(value = "TAIL"),
 			remap = false
 	)
@@ -148,11 +157,18 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 	}
 
 	@WrapOperation(
-			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;findHarvestablesNearby(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;I)Ljava/util/List;", remap = false),
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;"
+					+ "Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/entity/bee/hive/FarmerBee;"
+					+ "findHarvestablesNearby(Lnet/minecraft/world/level/Level;"
+					+ "Lnet/minecraft/core/BlockPos;I)Ljava/util/List;", remap = false),
 			require = 0
 	)
-	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos, int range,
+	private static List<BlockPos> productivebeesgenesis$redirectFindHarvestablesNearby(Level level, BlockPos pos,
+		int range,
 		Operation<List<BlockPos>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipFarmer) {
@@ -163,11 +179,18 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
 	@SuppressWarnings("unchecked")
 	@WrapOperation(
-			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
+			method = "simulateBee(Lnet/minecraft/server/level/ServerLevel;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;"
+					+ "Lnet/minecraft/world/level/block/entity/BeehiveBlockEntity$Occupant;)Lnet/minecraft/world/entity/Entity;",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntitiesOfClass("
+					+ "Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"),
 			require = 0
 	)
-	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(ServerLevel level, Class<T> clazz, AABB aabb,
+	private static <T extends Entity> List<T> productivebeesgenesis$redirectGetEntitiesOfClass(
+		ServerLevel level, Class<T> clazz,
+		AABB aabb,
 		Operation<List<T>> original) {
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self = productivebeesgenesis$getCurrentSelf();
 		if (self != null && self.productivebeesgenesis$skipHoarder && ItemEntity.class.isAssignableFrom(clazz)) {

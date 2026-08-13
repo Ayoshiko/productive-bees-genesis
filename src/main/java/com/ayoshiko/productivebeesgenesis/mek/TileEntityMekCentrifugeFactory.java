@@ -92,17 +92,20 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) tertiaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			tertiaryOutputSlots[i] = tertiaryOutputSlot;
 
-			FactoryInputInventorySlot inputSlot = FactoryInputInventorySlot.create(this, i, outputSlot, secondaryOutputSlot, lookupMonitor, xPos,
-				13);
+			FactoryInputInventorySlot inputSlot = FactoryInputInventorySlot.create(this, i, outputSlot, secondaryOutputSlot,
+					lookupMonitor, xPos,
+					13);
 			// Task 7: 注入输入槽分等级堆叠倍率（按 FactoryTier.ordinal 索引配置）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(inputMultiplier);
 			externalInputPolicy.register(inputSlot);
 
 			int index = i;
-			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE, getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
-				index)));
-			builder.addSlot(outputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT, getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE,
-				index)));
+			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
+					getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
+							index)));
+			builder.addSlot(outputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
+					getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE,
+							index)));
 			builder.addSlot(secondaryOutputSlot);
 			builder.addSlot(tertiaryOutputSlot);
 

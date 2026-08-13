@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
@@ -119,7 +118,8 @@ class MekCentrifugeSlotManager {
 		// 输入槽 — 与父类相同位置
 		InputInventorySlot inputSlot = InputInventorySlot.at(tile::containsRecipe, recipeCacheListener, 64, 17);
 		// Task 7: 注入输入槽分等级堆叠倍率（基础离心机使用 basic 配置）
-		((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(CentrifugeInputStackMultipliers.forBasic());
+		((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
+				CentrifugeInputStackMultipliers.forBasic());
 		builder.addSlot(inputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_INPUT)));

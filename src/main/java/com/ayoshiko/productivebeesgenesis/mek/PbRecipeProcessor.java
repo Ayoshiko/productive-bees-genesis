@@ -175,10 +175,14 @@ public class PbRecipeProcessor {
 		cachedOperationsPerTick = context.operationsPerTick();
 	}
 
-	/** Reserves active multi-fluid output types once per real game tick (implementation moved to {@link PbRecipeProcessorStateHelper#reserveActiveFluidOutputTypes}). */
+	/**
+	 * Reserves active multi-fluid output types once per real game tick (implementation moved to
+	 * {@link PbRecipeProcessorStateHelper#reserveActiveFluidOutputTypes}).
+	 */
 	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
-		lastFluidReservationTick = PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
-			lastFluidReservationTick);
+		lastFluidReservationTick = PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots,
+				recipeFinder,
+				lastFluidReservationTick);
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -445,19 +449,27 @@ public class PbRecipeProcessor {
 
 	/** Clears all per-process PB state (implementation moved to {@link PbRecipeProcessorStateHelper#clearPbState}). */
 	private void clearPbState(int processIndex) {
-		PbRecipeProcessorStateHelper.clearPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime, cachedPbRecipes, recipeCompleters[processIndex],
-			context);
+		PbRecipeProcessorStateHelper.clearPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime,
+				cachedPbRecipes, recipeCompleters[processIndex],
+				context);
 	}
 
-	/** Resets per-process PB progress without touching the active-state flag (implementation moved to {@link PbRecipeProcessorStateHelper#resetPbState}). */
+	/**
+	 * Resets per-process PB progress without touching the active-state flag (implementation moved to
+	 * {@link PbRecipeProcessorStateHelper#resetPbState}).
+	 */
 	public void resetPbState(int processIndex) {
-		PbRecipeProcessorStateHelper.resetPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime, cachedPbRecipes,
-			recipeCompleters[processIndex]);
+		PbRecipeProcessorStateHelper.resetPbState(processIndex, pbProcessing, pbOperatingTicks, pbProcessingTime,
+				cachedPbRecipes,
+				recipeCompleters[processIndex]);
 	}
 
 	// ===== 客户端同步和持久化 =====
 
-	/** Returns whether the given process is currently PB-processing (implementation moved to {@link PbRecipeProcessorStateHelper#isPbProcessing}). */
+	/**
+	 * Returns whether the given process is currently PB-processing (implementation moved to
+	 * {@link PbRecipeProcessorStateHelper#isPbProcessing}).
+	 */
 	public boolean isPbProcessing(int process) {
 		return PbRecipeProcessorStateHelper.isPbProcessing(pbProcessing, process);
 	}
@@ -468,13 +480,20 @@ public class PbRecipeProcessor {
 			context.baseTicksRequired());
 	}
 
-	/** Syncs PB progress to the tracked arrays (implementation moved to {@link PbRecipeProcessorStateHelper#tickProgressSync}). */
+	/**
+	 * Syncs PB progress to the tracked arrays (implementation moved to
+	 * {@link PbRecipeProcessorStateHelper#tickProgressSync}).
+	 */
 	public void tickProgressSync() {
-		progressSyncCounter = PbRecipeProcessorStateHelper.tickProgressSync(progressSyncCounter, context.processes(), pbOperatingTicks,
-			syncedOperatingTicks);
+		progressSyncCounter = PbRecipeProcessorStateHelper.tickProgressSync(progressSyncCounter, context.processes(),
+				pbOperatingTicks,
+				syncedOperatingTicks);
 	}
 
-	/** Adds PB progress DataSlot trackers (implementation moved to {@link PbRecipeProcessorStateHelper#addContainerTrackers}). */
+	/**
+	 * Adds PB progress DataSlot trackers (implementation moved to
+	 * {@link PbRecipeProcessorStateHelper#addContainerTrackers}).
+	 */
 	public void addContainerTrackers(MekanismContainer container) {
 		PbRecipeProcessorStateHelper.addContainerTrackers(container, context.processes(), syncedOperatingTicks, pbProcessing,
 			pbProcessingTime);

@@ -49,7 +49,8 @@ public class MekGuiBlockItemDepthMixin {
 		method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;III)V",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/client/gui/GuiGraphics;renderItem(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;III)V"
+			target = "Lnet/minecraft/client/gui/GuiGraphics;renderItem(Lnet/minecraft/world/entity/LivingEntity;"
+					+ "Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;III)V"
 		),
 		require = 1
 	)

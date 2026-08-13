@@ -32,7 +32,8 @@ public class CosmicShaders {
 	}
 
 	/** 当前 UV 快照 — AtomicReference 保证原子替换，渲染线程读到的要么是旧快照要么是新快照 */
-	private static final AtomicReference<CosmicUvSnapshot> cosmicUvSnapshot = new AtomicReference<>(CosmicUvSnapshot.EMPTY);
+	private static final AtomicReference<CosmicUvSnapshot> cosmicUvSnapshot =
+			new AtomicReference<>(CosmicUvSnapshot.EMPTY);
 
 	/** 兼容旧调用：返回当前快照的 UV 数组引用（快照不可变，引用安全） */
 	public static float[] getCosmicUvs() {
@@ -81,7 +82,9 @@ public class CosmicShaders {
 		// 修复：cosmic 仅以 NEW_ENTITY 注册一次，COSMIC_SHADER 与 COSMIC_ARMOR_SHADER 共用同一实例
 		// （两者的 shader 文件与 uniform 完全相同，仅 RenderType 的纹理/混合状态不同）。
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"), DefaultVertexFormat.NEW_ENTITY),
+			event.registerShader(new ShaderInstance(event.getResourceProvider(),
+				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
+				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
 				COSMIC_SHADER = shader;
 				COSMIC_ARMOR_SHADER = shader;
@@ -103,7 +106,9 @@ public class CosmicShaders {
 			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 着色器失败", e);
 		}
 		try {
-			event.registerShader(new ShaderInstance(event.getResourceProvider(), ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"), DefaultVertexFormat.NEW_ENTITY),
+			event.registerShader(new ShaderInstance(event.getResourceProvider(),
+				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"),
+				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
 				HELL_SHADER = shader;
 				hellTime = HELL_SHADER.safeGetUniform("time");

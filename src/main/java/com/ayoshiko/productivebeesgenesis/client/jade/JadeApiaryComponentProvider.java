@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.client.jade;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
-import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;

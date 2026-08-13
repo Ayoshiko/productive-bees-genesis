@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;

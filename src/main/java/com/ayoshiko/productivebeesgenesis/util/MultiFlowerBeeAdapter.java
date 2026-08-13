@@ -3,11 +3,8 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
 import cy.jdkdigital.productivebees.init.ModTags;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;

@@ -40,7 +40,8 @@ public final class EMEBlockRegistration {
 		}
 		for (EMExtraFactoryTier tier : EMExtraFactoryTier.values()) {
 			String registryName = tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory";
-			EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> blockType = MekCentrifugeEMEBlockType.getEMEFactoryType(tier);
+			EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> blockType =
+					MekCentrifugeEMEBlockType.getEMEFactoryType(tier);
 			if (blockType == null) {
 				ProductiveBeesGenesis.LOGGER.warn("EME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
 				continue;

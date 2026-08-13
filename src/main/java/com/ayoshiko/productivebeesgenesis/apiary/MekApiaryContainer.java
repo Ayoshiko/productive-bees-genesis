@@ -28,7 +28,8 @@ import java.util.List;
 	 *   <li>重写玩家物品栏偏移，使物品栏定位在输出区下方</li>
 	 * </ul>
 	 */
-public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiary> implements IFeederSlotContainer, IPbUpgradeSlotContainer {
+public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiary>
+		implements IFeederSlotContainer, IPbUpgradeSlotContainer {
 
 	/** 初始版蜜蜂列数 */
 	private static final int BEE_COLS = 3;

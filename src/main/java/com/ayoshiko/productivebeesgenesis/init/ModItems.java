@@ -33,7 +33,6 @@ import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import net.minecraft.Util;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -97,43 +96,51 @@ public final class ModItems {
 
 	/** 通用机械蜂箱 — 基础工厂BlockItem（含SORTING组件） */
 	public static final DeferredItem<ItemBlockMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
-			ITEMS.register("basic_mek_apiary_factory", () -> new ItemBlockMekApiaryFactory(ModBlocks.BASIC_MEK_APIARY_FACTORY.get(),
-				machineItemProperties(ModBlocks.BASIC_MEK_APIARY_FACTORY.get())));
+			ITEMS.register("basic_mek_apiary_factory",
+					() -> new ItemBlockMekApiaryFactory(ModBlocks.BASIC_MEK_APIARY_FACTORY.get(),
+							machineItemProperties(ModBlocks.BASIC_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 高级工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
-			ITEMS.register("advanced_mek_apiary_factory", () -> new ItemBlockMekApiaryFactory(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get(),
-				machineItemProperties(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get())));
+			ITEMS.register("advanced_mek_apiary_factory",
+					() -> new ItemBlockMekApiaryFactory(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get(),
+							machineItemProperties(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 精英工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
-			ITEMS.register("elite_mek_apiary_factory", () -> new ItemBlockMekApiaryFactory(ModBlocks.ELITE_MEK_APIARY_FACTORY.get(),
-				machineItemProperties(ModBlocks.ELITE_MEK_APIARY_FACTORY.get())));
+			ITEMS.register("elite_mek_apiary_factory",
+					() -> new ItemBlockMekApiaryFactory(ModBlocks.ELITE_MEK_APIARY_FACTORY.get(),
+							machineItemProperties(ModBlocks.ELITE_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 终极工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
-			ITEMS.register("ultimate_mek_apiary_factory", () -> new ItemBlockMekApiaryFactory(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get(),
-				machineItemProperties(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get())));
+			ITEMS.register("ultimate_mek_apiary_factory",
+					() -> new ItemBlockMekApiaryFactory(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get(),
+							machineItemProperties(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get())));
 
 	/** 基础工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekCentrifuge> BASIC_MEK_CENTRIFUGE_FACTORY =
-			ITEMS.register("basic_mek_centrifuge_factory", () -> new ItemBlockMekCentrifuge(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get(),
-				machineItemProperties(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get())));
+			ITEMS.register("basic_mek_centrifuge_factory",
+					() -> new ItemBlockMekCentrifuge(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get(),
+							machineItemProperties(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 高级工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekCentrifuge> ADVANCED_MEK_CENTRIFUGE_FACTORY =
-			ITEMS.register("advanced_mek_centrifuge_factory", () -> new ItemBlockMekCentrifuge(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get(),
-				machineItemProperties(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get())));
+			ITEMS.register("advanced_mek_centrifuge_factory",
+					() -> new ItemBlockMekCentrifuge(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get(),
+							machineItemProperties(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 精英工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekCentrifuge> ELITE_MEK_CENTRIFUGE_FACTORY =
-			ITEMS.register("elite_mek_centrifuge_factory", () -> new ItemBlockMekCentrifuge(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get(),
-				machineItemProperties(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get())));
+			ITEMS.register("elite_mek_centrifuge_factory",
+					() -> new ItemBlockMekCentrifuge(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get(),
+							machineItemProperties(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 终极工厂BlockItem */
 	public static final DeferredItem<ItemBlockMekCentrifuge> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
-			ITEMS.register("ultimate_mek_centrifuge_factory", () -> new ItemBlockMekCentrifuge(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get(),
-				machineItemProperties(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get())));
+			ITEMS.register("ultimate_mek_centrifuge_factory",
+					() -> new ItemBlockMekCentrifuge(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get(),
+							machineItemProperties(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 无尽·创世蜜脾 — 自定义蜜脾物品，预置 bee_type 数据组件，带 tooltip 提示 */
 	public static final DeferredItem<ItemInfinityCreationComb> INFINITY_CREATION_COMB =
@@ -143,8 +150,9 @@ public final class ModItems {
 
 	/** 无尽·创世蜜脾块 BlockItem，带 tooltip 提示 */
 	public static final DeferredItem<ItemInfinityCreationCombBlock> INFINITY_CREATION_COMB_BLOCK_ITEM =
-			ITEMS.register("infinitycreation_comb_block", () -> new ItemInfinityCreationCombBlock(ModBlocks.INFINITY_CREATION_COMB_BLOCK.get(),
-				new Item.Properties()));
+			ITEMS.register("infinitycreation_comb_block",
+					() -> new ItemInfinityCreationCombBlock(ModBlocks.INFINITY_CREATION_COMB_BLOCK.get(),
+							new Item.Properties()));
 
 	/**
 	 * EM工厂BlockItem映射 — 由registerEMFactoryItems()在EM加载时填充
@@ -152,7 +160,8 @@ public final class ModItems {
 	 * Key=FactoryTier（EM运行时扩展的枚举值），Value=对应的DeferredItem。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<FactoryTier, DeferredItem<ItemBlockMekCentrifuge>> EM_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<FactoryTier, DeferredItem<ItemBlockMekCentrifuge>> EM_FACTORY_ITEMS =
+			new ConcurrentHashMap<>();
 
 	/**
 	 * ME工厂BlockItem映射 — 由registerMEFactoryItems()在ME加载时填充
@@ -206,7 +215,8 @@ public final class ModItems {
 	 * EM 蜂箱工厂复用 ItemBlockMekApiaryFactory（与原版 4 等级相同）。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<FactoryTier, DeferredItem<ItemBlockMekApiaryFactory>> EM_APIARY_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<FactoryTier, DeferredItem<ItemBlockMekApiaryFactory>> EM_APIARY_FACTORY_ITEMS =
+			new ConcurrentHashMap<>();
 
 	private ModItems() {}
 

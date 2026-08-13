@@ -50,7 +50,8 @@ public class GuiGraphicsMixin {
 	 * @param text       自定义文本（null 时使用默认数量）
 	 * @param ci         回调信息
 	 */
-	@Inject(method = "renderItemDecorations(Lnet/minecraft/client/gui/Font;Lnet/minecraft/world/item/ItemStack;IILjava/lang/String;)V",
+	@Inject(method = "renderItemDecorations(Lnet/minecraft/client/gui/Font;"
+			+ "Lnet/minecraft/world/item/ItemStack;IILjava/lang/String;)V",
 			at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$formatLargeItemCount(Font font, ItemStack stack, int x, int y,
 			String text, CallbackInfo ci) {

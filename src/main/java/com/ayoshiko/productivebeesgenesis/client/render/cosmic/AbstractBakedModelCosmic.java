@@ -130,7 +130,8 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		}
 		// Iris 光影启用时延迟到世界渲染后执行，避免光影破坏 cosmic 着色器状态
 		if (IrisCompat.shouldDefer(context)) {
-			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay, RenderSystem.getProjectionMatrix(),
+			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay,
+				RenderSystem.getProjectionMatrix(),
 				RenderSystem.getModelViewMatrix()));
 			return;
 		}

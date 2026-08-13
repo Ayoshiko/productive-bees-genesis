@@ -148,7 +148,8 @@ public final class ItemStackMergeHelper {
 					ItemStack a = group.get(i);
 					ItemStack b = group.get(j);
 					if (!ItemStack.isSameItemSameComponents(a, b)) {
-						LogThrottle.warn("itemstack_hash_conflict", "检测到 ItemStack 组件 hashCode 冲突（同组内组件不一致），跳过该组合并以保护数据完整性: item={}, groupSize={}",
+						LogThrottle.warn("itemstack_hash_conflict", "检测到 ItemStack 组件 hashCode 冲突（同组内组件不一致），跳过该组合并以保护数据完整性: "
+								+ "item={}, groupSize={}",
 								a.getItem(), group.size());
 						return;
 					}

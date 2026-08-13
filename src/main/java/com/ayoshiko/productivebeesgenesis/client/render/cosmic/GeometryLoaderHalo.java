@@ -28,7 +28,8 @@ import java.util.function.Function;
 public class GeometryLoaderHalo implements IGeometryLoader<GeometryLoaderHalo.HaloGeometry> {
 
 	@Override
-	public HaloGeometry read(JsonObject jsonObject, JsonDeserializationContext deserializationContext) throws JsonParseException {
+	public HaloGeometry read(JsonObject jsonObject, JsonDeserializationContext deserializationContext)
+			throws JsonParseException {
 		JsonObject clean = jsonObject.deepCopy();
 		clean.remove("loader");
 		clean.remove("halo");

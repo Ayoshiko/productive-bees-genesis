@@ -19,7 +19,6 @@ import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraM
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.factory.TileEntityFactory;

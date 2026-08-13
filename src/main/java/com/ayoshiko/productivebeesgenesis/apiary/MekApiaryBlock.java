@@ -20,9 +20,7 @@ import mekanism.common.util.WorldUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -224,19 +222,25 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 	protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
 		List<ItemStack> drops = super.getDrops(state, params);
 		if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof TileEntityUpdateable updateable) {
-			HolderLookup.Provider provider = params.getLevel().registryAccess();
-			for (ItemStack drop : drops) {
-				if (drop.is(this.asItem())) {
-					// vanilla 标准路径：saveToItem 同时设置 BLOCK_ENTITY_DATA 和 DataComponents
-					updateable.saveToItem(drop, provider);
-					if (updateable instanceof TileEntityMekanism mekanismTile && mekanismTile.getCustomName() != null) {
-						drop.set(DataComponents.CUSTOM_NAME, mekanismTile.getCustomName());
+			// getDrops 幂等防护：二次调用时数据已清空，跳过重复序列化（防异常场景读到空数据）
+			boolean alreadySerialized = updateable instanceof TileEntityMekApiary apiary0
+					&& apiary0.isDropsSerialized();
+			if (!alreadySerialized) {
+				HolderLookup.Provider provider = params.getLevel().registryAccess();
+				for (ItemStack drop : drops) {
+					if (drop.is(this.asItem())) {
+						// vanilla 标准路径：saveToItem 同时设置 BLOCK_ENTITY_DATA 和 DataComponents
+						updateable.saveToItem(drop, provider);
+						if (updateable instanceof TileEntityMekanism mekanismTile && mekanismTile.getCustomName() != null) {
+							drop.set(DataComponents.CUSTOM_NAME, mekanismTile.getCustomName());
+						}
 					}
 				}
-			}
-			// 保存数据后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
-			if (updateable instanceof TileEntityMekApiary apiaryTile) {
-				apiaryTile.saveAllItemsForDrop();
+				// 保存数据后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
+				if (updateable instanceof TileEntityMekApiary apiaryTile) {
+					apiaryTile.markDropsSerialized();
+					apiaryTile.saveAllItemsForDrop();
+				}
 			}
 		}
 		return drops;

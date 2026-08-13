@@ -3,15 +3,12 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
-import com.ayoshiko.productivebeesgenesis.mek.PbConfigCardDataHelper;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
-import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -21,16 +18,11 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
 import mekanism.common.inventory.container.MekanismContainer;
-import mekanism.common.inventory.container.sync.SyncableBoolean;
-import mekanism.common.inventory.container.sync.SyncableInt;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
-import mekanism.common.inventory.slot.OutputInventorySlot;
-import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
-import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.prefab.TileEntityElectricMachine;
 import mekanism.common.upgrade.IUpgradeData;
 import net.minecraft.core.BlockPos;
@@ -47,8 +39,6 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
@@ -74,6 +64,24 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);
+	/**
+	 * 掉落数据已序列化标志 — getDrops 幂等防护
+	 * <br/>
+	 * getDrops 在 saveToItem 序列化掉落物后调用 saveAllItemsForDrop 清空槽位；
+	 * 若同一方块被二次调用 getDrops（异常场景），标志避免对已清空的数据重复序列化。
+	 */
+	private boolean dropsSerialized;
+
+	/** 掉落数据是否已序列化（getDrops 幂等防护） */
+	public boolean isDropsSerialized() {
+		return dropsSerialized;
+	}
+
+	/** 标记掉落数据已序列化（getDrops 幂等防护） */
+	public void markDropsSerialized() {
+		dropsSerialized = true;
+	}
+
 	/** PB升级处理器 — 安装/卸载/NBT迁移（Bug 6 核心数据结构持有者） */
 	final ApiaryPbUpgradeHandler pbUpgradeHandler;
 	/** PB原版安装桥接器 — 使PB原版潜行右键安装委托给自定义升级系统 */

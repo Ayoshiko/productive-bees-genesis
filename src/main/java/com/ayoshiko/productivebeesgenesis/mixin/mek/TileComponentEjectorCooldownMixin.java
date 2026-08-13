@@ -230,7 +230,8 @@ public abstract class TileComponentEjectorCooldownMixin {
 			method = "tickServer",
 			at = @At(
 					value = "INVOKE",
-					target = "Lmekanism/common/tile/component/TileComponentEjector;outputItems(Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V"
+					target = "Lmekanism/common/tile/component/TileComponentEjector;outputItems("
+							+ "Lnet/minecraft/core/Direction;Lmekanism/common/tile/component/config/ConfigInfo;)V"
 			),
 			require = 0
 	)

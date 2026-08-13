@@ -72,7 +72,8 @@ public abstract class FactoryForMEMixin extends BlockType {
 		// 移除ME的MixinFactory注入的ExtraAttributeUpgradeable（指向ME原版ABSOLUTE电力熔炼炉）
 		this.remove(ExtraAttributeUpgradeable.class);
 		// 添加指向我们的ABSOLUTE离心机工厂的ExtraAttributeUpgradeable
-		ExtraMachine.ExtraFactoryMachine<?> absoluteType = MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE);
+		ExtraMachine.ExtraFactoryMachine<?> absoluteType =
+				MekCentrifugeMEBlockType.getMEFactoryType(ExtraFactoryTier.ABSOLUTE);
 		if (absoluteType != null) {
 			ExtraAttributeUpgradeable upgradeable = absoluteType.get(ExtraAttributeUpgradeable.class);
 			if (upgradeable != null) {

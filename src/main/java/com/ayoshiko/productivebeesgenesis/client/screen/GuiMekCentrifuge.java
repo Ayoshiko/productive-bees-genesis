@@ -41,7 +41,8 @@ import org.jetbrains.annotations.NotNull;
 	 * <p>
 	 * imageHeight增加12以容纳流体槽（底部到83），背包标签下移到84。
 	 */
-public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
+public class GuiMekCentrifuge
+		extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
 
 	private GuiPbUpgradeTab<TileEntityMekCentrifuge> pbUpgradeTab;
 
@@ -72,8 +73,9 @@ public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifug
 		}
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));
 		// 流体输出槽 — 位置通过FactoryLayoutHelper动态计算，避免与输出槽重叠
-		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null), GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(),
-			FactoryLayoutHelper.getCentrifugeFluidTankY()));
+		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null),
+				GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(),
+				FactoryLayoutHelper.getCentrifugeFluidTankY()));
 		addRenderableWidget(new GuiProgress(
 				() -> ProgressDisplaySmoother.smooth(tile, 0, tile.getScaledProgress()),
 				ProgressType.BAR, this, 86, 38)
@@ -93,7 +95,8 @@ public class GuiMekCentrifuge extends GuiConfigurableTile<TileEntityMekCentrifug
 	 * @return JEI 配方查看器类型，JEI 未安装时为 null
 	 */
 	@org.jetbrains.annotations.Nullable
-	private static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
+	private static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType
+			<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
 	) {
 		if (ModList.get() != null && ModList.get().isLoaded("jei")) {
 			return ProductiveBeesGenesisJEI.getPbCentrifugeViewerType();

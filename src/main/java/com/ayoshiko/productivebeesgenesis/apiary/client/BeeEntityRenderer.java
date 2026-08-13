@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;

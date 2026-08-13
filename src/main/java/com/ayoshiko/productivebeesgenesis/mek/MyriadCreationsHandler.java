@@ -358,7 +358,8 @@ public class MyriadCreationsHandler {
 		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes,
 			effectiveBatchSize);
 		if (maxBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex,
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
+					logPrefix, processIndex,
 				batchSize);
 			return 0;
 		}
@@ -390,7 +391,8 @@ public class MyriadCreationsHandler {
 			degradationAttempts++;
 		}
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}", logPrefix, processIndex,
+			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
+					logPrefix, processIndex,
 				batchSize);
 			return 0;
 		}

@@ -40,7 +40,8 @@ public final class MEBlockRegistration {
 		}
 		for (ExtraFactoryTier tier : ExtraFactoryTier.values()) {
 			String registryName = tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory";
-			ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> blockType = MekCentrifugeMEBlockType.getMEFactoryType(tier);
+			ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory> blockType =
+					MekCentrifugeMEBlockType.getMEFactoryType(tier);
 			if (blockType == null) {
 				ProductiveBeesGenesis.LOGGER.warn("ME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
 				continue;

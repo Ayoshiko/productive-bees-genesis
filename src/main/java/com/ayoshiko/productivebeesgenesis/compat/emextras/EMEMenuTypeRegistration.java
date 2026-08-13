@@ -23,7 +23,8 @@ import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 public final class EMEMenuTypeRegistration {
 
 	/** EME 扩展版离心机工厂 MenuType（ABSOLUTE_OVERCLOCKED/SUPREME_QUANTUM/COSMIC_DENSE/INFINITE_MULTIVERSAL 共用） */
-	public static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> EME_CENTRIFUGE_FACTORY;
+	public static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>>
+			EME_CENTRIFUGE_FACTORY;
 
 	private EMEMenuTypeRegistration() {}
 
@@ -37,7 +38,8 @@ public final class EMEMenuTypeRegistration {
 		String name = "emextra_mek_centrifuge_factory";
 		EME_CENTRIFUGE_FACTORY = new ContainerTypeRegistryObject<>(
 				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		ModMenuTypes.MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(TileEntityEMExtraMekCentrifugeFactory.class,
-				(id, inv, tile) -> new EMExtraMekCentrifugeFactoryContainer(EME_CENTRIFUGE_FACTORY, id, inv, tile)));
+		ModMenuTypes.MENU_TYPES.registerMenu(name,
+				() -> MekanismContainerType.tile(TileEntityEMExtraMekCentrifugeFactory.class,
+						(id, inv, tile) -> new EMExtraMekCentrifugeFactoryContainer(EME_CENTRIFUGE_FACTORY, id, inv, tile)));
 	}
 }

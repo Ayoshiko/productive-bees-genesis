@@ -42,7 +42,10 @@ public final class MekCompatHooks {
 	private static final List<String> ME_TIER_FIELD_NAMES = List.of(
 			ME_ABSOLUTE_FIELD, ME_SUPREME_FIELD, ME_COSMIC_FIELD, ME_INFINITE_FIELD);
 
-	/** EMExtraFactoryTier的4个静态字段名（按等级升序：ABSOLUTE_OVERCLOCKED(12)→SUPREME_QUANTUM(14)→COSMIC_DENSE(16)→INFINITE_MULTIVERSAL(18)） */
+	/**
+	 * EMExtraFactoryTier的4个静态字段名（按等级升序：
+	 * ABSOLUTE_OVERCLOCKED(12)→SUPREME_QUANTUM(14)→COSMIC_DENSE(16)→INFINITE_MULTIVERSAL(18)）
+	 */
 	private static final String EME_ABSOLUTE_OVERCLOCKED_FIELD = "ABSOLUTE_OVERCLOCKED";
 	private static final String EME_SUPREME_QUANTUM_FIELD = "SUPREME_QUANTUM";
 	private static final String EME_COSMIC_DENSE_FIELD = "COSMIC_DENSE";

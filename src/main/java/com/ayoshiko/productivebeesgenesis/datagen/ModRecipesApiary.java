@@ -9,7 +9,6 @@ import io.github.masyumero.emextras.common.tags.EMExtraTags;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.common.tags.MekanismTags;
 import mekanism.common.tier.FactoryTier;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;

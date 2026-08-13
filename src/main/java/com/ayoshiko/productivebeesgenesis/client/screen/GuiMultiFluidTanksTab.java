@@ -36,7 +36,8 @@ import java.util.function.Supplier;
 	 * @param <TILE> 方块实体类型,必须实现 IMultiFluidTankHost
 	 * @since Task 8
 	 */
-public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost> extends GuiWindowCreatorTab<TILE, GuiMultiFluidTanksTab<TILE>> {
+public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost>
+		extends GuiWindowCreatorTab<TILE, GuiMultiFluidTanksTab<TILE>> {
 
 	/** Tab 颜色 — MEK 灰阶基色 #232323 RGB(35,35,35)(ARGB 格式) */
 	private static final int TAB_COLOR = 0xFF232323;

@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.crafting.RecipeManager;
 

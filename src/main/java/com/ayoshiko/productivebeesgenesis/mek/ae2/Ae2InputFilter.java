@@ -158,7 +158,8 @@ public final class Ae2InputFilter {
 		if (beeType == null || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
 		String entry = preciseMode ? Ae2FilterEntrySupport.formatEntry(beeType, isBlock) : beeType.toString();
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+				directVisibleAmounts, directUnlimited,
 				index, entry, DEFAULT_DIRECT_AMOUNT));
 	}
 
@@ -176,7 +177,10 @@ public final class Ae2InputFilter {
 		return Ae2InputFilterQuerySupport.entryAt(slots, index);
 	}
 
-	/** Clears all filter entries, keeping the capacity (implementation moved to {@link Ae2InputFilterSlotOps#clearAll}). */
+	/**
+	 * Clears all filter entries, keeping the capacity (implementation moved to
+	 * {@link Ae2InputFilterSlotOps#clearAll}).
+	 */
 	public synchronized void clearEntries() {
 		publish(Ae2InputFilterSlotOps.clearAll(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts,
 			directUnlimited));
@@ -206,7 +210,8 @@ public final class Ae2InputFilter {
 		ensureCapacity(index + 1);
 		String entry = (rawEntry == null || rawEntry.isBlank()) ? null : rawEntry;
 		long amount = isDirectFingerprint(entry) ? DEFAULT_DIRECT_AMOUNT : 0L;
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+				directVisibleAmounts, directUnlimited,
 				index, entry, amount));
 	}
 
@@ -215,16 +220,23 @@ public final class Ae2InputFilter {
 		return slots.length;
 	}
 
-	/** Non-empty slots as index+entry pairs (implementation moved to {@link Ae2InputFilterQuerySupport#nonEmptyEntries}). */
+	/**
+	 * Non-empty slots as index+entry pairs (implementation moved to
+	 * {@link Ae2InputFilterQuerySupport#nonEmptyEntries}).
+	 */
 	public List<IndexedEntry> getNonEmptyEntries() {
 		return Ae2InputFilterQuerySupport.nonEmptyEntries(slots);
 	}
 
-	/** Stores a component-aware fingerprint supplied by {@link Ae2ItemFingerprint} (implementation moved to {@link Ae2InputFilterSlotOps#setEntry}). */
+	/**
+	 * Stores a component-aware fingerprint supplied by {@link Ae2ItemFingerprint}
+	 * (implementation moved to {@link Ae2InputFilterSlotOps#setEntry}).
+	 */
 	public synchronized void setDirectEntryFingerprintAt(int index, String fingerprint) {
 		if (fingerprint == null || fingerprint.isBlank() || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+				directVisibleAmounts, directUnlimited,
 				index, DIRECT_ENTRY_PREFIX + fingerprint, DEFAULT_DIRECT_AMOUNT));
 	}
 
@@ -260,12 +272,18 @@ public final class Ae2InputFilter {
 		directVisibleAmounts = Ae2InputFilterSlotOps.setVisible(directVisibleAmounts, index, amount);
 	}
 
-	/** Whether the direct entry at the index is unlimited (implementation moved to {@link Ae2InputFilterQuerySupport#isDirectUnlimitedAt}). */
+	/**
+	 * Whether the direct entry at the index is unlimited (implementation moved to
+	 * {@link Ae2InputFilterQuerySupport#isDirectUnlimitedAt}).
+	 */
 	public boolean isDirectUnlimitedAt(int index) {
 		return Ae2InputFilterQuerySupport.isDirectUnlimitedAt(directUnlimited, index);
 	}
 
-	/** Toggles the unlimited flag of the direct entry at the index (implementation moved to {@link Ae2InputFilterSlotOps#toggleUnlimited}). */
+	/**
+	 * Toggles the unlimited flag of the direct entry at the index (implementation moved to
+	 * {@link Ae2InputFilterSlotOps#toggleUnlimited}).
+	 */
 	public synchronized void toggleDirectUnlimitedAt(int index) {
 		if (index < 0 || index >= slots.length || !isDirectFingerprint(slots[index])) return;
 		directUnlimited = Ae2InputFilterSlotOps.toggleUnlimited(directUnlimited, index);
@@ -293,7 +311,10 @@ public final class Ae2InputFilter {
 		invalidateDirectEntries();
 	}
 
-	/** Sets the unlimited flag of every direct entry (implementation moved to {@link Ae2InputFilterSlotOps#setAllUnlimited}). */
+	/**
+	 * Sets the unlimited flag of every direct entry (implementation moved to
+	 * {@link Ae2InputFilterSlotOps#setAllUnlimited}).
+	 */
 	public synchronized int setAllDirectUnlimited(boolean unlimited) {
 		Ae2InputFilterSlotOps.UnlimitedChange change = Ae2InputFilterSlotOps.setAllUnlimited(slots, directUnlimited,
 			unlimited);

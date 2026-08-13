@@ -34,8 +34,10 @@ public final class ApiaryDirectEjectOverlay {
 	private static final int BUTTON_Y_OFFSET = 24;
 	private static final int DIRECT_AE_BUTTON_X_OFFSET = 120;
 	private static final int BUTTON_SIZE = 14;
-	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectEjectButton>> BUTTONS = new WeakHashMap<>();
-	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectAeOutputButton>> DIRECT_AE_BUTTONS = new WeakHashMap<>();
+	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectEjectButton>> BUTTONS =
+			new WeakHashMap<>();
+	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectAeOutputButton>> DIRECT_AE_BUTTONS =
+			new WeakHashMap<>();
 
 	private ApiaryDirectEjectOverlay() {
 	}

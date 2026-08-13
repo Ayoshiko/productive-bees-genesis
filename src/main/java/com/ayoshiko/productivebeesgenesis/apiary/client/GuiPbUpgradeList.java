@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
@@ -325,7 +324,8 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 			return;
 		}
 		// 1:1对齐MEK原版GuiScrollList.onClick — 元素点击选择
-		if (mouseX >= getX() + 1 && mouseX < getX() + width - BAR_X_SHIFT - 1 && mouseY >= getY() + 1 && mouseY < getBottom() - 1) {
+		if (mouseX >= getX() + 1 && mouseX < getX() + width - BAR_X_SHIFT - 1
+				&& mouseY >= getY() + 1 && mouseY < getBottom() - 1) {
 			int index = getCurrentSelection();
 			int focused = getFocusedElements();
 			int maxElements = getMaxElements();

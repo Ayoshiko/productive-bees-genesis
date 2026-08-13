@@ -264,7 +264,8 @@ public class BeeSlot {
 	/**
 	 * F5: 获取蜜蜂 productivity 基因纯度
 	 * <br/>
-	 * 从 beeData 的 {@code neoforge:attachments.productivebees:attributes_handler.attributes.productivebees:productivity.purity}
+	 * 从 beeData 的
+	 * {@code neoforge:attachments.productivebees:attributes_handler.attributes.productivebees:productivity.purity}
 	 * 读取纯度值。解析失败或无属性时返回 0.0f（无加成）。首次解析后缓存，
 	 * {@link #setBeeData} 时重置缓存。
 	 * <p>

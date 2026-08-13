@@ -40,7 +40,8 @@ public abstract class RenderBlockBeLoadFixMixin {
 			method = "setRealBlock",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/world/level/block/entity/BlockEntity;loadCustomOnly(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V",
+					target = "Lnet/minecraft/world/level/block/entity/BlockEntity;loadCustomOnly("
+							+ "Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V",
 					remap = false
 			),
 			remap = false

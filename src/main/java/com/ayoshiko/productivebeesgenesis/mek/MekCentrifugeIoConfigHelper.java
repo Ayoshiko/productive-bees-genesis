@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import mekanism.api.IContentsListener;

@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -159,7 +158,8 @@ public final class MyriadBeeTypeCache {
 			return true;
 		}
 		// getAndUpdate 原子地递增并在达到阈值时重置为 0，避免 incrementAndGet + set 的非原子窗口
-		return LAST_CACHE_UPDATE_TICK.getAndUpdate(curr -> curr >= AbstractCombEventHandler.CACHE_UPDATE_INTERVAL ? 0 : curr + 1)
+		return LAST_CACHE_UPDATE_TICK.getAndUpdate(
+				curr -> curr >= AbstractCombEventHandler.CACHE_UPDATE_INTERVAL ? 0 : curr + 1)
 				>= AbstractCombEventHandler.CACHE_UPDATE_INTERVAL;
 	}
 

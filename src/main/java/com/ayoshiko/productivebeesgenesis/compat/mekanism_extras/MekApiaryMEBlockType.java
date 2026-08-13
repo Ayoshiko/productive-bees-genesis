@@ -56,7 +56,8 @@ public final class MekApiaryMEBlockType {
 	 * Key={@link ExtraFactoryTier}（ME 的独立枚举），Value=对应的 TileEntityTypeRegistryObject。
 	 * 使用 ConcurrentHashMap 保证线程安全。public 供 ModBlockEntities 写入。
 	 */
-	public static final Map<ExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityExtraMekApiaryFactory>> ME_APIARY_FACTORY_TILES =
+	public static final Map<ExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityExtraMekApiaryFactory>>
+			ME_APIARY_FACTORY_TILES =
 			new ConcurrentHashMap<>();
 
 	private MekApiaryMEBlockType() {}

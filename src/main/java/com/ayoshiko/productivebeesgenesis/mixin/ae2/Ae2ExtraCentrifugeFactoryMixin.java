@@ -28,7 +28,8 @@ import org.spongepowered.asm.mixin.Mixin;
 	 * @since 1.5.3
 	 * @author Ayoshiko
 	 */
-@Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory", remap = false)
+@Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory",
+		remap = false)
 public abstract class Ae2ExtraCentrifugeFactoryMixin implements IAe2OutputHost {
 	// Mixin 接口注入：显式实现 getGridNode，避免与 AE2 IGridConnectedBlockEntity default 冲突
 	@Override

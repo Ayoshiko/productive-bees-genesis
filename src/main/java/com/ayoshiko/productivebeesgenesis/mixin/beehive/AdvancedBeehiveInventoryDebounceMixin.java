@@ -77,7 +77,10 @@ public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventor
 	 * 跨 tick 产生的新变化最多延迟到下一个 tick 尾部刷新，对 NBT/网络同步无实质影响。
 	 */
 	@Inject(
-			method = "tick(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;)V",
+			method = "tick(Lnet/minecraft/world/level/Level;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;)V",
 			at = @At("TAIL")
 	)
 	private static void productivebeesgenesis$flushDirtyAtTail(

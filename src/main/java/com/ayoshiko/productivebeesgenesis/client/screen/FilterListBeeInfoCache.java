@@ -12,7 +12,6 @@ import net.minecraft.world.level.Level;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 

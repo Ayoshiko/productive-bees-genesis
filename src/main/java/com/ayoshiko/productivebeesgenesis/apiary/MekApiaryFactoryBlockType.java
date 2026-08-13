@@ -16,7 +16,6 @@ import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
@@ -283,7 +282,8 @@ public final class MekApiaryFactoryBlockType {
 		 * Key=FactoryTier（EM 运行时扩展的枚举值），Value=对应的 TileEntityTypeRegistryObject。
 		 * 使用 ConcurrentHashMap 保证线程安全。
 		 */
-		public static final Map<FactoryTier, TileEntityTypeRegistryObject<TileEntityMekApiaryFactory>> EM_APIARY_FACTORY_TILES =
+		public static final Map<FactoryTier, TileEntityTypeRegistryObject<TileEntityMekApiaryFactory>>
+				EM_APIARY_FACTORY_TILES =
 				new ConcurrentHashMap<>();
 	}
 }

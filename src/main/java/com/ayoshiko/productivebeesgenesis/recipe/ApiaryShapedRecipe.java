@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.recipe;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;

@@ -430,11 +430,20 @@ class MekCentrifugeSaveHandler {
 					tile.slotManager().getSecondaryOutputSlot(),
 					tile.slotManager().getTertiaryOutputSlot());
 			IInventorySlot targetEnergySlot = tile.accessor().productivebeesgenesis$getEnergySlot();
+			// 修复（升级目标缺口）：传入基础离心机自身的单流体槽 holder（与 buildUpgradeData 对称），
+			// 使源数据中的多流体槽 NBT 在目标为 SINGLE 模式时能合并进单流体槽而非被丢弃
+			IFluidTankHolder singleFluidHolder = new IFluidTankHolder() {
+				@Override
+				@NotNull
+				public List<IExtendedFluidTank> getTanks(@Nullable Direction side) {
+					return Collections.singletonList(tile.fluidOutputTank());
+				}
+			};
 			CentrifugeUpgradeDataHelper.applyUpgradeData(
 					provider, data,
 					pbUpgradeHandler,
 					ae2Handler.getStateHolder(),
-					null,
+					singleFluidHolder,
 					targetInputSlots,
 					targetOutputSlots,
 					targetEnergySlot);

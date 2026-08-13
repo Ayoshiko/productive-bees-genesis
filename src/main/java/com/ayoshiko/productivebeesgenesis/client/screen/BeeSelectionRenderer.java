@@ -139,13 +139,15 @@ final class BeeSelectionRenderer {
 		}
 
 		boolean activeSearch = !state.getSearchText().isEmpty();
-		int nameColor = activeSearch ? GuiColors.TEXT_WHITE : (added ? GuiColors.TEXT_NAME_ADDED_GREEN : GuiColors.TEXT_NAME_YELLOW);
+		int nameColor = activeSearch ? GuiColors.TEXT_WHITE
+				: (added ? GuiColors.TEXT_NAME_ADDED_GREEN : GuiColors.TEXT_NAME_YELLOW);
 		int typeColor = activeSearch ? GuiColors.TEXT_NAME_YELLOW : GuiColors.TEXT_PRODUCT_GRAY;
 		int textX = x + BeeSelectionScreen.CHECKBOX_COLUMN_WIDTH + BeeSelectionScreen.ICON_COLUMN_WIDTH + 6;
 		graphics.drawString(screen.getMinecraft().font, entry.displayName, textX, y + 4, nameColor);
 
 		int checkRightMargin = 18;
-		int typeMaxWidth = Math.max(20, width - (BeeSelectionScreen.CHECKBOX_COLUMN_WIDTH + BeeSelectionScreen.ICON_COLUMN_WIDTH + 6) - checkRightMargin);
+		int typeMaxWidth = Math.max(20,
+				width - (BeeSelectionScreen.CHECKBOX_COLUMN_WIDTH + BeeSelectionScreen.ICON_COLUMN_WIDTH + 6) - checkRightMargin);
 		String typeText = screen.getMinecraft().font.plainSubstrByWidth(entry.typeId, typeMaxWidth);
 		graphics.drawString(screen.getMinecraft().font, typeText, textX, y + 16, typeColor);
 

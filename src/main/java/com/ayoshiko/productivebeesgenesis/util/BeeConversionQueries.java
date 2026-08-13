@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.BlockConversionRecipe;
 import cy.jdkdigital.productivebees.common.recipe.ItemConversionRecipe;

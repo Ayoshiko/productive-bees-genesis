@@ -137,7 +137,8 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	/**
 	 * 卸载一个 PB 升级到输出槽
 	 * <br/>
-	 * 仅移除 1 个升级并放入输出槽（参照蜂箱版 {@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler#extractPbUpgradeByType}）。
+	 * 仅移除 1 个升级并放入输出槽（参照蜂箱版
+	 * {@link com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler#extractPbUpgradeByType}）。
 	 * 批量卸载由 {@link #removePbUpgrade} + 调用方处理。
 	 *
 	 * @param type 升级类型

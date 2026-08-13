@@ -53,7 +53,8 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 			WrappedItemModel.this.entity = entity;
 			// 使用 instanceof 检查避免 ClassCastException：entity.level() 在非客户端环境可能非 ClientLevel
 			// 转换失败时 world 为 null，下游 resolve 接受 @Nullable ClientLevel，可安全降级
-			WrappedItemModel.this.world = level != null ? level : (entity != null && entity.level() instanceof ClientLevel cl ? cl : null);
+			WrappedItemModel.this.world = level != null ? level
+					: (entity != null && entity.level() instanceof ClientLevel cl ? cl : null);
 			if (WrappedItemModel.this.cosmic) {
 				return WrappedItemModel.this.wrapped.getOverrides().resolve(originalModel, stack, level, entity, seed);
 			}

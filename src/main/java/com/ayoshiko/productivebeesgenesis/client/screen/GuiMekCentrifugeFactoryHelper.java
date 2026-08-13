@@ -94,7 +94,8 @@ public final class GuiMekCentrifugeFactoryHelper {
 	 * @return JEI 配方查看器类型，JEI 未安装时为 null
 	 */
 	@org.jetbrains.annotations.Nullable
-	public static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
+	public static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType
+			<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
 	) {
 		if (ModList.get() != null && ModList.get().isLoaded("jei")) {
 			return ProductiveBeesGenesisJEI.getPbCentrifugeViewerType();

@@ -61,8 +61,9 @@ final class AbstractMekCentrifugeFactorySetupHelper {
 		});
 		int energySlotX = FactoryLayoutHelper.getFactoryEnergySlotX(tier);
 		int energySlotY = FactoryLayoutHelper.getFactoryEnergySlotY(tier);
-		EnergyInventorySlot energySlot = EnergyInventorySlot.fillOrConvert(energyContainer, factory::getLevel, listener, energySlotX,
-			energySlotY);
+		EnergyInventorySlot energySlot = EnergyInventorySlot.fillOrConvert(energyContainer, factory::getLevel,
+				listener, energySlotX,
+				energySlotY);
 		accessor.productivebeesgenesis$setEnergySlot(energySlot);
 		builder.addSlot(energySlot);
 		return builder.build();
@@ -82,8 +83,11 @@ final class AbstractMekCentrifugeFactorySetupHelper {
 		// Task 5: 返回的 IFluidTankHolder 通过 setupFluidOutputConfig 暴露给 MEK 原生侧面配置 GUI
 		// Task 1: tankCountSetter 构造时设置 fluidOutputTankCount(MULTI=maxTanks,SINGLE=1),避免 Tab 窗口过窄
 		Level level = factory.productivebeesgenesis$getAe2Level();
-		return factory.fluidOutputHolder = MekCentrifugeFactoryHelper.createFluidOutputHolder(factory, listener, tier.processes, fluidTankMultiplier, level != null && level.isClientSide(), t -> factory.fluidOutputTank = t,
-			c -> factory.fluidOutputTankCount = c);
+		return factory.fluidOutputHolder =
+				MekCentrifugeFactoryHelper.createFluidOutputHolder(factory, listener, tier.processes,
+				fluidTankMultiplier, level != null && level.isClientSide(),
+				t -> factory.fluidOutputTank = t,
+				c -> factory.fluidOutputTankCount = c);
 	}
 
 	/** 只查SMELTING配方，PB配方由tryProcessPbRecipe独立处理 */
@@ -100,8 +104,9 @@ final class AbstractMekCentrifugeFactorySetupHelper {
 	static void addContainerTrackers(@NotNull AbstractMekCentrifugeFactory factory,
 			@NotNull MekanismContainer container, @NotNull Runnable superCall) {
 		// Task 3: DataSlot off-by-one 诊断优先;本方法使用 addContainerTrackersWithFilter(含 Filter Mode),与 ME/EME 路径不同
-		CentrifugeFactoryCommonLogic.addContainerTrackersWithFilter(container, factory.pbProcessor, factory.pbUpgradeDelegate, factory.productivebeesgenesis$getAe2StateHolder(),
-			superCall);
+		CentrifugeFactoryCommonLogic.addContainerTrackersWithFilter(container, factory.pbProcessor,
+				factory.pbUpgradeDelegate, factory.productivebeesgenesis$getAe2StateHolder(),
+				superCall);
 		// Task 8: 同步流体槽位数(供客户端 GUI 决定是否显示多流体槽 Tab 及动态布局)
 		container.track(SyncableInt.create(() -> factory.fluidOutputTankCount, v -> factory.fluidOutputTankCount = v));
 		// Task 8: SyncableBoolean 同步多流体槽模式状态,确保客户端 Tab 显示与服务端一致

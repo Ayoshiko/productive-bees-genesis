@@ -132,7 +132,8 @@ final class FilterListRenderer {
 		int ghostY = mouseY - FilterListScreen.ENTRY_HEIGHT / 2;
 		graphics.fill(listLeft + 1, ghostY, listRight - 1, ghostY + FilterListScreen.ENTRY_HEIGHT,
 			GuiColors.OVERLAY_DRAG_GHOST_BG);
-		graphics.drawString(screen.getMinecraft().font, Component.literal(beeTypes.get(dragSourceIdIndexSafe(beeTypes, dragSourceIndex))),
+		graphics.drawString(screen.getMinecraft().font,
+				Component.literal(beeTypes.get(dragSourceIdIndexSafe(beeTypes, dragSourceIndex))),
 				listLeft + 10, ghostY + 7, GuiColors.OVERLAY_DRAG_GHOST_TEXT);
 	}
 

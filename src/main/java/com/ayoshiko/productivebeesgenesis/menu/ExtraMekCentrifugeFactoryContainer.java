@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeSlotContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;

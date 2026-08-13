@@ -39,7 +39,8 @@ public final class MekCentrifugeMEBlockType {
 	 * Key=ExtraFactoryTier（ME的独立枚举），Value=对应的ExtraFactoryMachine BlockType。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	private static final Map<ExtraFactoryTier, ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory>> ME_FACTORY_TYPES =
+	private static final Map<ExtraFactoryTier, ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory>>
+			ME_FACTORY_TYPES =
 			new ConcurrentHashMap<>();
 
 	/**
@@ -48,7 +49,8 @@ public final class MekCentrifugeMEBlockType {
 	 * Key=ExtraFactoryTier（ME的独立枚举），Value=对应的TileEntityTypeRegistryObject。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<ExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityExtraMekCentrifugeFactory>> ME_FACTORY_TILES =
+	public static final Map<ExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityExtraMekCentrifugeFactory>>
+			ME_FACTORY_TILES =
 			new ConcurrentHashMap<>();
 
 	private MekCentrifugeMEBlockType() {}

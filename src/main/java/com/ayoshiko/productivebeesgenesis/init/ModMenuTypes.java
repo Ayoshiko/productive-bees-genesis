@@ -6,7 +6,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.menu.MekCentrifugeContainer;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.container.type.MekanismContainerType;
@@ -62,8 +61,8 @@ public final class ModMenuTypes {
 	private ModMenuTypes() {}
 
 	/** 注册基础机器Container */
-	private static <TILE extends TileEntityMekCentrifuge> ContainerTypeRegistryObject<MekanismTileContainer<TILE>> registerMachineContainer(
-			String name, Class<TILE> tileClass) {
+	private static <TILE extends TileEntityMekCentrifuge> ContainerTypeRegistryObject<MekanismTileContainer<TILE>>
+			registerMachineContainer(String name, Class<TILE> tileClass) {
 		ContainerTypeRegistryObject<MekanismTileContainer<TILE>> holder = new ContainerTypeRegistryObject<>(
 				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
 		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(tileClass,

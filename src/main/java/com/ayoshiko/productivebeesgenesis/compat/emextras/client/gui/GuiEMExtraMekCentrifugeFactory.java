@@ -54,7 +54,9 @@ import java.util.List;
 	 * - 流体输出槽在左侧固定位置
 	 * - 进度条使用SMELTING + PB离心配方的双配方跳转
 	 */
-public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEntityEMExtraMekCentrifugeFactory, MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> {
+public class GuiEMExtraMekCentrifugeFactory
+		extends GuiConfigurableTile<TileEntityEMExtraMekCentrifugeFactory,
+				MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> {
 
 	/** PB升级TAB */
 	private GuiPbUpgradeTab<TileEntityEMExtraMekCentrifugeFactory> pbUpgradeTab;
@@ -63,8 +65,8 @@ public class GuiEMExtraMekCentrifugeFactory extends GuiConfigurableTile<TileEnti
 	/** 多流体槽 Tab 同步监听器 — containerTick 中检测同步值变化动态添加/移除 Tab */
 	private MultiFluidTabSyncWatcher multiFluidTabWatcher;
 
-	public GuiEMExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory> container, Inventory inv,
-		Component title) {
+	public GuiEMExtraMekCentrifugeFactory(MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory> container,
+		Inventory inv, Component title) {
 		super(container, inv, title);
 		// 3行输出槽需要额外高度：标准187 + 副输出1(20) + 副输出2(20) = 227
 		imageHeight = 187 + 40;

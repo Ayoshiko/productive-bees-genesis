@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;

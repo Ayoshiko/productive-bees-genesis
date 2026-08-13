@@ -25,7 +25,8 @@ import java.util.List;
 	 *   <li>喂食槽数量随等级递增（Basic=9, Advanced=12, Elite=15, Ultimate=21），由 FeederSlotManager 动态创建</li>
 	 * </ul>
 	 */
-public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityMekApiaryFactory> implements IFeederSlotContainer, IPbUpgradeSlotContainer {
+public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityMekApiaryFactory>
+		implements IFeederSlotContainer, IPbUpgradeSlotContainer {
 
 	/** 喂食器虚拟槽位列表（Popup Window 交互用） */
 	@Nullable

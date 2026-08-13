@@ -334,7 +334,10 @@ public final class MekCentrifugeFactoryHelper {
 
 	// ===== fluid output holder creation (implementation moved to MekCentrifugeIoConfigHelper) =====
 
-	/** Creates the fluid output holder; implementation moved to {@link MekCentrifugeIoConfigHelper#createFluidOutputHolder}. */
+	/**
+	 * Creates the fluid output holder; implementation moved to
+	 * {@link MekCentrifugeIoConfigHelper#createFluidOutputHolder}.
+	 */
 	@NotNull
 	public static IFluidTankHolder createFluidOutputHolder(
 			@NotNull ISideConfiguration factory,
@@ -350,7 +353,10 @@ public final class MekCentrifugeFactoryHelper {
 
 	// ===== tertiary output slots & IO config (implementation moved to MekCentrifugeIoConfigHelper) =====
 
-	/** Configures tertiary output slots and IO; implementation moved to {@link MekCentrifugeIoConfigHelper#setupTertiarySlotsAndIO}. */
+	/**
+	 * Configures tertiary output slots and IO; implementation moved to
+	 * {@link MekCentrifugeIoConfigHelper#setupTertiarySlotsAndIO}.
+	 */
 	@NotNull
 	public static TileComponentEjector setupTertiarySlotsAndIO(
 			@NotNull TileEntityMekanism factory,

@@ -65,7 +65,8 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 	 * <br/>
 	 * 按 {@link PbUpgradeType} 缓存 WrappedTextRenderer，避免每帧重建。
 	 */
-	private final Map<PbUpgradeType, IFancyFontRenderer.WrappedTextRenderer> titleRenderers = new EnumMap<>(PbUpgradeType.class);
+	private final Map<PbUpgradeType, IFancyFontRenderer.WrappedTextRenderer> titleRenderers =
+			new EnumMap<>(PbUpgradeType.class);
 
 	/** 未选择时显示的文字渲染器（自动换行） */
 	private final IFancyFontRenderer.WrappedTextRenderer noSelectionRenderer;

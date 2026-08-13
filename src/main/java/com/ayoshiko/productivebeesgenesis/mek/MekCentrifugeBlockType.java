@@ -6,8 +6,6 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeME
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
-import mekanism.common.block.attribute.AttributeFactoryType;
-import mekanism.common.block.attribute.AttributeSideConfig;
 import mekanism.common.block.attribute.AttributeTier;
 import mekanism.common.block.attribute.AttributeUpgradeable;
 import mekanism.common.block.attribute.Attributes;
@@ -244,7 +242,8 @@ public final class MekCentrifugeBlockType {
 	 * 原版4等级走固定映射；EM等级从ModBlockEntitiesHolder.EM_FACTORY_TILES获取。
 	 * 必须有default分支：EM运行时扩展的枚举值会落入default。
 	 */
-	private static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> getFactoryTileEntityType(
+	private static mekanism.common.registration.impl.TileEntityTypeRegistryObject
+			<TileEntityMekCentrifugeFactory> getFactoryTileEntityType(
 		FactoryTier tier
 	) {
 		return switch (tier) {
@@ -349,10 +348,14 @@ public final class MekCentrifugeBlockType {
 	/** TileEntityType持有者 — 由ModBlockEntities静态初始化时设置，每个等级独立 */
 	public static class ModBlockEntitiesHolder {
 		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifuge> MEK_CENTRIFUGE;
-		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> BASIC_MEK_CENTRIFUGE_FACTORY;
-		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ADVANCED_MEK_CENTRIFUGE_FACTORY;
-		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ELITE_MEK_CENTRIFUGE_FACTORY;
-		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ULTIMATE_MEK_CENTRIFUGE_FACTORY;
+		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject
+				<TileEntityMekCentrifugeFactory> BASIC_MEK_CENTRIFUGE_FACTORY;
+		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject
+				<TileEntityMekCentrifugeFactory> ADVANCED_MEK_CENTRIFUGE_FACTORY;
+		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject
+				<TileEntityMekCentrifugeFactory> ELITE_MEK_CENTRIFUGE_FACTORY;
+		public static mekanism.common.registration.impl.TileEntityTypeRegistryObject
+				<TileEntityMekCentrifugeFactory> ULTIMATE_MEK_CENTRIFUGE_FACTORY;
 
 		/**
 		 * EM工厂TileEntityType映射 — 由ModBlockEntities在EM加载时填充
@@ -360,7 +363,8 @@ public final class MekCentrifugeBlockType {
 		 * Key=FactoryTier（EM运行时扩展的枚举值），Value=对应的TileEntityTypeRegistryObject。
 		 * 使用ConcurrentHashMap保证线程安全（填充与BlockType查询可能并发）。
 		 */
-		public static final Map<FactoryTier, mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory>> EM_FACTORY_TILES =
+		public static final Map<FactoryTier,
+				mekanism.common.registration.impl.TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory>> EM_FACTORY_TILES =
 				new ConcurrentHashMap<>();
 	}
 }

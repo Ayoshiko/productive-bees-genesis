@@ -18,7 +18,6 @@ import mekanism.common.inventory.container.slot.ContainerSlotType;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.warning.IWarningTracker;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
-import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.factory.TileEntityFactory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -51,7 +50,8 @@ import java.util.List;
 	 * <p>
 	 * dynamicSlots=true自动根据侧面配置渲染红/蓝边框，无需手动添加GuiSlot。
 	 */
-public class GuiMekCentrifugeFactory extends GuiConfigurableTile<TileEntityFactory<?>, MekanismTileContainer<TileEntityFactory<?>>> {
+public class GuiMekCentrifugeFactory
+		extends GuiConfigurableTile<TileEntityFactory<?>, MekanismTileContainer<TileEntityFactory<?>>> {
 
 	/** PB升级TAB — 仅当 tile 为 AbstractMekCentrifugeFactory 时创建 */
 	private GuiPbUpgradeTab<AbstractMekCentrifugeFactory> pbUpgradeTab;
@@ -109,7 +109,8 @@ public class GuiMekCentrifugeFactory extends GuiConfigurableTile<TileEntityFacto
 					.findFirst()
 					.map(slot -> slot.x)
 					.orElse(FactoryLayoutHelper.getEnergySlotX(tile.tier));
-			addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), energySlotX + 5, this.inventoryLabelY + 9,
+			addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), energySlotX + 5,
+				this.inventoryLabelY + 9,
 				52))
 					.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY, 0));
 		} else {

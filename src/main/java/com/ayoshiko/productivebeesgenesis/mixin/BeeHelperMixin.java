@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -61,7 +60,8 @@ public abstract class BeeHelperMixin {
 
 	/** 每 (tick, beeId) 的调用计数，用于可选节流 */
 	@Unique
-	private static final ConcurrentHashMap<Long, AtomicInteger> productivebeesgenesis$THROTTLE_COUNTERS = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<Long, AtomicInteger> productivebeesgenesis$THROTTLE_COUNTERS =
+			new ConcurrentHashMap<>();
 
 	/** 上次节流统计的游戏刻 */
 	@Unique

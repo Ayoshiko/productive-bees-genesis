@@ -32,8 +32,13 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 	private boolean productivebeesgenesis$isSimCacheValue;
 
 	@WrapOperation(
-			method = "tickBees(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;)V",
-			at = @At(value = "INVOKE", target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z", remap = false),
+			method = "tickBees(Lnet/minecraft/server/level/ServerLevel;"
+					+ "Lnet/minecraft/core/BlockPos;"
+					+ "Lnet/minecraft/world/level/block/state/BlockState;"
+					+ "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntityAbstract;)V",
+			at = @At(value = "INVOKE",
+					target = "Lcy/jdkdigital/productivebees/common/block/entity/AdvancedBeehiveBlockEntity;isSim()Z",
+					remap = false),
 			require = 0
 	)
 	private static boolean productivebeesgenesis$redirectIsSim(AdvancedBeehiveBlockEntity blockEntity,

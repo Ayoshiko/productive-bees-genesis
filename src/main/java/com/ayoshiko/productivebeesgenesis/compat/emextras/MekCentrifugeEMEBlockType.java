@@ -6,7 +6,6 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactoryType;
@@ -45,7 +44,8 @@ public final class MekCentrifugeEMEBlockType {
 	 * Key=EMExtraFactoryTier（EME的独立枚举），Value=对应的EMExtraFactoryMachine BlockType。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	private static final Map<EMExtraFactoryTier, EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory>> EME_FACTORY_TYPES =
+	private static final Map<EMExtraFactoryTier,
+			EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory>> EME_FACTORY_TYPES =
 			new ConcurrentHashMap<>();
 
 	/**
@@ -54,7 +54,8 @@ public final class MekCentrifugeEMEBlockType {
 	 * Key=EMExtraFactoryTier（EME的独立枚举），Value=对应的TileEntityTypeRegistryObject。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<EMExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityEMExtraMekCentrifugeFactory>> EME_FACTORY_TILES =
+	public static final Map<EMExtraFactoryTier, TileEntityTypeRegistryObject<TileEntityEMExtraMekCentrifugeFactory>>
+			EME_FACTORY_TILES =
 			new ConcurrentHashMap<>();
 
 	private MekCentrifugeEMEBlockType() {}
@@ -95,13 +96,15 @@ public final class MekCentrifugeEMEBlockType {
 		// 移除并替换为指向我们的ABSOLUTE_OVERCLOCKED离心机工厂
 		ultimateFactory.remove(EMExtraAttributeUpgradeable.class);
 		ultimateFactory.add(new EMExtraAttributeUpgradeable(
-				MekCentrifugeBlockType.wrapAsBlockRegistryObject(MekCentrifugeBlockType.getEMEFactoryBlock("absolute_overclocked"))));
+				MekCentrifugeBlockType.wrapAsBlockRegistryObject(
+						MekCentrifugeBlockType.getEMEFactoryBlock("absolute_overclocked"))));
 
 		// 为ME ABSOLUTE离心机工厂添加EMExtraAttributeUpgradeable
 		// 使ME ABSOLUTE离心机可以升级到EME ABSOLUTE_OVERCLOCKED离心机（跨升级系统升级）
 		if (meAbsoluteFactory != null) {
 			meAbsoluteFactory.add(new EMExtraAttributeUpgradeable(
-					MekCentrifugeBlockType.wrapAsBlockRegistryObject(MekCentrifugeBlockType.getEMEFactoryBlock("absolute_overclocked"))));
+					MekCentrifugeBlockType.wrapAsBlockRegistryObject(
+							MekCentrifugeBlockType.getEMEFactoryBlock("absolute_overclocked"))));
 		}
 	}
 

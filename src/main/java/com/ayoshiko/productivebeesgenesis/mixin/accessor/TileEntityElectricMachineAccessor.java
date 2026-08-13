@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mixin.accessor;
 
-import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.inventory.slot.InputInventorySlot;

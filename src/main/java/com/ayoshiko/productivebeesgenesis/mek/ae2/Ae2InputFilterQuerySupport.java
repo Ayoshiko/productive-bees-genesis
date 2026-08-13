@@ -12,9 +12,9 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
 
 /**
-	 * Read-only filter queries and AE2 item matching/pull-limit helpers (split from
-	 * {@link Ae2InputFilter}, SRP). Stateless: every method receives the volatile-read
-	 * state snapshots as parameters and never mutates the filter.
+	 * {@link Ae2InputFilter} 只读查询与 AE2 物品匹配/拉取上限工具（从过滤器拆分，SRP）
+	 * <br/>
+	 * 无状态：每个方法接收 volatile 读状态快照作为参数，绝不修改过滤器。
 	 */
 final class Ae2InputFilterQuerySupport {
 

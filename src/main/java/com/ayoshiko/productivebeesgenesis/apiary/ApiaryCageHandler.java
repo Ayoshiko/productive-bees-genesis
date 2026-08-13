@@ -62,7 +62,8 @@ class ApiaryCageHandler {
 		if (cageInSlot.isEmpty()) return;
 
 		ItemStack cageStack = cageInSlot.getStack();
-		if (cageStack.isEmpty() || (!cageStack.is(ModItems.BEE_CAGE.get()) && !cageStack.is(ModItems.STURDY_BEE_CAGE.get()))) return;
+		if (cageStack.isEmpty()
+				|| (!cageStack.is(ModItems.BEE_CAGE.get()) && !cageStack.is(ModItems.STURDY_BEE_CAGE.get()))) return;
 
 		try {
 			// 优先尝试装入蜜蜂（蜂笼含蜜蜂时）

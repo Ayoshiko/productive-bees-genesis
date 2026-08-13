@@ -25,8 +25,10 @@ public final class TransformUtils {
 	}
 
 	public static Transformation create(Vector3f translation, Vector3f rotation, Vector3f scale) {
-		return new Transformation(translation, new Quaternionf().rotationXYZ((float) (rotation.x() * Math.PI / 180.0), (float) (rotation.y() * Math.PI / 180.0), (float) (rotation.z() * Math.PI / 180.0)), scale,
-			null);
+		return new Transformation(translation,
+				new Quaternionf().rotationXYZ((float) (rotation.x() * Math.PI / 180.0),
+						(float) (rotation.y() * Math.PI / 180.0), (float) (rotation.z() * Math.PI / 180.0)),
+				scale, null);
 	}
 
 	public static Transformation create(ItemTransform transform) {

@@ -76,30 +76,44 @@ public final class GuiAeInputConfig extends GuiWindow {
 		this.stockSyncTicks = 0;
 		this.interactionStrategy = InteractionStrategy.ALL;
 
-		addChild(new GuiPinButton(gui(), relativeX + AeInputConfigLayout.PIN_X_OFFSET, relativeY + AeInputConfigLayout.PIN_Y_OFFSET,
-			this));
-		addChild(new GuiElementHolder(gui(), relativeX + AeInputConfigLayout.GRID_X, relativeY + AeInputConfigLayout.GRID_Y, AeInputConfigLayout.GRID_WIDTH,
-			AeInputConfigLayout.GRID_HEIGHT));
-		infoScreen = addChild(new GuiInnerScreen(gui(), relativeX + AeInputConfigLayout.INFO_X, relativeY + AeInputConfigLayout.GRID_Y, AeInputConfigLayout.INFO_WIDTH,
-			AeInputConfigLayout.INFO_HEIGHT));
+		addChild(new GuiPinButton(gui(), relativeX + AeInputConfigLayout.PIN_X_OFFSET,
+				relativeY + AeInputConfigLayout.PIN_Y_OFFSET,
+				this));
+		addChild(new GuiElementHolder(gui(), relativeX + AeInputConfigLayout.GRID_X,
+				relativeY + AeInputConfigLayout.GRID_Y, AeInputConfigLayout.GRID_WIDTH,
+				AeInputConfigLayout.GRID_HEIGHT));
+		infoScreen = addChild(new GuiInnerScreen(gui(), relativeX + AeInputConfigLayout.INFO_X,
+				relativeY + AeInputConfigLayout.GRID_Y, AeInputConfigLayout.INFO_WIDTH,
+				AeInputConfigLayout.INFO_HEIGHT));
 
 		// Control buttons (I/N/F/P)
 		int btnX = 8;
-		toggleBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
+		toggleBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
+				relativeY + AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
 				"I", (e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPayload(pos)); return true; }));
-		toggleBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.toggle.tooltip")));
+		toggleBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.toggle.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
-		nbtBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "N",
+		nbtBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
+				relativeY + AeInputConfigLayout.CTRL_Y,
+				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "N",
 				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputNbtIgnorePayload(pos)); return true; }));
-		nbtBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.nbt_ignore.tooltip")));
+		nbtBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.nbt_ignore.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
-		filterModeBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "F",
+		filterModeBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
+				relativeY + AeInputConfigLayout.CTRL_Y,
+				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "F",
 				(e, mx, my) -> { PacketDistributor.sendToServer(new CycleAeInputFilterModePayload(pos)); return true; }));
-		filterModeBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.tooltip")));
+		filterModeBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
-		preciseBtn = addChild(new CtrlButton(gui(), relativeX + btnX, relativeY + AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "P",
+		preciseBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
+				relativeY + AeInputConfigLayout.CTRL_Y,
+				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "P",
 				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
-		preciseBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
+		preciseBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
 		// 与下方逐槽齿轮一致：16×16 方形按钮，垂直方向相对 14px 控制行居中
 		globalGearBtn = addChild(new GlobalGearButton(gui(), relativeX + btnX, relativeY + AeInputConfigLayout.CTRL_Y - 1,
@@ -113,17 +127,20 @@ public final class GuiAeInputConfig extends GuiWindow {
 				- 3 * (AeInputConfigLayout.PAGE_BTN_WIDTH + 2) - 8,
 				AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.PAGE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
 					"\u25C0", (e, mx, my) -> { changePage(-1); return true; }));
-		prevPageBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.prev_page.tooltip")));
+		prevPageBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.prev_page.tooltip")));
 		clearBtn = addChild(new CtrlButton(gui(), relativeX + AeInputConfigLayout.WINDOW_WIDTH
 				- 2 * (AeInputConfigLayout.PAGE_BTN_WIDTH + 2) - 8,
 				AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.PAGE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
 					"C", (e, mx, my) -> { sendClear(); return true; }));
-		clearBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.clear.tooltip")));
+		clearBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.clear.tooltip")));
 		nextPageBtn = addChild(new CtrlButton(gui(), relativeX + AeInputConfigLayout.WINDOW_WIDTH
 				- (AeInputConfigLayout.PAGE_BTN_WIDTH + 2) - 8,
 				AeInputConfigLayout.CTRL_Y, AeInputConfigLayout.PAGE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
 					"\u25B6", (e, mx, my) -> { changePage(1); return true; }));
-		nextPageBtn.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.next_page.tooltip")));
+		nextPageBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.next_page.tooltip")));
 
 		// AE2LT overloaded-interface cells: gear (top) / marker (middle) / output (bottom)
 		ghostSlots = new GhostItemWidget[AeInputConfigLayout.SLOTS_PER_PAGE];

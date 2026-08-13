@@ -101,7 +101,8 @@ public final class Ae2CapabilityRegistrar {
 
 		// 8. EM 5 等级蜂箱工厂 — ModBlockEntitiesHolder.EM_APIARY_FACTORY_TILES 使用 Mekanism 的 FactoryTier 作为 key，
 		// 可安全直接遍历（Map 在 EM 未加载时为空），与离心机 EM 段保持一致
-		for (TileEntityTypeRegistryObject<?> tile : MekApiaryFactoryBlockType.ModBlockEntitiesHolder.EM_APIARY_FACTORY_TILES.values()) {
+		for (TileEntityTypeRegistryObject<?> tile :
+				MekApiaryFactoryBlockType.ModBlockEntitiesHolder.EM_APIARY_FACTORY_TILES.values()) {
 			registerForTileEntity(event, tile.get());
 		}
 

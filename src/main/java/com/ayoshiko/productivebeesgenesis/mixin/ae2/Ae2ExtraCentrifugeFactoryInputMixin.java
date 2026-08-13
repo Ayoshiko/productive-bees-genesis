@@ -39,7 +39,8 @@ import java.util.List;
 	 * @since 2.0.0
 	 * @author Ayoshiko
 	 */
-@Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory", remap = false)
+@Mixin(targets = "com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory",
+		remap = false)
 public abstract class Ae2ExtraCentrifugeFactoryInputMixin implements IAe2InputHost {
 	@Unique
 	private List<IInventorySlot> productivebeesgenesis$cachedInputSlots;

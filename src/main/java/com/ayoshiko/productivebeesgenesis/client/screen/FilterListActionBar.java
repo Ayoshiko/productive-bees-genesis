@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.network.FilterConfigSyncPayload;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;

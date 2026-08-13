@@ -38,11 +38,13 @@ public abstract class ShaderInstanceMixin implements ShaderInstanceInterface {
 	 * @param callbackInfo		回调信息
 	 */
 	@Inject(
-		method = { "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V" },
+		method = { "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;"
+				+ "Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V" },
 		at = { @At("TAIL") },
 		order = 1001
 	)
-	private void productivebeesgenesis$onShaderInit(ResourceProvider resourceProvider, ResourceLocation shaderLocation, VertexFormat vertexFormat,
+	private void productivebeesgenesis$onShaderInit(ResourceProvider resourceProvider, ResourceLocation shaderLocation,
+		VertexFormat vertexFormat,
 		CallbackInfo callbackInfo) {
 		// 防御性null检查：部分模组可能传入null shaderLocation
 		if (shaderLocation != null && ProductiveBeesGenesis.MOD_ID.equals(shaderLocation.getNamespace())) {

@@ -87,11 +87,13 @@ public final class FluidTankMultiplierConfigSection {
 					.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emDense")
 					.defineInRange("emDense", 1024, 1, 10_000_000);
 			mekCentrifugeFluidTankEmMultiversal = builder
-					.comment("进化通用机械 多元宇宙离心机（17 进程）", "默认 2048× → 单进程 524.3M mB (524,288 桶) | 工厂总 8.91G mB → 截断 2.15G mB (2,147,483 桶)")
+					.comment("进化通用机械 多元宇宙离心机（17 进程）",
+							"默认 2048× → 单进程 524.3M mB (524,288 桶) | 工厂总 8.91G mB → 截断 2.15G mB (2,147,483 桶)")
 					.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emMultiversal")
 					.defineInRange("emMultiversal", 2048, 1, 10_000_000);
 			mekCentrifugeFluidTankEmCreative = builder
-					.comment("进化通用机械 创造离心机（19 进程）", "默认 4096× → 单进程 1.05G mB (1,048,576 桶) | 工厂总 19.92G mB → 截断 2.15G mB (2,147,483 桶)")
+					.comment("进化通用机械 创造离心机（19 进程）",
+							"默认 4096× → 单进程 1.05G mB (1,048,576 桶) | 工厂总 19.92G mB → 截断 2.15G mB (2,147,483 桶)")
 					.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emCreative")
 					.defineInRange("emCreative", 4096, 1, 10_000_000);
 		} else {
@@ -102,19 +104,23 @@ public final class FluidTankMultiplierConfigSection {
 			mekCentrifugeFluidTankEmCreative = null;
 		}
 		mekCentrifugeFluidTankEmeAbsoluteOverclocked = builder
-				.comment("进化通用机械:扩展 绝对超频离心机（12 进程）", "默认 4096× → 单进程 1.05G mB (1,048,576 桶) | 工厂总 12.58G mB → 截断 2.15G mB (2,147,483 桶)")
+				.comment("进化通用机械:扩展 绝对超频离心机（12 进程）",
+						"默认 4096× → 单进程 1.05G mB (1,048,576 桶) | 工厂总 12.58G mB → 截断 2.15G mB (2,147,483 桶)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emeAbsoluteOverclocked")
 				.defineInRange("emeAbsoluteOverclocked", 4096, 1, 10_000_000);
 		mekCentrifugeFluidTankEmeSupremeQuantum = builder
-				.comment("进化通用机械:扩展 至尊量子离心机（14 进程）", "默认 8192× → 单进程 2.10G mB (2,097,152 桶) | 工厂总 29.36G mB → 截断 2.15G mB (2,147,483 桶)")
+				.comment("进化通用机械:扩展 至尊量子离心机（14 进程）",
+						"默认 8192× → 单进程 2.10G mB (2,097,152 桶) | 工厂总 29.36G mB → 截断 2.15G mB (2,147,483 桶)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emeSupremeQuantum")
 				.defineInRange("emeSupremeQuantum", 8192, 1, 10_000_000);
 		mekCentrifugeFluidTankEmeCosmicDense = builder
-				.comment("进化通用机械:扩展 寰宇致密离心机（16 进程）", "默认 16384× → 单进程 4.19G mB (4,194,304 桶) | 工厂总 67.11G mB → 截断 2.15G mB (2,147,483 桶)")
+				.comment("进化通用机械:扩展 寰宇致密离心机（16 进程）",
+						"默认 16384× → 单进程 4.19G mB (4,194,304 桶) | 工厂总 67.11G mB → 截断 2.15G mB (2,147,483 桶)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emeCosmicDense")
 				.defineInRange("emeCosmicDense", 16384, 1, 10_000_000);
 		mekCentrifugeFluidTankEmeInfiniteMultiversal = builder
-				.comment("进化通用机械:扩展 无限多元离心机（18 进程）", "默认 32768× → 单进程 8.39G mB (8,388,608 桶) | 工厂总 150.99G mB → 截断 2.15G mB (2,147,483 桶)")
+				.comment("进化通用机械:扩展 无限多元离心机（18 进程）",
+						"默认 32768× → 单进程 8.39G mB (8,388,608 桶) | 工厂总 150.99G mB → 截断 2.15G mB (2,147,483 桶)")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.fluid_tank_multiplier.emeInfiniteMultiversal")
 				.defineInRange("emeInfiniteMultiversal", 32768, 1, 10_000_000);
 		builder.pop(); // fluid_tank_multiplier

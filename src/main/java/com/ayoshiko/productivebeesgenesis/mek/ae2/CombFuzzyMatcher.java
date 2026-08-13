@@ -48,7 +48,8 @@ public final class CombFuzzyMatcher {
 	 * 注意：{@link ConcurrentHashMap#computeIfAbsent} 不存储 null 值，故非蜜脾物品不会进入缓存。
 	 * 调用方应先通过 {@link #isCombItem(AEItemKey)} 过滤，避免对非蜜脾 key 重复计算。
 	 */
-	private static final ConcurrentHashMap<AEItemKey, ResourceLocation> aeItemKeyToBeeTypeCache = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<AEItemKey, ResourceLocation> aeItemKeyToBeeTypeCache =
+			new ConcurrentHashMap<>();
 
 	private CombFuzzyMatcher() {
 		// 工具类，禁止实例化

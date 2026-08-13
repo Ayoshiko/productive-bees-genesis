@@ -111,7 +111,8 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		return productivebeesgenesis$externalInsertPolicy;
 	}
 
-	@Inject(method = "extractItem(ILmekanism/api/Action;Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+	@Inject(method = "extractItem(ILmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
 			at = @At("HEAD"), cancellable = true, order = 1000)
 	private void productivebeesgenesis$bulkExtractOverstackedOutput(int amount, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
@@ -129,7 +130,8 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		cir.setReturnValue(extracted);
 	}
 
-	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
 			at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$limitExternalInsert(ItemStack stack, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {

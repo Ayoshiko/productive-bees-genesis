@@ -1,15 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.ayoshiko.productivebeesgenesis.util.WannaBeeAmberAdapter;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.BlockPos;
@@ -21,12 +18,9 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
 	 * 蜜蜂产出处理器

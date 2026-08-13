@@ -51,6 +51,15 @@ Mixin 注入代码引用了 mixin 包内的非 Mixin 工具类，触发 `Illegal
 - **杂项（LOW）** — `MixinConfigPlugin` JDTE/EME Mixin 注释错位修复；`DevModeCommand` 白名单补 `crafting_upgrade`；`TickBatchSkipState.reset` 死代码删除；"正面方块"过时注释统一为"饲养板 BlockItem"；`saveCustomDataForItem`/`ICustomDataPersistable` Javadoc 修正（NeoForge 实际不调用，标注为防御性 API）
 - **文档修正** — 超 500 行文件表述改为准确状态（9 个高风险文件拆分完成；折行后 3 个文件轻微超限 503-531 行列入后续任务）
 
+### 后续审查任务完成（2026-08-13 第二批）
+
+- **未使用 import 清理** — 全仓静态分析清理 107 处未使用 import（71 个文件）
+- **超宽行归零** — 全项目超 120 字符行全部折行处理（0 处剩余）；Mixin 描述符拆分后与提交版本逐条比对一致
+- **getDrops 幂等防护（LOW）** — 蜂箱/离心机方块增加 dropsSerialized 标志：异常场景下二次调用 getDrops 不再对已清空的数据重复序列化
+- **基础离心机升级目标流体缺口修复（LOW）** — applyUpgradeData 传入单流体槽 holder，多流体槽升级数据在 SINGLE 目标下合并恢复而非丢弃
+- **AbstractMekCentrifugeFactory 再拆分** — isSorting/parseUpgradeData/installPbUpgradeBulk 委托至 AbstractMekCentrifugeFactoryStateSupport
+- **英文类头 Javadoc 统一中文**（PbRecipeFlushHelper/Ae2InputFilterSlotOps/QuerySupport 等）
+
 ### SemVer 合规性
 
 - 本次为单一崩溃修复，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.9 → v2.0.9-hotfix）

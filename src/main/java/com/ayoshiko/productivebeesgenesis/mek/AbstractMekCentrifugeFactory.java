@@ -8,7 +8,6 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -25,7 +24,6 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
 import mekanism.common.inventory.container.MekanismContainer;
-import mekanism.common.inventory.container.sync.SyncableBoolean;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
@@ -126,7 +124,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** 子类提供PB处理器名称（用于日志标识） */
 	protected abstract String getPbProcessorName();
 
-	/** Rebuilds the initial inventory (implementation moved to {@link AbstractMekCentrifugeFactorySetupHelper#createInitialInventory}). */
+	/** 重建初始物品栏（委托 AbstractMekCentrifugeFactorySetupHelper） */
 	@NotNull
 	@Override
 	protected IInventorySlotHolder getInitialInventory(IContentsListener listener) {
@@ -134,7 +132,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 			this::addSlots);
 	}
 
-	/** Builds the initial fluid tanks (implementation moved to {@link AbstractMekCentrifugeFactorySetupHelper#createInitialFluidTanks}). */
+	/** 构建初始流体罐（委托 AbstractMekCentrifugeFactorySetupHelper） */
 	@Nullable
 	@Override
 	protected IFluidTankHolder getInitialFluidTanks(IContentsListener listener) {
@@ -168,7 +166,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		return MekCentrifugeFactoryHelper.isCachedRecipeValid(cached, stack);
 	}
 
-	/** Finds a SMELTING or PB recipe (implementation moved to {@link AbstractMekCentrifugeFactorySetupHelper#findRecipe}). */
+	/** 查找 SMELTING/PB 配方（委托 AbstractMekCentrifugeFactorySetupHelper） */
 	@Override
 	protected ItemStackToItemStackRecipe findRecipe(
 		int process,
@@ -188,41 +186,58 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		@Nullable IInventorySlot secondaryOutputSlot,
 		boolean updateCache
 	) {
-		return CentrifugeFactoryCommonLogic.inputProducesOutput(level, fallbackInput, outputSlot, secondaryOutputSlot, inputProducesOutputCache, pbProcessor,
+		return CentrifugeFactoryCommonLogic.inputProducesOutput(level,
+			fallbackInput, outputSlot, secondaryOutputSlot, inputProducesOutputCache, pbProcessor,
 			() -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache));
 	}
 
 	/** 配置卡兼容性检查 — 支持ME/EME工厂跨等级粘贴配置 */
 	@Override
 	public boolean isConfigurationDataCompatible(@NotNull net.minecraft.world.level.block.Block blockType) {
-		return super.isConfigurationDataCompatible(blockType) || MekCompatHooks.isConfigurationDataCompatible(getBlockHolder(),
+		return super.isConfigurationDataCompatible(blockType) ||
+			MekCompatHooks.isConfigurationDataCompatible(getBlockHolder(),
 			blockType);
 	}
 
 	/** 写入配置卡数据 — 添加PB升级数量、AE2 per-tile状态和sorting字段（覆盖super用isSorting()写入的false） */
 	@Override
-	public void writeSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) { super.writeSustainedData(provider, data); CentrifugeFactoryCommonLogic.writeSustainedData(data, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder()); data.putBoolean(SerializationConstants.SORTING,
-		((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting()); }
+	public void writeSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
+		super.writeSustainedData(provider, data);
+		CentrifugeFactoryCommonLogic.writeSustainedData(data, pbUpgradeDelegate,
+				productivebeesgenesis$getAe2StateHolder());
+		data.putBoolean(SerializationConstants.SORTING,
+				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting());
+	}
 
 	/** 扳手拆卸隐式组件 — 覆盖super用isSorting()写入的false，持久化实际sorting字段值 */
 	@Override
-	protected void collectImplicitComponents(@NotNull DataComponentMap.Builder builder) { super.collectImplicitComponents(builder); builder.set(MekanismDataComponents.SORTING,
-		((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting()); }
+	protected void collectImplicitComponents(@NotNull DataComponentMap.Builder builder) {
+		super.collectImplicitComponents(builder);
+		builder.set(MekanismDataComponents.SORTING,
+				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting());
+	}
 
 	/** 从配置卡数据读取 — 恢复AE2 per-tile状态 */
 	@Override
-	public void readSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) { super.readSustainedData(provider, data); CentrifugeFactoryCommonLogic.readSustainedData(data,
-		productivebeesgenesis$getAe2StateHolder()); }
+	public void readSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
+		super.readSustainedData(provider, data);
+		CentrifugeFactoryCommonLogic.readSustainedData(data, productivebeesgenesis$getAe2StateHolder());
+	}
 
 	/** 设置配置卡数据 — 处理PB升级粘贴（含生存模式物品消耗） */
 	@Override
-	public void setConfigurationData(@NotNull HolderLookup.Provider provider, @Nullable net.minecraft.world.entity.player.Player player, @NotNull CompoundTag data) { super.setConfigurationData(provider, player, data); CentrifugeFactoryCommonLogic.setConfigurationData(data, player,
-		pbUpgradeDelegate); }
+	public void setConfigurationData(@NotNull HolderLookup.Provider provider,
+			@Nullable net.minecraft.world.entity.player.Player player, @NotNull CompoundTag data) {
+		super.setConfigurationData(provider, player, data);
+		CentrifugeFactoryCommonLogic.setConfigurationData(data, player, pbUpgradeDelegate);
+	}
 
 	@NotNull
 	@Override
-	public IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
-			SingleItem<ItemStackToItemStackRecipe>> getRecipeType() { return AbstractMekCentrifugeFactoryJdteSupport.getRecipeType(); }
+	public IMekanismRecipeTypeProvider<SingleRecipeInput,
+			ItemStackToItemStackRecipe, SingleItem<ItemStackToItemStackRecipe>> getRecipeType() {
+		return AbstractMekCentrifugeFactoryJdteSupport.getRecipeType();
+	}
 
 	@NotNull
 	@Override
@@ -241,14 +256,14 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@NotNull
 	@Override
 	public CachedRecipe<ItemStackToItemStackRecipe> createNewCachedRecipe(
-		@NotNull ItemStackToItemStackRecipe recipe,
-		int cacheIndex
-	) {
-		return CentrifugeFactoryCommonLogic.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors, inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction, this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer, this::getTicksRequired, this::markForSave, this::getOperationsPerTick,
-			progress);
+			@NotNull ItemStackToItemStackRecipe recipe, int cacheIndex) {
+		return CentrifugeFactoryCommonLogic.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
+				inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction,
+				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
+				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress);
 	}
 
-	/** JDTE accumulate hook (implementation moved to {@link AbstractMekCentrifugeFactoryJdteSupport#accumulateAcceleratedTicks}). */
+	/** JDTE 累计钩子（委托 AbstractMekCentrifugeFactoryJdteSupport） */
 	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
 		AbstractMekCentrifugeFactoryJdteSupport.accumulateAcceleratedTicks(this, ticks);
 	}
@@ -263,19 +278,19 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		return AbstractMekCentrifugeFactoryJdteSupport.onUpdateServer(this, inputSlots, () -> super.onUpdateServer());
 	}
 
-	/**
-	 * 按钮显示与 ME/EME 一致：始终返回 sorting 字段实际值，不因 AE2 拉取而锁死。
-	 * 通过 @Accessor 返回实际 sorting 字段值（绕过原版 toggleSorting 死锁）。
-	 */
+	/** 按钮显示与 ME/EME 一致：返回 sorting 字段实际值（委托 StateSupport，绕过原版死锁） */
 	@Override
 	public boolean isSorting() {
-		// 按钮显示与 ME/EME 一致：始终返回 sorting 字段实际值，不因 AE2 拉取而锁死
-		return ((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting();
+		return AbstractMekCentrifugeFactoryStateSupport.isSorting(this);
 	}
 
 	/** 覆写 toggleSorting — 直接设置 sorting 字段，避免原版 sorting = !isSorting() 死锁 */
 	@Override
-	public void toggleSorting() { boolean current = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(); ((TileEntityFactoryAccessor) this).productivebeesgenesis$setSorting(!current); markForSave(); }
+	public void toggleSorting() {
+		boolean current = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting();
+		((TileEntityFactoryAccessor) this).productivebeesgenesis$setSorting(!current);
+		markForSave();
+	}
 
 	/** PB处理时返回PB进度 */
 	@Override
@@ -284,7 +299,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 			() -> super.getScaledProgress(i, process));
 	}
 
-	/** Adds container trackers (implementation moved to {@link AbstractMekCentrifugeFactorySetupHelper#addContainerTrackers}). */
+	/** 注册容器同步追踪器（委托 AbstractMekCentrifugeFactorySetupHelper） */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
 		AbstractMekCentrifugeFactorySetupHelper.addContainerTrackers(this, container,
@@ -294,7 +309,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
 	@Override
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		CentrifugeFactoryCommonLogic.saveAdditional(nbt, provider, pbProcessor, pbUpgradeDelegate, productivebeesgenesis$ae2LifecycleHandler, this, fluidOutputHolder,
+		CentrifugeFactoryCommonLogic.saveAdditional(nbt,
+			provider, pbProcessor, pbUpgradeDelegate, productivebeesgenesis$ae2LifecycleHandler, this, fluidOutputHolder,
 			() -> super.saveAdditional(nbt, provider));
 	}
 
@@ -302,14 +318,16 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	@NotNull
 	public CompoundTag saveCustomDataForItem(@NotNull HolderLookup.Provider provider) {
-		return CentrifugeFactoryCommonLogic.saveCustomDataForItem(provider, pbProcessor, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder, this::getType,
+		return CentrifugeFactoryCommonLogic.saveCustomDataForItem(provider,
+			pbProcessor, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder, this::getType,
 			this);
 	}
 
 	/** 加载PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
 	@Override
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		CentrifugeFactoryCommonLogic.loadAdditional(nbt, provider, pbProcessor, pbUpgradeDelegate, productivebeesgenesis$ae2LifecycleHandler, this, fluidOutputHolder,
+		CentrifugeFactoryCommonLogic.loadAdditional(nbt,
+			provider, pbProcessor, pbUpgradeDelegate, productivebeesgenesis$ae2LifecycleHandler, this, fluidOutputHolder,
 			() -> super.loadAdditional(nbt, provider));
 	}
 
@@ -356,25 +374,18 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
 		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
-		return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(), getEnergyContainer(), progress, energySlot, inputSlots, outputSlots, ((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(), getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
-			fluidOutputHolder);
+		return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
+				getEnergyContainer(), progress, energySlot, inputSlots, outputSlots,
+				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(),
+				getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
+				fluidOutputHolder);
 	}
 
-	/**
-	 * 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级、AE2设置、多流体槽和深拷贝槽位内容
-	 * <br/>
-	 * 模块 3 Bug 2：传递新方块（本工厂）的输入槽/输出槽/能量槽给 helper，
-	 * 由 helper 从升级数据深拷贝字段覆盖恢复（super.parseUpgradeData 通过引用列表读取到空栈）。
-	 * inputSlots/outputSlots 来自父类 TileEntityItemToItemFactory 字段；
-	 * energySlot 通过 TileEntityFactoryAccessor 访问（与 getUpgradeData 一致）。
-	 */
+	/** 应用升级数据 — 恢复PB升级/AE2设置/多流体槽/深拷贝槽位（委托 StateSupport） */
 	@Override
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
-		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
-		CentrifugeFactoryCommonLogic.parseUpgradeData(provider, upgradeData, pbUpgradeDelegate,
-				productivebeesgenesis$getAe2StateHolder(), fluidOutputHolder,
-				inputSlots, outputSlots, energySlot,
-				data -> super.parseUpgradeData(provider, data));
+		AbstractMekCentrifugeFactoryStateSupport.parseUpgradeData(this, provider, upgradeData,
+				inputSlots, outputSlots, data -> super.parseUpgradeData(provider, data));
 	}
 
 	// ===== PbRecipeContext 接口实现 =====
@@ -431,7 +442,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public List<IExtendedFluidTank> getFluidTanks() {
 		return MultiFluidTankHostHelper.getFluidTanks(fluidOutputHolder, fluidOutputTank);
 	}
-	/** Multi-fluid mode flag (implementation moved to {@link AbstractMekCentrifugeFactorySetupHelper#isMultiFluidMode}). */
+	/** 多流体模式标志（委托 AbstractMekCentrifugeFactorySetupHelper） */
 	@Override
 	public boolean isMultiFluidMode() {
 		return AbstractMekCentrifugeFactorySetupHelper.isMultiFluidMode(this);
@@ -500,8 +511,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	/** 重写recalculateUpgrades — 复刻MEKExtras，支持STACK升级并行和CREATIVE无限能量 */
 	@Override
-	public void recalculateUpgrades(Upgrade upgrade) { super.recalculateUpgrades(upgrade); FactoryUpgradeStateHelper.recalculateUpgrades(this,
-		upgrade); }
+	public void recalculateUpgrades(Upgrade upgrade) {
+		super.recalculateUpgrades(upgrade);
+		FactoryUpgradeStateHelper.recalculateUpgrades(this, upgrade);
+	}
 
 	/** 重写getTicksRequired — CREATIVE 返回 0，对齐 Mekanism Extras 最大处理速率 */
 	@Override
@@ -596,7 +609,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	 * @param type 升级类型;@param maxAvailable 持有数量(stack.getCount());@return 实际安装数量(0 表示未安装)
 	 */
 	public int installPbUpgradeBulk(PbUpgradeType type, int maxAvailable) {
-		return pbUpgradeDelegate.installPbUpgradeBulk(type, maxAvailable);
+		return AbstractMekCentrifugeFactoryStateSupport.installPbUpgradeBulk(pbUpgradeDelegate, type, maxAvailable);
 	}
 	/** IUpgradeableBlockEntity — 返回PB原版安装桥接器，委托给自定义升级系统 */
 	@NotNull

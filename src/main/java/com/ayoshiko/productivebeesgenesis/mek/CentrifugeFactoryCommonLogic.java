@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;

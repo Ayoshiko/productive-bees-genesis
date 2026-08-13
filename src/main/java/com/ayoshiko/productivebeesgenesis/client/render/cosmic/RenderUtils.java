@@ -33,14 +33,15 @@ public class RenderUtils {
 
 	public static final RenderStateShard.TextureStateShard COSMIC_TEXTURE_ISOLATED =
 		new RenderStateShard.TextureStateShard(InventoryMenu.BLOCK_ATLAS, false, false);
-	public static final RenderStateShard.LayeringStateShard POLYGON_OFFSET_LAYERING = new RenderStateShard.LayeringStateShard("polygon_offset_layering",
-		() -> {
-		RenderSystem.polygonOffset(-1.0F, -10.0F);
-		RenderSystem.enablePolygonOffset();
-	}, () -> {
-		RenderSystem.polygonOffset(0.0F, 0.0F);
-		RenderSystem.disablePolygonOffset();
-	});
+	public static final RenderStateShard.LayeringStateShard POLYGON_OFFSET_LAYERING =
+		new RenderStateShard.LayeringStateShard("polygon_offset_layering",
+				() -> {
+					RenderSystem.polygonOffset(-1.0F, -10.0F);
+					RenderSystem.enablePolygonOffset();
+				}, () -> {
+					RenderSystem.polygonOffset(0.0F, 0.0F);
+					RenderSystem.disablePolygonOffset();
+				});
 
 	/**
 	 * 使用默认变换烘焙物品模型（变长参数版本）
@@ -82,7 +83,8 @@ public class RenderUtils {
 
 			for (BlockElement element : unbaked) {
 				for (Entry<Direction, BlockElementFace> directionBlockElementFaceEntry : element.faces.entrySet()) {
-					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, directionBlockElementFaceEntry.getValue(), sprite, directionBlockElementFaceEntry.getKey(), new SimpleModelState(state), element.rotation,
+					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, directionBlockElementFaceEntry.getValue(), sprite,
+						directionBlockElementFaceEntry.getKey(), new SimpleModelState(state), element.rotation,
 						element.shade));
 				}
 			}

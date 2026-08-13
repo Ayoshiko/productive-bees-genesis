@@ -85,6 +85,24 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	/** AE2 集成处理器 — 封装网格节点生命周期、per-tile 开关切换与容器同步 */
 	private final MekCentrifugeAe2Handler ae2Handler;
 
+	/**
+	 * 掉落数据已序列化标志 — getDrops 幂等防护
+	 * <br/>
+	 * getDrops 在 saveToItem 序列化掉落物后调用 saveAllItemsForDrop 清空槽位；
+	 * 若同一方块被二次调用 getDrops（异常场景），标志避免对已清空的数据重复序列化。
+	 */
+	private boolean dropsSerialized;
+
+	/** 掉落数据是否已序列化（getDrops 幂等防护） */
+	public boolean isDropsSerialized() {
+		return dropsSerialized;
+	}
+
+	/** 标记掉落数据已序列化（getDrops 幂等防护） */
+	public void markDropsSerialized() {
+		dropsSerialized = true;
+	}
+
 	/** 构造基础MEK离心机方块实体 */
 	public TileEntityMekCentrifuge(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, BASE_TICKS_REQUIRED);

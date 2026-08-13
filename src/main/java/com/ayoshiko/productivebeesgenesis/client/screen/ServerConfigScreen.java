@@ -27,7 +27,8 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 	private final ModConfig modConfig;
 
 	public ServerConfigScreen(Screen parent, ModConfig modConfig) {
-		super(parent, Minecraft.getInstance().options, Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
+		super(parent, Minecraft.getInstance().options,
+				Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
 		this.modConfig = modConfig;
 		// Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
 		// 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
@@ -43,12 +44,14 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter"));
 		StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel,
 			font).alignLeft();
-		filterLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
+		filterLabelWidget.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
 
 		Component filterButtonText = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.button"));
 		Button filterButton = Button.builder(filterButtonText, button -> minecraft.setScreen(new FilterListScreen(this)))
-				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")))
+				.tooltip(Tooltip.create(
+						Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")))
 				.width(Button.DEFAULT_WIDTH)
 				.build();
 
@@ -59,7 +62,8 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 				Component.translatable("productivebeesgenesis.configuration.server.other"));
 		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel,
 			font).alignLeft();
-		otherLabelWidget.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
+		otherLabelWidget.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
 
 		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.server.other.button"));
