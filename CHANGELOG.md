@@ -23,7 +23,76 @@
 > v1.5.4 起，所有历史 Release 附带的 JAR 文件名已重新构建，与 Release 版本号严格匹配。
 > git tag、GitHub Release 标题、JAR 文件名三处版本号已完全一致。
 
+## [2.0.9-hotfix.centrifuge] - 2026-08-14
+
+离心机加工反馈修复批次 — 进度条倒退、JDTE 加速残留、万象创世蜜脾虚拟加速进度、smelt（电力熔炼炉）配方时间加速。
+
+### 修复
+
+- **加工进度条会倒退到起点再重新填充（MAJOR）** — `ProgressDisplaySmoother` 在每个处理周期结束时用
+  0.25 秒平滑"回落"动画把进度条拉回起点，高加速倍率下被感知为可见的倒退。修复：删除下降平滑
+  （`MIN_DRAIN_SECONDS`），新周期开始直接跳转到新目标值，不再渲染回退动画。
+- **JDTE 时间加速器停止后加速效果残留过久（MAJOR）** — 虚拟 tick 银行挂账上限此前对齐 JDTE 的
+  `timeAcceleratorMaxPendingTicks`（1M），而每 gameTick 只消化批量预算（默认 256），停止加速后
+  残留的"已付费"虚拟 tick 需约 65 分钟才能消化完。修复：上限收紧为 4096（= JDTE 单刻最大入账量），
+  残留最多约 16 gameTick（0.8 秒）即恢复正常速度；JDT 时间手杖等旧式加速器不经过 JDTE 入账，
+  银行残留本就很小，因此不受影响。
+- **万象创世蜜脾加速时进度条不显示虚拟加速填充（MINOR）** — 万象创世路径每调用只推进 1 格进度，
+  未按加速倍率推进。修复：`PbRecipeProcessor` 将虚拟 tick 数一并传入
+  `MyriadCreationsHandler.tryProcessMyriadCreations`，进度按 `virtualTicks` 推进并封顶到处理时间，
+  与 PB 原版蜜脾的虚拟加速进度显示对齐。
+- **smelt（电力熔炼炉）配方不受 JDTE/JDT 时间手杖加速（MAJOR）** — Mekanism 熔炉管线由
+  `super.onUpdateServer()` 每次调用推进 1 tick，而批量收获模式下 super 每 gameTick 仅执行一次
+  （时间手杖后续 ticker 调用与 JDTE flush 均被同 gameTick 门控跳过），熔炉配方因此无法按倍率推进。
+  修复：基础机（`MekCentrifugeTickHandler`）与工厂版（`FactoryUpgradeStateHelper`）在批量倍率 > 1
+  且输入为 SMELTING 独占配方（万象/PB 蜜脾优先，非 PB 配方且存在熔炉配方）时，补调 super
+  `batchMultiplier - 1` 次，使熔炉管线按倍率 M 推进；PB 通道仍由 `PbVirtualTickPlan` 内部加速，
+  不做重复补调。
+- **ME/EME 工厂 smelt 配方仍不受时间加速（MAJOR）** — ME（Mekanism Extras）/EME（Evolved Mekanism）
+  工厂的 `onUpdateServer` 是独立实现，未接入上一项的补调逻辑，且不实现 JDTE 合并接口
+  （JDTE 按普通 ticker 路径循环调用），烧矿在时间手杖/JDTE 下仍只有 1x。修复：将 SMELTING 通道判定
+  （`hasSmeltingLane`）与补调执行（`runLightSmeltingTicks`）提升为 `MekCentrifugeFactoryHelper` 公共方法，
+  ME/EME 工厂 `!skipPb` 分支同步接入；原版工厂改调公共方法，消除重复实现。
+
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
+
+### 性能优化
+
+- **smelt 配方加速补调从完整 super 降级为轻量配方 tick（MAJOR）** — 上一批修复的补调走完整
+  `super.onUpdateServer()`，256x 加速下每 gameTick 额外执行 255 次 ejector tick、能量槽回填
+  （`fillContainerOrConvert`）与配方重查（`getUpdatedCache`，每次含 `isInputValid` + 成分匹配），
+  是加速环境下 MSPT 的主要来源。修复：基础机（`TileEntityMekCentrifuge.runLightSmeltingTicks`）
+  与工厂版（`MekCentrifugeFactoryHelper.runLightSmeltingTicks`）改为只对已缓存配方调用
+  `CachedRecipe.process()` 推进配方 tick——同一 gameTick 内输入不变，首次完整 super 已完成配方重查，
+  直接复用缓存配方安全（空输入走 `mismatchedRecipe` 安全重置、输入有效则继续推进），
+  语义等价于真实推进 `batchMultiplier` 次 tick（能量消耗、输入消费、产出一致），
+  但完全跳过 ejector/能量回填/配方重查/非 smelt lane 的重复开销，任意加速倍率下 MSPT 占用极低。
+- **smelt 补调升级为批量快速推进（JDTE 合并 flush 思路，MAJOR）** — 上一项优化后每次补调
+  `process()` 仍包含完整 `calculateOperationsThisTick`（getRecipeInput + 创建输出 ItemStack +
+  输出空间检查 + 能量计算），256x 加速下每 gameTick 仍执行 256 次完整计算。修复：新增
+  `CachedRecipeBatchAccelMixin` 在 Mekanism `CachedRecipe` 上注入批量快速路径
+  （`ICachedRecipeBatchAccel` 接口）——补调时启动预算（batchMultiplier - 1），`process()` 在
+  预算内循环做字段级快速推进（useEnergy + operatingTicks++ + 周期完成判定），
+  仅配方周期完成点走一次完整计算重算（输入/输出槽已变化），能量不足/配方暂停/持有者不可用时
+  自动终止并交还原版逻辑。256x、200 tick 配方下完整计算次数从 256 次降到约 3 次；
+  未激活时注入开销为零（两次 int 比较），常态性能不受影响。工厂与基础机补调层均接入，
+  预算耗尽立即停止补调（`isBatchExhausted`），避免合并推进后多余调用造成过度推进。
+- **万象创世蜜脾与 PB 原版蜜脾进度条节奏不一致（MINOR）** — 万象路径此前每调用只完成一个处理周期并
+  丢弃剩余虚拟 tick（进度直接归零），而 PB 原版路径由 `PbVirtualTickPlan` 在完成周期后把剩余虚拟 tick
+  继续推进到下一周期，加速时两条进度条表现不同。修复：万象路径（`MyriadCreationsHandler`）改为复用
+  `PbVirtualTickPlan` 推进进度与完成周期（含输出受阻裁剪、能量/输入限制），`PbRecipeProcessor` 不再把
+  每周期操作数按倍率放大；新增回归测试锁定跨周期进度语义。
+
 ## [2.0.9-hotfix.jdte] - 2026-08-13
+
 
 修复 JDTE 0.5.9-alpha1 时间加速器（初级/高级/扩展高级）无法加速本模组蜂箱与离心机的问题。
 
@@ -79,6 +148,15 @@ Mixin 注入代码引用了 mixin 包内的非 Mixin 工具类，触发 `Illegal
 - **AbstractMekCentrifugeFactory 再拆分** — isSorting/parseUpgradeData/installPbUpgradeBulk 委托至 AbstractMekCentrifugeFactoryStateSupport
 - **英文类头 Javadoc 统一中文**（PbRecipeFlushHelper/Ae2InputFilterSlotOps/QuerySupport 等）
 
+
+### ??????????2026-08-14?
+
+- **AE2 ?? 100-tick ????** ? ?? `Ae2InputFairnessScheduler`???? 100-tick ?????????????????????????????????? marked/?????????????????? typeRotation ????????
+- **???????? ME extract** ? `Ae2InputPuller.pullBatchForType` ??? `AEItemKey` ???? ME ??????????????????????? AE2 API ?????????
+- **? `AEItemKey` ????** ? ?? `Ae2InputKeyBackoffRegistry`??????? ME ???????? key???? per-tile `returnBackoff` ?????????
+- **???? `getLimit` ????** ? `BasicInventorySlotMixin` ?? HEAD ????????? `ItemStack.getMaxStackSize()` ????`SlotLimitCache` ???????
+- **?????????** ? ???? Shift ?????????????? `unlimitedAllFallback`????????????????????????????????????????
+- **???????????** ? `GlobalGearButton` ??????????????? `?` ????????? tooltip?
 ### SemVer 合规性
 
 - 本次为单一崩溃修复，延续 2.0.x 维护线定为 **PATCH** 级别（v2.0.9 → v2.0.9-hotfix）
@@ -142,6 +220,16 @@ v2.0.9 是 SemVer PATCH 版本，围绕 AE2LT 过载接口与 JDTE 时间加速�
 - **AE2 网络库存实时显示** — 虚拟输出槽与无限提供按钮实时显示 ME 网络可见库存，按每游戏刻缓存避免重复模拟提取
 - **AE2 拉取全配置全局齿轮** — 精确模式按钮右侧新增全局齿轮按钮：无需标记物品即可点击，打开应用到全部直连条目的拉取数量编辑器；Shift+点击一键切换全部直连条目的无限拉取（任一条目未开启则全部开启，全部已开启则全部关闭），服务端带容器一致性、距离与频次校验
 
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
+
 ### 性能优化
 
 - **虚拟刻批次规划** — 新增 `PbVirtualTickPlan` / `PbProcessFairness` / `SameTickFailureGate` / `GameTickGate`，把同一游戏刻内的重复加速 tick 合并为一次 PB 配方推进，进度、输入与能量消耗与逐 tick 执行等价
@@ -186,6 +274,16 @@ v2.0.8 是 SemVer PATCH 版本，围绕高等级工厂与 AE2 实测反馈继续
 - **万象创世直输 AE 流体** — 流体槽已满但 AE 有接收空间时，先模拟可接收额度再规划批次，产物可继续生产并直接进入 AE，不再整批暂停
 - **电炉兼容总开关与单机开关** — 按机器控制是否处理 Mekanism 熔炼配方，关闭后只处理 PB 离心配方
 - **AE2 拉取倍率修正** — 256 倍加速下使用上一完整游戏刻的实际倍率扩展拉取预算，每槽预算不再被错误地按 1x 计算
+
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
 
 ### 性能优化
 
@@ -233,6 +331,16 @@ v2.0.7 围绕整合包实测反馈继续打磨：让蜂箱与离心机的 PB 升
 - **PB 原版产量并行倍率** — 工厂与基础离心机按产量升级等级获得 4/8/16/32 并行，与 MEK STACK/JDT 倍率叠加，饱和运算防止极端组合溢出
 - **Building Gadgets 2 剪切/粘贴兼容** — 剪切方块粘贴时改用 `loadWithComponents` 完整恢复 DataComponents（MEK 升级、能量、侧面配置等），机器不再出现状态不完整
 - **Mek Energistics 安装器守卫** — 阻止 ME 工厂安装器把本模组离心机误判为 ME 电力熔炼炉/熔炼工厂并错误转换
+
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
 
 ### 性能优化
 
@@ -430,6 +538,16 @@ v2.0.4 是 SemVer PATCH 版本，修复服务端实测发现的 5 个独立 bug�
     4. **AE 协同**：fallback 后 AE2 推送（`pushOutputs`）仍会执行，若 AE 开启则优先通过 AE 推送，AE 失败再由 MEK Ejector 兜底
   - **影响范围**：2 个文件修改（`ApiaryDirectEjectHandler.java`、`ApiaryOutputBuffer.java`）
 
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
+
 ### 性能优化
 
 - **ApiaryOutputBuffer 独立预扫描数组** — 解决离心机输入槽与蜂箱输出槽数不同时反复扩容的问题
@@ -504,6 +622,16 @@ v2.0.3 是 SemVer PATCH 版本，修复专用服务器客户端无法放入蜜�
 
 - 统一所有服务端 Payload Handler 的容器一致性校验策略，与 `handleApiaryToggleSorting` 的强制校验模式保持一致
 - `handleSetAeInputFilterEntry` 的 `CLEAR` 操作特别危险（可清空他人过滤器），现已强制容器校验
+
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
 
 ### 性能优化
 
@@ -1173,6 +1301,16 @@ v2.0.0 是 SemVer MAJOR 版本，标志 MEK 蜂箱系统正式发布。本次更
   - `ProductiveBeesGenesisJEI` 从 442 行降至 324 行（减少 118 行）
   - 4 个重复 try-catch 块改为循环 + 参数化调用
 
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
+
 ### 性能优化
 
 - **FilterListBeeInfoCache LRU + clear**：防止长期运行内存累积
@@ -1265,6 +1403,16 @@ v2.0.0 是 SemVer MAJOR 版本，标志 MEK 蜂箱系统正式发布。本次更
   - 服务端通过 NBT 同步状态 ordinal，客户端不引用 AE2 类，避免类加载依赖
   - 仅当方块实体实现 `IAe2OutputHost` 且 AE2 集成已启用时显示
   - 注册到全部 4 种离心机方块实体类型（基础/原版工厂/ME 工厂/EME 工厂）
+
+- **错误的 Mixin 导致游戏启动失败（CRITICAL）** — `CachedRecipeBatchAccelMixin` 的完整计算捕获注入
+  使用 `LocalCapture.CAPTURE_FAILHARD` 捕获 `OperationTracker` 局部变量，运行时 Mixin 0.8.7 对
+  Mekanism `CachedRecipe::process()` 的 LVT 校验失败（`incompatible changes at opcode 59`），
+  触发 `MixinTransformerError`，Mekanism Mod 实例创建失败导致启动崩溃。修复：弃用
+  `LocalCapture`（运行时 sponge-mixin 0.15.2 已集成 MixinExtras 0.5.0），改用 `@Local` 注解捕获并
+  显式 `require = 0`（解析失败时静默跳过注入、不崩溃，自动降级为逐 tick 轻量补调语义）；嵌套类
+  Accessor（`CachedRecipeOperationTrackerAccessor`）一并移除，改为反射读取 `tracker.currentMax`
+  （惰性初始化 + 失败永久降级），HEAD 快速路径注入同样 `require = 0` 兜底，
+  任何注入点失败都不会再导致启动失败。
 
 ### 性能优化
 

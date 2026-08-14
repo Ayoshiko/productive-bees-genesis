@@ -107,6 +107,9 @@ public final class Ae2InputFilter {
 	/** Immutable direct-entry snapshot; invalidated only by configuration changes. */
 	private volatile List<DirectEntry> directEntriesCache;
 
+	/** 无标记时全量拉取的全局无限开关；仅在没有任何过滤条目时可切换 */
+	private volatile boolean unlimitedAllFallback = false;
+
 	public FilterMode getFilterMode() {
 		return filterMode;
 	}
@@ -308,6 +311,9 @@ public final class Ae2InputFilter {
 		directVisibleAmounts = s.visible();
 		directUnlimited = s.unlimited();
 		slots = s.slots();
+		if (hasAnyEntry(slots)) {
+			unlimitedAllFallback = false;
+		}
 		invalidateDirectEntries();
 	}
 
@@ -339,6 +345,9 @@ public final class Ae2InputFilter {
 	}
 
 	public boolean isAllowed(AEItemKey key, boolean ignoreNbt, HolderLookup.Provider registries) {
+		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)) {
+			return true;
+		}
 		return Ae2InputFilterQuerySupport.isAllowed(key, filterMode, preciseMode, slots, resolvedDirectKeys, ignoreNbt,
 			registries);
 	}
@@ -358,11 +367,26 @@ public final class Ae2InputFilter {
 
 	/** True when at least one direct entry has unlimited provide enabled. */
 	public boolean hasUnlimitedEntries() {
-		return Ae2InputFilterQuerySupport.hasUnlimitedEntries(slots, directUnlimited);
+		return unlimitedAllFallback || Ae2InputFilterQuerySupport.hasUnlimitedEntries(slots, directUnlimited);
 	}
 
 	public boolean hasFuzzyEntries() {
 		return Ae2InputFilterQuerySupport.hasFuzzyEntries(slots);
+	}
+
+	public boolean isUnlimitedAllFallback() {
+		return unlimitedAllFallback;
+	}
+
+	private static boolean hasAnyEntry(String[] entries) {
+		for (String entry : entries) {
+			if (entry != null) return true;
+		}
+		return false;
+	}
+
+	public synchronized void toggleUnlimitedAllFallback() {
+		unlimitedAllFallback = !unlimitedAllFallback;
 	}
 
 	/** True when every configured entry has opted into exact network-stock mode. */
@@ -386,7 +410,7 @@ public final class Ae2InputFilter {
 	/** Replaces a client-side synchronized snapshot with one set of array publications. */
 	public synchronized void replaceClientSnapshot(FilterMode mode, boolean precise,
 			List<Integer> indices, List<String> entries, List<Long> amounts,
-			List<Long> visibleAmounts, List<Boolean> unlimitedFlags) {
+			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, boolean unlimitedAllFallbackFlag) {
 		Ae2InputFilterSnapshot.Snapshot snapshot = Ae2InputFilterSnapshot.build(
 				mode, precise, indices, entries, amounts, visibleAmounts, unlimitedFlags, slots.length);
 		filterMode = snapshot.mode();
@@ -396,6 +420,7 @@ public final class Ae2InputFilter {
 		directVisibleAmounts = snapshot.visible();
 		directUnlimited = snapshot.unlimited();
 		slots = snapshot.slots();
+		unlimitedAllFallback = unlimitedAllFallbackFlag && !hasAnyEntry(slots);
 		invalidateDirectEntries();
 	}
 
@@ -446,7 +471,7 @@ public final class Ae2InputFilter {
 	public synchronized void save(CompoundTag tag) {
 		// synchronized：与 load/publish 的互斥保持一致，防止并发修改时
 		// slots 与 directAmounts/directUnlimited 三组数组长度不一致导致撕裂读（AIOOBE）
-		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directUnlimited);
+		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directUnlimited, unlimitedAllFallback);
 	}
 
 	/**
@@ -459,6 +484,7 @@ public final class Ae2InputFilter {
 		// 模式与精确标记始终应用（与历史行为一致）
 		filterMode = result.filterMode();
 		preciseMode = result.preciseMode();
+		unlimitedAllFallback = result.unlimitedAllFallback();
 		if (result.entriesPresent()) {
 			// 一次性发布完整数组
 			resolvedDirectKeys = new AEItemKey[result.slots().length];
@@ -466,6 +492,9 @@ public final class Ae2InputFilter {
 			directVisibleAmounts = new long[result.slots().length];
 			directUnlimited = result.directUnlimited();
 			slots = result.slots();
+			if (hasAnyEntry(slots)) {
+				unlimitedAllFallback = false;
+			}
 		}
 		invalidateDirectEntries();
 	}

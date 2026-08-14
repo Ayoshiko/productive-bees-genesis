@@ -12,7 +12,7 @@ import java.util.WeakHashMap;
 	 * 让用户误以为机器卡顿。本类对进度值做帧间平滑：
 	 * <ul>
 	 *   <li>上升限速：满条至少需要 {@link #MIN_FILL_SECONDS} 秒，处理再快也保持可读的填充动画</li>
-	 *   <li>下降快速：新循环开始时以较快速度回落，避免旧进度残留造成"卡在满条"的错觉</li>
+	 *   <li>下降瞬跳：新循环开始时直接跳到新目标值，不再做缓慢回落动画——避免进度条在每个处理周期结束时可见地"倒退到起点"再重新填充的错觉</li>
 	 * </ul>
 	 * 仅用于显示，不修改服务端真实进度。状态按方块实体弱引用持有，GUI 关闭后自动回收。
 	 * 渲染线程单线程访问，无需同步。
@@ -24,9 +24,6 @@ public final class ProgressDisplaySmoother {
 
 	/** 单帧最小步进 — 防止高帧率下 dt 过小导致进度几乎不动 */
 	private static final double MIN_STEP_PER_FRAME = 0.015;
-
-	/** 进度条回落最小时间（秒）— 加工完成后平滑下降，避免看起来在跳动 */
-	private static final double MIN_DRAIN_SECONDS = 0.25;
 
 	/** 预分配进度槽位（EME 最高 18 进程，留余量） */
 	private static final int DEFAULT_PROCESS_CAPACITY = 24;
@@ -92,9 +89,9 @@ public final class ProgressDisplaySmoother {
 			double maxDelta = Math.max(MIN_STEP_PER_FRAME, dt / MIN_FILL_SECONDS);
 			return Math.min(safeTarget, safeDisplayed + maxDelta);
 		}
-		// A lower value marks a completed recipe and the next cycle: drain the bar
-		// smoothly so it never snaps back to the start in a single frame.
-		double maxDownDelta = Math.max(MIN_STEP_PER_FRAME * 2.0, dt / MIN_DRAIN_SECONDS);
-		return Math.max(safeTarget, safeDisplayed - maxDownDelta);
+		// A lower value marks a completed recipe and the next cycle: jump straight to
+		// the new target so the bar never visibly "regresses to the start" between
+		// cycles (the previous smooth drain read as backwards movement at high speed).
+		return safeTarget;
 	}
 }

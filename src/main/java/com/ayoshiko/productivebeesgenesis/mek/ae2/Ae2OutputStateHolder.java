@@ -287,6 +287,7 @@ public final class Ae2OutputStateHolder {
 	public boolean isCachedFluidPushEnabled() { return configCache.isFluidPushEnabled(); }
 	public boolean isCachedPreferAppliedFluxOverAeEnergy() { return configCache.isPreferAppliedFluxOverAeEnergy(); }
 	public boolean isCachedInputPullEnabled() { return configCache.isInputPullEnabled(); }
+	public boolean isCachedEnergyInputEnabled() { return configCache.isEnergyInputEnabled(); }
 	public int getCachedInputRatePerTick() { return configCache.getInputRatePerTick(); }
 	public int getCachedInputIntervalTicks() { return configCache.getInputIntervalTicks(); }
 

@@ -99,15 +99,17 @@ public class MyriadCreationsHandler {
 
 	/**
 	 * 尝试处理万象创世蜜脾/蜜脾块（单进程，使用调用方已缓存的能量和操作数）
+	 *
+	 * @param virtualTicks 本调用应推进的虚拟 tick 数（加速倍率，至少 1）— 用于进度显示对齐标准 PB 路径
 	 */
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
-			long cachedEnergyPerTick, int cachedOperationsPerTick) {
+			long cachedEnergyPerTick, int cachedOperationsPerTick, int virtualTicks) {
 		return tryProcessMyriadCreations(processIndex, input, cachedEnergyPerTick,
-				cachedOperationsPerTick, Long.MAX_VALUE);
+				cachedOperationsPerTick, virtualTicks, Long.MAX_VALUE);
 	}
 
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
-			long cachedEnergyPerTick, int cachedOperationsPerTick, long energyBudget) {
+			long cachedEnergyPerTick, int cachedOperationsPerTick, int virtualTicks, long energyBudget) {
 		// Task 3 性能优化：每 tick 缓存流体槽满载状态
 		fluidOutputHandler.initFluidTankFullCache();
 
@@ -124,8 +126,9 @@ public class MyriadCreationsHandler {
 		long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
 		Level level = context.level();
 
-		// 计算每tick并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
-		// 并行处理：每tick进度+1，但每tick消耗effectiveOps倍能量和输入，完成时处理effectiveOps个输入
+		// 计算每周期并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
+		// 并行处理：进度由 PbVirtualTickPlan 按虚拟 tick 推进，完成一个周期（processingTime tick）
+		// 时处理 opsPerCycle 个输入并消耗对应能量，语义与 PB 原版蜜脾路径完全一致
 		// SubTask 5.1: maxOpsPerTick 配置 100-tick CAS 缓存，对齐 PbRecipeProcessor:261-264
 		int maxOpsPerTick = cache.refreshAndGetMaxOps(level);
 		int effectiveOps = (maxOpsPerTick > 0 && cachedOperationsPerTick > 1)
@@ -174,43 +177,59 @@ public class MyriadCreationsHandler {
 		// 激活处理
 		pbProcessing[processIndex] = true;
 
-		// 并行处理：每tick进度只+1，完成时处理effectiveOps个输入
-		pbOperatingTicks[processIndex]++;
+		// 输出受阻时最多推进到本周期完成边界，不能把后续虚拟 tick 也计入
+		// 完成批次（对齐 PB 原版路径的 outputBlocked 裁剪语义，避免越过完成边界后
+		// 在无输出空间时反复尝试完成周期）。
+		if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)) {
+			if (pbOperatingTicks[processIndex] >= processingTime) {
+				pbOperatingTicks[processIndex] = processingTime;
+				return true;
+			}
+			virtualTicks = Math.min(virtualTicks, Math.max(1, processingTime - pbOperatingTicks[processIndex]));
+		}
 
-		if (pbOperatingTicks[processIndex] >= processingTime) {
+		// 并行处理：复用 PbVirtualTickPlan 推进进度与完成周期，与 PB 原版蜜脾路径保持
+		// 完全一致的语义 — 每调用推进 virtualTicks 个进度，达到 processingTime 完成一个周期
+		// （处理 opsPerCycle 个输入），剩余虚拟 tick 继续推进下一周期进度。
+		// 修复：此前每调用只完成一个周期并丢弃剩余 ticks，加速时万象蜜脾的进度条
+		// 节奏与 PB 原版不一致（PB 会显示下一周期进度位置，万象却停在 0 重新开始）。
+		int opsPerCycle = effectiveOps;
+		PbVirtualTickPlan plan = PbVirtualTickPlan.create(
+				pbOperatingTicks[processIndex], Math.max(1, virtualTicks), processingTime,
+				opsPerCycle, inputCount, cachedEnergyPerTick, availableEnergy);
+		if (plan.executedTicks() <= 0) {
+			pbProcessing[processIndex] = false;
+			return false;
+		}
+		pbOperatingTicks[processIndex] = plan.remainingProgress();
+		int actualOps = plan.completedOperations();
+
+		if (actualOps > 0) {
 			// 输出受阻时暂停处理（仅物品槽满载才阻塞，流体满载可跳过）
 			if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)) {
 				pbOperatingTicks[processIndex] = processingTime;
 				return true;
 			}
 
-			int actualOps;
-			if (effectiveOps <= 1) {
-				actualOps = completeMyriadCreations(input, processIndex, context.productivityModifier());
+			int completed;
+			if (actualOps <= 1) {
+				completed = completeMyriadCreations(input, processIndex, context.productivityModifier());
 			} else {
-				actualOps = completeMyriadCreationsBatch(input, processIndex, effectiveOps);
+				completed = completeMyriadCreationsBatch(input, processIndex, actualOps);
 			}
 
-			if (actualOps <= 0) {
-				// plan 失败时不卡死进度，保留当前进度下一 tick 重试（期间 Ejector 会自动弹出产物腾出空间）
+			if (completed <= 0) {
+				// 完成失败时不卡死进度，保留当前进度下一 tick 重试（期间 Ejector 会自动弹出产物腾出空间）
 				// 不扣能量（无操作完成）
 				return true;
 			}
-			// 修复：按实际完成的操作数扣能量（与 PbRecipeProcessor 标准路径一致）
-			// 而非按 effectiveOps 扣（currentBatch 可能远小于 effectiveOps 导致能量过度扣除）
-			if (cachedEnergyPerTick > 0) {
-				context.energyContainer().extract((long) actualOps * cachedEnergyPerTick, Action.EXECUTE, AutomationType.INTERNAL);
-			}
-			pbOperatingTicks[processIndex] = 0;
 			if (context.inputSlot(processIndex).getStack().isEmpty()) {
 				context.setPbActiveState(false, processIndex);
 			}
-		} else {
-			// 进度未满，本 tick 不完成操作但仍消耗能量（保持并行语义，参考 PbRecipeProcessor opsRun=effectiveOps 路径）
-			if (cachedEnergyPerTick > 0) {
-				context.energyContainer().extract((long) effectiveOps * cachedEnergyPerTick, Action.EXECUTE,
-					AutomationType.INTERNAL);
-			}
+		}
+		// 按 plan 实际消耗扣能量（推进 tick × 操作数 × per-op 能量，与 PB 原版路径一致）
+		if (plan.energyUsed() > 0L) {
+			context.energyContainer().extract(plan.energyUsed(), Action.EXECUTE, AutomationType.INTERNAL);
 		}
 
 		return true;

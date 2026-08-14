@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
@@ -44,9 +45,9 @@ import java.util.function.IntSupplier;
 	 *   <li>SRP：仅负责输入槽倍率注入，不涉及输出槽或配方逻辑</li>
 	 * </ul>
 	 * <p>
-	 * 线程安全：cachedInputMultiplier / cachedInputVersion 使用 volatile 保证跨线程可见性
-	 * （getLimit 可能从同步线程调用）。{@link #productivebeesgenesis$getCachedMultiplier} 使用
-	 * synchronized 守卫 check-then-update 临界区，避免并发线程读到版本号已更新但倍率值仍为旧值。
+	 * 线程安全：cachedInputMultiplier / cachedInputVersion 使用 volatile 保证跨线程可见性。
+	 * 服务端 tick 与外部物流能力调用均在主线程执行，缓存检查/更新无需加锁；
+	 * 极端并发调用下最坏仅重复读取一次 supplier，不影响正确性。
 	 */
 @Mixin(value = BasicInventorySlot.class, remap = false)
 public abstract class BasicInventorySlotMixin implements TieredInputSlot {
@@ -170,7 +171,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	}
 
 	@Override
-	public synchronized int productivebeesgenesis$getCachedMultiplier() {
+	public int productivebeesgenesis$getCachedMultiplier() {
 		IntSupplier supplier = productivebeesgenesis$inputMultiplier;
 		if (supplier == null) return -1;
 		int multiplier = productivebeesgenesis$cachedInputMultiplier;
@@ -196,20 +197,30 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	}
 
 	/**
-	 * 在 getLimit 返回时乘以输入槽倍率（带版本号缓存）
+	 * 在 BasicInventorySlot.getLimit 头部用缓存直接替换原始计算。
 	 * <br/>
-	 * 仅当倍率已设置且大于 1 时生效，避免无倍率槽位的额外计算开销。
-	 * 倍率值在配置 reload 后通过 {@link TieredInputSlot#invalidateMultiplierCache()}
-	 * 递增版本号自动失效，无 reload 期间直接返回缓存值。
-	 * 对于已覆盖 getLimit 的子类（ME/EME 工厂输入槽），此 Mixin 不生效，
+	 * 原始 getLimit 每次都会调用 {@code ItemStack.getMaxStackSize()}，外部物流（AE2/SFM 等）
+	 * 高频探测时会放大 DataComponent 链开销。此注入在倍率已配置时直接复用
+	 * {@link SlotLimitCache} 缓存的 baseLimit，再乘以配置倍率，完全跳过原始计算。
+	 * 倍率为 -1 表示非本模组分等级输入槽，保持 Mekanism 原逻辑不变。
+	 * 对于已覆盖 getLimit 的子类（ME/EME 工厂输入槽），本 Mixin 不生效，
 	 * 由各自的专用 Mixin（ExtraFactoryInputInventorySlotMixin 等）处理。
 	 */
-	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("RETURN"), cancellable = true)
-	private void productivebeesgenesis$modifyGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
+	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true)
+	private void productivebeesgenesis$cachedTieredGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		int multiplier = productivebeesgenesis$getCachedMultiplier();
+		if (multiplier < 0) {
+			return;
+		}
+		BasicInventorySlotAccessor accessor = (BasicInventorySlotAccessor) this;
+		int rawLimit = accessor.productivebeesgenesis$getLimit();
+		boolean obeyLimit = accessor.productivebeesgenesis$getObeyStackLimit();
+		int baseLimit = productivebeesgenesis$getCachedBaseLimit(stack, rawLimit, obeyLimit, multiplier);
 		if (multiplier > 1) {
-			long scaled = (long) cir.getReturnValue() * multiplier;
+			long scaled = (long) baseLimit * multiplier;
 			cir.setReturnValue((int) Math.min(Integer.MAX_VALUE, Math.max(0L, scaled)));
+		} else {
+			cir.setReturnValue(baseLimit);
 		}
 	}
 }

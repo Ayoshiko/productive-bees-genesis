@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -144,6 +145,46 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 
 	/** 供 TickHandler 调用父类 onUpdateServer（protected 跨包不可直接访问） */
 	boolean callSuperOnUpdateServer() { return super.onUpdateServer(); }
+
+	/**
+	 * 轻量 SMELTING 补调 — 仅推进已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
+	 * <br/>
+	 * 对比补调完整 super（每 tick 含 ejector tick + 能量槽回填 + getUpdatedCache 配方重查），
+	 * 本方法直接调用 {@link CachedRecipe#process()} 推进缓存配方：
+	 * <ul>
+	 *   <li>同一 gameTick 内输入不变，首次完整 super 已重查配方，跳过每 tick 的 isInputValid/查找</li>
+	 *   <li>ejector 与能量回填每 gameTick 由首次完整 super 执行一次即可</li>
+	 *   <li>无熔炉配方（空输入/PB 配方/万象蜜脾）时缓存为 null，直接跳过</li>
+	 * </ul>
+	 * 语义等价于 Mekanism 管线真实推进 batchMultiplier 次 tick，确保 256x 加速下 MSPT 占用极低。
+	 *
+	 * @param batchMultiplier 批量倍率（≥2 时才有补调意义）
+	 * @return 是否有任意一次补调执行（调用方用于触发发送更新包）
+	 */
+	boolean runLightSmeltingTicks(int batchMultiplier) {
+		CachedRecipe<ItemStackToItemStackRecipe> cached = recipeCacheLookupMonitor.getCachedRecipe(0);
+		if (cached == null) {
+			return false;
+		}
+		int extraTicks = batchMultiplier - 1;
+		if (cached instanceof ICachedRecipeBatchAccel accel) {
+			// 批量快速推进（JDTE 合并 flush 思路）：一次完整计算 + 预算内循环推进，
+			// 跨周期自动重算，完整计算次数从 M 降到 ~M/配方时长；预算耗尽立即停止补调
+			accel.productivebeesgenesis$startBatch(extraTicks);
+			for (int i = 1; i < batchMultiplier; i++) {
+				cached.process();
+				if (accel.productivebeesgenesis$isBatchExhausted()) {
+					return true;
+				}
+			}
+			return true;
+		}
+		// Mixin 未应用（防御回退）：逐 tick 轻量推进
+		for (int i = 1; i < batchMultiplier; i++) {
+			cached.process();
+		}
+		return true;
+	}
 
 	/**
 	 * JDTE {@code CoalescedAcceleratedMachine} 合并接口委托（仅 JDTE 加载时经 Mixin 生效）。

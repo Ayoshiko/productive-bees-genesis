@@ -878,7 +878,7 @@
   "productivebeesgenesis.gui.ae_input_amount.too_large": "数量不能超过 %s",
   "productivebeesgenesis.gui.ae_input_amount.apply": "设置",
   "productivebeesgenesis.gui.ae_input_amount.title_all": "设置全部拉取数量",
-  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "点击：设置全部已标记条目的拉取数量\nShift+点击：一键切换全部已标记条目的无限拉取",
+  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "点击：设置全部已标记条目的拉取数量\nShift+点击：切换全部已标记条目的无限拉取；无标记时切换全量无限",
   "productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip": "精确模式：开时区分蜜脾与蜜脾块（仅拉取标记物品）；关时共享过滤（蜜脾/蜜脾块一起拉取）",
   "productivebeesgenesis.gui.ae_input_config.info.precise_on": "精确：开",
   "productivebeesgenesis.gui.ae_input_config.info.precise_off": "精确：关",
@@ -1109,5 +1109,6 @@
   "productivebeesgenesis.configuration.bee_conversion.apiaryItemConversionEnabled": "蜂箱物品转化",
   "productivebeesgenesis.configuration.bee_conversion.apiaryItemConversionEnabled.tooltip": "允许通用机械蜂箱转化饲养板（喂食槽）中的物品（PB item_conversion 配方，如 烈焰蜜蜂 + 黑曜石蜜蜂刷怪蛋 → 无限蜜蜂刷怪蛋）",
   "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick": "批量收获每真实tick虚拟tick预算",
-  "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick.tooltip": "每真实tick最多批量处理的虚拟tick数上限；实际预算按服务器TPS自适应降级（健康=满额，100ms卡顿=10%）。防止无批次限制加速器（如1024x时间杖）造成MSPT尖峰，余量挂账后续tick消化。"
+  "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick.tooltip": "每真实tick最多批量处理的虚拟tick数上限；实际预算按服务器TPS自适应降级（健康=满额，100ms卡顿=10%）。防止无批次限制加速器（如1024x时间杖）造成MSPT尖峰，余量挂账后续tick消化。",
+  "productivebeesgenesis.gui.ae_input_config.info.unlimited_all": "全量无限: %s"
 }

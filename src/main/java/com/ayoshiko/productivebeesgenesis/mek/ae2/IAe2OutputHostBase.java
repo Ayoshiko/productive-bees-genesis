@@ -338,11 +338,11 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * 也能使用注入的能量。
 	 * <p>
 	 * 守卫条件（按顺序检查，任一不满足则直接返回）：
+	 * 守卫条件（按顺序检查，任一不满足则直接返回）：
 	 * <ol>
 	 *   <li>{@link Ae2IntegrationLoader#isAe2Loaded()} — AE2 未安装时不执行</li>
-	 *   <li>{@code ModConfig.SERVER} 非 null — 配置已加载</li>
-	 *   <li>{@code mekCentrifugeAeEnergyInputEnabled} 非 null — 配置段已注册（防御性检查）</li>
-	 *   <li>配置项 {@code aeEnergyInputEnabled} — 默认关闭，向后兼容 v1.5.3</li>
+	 *   <li>{@link Ae2OutputStateHolder} 非 null — 方块实体状态已初始化</li>
+	 *   <li>holder 缓存的能量输入开关已开启（统一 5 秒刷新，避免每 tick 读取 ModConfig）</li>
 	 *   <li>离心机已连接到 AE 网格（grid 非 null，由 {@link Ae2EnergyInjector} 内部检查）</li>
 	 * </ol>
 	 * <p>
@@ -361,11 +361,14 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	default void productivebeesgenesis$injectAe2Energy() {
 		// 守卫1：AE2 未安装
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
-		// 守卫2：配置未注册（AE2 加载但配置段未注册的边缘情况）
-		if (ModConfig.SERVER == null) return;
-		if (ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled == null) return;
-		// 守卫3：配置未启用
-		if (!ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get()) return;
+		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return;
+		// 复用 holder 配置缓存，避免每 tick 读取 ModConfig 并将配置检查拆到统一缓存
+		Level level = productivebeesgenesis$getAe2Level();
+		if (level != null && holder.isConfigCacheStale(level.getGameTime())) {
+			holder.refreshConfigCache(level.getGameTime());
+		}
+		if (!holder.isCachedEnergyInputEnabled()) return;
 		// 委托给注入器协调器（v2.0.0：不再传递 perTick 上限，按需差额提取）
 		Ae2EnergyInjector.injectEnergy(this);
 	}

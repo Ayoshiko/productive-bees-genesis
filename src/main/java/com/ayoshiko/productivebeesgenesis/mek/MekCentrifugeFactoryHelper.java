@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.RecipeCacheLookupMonitorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -23,6 +24,7 @@ import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
+import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentConfig;
 import mekanism.common.tile.component.TileComponentEjector;
@@ -93,6 +95,92 @@ public final class MekCentrifugeFactoryHelper {
 	/** 输出检查谓词 — 验证SMELTING配方输出与现有输出槽物品是否可堆叠 */
 	public static final TriPredicate<ItemStackToItemStackRecipe, ItemStack, ItemStack> OUTPUT_CHECK =
 			(recipe, input, output) -> InventoryUtils.areItemsStackable(recipe.getOutput(input), output);
+
+	/**
+	 * 检查离心机工厂是否存在 SMELTING（电力熔炼炉）独占配方通道 — 用于批量倍率 > 1 时补调 super 加速。
+	 * <br/>
+	 * 语义与基础机 {@code MekCentrifugeTickHandler#isSmeltingOnlyInput} 一致：
+	 * 万象创世蜜脾/PB 离心配方优先，SMELTING 只在两者都未命中时参与；
+	 * SMELTING 兼容总开关关闭时返回 false（super 管线不会处理熔炉配方）。
+	 *
+	 * @param inputSlots  工厂输入槽（索引即进程索引）
+	 * @param host        离心机宿主（提供 per-tile smelt 兼容开关）
+	 * @param pbProcessor PB 配方处理器（PB/万象配方优先判定）
+	 * @return true 表示存在至少一个 SMELTING 配方通道
+	 */
+	public static boolean hasSmeltingLane(@NotNull List<IInventorySlot> inputSlots,
+			@NotNull IAe2OutputHostBase host, @NotNull PbRecipeProcessor pbProcessor) {
+		if (!isSmeltingCompatEnabled(host)) {
+			return false;
+		}
+		for (int i = 0; i < inputSlots.size(); i++) {
+			ItemStack input = inputSlots.get(i).getStack();
+			if (input.isEmpty()) {
+				continue;
+			}
+			if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
+				continue;
+			}
+			if (pbProcessor.findPbRecipe(input) != null) {
+				continue;
+			}
+			if (pbProcessor.hasSmeltingRecipe(i, input)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 轻量 SMELTING 补调 — 仅推进已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
+	 * <br/>
+	 * 对比完整 super 补调（每 tick 包含 ejector tick + 能量槽回填 + getUpdatedCache 配方重查），
+	 * 本方法只调用 {@code CachedRecipe.process()} 推进已缓存配方，跳过全部重复开销：
+	 * <ul>
+	 *   <li>ejector tick（TileEntityConfigurableMachine.ejectorComponent.tickServer）— 每 gameTick 由首次完整 super 执行一次</li>
+	 *   <li>energySlot.fillContainerOrConvert()（能量槽回填）— 同上</li>
+	 *   <li>getUpdatedCache（每 tick 的 isInputValid + 配方重查）— 同一 gameTick 内输入不变，
+	 *       首次完整 super 已重查，此处直接复用缓存配方</li>
+	 *   <li>无缓存配方的 lane（输入为空/PB 配方/万象蜜脾）— getCachedRecipe 为 null 直接跳过</li>
+	 * </ul>
+	 * 语义等价于 Mekanism 管线真实推进 batchMultiplier 次 tick（能量消耗、输入消费、产出一致），
+	 * 仅省去每次重复的查找/弹射/回填开销，确保 256x 等极端加速下 MSPT 占用极低。
+	 *
+	 * @param monitors        工厂的 recipeCacheLookupMonitors（受保护字段，由工厂实例方法传入）
+	 * @param batchMultiplier 批量倍率（≥2 时才有补调意义）
+	 * @return 是否有任意一次补调执行（调用方用于触发发送更新包）
+	 */
+	public static boolean runLightSmeltingTicks(@NotNull FactoryRecipeCacheLookupMonitor<?>[] monitors, int batchMultiplier) {
+		boolean updated = false;
+		for (int i = 0; i < monitors.length; i++) {
+			CachedRecipe<?> cached = monitors[i].getCachedRecipe(i);
+			if (cached == null) {
+				// 该 lane 无已缓存熔炉配方（空输入/被 PB 或万象路径独占），跳过
+				continue;
+			}
+			int extraTicks = batchMultiplier - 1;
+			if (cached instanceof ICachedRecipeBatchAccel accel) {
+				// 批量快速推进（JDTE 合并 flush 思路）：一次完整计算 + 预算内循环推进，
+				// 跨周期自动重算，完整计算次数从 M 降到 ~M/配方时长；预算耗尽立即停止补调
+				accel.productivebeesgenesis$startBatch(extraTicks);
+				for (int j = 1; j < batchMultiplier; j++) {
+					cached.process();
+					updated = true;
+					if (accel.productivebeesgenesis$isBatchExhausted()) {
+						break;
+					}
+				}
+			} else {
+				// Mixin 未应用（防御回退）：逐 tick 轻量推进
+				for (int j = 1; j < batchMultiplier; j++) {
+					cached.process();
+					updated = true;
+				}
+			}
+		}
+		return updated;
+	}
 
 	/** 工厂跟踪的配方错误类型（原版工厂构造函数使用） */
 	public static final List<RecipeError> TRACKED_ERROR_TYPES = List.of(

@@ -116,6 +116,9 @@ public final class Ae2InputPuller {
 		// 8. 获取复用缓冲区（与推送共享 ReusableBuffers，避免每 tick 创建临时对象）
 		//    holder 感知重载，跳过冗余 getAe2StateHolder
 		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
+		Ae2InputKeyBackoffRegistry keyBackoff = getOrCreateKeyBackoff(holder);
+		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
+		fairness.roll(currentTick);
 
 		// 9. 获取输入槽列表
 		List<IInventorySlot> inputSlots = host.productivebeesgenesis$getInputSlotsForPull();
@@ -247,44 +250,50 @@ public final class Ae2InputPuller {
 		//      marked flags are pre-computed once per pull (matchesAnyEntry walks the
 		//      filter slots; doing it inside the comparator would cost N*logN walks).
 		boolean sortIgnoreNbt = holder.isAeInputNbtIgnore();
+		boolean rankMarked = filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.DISABLED;
 		for (PullEntry entry : pullList) {
-			entry.marked = filter != null && filter.matchesAnyEntry(entry.key, sortIgnoreNbt);
+			entry.marked = rankMarked && filter.matchesAnyEntry(entry.key, sortIgnoreNbt);
 		}
 		pullList.sort((a, b) -> {
 			if (a.marked != b.marked) return Boolean.compare(b.marked, a.marked);
 			boolean aBlock = CombFuzzyMatcher.isCombBlock(a.key);
 			boolean bBlock = CombFuzzyMatcher.isCombBlock(b.key);
-			return Boolean.compare(bBlock, aBlock); // true (block) first
+			if (aBlock != bBlock) return Boolean.compare(bBlock, aBlock); // true (block) first
+			return Long.compare(fairness.served(a.key), fairness.served(b.key));
 		});
 
-		// 15. 槽位和类型双轮转。单类型也逐槽限额，不再从 slot 0 一次灌满。
 		long totalPulled = 0;
 		int typeCount = pullList.size();
-		int typeStart = holder.getAndIncrementTypeRotation(1, typeCount);
 		int slotStart = holder.getPushState().getAndAdvanceInputSlotRotation(processCount);
-		for (int slotOffset = 0; slotOffset < processCount && totalPulled < remainingQuota; slotOffset++) {
-			int slotIdx = (slotStart + slotOffset) % processCount;
-			IInventorySlot slot = inputSlots.get(slotIdx);
-			if (slot == null) continue;
+		long nanoNow = System.nanoTime();
+		for (int typeOffset = 0; typeOffset < typeCount && totalPulled < remainingQuota; typeOffset++) {
+			PullEntry entry = pullList.get(typeOffset);
+			if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
 
-			for (int typeOffset = 0; typeOffset < typeCount; typeOffset++) {
-				PullEntry entry = pullList.get((typeStart + slotOffset + typeOffset) % typeCount);
-				if (entry.remaining <= 0) continue;
+			// 先汇总该类型在所有可用槽位中的容量，然后一次 ME extract，再本地分发。
+			long typeAvailable = 0L;
+			for (int slotOffset = 0; slotOffset < processCount; slotOffset++) {
+				int slotIdx = (slotStart + slotOffset) % processCount;
+				IInventorySlot slot = inputSlots.get(slotIdx);
+				if (slot == null) continue;
 				long slotRemaining = getSlotRemainingCapacity(slot, entry.key);
-				if (slotRemaining <= 0) continue;
-				int toPull = SaturatingMath.saturatingToInt(Math.min(
-						Math.min(perSlotQuota, slotRemaining),
-						Math.min(entry.remaining, remainingQuota - totalPulled)));
-				if (toPull <= 0) break;
-				try {
-					int pulled = pullAndInsert(level, entry.key, toPull, meStorage,
-							ACTION_SOURCE, inputSlots, slotIdx, pos, returnBackoff);
-					entry.remaining -= pulled;
-					totalPulled += pulled;
-					if (pulled > 0) break;
-				} catch (LinkageError | RuntimeException e) {
-					handlePullException(e, entry.key);
+				if (slotRemaining > 0L) {
+					typeAvailable = Math.min(Long.MAX_VALUE,
+							typeAvailable + Math.min(perSlotQuota, slotRemaining));
 				}
+			}
+			if (typeAvailable <= 0L) continue;
+			int toPull = SaturatingMath.saturatingToInt(Math.min(
+					typeAvailable, Math.min(entry.remaining, remainingQuota - totalPulled)));
+			if (toPull <= 0) continue;
+			try {
+				int pulled = pullBatchForType(level, entry.key, toPull, meStorage, ACTION_SOURCE,
+						inputSlots, slotStart, perSlotQuota, pos, returnBackoff, keyBackoff);
+				entry.remaining -= pulled;
+				totalPulled += pulled;
+				if (pulled > 0) fairness.recordServed(entry.key, pulled);
+			} catch (LinkageError | RuntimeException e) {
+				handlePullException(e, entry.key);
 			}
 		}
 
@@ -408,77 +417,6 @@ public final class Ae2InputPuller {
 	}
 
 	/**
-	 * 执行单个 key 的拉取并按指定策略插入输入槽。
-	 * <br/>
-	 * 从 ME 网络提取物品，按 {@code targetSlotIndex} 决定插入策略：
-	 * -1 顺序填充；&gt;=0 先尝试指定 slot，失败回退到顺序填充其他兼容槽。剩余物品回送 ME 网络。
-	 *
-	 * @param level           当前世界
-	 * @param key             AE2 物品键
-	 * @param amount          拉取数量
-	 * @param meStorage       ME 存储
-	 * @param actionSource    AE2 操作源
-	 * @param inputSlots      输入槽列表
-	 * @param targetSlotIndex 目标槽索引（-1 顺序填充；&gt;=0 指定 slot 优先）
-	 * @param pos             方块位置（用于 returnLeftoverToMe 兜底 popResource）
-	 * @param returnBackoff   回送退避状态（Task 10，可为 null）
-	 * @return 实际插入输入槽的物品总数
-	 */
-	private static int pullAndInsert(Level level, AEItemKey key, int amount,
-			MEStorage meStorage, IActionSource actionSource,
-			List<IInventorySlot> inputSlots, int targetSlotIndex, BlockPos pos, Ae2PushBackoff returnBackoff) {
-		long extracted = meStorage.extract(key, amount, Actionable.MODULATE, actionSource);
-		if (extracted <= 0) {
-			return 0;
-		}
-
-		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
-		int originalCount = stack.getCount();
-
-		if (targetSlotIndex < 0) {
-			// 顺序填充：slot 0 先满再溢出到下一个槽（原版行为，单类型场景）
-			for (IInventorySlot slot : inputSlots) {
-				if (slot == null) continue;
-				if (stack.isEmpty()) break;
-				ItemStack remainder = slot.insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
-				stack = remainder;
-			}
-		} else if (targetSlotIndex < inputSlots.size()) {
-			// round-robin：先尝试指定 slot，失败回退到顺序填充其他兼容槽
-			// 修复根因 B：输出槽不兼容时 MEK insertItem 拒绝插入并返回整个 stack，顺序尝试其他槽
-			IInventorySlot targetSlot = inputSlots.get(targetSlotIndex);
-			if (targetSlot != null) {
-				stack = targetSlot.insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
-			}
-			for (int offset = 1; !stack.isEmpty() && offset < inputSlots.size(); offset++) {
-				int idx = (targetSlotIndex + offset) % inputSlots.size();
-				if (inputSlots.get(idx) != null) {
-					stack = inputSlots.get(idx).insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
-				}
-			}
-		}
-
-		int insertedCount = originalCount - (stack.isEmpty() ? 0 : stack.getCount());
-
-		// Task 2 修复：剩余物品回送 ME 网络，使用 poweredInsert + 三层兜底保证物品不丢失
-		// 根因：原 meStorage.insert 在 ME 网络状态变化（storage 已满/cell 移除/网络断开）时失败即丢弃物品。
-		// 修复：poweredInsert 重试 + 回插输入槽 + popResource 三层兜底，绝不丢失物品。
-		int leftoverRemaining = stack.isEmpty() ? 0 : stack.getCount();
-		if (!stack.isEmpty()) {
-			// M4-2 修复：returnLeftoverToMe 返回剩余未回送数量，> 0 表示有物品丢失风险
-			// 这里 stack 是从 ME 拉取的局部变量，无源槽位可保留，仅记录 ERROR 等待人工排查
-			leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource, returnBackoff,
-					level, pos, inputSlots);
-			if (leftoverRemaining > 0) {
-				// M9: LogThrottle.error 节流，5 秒内同 key 仅首条，避免 256× 加速刷屏
-				LogThrottle.error("ae2_pull_leftover_loss",
-						"AE2 拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
-			}
-		}
-		return insertedCount;
-	}
-
-	/**
 	 * 异常处理：限流日志 + 按异常类型分级记录 + InterruptedException 恢复中断。
 	 * <p>
 	 * Task 7.3 日志治理：
@@ -489,6 +427,54 @@ public final class Ae2InputPuller {
 	 *   <li>所有异常不阻塞拉取流程</li>
 	 * </ul>
 	 */
+	/**
+	 * Per-type batch pull: one ME extract, then local distribution across slots.
+	 * This mirrors the AE2LT batching approach and reduces high-tier factory AE2 API calls.
+	 */
+	private static int pullBatchForType(Level level, AEItemKey key, int amount,
+			MEStorage meStorage, IActionSource actionSource,
+			List<IInventorySlot> inputSlots, int slotStart, long perSlotQuota, BlockPos pos,
+			Ae2PushBackoff returnBackoff, Ae2InputKeyBackoffRegistry keyBackoff) {
+		long extracted = meStorage.extract(key, amount, Actionable.MODULATE, actionSource);
+		if (extracted <= 0) {
+			if (keyBackoff != null) {
+				keyBackoff.recordFailure(key, System.nanoTime());
+			}
+			return 0;
+		}
+		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
+		int originalCount = stack.getCount();
+		int slotCount = inputSlots.size();
+		for (int slotOffset = 0; slotOffset < slotCount && !stack.isEmpty(); slotOffset++) {
+			int slotIdx = (slotStart + slotOffset) % slotCount;
+			IInventorySlot slot = inputSlots.get(slotIdx);
+			if (slot == null) continue;
+			long slotRemaining = getSlotRemainingCapacity(slot, key);
+			if (slotRemaining <= 0L) continue;
+			int quota = SaturatingMath.saturatingToInt(Math.min(perSlotQuota, slotRemaining));
+			if (quota <= 0) continue;
+			int toInsert = Math.min(stack.getCount(), quota);
+			ItemStack remainder = slot.insertItem(stack.copyWithCount(toInsert), Action.EXECUTE, AutomationType.INTERNAL);
+			int insertedNow = toInsert - (remainder.isEmpty() ? 0 : remainder.getCount());
+			if (insertedNow > 0) {
+				stack.shrink(insertedNow);
+			}
+		}
+		int insertedCount = originalCount - (stack.isEmpty() ? 0 : stack.getCount());
+		if (insertedCount > 0 && keyBackoff != null) {
+			keyBackoff.recordSuccess(key);
+		}
+		if (!stack.isEmpty()) {
+			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource,
+					returnBackoff, level, pos, inputSlots);
+			if (leftoverRemaining > 0) {
+				LogThrottle.error("ae2_pull_leftover_loss_batch",
+						"AE2 批量拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
+			}
+		}
+		return insertedCount;
+	}
+
 	private static void handlePullException(Throwable e, AEItemKey key) {
 		long count = PULL_EXCEPTION_COUNTER.incrementAndGet();
 		if (e instanceof NullPointerException) {
@@ -508,6 +494,26 @@ public final class Ae2InputPuller {
 		if (e instanceof InterruptedException) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	private static Ae2InputKeyBackoffRegistry getOrCreateKeyBackoff(Ae2OutputStateHolder holder) {
+		Object cached = holder.getPushState().getInputKeyBackoffRegistry();
+		if (cached instanceof Ae2InputKeyBackoffRegistry registry) {
+			return registry;
+		}
+		Ae2InputKeyBackoffRegistry registry = new Ae2InputKeyBackoffRegistry();
+		holder.getPushState().setInputKeyBackoffRegistry(registry);
+		return registry;
+	}
+
+	private static Ae2InputFairnessScheduler getOrCreateFairnessScheduler(Ae2OutputStateHolder holder) {
+		Object cached = holder.getPushState().getInputFairnessScheduler();
+		if (cached instanceof Ae2InputFairnessScheduler scheduler) {
+			return scheduler;
+		}
+		Ae2InputFairnessScheduler scheduler = new Ae2InputFairnessScheduler();
+		holder.getPushState().setInputFairnessScheduler(scheduler);
+		return scheduler;
 	}
 
 	/**

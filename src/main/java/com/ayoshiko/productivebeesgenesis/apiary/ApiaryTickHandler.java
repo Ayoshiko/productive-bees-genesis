@@ -144,6 +144,12 @@ class ApiaryTickHandler {
 				return false;
 			}
 			skipBeeProcessing = action == TickBatchSkipState.TickAction.SKIP;
+			if (skipBeeProcessing) {
+				// 同 gameTick 后续 ticker 调用已由 decideAction 合并；对齐 JDTE
+				// CoalescedAcceleratedMachine 语义，完全跳过 super/能量/AE2 重路径。
+				// 同一 gameTick 只需首个入口完整处理一次。
+				return false;
+			}
 			if (!skipBeeProcessing) {
 				batchMultiplier = skipState.getBatchMultiplier();
 			}

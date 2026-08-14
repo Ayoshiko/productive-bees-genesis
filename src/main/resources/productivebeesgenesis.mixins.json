@@ -28,6 +28,7 @@
     "beehive.AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin",
     "beehive.AdvancedBeehiveInventoryDebounceMixin",
     "beehive.BlockEntityItemStackHandlerDebounceMixin",
+    "mek.CachedRecipeBatchAccelMixin",
     "mek.CentrifugeBlockEntityMixin",
     "mek.HeatedCentrifugeBlockEntityMixin",
     "mek.EMExtraFactoryMixin",

@@ -105,20 +105,24 @@ final class Ae2FilterPayloadHandlers {
 						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
 		if (filter == null) return;
-		// 目标状态：任一直连条目未开启无限 → 全部开启；全部已开启 → 全部关闭
-		boolean anyDirect = false;
-		boolean allUnlimited = true;
-		for (int i = 0; i < filter.getCapacity(); i++) {
-			if (filter.isDirectEntry(i)) {
-				anyDirect = true;
-				if (!filter.isDirectUnlimitedAt(i)) {
+		// 目标状态：有直连条目时切换全部直连条目的无限状态；
+		// 完全没有任何标记时，切换无标记全量拉取的全局无限开关。
+		if (filter.hasDirectEntries()) {
+			boolean allUnlimited = true;
+			for (int i = 0; i < filter.getCapacity(); i++) {
+				if (filter.isDirectEntry(i) && !filter.isDirectUnlimitedAt(i)) {
 					allUnlimited = false;
+					break;
 				}
 			}
-		}
-		if (!anyDirect) return;
-		if (filter.setAllDirectUnlimited(!allUnlimited) > 0 && be instanceof TileEntityMekanism mek) {
-			mek.markForSave();
+			if (filter.setAllDirectUnlimited(!allUnlimited) > 0 && be instanceof TileEntityMekanism mek) {
+				mek.markForSave();
+			}
+		} else if (!filter.hasFuzzyEntries()) {
+			filter.toggleUnlimitedAllFallback();
+			if (be instanceof TileEntityMekanism mek) {
+				mek.markForSave();
+			}
 		}
 		syncFilterToClient(be, serverPlayer);
 	}
@@ -349,7 +353,7 @@ final class Ae2FilterPayloadHandlers {
 		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
 		if (payload.filterMode() < 0 || payload.filterMode() >= modes.length) return;
 		filter.replaceClientSnapshot(modes[payload.filterMode()], payload.preciseMode(),
-				indices, entries, amounts, visibleAmounts, unlimited);
+				indices, entries, amounts, visibleAmounts, unlimited, payload.unlimitedAllFallback());
 	}
 
 	/**
@@ -421,7 +425,8 @@ final class Ae2FilterPayloadHandlers {
 				entries,
 				amounts,
 				visibleAmounts,
-				unlimited);
+				unlimited,
+				filter.isUnlimitedAllFallback());
 	}
 
 	static void syncFilterToClient(BlockEntity be, ServerPlayer player) {

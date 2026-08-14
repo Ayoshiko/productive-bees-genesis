@@ -28,6 +28,12 @@ public final class Ae2PushStateHolder {
 	/** 输入回送退避状态（Task 10：仅用于 Ae2InputPuller 回送失败） */
 	private final Ae2PushBackoff returnBackoff = new Ae2PushBackoff();
 
+	/** Per-AEItemKey input-pull failure backoff registry; Object keeps AE2 types out of this class. */
+	private volatile Object inputKeyBackoffRegistry;
+
+	/** AE2 input fairness scheduler; Object keeps AE2 types out of this class. */
+	private volatile Object inputFairnessScheduler;
+
 	// ===== 推送调用计数器（JDTE 兼容，替代 getGameTime） =====
 	/** 流体推送调用计数器 */
 	private volatile long fluidPushCallCounter = 0L;
@@ -59,6 +65,12 @@ public final class Ae2PushStateHolder {
 
 	/** 获取输入回送退避状态（Task 10） */
 	public Ae2PushBackoff getReturnBackoff() { return returnBackoff; }
+
+	public Object getInputKeyBackoffRegistry() { return inputKeyBackoffRegistry; }
+	public void setInputKeyBackoffRegistry(Object registry) { this.inputKeyBackoffRegistry = registry; }
+
+	public Object getInputFairnessScheduler() { return inputFairnessScheduler; }
+	public void setInputFairnessScheduler(Object scheduler) { this.inputFairnessScheduler = scheduler; }
 
 	/** 递增流体推送计数器并返回新值（JDTE 兼容节流依据） */
 	public long incrementFluidPushCallCounter() { return ++fluidPushCallCounter; }
@@ -151,6 +163,8 @@ public final class Ae2PushStateHolder {
 		fluidBackoff.reset();
 		itemBackoff.reset();
 		returnBackoff.reset();
+		inputKeyBackoffRegistry = null;
+		inputFairnessScheduler = null;
 		fluidPushCallCounter = 0L;
 		lastFluidPushCounter = 0L;
 		itemPushCallCounter = 0L;

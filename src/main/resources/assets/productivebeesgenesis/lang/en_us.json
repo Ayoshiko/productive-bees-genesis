@@ -627,7 +627,7 @@
   "productivebeesgenesis.gui.ae_input_amount.too_large": "Amount cannot exceed %s",
   "productivebeesgenesis.gui.ae_input_amount.apply": "Set",
   "productivebeesgenesis.gui.ae_input_amount.title_all": "Set Amount for All",
-  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "Click: set pull amount for all marked entries\nShift-click: toggle unlimited pull for all marked entries",
+  "productivebeesgenesis.gui.ae_input_config.global_gear.tooltip": "Click: set pull amount for all marked entries\nShift-click: toggle unlimited pull for all marked entries, or unlimited-all when no markers",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.basic": "Basic Parameters",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.ejection": "Ejection",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.io_limit": "IO Limit",
@@ -1109,5 +1109,6 @@
   "productivebeesgenesis.configuration.bee_conversion.apiaryItemConversionEnabled": "Apiary Item Conversion",
   "productivebeesgenesis.configuration.bee_conversion.apiaryItemConversionEnabled.tooltip": "Allow Mek Apiary hives to convert items placed in the feeding board (PB item_conversion recipes, e.g. Blazing bee + Obsidian bee spawn egg -> Infinite bee spawn egg)",
   "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick": "Batch Harvest Budget Per Tick",
-  "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick.tooltip": "Upper limit of virtual ticks processed per real tick; actual budget auto-scales down by server TPS (healthy=full, 100ms MSPT=10%). Prevents MSPT spikes from unbounded accelerators (e.g. 1024x time wand); leftovers are queued for later ticks."
+  "productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick.tooltip": "Upper limit of virtual ticks processed per real tick; actual budget auto-scales down by server TPS (healthy=full, 100ms MSPT=10%). Prevents MSPT spikes from unbounded accelerators (e.g. 1024x time wand); leftovers are queued for later ticks.",
+  "productivebeesgenesis.gui.ae_input_config.info.unlimited_all": "Unlimited All: %s"
 }

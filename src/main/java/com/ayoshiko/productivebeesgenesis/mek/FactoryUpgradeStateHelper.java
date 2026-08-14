@@ -153,14 +153,16 @@ public final class FactoryUpgradeStateHelper {
 	 * 在 256x JDTE 加速下，onUpdateServer 每游戏刻会被调用 256 次，若每次都完整执行
 	 * PB 配方处理将导致服务器冻结。通过 {@link TickBatchSkipState#decideAction} 采用
 	 * "虚拟 tick 银行 + 每 tick 预算"策略：本 gameTick 第一个入口执行 PB（从共享预算取批量倍率），
-	 * 后续调用跳过 PB 处理，仅保留 super 与 AE2 推送；同 gameTick 已由 JDTE flush 完整处理时
-	 * 完全跳过（含 super，避免双跑）。decideAction 内部已调用 tracker.onTick(level)，
+	 * 后续 ticker 调用与同 gameTick 已由 JDTE flush 处理的情况均完全跳过
+	 * （含 super / AE2 / 能量注入，避免双跑）。decideAction 内部已调用 tracker.onTick(level)，
 	 * 故此处不再单独调用（避免重复计数）。
 	 * <p>
 	 * AE2 推送/拉取批处理（v2.0.0+）：{@link CentrifugeFactoryCommonLogic#pushAe2OutputsAndPullInputs}
 	 * 已移入 if (!skipPb) 块内,与 PB 一致地批处理。256x 加速下仅第 1 次 tick 执行完整 AE2 操作,
-	 * 第 2-256 次 tick 跳过 AE2 推送/拉取（但仍执行 tryConnectNode 和 injectAe2Energy 保证能量供应）。
-	 * 进度累加和能量消耗由 superCall.getAsBoolean() 处理,不损失产出速率。
+	 * 第 2-256 次 tick 完全跳过（含 tryConnectNode / injectAe2Energy / AE2 推送拉取）。
+	 * SMELTING 配方进度推进由首次完整 super + 轻量补调
+	 * （{@link MekCentrifugeFactoryHelper#runLightSmeltingTicks}，仅推进已缓存配方）
+	 * 处理，能量消耗按真实 tick 数计费，不损失产出速率。
 	 *
 	 * @param factory		工厂实例
 	 * @param inputSlots	输入槽列表（工厂继承的受保护字段，由工厂传入）
@@ -179,10 +181,16 @@ public final class FactoryUpgradeStateHelper {
 			return false;
 		}
 		boolean skipPb = action == TickBatchSkipState.TickAction.SKIP;
+		if (skipPb) {
+			// 同 gameTick 后续 ticker 调用已由 decideAction 合并；对齐 JDTE
+			// CoalescedAcceleratedMachine 语义，完全跳过 super/能量/AE2 重路径。
+			// 同一 gameTick 只需首个入口完整处理一次。
+			return false;
+		}
 
-		// tryConnectNode 由 Task 13 volatile 门控优化,保留每 tick 调用
+		// tryConnectNode 由 Task 13 volatile 门控优化，仅在每个 gameTick 首个完整入口执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
-		// injectAe2Energy 保留每 tick 调用,保证能量供应
+		// injectAe2Energy 同样仅在每个 gameTick 首个完整入口执行
 		factory.productivebeesgenesis$injectAe2Energy();
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
@@ -190,20 +198,33 @@ public final class FactoryUpgradeStateHelper {
 
 		boolean result;
 		if (!skipPb) {
+			int batchMultiplier = skipState.getBatchMultiplier();
+			// SMELTING（电力熔炼炉）配方加速 — super 每 gameTick 只调用一次（后续 ticker 调用
+			// 与 JDTE flush 均被同 gameTick 门控跳过），Mekanism 管线无法按倍率推进。
+			// 存在 SMELTING 配方通道时补调 super，使熔炉配方按批量倍率 M 推进
+			// （JDTE 时间加速器与 JDT 时间手杖均生效）；PB 通道由 PbVirtualTickPlan 内部加速。
+			// 放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差（lastUsage 显示）。
+			if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, factory, factory.pbProcessor)) {
+				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
+				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+				if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
+					sendUpdatePacket = true;
+				}
+			}
 			// 输入槽状态变化频率低,每 gameTick 1 次足够,跳过 256x 下 255 次无意义操作
 			factory.pbUpgradeDelegate.processPbUpgradeInput();
 			factory.delegate.resetSortingMark();
 			// 执行 PB：设置批量倍率（虚拟 tick 银行取款,本 gameTick 第一次调用）
-			factory.pbProcessor.setTickMultiplier(skipState.getBatchMultiplier());
+			factory.pbProcessor.setTickMultiplier(batchMultiplier);
 			result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 				sendUpdatePacket, energyBeforeSuper, factory.energyContainer(), factory.processes(),
 				inputSlots, factory.pbProcessor, factory, factory.getActive(), factory::setActive,
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
-			// AE2 推送/拉取与 PB 一致批处理：256x 加速下第 2-256 次 tick 跳过
-			// tryConnectNode 和 injectAe2Energy 仍每 tick 调用,保证能量供应
+			// AE2 推送/拉取与 PB 一致批处理：仅首个完整入口执行，
+			// 后续 ticker 已由 decideAction 完全跳过
 			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory);
 		} else {
-			// 跳过 PB：本 gameTick 后续调用（256x 加速下第 2~256 次）,仅保留 super 返回值
+			// 历史兼容分支；正常路径已由 SKIP/ALREADY_HANDLED 提前返回
 			result = sendUpdatePacket;
 		}
 
@@ -232,6 +253,15 @@ public final class FactoryUpgradeStateHelper {
 		factory.productivebeesgenesis$injectAe2Energy();
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
 		boolean sendUpdatePacket = superCall.getAsBoolean();
+		// SMELTING 配方加速（与 onUpdateServer 的 !skipPb 分支一致）— 补调 super 使熔炉管线
+		// 按批量倍率推进；放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差。
+		if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, factory, factory.pbProcessor)) {
+			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
+			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+			if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
+				sendUpdatePacket = true;
+			}
+		}
 		// 升级输入、排序重置、PB 配方处理（批量倍率由调用方传入）
 		factory.pbUpgradeDelegate.processPbUpgradeInput();
 		factory.delegate.resetSortingMark();

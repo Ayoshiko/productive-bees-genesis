@@ -368,8 +368,20 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 
 		boolean result;
 		if (!skipPb) {
+			// SMELTING（电力熔炼炉）配方加速 — 与基础机/原版工厂一致：批量倍率 > 1
+			// 且存在 SMELTING 配方通道时轻量补调，使熔炉管线按倍率 M 推进
+			// （JDTE 时间加速器与 JDT 时间手杖均生效）。本类不实现 JDTE 合并接口，
+			// JDTE 按普通 ticker 路径循环调用本方法，同 gameTick 门控保证只补调一次。
+			int batchMultiplier = skipState.getBatchMultiplier();
+			if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, this, pbProcessor)) {
+				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
+				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+				if (productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
+					sendUpdatePacket = true;
+				}
+			}
 			// 执行 PB：设置批量倍率（虚拟 tick 银行取款）
-			pbProcessor.setTickMultiplier(skipState.getBatchMultiplier());
+			pbProcessor.setTickMultiplier(batchMultiplier);
 			result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 					sendUpdatePacket, energyBeforeSuper, energyContainer, tier.processes,
 					inputSlots, pbProcessor, this, getActive(), this::setActive,
@@ -385,6 +397,17 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		}
 
 		return result;
+	}
+
+	/**
+	 * 轻量 SMELTING 补调 — 仅推进各 lane 已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
+	 * <br/>
+	 * 见 {@link MekCentrifugeFactoryHelper#runLightSmeltingTicks}：跳过 ejector/能量回填/配方重查，
+	 * 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+	 * 本方法供 onUpdateServer 访问受保护的 {@code recipeCacheLookupMonitors}。
+	 */
+	public boolean productivebeesgenesis$runLightSmeltingTicks(int batchMultiplier) {
+		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(recipeCacheLookupMonitors, batchMultiplier);
 	}
 
 	/** PB处理时返回PB进度 */

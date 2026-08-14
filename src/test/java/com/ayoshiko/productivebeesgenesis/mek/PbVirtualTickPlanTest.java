@@ -49,6 +49,19 @@ class PbVirtualTickPlanTest {
 	}
 
 	@Test
+	void myriadProgressKeepsRemainingTicksIntoNextCycleLikePbPath() {
+		// 万象创世蜜脾复用 PbVirtualTickPlan 后的进度语义：256 虚拟 tick 在 200 tick
+		// 周期下完成 1 个周期（1 op）后，剩余 56 tick 继续推进下一周期进度（56/200），
+		// 与 PB 原版蜜脾一致；旧实现直接归零导致加速时进度条节奏不一致。
+		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 256, 200, 1, 4, 40L, Long.MAX_VALUE);
+
+		assertEquals(1, plan.completedOperations());
+		assertEquals(56, plan.remainingProgress());
+		assertEquals(256, plan.executedTicks());
+		assertEquals(10_240L, plan.energyUsed());
+	}
+
+	@Test
 	void zeroTickCreativePlanCompletesEveryVirtualTick() {
 		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 20, 0, 1, 20, 0L, 0L);
 

@@ -37,9 +37,10 @@ final class Ae2InputFilterNbtCodec {
 	 * @param directUnlimited  直连条目无限提供标记数组
 	 */
 	static void save(CompoundTag tag, Ae2InputFilter.FilterMode filterMode, boolean preciseMode,
-			String[] slots, long[] directAmounts, boolean[] directUnlimited) {
+			String[] slots, long[] directAmounts, boolean[] directUnlimited, boolean unlimitedAllFallback) {
 		tag.putByte("mode", (byte) filterMode.ordinal());
 		tag.putByte("precise", (byte) (preciseMode ? 1 : 0));
+		tag.putBoolean("unlimitedAllFallback", unlimitedAllFallback);
 		ListTag entriesTag = new ListTag();
 		// 找到最后一个非 null 槽位
 		int lastNonNull = -1;
@@ -83,8 +84,9 @@ final class Ae2InputFilterNbtCodec {
 			}
 		}
 		boolean preciseMode = tag.contains("precise") && tag.getByte("precise") == 1;
+		boolean unlimitedAllFallback = tag.contains("unlimitedAllFallback") && tag.getBoolean("unlimitedAllFallback");
 		if (!tag.contains("entries", Tag.TAG_LIST)) {
-			return new LoadResult(filterMode, preciseMode, false,
+			return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, false,
 					new String[0], new long[0], new boolean[0]);
 		}
 		// 局部构建新数组，最后一次性返回，由调用方 volatile 发布
@@ -137,7 +139,7 @@ final class Ae2InputFilterNbtCodec {
 						? Ae2InputFilter.DEFAULT_DIRECT_AMOUNT : 0L;
 			}
 		}
-		return new LoadResult(filterMode, preciseMode, true, newSlots, newAmounts, newUnlimited);
+		return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, true, newSlots, newAmounts, newUnlimited);
 	}
 
 	private static String[] grow(String[] src, int minCapacity) {
@@ -159,7 +161,7 @@ final class Ae2InputFilterNbtCodec {
 	}
 
 	/** 加载结果快照（数组均为新分配，可直接发布） */
-	record LoadResult(Ae2InputFilter.FilterMode filterMode, boolean preciseMode, boolean entriesPresent,
-			String[] slots, long[] directAmounts, boolean[] directUnlimited) {
+	record LoadResult(Ae2InputFilter.FilterMode filterMode, boolean preciseMode, boolean unlimitedAllFallback,
+			boolean entriesPresent, String[] slots, long[] directAmounts, boolean[] directUnlimited) {
 	}
 }

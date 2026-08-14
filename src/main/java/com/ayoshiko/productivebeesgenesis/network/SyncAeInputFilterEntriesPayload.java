@@ -49,7 +49,8 @@ public record SyncAeInputFilterEntriesPayload(
 		List<String> entries,
 		List<Long> amounts,
 		List<Long> visibleAmounts,
-		List<Boolean> unlimited
+		List<Boolean> unlimited,
+		boolean unlimitedAllFallback
 ) implements CustomPacketPayload {
 
 	/** Backward-compatible constructor for callers that do not provide stock metadata. */
@@ -58,7 +59,7 @@ public record SyncAeInputFilterEntriesPayload(
 		this(pos, filterMode, preciseMode, indices, entries,
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), 0L),
-				Collections.nCopies(entries.size(), false));
+				Collections.nCopies(entries.size(), false), false);
 	}
 
 	/**
@@ -66,13 +67,14 @@ public record SyncAeInputFilterEntriesPayload(
 	 * Keep the public payload fields unchanged while encoding the two per-entry
 	 * metadata lists as one composite field.
 	 */
-	private record DirectState(List<Long> amounts, List<Long> visibleAmounts, List<Boolean> unlimited) {}
+	private record DirectState(List<Long> amounts, List<Long> visibleAmounts, List<Boolean> unlimited, boolean unlimitedAllFallback) {}
 
 	private static final StreamCodec<ByteBuf, DirectState> DIRECT_STATE_CODEC =
 			StreamCodec.composite(
 					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::amounts,
 					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::visibleAmounts,
 					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::unlimited,
+					ByteBufCodecs.BOOL, DirectState::unlimitedAllFallback,
 					DirectState::new
 			);
 
@@ -90,10 +92,10 @@ public record SyncAeInputFilterEntriesPayload(
 					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_FILTER_ENTRY_LENGTH)
 							.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::entries,
 					DIRECT_STATE_CODEC,
-					payload -> new DirectState(payload.amounts(), payload.visibleAmounts(), payload.unlimited()),
+					payload -> new DirectState(payload.amounts(), payload.visibleAmounts(), payload.unlimited(), payload.unlimitedAllFallback()),
 					(pos, filterMode, preciseMode, indices, entries, directState) -> new SyncAeInputFilterEntriesPayload(
 							pos, filterMode, preciseMode, indices, entries,
-							directState.amounts(), directState.visibleAmounts(), directState.unlimited())
+							directState.amounts(), directState.visibleAmounts(), directState.unlimited(), directState.unlimitedAllFallback())
 			);
 
 	@Override

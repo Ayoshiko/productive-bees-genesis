@@ -289,10 +289,11 @@ public class PbRecipeProcessor {
 		if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 				|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
 			// Task 5: 批量倍率（加速模组 N 倍产出跳过 N-1 次重复 tick）
-			int myriadOps = SaturatingMath.saturatingToInt(
-					SaturatingMath.saturatingMultiply(cachedOperationsPerTick, virtualTicks));
+			// virtualTicks 一并传入万象处理器，使进度按虚拟 tick 推进（对齐标准 PB 路径的
+			// 虚拟加速进度显示）。cachedOperationsPerTick 为每周期操作数（不再按倍率放大，
+			// 由万象处理器内部 PbVirtualTickPlan 按虚拟 tick 完成多个周期，与 PB 原版一致）。
 			return myriadHandler.tryProcessMyriadCreations(processIndex, input,
-					cachedEnergyPerTick, myriadOps, availableEnergy);
+					cachedEnergyPerTick, cachedOperationsPerTick, virtualTicks, availableEnergy);
 		}
 
 			// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方

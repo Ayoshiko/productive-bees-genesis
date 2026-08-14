@@ -19,8 +19,8 @@ import org.jetbrains.annotations.NotNull;
 	 * <p>
 	 * 失效条件：物品类型变化、或配置 reload 导致 MULTIPLIER_VERSION 变化。
 	 * <p>
-	 * 线程安全：getLimit 可能从同步线程调用，{@link #getBaseLimit} 使用 synchronized 守卫
-	 * check-then-update 临界区，避免并发线程读到部分新值（如 cachedItem 已更新但 cachedBaseLimit 仍为旧值）。
+	 * 线程安全：服务端 tick 与外部物流能力调用均在主线程执行；字段为 volatile 保证可见性。
+	 * 若极端情况下发生并发调用，最坏结果为重复计算一次 baseLimit，不影响正确性。
 	 */
 public final class SlotLimitCache {
 
@@ -40,7 +40,7 @@ public final class SlotLimitCache {
 	 * @param multiplier  当前倍率值（已缓存）
 	 * @return 基础堆叠上限
 	 */
-	public synchronized int getBaseLimit(@NotNull ItemStack stack, int rawLimit, boolean obeyLimit, int multiplier) {
+	public int getBaseLimit(@NotNull ItemStack stack, int rawLimit, boolean obeyLimit, int multiplier) {
 		// 空槽直接计算（不缓存空槽）
 		if (stack.isEmpty()) {
 			return obeyLimit ? Math.min(rawLimit, stack.getMaxStackSize()) : rawLimit;

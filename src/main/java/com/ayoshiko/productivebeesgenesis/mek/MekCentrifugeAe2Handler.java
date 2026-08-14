@@ -129,13 +129,21 @@ class MekCentrifugeAe2Handler {
 
 	// ===== 输入槽访问 =====
 
+	/** 基础离心机输入槽列表缓存 — 参考工厂版 Mixin 的 stable-list 做法，避免 AE2 拉取路径每次分配 singletonList。 */
+	private List<IInventorySlot> cachedInputSlotsForPull;
+
 	/**
 	 * 获取用于拉取的输入槽列表 — 基础离心机只有1个输入槽
 	 * <br/>
 	 * 拉取器按顺序填充，槽满则跳到下一个。基础机固定返回单元素列表。
 	 */
 	List<IInventorySlot> getInputSlotsForPull() {
-		return Collections.singletonList(tile.accessor().productivebeesgenesis$getInputSlot());
+		List<IInventorySlot> cached = cachedInputSlotsForPull;
+		if (cached == null) {
+			cached = Collections.singletonList(tile.accessor().productivebeesgenesis$getInputSlot());
+			cachedInputSlotsForPull = cached;
+		}
+		return cached;
 	}
 
 	// ===== 容器同步器注册 =====

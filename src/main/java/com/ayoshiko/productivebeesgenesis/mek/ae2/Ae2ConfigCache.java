@@ -35,6 +35,9 @@ final class Ae2ConfigCache {
 	/** 缓存的 AE2 输入拉取开关（默认 false） */
 	private volatile boolean cachedInputPullEnabled = false;
 
+	/** 缓存的 AE2 能量输入开关（默认 false） */
+	private volatile boolean cachedEnergyInputEnabled = false;
+
 	private volatile int cachedInputRatePerTick = 64;
 	private volatile int cachedInputIntervalTicks = 20;
 
@@ -79,6 +82,8 @@ final class Ae2ConfigCache {
 			// mekCentrifugeAeInputEnabled 为 null（AE2 未加载）时回退 false
 			cachedInputPullEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
 					&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
+			cachedEnergyInputEnabled = ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled != null
+					&& ModConfig.SERVER.mekCentrifugeAeEnergyInputEnabled.get();
 			cachedInputRatePerTick = ModConfig.SERVER.mekCentrifugeAeInputRatePerTick == null
 					? 64 : Math.max(1, ModConfig.SERVER.mekCentrifugeAeInputRatePerTick.get());
 			cachedInputIntervalTicks = ModConfig.SERVER.mekCentrifugeAeInputIntervalTicks == null
@@ -99,6 +104,7 @@ final class Ae2ConfigCache {
 	boolean isFluidPushEnabled() { return cachedFluidPushEnabled; }
 	boolean isPreferAppliedFluxOverAeEnergy() { return cachedPreferAppliedFluxOverAeEnergy; }
 	boolean isInputPullEnabled() { return cachedInputPullEnabled; }
+	boolean isEnergyInputEnabled() { return cachedEnergyInputEnabled; }
 	int getInputRatePerTick() { return cachedInputRatePerTick; }
 	int getInputIntervalTicks() { return cachedInputIntervalTicks; }
 
@@ -110,6 +116,7 @@ final class Ae2ConfigCache {
 		cachedFluidPushEnabled = true;
 		cachedPreferAppliedFluxOverAeEnergy = false;
 		cachedInputPullEnabled = false;
+		cachedEnergyInputEnabled = false;
 		cachedInputRatePerTick = 64;
 		cachedInputIntervalTicks = 20;
 		lastConfigRefreshMs.set(-CONFIG_REFRESH_INTERVAL_MS);

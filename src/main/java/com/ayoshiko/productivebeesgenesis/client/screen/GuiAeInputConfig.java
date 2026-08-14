@@ -57,7 +57,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private final MekanismButton nbtBtn;
 	private final MekanismButton filterModeBtn;
 	private final MekanismButton preciseBtn;
-	private final MekanismButton globalGearBtn;
+	private final GlobalGearButton globalGearBtn;
 	private final MekanismButton prevPageBtn;
 	private final MekanismButton nextPageBtn;
 	private final MekanismButton clearBtn;
@@ -288,6 +288,13 @@ public final class GuiAeInputConfig extends GuiWindow {
 				Integer.toString(unlimitedCount));
 		drawScaledScrollingString(guiGraphics, unlimitedText, startX, startY + 81, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
+
+		boolean unlimitedAll = filter != null && filter.isUnlimitedAllFallback();
+		Component unlimitedAllText = Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.info.unlimited_all",
+				unlimitedAll ? "ON" : "OFF");
+		drawScaledScrollingString(guiGraphics, unlimitedAllText, startX, startY + 90, TextAlignment.LEFT,
+				unlimitedAll ? 0x55FF55 : screenTextColor(), panelWidth, 3, false, 0.7F);
 	}
 
 	@Override
@@ -381,6 +388,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		preciseBtn.setMessage(Component.translatable(precise
 				? "productivebeesgenesis.gui.ae_input_config.status.precise_on"
 				: "productivebeesgenesis.gui.ae_input_config.status.precise_off"));
+		globalGearBtn.setUnlimitedAllFallback(filter != null && filter.isUnlimitedAllFallback());
 	}
 
 	private void changePage(int delta) {

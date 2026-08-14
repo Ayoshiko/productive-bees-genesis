@@ -27,9 +27,9 @@ import java.util.concurrent.atomic.AtomicLong;
 	 *       {@code ModConfig}），NeoForge 配置运行时可通过 reload 变更</li>
 	 *   <li>配置 reload 时通过 {@link #invalidateCache()} 递增 {@link #CACHE_VERSION}，
 	 *       本类检测到版本号不匹配时主动重新计算 limit，确保配置变更后缓存立即失效</li>
-	 *   <li>线程安全：{@code CACHE_VERSION} 为 AtomicLong，{@code cachedVersion} 为实例字段，
-	 *       {@link #getCachedSlotLimit} 使用 synchronized 守卫 check-then-update 临界区，
-	 *       避免并发线程读到 cachedVersion 已更新但 cachedLimits 仍为旧值</li>
+	 *   <li>线程安全：服务端 tick 与外部物流能力调用均在主线程执行；
+	 *       {@code CACHE_VERSION} 为 AtomicLong，{@code cachedVersion} 为 volatile。
+	 *       极端并发调用下最坏仅重复计算一次 limit，不影响正确性</li>
 	 * </ul>
 	 */
 final class SlotLimitCache {
@@ -74,7 +74,7 @@ final class SlotLimitCache {
 	 * @param stack 当前槽内物品栈
 	 * @return 堆叠上限
 	 */
-	synchronized int getCachedSlotLimit(int index, BasicInventorySlot slot, ItemStack stack) {
+	int getCachedSlotLimit(int index, BasicInventorySlot slot, ItemStack stack) {
 		if (stack == cachedLimitStacks[index] && cachedVersion == CACHE_VERSION.get()) {
 			return cachedLimits[index];
 		}

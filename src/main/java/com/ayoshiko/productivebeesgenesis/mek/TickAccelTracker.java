@@ -34,8 +34,16 @@ public class TickAccelTracker {
 	/** 加速倍率上限 — 防止极端值导致 int 溢出 */
 	private static final int MAX_MULTIPLIER = 1024;
 
-	/** 虚拟 tick 银行挂账上限 — 对齐 JDTE timeAcceleratorMaxPendingTicks（1M），防止极端配置下溢出 */
-	private static final long MAX_PENDING_TICKS = 1_000_000L;
+	/**
+	 * 虚拟 tick 银行挂账上限 — 修复 JDTE 加速停止后残留过久的根因。
+	 * <br/>
+	 * JDTE 每 gameTick 最多入账 timeAcceleratorMaxExecutionsPerTick（默认 4096）个虚拟 tick，
+	 * 而每 gameTick 只消化 getBatchBudget（默认 256）个；若上限对齐 JDTE 的 1M 挂账，
+	 * 加速停止后残留的"已付费"虚拟 tick 需要 1M/256 ≈ 65 分钟才能消化完，
+	 * 表现为加速效果残留很久。将上限收紧为 4096（= JDTE 单刻最大入账量）：
+	 * 保留单刻突发量的完整平滑能力，同时把停止后的残留消化时间压缩到 4096/256 ≈ 0.8 秒。
+	 */
+	private static final long MAX_PENDING_TICKS = 4_096L;
 
 	/** 每真实 gameTick 最多批量执行的虚拟 tick 数（预算）— 防止无批次限制的加速器（如 1024x 时间杖）造成 MSPT 尖峰 */
 	private static final int MAX_BATCH_TICKS = 256;
@@ -161,7 +169,8 @@ public class TickAccelTracker {
 	 *   <li>无批次限制加速器（如 1024x 时间杖）：每 tick 最多处理 {@link #getMaxBatchTicks()}，
 	 *       余量挂账后续 tick 消化——<b>短期</b>总产出不丢失，MSPT 平滑；
 	 *       持续超预算加速时产能被预算封顶（见 {@link #getBatchBudget} 的饱和告警）</li>
-	 *   <li>加速停止：残留挂账继续按预算消化（对齐 JDTE 已付费虚拟 tick 继续执行的语义）</li>
+	 *   <li>加速停止：残留挂账被 {@link #MAX_PENDING_TICKS} 收紧（4096），按预算消化最多约 16 tick
+ *       （0.8 秒）即恢复正常速度，不再残留长时间的加速效果</li>
 	 * </ul>
 	 * 单次调用开销 &lt; 5ns（一次 Math.min + 一次减法）。
 	 *

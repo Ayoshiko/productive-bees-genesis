@@ -104,6 +104,12 @@ class MekCentrifugeTickHandler {
 					return false;
 				}
 				skipPb = action == TickBatchSkipState.TickAction.SKIP;
+				if (skipPb) {
+					// 同 gameTick 后续 ticker 调用已由 decideAction 合并；对齐 JDTE
+					// CoalescedAcceleratedMachine 语义，完全跳过 super/能量/AE2 重路径。
+					// 同一 gameTick 只需首个入口完整处理一次。
+					return false;
+				}
 				if (!skipPb) {
 					batchMultiplier = skipState.getBatchMultiplier();
 				}
@@ -169,6 +175,19 @@ class MekCentrifugeTickHandler {
 
 		boolean sendUpdatePacket = tile.callSuperOnUpdateServer();
 
+		// SMELTING（电力熔炼炉）配方加速 — Mekanism 管线每调用 super 推进 1 tick，
+		// 但批量收获模式下 super 每 gameTick 只调用一次（时间手杖的后续 ticker 调用
+		// 与 JDTE flush 均被同 gameTick 门控跳过）。输入为 SMELTING 配方时轻量补调，
+		// 使熔炉配方按批量倍率 M 推进（JDTE 时间加速器与 JDT 时间手杖均生效）。
+		// PB 配方路径不需要补调：PbVirtualTickPlan 已在内部按倍率推进。
+		if (batchMultiplier > 1 && isSmeltingOnlyInput()) {
+			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
+			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+			if (tile.runLightSmeltingTicks(batchMultiplier)) {
+				sendUpdatePacket = true;
+			}
+		}
+
 		// PB配方独立处理（不走Mekanism管线）
 		if (!skipPb) {
 			pbProcessor.setTickMultiplier(batchMultiplier);
@@ -198,6 +217,30 @@ class MekCentrifugeTickHandler {
 		return sendUpdatePacket;
 	}
 
+
+	/**
+	 * 判断当前输入是否为 SMELTING（电力熔炼炉）独占配方 — 用于批量倍率 > 1 时补调 super 加速。
+	 * <br/>
+	 * 语义与 {@link #tryProcessPbRecipe} 一致：万象创世蜜脾/PB 离心配方优先，SMELTING 只在
+	 * 两者都未命中时参与；SMELTING 兼容总开关关闭时返回 false（super 管线不会处理熔炉配方）。
+	 */
+	private boolean isSmeltingOnlyInput() {
+		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(tile)) {
+			return false;
+		}
+		ItemStack input = tile.accessor().productivebeesgenesis$getInputSlot().getStack();
+		if (input.isEmpty()) {
+			return false;
+		}
+		if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+				|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
+			return false;
+		}
+		if (pbProcessor.findPbRecipe(input) != null) {
+			return false;
+		}
+		return pbProcessor.hasSmeltingRecipe(0, input);
+	}
 
 	/**
 	 * 尝试PB离心配方处理
