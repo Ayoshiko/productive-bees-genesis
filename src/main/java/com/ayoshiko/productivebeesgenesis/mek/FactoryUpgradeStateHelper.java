@@ -55,6 +55,7 @@ public final class FactoryUpgradeStateHelper {
 		accessor.productivebeesgenesis$setOperationsPerTick(
 				MekExtrasUpgradeSemantics.operationsPerTick(
 						MekUpgradeSupport.hasCreativeUpgrade(factory), maxOps, speedAdjustedOps));
+		MekCentrifugeEnergyScaling.ensureCapacity(factory);
 	}
 
 	/**
@@ -191,14 +192,14 @@ public final class FactoryUpgradeStateHelper {
 		// tryConnectNode 由 Task 13 volatile 门控优化，仅在每个 gameTick 首个完整入口执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
 		// injectAe2Energy 同样仅在每个 gameTick 首个完整入口执行
-		factory.productivebeesgenesis$injectAe2Energy();
+		int batchMultiplier = skipState.getBatchMultiplier();
+		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
 		boolean sendUpdatePacket = superCall.getAsBoolean(); // super 始终调用
 
 		boolean result;
 		if (!skipPb) {
-			int batchMultiplier = skipState.getBatchMultiplier();
 			// SMELTING（电力熔炼炉）配方加速 — super 每 gameTick 只调用一次（后续 ticker 调用
 			// 与 JDTE flush 均被同 gameTick 门控跳过），Mekanism 管线无法按倍率推进。
 			// 存在 SMELTING 配方通道时补调 super，使熔炉配方按批量倍率 M 推进
@@ -250,7 +251,7 @@ public final class FactoryUpgradeStateHelper {
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		// 与 onUpdateServer 的 !skipPb 分支对齐：tryConnectNode 与能量注入在 super 前执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
-		factory.productivebeesgenesis$injectAe2Energy();
+		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
 		boolean sendUpdatePacket = superCall.getAsBoolean();
 		// SMELTING 配方加速（与 onUpdateServer 的 !skipPb 分支一致）— 补调 super 使熔炉管线

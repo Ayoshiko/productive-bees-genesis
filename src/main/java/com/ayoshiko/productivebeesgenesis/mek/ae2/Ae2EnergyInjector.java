@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -76,26 +77,35 @@ public final class Ae2EnergyInjector {
 	 * @since 2.0.0
 	 */
 	public static long injectEnergy(IAe2OutputHostBase host) {
-		// 守卫1：AE2 未安装（双重防御，调用方应已守卫）
+		return injectEnergy(host, 1);
+	}
+
+	/**
+	 * Injects no more than the deficit for the supplied batch size. Passing the batch multiplier
+	 * from the tick handler avoids recomputing upgrade effects more than once per real tick.
+	 */
+	public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		if (host == null) return 0;
 
-		// 先检查本地容器，满能量机器无需访问 AE 网格。
 		MachineEnergyContainer<?> container = host.productivebeesgenesis$getAe2EnergySource();
 		if (container == null) return 0;
 
-		// 计算剩余容量（v2.0.0：按需差额提取，剩余容量即为本次提取上限）
+		// Compute once, then both expand the local buffer and cap the AE extraction with the same value.
+		long requiredThisTick = MekCentrifugeEnergyScaling.requiredEnergyPerTick(host, batchMultiplier);
+		MekCentrifugeEnergyScaling.ensureCapacity(host, requiredThisTick);
+
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
 		long remainingCapacity = Ae2EnergyMath.remainingCapacity(currentEnergy, maxEnergy);
 		if (remainingCapacity <= 0) return 0;
 
-		// 仅在机器确实需要能量时访问已连接的网格。
+		long toExtract = Math.min(remainingCapacity,
+				requiredThisTick > currentEnergy ? requiredThisTick - currentEnergy : 0L);
+		if (toExtract <= 0) return 0;
+
 		IGrid grid = getConnectedGrid(host);
 		if (grid == null) return 0;
-
-		// 实际提取量目标 = 容器剩余容量（SIMULATE 模式会进一步限制为 ME 网络可提取量）
-		long toExtract = remainingCapacity;
 
 		// Bug 7：读取优先级配置 — 由宿主提供，蜂箱与离心机相互独立
 		boolean preferAppliedFlux = host.productivebeesgenesis$getPreferAppliedFluxOverAeEnergy();

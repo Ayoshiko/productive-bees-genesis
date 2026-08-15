@@ -312,6 +312,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void recalculateUpgrades(Upgrade upgrade) {
 		super.recalculateUpgrades(upgrade);
 		MekCentrifugeUpgradeOps.handleCreativeEnergy(this, upgrade);
+		MekCentrifugeEnergyScaling.ensureCapacity(this);
 	}
 
 	@NotNull

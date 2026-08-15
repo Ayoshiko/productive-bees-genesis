@@ -18,6 +18,7 @@ import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugePbUpgradeHost;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.MultiFluidTankHostDelegate;
@@ -36,6 +37,7 @@ import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryInputInv
 import io.github.masyumero.emextras.common.inventory.slot.EMExtraFactoryOutputInventorySlot;
 import io.github.masyumero.emextras.common.tile.factory.TileEntityEMExtraItemStackToItemStackFactory;
 import mekanism.api.IContentsListener;
+import mekanism.api.Upgrade;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -361,7 +363,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			pbUpgradeDelegate.processPbUpgradeInput();
 			delegate.resetSortingMark();
 		}
-		productivebeesgenesis$injectAe2Energy();
+		int batchMultiplier = skipState.getBatchMultiplier();
+		productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityEMExtraFactoryAccessor accessor = (TileEntityEMExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
 		boolean sendUpdatePacket = super.onUpdateServer();
@@ -372,7 +375,6 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			// 且存在 SMELTING 配方通道时轻量补调，使熔炉管线按倍率 M 推进
 			// （JDTE 时间加速器与 JDT 时间手杖均生效）。本类不实现 JDTE 合并接口，
 			// JDTE 按普通 ticker 路径循环调用本方法，同 gameTick 门控保证只补调一次。
-			int batchMultiplier = skipState.getBatchMultiplier();
 			if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, this, pbProcessor)) {
 				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
 				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
@@ -556,6 +558,12 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	}
 
 	/** 重写getOperationsPerTick — 委托给动态计算的operationsPerTick()，使SMELTING路径支持STACK升级 */
+	@Override
+	public void recalculateUpgrades(Upgrade upgrade) {
+		super.recalculateUpgrades(upgrade);
+		MekCentrifugeEnergyScaling.ensureCapacity(this);
+	}
+
 	@Override public int getOperationsPerTick() { return operationsPerTick(); }
 	@Override public int getTicksForBase(int baseTime) {
 		return CentrifugeFactoryCommonLogic.getTicksForBase(this, baseTime, pbUpgradeDelegate);

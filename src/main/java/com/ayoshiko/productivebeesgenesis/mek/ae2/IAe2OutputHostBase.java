@@ -359,18 +359,22 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * @since 2.0.0
 	 */
 	default void productivebeesgenesis$injectAe2Energy() {
-		// 守卫1：AE2 未安装
+		productivebeesgenesis$injectAe2Energy(1);
+	}
+
+	/**
+	 * AE2 energy input for one real game tick, with the current accelerator batch multiplier.
+	 */
+	default void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
-		// 复用 holder 配置缓存，避免每 tick 读取 ModConfig 并将配置检查拆到统一缓存
 		Level level = productivebeesgenesis$getAe2Level();
 		if (level != null && holder.isConfigCacheStale(level.getGameTime())) {
 			holder.refreshConfigCache(level.getGameTime());
 		}
 		if (!holder.isCachedEnergyInputEnabled()) return;
-		// 委托给注入器协调器（v2.0.0：不再传递 perTick 上限，按需差额提取）
-		Ae2EnergyInjector.injectEnergy(this);
+		Ae2EnergyInjector.injectEnergy(this, batchMultiplier);
 	}
 
 	/**

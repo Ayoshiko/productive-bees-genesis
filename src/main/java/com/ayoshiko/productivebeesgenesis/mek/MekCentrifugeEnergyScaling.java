@@ -1,0 +1,86 @@
+package com.ayoshiko.productivebeesgenesis.mek;
+
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.common.capabilities.energy.MachineEnergyContainer;
+
+/**
+ * Dynamically keeps the local Mekanism energy buffer large enough for one real tick at the
+ * machine's current upgrade-adjusted rate.
+ * <p>
+ * Mekanism deducts energy once per cached-recipe tick, and both the SMELTING path and the
+ * PB path use {@code energyPerTick * operationsPerTick}. If the local buffer is smaller
+ * than that product, even an AE2 creative energy cell cannot help because AE2 energy is
+ * injected into the local {@link MachineEnergyContainer} and is therefore capped by
+ * {@link MachineEnergyContainer#getMaxEnergy()}.
+ */
+public final class MekCentrifugeEnergyScaling {
+
+    private MekCentrifugeEnergyScaling() {
+    }
+
+    /**
+     * Returns the energy required to run every process at the current operations-per-tick
+     * rate for one real tick, saturating at {@link Long#MAX_VALUE}.
+     */
+    public static long requiredEnergyPerTick(PbRecipeContext context) {
+        return requiredEnergyPerTick(context, 1);
+    }
+
+    /**
+     * Returns the energy required for one real tick, including the tick-accelerator batch
+     * multiplier and PB productivity parallelism. The result saturates at Long.MAX_VALUE.
+     */
+    public static long requiredEnergyPerTick(PbRecipeContext context, int batchMultiplier) {
+        MachineEnergyContainer<?> container = context.energyContainer();
+        if (container == null) {
+            return 0L;
+        }
+        long energyPerOperation = Math.max(0L, container.getEnergyPerTick());
+        if (energyPerOperation == 0L) {
+            return 0L;
+        }
+        // Actual worst case for our machines: STACK 16 => 2^16 = 65536 parallel,
+        // MU speed/energy 32 (already included in energyPerOperation), plus PB
+        // productivity parallelism, then multiplied by the current tick-accelerator batch.
+        int operationsPerTick = Math.max(1, context.operationsPerTick());
+        int productivityParallel = Math.max(1, context.productivityParallelModifier());
+        int processes = Math.max(1, context.processes());
+        int batch = Math.max(1, batchMultiplier);
+
+        long required = SaturatingMath.saturatingMultiply(energyPerOperation, operationsPerTick);
+        required = SaturatingMath.saturatingMultiply(required, productivityParallel);
+        required = SaturatingMath.saturatingMultiply(required, processes);
+        return SaturatingMath.saturatingMultiply(required, batch);
+    }
+
+    /**
+     * Grows the local energy buffer to the current one-tick demand if it is too small.
+     */
+    public static void ensureCapacity(PbRecipeContext context) {
+        ensureCapacity(context, requiredEnergyPerTick(context, 1));
+    }
+
+    /**
+     * Grows the local energy buffer to the current batched one-tick demand if it is too small.
+     */
+    public static void ensureCapacity(PbRecipeContext context, int batchMultiplier) {
+        ensureCapacity(context, requiredEnergyPerTick(context, batchMultiplier));
+    }
+
+    /**
+     * Grows the local energy buffer to at least {@code required} FE. The capacity is never
+     * reduced here: Mekanism/MEKExtras already recalculates the normal or creative capacity
+     * on upgrade changes, and retaining a larger buffer is harmless.
+     */
+    public static void ensureCapacity(PbRecipeContext context, long required) {
+        MachineEnergyContainer<?> container = context.energyContainer();
+        if (container == null || required <= 0L) {
+            return;
+        }
+        long currentMax = container.getMaxEnergy();
+        if (currentMax == Long.MAX_VALUE || required <= currentMax) {
+            return;
+        }
+        container.setMaxEnergy(required);
+    }
+}

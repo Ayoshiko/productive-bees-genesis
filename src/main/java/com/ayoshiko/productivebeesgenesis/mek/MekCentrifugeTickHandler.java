@@ -167,7 +167,7 @@ class MekCentrifugeTickHandler {
 		}
 
 		// v2.0.0: 在 super 调用前从 AE 网络注入 FE 能量
-		tile.productivebeesgenesis$injectAe2Energy();
+		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();

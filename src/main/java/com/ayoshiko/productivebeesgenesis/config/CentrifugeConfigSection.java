@@ -90,7 +90,7 @@ public final class CentrifugeConfigSection {
 		mekCentrifugeEnergyPerTick = builder
 				.comment("每个处理槽每tick的能量消耗(FE)")
 				.defineInRange("energyPerTick", 50, 1, 10000);
-		mekCentrifugeEnergyStorage = builder.comment("机械离心机能量存储容量（FE）").defineInRange("energyStorage", 20000L, 1L,
+		mekCentrifugeEnergyStorage = builder.comment("机械离心机能量存储容量（FE）").defineInRange("energyStorage", 2_000_000L, 1L,
 			100_000_000L);
 		mekCentrifugeProcessingTime = builder
 				.comment("基础处理时间(tick)")
