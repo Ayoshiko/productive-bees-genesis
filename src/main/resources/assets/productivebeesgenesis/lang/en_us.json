@@ -12,6 +12,8 @@
   "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.smeltingCompatEnabled.tooltip": "Allow centrifuges to process smelting recipes",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat": "Smelting Recipe Compat",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat.title": "Smelting Recipe Compat",
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat": "Smelting Recipe Compatibility",
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.title": "Smelting Recipe Compatibility",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_apiary": "Mekanism Apiary",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_apiary.title": "Mekanism Apiary",
   "productivebeesgenesis.configuration.basic": "Basic Parameters",

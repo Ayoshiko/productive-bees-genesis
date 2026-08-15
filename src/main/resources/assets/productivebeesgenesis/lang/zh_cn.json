@@ -3,6 +3,8 @@
   "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.smeltingCompatEnabled.tooltip": "允许离心机处理熔炉配方",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat": "熔炉配方兼容",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.mek_centrifuge.smelting_compat.title": "熔炉配方兼容",
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat": "??????",
+  "productivebeesgenesis.configuration.mek_centrifuge.smelting_compat.title": "??????",
   "productivebeesgenesis.configuration.title": "资源蜜蜂：创世配置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.client.toml": "客户端设置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.client.toml.title": "客户端配置",
