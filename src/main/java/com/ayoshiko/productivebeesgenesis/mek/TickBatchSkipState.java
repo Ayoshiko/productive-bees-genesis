@@ -15,14 +15,14 @@ import net.minecraft.world.level.Level;
  *       {@code CoalescedAcceleratedMachine.flushAcceleratedTicks} 共享门控，
  *       每个真实 gameTick 只允许一个入口执行完整批量（第一次调用者执行，其余跳过），
  *       避免 JDTE 时序不确定时双倍处理（super/SMELTING 双跑、PB 双跑、能量双扣）。</li>
- *   <li><b>共享预算</b>：ticker 与 flush 同 gameTick 共用一份批量预算（
- *       {@code budgetConsumedThisTick} 累计扣减），保证每 gameTick 总处理量不超过
- *       {@code maxBatchTicksPerTick}（默认 256），与配置文档语义一致。</li>
+	 *   <li><b>共享预算</b>：ticker 与 flush 由同一门控选出唯一取款者，保证每 gameTick
+	 *       最多从虚拟 tick 银行取一次自适应预算，不超过 {@code maxBatchTicksPerTick}
+	 *       （默认 1024，按 MSPT 自动降级）。</li>
  *   <li><b>multiplier == 1</b>（本 gameTick 第一次 ticker 调用）：从虚拟 tick 银行取出批量预算，执行完整处理</li>
  *   <li><b>multiplier &gt; 1</b>（旧式加速模组同 gameTick 多次调用 ticker）：仅入账（onTick 内完成），跳过 PB</li>
  * </ul>
  * 线程安全：所有字段仅由服务端 tick 线程访问（方块实体 tick 链），无需 volatile/同步；
- * reset() 仅在主线程调用（tile 卸载/服务器停止/维度切换）。
+	 * tile 卸载后实例随方块实体一起释放。
  *
  * @author ayoshiko
  * @since 2.0.0
@@ -33,12 +33,6 @@ public final class TickBatchSkipState {
 
 	/** 本 gameTick 已由某入口完整处理过的标记（ticker/flush 共享门控） */
 	private long lastHandledGameTick = Long.MIN_VALUE;
-
-	/** 本 gameTick 已消耗的批量预算（ticker/flush 共享扣减） */
-	private int budgetConsumedThisTick = 0;
-
-	/** 预算记账对应的 gameTick（跨 tick 自动重置 consumed） */
-	private long budgetTrackedGameTick = Long.MIN_VALUE;
 
 	/** 本 gameTick 第 1 次完整处理时的批量倍率 — 由 getBatchMultiplier() 读取 */
 	private int batchMultiplierForCurrentTick = 1;
@@ -61,9 +55,9 @@ public final class TickBatchSkipState {
 	 * 逻辑：
 	 * <ul>
 	 *   <li>tracker/level 无效或客户端：返回 PROCESS（不启用批量跳过）</li>
-	 *   <li>调用 tracker.onTick(level) 更新真实 ticker 计数（AE2 网格 tick 不参与计数，见 {@link TickAccelTracker#onAe2Tick}）</li>
-	 *   <li>门控被占用（同 gameTick 已由 flush 处理）：返回 ALREADY_HANDLED，调用方完全跳过</li>
-	 *   <li>multiplier &gt; 1：返回 SKIP，调用方仅保留 super</li>
+	 *   <li>调用 tracker.onTick(level) 更新真实 ticker 计数</li>
+	 *   <li>门控被占用（同 gameTick 已由 ticker 或 flush 处理）：返回 ALREADY_HANDLED，调用方完全跳过</li>
+	 *   <li>multiplier &gt; 1：保留 SKIP 兼容分支；当前门控会先把同 tick 重复调用归为 ALREADY_HANDLED</li>
 	 *   <li>multiplier == 1：从共享预算中取款，返回 PROCESS</li>
 	 * </ul>
 	 *
@@ -100,31 +94,30 @@ public final class TickBatchSkipState {
 			return false;
 		}
 		lastHandledGameTick = gameTick;
-		// 新 gameTick 重置共享预算记账
-		budgetConsumedThisTick = 0;
-		budgetTrackedGameTick = gameTick;
 		return true;
+	}
+
+	/**
+	 * Returns whether this state already selected a complete processor for the supplied game tick.
+	 * <br/>
+	 * Used by outer block-entity wrappers to skip post-processing after an accelerated duplicate call.
+	 */
+	public boolean wasHandledForGameTick(long gameTick) {
+		return lastHandledGameTick == gameTick;
 	}
 
 	/**
 	 * 从虚拟 tick 银行取本 gameTick 的共享批量预算。
 	 * <br/>
-	 * ticker 与 flush 共用同一份预算：本 gameTick 已消耗的量会被扣除，
-	 * 保证每 gameTick 总处理量不超过 {@link TickAccelTracker#getBatchBudget} 的上限。
+	 * ticker 与 flush 共享同一门控，只有获胜入口会调用本方法，因此每 gameTick
+	 * 最多取一次 {@link TickAccelTracker#getBatchBudget} 限定的预算。
 	 *
 	 * @param tracker  加速追踪器
 	 * @param gameTick 当前游戏刻
 	 * @return 本入口应批量执行的虚拟 tick 数（至少 1）
 	 */
 	public int takeSharedBatchMultiplier(TickAccelTracker tracker, long gameTick) {
-		if (budgetTrackedGameTick != gameTick) {
-			budgetTrackedGameTick = gameTick;
-			budgetConsumedThisTick = 0;
-		}
-		int budget = tracker.getBatchBudget(gameTick);
-		int remaining = Math.max(1, budget - budgetConsumedThisTick);
-		int taken = tracker.takeBatchTicks(remaining);
-		budgetConsumedThisTick += taken;
+		int taken = tracker.takeBatchTicksForGameTick(gameTick);
 		batchMultiplierForCurrentTick = taken;
 		return taken;
 	}

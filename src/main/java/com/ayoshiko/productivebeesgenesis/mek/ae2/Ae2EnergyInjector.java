@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -87,16 +86,28 @@ public final class Ae2EnergyInjector {
 	public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		if (host == null) return 0;
+		return injectEnergy(host, host.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier));
+	}
+
+	/**
+	 * Injects the precomputed demand for one real tick. Tick handlers use this overload so upgrade,
+	 * process and accelerator multipliers are evaluated only once per batch.
+	 */
+	public static long injectEnergy(IAe2OutputHostBase host, long requiredThisTick) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
+		if (host == null) return 0;
 
 		MachineEnergyContainer<?> container = host.productivebeesgenesis$getAe2EnergySource();
 		if (container == null) return 0;
 
-		// Compute once, then both expand the local buffer and cap the AE extraction with the same value.
-		long requiredThisTick = MekCentrifugeEnergyScaling.requiredEnergyPerTick(host, batchMultiplier);
-		MekCentrifugeEnergyScaling.ensureCapacity(host, requiredThisTick);
+		requiredThisTick = Math.max(0L, requiredThisTick);
 
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
+		if (requiredThisTick > maxEnergy) {
+			container.setMaxEnergy(requiredThisTick);
+			maxEnergy = container.getMaxEnergy();
+		}
 		long remainingCapacity = Ae2EnergyMath.remainingCapacity(currentEnergy, maxEnergy);
 		if (remainingCapacity <= 0) return 0;
 

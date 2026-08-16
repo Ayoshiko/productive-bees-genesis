@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.config.Actionable;
-import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEItemKey;
@@ -46,6 +45,15 @@ public final class Ae2InputPuller {
 	 * @param host 输入宿主（离心机方块实体）
 	 */
 	public static void pullInputs(IAe2InputHost host) {
+		pullInputs(host, 0);
+	}
+
+	/**
+	 * Pulls inputs using the number of virtual ticks that the machine actually executed in this pass.
+	 * A positive value is already constrained by the adaptive batch budget, so it must not be scaled by
+	 * the MSPT factor a second time. A non-positive value keeps the legacy tracker-based fallback.
+	 */
+	public static void pullInputs(IAe2InputHost host, int executedBatchMultiplier) {
 		// Spark 优化：缓存 holder 到局部变量，消除后续 10+ 次冗余 getAe2StateHolder() 接口分发
 		// （每次2层接口分发：getLifecycleHandler→getStateHolder，热力图显示为热点）
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
@@ -83,49 +91,32 @@ public final class Ae2InputPuller {
 			return;
 		}
 
-		// 3. 网格节点 + 已连接网格检查（Task 12：holder 感知重载，跳过冗余 getAe2StateHolder）
-		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
-		if (grid == null) return;
-
-		// 4. 存储服务和 ME 存储检查（Task 12：holder 感知重载，避免重复 getService/getInventory）
-		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
-		if (storageService == null) return;
-		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
-		if (meStorage == null) return;
-
-		// 5. Level null 守卫（已在 1.5 节获取，复用避免重复调用）
+		// 3. Level null 守卫（已在 1.5 节获取，复用避免重复调用）
 		if (level == null) return;
 		long currentTick = level.getGameTime();
-		// Task 2：获取 BlockPos 用于 returnLeftoverToMe 兜底 popResource
-		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 
-		// 6. 加速倍率检测 — multiplier 已在调用方 onUpdateServer 入口处通过 tracker.onTick(level) 更新
+		// 4. 加速倍率检测 — multiplier 已在调用方 onUpdateServer 入口处通过 tracker.onTick(level) 更新
 		//    直接使用 holder 替代 host 接口分发
 		TickAccelTracker tracker = holder.getTickAccelTracker();
-		int M = (tracker != null)
-				? Math.max(tracker.getMultiplier(), tracker.getPreviousTickMultiplier())
-				: 1;
+		int M = Ae2PullFairnessPolicy.resolveAccelerationMultiplier(
+				executedBatchMultiplier,
+				tracker == null ? 1 : tracker.getMultiplier(),
+				tracker == null ? 1 : tracker.getPreviousTickMultiplier());
 
-		// 7. AE2LT-style adaptive cooldown (success: 1 tick unlimited / 5 normal, failures back off).
+		// 5. AE2LT-style adaptive cooldown (success: 1 tick unlimited / 5 normal, failures back off).
 		//    Driven by the pull call counter so acceleration mods that invoke multiple
 		//    ticks per game tick still converge; unlimited entries ignore the configured interval.
 		long pullCounter = holder.incrementPullCallCounter();
-		int cooldownTicks = holder.getInputPullCooldownTicks();
+		int cooldownTicks = Ae2PullFairnessPolicy.effectiveInterval(
+				holder.getInputPullCooldownTicks(), M);
 		if (pullCounter - holder.getLastPullCounter() < cooldownTicks) return;
 
-		// 8. 获取复用缓冲区（与推送共享 ReusableBuffers，避免每 tick 创建临时对象）
-		//    holder 感知重载，跳过冗余 getAe2StateHolder
-		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
-		Ae2InputKeyBackoffRegistry keyBackoff = getOrCreateKeyBackoff(holder);
-		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
-		fairness.roll(currentTick);
-
-		// 9. 获取输入槽列表
+		// 6. 获取输入槽列表。放在网格服务获取前，满槽时不触碰 AE2 服务缓存。
 		List<IInventorySlot> inputSlots = host.productivebeesgenesis$getInputSlotsForPull();
 		if (inputSlots == null || inputSlots.isEmpty()) return;
 		int processCount = inputSlots.size();
 
-		// 10. Unlimited entries bypass the rate budget entirely (AE2LT overloaded
+		// 7. Unlimited entries bypass the rate budget entirely (AE2LT overloaded
 		//     interface semantics): pull as much as the input slots can hold,
 		//     ignoring both the configured interval and per-tick quantity.
 		Ae2InputFilter filter = holder.getOrCreateInputFilter();
@@ -145,15 +136,32 @@ public final class Ae2InputPuller {
 			perSlotQuota = Long.MAX_VALUE;
 		} else {
 			long baseRate = holder.getCachedInputRatePerTick();
-			double tpsFactor = ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
+			double tpsFactor = executedBatchMultiplier > 0
+					? 1.0
+					: ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
 			perSlotQuota = Ae2PullFairnessPolicy.perSlotQuota(baseRate, M, processCount);
 			long baseProduct = SaturatingMath.saturatingMultiply(perSlotQuota, processCount);
-			long effectiveRate = Math.max(1L, (long) (baseProduct * tpsFactor));
+			long effectiveRate = Math.max(1L,
+					SaturatingMath.saturatingCeilToLong(baseProduct * tpsFactor));
 			remainingQuota = Math.min(effectiveRate, inputCapacity);
 		}
 		if (remainingQuota <= 0) return;
 
-		// 13. 遍历 MEStorage 可用栈，收集待拉取类型（不消耗 quota，由执行阶段按 round-robin 分配）
+		// 8. 只有冷却到期且本地确有容量时才解析网格存储服务。getCachedStorage 内部已验证 grid，
+		//    无需先单独调用 getCachedGrid；这会缩短大批机器处于冷却/满槽状态时的热路径。
+		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
+		if (storageService == null) return;
+		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
+		if (meStorage == null) return;
+		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
+
+		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
+		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
+		Ae2InputKeyBackoffRegistry keyBackoff = getOrCreateKeyBackoff(holder);
+		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
+		fairness.roll(currentTick);
+
+		// 10. 遍历 MEStorage 可用栈，收集待拉取类型（不消耗 quota，由执行阶段按 round-robin 分配）
 		//     V13 修复：收集所有可用类型，单类型走原版顺序填充，多类型走 round-robin 跨进程分发
 		List<PullEntry> pullList = buffers.borrowPullList();
 		pullList.clear(); // 清空上一 tick 残留数据

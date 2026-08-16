@@ -337,13 +337,13 @@ public final class CentrifugeFactoryCommonLogic {
 	// ===== onUpdateServer 公共后处理 =====
 
 	/** onUpdateServer 后处理 — 推送输出到 AE2 网络并拉取输入（AE2 未加载时短路） */
-	public static void pushAe2OutputsAndPullInputs(@NotNull IAe2OutputHostBase factory) {
+	public static void pushAe2OutputsAndPullInputs(@NotNull IAe2OutputHostBase factory, int batchMultiplier) {
 		Ae2OutputPusher.pushOutputs(factory);
 		// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽
 		Ae2FluidPusher.pushFluids(factory);
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
 			if (factory instanceof IAe2InputHost inputHost) {
-				Ae2InputPuller.pullInputs(inputHost);
+				Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
 			}
 		}
 	}

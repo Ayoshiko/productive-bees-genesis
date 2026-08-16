@@ -19,6 +19,12 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
+	void coalescedBatchMultiplierDoesNotDependOnRepeatedTickerCalls() {
+		assertEquals(1024, Ae2PullFairnessPolicy.resolveAccelerationMultiplier(1024, 1, 1));
+		assertEquals(256, Ae2PullFairnessPolicy.resolveAccelerationMultiplier(0, 1, 256));
+	}
+
+	@Test
 	void highAccelerationUsesBoundedPerSlotQuota() {
 		assertEquals(8_192L, Ae2PullFairnessPolicy.perSlotQuota(1_024L, 256, 32));
 		assertEquals(131_072L, Ae2PullFairnessPolicy.perSlotQuota(16_384L, 256, 32));

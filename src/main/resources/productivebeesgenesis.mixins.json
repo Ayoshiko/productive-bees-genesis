@@ -16,6 +16,8 @@
     "jdte.JdteApiaryCoalescedMixin",
     "jdte.JdteCentrifugeCoalescedMixin",
     "jdte.JdteCentrifugeFactoryCoalescedMixin",
+    "jdte.JdteExtraCentrifugeFactoryCoalescedMixin",
+    "jdte.JdteEMExtraCentrifugeFactoryCoalescedMixin",
     "ae2.Ae2ApiaryMixin",
     "ae2.Ae2CentrifugeFactoryMixin",
     "ae2.Ae2CentrifugeMixin",

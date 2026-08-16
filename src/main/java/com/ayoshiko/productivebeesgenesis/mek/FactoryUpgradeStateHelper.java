@@ -205,7 +205,7 @@ public final class FactoryUpgradeStateHelper {
 			// 存在 SMELTING 配方通道时补调 super，使熔炉配方按批量倍率 M 推进
 			// （JDTE 时间加速器与 JDT 时间手杖均生效）；PB 通道由 PbVirtualTickPlan 内部加速。
 			// 放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差（lastUsage 显示）。
-			if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, factory, factory.pbProcessor)) {
+			if (batchMultiplier > 1) {
 				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
 				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
 				if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
@@ -223,7 +223,7 @@ public final class FactoryUpgradeStateHelper {
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 			// AE2 推送/拉取与 PB 一致批处理：仅首个完整入口执行，
 			// 后续 ticker 已由 decideAction 完全跳过
-			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory);
+			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
 		} else {
 			// 历史兼容分支；正常路径已由 SKIP/ALREADY_HANDLED 提前返回
 			result = sendUpdatePacket;
@@ -256,7 +256,7 @@ public final class FactoryUpgradeStateHelper {
 		boolean sendUpdatePacket = superCall.getAsBoolean();
 		// SMELTING 配方加速（与 onUpdateServer 的 !skipPb 分支一致）— 补调 super 使熔炉管线
 		// 按批量倍率推进；放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差。
-		if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, factory, factory.pbProcessor)) {
+		if (batchMultiplier > 1) {
 			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
 			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
 			if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
@@ -272,6 +272,6 @@ public final class FactoryUpgradeStateHelper {
 				inputSlots, factory.pbProcessor, factory, factory.getActive(), factory::setActive,
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
-		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory);
+		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
 	}
 }

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -95,6 +96,15 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * {@link Ae2OutputPusher} 内部的适配器包装为 AE2 的 IEnergySource。
 	 */
 	MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource();
+
+	/**
+	 * Returns the maximum FE demand for one real tick at the supplied accelerator batch size.
+	 * Non-apiary machines use the centrifuge processing model; hosts with a different execution
+	 * model must override this method so AE extraction and local capacity use the same demand.
+	 */
+	default long productivebeesgenesis$getRequiredEnergyForBatch(int batchMultiplier) {
+		return MekCentrifugeEnergyScaling.requiredEnergyPerTick(this, batchMultiplier);
+	}
 
 	/** 获取方块实体所在世界 */
 	Level productivebeesgenesis$getAe2Level();
@@ -366,6 +376,9 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 * AE2 energy input for one real game tick, with the current accelerator batch multiplier.
 	 */
 	default void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
+		long requiredEnergy = productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
+		// Capacity must also grow when AE2 is absent or energy input is disabled.
+		MekCentrifugeEnergyScaling.ensureCapacity(this, requiredEnergy);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
@@ -374,7 +387,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 			holder.refreshConfigCache(level.getGameTime());
 		}
 		if (!holder.isCachedEnergyInputEnabled()) return;
-		Ae2EnergyInjector.injectEnergy(this, batchMultiplier);
+		Ae2EnergyInjector.injectEnergy(this, requiredEnergy);
 	}
 
 	/**

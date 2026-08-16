@@ -15,6 +15,7 @@ import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
+import com.ayoshiko.productivebeesgenesis.mek.IJdteCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugePbUpgradeHost;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
@@ -85,7 +86,8 @@ import java.util.function.IntSupplier;
 public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItemStackToItemStackFactory
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
 		IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
-		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost {
+		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost,
+		IJdteCentrifugeFactory {
 
 	@Override public void productivebeesgenesis$onSmeltingCompatChanged(
 	) {
@@ -342,7 +344,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	 * 先走SMELTING管线，再处理PB配方，末尾推送输出到AE2网络。
 	 * <br/>
 	 * skipPb 批量收获（镜像 AbstractMekCentrifugeFactory）：256x JDTE 加速下每 gameTick 调用 256 次,
-	 * 第一次执行 PB、升级槽与 AE I/O（使用上一 gameTick 倍率），后续 255 次仅保留 super 与能量注入。
+	 * 第一次执行 PB、升级槽与 AE I/O（使用上一 gameTick 倍率），后续调用只保留入口门控。
 	 * decideAction 内部已调用 tracker.onTick并处理同 gameTick 门控。
 	 */
 	@Override
@@ -357,13 +359,42 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			return false;
 		}
 		boolean skipPb = action == TickBatchSkipState.TickAction.SKIP;
+		return productivebeesgenesis$runTick(skipPb, skipState.getBatchMultiplier());
+	}
+
+	/** JDTE coalesced path: credit virtual ticks without entering the expensive factory ticker. */
+	@Override
+	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
+		TickAccelTracker tracker = productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		if (tracker != null) {
+			tracker.addVirtualTicks(ticks);
+		}
+	}
+
+	/** JDTE coalesced path: execute the full factory pipeline once for this real game tick. */
+	@Override
+	public void productivebeesgenesis$flushAcceleratedTicks() {
+		Level level = getLevel();
+		if (level == null || level.isClientSide) {
+			return;
+		}
+		TickAccelTracker tracker = productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		TickBatchSkipState skipState = productivebeesgenesis$getTickBatchSkipState();
+		long gameTick = level.getGameTime();
+		if (tracker == null || !skipState.tryBeginGameTick(gameTick)) {
+			return;
+		}
+		int batchMultiplier = skipState.takeSharedBatchMultiplier(tracker, gameTick);
+		productivebeesgenesis$runTick(false, batchMultiplier);
+	}
+
+	private boolean productivebeesgenesis$runTick(boolean skipPb, int batchMultiplier) {
 
 		productivebeesgenesis$ae2LifecycleHandler.tryConnectNode(this);
 		if (!skipPb) {
 			pbUpgradeDelegate.processPbUpgradeInput();
 			delegate.resetSortingMark();
 		}
-		int batchMultiplier = skipState.getBatchMultiplier();
 		productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityEMExtraFactoryAccessor accessor = (TileEntityEMExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
@@ -373,9 +404,9 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		if (!skipPb) {
 			// SMELTING（电力熔炼炉）配方加速 — 与基础机/原版工厂一致：批量倍率 > 1
 			// 且存在 SMELTING 配方通道时轻量补调，使熔炉管线按倍率 M 推进
-			// （JDTE 时间加速器与 JDT 时间手杖均生效）。本类不实现 JDTE 合并接口，
-			// JDTE 按普通 ticker 路径循环调用本方法，同 gameTick 门控保证只补调一次。
-			if (batchMultiplier > 1 && MekCentrifugeFactoryHelper.hasSmeltingLane(inputSlots, this, pbProcessor)) {
+			// （JDTE 时间加速器与 JDT 时间手杖均生效）。JDTE coalesced flush 与
+			// 普通 ticker 共用这一轻量路径，保证两种加速入口语义一致。
+			if (batchMultiplier > 1) {
 				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
 				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
 				if (productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
@@ -392,7 +423,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			multiFluidDelegate.setFluidOutputTankCount(multiFluidDelegate.getFluidOutputHolder()
 					instanceof MultiFluidTankHolder h ? h.getTankCount() : 1);
 			// AE I/O 与 PB 批处理共用真实游戏刻门控，避免 256x 子 tick 重复进入短路链。
-			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(this);
+			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(this, batchMultiplier);
 		} else {
 			// 跳过 PB：本 gameTick 后续调用,仅保留 super 返回值
 			result = sendUpdatePacket;

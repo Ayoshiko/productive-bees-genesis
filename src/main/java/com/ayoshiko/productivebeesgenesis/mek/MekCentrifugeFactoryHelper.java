@@ -97,42 +97,6 @@ public final class MekCentrifugeFactoryHelper {
 			(recipe, input, output) -> InventoryUtils.areItemsStackable(recipe.getOutput(input), output);
 
 	/**
-	 * 检查离心机工厂是否存在 SMELTING（电力熔炼炉）独占配方通道 — 用于批量倍率 > 1 时补调 super 加速。
-	 * <br/>
-	 * 语义与基础机 {@code MekCentrifugeTickHandler#isSmeltingOnlyInput} 一致：
-	 * 万象创世蜜脾/PB 离心配方优先，SMELTING 只在两者都未命中时参与；
-	 * SMELTING 兼容总开关关闭时返回 false（super 管线不会处理熔炉配方）。
-	 *
-	 * @param inputSlots  工厂输入槽（索引即进程索引）
-	 * @param host        离心机宿主（提供 per-tile smelt 兼容开关）
-	 * @param pbProcessor PB 配方处理器（PB/万象配方优先判定）
-	 * @return true 表示存在至少一个 SMELTING 配方通道
-	 */
-	public static boolean hasSmeltingLane(@NotNull List<IInventorySlot> inputSlots,
-			@NotNull IAe2OutputHostBase host, @NotNull PbRecipeProcessor pbProcessor) {
-		if (!isSmeltingCompatEnabled(host)) {
-			return false;
-		}
-		for (int i = 0; i < inputSlots.size(); i++) {
-			ItemStack input = inputSlots.get(i).getStack();
-			if (input.isEmpty()) {
-				continue;
-			}
-			if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
-				continue;
-			}
-			if (pbProcessor.findPbRecipe(input) != null) {
-				continue;
-			}
-			if (pbProcessor.hasSmeltingRecipe(i, input)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
 	 * 轻量 SMELTING 补调 — 仅推进已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
 	 * <br/>
 	 * 对比完整 super 补调（每 tick 包含 ejector tick + 能量槽回填 + getUpdatedCache 配方重查），
@@ -145,7 +109,7 @@ public final class MekCentrifugeFactoryHelper {
 	 *   <li>无缓存配方的 lane（输入为空/PB 配方/万象蜜脾）— getCachedRecipe 为 null 直接跳过</li>
 	 * </ul>
 	 * 语义等价于 Mekanism 管线真实推进 batchMultiplier 次 tick（能量消耗、输入消费、产出一致），
-	 * 仅省去每次重复的查找/弹射/回填开销，确保 256x 等极端加速下 MSPT 占用极低。
+	 * 仅省去每次重复的查找/弹射/回填开销，降低高倍加速下的 MSPT 占用。
 	 *
 	 * @param monitors        工厂的 recipeCacheLookupMonitors（受保护字段，由工厂实例方法传入）
 	 * @param batchMultiplier 批量倍率（≥2 时才有补调意义）

@@ -105,4 +105,16 @@ public final class SaturatingMath {
 	public static long saturatingMultiply(long a, long b, long c) {
 		return saturatingMultiply(saturatingMultiply(a, b), c);
 	}
+
+	/** Converts a positive floating-point quantity to a long without NaN or infinity leaks. */
+	public static long saturatingCeilToLong(double value) {
+		if (Double.isNaN(value) || value <= 0.0D) return 0L;
+		if (!Double.isFinite(value) || value >= Long.MAX_VALUE) return Long.MAX_VALUE;
+		return (long) Math.ceil(value);
+	}
+
+	/** Converts a positive floating-point quantity to an int using ceil semantics. */
+	public static int saturatingCeilToInt(double value) {
+		return saturatingToInt(saturatingCeilToLong(value));
+	}
 }

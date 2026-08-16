@@ -193,13 +193,27 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		@NotNull IContentsListener u) { return new ApiaryCapabilityProvider(this::slotManager).buildFluidTanks(l, r, u); }
 
 	@Override protected boolean onUpdateServer() {
-		try { ae2HostAdapter.tryConnectNode(); } catch (Exception e) { logAe2(e, "tryConnectNode"); }
-		try { ae2HostAdapter.refreshAe2ConfigCache(); } catch (Exception e) { logAe2(e, "refreshAe2ConfigCache"); }
 		// Bug 1 修复：先产出→直连弹出(优先于 AE2)→AE2 推送；原顺序直连弹出在生产前只能处理上一 tick 残留
 		boolean result = tickHandler.onUpdateServer();
+		// Legacy accelerators may invoke this wrapper repeatedly without advancing game time.
+		// The production handler already merges those calls; keep the outer routing/AE2 stage
+		// on the same real-tick gate so it does not repeatedly scan adjacent centrifuges.
+		if (tickHandler.handledLastInvocation()) {
+			productivebeesgenesis$runPostProductionAe2();
+		}
+		return result;
+	}
+
+	/** Prepares AE2 only after this invocation wins the real-tick gate. */
+	void prepareAe2ForTick() {
+		try { ae2HostAdapter.tryConnectNode(); } catch (Exception e) { logAe2(e, "tryConnectNode"); }
+		try { ae2HostAdapter.refreshAe2ConfigCache(); } catch (Exception e) { logAe2(e, "refreshAe2ConfigCache"); }
+	}
+
+	/** Runs apiary post-production routing once for the selected real game tick. */
+	private void productivebeesgenesis$runPostProductionAe2() {
 		try { directEjectHandler.tryDirectEject(); } catch (Exception e) { logAe2(e, "tryDirectEject"); }
 		try { ae2HostAdapter.pushOutputs(); } catch (Exception e) { logAe2(e, "pushOutputs"); }
-		return result;
 	}
 	private void logAe2(Exception e, String n) {
 		// NPE 防御:getLevel() 在方块实体卸载后可能返回 null(参考 MEK BlockEntity 源码),
@@ -458,11 +472,19 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	) {
 		return ae2HostAdapter.getAe2EnergySource();
 	}
+	@Override public long productivebeesgenesis$getRequiredEnergyForBatch(int batchMultiplier) {
+		MachineEnergyContainer<?> container = productivebeesgenesis$getAe2EnergySource();
+		return container == null ? 0L : ApiaryEnergyMath.calculateBatchEnergyCost(
+				container.getEnergyPerTick(), getBeeSlotCount(), batchMultiplier);
+	}
 	@Override public Level productivebeesgenesis$getAe2Level() { return ae2HostAdapter.getAe2Level(); }
 	@Override public BlockPos productivebeesgenesis$getAe2BlockPos() { return ae2HostAdapter.getAe2BlockPos(); }
 	@Override public boolean productivebeesgenesis$isOutputPushEnabled() { return ae2HostAdapter.isOutputPushEnabled(); }
 	@Override public boolean productivebeesgenesis$isFluidPushEnabled() { return ae2HostAdapter.isFluidPushEnabled(); }
-	@Override public void productivebeesgenesis$injectAe2Energy() { ae2HostAdapter.injectAe2Energy(); }
+	@Override public void productivebeesgenesis$injectAe2Energy() { ae2HostAdapter.injectAe2Energy(1); }
+	@Override public void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
+		ae2HostAdapter.injectAe2Energy(batchMultiplier);
+	}
 	@Override public boolean productivebeesgenesis$getPreferAppliedFluxOverAeEnergy(
 	) {
 		return ae2HostAdapter.getPreferAppliedFluxOverAeEnergy();
@@ -564,6 +586,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** JDTE 合并接口 flush 委托（见 {@link #productivebeesgenesis$accumulateAcceleratedTicks}） */
 	public void productivebeesgenesis$flushAcceleratedTicks() {
 		tickHandler.flushAcceleratedTicks();
+		if (tickHandler.handledLastInvocation()) {
+			productivebeesgenesis$runPostProductionAe2();
+		}
 	}
 	@Override public boolean productivebeesgenesis$outputSlotsFull(
 	) {

@@ -180,7 +180,7 @@ class MekCentrifugeTickHandler {
 		// 与 JDTE flush 均被同 gameTick 门控跳过）。输入为 SMELTING 配方时轻量补调，
 		// 使熔炉配方按批量倍率 M 推进（JDTE 时间加速器与 JDT 时间手杖均生效）。
 		// PB 配方路径不需要补调：PbVirtualTickPlan 已在内部按倍率推进。
-		if (batchMultiplier > 1 && isSmeltingOnlyInput()) {
+		if (batchMultiplier > 1) {
 			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
 			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
 			if (tile.runLightSmeltingTicks(batchMultiplier)) {
@@ -208,7 +208,7 @@ class MekCentrifugeTickHandler {
 
 		// AE2 输入拉取 + 输出推送（AE2 未加载时短路，避免触发 appeng 类加载）
 		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
-			Ae2InputPuller.pullInputs(tile);
+			Ae2InputPuller.pullInputs(tile, batchMultiplier);
 			Ae2OutputPusher.pushOutputs(tile);
 			// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽
 			Ae2FluidPusher.pushFluids(tile);
@@ -217,30 +217,6 @@ class MekCentrifugeTickHandler {
 		return sendUpdatePacket;
 	}
 
-
-	/**
-	 * 判断当前输入是否为 SMELTING（电力熔炼炉）独占配方 — 用于批量倍率 > 1 时补调 super 加速。
-	 * <br/>
-	 * 语义与 {@link #tryProcessPbRecipe} 一致：万象创世蜜脾/PB 离心配方优先，SMELTING 只在
-	 * 两者都未命中时参与；SMELTING 兼容总开关关闭时返回 false（super 管线不会处理熔炉配方）。
-	 */
-	private boolean isSmeltingOnlyInput() {
-		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(tile)) {
-			return false;
-		}
-		ItemStack input = tile.accessor().productivebeesgenesis$getInputSlot().getStack();
-		if (input.isEmpty()) {
-			return false;
-		}
-		if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-				|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
-			return false;
-		}
-		if (pbProcessor.findPbRecipe(input) != null) {
-			return false;
-		}
-		return pbProcessor.hasSmeltingRecipe(0, input);
-	}
 
 	/**
 	 * 尝试PB离心配方处理

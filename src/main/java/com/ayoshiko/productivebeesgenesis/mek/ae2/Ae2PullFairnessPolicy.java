@@ -12,6 +12,14 @@ final class Ae2PullFairnessPolicy {
 		return Math.max(1, (interval + multiplier - 1) / multiplier);
 	}
 
+	static int resolveAccelerationMultiplier(int executedBatchMultiplier,
+			int currentTrackerMultiplier, int previousTrackerMultiplier) {
+		if (executedBatchMultiplier > 0) {
+			return executedBatchMultiplier;
+		}
+		return Math.max(1, Math.max(currentTrackerMultiplier, previousTrackerMultiplier));
+	}
+
 	static long perSlotQuota(long configuredRate, int accelerationMultiplier, int processCount) {
 		long rate = Math.max(1L, configuredRate);
 		long processes = Math.max(1, processCount);

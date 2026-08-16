@@ -36,21 +36,23 @@ public final class MekCentrifugeEnergyScaling {
             return 0L;
         }
         long energyPerOperation = Math.max(0L, container.getEnergyPerTick());
-        if (energyPerOperation == 0L) {
-            return 0L;
-        }
         // Actual worst case for our machines: STACK 16 => 2^16 = 65536 parallel,
         // MU speed/energy 32 (already included in energyPerOperation), plus PB
         // productivity parallelism, then multiplied by the current tick-accelerator batch.
         int operationsPerTick = Math.max(1, context.operationsPerTick());
         int productivityParallel = Math.max(1, context.productivityParallelModifier());
         int processes = Math.max(1, context.processes());
-        int batch = Math.max(1, batchMultiplier);
+        return requiredEnergyPerTick(energyPerOperation, operationsPerTick,
+                productivityParallel, processes, batchMultiplier);
+    }
 
-        long required = SaturatingMath.saturatingMultiply(energyPerOperation, operationsPerTick);
-        required = SaturatingMath.saturatingMultiply(required, productivityParallel);
-        required = SaturatingMath.saturatingMultiply(required, processes);
-        return SaturatingMath.saturatingMultiply(required, batch);
+    static long requiredEnergyPerTick(long energyPerOperation, int operationsPerTick,
+            int productivityParallel, int processes, int batchMultiplier) {
+        long required = SaturatingMath.saturatingMultiply(
+                Math.max(0L, energyPerOperation), Math.max(1, operationsPerTick));
+        required = SaturatingMath.saturatingMultiply(required, Math.max(1, productivityParallel));
+        required = SaturatingMath.saturatingMultiply(required, Math.max(1, processes));
+        return SaturatingMath.saturatingMultiply(required, Math.max(1, batchMultiplier));
     }
 
     /**

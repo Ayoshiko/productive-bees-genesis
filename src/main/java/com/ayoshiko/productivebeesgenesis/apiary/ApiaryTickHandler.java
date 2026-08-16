@@ -66,6 +66,9 @@ class ApiaryTickHandler {
 	/** 批量收获状态（同 gameTick 门控 + 共享预算）— ticker 与 JDTE flush 共用 */
 	private final TickBatchSkipState skipState = new TickBatchSkipState();
 
+	/** Whether the immediately preceding ticker/flush invocation won the real-tick gate. */
+	private boolean handledLastInvocation;
+
 	/** 上一 tick 是否有蜜蜂在工作 — 用于检测工作停止时恢复 active 状态 */
 	private boolean wasWorking;
 
@@ -132,6 +135,7 @@ class ApiaryTickHandler {
 	 * @return 是否需要发送客户端同步包（由 super 返回）
 	 */
 	boolean onUpdateServer() {
+		handledLastInvocation = false;
 		// Task 6 批量收获模式：虚拟 tick 银行 + 每 tick 预算（对齐 JDTE 调度器哲学）
 		// decideAction 内部完成 onTick 计数、同 gameTick 门控与共享预算取款，消除 1024x 尖峰。
 		boolean skipBeeProcessing = false;
@@ -154,6 +158,7 @@ class ApiaryTickHandler {
 				batchMultiplier = skipState.getBatchMultiplier();
 			}
 		}
+		handledLastInvocation = true;
 		return runTick(skipBeeProcessing, batchMultiplier);
 	}
 
@@ -177,6 +182,7 @@ class ApiaryTickHandler {
 	 * 无论 JDTE flush 在 ticker 之前还是之后调用，同一 gameTick 只执行一次完整处理，避免双跑。
 	 */
 	void flushAcceleratedTicks() {
+		handledLastInvocation = false;
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide) {
 			return;
@@ -187,7 +193,18 @@ class ApiaryTickHandler {
 			return;
 		}
 		int batchMultiplier = skipState.takeSharedBatchMultiplier(tickAccelTracker, gameTick);
+		handledLastInvocation = true;
 		runTick(false, batchMultiplier);
+	}
+
+	/**
+	 * Returns whether the immediately preceding entry call selected and ran the complete apiary pass.
+	 * <br/>
+	 * The outer tile wrapper uses this to avoid repeating direct-eject and AE2 work when a
+	 * legacy accelerator invokes the ticker several times in one real game tick.
+	 */
+	boolean handledLastInvocation() {
+		return handledLastInvocation;
 	}
 
 	/**
@@ -196,8 +213,9 @@ class ApiaryTickHandler {
 	 * 批量倍率在进入前已从虚拟 tick 银行取出，skip 时仍执行 super 保证 ejector/能量管线工作。
 	 */
 	private boolean runTick(boolean skipBeeProcessing, int batchMultiplier) {
-		// AE2 能量注入（在 super 之前调用，让能量填充管线能使用注入的能量）
-		tile.productivebeesgenesis$injectAe2Energy();
+		tile.prepareAe2ForTick();
+		// One demand calculation and one batched AE request per real tick.
+		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		// 调用 super 处理能量填充和 ejector tick
 		boolean sendUpdatePacket = tile.callSuperOnUpdateServer();
 

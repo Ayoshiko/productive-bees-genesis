@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2EnergyInjector;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
@@ -180,10 +181,13 @@ class ApiaryAe2HostAdapter {
 	 * 守卫条件：AE2 未安装 / 配置缓存未启用时直接返回。
 	 * 配置值由 {@link #refreshAe2ConfigCache()} 每 100 tick 刷新到 {@link #cachedAeEnergyInputEnabled}。
 	 */
-	void injectAe2Energy() {
+	void injectAe2Energy(int batchMultiplier) {
+		long requiredEnergy = tile.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
+		// Keep the local buffer usable for batched production even when AE2 input is unavailable.
+		MekCentrifugeEnergyScaling.ensureCapacity(tile, requiredEnergy);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		if (!cachedAeEnergyInputEnabled) return;
-		Ae2EnergyInjector.injectEnergy(tile);
+		Ae2EnergyInjector.injectEnergy(tile, requiredEnergy);
 	}
 
 	/**

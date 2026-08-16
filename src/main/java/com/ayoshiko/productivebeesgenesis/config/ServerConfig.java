@@ -361,9 +361,10 @@ public final class ServerConfig {
 				.defineInRange("saveInterval", 20, 1, 200);
 
 		maxBatchTicksPerTick = builder
-				.comment("批量收获每真实tick虚拟tick预算", "上限值，实际预算按服务器TPS自适应降级（50ms健康=满额，100ms=10%）",
-						"无批次限制加速器（如1024x时间杖）下防止MSPT尖峰，余量挂账后续tick消化")
-				.defineInRange("maxBatchTicksPerTick", 256, 1, 1024);
+				.comment("批量加速每个真实游戏刻的虚拟 tick 上限",
+						"默认 1024；实际预算会根据当前 MSPT 自动降级，超出部分进入短期挂账")
+				.translation("productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick")
+				.defineInRange("maxBatchTicksPerTick", 1024, 1, 1024);
 
 		builder.pop(); // advanced_beehive
 

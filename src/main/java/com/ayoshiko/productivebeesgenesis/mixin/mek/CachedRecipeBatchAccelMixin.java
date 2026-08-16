@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import mekanism.api.recipes.cache.CachedRecipe;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -97,43 +98,9 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	@Unique
 	private int productivebeesgenesis$batchFastOps;
 
-	// ===== OperationTracker.currentMax 读取（反射 + 失败降级） =====
-	// 不用 @Accessor：CachedRecipe.OperationTracker 是嵌套类，@Accessor 的嵌套类 target
-	// 在部分 Mixin 版本/环境下可能应用失败导致启动崩溃（同 LocalCapture 的 LVT 兼容性问题）。
-	// 反射句柄惰性初始化并缓存；字段缺失/访问异常时永久降级（快速路径禁用），不影响正常运行。
-
-	/** currentMax 字段反射句柄（惰性初始化） */
+	/** 当前完整 process 调用正在等待最终操作数；提前返回时用于终止剩余补调。 */
 	@Unique
-	private static java.lang.reflect.Field productivebeesgenesis$currentMaxField;
-
-	/** 反射初始化是否已失败（true 后不再重试，永久降级） */
-	@Unique
-	private static boolean productivebeesgenesis$currentMaxFieldFailed;
-
-	/** 读取 tracker.currentMax；失败时返回 -1（调用方终止批量，降级为逐 tick 语义） */
-	@Unique
-	private static int productivebeesgenesis$getTrackerCurrentMax(CachedRecipe.OperationTracker tracker) {
-		java.lang.reflect.Field field = productivebeesgenesis$currentMaxField;
-		if (field == null) {
-			if (productivebeesgenesis$currentMaxFieldFailed) {
-				return -1;
-			}
-			try {
-				field = CachedRecipe.OperationTracker.class.getDeclaredField("currentMax");
-				field.setAccessible(true);
-				productivebeesgenesis$currentMaxField = field;
-			} catch (ReflectiveOperationException e) {
-				productivebeesgenesis$currentMaxFieldFailed = true;
-				return -1;
-			}
-		}
-		try {
-			return field.getInt(tracker);
-		} catch (ReflectiveOperationException e) {
-			productivebeesgenesis$currentMaxFieldFailed = true;
-			return -1;
-		}
-	}
+	private boolean productivebeesgenesis$awaitingFinalOperations;
 
 	// ===== 接口实现 =====
 
@@ -141,6 +108,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	public void productivebeesgenesis$startBatch(int ticks) {
 		productivebeesgenesis$batchTicksLeft = Math.max(0, ticks);
 		productivebeesgenesis$batchFastOps = 0;
+		productivebeesgenesis$awaitingFinalOperations = false;
 	}
 
 	@Override
@@ -159,12 +127,15 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	private void productivebeesgenesis$onProcessHead(CallbackInfo ci) {
 		int ticksLeft = productivebeesgenesis$batchTicksLeft;
 		if (ticksLeft <= 0) {
+			productivebeesgenesis$awaitingFinalOperations = false;
 			return; // 批量未激活：走原版逐 tick 逻辑
 		}
 		int ops = productivebeesgenesis$batchFastOps;
 		if (ops <= 0) {
+			productivebeesgenesis$awaitingFinalOperations = true;
 			return; // 需要完整重算：本次调用走原版逻辑，onAfterCalculate 恢复快速模式
 		}
+		productivebeesgenesis$awaitingFinalOperations = false;
 		// 配方被错误暂停或持有者不可用（红石等）：终止批量，交给原版逻辑维护错误/激活状态
 		if (pausedForErrors || !canHolderFunction.getAsBoolean()) {
 			productivebeesgenesis$batchTicksLeft = 0;
@@ -179,7 +150,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 			// 与原版 capAtMaxForEnergy 对齐：能量不足以支撑当前操作数（ops × perTick）时终止批量，
 			// 本次调用不取消、直接走原版逻辑（原版会 cap 降 ops 继续或标记 NOT_ENOUGH_ENERGY，
 			// 错误状态与 setActive 由原版维护，语义与逐 tick 完全一致，0 延迟）
-			if (energyPerTick != 0L && storedEnergy.getAsLong() < (long) ops * energyPerTick) {
+			if (energyPerTick > 0L && storedEnergy.getAsLong() / energyPerTick < ops) {
 				productivebeesgenesis$batchTicksLeft = 0;
 				productivebeesgenesis$batchFastOps = 0;
 				return;
@@ -208,41 +179,50 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		ci.cancel();
 	}
 
-	// ===== process() 完整计算点：捕获可执行操作数并恢复快速模式 =====
+	// ===== process() 完整计算点：捕获最终可执行操作数并恢复快速模式 =====
 
 	/**
-	 * 完整路径执行 {@code calculateOperationsThisTick} 后捕获 tracker.currentMax
-	 * （与原版后续的 capAtMaxForEnergy 能量裁剪对齐），恢复快速推进；
+	 * 在 {@code postProcessOperations} 与 {@code capAtMaxForEnergy} 都完成后，包裹原版读取
+	 * {@code tracker.currentMax} 的最终字段访问。这样缓存的操作数与本次原版实际执行值完全一致，
+	 * 不会绕过工厂排序、升级或能量阶段对操作数的二次裁剪；
 	 * 无法推进（输入空/输出满/能量不足/配方不匹配）时终止批量。
 	 */
-	// require = 0：@Local 局部变量解析失败时静默跳过该注入（不崩溃），
-	// 快速路径不会激活，自动降级为上轮的逐 tick 轻量补调语义。
-	@WrapOperation(method = "process", at = @At(value = "INVOKE",
-			target = "Lmekanism/api/recipes/cache/CachedRecipe;calculateOperationsThisTick(Lmekanism/api/recipes/cache/CachedRecipe$OperationTracker;)V"))
-	private void productivebeesgenesis$onAfterCalculate(CachedRecipe recipe, CachedRecipe.OperationTracker tracker, Operation<Void> original) {
-		original.call(recipe, tracker);
+	@WrapOperation(method = "process", at = @At(value = "FIELD",
+			target = "Lmekanism/api/recipes/cache/CachedRecipe$OperationTracker;currentMax:I",
+			opcode = Opcodes.GETFIELD))
+	private int productivebeesgenesis$captureFinalOperations(CachedRecipe.OperationTracker tracker,
+			Operation<Integer> original) {
+		int ops = original.call(tracker);
 		if (productivebeesgenesis$batchTicksLeft <= 0 || productivebeesgenesis$batchFastOps > 0) {
-			return;
+			return ops;
 		}
-		int ops = productivebeesgenesis$getTrackerCurrentMax(tracker);
+		productivebeesgenesis$awaitingFinalOperations = false;
 		if (ops <= 0) {
 			productivebeesgenesis$batchTicksLeft = 0;
 			productivebeesgenesis$batchFastOps = 0;
-			return;
-		}
-		long energyPerTick = perTickEnergy.getAsLong();
-		if (energyPerTick != 0L) {
-			long energyOps = storedEnergy.getAsLong() / energyPerTick;
-			if (energyOps < ops) {
-				ops = (int) energyOps;
-			}
-		}
-		if (ops <= 0) {
-			productivebeesgenesis$batchTicksLeft = 0;
-			productivebeesgenesis$batchFastOps = 0;
-			return;
+			return ops;
 		}
 		productivebeesgenesis$batchFastOps = ops;
 		productivebeesgenesis$batchTicksLeft--;
+		return ops;
+	}
+
+	/** 原版完成配方周期后已改变输入/输出，下一虚拟 tick 必须重新计算操作数。 */
+	@WrapOperation(method = "process", at = @At(value = "INVOKE",
+			target = "Lmekanism/api/recipes/cache/CachedRecipe;resetCache()V"))
+	private void productivebeesgenesis$invalidateAfterRecipeBoundary(CachedRecipe<?> recipe,
+			Operation<Void> original) {
+		original.call(recipe);
+		productivebeesgenesis$batchFastOps = 0;
+	}
+
+	/** paused/canHolder 等分支可能在最终操作数字段读取前返回；此时停止本轮补调。 */
+	@Inject(method = "process", at = @At("RETURN"))
+	private void productivebeesgenesis$stopBatchAfterEarlyReturn(CallbackInfo ci) {
+		if (productivebeesgenesis$awaitingFinalOperations) {
+			productivebeesgenesis$awaitingFinalOperations = false;
+			productivebeesgenesis$batchTicksLeft = 0;
+			productivebeesgenesis$batchFastOps = 0;
+		}
 	}
 }

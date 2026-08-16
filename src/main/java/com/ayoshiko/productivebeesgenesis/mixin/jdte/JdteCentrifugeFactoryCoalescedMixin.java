@@ -6,8 +6,8 @@ import org.spongepowered.asm.mixin.Mixin;
 
 /**
  * JDTE {@code CoalescedAcceleratedMachine} 合并接口注入 — 通用机械离心机工厂基类
- * （覆盖原版工厂变体 {@code TileEntityMekCentrifugeFactory} 及其子类，通过继承；
- * ME/EME 工厂继承各自基类不在此列，JDTE 对其按普通 ticker 路径加速，行为与未实现接口一致）。
+ * （覆盖原版工厂变体 {@code TileEntityMekCentrifugeFactory} 及其子类，通过继承）。
+ * ME/EME 工厂继承各自第三方基类，由各自的可选 JDTE 桥接 Mixin 单独覆盖。
  * <br/>
  * 仅当 JDTE 加载时由 {@code MixinConfigPlugin} 条件应用。
  * <p>

@@ -81,11 +81,21 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"ExtraFactoryOutputInventorySlotMixin"
 	);
 
-	/** 引用 JDTE 接口的 Mixin 简单类名集合（CoalescedAcceleratedMachine，仅 JDTE 加载时应用） */
+	/** 仅依赖 JDTE 的合并加速 Mixin。 */
 	private static final Set<String> JDTE_MIXINS = Set.of(
-			"JdteApiaryCoalescedMixin",
-			"JdteCentrifugeCoalescedMixin",
-			"JdteCentrifugeFactoryCoalescedMixin"
+		"JdteApiaryCoalescedMixin",
+		"JdteCentrifugeCoalescedMixin",
+		"JdteCentrifugeFactoryCoalescedMixin"
+	);
+
+	/** 目标继承 Mekanism Extras 基类，必须同时加载 JDTE 与 ME。 */
+	private static final Set<String> JDTE_ME_MIXINS = Set.of(
+		"JdteExtraCentrifugeFactoryCoalescedMixin"
+	);
+
+	/** 目标继承 Evolved Mekanism Extras 基类，必须同时加载 JDTE 与 EME。 */
+	private static final Set<String> JDTE_EME_MIXINS = Set.of(
+		"JdteEMExtraCentrifugeFactoryCoalescedMixin"
 	);
 
 	/** 引用 EME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 EME 的类）
@@ -244,6 +254,12 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 		if (JDTE_MIXINS.contains(simpleName)) {
 			return Holder.JDTE_LOADED;
+		}
+		if (JDTE_ME_MIXINS.contains(simpleName)) {
+			return Holder.JDTE_LOADED && Holder.ME_LOADED;
+		}
+		if (JDTE_EME_MIXINS.contains(simpleName)) {
+			return Holder.JDTE_LOADED && Holder.EME_LOADED;
 		}
 		return true;
 	}
