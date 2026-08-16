@@ -46,6 +46,8 @@ public final class Ae2PendingBatchBuffer {
 	/* Swap maps at drain time so a flush does not copy every pending entry. */
 	private Object2LongOpenHashMap<AEFluidKey> pendingAmounts = new Object2LongOpenHashMap<>();
 	private Object2LongOpenHashMap<AEFluidKey> drainedAmounts = new Object2LongOpenHashMap<>();
+	/** Per-scan totals. A host may expose several tanks containing the same fluid. */
+	private final Object2LongOpenHashMap<AEFluidKey> sampleAmounts = new Object2LongOpenHashMap<>();
 
 	/** 剩余成熟 tick 数（初始 RIPE_TICKS，每 tick 递减，0 时成熟） */
 	private int ripeTicksRemaining = RIPE_TICKS;
@@ -81,6 +83,26 @@ public final class Ae2PendingBatchBuffer {
 			pendingAmounts.put(fluidKey, amount);
 			totalPendingAmount = SaturatingMath.saturatingAdd(totalPendingAmount, amount - previous);
 		}
+	}
+
+	/** Starts one host-tank snapshot; repeated push attempts must not double-count it. */
+	void beginSample() {
+		sampleAmounts.clear();
+	}
+
+	/** Adds one tank to the current snapshot. */
+	void accumulateSample(AEFluidKey fluidKey, long amount) {
+		if (fluidKey == null || amount <= 0) return;
+		sampleAmounts.put(fluidKey,
+				SaturatingMath.saturatingAdd(sampleAmounts.getLong(fluidKey), amount));
+	}
+
+	/** Commits the summed snapshot using the existing max-across-samples semantics. */
+	void finishSample() {
+		for (Object2LongMap.Entry<AEFluidKey> entry : sampleAmounts.object2LongEntrySet()) {
+			accumulate(entry.getKey(), entry.getLongValue());
+		}
+		sampleAmounts.clear();
 	}
 
 	/**
@@ -176,6 +198,7 @@ public final class Ae2PendingBatchBuffer {
 	public void reset() {
 		pendingAmounts.clear();
 		drainedAmounts.clear();
+		sampleAmounts.clear();
 		totalPendingAmount = 0L;
 		ripeTicksRemaining = RIPE_TICKS;
 	}

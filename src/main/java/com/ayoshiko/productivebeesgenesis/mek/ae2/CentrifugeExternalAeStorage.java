@@ -239,14 +239,17 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	private AEFluidKey getCachedFluidKey(int index, FluidStack stack) {
 		Ae2OutputStateHolder holder = shared.host.productivebeesgenesis$getAe2StateHolder();
 		Object fluid = stack.getFluid();
-		int componentsHash = stack.getComponents().hashCode();
+		boolean componentsEmpty = stack.isComponentsPatchEmpty();
+		int componentsHash = componentsEmpty ? 0 : stack.getComponents().hashCode();
 		if (holder.getCachedFluidPushKeyFluid(index) == fluid
-				&& holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash
+				&& holder.isCachedFluidPushKeyComponentsEmpty(index) == componentsEmpty
+				&& (componentsEmpty
+						|| holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash)
 				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing) {
 			return existing;
 		}
 		AEFluidKey created = AEFluidKey.of(stack);
-		holder.setCachedFluidPushKey(index, created, fluid, componentsHash);
+		holder.setCachedFluidPushKey(index, created, fluid, componentsEmpty, componentsHash);
 		return created;
 	}
 

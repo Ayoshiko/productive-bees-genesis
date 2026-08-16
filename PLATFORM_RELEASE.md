@@ -44,11 +44,11 @@ CurseForge 的 `1.0.0` 与 NeoForge 元数据、Manifest `Implementation-Version
 
 ```text
 文件: build/libs/productivebeesgenesis-1.0.0.jar
-大小: 1,688,609 bytes
-SHA-256: 0B30136D5BEF85EFF96587D5CE4176D7E6A2DC63B81BA0D7B705F355D387DCF0
+大小: 1,690,931 bytes
+SHA-256: C8224556284454514BD122AABB0B6A756B73641260FD4A9164864CF552518A9B
 ```
 
-发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；已通过两次强制重建验证哈希一致，上传后应以此 SHA-256 核对平台下载文件。
+发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
 
 ## 图标
 

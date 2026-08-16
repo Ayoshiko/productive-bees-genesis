@@ -45,11 +45,7 @@ public final class SaturatingMath {
 	 */
 	public static long saturatingMultiply(long a, long b) {
 		if (a <= 0 || b <= 0) return 0;
-		try {
-			return Math.multiplyExact(a, b);
-		} catch (ArithmeticException overflow) {
-			return Long.MAX_VALUE;
-		}
+		return a > Long.MAX_VALUE / b ? Long.MAX_VALUE : a * b;
 	}
 
 	/**
@@ -66,11 +62,7 @@ public final class SaturatingMath {
 	 */
 	public static long saturatingAdd(long a, long b) {
 		if (a < 0 || b < 0) return 0;
-		try {
-			return Math.addExact(a, b);
-		} catch (ArithmeticException overflow) {
-			return Long.MAX_VALUE;
-		}
+		return a > Long.MAX_VALUE - b ? Long.MAX_VALUE : a + b;
 	}
 
 	/**

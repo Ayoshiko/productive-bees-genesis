@@ -96,7 +96,7 @@ public final class Ae2FluidPusher {
 		if (grid == null) return 0L;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return 0L;
-		AEFluidKey key = AEFluidKey.of(template);
+		AEFluidKey key = getCachedGeneratedFluidKey(holder, template);
 		if (key == null) return 0L;
 		try {
 			return SaturatingMath.clampToRequest(
@@ -190,6 +190,7 @@ public final class Ae2FluidPusher {
 		if (totalInTanks <= 0) return;
 
 		// 第二遍：每个真实游戏刻采样一次。加速子 tick 已在入口合并，不会放大组件哈希开销。
+		batchBuffer.beginSample();
 		for (int i = 0; i < tankCount; i++) {
 			IExtendedFluidTank tank = host.fluidOutputTank(i);
 			if (tank == null || tank.isEmpty()) continue;
@@ -202,8 +203,9 @@ public final class Ae2FluidPusher {
 			}
 			long amount = stack.getAmount();
 			if (amount <= 0) continue;
-			batchBuffer.accumulate(fluidKey, amount);
+			batchBuffer.accumulateSample(fluidKey, amount);
 		}
+		batchBuffer.finishSample();
 
 		// 10. 刷新检查：
 		//     - 关闭直接产出模式时，本地罐是唯一缓冲，逐真实 tick 刷新以避免限制机器吞吐；
@@ -347,7 +349,8 @@ public final class Ae2FluidPusher {
 	 * <br/>
 	 * Task 24：{@code AEFluidKey.of(FluidStack)} 每次分配 AEFluidKey + FluidStack，
 	 * 多槽高并行工厂在大量机器下每 tick 累积都会产生分配压力。
-	 * 按 (Fluid 引用 + components hash) 失效：流体类型不变时直接复用缓存对象。
+	 * 无组件补丁时按 Fluid 引用失效并跳过 hash；带组件时额外校验内容 hash，
+	 * 防止可变组件映射原地更新后错误复用缓存对象。
 	 *
 	 * @param holder AE2 状态持有者（承载 per-tile 缓存）
 	 * @param index  流体槽索引
@@ -356,14 +359,34 @@ public final class Ae2FluidPusher {
 	 */
 	private static AEFluidKey getCachedFluidKey(Ae2OutputStateHolder holder, int index, FluidStack stack) {
 		Object fluid = stack.getFluid();
-		int componentsHash = stack.getComponents().hashCode();
+		boolean componentsEmpty = stack.isComponentsPatchEmpty();
+		int componentsHash = componentsEmpty ? 0 : stack.getComponents().hashCode();
 		if (holder.getCachedFluidPushKeyFluid(index) == fluid
-				&& holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash
+				&& holder.isCachedFluidPushKeyComponentsEmpty(index) == componentsEmpty
+				&& (componentsEmpty
+						|| holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash)
 				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing) {
 			return existing;
 		}
 		AEFluidKey created = AEFluidKey.of(stack);
-		holder.setCachedFluidPushKey(index, created, fluid, componentsHash);
+		holder.setCachedFluidPushKey(index, created, fluid, componentsEmpty, componentsHash);
+		return created;
+	}
+
+	private static AEFluidKey getCachedGeneratedFluidKey(
+			Ae2OutputStateHolder holder, FluidStack stack) {
+		Object fluid = stack.getFluid();
+		boolean componentsEmpty = stack.isComponentsPatchEmpty();
+		int componentsHash = componentsEmpty ? 0 : stack.getComponents().hashCode();
+		if (holder.getGeneratedFluidKeyFluidRef() == fluid
+				&& holder.isGeneratedFluidKeyComponentsEmpty() == componentsEmpty
+				&& (componentsEmpty
+						|| holder.getGeneratedFluidKeyComponentsHash() == componentsHash)
+				&& holder.getGeneratedFluidKeyCache() instanceof AEFluidKey existing) {
+			return existing;
+		}
+		AEFluidKey created = AEFluidKey.of(stack);
+		holder.setGeneratedFluidKeyCache(created, fluid, componentsEmpty, componentsHash);
 		return created;
 	}
 

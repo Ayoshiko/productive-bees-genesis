@@ -116,9 +116,18 @@ public final class PbRecipeFlusher {
 			reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
 			reusableSlotIdxMap[slotCount++] = 2; // tertiary
 
-			// 先验证流体回退空间，再执行任何本地物品写入，保持刷新操作的原子性。
-			if (!canStorePendingFluidLocally(completer, context)) {
-				return false;
+			// Resolve the route once for this flush. Capacity planning and the final commit run on
+			// the server thread, so re-routing the same fluid only repeats map/hash work.
+			FluidStack pendingFluidTemplate = completer.getPendingFluidTemplate();
+			long pendingFluidAmount = completer.getPendingFluidAmount();
+			IExtendedFluidTank pendingFluidTank = null;
+			if (pendingFluidTemplate != null && !pendingFluidTemplate.isEmpty()
+					&& pendingFluidAmount > 0) {
+				pendingFluidTank = context.fluidOutputTankForInsert(pendingFluidTemplate);
+				if (!canStorePendingFluidLocally(
+						pendingFluidTemplate, pendingFluidAmount, pendingFluidTank)) {
+					return false;
+				}
 			}
 
 			// 单次直写:模拟 + 执行一体化
@@ -135,12 +144,10 @@ public final class PbRecipeFlusher {
 			// SRP 原则要求调用方知情,不能静默丢弃产物导致输入被消耗但产物丢失:
 			// tank==null 或空间不足时必须返回 false 触发暂停,让外层下个 tick 重试,
 			// 而非静默跳过让输入被扣除后产物丢失(违反配方原子性契约)。
-			FluidStack pendingFluidTemplate = completer.getPendingFluidTemplate();
-			long pendingFluidAmount = completer.getPendingFluidAmount();
 			if (pendingFluidTemplate != null && pendingFluidAmount > 0) {
 				int scaledAmount = (int) Math.min(pendingFluidAmount, Integer.MAX_VALUE);
 				FluidStack scaledFluid = pendingFluidTemplate.copyWithAmount(scaledAmount);
-				IExtendedFluidTank tank = context.fluidOutputTankForInsert(pendingFluidTemplate);
+				IExtendedFluidTank tank = pendingFluidTank;
 				FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 				long inserted = scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
 				completer.consumePendingFluid(inserted);
@@ -194,16 +201,16 @@ public final class PbRecipeFlusher {
 		return acceptedAny;
 	}
 
-	private static boolean canStorePendingFluidLocally(PbRecipeCompleter completer, PbRecipeContext context) {
-		FluidStack template = completer.getPendingFluidTemplate();
-		long pending = completer.getPendingFluidAmount();
-		if (template == null || template.isEmpty() || pending <= 0) return true;
+	private static boolean canStorePendingFluidLocally(
+			FluidStack template, long pending, IExtendedFluidTank tank) {
 		// 本地 FluidStack 使用 int 数量。超大批次必须先由调用方减半，
 		// 不能先插入 Integer.MAX_VALUE 再返回失败，否则输入未提交会复制流体。
 		if (pending > Integer.MAX_VALUE) return false;
 		int required = (int) Math.min(pending, Integer.MAX_VALUE);
-		IExtendedFluidTank tank = context.fluidOutputTankForInsert(template);
-		if (tank == null || tank.getNeeded() < required) {
+		FluidStack current = tank == null ? FluidStack.EMPTY : tank.getFluid();
+		boolean typeMismatch = !current.isEmpty()
+				&& !FluidStack.isSameFluidSameComponents(current, template);
+		if (tank == null || typeMismatch || tank.getNeeded() < required) {
 			DevLog.warn("pb_recipe", "流体插入失败: tank={}, needed={}, required={}, fluid={}",
 					tank, tank == null ? -1 : tank.getNeeded(), required, template.getFluid());
 			return false;
@@ -313,27 +320,6 @@ public final class PbRecipeFlusher {
 			}
 			if (remaining > 0) {
 				return false; // 空间不足,不执行任何修改
-			}
-		}
-
-		// 流体空间检查 — Task 10: 使用 fluidOutputTankForInsert 路由到目标槽
-		// SINGLE: 返回主槽,等价于原 fluidOutputTank();MULTI_PER_FLUID: 路由到对应类型槽,
-		// 槽位已满且无匹配槽时 fallback 主槽,主槽类型不匹配则 return false(由 isOutputBlocked 拦截)
-		// SRP 原则:失败必须返回 false 触发暂停,避免静默丢弃流体导致输入被消耗但产物丢失
-		FluidStack pendingFluidTemplate = completer.getPendingFluidTemplate();
-		long pendingFluidAmount = completer.getPendingFluidAmount();
-		if (pendingFluidTemplate != null && pendingFluidAmount > 0) {
-			IExtendedFluidTank tank = context.fluidOutputTankForInsert(pendingFluidTemplate);
-			int scaledAmount = (int) Math.min(pendingFluidAmount, Integer.MAX_VALUE);
-			if (tank == null) {
-				return false;
-			}
-			FluidStack current = tank.getFluid();
-			if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, pendingFluidTemplate)) {
-				return false;
-			}
-			if (tank.getNeeded() < scaledAmount) {
-				return false;
 			}
 		}
 

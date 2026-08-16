@@ -36,11 +36,18 @@ public final class Ae2OutputStateHolder {
 	 * <br/>
 	 * {@code AEFluidKey.of(FluidStack)} 每次分配 AEFluidKey + FluidStack，
 	 * 高并行工厂（多槽）在大量机器下每 tick 累积都会产生分配压力。
-	 * 缓存键按 (Fluid 引用 + components hash) 失效，流体类型不变时直接复用。
+	 * 缓存键按 (Fluid 引用 + components 空标记/hash) 失效。无组件流体走零哈希快路径，
+	 * 带组件流体使用内容哈希，避免原地修改组件映射后错误复用旧 key。
 	 */
 	private volatile Object[] fluidPushKeyCache;
 	private volatile Object[] fluidPushKeyFluidRefs;
 	private volatile int[] fluidPushKeyComponentsHashes;
+	private volatile boolean[] fluidPushKeyComponentsEmpty;
+	/** Last direct-generated fluid key; the common honey path reuses it across processes. */
+	private volatile Object generatedFluidKeyCache;
+	private volatile Object generatedFluidKeyFluidRef;
+	private volatile int generatedFluidKeyComponentsHash;
+	private volatile boolean generatedFluidKeyComponentsEmpty;
 
 	// ===== Task 12：AE2 网格/存储缓存（gridChanged 回调失效，减少 256× 下高频 AE2 API 查询） =====
 	/** 缓存的 AE2 网格（IGrid）/ 存储服务（IStorageService）/ ME 存储（MEStorage）。
@@ -178,6 +185,11 @@ public final class Ae2OutputStateHolder {
 		fluidPushKeyCache = null;
 		fluidPushKeyFluidRefs = null;
 		fluidPushKeyComponentsHashes = null;
+		fluidPushKeyComponentsEmpty = null;
+		generatedFluidKeyCache = null;
+		generatedFluidKeyFluidRef = null;
+		generatedFluidKeyComponentsHash = 0;
+		generatedFluidKeyComponentsEmpty = false;
 		// 熔炉兼容开关重置为默认关闭（与字段声明一致）
 		smeltingCompatEnabled = false;
 		centrifugeDirectAeOutputEnabled = false;
@@ -216,29 +228,53 @@ public final class Ae2OutputStateHolder {
 		return fluids != null && index < fluids.length ? fluids[index] : null;
 	}
 
-	/** 获取槽位缓存对应的 components hash（用于失效判断） */
+	/** 获取槽位缓存对应的 components hash（仅带组件流体用于失效判断） */
 	public int getCachedFluidPushKeyComponentsHash(int index) {
 		int[] hashes = fluidPushKeyComponentsHashes;
 		return hashes != null && index < hashes.length ? hashes[index] : 0;
 	}
 
+	/** 返回缓存 key 是否对应无组件补丁的流体。 */
+	public boolean isCachedFluidPushKeyComponentsEmpty(int index) {
+		boolean[] empty = fluidPushKeyComponentsEmpty;
+		return empty != null && index < empty.length && empty[index];
+	}
+
 	/** 更新槽位 AEFluidKey 缓存（数组不足时扩容） */
-	public void setCachedFluidPushKey(int index, Object key, Object fluid, int componentsHash) {
+	public void setCachedFluidPushKey(
+			int index, Object key, Object fluid, boolean componentsEmpty, int componentsHash) {
 		Object[] keys = fluidPushKeyCache;
 		Object[] fluids = fluidPushKeyFluidRefs;
 		int[] hashes = fluidPushKeyComponentsHashes;
+		boolean[] empty = fluidPushKeyComponentsEmpty;
 		if (keys == null || index >= keys.length) {
 			int length = Math.max(index + 1, 16);
 			keys = Arrays.copyOf(keys != null ? keys : new Object[0], length);
 			fluids = Arrays.copyOf(fluids != null ? fluids : new Object[0], length);
 			hashes = Arrays.copyOf(hashes != null ? hashes : new int[0], length);
+			empty = Arrays.copyOf(empty != null ? empty : new boolean[0], length);
 			fluidPushKeyCache = keys;
 			fluidPushKeyFluidRefs = fluids;
 			fluidPushKeyComponentsHashes = hashes;
+			fluidPushKeyComponentsEmpty = empty;
 		}
 		keys[index] = key;
 		fluids[index] = fluid;
 		hashes[index] = componentsHash;
+		empty[index] = componentsEmpty;
+	}
+
+	public Object getGeneratedFluidKeyCache() { return generatedFluidKeyCache; }
+	public Object getGeneratedFluidKeyFluidRef() { return generatedFluidKeyFluidRef; }
+	public int getGeneratedFluidKeyComponentsHash() { return generatedFluidKeyComponentsHash; }
+	public boolean isGeneratedFluidKeyComponentsEmpty() { return generatedFluidKeyComponentsEmpty; }
+
+	public void setGeneratedFluidKeyCache(
+			Object key, Object fluid, boolean componentsEmpty, int componentsHash) {
+		generatedFluidKeyCache = key;
+		generatedFluidKeyFluidRef = fluid;
+		generatedFluidKeyComponentsEmpty = componentsEmpty;
+		generatedFluidKeyComponentsHash = componentsHash;
 	}
 
 	// ===== ReusableBuffers / 网格缓存访问 =====

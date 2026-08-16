@@ -9,6 +9,9 @@ import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 /** Preserves pre-balance-config behavior when NeoForge corrects an old world config. */
 public final class BalanceConfigCompatibility {
@@ -32,9 +35,9 @@ public final class BalanceConfigCompatibility {
 	}
 
 	/**
-	 * Old configs have no balance profile. NeoForge creates a fresh -1 backup
-	 * immediately before adding missing spec keys, which lets us distinguish an
-	 * upgraded world from a new installation after correction has completed.
+	 * Old configs have no balance profile. NeoForge creates a numbered correction backup
+	 * immediately before adding missing spec keys, which lets us distinguish an upgraded
+	 * world from a new installation after correction has completed.
 	 */
 	public static boolean migrateLegacyConfig(ModConfig config) {
 		if (config == null) return false;
@@ -53,23 +56,23 @@ public final class BalanceConfigCompatibility {
 			server.speedUpgradeTiersExclusive.set(BalanceConfig.LEGACY_SPEED_EXCLUSIVE);
 			server.centrifugeProductivityAffectsOutput.set(BalanceConfig.LEGACY_CENTRIFUGE_OUTPUT);
 
-			// Existing values, including user-tuned lower limits, remain untouched.
-			// Only configs old enough to lack a limit receive the pre-change default.
-			setLegacyDefaultIfMissing(legacy, APIARY_PRODUCTIVITY_LIMIT,
+			// Restore the exact legacy limits, including user-tuned values. A legacy config
+			// from before these keys existed receives the old release default instead.
+			restoreLegacyLimit(legacy, APIARY_PRODUCTIVITY_LIMIT,
 					server.apiaryPbUpgradeProductivityMaxCount,
-					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT);
-			setLegacyDefaultIfMissing(legacy, APIARY_TIME_LIMIT,
+					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT, 1, 64);
+			restoreLegacyLimit(legacy, APIARY_TIME_LIMIT,
 					server.apiaryPbUpgradeTimeMaxCount,
-					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT);
-			setLegacyDefaultIfMissing(legacy, CENTRIFUGE_PRODUCTIVITY_LIMIT,
+					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT, 1, 64);
+			restoreLegacyLimit(legacy, CENTRIFUGE_PRODUCTIVITY_LIMIT,
 					server.mekCentrifugePbUpgradeProductivityMaxCount,
-					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT);
-			setLegacyDefaultIfMissing(legacy, CENTRIFUGE_TIME_LIMIT,
+					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT, 1, 64);
+			restoreLegacyLimit(legacy, CENTRIFUGE_TIME_LIMIT,
 					server.mekCentrifugePbUpgradeTimeMaxCount,
-					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT);
-			setLegacyDefaultIfMissing(legacy, CENTRIFUGE_STACK_LIMIT,
+					BalanceConfig.LEGACY_PB_UPGRADE_LIMIT, 1, 64);
+			restoreLegacyLimit(legacy, CENTRIFUGE_STACK_LIMIT,
 					server.mekCentrifugeMaxStackUpgrades,
-					BalanceConfig.LEGACY_STACK_UPGRADE_LIMIT);
+					BalanceConfig.LEGACY_STACK_UPGRADE_LIMIT, 8, 32);
 
 			LOGGER.log(System.Logger.Level.INFO,
 					"Preserved legacy balance settings for server config {0}", currentPath);
@@ -83,18 +86,52 @@ public final class BalanceConfigCompatibility {
 
 	static Path recentLegacyBackup(Path currentPath) {
 		if (currentPath == null || !Files.isRegularFile(currentPath)) return null;
-		Path backupPath = firstCorrectionBackup(currentPath);
-		if (backupPath == null || !Files.isRegularFile(backupPath)) return null;
 		try {
-			long correctionDelay = Files.getLastModifiedTime(currentPath).toMillis()
-					- Files.getLastModifiedTime(backupPath).toMillis();
-			if (correctionDelay < 0 || correctionDelay > CORRECTION_WINDOW.toMillis()) return null;
 			CommentedConfig current = parse(currentPath);
-			CommentedConfig backup = parse(backupPath);
-			return current.contains(PROFILE_KEY) && !backup.contains(PROFILE_KEY)
-					? backupPath : null;
+			if (!current.contains(PROFILE_KEY)) return null;
+			List<Path> candidates = correctionBackups(currentPath);
+			candidates.sort(Comparator.comparingLong(BalanceConfigCompatibility::lastModifiedMillis)
+					.reversed());
+			long currentModified = Files.getLastModifiedTime(currentPath).toMillis();
+			for (Path candidate : candidates) {
+				long correctionDelay = currentModified - Files.getLastModifiedTime(candidate).toMillis();
+				if (correctionDelay < 0 || correctionDelay > CORRECTION_WINDOW.toMillis()) continue;
+				CommentedConfig backup = parse(candidate);
+				if (!backup.contains(PROFILE_KEY)) return candidate;
+			}
+			return null;
 		} catch (IOException | RuntimeException exception) {
 			return null;
+		}
+	}
+
+	private static List<Path> correctionBackups(Path currentPath) throws IOException {
+		Path fileNamePath = currentPath.getFileName();
+		Path parent = currentPath.getParent();
+		if (fileNamePath == null || parent == null) return List.of();
+		String fileName = fileNamePath.toString();
+		int extensionStart = fileName.lastIndexOf('.');
+		String baseName = extensionStart < 0 ? fileName : fileName.substring(0, extensionStart);
+		String extension = extensionStart < 0 ? "" : fileName.substring(extensionStart);
+		String prefix = baseName + "-";
+		String suffix = extension + ".bak";
+		List<Path> candidates = new ArrayList<>();
+		try (var entries = Files.list(parent)) {
+			entries.filter(Files::isRegularFile).forEach(candidate -> {
+				String name = candidate.getFileName().toString();
+				if (!name.startsWith(prefix) || !name.endsWith(suffix)) return;
+				String index = name.substring(prefix.length(), name.length() - suffix.length());
+				if (!index.isEmpty() && index.chars().allMatch(Character::isDigit)) candidates.add(candidate);
+			});
+		}
+		return candidates;
+	}
+
+	private static long lastModifiedMillis(Path path) {
+		try {
+			return Files.getLastModifiedTime(path).toMillis();
+		} catch (IOException ignored) {
+			return Long.MIN_VALUE;
 		}
 	}
 
@@ -113,17 +150,45 @@ public final class BalanceConfigCompatibility {
 		return parse(configPath).contains(path);
 	}
 
+	static int legacyLimit(
+			Path configPath,
+			String path,
+			int legacyDefault,
+			int minimum,
+			int maximum) throws IOException {
+		return legacyLimitFromConfig(parse(configPath), path, legacyDefault, minimum, maximum);
+	}
+
 	private static CommentedConfig parse(Path path) throws IOException {
 		try (Reader reader = Files.newBufferedReader(path)) {
 			return new TomlParser().parse(reader);
 		}
 	}
 
-	private static void setLegacyDefaultIfMissing(
+	private static void restoreLegacyLimit(
 			CommentedConfig legacy,
 			String path,
 			net.neoforged.neoforge.common.ModConfigSpec.IntValue value,
-			int legacyDefault) {
-		if (!legacy.contains(path)) value.set(legacyDefault);
+			int legacyDefault,
+			int minimum,
+			int maximum) {
+		value.set(legacyLimitFromConfig(legacy, path, legacyDefault, minimum, maximum));
+	}
+
+	private static int legacyLimitFromConfig(
+			CommentedConfig legacy,
+			String path,
+			int legacyDefault,
+			int minimum,
+			int maximum) {
+		int restored = legacyDefault;
+		if (legacy != null && legacy.contains(path)) {
+			Object raw = legacy.get(path);
+			if (raw instanceof Number number) {
+				long candidate = number.longValue();
+				if (candidate >= minimum && candidate <= maximum) restored = (int) candidate;
+			}
+		}
+		return restored;
 	}
 }

@@ -43,20 +43,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 	 */
 public class MultiFluidTankHolder implements IFluidTankHolder {
 
-	/** 流体类型标识 — Fluid + DataComponentMap 哈希,用作 Map key */
-	private record FluidKey(Fluid fluid, int componentsHash) {
+	/** 流体类型标识 — Fluid + 组件补丁状态/哈希,用作 Map key */
+	private record FluidKey(Fluid fluid, boolean componentsEmpty, int componentsHash) {
 
 		/**
 		 * 从 FluidStack 构造 FluidKey
 		 * <br/>
-		 * 使用 {@link FluidStack#getComponents()} 的 hashCode 区分同流体不同组件
+		 * 无组件补丁的常见流体跳过 hashCode；带组件时使用内容哈希区分
 		 * (如不同 NBT 的蜂蜜),与 {@link FluidStack#isSameFluidSameComponents} 语义一致。
 		 *
 		 * @param stack 流体栈
 		 * @return 流体类型标识
 		 */
 		static FluidKey of(FluidStack stack) {
-			return new FluidKey(stack.getFluid(), stack.getComponents().hashCode());
+			boolean componentsEmpty = stack.isComponentsPatchEmpty();
+			return new FluidKey(stack.getFluid(), componentsEmpty,
+					componentsEmpty ? 0 : stack.getComponents().hashCode());
 		}
 	}
 

@@ -187,14 +187,13 @@ public class MyriadFluidOutputHandler {
 		if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, fluidOutput)) {
 			return 0; // 类型不匹配，无法插入任何流体
 		}
-		int space = tank.getCapacity() - tank.getFluidAmount();
-		if (space < 0) space = 0;
 		long perBatch = SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), productivityMod);
 		if (perBatch <= 0) return Integer.MAX_VALUE;
-		long directCapacity = context.productivebeesgenesis$isDirectAeOutputEnabled()
-				? context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, Long.MAX_VALUE)
-				: 0L;
-		long available = SaturatingMath.saturatingAdd(Math.max(0L, space), Math.max(0L, directCapacity));
+		// Direct AE output is an independent sink. Avoid a SIMULATE call for every accelerated
+		// process: the real insert below is authoritative and any shortfall is retained as pending.
+		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) return Integer.MAX_VALUE;
+		int space = Math.max(0, tank.getCapacity() - tank.getFluidAmount());
+		long available = Math.max(0L, space);
 		return SaturatingMath.saturatingToInt(available / perBatch);
 	}
 
@@ -208,8 +207,8 @@ public class MyriadFluidOutputHandler {
 	 * 蜜脾块配方在 CentrifugeRecipeIndex 中由蜜脾配方派生，流体量已乘以蜜脾块倍率，
 	 * 因此此处只需按输入消耗数量（modifier/batchSize）缩放，无需额外乘以蜜脾块倍率。
 	 * <p>
-	 * 原实现先 shrinkStack 再 insert，空间不足时会静默丢弃流体。现在先模拟 AE2 与本地容量；
-	 * 完全未提交时返回 {@link InsertResult#REJECTED}，已经部分提交时把剩余量持久化后返回
+	 * 原实现先 shrinkStack 再 insert，空间不足时会静默丢弃流体。现在以 AE2 和本地罐的
+	 * 实际接收量为准；完全未提交时返回 {@link InsertResult#REJECTED}，已经部分提交时把剩余量持久化后返回
 	 * {@link InsertResult#COMMITTED_PENDING}，调用方不会重复产出或丢失流体。
 	 *
 	 * @param input        输入物品（万象创世蜜脾或蜜脾块）
@@ -236,16 +235,6 @@ public class MyriadFluidOutputHandler {
 		if (requestedAmount <= 0L) return InsertResult.COMPLETE;
 
 		IExtendedFluidTank tank = context.fluidOutputTankForInsert(fluidOutput);
-		long localCapacity = availableLocalCapacity(tank, fluidOutput);
-		long simulatedAeCapacity = context.productivebeesgenesis$isDirectAeOutputEnabled()
-				? SaturatingMath.clampToRequest(
-						context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, requestedAmount),
-						requestedAmount)
-				: 0L;
-		if (SaturatingMath.saturatingAdd(localCapacity, simulatedAeCapacity) < requestedAmount) {
-			return InsertResult.REJECTED;
-		}
-
 		long acceptedByAe = 0L;
 		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
 			acceptedByAe = SaturatingMath.clampToRequest(
@@ -274,8 +263,10 @@ public class MyriadFluidOutputHandler {
 	}
 
 	private long insertLocally(IExtendedFluidTank tank, FluidStack fluid, long amount) {
-		if (tank == null || amount <= 0L || amount > Integer.MAX_VALUE) return 0L;
-		FluidStack scaledFluid = fluid.copyWithAmount((int) amount);
+		long localAmount = Math.min(amount, availableLocalCapacity(tank, fluid));
+		int offeredAmount = SaturatingMath.saturatingToInt(localAmount);
+		if (offeredAmount <= 0) return 0L;
+		FluidStack scaledFluid = fluid.copyWithAmount(offeredAmount);
 		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 		long inserted = scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
 		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
@@ -305,7 +296,6 @@ public class MyriadFluidOutputHandler {
 		if (pending <= 0L) return true;
 
 		IExtendedFluidTank tank = context.fluidOutputTankForInsert(honey);
-		if (availableLocalCapacity(tank, honey) < pending) return false;
 		long inserted = insertLocally(tank, honey, pending);
 		if (inserted > 0L) {
 			pending -= inserted;
