@@ -25,11 +25,23 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 
 	/** 上次缓存 isSim() 结果时的游戏刻，-1L 表示未缓存 */
 	@Unique
-	private long productivebeesgenesis$isSimCacheTick = -1L;
+	private long productivebeesgenesis$isSimCacheTick;
 
 	/** 对应 tick 的 isSim() 缓存值 */
 	@Unique
 	private boolean productivebeesgenesis$isSimCacheValue;
+
+	@Unique
+	private boolean productivebeesgenesis$isSimCacheInitialized;
+
+	@Unique
+	private void productivebeesgenesis$ensureSimCacheState() {
+		if (!productivebeesgenesis$isSimCacheInitialized) {
+			productivebeesgenesis$isSimCacheTick = -1L;
+			productivebeesgenesis$isSimCacheValue = false;
+			productivebeesgenesis$isSimCacheInitialized = true;
+		}
+	}
 
 	@WrapOperation(
 			method = "tickBees(Lnet/minecraft/server/level/ServerLevel;"
@@ -47,6 +59,7 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimCacheMixin {
 		long gameTime = level != null ? level.getGameTime() : -1L;
 		AdvancedBeehiveBlockEntityAbstractSimCacheMixin mixin =
 				(AdvancedBeehiveBlockEntityAbstractSimCacheMixin) (Object) blockEntity;
+		mixin.productivebeesgenesis$ensureSimCacheState();
 		if (gameTime != mixin.productivebeesgenesis$isSimCacheTick) {
 			mixin.productivebeesgenesis$isSimCacheTick = gameTime;
 			mixin.productivebeesgenesis$isSimCacheValue = original.call(blockEntity);

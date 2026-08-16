@@ -43,7 +43,7 @@ public abstract class SelectedWindowDataMixin implements CustomWindowData {
 
 	/** 自定义持久化 saveName — null 时使用 MEK 原有逻辑 */
 	@Unique
-	private String productivebeesgenesis$customSaveName = null;
+	private String productivebeesgenesis$customSaveName;
 
 	/**
 	 * 待保存标记 — true 表示有未写入磁盘的位置变更。

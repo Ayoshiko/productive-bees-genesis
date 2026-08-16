@@ -62,25 +62,39 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 
 	/** 上次执行农夫作物扫描时的游戏刻 */
 	@Unique
-	private long productivebeesgenesis$lastFarmerTick = -1L;
+	private long productivebeesgenesis$lastFarmerTick;
 
 	/** 上次执行囤积/收集掉落物扫描时的游戏刻 */
 	@Unique
-	private long productivebeesgenesis$lastHoarderTick = -1L;
+	private long productivebeesgenesis$lastHoarderTick;
 
 	/**
 	 * 当前 simulateBee 调用是否跳过农夫作物扫描。
 	 * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
 	 */
 	@Unique
-	private boolean productivebeesgenesis$skipFarmer = false;
+	private boolean productivebeesgenesis$skipFarmer;
 
 	/**
 	 * 当前 simulateBee 调用是否跳过囤积/收集掉落物扫描。
 	 * <p>实例字段，生命周期与 BlockEntity 一致，不会跨实例污染。
 	 */
 	@Unique
-	private boolean productivebeesgenesis$skipHoarder = false;
+	private boolean productivebeesgenesis$skipHoarder;
+
+	@Unique
+	private boolean productivebeesgenesis$simulateThrottleInitialized;
+
+	@Unique
+	private void productivebeesgenesis$ensureSimulateThrottleState() {
+		if (!productivebeesgenesis$simulateThrottleInitialized) {
+			productivebeesgenesis$lastFarmerTick = -1L;
+			productivebeesgenesis$lastHoarderTick = -1L;
+			productivebeesgenesis$skipFarmer = false;
+			productivebeesgenesis$skipHoarder = false;
+			productivebeesgenesis$simulateThrottleInitialized = true;
+		}
+	}
 
 	/**
 	 * 当前 simulateBee 调用对应的 BlockEntity 弱引用。
@@ -111,6 +125,7 @@ public abstract class AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin {
 		}
 		AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin self =
 				(AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin) (Object) blockEntity;
+		self.productivebeesgenesis$ensureSimulateThrottleState();
 		// 先重置实例字段，避免上次异常未清理时的残值污染本次判断
 		self.productivebeesgenesis$skipFarmer = false;
 		self.productivebeesgenesis$skipHoarder = false;

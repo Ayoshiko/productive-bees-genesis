@@ -51,46 +51,46 @@ public abstract class TileComponentEjectorCooldownMixin {
 
 	/** 连续未弹出物品次数（Atomic 保证服务端主线程与异步回调的可见性） */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$consecutiveEmptyEjects = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$consecutiveEmptyEjects;
 
 	/** 剩余冷却 tick 数，大于 0 时跳过 outputItems */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$ejectCooldown = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$ejectCooldown;
 
 	// ===== Task 16: 输出槽内容未变化时跳过 outputItems =====
 	/** 上次观察到的输出槽内容版本号 */
 	@Unique
-	private volatile long productivebeesgenesis$lastOutputContentsVersion = -1L;
+	private volatile long productivebeesgenesis$lastOutputContentsVersion;
 
 	/** 内容未变化时剩余可跳过的 tick 数 */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$skipTicksRemaining = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$skipTicksRemaining;
 
 	// ===== Task 23: Ejector 持续高负载下降频 =====
 	/** 长冷却剩余 tick 数，大于 0 时跳过 outputItems */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$busyCooldown = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$busyCooldown;
 
 	/** 连续未减少输出槽物品的次数 */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$consecutiveBusyEjects = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$consecutiveBusyEjects;
 
 	/** 最小调用间隔剩余 tick 数 */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$minIntervalRemaining = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$minIntervalRemaining;
 
 	// ===== Step 5: 单 tick 最大弹出次数上限 =====
 	/** 当前 tick 剩余可调用 outputItems 的次数（<=0=已耗尽；Integer.MAX_VALUE=无限制） */
 	@Unique
-	private final AtomicInteger productivebeesgenesis$ejectsRemainingThisTick = new AtomicInteger(0);
+	private AtomicInteger productivebeesgenesis$ejectsRemainingThisTick;
 
 	/** Prevents accelerated sub-ticks from decrementing cooldowns or resetting quotas repeatedly. */
 	@Unique
-	private final GameTickGate productivebeesgenesis$realTickGate = new GameTickGate();
+	private volatile GameTickGate productivebeesgenesis$realTickGate;
 
 	/** Avoids retrying a confirmed blocked target hundreds of times in the same JDTE execution batch. */
 	@Unique
-	private final SameTickFailureGate productivebeesgenesis$sameTickFailureGate = new SameTickFailureGate();
+	private SameTickFailureGate productivebeesgenesis$sameTickFailureGate;
 
 	// ===== 配置缓存：避免每 tick 高频读取 ModConfig（256× 加速下每 tick 3584 次配置读取） =====
 	/** 配置缓存刷新间隔（tick） */
@@ -99,47 +99,81 @@ public abstract class TileComponentEjectorCooldownMixin {
 
 	/** 上次刷新配置的游戏刻 — AtomicLong 配合 CAS 防止多线程同时通过检查导致重复刷新 */
 	@Unique
-	private final AtomicLong productivebeesgenesis$lastConfigRefreshTick =
-			new AtomicLong(-productivebeesgenesis$CONFIG_REFRESH_INTERVAL);
+	private AtomicLong productivebeesgenesis$lastConfigRefreshTick;
 
 	/** 缓存的最大速度模式标志 */
 	@Unique
-	private volatile boolean productivebeesgenesis$cachedMaxSpeedMode = true;
+	private volatile boolean productivebeesgenesis$cachedMaxSpeedMode;
 
 	/** 缓存的跳过未变化开关 */
 	@Unique
-	private volatile boolean productivebeesgenesis$cachedSkipUnchanged = true;
+	private volatile boolean productivebeesgenesis$cachedSkipUnchanged;
 
 	/** 缓存的跳过 tick 数 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedSkipTicks = 0;
+	private volatile int productivebeesgenesis$cachedSkipTicks;
 
 	/** 缓存的最小调用间隔 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedMinInterval = 0;
+	private volatile int productivebeesgenesis$cachedMinInterval;
 
 	/** 缓存的每 tick 最大弹出次数 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedMaxPerTick = 0;
+	private volatile int productivebeesgenesis$cachedMaxPerTick;
 
 	/** 缓存的阻塞阈值 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedBlockedThreshold = 3;
+	private volatile int productivebeesgenesis$cachedBlockedThreshold;
 
 	/** 缓存的阻塞冷却 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedBlockedCooldown = 15;
+	private volatile int productivebeesgenesis$cachedBlockedCooldown;
 
 	/** 缓存的长冷却阈值 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedBusyThreshold = 5;
+	private volatile int productivebeesgenesis$cachedBusyThreshold;
 
 	/** 缓存的长冷却时间 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedBusyCooldown = 20;
+	private volatile int productivebeesgenesis$cachedBusyCooldown;
 
 	@Shadow
 	private void outputItems(Direction facing, ConfigInfo info) {
+	}
+
+	/** Initializes state without relying on target-constructor Mixin injection. */
+	@Unique
+	private void productivebeesgenesis$ensureState() {
+		if (productivebeesgenesis$realTickGate != null) {
+			return;
+		}
+		synchronized (this) {
+			if (productivebeesgenesis$realTickGate != null) {
+				return;
+			}
+			GameTickGate realTickGate = new GameTickGate();
+			productivebeesgenesis$consecutiveEmptyEjects = new AtomicInteger(0);
+			productivebeesgenesis$ejectCooldown = new AtomicInteger(0);
+			productivebeesgenesis$lastOutputContentsVersion = -1L;
+			productivebeesgenesis$skipTicksRemaining = new AtomicInteger(0);
+			productivebeesgenesis$busyCooldown = new AtomicInteger(0);
+			productivebeesgenesis$consecutiveBusyEjects = new AtomicInteger(0);
+			productivebeesgenesis$minIntervalRemaining = new AtomicInteger(0);
+			productivebeesgenesis$ejectsRemainingThisTick = new AtomicInteger(0);
+			productivebeesgenesis$sameTickFailureGate = new SameTickFailureGate();
+			productivebeesgenesis$lastConfigRefreshTick =
+					new AtomicLong(-productivebeesgenesis$CONFIG_REFRESH_INTERVAL);
+			productivebeesgenesis$cachedMaxSpeedMode = true;
+			productivebeesgenesis$cachedSkipUnchanged = true;
+			productivebeesgenesis$cachedSkipTicks = 0;
+			productivebeesgenesis$cachedMinInterval = 0;
+			productivebeesgenesis$cachedMaxPerTick = 0;
+			productivebeesgenesis$cachedBlockedThreshold = 3;
+			productivebeesgenesis$cachedBlockedCooldown = 15;
+			productivebeesgenesis$cachedBusyThreshold = 5;
+			productivebeesgenesis$cachedBusyCooldown = 20;
+			productivebeesgenesis$realTickGate = realTickGate;
+		}
 	}
 
 	/**
@@ -196,6 +230,7 @@ public abstract class TileComponentEjectorCooldownMixin {
 	private void productivebeesgenesis$decrementCooldownAtTickStart(CallbackInfo ci) {
 		TileEntityMekanism tile = ((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$getTile();
 		if (tile instanceof IHasEjectorCooldown) {
+			productivebeesgenesis$ensureState();
 			Level level = tile.getLevel();
 			if (level == null || !productivebeesgenesis$realTickGate.tryEnter(level.getGameTime())) return;
 			// 刷新配置缓存（每 100 个真实 tick 一次），按方块类型读取独立配置段
@@ -246,6 +281,7 @@ public abstract class TileComponentEjectorCooldownMixin {
 			original.call(ejector, facing, info);
 			return;
 		}
+		productivebeesgenesis$ensureState();
 
 		// 使用缓存的配置值，避免高频读取 ModConfig
 		boolean maxSpeedMode = productivebeesgenesis$cachedMaxSpeedMode;

@@ -73,25 +73,52 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	/** 输入槽堆叠倍率供应商 — null 表示未设置，getLimit 行为不变 */
 	@Unique
-	private IntSupplier productivebeesgenesis$inputMultiplier = null;
+	private IntSupplier productivebeesgenesis$inputMultiplier;
 
 	@Unique
-	private ExternalInsertPolicy productivebeesgenesis$externalInsertPolicy = null;
+	private ExternalInsertPolicy productivebeesgenesis$externalInsertPolicy;
 
 	/** 缓存的倍率值 — -1 表示未初始化 */
 	@Unique
-	private volatile int productivebeesgenesis$cachedInputMultiplier = -1;
+	private volatile int productivebeesgenesis$cachedInputMultiplier;
 
 	/** 缓存时的版本号 — 与 {@link TieredInputSlot#MULTIPLIER_VERSION} 比较 */
 	@Unique
-	private volatile long productivebeesgenesis$cachedInputVersion = -1;
+	private volatile long productivebeesgenesis$cachedInputVersion;
+
+	@Unique
+	private volatile boolean productivebeesgenesis$tieredStateInitialized;
+
+	@Unique
+	private void productivebeesgenesis$ensureTieredState() {
+		if (!productivebeesgenesis$tieredStateInitialized) {
+			synchronized (this) {
+				if (!productivebeesgenesis$tieredStateInitialized) {
+					productivebeesgenesis$cachedInputMultiplier = -1;
+					productivebeesgenesis$cachedInputVersion = -1L;
+					productivebeesgenesis$tieredStateInitialized = true;
+				}
+			}
+		}
+	}
 
 	/** 基础上限单条目缓存，避免每次 getLimit 都调用 ItemStack.getMaxStackSize() */
 	@Unique
-	private final SlotLimitCache productivebeesgenesis$limitCache = new SlotLimitCache();
+	private volatile SlotLimitCache productivebeesgenesis$limitCache;
+
+	@Unique
+	private SlotLimitCache productivebeesgenesis$getLimitCache() {
+		SlotLimitCache limitCache = productivebeesgenesis$limitCache;
+		if (limitCache == null) {
+			limitCache = new SlotLimitCache();
+			productivebeesgenesis$limitCache = limitCache;
+		}
+		return limitCache;
+	}
 
 	@Override
 	public void productivebeesgenesis$setInputStackMultiplier(IntSupplier supplier) {
+		productivebeesgenesis$ensureTieredState();
 		this.productivebeesgenesis$inputMultiplier = supplier;
 		// 重置缓存，确保新 supplier 立即生效
 		this.productivebeesgenesis$cachedInputMultiplier = -1;
@@ -172,6 +199,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	@Override
 	public int productivebeesgenesis$getCachedMultiplier() {
+		productivebeesgenesis$ensureTieredState();
 		IntSupplier supplier = productivebeesgenesis$inputMultiplier;
 		if (supplier == null) return -1;
 		int multiplier = productivebeesgenesis$cachedInputMultiplier;
@@ -193,7 +221,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	@Override
 	public int productivebeesgenesis$getCachedBaseLimit(@NotNull ItemStack stack,
 														int rawLimit, boolean obeyLimit, int multiplier) {
-		return productivebeesgenesis$limitCache.getBaseLimit(stack, rawLimit, obeyLimit, multiplier);
+		return productivebeesgenesis$getLimitCache().getBaseLimit(stack, rawLimit, obeyLimit, multiplier);
 	}
 
 	/**

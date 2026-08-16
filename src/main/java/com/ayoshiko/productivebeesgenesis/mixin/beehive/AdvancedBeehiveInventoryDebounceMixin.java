@@ -35,7 +35,7 @@ public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventor
 	 * 所有读写均在服务端主线程完成，AtomicLong 仅提供可见性与原子性保障。
 	 */
 	@Unique
-	private final AtomicLong productivebeesgenesis$dirtyInventoryTick = new AtomicLong(-1L);
+	private volatile AtomicLong productivebeesgenesis$dirtyInventoryTick;
 
 	/**
 	 * 上次执行 flush（setChanged）的游戏刻。
@@ -43,16 +43,37 @@ public abstract class AdvancedBeehiveInventoryDebounceMixin implements IInventor
 	 * 用于配合 {@code saveInterval} 限制实际序列化频率，初始 -1L 保证首次脏标记即可触发。
 	 */
 	@Unique
-	private final AtomicLong productivebeesgenesis$lastFlushTick = new AtomicLong(-1L);
+	private volatile AtomicLong productivebeesgenesis$lastFlushTick;
+
+	/**
+	 * Mixin field initializers are not reliably added to foreign target constructors.
+	 * Establish the state on first use so deserialized block entities are safe too.
+	 */
+	@Unique
+	private void productivebeesgenesis$ensureInventoryDebounceState() {
+		if (productivebeesgenesis$dirtyInventoryTick != null && productivebeesgenesis$lastFlushTick != null) {
+			return;
+		}
+		synchronized (this) {
+			if (productivebeesgenesis$dirtyInventoryTick == null) {
+				productivebeesgenesis$dirtyInventoryTick = new AtomicLong(-1L);
+			}
+			if (productivebeesgenesis$lastFlushTick == null) {
+				productivebeesgenesis$lastFlushTick = new AtomicLong(-1L);
+			}
+		}
+	}
 
 	@Override
 	public void productivebeesgenesis$markInventoryDirty(long gameTime) {
+		productivebeesgenesis$ensureInventoryDebounceState();
 		// 同一 tick 内多次写入覆盖相同值即可，无需 CAS 判断
 		productivebeesgenesis$dirtyInventoryTick.set(gameTime);
 	}
 
 	@Override
 	public void productivebeesgenesis$flushInventoryDirty(long gameTime) {
+		productivebeesgenesis$ensureInventoryDebounceState();
 		// 无脏标记直接返回，未变化的 tick 不产生任何开销
 		if (productivebeesgenesis$dirtyInventoryTick.get() == -1L) {
 			return;
