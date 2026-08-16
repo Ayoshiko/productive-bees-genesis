@@ -61,4 +61,30 @@ public class CombBlockConverter {
 		}
 		return result;
 	}
+
+	/** Converts a caller-owned mutable production buffer without allocating another list. */
+	List<ItemStack> convertCombsToBlocksInPlace(List<ItemStack> items) {
+		int writeIndex = 0;
+		for (int readIndex = 0; readIndex < items.size(); readIndex++) {
+			ItemStack stack = items.get(readIndex);
+			if (stack.isEmpty()) continue;
+			if (stack.getItem() instanceof HoneycombItem) {
+				try {
+					ItemStack block = BeeHelper.getCombBlockFromHoneyComb(stack);
+					if (!block.isEmpty()) {
+						block.setCount(stack.getCount());
+						stack = block;
+					}
+				} catch (Exception e) {
+					ProductiveBeesGenesis.LOGGER.warn(
+							"Failed to convert honeycomb output to a comb block; retaining the original stack", e);
+				}
+			}
+			items.set(writeIndex++, stack);
+		}
+		if (writeIndex < items.size()) {
+			items.subList(writeIndex, items.size()).clear();
+		}
+		return items;
+	}
 }

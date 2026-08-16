@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionCache;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
+import com.ayoshiko.productivebeesgenesis.util.BeeProductModProfile;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,6 +16,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -27,9 +29,9 @@ import java.util.stream.Collectors;
 	 * 功能：
 	 * <ol>
 	 *   <li>展示所有已注册蜜蜂（名称、类型ID、产物信息）</li>
-	 *   <li>搜索框实时过滤（匹配类型ID或显示名称）</li>
-	 *   <li>按 namespace 分组显示，支持折叠/展开</li>
-	 *   <li>按名称/类型ID/模组排序</li>
+	 *   <li>搜索框实时过滤（匹配类型ID、显示名称或产物模组ID）</li>
+	 *   <li>按离心最终产物所属模组分组显示，支持折叠/展开</li>
+	 *   <li>按名称/类型ID/产物模组排序</li>
 	 *   <li>全选/反选当前过滤结果</li>
 	 *   <li>滚动列表支持大量蜜蜂类型</li>
 	 *   <li>未添加蜜蜂条目左侧复选框，点击切换选中状态</li>
@@ -444,25 +446,29 @@ public final class BeeSelectionScreen extends Screen {
 	/**
 	 * 蜜蜂条目缓存
 	 * <p>
-	 * 预计算类型ID、显示名称及产物信息，避免渲染和过滤时重复查询。
+	 * 预计算类型ID、显示名称、产物信息及最终产物模组，避免渲染和过滤时重复查询。
 	 */
 	static final class BeeEntry {
-		final ResourceLocation type;
 		final String typeId;
 		final String typeIdLower;
 		final Component displayName;
 		final String displayNameLower;
 		final Component productInfo;
+		final String productModId;
+		final String searchableProductModIdsLower;
 		/** 预计算的代表物品图标，避免每帧创建 ItemStack */
 		final ItemStack icon;
 
-		BeeEntry(ResourceLocation type, Component displayName, Component productInfo, ItemStack icon) {
-			this.type = type;
+		BeeEntry(ResourceLocation type, Component displayName, Component productInfo,
+				BeeProductModProfile productMods, ItemStack icon) {
 			this.typeId = type.toString();
-			this.typeIdLower = this.typeId.toLowerCase();
+			this.typeIdLower = this.typeId.toLowerCase(Locale.ROOT);
 			this.displayName = displayName;
-			this.displayNameLower = displayName.getString().toLowerCase();
+			this.displayNameLower = displayName.getString().toLowerCase(Locale.ROOT);
 			this.productInfo = productInfo;
+			this.productModId = productMods.primaryModId();
+			this.searchableProductModIdsLower = String.join(" ", productMods.allModIds())
+					.toLowerCase(Locale.ROOT);
 			this.icon = icon;
 		}
 	}

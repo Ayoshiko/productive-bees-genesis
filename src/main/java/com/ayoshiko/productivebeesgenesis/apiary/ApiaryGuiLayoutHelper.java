@@ -60,7 +60,7 @@ public final class ApiaryGuiLayoutHelper {
 	/** MEK 标准 GUI 宽度 */
 	public static final int BASE_WIDTH = 176;
 
-	/** Ultimate 工厂 GUI 宽度（与 MEK 原版 Ultimate 工厂一致：176+34=210） */
+	/** 旧版 6 列输出工厂 GUI 宽度（保留兼容：176+34=210） */
 	public static final int ULTIMATE_FACTORY_WIDTH = 210;
 
 	/** 工厂版蜜蜂固定列数（5列） */
@@ -83,6 +83,9 @@ public final class ApiaryGuiLayoutHelper {
 	/** 玩家物品栏区域高度（3行54+间距4+快捷栏18=76px） */
 	private static final int INVENTORY_AREA_HEIGHT = 76;
 
+	/** 输出分页控件占用输出区下方的 6px 额外间距，最高等级仍保持在 270px 内。 */
+	private static final int OUTPUT_PAGE_CONTROL_GAP = 6;
+
 	/** 玩家物品栏宽度（9格×18=162，居中偏移=imageWidth/2-81） */
 	private static final int INVENTORY_WIDTH = 9 * SLOT;
 
@@ -97,13 +100,13 @@ public final class ApiaryGuiLayoutHelper {
 	 * 动态计算规则：
 	 * <ul>
 	 *   <li>初始版 (beeCols=3, outputCols=3)：返回 BASE_WIDTH (176)</li>
-	 *   <li>工厂版 Basic/Advanced/Elite (beeCols=5, outputCols=3/4/5)：返回 BASE_WIDTH (176)</li>
-	 *   <li>工厂版 Ultimate (beeCols=5, outputCols=6)：返回 ULTIMATE_FACTORY_WIDTH (210)</li>
+	 *   <li>工厂版 Basic/Advanced/Elite (beeCols=5, outputCols=5)：返回 BASE_WIDTH (176)</li>
+	 *   <li>工厂版 Ultimate (beeCols=10, outputCols=10)：按内容区宽度动态计算</li>
 	 *   <li>扩展等级 (beeCols>5 或 outputCols>=7)：按 max(蜜蜂区总宽, 输出区宽) + ME_EME_WIDTH_OVERHEAD 动态计算</li>
 	 * </ul>
 	 * MEK 使用九宫格切片渲染 base.png，自动适配任意宽度，无需专用纹理。
 	 *
-	 * @param beeCols    蜜蜂列数（3=初始版，5=工厂基础版，6~8=扩展等级）
+	 * @param beeCols    蜜蜂列数（3=初始版，工厂与扩展等级由配置动态计算）
 	 * @param outputCols 输出列数
 	 * @return GUI 宽度
 	 */
@@ -154,7 +157,7 @@ public final class ApiaryGuiLayoutHelper {
 	 * <p>
 	 * 高度规格：
 	 * <ul>
-	 *   <li>Basic(1行)=183, Advanced(2行)=212, Elite(3行)=241, Ultimate(4行)=270</li>
+	 *   <li>Basic(1行)=183, Advanced/Ultimate(2行)=212, Elite(3行)=241</li>
 	 *   <li>5行紧凑模式=262px（含2px防重叠间距），适配scale=4@1080p的270px限制</li>
 	 * </ul>
 	 *
@@ -346,6 +349,14 @@ public final class ApiaryGuiLayoutHelper {
 	}
 
 	/**
+	 * Ensures the output matrix is never narrower than the bee matrix.
+	 * Tiers whose output area is already wider keep their configured width.
+	 */
+	public static int getAlignedOutputCols(int beeCols, int configuredOutputCols) {
+		return Math.max(beeCols, configuredOutputCols);
+	}
+
+	/**
 	 * 输出区高度（固定 3 行）
 	 * <br/>
 	 * 公式：3×18 + 2×2 = 58
@@ -408,19 +419,19 @@ public final class ApiaryGuiLayoutHelper {
 	/**
 	 * 玩家物品栏 Y 坐标
 	 * <br/>
-	 * 公式：outputBottom + 10（为 "Inventory" 标签留出 9px 空间 + 1px 间隙）
+	 * 公式：outputBottom + 16（为输出分页控件和 "Inventory" 标签留出独立间隙）
 	 *
 	 * @param outputBottom 输出区底部 Y
 	 * @return 物品栏起始 Y
 	 */
 	public static int getInventoryY(int outputBottom) {
-		return outputBottom + 10;
+		return outputBottom + 10 + OUTPUT_PAGE_CONTROL_GAP;
 	}
 
 	/**
 	 * 获取 "Inventory" 标签 Y 坐标
 	 * <br/>
-	 * 位于输出区底部与物品栏之间，公式：outputBottom + 1。
+	 * 位于输出区底部与物品栏之间，公式：outputBottom + 4。
 	 * 确保标签不与输出区第3行或物品栏第1行重叠。
 	 *
 	 * @param beeRows 蜜蜂行数
@@ -429,7 +440,22 @@ public final class ApiaryGuiLayoutHelper {
 	public static int getInventoryLabelY(int beeRows) {
 		int beeBottom = getBeeBottom(beeRows);
 		int outputBottom = getOutputY(beeBottom, beeRows) + getOutputH();
-		return outputBottom + 1;
+		return outputBottom + 4;
+	}
+
+	/** Y 坐标 for the two output page buttons, below the output matrix. */
+	public static int getOutputPageButtonY(int outputBottom) {
+		return outputBottom + 2;
+	}
+
+	/** Previous button X, symmetric with {@link #getOutputPageNextButtonX}. */
+	public static int getOutputPagePreviousButtonX(int outputX, int outputWidth) {
+		return outputX + outputWidth / 2 - 30;
+	}
+
+	/** Next button X, symmetric with {@link #getOutputPagePreviousButtonX}. */
+	public static int getOutputPageNextButtonX(int outputX, int outputWidth) {
+		return outputX + outputWidth / 2 + 18;
 	}
 
 	/**

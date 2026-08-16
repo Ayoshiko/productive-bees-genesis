@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
@@ -69,7 +70,7 @@ public final class PbRecipeFlusher {
 	 */
 	public boolean flush(PbRecipeCompleter completer, int processIndex) {
 		// 修复:纯流体输出配方(如 oritech 石油蜜蜂的蜜脾)没有物品输出,但仍有流体和输入扣除待处理
-		if (completer.getPendingRecipe() == null
+		if ((completer.getPendingRecipe() == null && !completer.hasCommittedPendingOutputs())
 				|| (completer.getPendingOutputs().isEmpty()
 						&& completer.getPendingFluidAmount() <= 0
 						&& completer.getPendingInputShrink() <= 0)) {
@@ -78,6 +79,12 @@ public final class PbRecipeFlusher {
 		}
 
 		PbRecipeContext context = completer.getContext();
+		FluidStack bufferedFluid = completer.getPendingFluidTemplate();
+		if (context.suppressesUselessByproducts()
+				&& bufferedFluid != null
+				&& UselessByproductUpgradeHelper.isHoney(bufferedFluid)) {
+			completer.consumePendingFluid(completer.getPendingFluidAmount());
+		}
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
 			if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
@@ -264,20 +271,17 @@ public final class PbRecipeFlusher {
 		if (recipeOutputs != expectedOutputs) {
 			recipeOutputs = expectedOutputs;
 		}
-		// 防御性 null 检查：pendingRecipe 为 null 时 recipeOutputs 可能为 null
-		if (recipeOutputs == null) {
-			return false;
-		}
 		Map<ItemStack, Integer> pendingOutputs = completer.getPendingOutputs();
 		PbRecipeContext context = completer.getContext();
 
-		for (Map.Entry<ItemStack, ChancedOutput> entry : recipeOutputs.entrySet()) {
-			Integer count = pendingOutputs.get(entry.getKey());
+		Iterable<ItemStack> orderedTemplates = recipeOutputs == null
+				? pendingOutputs.keySet() : recipeOutputs.keySet();
+		for (ItemStack outputTemplate : orderedTemplates) {
+			Integer count = pendingOutputs.get(outputTemplate);
 			if (count == null || count <= 0) {
 				continue;
 			}
 			int remaining = count;
-			ItemStack outputTemplate = entry.getKey();
 
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
 				ItemStack simStack = simStacks[i];

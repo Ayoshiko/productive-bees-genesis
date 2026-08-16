@@ -47,6 +47,10 @@ public final class ServerConfig {
 
 	// ========== 万象创世蜜蜂总开关(存档级别)==========
 	public final ModConfigSpec.BooleanValue myriadCreationsEnabled;
+	public final ModConfigSpec.EnumValue<BalancePreset> balancePreset;
+	public final ModConfigSpec.BooleanValue productivityUpgradeTiersExclusive;
+	public final ModConfigSpec.BooleanValue speedUpgradeTiersExclusive;
+	public final ModConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
 
 	// ========== 万象创世过滤配置(存档级别)==========
 	// 使用枚举类型,ConfigurationScreen自动渲染循环切换按钮
@@ -109,7 +113,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue maxBatchTicksPerTick;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段(基础参数,堆叠/流体倍率已迁移至子段)==========
-	public final ModConfigSpec.IntValue mekCentrifugeEnergyPerTick;
+	public final ModConfigSpec.LongValue mekCentrifugeEnergyPerTick;
 	/** 能量存储容量(FE),工厂版按并行数倍增。Task 3 从硬编码 20000L 改为 config */
 	public final ModConfigSpec.LongValue mekCentrifugeEnergyStorage;
 	public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
@@ -125,7 +129,7 @@ public final class ServerConfig {
 	 */
 	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
 	/**
-	 * Task 6: 流体弹出速率(mB/tick),默认 256,范围 1-10240
+	 * Task 6: 流体弹出速率(mB/tick),默认 256,范围 1-Integer.MAX_VALUE
 	 * <br/>
 	 * 委托自 CentrifugeConfigSection,由 AbstractMekCentrifugeFactory 构造函数注入 Ejector。
 	 * 100-tick CAS 缓存读取避免 TPS 退化(参考 MultiFluidSideConfigHandler.getCachedEjectRate)。
@@ -219,10 +223,35 @@ public final class ServerConfig {
 				.comment("启用万象创世蜜蜂", "false时禁用蜜蜂相关功能，仅保留通用机械资源蜜蜂机器")
 				.define("myriadCreationsEnabled", true);
 
+		balancePreset = builder
+				.comment("全局平衡性预设",
+						"基础、悖论无限或自定义。配置文件中的 BASIC、PARADOX_INFINITY、CUSTOM 是兼容存档所需的固定标识。",
+						"切换预设不会删除机器中已经安装的升级。")
+				.translation("productivebeesgenesis.configuration.balance.profile")
+				.defineEnum("balanceProfile", BalanceConfig.DEFAULT_PRESET);
+
+		builder.comment("平衡性规则；仅在全局平衡性配置为“自定义”时直接生效").push("balance");
+		productivityUpgradeTiersExclusive = builder
+				.comment("禁止产量升级 α/β/γ/Ω 在同一台机器中混装")
+				.translation("productivebeesgenesis.configuration.balance.productivityUpgradeTiersExclusive")
+				.define("productivityUpgradeTiersExclusive",
+						BalanceConfig.DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE);
+		speedUpgradeTiersExclusive = builder
+				.comment("禁止时间 I 与时间 II 两种速度升级在同一台机器中混装")
+				.translation("productivebeesgenesis.configuration.balance.speedUpgradeTiersExclusive")
+				.define("speedUpgradeTiersExclusive", BalanceConfig.DEFAULT_CUSTOM_SPEED_EXCLUSIVE);
+		centrifugeProductivityAffectsOutput = builder
+				.comment("离心机产量升级是否额外增加单次产出；无论此项如何，资源蜜蜂原版并行能力始终保留")
+				.translation("productivebeesgenesis.configuration.balance.centrifugeProductivityAffectsOutput")
+				.define("centrifugeProductivityAffectsOutput",
+						BalanceConfig.DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT);
+		builder.pop();
+
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");
 
 		myriadCreationsFilterMode = builder
-				.comment("过滤模式", "DISABLED/BLOCKLIST/WHITELIST")
+				.comment("过滤模式", "可选模式：禁用、黑名单、白名单")
+				.translation("productivebeesgenesis.configuration.myriad_creations_filter.filterMode")
 				.defineEnum("filterMode", ModConfig.FilterMode.DISABLED);
 
 		myriadCreationsFilteredBeeTypes = builder
@@ -259,12 +288,15 @@ public final class ServerConfig {
 		builder.push("fishing").comment("钓鱼获得万象创世蜜蜂");
 		fishingEnabled = builder
 				.comment("是否启用钓鱼获得万象创世蜜蜂")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.fishingEnabled")
 				.define("enabled", false);
 		fishingChance = builder
 				.comment("钓鱼获得蜜蜂的概率（0.0~1.0）")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.fishingChance")
 				.defineInRange("chance", 0.1D, 0.0D, 1.0D);
 		fishingBiomes = builder
 				.comment("可钓鱼获得蜜蜂的群系列表")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.fishingBiomes")
 				.defineList("biomes", List.of(
 						"minecraft:ocean",
 						"minecraft:deep_ocean",
@@ -281,24 +313,30 @@ public final class ServerConfig {
 		builder.push("breeding").comment("繁殖获得万象创世蜜蜂");
 		breedingEnabled = builder
 				.comment("是否启用繁殖获得万象创世蜜蜂")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.breedingEnabled")
 				.define("enabled", true);
 		breedingParent1 = builder
 				.comment("亲代蜜蜂1（注册名，如 productivebees:myriadcreations）")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.breedingParent1")
 				.define("parent1", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
 		breedingParent2 = builder
 				.comment("亲代蜜蜂2（注册名）")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.breedingParent2")
 				.define("parent2", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
 		builder.pop(); // breeding
 
 		builder.push("spawning").comment("蜂巢生成万象创世蜜蜂");
 		spawningEnabled = builder
 				.comment("是否启用蜂巢自然生成万象创世蜜蜂")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.spawningEnabled")
 				.define("enabled", false);
 		spawningNest = builder
 				.comment("生成蜜蜂的蜂巢方块（如 productivebees:stone_nest）")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.spawningNest")
 				.define("nest", "productivebees:stone_nest", ModConfig::validateResourceLocation);
 		spawningBiomes = builder
 				.comment("生成蜜蜂的群系（标签或群系ID，如 #c:is_plains）")
+				.translation("productivebeesgenesis.configuration.bee_acquisition.spawningBiomes")
 				.define("biomes", "#c:is_plains", ModConfig::validateBiomeSpec);
 		builder.pop(); // spawning
 
@@ -307,46 +345,59 @@ public final class ServerConfig {
 		builder.comment("蜜蜂转化配方配置（用其他物品转化获得万象创世）").push("bee_conversion");
 		conversionEnabled = builder
 				.comment("是否启用万象创世的物品转化配方")
+				.translation("productivebeesgenesis.configuration.bee_conversion.conversionEnabled")
 				.define("enabled", true);
 		conversionSource = builder
 				.comment("源蜜蜂类型（注册名，如 minecraft:bee）")
+				.translation("productivebeesgenesis.configuration.bee_conversion.conversionSource")
 				.define("source", "minecraft:bee", ModConfig::validateResourceLocation);
 		conversionResult = builder
 				.comment("转化目标蜜蜂（注册名，如 productivebees:myriadcreations）")
+				.translation("productivebeesgenesis.configuration.bee_conversion.conversionResult")
 				.define("result", "productivebees:myriadcreations", ModConfig::validateResourceLocation);
 		conversionItem = builder
 				.comment("转化所需物品ID（如 minecraft:stick）")
+				.translation("productivebeesgenesis.configuration.bee_conversion.conversionItem")
 				.define("item", "minecraft:stick", ModConfig::validateResourceLocation);
 		conversionChance = builder
 				.comment("转化概率（0.0~1.0）")
+				.translation("productivebeesgenesis.configuration.bee_conversion.conversionChance")
 				.defineInRange("chance", 1.0D, 0.0D, 1.0D);
 		apiaryItemConversionEnabled = builder
-				.comment("是否允许机械蜂箱（蜂箱工厂）通过饲养板进行物品转化（PB item_conversion 配方，如烈焰蜜蜂 + 黑曜石蜜蜂刷怪蛋 → 无限蜜蜂刷怪蛋）")
+				.comment("允许机械蜂箱使用 PB 物品转化配方")
+				.translation("productivebeesgenesis.configuration.bee_conversion.apiaryItemConversionEnabled")
 				.define("apiaryItemConversionEnabled", true);
 		apiaryBlockConversionEnabled = builder
-				.comment("是否允许机械蜂箱（蜂箱工厂）通过饲养板中的方块物品进行方块转化（PB block_conversion 配方）")
+				.comment("允许机械蜂箱使用 PB 方块转化配方")
+				.translation("productivebeesgenesis.configuration.bee_conversion.apiaryBlockConversionEnabled")
 				.define("apiaryBlockConversionEnabled", true);
 		builder.pop(); // bee_conversion
 
 		builder.comment("蜜蜂产出配方配置（万象创世蜜脾产出参数）").push("bee_produce");
 		produceEnabled = builder
 				.comment("是否启用万象创世的蜜脾产出")
+				.translation("productivebeesgenesis.configuration.bee_produce.produceEnabled")
 				.define("enabled", true);
 		produceOutputItem = builder
 				.comment("产出物品ID")
+				.translation("productivebeesgenesis.configuration.bee_produce.produceOutputItem")
 				.define("outputItem", "productivebees:configurable_honeycomb", ModConfig::validateResourceLocation);
 		produceOutputMin = builder
 				.comment("最小产出数量")
+				.translation("productivebeesgenesis.configuration.bee_produce.produceOutputMin")
 				.defineInRange("outputMin", 1, 1, 64);
 		produceOutputMax = builder
 				.comment("最大产出数量")
+				.translation("productivebeesgenesis.configuration.bee_produce.produceOutputMax")
 				.defineInRange("outputMax", 1, 1, 64);
 		produceOutputChance = builder
 				.comment("产出概率（0.0~1.0）")
+				.translation("productivebeesgenesis.configuration.bee_produce.produceOutputChance")
 				.defineInRange("outputChance", 1.0D, 0.0D, 1.0D);
 
 		myriadProduceThrottlePerTick = builder
 				.comment("每tick每只蜜蜂最大产物事件数", "0=无限制，高倍加速时降低CPU")
+				.translation("productivebeesgenesis.configuration.bee_produce.myriadProduceThrottlePerTick")
 				.defineInRange("myriadProduceThrottlePerTick", 0, 0, 20);
 		builder.pop(); // bee_produce
 
@@ -354,10 +405,12 @@ public final class ServerConfig {
 
 		advancedBeehiveSimulateCooldown = builder
 				.comment("模拟行为查询冷却(tick)", "0=原版，1-5降低高倍加速CPU开销")
+				.translation("productivebeesgenesis.configuration.advanced_beehive.simulateCooldown")
 				.defineInRange("simulateCooldown", 0, 0, 20);
 
 		advancedBeehiveSaveInterval = builder
 				.comment("NBT保存间隔(tick)", "默认20，值越大性能越好但宕机风险增加")
+				.translation("productivebeesgenesis.configuration.advanced_beehive.saveInterval")
 				.defineInRange("saveInterval", 20, 1, 200);
 
 		maxBatchTicksPerTick = builder

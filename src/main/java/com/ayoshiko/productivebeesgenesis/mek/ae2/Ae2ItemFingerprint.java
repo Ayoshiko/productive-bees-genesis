@@ -45,20 +45,30 @@ public final class Ae2ItemFingerprint {
 	/** Resolves new SNBT fingerprints without scanning and old fingerprints with one snapshot pass. */
 	public static Map<String, AEItemKey> resolve(List<Ae2InputFilter.DirectEntry> entries,
 			KeyCounter cachedInventory, HolderLookup.Provider registries) {
-		Map<String, AEItemKey> resolved = new HashMap<>();
-		Set<String> legacy = new HashSet<>();
+		Map<String, AEItemKey> resolved = null;
+		Set<String> legacy = null;
 		for (Ae2InputFilter.DirectEntry entry : entries) {
 			if (entry.key() != null) continue;
 			AEItemKey decoded = decode(entry.fingerprint(), registries);
-			if (decoded != null) resolved.put(entry.fingerprint(), decoded);
-			else legacy.add(entry.fingerprint());
+			if (decoded != null) {
+				if (resolved == null) resolved = new HashMap<>();
+				resolved.put(entry.fingerprint(), decoded);
+			} else {
+				if (legacy == null) legacy = new HashSet<>();
+				legacy.add(entry.fingerprint());
+			}
 		}
-		if (legacy.isEmpty() || cachedInventory == null) return resolved;
+		if (legacy == null || legacy.isEmpty() || cachedInventory == null) {
+			return resolved == null ? Map.of() : resolved;
+		}
 		for (var stack : cachedInventory) {
 			if (!(stack.getKey() instanceof AEItemKey itemKey)) continue;
 			String fingerprint = itemKey.toString();
-			if (legacy.contains(fingerprint)) resolved.put(fingerprint, itemKey);
+			if (legacy.contains(fingerprint)) {
+				if (resolved == null) resolved = new HashMap<>();
+				resolved.put(fingerprint, itemKey);
+			}
 		}
-		return resolved;
+		return resolved == null ? Map.of() : resolved;
 	}
 }

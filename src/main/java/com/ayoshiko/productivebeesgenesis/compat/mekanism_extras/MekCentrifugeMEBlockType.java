@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
 import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
@@ -107,8 +108,9 @@ public final class MekCentrifugeMEBlockType {
 				MekCentrifugeBlockType.descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory"),
 							FactoryType.SMELTING)
 				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
-						() -> Math.max(ModConfig.SERVER.mekCentrifugeEnergyStorage.get(),
-								ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue()) * tier.processes)
+						() -> SaturatingMath.saturatingMultiply(
+								Math.max(ModConfig.SERVER.mekCentrifugeEnergyStorage.get(),
+										ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()), tier.processes))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY)

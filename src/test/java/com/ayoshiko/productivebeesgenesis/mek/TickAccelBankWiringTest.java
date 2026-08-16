@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * JDTE 0.5.9-alpha1 accelerates our machines through the {@code CoalescedAcceleratedMachine} path
  * ({@code accumulateAcceleratedTicks} credits virtual ticks into the {@link TickAccelTracker} held by the
  * tile's AE2 state holder). The machine's production tick must consume that exact tracker; using a different
- * tracker instance silently drops all credited ticks (the apiary bug fixed in 2.0.9-hotfix.jdte+).
+ * tracker instance silently drops all credited ticks (the apiary bug fixed before the stable release).
  */
 class TickAccelBankWiringTest {
 

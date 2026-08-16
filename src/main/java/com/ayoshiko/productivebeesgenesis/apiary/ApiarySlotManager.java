@@ -84,6 +84,12 @@ public class ApiarySlotManager {
 	/** 输出槽位数 */
 	private final int outputSlotCount;
 
+	/** 每页输出槽位数（GUI 页内矩阵容量） */
+	private final int outputSlotsPerPage;
+
+	/** 输出页数 */
+	private final int outputPageCount;
+
 	/** 输出列数 */
 	private final int outputCols;
 
@@ -135,30 +141,33 @@ public class ApiarySlotManager {
 	public ApiarySlotManager(TileEntityMekApiary tile) {
 		this(tile, DEFAULT_BEE_SLOT_COUNT, DEFAULT_BEE_COLS, DEFAULT_BEE_ROWS,
 				DEFAULT_OUTPUT_SLOT_COUNT, DEFAULT_OUTPUT_COLS, DEFAULT_OUTPUT_ROWS,
-				DEFAULT_FLUID_TANK_CAPACITY);
+				2, DEFAULT_FLUID_TANK_CAPACITY);
 	}
 
 	/**
-	 * 工厂版构造（动态参数）
-	 *
-	 * @param tile               所属方块实体
-	 * @param beeSlotCount       蜜蜂槽位数量
-	 * @param beeCols            蜜蜂列数（工厂版固定5列）
-	 * @param beeRows            蜜蜂行数（工厂版按等级 1/2/3/4 行）
-	 * @param outputSlotCount    输出槽位数量
-	 * @param outputCols         输出列数
-	 * @param outputRows         输出行数
-	 * @param fluidTankCapacity  流体罐容量（mB）
+	 * Compatibility constructor: the supplied output count is treated as the
+	 * page capacity and the standard two-page layout is enabled.
 	 */
 	public ApiarySlotManager(TileEntityMekApiary tile,
 			int beeSlotCount, int beeCols, int beeRows,
-			int outputSlotCount, int outputCols, int outputRows,
+			int outputSlotsPerPage, int outputCols, int outputRows,
+			int fluidTankCapacity) {
+		this(tile, beeSlotCount, beeCols, beeRows, outputSlotsPerPage, outputCols,
+				outputRows, 2, fluidTankCapacity);
+	}
+
+	/** 工厂版构造（动态参数，支持显式页数）。 */
+	public ApiarySlotManager(TileEntityMekApiary tile,
+			int beeSlotCount, int beeCols, int beeRows,
+			int outputSlotsPerPage, int outputCols, int outputRows, int outputPageCount,
 			int fluidTankCapacity) {
 		this.tile = tile;
 		this.beeSlotCount = beeSlotCount;
 		this.beeCols = beeCols;
 		this.beeRows = beeRows;
-		this.outputSlotCount = outputSlotCount;
+		this.outputSlotsPerPage = Math.max(1, outputSlotsPerPage);
+		this.outputPageCount = Math.max(1, outputPageCount);
+		this.outputSlotCount = this.outputSlotsPerPage * this.outputPageCount;
 		this.outputCols = outputCols;
 		this.outputRows = outputRows;
 		this.fluidTankCapacity = fluidTankCapacity;
@@ -166,8 +175,8 @@ public class ApiarySlotManager {
 		for (int i = 0; i < beeSlotCount; i++) {
 			beeSlots[i] = new BeeSlot();
 		}
-		this.outputSlots = new ArrayList<>(outputSlotCount);
-		this.slotLimitCache = new SlotLimitCache(outputSlotCount);
+		this.outputSlots = new ArrayList<>(this.outputSlotCount);
+		this.slotLimitCache = new SlotLimitCache(this.outputSlotCount);
 		// 初始化组合委托处理器（持有 this 引用，操作时回调访问槽位数据）
 		this.cageHandler = new ApiaryCageHandler(this);
 		this.serializer = new ApiarySlotSerializer(this);
@@ -215,20 +224,25 @@ public class ApiarySlotManager {
 		((BasicInventorySlotAccessor) cageOutSlot).productivebeesgenesis$setObeyStackLimit(false);
 		builder.addSlot(cageOutSlot);
 
-		// 输出槽 — 按 outputRows × outputCols 矩形排布
+		// 物理输出库存按页追加；每页复用同一套 GUI 坐标，由容器代理槽选择当前页。
 		// 使用 TieredOutputInventorySlot 支持分等级堆叠倍率，倍率由 ApiaryTierMultiplierResolver 动态提供
 		// Bug 10: 绑定 NO_SPACE_IN_OUTPUT 警告，输出槽满时在警告Tab显示
 		IntSupplier stackMultiplier = ApiaryTierMultiplierResolver.getStackMultiplierForTier(tile);
-		for (int row = 0; row < outputRows; row++) {
-			for (int col = 0; col < outputCols; col++) {
-				TieredOutputInventorySlot outputSlot = TieredOutputInventorySlot.at(
-						stackMultiplier, listener,
-						outputX + col * SLOT_PITCH, outputY + row * SLOT_PITCH);
-				outputSlots.add(outputSlot);
-				builder.addSlot(outputSlot)
-						.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
-								tile.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
-			}
+		IContentsListener outputListener = () -> {
+			listener.onContentsChanged();
+			tile.onOutputSlotContentsChanged();
+		};
+		for (int index = 0; index < outputSlotCount; index++) {
+			int pageSlot = index % outputSlotsPerPage;
+			int row = pageSlot / outputCols;
+			int col = pageSlot % outputCols;
+			TieredOutputInventorySlot outputSlot = TieredOutputInventorySlot.at(
+					stackMultiplier, outputListener,
+					outputX + col * SLOT_PITCH, outputY + row * SLOT_PITCH);
+			outputSlots.add(outputSlot);
+			builder.addSlot(outputSlot)
+					.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
+							tile.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
 		}
 
 		// 能量槽 — 通过 accessor 获取父类的 energyContainer
@@ -319,7 +333,7 @@ public class ApiarySlotManager {
 	/**
 	 * 检查输出槽是否有任意物品 — 供 AE2 推送器空输出短路
 	 * <br/>
-	 * 蜂箱输出槽数量少（9-18），直接遍历足够高效，无需维护标志位。
+	 * 蜂箱输出槽数量有限（18-102，含两页物理库存），直接遍历足够高效，无需维护标志位。
 	 *
 	 * @return true 如果任意输出槽有物品
 	 */
@@ -396,6 +410,10 @@ public class ApiarySlotManager {
 
 	/** 获取输出列数 — GUI布局用 */
 	int getOutputCols() { return outputCols; }
+
+	int getOutputSlotsPerPage() { return outputSlotsPerPage; }
+
+	int getOutputPageCount() { return outputPageCount; }
 
 	/** 获取输出行数 — GUI布局用 */
 	int getOutputRows() { return outputRows; }

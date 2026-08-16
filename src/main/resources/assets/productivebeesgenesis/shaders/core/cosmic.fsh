@@ -64,6 +64,28 @@ mat4 rotationMatrix(vec3 axis, float angle)
                 0.0,                                0.0,                                0.0,                                1.0);
 }
 
+vec3 cosmicRainbow(float phase)
+{
+    phase = fract(phase);
+
+    vec3 rose = vec3(0.90, 0.48, 0.68);
+    vec3 lavender = vec3(0.62, 0.54, 0.90);
+    vec3 sky = vec3(0.43, 0.72, 0.88);
+    vec3 mint = vec3(0.48, 0.82, 0.66);
+    vec3 peach = vec3(0.93, 0.67, 0.45);
+
+    if (phase < 0.2) {
+        return mix(rose, lavender, phase * 5.0);
+    } else if (phase < 0.4) {
+        return mix(lavender, sky, (phase - 0.2) * 5.0);
+    } else if (phase < 0.6) {
+        return mix(sky, mint, (phase - 0.4) * 5.0);
+    } else if (phase < 0.8) {
+        return mix(mint, peach, (phase - 0.6) * 5.0);
+    }
+    return mix(peach, rose, (phase - 0.8) * 5.0);
+}
+
 void main (void)
 {
     vec4 mask = texture(Sampler0, texCoord0.xy);
@@ -72,13 +94,11 @@ void main (void)
 
     int uvtiles = 16;
 
-    // background colour
-    vec4 col = vec4(0.1,0.0,0.0,1.0);
-
     float pulse = mod(time,400)/400.0;
 
-    col.g = sin(pulse*M_PI*2) * 0.075 + 0.225;
-    col.b = cos(pulse*M_PI*2) * 0.05 + 0.3;
+    // A clean deep-indigo base keeps the star mask distinct without a muddy cyan cast.
+    vec3 cosmicBase = vec3(0.06, 0.05, 0.12) + cosmicRainbow(pulse) * 0.15;
+    vec4 col = vec4(cosmicBase, 1.0);
 
     // get ray from camera to fragment
     vec4 dir = normalize(vec4(-fPos, 0));
@@ -181,14 +201,16 @@ void main (void)
             // set the alpha, blending out at the bunched ends
             float a = tcol.r * (0.5 + (1.0/mult) * 1.0) * (1.0-smoothstep(0.15, 0.48, abs(rawv-0.5)));
 
-            // get fancy colours
-            float r = (mod(rand1, 29.0)/29.0) * 0.3 + 0.4;
-            float g = (mod(rand2, 35.0)/35.0) * 0.4 + 0.6;
-            float b = (mod(rand1, 17.0)/17.0) * 0.3 + 0.7;
+            float colorPhase = fract(
+                (mod(rand1, 29.0) / 29.0) * 0.65
+                + (mod(rand2, 35.0) / 35.0) * 0.35
+                + pulse * 0.2
+            );
+            vec3 starColor = cosmicRainbow(colorPhase);
+            float starBrightness = (mod(rand1, 17.0) / 17.0) * 0.12 + 0.82;
 
             // mix the colours
-            //col = col*(1-a) + vec4(r,g,b,1)*a;
-            col = col + vec4(r,g,b,1)*a;
+            col = col + vec4(starColor * starBrightness, 1.0) * a * 0.85;
         }
     }
 

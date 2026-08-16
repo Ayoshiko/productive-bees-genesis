@@ -99,7 +99,7 @@ final class BeeSelectionSearchBar {
 	/**
 	 * 搜索框内容变化回调
 	 * <p>
-	 * 大小写不敏感匹配类型ID或显示名称。
+	 * 大小写不敏感匹配类型ID、显示名称或最终产物模组ID。
 	 *
 	 * @param text 输入文本
 	 */

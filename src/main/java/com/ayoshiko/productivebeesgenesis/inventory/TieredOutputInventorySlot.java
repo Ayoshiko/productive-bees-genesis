@@ -1,8 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.IContentsListener;
 import mekanism.api.functions.ConstantPredicates;
 import mekanism.common.inventory.container.slot.ContainerSlotType;
+import mekanism.common.inventory.container.slot.InventoryContainerSlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -75,6 +77,17 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 	}
 
 	/**
+	 * Output inventory is exposed to automation as normal, but the GUI uses a
+	 * fixed set of page-aware proxy slots. Returning null prevents Mekanism's
+	 * tile container from registering every physical page at the same position.
+	 */
+	@Nullable
+	@Override
+	public InventoryContainerSlot createContainerSlot() {
+		return null;
+	}
+
+	/**
 	 * 返回 baseLimit × multiplier（带版本号缓存）
 	 * <br/>
 	 * {@code super.getLimit(stack)} 返回 {@code Math.min(ABSOLUTE_MAX_STACK_SIZE, stack.getMaxStackSize())}，
@@ -97,6 +110,7 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 		}
 		// 使用单条目缓存避免每次调用 ItemStack.getMaxStackSize() 触发 DataComponent 链
 		int baseLimit = limitCache.getBaseLimit(stack, 64, !stack.isEmpty(), multiplier);
-		return baseLimit * multiplier;
+		return SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(baseLimit, multiplier));
 	}
 }

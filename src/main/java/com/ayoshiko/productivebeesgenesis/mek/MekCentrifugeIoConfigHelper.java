@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -104,7 +105,8 @@ final class MekCentrifugeIoConfigHelper {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(factory);
 		long baseCapacity = readFluidTankCapacitySafely();
 		long multiplier = fluidTankMultiplier.getAsInt();
-		int capacity = (int) Math.min(baseCapacity * processes * multiplier, Integer.MAX_VALUE);
+		int capacity = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(baseCapacity, processes, multiplier));
 		IExtendedFluidTank tank = BasicFluidTank.output(capacity, listener);
 		tankSetter.accept(tank);
 		helper.addTank(tank);

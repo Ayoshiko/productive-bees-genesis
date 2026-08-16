@@ -157,6 +157,7 @@ final class ApiaryTilePersistence {
 		PbConfigCardDataHelper.writeAe2PerTileState(data,
 				tile.ae2HostAdapter().isAeItemOutputEnabled(), tile.ae2HostAdapter().isAeFluidOutputEnabled());
 		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT, tile.isDirectAeOutputEnabled());
+		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_CENTRIFUGE_PRIORITY, tile.isCentrifugePriorityEnabled());
 	}
 
 	/** 从配置卡读取 — 恢复AE2 per-tile状态（PB升级粘贴在 setConfigurationData 中处理） */
@@ -169,6 +170,9 @@ final class ApiaryTilePersistence {
 		}
 		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT)) {
 			tile.setDirectAeOutputEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT));
+		}
+		if (data.contains(ApiaryNbtSerializer.NBT_KEY_CENTRIFUGE_PRIORITY)) {
+			tile.setCentrifugePriorityEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_CENTRIFUGE_PRIORITY));
 		}
 	}
 

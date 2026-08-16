@@ -8,9 +8,11 @@ import com.ayoshiko.productivebeesgenesis.compat.emextras.MekCentrifugeEMEBlockT
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekApiaryMEBlockType;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MekCentrifugeMEBlockType;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
@@ -61,31 +63,31 @@ public final class Ae2CapabilityRegistrar {
 	public static void register(RegisterCapabilitiesEvent event) {
 		// ===== 离心机 =====
 		// 1. 基础离心机
-		registerForTileEntity(event, ModBlockEntities.MEK_CENTRIFUGE.get());
+		registerCentrifuge(event, ModBlockEntities.MEK_CENTRIFUGE.get());
 
 		// 2. 原版 4 等级工厂
-		registerForTileEntity(event, ModBlockEntities.BASIC_MEK_CENTRIFUGE_FACTORY.get());
-		registerForTileEntity(event, ModBlockEntities.ADVANCED_MEK_CENTRIFUGE_FACTORY.get());
-		registerForTileEntity(event, ModBlockEntities.ELITE_MEK_CENTRIFUGE_FACTORY.get());
-		registerForTileEntity(event, ModBlockEntities.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get());
+		registerCentrifuge(event, ModBlockEntities.BASIC_MEK_CENTRIFUGE_FACTORY.get());
+		registerCentrifuge(event, ModBlockEntities.ADVANCED_MEK_CENTRIFUGE_FACTORY.get());
+		registerCentrifuge(event, ModBlockEntities.ELITE_MEK_CENTRIFUGE_FACTORY.get());
+		registerCentrifuge(event, ModBlockEntities.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get());
 
 		// 3. EM 5 等级工厂 — ModBlockEntitiesHolder.EM_FACTORY_TILES 使用 Mekanism 的 FactoryTier 作为 key，
 		// 可安全直接遍历（Map 在 EM 未加载时为空）
 		for (TileEntityTypeRegistryObject<?> tile : MekCentrifugeBlockType.ModBlockEntitiesHolder.EM_FACTORY_TILES.values()) {
-			registerForTileEntity(event, tile.get());
+			registerCentrifuge(event, tile.get());
 		}
 
 		// 4. ME 4 等级工厂 — 仅在 ME 已加载时访问 MekCentrifugeMEBlockType 类（避免 NoClassDefFoundError）
 		if (MekCompatHooks.isMekanismExtrasLoaded()) {
 			for (TileEntityTypeRegistryObject<?> tile : MekCentrifugeMEBlockType.ME_FACTORY_TILES.values()) {
-				registerForTileEntity(event, tile.get());
+				registerCentrifuge(event, tile.get());
 			}
 		}
 
 		// 5. EME 4 等级工厂 — 仅在 EME 已加载时访问 MekCentrifugeEMEBlockType 类（避免 NoClassDefFoundError）
 		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
 			for (TileEntityTypeRegistryObject<?> tile : MekCentrifugeEMEBlockType.EME_FACTORY_TILES.values()) {
-				registerForTileEntity(event, tile.get());
+				registerCentrifuge(event, tile.get());
 			}
 		}
 
@@ -150,6 +152,23 @@ public final class Ae2CapabilityRegistrar {
 				(blockEntity, context) -> blockEntity instanceof IAe2OutputHostBase host
 						&& host instanceof IInWorldGridNodeHost gridHost
 						? gridHost
+						: null
+		);
+	}
+
+	private static void registerCentrifuge(RegisterCapabilitiesEvent event,
+			BlockEntityType<?> tileEntityType) {
+		registerForTileEntity(event, tileEntityType);
+		if (tileEntityType == null) return;
+		event.registerBlockEntity(
+				AECapabilities.ME_STORAGE,
+				tileEntityType,
+				(blockEntity, side) -> side != null
+						&& blockEntity instanceof IAe2OutputHostBase host
+						&& blockEntity instanceof IMekCentrifugeTile centrifuge
+						&& blockEntity instanceof ISideConfiguration sideConfiguration
+						? CentrifugeExternalAeStorage.getOrCreate(
+								host, centrifuge, sideConfiguration, side)
 						: null
 		);
 	}

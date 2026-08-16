@@ -303,6 +303,7 @@ public class BeeSlot {
 			if (productivity.isEmpty()) return 0.0f;
 			float purity = productivity.getFloat("purity");
 			// 截断到 [0.0, 1.0] 防止异常值
+			if (!Float.isFinite(purity)) return 0.0f;
 			return Math.max(0.0f, Math.min(1.0f, purity));
 		} catch (RuntimeException e) {
 			return 0.0f;

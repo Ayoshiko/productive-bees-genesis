@@ -30,8 +30,16 @@ public final class MyriadCombModelRegistry {
 
 	/** 方块模型包装注册日志仅输出一次 */
 	private static final AtomicBoolean BLOCK_WRAPPER_LOGGED = new AtomicBoolean(false);
+	private static final AtomicBoolean SPAWN_EGG_WRAPPER_LOGGED = new AtomicBoolean(false);
+	private static final ModelResourceLocation MYRIAD_SPAWN_EGG_MODEL = ModelResourceLocation.standalone(
+			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/myriadcreations_spawn_egg"));
 
 	private MyriadCombModelRegistry() {
+	}
+
+	@SubscribeEvent
+	public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event) {
+		event.register(MYRIAD_SPAWN_EGG_MODEL);
 	}
 
 	@SubscribeEvent
@@ -62,6 +70,21 @@ public final class MyriadCombModelRegistry {
 		BakedModel infinityCombBlockItem = models.get(infinityCombBlockItemKey);
 		if (pbCombItem != null && infinityCombBlockItem != null) {
 			models.put(pbCombItemKey, new BakedModelMyriadCombBlock(pbCombItem, infinityCombBlockItem));
+		}
+
+		// PB uses one configurable spawn-egg item for every data-driven bee. Select
+		// the animated rainbow model only when the stack contains the Myriad type.
+		ModelResourceLocation pbSpawnEggKey = ModelResourceLocation.inventory(
+				ResourceLocation.fromNamespaceAndPath("productivebees", "spawn_egg_configurable_bee"));
+		BakedModel pbSpawnEgg = models.get(pbSpawnEggKey);
+		BakedModel myriadSpawnEgg = models.get(MYRIAD_SPAWN_EGG_MODEL);
+		if (pbSpawnEgg != null && myriadSpawnEgg != null) {
+			models.put(pbSpawnEggKey, new BakedModelMyriadSpawnEgg(pbSpawnEgg, myriadSpawnEgg));
+			if (SPAWN_EGG_WRAPPER_LOGGED.compareAndSet(false, true)) {
+				ProductiveBeesGenesis.LOGGER.info(
+						"Myriad Creations spawn-egg model wrapper registered: PB key={}, custom key={}",
+						pbSpawnEggKey, MYRIAD_SPAWN_EGG_MODEL);
+			}
 		}
 
 		// PB 的 configurable_comb 方块模型

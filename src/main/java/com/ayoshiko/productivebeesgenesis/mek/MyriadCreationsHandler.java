@@ -8,6 +8,7 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -110,6 +111,10 @@ public class MyriadCreationsHandler {
 
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
 			long cachedEnergyPerTick, int cachedOperationsPerTick, int virtualTicks, long energyBudget) {
+		if (!fluidOutputHandler.flushPendingFluid(processIndex)) {
+			pbProcessing[processIndex] = false;
+			return false;
+		}
 		// Task 3 性能优化：每 tick 缓存流体槽满载状态
 		fluidOutputHandler.initFluidTankFullCache();
 
@@ -246,7 +251,8 @@ public class MyriadCreationsHandler {
 		int modifier = Math.max(1, productivityModifier);
 
 		// 万象创世蜜脾块 = 4个蜜脾，输出总数乘以4
-		int totalCount = isCombBlock ? (int) Math.min((long) modifier * 4, Integer.MAX_VALUE) : modifier;
+		int totalCount = isCombBlock ? SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(modifier, 4)) : modifier;
 
 		// 限制种类数不超过输出槽数和总数量
 		int maxTypes = Math.min(OUTPUT_SLOT_COUNT, totalCount);
@@ -287,7 +293,9 @@ public class MyriadCreationsHandler {
 			boolean fluidFull = fluidOutputHandler.isFluidTankFull();
 			if (!fluidFull) {
 				// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
-				if (!fluidOutputHandler.insertFluidOutput(input, modifier, processIndex)) {
+				MyriadFluidOutputHandler.InsertResult fluidResult =
+						fluidOutputHandler.insertFluidOutput(input, modifier, processIndex);
+				if (!fluidResult.committed()) {
 					// v9-P2 修复：回收成功的 plan 防止对象池泄漏
 					MyriadBatchPlanner.recyclePlan(plan);
 					return 0;
@@ -374,7 +382,9 @@ public class MyriadCreationsHandler {
 		// Task 4 根因修复：万象创世的主要产出是随机蜜脾物品，流体（蜂蜜）是副产物。
 		// 流体槽满载时不应阻塞物品产出，跳过流体输出继续处理物品。
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
-		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, multiplier, selectedTypes,
+		int outputPerOperation = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(multiplier, productivityMod));
+		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, outputPerOperation, selectedTypes,
 			effectiveBatchSize);
 		if (maxBatch <= 0) {
 			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
@@ -400,7 +410,8 @@ public class MyriadCreationsHandler {
 		int degradationAttempts = 0;
 		while (!plan.isSuccess() && currentBatch > 1 && degradationAttempts < MAX_DEGRADATION_ATTEMPTS) {
 			currentBatch = Math.max(1, currentBatch / 2);
-			totalCount = (int) Math.min((long) currentBatch * multiplier * productivityMod, Integer.MAX_VALUE);
+			totalCount = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(currentBatch, multiplier, productivityMod));
 			typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, OUTPUT_SLOT_COUNT)));
 			// SubTask 5.6: 降级重试同样用 allocateByWeight
 			activeTypes = selectedTypes.subList(0, typesToUse);
@@ -421,9 +432,10 @@ public class MyriadCreationsHandler {
 		try {
 			// Task 4 根因修复：流体是万象创世的副产物，满载时跳过，不阻塞物品产出
 			// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
-			long fluidAmount = (long) currentBatch * productivityMod;
-			int fluidAmountClamped = (int) Math.min(fluidAmount, Integer.MAX_VALUE);
-			if (!fluidOutputHandler.insertFluidOutput(input, fluidAmountClamped, processIndex)) {
+			long fluidAmount = SaturatingMath.saturatingMultiply(currentBatch, productivityMod);
+			MyriadFluidOutputHandler.InsertResult fluidResult =
+					fluidOutputHandler.insertFluidOutput(input, fluidAmount, processIndex);
+			if (!fluidResult.committed()) {
 				MyriadBatchPlanner.recyclePlan(plan);
 				return 0;
 			}
@@ -456,5 +468,13 @@ public class MyriadCreationsHandler {
 	/** 配方重载时失效 cachedTicksForBase（由 PbRecipeProcessor.checkRecipeVersion 调用） — 委托至缓存管理器 */
 	public void clearCachedTicksForBase() {
 		cache.clearCachedTicksForBase();
+	}
+
+	public void saveAdditional(CompoundTag nbt) {
+		fluidOutputHandler.saveAdditional(nbt);
+	}
+
+	public void loadAdditional(CompoundTag nbt) {
+		fluidOutputHandler.loadAdditional(nbt);
 	}
 }

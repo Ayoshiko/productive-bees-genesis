@@ -44,7 +44,7 @@ public interface IMekApiaryTile {
 	/**
 	 * 返回所有输出槽的物品总数，供 Ejector Mixin 替代 O(n) 遍历计数。
 	 * <br/>
-	 * 蜂箱输出槽数量少（9-18），直接遍历计数足够高效。
+	 * 蜂箱输出槽数量有限（9-51），直接遍历计数足够高效。
 	 * 用于 Mixin 比较调用 outputItems 前后的物品总量，判断是否成功弹出。
 	 */
 	default long productivebeesgenesis$outputItemCount() {

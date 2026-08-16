@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
@@ -22,11 +23,16 @@ final class ApiaryOutputMerger {
 
 	/** 每个虚拟栈对应的原始输出槽列表（与 virtualStacks 平行） */
 	private final List<List<BasicInventorySlot>> sourceSlots = new ArrayList<>(9);
+	private int[] virtualHashes = new int[9];
+	private int activeGroupCount;
 
 	/** 清空合并结果 */
 	void clear() {
-		virtualStacks.clear();
-		sourceSlots.clear();
+		for (int i = 0; i < activeGroupCount; i++) {
+			virtualStacks.set(i, ItemStack.EMPTY);
+			sourceSlots.get(i).clear();
+		}
+		activeGroupCount = 0;
 	}
 
 	/**
@@ -38,11 +44,13 @@ final class ApiaryOutputMerger {
 	void add(BasicInventorySlot slot) {
 		ItemStack stack = slot.getStack();
 		if (stack.isEmpty()) return;
+		int stackHash = ItemStack.hashItemAndComponents(stack);
 
 		// 查找是否已有同类型虚拟栈
 		int existIdx = -1;
-		for (int i = 0; i < virtualStacks.size(); i++) {
-			if (ItemStack.isSameItemSameComponents(virtualStacks.get(i), stack)) {
+		for (int i = 0; i < activeGroupCount; i++) {
+			if (virtualHashes[i] == stackHash
+					&& ItemStack.isSameItemSameComponents(virtualStacks.get(i), stack)) {
 				existIdx = i;
 				break;
 			}
@@ -50,20 +58,39 @@ final class ApiaryOutputMerger {
 
 		if (existIdx >= 0) {
 			// 合并到已有虚拟栈
-			virtualStacks.get(existIdx).grow(stack.getCount());
+			ItemStack virtualStack = virtualStacks.get(existIdx);
+			virtualStack.setCount(SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingAdd(virtualStack.getCount(), stack.getCount())));
 			sourceSlots.get(existIdx).add(slot);
 		} else {
-			// 新建虚拟栈（copyWithCount 避免修改原始 stack）
-			virtualStacks.add(stack.copyWithCount(stack.getCount()));
-			List<BasicInventorySlot> sources = new ArrayList<>();
+			ensureHashCapacity(activeGroupCount + 1);
+			List<BasicInventorySlot> sources;
+			if (activeGroupCount < virtualStacks.size()) {
+				virtualStacks.set(activeGroupCount, stack.copy());
+				sources = sourceSlots.get(activeGroupCount);
+			} else {
+				virtualStacks.add(stack.copy());
+				sources = new ArrayList<>(1);
+				sourceSlots.add(sources);
+			}
 			sources.add(slot);
-			sourceSlots.add(sources);
+			virtualHashes[activeGroupCount] = stackHash;
+			activeGroupCount++;
 		}
+	}
+
+	private void ensureHashCapacity(int requiredCapacity) {
+		if (requiredCapacity <= virtualHashes.length) return;
+		int doubled = virtualHashes.length <= Integer.MAX_VALUE / 2
+				? virtualHashes.length * 2 : Integer.MAX_VALUE;
+		int[] expanded = new int[Math.max(requiredCapacity, doubled)];
+		System.arraycopy(virtualHashes, 0, expanded, 0, activeGroupCount);
+		virtualHashes = expanded;
 	}
 
 	/** 虚拟栈数量 */
 	int size() {
-		return virtualStacks.size();
+		return activeGroupCount;
 	}
 
 	/** 获取指定虚拟栈（可能为空） */

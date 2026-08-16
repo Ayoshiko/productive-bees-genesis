@@ -30,7 +30,7 @@ import java.util.WeakHashMap;
 	 * <br/>
 	 * 负责：
 	 * <ol>
-	 *   <li>蜜蜂类型缓存管理（定期从PB数据源刷新，应用配置过滤）— 委托给 {@link MyriadBeeTypeCache}</li>
+	 *   <li>蜜蜂类型缓存管理（首次加载及配置/数据重载时刷新）— 委托给 {@link MyriadBeeTypeCache}</li>
 	 *   <li>随机蜜脾/蜜脾块生成（供Mixin调用）— 委托给 {@link RandomHoneycombSelector}</li>
 	 *   <li>离心机追加产出逻辑 + 空转拦截 — 委托给 {@link CombBlockCheckCache}</li>
 	 * </ol>
@@ -78,7 +78,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	// ========== 事件订阅 ==========
 
-	/** 服务器tick事件 — 定期更新蜜蜂类型缓存 */
+	/** 服务器 tick 事件 — 仅在首次加载或缓存失效后重建蜜蜂类型缓存 */
 	@SubscribeEvent
 	public static void onServerTick(ServerTickEvent.Post event) {
 		// 万象创世功能被禁用时，跳过缓存更新
@@ -111,7 +111,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 供 {@link com.ayoshiko.productivebeesgenesis.mek.MyriadCreationsHandler} 在缓存为空时区分：
 	 * <ul>
 	 *   <li>{@code false} — 预热未完成，"缓存未就绪"（info 级别日志）</li>
-	 *   <li>{@code true} — 预热完成但仍为空，"配置过滤过严"（warn 级别日志）</li>
+	 *   <li>{@code true} — 蜜蜂数据已就绪，当前过滤结果合法为空</li>
 	 * </ul>
 	 *
 	 * @return true 如果预热阶段已完成（无论缓存是否非空）
@@ -219,7 +219,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	/**
 	 * 万象创世功能是否启用的缓存值（volatile 读取避免重复配置查询）
 	 * <br/>
-	 * processPbRecipesAndUpdate 每 tick 调 32 次（16 myraid + 16 comb）isMyriadCreationsEnabled()，
+	 * processPbRecipesAndUpdate 每 tick 调 32 次（16 myriad + 16 comb）isMyriadCreationsEnabled()，
 	 * 每次需 2 次 volatile read（ModConfigSpec.isLoaded + myraidConfigValue.get()）。
 	 * 缓存到 volatile 字段后单次访问仅 1 次 volatile read，
 	 * ModConfigEvent.Reloading 时通过 {@link #invalidateEnabledCache()} 同步更新。

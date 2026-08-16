@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.config.MekanismConfig;
 import mekanism.common.util.MekanismUtils;
@@ -216,12 +217,12 @@ public class ApiaryUpgradeHandler {
 	 * @return 生产力倍率(基础 1.0)
 	 */
 	float computeProductivityMultiplier() {
-		float mod = 1.0f;
-		mod += PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY);
-		mod += PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_2);
-		mod += PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3);
-		mod += PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4);
-		return mod;
+		double mod = 1.0D;
+		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_2);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4);
+		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
 	}
 
 	/**
@@ -302,12 +303,8 @@ public class ApiaryUpgradeHandler {
 	 */
 	float computeTimeMultiplier() {
 		float mekTimeMultiplier = getMekSpeedTimeMultiplier();
-		// Bug 3：TIME_2 按 2 倍权重计算，与 PB 原版离心机公式一致
-		int timeCount = getInstalledUpgrades(PbUpgradeType.TIME);
-		int time2Count = getInstalledUpgrades(PbUpgradeType.TIME_2);
-		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		float pbTimeDivisor = 1.0f + PbUpgradeConfig.timeBonus() * effectiveTimeUpgrades;
-		return mekTimeMultiplier / pbTimeDivisor;
+		float pbTimeDivisor = ApiaryUpgradeMath.getPbTimeDivisor(this);
+		return SaturatingMath.positiveFiniteFloat((double) mekTimeMultiplier / pbTimeDivisor, 1.0f);
 	}
 
 	/**

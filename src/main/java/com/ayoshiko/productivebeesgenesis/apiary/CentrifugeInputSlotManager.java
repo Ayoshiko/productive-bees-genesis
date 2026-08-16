@@ -4,9 +4,6 @@ import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
 	 * 离心机输入槽状态管理器 — 封装蜂箱直连弹出的输入槽预扫描、类型缓存、按负载排序
 	 * <br/>
@@ -23,6 +20,8 @@ class CentrifugeInputSlotManager {
 
 	/** 预扫描的输入槽 ItemStack 数组(复用,槽数不变时不重新分配) */
 	private ItemStack[] reusableInputStacks = new ItemStack[0];
+	/** 预扫描的输入槽引用，避免分组和实际转移阶段重复解析槽位。 */
+	private IInventorySlot[] reusableInputSlots = new IInventorySlot[0];
 
 	/** 预扫描的输入槽当前 count 数组(复用) */
 	private int[] reusableInputCounts = new int[0];
@@ -32,6 +31,10 @@ class CentrifugeInputSlotManager {
 
 	/** 预扫描的输入槽剩余空间数组(= limit - count,复用) */
 	private int[] reusableInputRemaining = new int[0];
+	/** 同类型非空槽的复用索引缓冲，避免每个虚拟产物分配 Integer 列表。 */
+	private int[] reusableSameTypeIndices = new int[0];
+	/** 空槽按容量排序后的复用索引缓冲。 */
+	private int[] reusableEmptyIndices = new int[0];
 
 	/**
 	 * 预扫描所有输入槽的当前状态
@@ -48,13 +51,17 @@ class CentrifugeInputSlotManager {
 		// 数组复用:槽数不变时复用,变化时重新分配
 		if (reusableInputStacks.length != slotCount) {
 			reusableInputStacks = new ItemStack[slotCount];
+			reusableInputSlots = new IInventorySlot[slotCount];
 			reusableInputCounts = new int[slotCount];
 			reusableInputLimits = new int[slotCount];
 			reusableInputRemaining = new int[slotCount];
+			reusableSameTypeIndices = new int[slotCount];
+			reusableEmptyIndices = new int[slotCount];
 		}
 		// 预扫描填充
 		for (int i = 0; i < slotCount; i++) {
 			IInventorySlot inputSlot = centrifuge.productivebeesgenesis$getInputSlot(i);
+			reusableInputSlots[i] = inputSlot;
 			if (inputSlot == null) {
 				reusableInputStacks[i] = ItemStack.EMPTY;
 				reusableInputCounts[i] = 0;
@@ -106,17 +113,24 @@ class CentrifugeInputSlotManager {
 	 *
 	 * @param stack     待匹配的 ItemStack
 	 * @param slotCount 输入槽数量
-	 * @return 同类型非空输入槽的索引列表(可能为空)
+	 * @return 写入复用索引缓冲的槽位数量
 	 */
-	public List<Integer> findSameTypeSlots(ItemStack stack, int slotCount) {
-		List<Integer> result = new ArrayList<>();
-		for (int i = 0; i < slotCount; i++) {
+	int prepareSameTypeSlots(ItemStack stack, int slotCount) {
+		int count = 0;
+		int scanCount = Math.min(slotCount, reusableInputStacks.length);
+		for (int i = 0; i < scanCount; i++) {
 			ItemStack inputStack = reusableInputStacks[i];
-			if (!inputStack.isEmpty() && ItemStack.isSameItemSameComponents(inputStack, stack)) {
-				result.add(i);
+			if (!inputStack.isEmpty() && reusableInputRemaining[i] > 0
+					&& ItemStack.isSameItemSameComponents(inputStack, stack)) {
+				reusableSameTypeIndices[count++] = i;
 			}
 		}
-		return result;
+		return count;
+	}
+
+	/** 返回 {@link #prepareSameTypeSlots} 生成的第 {@code order} 个槽位索引。 */
+	int getSameTypeSlotIndex(int order) {
+		return reusableSameTypeIndices[order];
 	}
 
 	/**
@@ -127,39 +141,49 @@ class CentrifugeInputSlotManager {
 	 * <p>
 	 * 19 槽场景下排序开销 < 1μs(19 log 19 ≈ 80 比较)。
 	 *
-	 * @param centrifuge 离心机接口(用于计算空槽 limit)
 	 * @param outputStack 待插入的 ItemStack(用于计算空槽 limit)
 	 * @param slotCount  输入槽数量
-	 * @return 空槽索引列表,按剩余空间(limit)降序排序
+	 * @return 写入复用索引缓冲的空槽数量，索引按剩余空间降序排列
 	 */
-	public List<Integer> findEmptySlotsSortedByRemainingDesc(
-			IMekCentrifugeTile centrifuge, ItemStack outputStack, int slotCount) {
-		List<int[]> emptySlotsWithLimit = new ArrayList<>();  // [index, limit]
-		for (int i = 0; i < slotCount; i++) {
+	int prepareEmptySlotsSortedByRemainingDesc(ItemStack outputStack, int slotCount) {
+		int count = 0;
+		int scanCount = Math.min(slotCount, reusableInputStacks.length);
+		for (int i = 0; i < scanCount; i++) {
 			if (reusableInputStacks[i].isEmpty()) {
-				IInventorySlot inputSlot = centrifuge.productivebeesgenesis$getInputSlot(i);
+				IInventorySlot inputSlot = reusableInputSlots[i];
 				if (inputSlot == null) continue;
 				int limit = inputSlot.getLimit(outputStack);
 				if (limit <= 0) continue;
-				emptySlotsWithLimit.add(new int[]{i, limit});
+				reusableEmptyIndices[count++] = i;
 				// 同步更新预扫描数组(避免下次重复计算)
 				reusableInputLimits[i] = limit;
 				reusableInputRemaining[i] = limit;
 			}
 		}
-		// 按 limit 降序排序
-		emptySlotsWithLimit.sort((a, b) -> Integer.compare(b[1], a[1]));
-		List<Integer> result = new ArrayList<>(emptySlotsWithLimit.size());
-		for (int[] entry : emptySlotsWithLimit) {
-			result.add(entry[0]);
+		// 输入槽通常不超过 19 个；原地插入排序避免 Comparator、Integer 和 int[] 分配。
+		for (int i = 1; i < count; i++) {
+			int index = reusableEmptyIndices[i];
+			int remaining = reusableInputRemaining[index];
+			int insertAt = i - 1;
+			while (insertAt >= 0
+					&& reusableInputRemaining[reusableEmptyIndices[insertAt]] < remaining) {
+				reusableEmptyIndices[insertAt + 1] = reusableEmptyIndices[insertAt];
+				insertAt--;
+			}
+			reusableEmptyIndices[insertAt + 1] = index;
 		}
-		return result;
+		return count;
+	}
+
+	/** 返回 {@link #prepareEmptySlotsSortedByRemainingDesc} 生成的第 {@code order} 个槽位索引。 */
+	int getEmptySlotIndex(int order) {
+		return reusableEmptyIndices[order];
 	}
 
 	/**
 	 * 获取所有空槽中最大的剩余空间(用于短路优化判断)
 	 * <br/>
-	 * 注意:此方法假设空槽的 limit 已在 preScan 或 findEmptySlotsSortedByRemainingDesc 中计算。
+	 * 注意:此方法假设空槽的 limit 已在 preScan 或 prepareEmptySlotsSortedByRemainingDesc 中计算。
 	 * 若空槽 limit 未计算(空槽且 outputStack 未知),返回 0(短路优化不触发,走正常路径)。
 	 *
 	 * @param slotCount 输入槽数量
@@ -167,7 +191,8 @@ class CentrifugeInputSlotManager {
 	 */
 	public int getMaxEmptySlotRemaining(int slotCount) {
 		int maxRemaining = 0;
-		for (int i = 0; i < slotCount; i++) {
+		int scanCount = Math.min(slotCount, reusableInputStacks.length);
+		for (int i = 0; i < scanCount; i++) {
 			if (reusableInputStacks[i].isEmpty()) {
 				maxRemaining = Math.max(maxRemaining, reusableInputRemaining[i]);
 			}
@@ -193,5 +218,10 @@ class CentrifugeInputSlotManager {
 	/** 获取预扫描的输入槽剩余空间 */
 	public int getInputRemaining(int index) {
 		return reusableInputRemaining[index];
+	}
+
+	/** 获取预扫描的输入槽引用。 */
+	IInventorySlot getInputSlot(int index) {
+		return reusableInputSlots[index];
 	}
 }

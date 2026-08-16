@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import java.util.List;
 import mekanism.api.inventory.IInventorySlot;
@@ -48,7 +49,8 @@ final class PbRecipeProcessorStateHelper {
 			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
 			if (recipe == null) continue;
 			var fluid = recipe.value().getFluidOutputs();
-			if (!fluid.isEmpty()) {
+			if (!fluid.isEmpty() && !(context.suppressesUselessByproducts()
+					&& UselessByproductUpgradeHelper.isHoney(fluid))) {
 				context.reserveFluidOutputType(fluid);
 			}
 		}
@@ -66,7 +68,7 @@ final class PbRecipeProcessorStateHelper {
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
 		// v2.0.9 修复产物锁定 bug：清除 PB 状态时同步重置 completer
-		completer.resetPendingRecipe();
+		if (!completer.hasCommittedPendingOutputs()) completer.resetPendingRecipe();
 		// 关闭该进程的激活位，防止进度箭头残留
 		context.setPbActiveState(false, processIndex);
 	}
@@ -80,7 +82,7 @@ final class PbRecipeProcessorStateHelper {
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
 		// v2.0.9 修复产物锁定 bug：重置 PB 状态时同步重置 completer
-		completer.resetPendingRecipe();
+		if (!completer.hasCommittedPendingOutputs()) completer.resetPendingRecipe();
 	}
 
 	/** 检查指定进程是否正在处理PB配方 */

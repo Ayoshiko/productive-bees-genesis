@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -87,10 +88,8 @@ public class ApiaryPbUpgradeHandler {
 	private final PbUpgradeInventorySlot pbUpgradeOutputSlot;
 
 	/**
-	 * NBT 迁移与超出部分注入委托 — 从本类拆分（SRP/M1-4）
-	 * <br/>
-	 * 持有 {@link #pbUpgradeCounts} 与 {@link #pbUpgradeOutputSlot} 共享引用，
-	 * 负责 v14 loadSlots/loadCounts 顺序修复、历史格式迁移和超出部分暂存/注入。
+	 * PB 升级 NBT 历史格式迁移委托；持有 {@link #pbUpgradeCounts} 的共享引用。
+	 * 持久化数量按原值恢复，当前配置上限只限制后续安装。
 	 */
 	private final ApiaryPbUpgradeNbtMigrator nbtMigrator;
 
@@ -103,9 +102,7 @@ public class ApiaryPbUpgradeHandler {
 		this.tile = tile;
 		this.pbUpgradeInputSlot = PbUpgradeInventorySlot.createInput(tile::setChanged);
 		this.pbUpgradeOutputSlot = PbUpgradeInventorySlot.createOutput(tile::setChanged);
-		// 迁移器共享 pbUpgradeCounts 与输出槽引用，limitProvider 委托本类查询
-		this.nbtMigrator = new ApiaryPbUpgradeNbtMigrator(
-				tile, pbUpgradeOutputSlot, pbUpgradeCounts, this::getPbUpgradeLimit);
+		this.nbtMigrator = new ApiaryPbUpgradeNbtMigrator(pbUpgradeCounts);
 	}
 
 	// ===== 槽位访问 =====
@@ -136,6 +133,7 @@ public class ApiaryPbUpgradeHandler {
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return false;
 		if (type == null || type.isBuiltin()) return false;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
+		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return false;
 		if (current >= getPbUpgradeLimit(type)) return false;
 		pbUpgradeCounts.put(type, current + 1);
 		tile.setChanged();
@@ -160,6 +158,7 @@ public class ApiaryPbUpgradeHandler {
 		if (type == null || type.isBuiltin()) return 0;
 		if (maxAvailable <= 0) return 0;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
+		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return 0;
 		int limit = getPbUpgradeLimit(type);
 		int toAdd = Math.min(limit - current, maxAvailable);
 		if (toAdd <= 0) return 0;
@@ -256,13 +255,15 @@ public class ApiaryPbUpgradeHandler {
 		if (ModConfig.SERVER == null) return type.getMaxCount();
 		return switch (type) {
 			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4 ->
-					ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount != null
-							? ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount.get()
-							: type.getMaxCount();
+					BalanceConfig.pbUpgradeLimit(
+							ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount != null
+									? ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount.get()
+									: type.getMaxCount());
 			case TIME, TIME_2 ->
-					ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount != null
-							? ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.get()
-							: type.getMaxCount();
+					BalanceConfig.pbUpgradeLimit(
+							ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount != null
+									? ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.get()
+									: type.getMaxCount());
 			case GENE_SAMPLER ->
 					ModConfig.SERVER.apiaryPbUpgradeGeneSamplerMaxCount != null
 							? ModConfig.SERVER.apiaryPbUpgradeGeneSamplerMaxCount.get()
@@ -298,7 +299,7 @@ public class ApiaryPbUpgradeHandler {
 		// Bug 2修复：升级已满时重置计数器，避免进度条无限循环
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
 		int maxCount = getPbUpgradeLimit(type);
-		if (current >= maxCount) {
+		if (current >= maxCount || !BalanceConfig.canInstall(type, pbUpgradeCounts)) {
 			pbUpgradeTicks = 0;
 			return;
 		}
@@ -401,7 +402,7 @@ public class ApiaryPbUpgradeHandler {
 	 * 旧格式1：{@link ApiaryPbUpgradeNbtMigrator#NBT_KEY_PB_UPGRADE_HANDLER_LEGACY}（ItemStackHandler 序列化）。
 	 * 旧格式2：{@link ApiaryPbUpgradeNbtMigrator#NBT_KEY_PB_UPGRADES_LEGACY}（CompoundTag, key=typeId, value=count）。
 	 * <p>
-	 * 迁移与超出部分注入逻辑委托给 {@link #nbtMigrator}（SRP/M1-4）。
+	 * 历史格式迁移逻辑委托给 {@link #nbtMigrator}（SRP/M1-4）。
 	 */
 	void loadPbUpgradeCounts(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		pbUpgradeCounts.clear();
@@ -412,8 +413,7 @@ public class ApiaryPbUpgradeHandler {
 				if (type != null && !type.isBuiltin()) {
 					int count = countsTag.getInt(typeId);
 					if (count > 0) {
-						// 修复 HIGH-6: 截断超出部分尝试放入输出槽，避免物品凭空消失
-						nbtMigrator.applyCountWithLimit(type, count);
+						nbtMigrator.restorePersistedCount(type, count);
 					}
 				}
 			}
@@ -432,8 +432,7 @@ public class ApiaryPbUpgradeHandler {
 				if (type != null && !type.isBuiltin()) {
 					int count = legacyTag.getInt(typeId);
 					if (count > 0) {
-						// 修复 HIGH-6: 截断超出部分尝试放入输出槽，避免物品凭空消失
-						nbtMigrator.applyCountWithLimit(type, count);
+						nbtMigrator.restorePersistedCount(type, count);
 					}
 				}
 			}
@@ -447,14 +446,7 @@ public class ApiaryPbUpgradeHandler {
 		nbt.put(NBT_KEY_PB_UPGRADE_OUTPUT, pbUpgradeOutputSlot.serializeNBT(provider));
 	}
 
-	/**
-	 * 从NBT加载PB升级输入/输出槽
-	 * <br/>
-	 * 修复 v14 loadSlots/loadCounts 顺序：加载完成后委托 {@link ApiaryPbUpgradeNbtMigrator#markSlotsLoaded()}
-	 * 标记槽位已加载并刷新暂存的超出部分升级物品。
-	 * 原理:若 loadPbUpgradeCounts 在本方法之前调用,超出部分会被暂存到 migrator 内部,
-	 * 需要在此处槽位恢复完成后统一注入,避免注入结果被本方法覆盖。
-	 */
+	/** 从 NBT 加载 PB 升级输入/输出槽。 */
 	void loadSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		if (nbt.contains(NBT_KEY_PB_UPGRADE_INPUT, Tag.TAG_COMPOUND)) {
 			pbUpgradeInputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_PB_UPGRADE_INPUT));
@@ -462,8 +454,6 @@ public class ApiaryPbUpgradeHandler {
 		if (nbt.contains(NBT_KEY_PB_UPGRADE_OUTPUT, Tag.TAG_COMPOUND)) {
 			pbUpgradeOutputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_PB_UPGRADE_OUTPUT));
 		}
-		// 修复 v14: 标记槽位已加载，并刷新暂存的超出部分（处理 loadPbUpgradeCounts 先于 loadSlots 的情况）
-		nbtMigrator.markSlotsLoaded();
 	}
 
 	/**

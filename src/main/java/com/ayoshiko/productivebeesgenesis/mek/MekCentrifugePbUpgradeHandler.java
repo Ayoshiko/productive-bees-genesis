@@ -4,7 +4,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.util.MekanismUtils;
@@ -103,6 +104,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return false;
 		if (type == null || type.isBuiltin() || !isSupported(type)) return false;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
+		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return false;
 		if (current >= getLimit(type)) return false;
 		pbUpgradeCounts.put(type, current + 1);
 		tile.setChanged();
@@ -126,6 +128,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (type == null || type.isBuiltin() || !isSupported(type)) return 0;
 		if (maxAvailable <= 0) return 0;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
+		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return 0;
 		int limit = getLimit(type);
 		int toAdd = Math.min(limit - current, maxAvailable);
 		if (toAdd <= 0) return 0;
@@ -219,7 +222,10 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (type == null || !isSupported(type)) { installTicks = 0; return; }
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
 		int maxCount = getLimit(type);
-		if (current >= maxCount) { installTicks = 0; return; }
+		if (current >= maxCount || !BalanceConfig.canInstall(type, pbUpgradeCounts)) {
+			installTicks = 0;
+			return;
+		}
 		installTicks++;
 		if (installTicks >= INSTALL_THRESHOLD) {
 			int canInstall = Math.min(input.getCount(), maxCount - current);
@@ -281,13 +287,15 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (ModConfig.SERVER == null) return type.getMaxCount();
 		return switch (type) {
 			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4 ->
-					ModConfig.SERVER.mekCentrifugePbUpgradeProductivityMaxCount != null
-							? ModConfig.SERVER.mekCentrifugePbUpgradeProductivityMaxCount.get()
-							: type.getMaxCount();
+					BalanceConfig.pbUpgradeLimit(
+							ModConfig.SERVER.mekCentrifugePbUpgradeProductivityMaxCount != null
+									? ModConfig.SERVER.mekCentrifugePbUpgradeProductivityMaxCount.get()
+									: type.getMaxCount());
 			case TIME, TIME_2 ->
-					ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount != null
-							? ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.get()
-							: type.getMaxCount();
+					BalanceConfig.pbUpgradeLimit(
+							ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount != null
+									? ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.get()
+									: type.getMaxCount());
 			case STABILITY ->
 					ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount != null
 							? ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount.get()
@@ -306,7 +314,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (type == null || type.isBuiltin()) return false;
 		return switch (type) {
 			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-					TIME, TIME_2, STABILITY -> true;
+					TIME, TIME_2, STABILITY, USELESS_BYPRODUCT -> true;
 			default -> false;
 		};
 	}
@@ -362,57 +370,12 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 				if (type != null && !type.isBuiltin() && isSupported(type)) {
 					int count = countsTag.getInt(typeId);
 					if (count > 0) {
-						int limit = getLimit(type);
-						if (count > limit) {
-							// 修复 HIGH-5: 截断超出部分，生成物品尝试放入输出槽
-							int excess = count - limit;
-							pbUpgradeCounts.put(type, limit);
-							ItemStack template = PbUpgradeInventorySlot.getRepresentativeStack(type);
-							if (!template.isEmpty()) {
-								int remaining = tryInjectToOutputSlot(template, excess);
-								if (remaining > 0) {
-									DevLog.warn("pb_upgrade_truncated",
-											"PB 升级 {} 数量超出上限 {}，截断 {} 个（输出槽已满，未返还）",
-											type.getId(), limit, remaining);
-								}
-							}
-						} else {
-							pbUpgradeCounts.put(type, count);
-						}
+						// Persisted counts are authoritative; caps affect future installs only.
+						pbUpgradeCounts.put(type, count);
 					}
 				}
 			}
 		}
-	}
-
-	/**
-	 * 尝试将指定数量的物品注入输出槽（修复 HIGH-5）
-	 *
-	 * @param template 物品模板（用于构造 ItemStack）
-	 * @param amount   注入数量
-	 * @return 未注入的剩余数量（输出槽满时返回 >0）
-	 */
-	private int tryInjectToOutputSlot(@NotNull ItemStack template, int amount) {
-		int remaining = amount;
-		ItemStack output = outputSlot.getStack();
-		// 优先堆叠到已有同种物品
-		if (!output.isEmpty() && ItemStack.isSameItemSameComponents(output, template)) {
-			int canAdd = Math.min(remaining, output.getMaxStackSize() - output.getCount());
-			if (canAdd > 0) {
-				output.grow(canAdd);
-				remaining -= canAdd;
-				tile.setChanged();
-			}
-		}
-		// 输出槽为空时直接放入（按 maxStackSize 分批）
-		while (remaining > 0 && output.isEmpty()) {
-			int batch = Math.min(remaining, template.getMaxStackSize());
-			outputSlot.setStack(template.copyWithCount(batch));
-			remaining -= batch;
-			tile.setChanged();
-			output = outputSlot.getStack();
-		}
-		return remaining;
 	}
 
 	/** 保存PB升级输入/输出槽到NBT */
@@ -440,12 +403,13 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * {@code 1.0 + Σ(factor_i × count_i)}
 	 */
 	float getProductivityMultiplier() {
-		float mod = 1.0f;
-		mod += PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY);
-		mod += PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_2);
-		mod += PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_3);
-		mod += PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_4);
-		return mod;
+		if (!BalanceConfig.centrifugeProductivityAffectsOutput()) return 1.0f;
+		double mod = 1.0D;
+		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_2);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_3);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_4);
+		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
 	}
 
 	/**
@@ -454,11 +418,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * PB 处理器仅按实际输入、能量和输出空间统一裁剪。
 	 */
 	int getProductivityParallelModifier() {
-		int modifier = getInstalledCount(PbUpgradeType.PRODUCTIVITY) * 4
-				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_2) * 8
-				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_3) * 16
-				+ getInstalledCount(PbUpgradeType.PRODUCTIVITY_4) * 32;
-		return Math.max(1, modifier);
+		long modifier = SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY), 4);
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_2), 8));
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_3), 16));
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_4), 32));
+		return Math.max(1, SaturatingMath.saturatingToInt(modifier));
 	}
 
 	/**
@@ -475,11 +442,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 */
 	float getTimeMultiplier() {
 		float mekTimeMultiplier = getMekSpeedTimeMultiplier();
-		int timeCount = getInstalledCount(PbUpgradeType.TIME);
-		int time2Count = getInstalledCount(PbUpgradeType.TIME_2);
-		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		float pbTimeDivisor = 1.0f + PbUpgradeConfig.timeBonus() * effectiveTimeUpgrades;
-		return mekTimeMultiplier / pbTimeDivisor;
+		long effectiveTimeUpgrades = SaturatingMath.saturatingAdd(
+				getInstalledCount(PbUpgradeType.TIME),
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.TIME_2), 2));
+		float timeBonus = PbUpgradeConfig.timeBonus();
+		if (Float.isNaN(timeBonus) || timeBonus <= 0.0f) return mekTimeMultiplier;
+		float pbTimeDivisor = SaturatingMath.positiveFiniteFloat(
+				1.0D + (double) timeBonus * effectiveTimeUpgrades, 1.0f);
+		return SaturatingMath.positiveFiniteFloat((double) mekTimeMultiplier / pbTimeDivisor, 1.0f);
 	}
 
 	/**

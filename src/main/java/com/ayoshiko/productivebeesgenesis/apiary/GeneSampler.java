@@ -6,6 +6,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -86,14 +87,14 @@ public class GeneSampler {
 		}
 		// 蜜蜂类型字符串 — 与 PB 原版 ConfigurableBee#getBeeType().toString() 格式一致
 		String typeString = beeTypeKey.toString();
-		List<ItemStack> genes = new ArrayList<>();
+		int[] purityCounts = new int[4];
+		var random = level.getRandom();
 
 		if (produceCount <= GENE_SAMPLER_MAX_LOOP) {
 			// 正常场景：独立伯努利判定，保留完整随机性
 			for (int i = 0; i < produceCount; i++) {
-				if (level.getRandom().nextFloat() <= chance) {
-					int purity = level.getRandom().nextInt(4) + 1;
-					genes.add(Gene.getStack(typeString, purity));
+				if (random.nextFloat() <= chance) {
+					purityCounts[random.nextInt(4)]++;
 				}
 			}
 		} else {
@@ -107,19 +108,31 @@ public class GeneSampler {
 			double variance = expectedHits * (1.0 - effectiveChance);
 			double stddev = Math.sqrt(variance);
 			// Box-Muller 正态分布采样（截断到非负整数）
-			double u1 = level.getRandom().nextDouble();
-			double u2 = level.getRandom().nextDouble();
+			double u1 = random.nextDouble();
+			double u2 = random.nextDouble();
 			double z = Math.sqrt(-2.0 * Math.log(u1 + 1e-10)) * Math.cos(2.0 * Math.PI * u2);
 			// M2-2 修复：hitCount 上限截断到 produceCount
 			// 正态分布右尾可能使 hitCount 超过 produceCount（如 expectedHits=produceCount，
 			// z*stddev > 0 时 hitCount > produceCount），但实际单次循环最多产生 1 个基因，
 			// 总命中数不应超过循环次数 produceCount
-			int hitCount = Math.max(0, (int) Math.round(expectedHits + z * stddev));
-			hitCount = Math.min(hitCount, produceCount);
-			for (int i = 0; i < hitCount; i++) {
-				int purity = level.getRandom().nextInt(4) + 1;
-				genes.add(Gene.getStack(typeString, purity));
+			long roundedHits = Math.round(expectedHits + z * stddev);
+			int hitCount = (int) Math.min(produceCount, Math.max(0L, roundedHits));
+			int perPurity = hitCount / purityCounts.length;
+			Arrays.fill(purityCounts, perPurity);
+			int remainder = hitCount % purityCounts.length;
+			int purityStart = random.nextInt(purityCounts.length);
+			for (int i = 0; i < remainder; i++) {
+				purityCounts[(purityStart + i) % purityCounts.length]++;
 			}
+		}
+
+		List<ItemStack> genes = new ArrayList<>(purityCounts.length);
+		for (int purityIndex = 0; purityIndex < purityCounts.length; purityIndex++) {
+			int count = purityCounts[purityIndex];
+			if (count <= 0) continue;
+			ItemStack gene = Gene.getStack(typeString, purityIndex + 1);
+			gene.setCount(count);
+			genes.add(gene);
 		}
 		return genes;
 	}

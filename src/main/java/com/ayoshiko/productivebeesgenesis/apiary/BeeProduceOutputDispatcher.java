@@ -36,6 +36,13 @@ final class BeeProduceOutputDispatcher {
 	private int[] reusableSlotCounts = new int[0];
 	private int[] reusableSlotLimits = new int[0];
 
+	/** Reusable open-addressed table mapping item/component identity to a primitive slot index. */
+	private int[] sameTypeGroupTable = new int[0];
+	private OutputGroup[] reusableOutputGroups = new OutputGroup[0];
+	private int activeOutputGroupCount;
+	/** Reusable index of empty slots in physical GUI order. */
+	private final OrderedSlotIndex emptySlots = new OrderedSlotIndex();
+
 	/**
 	 * 分发物品列表到输出槽（直写优化版）
 	 * <br/>
@@ -53,7 +60,8 @@ final class BeeProduceOutputDispatcher {
 	 * @return 未成功插入的剩余产物列表（F4：供调用方送入 ApiaryOutputBuffer）
 	 */
 	List<ItemStack> distribute(List<? extends IInventorySlot> outputSlots, List<ItemStack> stacks) {
-		if (stacks.isEmpty() || outputSlots.isEmpty()) return new ArrayList<>();
+		if (stacks.isEmpty()) return List.of();
+		if (outputSlots.isEmpty()) return stacks;
 		// mergeStacks 条件化：小批量（≤8 stack）跳过合并，避免小批量场景的 hashCode 预分组纯开销
 		List<ItemStack> merged = (stacks.size() > MERGE_THRESHOLD)
 				? ItemStackMergeHelper.mergeStacks(stacks)
@@ -61,7 +69,7 @@ final class BeeProduceOutputDispatcher {
 
 		int slotCount = outputSlots.size();
 		// F4: 收集未成功插入的剩余产物，返回给调用方送入 ApiaryOutputBuffer
-		List<ItemStack> leftovers = new ArrayList<>();
+		List<ItemStack> leftovers = null;
 		// 数组复用：槽位数不变时直接复用实例字段数组，避免每 20 tick × 类型数次分配 3 数组
 		if (reusableSlotStacks.length != slotCount) {
 			// 防御性：槽位数变化时重新分配（正常场景不触发）
@@ -72,16 +80,20 @@ final class BeeProduceOutputDispatcher {
 			// 复用：仅清空 slotStacks 引用（slotCounts / slotLimits 会被覆盖写入，无需清空）
 			Arrays.fill(reusableSlotStacks, null);
 		}
-		// 预扫描输出槽当前状态（一次遍历，避免每次 insert 都重新读取+比较）
+		// 预扫描输出槽当前状态，并建立同类槽/空槽索引，避免每个产物从槽 0 全扫描。
+		resetOutputGroups(slotCount);
+		emptySlots.reset(slotCount);
 		for (int i = 0; i < slotCount; i++) {
 			ItemStack current = outputSlots.get(i).getStack();
 			reusableSlotStacks[i] = current;
 			if (current.isEmpty()) {
 				reusableSlotCounts[i] = 0;
 				reusableSlotLimits[i] = 0; // 空槽 limit 待填入时计算
+				emptySlots.add(i);
 			} else {
 				reusableSlotCounts[i] = current.getCount();
 				reusableSlotLimits[i] = outputSlots.get(i).getLimit(current);
+				findOutputGroup(current, true, slotCount).slots.add(i);
 			}
 		}
 
@@ -90,24 +102,13 @@ final class BeeProduceOutputDispatcher {
 			if (stack.isEmpty()) continue;
 			int remaining = stack.getCount();
 
-			for (int i = 0; i < slotCount && remaining > 0; i++) {
+			OutputGroup matchingGroup = findOutputGroup(stack, false, slotCount);
+			if (matchingGroup != null) for (int groupIndex = 0;
+					groupIndex < matchingGroup.slots.size(); groupIndex++) {
+				if (remaining <= 0) break;
+				int i = matchingGroup.slots.get(groupIndex);
 				ItemStack slotStack = reusableSlotStacks[i];
-				if (slotStack.isEmpty()) {
-					// 空槽：计算 limit 并填入
-					int limit = outputSlots.get(i).getLimit(stack);
-					if (limit <= 0) continue;
-					int canFit = Math.min(remaining, limit);
-					// 直写：setStack 替代 insertItem
-					ItemStack newStack = stack.copyWithCount(canFit);
-					outputSlots.get(i).setStack(newStack);
-					// M3-1 修复：setStack 后回读 actual stack，防止 slot 内部截断导致 remaining 计算错误
-					ItemStack actualStack = outputSlots.get(i).getStack();
-					int actualCount = actualStack.isEmpty() ? 0 : actualStack.getCount();
-					reusableSlotStacks[i] = actualStack;
-					reusableSlotCounts[i] = actualCount;
-					reusableSlotLimits[i] = limit;
-					remaining -= actualCount;
-				} else if (slotStack.getItem() == stack.getItem()
+				if (!slotStack.isEmpty() && slotStack.getItem() == stack.getItem()
 						&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
 					// Bug 2 修复：同 Item 同 BEE_TYPE 组件才可叠加，防止不同 bee_type 蜜脾互相覆盖
 					int space = reusableSlotLimits[i] - reusableSlotCounts[i];
@@ -125,12 +126,31 @@ final class BeeProduceOutputDispatcher {
 					remaining -= actualGrown;
 				}
 			}
+			for (int emptyIndex = 0; emptyIndex < emptySlots.size() && remaining > 0; emptyIndex++) {
+				int i = emptySlots.get(emptyIndex);
+				if (i < 0 || !reusableSlotStacks[i].isEmpty()) continue;
+				int limit = outputSlots.get(i).getLimit(stack);
+				if (limit <= 0) continue;
+				int canFit = Math.min(remaining, limit);
+				outputSlots.get(i).setStack(stack.copyWithCount(canFit));
+				ItemStack actualStack = outputSlots.get(i).getStack();
+				int actualCount = actualStack.isEmpty() ? 0 : actualStack.getCount();
+				reusableSlotStacks[i] = actualStack;
+				reusableSlotCounts[i] = actualCount;
+				reusableSlotLimits[i] = limit;
+				remaining -= actualCount;
+				if (actualCount > 0) {
+					findOutputGroup(actualStack, true, slotCount).slots.add(i);
+					emptySlots.consume(emptyIndex);
+				}
+			}
 			// F4: 收集未成功插入的剩余产物，返回给调用方送入 ApiaryOutputBuffer
 			if (remaining > 0) {
+				if (leftovers == null) leftovers = new ArrayList<>();
 				leftovers.add(stack.copyWithCount(remaining));
 			}
 		}
-		return leftovers;
+		return leftovers == null ? List.of() : leftovers;
 	}
 
 	/**
@@ -146,8 +166,8 @@ final class BeeProduceOutputDispatcher {
 	 * @param template 流体模板（含流体类型，amount 字段不使用，由 amount 参数覆盖）
 	 * @param amount   注入量（mB），批量场景为累积总量（long 避免溢出）
 	 */
-	void injectFluid(IExtendedFluidTank tank, FluidStack template, long amount) {
-		if (tank == null || amount <= 0 || template.isEmpty()) return;
+	long injectFluid(IExtendedFluidTank tank, FluidStack template, long amount) {
+		if (tank == null || amount <= 0 || template == null || template.isEmpty()) return Math.max(0L, amount);
 		// FluidStack 构造器仅接受 int，long 总量需分段注入
 		// 单次上限 Integer.MAX_VALUE（约 21.47 亿 mB），避免溢出
 		long remaining = amount;
@@ -163,6 +183,62 @@ final class BeeProduceOutputDispatcher {
 			remaining -= actualInserted;
 			// 实际注入量为 0（tank 已满），跳出避免无限循环
 			if (actualInserted == 0 && chunk > 0) break;
+		}
+		return remaining;
+	}
+
+	private void resetOutputGroups(int slotCount) {
+		if (reusableOutputGroups.length < slotCount) {
+			int previousLength = reusableOutputGroups.length;
+			reusableOutputGroups = Arrays.copyOf(reusableOutputGroups, slotCount);
+			for (int i = previousLength; i < slotCount; i++) {
+				reusableOutputGroups[i] = new OutputGroup();
+			}
+		}
+		int requiredTableSize = 1;
+		while (requiredTableSize < slotCount * 2) requiredTableSize <<= 1;
+		if (sameTypeGroupTable.length < requiredTableSize) {
+			sameTypeGroupTable = new int[requiredTableSize];
+		} else {
+			Arrays.fill(sameTypeGroupTable, 0);
+		}
+		activeOutputGroupCount = 0;
+	}
+
+	private OutputGroup findOutputGroup(ItemStack stack, boolean create, int slotCount) {
+		int hash = ItemStack.hashItemAndComponents(stack);
+		int tableMask = sameTypeGroupTable.length - 1;
+		int bucket = (hash ^ (hash >>> 16)) & tableMask;
+		while (true) {
+			int encodedGroup = sameTypeGroupTable[bucket];
+			if (encodedGroup == 0) {
+				if (!create) return null;
+				OutputGroup group = reusableOutputGroups[activeOutputGroupCount];
+				group.reset(stack, hash, slotCount);
+				sameTypeGroupTable[bucket] = ++activeOutputGroupCount;
+				return group;
+			}
+			OutputGroup group = reusableOutputGroups[encodedGroup - 1];
+			if (group.matches(stack, hash)) return group;
+			bucket = (bucket + 1) & tableMask;
+		}
+	}
+
+	private static final class OutputGroup {
+		private Object item;
+		private Object components;
+		private int hash;
+		private final OrderedSlotIndex slots = new OrderedSlotIndex();
+
+		void reset(ItemStack stack, int hash, int slotCount) {
+			this.item = stack.getItem();
+			this.components = stack.getComponents();
+			this.hash = hash;
+			slots.reset(slotCount);
+		}
+
+		boolean matches(ItemStack stack, int hash) {
+			return this.hash == hash && item == stack.getItem() && components.equals(stack.getComponents());
 		}
 	}
 }

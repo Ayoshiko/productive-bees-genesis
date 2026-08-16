@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
@@ -125,7 +126,8 @@ public final class MekApiaryEMEBlockType {
 		// 能量配置：EME 模式，storage = max(origStorage, origUsage) * tier.processes
 		long usage = 50L;
 		int beeSlots = FactoryApiaryConfig.forEMETier(tier).beeSlotCount;
-		long storage = Math.max(20_000L, usage) * Math.max(tier.processes, beeSlots);
+		long storage = SaturatingMath.saturatingMultiply(
+				Math.max(20_000L, usage), Math.max(tier.processes, beeSlots));
 
 		var builder = Machine.MachineBuilder
 				.createMachine(() -> EME_APIARY_FACTORY_TILES.get(tier),

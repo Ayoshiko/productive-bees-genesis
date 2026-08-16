@@ -39,6 +39,7 @@ class ApiaryAe2HostAdapter {
 
 	/** AE2 生命周期处理器 — 网格节点、AEItemKey 缓存、待连接标志 */
 	private final MekAe2LifecycleHandler ae2LifecycleHandler = new MekAe2LifecycleHandler();
+	private static final int MAX_DIRECT_GENERATED_ITEM_PUSHES_PER_TICK = 32;
 
 	// ===== AE2 配置缓存：每 100 tick 刷新一次，避免每 tick 高频读取 NeoForge 配置 =====
 	/** AE2 配置缓存刷新间隔（tick） */
@@ -104,7 +105,22 @@ class ApiaryAe2HostAdapter {
 		// 模块6：输出缓冲区直推 AE —— 离心机处理不了的物品、或离心机来不及处理的
 		// 多余蜜脾，在输出槽被占满时也能直接回 AE，不再等待输出槽腾出空间
 		if (tile.getOutputBuffer().getBufferedGroupCount() > 0) {
-			tile.getOutputBuffer().pushToAe(stack -> Ae2OutputPusher.pushItemStack(tile, stack));
+			Level level = tile.getLevel();
+			var pushState = ae2LifecycleHandler.getStateHolder().getPushState();
+			long now = System.nanoTime();
+			if (level != null && pushState.tryStartBufferedItemPush(level.getGameTime())
+					&& !pushState.getBufferedItemBackoff().shouldSkip(now)) {
+				Ae2OutputPusher.DirectItemPushSession session =
+						Ae2OutputPusher.prepareDirectItemPush(tile);
+				if (session != null) {
+					int pushed = tile.getOutputBuffer().pushToAe(session);
+					if (pushed > 0) {
+						pushState.getBufferedItemBackoff().recordSuccess();
+					} else if (session.attemptedCount() > 0) {
+						pushState.getBufferedItemBackoff().recordFailure(now);
+					}
+				}
+			}
 		}
 		// Bug 7：流体罐非空时推送流体到 AE2 网络
 		// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽(蜂箱默认 1)
@@ -113,6 +129,10 @@ class ApiaryAe2HostAdapter {
 
 	int pushGeneratedItem(ItemStack stack) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
+		Level level = tile.getLevel();
+		if (level == null || !ae2LifecycleHandler.getStateHolder().getPushState()
+				.tryAcquireGeneratedItemPush(level.getGameTime(),
+						MAX_DIRECT_GENERATED_ITEM_PUSHES_PER_TICK)) return 0;
 		return Ae2OutputPusher.pushItemStack(tile, stack);
 	}
 
@@ -183,8 +203,9 @@ class ApiaryAe2HostAdapter {
 	 */
 	void injectAe2Energy(int batchMultiplier) {
 		long requiredEnergy = tile.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
-		// Keep the local buffer usable for batched production even when AE2 input is unavailable.
-		MekCentrifugeEnergyScaling.ensureCapacity(tile, requiredEnergy);
+		// One extra batch prevents an exact fill/drain cycle from oscillating the synced FE bar.
+		MekCentrifugeEnergyScaling.ensureCapacity(tile,
+				MekCentrifugeEnergyScaling.bufferedCapacityForDemand(requiredEnergy));
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		if (!cachedAeEnergyInputEnabled) return;
 		Ae2EnergyInjector.injectEnergy(tile, requiredEnergy);
@@ -256,7 +277,15 @@ class ApiaryAe2HostAdapter {
 
 	/** 设置 per-tile AE2 物品输出开关 */
 	void setAeItemOutputEnabled(boolean enabled) {
-		this.aeItemOutputEnabled = enabled;
+		if (aeItemOutputEnabled == enabled) return;
+		aeItemOutputEnabled = enabled;
+		if (enabled) {
+			var pushState = ae2LifecycleHandler.getStateHolder().getPushState();
+			pushState.getItemBackoff().reset();
+			pushState.getBufferedItemBackoff().reset();
+			pushState.invalidateNodeStateCache();
+		}
+		tile.setChanged();
 	}
 
 	/** 获取 per-tile AE2 流体输出开关 */
@@ -266,17 +295,32 @@ class ApiaryAe2HostAdapter {
 
 	/** 设置 per-tile AE2 流体输出开关 */
 	void setAeFluidOutputEnabled(boolean enabled) {
-		this.aeFluidOutputEnabled = enabled;
+		if (aeFluidOutputEnabled == enabled) return;
+		aeFluidOutputEnabled = enabled;
+		if (enabled) {
+			ae2LifecycleHandler.getStateHolder().getPushState().getFluidBackoff().reset();
+			ae2LifecycleHandler.getStateHolder().getPushState().invalidateNodeStateCache();
+		}
+		tile.setChanged();
 	}
 
 	/** 切换 per-tile AE2 物品输出开关 */
 	void toggleAeItemOutput() {
-		aeItemOutputEnabled = !aeItemOutputEnabled;
+		setAeItemOutputEnabled(!aeItemOutputEnabled);
 	}
 
 	/** 切换 per-tile AE2 流体输出开关 */
 	void toggleAeFluidOutput() {
-		aeFluidOutputEnabled = !aeFluidOutputEnabled;
+		setAeFluidOutputEnabled(!aeFluidOutputEnabled);
+	}
+
+	/** New local output must not remain parked behind a rejection from an older stack. */
+	void onOutputSlotContentsChanged() {
+		ae2LifecycleHandler.getStateHolder().getPushState().getItemBackoff().reset();
+	}
+
+	void onOutputBufferContentsChanged() {
+		ae2LifecycleHandler.getStateHolder().getPushState().getBufferedItemBackoff().reset();
 	}
 
 	/**

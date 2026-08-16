@@ -50,7 +50,8 @@ public record CycleAeOutputPayload(
 		/** 流体输出 */
 		FLUID,
 		APIARY_DIRECT,
-		CENTRIFUGE_DIRECT;
+		CENTRIFUGE_DIRECT,
+		APIARY_CENTRIFUGE_PRIORITY;
 
 		private static final OutputType[] VALUES = values();
 

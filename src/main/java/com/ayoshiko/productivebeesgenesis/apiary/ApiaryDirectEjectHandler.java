@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
+import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
@@ -40,7 +42,7 @@ import java.util.List;
 	 * 性能优化（vs 旧版）：
 	 * <ul>
 	 *   <li>预扫描数组复用：避免每次 targetSlot.getStack() API 调用，19 输入槽场景节省 19 次调用</li>
-	 *   <li>类型缓存查找：findSameTypeSlots 直接返回同类型槽列表，O(19) → O(同类型数)</li>
+	 *   <li>类型缓存查找：复用原生索引缓冲，仅遍历同类型槽位，避免列表与装箱分配</li>
 	 *   <li>按负载排序：第二轮按剩余空间降序，避免前几个空槽被优先填满，实现负载均衡</li>
 	 *   <li>虚拟栈合并：9 个相同类型输出槽合并为 1 个虚拟栈，循环次数 9 → 1</li>
 	 *   <li>短路优化：单类型物品 ≤ 单槽空间时，O(1) 直接插入，跳过两轮遍历</li>
@@ -55,6 +57,8 @@ class ApiaryDirectEjectHandler {
 
 	/** 跨机器轮转起始索引 — 用于多台离心机间的负载均衡 */
 	private int roundRobinIndex = 0;
+	/** Rotating physical source slot for fair partial transfers across output pages. */
+	private int outputSourceCursor = 0;
 
 	/** 直连目标扫描器（缓存目标列表 + 配置签名失效） */
 	private final ApiaryDirectEjectTargets targets;
@@ -77,14 +81,6 @@ class ApiaryDirectEjectHandler {
 
 	/** 上次执行直连弹出检测的真实时间（纳秒）— 用于周期性刷新兜底 */
 	private volatile long lastCacheRefreshNanos = 0L;
-
-	/**
-	 * Task 3: 输入槽状态管理器（预扫描数组复用 + 类型缓存 + 按负载排序）
-	 * <br/>
-	 * 封装输入槽状态预扫描和查找逻辑，避免 tryDirectEject 中重复读取输入槽状态。
-	 * 19 输入槽场景下预扫描 + 类型查找 + 按负载排序总开销 < 5μs/tick。
-	 */
-	private final CentrifugeInputSlotManager inputSlotManager = new CentrifugeInputSlotManager();
 
 	/** 同类输出槽合并器（虚拟栈复用，避免每 tick 分配） */
 	private final ApiaryOutputMerger outputMerger = new ApiaryOutputMerger();
@@ -109,6 +105,14 @@ class ApiaryDirectEjectHandler {
 	 */
 	private final List<IInventorySlot> bufferInputSlots = new ArrayList<>(8);
 
+	/** 同一游戏刻最多缓存的离心机可处理性结果，固定容量防止高混养场景无界增长。 */
+	private static final int PROCESSABILITY_CACHE_CAPACITY = 64;
+	private final ItemStack[] processabilityStacks = new ItemStack[PROCESSABILITY_CACHE_CAPACITY];
+	private final long[] processabilityTargetMasks = new long[PROCESSABILITY_CACHE_CAPACITY];
+	private long processabilityCacheGameTick = Long.MIN_VALUE;
+	private int processabilityCacheSize;
+	private final SameTickFailureGate failedTransferGate = new SameTickFailureGate();
+
 	/**
 	 * 构造函数
 	 *
@@ -127,6 +131,61 @@ class ApiaryDirectEjectHandler {
 	 */
 	void markEjectDirty() {
 		needsEjectCheck = true;
+	}
+
+	/** 侧面路由或直连开关改变后立即丢弃拓扑和本刻可处理性结果。 */
+	void onRoutingConfigChanged() {
+		targets.clearCache();
+		clearProcessabilityCache();
+		failedTransferGate.clear();
+		markEjectDirty();
+	}
+
+	/** Returns whether any currently routed adjacent centrifuge accepts this product type. */
+	boolean canAnyTargetProcess(ItemStack stack) {
+		Level level = apiary.getLevel();
+		if (stack == null || stack.isEmpty() || level == null || level.isClientSide
+				|| !apiary.isDirectEjectEnabled()) {
+			return false;
+		}
+		long gameTick = level.getGameTime();
+		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
+		return acceptedTargetMask(stack, targetList, gameTick) != 0L;
+	}
+
+	/** Returns a bit mask of adjacent centrifuges accepting this item, cached once per real game tick. */
+	private long acceptedTargetMask(ItemStack stack,
+			List<ApiaryDirectEjectTargets.Target> targetList, long gameTick) {
+		if (processabilityCacheGameTick != gameTick) {
+			clearProcessabilityCache();
+			processabilityCacheGameTick = gameTick;
+		}
+		for (int i = 0; i < processabilityCacheSize; i++) {
+			if (ItemStack.isSameItemSameComponents(processabilityStacks[i], stack)) {
+				return processabilityTargetMasks[i];
+			}
+		}
+		long acceptedTargets = 0L;
+		int targetCount = Math.min(targetList.size(), Long.SIZE);
+		for (int i = 0; i < targetCount; i++) {
+			if (targetList.get(i).centrifuge.productivebeesgenesis$isValidInput(stack)) {
+				acceptedTargets |= 1L << i;
+			}
+		}
+		if (processabilityCacheSize < PROCESSABILITY_CACHE_CAPACITY) {
+			processabilityStacks[processabilityCacheSize] = stack.copyWithCount(1);
+			processabilityTargetMasks[processabilityCacheSize] = acceptedTargets;
+			processabilityCacheSize++;
+		}
+		return acceptedTargets;
+	}
+
+	private void clearProcessabilityCache() {
+		for (int i = 0; i < processabilityCacheSize; i++) {
+			processabilityStacks[i] = null;
+		}
+		processabilityCacheSize = 0;
+		processabilityCacheGameTick = Long.MIN_VALUE;
 	}
 
 	/**
@@ -171,10 +230,14 @@ class ApiaryDirectEjectHandler {
 		if (!apiary.isDirectEjectEnabled()) {
 			needsEjectCheck = false;
 			consecutiveEjectFailures = 0;
+			failedTransferGate.clear();
 			return false;
 		}
 
 		if (!shouldCheck()) return false;
+		long gameTick = level.getGameTime();
+		long outputVersion = apiary.getOutputBuffer().getOutputVersion();
+		if (failedTransferGate.shouldSkip(gameTick, outputVersion)) return false;
 
 		// needsEjectCheck 重置移到方法末尾，部分转移失败时保持脏标记下 tick 立即重试
 		lastCacheRefreshNanos = System.nanoTime();
@@ -187,14 +250,24 @@ class ApiaryDirectEjectHandler {
 			consecutiveEjectFailures = 0;
 			// 保持脏标记，下 tick 重新尝试直连弹出（可能离心机已腾出空间）
 			needsEjectCheck = true;
+			failedTransferGate.recordFailure(gameTick, outputVersion);
 			return true;
 		}
 
 		// 查找直连目标：优先按侧面配置的输出面路由；未配置任何输出面时回退到任意相邻离心机
 		List<ApiaryDirectEjectTargets.Target> targetList = this.targets.findDirectEjectTargets(level);
 		if (targetList.isEmpty()) {
+			if (hasNonEmptyOutputSlot(apiary.getOutputSlots())
+					|| apiary.getOutputBuffer().getBufferedGroupCount() > 0) {
+				failedTransferGate.recordFailure(gameTick, outputVersion);
+			}
 			needsEjectCheck = false;
 			return true;
+		}
+		// Snapshot each centrifuge once per batch. The previous product x target scan repeated all 19
+		// input-slot reads for every mixed product type, which scaled poorly under accelerated ticks.
+		for (ApiaryDirectEjectTargets.Target target : targetList) {
+			target.preScanInputSlots();
 		}
 
 		List<BasicInventorySlot> outputSlots = apiary.getOutputSlots();
@@ -213,46 +286,44 @@ class ApiaryDirectEjectHandler {
 			if (virtualStack.isEmpty()) continue;
 
 			int originalCount = virtualStack.getCount();
+			long acceptedTargets = acceptedTargetMask(virtualStack, targetList, gameTick);
 			for (int t = 0; t < targetList.size() && !virtualStack.isEmpty(); t++) {
-				ApiaryDirectEjectTargets.Target target = targetList.get((start + t) % targetList.size());
-				IMekCentrifugeTile centrifuge = this.targets.resolveTarget(level, target);
-				if (centrifuge == null) {
-					// 缓存目标已失效（方块被移除/替换），下 tick 重新扫描
-					this.targets.clearCache();
-					continue;
-				}
-				// 该机器不接受此类输入（如熔炉兼容关闭）时换下一台
-				if (!centrifuge.productivebeesgenesis$isValidInput(virtualStack)) continue;
-
-				int inputSlotCount = centrifuge.productivebeesgenesis$getInputSlotCount();
+				int targetIndex = (start + t) % targetList.size();
+				if ((acceptedTargets & (1L << targetIndex)) == 0L) continue;
+				ApiaryDirectEjectTargets.Target target = targetList.get(targetIndex);
+				CentrifugeInputSlotManager inputSlotManager = target.inputSlotManager;
+				int inputSlotCount = target.inputSlotCount;
 				if (inputSlotCount <= 0) continue;
 
-				// Task 3: 预扫描当前机器输入槽状态到复用数组
-				inputSlotManager.preScanInputSlots(centrifuge, inputSlotCount);
-
 				// 第一轮：填满同类型非空输入槽（堆叠合并优先）
-				List<Integer> sameTypeSlots = inputSlotManager.findSameTypeSlots(virtualStack, inputSlotCount);
-				for (int inputIdx : sameTypeSlots) {
+				int sameTypeSlotCount = inputSlotManager.prepareSameTypeSlots(virtualStack, inputSlotCount);
+				for (int order = 0; order < sameTypeSlotCount; order++) {
 					if (virtualStack.isEmpty()) break;
-					virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, false);
+					int inputIdx = inputSlotManager.getSameTypeSlotIndex(order);
+					virtualStack = tryTransferToInputFromVirtual(
+							inputSlotManager, virtualStack, vIdx, inputIdx, false);
 				}
 				if (virtualStack.isEmpty()) break;
 
 				// 第二轮：使用空输入槽（按剩余空间降序，负载均衡）
-				List<Integer> emptySlots = inputSlotManager.findEmptySlotsSortedByRemainingDesc(
-						centrifuge, virtualStack, inputSlotCount);
-				for (int inputIdx : emptySlots) {
+				int emptySlotCount = inputSlotManager.prepareEmptySlotsSortedByRemainingDesc(
+						virtualStack, inputSlotCount);
+				for (int order = 0; order < emptySlotCount; order++) {
 					if (virtualStack.isEmpty()) break;
-					virtualStack = tryTransferToInputFromVirtual(centrifuge, virtualStack, vIdx, inputIdx, true);
+					int inputIdx = inputSlotManager.getEmptySlotIndex(order);
+					virtualStack = tryTransferToInputFromVirtual(
+							inputSlotManager, virtualStack, vIdx, inputIdx, true);
 				}
 			}
 			// 模块5：累计本次虚拟栈转移的物品数
-			transferredCount += originalCount - virtualStack.getCount();
+			transferredCount = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
+					transferredCount, originalCount - virtualStack.getCount()));
 		}
 
 		// 模块5：从 ApiaryOutputBuffer 转移物品到所有直连离心机输入槽剩余空间
 		// 解决缓冲区持续积压问题（输出槽满载时产物被困缓冲区）
-		transferredCount += tryEjectFromBuffers(level, targetList);
+		transferredCount = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
+				transferredCount, tryEjectFromBuffers(targetList, gameTick)));
 
 		// 模块5：根据转移结果更新退避与失败计数
 		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
@@ -261,9 +332,13 @@ class ApiaryDirectEjectHandler {
 			// 成功转移 — 重置缓冲区退避，立即下 tick 重试注入蜂箱输出槽
 			outputBuffer.resetBackoff();
 			consecutiveEjectFailures = 0;
+			failedTransferGate.clear();
 		} else if (hasNonEmptyOutputSlot(outputSlots) || bufferedGroupCount > 0) {
 			// 有物品但未转移成功 — 递增失败计数，达阈值后下 tick 触发 fallback
 			consecutiveEjectFailures++;
+			failedTransferGate.recordFailure(gameTick, outputBuffer.getOutputVersion());
+		} else {
+			failedTransferGate.clear();
 		}
 
 		// 检查所有输出槽与缓冲区是否已空，部分失败时保持脏标记下 tick 立即重试
@@ -285,39 +360,38 @@ class ApiaryDirectEjectHandler {
 	 *   <li>bufferInputSlots 复用，避免每次转移分配 ArrayList</li>
 	 * </ul>
 	 *
-	 * @param level   世界实例
 	 * @param targets 直连离心机目标列表
 	 * @return 实际转移的物品总数
 	 */
-	private int tryEjectFromBuffers(Level level, List<ApiaryDirectEjectTargets.Target> targets) {
+	private int tryEjectFromBuffers(
+			List<ApiaryDirectEjectTargets.Target> targets, long gameTick) {
 		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
 		// O(1) 短路：缓冲区为空时直接返回，避免无效的输入槽收集与 synchronized 调用
 		if (outputBuffer.getBufferedGroupCount() <= 0) return 0;
 
 		int total = 0;
-		for (ApiaryDirectEjectTargets.Target target : targets) {
-			IMekCentrifugeTile centrifuge = this.targets.resolveTarget(level, target);
-			if (centrifuge == null) {
-				this.targets.clearCache();
-				continue;
-			}
-			int inputSlotCount = centrifuge.productivebeesgenesis$getInputSlotCount();
+		for (int targetIndex = 0; targetIndex < targets.size(); targetIndex++) {
+			ApiaryDirectEjectTargets.Target target = targets.get(targetIndex);
+			int inputSlotCount = target.inputSlotCount;
 			if (inputSlotCount <= 0) continue;
 
 			// 收集该离心机输入槽列表（复用 bufferInputSlots，clear 不缩容）
 			bufferInputSlots.clear();
 			for (int i = 0; i < inputSlotCount; i++) {
-				IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(i);
+				IInventorySlot slot = target.inputSlotManager.getInputSlot(i);
 				if (slot != null) {
 					bufferInputSlots.add(slot);
 				}
 			}
 			if (bufferInputSlots.isEmpty()) continue;
 
-			// 按各机器自己的输入验证器过滤（每台熔炉兼容开关可能不同）
-			total += outputBuffer.tryRedistributeToExternalSlots(
-					bufferInputSlots,
-					centrifuge::productivebeesgenesis$isValidInput);
+			// Reuse the same per-tick target mask as generated and slotted products. This avoids repeating
+			// recipe-manager validation for buffer groups already seen earlier in the production batch.
+			long targetBit = 1L << targetIndex;
+			total = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(total,
+					outputBuffer.tryRedistributeToExternalSlots(
+							bufferInputSlots,
+							stack -> (acceptedTargetMask(stack, targets, gameTick) & targetBit) != 0L)));
 		}
 		return total;
 	}
@@ -335,8 +409,11 @@ class ApiaryDirectEjectHandler {
 	 */
 	private void mergeOutputSlotsByType(List<BasicInventorySlot> outputSlots) {
 		outputMerger.clear();
-		for (BasicInventorySlot slot : outputSlots) {
-			outputMerger.add(slot);
+		int slotCount = outputSlots.size();
+		int start = RoundRobinSlotTraversal.normalize(outputSourceCursor, slotCount);
+		outputSourceCursor = RoundRobinSlotTraversal.advance(start, slotCount);
+		for (int offset = 0; offset < slotCount; offset++) {
+			outputMerger.add(outputSlots.get(RoundRobinSlotTraversal.index(start, offset, slotCount)));
 		}
 	}
 
@@ -350,7 +427,6 @@ class ApiaryDirectEjectHandler {
 	 * Task 3 优化：使用预扫描数组值（inputSlotManager.getInputStack/getInputCount/getInputLimit），
 	 * 避免每次 targetSlot.getStack() API 调用。转移完成后调用 updateSlotAfterTransfer 同步缓存。
 	 *
-	 * @param centrifuge  离心机接口
 	 * @param virtualStack 虚拟栈（会被修改 count）
 	 * @param virtualIdx  虚拟栈在 outputMerger 中的索引
 	 * @param inputIdx    输入槽索引
@@ -358,12 +434,10 @@ class ApiaryDirectEjectHandler {
 	 * @return 更新后的虚拟栈（可能为空）
 	 */
 	private ItemStack tryTransferToInputFromVirtual(
-			IMekCentrifugeTile centrifuge, ItemStack virtualStack, int virtualIdx,
-			int inputIdx, boolean requireEmpty) {
+			CentrifugeInputSlotManager inputSlotManager, ItemStack virtualStack,
+			int virtualIdx, int inputIdx, boolean requireEmpty) {
 
 		if (virtualStack.isEmpty()) return virtualStack;
-		// 该机器不接受时返回原栈，由调用方尝试下一台机器（不损耗虚拟栈）
-		if (!centrifuge.productivebeesgenesis$isValidInput(virtualStack)) return virtualStack;
 
 		// Task 3: 使用预扫描数组值，避免 targetSlot.getStack() API 调用
 		ItemStack targetStack = inputSlotManager.getInputStack(inputIdx);
@@ -383,7 +457,7 @@ class ApiaryDirectEjectHandler {
 		if (availableSpace <= 0) return virtualStack;
 
 		int transferable = Math.min(virtualStack.getCount(), availableSpace);
-		final IInventorySlot targetSlot = centrifuge.productivebeesgenesis$getInputSlot(inputIdx);
+		final IInventorySlot targetSlot = inputSlotManager.getInputSlot(inputIdx);
 		if (targetSlot == null) {
 			return virtualStack;
 		}
@@ -431,7 +505,7 @@ class ApiaryDirectEjectHandler {
 			}
 			if (!remaining.isEmpty()) {
 				bufferedCount = remaining.getCount();
-				apiary.getOutputBuffer().offer(List.of(remaining.copy()));
+				apiary.getOutputBuffer().offer(remaining);
 			}
 		}
 

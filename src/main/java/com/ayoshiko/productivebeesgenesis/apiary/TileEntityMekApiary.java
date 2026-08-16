@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -89,6 +90,11 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private final ApiaryNbtSerializer nbtSerializer;
 	/** F4: 产物溢出缓冲区 — 缓存输出槽满载时的剩余产物，下 tick 重试注入 */
 	private final ApiaryOutputBuffer outputBuffer = new ApiaryOutputBuffer(this);
+	/** Honey that was accepted by neither AE2 nor the local tank yet. Kept outside FluidStack because its amount is long. */
+	private long pendingHoneyFluidAmount;
+	/** Type/components for {@link #pendingHoneyFluidAmount}; current bee recipes produce honey only, but preserve the template. */
+	@Nullable
+	private FluidStack pendingHoneyFluidTemplate;
 	/** Bug 9：选中的蜜蜂槽位索引（-1=未选择），跨线程访问需 volatile 保证可见性 */
 	private volatile int selectedBeeSlot = -1;
 	/** 客户端同步用：选中蜜蜂槽位（仅服务端同步回调写入，GUI 通过 getter 读取），跨线程访问需 volatile */
@@ -96,6 +102,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** 是否启用蜂箱到相邻离心机的特殊直连通道；默认开启以兼容旧存档。 */
 	private boolean directEjectEnabled = true;
 	private boolean directAeOutputEnabled = false;
+	private boolean centrifugePriorityEnabled = true;
 
 	public TileEntityMekApiary(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, APIARY_TICKS_REQUIRED);
@@ -132,6 +139,55 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
+	}
+
+	long getPendingHoneyFluidAmount() {
+		return pendingHoneyFluidAmount;
+	}
+
+	@Nullable
+	FluidStack getPendingHoneyFluidTemplate() {
+		return pendingHoneyFluidTemplate == null ? null : pendingHoneyFluidTemplate.copyWithAmount(1);
+	}
+
+	void addPendingHoneyFluid(FluidStack template, long amount) {
+		if (template == null || template.isEmpty() || amount <= 0) return;
+		FluidStack normalized = template.copyWithAmount(1);
+		if (pendingHoneyFluidTemplate == null || pendingHoneyFluidTemplate.isEmpty()) {
+			pendingHoneyFluidTemplate = normalized;
+		} else if (!FluidStack.isSameFluidSameComponents(pendingHoneyFluidTemplate, normalized)) {
+			// BeeFluidOutputResolver currently emits one type (honey). Do not overwrite a
+			// different pending type if a future recipe is added accidentally.
+			ProductiveBeesGenesis.LOGGER.error("Apiary pending fluid type conflict at {}", getBlockPos());
+			return;
+		}
+		long previous = pendingHoneyFluidAmount;
+		pendingHoneyFluidAmount = SaturatingMath.saturatingAdd(previous, amount);
+		if (pendingHoneyFluidAmount != previous) setChanged();
+	}
+
+	void setPendingHoneyFluid(long amount, @Nullable FluidStack template) {
+		long previousAmount = pendingHoneyFluidAmount;
+		FluidStack previousTemplate = pendingHoneyFluidTemplate;
+		if (amount <= 0 || template == null || template.isEmpty()) {
+			pendingHoneyFluidAmount = 0L;
+			pendingHoneyFluidTemplate = null;
+		} else {
+			pendingHoneyFluidAmount = amount;
+			pendingHoneyFluidTemplate = template.copyWithAmount(1);
+		}
+		boolean templateChanged = previousTemplate == null ? pendingHoneyFluidTemplate != null
+				: pendingHoneyFluidTemplate == null
+						|| !FluidStack.isSameFluidSameComponents(previousTemplate, pendingHoneyFluidTemplate);
+		if (previousAmount != pendingHoneyFluidAmount || templateChanged) setChanged();
+	}
+
+	void clearPendingHoneyFluid() {
+		if (pendingHoneyFluidAmount != 0L || pendingHoneyFluidTemplate != null) {
+			pendingHoneyFluidAmount = 0L;
+			pendingHoneyFluidTemplate = null;
+			setChanged();
+		}
 	}
 
 	/** 失效所有蜂箱槽位上限缓存 — 委托 ApiarySlotManager.invalidateCache()，配置 reload 时调用 */
@@ -231,6 +287,24 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		directEjectHandler.markEjectDirty();
 	}
 
+	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */
+	void onDirectEjectRoutingChanged() {
+		directEjectHandler.onRoutingConfigChanged();
+	}
+
+	/** Called by every physical output slot, including changes made by external automation. */
+	void onOutputSlotContentsChanged() {
+		// Inventory slots are constructed from the superclass constructor before our fields initialize.
+		if (outputBuffer != null) outputBuffer.onOutputSlotContentsChanged();
+		if (directEjectHandler != null) directEjectHandler.markEjectDirty();
+		if (ae2HostAdapter != null) ae2HostAdapter.onOutputSlotContentsChanged();
+	}
+
+	/** New overflow content must get an immediate AE attempt even after an older batch was rejected. */
+	void onOutputBufferContentsChanged() {
+		if (ae2HostAdapter != null) ae2HostAdapter.onOutputBufferContentsChanged();
+	}
+
 	public boolean isDirectEjectEnabled() {
 		return directEjectEnabled;
 	}
@@ -238,7 +312,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void setDirectEjectEnabled(boolean enabled) {
 		if (directEjectEnabled == enabled) return;
 		directEjectEnabled = enabled;
-		directEjectHandler.markEjectDirty();
+		directEjectHandler.onRoutingConfigChanged();
 		setChanged();
 	}
 
@@ -253,6 +327,22 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		setChanged();
 	}
 	public void toggleDirectAeOutput() { setDirectAeOutputEnabled(!directAeOutputEnabled); }
+
+	public boolean isCentrifugePriorityEnabled() { return centrifugePriorityEnabled; }
+	public void setCentrifugePriorityEnabled(boolean enabled) {
+		if (centrifugePriorityEnabled == enabled) return;
+		centrifugePriorityEnabled = enabled;
+		directEjectHandler.markEjectDirty();
+		setChanged();
+	}
+	public void toggleCentrifugePriority() {
+		setCentrifugePriorityEnabled(!centrifugePriorityEnabled);
+	}
+
+	boolean shouldPreferCentrifuge(ItemStack stack) {
+		return centrifugePriorityEnabled && directEjectEnabled
+				&& directEjectHandler.canAnyTargetProcess(stack);
+	}
 
 	/** 容器数据同步 — 蜜蜂状态 + PB升级数量 + 安装计数器 + 选中槽位 */
 	@Override
@@ -340,6 +430,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public int getBeeRows() { return slotManager.getBeeRows(); }
 	public int getOutputCols() { return slotManager.getOutputCols(); }
 	public int getOutputRows() { return slotManager.getOutputRows(); }
+	public int getOutputSlotsPerPage() { return slotManager.getOutputSlotsPerPage(); }
+	public int getOutputPageCount() { return slotManager.getOutputPageCount(); }
 	@NotNull public FeederSlotManager getFeederSlotManager() { return feederSlotManager; }
 	@NotNull public List<IInventorySlot> getFeederSlots() { return feederSlotManager.getFeederSlots(); }
 	@NotNull List<FeederInventorySlot> getFeederInventorySlots() { return feederSlotManager.getFeederInventorySlots(); }

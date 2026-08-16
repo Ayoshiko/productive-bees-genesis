@@ -9,6 +9,7 @@ import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationComb;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationCombBlock;
+import com.ayoshiko.productivebeesgenesis.item.UselessByproductUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
@@ -153,6 +154,11 @@ public final class ModItems {
 			ITEMS.register("infinitycreation_comb_block",
 					() -> new ItemInfinityCreationCombBlock(ModBlocks.INFINITY_CREATION_COMB_BLOCK.get(),
 							new Item.Properties()));
+
+	/** Discards honey and pollen-puff byproducts in supported hives and centrifuges. */
+	public static final DeferredItem<UselessByproductUpgradeItem> BYPRODUCT_DESTRUCTION_UPGRADE =
+			ITEMS.register("byproduct_destruction_upgrade",
+					() -> new UselessByproductUpgradeItem(new Item.Properties()));
 
 	/**
 	 * EM工厂BlockItem映射 — 由registerEMFactoryItems()在EM加载时填充

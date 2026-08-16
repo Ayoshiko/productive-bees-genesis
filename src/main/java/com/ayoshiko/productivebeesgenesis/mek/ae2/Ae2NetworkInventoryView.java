@@ -5,9 +5,7 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
-
-import java.util.HashMap;
-import java.util.Map;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 
 /** Per-machine, per-game-tick view of stock that AE2 can actually extract. */
 public final class Ae2NetworkInventoryView {
@@ -21,11 +19,8 @@ public final class Ae2NetworkInventoryView {
 		if (holder == null || cachedInventory == null || key == null || cap <= 0L) return 0L;
 
 		TickCache cache = getTickCache(holder, gameTick, network);
-		Long cached = cache.amounts.get(key);
-		long visible;
-		if (cached != null) {
-			visible = cached;
-		} else {
+		long visible = cache.amounts.getLong(key);
+		if (visible < 0L) {
 			long reported = Math.max(0L, cachedInventory.get(key));
 			long simulated = 0L;
 			// AE2LT probes configured keys even when the cached counter is positive:
@@ -64,11 +59,12 @@ public final class Ae2NetworkInventoryView {
 	private static final class TickCache {
 		private long gameTick;
 		private final MEStorage network;
-		private final Map<AEItemKey, Long> amounts = new HashMap<>();
+		private final Object2LongOpenHashMap<AEItemKey> amounts = new Object2LongOpenHashMap<>();
 
 		private TickCache(long gameTick, MEStorage network) {
 			this.gameTick = gameTick;
 			this.network = network;
+			amounts.defaultReturnValue(-1L);
 		}
 	}
 }

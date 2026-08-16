@@ -19,7 +19,7 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 	 * 该页面同时提供两个入口：
 	 * <ul>
 	 *   <li>“万象创世过滤” — 打开自定义 {@link FilterListScreen}，支持搜索、多选、滚动、全选</li>
-	 *   <li>“其他服务端配置” — 打开 NeoForge 原生服务端分组列表（蜜蜂属性、获得方式、转化产出等）</li>
+	 *   <li>“其他服务端配置” — 打开基于 NeoForge 的服务端分组列表；平衡性预设使用列表选择器</li>
 	 * </ul>
 	 */
 public final class ServerConfigScreen extends OptionsSubScreen {
@@ -57,7 +57,7 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 
 		list.addSmall(filterLabelWidget, filterButton);
 
-		// 2. 其他服务端配置 — 原生 NeoForge 配置界面
+		// 2. 其他服务端配置 — 基于 NeoForge，并为平衡性预设提供列表选择器
 		Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.server.other"));
 		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel,
@@ -68,7 +68,7 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
 				Component.translatable("productivebeesgenesis.configuration.server.other.button"));
 		Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
-						new ConfigurationScreen.ConfigurationSectionScreen(
+						new BalanceConfigurationScreen(
 								this, ModConfig.Type.SERVER, modConfig,
 								Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"))))
 				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")))

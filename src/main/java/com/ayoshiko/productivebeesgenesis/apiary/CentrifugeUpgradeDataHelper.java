@@ -246,10 +246,8 @@ public final class CentrifugeUpgradeDataHelper {
 			@Nullable List<IInventorySlot> targetOutputSlots,
 			@Nullable IInventorySlot targetEnergySlot) {
 
-		// 恢复 PB 升级输入/输出槽内容（防止升级时槽内物品丢失，null 守卫）
-		// 修复 v14 loadSlots/loadCounts 顺序：必须先恢复槽位,再恢复数量。
-		// 原理:loadCounts 内部 applyCountWithLimit 在数量超过配置上限时,会将超出部分注入输出槽。
-		// 若输出槽未先恢复,注入的超出部分会被后续 deserializeNBT 覆盖,导致升级物品凭空消失。
+		// 恢复 PB 升级输入/输出槽内容（防止升级时槽内物品丢失，null 守卫）。
+		// PB 升级数量按 NBT 原样恢复；当前配置上限仅限制后续安装。
 		if (data.pbUpgradeInputNbt != null) {
 			pbUpgradeAccess.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
 		}
@@ -272,7 +270,7 @@ public final class CentrifugeUpgradeDataHelper {
 				}
 			}
 			pbNbt.put(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, countsTag);
-			// 复用 loadCounts 反序列化路径（含上限 clamp 和 supported 校验）
+			// 复用 loadCounts 反序列化路径（原样恢复受支持的升级数量）。
 			pbUpgradeAccess.loadCounts(pbNbt);
 		}
 

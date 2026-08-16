@@ -1,7 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
@@ -33,6 +39,7 @@ import java.util.concurrent.ThreadLocalRandom;
 	 * 与服务端 tick 并发访问安全。
 	 */
 public class PbRecipeCompleter {
+	private static final String NBT_PENDING_COUNT = "productivebeesgenesis_count";
 
 	/** 触发 flush 的物品数量阈值(约一个栈),防止输出槽溢出 */
 	public static final int PENDING_FLUSH_THRESHOLD = 64;
@@ -107,10 +114,7 @@ public class PbRecipeCompleter {
 		// v2.0.9 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
 		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
 		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
-		if (this.pendingRecipe != recipe) {
-			this.pendingRecipe = recipe;
-			this.pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
-		}
+		selectRecipe(recipe);
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
@@ -121,32 +125,31 @@ public class PbRecipeCompleter {
 			if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) {
 				continue;
 			}
-			int count = chanced.min();
-			int max = chanced.max();
-			if (max > count) {
-				count += random.nextInt(max - count + 1);
-			}
+			int min = Math.max(0, chanced.min());
+			int max = Math.max(min, chanced.max());
+			int count = SampleUniformSum.sampleSingle(random, min, max);
 			// long 域计算防止溢出为负,溢出截断到 Integer.MAX_VALUE
-			long totalCount = (long) count * modifier;
+			long totalCount = SaturatingMath.saturatingMultiply(count, modifier);
 			if (totalCount <= 0) {
 				continue;
 			}
 			count = (int) Math.min(totalCount, Integer.MAX_VALUE);
-			pendingOutputs.merge(entry.getKey(), count, Integer::sum);
-			pendingItemCount += count;
+			addPendingOutput(entry.getKey(), count);
+			pendingItemCount = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingAdd(pendingItemCount, count));
 		}
 
-		FluidStack fluidOutput = recipe.getFluidOutputs();
-		if (!fluidOutput.isEmpty()) {
-			if (pendingFluidTemplate == null || pendingFluidTemplate.isEmpty()) {
-				// 1.21修复:copyWithAmount(0) 会返回 isEmpty() 的 FluidStack,使用 copy() 保留原始 amount
-				pendingFluidTemplate = fluidOutput.copy();
-			}
-			pendingFluidAmount += (long) fluidOutput.getAmount() * modifier;
+		FluidStack fluidOutput = pendingFluidTemplate;
+		if (fluidOutput != null && !fluidOutput.isEmpty()
+				&& !(context.suppressesUselessByproducts()
+						&& UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
+			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
+				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier));
 		}
 
 		// 修复:每次操作只消耗1个输入,productivityModifier 只影响输出数量不影响输入消耗
-		pendingInputShrink += 1;
+		pendingInputShrink = SaturatingMath.saturatingToInt(
+			SaturatingMath.saturatingAdd(pendingInputShrink, 1));
 	}
 
 	/**
@@ -182,15 +185,12 @@ public class PbRecipeCompleter {
 		float stabilityBonus = context.stabilityBonus();
 
 		// v2.0.9 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
-		if (this.pendingRecipe != recipe) {
-			this.pendingRecipe = recipe;
-			this.pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
-		}
+		selectRecipe(recipe);
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
-			int min = chanced.min();
+			int min = Math.max(0, chanced.min());
 			int max = chanced.max();
 			if (max < min) max = min; // 防御性处理
 
@@ -216,18 +216,41 @@ public class PbRecipeCompleter {
 				continue;
 			}
 			int countInt = (int) Math.min(totalCount, Integer.MAX_VALUE);
-			pendingOutputs.merge(entry.getKey(), countInt, Integer::sum);
-			pendingItemCount += countInt;
+			addPendingOutput(entry.getKey(), countInt);
+			pendingItemCount = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingAdd(pendingItemCount, countInt));
 		}
 
-		FluidStack fluidOutput = recipe.getFluidOutputs();
-		if (!fluidOutput.isEmpty()) {
-			if (pendingFluidTemplate == null || pendingFluidTemplate.isEmpty()) {
-				pendingFluidTemplate = fluidOutput.copy();
-			}
-			pendingFluidAmount += (long) fluidOutput.getAmount() * modifier * batchCount;
+		FluidStack fluidOutput = pendingFluidTemplate;
+		if (fluidOutput != null && !fluidOutput.isEmpty()
+				&& !(context.suppressesUselessByproducts()
+						&& UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
+			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
+				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier, batchCount));
 		}
-		pendingInputShrink += batchCount;
+		pendingInputShrink = SaturatingMath.saturatingToInt(
+			SaturatingMath.saturatingAdd(pendingInputShrink, batchCount));
+	}
+
+	/** Adds an output without allocating the BiFunction/boxing path used by Map.merge. */
+	private void addPendingOutput(ItemStack key, int amount) {
+		if (amount <= 0) return;
+		Integer previous = pendingOutputs.get(key);
+		if (previous == null) {
+			pendingOutputs.put(key, amount);
+			return;
+		}
+		long combined = (long) previous + amount;
+		pendingOutputs.put(key, (int) Math.min(combined, Integer.MAX_VALUE));
+	}
+
+	private void selectRecipe(CentrifugeRecipe recipe) {
+		if (pendingRecipe == recipe) return;
+		if (pendingRecipe != null) clearPendingOutputs();
+		pendingRecipe = recipe;
+		pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
+		FluidStack fluidOutput = recipe.getFluidOutputs();
+		pendingFluidTemplate = fluidOutput.isEmpty() ? null : fluidOutput.copy();
 	}
 
 	/**
@@ -317,6 +340,7 @@ public class PbRecipeCompleter {
 	void consumePendingItemCount(int accepted) {
 		if (accepted > 0) {
 			pendingItemCount = Math.max(0, pendingItemCount - accepted);
+			if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
 		}
 	}
 
@@ -324,18 +348,21 @@ public class PbRecipeCompleter {
 	void consumeAllPendingItems() {
 		pendingOutputs.clear();
 		pendingItemCount = 0;
+		if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
 	}
 
 	/** Direct-AE 路径按实际接收量减少 pending 流体。 */
 	void consumePendingFluid(long accepted) {
 		if (accepted > 0) {
 			pendingFluidAmount = Math.max(0L, pendingFluidAmount - accepted);
+			if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
 		}
 	}
 
 	/** Direct-AE 已提交部分产物后，标记对应输入已经且只会被扣除一次。 */
 	void markPendingInputConsumed() {
 		pendingInputShrink = 0;
+		context.productivebeesgenesis$markForSave();
 	}
 
 	/** @return 是否仍有尚未写入 AE 或本地槽的产物。 */
@@ -353,6 +380,53 @@ public class PbRecipeCompleter {
 	/** @return 本 tick 尚未扣除的输入数量 */
 	int getPendingInputShrink() {
 		return pendingInputShrink;
+	}
+
+	@Nullable
+	CompoundTag saveCommittedPending(HolderLookup.Provider provider) {
+		if (!hasCommittedPendingOutputs()) return null;
+		CompoundTag root = new CompoundTag();
+		ListTag items = new ListTag();
+		for (Map.Entry<ItemStack, Integer> entry : pendingOutputs.entrySet()) {
+			int count = Math.max(0, entry.getValue());
+			if (count <= 0 || entry.getKey().isEmpty()) continue;
+			Tag encoded = entry.getKey().copyWithCount(1).save(provider);
+			if (encoded instanceof CompoundTag stackTag) {
+				stackTag.putInt(NBT_PENDING_COUNT, count);
+				items.add(stackTag);
+			}
+		}
+		if (!items.isEmpty()) root.put("items", items);
+		if (pendingFluidTemplate != null && !pendingFluidTemplate.isEmpty() && pendingFluidAmount > 0L) {
+			root.put("fluid", pendingFluidTemplate.copyWithAmount(1).save(provider));
+			root.putLong("fluid_amount", pendingFluidAmount);
+		}
+		return root.isEmpty() ? null : root;
+	}
+
+	void loadCommittedPending(CompoundTag root, HolderLookup.Provider provider) {
+		resetPendingRecipe();
+		if (root.contains("items", Tag.TAG_LIST)) {
+			ListTag items = root.getList("items", Tag.TAG_COMPOUND);
+			for (int i = 0; i < items.size(); i++) {
+				CompoundTag stackTag = items.getCompound(i);
+				int count = stackTag.getInt(NBT_PENDING_COUNT);
+				ItemStack stack = ItemStack.parse(provider, stackTag).orElse(ItemStack.EMPTY);
+				if (count <= 0 || stack.isEmpty()) continue;
+				stack.setCount(1);
+				pendingOutputs.put(stack, count);
+				pendingItemCount = SaturatingMath.saturatingAddToInt(pendingItemCount, count);
+			}
+		}
+		if (root.contains("fluid", Tag.TAG_COMPOUND)) {
+			FluidStack fluid = FluidStack.parseOptional(provider, root.getCompound("fluid"));
+			long amount = root.getLong("fluid_amount");
+			if (!fluid.isEmpty() && amount > 0L) {
+				pendingFluidTemplate = fluid.copyWithAmount(1);
+				pendingFluidAmount = amount;
+			}
+		}
+		pendingInputShrink = 0;
 	}
 
 	/**

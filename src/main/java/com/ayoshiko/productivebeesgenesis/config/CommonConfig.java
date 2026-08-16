@@ -19,7 +19,8 @@ public final class CommonConfig {
 		builder.comment("通用配置 — 跨端同步且无需按存档区分的参数").push("common");
 
 		enableLargeNumberAbbreviation = builder
-				.comment("启用大数字缩写显示", "true: 使用 K/M/G/T 格式（如 1.5K、2.5M）", "false: 使用千分位分隔（如 1,500、2,500,000）")
+				.comment("使用 K/M/G/T 代替千分位显示")
+				.translation("productivebeesgenesis.configuration.common.enableLargeNumberAbbreviation")
 				.define("enableLargeNumberAbbreviation", true);
 
 		builder.pop(); // common

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.util.MekanismUtils;
@@ -67,7 +68,7 @@ public final class FactoryUpgradeStateHelper {
 	public static int getUpgradeMaxOperations(@NotNull AbstractMekCentrifugeFactory factory) {
 		int stackUpgrades = MekUpgradeSupport.getStackUpgrades(factory);
 		// 位运算替代 Math.pow：stackUpgrades 最大 16，1 << 16 = 65536 不会溢出
-		return stackUpgrades > 0 ? 1 << stackUpgrades : 1;
+		return SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 	}
 
 	/**
@@ -94,7 +95,8 @@ public final class FactoryUpgradeStateHelper {
 		if (MekUpgradeSupport.isStackUpgrade(upgrade)) {
 			ret.clear();
 			// 位运算替代 Math.pow（int → double 自动拓宽）
-			double stack = 1 << MekUpgradeSupport.getStackUpgrades(factory);
+			double stack = SaturatingMath.saturatingPowerOfTwo(
+					MekUpgradeSupport.getStackUpgrades(factory));
 			ret.add(Component.translatable("gui.productivebeesgenesis.upgrades.stack", stack));
 		} else if (MekUpgradeSupport.isCreativeUpgrade(upgrade)) {
 			ret.add(Component.translatable("gui.mekanism.upgrades.effect", "∞"));

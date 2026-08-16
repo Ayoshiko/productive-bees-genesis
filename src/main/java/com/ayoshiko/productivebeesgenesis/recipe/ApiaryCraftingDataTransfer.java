@@ -13,6 +13,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
@@ -289,8 +290,9 @@ final class ApiaryCraftingDataTransfer {
 			for (String typeId : inputCounts.getAllKeys()) {
 				int inputValue = inputCounts.getInt(typeId);
 				if (inputValue <= 0) continue;
-				int current = mergedCounts.getInt(typeId);
-				mergedCounts.putInt(typeId, current + inputValue);
+				int current = Math.max(0, mergedCounts.getInt(typeId));
+				mergedCounts.putInt(typeId, SaturatingMath.saturatingToInt(
+						SaturatingMath.saturatingAdd(current, inputValue)));
 			}
 		}
 

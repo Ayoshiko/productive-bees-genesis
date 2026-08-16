@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -138,7 +139,8 @@ public class MyriadAggregatedStacksBuilder {
 		}
 
 		try {
-			int scaledTotal = totalCount * COMB_BLOCK_SCALE;
+			int scaledTotal = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(totalCount, COMB_BLOCK_SCALE));
 			List<ResourceLocation> selectedTypes = WeightedTypeSelector.getInstance()
 					.selectForProcess(PROCESS_INDEX, PROCESS_COUNT, level, allTypes, factoryKey);
 			if (selectedTypes.isEmpty()) {
@@ -242,7 +244,8 @@ public class MyriadAggregatedStacksBuilder {
 					cause);
 		});
 		try {
-			int scaledTotal = totalCount * COMB_BLOCK_SCALE;
+			int scaledTotal = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(totalCount, COMB_BLOCK_SCALE));
 			return MyriadCreationsEventHandler.getAggregatedRandomCombBlocks(
 					scaledTotal, level.getRandom());
 		} catch (Exception fallback) {

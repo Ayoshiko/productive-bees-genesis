@@ -34,12 +34,26 @@ final class ApiaryDirectEjectTargets {
 	/** 缓存对应的物品侧面配置签名（含朝向）— 配置或朝向变化时强制重建目标列表 */
 	private int cachedConfigVersion = -1;
 
-	/** 直连目标：相邻离心机的位置 */
+	/** 最近一次解析目标的游戏刻；JDTE 同刻子循环直接复用结果，包括空结果。 */
+	private long lastResolvedGameTick = Long.MIN_VALUE;
+
+	/** 直连目标：已校验的相邻离心机位置、方块实体与接口引用。 */
 	static final class Target {
 		final BlockPos pos;
+		final BlockEntity blockEntity;
+		final IMekCentrifugeTile centrifuge;
+		final CentrifugeInputSlotManager inputSlotManager = new CentrifugeInputSlotManager();
+		int inputSlotCount;
 
-		Target(BlockPos pos) {
+		Target(BlockPos pos, BlockEntity blockEntity, IMekCentrifugeTile centrifuge) {
 			this.pos = pos;
+			this.blockEntity = blockEntity;
+			this.centrifuge = centrifuge;
+		}
+
+		void preScanInputSlots() {
+			inputSlotCount = Math.max(0, centrifuge.productivebeesgenesis$getInputSlotCount());
+			inputSlotManager.preScanInputSlots(centrifuge, inputSlotCount);
 		}
 	}
 
@@ -59,6 +73,11 @@ final class ApiaryDirectEjectTargets {
 	 * @return 直连目标列表，可能为空
 	 */
 	List<Target> findDirectEjectTargets(Level level) {
+		long gameTick = level.getGameTime();
+		if (cachedTargets != null && lastResolvedGameTick == gameTick) {
+			return cachedTargets;
+		}
+
 		BlockPos myPos = apiary.getBlockPos();
 		Direction facing = apiary.getDirection();
 		ConfigInfo itemConfig = apiary.getConfig().getConfig(TransmissionType.ITEM);
@@ -68,13 +87,15 @@ final class ApiaryDirectEjectTargets {
 		if (cachedTargets != null && configVersion == cachedConfigVersion) {
 			boolean allValid = true;
 			for (Target target : cachedTargets) {
-				BlockEntity be = level.getBlockEntity(target.pos);
-				if (!(be instanceof IMekCentrifugeTile) || be.isRemoved()) {
+				if (target.blockEntity.isRemoved() || level.getBlockEntity(target.pos) != target.blockEntity) {
 					allValid = false;
 					break;
 				}
 			}
-			if (allValid) return cachedTargets;
+			if (allValid) {
+				lastResolvedGameTick = gameTick;
+				return cachedTargets;
+			}
 			cachedTargets = null;
 		}
 
@@ -95,11 +116,12 @@ final class ApiaryDirectEjectTargets {
 			BlockEntity be = level.getBlockEntity(adjacentPos);
 			if (be instanceof IMekCentrifugeTile centrifuge && !be.isRemoved()) {
 				if (found == null) found = new ArrayList<>(4);
-				found.add(new Target(adjacentPos));
+				found.add(new Target(adjacentPos, be, centrifuge));
 			}
 		}
 		cachedConfigVersion = configVersion;
-		cachedTargets = found == null ? List.of() : found;
+		lastResolvedGameTick = gameTick;
+		cachedTargets = found == null ? List.of() : List.copyOf(found);
 		return cachedTargets;
 	}
 
@@ -109,6 +131,7 @@ final class ApiaryDirectEjectTargets {
 		if (itemConfig != null) {
 			for (RelativeSide relativeSide : RelativeSide.values()) {
 				DataType dataType = itemConfig.getDataType(relativeSide);
+				version = version * 31 + (itemConfig.isSideEnabled(relativeSide) ? 1 : 0);
 				version = version * 31 + (dataType == null ? 0 : dataType.ordinal());
 			}
 		}
@@ -126,15 +149,10 @@ final class ApiaryDirectEjectTargets {
 		return false;
 	}
 
-	/** 按缓存目标解析离心机接口，目标失效时返回 null */
-	@Nullable
-	IMekCentrifugeTile resolveTarget(Level level, Target target) {
-		BlockEntity be = level.getBlockEntity(target.pos);
-		return be instanceof IMekCentrifugeTile centrifuge && !be.isRemoved() ? centrifuge : null;
-	}
-
 	/** 清除缓存（方块移动/移除时调用） */
 	void clearCache() {
 		cachedTargets = null;
+		cachedConfigVersion = -1;
+		lastResolvedGameTick = Long.MIN_VALUE;
 	}
 }

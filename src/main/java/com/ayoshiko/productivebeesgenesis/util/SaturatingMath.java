@@ -106,6 +106,19 @@ public final class SaturatingMath {
 		return saturatingMultiply(saturatingMultiply(a, b), c);
 	}
 
+	/** Clamps an untrusted external result to the non-negative requested amount. */
+	public static long clampToRequest(long result, long requested) {
+		if (result <= 0 || requested <= 0) return 0L;
+		return Math.min(result, requested);
+	}
+
+	/** Returns {@code 2^exponent}, saturating at the largest positive int. */
+	public static int saturatingPowerOfTwo(int exponent) {
+		if (exponent <= 0) return 1;
+		if (exponent >= 31) return Integer.MAX_VALUE;
+		return 1 << exponent;
+	}
+
 	/** Converts a positive floating-point quantity to a long without NaN or infinity leaks. */
 	public static long saturatingCeilToLong(double value) {
 		if (Double.isNaN(value) || value <= 0.0D) return 0L;
@@ -113,8 +126,33 @@ public final class SaturatingMath {
 		return (long) Math.ceil(value);
 	}
 
+	/** Converts a positive floating-point quantity using {@link Math#round(double)} semantics. */
+	public static long saturatingRoundToLong(double value) {
+		if (Double.isNaN(value) || value <= 0.0D) return 0L;
+		if (!Double.isFinite(value) || value >= Long.MAX_VALUE) return Long.MAX_VALUE;
+		return Math.round(value);
+	}
+
 	/** Converts a positive floating-point quantity to an int using ceil semantics. */
 	public static int saturatingCeilToInt(double value) {
 		return saturatingToInt(saturatingCeilToLong(value));
+	}
+
+	/** Converts a positive floating-point quantity to an int using round semantics. */
+	public static int saturatingRoundToInt(double value) {
+		return saturatingToInt(saturatingRoundToLong(value));
+	}
+
+	/** Saturating non-negative int addition. */
+	public static int saturatingAddToInt(int a, int b) {
+		return saturatingToInt(saturatingAdd(Math.max(0, a), Math.max(0, b)));
+	}
+
+	/** Converts a positive double to float while preventing NaN, infinity and zero. */
+	public static float positiveFiniteFloat(double value, float fallback) {
+		if (Double.isNaN(value) || value <= 0.0D) return fallback;
+		if (!Double.isFinite(value) || value >= Float.MAX_VALUE) return Float.MAX_VALUE;
+		float converted = (float) value;
+		return converted > 0.0f && Float.isFinite(converted) ? converted : fallback;
 	}
 }

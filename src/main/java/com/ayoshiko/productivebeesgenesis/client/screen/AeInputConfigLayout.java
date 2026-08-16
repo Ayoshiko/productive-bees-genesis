@@ -41,4 +41,8 @@ final class AeInputConfigLayout {
 		int capPages = (int) Math.ceil((double) slotCount / SLOTS_PER_PAGE);
 		return Math.max(1, Math.max(minPages, capPages));
 	}
+
+	static int controlY(int relativeY) {
+		return relativeY + CTRL_Y;
+	}
 }

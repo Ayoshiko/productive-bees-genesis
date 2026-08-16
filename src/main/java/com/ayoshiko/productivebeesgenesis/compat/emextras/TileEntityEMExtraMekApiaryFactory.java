@@ -27,10 +27,10 @@ import net.minecraft.world.level.block.state.BlockState;
 	 * <p>
 	 * EME 工厂蜂箱参数表（{@link FactoryApiaryConfig}）：
 	 * <ul>
-	 *   <li>Absolute Overclocked: 45 蜜蜂(9×5)/33 输出(3×11)/45 喂食(3×15)/2,304,000 mB</li>
-	 *   <li>Supreme Quantum: 51 蜜蜂(17×3)/36 输出(3×12)/51 喂食(3×17)/2,560,000 mB</li>
-	 *   <li>Cosmic Dense: 55 蜜蜂(11×5)/39 输出(3×13)/57 喂食(3×19)/2,816,000 mB</li>
-	 *   <li>Infinite Multiversal: 60 蜜蜂(12×5)/42 输出(3×14)/60 喂食(3×20)/3,072,000 mB</li>
+	 *   <li>Absolute Overclocked: 45 蜜蜂(3×15)/45 输出(3×15)/45 喂食(9×5)/2,304,000 mB</li>
+	 *   <li>Supreme Quantum: 51 蜜蜂(3×17)/51 输出(3×17)/55 喂食(11×5)/2,560,000 mB</li>
+	 *   <li>Cosmic Dense: 55 蜜蜂(5×11)/39 输出(3×13)/55 喂食(11×5)/2,816,000 mB</li>
+	 *   <li>Infinite Multiversal: 60 蜜蜂(5×12)/42 输出(3×14)/60 喂食(12×5)/3,072,000 mB</li>
 	 * </ul>
 	 */
 public class TileEntityEMExtraMekApiaryFactory extends TileEntityMekApiaryFactory {
@@ -69,7 +69,7 @@ public class TileEntityEMExtraMekApiaryFactory extends TileEntityMekApiaryFactor
 		FactoryApiaryConfig config = FactoryApiaryConfig.forEMETier(emeTier);
 		return new ApiarySlotManager(this,
 				config.beeSlotCount, config.beeCols, config.beeRows,
-				config.outputSlotCount, config.outputCols, config.outputRows,
+				config.outputSlotsPerPage, config.outputCols, config.outputRows, config.outputPageCount,
 				config.fluidTankCapacity);
 	}
 

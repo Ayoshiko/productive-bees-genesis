@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary.client;
 
 import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
+import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiarySelectBeePayload;
@@ -24,6 +25,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -148,7 +150,40 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		beeEntityRenderer = new BeeEntityRenderer();
 		beeNameRenderer = new BeeNameRenderer();
 		beeTooltipRenderer = new BeeTooltipRenderer();
+		addOutputPageControls();
 		// AE2 输出按钮已移至 MEK 侧面配置 Tab，由 AeOutputOverlay 动态注入
+	}
+
+	private void addOutputPageControls() {
+		if (!(menu instanceof IPagedOutputContainer paged) || paged.getOutputPageCount() <= 1) return;
+		int outputX = ApiaryGuiLayoutHelper.getOutputX(
+				ApiaryGuiLayoutHelper.getBeeX(imageWidth, getBeeCols()),
+				ApiaryGuiLayoutHelper.getBeeW(getBeeCols()),
+				ApiaryGuiLayoutHelper.getOutputW(getOutputCols()));
+		int outputBottom = ApiaryGuiLayoutHelper.getOutputY(
+				ApiaryGuiLayoutHelper.getBeeBottom(getBeeRows()), getBeeRows())
+				+ ApiaryGuiLayoutHelper.getOutputH();
+		int outputWidth = ApiaryGuiLayoutHelper.getOutputW(getOutputCols());
+		int buttonY = ApiaryGuiLayoutHelper.getOutputPageButtonY(outputBottom);
+		FeederPageButton previous = new FeederPageButton(this,
+				ApiaryGuiLayoutHelper.getOutputPagePreviousButtonX(outputX, outputWidth), buttonY,
+				12, 12, "\u25C0", () -> changeOutputPage(paged, -1, IPagedOutputContainer.PREVIOUS_OUTPUT_PAGE_BUTTON));
+		previous.setTooltip(Tooltip.create(Component.translatable(
+				"gui.productivebeesgenesis.output_page.prev.tooltip")));
+		FeederPageButton next = new FeederPageButton(this,
+				ApiaryGuiLayoutHelper.getOutputPageNextButtonX(outputX, outputWidth), buttonY,
+				12, 12, "\u25B6", () -> changeOutputPage(paged, 1, IPagedOutputContainer.NEXT_OUTPUT_PAGE_BUTTON));
+		next.setTooltip(Tooltip.create(Component.translatable(
+				"gui.productivebeesgenesis.output_page.next.tooltip")));
+		addRenderableWidget(previous);
+		addRenderableWidget(next);
+	}
+
+	private void changeOutputPage(IPagedOutputContainer paged, int delta, int buttonId) {
+		paged.changeOutputPage(delta);
+		if (minecraft.gameMode != null) {
+			minecraft.gameMode.handleInventoryButtonClick(menu.containerId, buttonId);
+		}
 	}
 
 	/**
@@ -230,6 +265,20 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
 		renderInventoryText(guiGraphics);
+		if (menu instanceof IPagedOutputContainer paged && paged.getOutputPageCount() > 1) {
+			int outputX = ApiaryGuiLayoutHelper.getOutputX(
+					ApiaryGuiLayoutHelper.getBeeX(imageWidth, getBeeCols()),
+					ApiaryGuiLayoutHelper.getBeeW(getBeeCols()),
+					ApiaryGuiLayoutHelper.getOutputW(getOutputCols()));
+			int outputWidth = ApiaryGuiLayoutHelper.getOutputW(getOutputCols());
+			int outputBottom = ApiaryGuiLayoutHelper.getOutputY(
+					ApiaryGuiLayoutHelper.getBeeBottom(getBeeRows()), getBeeRows())
+					+ ApiaryGuiLayoutHelper.getOutputH();
+			String pageText = (paged.getOutputPage() + 1) + "/" + paged.getOutputPageCount();
+			int textX = outputX + (outputWidth - font.width(pageText)) / 2;
+			guiGraphics.drawString(font, pageText, textX,
+					ApiaryGuiLayoutHelper.getOutputPageButtonY(outputBottom) + 2, 0x404040, false);
+		}
 		renderBeeVisuals(guiGraphics, mouseX, mouseY);
 		super.drawForegroundText(guiGraphics, mouseX, mouseY);
 	}

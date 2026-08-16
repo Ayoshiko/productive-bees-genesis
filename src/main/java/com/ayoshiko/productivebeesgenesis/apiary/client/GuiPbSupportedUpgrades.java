@@ -58,7 +58,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 			PbUpgradeType.TIME,
 			PbUpgradeType.TIME_2,
 			PbUpgradeType.GENE_SAMPLER,
-			PbUpgradeType.BLOCK
+			PbUpgradeType.BLOCK,
+			PbUpgradeType.USELESS_BYPRODUCT
 	};
 
 	/** 本实例显示的升级类型（构造时注入） */

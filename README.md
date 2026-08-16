@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-2.0.9-hotfix-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.0-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -10,7 +10,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-> ⚠️ This mod is under active development — expect bugs, crashes, and compatibility issues. Feedback is welcome.
+> This is the first stable release. Please report bugs and compatibility issues through [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
 
 ---
 
@@ -115,11 +115,17 @@ An electrified bee production system built on the **Mekanism** universal machine
 
 | Tier family | Tier names | Bee slots | Output slots | Fluid tank capacity |
 | --- | --- | --- | --- | --- |
-| Base | MEK Apiary | 3 | 9 | 256,000 mB |
-| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 5–20 | 9–18 | 256K–1024K mB |
-| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 26–42 | 21–30 | 1280K–2048K mB |
-| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 26–45 | 21–33 | 1280K–2304K mB |
-| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 45–60 | 33–42 | 2304K–3072K mB |
+| Base | MEK Apiary | 3 | 18 (9 per page, 2 pages) | 256,000 mB |
+| Mekanism (4 tiers) | Basic / Advanced / Elite / Ultimate | 5–20 | 30–60 (2 pages) | 256K–1024K mB |
+| Mekanism Extras (4 tiers) | Absolute / Supreme / Cosmic / Infinite | 26–42 | 60–84 (2 pages) | 1280K–2048K mB |
+| Evolved Mekanism (5 tiers) | Overclocked / Quantum / Dense / Multiversal / Creative | 26–45 | 60–90 (2 pages) | 1280K–2304K mB |
+| Evolved Mekanism Extras (4 tiers) | Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal | 45–60 | 78–102 (2 pages) | 2304K–3072K mB |
+
+#### Apiary Output Paging and Throughput
+
+Every apiary level uses two output pages. A bee can contribute up to six distinct item/component combinations, so the theoretical distinct-output bound is `6 × bee slots` (18 for the base apiary and up to 360 for the 60-bee tier). One page remains a centered 3-row matrix; the second page doubles physical capacity without widening the GUI. Cosmic Dense and Infinite Multiversal keep their existing 3×13 and 3×14 page widths.
+
+The page is a client/container view only. AE2, Mekanism ejectors, adjacent centrifuges, and external item handlers always enumerate the complete physical slot list in stable index order. Output distribution first merges equal item/component keys, then targets indexed matching slots and a reusable empty-slot queue. If extraction is slower than production, leftovers are aggregated by the same key in a persistent FIFO buffer (512 groups) and retried with backoff, preserving output instead of dropping it during normal mixed-bee bursts.
 
 #### Core Features
 
@@ -352,23 +358,23 @@ Apiary config mirrors the centrifuge structure and adds apiary-specific tuning:
 **Ejection policy**: mirrors the centrifuge's ejection policy, with "apiary" prefix.
 
 **Output slot stack multiplier**: per-tier output slot stack multiplier across 17 factory tiers:
-- Basic apiary (3 processes, 9 output slots) default 1×
-- Advanced apiary (5 processes, 12 output slots) default 2×
-- Elite apiary (7 processes, 15 output slots) default 4×
-- Ultimate apiary (9 processes, 18 output slots) default 8×
-- Mekanism Extras Absolute apiary (11 processes, 21 output slots) default 16×
-- Mekanism Extras Supreme apiary (13 processes, 24 output slots) default 32×
-- Mekanism Extras Cosmic apiary (15 processes, 27 output slots) default 64×
-- Mekanism Extras Infinite apiary (17 processes, 30 output slots) default 128×
-- Evolved Mekanism Overclocked apiary (11 processes, 21 output slots) default 16×
-- Evolved Mekanism Quantum apiary (13 processes, 24 output slots) default 32×
-- Evolved Mekanism Dense apiary (15 processes, 27 output slots) default 64×
-- Evolved Mekanism Multiversal apiary (17 processes, 30 output slots) default 128×
-- Evolved Mekanism Creative apiary (19 processes, 33 output slots) default 256×
-- Evolved Mekanism Extras Absolute Overclocked apiary (12 processes, 33 output slots) default 256×
-- Evolved Mekanism Extras Supreme Quantum apiary (14 processes, 36 output slots) default 512×
-- Evolved Mekanism Extras Cosmic Dense apiary (16 processes, 39 output slots) default 1024×
-- Evolved Mekanism Extras Infinite Multiversal apiary (18 processes, 42 output slots) default 4096×
+- Basic apiary (3 processes, 30 output slots, 15 per page) default 1×
+- Advanced apiary (5 processes, 30 output slots, 15 per page) default 2×
+- Elite apiary (7 processes, 30 output slots, 15 per page) default 4×
+- Ultimate apiary (9 processes, 60 output slots, 30 per page) default 8×
+- Mekanism Extras Absolute apiary (11 processes, 78 output slots, 39 per page) default 16×
+- Mekanism Extras Supreme apiary (13 processes, 60 output slots, 30 per page) default 32×
+- Mekanism Extras Cosmic apiary (15 processes, 72 output slots, 36 per page) default 64×
+- Mekanism Extras Infinite apiary (17 processes, 84 output slots, 42 per page) default 128×
+- Evolved Mekanism Overclocked apiary (11 processes, 78 output slots, 39 per page) default 16×
+- Evolved Mekanism Quantum apiary (13 processes, 60 output slots, 30 per page) default 32×
+- Evolved Mekanism Dense apiary (15 processes, 72 output slots, 36 per page) default 64×
+- Evolved Mekanism Multiversal apiary (17 processes, 84 output slots, 42 per page) default 128×
+- Evolved Mekanism Creative apiary (19 processes, 90 output slots, 45 per page) default 256×
+- Evolved Mekanism Extras Absolute Overclocked apiary (12 processes, 90 output slots, 45 per page) default 256×
+- Evolved Mekanism Extras Supreme Quantum apiary (14 processes, 102 output slots, 51 per page) default 512×
+- Evolved Mekanism Extras Cosmic Dense apiary (16 processes, 78 output slots, 39 per page) default 1024×
+- Evolved Mekanism Extras Infinite Multiversal apiary (18 processes, 84 output slots, 42 per page) default 4096×
 
 **AE2 integration** (only registered when AE2 is loaded): AE2 output toggle + AppliedFlux priority switch, mirroring the centrifuge's AE2 integration.
 
@@ -406,7 +412,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The built jar will be at `build/libs/productivebeesgenesis-<version>.jar`.
+The release jar is `build/libs/productivebeesgenesis-1.0.0.jar`.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 >

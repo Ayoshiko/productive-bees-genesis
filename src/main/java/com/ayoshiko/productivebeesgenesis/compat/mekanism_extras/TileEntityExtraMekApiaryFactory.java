@@ -68,7 +68,7 @@ public class TileEntityExtraMekApiaryFactory extends TileEntityMekApiaryFactory 
 		FactoryApiaryConfig config = FactoryApiaryConfig.forMETier(meTier);
 		return new ApiarySlotManager(this,
 				config.beeSlotCount, config.beeCols, config.beeRows,
-				config.outputSlotCount, config.outputCols, config.outputRows,
+				config.outputSlotsPerPage, config.outputCols, config.outputRows, config.outputPageCount,
 				config.fluidTankCapacity);
 	}
 

@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -33,29 +35,45 @@ final class Ae2CursorScan {
 	 */
 	static <T> void collect(List<T> out, List<T> keys, T cursor,
 			int maxTypes, Predicate<T> acceptable) {
+		List<T> prefixScratch = new ArrayList<>(Math.min(Math.max(0, maxTypes), 16));
+		collectMapped(out, prefixScratch, keys, cursor, maxTypes, Function.identity(), acceptable);
+	}
+
+	/**
+	 * Single-pass cursor scan for a heterogeneous source. Only up to {@code maxTypes}
+	 * acceptable keys before the cursor are retained for a possible wraparound.
+	 */
+	static <S, T> void collectMapped(List<T> out, List<T> prefixScratch,
+			Iterable<S> keys, T cursor, int maxTypes,
+			Function<S, T> mapper, Predicate<T> acceptable) {
+		prefixScratch.clear();
+		if (maxTypes <= out.size()) return;
+
 		boolean afterCursor = cursor == null;
-		for (T key : keys) {
-			if (out.size() >= maxTypes) break;
-			if (!acceptable.test(key) || out.contains(key)) continue;
+		for (S source : keys) {
+			T key = mapper.apply(source);
+			if (key == null || out.contains(key)) continue;
+
 			if (!afterCursor) {
 				if (key.equals(cursor)) {
-					// 游标键本身也是可拉取类型：命中后置位并放行加入
+					if (!acceptable.test(key)) continue;
 					afterCursor = true;
-				} else {
-					continue;
+					out.add(key);
+				} else if (prefixScratch.size() < maxTypes && acceptable.test(key)) {
+					prefixScratch.add(key);
 				}
+			} else {
+				if (acceptable.test(key)) out.add(key);
 			}
-			out.add(key);
+
+			if (afterCursor && out.size() >= maxTypes) return;
 		}
 
-		// 游标不存在或已到列表尾部时从开头回绕。只在回绕边界多扫一次。
-		if (cursor != null && out.size() < maxTypes) {
-			for (T key : keys) {
-				if (out.size() >= maxTypes) break;
-				if (!acceptable.test(key)) continue;
-				if (key.equals(cursor)) break;
-				if (!out.contains(key)) out.add(key);
-			}
+		// If the cursor was absent or unacceptable, prefixScratch contains the first
+		// acceptable keys from the whole source. Otherwise it is the wraparound prefix.
+		for (T key : prefixScratch) {
+			if (out.size() >= maxTypes) break;
+			if (!out.contains(key)) out.add(key);
 		}
 	}
 }

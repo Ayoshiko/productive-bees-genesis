@@ -25,11 +25,18 @@ public final class Ae2PushStateHolder {
 	 * 物品推送退避状态使用同一短窗口，避免一个失败 key 长时间拖住并行工厂。
 	 */
 	private final Ae2PushBackoff itemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
+	/** Overflow-buffer inserts use a separate backoff so a blocked buffer cannot hammer ME storage. */
+	private final Ae2PushBackoff bufferedItemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
 	/** 输入回送退避状态（Task 10：仅用于 Ae2InputPuller 回送失败） */
 	private final Ae2PushBackoff returnBackoff = new Ae2PushBackoff();
 
 	/** Per-AEItemKey input-pull failure backoff registry; Object keeps AE2 types out of this class. */
 	private volatile Object inputKeyBackoffRegistry;
+
+	/** Per-AEItemKey output failure backoff registry; Object keeps AE2 types out of this class. */
+	private volatile Object outputKeyBackoffRegistry;
+	/** Per-AEFluidKey output failure backoff registry; Object keeps AE2 types out of this class. */
+	private volatile Object fluidKeyBackoffRegistry;
 
 	/** AE2 input fairness scheduler; Object keeps AE2 types out of this class. */
 	private volatile Object inputFairnessScheduler;
@@ -47,6 +54,9 @@ public final class Ae2PushStateHolder {
 	private volatile int inputSlotRotationIndex = 0;
 	/** 最近执行物品/流体推送的真实游戏刻，用于合并同刻加速器重复调用。 */
 	private volatile long lastItemPushGameTick = Long.MIN_VALUE;
+	private volatile long lastBufferedItemPushGameTick = Long.MIN_VALUE;
+	private volatile long generatedItemPushGameTick = Long.MIN_VALUE;
+	private volatile int generatedItemPushesThisTick;
 	private volatile long lastFluidPushGameTick = Long.MIN_VALUE;
 
 	// ===== Grid Node 状态缓存（模块2.1：避免每 tick 高频调用 getGridNodeState） =====
@@ -63,11 +73,18 @@ public final class Ae2PushStateHolder {
 	/** 获取物品推送退避状态 */
 	public Ae2PushBackoff getItemBackoff() { return itemBackoff; }
 
+	public Ae2PushBackoff getBufferedItemBackoff() { return bufferedItemBackoff; }
+
 	/** 获取输入回送退避状态（Task 10） */
 	public Ae2PushBackoff getReturnBackoff() { return returnBackoff; }
 
 	public Object getInputKeyBackoffRegistry() { return inputKeyBackoffRegistry; }
 	public void setInputKeyBackoffRegistry(Object registry) { this.inputKeyBackoffRegistry = registry; }
+
+	public Object getOutputKeyBackoffRegistry() { return outputKeyBackoffRegistry; }
+	public void setOutputKeyBackoffRegistry(Object registry) { this.outputKeyBackoffRegistry = registry; }
+	public Object getFluidKeyBackoffRegistry() { return fluidKeyBackoffRegistry; }
+	public void setFluidKeyBackoffRegistry(Object registry) { this.fluidKeyBackoffRegistry = registry; }
 
 	public Object getInputFairnessScheduler() { return inputFairnessScheduler; }
 	public void setInputFairnessScheduler(Object scheduler) { this.inputFairnessScheduler = scheduler; }
@@ -109,6 +126,24 @@ public final class Ae2PushStateHolder {
 	public boolean tryStartItemPush(long gameTick) {
 		if (lastItemPushGameTick == gameTick) return false;
 		lastItemPushGameTick = gameTick;
+		return true;
+	}
+
+	/** Buffered output has a separate budget, but accelerated sub-ticks share one attempt. */
+	public boolean tryStartBufferedItemPush(long gameTick) {
+		if (lastBufferedItemPushGameTick == gameTick) return false;
+		lastBufferedItemPushGameTick = gameTick;
+		return true;
+	}
+
+	/** Reserves one direct generated-item insert from a fixed real-tick budget. */
+	public boolean tryAcquireGeneratedItemPush(long gameTick, int maxPushes) {
+		if (generatedItemPushGameTick != gameTick) {
+			generatedItemPushGameTick = gameTick;
+			generatedItemPushesThisTick = 0;
+		}
+		if (generatedItemPushesThisTick >= Math.max(0, maxPushes)) return false;
+		generatedItemPushesThisTick++;
 		return true;
 	}
 
@@ -162,8 +197,11 @@ public final class Ae2PushStateHolder {
 	public void reset() {
 		fluidBackoff.reset();
 		itemBackoff.reset();
+		bufferedItemBackoff.reset();
 		returnBackoff.reset();
 		inputKeyBackoffRegistry = null;
+		outputKeyBackoffRegistry = null;
+		fluidKeyBackoffRegistry = null;
 		inputFairnessScheduler = null;
 		fluidPushCallCounter = 0L;
 		lastFluidPushCounter = 0L;
@@ -171,6 +209,9 @@ public final class Ae2PushStateHolder {
 		lastItemPushCounter = 0L;
 		inputSlotRotationIndex = 0;
 		lastItemPushGameTick = Long.MIN_VALUE;
+		lastBufferedItemPushGameTick = Long.MIN_VALUE;
+		generatedItemPushGameTick = Long.MIN_VALUE;
+		generatedItemPushesThisTick = 0;
 		lastFluidPushGameTick = Long.MIN_VALUE;
 		// 模块2.1：重置 grid node 状态缓存，方块重建后从初始状态重新查询
 		cachedNodeState = -1;

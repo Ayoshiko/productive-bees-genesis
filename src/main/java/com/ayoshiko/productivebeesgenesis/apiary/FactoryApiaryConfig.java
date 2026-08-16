@@ -13,6 +13,7 @@ import mekanism.common.tier.FactoryTier;
 	 * 布局策略（所有等级统一走智能矩形布局）：
 	 * <ul>
 	 *   <li>蜜蜂槽：列数由 {@link #calculateOptimalBeeCols} 动态计算，寻找精确因数对使布局接近正方形且行数≤5</li>
+	 *   <li>输出槽：固定 3 行；容量不足的等级扩充到与蜜蜂槽相同的列数，已有更宽输出区的等级保持原布局</li>
 	 *   <li>喂食器：低等级（蜂数&lt;9）保持 3×3=9 槽（原版行为）；高等级（蜂数≥9）使用 5 列严格矩形，
 	 *       槽位数 = ceil(蜂数/5)*5。高等级 GUI 通过 {@link com.ayoshiko.productivebeesgenesis.apiary.client.GuiFeederWindow}
 	 *       的"5×6=30 翻页"机制查看完整槽位（蜂数&gt;30 时启用翻页，每页 30 槽）。</li>
@@ -20,22 +21,22 @@ import mekanism.common.tier.FactoryTier;
 	 * <p>
 	 * 基础4级参数表（智能布局，蜂槽视觉与原固定5列一致；喂食器匹配蜂数）：
 	 * <ul>
-	 *   <li>Basic: 5 蜂蜂(1×5)/9 输出(3×3)/9 喂食(3×3 低等级)/256,000 mB</li>
-	 *   <li>Advanced: 10 蜂蜂(2×5)/12 输出(3×4)/10 喂食(5×2)/512,000 mB</li>
+	 *   <li>Basic: 5 蜂蜂(1×5)/15 输出(3×5)/9 喂食(3×3 低等级)/256,000 mB</li>
+	 *   <li>Advanced: 10 蜂蜂(2×5)/15 输出(3×5)/10 喂食(5×2)/512,000 mB</li>
 	 *   <li>Elite: 15 蜂蜂(3×5)/15 输出(3×5)/15 喂食(5×3)/768,000 mB</li>
-	 *   <li>Ultimate: 20 蜂蜂(4×5)/18 输出(3×6)/20 喂食(5×4)/1,024,000 mB</li>
+	 *   <li>Ultimate: 20 蜂蜂(2×10)/30 输出(3×10)/20 喂食(4×5)/1,024,000 mB</li>
 	 * </ul>
 	 * <p>
 	 * 扩展等级参数表（蜂槽精确因数对布局；喂食器=ceil(N/5)*5 严格矩形，>30 槽启用翻页）：
 	 * <ul>
-	 *   <li>26蜂: 9列3行蜂/30喂食(5×6,1页)</li>
-	 *   <li>30蜂: 6列5行蜂/30喂食(5×6,1页)</li>
-	 *   <li>36蜂: 9列4行蜂/40喂食(5×8,2页:30+10)</li>
-	 *   <li>42蜂: 7列6行蜂/45喂食(5×9,2页:30+15)</li>
-	 *   <li>45蜂: 9列5行蜂/45喂食(5×9,2页:30+15)</li>
+	 *   <li>26蜂: 13列2行蜂/30喂食(5×6,1页)</li>
+	 *   <li>30蜂: 10列3行蜂/30喂食(5×6,1页)</li>
+	 *   <li>36蜂: 12列3行蜂/40喂食(5×8,2页:30+10)</li>
+	 *   <li>42蜂: 14列3行蜂/45喂食(5×9,2页:30+15)</li>
+	 *   <li>45蜂: 15列3行蜂/45喂食(5×9,2页:30+15)</li>
 	 *   <li>51蜂: 17列3行蜂/55喂食(5×11,2页:30+25)</li>
 	 *   <li>55蜂: 11列5行蜂/55喂食(5×11,2页:30+25)</li>
-	 *   <li>60蜂: 10列6行蜂/60喂食(5×12,2页:30+30) — 最高等级</li>
+	 *   <li>60蜂: 12列5行蜂/60喂食(5×12,2页:30+30) — 最高等级</li>
 	 * </ul>
 	 */
 public final class FactoryApiaryConfig {
@@ -60,6 +61,11 @@ public final class FactoryApiaryConfig {
 	public final int beeSlotCount;
 	public final int beeCols;
 	public final int beeRows;
+	/** 输出槽每页容量；GUI 始终只绘制这一页的 3 行矩阵。 */
+	public final int outputSlotsPerPage;
+	/** 输出页数。物理库存包含所有页，自动化不受当前 GUI 页影响。 */
+	public final int outputPageCount;
+	/** 输出槽物理总数 = outputSlotsPerPage * outputPageCount。 */
 	public final int outputSlotCount;
 	public final int outputCols;
 	public final int outputRows;
@@ -69,13 +75,10 @@ public final class FactoryApiaryConfig {
 	public final int fluidTankCapacity;
 
 	private FactoryApiaryConfig(int beeSlotCount, int beeRowsHint,
-			int outputSlotCount, int outputCols,
+			int outputCols,
 			int feederSlotCount, int feederCols,
 			int fluidTankCapacity) {
 		this.beeSlotCount = beeSlotCount;
-		this.outputSlotCount = outputSlotCount;
-		this.outputCols = outputCols;
-		this.outputRows = FACTORY_OUTPUT_ROWS;
 		this.fluidTankCapacity = fluidTankCapacity;
 
 		if (beeSlotCount > EXTENDED_THRESHOLD) {
@@ -102,6 +105,12 @@ public final class FactoryApiaryConfig {
 			this.feederCols = feederCols;
 			this.feederRows = FACTORY_FEEDER_ROWS;
 		}
+
+		this.outputCols = ApiaryGuiLayoutHelper.getAlignedOutputCols(this.beeCols, outputCols);
+		this.outputRows = FACTORY_OUTPUT_ROWS;
+		this.outputSlotsPerPage = this.outputCols * this.outputRows;
+		this.outputPageCount = 2;
+		this.outputSlotCount = this.outputSlotsPerPage * this.outputPageCount;
 	}
 
 	/**
@@ -185,7 +194,7 @@ public final class FactoryApiaryConfig {
 	 * <br/>
 	 * EM 通过 Mixin 在运行时扩展 FactoryTier 枚举，添加 OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE。
 	 * 编译时这些枚举值不存在，通过 tier.name() 字符串匹配。
-	 * 参数递增模式与 ME 一致（每级 +5 蜜蜂 / +3 输出 / +256K mB），喂食槽按 ceil(max(N,9)/3)*3 计算。
+	 * 参数递增模式与 ME 一致（每级 +5 蜜蜂 / 输出区按蜜蜂列数对齐 / +256K mB），喂食槽按配置的矩形布局计算。
 	 */
 	private static FactoryApiaryConfig forEMTier(FactoryTier tier) {
 		String name = tier.name();
@@ -199,49 +208,49 @@ public final class FactoryApiaryConfig {
 		};
 	}
 
-	/** EM Overclocked 工厂：26 蜂蜂/21 输出(3×7)/27 喂食(3×9)/1,280,000 mB */
+	/** EM Overclocked 工厂：26 蜂蜂(2×13)/39 输出(3×13)/30 喂食(6×5)/1,280,000 mB */
 	private static FactoryApiaryConfig forEMOverclocked() {
-		return new FactoryApiaryConfig(26, 5, 21, 7, 15, 5, 1_280_000);
+		return new FactoryApiaryConfig(26, 5, 13, 15, 5, 1_280_000);
 	}
 
-	/** EM Quantum 工厂：30 蜂蜂(6×5)/24 输出(3×8)/30 喂食(3×10)/1,536,000 mB */
+	/** EM Quantum 工厂：30 蜂蜂(3×10)/30 输出(3×10)/30 喂食(6×5)/1,536,000 mB */
 	private static FactoryApiaryConfig forEMQuantum() {
-		return new FactoryApiaryConfig(30, 6, 24, 8, 15, 5, 1_536_000);
+		return new FactoryApiaryConfig(30, 6, 10, 15, 5, 1_536_000);
 	}
 
-	/** EM Dense 工厂：36 蜂蜂/27 输出(3×9)/36 喂食(3×12)/1,792,000 mB */
+	/** EM Dense 工厂：36 蜂蜂(3×12)/36 输出(3×12)/40 喂食(8×5)/1,792,000 mB */
 	private static FactoryApiaryConfig forEMDense() {
-		return new FactoryApiaryConfig(36, 7, 27, 9, 15, 5, 1_792_000);
+		return new FactoryApiaryConfig(36, 7, 12, 15, 5, 1_792_000);
 	}
 
-	/** EM Multiversal 工厂：42 蜂蜂/30 输出(3×10)/42 喂食(3×14)/2,048,000 mB */
+	/** EM Multiversal 工厂：42 蜂蜂(3×14)/42 输出(3×14)/45 喂食(9×5)/2,048,000 mB */
 	private static FactoryApiaryConfig forEMMultiversal() {
-		return new FactoryApiaryConfig(42, 8, 30, 10, 15, 5, 2_048_000);
+		return new FactoryApiaryConfig(42, 8, 14, 15, 5, 2_048_000);
 	}
 
-	/** EM Creative 工厂：45 蜂蜂(9×5)/33 输出(3×11)/45 喂食(3×15)/2,304,000 mB */
+	/** EM Creative 工厂：45 蜂蜂(3×15)/45 输出(3×15)/45 喂食(9×5)/2,304,000 mB */
 	private static FactoryApiaryConfig forEMCreative() {
-		return new FactoryApiaryConfig(45, 9, 33, 11, 15, 5, 2_304_000);
+		return new FactoryApiaryConfig(45, 9, 15, 15, 5, 2_304_000);
 	}
 
-	/** Basic 工厂：5 蜂蜂(1×5)/9 输出(3×3)/9 喂食(3×3)/256,000 mB */
+	/** Basic 工厂：5 蜂蜂(1×5)/15 输出(3×5)/9 喂食(3×3)/256,000 mB */
 	private static FactoryApiaryConfig forBasic() {
-		return new FactoryApiaryConfig(5, 1, 9, 3, 9, 3, 256_000);
+		return new FactoryApiaryConfig(5, 1, 5, 9, 3, 256_000);
 	}
 
-	/** Advanced 工厂：10 蜂蜂(2×5)/12 输出(3×4)/12 喂食(3×4)/512,000 mB */
+	/** Advanced 工厂：10 蜂蜂(2×5)/15 输出(3×5)/10 喂食(2×5)/512,000 mB */
 	private static FactoryApiaryConfig forAdvanced() {
-		return new FactoryApiaryConfig(10, 2, 12, 4, 9, 3, 512_000);
+		return new FactoryApiaryConfig(10, 2, 5, 9, 3, 512_000);
 	}
 
 	/** Elite 工厂：15 蜂蜂(3×5)/15 输出(3×5)/15 喂食(3×5)/768,000 mB */
 	private static FactoryApiaryConfig forElite() {
-		return new FactoryApiaryConfig(15, 3, 15, 5, 12, 4, 768_000);
+		return new FactoryApiaryConfig(15, 3, 5, 12, 4, 768_000);
 	}
 
-	/** Ultimate 工厂：20 蜂蜂(4×5)/18 输出(3×6)/21 喂食(3×7)/1,024,000 mB */
+	/** Ultimate 工厂：20 蜂蜂(2×10)/30 输出(3×10)/20 喂食(4×5)/1,024,000 mB */
 	private static FactoryApiaryConfig forUltimate() {
-		return new FactoryApiaryConfig(20, 4, 18, 6, 15, 5, 1_024_000);
+		return new FactoryApiaryConfig(20, 4, 10, 15, 5, 1_024_000);
 	}
 
 	// ===== Task 6 准备：ME（Mekanism Extras）工厂等级配置 =====
@@ -249,7 +258,7 @@ public final class FactoryApiaryConfig {
 	/**
 	 * Task 6 准备：根据 ME 工厂等级获取对应参数配置
 	 * <br/>
-	 * ME 等级延续原版递增模式：每级 +5 蜜蜂 / +3 输出 / +256K mB，喂食槽按 ceil(max(N,9)/3)*3 计算。
+	 * ME 等级延续原版递增模式：每级 +5 蜜蜂 / 输出区按蜜蜂列数对齐 / +256K mB，喂食槽按配置的矩形布局计算。
 	 * 调用方需确保 ME 已加载（通过 {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isMekanismExtrasLoaded()} 守卫）。
 	 * <p>
 	 * 修复 v15 软依赖隔离：方法签名改为 {@code Object}，避免本类直接 import ME 的 {@code ExtraFactoryTier}。
@@ -270,24 +279,24 @@ public final class FactoryApiaryConfig {
 		};
 	}
 
-	/** ME Absolute 工厂：26 蜂蜂/21 输出(3×7)/27 喂食(3×9)/1,280,000 mB */
+	/** ME Absolute 工厂：26 蜂蜂(2×13)/39 输出(3×13)/30 喂食(6×5)/1,280,000 mB */
 	private static FactoryApiaryConfig forMEAbsolute() {
-		return new FactoryApiaryConfig(26, 5, 21, 7, 15, 5, 1_280_000);
+		return new FactoryApiaryConfig(26, 5, 13, 15, 5, 1_280_000);
 	}
 
-	/** ME Supreme 工厂：30 蜂蜂(6×5)/24 输出(3×8)/30 喂食(3×10)/1,536,000 mB */
+	/** ME Supreme 工厂：30 蜂蜂(3×10)/30 输出(3×10)/30 喂食(6×5)/1,536,000 mB */
 	private static FactoryApiaryConfig forMESupreme() {
-		return new FactoryApiaryConfig(30, 6, 24, 8, 15, 5, 1_536_000);
+		return new FactoryApiaryConfig(30, 6, 10, 15, 5, 1_536_000);
 	}
 
-	/** ME Cosmic 工厂：36 蜂蜂/27 输出(3×9)/36 喂食(3×12)/1,792,000 mB */
+	/** ME Cosmic 工厂：36 蜂蜂(3×12)/36 输出(3×12)/40 喂食(8×5)/1,792,000 mB */
 	private static FactoryApiaryConfig forMECosmic() {
-		return new FactoryApiaryConfig(36, 7, 27, 9, 15, 5, 1_792_000);
+		return new FactoryApiaryConfig(36, 7, 12, 15, 5, 1_792_000);
 	}
 
-	/** ME Infinite 工厂：42 蜂蜂/30 输出(3×10)/42 喂食(3×14)/2,048,000 mB */
+	/** ME Infinite 工厂：42 蜂蜂(3×14)/42 输出(3×14)/45 喂食(9×5)/2,048,000 mB */
 	private static FactoryApiaryConfig forMEInfinite() {
-		return new FactoryApiaryConfig(42, 8, 30, 10, 15, 5, 2_048_000);
+		return new FactoryApiaryConfig(42, 8, 14, 15, 5, 2_048_000);
 	}
 
 	// ===== Task 6 准备：EME（Evolved Mekanism Extras）工厂等级配置 =====
@@ -295,7 +304,7 @@ public final class FactoryApiaryConfig {
 	/**
 	 * Task 6 准备：根据 EME 工厂等级获取对应参数配置
 	 * <br/>
-	 * EME 等级延续 ME 递增模式：每级 +5 蜜蜂 / +3 输出 / +256K mB，喂食槽按 ceil(max(N,9)/3)*3 计算。
+	 * EME 等级延续 ME 递增模式：每级 +5 蜜蜂 / 输出区按蜜蜂列数对齐 / +256K mB，喂食槽按配置的矩形布局计算。
 	 * 调用方需确保 EME 已加载（通过 {@link com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks#isEvolvedMekanismExtrasLoaded()} 守卫）。
 	 * <p>
 	 * 修复 v15 软依赖隔离：方法签名改为 {@code Object}，避免本类直接 import EME 的 {@code EMExtraFactoryTier}。
@@ -316,23 +325,23 @@ public final class FactoryApiaryConfig {
 		};
 	}
 
-	/** EME Absolute Overclocked 工厂：45 蜂蜂(9×5)/33 输出(3×11)/45 喂食(3×15)/2,304,000 mB */
+	/** EME Absolute Overclocked 工厂：45 蜂蜂(3×15)/45 输出(3×15)/45 喂食(9×5)/2,304,000 mB */
 	private static FactoryApiaryConfig forEMEAbsoluteOverclocked() {
-		return new FactoryApiaryConfig(45, 9, 33, 11, 15, 5, 2_304_000);
+		return new FactoryApiaryConfig(45, 9, 15, 15, 5, 2_304_000);
 	}
 
-	/** EME Supreme Quantum 工厂：51 蜜蜂(17×3)/36 输出(3×12)/51 喂食(3×17)/2,560,000 mB */
+	/** EME Supreme Quantum 工厂：51 蜜蜂(3×17)/51 输出(3×17)/55 喂食(11×5)/2,560,000 mB */
 	private static FactoryApiaryConfig forEMESupremeQuantum() {
-		return new FactoryApiaryConfig(51, 17, 36, 12, 15, 5, 2_560_000);
+		return new FactoryApiaryConfig(51, 17, 17, 15, 5, 2_560_000);
 	}
 
-	/** EME Cosmic Dense 工厂：55 蜜蜂(11×5)/39 输出(3×13)/57 喂食(3×19，多2空槽保持矩形)/2,816,000 mB */
+	/** EME Cosmic Dense 工厂：55 蜜蜂(5×11)/39 输出(3×13)/55 喂食(11×5)/2,816,000 mB */
 	private static FactoryApiaryConfig forEMECosmicDense() {
-		return new FactoryApiaryConfig(55, 11, 39, 13, 15, 5, 2_816_000);
+		return new FactoryApiaryConfig(55, 11, 13, 15, 5, 2_816_000);
 	}
 
-	/** EME Infinite Multiversal 工厂：60 蜂蜂(12×5)/42 输出(3×14)/60 喂食(3×20)/3,072,000 mB */
+	/** EME Infinite Multiversal 工厂：60 蜂蜂(5×12)/42 输出(3×14)/60 喂食(12×5)/3,072,000 mB */
 	private static FactoryApiaryConfig forEMEInfiniteMultiversal() {
-		return new FactoryApiaryConfig(60, 12, 42, 14, 15, 5, 3_072_000);
+		return new FactoryApiaryConfig(60, 12, 14, 15, 5, 3_072_000);
 	}
 }

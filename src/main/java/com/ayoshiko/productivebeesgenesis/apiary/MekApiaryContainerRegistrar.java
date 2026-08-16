@@ -128,8 +128,8 @@ public class MekApiaryContainerRegistrar {
 	/**
 	 * 获取蜂箱的输出槽数量（用于构建物品容器创建器）
 	 * <br/>
-	 * 基础版：9 输出槽
-	 * 工厂版：根据工厂等级递增（原版 9/12/15/18，ME/EME 按等级继续递增）
+	 * 基础版：18 个物理输出槽（3×3，每页 9 格）
+	 * 工厂版：由 {@link FactoryApiaryConfig} 根据蜜蜂列数动态对齐并创建两页物理槽（ME/EME 同样适用）
 	 * 物品槽位总数 = 输出槽 + 3（1蜂笼输入 + 1蜂笼输出 + 1能量槽）
 	 * <p>
 	 * ME/EME 等级识别与 {@link #getFluidCapacity} 一致，通过 compat 辅助类隔离软依赖。
@@ -153,8 +153,8 @@ public class MekApiaryContainerRegistrar {
 				return count;
 			}
 		}
-		// 基础版蜂箱
-		return ApiarySlotManager.DEFAULT_OUTPUT_SLOT_COUNT;
+		// 基础版蜂箱：两页物理输出库存，容器每页显示 3×3。
+		return ApiarySlotManager.DEFAULT_OUTPUT_SLOT_COUNT * 2;
 	}
 
 	/**

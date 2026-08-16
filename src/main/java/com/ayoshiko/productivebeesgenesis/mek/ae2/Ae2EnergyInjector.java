@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import org.jetbrains.annotations.Nullable;
 
@@ -80,7 +81,7 @@ public final class Ae2EnergyInjector {
 	}
 
 	/**
-	 * Injects no more than the deficit for the supplied batch size. Passing the batch multiplier
+	 * Refills to the supplied batch demand plus one reserve batch. Passing the batch multiplier
 	 * from the tick handler avoids recomputing upgrade effects more than once per real tick.
 	 */
 	public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier) {
@@ -90,8 +91,9 @@ public final class Ae2EnergyInjector {
 	}
 
 	/**
-	 * Injects the precomputed demand for one real tick. Tick handlers use this overload so upgrade,
-	 * process and accelerator multipliers are evaluated only once per batch.
+	 * Refills toward a two-batch high-water mark derived from the precomputed real-tick demand.
+	 * Tick handlers use this overload so upgrade, process and accelerator multipliers are evaluated
+	 * only once per batch.
 	 */
 	public static long injectEnergy(IAe2OutputHostBase host, long requiredThisTick) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
@@ -102,17 +104,18 @@ public final class Ae2EnergyInjector {
 
 		requiredThisTick = Math.max(0L, requiredThisTick);
 
+		long targetEnergy = MekCentrifugeEnergyScaling.bufferedCapacityForDemand(requiredThisTick);
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
-		if (requiredThisTick > maxEnergy) {
-			container.setMaxEnergy(requiredThisTick);
+		if (targetEnergy > maxEnergy) {
+			container.setMaxEnergy(targetEnergy);
 			maxEnergy = container.getMaxEnergy();
 		}
 		long remainingCapacity = Ae2EnergyMath.remainingCapacity(currentEnergy, maxEnergy);
 		if (remainingCapacity <= 0) return 0;
 
 		long toExtract = Math.min(remainingCapacity,
-				requiredThisTick > currentEnergy ? requiredThisTick - currentEnergy : 0L);
+				targetEnergy > currentEnergy ? targetEnergy - currentEnergy : 0L);
 		if (toExtract <= 0) return 0;
 
 		IGrid grid = getConnectedGrid(host);

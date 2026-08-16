@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableBoolean;
 import mekanism.common.inventory.container.sync.SyncableInt;
+import mekanism.common.inventory.container.sync.SyncableItemStack;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 
 /**
  * 机械蜂箱容器同步器注册（纯静态，无状态）
@@ -43,5 +45,14 @@ final class ApiaryContainerTrackers {
 		container.track(SyncableBoolean.create(
 				tile::isDirectAeOutputEnabled,
 				tile::setDirectAeOutputEnabled));
+		container.track(SyncableBoolean.create(
+				tile::isCentrifugePriorityEnabled,
+				tile::setCentrifugePriorityEnabled));
+		// Physical pages stay synchronized while the GUI is open. The visible proxy slots alone
+		// cannot observe changes made to a hidden page, which otherwise leaves stale client stacks.
+		for (BasicInventorySlot outputSlot : tile.getOutputSlots()) {
+			container.track(SyncableItemStack.create(
+					outputSlot::getStack, outputSlot::setStackUnchecked));
+		}
 	}
 }

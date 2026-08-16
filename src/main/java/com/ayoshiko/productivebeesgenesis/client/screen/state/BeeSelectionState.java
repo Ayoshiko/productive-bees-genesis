@@ -96,34 +96,34 @@ public final class BeeSelectionState {
 		return sortMode;
 	}
 
-	/** 判断指定 namespace 分组是否处于折叠状态 */
-	public boolean isGroupCollapsed(String namespace) {
-		return namespace != null && collapsedGroups.contains(namespace);
+	/** 判断指定产物模组分组是否处于折叠状态 */
+	public boolean isGroupCollapsed(String groupId) {
+		return groupId != null && collapsedGroups.contains(groupId);
 	}
 
-	/** 设置指定 namespace 分组的折叠状态 */
-	public void setGroupCollapsed(String namespace, boolean collapsed) {
-		if (namespace == null) {
+	/** 设置指定产物模组分组的折叠状态 */
+	public void setGroupCollapsed(String groupId, boolean collapsed) {
+		if (groupId == null) {
 			return;
 		}
 		if (collapsed) {
-			collapsedGroups.add(namespace);
+			collapsedGroups.add(groupId);
 		} else {
-			collapsedGroups.remove(namespace);
+			collapsedGroups.remove(groupId);
 		}
 	}
 
-	/** 切换指定 namespace 分组的折叠状态 */
-	public void toggleGroupCollapsed(String namespace) {
-		if (namespace == null) {
+	/** 切换指定产物模组分组的折叠状态 */
+	public void toggleGroupCollapsed(String groupId) {
+		if (groupId == null) {
 			return;
 		}
-		if (!collapsedGroups.remove(namespace)) {
-			collapsedGroups.add(namespace);
+		if (!collapsedGroups.remove(groupId)) {
+			collapsedGroups.add(groupId);
 		}
 	}
 
-	/** 获取所有折叠分组的 namespace 集合（副本） */
+	/** 获取所有折叠产物模组分组ID（副本） */
 	public Set<String> getCollapsedGroups() {
 		return new HashSet<>(collapsedGroups);
 	}

@@ -9,12 +9,12 @@ import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -63,6 +63,9 @@ public final class Ae2FluidPusher {
 
 	/** 进入"按子 tick 累积并立即刷新"模式的槽内流体阈值（mB）— 低于此值时只在窗口边界累积 */
 	private static final long SATURATION_ACCUMULATE_THRESHOLD_MB = 250_000L;
+	/** Bound one key's ME request so a single huge tank cannot monopolize a tick. */
+	private static final long MAX_FLUID_BATCH_REQUEST_MB = 16_000_000L;
+	private static final int MAX_FLUID_BATCH_CALLS_PER_KEY = 4;
 
 	private Ae2FluidPusher() {}
 
@@ -96,7 +99,8 @@ public final class Ae2FluidPusher {
 		AEFluidKey key = AEFluidKey.of(template);
 		if (key == null) return 0L;
 		try {
-			return meStorage.insert(key, requested, action, ACTION_SOURCE);
+			return SaturatingMath.clampToRequest(
+					meStorage.insert(key, requested, action, ACTION_SOURCE), requested);
 		} catch (Exception e) {
 			LogThrottle.warnWithCooldown("ae2_direct_generated_fluid", 60_000L,
 					"AE2 direct generated-fluid insert failed: fluid={}, amount={}, error={}",
@@ -156,7 +160,7 @@ public final class Ae2FluidPusher {
 		for (int i = 0; i < tankCount; i++) {
 			IExtendedFluidTank tank = host.fluidOutputTank(i);
 			if (tank == null || tank.isEmpty()) continue;
-			totalInTanks += tank.getFluid().getAmount();
+			totalInTanks = SaturatingMath.saturatingAdd(totalInTanks, tank.getFluid().getAmount());
 		}
 
 		// tryStartFluidPush 已将加速子 tick 合并为每个真实游戏刻一次。
@@ -211,7 +215,7 @@ public final class Ae2FluidPusher {
 		if (meStorage == null) return;
 
 		// 11. Task 21: drain 并批量推送
-		ConcurrentMap<AEFluidKey, Long> pendingMap = batchBuffer.drain();
+		Object2LongMap<AEFluidKey> pendingMap = batchBuffer.drainFast();
 		if (pendingMap.isEmpty()) return;
 
 		boolean anySuccess = false;
@@ -219,11 +223,14 @@ public final class Ae2FluidPusher {
 		long totalRequested = 0L;
 		long totalActualShrunk = 0L; // 实际从 tank shrink 的总量（区分 tank 已空和推送失败）
 		long rejectedCount = 0L; // 被网络完全拒绝的流体种类数（用于触发退避）
+		long nanoNow = System.nanoTime();
+		Ae2KeyBackoffRegistry<AEFluidKey> keyBackoff = getOrCreateFluidKeyBackoff(holder);
 
-		for (Map.Entry<AEFluidKey, Long> entry : pendingMap.entrySet()) {
+		for (Object2LongMap.Entry<AEFluidKey> entry : pendingMap.object2LongEntrySet()) {
 			AEFluidKey fluidKey = entry.getKey();
-			long amount = entry.getValue();
-			totalRequested += amount;
+			if (keyBackoff.shouldSkip(fluidKey, nanoNow)) continue;
+			long amount = entry.getLongValue();
+			totalRequested = SaturatingMath.saturatingAdd(totalRequested, amount);
 
 			try {
 				// 无丢失推送：先快照当前 tank 中该流体的实际总量作为推送上限。
@@ -238,16 +245,18 @@ public final class Ae2FluidPusher {
 				long inserted = batchPush(meStorage, fluidKey, pushed);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发退避
-					rejectedCount++;
+					keyBackoff.recordFailure(fluidKey, nanoNow);
+					rejectedCount = SaturatingMath.saturatingAdd(rejectedCount, 1L);
 					continue;
 				}
+				keyBackoff.recordSuccess(fluidKey);
 				anySuccess = true;
 				allFailed = false;
 				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
 				// 正常情况下 shrink 必然足额；不足仅可能出现在极端并发/异常，
 				// 记录 error 防止静默复制（防御性）。
 				long shrunk = shrinkStackSafely(host, fluidKey, inserted, tankCount);
-				totalActualShrunk += shrunk;
+				totalActualShrunk = SaturatingMath.saturatingAdd(totalActualShrunk, shrunk);
 				if (shrunk < inserted) {
 					LogThrottle.error("ae2_fluid_shrink_mismatch",
 							"AE2 流体推送后 shrink 不足: fluid={}, inserted={}, shrunk={} (5秒内仅首条)",
@@ -256,6 +265,8 @@ public final class Ae2FluidPusher {
 
 				logPushResult(fluidKey, pushed, inserted);
 			} catch (Exception e) {
+				keyBackoff.recordFailure(fluidKey, nanoNow);
+				rejectedCount = SaturatingMath.saturatingAdd(rejectedCount, 1L);
 				handlePushException(e, fluidKey, amount);
 			}
 		}
@@ -272,6 +283,18 @@ public final class Ae2FluidPusher {
 			fluidBackoff.recordSuccess();
 		}
 		if (totalActualShrunk > 0) host.productivebeesgenesis$onAe2FluidPushComplete();
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Ae2KeyBackoffRegistry<AEFluidKey> getOrCreateFluidKeyBackoff(
+			Ae2OutputStateHolder holder) {
+		Object cached = holder.getPushState().getFluidKeyBackoffRegistry();
+		if (cached instanceof Ae2KeyBackoffRegistry<?> registry) {
+			return (Ae2KeyBackoffRegistry<AEFluidKey>) registry;
+		}
+		Ae2KeyBackoffRegistry<AEFluidKey> registry = new Ae2KeyBackoffRegistry<>();
+		holder.getPushState().setFluidKeyBackoffRegistry(registry);
+		return registry;
 	}
 
 	/**
@@ -291,7 +314,7 @@ public final class Ae2FluidPusher {
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty() || !fluidKey.matches(stack)) continue;
-			total += stack.getAmount();
+			total = SaturatingMath.saturatingAdd(total, stack.getAmount());
 		}
 		return total;
 	}
@@ -360,8 +383,18 @@ public final class Ae2FluidPusher {
 	 */
 	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount) {
 		// 固定有限批量，避免 256× 时单次向第三方存储请求数亿 mB，同时保持较低调用次数。
-		long batchSizeLimit = 16_000_000L;
-		return Math.max(0L, meStorage.insert(fluidKey, amount, Actionable.MODULATE, ACTION_SOURCE));
+		long remaining = Math.max(0L, amount);
+		long insertedTotal = 0L;
+		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
+			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
+			long inserted = SaturatingMath.clampToRequest(
+					meStorage.insert(fluidKey, request, Actionable.MODULATE, ACTION_SOURCE), request);
+			if (inserted <= 0L) break;
+			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
+			remaining -= inserted;
+			if (inserted < request) break;
+		}
+		return SaturatingMath.clampToRequest(insertedTotal, amount);
 	}
 
 	/**
@@ -404,7 +437,7 @@ public final class Ae2FluidPusher {
 			long tankAmount = stack.getAmount();
 			long shrinkThisTank = Math.min(remaining, tankAmount);
 			long actualShrunk = shrinkSingleTankChunked(tank, shrinkThisTank);
-			totalShrunk += actualShrunk;
+			totalShrunk = SaturatingMath.saturatingAdd(totalShrunk, actualShrunk);
 			remaining -= actualShrunk;
 			// 实际 shrink 量小于请求量,说明 tank 状态异常,跳出避免无效循环
 			if (actualShrunk < shrinkThisTank) break;
@@ -436,7 +469,7 @@ public final class Ae2FluidPusher {
 				FluidStack after = tank.getFluid();
 				long afterAmount = after.isEmpty() ? 0 : after.getAmount();
 				long actualChunk = Math.max(0, beforeAmount - afterAmount);
-				totalShrunk += actualChunk;
+				totalShrunk = SaturatingMath.saturatingAdd(totalShrunk, actualChunk);
 				amount -= actualChunk;
 				// tank 实际未 shrink(chunk > 0 但 actualChunk == 0),跳出避免无限循环
 				if (actualChunk == 0 && chunk > 0) break;

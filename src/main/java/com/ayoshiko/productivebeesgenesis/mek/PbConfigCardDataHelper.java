@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NbtKeys;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -229,7 +230,7 @@ public final class PbConfigCardDataHelper {
 		for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
 			ItemStack stack = player.getInventory().getItem(i);
 			if (!stack.isEmpty() && stack.getItem() == item) {
-				count += stack.getCount();
+				count = SaturatingMath.saturatingAddToInt(count, stack.getCount());
 			}
 		}
 		return count;
@@ -291,7 +292,7 @@ public final class PbConfigCardDataHelper {
 		return switch (machineType) {
 			case CENTRIFUGE -> switch (type) {
 				case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-						TIME, TIME_2, STABILITY -> true;
+						TIME, TIME_2, STABILITY, USELESS_BYPRODUCT -> true;
 				default -> false;
 			};
 			case APIARY -> type != PbUpgradeType.STABILITY;

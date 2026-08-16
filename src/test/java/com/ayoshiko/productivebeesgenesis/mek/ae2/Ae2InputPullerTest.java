@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -97,5 +98,49 @@ class Ae2InputPullerTest {
 		Ae2CursorScan.collect(out, keys, "zzz", 8, key -> true);
 		// 游标键已不在网络中：主扫描不命中，回绕从头收集全部可拉取键
 		assertEquals(List.of("a", "b"), out);
+	}
+
+	@Test
+	void mappedScanKeepsWraparoundStorageBounded() {
+		List<String> keys = new ArrayList<>();
+		for (int i = 0; i < 1_000; i++) keys.add("k" + i);
+		List<String> out = new ArrayList<>();
+		List<String> prefixScratch = new ArrayList<>();
+
+		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "k500", 3,
+				key -> key, key -> true);
+
+		assertEquals(List.of("k500", "k501", "k502"), out);
+		assertEquals(3, prefixScratch.size());
+	}
+
+	@Test
+	void mappedScanStopsFilteringOnceWrapPrefixIsFull() {
+		List<String> keys = new ArrayList<>();
+		for (int i = 0; i < 1_000; i++) keys.add("k" + i);
+		List<String> out = new ArrayList<>();
+		List<String> prefixScratch = new ArrayList<>();
+		AtomicInteger predicateCalls = new AtomicInteger();
+
+		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "k900", 3,
+				key -> key, key -> {
+					predicateCalls.incrementAndGet();
+					return true;
+				});
+
+		assertEquals(List.of("k900", "k901", "k902"), out);
+		assertEquals(6, predicateCalls.get());
+	}
+
+	@Test
+	void mappedScanSkipsUnrelatedSourceTypes() {
+		List<Object> keys = List.of(1, "a", 2, "b", "c");
+		List<String> out = new ArrayList<>();
+		List<String> prefixScratch = new ArrayList<>();
+
+		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "b", 3,
+				key -> key instanceof String string ? string : null, key -> true);
+
+		assertEquals(List.of("b", "c", "a"), out);
 	}
 }

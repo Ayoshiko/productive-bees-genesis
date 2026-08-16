@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -125,11 +126,8 @@ public final class ItemStackMergeHelper {
 	 * <p>
 	 * 分组策略（兼顾性能与数据完整性）：
 	 * <ul>
-	 *   <li>快速路径（组大小 ≤ 2）：直接信任 hashCode 分组结果，按总量拆分堆叠。
-	 *       蜜蜂产物组件简单（蜜脾/蜂蜜瓶/蜡/基因等），32 位 hashCode 冲突概率极低，
-	 *       且避免 GeckoLib wrapOperation 拦截带来的 isSameItemSameComponents 开销。</li>
-	 *   <li>回退路径（组大小 ≥ 3）：使用 {@link ItemStack#isSameItemSameComponents} 两两验证组内元素，
-	 *       发现冲突时跳过整个组的合并并记录 WARN 日志（保守策略，保护数据完整性）。</li>
+	 *   <li>用组件 hash 先缩小候选组，再把每个元素与组首元素比较，总比较次数为 N-1。</li>
+	 *   <li>发现 hash 冲突时保留全部原始栈并记录节流日志，绝不合并或丢弃不同组件。</li>
 	 * </ul>
 	 */
 	private static void mergeGroup(List<ItemStack> group, List<ItemStack> result) {
@@ -139,32 +137,30 @@ public final class ItemStackMergeHelper {
 			return;
 		}
 
-		// 回退路径：组大小 ≥ 3 时，使用 isSameItemSameComponents 两两验证组内无 hash 冲突。
-		// 同组内 Item 已相同（MergeKey 含 Item identity），冲突只可能来自组件 hashCode 碰撞。
-		// 一旦发现不一致，跳过整个组的合并（保守策略），避免不同组件的物品被错误堆叠导致数据破坏。
-		if (group.size() >= 3) {
-			for (int i = 0; i < group.size(); i++) {
-				for (int j = i + 1; j < group.size(); j++) {
-					ItemStack a = group.get(i);
-					ItemStack b = group.get(j);
-					if (!ItemStack.isSameItemSameComponents(a, b)) {
-						LogThrottle.warn("itemstack_hash_conflict", "检测到 ItemStack 组件 hashCode 冲突（同组内组件不一致），跳过该组合并以保护数据完整性: "
-								+ "item={}, groupSize={}",
-								a.getItem(), group.size());
-						return;
-					}
-				}
+		// Equality is transitive, so comparing each entry with the first is enough.
+		// On the extremely rare 32-bit component-hash collision, preserve every stack
+		// instead of merging incompatible components or dropping the whole group.
+		ItemStack first = group.get(0);
+		for (int i = 1; i < group.size(); i++) {
+			if (!ItemStack.isSameItemSameComponents(first, group.get(i))) {
+				LogThrottle.warn("itemstack_hash_conflict",
+						"检测到 ItemStack 组件 hashCode 冲突，保留原始物品栈: item={}, groupSize={}",
+						first.getItem(), group.size());
+				for (ItemStack stack : group) result.add(stack.copy());
+				return;
 			}
 		}
 
-		// 快速路径（组大小 ≤ 2 直接信任，或组大小 ≥ 3 已通过两两验证）：
-		// 同组内 (Item, componentHash) 已相同，直接按总量拆分堆叠。
-		ItemStack first = group.get(0);
+		// All entries are component-equal; aggregate their counts and split by max stack size.
 		long totalCount = 0;
 		for (ItemStack stack : group) {
-			totalCount += stack.getCount();
+			totalCount = SaturatingMath.saturatingAdd(totalCount, stack.getCount());
 		}
 		int maxSize = first.getMaxStackSize();
+		if (maxSize <= 0) {
+			for (ItemStack stack : group) result.add(stack.copy());
+			return;
+		}
 		while (totalCount > 0) {
 			int count = (int) Math.min(totalCount, maxSize);
 			result.add(first.copyWithCount(count));

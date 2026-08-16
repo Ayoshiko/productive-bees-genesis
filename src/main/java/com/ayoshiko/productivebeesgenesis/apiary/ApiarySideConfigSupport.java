@@ -46,7 +46,8 @@ final class ApiarySideConfigSupport {
 		// 同时弹出物品和流体
 		tile.ejectorComponent.setOutputData(tile.configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
 		// 直连输出路由：侧面配置变化时立即标记直连检测，重新扫描目标离心机
-		tile.configComponent.addConfigChangeListener(TransmissionType.ITEM, ignored -> tile.markDirectEjectDirty());
+		tile.configComponent.addConfigChangeListener(TransmissionType.ITEM,
+				ignored -> tile.onDirectEjectRoutingChanged());
 	}
 
 	/**

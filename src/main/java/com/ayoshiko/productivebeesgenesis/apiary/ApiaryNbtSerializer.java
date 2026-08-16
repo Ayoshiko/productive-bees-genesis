@@ -42,6 +42,7 @@ class ApiaryNbtSerializer {
 	static final String NBT_KEY_SELECTED_BEE = "productivebeesgenesis_selected_bee";
 	static final String NBT_KEY_DIRECT_EJECT = "productivebeesgenesis_direct_eject";
 	static final String NBT_KEY_DIRECT_AE_OUTPUT = "productivebeesgenesis_direct_ae_output";
+	static final String NBT_KEY_CENTRIFUGE_PRIORITY = "productivebeesgenesis_centrifuge_priority";
 
 	/**
 	 * NBT key — 蜂箱内部流体罐内容
@@ -51,6 +52,8 @@ class ApiaryNbtSerializer {
 	 * 保持 DRY（同一序列化格式在存档/拆卸/升级三个路径复用）。
 	 */
 	static final String NBT_KEY_APIARY_FLUID = "productivebeesgenesis_apiary_fluid";
+	private static final String NBT_KEY_PENDING_FLUID_AMOUNT = "PendingAmount";
+	private static final String NBT_KEY_PENDING_FLUID = "PendingFluid";
 
 	// ===== 模块 3：镐子破坏持久化 — 补充 saveCustomData 缺失的槽位 =====
 	// 原 saveCustomData 通过 writeApiaryStateTo 已保存蜜蜂槽/喂食槽/PB升级/流体罐/outputBuffer/选中槽位，
@@ -117,11 +120,18 @@ class ApiaryNbtSerializer {
 		nbt.putInt(NBT_KEY_SELECTED_BEE, tile.getSelectedBeeSlot());
 		nbt.putBoolean(NBT_KEY_DIRECT_EJECT, tile.isDirectEjectEnabled());
 		nbt.putBoolean(NBT_KEY_DIRECT_AE_OUTPUT, tile.isDirectAeOutputEnabled());
+		nbt.putBoolean(NBT_KEY_CENTRIFUGE_PRIORITY, tile.isCentrifugePriorityEnabled());
 		// 修复 v14：序列化流体罐内容（非空时写入，避免空标签）
 		FluidStack fluid = tile.getFluidTank().getFluid();
-		if (!fluid.isEmpty()) {
+		FluidStack pendingTemplate = tile.getPendingHoneyFluidTemplate();
+		long pendingAmount = tile.getPendingHoneyFluidAmount();
+		if (!fluid.isEmpty() || pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
 			CompoundTag fluidNbt = new CompoundTag();
-			fluidNbt.put("Fluid", fluid.save(provider));
+			if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.save(provider));
+			if (pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
+				fluidNbt.putLong(NBT_KEY_PENDING_FLUID_AMOUNT, pendingAmount);
+				fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.save(provider));
+			}
 			nbt.put(NBT_KEY_APIARY_FLUID, fluidNbt);
 		}
 		// F4: 序列化产物溢出缓冲区（非空时写入，向后兼容旧存档）
@@ -138,9 +148,7 @@ class ApiaryNbtSerializer {
 	 * 修复 v14：追加流体罐反序列化，恢复存档/扳手拆卸时保存的流体内容。
 	 * 使用 {@code insert(..., AutomationType.INTERNAL)} 尊重当前罐容量，
 	 * 与 {@link #applyUpgradeData} 中的流体恢复逻辑一致（DRY）。
-	 * 修复 v14 loadSlots/loadCounts 顺序：必须先 loadSlots 恢复槽位,再 loadPbUpgradeCounts 恢复数量。
-	 * 原理:loadPbUpgradeCounts 内部 applyCountWithLimit 在数量超过配置上限时,会将超出部分注入输出槽。
-	 * 若 loadSlots 未先执行,输出槽为空,注入的超出部分会被后续 loadSlots 覆盖,导致升级物品凭空消失。
+	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadApiaryState(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		int schemaVersion = nbt.getInt(NBT_KEY_SCHEMA_VERSION);
@@ -165,6 +173,9 @@ class ApiaryNbtSerializer {
 		if (nbt.contains(NBT_KEY_DIRECT_AE_OUTPUT, Tag.TAG_BYTE)) {
 			tile.setDirectAeOutputEnabled(nbt.getBoolean(NBT_KEY_DIRECT_AE_OUTPUT));
 		}
+		if (nbt.contains(NBT_KEY_CENTRIFUGE_PRIORITY, Tag.TAG_BYTE)) {
+			tile.setCentrifugePriorityEnabled(nbt.getBoolean(NBT_KEY_CENTRIFUGE_PRIORITY));
+		}
 		// 修复 v14：反序列化流体罐内容（向后兼容：旧存档无此字段时跳过）
 		if (nbt.contains(NBT_KEY_APIARY_FLUID, Tag.TAG_COMPOUND)) {
 			CompoundTag fluidNbt = nbt.getCompound(NBT_KEY_APIARY_FLUID);
@@ -174,6 +185,9 @@ class ApiaryNbtSerializer {
 					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
 			}
+			loadPendingHoneyFluid(fluidNbt, provider);
+		} else {
+			tile.setPendingHoneyFluid(0L, null);
 		}
 		// F4: 反序列化产物溢出缓冲区（向后兼容：旧存档无此字段时跳过）
 		if (nbt.contains(ApiaryOutputBuffer.nbtKey(), Tag.TAG_COMPOUND)) {
@@ -182,6 +196,16 @@ class ApiaryNbtSerializer {
 		// 模块 3 Bug 1：反序列化镐子破坏/扳手拆卸冗余保存的槽位（向后兼容：旧存档无此键时跳过）
 		// 这些键仅由 saveCustomData 写入，存档加载时通常不存在，由 MEK ITEM_CONTAINER 接管恢复
 		loadDropSlotsFromNbt(nbt, provider);
+	}
+
+	private void loadPendingHoneyFluid(CompoundTag fluidNbt, HolderLookup.Provider provider) {
+		tile.setPendingHoneyFluid(0L, null);
+		if (fluidNbt == null || !fluidNbt.contains(NBT_KEY_PENDING_FLUID_AMOUNT, Tag.TAG_LONG)
+				|| !fluidNbt.contains(NBT_KEY_PENDING_FLUID, Tag.TAG_COMPOUND)) return;
+		long amount = fluidNbt.getLong(NBT_KEY_PENDING_FLUID_AMOUNT);
+		if (amount <= 0L) return;
+		FluidStack template = FluidStack.parseOptional(provider, fluidNbt.getCompound(NBT_KEY_PENDING_FLUID));
+		if (!template.isEmpty()) tile.setPendingHoneyFluid(amount, template);
 	}
 
 	/**
@@ -322,8 +346,12 @@ class ApiaryNbtSerializer {
 
 		CompoundTag fluidNbt = new CompoundTag();
 		FluidStack fluid = tile.getFluidTank().getFluid();
-		if (!fluid.isEmpty()) {
-			fluidNbt.put("Fluid", fluid.save(provider));
+		if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.save(provider));
+		FluidStack pendingTemplate = tile.getPendingHoneyFluidTemplate();
+		long pendingAmount = tile.getPendingHoneyFluidAmount();
+		if (pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
+			fluidNbt.putLong(NBT_KEY_PENDING_FLUID_AMOUNT, pendingAmount);
+			fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.save(provider));
 		}
 
 		// 蜂笼输出槽序列化（独立于产物输出槽）
@@ -350,7 +378,7 @@ class ApiaryNbtSerializer {
 				fluidNbt, cageOutSlotNbt, outputItems,
 				cageInSlotNbt, energySlotNbt, outputBufferNbt, tile.getSelectedBeeSlot(),
 				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled(),
-				tile.isDirectAeOutputEnabled());
+				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled());
 	}
 
 	/**
@@ -412,9 +440,7 @@ class ApiaryNbtSerializer {
 				component.read(data.components, provider);
 			}
 			// 恢复蜂箱特有数据
-			// 修复 v14 loadSlots/loadCounts 顺序：必须先恢复槽位,再恢复数量。
-			// 原理:loadPbUpgradeCounts 内部 applyCountWithLimit 在数量超过配置上限时,会将超出部分注入输出槽。
-			// 若输出槽未先恢复,注入的超出部分会被后续 deserializeNBT 覆盖,导致升级物品凭空消失。
+			// PB 升级槽位与数量均按快照恢复；当前配置上限仅限制后续安装。
 			tile.getSlotManager().loadBeeSlots(data.beeSlotsNbt);
 			tile.feederSlotManager.loadFeederSlots(data.feederSlotsNbt, provider);
 			tile.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
@@ -431,6 +457,7 @@ class ApiaryNbtSerializer {
 					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
 			}
+			loadPendingHoneyFluid(data.fluidNbt, provider);
 			// 恢复蜂笼输出槽
 			tile.getCageOutSlot().deserializeNBT(provider, data.cageOutSlotNbt);
 			// 恢复选中蜜蜂槽（边界检查，超出当前槽位数量时重置为未选择）
@@ -447,6 +474,7 @@ class ApiaryNbtSerializer {
 			}
 			tile.setDirectEjectEnabled(data.directEjectEnabled);
 			tile.setDirectAeOutputEnabled(data.directAeOutputEnabled);
+			tile.setCentrifugePriorityEnabled(data.centrifugePriorityEnabled);
 			// 修复 MEDIUM-2: 显式恢复 SORTING 字段（模板方法,基础蜂箱为 no-op,工厂版重写设置 sorting）
 			tile.setSortingFromUpgradeData(data.sorting);
 		} catch (RuntimeException e) {

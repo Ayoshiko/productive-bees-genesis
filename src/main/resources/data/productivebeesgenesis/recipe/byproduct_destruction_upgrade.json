@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "YHY",
+    "SBS",
+    "YHY"
+  ],
+  "key": {
+    "B": {
+      "item": "productivelib:upgrade_base"
+    },
+    "H": {
+      "item": "minecraft:honey_bottle"
+    },
+    "S": {
+      "item": "minecraft:sponge"
+    },
+    "Y": {
+      "item": "minecraft:yellow_dye"
+    }
+  },
+  "result": {
+    "id": "productivebeesgenesis:byproduct_destruction_upgrade"
+  }
+}

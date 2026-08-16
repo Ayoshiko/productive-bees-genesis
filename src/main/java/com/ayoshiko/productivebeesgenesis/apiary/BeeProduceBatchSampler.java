@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
 import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import net.minecraft.world.item.ItemStack;
 
@@ -56,17 +57,31 @@ public final class BeeProduceBatchSampler {
 		if (recipeOutputs == null || recipeOutputs.isEmpty() || batchCount <= 0) {
 			return List.of();
 		}
-		ThreadLocalRandom random = ThreadLocalRandom.current();
 		List<ItemStack> result = new ArrayList<>(recipeOutputs.size());
+		sampleInto(result, recipeOutputs, batchCount, multiplier, stabilityBonus);
+		return result;
+	}
+
+	/** Writes sampled stacks into a caller-owned buffer to avoid an intermediate list per bee group. */
+	public static void sampleInto(List<ItemStack> output,
+			Map<ItemStack, ChancedOutput> recipeOutputs,
+			int batchCount, float multiplier, float stabilityBonus) {
+		if (output == null || recipeOutputs == null || recipeOutputs.isEmpty() || batchCount <= 0
+				|| Float.isNaN(multiplier) || multiplier <= 0.0f) return;
+		ThreadLocalRandom random = ThreadLocalRandom.current();
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : recipeOutputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
+			if (Float.isNaN(chance) || chance <= 0.0f) continue;
+			float safeStabilityBonus = Float.isFinite(stabilityBonus)
+					? Math.max(0.0f, stabilityBonus)
+					: (stabilityBonus > 0.0f ? 1.0f : 0.0f);
 			// stability bonus 提升非保底产物概率，截断到 1.0（与 PbRecipeCompleter 一致）
-			float adjustedChance = chance >= 1.0f ? chance : Math.min(1.0f, chance + stabilityBonus);
+			float adjustedChance = chance >= 1.0f ? 1.0f : Math.min(1.0f, chance + safeStabilityBonus);
 			if (adjustedChance <= 0.0f) continue;
 
-			int min = chanced.min();
+			int min = Math.max(0, chanced.min());
 			int max = Math.max(chanced.max(), min);
 
 			// baseSum：不含 multiplier 的基础数量之和（long 域防溢出）
@@ -74,8 +89,7 @@ public final class BeeProduceBatchSampler {
 			if (batchCount == 1) {
 				// 单次路径 — 与 PbRecipeCompleter.accumulatePbRecipeOutputs 完全等价
 				if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) continue;
-				baseSum = min;
-				if (max > min) baseSum += random.nextInt(max - min + 1);
+				baseSum = SampleUniformSum.sampleSingle(random, min, max);
 			} else if (adjustedChance >= 1.0f) {
 				// 必定通过 — CLT 近似 batchCount 次 [min,max] 之和（modifier=1，倍率后续统一应用）
 				baseSum = SampleUniformSum.sample(random, min, max, batchCount, 1);
@@ -89,12 +103,26 @@ public final class BeeProduceBatchSampler {
 
 			if (baseSum <= 0) continue;
 			// 应用 float multiplier（含 purity 加成），long 域防溢出
-			long totalCount = Math.round((double) baseSum * multiplier);
+			long totalCount = SaturatingMath.saturatingRoundToLong((double) baseSum * multiplier);
 			// 最终 clamp 到 Integer.MAX_VALUE（ItemStack count 上限）
 			totalCount = Math.min(totalCount, Integer.MAX_VALUE);
 			if (totalCount <= 0) continue;
-			result.add(entry.getKey().copyWithCount((int) totalCount));
+			output.add(entry.getKey().copyWithCount((int) totalCount));
 		}
-		return result;
+	}
+
+	/**
+	 * Samples a guaranteed one-item output without constructing a synthetic recipe map.
+	 * Used by feeder-dependent bees whose output item is selected once per production batch.
+	 */
+	public static void sampleGuaranteedInto(List<ItemStack> output, ItemStack template,
+			int batchCount, float multiplier) {
+		if (output == null || template == null || template.isEmpty() || batchCount <= 0
+				|| Float.isNaN(multiplier) || multiplier <= 0.0f) return;
+		long totalCount = SaturatingMath.saturatingRoundToLong((double) batchCount * multiplier);
+		totalCount = Math.min(totalCount, Integer.MAX_VALUE);
+		if (totalCount > 0) {
+			output.add(template.copyWithCount((int) totalCount));
+		}
 	}
 }

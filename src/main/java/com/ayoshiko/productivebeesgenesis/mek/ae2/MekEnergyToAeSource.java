@@ -6,6 +6,7 @@ import appeng.api.networking.energy.IEnergySource;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 /**
 	 * Mekanism 能量容器到 AE2 能量源的适配器
@@ -41,21 +42,25 @@ public final class MekEnergyToAeSource implements IEnergySource {
 
 	@Override
 	public double extractAEPower(double amount, Actionable mode, PowerMultiplier multiplier) {
+		if (Double.isNaN(amount) || amount <= 0.0D || multiplier == null) return 0.0D;
 		// AE 能量 → FE 能量（应用 multiplier 和转换比例）
 		double scaled = multiplier.multiply(amount);
-		long feAmount = (long) Math.ceil(scaled * AE_TO_FE_RATIO);
+		long feAmount = SaturatingMath.saturatingCeilToLong(scaled * AE_TO_FE_RATIO);
 		if (feAmount <= 0) {
 			return 0;
 		}
 
 		// Mekanism Action：MODULATE → EXECUTE，SIMULATE → SIMULATE
 		Action mekAction = mode.isSimulate() ? Action.SIMULATE : Action.EXECUTE;
-		long extracted = container.extract(feAmount, mekAction, AutomationType.INTERNAL);
+		long extracted = SaturatingMath.clampToRequest(
+				container.extract(feAmount, mekAction, AutomationType.INTERNAL), feAmount);
 		if (extracted <= 0) {
 			return 0;
 		}
 
 		// FE 能量 → AE 能量（反向转换并应用 multiplier 除法）
-		return multiplier.divide(extracted / AE_TO_FE_RATIO);
+		double extractedAe = multiplier.divide(extracted / AE_TO_FE_RATIO);
+		if (Double.isNaN(extractedAe) || extractedAe <= 0.0D) return 0.0D;
+		return Double.isFinite(amount) ? Math.min(amount, extractedAe) : extractedAe;
 	}
 }

@@ -44,6 +44,13 @@ bee_*.txt
 config_bee.txt
 dependencies.txt
 
+# 本地材质备份与预览（不参与源码、构建或发布）
+texture_backups/
+tmp_new_texture_preview/
+tmp_pb_inspect/
+tmp_texture_sources/
+tmp_texture_sources.zip
+
 # 审查文档（内部使用，不入库）
 docs/
 CODE_WIKI.md

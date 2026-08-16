@@ -75,11 +75,16 @@ public final class MultiFlowerBeeAdapter {
 	 */
 	public static List<ItemStack> sampleProduceFromFeeder(
 			ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder, @Nullable Level level) {
-		if (feeder == null) return List.of();
-		MultiFlowerStrategy strategy = STRATEGIES.get(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
-		if (strategy == null) return List.of();
-		ItemStack sample = strategy.sampleFromFeeder(feeder, level);
+		ItemStack sample = sampleProduceStackFromFeeder(beeTypeKey, feeder, level);
 		return sample.isEmpty() ? List.of() : List.of(sample);
+	}
+
+	/** Returns the selected feeder-dependent output without allocating a single-element list. */
+	public static ItemStack sampleProduceStackFromFeeder(
+			ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder, @Nullable Level level) {
+		if (feeder == null) return ItemStack.EMPTY;
+		MultiFlowerStrategy strategy = STRATEGIES.get(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
+		return strategy == null ? ItemStack.EMPTY : strategy.sampleFromFeeder(feeder, level);
 	}
 
 	/**

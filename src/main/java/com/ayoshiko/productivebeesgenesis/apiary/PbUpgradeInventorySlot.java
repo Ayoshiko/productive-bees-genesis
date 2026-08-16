@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import cy.jdkdigital.productivelib.registry.LibItems;
@@ -115,7 +116,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_PRODUCTIVITY_4.get()
 				|| item == LibItems.UPGRADE_TIME.get()
 				|| item == LibItems.UPGRADE_TIME_2.get()
-				|| item == LibItems.UPGRADE_STABILITY.get();
+				|| item == LibItems.UPGRADE_STABILITY.get()
+				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
 	}
 
 	/**
@@ -162,7 +164,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_TIME.get()
 				|| item == LibItems.UPGRADE_TIME_2.get()
 				|| item == LibItems.UPGRADE_GENE_SAMPLER.get()
-				|| item == LibItems.UPGRADE_BLOCK.get();
+				|| item == LibItems.UPGRADE_BLOCK.get()
+				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
 	}
 
 	/**
@@ -208,6 +211,9 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 		if (item == LibItems.UPGRADE_STABILITY.get()) {
 			return PbUpgradeType.STABILITY;
 		}
+		if (item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()) {
+			return PbUpgradeType.USELESS_BYPRODUCT;
+		}
 		return null;
 	}
 
@@ -232,6 +238,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case BLOCK -> new ItemStack(LibItems.UPGRADE_BLOCK.get());
 			case SIMULATION -> new ItemStack(LibItems.UPGRADE_SIMULATOR.get());
 			case STABILITY -> new ItemStack(LibItems.UPGRADE_STABILITY.get());
+			case USELESS_BYPRODUCT -> new ItemStack(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 			default -> ItemStack.EMPTY;
 		};
 	}
@@ -260,6 +267,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case BLOCK -> item == LibItems.UPGRADE_BLOCK.get();
 			case SIMULATION -> item == LibItems.UPGRADE_SIMULATOR.get();
 			case STABILITY -> item == LibItems.UPGRADE_STABILITY.get();
+			case USELESS_BYPRODUCT -> item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
 			default -> false;
 		};
 	}

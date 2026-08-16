@@ -73,13 +73,13 @@ class MekCentrifugeSaveHandler {
 	// ===== PB 配方进度 NBT =====
 
 	/** 保存PB配方处理进度到NBT — 委托给 {@link PbRecipeProcessor#saveAdditional} */
-	void save(@NotNull CompoundTag nbt) {
-		pbProcessor.saveAdditional(nbt);
+	void save(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		pbProcessor.saveAdditional(nbt, provider);
 	}
 
 	/** 加载PB配方处理进度 — 委托给 PbRecipeProcessor */
-	void load(@NotNull CompoundTag nbt) {
-		pbProcessor.loadAdditional(nbt);
+	void load(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		pbProcessor.loadAdditional(nbt, provider);
 	}
 
 	/** 同步PB进度到客户端 — 委托给 {@link PbRecipeProcessor#addContainerTrackers} */
@@ -113,7 +113,7 @@ class MekCentrifugeSaveHandler {
 	 * 修复 v14：追加基础离心机单流体槽序列化（工厂版由 MultiFluidTankHolder 独立处理）。
 	 */
 	void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		save(nbt);
+		save(nbt, provider);
 		pbUpgradeHandler.saveCounts(nbt);
 		pbUpgradeHandler.saveSlots(nbt, provider);
 		ae2Handler.saveNodeNBT(nbt);
@@ -130,12 +130,10 @@ class MekCentrifugeSaveHandler {
 	 * <br/>
 	 * 由 {@link TileEntityMekCentrifuge#loadAdditional} 在调用 super 后委托。
 	 * 修复 v14：追加基础离心机单流体槽反序列化（向后兼容：旧存档无此字段时跳过）。
-	 * 修复 v14 loadSlots/loadCounts 顺序：必须先 loadSlots 恢复槽位内容,再 loadCounts 恢复数量。
-	 * 原理:loadCounts 内部 applyCountWithLimit 在数量超过配置上限时,会将超出部分注入输出槽。
-	 * 若 loadSlots 未先执行,输出槽为空,注入的超出部分会被后续 loadSlots 覆盖,导致升级物品凭空消失。
+	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		load(nbt);
+		load(nbt, provider);
 		pbUpgradeHandler.loadSlots(nbt, provider);
 		pbUpgradeHandler.loadCounts(nbt);
 		ae2Handler.loadNodeNBT(nbt);
@@ -156,7 +154,7 @@ class MekCentrifugeSaveHandler {
 	@NotNull
 	CompoundTag saveCustomDataForItem(@NotNull HolderLookup.Provider provider) {
 		CompoundTag nbt = new CompoundTag();
-		save(nbt);
+		save(nbt, provider);
 		pbUpgradeHandler.saveCounts(nbt);
 		pbUpgradeHandler.saveSlots(nbt, provider);
 		ae2Handler.savePerTileState(nbt);

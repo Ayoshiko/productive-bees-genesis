@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
@@ -264,7 +265,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 		CompoundTag countsTag = nbt.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS);
 		int total = 0;
 		for (String typeId : countsTag.getAllKeys()) {
-			total += countsTag.getInt(typeId);
+			total = SaturatingMath.saturatingAddToInt(total, countsTag.getInt(typeId));
 		}
 		return total;
 	}

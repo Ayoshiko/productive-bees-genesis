@@ -1,9 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEFluidKey;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import it.unimi.dsi.fastutil.objects.Object2LongMap;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
 	 * AE2 流体推送批处理缓冲（简化版 PendingAEBatch）
@@ -19,7 +22,7 @@ import java.util.concurrent.ConcurrentMap;
 	 *   <li><b>即时刷新</b>：累积量超过阈值时 shouldFlushNow 提前刷新，避免内存占用过高</li>
 	 * </ul>
 	 * <p>
-	 * <b>线程安全</b>：使用 ConcurrentHashMap（防御性），实际由服务端单线程独占调用。
+	 * <b>线程安全</b>：服务端 tick 线程独占访问，无需并发容器。
 	 * <p>
 	 * <b>性能收益</b>：256× 加速 + 16 STACK（65536 并行）下，原每 tick 每 tank 调用一次
 	 * poweredInsert（N×M 次/gameTick），批处理后降为每 20 tick 一次批量调用（N/20 次/gameTick），
@@ -39,8 +42,10 @@ public final class Ae2PendingBatchBuffer {
 	 *  Spark优化：从20亿提升到50亿mB，配合更大批量减少flush次数 */
 	private static final long FLUSH_THRESHOLD_MB = 5_000_000_000L; // 50 亿 mB
 
-	/** 累积的流体待推送量（按 AEFluidKey 合并） — ConcurrentHashMap 防御性并发保护 */
-	private final ConcurrentMap<AEFluidKey, Long> pendingAmounts = new ConcurrentHashMap<>();
+	/** 累积的流体待推送量（按 AEFluidKey 合并），仅由服务端 tick 线程访问。 */
+	/* Swap maps at drain time so a flush does not copy every pending entry. */
+	private Object2LongOpenHashMap<AEFluidKey> pendingAmounts = new Object2LongOpenHashMap<>();
+	private Object2LongOpenHashMap<AEFluidKey> drainedAmounts = new Object2LongOpenHashMap<>();
 
 	/** 剩余成熟 tick 数（初始 RIPE_TICKS，每 tick 递减，0 时成熟） */
 	private int ripeTicksRemaining = RIPE_TICKS;
@@ -68,24 +73,13 @@ public final class Ae2PendingBatchBuffer {
 	 */
 	public void accumulate(AEFluidKey fluidKey, long amount) {
 		if (fluidKey == null || amount <= 0) return;
-		while (true) {
-			Long prev = pendingAmounts.get(fluidKey);
-			if (prev == null) {
-				Long existing = pendingAmounts.putIfAbsent(fluidKey, amount);
-				if (existing == null) {
-					totalPendingAmount += amount;
-					return;
-				}
-				prev = existing;
-			}
-			if (amount <= prev) {
-				return;
-			}
-			if (pendingAmounts.replace(fluidKey, prev, amount)) {
-				totalPendingAmount += amount - prev;
-				return;
-			}
-			// replace 失败（防御性并发修改）：重读重试
+		long previous = pendingAmounts.getLong(fluidKey);
+		if (previous == 0L) {
+			pendingAmounts.put(fluidKey, amount);
+			totalPendingAmount = SaturatingMath.saturatingAdd(totalPendingAmount, amount);
+		} else if (amount > previous) {
+			pendingAmounts.put(fluidKey, amount);
+			totalPendingAmount = SaturatingMath.saturatingAdd(totalPendingAmount, amount - previous);
 		}
 	}
 
@@ -132,13 +126,26 @@ public final class Ae2PendingBatchBuffer {
 	 * 排空缓冲并返回累积的 key→amount 映射。
 	 * <br/>
 	 * 调用后缓冲被清空，成熟计数器重置为 RIPE_TICKS。
-	 * 返回的 Map 是内部 ConcurrentHashMap 的引用快照（通过 new HashMap 包装避免并发修改）。
+	 * 返回的 Map 是独立副本；内部服务端路径使用 {@link #drainFast()} 避免复制，
+	 * 但该路径返回的映射只保证在下一次 drain 前有效。
 	 *
 	 * @return 累积的 key→amount 映射（可能为空 Map，永不为 null）
 	 */
-	public ConcurrentMap<AEFluidKey, Long> drain() {
-		// 复制到新 Map 避免调用方遍历时内部 Map 被修改
-		ConcurrentMap<AEFluidKey, Long> snapshot = new ConcurrentHashMap<>(pendingAmounts);
+	public Map<AEFluidKey, Long> drain() {
+		Object2LongMap<AEFluidKey> snapshot = drainFast();
+		return snapshot.isEmpty() ? new HashMap<>() : new HashMap<>(snapshot);
+	}
+
+	/**
+	 * Internal server-thread drain that swaps reusable maps without copying entries.
+	 * The returned map must be consumed before the next call on this buffer.
+	 */
+	Object2LongMap<AEFluidKey> drainFast() {
+		// Swap instead of copying every entry. The returned map is only reused after
+		// the caller has finished iterating it on the server tick thread.
+		Object2LongOpenHashMap<AEFluidKey> snapshot = pendingAmounts;
+		pendingAmounts = drainedAmounts;
+		drainedAmounts = snapshot;
 		pendingAmounts.clear();
 		totalPendingAmount = 0L;
 		ripeTicksRemaining = RIPE_TICKS;
@@ -168,6 +175,7 @@ public final class Ae2PendingBatchBuffer {
 	/** 完全重置（方块销毁时调用） */
 	public void reset() {
 		pendingAmounts.clear();
+		drainedAmounts.clear();
 		totalPendingAmount = 0L;
 		ripeTicksRemaining = RIPE_TICKS;
 	}

@@ -29,18 +29,22 @@ public final class ClientConfig {
 
 		rainbowMode = builder
 				.comment("启用彩虹模式（颜色会动态变化）")
+				.translation("productivebeesgenesis.configuration.rainbow_effects.rainbowMode")
 				.define("rainbowMode", true);
 
 		particleEffectEnabled = builder
 				.comment("启用彩虹粒子特效")
+				.translation("productivebeesgenesis.configuration.rainbow_effects.particleEffectEnabled")
 				.define("particleEffectEnabled", true);
 
 		particleCount = builder
 				.comment("每个tick生成的粒子数量")
+				.translation("productivebeesgenesis.configuration.rainbow_effects.particleCount")
 				.defineInRange("particleCount", 1, 1, 20);
 
 		glowEnabled = builder
 				.comment("启用光晕效果")
+				.translation("productivebeesgenesis.configuration.rainbow_effects.glowEnabled")
 				.define("glowEnabled", true);
 
 		builder.pop(); // rainbow_effects
@@ -50,10 +54,12 @@ public final class ClientConfig {
 
 		showPortColors = builder
 				.comment("手持配置器时显示端口颜色")
+				.translation("productivebeesgenesis.configuration.mek_port_visualization.showPortColors")
 				.define("showPortColors", true);
 
 		portColorRenderRange = builder
 				.comment("端口颜色渲染范围（方块距离）")
+				.translation("productivebeesgenesis.configuration.mek_port_visualization.portColorRenderRange")
 				.defineInRange("portColorRenderRange", 16, 4, 32);
 
 		builder.pop(); // mek_port_visualization

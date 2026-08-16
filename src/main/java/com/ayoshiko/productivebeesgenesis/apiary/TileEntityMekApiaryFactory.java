@@ -33,10 +33,10 @@ import java.util.List;
 	 * <p>
 	 * 工厂版参数表（spec.md 表 2.1）：
 	 * <ul>
-	 *   <li>Basic: 5 蜂蜂(1×5)/9 输出(3×3)/9 喂食(3×3)/256,000 mB/128,000 FE</li>
-	 *   <li>Advanced: 10 蜂蜂(2×5)/12 输出(3×4)/12 喂食(3×4)/512,000 mB/256,000 FE</li>
+	 *   <li>Basic: 5 蜂蜂(1×5)/15 输出(3×5)/9 喂食(3×3)/256,000 mB/128,000 FE</li>
+	 *   <li>Advanced: 10 蜂蜂(2×5)/15 输出(3×5)/12 喂食(3×4)/512,000 mB/256,000 FE</li>
 	 *   <li>Elite: 15 蜂蜂(3×5)/15 输出(3×5)/15 喂食(3×5)/768,000 mB/512,000 FE</li>
-	 *   <li>Ultimate: 20 蜂蜂(4×5)/18 输出(3×6)/21 喂食(3×7)/1,024,000 mB/1,024,000 FE</li>
+	 *   <li>Ultimate: 20 蜂蜂(2×10)/30 输出(3×10)/20 喂食(4×5)/1,024,000 mB/1,024,000 FE</li>
 	 * </ul>
 	 * <p>
 	 * 排序功能：实现 sorting 字段和 {@link #toggleSorting()}/{@link #isSorting()} 方法，
@@ -86,7 +86,7 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 		FactoryApiaryConfig config = FactoryApiaryConfig.forTier(tier);
 		return new ApiarySlotManager(this,
 				config.beeSlotCount, config.beeCols, config.beeRows,
-				config.outputSlotCount, config.outputCols, config.outputRows,
+				config.outputSlotsPerPage, config.outputCols, config.outputRows, config.outputPageCount,
 				config.fluidTankCapacity);
 	}
 
@@ -117,19 +117,19 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 	// 原因：FactoryApiaryConfig 为包私有，client 包无法直接访问。
 	// 通过 public getter 暴露必要参数，遵循迪米特法则。
 
-	/** 获取蜜蜂列数 — GUI布局用（工厂版固定 5） */
+	/** 获取蜜蜂列数 — GUI布局用（由 FactoryApiaryConfig 动态计算） */
 	@Override
 	public int getBeeCols() {
 		return FactoryApiaryConfig.forTier(tier).beeCols;
 	}
 
-	/** 获取蜜蜂行数 — GUI布局用（Basic=1/Advanced=2/Elite=3/Ultimate=4） */
+	/** 获取蜜蜂行数 — GUI布局用（由 FactoryApiaryConfig 动态计算） */
 	@Override
 	public int getBeeRows() {
 		return FactoryApiaryConfig.forTier(tier).beeRows;
 	}
 
-	/** 获取输出列数 — GUI布局用（Basic=3/Advanced=4/Elite=5/Ultimate=6） */
+	/** 获取输出列数 — GUI布局用（输出区至少与蜜蜂区同宽） */
 	@Override
 	public int getOutputCols() {
 		return FactoryApiaryConfig.forTier(tier).outputCols;

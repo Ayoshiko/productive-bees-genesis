@@ -9,7 +9,6 @@ import net.minecraft.resources.ResourceLocation;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +56,6 @@ public final class WeightedAllocation {
 	 */
 	public static Map<ResourceLocation, Integer> allocateByWeight(
 			int total, List<ResourceLocation> types, double[] weights) {
-		Map<ResourceLocation, Integer> fallback = RandomHoneycombSelector.allocateEvenly(total, types);
 		try {
 			return allocateByWeightInternal(total, types, weights);
 		} catch (Exception e) {
@@ -65,14 +63,14 @@ public final class WeightedAllocation {
 				ProductiveBeesGenesis.LOGGER.warn(
 						"按权重分配异常，退化为均匀分配" + (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), e);
 			});
-			return fallback;
+			return RandomHoneycombSelector.allocateEvenly(total, types);
 		}
 	}
 
 	private static Map<ResourceLocation, Integer> allocateByWeightInternal(
 			int total, List<ResourceLocation> types, double[] weights) {
-		Map<ResourceLocation, Integer> result = new HashMap<>(types.size() * 2);
 		int n = types.size();
+		Map<ResourceLocation, Integer> result = new HashMap<>(safeMapCapacity(n));
 		if (n <= 0 || total <= 0) return result;
 		if (n == 1) {
 			result.put(types.get(0), total);
@@ -82,42 +80,26 @@ public final class WeightedAllocation {
 		if (weights == null || weights.length != n) {
 			return RandomHoneycombSelector.allocateEvenly(total, types);
 		}
-		double sumWeights = 0.0;
-		for (double w : weights) sumWeights += Math.max(0.0, w);
-		if (sumWeights <= 0.0) {
+		int[] allocated = WeightedAllocationMath.allocate(total, weights);
+		if (allocated == null) {
 			return RandomHoneycombSelector.allocateEvenly(total, types);
-		}
-
-		// 初始分配：floor(total × effectiveWeight / sumWeights)
-		int[] allocated = new int[n];
-		int totalAllocated = 0;
-		for (int i = 0; i < n; i++) {
-			double effectiveWeight = Math.max(0.0, weights[i]);
-			allocated[i] = (int) Math.floor(total * effectiveWeight / sumWeights);
-			totalAllocated += allocated[i];
-		}
-
-		// 余数按权重从高到低分配（每个 +1 直到分配完）
-		int remainder = total - totalAllocated;
-		if (remainder > 0) {
-			Integer[] indices = new Integer[n];
-			for (int i = 0; i < n; i++) indices[i] = i;
-			// 按权重降序排序（权重相同则按索引升序，保证稳定性）
-			Arrays.sort(indices, (a, b) -> {
-				int cmp = Double.compare(weights[b], weights[a]);
-				return cmp != 0 ? cmp : Integer.compare(a, b);
-			});
-			for (int i = 0; i < remainder; i++) {
-				allocated[indices[i % n]]++;
-			}
 		}
 
 		// 构建结果（0 分配的类型跳过，避免空 entry）
 		for (int i = 0; i < n; i++) {
 			if (allocated[i] > 0) {
-				result.put(types.get(i), allocated[i]);
+				result.merge(types.get(i), allocated[i], WeightedAllocation::saturatedAdd);
 			}
 		}
 		return result;
+	}
+
+	private static int safeMapCapacity(int size) {
+		return (int) Math.min(1L << 30, Math.max(0L, (long) size * 2L));
+	}
+
+	private static int saturatedAdd(int first, int second) {
+		long sum = (long) Math.max(0, first) + Math.max(0, second);
+		return (int) Math.min(Integer.MAX_VALUE, sum);
 	}
 }

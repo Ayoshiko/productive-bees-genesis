@@ -3,7 +3,9 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -12,9 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -127,12 +127,13 @@ class BeeSlotTickProcessor {
 	 */
 	private final ResourceLocation[] beeTypeKeyBySlot;
 
-	/**
-	 * flushPendingProductions 复用的分组缓冲（避免每次刷新都 new HashMap）
-	 * <br/>
-	 * 仅服务端 tick 线程访问，无需同步。每次 flushPendingProductions 调用前 clear()。
-	 */
-	private final HashMap<ResourceLocation, List<Integer>> pendingProductionsBuffer = new HashMap<>();
+	/** Reused eligibility snapshot for fair partial-batch energy allocation. */
+	private final boolean[] runnableBeeSlots;
+
+	/** Reusable open-addressed groups for pending production slots. */
+	private final PendingProductionGroup[] pendingProductionGroups;
+	private final int[] pendingProductionGroupTable;
+	private int activePendingProductionGroupCount;
 
 	/**
 	 * 构造蜜蜂槽位 tick 处理器
@@ -163,6 +164,14 @@ class BeeSlotTickProcessor {
 		this.lastCheckedBeeData = new CompoundTag[slotManager.getBeeSlotCount()];
 		this.cachedBeeTypeKeys = new ResourceLocation[slotManager.getBeeSlotCount()];
 		this.beeTypeKeyBySlot = new ResourceLocation[slotManager.getBeeSlotCount()];
+		this.runnableBeeSlots = new boolean[slotManager.getBeeSlotCount()];
+		this.pendingProductionGroups = new PendingProductionGroup[slotManager.getBeeSlotCount()];
+		for (int i = 0; i < pendingProductionGroups.length; i++) {
+			pendingProductionGroups[i] = new PendingProductionGroup();
+		}
+		int tableSize = 1;
+		while (tableSize < Math.max(2, pendingProductionGroups.length * 2)) tableSize <<= 1;
+		this.pendingProductionGroupTable = new int[tableSize];
 	}
 
 	/**
@@ -216,7 +225,6 @@ class BeeSlotTickProcessor {
 			activationCounter.deactivateAll();
 			return;
 		}
-		long pendingEnergyCost = 0;
 		float timeMultiplier = upgradeHandler.getTimeMultiplier();
 		// MachineEnergyContainer 已按 Mekanism 官方公式实时应用速度/能量升级，
 		// 直接读取可同时保留普通蜂箱配置和各工厂等级的基础能耗。
@@ -240,6 +248,9 @@ class BeeSlotTickProcessor {
 		// 缓存输出空间状态 — 避免循环内重复调用 isOutputFull()（O(N×M) → O(N+M)）
 		// 输出槽对所有蜜蜂共享，状态在一次 tick 内一致
 		boolean outputFull = slotManager.isOutputFull();
+		// Commit any fluid suffix from the previous batch before advancing bee progress.
+		// Keeping production blocked while it remains pending prevents an unbounded long buffer.
+		boolean pendingFluidBlocked = !produceProcessor.flushPendingFluid();
 
 		// 花朵有效性缓存：使用 BeeSlot 内部 volatile 字段直接缓存 — 比 per-tick HashMap 更便宜：
 		//   - cache hit: 2 次 volatile 读（cachedFlowerValidTick、cachedFlowerValid）≈ 10ns
@@ -247,11 +258,9 @@ class BeeSlotTickProcessor {
 		// 同 tick 内同种蜜蜂 cache hit，避免重复调用 hasValidFlower。
 		// 使用 long 类型避免 long-running 服务器上 getGameTime() 溢出（int 上限约 3.4 年游戏时间）
 		long currentTick = (level != null) ? level.getGameTime() : 0L;
-
-		// v9-P3 修复：try-finally 确保循环中途异常时已累积的能量仍被扣除，
-		// 避免 ticksInHive 已推进、pendingEnergyCost 已累积但能量未扣除的不一致状态
+		Arrays.fill(runnableBeeSlots, false);
+		int runnableBeeCount = 0;
 		int slotStart = beeSlots.length == 0 ? 0 : Math.floorMod(beeSlotRotationIndex, beeSlots.length);
-		try {
 		for (int slotOffset = 0; slotOffset < beeSlots.length; slotOffset++) {
 			int i = (slotStart + slotOffset) % beeSlots.length;
 			BeeSlot slot = beeSlots[i];
@@ -260,55 +269,58 @@ class BeeSlotTickProcessor {
 				continue;
 			}
 
-			// 花朵检查 — 无花朵则蜜蜂无法工作
-			// 使用 beeData 直接查询花朵偏好，避免 EntityType.getKey() 对 ConfigurableBee 返回通用类型
 			ResourceLocation beeTypeKey = resolveBeeTypeKeyForSlot(slot, i);
-			beeTypeKeyBySlot[i] = beeTypeKey; // Task 5：预算写入，供 flushPendingProductions 复用
+			beeTypeKeyBySlot[i] = beeTypeKey;
 			if (beeTypeKey == null) {
 				slot.setState(BeeState.WAITING_FLOWER);
 				activationCounter.onBeeDeactivated(i);
 				continue;
 			}
-			// 每只蜜蜂内部缓存（volatile 字段）：同 tick 内同种蜜蜂 cache hit，
-			// 避免对 LinkedHashMap (access-order) 的 get + afterNodeAccess 调用（Spark HashMap.get 23.68ms 热点）
-			boolean flowerValid = ApiaryFlowerValidation.check(slot, beeTypeKey, currentTick, feederManager);
-			if (!flowerValid) {
+			if (!ApiaryFlowerValidation.check(slot, beeTypeKey, currentTick, feederManager)) {
 				slot.setState(BeeState.WAITING_FLOWER);
 				activationCounter.onBeeDeactivated(i);
 				continue;
 			}
-
-			// 输出空间检查 — 输出槽满时彻底停止生产（不推进进度、不累积pendingProductions）
-			// 与离心机"输出满停机"语义一致，避免输出满时pendingProductions无限累积
-			if (outputFull) {
+			if (outputFull || pendingFluidBlocked) {
 				slot.setState(BeeState.WAITING_OUTPUT);
 				activationCounter.onBeeDeactivated(i);
 				continue;
 			}
+			runnableBeeSlots[i] = true;
+			runnableBeeCount++;
+		}
 
-			// 能量检查。当前容器预算不够时先结算已处理蜜蜂，再从 AE 补满并继续本批。
-			// 这样容器容量只需要覆盖一段工作，不需要一次容纳 32 只蜜蜂 × 256 虚拟 tick 的总能耗。
-			long acceleratedEnergyCost = ApiaryEnergyMath.calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
-			long availableEnergy = energyContainer.getEnergy();
-			if (pendingEnergyCost > availableEnergy
-					|| acceleratedEnergyCost > availableEnergy - pendingEnergyCost) {
-				if (pendingEnergyCost > 0) {
-					energyContainer.extract(pendingEnergyCost, Action.EXECUTE, AutomationType.INTERNAL);
-					pendingEnergyCost = 0;
-				}
-				tile.productivebeesgenesis$injectAe2Energy();
-				availableEnergy = energyContainer.getEnergy();
-				if (acceleratedEnergyCost > availableEnergy) {
-					slot.setState(BeeState.WAITING_ENERGY);
-					activationCounter.onBeeDeactivated(i);
-					continue;
-				}
+		ApiaryEnergyMath.BeeTickAllocation energyAllocation = ApiaryEnergyMath.allocateBeeTicks(
+				energyContainer.getEnergy(), beeEnergyCost, runnableBeeCount, tickMultiplier);
+		int extraTickBeesRemaining = energyAllocation.beesWithExtraTick();
+		long pendingEnergyCost = 0L;
+
+		// v9-P3 修复：try-finally 确保循环中途异常时已累积的能量仍被扣除，
+		// 避免 ticksInHive 已推进、pendingEnergyCost 已累积但能量未扣除的不一致状态
+		try {
+		for (int slotOffset = 0; slotOffset < beeSlots.length; slotOffset++) {
+			int i = (slotStart + slotOffset) % beeSlots.length;
+			BeeSlot slot = beeSlots[i];
+			if (!runnableBeeSlots[i]) {
+				continue;
+			}
+
+			int allocatedTicks = energyAllocation.ticksPerBee();
+			if (extraTickBeesRemaining > 0) {
+				allocatedTicks++;
+				extraTickBeesRemaining--;
+			}
+			if (allocatedTicks <= 0) {
+				slot.setState(BeeState.WAITING_ENERGY);
+				activationCounter.onBeeDeactivated(i);
+				continue;
 			}
 
 			// 推进计时 — 委托 ApiaryProgressAdvancer（纯代码移动：计算完成周期、更新进度、累积待产出次数）
-			pendingEnergyCost += ApiaryProgressAdvancer.advance(slot, i, tickMultiplier, currentTick,
+			pendingEnergyCost = SaturatingMath.saturatingAdd(pendingEnergyCost,
+					ApiaryProgressAdvancer.advance(slot, i, allocatedTicks, currentTick,
 					timeMultiplier, beeEnergyCost, stackProductionCount, configCache.getProcessingTime(),
-					upgradeHandler, pendingProductions, accumulatedProgress);
+					upgradeHandler, pendingProductions, accumulatedProgress));
 			// 设置工作状态 — CAS 守卫仅在工作状态转换 0→1 时递增计数器
 			slot.setState(BeeState.WORKING);
 			activationCounter.onBeeActivated(i);
@@ -370,9 +382,9 @@ class BeeSlotTickProcessor {
 		// 按蜜蜂类型键（ResourceLocation）分组蜜蜂槽索引（Task 16.1）
 		// 使用 beeTypeKey 而非 EntityType，确保 ConfigurableBee 按具体类型（如 productivebees:iron）分组
 		// 仅服务器 tick 线程访问，无需并发容器
-		// Task 23.5：复用实例字段 pendingProductionsBuffer，避免每次 flush 都 new HashMap
+		// 固定容量开放寻址分组，避免每次 flush 重建 HashMap 节点和装箱槽位索引。
 		// Task 5：复用主循环预算的 beeTypeKeyBySlot[i]，避免重复调用 resolveBeeTypeKeyForSlot
-		pendingProductionsBuffer.clear();
+		resetPendingProductionGroups();
 		for (int i = 0; i < beeSlots.length && i < pendingProductions.length; i++) {
 			if (pendingProductions[i] <= 0) continue;
 			BeeSlot slot = beeSlots[i];
@@ -385,7 +397,7 @@ class BeeSlotTickProcessor {
 				pendingProductions[i] = 0;
 				continue;
 			}
-			pendingProductionsBuffer.computeIfAbsent(beeTypeKey, k -> new ArrayList<>()).add(i);
+			findPendingProductionGroup(beeTypeKey).slotIndices.add(i);
 		}
 
 		// 输出空间检查 — 刷新前再次检查，避免产物丢失
@@ -398,13 +410,15 @@ class BeeSlotTickProcessor {
 		// finally 确保异常时也清零 pendingProductions，防止下次 flush 重复分发导致产出翻倍
 		// 异常时未分发的产出会丢失，但优于产出翻倍
 		try {
-			for (Map.Entry<ResourceLocation, List<Integer>> entry : pendingProductionsBuffer.entrySet()) {
-				ResourceLocation typeKey = entry.getKey();
+			for (int groupIndex = 0; groupIndex < activePendingProductionGroupCount; groupIndex++) {
+				PendingProductionGroup group = pendingProductionGroups[groupIndex];
+				ResourceLocation typeKey = group.typeKey;
 
 				// 花朵校验：喂食槽无匹配花朵（含转化原料花朵）时清零该组 pending 并跳过 flush，
 				// 避免"蜜蜂无有效花朵时仍产出/吸蜜"导致产出异常
 				if (!feederManager.hasValidFlower(typeKey)) {
-					for (int idx : entry.getValue()) {
+					for (int position = 0; position < group.slotIndices.size(); position++) {
+						int idx = group.slotIndices.get(position);
 						if (idx >= 0 && idx < pendingProductions.length) pendingProductions[idx] = 0;
 					}
 					continue;
@@ -413,25 +427,62 @@ class BeeSlotTickProcessor {
 				// 转化处理（在产出前执行）：饲养板 BlockItem 物品/方块转化（PB item_conversion / block_conversion 适配）
 				// pollinates=false 的转化周期会扣减 pendingProductions，该周期不产出蜜脾（对齐 PB hasConverted 语义）
 				conversionProcessor.processGroupConversions(typeKey, level, beeSlots,
-						entry.getValue(), pendingProductions);
+						group.slotIndices, pendingProductions);
 
 				// 同组共享一次配方查询（缓存命中 O(1)）
 				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
 				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
-				Map<ItemStack, ChancedOutput> produceList = produceProcessor.getCachedProduce(typeKey, level, feederManager);
-				if (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
+				boolean feederDependentProduce = MultiFlowerBeeAdapter.isMultiFlowerBee(typeKey);
+				Map<ItemStack, ChancedOutput> produceList = feederDependentProduce
+						? Map.of()
+						: produceProcessor.getCachedProduce(typeKey, level, feederManager);
+				if (produceList.isEmpty() && !feederDependentProduce
+						&& !PBConstants.WANNA_TYPE.equals(typeKey)) continue;
 
 				// 复用 pendingProductions 数组，processBatchProduce 内部按索引读取
 				// Bug 10: 传入 level 用于万象创世随机蜜脾生成
-				// Bug 3: 传入 entry.getValue() 限定仅处理当前组的槽位索引，避免混养串组
+				// Bug 3: 仅传入当前组的槽位索引，避免混养串组
 				// F4: 传入 outputBuffer，输出槽满载时剩余产物送入缓冲区下 tick 重试
-				produceProcessor.processBatchProduce(beeSlots, pendingProductions, entry.getValue(),
+				produceProcessor.processBatchProduce(beeSlots, pendingProductions, group.slotIndices,
 						typeKey, produceList, slotManager, feederManager, tile.getBlockPos(),
 						level, tile.getOutputBuffer());
 			}
 		} finally {
 			// 清零所有累积计数（含 accumulatedProgress），异常时也执行，防止产出翻倍
 			clearPendingProductions();
+		}
+	}
+
+	private void resetPendingProductionGroups() {
+		Arrays.fill(pendingProductionGroupTable, 0);
+		activePendingProductionGroupCount = 0;
+	}
+
+	private PendingProductionGroup findPendingProductionGroup(ResourceLocation typeKey) {
+		int hash = typeKey.hashCode();
+		int tableMask = pendingProductionGroupTable.length - 1;
+		int bucket = (hash ^ (hash >>> 16)) & tableMask;
+		while (true) {
+			int encodedGroup = pendingProductionGroupTable[bucket];
+			if (encodedGroup == 0) {
+				PendingProductionGroup group = pendingProductionGroups[activePendingProductionGroupCount];
+				group.reset(typeKey, pendingProductions.length);
+				pendingProductionGroupTable[bucket] = ++activePendingProductionGroupCount;
+				return group;
+			}
+			PendingProductionGroup group = pendingProductionGroups[encodedGroup - 1];
+			if (group.typeKey.equals(typeKey)) return group;
+			bucket = (bucket + 1) & tableMask;
+		}
+	}
+
+	private static final class PendingProductionGroup {
+		private ResourceLocation typeKey;
+		private final OrderedSlotIndex slotIndices = new OrderedSlotIndex();
+
+		void reset(ResourceLocation typeKey, int slotCount) {
+			this.typeKey = typeKey;
+			slotIndices.reset(slotCount);
 		}
 	}
 

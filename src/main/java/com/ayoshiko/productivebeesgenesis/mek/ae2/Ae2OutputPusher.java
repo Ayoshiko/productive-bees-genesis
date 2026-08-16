@@ -9,7 +9,11 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2LongLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.world.item.ItemStack;
@@ -17,9 +21,14 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.ToIntFunction;
 
 /**
 	 * AE2 输出推送器 — 将离心机输出槽物品通过 {@link StorageHelper#poweredInsert} 推送到 AE2 网络。
@@ -46,6 +55,8 @@ public final class Ae2OutputPusher {
 
 	/** 批量合并的最小槽位数阈值 — 非空槽位数 <= 此阈值时直接逐槽推送，避免 Map 分配开销 */
 	private static final int BATCH_MERGE_THRESHOLD = 3;
+	/** 每台机器每游戏刻最多提交的不同物品键数，限制大型两页库存的 AE 网络尖峰。 */
+	private static final int MAX_ITEM_KEYS_PER_TICK = 32;
 
 	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例 */
 	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
@@ -84,7 +95,9 @@ public final class Ae2OutputPusher {
 		// 1.3 退避检查 — 使用缓存的 pushState（消除2次冗余 getAe2StateHolder）
 		long pushCounter = pushState.incrementItemPushCallCounter();
 		Ae2PushBackoff itemBackoff = pushState.getItemBackoff();
-		if (itemBackoff.shouldSkip(System.nanoTime())) return;
+		long nowNanos = System.nanoTime();
+		if (itemBackoff.shouldSkip(nowNanos)) return;
+		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateOutputKeyBackoff(holder);
 
 		// 同一游戏刻的重复调用已由 tryStartItemPush 合并；工厂每刻仅调用一次也不会被 M 误节流。
 		pushState.updateLastItemPushCounter(pushCounter);
@@ -122,67 +135,128 @@ public final class Ae2OutputPusher {
 		int processes = host.processes();
 		List<SlotEntry> entries = buffers.entries;
 		entries.clear();
-		for (int i = 0; i < processes; i++) {
-			collectSlot(entries, i, 0, host.primaryOutputSlot(i), keyCache);
-			collectSlot(entries, i, 1, host.secondaryOutputSlot(i), keyCache);
-			collectSlot(entries, i, 2, host.tertiaryOutputSlot(i), keyCache);
+		buffers.entryPoolCursor = 0;
+		int flatSlotCount = Math.max(0, processes) * AeItemKeyCache.SLOTS_PER_PROCESS;
+		int scanStart = RoundRobinSlotTraversal.normalize(buffers.outputSlotScanCursor, flatSlotCount);
+		buffers.outputSlotScanCursor = RoundRobinSlotTraversal.advance(scanStart, flatSlotCount);
+		for (int offset = 0; offset < flatSlotCount; offset++) {
+			int flatIndex = RoundRobinSlotTraversal.index(scanStart, offset, flatSlotCount);
+			int process = flatIndex / AeItemKeyCache.SLOTS_PER_PROCESS;
+			int slotIdx = flatIndex % AeItemKeyCache.SLOTS_PER_PROCESS;
+			collectSlot(buffers, process, slotIdx, outputSlot(host, process, slotIdx), keyCache);
 		}
 
 		if (entries.isEmpty()) return;
 		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
 		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
 			int pushedItems = 0;
+			int attemptedEntries = 0;
+			SlotEntry firstAttemptedEntry = null;
 			for (SlotEntry entry : entries) {
-				pushedItems += tryPushSlotDirect(entry, meStorage, ACTION_SOURCE);
+				if (keyBackoff.shouldSkip(entry.key, nowNanos)) continue;
+				if (firstAttemptedEntry == null) firstAttemptedEntry = entry;
+				attemptedEntries++;
+				int pushed = tryPushSlotDirect(entry, meStorage, ACTION_SOURCE);
+				if (pushed > 0) {
+					keyBackoff.recordSuccess(entry.key);
+				} else {
+					keyBackoff.recordFailure(entry.key, nowNanos);
+				}
+				pushedItems = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
+						pushedItems, pushed));
 			}
 			if (pushedItems > 0) {
 				host.productivebeesgenesis$onAe2PushComplete(pushedItems);
 				itemBackoff.recordSuccess();
-			} else {
+			} else if (attemptedEntries > 0) {
 				// 完全失败 — 记录退避 + 诊断 + 首次失败兜底回送（取首个 key 作为代表）
-				SlotEntry first = entries.get(0);
-				handleCompleteFailure(itemBackoff, first.key, first.count);
+				handleCompleteFailure(itemBackoff,
+						firstAttemptedEntry.key, firstAttemptedEntry.count);
 			}
 			return;
 		}
 
 		// 10. 批量合并：按 AEItemKey 分组（复用 ConcurrentHashMap，clear 而非新建）
 		Map<AEItemKey, List<SlotEntry>> keyToEntries = buffers.keyToEntries;
-		Map<AEItemKey, Long> keyToTotalCount = buffers.keyToTotalCount;
+		Object2LongLinkedOpenHashMap<AEItemKey> keyToTotalCount = buffers.keyToTotalCount;
+		for (List<SlotEntry> grouped : buffers.keyEntryListPool) grouped.clear();
 		keyToEntries.clear();
+		buffers.keyEntryListPoolCursor = 0;
 		keyToTotalCount.clear();
 		for (SlotEntry entry : entries) {
-			// computeIfAbsent 中 lambda 可能新建子 ArrayList，复用收益有限故保持原逻辑
-			keyToEntries.computeIfAbsent(entry.key, k -> new ArrayList<>()).add(entry);
-			keyToTotalCount.merge(entry.key, (long) entry.count, Long::sum);
+			List<SlotEntry> grouped = keyToEntries.get(entry.key);
+			if (grouped == null) {
+				if (buffers.keyEntryListPoolCursor < buffers.keyEntryListPool.size()) {
+					grouped = buffers.keyEntryListPool.get(buffers.keyEntryListPoolCursor++);
+				} else {
+					grouped = new ArrayList<>();
+					buffers.keyEntryListPool.add(grouped);
+					buffers.keyEntryListPoolCursor++;
+				}
+				keyToEntries.put(entry.key, grouped);
+			}
+			grouped.add(entry);
+			keyToTotalCount.put(entry.key, SaturatingMath.saturatingAdd(
+					keyToTotalCount.getLong(entry.key), entry.count));
 		}
 
 		// 11. 对每个 key 调用一次 poweredInsert，按比例清空槽位
 		int pushedItems = 0;
-		Map.Entry<AEItemKey, Long> firstKeyEntry = null;
-		for (Map.Entry<AEItemKey, Long> keyEntry : keyToTotalCount.entrySet()) {
-			if (firstKeyEntry == null) firstKeyEntry = keyEntry;
+		AEItemKey firstDeferredKey = null;
+		AEItemKey firstAttemptedKey = null;
+		long firstAttemptedAmount = 0L;
+		int attemptedKeys = 0;
+		for (Object2LongMap.Entry<AEItemKey> keyEntry : keyToTotalCount.object2LongEntrySet()) {
+			if (attemptedKeys >= MAX_ITEM_KEYS_PER_TICK) {
+				if (firstDeferredKey == null) firstDeferredKey = keyEntry.getKey();
+				break;
+			}
 			AEItemKey key = keyEntry.getKey();
-			long totalCount = keyEntry.getValue();
-			pushedItems += pushBatchKey(key, totalCount, keyToEntries.get(key),
+			long totalCount = keyEntry.getLongValue();
+			if (keyBackoff.shouldSkip(key, nowNanos)) {
+				if (firstDeferredKey == null) firstDeferredKey = key;
+				continue;
+			}
+			if (firstAttemptedKey == null) {
+				firstAttemptedKey = key;
+				firstAttemptedAmount = totalCount;
+			}
+			int pushed = pushBatchKey(key, totalCount, keyToEntries.get(key),
 					meStorage, ACTION_SOURCE);
+			if (pushed > 0) {
+				keyBackoff.recordSuccess(key);
+			} else {
+				keyBackoff.recordFailure(key, nowNanos);
+			}
+			pushedItems = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
+					pushedItems, pushed));
+			attemptedKeys++;
+		}
+		if (firstDeferredKey == null) {
+			// Every key was attempted. Rotate one physical slot so duplicate stacks share priority over time.
+			buffers.outputSlotScanCursor = RoundRobinSlotTraversal.advance(scanStart, flatSlotCount);
+		} else {
+			// Resume at the first physical occurrence of the first deferred key. Advancing merely by the
+			// number of keys is incorrect when one key occupies several slots and can starve later pages.
+			List<SlotEntry> deferredEntries = keyToEntries.get(firstDeferredKey);
+			SlotEntry deferred = deferredEntries.get(0);
+			buffers.outputSlotScanCursor = deferred.process * AeItemKeyCache.SLOTS_PER_PROCESS
+					+ deferred.slotIdx;
 		}
 
 		if (pushedItems > 0) {
 			host.productivebeesgenesis$onAe2PushComplete(pushedItems);
 			itemBackoff.recordSuccess();
-		} else if (firstKeyEntry != null) {
+		} else if (firstAttemptedKey != null) {
 			// 完全失败 — 记录退避 + 诊断 + 首次失败兜底回送（取首个 key 作为代表）
-			handleCompleteFailure(itemBackoff, firstKeyEntry.getKey(), firstKeyEntry.getValue());
+			handleCompleteFailure(itemBackoff, firstAttemptedKey, firstAttemptedAmount);
 		}
 	}
 
 	/**
 	 * 推送单个物品栈到 AE2 网络（蜂箱输出缓冲区直推用）
 	 * <br/>
-	 * 复用 {@link #pushOutputs} 相同的守卫链（开关、TPS、退避、节点 ONLINE、网格/存储），
-	 * 但使用独立的 M 边界计数器，避免与主输出推送互相抢占每个游戏刻的唯一推送名额。
-	 * 缓冲区物品量很小（最多几十组），每次调用直接按 key 推送，不经过槽位收集。
+	 * 复用 {@link #pushOutputs} 的开关、节点和存储守卫；失败时由调用方保留原栈。
 	 *
 	 * @param host  输出宿主
 	 * @param stack 待推送的物品栈（不修改原栈，返回实际接收数量由调用方扣除）
@@ -190,36 +264,88 @@ public final class Ae2OutputPusher {
 	 */
 	public static int pushItemStack(IAe2OutputHostBase host, ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return 0;
-		if (!host.productivebeesgenesis$isOutputPushEnabled()) return 0;
-		if (!host.productivebeesgenesis$isAeItemOutputEnabled()) return 0;
+		DirectItemPushSession session = prepareDirectItemPush(host);
+		return session == null ? 0 : session.applyAsInt(stack);
+	}
+
+	/** Resolves the AE target once so a bounded buffer drain does not repeat host/grid lookups per group. */
+	@Nullable
+	public static DirectItemPushSession prepareDirectItemPush(IAe2OutputHostBase host) {
+		if (!host.productivebeesgenesis$isOutputPushEnabled()) return null;
+		if (!host.productivebeesgenesis$isAeItemOutputEnabled()) return null;
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
-		if (holder == null) return 0;
+		if (holder == null) return null;
 		Ae2PushStateHolder pushState = holder.getPushState();
 		Level level = host.productivebeesgenesis$getAe2Level();
-		if (level == null) return 0;
-		if (pushState.getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return 0;
+		if (level == null) return null;
+		if (pushState.getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return null;
 		IGrid grid = Ae2GridNodeManager.getCachedGrid(holder, host);
-		if (grid == null) return 0;
+		if (grid == null) return null;
 		IStorageService storageService = Ae2GridNodeManager.getCachedStorage(holder, host);
-		if (storageService == null) return 0;
+		if (storageService == null) return null;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
-		if (meStorage == null) return 0;
-		AEItemKey key = AEItemKey.of(stack);
-		if (key == null) return 0;
-		long inserted;
-		try {
-			inserted = meStorage.insert(key, stack.getCount(), Actionable.MODULATE, ACTION_SOURCE);
-		} catch (Exception e) {
-			handlePushException(e, 0, 0, stack, stack.getCount());
-			return 0;
+		if (meStorage == null) return null;
+		ReusableBuffers buffers = getReusableBuffers(holder, host);
+		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateOutputKeyBackoff(holder);
+		if (buffers.directItemPushSession == null) {
+			buffers.directItemPushSession = new DirectItemPushSession(meStorage, keyBackoff);
+		} else {
+			buffers.directItemPushSession.reset(meStorage, keyBackoff);
 		}
-		if (inserted <= 0) {
-			// Direct production failures fall back to local output slots without global backoff.
-			LogThrottle.warnWithCooldown("ae2_buffer_push_backoff", 60_000L,
-					"AE2 缓冲区物品推送失败 item={}, count={}", key, stack.getCount());
-			return 0;
+		return buffers.directItemPushSession;
+	}
+
+	/** Prepared, immutable insert target used for one bounded direct-output batch. */
+	public static final class DirectItemPushSession implements ToIntFunction<ItemStack> {
+		private MEStorage meStorage;
+		private Ae2KeyBackoffRegistry<AEItemKey> keyBackoff;
+		private long nowNanos;
+		private int attemptedCount;
+		private int deferredCount;
+
+		private DirectItemPushSession(MEStorage meStorage, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
+			reset(meStorage, keyBackoff);
 		}
-		return SaturatingMath.saturatingToInt(inserted);
+
+		private void reset(MEStorage meStorage, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
+			this.meStorage = meStorage;
+			this.keyBackoff = keyBackoff;
+			this.nowNanos = System.nanoTime();
+			this.attemptedCount = 0;
+			this.deferredCount = 0;
+		}
+
+		public int attemptedCount() { return attemptedCount; }
+		public int deferredCount() { return deferredCount; }
+
+		@Override
+		public int applyAsInt(ItemStack stack) {
+			if (stack == null || stack.isEmpty()) return 0;
+			AEItemKey key = AEItemKey.of(stack);
+			if (key == null) return 0;
+			if (keyBackoff != null && keyBackoff.shouldSkip(key, nowNanos)) {
+				deferredCount++;
+				return 0;
+			}
+			attemptedCount++;
+			long inserted;
+			try {
+				inserted = meStorage.insert(key, stack.getCount(), Actionable.MODULATE, ACTION_SOURCE);
+			} catch (Exception e) {
+				if (keyBackoff != null) keyBackoff.recordFailure(key, nowNanos);
+				handlePushException(e, 0, 0, stack, stack.getCount());
+				return 0;
+			}
+			if (inserted <= 0) {
+				if (keyBackoff != null) keyBackoff.recordFailure(key, nowNanos);
+				LogThrottle.warnWithCooldown("ae2_buffer_push_backoff", 60_000L,
+						"AE2 缓冲区物品推送失败 item={}, count={}", key, stack.getCount());
+				return 0;
+			}
+			if (keyBackoff != null) keyBackoff.recordSuccess(key);
+			return SaturatingMath.saturatingToInt(
+					SaturatingMath.clampToRequest(inserted, stack.getCount()));
+		}
 	}
 
 	/**
@@ -232,6 +358,18 @@ public final class Ae2OutputPusher {
 		LogThrottle.warnWithCooldown("ae2_output_backoff", 300_000L,
 				"AE2 物品输出推送完全失败，进入短退避 item={}, count={}, 近5分钟累计 {} 次",
 				itemKey, requestedAmount, failureCount);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Ae2KeyBackoffRegistry<AEItemKey> getOrCreateOutputKeyBackoff(
+			Ae2OutputStateHolder holder) {
+		Object cached = holder.getPushState().getOutputKeyBackoffRegistry();
+		if (cached instanceof Ae2KeyBackoffRegistry<?> registry) {
+			return (Ae2KeyBackoffRegistry<AEItemKey>) registry;
+		}
+		Ae2KeyBackoffRegistry<AEItemKey> registry = new Ae2KeyBackoffRegistry<>();
+		holder.getPushState().setOutputKeyBackoffRegistry(registry);
+		return registry;
 	}
 
 	/**
@@ -265,7 +403,7 @@ public final class Ae2OutputPusher {
 	/**
 	 * 收集非空槽位到列表
 	 */
-	private static void collectSlot(List<SlotEntry> entries, int process, int slotIdx,
+	private static void collectSlot(ReusableBuffers buffers, int process, int slotIdx,
 									@Nullable IInventorySlot slot, @Nullable AeItemKeyCache cache) {
 		if (slot == null) return;
 		ItemStack stack = slot.getStack();
@@ -279,7 +417,26 @@ public final class Ae2OutputPusher {
 		}
 		if (key == null) return;
 
-		entries.add(new SlotEntry(slot, stack, key, stack.getCount(), process, slotIdx));
+		SlotEntry entry;
+		if (buffers.entryPoolCursor < buffers.entryPool.size()) {
+			entry = buffers.entryPool.get(buffers.entryPoolCursor++);
+		} else {
+			entry = new SlotEntry();
+			buffers.entryPool.add(entry);
+			buffers.entryPoolCursor++;
+		}
+		entry.set(slot, stack, key, stack.getCount(), process, slotIdx);
+		buffers.entries.add(entry);
+	}
+
+	@Nullable
+	private static IInventorySlot outputSlot(IAe2OutputHostBase host, int process, int slotIdx) {
+		return switch (slotIdx) {
+			case 0 -> host.primaryOutputSlot(process);
+			case 1 -> host.secondaryOutputSlot(process);
+			case 2 -> host.tertiaryOutputSlot(process);
+			default -> null;
+		};
 	}
 
 	/**
@@ -291,7 +448,9 @@ public final class Ae2OutputPusher {
 		int originalCount = entry.count;
 		long inserted = 0;
 		try {
-			inserted = meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource);
+			inserted = SaturatingMath.clampToRequest(
+					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource),
+					originalCount);
 			if (inserted <= 0) {
 				return 0;
 			}
@@ -323,7 +482,8 @@ public final class Ae2OutputPusher {
 			MEStorage meStorage,
 			IActionSource actionSource) {
 		try {
-			long inserted = meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource);
+			long inserted = SaturatingMath.clampToRequest(
+					meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource), totalCount);
 			if (inserted <= 0) {
 				return 0;
 			}
@@ -387,14 +547,17 @@ public final class Ae2OutputPusher {
 	 * 槽位条目 — 缓存扫描结果，避免重复读取
 	 */
 	private static final class SlotEntry {
-		final IInventorySlot slot;
-		final ItemStack stack;
-		final AEItemKey key;
-		final int count;
-		final int process;
-		final int slotIdx;
+		IInventorySlot slot;
+		ItemStack stack;
+		AEItemKey key;
+		int count;
+		int process;
+		int slotIdx;
 
-		SlotEntry(IInventorySlot slot, ItemStack stack, AEItemKey key, int count, int process, int slotIdx) {
+		SlotEntry() {
+		}
+
+		void set(IInventorySlot slot, ItemStack stack, AEItemKey key, int count, int process, int slotIdx) {
 			this.slot = slot;
 			this.stack = stack;
 			this.key = key;
@@ -409,6 +572,8 @@ public final class Ae2OutputPusher {
 	 * energyAdapter 使用 volatile + double-checked locking 保证线程安全。
 	 */
 	static final class ReusableBuffers {
+		/** Reused synchronous direct-insert session for generated items and the apiary overflow buffer. */
+		DirectItemPushSession directItemPushSession;
 		/**
 		 * 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变
 		 * <p>
@@ -419,21 +584,34 @@ public final class Ae2OutputPusher {
 
 		/** 复用的槽位条目列表 — 容量自动增长到峰值后零扩容 */
 		final List<SlotEntry> entries = new ArrayList<>();
+		final List<SlotEntry> entryPool = new ArrayList<>();
+		int entryPoolCursor;
+		int outputSlotScanCursor;
 
 		/** 复用的 key → 槽位列表映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
-		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new java.util.HashMap<>();
+		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new LinkedHashMap<>();
+		final List<List<SlotEntry>> keyEntryListPool = new ArrayList<>();
+		int keyEntryListPoolCursor;
 
 		/** 复用的 key → 总数量映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
-		final Map<AEItemKey, Long> keyToTotalCount = new java.util.HashMap<>();
+		final Object2LongLinkedOpenHashMap<AEItemKey> keyToTotalCount =
+				new Object2LongLinkedOpenHashMap<>();
 
 		/** 拉取列表缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 使用） */
 		final List<Ae2InputPuller.PullEntry> pullList = new ArrayList<>();
+		final List<Ae2InputPuller.PullEntry> pullEntryPool = new ArrayList<>();
+		int pullEntryPoolCursor;
+		final Set<AEItemKey> pullKeys = new HashSet<>();
 
-		/** 拉取扫描键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
-		final List<AEItemKey> scanKeys = new ArrayList<>();
+		/** Bounded wraparound prefix for the AE2 input cursor scan. */
+		final List<AEItemKey> scanPrefixKeys = new ArrayList<>();
 
 		/** 游标扫描选中键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
 		final List<AEItemKey> scanSelectedKeys = new ArrayList<>();
+		final PullCandidateAmounts scanCandidateAmounts = new PullCandidateAmounts();
+
+		/** Per-input-slot capacity snapshot reused between pull planning and local insertion. */
+		private long[] inputSlotCapacities = new long[16];
 
 		/**
 		 * 获取能量适配器（懒初始化，volatile + double-checked locking 保证线程安全）
@@ -463,14 +641,64 @@ public final class Ae2OutputPusher {
 			return pullList;
 		}
 
-		/** 借用拉取扫描键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
-		List<AEItemKey> borrowScanKeys() {
-			return scanKeys;
+		void resetPullEntryPool() {
+			pullEntryPoolCursor = 0;
+		}
+
+		Ae2InputPuller.PullEntry borrowPullEntry(AEItemKey key, int amount) {
+			Ae2InputPuller.PullEntry entry;
+			if (pullEntryPoolCursor < pullEntryPool.size()) {
+				entry = pullEntryPool.get(pullEntryPoolCursor++);
+			} else {
+				entry = new Ae2InputPuller.PullEntry(key, amount);
+				pullEntryPool.add(entry);
+				pullEntryPoolCursor++;
+			}
+			entry.reset(key, amount);
+			return entry;
+		}
+
+		/** Borrow the bounded cursor-wrap prefix scratch list. */
+		List<AEItemKey> borrowScanPrefixKeys() {
+			return scanPrefixKeys;
 		}
 
 		/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
 		List<AEItemKey> borrowScanSelectedKeys() {
 			return scanSelectedKeys;
+		}
+
+		PullCandidateAmounts borrowScanCandidateAmounts() {
+			return scanCandidateAmounts;
+		}
+
+		long[] borrowInputSlotCapacities(int requiredSize) {
+			if (requiredSize > inputSlotCapacities.length) {
+				int newLength = Math.max(requiredSize, inputSlotCapacities.length << 1);
+				inputSlotCapacities = Arrays.copyOf(inputSlotCapacities, newLength);
+			}
+			return inputSlotCapacities;
+		}
+
+		Set<AEItemKey> borrowPullKeys() {
+			return pullKeys;
+		}
+	}
+
+	/** Reusable primitive side table for amounts computed while scanning AE candidates. */
+	static final class PullCandidateAmounts {
+		private final Object2IntOpenHashMap<AEItemKey> amounts = new Object2IntOpenHashMap<>(16);
+
+		void clear() {
+			amounts.clear();
+		}
+
+		void put(AEItemKey key, int amount) {
+			amounts.put(key, amount);
+		}
+
+		int get(AEItemKey key) {
+			return amounts.getInt(key);
 		}
 	}
 }

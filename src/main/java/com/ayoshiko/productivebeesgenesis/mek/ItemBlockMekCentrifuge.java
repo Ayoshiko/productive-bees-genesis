@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
@@ -316,7 +317,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 		CompoundTag countsTag = nbt.getCompound(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS);
 		int total = 0;
 		for (String typeId : countsTag.getAllKeys()) {
-			total += countsTag.getInt(typeId);
+			total = SaturatingMath.saturatingAddToInt(total, countsTag.getInt(typeId));
 		}
 		return total;
 	}

@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import mekanism.api.Action;
@@ -11,6 +13,8 @@ import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
@@ -33,6 +37,23 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 	 * @since 1.0.0
 	 */
 public class MyriadFluidOutputHandler {
+	private static final String NBT_PENDING_FLUID = "productivebeesgenesis_myriad_pending_fluid";
+
+	public enum InsertResult {
+		REJECTED(false),
+		COMPLETE(true),
+		COMMITTED_PENDING(true);
+
+		private final boolean committed;
+
+		InsertResult(boolean committed) {
+			this.committed = committed;
+		}
+
+		public boolean committed() {
+			return committed;
+		}
+	}
 
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
@@ -45,6 +66,7 @@ public class MyriadFluidOutputHandler {
 
 	/** 每进程的流体诊断日志冷却器 — 避免流体不产出时 WARN 刷屏 */
 	private final LogThrottle[] fluidDiagThrottles;
+	private final long[] pendingFluidAmounts;
 
 	/**
 	 * Task 3 性能优化：每 tick 缓存的流体槽满载状态
@@ -70,6 +92,7 @@ public class MyriadFluidOutputHandler {
 		this.recipeFinder = recipeFinder;
 		this.logPrefix = logPrefix;
 		this.fluidDiagThrottles = new LogThrottle[processes];
+		this.pendingFluidAmounts = new long[processes];
 		for (int i = 0; i < processes; i++) {
 			this.fluidDiagThrottles[i] = new LogThrottle();
 		}
@@ -87,6 +110,10 @@ public class MyriadFluidOutputHandler {
 	 * 暂停语义:所有槽满载且无法分配新槽才暂停(新流体类型可写入新槽时不暂停)。
 	 */
 	public void initFluidTankFullCache() {
+		if (context.suppressesUselessByproducts()) {
+			cachedFluidTankFull = false;
+			return;
+		}
 		Level level = context.level();
 		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
 		if (tick == lastFullCacheTick) return;
@@ -116,6 +143,10 @@ public class MyriadFluidOutputHandler {
 	 * Task 4 修复:使用复合判断,与 initFluidTankFullCache 保持一致。
 	 */
 	public void refreshFluidTankFullCache() {
+		if (context.suppressesUselessByproducts()) {
+			cachedFluidTankFull = false;
+			return;
+		}
 		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
 		Level level = context.level();
 		lastFullCacheTick = level == null ? Long.MIN_VALUE : level.getGameTime();
@@ -143,6 +174,10 @@ public class MyriadFluidOutputHandler {
 		// Task 8 修复：万象创世蜜脾没有 PB 配方，直接使用蜂蜜流体作为副产物
 		// 避免对万象创世蜜脾调用 findPbRecipe 返回 null 后产生不必要的"未找到PB配方"警告
 		FluidStack fluidOutput = resolveFluidOutput(input, 0);
+		if (context.suppressesUselessByproducts()
+				&& UselessByproductUpgradeHelper.isHoney(fluidOutput)) {
+			return Integer.MAX_VALUE;
+		}
 		// Task 11: 使用 fluidOutputTankForInsert 路由到目标槽
 		// MULTI_PER_FLUID 模式下查询对应槽的剩余空间（而非主槽），保证批量计算准确
 		// SINGLE 模式下 fluidOutputTankForInsert 默认返回主槽，行为与修改前完全一致
@@ -154,14 +189,13 @@ public class MyriadFluidOutputHandler {
 		}
 		int space = tank.getCapacity() - tank.getFluidAmount();
 		if (space < 0) space = 0;
-		long perBatch = (long) fluidOutput.getAmount() * productivityMod;
+		long perBatch = SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), productivityMod);
 		if (perBatch <= 0) return Integer.MAX_VALUE;
 		long directCapacity = context.productivebeesgenesis$isDirectAeOutputEnabled()
-				? context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, Integer.MAX_VALUE)
+				? context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, Long.MAX_VALUE)
 				: 0L;
-		long available = Math.max(0L, space) + Math.max(0L, directCapacity);
-		long representableBatches = Integer.MAX_VALUE / perBatch;
-		return (int) Math.min(Math.min(available / perBatch, representableBatches), Integer.MAX_VALUE);
+		long available = SaturatingMath.saturatingAdd(Math.max(0L, space), Math.max(0L, directCapacity));
+		return SaturatingMath.saturatingToInt(available / perBatch);
 	}
 
 	/**
@@ -174,63 +208,130 @@ public class MyriadFluidOutputHandler {
 	 * 蜜脾块配方在 CentrifugeRecipeIndex 中由蜜脾配方派生，流体量已乘以蜜脾块倍率，
 	 * 因此此处只需按输入消耗数量（modifier/batchSize）缩放，无需额外乘以蜜脾块倍率。
 	 * <p>
-	 * <b>v9-M2 修复：</b>硬约束要求"离心机流体槽满时必须暂停处理"。
-	 * 原实现先 shrinkStack 再 insert，空间不足时静默丢弃流体。现改为先检查空间，
-	 * 不足时不插入并返回 false，调用方据此不扣输入、暂停处理。
+	 * 原实现先 shrinkStack 再 insert，空间不足时会静默丢弃流体。现在先模拟 AE2 与本地容量；
+	 * 完全未提交时返回 {@link InsertResult#REJECTED}，已经部分提交时把剩余量持久化后返回
+	 * {@link InsertResult#COMMITTED_PENDING}，调用方不会重复产出或丢失流体。
 	 *
 	 * @param input        输入物品（万象创世蜜脾或蜜脾块）
 	 * @param amount       输入消耗数量（单件=modifier，批量=batchSize）
 	 * @param processIndex 进程索引（用于日志冷却）
-	 * @return true 全部流体成功插入；false 流体槽空间不足或类型不匹配，未执行插入
+	 * @return {@link InsertResult#REJECTED} 表示没有提交任何流体；{@link InsertResult#COMPLETE} 表示全部提交或无需流体；{@link InsertResult#COMMITTED_PENDING} 表示已提交部分且剩余量已进入持久化 pending 缓冲
 	 */
-	public boolean insertFluidOutput(ItemStack input, int amount, int processIndex) {
+	public InsertResult insertFluidOutput(ItemStack input, long amount, int processIndex) {
 		if (amount <= 0) {
 			logThrottledWarn(processIndex,
 					"{}insertFluidOutput 跳过：amount<=0 amount={} input={}", logPrefix, amount, input);
-			return true;
+			return InsertResult.COMPLETE;
 		}
 		// Task 8 修复：万象创世蜜脾没有 PB CentrifugeRecipe（其产物是动态随机蜜脾），
 		// 查找 PB 配方必然返回 null。原实现因此每次都输出"未找到PB配方"警告（30+ 次），
 		// 误导用户以为是配方查找 bug。实际是预期行为：万象创世蜜脾的流体副产物固定为蜂蜜。
 		// 修复：识别万象创世蜜脾后跳过 PB 配方查找，直接使用蜂蜜流体，避免无谓警告日志。
 		FluidStack fluidOutput = resolveFluidOutput(input, processIndex);
-		// 先按 amount 缩放流体栈，用于查询目标槽及后续插入
-		FluidStack scaledFluid = fluidOutput.copyWithAmount(
-				(int) Math.min((long) fluidOutput.getAmount() * amount, Integer.MAX_VALUE));
-		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
-			long accepted = Math.max(0L, Math.min((long) scaledFluid.getAmount(),
-					context.productivebeesgenesis$pushGeneratedFluidToAe(scaledFluid, scaledFluid.getAmount())));
-			if (accepted >= scaledFluid.getAmount()) return true;
-			if (accepted > 0) {
-				scaledFluid = scaledFluid.copyWithAmount((int) (scaledFluid.getAmount() - accepted));
-			}
+		if (context.suppressesUselessByproducts()
+				&& UselessByproductUpgradeHelper.isHoney(fluidOutput)) {
+			return InsertResult.COMPLETE;
 		}
-		// Task 11: 多槽路由 — 使用 fluidOutputTankForInsert 按流体类型查询目标槽
-		// SINGLE 模式：默认实现返回主槽，行为与修改前完全一致
-		// MULTI_PER_FLUID 模式：自动按流体类型路由到对应槽（已存在同类型槽返回该槽，否则分配新槽）
-		IExtendedFluidTank tank = context.fluidOutputTankForInsert(scaledFluid);
-		if (tank == null) {
-			logThrottledWarn(processIndex,
-					"{}insertFluidOutput 流体输出槽为 null：input={}", logPrefix, input);
+		long requestedAmount = SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), amount);
+		if (requestedAmount <= 0L) return InsertResult.COMPLETE;
+
+		IExtendedFluidTank tank = context.fluidOutputTankForInsert(fluidOutput);
+		long localCapacity = availableLocalCapacity(tank, fluidOutput);
+		long simulatedAeCapacity = context.productivebeesgenesis$isDirectAeOutputEnabled()
+				? SaturatingMath.clampToRequest(
+						context.productivebeesgenesis$simulateGeneratedFluidToAe(fluidOutput, requestedAmount),
+						requestedAmount)
+				: 0L;
+		if (SaturatingMath.saturatingAdd(localCapacity, simulatedAeCapacity) < requestedAmount) {
+			return InsertResult.REJECTED;
+		}
+
+		long acceptedByAe = 0L;
+		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			acceptedByAe = SaturatingMath.clampToRequest(
+					context.productivebeesgenesis$pushGeneratedFluidToAe(fluidOutput, requestedAmount),
+					requestedAmount);
+		}
+		long remainingAmount = requestedAmount - acceptedByAe;
+		if (remainingAmount <= 0L) return InsertResult.COMPLETE;
+
+		long insertedLocally = insertLocally(tank, fluidOutput, remainingAmount);
+		remainingAmount -= insertedLocally;
+		if (remainingAmount <= 0L) return InsertResult.COMPLETE;
+
+		if (acceptedByAe <= 0L && insertedLocally <= 0L) {
+			return InsertResult.REJECTED;
+		}
+		addPendingFluid(processIndex, remainingAmount);
+		return InsertResult.COMMITTED_PENDING;
+	}
+
+	private long availableLocalCapacity(IExtendedFluidTank tank, FluidStack fluid) {
+		if (tank == null) return 0L;
+		FluidStack current = tank.getFluid();
+		if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, fluid)) return 0L;
+		return Math.max(0L, (long) tank.getCapacity() - tank.getFluidAmount());
+	}
+
+	private long insertLocally(IExtendedFluidTank tank, FluidStack fluid, long amount) {
+		if (tank == null || amount <= 0L || amount > Integer.MAX_VALUE) return 0L;
+		FluidStack scaledFluid = fluid.copyWithAmount((int) amount);
+		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
+		return scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
+	}
+
+	public boolean flushPendingFluid(int processIndex) {
+		long pending = pendingFluidAmounts[processIndex];
+		if (pending <= 0L) return true;
+		if (context.suppressesUselessByproducts()) {
+			setPendingFluid(processIndex, 0L);
 			return true;
 		}
 
-		// v9-M2 修复：先检查空间，不足时不插入，返回 false 让调用方暂停处理
-		int space = tank.getCapacity() - tank.getFluidAmount();
-		FluidStack current = tank.getFluid();
-		if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, scaledFluid)) {
-			logThrottledWarn(processIndex,
-					"{}insertFluidOutput 流体类型不匹配：current={} input={}", logPrefix, current, input);
-			return false;
+		FluidStack honey = new FluidStack(ModFluids.HONEY.get(), 1);
+		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			long accepted = SaturatingMath.clampToRequest(
+					context.productivebeesgenesis$pushGeneratedFluidToAe(honey, pending), pending);
+			if (accepted > 0L) {
+				pending -= accepted;
+				setPendingFluid(processIndex, pending);
+			}
 		}
-		if (scaledFluid.getAmount() > space) {
-			logThrottledWarn(processIndex,
-					"{}insertFluidOutput 流体槽空间不足：input={} amount={} scaled={} space={} tankCapacity={} tankFluidAmount={}",
-					logPrefix, input, amount, scaledFluid, space, tank.getCapacity(), tank.getFluidAmount());
-			return false;
+		if (pending <= 0L) return true;
+
+		IExtendedFluidTank tank = context.fluidOutputTankForInsert(honey);
+		if (availableLocalCapacity(tank, honey) < pending) return false;
+		long inserted = insertLocally(tank, honey, pending);
+		if (inserted > 0L) {
+			pending -= inserted;
+			setPendingFluid(processIndex, pending);
 		}
-		tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
-		return true;
+		return pending <= 0L;
+	}
+
+	private void addPendingFluid(int processIndex, long amount) {
+		setPendingFluid(processIndex,
+				SaturatingMath.saturatingAdd(pendingFluidAmounts[processIndex], Math.max(0L, amount)));
+	}
+
+	private void setPendingFluid(int processIndex, long amount) {
+		long normalized = Math.max(0L, amount);
+		if (pendingFluidAmounts[processIndex] == normalized) return;
+		pendingFluidAmounts[processIndex] = normalized;
+		context.productivebeesgenesis$markForSave();
+	}
+
+	public void saveAdditional(CompoundTag nbt) {
+		nbt.putLongArray(NBT_PENDING_FLUID, pendingFluidAmounts);
+	}
+
+	public void loadAdditional(CompoundTag nbt) {
+		if (!nbt.contains(NBT_PENDING_FLUID, Tag.TAG_LONG_ARRAY)) return;
+		long[] saved = nbt.getLongArray(NBT_PENDING_FLUID);
+		int length = Math.min(saved.length, pendingFluidAmounts.length);
+		for (int i = 0; i < length; i++) {
+			pendingFluidAmounts[i] = Math.max(0L, saved[i]);
+		}
 	}
 
 	/**

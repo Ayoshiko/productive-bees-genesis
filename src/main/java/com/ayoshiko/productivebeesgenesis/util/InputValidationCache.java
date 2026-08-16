@@ -12,6 +12,7 @@ import net.minecraft.world.level.Level;
 
 import javax.annotation.Nullable;
 
+import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
@@ -19,13 +20,14 @@ import java.util.function.Supplier;
 	 * <br/>
 	 * SFM / AE2 等自动化模组会每 tick 多次探测输入槽有效性（{@code isItemValidForSlot} / {@code isValidInputItem}），
 	 * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
-	 * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用。
+	 * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用；
+	 * 默认保留最近 4 个输入，避免多进程工厂交替输入时单条目缓存反复失效。
 	 * <p>
 	 * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
 	 * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
 	 * 和 {@code PatchedDataComponentMap.hashCode()} 的高昂开销。
 	 * 对于 configurable_honeycomb / configurable_comb_block，只需比较 Item + bee_type 即可唯一确定身份；
-	 * 其他物品退化为 Item identity 比较（与 isSameItemSameComponents 中 Item 检查等价）。
+	 * 其他物品使用官方组件哈希，保证带数据组件的物品不会错误共享结果。
 	 * <p>
 	 * 支持两种缓存粒度：
 	 * <ul>
@@ -48,16 +50,19 @@ public class InputValidationCache {
 	 */
 	public static final int DEFAULT_TTL = 100;
 
+	/** Default number of recent inputs retained for alternating factory lanes. */
+	private static final int DEFAULT_MAX_ENTRIES = 4;
+
 	/**
-	 * 输入指纹 — Item + beeType，不含 count 和其他组件
+	 * 输入指纹 — Item + beeType + 通用组件哈希，不含 count
 	 * <br/>
 	 * 与 {@link ItemStack#isSameItemSameComponents} 语义近似（不比较 count），
 	 * 但对 configurable_honeycomb / configurable_comb_block 只比较 bee_type，
 	 * 跳过其他数据组件的哈希计算（这些物品除 bee_type 外组件固定）。
-	 * 其他物品退化为 Item identity 比较。
+	 * 其他物品保留组件哈希，避免同一 Item 的不同数据组件错误共享配方结果。
 	 */
-	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType) {
-		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null);
+	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType, int componentHash) {
+		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null, 0);
 
 		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
 		static InputFingerprint of(ItemStack stack) {
@@ -67,9 +72,9 @@ public class InputValidationCache {
 			Item item = stack.getItem();
 			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
 			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-				return new InputFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
+				return new InputFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()), 0);
 			}
-			return new InputFingerprint(item, null);
+		return new InputFingerprint(item, null, ItemStack.hashItemAndComponents(stack));
 		}
 	}
 
@@ -89,25 +94,38 @@ public class InputValidationCache {
 	}
 
 	private final int ttlTicks;
+	private final CacheEntry[] entries;
 
-	/** 上次缓存的输入指纹（轻量 key，避免完整组件哈希） */
-	private InputFingerprint cachedFingerprint = InputFingerprint.EMPTY;
+	private static final class CacheEntry {
+		private final InputFingerprint fingerprint;
+		private final ValidationResult result;
+		private final long cachedAt;
 
-	/** 上次缓存的完整结果（兼容 boolean 路径时 recipe/beeType/isCombBlock 为默认值） */
-	private ValidationResult cachedResultValue = ValidationResult.INVALID;
-
-	/** 上次缓存时的游戏刻 */
-	private long cachedAt = -1L;
+		private CacheEntry(InputFingerprint fingerprint, ValidationResult result, long cachedAt) {
+			this.fingerprint = fingerprint;
+			this.result = result;
+			this.cachedAt = cachedAt;
+		}
+	}
 
 	/** Last smelting-compat flag seen by this cache; cleared on change so toggles take effect immediately. */
 	private boolean lastSmeltingAllowed = false;
 
 	public InputValidationCache() {
-		this(DEFAULT_TTL);
+		this(DEFAULT_TTL, DEFAULT_MAX_ENTRIES);
 	}
 
 	public InputValidationCache(int ttlTicks) {
+		this(ttlTicks, DEFAULT_MAX_ENTRIES);
+	}
+
+	/** Creates a bounded cache without introducing an unbounded map for automation probes. */
+	public InputValidationCache(int ttlTicks, int maxEntries) {
+		if (maxEntries <= 0) {
+			throw new IllegalArgumentException("maxEntries must be positive, got: " + maxEntries);
+		}
 		this.ttlTicks = ttlTicks;
+		this.entries = new CacheEntry[maxEntries];
 	}
 
 	/**
@@ -144,14 +162,15 @@ public class InputValidationCache {
 		long now = level.getGameTime();
 		// 指纹比对（轻量 key，避免 isSameItemSameComponents 的全组件哈希）
 		InputFingerprint fp = InputFingerprint.of(input);
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
-			return cachedResultValue;
+		int hit = findFreshEntry(fp, now);
+		if (hit >= 0) {
+			promote(hit);
+			return entries[0].result;
 		}
 		// 未命中 — 重新校验并缓存指纹
-		cachedFingerprint = fp;
-		cachedResultValue = validator.get();
-		cachedAt = now;
-		return cachedResultValue;
+		ValidationResult result = validator.get();
+		insert(fp, result, now);
+		return result;
 	}
 
 	/**
@@ -172,20 +191,42 @@ public class InputValidationCache {
 		long now = level.getGameTime();
 		// 指纹比对
 		InputFingerprint fp = InputFingerprint.of(input);
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks && fp.equals(cachedFingerprint)) {
-			return cachedResultValue.valid();
+		int hit = findFreshEntry(fp, now);
+		if (hit >= 0) {
+			promote(hit);
+			return entries[0].result.valid();
 		}
 		boolean result = validator.get();
-		cachedFingerprint = fp;
-		cachedResultValue = new ValidationResult(result, null, null, false);
-		cachedAt = now;
+		insert(fp, new ValidationResult(result, null, null, false), now);
 		return result;
+	}
+
+	private int findFreshEntry(InputFingerprint fingerprint, long now) {
+		for (int i = 0; i < entries.length; i++) {
+			CacheEntry entry = entries[i];
+			if (entry != null && now >= entry.cachedAt && now - entry.cachedAt < ttlTicks
+					&& fingerprint.equals(entry.fingerprint)) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	/** Move a hit to the front so alternating hot inputs stay resident. */
+	private void promote(int index) {
+		if (index <= 0) return;
+		CacheEntry hit = entries[index];
+		System.arraycopy(entries, 0, entries, 1, index);
+		entries[0] = hit;
+	}
+
+	private void insert(InputFingerprint fingerprint, ValidationResult result, long now) {
+		System.arraycopy(entries, 0, entries, 1, entries.length - 1);
+		entries[0] = new CacheEntry(fingerprint, result, now);
 	}
 
 	/** 清空缓存（配方重载等场景调用） */
 	public void clear() {
-		cachedFingerprint = InputFingerprint.EMPTY;
-		cachedResultValue = ValidationResult.INVALID;
-		cachedAt = -1L;
+		Arrays.fill(entries, null);
 	}
 }

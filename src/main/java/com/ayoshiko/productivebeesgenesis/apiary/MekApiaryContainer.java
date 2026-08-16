@@ -2,8 +2,10 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,7 +31,7 @@ import java.util.List;
 	 * </ul>
 	 */
 public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiary>
-		implements IFeederSlotContainer, IPbUpgradeSlotContainer {
+		implements IFeederSlotContainer, IPbUpgradeSlotContainer, IPagedOutputContainer {
 
 	/** 初始版蜜蜂列数 */
 	private static final int BEE_COLS = 3;
@@ -39,6 +41,8 @@ public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiar
 
 	/** 初始版输出列数 */
 	private static final int OUTPUT_COLS = 3;
+
+	private int outputPage;
 
 	/** 喂食器虚拟槽位列表（Popup Window 交互用） */
 	@Nullable
@@ -68,6 +72,7 @@ public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiar
 	@Override
 	protected void addSlots() {
 		super.addSlots();
+		addPagedOutputSlots();
 		// 添加喂食器虚拟槽位
 		List<FeederInventorySlot> feederInventorySlots = tile.getFeederInventorySlots();
 		feederSlots = new ArrayList<>(feederInventorySlots.size());
@@ -81,6 +86,54 @@ public class MekApiaryContainer extends MekanismTileContainer<TileEntityMekApiar
 		addSlot(pbUpgradeInputSlot);
 		pbUpgradeOutputSlot = tile.getPbUpgradeOutputSlot().createContainerSlot();
 		addSlot(pbUpgradeOutputSlot);
+	}
+
+	private void addPagedOutputSlots() {
+		List<BasicInventorySlot> outputSlots = tile.getOutputSlots();
+		int slotsPerPage = tile.getOutputSlotsPerPage();
+		int beeX = ApiaryGuiLayoutHelper.getBeeX(
+				ApiaryGuiLayoutHelper.getImageWidth(BEE_COLS, OUTPUT_COLS), BEE_COLS);
+		int outputX = ApiaryGuiLayoutHelper.getOutputX(beeX,
+				ApiaryGuiLayoutHelper.getBeeW(BEE_COLS), ApiaryGuiLayoutHelper.getOutputW(OUTPUT_COLS));
+		int outputY = ApiaryGuiLayoutHelper.getOutputY(ApiaryGuiLayoutHelper.getBeeBottom(BEE_ROWS), BEE_ROWS);
+		int pitch = ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP;
+		for (int pageSlot = 0; pageSlot < slotsPerPage; pageSlot++) {
+			int row = pageSlot / OUTPUT_COLS;
+			int col = pageSlot % OUTPUT_COLS;
+			addSlot(new PagedOutputContainerSlot(outputSlots, this::getOutputPage,
+					slotsPerPage, pageSlot, outputX + col * pitch, outputY + row * pitch,
+					tile.getWarningCheck(mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
+		}
+	}
+
+	@Override
+	public int getOutputPage() {
+		return outputPage;
+	}
+
+	@Override
+	public int getOutputPageCount() {
+		return tile.getOutputPageCount();
+	}
+
+	@Override
+	public void setOutputPage(int page) {
+		outputPage = Math.max(0, Math.min(page, getOutputPageCount() - 1));
+	}
+
+	@Override
+	public boolean clickMenuButton(Player player, int id) {
+		if (id == PREVIOUS_OUTPUT_PAGE_BUTTON) {
+			changeOutputPage(-1);
+			broadcastFullState();
+			return true;
+		}
+		if (id == NEXT_OUTPUT_PAGE_BUTTON) {
+			changeOutputPage(1);
+			broadcastFullState();
+			return true;
+		}
+		return super.clickMenuButton(player, id);
 	}
 
 	/** 获取喂食器虚拟槽位列表（供 GuiFeederWindow 绑定 GuiVirtualSlot） */

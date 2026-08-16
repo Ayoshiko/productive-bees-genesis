@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.jerry.mekextras.api.ExtraUpgrade;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -78,7 +79,8 @@ public class ExtraUpgradeStackMixin {
 				&& productivebeesgenesis$isCentrifugeFactory()) {
 			// null 守卫与项目惯例一致（Ae2InputPuller 等），异常加载顺序下回退原值避免 NPE
 			if (ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeMaxStackUpgrades != null) {
-				return ModConfig.SERVER.mekCentrifugeMaxStackUpgrades.get();
+				return BalanceConfig.centrifugeStackLimit(
+						ModConfig.SERVER.mekCentrifugeMaxStackUpgrades.get());
 			}
 			return original.call(upgrade);
 		}

@@ -101,7 +101,7 @@ final class BeeSelectionRenderer {
 			GuiColors.BORDER_GROUP_HEADER);
 
 		String arrow = header.collapsed ? COLLAPSED_ARROW : EXPANDED_ARROW;
-		String text = arrow + " " + header.namespace + " (" + header.count + ")";
+		String text = arrow + " " + header.productModId + " (" + header.count + ")";
 		graphics.drawString(screen.getMinecraft().font, text, x + 4, y + 8, GuiColors.TEXT_WHITE);
 	}
 
@@ -192,12 +192,12 @@ final class BeeSelectionRenderer {
 	 * 分组标题项。
 	 */
 	static final class HeaderItem extends DisplayItem {
-		final String namespace;
+		final String productModId;
 		final int count;
 		boolean collapsed;
 
-		HeaderItem(String namespace, int count, boolean collapsed) {
-			this.namespace = namespace;
+		HeaderItem(String productModId, int count, boolean collapsed) {
+			this.productModId = productModId;
 			this.count = count;
 			this.collapsed = collapsed;
 		}

@@ -2,6 +2,10 @@ package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.init.ModItems;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
+import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
+import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivelib.event.CollectValidUpgradesEvent;
 import cy.jdkdigital.productivelib.registry.LibItems;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -68,7 +72,20 @@ public final class CollectValidUpgradesEventHandler {
 	@SubscribeEvent
 	public static void onCollectValidUpgrades(CollectValidUpgradesEvent event) {
 		BlockEntity be = event.getBlockEntity();
+		boolean isProductiveBeesMachine = be instanceof AdvancedBeehiveBlockEntity
+				|| be instanceof CentrifugeBlockEntity;
 		// 接口多态判定 — 避免引用 ME/EME 可选依赖的具体离心机类
+		if (!(be instanceof IPbUpgradeProvider) && !isProductiveBeesMachine) {
+			return;
+		}
+
+		// ProductiveLib 每次插入都会重新收集白名单。安装后不再加入列表，
+		// 因而 PB 原版的四个独立升级槽也只能接受一个该升级。
+		if (!UselessByproductUpgradeHelper.hasUpgrade(be)) {
+			event.addValidUpgrade(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
+		}
+
+		// PB 原版机器自己的事件处理器负责其余升级；下方白名单仅属于本模组机器。
 		if (!(be instanceof IPbUpgradeProvider)) {
 			return;
 		}

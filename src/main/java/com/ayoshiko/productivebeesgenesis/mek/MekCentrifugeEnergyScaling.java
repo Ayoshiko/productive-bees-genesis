@@ -56,6 +56,16 @@ public final class MekCentrifugeEnergyScaling {
     }
 
     /**
+     * Keeps one additional batch as a low-water reserve. With an exact-demand buffer the
+     * injector fills the machine and processing drains it to zero every game tick, making the
+     * synced FE bar oscillate and leaving no tolerance for another pipeline stage in that tick.
+     */
+    public static long bufferedCapacityForDemand(long required) {
+        long demand = Math.max(0L, required);
+        return SaturatingMath.saturatingAdd(demand, demand);
+    }
+
+    /**
      * Grows the local energy buffer to the current one-tick demand if it is too small.
      */
     public static void ensureCapacity(PbRecipeContext context) {

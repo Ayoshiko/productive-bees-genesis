@@ -26,18 +26,23 @@ import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.BUTTON_SIZE;
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.BUTTON_X_OFFSET;
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.BUTTON_Y_OFFSET;
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.CENTRIFUGE_PRIORITY_BUTTON_X_OFFSET;
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.CENTRIFUGE_PRIORITY_BUTTON_Y_OFFSET;
+import static com.ayoshiko.productivebeesgenesis.client.screen.ApiaryDirectEjectLayout.DIRECT_AE_BUTTON_X_OFFSET;
+
 /** 在机械蜂箱的 Mekanism 物品侧面配置页注入快速直连开关。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class ApiaryDirectEjectOverlay {
 
-	private static final int BUTTON_X_OFFSET = 136;
-	private static final int BUTTON_Y_OFFSET = 24;
-	private static final int DIRECT_AE_BUTTON_X_OFFSET = 120;
-	private static final int BUTTON_SIZE = 14;
 	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectEjectButton>> BUTTONS =
 			new WeakHashMap<>();
 	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryDirectAeOutputButton>> DIRECT_AE_BUTTONS =
 			new WeakHashMap<>();
+	private static final Map<GuiSideConfiguration<?>, WeakReference<ApiaryCentrifugePriorityButton>>
+			CENTRIFUGE_PRIORITY_BUTTONS = new WeakHashMap<>();
 
 	private ApiaryDirectEjectOverlay() {
 	}
@@ -80,6 +85,21 @@ public final class ApiaryDirectEjectOverlay {
 				target.apiary().isDirectAeOutputEnabled()
 						? "productivebeesgenesis.gui.apiary_direct_ae.enabled"
 						: "productivebeesgenesis.gui.apiary_direct_ae.disabled")));
+
+		ApiaryCentrifugePriorityButton priorityButton = getCentrifugePriorityButton(sideConfig);
+		if (priorityButton == null) {
+			priorityButton = new ApiaryCentrifugePriorityButton(target.gui(),
+					sideConfig.getRelativeX() + CENTRIFUGE_PRIORITY_BUTTON_X_OFFSET,
+					sideConfig.getRelativeY() + CENTRIFUGE_PRIORITY_BUTTON_Y_OFFSET, target);
+			sideConfig.children().add(priorityButton);
+			CENTRIFUGE_PRIORITY_BUTTONS.put(sideConfig, new WeakReference<>(priorityButton));
+		}
+		priorityButton.target = target;
+		priorityButton.visible = target.type() == TransmissionType.ITEM;
+		priorityButton.setTooltip(Tooltip.create(Component.translatable(
+				target.apiary().isCentrifugePriorityEnabled()
+						? "productivebeesgenesis.gui.apiary_centrifuge_priority.enabled"
+						: "productivebeesgenesis.gui.apiary_centrifuge_priority.disabled")));
 	}
 
 	@SubscribeEvent
@@ -89,6 +109,20 @@ public final class ApiaryDirectEjectOverlay {
 		if (target == null || target.type() != TransmissionType.ITEM) return;
 		ApiaryDirectEjectButton button = getButton(target.sideConfig());
 		if (button == null || !button.visible) return;
+		ApiaryCentrifugePriorityButton priorityButton = getCentrifugePriorityButton(target.sideConfig());
+		ButtonBounds priorityBounds = bounds(
+				target,
+				CENTRIFUGE_PRIORITY_BUTTON_X_OFFSET,
+				CENTRIFUGE_PRIORITY_BUTTON_Y_OFFSET);
+		if (priorityButton != null && priorityButton.visible
+				&& priorityBounds.contains(event.getMouseX(), event.getMouseY())) {
+			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
+					target.apiary().getBlockPos(),
+					com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload.OutputType
+							.APIARY_CENTRIFUGE_PRIORITY));
+			event.setCanceled(true);
+			return;
+		}
 		ApiaryDirectAeOutputButton directAeButton = getDirectAeButton(target.sideConfig());
 		ButtonBounds directAeBounds = bounds(target, DIRECT_AE_BUTTON_X_OFFSET);
 		if (directAeButton != null && directAeButton.visible && directAeButton.active
@@ -113,6 +147,13 @@ public final class ApiaryDirectEjectOverlay {
 
 	private static ApiaryDirectAeOutputButton getDirectAeButton(GuiSideConfiguration<?> sideConfig) {
 		WeakReference<ApiaryDirectAeOutputButton> reference = DIRECT_AE_BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
+	}
+
+	private static ApiaryCentrifugePriorityButton getCentrifugePriorityButton(
+			GuiSideConfiguration<?> sideConfig) {
+		WeakReference<ApiaryCentrifugePriorityButton> reference =
+				CENTRIFUGE_PRIORITY_BUTTONS.get(sideConfig);
 		return reference == null ? null : reference.get();
 	}
 
@@ -143,9 +184,13 @@ public final class ApiaryDirectEjectOverlay {
 	}
 
 	private static ButtonBounds bounds(OverlayTarget target, int xOffset) {
+		return bounds(target, xOffset, BUTTON_Y_OFFSET);
+	}
+
+	private static ButtonBounds bounds(OverlayTarget target, int xOffset, int yOffset) {
 		return new ButtonBounds(
 				target.gui().getGuiLeft() + target.sideConfig().getRelativeX() + xOffset,
-				target.gui().getGuiTop() + target.sideConfig().getRelativeY() + BUTTON_Y_OFFSET,
+				target.gui().getGuiTop() + target.sideConfig().getRelativeY() + yOffset,
 				BUTTON_SIZE);
 	}
 

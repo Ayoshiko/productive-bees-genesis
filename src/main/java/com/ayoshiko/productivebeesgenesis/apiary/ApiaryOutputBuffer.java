@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -12,7 +14,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
@@ -25,7 +29,7 @@ import java.util.function.Predicate;
 	 * <ul>
 	 *   <li>单一职责：仅缓存与重试注入，不涉及产出计算或槽位管理</li>
 	 *   <li>线程安全：synchronized 保护 offer/tickRedistribute/save/load，与 NBT 同步线程互斥</li>
-	 *   <li>容量上限：MAX_BUFFER_GROUPS=64，超出时丢弃最旧组并 WARN（防 OOM）</li>
+	 *   <li>容量上限：MAX_BUFFER_GROUPS=512，覆盖 60 蜜蜂 × 6 产物的单批最坏情况；持续阻塞时仍有 FIFO 上限保护</li>
 	 *   <li>FIFO 淘汰：ArrayDeque 实现，pollFirst/addLast 均 O(1)</li>
 	 * </ul>
 	 * <p>
@@ -35,14 +39,20 @@ import java.util.function.Predicate;
 public final class ApiaryOutputBuffer {
 
 	/** 缓冲区容量上限（组数） — 防止输出槽长期满载时缓冲区无限增长导致 OOM */
-	static final int MAX_BUFFER_GROUPS = 64;
+	static final int MAX_BUFFER_GROUPS = 512;
 
 	/** NBT key — 供 ApiaryNbtSerializer 使用 */
 	private static final String NBT_KEY = "productivebeesgenesis_output_buffer";
 	private static final String NBT_KEY_STACKS = "stacks";
+	private static final String NBT_KEY_STACK_COUNT = "productivebeesgenesis_count";
 
 	/** 缓冲的物品栈双端队列（按入队顺序，FIFO 重试 + FIFO 淘汰均 O(1)） */
 	private final Deque<ItemStack> bufferedStacks = new ArrayDeque<>();
+
+	/** 物品键到缓冲组的索引；Deque 仍负责 FIFO 顺序和淘汰。 */
+	private final Map<BufferKey, List<ItemStack>> bufferedIndex = new HashMap<>();
+	/** Reused per-key lists so repeated buffer rebuilds do not allocate short-lived ArrayLists. */
+	private final Deque<List<ItemStack>> reusableIndexLists = new ArrayDeque<>();
 
 	/** 复用 remaining 列表避免每 tick 分配 ArrayList（256× 加速场景下减少 GC 压力） */
 	private final List<ItemStack> remainingBuffer = new ArrayList<>();
@@ -78,6 +88,7 @@ public final class ApiaryOutputBuffer {
 	private ItemStack[] reusableRedistStacks = new ItemStack[0];
 	private int[] reusableRedistCounts = new int[0];
 	private int[] reusableRedistLimits = new int[0];
+	private int redistributeEmptyCursor;
 
 	/**
 	 * 代码审查修复：外部槽位（离心机输入槽）独立预扫描数组
@@ -89,6 +100,11 @@ public final class ApiaryOutputBuffer {
 	private ItemStack[] reusableExternalStacks = new ItemStack[0];
 	private int[] reusableExternalCounts = new int[0];
 	private int[] reusableExternalLimits = new int[0];
+	private int externalEmptyCursor;
+
+	private static final int MAX_AE_BUFFER_GROUPS_PER_CALL = 32;
+	private ItemStack[] reusableAePushStacks = new ItemStack[0];
+	private int aePushCursor;
 
 	/** 所属方块实体（用于 setChanged） */
 	private final TileEntityMekApiary tile;
@@ -101,41 +117,114 @@ public final class ApiaryOutputBuffer {
 	 * 尝试注入剩余产物到缓冲区。
 	 * 缓冲区满时丢弃最旧组并记录 WARN（模块2.3.1：使用 LogThrottle 5分钟节流避免刷屏）。
 	 * <p>
-	 * 模块2.3.2：offer 入口拆分 count > 99 的超量堆叠为多个 ≤99 的子栈，
-	 * 避免 save 时 DataResult 范围校验异常（[1;99]）。主修复，覆盖高产基因满级场景。
+	 * 相同物品和组件优先合并到现有缓冲组；数量以 int 保留，持久化时由自定义数量字段编码，
+	 * 不需要为超量堆叠创建成千上万个临时 ItemStack。
 	 *
 	 * @param leftovers distributeToOutput 未成功插入的剩余产物列表
 	 */
 	public synchronized void offer(List<ItemStack> leftovers) {
 		if (leftovers == null || leftovers.isEmpty()) return;
+		boolean changed = false;
 		for (ItemStack stack : leftovers) {
-			if (stack == null || stack.isEmpty()) continue;
-			// 模块2.3.2：拆分 count > 99 的栈为多个 ≤99 的子栈，避免 save 时 DataResult 范围校验异常
-			int remaining = stack.getCount();
-			for (ItemStack existing : bufferedStacks) {
-				if (!ItemStack.isSameItemSameComponents(existing, stack)) continue;
-				long merged = (long) existing.getCount() + remaining;
-				existing.setCount((int) Math.min(Integer.MAX_VALUE, merged));
-				remaining = (int) Math.max(0L, merged - Integer.MAX_VALUE);
-				if (remaining == 0) break;
-			}
-			if (remaining <= 0) continue;
-			if (bufferedStacks.size() >= MAX_BUFFER_GROUPS) {
-				// 代码审查修复：每次 addLast 前检查缓冲区上限
-				// 原实现仅在 for 循环入口检查，while 循环内持续 addLast 会突破 MAX_BUFFER_GROUPS 上限
-				// 触发场景：高产基因满级 count=8808，拆分出 89 个子栈，远超 MAX_BUFFER_GROUPS=64
-					// FIFO 淘汰最旧组防止 OOM — ArrayDeque.pollFirst O(1)
-					bufferedStacks.pollFirst();
-					// 模块2.3.1：使用 LogThrottle 5分钟节流替代直接 LOGGER.warn，避免刷屏
-					discardedCount.incrementAndGet();
-					LogThrottle.warnWithCooldown("apiary_output_buffer_full", 300_000L,
-							"ApiaryOutputBuffer 已满（{}），丢弃最旧产物组，近5分钟累计丢弃 {} 组",
-							MAX_BUFFER_GROUPS, discardedCount.get());
-			}
-			bufferedStacks.addLast(stack.copyWithCount(remaining));
+			changed |= offerOne(stack);
 		}
+		if (!changed) return;
+		markContentsChanged();
+	}
+
+	/** Single-stack path used by defensive transport rollback without allocating a wrapper list. */
+	public synchronized void offer(ItemStack leftover) {
+		if (!offerOne(leftover)) return;
+		markContentsChanged();
+	}
+
+	private boolean offerOne(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return false;
+		int remaining = stack.getCount();
+		BufferKey key = BufferKey.of(stack);
+		List<ItemStack> candidates = bufferedIndex.get(key);
+		if (candidates != null) for (ItemStack existing : candidates) {
+			if (!ItemStack.isSameItemSameComponents(existing, stack)) continue;
+			long merged = (long) existing.getCount() + remaining;
+			existing.setCount((int) Math.min(Integer.MAX_VALUE, merged));
+			remaining = (int) Math.max(0L, merged - Integer.MAX_VALUE);
+			if (remaining == 0) break;
+		}
+		if (remaining <= 0) return true;
+		if (bufferedStacks.size() >= MAX_BUFFER_GROUPS) {
+			ItemStack evicted = bufferedStacks.pollFirst();
+			removeFromIndex(evicted);
+			discardedCount.incrementAndGet();
+			LogThrottle.warnWithCooldown("apiary_output_buffer_full", 300_000L,
+					"ApiaryOutputBuffer 已满（{}），丢弃最旧产物组，近5分钟累计丢弃 {} 组",
+					MAX_BUFFER_GROUPS, discardedCount.get());
+			// Eviction can pool this key's final list, so resolve it again before appending.
+			candidates = bufferedIndex.get(key);
+		}
+		ItemStack buffered = stack.copyWithCount(remaining);
+		bufferedStacks.addLast(buffered);
+		if (candidates == null) {
+			candidates = borrowIndexList();
+			bufferedIndex.put(key, candidates);
+		}
+		candidates.add(buffered);
+		return true;
+	}
+
+	private void markContentsChanged() {
 		outputVersion.incrementAndGet();
+		tile.onOutputBufferContentsChanged();
 		tile.setChanged();
+	}
+
+	private void removeFromIndex(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return;
+		BufferKey key = BufferKey.of(stack);
+		List<ItemStack> entries = bufferedIndex.get(key);
+		if (entries == null) return;
+		for (int i = 0; i < entries.size(); i++) {
+			if (entries.get(i) == stack) {
+				entries.remove(i);
+				break;
+			}
+		}
+		if (entries.isEmpty()) {
+			bufferedIndex.remove(key);
+			entries.clear();
+			reusableIndexLists.addLast(entries);
+		}
+	}
+
+	private void rebuildIndex() {
+		for (List<ItemStack> entries : bufferedIndex.values()) {
+			entries.clear();
+			reusableIndexLists.addLast(entries);
+		}
+		bufferedIndex.clear();
+		for (ItemStack stack : bufferedStacks) {
+			if (!stack.isEmpty()) {
+				BufferKey key = BufferKey.of(stack);
+				List<ItemStack> entries = bufferedIndex.get(key);
+				if (entries == null) {
+					entries = borrowIndexList();
+					bufferedIndex.put(key, entries);
+				}
+				entries.add(stack);
+			}
+		}
+	}
+
+	private List<ItemStack> borrowIndexList() {
+		List<ItemStack> entries = reusableIndexLists.pollFirst();
+		return entries == null ? new ArrayList<>(1) : entries;
+	}
+
+	private void clearIndex() {
+		for (List<ItemStack> entries : bufferedIndex.values()) {
+			entries.clear();
+			reusableIndexLists.addLast(entries);
+		}
+		bufferedIndex.clear();
 	}
 
 	/**
@@ -203,7 +292,26 @@ public final class ApiaryOutputBuffer {
 				continue;
 			}
 			int remaining = stack.getCount();
+			int originalCount = remaining;
+			// Merge matching stacks on either page before claiming any empty slot.
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
+				ItemStack slotStack = reusableRedistStacks[i];
+				if (slotStack.isEmpty() || slotStack.getItem() != stack.getItem()
+						|| !ItemStack.isSameItemSameComponents(slotStack, stack)) continue;
+				int space = reusableRedistLimits[i] - reusableRedistCounts[i];
+				if (space <= 0) continue;
+				int canFit = Math.min(remaining, space);
+				outputSlots.get(i).setStack(slotStack.copyWithCount(reusableRedistCounts[i] + canFit));
+				ItemStack actual = outputSlots.get(i).getStack();
+				int actualCount = actual.isEmpty() ? 0 : actual.getCount();
+				int actualGrown = Math.max(0, actualCount - reusableRedistCounts[i]);
+				reusableRedistStacks[i] = actual;
+				reusableRedistCounts[i] = actualCount;
+				remaining -= actualGrown;
+			}
+			int emptyStart = RoundRobinSlotTraversal.normalize(redistributeEmptyCursor, slotCount);
+			for (int offset = 0; offset < slotCount && remaining > 0; offset++) {
+				int i = RoundRobinSlotTraversal.index(emptyStart, offset, slotCount);
 				ItemStack slotStack = reusableRedistStacks[i];
 				if (slotStack.isEmpty()) {
 					// 空槽：查询 limit 并填入
@@ -218,6 +326,9 @@ public final class ApiaryOutputBuffer {
 					reusableRedistCounts[i] = actualCount;
 					reusableRedistLimits[i] = limit;
 					remaining -= actualCount;
+					if (actualCount > 0) {
+						redistributeEmptyCursor = RoundRobinSlotTraversal.advance(i, slotCount);
+					}
 				} else if (slotStack.getItem() == stack.getItem()
 						&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
 					// 同类型槽：叠加
@@ -234,7 +345,11 @@ public final class ApiaryOutputBuffer {
 				}
 			}
 			if (remaining > 0) {
-				remainingBuffer.add(stack.copyWithCount(remaining));
+				if (remaining < originalCount) {
+					stack.setCount(remaining);
+					changed = true;
+				}
+				remainingBuffer.add(stack);
 			} else {
 				changed = true;
 			}
@@ -243,6 +358,7 @@ public final class ApiaryOutputBuffer {
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			rebuildIndex();
 			outputVersion.incrementAndGet();
 			tile.setChanged();
 		}
@@ -269,10 +385,18 @@ public final class ApiaryOutputBuffer {
 		redistributeBackoffUntilNanos = 0L;
 	}
 
+	/** Invalidates transport backoff/version state whenever a physical output slot changes. */
+	public synchronized void onOutputSlotContentsChanged() {
+		outputVersion.incrementAndGet();
+		redistributeBackoffNanos = 0L;
+		redistributeBackoffUntilNanos = 0L;
+	}
+
 	/** 进入墙钟指数退避（50ms 起步、倍增、1s 封顶） */
 	private void enterBackoff() {
 		redistributeBackoffNanos = Math.min(MAX_BACKOFF_NANOS,
-				Math.max(INITIAL_BACKOFF_NANOS, redistributeBackoffNanos * 2));
+				Math.max(INITIAL_BACKOFF_NANOS,
+						SaturatingMath.saturatingMultiply(redistributeBackoffNanos, 2)));
 		redistributeBackoffUntilNanos = System.nanoTime() + redistributeBackoffNanos;
 	}
 
@@ -347,7 +471,27 @@ public final class ApiaryOutputBuffer {
 				continue;
 			}
 			int remaining = stack.getCount();
+			int originalCount = remaining;
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
+				ItemStack slotStack = reusableExternalStacks[i];
+				if (slotStack.isEmpty() || slotStack.getItem() != stack.getItem()
+						|| !ItemStack.isSameItemSameComponents(slotStack, stack)) continue;
+				int space = reusableExternalLimits[i] - reusableExternalCounts[i];
+				if (space <= 0) continue;
+				int canFit = Math.min(remaining, space);
+				externalSlots.get(i).setStack(slotStack.copyWithCount(reusableExternalCounts[i] + canFit));
+				ItemStack actual = externalSlots.get(i).getStack();
+				int actualCount = actual.isEmpty() ? 0 : actual.getCount();
+				int actualGrown = Math.max(0, actualCount - reusableExternalCounts[i]);
+				reusableExternalStacks[i] = actual;
+				reusableExternalCounts[i] = actualCount;
+				remaining -= actualGrown;
+				totalTransferred = SaturatingMath.saturatingToInt(
+						SaturatingMath.saturatingAdd(totalTransferred, actualGrown));
+			}
+			int emptyStart = RoundRobinSlotTraversal.normalize(externalEmptyCursor, slotCount);
+			for (int offset = 0; offset < slotCount && remaining > 0; offset++) {
+				int i = RoundRobinSlotTraversal.index(emptyStart, offset, slotCount);
 				ItemStack slotStack = reusableExternalStacks[i];
 				if (slotStack.isEmpty()) {
 					// 空槽：查询 limit 并填入
@@ -363,7 +507,11 @@ public final class ApiaryOutputBuffer {
 					reusableExternalLimits[i] = limit;
 					int transferred = actualCount;
 					remaining -= transferred;
-					totalTransferred += transferred;
+					totalTransferred = SaturatingMath.saturatingToInt(
+						SaturatingMath.saturatingAdd(totalTransferred, transferred));
+					if (actualCount > 0) {
+						externalEmptyCursor = RoundRobinSlotTraversal.advance(i, slotCount);
+					}
 				} else if (slotStack.getItem() == stack.getItem()
 						&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
 					// 同类型槽：叠加
@@ -377,11 +525,16 @@ public final class ApiaryOutputBuffer {
 					reusableExternalStacks[i] = actual;
 					reusableExternalCounts[i] = actualCount;
 					remaining -= actualGrown;
-					totalTransferred += actualGrown;
+					totalTransferred = SaturatingMath.saturatingToInt(
+						SaturatingMath.saturatingAdd(totalTransferred, actualGrown));
 				}
 			}
 			if (remaining > 0) {
-				remainingBuffer.add(stack.copyWithCount(remaining));
+				if (remaining < originalCount) {
+					stack.setCount(remaining);
+					changed = true;
+				}
+				remainingBuffer.add(stack);
 			} else {
 				changed = true;
 			}
@@ -390,6 +543,7 @@ public final class ApiaryOutputBuffer {
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			rebuildIndex();
 			outputVersion.incrementAndGet();
 			tile.setChanged();
 		}
@@ -411,16 +565,37 @@ public final class ApiaryOutputBuffer {
 	public synchronized int pushToAe(java.util.function.ToIntFunction<ItemStack> pushSingle) {
 		if (bufferedStacks.isEmpty()) return 0;
 		remainingBuffer.clear();
+		int groupCount = bufferedStacks.size();
+		if (reusableAePushStacks.length < groupCount) {
+			reusableAePushStacks = new ItemStack[groupCount];
+		}
+		int snapshotIndex = 0;
+		for (ItemStack buffered : bufferedStacks) {
+			reusableAePushStacks[snapshotIndex++] = buffered;
+		}
+		int start = RoundRobinSlotTraversal.normalize(aePushCursor, groupCount);
+		int attemptLimit = Math.min(groupCount, MAX_AE_BUFFER_GROUPS_PER_CALL);
+		int attemptedSurvivors = 0;
 		int totalPushed = 0;
 		boolean changed = false;
-		for (ItemStack stack : bufferedStacks) {
+		for (int offset = 0; offset < groupCount; offset++) {
+			ItemStack stack = reusableAePushStacks[
+					RoundRobinSlotTraversal.index(start, offset, groupCount)];
 			if (stack.isEmpty()) {
 				changed = true;
 				continue;
 			}
+			if (offset >= attemptLimit) {
+				remainingBuffer.add(stack);
+				continue;
+			}
 			int pushed = 0;
 			try {
-				pushed = Math.max(0, pushSingle.applyAsInt(stack));
+				// A callback must never be able to claim more than this stack contains.
+				// Clamping here keeps the buffer and the returned accounting consistent
+				// even when an integration reports an invalid amount.
+				pushed = Math.min(stack.getCount(), Math.max(0,
+						pushSingle == null ? 0 : pushSingle.applyAsInt(stack)));
 			} catch (RuntimeException e) {
 				// 单物品推送异常隔离：不影响其余缓冲物品，但需记录日志便于定位
 				pushed = 0;
@@ -429,20 +604,29 @@ public final class ApiaryOutputBuffer {
 			}
 			if (pushed <= 0) {
 				remainingBuffer.add(stack);
+				attemptedSurvivors++;
 				continue;
 			}
-			totalPushed += pushed;
+			totalPushed = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingAdd(totalPushed, pushed));
 			changed = true;
 			int remaining = stack.getCount() - pushed;
 			if (remaining > 0) {
-				remainingBuffer.add(stack.copyWithCount(remaining));
+				stack.setCount(remaining);
+				remainingBuffer.add(stack);
+				attemptedSurvivors++;
 			}
 		}
 		if (changed) {
 			bufferedStacks.clear();
 			bufferedStacks.addAll(remainingBuffer);
+			rebuildIndex();
 			outputVersion.incrementAndGet();
 			tile.setChanged();
+			aePushCursor = RoundRobinSlotTraversal.normalize(
+					attemptedSurvivors, remainingBuffer.size());
+		} else {
+			aePushCursor = RoundRobinSlotTraversal.index(start, attemptLimit, groupCount);
 		}
 		return totalPushed;
 	}
@@ -456,6 +640,8 @@ public final class ApiaryOutputBuffer {
 	public synchronized void clear() {
 		if (!bufferedStacks.isEmpty()) {
 			bufferedStacks.clear();
+			clearIndex();
+			aePushCursor = 0;
 			tile.setChanged();
 		}
 	}
@@ -463,9 +649,8 @@ public final class ApiaryOutputBuffer {
 	/**
 	 * NBT 序列化 — 供 ApiaryNbtSerializer 调用
 	 * <p>
-	 * 模块2.3.3：防御性拆分 — 通常 offer 入口已拆分（2.3.2），此分支仅处理旧存档加载的大栈。
-	 * 旧版本未在 offer 入口拆分，load 加载的历史遗留大栈（count > 99）在 save 时会触发
-	 * DataResult 范围校验异常（[1;99]），因此 save 需要保留防御性拆分逻辑。
+	 * 超量堆叠使用 count=1 的合法模板编码，并把真实 int 数量写入独立字段。
+	 * 这避免按 99 拆分巨大数量造成保存尖峰，同时 load 仍兼容没有该字段的旧条目。
 	 */
 	public synchronized CompoundTag save(HolderLookup.Provider provider) {
 		CompoundTag tag = new CompoundTag();
@@ -473,13 +658,10 @@ public final class ApiaryOutputBuffer {
 		ListTag list = new ListTag();
 		for (ItemStack stack : bufferedStacks) {
 			if (!stack.isEmpty()) {
-				int remaining = stack.getCount();
-				// 防御性拆分：通常 offer 入口已拆分，此分支仅处理旧存档加载的大栈
-				while (remaining > 0) {
-					int splitSize = Math.min(remaining, 99);
-					ItemStack split = stack.copyWithCount(splitSize);
-					list.add(split.save(provider));
-					remaining -= splitSize;
+				Tag encoded = stack.copyWithCount(1).save(provider);
+				if (encoded instanceof CompoundTag stackTag) {
+					stackTag.putInt(NBT_KEY_STACK_COUNT, stack.getCount());
+					list.add(stackTag);
 				}
 			}
 		}
@@ -490,16 +672,22 @@ public final class ApiaryOutputBuffer {
 	/** NBT 反序列化 — 供 ApiaryNbtSerializer 调用（向后兼容：旧存档无此字段时跳过） */
 	public synchronized void load(HolderLookup.Provider provider, CompoundTag tag) {
 		bufferedStacks.clear();
+		clearIndex();
+		aePushCursor = 0;
 		if (tag == null) return;
 		if (tag.contains(NBT_KEY_STACKS, Tag.TAG_LIST)) {
 			ListTag list = tag.getList(NBT_KEY_STACKS, Tag.TAG_COMPOUND);
 			for (int i = 0; i < list.size(); i++) {
-				ItemStack stack = ItemStack.parse(provider, list.getCompound(i)).orElse(ItemStack.EMPTY);
+				CompoundTag stackTag = list.getCompound(i);
+				ItemStack stack = ItemStack.parse(provider, stackTag).orElse(ItemStack.EMPTY);
 				if (!stack.isEmpty()) {
+					int storedCount = stackTag.getInt(NBT_KEY_STACK_COUNT);
+					if (storedCount > 0) stack.setCount(storedCount);
 					bufferedStacks.addLast(stack);
 				}
 			}
 		}
+		rebuildIndex();
 	}
 
 	/** NBT key（供 ApiaryNbtSerializer 使用） */
@@ -515,5 +703,33 @@ public final class ApiaryOutputBuffer {
 	/** 输出内容版本号（见 {@link #outputVersion}） */
 	public long getOutputVersion() {
 		return outputVersion.get();
+	}
+
+	/** Immutable item/component key used only for the in-memory aggregation index. */
+	private static final class BufferKey {
+		private final Object item;
+		private final Object components;
+		private final int hash;
+
+		private BufferKey(Object item, Object components) {
+			this.item = item;
+			this.components = components;
+			this.hash = System.identityHashCode(item) * 31 + components.hashCode();
+		}
+
+		static BufferKey of(ItemStack stack) {
+			return new BufferKey(stack.getItem(), stack.getComponents());
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			return this == other || other instanceof BufferKey key
+					&& item == key.item && components.equals(key.components);
+		}
+
+		@Override
+		public int hashCode() {
+			return hash;
+		}
 	}
 }

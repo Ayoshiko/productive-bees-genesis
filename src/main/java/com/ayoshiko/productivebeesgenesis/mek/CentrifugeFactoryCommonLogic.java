@@ -172,7 +172,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull MekAe2LifecycleHandler ae2LifecycleHandler, @NotNull IAe2OutputHostBase factory,
 			@Nullable IFluidTankHolder fluidOutputHolder, @NotNull Runnable superSave) {
 		superSave.run();
-		pbProcessor.saveAdditional(nbt);
+		pbProcessor.saveAdditional(nbt, provider);
 		pbUpgradeDelegate.save(nbt, provider);
 		ae2LifecycleHandler.saveNodeNBT(factory, nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().savePerTileState(nbt);
@@ -207,7 +207,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull Supplier<BlockEntityType<?>> typeSupplier,
 			@NotNull IAe2OutputHostBase factory) {
 		CompoundTag nbt = new CompoundTag();
-		pbProcessor.saveAdditional(nbt);
+		pbProcessor.saveAdditional(nbt, provider);
 		pbUpgradeDelegate.save(nbt, provider);
 		ae2StateHolder.savePerTileState(nbt);
 		// Task 10: MULTI_PER_FLUID 模式下持久化多流体槽内容（扳手拆卸不丢失流体）
@@ -230,7 +230,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull MekAe2LifecycleHandler ae2LifecycleHandler, @NotNull IAe2OutputHostBase factory,
 			@Nullable IFluidTankHolder fluidOutputHolder, @NotNull Runnable superLoad) {
 		superLoad.run();
-		pbProcessor.loadAdditional(nbt);
+		pbProcessor.loadAdditional(nbt, provider);
 		pbUpgradeDelegate.load(nbt, provider);
 		ae2LifecycleHandler.loadNodeNBT(factory, nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().loadPerTileState(nbt);

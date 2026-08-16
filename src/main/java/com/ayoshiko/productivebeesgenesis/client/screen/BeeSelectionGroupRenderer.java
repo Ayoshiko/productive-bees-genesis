@@ -49,10 +49,10 @@ final class BeeSelectionGroupRenderer {
 	 * 委托状态层切换折叠标记，再通知排序器使 displayItems 缓存失效并重建，
 	 * 最后修正滚动偏移以避免越界。
 	 *
-	 * @param namespace 分组对应的 namespace（模组ID）
+	 * @param productModId 分组对应的最终产物模组ID
 	 */
-	void toggleGroupCollapsed(String namespace) {
-		state.toggleGroupCollapsed(namespace);
+	void toggleGroupCollapsed(String productModId) {
+		state.toggleGroupCollapsed(productModId);
 		sorter.onCollapsedChanged();
 	}
 
@@ -107,7 +107,7 @@ final class BeeSelectionGroupRenderer {
 		if (headerIndex != null) {
 			BeeSelectionRenderer.DisplayItem item = displayItems.get(headerIndex);
 			if (item instanceof BeeSelectionRenderer.HeaderItem header) {
-				toggleGroupCollapsed(header.namespace);
+				toggleGroupCollapsed(header.productModId);
 			}
 			return true;
 		}

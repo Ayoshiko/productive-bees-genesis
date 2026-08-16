@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.block.attribute.AttributeTier;
 import mekanism.common.block.attribute.AttributeUpgradeable;
 import mekanism.common.block.attribute.Attributes;
@@ -45,11 +46,11 @@ import java.util.concurrent.ConcurrentHashMap;
 	 */
 public final class MekApiaryFactoryBlockType {
 
-	/** 基础工厂 BlockType（5 蜜蜂 / 9 输出 / 128,000 FE） */
+	/** 基础工厂 BlockType（5 蜜蜂 / 15 输出 / 128,000 FE） */
 	public static final BlockTypeTile<TileEntityMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
 			createFactoryBlockType(FactoryTier.BASIC, 20L, 128_000L, descriptionLang("basic_mek_apiary_factory"));
 
-	/** 高级工厂 BlockType（10 蜜蜂 / 12 输出 / 256,000 FE） */
+	/** 高级工厂 BlockType（10 蜜蜂 / 15 输出 / 256,000 FE） */
 	public static final BlockTypeTile<TileEntityMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
 			createFactoryBlockType(FactoryTier.ADVANCED, 22L, 256_000L, descriptionLang("advanced_mek_apiary_factory"));
 
@@ -57,7 +58,7 @@ public final class MekApiaryFactoryBlockType {
 	public static final BlockTypeTile<TileEntityMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
 			createFactoryBlockType(FactoryTier.ELITE, 25L, 512_000L, descriptionLang("elite_mek_apiary_factory"));
 
-	/** 终极工厂 BlockType（20 蜜蜂 / 18 输出 / 1,024,000 FE） */
+	/** 终极工厂 BlockType（20 蜜蜂 / 30 输出 / 1,024,000 FE） */
 	public static final BlockTypeTile<TileEntityMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
 			createFactoryBlockType(FactoryTier.ULTIMATE, 30L, 1_024_000L, descriptionLang("ultimate_mek_apiary_factory"));
 
@@ -243,8 +244,8 @@ public final class MekApiaryFactoryBlockType {
 		for (FactoryTier tier : emTiers) {
 			EM_APIARY_FACTORY_TYPES.computeIfAbsent(tier,
 					t -> createFactoryBlockType(t, 50L,
-							Math.max(20_000L, 50L) * Math.max(t.processes,
-									FactoryApiaryConfig.forTier(t).beeSlotCount),
+							SaturatingMath.saturatingMultiply(Math.max(20_000L, 50L),
+									Math.max(t.processes, FactoryApiaryConfig.forTier(t).beeSlotCount)),
 							descriptionLang(t.name().toLowerCase() + "_mek_apiary_factory")));
 		}
 	}

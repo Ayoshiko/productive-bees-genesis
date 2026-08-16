@@ -51,11 +51,11 @@ final class MyriadCreationsLogger {
 		}
 	}
 
-	/** 缓存为空时记录区分性日志并保留进度：预热未完成 = info，已完成 = warn */
+	/** 缓存为空时记录区分性日志并保留进度：预热未完成 = info，过滤结果为空 = warn */
 	void logEmptyCacheAndPreserve(int processIndex) {
 		if (MyriadCreationsEventHandler.isBeeTypeCacheWarmupComplete()) {
 			logThrottledWarn(emptyCacheLogThrottles, processIndex,
-					"{}进程{}万象创世类型缓存永久为空（配置过滤过严），保留进度等待配置修正",
+					"{}进程{}万象创世蜜蜂数据已就绪但当前过滤结果为空，保留进度等待配置或数据包变化",
 					logPrefix, processIndex);
 		} else {
 			logThrottledInfo(emptyCacheLogThrottles, processIndex,

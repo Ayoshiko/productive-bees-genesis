@@ -3,7 +3,9 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.client.screen.BeeSelectionScreen.BeeEntry;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState.SortMode;
 import com.ayoshiko.productivebeesgenesis.client.screen.state.BeeSelectionState;
+import com.ayoshiko.productivebeesgenesis.util.BeeProductModProfile;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.Minecraft;
@@ -17,6 +19,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -26,7 +29,7 @@ import java.util.stream.Stream;
 /**
 	 * BeeSelectionScreen 的排序与过滤逻辑处理器
 	 * <p>
-	 * 将蜜蜂条目的加载、排序、过滤（搜索/仅未添加）及按 namespace 分组构建等
+	 * 将蜜蜂条目的加载、排序、过滤（搜索/仅未添加）及按最终产物模组分组构建等
 	 * 数据处理逻辑从屏幕类中剥离，使 BeeSelectionScreen 专注于事件调度与渲染。
 	 * <p>
 	 * 设计原则：
@@ -75,6 +78,7 @@ final class BeeSelectionSorter {
 	private String lastSearchText = null;
 	private int collapsedVersion = 0;
 	private int lastCollapsedVersion = -1;
+	private SortMode lastDisplaySortMode = null;
 
 	BeeSelectionSorter(BeeSelectionScreen screen, BeeSelectionState state) {
 		this.screen = screen;
@@ -98,9 +102,12 @@ final class BeeSelectionSorter {
 			Component productInfo = level != null
 					? BeeInfoHelper.getBeeProductInfo(level, beeType)
 					: Component.empty();
+			BeeProductModProfile productMods = level != null
+					? BeeInfoHelper.getBeeProductModProfile(level, beeType)
+					: BeeProductModProfile.fallback(PBConstants.PRODUCTIVE_BEES_MOD_ID);
 			// 预计算代表图标，避免每帧创建 ItemStack；世界为空时返回空栈不渲染
 			ItemStack icon = level != null ? BeeInfoHelper.resolveBeeIcon(level, beeType) : ItemStack.EMPTY;
-			allEntries.add(new BeeEntry(beeType, displayName, productInfo, icon));
+			allEntries.add(new BeeEntry(beeType, displayName, productInfo, productMods, icon));
 		}
 		// allEntries 被重新赋值为新列表，重置排序缓存以强制下次排序
 		lastSortedMode = null;
@@ -114,7 +121,7 @@ final class BeeSelectionSorter {
 	 * 重新计算过滤后的列表与分组显示列表
 	 * <p>
 	 * 先按当前排序规则排序，再应用"仅未添加"过滤与搜索过滤，
-	 * 最后按 namespace 分组并插入可折叠的组标题。
+	 * 最后按离心最终产物所属模组分组并插入可折叠的组标题。
 	 */
 	void recomputeFilteredEntries() {
 		SortMode currentMode = state.getSortMode();
@@ -125,14 +132,15 @@ final class BeeSelectionSorter {
 			lastSortedSize = currentSize;
 		}
 
-		String lower = state.getSearchText().toLowerCase().trim();
+		String lower = state.getSearchText().toLowerCase(Locale.ROOT).trim();
 		Stream<BeeEntry> stream = allEntries.stream();
 		if (state.isShowOnlyUnadded()) {
 			stream = stream.filter(entry -> !screen.isAlreadyAdded(entry));
 		}
 		if (!lower.isEmpty()) {
 			stream = stream.filter(entry -> entry.typeIdLower.contains(lower)
-					|| entry.displayNameLower.contains(lower));
+					|| entry.displayNameLower.contains(lower)
+					|| entry.searchableProductModIdsLower.contains(lower));
 		}
 		filteredEntries = stream.collect(Collectors.toList());
 
@@ -147,15 +155,15 @@ final class BeeSelectionSorter {
 		return switch (state.getSortMode()) {
 			case NAME -> Comparator.comparing(entry -> entry.displayName.getString(), String.CASE_INSENSITIVE_ORDER);
 			case ID -> Comparator.comparing(entry -> entry.typeId, String.CASE_INSENSITIVE_ORDER);
-			case MOD -> Comparator.comparing((BeeEntry entry) -> entry.type.getNamespace(), String.CASE_INSENSITIVE_ORDER)
+			case MOD -> Comparator.comparing((BeeEntry entry) -> entry.productModId, String.CASE_INSENSITIVE_ORDER)
 					.thenComparing(entry -> entry.displayName.getString(), String.CASE_INSENSITIVE_ORDER);
 		};
 	}
 
 	/**
-	 * 按 namespace 分组并构建带标题的显示列表
+	 * 按离心最终产物所属模组分组并构建带标题的显示列表
 	 * <p>
-	 * 组标题按 namespace 字母顺序排列，组内按当前排序规则排序。
+	 * 组标题按产物模组ID字母顺序排列，组内按当前排序规则排序。
 	 * 已折叠的分组仅保留标题。
 	 */
 	private void buildDisplayItems() {
@@ -163,26 +171,28 @@ final class BeeSelectionSorter {
 		String currentSearch = state.getSearchText();
 		if (lastFilteredSize == currentSize
 				&& Objects.equals(lastSearchText, currentSearch)
-				&& lastCollapsedVersion == collapsedVersion) {
+				&& lastCollapsedVersion == collapsedVersion
+				&& lastDisplaySortMode == state.getSortMode()) {
 			return; // 使用缓存
 		}
 		lastFilteredSize = currentSize;
 		lastSearchText = currentSearch;
 		lastCollapsedVersion = collapsedVersion;
+		lastDisplaySortMode = state.getSortMode();
 
 		displayItems.clear();
 		Map<String, List<BeeEntry>> groups = new TreeMap<>();
 		for (BeeEntry entry : filteredEntries) {
-			groups.computeIfAbsent(entry.type.getNamespace(), k -> new ArrayList<>()).add(entry);
+			groups.computeIfAbsent(entry.productModId, k -> new ArrayList<>()).add(entry);
 		}
 
 		Comparator<BeeEntry> comparator = getSortComparator();
 		for (Map.Entry<String, List<BeeEntry>> group : groups.entrySet()) {
-			String namespace = group.getKey();
+			String productModId = group.getKey();
 			List<BeeEntry> entries = group.getValue();
 			entries.sort(comparator);
-			boolean collapsed = state.isGroupCollapsed(namespace);
-			displayItems.add(new BeeSelectionRenderer.HeaderItem(namespace, entries.size(), collapsed));
+			boolean collapsed = state.isGroupCollapsed(productModId);
+			displayItems.add(new BeeSelectionRenderer.HeaderItem(productModId, entries.size(), collapsed));
 			if (!collapsed) {
 				for (BeeEntry entry : entries) {
 					displayItems.add(new BeeSelectionRenderer.EntryItem(entry));

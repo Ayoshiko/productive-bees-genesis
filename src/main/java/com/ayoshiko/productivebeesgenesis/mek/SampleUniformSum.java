@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -36,30 +38,35 @@ public final class SampleUniformSum {
 	 * @return N 次采样的总和乘以 modifier
 	 */
 	public static long sample(ThreadLocalRandom random, int min, int max, long n, int modifier) {
-		if (n <= 0) return 0;
+		if (n <= 0 || modifier <= 0 || max < min || min < 0) return 0;
 		if (n == 1) {
 			// 单次走原版精确路径
-			int count = min;
-			if (max > count) {
-				count += random.nextInt(max - count + 1);
-			}
-			return (long) count * modifier;
+			int count = sampleSingle(random, min, max);
+			return SaturatingMath.saturatingMultiply(count, modifier);
 		}
 		if (min == max) {
 			// 固定数量,无随机
-			return (long) min * modifier * n;
+			return SaturatingMath.saturatingMultiply(min, modifier, n);
 		}
 		// Normal 近似 N 次均匀分布之和
-		double mean = (min + max) / 2.0 * n;
-		double range = (max - min + 1);
+		double mean = ((double) min + max) / 2.0D * n;
+		double range = (double) max - min + 1.0D;
 		double variance = n * (range * range - 1) / 12.0;
 		double stdDev = Math.sqrt(Math.max(0, variance));
 		double gaussian = random.nextGaussian();
-		long sum = Math.round(mean + gaussian * stdDev);
+		long sum = SaturatingMath.saturatingRoundToLong(mean + gaussian * stdDev);
 		// 限制在 [min*n, max*n] 范围内(防止 Normal 近似的极端值)
-		long lower = (long) min * n;
-		long upper = (long) max * n;
+		long lower = SaturatingMath.saturatingMultiply(min, n);
+		long upper = SaturatingMath.saturatingMultiply(max, n);
 		sum = Math.max(lower, Math.min(upper, sum));
-		return sum * modifier;
+		return SaturatingMath.saturatingMultiply(sum, modifier);
+	}
+
+	/** Samples an inclusive int range without overflowing {@code max - min + 1}. */
+	public static int sampleSingle(ThreadLocalRandom random, int min, int max) {
+		if (random == null || min < 0 || max < min) return 0;
+		if (max == min) return min;
+		long range = (long) max - min + 1L;
+		return (int) (min + random.nextLong(range));
 	}
 }

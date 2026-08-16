@@ -54,6 +54,9 @@ public enum PbUpgradeType {
 	/** 稳定性升级 — 提升离心机非保底产物的产出概率（每级 +0.15，上限 7，仅离心机生效） */
 	STABILITY("stability", 0xFF42A5F5, 0f, 7),
 
+	/** 无用副产物升级 — 丢弃蜂蜜和可选的花粉球副产物（功能型，最多安装 1 个） */
+	USELESS_BYPRODUCT("useless_byproduct", 0xFFE6A23C, 0f, 1),
+
 	/** 模拟升级 — 模拟生产（机械蜂箱内置，不占槽位） */
 	SIMULATION("simulation", 0xFF607D8B, 0f, 8);
 

@@ -48,14 +48,12 @@ public final class MultiFluidTankNbtCodec {
 		CompoundTag root = new CompoundTag();
 		root.putInt("count", holder.getTanksInOrderForCodec().size());
 		ListTag list = new ListTag();
-		long totalFluidAmount = 0;
 		for (IExtendedFluidTank tank : holder.getTanksInOrderForCodec()) {
 			FluidStack fluid = tank.getFluid();
 			if (!fluid.isEmpty()) {
 				CompoundTag entry = new CompoundTag();
 				entry.put("fluidStack", fluid.save(provider));
 				list.add(entry);
-				totalFluidAmount += fluid.getAmount();
 			}
 		}
 		root.put("tanks", list);
@@ -94,7 +92,6 @@ public final class MultiFluidTankNbtCodec {
 		}
 		CompoundTag root = nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
 		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
-		long totalFluidAmount = 0;
 		for (int i = 0; i < list.size(); i++) {
 			CompoundTag entry = list.getCompound(i);
 			FluidStack stack = FluidStack.parseOptional(provider, entry.getCompound("fluidStack"));
@@ -112,7 +109,6 @@ public final class MultiFluidTankNbtCodec {
 			if (!remaining.isEmpty()) {
 				DevLog.warn("fluid_tank", "流体槽容量不足,丢弃 {} mB 流体 {}", remaining.getAmount(), remaining.getFluid());
 			}
-			totalFluidAmount += stack.getAmount() - remaining.getAmount();
 		}
 	}
 }

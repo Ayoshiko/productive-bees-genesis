@@ -264,7 +264,7 @@ public abstract class TileComponentEjectorCooldownMixin {
 		// A failed target probe cannot succeed again in the same JDTE batch unless local output contents change.
 		// This remains active in maximum-speed mode but never suppresses successful transfers or the next real tick.
 		Level level = tile.getLevel();
-		if (tile instanceof IMekCentrifugeTile && level != null
+		if ((tile instanceof IMekCentrifugeTile || tile instanceof IMekApiaryTile) && level != null
 				&& productivebeesgenesis$sameTickFailureGate.shouldSkip(level.getGameTime(),
 						productivebeesgenesis$getOutputContentsVersion(tile))) {
 			return;
@@ -336,7 +336,7 @@ public abstract class TileComponentEjectorCooldownMixin {
 			}
 			return;
 		}
-		if (tile instanceof IMekCentrifugeTile && level != null) {
+		if ((tile instanceof IMekCentrifugeTile || tile instanceof IMekApiaryTile) && level != null) {
 			productivebeesgenesis$sameTickFailureGate.recordFailure(level.getGameTime(),
 					productivebeesgenesis$getOutputContentsVersion(tile));
 		}

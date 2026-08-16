@@ -20,7 +20,7 @@ import java.util.List;
 	 * 蜂箱不走 PbRecipeProcessor 管线，此处实现仅为满足 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase}
 	 * 继承的 PbRecipeContext 契约，供 {@link com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher} 遍历输出槽。
 	 * <p>
-	 * 输出槽映射：processes() = outputSlots.size() / 3，每进程暴露3个输出槽。
+	 * 输出槽映射：processes() = outputSlots.size() / 3，每进程暴露3个输出槽；分页不会隐藏物理槽。
 	 * 蜂笼槽和喂食器槽不通过这些方法暴露，实现"AE2隐藏"。
 	 * <p>
 	 * no-op 方法（7个）：
@@ -67,7 +67,7 @@ class ApiaryPbRecipeContextAdapter implements PbRecipeContext {
 	/**
 	 * 蜂箱的进程数 — 输出槽数量向上取整 / 3
 	 * <br/>
-	 * 蜂箱没有离心机的"并行进程"概念，此处将9-18个输出槽按每进程3个分组，
+	 * 蜂箱没有离心机的"并行进程"概念，此处将完整物理输出槽按每进程3个分组，
 	 * 供 Ae2OutputPusher 遍历所有输出槽进行推送。
 	 * 使用向上取整 (outputCount + 2) / 3，确保非 3 倍数的尾部槽位也被 AE2 推送。
 	 */
@@ -101,7 +101,7 @@ class ApiaryPbRecipeContextAdapter implements PbRecipeContext {
 	/**
 	 * 按索引获取输出槽，越界时返回 null
 	 * <br/>
-	 * 防御性检查：工厂版输出槽数量为9-18，processes() 保证索引不超过 outputSlots.size()，
+	 * 防御性检查：蜂箱输出槽数量为18-102，processes() 保证索引不超过 outputSlots.size()，
 	 * 但若未来输出槽数量变化，此处仍安全返回 null（Ae2OutputPusher.collectSlot 处理 null）。
 	 */
 	@Nullable

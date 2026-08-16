@@ -18,6 +18,9 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 final class Ae2InputFilterQuerySupport {
 
+	record FuzzyEntry(ResourceLocation beeType, boolean block) {
+	}
+
 	private Ae2InputFilterQuerySupport() {
 	}
 
@@ -53,11 +56,12 @@ final class Ae2InputFilterQuerySupport {
 	 * @param isBlock 是否为蜜脾块
 	 * @return true 表示允许拉取
 	 */
-	static boolean isAllowed(ResourceLocation beeType, boolean isBlock, FilterMode mode, boolean precise, String[] slots) {
+	static boolean isAllowed(ResourceLocation beeType, boolean isBlock, FilterMode mode, boolean precise,
+			FuzzyEntry[] fuzzyEntries) {
 		if (beeType == null) return true;
 		boolean matched = false;
-		for (String configured : slots) {
-			if (Ae2FilterEntrySupport.matchesFuzzyEntry(configured, beeType, isBlock, precise)) {
+		for (FuzzyEntry configured : fuzzyEntries) {
+			if (matchesFuzzyEntry(configured, beeType, isBlock, precise)) {
 				matched = true;
 				break;
 			}
@@ -70,7 +74,8 @@ final class Ae2InputFilterQuerySupport {
 	}
 
 	static boolean isAllowed(AEItemKey key, FilterMode mode, boolean precise, String[] slots,
-			AEItemKey[] keys, boolean ignoreNbt, HolderLookup.Provider registries) {
+			FuzzyEntry[] fuzzyEntries, AEItemKey[] keys, boolean ignoreNbt,
+			HolderLookup.Provider registries) {
 		if (key == null) return false;
 		if (mode == FilterMode.DISABLED) return true;
 		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(key);
@@ -87,7 +92,7 @@ final class Ae2InputFilterQuerySupport {
 				matches = Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key, beeType, isBlock,
 						ignoreNbt, precise);
 			} else if (beeType != null) {
-				matches = Ae2FilterEntrySupport.matchesFuzzyEntry(entry, beeType, isBlock, precise);
+				matches = matchesFuzzyEntry(fuzzyEntries[i], beeType, isBlock, precise);
 			}
 			if (!matches) continue;
 			return mode == FilterMode.WHITELIST;
@@ -104,7 +109,7 @@ final class Ae2InputFilterQuerySupport {
 	 * fuzzy), regardless of whitelist/blacklist mode. The puller uses this to rank
 	 * marked entries ahead of unmarked ones ("mark first" AE2LT semantics).
 	 */
-	static boolean matchesAnyEntry(AEItemKey key, String[] slots, AEItemKey[] keys,
+	static boolean matchesAnyEntry(AEItemKey key, String[] slots, FuzzyEntry[] fuzzyEntries, AEItemKey[] keys,
 			boolean precise, boolean ignoreNbt) {
 		if (key == null) return false;
 		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(key);
@@ -116,11 +121,30 @@ final class Ae2InputFilterQuerySupport {
 				AEItemKey configured = i < keys.length ? keys[i] : null;
 				if (Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key, beeType, isBlock,
 						ignoreNbt, precise)) return true;
-			} else if (beeType != null && Ae2FilterEntrySupport.matchesFuzzyEntry(entry, beeType, isBlock, precise)) {
+			} else if (beeType != null && matchesFuzzyEntry(fuzzyEntries[i], beeType, isBlock, precise)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	static FuzzyEntry[] compileFuzzyEntries(String[] slots) {
+		FuzzyEntry[] compiled = new FuzzyEntry[slots.length];
+		for (int i = 0; i < slots.length; i++) {
+			String entry = slots[i];
+			if (entry == null || entry.isBlank() || Ae2InputFilter.isDirectFingerprint(entry)) continue;
+			boolean block = entry.endsWith("#block");
+			String typeText = block ? entry.substring(0, entry.length() - 6) : entry;
+			ResourceLocation beeType = ResourceLocation.tryParse(typeText);
+			if (beeType != null) compiled[i] = new FuzzyEntry(beeType, block);
+		}
+		return compiled;
+	}
+
+	private static boolean matchesFuzzyEntry(FuzzyEntry configured, ResourceLocation candidateBeeType,
+			boolean candidateBlock, boolean precise) {
+		return configured != null && configured.beeType().equals(candidateBeeType)
+				&& (!precise || configured.block() == candidateBlock);
 	}
 
 	static long directPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
@@ -149,6 +173,55 @@ final class Ae2InputFilterQuerySupport {
 			requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 		}
 		if (!found) return -1L;
+		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock,
+				Ae2InputFilter.getMaxDirectAmount());
+	}
+
+	/**
+	 * Combines filter admission and direct-entry pull-limit calculation in one slot walk.
+	 * Returns {@link Ae2InputFilter#PULL_DISALLOWED} when rejected, {@code -1} when
+	 * allowed without a direct limit, or a non-negative effective limit.
+	 */
+	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
+			AEItemKey[] keys, long[] amounts, boolean[] unlimited) {
+		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
+		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
+		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
+		boolean filterMatched = false;
+		boolean directFound = false;
+		boolean liveStock = false;
+		long requested = 0L;
+
+		for (int i = 0; i < slots.length; i++) {
+			String entry = slots[i];
+			if (entry == null) continue;
+			boolean matches;
+			if (Ae2InputFilter.isDirectFingerprint(entry)) {
+				AEItemKey configured = i < keys.length ? keys[i] : null;
+				matches = Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key,
+						candidateBeeType, candidateBlock, ignoreNbt, precise);
+				if (matches) {
+					directFound = true;
+					if (i < unlimited.length && unlimited[i]) {
+						liveStock = true;
+					} else if (i < amounts.length) {
+						requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
+					}
+				}
+			} else {
+				matches = candidateBeeType != null && i < fuzzyEntries.length
+						&& matchesFuzzyEntry(fuzzyEntries[i], candidateBeeType, candidateBlock, precise);
+			}
+			if (!matches) continue;
+			filterMatched = true;
+			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
+		}
+
+		if (mode == FilterMode.WHITELIST && !filterMatched) {
+			return Ae2InputFilter.PULL_DISALLOWED;
+		}
+		if (!directFound) return -1L;
 		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock,
 				Ae2InputFilter.getMaxDirectAmount());
 	}

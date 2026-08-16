@@ -1,11 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 /**
@@ -22,6 +25,13 @@ import net.neoforged.neoforge.fluids.FluidStack;
 	 * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
 	 */
 public interface PbRecipeContext {
+
+	/** Marks context-owned transient processing state for persistence. */
+	default void productivebeesgenesis$markForSave() {
+		if (this instanceof BlockEntity blockEntity) {
+			blockEntity.setChanged();
+		}
+	}
 
 	/** 获取世界实例（用于配方查找和随机数） */
 	Level level();
@@ -250,6 +260,12 @@ public interface PbRecipeContext {
 	 */
 	default float stabilityBonus() {
 		return 0.0f;
+	}
+
+	/** Whether this machine currently discards honey and pollen-puff byproducts. */
+	default boolean suppressesUselessByproducts() {
+		return this instanceof IPbUpgradeProvider provider
+				&& provider.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;
 	}
 
 	/** 新产物是否优先直接写入 AE；默认关闭，保持原本地输出槽行为。 */

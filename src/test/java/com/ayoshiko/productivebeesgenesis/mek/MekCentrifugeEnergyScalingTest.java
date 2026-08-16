@@ -18,4 +18,12 @@ class MekCentrifugeEnergyScalingTest {
 				Long.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, 256));
 		assertEquals(0L, MekCentrifugeEnergyScaling.requiredEnergyPerTick(0L, 1, 1, 1, 256));
 	}
+
+	@Test
+	void bufferedCapacityKeepsOneCompleteBatchInReserve() {
+		assertEquals(2_000L, MekCentrifugeEnergyScaling.bufferedCapacityForDemand(1_000L));
+		assertEquals(0L, MekCentrifugeEnergyScaling.bufferedCapacityForDemand(-1L));
+		assertEquals(Long.MAX_VALUE,
+				MekCentrifugeEnergyScaling.bufferedCapacityForDemand(Long.MAX_VALUE));
+	}
 }

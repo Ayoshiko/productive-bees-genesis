@@ -120,6 +120,9 @@ final class Ae2PayloadHandlers {
 		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.APIARY_DIRECT
 				&& be instanceof com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary apiary) {
 			apiary.toggleDirectAeOutput();
+		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.APIARY_CENTRIFUGE_PRIORITY
+				&& be instanceof com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary apiary) {
+			apiary.toggleCentrifugePriority();
 		} else if (payload.outputType() == CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT
 				&& be instanceof com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile) {
 			host.productivebeesgenesis$getAe2StateHolder().toggleCentrifugeDirectAeOutputEnabled();

@@ -92,7 +92,7 @@ final class ApiaryConversionProcessor {
 	 * @param pendingProductions  待产出计数数组（转化占用时原地扣减）
 	 */
 	void processGroupConversions(ResourceLocation beeTypeKey, Level level, BeeSlot[] beeSlots,
-			List<Integer> slotIndices, int[] pendingProductions) {
+			OrderedSlotIndex slotIndices, int[] pendingProductions) {
 		if (beeTypeKey == null || level == null || beeSlots == null || slotIndices == null
 				|| pendingProductions == null) {
 			return;
@@ -112,7 +112,8 @@ final class ApiaryConversionProcessor {
 		if (!feederManager.hasAnyFlower()) {
 			return;
 		}
-		for (int idx : slotIndices) {
+		for (int position = 0; position < slotIndices.size(); position++) {
+			int idx = slotIndices.get(position);
 			if (idx < 0 || idx >= beeSlots.length || idx >= pendingProductions.length) {
 				continue;
 			}

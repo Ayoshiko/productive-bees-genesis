@@ -41,7 +41,7 @@ public final class BatchProbabilitySampler {
 	 *   <li>{@code sampleBinomialExact} 的 O(N) 循环不会 runaway（虽然 N ≤ 30 才走此路径）</li>
 	 * </ul>
 	 */
-	static final int MAX_SAFE_N = 1_000_000;
+	static final int MAX_SAFE_N = Integer.MAX_VALUE;
 
 	private BatchProbabilitySampler() {
 		// 工具类禁止实例化

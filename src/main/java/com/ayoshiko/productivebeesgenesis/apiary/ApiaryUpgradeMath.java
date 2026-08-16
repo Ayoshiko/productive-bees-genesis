@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.config.MekanismConfig;
 
@@ -16,9 +17,9 @@ final class ApiaryUpgradeMath {
 
 	/** 纯公式：MEK 速度升级时间倍率（运行时入口由 {@code MekanismUtils} 承接可选模组 mixin） */
 	static float computeMekSpeedTimeMultiplier(int speedUpgrades, int maxSpeed, float maxMultiplier) {
-		if (maxSpeed <= 0 || speedUpgrades <= 0 || maxMultiplier <= 0) return 1.0f;
+		if (maxSpeed <= 0 || speedUpgrades <= 0 || maxMultiplier <= 0 || !Float.isFinite(maxMultiplier)) return 1.0f;
 		float speedFraction = (float) speedUpgrades / maxSpeed;
-		return (float) Math.pow(maxMultiplier, -speedFraction);
+		return SaturatingMath.positiveFiniteFloat(Math.pow(maxMultiplier, -speedFraction), 1.0f);
 	}
 
 	/**
@@ -27,9 +28,9 @@ final class ApiaryUpgradeMath {
 	 */
 	static float computeMekSpeedEnergyMultiplier(int speedUpgrades, int energyUpgrades,
 			int maxUpgrades, float maxMultiplier) {
-		if (maxUpgrades <= 0 || maxMultiplier <= 0.0f) return 1.0f;
+		if (maxUpgrades <= 0 || maxMultiplier <= 0.0f || !Float.isFinite(maxMultiplier)) return 1.0f;
 		float exponent = (2.0f * speedUpgrades - energyUpgrades) / maxUpgrades;
-		return (float) Math.pow(maxMultiplier, exponent);
+		return SaturatingMath.positiveFiniteFloat(Math.pow(maxMultiplier, exponent), 1.0f);
 	}
 
 	/**
@@ -66,8 +67,11 @@ final class ApiaryUpgradeMath {
 	static float getPbTimeDivisor(ApiaryUpgradeHandler handler) {
 		int timeCount = handler.getInstalledUpgrades(PbUpgradeType.TIME);
 		int time2Count = handler.getInstalledUpgrades(PbUpgradeType.TIME_2);
-		int effectiveTimeUpgrades = timeCount + time2Count * 2;
-		return 1.0f + PbUpgradeConfig.timeBonus() * effectiveTimeUpgrades;
+		long effectiveTimeUpgrades = SaturatingMath.saturatingAdd(
+				Math.max(0, timeCount), SaturatingMath.saturatingMultiply(Math.max(0, time2Count), 2));
+		float timeBonus = PbUpgradeConfig.timeBonus();
+		if (Float.isNaN(timeBonus) || timeBonus <= 0.0f) return 1.0f;
+		return SaturatingMath.positiveFiniteFloat(1.0D + (double) timeBonus * effectiveTimeUpgrades, 1.0f);
 	}
 
 	/**
@@ -79,6 +83,6 @@ final class ApiaryUpgradeMath {
 	 */
 	static float getEnergyCapacityMultiplier(ApiaryUpgradeHandler handler) {
 		int energyUpgrades = handler.getMekEnergyUpgrades();
-		return (float) Math.pow(2, energyUpgrades);
+		return SaturatingMath.positiveFiniteFloat(Math.pow(2.0D, Math.max(0, energyUpgrades)), 1.0f);
 	}
 }

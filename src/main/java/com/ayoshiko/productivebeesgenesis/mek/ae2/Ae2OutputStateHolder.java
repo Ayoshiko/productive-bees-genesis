@@ -51,6 +51,8 @@ public final class Ae2OutputStateHolder {
 	private volatile Object cachedMeStorage;
 	/** Per-game-tick direct-input stock cache; Object keeps AE2 optional at class load time. */
 	private volatile Object inputInventoryViewCache;
+	/** Per-side native centrifuge MEStorage adapters and their shared snapshots. */
+	private volatile Object centrifugeExternalStorageCache;
 
 	/** AE2 全局配置缓存（输出/流体/输入/能量注入开关，墙钟 5 秒刷新） */
 	private final Ae2ConfigCache configCache = new Ae2ConfigCache();
@@ -146,6 +148,7 @@ public final class Ae2OutputStateHolder {
 		cachedStorage = null;
 		cachedMeStorage = null;
 		inputInventoryViewCache = null;
+		centrifugeExternalStorageCache = null;
 		// 重置配置缓存为初始默认值，确保方块重建后不会残留旧配置
 		configCache.reset();
 		// 重置 per-tile 开关为默认值（与字段声明一致，参考 Mek-Energistics 默认全开）
@@ -250,6 +253,24 @@ public final class Ae2OutputStateHolder {
 		inputInventoryViewCache = null;
 		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
 		pushState.invalidateNodeStateCache();
+		pushState.getItemBackoff().reset();
+		pushState.getBufferedItemBackoff().reset();
+		pushState.getFluidBackoff().reset();
+		pushState.getReturnBackoff().reset();
+		inputPullCooldown.reset();
+		lastPullCounter = Long.MIN_VALUE / 2;
+		Object inputRegistry = pushState.getInputKeyBackoffRegistry();
+		if (inputRegistry instanceof Ae2KeyBackoffRegistry<?> inputKeyRegistry) {
+			inputKeyRegistry.clear();
+		}
+		Object registry = pushState.getOutputKeyBackoffRegistry();
+		if (registry instanceof Ae2KeyBackoffRegistry<?> outputRegistry) {
+			outputRegistry.clear();
+		}
+		Object fluidRegistry = pushState.getFluidKeyBackoffRegistry();
+		if (fluidRegistry instanceof Ae2KeyBackoffRegistry<?> fluidKeyRegistry) {
+			fluidKeyRegistry.clear();
+		}
 	}
 
 	public Object getCachedGrid() { return cachedGrid; }
@@ -260,6 +281,8 @@ public final class Ae2OutputStateHolder {
 	public void setCachedMeStorage(Object meStorage) { this.cachedMeStorage = meStorage; }
 	public Object getInputInventoryViewCache() { return inputInventoryViewCache; }
 	public void setInputInventoryViewCache(Object cache) { this.inputInventoryViewCache = cache; }
+	public Object getCentrifugeExternalStorageCache() { return centrifugeExternalStorageCache; }
+	public void setCentrifugeExternalStorageCache(Object cache) { this.centrifugeExternalStorageCache = cache; }
 
 	// ===== AE2 配置缓存方法 =====
 

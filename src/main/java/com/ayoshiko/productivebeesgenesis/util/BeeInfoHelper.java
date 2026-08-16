@@ -148,6 +148,8 @@ public final class BeeInfoHelper {
 		cachedAllBeeTypes = null;
 		// 模块 2+3：清空配方索引与输出表缓存，防止配方重载后返回过期数据
 		BeeProduceQueries.invalidate();
+		// 最终产物模组归属依赖离心配方与标签解析结果，重载后必须同步失效
+		BeeProductModResolver.invalidateCache();
 		// 用 synchronized 保护 invalidate 与 getFlowerPreference 的 write-on-copy 互斥，
 		// 避免新条目被 replace 覆盖造成 cache 写入丢失
 		synchronized (BeeInfoHelper.class) {
@@ -235,6 +237,23 @@ public final class BeeInfoHelper {
 	@Nonnull
 	public static List<ItemStack> getBeeProduceStacks(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
 		return BeeProduceQueries.getBeeProduceStacks(level, beeType);
+	}
+
+	/**
+	 * 获取蜜蜂最终资源产物所属的模组命名空间。
+	 * <p>
+	 * 该查询解析蜜脾的离心产物，而不是蜜蜂或可配置蜜脾自身的命名空间。
+	 */
+	@Nonnull
+	public static String getBeeProductModId(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		return BeeProductModResolver.resolve(level, beeType);
+	}
+
+	/** Returns the primary grouping mod and every searchable final-product mod. */
+	@Nonnull
+	public static BeeProductModProfile getBeeProductModProfile(
+			@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		return BeeProductModResolver.resolveProfile(level, beeType);
 	}
 
 	/**

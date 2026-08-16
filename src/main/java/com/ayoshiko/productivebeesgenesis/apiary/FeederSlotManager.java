@@ -355,17 +355,18 @@ public class FeederSlotManager {
 	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
 	 */
 	public ItemStack getRandomBlockFromFeeder(TagKey<Block> blockTag) {
-		List<Block> candidates = new ArrayList<>(feederSlots.size());
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		Block selected = null;
+		int matches = 0;
 		for (int i = 0; i < feederSlots.size(); i++) {
 			ItemStack stack = feederSlots.get(i).getStack();
 			if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) continue;
 			Block block = ((BlockItem) stack.getItem()).getBlock();
 			// 用 BlockState.is 替代废弃的 Block.builtInRegistryHolder().is()
 			if (!block.defaultBlockState().is(blockTag)) continue;
-			candidates.add(block);
+			if (random.nextInt(++matches) == 0) selected = block;
 		}
-		return candidates.isEmpty() ? ItemStack.EMPTY
-				: new ItemStack(candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())));
+		return selected == null ? ItemStack.EMPTY : new ItemStack(selected);
 	}
 
 	/**
@@ -377,14 +378,15 @@ public class FeederSlotManager {
 	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
 	 */
 	public ItemStack getRandomItemFromFeeder(TagKey<Item> itemTag) {
-		List<ItemStack> candidates = new ArrayList<>(feederSlots.size());
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		ItemStack selected = ItemStack.EMPTY;
+		int matches = 0;
 		for (int i = 0; i < feederSlots.size(); i++) {
 			ItemStack stack = feederSlots.get(i).getStack();
 			if (stack.isEmpty() || !stack.is(itemTag)) continue;
-			candidates.add(stack);
+			if (random.nextInt(++matches) == 0) selected = stack;
 		}
-		return candidates.isEmpty() ? ItemStack.EMPTY
-				: candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())).copy();
+		return selected.isEmpty() ? ItemStack.EMPTY : selected.copy();
 	}
 
 	/** 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照（委托琥珀工具类） */

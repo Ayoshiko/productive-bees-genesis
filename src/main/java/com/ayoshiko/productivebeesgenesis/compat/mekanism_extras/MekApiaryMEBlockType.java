@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
@@ -101,7 +102,8 @@ public final class MekApiaryMEBlockType {
 		// 能量配置：ME 模式，storage = max(origStorage, origUsage) * tier.processes
 		long usage = 50L;
 		int beeSlots = FactoryApiaryConfig.forMETier(tier).beeSlotCount;
-		long storage = Math.max(20_000L, usage) * Math.max(tier.processes, beeSlots);
+		long storage = SaturatingMath.saturatingMultiply(
+				Math.max(20_000L, usage), Math.max(tier.processes, beeSlots));
 
 		// 使用原版 Machine.MachineBuilder.createMachine 构建（非 ExtraFactoryMachine），
 		// 因为蜂箱不走 CachedRecipe 管线，不需要 AttributeFactoryType

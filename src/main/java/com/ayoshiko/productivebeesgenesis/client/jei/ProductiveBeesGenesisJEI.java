@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
@@ -269,13 +270,16 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			for (ChancedOutput chanced : recipe.itemOutput) {
 				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
 				if (isWaxOutput(chanced)) continue;
-				blockOutputs.add(new ChancedOutput(chanced.ingredient(), chanced.min() * multiplier, chanced.max() * multiplier,
-					chanced.chance()));
+				blockOutputs.add(new ChancedOutput(chanced.ingredient(),
+						SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(chanced.min(), multiplier)),
+						SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(chanced.max(), multiplier)),
+						chanced.chance()));
 			}
 
 			// 生成按配置倍率缩放的流体输出
 			SizedFluidIngredient blockFluid = new SizedFluidIngredient(
-					recipe.fluidOutput.ingredient(), recipe.fluidOutput.amount() * multiplier);
+					recipe.fluidOutput.ingredient(),
+					SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(recipe.fluidOutput.amount(), multiplier)));
 
 			blockRecipes.add(new CentrifugeRecipe(
 					Ingredient.of(combBlock), blockOutputs, blockFluid, recipe.getProcessingTime()));

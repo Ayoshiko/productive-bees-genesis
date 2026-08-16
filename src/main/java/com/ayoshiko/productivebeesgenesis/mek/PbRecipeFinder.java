@@ -46,10 +46,10 @@ public class PbRecipeFinder {
 	private final RecipeCacheManager<RecipeHolder<CentrifugeRecipe>> pbRecipeCache;
 
 	/**
-	 * PB配方查找的短期缓存（TTL 100 tick + 指纹比对）
+	 * PB配方查找的短期缓存（TTL 100 tick + 最近 4 个指纹条目）
 	 * <br/>
 	 * 作为 {@link #pbRecipeCache} 的上层缓存：tryProcessPbRecipe 每 tick 调用 findPbRecipe 时，
-	 * 通过指纹（Item + bee_type）快速命中缓存，跳过 pbRecipeCache 的
+	 * 通过指纹（Item + bee_type/组件哈希）快速命中缓存，跳过 pbRecipeCache 的
 	 * {@link ItemStack#hashItemAndComponents} 计算。配方重载时由 {@link #clearCaches()} 清空。
 	 */
 	private final InputValidationCache inputRecipeCache = new InputValidationCache();

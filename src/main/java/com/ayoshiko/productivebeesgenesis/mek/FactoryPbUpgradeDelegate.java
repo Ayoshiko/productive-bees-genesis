@@ -229,9 +229,7 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 	/**
 	 * 从 NBT 加载 PB 升级数量和槽位
 	 * <br/>
-	 * 修复 v14 loadSlots/loadCounts 顺序：必须先 loadSlots 恢复槽位,再 loadCounts 恢复数量。
-	 * 原理:loadCounts 内部 applyCountWithLimit 在数量超过配置上限时,会将超出部分注入输出槽。
-	 * 若 loadSlots 未先执行,输出槽为空,注入的超出部分会被后续 loadSlots 覆盖,导致升级物品凭空消失。
+	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	public void load(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		pbUpgradeHandler.loadSlots(nbt, provider);

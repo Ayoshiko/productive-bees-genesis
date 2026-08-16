@@ -2,8 +2,10 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,15 +20,16 @@ import java.util.List;
 	 * <p>
 	 * 与初始版 {@link MekApiaryContainer} 的差异：
 	 * <ul>
-	 *   <li>蜜蜂列数固定 5（工厂版 FACTORY_BEE_COLS）</li>
-	 *   <li>蜜蜂行数随等级递增（Basic=1/Advanced=2/Elite=3/Ultimate=4）</li>
-	 *   <li>输出列数随等级递增（Basic=3/Advanced=4/Elite=5/Ultimate=6）</li>
-	 *   <li>imageWidth 动态：Ultimate=210px，其他=176px</li>
-	 *   <li>喂食槽数量随等级递增（Basic=9, Advanced=12, Elite=15, Ultimate=21），由 FeederSlotManager 动态创建</li>
+	 *   <li>蜜蜂列数与行数由 FactoryApiaryConfig 智能计算</li>
+	 *   <li>输出列数不小于蜜蜂列数（Basic=5/Advanced=5/Elite=5/Ultimate=10）</li>
+	 *   <li>imageWidth 根据蜜蜂区和输出区的最大宽度动态计算</li>
+	 *   <li>喂食槽数量由 FactoryApiaryConfig 动态创建</li>
 	 * </ul>
 	 */
 public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityMekApiaryFactory>
-		implements IFeederSlotContainer, IPbUpgradeSlotContainer {
+		implements IFeederSlotContainer, IPbUpgradeSlotContainer, IPagedOutputContainer {
+
+	private int outputPage;
 
 	/** 喂食器虚拟槽位列表（Popup Window 交互用） */
 	@Nullable
@@ -54,6 +57,7 @@ public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityM
 	@Override
 	protected void addSlots() {
 		super.addSlots();
+		addPagedOutputSlots();
 		List<FeederInventorySlot> feederInventorySlots = tile.getFeederInventorySlots();
 		feederSlots = new ArrayList<>(feederInventorySlots.size());
 		for (FeederInventorySlot feederSlot : feederInventorySlots) {
@@ -66,6 +70,57 @@ public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityM
 		addSlot(pbUpgradeInputSlot);
 		pbUpgradeOutputSlot = tile.getPbUpgradeOutputSlot().createContainerSlot();
 		addSlot(pbUpgradeOutputSlot);
+	}
+
+	private void addPagedOutputSlots() {
+		List<BasicInventorySlot> outputSlots = tile.getOutputSlots();
+		int slotsPerPage = tile.getOutputSlotsPerPage();
+		int beeCols = tile.getBeeCols();
+		int outputCols = tile.getOutputCols();
+		int imageWidth = ApiaryGuiLayoutHelper.getImageWidth(beeCols, outputCols);
+		int beeX = ApiaryGuiLayoutHelper.getBeeX(imageWidth, beeCols);
+		int outputX = ApiaryGuiLayoutHelper.getOutputX(beeX,
+				ApiaryGuiLayoutHelper.getBeeW(beeCols), ApiaryGuiLayoutHelper.getOutputW(outputCols));
+		int outputY = ApiaryGuiLayoutHelper.getOutputY(
+				ApiaryGuiLayoutHelper.getBeeBottom(tile.getBeeRows()), tile.getBeeRows());
+		int pitch = ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP;
+		for (int pageSlot = 0; pageSlot < slotsPerPage; pageSlot++) {
+			int row = pageSlot / outputCols;
+			int col = pageSlot % outputCols;
+			addSlot(new PagedOutputContainerSlot(outputSlots, this::getOutputPage,
+					slotsPerPage, pageSlot, outputX + col * pitch, outputY + row * pitch,
+					tile.getWarningCheck(mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
+		}
+	}
+
+	@Override
+	public int getOutputPage() {
+		return outputPage;
+	}
+
+	@Override
+	public int getOutputPageCount() {
+		return tile.getOutputPageCount();
+	}
+
+	@Override
+	public void setOutputPage(int page) {
+		outputPage = Math.max(0, Math.min(page, getOutputPageCount() - 1));
+	}
+
+	@Override
+	public boolean clickMenuButton(Player player, int id) {
+		if (id == PREVIOUS_OUTPUT_PAGE_BUTTON) {
+			changeOutputPage(-1);
+			broadcastFullState();
+			return true;
+		}
+		if (id == NEXT_OUTPUT_PAGE_BUTTON) {
+			changeOutputPage(1);
+			broadcastFullState();
+			return true;
+		}
+		return super.clickMenuButton(player, id);
 	}
 
 	/** 获取喂食器虚拟槽位列表（供 GuiFeederWindow 绑定 GuiVirtualSlot） */
@@ -110,7 +165,7 @@ public class MekApiaryFactoryContainer extends MekanismTileContainer<TileEntityM
 	/**
 	 * 玩家物品栏 X 偏移 — 根据工厂等级 imageWidth 居中
 	 * <br/>
-	 * Ultimate 工厂 imageWidth=210，其他=176。
+	 * 宽度由蜜蜂区和输出区的较大者决定。
 	 * 通过 tile getter 获取列数，避免依赖 tile.getTier()（ME/EME 版本返回 null）。
 	 */
 	@Override

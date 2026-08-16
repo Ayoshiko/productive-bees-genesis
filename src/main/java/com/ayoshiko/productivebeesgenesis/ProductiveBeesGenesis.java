@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis;
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
 import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfigCompatibility;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.datagen.ConditionalBlockLootProvider;
 import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
@@ -151,7 +153,10 @@ public final class ProductiveBeesGenesis {
 	private void registerConfigListeners(IEventBus eventBus) {
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
-				if (ModConfig.validateAndFixCrossFields()) {
+				boolean changed = BalanceConfigCompatibility.migrateLegacyConfig(event.getConfig());
+				changed |= ModConfig.validateAndFixCrossFields();
+				changed |= BalanceConfig.refresh(false);
+				if (changed) {
 					ModConfig.SERVER_SPEC.save();
 				}
 				BeeConfigApplier.applyOverrides();
@@ -160,7 +165,9 @@ public final class ProductiveBeesGenesis {
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
 			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
-				if (ModConfig.validateAndFixCrossFields()) {
+				boolean changed = ModConfig.validateAndFixCrossFields();
+				changed |= BalanceConfig.refresh(true);
+				if (changed) {
 					ModConfig.SERVER_SPEC.save();
 				}
 				BeeConfigApplier.applyOverrides();

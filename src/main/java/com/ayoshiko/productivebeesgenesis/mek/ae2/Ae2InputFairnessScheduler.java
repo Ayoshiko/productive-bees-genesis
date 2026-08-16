@@ -1,9 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 
 /**
  * AE2 input type fairness scheduler, modeled after AE2LT's 100-tick accounting window.
@@ -21,21 +20,23 @@ final class Ae2InputFairnessScheduler {
     static final int WINDOW_TICKS = 100;
 
     private long windowStartTick = Long.MIN_VALUE;
-    private final Map<AEItemKey, Long> served = new HashMap<>();
+	private final Object2LongOpenHashMap<AEItemKey> served = new Object2LongOpenHashMap<>();
 
     void roll(long gameTick) {
-        if (gameTick - windowStartTick >= WINDOW_TICKS) {
+        if (windowStartTick == Long.MIN_VALUE
+                || gameTick < windowStartTick
+                || gameTick - windowStartTick >= WINDOW_TICKS) {
             served.clear();
             windowStartTick = gameTick;
         }
     }
 
-    long served(AEItemKey key) {
-        return served.getOrDefault(key, 0L);
-    }
+	long served(AEItemKey key) {
+		return served.getLong(key);
+	}
 
     void recordServed(AEItemKey key, long amount) {
         if (key == null || amount <= 0L) return;
-        served.merge(key, amount, Long::sum);
-    }
+		served.put(key, SaturatingMath.saturatingAdd(served.getLong(key), amount));
+	}
 }

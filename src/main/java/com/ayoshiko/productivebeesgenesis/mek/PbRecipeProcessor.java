@@ -11,6 +11,9 @@ import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.container.MekanismContainer;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
@@ -24,6 +27,7 @@ import java.util.List;
 	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
 	 */
 public class PbRecipeProcessor {
+	private static final String NBT_COMMITTED_PENDING = "productivebeesgenesis_pb_committed_pending";
 
 	/** PB配方处理上下文 — 由Factory TileEntity提供 */
 	private final PbRecipeContext context;
@@ -208,7 +212,9 @@ public class PbRecipeProcessor {
 			// v2.0.9 修复产物锁定 bug：配方版本变更时重置所有 completer
 			// 防止配方重载后 completer 持有旧配方的 pendingRecipeOutputs 引用
 			for (int i = 0; i < recipeCompleters.length; i++) {
-				recipeCompleters[i].resetPendingRecipe();
+				if (!recipeCompleters[i].hasCommittedPendingOutputs()) {
+					recipeCompleters[i].resetPendingRecipe();
+				}
 			}
 			lastRecipeVersion = currentVersion;
 		}
@@ -269,6 +275,12 @@ public class PbRecipeProcessor {
 
 			// 配方重载检测：版本号变更时清空 SMELTING 和 PB 配方缓存
 			checkRecipeVersion();
+			PbRecipeCompleter completer = recipeCompleters[processIndex];
+			if (completer.hasCommittedPendingOutputs()
+					&& !completer.flushPendingPbOutputs(processIndex)) {
+				pbProcessing[processIndex] = false;
+				return false;
+			}
 
 			// 能量/操作数/流体槽满载缓存由入口统一刷新（Task 1.3 CREATIVE 兜底 + Task 4 暂停语义）
 			long currentGameTime = level.getGameTime();
@@ -320,7 +332,7 @@ public class PbRecipeProcessor {
 			int processingTime = energyCache.getPbProcessingTime(recipeValue);
 			pbProcessingTime[processIndex] = processingTime;
 			boolean hasItemOutputs = !recipeValue.getRecipeOutputs().isEmpty();
-			boolean hasFluidOutputs = PbRecipeOutputChecker.hasFluidOutput(recipeValue);
+			boolean hasFluidOutputs = PbRecipeOutputChecker.hasFluidOutput(context, recipeValue);
 
 			// 计算每tick并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
 			int operationsPerTick = cachedOperationsPerTick;
@@ -501,12 +513,32 @@ public class PbRecipeProcessor {
 	}
 
 	/** Persists PB progress to NBT (implementation moved to {@link PbRecipeProcessorStateHelper#saveAdditional}). */
-	public void saveAdditional(CompoundTag nbt) {
+	public void saveAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
 		PbRecipeProcessorStateHelper.saveAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
+		myriadHandler.saveAdditional(nbt);
+		ListTag pendingList = new ListTag();
+		for (int i = 0; i < recipeCompleters.length; i++) {
+			CompoundTag pending = recipeCompleters[i].saveCommittedPending(provider);
+			if (pending == null) continue;
+			pending.putInt("process", i);
+			pendingList.add(pending);
+		}
+		if (!pendingList.isEmpty()) nbt.put(NBT_COMMITTED_PENDING, pendingList);
+		else nbt.remove(NBT_COMMITTED_PENDING);
 	}
 
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
-	public void loadAdditional(CompoundTag nbt) {
+	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
+		myriadHandler.loadAdditional(nbt);
+		for (PbRecipeCompleter completer : recipeCompleters) completer.resetPendingRecipe();
+		if (!nbt.contains(NBT_COMMITTED_PENDING, Tag.TAG_LIST)) return;
+		ListTag pendingList = nbt.getList(NBT_COMMITTED_PENDING, Tag.TAG_COMPOUND);
+		for (int i = 0; i < pendingList.size(); i++) {
+			CompoundTag pending = pendingList.getCompound(i);
+			int process = pending.getInt("process");
+			if (process < 0 || process >= recipeCompleters.length) continue;
+			recipeCompleters[process].loadCommittedPending(pending, provider);
+		}
 	}
 }

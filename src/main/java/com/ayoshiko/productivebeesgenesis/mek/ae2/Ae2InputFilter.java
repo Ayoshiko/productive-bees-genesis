@@ -51,6 +51,8 @@ public final class Ae2InputFilter {
 	public static final long DEFAULT_DIRECT_AMOUNT = 64L;
 	/** Fallback used while the server configuration is still unavailable. */
 	public static final long MAX_DIRECT_AMOUNT = 8_192L;
+	/** Sentinel returned by the allocation-free pull-candidate decision path. */
+	static final long PULL_DISALLOWED = Long.MIN_VALUE;
 
 	/**
 	 * Returns the configured per-pull cap. The same value is used by the puller,
@@ -106,6 +108,8 @@ public final class Ae2InputFilter {
 	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
 	/** Immutable direct-entry snapshot; invalidated only by configuration changes. */
 	private volatile List<DirectEntry> directEntriesCache;
+	/** Parsed fuzzy entries keyed by the copy-on-write slots array identity. */
+	private volatile FuzzyEntriesCache fuzzyEntriesCache;
 
 	/** 无标记时全量拉取的全局无限开关；仅在没有任何过滤条目时可切换 */
 	private volatile boolean unlimitedAllFallback = false;
@@ -191,7 +195,9 @@ public final class Ae2InputFilter {
 
 	/** Whitelist/blacklist check for a bee type (implementation moved to {@link Ae2InputFilterQuerySupport#isAllowed}). */
 	public boolean isAllowed(ResourceLocation beeType, boolean isBlock) {
-		return Ae2InputFilterQuerySupport.isAllowed(beeType, isBlock, filterMode, preciseMode, slots);
+		String[] currentSlots = slots;
+		return Ae2InputFilterQuerySupport.isAllowed(
+				beeType, isBlock, filterMode, preciseMode, getFuzzyEntries(currentSlots));
 	}
 
 	/**
@@ -348,8 +354,9 @@ public final class Ae2InputFilter {
 		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)) {
 			return true;
 		}
-		return Ae2InputFilterQuerySupport.isAllowed(key, filterMode, preciseMode, slots, resolvedDirectKeys, ignoreNbt,
-			registries);
+		String[] currentSlots = slots;
+		return Ae2InputFilterQuerySupport.isAllowed(key, filterMode, preciseMode, currentSlots,
+				getFuzzyEntries(currentSlots), resolvedDirectKeys, ignoreNbt, registries);
 	}
 
 	public boolean isDirectEntry(int index) {
@@ -371,7 +378,11 @@ public final class Ae2InputFilter {
 	}
 
 	public boolean hasFuzzyEntries() {
-		return Ae2InputFilterQuerySupport.hasFuzzyEntries(slots);
+		String[] currentSlots = slots;
+		for (Ae2InputFilterQuerySupport.FuzzyEntry entry : getFuzzyEntries(currentSlots)) {
+			if (entry != null) return true;
+		}
+		return false;
 	}
 
 	public boolean isUnlimitedAllFallback() {
@@ -428,6 +439,18 @@ public final class Ae2InputFilter {
 		directEntriesCache = null;
 	}
 
+	private Ae2InputFilterQuerySupport.FuzzyEntry[] getFuzzyEntries(String[] currentSlots) {
+		FuzzyEntriesCache cached = fuzzyEntriesCache;
+		if (cached != null && cached.slots == currentSlots) return cached.entries;
+		Ae2InputFilterQuerySupport.FuzzyEntry[] entries =
+				Ae2InputFilterQuerySupport.compileFuzzyEntries(currentSlots);
+		fuzzyEntriesCache = new FuzzyEntriesCache(currentSlots, entries);
+		return entries;
+	}
+
+	private record FuzzyEntriesCache(String[] slots, Ae2InputFilterQuerySupport.FuzzyEntry[] entries) {
+	}
+
 	/**
 	 * Returns true when the key matches at least one configured entry (direct or
 	 * fuzzy), regardless of whitelist/blacklist mode. The puller uses this to rank
@@ -435,7 +458,9 @@ public final class Ae2InputFilter {
 	 * (implementation moved to {@link Ae2InputFilterQuerySupport#matchesAnyEntry})
 	 */
 	public boolean matchesAnyEntry(AEItemKey key, boolean ignoreNbt) {
-		return Ae2InputFilterQuerySupport.matchesAnyEntry(key, slots, resolvedDirectKeys, preciseMode, ignoreNbt);
+		String[] currentSlots = slots;
+		return Ae2InputFilterQuerySupport.matchesAnyEntry(key, currentSlots, getFuzzyEntries(currentSlots),
+				resolvedDirectKeys, preciseMode, ignoreNbt);
 	}
 
 	/**
@@ -452,6 +477,15 @@ public final class Ae2InputFilter {
 			HolderLookup.Provider registries) {
 		return Ae2InputFilterQuerySupport.directPullLimit(key, visibleStock, ignoreNbt, registries, slots, resolvedDirectKeys,
 				directAmounts, directUnlimited, preciseMode);
+	}
+
+	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
+	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt) {
+		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)) return -1L;
+		String[] currentSlots = slots;
+		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
+				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
+				directAmounts, directUnlimited);
 	}
 
 	/** Exact-key compatibility overload used by older integrations. */

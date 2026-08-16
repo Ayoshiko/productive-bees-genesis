@@ -139,8 +139,7 @@ public final class RandomHoneycombSelector {
 	/**
 	 * 批量生成蜜脾：一次性生成 count 个随机蜜脾并追加到输出列表
 	 * <p>
-	 * 预分配索引数组，减少 {@link ThreadLocalRandom} 调用与扩容开销，适用于 256x
-	 * 加速等高频调用场景。
+	 * 单遍随机选择并复制模板，避免为短期随机索引分配与产出数量等长的数组。
 	 *
 	 * @param out       输出列表
 	 * @param count     生成数量
@@ -148,13 +147,9 @@ public final class RandomHoneycombSelector {
 	 */
 	public static void appendRandomHoneycombs(List<ItemStack> out, int count, ItemStack[] templates) {
 		if (count <= 0 || templates == null || templates.length == 0) return;
-		int[] indices = new int[count];
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		for (int i = 0; i < count; i++) {
-			indices[i] = random.nextInt(templates.length);
-		}
-		for (int idx : indices) {
-			out.add(templates[idx].copy());
+			out.add(templates[random.nextInt(templates.length)].copy());
 		}
 	}
 
@@ -180,13 +175,9 @@ public final class RandomHoneycombSelector {
 	 */
 	public static void appendRandomCombBlocks(List<ItemStack> out, int count, ItemStack[] templates) {
 		if (count <= 0 || templates == null || templates.length == 0) return;
-		int[] indices = new int[count];
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		for (int i = 0; i < count; i++) {
-			indices[i] = random.nextInt(templates.length);
-		}
-		for (int idx : indices) {
-			out.add(templates[idx].copy());
+			out.add(templates[random.nextInt(templates.length)].copy());
 		}
 	}
 
@@ -244,13 +235,13 @@ public final class RandomHoneycombSelector {
 			return List.of();
 		}
 
-		Map<ResourceLocation, Integer> allocation = allocateEvenly(totalCount, selectedTypes);
 		List<ItemStack> result = new ArrayList<>(selectedTypes.size() * 2);
-		for (ResourceLocation type : selectedTypes) {
-			Integer count = allocation.get(type);
-			if (count == null || count <= 0) {
-				continue;
-			}
+		int typeCount = selectedTypes.size();
+		int baseAllocation = totalCount / typeCount;
+		int allocationRemainder = totalCount % typeCount;
+		for (int typeIndex = 0; typeIndex < typeCount; typeIndex++) {
+			ResourceLocation type = selectedTypes.get(typeIndex);
+			int count = baseAllocation + (typeIndex < allocationRemainder ? 1 : 0);
 			int remaining = count;
 			// O(1) Map 查找优先；Map 为空（向后兼容）时回退到 O(N) 数组扫描
 			ItemStack template = (templateByType != null && !templateByType.isEmpty())
@@ -350,7 +341,7 @@ public final class RandomHoneycombSelector {
 	public static List<ResourceLocation> selectDistinctBeeTypes(
 			int count, RandomSource random, List<ResourceLocation> cache) {
 		int poolSize = cache.size();
-		if (poolSize == 0) return List.of();
+		if (count <= 0 || poolSize == 0) return List.of();
 		if (count >= poolSize) return List.copyOf(cache);
 
 		// 当选取数量超过池容量一半时，do-while 碰撞率激增，改用洗牌算法
@@ -367,6 +358,27 @@ public final class RandomHoneycombSelector {
 		}
 
 		List<ResourceLocation> selected = new ArrayList<>(count);
+		if (count <= 32) {
+			int[] usedIndices = new int[count];
+			for (int i = 0; i < count; i++) {
+				int idx;
+				boolean duplicate;
+				do {
+					idx = random.nextInt(poolSize);
+					duplicate = false;
+					for (int previous = 0; previous < i; previous++) {
+						if (usedIndices[previous] == idx) {
+							duplicate = true;
+							break;
+						}
+					}
+				} while (duplicate);
+				usedIndices[i] = idx;
+				selected.add(cache.get(idx));
+			}
+			return selected;
+		}
+
 		Set<Integer> usedIndices = new HashSet<>(count * 2);
 
 		for (int i = 0; i < count; i++) {

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.inventory.IInventorySlot;
@@ -77,9 +78,11 @@ final class PbRecipeOutputChecker {
 	 * @param recipe	PB离心配方
 	 * @return true 如果配方有流体输出
 	 */
-	public static boolean hasFluidOutput(CentrifugeRecipe recipe) {
+	public static boolean hasFluidOutput(PbRecipeContext context, CentrifugeRecipe recipe) {
 		try {
-			return !recipe.getFluidOutputs().isEmpty();
+			FluidStack fluid = recipe.getFluidOutputs();
+			return !fluid.isEmpty() && !(context.suppressesUselessByproducts()
+					&& UselessByproductUpgradeHelper.isHoney(fluid));
 		} catch (RuntimeException e) {
 			// 自定义配方实现可能抛异常，fail-safe 返回 false（节流日志便于排查）
 			LogThrottle.warn("pb_recipe_fluid_output",
