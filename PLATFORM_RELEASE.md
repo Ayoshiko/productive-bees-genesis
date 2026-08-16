@@ -34,6 +34,12 @@ CurseForge 版本: 1.0.0
 
 CurseForge 的 `1.0.0` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
 
+## 历史开发版本
+
+首个正式版前的所有 GitHub Release（原 `v1.0.0` 至 `v2.0.9-hotfix`）均为开发快照，不是正式发行版。
+其 Git 标签统一使用 `dev-v...` 前缀，Release 标题使用 `dev-...` 前缀并标记为 Pre-release；新的
+`v1.0.0` 是唯一不带该前缀的正式标签。历史 Release 的 JAR 资产维持原文件名和校验和，不重新打包或改名。
+
 ## 当前正式版产物
 
 ```text
