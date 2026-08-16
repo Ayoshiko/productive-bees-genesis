@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.network;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -113,6 +114,14 @@ public final class ModPayloads {
 				ToggleApiaryDirectEjectPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleToggleApiaryDirectEject
 		);
+		// Smelting compatibility is a core centrifuge feature and remains available without AE2.
+		registrar.playToServer(
+				ToggleSmeltingCompatPayload.TYPE,
+				ToggleSmeltingCompatPayload.STREAM_CODEC,
+				SmeltingCompatPayloadHandler::handle
+		);
+		// Do not create method handles for classes with direct AE2 API references unless AE2 is present.
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
 		// per-tile AE2 输出切换包 — 由 AeOutputButton 点击发送
 		registrar.playToServer(
 				CycleAeOutputPayload.TYPE,
@@ -126,11 +135,6 @@ public final class ModPayloads {
 				Ae2PayloadHandlers::handleToggleAeInput
 		);
 		// per-tile 离心机熔炉配方兼容开关包 — 由 SmeltingCompatButton 点击发送
-		registrar.playToServer(
-				ToggleSmeltingCompatPayload.TYPE,
-				ToggleSmeltingCompatPayload.STREAM_CODEC,
-				Ae2PayloadHandlers::handleToggleSmeltingCompat
-		);
 		// per-tile AE2 输入 NBT 忽略开关包 — 由 AeInputNbtIgnoreButton 点击发送
 		registrar.playToServer(
 				ToggleAeInputNbtIgnorePayload.TYPE,
@@ -190,6 +194,7 @@ public final class ModPayloads {
 				SyncAeInputFilterEntriesPayload.STREAM_CODEC,
 				Ae2FilterPayloadHandlers::handleSyncAeInputFilterEntries
 		);
+		}
 		// 服务端 → 客户端：开发者模式状态同步包（玩家登录时推送 + 命令切换时广播）
 		registrar.playToClient(
 				DevModeStateSyncPacket.TYPE,

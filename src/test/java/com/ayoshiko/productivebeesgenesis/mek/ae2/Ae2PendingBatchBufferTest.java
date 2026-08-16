@@ -22,4 +22,11 @@ class Ae2PendingBatchBufferTest {
 		buffer.reset();
 		assertFalse(buffer.isWindowRipe());
 	}
+
+	@Test
+	void localTankDrainFlushesImmediatelyWhenDirectAeOutputIsDisabled() {
+		assertTrue(Ae2FluidFlushPolicy.shouldFlush(false, false, 1_000L, 1_000L));
+		assertFalse(Ae2FluidFlushPolicy.shouldFlush(true, false, 1_000L, 1_000L));
+		assertTrue(Ae2FluidFlushPolicy.shouldFlush(true, true, 1_000L, 1_000L));
+	}
 }

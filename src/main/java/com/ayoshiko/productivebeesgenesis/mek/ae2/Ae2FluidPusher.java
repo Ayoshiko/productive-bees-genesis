@@ -61,8 +61,6 @@ public final class Ae2FluidPusher {
 	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态,全局只需 1 个实例 */
 	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
 
-	/** 进入"按子 tick 累积并立即刷新"模式的槽内流体阈值（mB）— 低于此值时只在窗口边界累积 */
-	private static final long SATURATION_ACCUMULATE_THRESHOLD_MB = 250_000L;
 	/** Bound one key's ME request so a single huge tank cannot monopolize a tick. */
 	private static final long MAX_FLUID_BATCH_REQUEST_MB = 16_000_000L;
 	private static final int MAX_FLUID_BATCH_CALLS_PER_KEY = 4;
@@ -184,12 +182,13 @@ public final class Ae2FluidPusher {
 		}
 
 		// 10. 刷新检查：
-		//     - 成熟窗口（低产量批量，默认 20 游戏刻）
-		//     - 累积量达到自适应阈值：槽内流体总量（即首个采样采满整槽时立即刷新）
-		//       且至少 250,000 mB，避免极小罐在低产量下每子 tick 都调用 AE API
-		long adaptiveThreshold = Math.max(SATURATION_ACCUMULATE_THRESHOLD_MB, totalInTanks);
-		boolean shouldFlush = batchBuffer.isRipe()
-				|| batchBuffer.shouldFlushNow(batchBuffer.getTotalAmount(), adaptiveThreshold);
+		//     - 关闭直接产出模式时，本地罐是唯一缓冲，逐真实 tick 刷新以避免限制机器吞吐；
+		//     - 直接产出模式保留成熟窗口（低产量批量，默认 20 游戏刻）；
+		//     - 累积量达到自适应阈值：槽内流体总量（即首个采样采满整槽时立即刷新），
+		//       且至少 250,000 mB，避免极小罐在低产量下每子 tick 都调用 AE API。
+		boolean shouldFlush = Ae2FluidFlushPolicy.shouldFlush(
+				host.productivebeesgenesis$isDirectAeOutputEnabled(),
+				batchBuffer.isRipe(), batchBuffer.getTotalAmount(), totalInTanks);
 		if (!shouldFlush) return;
 
 		// 3. TPS 自适应:TPS 严重下降时跳过推送,让出服务器资源（阈值从 10 降到 5，
