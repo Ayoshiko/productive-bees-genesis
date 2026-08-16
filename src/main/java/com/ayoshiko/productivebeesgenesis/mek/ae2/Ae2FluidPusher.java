@@ -64,6 +64,8 @@ public final class Ae2FluidPusher {
 	/** Bound one key's ME request so a single huge tank cannot monopolize a tick. */
 	private static final long MAX_FLUID_BATCH_REQUEST_MB = 16_000_000L;
 	private static final int MAX_FLUID_BATCH_CALLS_PER_KEY = 4;
+	/** Maximum extra local-tank drains in one real tick for a high-parallel output batch. */
+	private static final int MAX_ADDITIONAL_LOCAL_DRAINS_PER_TICK = 64;
 
 	private Ae2FluidPusher() {}
 
@@ -127,6 +129,21 @@ public final class Ae2FluidPusher {
 	 * @param host 输出宿主(蜂箱/离心机方块实体)
 	 */
 	public static void pushFluids(IAe2OutputHostBase host) {
+		pushFluids(host, false);
+	}
+
+	/**
+	 * Drains fluid committed to a local output tank during the current real game tick.
+	 * <p>
+	 * This is intentionally separate from direct generated-fluid insertion: the machine has
+	 * already committed the fluid to its Mekanism tank before this method is called. It lets a
+	 * high-parallel batch reuse that tank without enabling the direct-AE-output option.
+	 */
+	public static void pushLocalTankContentsNow(IAe2OutputHostBase host) {
+		pushFluids(host, true);
+	}
+
+	private static void pushFluids(IAe2OutputHostBase host, boolean allowAdditionalSameTickDrain) {
 		// 1. 流体推送独立开关检查(与物品推送分离)
 		//    注意：这两个接口方法可能被蜂箱子类覆盖，保持原调用方式（各内部调用1次 getAe2StateHolder）
 		if (!host.productivebeesgenesis$isFluidPushEnabled()) return;
@@ -139,7 +156,14 @@ public final class Ae2FluidPusher {
 		if (holder == null) return;
 		Ae2PushStateHolder pushState = holder.getPushState();
 		Level level = host.productivebeesgenesis$getAe2Level();
-		if (level == null || !pushState.tryStartFluidPush(level.getGameTime())) return;
+		if (level == null) return;
+		long gameTick = level.getGameTime();
+		boolean firstPushThisTick = pushState.tryStartFluidPush(gameTick);
+		boolean directAeOutputEnabled = host.productivebeesgenesis$isDirectAeOutputEnabled();
+		if (!firstPushThisTick && (!allowAdditionalSameTickDrain || directAeOutputEnabled
+				|| !pushState.tryAcquireAdditionalLocalFluidDrain(gameTick, MAX_ADDITIONAL_LOCAL_DRAINS_PER_TICK))) {
+			return;
+		}
 
 		// 2. 深度退避检查(入口级别)— 退避期内跳过整个 pushFluids 路径(spec Change 3)
 		//    基于 System.nanoTime() 墙钟单调时钟,不受 JDTE 加速影响(Task 5)
@@ -161,8 +185,8 @@ public final class Ae2FluidPusher {
 			totalInTanks = SaturatingMath.saturatingAdd(totalInTanks, tank.getFluid().getAmount());
 		}
 
-		// tryStartFluidPush 已将加速子 tick 合并为每个真实游戏刻一次。
-		batchBuffer.tick();
+		// 加速子 tick 仅推进一次批处理窗口；本地罐的额外排空不改变窗口计时。
+		if (firstPushThisTick) batchBuffer.tick();
 		if (totalInTanks <= 0) return;
 
 		// 第二遍：每个真实游戏刻采样一次。加速子 tick 已在入口合并，不会放大组件哈希开销。
@@ -187,7 +211,7 @@ public final class Ae2FluidPusher {
 		//     - 累积量达到自适应阈值：槽内流体总量（即首个采样采满整槽时立即刷新），
 		//       且至少 250,000 mB，避免极小罐在低产量下每子 tick 都调用 AE API。
 		boolean shouldFlush = Ae2FluidFlushPolicy.shouldFlush(
-				host.productivebeesgenesis$isDirectAeOutputEnabled(),
+				directAeOutputEnabled,
 				batchBuffer.isRipe(), batchBuffer.getTotalAmount(), totalInTanks);
 		if (!shouldFlush) return;
 

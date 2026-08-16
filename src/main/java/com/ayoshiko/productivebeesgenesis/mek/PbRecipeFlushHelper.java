@@ -15,7 +15,9 @@ final class PbRecipeFlushHelper {
 	}
 
 	/**
-	 * 分批减半回退 — O(log N) 次减半尝试 + 批量执行（替代 N 次逐次重试）。成功：batchSize 不变；失败：batchSize /= 2；batchSize=1 失败时跳出。
+	 * 分批减半回退 — O(log N) 次减半尝试 + 批量执行（替代 N 次逐次重试）。
+	 * 成功后逐步恢复 batchSize，避免高并行本地流体罐刚被 AE2 排空时仍以很小的回退批次循环。
+	 * 失败时 batchSize /= 2；batchSize=1 失败时跳出。
 	 */
 	static int retryBatchedFlush(@NotNull PbRecipeCompleter completer, @NotNull CentrifugeRecipe recipe,
 			int processIndex, int modifier, int totalOps) {
@@ -34,6 +36,9 @@ final class PbRecipeFlushHelper {
 			if (completer.flushPendingPbOutputs(processIndex)) {
 				opsSuccessfullyRun += trySize;
 				remaining -= trySize;
+				if (remaining > 0 && batchSize < remaining) {
+					batchSize = (int) Math.min((long) remaining, Math.max(1L, (long) batchSize * 2L));
+				}
 			} else {
 				if (completer.hasCommittedPendingOutputs()) {
 					opsSuccessfullyRun += trySize;

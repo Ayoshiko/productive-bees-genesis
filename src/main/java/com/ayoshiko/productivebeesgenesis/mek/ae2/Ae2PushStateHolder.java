@@ -58,6 +58,10 @@ public final class Ae2PushStateHolder {
 	private volatile long generatedItemPushGameTick = Long.MIN_VALUE;
 	private volatile int generatedItemPushesThisTick;
 	private volatile long lastFluidPushGameTick = Long.MIN_VALUE;
+	/** Real tick that owns the additional local-fluid drain budget. */
+	private volatile long localFluidDrainGameTick = Long.MIN_VALUE;
+	/** Extra local-tank drains used after the normal once-per-tick fluid push. */
+	private volatile int localFluidDrainsThisTick;
 
 	// ===== Grid Node 状态缓存（模块2.1：避免每 tick 高频调用 getGridNodeState） =====
 	/** 缓存刷新间隔（纳秒）— 20 tick ≈ 1000ms = 1_000_000_000ns，使用 wall clock 避免 JDTE 加速下 getGameTime 不变 */
@@ -153,6 +157,20 @@ public final class Ae2PushStateHolder {
 		return true;
 	}
 
+	/**
+	 * Reserves an additional same-tick drain after a batch has committed fluid to a local tank.
+	 * The normal {@link #tryStartFluidPush(long)} attempt is deliberately not counted here.
+	 */
+	public boolean tryAcquireAdditionalLocalFluidDrain(long gameTick, int maxAdditionalDrains) {
+		if (localFluidDrainGameTick != gameTick) {
+			localFluidDrainGameTick = gameTick;
+			localFluidDrainsThisTick = 0;
+		}
+		if (localFluidDrainsThisTick >= Math.max(0, maxAdditionalDrains)) return false;
+		localFluidDrainsThisTick++;
+		return true;
+	}
+
 	// ===== Grid Node 状态缓存方法（模块2.1） =====
 
 	/**
@@ -213,6 +231,8 @@ public final class Ae2PushStateHolder {
 		generatedItemPushGameTick = Long.MIN_VALUE;
 		generatedItemPushesThisTick = 0;
 		lastFluidPushGameTick = Long.MIN_VALUE;
+		localFluidDrainGameTick = Long.MIN_VALUE;
+		localFluidDrainsThisTick = 0;
 		// 模块2.1：重置 grid node 状态缓存，方块重建后从初始状态重新查询
 		cachedNodeState = -1;
 		nodeStateRefreshAt = 0L;

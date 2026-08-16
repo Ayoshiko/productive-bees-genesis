@@ -277,7 +277,12 @@ public class MyriadFluidOutputHandler {
 		if (tank == null || amount <= 0L || amount > Integer.MAX_VALUE) return 0L;
 		FluidStack scaledFluid = fluid.copyWithAmount((int) amount);
 		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
-		return scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
+		long inserted = scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
+		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
+				tank.getNeeded(), amount)) {
+			context.productivebeesgenesis$onLocalFluidOutputCommitted();
+		}
+		return inserted;
 	}
 
 	public boolean flushPendingFluid(int processIndex) {

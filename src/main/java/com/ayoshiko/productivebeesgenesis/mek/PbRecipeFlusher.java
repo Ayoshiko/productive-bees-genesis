@@ -144,6 +144,10 @@ public final class PbRecipeFlusher {
 				FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 				long inserted = scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
 				completer.consumePendingFluid(inserted);
+				if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
+						tank.getNeeded(), scaledAmount)) {
+					context.productivebeesgenesis$onLocalFluidOutputCommitted();
+				}
 				if (inserted < scaledAmount || completer.getPendingFluidAmount() > 0) {
 					return false;
 				}

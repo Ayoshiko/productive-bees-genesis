@@ -188,6 +188,11 @@ class MekCentrifugeTickHandler {
 			}
 		}
 
+		// 在配方处理前释放上 tick 遗留流体，避免满罐使本 tick 的高并行批次提前暂停。
+		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
+			Ae2FluidPusher.pushFluids(tile);
+		}
+
 		// PB配方独立处理（不走Mekanism管线）
 		if (!skipPb) {
 			pbProcessor.setTickMultiplier(batchMultiplier);
@@ -210,8 +215,8 @@ class MekCentrifugeTickHandler {
 		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
 			Ae2InputPuller.pullInputs(tile, batchMultiplier);
 			Ae2OutputPusher.pushOutputs(tile);
-			// Task 13: 多槽推送 — 内部遍历 host.fluidOutputTankCount() 个槽
-			Ae2FluidPusher.pushFluids(tile);
+			// 配方执行期间写入本地罐的流体需要在同一真实 tick 内立即收尾排空。
+			Ae2FluidPusher.pushLocalTankContentsNow(tile);
 		}
 
 		return sendUpdatePacket;

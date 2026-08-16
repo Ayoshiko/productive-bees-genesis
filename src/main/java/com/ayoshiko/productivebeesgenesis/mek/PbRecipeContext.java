@@ -297,6 +297,14 @@ public interface PbRecipeContext {
 	}
 
 	/**
+	 * Called after local fluid reaches the high-water mark for the current output batch.
+	 * Implementations with an enabled AE2 fluid output may drain before the current
+	 * high-parallel batch attempts its next local commit. The default keeps non-AE hosts inert.
+	 */
+	default void productivebeesgenesis$onLocalFluidOutputCommitted() {
+	}
+
+	/**
 	 * 获取每tick操作次数（受速度升级影响）
 	 * <br/>
 	 * 对应 MekanismUtils.getOperationsPerTick(this, BASE_TICKS_REQUIRED, 1)，

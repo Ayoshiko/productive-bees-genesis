@@ -283,6 +283,13 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		return Ae2FluidPusher.simulateGeneratedFluid(this, stack, amount);
 	}
 
+	@Override
+	default void productivebeesgenesis$onLocalFluidOutputCommitted() {
+		if (!Ae2IntegrationLoader.isAe2Loaded()
+				|| productivebeesgenesis$isDirectAeOutputEnabled()) return;
+		Ae2FluidPusher.pushLocalTankContentsNow(this);
+	}
+
 	/**
 	 * 切换 per-tile AE2 物品输出开关（取反当前状态）
 	 * <br/>

@@ -272,6 +272,9 @@ public final class MekCentrifugeFactoryHelper {
 			@NotNull Consumer<Boolean> setActive,
 			@NotNull LongConsumer setLastUsage) {
 
+		if (context instanceof IAe2OutputHostBase ae2Host) {
+			CentrifugeFactoryCommonLogic.drainAe2FluidsBeforeProcessing(ae2Host);
+		}
 		// 入口刷新缓存 — 替代原 tryProcessPbRecipe 内部的每次调用刷新
 		pbProcessor.refreshFluidTankFullCacheForTick(context);
 		pbProcessor.refreshEnergyAndOpsCache(context);

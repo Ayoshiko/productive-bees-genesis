@@ -45,6 +45,10 @@ class Ae2InputPullerTest {
 		assertTrue(state.tryStartItemPush(101));
 		assertTrue(state.tryStartFluidPush(100));
 		assertFalse(state.tryStartFluidPush(100));
+		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
+		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
+		assertFalse(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
+		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(101, 2));
 	}
 
 
