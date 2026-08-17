@@ -25,7 +25,7 @@
 内部版本 `1.0.1` 与 CurseForge 正式版本 `1.0.1` 是同一次发布，使用同一个 JAR：
 
 ```text
-CurseForge 文件展示名: Productive Bees Genesis 1.0.1 (MC 1.21.1)
+CurseForge 文件展示名: productivebeesgenesis-1.0.1.jar (MC 1.21.1)
 上传文件: productivebeesgenesis-1.0.1.jar
 JAR 内部版本: 1.0.1
 CurseForge 版本: 1.0.1
