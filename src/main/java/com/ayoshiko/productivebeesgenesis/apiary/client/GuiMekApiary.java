@@ -233,7 +233,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		int beeRows = getBeeRows();
 		int beeRowH = getBeeRowH();
 		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY();
+		int beeY = ApiaryGuiLayoutHelper.getBeeY(beeRows);
 		int beeSlotCount = tile.getBeeSlotCount();
 		for (int i = 0; i < beeSlotCount; i++) {
 			int col = i % beeCols;
@@ -301,7 +301,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		int beeRowH = getBeeRowH();
 		boolean compactMode = beeRows >= ApiaryGuiLayoutHelper.COMPACT_MODE_THRESHOLD;
 		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY();
+		int beeY = ApiaryGuiLayoutHelper.getBeeY(beeRows);
 		float partialTick = mekanism.client.render.MekanismRenderer.getPartialTick();
 
 		// Bug 9：渲染选中槽位高亮边框（在蜜蜂下方渲染，避免遮挡蜜蜂模型）
@@ -386,7 +386,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		int beeCols = getBeeCols();
 		int beeRowH = getBeeRowH();
 		int beeX = leftPos + ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = topPos + ApiaryGuiLayoutHelper.getBeeY();
+		int beeY = topPos + ApiaryGuiLayoutHelper.getBeeY(getBeeRows());
 		int beeSlotCount = tile.getBeeSlotCount();
 		for (int i = 0; i < beeSlotCount; i++) {
 			int col = i % beeCols;
@@ -509,7 +509,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		int beeCols = getBeeCols();
 		int beeRowH = getBeeRowH();
 		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY();
+		int beeY = ApiaryGuiLayoutHelper.getBeeY(getBeeRows());
 
 		BeeSlot[] beeSlots = tile.getBeeSlots();
 		for (int i = 0; i < beeSlots.length; i++) {

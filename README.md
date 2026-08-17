@@ -1,6 +1,6 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -412,7 +412,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The release jar is `build/libs/productivebeesgenesis-1.0.0.jar`.
+The release jar is `build/libs/productivebeesgenesis-1.0.1.jar`.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 >

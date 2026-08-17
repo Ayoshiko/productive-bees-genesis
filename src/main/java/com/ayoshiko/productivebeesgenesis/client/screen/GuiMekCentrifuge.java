@@ -29,17 +29,17 @@ import org.jetbrains.annotations.NotNull;
 	 * <br/>
 	 * 继承Mekanism的GuiConfigurableTile，使用dynamicSlots=true自动渲染槽位背景。
 	 * <p>
-	 * 布局（imageWidth=176, imageHeight=178）：
-	 * - 流体输出槽(8,35) 位置通过FactoryLayoutHelper动态计算
+	 * 布局（imageWidth=176, imageHeight=184）：
+	 * - 流体输出槽(7,44) 位置通过FactoryLayoutHelper动态计算，底边与第三输出槽对齐
 	 * - 输入槽(64,17) 红色边框（dynamicSlots自动渲染）
 	 * - 能量槽(64,53) POWER样式（dynamicSlots自动渲染）
 	 * - 主输出槽(134,17) 蓝色边框（dynamicSlots自动渲染）
-	 * - 副输出槽1(134,35) 蓝色边框（dynamicSlots自动渲染）
-	 * - 副输出槽2(134,53) 蓝色边框（dynamicSlots自动渲染）
+	 * - 副输出槽1(134,37) 蓝色边框（dynamicSlots自动渲染）
+	 * - 副输出槽2(134,57) 蓝色边框（dynamicSlots自动渲染）
 	 * - 进度条(86,38) BAR类型
 	 * - 能量条(164,15) 垂直
 	 * <p>
-	 * imageHeight增加12以容纳流体槽（底部到83），背包标签下移到84。
+	 * imageHeight增加18以容纳三行输出槽、流体槽和底部标签间距；玩家物品栏从 y=100 开始。
 	 */
 public class GuiMekCentrifuge
 		extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
@@ -49,12 +49,12 @@ public class GuiMekCentrifuge
 	public GuiMekCentrifuge(MekanismTileContainer<TileEntityMekCentrifuge> container, Inventory inv, Component title) {
 		super(container, inv, title);
 		dynamicSlots = true;
-		// 流体槽底部到83，需要增加imageHeight以避免与背包标签重叠(+12)
-		// Tab 布局重排后 GuiEnergyTab 下移至 y=156，需要额外 +6 容纳底部 Tab(+6) → 总 +18(178→184)
+		// 流体槽与第三个输出槽底部对齐；保留额外底部空间容纳三行槽位和标签。
+		// Tab 布局重排后 GuiEnergyTab 下移至 y=156，需要额外 +6 容纳底部 Tab；总高度为184。
 		imageHeight += 18;
-		// 物品栏标题上移到物品栏格子之上（背包格子位于y=imageHeight-94=90，占y=90-108）
-		// 默认inventoryLabelY=imageHeight-94=90，需上移6到y=84
-		inventoryLabelY -= 6;
+		// Keep the label immediately above the inventory rows. The container
+		// places the first player row at y=100, leaving a compact bottom margin.
+		inventoryLabelY = 90;
 	}
 
 	@Override

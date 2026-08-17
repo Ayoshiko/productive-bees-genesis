@@ -159,11 +159,11 @@ config="${mod_id}.iris.mixins.json"
     side="CLIENT"
 
 # Just Dire Things Extras 可选依赖（提供 CoalescedAcceleratedMachine 合并加速接口）
-# 运行时经 MixinConfigPlugin 条件应用，未安装时跳过 3 个 JDTE Mixin
+# 0.5.5 及以上版本均可用；运行时经 MixinConfigPlugin 条件应用，未安装时跳过 JDTE Mixin
 [[dependencies.${mod_id}]]
     modId="jdte"
     type="optional"
-    versionRange="[0.5.9-alpha1,)"
+    versionRange="[0.5.5,)"
     ordering="AFTER"
     side="BOTH"
 

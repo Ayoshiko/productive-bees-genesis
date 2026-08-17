@@ -103,7 +103,7 @@ class MekCentrifugeSlotManager {
 	 * 构建物品槽位持有者 — 添加2个副输出槽
 	 * <br/>
 	 * 父类只有1个输出槽，PB离心配方最多3个物品输出。
-	 * 布局：3个输出槽竖排于x=134，y分别为17/35/53，间隔18。
+	 * 布局：3个输出槽竖排于x=134，y分别为17/37/57，槽位之间保留2px间距。
 	 * <p>
 	 * 性能优化：3个输出槽使用组合 listener，内容变更时同时触发
 	 * recipeCacheUnpauseListener 和 {@link #updateOutputSlotFlags}，
@@ -129,7 +129,8 @@ class MekCentrifugeSlotManager {
 		IContentsListener outputListener = createOutputListener();
 
 		// 主输出槽 — 竖排第1个（x=134, y=17）
-		OutputInventorySlot outputSlot = OutputInventorySlot.at(outputListener, 134, 17);
+		OutputInventorySlot outputSlot = OutputInventorySlot.at(outputListener,
+				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(0));
 		builder.addSlot(outputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));
@@ -137,12 +138,14 @@ class MekCentrifugeSlotManager {
 		// 副输出槽1/2 — 使用 TieredOutputInventorySlot 支持分等级堆叠倍率
 		// 倍率由 getStackMultiplierForTier 动态提供，基础版使用 basic 倍率
 		IntSupplier stackMultiplier = getStackMultiplierForTier();
-		// 副输出槽1 — 竖排第2个（x=134, y=35）
-		secondaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener, 134, 35);
+		// 副输出槽1 — 竖排第2个（x=134, y=37）
+		secondaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener,
+				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(1));
 		builder.addSlot(secondaryOutputSlot);
 
-		// 副输出槽2 — 竖排第3个（x=134, y=53）
-		tertiaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener, 134, 53);
+		// 副输出槽2 — 竖排第3个（x=134, y=57）
+		tertiaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener,
+				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(2));
 		builder.addSlot(tertiaryOutputSlot);
 
 		// 能量槽 — 与父类相同位置

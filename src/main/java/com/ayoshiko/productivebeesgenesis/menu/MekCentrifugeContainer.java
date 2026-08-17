@@ -6,6 +6,10 @@ import com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
+import mekanism.common.inventory.container.slot.ContainerSlotType;
+import mekanism.common.inventory.container.slot.InventoryContainerSlot;
+import mekanism.common.inventory.warning.WarningTracker.WarningType;
+import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 import mekanism.common.tile.base.TileEntityMekanism;
@@ -53,9 +57,25 @@ public class MekCentrifugeContainer<TILE extends TileEntityMekanism> extends Mek
 		super.addSlots();
 		if (tile instanceof TileEntityMekCentrifuge centrifuge) {
 			addPbUpgradeSlots(centrifuge.getPbUpgradeInputSlot(), centrifuge.getPbUpgradeOutputSlot());
+			// TieredOutputInventorySlot intentionally returns null from
+			// createContainerSlot() so it is not exposed once per physical page.
+			// The base centrifuge has no page selector, so expose the two fixed
+			// secondary outputs explicitly for the GUI and player interaction.
+			addFixedOutputSlot(centrifuge, centrifuge.getSecondaryOutputSlot(),
+				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(1));
+			addFixedOutputSlot(centrifuge, centrifuge.getTertiaryOutputSlot(),
+				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(2));
 		} else if (tile instanceof AbstractMekCentrifugeFactory factory) {
 			addPbUpgradeSlots(factory.getPbUpgradeInputSlot(), factory.getPbUpgradeOutputSlot());
 		}
+	}
+
+	private void addFixedOutputSlot(TileEntityMekCentrifuge centrifuge,
+			mekanism.common.inventory.slot.BasicInventorySlot outputSlot, int x, int y) {
+		addSlot(new InventoryContainerSlot(outputSlot, x, y, ContainerSlotType.OUTPUT, null,
+				warning -> warning.warning(WarningType.NO_SPACE_IN_OUTPUT,
+						centrifuge.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)),
+				ignored -> { }));
 	}
 
 	/** 创建并添加 PB 升级输入/输出虚拟槽 — 消除重复代码；含 null 守卫防止客户端构造时 NPE */
@@ -94,7 +114,10 @@ public class MekCentrifugeContainer<TILE extends TileEntityMekanism> extends Mek
 		if (tile instanceof TileEntityFactory<?>) {
 			return 135;
 		}
-		return super.getInventoryYOffset();
+		// The base centrifuge GUI reserves space for the fluid gauge and three
+		// output rows. Keep the player inventory below that content instead of
+		// using Mekanism's default y=84, which overlaps the gauge label.
+		return 100;
 	}
 
 	/**

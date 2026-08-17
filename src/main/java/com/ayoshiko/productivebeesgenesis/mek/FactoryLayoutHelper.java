@@ -47,8 +47,17 @@ public final class FactoryLayoutHelper {
 	/** 红石能量槽与物品栏的间距（像素） */
 	private static final int ENERGY_SLOT_GAP = 4;
 
-	/** 副输出槽2的Y坐标（最下面一排输出槽） */
+	/** 工厂版副输出槽2的Y坐标（最下面一排输出槽） */
 	private static final int TERTIARY_OUTPUT_Y = 97;
+	/** 基础离心机输出槽 X 坐标 */
+	private static final int CENTRIFUGE_OUTPUT_X = 134;
+	/** 基础离心机第一个输出槽 Y 坐标 */
+	private static final int CENTRIFUGE_OUTPUT_FIRST_Y = 17;
+	/** 基础离心机输出槽节距（18px 槽体 + 2px 间距） */
+	private static final int CENTRIFUGE_OUTPUT_PITCH = 20;
+	/** 基础离心机副输出槽2的Y坐标（最下面一排输出槽） */
+	private static final int CENTRIFUGE_TERTIARY_OUTPUT_Y =
+			CENTRIFUGE_OUTPUT_FIRST_Y + 2 * CENTRIFUGE_OUTPUT_PITCH;
 
 	/** GuiEnergyTab默认Y坐标（构造函数硬编码） */
 	private static final int ENERGY_TAB_DEFAULT_Y = 137;
@@ -178,10 +187,10 @@ public final class FactoryLayoutHelper {
 			// 流体槽Y = 189 - FLUID_TANK_HEIGHT(30) - 2(间隙) = 157
 			return INVENTORY_Y_OFFSET + 3 * SLOT_HEIGHT - FLUID_TANK_HEIGHT - 2;
 		}
-		// 原版4等级：流体槽下边框与第三排输出槽下边框对齐
+		// 原版4等级：流体槽视觉底边比第三排输出槽底边上移1px，补偿Gauge边框
 		// 第三排输出槽下边框 = TERTIARY_OUTPUT_Y + SLOT_HEIGHT = 97 + 18 = 115
-		// 流体槽Y = 115 - FLUID_TANK_HEIGHT(30) = 85
-		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT;
+		// 流体槽Y = 115 - FLUID_TANK_HEIGHT(30) - 1 = 84
+		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT - 1;
 	}
 
 	/**
@@ -260,20 +269,32 @@ public final class FactoryLayoutHelper {
 		return 7;
 	}
 
-	/** ME等级流体槽Y坐标 — 下边框与第三排输出槽下边框对齐 */
+	/** ME等级流体槽Y坐标 — 比第三排输出槽底边上移1px，补偿Gauge边框视觉偏差 */
 	public static int getFluidTankY(ExtraFactoryTier tier) {
-		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT;
+		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT - 1;
 	}
 
 	// ===== 非工厂版离心机（单进程） =====
 
 	/** 基础离心机流体槽X坐标 */
 	public static int getCentrifugeFluidTankX() {
-		return 8;
+		return 7;
+	}
+
+	/** 基础离心机输出槽 X 坐标。 */
+	public static int getCentrifugeOutputX() {
+		return CENTRIFUGE_OUTPUT_X;
+	}
+
+	/** 基础离心机输出槽 Y 坐标，槽位之间保留 2px 视觉间距。 */
+	public static int getCentrifugeOutputY(int index) {
+		return CENTRIFUGE_OUTPUT_FIRST_Y + Math.max(0, index) * CENTRIFUGE_OUTPUT_PITCH;
 	}
 
 	/** 基础离心机流体槽Y坐标 */
 	public static int getCentrifugeFluidTankY() {
-		return 35;
+		// The one-pixel visual correction compensates for the gauge's lower
+		// border so it lines up with the third output slot's border.
+		return CENTRIFUGE_TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT - 1;
 	}
 }

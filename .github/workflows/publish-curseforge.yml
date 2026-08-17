@@ -20,9 +20,9 @@ on:
           - beta
           - alpha
       changelog:
-        description: Changelog text to publish
+        description: Bilingual release body containing a ## English section
         required: true
-        default: Manual CurseForge upload.
+        default: "## English\nManual CurseForge upload."
         type: string
 
 permissions:
@@ -55,6 +55,23 @@ jobs:
       - name: Build release artifact
         run: ./gradlew build verifyReleaseArtifact --no-daemon
 
+      - name: Extract English changelog for CurseForge
+        id: curseforge_changelog
+        env:
+          RELEASE_BODY: ${{ github.event.release.body || github.event.inputs.changelog }}
+        shell: bash
+        run: |
+          english="$(printf '%s\n' "$RELEASE_BODY" | awk 'BEGIN {found=0} /^## English[[:space:]]*$/ {found=1; next} found {print}')"
+          if [ -z "$(printf '%s' "$english" | tr -d '[:space:]')" ]; then
+            echo "Release body must contain a non-empty ## English section." >&2
+            exit 1
+          fi
+          {
+            echo 'changelog<<EOF'
+            printf '%s\n' "$english"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish to CurseForge
         uses: Kira-NT/mc-publish@v3.3
         with:
@@ -67,7 +84,7 @@ jobs:
           name: Productive Bees Genesis ${{ github.event.release.tag_name || github.event.inputs.version }}
           version: ${{ github.event.release.tag_name || github.event.inputs.version }}
           version-type: ${{ github.event.inputs.version_type || 'release' }}
-          changelog: ${{ github.event.release.body || github.event.inputs.changelog }}
+          changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
 
           dependencies: |
             curseforge:223794(required)

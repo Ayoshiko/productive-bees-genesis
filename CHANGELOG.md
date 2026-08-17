@@ -29,6 +29,34 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.1] - 2026-08-18
+
+### 界面与布局
+
+- **蜂箱 GUI 对齐**：调整所有等级蜂箱的 GUI 背景尺寸、蜜蜂槽和蜂笼槽坐标；蜂笼按蜜蜂行数对称居中，并补偿 Mekanism 动态槽位绘制的一像素内缩。
+- **蜂箱空间优化**：重新排列工厂蜂箱的蜜蜂、蜂笼、能量条和输出区域，避免槽位重叠并为分页按钮和物品栏保留底部空间。
+- **离心机 GUI 对齐**：基础离心机恢复三个竖向输出槽并保留槽间距；流体槽、输出槽、能量槽和物品栏标签重新对齐，各工厂等级统一流体槽底边位置。
+
+### 修复与兼容性
+
+- **基础离心机输出槽**：将两个副输出槽加入实际容器槽，确保 GUI 显示、点击和配方输出都使用三个独立槽位。
+- **JDTE 可选依赖**：JDTE 继续保持软依赖；未安装时跳过相关 Mixin，最低支持版本调整为 `0.5.5`（`versionRange="[0.5.5,)"`），不会形成运行时硬依赖。
+- **构建验证**：发布产物继续通过 `verifyReleaseArtifact` 检查，JDTE 仅以 `compileOnly` 参与编译，不会打包进模组。
+
+### English
+
+#### GUI and layout
+
+- **Apiary GUI alignment**: adjusted every apiary tier's background size, bee slots, and cage slots; cage slots are centered symmetrically for each bee-row layout and compensate for Mekanism's one-pixel dynamic-slot rendering inset.
+- **Apiary spacing**: rearranged factory apiary bees, cages, energy bar, and output area to prevent overlap and leave room for paging controls and the player inventory.
+- **Centrifuge GUI alignment**: restored three vertically arranged output slots in the base centrifuge with visible spacing; aligned the fluid tank, output slots, energy slot, inventory label, and fluid-tank bottoms across factory tiers.
+
+#### Fixes and compatibility
+
+- **Base centrifuge outputs**: added the two secondary outputs to the real container slots so the GUI, interaction, and recipes use three independent output slots.
+- **Optional JDTE dependency**: JDTE remains optional. Related Mixins are skipped when JDTE is absent, and the minimum supported version is now `0.5.5` (`versionRange="[0.5.5,)"`); no runtime hard dependency is introduced.
+- **Release verification**: the artifact passes `verifyReleaseArtifact`; JDTE remains `compileOnly` and is not bundled into the mod.
+
 ## [1.0.0] - 2026-08-16
 
 ### 兼容性

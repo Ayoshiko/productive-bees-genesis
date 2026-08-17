@@ -64,8 +64,8 @@ public final class EMEFactoryLayoutHelper {
 		return 7;
 	}
 
-	/** EME等级流体槽Y坐标 — 下边框与第三排输出槽下边框对齐 */
+	/** EME等级流体槽Y坐标 — 比第三排输出槽底边上移1px，补偿Gauge边框视觉偏差 */
 	public static int getFluidTankY(EMExtraFactoryTier tier) {
-		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT;
+		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT - 1;
 	}
 }

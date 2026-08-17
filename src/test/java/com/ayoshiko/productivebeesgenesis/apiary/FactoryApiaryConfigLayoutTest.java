@@ -90,6 +90,28 @@ class FactoryApiaryConfigLayoutTest {
 		assertEquals(1, page[0]);
 	}
 
+	@ParameterizedTest(name = "{0} bee rows keep cage centered")
+	@MethodSource("beeRowLayouts")
+	void cageUsesTheBeeGridCenterWithoutManualAutoSlotDrift(String name, int beeRows) {
+		int beeY = ApiaryGuiLayoutHelper.getBeeY(beeRows);
+		int rowHeight = ApiaryGuiLayoutHelper.getBeeRowH(beeRows);
+		int cageY = ApiaryGuiLayoutHelper.getCageY(beeRows);
+
+		// The visible cage frame uses cageY - 1 because Mekanism's dynamic slot
+		// renderer applies a one-pixel inset. It must land at the center of the
+		// first/last bee frames for both odd and even row counts.
+		assertEquals(beeY * 2 + (beeRows - 1) * rowHeight,
+				(cageY - 1) * 2, name);
+	}
+
+	private static Stream<Arguments> beeRowLayouts() {
+		return Stream.of(
+				Arguments.of("basic", 1),
+				Arguments.of("advanced", 2),
+				Arguments.of("elite", 3),
+				Arguments.of("compact", 5));
+	}
+
 	@Test
 	void everyFactoryTierHasTwoPhysicalOutputPages() {
 		// FactoryTier loads Minecraft's StringRepresentable interface in its static

@@ -7,7 +7,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 	 * <p>
 	 * 布局结构（自上而下）：
 	 * <ul>
-	 *   <li>蜜蜂区（beeY=16）：蜂笼输入槽 | 蜜蜂居住槽 | 蜂笼输出槽，水平居中</li>
+	 *   <li>蜜蜂区（多行 beeY=16，单行 beeY=20）：蜂笼输入槽 | 蜜蜂居住槽 | 蜂笼输出槽，水平居中</li>
 	 *   <li>输出区（outputY=beeBottom+8）：3×3 输出槽矩阵，与蜜蜂区水平对齐</li>
 	 *   <li>玩家物品栏（inventoryY=outputBottom+8）：标准 9×3 + 快捷栏</li>
 	 * </ul>
@@ -15,7 +15,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 	 * 左侧固定区域：能量槽(7,13)、流体罐(7,35)。
 	 * 右侧固定区域：垂直电力条(imageWidth-12, 16)。
 	 * <p>
-	 * 初始版参数：3 蜜蜂(1行3列) / 9 输出(3行3列) / imageWidth=176 / imageHeight=203。
+	 * 初始版参数：3 蜜蜂(1行3列) / 9 输出(3行3列) / imageWidth=176 / 高度按布局动态计算。
 	 * <p>
 	 * MEK Tab 位置动态计算已抽取至 {@link ApiaryTabLayoutHelper}，本类仅保留委托方法。
 	 */
@@ -30,6 +30,21 @@ public final class ApiaryGuiLayoutHelper {
 
 	/** 槽位间距（2px） */
 	public static final int GAP = 2;
+
+	/** 蜂笼与最外侧蜜蜂槽之间的视觉间距。 */
+	private static final int BEE_CAGE_GAP = 3;
+
+	/** 单行蜂箱下移量，给上方蜂笼留出轻微的视觉高度差。 */
+	private static final int SINGLE_ROW_BEE_Y_OFFSET = 4;
+
+	/**
+	 * 蜂笼相对布局中心的额外偏移。
+	 *
+	 * <p>蜂笼是 Mekanism 的真实容器槽。其 {@code dynamicSlots} 绘制器会把
+	 * 槽框绘制在 {@code slot.y - 1}；自绘蜜蜂槽框使用原始坐标，因此这里补回
+	 * 1px，保证两类槽框的可见外边缘完全重合。</p>
+	 */
+	private static final int CAGE_Y_BIAS = 1;
 
 	/** 蜜蜂行总高=18槽+8名称+2间距（紧凑布局，4行节省4px） */
 	public static final int BEE_ROW_H = 28;
@@ -60,6 +75,9 @@ public final class ApiaryGuiLayoutHelper {
 	/** MEK 标准 GUI 宽度 */
 	public static final int BASE_WIDTH = 176;
 
+	/** 5列蜂箱在固定能量槽/电力条之间所需的最小宽度。 */
+	private static final int FIVE_BEE_COLUMN_WIDTH = 184;
+
 	/** 旧版 6 列输出工厂 GUI 宽度（保留兼容：176+34=210） */
 	public static final int ULTIMATE_FACTORY_WIDTH = 210;
 
@@ -86,6 +104,9 @@ public final class ApiaryGuiLayoutHelper {
 	/** 输出分页控件占用输出区下方的 6px 额外间距，最高等级仍保持在 270px 内。 */
 	private static final int OUTPUT_PAGE_CONTROL_GAP = 6;
 
+	/** 背景底部安全留白。分页按钮和快捷栏边框都需要绘制在 imageHeight 内。 */
+	private static final int BOTTOM_PADDING = 4;
+
 	/** 玩家物品栏宽度（9格×18=162，居中偏移=imageWidth/2-81） */
 	private static final int INVENTORY_WIDTH = 9 * SLOT;
 
@@ -100,7 +121,7 @@ public final class ApiaryGuiLayoutHelper {
 	 * 动态计算规则：
 	 * <ul>
 	 *   <li>初始版 (beeCols=3, outputCols=3)：返回 BASE_WIDTH (176)</li>
-	 *   <li>工厂版 Basic/Advanced/Elite (beeCols=5, outputCols=5)：返回 BASE_WIDTH (176)</li>
+	 *   <li>工厂版 Basic/Advanced/Elite (beeCols=5, outputCols=5)：返回 184，避免蜂笼与两侧固定槽重叠</li>
 	 *   <li>工厂版 Ultimate (beeCols=10, outputCols=10)：按内容区宽度动态计算</li>
 	 *   <li>扩展等级 (beeCols>5 或 outputCols>=7)：按 max(蜜蜂区总宽, 输出区宽) + ME_EME_WIDTH_OVERHEAD 动态计算</li>
 	 * </ul>
@@ -118,7 +139,7 @@ public final class ApiaryGuiLayoutHelper {
 		// 基础工厂（5列蜜蜂）
 		if (beeCols == FACTORY_BEE_COLS) {
 			if (outputCols <= 5) {
-				return BASE_WIDTH;
+				return FIVE_BEE_COLUMN_WIDTH;
 			}
 			if (outputCols == 6) {
 				return ULTIMATE_FACTORY_WIDTH;
@@ -166,10 +187,12 @@ public final class ApiaryGuiLayoutHelper {
 	 * @return GUI 高度
 	 */
 	public static int getImageHeight(int beeRows, int outputCols) {
-		int beeActualBottom = getBeeY() + getBeeH(beeRows);
+		int beeActualBottom = getBeeY(beeRows) + getBeeH(beeRows);
 		int outputBottom = getOutputY(beeActualBottom, beeRows) + getOutputH();
 		int inventoryY = getInventoryY(outputBottom);
-		return inventoryY + INVENTORY_AREA_HEIGHT;
+		// Keep a small border below the hotbar.  Without it the last row's 2px
+		// slot frame can be clipped after output paging controls are enabled.
+		return inventoryY + INVENTORY_AREA_HEIGHT + BOTTOM_PADDING;
 	}
 
 	// ===== 蜜蜂区坐标 =====
@@ -181,6 +204,11 @@ public final class ApiaryGuiLayoutHelper {
 	 */
 	public static int getBeeY() {
 		return POWER_Y;
+	}
+
+	/** 蜂箱蜜蜂区 Y 坐标；单行布局下移少量像素以突出蜂笼高度。 */
+	public static int getBeeY(int beeRows) {
+		return POWER_Y + (beeRows == 1 ? SINGLE_ROW_BEE_Y_OFFSET : 0);
 	}
 
 	/**
@@ -228,17 +256,16 @@ public final class ApiaryGuiLayoutHelper {
 	 * @return 蜜蜂区实际底部 Y
 	 */
 	public static int getBeeBottom(int beeRows) {
-		return getBeeY() + getBeeH(beeRows);
+		return getBeeY(beeRows) + getBeeH(beeRows);
 	}
 
 	/**
 	 * 蜜蜂区 X 坐标（居中算法 + 防重叠保护）
 	 * <br/>
-	 * 将 [蜂笼输入槽 + 蜜蜂区 + 蜂笼输出槽] 整体在内容区 [CONTENT_LEFT, powerBarX] 内水平居中。
+	 * 将 [蜂笼输入槽 + 蜜蜂区 + 蜂笼输出槽] 整体按 GUI 中心居中，
+	 * 再限制在内容区 [CONTENT_LEFT, powerBarX] 内，避免与两侧固定槽重叠。
 	 * <p>
-	 * 防重叠保护：当内容总宽度超过可用空间时（如 Basic/Advanced/Elite 工厂 5列蜜蜂+176宽GUI），
-	 * 居中算法会产生负偏移导致蜂笼输出槽与电力条重叠。此时将内容左移，
-	 * 确保蜂笼输出槽右边界恰好与电力条左边界对齐（cageOutRight == powerBarX）。
+	 * 工厂低等级通过 {@link #getImageWidth(int, int)} 预留额外宽度；宽等级仍使用边界夹紧。
 	 *
 	 * @param imageWidth GUI 宽度
 	 * @param beeCols    蜜蜂列数
@@ -247,15 +274,15 @@ public final class ApiaryGuiLayoutHelper {
 	public static int getBeeX(int imageWidth, int beeCols) {
 		int beeW = getBeeW(beeCols);
 		// 蜂笼输入槽 + 间距 + 蜜蜂区 + 间距 + 蜂笼输出槽
-		int totalW = SLOT + GAP + beeW + GAP + SLOT;
+		int totalW = SLOT + BEE_CAGE_GAP + beeW + BEE_CAGE_GAP + SLOT;
 		int midR = getPowerBarX(imageWidth);
-		int available = midR - CONTENT_LEFT;
-		int startX = CONTENT_LEFT + (available - totalW) / 2;
-		// 防止蜂笼输出槽与电力条重叠：内容超出可用空间时左对齐至电力条边界
-		if (startX + totalW > midR) {
-			startX = midR - totalW;
-		}
-		return startX + SLOT + GAP;
+		// Center the complete cage + bee assembly in the GUI first. This keeps
+		// the two cage slots visually symmetric for the standard 176px screen.
+		// Wide factory layouts are then clamped to the fixed energy/power bounds.
+		int idealStartX = (imageWidth - totalW) / 2;
+		int maxStartX = midR - totalW;
+		int startX = Math.max(CONTENT_LEFT, Math.min(idealStartX, maxStartX));
+		return startX + SLOT + BEE_CAGE_GAP;
 	}
 
 	// ===== 蜂笼槽坐标 =====
@@ -268,7 +295,7 @@ public final class ApiaryGuiLayoutHelper {
 	 * @return 蜂笼输入槽 X
 	 */
 	public static int getCageInX(int imageWidth, int beeCols) {
-		return getBeeX(imageWidth, beeCols) - SLOT - GAP;
+		return getBeeX(imageWidth, beeCols) - SLOT - BEE_CAGE_GAP;
 	}
 
 	/**
@@ -279,19 +306,21 @@ public final class ApiaryGuiLayoutHelper {
 	 * @return 蜂笼输出槽 X
 	 */
 	public static int getCageOutX(int imageWidth, int beeCols) {
-		return getBeeX(imageWidth, beeCols) + getBeeW(beeCols) + GAP;
+		return getBeeX(imageWidth, beeCols) + getBeeW(beeCols) + BEE_CAGE_GAP;
 	}
 
 	/**
-	 * 蜂笼槽 Y（垂直居中于蜜蜂区）
+	 * 蜂笼槽 Y（奇数行对齐中间蜜蜂槽，偶数行居中于中间两行之间）
 	 * <br/>
-	 * 公式：beeY + (beeH - SLOT) / 2
+	 * 公式：{@code beeY + (rows - 1) × rowHeight / 2}。
+	 * 这样 1/3/5 行时蜂笼与中间蜜蜂槽平行，2/4 行时位于两行正中。
 	 *
 	 * @param beeRows 蜜蜂行数
 	 * @return 蜂笼槽 Y
 	 */
 	public static int getCageY(int beeRows) {
-		return getBeeY() + (getBeeH(beeRows) - SLOT) / 2;
+		int rows = Math.max(1, beeRows);
+		return getBeeY(rows) + ((rows - 1) * getBeeRowH(rows)) / 2 + CAGE_Y_BIAS;
 	}
 
 	// ===== 输出区坐标 =====
