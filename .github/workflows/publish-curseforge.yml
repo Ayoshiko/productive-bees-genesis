@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version name to publish
+        description: Existing GitHub Release tag whose JAR should be mirrored
         required: true
-        default: manual-build
+        default: v1.0.1
         type: string
       version_type:
         description: CurseForge release type
@@ -40,20 +40,31 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: temurin
+      - name: Normalize release metadata
+        id: release_meta
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build release artifact
-        run: ./gradlew build verifyReleaseArtifact --no-daemon
+      - name: Download verified release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="productivebeesgenesis-${RELEASE_VERSION}.jar"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${artifact}"
+          mkdir -p build/libs
+          curl --fail --location --retry 3 \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/octet-stream' \
+            "$url" --output "build/libs/${artifact}"
+          test -s "build/libs/${artifact}"
 
       - name: Extract English changelog for CurseForge
         id: curseforge_changelog
@@ -81,8 +92,8 @@ jobs:
           files: |
             build/libs/!(*-@(dev|sources|javadoc)).jar
 
-          name: Productive Bees Genesis ${{ github.event.release.tag_name || github.event.inputs.version }}
-          version: ${{ github.event.release.tag_name || github.event.inputs.version }}
+          name: Productive Bees Genesis ${{ steps.release_meta.outputs.version }}
+          version: ${{ steps.release_meta.outputs.version }}
           version-type: ${{ github.event.inputs.version_type || 'release' }}
           changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
 

@@ -91,7 +91,7 @@ SHA-256: F4E6B4F25F2987FBEFE7F09C723BE15B99E53B7C2525972347AD3ADBC5988802
 1. 确认 `gradle.properties` 中 `mod_version=1.0.1`、`curseforge_release_version=1.0.1`。
 2. 将 `CHANGELOG.md` 的 `1.0.1` 章节作为 CurseForge `1.0.1` 更新日志基础；GitHub Release body 必须包含 `## English` 段落，工作流会将英文段落同步到 CurseForge。
 3. 运行 `./gradlew cleanTest test build verifyReleaseArtifact --rerun-tasks --no-daemon`。
-4. 确认 `build/libs/productivebeesgenesis-1.0.1.jar` 存在并记录 SHA-256。
+4. 确认 `build/libs/productivebeesgenesis-1.0.1.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
 5. `verifyReleaseArtifact` 必须确认 JAR 内含 NeoForge 元数据、图标、Manifest、MIT 许可证和第三方许可说明。
 6. 检查 `neoforge.mods.toml` 中版本 `1.0.1`、依赖范围、主页、问题反馈和 `logoFile`。
 7. 在干净的测试实例中至少完成客户端启动、服务器启动、蜂箱/离心机放置及 AE2 连接测试。
