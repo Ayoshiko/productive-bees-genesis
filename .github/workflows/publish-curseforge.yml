@@ -92,7 +92,8 @@ jobs:
           files: |
             build/libs/!(*-@(dev|sources|javadoc)).jar
 
-          name: Productive Bees Genesis ${{ steps.release_meta.outputs.version }}
+          # Match historical CurseForge entries: derive the version name from the JAR filename.
+          curseforge-name: ""
           version: ${{ steps.release_meta.outputs.version }}
           version-type: ${{ github.event.inputs.version_type || 'release' }}
           changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
