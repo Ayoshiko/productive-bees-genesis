@@ -1,0 +1,82 @@
+name: Publish to CurseForge
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name to publish
+        required: true
+        default: manual-build
+        type: string
+      version_type:
+        description: CurseForge release type
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - beta
+          - alpha
+      changelog:
+        description: Changelog text to publish
+        required: true
+        default: Manual CurseForge upload.
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build release artifact
+        run: ./gradlew build verifyReleaseArtifact --no-daemon
+
+      - name: Publish to CurseForge
+        uses: Kira-NT/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+
+          files: |
+            build/libs/!(*-@(dev|sources|javadoc)).jar
+
+          name: Productive Bees Genesis ${{ github.event.release.tag_name || github.event.inputs.version }}
+          version: ${{ github.event.release.tag_name || github.event.inputs.version }}
+          version-type: ${{ github.event.inputs.version_type || 'release' }}
+          changelog: ${{ github.event.release.body || github.event.inputs.changelog }}
+
+          dependencies: |
+            curseforge:223794(required)
+            curseforge:268560(required)
+            curseforge:574300(required)
+
+          loaders: |
+            neoforge
+          game-versions: |
+            1.21.1
+          java: |
+            21
