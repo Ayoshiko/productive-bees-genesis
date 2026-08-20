@@ -68,6 +68,8 @@ public final class CentrifugeConfigSection {
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	/** 允许提取 AE2 原生能量（仅 AppliedFlux 加载时注册；关闭后仅从 AppliedFlux FE 提取） */
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
@@ -213,8 +215,14 @@ public final class CentrifugeConfigSection {
 						.comment("AE 网络能量优先级（true=优先 AppliedFlux，false=优先 AE2 原生能量）")
 						.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.preferAppliedFluxOverAeEnergy")
 						.define("preferAppliedFluxOverAeEnergy", true);
+				mekCentrifugeAeNativeEnergyInputEnabled = builder
+						.comment("允许提取 AE2 原生能量（关闭后仅从 AppliedFlux 存储的 FE 提取，",
+								"避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电）", "默认开启")
+						.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeNativeEnergyInputEnabled")
+						.define("aeNativeEnergyInputEnabled", true);
 			} else {
 				mekCentrifugePreferAppliedFluxOverAeEnergy = null;
+				mekCentrifugeAeNativeEnergyInputEnabled = null;
 			}
 			mekCentrifugeAeInputEnabled = builder
 					.comment("启用 AE2 输入拉取（离心机主动从 ME 网络拉取输入物品）",
@@ -239,6 +247,7 @@ public final class CentrifugeConfigSection {
 			mekCentrifugeAeFluidOutputEnabled = null;
 			mekCentrifugeAeEnergyInputEnabled = null;
 			mekCentrifugePreferAppliedFluxOverAeEnergy = null;
+			mekCentrifugeAeNativeEnergyInputEnabled = null;
 			mekCentrifugeAeInputEnabled = null;
 			mekCentrifugeAeInputRatePerTick = null;
 			mekCentrifugeAeInputIntervalTicks = null;

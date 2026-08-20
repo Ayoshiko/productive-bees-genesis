@@ -29,6 +29,15 @@ public final class Ae2PushStateHolder {
 	private final Ae2PushBackoff bufferedItemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
 	/** 输入回送退避状态（Task 10：仅用于 Ae2InputPuller 回送失败） */
 	private final Ae2PushBackoff returnBackoff = new Ae2PushBackoff();
+	/**
+	 * 能量注入退避状态 — ME 网络无能量时跳过 SIMULATE 探测（每次均为完整网络遍历）。
+	 * <p>
+	 * 窗口特意短于其他退避（100ms→200ms 封顶，即 2→4 tick）：容器缓冲下限为
+	 * 2×单批需求（{@code MekCentrifugeEnergyScaling.bufferedCapacityForDemand}），
+	 * 退避窗口内容器足以撑住满速消耗，网络恢复后下一次探测立即补满，无能量饥饿。
+	 * 部分成功（injected &gt; 0）立即重置退避。
+	 */
+	private final Ae2PushBackoff energyBackoff = new Ae2PushBackoff(100_000_000L, 200_000_000L);
 
 	/** Per-AEItemKey input-pull failure backoff registry; Object keeps AE2 types out of this class. */
 	private volatile Object inputKeyBackoffRegistry;
@@ -81,6 +90,9 @@ public final class Ae2PushStateHolder {
 
 	/** 获取输入回送退避状态（Task 10） */
 	public Ae2PushBackoff getReturnBackoff() { return returnBackoff; }
+
+	/** 获取能量注入退避状态（ME 网络无能量时跳过探测） */
+	public Ae2PushBackoff getEnergyBackoff() { return energyBackoff; }
 
 	public Object getInputKeyBackoffRegistry() { return inputKeyBackoffRegistry; }
 	public void setInputKeyBackoffRegistry(Object registry) { this.inputKeyBackoffRegistry = registry; }

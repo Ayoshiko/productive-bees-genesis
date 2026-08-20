@@ -101,7 +101,15 @@ public final class Ae2InputFilter {
 	 * 非精确模式下，条目仅为 {@code beeType}，蜜脾和蜜脾块共享同一过滤条目。
 	 */
 	private volatile String[] slots = new String[DEFAULT_CAPACITY];
-	private volatile AEItemKey[] resolvedDirectKeys = new AEItemKey[DEFAULT_CAPACITY];
+	/**
+	 * 直连条目解析缓存（fingerprint → AEItemKey）— 懒创建
+	 * <br/>
+	 * <b>禁止字段初始化器创建</b>：{@code new AEItemKey[...]} 是构造器 &lt;init&gt; 的一部分，
+	 * anewarray 指令会立即解析组件类 AEItemKey — AE2 未安装时 new 本类即 NoClassDefFoundError
+	 * （Issue #8：GUI tracker 的 getFilterMode 同步在无 AE2 环境触发构造）。
+	 * 改为 null 起始 + {@link #ensureKeys()} 首次写入时创建；读取路径容忍 null。
+	 */
+	private volatile AEItemKey[] resolvedDirectKeys;
 	private volatile long[] directAmounts = new long[DEFAULT_CAPACITY];
 	/** Client-side network stock snapshot; this is never persisted or trusted for pulls. */
 	private volatile long[] directVisibleAmounts = new long[DEFAULT_CAPACITY];
@@ -113,6 +121,20 @@ public final class Ae2InputFilter {
 
 	/** 无标记时全量拉取的全局无限开关；仅在没有任何过滤条目时可切换 */
 	private volatile boolean unlimitedAllFallback = false;
+
+	/**
+	 * 懒创建 resolvedDirectKeys — 仅写入路径调用（GUI 配置/网络包/AE2 拉取解析，均处 AE2 环境）
+	 * <br/>
+	 * 调用方均为 synchronized 方法，无竞态；读取路径（getResolvedDirectKey 等）容忍 null 不经此方法。
+	 */
+	private AEItemKey[] ensureKeys() {
+		AEItemKey[] local = resolvedDirectKeys;
+		if (local == null) {
+			local = new AEItemKey[Math.max(DEFAULT_CAPACITY, slots.length)];
+			resolvedDirectKeys = local;
+		}
+		return local;
+	}
 
 	public FilterMode getFilterMode() {
 		return filterMode;
@@ -165,14 +187,14 @@ public final class Ae2InputFilter {
 		if (beeType == null || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
 		String entry = preciseMode ? Ae2FilterEntrySupport.formatEntry(beeType, isBlock) : beeType.toString();
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
 				directVisibleAmounts, directUnlimited,
 				index, entry, DEFAULT_DIRECT_AMOUNT));
 	}
 
 	/** Removes the entry at the given slot index (implementation moved to {@link Ae2InputFilterSlotOps#removeEntry}). */
 	public synchronized void removeEntryAt(int index) {
-		Ae2InputFilterSlotOps.StateArrays s = Ae2InputFilterSlotOps.removeEntry(slots, resolvedDirectKeys, directAmounts,
+		Ae2InputFilterSlotOps.StateArrays s = Ae2InputFilterSlotOps.removeEntry(slots, ensureKeys(), directAmounts,
 				directVisibleAmounts, directUnlimited, index);
 		if (s != null) {
 			publish(s);
@@ -189,7 +211,7 @@ public final class Ae2InputFilter {
 	 * {@link Ae2InputFilterSlotOps#clearAll}).
 	 */
 	public synchronized void clearEntries() {
-		publish(Ae2InputFilterSlotOps.clearAll(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts,
+		publish(Ae2InputFilterSlotOps.clearAll(slots, ensureKeys(), directAmounts, directVisibleAmounts,
 			directUnlimited));
 	}
 
@@ -207,7 +229,7 @@ public final class Ae2InputFilter {
 	public synchronized void ensureCapacity(int minCapacity) {
 		if (minCapacity > MAX_FILTER_SLOTS) return;
 		if (slots.length >= minCapacity) return;
-		publish(Ae2InputFilterSlotOps.grow(slots, resolvedDirectKeys, directAmounts, directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.grow(slots, ensureKeys(), directAmounts, directVisibleAmounts, directUnlimited,
 			minCapacity));
 	}
 
@@ -219,7 +241,7 @@ public final class Ae2InputFilter {
 		ensureCapacity(index + 1);
 		String entry = (rawEntry == null || rawEntry.isBlank()) ? null : rawEntry;
 		long amount = isDirectFingerprint(entry) ? DEFAULT_DIRECT_AMOUNT : 0L;
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
 				directVisibleAmounts, directUnlimited,
 				index, entry, amount));
 	}
@@ -244,7 +266,7 @@ public final class Ae2InputFilter {
 	public synchronized void setDirectEntryFingerprintAt(int index, String fingerprint) {
 		if (fingerprint == null || fingerprint.isBlank() || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
-		publish(Ae2InputFilterSlotOps.setEntry(slots, resolvedDirectKeys, directAmounts,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
 				directVisibleAmounts, directUnlimited,
 				index, DIRECT_ENTRY_PREFIX + fingerprint, DEFAULT_DIRECT_AMOUNT));
 	}
@@ -254,8 +276,9 @@ public final class Ae2InputFilter {
 	}
 
 	public synchronized void resolveDirectKey(int index, AEItemKey key) {
-		if (index < 0 || index >= resolvedDirectKeys.length || !isDirectEntry(index) || key == null) return;
-		resolvedDirectKeys = Ae2InputFilterSlotOps.setKey(resolvedDirectKeys, index, key);
+		AEItemKey[] keys = ensureKeys();
+		if (index < 0 || index >= keys.length || !isDirectEntry(index) || key == null) return;
+		resolvedDirectKeys = Ae2InputFilterSlotOps.setKey(keys, index, key);
 		invalidateDirectEntries();
 	}
 
@@ -520,8 +543,9 @@ public final class Ae2InputFilter {
 		preciseMode = result.preciseMode();
 		unlimitedAllFallback = result.unlimitedAllFallback();
 		if (result.entriesPresent()) {
-			// 一次性发布完整数组
-			resolvedDirectKeys = new AEItemKey[result.slots().length];
+			// 一次性发布完整数组；resolvedDirectKeys 重置为未解析（null），
+			// 避免 NBT 恢复路径触发 AEItemKey 数组创建（Issue #8 类加载安全）
+			resolvedDirectKeys = null;
 			directAmounts = result.directAmounts();
 			directVisibleAmounts = new long[result.slots().length];
 			directUnlimited = result.directUnlimited();

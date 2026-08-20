@@ -64,19 +64,26 @@ public final class MekUpgradeSupport {
 	/**
 	 * 获取蜂箱专用升级支持属性
 	 * <br/>
-	 * 蜂箱不支持STACK/CREATIVE升级（CREATIVE导致TPS严重降低，STACK产出倍率过高），
-	 * 仅支持原版SPEED/ENERGY/MUFFLING + MekanismEmpowered的输出机器升级（若加载）。
+	 * 蜂箱支持原版SPEED/ENERGY/MUFFLING + MEKExtras的CREATIVE升级（若加载）+
+	 * MekanismEmpowered的输出机器升级（若加载）。
 	 * <p>
-	 * 与{@link #forMachine()}的差异：无论MEKExtras是否加载，都不包含STACK/CREATIVE。
+	 * 与{@link #forMachine()}的差异：STACK升级始终排除（2^n次产出倍率对蜂箱产量体系过高）。
+	 * CREATIVE升级的历史TPS风险已被产出管线的20-tick批量聚合消除
+	 * （{@code BeeSlotTickProcessor}的BATCH_FLUSH_INTERVAL + FLUSH_ACCUMULATION_THRESHOLD），
+	 * 每 tick 产出仅累积计数，产出物品按批次合并插入。
 	 * 离心机仍使用{@link #forMachine()}保留STACK/CREATIVE支持。
 	 *
-	 * @return 包含SPEED/ENERGY/MUFFLING + 可选MekEmp输出升级的AttributeUpgradeSupport实例
+	 * @return 包含SPEED/ENERGY/MUFFLING + 可选CREATIVE/MekEmp输出升级的AttributeUpgradeSupport实例
 	 */
 	public static AttributeUpgradeSupport forApiary() {
-		List<Upgrade> base = new ArrayList<>(3);
+		List<Upgrade> base = new ArrayList<>(4);
 		base.add(Upgrade.SPEED);
 		base.add(Upgrade.ENERGY);
 		base.add(Upgrade.MUFFLING);
+		// MEKExtras CREATIVE 升级（若加载）— 通过包私有类间接添加，避免直接引用 ExtraUpgrade
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			MekExtraUpgradeSupport.collectCreativeUpgrade(base);
+		}
 		// 追加 MekanismEmpowered 输出机器升级（若加载）
 		if (MekCompatHooks.isMekanismEmpoweredLoaded()) {
 			return MekEmpUpgradeSupport.createItemOutputMachineUpgrades(base);

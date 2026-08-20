@@ -195,6 +195,14 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 		return pbUpgradeHandler.getStabilityBonus();
 	}
 
+	/**
+	 * 失效 PB 升级倍率缓存 — MEK SPEED/ENERGY 升级重算时由
+	 * {@link FactoryUpgradeStateHelper#recalculateUpgrades} 调用，使时间倍率立即反映变更
+	 */
+	public void invalidateMultiplierCache() {
+		pbUpgradeHandler.invalidateMultiplierCache();
+	}
+
 	// ===== 容器同步 =====
 
 	/**

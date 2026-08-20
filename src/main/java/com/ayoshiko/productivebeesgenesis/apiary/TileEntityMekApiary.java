@@ -3,6 +3,10 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
+import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.mek.EnergySyncThrottler;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
@@ -10,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
+import mekanism.api.Upgrade;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -30,6 +35,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -63,6 +69,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	protected BeeProduceProcessor produceProcessor;
 	protected ApiaryTickHandler tickHandler;
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
+	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2，蜂箱工厂继承复用） */
+	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);
 	/**
@@ -195,7 +203,49 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		ApiarySlotManager.invalidateCache();
 	}
 
+	/**
+	 * 重写recalculateUpgrades — 支持MEKExtras CREATIVE升级的无限电容量
+	 * <br/>
+	 * 复用离心机的 {@link MekCreativeEnergyHelper}（1:1复刻MEKExtras
+	 * MixinMachineEnergyContainer.mekanism_Extras$extraRecalculateUpgrades）：
+	 * <ul>
+	 *   <li>CREATIVE 安装：setMaxEnergy(Long.MAX_VALUE) 并回满能量</li>
+	 *   <li>CREATIVE 移除：恢复正常电容量（MekanismUtils.getMaxEnergy 公式）</li>
+	 *   <li>CREATIVE 已装时 SPEED/ENERGY 变动：恢复被 super 覆盖的无限容量</li>
+	 * </ul>
+	 * 能耗归零无需手动处理 — MEKExtras Mixin 在 MachineEnergyContainer.getEnergyPerTick
+	 * 层面自动返回 0（蜂箱能耗直接读该方法，见 BeeSlotTickProcessor）。
+	 * 同时失效升级缓存，使 hasCreativeUpgrade 等查询立即反映变更（不等待100-tick自动刷新）。
+	 */
+	@Override
+	public void recalculateUpgrades(Upgrade upgrade) {
+		super.recalculateUpgrades(upgrade);
+		// 不走缓存的直查 — 缓存尚未失效时读到的是安装前的旧值
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			MekCreativeEnergyHelper.recalculateCreativeEnergy(
+					accessor().productivebeesgenesis$getEnergyContainer(), upgrade,
+					MekUpgradeSupport.hasCreativeUpgrade(this));
+		}
+		upgradeHandler.invalidateUpgradeCache();
+	}
+
+	/**
+	 * 重写getInfo — GUI升级窗口显示CREATIVE的自定义信息
+	 * <br/>
+	 * MEK原版GuiUpgradeWindow渲染升级tooltip时调用tile.getInfo(upgrade)。
+	 * 委托 {@link MekUpgradeSupport#getUpgradeInfo}：CREATIVE 显示"效率: ∞ / 能耗: 0"，
+	 * 其他升级保持 MEK 原版效率显示（与离心机实现一致）。
+	 */
+	@NotNull
+	@Override
+	public List<Component> getInfo(@NotNull Upgrade upgrade) {
+		return MekUpgradeSupport.getUpgradeInfo(this, upgrade);
+	}
+
 	TileEntityElectricMachineAccessor accessor() { return (TileEntityElectricMachineAccessor) this; }
+
+	/** GUI 能量条同步节流器 — 供 ApiaryTickHandler 在 tick 末尾刷新快照 */
+	EnergySyncThrottler energySyncThrottler() { return energySyncThrottler; }
 	boolean callSuperOnUpdateServer() { return super.onUpdateServer(); }
 	void callSetActive(boolean active) { setActive(active); }
 	boolean callSuperCanFunction() { return super.canFunction(); }
@@ -262,16 +312,18 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** Prepares AE2 only after this invocation wins the real-tick gate. */
 	void prepareAe2ForTick() {
-		try { ae2HostAdapter.tryConnectNode(); } catch (Exception e) { logAe2(e, "tryConnectNode"); }
-		try { ae2HostAdapter.refreshAe2ConfigCache(); } catch (Exception e) { logAe2(e, "refreshAe2ConfigCache"); }
+		try { ae2HostAdapter.tryConnectNode(); } catch (Exception | LinkageError e) { logAe2(e, "tryConnectNode"); }
+		try { ae2HostAdapter.refreshAe2ConfigCache(); } catch (Exception | LinkageError e) { logAe2(e, "refreshAe2ConfigCache"); }
 	}
 
 	/** Runs apiary post-production routing once for the selected real game tick. */
 	private void productivebeesgenesis$runPostProductionAe2() {
-		try { directEjectHandler.tryDirectEject(); } catch (Exception e) { logAe2(e, "tryDirectEject"); }
-		try { ae2HostAdapter.pushOutputs(); } catch (Exception e) { logAe2(e, "pushOutputs"); }
+		// LinkageError 兜底：NoClassDefFoundError 属 Error 非 Exception，原 catch 拦不住类加载失败；
+		// 漏守卫路径降级为节流日志而非 tick 崩溃（Issue #8 防御深度）
+		try { directEjectHandler.tryDirectEject(); } catch (Exception | LinkageError e) { logAe2(e, "tryDirectEject"); }
+		try { ae2HostAdapter.pushOutputs(); } catch (Exception | LinkageError e) { logAe2(e, "pushOutputs"); }
 	}
-	private void logAe2(Exception e, String n) {
+	private void logAe2(Throwable e, String n) {
 		// NPE 防御:getLevel() 在方块实体卸载后可能返回 null(参考 MEK BlockEntity 源码),
 		// tryLog 失败时降级为直接日志输出,避免日志记录本身引发二次异常
 		Level level = getLevel();
@@ -285,6 +337,16 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** 标记直连弹出检测为脏 — 委托 ApiaryDirectEjectHandler.markEjectDirty()，下 tick 立即执行 */
 	void markDirectEjectDirty() {
 		directEjectHandler.markEjectDirty();
+	}
+
+	/**
+	 * 产出直连转移 — 产出阶段蜜脾快速通道（离心机优先 + 直连开启时跳过输出槽中转）
+	 * <br/>
+	 * 供 {@link BeeProduceProcessor#processBatchProduce} 在分发输出槽前调用，
+	 * 直接将可处理产物写入相邻离心机输入槽，返回未能转移的剩余列表。
+	 */
+	List<ItemStack> directTransferProducedToCentrifuges(List<ItemStack> stacks) {
+		return directEjectHandler.transferProducedStacks(stacks);
 	}
 
 	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */
@@ -332,22 +394,66 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void setCentrifugePriorityEnabled(boolean enabled) {
 		if (centrifugePriorityEnabled == enabled) return;
 		centrifugePriorityEnabled = enabled;
-		directEjectHandler.markEjectDirty();
+		// 开关切换影响 hold 判定与 AE2 推送过滤，立即失效拓扑掩码缓存并解除直连退避
+		directEjectHandler.onRoutingConfigChanged();
 		setChanged();
 	}
 	public void toggleCentrifugePriority() {
 		setCentrifugePriorityEnabled(!centrifugePriorityEnabled);
 	}
 
-	boolean shouldPreferCentrifuge(ItemStack stack) {
-		return centrifugePriorityEnabled && directEjectEnabled
-				&& directEjectHandler.canAnyTargetProcess(stack);
+	/**
+	 * 离心机优先判定：该产物是否应保留给相邻离心机处理（不推 AE2）。
+	 * <br/>
+	 * 与直连开关解耦 — 关闭直连时蜜脾仍不回 AE，等待 Ejector/管道/玩家收取；
+	 * 判定结果由 {@link ApiaryDirectEjectHandler} 的跨 tick 掩码缓存加速
+	 * （拓扑/配方变化时失效）。
+	 */
+	boolean shouldHoldForCentrifuge(ItemStack stack) {
+		return centrifugePriorityEnabled && directEjectHandler.canAnyTargetProcess(stack);
+	}
+
+	/** AE2 推送路径的蜜脾保持判定 — 供 {@code Ae2OutputPusher} 过滤输出槽蜜脾（OCP 接口扩展） */
+	@Override
+	public boolean productivebeesgenesis$shouldHoldForCentrifuge(ItemStack stack) {
+		return shouldHoldForCentrifuge(stack);
+	}
+
+	/**
+	 * 产物剩余入缓冲区（离心机优先协调入口）
+	 * <br/>
+	 * hold 物品（蜜脾）缓冲区满时不淘汰 — 超出输出上限的溢出部分推送 AE2；
+	 * AE 也拒收时回退普通 offer（FIFO 淘汰兜底，物品守恒不丢失）。
+	 * <br/>
+	 * 溢出保底受 AE 输出总开关（isAeItemOutputEnabled，经 prepareDirectItemPush 检查）控制：
+	 * 即使"直输 AE"子开关关闭，极端溢出场景下蜜脾仍会经本保底进入 AE（优于 FIFO 淘汰丢弃）。
+	 *
+	 * @param leftovers distributeToOutput 未成功插入输出槽的剩余产物
+	 */
+	void offerLeftoversWithCentrifugeHold(List<ItemStack> leftovers) {
+		if (leftovers == null || leftovers.isEmpty()) return;
+		List<ItemStack> overflow = outputBuffer.offerHolding(leftovers, this::shouldHoldForCentrifuge);
+		if (overflow == null || overflow.isEmpty()) return;
+		for (int i = 0; i < overflow.size(); i++) {
+			ItemStack stack = overflow.get(i);
+			int accepted = pushGeneratedItemToAe(stack);
+			if (accepted < stack.getCount()) {
+				ItemStack remaining = stack.copy();
+				remaining.shrink(Math.max(0, accepted));
+				outputBuffer.offer(remaining);
+			}
+		}
 	}
 
 	/** 容器数据同步 — 蜜蜂状态 + PB升级数量 + 安装计数器 + 选中槽位 */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
+		int trackersBeforeSuper = EnergySyncThrottler.trackedCount(container);
 		super.addContainerTrackers(container);
+		// 能量条节流：在 super 新增区段内按值语义识别并替换 storedEnergy tracker
+		// （必须先于 slotManager/ApiaryContainerTrackers 注册，保证区段内只有 super 注册项）
+		EnergySyncThrottler.installTracker(container, energySyncThrottler,
+				accessor().productivebeesgenesis$getEnergyContainer(), trackersBeforeSuper);
 		slotManager.addContainerTrackers(container);
 		ApiaryContainerTrackers.addTrackers(this, container);
 	}
@@ -581,6 +687,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	) {
 		return ae2HostAdapter.getPreferAppliedFluxOverAeEnergy();
 	}
+	@Override public boolean productivebeesgenesis$isAeNativeEnergyInputEnabled() {
+		return ae2HostAdapter.isAeNativeEnergyInputEnabled();
+	}
 	@Override public boolean productivebeesgenesis$isAeItemOutputEnabled(
 	) {
 		return ae2HostAdapter.isAeItemOutputEnabled();
@@ -617,7 +726,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override public MachineEnergyContainer<?> energyContainer() {
 		return ae2HostAdapter.getPbRecipeAdapter().energyContainer();
 	}
-	@Override public boolean hasCreativeUpgrade() { return false; }
+	@Override public boolean hasCreativeUpgrade() { return upgradeHandler.hasCreativeUpgrade(); }
 
 	@Override public int processes() { return ae2HostAdapter.getPbRecipeAdapter().processes(); }
 	@Override public IInventorySlot inputSlot(int process) {

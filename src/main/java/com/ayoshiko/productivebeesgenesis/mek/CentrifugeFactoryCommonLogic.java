@@ -262,9 +262,12 @@ public final class CentrifugeFactoryCommonLogic {
 		pbUpgradeDelegate.addContainerTrackers(container);
 		addAe2StateTrackers(container, ae2StateHolder);
 		// per-tile AE2 输入过滤模式同步（ordinal：0=DISABLED, 1=WHITELIST, 2=BLACKLIST）
-		container.track(SyncableInt.create(
-				() -> ae2StateHolder.getOrCreateInputFilter().getFilterMode().ordinal(),
-				v -> ae2StateHolder.getOrCreateInputFilter().setFilterMode(Ae2InputFilter.FilterMode.values()[v])));
+		// AE2 未安装时不注册：GUI 打开时 initMenu→broadcastChanges 会立即执行 getter（Issue #8）
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			container.track(SyncableInt.create(
+					() -> ae2StateHolder.getOrCreateInputFilter().getFilterMode().ordinal(),
+					v -> ae2StateHolder.getOrCreateInputFilter().setFilterMode(Ae2InputFilter.FilterMode.values()[v])));
+		}
 	}
 
 	/** 添加 AE2 per-tile 状态追踪器（输出/输入开关 + NBT 忽略开关） */
@@ -343,13 +346,14 @@ public final class CentrifugeFactoryCommonLogic {
 
 	/** onUpdateServer 后处理 — 推送输出到 AE2 网络并拉取输入（AE2 未加载时短路） */
 	public static void pushAe2OutputsAndPullInputs(@NotNull IAe2OutputHostBase factory, int batchMultiplier) {
+		// AE2 未加载时整体短路：pushOutputs/pushLocalTankContentsNow 会触发 pusher 类加载，
+		// 原守卫位置在两者之后无法拦截（Issue #8 同类问题）
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputPusher.pushOutputs(factory);
 		// 收尾排空本 batch 写入本地罐的流体；直接产出模式仍保持正常批处理。
 		Ae2FluidPusher.pushLocalTankContentsNow(factory);
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			if (factory instanceof IAe2InputHost inputHost) {
-				Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
-			}
+		if (factory instanceof IAe2InputHost inputHost) {
+			Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
 		}
 	}
 

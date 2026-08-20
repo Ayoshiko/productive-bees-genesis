@@ -6,40 +6,40 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
-	 * 蜂箱升级倍率缓存
-	 * <br/>
-	 * 缓存 {@link ApiaryUpgradeHandler} 的 6 个高频查询结果（时间倍率、能耗倍率、生产力倍率、
-	 * 蜜脾块升级标志、基因采样器升级标志、基因采样器数量），避免每 tick 重复调用
-	 * {@code Math.pow} 与 EnumMap 查询。
-	 * <p>
-	 * 缓存刷新策略（参考 {@code PbRecipeProcessor} 的 100-tick 配置缓存模式）：
-	 * <ul>
-	 *   <li>每 {@value #REFRESH_INTERVAL} 次调用自动刷新一次，对齐
-	 *       {@code BeeSlotTickProcessor.configCache} 周期</li>
-	 *   <li>使用 volatile 字段 + simple if check 守卫，防止多线程重复刷新</li>
-	 *   <li>升级组件变更时调用 {@link #invalidate()} 强制下次访问触发刷新</li>
-	 * </ul>
-	 * <p>
-	 * <b>JDTE 适配</b>：刷新基于内部计数器 {@link #internalCounter} 而非 {@code level.getGameTime()}。
-	 * JDTE（Just Do The Enhancement）等 tick 加速模组通过多次调用 {@code BlockEntityTicker.tick()}
-	 * 实现加速，{@code getGameTime()} 在这些加速 tick 中保持不变，会导致 100-tick 缓存守卫失效。
-	 * 改用每次 {@link #refreshIfNeeded()} 调用递增的内部计数器，正确反映实际 tick 调用次数。
-	 * <p>
-	 * <b>递归防护</b>：刷新逻辑调用 handler 的 package-private {@code compute*} 方法
-	 * （非公共 getter），因为公共 getter 已委托到本缓存，调用公共 getter 会形成
-	 * handler.getXxx → cache.getXxx → refreshIfNeeded → handler.getXxx 的无限递归。
-	 * <p>
-	 * 异常处理：刷新过程中若 handler compute* 方法抛出异常，标记 {@link #refreshFailed}，
-	 * 后续 getter 退化为直接调用 handler compute* 方法（不缓存），并通过 {@link LogThrottle}
-	 * 节流记录警告日志，避免高频异常刷屏。
-	 * <p>
-	 * <b>线程安全</b>：缓存值字段为 volatile（单字段读写原子，保证可见性）；
-	 * 计数器与时间戳字段使用 {@link AtomicLong}，并通过 {@code synchronized(this)} 守卫
-	 * check-refresh-update 临界区，避免 check-then-act 竞态导致重复刷新或刷新丢失。
-	 * 服务端单线程 tick 场景下作为可见性保证与安全冗余。
-	 *
-	 * @since 1.0.0
-	 */
+ * 蜂箱升级倍率缓存
+ * <br/>
+ * 缓存 {@link ApiaryUpgradeHandler} 的 7 个高频查询结果（时间倍率、能耗倍率、生产力倍率、
+ * 蜜脾块升级标志、基因采样器升级标志、基因采样器数量、CREATIVE升级标志），避免每 tick 重复调用
+ * {@code Math.pow} 与 EnumMap 查询。
+ * <p>
+ * 缓存刷新策略（参考 {@code PbRecipeProcessor} 的 100-tick 配置缓存模式）：
+ * <ul>
+ *   <li>每 {@value #REFRESH_INTERVAL} 次调用自动刷新一次，对齐
+ *       {@code BeeSlotTickProcessor.configCache} 周期</li>
+ *   <li>使用 volatile 字段 + simple if check 守卫，防止多线程重复刷新</li>
+ *   <li>升级组件变更时调用 {@link #invalidate()} 强制下次访问触发刷新</li>
+ * </ul>
+ * <p>
+ * <b>JDTE 适配</b>：刷新基于内部计数器 {@link #internalCounter} 而非 {@code level.getGameTime()}。
+ * JDTE（Just Do The Enhancement）等 tick 加速模组通过多次调用 {@code BlockEntityTicker.tick()}
+ * 实现加速，{@code getGameTime()} 在这些加速 tick 中保持不变，会导致 100-tick 缓存守卫失效。
+ * 改用每次 {@link #refreshIfNeeded()} 调用递增的内部计数器，正确反映实际 tick 调用次数。
+ * <p>
+ * <b>递归防护</b>：刷新逻辑调用 handler 的 package-private {@code compute*} 方法
+ * （非公共 getter），因为公共 getter 已委托到本缓存，调用公共 getter 会形成
+ * handler.getXxx → cache.getXxx → refreshIfNeeded → handler.getXxx 的无限递归。
+ * <p>
+ * 异常处理：刷新过程中若 handler compute* 方法抛出异常，标记 {@link #refreshFailed}，
+ * 后续 getter 退化为直接调用 handler compute* 方法（不缓存），并通过 {@link LogThrottle}
+ * 节流记录警告日志，避免高频异常刷屏。
+ * <p>
+ * <b>线程安全</b>：缓存值字段为 volatile（单字段读写原子，保证可见性）；
+ * 计数器与时间戳字段使用 {@link AtomicLong}，并通过 {@code synchronized(this)} 守卫
+ * check-refresh-update 临界区，避免 check-then-act 竞态导致重复刷新或刷新丢失。
+ * 服务端单线程 tick 场景下作为可见性保证与安全冗余。
+ *
+ * @since 1.0.0
+ */
 public class ApiaryUpgradeCache {
 
 	/** 缓存刷新间隔（调用次数） — 对齐 BeeSlotTickProcessor.configCache 周期 */
@@ -68,6 +68,9 @@ public class ApiaryUpgradeCache {
 
 	/** 缓存的基因采样器安装数量（默认 0 = 未安装） */
 	private volatile int cachedGeneSamplerCount = 0;
+
+	/** 缓存的MEKExtras CREATIVE升级标志（默认 false = 未安装） — 每 tick 每蜜蜂查询，必须走缓存 */
+	private volatile boolean cachedHasCreativeUpgrade = false;
 
 	/** 内部调用计数器 — JDTE 适配，不依赖 level.getGameTime()；AtomicLong 保证自增原子 */
 	private final AtomicLong internalCounter = new AtomicLong(0L);
@@ -117,11 +120,11 @@ public class ApiaryUpgradeCache {
 	}
 
 	/**
-	 * 内部刷新实现 — 调用 handler 的 package-private compute* 方法计算 6 个缓存字段
+	 * 内部刷新实现 — 调用 handler 的 package-private compute* 方法计算 7 个缓存字段
 	 * <br/>
 	 * 注意：必须调用 {@code compute*} 方法而非公共 getter，否则会形成
 	 * handler.getXxx → cache.getXxx → refreshIfNeeded → handler.getXxx 的无限递归。
-	 * 6 个值先全部计算成功后再提交到缓存字段，避免部分刷新导致缓存不一致。
+	 * 7 个值先全部计算成功后再提交到缓存字段，避免部分刷新导致缓存不一致。
 	 * 任一异常标记 {@link #refreshFailed}，getter 将退化为直接调用 handler compute* 方法。
 	 */
 	private void doRefresh() {
@@ -132,13 +135,15 @@ public class ApiaryUpgradeCache {
 			boolean hasCombBlock = handler.computeHasCombBlockUpgrade();
 			boolean hasGeneSampler = handler.computeHasGeneSamplerUpgrade();
 			int geneSamplerCount = handler.computeGeneSamplerCount();
-			// 6 个值全部计算成功，提交到缓存
+			boolean hasCreativeUpgrade = handler.computeHasCreativeUpgrade();
+			// 7 个值全部计算成功，提交到缓存
 			cachedTimeMultiplier = timeMultiplier;
 			cachedEnergyMultiplier = energyMultiplier;
 			cachedProductivityMultiplier = productivityMultiplier;
 			cachedHasCombBlock = hasCombBlock;
 			cachedHasGeneSampler = hasGeneSampler;
 			cachedGeneSamplerCount = geneSamplerCount;
+			cachedHasCreativeUpgrade = hasCreativeUpgrade;
 			refreshFailed = false;
 		} catch (Exception e) {
 			refreshFailed = true;
@@ -245,6 +250,25 @@ public class ApiaryUpgradeCache {
 			return handler.computeGeneSamplerCount();
 		}
 		return cachedGeneSamplerCount;
+	}
+
+	/**
+	 * 是否安装了MEKExtras CREATIVE升级
+	 * <br/>
+	 * 首次访问或距上次刷新 ≥ {@value #REFRESH_INTERVAL} 次调用时自动触发刷新。
+	 * 刷新失败时退化为直接调用 {@link ApiaryUpgradeHandler#computeHasCreativeUpgrade()}（不走缓存）。
+	 * <p>
+	 * 调用方为 {@code ApiaryProgressAdvancer.advance}（每 tick 每蜜蜂一次），
+	 * 必须走缓存避免高频 EnumMap 查询。
+	 *
+	 * @return true 如果已安装 CREATIVE 升级
+	 */
+	public boolean hasCreativeUpgrade() {
+		refreshIfNeeded();
+		if (refreshFailed) {
+			return handler.computeHasCreativeUpgrade();
+		}
+		return cachedHasCreativeUpgrade;
 	}
 
 	/**

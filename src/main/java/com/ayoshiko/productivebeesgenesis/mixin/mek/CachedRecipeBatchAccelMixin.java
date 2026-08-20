@@ -120,8 +120,15 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 
 	/**
 	 * 批量激活且已有可用操作数时，在预算内循环快速推进：
-	 * 每 tick 仅做 useEnergy + operatingTicks++ + 周期完成判定（字段级成本），
+	 * 每 tick 仅做 operatingTicks++ + 周期完成判定（字段级成本），
 	 * 跳过完整的 calculateOperationsThisTick；周期完成点退出并标记需要重算。
+	 * <p>
+	 * v1.0.2 能量批量扣除：原实现每虚拟 tick 调一次 {@code useEnergy(ops)}
+	 * （每次触发容器 extract → onContentsChanged → setChanged → markChunkDirty），
+	 * 1024 倍加速下每 gameTick 执行 1024 次容器写与 chunk 标脏。现改为循环前一次
+	 * 计算能量预算（可支撑的虚拟 tick 数），循环后一次 {@code useEnergy.accept}
+	 * 扣除总额（{@code perTick × ops × ran}，与 Mekanism {@code useEnergy(int)}
+	 * 的内部公式逐 tick 累加结果完全等价），将容器写次数从 N 次降为 1 次。
 	 */
 	@Inject(method = "process", at = @At("HEAD"), cancellable = true, require = 0)
 	private void productivebeesgenesis$onProcessHead(CallbackInfo ci) {
@@ -144,19 +151,25 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		}
 		long energyPerTick = perTickEnergy.getAsLong();
 		int ticksRequired = requiredTicks.getAsInt();
-		// 快速推进期间 active 保持 true，只在进入时设置一次（Mekanism setActive 内部有状态比较）
-		setActive.accept(true);
-		while (ticksLeft > 0) {
-			// 与原版 capAtMaxForEnergy 对齐：能量不足以支撑当前操作数（ops × perTick）时终止批量，
-			// 本次调用不取消、直接走原版逻辑（原版会 cap 降 ops 继续或标记 NOT_ENOUGH_ENERGY，
-			// 错误状态与 setActive 由原版维护，语义与逐 tick 完全一致，0 延迟）
-			if (energyPerTick > 0L && storedEnergy.getAsLong() / energyPerTick < ops) {
+		// 能量预算：storedEnergy 可支撑的虚拟 tick 数（与原版 capAtMaxForEnergy 语义一致）
+		int ticksToRun = ticksLeft;
+		if (energyPerTick > 0L) {
+			long stored = storedEnergy.getAsLong();
+			long perVirtualTick = energyPerTick * (long) ops;
+			ticksToRun = (int) Math.min(ticksLeft, stored / perVirtualTick);
+			if (ticksToRun <= 0) {
+				// 能量不足以支撑当前操作数：终止批量，交给原版逻辑
+				// （原版会 cap 降 ops 继续或标记 NOT_ENOUGH_ENERGY，语义与逐 tick 一致）
 				productivebeesgenesis$batchTicksLeft = 0;
 				productivebeesgenesis$batchFastOps = 0;
 				return;
 			}
-			ticksLeft--;
-			useEnergy(ops);
+		}
+		// 快速推进期间 active 保持 true，只在进入时设置一次（Mekanism setActive 内部有状态比较）
+		setActive.accept(true);
+		int ran = 0;
+		while (ran < ticksToRun) {
+			ran++;
 			operatingTicks++;
 			if (operatingTicks >= ticksRequired) {
 				operatingTicks = 0;
@@ -175,7 +188,15 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 				operatingTicksChanged.accept(operatingTicks);
 			}
 		}
-		productivebeesgenesis$batchTicksLeft = ticksLeft;
+		// 批量能量一次性扣除（等价于逐虚拟 tick useEnergy(ops) 的累加总额）
+		if (energyPerTick > 0L && ran > 0) {
+			useEnergy.accept(energyPerTick * (long) ops * ran);
+		}
+		// 剩余预算处理（区分退出原因）：
+		// - 能量预算耗尽（ticksToRun < ticksLeft）：终止批量，下个虚拟 tick 走原版完整重算，
+		//   由原版 cap 降 ops 或标记 NOT_ENOUGH_ENERGY（对齐原实现能量不足即终止的语义）
+		// - 能量充足但周期完成 break：保留剩余批量（原实现语义），下次调用完整重算后继续快速推进
+		productivebeesgenesis$batchTicksLeft = ticksToRun < ticksLeft ? 0 : ticksLeft - ran;
 		ci.cancel();
 	}
 

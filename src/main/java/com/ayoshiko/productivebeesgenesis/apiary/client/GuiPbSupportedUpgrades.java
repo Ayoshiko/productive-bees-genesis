@@ -183,12 +183,12 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 				Component upgradeName = Component.translatable(upgrade.getNameKey()).withColor(upgrade.getColor());
 				List<Component> info;
 				if (supportedTypes.contains(upgrade)) {
-					info = List.of(upgradeName, Component.translatable(upgrade.getDescriptionKey()));
+					info = List.of(upgradeName, PbUpgradeTooltipHelper.descriptionComponent(upgrade));
 				} else {
 					info = List.of(
 							Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.not_supported",
 									upgradeName).withColor(0xFFFF0000),
-							Component.translatable(upgrade.getDescriptionKey())
+							PbUpgradeTooltipHelper.descriptionComponent(upgrade)
 					);
 				}
 				if (!info.equals(lastInfo)) {

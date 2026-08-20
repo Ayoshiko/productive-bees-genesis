@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 	 * @param tickMultiplier 本 tick 批量倍率
 	 * @param currentTick 当前游戏刻（调试日志采样用）
 	 * @param timeMultiplier 时间倍率（加速 < 1.0 / 减速 > 1.0）
+	 * @param hasCreativeUpgrade 是否安装 MEKExtras CREATIVE 升级（循环外读取一次，Spark 优化：
+	 *                           原每 tick 每蜜蜂查询一次，创造模式下 49 槽工厂每秒 980 次冗余缓存刷新计数）
 	 * @param beeEnergyCost 单只蜜蜂每 tick 能耗
 	 * @param stackProductionCount STACK 升级产出次数倍率
 	 * @param cachedProcessingTime 配置缓存的基础处理时间（tick）
@@ -25,15 +27,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 	 * @param pendingProductions 待产出次数数组（按槽位索引）
 	 * @param accumulatedProgress 累积产出计数器
 	 * @return 本槽位本 tick 应累积的能耗（由调用方加入 pendingEnergyCost）
-	 */
+ */
 final class ApiaryProgressAdvancer {
 
 	private ApiaryProgressAdvancer() {
 	}
 
 	static long advance(BeeSlot slot, int slotIndex, int tickMultiplier, long currentTick,
-			float timeMultiplier, long beeEnergyCost, int stackProductionCount, int cachedProcessingTime,
-			ApiaryUpgradeHandler upgradeHandler, int[] pendingProductions, AtomicInteger accumulatedProgress) {
+			float timeMultiplier, boolean hasCreativeUpgrade, long beeEnergyCost, int stackProductionCount,
+			int cachedProcessingTime, ApiaryUpgradeHandler upgradeHandler, int[] pendingProductions,
+			AtomicInteger accumulatedProgress) {
 
 		long acceleratedEnergyCost = ApiaryEnergyMath.calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
 
@@ -50,7 +53,7 @@ final class ApiaryProgressAdvancer {
 		// 应用时间倍率（< 1.0 加速，> 1.0 减速）
 		// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
 		float safeTimeMultiplier = SaturatingMath.positiveFiniteFloat(timeMultiplier, 1.0f);
-		int adjustedMinTicks = upgradeHandler.hasCreativeUpgrade() ? 1
+		int adjustedMinTicks = hasCreativeUpgrade ? 1
 				: Math.max(1, SaturatingMath.saturatingRoundToInt((double) baseMinTicks * safeTimeMultiplier));
 		// 模块1：蜂箱速度调试日志 — 每 100 tick 采样一次，仅在 dev 模式开启时输出
 		// 外层 isEnabled() 守卫避免 dev 关闭时调用 DevLog.debug 的方法调用开销

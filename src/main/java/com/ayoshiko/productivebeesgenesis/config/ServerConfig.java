@@ -161,6 +161,8 @@ public final class ServerConfig {
 	// v2.0.0: AE 网络能量输入集成 — AE2/AppliedFlux 未加载时为 null(条件化注册)
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	// 允许提取 AE2 原生能量 — AppliedFlux 未加载时为 null(条件化注册)
+	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
 	// AE2 输入拉取集成 — AE2 未加载时为 null(条件化注册)
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
@@ -209,6 +211,8 @@ public final class ServerConfig {
 	public final ModConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
 	// AE 网络能量优先级 — AppliedFlux 未加载时为 null(条件化注册)
 	public final ModConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
+	// 允许提取 AE2 原生能量 — AppliedFlux 未加载时为 null(条件化注册)
+	public final ModConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
 	// PB升级上限
 	public final ModConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
 	public final ModConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
@@ -453,6 +457,7 @@ public final class ServerConfig {
 		// v2.0.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
 		this.mekCentrifugeAeEnergyInputEnabled = centrifuge.mekCentrifugeAeEnergyInputEnabled;
 		this.mekCentrifugePreferAppliedFluxOverAeEnergy = centrifuge.mekCentrifugePreferAppliedFluxOverAeEnergy;
+		this.mekCentrifugeAeNativeEnergyInputEnabled = centrifuge.mekCentrifugeAeNativeEnergyInputEnabled;
 		// AE2 输入拉取集成 — 向后兼容委托字段赋值(指向同一 ConfigValue 实例,零开销)
 		this.mekCentrifugeAeInputEnabled = centrifuge.mekCentrifugeAeInputEnabled;
 		this.mekCentrifugeAeInputRatePerTick = centrifuge.mekCentrifugeAeInputRatePerTick;
@@ -501,6 +506,7 @@ public final class ServerConfig {
 		this.apiaryAeFluidOutputEnabled = apiary.apiaryAeFluidOutputEnabled;
 		this.apiaryAeEnergyInputEnabled = apiary.apiaryAeEnergyInputEnabled;
 		this.apiaryPreferAppliedFluxOverAeEnergy = apiary.apiaryPreferAppliedFluxOverAeEnergy;
+		this.apiaryAeNativeEnergyInputEnabled = apiary.apiaryAeNativeEnergyInputEnabled;
 		this.apiaryPbUpgradeProductivityMaxCount = apiary.apiaryPbUpgradeProductivityMaxCount;
 		this.apiaryPbUpgradeTimeMaxCount = apiary.apiaryPbUpgradeTimeMaxCount;
 		this.apiaryPbUpgradeGeneSamplerMaxCount = apiary.apiaryPbUpgradeGeneSamplerMaxCount;

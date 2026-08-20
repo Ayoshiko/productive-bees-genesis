@@ -37,8 +37,10 @@ import java.util.concurrent.ThreadLocalRandom;
 	 *   <li>无尽·创世：10秒宇宙色循环、星尘调色板</li>
 	 * </ul>
 	 * <p>
-	 * <b>线程安全</b>：所有方法仅在客户端 tick/render 线程调用，单线程访问，无需同步。
-	 * 跳帧计数器为实例字段，由各子类单例独享，互不干扰。
+	 * <b>线程安全</b>：{@link #handleClientTick} 与 {@link #handleEntityJoinLevel} 订阅的是双端事件，
+ * 集成服务器中也会被 Server thread 调用 — 二者首行 isClientSide 守卫保证服务端调用
+ * 不触碰任何状态/配置；守卫之后的实际逻辑仅在客户端线程执行，单线程访问，无需同步。
+ * 跳帧计数器为实例字段，由各子类单例独享，互不干扰。
 	 * <p>
 	 * <b>使用方式</b>：子类声明单例 {@code INSTANCE}，静态 {@code @SubscribeEvent} 方法委托给
 	 * {@code INSTANCE.handleXxx(event)}，以兼容 {@code @EventBusSubscriber} 的静态注册要求，
@@ -93,7 +95,7 @@ public abstract class AbstractClientCombEventHandler {
 	/**
 	 * 客户端 LevelTick 模板 — 跳帧粒子生成
 	 * <p>
-	 * 流程：配置开关 → 客户端世界过滤 → 跳帧 → 遍历实体 → 按子类颜色/速度生成粒子。
+	 * 流程：客户端世界过滤（首行守卫）→ 配置开关 → 跳帧 → 遍历实体 → 按子类颜色/速度生成粒子。
 	 * 计数器放在 ClientLevel 检查之后，避免被服务端维度事件干扰。
 	 * <p>
 	 * 随机数调用顺序与原实现一致，保证粒子序列与视觉效果完全不变。
@@ -101,12 +103,13 @@ public abstract class AbstractClientCombEventHandler {
 	 * @param event LevelTick.Post 事件
 	 */
 	protected void handleClientTick(LevelTickEvent.Post event) {
+		// 前置客户端守卫：集成服务器中本事件也在 Server thread 触发（每维度每 tick），
+		// 任何配置读取（尤其 CLIENT 配置的跨线程访问）必须位于 isClientSide 判定之后
+		Level level = event.getLevel();
+		if (!level.isClientSide()) return;
 		// 服务端配置禁用万象创世时，客户端不渲染特效
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 		if (!ModConfig.CLIENT.particleEffectEnabled.get()) return;
-
-		Level level = event.getLevel();
-		if (!level.isClientSide()) return;
 
 		particleTickCounter++;
 		if (particleTickCounter % getParticleInterval() != 0) return;
@@ -222,13 +225,14 @@ public abstract class AbstractClientCombEventHandler {
 	 * @param event EntityJoinLevelEvent 事件
 	 */
 	protected void handleEntityJoinLevel(EntityJoinLevelEvent event) {
+		// 前置客户端守卫（与 handleClientTick 同理）：服务端实体加入事件先于配置读取拒绝
+		if (!event.getLevel().isClientSide()) return;
 		// 服务端配置禁用万象创世时，客户端不渲染特效
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 
 		Entity entity = event.getEntity();
 		if (!(entity instanceof ConfigurableBee bee)) return;
 		if (!getBeeType().equals(bee.getBeeType())) return;
-		if (!event.getLevel().isClientSide()) return;
 
 		Vec3 pos = entity.position();
 		ThreadLocalRandom rng = ThreadLocalRandom.current();

@@ -50,6 +50,8 @@ public final class ApiaryConfigSection {
 	public final ModConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
 	public final ModConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
+	/** 允许提取 AE2 原生能量（仅 AppliedFlux 加载时注册；关闭后仅从 AppliedFlux FE 提取） */
+	public final ModConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
 
 	// ========== PB升级上限 ==========
 	public final ModConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
@@ -226,8 +228,14 @@ public final class ApiaryConfigSection {
 						.comment("AE 网络能量优先级（true=优先 AppliedFlux，false=优先 AE2 原生能量）")
 						.translation("productivebeesgenesis.configuration.mek_apiary.ae2.preferAppliedFluxOverAeEnergy")
 						.define("preferAppliedFluxOverAeEnergy", true);
+				apiaryAeNativeEnergyInputEnabled = builder
+						.comment("允许提取 AE2 原生能量（关闭后仅从 AppliedFlux 存储的 FE 提取，",
+								"避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电）", "默认开启")
+						.translation("productivebeesgenesis.configuration.mek_apiary.ae2.aeNativeEnergyInputEnabled")
+						.define("aeNativeEnergyInputEnabled", true);
 			} else {
 				apiaryPreferAppliedFluxOverAeEnergy = null;
+				apiaryAeNativeEnergyInputEnabled = null;
 			}
 			builder.pop(); // ae2
 		} else {
@@ -235,6 +243,7 @@ public final class ApiaryConfigSection {
 			apiaryAeFluidOutputEnabled = null;
 			apiaryAeEnergyInputEnabled = null;
 			apiaryPreferAppliedFluxOverAeEnergy = null;
+			apiaryAeNativeEnergyInputEnabled = null;
 		}
 
 		// ===== PB升级上限 =====

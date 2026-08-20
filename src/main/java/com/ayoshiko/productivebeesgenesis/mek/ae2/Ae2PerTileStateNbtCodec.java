@@ -62,8 +62,12 @@ final class Ae2PerTileStateNbtCodec {
 		holder.setCentrifugeDirectAeOutputEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false);
 		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
-		CompoundTag filterTag = tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER)
-				? tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER) : new CompoundTag();
-		holder.getOrCreateInputFilter().load(filterTag);
+		// AE2 未安装时跳过：无 AE2 环境不应创建过滤器（方块实体从存档恢复即触发构造，
+		// Issue #8 类加载安全）；save 侧用 getAeInputFilter() 不创建，天然对称
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			CompoundTag filterTag = tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER)
+					? tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER) : new CompoundTag();
+			holder.getOrCreateInputFilter().load(filterTag);
+		}
 	}
 }

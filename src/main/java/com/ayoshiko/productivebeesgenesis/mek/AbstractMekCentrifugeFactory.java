@@ -98,6 +98,32 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	protected final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — 工厂变体共用，用于 skipPb 判断 */
 	protected final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
+	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2） */
+	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
+
+	/**
+	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
+	 * <br/>
+	 * 原接口链（getAe2StateHolder → getStateHolder → getTickAccelTracker，3 层
+	 * megamorphic 接口分发）在 JDTE 256x 加速下每 gameTick 被调用 256 次，
+	 * 是模组内最大热点方法（268ms self）。tracker 是 holder 的 final 字段，
+	 * tile 生命周期内引用稳定，首次解析后缓存，后续为单次字段读。
+	 */
+	private TickAccelTracker productivebeesgenesis$cachedTickAccelTracker;
+
+	@Override
+	public TickAccelTracker productivebeesgenesis$getTickAccelTracker() {
+		TickAccelTracker tracker = productivebeesgenesis$cachedTickAccelTracker;
+		if (tracker != null) {
+			return tracker;
+		}
+		// lifecycleHandler 为构造器初始化的 final 字段，getStateHolder 必非 null；null 时不缓存以便重试
+		tracker = productivebeesgenesis$ae2LifecycleHandler.getStateHolder().getTickAccelTracker();
+		if (tracker != null) {
+			productivebeesgenesis$cachedTickAccelTracker = tracker;
+		}
+		return tracker;
+	}
 
 	/** 构造函数 — 初始化PB处理器、PB升级委托和IO配置 */
 	public AbstractMekCentrifugeFactory(Holder<net.minecraft.world.level.block.Block> blockProvider, BlockPos pos,
@@ -314,8 +340,13 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
 		AbstractMekCentrifugeFactorySetupHelper.addContainerTrackers(this, container,
-			() -> super.addContainerTrackers(container));
+			// 能量条节流：super 注册后立即按值语义识别并替换 storedEnergy tracker
+			() -> EnergySyncThrottler.installWithSuper(container, energySyncThrottler,
+				energyContainer(), () -> super.addContainerTrackers(container)));
 	}
+
+	/** GUI 能量条同步节流器 — 供 FactoryUpgradeStateHelper 在 tick 末尾刷新快照 */
+	EnergySyncThrottler energySyncThrottler() { return energySyncThrottler; }
 
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
 	@Override

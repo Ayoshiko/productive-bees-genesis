@@ -226,6 +226,9 @@ class BeeSlotTickProcessor {
 			return;
 		}
 		float timeMultiplier = upgradeHandler.getTimeMultiplier();
+		// CREATIVE 升级状态循环外读取一次（Spark 优化：原在 advance 内每 tick 每蜜蜂查询，
+		// 每次触发 ApiaryUpgradeCache 的 AtomicLong 自增；49 槽创造工厂每秒 980 次冗余原子操作）
+		boolean hasCreativeUpgrade = upgradeHandler.hasCreativeUpgrade();
 		// MachineEnergyContainer 已按 Mekanism 官方公式实时应用速度/能量升级，
 		// 直接读取可同时保留普通蜂箱配置和各工厂等级的基础能耗。
 		long beeEnergyCost = ApiaryEnergyMath.calculateBeeEnergyCost(energyContainer.getEnergyPerTick());
@@ -247,6 +250,10 @@ class BeeSlotTickProcessor {
 
 		// 缓存输出空间状态 — 避免循环内重复调用 isOutputFull()（O(N×M) → O(N+M)）
 		// 输出槽对所有蜜蜂共享，状态在一次 tick 内一致
+		// 设计语义：输出满阻塞蜜蜂是虚拟缓冲区防溢出的核心 — 高倍加速混养场景下
+		// 若蜜蜂持续产出，多蜂种产物会溢出输出格与缓冲区造成丢失（用户反馈的"无限产物"感知
+		// 正是缓冲区积压消退过程）。产出直连（transferProducedStacks）从源头减少蜜脾占用输出槽，
+		// 降低触发本阻塞的概率，而非移除阻塞本身。
 		boolean outputFull = slotManager.isOutputFull();
 		// Commit any fluid suffix from the previous batch before advancing bee progress.
 		// Keeping production blocked while it remains pending prevents an unbounded long buffer.
@@ -282,6 +289,7 @@ class BeeSlotTickProcessor {
 				continue;
 			}
 			if (outputFull || pendingFluidBlocked) {
+				// 输出满/流体后缀阻塞 — 虚拟缓冲区防溢出语义（见上方设计注释）
 				slot.setState(BeeState.WAITING_OUTPUT);
 				activationCounter.onBeeDeactivated(i);
 				continue;
@@ -319,7 +327,7 @@ class BeeSlotTickProcessor {
 			// 推进计时 — 委托 ApiaryProgressAdvancer（纯代码移动：计算完成周期、更新进度、累积待产出次数）
 			pendingEnergyCost = SaturatingMath.saturatingAdd(pendingEnergyCost,
 					ApiaryProgressAdvancer.advance(slot, i, allocatedTicks, currentTick,
-					timeMultiplier, beeEnergyCost, stackProductionCount, configCache.getProcessingTime(),
+					timeMultiplier, hasCreativeUpgrade, beeEnergyCost, stackProductionCount, configCache.getProcessingTime(),
 					upgradeHandler, pendingProductions, accumulatedProgress));
 			// 设置工作状态 — CAS 守卫仅在工作状态转换 0→1 时递增计数器
 			slot.setState(BeeState.WORKING);

@@ -32,6 +32,9 @@ final class Ae2ConfigCache {
 	/** 缓存的 AppliedFlux 优先开关（默认 false） */
 	private volatile boolean cachedPreferAppliedFluxOverAeEnergy = false;
 
+	/** 缓存的 AE2 原生能量提取开关（默认 true；AppliedFlux 未加载时配置为 null 回退 true，此时原生是唯一能量源） */
+	private volatile boolean cachedNativeEnergyInputEnabled = true;
+
 	/** 缓存的 AE2 输入拉取开关（默认 false） */
 	private volatile boolean cachedInputPullEnabled = false;
 
@@ -79,6 +82,9 @@ final class Ae2ConfigCache {
 			// mekCentrifugePreferAppliedFluxOverAeEnergy 为 null（AppliedFlux 未加载）时回退 false
 			cachedPreferAppliedFluxOverAeEnergy = ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy != null
 					&& ModConfig.SERVER.mekCentrifugePreferAppliedFluxOverAeEnergy.get();
+			// mekCentrifugeAeNativeEnergyInputEnabled 为 null（AppliedFlux 未加载）时回退 true（原生是唯一能量源）
+			cachedNativeEnergyInputEnabled = ModConfig.SERVER.mekCentrifugeAeNativeEnergyInputEnabled == null
+					|| ModConfig.SERVER.mekCentrifugeAeNativeEnergyInputEnabled.get();
 			// mekCentrifugeAeInputEnabled 为 null（AE2 未加载）时回退 false
 			cachedInputPullEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
 					&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
@@ -103,6 +109,7 @@ final class Ae2ConfigCache {
 	boolean isOutputPushEnabled() { return cachedOutputPushEnabled; }
 	boolean isFluidPushEnabled() { return cachedFluidPushEnabled; }
 	boolean isPreferAppliedFluxOverAeEnergy() { return cachedPreferAppliedFluxOverAeEnergy; }
+	boolean isNativeEnergyInputEnabled() { return cachedNativeEnergyInputEnabled; }
 	boolean isInputPullEnabled() { return cachedInputPullEnabled; }
 	boolean isEnergyInputEnabled() { return cachedEnergyInputEnabled; }
 	int getInputRatePerTick() { return cachedInputRatePerTick; }
@@ -115,6 +122,7 @@ final class Ae2ConfigCache {
 		cachedOutputPushEnabled = false;
 		cachedFluidPushEnabled = true;
 		cachedPreferAppliedFluxOverAeEnergy = false;
+		cachedNativeEnergyInputEnabled = true;
 		cachedInputPullEnabled = false;
 		cachedEnergyInputEnabled = false;
 		cachedInputRatePerTick = 64;

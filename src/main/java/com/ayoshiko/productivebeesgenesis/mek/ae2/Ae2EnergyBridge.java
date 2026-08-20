@@ -31,25 +31,54 @@ import org.jetbrains.annotations.Nullable;
 	 * <b>能量转换比例</b>：AE2 标准 1 AE = 2 FE，{@link #extractAeEnergyAsFe} 内部
 	 * 将请求的 FE 量除以 2 转换为 AE 量，提取后再乘以 2 转回 FE 返回。
 	 * <p>
-	 * <b>类加载安全</b>：本类直接 import {@link FluxKey} 和 {@link EnergyType}
-	 * （编译时为 compileOnly 依赖）。运行时当 AppliedFlux 未安装时，
-	 * {@link #extractAppliedFluxFe} 在方法入口通过 {@link AppliedFluxIntegrationLoader#isAppliedFluxLoaded()}
-	 * 守卫立即返回 0，不会执行到引用 FluxKey 的字节码，故 JVM 不会触发 FluxKey 类的加载
-	 * （方法入口的 boolean 检查不依赖未加载的类）。
-	 * <p>
-	 * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 的 IGrid / MEStorage / IEnergyService
-	 * 内部自带线程安全保证（AE2 网络在主线程处理 tick）。
-	 *
-	 * @since 2.0.0
-	 * @author Ayoshiko
-	 */
+	 * <b>类加载安全</b>：FluxKey/EnergyType 是 AppliedFlux 的 compileOnly 类，
+ * 全部引用被隔离到内部类 {@link FluxKeys} 中，本类方法体不出现 FluxKey 类型字面引用。
+ * 方法入口守卫仅对解释执行的懒解析有效 — 能量注入每 tick 高频调用，
+ * 方法被 JIT 编译时会解析常量池全部类引用，AppliedFlux 未安装时直接
+ * NoClassDefFoundError（Issue #8 追加报告的崩溃场景）。
+ * Holder 内部类仅在守卫通过后的首次访问时初始化，根治该问题。
+ * <p>
+ * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 的 IGrid / MEStorage / IEnergyService
+ * 内部自带线程安全保证（AE2 网络在主线程处理 tick）。
+ *
+ * @since 2.0.0
+ * @author Ayoshiko
+ */
 public final class Ae2EnergyBridge {
 
 	/** AE2 到 FE 的能量转换比例：1 AE = 2 FE（AE2 标准比例） */
 	private static final double AE_TO_FE_RATIO = 2.0;
 
-	/** 全局共享的 AE2 操作源 — BaseActionSource 完全无状态，全局只需 1 个实例 */
-	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
+	/**
+	 * FluxKey 引用隔离 Holder — AppliedFlux 未安装时主类加载/验证不触发 FluxKey 解析
+	 * <br/>
+	 * <b>隔离要求</b>：主类方法体不得出现任何 FluxKey 类型流 — 不仅 FluxKey.of() 调用，
+	 * 还包括将 FluxKey 类型值传给 {@code extract(AEKey, ...)} 的子类型检查
+	 * （HotSpot 验证器在 AEKey 已加载时会强制解析未加载的 FluxKey，Issue #8 追加场景）。
+	 * 故 extract 调用本身也封装在本嵌套类中，主类仅以 appeng 类型参数与之交互。
+	 * <p>
+	 * JVM 保证本类仅在守卫通过后首次访问时初始化（线程安全），
+	 * 同时将 {@code FluxKey.of(EnergyType.FE)} 缓存为静态常量消除重复调用开销。
+	 */
+	private static final class FluxKeys {
+		/** FE 能量 key（AppliedFlux 在 ME 网络中存储 FE 的 AEKey） */
+		static final FluxKey FE = FluxKey.of(EnergyType.FE);
+
+		/** 在隔离边界内执行 ME 提取 — FluxKey&lt;:AEKey 子类型检查只发生在本类验证时（AppliedFlux 已装） */
+		static long extract(MEStorage meStorage, long amount, Actionable mode, IActionSource source) {
+			return meStorage.extract(FE, amount, mode, source);
+		}
+	}
+
+	/**
+	 * 懒加载 Holder — AE2 未安装时主类初始化不触发 {@link BaseActionSource} 类解析
+	 * <br/>
+	 * 与 Ae2OutputPusher/Ae2FluidPusher 的 ActionSourceHolder 模式一致（防御深度）。
+	 */
+	private static final class ActionSourceHolder {
+		/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例 */
+		static final IActionSource INSTANCE = new BaseActionSource() {};
+	}
 
 	private Ae2EnergyBridge() {}
 
@@ -73,18 +102,16 @@ public final class Ae2EnergyBridge {
 	 */
 	public static long extractAppliedFluxFe(@Nullable IGrid grid, long amount, Actionable mode,
 											@Nullable IActionSource source) {
-		// 守卫：AppliedFlux 未安装时立即返回，不触发 FluxKey 类加载
+		// 守卫：AppliedFlux 未安装时立即返回，不触发 FluxKeys Holder 类初始化
 		if (!AppliedFluxIntegrationLoader.isAppliedFluxLoaded()) return 0;
 		if (grid == null || amount <= 0) return 0;
 
 		try {
 			IStorageService storageService = grid.getService(IStorageService.class);
 			MEStorage meStorage = storageService.getInventory();
-			IActionSource actionSource = source != null ? source : ACTION_SOURCE;
-			// FluxKey.of(EnergyType.FE) 返回表示 FE 能量的 AEKey
-			// 此行仅在 AppliedFlux 已安装时执行（守卫已保证），不会触发类加载失败
-			FluxKey feKey = FluxKey.of(EnergyType.FE);
-			long extracted = meStorage.extract(feKey, amount, mode, actionSource);
+			IActionSource actionSource = source != null ? source : ActionSourceHolder.INSTANCE;
+			// 隔离边界内执行提取：FluxKey 类型流不出现在主类方法体（验证/JIT 均不解析 FluxKey）
+			long extracted = FluxKeys.extract(meStorage, amount, mode, actionSource);
 			return Ae2EnergyMath.clampExtracted(extracted, amount);
 		} catch (LinkageError | RuntimeException e) {
 			// LinkageError 覆盖 NoSuchMethodError/NoClassDefFoundError（AE2/AppliedFlux 版本不兼容）；

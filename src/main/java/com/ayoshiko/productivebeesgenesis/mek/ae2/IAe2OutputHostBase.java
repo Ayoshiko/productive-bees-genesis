@@ -346,6 +346,33 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		return holder.isCachedPreferAppliedFluxOverAeEnergy();
 	}
 
+	/**
+	 * 是否允许提取 AE2 原生能量 — 由宿主自定义配置源（与能量优先级同模式）
+	 * <br/>
+	 * 关闭后能量提取仅使用 AppliedFlux 在 ME 网络中存储的 FE，跳过 AE2 原生能量，
+	 * 避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电。
+	 * <p>
+	 * <b>默认实现</b>：读取离心机的 {@code mekCentrifugeAeNativeEnergyInputEnabled} 配置缓存。
+	 * <b>蜂箱覆盖</b>：蜂箱实现类覆盖此方法，读取 {@code apiaryAeNativeEnergyInputEnabled} 缓存。
+	 * <p>
+	 * <b>null 守卫</b>：AppliedFlux 未加载时配置项为 null，回退 true（原生是唯一能量源，
+	 * 由主开关 {@code aeEnergyInputEnabled} 管控）。
+	 *
+	 * @return true 允许提取 AE2 原生能量，false 仅从 AppliedFlux 提取
+	 * @since 1.0.2
+	 */
+	default boolean productivebeesgenesis$isAeNativeEnergyInputEnabled() {
+		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return true;
+		Level level = productivebeesgenesis$getAe2Level();
+		if (level == null) return true;
+		long currentTick = level.getGameTime();
+		if (holder.isConfigCacheStale(currentTick)) {
+			holder.refreshConfigCache(currentTick);
+		}
+		return holder.isCachedNativeEnergyInputEnabled();
+	}
+
 	// ===== v2.0.0 新增：AE2 网络能量输入 =====
 
 	/**
@@ -422,6 +449,23 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 		TickAccelTracker tracker = holder.getTickAccelTracker();
 		if (tracker == null) return;
 		tracker.onAe2Tick(level);
+	}
+
+	/**
+	 * 离心机优先保持判定 — 该物品是否应保留给离心机处理而不推送 AE2
+	 * <br/>
+	 * 蜂箱实现类覆盖此方法（离心机优先开关 + 相邻离心机可处理性缓存），
+	 * 离心机与其他宿主默认返回 false（行为不变）。
+	 * <p>
+	 * <b>设计原则（OCP/DIP）</b>：通过 default 方法扩展，{@link Ae2OutputPusher}
+	 * 依赖抽象接口而非具体蜂箱类，输出槽蜜脾过滤对离心机宿主零影响。
+	 *
+	 * @param stack 待判定的输出物品
+	 * @return true 表示该物品跳过 AE2 推送，保留给离心机
+	 * @since 1.0.2
+	 */
+	default boolean productivebeesgenesis$shouldHoldForCentrifuge(ItemStack stack) {
+		return false;
 	}
 
 	// ===== Task 3 新增：AE2 推送退避状态和计数器访问（委托给 Ae2PushStateHolder） =====

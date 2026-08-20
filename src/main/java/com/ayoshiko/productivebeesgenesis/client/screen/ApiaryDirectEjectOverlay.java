@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryDirectEjectPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
@@ -69,6 +70,9 @@ public final class ApiaryDirectEjectOverlay {
 				? "productivebeesgenesis.gui.apiary_direct_eject.enabled"
 				: "productivebeesgenesis.gui.apiary_direct_eject.disabled")));
 
+		// 直连 AE 按钮与离心机优先级按钮发送 CycleAeOutputPayload（服务端注册被 AE2 守卫），
+		// AE2 未安装时不创建，否则点击触发 UnsupportedOperationException（Issue #8 对称修复）
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		ApiaryDirectAeOutputButton directAeButton = getDirectAeButton(sideConfig);
 		if (directAeButton == null) {
 			directAeButton = new ApiaryDirectAeOutputButton(target.gui(),
@@ -104,6 +108,8 @@ public final class ApiaryDirectEjectOverlay {
 
 	@SubscribeEvent
 	public static void mouseClicked(ScreenEvent.MouseButtonPressed.Pre event) {
+		// AE2 未加载时 AE 相关按钮未注入（防御性短路，正常路径 null 检查已覆盖）
+		boolean aeLoaded = Ae2IntegrationLoader.isAe2Loaded();
 		if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
 		OverlayTarget target = findTarget(event.getScreen());
 		if (target == null || target.type() != TransmissionType.ITEM) return;
@@ -114,7 +120,7 @@ public final class ApiaryDirectEjectOverlay {
 				target,
 				CENTRIFUGE_PRIORITY_BUTTON_X_OFFSET,
 				CENTRIFUGE_PRIORITY_BUTTON_Y_OFFSET);
-		if (priorityButton != null && priorityButton.visible
+		if (aeLoaded && priorityButton != null && priorityButton.visible
 				&& priorityBounds.contains(event.getMouseX(), event.getMouseY())) {
 			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
 					target.apiary().getBlockPos(),
@@ -125,7 +131,7 @@ public final class ApiaryDirectEjectOverlay {
 		}
 		ApiaryDirectAeOutputButton directAeButton = getDirectAeButton(target.sideConfig());
 		ButtonBounds directAeBounds = bounds(target, DIRECT_AE_BUTTON_X_OFFSET);
-		if (directAeButton != null && directAeButton.visible && directAeButton.active
+		if (aeLoaded && directAeButton != null && directAeButton.visible && directAeButton.active
 				&& directAeBounds.contains(event.getMouseX(), event.getMouseY())) {
 			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
 					target.apiary().getBlockPos(),

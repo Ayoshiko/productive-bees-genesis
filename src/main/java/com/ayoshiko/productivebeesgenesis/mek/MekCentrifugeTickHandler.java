@@ -219,6 +219,9 @@ class MekCentrifugeTickHandler {
 			Ae2FluidPusher.pushLocalTankContentsNow(tile);
 		}
 
+		// 能量条节流：本 tick 全部能量变化（AE 注入 + 批量扣除）完成后刷新同步快照
+		tile.energySyncThrottler().tickServer(tile.getLevel(), energyContainer);
+
 		return sendUpdatePacket;
 	}
 

@@ -67,7 +67,9 @@ final class ApiaryDirectEjectTargets {
 	 * 路由规则：若蜂箱物品侧面配置存在输出面（OUTPUT/INPUT_OUTPUT），
 	 * 只直连这些面对应的相邻离心机；若未配置任何输出面，回退到任意相邻离心机（兼容旧存档）。
 	 * <p>
-	 * 缓存优化：缓存列表仍有效时直接返回；失效（方块被移除/替换）时重新扫描。
+	 * 缓存优化：非空缓存列表且配置签名一致、所有方块仍有效时直接返回；
+	 * <b>空列表不跨 tick 缓存</b>（仅同 tick 内复用），保证后放置的离心机能被下一 tick 的
+	 * 重扫发现。失效（方块被移除/替换）时重新扫描。
 	 *
 	 * @param level 世界实例
 	 * @return 直连目标列表，可能为空
@@ -83,8 +85,8 @@ final class ApiaryDirectEjectTargets {
 		ConfigInfo itemConfig = apiary.getConfig().getConfig(TransmissionType.ITEM);
 		int configVersion = computeConfigVersion(facing, itemConfig);
 
-		// 优先使用缓存：配置签名一致且所有方块仍有效时直接返回，不重复扫描全部方向
-		if (cachedTargets != null && configVersion == cachedConfigVersion) {
+		// 优先使用缓存：非空列表 + 配置签名一致且所有方块仍有效时直接返回，不重复扫描全部方向
+		if (cachedTargets != null && !cachedTargets.isEmpty() && configVersion == cachedConfigVersion) {
 			boolean allValid = true;
 			for (Target target : cachedTargets) {
 				if (target.blockEntity.isRemoved() || level.getBlockEntity(target.pos) != target.blockEntity) {

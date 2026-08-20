@@ -67,4 +67,24 @@ public final class PbUpgradeConfig {
 			return DEFAULT_TIME_BONUS;
 		}
 	}
+
+	/** PB 原版 stabilityChanceIncrease 默认值（配置未加载/读取异常时回退） */
+	private static final float DEFAULT_STABILITY_BONUS = 0.15f;
+
+	/**
+	 * 获取 PB 稳定性升级的每级概率加成（stabilityChanceIncrease）。
+	 *
+	 * @return 配置值；配置未就绪或异常时回退 0.15（PB 默认）
+	 */
+	public static float stabilityChanceIncrease() {
+		try {
+			var upgrades = ProductiveBeesConfig.UPGRADES;
+			if (upgrades == null) {
+				return DEFAULT_STABILITY_BONUS;
+			}
+			return (float) upgrades.stabilityChanceIncrease.get().doubleValue();
+		} catch (RuntimeException e) {
+			return DEFAULT_STABILITY_BONUS;
+		}
+	}
 }

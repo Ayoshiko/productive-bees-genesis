@@ -34,9 +34,11 @@ import java.util.concurrent.atomic.AtomicLong;
 	 * </ul>
 	 * <p>
 	 * <b>spec fix-ae2-push-backoff-and-jdte-adapt 自适应机制</b>:
-	 * <ul>
-	 *   <li><b>TPS 自适应</b>:服务器 MSPT 严重卡顿(tpsFactor &lt; 0.5)时跳过推送,让出 tick 资源</li>
-	 *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
+ * <ul>
+ *   <li><b>卡顿保护</b>:由 {@link Ae2GlobalInsertBudget} 全服慢 insert 预算承担 —
+ *       只钳制病态网络（如 EnderDrives fsync）的慢 insert,健康网络满速推送不受限
+ *       （原 TPS 自适应跳过设计因伤害产出效率已移除）</li>
+ *   <li><b>网格节点状态检查</b>:仅 ONLINE(3) 时继续推送,与 {@link Ae2OutputPusher} 对称,
 	 *       非 ONLINE 状态直接返回不触发退避(修复: 原缺少此检查导致网格不稳定时 poweredInsert 必然失败)</li>
 	 *   <li><b>退避</b>:仅所有流体 key 都失败时进入 50ms→1s 的短指数退避,
 	 *       基于 {@link System#nanoTime()} 墙钟单调时钟,窗口内跳过所有 AE2 存储操作,
@@ -58,8 +60,17 @@ public final class Ae2FluidPusher {
 	/** 异常累计计数器 — 用于日志显示总次数（节流由 LogThrottle 时间维度处理） */
 	private static final AtomicLong PUSH_EXCEPTION_COUNTER = new AtomicLong(0);
 
-	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态,全局只需 1 个实例 */
-	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
+	/**
+	 * 懒加载 Holder — AE2 未安装时本类初始化不触发 {@link BaseActionSource} 类解析（Issue #8）
+	 * <br/>
+	 * 原静态字段在 &lt;clinit&gt; 执行先于方法体守卫，AE2 未安装时首次调用 pushFluids 即
+	 * NoClassDefFoundError。Holder 仅在首次访问 INSTANCE 时初始化（JVM 保证线程安全），
+	 * 所有访问点均位于 isFluidPushEnabled 守卫之后的 AE2 路径。
+	 */
+	private static final class ActionSourceHolder {
+		/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态,全局只需 1 个实例 */
+		static final IActionSource INSTANCE = new BaseActionSource() {};
+	}
 
 	/** Bound one key's ME request so a single huge tank cannot monopolize a tick. */
 	private static final long MAX_FLUID_BATCH_REQUEST_MB = 16_000_000L;
@@ -98,10 +109,18 @@ public final class Ae2FluidPusher {
 		if (meStorage == null) return 0L;
 		AEFluidKey key = getCachedGeneratedFluidKey(holder, template);
 		if (key == null) return 0L;
+		// 全服慢 insert 预算：病态网络（EnderDrives fsync）下跳过本轮直推，流体由调用方留在本地
+		long gameTick = level.getGameTime();
+		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) return 0L;
+		long insertStart = System.nanoTime();
 		try {
-			return SaturatingMath.clampToRequest(
-					meStorage.insert(key, requested, action, ACTION_SOURCE), requested);
+			long accepted = SaturatingMath.clampToRequest(
+					meStorage.insert(key, requested, action, ActionSourceHolder.INSTANCE), requested);
+			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
+			return accepted;
 		} catch (Exception e) {
+			// 抛异常的 insert 同样入账全服预算，防止病态网络下每 tick 重复昂贵遍历
+			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
 			LogThrottle.warnWithCooldown("ae2_direct_generated_fluid", 60_000L,
 					"AE2 direct generated-fluid insert failed: fluid={}, amount={}, error={}",
 					key, requested, e.toString());
@@ -217,8 +236,9 @@ public final class Ae2FluidPusher {
 				batchBuffer.isRipe(), batchBuffer.getTotalAmount(), totalInTanks);
 		if (!shouldFlush) return;
 
-		// 3. TPS 自适应:TPS 严重下降时跳过推送,让出服务器资源（阈值从 10 降到 5，
-		//     避免 256× 加速下常规高负载把推送整体关停导致流体槽打满停机）
+		// 3. 卡顿保护说明:曾设计 TPS 自适应跳过（TPS<5 时停推），因会导致流体槽打满停机、
+		//     伤害产出效率已移除；卡顿保护由 Ae2GlobalInsertBudget 慢 insert 预算承担
+		//     （只钳制病态网络的慢 insert，不误伤正常推送）。
 
 		// 3.1 模块2.1 对称：强检测 grid node 状态，仅当 ONLINE(3) 时继续推送
 		//     状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入 poweredInsert 路径，不触发退避
@@ -267,7 +287,7 @@ public final class Ae2FluidPusher {
 				if (tankTotal <= 0) continue; // tank 已空，跳过推送
 				long pushed = Math.min(amount, tankTotal);
 
-				long inserted = batchPush(meStorage, fluidKey, pushed);
+				long inserted = batchPush(meStorage, fluidKey, pushed, gameTick);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发退避
 					keyBackoff.recordFailure(fluidKey, nanoNow);
@@ -425,16 +445,21 @@ public final class Ae2FluidPusher {
 	 * @param meStorage     AE2 存储目标
 	 * @param fluidKey      流体键
 	 * @param amount        总推送量(mB)
+	 * @param gameTick      当前游戏刻 — 供全服慢 insert 预算判定与记账
 	 * @return 实际推送总量(mB);0 表示完全失败
 	 */
-	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount) {
+	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount, long gameTick) {
 		// 固定有限批量，避免 256× 时单次向第三方存储请求数亿 mB，同时保持较低调用次数。
 		long remaining = Math.max(0L, amount);
 		long insertedTotal = 0L;
 		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
+			// 全服慢 insert 预算：病态网络下停止后续分批，剩余量下窗口重试（无丢失）
+			if (Ae2GlobalInsertBudget.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
+			long insertStart = System.nanoTime();
 			long inserted = SaturatingMath.clampToRequest(
-					meStorage.insert(fluidKey, request, Actionable.MODULATE, ACTION_SOURCE), request);
+					meStorage.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE), request);
+			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
 			if (inserted <= 0L) break;
 			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
 			remaining -= inserted;

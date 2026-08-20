@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
 import mekanism.client.gui.GuiMekanism;
@@ -41,6 +42,9 @@ public final class CentrifugeDirectAeOutputOverlay {
 
 	@SubscribeEvent
 	public static void onClientTick(ClientTickEvent.Pre event) {
+		// AE2 未加载时不注入按钮：服务端 payload 注册被守卫跳过，
+		// 点击会触发 UnsupportedOperationException（Issue #8 客户端对称修复）
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		AeInputOverlay.OverlayTarget target = findTarget(Minecraft.getInstance().screen);
 		if (target == null) return;
 		CentrifugeDirectAeOutputButton button = BUTTONS.computeIfAbsent(target.sideConfig(), sideConfig -> {
@@ -65,6 +69,8 @@ public final class CentrifugeDirectAeOutputOverlay {
 
 	@SubscribeEvent
 	public static void mouseClicked(ScreenEvent.MouseButtonPressed.Pre event) {
+		// AE2 未加载时按钮不存在（onClientTick 守卫未注入），此处防御性短路
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
 		AeInputOverlay.OverlayTarget target = findTarget(event.getScreen());
 		if (target == null) return;

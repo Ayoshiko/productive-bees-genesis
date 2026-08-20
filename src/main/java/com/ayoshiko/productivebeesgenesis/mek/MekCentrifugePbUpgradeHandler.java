@@ -107,6 +107,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return false;
 		if (current >= getLimit(type)) return false;
 		pbUpgradeCounts.put(type, current + 1);
+		upgradeCountsVersion++;
 		tile.setChanged();
 		return true;
 	}
@@ -133,6 +134,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		int toAdd = Math.min(limit - current, maxAvailable);
 		if (toAdd <= 0) return 0;
 		pbUpgradeCounts.put(type, current + toAdd);
+		upgradeCountsVersion++;
 		tile.setChanged();
 		return toAdd;
 	}
@@ -165,6 +167,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		} else {
 			pbUpgradeCounts.put(type, current - 1);
 		}
+		upgradeCountsVersion++;
 		tile.setChanged();
 		ItemStack removed = template.copyWithCount(1);
 		if (output.isEmpty()) {
@@ -198,6 +201,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		} else {
 			pbUpgradeCounts.put(type, current - toRemove);
 		}
+		upgradeCountsVersion++;
 		tile.setChanged();
 		ItemStack template = PbUpgradeInventorySlot.getRepresentativeStack(type);
 		if (template.isEmpty()) return Collections.emptyList();
@@ -231,6 +235,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 			int canInstall = Math.min(input.getCount(), maxCount - current);
 			if (canInstall > 0) {
 				pbUpgradeCounts.put(type, current + canInstall);
+				upgradeCountsVersion++;
 				input.shrink(canInstall);
 				if (input.isEmpty()) inputSlot.setStack(ItemStack.EMPTY);
 				tile.setChanged();
@@ -376,6 +381,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 				}
 			}
 		}
+		upgradeCountsVersion++;
 	}
 
 	/** 保存PB升级输入/输出槽到NBT */
@@ -394,42 +400,87 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		}
 	}
 
-	// ===== 产量/速度倍率计算 =====
+	// ===== 产量/速度倍率计算（100-tick 缓存） =====
+
+	/** 倍率缓存刷新间隔（调用次数）— 对齐蜂箱 ApiaryUpgradeCache 模式 */
+	private static final int MULTIPLIER_REFRESH_INTERVAL = 100;
+
+	/** 升级数量版本号 — install/remove/load 变更时递增，立即失效倍率缓存 */
+	private long upgradeCountsVersion;
+
+	/** 缓存对应的版本号（-1 表示未初始化，首次访问强制刷新） */
+	private long cachedMultiplierVersion = -1;
+
+	/** 倍率缓存调用计数器 — 达到 {@link #MULTIPLIER_REFRESH_INTERVAL} 次自动重算 */
+	private int multiplierCallCounter;
+
+	/** 缓存的生产力倍率 */
+	private float cachedProductivityMultiplier = 1.0f;
+
+	/** 缓存的 PB 原版产量并行倍率 */
+	private int cachedParallelModifier = 1;
+
+	/** 缓存的时间倍率 */
+	private float cachedTimeMultiplier = 1.0f;
+
+	/** 缓存的稳定性概率加成 */
+	private float cachedStabilityBonus;
 
 	/**
-	 * 获取生产力倍率
+	 * 按需刷新倍率缓存 — 版本号变化或调用计数达到间隔时重算
+	 * <br/>
+	 * Spark 优化（报告 l5oASjsSuW）：倍率计算原为每次查询重算（每 tick 每 process
+	 * 调用 productivityParallelModifier/productivityModifier，每次触发 8+ 次
+	 * getInstalledCount → isClientSide 双层 getLevel），是模组内第二大热点。
+	 * 缓存后每 100 次调用才重算一次，机器效率不变（升级变更立即失效）。
+	 * <p>
+	 * 线程安全：服务端主线程独占访问（tick 与 Container 网络包同线程），无需 volatile。
+	 */
+	private void refreshMultiplierCacheIfNeeded() {
+		if (cachedMultiplierVersion == upgradeCountsVersion
+				&& ++multiplierCallCounter < MULTIPLIER_REFRESH_INTERVAL) {
+			return;
+		}
+		multiplierCallCounter = 0;
+		cachedMultiplierVersion = upgradeCountsVersion;
+		cachedProductivityMultiplier = computeProductivityMultiplier();
+		cachedParallelModifier = computeProductivityParallelModifier();
+		cachedTimeMultiplier = computeTimeMultiplier();
+		cachedStabilityBonus = computeStabilityBonus();
+	}
+
+	/**
+	 * 失效倍率缓存 — 升级数量变更或外部状态变化（如 MEK SPEED 升级重算）时调用
+	 */
+	public void invalidateMultiplierCache() {
+		cachedMultiplierVersion = -1;
+	}
+
+	/**
+	 * 获取生产力倍率（走缓存）
 	 * <br/>
 	 * 影响离心机配方产出数量。按等级加权求和：
 	 * {@code 1.0 + Σ(factor_i × count_i)}
 	 */
 	float getProductivityMultiplier() {
-		if (!BalanceConfig.centrifugeProductivityAffectsOutput()) return 1.0f;
-		double mod = 1.0D;
-		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_2);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_3);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_4);
-		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
+		refreshMultiplierCacheIfNeeded();
+		return cachedProductivityMultiplier;
 	}
 
 	/**
+	 * 获取 PB 原版产量并行倍率（走缓存）
+	 * <br/>
 	 * PB 原版离心机并行倍率：PRODUCTIVITY/2/3/4 分别贡献 4/8/16/32。
 	 * 不对总并行额外设置上限，便于与 MEK STACK/JDT 倍率叠加；
 	 * PB 处理器仅按实际输入、能量和输出空间统一裁剪。
 	 */
 	int getProductivityParallelModifier() {
-		long modifier = SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY), 4);
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_2), 8));
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_3), 16));
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_4), 32));
-		return Math.max(1, SaturatingMath.saturatingToInt(modifier));
+		refreshMultiplierCacheIfNeeded();
+		return cachedParallelModifier;
 	}
 
 	/**
-	 * 获取时间倍率
+	 * 获取时间倍率（走缓存）
 	 * <br/>
 	 * PB时间升级：TIME 每级权重 1，TIME_2 每级权重 2（双倍效果）。
 	 * 公式：{@code mekTimeMultiplier / (1 + timeBonus × effectiveTimeUpgrades)}
@@ -441,6 +492,48 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * @return 时间倍率（>0，越小越快）
 	 */
 	float getTimeMultiplier() {
+		refreshMultiplierCacheIfNeeded();
+		return cachedTimeMultiplier;
+	}
+
+	/**
+	 * 计算生产力倍率（不走缓存）— 供 {@link #refreshMultiplierCacheIfNeeded} 调用
+	 * <br/>
+	 * 影响离心机配方产出数量。按等级加权求和：
+	 * {@code 1.0 + Σ(factor_i × count_i)}
+	 */
+	private float computeProductivityMultiplier() {
+		if (!BalanceConfig.centrifugeProductivityAffectsOutput()) return 1.0f;
+		double mod = 1.0D;
+		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_2);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_3);
+		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_4);
+		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
+	}
+
+	/**
+	 * 计算 PB 原版产量并行倍率（不走缓存）— 供 {@link #refreshMultiplierCacheIfNeeded} 调用
+	 * <br/>
+	 * PRODUCTIVITY/2/3/4 分别贡献 4/8/16/32。
+	 */
+	private int computeProductivityParallelModifier() {
+		long modifier = SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY), 4);
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_2), 8));
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_3), 16));
+		modifier = SaturatingMath.saturatingAdd(modifier,
+				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_4), 32));
+		return Math.max(1, SaturatingMath.saturatingToInt(modifier));
+	}
+
+	/**
+	 * 计算时间倍率（不走缓存）— 供 {@link #refreshMultiplierCacheIfNeeded} 调用
+	 * <br/>
+	 * 公式：{@code mekTimeMultiplier / (1 + timeBonus × effectiveTimeUpgrades)}
+	 */
+	private float computeTimeMultiplier() {
 		float mekTimeMultiplier = getMekSpeedTimeMultiplier();
 		long effectiveTimeUpgrades = SaturatingMath.saturatingAdd(
 				getInstalledCount(PbUpgradeType.TIME),
@@ -450,6 +543,15 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		float pbTimeDivisor = SaturatingMath.positiveFiniteFloat(
 				1.0D + (double) timeBonus * effectiveTimeUpgrades, 1.0f);
 		return SaturatingMath.positiveFiniteFloat((double) mekTimeMultiplier / pbTimeDivisor, 1.0f);
+	}
+
+	/**
+	 * 计算稳定性概率加成（不走缓存）— 供 {@link #refreshMultiplierCacheIfNeeded} 调用
+	 */
+	private float computeStabilityBonus() {
+		int count = getInstalledCount(PbUpgradeType.STABILITY);
+		return (float) PbOutputChance.stabilityBonus(
+				count, ProductiveBeesConfig.UPGRADES.stabilityChanceIncrease.get());
 	}
 
 	/**
@@ -469,7 +571,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	}
 
 	/**
-	 * 获取稳定性概率加成 — 提升非保底产物的产出概率
+	 * 获取稳定性概率加成（走缓存）— 提升非保底产物的产出概率
 	 * <br/>
 	 * 对齐 PB 原版 {@code CentrifugeBlockEntity.completeRecipeProcessing} 的 stability 逻辑：
 	 * {@code bonus = (已装数 + 1) × PB配置加成}，截断到 1.0。
@@ -482,9 +584,8 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * @return 稳定性概率加成 [0.0, 1.0]
 	 */
 	float getStabilityBonus() {
-		int count = getInstalledCount(PbUpgradeType.STABILITY);
-		return (float) PbOutputChance.stabilityBonus(
-				count, ProductiveBeesConfig.UPGRADES.stabilityChanceIncrease.get());
+		refreshMultiplierCacheIfNeeded();
+		return cachedStabilityBonus;
 	}
 
 	// ===== 内部辅助 =====

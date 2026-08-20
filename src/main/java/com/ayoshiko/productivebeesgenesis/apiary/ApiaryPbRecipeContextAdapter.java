@@ -56,12 +56,13 @@ class ApiaryPbRecipeContextAdapter implements PbRecipeContext {
 	/**
 	 * CREATIVE 升级兜底
 	 * <br/>
-	 * 蜂箱不支持CREATIVE升级，此方法始终返回false。
-	 * 仅为满足 PbRecipeContext 接口契约而保留。
+	 * 委托 tile 的升级处理器（走 ApiaryUpgradeCache 缓存）。
+	 * 蜂箱不走 PbRecipeProcessor 管线，此实现仅为满足 PbRecipeContext 接口契约
+	 * （供 Ae2OutputPusher 等遍历输出槽时查询）。
 	 */
 	@Override
 	public boolean hasCreativeUpgrade() {
-		return false;
+		return tile.hasCreativeUpgrade();
 	}
 
 	/**

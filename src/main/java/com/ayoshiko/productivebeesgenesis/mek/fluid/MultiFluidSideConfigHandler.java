@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
@@ -203,7 +204,8 @@ public final class MultiFluidSideConfigHandler {
 	 * @param host AE2 输出宿主(必须实现 {@link IAe2OutputHostBase})
 	 */
 	public static void ejectToAe(@Nullable IAe2OutputHostBase host) {
-		if (host == null) {
+		// AE2 未安装守卫：Ae2FluidPusher 类加载即触发 AEKey 解析（Issue #8 防御性加固）
+		if (host == null || !Ae2IntegrationLoader.isAe2Loaded()) {
 			return;
 		}
 		// 委托给 Ae2FluidPusher,已实现 MULTI_PER_FLUID 多槽遍历 + per-tile/全局开关检查

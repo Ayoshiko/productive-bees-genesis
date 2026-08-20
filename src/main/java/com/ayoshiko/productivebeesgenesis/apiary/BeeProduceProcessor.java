@@ -279,7 +279,7 @@ public class BeeProduceProcessor {
 			List<ItemStack> aeLeftovers = null;
 			for (ItemStack stack : allItems) {
 				if (stack.isEmpty()) continue;
-				if (apiary.shouldPreferCentrifuge(stack)) {
+				if (apiary.shouldHoldForCentrifuge(stack)) {
 					if (aeLeftovers == null) aeLeftovers = new ArrayList<>();
 					aeLeftovers.add(stack);
 					continue;
@@ -294,10 +294,18 @@ public class BeeProduceProcessor {
 			}
 			allItems = aeLeftovers == null ? List.of() : aeLeftovers;
 		}
+		// 离心机优先产出直连：蜜脾跳过输出槽中转直接进离心机输入槽（低频 flush 路径）
+		// 输出槽保留给非蜜脾产物，降低输出满触发蜜蜂停工的概率；
+		// 离心机也满时剩余回落输出槽 → 缓冲区 → 直连重试（渐进降级，防溢出语义不变）
+		if (!allItems.isEmpty() && apiary.isCentrifugePriorityEnabled()
+				&& apiary.isDirectEjectEnabled()) {
+			allItems = apiary.directTransferProducedToCentrifuges(allItems);
+		}
 		List<ItemStack> leftovers = outputDispatcher.distribute(slotManager.getOutputSlots(), allItems);
 		// F4: 将未成功插入的剩余产物送入缓冲区，下 tick 重试注入
+		// 离心机优先：蜜脾满时不淘汰，超出输出上限的溢出部分推 AE（不再丢弃）
 		if (!leftovers.isEmpty() && outputBuffer != null) {
-			outputBuffer.offer(leftovers);
+			apiary.offerLeftoversWithCentrifugeHold(leftovers);
 		}
 
 		// 模块 2+3：批量注入累积流体（类型由 BeeFluidOutputResolver 推断）

@@ -56,9 +56,15 @@ public final class MekCentrifugeEnergyScaling {
     }
 
     /**
-     * Keeps one additional batch as a low-water reserve. With an exact-demand buffer the
-     * injector fills the machine and processing drains it to zero every game tick, making the
-     * synced FE bar oscillate and leaving no tolerance for another pipeline stage in that tick.
+     * Capacity floor for the local buffer: one extra batch kept as a low-water reserve.
+     * <p>
+     * <b>Role (v1.0.2)</b>: this value is a <b>minimum capacity</b> for
+     * {@link #ensureCapacity}, not an injection target — AE2 injection now fills the
+     * container to its full capacity so the GUI FE bar reflects real stored energy.
+     * With an exact-demand buffer the injector fills the machine and processing drains
+     * it to zero every game tick, making the synced FE bar oscillate and leaving no
+     * tolerance for another pipeline stage in that tick; the doubled floor absorbs
+     * that oscillation and covers batched deduction spikes.
      */
     public static long bufferedCapacityForDemand(long required) {
         long demand = Math.max(0L, required);

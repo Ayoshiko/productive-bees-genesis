@@ -39,4 +39,19 @@ class Ae2EnergyMathTest {
 		assertEquals(0L, Ae2EnergyMath.remainingCapacity(-1L, 0L));
 		assertEquals(0L, Ae2EnergyMath.clampExtracted(-1L, 100L));
 	}
+
+	@Test
+	void networkExtractCapKeepsFivePercentReserve() {
+		// 常规存量：保留 5%（1,000,000 → 可抽 950,000）
+		assertEquals(950_000L, Ae2EnergyMath.networkExtractCap(1_000_000L));
+		// 大额存量饱和安全
+		assertEquals(Long.MAX_VALUE - Long.MAX_VALUE / 20,
+				Ae2EnergyMath.networkExtractCap(Long.MAX_VALUE));
+		// 微量存量：保留量向下取整为 0，全量可抽（无保留意义）
+		assertEquals(19L, Ae2EnergyMath.networkExtractCap(19L));
+		assertEquals(1L, Ae2EnergyMath.networkExtractCap(1L));
+		// 非正值短路
+		assertEquals(0L, Ae2EnergyMath.networkExtractCap(0L));
+		assertEquals(0L, Ae2EnergyMath.networkExtractCap(-5L));
+	}
 }

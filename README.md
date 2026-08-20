@@ -1,6 +1,7 @@
 # Productive Bees Genesis
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
+[![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
+![Version](https://img.shields.io/badge/version-1.0.2-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -10,7 +11,9 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-> This is the first stable release. Please report bugs and compatibility issues through [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
+**Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
+
+> Please report bugs and compatibility issues through [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
 
 ---
 
@@ -43,7 +46,7 @@
 - **Myriad Creations Bee** — a special bee whose honeycomb randomly produces honeycombs from other resource bees via a configurable filter.
 - **MEK Centrifuge** — a Mekanism-style centrifuge that processes Productive Bees honeycombs and honeycomb blocks, and also supports Energized Smelter recipes.
 - **MEK Apiary** — an electrified apiary with built-in simulation, housing multiple bees working simultaneously. Its internal feeder slots hold various flowers bees need for pollination without consuming them.
-- Deep **AE2 integration** — both centrifuges and apiaries can join AE network connections, supporting AE default channel transmission. Outputs can be pushed directly into the ME network, with AE output toggles for items and fluids in the Mekanism config screen. Supports using FE energy stored in the linked ME network, while also retaining AE network native energy. Energy priority is configurable. The centrifuge can also pull honeycombs from the linked ME network for processing, with pulling behavior configurable.
+- Deep **AE2 integration** — both centrifuges and apiaries can join AE network connections, supporting AE default channel transmission. Outputs can be pushed directly into the ME network, with AE output toggles for items and fluids in the Mekanism config screen. Supports using FE energy stored in the linked ME network, while also retaining AE network native energy. Energy priority is configurable, energy extraction keeps a 5% network reserve so machines can never brown out the ME network, and AE2 native energy extraction can be disabled per machine when Applied Flux is installed. The centrifuge can also pull honeycombs from the linked ME network for processing, with pulling behavior configurable.
 - Preserves Mekanism's native GUI, side configuration, auto-ejection config, upgrade buttons, safety system, redstone control, and config-tool interaction.
 - Jade support for displaying machine AE online status, internal items, fluids, energy, etc.
 - Fully configurable Myriad Creations Bee honeycomb conversion filter UI — supports blacklist/whitelist, search, sort, drag-and-drop, clipboard import/export.
@@ -72,7 +75,7 @@ An industrialized Mekanism-style centrifuge that extends Mekanism's native elect
 
 #### Core Capabilities
 
-- **Multi-recipe support**: Processes Productive Bees honeycombs and honeycomb blocks, and also supports Energized Smelter recipes.
+- **Multi-recipe support**: Processes Productive Bees honeycombs and honeycomb blocks, and also supports Energized Smelter recipes — smelter-recipe compatibility is a per-tile toggle in the machine GUI (off by default), gated by a global server-config switch.
 - **Factory parallel processing**: Base variant processes a single recipe; factory variants provide multi-process parallel processing (2–18 processes) scaling with tier.
 - **Output safety**: Identical output stacks are auto-merged; processing pauses when output slots are full to avoid wasting energy.
 - **Ejection optimization**: All variants use a configurable four-state ejection policy (active/idle/blocked/busy) with fine-grained controls like skip-unchanged-ticks, max-speed mode, and busy cooldown.
@@ -107,6 +110,8 @@ The centrifuge supports three independent upgrade systems that can coexist:
 - **Mekanism Empowered upgrades**: Empowered Speed, Empowered Energy, IO Capacity, Auto Inserter, Fast Item Insert, Fast Item Eject — only when MekanismEmpowered is installed
 - **PB Upgrade System**: see [PB Upgrade System](#pb-upgrade-system) section
 
+The apiary supports the same upgrade families, with one difference: **MEKExtras CREATIVE is accepted by every apiary tier** (infinite energy, produces every tick — the STACK upgrade stays excluded), in addition to the Mekanism / Mekanism Empowered upgrade cards and the PB upgrade cards below.
+
 ### MEK Apiary
 
 An electrified bee production system built on the **Mekanism** universal machine framework. By extending Mekanism's electric machine base class, the apiary fully reuses Mekanism's energy storage, side configuration, upgrade cards, safety interlocks, and GUI framework — migrating Productive Bees' vanilla hive logic into a MEK industrialized pipeline.
@@ -131,39 +136,62 @@ The page is a client/container view only. AE2, Mekanism ejectors, adjacent centr
 
 - **Slot layout**: bee slots / output slots / cage slots (bidirectional transfer) / energy slot / honey fluid tank / PB upgrade slots.
 - **Feeder system**: dedicated window managing flower items. Base variant uses a fixed 3×3 = 9-slot grid; factory variants use a dynamic layout scaling with bee slot count.
-- **PB upgrade system**: 9 self-developed upgrade cards applicable to both centrifuge and apiary — see [PB Upgrade System](#pb-upgrade-system) section.
+- **PB upgrade system**: self-developed upgrade cards — productivity (α/β/γ/Ω), time (I/II), gene sampler, honeycomb block, byproduct destruction, plus the built-in simulation upgrade; see [PB Upgrade System](#pb-upgrade-system) section.
 - **AE2 integration**: outputs (items / fluids / energy) push into the ME network; AppliedFlux priority switching supported.
 - **Direct ejection**: when a centrifuge is adjacent to the apiary, the apiary bypasses the MEK Ejector throttling and pushes honeycombs straight into the centrifuge's input slot — see [Direct Centrifuge Connection](#direct-centrifuge-connection).
+- **Centrifuge priority**: a per-tile toggle that keeps honeycombs out of the AE network and routes them to adjacent centrifuges — produced honeycombs take a fast path straight into centrifuge input slots without passing through the apiary's output slots, and buffered honeycombs are never FIFO-evicted (overflow returns to the AE network first, FIFO only as the last resort).
 - **Jade tooltip**: shows bee count, production progress, and AE2 network status.
 - **GUI tabs**: Sorting / Feeder / PB Upgrades / Multi-fluid tank — four customizable tabs with persisted window positions.
+- **Performance**: throttled GUI energy-bar sync (every 5 game ticks instead of every tick), batched energy deduction under tick acceleration, and cached per-slot NBT serialization keep large factories light on CPU and network.
 
 ### Direct Centrifuge Connection
 
 The apiary and the centrifuge form an industrialized **"produce → process"** pipeline:
 
 1. Bees produce honeycombs according to PB recipes; honey is injected into the apiary's fluid tank.
-2. When an apiary's adjacent block is a centrifuge, the apiary **bypasses the MEK Ejector throttling** and transfers honeycombs directly into the centrifuge's input slot.
+2. When an apiary's adjacent block is a centrifuge, the apiary **bypasses the MEK Ejector throttling** and transfers honeycombs directly into the centrifuge's input slot — with centrifuge priority enabled, fresh honeycomb output is written straight into centrifuge inputs without even passing through the apiary's output slots.
 3. The centrifuge processes the honeycombs and outputs the bee products.
 
-This short-circuit eliminates the throughput bottleneck introduced by the MEK Ejector's per-tick limits and busy/block cooldowns, allowing full-rate industrial production when machines are placed back-to-back.
+This short-circuit eliminates the throughput bottleneck introduced by the MEK Ejector's per-tick limits and busy/block cooldowns, allowing full-rate industrial production when machines are placed back-to-back. Blocked centrifuge inputs back off over wall-clock time (250ms→2s) while fresh output stays zero-delay, and the retry behavior stays correct under tick-acceleration mods.
 
 ### PB Upgrade System
 
-The mod's self-developed **PB Upgrade System** is independent from Mekanism's native upgrade system. It uses Mekanism's upgrade card installation mechanism, but all effect calculations are handled by this mod. The system applies to both the **MEK Centrifuge** (6 types) and the **MEK Apiary** (all 9 types), and upgrades can coexist.
+The mod's self-developed **PB Upgrade System** is independent from Mekanism's native upgrade system. It uses Mekanism's upgrade card installation mechanism, but all effect calculations are handled by this mod. The system applies to both the **MEK Centrifuge** (productivity, time, stability, byproduct destruction) and the **MEK Apiary** (productivity, time, gene sampler, honeycomb block, byproduct destruction, plus the built-in simulation upgrade), and upgrades can coexist.
+
+#### Balance Presets
+
+A server-side **global balance profile** governs how the upgrade system behaves. In the in-game config screen, clicking the profile entry opens a selector list showing every profile with its description:
+
+| Profile | Tier mixing | Centrifuge productivity | PB upgrade cap | Stack upgrade cap |
+| --- | --- | --- | --- | --- |
+| **Basic** (default) | Productivity α/β/γ/Ω mutually exclusive; Time I/II mutually exclusive | Adds parallelism only (no per-batch output amplification) | 4 | 8 |
+| **Paradox Infinity** | Tiers can be mixed freely | Adds output and parallelism | 8+ | 16+ |
+| **Custom** | Uses the individual balance rules below | Configurable | Configurable | Configurable |
+
+- Named profiles clamp the configured caps: Basic takes the smaller of the configured value and 4 (stack: 8); Paradox Infinity takes the larger of the configured value and 8 (stack: 16).
+- Switching profiles never removes or normalizes upgrades already installed in machines — the tier-exclusivity rules only gate new installs.
+- Switching from Basic or Paradox Infinity to Custom inherits the currently effective values; legacy configs from before the balance system are migrated to Custom with the previous behavior preserved.
+- Basic stays close to vanilla Mekanism and Productive Bees pacing; Paradox Infinity unlocks the full power of the Myriad Creations Bee.
 
 #### Upgrade Types
 
-| Upgrade type | Identifier | Effect | Default limit | Applies to |
+| Upgrade type | Identifier | Effect | Default limit (Basic) | Applies to |
 | --- | --- | --- | --- | --- |
-| Productivity α | PRODUCTIVITY | Output multiplier +1.2× (per card) | 8 | Centrifuge + Apiary |
-| Productivity β | PRODUCTIVITY_2 | Output multiplier +1.5× (per card) | 8 | Centrifuge + Apiary |
-| Productivity γ | PRODUCTIVITY_3 | Output multiplier +2.0× (per card) | 8 | Centrifuge + Apiary |
-| Productivity Ω | PRODUCTIVITY_4 | Output multiplier +2.6× (per card) | 8 | Centrifuge + Apiary |
-| Time I | TIME | Processing time reduction (1× weight per card) | 8 | Centrifuge + Apiary |
-| Time II | TIME_2 | Processing time reduction (2× weight per card) | 8 | Centrifuge + Apiary |
-| Gene Sampler | GENE_SAMPLER | Gene sampling upgrade | 4 | Apiary only |
-| Honeycomb Block | BLOCK | Honeycomb block processing upgrade | 1 | Apiary only |
-| Simulation | SIMULATION | Simulation upgrade | 8 | Apiary only |
+| Productivity α | PRODUCTIVITY | Output multiplier +1.2× (per card) | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Productivity β | PRODUCTIVITY_2 | Output multiplier +1.5× (per card) | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Productivity γ | PRODUCTIVITY_3 | Output multiplier +2.0× (per card) | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Productivity Ω | PRODUCTIVITY_4 | Output multiplier +2.6× (per card), also enables the honeycomb-block effect | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Time I | TIME | Processing time reduction (1× weight per card) | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Time II | TIME_2 | Processing time reduction (2× weight per card) | 4 (8+ in Paradox Infinity) | Centrifuge + Apiary |
+| Gene Sampler | GENE_SAMPLER | Gene sampling upgrade | 4 (configurable up to 20) | Apiary only |
+| Honeycomb Block | BLOCK | Converts comb output into honeycomb-block form | 1 | Apiary only |
+| Stability | STABILITY | +15% chance per card for non-guaranteed centrifuge outputs | 7 | Centrifuge only |
+| Byproduct Destruction | USELESS_BYPRODUCT | Discards honey and the optional pollen-ball byproduct | 1 | Centrifuge + Apiary |
+| Simulation | SIMULATION | Built-in simulation production (does not occupy a slot) | — | Apiary only |
+
+> All bonus values shown in the upgrade GUI tooltips (productivity factors, time bonus, stability chance) are read at runtime from the Productive Bees config file, so they always reflect your actual PB configuration.
+>
+> Under the default Basic preset, centrifuge productivity upgrades only add parallelism without amplifying per-batch output, and mixing productivity or time tiers on one machine is blocked — switch to Paradox Infinity or Custom to unlock those.
 
 #### Effect Calculation
 
@@ -171,21 +199,24 @@ Unlike Productive Bees' native additive model, this mod's PB upgrades use a **we
 
 **Productivity upgrades** (shared by centrifuge and apiary):
 - Total output multiplier = `1 + Σ(factor × count)`, where factors are 1.2 / 1.5 / 2.0 / 2.6
-- Example: 4× Productivity α + 2× Productivity γ = `1 + (1.2×4 + 2.0×2) = 1 + 8.8 = 9.8×` output
+- Example: 4× Productivity α + 2× Productivity γ = `1 + (1.2×4 + 2.0×2) = 1 + 8.8 = 9.8×` output (mixing tiers like this requires tier mixing to be allowed — Paradox Infinity, or Custom with exclusivity off)
 - The apiary applies an extra 1.22 compensation factor (to balance output pacing between apiary and centrifuge); the centrifuge has no compensation factor
+- On the centrifuge, the per-batch output amplification only applies when the balance profile enables it (Paradox Infinity, or Custom with "centrifuge productivity affects output" on); under Basic, centrifuge productivity upgrades add parallelism only
 
 **Time upgrades** (shared by centrifuge and apiary):
 - Time multiplier = `1 / (1 + 0.15 × (Time I count + Time II count × 2))`
 - Time II contributes 2× weight per card, making it stronger
-- Example: 2× Time I + 1× Time II = `1 / (1 + 0.15 × (2 + 1×2)) = 1 / 1.6 = 0.625`, i.e. processing time reduced to 62.5%
+- Example: 2× Time I + 1× Time II = `1 / (1 + 0.15 × (2 + 1×2)) = 1 / 1.6 = 0.625`, i.e. processing time reduced to 62.5% (again, mixing Time I and Time II requires tier mixing to be allowed)
 
 #### Per-Type Install Limits
 
-Different upgrade types have different default install limits; all limits are adjustable in the server config:
-- **Productivity / Time upgrades**: default 8 cards (shared by centrifuge and apiary, coexist, configurable)
+Different upgrade types have different default install limits; all limits are adjustable in the server config and further clamped by the [balance profile](#balance-presets):
+- **Productivity / Time upgrades**: 4 cards under the default Basic preset (8+ under Paradox Infinity; configurable up to 64 under Custom) — shared by centrifuge and apiary
 - **Simulation upgrade**: default 8 cards (apiary only)
-- **Gene Sampler upgrade**: default 4 cards (apiary only)
+- **Gene Sampler upgrade**: default 4 cards, configurable up to 20 (apiary only)
 - **Honeycomb Block upgrade**: fixed 1 card (apiary only)
+- **Stability upgrade**: default 7 cards (centrifuge only)
+- **Byproduct Destruction upgrade**: fixed 1 card (functional, centrifuge + apiary)
 
 #### Relationship with Mekanism Native Upgrades
 
@@ -201,12 +232,13 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
 - Connect directly with AE2 smart cables and adjacent machines.
 - Auto-discovered by addon-mod cables (ExtendedAE, AdvancedAE, ae2cs, ae2lt, Glodium, AppliedFlux).
 - **Direct ME output**: push output slot items into the ME network, bypassing external logistics. Toggleable in the Mekanism config screen.
-- **ME energy input**: drain FE stored in the ME network to power the machine. Supports 5-tier energy priority:
+- **ME energy input**: drain FE stored in the ME network to power the machine — the injection target fills the internal energy container (no more near-empty energy bars), and a single extraction takes at most 95% of the network stock so several machines filling up at once can never power down the shared network. Supports 5-tier energy priority:
   1. Local FE cache
   2. External direct supply (Mekanism config component + energy slot)
   3. ME network stored FE (AppliedFlux)
   4. Other energy (handled by Mekanism parent)
   5. AE2 native network energy (converted to FE)
+- **AE2 native energy toggle** (`aeNativeEnergyInputEnabled`, shown only when Applied Flux is installed): disable it to draw energy only from AppliedFlux-stored FE, preventing excessive AE drain from powering down the ME network when FE runs low.
 - **Honeycomb pulling** (centrifuge only): the centrifuge can actively pull honeycombs from the connected ME network for processing, with pulling behavior configurable.
 - **Jade tooltip**: Shows AE2 network status (Offline / Booting / Missing Channel / Online).
 - Node lifecycle is decoupled from the output toggle — closing output push does not disconnect the machine, allowing ME energy input to continue.
@@ -296,7 +328,14 @@ Common config manages Myriad Creations Bee core attributes, grouped into:
 
 ### Server Configuration
 
-Server config is the mod's core, managing machine behavior, split into two main modules:
+Server config is the mod's core, managing machine behavior, split into three main parts:
+
+#### Balance Rules
+
+- **Global balance profile**: Basic / Paradox Infinity / Custom — see [Balance Presets](#balance-presets). Clicking the entry in the in-game config screen opens a selector list with each profile's description.
+- **Productivity tiers exclusive** (Custom only): forbid mixing productivity α/β/γ/Ω on one machine.
+- **Time tiers exclusive** (Custom only): forbid mixing Time I and Time II on one machine.
+- **Centrifuge productivity affects output** (Custom only): when on, centrifuge productivity upgrades also amplify per-batch output; when off, they only add parallelism. PB's native parallelism is always preserved regardless.
 
 #### MEK Centrifuge Configuration
 
@@ -309,6 +348,7 @@ Centrifuge config is grouped by function, with 21 options total:
 - Fluid ejection rate: fluid ejection rate per tick for factory centrifuges (mB), range 1-10240, default 256.
 - Honeycomb block multiplier: output multiplier when centrifuging honeycomb blocks.
 - Multi-fluid tank mode: dynamically allocates independent slots per fluid type when enabled.
+- Smelting compatibility master switch: allows centrifuges to process Energized Smelter (SMELTING) recipes, default on; when off, the per-tile GUI toggle is unusable. Each centrifuge's smelter compatibility is controlled by its own GUI toggle, default off.
 
 **Ejection policy**:
 - Eject delay: output slot auto-eject delay (tick), recommended 2 (0.1s).
@@ -330,6 +370,7 @@ Centrifuge config is grouped by function, with 21 options total:
 - Enable AE2 direct output: push output slot items to AE2 network, default on.
 - Enable AE2 fluid output: push honey fluid to AE2 network, default on.
 - Enable AE energy input: extract FE from ME network into local energy container, default on.
+- Enable AE2 native energy input (only shown when Applied Flux is installed): when off, energy is drawn only from AppliedFlux-stored FE, protecting the ME network from brownouts.
 - Enable AE2 input pulling: centrifuge actively pulls input items from ME network.
 - Max items per pull: 1-16384; too high may increase CPU overhead.
 - Pull trigger interval: game ticks; higher values reduce CPU overhead but slow response.
@@ -340,9 +381,9 @@ Centrifuge config is grouped by function, with 21 options total:
 
 **Input slot stack multiplier**: honeycomb processing multiplier; input slot default is 1/4 of output slot.
 
-**PB upgrade limits**: max install count for productivity, time, gene sampling, honeycomb block upgrades.
+**PB upgrade limits**: max install count for productivity, time, gene sampling, honeycomb block, stability upgrades — productivity/time limits are further clamped by the balance profile (4 under Basic, 8+ under Paradox Infinity).
 
-**ME upgrade limits**: max stack upgrade count, 2^N parallel, only applies to this mod's centrifuge factories.
+**ME upgrade limits**: max stack upgrade count, 2^N parallel, only applies to this mod's centrifuge factories — clamped by the balance profile (8 under Basic, 16+ under Paradox Infinity).
 
 **Fluid tank multiplier**: per-tier fluid tank capacity multiplier.
 
@@ -376,7 +417,7 @@ Apiary config mirrors the centrifuge structure and adds apiary-specific tuning:
 - Evolved Mekanism Extras Cosmic Dense apiary (16 processes, 78 output slots, 39 per page) default 1024×
 - Evolved Mekanism Extras Infinite Multiversal apiary (18 processes, 84 output slots, 42 per page) default 4096×
 
-**AE2 integration** (only registered when AE2 is loaded): AE2 output toggle + AppliedFlux priority switch, mirroring the centrifuge's AE2 integration.
+**AE2 integration** (only registered when AE2 is loaded): AE2 output toggle + AppliedFlux priority switch + the AE2 native energy input toggle, mirroring the centrifuge's AE2 integration.
 
 **PB upgrade limits**: PB upgrade card stack limits — productivity / time / gene sampling / honeycomb block / simulation.
 
@@ -402,7 +443,10 @@ Changes take effect after restarting the game or running `/reload`.
 4. Process honeycombs or honeycomb blocks in the **MEK Centrifuge** or any of its factory variants.
 5. Place bees in the **MEK Apiary** or any of its factory variants, put bee foraging materials in the feeder slots, and bees will produce honeycombs.
 6. Connect the centrifuge/apiary to an AE2 network via smart cables to enable direct ME output and FE energy input.
-7. (Optional) Use a **KubeJS** server script listening on `MyriadBeeEvents.REGISTER` to dynamically register custom bee recipes at runtime.
+7. Tune the **balance profile** (Basic / Paradox Infinity / Custom) in the server config to control upgrade tier mixing, centrifuge productivity behavior, and upgrade caps.
+8. (Optional) Use a **KubeJS** server script listening on `MyriadBeeEvents.REGISTER` to dynamically register custom bee recipes at runtime.
+
+Progress advancements guide the early route: obtaining the MEK centrifuge, processing your first items, the byproduct-destruction upgrade recipe, and the ultimate centrifuge.
 
 ## Building
 
@@ -412,7 +456,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The release jar is `build/libs/productivebeesgenesis-1.0.1.jar`.
+The release jar is `build/libs/productivebeesgenesis-1.0.2.jar`.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 >

@@ -394,10 +394,10 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 			if (mouseX >= getX() + 1 && mouseX < getX() + width - BAR_X_SHIFT - 1 &&
 					mouseY >= y && mouseY < y + ELEMENT_HEIGHT) {
 				PbUpgradeType type = installed.get(currentSelection + i);
-				List<Component> info = List.of(
-						Component.translatable(type.getNameKey()).withColor(type.getColor()),
-						Component.translatable(type.getDescriptionKey())
-				);
+			List<Component> info = List.of(
+					Component.translatable(type.getNameKey()).withColor(type.getColor()),
+					PbUpgradeTooltipHelper.descriptionComponent(type)
+			);
 				if (!info.equals(lastInfo)) {
 					lastInfo = info;
 					lastTooltip = TooltipUtils.create(info);

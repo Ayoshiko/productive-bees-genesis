@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.jade;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -64,8 +65,10 @@ public final class JadeAe2StatusProvider
 			tag.putByte(NBT_STATE, (byte) -1);
 			return;
 		}
-		// 节点对象为空说明 AE2 集成未启用，不显示
-		if (host.productivebeesgenesis$getAe2GridNode() == null) {
+		// AE2 未安装或节点对象为空时不显示；显式守卫避免依赖
+		// getAe2GridNode()==null 的隐式短路（Jade 装而 AE2 未装场景）
+		if (!Ae2IntegrationLoader.isAe2Loaded()
+				|| host.productivebeesgenesis$getAe2GridNode() == null) {
 			tag.putByte(NBT_STATE, (byte) -1);
 			return;
 		}

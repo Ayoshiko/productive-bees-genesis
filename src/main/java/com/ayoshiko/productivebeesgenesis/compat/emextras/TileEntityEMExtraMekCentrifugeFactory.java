@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
+import com.ayoshiko.productivebeesgenesis.mek.EnergySyncThrottler;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
 import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
@@ -122,6 +123,32 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	private final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — skipPb "虚拟 tick 银行"策略,256x JDTE 加速下避免每 gameTick 256 次完整 PB 处理 */
 	private final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
+	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2） */
+	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
+
+	/**
+	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
+	 * <br/>
+	 * 原每 tick 经 getAe2StateHolder() 3 层接口分发链解析（JDTE 256x 下每 gameTick 256 次），
+	 * 是模组最大热点方法。tracker 是 holder 的 final 字段，tile 生命周期内稳定，
+	 * 首次解析后缓存。本类不继承 AbstractMekCentrifugeFactory（EME 工厂基类），
+	 * 需独立持有缓存。
+	 */
+	private TickAccelTracker productivebeesgenesis$cachedTickAccelTracker;
+
+	/** 获取 TickAccelTracker（懒缓存）— 供 onUpdateServer/accumulate/flush 三入口共用 */
+	TickAccelTracker productivebeesgenesis$getTickAccelTracker() {
+		TickAccelTracker tracker = productivebeesgenesis$cachedTickAccelTracker;
+		if (tracker != null) {
+			return tracker;
+		}
+		// lifecycleHandler 为构造器初始化的 final 字段，getStateHolder 必非 null；null 时不缓存以便重试
+		tracker = productivebeesgenesis$ae2LifecycleHandler.getStateHolder().getTickAccelTracker();
+		if (tracker != null) {
+			productivebeesgenesis$cachedTickAccelTracker = tracker;
+		}
+		return tracker;
+	}
 
 	/** 构造函数 — 初始化PB处理器、PB升级委托和IO配置 */
 	public TileEntityEMExtraMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
@@ -349,8 +376,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	 */
 	@Override
 	protected boolean onUpdateServer() {
-		// 编译时通过 IAe2OutputHostBase.getAe2StateHolder() 访问,与 IAe2InputHost.getTickAccelTracker() default 实现等价
-		TickAccelTracker tracker = productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		// Spark 优化：走基类懒缓存 getter（原每 tick 3 层接口链分发是模组最大热点）
+		TickAccelTracker tracker = productivebeesgenesis$getTickAccelTracker();
 		Level level = getLevel();
 		TickBatchSkipState skipState = productivebeesgenesis$getTickBatchSkipState();
 		TickBatchSkipState.TickAction action = skipState.decideAction(tracker, level);
@@ -365,7 +392,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	/** JDTE coalesced path: credit virtual ticks without entering the expensive factory ticker. */
 	@Override
 	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
-		TickAccelTracker tracker = productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		TickAccelTracker tracker = productivebeesgenesis$getTickAccelTracker();
 		if (tracker != null) {
 			tracker.addVirtualTicks(ticks);
 		}
@@ -378,7 +405,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		if (level == null || level.isClientSide) {
 			return;
 		}
-		TickAccelTracker tracker = productivebeesgenesis$getAe2StateHolder().getTickAccelTracker();
+		TickAccelTracker tracker = productivebeesgenesis$getTickAccelTracker();
 		TickBatchSkipState skipState = productivebeesgenesis$getTickBatchSkipState();
 		long gameTick = level.getGameTime();
 		if (tracker == null || !skipState.tryBeginGameTick(gameTick)) {
@@ -429,6 +456,9 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			result = sendUpdatePacket;
 		}
 
+		// 能量条节流：本 tick 全部能量变化完成后刷新同步快照
+		energySyncThrottler.tickServer(level, energyContainer);
+
 		return result;
 	}
 
@@ -452,7 +482,9 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	@Override public void addContainerTrackers(MekanismContainer container) {
 		TileEntityEMExtraFactoryDelegates.addContainerTrackers(container,
 			pbProcessor, pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(), multiFluidDelegate,
-			() -> super.addContainerTrackers(container));
+			// 能量条节流：super 注册后立即按值语义识别并替换 storedEnergy tracker
+			() -> EnergySyncThrottler.installWithSuper(container, energySyncThrottler,
+				energyContainer, () -> super.addContainerTrackers(container)));
 	}
 
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
@@ -592,6 +624,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	@Override
 	public void recalculateUpgrades(Upgrade upgrade) {
 		super.recalculateUpgrades(upgrade);
+		// 升级数量变更（MEK SPEED/ENERGY 等）时立即失效 PB 倍率缓存，与基础离心机/MEK 工厂路径保持一致
+		pbUpgradeDelegate.invalidateMultiplierCache();
 		MekCentrifugeEnergyScaling.ensureCapacity(this);
 	}
 

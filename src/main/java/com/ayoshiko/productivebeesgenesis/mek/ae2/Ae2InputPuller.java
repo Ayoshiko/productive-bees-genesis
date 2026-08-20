@@ -37,8 +37,16 @@ public final class Ae2InputPuller {
 	/** 异常日志计数器 — 用于在日志中显示累计出现次数（LogThrottle 已负责节流） */
 	private static final AtomicLong PULL_EXCEPTION_COUNTER = new AtomicLong(0);
 
-	/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例 */
-	private static final IActionSource ACTION_SOURCE = new BaseActionSource() {};
+	/**
+	 * 懒加载 Holder — AE2 未安装时本类初始化不触发 {@link BaseActionSource} 类解析
+	 * <br/>
+	 * 与 Ae2OutputPusher/Ae2FluidPusher/Ae2EnergyBridge 的 ActionSourceHolder 模式一致
+	 * （Issue #8 防御深度：静态字段在 &lt;clinit&gt; 执行先于方法体守卫）。
+	 */
+	private static final class ActionSourceHolder {
+		/** 全局共享的 AE2 操作源 — {@link BaseActionSource} 完全无状态，全局只需 1 个实例 */
+		static final IActionSource INSTANCE = new BaseActionSource() {};
+	}
 
 	private Ae2InputPuller() {}
 
@@ -203,7 +211,7 @@ public final class Ae2InputPuller {
 				AEItemKey key = direct.key();
 				if (key == null || !CombFuzzyMatcher.isCombItem(key) || !pullKeys.add(key)) continue;
 				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-						availableStacks, meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
+						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 				long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
 				if (!unlimitedMode && configuredLimit >= 0L) {
 					available = Math.min(available, configuredLimit);
@@ -223,7 +231,7 @@ public final class Ae2InputPuller {
 					if (!direct.networkStock() || key == null || !CombFuzzyMatcher.isCombItem(key)
 							|| !pullKeys.add(key)) continue;
 					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-							availableStacks, meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
+						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 					long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
 					if (!unlimitedMode && configuredLimit >= 0L) {
 						available = Math.min(available, configuredLimit);
@@ -315,7 +323,7 @@ public final class Ae2InputPuller {
 					typeAvailable, Math.min(entry.remaining, remainingQuota - totalPulled)));
 			if (toPull <= 0) continue;
 			try {
-				int pulled = pullBatchForType(level, entry.key, toPull, meStorage, ACTION_SOURCE,
+				int pulled = pullBatchForType(level, entry.key, toPull, meStorage, ActionSourceHolder.INSTANCE,
 						inputSlots, inputSlotCapacities, slotStart, pos, returnBackoff, keyBackoff);
 				entry.remaining -= pulled;
 				totalPulled += pulled;

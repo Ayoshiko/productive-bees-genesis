@@ -60,6 +60,9 @@ class ApiaryAe2HostAdapter {
 	/** 缓存的 AppliedFlux 优先开关（默认 true，与 apiaryPreferAppliedFluxOverAeEnergy 配置默认值一致） */
 	private volatile boolean cachedPreferAppliedFluxOverAeEnergy = true;
 
+	/** 缓存的 AE2 原生能量提取开关（默认 true；AppliedFlux 未加载时配置为 null 回退 true，此时原生是唯一能量源） */
+	private volatile boolean cachedAeNativeEnergyInputEnabled = true;
+
 	// ===== per-tile AE2 输出开关（与全局配置 AND 关系） =====
 	/** per-tile AE2 物品输出开关（默认 true，与全局配置 AND 关系） */
 	private volatile boolean aeItemOutputEnabled = true;
@@ -101,6 +104,9 @@ class ApiaryAe2HostAdapter {
 
 	/** tick 末尾尝试将输出槽物品推送到 AE2 网络 */
 	void pushOutputs() {
+		// AE2 未安装守卫：Ae2OutputPusher 方法体验证需解析 AEItemKey&lt;:AEKey 子类型层级，
+		// 类加载即 NoClassDefFoundError（Issue #8 蜂箱 tick 路径，放置后首个 tick 崩溃）
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputPusher.pushOutputs(tile);
 		// 模块6：输出缓冲区直推 AE —— 离心机处理不了的物品、或离心机来不及处理的
 		// 多余蜜脾，在输出槽被占满时也能直接回 AE，不再等待输出槽腾出空间
@@ -113,10 +119,21 @@ class ApiaryAe2HostAdapter {
 				Ae2OutputPusher.DirectItemPushSession session =
 						Ae2OutputPusher.prepareDirectItemPush(tile);
 				if (session != null) {
-					int pushed = tile.getOutputBuffer().pushToAe(session);
-					if (pushed > 0) {
+					// 离心机优先：hold 蜜脾保留在缓冲区等待离心机，不推 AE
+					ApiaryOutputBuffer.AeBufferPushResult result =
+							tile.getOutputBuffer().pushToAe(session, tile::shouldHoldForCentrifuge);
+					int pushed = result.pushed();
+					// 慢 insert/连续零接收优先于成功复位判定：病态网络 insert 仍会成功（pushed>0），
+					// 先 recordSuccess 再 recordFailure 会每轮清零指数，窗口恒卡 50ms
+					// （每 50ms 一次 5-10ms 完整网络遍历）。禁止复位，指数累积至 1s 封顶；
+					// 网络恢复（insert 变快）后一次健康成功即复位。
+					if (session.shouldTriggerBackoff()) {
+						pushState.getBufferedItemBackoff().recordFailure(System.nanoTime());
+					} else if (pushed > 0) {
 						pushState.getBufferedItemBackoff().recordSuccess();
-					} else if (session.attemptedCount() > 0) {
+					} else if (session.attemptedCount() > 0 || result.heldCount() > 0) {
+						// 真实尝试被拒，或全部组被离心机优先 hold 保留 — 都进入退避，
+						// 避免满缓冲蜜脾场景每 tick 重复全量遍历（满缓存深度优化）
 						pushState.getBufferedItemBackoff().recordFailure(now);
 					}
 				}
@@ -130,10 +147,27 @@ class ApiaryAe2HostAdapter {
 	int pushGeneratedItem(ItemStack stack) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		Level level = tile.getLevel();
-		if (level == null || !ae2LifecycleHandler.getStateHolder().getPushState()
-				.tryAcquireGeneratedItemPush(level.getGameTime(),
-						MAX_DIRECT_GENERATED_ITEM_PUSHES_PER_TICK)) return 0;
-		return Ae2OutputPusher.pushItemStack(tile, stack);
+		if (level == null) return 0;
+		var pushState = ae2LifecycleHandler.getStateHolder().getPushState();
+		// 满存储专项：与主路径共享 itemBackoff — 满存储退避期间跳过生成物直推，
+		// 避免每 tick 32 次注定失败的完整网络遍历（网络恢复后任意一次成功即复位退避）；
+		// 先查退避再取配额，退避期间不白白消耗直推配额
+		if (pushState.getItemBackoff().shouldSkip(System.nanoTime())) return 0;
+		if (!pushState.tryAcquireGeneratedItemPush(level.getGameTime(),
+				MAX_DIRECT_GENERATED_ITEM_PUSHES_PER_TICK)) return 0;
+		Ae2OutputPusher.DirectItemPushSession session =
+				Ae2OutputPusher.prepareDirectItemPush(tile);
+		if (session == null) return 0;
+		int pushed = session.applyAsInt(stack);
+		if (session.shouldTriggerBackoff() || (pushed <= 0 && session.attemptedCount() > 0)) {
+			// 慢 insert/连续零接收，或零接收（真实 insert 被拒）→ 联动整体退避；
+			// 慢 insert 时指数不被成功分支复位，可累积至 1s 封顶（病态网络降频 ~20 倍）
+			pushState.getItemBackoff().recordFailure(System.nanoTime());
+		} else if (pushed > 0) {
+			// 健康成功 — 复位退避指数（偶发失败后快速恢复满速，避免指数只增不减）
+			pushState.getItemBackoff().recordSuccess();
+		}
+		return pushed;
 	}
 
 	long pushGeneratedFluid(FluidStack stack, long amount) {
@@ -253,6 +287,12 @@ class ApiaryAe2HostAdapter {
 		} else {
 			cachedPreferAppliedFluxOverAeEnergy = true;
 		}
+		// null 守卫：AppliedFlux 未加载时 apiaryAeNativeEnergyInputEnabled 为 null，回退 true（原生是唯一能量源）
+		if (ModConfig.SERVER.apiaryAeNativeEnergyInputEnabled != null) {
+			cachedAeNativeEnergyInputEnabled = ModConfig.SERVER.apiaryAeNativeEnergyInputEnabled.get();
+		} else {
+			cachedAeNativeEnergyInputEnabled = true;
+		}
 	}
 
 	/**
@@ -266,6 +306,19 @@ class ApiaryAe2HostAdapter {
 	boolean getPreferAppliedFluxOverAeEnergy() {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return false;
 		return cachedPreferAppliedFluxOverAeEnergy;
+	}
+
+	/**
+	 * 蜂箱是否允许提取 AE2 原生能量 — 读取缓存值
+	 * <br/>
+	 * 配置值由 {@link #refreshAe2ConfigCache()} 每 100 tick 刷新到
+	 * {@link #cachedAeNativeEnergyInputEnabled}。AppliedFlux 未加载时配置项为 null，
+	 * 缓存回退 true（原生是唯一能量源，由主开关管控）。
+	 * AE2 未安装时返回 false。
+	 */
+	boolean isAeNativeEnergyInputEnabled() {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return false;
+		return cachedAeNativeEnergyInputEnabled;
 	}
 
 	// ===== per-tile AE2 输出开关方法 =====

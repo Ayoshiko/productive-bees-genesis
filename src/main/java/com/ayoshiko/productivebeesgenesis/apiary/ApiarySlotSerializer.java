@@ -37,8 +37,17 @@ public class ApiarySlotSerializer {
 	/** NBT key — 蜜蜂槽数组（带模组前缀避免冲突） */
 	public static final String NBT_KEY_BEE_SLOTS = "productivebeesgenesis_apiary_bee_slots";
 
+	/** 空槽位共享的空字节数组 — 不可变语义，客户端据此判断槽位为空 */
+	private static final byte[] EMPTY_BEE_DATA = new byte[0];
+
 	/** 所属槽位管理器 — 访问蜜蜂槽数组与数量 */
 	private final ApiarySlotManager manager;
+
+	/** per-slot 序列化缓存 — beeData 引用未变时复用字节数组，避免每 gameTick 重复 NBT 压缩（v1.0.2） */
+	private byte[][] serializedBeeDataCache;
+
+	/** per-slot 缓存对应的 beeData 引用 — 引用相等即缓存命中 */
+	private CompoundTag[] serializedSourceCache;
 
 	/**
 	 * 构造蜜蜂槽序列化器
@@ -173,8 +182,14 @@ public class ApiarySlotSerializer {
 	void addContainerTrackers(MekanismContainer container) {
 		BeeSlot[] beeSlots = manager.getBeeSlots();
 		int beeSlotCount = manager.getBeeSlotCount();
+		// 惰性初始化 per-slot 序列化缓存（tracker 注册仅在 GUI 打开时执行）
+		if (serializedBeeDataCache == null || serializedBeeDataCache.length != beeSlotCount) {
+			serializedBeeDataCache = new byte[beeSlotCount][];
+			serializedSourceCache = new CompoundTag[beeSlotCount];
+		}
 		for (int i = 0; i < beeSlotCount; i++) {
 			final BeeSlot slot = beeSlots[i];
+			final int slotIndex = i;
 			// 状态枚举 — 通过 ordinal 同步
 			container.track(SyncableEnum.create(
 					ApiarySlotSerializer::stateByOrdinal,
@@ -193,9 +208,13 @@ public class ApiarySlotSerializer {
 					slot::setHasNectar
 			));
 			// 蜜蜂完整 NBT（字节数组形式）— 供客户端渲染蜜蜂实体、名称、tooltip
-			// 序列化/反序列化使用 NbtIo，空槽位同步空数组
+			// v1.0.2：SyncableByteArray 的 dirty 检查每 gameTick 调用 getter，
+			// 原实现每 tick 每 slot 执行一次 NbtIo.writeCompressed（49 槽工厂蜂箱
+			// = 每 gameTick 49 次 NBT 压缩序列化 + 全数组 hashCode）。
+			// BeeSlot 仅在蜜蜂实质变化时更新 beeData 引用，引用相等即复用缓存，
+			// 序列化次数从 每 tick×N 降为 仅蜜蜂变化时。
 			container.track(SyncableByteArray.create(
-					() -> serializeBeeData(slot.getBeeData()),
+					() -> serializeBeeDataCached(slotIndex, slot),
 					bytes -> slot.setBeeData(deserializeBeeData(bytes))
 			));
 			// 已居住 tick 数 — tooltip 进度显示
@@ -212,15 +231,37 @@ public class ApiarySlotSerializer {
 	}
 
 	/**
+	 * 带引用缓存的 beeData 序列化（网络同步 getter 专用，v1.0.2）
+	 * <br/>
+	 * {@code BeeSlot.setBeeData} 仅在蜜蜂实质变化（装入/取出/NBT 修改）时更新引用，
+	 * 因此引用相等即可安全复用上次序列化结果。空槽位返回共享的 {@link #EMPTY_BEE_DATA}。
+	 *
+	 * @param slotIndex 槽位索引（缓存数组下标）
+	 * @param slot      蜜蜂槽
+	 * @return 压缩后的字节数组（缓存实例，调用方不得修改）
+	 */
+	private byte[] serializeBeeDataCached(int slotIndex, BeeSlot slot) {
+		CompoundTag beeData = slot.getBeeData();
+		if (beeData == null) return EMPTY_BEE_DATA;
+		if (beeData == serializedSourceCache[slotIndex]) {
+			return serializedBeeDataCache[slotIndex];
+		}
+		byte[] serialized = serializeBeeData(beeData);
+		serializedSourceCache[slotIndex] = beeData;
+		serializedBeeDataCache[slotIndex] = serialized;
+		return serialized;
+	}
+
+	/**
 	 * 将 beeData 序列化为字节数组（用于网络同步）
 	 * <br/>
-	 * 使用 NbtIo 压缩写入，空数据返回空数组（长度为0），客户端据此判断槽位为空。
+	 * 使用 NbtIo 压缩写入，空数据返回共享空数组（长度为0），客户端据此判断槽位为空。
 	 *
 	 * @param beeData 蜜蜂 NBT 数据
-	 * @return 压缩后的字节数组，空数据返回空数组
+	 * @return 压缩后的字节数组，空数据返回共享空数组（不可变语义）
 	 */
 	private static byte[] serializeBeeData(CompoundTag beeData) {
-		if (beeData == null) return new byte[0];
+		if (beeData == null) return EMPTY_BEE_DATA;
 		try {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
 			NbtIo.writeCompressed(beeData, baos);
@@ -228,7 +269,7 @@ public class ApiarySlotSerializer {
 		} catch (Exception e) {
 			// DevLog 节流日志便于排查（网络同步路径，避免刷屏）
 			DevLog.warn("nbt_serialize", "序列化 beeData 失败: {}", e.toString());
-			return new byte[0];
+			return EMPTY_BEE_DATA;
 		}
 	}
 

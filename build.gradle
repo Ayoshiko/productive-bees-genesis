@@ -123,8 +123,12 @@ dependencies {
     implementation name: 'Mekanism-1.21.1-10.7.19.85'
 
     // Mekanism Extras（可选依赖，编译时需要访问ME的ExtraFactory等类）
-    compileOnly name: 'mekanism_extras-1.21.1-1.4.0'
-    // ME本体（测试环境运行时依赖）
+    // v1.4.1：AdvancedTier.getColor() 对 COSMIC/INFINITE 返回动态变色（TierColor 每客户端tick刷新）
+    // 编译用 1.4.1（API 兼容 1.4.0），运行时用 1.4.0（整合包主流稳定版）验证向后兼容：
+    // 我们引用的 API（ExtraUpgrade/AdvancedTier/ExtraAttributeTier/IMixinMachineEnergyContainer）
+    // 在 1.4.0 中签名一致；变色效果仅在玩家安装 1.4.1+ 时生效，旧版自动降级为静态颜色
+    compileOnly name: 'mekanism_extras-1.21.1-1.4.1'
+    // ME本体（测试环境运行时依赖 — 刻意使用 1.4.0 稳定版，确保多数玩家的旧版环境兼容）
     runtimeOnly name: 'mekanism_extras-1.21.1-1.4.0'
 
     // EvolvedMekanism（可选依赖，编译时需要访问EM的FactoryTier等类）

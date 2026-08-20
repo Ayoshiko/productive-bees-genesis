@@ -61,6 +61,20 @@ final class MekExtraUpgradeSupport {
 		if (ExtraUpgrade.STACK != null && !upgrades.contains(ExtraUpgrade.STACK)) {
 			upgrades.add(ExtraUpgrade.STACK);
 		}
+		collectCreativeUpgrade(upgrades);
+	}
+
+	/**
+	 * 仅收集CREATIVE升级（不含STACK）到给定列表
+	 * <br/>
+	 * 供 {@link MekUpgradeSupport#forApiary()} 使用：蜂箱自v2.x起支持CREATIVE升级
+	 * （产出管线已有20-tick批量聚合，每tick产出的TPS风险可控），
+	 * 但STACK升级仍被排除（2^n次产出倍率对蜂箱产量体系过高）。
+	 * 防御性检查：ExtraUpgrade.CREATIVE由ME Mixin注入，若为null则跳过。
+	 *
+	 * @param upgrades 升级列表（会被修改）
+	 */
+	static void collectCreativeUpgrade(java.util.List<Upgrade> upgrades) {
 		if (ExtraUpgrade.CREATIVE != null && !upgrades.contains(ExtraUpgrade.CREATIVE)) {
 			upgrades.add(ExtraUpgrade.CREATIVE);
 		}

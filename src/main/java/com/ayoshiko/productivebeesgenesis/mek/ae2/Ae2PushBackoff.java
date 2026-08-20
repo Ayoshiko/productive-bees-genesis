@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 /**
 	 * Per-tile 指数退避状态管理器（AE2 推送器），基于 {@link System#nanoTime()} 单调时钟。
 	 * <br/>
@@ -27,6 +29,13 @@ public final class Ae2PushBackoff {
 
 	/** 最大退避纳秒（默认 1 秒） */
 	private static final long DEFAULT_MAX_BACKOFF_NS = 1_000_000_000L;
+
+	/**
+	 * 退避窗口相位抖动系数 — Spark 实证：多台机器在同一病态网络（EnderDrives fsync）上
+	 * 同 tick 失败后，无抖动的退避到期时刻完全对齐，重试时同 tick 串行发起 N 次慢 insert
+	 * （对应报告 MSPT median 42ms / max 260ms 的尖峰形态）。±25% 抖动打散重试相位。
+	 */
+	private static final double JITTER_FACTOR = 0.25;
 
 	/** 初始退避窗口（实例可配置，流体推送用更短窗口避免 256× 加速下长时间停机） */
 	private final long initialBackoffNs;
@@ -82,7 +91,10 @@ public final class Ae2PushBackoff {
 		// 钳制移位避免指数过大后溢出；最终窗口再由实例最大值限制。
 		int shift = Math.min(backoffExponent - 1, 5);
 		long backoffNanos = Math.min(maxBackoffNs, initialBackoffNs << shift);
-		backoffEndNanos = nanos + backoffNanos;
+		// 相位抖动 ±JITTER_FACTOR：窗口恒为正（0.75×~1.25×），仅打散多机重试时刻
+		long jitter = (long) (backoffNanos * JITTER_FACTOR
+				* ThreadLocalRandom.current().nextDouble(-1.0, 1.0));
+		backoffEndNanos = nanos + backoffNanos + jitter;
 	}
 
 	/**

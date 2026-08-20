@@ -126,7 +126,8 @@ public final class ApiaryOutputBuffer {
 		if (leftovers == null || leftovers.isEmpty()) return;
 		boolean changed = false;
 		for (ItemStack stack : leftovers) {
-			changed |= offerOne(stack);
+			if (stack == null || stack.isEmpty()) continue;
+			changed |= offerOneHold(stack, false) == 0;
 		}
 		if (!changed) return;
 		markContentsChanged();
@@ -134,12 +135,58 @@ public final class ApiaryOutputBuffer {
 
 	/** Single-stack path used by defensive transport rollback without allocating a wrapper list. */
 	public synchronized void offer(ItemStack leftover) {
-		if (!offerOne(leftover)) return;
+		if (leftover == null || leftover.isEmpty()) return;
+		if (offerOneHold(leftover, false) != 0) return;
 		markContentsChanged();
 	}
 
-	private boolean offerOne(ItemStack stack) {
-		if (stack == null || stack.isEmpty()) return false;
+	/**
+	 * 离心机优先模式的带保持注入（"离心机已满优先在蜂箱缓存暂存，超出输出上限再回AE"）
+	 * <br/>
+	 * hold 物品在缓冲区满时<b>不淘汰</b>最旧组，超出容量的部分作为溢出返回给调用方
+	 * （由调用方推送 AE2）；非 hold 物品保持原有 FIFO 淘汰行为，行为完全兼容。
+	 *
+	 * @param leftovers  distributeToOutput 未成功插入的剩余产物列表
+	 * @param holdFilter hold 判定（null 等价于全部非 hold，退化为普通 offer）
+	 * @return 溢出列表（缓冲区满且被 hold 的部分）；null 表示无溢出
+	 */
+	public synchronized List<ItemStack> offerHolding(List<ItemStack> leftovers,
+			Predicate<ItemStack> holdFilter) {
+		if (leftovers == null || leftovers.isEmpty()) return null;
+		List<ItemStack> overflow = null;
+		boolean plainChanged = false;
+		boolean holdChanged = false;
+		for (ItemStack stack : leftovers) {
+			if (stack == null || stack.isEmpty()) continue;
+			boolean hold = holdFilter != null && holdFilter.test(stack);
+			int overflowCount = offerOneHold(stack, hold);
+			if (overflowCount > 0) {
+				if (overflow == null) overflow = new ArrayList<>(4);
+				overflow.add(stack.copyWithCount(overflowCount));
+			} else {
+				if (hold) holdChanged = true;
+				else plainChanged = true;
+			}
+		}
+		// hold 注入不 reset AE2 退避：hold 组永远被 pushToAe 跳过，推送结果不因蜜脾入缓冲而改变；
+		// 加速场景下每批产出若 reset 退避会触发一次注定无效的全量遍历（512 组快照 + 逐组判定）。
+		// 版本号仍递增：直连退避依赖版本变化感知新蜜脾并立即重试离心机转移。
+		if (plainChanged) {
+			markContentsChanged();
+		} else if (holdChanged) {
+			markHoldContentsChanged();
+		}
+		return overflow;
+	}
+
+	/**
+	 * 注入单个产物组，返回溢出数量。
+	 *
+	 * @param stack 待注入产物（调用方保证非空）
+	 * @param hold  true=缓冲区满时不淘汰，超出容量部分返回；false=满时 FIFO 淘汰最旧组
+	 * @return 溢出数量（仅 hold=true 且缓冲区满时可能非 0）
+	 */
+	private int offerOneHold(ItemStack stack, boolean hold) {
 		int remaining = stack.getCount();
 		BufferKey key = BufferKey.of(stack);
 		List<ItemStack> candidates = bufferedIndex.get(key);
@@ -150,8 +197,12 @@ public final class ApiaryOutputBuffer {
 			remaining = (int) Math.max(0L, merged - Integer.MAX_VALUE);
 			if (remaining == 0) break;
 		}
-		if (remaining <= 0) return true;
+		if (remaining <= 0) return 0;
 		if (bufferedStacks.size() >= MAX_BUFFER_GROUPS) {
+			if (hold) {
+				// 离心机优先：不淘汰待离心物品，超出输出上限的溢出交由调用方推 AE
+				return remaining;
+			}
 			ItemStack evicted = bufferedStacks.pollFirst();
 			removeFromIndex(evicted);
 			discardedCount.incrementAndGet();
@@ -168,12 +219,26 @@ public final class ApiaryOutputBuffer {
 			bufferedIndex.put(key, candidates);
 		}
 		candidates.add(buffered);
-		return true;
+		return 0;
 	}
 
 	private void markContentsChanged() {
 		outputVersion.incrementAndGet();
 		tile.onOutputBufferContentsChanged();
+		tile.setChanged();
+	}
+
+	/**
+	 * hold 物品（离心机优先蜜脾）入缓冲的轻量标记 — 仅版本递增与持久化。
+	 * <br/>
+	 * 不触发 {@code onOutputBufferContentsChanged}（AE2 推送退避 reset）：
+	 * hold 组被 {@link #pushToAe} 的 holdFilter 永久跳过，蜜脾入缓冲不改变推送结果，
+	 * reset 只会打穿退避造成每批产出一次无效全量遍历（加速场景 mspt 热点）。
+	 * 版本号递增保留：直连退避（ApiaryDirectEjectHandler.shouldCheck）依赖版本变化
+	 * 感知新蜜脾并立即重试离心机转移。
+	 */
+	private void markHoldContentsChanged() {
+		outputVersion.incrementAndGet();
 		tile.setChanged();
 	}
 
@@ -556,14 +621,21 @@ public final class ApiaryOutputBuffer {
 	 * 当输出槽被待离心蜜脾占满、缓冲区里积压了非蜜脾物品或多余蜜脾时，
 	 * 直接调用回调逐组推送，避免等待输出槽腾出空间（墙钟退避，加速免疫）。
 	 * <p>
+	 * 离心机优先：被 holdFilter 判定保持的物品（蜜脾）跳过推送，保留在缓冲区等待离心机；
+	 * heldCount 返回被跳过的组数，供调用方在"全部组被 hold"时进入退避，
+	 * 避免满缓冲蜜脾场景每 tick 重复全量遍历（满缓存深度优化）。
+	 * <p>
 	 * 回调返回该组实际被接收的数量（0=完全拒绝）；部分接收时剩余数量保留在缓冲区。
 	 * 与 {@link #tryRedistributeToExternalSlots} 共用 remainingBuffer，调用前已 clear。
 	 *
 	 * @param pushSingle 单组推送回调（返回实际接收数量，异常时按 0 处理）
-	 * @return 实际推送总量；0 表示未推送
+	 * @param holdFilter hold 判定（null 表示不过滤）；判定在缓冲区锁内执行，
+	 *                   实现不得回调本缓冲区方法（防死锁）
+	 * @return 推送结果（pushed=推送总量，heldCount=被 hold 跳过的组数）
 	 */
-	public synchronized int pushToAe(java.util.function.ToIntFunction<ItemStack> pushSingle) {
-		if (bufferedStacks.isEmpty()) return 0;
+	public synchronized AeBufferPushResult pushToAe(java.util.function.ToIntFunction<ItemStack> pushSingle,
+			Predicate<ItemStack> holdFilter) {
+		if (bufferedStacks.isEmpty()) return AeBufferPushResult.EMPTY;
 		remainingBuffer.clear();
 		int groupCount = bufferedStacks.size();
 		if (reusableAePushStacks.length < groupCount) {
@@ -577,12 +649,19 @@ public final class ApiaryOutputBuffer {
 		int attemptLimit = Math.min(groupCount, MAX_AE_BUFFER_GROUPS_PER_CALL);
 		int attemptedSurvivors = 0;
 		int totalPushed = 0;
+		int heldCount = 0;
 		boolean changed = false;
 		for (int offset = 0; offset < groupCount; offset++) {
 			ItemStack stack = reusableAePushStacks[
 					RoundRobinSlotTraversal.index(start, offset, groupCount)];
 			if (stack.isEmpty()) {
 				changed = true;
+				continue;
+			}
+			// 离心机优先：hold 物品保留在缓冲区等待离心机，不推 AE
+			if (holdFilter != null && holdFilter.test(stack)) {
+				remainingBuffer.add(stack);
+				heldCount++;
 				continue;
 			}
 			if (offset >= attemptLimit) {
@@ -628,7 +707,12 @@ public final class ApiaryOutputBuffer {
 		} else {
 			aePushCursor = RoundRobinSlotTraversal.index(start, attemptLimit, groupCount);
 		}
-		return totalPushed;
+		return new AeBufferPushResult(totalPushed, heldCount);
+	}
+
+	/** pushToAe 结果：pushed=实际推送数量，heldCount=被 hold 过滤保留的组数 */
+	public record AeBufferPushResult(int pushed, int heldCount) {
+		static final AeBufferPushResult EMPTY = new AeBufferPushResult(0, 0);
 	}
 
 	/**

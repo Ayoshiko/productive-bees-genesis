@@ -84,7 +84,7 @@ final class Ae2InputFilterQuerySupport {
 			String entry = slots[i];
 			boolean matches = false;
 			if (Ae2InputFilter.isDirectFingerprint(entry)) {
-				AEItemKey configured = i < keys.length ? keys[i] : null;
+				AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
 				if (configured == null && registries != null) {
 					configured = Ae2ItemFingerprint.decode(
 							entry.substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()), registries);
@@ -118,7 +118,7 @@ final class Ae2InputFilterQuerySupport {
 			String entry = slots[i];
 			if (entry == null || entry.isBlank()) continue;
 			if (Ae2InputFilter.isDirectFingerprint(entry)) {
-				AEItemKey configured = i < keys.length ? keys[i] : null;
+				AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
 				if (Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key, beeType, isBlock,
 						ignoreNbt, precise)) return true;
 			} else if (beeType != null && matchesFuzzyEntry(fuzzyEntries[i], beeType, isBlock, precise)) {
@@ -158,7 +158,7 @@ final class Ae2InputFilterQuerySupport {
 		long requested = 0L;
 		for (int i = 0; i < slots.length; i++) {
 			if (!Ae2InputFilter.isDirectFingerprint(slots[i])) continue;
-			AEItemKey configured = i < keys.length ? keys[i] : null;
+			AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
 			if (configured == null && registries != null) {
 				configured = Ae2ItemFingerprint.decode(
 						slots[i].substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()), registries);
@@ -198,7 +198,7 @@ final class Ae2InputFilterQuerySupport {
 			if (entry == null) continue;
 			boolean matches;
 			if (Ae2InputFilter.isDirectFingerprint(entry)) {
-				AEItemKey configured = i < keys.length ? keys[i] : null;
+				AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
 				matches = Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key,
 						candidateBeeType, candidateBlock, ignoreNbt, precise);
 				if (matches) {
@@ -266,15 +266,16 @@ final class Ae2InputFilterQuerySupport {
 		List<DirectEntry> result = new ArrayList<>();
 		for (int i = 0; i < slots.length; i++) {
 			if (Ae2InputFilter.isDirectFingerprint(slots[i])) {
-				result.add(new DirectEntry(i, slots[i].substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()), keys[i],
-						amounts[i], unlimited[i]));
+				// keys 懒创建可能为 null（NBT 恢复后未解析），此时 key 记为 null 表示待解析
+				result.add(new DirectEntry(i, slots[i].substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()),
+						keys == null ? null : keys[i], amounts[i], unlimited[i]));
 			}
 		}
 		return result;
 	}
 
 	static AEItemKey resolvedDirectKey(AEItemKey[] keys, int index) {
-		return index >= 0 && index < keys.length ? keys[index] : null;
+		return keys != null && index >= 0 && index < keys.length ? keys[index] : null;
 	}
 
 	static long directAmountAt(long[] amounts, int index) {

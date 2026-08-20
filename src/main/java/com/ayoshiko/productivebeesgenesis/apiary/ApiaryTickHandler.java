@@ -230,9 +230,10 @@ class ApiaryTickHandler {
 				tile.processPbUpgradeInput();
 				// Bug 4：递减PB升级动画计数器
 				tile.tickPbUpgradeAnim();
-			} catch (Exception e) {
-				// 捕获异常防止 tick 崩溃，记录错误日志（节流避免刷屏）
-				final Exception cause = e;
+			} catch (Exception | LinkageError e) {
+				// 捕获异常防止 tick 崩溃，记录错误日志（节流避免刷屏）；
+				// LinkageError 与 AE2 兜底捕获保持同一防御深度（未装 AE2 时的类加载缺失）
+				final Throwable cause = e;
 				// 统一使用 ms 时间源，避免 tick/ms 双模式混用导致节流失效（Task 15）
 				slotErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
 					ProductiveBeesGenesis.LOGGER.error("ApiaryTickHandler 处理蜜蜂槽位时异常"
@@ -266,6 +267,10 @@ class ApiaryTickHandler {
 		if (isWorking) {
 			soundHandler.maybePlayWorkSound(activationCounter.getWorkingCount());
 		}
+
+		// 能量条节流：本 tick 全部能量变化（AE 注入 + 蜜蜂批量扣除）完成后刷新同步快照
+		tile.energySyncThrottler().tickServer(tile.getLevel(),
+				tile.accessor().productivebeesgenesis$getEnergyContainer());
 
 		return sendUpdatePacket;
 	}

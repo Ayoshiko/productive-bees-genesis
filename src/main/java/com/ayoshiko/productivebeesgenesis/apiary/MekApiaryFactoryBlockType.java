@@ -108,7 +108,7 @@ public final class MekApiaryFactoryBlockType {
 		if (nextTierBlock != null) {
 			builder.with(new AttributeUpgradeable(MekCentrifugeBlockType.wrapAsBlockRegistryObject(nextTierBlock)));
 		}
-		// 蜂箱不支持STACK/CREATIVE升级（CREATIVE导致TPS严重降低），仅支持SPEED/ENERGY/MUFFLING
+		// 蜂箱支持CREATIVE升级（TPS风险已由20-tick批量产出聚合消除），STACK仍排除（产出倍率过高）
 		builder.with(MekUpgradeSupport.forApiary());
 
 		return builder.build();

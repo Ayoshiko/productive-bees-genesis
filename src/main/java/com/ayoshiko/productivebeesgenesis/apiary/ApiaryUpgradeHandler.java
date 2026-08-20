@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
@@ -60,7 +61,7 @@ public class ApiaryUpgradeHandler {
 	/**
 	 * 升级倍率缓存 — 100 tick 刷新一次，避免每 tick 重复 Math.pow 与 EnumMap 查询。
 	 * <p>
-	 * 6 个公共 getter 委托到此缓存；缓存刷新时调用 package-private 的
+	 * 7 个公共 getter 委托到此缓存；缓存刷新时调用 package-private 的
 	 * {@code compute*} 方法获取最新值，避免 handler → cache → handler 递归。
 	 */
 	private final ApiaryUpgradeCache upgradeCache;
@@ -173,14 +174,25 @@ public class ApiaryUpgradeHandler {
 	}
 
 	/**
-	 * 是否安装了 MEKExtras 创造升级
+	 * 是否安装了 MEKExtras 创造升级（不走缓存，直接查询）
 	 * <br/>
-	 * 蜂箱不支持CREATIVE升级，此方法始终返回false。保留方法签名以维持兼容性。
+	 * 委托 {@link MekUpgradeSupport#hasCreativeUpgrade}（MEKExtras 未加载时安全返回 false）。
+	 * CREATIVE 安装后：能耗经 MEKExtras Mixin 自动归零（MachineEnergyContainer.getEnergyPerTick=0），
+	 * 生产周期由 {@code ApiaryProgressAdvancer} 缩短为每 tick 产出。
 	 *
-	 * @return 始终返回 false
+	 * @return true 如果安装了 CREATIVE 升级
 	 */
 	private boolean hasMekCreativeUpgrade() {
-		return false;
+		return MekUpgradeSupport.hasCreativeUpgrade(tile);
+	}
+
+	/**
+	 * 计算是否安装了 CREATIVE 升级（不走缓存）— 供 {@link ApiaryUpgradeCache#doRefresh} 调用
+	 *
+	 * @return true 如果安装了 CREATIVE 升级
+	 */
+	boolean computeHasCreativeUpgrade() {
+		return hasMekCreativeUpgrade();
 	}
 
 	// ===== 倍率计算 =====
@@ -268,13 +280,14 @@ public class ApiaryUpgradeHandler {
 	/**
 	 * 判断是否安装了 MEKExtras CREATIVE 升级
 	 * <br/>
-	 * 蜂箱不支持CREATIVE升级，此方法始终返回false。
-	 * 保留方法签名以维持与调用方（BeeProduceProcessor、ApiaryTickHandler）的兼容性。
+	 * 委托到 {@link ApiaryUpgradeCache}，命中缓存时不调用 EnumMap 查询
+	 * （调用方 {@code ApiaryProgressAdvancer.advance} 每 tick 每蜜蜂执行一次，必须走缓存）。
+	 * CREATIVE 安装/移除时由 {@code TileEntityMekApiary#recalculateUpgrades} 主动失效缓存，立即生效。
 	 *
-	 * @return 始终返回 false
+	 * @return true 如果安装了 CREATIVE 升级
 	 */
 	public boolean hasCreativeUpgrade() {
-		return false;
+		return upgradeCache.hasCreativeUpgrade();
 	}
 
 	/**
@@ -325,7 +338,8 @@ public class ApiaryUpgradeHandler {
 	 * Bug 2修复：改用 MEK 原版公式
 	 * {@code maxUpgradeMultiplier ^ (2 * speedFraction - energyFraction)}。
 	 * 这与 MekanismUtils.getEnergyPerTick 一致，ENERGY 升级会抵消速度升级带来的额外能耗。
-	 * 蜂箱不支持 CREATIVE 升级，无需零能耗判断。
+	 * CREATIVE 升级的零能耗由 MEKExtras Mixin 在 MachineEnergyContainer.getEnergyPerTick
+	 * 层面处理，此倍率不参与实际能耗扣减（BeeSlotTickProcessor 直接读 getEnergyPerTick）。
 	 *
 	 * @return 能耗倍率（>0）
 	 */

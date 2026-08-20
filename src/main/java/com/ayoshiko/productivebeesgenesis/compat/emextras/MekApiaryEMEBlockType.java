@@ -147,7 +147,7 @@ public final class MekApiaryEMEBlockType {
 					getEMEApiaryFactoryBlock(nextTier.getEMExtraTier().getLowerName()))));
 		}
 		// INFINITE_MULTIVERSAL 是最高级，不添加升级属性
-		// 蜂箱不支持STACK/CREATIVE升级（CREATIVE导致TPS严重降低），仅支持SPEED/ENERGY/MUFFLING
+		// 蜂箱支持CREATIVE升级（TPS风险已由20-tick批量产出聚合消除），STACK仍排除（产出倍率过高）
 		builder.with(MekUpgradeSupport.forApiary());
 
 		return builder.build();

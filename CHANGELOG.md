@@ -29,6 +29,122 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.2] - 2026-08-20
+
+### 新增
+
+- **蜂箱支持 MEKExtras CREATIVE 升级**：所有等级的机械蜂箱现在可以安装 CREATIVE 升级（STACK 升级仍排除）。安装后能耗归零、每个游戏刻产出，GUI 升级窗口显示"效率: ∞ / 能耗: 0"。历史 TPS 风险已由产出管线的 20-tick 批量聚合消除。
+- **新增"AE2 原生能量提取"开关配置**：蜂箱与离心机可分别关闭 AE2 原生能量提取（`aeNativeEnergyInputEnabled`，仅安装 Applied Flux 时出现）。关闭后仅从 AppliedFlux 在 ME 网络中存储的 FE 提取能量，避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电。
+- **离心机优先模式增强**：开启"离心机优先"后，蜜脾产出直接写入相邻离心机的输入槽，不再经过蜂箱输出槽中转，降低"输出槽满导致蜜蜂停工"的概率；该判定与"直连弹出"开关联动语义调整——关闭直连弹出时蜜脾仍不推送 AE 网络，等待 Ejector/管道/玩家收取；缓冲区中的蜜脾在缓冲区满时不再被 FIFO 淘汰丢弃，超出上限的溢出部分回退推送 AE 网络，AE 也拒收时才进入普通 FIFO 兜底（物品守恒不丢失）。
+
+### 修复与兼容性
+
+- **未安装 AE2 时的系列崩溃（Issue #8）**：修复了只安装资源蜜蜂和通用机械时，机械蜂箱与离心机在各个环节触发 AE2 相关类加载导致的崩溃。这些功能入口此前缺少"AE2 是否安装"检查，现在未安装 AE2 时会完全跳过 AE2 相关逻辑：
+
+  - 放置或加载已存在的机械蜂箱时崩溃（准备 AE2 网格节点阶段）。
+  - 蜂箱开始产出蜂蜜后的首个游戏刻崩溃（输出推送到 AE2 网络阶段）。
+  - 右键打开离心机界面时崩溃（AE2 输入过滤器状态同步阶段）。
+  - 打开侧面配置窗口后点击"直输 AE"等 AE 相关按钮时崩溃（这些按钮在未安装 AE2 时不再显示）。
+  - 退出世界后重新进入时崩溃（AE2 过滤器存档恢复阶段）。
+  - 安装了 AE2 但未安装 Applied Flux 时，机器从 ME 网络提取能量导致崩溃（现自动回退为 AE2 原生能量）。
+
+- **防御深度加固**：基于上述场景的类加载原理（`<clinit>` 静态初始化与 JIT 编译时的常量池类引用解析），进一步加固了所有高频调用入口：
+
+  - `BaseActionSource` 静态字段改为懒加载 Holder（输出推送、输入拉取、流体推送）。
+  - `FluxKey`/`EnergyType` 引用隔离到内部 Holder 类，根治 JIT 编译触发 `NoClassDefFoundError`。
+  - AE2 生命周期（节点准备/销毁/连接/NBT 读写）、过滤器反序列化、流体弹出、Jade 状态显示等入口全部补充"AE2 是否安装"守卫。
+  - 服务端 `SyncableInt` 追踪器仅在 AE2 安装时注册，避免 GUI 打开时立即执行未守卫的 getter。
+  - 客户端 AE 相关按钮（直输 AE、优先级切换）在未安装 AE2 时不再注入，点击不再触发异常。
+  - 蜂箱 tick 路径的异常捕获从 `Exception` 扩展为 `Exception | LinkageError`。
+
+- **覆盖范围**：上述修复覆盖所有等级的蜂箱与离心机，包括基础机型、通用机械原版四级工厂、Mekanism Extras 等级和 EvolvedMekanismExtras 等级。
+
+- **防御加固**：蜂箱的运行逻辑增加了兜底保护——即使未来出现遗漏的调用点，问题会以节流日志的形式记录下来，而不会让游戏或服务器直接崩溃。
+
+- **升级加成数值 tooltip 动态化**：产量升级（α/β/γ/Ω）、速度升级（TIME/TIME_2）和稳定性升级在 GUI tooltip 中显示的加成数值改为运行时读取 PB 原版配置文件（`productivityMultiplier[1..4]`、`timeBonus`、`stabilityChanceIncrease`），不再使用语言文件中的硬编码固定数值。玩家修改 PB 原版配置后，蜂箱/离心机升级界面的 tooltip 立即反映真实加成。
+- **AE2 供能机器的能量条显示修复**：能量注入目标从固定的低水位（2× 单批需求）改为填满内部能量容器（受 ME 网络实际存量限制），供电充足时 GUI 能量条满格显示，不再与能量升级扩容后的容量脱节显示为接近 0%；创意升级（无限容量）机器有专门守卫，不会一次性抽干 ME 网络。
+- **ME 网络能量提取保留 5% 存量**：单次能量提取最多取 ME 网络存量的 95%，多台机器大额首次填充不再瞬间抽干共享的 AppliedFlux FE 或 AE 原生能量导致 ME 网络断电；供电充足时行为不变。
+- **蜂箱后放置离心机的发现修复**：直连目标列表为空时不再跨游戏刻缓存，在蜂箱旁后放置的离心机下一个游戏刻即被发现并纳入直连弹出与离心机优先路径（此前需修改侧面配置或切换开关才会重扫）。
+
+### 性能优化
+
+- **离心机 PB 升级倍率 100-tick 缓存**：产量/时间/并行/稳定性倍率由每次查询实时重算改为按需缓存，升级数量变更时立即失效（Spark 报告第二大热点）；覆盖全部工厂等级（含 Mekanism Extras 与 EvolvedMekanismExtras 等级，升级增删后立即失效重算）。
+- **AE2 输出推送耗时预算与满存储保护**：新增单 tick insert 时间预算（1ms）、慢 insert 检测联动整体退避、连续零接收短路（满存储专项，病态网络下避免每 tick 最多 64 次完整网络遍历）；批量合并阈值由 3 槽提升到 8 槽，蜂箱生成物直推同样联动退避；退避窗口加入 ±25% 相位抖动，多台机器共享病态 ME 网络（如 EnderDrives fsync）时重试时刻被打散，避免同刻集中重试造成的 MSPT 尖峰；抛异常的 insert 同样入账时间预算，防止每 tick 重复昂贵遍历。
+- **TickAccelTracker 懒缓存**：工厂类每游戏刻经三层接口链取 tracker（JDTE 256 倍加速下为模组最大热点）改为首次解析后缓存。
+- **GUI 能量条同步节流**：机械蜂箱与离心机（含全部工厂等级）的能量条刷新由每游戏刻同步改为每 5 游戏刻一次（变化超过容量 1% 时立即同步），打开 GUI 时的网络包频率降低约 80%，高加速场景下能量条不再逐刻抖动。tracker 替换采用值语义识别并带节流日志兜底，Mekanism 注册结构变化时自动退化为默认同步。
+- **高加速批量能量一次性扣除**：256×/1024× 加速下，机器能量容器写入与区块标脏从每虚拟 tick 一次合并为每真实游戏刻一次批量扣除（与逐 tick 扣除总额完全等价），大幅降低容器写开销。
+- **蜜蜂槽 NBT 序列化缓存**：GUI 打开时蜜蜂槽的网络同步序列化从每游戏刻每槽一次 NBT 压缩降为仅在蜜蜂数据实际变化时执行（49 槽工厂显著降低 CPU/GC 压力），持久化 NBT 格式不变。
+- **直连弹出与产出直连优化**：离心机输入持续阻塞时，直连重试从每 tick 全量降为 250ms→2s 墙钟指数退避（新产出零延迟响应，tick 加速器下同样生效）；离心机优先模式下蜜脾产出经快速通道直写离心机输入槽（getStack 预判 + 单槽异常隔离）；直连目标掩码改为跨 tick 缓存（配置/拓扑变化时失效）。
+- **AE2 慢 insert 退避累积修复**：修复病态网络（含 ProjectExpansion 转换接口等昂贵外部存储，单次 insert 遍历 5-10ms）下退避指数被清零、窗口恒卡 50ms 的缺陷。此类网络上 insert 仍会成功（返回>0），原逻辑先 `recordSuccess()` 清零退避指数再 `recordFailure()`，指数每轮从 50ms 重新计时、永远爬不到 1s 封顶，稳态退化为"每 50ms 一次 10ms 完整网络遍历"。现慢 insert 判定优先于成功复位（慢命中时禁止复位），指数正常累积 50ms→…→1s 封顶，探测频率降低约 20 倍；网络恢复后一次健康 insert 即复位，正常吞吐不受影响。覆盖离心机逐槽/批量推送与蜂箱缓冲区/生成物直推四条路径。
+- **客户端事件服务端线程泄漏修复**：`MyriadCreationsClientEventHandler` 等客户端粒子供渲染处理器此前在集成服务器（单人/局域网）中会被 Server thread 调用——`LevelTickEvent.Post` 与 `EntityJoinLevelEvent` 为双端事件，原守卫顺序在两次配置读取（含跨线程读 CLIENT 配置，违反 NeoForge 配置线程约定）后才检查 `isClientSide()`。现 `isClientSide()` 前置到方法首行，服务端路径只剩一次 boolean 字段读即返回；客户端粒子视觉零变化。
+
+### 测试
+
+- **Ae2PushBackoffTest 新增回归用例**：固化"连续慢 insert 失败指数必须能爬到 1s 封顶"、"封顶后失败窗口不再增长"、"健康成功立即复位"语义，防止退避累积逻辑退化。
+- **慢 insert 诊断日志**：慢 insert 触发退避时记录一条 5 分钟节流的安全级日志（含当前退避指数），玩家可据此定位 ME 网络中的昂贵外部存储（转换接口/EnderDrives 等）。
+
+### 构建
+
+- **Mekanism Extras 编译依赖升级到 1.4.1**：编译使用 1.4.1（COSMIC/INFINITE 动态变色），运行时保持 1.4.0 稳定版，向后兼容主流整合包环境。
+
+### English
+
+#### New features
+
+- **MEKExtras CREATIVE upgrade support for apiaries**: every Mek apiary tier can now accept the CREATIVE upgrade (STACK remains excluded). It zeroes energy cost and produces every tick, with the GUI upgrade window showing "Efficiency: ∞ / Energy: 0". The historical TPS risk is eliminated by the 20-tick batched output pipeline.
+- **New "AE2 native energy input" toggle**: apiaries and centrifuges can independently disable AE2 native energy extraction (`aeNativeEnergyInputEnabled`, shown only when Applied Flux is installed). When off, energy is drawn only from AppliedFlux-stored FE on the ME network, preventing excessive AE drain from powering down the ME network when FE runs low.
+- **Centrifuge-priority mode enhanced**: with "centrifuge priority" enabled, honeycomb output is written straight into adjacent centrifuge input slots without passing through the apiary's output slots, reducing the chance of bees stalling on full outputs. The routing semantics with the direct-eject toggle changed accordingly — with direct ejection off, honeycombs still never go to the AE network and wait for ejectors/pipes/players instead. Buffered honeycombs are no longer FIFO-evicted when the buffer is full: the overflow is pushed back to the AE network, and only if AE also rejects it does it fall through to the regular FIFO fallback (item conservation preserved).
+
+#### Fixes and compatibility
+
+- **Crashes without AE2 installed (Issue #8)**: fixed a series of crashes that occurred when only Productive Bees and Mekanism were installed. The Mek apiary and centrifuge triggered AE2 class loading in several code paths because those entry points were missing an "is AE2 installed" check; they now skip all AE2 logic entirely when AE2 is absent:
+
+  - Crash when placing or loading an existing Mek apiary (AE2 grid node preparation).
+  - Crash on the first game tick after the apiary starts producing (output push to the AE2 network).
+  - Crash when right-clicking the centrifuge to open its GUI (AE2 input filter state sync).
+  - Crash when clicking AE-related buttons such as "direct AE output" in the side configuration window (those buttons are no longer shown without AE2).
+  - Crash when re-entering a world (AE2 filter save data restoration).
+  - Crash when AE2 is installed but Applied Flux is not (energy extraction from the ME network now falls back to native AE2 energy).
+
+- **Defensive depth hardening**: based on the class-loading mechanics behind the crashes (`<clinit>` static initialization and constant-pool class resolution during JIT compilation), every high-frequency entry point was further hardened:
+
+  - `BaseActionSource` static fields moved to lazily-initialized holders (output push, input pull, fluid push).
+  - `FluxKey`/`EnergyType` references isolated into an inner holder class, fixing `NoClassDefFoundError` triggered by JIT compilation.
+  - Added "is AE2 installed" guards to AE2 lifecycle (node prepare/destroy/connect/NBT read/write), filter deserialization, fluid ejection, and Jade status display.
+  - Server-side `SyncableInt` trackers are only registered when AE2 is installed, avoiding unguarded getters on GUI open.
+  - Client AE buttons (direct AE output, priority cycling) are no longer injected without AE2, so clicks no longer throw.
+  - Apiary tick exception handling extended from `Exception` to `Exception | LinkageError`.
+
+- **Coverage**: the fixes cover every apiary and centrifuge tier, including base machines, vanilla Mekanism factory tiers, Mekanism Extras tiers, and EvolvedMekanismExtras tiers.
+
+- **Defensive hardening**: the apiary tick logic gained a safety net — any future missed call path is logged with throttling instead of crashing the game or server.
+
+- **Dynamic upgrade bonus tooltips**: the bonus values shown in the GUI tooltips for productivity (α/β/γ/Ω), time (TIME/TIME_2) and stability upgrades are now read at runtime from the Productive Bees config file (`productivityMultiplier[1..4]`, `timeBonus`, `stabilityChanceIncrease`) instead of hard-coded strings in the lang files. After editing the PB config, the apiary/centrifuge upgrade GUI tooltips immediately reflect the real bonuses.
+- **Energy bar display fix for AE2-powered machines**: the energy injection target changed from a fixed low-water mark (2× per-batch demand) to filling the internal energy container (limited by actual ME network stock). With sufficient power the GUI energy bar now displays full instead of near 0% after energy-upgrade capacity expansion; creative-upgrade (infinite capacity) machines have a dedicated guard so they never drain the ME network in one shot.
+- **ME network energy extraction keeps a 5% reserve**: a single extraction takes at most 95% of the network stock, so multiple machines performing large first-time fills no longer instantly drain shared AppliedFlux FE or native AE energy and power down the ME network; behavior is unchanged when power is plentiful.
+- **Late-placed centrifuges are now discovered**: an empty direct-eject target list is no longer cached across game ticks, so a centrifuge placed next to an apiary is picked up on the next game tick and joins the direct-eject and centrifuge-priority paths (previously a side-config edit or toggle change was required to rescan).
+
+#### Performance
+
+- **100-tick multiplier cache for the centrifuge PB upgrades**: productivity/time/parallel/stability multipliers are now cached and invalidated immediately on upgrade changes (second largest hotspot per Spark report); covers every factory tier (including Mekanism Extras and EvolvedMekanismExtras tiers, which now invalidate immediately on upgrade add/remove).
+- **AE2 output push time budget and full-storage protection**: added a per-tick insert time budget (1ms), slow-insert detection linked to the global backoff, and consecutive zero-accept short-circuit (full-storage protection, avoiding up to 64 full network traversals per tick on pathological networks); the batch-merge threshold was raised from 3 to 8 slots, and apiary generated-item direct push now follows the same backoff; backoff windows gained ±25% phase jitter so multiple machines sharing a pathological ME network (e.g. EnderDrives fsync) spread out their retry moments instead of spiking MSPT in the same tick; inserts that throw exceptions are also charged to the time budget, preventing repeated expensive traversals every tick.
+- **TickAccelTracker lazy cache**: factory tiles now cache the tracker after first resolution instead of traversing a three-layer interface chain every game tick (largest hotspot under JDTE 256x acceleration).
+- **GUI energy bar sync throttling**: the energy bar of Mek apiaries and centrifuges (all factory tiers included) now syncs every 5 game ticks instead of every tick (immediately on changes above 1% of capacity), cutting network packet frequency by roughly 80% while a GUI is open and stopping per-tick jitter under high acceleration. The tracker replacement uses value-semantic identification with a throttled-log fallback, degrading to default syncing automatically if Mekanism's registration structure changes.
+- **Single batched energy deduction under high acceleration**: at 256×/1024× acceleration, energy-container writes and chunk dirtying are collapsed from once per virtual tick to one batched deduction per real game tick (mathematically identical to the summed per-tick deductions), greatly reducing container write overhead.
+- **Bee slot NBT serialization cache**: with a GUI open, per-slot network-sync serialization drops from one NBT compression per slot per game tick to only when bee data actually changes (significant CPU/GC reduction on 49-slot factories); persisted NBT format is unchanged.
+- **Direct ejection and produced-item transfer optimizations**: when centrifuge inputs stay blocked, direct-eject retries back off exponentially over wall-clock time (250ms→2s cap, zero-delay for fresh output, effective under tick acceleration too); with centrifuge priority enabled, honeycomb output takes a fast path straight into centrifuge input slots (getStack pre-check + per-slot exception isolation); the direct-eject target mask is cached across ticks (invalidated on config/topology changes).
+- **Fix AE2 slow-insert backoff accumulation**: fixed a defect on pathological ME networks (expensive external storage such as the ProjectExpansion transmutation interface, 5-10ms per insert traversal) where the backoff exponent was reset every round, pinning the window at 50ms. On such networks an insert still *succeeds* (returns >0), but the old logic called `recordSuccess()` (zeroing the exponent) before `recordFailure()`, so the exponent restarted from 50ms every round and could never reach the 1s cap — degrading to "one 10ms full network traversal every 50ms". The slow-insert check now takes priority over success-reset (no reset on slow hits), so the exponent climbs 50ms→…→1s normally, cutting probe frequency roughly 20×; after the network recovers, one healthy insert resets it immediately, leaving normal throughput untouched. Covers the centrifuge per-slot/batch push and the apiary buffer/direct generated-item push (four paths).
+- **Fix client event leaking onto the server thread**: `MyriadCreationsClientEventHandler` and sibling particle/display handlers were being invoked on the Server thread inside integrated servers (singleplayer/LAN), because `LevelTickEvent.Post` and `EntityJoinLevelEvent` fire on both sides and the old guard checked `isClientSide()` only after two config reads (including a cross-thread read of the CLIENT config, violating NeoForge's config threading contract). The `isClientSide()` guard now runs first, so the server-thread path returns after a single boolean field read; client-side particle visuals are unchanged.
+
+#### Testing
+
+- **New regression cases in Ae2PushBackoffTest**: pin down the semantics "consecutive slow-insert failures must climb to the 1s cap", "the window no longer grows past the cap", and "one healthy success resets immediately", guarding the backoff-accumulation logic against regression.
+- **Slow-insert diagnostic log**: a throttled (5-minute) warning is logged when a slow insert triggers backoff (with the current exponent), letting players locate expensive external storage on the ME network (transmutation interface / EnderDrives etc.).
+
+#### Build
+
+- **Mekanism Extras compile dependency upgraded to 1.4.1**: compiled against 1.4.1 (dynamic COSMIC/INFINITE coloring) while the runtime stays on 1.4.0 for backward compatibility with mainstream modpacks.
+
 ## [1.0.1] - 2026-08-18
 
 ### 界面与布局

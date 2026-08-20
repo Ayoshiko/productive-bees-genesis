@@ -46,6 +46,8 @@ public final class FactoryUpgradeStateHelper {
 			MekCreativeEnergyHelper.recalculateCreativeEnergy(factory.energyContainer(), upgrade,
 					MekUpgradeSupport.hasCreativeUpgrade(factory));
 		}
+		// SPEED/ENERGY 变化影响时间倍率 — 失效 PB 升级倍率缓存（Spark 优化）
+		factory.pbUpgradeDelegate.invalidateMultiplierCache();
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		if (upgrade == Upgrade.SPEED) {
 			accessor.productivebeesgenesis$setTicksRequired(MekanismUtils.getTicks(factory, factory.baseTicksRequired()));
@@ -231,6 +233,10 @@ public final class FactoryUpgradeStateHelper {
 			result = sendUpdatePacket;
 		}
 
+		// 能量条节流：本 tick 全部能量变化完成后刷新同步快照
+		factory.energySyncThrottler().tickServer(factory.productivebeesgenesis$getAe2Level(),
+				factory.energyContainer());
+
 		return result;
 	}
 
@@ -275,5 +281,8 @@ public final class FactoryUpgradeStateHelper {
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
 		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
+		// 能量条节流：本 tick 全部能量变化完成后刷新同步快照
+		factory.energySyncThrottler().tickServer(factory.productivebeesgenesis$getAe2Level(),
+				factory.energyContainer());
 	}
 }

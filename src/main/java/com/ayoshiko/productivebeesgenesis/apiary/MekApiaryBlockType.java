@@ -22,8 +22,8 @@ import mekanism.common.lib.transmitter.TransmissionType;
 	 *   <li>AttributeGui — GUI关联（通过withGui添加）</li>
 	 * </ul>
 	 * <p>
-	 * 升级支持：通过{@link MekUpgradeSupport#forMachine()}替换默认的AttributeUpgradeSupport，
-	 * MEKExtras加载时额外支持STACK/CREATIVE升级。
+	 * 升级支持：通过{@link MekUpgradeSupport#forApiary()}替换默认的AttributeUpgradeSupport，
+	 * MEKExtras加载时额外支持CREATIVE升级（STACK仍排除）。
 	 * <p>
 	 * 设计原则：单一职责，本类仅负责BlockType定义，方块/方块实体/物品注册由init包负责。
 	 * TileEntityType引用通过lazy supplier延迟解析，避免循环类加载依赖。
@@ -48,7 +48,7 @@ public final class MekApiaryBlockType {
 			.withGui(() -> ModMenuTypes.MEK_APIARY)
 			// Bug 8：添加 AttributeUpgradeable，指向基础工厂版蜂箱，使 Basic Tier Installer 能将初始蜂箱升级为工厂版
 		.with(new AttributeUpgradeable(MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_APIARY_FACTORY)))
-		// 蜂箱不支持STACK/CREATIVE升级（CREATIVE导致TPS严重降低），仅支持SPEED/ENERGY/MUFFLING
+		// 蜂箱支持CREATIVE升级（TPS风险已由20-tick批量产出聚合消除），STACK仍排除（产出倍率过高）
 		.with(MekUpgradeSupport.forApiary())
 		.build();
 

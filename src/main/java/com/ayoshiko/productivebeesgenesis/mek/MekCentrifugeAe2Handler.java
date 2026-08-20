@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import mekanism.api.inventory.IInventorySlot;
@@ -179,8 +180,12 @@ class MekCentrifugeAe2Handler {
 				holder::setCentrifugeDirectAeOutputEnabled));
 		// per-tile AE2 输入过滤模式同步（ordinal：0=DISABLED, 1=WHITELIST, 2=BLACKLIST）
 		// 供 GUI 按钮实时反映模式切换；条目列表由 SyncAeInputFilterEntriesPayload 单独推送
-		container.track(SyncableInt.create(
-				() -> holder.getOrCreateInputFilter().getFilterMode().ordinal(),
-				v -> holder.getOrCreateInputFilter().setFilterMode(Ae2InputFilter.FilterMode.values()[v])));
+		// AE2 未安装时不注册：GUI 打开时 initMenu→broadcastChanges 会立即执行 getter，
+		// 无守卫会在无 AE2 环境触发过滤器构造（Issue #8 GUI 崩溃路径）
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
+			container.track(SyncableInt.create(
+					() -> holder.getOrCreateInputFilter().getFilterMode().ordinal(),
+					v -> holder.getOrCreateInputFilter().setFilterMode(Ae2InputFilter.FilterMode.values()[v])));
+		}
 	}
 }

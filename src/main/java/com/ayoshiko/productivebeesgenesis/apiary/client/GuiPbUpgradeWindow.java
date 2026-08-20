@@ -186,7 +186,7 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 						TextAlignment.LEFT, screenTextColor(), screenWidth, 2, true, 0.6F, msSelected);
 
 				textY += 8;
-				Component desc = Component.translatable(selectedType.getDescriptionKey());
+				Component desc = PbUpgradeTooltipHelper.descriptionComponent(selectedType);
 				rightScreen.drawScaledScrollingString(guiGraphics, desc, 0, textY - rightScreen.getRelativeY() + 2,
 						TextAlignment.LEFT, screenTextColor(), screenWidth, 2, true, 0.6F, msSelected);
 			}
