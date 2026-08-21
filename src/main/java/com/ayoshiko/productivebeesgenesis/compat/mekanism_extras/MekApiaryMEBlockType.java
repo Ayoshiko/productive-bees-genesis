@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
@@ -110,7 +111,8 @@ public final class MekApiaryMEBlockType {
 		var builder = Machine.MachineBuilder
 				.createMachine(() -> ME_APIARY_FACTORY_TILES.get(tier),
 						descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_apiary_factory"))
-				.withEnergyConfig(() -> usage, () -> storage)
+				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
+						() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(storage))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_APIARY_FACTORY)

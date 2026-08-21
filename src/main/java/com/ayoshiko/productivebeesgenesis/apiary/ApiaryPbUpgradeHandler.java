@@ -231,7 +231,10 @@ public class ApiaryPbUpgradeHandler {
 		if (type != null) {
 			int ord = type.ordinal();
 			if (ord >= 0 && ord < clientUpgradeCounts.length()) {
-				clientUpgradeCounts.set(ord, count);
+				int previous = clientUpgradeCounts.getAndSet(ord, count);
+				if (previous != count) {
+					tile.upgradeHandler.invalidateUpgradeCache();
+				}
 			}
 		}
 	}
@@ -308,6 +311,7 @@ public class ApiaryPbUpgradeHandler {
 			int canInstall = Math.min(input.getCount(), maxCount - current);
 			if (canInstall > 0) {
 				pbUpgradeCounts.put(type, current + canInstall);
+				tile.upgradeHandler.invalidateUpgradeCache();
 				input.shrink(canInstall);
 				if (input.isEmpty()) {
 					pbUpgradeInputSlot.setStack(ItemStack.EMPTY);

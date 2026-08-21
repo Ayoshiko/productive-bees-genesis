@@ -1,6 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import mekanism.api.recipes.cache.CachedRecipe;
 import org.objectweb.asm.Opcodes;
@@ -10,8 +14,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
@@ -71,13 +73,13 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	private LongConsumer useEnergy;
 
 	@Shadow
+	private IntSupplier baselineMaxOperations;
+
+	@Shadow
 	private int operatingTicks;
 
 	@Shadow
 	private IntConsumer operatingTicksChanged;
-
-	@Shadow
-	protected abstract void useEnergy(int operations);
 
 	@Shadow
 	protected abstract void finishProcessing(int operations);
@@ -102,7 +104,16 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	@Unique
 	private boolean productivebeesgenesis$awaitingFinalOperations;
 
+	/** Only recipes created by this mod opt into marginal high-parallel energy pricing. */
+	@Unique
+	private boolean productivebeesgenesis$marginalEnergyPricing;
+
 	// ===== 接口实现 =====
+
+	@Override
+	public void productivebeesgenesis$enableMarginalEnergyPricing() {
+		productivebeesgenesis$marginalEnergyPricing = true;
+	}
 
 	@Override
 	public void productivebeesgenesis$startBatch(int ticks) {
@@ -116,6 +127,35 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		return productivebeesgenesis$batchTicksLeft <= 0;
 	}
 
+	/**
+	 * Replaces Mekanism's linear stored-energy division with the same inverse marginal curve
+	 * used by PB processing. The surrounding vanilla method still owns error reporting and
+	 * the final {@code maxForEnergy} cap, so reduced-rate warnings retain their normal timing.
+	 */
+	@ModifyExpressionValue(method = "calculateOperationsThisTick",
+			at = @At(value = "INVOKE",
+					target = "Lmekanism/api/math/MathUtils;clampToInt(J)I"))
+	private int productivebeesgenesis$priceFullRecipeTick(int linearAffordableOperations) {
+		if (!productivebeesgenesis$marginalEnergyPricing) {
+			return linearAffordableOperations;
+		}
+		return MekCentrifugeEnergyScaling.affordableOperations(
+				perTickEnergy.getAsLong(), Math.max(0, baselineMaxOperations.getAsInt()),
+				storedEnergy.getAsLong());
+	}
+
+	/** Charges a normal full-calculation tick with the same curve as the accelerated fast path. */
+	@Inject(method = "useEnergy", at = @At("HEAD"), cancellable = true)
+	private void productivebeesgenesis$chargeFullRecipeTick(int operations, CallbackInfo ci) {
+		if (!productivebeesgenesis$marginalEnergyPricing) return;
+		long energyPerTick = perTickEnergy.getAsLong();
+		if (energyPerTick > 0L && operations > 0) {
+			useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
+					energyPerTick, operations, 1));
+		}
+		ci.cancel();
+	}
+
 	// ===== process() HEAD：批量快速路径 =====
 
 	/**
@@ -127,8 +167,8 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	 * （每次触发容器 extract → onContentsChanged → setChanged → markChunkDirty），
 	 * 1024 倍加速下每 gameTick 执行 1024 次容器写与 chunk 标脏。现改为循环前一次
 	 * 计算能量预算（可支撑的虚拟 tick 数），循环后一次 {@code useEnergy.accept}
-	 * 扣除总额（{@code perTick × ops × ran}，与 Mekanism {@code useEnergy(int)}
-	 * 的内部公式逐 tick 累加结果完全等价），将容器写次数从 N 次降为 1 次。
+	 * 扣除总额（共享的高并行边际计费 × {@code ran}），与本模组完整配方 tick 的
+	 * 能量曲线一致，同时将容器写次数从 N 次降为 1 次。
 	 */
 	@Inject(method = "process", at = @At("HEAD"), cancellable = true, require = 0)
 	private void productivebeesgenesis$onProcessHead(CallbackInfo ci) {
@@ -155,7 +195,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		int ticksToRun = ticksLeft;
 		if (energyPerTick > 0L) {
 			long stored = storedEnergy.getAsLong();
-			long perVirtualTick = energyPerTick * (long) ops;
+			long perVirtualTick = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, 1);
 			ticksToRun = (int) Math.min(ticksLeft, stored / perVirtualTick);
 			if (ticksToRun <= 0) {
 				// 能量不足以支撑当前操作数：终止批量，交给原版逻辑
@@ -190,7 +230,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		}
 		// 批量能量一次性扣除（等价于逐虚拟 tick useEnergy(ops) 的累加总额）
 		if (energyPerTick > 0L && ran > 0) {
-			useEnergy.accept(energyPerTick * (long) ops * ran);
+			useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, ran));
 		}
 		// 剩余预算处理（区分退出原因）：
 		// - 能量预算耗尽（ticksToRun < ticksLeft）：终止批量，下个虚拟 tick 走原版完整重算，

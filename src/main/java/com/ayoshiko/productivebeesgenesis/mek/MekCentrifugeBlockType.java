@@ -55,8 +55,10 @@ public final class MekCentrifugeBlockType {
 	/** 基础MEK离心机BlockType — 不设置AttributeTier，使Basic Tier Installer能正确升级（fromTier=null匹配） */
 	public static final BlockTypeTile<TileEntityMekCentrifuge> MEK_CENTRIFUGE = Machine.MachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_CENTRIFUGE, descriptionLang("mek_centrifuge"))
-			.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
-					() -> ModConfig.SERVER.mekCentrifugeEnergyStorage.get())
+			.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
+						ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()),
+					() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(
+							ModConfig.SERVER.mekCentrifugeEnergyStorage.get()))
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE)
@@ -110,8 +112,10 @@ public final class MekCentrifugeBlockType {
 				// 原版Mekanism工厂所有等级（BASIC/ADVANCED/ELITE/ULTIMATE）使用相同的20000L存储
 				// EM等级也遵循此规则（EM的FactoryMixin只调整energySlot位置，不修改容量）
 				// ME/EME等级才乘以processes（遵循ME的ExtraFactory.setMachineData模式）
-				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
-						() -> ModConfig.SERVER.mekCentrifugeEnergyStorage.get())
+				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
+							ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()),
+						() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(
+								ModConfig.SERVER.mekCentrifugeEnergyStorage.get()))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE_FACTORY)

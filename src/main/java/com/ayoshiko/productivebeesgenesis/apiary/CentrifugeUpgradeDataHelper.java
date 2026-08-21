@@ -52,8 +52,8 @@ import java.util.Map;
 	 */
 public final class CentrifugeUpgradeDataHelper {
 
-	/** 过滤条目 index 合理上限 — 防止损坏数据触发过大数组分配（16页 × 9槽 = 144，取 256 余量） */
-	private static final int MAX_FILTER_INDEX = 256;
+	/** 与过滤模型一致的排他索引上限，防止损坏的旧升级数据触发无界扩容。 */
+	private static final int MAX_FILTER_INDEX = 1024;
 
 	private CentrifugeUpgradeDataHelper() {
 	}
@@ -119,9 +119,12 @@ public final class CentrifugeUpgradeDataHelper {
 		Map<Integer, String> aeInputFilterEntries = new HashMap<>();
 		Map<Integer, Long> aeInputFilterAmounts = new HashMap<>();
 		Map<Integer, Boolean> aeInputFilterUnlimited = new HashMap<>();
+		CompoundTag aeInputFilterNbt = null;
 		boolean preciseMode = false;
 		if (aeLoaded) {
 			Ae2InputFilter filter = ae2StateHolder.getOrCreateInputFilter();
+			aeInputFilterNbt = new CompoundTag();
+			filter.save(aeInputFilterNbt);
 			aeInputFilterMode = filter.getFilterMode().ordinal();
 			preciseMode = filter.isPreciseMode();
 			// V15: 使用 getNonEmptyEntries() 获取带位置索引的条目（保留位置固定语义）
@@ -178,7 +181,8 @@ public final class CentrifugeUpgradeDataHelper {
 				multiFluidTanksNbt,
 				outputItems,
 				inputItems,
-				energyItem);
+				energyItem,
+				aeInputFilterNbt);
 	}
 
 	/**
@@ -285,34 +289,10 @@ public final class CentrifugeUpgradeDataHelper {
 			ae2StateHolder.setAeFluidOutputEnabled(data.aeFluidOutputEnabled);
 			// 恢复输入过滤器和条目
 			Ae2InputFilter filter = ae2StateHolder.getOrCreateInputFilter();
-			Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
-			if (data.aeInputFilterMode >= 0 && data.aeInputFilterMode < modes.length) {
-				filter.setFilterMode(modes[data.aeInputFilterMode]);
-			}
-			filter.setPreciseMode(data.preciseMode);
-			filter.clearEntries();
-			if (data.aeInputFilterEntries != null) {
-				// V15: 按 index 恢复条目（保留位置固定语义和 #block 后缀）
-				// 防御性范围检查：跳过超出合理上限的 index，防止损坏数据触发过大数组分配
-				for (Map.Entry<Integer, String> entry : data.aeInputFilterEntries.entrySet()) {
-					int idx = entry.getKey();
-					if (idx >= 0 && idx < MAX_FILTER_INDEX) {
-						filter.setEntryAtIndex(idx, entry.getValue());
-						// 修复：恢复直连条目的拉取配额与无限提供标志
-						// （setEntryAtIndex 对直连条目固定写默认 64/false，必须显式覆盖）
-						if (data.aeInputFilterAmounts != null) {
-							Long amount = data.aeInputFilterAmounts.get(idx);
-							if (amount != null) {
-								filter.setDirectAmountAt(idx, amount);
-							}
-						}
-						if (data.aeInputFilterUnlimited != null
-								&& Boolean.TRUE.equals(data.aeInputFilterUnlimited.get(idx))) {
-							// setEntryAtIndex 后 unlimited=false，toggle 到 true 恢复无限提供
-							filter.toggleDirectUnlimitedAt(idx);
-						}
-					}
-				}
+			if (data.aeInputFilterNbt != null) {
+				filter.load(data.aeInputFilterNbt.copy());
+			} else {
+				restoreLegacyFilterData(data, filter);
 			}
 		}
 
@@ -334,6 +314,29 @@ public final class CentrifugeUpgradeDataHelper {
 		// 引用指向空栈，必须从深拷贝字段恢复（覆盖 super.parseUpgradeData 写入的空栈）。
 		// 向后兼容：深拷贝字段为 null 时跳过（旧升级数据，super.parseUpgradeData 引用路径已处理）
 		restoreItemStackDeepCopies(data, targetInputSlots, targetOutputSlots, targetEnergySlot);
+	}
+
+	private static void restoreLegacyFilterData(CentrifugeUpgradeData data, Ae2InputFilter filter) {
+		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
+		if (data.aeInputFilterMode >= 0 && data.aeInputFilterMode < modes.length) {
+			filter.setFilterMode(modes[data.aeInputFilterMode]);
+		}
+		filter.setPreciseMode(data.preciseMode);
+		filter.clearEntries();
+		if (data.aeInputFilterEntries == null) return;
+		for (Map.Entry<Integer, String> entry : data.aeInputFilterEntries.entrySet()) {
+			int idx = entry.getKey();
+			if (idx < 0 || idx >= MAX_FILTER_INDEX) continue;
+			filter.setEntryAtIndex(idx, entry.getValue());
+			if (data.aeInputFilterAmounts != null) {
+				Long amount = data.aeInputFilterAmounts.get(idx);
+				if (amount != null) filter.setDirectAmountAt(idx, amount);
+			}
+			if (data.aeInputFilterUnlimited != null
+					&& Boolean.TRUE.equals(data.aeInputFilterUnlimited.get(idx))) {
+				filter.toggleDirectUnlimitedAt(idx);
+			}
+		}
 	}
 
 	/**

@@ -6,7 +6,6 @@
   "mixins": [
     "accessor.BasicInventorySlotAccessor",
     "accessor.CentrifugeBlockEntityAccessor",
-    "accessor.MekanismContainerAccessor",
     "accessor.RecipeCacheLookupMonitorAccessor",
     "accessor.TileEntityElectricMachineAccessor",
     "accessor.TileEntityEjectorAccessor",

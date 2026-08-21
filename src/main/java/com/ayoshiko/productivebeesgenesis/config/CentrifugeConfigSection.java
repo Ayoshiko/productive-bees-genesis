@@ -90,10 +90,12 @@ public final class CentrifugeConfigSection {
 		// ===== 基础参数 =====
 		builder.comment("基础参数").push("basic");
 		mekCentrifugeEnergyPerTick = builder
-				.comment("每个处理槽每tick的能量消耗(FE)")
+				.comment("每个处理槽每tick的配置能耗(FE)",
+						"机器注册时应用 1/5 内置平衡系数，不能整除时向上取整")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.energyPerTick")
 				.defineInRange("energyPerTick", 50L, 1L, Long.MAX_VALUE);
-		mekCentrifugeEnergyStorage = builder.comment("机械离心机能量存储容量（FE）")
+		mekCentrifugeEnergyStorage = builder.comment("机械离心机配置基础容量(FE)",
+						"机器注册时应用 1/2 内置平衡系数；工厂再按进程数倍增")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.energyStorage")
 				.defineInRange("energyStorage", 100_000L, 1L, Long.MAX_VALUE);
 		mekCentrifugeProcessingTime = builder

@@ -60,6 +60,11 @@ final class Ae2GlobalInsertBudget {
 		return spentNanos >= BUDGET_NANOS;
 	}
 
+	/** Whether one storage operation is slow enough to require budget and backoff handling. */
+	static boolean isSlowOperation(long costNanos) {
+		return costNanos > SLOW_INSERT_NANOS;
+	}
+
 	/**
 	 * 将一次 insert 的耗时计入全服预算 — 仅累计超出慢阈值的部分。
 	 *
@@ -67,7 +72,7 @@ final class Ae2GlobalInsertBudget {
 	 * @param costNanos  本次 insert 实际耗时（System.nanoTime 差值）
 	 */
 	static void recordCost(long gameTick, long costNanos) {
-		if (costNanos <= SLOW_INSERT_NANOS) return;
+		if (!isSlowOperation(costNanos)) return;
 		refreshTick(gameTick);
 		spentNanos += costNanos - SLOW_INSERT_NANOS;
 	}

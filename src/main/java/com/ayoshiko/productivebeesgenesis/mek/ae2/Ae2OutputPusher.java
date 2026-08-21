@@ -57,14 +57,6 @@ public final class Ae2OutputPusher {
 
 	/** 模块2.4：单次推送物品数硬上限 — 超过此值强制回送 ME 网络，避免输出槽持续积压（与原版物品栈上限对齐） */
 
-	/**
-	 * 批量合并的最小槽位数阈值 — 非空槽位数 <= 此阈值时直接逐槽推送，避免 Map 分配开销。
-	 * <p>
-	 * Spark 依据：合并路径的 Map 由 {@link ReusableBuffers} 跨 tick 复用（clear 而非新建），
-	 * 对象开销趋近于零；而逐槽直推每槽触发一次完整 AE 网络遍历。病态网络（含 ProjectExpansion
-	 * 转换接口等昂贵外部存储）单次遍历 5-10ms，8 槽直推最坏 80ms vs 合并后按 key 数仅 1-3 次遍历。
-	 */
-	private static final int BATCH_MERGE_THRESHOLD = 8;
 	/** 每台机器每游戏刻最多提交的不同物品键数，限制大型两页库存的 AE 网络尖峰。 */
 	private static final int MAX_ITEM_KEYS_PER_TICK = 32;
 	/**
@@ -189,7 +181,7 @@ public final class Ae2OutputPusher {
 
 		if (entries.isEmpty()) return;
 		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
-		if (entries.size() <= BATCH_MERGE_THRESHOLD) {
+		if (!Ae2OutputMergePolicy.shouldMergeEntries(entries.size())) {
 			int pushedItems = 0;
 			int attemptedEntries = 0;
 			SlotEntry firstAttemptedEntry = null;
@@ -215,16 +207,21 @@ public final class Ae2OutputPusher {
 				long insertStart = System.nanoTime();
 				int pushed = tryPushSlotDirect(entry, meStorage, ActionSourceHolder.INSTANCE);
 				long insertCost = System.nanoTime() - insertStart;
-				if (insertCost > Ae2GlobalInsertBudget.SLOW_INSERT_NANOS) {
+				boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
+				if (slowInsert) {
 					// 只累计慢 insert 的超出耗时 — 健康网络预算恒 0，满速推送不受限
 					spentInsertNanos += insertCost - Ae2GlobalInsertBudget.SLOW_INSERT_NANOS;
 					slowInsertDetected = true;
 				}
 				Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
 				if (pushed > 0) {
-					keyBackoff.recordSuccess(entry.key);
+					// Slot changes reset the tile-wide backoff. Preserve a key-local delay for
+					// successful but pathological external-storage traversals.
+					if (slowInsert) keyBackoff.recordFailure(entry.key, System.nanoTime());
+					else keyBackoff.recordSuccess(entry.key);
 				} else {
-					keyBackoff.recordFailure(entry.key, nowNanos);
+					keyBackoff.recordFailure(entry.key,
+							slowInsert ? System.nanoTime() : nowNanos);
 				}
 				pushedItems = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
 						pushedItems, pushed));
@@ -318,16 +315,18 @@ public final class Ae2OutputPusher {
 			int pushed = pushBatchKey(key, totalCount, keyToEntries.get(key),
 					meStorage, ActionSourceHolder.INSTANCE);
 			long insertCost = System.nanoTime() - insertStart;
-			if (insertCost > Ae2GlobalInsertBudget.SLOW_INSERT_NANOS) {
+			boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
+			if (slowInsert) {
 				// 只累计慢 insert 的超出耗时 — 健康网络预算恒 0，满速推送不受限
 				spentInsertNanos += insertCost - Ae2GlobalInsertBudget.SLOW_INSERT_NANOS;
 				slowInsertDetected = true;
 			}
 			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
 			if (pushed > 0) {
-				keyBackoff.recordSuccess(key);
+				if (slowInsert) keyBackoff.recordFailure(key, System.nanoTime());
+				else keyBackoff.recordSuccess(key);
 			} else {
-				keyBackoff.recordFailure(key, nowNanos);
+				keyBackoff.recordFailure(key, slowInsert ? System.nanoTime() : nowNanos);
 			}
 			pushedItems = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
 					pushedItems, pushed));
@@ -473,7 +472,7 @@ public final class Ae2OutputPusher {
 
 		/** 记录单次 insert 耗时到单机预算与全服预算（成功与异常路径共用） */
 		private void recordInsertCost(long insertCost) {
-			if (insertCost > Ae2GlobalInsertBudget.SLOW_INSERT_NANOS) {
+			if (Ae2GlobalInsertBudget.isSlowOperation(insertCost)) {
 				// 只累计慢 insert 的超出耗时 — 健康网络预算恒 0，满速推送不受限
 				spentInsertNanos += insertCost - Ae2GlobalInsertBudget.SLOW_INSERT_NANOS;
 				slowInsertDetected = true;
@@ -506,20 +505,25 @@ public final class Ae2OutputPusher {
 				// 抛异常的 insert 恰恰最昂贵（病态网络的 fsync/转换接口），同样入账预算防止每 tick 重复全量遍历
 				recordInsertCost(System.nanoTime() - insertStart);
 				zeroAcceptStreak++;
-				if (keyBackoff != null) keyBackoff.recordFailure(key, nowNanos);
+				if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 				handlePushException(e, 0, 0, stack, stack.getCount());
 				return 0;
 			}
-			recordInsertCost(System.nanoTime() - insertStart);
+			long insertCost = System.nanoTime() - insertStart;
+			boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
+			recordInsertCost(insertCost);
 			if (inserted <= 0) {
 				zeroAcceptStreak++;
-				if (keyBackoff != null) keyBackoff.recordFailure(key, nowNanos);
+				if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 				LogThrottle.warnWithCooldown("ae2_buffer_push_backoff", 60_000L,
 						"AE2 缓冲区物品推送失败 item={}, count={}", key, stack.getCount());
 				return 0;
 			}
 			zeroAcceptStreak = 0;
-			if (keyBackoff != null) keyBackoff.recordSuccess(key);
+			if (keyBackoff != null) {
+				if (slowInsert) keyBackoff.recordFailure(key, System.nanoTime());
+				else keyBackoff.recordSuccess(key);
+			}
 			return SaturatingMath.saturatingToInt(
 					SaturatingMath.clampToRequest(inserted, stack.getCount()));
 		}
@@ -781,12 +785,12 @@ public final class Ae2OutputPusher {
 		int entryPoolCursor;
 		int outputSlotScanCursor;
 
-		/** 复用的 key → 槽位列表映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
+		/** 复用的 key → 槽位列表映射 — 由 {@link Ae2OutputMergePolicy} 决定是否启用 */
 		final Map<AEItemKey, List<SlotEntry>> keyToEntries = new LinkedHashMap<>();
 		final List<List<SlotEntry>> keyEntryListPool = new ArrayList<>();
 		int keyEntryListPoolCursor;
 
-		/** 复用的 key → 总数量映射 — 仅在 entries.size() > BATCH_MERGE_THRESHOLD 时使用 */
+		/** 复用的 key → 总数量映射 — 由 {@link Ae2OutputMergePolicy} 决定是否启用 */
 		final Object2LongLinkedOpenHashMap<AEItemKey> keyToTotalCount =
 				new Object2LongLinkedOpenHashMap<>();
 

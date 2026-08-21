@@ -22,6 +22,9 @@ import net.minecraft.nbt.Tag;
  * 线程安全：本类无状态；调用方负责 volatile 发布加载结果。
  */
 final class Ae2InputFilterNbtCodec {
+	static final int CURRENT_FORMAT_VERSION = 1;
+	private static final String KEY_VERSION = "version";
+	private static final String KEY_CAPACITY = "capacity";
 
 	private Ae2InputFilterNbtCodec() {
 	}
@@ -38,6 +41,8 @@ final class Ae2InputFilterNbtCodec {
 	 */
 	static void save(CompoundTag tag, Ae2InputFilter.FilterMode filterMode, boolean preciseMode,
 			String[] slots, long[] directAmounts, boolean[] directUnlimited, boolean unlimitedAllFallback) {
+		tag.putInt(KEY_VERSION, CURRENT_FORMAT_VERSION);
+		tag.putInt(KEY_CAPACITY, slots.length);
 		tag.putByte("mode", (byte) filterMode.ordinal());
 		tag.putByte("precise", (byte) (preciseMode ? 1 : 0));
 		tag.putBoolean("unlimitedAllFallback", unlimitedAllFallback);
@@ -90,9 +95,13 @@ final class Ae2InputFilterNbtCodec {
 					new String[0], new long[0], new boolean[0]);
 		}
 		// 局部构建新数组，最后一次性返回，由调用方 volatile 发布
-		String[] newSlots = new String[Ae2InputFilter.getDefaultCapacity()];
-		long[] newAmounts = new long[Ae2InputFilter.getDefaultCapacity()];
-		boolean[] newUnlimited = new boolean[Ae2InputFilter.getDefaultCapacity()];
+		int persistedCapacity = tag.contains(KEY_CAPACITY, Tag.TAG_ANY_NUMERIC)
+				? tag.getInt(KEY_CAPACITY) : Ae2InputFilter.getDefaultCapacity();
+		int initialCapacity = Math.max(Ae2InputFilter.getDefaultCapacity(),
+				Math.min(Ae2InputFilter.getMaxFilterSlots(), persistedCapacity));
+		String[] newSlots = new String[initialCapacity];
+		long[] newAmounts = new long[initialCapacity];
+		boolean[] newUnlimited = new boolean[initialCapacity];
 		ListTag entriesTag = tag.getList("entries", Tag.TAG_COMPOUND);
 		if (!entriesTag.isEmpty()) {
 			// V15 新格式：CompoundTag 含 index

@@ -65,9 +65,12 @@ final class Ae2PerTileStateNbtCodec {
 		// AE2 未安装时跳过：无 AE2 环境不应创建过滤器（方块实体从存档恢复即触发构造，
 		// Issue #8 类加载安全）；save 侧用 getAeInputFilter() 不创建，天然对称
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			CompoundTag filterTag = tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER)
-					? tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER) : new CompoundTag();
-			holder.getOrCreateInputFilter().load(filterTag);
+			Ae2InputFilter filter = holder.getOrCreateInputFilter();
+			if (tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER)) {
+				filter.load(tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER));
+			} else {
+				filter.resetPersistentState();
+			}
 		}
 	}
 }

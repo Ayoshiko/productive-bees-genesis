@@ -431,10 +431,19 @@ public final class Ae2InputPuller {
 		if (slot == null || key == null) return 0;
 		ItemStack stack = slot.getStack();
 		try {
+			if (!stack.isEmpty() && !key.matches(stack)) return 0;
+			// validator 全语义预检（SIMULATE 探测 1 个，不写入）：
+			// 工厂输入槽的 validator 含 inputProducesOutput 配方检查 — 被拒时 insertItem
+			// 会整栈退回，extract 到的物品只能经 returnLeftoverToMe 回送 ME，在 EnderDrives
+			// 类网络上每次回送都是一次主线程 WAL fsync（spark w4xREcN1HI 回送链路 1.26s/27s）。
+			// 预检被拒 → 容量记 0，从源头不拉取。不触碰 getLimit 语义，高堆叠槽位不受影响。
+			ItemStack probe = key.toStack(1);
+			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
+				return 0;
+			}
 			if (stack.isEmpty()) {
 				return slot.getLimit(ItemStack.EMPTY);
 			}
-			if (!key.matches(stack)) return 0;
 			int limit = slot.getLimit(stack);
 			return Math.max(0, (long) limit - stack.getCount());
 		} catch (RuntimeException e) {
@@ -464,8 +473,16 @@ public final class Ae2InputPuller {
 			MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, int slotStart, BlockPos pos,
 			Ae2PushBackoff returnBackoff, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
+		// 全服慢网络操作预算（Spark w4xREcN1HI：EnderDrives 的 extract 同样写 WAL，
+		// appendWalRecordsLocked→force 在主线程 fsync 5-10ms/次）。预算耗尽时跳过本轮
+		// extract — 物品留在 ME 网络无损，退避结束后由冷却节奏自然恢复，吞吐不受损。
+		long gameTick = level.getGameTime();
+		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) return 0;
+		long extractStart = System.nanoTime();
 		long extracted = SaturatingMath.clampToRequest(
 				meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
+		long extractCost = System.nanoTime() - extractStart;
+		Ae2GlobalInsertBudget.recordCost(gameTick, extractCost);
 		if (extracted <= 0) {
 			if (keyBackoff != null) {
 				keyBackoff.recordFailure(key, System.nanoTime());
@@ -506,6 +523,13 @@ public final class Ae2InputPuller {
 				LogThrottle.error("ae2_pull_leftover_loss_batch",
 						"AE2 批量拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
 			}
+		}
+		// 慢 extract 联动整机拉取退避 — 放在 leftover 处理之后，确保不被回送成功的
+		// recordSuccess 覆盖（对齐输出侧"部分成功也不复位退避"设计）。健康网络单次
+		// extract <500µs 永不触发，拉取吞吐零影响；病态网络（EnderDrives fsync）
+		// 下整机进入 50ms→1s 指数退避，大幅降低 extract 频率。
+		if (Ae2GlobalInsertBudget.isSlowOperation(extractCost) && returnBackoff != null) {
+			returnBackoff.recordFailure(System.nanoTime());
 		}
 		return insertedCount;
 	}

@@ -135,7 +135,7 @@ public final class GuiMekCentrifugeFactoryHelper {
 			IGuiWrapper gui,
 			MachineEnergyContainer<?> energyContainer,
 			LongSupplier lastUsage) {
-		return new GuiEnergyTab(gui, energyContainer, lastUsage);
+		return new GuiEnergyTab(gui, energyContainer, new EnergyUsageDisplaySmoother(lastUsage));
 	}
 
 	/**

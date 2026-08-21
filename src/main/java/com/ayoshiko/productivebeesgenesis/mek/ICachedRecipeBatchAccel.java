@@ -20,6 +20,12 @@ import mekanism.api.recipes.cache.CachedRecipe;
 public interface ICachedRecipeBatchAccel {
 
 	/**
+	 * Enables the centrifuge marginal-energy curve for both normal and accelerated recipe ticks.
+	 * The Mixin is global, so callers must opt in only for recipes owned by this mod.
+	 */
+	void productivebeesgenesis$enableMarginalEnergyPricing();
+
+	/**
 	 * 启动一次批量快速推进（预算 = ticks 个配方 tick）。
 	 * <br/>
 	 * 调用后对 {@link CachedRecipe#process()} 的后续调用会在预算内走快速路径；

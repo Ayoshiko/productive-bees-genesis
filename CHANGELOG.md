@@ -29,6 +29,76 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.3] - 2026-08-21
+
+### 能量与升级平衡
+
+- **取消 64M FE/t 固定取电预算**：AE2 供能不再按固定上限截断，高并行机器会按当前实际工作量补能；提取请求使用真实需求做有界模拟，不再发送超大探测请求，也不再固定扣留 5% 网络存量。
+- **STACK 边际能耗重做**：每通道前 16 次并行保持线性计费，之后每翻倍只增加 1 次计费操作。PB 蜜脾、万象创世和兼容熔炼的首个完整处理刻使用同一条曲线，STACK 不会再因首刻仍按线性能耗而被本地缓存裁掉。
+- **基础能耗降低**：蜂箱与离心机的配置基础能耗统一应用 `1/5` 平衡系数，默认 `50 FE/t` 变为更易计算的 `10 FE/t`；所有原版、Mekanism Extras 和 EvolvedMekanismExtras 等级同步生效。
+- **基础容量降低并修复旧存档**：注册基础容量统一应用 `1/2` 系数。机器加载、升级重算和运行时会按“注册基础容量 + 当前 ENERGY 升级”精确归一化，可增可减；旧机器残留的异常大缓存、反复拆装能量升级后容量持续累加、同配置机器容量不一致的问题均会自动迁移修正。
+- **补能水位调整**：机器在两批需求以下才补能，目标为四批需求并受正常容量限制；处理完成后再检查一次水位，避免界面显示先满后空，同时不会在稳态重复访问 ME 网络。
+- **STACK 上限与显示一致**：运行时按当前平衡档案限制旧存档中的超额 STACK，CUSTOM 可正确使用 16/32 级；31/32 级显示与 `int` 并行上限一致，不再出现界面倍率高于实际运行值。
+- **精确满配结果**：最高 19 通道工厂、PB 产量倍率 `480x` 下，`8+8 / 16+16 / 32+32` 速度与能量升级的峰值分别为：无 STACK `39,900 / 399,000 / 39,900,000 FE/t`，STACK 8 `55,100 / 551,000 / 55,100,000 FE/t`，STACK 16 `70,300 / 703,000 / 70,300,000 FE/t`。兼容熔炼的 STACK 16 满通道峰值为 `53,200,000 FE/t`。
+
+### AE2 拉取配置与持久化
+
+- **过滤页面完整持久化**：AE2 拉取过滤器新增版本号与页面容量字段，可保留高页索引、空白页容量、精确模式、过滤模式、单项数量和无限提供标记。
+- **所有搬迁路径统一**：普通存档、挖掘掉落、扳手拆卸、配置卡复制，以及原版/Mekanism Extras/EvolvedMekanismExtras 工厂升级安装器均携带完整过滤快照；快照使用防御性复制，升级过程中不会共享可变 NBT。
+- **旧数据兼容**：旧升级数据继续通过原有索引映射恢复；旧配置卡没有过滤字段时会明确重置目标过滤器，避免目标机器保留粘贴前的旧条目。
+
+### 性能与稳定性
+
+- **减少慢存储网络重复访问**：AE2 输入在提取前先用目标槽完整 validator 做模拟预检，拒收配方不会再先提取后回送；慢 extract 与 insert 共用全服时间预算，并按机器和物品键指数退避。
+- **输出请求聚合**：两个及以上输出槽按 AE2 物品键合并后提交，成功但耗时异常的外部存储访问也会进入键级退避；健康网络仍保持原吞吐。
+- **蜂箱直连更稳妥**：蜂箱到离心机的内部转移不再误触外部存储准入策略；离心机输入已满时，优先模式会把蜜脾释放给正常 AE2 输出路径，不再无限隐藏在蜂箱缓冲中；部分写入缓冲也会正确标脏和递增版本。
+- **恢复 Mekanism 原生同步顺序**：移除会按值替换容器 tracker 的能量同步节流器，避免误替换工厂 `lastUsage` 或改变属性索引；客户端仅对能耗数字做 750ms 稳定显示，不改变服务端真实扣电。
+- **批量计算防溢出**：高加速配方的能量乘法改为饱和运算，极端配置不会因 `long` 回绕而少扣电；PB 升级的客户端同步和自动安装会立即失效倍率缓存。
+
+### 界面与兼容性
+
+- **大数量统一显示**：普通机器槽位与 AE2 拉取窗口共用固定 `0.7x` 字号和 K/M/B 紧凑格式，不再按字符串宽度动态缩放。
+- **OmniTools LINK 模式兼容**：OmniTools 扳手处于 ME 光束绑定模式时不再被本模组的潜行拆卸事件抢先处理；普通扳手拆卸行为保持不变。
+
+### 测试
+
+- 增加 STACK 8、STACK 16、`16 SPEED + 16 ENERGY`、满配 19 通道峰值、兼容熔炼能耗、STACK 档案上限、AE2 水位、慢操作阈值、输出聚合和客户端能耗稳定显示回归测试。
+
+### English
+
+#### Energy and upgrades
+
+- **Removed the fixed 64M FE/t draw budget**: AE2 power input now follows the machine's real active demand without a fixed ceiling. Simulations are bounded to the actual request, with no oversized stock probe or hard-coded 5% reserve.
+- **New marginal STACK pricing**: the first 16 operations per lane remain linear; every doubling after that adds one billable operation. PB recipes, Myriad Creations, and the first full tick of smelting-compatible recipes now share the same curve, so STACK is no longer clipped by a leftover linear energy check.
+- **Lower base usage and capacity**: configured base usage is multiplied by `1/5` (`50 FE/t` becomes `10 FE/t`) and registered base capacity by `1/2` across apiaries, centrifuges, and every supported factory tier.
+- **Old-save capacity migration**: capacity is recalculated from the registered base and currently installed ENERGY upgrades on load, upgrade changes, and runtime refill checks. Oversized historical buffers shrink correctly, and repeatedly removing and reinstalling ENERGY upgrades can no longer accumulate capacity.
+- **Demand-based buffering**: AE2 refills below a two-batch low-water mark and targets four batches, clamped to normal capacity. A post-processing refill keeps the GUI stable without doubling steady-state network calls.
+- **STACK limits match runtime and UI**: old saves are capped by the active balance profile, CUSTOM profiles can use 16/32 levels correctly, and level 31/32 tooltips saturate at the same positive-int ceiling as processing.
+- **Exact full-build figures**: on the highest 19-lane factory with `480x` PB productivity, `8+8 / 16+16 / 32+32` SPEED+ENERGY peak at `39,900 / 399,000 / 39,900,000 FE/t` without STACK, `55,100 / 551,000 / 55,100,000 FE/t` with STACK 8, and `70,300 / 703,000 / 70,300,000 FE/t` with STACK 16. Full-lane smelting compatibility peaks at `53,200,000 FE/t` with STACK 16.
+
+#### AE2 filter persistence
+
+- **Complete filter-page persistence**: the pull filter now stores a format version and page capacity alongside high-page entries, blank-page capacity, modes, per-entry amounts, and unlimited flags.
+- **Every move path is covered**: world saves, mined drops, wrench dismantling, configuration cards, and all supported factory tier installers carry a defensive copy of the complete filter snapshot.
+- **Legacy-safe loading**: older installer maps still restore correctly, while a legacy configuration card without filter data explicitly clears the destination filter instead of leaving stale entries behind.
+
+#### Performance and reliability
+
+- **Fewer calls into slow ME storage**: input slots run their full validator before extraction, preventing reject-and-return cycles. Slow extracts and inserts share a server-wide time budget and use per-machine plus per-key exponential backoff.
+- **Output coalescing**: two or more output slots are merged by AE item key before insertion. A successful but abnormally slow external-storage call still backs off that key, while healthy networks keep full throughput.
+- **Safer apiary routing**: internal apiary-to-centrifuge moves no longer trigger the external storage admission policy. Full centrifuge inputs release priority honeycomb to the normal AE2 path, and partial buffer writes now mark the tile dirty correctly.
+- **Restored Mekanism tracker ordering**: the value-matching energy tracker replacement was removed to avoid replacing factory `lastUsage` or shifting sync indices. Only the client tooltip number is stabilized for 750ms; server accounting remains exact.
+- **Overflow-safe batch energy**: accelerated energy multiplication saturates instead of wrapping, and PB upgrade caches now invalidate immediately after client sync or automatic installation.
+
+#### UI and compatibility
+
+- **Consistent large counts**: normal machine slots and the AE2 pull screen share a fixed `0.7x` K/M/B count renderer.
+- **OmniTools LINK mode**: an OmniTools wrench in ME laser-link mode is allowed through to its binding handler; ordinary wrench dismantling is unchanged.
+
+#### Tests
+
+- Added regression coverage for STACK 8/16, `16 SPEED + 16 ENERGY`, 19-lane peak figures, smelting energy, profile caps, AE2 refill watermarks, slow-operation budgeting, output coalescing, and client energy-display stability.
+
 ## [1.0.2] - 2026-08-20
 
 ### 新增

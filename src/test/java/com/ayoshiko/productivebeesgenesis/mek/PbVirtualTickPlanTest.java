@@ -40,12 +40,27 @@ class PbVirtualTickPlanTest {
 	@Test
 	void stackParallelismDownscalesToAvailableEnergyInsteadOfStalling() {
 		PbVirtualTickPlan plan = PbVirtualTickPlan.create(
-				0, 1, 1, 65_536, 1_000_000, 100L, 10_000L);
+				0, 1, 1, 65_536, 1_000_000, 100L, 2_000L);
 
-		assertEquals(100, plan.completedOperations());
+		assertEquals(256, plan.completedOperations());
 		assertEquals(0, plan.remainingProgress());
 		assertEquals(1, plan.executedTicks());
-		assertEquals(10_000L, plan.energyUsed());
+		assertEquals(2_000L, plan.energyUsed());
+	}
+
+	@Test
+	void fullCustomParallelBatchUsesOptimizedEnergyCurve() {
+		int operations = 65_536 * 480;
+		long fullEnergy = 4_810_000L;
+		PbVirtualTickPlan full = PbVirtualTickPlan.create(
+				0, 1, 1, operations, operations, 130_000L, fullEnergy);
+		PbVirtualTickPlan limited = PbVirtualTickPlan.create(
+				0, 1, 1, operations, operations, 130_000L, fullEnergy - 130_000L);
+
+		assertEquals(operations, full.completedOperations());
+		assertEquals(fullEnergy, full.energyUsed());
+		assertTrue(limited.completedOperations() < operations);
+		assertTrue(limited.energyUsed() <= fullEnergy - 130_000L);
 	}
 
 	@Test

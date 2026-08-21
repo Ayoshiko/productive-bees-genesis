@@ -65,7 +65,8 @@ public final class ApiaryConfigSection {
 		// ===== 基础参数 =====
 		builder.comment("基础参数").push("basic");
 		apiaryEnergyPerTick = builder
-				.comment("每个处理槽每tick的能量消耗(FE)")
+				.comment("每个处理槽每tick的配置能耗(FE)",
+						"机器注册时应用 1/5 内置平衡系数，不能整除时向上取整")
 				.translation("productivebeesgenesis.configuration.mek_apiary.basic.energyPerTick")
 				.defineInRange("energyPerTick", 50L, 1L, Long.MAX_VALUE);
 

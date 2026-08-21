@@ -51,7 +51,8 @@ record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 		if (ticksLeft >= required && inputsLeft >= maxOperations) {
 			long cycles = Math.min((long) ticksLeft / required, (long) inputsLeft / maxOperations);
 			if (perOperation > 0L) {
-				cycles = Math.min(cycles, energyLeft / perOperation / maxOperations / required);
+				long energyPerCycle = energyFor(required, maxOperations, perOperation);
+				cycles = energyPerCycle <= 0L ? 0L : Math.min(cycles, energyLeft / energyPerCycle);
 			}
 			if (cycles > 0L) {
 				int cycleTicks = (int) (cycles * required);
@@ -90,21 +91,24 @@ record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 	private static int affordableOperationsForOneTick(int requestedOperations, int availableInputs,
 			long energyPerOperation, long availableEnergy) {
 		int operations = Math.min(Math.max(0, requestedOperations), Math.max(0, availableInputs));
-		if (operations <= 0 || energyPerOperation <= 0L) return operations;
-		return (int) Math.min(operations, availableEnergy / energyPerOperation);
+		return MekCentrifugeEnergyScaling.affordableOperations(
+				energyPerOperation, operations, availableEnergy);
 	}
 
 	private static int affordableTicks(int requestedTicks, int operations, long energyPerOperation,
 			long availableEnergy) {
 		if (requestedTicks <= 0 || operations <= 0) return 0;
 		if (energyPerOperation == 0L) return requestedTicks;
-		long affordable = availableEnergy / energyPerOperation / operations;
+		long perTick = MekCentrifugeEnergyScaling.parallelEnergyCost(
+				energyPerOperation, operations);
+		if (perTick <= 0L) return 0;
+		long affordable = availableEnergy / perTick;
 		return (int) Math.min(requestedTicks, affordable);
 	}
 
 	private static long energyFor(int ticks, int operations, long energyPerOperation) {
 		if (ticks <= 0 || operations <= 0 || energyPerOperation <= 0L) return 0L;
-		return SaturatingMath.saturatingMultiply(energyPerOperation, operations, ticks);
+		return MekCentrifugeEnergyScaling.batchEnergyCost(energyPerOperation, operations, ticks);
 	}
 
 	private static int saturatedAdd(int first, int second) {

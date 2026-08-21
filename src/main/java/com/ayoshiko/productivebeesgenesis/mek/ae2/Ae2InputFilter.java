@@ -557,6 +557,20 @@ public final class Ae2InputFilter {
 		invalidateDirectEntries();
 	}
 
+	/** Resets every persisted setting when loading legacy data without a filter payload. */
+	public synchronized void resetPersistentState() {
+		filterMode = FilterMode.DISABLED;
+		preciseMode = false;
+		slots = new String[DEFAULT_CAPACITY];
+		resolvedDirectKeys = null;
+		directAmounts = new long[DEFAULT_CAPACITY];
+		directVisibleAmounts = new long[DEFAULT_CAPACITY];
+		directUnlimited = new boolean[DEFAULT_CAPACITY];
+		unlimitedAllFallback = false;
+		fuzzyEntriesCache = null;
+		invalidateDirectEntries();
+	}
+
 	/** 条目信息 — 解析后的过滤条目 */
 	public static final class EntryInfo {
 		public final ResourceLocation beeType;

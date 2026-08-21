@@ -142,6 +142,7 @@ class MekCentrifugeSaveHandler {
 		deserializeFluidTank(provider, nbt);
 		// 模块 3 Bug 1：反序列化输出槽/输入槽/能量槽（冗余备份，向后兼容：旧存档无此键时跳过）
 		deserializeDropSlots(nbt, provider);
+		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 	}
 
 	/**

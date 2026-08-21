@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.compat.emextras;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -128,18 +129,20 @@ public final class MekCentrifugeEMEBlockType {
 	@SuppressWarnings("unchecked")
 	private static EMExtraMachine.EMExtraFactoryMachine<TileEntityEMExtraMekCentrifugeFactory> createEMEFactoryBlockType(
 			EMExtraFactoryTier tier) {
-		// 能量配置：EME模式，storage = max(origStorage, origUsage) * tier.processes
-		// Task 3: origStorage/origUsage 从 config 读取（默认 20000L/50L）
+		// 能耗应用 1/5、容量应用 1/2 内置平衡系数，再按 EME 模式乘以 tier.processes。
 		// 使用离心机专属description key替代通用DESCRIPTION_FACTORY
 		// key格式：description.productivebeesgenesis.{tier小写}_emextra_mek_centrifuge_factory
 		var builder = EMExtraMachine.EMExtraMachineBuilder
 				.createEMExtraFactoryMachine(() -> EME_FACTORY_TILES.get(tier),
 				MekCentrifugeBlockType.descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory"),
 							EMExtraFactoryType.SMELTING)
-				.withEnergyConfig(() -> ModConfig.SERVER.mekCentrifugeEnergyPerTick.get().longValue(),
+				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
+							ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()),
 						() -> SaturatingMath.saturatingMultiply(
-								Math.max(ModConfig.SERVER.mekCentrifugeEnergyStorage.get(),
-										ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()), tier.processes))
+								Math.max(MekCentrifugeEnergyScaling.balancedBaseCapacity(
+											ModConfig.SERVER.mekCentrifugeEnergyStorage.get()),
+										MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
+												ModConfig.SERVER.mekCentrifugeEnergyPerTick.get())), tier.processes))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY)

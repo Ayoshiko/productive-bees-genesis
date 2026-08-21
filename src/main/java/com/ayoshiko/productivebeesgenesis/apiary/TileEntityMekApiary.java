@@ -5,8 +5,8 @@ import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
-import com.ayoshiko.productivebeesgenesis.mek.EnergySyncThrottler;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
@@ -69,8 +69,6 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	protected BeeProduceProcessor produceProcessor;
 	protected ApiaryTickHandler tickHandler;
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
-	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2，蜂箱工厂继承复用） */
-	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);
 	/**
@@ -227,6 +225,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 					MekUpgradeSupport.hasCreativeUpgrade(this));
 		}
 		upgradeHandler.invalidateUpgradeCache();
+		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 	}
 
 	/**
@@ -244,8 +243,6 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	TileEntityElectricMachineAccessor accessor() { return (TileEntityElectricMachineAccessor) this; }
 
-	/** GUI 能量条同步节流器 — 供 ApiaryTickHandler 在 tick 末尾刷新快照 */
-	EnergySyncThrottler energySyncThrottler() { return energySyncThrottler; }
 	boolean callSuperOnUpdateServer() { return super.onUpdateServer(); }
 	void callSetActive(boolean active) { setActive(active); }
 	boolean callSuperCanFunction() { return super.canFunction(); }
@@ -410,7 +407,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 * （拓扑/配方变化时失效）。
 	 */
 	boolean shouldHoldForCentrifuge(ItemStack stack) {
-		return centrifugePriorityEnabled && directEjectHandler.canAnyTargetProcess(stack);
+		if (!centrifugePriorityEnabled) return false;
+		// When direct routing is active, hold only while a compatible lane has space. A full
+		// centrifuge must release honeycomb to the normal AE2 path instead of hiding an
+		// unbounded backlog in the apiary buffer. With direct routing disabled, preserve the
+		// legacy Ejector/pipe hand-off semantics and hold by recipe compatibility alone.
+		return directEjectEnabled
+				? directEjectHandler.canAnyTargetAccept(stack)
+				: directEjectHandler.canAnyTargetProcess(stack);
 	}
 
 	/** AE2 推送路径的蜜脾保持判定 — 供 {@code Ae2OutputPusher} 过滤输出槽蜜脾（OCP 接口扩展） */
@@ -448,12 +452,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** 容器数据同步 — 蜜蜂状态 + PB升级数量 + 安装计数器 + 选中槽位 */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
-		int trackersBeforeSuper = EnergySyncThrottler.trackedCount(container);
 		super.addContainerTrackers(container);
-		// 能量条节流：在 super 新增区段内按值语义识别并替换 storedEnergy tracker
-		// （必须先于 slotManager/ApiaryContainerTrackers 注册，保证区段内只有 super 注册项）
-		EnergySyncThrottler.installTracker(container, energySyncThrottler,
-				accessor().productivebeesgenesis$getEnergyContainer(), trackersBeforeSuper);
 		slotManager.addContainerTrackers(container);
 		ApiaryContainerTrackers.addTrackers(this, container);
 	}

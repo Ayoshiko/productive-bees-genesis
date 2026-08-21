@@ -219,8 +219,9 @@ class MekCentrifugeTickHandler {
 			Ae2FluidPusher.pushLocalTankContentsNow(tile);
 		}
 
-		// 能量条节流：本 tick 全部能量变化（AE 注入 + 批量扣除）完成后刷新同步快照
-		tile.energySyncThrottler().tickServer(tile.getLevel(), energyContainer);
+		// 配方扣能后的低水位补充；正常稳态下 tick 开头会因高水位而短路，
+		// 因此不会把 AE2 网络调用翻倍，并可消除客户端能量条的锯齿同步。
+		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return sendUpdatePacket;
 	}

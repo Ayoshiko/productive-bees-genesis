@@ -2,9 +2,16 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import mekanism.api.AutomationType;
 import org.junit.jupiter.api.Test;
 
 class ApiaryDirectEjectHandlerTest {
+
+	@Test
+	void directTargetInsertionBypassesExternalStorageAdmissionPolicy() {
+		assertEquals(AutomationType.INTERNAL,
+				ApiaryDirectEjectHandler.TARGET_INSERT_AUTOMATION);
+	}
 
 	@Test
 	void virtualStackTracksOnlyItemsThatActuallyLeaveSourceSlots() {

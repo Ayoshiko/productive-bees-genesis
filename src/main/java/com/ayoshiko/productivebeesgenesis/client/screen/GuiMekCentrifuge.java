@@ -63,7 +63,9 @@ public class GuiMekCentrifuge
 
 		addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(), 164, 15)
 				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY)));
-		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(), tile::getActive));
+		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(),
+				new EnergyUsageDisplaySmoother(() -> tile.getActive()
+						? tile.getEnergyContainer().getEnergyPerTick() : 0L)));
 		// Tab 布局重排:GuiEnergyTab 下移 Δ=+19(y=137→156),与左侧 Tab 布局对称
 		for (GuiEventListener child : children()) {
 			if (child instanceof GuiEnergyTab energyTab) {

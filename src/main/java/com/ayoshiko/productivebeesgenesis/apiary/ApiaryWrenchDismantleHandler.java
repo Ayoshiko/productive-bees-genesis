@@ -31,6 +31,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 	 * {@code Item.useOn} 之前派发），服务端以 HIGHEST 优先级处理：
 	 * <ol>
 	 *   <li>shift 键按下 + 手持通用扳手 + 目标是本模组机器（蜂箱/离心机）</li>
+	 *   <li>OmniTools 的 LINK 模式例外放行，由 ME 光束绑定 handler 处理</li>
 	 *   <li>直接调用 {@link WorldUtils#dismantleBlock} 执行拆卸</li>
 	 *   <li>取消事件并返回 SUCCESS，阻止后续 {@code Item.useOn}（omnitools 拦截点）执行</li>
 	 * </ol>
@@ -69,6 +70,12 @@ public final class ApiaryWrenchDismantleHandler {
 		}
 		ItemStack stack = event.getItemStack();
 		if (stack.isEmpty() || !WrenchCapabilityHelper.canUseAsWrench(stack)) {
+			return;
+		}
+		// OmniTools 的 LINK 模式需要把潜行右键转发给 ME 光束的绑定工具。
+		// 放行后，若绑定条件不满足，OmniTools 会返回 PASS 并继续走本类机器
+		// 原有的 Block.useItemOn 拆卸兜底，因此普通拆卸行为仍保持兼容。
+		if (WrenchCapabilityHelper.isOmniToolsLinkMode(stack)) {
 			return;
 		}
 		BlockPos pos = event.getPos();

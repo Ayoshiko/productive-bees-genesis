@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.api.recipes.cache.CachedRecipe;
@@ -44,8 +45,8 @@ final class MekCentrifugeUpgradeOps {
 		int maxOps = 1;
 		int stackUpgrades = MekUpgradeSupport.getStackUpgrades(tile);
 		if (stackUpgrades > 0) {
-			// 位运算替代 Math.pow：stackUpgrades 最大 16，1 << 16 = 65536 不会溢出
-			maxOps = 1 << stackUpgrades;
+			// Saturate instead of int-shifting: CUSTOM profiles may allow 32 levels.
+			maxOps = SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 		}
 		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, tile.baseTicksRequired(), maxOps);
 		return MekExtrasUpgradeSemantics.operationsPerTick(
@@ -113,11 +114,15 @@ final class MekCentrifugeUpgradeOps {
 	static CachedRecipe<ItemStackToItemStackRecipe> configureCachedRecipe(
 			TileEntityMekCentrifuge tile,
 			CachedRecipe<ItemStackToItemStackRecipe> cached) {
-		return cached
+		CachedRecipe<ItemStackToItemStackRecipe> configured = cached
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
 						MekUpgradeSupport.hasCreativeUpgrade(tile), tile.energyContainer().getEnergyPerTick()),
 						tile.energyContainer())
 				.setBaselineMaxOperations(tile::getOperationsPerTick);
+		if (configured instanceof ICachedRecipeBatchAccel accel) {
+			accel.productivebeesgenesis$enableMarginalEnergyPricing();
+		}
+		return configured;
 	}
 
 	/**

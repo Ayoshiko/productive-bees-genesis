@@ -27,4 +27,39 @@ class MekExtrasUpgradeSemanticsTest {
 		assertEquals(1, MekExtrasUpgradeSemantics.processingTicks(false, 1, 0.000_001D));
 		assertEquals(1, MekExtrasUpgradeSemantics.processingTicks(false, 0, 1.0D));
 	}
+
+	@Test
+	void runtimeStackCountCannotBypassBasicProfileCap() {
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(16, 16));
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(32, 32));
+		assertEquals(0, MekExtraUpgradeSupport.cappedStackUpgrades(-4, 16));
+	}
+
+	@Test
+	void runtimeStackCountUsesTheSelectedProfileLimit() {
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 32, ignored -> 8));
+		assertEquals(16, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 8, configured -> Math.max(16, configured)));
+		assertEquals(24, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 24, configured -> configured));
+		assertEquals(32, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 32, configured -> configured));
+	}
+
+	@Test
+	void invalidConfigurationFallsBackToConservativeCap() {
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(32, -100, null));
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 32, ignored -> { throw new IllegalStateException("config unavailable"); }));
+		assertEquals(8, MekExtraUpgradeSupport.cappedStackUpgrades(
+				32, 32, ignored -> -1));
+	}
+
+	@Test
+	void stackDisplayMultiplierDoesNotWrapAtThirtyTwoLevels() {
+		assertEquals(256.0D, MekUpgradeSupport.stackUpgradeMultiplier(8));
+		assertEquals(2_147_483_647.0D, MekUpgradeSupport.stackUpgradeMultiplier(32));
+		assertEquals(1.0D, MekUpgradeSupport.stackUpgradeMultiplier(-1));
+	}
 }

@@ -98,8 +98,6 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	protected final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — 工厂变体共用，用于 skipPb 判断 */
 	protected final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
-	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2） */
-	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
 
 	/**
 	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
@@ -340,13 +338,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
 		AbstractMekCentrifugeFactorySetupHelper.addContainerTrackers(this, container,
-			// 能量条节流：super 注册后立即按值语义识别并替换 storedEnergy tracker
-			() -> EnergySyncThrottler.installWithSuper(container, energySyncThrottler,
-				energyContainer(), () -> super.addContainerTrackers(container)));
+			() -> super.addContainerTrackers(container));
 	}
-
-	/** GUI 能量条同步节流器 — 供 FactoryUpgradeStateHelper 在 tick 末尾刷新快照 */
-	EnergySyncThrottler energySyncThrottler() { return energySyncThrottler; }
 
 	/** 持久化PB进度、PB升级、AE2节点、AE2 per-tile状态和多流体槽 */
 	@Override

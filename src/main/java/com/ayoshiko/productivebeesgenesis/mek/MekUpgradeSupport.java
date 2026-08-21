@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
@@ -180,13 +181,18 @@ public final class MekUpgradeSupport {
 		List<Component> ret = new ArrayList<>(UpgradeUtils.getMultScaledInfo(tile, upgrade));
 		if (isStackUpgrade(upgrade)) {
 			ret.clear();
-			// 位运算替代 Math.pow（int → double 自动拓宽）
-			double stack = 1 << getStackUpgrades(tile);
+			// 与 int 类型的运行时操作数使用同一饱和策略，避免 31/32 级显示虚高。
+			double stack = stackUpgradeMultiplier(getStackUpgrades(tile));
 			ret.add(Component.translatable("gui.productivebeesgenesis.upgrades.stack", stack));
 		} else if (isCreativeUpgrade(upgrade)) {
 			ret.add(Component.translatable("gui.mekanism.upgrades.effect", "∞"));
 			ret.add(Component.translatable("gui.productivebeesgenesis.energy_consumption", 0));
 		}
 		return ret;
+	}
+
+	/** Return the display multiplier using the same positive-int ceiling as runtime operations. */
+	static double stackUpgradeMultiplier(int stackUpgrades) {
+		return SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 	}
 }

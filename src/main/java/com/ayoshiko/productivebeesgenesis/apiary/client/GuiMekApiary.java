@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.client.screen.EnergyUsageDisplaySmoother;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiarySelectBeePayload;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -129,7 +130,9 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 				() -> tile.getFluidTanks(null), GaugeType.SMALL, this,
 				ApiaryGuiLayoutHelper.TANK_X, ApiaryGuiLayoutHelper.TANK_Y));
 
-		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(), tile::getActive));
+		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(),
+				new EnergyUsageDisplaySmoother(() -> tile.getActive()
+						? tile.getEnergyContainer().getEnergyPerTick() : 0L)));
 
 		feederTab = addRenderableWidget(new GuiFeederTab(this, tile, () -> feederTab));
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));

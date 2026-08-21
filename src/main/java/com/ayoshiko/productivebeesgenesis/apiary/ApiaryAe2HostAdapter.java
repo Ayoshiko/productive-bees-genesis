@@ -237,9 +237,7 @@ class ApiaryAe2HostAdapter {
 	 */
 	void injectAe2Energy(int batchMultiplier) {
 		long requiredEnergy = tile.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
-		// One extra batch prevents an exact fill/drain cycle from oscillating the synced FE bar.
-		MekCentrifugeEnergyScaling.ensureCapacity(tile,
-				MekCentrifugeEnergyScaling.bufferedCapacityForDemand(requiredEnergy));
+		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		if (!cachedAeEnergyInputEnabled) return;
 		Ae2EnergyInjector.injectEnergy(tile, requiredEnergy);

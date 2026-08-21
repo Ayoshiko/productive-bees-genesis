@@ -241,7 +241,6 @@ class ApiaryTickHandler {
 				});
 			}
 		}
-
 		// F4: 重试将缓冲区产物注入输出槽
 		// Tick 加速模式（skipBeeProcessing=true）下降低频率：缓冲区在加速期间无新产物入队，
 		// 仅需每 4 tick 检查一次输出槽是否有空间（Ejector 腾出空间后缓冲区填充）
@@ -252,7 +251,6 @@ class ApiaryTickHandler {
 				ProductiveBeesGenesis.LOGGER.warn("ApiaryOutputBuffer tickRedistribute 异常", e);
 			}
 		}
-
 		// active 状态管理 — O(1) 计数器读取
 		boolean isWorking = activationCounter.hasActiveBee();
 		if (isWorking) {
@@ -267,10 +265,9 @@ class ApiaryTickHandler {
 		if (isWorking) {
 			soundHandler.maybePlayWorkSound(activationCounter.getWorkingCount());
 		}
-
-		// 能量条节流：本 tick 全部能量变化（AE 注入 + 蜜蜂批量扣除）完成后刷新同步快照
-		tile.energySyncThrottler().tickServer(tile.getLevel(),
-				tile.accessor().productivebeesgenesis$getEnergyContainer());
+		// 消耗后再补一次：低水位守卫使稳态每 tick 仅发生一次网络提取，
+		// 同时让客户端同步看到的是补能后的稳定缓存，而不是先满后空的中间值。
+		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return sendUpdatePacket;
 	}

@@ -160,12 +160,14 @@ public final class ApiaryOutputBuffer {
 			if (stack == null || stack.isEmpty()) continue;
 			boolean hold = holdFilter != null && holdFilter.test(stack);
 			int overflowCount = offerOneHold(stack, hold);
+			int acceptedCount = Math.max(0, stack.getCount() - overflowCount);
+			if (acceptedCount > 0) {
+				if (hold) holdChanged = true;
+				else plainChanged = true;
+			}
 			if (overflowCount > 0) {
 				if (overflow == null) overflow = new ArrayList<>(4);
 				overflow.add(stack.copyWithCount(overflowCount));
-			} else {
-				if (hold) holdChanged = true;
-				else plainChanged = true;
 			}
 		}
 		// hold 注入不 reset AE2 退避：hold 组永远被 pushToAe 跳过，推送结果不因蜜脾入缓冲而改变；

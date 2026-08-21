@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -34,12 +35,12 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@code ApiaryTickHandler}。
 	 * 工厂等级仅通过 {@link AttributeTier} 区分（LED 颜色 + 物品名称颜色），不通过边框或材质区分。
 	 * <p>
-	 * 能量配置按 spec.md 表 2.1 等级递增：
+	 * 配置基数按 spec.md 表 2.1 等级递增，注册时统一应用 1/5 能耗与 1/2 容量平衡：
 	 * <ul>
-	 *   <li>Basic: usage=20 FE/t（每蜜蜂），storage=128,000 FE</li>
-	 *   <li>Advanced: usage=22 FE/t，storage=256,000 FE</li>
-	 *   <li>Elite: usage=25 FE/t，storage=512,000 FE</li>
-	 *   <li>Ultimate: usage=30 FE/t，storage=1,024,000 FE</li>
+	 *   <li>Basic: 4 FE/t（每蜜蜂），64,000 FE</li>
+	 *   <li>Advanced: 5 FE/t，128,000 FE</li>
+	 *   <li>Elite: 5 FE/t，256,000 FE</li>
+	 *   <li>Ultimate: 6 FE/t，512,000 FE</li>
 	 * </ul>
 	 * <p>
 	 * 设计原则：单一职责，本类仅负责 BlockType 定义，方块/方块实体/物品注册由 init 包负责。
@@ -88,15 +89,16 @@ public final class MekApiaryFactoryBlockType {
 	 * （与 EME 的 INFINITE_MULTIVERSAL 一致，避免自指导致 ItemMaxTierInstaller 死循环）。
 	 *
 	 * @param tier        工厂等级
-	 * @param usage       每蜜蜂每 tick 基础能耗（FE）
-	 * @param storage     能量容量（FE）
+	 * @param usage       每蜜蜂每 tick 配置能耗基数（FE）
+	 * @param storage     配置容量基数（FE）
 	 * @param description 描述 ILangEntry
 	 */
 	private static BlockTypeTile<TileEntityMekApiaryFactory> createFactoryBlockType(
 			FactoryTier tier, long usage, long storage, mekanism.api.text.ILangEntry description) {
 		var builder = Machine.MachineBuilder
 				.createMachine(() -> getFactoryTileEntityType(tier), description)
-				.withEnergyConfig(() -> usage, () -> storage)
+				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
+						() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(storage))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_APIARY_FACTORY)

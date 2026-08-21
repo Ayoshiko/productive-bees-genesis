@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.compat.emextras;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
@@ -132,7 +133,8 @@ public final class MekApiaryEMEBlockType {
 		var builder = Machine.MachineBuilder
 				.createMachine(() -> EME_APIARY_FACTORY_TILES.get(tier),
 						descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_apiary_factory"))
-				.withEnergyConfig(() -> usage, () -> storage)
+				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
+						() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(storage))
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_APIARY_FACTORY)

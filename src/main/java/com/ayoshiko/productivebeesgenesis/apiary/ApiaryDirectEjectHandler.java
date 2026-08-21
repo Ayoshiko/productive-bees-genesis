@@ -54,6 +54,9 @@ import java.util.List;
 	 */
 class ApiaryDirectEjectHandler {
 
+	/** Internal machine-to-machine transfers must bypass the external storage admission policy. */
+	static final AutomationType TARGET_INSERT_AUTOMATION = AutomationType.INTERNAL;
+
 	/** 所属蜂箱方块实体 */
 	private final TileEntityMekApiary apiary;
 
@@ -183,6 +186,36 @@ class ApiaryDirectEjectHandler {
 		}
 		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
 		return acceptedTargetMask(stack, targetList) != 0L;
+	}
+
+	/**
+	 * Returns whether a recipe-compatible adjacent centrifuge has room right now. This is
+	 * intentionally separate from {@link #canAnyTargetProcess(ItemStack)}: the latter is a
+	 * stable recipe/topology query used for routing, while AE2 output arbitration must not hold
+	 * honeycomb forever when every compatible input lane is full.
+	 */
+	boolean canAnyTargetAccept(ItemStack stack) {
+		Level level = apiary.getLevel();
+		if (stack == null || stack.isEmpty() || level == null || level.isClientSide) return false;
+		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
+		long acceptedTargets = acceptedTargetMask(stack, targetList);
+		if (acceptedTargets == 0L) return false;
+		for (int targetIndex = 0; targetIndex < targetList.size() && targetIndex < Long.SIZE; targetIndex++) {
+			if ((acceptedTargets & (1L << targetIndex)) == 0L) continue;
+			ApiaryDirectEjectTargets.Target target = targetList.get(targetIndex);
+			try {
+				target.preScanInputSlots();
+				int slotCount = target.inputSlotCount;
+				if (target.inputSlotManager.prepareSameTypeSlots(stack, slotCount) > 0
+						|| target.inputSlotManager.prepareEmptySlotsSortedByRemainingDesc(stack, slotCount) > 0) {
+					return true;
+				}
+			} catch (Exception | LinkageError e) {
+				LogThrottle.warn("apiary_hold_capacity_check",
+						"离心机输入容量判定异常，按无空间处理: {}", stack.getItem(), e);
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -344,7 +377,10 @@ class ApiaryDirectEjectHandler {
 			if (!inSlot.isEmpty() && !ItemStack.isSameItemSameComponents(inSlot, stack)) continue;
 			ItemStack remainder;
 			try {
-				remainder = slot.insertItem(stack, Action.EXECUTE, AutomationType.EXTERNAL);
+				// This is an internal transfer between two machines owned by this mod. EXTERNAL is
+				// reserved for capability/storage-bus callers and activates the factory admission
+				// policy, which intentionally limits one item type to one lane per game tick.
+				remainder = slot.insertItem(stack, Action.EXECUTE, TARGET_INSERT_AUTOMATION);
 			} catch (Exception | LinkageError e) {
 				// 单槽异常隔离：按该槽拒收处理，继续尝试下一槽（与 acceptedTargetMask 防御层级统一）
 				LogThrottle.warn("apiary_produced_direct_insert",
@@ -617,7 +653,7 @@ class ApiaryDirectEjectHandler {
 		}
 		// Reserve only the amount the destination accepts before touching source slots.
 		ItemStack simulatedRemainder = targetSlot.insertItem(
-				virtualStack.copyWithCount(transferable), Action.SIMULATE, AutomationType.EXTERNAL);
+				virtualStack.copyWithCount(transferable), Action.SIMULATE, TARGET_INSERT_AUTOMATION);
 		int simulatedAccepted = transferable - (simulatedRemainder.isEmpty() ? 0 : simulatedRemainder.getCount());
 		if (simulatedAccepted <= 0) return virtualStack;
 
@@ -645,7 +681,7 @@ class ApiaryDirectEjectHandler {
 		ItemStack toInsert = virtualStack.copyWithCount(totalExtracted);
 		ItemStack remaining;
 		try {
-			remaining = targetSlot.insertItem(toInsert, Action.EXECUTE, AutomationType.EXTERNAL);
+			remaining = targetSlot.insertItem(toInsert, Action.EXECUTE, TARGET_INSERT_AUTOMATION);
 		} catch (RuntimeException e) {
 			remaining = toInsert;
 		}

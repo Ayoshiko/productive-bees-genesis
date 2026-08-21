@@ -85,8 +85,6 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	private final PbUpgradeInstallHandler pbUpgradeInstallHandler;
 	/** AE2 集成处理器 — 封装网格节点生命周期、per-tile 开关切换与容器同步 */
 	private final MekCentrifugeAe2Handler ae2Handler;
-	/** GUI 能量条同步节流器 — 快照每 5 gameTick / 变化超容量 1% 刷新，网络包频率降 80%（v1.0.2） */
-	private final EnergySyncThrottler energySyncThrottler = new EnergySyncThrottler();
 
 	/**
 	 * 掉落数据已序列化标志 — getDrops 幂等防护
@@ -136,9 +134,6 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 
 	/** 获取Accessor — 供同包 SlotManager/TickHandler/SaveHandler/Ae2Handler 访问父类包私有字段 */
 	TileEntityElectricMachineAccessor accessor() { return (TileEntityElectricMachineAccessor) this; }
-
-	/** GUI 能量条同步节流器 — 供 TickHandler 在 tick 末尾刷新快照 */
-	EnergySyncThrottler energySyncThrottler() { return energySyncThrottler; }
 
 	/** 懒初始化槽位管理器（super() 构造期间通过 getInitialInventory() 虚方法调用进入此处） */
 	MekCentrifugeSlotManager slotManager() {
@@ -317,7 +312,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void recalculateUpgrades(Upgrade upgrade) {
 		super.recalculateUpgrades(upgrade);
 		MekCentrifugeUpgradeOps.handleCreativeEnergy(this, upgrade);
-		MekCentrifugeEnergyScaling.ensureCapacity(this);
+		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 		// SPEED/ENERGY 变化影响时间倍率 — 失效 PB 升级倍率缓存（Spark 优化）
 		pbUpgradeHandler.invalidateMultiplierCache();
 	}
@@ -465,12 +460,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	/** 同步PB进度、PB升级数量/安装进度和 AE2 开关 — 委托 {@link MekCentrifugeSaveHandler#addContainerTrackers} */
 	@Override
 	public void addContainerTrackers(MekanismContainer container) {
-		int trackersBeforeSuper = EnergySyncThrottler.trackedCount(container);
 		super.addContainerTrackers(container);
-		// 能量条节流：在 super 新增区段内按值语义识别并替换 storedEnergy tracker
-		// （必须先于 saveHandler 的 trackArray 注册，保证区段内只有 super 注册项）
-		EnergySyncThrottler.installTracker(container, energySyncThrottler,
-				accessor().productivebeesgenesis$getEnergyContainer(), trackersBeforeSuper);
 		saveHandler.addContainerTrackers(container);
 	}
 	/** 持久化完整状态（PB进度/PB升级/AE2节点/per-tile开关） — 委托 {@link MekCentrifugeSaveHandler#saveAdditional} */

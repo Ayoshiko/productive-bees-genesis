@@ -58,7 +58,7 @@ public final class FactoryUpgradeStateHelper {
 		accessor.productivebeesgenesis$setOperationsPerTick(
 				MekExtrasUpgradeSemantics.operationsPerTick(
 						MekUpgradeSupport.hasCreativeUpgrade(factory), maxOps, speedAdjustedOps));
-		MekCentrifugeEnergyScaling.ensureCapacity(factory);
+		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
 	}
 
 	/**
@@ -233,9 +233,8 @@ public final class FactoryUpgradeStateHelper {
 			result = sendUpdatePacket;
 		}
 
-		// 能量条节流：本 tick 全部能量变化完成后刷新同步快照
-		factory.energySyncThrottler().tickServer(factory.productivebeesgenesis$getAe2Level(),
-				factory.energyContainer());
+		// 工厂本 tick 消耗完成后补回高水位，下一 tick 的前置注入会自然短路。
+		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return result;
 	}
@@ -281,8 +280,7 @@ public final class FactoryUpgradeStateHelper {
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
 		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
-		// 能量条节流：本 tick 全部能量变化完成后刷新同步快照
-		factory.energySyncThrottler().tickServer(factory.productivebeesgenesis$getAe2Level(),
-				factory.energyContainer());
+		// Coalesced flush 同样在所有配方消耗完成后补回高水位。
+		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 	}
 }

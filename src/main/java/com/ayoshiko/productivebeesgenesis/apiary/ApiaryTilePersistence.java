@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.PbConfigCardDataHelper;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.upgrade.IUpgradeData;
@@ -51,6 +52,7 @@ final class ApiaryTilePersistence {
 		tile.nbtSerializer().loadApiaryState(nbt, provider);
 		tile.ae2HostAdapter().loadNodeNBT(nbt);
 		tile.ae2HostAdapter().loadPerTileState(nbt);
+		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 	}
 
 	/** 构建升级数据（构建后立即清空旧方块所有槽位，防止 setRemoved 重复掉落） */

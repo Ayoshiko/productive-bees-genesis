@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import mekanism.common.block.attribute.AttributeUpgradeable;
 import mekanism.common.content.blocktype.BlockTypeTile;
@@ -33,7 +34,7 @@ public final class MekApiaryBlockType {
 	/**
 	 * 基础MEK通用机械蜂箱BlockType
 	 * <br/>
-	 * 能量配置：usage=50L/tick，storage=20000L（与MEK离心机一致）。
+	 * 能量配置：默认配置 50 FE/t 应用 1/5 平衡后为 10 FE/t，20,000 FE 容量减半为 10,000 FE。
 	 * 侧面配置：物品/流体/能量三种传输类型。
 	 * GUI关联：ModMenuTypes.MEK_APIARY（占位，后续Task 7完善Container）。
 	 * 生产周期由TileEntityMekApiary构造函数传入（200 ticks = 10秒，MEK原版标准）。
@@ -41,8 +42,10 @@ public final class MekApiaryBlockType {
 	 */
 	public static final BlockTypeTile<TileEntityMekApiary> MEK_APIARY = Machine.MachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_APIARY, descriptionLang("mek_apiary"))
-			// 基础蜂箱能耗由服务器配置提供；工厂版在 MekApiaryFactoryBlockType 中使用各等级固定基础值。
-			.withEnergyConfig(() -> ModConfig.SERVER.apiaryEnergyPerTick.get(), () -> 20_000L)
+			// 与离心机共用内置能耗/容量平衡；旧存档会由运行时容量归一化自动迁移。
+			.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
+						ModConfig.SERVER.apiaryEnergyPerTick.get()),
+					() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(20_000L))
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(mekanism.common.block.attribute.Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_APIARY)

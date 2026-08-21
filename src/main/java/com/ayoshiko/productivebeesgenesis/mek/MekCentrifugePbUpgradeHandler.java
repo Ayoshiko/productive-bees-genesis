@@ -335,7 +335,10 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (type != null) {
 			int ord = type.ordinal();
 			if (ord >= 0 && ord < clientUpgradeCounts.length()) {
-				clientUpgradeCounts.set(ord, count);
+				int previous = clientUpgradeCounts.getAndSet(ord, count);
+				if (previous != count) {
+					upgradeCountsVersion++;
+				}
 			}
 		}
 	}

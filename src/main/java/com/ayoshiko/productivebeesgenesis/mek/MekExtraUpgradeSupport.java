@@ -1,12 +1,16 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.jerry.mekextras.api.ExtraUpgrade;
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentUpgrade;
+
+import java.util.function.IntUnaryOperator;
 
 /**
 	 * MEKExtras升级支持构建器
@@ -21,6 +25,9 @@ import mekanism.common.tile.component.TileComponentUpgrade;
 	 * 本类调用时Mixin已应用，ExtraUpgrade字段已填充。
 	 */
 final class MekExtraUpgradeSupport {
+
+	/** Conservative STACK cap used while the server balance snapshot is unavailable. */
+	static final int DEFAULT_STACK_UPGRADE_LIMIT = 8;
 
 	/** 升级查询异常日志限流器（ms 模式，5 秒冷却）— 静态工具类无 Level 访问 */
 	private static final LogThrottle UPGRADE_WARN_THROTTLE = new LogThrottle(100L, 5000L);
@@ -93,12 +100,55 @@ final class MekExtraUpgradeSupport {
 		if (tile == null || ExtraUpgrade.STACK == null) return 0;
 		try {
 			TileComponentUpgrade component = tile.getComponent();
-			return component == null ? 0 : component.getUpgrades(ExtraUpgrade.STACK);
+			if (component == null) return 0;
+			int installed = component.getUpgrades(ExtraUpgrade.STACK);
+			return cappedStackUpgrades(installed, configuredStackLimit());
 		} catch (Exception e) {
 			UPGRADE_WARN_THROTTLE.tryLogMs(System.currentTimeMillis(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.warn("查询 STACK 升级数量失败，返回 0（已抑制 {} 次类似警告）", suppressed, e));
 			return 0;
 		}
+	}
+
+	/**
+	 * Applies the same effective cap used by the installation mixin to runtime calculations.
+	 * Old saves can contain more STACK upgrades than the current server policy, so this must
+	 * be enforced at every consumer rather than only when a new item is installed.
+	 */
+	static int cappedStackUpgrades(int installed, int configuredLimit) {
+		return cappedStackUpgrades(installed, configuredLimit, BalanceConfig::centrifugeStackLimit);
+	}
+
+	/**
+	 * Pure STACK cap policy. The resolver represents the selected balance profile and is
+	 * injectable so profile behaviour can be tested without constructing a NeoForge config.
+	 */
+	static int cappedStackUpgrades(int installed, int configuredLimit,
+			IntUnaryOperator profileLimitResolver) {
+		int safeInstalled = Math.max(0, installed);
+		int safeConfigured = Math.max(DEFAULT_STACK_UPGRADE_LIMIT, configuredLimit);
+		int effectiveLimit = DEFAULT_STACK_UPGRADE_LIMIT;
+		if (profileLimitResolver != null) {
+			try {
+				effectiveLimit = profileLimitResolver.applyAsInt(safeConfigured);
+			} catch (RuntimeException ignored) {
+				// A malformed or not-yet-loaded config falls back to the conservative cap.
+			}
+		}
+		// BalanceConfig currently guarantees a minimum of eight. Keep the same conservative
+		// fallback if a future resolver returns an invalid negative value.
+		return Math.min(safeInstalled, Math.max(DEFAULT_STACK_UPGRADE_LIMIT, effectiveLimit));
+	}
+
+	private static int configuredStackLimit() {
+		try {
+			if (ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeMaxStackUpgrades != null) {
+				return ModConfig.SERVER.mekCentrifugeMaxStackUpgrades.get();
+			}
+		} catch (RuntimeException ignored) {
+			// Configuration may be queried while the server spec is still loading.
+		}
+		return DEFAULT_STACK_UPGRADE_LIMIT;
 	}
 
 	/**

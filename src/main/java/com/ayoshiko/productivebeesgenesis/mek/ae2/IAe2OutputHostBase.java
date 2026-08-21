@@ -411,9 +411,8 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 */
 	default void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
 		long requiredEnergy = productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
-		// Capacity must also retain one batch of reserve when AE2 is absent or input is disabled.
-		MekCentrifugeEnergyScaling.ensureCapacity(this,
-				MekCentrifugeEnergyScaling.bufferedCapacityForDemand(requiredEnergy));
+		// Capacity coordination also repairs oversized legacy buffers when AE2 is disabled.
+		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;

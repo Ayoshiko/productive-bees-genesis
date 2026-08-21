@@ -16,6 +16,7 @@ import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
@@ -249,6 +250,7 @@ public final class CentrifugeFactoryCommonLogic {
 				DevLog.warn("fluid_tank", "检测到多流体槽数据,当前为 SINGLE 模式。数据已保留为孤儿 NBT,切换回 MULTI 模式可恢复");
 			}
 		}
+		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
 	}
 
 	// ===== 容器同步 =====
@@ -447,7 +449,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull Runnable markForSave,
 			@NotNull IntSupplier operationsPerTick,
 			int[] progress) {
-		return OneInputCachedRecipe.itemToItem(
+		CachedRecipe<ItemStackToItemStackRecipe> configured = OneInputCachedRecipe.itemToItem(
 				recipe, recheckAllRecipeErrors[cacheIndex],
 				inputHandlers[cacheIndex], outputHandlers[cacheIndex])
 				.setErrorsChanged(errors -> errorsChanged.accept((Set<CachedRecipe.OperationTracker.RecipeError>) errors,
@@ -460,6 +462,10 @@ public final class CentrifugeFactoryCommonLogic {
 				.setOnFinish(markForSave)
 				.setBaselineMaxOperations(operationsPerTick)
 				.setOperatingTicksChanged(operatingTicks -> progress[cacheIndex] = operatingTicks);
+		if (configured instanceof ICachedRecipeBatchAccel accel) {
+			accel.productivebeesgenesis$enableMarginalEnergyPricing();
+		}
+		return configured;
 	}
 
 	// ===== PB 上下文计算 =====
@@ -469,8 +475,8 @@ public final class CentrifugeFactoryCommonLogic {
 		int maxOps = 1;
 		int stackUpgrades = MekUpgradeSupport.getStackUpgrades(tile);
 		if (stackUpgrades > 0) {
-			// 位运算替代 Math.pow：stackUpgrades 最大 16，1 << 16 = 65536 不会溢出
-			maxOps = 1 << stackUpgrades;
+			// Saturate instead of int-shifting: CUSTOM profiles may allow 32 levels.
+			maxOps = SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 		}
 		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
 		return MekExtrasUpgradeSemantics.operationsPerTick(

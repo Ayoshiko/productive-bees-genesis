@@ -143,10 +143,10 @@ public class MyriadCreationsHandler {
 		int inputCount = context.inputSlot(processIndex).getStack().getCount();
 		effectiveOps = Math.min(effectiveOps, inputCount);
 
-		// 能量检查：cachedEnergyPerTick 是 per-op 能量（不含 STACK 倍率，参考 PbRecipeProcessor 标准路径）
-		// 需按 effectiveOps 限流，避免 STACK 升级满级时只扣 50 FE/t（实际应扣 65536 * 50 = 3.27M FE/t）
+		// 与 PB 标准路径共用高并行边际能耗曲线，并按当前能量反算可执行操作数。
 		if (cachedEnergyPerTick > 0) {
-			int energyLimitedOps = (int) Math.min(effectiveOps, availableEnergy / cachedEnergyPerTick);
+			int energyLimitedOps = MekCentrifugeEnergyScaling.affordableOperations(
+					cachedEnergyPerTick, effectiveOps, availableEnergy);
 			if (energyLimitedOps <= 0) {
 				pbProcessing[processIndex] = false;
 				return false;

@@ -2,12 +2,14 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import mekanism.api.MekanismItemAbilities;
 import mekanism.common.util.MekanismUtils;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 
 import java.util.Set;
 
@@ -43,6 +45,12 @@ public final class WrenchCapabilityHelper {
 			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_wrench"),
 			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_vajra"));
 
+	/** OmniTools 在 ME 光束兼容模式下写入 ItemStack 的自定义数据键。 */
+	private static final String OMNITOOLS_MODE_TAG = "ToolMode";
+	private static final String OMNITOOLS_LINK_MODE = "link";
+	private static final ResourceLocation OMNITOOLS_WRENCH_ID =
+			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_wrench");
+
 	private WrenchCapabilityHelper() {
 		// 工具类禁止实例化
 	}
@@ -72,5 +80,27 @@ public final class WrenchCapabilityHelper {
 		// 4. 显式物品 ID 兜底（AE2 / OmniTools 等）
 		return EXPLICIT_WRENCH_IDS.contains(
 				BuiltInRegistries.ITEM.getKey(stack.getItem()));
+	}
+
+	/**
+	 * 判断 OmniTools 扳手当前是否处于 ME 光束绑定模式。
+	 * <p>
+	 * OmniTools 的 ME 光束兼容 handler 会在该模式下把右键转发给
+	 * {@code LaserBindingTool}。调用方必须放行这个交互，否则本模组的潜行扳手
+	 * 拆卸事件会先一步拆掉机器，导致无线塔永远无法绑定。
+	 *
+	 * @param stack 交互时手持的物品
+	 * @return true 表示应让 OmniTools/ME 光束优先处理
+	 */
+	public static boolean isOmniToolsLinkMode(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return false;
+		}
+		ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+		if (!OMNITOOLS_WRENCH_ID.equals(itemId)) {
+			return false;
+		}
+		CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+		return OMNITOOLS_LINK_MODE.equals(customData.copyTag().getString(OMNITOOLS_MODE_TAG));
 	}
 }

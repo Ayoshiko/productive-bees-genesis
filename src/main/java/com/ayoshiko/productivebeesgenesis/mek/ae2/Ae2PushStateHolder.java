@@ -32,9 +32,8 @@ public final class Ae2PushStateHolder {
 	/**
 	 * 能量注入退避状态 — ME 网络无能量时跳过 SIMULATE 探测（每次均为完整网络遍历）。
 	 * <p>
-	 * 窗口特意短于其他退避（100ms→200ms 封顶，即 2→4 tick）：容器缓冲下限为
-	 * 2×单批需求（{@code MekCentrifugeEnergyScaling.bufferedCapacityForDemand}），
-	 * 退避窗口内容器足以撑住满速消耗，网络恢复后下一次探测立即补满，无能量饥饿。
+	 * 窗口特意短于其他退避（100ms→200ms 封顶，即 2→4 tick），避免标准容量较小的
+	 * 机器在网络恢复后仍长时间等待；部分成功会立即恢复正常探测频率。
 	 * 部分成功（injected &gt; 0）立即重置退避。
 	 */
 	private final Ae2PushBackoff energyBackoff = new Ae2PushBackoff(100_000_000L, 200_000_000L);
