@@ -27,6 +27,7 @@ import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityExtraFactoryAccessor;
@@ -452,7 +453,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 			result = sendUpdatePacket;
 		}
 
-		// 消耗后补回 AE2 能量高水位，稳定客户端能量条并保证下一批有完整储备。
+		// 消耗后补回完整正常容量，稳定客户端能量条并保证下一批有完整储备。
 		productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return result;
@@ -527,6 +528,9 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler(
 	) {
 		return productivebeesgenesis$ae2LifecycleHandler;
+	}
+	@Override public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return productivebeesgenesis$ae2LifecycleHandler.getStateHolder();
 	}
 	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return energyContainer; }
 	@Override public Level productivebeesgenesis$getAe2Level() { return level; }

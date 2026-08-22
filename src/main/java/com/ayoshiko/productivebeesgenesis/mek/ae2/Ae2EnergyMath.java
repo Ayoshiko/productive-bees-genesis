@@ -14,26 +14,6 @@ final class Ae2EnergyMath {
 		return current >= maxEnergy ? 0L : maxEnergy - current;
 	}
 
-	/**
-	 * Refill at or below a two-batch low-water mark.
-	 * <p>
-	 * A strict one-batch threshold lets a machine consume the exact last batch before the
-	 * next network request. At high FE/t that produces a visible empty/full saw-tooth and can
-	 * make Mekanism allocate fewer operations on the following tick. Two batches leave room
-	 * for one delayed or partially accepted network extraction.
-	 */
-	static boolean belowLowWater(long currentEnergy, long maxEnergy, long requiredThisTick) {
-		if (maxEnergy <= 0L || requiredThisTick <= 0L) return false;
-		long lowWater = Math.min(maxEnergy,
-				SaturatingMath.saturatingMultiply(requiredThisTick, 2L));
-		return Math.max(0L, currentEnergy) <= lowWater;
-	}
-
-	/** Four-batch refill target, clamped to the machine capacity. */
-	static long highWaterTarget(long maxEnergy, long requiredThisTick) {
-		if (maxEnergy <= 0L || requiredThisTick <= 0L) return 0L;
-		return Math.min(maxEnergy, SaturatingMath.saturatingMultiply(requiredThisTick, 4L));
-	}
 	static long clampExtracted(long extracted, long requested) {
 		if (extracted <= 0L || requested <= 0L) return 0L;
 		return Math.min(extracted, requested);

@@ -13,6 +13,16 @@ public final class Ae2NetworkInventoryView {
 	private Ae2NetworkInventoryView() {
 	}
 
+	/**
+	 * Reads the already aggregated AE2 counter without probing every storage
+	 * provider. This is used for GUI stock display; pull decisions use
+	 * {@link #visibleAmount} when a simulated extract is required.
+	 */
+	public static long cachedAmount(KeyCounter cachedInventory, AEItemKey key, long cap) {
+		if (cachedInventory == null || key == null || cap <= 0L) return 0L;
+		return Ae2VisibleStockMath.merge(cachedInventory.get(key), 0L, cap);
+	}
+
 	public static long visibleAmount(Ae2OutputStateHolder holder, long gameTick,
 			KeyCounter cachedInventory, MEStorage network, AEItemKey key, long cap,
 			IActionSource source) {
@@ -40,6 +50,24 @@ public final class Ae2NetworkInventoryView {
 			cache.amounts.put(key, visible);
 		}
 		return Ae2VisibleStockMath.merge(visible, 0L, cap);
+	}
+
+	/**
+	 * Applies a committed ME extraction to the same-tick view. JDTE may invoke the
+	 * puller multiple times while the world game time is unchanged; keeping this
+	 * key's cached amount in sync prevents a later invocation from crossing a
+	 * configured reserve floor without invalidating the whole per-tick map.
+	 */
+	public static void recordExtract(Ae2OutputStateHolder holder, long gameTick,
+			MEStorage network, AEItemKey key, long extracted) {
+		if (holder == null || network == null || key == null || extracted <= 0L) return;
+		Object cached = holder.getInputInventoryViewCache();
+		if (!(cached instanceof TickCache cache)
+				|| cache.network != network || cache.gameTick != gameTick) return;
+		long current = cache.amounts.getLong(key);
+		if (current >= 0L) {
+			cache.amounts.put(key, Math.max(0L, current - extracted));
+		}
 	}
 
 	private static TickCache getTickCache(Ae2OutputStateHolder holder, long gameTick, MEStorage network) {

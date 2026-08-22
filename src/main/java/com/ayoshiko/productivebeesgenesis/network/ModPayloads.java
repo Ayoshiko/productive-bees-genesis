@@ -174,6 +174,11 @@ public final class ModPayloads {
 				ToggleAllAeInputFilterUnlimitedPayload.STREAM_CODEC,
 				Ae2FilterPayloadHandlers::handleToggleAllAeInputFilterUnlimited
 		);
+		registrar.playToServer(
+				ToggleAllAeInputFilterNetworkStockPayload.TYPE,
+				ToggleAllAeInputFilterNetworkStockPayload.STREAM_CODEC,
+				Ae2FilterPayloadHandlers::handleToggleAllAeInputFilterNetworkStock
+		);
 		// AE2LT-style virtual output slot interaction (take out / put back)
 		registrar.playToServer(
 				AeInputOutputSlotPayload.TYPE,

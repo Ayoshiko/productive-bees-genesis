@@ -201,6 +201,11 @@ public class FactoryPbContextDelegate {
 		outputSlotFlagManager.beginBatch();
 	}
 
+	/** Declares one manager-owned output slot mutation before setStack/growStack. */
+	public void expectOutputSlotChange() {
+		outputSlotFlagManager.expectSlotChange();
+	}
+
 	/**
 	 * 仅重算单个槽位的状态缓存（Task 7 增量更新）
 	 * <br/>

@@ -51,6 +51,25 @@ public final class CombFuzzyMatcher {
 	private static final ConcurrentHashMap<AEItemKey, ResourceLocation> aeItemKeyToBeeTypeCache =
 			new ConcurrentHashMap<>();
 
+	/**
+	 * Registered item references are stable for the lifetime of a server. Resolve
+	 * the DeferredHolders once on first matcher use instead of paying the holder
+	 * lookup cost for every key in every AE2 inventory scan.
+	 */
+	private static final class ItemRefs {
+		private static final Item CONFIGURABLE_HONEYCOMB = ModItems.CONFIGURABLE_HONEYCOMB.get();
+		private static final Item CONFIGURABLE_COMB_BLOCK = ModItems.CONFIGURABLE_COMB_BLOCK.get();
+		private static final Item HONEYCOMB_GHOSTLY = ModItems.HONEYCOMB_GHOSTLY.get();
+		private static final Item HONEYCOMB_MILKY = ModItems.HONEYCOMB_MILKY.get();
+		private static final Item HONEYCOMB_POWDERY = ModItems.HONEYCOMB_POWDERY.get();
+		private static final Item COMB_GHOSTLY = ModBlocks.COMB_GHOSTLY.get().asItem();
+		private static final Item COMB_MILKY = ModBlocks.COMB_MILKY.get().asItem();
+		private static final Item COMB_POWDERY = ModBlocks.COMB_POWDERY.get().asItem();
+
+		private ItemRefs() {
+		}
+	}
+
 	private CombFuzzyMatcher() {
 		// 工具类，禁止实例化
 	}
@@ -73,8 +92,8 @@ public final class CombFuzzyMatcher {
 	public static boolean isCombItem(AEItemKey key) {
 		if (key == null) return false;
 		Item item = key.getItem();
-		return item == ModItems.CONFIGURABLE_HONEYCOMB.get()
-				|| item == ModItems.CONFIGURABLE_COMB_BLOCK.get()
+		return item == ItemRefs.CONFIGURABLE_HONEYCOMB
+				|| item == ItemRefs.CONFIGURABLE_COMB_BLOCK
 				|| isFixedComb(item)
 				|| isFixedCombBlock(item)
 				|| item == Items.HONEYCOMB
@@ -91,7 +110,7 @@ public final class CombFuzzyMatcher {
 	 * @return true 表示该 key 对应的是蜜脾块
 	 */
 	public static boolean isCombBlock(AEItemKey key) {
-		return key != null && (key.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()
+		return key != null && (key.getItem() == ItemRefs.CONFIGURABLE_COMB_BLOCK
 				|| isFixedCombBlock(key.getItem()) || key.getItem() == Items.HONEYCOMB_BLOCK);
 	}
 
@@ -103,7 +122,7 @@ public final class CombFuzzyMatcher {
 	 */
 	public static boolean isCombBlock(ItemStack stack) {
 		return stack != null && !stack.isEmpty()
-				&& (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()
+				&& (stack.getItem() == ItemRefs.CONFIGURABLE_COMB_BLOCK
 						|| isFixedCombBlock(stack.getItem()) || stack.getItem() == Items.HONEYCOMB_BLOCK);
 	}
 
@@ -132,17 +151,17 @@ public final class CombFuzzyMatcher {
 		if (isExternalCentrifugeComb(item)) {
 			return FEYWILD_HONEYCOMB_TYPE;
 		}
-		if (item == ModItems.HONEYCOMB_GHOSTLY.get() || item == ModBlocks.COMB_GHOSTLY.get().asItem()) {
+		if (item == ItemRefs.HONEYCOMB_GHOSTLY || item == ItemRefs.COMB_GHOSTLY) {
 			return GHOSTLY_TYPE;
 		}
-		if (item == ModItems.HONEYCOMB_MILKY.get() || item == ModBlocks.COMB_MILKY.get().asItem()) {
+		if (item == ItemRefs.HONEYCOMB_MILKY || item == ItemRefs.COMB_MILKY) {
 			return MILKY_TYPE;
 		}
-		if (item == ModItems.HONEYCOMB_POWDERY.get() || item == ModBlocks.COMB_POWDERY.get().asItem()) {
+		if (item == ItemRefs.HONEYCOMB_POWDERY || item == ItemRefs.COMB_POWDERY) {
 			return POWDERY_TYPE;
 		}
-		if (item == ModItems.CONFIGURABLE_HONEYCOMB.get()
-				|| item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB
+				|| item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
 			return stack.get(ModDataComponents.BEE_TYPE.get());
 		}
 		return null;
@@ -154,13 +173,13 @@ public final class CombFuzzyMatcher {
 			return new ItemStack(block ? Items.HONEYCOMB_BLOCK : Items.HONEYCOMB);
 		}
 		if (GHOSTLY_TYPE.equals(filterType)) {
-			return new ItemStack(block ? ModBlocks.COMB_GHOSTLY.get() : ModItems.HONEYCOMB_GHOSTLY.get());
+			return new ItemStack(block ? ItemRefs.COMB_GHOSTLY : ItemRefs.HONEYCOMB_GHOSTLY);
 		}
 		if (MILKY_TYPE.equals(filterType)) {
-			return new ItemStack(block ? ModBlocks.COMB_MILKY.get() : ModItems.HONEYCOMB_MILKY.get());
+			return new ItemStack(block ? ItemRefs.COMB_MILKY : ItemRefs.HONEYCOMB_MILKY);
 		}
 		if (POWDERY_TYPE.equals(filterType)) {
-			return new ItemStack(block ? ModBlocks.COMB_POWDERY.get() : ModItems.HONEYCOMB_POWDERY.get());
+			return new ItemStack(block ? ItemRefs.COMB_POWDERY : ItemRefs.HONEYCOMB_POWDERY);
 		}
 		if (!block && FEYWILD_HONEYCOMB_TYPE.equals(filterType)
 				&& ExternalCentrifugeCombItems.FEYWILD_HONEYCOMB != null) {
@@ -170,15 +189,15 @@ public final class CombFuzzyMatcher {
 	}
 
 	private static boolean isFixedComb(Item item) {
-		return item == ModItems.HONEYCOMB_GHOSTLY.get()
-				|| item == ModItems.HONEYCOMB_MILKY.get()
-				|| item == ModItems.HONEYCOMB_POWDERY.get();
+		return item == ItemRefs.HONEYCOMB_GHOSTLY
+				|| item == ItemRefs.HONEYCOMB_MILKY
+				|| item == ItemRefs.HONEYCOMB_POWDERY;
 	}
 
 	private static boolean isFixedCombBlock(Item item) {
-		return item == ModBlocks.COMB_GHOSTLY.get().asItem()
-				|| item == ModBlocks.COMB_MILKY.get().asItem()
-				|| item == ModBlocks.COMB_POWDERY.get().asItem();
+		return item == ItemRefs.COMB_GHOSTLY
+				|| item == ItemRefs.COMB_MILKY
+				|| item == ItemRefs.COMB_POWDERY;
 	}
 
 	private static boolean isExternalCentrifugeComb(Item item) {

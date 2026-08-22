@@ -806,6 +806,14 @@ public final class Ae2OutputPusher {
 		/** 游标扫描选中键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
 		final List<AEItemKey> scanSelectedKeys = new ArrayList<>();
 		final PullCandidateAmounts scanCandidateAmounts = new PullCandidateAmounts();
+		/**
+		 * Cached comb keys observed in the AE2 inventory. The current KeyCounter is
+		 * consulted for amounts during every pull; this list only avoids repeatedly
+		 * enumerating a large network inventory while accelerated machines catch up.
+		 */
+		final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
+		volatile Object scanCandidateSource;
+		volatile long scanCandidateRefreshTick = Long.MIN_VALUE;
 
 		/** Per-input-slot capacity snapshot reused between pull planning and local insertion. */
 		private long[] inputSlotCapacities = new long[16];
@@ -843,6 +851,10 @@ public final class Ae2OutputPusher {
 		}
 
 		Ae2InputPuller.PullEntry borrowPullEntry(AEItemKey key, int amount) {
+			return borrowPullEntry(key, amount, false);
+		}
+
+		Ae2InputPuller.PullEntry borrowPullEntry(AEItemKey key, int amount, boolean unlimited) {
 			Ae2InputPuller.PullEntry entry;
 			if (pullEntryPoolCursor < pullEntryPool.size()) {
 				entry = pullEntryPool.get(pullEntryPoolCursor++);
@@ -851,13 +863,36 @@ public final class Ae2OutputPusher {
 				pullEntryPool.add(entry);
 				pullEntryPoolCursor++;
 			}
-			entry.reset(key, amount);
+			entry.reset(key, amount, unlimited);
 			return entry;
 		}
 
 		/** Borrow the bounded cursor-wrap prefix scratch list. */
 		List<AEItemKey> borrowScanPrefixKeys() {
 			return scanPrefixKeys;
+		}
+
+		List<AEItemKey> borrowScanCandidateKeys() {
+			return scanCandidateKeys;
+		}
+
+		boolean needsScanCandidateRefresh(Object source, long gameTick, long intervalTicks) {
+			return scanCandidateSource != source
+					|| scanCandidateRefreshTick == Long.MIN_VALUE
+					|| gameTick < scanCandidateRefreshTick
+					|| gameTick - scanCandidateRefreshTick >= Math.max(1L, intervalTicks);
+		}
+
+		void markScanCandidateRefresh(Object source, long gameTick) {
+			scanCandidateSource = source;
+			scanCandidateRefreshTick = gameTick;
+		}
+
+		void invalidateScanCandidateCache() {
+			// Grid callbacks may run off the server thread. Only publish invalidation
+			// markers here; the next server tick owns and clears the ArrayList.
+			scanCandidateSource = null;
+			scanCandidateRefreshTick = Long.MIN_VALUE;
 		}
 
 		/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */

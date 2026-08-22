@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -665,14 +666,12 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	) {
 		return ae2HostAdapter.getAe2LifecycleHandler();
 	}
+	@Override public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return ae2HostAdapter.getAe2StateHolder();
+	}
 	@Override public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource(
 	) {
 		return ae2HostAdapter.getAe2EnergySource();
-	}
-	@Override public long productivebeesgenesis$getRequiredEnergyForBatch(int batchMultiplier) {
-		MachineEnergyContainer<?> container = productivebeesgenesis$getAe2EnergySource();
-		return container == null ? 0L : ApiaryEnergyMath.calculateBatchEnergyCost(
-				container.getEnergyPerTick(), getBeeSlotCount(), batchMultiplier);
 	}
 	@Override public Level productivebeesgenesis$getAe2Level() { return ae2HostAdapter.getAe2Level(); }
 	@Override public BlockPos productivebeesgenesis$getAe2BlockPos() { return ae2HostAdapter.getAe2BlockPos(); }

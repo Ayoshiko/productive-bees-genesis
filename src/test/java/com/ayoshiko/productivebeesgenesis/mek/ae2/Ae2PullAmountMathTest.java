@@ -14,10 +14,18 @@ class Ae2PullAmountMathTest {
 	}
 
 	@Test
-	void networkStockReplacesConfiguredRequestAndIgnoresGlobalCap() {
+	void networkStockRespectsConfiguredRequestAndUnlimitedUsesVisibleStock() {
 		assertEquals(64L, Ae2PullAmountMath.effectiveLimit(64L, 4096L, false, 16_384L));
-		assertEquals(4096L, Ae2PullAmountMath.effectiveLimit(64L, 4096L, true, 16_384L));
-		assertEquals(100_000L, Ae2PullAmountMath.effectiveLimit(64L, 100_000L, true, 1_000L));
+		assertEquals(64L, Ae2PullAmountMath.effectiveLimit(64L, 4096L, true, 16_384L));
+		assertEquals(64L, Ae2PullAmountMath.effectiveLimit(64L, 100_000L, true, 1_000L));
 		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(64L, -1L, true, 16_384L));
+	}
+
+	@Test
+	void networkStockReserveOnlyPullsAmountAboveFloor() {
+		assertEquals(64L, Ae2PullAmountMath.effectiveLimit(64L, 1_000L, true, 16_384L, 300L));
+		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(64L, 300L, true, 16_384L, 300L));
+		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(64L, 100L, true, 16_384L, 300L));
+		assertEquals(700L, Ae2PullAmountMath.effectiveLimit(64L, 1_000L, true, true, 16_384L, 300L));
 	}
 }

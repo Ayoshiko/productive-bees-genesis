@@ -38,18 +38,22 @@ import java.util.List;
 	 * @param preciseMode 精确模式（true=区分蜜脾/蜜脾块）
 	 * @param indices     非空槽位的 index 列表（与 entries 平行）
 	 * @param entries     非空槽位的 entry 字符串列表（与 indices 平行，可能含 #block 后缀）
-	 * @param amounts     直连条目的 AE2 实时库存数量（与 entries 平行，非直连条目为 0）
+	 * @param amounts     直连条目的每次拉取数量（与 entries 平行，非直连条目为 0）
+	 * @param reserveAmounts 直连条目的网络库存保留量（与 entries 平行，非直连条目为 0）
 	 * @param unlimited    直连条目的无限提供状态（与 entries 平行，非直连条目为 false）
+	 * @param networkStock 直连条目的库存模式状态（与 entries 平行，非直连条目为 false）
 	 */
 public record SyncAeInputFilterEntriesPayload(
 		BlockPos pos,
 		int filterMode,
 		boolean preciseMode,
 		List<Integer> indices,
-		List<String> entries,
-		List<Long> amounts,
-		List<Long> visibleAmounts,
+	List<String> entries,
+	List<Long> amounts,
+	List<Long> reserveAmounts,
+	List<Long> visibleAmounts,
 		List<Boolean> unlimited,
+	List<Boolean> networkStock,
 		boolean unlimitedAllFallback
 ) implements CustomPacketPayload {
 
@@ -59,21 +63,25 @@ public record SyncAeInputFilterEntriesPayload(
 		this(pos, filterMode, preciseMode, indices, entries,
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), 0L),
+				Collections.nCopies(entries.size(), 0L),
+				Collections.nCopies(entries.size(), false),
 				Collections.nCopies(entries.size(), false), false);
 	}
 
 	/**
 	 * StreamCodec.composite supports at most six fields in this NeoForge version.
-	 * Keep the public payload fields unchanged while encoding the two per-entry
-	 * metadata lists as one composite field.
+	 * Encode the per-entry metadata lists as one composite field.
 	 */
-	private record DirectState(List<Long> amounts, List<Long> visibleAmounts, List<Boolean> unlimited, boolean unlimitedAllFallback) {}
+	private record DirectState(List<Long> amounts, List<Long> reserveAmounts, List<Long> visibleAmounts,
+			List<Boolean> unlimited, List<Boolean> networkStock, boolean unlimitedAllFallback) {}
 
 	private static final StreamCodec<ByteBuf, DirectState> DIRECT_STATE_CODEC =
 			StreamCodec.composite(
 					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::amounts,
+					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::reserveAmounts,
 					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::visibleAmounts,
 					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::unlimited,
+					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::networkStock,
 					ByteBufCodecs.BOOL, DirectState::unlimitedAllFallback,
 					DirectState::new
 			);
@@ -92,10 +100,12 @@ public record SyncAeInputFilterEntriesPayload(
 					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_FILTER_ENTRY_LENGTH)
 							.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::entries,
 					DIRECT_STATE_CODEC,
-					payload -> new DirectState(payload.amounts(), payload.visibleAmounts(), payload.unlimited(), payload.unlimitedAllFallback()),
+					payload -> new DirectState(payload.amounts(), payload.reserveAmounts(), payload.visibleAmounts(),
+							payload.unlimited(), payload.networkStock(), payload.unlimitedAllFallback()),
 					(pos, filterMode, preciseMode, indices, entries, directState) -> new SyncAeInputFilterEntriesPayload(
 							pos, filterMode, preciseMode, indices, entries,
-							directState.amounts(), directState.visibleAmounts(), directState.unlimited(), directState.unlimitedAllFallback())
+							directState.amounts(), directState.reserveAmounts(), directState.visibleAmounts(),
+							directState.unlimited(), directState.networkStock(), directState.unlimitedAllFallback())
 			);
 
 	@Override

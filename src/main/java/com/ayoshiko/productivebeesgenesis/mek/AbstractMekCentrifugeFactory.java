@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
@@ -387,6 +388,11 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler(
 	) {
 		return productivebeesgenesis$ae2LifecycleHandler;
+	}
+
+	@Override
+	public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return productivebeesgenesis$ae2LifecycleHandler.getStateHolder();
 	}
 
 	@Override

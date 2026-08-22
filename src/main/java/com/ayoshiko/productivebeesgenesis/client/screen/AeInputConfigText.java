@@ -10,6 +10,7 @@ final class AeInputConfigText {
 
 	static String formatCompactAmount(long amount) {
 		long safeAmount = Math.max(0L, amount);
+		if (safeAmount == Long.MAX_VALUE) return "∞";
 		if (safeAmount < 1_000L) return Long.toString(safeAmount);
 		long divisor = 1_000L;
 		char[] suffixes = {'K', 'M', 'G', 'T', 'P', 'E'};

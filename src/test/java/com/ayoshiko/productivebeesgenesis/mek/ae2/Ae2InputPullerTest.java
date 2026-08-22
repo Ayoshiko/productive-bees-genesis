@@ -147,4 +147,5 @@ class Ae2InputPullerTest {
 
 		assertEquals(List.of("b", "c", "a"), out);
 	}
+
 }

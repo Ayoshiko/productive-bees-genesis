@@ -25,7 +25,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-/** MEK-styled editor for one exact AE input entry's requested pull amount. */
+	/** MEK-styled editor for one exact AE input entry's pull amount or stock reserve. */
 final class GuiAeInputAmountConfig extends GuiWindow {
 
 	private static final int WINDOW_WIDTH = 184;
@@ -42,6 +42,7 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 	private final int slotIndex;
 	private final ItemStack icon;
 	private final boolean applyToAll;
+	private final boolean reserveMode;
 	private final GuiTextField amountField;
 	private final AmountButton[] increaseButtons = new AmountButton[NORMAL_STEPS.length];
 	private final AmountButton[] decreaseButtons = new AmountButton[NORMAL_STEPS.length];
@@ -50,22 +51,33 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 
 	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos, int slotIndex,
 			ItemStack icon, long amount) {
-		this(gui, x, y, pos, slotIndex, icon, amount, false);
+		this(gui, x, y, pos, slotIndex, icon, amount, false, false);
+	}
+
+	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos, int slotIndex,
+			ItemStack icon, long amount, boolean reserveMode) {
+		this(gui, x, y, pos, slotIndex, icon, amount, false, reserveMode);
 	}
 
 	/** 全局模式构造：应用于全部直连条目，不需要 slotIndex 与图标。 */
 	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos,
 			ItemStack icon, long amount) {
-		this(gui, x, y, pos, 0, icon, amount, true);
+		this(gui, x, y, pos, 0, icon, amount, true, false);
+	}
+
+	GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos,
+			ItemStack icon, long amount, boolean reserveMode) {
+		this(gui, x, y, pos, 0, icon, amount, true, reserveMode);
 	}
 
 	private GuiAeInputAmountConfig(IGuiWrapper gui, int x, int y, BlockPos pos, int slotIndex,
-			ItemStack icon, long amount, boolean applyToAll) {
+			ItemStack icon, long amount, boolean applyToAll, boolean reserveMode) {
 		super(gui, x, y, WINDOW_WIDTH, WINDOW_HEIGHT, new SelectedWindowData(WindowType.UNSPECIFIED));
 		this.pos = pos;
 		this.slotIndex = slotIndex;
 		this.icon = icon == null ? ItemStack.EMPTY : icon.copyWithCount(1);
 		this.applyToAll = applyToAll;
+		this.reserveMode = reserveMode;
 		this.interactionStrategy = InteractionStrategy.NONE;
 
 		for (int i = 0; i < NORMAL_STEPS.length; i++) {
@@ -80,7 +92,9 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 
 		amountField = addChild(new GuiTextField(gui(), this, relativeX + 55, relativeY + 61, 76, 18));
 		amountField.setInputValidator(GuiAeInputAmountConfig::isAmountCharacter);
-		amountField.setMaxLength(16);
+		// Reserve values use the full long range (up to 19 digits); leave room for
+		// AE2-style expressions while keeping the normal editor compact.
+		amountField.setMaxLength(reserveMode ? 32 : 16);
 		amountField.setText(Long.toString(clampAmount(amount)));
 		amountField.setResponder(ignored -> updateValidation());
 		amountField.setEnterHandler(this::applyAmount);
@@ -101,11 +115,14 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 	public void renderForeground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		super.renderForeground(guiGraphics, mouseX, mouseY);
 		drawTitleText(guiGraphics,
-				Component.translatable(applyToAll
-						? "productivebeesgenesis.gui.ae_input_amount.title_all"
-						: "productivebeesgenesis.gui.ae_input_amount.title"), 5);
+				Component.translatable(reserveMode
+						? (applyToAll ? "productivebeesgenesis.gui.ae_input_amount.reserve_title_all"
+								: "productivebeesgenesis.gui.ae_input_amount.reserve_title")
+						: (applyToAll ? "productivebeesgenesis.gui.ae_input_amount.title_all"
+								: "productivebeesgenesis.gui.ae_input_amount.title")), 5);
 		drawScaledScrollingString(guiGraphics,
-				Component.translatable("productivebeesgenesis.gui.ae_input_amount.range", maxAmount()),
+				Component.translatable(reserveMode ? "productivebeesgenesis.gui.ae_input_amount.reserve_range"
+						: "productivebeesgenesis.gui.ae_input_amount.range", maxAmount()),
 				55, 51, TextAlignment.LEFT, screenTextColor(), 116, 3, false, 0.75F);
 	}
 
@@ -160,9 +177,9 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 			return;
 		}
 		if (applyToAll) {
-			PacketDistributor.sendToServer(new SetAllAeInputFilterAmountPayload(pos, parsed.getAsLong()));
+			PacketDistributor.sendToServer(new SetAllAeInputFilterAmountPayload(pos, parsed.getAsLong(), reserveMode));
 		} else {
-			PacketDistributor.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong()));
+			PacketDistributor.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong(), reserveMode));
 		}
 		close();
 	}
@@ -200,12 +217,12 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 				|| character == '(' || character == ')' || character == '.';
 	}
 
-	private static long clampAmount(long amount) {
+	private long clampAmount(long amount) {
 		return Math.max(MIN_AMOUNT, Math.min(maxAmount(), amount));
 	}
 
-	private static long maxAmount() {
-		return Ae2InputFilter.getMaxDirectAmount();
+	private long maxAmount() {
+		return reserveMode ? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount();
 	}
 
 	@Override

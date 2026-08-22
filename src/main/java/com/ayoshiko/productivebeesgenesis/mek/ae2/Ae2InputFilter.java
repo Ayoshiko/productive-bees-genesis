@@ -51,6 +51,12 @@ public final class Ae2InputFilter {
 	public static final long DEFAULT_DIRECT_AMOUNT = 64L;
 	/** Fallback used while the server configuration is still unavailable. */
 	public static final long MAX_DIRECT_AMOUNT = 8_192L;
+	/** Reserve values are stock floors, so they are not tied to the per-pull rate. */
+	public static final long MAX_DIRECT_RESERVE_AMOUNT = Long.MAX_VALUE;
+
+	public static long clampDirectReserveAmount(long amount) {
+		return Math.max(0L, Math.min(MAX_DIRECT_RESERVE_AMOUNT, amount));
+	}
 	/** Sentinel returned by the allocation-free pull-candidate decision path. */
 	static final long PULL_DISALLOWED = Long.MIN_VALUE;
 
@@ -111,9 +117,12 @@ public final class Ae2InputFilter {
 	 */
 	private volatile AEItemKey[] resolvedDirectKeys;
 	private volatile long[] directAmounts = new long[DEFAULT_CAPACITY];
+	/** Minimum AE2 network stock to keep for each exact entry in network-stock mode. */
+	private volatile long[] directReserveAmounts = new long[DEFAULT_CAPACITY];
 	/** Client-side network stock snapshot; this is never persisted or trusted for pulls. */
 	private volatile long[] directVisibleAmounts = new long[DEFAULT_CAPACITY];
 	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
+	private volatile boolean[] directNetworkStock = new boolean[DEFAULT_CAPACITY];
 	/** Immutable direct-entry snapshot; invalidated only by configuration changes. */
 	private volatile List<DirectEntry> directEntriesCache;
 	/** Parsed fuzzy entries keyed by the copy-on-write slots array identity. */
@@ -187,15 +196,16 @@ public final class Ae2InputFilter {
 		if (beeType == null || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
 		String entry = preciseMode ? Ae2FilterEntrySupport.formatEntry(beeType, isBlock) : beeType.toString();
-		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
-				directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts, directReserveAmounts,
+				directVisibleAmounts, directUnlimited, directNetworkStock,
 				index, entry, DEFAULT_DIRECT_AMOUNT));
 	}
 
 	/** Removes the entry at the given slot index (implementation moved to {@link Ae2InputFilterSlotOps#removeEntry}). */
 	public synchronized void removeEntryAt(int index) {
 		Ae2InputFilterSlotOps.StateArrays s = Ae2InputFilterSlotOps.removeEntry(slots, ensureKeys(), directAmounts,
-				directVisibleAmounts, directUnlimited, index);
+				directReserveAmounts,
+				directVisibleAmounts, directUnlimited, directNetworkStock, index);
 		if (s != null) {
 			publish(s);
 		}
@@ -211,8 +221,8 @@ public final class Ae2InputFilter {
 	 * {@link Ae2InputFilterSlotOps#clearAll}).
 	 */
 	public synchronized void clearEntries() {
-		publish(Ae2InputFilterSlotOps.clearAll(slots, ensureKeys(), directAmounts, directVisibleAmounts,
-			directUnlimited));
+		publish(Ae2InputFilterSlotOps.clearAll(slots, ensureKeys(), directAmounts, directReserveAmounts, directVisibleAmounts,
+			directUnlimited, directNetworkStock));
 	}
 
 	/** Whitelist/blacklist check for a bee type (implementation moved to {@link Ae2InputFilterQuerySupport#isAllowed}). */
@@ -229,7 +239,8 @@ public final class Ae2InputFilter {
 	public synchronized void ensureCapacity(int minCapacity) {
 		if (minCapacity > MAX_FILTER_SLOTS) return;
 		if (slots.length >= minCapacity) return;
-		publish(Ae2InputFilterSlotOps.grow(slots, ensureKeys(), directAmounts, directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.grow(slots, ensureKeys(), directAmounts, directReserveAmounts, directVisibleAmounts,
+			directUnlimited, directNetworkStock,
 			minCapacity));
 	}
 
@@ -241,8 +252,8 @@ public final class Ae2InputFilter {
 		ensureCapacity(index + 1);
 		String entry = (rawEntry == null || rawEntry.isBlank()) ? null : rawEntry;
 		long amount = isDirectFingerprint(entry) ? DEFAULT_DIRECT_AMOUNT : 0L;
-		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
-				directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts, directReserveAmounts,
+				directVisibleAmounts, directUnlimited, directNetworkStock,
 				index, entry, amount));
 	}
 
@@ -266,8 +277,8 @@ public final class Ae2InputFilter {
 	public synchronized void setDirectEntryFingerprintAt(int index, String fingerprint) {
 		if (fingerprint == null || fingerprint.isBlank() || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
-		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts,
-				directVisibleAmounts, directUnlimited,
+		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts, directReserveAmounts,
+				directVisibleAmounts, directUnlimited, directNetworkStock,
 				index, DIRECT_ENTRY_PREFIX + fingerprint, DEFAULT_DIRECT_AMOUNT));
 	}
 
@@ -290,6 +301,19 @@ public final class Ae2InputFilter {
 		if (index < 0 || index >= directAmounts.length) return;
 		directAmounts = Ae2InputFilterSlotOps.setAmount(directAmounts, index,
 				Math.max(0L, Math.min(getMaxDirectAmount(), amount)));
+		invalidateDirectEntries();
+	}
+
+	/** Returns the minimum AE2 network stock to keep for this exact entry. */
+	public long getDirectReserveAmountAt(int index) {
+		return Ae2InputFilterQuerySupport.directAmountAt(directReserveAmounts, index);
+	}
+
+	/** Updates the minimum network stock retained for this exact entry. */
+	public synchronized void setDirectReserveAmountAt(int index, long amount) {
+		if (index < 0 || index >= directReserveAmounts.length) return;
+		directReserveAmounts = Ae2InputFilterSlotOps.setReserve(directReserveAmounts, index,
+				clampDirectReserveAmount(amount));
 		invalidateDirectEntries();
 	}
 
@@ -322,6 +346,18 @@ public final class Ae2InputFilter {
 		invalidateDirectEntries();
 	}
 
+	/** Returns whether this exact entry uses the AE2 network-stock floor. */
+	public boolean isDirectNetworkStockAt(int index) {
+		return Ae2InputFilterQuerySupport.isDirectUnlimitedAt(directNetworkStock, index);
+	}
+
+	/** Toggles network-stock mode independently of the unlimited-pull mode. */
+	public synchronized void toggleDirectNetworkStockAt(int index) {
+		if (index < 0 || index >= slots.length || !isDirectFingerprint(slots[index])) return;
+		directNetworkStock = Ae2InputFilterSlotOps.toggleNetworkStock(directNetworkStock, index);
+		invalidateDirectEntries();
+	}
+
 	/** Sets all direct-entry request amounts (implementation moved to {@link Ae2InputFilterSlotOps#setAllAmounts}). */
 	public synchronized int setAllDirectAmounts(long amount) {
 		long clamped = Math.max(0L, Math.min(getMaxDirectAmount(), amount));
@@ -333,12 +369,26 @@ public final class Ae2InputFilter {
 		return change.changed();
 	}
 
+	/** Sets the minimum retained network stock for all exact entries. */
+	public synchronized int setAllDirectReserveAmounts(long amount) {
+		long clamped = clampDirectReserveAmount(amount);
+		Ae2InputFilterSlotOps.AmountChange change = Ae2InputFilterSlotOps.setAllReserves(slots,
+				directReserveAmounts, clamped);
+		if (change.changed() > 0) {
+			directReserveAmounts = change.amounts();
+			invalidateDirectEntries();
+		}
+		return change.changed();
+	}
+
 	/** Publishes a clone-modify result and invalidates the direct-entry cache (CopyOnWrite). */
 	private void publish(Ae2InputFilterSlotOps.StateArrays s) {
 		resolvedDirectKeys = s.keys();
 		directAmounts = s.amounts();
+		directReserveAmounts = s.reserves();
 		directVisibleAmounts = s.visible();
 		directUnlimited = s.unlimited();
+		directNetworkStock = s.networkStock();
 		slots = s.slots();
 		if (hasAnyEntry(slots)) {
 			unlimitedAllFallback = false;
@@ -355,6 +405,17 @@ public final class Ae2InputFilter {
 			unlimited);
 		if (change.changed() > 0) {
 			directUnlimited = change.unlimited();
+			invalidateDirectEntries();
+		}
+		return change.changed();
+	}
+
+	/** Sets network-stock mode for every exact entry. */
+	public synchronized int setAllDirectNetworkStock(boolean networkStock) {
+		Ae2InputFilterSlotOps.UnlimitedChange change = Ae2InputFilterSlotOps.setAllNetworkStock(slots,
+				directNetworkStock, networkStock);
+		if (change.changed() > 0) {
+			directNetworkStock = change.unlimited();
 			invalidateDirectEntries();
 		}
 		return change.changed();
@@ -392,12 +453,30 @@ public final class Ae2InputFilter {
 
 	/** Returns true when at least one exact entry uses live network stock. */
 	public boolean hasNetworkStockEntries() {
-		return Ae2InputFilterQuerySupport.hasNetworkStockEntries(slots, directUnlimited);
+		return Ae2InputFilterQuerySupport.hasNetworkStockEntries(slots, directNetworkStock);
 	}
 
 	/** True when at least one direct entry has unlimited provide enabled. */
 	public boolean hasUnlimitedEntries() {
 		return unlimitedAllFallback || Ae2InputFilterQuerySupport.hasUnlimitedEntries(slots, directUnlimited);
+	}
+
+	/** Returns whether this specific key has opted into unlimited pulling. */
+	public boolean isUnlimitedForKey(AEItemKey key, boolean ignoreNbt) {
+		if (key == null || !CombFuzzyMatcher.isCombItem(key)) return false;
+		if (unlimitedAllFallback) return true;
+		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
+		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
+		String[] currentSlots = slots;
+		AEItemKey[] currentKeys = resolvedDirectKeys;
+		for (int i = 0; i < currentSlots.length; i++) {
+			if (!Ae2InputFilter.isDirectFingerprint(currentSlots[i])
+					|| i >= directUnlimited.length || !directUnlimited[i]) continue;
+			AEItemKey configured = currentKeys != null && i < currentKeys.length ? currentKeys[i] : null;
+			if (Ae2FilterEntrySupport.matchesDirectEntry(currentSlots[i], configured, key,
+					candidateBeeType, candidateBlock, ignoreNbt, preciseMode)) return true;
+		}
+		return false;
 	}
 
 	public boolean hasFuzzyEntries() {
@@ -425,7 +504,7 @@ public final class Ae2InputFilter {
 
 	/** True when every configured entry has opted into exact network-stock mode. */
 	public boolean hasOnlyNetworkStockEntries() {
-		return Ae2InputFilterQuerySupport.hasOnlyNetworkStockEntries(slots, directUnlimited);
+		return Ae2InputFilterQuerySupport.hasOnlyNetworkStockEntries(slots, directNetworkStock);
 	}
 
 	public List<DirectEntry> getDirectEntries() {
@@ -435,7 +514,7 @@ public final class Ae2InputFilter {
 			cached = directEntriesCache;
 			if (cached != null) return cached;
 			List<DirectEntry> snapshot = List.copyOf(Ae2InputFilterQuerySupport.collectDirectEntries(
-					slots, resolvedDirectKeys, directAmounts, directUnlimited));
+					slots, resolvedDirectKeys, directAmounts, directReserveAmounts, directUnlimited, directNetworkStock));
 			directEntriesCache = snapshot;
 			return snapshot;
 		}
@@ -443,16 +522,20 @@ public final class Ae2InputFilter {
 
 	/** Replaces a client-side synchronized snapshot with one set of array publications. */
 	public synchronized void replaceClientSnapshot(FilterMode mode, boolean precise,
-			List<Integer> indices, List<String> entries, List<Long> amounts,
-			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, boolean unlimitedAllFallbackFlag) {
+			List<Integer> indices, List<String> entries, List<Long> amounts, List<Long> reserveAmounts,
+			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, List<Boolean> networkStockFlags,
+			boolean unlimitedAllFallbackFlag) {
 		Ae2InputFilterSnapshot.Snapshot snapshot = Ae2InputFilterSnapshot.build(
-				mode, precise, indices, entries, amounts, visibleAmounts, unlimitedFlags, slots.length);
+				mode, precise, indices, entries, amounts, reserveAmounts, visibleAmounts, unlimitedFlags,
+				networkStockFlags, slots.length);
 		filterMode = snapshot.mode();
 		preciseMode = snapshot.precise();
 		resolvedDirectKeys = snapshot.keys();
 		directAmounts = snapshot.amounts();
+		directReserveAmounts = snapshot.reserves();
 		directVisibleAmounts = snapshot.visible();
 		directUnlimited = snapshot.unlimited();
+		directNetworkStock = snapshot.networkStock();
 		slots = snapshot.slots();
 		unlimitedAllFallback = unlimitedAllFallbackFlag && !hasAnyEntry(slots);
 		invalidateDirectEntries();
@@ -499,7 +582,7 @@ public final class Ae2InputFilter {
 	public long getDirectPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			HolderLookup.Provider registries) {
 		return Ae2InputFilterQuerySupport.directPullLimit(key, visibleStock, ignoreNbt, registries, slots, resolvedDirectKeys,
-				directAmounts, directUnlimited, preciseMode);
+				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock, preciseMode);
 	}
 
 	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
@@ -508,7 +591,7 @@ public final class Ae2InputFilter {
 		String[] currentSlots = slots;
 		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
 				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
-				directAmounts, directUnlimited);
+				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock);
 	}
 
 	/** Exact-key compatibility overload used by older integrations. */
@@ -528,7 +611,8 @@ public final class Ae2InputFilter {
 	public synchronized void save(CompoundTag tag) {
 		// synchronized：与 load/publish 的互斥保持一致，防止并发修改时
 		// slots 与 directAmounts/directUnlimited 三组数组长度不一致导致撕裂读（AIOOBE）
-		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directUnlimited, unlimitedAllFallback);
+		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directReserveAmounts,
+				directUnlimited, directNetworkStock, unlimitedAllFallback);
 	}
 
 	/**
@@ -547,8 +631,10 @@ public final class Ae2InputFilter {
 			// 避免 NBT 恢复路径触发 AEItemKey 数组创建（Issue #8 类加载安全）
 			resolvedDirectKeys = null;
 			directAmounts = result.directAmounts();
+			directReserveAmounts = result.directReserveAmounts();
 			directVisibleAmounts = new long[result.slots().length];
 			directUnlimited = result.directUnlimited();
+			directNetworkStock = result.directNetworkStock();
 			slots = result.slots();
 			if (hasAnyEntry(slots)) {
 				unlimitedAllFallback = false;
@@ -564,8 +650,10 @@ public final class Ae2InputFilter {
 		slots = new String[DEFAULT_CAPACITY];
 		resolvedDirectKeys = null;
 		directAmounts = new long[DEFAULT_CAPACITY];
+		directReserveAmounts = new long[DEFAULT_CAPACITY];
 		directVisibleAmounts = new long[DEFAULT_CAPACITY];
 		directUnlimited = new boolean[DEFAULT_CAPACITY];
+		directNetworkStock = new boolean[DEFAULT_CAPACITY];
 		unlimitedAllFallback = false;
 		fuzzyEntriesCache = null;
 		invalidateDirectEntries();
@@ -591,5 +679,6 @@ public final class Ae2InputFilter {
 	/** 带位置索引的条目记录 — 用于网络同步 */
 	public record IndexedEntry(int index, String entry) {}
 
-	public record DirectEntry(int index, String fingerprint, AEItemKey key, long amount, boolean networkStock) {}
+	public record DirectEntry(int index, String fingerprint, AEItemKey key, long amount, long reserveAmount,
+			boolean unlimited, boolean networkStock) {}
 }

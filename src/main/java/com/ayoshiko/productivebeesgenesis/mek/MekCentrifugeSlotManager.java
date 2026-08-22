@@ -282,6 +282,11 @@ class MekCentrifugeSlotManager {
 		outputBatchDepth++;
 	}
 
+	/** Base centrifuges do not use the factory's incremental output flag manager. */
+	void expectOutputSlotChange() {
+		// no-op
+	}
+
 	/**
 	 * 结束批量输出插入，统一触发一次标志位更新和 recipe cache unpause
 	 * <br/>

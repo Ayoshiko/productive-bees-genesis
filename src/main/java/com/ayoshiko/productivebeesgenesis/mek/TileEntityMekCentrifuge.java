@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
@@ -402,6 +403,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void productivebeesgenesis$beginOutputBatch() { slotManager.beginOutputBatch(); }
 	@Override
+	public void productivebeesgenesis$expectOutputSlotChange() { slotManager.expectOutputSlotChange(); }
+	@Override
 	public void productivebeesgenesis$endOutputBatch(int process) { slotManager.endOutputBatch(); }
 	/** 基础机器不用计数器，hasActiveProcess 直接读 pbProcessor 状态 */
 	@Override
@@ -569,6 +572,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler() {
 		return ae2Handler.getLifecycleHandler();
+	}
+	@Override
+	public Ae2OutputStateHolder productivebeesgenesis$getAe2StateHolder() {
+		return ae2Handler.getStateHolder();
 	}
 	@Override
 	public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return energyContainer(); }

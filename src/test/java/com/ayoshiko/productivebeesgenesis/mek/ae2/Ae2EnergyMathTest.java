@@ -1,8 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -18,29 +16,14 @@ class Ae2EnergyMathTest {
 	}
 
 	@Test
-	void lowWaterHysteresisAvoidsRepeatedTopUps() {
-		assertTrue(Ae2EnergyMath.belowLowWater(1_000L, 2_000L, 1_000L));
-		assertTrue(Ae2EnergyMath.belowLowWater(1_999L, 2_000L, 1_000L));
-		assertFalse(Ae2EnergyMath.belowLowWater(2_001L, 4_000L, 1_000L));
-		assertFalse(Ae2EnergyMath.belowLowWater(0L, 0L, 1_000L));
-		assertFalse(Ae2EnergyMath.belowLowWater(0L, 2_000L, 0L));
+	void refillRequestIsTheEntireNormalizedCapacityDifference() {
+		assertEquals(9_000L, Ae2EnergyMath.remainingCapacity(1_000L, 10_000L));
+		assertEquals(2_000_000_000L,
+				Ae2EnergyMath.remainingCapacity(0L, 2_000_000_000L));
+		assertEquals(Long.MAX_VALUE,
+				Ae2EnergyMath.remainingCapacity(0L, Long.MAX_VALUE));
 	}
 
-	@Test
-	void highWaterTargetKeepsFourBatchesWithoutOverflow() {
-		assertEquals(4_000L, Ae2EnergyMath.highWaterTarget(10_000L, 1_000L));
-		assertEquals(2_000L, Ae2EnergyMath.highWaterTarget(2_000L, 1_000L));
-		assertEquals(Long.MAX_VALUE, Ae2EnergyMath.highWaterTarget(Long.MAX_VALUE, Long.MAX_VALUE));
-		assertEquals(0L, Ae2EnergyMath.highWaterTarget(10_000L, 0L));
-	}
-
-	@Test
-	void highWaterRequestIsNotTruncatedAtFormer64MfeBudget() {
-		long target = Ae2EnergyMath.highWaterTarget(2_000_000_000L, 200_000_000L);
-
-		assertEquals(800_000_000L, target);
-		assertTrue(target > 64_000_000L);
-	}
 	@Test
 	void handlesNonZeroEnergyAndOversizedBridgeResults() {
 		Ae2EnergyMath.InjectionResult result = Ae2EnergyMath.apply(25L, 100L, 90L, 90L);

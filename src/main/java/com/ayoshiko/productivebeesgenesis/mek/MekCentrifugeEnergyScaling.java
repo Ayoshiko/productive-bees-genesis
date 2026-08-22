@@ -1,6 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.api.Upgrade;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.tile.interfaces.IUpgradeTile;
@@ -156,16 +160,45 @@ public final class MekCentrifugeEnergyScaling {
 	 */
 	public static void normalizeCapacity(PbRecipeContext context) {
 		MachineEnergyContainer<?> container = context.energyContainer();
-		if (container == null || context.hasCreativeUpgrade()) return;
-		long desired = normalCapacityFor(context, container);
-		if (container.getMaxEnergy() != desired) {
+		if (container == null) return;
+		boolean ae2Loaded = Ae2IntegrationLoader.isAe2Loaded();
+		if (context.hasCreativeUpgrade()) {
+			if (ae2Loaded && context instanceof IAe2OutputHostBase ae2Host) {
+				ae2Host.productivebeesgenesis$getAe2StateHolder().invalidateNormalizedCapacity();
+			}
+			return;
+		}
+		long baseCapacity = Math.max(1L, container.getBaseMaxEnergy());
+		long currentCapacity = container.getMaxEnergy();
+		long upgradeFingerprint = Long.MIN_VALUE;
+		Ae2OutputStateHolder capacityCache = null;
+		if (ae2Loaded && context instanceof IAe2OutputHostBase ae2Host) {
+			capacityCache = ae2Host.productivebeesgenesis$getAe2StateHolder();
+			if (capacityCache != null) {
+				upgradeFingerprint = upgradeFingerprint(context);
+				if (capacityCache.isNormalizedCapacity(baseCapacity, currentCapacity, upgradeFingerprint)) return;
+			}
+		}
+		long desired = normalCapacityFor(context, container, baseCapacity);
+		if (currentCapacity != desired) {
 			container.setMaxEnergy(desired);
+		}
+		if (capacityCache != null) {
+			capacityCache.cacheNormalizedCapacity(baseCapacity, desired, upgradeFingerprint);
 		}
 	}
 
+	/**
+	 * Capacity only depends on ENERGY upgrades. Reading that counter directly keeps
+	 * accelerated sub-ticks allocation-free without walking unrelated upgrade types.
+	 */
+	private static long upgradeFingerprint(PbRecipeContext context) {
+		if (!(context instanceof IUpgradeTile upgradeTile)) return Long.MIN_VALUE;
+		return upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
+	}
+
 	private static long normalCapacityFor(PbRecipeContext context,
-			MachineEnergyContainer<?> container) {
-		long baseCapacity = Math.max(1L, container.getBaseMaxEnergy());
+			MachineEnergyContainer<?> container, long baseCapacity) {
 		long upgradedCapacity = baseCapacity;
 		if (context instanceof IUpgradeTile upgradeTile) {
 			upgradedCapacity = MekanismUtils.getMaxEnergy(upgradeTile, baseCapacity);

@@ -37,10 +37,12 @@ final class Ae2InputFilterNbtCodec {
 	 * @param preciseMode      精确模式
 	 * @param slots            条目数组（volatile 读快照）
 	 * @param directAmounts    直连条目数量数组
+	 * @param directReserveAmounts 直连条目网络库存保留量数组
 	 * @param directUnlimited  直连条目无限提供标记数组
 	 */
 	static void save(CompoundTag tag, Ae2InputFilter.FilterMode filterMode, boolean preciseMode,
-			String[] slots, long[] directAmounts, boolean[] directUnlimited, boolean unlimitedAllFallback) {
+			String[] slots, long[] directAmounts, long[] directReserveAmounts, boolean[] directUnlimited,
+			boolean[] directNetworkStock, boolean unlimitedAllFallback) {
 		tag.putInt(KEY_VERSION, CURRENT_FORMAT_VERSION);
 		tag.putInt(KEY_CAPACITY, slots.length);
 		tag.putByte("mode", (byte) filterMode.ordinal());
@@ -62,7 +64,9 @@ final class Ae2InputFilterNbtCodec {
 			entryTag.putString("v", slots[i] == null ? "" : slots[i]);
 			if (Ae2InputFilter.isDirectFingerprint(slots[i])) {
 				entryTag.putLong("a", Math.max(0L, directAmounts[i]));
+				entryTag.putLong("r", Math.max(0L, directReserveAmounts[i]));
 				entryTag.putBoolean("u", directUnlimited[i]);
+				entryTag.putBoolean("n", directNetworkStock[i]);
 			}
 			entriesTag.add(entryTag);
 		}
@@ -92,7 +96,7 @@ final class Ae2InputFilterNbtCodec {
 		boolean unlimitedAllFallback = tag.contains("unlimitedAllFallback") && tag.getBoolean("unlimitedAllFallback");
 		if (!tag.contains("entries", Tag.TAG_LIST)) {
 			return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, false,
-					new String[0], new long[0], new boolean[0]);
+					new String[0], new long[0], new long[0], new boolean[0], new boolean[0]);
 		}
 		// 局部构建新数组，最后一次性返回，由调用方 volatile 发布
 		int persistedCapacity = tag.contains(KEY_CAPACITY, Tag.TAG_ANY_NUMERIC)
@@ -101,7 +105,9 @@ final class Ae2InputFilterNbtCodec {
 				Math.min(Ae2InputFilter.getMaxFilterSlots(), persistedCapacity));
 		String[] newSlots = new String[initialCapacity];
 		long[] newAmounts = new long[initialCapacity];
+		long[] newReserveAmounts = new long[initialCapacity];
 		boolean[] newUnlimited = new boolean[initialCapacity];
+		boolean[] newNetworkStock = new boolean[initialCapacity];
 		ListTag entriesTag = tag.getList("entries", Tag.TAG_COMPOUND);
 		if (!entriesTag.isEmpty()) {
 			// V15 新格式：CompoundTag 含 index
@@ -122,13 +128,21 @@ final class Ae2InputFilterNbtCodec {
 				if (idx >= newSlots.length) {
 					newSlots = grow(newSlots, idx + 1);
 					newAmounts = grow(newAmounts, idx + 1);
+					newReserveAmounts = grow(newReserveAmounts, idx + 1);
 					newUnlimited = grow(newUnlimited, idx + 1);
+					newNetworkStock = grow(newNetworkStock, idx + 1);
 				}
 				newSlots[idx] = val.isEmpty() ? null : val;
 				newAmounts[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
 						? Math.min(Ae2InputFilter.getMaxDirectAmount(), Math.max(0L, entryTag.contains("a", Tag.TAG_LONG)
-								? entryTag.getLong("a") : Ae2InputFilter.DEFAULT_DIRECT_AMOUNT)) : 0L;
-				newUnlimited[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx]) && entryTag.getBoolean("u");
+							? entryTag.getLong("a") : Ae2InputFilter.DEFAULT_DIRECT_AMOUNT)) : 0L;
+				newReserveAmounts[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
+						? Ae2InputFilter.clampDirectReserveAmount(Math.max(0L,
+							entryTag.contains("r", Tag.TAG_LONG) ? entryTag.getLong("r") : 0L)) : 0L;
+				boolean legacyStock = entryTag.getBoolean("u");
+				newUnlimited[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx]) && legacyStock;
+				newNetworkStock[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
+						&& (entryTag.contains("n", Tag.TAG_BYTE) ? entryTag.getBoolean("n") : legacyStock);
 			}
 		} else {
 			// 向后兼容：旧紧凑 StringTag 格式，按顺序填入 0,1,2...
@@ -139,7 +153,9 @@ final class Ae2InputFilterNbtCodec {
 			if (oldCount > newSlots.length) {
 				newSlots = new String[oldCount];
 				newAmounts = new long[oldCount];
+				newReserveAmounts = new long[oldCount];
 				newUnlimited = new boolean[oldCount];
+				newNetworkStock = new boolean[oldCount];
 			}
 			for (int i = 0; i < oldCount; i++) {
 				String val = oldEntries.getString(i);
@@ -148,7 +164,8 @@ final class Ae2InputFilterNbtCodec {
 						? Ae2InputFilter.DEFAULT_DIRECT_AMOUNT : 0L;
 			}
 		}
-		return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, true, newSlots, newAmounts, newUnlimited);
+		return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, true, newSlots, newAmounts,
+				newReserveAmounts, newUnlimited, newNetworkStock);
 	}
 
 	private static String[] grow(String[] src, int minCapacity) {
@@ -171,6 +188,7 @@ final class Ae2InputFilterNbtCodec {
 
 	/** 加载结果快照（数组均为新分配，可直接发布） */
 	record LoadResult(Ae2InputFilter.FilterMode filterMode, boolean preciseMode, boolean unlimitedAllFallback,
-			boolean entriesPresent, String[] slots, long[] directAmounts, boolean[] directUnlimited) {
+		boolean entriesPresent, String[] slots, long[] directAmounts, long[] directReserveAmounts,
+			boolean[] directUnlimited, boolean[] directNetworkStock) {
 	}
 }

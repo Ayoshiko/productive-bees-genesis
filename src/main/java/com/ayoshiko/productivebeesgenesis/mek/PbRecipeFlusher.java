@@ -335,9 +335,11 @@ public final class PbRecipeFlusher {
 			if (current.isEmpty()) {
 				// 空槽 → setStack(BasicInventorySlot.setStack 总是触发 onContentsChanged)
 				ItemStack template = setTemplates[i];
+				context.productivebeesgenesis$expectOutputSlotChange();
 				slot.setStack(template.copyWithCount(addAmounts[i]));
 			} else {
 				// 非空槽 → growStack(内部走 setStack → onContentsChanged,批量模式下仅标记 dirty)
+				context.productivebeesgenesis$expectOutputSlotChange();
 				slot.growStack(addAmounts[i], Action.EXECUTE);
 			}
 			context.productivebeesgenesis$updateSlotOnly(processIndex, reusableSlotIdxMap[i], slot);

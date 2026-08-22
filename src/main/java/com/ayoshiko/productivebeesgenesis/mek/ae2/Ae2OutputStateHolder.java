@@ -61,6 +61,11 @@ public final class Ae2OutputStateHolder {
 	/** Per-side native centrifuge MEStorage adapters and their shared snapshots. */
 	private volatile Object centrifugeExternalStorageCache;
 
+	/** Cached normal energy capacity used to avoid repeating Mekanism upgrade math in accelerated sub-ticks. */
+	private volatile long normalizedCapacityBase = Long.MIN_VALUE;
+	private volatile long normalizedCapacity = Long.MIN_VALUE;
+	private volatile long normalizedCapacityFingerprint = Long.MIN_VALUE;
+
 	/** AE2 全局配置缓存（输出/流体/输入/能量注入开关，墙钟 5 秒刷新） */
 	private final Ae2ConfigCache configCache = new Ae2ConfigCache();
 
@@ -140,6 +145,26 @@ public final class Ae2OutputStateHolder {
 	public boolean isAe2NodePending() { return ae2NodePending; }
 	public void setAe2NodePending(boolean pending) { this.ae2NodePending = pending; }
 
+	/** Returns true when the current container capacity is the cached normal capacity. */
+	public boolean isNormalizedCapacity(long baseCapacity, long currentCapacity, long fingerprint) {
+		return normalizedCapacityBase == baseCapacity && normalizedCapacity == currentCapacity
+				&& normalizedCapacityFingerprint == fingerprint;
+	}
+
+	/** Records the normal capacity after a successful normalization pass. */
+	public void cacheNormalizedCapacity(long baseCapacity, long capacity, long fingerprint) {
+		normalizedCapacityBase = baseCapacity;
+		normalizedCapacity = capacity;
+		normalizedCapacityFingerprint = fingerprint;
+	}
+
+	/** Invalidates the capacity cache, for example when a creative upgrade is active. */
+	public void invalidateNormalizedCapacity() {
+		normalizedCapacityBase = Long.MIN_VALUE;
+		normalizedCapacity = Long.MIN_VALUE;
+		normalizedCapacityFingerprint = Long.MIN_VALUE;
+	}
+
 	/**
 	 * 清空所有状态（方块销毁时调用）
 	 * <br/>
@@ -156,6 +181,7 @@ public final class Ae2OutputStateHolder {
 		cachedMeStorage = null;
 		inputInventoryViewCache = null;
 		centrifugeExternalStorageCache = null;
+		invalidateNormalizedCapacity();
 		// 重置配置缓存为初始默认值，确保方块重建后不会残留旧配置
 		configCache.reset();
 		// 重置 per-tile 开关为默认值（与字段声明一致，参考 Mek-Energistics 默认全开）
@@ -287,6 +313,9 @@ public final class Ae2OutputStateHolder {
 		cachedStorage = null;
 		cachedMeStorage = null;
 		inputInventoryViewCache = null;
+		if (reusableBuffers instanceof Ae2OutputPusher.ReusableBuffers buffers) {
+			buffers.invalidateScanCandidateCache();
+		}
 		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
 		pushState.invalidateNodeStateCache();
 		pushState.getItemBackoff().reset();

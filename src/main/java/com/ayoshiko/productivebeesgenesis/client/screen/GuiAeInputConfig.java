@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload.OperationType;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAllAeInputFilterUnlimitedPayload;
+import com.ayoshiko.productivebeesgenesis.network.ToggleAllAeInputFilterNetworkStockPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputNbtIgnorePayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPayload;
 import com.ayoshiko.productivebeesgenesis.network.ToggleAeInputPreciseModePayload;
@@ -57,6 +58,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private final MekanismButton nbtBtn;
 	private final MekanismButton filterModeBtn;
 	private final MekanismButton preciseBtn;
+	private final ReserveModeButton reserveBtn;
 	private final GlobalGearButton globalGearBtn;
 	private final MekanismButton prevPageBtn;
 	private final MekanismButton nextPageBtn;
@@ -121,6 +123,13 @@ public final class GuiAeInputConfig extends GuiWindow {
 				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterUnlimitedPayload(pos))));
 		globalGearBtn.setTooltip(Tooltip.create(Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.global_gear.tooltip")));
+		btnX += AeInputConfigLayout.GEAR_SIZE + 4;
+		reserveBtn = addChild(new ReserveModeButton(gui(), relativeX + btnX,
+				AeInputConfigLayout.controlY(relativeY),
+				() -> onOpenGlobalReserve(),
+				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterNetworkStockPayload(pos))));
+		reserveBtn.setTooltip(Tooltip.create(Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.reserve_button.tooltip")));
 
 		// Page buttons (prev / clear / next)
 		prevPageBtn = addChild(new CtrlButton(gui(), relativeX + AeInputConfigLayout.WINDOW_WIDTH
@@ -159,7 +168,8 @@ public final class GuiAeInputConfig extends GuiWindow {
 					null, false, this::onSlotPlaced, this::onSlotRemoved));
 			stockButtons[i] = addChild(new StockGearButton(gui(), relativeX + cellX,
 					relativeY + cellY, AeInputConfigLayout.GEAR_SIZE, i,
-					this::onSlotConfigureAmount, this::onSlotToggleUnlimited));
+					this::onSlotConfigureAmount, this::onSlotToggleUnlimited,
+					this::onSlotToggleNetworkStock, this::onSlotConfigureReserve));
 			outputSlots[i] = addChild(new OutputSlotWidget(gui(), relativeX + cellX,
 					relativeY + cellY + 36, pos, i));
 		}
@@ -190,8 +200,8 @@ public final class GuiAeInputConfig extends GuiWindow {
 	public void tick() {
 		super.tick();
 		Ae2InputFilter filter = getFilter();
-		if (filter != null && filter.hasNetworkStockEntries()) {
-			if (++stockSyncTicks >= 10) {
+		if (filter != null && filter.hasDirectEntries()) {
+			if (++stockSyncTicks >= 20) {
 				stockSyncTicks = 0;
 				PacketDistributor.sendToServer(new OpenAeInputConfigPayload(pos));
 			}
@@ -298,6 +308,21 @@ public final class GuiAeInputConfig extends GuiWindow {
 				unlimitedAll ? "ON" : "OFF");
 		drawScaledScrollingString(guiGraphics, unlimitedAllText, startX, startY + 90, TextAlignment.LEFT,
 				unlimitedAll ? 0x55FF55 : screenTextColor(), panelWidth, 3, false, 0.7F);
+
+		int stockCount = 0;
+		int reserveCount = 0;
+		if (filter != null) {
+			for (Ae2InputFilter.IndexedEntry ie : filter.getNonEmptyEntries()) {
+				if (!filter.isDirectNetworkStockAt(ie.index())) continue;
+				stockCount++;
+				if (filter.getDirectReserveAmountAt(ie.index()) > 0L) reserveCount++;
+			}
+		}
+		Component reserveText = Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.info.reserve_status",
+				Integer.toString(stockCount), Integer.toString(reserveCount));
+		drawScaledScrollingString(guiGraphics, reserveText, startX, startY + 99, TextAlignment.LEFT,
+				stockCount > 0 ? 0x55FF55 : screenTextColor(), panelWidth, 3, false, 0.7F);
 	}
 
 	@Override
@@ -333,17 +358,18 @@ public final class GuiAeInputConfig extends GuiWindow {
 					}
 					if (key != null) filter.resolveDirectKey(globalIdx, key);
 					long amount = filter.getDirectAmountAt(globalIdx);
+					long reserveAmount = filter.getDirectReserveAmountAt(globalIdx);
 					long visibleAmount = filter.getDirectVisibleAmountAt(globalIdx);
-					boolean networkStock = filter.isDirectUnlimitedAt(globalIdx);
+					boolean networkStock = filter.isDirectNetworkStockAt(globalIdx);
+					boolean unlimited = filter.isDirectUnlimitedAt(globalIdx);
 					if (key != null) {
 						ItemStack icon = key.toStack(1);
 						ghostSlots[i].setDirectEntry(icon, info.directFingerprint);
 						ghostSlots[i].setTooltip(Tooltip.create(icon.getHoverName()));
-						outputSlots[i].setDirectEntry(icon,
-								networkStock ? visibleAmount : amount, networkStock, globalIdx);
+						outputSlots[i].setDirectEntry(icon, visibleAmount, networkStock, globalIdx);
 						outputSlots[i].setTooltip(Tooltip.create(Component.translatable(
 								"productivebeesgenesis.gui.ae_input_config.output_slot.tooltip",
-								AeInputConfigText.formatCompactAmount(networkStock ? visibleAmount : amount))));
+								AeInputConfigText.formatCompactAmount(visibleAmount))));
 					} else {
 						ghostSlots[i].setDirectFingerprint(info.directFingerprint);
 						ghostSlots[i].setTooltip(Tooltip.create(Component.literal(info.directFingerprint)));
@@ -351,11 +377,19 @@ public final class GuiAeInputConfig extends GuiWindow {
 					stockButtons[i].visible = true;
 					stockButtons[i].active = true;
 					stockButtons[i].setNetworkStock(networkStock);
-					String tooltipKey = networkStock
-							? "productivebeesgenesis.gui.ae_input_config.stock_button.on"
-							: "productivebeesgenesis.gui.ae_input_config.stock_button.off";
-					stockButtons[i].setTooltip(Tooltip.create(Component.translatable(
-							tooltipKey, networkStock ? visibleAmount : amount)));
+					stockButtons[i].setUnlimited(unlimited);
+					Component stockTooltip = Component.translatable(
+							"productivebeesgenesis.gui.ae_input_config.stock_button.tooltip",
+							Component.translatable(networkStock
+									? "productivebeesgenesis.gui.ae_input_config.state.on"
+									: "productivebeesgenesis.gui.ae_input_config.state.off"),
+							Component.translatable(unlimited
+									? "productivebeesgenesis.gui.ae_input_config.state.on"
+									: "productivebeesgenesis.gui.ae_input_config.state.off"),
+							AeInputConfigText.formatCompactAmount(amount),
+							AeInputConfigText.formatCompactAmount(visibleAmount),
+							AeInputConfigText.formatCompactAmount(reserveAmount));
+					stockButtons[i].setTooltip(Tooltip.create(stockTooltip));
 					continue;
 				}
 				if (info != null && info.beeType != null) {
@@ -392,6 +426,8 @@ public final class GuiAeInputConfig extends GuiWindow {
 				? "productivebeesgenesis.gui.ae_input_config.status.precise_on"
 				: "productivebeesgenesis.gui.ae_input_config.status.precise_off"));
 		globalGearBtn.setUnlimitedAllFallback(filter != null && filter.isUnlimitedAllFallback());
+		reserveBtn.active = filter != null && filter.hasDirectEntries();
+		reserveBtn.setMessage(Component.translatable("productivebeesgenesis.gui.ae_input_config.reserve_button.label"));
 	}
 
 	private void changePage(int delta) {
@@ -477,11 +513,43 @@ public final class GuiAeInputConfig extends GuiWindow {
 				pos, ItemStack.EMPTY, initial));
 	}
 
+	/** Opens the explicit global network-stock reserve editor. */
+	private void onOpenGlobalReserve() {
+		Ae2InputFilter filter = getFilter();
+		if (filter == null || !filter.hasDirectEntries()) return;
+		long initial = 0L;
+		for (int i = 0; i < filter.getCapacity(); i++) {
+			if (filter.isDirectEntry(i)) {
+				initial = filter.getDirectReserveAmountAt(i);
+				break;
+			}
+		}
+		gui().addWindow(new GuiAeInputAmountConfig(gui(), relativeX + 38, relativeY + 18,
+				pos, ItemStack.EMPTY, initial, true));
+	}
+
 	/** Toggle the unlimited-provide marker for a direct AE2 entry. */
 	private void onSlotToggleUnlimited(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
 		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, globalSlotIndex, OperationType.TOGGLE_UNLIMITED));
+	}
+
+	private void onSlotToggleNetworkStock(int pageSlotIndex) {
+		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
+		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+				pos, Optional.empty(), false, globalSlotIndex, OperationType.TOGGLE_NETWORK_STOCK));
+	}
+
+	/** Opens the per-entry reserve editor (Shift+right-click on the gear). */
+	private void onSlotConfigureReserve(int pageSlotIndex) {
+		Ae2InputFilter filter = getFilter();
+		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
+		if (filter == null || !filter.isDirectEntry(globalSlotIndex)) return;
+		AEItemKey key = filter.getResolvedDirectKey(globalSlotIndex);
+		ItemStack icon = key == null ? ItemStack.EMPTY : key.toStack(1);
+		gui().addWindow(new GuiAeInputAmountConfig(gui(), relativeX + 38, relativeY + 18,
+				pos, globalSlotIndex, icon, filter.getDirectReserveAmountAt(globalSlotIndex), true));
 	}
 
 	private void sendClear() {

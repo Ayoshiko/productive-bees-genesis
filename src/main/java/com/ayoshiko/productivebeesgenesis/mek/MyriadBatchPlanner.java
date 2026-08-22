@@ -440,6 +440,12 @@ public final class MyriadBatchPlanner {
 	 * 改用 {@link IInventorySlot#growStack}（default 方法，内部走 setStack → onContentsChanged）。
 	 */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots) {
+		apply(plan, slots, () -> {});
+	}
+
+	/** Executes a plan and declares each manager-owned slot listener callback. */
+	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots,
+			@NotNull Runnable beforeSlotMutation) {
 		if (!plan.isSuccess()) {
 			return;
 		}
@@ -455,9 +461,11 @@ public final class MyriadBatchPlanner {
 				}
 				if (slotPlan.wasEmpty()) {
 					ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
+					beforeSlotMutation.run();
 					slot.setStack(toSet);
 				} else {
 					// Task 4 修复：growStack 触发 listener，替代直接修改 getStack 返回值
+					beforeSlotMutation.run();
 					slot.growStack(slotPlan.amount(), Action.EXECUTE);
 				}
 			}

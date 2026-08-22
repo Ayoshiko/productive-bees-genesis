@@ -219,8 +219,8 @@ class MekCentrifugeTickHandler {
 			Ae2FluidPusher.pushLocalTankContentsNow(tile);
 		}
 
-		// 配方扣能后的低水位补充；正常稳态下 tick 开头会因高水位而短路，
-		// 因此不会把 AE2 网络调用翻倍，并可消除客户端能量条的锯齿同步。
+		// 配方扣能后补回正常容量；稳态下 tick 开头会因容量已满而短路，
+		// 因此不会把实际 AE2 取电调用翻倍，并可消除客户端能量条的锯齿同步。
 		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return sendUpdatePacket;

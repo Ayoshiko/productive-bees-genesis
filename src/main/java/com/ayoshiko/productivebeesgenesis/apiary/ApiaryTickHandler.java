@@ -265,8 +265,8 @@ class ApiaryTickHandler {
 		if (isWorking) {
 			soundHandler.maybePlayWorkSound(activationCounter.getWorkingCount());
 		}
-		// 消耗后再补一次：低水位守卫使稳态每 tick 仅发生一次网络提取，
-		// 同时让客户端同步看到的是补能后的稳定缓存，而不是先满后空的中间值。
+		// 消耗后再补一次：tick 开头的满容量检查会直接短路，因此稳态每 tick
+		// 仅发生一次实际网络提取，客户端同步看到的是补能后的稳定缓存。
 		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return sendUpdatePacket;

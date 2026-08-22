@@ -54,6 +54,11 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	}
 
 	@Override
+	default void productivebeesgenesis$expectOutputSlotChange() {
+		productivebeesgenesis$getDelegate().expectOutputSlotChange();
+	}
+
+	@Override
 	default void productivebeesgenesis$endOutputBatch(int process) {
 		productivebeesgenesis$getDelegate().endOutputBatch(process);
 	}

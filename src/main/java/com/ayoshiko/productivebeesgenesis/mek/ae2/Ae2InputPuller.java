@@ -28,6 +28,13 @@ import java.util.concurrent.atomic.AtomicLong;
 	 * @since 2.0.0
 	 */
 public final class Ae2InputPuller {
+	/**
+	 * Refresh the candidate key list at most every half second. Inventory amounts are
+	 * still read from the current AE2 snapshot for every pull, so this only delays
+	 * discovery of newly-added item types and never uses stale amounts.
+	 */
+	private static final long CANDIDATE_KEY_REFRESH_INTERVAL_TICKS = 10L;
+
 	private static final Comparator<PullEntry> PULL_ENTRY_ORDER = (a, b) -> {
 		if (a.marked != b.marked) return Boolean.compare(b.marked, a.marked);
 		if (a.combBlock != b.combBlock) return Boolean.compare(b.combBlock, a.combBlock);
@@ -134,7 +141,13 @@ public final class Ae2InputPuller {
 		//     interface semantics): pull as much as the input slots can hold,
 		//     ignoring both the configured interval and per-tick quantity.
 		Ae2InputFilter filter = holder.getOrCreateInputFilter();
-		boolean unlimitedMode = filter != null && filter.hasUnlimitedEntries();
+		// A network-stock flag is per entry. Only the explicit all-entry fallback
+		// and an all-network-stock whitelist retain the high-throughput cadence.
+		// The legacy Shift action is the only machine-wide unlimited mode. A direct
+		// entry's unlimited flag is carried by its PullEntry and does not widen other
+		// entries' quotas.
+		boolean unlimitedMode = filter != null
+				&& (filter.isUnlimitedAllFallback() || filter.hasUnlimitedEntries());
 		long inputCapacity = calculateInputCapacity(inputSlots);
 		if (inputCapacity <= 0) {
 			// Input slots are full; treat as a failed attempt so the cooldown backs off.
@@ -143,23 +156,16 @@ public final class Ae2InputPuller {
 			holder.updateLastPullCounter(pullCounter);
 			return;
 		}
-		long remainingQuota;
-		long perSlotQuota;
-		if (unlimitedMode) {
-			remainingQuota = inputCapacity;
-			perSlotQuota = Long.MAX_VALUE;
-		} else {
-			long baseRate = holder.getCachedInputRatePerTick();
-			double tpsFactor = executedBatchMultiplier > 0
-					? 1.0
-					: ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
-			perSlotQuota = Ae2PullFairnessPolicy.perSlotQuota(baseRate, M, processCount);
-			long baseProduct = SaturatingMath.saturatingMultiply(perSlotQuota, processCount);
-			long effectiveRate = Math.max(1L,
-					SaturatingMath.saturatingCeilToLong(baseProduct * tpsFactor));
-			remainingQuota = Math.min(effectiveRate, inputCapacity);
-		}
-		if (remainingQuota <= 0) return;
+		long baseRate = holder.getCachedInputRatePerTick();
+		double tpsFactor = executedBatchMultiplier > 0
+				? 1.0
+				: ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
+		long perSlotQuota = Ae2PullFairnessPolicy.perSlotQuota(baseRate, M, processCount);
+		long baseProduct = SaturatingMath.saturatingMultiply(perSlotQuota, processCount);
+		long effectiveRate = Math.max(1L,
+				SaturatingMath.saturatingCeilToLong(baseProduct * tpsFactor));
+		long normalQuota = Math.min(effectiveRate, inputCapacity);
+		if (normalQuota <= 0L && !unlimitedMode) return;
 
 		// 8. 只有冷却到期且本地确有容量时才解析网格存储服务。getCachedStorage 内部已验证 grid，
 		//    无需先单独调用 getCachedGrid；这会缩短大批机器处于冷却/满槽状态时的热路径。
@@ -213,18 +219,22 @@ public final class Ae2InputPuller {
 				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 				long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
-				if (!unlimitedMode && configuredLimit >= 0L) {
+				if (configuredLimit >= 0L) {
 					available = Math.min(available, configuredLimit);
 				}
 				if (available > 0) {
-					pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available)));
+					pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
+							direct.unlimited()));
 				} else {
 					pullKeys.remove(key);
 				}
 			}
 		} else {
-			// Mixed whitelists still honor network-stock entries that are extractable but absent from AE's cache.
-			if (filter != null && filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST) {
+			// Probe configured network-stock keys directly. This also covers disabled
+			// filters and AE2 storage providers whose simulated stock is not present in
+			// the cached KeyCounter. Blacklist entries remain excluded by the normal
+			// filter path below.
+			if (filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.BLACKLIST) {
 				for (Ae2InputFilter.DirectEntry direct : directEntries) {
 					if (pullList.size() >= maxTypesToCollect) break;
 					AEItemKey key = direct.key();
@@ -233,11 +243,12 @@ public final class Ae2InputPuller {
 					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 					long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
-					if (!unlimitedMode && configuredLimit >= 0L) {
+					if (configuredLimit >= 0L) {
 						available = Math.min(available, configuredLimit);
 					}
 					if (available > 0) {
-						pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available)));
+						pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
+								direct.unlimited()));
 					} else {
 						pullKeys.remove(key);
 					}
@@ -250,16 +261,30 @@ public final class Ae2InputPuller {
 			Ae2OutputPusher.PullCandidateAmounts candidateAmounts = buffers.borrowScanCandidateAmounts();
 			candidateAmounts.clear();
 			List<AEItemKey> prefixKeys = buffers.borrowScanPrefixKeys();
+			List<AEItemKey> candidateKeys = buffers.borrowScanCandidateKeys();
+			if (buffers.needsScanCandidateRefresh(availableStacks, currentTick,
+					CANDIDATE_KEY_REFRESH_INTERVAL_TICKS)) {
+				candidateKeys.clear();
+				for (var entry : availableStacks) {
+					if (entry.getKey() instanceof AEItemKey itemKey
+							&& CombFuzzyMatcher.isCombItem(itemKey)) {
+						candidateKeys.add(itemKey);
+					}
+				}
+				buffers.markScanCandidateRefresh(availableStacks, currentTick);
+			}
 			boolean ignoreNbt = holder.isAeInputNbtIgnore();
 			// 总收集上限与旧实现一致：whitelist 预置条目也计入 maxTypesToCollect
 			int scanCap = Math.max(0, maxTypesToCollect - pullList.size());
-			Ae2CursorScan.collectMapped(selectedKeys, prefixKeys, availableStacks.keySet(),
+			// The candidate list is refreshed infrequently; amounts are still read from
+			// the current KeyCounter snapshot, preserving live stock and filter limits.
+			Ae2CursorScan.collectMapped(selectedKeys, prefixKeys, candidateKeys,
 					candidateCursor, scanCap,
-					rawKey -> rawKey instanceof AEItemKey itemKey ? itemKey : null,
+					entry -> entry,
 					key -> {
 						if (pullKeys.contains(key)) return false;
 						int amount = getPullCandidateAmount(
-								key, availableStacks.get(key), filter, ignoreNbt, unlimitedMode);
+								key, availableStacks.get(key), filter, ignoreNbt);
 						if (amount <= 0) return false;
 						candidateAmounts.put(key, amount);
 						return true;
@@ -267,7 +292,8 @@ public final class Ae2InputPuller {
 			for (AEItemKey key : selectedKeys) {
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
-					pullList.add(buffers.borrowPullEntry(key, amount));
+					pullList.add(buffers.borrowPullEntry(key, amount,
+						filter != null && filter.isUnlimitedForKey(key, ignoreNbt)));
 				}
 			}
 			candidateAmounts.clear();
@@ -298,35 +324,44 @@ public final class Ae2InputPuller {
 		pullList.sort(PULL_ENTRY_ORDER);
 
 		long totalPulled = 0;
+		long normalPulled = 0;
 		int typeCount = pullList.size();
 		int slotStart = holder.getPushState().getAndAdvanceInputSlotRotation(processCount);
 		long[] inputSlotCapacities = buffers.borrowInputSlotCapacities(processCount);
 		long nanoNow = System.nanoTime();
-		for (int typeOffset = 0; typeOffset < typeCount && totalPulled < remainingQuota; typeOffset++) {
+		for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity; typeOffset++) {
 			PullEntry entry = pullList.get(typeOffset);
 			if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
 
 			// 先汇总该类型在所有可用槽位中的容量，然后一次 ME extract，再本地分发。
+			// 同一类型的模拟探针在所有输入槽中复用；SIMULATE 不会修改传入栈，
+			// 这样可避免高倍加速下为每个「类型 × 槽位」重复创建 ItemStack。
+			ItemStack slotProbe = entry.key.toStack(1);
 			long typeAvailable = 0L;
 			for (int slotOffset = 0; slotOffset < processCount; slotOffset++) {
 				int slotIdx = (slotStart + slotOffset) % processCount;
 				IInventorySlot slot = inputSlots.get(slotIdx);
+				long slotQuota = entry.unlimited ? Long.MAX_VALUE : perSlotQuota;
 				long slotCapacity = slot == null ? 0L
-						: Math.min(perSlotQuota, getSlotRemainingCapacity(slot, entry.key));
+						: Math.min(slotQuota, getSlotRemainingCapacity(slot, entry.key, slotProbe));
 				inputSlotCapacities[slotIdx] = slotCapacity;
 				if (slotCapacity > 0L) {
 					typeAvailable = SaturatingMath.saturatingAdd(typeAvailable, slotCapacity);
 				}
 			}
 			if (typeAvailable <= 0L) continue;
+			long entryQuota = entry.unlimited
+					? inputCapacity - totalPulled
+					: normalQuota - normalPulled;
 			int toPull = SaturatingMath.saturatingToInt(Math.min(
-					typeAvailable, Math.min(entry.remaining, remainingQuota - totalPulled)));
+					typeAvailable, Math.min(entry.remaining, Math.max(0L, entryQuota))));
 			if (toPull <= 0) continue;
 			try {
-				int pulled = pullBatchForType(level, entry.key, toPull, meStorage, ActionSourceHolder.INSTANCE,
+				int pulled = pullBatchForType(level, holder, entry.key, toPull, meStorage, ActionSourceHolder.INSTANCE,
 						inputSlots, inputSlotCapacities, slotStart, pos, returnBackoff, keyBackoff);
 				entry.remaining -= pulled;
 				totalPulled += pulled;
+				if (!entry.unlimited) normalPulled += pulled;
 				if (pulled > 0) fairness.recordServed(entry.key, pulled);
 			} catch (LinkageError | RuntimeException e) {
 				handlePullException(e, entry.key);
@@ -338,7 +373,7 @@ public final class Ae2InputPuller {
 		// 16. Update the adaptive cooldown: success shortens the next interval
 		//     (1 tick unlimited / 5 normal), failure backs off (AE2LT parity).
 		if (totalPulled > 0) {
-			holder.onInputPullSuccess(unlimitedMode, totalPulled, remainingQuota);
+			holder.onInputPullSuccess(unlimitedMode, totalPulled, normalQuota);
 		} else {
 			holder.onInputPullFail(unlimitedMode);
 		}
@@ -350,17 +385,13 @@ public final class Ae2InputPuller {
 	}
 
 	private static int getPullCandidateAmount(Object rawKey, long available, Ae2InputFilter filter,
-			boolean ignoreNbt, boolean unlimitedMode) {
+			boolean ignoreNbt) {
 		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)
 				|| !CombFuzzyMatcher.isCombItem(itemKey)) return 0;
 		if (filter != null) {
-			if (unlimitedMode) {
-				if (!filter.isAllowed(itemKey, ignoreNbt)) return 0;
-			} else {
-				long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt);
-				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
-				if (configuredLimit >= 0L) available = Math.min(available, configuredLimit);
-			}
+			long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt);
+			if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
+			if (configuredLimit >= 0L) available = Math.min(available, configuredLimit);
 		}
 		return available <= 0L ? 0 : SaturatingMath.saturatingToInt(available);
 	}
@@ -427,7 +458,7 @@ public final class Ae2InputPuller {
 	 * @param key  待插入的 AE2 物品键（null 时返回 0）
 	 * @return 剩余容量（槽内物品与 key 不匹配时返回 0）
 	 */
-	private static long getSlotRemainingCapacity(IInventorySlot slot, AEItemKey key) {
+	private static long getSlotRemainingCapacity(IInventorySlot slot, AEItemKey key, ItemStack probe) {
 		if (slot == null || key == null) return 0;
 		ItemStack stack = slot.getStack();
 		try {
@@ -437,7 +468,6 @@ public final class Ae2InputPuller {
 			// 会整栈退回，extract 到的物品只能经 returnLeftoverToMe 回送 ME，在 EnderDrives
 			// 类网络上每次回送都是一次主线程 WAL fsync（spark w4xREcN1HI 回送链路 1.26s/27s）。
 			// 预检被拒 → 容量记 0，从源头不拉取。不触碰 getLimit 语义，高堆叠槽位不受影响。
-			ItemStack probe = key.toStack(1);
 			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
 				return 0;
 			}
@@ -469,7 +499,7 @@ public final class Ae2InputPuller {
 	 * Per-type batch pull: one ME extract, then local distribution across slots.
 	 * This mirrors the AE2LT batching approach and reduces high-tier factory AE2 API calls.
 	 */
-	private static int pullBatchForType(Level level, AEItemKey key, int amount,
+	private static int pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
 			MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, int slotStart, BlockPos pos,
 			Ae2PushBackoff returnBackoff, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
@@ -489,6 +519,7 @@ public final class Ae2InputPuller {
 			}
 			return 0;
 		}
+		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
 		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
 		int originalCount = stack.getCount();
 		int slotCount = inputSlots.size();
@@ -582,18 +613,20 @@ public final class Ae2InputPuller {
 	static final class PullEntry {
 		AEItemKey key;
 		int remaining;
+		boolean unlimited;
 		/** Pre-computed "matches a configured entry" flag used by the marked-first sort. */
 		boolean marked;
 		boolean combBlock;
 		long servedInWindow;
 
 		PullEntry(AEItemKey key, int amount) {
-			reset(key, amount);
+			reset(key, amount, false);
 		}
 
-		void reset(AEItemKey key, int amount) {
+		void reset(AEItemKey key, int amount, boolean unlimited) {
 			this.key = key;
 			this.remaining = amount;
+			this.unlimited = unlimited;
 			this.marked = false;
 			this.combBlock = false;
 			this.servedInWindow = 0L;

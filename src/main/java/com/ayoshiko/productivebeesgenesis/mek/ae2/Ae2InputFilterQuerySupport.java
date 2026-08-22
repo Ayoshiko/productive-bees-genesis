@@ -149,13 +149,15 @@ final class Ae2InputFilterQuerySupport {
 
 	static long directPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			HolderLookup.Provider registries, String[] slots, AEItemKey[] keys,
-			long[] amounts, boolean[] unlimited, boolean precise) {
+			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock, boolean precise) {
 		if (key == null) return -1L;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
 		boolean found = false;
 		boolean liveStock = false;
+		boolean unlimitedPull = false;
 		long requested = 0L;
+		long reserve = 0L;
 		for (int i = 0; i < slots.length; i++) {
 			if (!Ae2InputFilter.isDirectFingerprint(slots[i])) continue;
 			AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
@@ -166,15 +168,16 @@ final class Ae2InputFilterQuerySupport {
 			if (!Ae2FilterEntrySupport.matchesDirectEntry(slots[i], configured, key, candidateBeeType,
 					candidateBlock, ignoreNbt, precise)) continue;
 			found = true;
-			if (unlimited[i]) {
+			if (networkStock[i]) {
 				liveStock = true;
-				continue;
+				reserve = Ae2PullAmountMath.addConfigured(reserve, i < reserves.length ? reserves[i] : 0L);
 			}
+			if (unlimited[i]) unlimitedPull = true;
 			requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 		}
 		if (!found) return -1L;
-		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock,
-				Ae2InputFilter.getMaxDirectAmount());
+		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
+				Ae2InputFilter.getMaxDirectAmount(), reserve);
 	}
 
 	/**
@@ -184,14 +187,16 @@ final class Ae2InputFilterQuerySupport {
 	 */
 	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
-			AEItemKey[] keys, long[] amounts, boolean[] unlimited) {
+			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock) {
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
 		boolean filterMatched = false;
 		boolean directFound = false;
 		boolean liveStock = false;
+		boolean unlimitedPull = false;
 		long requested = 0L;
+		long reserve = 0L;
 
 		for (int i = 0; i < slots.length; i++) {
 			String entry = slots[i];
@@ -203,9 +208,14 @@ final class Ae2InputFilterQuerySupport {
 						candidateBeeType, candidateBlock, ignoreNbt, precise);
 				if (matches) {
 					directFound = true;
-					if (i < unlimited.length && unlimited[i]) {
+					if (i < networkStock.length && networkStock[i]) {
 						liveStock = true;
-					} else if (i < amounts.length) {
+						if (i < reserves.length) reserve = Ae2PullAmountMath.addConfigured(reserve, reserves[i]);
+					}
+					if (i < unlimited.length && unlimited[i]) {
+						unlimitedPull = true;
+					}
+					if (i < amounts.length) {
 						requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 					}
 				}
@@ -222,14 +232,15 @@ final class Ae2InputFilterQuerySupport {
 			return Ae2InputFilter.PULL_DISALLOWED;
 		}
 		if (!directFound) return -1L;
-		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock,
-				Ae2InputFilter.getMaxDirectAmount());
+		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
+				Ae2InputFilter.getMaxDirectAmount(), reserve);
 	}
 
 	/** Returns true when at least one exact entry uses live network stock. */
-	static boolean hasNetworkStockEntries(String[] slots, boolean[] unlimited) {
+	static boolean hasNetworkStockEntries(String[] slots, boolean[] networkStock) {
 		for (int i = 0; i < slots.length; i++) {
-			if (Ae2InputFilter.isDirectFingerprint(slots[i]) && unlimited[i]) return true;
+			if (Ae2InputFilter.isDirectFingerprint(slots[i])
+					&& i < networkStock.length && networkStock[i]) return true;
 		}
 		return false;
 	}
@@ -248,11 +259,12 @@ final class Ae2InputFilterQuerySupport {
 	}
 
 	/** True when every configured entry has opted into exact network-stock mode. */
-	static boolean hasOnlyNetworkStockEntries(String[] slots, boolean[] unlimited) {
+	static boolean hasOnlyNetworkStockEntries(String[] slots, boolean[] networkStock) {
 		boolean found = false;
 		for (int i = 0; i < slots.length; i++) {
 			if (slots[i] == null) continue;
-			if (!Ae2InputFilter.isDirectFingerprint(slots[i]) || !unlimited[i]) return false;
+			if (!Ae2InputFilter.isDirectFingerprint(slots[i])
+					|| i >= networkStock.length || !networkStock[i]) return false;
 			found = true;
 		}
 		return found;
@@ -262,13 +274,14 @@ final class Ae2InputFilterQuerySupport {
 	 * Builds the immutable direct-entry snapshot (split from {@link Ae2InputFilter#getDirectEntries()});
 	 * the caller keeps the cache and publication semantics.
 	 */
-	static List<DirectEntry> collectDirectEntries(String[] slots, AEItemKey[] keys, long[] amounts, boolean[] unlimited) {
+	static List<DirectEntry> collectDirectEntries(String[] slots, AEItemKey[] keys, long[] amounts,
+			long[] reserves, boolean[] unlimited, boolean[] networkStock) {
 		List<DirectEntry> result = new ArrayList<>();
 		for (int i = 0; i < slots.length; i++) {
 			if (Ae2InputFilter.isDirectFingerprint(slots[i])) {
 				// keys 懒创建可能为 null（NBT 恢复后未解析），此时 key 记为 null 表示待解析
 				result.add(new DirectEntry(i, slots[i].substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()),
-						keys == null ? null : keys[i], amounts[i], unlimited[i]));
+						keys == null ? null : keys[i], amounts[i], reserves[i], unlimited[i], networkStock[i]));
 			}
 		}
 		return result;

@@ -97,15 +97,6 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 */
 	MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource();
 
-	/**
-	 * Returns the maximum FE demand for one real tick at the supplied accelerator batch size.
-	 * Non-apiary machines use the centrifuge processing model; hosts with a different execution
-	 * model must override this method so AE extraction and local capacity use the same demand.
-	 */
-	default long productivebeesgenesis$getRequiredEnergyForBatch(int batchMultiplier) {
-		return MekCentrifugeEnergyScaling.requiredEnergyPerTick(this, batchMultiplier);
-	}
-
 	/** 获取方块实体所在世界 */
 	Level productivebeesgenesis$getAe2Level();
 
@@ -407,10 +398,10 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	}
 
 	/**
-	 * AE2 energy input for one real game tick, with the current accelerator batch multiplier.
+	 * AE2 energy input for one real game tick. The multiplier remains part of the host tick API,
+	 * but charging no longer scans recipe demand and is independent of current activity.
 	 */
 	default void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
-		long requiredEnergy = productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
 		// Capacity coordination also repairs oversized legacy buffers when AE2 is disabled.
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
@@ -421,7 +412,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 			holder.refreshConfigCache(level.getGameTime());
 		}
 		if (!holder.isCachedEnergyInputEnabled()) return;
-		Ae2EnergyInjector.injectEnergy(this, requiredEnergy);
+		Ae2EnergyInjector.injectEnergy(this, batchMultiplier);
 	}
 
 	/**

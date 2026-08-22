@@ -22,6 +22,7 @@ import java.util.Optional;
 	 *   <li>REMOVE：移除 slotIndex 位置的条目</li>
 	 *   <li>CLEAR：清空所有条目</li>
 	 *   <li>TOGGLE_UNLIMITED：切换直连条目的无限提供状态</li>
+	 *   <li>TOGGLE_NETWORK_STOCK：切换直连条目的库存模式</li>
 	 * </ul>
 	 *
 	 * @param pos       方块坐标
@@ -91,7 +92,9 @@ public record SetAeInputFilterEntryPayload(
 		/** 清空所有过滤条目 */
 		CLEAR,
 		/** 切换指定直连条目的无限提供状态 */
-		TOGGLE_UNLIMITED;
+		TOGGLE_UNLIMITED,
+		/** 切换指定直连条目的 AE2 库存保留模式 */
+		TOGGLE_NETWORK_STOCK;
 
 		private static final OperationType[] VALUES = values();
 

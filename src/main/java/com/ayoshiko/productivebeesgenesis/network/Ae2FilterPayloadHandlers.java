@@ -38,12 +38,13 @@ final class Ae2FilterPayloadHandlers {
 	private Ae2FilterPayloadHandlers() {
 	}
 
-	/** Applies one direct-entry pull amount after validating the active machine container. */
+	/** Applies one direct-entry pull amount or network-stock reserve after validating the active container. */
 	static void handleSetAeInputFilterAmount(SetAeInputFilterAmountPayload payload, IPayloadContext context) {
 		if (payload.slotIndex() < 0
 				|| payload.slotIndex() >= NetworkSecurityConstants.MAX_AE_INPUT_FILTER_SLOTS
 				|| payload.amount() < 0L
-				|| payload.amount() > Ae2InputFilter.getMaxDirectAmount()) return;
+				|| payload.amount() > (payload.reserve()
+						? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
 		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_filter_amount_pos_mismatch")) return;
@@ -57,7 +58,11 @@ final class Ae2FilterPayloadHandlers {
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
 		if (filter == null || !filter.isDirectEntry(payload.slotIndex())) return;
 
-		filter.setDirectAmountAt(payload.slotIndex(), payload.amount());
+		if (payload.reserve()) {
+			filter.setDirectReserveAmountAt(payload.slotIndex(), payload.amount());
+		} else {
+			filter.setDirectAmountAt(payload.slotIndex(), payload.amount());
+		}
 		if (be instanceof TileEntityMekanism mek) mek.markForSave();
 		syncFilterToClient(be, serverPlayer);
 	}
@@ -68,7 +73,8 @@ final class Ae2FilterPayloadHandlers {
 	 * 由全局齿轮按钮（无需标记物品）调用，安全校验与单条数量编辑一致。
 	 */
 	static void handleSetAllAeInputFilterAmount(SetAllAeInputFilterAmountPayload payload, IPayloadContext context) {
-		if (payload.amount() < 0L || payload.amount() > Ae2InputFilter.getMaxDirectAmount()) return;
+		if (payload.amount() < 0L || payload.amount() > (payload.reserve()
+				? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
 		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_all_amount_pos_mismatch")) return;
@@ -80,7 +86,10 @@ final class Ae2FilterPayloadHandlers {
 						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
 		if (filter == null) return;
-		if (filter.setAllDirectAmounts(payload.amount()) > 0 && be instanceof TileEntityMekanism mek) {
+		int changed = payload.reserve()
+				? filter.setAllDirectReserveAmounts(payload.amount())
+				: filter.setAllDirectAmounts(payload.amount());
+		if (changed > 0 && be instanceof TileEntityMekanism mek) {
 			mek.markForSave();
 		}
 		syncFilterToClient(be, serverPlayer);
@@ -127,6 +136,33 @@ final class Ae2FilterPayloadHandlers {
 		syncFilterToClient(be, serverPlayer);
 	}
 
+	/** Toggles network-stock mode for all exact entries without changing unlimited-pull flags. */
+	static void handleToggleAllAeInputFilterNetworkStock(
+			ToggleAllAeInputFilterNetworkStockPayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+				"ae2_input_all_network_stock_pos_mismatch")) return;
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_network_stock",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(be instanceof IAe2InputHost host)
+				|| serverPlayer.distanceToSqr(payload.pos().getCenter())
+						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
+		if (filter == null || !filter.hasDirectEntries()) return;
+		boolean allEnabled = true;
+		for (int i = 0; i < filter.getCapacity(); i++) {
+			if (filter.isDirectEntry(i) && !filter.isDirectNetworkStockAt(i)) {
+				allEnabled = false;
+				break;
+			}
+		}
+		if (filter.setAllDirectNetworkStock(!allEnabled) > 0 && be instanceof TileEntityMekanism mek) {
+			mek.markForSave();
+		}
+		syncFilterToClient(be, serverPlayer);
+	}
+
 	/**
 	 * 服务端处理：添加、移除或清空 per-tile AE2 输入过滤条目
 	 * <br/>
@@ -151,6 +187,7 @@ final class Ae2FilterPayloadHandlers {
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
 		String rateLimitKey = payload.operation() == SetAeInputFilterEntryPayload.OperationType.TOGGLE_UNLIMITED
+				|| payload.operation() == SetAeInputFilterEntryPayload.OperationType.TOGGLE_NETWORK_STOCK
 				? "ae_input_filter_stock" : "ae_input_filter_set";
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, rateLimitKey,
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
@@ -209,6 +246,7 @@ final class Ae2FilterPayloadHandlers {
 			case REMOVE -> filter.removeEntryAt(payload.slotIndex());
 			case CLEAR -> filter.clearEntries();
 			case TOGGLE_UNLIMITED -> filter.toggleDirectUnlimitedAt(payload.slotIndex());
+			case TOGGLE_NETWORK_STOCK -> filter.toggleDirectNetworkStockAt(payload.slotIndex());
 		}
 		// 标记 dirty 确保过滤器条目修改持久化
 		if (be instanceof TileEntityMekanism mek) {
@@ -332,12 +370,16 @@ final class Ae2FilterPayloadHandlers {
 		List<Integer> indices = payload.indices();
 		List<String> entries = payload.entries();
 		List<Long> amounts = payload.amounts();
+		List<Long> reserveAmounts = payload.reserveAmounts();
 		List<Long> visibleAmounts = payload.visibleAmounts();
 		List<Boolean> unlimited = payload.unlimited();
+		List<Boolean> networkStock = payload.networkStock();
 		// 平行数组防御性校验：防止恶意服务端发送不一致的 indices/entries
 		if (indices.size() != entries.size() || amounts.size() != entries.size()
+				|| reserveAmounts.size() != entries.size()
 				|| visibleAmounts.size() != entries.size()
-				|| unlimited.size() != entries.size()) return;
+				|| unlimited.size() != entries.size()
+				|| networkStock.size() != entries.size()) return;
 		int count = entries.size();
 		for (int i = 0; i < count; i++) {
 			int idx = indices.get(i);
@@ -353,7 +395,8 @@ final class Ae2FilterPayloadHandlers {
 		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
 		if (payload.filterMode() < 0 || payload.filterMode() >= modes.length) return;
 		filter.replaceClientSnapshot(modes[payload.filterMode()], payload.preciseMode(),
-				indices, entries, amounts, visibleAmounts, unlimited, payload.unlimitedAllFallback());
+				indices, entries, amounts, reserveAmounts, visibleAmounts, unlimited, networkStock,
+				payload.unlimitedAllFallback());
 	}
 
 	/**
@@ -387,8 +430,10 @@ final class Ae2FilterPayloadHandlers {
 		List<Integer> indices = new ArrayList<>(nonEmpty.size());
 		List<String> entries = new ArrayList<>(nonEmpty.size());
 		List<Long> amounts = new ArrayList<>(nonEmpty.size());
+		List<Long> reserveAmounts = new ArrayList<>(nonEmpty.size());
 		List<Long> visibleAmounts = new ArrayList<>(nonEmpty.size());
 		List<Boolean> unlimited = new ArrayList<>(nonEmpty.size());
+		List<Boolean> networkStock = new ArrayList<>(nonEmpty.size());
 		List<Ae2InputFilter.DirectEntry> directEntries = filter.hasDirectEntries()
 				? filter.getDirectEntries() : List.of();
 		var resolvedKeys = Ae2ItemFingerprint.resolve(
@@ -403,19 +448,25 @@ final class Ae2FilterPayloadHandlers {
 			indices.add(ie.index());
 			entries.add(ie.entry());
 			long amount = 0L;
+			long reserveAmount = 0L;
 			long visibleAmount = 0L;
 			Ae2InputFilter.EntryInfo info = filter.getEntryAt(ie.index());
 			if (info != null && info.directFingerprint != null) {
 				amount = filter.getDirectAmountAt(ie.index());
+				reserveAmount = filter.getDirectReserveAmountAt(ie.index());
 				AEItemKey key = filter.getResolvedDirectKey(ie.index());
-				if (key != null && cachedInventory != null && filter.isDirectUnlimitedAt(ie.index())) {
-					visibleAmount = Ae2NetworkInventoryView.visibleAmount(holder, be.getLevel().getGameTime(),
-							cachedInventory, network, key, Long.MAX_VALUE, ACTION_SOURCE);
+				if (key != null && cachedInventory != null) {
+					visibleAmount = filter.isDirectNetworkStockAt(ie.index())
+							? Ae2NetworkInventoryView.visibleAmount(holder, be.getLevel().getGameTime(),
+									cachedInventory, network, key, Long.MAX_VALUE, ACTION_SOURCE)
+							: Ae2NetworkInventoryView.cachedAmount(cachedInventory, key, Long.MAX_VALUE);
 				}
 			}
 			amounts.add(Math.max(0L, amount));
+			reserveAmounts.add(Math.max(0L, reserveAmount));
 			visibleAmounts.add(Math.max(0L, visibleAmount));
 			unlimited.add(filter.isDirectUnlimitedAt(ie.index()));
+			networkStock.add(filter.isDirectNetworkStockAt(ie.index()));
 		}
 		return new SyncAeInputFilterEntriesPayload(
 				be.getBlockPos(),
@@ -424,8 +475,10 @@ final class Ae2FilterPayloadHandlers {
 				indices,
 				entries,
 				amounts,
+				reserveAmounts,
 				visibleAmounts,
 				unlimited,
+				networkStock,
 				filter.isUnlimitedAllFallback());
 	}
 

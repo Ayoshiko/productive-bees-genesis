@@ -30,6 +30,8 @@ public final class OutputSlotFlagManager {
 	private int fullProcessCount;
 	private int batchDepth;
 	private boolean dirty;
+	/** Number of listener callbacks expected from the manager-owned writes in this batch. */
+	private int expectedListenerEvents;
 
 	/**
 	 * 每进程输出槽物品数量（主+副1+副2）
@@ -111,7 +113,21 @@ public final class OutputSlotFlagManager {
 
 	/** 输出槽内容变化时调用（由 IContentsListener 回调） */
 	public void onSlotChanged() {
-		dirty = true;
+		// Output slots notify synchronously. During our own begin/end batch the caller
+		// immediately records the changed slot through updateSlotOnly, so a full scan
+		// would discard the incremental fast path. Changes outside a batch still use
+		// dirty to cover SFM/AE2/hopper mutations that do not identify a process.
+		if (batchDepth == 0) {
+			dirty = true;
+		} else if (expectedListenerEvents > 0) {
+			// The caller declared this slot write immediately before set/grow. Consume
+			// exactly one synchronous callback without losing the incremental path.
+			expectedListenerEvents--;
+		} else {
+			// Listener callbacks do not identify their process. An undeclared callback
+			// is therefore an external/unknown mutation and requires a full refresh.
+			dirty = true;
+		}
 	}
 
 	/** 开始批量输出插入；嵌套调用安全 */
@@ -124,6 +140,7 @@ public final class OutputSlotFlagManager {
 			}
 			// Task 7：清空 slotKnown 标志，本次 batch 内由 updateSlotOnly 重新标记已知槽位
 			java.util.Arrays.fill(slotKnown, false);
+			expectedListenerEvents = 0;
 		}
 		batchDepth++;
 	}
@@ -140,20 +157,34 @@ public final class OutputSlotFlagManager {
 			batchDepth = 0;
 			return false;
 		}
-		if (--batchDepth == 0 && dirty) {
-			dirty = false;
-			// 审查问题修复：endBatch(process) 仅聚合单进程时，若 batch 期间其他进程的槽位
-			// 被外部（SFM/AE2/漏斗）修改触发 onSlotChanged → dirty=true，这些进程的状态
-			// 将无法被 updateProcessAggregate(process) 聚合到，导致 processHasItems /
-			// processFull / processItemCount 和全局计数器（hasItemsProcessCount /
-			// fullProcessCount / outputItemCount）陈旧。故 dirty 被设置时强制走全量扫描，
-			// 仅在 dirty 未被设置时（即 batch 期间无外部变更）才使用增量聚合。
-			// 注：updateProcessAggregate 内部已通过 slotKnown 复用 batch 内已标记的槽位缓存，
-			// 故即使全量扫描，本批次修改的槽位仍能享受 O(1) 复用，不会产生性能退化。
-			updateAll();
-			return true;
+		if (--batchDepth == 0) {
+			if (dirty || expectedListenerEvents > 0) {
+				dirty = false;
+				// External changes during a batch are unidentified, so retain the
+				// conservative full scan for correctness.
+				updateAll();
+				return true;
+			}
+			// A planner batch may mutate slots through a reusable plan and rely solely
+			// on the synchronous slot listener. It still belongs to the process passed
+			// to endBatch, so aggregate that process without scanning every lane.
+			if (hasKnownSlots(process)) {
+				updateProcessAggregate(process);
+				return true;
+			}
 		}
 		return false;
+	}
+
+	/** Declares one manager-owned slot mutation before invoking setStack/growStack. */
+	public void expectSlotChange() {
+		if (batchDepth > 0) expectedListenerEvents++;
+	}
+
+	private boolean hasKnownSlots(int process) {
+		if (process < 0 || process >= processHasItems.length) return false;
+		int offset = process * 3;
+		return slotKnown[offset] || slotKnown[offset + 1] || slotKnown[offset + 2];
 	}
 
 	/** 若 dirty 标志被设置，执行一次全量扫描并清除标志 */

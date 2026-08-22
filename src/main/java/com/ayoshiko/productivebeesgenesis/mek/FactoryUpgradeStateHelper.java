@@ -233,7 +233,7 @@ public final class FactoryUpgradeStateHelper {
 			result = sendUpdatePacket;
 		}
 
-		// 工厂本 tick 消耗完成后补回高水位，下一 tick 的前置注入会自然短路。
+		// 工厂本 tick 消耗完成后补回正常容量，下一 tick 的前置注入会自然短路。
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return result;
@@ -280,7 +280,7 @@ public final class FactoryUpgradeStateHelper {
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
 		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
-		// Coalesced flush 同样在所有配方消耗完成后补回高水位。
+		// Coalesced flush 同样在所有配方消耗完成后补回正常容量。
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 	}
 }

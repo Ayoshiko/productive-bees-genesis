@@ -364,6 +364,11 @@ public interface PbRecipeContext {
 	 */
 	void productivebeesgenesis$beginOutputBatch();
 
+	/** Declares the next synchronous output-slot listener callback as manager-owned. */
+	default void productivebeesgenesis$expectOutputSlotChange() {
+		// no-op for contexts without incremental output tracking
+	}
+
 	/**
 	 * 结束批量输出插入
 	 *

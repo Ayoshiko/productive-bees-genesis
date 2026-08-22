@@ -301,7 +301,8 @@ public class MyriadCreationsHandler {
 					return 0;
 				}
 			}
-			MyriadBatchPlanner.apply(plan, reusableOutputSlots);
+			MyriadBatchPlanner.apply(plan, reusableOutputSlots,
+					context::productivebeesgenesis$expectOutputSlotChange);
 			// 修复：每次操作只消耗1个输入，productivityModifier只影响输出数量不影响输入消耗
 			context.inputSlot(processIndex).shrinkStack(1, Action.EXECUTE);
 			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
@@ -439,7 +440,8 @@ public class MyriadCreationsHandler {
 				MyriadBatchPlanner.recyclePlan(plan);
 				return 0;
 			}
-			MyriadBatchPlanner.apply(plan, reusableOutputSlots);
+			MyriadBatchPlanner.apply(plan, reusableOutputSlots,
+					context::productivebeesgenesis$expectOutputSlotChange);
 			context.inputSlot(processIndex).shrinkStack(currentBatch, Action.EXECUTE);
 			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
 			WeightedTypeSelector.getInstance().recordOutputs(allocation);

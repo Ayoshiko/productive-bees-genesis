@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NbtKeys;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.core.BlockPos;
@@ -192,6 +193,11 @@ class ApiaryAe2HostAdapter {
 		return ae2LifecycleHandler;
 	}
 
+	/** Direct state-holder access for hot AE2 tick paths. */
+	Ae2OutputStateHolder getAe2StateHolder() {
+		return ae2LifecycleHandler.getStateHolder();
+	}
+
 	/** 获取能量源 — AE2 poweredInsert 能量消耗 */
 	MachineEnergyContainer<?> getAe2EnergySource() {
 		return tile.accessor().productivebeesgenesis$getEnergyContainer();
@@ -236,11 +242,10 @@ class ApiaryAe2HostAdapter {
 	 * 配置值由 {@link #refreshAe2ConfigCache()} 每 100 tick 刷新到 {@link #cachedAeEnergyInputEnabled}。
 	 */
 	void injectAe2Energy(int batchMultiplier) {
-		long requiredEnergy = tile.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier);
 		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		if (!cachedAeEnergyInputEnabled) return;
-		Ae2EnergyInjector.injectEnergy(tile, requiredEnergy);
+		Ae2EnergyInjector.injectEnergy(tile, batchMultiplier);
 	}
 
 	/**
