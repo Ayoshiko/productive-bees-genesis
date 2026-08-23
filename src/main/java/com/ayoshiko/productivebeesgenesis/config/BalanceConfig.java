@@ -12,11 +12,13 @@ public final class BalanceConfig {
 	static final boolean DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE = true;
 	static final boolean DEFAULT_CUSTOM_SPEED_EXCLUSIVE = true;
 	static final boolean DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT = false;
+	static final boolean DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK = true;
 	static final int DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT = 4;
 	static final int DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT = 8;
 	static final boolean LEGACY_PRODUCTIVITY_EXCLUSIVE = false;
 	static final boolean LEGACY_SPEED_EXCLUSIVE = false;
 	static final boolean LEGACY_CENTRIFUGE_OUTPUT = true;
+	static final boolean LEGACY_APIARY_BEE_GENES_AFFECT_WORK = false;
 
 	private static final int BASIC_PB_UPGRADE_LIMIT = 4;
 	static final int LEGACY_PB_UPGRADE_LIMIT = 8;
@@ -51,7 +53,8 @@ public final class BalanceConfig {
 				preset,
 				persisted.productivityTiersExclusive(),
 				persisted.speedTiersExclusive(),
-				persisted.centrifugeProductivityAffectsOutput());
+				persisted.centrifugeProductivityAffectsOutput(),
+				persisted.apiaryBeeGenesAffectWork());
 		initialized = true;
 		return changed;
 	}
@@ -70,6 +73,11 @@ public final class BalanceConfig {
 
 	public static boolean centrifugeProductivityAffectsOutput() {
 		return activeRules.centrifugeProductivityAffectsOutput();
+	}
+
+	/** Return whether mechanical apiaries obey each bee's behavior and weather-tolerance genes. */
+	public static boolean apiaryBeeGenesAffectWork() {
+		return activeRules.apiaryBeeGenesAffectWork();
 	}
 
 	/**
@@ -109,11 +117,13 @@ public final class BalanceConfig {
 				preset,
 				configured.productivityTiersExclusive(),
 				configured.speedTiersExclusive(),
-				configured.centrifugeProductivityAffectsOutput());
+				configured.centrifugeProductivityAffectsOutput(),
+				configured.apiaryBeeGenesAffectWork());
 		return new CustomSettings(
 				rules.productivityTiersExclusive(),
 				rules.speedTiersExclusive(),
 				rules.centrifugeProductivityAffectsOutput(),
+				rules.apiaryBeeGenesAffectWork(),
 				pbUpgradeLimit(preset, configured.apiaryProductivityLimit()),
 				pbUpgradeLimit(preset, configured.apiaryTimeLimit()),
 				pbUpgradeLimit(preset, configured.centrifugeProductivityLimit()),
@@ -171,7 +181,8 @@ public final class BalanceConfig {
 			BalancePreset preset,
 			boolean customProductivityExclusive,
 			boolean customSpeedExclusive,
-			boolean customCentrifugeOutput) {
+			boolean customCentrifugeOutput,
+			boolean customApiaryBeeGenesAffectWork) {
 		BalancePreset safePreset = preset == null ? DEFAULT_PRESET : preset;
 		return switch (safePreset) {
 			case BASIC -> Rules.basic();
@@ -180,7 +191,8 @@ public final class BalanceConfig {
 					BalancePreset.CUSTOM,
 					customProductivityExclusive,
 					customSpeedExclusive,
-					customCentrifugeOutput);
+					customCentrifugeOutput,
+					customApiaryBeeGenesAffectWork);
 		};
 	}
 
@@ -222,6 +234,8 @@ public final class BalanceConfig {
 						DEFAULT_CUSTOM_SPEED_EXCLUSIVE),
 				readBoolean(ModConfig.SERVER.centrifugeProductivityAffectsOutput,
 						DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT),
+				readBoolean(ModConfig.SERVER.apiaryBeeGenesAffectWork,
+						DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK),
 				readInt(ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount,
 						DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT),
 				readInt(ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount,
@@ -242,6 +256,8 @@ public final class BalanceConfig {
 				settings.speedTiersExclusive());
 		changed |= setBoolean(ModConfig.SERVER.centrifugeProductivityAffectsOutput,
 				settings.centrifugeProductivityAffectsOutput());
+		changed |= setBoolean(ModConfig.SERVER.apiaryBeeGenesAffectWork,
+				settings.apiaryBeeGenesAffectWork());
 		changed |= setInt(ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount,
 				settings.apiaryProductivityLimit());
 		changed |= setInt(ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount,
@@ -294,10 +310,11 @@ public final class BalanceConfig {
 			BalancePreset preset,
 			boolean productivityTiersExclusive,
 			boolean speedTiersExclusive,
-			boolean centrifugeProductivityAffectsOutput) {
+			boolean centrifugeProductivityAffectsOutput,
+			boolean apiaryBeeGenesAffectWork) {
 
 		static Rules basic() {
-			return new Rules(BalancePreset.BASIC, true, true, false);
+			return new Rules(BalancePreset.BASIC, true, true, false, true);
 		}
 
 		static Rules paradoxInfinity() {
@@ -305,7 +322,8 @@ public final class BalanceConfig {
 					BalancePreset.PARADOX_INFINITY,
 					LEGACY_PRODUCTIVITY_EXCLUSIVE,
 					LEGACY_SPEED_EXCLUSIVE,
-					LEGACY_CENTRIFUGE_OUTPUT);
+					LEGACY_CENTRIFUGE_OUTPUT,
+					LEGACY_APIARY_BEE_GENES_AFFECT_WORK);
 		}
 
 		static Rules customDefaults() {
@@ -313,7 +331,8 @@ public final class BalanceConfig {
 					BalancePreset.CUSTOM,
 					DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE,
 					DEFAULT_CUSTOM_SPEED_EXCLUSIVE,
-					DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT);
+					DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT,
+					DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);
 		}
 	}
 
@@ -321,6 +340,7 @@ public final class BalanceConfig {
 			boolean productivityTiersExclusive,
 			boolean speedTiersExclusive,
 			boolean centrifugeProductivityAffectsOutput,
+			boolean apiaryBeeGenesAffectWork,
 			int apiaryProductivityLimit,
 			int apiaryTimeLimit,
 			int centrifugeProductivityLimit,

@@ -341,7 +341,7 @@ public class MyriadFluidOutputHandler {
 	 * <ul>
 	 *   <li>万象创世蜜脾：跳过 PB 配方查找，直接使用 ModFluids.HONEY（蜂蜜是万象创世的固定副产物）</li>
 	 *   <li>普通 PB 蜜脾：保留原查找逻辑（findPbRecipe + getFluidOutputs + extractFluidFromIngredient fallback）</li>
-	 *   <li>普通蜜脾查找失败：保留 WARN 日志（真正异常，非万象创世场景）</li>
+	 *   <li>普通蜜脾查找失败或配方没有流体：返回 EMPTY，不伪造蜂蜜副产物</li>
 	 * </ul>
 	 *
 	 * @param input        输入物品（万象创世蜜脾或普通 PB 蜜脾）
@@ -366,22 +366,29 @@ public class MyriadFluidOutputHandler {
 		// 路径 2：普通 PB 蜜脾 — 查找 CentrifugeRecipe 获取配方定义的流体
 		RecipeHolder<CentrifugeRecipe> recipeHolder = recipeFinder.findPbRecipe(input);
 		if (recipeHolder != null) {
-			CentrifugeRecipe recipe = recipeHolder.value();
-			FluidStack fluidOutput = recipe.getFluidOutputs();
-			if (fluidOutput.isEmpty()) {
-				// getFluidOutputs() 返回 EMPTY 时（plib 的 getPreferredFluidStackByMod 无匹配 mod），
-				// 直接访问 fluidOutput 字段构造 FluidStack 作为 fallback
-				fluidOutput = extractFluidFromIngredient(recipe);
+			try {
+				CentrifugeRecipe recipe = recipeHolder.value();
+				FluidStack fluidOutput = recipe.getFluidOutputs();
+				if (fluidOutput.isEmpty()) {
+					// getFluidOutputs() 返回 EMPTY 时（plib 的 getPreferredFluidStackByMod 无匹配 mod），
+					// 直接访问 fluidOutput 字段构造 FluidStack 作为 fallback
+					fluidOutput = extractFluidFromIngredient(recipe);
+				}
+				if (!fluidOutput.isEmpty()) return fluidOutput;
+			} catch (RuntimeException e) {
+				LogThrottle.warn("fluid_output_lookup",
+						"PB 配方流体输出查询异常，不生成流体：recipe={}, error={}", recipeHolder.id(), e.toString());
 			}
-			if (!fluidOutput.isEmpty()) return fluidOutput;
 		} else {
-			// 普通 PB 蜜脾查找失败 — 真正异常（非万象创世场景），保留 WARN 日志
+			// 普通 PB 蜜脾查找失败 — 真正异常（非万象创世场景），保留 WARN 日志。
+			// 没有可验证的配方时不能伪造蜂蜜输出。
 			logThrottledWarn(processIndex,
-					"{}resolveFluidOutput 未找到PB配方（非万象创世蜜脾），使用蜂蜜兜底：input={}",
+					"{}resolveFluidOutput 未找到PB配方（非万象创世蜜脾），不生成流体：input={}",
 					logPrefix, input);
 		}
-		// 兜底：蜂蜜流体（普通蜜脾查找失败或配方流体为空时）
-		return new FluidStack(ModFluids.HONEY.get(), 250);
+		// 普通 PB 配方没有流体输出时必须返回 EMPTY。蜂蜜只属于万象创世固定副产物，
+		// 不能因为配方缺少 fluid 字段而隐式生成 250 mB 蜂蜜。
+		return FluidStack.EMPTY;
 	}
 
 	/**

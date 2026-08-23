@@ -80,12 +80,11 @@ public class BeeSlot {
 	private volatile boolean cachedFlowerValid;
 
 	/**
-	 * F5: 缓存的 productivity 基因纯度
+	 * 缓存的 PB 生产力基因等级。
 	 * <br/>
-	 * -1.0f 表示未缓存，[0.0, 1.0] 为有效值。首次调用 {@link #getProductivityPurity} 时解析并缓存，
-	 * {@link #setBeeData} 时重置为 -1.0f。volatile 保证跨线程可见性。
+	 * -1 表示未缓存，0 到 3 对应 normal 到 very_high。蜜蜂更换时重置。
 	 */
-	private volatile float cachedProductivityPurity = -1.0f;
+	private volatile int cachedProductivityLevel = -1;
 
 	/**
 	 * 消费缓存的花朵有效性（cache miss 返回 {@code null}，避免哨兵值歧义）
@@ -149,8 +148,7 @@ public class BeeSlot {
 		// 内容比较：若 NBT 数据实质相同则跳过（防止 copy() 产生的新引用误触发）
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
-		// F5: 蜜蜂更换后重置 productivity 纯度缓存
-		this.cachedProductivityPurity = -1.0f;
+		this.cachedProductivityLevel = -1;
 		this.dirty = true;
 	}
 
@@ -262,52 +260,34 @@ public class BeeSlot {
 	}
 
 	/**
-	 * F5: 获取蜜蜂 productivity 基因纯度
+	 * 获取蜜蜂的 PB 生产力基因等级。
 	 * <br/>
-	 * 从 beeData 的
-	 * {@code neoforge:attachments.productivebees:attributes_handler.attributes.productivebees:productivity.purity}
-	 * 读取纯度值。解析失败或无属性时返回 0.0f（无加成）。首次解析后缓存，
-	 * {@link #setBeeData} 时重置缓存。
+	 * 从 {@code neoforge:attachments.productivebees:attributes_handler.bee_productivity}
+	 * 读取 PB 序列化枚举，返回其 {@code GeneValue#getValue()} 对应值。首次解析后缓存，
+	 * {@link #setBeeData} 和 {@link #clear()} 时重置缓存。
 	 * <p>
-	 * 线程安全：cachedProductivityPurity 为 volatile，单次赋值原子。
+	 * 线程安全：cachedProductivityLevel 为 volatile，单次赋值原子。
 	 * 多线程竞争时最坏情况重复解析一次，无正确性问题。
 	 *
-	 * @return productivity 纯度 [0.0, 1.0]，解析失败返回 0.0
+	 * @return 生产力等级 0 到 3，解析失败返回 0
 	 */
-	public float getProductivityPurity() {
-		if (cachedProductivityPurity >= 0.0f) {
-			return cachedProductivityPurity;
+	public int getProductivityLevel() {
+		if (cachedProductivityLevel >= 0) {
+			return cachedProductivityLevel;
 		}
-		cachedProductivityPurity = parseProductivityPurity();
-		return cachedProductivityPurity;
+		cachedProductivityLevel = BeeProductivityGene.readLevel(beeData);
+		return cachedProductivityLevel;
 	}
 
 	/**
-	 * 从 beeData NBT 解析 productivity 纯度
-	 * <br/>
-	 * NBT 路径：{@code neoforge:attachments → productivebees:attributes_handler → attributes →
-	 * productivebees:productivity → purity}
-	 * 任一层缺失返回 0.0f，异常时返回 0.0f 不抛出。
+	 * 兼容旧调用方的归一化生产力值。
+	 *
+	 * @return 生产力等级除以 3 后的归一化值
+	 * @deprecated PB 蜜蜂 NBT 不存储 productivity purity；请使用 {@link #getProductivityLevel()}
 	 */
-	private float parseProductivityPurity() {
-		CompoundTag data = this.beeData;
-		if (data == null) return 0.0f;
-		try {
-			CompoundTag attachments = data.getCompound("neoforge:attachments");
-			if (attachments.isEmpty()) return 0.0f;
-			CompoundTag handler = attachments.getCompound("productivebees:attributes_handler");
-			if (handler.isEmpty()) return 0.0f;
-			CompoundTag attributes = handler.getCompound("attributes");
-			if (attributes.isEmpty()) return 0.0f;
-			CompoundTag productivity = attributes.getCompound("productivebees:productivity");
-			if (productivity.isEmpty()) return 0.0f;
-			float purity = productivity.getFloat("purity");
-			// 截断到 [0.0, 1.0] 防止异常值
-			if (!Float.isFinite(purity)) return 0.0f;
-			return Math.max(0.0f, Math.min(1.0f, purity));
-		} catch (RuntimeException e) {
-			return 0.0f;
-		}
+	@Deprecated(forRemoval = false)
+	public float getProductivityPurity() {
+		return getProductivityLevel() / 3.0F;
 	}
 
 	/**
@@ -332,8 +312,7 @@ public class BeeSlot {
 		this.hasNectar = false;
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
-		// F5: 清空蜜蜂时重置 productivity 纯度缓存
-		this.cachedProductivityPurity = -1.0f;
+		this.cachedProductivityLevel = -1;
 		this.dirty = true;
 	}
 }

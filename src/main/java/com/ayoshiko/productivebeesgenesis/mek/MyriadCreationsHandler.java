@@ -69,6 +69,12 @@ public class MyriadCreationsHandler {
 	/** 可复用的输出槽列表（避免每次完成配方都创建新ArrayList） */
 	private final List<IInventorySlot> reusableOutputSlots = new ArrayList<>(3);
 
+	/**
+	 * reusableOutputSlots 中的列表索引到工厂物理输出槽索引（0=主，1=副1，2=副2）。
+	 * 副槽可能为 null，列表会跳过它们，因此不能直接使用列表索引更新增量缓存。
+	 */
+	private final int[] reusableSlotIdxMap = new int[OUTPUT_SLOT_COUNT];
+
 	/** 缓存与过滤管理器（ticksForBase / maxOpsPerTick 缓存 + 输出槽满载判断） */
 	private final MyriadCreationsCache cache = new MyriadCreationsCache();
 
@@ -159,7 +165,8 @@ public class MyriadCreationsHandler {
 			return false;
 		}
 
-		if (effectiveOps > 1 && fluidOutputHandler.isFluidTankFull()
+		if (!context.productivebeesgenesis$isDirectAeOutputEnabled()
+				&& fluidOutputHandler.isFluidTankFull()
 				&& pbOperatingTicks[processIndex] >= processingTime) {
 			long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
 			if (gameTick != lastFluidBlockedProbeTick) {
@@ -171,8 +178,8 @@ public class MyriadCreationsHandler {
 			return true;
 		}
 
-		// 输出受阻且进度已满时不消耗能量
-		// Task 4 根因修复：流体满载不阻塞处理（万象创世流体是副产物，可跳过）
+		// 输出受阻且进度已满时不消耗能量。流体输出属于原子事务，
+		// 满载时由上面的边界检查暂停，不能跳过并丢弃蜂蜜。
 		if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)
 				&& pbOperatingTicks[processIndex] >= processingTime) {
 			pbOperatingTicks[processIndex] = processingTime;
@@ -208,6 +215,7 @@ public class MyriadCreationsHandler {
 		}
 		pbOperatingTicks[processIndex] = plan.remainingProgress();
 		int actualOps = plan.completedOperations();
+		int committedOps = actualOps;
 
 		if (actualOps > 0) {
 			// 输出受阻时暂停处理（仅物品槽满载才阻塞，流体满载可跳过）
@@ -224,17 +232,33 @@ public class MyriadCreationsHandler {
 			}
 
 			if (completed <= 0) {
-				// 完成失败时不卡死进度，保留当前进度下一 tick 重试（期间 Ejector 会自动弹出产物腾出空间）
-				// 不扣能量（无操作完成）
+				// The processing work reached a completion boundary, but the atomic
+				// output transaction could not commit. Keep the boundary pending so the
+				// next tick retries output without advancing or charging another cycle.
+				pbOperatingTicks[processIndex] = processingTime;
 				return true;
+			}
+			committedOps = completed;
+			if (completed < actualOps) {
+				// Output capacity can be smaller than the requested parallel batch.
+				// Preserve a completion boundary for the uncommitted remainder instead
+				// of silently dropping those operations.
+				pbOperatingTicks[processIndex] = processingTime;
 			}
 			if (context.inputSlot(processIndex).getStack().isEmpty()) {
 				context.setPbActiveState(false, processIndex);
 			}
 		}
-		// 按 plan 实际消耗扣能量（推进 tick × 操作数 × per-op 能量，与 PB 原版路径一致）
-		if (plan.energyUsed() > 0L) {
-			context.energyContainer().extract(plan.energyUsed(), Action.EXECUTE, AutomationType.INTERNAL);
+		// 按实际提交的批次扣能量。输出槽容量可能小于虚拟并行数，
+		// 此时 completeMyriadCreationsBatch 只提交 completed 个输入；若仍扣完整
+		// plan.energyUsed()，会在输出受限时过度扣能量。
+		long energyUsed = plan.energyUsed();
+		if (actualOps > 0 && committedOps < actualOps) {
+			energyUsed = MekCentrifugeEnergyScaling.batchEnergyCost(
+					cachedEnergyPerTick, committedOps, plan.executedTicks());
+		}
+		if (energyUsed > 0L) {
+			context.energyContainer().extract(energyUsed, Action.EXECUTE, AutomationType.INTERNAL);
 		}
 
 		return true;
@@ -288,21 +312,20 @@ public class MyriadCreationsHandler {
 		// 执行计划 + 插入流体 + 扣除输入，全部在 begin/endOutputBatch 之内
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
-			// Task 4 根因修复：流体是万象创世的副产物，满载时跳过，不阻塞物品产出
-			// 检查流体槽是否已满，满载时跳过流体插入
-			boolean fluidFull = fluidOutputHandler.isFluidTankFull();
-			if (!fluidFull) {
-				// v9-M2 修复：先插入流体（含空间检查），失败时不插入物品、不扣输入
-				MyriadFluidOutputHandler.InsertResult fluidResult =
-						fluidOutputHandler.insertFluidOutput(input, modifier, processIndex);
-				if (!fluidResult.committed()) {
-					// v9-P2 修复：回收成功的 plan 防止对象池泄漏
-					MyriadBatchPlanner.recyclePlan(plan);
-					return 0;
-				}
+			// The fluid output is part of the atomic Myriad transaction. A full local
+			// tank must pause the cycle (or use direct AE output), never discard honey
+			// while still consuming the input and committing combs.
+			MyriadFluidOutputHandler.InsertResult fluidResult =
+					fluidOutputHandler.insertFluidOutput(input, modifier, processIndex);
+			if (!fluidResult.committed()) {
+				// v9-P2 修复：回收成功的 plan 防止对象池泄漏
+				MyriadBatchPlanner.recyclePlan(plan);
+				return 0;
 			}
 			MyriadBatchPlanner.apply(plan, reusableOutputSlots,
-					context::productivebeesgenesis$expectOutputSlotChange);
+					context::productivebeesgenesis$expectOutputSlotChange,
+					(slotIndex, slot) -> context.productivebeesgenesis$updateSlotOnly(
+							processIndex, reusableSlotIdxMap[slotIndex], slot));
 			// 修复：每次操作只消耗1个输入，productivityModifier只影响输出数量不影响输入消耗
 			context.inputSlot(processIndex).shrinkStack(1, Action.EXECUTE);
 			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
@@ -441,7 +464,9 @@ public class MyriadCreationsHandler {
 				return 0;
 			}
 			MyriadBatchPlanner.apply(plan, reusableOutputSlots,
-					context::productivebeesgenesis$expectOutputSlotChange);
+					context::productivebeesgenesis$expectOutputSlotChange,
+					(slotIndex, slot) -> context.productivebeesgenesis$updateSlotOnly(
+							processIndex, reusableSlotIdxMap[slotIndex], slot));
 			context.inputSlot(processIndex).shrinkStack(currentBatch, Action.EXECUTE);
 			// SubTask 5.7: 记录实际产出供 WeightedTypeSelector 更新 EMA 权重表
 			WeightedTypeSelector.getInstance().recordOutputs(allocation);
@@ -457,13 +482,17 @@ public class MyriadCreationsHandler {
 	private void buildOutputSlots(int processIndex) {
 		reusableOutputSlots.clear();
 		reusableOutputSlots.add(context.primaryOutputSlot(processIndex));
+		reusableSlotIdxMap[0] = 0;
+		int reusableSlotCount = 1;
 		IInventorySlot secondary = context.secondaryOutputSlot(processIndex);
 		if (secondary != null) {
 			reusableOutputSlots.add(secondary);
+			reusableSlotIdxMap[reusableSlotCount++] = 1;
 		}
 		IInventorySlot tertiary = context.tertiaryOutputSlot(processIndex);
 		if (tertiary != null) {
 			reusableOutputSlots.add(tertiary);
+			reusableSlotIdxMap[reusableSlotCount] = 2;
 		}
 	}
 

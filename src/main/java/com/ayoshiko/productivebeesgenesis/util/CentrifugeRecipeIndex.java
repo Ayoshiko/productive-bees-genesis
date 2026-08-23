@@ -120,6 +120,7 @@ public final class CentrifugeRecipeIndex {
 			} catch (Throwable ignored) {
 				multiplier = 4;
 			}
+			multiplier = Math.max(1, multiplier);
 
 			// 模块 6 修复（v2.4 最终版）：两遍扫描消除 HashMap 迭代顺序依赖
 		// v2.3 单遍扫描 + putIfAbsent 存在 Bug：若单蜜脾配方先于原生蜜脾块配方被处理，
@@ -308,10 +309,15 @@ public final class CentrifugeRecipeIndex {
 				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
 				if (isWaxOutput(chanced)) continue;
 				blockOutputs.add(new ChancedOutput(chanced.ingredient(),
-						chanced.min() * multiplier, chanced.max() * multiplier, chanced.chance()));
+						SaturatingMath.saturatingToInt(
+								SaturatingMath.saturatingMultiply(chanced.min(), multiplier)),
+						SaturatingMath.saturatingToInt(
+								SaturatingMath.saturatingMultiply(chanced.max(), multiplier)),
+						chanced.chance()));
 			}
 			SizedFluidIngredient blockFluid = new SizedFluidIngredient(
-					original.fluidOutput.ingredient(), original.fluidOutput.amount() * multiplier);
+					original.fluidOutput.ingredient(), SaturatingMath.saturatingToInt(
+							SaturatingMath.saturatingMultiply(original.fluidOutput.amount(), multiplier)));
 			CentrifugeRecipe blockRecipe = new CentrifugeRecipe(
 					blockIngredient, blockOutputs, blockFluid, original.getProcessingTime());
 			return new RecipeHolder<>(honeycombRecipe.id().withSuffix("_block"), blockRecipe);

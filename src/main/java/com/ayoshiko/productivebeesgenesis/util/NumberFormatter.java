@@ -75,6 +75,19 @@ public final class NumberFormatter {
 		return formatAbbreviated(value);
 	}
 
+	/** Formats a compact count for the fixed-width label in an 18px item slot. */
+	public static String formatCompactSlot(long value) {
+		if (value == 0) {
+			return "0";
+		}
+		boolean negative = value < 0;
+		long absValue = negative
+				? (value == Long.MIN_VALUE ? Long.MAX_VALUE : -value)
+				: value;
+		String formatted = formatPositiveSlot(absValue);
+		return negative ? "-" + formatted : formatted;
+	}
+
 	/**
 	 * 判断缩写模式是否启用
 	 * <br/>
@@ -121,7 +134,11 @@ public final class NumberFormatter {
 		}
 
 		boolean negative = value < 0;
-		long absValue = negative ? -value : value;
+		// Long.MIN_VALUE cannot be negated in a long. Saturating to MAX_VALUE keeps
+		// the compact display valid instead of leaking the raw overflowed number.
+		long absValue = negative
+				? (value == Long.MIN_VALUE ? Long.MAX_VALUE : -value)
+				: value;
 
 		String formatted = formatPositiveAbbreviated(absValue);
 		return negative ? "-" + formatted : formatted;
@@ -160,6 +177,29 @@ public final class NumberFormatter {
 		}
 
 		// 非整数保留 1 位小数（如 1500 → "1.5K"）
+		return String.format(Locale.US, "%.1f%s", rounded, SUFFIXES[suffixIndex]);
+	}
+
+	private static String formatPositiveSlot(long absValue) {
+		if (absValue < UNIT) {
+			return Long.toString(absValue);
+		}
+		int suffixIndex = 0;
+		double scaled = absValue;
+		while (scaled >= UNIT && suffixIndex < MAX_SUFFIX_INDEX) {
+			scaled /= UNIT;
+			suffixIndex++;
+		}
+		double rounded = scaled < 10.0
+				? Math.round(scaled * 10.0) / 10.0
+				: Math.round(scaled);
+		if (rounded >= UNIT && suffixIndex < MAX_SUFFIX_INDEX) {
+			rounded /= UNIT;
+			suffixIndex++;
+		}
+		if (isWholeNumber(rounded)) {
+			return (long) rounded + SUFFIXES[suffixIndex];
+		}
 		return String.format(Locale.US, "%.1f%s", rounded, SUFFIXES[suffixIndex]);
 	}
 

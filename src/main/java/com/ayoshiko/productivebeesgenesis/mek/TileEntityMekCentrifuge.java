@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
@@ -233,6 +234,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 */
 	@Override
 	public boolean containsRecipe(@NotNull ItemStack input) {
+		if (MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
+			return true;
+		}
 		// 熔炉配方兼容关闭时只接受 PB 离心配方输入
 		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
 			return pbProcessor.findPbRecipe(input) != null;
@@ -253,7 +257,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 			return null;
 		}
 		ItemStack input = accessor().productivebeesgenesis$getInputSlot().getStack();
-		if (!input.isEmpty() && pbProcessor.findPbRecipe(input) != null) return null;
+		if (!input.isEmpty() && (MyriadCreationsEventHandler.isMyriadCreationsItem(input)
+				|| pbProcessor.findPbRecipe(input) != null)) return null;
 		return super.getRecipe(cacheIndex);
 	}
 

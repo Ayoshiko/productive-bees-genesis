@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.apiary.BeeProductivityGene;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler;
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
 import com.mojang.authlib.GameProfile;
 import cy.jdkdigital.productivebees.common.block.entity.AmberBlockEntity;
@@ -40,12 +42,31 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatch(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			int productionCount, float multiplier) {
+		return sampleBatch(level, origin, feeder, productionCount, multiplier, BeeProductivityGene.NORMAL);
+	}
+
+	/**
+	 * 按 PB 原版公式对每个抽中的战利品栈应用生产力基因，再聚合批量结果。
+	 *
+	 * @param level             服务端世界
+	 * @param origin            蜂箱位置
+	 * @param feeder            喂食槽
+	 * @param productionCount   生产次数
+	 * @param multiplier        蜂箱生产力升级倍率
+	 * @param productivityLevel 生产力基因等级 0 到 3
+	 * @return 聚合后的战利品栈
+	 */
+	public static List<ItemStack> sampleBatch(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
+			int productionCount, float multiplier, int productivityLevel) {
 		if (level == null || origin == null || feeder == null
 				|| productionCount <= 0 || multiplier <= 0.0F) return List.of();
 		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
 		if (candidates.isEmpty()) return List.of();
+		int rollCount = BeeProduceBatchSampler.sampleRollCount(
+				ThreadLocalRandom.current(), productionCount, multiplier);
+		if (rollCount <= 0) return List.of();
 
-		int sampleCount = WannaBeeBatchPlan.sampleCount(productionCount);
+		int sampleCount = WannaBeeBatchPlan.sampleCount(rollCount);
 		BatchSampler sampler;
 		try {
 			sampler = new BatchSampler(level, origin, candidates);
@@ -58,15 +79,16 @@ public final class WannaBeeAmberAdapter {
 		for (int i = 0; i < sampleCount; i++) {
 			ItemStack sampled = sampler.sample();
 			if (sampled.isEmpty()) continue;
-			long representedEvents = WannaBeeBatchPlan.weightAt(productionCount, i);
-			long amount = (long) sampled.getCount() * representedEvents;
+			long representedEvents = WannaBeeBatchPlan.weightAt(rollCount, i);
+			int adjustedCount = BeeProductivityGene.adjustStackCount(
+					sampled.getCount(), productivityLevel);
+			long amount = (long) adjustedCount * representedEvents;
 			merge(aggregated, sampled, amount);
 		}
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());
 		for (AggregatedDrop drop : aggregated) {
-			double scaled = drop.count * (double) multiplier;
-			int count = scaled >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.round(scaled);
+			int count = drop.count >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) drop.count;
 			if (count > 0) result.add(drop.template.copyWithCount(count));
 		}
 		return result;

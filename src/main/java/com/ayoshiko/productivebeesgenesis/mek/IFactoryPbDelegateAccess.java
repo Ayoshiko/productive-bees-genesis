@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 
 /**
@@ -139,6 +140,9 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	 */
 	@Override
 	default boolean productivebeesgenesis$isValidInput(net.minecraft.world.item.ItemStack stack) {
+		// 万象创世蜜脾/蜜脾块由动态特殊路径处理，没有静态 PB 配方，
+		// 不能按普通 PB 输入的 findPbRecipe 结果判无效。
+		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) return true;
 		// Bug 2 修复：PB 蜜脾/蜜脾块强制走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配
 		// 与基础离心机 TileEntityMekCentrifuge.containsRecipe 语义一致
 		if (productivebeesgenesis$isPbCombInput(stack)) {

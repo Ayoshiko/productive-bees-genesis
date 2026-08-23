@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
@@ -96,10 +97,22 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot,
 			@NotNull InputOutputCompatibilityCache cache, @NotNull PbRecipeProcessor pbProcessor,
 			@NotNull BooleanSupplier superChecker) {
+		return inputProducesOutput(level, fallbackInput, outputSlot, secondaryOutputSlot, null, cache,
+				pbProcessor, superChecker);
+	}
+
+	/** 检查输入是否产出指定输出（含第三物品输出槽）。 */
+	public static boolean inputProducesOutput(@Nullable Level level, @NotNull ItemStack fallbackInput,
+			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot,
+			@Nullable IInventorySlot tertiaryOutputSlot,
+			@NotNull InputOutputCompatibilityCache cache, @NotNull PbRecipeProcessor pbProcessor,
+			@NotNull BooleanSupplier superChecker) {
 		return cache.get(level, fallbackInput, outputSlot.getStack(),
 				secondaryOutputSlot == null ? ItemStack.EMPTY : secondaryOutputSlot.getStack(),
+				tertiaryOutputSlot == null ? ItemStack.EMPTY : tertiaryOutputSlot.getStack(),
 				() -> superChecker.getAsBoolean()
-						|| MekCentrifugeFactoryHelper.checkPbOutputFallback(pbProcessor, fallbackInput, outputSlot, secondaryOutputSlot));
+						|| MekCentrifugeFactoryHelper.checkPbOutputFallback(pbProcessor, fallbackInput, outputSlot,
+								secondaryOutputSlot, tertiaryOutputSlot));
 	}
 
 	/** 查找配方 — PB 配方存在时返回 null，阻止 SMELTING 管线抢占输入 */
@@ -113,7 +126,8 @@ public final class CentrifugeFactoryCommonLogic {
 			return null;
 		}
 		ItemStack input = (ItemStack) inputHandlers[cacheIndex].getInput();
-		if (!input.isEmpty() && pbProcessor.findPbRecipe(input) != null) {
+		if (!input.isEmpty() && (MyriadCreationsEventHandler.isMyriadCreationsItem(input)
+				|| pbProcessor.findPbRecipe(input) != null)) {
 			return null;
 		}
 		return findFirstRecipe.apply(inputHandlers[cacheIndex]);

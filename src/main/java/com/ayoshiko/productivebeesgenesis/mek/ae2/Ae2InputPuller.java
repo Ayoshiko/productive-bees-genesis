@@ -44,6 +44,11 @@ public final class Ae2InputPuller {
 	/** 异常日志计数器 — 用于在日志中显示累计出现次数（LogThrottle 已负责节流） */
 	private static final AtomicLong PULL_EXCEPTION_COUNTER = new AtomicLong(0);
 
+	/** Result of one per-key extract and local distribution attempt. */
+	private record PullBatchResult(int insertedCount, long extractCostNanos,
+			boolean slowExtract, boolean degraded, boolean healthy) {
+	}
+
 	/**
 	 * 懒加载 Holder — AE2 未安装时本类初始化不触发 {@link BaseActionSource} 类解析
 	 * <br/>
@@ -209,6 +214,7 @@ public final class Ae2InputPuller {
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
 				&& filter.hasOnlyNetworkStockEntries()
+				&& !filter.isGlobalNetworkStock()
 				&& !holder.isAeInputNbtIgnore();
 		if (directOnly) {
 			// Network-stock whitelist entries use exact keys and avoid a full inventory scan.
@@ -238,11 +244,16 @@ public final class Ae2InputPuller {
 				for (Ae2InputFilter.DirectEntry direct : directEntries) {
 					if (pullList.size() >= maxTypesToCollect) break;
 					AEItemKey key = direct.key();
-					if (!direct.networkStock() || key == null || !CombFuzzyMatcher.isCombItem(key)
+					if ((!direct.networkStock() && !filter.isGlobalNetworkStock())
+							|| key == null || !CombFuzzyMatcher.isCombItem(key)
 							|| !pullKeys.add(key)) continue;
 					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
-					long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
+					long configuredLimit = filter.getPullLimitIfAllowed(key, available, holder.isAeInputNbtIgnore());
+					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
+						pullKeys.remove(key);
+						continue;
+					}
 					if (configuredLimit >= 0L) {
 						available = Math.min(available, configuredLimit);
 					}
@@ -325,6 +336,12 @@ public final class Ae2InputPuller {
 
 		long totalPulled = 0;
 		long normalPulled = 0;
+		boolean unlimitedAttempted = false;
+		boolean unlimitedSucceeded = false;
+		boolean slowExtractDetected = false;
+		boolean degradedExtractDetected = false;
+		boolean healthyExtractDetected = false;
+		long maxSlowExtractCost = 0L;
 		int typeCount = pullList.size();
 		int slotStart = holder.getPushState().getAndAdvanceInputSlotRotation(processCount);
 		long[] inputSlotCapacities = buffers.borrowInputSlotCapacities(processCount);
@@ -356,15 +373,36 @@ public final class Ae2InputPuller {
 			int toPull = SaturatingMath.saturatingToInt(Math.min(
 					typeAvailable, Math.min(entry.remaining, Math.max(0L, entryQuota))));
 			if (toPull <= 0) continue;
+			if (entry.unlimited) unlimitedAttempted = true;
 			try {
-				int pulled = pullBatchForType(level, holder, entry.key, toPull, meStorage, ActionSourceHolder.INSTANCE,
-						inputSlots, inputSlotCapacities, slotStart, pos, returnBackoff, keyBackoff);
+				PullBatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull, meStorage,
+						ActionSourceHolder.INSTANCE,
+					inputSlots, inputSlotCapacities, slotStart, pos, keyBackoff);
+				int pulled = batchResult.insertedCount();
 				entry.remaining -= pulled;
 				totalPulled += pulled;
 				if (!entry.unlimited) normalPulled += pulled;
+				if (entry.unlimited && pulled > 0) unlimitedSucceeded = true;
 				if (pulled > 0) fairness.recordServed(entry.key, pulled);
+				slowExtractDetected |= batchResult.slowExtract();
+				degradedExtractDetected |= batchResult.degraded();
+				healthyExtractDetected |= batchResult.healthy();
+				maxSlowExtractCost = Math.max(maxSlowExtractCost, batchResult.extractCostNanos());
 			} catch (LinkageError | RuntimeException e) {
 				handlePullException(e, entry.key);
+				degradedExtractDetected = true;
+			}
+		}
+		// Update the whole-tile storage backoff once per pull pass. A slow key wins over
+		// a later healthy key in the same pass; otherwise a healthy pass clears the window
+		// immediately, while leftover fallback remains a degraded result.
+		if (returnBackoff != null) {
+			if (slowExtractDetected) {
+				returnBackoff.recordSlowOperation(System.nanoTime(), maxSlowExtractCost);
+			} else if (degradedExtractDetected) {
+				returnBackoff.recordFailure(System.nanoTime());
+			} else if (healthyExtractDetected) {
+				returnBackoff.recordSuccess();
 			}
 		}
 
@@ -373,9 +411,9 @@ public final class Ae2InputPuller {
 		// 16. Update the adaptive cooldown: success shortens the next interval
 		//     (1 tick unlimited / 5 normal), failure backs off (AE2LT parity).
 		if (totalPulled > 0) {
-			holder.onInputPullSuccess(unlimitedMode, totalPulled, normalQuota);
+			holder.onInputPullSuccess(unlimitedSucceeded, totalPulled, normalQuota);
 		} else {
-			holder.onInputPullFail(unlimitedMode);
+			holder.onInputPullFail(unlimitedAttempted);
 		}
 		holder.updateLastPullTick(currentTick);
 		holder.updateLastPullCounter(pullCounter);
@@ -499,15 +537,17 @@ public final class Ae2InputPuller {
 	 * Per-type batch pull: one ME extract, then local distribution across slots.
 	 * This mirrors the AE2LT batching approach and reduces high-tier factory AE2 API calls.
 	 */
-	private static int pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
+	private static PullBatchResult pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
 			MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, int slotStart, BlockPos pos,
-			Ae2PushBackoff returnBackoff, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
+			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
 		// 全服慢网络操作预算（Spark w4xREcN1HI：EnderDrives 的 extract 同样写 WAL，
 		// appendWalRecordsLocked→force 在主线程 fsync 5-10ms/次）。预算耗尽时跳过本轮
 		// extract — 物品留在 ME 网络无损，退避结束后由冷却节奏自然恢复，吞吐不受损。
 		long gameTick = level.getGameTime();
-		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) return 0;
+		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) {
+			return new PullBatchResult(0, 0L, false, true, false);
+		}
 		long extractStart = System.nanoTime();
 		long extracted = SaturatingMath.clampToRequest(
 				meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
@@ -517,7 +557,8 @@ public final class Ae2InputPuller {
 			if (keyBackoff != null) {
 				keyBackoff.recordFailure(key, System.nanoTime());
 			}
-			return 0;
+			boolean slow = Ae2GlobalInsertBudget.isSlowOperation(extractCost);
+			return new PullBatchResult(0, extractCost, slow, slow, !slow);
 		}
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
 		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
@@ -544,25 +585,25 @@ public final class Ae2InputPuller {
 			}
 		}
 		int insertedCount = originalCount - (stack.isEmpty() ? 0 : stack.getCount());
+		boolean slowExtract = Ae2GlobalInsertBudget.isSlowOperation(extractCost);
 		if (insertedCount > 0 && keyBackoff != null) {
-			keyBackoff.recordSuccess(key);
+			if (slowExtract) {
+				keyBackoff.recordFailure(key, System.nanoTime());
+			} else {
+				keyBackoff.recordSuccess(key);
+			}
 		}
-		if (!stack.isEmpty()) {
+		boolean hadLeftover = !stack.isEmpty();
+		if (hadLeftover) {
 			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource,
-					returnBackoff, level, pos, inputSlots);
+					null, level, pos, inputSlots);
 			if (leftoverRemaining > 0) {
 				LogThrottle.error("ae2_pull_leftover_loss_batch",
 						"AE2 批量拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
 			}
 		}
-		// 慢 extract 联动整机拉取退避 — 放在 leftover 处理之后，确保不被回送成功的
-		// recordSuccess 覆盖（对齐输出侧"部分成功也不复位退避"设计）。健康网络单次
-		// extract <500µs 永不触发，拉取吞吐零影响；病态网络（EnderDrives fsync）
-		// 下整机进入 50ms→1s 指数退避，大幅降低 extract 频率。
-		if (Ae2GlobalInsertBudget.isSlowOperation(extractCost) && returnBackoff != null) {
-			returnBackoff.recordFailure(System.nanoTime());
-		}
-		return insertedCount;
+		return new PullBatchResult(insertedCount, extractCost, slowExtract, hadLeftover,
+				!slowExtract && !hadLeftover);
 	}
 
 	private static void handlePullException(Throwable e, AEItemKey key) {

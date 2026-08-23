@@ -300,7 +300,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		boolean updateCache
 	) {
 		return CentrifugeFactoryCommonLogic.inputProducesOutput(level,
-			fallbackInput, outputSlot, secondaryOutputSlot, inputProducesOutputCache, pbProcessor,
+			fallbackInput, outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), inputProducesOutputCache, pbProcessor,
 			() -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache));
 	}
 	/** 配置卡兼容性检查 — 支持EME/ME工厂跨等级粘贴配置 */

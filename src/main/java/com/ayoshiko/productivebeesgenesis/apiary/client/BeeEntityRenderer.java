@@ -58,6 +58,44 @@ public class BeeEntityRenderer {
 	/** 蜜蜂实体缓存 — 单例，相同蜜蜂类型共享实体实例，避免重复创建 */
 	private final BeeEntityCache beeEntityCache = BeeEntityCache.getInstance();
 
+	/** 当前 GUI 蜜蜂实体批次使用的缓冲源；仅在客户端渲染线程访问 */
+	private MultiBufferSource.BufferSource activeBufferSource;
+
+	/** 是否处于批量实体渲染阶段 */
+	private boolean batchActive;
+
+	/**
+	 * 开始一批蜜蜂实体渲染。
+	 * <br/>
+	 * EntityRenderDispatcher 会为每只蜜蜂写入同一个缓冲源。将 {@code endBatch()}
+	 * 延迟到整批结束，可以避免高等级工厂中每个槽位都触发一次缓冲提交和深度测试切换。
+	 */
+	public void beginBatch() {
+		if (batchActive) return;
+		activeBufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
+		batchActive = true;
+		RenderSystem.enableDepthTest();
+	}
+
+	/**
+	 * 结束当前蜜蜂实体批次并恢复 GUI 所需的渲染状态。
+	 * <br/>
+	 * 即使批次中的某只蜜蜂渲染失败，也应由调用方在 {@code finally} 中调用本方法。
+	 */
+	public void endBatch() {
+		if (!batchActive) return;
+		try {
+			if (activeBufferSource != null) {
+				activeBufferSource.endBatch();
+			}
+		} finally {
+			activeBufferSource = null;
+			batchActive = false;
+			RenderSystem.disableDepthTest();
+			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		}
+	}
+
 	/**
 	 * 在指定位置渲染蜜蜂实体预览（PB 原版风格）
 	 * <br/>
@@ -105,31 +143,34 @@ public class BeeEntityRenderer {
 		// 设置身体朝向（PB 原版使用 -20°）
 		beeEntity.setYBodyRot(-20.0F);
 
+		// 保留单体调用的兼容行为；GUI 批量调用时由外层统一 begin/endBatch。
+		boolean ownsBatch = !batchActive;
+		if (ownsBatch) beginBatch();
+
 		PoseStack pose = guiGraphics.pose();
-		pose.pushPose();
+		boolean pushed = false;
+		try {
+			pose.pushPose();
+			pushed = true;
 
-		// PB 原版变换序列：translate(7, 12, 1.5) → Z+190° → Y+20° → X+20° → translate(0, -0.2, 1) → scale
-		pose.translate(7.0F + x, 12.0F + y, 1.5F);
-		pose.mulPose(Axis.ZP.rotationDegrees(190.0F));
-		pose.mulPose(Axis.YP.rotationDegrees(20.0F));
-		pose.mulPose(Axis.XP.rotationDegrees(20.0F));
-		pose.translate(0.0F, -0.2F, 1.0F);
-		pose.scale(scale, scale, scale);
+			// PB 原版变换序列：translate(7, 12, 1.5) → Z+190° → Y+20° → X+20° → translate(0, -0.2, 1) → scale
+			pose.translate(7.0F + x, 12.0F + y, 1.5F);
+			pose.mulPose(Axis.ZP.rotationDegrees(190.0F));
+			pose.mulPose(Axis.YP.rotationDegrees(20.0F));
+			pose.mulPose(Axis.XP.rotationDegrees(20.0F));
+			pose.translate(0.0F, -0.2F, 1.0F);
+			pose.scale(scale, scale, scale);
 
-		// 启用深度测试
-		RenderSystem.enableDepthTest();
-
-		EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
-		MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
-		// Bug 1修复：partialTicks=1.0F 冻结所有插值动画（lerp(prev,cur,1.0)=cur），
-		// 与 PB 原版 BeeRenderer.render 第61行一致，避免每帧 partialTick 变化导致抖动
-		dispatcher.render(beeEntity, 0, 0, 0, 0.0F, 1.0F, pose, bufferSource, FULL_LIGHT);
-		bufferSource.endBatch();
-
-		// 重置渲染状态（防止 GL 状态泄漏）
-		RenderSystem.disableDepthTest();
-		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-		pose.popPose();
+			EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
+			MultiBufferSource.BufferSource bufferSource = activeBufferSource;
+			if (bufferSource == null) return;
+			// Bug 1修复：partialTicks=1.0F 冻结所有插值动画（lerp(prev,cur,1.0)=cur），
+			// 与 PB 原版 BeeRenderer.render 第61行一致，避免每帧 partialTick 变化导致抖动
+			dispatcher.render(beeEntity, 0, 0, 0, 0.0F, 1.0F, pose, bufferSource, FULL_LIGHT);
+		} finally {
+			if (pushed) pose.popPose();
+			if (ownsBatch) endBatch();
+		}
 	}
 
 	/**

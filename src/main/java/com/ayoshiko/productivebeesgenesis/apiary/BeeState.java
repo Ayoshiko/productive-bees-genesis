@@ -12,6 +12,9 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 	 *   <li>{@link #WAITING_FLOWER} — 喂食器无有效花朵，等待玩家补充</li>
 	 *   <li>{@link #WAITING_ENERGY} — 能量不足，等待能量恢复</li>
 	 *   <li>{@link #WAITING_OUTPUT} — 输出槽已满，等待产物被取走</li>
+	 *   <li>{@link #WAITING_DAY_CYCLE} — 行为基因与当前昼夜不符</li>
+	 *   <li>{@link #WAITING_RAIN} — 天气耐受基因无法适应雨天</li>
+	 *   <li>{@link #WAITING_THUNDER} — 天气耐受基因无法适应雷暴</li>
 	 * </ul>
 	 * <p>
 	 * 设计原则：单一职责，仅描述状态与对应的 GUI 渲染颜色。
@@ -31,7 +34,16 @@ public enum BeeState {
 	WAITING_ENERGY(0xF44336),
 
 	/** 等待输出空间 — 黄色 */
-	WAITING_OUTPUT(0xFFC107);
+	WAITING_OUTPUT(0xFFC107),
+
+	/** 行为基因不适应当前昼夜 — 紫色 */
+	WAITING_DAY_CYCLE(0x9C6ADE),
+
+	/** 天气耐受基因不适应雨天 — 蓝色 */
+	WAITING_RAIN(0x42A5F5),
+
+	/** 天气耐受基因不适应雷暴 — 深蓝色 */
+	WAITING_THUNDER(0x5C6BC0);
 
 	/** 状态颜色 RGB int 值（供 GUI 状态灯渲染） */
 	private final int color;

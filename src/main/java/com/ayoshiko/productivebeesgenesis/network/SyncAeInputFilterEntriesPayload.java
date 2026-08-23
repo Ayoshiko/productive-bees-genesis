@@ -42,6 +42,8 @@ import java.util.List;
 	 * @param reserveAmounts 直连条目的网络库存保留量（与 entries 平行，非直连条目为 0）
 	 * @param unlimited    直连条目的无限提供状态（与 entries 平行，非直连条目为 false）
 	 * @param networkStock 直连条目的库存模式状态（与 entries 平行，非直连条目为 false）
+	 * @param globalNetworkStock 是否对所有过滤器允许的蜜脾应用默认库存保留
+	 * @param globalReserveAmount 过滤器级默认库存保留量
 	 */
 public record SyncAeInputFilterEntriesPayload(
 		BlockPos pos,
@@ -52,9 +54,11 @@ public record SyncAeInputFilterEntriesPayload(
 	List<Long> amounts,
 	List<Long> reserveAmounts,
 	List<Long> visibleAmounts,
-		List<Boolean> unlimited,
+	List<Boolean> unlimited,
 	List<Boolean> networkStock,
-		boolean unlimitedAllFallback
+	boolean unlimitedAllFallback,
+	boolean globalNetworkStock,
+	long globalReserveAmount
 ) implements CustomPacketPayload {
 
 	/** Backward-compatible constructor for callers that do not provide stock metadata. */
@@ -65,7 +69,7 @@ public record SyncAeInputFilterEntriesPayload(
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), false),
-				Collections.nCopies(entries.size(), false), false);
+				Collections.nCopies(entries.size(), false), false, false, 0L);
 	}
 
 	/**
@@ -73,7 +77,13 @@ public record SyncAeInputFilterEntriesPayload(
 	 * Encode the per-entry metadata lists as one composite field.
 	 */
 	private record DirectState(List<Long> amounts, List<Long> reserveAmounts, List<Long> visibleAmounts,
-			List<Boolean> unlimited, List<Boolean> networkStock, boolean unlimitedAllFallback) {}
+			List<Boolean> unlimited, List<Boolean> networkStock, StockDefaults defaults) {}
+	private record StockDefaults(boolean unlimitedAllFallback, boolean globalNetworkStock, long globalReserveAmount) {}
+	private static final StreamCodec<ByteBuf, StockDefaults> STOCK_DEFAULTS_CODEC = StreamCodec.composite(
+			ByteBufCodecs.BOOL, StockDefaults::unlimitedAllFallback,
+			ByteBufCodecs.BOOL, StockDefaults::globalNetworkStock,
+			ByteBufCodecs.VAR_LONG, StockDefaults::globalReserveAmount,
+			StockDefaults::new);
 
 	private static final StreamCodec<ByteBuf, DirectState> DIRECT_STATE_CODEC =
 			StreamCodec.composite(
@@ -82,7 +92,7 @@ public record SyncAeInputFilterEntriesPayload(
 					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::visibleAmounts,
 					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::unlimited,
 					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::networkStock,
-					ByteBufCodecs.BOOL, DirectState::unlimitedAllFallback,
+					STOCK_DEFAULTS_CODEC, DirectState::defaults,
 					DirectState::new
 			);
 
@@ -98,14 +108,19 @@ public record SyncAeInputFilterEntriesPayload(
 					ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::indices,
 					// 限制单个entry最大256字符（beeType ResourceLocation足够），防止恶意超大字符串导致OOM
 					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_FILTER_ENTRY_LENGTH)
-							.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::entries,
+					.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::entries,
 					DIRECT_STATE_CODEC,
 					payload -> new DirectState(payload.amounts(), payload.reserveAmounts(), payload.visibleAmounts(),
-							payload.unlimited(), payload.networkStock(), payload.unlimitedAllFallback()),
+							payload.unlimited(), payload.networkStock(),
+							new StockDefaults(payload.unlimitedAllFallback(), payload.globalNetworkStock(),
+									payload.globalReserveAmount())),
 					(pos, filterMode, preciseMode, indices, entries, directState) -> new SyncAeInputFilterEntriesPayload(
 							pos, filterMode, preciseMode, indices, entries,
 							directState.amounts(), directState.reserveAmounts(), directState.visibleAmounts(),
-							directState.unlimited(), directState.networkStock(), directState.unlimitedAllFallback())
+							directState.unlimited(), directState.networkStock(),
+							directState.defaults().unlimitedAllFallback(),
+							directState.defaults().globalNetworkStock(),
+							directState.defaults().globalReserveAmount())
 			);
 
 	@Override

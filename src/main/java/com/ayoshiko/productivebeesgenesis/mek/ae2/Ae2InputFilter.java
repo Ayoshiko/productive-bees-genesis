@@ -123,6 +123,10 @@ public final class Ae2InputFilter {
 	private volatile long[] directVisibleAmounts = new long[DEFAULT_CAPACITY];
 	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
 	private volatile boolean[] directNetworkStock = new boolean[DEFAULT_CAPACITY];
+	/** Filter-level network stock policy applied to every allowed comb candidate. */
+	private volatile boolean globalNetworkStock;
+	/** Default stock floor used by {@link #globalNetworkStock}. */
+	private volatile long globalReserveAmount;
 	/** Immutable direct-entry snapshot; invalidated only by configuration changes. */
 	private volatile List<DirectEntry> directEntriesCache;
 	/** Parsed fuzzy entries keyed by the copy-on-write slots array identity. */
@@ -456,6 +460,33 @@ public final class Ae2InputFilter {
 		return Ae2InputFilterQuerySupport.hasNetworkStockEntries(slots, directNetworkStock);
 	}
 
+	/** Returns whether all filter-allowed combs use the default network stock floor. */
+	public boolean isGlobalNetworkStock() {
+		return globalNetworkStock;
+	}
+
+	/** Enables or disables the filter-level network stock policy. */
+	public synchronized void setGlobalNetworkStock(boolean enabled) {
+		globalNetworkStock = enabled;
+		invalidateDirectEntries();
+	}
+
+	/** Toggles the filter-level network stock policy. */
+	public synchronized void toggleGlobalNetworkStock() {
+		setGlobalNetworkStock(!globalNetworkStock);
+	}
+
+	/** Returns the default stock floor for all allowed candidates. */
+	public long getGlobalReserveAmount() {
+		return globalReserveAmount;
+	}
+
+	/** Updates the default stock floor for all allowed candidates. */
+	public synchronized void setGlobalReserveAmount(long amount) {
+		globalReserveAmount = clampDirectReserveAmount(amount);
+		invalidateDirectEntries();
+	}
+
 	/** True when at least one direct entry has unlimited provide enabled. */
 	public boolean hasUnlimitedEntries() {
 		return unlimitedAllFallback || Ae2InputFilterQuerySupport.hasUnlimitedEntries(slots, directUnlimited);
@@ -524,7 +555,7 @@ public final class Ae2InputFilter {
 	public synchronized void replaceClientSnapshot(FilterMode mode, boolean precise,
 			List<Integer> indices, List<String> entries, List<Long> amounts, List<Long> reserveAmounts,
 			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, List<Boolean> networkStockFlags,
-			boolean unlimitedAllFallbackFlag) {
+			boolean unlimitedAllFallbackFlag, boolean globalNetworkStockFlag, long globalReserveAmountValue) {
 		Ae2InputFilterSnapshot.Snapshot snapshot = Ae2InputFilterSnapshot.build(
 				mode, precise, indices, entries, amounts, reserveAmounts, visibleAmounts, unlimitedFlags,
 				networkStockFlags, slots.length);
@@ -538,6 +569,8 @@ public final class Ae2InputFilter {
 		directNetworkStock = snapshot.networkStock();
 		slots = snapshot.slots();
 		unlimitedAllFallback = unlimitedAllFallbackFlag && !hasAnyEntry(slots);
+		globalNetworkStock = globalNetworkStockFlag;
+		globalReserveAmount = clampDirectReserveAmount(globalReserveAmountValue);
 		invalidateDirectEntries();
 	}
 
@@ -573,6 +606,8 @@ public final class Ae2InputFilter {
 	 * Returns the pull cap for a configured key, using the same NBT/precise matching
 	 * rules as {@link #isAllowed(AEItemKey, boolean)}. Duplicate matching entries are
 	 * summed; any network-stock entry uses the current visible stock instead.
+	 * Direct entries without an explicit stock override use the filter-level reserve
+	 * when global stock mode is enabled.
 	 * (implementation moved to {@link Ae2InputFilterQuerySupport#directPullLimit})
 	 */
 	public long getDirectPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt) {
@@ -582,16 +617,19 @@ public final class Ae2InputFilter {
 	public long getDirectPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			HolderLookup.Provider registries) {
 		return Ae2InputFilterQuerySupport.directPullLimit(key, visibleStock, ignoreNbt, registries, slots, resolvedDirectKeys,
-				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock, preciseMode);
+				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock, preciseMode,
+				globalNetworkStock, globalReserveAmount);
 	}
 
 	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt) {
-		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)) return -1L;
+		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)
+				&& !globalNetworkStock) return -1L;
 		String[] currentSlots = slots;
 		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
 				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
-				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock);
+				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
+				globalNetworkStock, globalReserveAmount);
 	}
 
 	/** Exact-key compatibility overload used by older integrations. */
@@ -612,7 +650,7 @@ public final class Ae2InputFilter {
 		// synchronized：与 load/publish 的互斥保持一致，防止并发修改时
 		// slots 与 directAmounts/directUnlimited 三组数组长度不一致导致撕裂读（AIOOBE）
 		Ae2InputFilterNbtCodec.save(tag, filterMode, preciseMode, slots, directAmounts, directReserveAmounts,
-				directUnlimited, directNetworkStock, unlimitedAllFallback);
+				directUnlimited, directNetworkStock, unlimitedAllFallback, globalNetworkStock, globalReserveAmount);
 	}
 
 	/**
@@ -626,6 +664,8 @@ public final class Ae2InputFilter {
 		filterMode = result.filterMode();
 		preciseMode = result.preciseMode();
 		unlimitedAllFallback = result.unlimitedAllFallback();
+		globalNetworkStock = result.globalNetworkStock();
+		globalReserveAmount = result.globalReserveAmount();
 		if (result.entriesPresent()) {
 			// 一次性发布完整数组；resolvedDirectKeys 重置为未解析（null），
 			// 避免 NBT 恢复路径触发 AEItemKey 数组创建（Issue #8 类加载安全）
@@ -655,6 +695,8 @@ public final class Ae2InputFilter {
 		directUnlimited = new boolean[DEFAULT_CAPACITY];
 		directNetworkStock = new boolean[DEFAULT_CAPACITY];
 		unlimitedAllFallback = false;
+		globalNetworkStock = false;
+		globalReserveAmount = 0L;
 		fuzzyEntriesCache = null;
 		invalidateDirectEntries();
 	}

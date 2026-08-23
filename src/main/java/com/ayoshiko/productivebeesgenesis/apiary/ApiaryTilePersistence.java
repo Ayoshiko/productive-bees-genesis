@@ -151,24 +151,28 @@ final class ApiaryTilePersistence {
 		tile.setChanged();
 	}
 
-	/** 写入配置卡数据 — 追加PB升级数量和AE2 per-tile状态到 MEK 配置卡 */
+	/** 写入配置卡数据 — 追加PB升级、AE2状态和产物路由开关到 MEK 配置卡 */
 	static void writeSustainedData(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider,
 			@NotNull CompoundTag data) {
 		PbConfigCardDataHelper.writePbUpgrades(data, tile.pbUpgradeHandler().getPbUpgradeCounts(),
 				PbConfigCardDataHelper.MachineType.APIARY);
 		PbConfigCardDataHelper.writeAe2PerTileState(data,
 				tile.ae2HostAdapter().isAeItemOutputEnabled(), tile.ae2HostAdapter().isAeFluidOutputEnabled());
+		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_EJECT, tile.isDirectEjectEnabled());
 		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT, tile.isDirectAeOutputEnabled());
 		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_CENTRIFUGE_PRIORITY, tile.isCentrifugePriorityEnabled());
 	}
 
-	/** 从配置卡读取 — 恢复AE2 per-tile状态（PB升级粘贴在 setConfigurationData 中处理） */
+	/** 从配置卡读取 — 恢复AE2状态和产物路由开关（PB升级粘贴在 setConfigurationData 中处理） */
 	static void readSustainedData(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider,
 			@NotNull CompoundTag data) {
 		boolean[] ae2State = PbConfigCardDataHelper.readAe2PerTileState(data);
 		if (ae2State != null) {
 			tile.ae2HostAdapter().setAeItemOutputEnabled(ae2State[0]);
 			tile.ae2HostAdapter().setAeFluidOutputEnabled(ae2State[1]);
+		}
+		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_EJECT)) {
+			tile.setDirectEjectEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_EJECT));
 		}
 		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT)) {
 			tile.setDirectAeOutputEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_AE_OUTPUT));

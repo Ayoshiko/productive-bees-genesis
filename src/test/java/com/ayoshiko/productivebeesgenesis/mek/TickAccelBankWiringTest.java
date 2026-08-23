@@ -63,6 +63,26 @@ class TickAccelBankWiringTest {
 	}
 
 	@Test
+	void jdte1024BatchConsumesOnlyOneBoundedChunkPerGameTick() {
+		TickAccelTracker tracker = new TickAccelTracker();
+		tracker.addVirtualTicks(4_096);
+
+		assertEquals(1_024, tracker.takeBatchTicks(TickAccelTracker.getMaxBatchTicks()));
+		assertEquals(3_072L, tracker.getPendingVirtualTicks());
+	}
+
+	@Test
+	void jdt256RepeatedTickerCallsRunThePipelineOnce() {
+		TickBatchSkipState state = new TickBatchSkipState();
+
+		assertTrue(state.tryBeginGameTick(100L));
+		for (int call = 1; call < 256; call++) {
+			assertFalse(state.tryBeginGameTick(100L));
+		}
+		assertTrue(state.tryBeginGameTick(101L));
+	}
+
+	@Test
 	void gameTickGateReportsTheSelectedProcessor() {
 		TickBatchSkipState state = new TickBatchSkipState();
 

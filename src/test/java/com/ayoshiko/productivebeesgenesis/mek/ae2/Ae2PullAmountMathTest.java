@@ -28,4 +28,12 @@ class Ae2PullAmountMathTest {
 		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(64L, 100L, true, 16_384L, 300L));
 		assertEquals(700L, Ae2PullAmountMath.effectiveLimit(64L, 1_000L, true, true, 16_384L, 300L));
 	}
+
+	@Test
+	void globalReserveWorksForUnmarkedCandidatesAndUnlimitedPull() {
+		assertEquals(700L, Ae2PullAmountMath.effectiveLimit(Long.MAX_VALUE, 1_000L,
+				true, true, Long.MAX_VALUE, 300L));
+		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(Long.MAX_VALUE, 300L,
+				true, true, Long.MAX_VALUE, 300L));
+	}
 }

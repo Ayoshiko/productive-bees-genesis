@@ -98,6 +98,36 @@ public final class Ae2PushBackoff {
 	}
 
 	/**
+	 * Records a slow storage operation with a cost-sensitive window.
+	 * <p>
+	 * A fixed first window is too aggressive for a 0.6-1ms external inventory call,
+	 * while treating a 100ms serialization stall as an ordinary failure causes the
+	 * next retry to arrive too soon. The progressive sequence is still retained for
+	 * repeated slow calls, but the measured operation cost can raise the current
+	 * window immediately. A later healthy operation calls {@link #recordSuccess()} and
+	 * restores the full-rate path without waiting for the old window to expire.
+	 *
+	 * @param nanos current monotonic timestamp
+	 * @param costNanos measured storage-operation duration
+	 */
+	public void recordSlowOperation(long nanos, long costNanos) {
+		if (costNanos <= 500_000L) {
+			recordSuccess();
+			return;
+		}
+		backoffExponent++;
+		int shift = Math.min(backoffExponent - 1, 5);
+		long progressive = Math.min(maxBackoffNs, initialBackoffNs << shift);
+		long measured = costNanos >= maxBackoffNs / 2
+				? maxBackoffNs
+				: Math.min(maxBackoffNs, costNanos * 2L);
+		long backoffNanos = Math.max(progressive, measured);
+		long jitter = (long) (backoffNanos * JITTER_FACTOR
+				* ThreadLocalRandom.current().nextDouble(-1.0, 1.0));
+		backoffEndNanos = nanos + backoffNanos + jitter;
+	}
+
+	/**
 	 * Compatibility entry point for callers that previously requested aggressive backoff.
 	 * A transient first rejection now uses the same short progressive window as any other failure.
 	 *

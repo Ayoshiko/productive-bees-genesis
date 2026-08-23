@@ -55,6 +55,7 @@ public final class BalanceConfigCompatibility {
 			server.productivityUpgradeTiersExclusive.set(BalanceConfig.LEGACY_PRODUCTIVITY_EXCLUSIVE);
 			server.speedUpgradeTiersExclusive.set(BalanceConfig.LEGACY_SPEED_EXCLUSIVE);
 			server.centrifugeProductivityAffectsOutput.set(BalanceConfig.LEGACY_CENTRIFUGE_OUTPUT);
+			server.apiaryBeeGenesAffectWork.set(BalanceConfig.LEGACY_APIARY_BEE_GENES_AFFECT_WORK);
 
 			// Restore the exact legacy limits, including user-tuned values. A legacy config
 			// from before these keys existed receives the old release default instead.

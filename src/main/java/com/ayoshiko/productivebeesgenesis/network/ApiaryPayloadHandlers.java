@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
+import com.ayoshiko.productivebeesgenesis.apiary.ApiaryHoneyTreatFeeder;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
@@ -156,6 +157,34 @@ final class ApiaryPayloadHandlers {
 				}
 				serverPlayer.containerMenu.broadcastChanges();
 			}
+		}
+	}
+
+	/**
+	 * 服务端处理：在机械蜂箱 GUI 中给指定蜜蜂喂食基因小食。
+	 * <p>
+	 * 校验当前容器绑定位置、交互距离、槽位边界和服务端光标物品后，委托
+	 * {@link ApiaryHoneyTreatFeeder} 复用 Productive Bees 原版喂食行为。
+	 */
+	static void handleApiaryFeedBee(ApiaryFeedBeePayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)
+				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
+				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			return;
+		}
+		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
+		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
+				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+
+		int slotIndex = payload.slotIndex();
+		if (slotIndex < 0 || slotIndex >= apiary.getBeeSlotCount()) return;
+		ItemStack cursor = serverPlayer.containerMenu.getCarried();
+		if (ApiaryHoneyTreatFeeder.feedGeneTreat(apiary, slotIndex, serverPlayer, cursor)) {
+			if (cursor.isEmpty()) {
+				serverPlayer.containerMenu.setCarried(ItemStack.EMPTY);
+			}
+			serverPlayer.containerMenu.broadcastChanges();
 		}
 	}
 

@@ -193,15 +193,17 @@ public class PbRecipeProcessor {
 
 	/** 检查配方版本号是否变更，变更则清空所有缓存（每 gameTick 仅查询一次 RECIPE_VERSION，避免 256x 下高频 volatile 读） */
 	private void checkRecipeVersion() {
+		// 先读取版本号再做 gameTick 短路。热重载可能在同一个 gameTick 内完成，
+		// 若先按 tick 返回，会让旧的 SMELTING/PB/能量缓存多保留一 tick。
+		long currentVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		Level level = context.level();
 		if (level != null) {
 			long currentGameTime = level.getGameTime();
-			if (currentGameTime == lastCheckedGameTick) {
+			if (currentGameTime == lastCheckedGameTick && lastRecipeVersion == currentVersion) {
 				return; // 本 gameTick 已检查过
 			}
 			lastCheckedGameTick = currentGameTime;
 		}
-		long currentVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		if (lastRecipeVersion != currentVersion) {
 			clearSmeltingCacheAll();
 			recipeFinder.clearCaches();

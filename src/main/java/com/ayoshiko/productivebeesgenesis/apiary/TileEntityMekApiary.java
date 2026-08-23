@@ -620,14 +620,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		return super.isConfigurationDataCompatible(blockType) || blockType instanceof MekApiaryBlock;
 	}
 
-	/** 写入配置卡数据 — 追加PB升级数量和AE2 per-tile状态到 MEK 配置卡 */
+	/** 写入配置卡数据 — 追加PB升级、AE2状态和产物路由开关到 MEK 配置卡 */
 	@Override
 	public void writeSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
 		super.writeSustainedData(provider, data);
 		ApiaryTilePersistence.writeSustainedData(this, provider, data);
 	}
 
-	/** 从配置卡读取 — 恢复AE2 per-tile状态（PB升级粘贴在 setConfigurationData 中处理） */
+	/** 从配置卡读取 — 恢复AE2状态和产物路由开关（PB升级粘贴在 setConfigurationData 中处理） */
 	@Override
 	public void readSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {
 		super.readSustainedData(provider, data);

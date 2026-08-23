@@ -12,6 +12,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,8 +36,9 @@ final class PbRecipeOutputChecker {
 	/**
 	 * 检查PB配方输出与现有输出槽内容是否兼容
 	 * <br/>
-	 * 遍历PB配方的可能输出，检查主输出槽和副输出槽1中的现有物品是否可堆叠。
-	 * 只要有一个输出不兼容就返回false（排序不应将物品分配到输出不兼容的进程）。
+	 * 把每个可能产出的模板与物理输出槽做一对一可行匹配。PB 输出写入器会把输出路由到
+	 * 任意可用槽位，而不是按配方 Map 的迭代顺序固定槽位，因此不能把第一个/第二个 Map
+	 * 条目硬绑定到主槽/副槽，也不能让多个模板错误共享同一个已占用槽。
 	 *
 	 * @param recipe				PB离心配方
 	 * @param outputSlot			主输出槽
@@ -45,31 +48,63 @@ final class PbRecipeOutputChecker {
 	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
 			@NotNull IInventorySlot outputSlot,
 			@Nullable IInventorySlot secondaryOutputSlot) {
+		return isPbOutputCompatible(recipe, outputSlot, secondaryOutputSlot, null);
+	}
+
+	/** 检查主、副1、副2三个物品输出槽是否都能接收此 PB 配方。 */
+	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
+			@NotNull IInventorySlot outputSlot,
+			@Nullable IInventorySlot secondaryOutputSlot,
+			@Nullable IInventorySlot tertiaryOutputSlot) {
 		Map<ItemStack, ChancedOutput> outputs = recipe.getRecipeOutputs();
 		if (outputs.isEmpty()) {
 			return true;
 		}
-		// 检查主输出槽
-		ItemStack existingOutput = outputSlot.getStack();
-		if (!existingOutput.isEmpty()) {
-			ItemStack recipeOutput = outputs.entrySet().iterator().next().getKey();
-			if (!InventoryUtils.areItemsStackable(recipeOutput, existingOutput)) {
-				return false;
-			}
+		List<IInventorySlot> slots = new ArrayList<>(3);
+		slots.add(outputSlot);
+		if (secondaryOutputSlot != null) slots.add(secondaryOutputSlot);
+		if (tertiaryOutputSlot != null) slots.add(tertiaryOutputSlot);
+
+		// TagOutputRecipe outputs are independent candidates. Reserve one physical slot
+		// per candidate while checking the gate, otherwise two occupied slots containing
+		// the same item can both match output A and incorrectly leave output B unplaceable.
+		List<ItemStack> templates = new ArrayList<>(outputs.size());
+		for (Map.Entry<ItemStack, ChancedOutput> entry : outputs.entrySet()) {
+			ChancedOutput chanced = entry.getValue();
+			if (chanced == null || chanced.chance() <= 0.0f || Math.max(0, chanced.max()) <= 0) continue;
+			templates.add(entry.getKey());
 		}
-		// 检查副输出槽1
-		if (secondaryOutputSlot != null) {
-			ItemStack existingSecondary = secondaryOutputSlot.getStack();
-			if (!existingSecondary.isEmpty() && outputs.size() > 1) {
-				var iter = outputs.entrySet().iterator();
-				iter.next(); // 跳过主输出
-				ItemStack recipeSecondary = iter.next().getKey();
-				if (!InventoryUtils.areItemsStackable(recipeSecondary, existingSecondary)) {
-					return false;
+		if (templates.isEmpty()) return true;
+
+		// Use augmenting paths instead of greedy claiming: an early template may fit an
+		// empty slot while a later template only fits the occupied slot, and both are
+		// placeable after reassigning the first template to the occupied slot.
+		int[] matchedTemplateBySlot = new int[slots.size()];
+		java.util.Arrays.fill(matchedTemplateBySlot, -1);
+		for (int templateIndex = 0; templateIndex < templates.size(); templateIndex++) {
+			if (!tryMatchTemplate(templateIndex, templates, slots, matchedTemplateBySlot,
+					new boolean[slots.size()])) return false;
+		}
+		return true;
+	}
+
+	private static boolean tryMatchTemplate(int templateIndex, List<ItemStack> templates,
+			List<IInventorySlot> slots, int[] matchedTemplateBySlot, boolean[] visited) {
+		ItemStack template = templates.get(templateIndex);
+		for (int i = 0; i < slots.size(); i++) {
+			if (visited[i]) continue;
+			visited[i] = true;
+			IInventorySlot slot = slots.get(i);
+			ItemStack existing = slot.getStack();
+			if (existing.isEmpty() || InventoryUtils.areItemsStackable(template, existing)) {
+				int previous = matchedTemplateBySlot[i];
+				if (previous < 0 || tryMatchTemplate(previous, templates, slots, matchedTemplateBySlot, visited)) {
+					matchedTemplateBySlot[i] = templateIndex;
+					return true;
 				}
 			}
 		}
-		return true;
+		return false;
 	}
 
 	/**

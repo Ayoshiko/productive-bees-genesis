@@ -86,9 +86,14 @@ final class Ae2FilterPayloadHandlers {
 						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
 		if (filter == null) return;
-		int changed = payload.reserve()
-				? filter.setAllDirectReserveAmounts(payload.amount())
-				: filter.setAllDirectAmounts(payload.amount());
+		int changed;
+		if (payload.reserve()) {
+			long previous = filter.getGlobalReserveAmount();
+			filter.setGlobalReserveAmount(payload.amount());
+			changed = previous == filter.getGlobalReserveAmount() ? 0 : 1;
+		} else {
+			changed = filter.setAllDirectAmounts(payload.amount());
+		}
 		if (changed > 0 && be instanceof TileEntityMekanism mek) {
 			mek.markForSave();
 		}
@@ -136,7 +141,7 @@ final class Ae2FilterPayloadHandlers {
 		syncFilterToClient(be, serverPlayer);
 	}
 
-	/** Toggles network-stock mode for all exact entries without changing unlimited-pull flags. */
+	/** Toggles the filter-level global stock mode without changing unlimited-pull flags. */
 	static void handleToggleAllAeInputFilterNetworkStock(
 			ToggleAllAeInputFilterNetworkStockPayload payload, IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
@@ -149,15 +154,9 @@ final class Ae2FilterPayloadHandlers {
 				|| serverPlayer.distanceToSqr(payload.pos().getCenter())
 						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
-		if (filter == null || !filter.hasDirectEntries()) return;
-		boolean allEnabled = true;
-		for (int i = 0; i < filter.getCapacity(); i++) {
-			if (filter.isDirectEntry(i) && !filter.isDirectNetworkStockAt(i)) {
-				allEnabled = false;
-				break;
-			}
-		}
-		if (filter.setAllDirectNetworkStock(!allEnabled) > 0 && be instanceof TileEntityMekanism mek) {
+		if (filter == null) return;
+		filter.toggleGlobalNetworkStock();
+		if (be instanceof TileEntityMekanism mek) {
 			mek.markForSave();
 		}
 		syncFilterToClient(be, serverPlayer);
@@ -396,7 +395,7 @@ final class Ae2FilterPayloadHandlers {
 		if (payload.filterMode() < 0 || payload.filterMode() >= modes.length) return;
 		filter.replaceClientSnapshot(modes[payload.filterMode()], payload.preciseMode(),
 				indices, entries, amounts, reserveAmounts, visibleAmounts, unlimited, networkStock,
-				payload.unlimitedAllFallback());
+				payload.unlimitedAllFallback(), payload.globalNetworkStock(), payload.globalReserveAmount());
 	}
 
 	/**
@@ -479,7 +478,7 @@ final class Ae2FilterPayloadHandlers {
 				visibleAmounts,
 				unlimited,
 				networkStock,
-				filter.isUnlimitedAllFallback());
+				filter.isUnlimitedAllFallback(), filter.isGlobalNetworkStock(), filter.getGlobalReserveAmount());
 	}
 
 	static void syncFilterToClient(BlockEntity be, ServerPlayer player) {

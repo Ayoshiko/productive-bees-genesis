@@ -31,6 +31,72 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-08-23
+
+### 新增
+
+- **全局 AE2 库存**：整台机器共用一个库存开关和默认保留量，会随世界存档、配置卡和机器拆装保存。未单独标记的蜜脾也会遵守这套保留；界面库存按钮改为更短的状态文字，左键设置默认保留量，右键切换全局库存。
+- **大数字显示**：网络库存、输入槽、输出槽和物品槽数量统一支持 `K/M/G/T/P/E`；数量标签使用统一字号并压缩格式，`3.6T`、`9.2E` 等数值不会溢出或遮挡相邻槽位。
+- **机械蜂箱基因工作规则**：蜂箱默认根据每只蜜蜂的昼夜行为和天气耐受基因决定是否工作，停工原因会直接显示在蜜蜂 tooltip。平衡性设置可单独配置；`BASIC` 与原版一致，`PARADOX_INFINITY` 保留旧版忽略工作基因的行为。
+- **蜂箱内基因小食喂食**：在机械蜂箱 GUI 中，用光标拿着含基因的蜜蜂小食右键对应蜜蜂，可直接复用 Productive Bees 实体喂食效果。
+
+### 变更
+
+- **AE2 过滤匹配路径**：精确 AE key 命中时提前返回，避免重复解析蜜蜂类型和组件信息，过滤语义保持不变。
+- **第三输出槽**：工厂离心机的第三个物品输出槽会参与配方兼容判断和产物写入，多产物配方更不容易被前两个槽卡住。
+- **万象蜂蜜与 AE2 直连输出**：本地储罐已满时，若已开启 AE2 产物直连，蜂蜜会继续送进网络，不再因此整机停摆。
+- **生产力基因产量**：机械蜂箱现在与 Productive Bees 原版蜂箱一样，在每个成功产物栈上应用生产力基因公式；混养不同生产力等级时按四档分别聚合，保留原版逐栈取整语义。
+
+### 修复
+
+- **万象创世蜜脾被弹出**：万象创世蜜脾和蜜脾块没有静态离心配方，AE2、管道和 SFM 会把它们当成无效输入弹出。现在会正确识别为可处理输入，可以正常拉入并离心。
+- **万象蜂蜜丢失**：离心万象蜜脾时，本地储罐装不下蜂蜜曾可能跳过流体仍消耗输入。现在蜂蜜与物品一起提交；装不下且未开启 AE 直连时会暂停等待，不再丢掉蜂蜜。
+- **万象批量产物串味**：同一批次里后出现的蜜蜂类型不再套用前一种的输出模板，第三输出槽也能正确写入；只完成部分操作时，只扣除已提交次数对应的能量。
+- **极值格式化**：`Long.MIN_VALUE` 等边界值不再因取绝对值溢出而显示错误的完整长数字；库存界面的无限保留量继续显示为 `∞`。
+- **慢存储回送误判**：产物暂时塞不回 AE2 网络时，不再把整轮拉取当成成功而清掉保护；健康网络仍会较快恢复全速。
+- **配方重载**：资源包或数据包更新离心配方后，机器会及时改用新配方，不再卡在旧结果上。
+- **配置卡复制特殊直连开关**：离心机侧面“新产物优先直入 AE2”设置即使处于关闭状态，也会被配置卡显式记录并粘贴。
+
+### 性能
+
+- **高等级蜂箱蜜蜂渲染批处理**：同一 GUI 内的多只蜜蜂共用一次实体缓冲提交和深度测试阶段，减少高等级工厂存放多只蜜蜂时的客户端渲染状态切换开销；蜜蜂模型、状态灯和名称显示保持不变。
+- **AE2 交互保持批处理与缓存**：继续使用同 tick 库存快照、候选键降频刷新、同一 AEItemKey 单次提取后本地分发和慢网络退避；MCP 复核显示本模组 AE2 拉取约占 Spark 总采样的 0.21%~0.44%，未引入全网逐项扫描。
+- **开发环境基线复核**：纯净 AE2 网络、多台本模组机器的报告中，主要成本仍来自高阶工厂处理、AE2 网格启动、区块访问和 JVM 等待，本轮仅加入低风险局部优化。
+- **高倍加速基因与产量路径**：JDT 256 倍的同刻重复 ticker 只执行一次完整蜂箱管线，JDTE 1024 倍通过虚拟 tick 银行每真实 tick 合并一次；工作基因只在蜜蜂 NBT 变化时解析，产量按蜂种和四档生产力固定分组批量采样，不按虚拟 tick 数逐次循环。
+
+### English
+
+#### Added
+
+- **Global AE2 stock**: a machine-wide stock switch and default reserve persist through world saves, configuration cards, and machine pickup. Unmarked combs now follow that reserve. The stock button uses a shorter state label; left-click sets the default reserve and right-click toggles global stock.
+- **Large-number display**: network stock, input slots, output slots, and item-slot counts share `K/M/G/T/P/E` notation. Count labels use one consistent font size with slot-friendly compact formatting, keeping values such as `3.6T` and `9.2E` inside their slots.
+- **Gene-aware apiary work rules**: mechanical apiaries now obey each bee's day-cycle behavior and weather-tolerance genes by default, and bee tooltips show the reason when work is blocked. The balance setting is configurable: `BASIC` matches Productive Bees behavior while `PARADOX_INFINITY` preserves the legacy gene-ignoring mode.
+- **In-apiary gene-treat feeding**: right-clicking a stored bee with a gene-bearing honey treat on the GUI cursor now applies the same Productive Bees interaction as feeding the spawned entity.
+
+#### Changed
+
+- **AE2 filter matching**: exact AE key matches return early, avoiding repeated bee-type and component parsing without changing filter semantics.
+- **Third output slot**: factory centrifuges now include the third item output slot in recipe compatibility and product writes, so multi-output recipes are less likely to stall on the first two slots.
+- **Myriad honey with AE2 direct output**: if AE2 product push is enabled, honey continues into the network when the local tank is full instead of pausing the whole machine.
+- **Productivity-gene output**: mechanical apiaries now apply the Productive Bees productivity formula to every successful output stack. Mixed gene levels are aggregated in four separate buckets so the original per-stack rounding remains intact.
+
+#### Fixed
+
+- **Myriad Creations combs being ejected**: Myriad Creations combs and comb blocks have no static centrifuge recipe, so AE2, pipes, and SFM treated them as invalid input and ejected them. They are now recognized as valid processable input and can be pulled and centrifuged normally.
+- **Lost Myriad honey**: centrifuging Myriad combs could skip honey while still consuming the input when the local tank was full. Honey is now committed with the items; if it cannot fit and AE direct output is off, the machine pauses instead of discarding honey.
+- **Mixed Myriad batch outputs**: later bee types in the same batch no longer reuse the previous type's output template, and the third output slot is written correctly. Partial completions only charge energy for the operations that actually committed.
+- **Extreme-value formatting**: boundary values such as `Long.MIN_VALUE` no longer overflow while taking an absolute value; unlimited reserves remain displayed as `∞` in the stock UI.
+- **Slow-storage leftover handling**: leftover products that cannot yet return to AE2 no longer clear pull protection as a success; healthy networks still recover to full rate quickly.
+- **Recipe reloads**: centrifuge recipe datapack or resource-pack updates now take effect on running machines instead of sticking to stale results.
+- **Configuration-card direct-output state**: the centrifuge side setting for sending newly produced items directly to AE2 is now explicitly copied even when it is disabled.
+
+#### Performance
+
+- **Batched bee previews**: Multiple bees in one GUI now share a single entity-buffer submission and depth-test phase, reducing client render-state overhead in high-tier factories with many stored bees while preserving bee models, status lights, and names.
+- **Cached and batched AE2 interaction**: same-tick stock snapshots, bounded candidate refreshes, one extraction per AEItemKey with local distribution, and slow-network backoff remain in place. MCP samples put AE2 input pulling at about 0.21%~0.44% of total Spark sample time, with no full-network per-entry scan added.
+- **Development baseline review**: in the clean AE2-network, multi-machine reports, the dominant costs remain high-tier factory processing, AE2 grid startup, chunk access, and JVM waiting; this update therefore stays limited to targeted low-risk hot-path work.
+- **Gene and output handling under acceleration**: JDT 256x repeated ticker calls execute the full apiary pipeline only once per game tick, while JDTE 1024x credits a bounded virtual-tick bank and flushes one coalesced batch. Work genes are parsed only when bee NBT changes, and output is sampled by bee type and four fixed productivity buckets instead of looping over virtual ticks.
+
 ## [1.0.4] - 2026-08-22
 
 ### 新增
@@ -65,10 +131,6 @@
 
 - **持久化与配置卡**：库存模式、无限模式、单次数量、保留量和网络库存显示状态继续兼容挖掘、扳手拆卸、工厂升级器和配置卡复制。
 
-### 测试
-
-- 通过 `gradlew test`、`gradlew build` 和 `git diff --check` 验证。
-
 ### English
 
 #### Added
@@ -98,10 +160,6 @@
 #### Compatibility
 
 - **Persistence**: stock mode, unlimited mode, per-pull amount, reserve, and visible network stock remain preserved through mining, wrench dismantling, factory installers, and configuration-card copies.
-
-#### Tests
-
-- Verified with `gradlew test`, `gradlew build`, and `git diff --check`.
 
 ## [1.0.3] - 2026-08-21
 

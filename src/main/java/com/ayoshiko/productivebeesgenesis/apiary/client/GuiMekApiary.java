@@ -6,7 +6,9 @@ import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.client.screen.EnergyUsageDisplaySmoother;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
+import com.ayoshiko.productivebeesgenesis.network.ApiaryFeedBeePayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiarySelectBeePayload;
+import cy.jdkdigital.productivebees.common.item.HoneyTreat;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.client.gui.GuiConfigurableTile;
@@ -321,6 +323,29 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		}
 
 		BeeSlot[] beeSlots = tile.getBeeSlots();
+		// 先提交整批实体渲染，再绘制状态灯和名称，避免每只蜜蜂都 endBatch() 并切换深度测试。
+		boolean batchStarted = false;
+		try {
+			for (int i = 0; i < beeSlots.length; i++) {
+				BeeSlot beeSlot = beeSlots[i];
+				if (beeSlot.isEmpty()) continue;
+
+				int col = i % beeCols;
+				int row = i / beeCols;
+				int slotX = beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
+				int slotY = beeY + row * beeRowH;
+				if (!batchStarted) {
+					beeEntityRenderer.beginBatch();
+					batchStarted = true;
+				}
+				beeEntityRenderer.renderBee(guiGraphics, slotX, slotY, beeSlot, partialTick);
+			}
+		} finally {
+			if (batchStarted) {
+				beeEntityRenderer.endBatch();
+			}
+		}
+
 		for (int i = 0; i < beeSlots.length; i++) {
 			int col = i % beeCols;
 			int row = i / beeCols;
@@ -332,7 +357,6 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 			BeeSlot beeSlot = beeSlots[i];
 			if (beeSlot.isEmpty()) continue;
 
-			beeEntityRenderer.renderBee(guiGraphics, slotX, slotY, beeSlot, partialTick);
 			beeEntityRenderer.renderStatusLight(guiGraphics, slotX, slotY, beeSlot.getState());
 			// 紧凑模式（5行蜂箱）不渲染名称，节省垂直空间适配scale=4@1080p
 			if (!compactMode) {
@@ -359,7 +383,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		// 点击落在已打开窗口内时，交由窗口处理，避免拖动窗口误选蜜蜂
-		if (button == 0 && isClickOnOpenWindow(mouseX, mouseY)) {
+		if (isClickOnOpenWindow(mouseX, mouseY)) {
 			return super.mouseClicked(mouseX, mouseY, button);
 		}
 		int clickedSlot = getClickedBeeSlot(mouseX, mouseY);
@@ -370,13 +394,33 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 				PacketDistributor.sendToServer(new ApiarySelectBeePayload(tile.getBlockPos(), newSelection));
 				return true;
 			} else if (button == 1) {
-				// 右键：桶式蜂笼操作
+				if (handleHoneyTreatFeeding(clickedSlot)) {
+					return true;
+				}
+				// 未手持基因小食时，继续处理桶式蜂笼操作
 				if (handleCageOperation(clickedSlot)) {
 					return true;
 				}
 			}
 		}
 		return super.mouseClicked(mouseX, mouseY, button);
+	}
+
+	/**
+	 * 检查光标上的基因小食，并请求服务端喂食指定槽位内的蜜蜂。
+	 *
+	 * @param slotIndex 目标蜜蜂槽位索引
+	 * @return 满足喂食条件并已发送请求时返回 {@code true}
+	 */
+	private boolean handleHoneyTreatFeeding(int slotIndex) {
+		if (slotIndex < 0 || slotIndex >= tile.getBeeSlotCount()) return false;
+		BeeSlot beeSlot = tile.getBeeSlots()[slotIndex];
+		ItemStack cursor = getMenu().getCarried();
+		if (beeSlot.isEmpty() || !(cursor.getItem() instanceof HoneyTreat) || !HoneyTreat.hasGene(cursor)) {
+			return false;
+		}
+		PacketDistributor.sendToServer(new ApiaryFeedBeePayload(tile.getBlockPos(), slotIndex));
+		return true;
 	}
 
 	/**

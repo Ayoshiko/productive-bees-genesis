@@ -99,6 +99,7 @@ class BalanceConfigCompatibilityTest {
 		assertFalse(BalanceConfig.LEGACY_PRODUCTIVITY_EXCLUSIVE);
 		assertFalse(BalanceConfig.LEGACY_SPEED_EXCLUSIVE);
 		assertTrue(BalanceConfig.LEGACY_CENTRIFUGE_OUTPUT);
+		assertFalse(BalanceConfig.LEGACY_APIARY_BEE_GENES_AFFECT_WORK);
 		assertEquals(2, BalanceConfigCompatibility.legacyLimit(legacy,
 				"mek_apiary.pb_upgrade.productivityMaxCount", 8, 1, 64));
 		assertEquals(8, BalanceConfigCompatibility.legacyLimit(legacy,

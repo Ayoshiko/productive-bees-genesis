@@ -19,6 +19,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 /**
 	 * 万象创世产物批量插入规划器：将按 bee_type 分配的数量转换为槽位索引执行计划，
@@ -194,9 +195,10 @@ public final class MyriadBatchPlanner {
 	/** Snapshot 缓存条目：按 tick + slots identity 复用 */
 	private static final class SnapshotCache {
 		private long tick = -1L;
-		// 直接持有 slots 实例引用（== 比较）：identityHashCode 可能碰撞（对象被 GC 后地址复用），
-		// 同一 gameTick 内不同 List 若 hash 相同会静默复用错误的容量快照
-		private List<IInventorySlot> slots;
+		// The handler reuses one mutable list across processes, so list identity alone
+		// is insufficient. Retain the element identities captured with the snapshot.
+		private IInventorySlot[] slotIdentities;
+		private Item baseItem;
 		@Nullable
 		private SlotCapacitySnapshot snapshot;
 	}
@@ -232,7 +234,7 @@ public final class MyriadBatchPlanner {
 	}
 
 	/**
-	 * 拍摄输出槽容量快照（带跨 tick 缓存）。同 tick+同一 slots 直接返回缓存；snapshot 只读可跨工厂复用。
+	 * 拍摄输出槽容量快照（带跨 tick 缓存）。同 tick+同一槽位元素身份直接返回缓存；snapshot 只读可跨工厂复用。
 	 * <br/>
 	 * 空槽容量用 {@link IInventorySlot#getLimit(ItemStack)}，异常/非正回退到 {@link Item#getMaxStackSize(ItemStack)}；
 	 * 非空槽用 {@code slot.getLimit(stack) - stack.getCount()}。
@@ -240,14 +242,25 @@ public final class MyriadBatchPlanner {
 	@NotNull
 	public static SlotCapacitySnapshot takeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
 		SnapshotCache cache = snapshotCache.get();
-		if (cache.snapshot != null && cache.tick == tick && cache.slots == slots) {
+		if (cache.snapshot != null && cache.tick == tick && cache.baseItem == baseItem
+				&& sameSlotIdentities(cache.slotIdentities, slots)) {
 			return cache.snapshot;
 		}
 		SlotCapacitySnapshot snapshot = doTakeSnapshot(slots, baseItem, tick);
 		cache.tick = tick;
-		cache.slots = slots;
+		cache.slotIdentities = slots.toArray(new IInventorySlot[0]);
+		cache.baseItem = baseItem;
 		cache.snapshot = snapshot;
 		return snapshot;
+	}
+
+	private static boolean sameSlotIdentities(@Nullable IInventorySlot[] cached,
+			List<IInventorySlot> current) {
+		if (cached == null || cached.length != current.size()) return false;
+		for (int i = 0; i < cached.length; i++) {
+			if (cached[i] != current.get(i)) return false;
+		}
+		return true;
 	}
 
 	/** 实际拍摄快照（无缓存） */
@@ -326,6 +339,12 @@ public final class MyriadBatchPlanner {
 		int[] addAmounts = new int[slotCount];
 		boolean[] wasEmpty = new boolean[slotCount];
 		ItemStack[] templates = new ItemStack[slotCount];
+		// The snapshot is immutable and is intentionally reusable across plans. Keep a
+		// mutable planning view so a slot claimed by one bee type cannot be reused by a
+		// later type in the same allocation (which would otherwise mix templates).
+		boolean[] availableAsEmpty = snapshot.empty.clone();
+		ResourceLocation[] workingBeeTypes = snapshot.slotBeeTypes.clone();
+		int[] workingCounts = snapshot.slotCounts.clone();
 
 		for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
 			ResourceLocation beeType = entry.getKey();
@@ -336,32 +355,36 @@ public final class MyriadBatchPlanner {
 
 			// 第一优先级：已有同类型槽位（grow 路径，不需要 template）
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
-				if (snapshot.empty[i] || snapshot.slotBeeTypes[i] == null
-						|| !snapshot.slotBeeTypes[i].equals(beeType)) {
+				if (availableAsEmpty[i] || workingBeeTypes[i] == null
+						|| !workingBeeTypes[i].equals(beeType)) {
 					continue;
 				}
-				int space = snapshot.slotLimits[i] - snapshot.slotCounts[i];
+				int space = snapshot.slotLimits[i] - workingCounts[i];
 				if (space <= 0) {
 					continue;
 				}
 				int add = Math.min(space, remaining);
 				addAmounts[i] += add;
 				wasEmpty[i] = false;
+				workingCounts[i] += add;
 				remaining -= add;
 			}
 
 			// 第二优先级：空槽
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
-				if (!snapshot.empty[i]) {
+				if (!availableAsEmpty[i]) {
 					continue;
 				}
-				int space = snapshot.slotLimits[i];
+				int space = snapshot.slotLimits[i] - workingCounts[i];
 				if (space <= 0) {
 					continue;
 				}
 				int add = Math.min(space, remaining);
 				addAmounts[i] += add;
 				wasEmpty[i] = true;
+				availableAsEmpty[i] = false;
+				workingBeeTypes[i] = beeType;
+				workingCounts[i] = add;
 				remaining -= add;
 				if (templates[i] == null) {
 					templates[i] = createTemplate(baseItem, beeType);
@@ -446,6 +469,17 @@ public final class MyriadBatchPlanner {
 	/** Executes a plan and declares each manager-owned slot listener callback. */
 	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots,
 			@NotNull Runnable beforeSlotMutation) {
+		apply(plan, slots, beforeSlotMutation, (slotIndex, slot) -> {});
+	}
+
+	/**
+	 * Executes a plan and reports each successful slot mutation after the inventory
+	 * listener has been notified. The slot index is the index in {@code slots}; the
+	 * caller can map it to a physical machine slot when the list omits null slots.
+	 */
+	public static void apply(@NotNull Plan plan, @NotNull List<IInventorySlot> slots,
+			@NotNull Runnable beforeSlotMutation,
+			@NotNull BiConsumer<Integer, IInventorySlot> afterSlotMutation) {
 		if (!plan.isSuccess()) {
 			return;
 		}
@@ -463,10 +497,12 @@ public final class MyriadBatchPlanner {
 					ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
 					beforeSlotMutation.run();
 					slot.setStack(toSet);
+					afterSlotMutation.accept(slotPlan.slotIndex(), slot);
 				} else {
 					// Task 4 修复：growStack 触发 listener，替代直接修改 getStack 返回值
 					beforeSlotMutation.run();
 					slot.growStack(slotPlan.amount(), Action.EXECUTE);
+					afterSlotMutation.accept(slotPlan.slotIndex(), slot);
 				}
 			}
 		} finally {

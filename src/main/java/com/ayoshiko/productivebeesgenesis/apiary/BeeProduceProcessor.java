@@ -20,6 +20,7 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,9 +62,6 @@ public class BeeProduceProcessor {
 	 */
 	private static final int MYRIAD_RANDOM_CAP = 576;
 
-
-	/**
-
 	/** 升级处理器引用 — 用于应用生产力倍率 */
 	private final ApiaryUpgradeHandler upgradeHandler;
 	private final TileEntityMekApiary apiary;
@@ -80,6 +78,8 @@ public class BeeProduceProcessor {
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
 	private final BeeProduceOutputDispatcher outputDispatcher = new BeeProduceOutputDispatcher();
 	private final ArrayList<ItemStack> reusableProducedItems = new ArrayList<>();
+	/** 每次 flush 复用的四档生产力基因计数，避免按蜜蜂类型分组时反复分配数组。 */
+	private final long[] reusableProductivityCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
 
 
 	/**
@@ -142,13 +142,11 @@ public class BeeProduceProcessor {
 		List<ItemStack> allItems = reusableProducedItems;
 		reusableProducedItems.clear();
 		long totalFluidAmount = 0L;
-		// Bug 10: 累积万象创世蜜蜂的产出次数，用于追加随机蜜脾/蜜脾块
-		long myriadCount = 0L;
 		long aggregatedCount = 0L;  // 累积同组产出次数，循环外统一调用 BeeProduceBatchSampler（聚合取整修复）
 		// 累积总产出次数 — 基因采样器按每次产出独立判定概率（与 PB 原版语义一致）
 		long totalProduceCount = 0L;
-		// F5: 累加 productivity 基因纯度（按产出次数加权），用于加权平均后应用 PB 原版第五层公式
-		double weightedPuritySum = 0.0D;
+		long[] productivityCounts = reusableProductivityCounts;
+		Arrays.fill(productivityCounts, 0L);
 		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
 
 		// 循环外预算生产力倍率 — 升级安装数量不随蜜蜂槽变化，
@@ -179,41 +177,48 @@ public class BeeProduceProcessor {
 				totalFluidAmount = SaturatingMath.saturatingAdd(totalFluidAmount, fluidAmount);
 			}
 			totalProduceCount = SaturatingMath.saturatingAdd(totalProduceCount, count);
-			// F5: 累加当前蜜蜂的 productivity 纯度（按产出次数加权，后续除以 aggregatedCount 得加权平均）
-			weightedPuritySum += slot.getProductivityPurity() * count;
-			// 万象创世蜜蜂累积产出次数（按 count 线性缩放随机产物）
-			if (isMyriad) {
-				myriadCount = SaturatingMath.saturatingAdd(myriadCount, count);
-			}
+			int productivityLevel = slot.getProductivityLevel();
+			productivityCounts[productivityLevel] = SaturatingMath.saturatingAdd(
+					productivityCounts[productivityLevel], count);
 			// Bug 3: 处理完立即清零，防止其他组重复处理同一槽位导致产出翻倍
 			pendingCounts[idx] = 0;
 		}
 
-		// 模块 2+3：概率产出统一 — 循环外调用 BeeProduceBatchSampler 替代 buildAdjustedItems
-		// F5: 计算同组蜜蜂的加权平均 productivity 纯度，应用 PB 原版第五层公式
-		// finalMultiplier = upgradeMultiplier × (1 + 0.2 × purity)，纯度 1.0 时额外 +20% 产出
+		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
 		if (aggregatedCount > 0) {
-			int sampledProductionCount = SaturatingMath.saturatingToInt(aggregatedCount);
-			float avgPurity = (float) (weightedPuritySum / aggregatedCount);
-			float beeBonus = 1.0f + 0.2f * avgPurity;
-			float finalMultiplier = productivityMultiplier * beeBonus;
-			// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
-			if (MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey)) {
-				ItemStack feederProduce = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
-						beeTypeKey, feederManager, level);
-				BeeProduceBatchSampler.sampleGuaranteedInto(
-						allItems, feederProduce, sampledProductionCount, finalMultiplier);
-			} else {
-				BeeProduceBatchSampler.sampleInto(allItems,
-						produceList, sampledProductionCount, finalMultiplier, 0.0f);
-			}
-			if (PBConstants.WANNA_TYPE.equals(beeTypeKey) && level instanceof ServerLevel serverLevel) {
-				allItems.addAll(WannaBeeAmberAdapter.sampleBatch(
-						serverLevel, origin, feederManager, sampledProductionCount, finalMultiplier));
+			boolean multiFlowerBee = MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey);
+			for (int productivityLevel = BeeProductivityGene.NORMAL;
+					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
+				int sampledProductionCount = SaturatingMath.saturatingToInt(
+						productivityCounts[productivityLevel]);
+				if (sampledProductionCount <= 0) continue;
+				// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
+				if (multiFlowerBee) {
+					ItemStack feederProduce = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
+							beeTypeKey, feederManager, level);
+					BeeProduceBatchSampler.sampleGuaranteedInto(allItems, feederProduce,
+							sampledProductionCount, productivityMultiplier, productivityLevel);
+				} else {
+					BeeProduceBatchSampler.sampleInto(allItems, produceList,
+							sampledProductionCount, productivityMultiplier, 0.0f, productivityLevel);
+				}
+				if (PBConstants.WANNA_TYPE.equals(beeTypeKey)
+						&& level instanceof ServerLevel serverLevel) {
+					allItems.addAll(WannaBeeAmberAdapter.sampleBatch(serverLevel, origin, feederManager,
+							sampledProductionCount, productivityMultiplier, productivityLevel));
+				}
 			}
 		}
-		// Task 1: 万象创世随机蜜脾应用 PB 生产力倍率
-		double scaledMyriadCount = myriadCount * (double) productivityMultiplier;
+		// 万象创世追加产物也按每只蜜蜂的生产力等级计算，避免与主产物倍率脱节。
+		double scaledMyriadCount = 0.0D;
+		if (isMyriad) {
+			for (int productivityLevel = BeeProductivityGene.NORMAL;
+					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
+				scaledMyriadCount += productivityCounts[productivityLevel]
+						* (double) productivityMultiplier
+						* BeeProductivityGene.adjustStackCount(1, productivityLevel);
+			}
+		}
 		int effectiveMyriadCount = scaledMyriadCount >= Integer.MAX_VALUE
 				? Integer.MAX_VALUE : Math.max(0, (int) scaledMyriadCount);
 

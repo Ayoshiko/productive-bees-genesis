@@ -212,7 +212,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		boolean updateCache
 	) {
 		return CentrifugeFactoryCommonLogic.inputProducesOutput(level,
-			fallbackInput, outputSlot, secondaryOutputSlot, inputProducesOutputCache, pbProcessor,
+			fallbackInput, outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), inputProducesOutputCache, pbProcessor,
 			() -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache));
 	}
 

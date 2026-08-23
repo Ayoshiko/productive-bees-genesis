@@ -56,6 +56,9 @@ final class Ae2FilterEntrySupport {
 		if (configured == null) {
 			return Ae2ItemFingerprint.matchesLegacy(candidate, fingerprint);
 		}
+		// Exact AE keys satisfy every direct-entry mode. Avoid resolving bee type,
+		// block form and component metadata again for the common exact-match path.
+		if (configured.equals(candidate)) return true;
 		ResourceLocation configuredBeeType = CombFuzzyMatcher.getBeeType(configured);
 		return matchesLogicalComb(configured, candidate, configuredBeeType, candidateBeeType,
 				ignoreNbt, precise, candidateBlock);

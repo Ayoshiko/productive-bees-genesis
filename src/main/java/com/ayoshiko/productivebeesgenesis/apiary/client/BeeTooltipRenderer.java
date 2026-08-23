@@ -29,7 +29,7 @@ import java.util.function.Function;
 	 * <br/>
 	 * 鼠标悬停在蜜蜂槽上时显示详细信息 tooltip。
 	 * <p>
-	 * 未按 Shift：显示蜜蜂名称 + "按住 Shift 查看更多信息"提示。
+	 * 未按 Shift：显示蜜蜂名称、停工原因（如有）和"按住 Shift 查看更多信息"提示。
 	 * 按住 Shift：显示完整属性（年龄/血量/生产力/耐力/脾气/行为/天气耐受性）
 	 * 及生产进度、当前状态、花蜜信息。
 	 * <p>
@@ -106,7 +106,7 @@ public class BeeTooltipRenderer {
 		ResourceLocation beeType = resolveBeeType(beeSlot);
 		if (beeType == null) return;
 
-		List<FormattedCharSequence> lines = new ArrayList<>(12);
+		List<FormattedCharSequence> lines = new ArrayList<>(13);
 
 		// 1. 蜜蜂名称（带状态颜色）
 		Component name = BeeInfoHelper.getBeeDisplayName(beeType);
@@ -119,7 +119,11 @@ public class BeeTooltipRenderer {
 			// Shift 按下：显示完整属性
 			addDetailLines(lines, beeSlot, beeData);
 		} else {
-			// 未按 Shift：显示提示
+			// 停工原因无需按 Shift 即可查看，避免玩家只能看到状态灯却不知道原因
+			if (beeSlot.getState() != BeeState.WORKING) {
+				addStateLine(lines, beeSlot);
+			}
+			// 未按 Shift：显示更多信息提示
 			lines.add(Component.translatable(KEY_HOLD_SHIFT)
 					.withStyle(ChatFormatting.WHITE).getVisualOrderText());
 		}
@@ -418,6 +422,9 @@ public class BeeTooltipRenderer {
 			case WAITING_FLOWER -> "gui.productivebeesgenesis.bee_state.waiting_flower";
 			case WAITING_ENERGY -> "gui.productivebeesgenesis.bee_state.waiting_energy";
 			case WAITING_OUTPUT -> "gui.productivebeesgenesis.bee_state.waiting_output";
+			case WAITING_DAY_CYCLE -> "gui.productivebeesgenesis.bee_state.waiting_day_cycle";
+			case WAITING_RAIN -> "gui.productivebeesgenesis.bee_state.waiting_rain";
+			case WAITING_THUNDER -> "gui.productivebeesgenesis.bee_state.waiting_thunder";
 		};
 		int color = ALPHA_OPAQUE | state.getColor();
 		return Component.translatable(key).withStyle(s -> s.withColor(color));

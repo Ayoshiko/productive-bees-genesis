@@ -11,8 +11,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Applies the AE2 honeycomb pull window's fixed-size count label to large
- * item stacks rendered by normal inventory slots.
+ * Applies the AE2 honeycomb pull window's fixed-size count label to item stacks
+ * rendered by normal inventory slots.
  *
  * <p>The vanilla decoration call is retained for durability bars, while its
  * count text is suppressed and replaced with the shared fixed-scale renderer.
@@ -22,9 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(GuiGraphics.class)
 public class GuiGraphicsMixin {
 
-	/** Large stack threshold; normal vanilla stacks keep their original display. */
+	/** Vanilla does not draw a count for a single-item stack. */
 	@Unique
-	private static final int productivebeesgenesis$FORMAT_THRESHOLD = 1000;
+	private static final int productivebeesgenesis$FORMAT_THRESHOLD = 2;
 
 	@Inject(method = "renderItemDecorations(Lnet/minecraft/client/gui/Font;"
 			+ "Lnet/minecraft/world/item/ItemStack;IILjava/lang/String;)V",

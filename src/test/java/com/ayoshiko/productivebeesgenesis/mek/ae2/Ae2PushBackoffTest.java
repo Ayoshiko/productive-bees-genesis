@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -73,5 +74,16 @@ class Ae2PushBackoffTest {
 		// 网络恢复：一次健康成功立即复位（慢 insert 修复不牺牲正常吞吐恢复速度）
 		backoff.recordSuccess();
 		assertFalse(backoff.shouldSkip(capFailure + 1L));
+	}
+
+	@Test
+	void healthyStorageOperationRestoresFullRateImmediately() {
+		Ae2PushBackoff backoff = new Ae2PushBackoff();
+		backoff.recordSlowOperation(10_000L, 100_000_000L);
+		assertTrue(backoff.shouldSkip(10_000L + 1L));
+
+		backoff.recordSlowOperation(20_000L, 400_000L);
+		assertFalse(backoff.shouldSkip(20_000L + 1L));
+		assertEquals(0, backoff.getBackoffExponent());
 	}
 }

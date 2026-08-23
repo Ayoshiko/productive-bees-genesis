@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
@@ -118,6 +119,9 @@ class BeeSlotTickProcessor {
 	 */
 	private final ResourceLocation[] cachedBeeTypeKeys;
 
+	/** 每只蜜蜂缓存的行为与天气耐受基因，仅在 beeData 引用变化后重新解析。 */
+	private final BeeWorkConditionEvaluator.WorkTraits[] cachedBeeWorkTraits;
+
 	/**
 	 * 主循环预算的蜜蜂类型键数组 — 供 flushPendingProductions 复用，避免重复调用 resolveBeeTypeKeyForSlot。
 	 * <br/>
@@ -163,6 +167,7 @@ class BeeSlotTickProcessor {
 		this.pendingProductions = new int[slotManager.getBeeSlotCount()];
 		this.lastCheckedBeeData = new CompoundTag[slotManager.getBeeSlotCount()];
 		this.cachedBeeTypeKeys = new ResourceLocation[slotManager.getBeeSlotCount()];
+		this.cachedBeeWorkTraits = new BeeWorkConditionEvaluator.WorkTraits[slotManager.getBeeSlotCount()];
 		this.beeTypeKeyBySlot = new ResourceLocation[slotManager.getBeeSlotCount()];
 		this.runnableBeeSlots = new boolean[slotManager.getBeeSlotCount()];
 		this.pendingProductionGroups = new PendingProductionGroup[slotManager.getBeeSlotCount()];
@@ -265,6 +270,11 @@ class BeeSlotTickProcessor {
 		// 同 tick 内同种蜜蜂 cache hit，避免重复调用 hasValidFlower。
 		// 使用 long 类型避免 long-running 服务器上 getGameTime() 溢出（int 上限约 3.4 年游戏时间）
 		long currentTick = (level != null) ? level.getGameTime() : 0L;
+		boolean checkBeeGenes = level != null && BalanceConfig.apiaryBeeGenesAffectWork();
+		boolean fixedTime = checkBeeGenes && level.dimensionType().hasFixedTime();
+		boolean night = checkBeeGenes && level.isNight();
+		boolean raining = checkBeeGenes && level.isRaining();
+		boolean thundering = checkBeeGenes && level.isThundering();
 		Arrays.fill(runnableBeeSlots, false);
 		int runnableBeeCount = 0;
 		int slotStart = beeSlots.length == 0 ? 0 : Math.floorMod(beeSlotRotationIndex, beeSlots.length);
@@ -272,6 +282,7 @@ class BeeSlotTickProcessor {
 			int i = (slotStart + slotOffset) % beeSlots.length;
 			BeeSlot slot = beeSlots[i];
 			if (slot.isEmpty()) {
+				clearBeeDataCache(i);
 				activationCounter.onBeeDeactivated(i);
 				continue;
 			}
@@ -282,6 +293,16 @@ class BeeSlotTickProcessor {
 				slot.setState(BeeState.WAITING_FLOWER);
 				activationCounter.onBeeDeactivated(i);
 				continue;
+			}
+			if (checkBeeGenes) {
+				BeeState blockingState = BeeWorkConditionEvaluator.blockingState(
+						resolveBeeWorkTraitsForSlot(slot, i),
+						fixedTime, night, raining, thundering);
+				if (blockingState != null) {
+					slot.setState(blockingState);
+					activationCounter.onBeeDeactivated(i);
+					continue;
+				}
 			}
 			if (!ApiaryFlowerValidation.check(slot, beeTypeKey, currentTick, feederManager)) {
 				slot.setState(BeeState.WAITING_FLOWER);
@@ -521,7 +542,30 @@ class BeeSlotTickProcessor {
 		ResourceLocation key = BeeNbtHelper.resolveBeeTypeKey(beeData);
 		lastCheckedBeeData[index] = beeData;
 		cachedBeeTypeKeys[index] = key;
+		cachedBeeWorkTraits[index] = null;
 		return key;
+	}
+
+	/** 复用槽位 beeData 引用缓存，保证工作相关基因只在蜜蜂变化时解析一次。 */
+	private BeeWorkConditionEvaluator.WorkTraits resolveBeeWorkTraitsForSlot(BeeSlot slot, int index) {
+		CompoundTag beeData = slot.getBeeData();
+		if (beeData != lastCheckedBeeData[index]) {
+			resolveBeeTypeKeyForSlot(slot, index);
+		}
+		BeeWorkConditionEvaluator.WorkTraits traits = cachedBeeWorkTraits[index];
+		if (traits == null) {
+			traits = BeeWorkConditionEvaluator.readTraits(beeData);
+			cachedBeeWorkTraits[index] = traits;
+		}
+		return traits;
+	}
+
+	/** 清空空槽的 NBT 引用缓存，避免长期保留已取出的蜜蜂数据。 */
+	private void clearBeeDataCache(int index) {
+		lastCheckedBeeData[index] = null;
+		cachedBeeTypeKeys[index] = null;
+		cachedBeeWorkTraits[index] = null;
+		beeTypeKeyBySlot[index] = null;
 	}
 
 }

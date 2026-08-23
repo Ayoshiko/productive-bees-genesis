@@ -113,8 +113,11 @@ public final class PbRecipeFlusher {
 				reusableOutputSlots.add(secondary);
 				reusableSlotIdxMap[slotCount++] = 1; // secondary
 			}
-			reusableOutputSlots.add(context.tertiaryOutputSlot(processIndex));
-			reusableSlotIdxMap[slotCount++] = 2; // tertiary
+			IInventorySlot tertiary = context.tertiaryOutputSlot(processIndex);
+			if (tertiary != null) {
+				reusableOutputSlots.add(tertiary);
+				reusableSlotIdxMap[slotCount++] = 2; // tertiary
+			}
 
 			// Resolve the route once for this flush. Capacity planning and the final commit run on
 			// the server thread, so re-routing the same fluid only repeats map/hash work.

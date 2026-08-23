@@ -28,7 +28,7 @@ final class AeInputConfigLayout {
 	static final int CTRL_Y = 22;
 	static final int CTRL_BTN_HEIGHT = 14;
 	static final int TOGGLE_BTN_WIDTH = 26;
-	static final int RESERVE_BTN_WIDTH = 42;
+	static final int RESERVE_BTN_WIDTH = 28;
 	static final int PAGE_BTN_WIDTH = 18;
 	static final int PIN_X_OFFSET = 16;
 	static final int PIN_Y_OFFSET = 6;

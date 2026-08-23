@@ -51,6 +51,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.BooleanValue productivityUpgradeTiersExclusive;
 	public final ModConfigSpec.BooleanValue speedUpgradeTiersExclusive;
 	public final ModConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
+	public final ModConfigSpec.BooleanValue apiaryBeeGenesAffectWork;
 
 	// ========== 万象创世过滤配置(存档级别)==========
 	// 使用枚举类型,ConfigurationScreen自动渲染循环切换按钮
@@ -249,6 +250,11 @@ public final class ServerConfig {
 				.translation("productivebeesgenesis.configuration.balance.centrifugeProductivityAffectsOutput")
 				.define("centrifugeProductivityAffectsOutput",
 						BalanceConfig.DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT);
+		apiaryBeeGenesAffectWork = builder
+				.comment("机械蜂箱是否根据蜜蜂的昼夜行为与天气耐受基因暂停工作")
+				.translation("productivebeesgenesis.configuration.balance.apiaryBeeGenesAffectWork")
+				.define("apiaryBeeGenesAffectWork",
+						BalanceConfig.DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);
 		builder.pop();
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");

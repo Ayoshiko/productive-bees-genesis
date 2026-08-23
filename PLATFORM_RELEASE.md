@@ -8,8 +8,8 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 内部/构建版本 | `1.0.4` |
-| CurseForge 正式版本 | `1.0.4` |
+| 内部/构建版本 | `1.0.5` |
+| CurseForge 正式版本 | `1.0.5` |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -22,17 +22,17 @@
 
 ## 版本映射
 
-内部版本 `1.0.4` 与 CurseForge 正式版本 `1.0.4` 是同一次发布，使用同一个 JAR：
+内部版本 `1.0.5` 与 CurseForge 正式版本 `1.0.5` 是同一次发布，使用同一个 JAR：
 
 ```text
-CurseForge 文件展示名: productivebeesgenesis-1.0.4.jar (MC 1.21.1)
-上传文件: productivebeesgenesis-1.0.4.jar
-JAR 内部版本: 1.0.4
-CurseForge 版本: 1.0.4
+CurseForge 文件展示名: productivebeesgenesis-1.0.5.jar (MC 1.21.1)
+上传文件: productivebeesgenesis-1.0.5.jar
+JAR 内部版本: 1.0.5
+CurseForge 版本: 1.0.5
 发布渠道: Release
 ```
 
-CurseForge 的 `1.0.4` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
+CurseForge 的 `1.0.5` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
 
 ## 历史开发版本
 
@@ -43,9 +43,9 @@ CurseForge 的 `1.0.4` 与 NeoForge 元数据、Manifest `Implementation-Version
 ## 当前正式版产物
 
 ```text
-文件: build/libs/productivebeesgenesis-1.0.4.jar
-大小: 1,723,798 bytes
-SHA-256: AD72A407826696F72AA4008038757BF74265BC19E92C4E08585B9EDF68B5B678
+文件: build/libs/productivebeesgenesis-1.0.5.jar
+大小: 1,741,128 bytes
+SHA-256: 10327915EEC905E303C7D69CFD9466F719685239B97BD39F264EED8BDE116580
 ```
 
 发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
@@ -88,14 +88,14 @@ SHA-256: AD72A407826696F72AA4008038757BF74265BC19E92C4E08585B9EDF68B5B678
 
 ## 每次发布前
 
-1. 确认 `gradle.properties` 中 `mod_version=1.0.4`、`curseforge_release_version=1.0.4`。
-2. 将 `.release_body_1.0.4.md` 的 English 段落作为 CurseForge `1.0.4` 更新日志；GitHub Release body 必须包含 `## English` 段落，工作流会将英文段落同步到 CurseForge。
+1. 确认 `gradle.properties` 中 `mod_version=1.0.5`、`curseforge_release_version=1.0.5`。
+2. 将 `.release_body_1.0.5.md` 的 English 段落作为 CurseForge `1.0.5` 更新日志；GitHub Release body 必须包含 `## English` 段落，工作流会将英文段落同步到 CurseForge。
 3. 运行 `./gradlew cleanTest test build verifyReleaseArtifact --rerun-tasks --no-daemon`。
-4. 确认 `build/libs/productivebeesgenesis-1.0.4.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
+4. 确认 `build/libs/productivebeesgenesis-1.0.5.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
 5. `verifyReleaseArtifact` 必须确认 JAR 内含 NeoForge 元数据、图标、Manifest、MIT 许可证和第三方许可说明。
-6. 检查 `neoforge.mods.toml` 中版本 `1.0.4`、依赖范围、主页、问题反馈和 `logoFile`。
+6. 检查 `neoforge.mods.toml` 中版本 `1.0.5`、依赖范围、主页、问题反馈和 `logoFile`。
 7. 在干净的测试实例中至少完成客户端启动、服务器启动、蜂箱/离心机放置及 AE2 连接测试。
-8. CurseForge 文件版本填写 `1.0.4`，渠道固定选择 `Release`，上传第 4 步的同一 JAR。
+8. CurseForge 文件版本填写 `1.0.5`，渠道固定选择 `Release`，上传第 4 步的同一 JAR。
 9. 发布完成后，将 CurseForge 与 Modrinth 项目页链接补充到中英文 README。
 
 ## 文件命名
@@ -103,7 +103,7 @@ SHA-256: AD72A407826696F72AA4008038757BF74265BC19E92C4E08585B9EDF68B5B678
 构建产物由 Gradle 统一命名：
 
 ```text
-productivebeesgenesis-1.0.4.jar
+productivebeesgenesis-1.0.5.jar
 ```
 
 不要为 CurseForge 的 `1.0.1` 手工重命名 JAR，以便校验哈希并确认各平台提供的是同一构建产物。

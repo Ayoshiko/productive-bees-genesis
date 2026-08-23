@@ -149,7 +149,8 @@ final class Ae2InputFilterQuerySupport {
 
 	static long directPullLimit(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			HolderLookup.Provider registries, String[] slots, AEItemKey[] keys,
-			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock, boolean precise) {
+			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock, boolean precise,
+			boolean globalNetworkStock, long globalReserve) {
 		if (key == null) return -1L;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
@@ -176,6 +177,10 @@ final class Ae2InputFilterQuerySupport {
 			requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 		}
 		if (!found) return -1L;
+		if (!liveStock && globalNetworkStock) {
+			liveStock = true;
+			reserve = Math.max(0L, globalReserve);
+		}
 		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
 				Ae2InputFilter.getMaxDirectAmount(), reserve);
 	}
@@ -187,7 +192,8 @@ final class Ae2InputFilterQuerySupport {
 	 */
 	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
-			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock) {
+			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean globalNetworkStock, long globalReserve) {
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
@@ -231,7 +237,16 @@ final class Ae2InputFilterQuerySupport {
 		if (mode == FilterMode.WHITELIST && !filterMatched) {
 			return Ae2InputFilter.PULL_DISALLOWED;
 		}
-		if (!directFound) return -1L;
+		if (!directFound) {
+			if (!globalNetworkStock) return -1L;
+			return Math.max(0L, visibleStock - Math.max(0L, globalReserve));
+		}
+		// A direct entry with its own stock mode is an explicit override. Otherwise
+		// the filter-level default applies even when this key was directly marked.
+		if (!liveStock && globalNetworkStock) {
+			liveStock = true;
+			reserve = Math.max(0L, globalReserve);
+		}
 		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
 				Ae2InputFilter.getMaxDirectAmount(), reserve);
 	}

@@ -109,6 +109,12 @@ public final class ModPayloads {
 				ApiaryCageOperationPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleApiaryCageOperation
 		);
+		// 蜂箱内基因小食喂食包 — 由 GuiMekApiary 右键点击蜜蜂槽发送
+		registrar.playToServer(
+				ApiaryFeedBeePayload.TYPE,
+				ApiaryFeedBeePayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleApiaryFeedBee
+		);
 		registrar.playToServer(
 				ToggleApiaryDirectEjectPayload.TYPE,
 				ToggleApiaryDirectEjectPayload.STREAM_CODEC,

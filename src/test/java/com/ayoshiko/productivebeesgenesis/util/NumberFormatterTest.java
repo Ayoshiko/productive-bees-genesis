@@ -33,5 +33,16 @@ class NumberFormatterTest {
 	@Test
 	void extremeValuesStayCompact() {
 		assertEquals("9.2E", NumberFormatter.formatCompact(Long.MAX_VALUE));
+		assertEquals("-9.2E", NumberFormatter.formatCompact(Long.MIN_VALUE));
+	}
+
+	@Test
+	void slotCountsKeepCompactWidth() {
+		assertEquals("2", NumberFormatter.formatCompactSlot(2L));
+		assertEquals("3.6T", NumberFormatter.formatCompactSlot(3_600_000_000_000L));
+		assertEquals("9.2E", NumberFormatter.formatCompactSlot(Long.MAX_VALUE));
+		assertEquals("12M", NumberFormatter.formatCompactSlot(12_345_678L));
+		assertEquals("1M", NumberFormatter.formatCompactSlot(999_900L));
+		assertEquals("-9.2E", NumberFormatter.formatCompactSlot(Long.MIN_VALUE));
 	}
 }

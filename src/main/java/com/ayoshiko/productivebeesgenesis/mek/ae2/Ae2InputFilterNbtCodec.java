@@ -14,6 +14,7 @@ import net.minecraft.nbt.Tag;
  * <ul>
  *   <li>mode (Byte): 0=DISABLED, 1=WHITELIST, 2=BLACKLIST</li>
  *   <li>precise (Byte): 0=非精确模式, 1=精确模式</li>
+ *   <li>globalNetworkStock / globalReserveAmount: 过滤器级默认库存策略</li>
  *   <li>entries (ListTag of CompoundTag): 含 index(i) 和 entry(v)，
  *       写入 0..lastNonNull（含中间 null，用空字符串表示）</li>
  * </ul>
@@ -42,12 +43,15 @@ final class Ae2InputFilterNbtCodec {
 	 */
 	static void save(CompoundTag tag, Ae2InputFilter.FilterMode filterMode, boolean preciseMode,
 			String[] slots, long[] directAmounts, long[] directReserveAmounts, boolean[] directUnlimited,
-			boolean[] directNetworkStock, boolean unlimitedAllFallback) {
+			boolean[] directNetworkStock, boolean unlimitedAllFallback, boolean globalNetworkStock,
+			long globalReserveAmount) {
 		tag.putInt(KEY_VERSION, CURRENT_FORMAT_VERSION);
 		tag.putInt(KEY_CAPACITY, slots.length);
 		tag.putByte("mode", (byte) filterMode.ordinal());
 		tag.putByte("precise", (byte) (preciseMode ? 1 : 0));
 		tag.putBoolean("unlimitedAllFallback", unlimitedAllFallback);
+		tag.putBoolean("globalNetworkStock", globalNetworkStock);
+		tag.putLong("globalReserveAmount", Math.max(0L, globalReserveAmount));
 		ListTag entriesTag = new ListTag();
 		// 找到最后一个非 null 槽位
 		int lastNonNull = -1;
@@ -94,8 +98,12 @@ final class Ae2InputFilterNbtCodec {
 		}
 		boolean preciseMode = tag.contains("precise") && tag.getByte("precise") == 1;
 		boolean unlimitedAllFallback = tag.contains("unlimitedAllFallback") && tag.getBoolean("unlimitedAllFallback");
+		boolean globalNetworkStock = tag.contains("globalNetworkStock") && tag.getBoolean("globalNetworkStock");
+		long globalReserveAmount = tag.contains("globalReserveAmount", Tag.TAG_ANY_NUMERIC)
+				? Ae2InputFilter.clampDirectReserveAmount(Math.max(0L, tag.getLong("globalReserveAmount"))) : 0L;
 		if (!tag.contains("entries", Tag.TAG_LIST)) {
-			return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, false,
+			return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, globalNetworkStock,
+					globalReserveAmount, false,
 					new String[0], new long[0], new long[0], new boolean[0], new boolean[0]);
 		}
 		// 局部构建新数组，最后一次性返回，由调用方 volatile 发布
@@ -164,8 +172,8 @@ final class Ae2InputFilterNbtCodec {
 						? Ae2InputFilter.DEFAULT_DIRECT_AMOUNT : 0L;
 			}
 		}
-		return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, true, newSlots, newAmounts,
-				newReserveAmounts, newUnlimited, newNetworkStock);
+		return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, globalNetworkStock,
+				globalReserveAmount, true, newSlots, newAmounts, newReserveAmounts, newUnlimited, newNetworkStock);
 	}
 
 	private static String[] grow(String[] src, int minCapacity) {
@@ -188,7 +196,8 @@ final class Ae2InputFilterNbtCodec {
 
 	/** 加载结果快照（数组均为新分配，可直接发布） */
 	record LoadResult(Ae2InputFilter.FilterMode filterMode, boolean preciseMode, boolean unlimitedAllFallback,
-		boolean entriesPresent, String[] slots, long[] directAmounts, long[] directReserveAmounts,
+		boolean globalNetworkStock, long globalReserveAmount, boolean entriesPresent, String[] slots,
+		long[] directAmounts, long[] directReserveAmounts,
 			boolean[] directUnlimited, boolean[] directNetworkStock) {
 	}
 }

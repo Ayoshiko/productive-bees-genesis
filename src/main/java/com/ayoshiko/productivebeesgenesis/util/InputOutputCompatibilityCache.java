@@ -67,6 +67,7 @@ public class InputOutputCompatibilityCache {
 	private SlotFingerprint cachedInputFp = SlotFingerprint.EMPTY;
 	private SlotFingerprint cachedOutputFp = SlotFingerprint.EMPTY;
 	private SlotFingerprint cachedSecondaryFp = SlotFingerprint.EMPTY;
+	private SlotFingerprint cachedTertiaryFp = SlotFingerprint.EMPTY;
 
 	/**
 	 * 上次缓存的输入/输出原引用（identity 短路用）
@@ -77,6 +78,7 @@ public class InputOutputCompatibilityCache {
 	private ItemStack cachedInputIdentity = ItemStack.EMPTY;
 	private ItemStack cachedOutputIdentity = ItemStack.EMPTY;
 	private ItemStack cachedSecondaryIdentity = ItemStack.EMPTY;
+	private ItemStack cachedTertiaryIdentity = ItemStack.EMPTY;
 
 	private boolean cachedResult = false;
 	private long cachedAt = -1L;
@@ -102,14 +104,23 @@ public class InputOutputCompatibilityCache {
 	public boolean get(@Nullable Level level, @Nullable ItemStack input,
 			@Nullable ItemStack output, @Nullable ItemStack secondary,
 			Supplier<Boolean> validator) {
+		return get(level, input, output, secondary, ItemStack.EMPTY, validator);
+	}
+
+	/** 获取缓存结果（含第三物品输出槽指纹）。 */
+	public boolean get(@Nullable Level level, @Nullable ItemStack input,
+			@Nullable ItemStack output, @Nullable ItemStack secondary,
+			@Nullable ItemStack tertiary, Supplier<Boolean> validator) {
 		if (level == null || input == null || output == null) {
 			return validator.get();
 		}
 		long now = level.getGameTime();
+		ItemStack normalizedTertiary = tertiary == null ? ItemStack.EMPTY : tertiary;
 		// identity 短路，同一引用组且未过期时直接返回缓存结果
 		boolean identityMatch = input == cachedInputIdentity
 				&& output == cachedOutputIdentity
-				&& secondary == cachedSecondaryIdentity;
+				&& secondary == cachedSecondaryIdentity
+				&& normalizedTertiary == cachedTertiaryIdentity;
 		if (cachedAt >= 0 && now - cachedAt < ttlTicks && identityMatch) {
 			return cachedResult;
 		}
@@ -117,23 +128,28 @@ public class InputOutputCompatibilityCache {
 		SlotFingerprint inputFp = SlotFingerprint.of(input);
 		SlotFingerprint outputFp = SlotFingerprint.of(output);
 		SlotFingerprint secondaryFp = SlotFingerprint.of(secondary == null ? ItemStack.EMPTY : secondary);
+		SlotFingerprint tertiaryFp = SlotFingerprint.of(normalizedTertiary);
 		if (cachedAt >= 0 && now - cachedAt < ttlTicks
 				&& inputFp.equals(cachedInputFp)
 				&& outputFp.equals(cachedOutputFp)
-				&& secondaryFp.equals(cachedSecondaryFp)) {
+				&& secondaryFp.equals(cachedSecondaryFp)
+				&& tertiaryFp.equals(cachedTertiaryFp)) {
 			// 指纹命中时也更新 identity 引用，加速下次 identity 短路
 			cachedInputIdentity = input;
 			cachedOutputIdentity = output;
 			cachedSecondaryIdentity = secondary;
+			cachedTertiaryIdentity = normalizedTertiary;
 			return cachedResult;
 		}
 		// 未命中 — 重新校验并缓存指纹
 		cachedInputFp = inputFp;
 		cachedOutputFp = outputFp;
 		cachedSecondaryFp = secondaryFp;
+		cachedTertiaryFp = tertiaryFp;
 		cachedInputIdentity = input;
 		cachedOutputIdentity = output;
 		cachedSecondaryIdentity = secondary;
+		cachedTertiaryIdentity = normalizedTertiary;
 		cachedResult = validator.get();
 		cachedAt = now;
 		return cachedResult;
@@ -144,9 +160,11 @@ public class InputOutputCompatibilityCache {
 		cachedInputFp = SlotFingerprint.EMPTY;
 		cachedOutputFp = SlotFingerprint.EMPTY;
 		cachedSecondaryFp = SlotFingerprint.EMPTY;
+		cachedTertiaryFp = SlotFingerprint.EMPTY;
 		cachedInputIdentity = ItemStack.EMPTY;
 		cachedOutputIdentity = ItemStack.EMPTY;
 		cachedSecondaryIdentity = ItemStack.EMPTY;
+		cachedTertiaryIdentity = ItemStack.EMPTY;
 		cachedAt = -1L;
 	}
 }

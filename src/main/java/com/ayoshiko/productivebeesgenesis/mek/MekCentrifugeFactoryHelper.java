@@ -200,6 +200,7 @@ public final class MekCentrifugeFactoryHelper {
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack stack,
 			@NotNull PbRecipeProcessor pbProcessor) {
+		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) return true;
 		if (containsSmeltingInput(recipeType, level, stack)) return true;
 		return pbProcessor.findPbRecipe(stack) != null;
 	}
@@ -215,6 +216,14 @@ public final class MekCentrifugeFactoryHelper {
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack stack,
 			@NotNull PbRecipeProcessor pbProcessor, boolean allowSmelting) {
+		// 万象创世蜜脾/蜜脾块由动态特殊路径处理，没有静态 PB CentrifugeRecipe。
+		// 必须在 SMELTING 查询前显式接受，否则整合包为 c:honeycombs 注册的
+		// 熔炼配方会抢占输入，或在熔炼兼容关闭时把万象物品误判为无效。
+		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) {
+			return new InputValidationCache.ValidationResult(true, null,
+					stack.get(ModDataComponents.BEE_TYPE.get()),
+					stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get());
+		}
 		if (allowSmelting && containsSmeltingInput(recipeType, level, stack)) {
 			return new InputValidationCache.ValidationResult(true, null, null, false);
 		}
@@ -240,14 +249,24 @@ public final class MekCentrifugeFactoryHelper {
 
 	/** PB 配方输出兼容性回退检查 — SMELTING 检查失败后调用,验证 PB 配方输出与现有输出槽兼容 */
 	public static boolean checkPbOutputFallback(@NotNull PbRecipeProcessor pbProcessor,
-												@NotNull ItemStack fallbackInput,
-												@NotNull IInventorySlot outputSlot,
-												@Nullable IInventorySlot secondaryOutputSlot) {
+														@NotNull ItemStack fallbackInput,
+														@NotNull IInventorySlot outputSlot,
+														@Nullable IInventorySlot secondaryOutputSlot) {
+		return checkPbOutputFallback(pbProcessor, fallbackInput, outputSlot, secondaryOutputSlot, null);
+	}
+
+	/** PB 配方输出兼容性回退检查（含第三输出槽）。 */
+	public static boolean checkPbOutputFallback(@NotNull PbRecipeProcessor pbProcessor,
+														@NotNull ItemStack fallbackInput,
+														@NotNull IInventorySlot outputSlot,
+														@Nullable IInventorySlot secondaryOutputSlot,
+														@Nullable IInventorySlot tertiaryOutputSlot) {
 		RecipeHolder<CentrifugeRecipe> pbRecipe = pbProcessor.findPbRecipe(fallbackInput);
 		if (pbRecipe == null) {
 			return false;
 		}
-		return PbRecipeOutputChecker.isPbOutputCompatible(pbRecipe.value(), outputSlot, secondaryOutputSlot);
+		return PbRecipeOutputChecker.isPbOutputCompatible(pbRecipe.value(), outputSlot, secondaryOutputSlot,
+				tertiaryOutputSlot);
 	}
 
 	// ===== onUpdateServer 公共逻辑 =====
