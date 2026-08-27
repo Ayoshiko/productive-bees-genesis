@@ -103,6 +103,15 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	/** 获取方块实体位置 */
 	BlockPos productivebeesgenesis$getAe2BlockPos();
 
+	/** 标记宿主 AE2 事务状态需要写入区块存档。 */
+	default void productivebeesgenesis$markAe2StateChanged() {
+		Level level = productivebeesgenesis$getAe2Level();
+		if (level == null) return;
+		net.minecraft.world.level.block.entity.BlockEntity blockEntity =
+				level.getBlockEntity(productivebeesgenesis$getAe2BlockPos());
+		if (blockEntity != null) blockEntity.setChanged();
+	}
+
 	/**
 	 * 获取 AEItemKey 缓存
 	 * <br/>

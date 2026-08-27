@@ -34,6 +34,12 @@ public final class Ae2NbtKeys {
 	public static final String NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT =
 			"productivebeesgenesis_centrifuge_direct_ae_output";
 
+	/** AE2 输入剩余物有界持久化缓冲。 */
+	public static final String NBT_KEY_AE_PENDING_ITEMS = "productivebeesgenesis_ae_pending_items";
+
+	/** AE2 输出已提交但本地尚未确认扣除的结算账本。 */
+	public static final String NBT_KEY_AE_OUTPUT_LEDGER = "productivebeesgenesis_ae_output_ledger";
+
 	private Ae2NbtKeys() {
 	}
 }

@@ -59,6 +59,9 @@ class MekCentrifugeTickHandler {
 	/** 进程异常日志冷却器（tick 模式） */
 	private final LogThrottle pbErrorThrottle = new LogThrottle();
 
+	/** AE2 tick 阶段异常日志冷却器（ms 模式，与 PB 异常分开节流避免相互覆盖） */
+	private final LogThrottle ae2ErrorThrottle = new LogThrottle();
+
 	MekCentrifugeTickHandler(TileEntityMekCentrifuge tile, PbRecipeProcessor pbProcessor,
 			TickAccelTracker tickAccelTracker) {
 		this.tile = tile;
@@ -189,8 +192,15 @@ class MekCentrifugeTickHandler {
 		}
 
 		// 在配方处理前释放上 tick 遗留流体，避免满罐使本 tick 的高并行批次提前暂停。
+		// LinkageError 兜底：present-but-incompatible AE2 在 pusher 类链接/校验阶段抛
+		// NoClassDefFoundError（属 Error 非 Exception），isAe2Loaded 守卫拦不住，
+		// 与蜂箱路径（TileEntityMekApiary.runPostProductionAe2）保持同一防御深度（Issue #8）。
 		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
-			Ae2FluidPusher.pushFluids(tile);
+			try {
+				Ae2FluidPusher.pushFluids(tile);
+			} catch (Exception | LinkageError e) {
+				logAe2(e, "pushFluids");
+			}
 		}
 
 		// PB配方独立处理（不走Mekanism管线）
@@ -212,11 +222,17 @@ class MekCentrifugeTickHandler {
 		}
 
 		// AE2 输入拉取 + 输出推送（AE2 未加载时短路，避免触发 appeng 类加载）
+		// LinkageError 兜底：与上方 pushFluids 同理，present-but-incompatible AE2 会在
+		// Ae2InputPuller/Ae2OutputPusher 类链接阶段抛 Error，与蜂箱路径防御深度一致。
 		if (!skipPb && Ae2IntegrationLoader.isAe2Loaded()) {
-			Ae2InputPuller.pullInputs(tile, batchMultiplier);
-			Ae2OutputPusher.pushOutputs(tile);
-			// 配方执行期间写入本地罐的流体需要在同一真实 tick 内立即收尾排空。
-			Ae2FluidPusher.pushLocalTankContentsNow(tile);
+			try {
+				Ae2InputPuller.pullInputs(tile, batchMultiplier);
+				Ae2OutputPusher.pushOutputs(tile);
+				// 配方执行期间写入本地罐的流体需要在同一真实 tick 内立即收尾排空。
+				Ae2FluidPusher.pushLocalTankContentsNow(tile);
+			} catch (Exception | LinkageError e) {
+				logAe2(e, "pushOutputs");
+			}
 		}
 
 		// 配方扣能后补回正常容量；稳态下 tick 开头会因容量已满而短路，
@@ -224,6 +240,20 @@ class MekCentrifugeTickHandler {
 		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 
 		return sendUpdatePacket;
+	}
+
+	/**
+	 * AE2 tick 阶段异常兜底日志（节流）
+	 * <br/>
+	 * present-but-incompatible AE2 在 pusher/puller 类链接阶段抛 {@code NoClassDefFoundError}
+	 * （属 Error 非 Exception），isAe2Loaded 守卫无法拦截；降级为节流日志而非 tick 崩溃，
+	 * 与蜂箱路径（{@code TileEntityMekApiary.logAe2}）保持同一防御深度（Issue #8）。
+	 */
+	private void logAe2(Throwable e, String stage) {
+		final Throwable cause = e;
+		ae2ErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+				ProductiveBeesGenesis.LOGGER.error("AE2 {} 异常"
+						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), stage, cause));
 	}
 
 

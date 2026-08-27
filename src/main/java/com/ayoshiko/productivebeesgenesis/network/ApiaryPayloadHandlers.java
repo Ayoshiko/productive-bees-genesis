@@ -49,6 +49,26 @@ final class ApiaryPayloadHandlers {
 	}
 
 	/**
+	 * 服务端处理：切换喂食槽物品转化开关
+	 * <br/>
+	 * 安全模型与 {@link #handleToggleApiaryDirectEject} 一致：玩家身份 → 打开的容器指向同一方块
+	 * → 方块实体类型 → 8 格交互距离，避免恶意客户端远距离改别人蜂箱的开关。
+	 */
+	static void handleToggleApiaryFeederConversion(ToggleApiaryFeederConversionPayload payload,
+			IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)
+				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
+				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			return;
+		}
+		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
+		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
+				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		apiary.toggleFeederConversion();
+	}
+
+	/**
 	 * 服务端处理：选中蜜蜂槽位（Bug 9）
 	 * <br/>
 	 * 校验玩家当前打开的容器指向目标方块实体，校验槽位索引合法后调用 setSelectedBeeSlot。

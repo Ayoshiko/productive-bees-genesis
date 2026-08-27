@@ -32,6 +32,7 @@ final class ApiaryTilePersistence {
 		tile.nbtSerializer().saveApiaryState(nbt, provider);
 		tile.ae2HostAdapter().saveNodeNBT(nbt);
 		tile.ae2HostAdapter().savePerTileState(nbt);
+		tile.ae2HostAdapter().savePendingItems(nbt);
 	}
 
 	/**
@@ -43,7 +44,9 @@ final class ApiaryTilePersistence {
 	 */
 	@NotNull
 	static CompoundTag saveCustomDataForItem(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider) {
-		return tile.nbtSerializer().saveCustomData(provider);
+		CompoundTag nbt = tile.nbtSerializer().saveCustomData(provider);
+		tile.ae2HostAdapter().savePendingItems(nbt);
+		return nbt;
 	}
 
 	/** 加载附加 NBT — super.loadAdditional 已由调用方执行 */
@@ -52,6 +55,7 @@ final class ApiaryTilePersistence {
 		tile.nbtSerializer().loadApiaryState(nbt, provider);
 		tile.ae2HostAdapter().loadNodeNBT(nbt);
 		tile.ae2HostAdapter().loadPerTileState(nbt);
+		tile.ae2HostAdapter().loadPendingItems(nbt);
 		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 	}
 

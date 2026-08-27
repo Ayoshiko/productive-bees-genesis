@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui;
 
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.CompactStackCountScreen;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksTab;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksWindow;
@@ -56,7 +57,8 @@ import java.util.List;
 	 */
 public class GuiEMExtraMekCentrifugeFactory
 		extends GuiConfigurableTile<TileEntityEMExtraMekCentrifugeFactory,
-				MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>> {
+				MekanismTileContainer<TileEntityEMExtraMekCentrifugeFactory>>
+		implements CompactStackCountScreen {
 
 	/** PB升级TAB */
 	private GuiPbUpgradeTab<TileEntityEMExtraMekCentrifugeFactory> pbUpgradeTab;

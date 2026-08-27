@@ -391,6 +391,11 @@ class ApiaryAe2HostAdapter {
 		nbt.putBoolean("productivebeesgenesis_ae_fluid_output", aeFluidOutputEnabled);
 	}
 
+	/** 保存 AE2 输入 pending 记录。 */
+	void savePendingItems(CompoundTag nbt) {
+		ae2LifecycleHandler.getStateHolder().savePendingItems(nbt);
+	}
+
 	/**
 	 * 从 NBT 加载 per-tile 状态
 	 * <br/>
@@ -404,6 +409,11 @@ class ApiaryAe2HostAdapter {
 				? nbt.getBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_OUTPUT) : true;
 		aeFluidOutputEnabled = nbt.contains(Ae2NbtKeys.NBT_KEY_AE_FLUID_OUTPUT)
 				? nbt.getBoolean(Ae2NbtKeys.NBT_KEY_AE_FLUID_OUTPUT) : true;
+	}
+
+	/** 加载 AE2 输入 pending 记录。 */
+	void loadPendingItems(CompoundTag nbt) {
+		ae2LifecycleHandler.getStateHolder().loadPendingItems(nbt);
 	}
 
 	// ===== PbRecipeContext 委托方法 =====

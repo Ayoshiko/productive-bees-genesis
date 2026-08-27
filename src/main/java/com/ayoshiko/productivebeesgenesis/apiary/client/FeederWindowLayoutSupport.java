@@ -77,6 +77,33 @@ final class FeederWindowLayoutSupport {
 	static final int PAGE_BTN_RIGHT_MARGIN = 8;
 
 	/**
+	 * 标题栏右侧按钮位置计算（自右向左第 index 个按钮的 X 偏移，index 从 0 开始）
+	 * <br/>
+	 * 翻页按钮与转化开关共用同一排、同一尺寸与间距，统一由本方法排布，
+	 * 避免各处重复硬编码偏移导致按钮重叠。
+	 *
+	 * @param windowWidth 窗口总宽度
+	 * @param index       自右向左的序号（0 = 最右侧）
+	 * @return 相对窗口左边的 X 偏移
+	 */
+	static int titleButtonX(int windowWidth, int index) {
+		return windowWidth - (index + 1) * (PAGE_BTN_WIDTH + PAGE_BTN_GAP) - PAGE_BTN_RIGHT_MARGIN;
+	}
+
+	/**
+	 * 标题文字右侧需要让出的宽度 — 供 {@code GuiFeederWindow.getTitlePadEnd} 使用
+	 * <br/>
+	 * 标题居中绘制区间为 [padStart, xSize - padEnd]，不让出按钮占位时长标题会压到按钮上。
+	 *
+	 * @param buttonCount 标题栏右侧按钮数量
+	 * @return 右侧保留宽度
+	 */
+	static int titleButtonsReservedWidth(int buttonCount) {
+		if (buttonCount <= 0) return 0;
+		return buttonCount * (PAGE_BTN_WIDTH + PAGE_BTN_GAP) + PAGE_BTN_RIGHT_MARGIN;
+	}
+
+	/**
 	 * 计算窗口宽度 — 供 {@link GuiFeederTab} 居中定位使用
 	 * <br/>
 	 * 模块 4 修复（v2.4 最终版）：暴露为 public，避免 GuiFeederTab 使用错误的窗口宽度

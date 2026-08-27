@@ -10,6 +10,8 @@ public final class LargeStackCountRenderer {
 
 	private static final float COUNT_SCALE = 0.7F;
 	private static final float COUNT_INVERSE_SCALE = 1.0F / COUNT_SCALE;
+	/** Keep labels above the +150 item layer without crossing Mekanism's next-window layer at +200. */
+	private static final float COUNT_Z_OFFSET = 190.0F;
 	private static final int TEXT_COLOR = 0xFFFFFF;
 
 	private LargeStackCountRenderer() {
@@ -40,7 +42,7 @@ public final class LargeStackCountRenderer {
 		int drawY = Math.round((slotY + 16.0F - 3.75F) * COUNT_INVERSE_SCALE);
 		PoseStack pose = guiGraphics.pose();
 		pose.pushPose();
-		pose.translate(0.0F, 0.0F, 300.0F);
+		pose.translate(0.0F, 0.0F, COUNT_Z_OFFSET);
 		pose.scale(COUNT_SCALE, COUNT_SCALE, COUNT_SCALE);
 		drawShadowedText(guiGraphics, font, drawX, drawY, text);
 		pose.popPose();

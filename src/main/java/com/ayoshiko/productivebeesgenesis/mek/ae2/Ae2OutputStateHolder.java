@@ -31,6 +31,12 @@ public final class Ae2OutputStateHolder {
 	/** Task 21: AE2 流体推送批处理缓冲（Ae2PendingBatchBuffer）— 10 tick 累积 + AEFluidKey 合并 */
 	private volatile Object pendingBatchBuffer;
 
+	/** AE2 输入抽取后无法立即归还的物品，宿主级有界持久化状态。 */
+	private final Ae2PendingItemBuffer pendingItemBuffer = new Ae2PendingItemBuffer();
+
+	/** AE2 输出确认式结算账本。 */
+	private final Ae2OutputLedger outputLedger = new Ae2OutputLedger();
+
 	/**
 	 * Task 24：按流体槽索引缓存的 AEFluidKey（Object 隔离 AE2 依赖）。
 	 * <br/>
@@ -221,7 +227,47 @@ public final class Ae2OutputStateHolder {
 		centrifugeDirectAeOutputEnabled = false;
 		// Task 2：重置 AE2 推送退避和计数器状态（fluid/item backoff + 计数器全部归零）
 		pushState.reset();
+		pendingItemBuffer.clear();
+		outputLedger.clear();
 	}
+
+	/**
+	 * 清理区块卸载时的瞬态 AE2 引用，但保留 per-tile 配置和 pending 物品所有权。
+	 * <p>
+	 * 区块卸载后方块实体仍可能在保存/重新加载路径中复用同一状态对象，
+	 * 因此不能调用 {@link #clear()} 丢弃尚未归还的物品。
+	 */
+	public void clearForChunkUnload() {
+		ae2GridNode = null;
+		aeItemKeyCache = null;
+		ae2NodePending = false;
+		reusableBuffers = null;
+		cachedGrid = null;
+		cachedStorage = null;
+		cachedMeStorage = null;
+		inputInventoryViewCache = null;
+		centrifugeExternalStorageCache = null;
+		invalidateNormalizedCapacity();
+		if (pendingBatchBuffer instanceof Ae2PendingBatchBuffer batchBuffer) {
+			batchBuffer.reset();
+		}
+		pendingBatchBuffer = null;
+		fluidPushKeyCache = null;
+		fluidPushKeyFluidRefs = null;
+		fluidPushKeyComponentsHashes = null;
+		fluidPushKeyComponentsEmpty = null;
+		generatedFluidKeyCache = null;
+		generatedFluidKeyFluidRef = null;
+		generatedFluidKeyComponentsHash = 0;
+		generatedFluidKeyComponentsEmpty = false;
+		pushState.reset();
+	}
+
+	/** 获取 AE2 输入剩余物缓冲。 */
+	public Ae2PendingItemBuffer getPendingItemBuffer() { return pendingItemBuffer; }
+
+	/** 获取 AE2 输出确认式结算账本。 */
+	public Ae2OutputLedger getOutputLedger() { return outputLedger; }
 
 	// ===== 离心机熔炉配方兼容开关（per-tile） =====
 
@@ -544,5 +590,15 @@ public final class Ae2OutputStateHolder {
 	 */
 	public void loadPerTileState(CompoundTag tag) {
 		Ae2PerTileStateNbtCodec.load(this, tag);
+	}
+
+	/** 保存 AE2 输入剩余物所有权记录（仅方块实体 NBT，不用于配置卡）。 */
+	public void savePendingItems(CompoundTag tag) {
+		Ae2PerTileStateNbtCodec.savePendingItems(this, tag);
+	}
+
+	/** 加载 AE2 输入剩余物所有权记录。 */
+	public void loadPendingItems(CompoundTag tag) {
+		Ae2PerTileStateNbtCodec.loadPendingItems(this, tag);
 	}
 }

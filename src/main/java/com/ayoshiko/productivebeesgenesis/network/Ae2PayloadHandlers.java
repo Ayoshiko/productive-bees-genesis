@@ -15,6 +15,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.server.level.ServerPlayer;
@@ -314,6 +315,12 @@ final class Ae2PayloadHandlers {
 		if (!(be instanceof IAe2InputHost host)) return;
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
+		String operation = payload.shift() ? "shift" : (payload.rightClick() ? "right" : "left");
+		String rateKey = "ae_input_output_slot:" + payload.pos().asLong() + ":" + operation;
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, rateKey,
+			NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
+			return;
+		}
 		Ae2InputFilter filter = holder.getOrCreateInputFilter();
 		int slot = payload.slotIndex();
 		if (filter == null || !filter.isDirectEntry(slot)) return;
@@ -339,6 +346,7 @@ final class Ae2PayloadHandlers {
 		long cap = filter.getDirectPullLimit(key, visible, ignoreNbt,
 				serverPlayer.level().registryAccess());
 		if (cap >= 0L) visible = Math.min(visible, cap);
+		boolean changed = false;
 		if (payload.shift()) {
 			// Quick move: extract up to a full stack into the player inventory.
 			long maxExtract = Math.min(visible, key.getMaxStackSize());
@@ -349,8 +357,10 @@ final class Ae2PayloadHandlers {
 				int capacity = freeInventoryCapacity(serverPlayer, key.toStack(1));
 				maxExtract = Math.min(maxExtract, capacity);
 				if (maxExtract > 0L) {
-					long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
+					long extracted = SaturatingMath.clampToRequest(
+						meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE), maxExtract);
 					if (extracted > 0L) {
+						changed = true;
 						// 库存已扣减：失效同 tick 可见库存缓存，避免客户端显示提取前旧值
 						holder.invalidateInputInventoryViewCache();
 						net.minecraft.world.item.ItemStack stack = key.toStack(
@@ -369,8 +379,10 @@ final class Ae2PayloadHandlers {
 				long maxExtract = Math.min(visible, key.getMaxStackSize());
 				if (payload.rightClick()) maxExtract = Math.max(1L, (maxExtract + 1L) / 2L);
 				if (maxExtract > 0L) {
-					long extracted = meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE);
-					if (extracted > 0L) {
+				long extracted = SaturatingMath.clampToRequest(
+						meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE), maxExtract);
+				if (extracted > 0L) {
+					changed = true;
 						// 库存已扣减：失效同 tick 可见库存缓存
 						holder.invalidateInputInventoryViewCache();
 						serverPlayer.containerMenu.setCarried(key.toStack(
@@ -382,8 +394,10 @@ final class Ae2PayloadHandlers {
 				AEItemKey carriedKey = AEItemKey.of(carried);
 				if (carriedKey == null) return;
 				int toInsert = payload.rightClick() ? 1 : carried.getCount();
-				long inserted = meStorage.insert(carriedKey, toInsert, Actionable.MODULATE, ACTION_SOURCE);
+				long inserted = SaturatingMath.clampToRequest(
+						meStorage.insert(carriedKey, toInsert, Actionable.MODULATE, ACTION_SOURCE), toInsert);
 				if (inserted > 0L) {
+					changed = true;
 					carried.shrink((int) inserted);
 					if (carried.isEmpty()) {
 						serverPlayer.containerMenu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
@@ -391,8 +405,10 @@ final class Ae2PayloadHandlers {
 				}
 			}
 		}
-		// Refresh the GUI stock display after a successful mutation.
-		Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
+		// 只有 ME 状态实际改变时才同步，避免被拒绝/空操作放大广播。
+		if (changed) {
+			Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
+		}
 	}
 
 	/**

@@ -110,6 +110,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private boolean directEjectEnabled = true;
 	private boolean directAeOutputEnabled = false;
 	private boolean centrifugePriorityEnabled = true;
+	/**
+	 * 喂食槽转化开关（默认关闭）
+	 * <br/>
+	 * 控制蜜蜂是否对喂食槽内物品执行 PB 的 item_conversion / block_conversion 转化
+	 * （如末影龙蜜蜂把黑曜石转为哭泣的黑曜石）。默认关闭以免玩家放在喂食槽里
+	 * 单纯当花朵用的物品被意外消耗，需要转化时由玩家在喂食槽 GUI 主动开启。
+	 */
+	private boolean feederConversionEnabled = false;
 
 	public TileEntityMekApiary(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state, APIARY_TICKS_REQUIRED);
@@ -120,6 +128,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		nbtSerializer = new ApiaryNbtSerializer(this);
 		feederSlotManager = createFeederSlotManager();
 		feederSlotManager.buildFeederSlots(this::setChanged);
+		// 注入 per-tile 转化开关查询：关闭时「转化原料算有效花朵」通路失效，
+		// 避免只放转化原料（如末影龙蜜蜂的黑曜石）也被判定为有花朵而照常采蜜
+		feederSlotManager.setConversionEnabledSupplier(this::isFeederConversionEnabled);
 		upgradeHandler = new ApiaryUpgradeHandler(this);
 		produceProcessor = new BeeProduceProcessor(upgradeHandler, this);
 		tickHandler = new ApiaryTickHandler(this, slotManager, produceProcessor, upgradeHandler, feederSlotManager);
@@ -399,6 +410,17 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void toggleCentrifugePriority() {
 		setCentrifugePriorityEnabled(!centrifugePriorityEnabled);
 	}
+
+	/** 喂食槽转化功能是否开启（默认关闭）— 由 {@link ApiaryConversionProcessor} 在转化入口读取 */
+	public boolean isFeederConversionEnabled() { return feederConversionEnabled; }
+
+	public void setFeederConversionEnabled(boolean enabled) {
+		if (feederConversionEnabled == enabled) return;
+		feederConversionEnabled = enabled;
+		setChanged();
+	}
+
+	public void toggleFeederConversion() { setFeederConversionEnabled(!feederConversionEnabled); }
 
 	/**
 	 * 离心机优先判定：该产物是否应保留给相邻离心机处理（不推 AE2）。

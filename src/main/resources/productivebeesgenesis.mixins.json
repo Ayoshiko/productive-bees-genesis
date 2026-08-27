@@ -60,7 +60,7 @@
     "AbstractUpgradeItemMixin"
   ],
   "client": [
-    "client.GuiGraphicsMixin",
+    "client.ContainerSlotCountMixin",
     "client.MekGuiBlockItemDepthMixin",
     "client.IBlockEntityExtensionMixin",
     "client.ConfigurableBeeColorMixin",

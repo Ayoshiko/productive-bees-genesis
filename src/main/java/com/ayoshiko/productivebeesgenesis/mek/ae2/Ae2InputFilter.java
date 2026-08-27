@@ -58,7 +58,7 @@ public final class Ae2InputFilter {
 		return Math.max(0L, Math.min(MAX_DIRECT_RESERVE_AMOUNT, amount));
 	}
 	/** Sentinel returned by the allocation-free pull-candidate decision path. */
-	static final long PULL_DISALLOWED = Long.MIN_VALUE;
+	static final long PULL_DISALLOWED = Ae2FilterPullPolicy.PULL_DISALLOWED;
 
 	/**
 	 * Returns the configured per-pull cap. The same value is used by the puller,
@@ -132,7 +132,7 @@ public final class Ae2InputFilter {
 	/** Parsed fuzzy entries keyed by the copy-on-write slots array identity. */
 	private volatile FuzzyEntriesCache fuzzyEntriesCache;
 
-	/** 无标记时全量拉取的全局无限开关；仅在没有任何过滤条目时可切换 */
+	/** 过滤器准入后对所有允许蜜脾生效的全局无限拉取开关。 */
 	private volatile boolean unlimitedAllFallback = false;
 
 	/**
@@ -394,9 +394,6 @@ public final class Ae2InputFilter {
 		directUnlimited = s.unlimited();
 		directNetworkStock = s.networkStock();
 		slots = s.slots();
-		if (hasAnyEntry(slots)) {
-			unlimitedAllFallback = false;
-		}
 		invalidateDirectEntries();
 	}
 
@@ -439,9 +436,6 @@ public final class Ae2InputFilter {
 	}
 
 	public boolean isAllowed(AEItemKey key, boolean ignoreNbt, HolderLookup.Provider registries) {
-		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)) {
-			return true;
-		}
 		String[] currentSlots = slots;
 		return Ae2InputFilterQuerySupport.isAllowed(key, filterMode, preciseMode, currentSlots,
 				getFuzzyEntries(currentSlots), resolvedDirectKeys, ignoreNbt, registries);
@@ -487,7 +481,7 @@ public final class Ae2InputFilter {
 		invalidateDirectEntries();
 	}
 
-	/** True when at least one direct entry has unlimited provide enabled. */
+	/** True when global unlimited or at least one exact-entry unlimited flag is enabled. */
 	public boolean hasUnlimitedEntries() {
 		return unlimitedAllFallback || Ae2InputFilterQuerySupport.hasUnlimitedEntries(slots, directUnlimited);
 	}
@@ -520,13 +514,6 @@ public final class Ae2InputFilter {
 
 	public boolean isUnlimitedAllFallback() {
 		return unlimitedAllFallback;
-	}
-
-	private static boolean hasAnyEntry(String[] entries) {
-		for (String entry : entries) {
-			if (entry != null) return true;
-		}
-		return false;
 	}
 
 	public synchronized void toggleUnlimitedAllFallback() {
@@ -568,7 +555,7 @@ public final class Ae2InputFilter {
 		directUnlimited = snapshot.unlimited();
 		directNetworkStock = snapshot.networkStock();
 		slots = snapshot.slots();
-		unlimitedAllFallback = unlimitedAllFallbackFlag && !hasAnyEntry(slots);
+		unlimitedAllFallback = unlimitedAllFallbackFlag;
 		globalNetworkStock = globalNetworkStockFlag;
 		globalReserveAmount = clampDirectReserveAmount(globalReserveAmountValue);
 		invalidateDirectEntries();
@@ -623,13 +610,11 @@ public final class Ae2InputFilter {
 
 	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt) {
-		if (unlimitedAllFallback && key != null && CombFuzzyMatcher.isCombItem(key)
-				&& !globalNetworkStock) return -1L;
 		String[] currentSlots = slots;
 		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
 				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
 				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
-				globalNetworkStock, globalReserveAmount);
+				unlimitedAllFallback, globalNetworkStock, globalReserveAmount);
 	}
 
 	/** Exact-key compatibility overload used by older integrations. */
@@ -676,9 +661,6 @@ public final class Ae2InputFilter {
 			directUnlimited = result.directUnlimited();
 			directNetworkStock = result.directNetworkStock();
 			slots = result.slots();
-			if (hasAnyEntry(slots)) {
-				unlimitedAllFallback = false;
-			}
 		}
 		invalidateDirectEntries();
 	}

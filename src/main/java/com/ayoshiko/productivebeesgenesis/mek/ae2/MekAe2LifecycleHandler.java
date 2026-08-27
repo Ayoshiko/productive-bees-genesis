@@ -110,7 +110,7 @@ public final class MekAe2LifecycleHandler {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			Ae2GridNodeManager.destroyNode(host);
-			stateHolder.clear();
+			stateHolder.clearForChunkUnload();
 			// 重置连接标志，与 destroyForRemoval 行为一致
 			ae2NodeConnected = false;
 		}

@@ -14,7 +14,7 @@ import org.jetbrains.annotations.NotNull;
 	 * 全配置页全局齿轮按钮（无需标记物品即可使用）
 	 * <br/>
 	 * 普通点击：打开应用到全部直连条目的数量编辑器；
-	 * Shift+点击：一键切换全部直连条目的无限拉取状态。
+	 * Shift+点击：切换过滤后所有蜜脾的全量无限拉取。
 	 */
 final class GlobalGearButton extends MekanismButton {
 

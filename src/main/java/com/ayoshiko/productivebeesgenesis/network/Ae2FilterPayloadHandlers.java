@@ -100,12 +100,7 @@ final class Ae2FilterPayloadHandlers {
 		syncFilterToClient(be, serverPlayer);
 	}
 
-	/**
-	 * 服务端处理：一键切换全部直连条目的无限拉取状态
-	 * <br/>
-	 * 任一直连条目未开启无限 → 全部开启；全部已开启 → 全部关闭。
-	 * 由全局齿轮按钮 Shift+点击调用（无需标记物品）。
-	 */
+	/** 服务端处理：切换过滤后所有允许蜜脾的全量无限拉取。 */
 	static void handleToggleAllAeInputFilterUnlimited(ToggleAllAeInputFilterUnlimitedPayload payload,
 			IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
@@ -119,24 +114,9 @@ final class Ae2FilterPayloadHandlers {
 						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
 		if (filter == null) return;
-		// 目标状态：有直连条目时切换全部直连条目的无限状态；
-		// 完全没有任何标记时，切换无标记全量拉取的全局无限开关。
-		if (filter.hasDirectEntries()) {
-			boolean allUnlimited = true;
-			for (int i = 0; i < filter.getCapacity(); i++) {
-				if (filter.isDirectEntry(i) && !filter.isDirectUnlimitedAt(i)) {
-					allUnlimited = false;
-					break;
-				}
-			}
-			if (filter.setAllDirectUnlimited(!allUnlimited) > 0 && be instanceof TileEntityMekanism mek) {
-				mek.markForSave();
-			}
-		} else if (!filter.hasFuzzyEntries()) {
-			filter.toggleUnlimitedAllFallback();
-			if (be instanceof TileEntityMekanism mek) {
-				mek.markForSave();
-			}
+		filter.toggleUnlimitedAllFallback();
+		if (be instanceof TileEntityMekanism mek) {
+			mek.markForSave();
 		}
 		syncFilterToClient(be, serverPlayer);
 	}

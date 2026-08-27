@@ -118,6 +118,7 @@ class MekCentrifugeSaveHandler {
 		pbUpgradeHandler.saveSlots(nbt, provider);
 		ae2Handler.saveNodeNBT(nbt);
 		ae2Handler.savePerTileState(nbt);
+		ae2Handler.getStateHolder().savePendingItems(nbt);
 		// 修复 v14：序列化基础离心机单流体槽（DRY：复用 serializeFluidTank）
 		CompoundTag fluidNbt = serializeFluidTank(provider);
 		if (fluidNbt != null) {
@@ -138,6 +139,7 @@ class MekCentrifugeSaveHandler {
 		pbUpgradeHandler.loadCounts(nbt);
 		ae2Handler.loadNodeNBT(nbt);
 		ae2Handler.loadPerTileState(nbt);
+		ae2Handler.getStateHolder().loadPendingItems(nbt);
 		// 修复 v14：反序列化基础离心机单流体槽（DRY：复用 deserializeFluidTank）
 		deserializeFluidTank(provider, nbt);
 		// 模块 3 Bug 1：反序列化输出槽/输入槽/能量槽（冗余备份，向后兼容：旧存档无此键时跳过）
@@ -159,6 +161,7 @@ class MekCentrifugeSaveHandler {
 		pbUpgradeHandler.saveCounts(nbt);
 		pbUpgradeHandler.saveSlots(nbt, provider);
 		ae2Handler.savePerTileState(nbt);
+		ae2Handler.getStateHolder().savePendingItems(nbt);
 		// 修复 v14：序列化基础离心机单流体槽（DRY：复用 serializeFluidTank）
 		CompoundTag fluidNbt = serializeFluidTank(provider);
 		if (fluidNbt != null) {

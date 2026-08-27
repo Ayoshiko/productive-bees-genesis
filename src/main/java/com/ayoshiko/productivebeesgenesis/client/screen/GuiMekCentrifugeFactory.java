@@ -51,7 +51,8 @@ import java.util.List;
 	 * dynamicSlots=true自动根据侧面配置渲染红/蓝边框，无需手动添加GuiSlot。
 	 */
 public class GuiMekCentrifugeFactory
-		extends GuiConfigurableTile<TileEntityFactory<?>, MekanismTileContainer<TileEntityFactory<?>>> {
+		extends GuiConfigurableTile<TileEntityFactory<?>, MekanismTileContainer<TileEntityFactory<?>>>
+		implements CompactStackCountScreen {
 
 	/** PB升级TAB — 仅当 tile 为 AbstractMekCentrifugeFactory 时创建 */
 	private GuiPbUpgradeTab<AbstractMekCentrifugeFactory> pbUpgradeTab;

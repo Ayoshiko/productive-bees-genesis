@@ -82,7 +82,7 @@ final class ApiaryConversionProcessor {
 	 * {@code pollinates=false} 的配方，则该周期的产出被占用（扣减 pendingProductions），
 	 * 与 PB 的 hasConverted 语义一致。
 	 * <p>
-	 * 快速路径顺序：配置开关 → 配方索引就绪 → 蜜蜂有转化配方 → 饲养板非空，
+	 * 快速路径顺序：per-tile 喂食槽转化开关 → 配置开关 → 配方索引就绪 → 蜜蜂有转化配方 → 饲养板非空，
 	 * 全部通过后才进入逐槽尝试。
 	 *
 	 * @param beeTypeKey          蜜蜂类型键（同组共享）
@@ -95,6 +95,12 @@ final class ApiaryConversionProcessor {
 			OrderedSlotIndex slotIndices, int[] pendingProductions) {
 		if (beeTypeKey == null || level == null || beeSlots == null || slotIndices == null
 				|| pendingProductions == null) {
+			return;
+		}
+		// per-tile 喂食槽转化开关（默认关闭）：关闭时零遍历直接返回，
+		// 放在配置读取之前作为最便宜的快速路径；缓存键只依赖饲养板版本与全局配置，
+		// 关闭期间不会消耗原料，故重新开启后沿用缓存仍然正确。
+		if (!tile.isFeederConversionEnabled()) {
 			return;
 		}
 		// 配置开关单次读取（避免每槽每蜜蜂重复读 NeoForge 配置）

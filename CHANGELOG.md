@@ -31,6 +31,52 @@
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-08-27
+
+### 新增
+
+- **喂食槽转化开关**：机械蜂箱喂食槽窗口标题栏新增转化开关（默认关闭）。关闭时喂食槽物品只当花朵用、绝不被消耗；开启后蜜蜂才会执行 Productive Bees 的物品/方块转化配方（如末影龙蜜蜂把黑曜石转成哭泣的黑曜石）。开关随存档、配置卡和机器拆装保留，底部提示文字会随开关切换说明原料是否会被消耗。
+
+### 变更
+
+- **全量无限拉取语义**：AE2 拉取界面全局齿轮的 Shift+点击不再区分"有无标记"，统一切换"过滤器放行的所有蜜脾都无限拉取"。设置标记后该开关不会再被自动关掉，中英文 tooltip 已同步更新。
+
+### 修复
+
+- **黑名单被全量拉取绕过**：开启全量无限拉取时，黑名单/白名单的准入判定现在先于无限开关生效，被黑名单排除的蜜脾不会再被拉进机器；全局库存保留量在无限模式下同样继续生效。
+- **喂食槽转化关闭时的采蜜判定**：转化开关关闭时，喂食槽里的转化原料不再被算作有效花朵，蜜蜂不会再"凭黑曜石"照常采蜜产出本应依赖真实花朵的蜜脾。开关翻转会立即失效花朵判定缓存。
+- **拉取剩余物掉落导致进存档卡死**：输入槽满且无法回送 ME 时，剩余物过去会被丢到世界上，原版会把大堆栈拆成大量掉落实体——ME 存量到 1e8 级时可堆出数十万实体打满堆内存，表现为进入存档卡在 100% 加载、无日志无崩溃报告。现在改为宿主级有界待处理缓冲（按物品类型登记、随存档持久化），抽取前先确认有登记位，抽不下就整轮跳过，物品无损留在 ME 网络。
+- **区块卸载丢失待处理物品**：区块卸载过去会清空整个 AE2 状态，连尚未归还的待处理物品一起丢弃。现在只清理网格节点和各类缓存，物品所有权保留到下次加载继续回送。
+- **输出推送的物品复制与丢失**：产物推送改为"预留—提交—确认"账本：ME 已接收但槽位扣减失败时不再按成功计数，指纹与源槽不匹配会冻结该槽并告警；已提交账本在输出开关关闭后仍会优先结算，不会悬挂。
+- **AE2 缺失/版本不兼容时的工厂崩溃**：工厂与基础离心机的 AE2 tick 阶段补齐 `LinkageError` 兜底，与蜂箱路径同一防御深度，版本不兼容的 AE2 只会输出节流日志而非让机器 tick 崩溃。
+- **数量显示作用域**：紧凑堆叠数量改为槽位级实现，严格限定到本模组机器的输入/输出槽和 AE2 拉取窗口；玩家背包、能量槽、光标物品、tooltip、JEI 叠加层以及其他所有界面均保持原版显示。
+- **数量穿透窗口**：AE2 拉取槽的库存数字不再越过后打开的数量设置窗口，重叠区域会正确由前景窗口遮挡。
+- **拉取窗口槽位操作**：AE2 拉取窗口的取放操作加入按操作类型的频率限制，ME 提取/插入返回值做饱和裁剪，且只在 ME 状态真的改变时才同步界面，避免空操作放大广播。
+- **Mekanism Extras 工厂 Mixin 条件**：同时引用 Mekanism Extras 与 Evolved Mekanism Extras 的 Mixin 现在要求两者都存在才应用，只装其中一个不会再触发类加载失败。
+
+### English
+
+#### Added
+
+- **Feeder conversion toggle**: the mechanical apiary feeder window title bar now has a conversion switch (off by default). While off, feeder items act as flowers only and are never consumed; turning it on lets bees run Productive Bees item/block conversion recipes (for example a Draconic Bee turning Obsidian into Crying Obsidian). The switch persists through world saves, configuration cards, and machine pickup, and the bottom hint text changes to state whether inputs are consumed.
+
+#### Changed
+
+- **Unlimited-all semantics**: Shift-clicking the global gear in the AE2 pull UI no longer behaves differently depending on whether markers exist. It always toggles "pull unlimited for every comb the filter allows", and the flag is no longer cleared when markers are added. English and Chinese tooltips were updated to match.
+
+#### Fixed
+
+- **Blacklist bypassed by unlimited-all**: blacklist/whitelist admission is now resolved before the unlimited flag, so blacklisted combs are never pulled while unlimited-all is enabled. Global stock reserves still apply in unlimited mode.
+- **Harvest check with conversion disabled**: while the conversion toggle is off, conversion ingredients in the feeder no longer count as valid flowers, so bees can no longer "harvest from obsidian" and produce combs that should require a real flower. Flipping the toggle invalidates the flower cache immediately.
+- **Dropped pull leftovers hanging world load**: when input slots were full and leftovers could not return to the ME network, they used to be dropped into the world, where vanilla splits a large stack into many item entities — with ME stock in the 1e8 range this piled up hundreds of thousands of entities and exhausted the heap, appearing as a world load stuck at 100% with no log output and no crash report. Leftovers now go into a bounded per-machine pending buffer (registered per item type, persisted with the save); extraction is skipped for the round when no registration slot is free, leaving the items safely in the ME network.
+- **Pending items lost on chunk unload**: chunk unload used to clear the entire AE2 state, discarding pending items along with it. It now only clears grid nodes and caches, so item ownership survives until the next load and returns to the network.
+- **Output push duplication and loss**: product pushes now use a reserve–commit–confirm ledger. Items accepted by the ME network but not successfully removed from the slot are no longer counted as pushed, a fingerprint mismatch freezes that slot with a warning, and committed ledger entries are settled first even after the output switch is turned off so nothing hangs.
+- **Factory crashes with a missing or incompatible AE2**: factory and basic centrifuge AE2 tick stages now guard against `LinkageError` at the same depth as the apiary path, so an incompatible AE2 produces a throttled log line instead of crashing the machine tick.
+- **Count-rendering scope**: compact counts moved to a slot-level implementation and are strictly limited to this mod's machine input/output slots and AE2 pull window. Player inventory slots, power slots, cursor items, tooltips, JEI overlays, and every other screen retain vanilla count rendering.
+- **Count labels showing through windows**: AE2 pull-slot stock labels are now correctly covered by amount-editor windows opened above them.
+- **Pull-window slot actions**: AE2 pull-window take/place actions are rate limited per action type, ME extract/insert results are saturation-clamped, and the GUI is only resynced when ME state actually changed, so rejected or no-op clicks cannot amplify broadcasts.
+- **Mekanism Extras factory mixin condition**: the mixin that references both Mekanism Extras and Evolved Mekanism Extras now requires both to be present, so installing only one no longer triggers a class-loading failure.
+
 ## [1.0.5] - 2026-08-23
 
 ### 新增

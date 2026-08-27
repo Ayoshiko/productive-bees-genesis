@@ -120,6 +120,12 @@ public final class ModPayloads {
 				ToggleApiaryDirectEjectPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleToggleApiaryDirectEject
 		);
+		// 喂食槽转化开关包 — 由 GuiFeederWindow 的转化开关按钮发送（与 AE2 无关，无条件注册）
+		registrar.playToServer(
+				ToggleApiaryFeederConversionPayload.TYPE,
+				ToggleApiaryFeederConversionPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleToggleApiaryFeederConversion
+		);
 		// Smelting compatibility is a core centrifuge feature and remains available without AE2.
 		registrar.playToServer(
 				ToggleSmeltingCompatPayload.TYPE,

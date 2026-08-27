@@ -17,6 +17,7 @@ import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.inventory.IInventorySlot;
@@ -191,6 +192,7 @@ public final class CentrifugeFactoryCommonLogic {
 		pbUpgradeDelegate.save(nbt, provider);
 		ae2LifecycleHandler.saveNodeNBT(factory, nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().savePerTileState(nbt);
+		factory.productivebeesgenesis$getAe2StateHolder().savePendingItems(nbt);
 		// Task 6/10: 多流体槽 NBT 持久化 — orphaned NBT 字段方案
 		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
 			// MULTI 模式:写出当前多流体槽数据
@@ -225,6 +227,7 @@ public final class CentrifugeFactoryCommonLogic {
 		pbProcessor.saveAdditional(nbt, provider);
 		pbUpgradeDelegate.save(nbt, provider);
 		ae2StateHolder.savePerTileState(nbt);
+		ae2StateHolder.savePendingItems(nbt);
 		// Task 10: MULTI_PER_FLUID 模式下持久化多流体槽内容（扳手拆卸不丢失流体）
 		// 修复 HIGH-4: SINGLE 模式孤儿 NBT 也需写出（与 saveAdditional 对称）
 		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
@@ -249,6 +252,7 @@ public final class CentrifugeFactoryCommonLogic {
 		pbUpgradeDelegate.load(nbt, provider);
 		ae2LifecycleHandler.loadNodeNBT(factory, nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().loadPerTileState(nbt);
+		factory.productivebeesgenesis$getAe2StateHolder().loadPendingItems(nbt);
 		boolean hasMultiFluidTag = nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
 		// Task 6/10: 多流体槽 NBT 处理 — orphaned NBT 字段方案
 		// 原理:saveAdditional 接收全新 CompoundTag,SINGLE 模式不调用 writeToNBT 会导致数据丢失;
@@ -357,7 +361,16 @@ public final class CentrifugeFactoryCommonLogic {
 
 	/** Drains the previous tick's local fluid before a high-parallel factory batch starts. */
 	public static void drainAe2FluidsBeforeProcessing(@NotNull IAe2OutputHostBase factory) {
-		if (Ae2IntegrationLoader.isAe2Loaded()) Ae2FluidPusher.pushFluids(factory);
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
+		// LinkageError 兜底：present-but-incompatible AE2 在 Ae2FluidPusher 类链接阶段抛
+		// NoClassDefFoundError（属 Error 非 Exception），isAe2Loaded 守卫拦不住，与蜂箱
+		// 路径（TileEntityMekApiary.logAe2）和基础机路径保持同一防御深度（Issue #8）。
+		try {
+			Ae2FluidPusher.pushFluids(factory);
+		} catch (Exception | LinkageError e) {
+			LogThrottle.error("ae2_factory_drain_fluids",
+					"AE2 工厂 drainAe2FluidsBeforeProcessing 异常，降级跳过本 tick: {}", e.toString());
+		}
 	}
 
 	/** onUpdateServer 后处理 — 推送输出到 AE2 网络并拉取输入（AE2 未加载时短路） */
@@ -365,11 +378,18 @@ public final class CentrifugeFactoryCommonLogic {
 		// AE2 未加载时整体短路：pushOutputs/pushLocalTankContentsNow 会触发 pusher 类加载，
 		// 原守卫位置在两者之后无法拦截（Issue #8 同类问题）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
-		Ae2OutputPusher.pushOutputs(factory);
-		// 收尾排空本 batch 写入本地罐的流体；直接产出模式仍保持正常批处理。
-		Ae2FluidPusher.pushLocalTankContentsNow(factory);
-		if (factory instanceof IAe2InputHost inputHost) {
-			Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
+		// LinkageError 兜底：与蜂箱/基础机 AE2 tick 阶段一致，present-but-incompatible AE2
+		// 在 pusher/puller 类链接阶段抛 Error，降级为节流日志而非工厂 tick 崩溃。
+		try {
+			Ae2OutputPusher.pushOutputs(factory);
+			// 收尾排空本 batch 写入本地罐的流体；直接产出模式仍保持正常批处理。
+			Ae2FluidPusher.pushLocalTankContentsNow(factory);
+			if (factory instanceof IAe2InputHost inputHost) {
+				Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
+			}
+		} catch (Exception | LinkageError e) {
+			LogThrottle.error("ae2_factory_push_pull",
+					"AE2 工厂 pushAe2OutputsAndPullInputs 异常，降级跳过本 tick: {}", e.toString());
 		}
 	}
 

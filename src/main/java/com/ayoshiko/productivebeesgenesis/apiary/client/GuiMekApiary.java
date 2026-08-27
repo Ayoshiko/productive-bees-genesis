@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.client.screen.CompactStackCountScreen;
 import com.ayoshiko.productivebeesgenesis.client.screen.EnergyUsageDisplaySmoother;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryFeedBeePayload;
@@ -60,7 +61,8 @@ import org.jetbrains.annotations.NotNull;
 	 * @param <CONTAINER> 蜂箱容器类型，必须继承 {@link MekanismTileContainer}
 	 */
 public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends MekanismTileContainer<TILE>>
-		extends GuiConfigurableTile<TILE, CONTAINER> {
+		extends GuiConfigurableTile<TILE, CONTAINER>
+		implements CompactStackCountScreen {
 
 	private static final int BEE_COLS = 3;
 	private static final int BEE_ROWS = 1;

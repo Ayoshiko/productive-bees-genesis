@@ -146,13 +146,9 @@ public final class Ae2InputPuller {
 		//     interface semantics): pull as much as the input slots can hold,
 		//     ignoring both the configured interval and per-tick quantity.
 		Ae2InputFilter filter = holder.getOrCreateInputFilter();
-		// A network-stock flag is per entry. Only the explicit all-entry fallback
-		// and an all-network-stock whitelist retain the high-throughput cadence.
-		// The legacy Shift action is the only machine-wide unlimited mode. A direct
-		// entry's unlimited flag is carried by its PullEntry and does not widen other
-		// entries' quotas.
-		boolean unlimitedMode = filter != null
-				&& (filter.isUnlimitedAllFallback() || filter.hasUnlimitedEntries());
+		// Global unlimited applies after filter admission. Per-entry unlimited remains
+		// independent and is carried by each PullEntry.
+		boolean unlimitedMode = filter != null && filter.hasUnlimitedEntries();
 		long inputCapacity = calculateInputCapacity(inputSlots);
 		if (inputCapacity <= 0) {
 			// Input slots are full; treat as a failed attempt so the cooldown backs off.
@@ -179,6 +175,10 @@ public final class Ae2InputPuller {
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
 		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
+		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
+		boolean hadPendingItems = holder.getPendingItemBuffer().size() > 0;
+		retryPendingItems(level, holder, meStorage, inputSlots, pos, currentTick);
+		if (hadPendingItems) host.productivebeesgenesis$markAe2StateChanged();
 
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
@@ -211,11 +211,12 @@ public final class Ae2InputPuller {
 			}
 			directEntries = filter.getDirectEntries();
 		}
+		boolean ignoreNbt = holder.isAeInputNbtIgnore();
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
 				&& filter.hasOnlyNetworkStockEntries()
 				&& !filter.isGlobalNetworkStock()
-				&& !holder.isAeInputNbtIgnore();
+				&& !ignoreNbt;
 		if (directOnly) {
 			// Network-stock whitelist entries use exact keys and avoid a full inventory scan.
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
@@ -224,13 +225,17 @@ public final class Ae2InputPuller {
 				if (key == null || !CombFuzzyMatcher.isCombItem(key) || !pullKeys.add(key)) continue;
 				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
-				long configuredLimit = filter.getDirectPullLimit(key, available, holder.isAeInputNbtIgnore());
+				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
+				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
+					pullKeys.remove(key);
+					continue;
+				}
 				if (configuredLimit >= 0L) {
 					available = Math.min(available, configuredLimit);
 				}
 				if (available > 0) {
 					pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-							direct.unlimited()));
+							filter.isUnlimitedForKey(key, ignoreNbt)));
 				} else {
 					pullKeys.remove(key);
 				}
@@ -249,7 +254,7 @@ public final class Ae2InputPuller {
 							|| !pullKeys.add(key)) continue;
 					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
-					long configuredLimit = filter.getPullLimitIfAllowed(key, available, holder.isAeInputNbtIgnore());
+					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
@@ -259,7 +264,7 @@ public final class Ae2InputPuller {
 					}
 					if (available > 0) {
 						pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-								direct.unlimited()));
+								filter.isUnlimitedForKey(key, ignoreNbt)));
 					} else {
 						pullKeys.remove(key);
 					}
@@ -284,7 +289,6 @@ public final class Ae2InputPuller {
 				}
 				buffers.markScanCandidateRefresh(availableStacks, currentTick);
 			}
-			boolean ignoreNbt = holder.isAeInputNbtIgnore();
 			// 总收集上限与旧实现一致：whitelist 预置条目也计入 maxTypesToCollect
 			int scanCap = Math.max(0, maxTypesToCollect - pullList.size());
 			// The candidate list is refreshed infrequently; amounts are still read from
@@ -548,6 +552,25 @@ public final class Ae2InputPuller {
 		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) {
 			return new PullBatchResult(0, 0L, false, true, false);
 		}
+		// 抽取前的兜底闸门：只要求 pending 缓冲还有「类型条目位」可登记，不限制抽取数量。
+		// extract 一旦执行就无法撤回，若之后既无法落槽、又无法回送 ME、也无处登记，
+		// 物品就无处安放。旧实现把这部分 dropItemStack 到世界，而原版
+		// Containers.dropItemStack 把一个大栈按 maxStackSize 拆成多个 ItemEntity，
+		// 因此在「输入槽满 + 缓冲满」的稳定态下每轮都在刷掉落物，
+		// 本整合包 ME 存量达 1e8 级时直接堆出 75 万个 ItemEntity 打满 4GB 堆，
+		// 表现为「进入存档卡在 100% 加载界面、日志无输出、无崩溃报告」。
+		// 注意：这里不能用数量额度去截断 request —— 无限拉取模式要求一次拉满槽位堆叠上限
+		// （无限多元工厂单槽 17M），按缓冲额度限流会把吞吐压到 131K，属功能回退。
+		// 缓冲只承载「分发 + 回送 ME 之后仍剩下的」少量物品，数量本身不占 NBT 体积。
+		String fingerprint = Ae2ItemFingerprint.encode(key, level.registryAccess());
+		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
+		if (!pending.canRegister(fingerprint)) {
+			LogThrottle.warn("ae2_pending_item_capacity",
+					"AE2 输入剩余物缓冲类型已满（{} 种），本轮跳过抽取（物品留在 ME 网络无损）key={}",
+					Ae2PendingItemBuffer.MAX_ENTRIES, key);
+			return new PullBatchResult(0, 0L, false, true, false);
+		}
+		if (amount <= 0) return new PullBatchResult(0, 0L, false, true, false);
 		long extractStart = System.nanoTime();
 		long extracted = SaturatingMath.clampToRequest(
 				meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
@@ -561,6 +584,9 @@ public final class Ae2InputPuller {
 			return new PullBatchResult(0, extractCost, slow, slow, !slow);
 		}
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
+		// 只登记「分发+回送之后真正剩下的」数量，不再预登记整批抽取量。
+		// 抽取前已确认该指纹有条目位可用，因此剩余量一定能被完整登记，
+		// 不存在「登记不下 → 掉落世界」的分支。
 		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
 		int originalCount = stack.getCount();
 		int slotCount = inputSlots.size();
@@ -596,14 +622,59 @@ public final class Ae2InputPuller {
 		boolean hadLeftover = !stack.isEmpty();
 		if (hadLeftover) {
 			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack, actionSource,
-					null, level, pos, inputSlots);
+					holder.getPushState().getReturnBackoff(), level, pos, inputSlots);
 			if (leftoverRemaining > 0) {
-				LogThrottle.error("ae2_pull_leftover_loss_batch",
-						"AE2 批量拉取剩余物品回送失败，存在丢失风险 (5秒内仅首条输出) key={}", key);
+				// 既没落槽也没回送成功的部分才登记 pending，由下一轮 retryPendingItems 处理。
+				// 抽取前的条目位检查保证这里必定登记成功（数量无上限，只用饱和加法防溢出）。
+				pending.enqueue(fingerprint, leftoverRemaining, gameTick);
+				pending.recordFailure(fingerprint, gameTick);
+				if (level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
+				LogThrottle.warn("ae2_pull_leftover_pending",
+						"AE2 批量拉取剩余物品已登记 pending，等待下一轮回送 key={} count={}",
+						key, leftoverRemaining);
 			}
 		}
 		return new PullBatchResult(insertedCount, extractCost, slowExtract, hadLeftover,
 				!slowExtract && !hadLeftover);
+	}
+
+	/** 重试宿主级 pending 物品；每次最多处理四种 key，避免断网时占满 tick。 */
+	private static void retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
+			List<IInventorySlot> inputSlots, BlockPos pos, long currentTick) {
+		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
+		int attempts = 0;
+		for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick)) {
+			if (attempts++ >= 4) break;
+			AEItemKey key = Ae2ItemFingerprint.decode(entry.fingerprint(), level.registryAccess());
+			if (key == null) {
+				pending.recordFailure(entry.fingerprint(), currentTick);
+				LogThrottle.warn("ae2_pending_item_decode",
+						"AE2 pending 物品指纹无法解析，保留等待迁移 fingerprint={}", entry.fingerprint());
+				continue;
+			}
+			// 单次只尝试 int 能表达的部分：pending 数量现在无上限（可超过 Integer.MAX_VALUE），
+			// 用 update 覆盖会把未尝试的超额部分抹掉造成物品丢失，改为按实际交付量 consume。
+			long attempt = Math.min(entry.amount(), Integer.MAX_VALUE);
+			ItemStack stack = key.toStack((int) attempt);
+			for (IInventorySlot slot : inputSlots) {
+				if (slot == null || stack.isEmpty()) continue;
+				try {
+					stack = slot.insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
+				} catch (RuntimeException e) {
+					LogThrottle.warn("ae2_pending_item_slot",
+							"AE2 pending 物品回插槽异常，跳过该槽: {}", e.toString());
+				}
+			}
+			long remaining = stack.isEmpty() ? 0L : stack.getCount();
+			if (remaining > 0L) {
+				remaining = Ae2LeftoverReturner.returnLeftoverToMe(meStorage, key, stack,
+						ActionSourceHolder.INSTANCE, holder.getPushState().getReturnBackoff(),
+						level, pos, inputSlots);
+			}
+			long delivered = attempt - remaining;
+			if (delivered > 0L) pending.consume(entry.fingerprint(), delivered, currentTick);
+			if (remaining > 0L) pending.recordFailure(entry.fingerprint(), currentTick);
+		}
 	}
 
 	private static void handlePullException(Throwable e, AEItemKey key) {

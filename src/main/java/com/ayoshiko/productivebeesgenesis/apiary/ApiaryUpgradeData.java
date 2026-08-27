@@ -113,6 +113,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	public final boolean directEjectEnabled;
 	public final boolean directAeOutputEnabled;
 	public final boolean centrifugePriorityEnabled;
+	/** 喂食槽转化开关（升级时保留用户设置，默认关闭）。 */
+	public final boolean feederConversionEnabled;
 
 	/**
 	 * 蜂箱工厂升级数据构造函数
@@ -154,7 +156,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			@Nullable CompoundTag cageInSlotNbt, @Nullable CompoundTag energySlotNbt,
 			@Nullable CompoundTag outputBufferNbt, int selectedBeeSlot,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
-			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled) {
+			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
+			boolean feederConversionEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -174,5 +177,6 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.directEjectEnabled = directEjectEnabled;
 		this.directAeOutputEnabled = directAeOutputEnabled;
 		this.centrifugePriorityEnabled = centrifugePriorityEnabled;
+		this.feederConversionEnabled = feederConversionEnabled;
 	}
 }

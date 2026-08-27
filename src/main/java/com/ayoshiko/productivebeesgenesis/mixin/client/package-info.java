@@ -5,7 +5,7 @@
 	 * <ol>
 	 *   <li>{@code ConfigurableBeeColorMixin} — 蜜蜂颜色配置覆盖</li>
 	 *   <li>{@code CosmicItemRendererMixin} — 宇宙物品渲染拦截</li>
-	 *   <li>{@code GuiGraphicsMixin} — GUI 物品数量大数字格式化（K/M/G/T）</li>
+	 *   <li>{@code ContainerSlotCountMixin} — 机器输入/输出槽大数字格式化</li>
 	 *   <li>{@code IBlockEntityExtensionMixin} — 方块实体模型数据注入</li>
 	 * </ol>
 	 */

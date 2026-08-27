@@ -42,7 +42,8 @@ import org.jetbrains.annotations.NotNull;
 	 * imageHeight增加18以容纳三行输出槽、流体槽和底部标签间距；玩家物品栏从 y=100 开始。
 	 */
 public class GuiMekCentrifuge
-		extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>> {
+		extends GuiConfigurableTile<TileEntityMekCentrifuge, MekanismTileContainer<TileEntityMekCentrifuge>>
+		implements CompactStackCountScreen {
 
 	private GuiPbUpgradeTab<TileEntityMekCentrifuge> pbUpgradeTab;
 

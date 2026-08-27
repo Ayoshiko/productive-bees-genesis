@@ -187,13 +187,15 @@ final class Ae2InputFilterQuerySupport {
 
 	/**
 	 * Combines filter admission and direct-entry pull-limit calculation in one slot walk.
+	 * Blacklist/whitelist admission is resolved before the global unlimited flag is
+	 * applied, so unlimited-all cannot re-enable a rejected key.
 	 * Returns {@link Ae2InputFilter#PULL_DISALLOWED} when rejected, {@code -1} when
 	 * allowed without a direct limit, or a non-negative effective limit.
 	 */
 	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
 			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
-			boolean globalNetworkStock, long globalReserve) {
+			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve) {
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
@@ -231,24 +233,19 @@ final class Ae2InputFilterQuerySupport {
 			}
 			if (!matches) continue;
 			filterMatched = true;
+			// Blacklist admission is already conclusively rejected; avoid walking the
+			// remaining slots and never let an unlimited flag reach the amount policy.
 			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
 		}
 
-		if (mode == FilterMode.WHITELIST && !filterMatched) {
-			return Ae2InputFilter.PULL_DISALLOWED;
-		}
-		if (!directFound) {
-			if (!globalNetworkStock) return -1L;
-			return Math.max(0L, visibleStock - Math.max(0L, globalReserve));
-		}
-		// A direct entry with its own stock mode is an explicit override. Otherwise
-		// the filter-level default applies even when this key was directly marked.
-		if (!liveStock && globalNetworkStock) {
-			liveStock = true;
-			reserve = Math.max(0L, globalReserve);
-		}
-		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
-				Ae2InputFilter.getMaxDirectAmount(), reserve);
+		boolean admitted = switch (mode) {
+			case BLACKLIST -> !filterMatched;
+			case WHITELIST -> filterMatched;
+			case DISABLED -> true;
+		};
+		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
+				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
+				Ae2InputFilter.getMaxDirectAmount());
 	}
 
 	/** Returns true when at least one exact entry uses live network stock. */

@@ -73,4 +73,16 @@ final class Ae2PerTileStateNbtCodec {
 			}
 		}
 	}
+
+	/** 保存不应进入配置卡的 AE2 输入剩余物所有权记录。 */
+	static void savePendingItems(Ae2OutputStateHolder holder, CompoundTag tag) {
+		holder.getPendingItemBuffer().save(tag);
+		holder.getOutputLedger().save(tag);
+	}
+
+	/** 加载方块实体的 AE2 输入剩余物所有权记录。 */
+	static void loadPendingItems(Ae2OutputStateHolder holder, CompoundTag tag) {
+		holder.getPendingItemBuffer().load(tag);
+		holder.getOutputLedger().load(tag);
+	}
 }

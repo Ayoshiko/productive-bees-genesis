@@ -48,6 +48,10 @@ final class ApiaryContainerTrackers {
 		container.track(SyncableBoolean.create(
 				tile::isCentrifugePriorityEnabled,
 				tile::setCentrifugePriorityEnabled));
+		// 喂食槽转化开关（无条件添加，保持客户端/服务端 tracker 数量一致）
+		container.track(SyncableBoolean.create(
+				tile::isFeederConversionEnabled,
+				tile::setFeederConversionEnabled));
 		// Physical pages stay synchronized while the GUI is open. The visible proxy slots alone
 		// cannot observe changes made to a hidden page, which otherwise leaves stale client stacks.
 		for (BasicInventorySlot outputSlot : tile.getOutputSlots()) {

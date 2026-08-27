@@ -41,7 +41,8 @@ import java.util.List;
 	 */
 public class GuiExtraMekCentrifugeFactory
 		extends GuiConfigurableTile<TileEntityExtraMekCentrifugeFactory,
-				MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>> {
+				MekanismTileContainer<TileEntityExtraMekCentrifugeFactory>>
+		implements CompactStackCountScreen {
 
 	/** PB升级TAB */
 	private GuiPbUpgradeTab<TileEntityExtraMekCentrifugeFactory> pbUpgradeTab;

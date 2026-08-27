@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 
 
 /**
@@ -75,6 +76,18 @@ public class FeederSlotManager {
 
 	/** 上次同步的转化配方版本号 — 配方重载后失效花朵缓存（转化原料作为花朵来源） */
 	private int lastConversionQueriesVersion = -1;
+
+	/**
+	 * per-tile 转化开关查询（DIP：依赖抽象而非持有 TileEntity 引用）
+	 * <br/>
+	 * 默认 {@code false} 与蜂箱字段默认值一致；由 {@link TileEntityMekApiary} 构造时注入
+	 * {@code this::isFeederConversionEnabled}。开关关闭时「转化原料算有效花朵」通路必须失效，
+	 * 否则玩家只放转化原料（如末影龙蜜蜂的黑曜石）也会被判定为有花朵而照常采蜜产蜜脾。
+	 */
+	private BooleanSupplier conversionEnabledSupplier = () -> false;
+
+	/** 上次判定时的转化开关状态 — 开关翻转需失效花朵缓存 */
+	private boolean lastConversionEnabled = false;
 
 	/**
 	 * 默认构造（初始版参数：3×3=9 个喂食槽）
@@ -174,14 +187,34 @@ public class FeederSlotManager {
 			flowerValidityCache.invalidate();
 			lastConversionQueriesVersion = BeeConversionQueries.getVersion();
 		}
+		// per-tile 转化开关变化会改变「转化原料是否算有效花朵」的结论，必须同样失效缓存，
+		// 否则关闭开关后仍读到开启时缓存的 true（反之亦然）
+		boolean conversionEnabled = conversionEnabledSupplier.getAsBoolean();
+		if (lastConversionEnabled != conversionEnabled) {
+			flowerValidityCache.invalidate();
+			lastConversionEnabled = conversionEnabled;
+		}
 		Boolean cached = flowerValidityCache.get(beeTypeKey);
 		if (cached != null) {
 			return cached;
 		}
 
-		boolean result = computeHasValidFlower(beeTypeKey);
+		boolean result = computeHasValidFlower(beeTypeKey, conversionEnabled);
 		flowerValidityCache.put(beeTypeKey, result);
 		return result;
+	}
+
+	/**
+	 * 注入 per-tile 转化开关查询 — 由 {@link TileEntityMekApiary} 构造时调用
+	 * <br/>
+	 * 用 {@link BooleanSupplier} 而非持有 TileEntity 引用：避免槽位管理器反向依赖方块实体
+	 * （DIP + 迪米特法则），也便于工厂版子类复用同一注入路径。
+	 */
+	public void setConversionEnabledSupplier(BooleanSupplier supplier) {
+		if (supplier == null) return;
+		this.conversionEnabledSupplier = supplier;
+		this.lastConversionEnabled = supplier.getAsBoolean();
+		flowerValidityCache.invalidate();
 	}
 
 
@@ -203,12 +236,15 @@ public class FeederSlotManager {
 		return flowerValidityCache.version();
 	}
 
-	private boolean computeHasValidFlower(ResourceLocation beeTypeKey) {
+	private boolean computeHasValidFlower(ResourceLocation beeTypeKey, boolean conversionEnabled) {
 		// PB isFlowerItem/isFlowerBlock 语义：转化原料（物品转化 / 方块转化 BlockItem）
 		// 对任意花朵类型（blocks/entity_types/Rancher）都是有效花朵，与 flowerType 无关——
 		// 必须在 Rancher/实体早退分支之前检查，否则 entity_types 类蜜蜂放入转化原料
 		// 会因花朵判定失败导致 pending 清零、转化永不执行。
-		if (BeeConversionQueries.hasAnyConversionRecipe(beeTypeKey)
+		// 但该通路只在 per-tile 转化开关开启时成立：开关关闭时转化不会执行，
+		// 若仍把转化原料算作有效花朵，蜜蜂会"凭黑曜石采蜜"产出本应靠龙蛋才有的蜜脾。
+		if (conversionEnabled
+				&& BeeConversionQueries.hasAnyConversionRecipe(beeTypeKey)
 				&& hasConversionFlowerInFeeder(beeTypeKey)) {
 			return true;
 		}

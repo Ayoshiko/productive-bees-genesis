@@ -125,12 +125,8 @@ public class GuiFeederWindow extends GuiWindow {
 
 		// 翻页按钮（仅 paginated 时添加，位于标题栏右侧）
 		if (paginated) {
-			int prevX = relativeX + width
-					- 2 * (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP)
-					- FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
-			int nextX = relativeX + width
-					- (FeederWindowLayoutSupport.PAGE_BTN_WIDTH + FeederWindowLayoutSupport.PAGE_BTN_GAP)
-					- FeederWindowLayoutSupport.PAGE_BTN_RIGHT_MARGIN;
+			int prevX = relativeX + FeederWindowLayoutSupport.titleButtonX(width, 2);
+			int nextX = relativeX + FeederWindowLayoutSupport.titleButtonX(width, 1);
 			int btnY = relativeY + FeederWindowLayoutSupport.PAGE_BTN_Y_OFFSET;
 			FeederPageButton prevBtn = new FeederPageButton(gui(), prevX, btnY,
 					FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
@@ -145,6 +141,13 @@ public class GuiFeederWindow extends GuiWindow {
 			addChild(prevBtn);
 			addChild(nextBtn);
 		}
+
+		// 转化功能开关（标题栏最右侧；paginated 时排在两个翻页按钮之外，索引 0 恒为最右）
+		addChild(new FeederConversionButton(gui(),
+				relativeX + FeederWindowLayoutSupport.titleButtonX(width, 0),
+				relativeY + FeederWindowLayoutSupport.PAGE_BTN_Y_OFFSET,
+				FeederWindowLayoutSupport.PAGE_BTN_WIDTH, FeederWindowLayoutSupport.PAGE_BTN_HEIGHT,
+				tile));
 
 		// 左侧喂食槽网格背景（GuiElementHolder）
 		addChild(new GuiElementHolder(gui(), relativeX + FeederWindowLayoutSupport.LEFT_PADDING,
@@ -181,6 +184,17 @@ public class GuiFeederWindow extends GuiWindow {
 	@Override
 	protected int getTitlePadStart() {
 		return 14 + GuiPinButton.WIDTH;
+	}
+
+	/**
+	 * 标题右侧内边距 — 为转化开关（+ 可选两个翻页按钮）让位
+	 * <br/>
+	 * MEK 的 drawTitleText 把标题居中于 [padStart, xSize - padEnd] 区间，
+	 * 不让位时长标题会压到标题栏右侧按钮上。
+	 */
+	@Override
+	protected int getTitlePadEnd() {
+		return FeederWindowLayoutSupport.titleButtonsReservedWidth(paginated ? 3 : 1);
 	}
 
 	/**
@@ -270,8 +284,10 @@ public class GuiFeederWindow extends GuiWindow {
 		// 右侧信息面板内容
 		renderInfoPanel(guiGraphics);
 
-		// 底部提示
-		Component hint = Component.translatable("gui.productivebeesgenesis.feeder_window.hint");
+		// 底部提示 — 随转化开关切换文案：开启后原料会被消耗，避免与"物品不会被消耗"矛盾
+		Component hint = Component.translatable(tile.isFeederConversionEnabled()
+				? "gui.productivebeesgenesis.feeder_window.hint_conversion"
+				: "gui.productivebeesgenesis.feeder_window.hint");
 		int hintWidth = font().width(hint);
 		int hintX = relativeX + (width - hintWidth) / 2;
 		int hintY = relativeY + height - FeederWindowLayoutSupport.HINT_HEIGHT + 2;

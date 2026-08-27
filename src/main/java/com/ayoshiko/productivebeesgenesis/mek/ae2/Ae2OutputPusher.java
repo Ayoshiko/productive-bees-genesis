@@ -105,23 +105,23 @@ public final class Ae2OutputPusher {
 	 * @param host 输出宿主（离心机方块实体）
 	 */
 	public static void pushOutputs(IAe2OutputHostBase host) {
-		// 1. 集成开关检查（由宿主决定配置源：离心机读 aeOutputEnabled，蜂箱读 apiaryAeOutputEnabled）
-		//    注意：这两个接口方法可能被蜂箱子类覆盖，保持原调用方式（各内部调用1次 getAe2StateHolder）
-		if (!host.productivebeesgenesis$isOutputPushEnabled()) return;
-		// 1.1 per-tile 物品输出开关检查（与全局配置 AND 关系）
-		if (!host.productivebeesgenesis$isAeItemOutputEnabled()) return;
-
 		// Spark 优化：缓存 holder 和 pushState，消除后续 9 次冗余 getAe2StateHolder() 接口分发
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
+		Level level = host.productivebeesgenesis$getAe2Level();
+		if (level == null) return;
+		int settled = settleOutputLedger(host, holder.getOutputLedger(), level.registryAccess());
+		if (settled > 0) {
+			host.productivebeesgenesis$onAe2PushComplete(settled);
+			host.productivebeesgenesis$markAe2StateChanged();
+		}
+
+		// 新提交可被开关和退避阻止，但已提交账本必须优先结算，避免关闭输出后复制窗口悬挂。
+		if (!host.productivebeesgenesis$isOutputPushEnabled()
+				|| !host.productivebeesgenesis$isAeItemOutputEnabled()) return;
 		Ae2PushStateHolder pushState = holder.getPushState();
 
 		// 1.2 同 gameTick 去重 — JDTE/JDT 加速器在同一真实 tick 内多次调用时仅首次执行完整推送。
-		//     注：曾设计 TPS 自适应跳过（TPS<5 时停推），因会伤害满载产出/推送效率已移除，
-		//     卡顿保护改由慢 insert 预算 + 指数退避承担（只钳制病态网络，不误伤正常推送）。
-		//     null level 守卫：仅在 tile 初始化阶段 getAe2Level() 返回 null，直接返回安全
-		Level level = host.productivebeesgenesis$getAe2Level();
-		if (level == null) return;
 		long gameTick = level.getGameTime();
 		if (!pushState.tryStartItemPush(gameTick)) return;
 
@@ -176,8 +176,10 @@ public final class Ae2OutputPusher {
 			int flatIndex = RoundRobinSlotTraversal.index(scanStart, offset, flatSlotCount);
 			int process = flatIndex / AeItemKeyCache.SLOTS_PER_PROCESS;
 			int slotIdx = flatIndex % AeItemKeyCache.SLOTS_PER_PROCESS;
-			collectSlot(buffers, process, slotIdx, outputSlot(host, process, slotIdx), keyCache);
+			collectSlot(buffers, process, slotIdx, outputSlot(host, process, slotIdx), keyCache,
+					level.registryAccess());
 		}
+		entries.removeIf(entry -> holder.getOutputLedger().hasSlot(entry.process, entry.slotIdx));
 
 		if (entries.isEmpty()) return;
 		// 9. 少量槽位时直接逐槽推送，避免 Map 开销
@@ -205,7 +207,8 @@ public final class Ae2OutputPusher {
 				if (firstAttemptedEntry == null) firstAttemptedEntry = entry;
 				attemptedEntries++;
 				long insertStart = System.nanoTime();
-				int pushed = tryPushSlotDirect(entry, meStorage, ActionSourceHolder.INSTANCE);
+				int pushed = tryPushSlotDirect(entry, meStorage, ActionSourceHolder.INSTANCE,
+						holder.getOutputLedger());
 				long insertCost = System.nanoTime() - insertStart;
 				boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
 				if (slowInsert) {
@@ -228,6 +231,7 @@ public final class Ae2OutputPusher {
 			}
 			if (pushedItems > 0) {
 				host.productivebeesgenesis$onAe2PushComplete(pushedItems);
+				host.productivebeesgenesis$markAe2StateChanged();
 			}
 			// 慢 insert 优先于成功复位判定：病态网络（含 ProjectExpansion 转换接口等昂贵
 			// 外部存储）insert 仍会成功（返回>0），若先 recordSuccess 再 recordFailure，
@@ -313,7 +317,7 @@ public final class Ae2OutputPusher {
 			}
 			long insertStart = System.nanoTime();
 			int pushed = pushBatchKey(key, totalCount, keyToEntries.get(key),
-					meStorage, ActionSourceHolder.INSTANCE);
+					meStorage, ActionSourceHolder.INSTANCE, holder.getOutputLedger());
 			long insertCost = System.nanoTime() - insertStart;
 			boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
 			if (slowInsert) {
@@ -346,6 +350,7 @@ public final class Ae2OutputPusher {
 
 		if (pushedItems > 0) {
 			host.productivebeesgenesis$onAe2PushComplete(pushedItems);
+			host.productivebeesgenesis$markAe2StateChanged();
 		}
 		// 慢 insert 优先于成功复位判定（与逐槽路径同语义）：病态网络 insert 仍会成功，
 		// 先 recordSuccess 会每轮清零指数，窗口恒卡 50ms（每 50ms 一次 5-10ms 网络遍历）。
@@ -601,7 +606,8 @@ public final class Ae2OutputPusher {
 	 */
 	private static void collectSlot(ReusableBuffers buffers,
 									int process, int slotIdx, @Nullable IInventorySlot slot,
-									@Nullable AeItemKeyCache cache) {
+									@Nullable AeItemKeyCache cache,
+									net.minecraft.core.HolderLookup.Provider registries) {
 		if (slot == null) return;
 		ItemStack stack = slot.getStack();
 		if (stack.isEmpty()) return;
@@ -622,8 +628,46 @@ public final class Ae2OutputPusher {
 			buffers.entryPool.add(entry);
 			buffers.entryPoolCursor++;
 		}
-		entry.set(slot, stack, key, stack.getCount(), process, slotIdx);
+		entry.set(slot, stack, key, stack.getCount(), process, slotIdx,
+				Ae2ItemFingerprint.encode(key, registries));
 		buffers.entries.add(entry);
+	}
+
+	private static int settleOutputLedger(IAe2OutputHostBase host, Ae2OutputLedger ledger,
+			net.minecraft.core.HolderLookup.Provider registries) {
+		int confirmed = 0;
+		for (Ae2OutputLedger.Settlement settlement : ledger.snapshot()) {
+			try {
+				IInventorySlot slot = outputSlot(host, settlement.process(), settlement.slot());
+				if (slot == null) continue;
+				ItemStack current = slot.getStack();
+				if (current.isEmpty()) {
+					ledger.confirm(settlement.process(), settlement.slot(), settlement.remaining());
+					confirmed += settlement.remaining();
+					continue;
+				}
+				AEItemKey currentKey = AEItemKey.of(current);
+				if (currentKey == null || !settlement.fingerprint().equals(
+						Ae2ItemFingerprint.encode(currentKey, registries))) {
+					LogThrottle.error("ae2_output_ledger_conflict",
+							"AE2 输出账本与源槽指纹冲突，槽位已冻结 process={} slot={} remaining={}",
+							settlement.process(), settlement.slot(), settlement.remaining());
+					continue;
+				}
+				int remaining = Math.min(settlement.remaining(), current.getCount());
+				if (remaining <= 0) continue;
+				ItemStack updated = current.copy();
+				updated.shrink(remaining);
+				slot.setStack(updated);
+				ledger.confirm(settlement.process(), settlement.slot(), remaining);
+				confirmed += remaining;
+			} catch (RuntimeException e) {
+				LogThrottle.warn("ae2_output_ledger_settle",
+						"AE2 输出账本结算异常，保留记录等待重试 process={} slot={}: {}",
+						settlement.process(), settlement.slot(), e.toString());
+			}
+		}
+		return confirmed;
 	}
 
 	@Nullable
@@ -640,32 +684,42 @@ public final class Ae2OutputPusher {
 	 * 直接推送单个槽位（少量槽位场景，避免 Map 开销）
 	 */
 	private static int tryPushSlotDirect(SlotEntry entry,
-			MEStorage meStorage, IActionSource actionSource) {
+			MEStorage meStorage, IActionSource actionSource, Ae2OutputLedger ledger) {
 		IInventorySlot slot = entry.slot;
 		int originalCount = entry.count;
 		long inserted = 0;
+		if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint, originalCount)) return 0;
 		try {
 			inserted = SaturatingMath.clampToRequest(
 					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource),
 					originalCount);
 			if (inserted <= 0) {
+				ledger.cancel(entry.process, entry.slotIdx);
 				return 0;
 			}
+			ledger.commitAccepted(entry.process, entry.slotIdx, (int) inserted);
 
 			if (inserted >= originalCount) {
 				slot.setStack(ItemStack.EMPTY);
 			} else {
 				ItemStack current = slot.getStack();
-				if (current.isEmpty()) return (int) inserted;
-				current.shrink((int) inserted);
-				slot.setStack(current);
+				if (current.isEmpty()) {
+					ledger.confirm(entry.process, entry.slotIdx, (int) inserted);
+					return (int) inserted;
+				}
+				if (!entry.key.matches(current)) return 0;
+				ItemStack updated = current.copy();
+				updated.shrink((int) inserted);
+				slot.setStack(updated);
 			}
+			ledger.confirm(entry.process, entry.slotIdx, (int) inserted);
 			return (int) inserted;
 		} catch (Exception e) {
+			if (inserted <= 0) ledger.cancel(entry.process, entry.slotIdx);
 			handlePushException(e, entry.process, entry.slotIdx, entry.stack, originalCount);
 			// v9-L4 修复：poweredInsert 已成功但 setStack 异常时，物品已进入 AE2 不可撤回。
 			// 返回已插入量防止调用方重试导致物品复制；未插入时返回 0
-			return SaturatingMath.saturatingToInt(inserted);
+			return 0;
 		}
 	}
 
@@ -677,41 +731,74 @@ public final class Ae2OutputPusher {
 	 */
 	private static int pushBatchKey(AEItemKey key, long totalCount, List<SlotEntry> slotEntries,
 			MEStorage meStorage,
-			IActionSource actionSource) {
+			IActionSource actionSource, Ae2OutputLedger ledger) {
+		int reserved = 0;
+		for (SlotEntry entry : slotEntries) {
+			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint, entry.count)) {
+				for (int i = 0; i < reserved; i++) {
+					SlotEntry reservedEntry = slotEntries.get(i);
+					ledger.cancel(reservedEntry.process, reservedEntry.slotIdx);
+				}
+				return 0;
+			}
+			reserved++;
+		}
 		try {
 			long inserted = SaturatingMath.clampToRequest(
 					meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource), totalCount);
 			if (inserted <= 0) {
+				for (SlotEntry entry : slotEntries) ledger.cancel(entry.process, entry.slotIdx);
 				return 0;
 			}
 
-			// 按顺序清空槽位
-			long remaining = inserted;
-			for (SlotEntry entry : slotEntries) {
-				if (remaining <= 0) break;
+			int[] acceptedBySlot = new int[slotEntries.size()];
+			long remainingToAssign = inserted;
+			for (int i = 0; i < slotEntries.size(); i++) {
+				SlotEntry entry = slotEntries.get(i);
+				if (remainingToAssign <= 0) {
+					ledger.cancel(entry.process, entry.slotIdx);
+					continue;
+				}
+				int assigned = (int) Math.min(entry.count, remainingToAssign);
+				acceptedBySlot[i] = assigned;
+				ledger.commitAccepted(entry.process, entry.slotIdx, assigned);
+				remainingToAssign -= assigned;
+			}
+
+			int confirmed = 0;
+			for (int i = 0; i < slotEntries.size(); i++) {
+				SlotEntry entry = slotEntries.get(i);
+				int toRemove = acceptedBySlot[i];
+				if (toRemove <= 0) continue;
 				IInventorySlot slot = entry.slot;
 				try {
 					ItemStack current = slot.getStack();
-					if (current.isEmpty()) continue;
-					int toRemove = (int) Math.min(current.getCount(), remaining);
-					if (toRemove <= 0) continue;
+					if (current.isEmpty()) {
+						ledger.confirm(entry.process, entry.slotIdx, toRemove);
+						confirmed += toRemove;
+						continue;
+					}
+					if (!key.matches(current) || current.getCount() < toRemove) break;
 					if (toRemove >= current.getCount()) {
 						slot.setStack(ItemStack.EMPTY);
 					} else {
-						current.shrink(toRemove);
-						slot.setStack(current);
+						ItemStack updated = current.copy();
+						updated.shrink(toRemove);
+						slot.setStack(updated);
 					}
-					remaining -= toRemove;
+					ledger.confirm(entry.process, entry.slotIdx, toRemove);
+					confirmed += toRemove;
 				} catch (Exception e) {
-					// 单个槽位清空异常不影响其他槽位
 					handlePushException(e, entry.process, entry.slotIdx, entry.stack, entry.count);
+					break;
 				}
 			}
-			return SaturatingMath.saturatingToInt(inserted);
+			return confirmed;
 		} catch (Exception e) {
 			// v9-L1 修复：外层 catch 仅在 poweredInsert 抛出时触发（内层循环异常已被内层 catch 处理），
 			// 此时槽位尚未被修改，无需回滚。移除死回滚代码避免误导。
 			SlotEntry first = slotEntries.get(0);
+			for (SlotEntry entry : slotEntries) ledger.cancel(entry.process, entry.slotIdx);
 			handlePushException(e, first.process, first.slotIdx, first.stack, first.count);
 			return 0;
 		}
@@ -750,17 +837,20 @@ public final class Ae2OutputPusher {
 		int count;
 		int process;
 		int slotIdx;
+		String fingerprint;
 
 		SlotEntry() {
 		}
 
-		void set(IInventorySlot slot, ItemStack stack, AEItemKey key, int count, int process, int slotIdx) {
+		void set(IInventorySlot slot, ItemStack stack, AEItemKey key, int count, int process, int slotIdx,
+				String fingerprint) {
 			this.slot = slot;
 			this.stack = stack;
 			this.key = key;
 			this.count = count;
 			this.process = process;
 			this.slotIdx = slotIdx;
+			this.fingerprint = fingerprint;
 		}
 	}
 
