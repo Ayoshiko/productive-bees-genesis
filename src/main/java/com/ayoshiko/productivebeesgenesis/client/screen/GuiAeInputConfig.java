@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeInputFilterModePayload;
+import com.ayoshiko.productivebeesgenesis.network.NetworkSecurityConstants;
 import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload.OperationType;
 import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterEntryPayload;
@@ -454,24 +455,28 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private void onSlotPlaced(int pageSlotIndex, ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return;
 		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(stack);
-		if (beeType == null) return;
-		boolean isBlock = CombFuzzyMatcher.isCombBlock(stack);
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
-		Optional<String> directKey = Optional.empty();
+		if (beeType != null) {
+			boolean isBlock = CombFuzzyMatcher.isCombBlock(stack);
+			PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+					pos, Optional.of(beeType), Optional.empty(), isBlock, globalSlotIndex, OperationType.ADD));
+			ghostSlots[pageSlotIndex].setEntry(beeType, isBlock);
+			return;
+		}
+
+		String fingerprint;
 		try {
-			if (Minecraft.getInstance().level != null) {
-				String fingerprint = Ae2ItemFingerprint.encode(AEItemKey.of(stack),
-						Minecraft.getInstance().level.registryAccess());
-				if (!fingerprint.isBlank()) directKey = Optional.of(fingerprint);
-			}
-		} catch (RuntimeException ignored) {
-			// Keep the legacy bee-type entry when an AE key cannot be created.
+			if (Minecraft.getInstance().level == null) return;
+			fingerprint = Ae2ItemFingerprint.encode(AEItemKey.of(stack),
+					Minecraft.getInstance().level.registryAccess());
+		} catch (RuntimeException error) {
+			return;
 		}
+		if (fingerprint.isBlank()
+				|| fingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH) return;
 		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
-				pos, Optional.of(beeType), directKey, isBlock, globalSlotIndex, OperationType.ADD));
-		if (directKey.isPresent()) {
-			ghostSlots[pageSlotIndex].setDirectEntry(stack, directKey.get());
-		}
+				pos, Optional.empty(), Optional.of(fingerprint), false, globalSlotIndex, OperationType.ADD));
+		ghostSlots[pageSlotIndex].setDirectEntry(stack, fingerprint);
 	}
 
 	/** Sends a REMOVE operation for the given page-local slot. */

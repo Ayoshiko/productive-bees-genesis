@@ -76,4 +76,12 @@ final class Ae2CursorScan {
 			if (!out.contains(key)) out.add(key);
 		}
 	}
+
+	/** Collects the prioritized group first, then uses remaining capacity for fallback keys. */
+	static <T> void collectPrioritized(List<T> out, List<T> prefixScratch,
+			Iterable<T> prioritizedKeys, Iterable<T> fallbackKeys, T cursor,
+			int maxTypes, Predicate<T> acceptable) {
+		collectMapped(out, prefixScratch, prioritizedKeys, cursor, maxTypes, Function.identity(), acceptable);
+		collectMapped(out, prefixScratch, fallbackKeys, cursor, maxTypes, Function.identity(), acceptable);
+	}
 }

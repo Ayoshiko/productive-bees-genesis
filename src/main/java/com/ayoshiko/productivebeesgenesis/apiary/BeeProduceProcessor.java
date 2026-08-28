@@ -12,6 +12,7 @@ import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -66,8 +67,10 @@ public class BeeProduceProcessor {
 	private final ApiaryUpgradeHandler upgradeHandler;
 	private final TileEntityMekApiary apiary;
 
-	/** 基因采样器产出处理器 — 委托生成 TYPE 基因物品 */
+	/** 基因采样器产出处理器 — 委托生成类型与属性基因物品 */
 	private final GeneSampler geneSampler = new GeneSampler();
+	/** 每次 flush 复用的采样来源；保存不可变属性快照和计数，不持有蜜蜂 NBT。 */
+	private final GeneSampler.SampleBatch reusableGeneSampleBatch = new GeneSampler.SampleBatch();
 
 	/** 蜜脾→蜜脾块转换器 — 委托执行蜜脾块升级转换 */
 	private final CombBlockConverter combBlockConverter = new CombBlockConverter();
@@ -143,8 +146,10 @@ public class BeeProduceProcessor {
 		reusableProducedItems.clear();
 		long totalFluidAmount = 0L;
 		long aggregatedCount = 0L;  // 累积同组产出次数，循环外统一调用 BeeProduceBatchSampler（聚合取整修复）
-		// 累积总产出次数 — 基因采样器按每次产出独立判定概率（与 PB 原版语义一致）
-		long totalProduceCount = 0L;
+		// 基因采样批次复用固定数组，避免高等级工厂每个蜂种组创建 List/record/NBT 引用。
+		GeneSampler.SampleBatch geneSampleBatch = reusableGeneSampleBatch;
+		geneSampleBatch.clear();
+		int geneSamplerCount = upgradeHandler.getGeneSamplerCount();
 		long[] productivityCounts = reusableProductivityCounts;
 		Arrays.fill(productivityCounts, 0L);
 		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
@@ -169,6 +174,7 @@ public class BeeProduceProcessor {
 			if (count <= 0) continue;
 			BeeSlot slot = beeSlots[idx];
 			if (slot == null || slot.isEmpty()) continue;
+			CompoundTag beeData = slot.getBeeData();
 
 			aggregatedCount = SaturatingMath.saturatingAdd(aggregatedCount, count);
 			// 模块 2+3：仅当流体模板非空时累积流体量（非蜂蜜流体蜜蜂不注入蜂蜜）
@@ -176,7 +182,12 @@ public class BeeProduceProcessor {
 				long fluidAmount = SaturatingMath.saturatingMultiply(fluidTemplate.getAmount(), count);
 				totalFluidAmount = SaturatingMath.saturatingAdd(totalFluidAmount, fluidAmount);
 			}
-			totalProduceCount = SaturatingMath.saturatingAdd(totalProduceCount, count);
+			if (geneSamplerCount > 0) {
+				// PB 原版只采样成年蜂；Age 缺失时 CompoundTag#getInt 返回 0，按成年蜂兼容。
+				if (beeData == null || beeData.getInt("Age") >= 0) {
+					geneSampleBatch.add(slot.getGeneSampleProfile(), count);
+				}
+			}
 			int productivityLevel = slot.getProductivityLevel();
 			productivityCounts[productivityLevel] = SaturatingMath.saturatingAdd(
 					productivityCounts[productivityLevel], count);
@@ -251,21 +262,19 @@ public class BeeProduceProcessor {
 			}
 		}
 
-		// 基因采样器产出 TYPE 基因 — 复刻 PB 原版 AdvancedBeehiveBlockEntity#beeReleasePostAction 逻辑
-		// 机械蜂箱虽无实体蜜蜂，但可从蜜蜂 NBT 的 neoforge:attachments.productivebees:attributes_handler 读取属性
-		// （参考 BeeTooltipRenderer.getAttributesCompound）。当前仅生成 TYPE 基因，
-		// PRODUCTIVITY 基因加成已在 BeeProduceBatchSampler 中应用，ENDURANCE/TEMPER 不适用（无实体蜜蜂）。
-		// 与 PB 原版 Gene.getStack(type, purity) 格式完全兼容。
-		// 概率公式：SAMPLER_BASE_CHANCE × 采样器数量 × 累积产出次数（独立伯努利判定）
-		if (totalProduceCount > 0 && beeTypeKey != null && level != null
-				&& upgradeHandler.hasGeneSamplerUpgrade()) {
-			List<ItemStack> geneStacks = geneSampler.generateGeneSamples(
-					beeTypeKey, SaturatingMath.saturatingToInt(totalProduceCount),
-					upgradeHandler.getGeneSamplerCount(), level);
-			if (!geneStacks.isEmpty()) {
-				allItems.addAll(geneStacks);
+		// 基因采样器按 PB 原版六类 GeneAttribute 随机采样。机械蜂箱从每只蜜蜂保存的
+		// attributes_handler NBT 读取属性值，不能只按 beeTypeKey 聚合，否则同类型异属性蜜蜂会串值。
+		// 概率公式：PB samplerChance × 采样器数量；批次总量按成年蜜蜂产出次数加权。
+		if (!geneSampleBatch.isEmpty() && beeTypeKey != null && level != null && geneSamplerCount > 0) {
+			try {
+				geneSampler.generateGeneSamplesInto(
+						allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level);
+			} finally {
+				geneSampleBatch.clear();
 			}
 		}
+		// 防御性清理：beeTypeKey/level 异常时也不跨 tick 保留属性快照。
+		geneSampleBatch.clear();
 
 		if (discardUselessByproducts) {
 			allItems.removeIf(UselessByproductUpgradeHelper::isPollenPuff);

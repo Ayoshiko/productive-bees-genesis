@@ -42,9 +42,10 @@ final class AbstractMekCentrifugeFactorySetupHelper {
 			@NotNull RecipeCacheLookupMonitor<?>[] monitors) {
 		factory.validInputCache.clear();
 		factory.inputProducesOutputCache.clear();
+		boolean smeltingEnabled = MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(factory);
 		for (int i = 0; i < processes; i++) {
 			factory.pbProcessor.resetSmeltingCache(i);
-			MekCentrifugeFactoryHelper.invalidateRecipeMonitor(monitors[i]);
+			if (smeltingEnabled) MekCentrifugeFactoryHelper.invalidateRecipeMonitor(monitors[i]);
 		}
 	}
 

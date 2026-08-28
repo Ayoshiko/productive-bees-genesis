@@ -70,7 +70,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void productivebeesgenesis$onSmeltingCompatChanged() {
 		pbProcessor.resetSmeltingCache(0);
-		MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitor);
+		// 关闭时保留 active CachedRecipe，让已经进入输入槽的 SMELTING 任务自然排空。
+		if (MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
+			MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitor);
+		}
 	}
 
 	/** 输出槽/流体槽管理器 — 懒初始化（super() 构造期间通过 getInitialInventory() 触发） */

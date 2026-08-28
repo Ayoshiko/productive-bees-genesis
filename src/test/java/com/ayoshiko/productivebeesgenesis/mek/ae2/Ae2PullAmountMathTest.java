@@ -36,4 +36,29 @@ class Ae2PullAmountMathTest {
 		assertEquals(0L, Ae2PullAmountMath.effectiveLimit(Long.MAX_VALUE, 300L,
 				true, true, Long.MAX_VALUE, 300L));
 	}
+
+	@Test
+	void finalReserveGateUsesCurrentExtractableStock() {
+		assertEquals(100, Ae2FilterPullPolicy.reserveSafeRequest(256, 1_100L, 1_000L));
+		assertEquals(0, Ae2FilterPullPolicy.reserveSafeRequest(256, 1_000L, 1_000L));
+		assertEquals(0, Ae2FilterPullPolicy.reserveSafeRequest(256, 900L, 1_000L));
+		assertEquals(64, Ae2FilterPullPolicy.reserveSafeRequest(64, 10_000L, 1_000L));
+		assertEquals(5, Ae2FilterPullPolicy.reserveSafeRequest(
+				Integer.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE - 5L));
+	}
+
+	@Test
+	void finalReserveGateFailsClosedForInvalidLiveStock() {
+		assertEquals(0, Ae2FilterPullPolicy.reserveSafeRequest(64, -1L, 1_000L));
+		assertEquals(0, Ae2FilterPullPolicy.reserveSafeRequest(0, 1_100L, 1_000L));
+		assertEquals(0, Ae2FilterPullPolicy.reserveSafeRequest(64, 1_100L, -1L));
+	}
+
+	@Test
+	void entryReserveOverridesGlobalAndGlobalRemainsTheFallback() {
+		assertEquals(250L, Ae2FilterPullPolicy.effectiveReserveFloor(true, 250L, true, 1_000L));
+		assertEquals(1_000L, Ae2FilterPullPolicy.effectiveReserveFloor(false, 250L, true, 1_000L));
+		assertEquals(-1L, Ae2FilterPullPolicy.effectiveReserveFloor(false, 250L, false, 1_000L));
+	}
+
 }

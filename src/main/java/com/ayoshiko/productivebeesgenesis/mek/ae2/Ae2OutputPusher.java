@@ -897,13 +897,19 @@ public final class Ae2OutputPusher {
 		final List<AEItemKey> scanSelectedKeys = new ArrayList<>();
 		final PullCandidateAmounts scanCandidateAmounts = new PullCandidateAmounts();
 		/**
-		 * Cached comb keys observed in the AE2 inventory. The current KeyCounter is
-		 * consulted for amounts during every pull; this list only avoids repeatedly
-		 * enumerating a large network inventory while accelerated machines catch up.
+		 * Cached SMELTING keys observed in the AE2 inventory. Keeping this list separate
+		 * lets the puller fill its bounded candidate window with SMELTING keys before
+		 * falling back to combs without enumerating the network twice.
 		 */
+		final List<AEItemKey> scanSmeltingCandidateKeys = new ArrayList<>();
+		/** Cached Productive Bees comb keys used as the lower-priority candidate group. */
 		final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
 		volatile Object scanCandidateSource;
 		volatile long scanCandidateRefreshTick = Long.MIN_VALUE;
+		volatile long scanCandidateRecipeVersion = Long.MIN_VALUE;
+		volatile boolean scanCandidateSmeltingEnabled;
+		/** Per-host Mekanism recipe lookup cache; released with the reusable buffers. */
+		final Ae2SmeltingInputCache smeltingInputCache = new Ae2SmeltingInputCache();
 
 		/** Per-input-slot capacity snapshot reused between pull planning and local insertion. */
 		private long[] inputSlotCapacities = new long[16];
@@ -966,23 +972,35 @@ public final class Ae2OutputPusher {
 			return scanCandidateKeys;
 		}
 
-		boolean needsScanCandidateRefresh(Object source, long gameTick, long intervalTicks) {
+		List<AEItemKey> borrowScanSmeltingCandidateKeys() {
+			return scanSmeltingCandidateKeys;
+		}
+
+		boolean needsScanCandidateRefresh(Object source, long gameTick, long intervalTicks,
+				long recipeVersion, boolean smeltingEnabled) {
 			return scanCandidateSource != source
 					|| scanCandidateRefreshTick == Long.MIN_VALUE
 					|| gameTick < scanCandidateRefreshTick
-					|| gameTick - scanCandidateRefreshTick >= Math.max(1L, intervalTicks);
+					|| gameTick - scanCandidateRefreshTick >= Math.max(1L, intervalTicks)
+					|| scanCandidateRecipeVersion != recipeVersion
+					|| scanCandidateSmeltingEnabled != smeltingEnabled;
 		}
 
-		void markScanCandidateRefresh(Object source, long gameTick) {
+		void markScanCandidateRefresh(Object source, long gameTick, long recipeVersion,
+				boolean smeltingEnabled) {
 			scanCandidateSource = source;
 			scanCandidateRefreshTick = gameTick;
+			scanCandidateRecipeVersion = recipeVersion;
+			scanCandidateSmeltingEnabled = smeltingEnabled;
 		}
 
 		void invalidateScanCandidateCache() {
-			// Grid callbacks may run off the server thread. Only publish invalidation
-			// markers here; the next server tick owns and clears the ArrayList.
+			// Grid callbacks may run off the server thread. Publish list invalidation
+			// markers only; the recipe cache provides its own synchronized clear path.
 			scanCandidateSource = null;
 			scanCandidateRefreshTick = Long.MIN_VALUE;
+			scanCandidateRecipeVersion = Long.MIN_VALUE;
+			smeltingInputCache.clear();
 		}
 
 		/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */

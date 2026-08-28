@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -146,6 +147,35 @@ class Ae2InputPullerTest {
 				key -> key instanceof String string ? string : null, key -> true);
 
 		assertEquals(List.of("b", "c", "a"), out);
+	}
+
+	@Test
+	void prioritizedScanFillsSmeltingCandidatesBeforeCombFallback() {
+		List<String> out = new ArrayList<>();
+		List<String> prefixScratch = new ArrayList<>();
+
+		Ae2CursorScan.collectPrioritized(out, prefixScratch,
+				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b"),
+				null, 3, key -> true);
+
+		assertEquals(List.of("smelt_a", "smelt_b", "comb_a"), out);
+	}
+
+	@Test
+	void prioritizedScanAppliesReserveToSmeltingAndCombCandidates() {
+		List<String> out = new ArrayList<>();
+		List<String> prefixScratch = new ArrayList<>();
+		Map<String, Long> stock = Map.of(
+				"smelt_floor", 1_000L, "smelt_above", 1_100L,
+				"comb_floor", 1_000L, "comb_above", 1_100L);
+
+		Ae2CursorScan.collectPrioritized(out, prefixScratch,
+				List.of("smelt_floor", "smelt_above"), List.of("comb_floor", "comb_above"),
+				null, 4, key -> Ae2FilterPullPolicy.effectiveLimit(
+						true, false, 0L, stock.get(key), false, 0L,
+						false, false, true, 1_000L, Long.MAX_VALUE) > 0L);
+
+		assertEquals(List.of("smelt_above", "comb_above"), out);
 	}
 
 }

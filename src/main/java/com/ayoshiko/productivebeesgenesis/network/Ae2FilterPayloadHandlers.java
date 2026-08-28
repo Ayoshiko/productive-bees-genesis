@@ -11,6 +11,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NetworkInventoryView;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -206,11 +207,20 @@ final class Ae2FilterPayloadHandlers {
 		AEItemKey directKey = null;
 		if (directFingerprint != null && !directFingerprint.isBlank()) {
 			directKey = Ae2ItemFingerprint.decode(directFingerprint, serverPlayer.registryAccess());
-			if (directKey == null || !CombFuzzyMatcher.isCombItem(directKey)) return;
-			ResourceLocation actualBeeType = CombFuzzyMatcher.getBeeType(directKey);
-			if (beeType != null && !beeType.equals(actualBeeType)) return;
-			if (payload.isBlock() != CombFuzzyMatcher.isCombBlock(directKey)) return;
-			directFingerprint = Ae2ItemFingerprint.encode(directKey, serverPlayer.registryAccess());
+			if (directKey == null) return;
+			if (CombFuzzyMatcher.isCombItem(directKey)) {
+				ResourceLocation actualBeeType = CombFuzzyMatcher.getBeeType(directKey);
+				if (beeType == null || !beeType.equals(actualBeeType)
+						|| payload.isBlock() != CombFuzzyMatcher.isCombBlock(directKey)) return;
+				// 蜜脾保持 fuzzy 语义；兼容旧客户端同时发送 direct key 的请求。
+				directFingerprint = null;
+				directKey = null;
+			} else {
+				if (beeType != null || payload.isBlock() || !isSmeltingInput(serverPlayer, directKey)) return;
+				directFingerprint = Ae2ItemFingerprint.encode(directKey, serverPlayer.registryAccess());
+				if (directFingerprint.isBlank()
+						|| directFingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH) return;
+			}
 		}
 		switch (payload.operation()) {
 			// V15: setEntryAt 直接覆盖目标位置（位置固定语义，拖到哪格放哪格）
@@ -233,6 +243,16 @@ final class Ae2FilterPayloadHandlers {
 		}
 		// 推送完整条目列表到客户端（tracker 无法同步集合数据）
 		syncFilterToClient(be, serverPlayer);
+	}
+
+	private static boolean isSmeltingInput(ServerPlayer player, AEItemKey key) {
+		try {
+			return MekanismRecipeType.SMELTING.getInputCache().containsInput(player.level(), key.getReadOnlyStack());
+		} catch (LinkageError | RuntimeException error) {
+			LogThrottle.warn("ae2_filter_server_smelting",
+					"服务端 AE2 过滤器 SMELTING 配方校验异常，拒绝 key={}: {}", key, error.toString());
+			return false;
+		}
 	}
 
 	/**

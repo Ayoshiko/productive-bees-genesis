@@ -39,8 +39,7 @@ public final class Ae2NetworkInventoryView {
 			// GUI sync and input pulling from repeating this probe in the same game tick.
 			if (network != null) {
 				try {
-					simulated = Math.max(0L,
-							network.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, source));
+					simulated = liveExtractableAmount(network, key, Long.MAX_VALUE, source);
 				} catch (LinkageError | RuntimeException ignored) {
 					// The cached inventory is still a safe fallback for incompatible external storages.
 				}
@@ -50,6 +49,16 @@ public final class Ae2NetworkInventoryView {
 			cache.amounts.put(key, visible);
 		}
 		return Ae2VisibleStockMath.merge(visible, 0L, cap);
+	}
+
+	/**
+	 * Queries current extractable stock without using the per-machine or AE2 inventory cache.
+	 * Callers enforcing a reserve floor must invoke this immediately before MODULATE.
+	 */
+	static long liveExtractableAmount(MEStorage network, AEItemKey key, long cap, IActionSource source) {
+		if (network == null || key == null || source == null || cap <= 0L) return 0L;
+		long extracted = network.extract(key, cap, Actionable.SIMULATE, source);
+		return Math.min(cap, Math.max(0L, extracted));
 	}
 
 	/**

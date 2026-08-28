@@ -6,6 +6,8 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -17,10 +19,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-import java.util.List;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 
 /**
 	 * AE2 输入拉取器（与 {@link Ae2OutputPusher} 对称）— 将 AE2 网络中的蜜脾拉取到离心机输入槽。
@@ -30,13 +33,14 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class Ae2InputPuller {
 	/**
 	 * Refresh the candidate key list at most every half second. Inventory amounts are
-	 * still read from the current AE2 snapshot for every pull, so this only delays
-	 * discovery of newly-added item types and never uses stale amounts.
+	 * resolved again for every pull; reserve-aware modes are clamped against a live
+	 * simulation immediately before extraction, so this only delays discovery of new types.
 	 */
 	private static final long CANDIDATE_KEY_REFRESH_INTERVAL_TICKS = 10L;
 
 	private static final Comparator<PullEntry> PULL_ENTRY_ORDER = (a, b) -> {
 		if (a.marked != b.marked) return Boolean.compare(b.marked, a.marked);
+		if (a.smelting != b.smelting) return Boolean.compare(b.smelting, a.smelting);
 		if (a.combBlock != b.combBlock) return Boolean.compare(b.combBlock, a.combBlock);
 		return Long.compare(a.servedInWindow, b.servedInWindow);
 	};
@@ -182,6 +186,7 @@ public final class Ae2InputPuller {
 
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2OutputPusher.ReusableBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
+		boolean smeltingEnabled = MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(host);
 		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateKeyBackoff(holder);
 		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
 		fairness.roll(currentTick);
@@ -212,6 +217,9 @@ public final class Ae2InputPuller {
 			directEntries = filter.getDirectEntries();
 		}
 		boolean ignoreNbt = holder.isAeInputNbtIgnore();
+		boolean globalNetworkStock = filter != null && filter.isGlobalNetworkStock();
+		boolean hasNetworkStockEntries = filter != null && !globalNetworkStock
+				&& filter.hasNetworkStockEntries();
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
 				&& filter.hasOnlyNetworkStockEntries()
@@ -222,7 +230,9 @@ public final class Ae2InputPuller {
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
 				if (pullList.size() >= maxTypesToCollect) break;
 				AEItemKey key = direct.key();
-				if (key == null || !CombFuzzyMatcher.isCombItem(key) || !pullKeys.add(key)) continue;
+				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
+						level, key, smeltingEnabled, buffers.smeltingInputCache);
+				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
 				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
@@ -249,9 +259,10 @@ public final class Ae2InputPuller {
 				for (Ae2InputFilter.DirectEntry direct : directEntries) {
 					if (pullList.size() >= maxTypesToCollect) break;
 					AEItemKey key = direct.key();
+					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
+							level, key, smeltingEnabled, buffers.smeltingInputCache);
 					if ((!direct.networkStock() && !filter.isGlobalNetworkStock())
-							|| key == null || !CombFuzzyMatcher.isCombItem(key)
-							|| !pullKeys.add(key)) continue;
+							|| !kind.isAllowed() || !pullKeys.add(key)) continue;
 					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
 					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
@@ -277,33 +288,41 @@ public final class Ae2InputPuller {
 			Ae2OutputPusher.PullCandidateAmounts candidateAmounts = buffers.borrowScanCandidateAmounts();
 			candidateAmounts.clear();
 			List<AEItemKey> prefixKeys = buffers.borrowScanPrefixKeys();
+			List<AEItemKey> smeltingCandidateKeys = buffers.borrowScanSmeltingCandidateKeys();
 			List<AEItemKey> candidateKeys = buffers.borrowScanCandidateKeys();
+			long recipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 			if (buffers.needsScanCandidateRefresh(availableStacks, currentTick,
-					CANDIDATE_KEY_REFRESH_INTERVAL_TICKS)) {
+					CANDIDATE_KEY_REFRESH_INTERVAL_TICKS, recipeVersion, smeltingEnabled)) {
+				smeltingCandidateKeys.clear();
 				candidateKeys.clear();
 				for (var entry : availableStacks) {
-					if (entry.getKey() instanceof AEItemKey itemKey
-							&& CombFuzzyMatcher.isCombItem(itemKey)) {
-						candidateKeys.add(itemKey);
-					}
+					if (!(entry.getKey() instanceof AEItemKey itemKey)) continue;
+					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
+							level, itemKey, smeltingEnabled, buffers.smeltingInputCache);
+					if (kind.isSmelting()) smeltingCandidateKeys.add(itemKey);
+					else if (kind == Ae2InputCandidatePolicy.CandidateKind.COMB) candidateKeys.add(itemKey);
 				}
-				buffers.markScanCandidateRefresh(availableStacks, currentTick);
+				buffers.markScanCandidateRefresh(availableStacks, currentTick, recipeVersion, smeltingEnabled);
 			}
 			// 总收集上限与旧实现一致：whitelist 预置条目也计入 maxTypesToCollect
 			int scanCap = Math.max(0, maxTypesToCollect - pullList.size());
-			// The candidate list is refreshed infrequently; amounts are still read from
-			// the current KeyCounter snapshot, preserving live stock and filter limits.
-			Ae2CursorScan.collectMapped(selectedKeys, prefixKeys, candidateKeys,
-					candidateCursor, scanCap,
-					entry -> entry,
-					key -> {
-						if (pullKeys.contains(key)) return false;
-						int amount = getPullCandidateAmount(
-								key, availableStacks.get(key), filter, ignoreNbt);
-						if (amount <= 0) return false;
-						candidateAmounts.put(key, amount);
-						return true;
-					});
+			// Candidate selection remains cheap and bounded. A provisional high stock value
+			// keeps under-reporting external storage compatible; the final live reserve gate
+			// clamps every guarded key immediately before MODULATE.
+			Predicate<AEItemKey> acceptableCandidate = key -> {
+				if (pullKeys.contains(key)) return false;
+				boolean reserveGuarded = globalNetworkStock || (hasNetworkStockEntries
+						&& filter.getReserveFloorForKey(key, ignoreNbt) >= 0L);
+				long available = reserveGuarded ? Long.MAX_VALUE : availableStacks.get(key);
+				int amount = getPullCandidateAmount(
+						level, key, available, filter, ignoreNbt,
+						smeltingEnabled, buffers.smeltingInputCache);
+				if (amount <= 0) return false;
+				candidateAmounts.put(key, amount);
+				return true;
+			};
+			Ae2CursorScan.collectPrioritized(selectedKeys, prefixKeys, smeltingCandidateKeys,
+					candidateKeys, candidateCursor, scanCap, acceptableCandidate);
 			for (AEItemKey key : selectedKeys) {
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
@@ -333,6 +352,10 @@ public final class Ae2InputPuller {
 		boolean rankMarked = filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.DISABLED;
 		for (PullEntry entry : pullList) {
 			entry.marked = rankMarked && filter.matchesAnyEntry(entry.key, sortIgnoreNbt);
+			entry.reserveFloor = filter == null ? -1L
+					: filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);
+			entry.smelting = Ae2InputCandidatePolicy.classify(
+					level, entry.key, smeltingEnabled, buffers.smeltingInputCache).isSmelting();
 			entry.combBlock = CombFuzzyMatcher.isCombBlock(entry.key);
 			entry.servedInWindow = fairness.served(entry.key);
 		}
@@ -379,7 +402,8 @@ public final class Ae2InputPuller {
 			if (toPull <= 0) continue;
 			if (entry.unlimited) unlimitedAttempted = true;
 			try {
-				PullBatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull, meStorage,
+				PullBatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull,
+						entry.reserveFloor, meStorage,
 						ActionSourceHolder.INSTANCE,
 					inputSlots, inputSlotCapacities, slotStart, pos, keyBackoff);
 				int pulled = batchResult.insertedCount();
@@ -426,10 +450,11 @@ public final class Ae2InputPuller {
 		pullList.clear();
 	}
 
-	private static int getPullCandidateAmount(Object rawKey, long available, Ae2InputFilter filter,
-			boolean ignoreNbt) {
+	private static int getPullCandidateAmount(Level level, Object rawKey, long available, Ae2InputFilter filter,
+			boolean ignoreNbt, boolean smeltingEnabled, Ae2SmeltingInputCache smeltingInputCache) {
 		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)
-				|| !CombFuzzyMatcher.isCombItem(itemKey)) return 0;
+				|| !Ae2InputCandidatePolicy.classify(level, itemKey, smeltingEnabled,
+						smeltingInputCache).isAllowed()) return 0;
 		if (filter != null) {
 			long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt);
 			if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
@@ -542,7 +567,7 @@ public final class Ae2InputPuller {
 	 * This mirrors the AE2LT batching approach and reduces high-tier factory AE2 API calls.
 	 */
 	private static PullBatchResult pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
-			MEStorage meStorage, IActionSource actionSource,
+			long reserveFloor, MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, int slotStart, BlockPos pos,
 			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff) {
 		// 全服慢网络操作预算（Spark w4xREcN1HI：EnderDrives 的 extract 同样写 WAL，
@@ -571,17 +596,55 @@ public final class Ae2InputPuller {
 			return new PullBatchResult(0, 0L, false, true, false);
 		}
 		if (amount <= 0) return new PullBatchResult(0, 0L, false, true, false);
+
+		long reserveQueryCost = 0L;
+		boolean slowReserveQuery = false;
+		if (reserveFloor >= 0L) {
+			// AE2 的 KeyCounter 直到 tick 末才刷新。实际抽取前重新模拟，确保同刻的
+			// 其他离心机或外部设备已提交的消耗也会压低本次请求量。
+			long queryCap = SaturatingMath.saturatingAdd(reserveFloor, amount);
+			long queryStart = System.nanoTime();
+			long liveExtractable;
+			try {
+				liveExtractable = Ae2NetworkInventoryView.liveExtractableAmount(
+						meStorage, key, queryCap, actionSource);
+			} catch (LinkageError | RuntimeException e) {
+				reserveQueryCost = System.nanoTime() - queryStart;
+				Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost);
+				if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
+				LogThrottle.warn("ae2_reserve_query",
+						"AE2 库存保留实时查询失败，本轮跳过抽取 key={}: {}", key, e.toString());
+				return new PullBatchResult(0, reserveQueryCost,
+						Ae2GlobalInsertBudget.isSlowOperation(reserveQueryCost), true, false);
+			}
+			reserveQueryCost = System.nanoTime() - queryStart;
+			Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost);
+			slowReserveQuery = Ae2GlobalInsertBudget.isSlowOperation(reserveQueryCost);
+			amount = Ae2FilterPullPolicy.reserveSafeRequest(amount, liveExtractable, reserveFloor);
+			boolean reserveReached = amount <= 0;
+			if (reserveReached || Ae2GlobalInsertBudget.isExhausted(gameTick)) {
+				// 256x 加速仍只执行一次完整 tick，但保留线稳态下会每个真实 tick 重试。
+				// 按 key 墙钟退避可把空探针降到最高每秒一次；补货并成功抽取后立即清除。
+				if ((reserveReached || slowReserveQuery) && keyBackoff != null) {
+					keyBackoff.recordFailure(key, System.nanoTime());
+				}
+				return new PullBatchResult(0, reserveQueryCost, slowReserveQuery,
+						slowReserveQuery, !slowReserveQuery);
+			}
+		}
 		long extractStart = System.nanoTime();
 		long extracted = SaturatingMath.clampToRequest(
 				meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
 		long extractCost = System.nanoTime() - extractStart;
 		Ae2GlobalInsertBudget.recordCost(gameTick, extractCost);
+		long maxNetworkCost = Math.max(reserveQueryCost, extractCost);
+		boolean slowNetworkOperation = slowReserveQuery || Ae2GlobalInsertBudget.isSlowOperation(extractCost);
 		if (extracted <= 0) {
 			if (keyBackoff != null) {
 				keyBackoff.recordFailure(key, System.nanoTime());
 			}
-			boolean slow = Ae2GlobalInsertBudget.isSlowOperation(extractCost);
-			return new PullBatchResult(0, extractCost, slow, slow, !slow);
+			return new PullBatchResult(0, maxNetworkCost, slowNetworkOperation,
+					slowNetworkOperation, !slowNetworkOperation);
 		}
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
 		// 只登记「分发+回送之后真正剩下的」数量，不再预登记整批抽取量。
@@ -611,7 +674,7 @@ public final class Ae2InputPuller {
 			}
 		}
 		int insertedCount = originalCount - (stack.isEmpty() ? 0 : stack.getCount());
-		boolean slowExtract = Ae2GlobalInsertBudget.isSlowOperation(extractCost);
+		boolean slowExtract = slowNetworkOperation;
 		if (insertedCount > 0 && keyBackoff != null) {
 			if (slowExtract) {
 				keyBackoff.recordFailure(key, System.nanoTime());
@@ -634,7 +697,7 @@ public final class Ae2InputPuller {
 						key, leftoverRemaining);
 			}
 		}
-		return new PullBatchResult(insertedCount, extractCost, slowExtract, hadLeftover,
+		return new PullBatchResult(insertedCount, maxNetworkCost, slowExtract, hadLeftover,
 				!slowExtract && !hadLeftover);
 	}
 
@@ -728,6 +791,10 @@ public final class Ae2InputPuller {
 		boolean unlimited;
 		/** Pre-computed "matches a configured entry" flag used by the marked-first sort. */
 		boolean marked;
+		/** Whether this entry is an ordinary Mekanism SMELTING input. */
+		boolean smelting;
+		/** Effective AE2 stock floor, or -1 when no reserve policy applies. */
+		long reserveFloor;
 		boolean combBlock;
 		long servedInWindow;
 
@@ -740,6 +807,8 @@ public final class Ae2InputPuller {
 			this.remaining = amount;
 			this.unlimited = unlimited;
 			this.marked = false;
+			this.smelting = false;
+			this.reserveFloor = -1L;
 			this.combBlock = false;
 			this.servedInWindow = 0L;
 		}

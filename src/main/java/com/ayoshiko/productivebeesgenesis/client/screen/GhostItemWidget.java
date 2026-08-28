@@ -2,12 +2,14 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.slot.SlotType;
 import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostIngredientConsumer;
 import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostItemConsumer;
 import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget;
+import mekanism.common.recipe.MekanismRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -134,7 +136,7 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 	}
 
 	/**
-	 * JEI ghost ingredient 目标处理器 — 返回仅接受蜜脾类物品的消费者
+	 * JEI ghost ingredient 目标处理器 — 接受蜜脾或客户端可识别的 SMELTING 输入
 	 */
 	@Override
 	public IGhostIngredientConsumer getGhostHandler() {
@@ -147,7 +149,7 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 		@Override
 		public ItemStack supportedTarget(Object ingredient) {
 			if (ingredient instanceof ItemStack stack && !stack.isEmpty()) {
-				return CombFuzzyMatcher.getBeeType(stack) != null ? stack : null;
+				return isSupportedInput(stack) ? stack : null;
 			}
 			return null;
 		}
@@ -242,19 +244,33 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 	/**
 	 * 接收幽灵物品 — 统一入口
 	 * <br/>
-	 * 通过 {@link CombFuzzyMatcher#getBeeType(ItemStack)} 校验是否为蜜脾类物品，
-	 * 非蜜脾物品拒绝接收。校验通过后触发 placeCallback 由上层处理网络同步，
+	 * 蜜脾沿用 fuzzy 标记；普通物品仅在客户端存在 Mekanism SMELTING 配方时接受。
+	 * 客户端判断只改善界面交互，服务端仍会对完整 AE2 指纹重新验证配方。
+	 * 校验通过后触发 placeCallback 由上层处理网络同步，
 	 * 本地 beeType/isBlock 状态由服务端推送 {@link com.ayoshiko.productivebeesgenesis.network.SyncAeInputFilterEntriesPayload} 后刷新。
 	 */
 	public void acceptGhostIngredient(ItemStack stack) {
 		if (stack == null || stack.isEmpty()) {
 			return;
 		}
-		if (CombFuzzyMatcher.getBeeType(stack) == null) {
+		if (!isSupportedInput(stack)) {
 			return;
 		}
 		if (placeCallback != null) {
 			placeCallback.accept(slotIndex, stack);
+		}
+	}
+
+	private static boolean isSupportedInput(ItemStack stack) {
+		if (CombFuzzyMatcher.getBeeType(stack) != null) return true;
+		Level level = Minecraft.getInstance().level;
+		if (level == null) return false;
+		try {
+			return MekanismRecipeType.SMELTING.getInputCache().containsInput(level, stack);
+		} catch (LinkageError | RuntimeException error) {
+			LogThrottle.warn("ae2_filter_client_smelting",
+					"客户端 AE2 过滤器 SMELTING 配方查询异常，拒绝本次幽灵物品: {}", error.toString());
+			return false;
 		}
 	}
 

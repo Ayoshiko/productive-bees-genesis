@@ -86,6 +86,10 @@ public class BeeSlot {
 	 */
 	private volatile int cachedProductivityLevel = -1;
 
+	/** 基因采样属性快照；蜜蜂 NBT 变化后失效，避免每次批量产出重复解析五个字符串。 */
+	private volatile @Nullable GeneSampleProfile cachedGeneSampleProfile;
+	private volatile @Nullable CompoundTag cachedGeneSampleSource;
+
 	/**
 	 * 消费缓存的花朵有效性（cache miss 返回 {@code null}，避免哨兵值歧义）
 	 * <br/>
@@ -149,6 +153,8 @@ public class BeeSlot {
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
 		this.cachedProductivityLevel = -1;
+		this.cachedGeneSampleProfile = null;
+		this.cachedGeneSampleSource = null;
 		this.dirty = true;
 	}
 
@@ -280,6 +286,21 @@ public class BeeSlot {
 	}
 
 	/**
+	 * 获取当前蜜蜂的基因采样快照，仅在 NBT 引用变化时重新解析。
+	 *
+	 * @return 不持有 NBT 引用的不可变属性快照
+	 */
+	GeneSampleProfile getGeneSampleProfile() {
+		CompoundTag source = beeData;
+		GeneSampleProfile cached = cachedGeneSampleProfile;
+		if (cached != null && cachedGeneSampleSource == source) return cached;
+		GeneSampleProfile resolved = GeneSampleProfile.fromBeeData(source);
+		cachedGeneSampleSource = source;
+		cachedGeneSampleProfile = resolved;
+		return resolved;
+	}
+
+	/**
 	 * 兼容旧调用方的归一化生产力值。
 	 *
 	 * @return 生产力等级除以 3 后的归一化值
@@ -313,6 +334,8 @@ public class BeeSlot {
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
 		this.cachedProductivityLevel = -1;
+		this.cachedGeneSampleProfile = null;
+		this.cachedGeneSampleSource = null;
 		this.dirty = true;
 	}
 }

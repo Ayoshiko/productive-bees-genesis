@@ -488,7 +488,7 @@ public final class Ae2InputFilter {
 
 	/** Returns whether this specific key has opted into unlimited pulling. */
 	public boolean isUnlimitedForKey(AEItemKey key, boolean ignoreNbt) {
-		if (key == null || !CombFuzzyMatcher.isCombItem(key)) return false;
+		if (key == null) return false;
 		if (unlimitedAllFallback) return true;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
@@ -615,6 +615,13 @@ public final class Ae2InputFilter {
 				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
 				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
 				unlimitedAllFallback, globalNetworkStock, globalReserveAmount);
+	}
+
+	/** Returns the reserve floor that must be rechecked immediately before extracting this key. */
+	long getReserveFloorForKey(AEItemKey key, boolean ignoreNbt) {
+		return Ae2InputFilterQuerySupport.reserveFloorForKey(key, ignoreNbt, preciseMode,
+				slots, resolvedDirectKeys, directReserveAmounts, directNetworkStock,
+				globalNetworkStock, globalReserveAmount);
 	}
 
 	/** Exact-key compatibility overload used by older integrations. */

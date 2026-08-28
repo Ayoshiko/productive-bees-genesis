@@ -50,12 +50,14 @@ final class TileEntityExtraFactoryDelegates {
 	/** 清空输入校验缓存并重置配方监视器 — smelting-compat 开关切换时调用 */
 	static void onSmeltingCompatChanged(InputValidationCache validInputCache,
 			InputOutputCompatibilityCache inputProducesOutputCache, PbRecipeProcessor pbProcessor, int processes,
-			FactoryRecipeCacheLookupMonitor<?>[] recipeCacheLookupMonitors) {
+			FactoryRecipeCacheLookupMonitor<?>[] recipeCacheLookupMonitors, boolean smeltingEnabled) {
 		validInputCache.clear();
 		inputProducesOutputCache.clear();
 		for (int i = 0; i < processes; i++) {
 			pbProcessor.resetSmeltingCache(i);
-			MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitors[i]);
+			if (smeltingEnabled) {
+				MekCentrifugeFactoryHelper.invalidateRecipeMonitor(recipeCacheLookupMonitors[i]);
+			}
 		}
 	}
 

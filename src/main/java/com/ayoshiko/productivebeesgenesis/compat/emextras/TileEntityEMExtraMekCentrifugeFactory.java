@@ -94,7 +94,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	) {
 		TileEntityEMExtraFactoryDelegates.onSmeltingCompatChanged(validInputCache,
 			inputProducesOutputCache, pbProcessor, tier.processes,
-			recipeCacheLookupMonitors);
+			recipeCacheLookupMonitors, MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this));
 	}
 
 	/** 副输出槽2 — 每进程第3个物品输出槽 */

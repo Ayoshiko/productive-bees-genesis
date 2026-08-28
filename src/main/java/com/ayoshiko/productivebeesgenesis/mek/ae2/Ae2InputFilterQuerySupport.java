@@ -177,9 +177,11 @@ final class Ae2InputFilterQuerySupport {
 			requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 		}
 		if (!found) return -1L;
-		if (!liveStock && globalNetworkStock) {
+		long reserveFloor = Ae2FilterPullPolicy.effectiveReserveFloor(
+				liveStock, reserve, globalNetworkStock, globalReserve);
+		if (reserveFloor >= 0L) {
 			liveStock = true;
-			reserve = Math.max(0L, globalReserve);
+			reserve = reserveFloor;
 		}
 		return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, liveStock, unlimitedPull,
 				Ae2InputFilter.getMaxDirectAmount(), reserve);
@@ -246,6 +248,32 @@ final class Ae2InputFilterQuerySupport {
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());
+	}
+
+	/** Returns the effective reserve floor for a key, or {@code -1} when no stock policy applies. */
+	static long reserveFloorForKey(AEItemKey key, boolean ignoreNbt, boolean precise,
+			String[] slots, AEItemKey[] keys, long[] reserves, boolean[] networkStock,
+			boolean globalNetworkStock, long globalReserve) {
+		if (key == null) return -1L;
+		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
+		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
+		boolean directStockMatched = false;
+		long directReserve = 0L;
+
+		for (int i = 0; i < slots.length; i++) {
+			String entry = slots[i];
+			if (!Ae2InputFilter.isDirectFingerprint(entry)
+					|| i >= networkStock.length || !networkStock[i]) continue;
+			AEItemKey configured = keys != null && i < keys.length ? keys[i] : null;
+			if (!Ae2FilterEntrySupport.matchesDirectEntry(entry, configured, key,
+					candidateBeeType, candidateBlock, ignoreNbt, precise)) continue;
+			directStockMatched = true;
+			if (i < reserves.length) {
+				directReserve = Ae2PullAmountMath.addConfigured(directReserve, reserves[i]);
+			}
+		}
+		return Ae2FilterPullPolicy.effectiveReserveFloor(
+				directStockMatched, directReserve, globalNetworkStock, globalReserve);
 	}
 
 	/** Returns true when at least one exact entry uses live network stock. */
