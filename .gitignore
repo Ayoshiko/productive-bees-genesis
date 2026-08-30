@@ -54,6 +54,7 @@ tmp_texture_sources.zip
 # 审查文档（内部使用，不入库）
 docs/
 CODE_WIKI.md
+debug-energy-input-regression.md
 
 # 发布说明草稿（与 CHANGELOG 重复，不入库）
 .release_body_*.md
