@@ -178,4 +178,39 @@ class Ae2InputPullerTest {
 		assertEquals(List.of("smelt_above", "comb_above"), out);
 	}
 
+	@Test
+	void laneBudgetSplitsSlotsAcrossCompetingTypesAndNeverStarves() {
+		// 单类型不设限：吞吐与旧实现完全一致
+		assertEquals(Ae2InputLaneFairness.UNLIMITED_LANES,
+				Ae2InputLaneFairness.emptyLaneBudget(32, 1));
+		// 32 槽 4 类型 → 每类型 8 条车道
+		assertEquals(8, Ae2InputLaneFairness.emptyLaneBudget(32, 4));
+		// 槽少于类型数时向上取整为 1，否则少数类型永远拿不到槽（饿死）
+		assertEquals(1, Ae2InputLaneFairness.emptyLaneBudget(3, 8));
+		assertEquals(0, Ae2InputLaneFairness.emptyLaneBudget(0, 4));
+	}
+
+	@Test
+	void typeQuotaShareDividesRateBudgetAndKeepsAtLeastOne() {
+		assertEquals(1_024L, Ae2InputLaneFairness.typeQuotaShare(1_024L, 1));
+		assertEquals(256L, Ae2InputLaneFairness.typeQuotaShare(1_024L, 4));
+		// 向上取整：3 个类型分 10 个额度，每个至少 4，不会有类型分到 0
+		assertEquals(4L, Ae2InputLaneFairness.typeQuotaShare(10L, 3));
+		assertEquals(1L, Ae2InputLaneFairness.typeQuotaShare(2L, 8));
+		assertEquals(0L, Ae2InputLaneFairness.typeQuotaShare(0L, 4));
+	}
+
+	@Test
+	void pullerRunsFairPassBeforeUnboundedFillPass() throws Exception {
+		String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
+		// 公平轮 + 补齐轮的双轮结构，且补齐轮只在被截断时才跑（避免重复 SIMULATE 探测）
+		assertTrue(source.contains("int passes = typeCount > 1 ? 2 : 1;"));
+		assertTrue(source.contains("if (!fairPass && !fairPassTruncated) break;"));
+		// 空槽车道上限与速率份额上限都只在公平轮生效
+		assertTrue(source.contains("Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount)"));
+		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));
+		assertTrue(source.contains("if (slotCapacity > 0L && fairPass && slot.getStack().isEmpty())"));
+	}
+
 }

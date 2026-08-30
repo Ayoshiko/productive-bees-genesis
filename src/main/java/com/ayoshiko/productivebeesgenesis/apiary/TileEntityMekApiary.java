@@ -176,7 +176,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		} else if (!FluidStack.isSameFluidSameComponents(pendingHoneyFluidTemplate, normalized)) {
 			// BeeFluidOutputResolver currently emits one type (honey). Do not overwrite a
 			// different pending type if a future recipe is added accidentally.
-			ProductiveBeesGenesis.LOGGER.error("Apiary pending fluid type conflict at {}", getBlockPos());
+			// 节流：本方法每次蜜蜂产出都会调用，类型冲突若持续存在会每 tick 刷屏
+			LogThrottle.error("apiary_pending_fluid_conflict",
+					"Apiary pending fluid type conflict at {}", getBlockPos());
 			return;
 		}
 		long previous = pendingHoneyFluidAmount;

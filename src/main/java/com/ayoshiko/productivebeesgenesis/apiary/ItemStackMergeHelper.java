@@ -88,6 +88,79 @@ public final class ItemStackMergeHelper {
 	}
 
 	/**
+	 * 合并相同物品+组件的栈，<b>不按最大堆叠数拆分</b>（AE2 直推专用）。
+	 * <p>
+	 * 与 {@link #mergeStacks(List)} 的区别只有一点：本方法把同类物品的数量全部聚合到
+	 * 一个栈里（数量可远超 64），因为 AE2 的 {@code MEStorage.insert(key, amount, ...)}
+	 * 接受任意数量，一次 insert 就能收下全部产物。
+	 * <p>
+	 * <b>为什么需要它</b>：蜂箱批量产出会为四档生产力基因各生成一个同类蜜脾栈
+	 * （{@code BeeProduceBatchSampler.sampleInto} 按 productivityLevel 循环调用），
+	 * 加上基因采样与万象产物，同一物品在 {@code allItems} 中可能出现 4 次以上。
+	 * 每个栈单独调用 {@code pushGeneratedItemToAe} 就是 4 次完整 ME 网络遍历；
+	 * 而 Spark 实证单次遍历在昂贵外部存储（EnderDrives WAL fsync、ae2lt 样板解码）
+	 * 上要 0.3-10ms。先聚合再推送，把 insert 次数降到「物品种类数」，
+	 * 产物数量一件不少 —— 纯降开销、不降吞吐。
+	 * <p>
+	 * 数量用饱和加法防溢出；超过 {@link Integer#MAX_VALUE} 时才拆成多个栈。
+	 *
+	 * @param stacks 待聚合的物品栈列表
+	 * @return 按物品+组件聚合后的列表；输入 ≤1 个元素时直接返回原列表（零开销）
+	 */
+	public static List<ItemStack> mergeForBulkTransfer(List<ItemStack> stacks) {
+		if (stacks.size() <= 1) return stacks;
+
+		// 一级：按 (Item identity, componentHash) 分组，与 mergeStacks 同策略
+		Map<MergeKey, List<ItemStack>> groups = new HashMap<>();
+		for (ItemStack stack : stacks) {
+			if (stack.isEmpty()) continue;
+			MergeKey key = new MergeKey(stack.getItem(), stack.getComponents().hashCode());
+			groups.computeIfAbsent(key, k -> new ArrayList<>()).add(stack);
+		}
+		if (groups.size() == stacks.size()) return stacks; // 无可聚合项，避免多余复制
+
+		List<ItemStack> result = new ArrayList<>(groups.size());
+		for (List<ItemStack> group : groups.values()) {
+			mergeGroupUnbounded(group, result);
+		}
+		return result;
+	}
+
+	/**
+	 * 合并单个分组，数量不按最大堆叠数拆分（仅受 int 上限约束）。
+	 * <p>
+	 * hash 冲突时与 {@link #mergeGroup} 同策略：保留全部原始栈并记录节流日志，
+	 * 绝不合并组件不同的物品。
+	 */
+	private static void mergeGroupUnbounded(List<ItemStack> group, List<ItemStack> result) {
+		if (group.isEmpty()) return;
+		if (group.size() == 1) {
+			result.add(group.get(0));
+			return;
+		}
+		ItemStack first = group.get(0);
+		for (int i = 1; i < group.size(); i++) {
+			if (!ItemStack.isSameItemSameComponents(first, group.get(i))) {
+				LogThrottle.warn("itemstack_hash_conflict",
+						"检测到 ItemStack 组件 hashCode 冲突，保留原始物品栈: item={}, groupSize={}",
+						first.getItem(), group.size());
+				result.addAll(group);
+				return;
+			}
+		}
+		long totalCount = 0L;
+		for (ItemStack stack : group) {
+			totalCount = SaturatingMath.saturatingAdd(totalCount, stack.getCount());
+		}
+		// int 溢出保护：超过上限的部分拆成后续栈，数量零丢失
+		while (totalCount > 0L) {
+			int count = (int) Math.min(totalCount, Integer.MAX_VALUE);
+			result.add(first.copyWithCount(count));
+			totalCount -= count;
+		}
+	}
+
+	/**
 	 * 复合分组键：Item 引用 + 组件 hashCode
 	 * <br/>
 	 * 使用 Item 的 identityHashCode 避免 hashCode() 开销（Item 通常不覆盖 hashCode）。

@@ -23,6 +23,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.MultiFluidTankHostDelegate;
+import com.ayoshiko.productivebeesgenesis.mek.OperationsPerTickCache;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
@@ -138,6 +139,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	private final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — skipPb "虚拟 tick 银行"策略,256x JDTE 加速下避免每 gameTick 256 次完整 PB 处理 */
 	private final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
+	/** operationsPerTick 每游戏刻记忆化 — CachedRecipe 每次完整计算都会调用该供应商（spark XnLugba3Cw 首位热点） */
+	private final OperationsPerTickCache productivebeesgenesis$operationsPerTickCache = new OperationsPerTickCache();
 
 	/**
 	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
@@ -619,7 +622,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	}
 	@Override public int productivityParallelModifier() { return pbUpgradeDelegate.getProductivityParallelModifier(); }
 	@Override public int operationsPerTick() {
-		return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED);
+		return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED,
+				productivebeesgenesis$operationsPerTickCache);
 	}
 
 	/** 重写getOperationsPerTick — 委托给动态计算的operationsPerTick()，使SMELTING路径支持STACK升级 */
@@ -628,6 +632,8 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		super.recalculateUpgrades(upgrade);
 		// 升级数量变更（MEK SPEED/ENERGY 等）时立即失效 PB 倍率缓存，与基础离心机/MEK 工厂路径保持一致
 		pbUpgradeDelegate.invalidateMultiplierCache();
+		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻
+		productivebeesgenesis$operationsPerTickCache.invalidate();
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 	}
 

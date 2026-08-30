@@ -35,4 +35,32 @@ class ServerTickTimeMonitorTest {
 		assertEquals(80.0, responsive, 1.0e-9);
 		assertEquals(74.0, ServerTickTimeMonitor.nextResponsiveMspt(responsive, 50.0), 1.0e-9);
 	}
+
+	/**
+	 * 回归：Post 没有配对的 Pre 时必须丢弃样本。
+	 * 原实现 tickStartNanos 初值为 0，此时 nanoTime()-0 = 开机以来的纳秒数，
+	 * 写进滚动平均后 avgMspt 永久巨大，AE2 输入拉取被 TPS 闸门永久降级。
+	 */
+	@Test
+	void missingPreEventDiscardsSampleInsteadOfRecordingUptime() {
+		assertEquals(ServerTickTimeMonitor.INVALID_SAMPLE,
+				ServerTickTimeMonitor.sampleMsFor(ServerTickTimeMonitor.UNSET_TICK_START, 9_876_543_210L),
+				"无配对 Pre 必须返回 INVALID_SAMPLE，不能把 nanoTime 绝对值当耗时");
+	}
+
+	@Test
+	void clockRegressionDiscardsSample() {
+		assertEquals(ServerTickTimeMonitor.INVALID_SAMPLE,
+				ServerTickTimeMonitor.sampleMsFor(1_000_000L, 999_999L),
+				"时钟回拨（负耗时）必须丢弃样本");
+	}
+
+	@Test
+	void normalSampleConvertsNanosToMillisAndClampsOutliers() {
+		assertEquals(42.0, ServerTickTimeMonitor.sampleMsFor(0L, 42_000_000L), 1.0e-9,
+				"正常样本按纳秒转毫秒");
+		assertEquals(ServerTickTimeMonitor.MAX_SAMPLE_MS,
+				ServerTickTimeMonitor.sampleMsFor(0L, 60_000_000_000L), 1.0e-9,
+				"超长停顿钳制到 MAX_SAMPLE_MS，避免长期占据 100-tick 窗口");
+	}
 }

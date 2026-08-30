@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.world.item.HoneycombItem;
 import net.minecraft.world.item.ItemStack;
@@ -54,7 +54,9 @@ public class CombBlockConverter {
 					}
 				} catch (Exception e) {
 					// 转换失败保留原始物品，避免产物丢失
-					ProductiveBeesGenesis.LOGGER.warn("蜜脾→蜜脾块转换失败，保留原始物品", e);
+					// 节流：本方法在每次产出的逐栈循环内调用，异常若持续存在会每 tick 刷屏
+					LogThrottle.warn("comb_block_convert",
+							"蜜脾→蜜脾块转换失败，保留原始物品: {}", e.toString());
 				}
 			}
 			result.add(stack);
@@ -76,8 +78,10 @@ public class CombBlockConverter {
 						stack = block;
 					}
 				} catch (Exception e) {
-					ProductiveBeesGenesis.LOGGER.warn(
-							"Failed to convert honeycomb output to a comb block; retaining the original stack", e);
+					// 同上：原地转换同样位于逐栈热循环，改用时间维度节流
+					LogThrottle.warn("comb_block_convert_in_place",
+							"Failed to convert honeycomb output to a comb block; retaining the original stack: {}",
+							e.toString());
 				}
 			}
 			items.set(writeIndex++, stack);

@@ -290,6 +290,10 @@ public class BeeProduceProcessor {
 
 		// 批量插入合并后的物品到输出槽
 		if (apiary.isDirectAeOutputEnabled() && !allItems.isEmpty()) {
+			// 推 AE 前先按物品+组件聚合：四档生产力基因会为同一蜜脾各生成一个栈，
+			// 逐栈 insert 就是 N 次完整 ME 网络遍历（昂贵外部存储单次 0.3-10ms）。
+			// 聚合后 insert 次数 = 物品种类数，产物数量一件不少（AE insert 接受任意 count）。
+			allItems = ItemStackMergeHelper.mergeForBulkTransfer(allItems);
 			List<ItemStack> aeLeftovers = null;
 			for (ItemStack stack : allItems) {
 				if (stack.isEmpty()) continue;

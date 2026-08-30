@@ -211,6 +211,17 @@ public final class ModPayloads {
 				SyncAeInputFilterEntriesPayload.STREAM_CODEC,
 				Ae2FilterPayloadHandlers::handleSyncAeInputFilterEntries
 		);
+		// smelt 输入标签过滤表达式：保存请求（C→S）与归一化结果回传（S→C）
+		registrar.playToServer(
+				SetAeInputTagFilterPayload.TYPE,
+				SetAeInputTagFilterPayload.STREAM_CODEC,
+				Ae2TagFilterPayloadHandlers::handleSetAeInputTagFilter
+		);
+		registrar.playToClient(
+				SyncAeInputTagFilterPayload.TYPE,
+				SyncAeInputTagFilterPayload.STREAM_CODEC,
+				Ae2TagFilterPayloadHandlers::handleSyncAeInputTagFilter
+		);
 		}
 		// 服务端 → 客户端：开发者模式状态同步包（玩家登录时推送 + 命令切换时广播）
 		registrar.playToClient(

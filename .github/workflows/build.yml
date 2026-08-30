@@ -1,0 +1,84 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main-neo/1.21.1
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: NeoForge 1.21.1 build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Restore development compile dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p libs
+          fetch() {
+            curl --fail --location --retry 3 --retry-all-errors "$1" --output "libs/$2"
+            test -s "libs/$2"
+          }
+          curse_maven() {
+            fetch "https://www.cursemaven.com/curse/maven/$1/$2/$1-$2.jar" "$3"
+          }
+
+          curse_maven productivebees-377897 8022994 productivebees-1.21.1-13.13.5.jar
+          unzip -p libs/productivebees-1.21.1-13.13.5.jar \
+            META-INF/jarjar/productivelib-1.21.1-0.2.0.jar \
+            > libs/productivelib-1.21.1-0.2.0.jar
+          test -s libs/productivelib-1.21.1-0.2.0.jar
+
+          curse_maven mekanism-268560 7904058 Mekanism-1.21.1-10.7.19.85.jar
+          curse_maven mekanism-extras-1026040 8677677 mekanism_extras-1.21.1-1.4.1.jar
+          curse_maven mekanism-extras-1026040 7921191 mekanism_extras-1.21.1-1.4.0.jar
+          curse_maven evolved-mekanism-1230085 7599592 'Evolved Mekanism-1.21.1-1.2.1-fix3.jar'
+          curse_maven evolved-mekanism-extras-1268159 8118026 EvolvedMekanismExtras-1.21.1-1.2.1.jar
+          curse_maven jdte-1566414 8622543 jdte-0.5.9-alpha1.jar
+          curse_maven jade-324717 7545219 Jade-1.21.1-NeoForge-15.10.5.jar
+          curse_maven kubejs-238086 8083208 kubejs-neoforge-2101.7.2-build.368.jar
+          fetch https://maven.latvian.dev/releases/dev/latvian/mods/rhino/2101.2.7-build.85/rhino-2101.2.7-build.85.jar \
+            rhino-2101.2.7-build.85.jar
+          curse_maven jei-238222 8407142 jei-1.21.1-neoforge-19.36.0.360.jar
+          curse_maven applied-energistics-2-223794 7027323 appliedenergistics2-1.21.1-19.2.17.jar
+          curse_maven applied-flux-965012 6217144 AppliedFlux-1.21-2.1.5-neoforge.jar
+
+          # Match the Mixin runtime bundled by NeoForge 1.21.1.
+          fetch 'https://maven.neoforged.net/releases/net/fabricmc/sponge-mixin/0.15.2%2Bmixin.0.8.7/sponge-mixin-0.15.2%2Bmixin.0.8.7.jar' \
+            sponge-mixin.jar
+
+      - name: Build
+        shell: bash
+        run: bash ./gradlew build --stacktrace
+
+      - name: Upload mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: productivebeesgenesis-neoforge-1.21.1
+          if-no-files-found: error
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-javadoc.jar

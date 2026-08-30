@@ -30,8 +30,8 @@ final class Ae2GlobalInsertBudget {
 	/**
 	 * 单次 insert 慢阈值（纳秒）— 超过说明网络含昂贵外部存储（健康网络 insert 通常 &lt;100µs）。
 	 * <p>
-	 * 唯一事实来源：{@link Ae2OutputPusher} 与 {@link DirectItemPushSession} 的
-	 * 慢 insert 检测、预算累计均引用此常量。
+	 * 唯一事实来源：{@link Ae2OutputSlotPass}、{@link Ae2OutputMergedPass} 与
+	 * {@link Ae2DirectItemPushSession} 的慢 insert 检测、预算累计均引用此常量。
 	 */
 	static final long SLOW_INSERT_NANOS = 500_000L;
 
@@ -72,9 +72,25 @@ final class Ae2GlobalInsertBudget {
 	 * @param costNanos  本次 insert 实际耗时（System.nanoTime 差值）
 	 */
 	static void recordCost(long gameTick, long costNanos) {
-		if (!isSlowOperation(costNanos)) return;
+		recordCost(gameTick, costNanos, SLOW_INSERT_NANOS);
+	}
+
+	/**
+	 * 带自定义计费阈值的记账。
+	 * <p>
+	 * <b>为什么输入拉取需要更高的阈值</b>：0.5ms 对 insert（写入侧、目标存储可能是
+	 * 病态 WAL）是合理的告警线，但 extract 在健康的大型网络里本身就要 0.6-3ms
+	 * （多存储总线 + 跨维度 + 大 KeyCounter）。用 0.5ms 记账时，2ms 的全服预算会被
+	 * 两三次<b>完全正常</b>的 extract 打满，同 tick 里后续机器一律跳过抽取 ——
+	 * 而抽取顺序由 tick 顺序固定，于是「两台相同配置的离心工厂只有一台会拉取」，
+	 * 负载波动时又会自己好转。故拉取路径按 5ms 病态阈值记账。
+	 *
+	 * @param thresholdNanos 计费起点，低于此值的操作完全不计入预算
+	 */
+	static void recordCost(long gameTick, long costNanos, long thresholdNanos) {
+		if (costNanos <= thresholdNanos) return;
 		refreshTick(gameTick);
-		spentNanos += costNanos - SLOW_INSERT_NANOS;
+		spentNanos += costNanos - thresholdNanos;
 	}
 
 	/** gameTick 推进时重置累计值（同 tick 重复调用幂等） */

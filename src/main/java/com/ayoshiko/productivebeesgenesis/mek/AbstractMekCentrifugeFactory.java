@@ -99,6 +99,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	protected final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — 工厂变体共用，用于 skipPb 判断 */
 	protected final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
+	/** operationsPerTick 每游戏刻记忆化 — CachedRecipe 每次完整计算都会调用该供应商（spark XnLugba3Cw 首位热点） */
+	protected final OperationsPerTickCache operationsPerTickCache = new OperationsPerTickCache();
 
 	/**
 	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
@@ -548,12 +550,17 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public float stabilityBonus() { return pbUpgradeDelegate.getStabilityBonus(); }
 
 	@Override
-	public int operationsPerTick() { return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED); }
+	public int operationsPerTick() {
+		return CentrifugeFactoryCommonLogic.operationsPerTick(this, BASE_TICKS_REQUIRED,
+				operationsPerTickCache);
+	}
 
 	/** 重写recalculateUpgrades — 复刻MEKExtras，支持STACK升级并行和CREATIVE无限能量 */
 	@Override
 	public void recalculateUpgrades(Upgrade upgrade) {
 		super.recalculateUpgrades(upgrade);
+		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻
+		operationsPerTickCache.invalidate();
 		FactoryUpgradeStateHelper.recalculateUpgrades(this, upgrade);
 	}
 

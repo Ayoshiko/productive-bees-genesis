@@ -37,12 +37,19 @@ public final class Ae2NetworkInventoryView {
 			// special/infinite storage may report a finite placeholder that is lower than
 			// the amount the network can actually extract. The per-tick cache above keeps
 			// GUI sync and input pulling from repeating this probe in the same game tick.
-			if (network != null) {
+			// 昂贵网络下探针本身可能比抽取还贵（megacells 大宗盘线性扫压缩链），
+			// 由 Ae2StockProbePolicy 决定是否值得探；健康网络永远照常探测。
+			if (network != null && cache.probePolicy.shouldProbe(gameTick, key)) {
+				long probeStart = System.nanoTime();
 				try {
 					simulated = liveExtractableAmount(network, key, Long.MAX_VALUE, source);
 				} catch (LinkageError | RuntimeException ignored) {
 					// The cached inventory is still a safe fallback for incompatible external storages.
 				}
+				cache.probePolicy.record(gameTick, key, System.nanoTime() - probeStart, reported, simulated);
+			} else if (network != null && cache.probePolicy.isExpensiveNetwork()) {
+				// 降级是静默的，玩家只会看到「机器变慢」；开发者模式下周期性提示昂贵存储元件方向
+				Ae2ExpensiveNetworkLog.probeDowngraded(cache.probePolicy.averageCostNanos());
 			}
 			// Cache the uncapped result: GUI and pulling may request different caps in one tick.
 			visible = Ae2VisibleStockMath.merge(reported, simulated, Long.MAX_VALUE);
@@ -97,6 +104,11 @@ public final class Ae2NetworkInventoryView {
 		private long gameTick;
 		private final MEStorage network;
 		private final Object2LongOpenHashMap<AEItemKey> amounts = new Object2LongOpenHashMap<>();
+		/**
+		 * 探针策略与本网络同生命周期：amounts 每 tick 清空，但「哪些键值得探针」
+		 * 是网络级知识，必须跨 tick 保留；换网络时随新 TickCache 一起重建。
+		 */
+		private final Ae2StockProbePolicy<AEItemKey> probePolicy = new Ae2StockProbePolicy<>();
 
 		private TickCache(long gameTick, MEStorage network) {
 			this.gameTick = gameTick;

@@ -114,13 +114,17 @@ final class MekCentrifugeUpgradeOps {
 	static CachedRecipe<ItemStackToItemStackRecipe> configureCachedRecipe(
 			TileEntityMekCentrifuge tile,
 			CachedRecipe<ItemStackToItemStackRecipe> cached) {
+		// 零耗时合并窗口（CREATIVE 升级 getTicksRequired()==0）：并行上限供应商替换为窗口对象，
+		// 时间加速批量期间一次完整计算承担整批虚拟刻，裁剪仍由 Mekanism 原逻辑负责。
+		ZeroTickCoalesceState coalesce = new ZeroTickCoalesceState(tile::getOperationsPerTick);
 		CachedRecipe<ItemStackToItemStackRecipe> configured = cached
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
 						MekUpgradeSupport.hasCreativeUpgrade(tile), tile.energyContainer().getEnergyPerTick()),
 						tile.energyContainer())
-				.setBaselineMaxOperations(tile::getOperationsPerTick);
+				.setBaselineMaxOperations(coalesce);
 		if (configured instanceof ICachedRecipeBatchAccel accel) {
 			accel.productivebeesgenesis$enableMarginalEnergyPricing();
+			accel.productivebeesgenesis$bindZeroTickCoalesce(coalesce);
 		}
 		return configured;
 	}

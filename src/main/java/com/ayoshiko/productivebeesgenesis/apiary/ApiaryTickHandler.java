@@ -248,7 +248,9 @@ class ApiaryTickHandler {
 			try {
 				tile.getOutputBuffer().tickRedistribute(tile.getSlotManager().getOutputSlots());
 			} catch (Exception e) {
-				ProductiveBeesGenesis.LOGGER.warn("ApiaryOutputBuffer tickRedistribute 异常", e);
+				// 节流：本调用每 tick 执行，异常若持续存在会每 tick 刷屏
+				LogThrottle.warn("apiary_buffer_redistribute",
+						"ApiaryOutputBuffer tickRedistribute 异常: {}", e.toString());
 			}
 		}
 		// active 状态管理 — O(1) 计数器读取

@@ -111,16 +111,23 @@ public final class Ae2FluidPusher {
 		if (key == null) return 0L;
 		// 全服慢 insert 预算：病态网络（EnderDrives fsync）下跳过本轮直推，流体由调用方留在本地
 		long gameTick = level.getGameTime();
-		if (Ae2GlobalInsertBudget.isExhausted(gameTick)) return 0L;
+		// 自适应成本记账器与物品路径共用：流体与物品经过同一个 ExternalStorageFacade 门面，
+		// 决定 tick 成本的是 insert 调用次数（样板解码/WAL fsync 与 amount 无关），故共享同一份 EWMA。
+		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
+		if (Ae2GlobalInsertBudget.isExhausted(gameTick) || costTracker.isExhausted(gameTick)) return 0L;
 		long insertStart = System.nanoTime();
 		try {
 			long accepted = SaturatingMath.clampToRequest(
 					meStorage.insert(key, requested, action, ActionSourceHolder.INSTANCE), requested);
-			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
+			long insertCost = System.nanoTime() - insertStart;
+			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			costTracker.record(gameTick, insertCost);
 			return accepted;
 		} catch (Exception e) {
 			// 抛异常的 insert 同样入账全服预算，防止病态网络下每 tick 重复昂贵遍历
-			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
+			long insertCost = System.nanoTime() - insertStart;
+			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			costTracker.record(gameTick, insertCost);
 			LogThrottle.warnWithCooldown("ae2_direct_generated_fluid", 60_000L,
 					"AE2 direct generated-fluid insert failed: fluid={}, amount={}, error={}",
 					key, requested, e.toString());
@@ -270,6 +277,9 @@ public final class Ae2FluidPusher {
 		long rejectedCount = 0L; // 被网络完全拒绝的流体种类数（用于触发退避）
 		long nanoNow = System.nanoTime();
 		Ae2KeyBackoffRegistry<AEFluidKey> keyBackoff = getOrCreateFluidKeyBackoff(holder);
+		// 与物品推送共享同一 per-tile 成本记账器：同一 ME 网络的昂贵外部存储对流体同样昂贵，
+		// 共享 EWMA 可让任一路径先探到病态网络后，另一路径立即受益（无需各自重新学习）。
+		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
 
 		for (Object2LongMap.Entry<AEFluidKey> entry : pendingMap.object2LongEntrySet()) {
 			AEFluidKey fluidKey = entry.getKey();
@@ -287,7 +297,7 @@ public final class Ae2FluidPusher {
 				if (tankTotal <= 0) continue; // tank 已空，跳过推送
 				long pushed = Math.min(amount, tankTotal);
 
-				long inserted = batchPush(meStorage, fluidKey, pushed, gameTick);
+				long inserted = batchPush(meStorage, fluidKey, pushed, gameTick, costTracker);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发退避
 					keyBackoff.recordFailure(fluidKey, nanoNow);
@@ -446,20 +456,26 @@ public final class Ae2FluidPusher {
 	 * @param fluidKey      流体键
 	 * @param amount        总推送量(mB)
 	 * @param gameTick      当前游戏刻 — 供全服慢 insert 预算判定与记账
+	 * @param costTracker   自适应成本记账器（与物品路径共享同一 ME 网络的 EWMA）
 	 * @return 实际推送总量(mB);0 表示完全失败
 	 */
-	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount, long gameTick) {
+	private static long batchPush(MEStorage meStorage, AEFluidKey fluidKey, long amount, long gameTick,
+			Ae2InsertCostTracker costTracker) {
 		// 固定有限批量，避免 256× 时单次向第三方存储请求数亿 mB，同时保持较低调用次数。
 		long remaining = Math.max(0L, amount);
 		long insertedTotal = 0L;
 		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
 			// 全服慢 insert 预算：病态网络下停止后续分批，剩余量下窗口重试（无丢失）
-			if (Ae2GlobalInsertBudget.isExhausted(gameTick)) break;
+			// 不套「键配额」：流体键数天然有界（蜂箱 1、工厂 ≤ tank 数，每键 ≤ 4 次），
+			// 且配额为 1 时会饿死第二种流体；只做时间硬预算判定与成本记账。
+			if (Ae2GlobalInsertBudget.isExhausted(gameTick) || costTracker.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
 			long insertStart = System.nanoTime();
 			long inserted = SaturatingMath.clampToRequest(
 					meStorage.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE), request);
-			Ae2GlobalInsertBudget.recordCost(gameTick, System.nanoTime() - insertStart);
+			long insertCost = System.nanoTime() - insertStart;
+			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			costTracker.record(gameTick, insertCost);
 			if (inserted <= 0L) break;
 			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
 			remaining -= inserted;

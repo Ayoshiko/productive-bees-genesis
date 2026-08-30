@@ -52,9 +52,10 @@ final class Ae2FilterEntrySupport {
 	static boolean matchesDirectEntry(String entry, AEItemKey configured,
 			AEItemKey candidate, ResourceLocation candidateBeeType, boolean candidateBlock,
 			boolean ignoreNbt, boolean precise) {
-		String fingerprint = entry.substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length());
 		if (configured == null) {
-			return Ae2ItemFingerprint.matchesLegacy(candidate, fingerprint);
+			// 仅未解析的旧格式条目才需要切出指纹串；已解析路径不做这次字符串分配。
+			return Ae2ItemFingerprint.matchesLegacy(candidate,
+					entry.substring(Ae2InputFilter.DIRECT_ENTRY_PREFIX.length()));
 		}
 		// Exact AE keys satisfy every direct-entry mode. Avoid resolving bee type,
 		// block form and component metadata again for the common exact-match path.
@@ -67,10 +68,14 @@ final class Ae2FilterEntrySupport {
 	private static boolean matchesLogicalComb(AEItemKey configured, AEItemKey candidate,
 			ResourceLocation configuredBeeType, ResourceLocation candidateBeeType,
 			boolean ignoreNbt, boolean precise, boolean candidateBlock) {
+		// 直接用 ResourceLocation.equals 比较：ResourceLocation.toString 每次都拼接新串，
+		// 而本方法处于「候选键 × 过滤槽位」的乘积热路径上（spark vVh8WfPCN3），
+		// 不能为一次相等判断付出字符串分配的代价。
 		return Ae2FilterEntryMatcher.matchesDirect(configured.equals(candidate),
-				configuredBeeType == null ? null : configuredBeeType.toString(),
+				configuredBeeType != null,
+				candidateBeeType != null,
+				configuredBeeType != null && configuredBeeType.equals(candidateBeeType),
 				CombFuzzyMatcher.isCombBlock(configured),
-				candidateBeeType == null ? null : candidateBeeType.toString(),
 				candidateBlock, configured.getItem() == candidate.getItem(), ignoreNbt, precise);
 	}
 }

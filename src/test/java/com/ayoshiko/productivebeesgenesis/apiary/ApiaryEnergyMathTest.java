@@ -20,6 +20,12 @@ class ApiaryEnergyMathTest {
 	}
 
 	@Test
+	void creativeUpgradeExplicitlyDisablesBeeEnergy() {
+		assertEquals(0L, ApiaryEnergyMath.calculateBeeEnergyCost(50L, true));
+		assertEquals(50L, ApiaryEnergyMath.calculateBeeEnergyCost(50L, false));
+	}
+
+	@Test
 	void partialBatchEnergyIsSharedAcrossEveryRunnableBee() {
 		ApiaryEnergyMath.BeeTickAllocation allocation = ApiaryEnergyMath.allocateBeeTicks(
 				50L * 64L * 5L, 50L, 64, 256);

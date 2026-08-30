@@ -83,6 +83,16 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	@Nullable
 	public final CompoundTag aeInputFilterNbt;
 
+	/**
+	 * smelt 输入标签过滤表达式快照（{@code Ae2TagFilter.save} 输出）
+	 * <br/>
+	 * 与 {@link #aeInputFilterNbt} 分开存放的原因：标签过滤不依赖 AE2 类，
+	 * 即使 AE2 未安装也应随等级升级保留，而 aeInputFilterNbt 受 AE2 加载守卫约束。
+	 * null 表示无标签过滤配置（未配置或旧升级数据）。
+	 */
+	@Nullable
+	public final CompoundTag aeTagFilterNbt;
+
 	/** per-tile AE2 输入精确模式开关（true 时蜜脾和蜜脾块分别匹配，AE2 未加载时为 false） */
 	public final boolean preciseMode;
 
@@ -201,7 +211,7 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 				aeInputFilterMode, aeInputFilterEntries, aeInputFilterAmounts, aeInputFilterUnlimited,
 				preciseMode, aeItemOutputEnabled, aeFluidOutputEnabled, smeltingCompatEnabled,
 				centrifugeDirectAeOutputEnabled, multiFluidTanksNbt, outputItems, inputItems,
-				energyItem, null);
+				energyItem, null, null);
 	}
 
 	/** Current constructor carrying the complete, versioned AE2 input-filter snapshot. */
@@ -222,6 +232,34 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 			@Nullable List<ItemStack> inputItems,
 			@Nullable ItemStack energyItem,
 			@Nullable CompoundTag aeInputFilterNbt) {
+		this(provider, redstone, controlType, energyContainer, progress, energySlot,
+				inputSlots, outputSlots, sorting, components, pbUpgrades,
+				pbUpgradeInputNbt, pbUpgradeOutputNbt, aeItemInputEnabled, aeInputNbtIgnore,
+				aeInputFilterMode, aeInputFilterEntries, aeInputFilterAmounts, aeInputFilterUnlimited,
+				preciseMode, aeItemOutputEnabled, aeFluidOutputEnabled, smeltingCompatEnabled,
+				centrifugeDirectAeOutputEnabled, multiFluidTanksNbt, outputItems, inputItems,
+				energyItem, aeInputFilterNbt, null);
+	}
+
+	/** 当前构造器：额外携带 smelt 输入标签过滤表达式快照。 */
+	public CentrifugeUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
+			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
+			List<IInventorySlot> inputSlots, List<IInventorySlot> outputSlots, boolean sorting,
+			List<ITileComponent> components,
+			Map<String, Integer> pbUpgrades,
+			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
+			boolean aeItemInputEnabled, boolean aeInputNbtIgnore,
+			int aeInputFilterMode, Map<Integer, String> aeInputFilterEntries,
+			@Nullable Map<Integer, Long> aeInputFilterAmounts,
+			@Nullable Map<Integer, Boolean> aeInputFilterUnlimited, boolean preciseMode,
+			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled,
+			boolean smeltingCompatEnabled, boolean centrifugeDirectAeOutputEnabled,
+			@Nullable CompoundTag multiFluidTanksNbt,
+			@Nullable List<ItemStack> outputItems,
+			@Nullable List<ItemStack> inputItems,
+			@Nullable ItemStack energyItem,
+			@Nullable CompoundTag aeInputFilterNbt,
+			@Nullable CompoundTag aeTagFilterNbt) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.pbUpgrades = pbUpgrades;
@@ -234,6 +272,7 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 		this.aeInputFilterAmounts = aeInputFilterAmounts;
 		this.aeInputFilterUnlimited = aeInputFilterUnlimited;
 		this.aeInputFilterNbt = aeInputFilterNbt == null ? null : aeInputFilterNbt.copy();
+		this.aeTagFilterNbt = aeTagFilterNbt == null ? null : aeTagFilterNbt.copy();
 		this.preciseMode = preciseMode;
 		this.aeItemOutputEnabled = aeItemOutputEnabled;
 		this.aeFluidOutputEnabled = aeFluidOutputEnabled;

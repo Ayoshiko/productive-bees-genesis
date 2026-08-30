@@ -31,19 +31,23 @@
 
 ## [Unreleased]
 
-## [1.0.6] - 2026-08-27
+## [1.0.6] - 未发布
 
 ### 新增
 
 - **喂食槽转化开关**：机械蜂箱喂食槽窗口标题栏新增转化开关（默认关闭）。关闭时喂食槽物品只当花朵用、绝不被消耗；开启后蜜蜂才会执行 Productive Bees 的物品/方块转化配方（如末影龙蜜蜂把黑曜石转成哭泣的黑曜石）。开关随存档、配置卡和机器拆装保留，底部提示文字会随开关切换说明原料是否会被消耗。
 - **AE2 拉取普通熔炼输入**：开启离心兼容开关后，AE2 拉取不再局限于蜜脾，凡是存在 Mekanism SMELTING 配方的物品都可以从网络拉进离心机；过滤器界面也能直接拖入这类物品（保存为精确指纹条目，蜜脾仍保持模糊匹配语义）。拉取排序中 SMELTING 候选优先于蜜脾，避免大量蜜脾把有限的候选窗口占满。
 - **完整六类基因采样**：基因采样器与 PB 13.13.5 对齐，除 TYPE 外还会产出 PRODUCTIVITY、ENDURANCE、TEMPER、BEHAVIOR、WEATHER_TOLERANCE 基因。属性值逐只从蜜蜂 NBT 的 `attributes_handler` 读取，同类型不同属性的蜜蜂不会互相串值；命中概率改用 PB 配置项 `samplerChance`（不再硬编码 0.05），且与原版一致只采样成年蜂。
+- **熔炼输入标签表达式过滤**：AE2 拉取配置新增独立的熔炼输入标签过滤窗口，支持白名单/黑名单、`&|^!()` 运算符和 `*` 通配符；可从物品标签选取器快速添加或移除标签，也可直接填写物品 id。表达式经客户端与服务端双重长度、深度和节点数校验，蜜脾过滤语义不受影响。
 
 ### 变更
 
 - **全量无限拉取语义**：AE2 拉取界面全局齿轮的 Shift+点击不再区分"有无标记"，统一切换"过滤器放行的所有蜜脾都无限拉取"。设置标记后该开关不会再被自动关掉，中英文 tooltip 已同步更新。
 - **离心兼容开关关闭不再打断在制任务**：基础机与三种工厂版在关闭 smelting-compat 时只重置输入校验缓存，不再清空 active `CachedRecipe`，已经进入输入槽的 SMELTING 任务会自然排空而不是原地丢失进度。
 - **无限拉取标记适用范围**：`isUnlimitedForKey` 不再要求候选是蜜脾，普通 SMELTING 输入同样可以使用无限拉取与保留量设置。
+- **AE2 输出推送职责拆分**：将原有大型推送器拆分为逐槽提交、同键合并、直推会话、账本结算、退避日志和复用缓冲等协作组件，保持“预留—提交—确认”语义并降低单类维护复杂度。
+- **多类型输入公平调度**：AE2 输入拉取增加按空槽车道与配额的两轮分配，避免某一物品类型长期占满高容量输入槽而饿死其他候选；游标扫描和精确过滤键索引也同步接入。
+- **配置与状态同步**：标签过滤表达式纳入方块实体存档、机器拆装、等级升级、配置卡和网络同步；服务端配置监听限定为本模组 SERVER 配置，客户端同步事件不再误触发本地文件迁移逻辑。
 
 ### 修复
 
@@ -52,6 +56,7 @@
 - **过滤器条目校验**：客户端拖入非蜜脾物品时不再回落成"蜜脾条目 + 精确 key"的混合写法；服务端对蜜脾要求 beeType/isBlock 与实际物品一致，对普通物品要求确实存在 SMELTING 配方，并校验指纹长度上限，非法请求直接丢弃。
 - **黑名单被全量拉取绕过**：开启全量无限拉取时，黑名单/白名单的准入判定现在先于无限开关生效，被黑名单排除的蜜脾不会再被拉进机器；全局库存保留量在无限模式下同样继续生效。
 - **喂食槽转化关闭时的采蜜判定**：转化开关关闭时，喂食槽里的转化原料不再被算作有效花朵，蜜蜂不会再"凭黑曜石"照常采蜜产出本应依赖真实花朵的蜜脾。开关翻转会立即失效花朵判定缓存。
+- **蜂箱 CREATIVE 能耗兜底**：蜂箱生产路径现在显式将 CREATIVE 升级的单蜜蜂能耗设为 0，不再依赖 MEKExtras 能量容器 Mixin 的返回值；自定义能量容器或加载时序变化也不会意外扣除能量。
 - **拉取剩余物掉落导致进存档卡死**：输入槽满且无法回送 ME 时，剩余物过去会被丢到世界上，原版会把大堆栈拆成大量掉落实体——ME 存量到 1e8 级时可堆出数十万实体打满堆内存，表现为进入存档卡在 100% 加载、无日志无崩溃报告。现在改为宿主级有界待处理缓冲（按物品类型登记、随存档持久化），抽取前先确认有登记位，抽不下就整轮跳过，物品无损留在 ME 网络。
 - **区块卸载丢失待处理物品**：区块卸载过去会清空整个 AE2 状态，连尚未归还的待处理物品一起丢弃。现在只清理网格节点和各类缓存，物品所有权保留到下次加载继续回送。
 - **输出推送的物品复制与丢失**：产物推送改为"预留—提交—确认"账本：ME 已接收但槽位扣减失败时不再按成功计数，指纹与源槽不匹配会冻结该槽并告警；已提交账本在输出开关关闭后仍会优先结算，不会悬挂。
@@ -60,12 +65,23 @@
 - **数量穿透窗口**：AE2 拉取槽的库存数字不再越过后打开的数量设置窗口，重叠区域会正确由前景窗口遮挡。
 - **拉取窗口槽位操作**：AE2 拉取窗口的取放操作加入按操作类型的频率限制，ME 提取/插入返回值做饱和裁剪，且只在 ME 状态真的改变时才同步界面，避免空操作放大广播。
 - **Mekanism Extras 工厂 Mixin 条件**：同时引用 Mekanism Extras 与 Evolved Mekanism Extras 的 Mixin 现在要求两者都存在才应用，只装其中一个不会再触发类加载失败。
+- **蜂箱批量刷新尖峰**：按本刻批量倍率调整累积刷新阈值，避免 CREATIVE/高倍时间加速下每刻反复触发固定刷新开销；喂食槽转化开关现随配置卡复制保留。
+- **零耗时配方重复计算**：CREATIVE 升级下的零耗时 Mekanism 配方采用按方块的合并窗口，按获批操作数折算虚拟刻进度与能量，避免高倍加速重复执行完整配方计算。
+- **低 TPS 闸门误停机**：将 AE2 输入在低 TPS 时的二值停机改为限流放行，并钳制非法 tick 样本，防止一次异常时间戳使降级状态永久保持。
+- **异常日志与缓存生命周期**：高频蜂箱/AE2 异常改为时间节流；槽位上限、指纹、熔炼配方和网络成本缓存均设置版本失效或有界清理，避免跨存档残留和无界增长。
 
 ### 性能
 
 - **基因采样热路径去分配**：采样结果改用固定域 `long[]` 计数器（6 属性 × 19 枚举值 × 4 纯度）并跨批次复用，蜂种分组不再新建 List/record；单批产出次数超过 128 时聚合命中数与分布，主线程开销不随 JDT/JDTE 倍率线性增长；`BeeSlot` 按 NBT 引用缓存属性快照，避免每轮重复解析五个字符串。
 - **SMELTING 配方查询缓存**：新增按宿主的有界 LRU 缓存（上限 1024 条，只保存 `AEItemKey` 与布尔结果），配方重载通过 `RECIPE_VERSION` 失效，AE2 网格拓扑变化时随复用缓冲一起清理，避免每 tick 对整网物品重复走 Mekanism 配方查询。
 - **候选键分组缓存**：网络库存扫描一次同时产出 SMELTING 与蜜脾两组候选列表，刷新条件加入配方版本与兼容开关状态，开关或数据包变化会立即重建而不必等到下一个刷新窗口。
+- **AE2 网络自适应限流**：物品与流体直连共享插入成本记账，结合单机/全服预算、慢操作退避、连续零接收短路和低成本高频 EWMA，降低满存储或昂贵第三方存储造成的主线程尖峰；健康网络不受额外吞吐限制。
+- **热路径缓存与批处理**：复用 AE2 扫描/提交缓冲区，按游戏刻缓存 `operationsPerTick`，并缓存 `AEItemKey` 指纹、槽位最终上限和 SMELTING 候选；蜂箱直连 AE 输出会先合并同物品产物，减少时间加速下的对象创建、配方查询和重复网络遍历。
+
+### 测试
+
+- **新增回归覆盖**：补充标签表达式解析、蜂箱/流体刷新策略、零耗时批处理、低 TPS 闸门、AE2 精确键索引、成本记账、持久化路径和热路径接线测试。
+- **持续集成构建**：新增 NeoForge 1.21.1 GitHub Actions 工作流，使用 Java 21 恢复开发依赖、校验 Gradle Wrapper、执行完整构建并上传模组 JAR。
 
 ### English
 
@@ -74,12 +90,16 @@
 - **Feeder conversion toggle**: the mechanical apiary feeder window title bar now has a conversion switch (off by default). While off, feeder items act as flowers only and are never consumed; turning it on lets bees run Productive Bees item/block conversion recipes (for example a Draconic Bee turning Obsidian into Crying Obsidian). The switch persists through world saves, configuration cards, and machine pickup, and the bottom hint text changes to state whether inputs are consumed.
 - **AE2 pulling of ordinary smelting inputs**: while the centrifuge compatibility switch is on, AE2 pulling is no longer restricted to combs — any item with a Mekanism SMELTING recipe can be pulled from the network, and such items can be dragged straight into the filter UI (stored as exact fingerprint entries, while combs keep fuzzy matching). SMELTING candidates are ranked ahead of combs so a large comb inventory cannot fill the bounded candidate window on its own.
 - **Full six-attribute gene sampling**: the gene sampler now matches PB 13.13.5 and produces PRODUCTIVITY, ENDURANCE, TEMPER, BEHAVIOR and WEATHER_TOLERANCE genes in addition to TYPE. Attribute values are read per bee from the `attributes_handler` NBT, so bees of the same type with different attributes no longer bleed values into each other. The hit chance now comes from the PB `samplerChance` config instead of a hardcoded 0.05, and only adult bees are sampled, as in vanilla PB.
+- **Smelting-input tag expressions**: the AE2 pull configuration now has a dedicated tag-filter window for smelting inputs, with whitelist/blacklist expressions, `&|^!()` operators and `*` wildcards. An item-tag picker can add or remove tags, while item ids may still be entered directly. Client and server enforce bounded length, depth and node counts, and comb matching remains unchanged.
 
 #### Changed
 
 - **Unlimited-all semantics**: Shift-clicking the global gear in the AE2 pull UI no longer behaves differently depending on whether markers exist. It always toggles "pull unlimited for every comb the filter allows", and the flag is no longer cleared when markers are added. English and Chinese tooltips were updated to match.
 - **Disabling smelting compat no longer interrupts in-progress work**: the basic machine and all three factory variants now only reset the input validation caches when smelting compat is turned off. The active `CachedRecipe` is kept, so a SMELTING job already in the input slots drains naturally instead of losing its progress.
 - **Unlimited markers apply to smelting inputs**: `isUnlimitedForKey` no longer requires the candidate to be a comb, so ordinary SMELTING inputs can use unlimited pulling and reserve settings too.
+- **Split AE2 output responsibilities**: the former monolithic pusher is now organized into slot and merged submission paths, direct-push sessions, ledger settlement, backoff diagnostics and reusable buffers while retaining reserve-commit-confirm semantics.
+- **Fair multi-type input scheduling**: AE2 input pulls use two-pass empty-lane and quota allocation so one high-capacity item type cannot occupy every input slot; cursor scanning and exact-key indexing are wired into the same path.
+- **Configuration and state synchronization**: tag expressions persist through block-entity saves, machine pickup, tier upgrades and configuration cards, and are synchronized over the network. Server config listeners now accept only this mod's SERVER config, so client sync events cannot trigger local-file migration logic.
 
 #### Fixed
 
@@ -88,6 +108,7 @@
 - **Filter entry validation**: dragging a non-comb item on the client no longer falls back to a mixed "comb entry plus exact key" write. The server requires beeType/isBlock to match the actual item for combs, requires an existing SMELTING recipe for ordinary items, and enforces the fingerprint length limit, dropping malformed requests outright.
 - **Blacklist bypassed by unlimited-all**: blacklist/whitelist admission is now resolved before the unlimited flag, so blacklisted combs are never pulled while unlimited-all is enabled. Global stock reserves still apply in unlimited mode.
 - **Harvest check with conversion disabled**: while the conversion toggle is off, conversion ingredients in the feeder no longer count as valid flowers, so bees can no longer "harvest from obsidian" and produce combs that should require a real flower. Flipping the toggle invalidates the flower cache immediately.
+- **Apiary CREATIVE energy fallback**: the apiary production path now explicitly treats CREATIVE as zero per-bee energy, instead of relying only on the MEKExtras energy-container Mixin return value; custom containers or load-order differences cannot accidentally consume energy.
 - **Dropped pull leftovers hanging world load**: when input slots were full and leftovers could not return to the ME network, they used to be dropped into the world, where vanilla splits a large stack into many item entities — with ME stock in the 1e8 range this piled up hundreds of thousands of entities and exhausted the heap, appearing as a world load stuck at 100% with no log output and no crash report. Leftovers now go into a bounded per-machine pending buffer (registered per item type, persisted with the save); extraction is skipped for the round when no registration slot is free, leaving the items safely in the ME network.
 - **Pending items lost on chunk unload**: chunk unload used to clear the entire AE2 state, discarding pending items along with it. It now only clears grid nodes and caches, so item ownership survives until the next load and returns to the network.
 - **Output push duplication and loss**: product pushes now use a reserve–commit–confirm ledger. Items accepted by the ME network but not successfully removed from the slot are no longer counted as pushed, a fingerprint mismatch freezes that slot with a warning, and committed ledger entries are settled first even after the output switch is turned off so nothing hangs.
@@ -96,12 +117,23 @@
 - **Count labels showing through windows**: AE2 pull-slot stock labels are now correctly covered by amount-editor windows opened above them.
 - **Pull-window slot actions**: AE2 pull-window take/place actions are rate limited per action type, ME extract/insert results are saturation-clamped, and the GUI is only resynced when ME state actually changed, so rejected or no-op clicks cannot amplify broadcasts.
 - **Mekanism Extras factory mixin condition**: the mixin that references both Mekanism Extras and Evolved Mekanism Extras now requires both to be present, so installing only one no longer triggers a class-loading failure.
+- **Apiary batch spikes**: accumulation thresholds now scale with the current batch multiplier, preventing CREATIVE/high-speed operation from flushing the same fixed overhead every tick; the feeder conversion toggle is also copied by configuration cards.
+- **Repeated zero-duration recipe work**: CREATIVE zero-duration Mekanism recipes use a per-tile coalescing window that derives virtual-tick progress and energy charges from approved operations, avoiding repeated full recipe calculations under acceleration.
+- **Low-TPS false shutdowns**: the AE2 input gate now rate-limits instead of stopping completely at low TPS, and invalid tick samples are clamped so one bad timestamp cannot permanently force degraded mode.
+- **Exception and cache lifecycle**: high-frequency apiary/AE2 errors are time-throttled; slot limits, fingerprints, smelting lookups and network-cost state have bounded storage and explicit invalidation to prevent cross-save residue or unbounded growth.
 
 #### Performance
 
 - **Allocation-free gene sampling hot path**: sampling results now use a fixed-domain `long[]` counter (6 attributes × 19 enum values × 4 purities) reused across batches, so bee-type groups no longer allocate lists or records. Batches above 128 produce events aggregate the hit count and its distribution, keeping main-thread cost independent of JDT/JDTE multipliers, and `BeeSlot` caches the attribute snapshot per NBT reference instead of re-parsing five strings every round.
 - **SMELTING recipe lookup cache**: a bounded per-host LRU cache (1024 entries, storing only `AEItemKey` and a boolean) backs recipe queries. It is invalidated by `RECIPE_VERSION` on datapack reloads and cleared with the reusable buffers on AE2 grid topology changes, so a full network inventory no longer re-runs Mekanism recipe lookups every tick.
 - **Grouped candidate key cache**: one network inventory scan now produces both the SMELTING and comb candidate lists, and the refresh condition includes the recipe version and the compat switch state, so toggling the switch or reloading data rebuilds the lists immediately instead of waiting for the next refresh window.
+- **Adaptive AE2 throttling**: item and fluid direct output share insert-cost accounting with per-machine/global budgets, slow-operation backoff, consecutive-zero short-circuiting and EWMA limits for cheap-but-frequent calls. Healthy networks retain full throughput.
+- **Hot-path caching and batching**: reusable AE2 scan/submit buffers, per-game-tick `operationsPerTick` caching, cached item fingerprints, final slot limits and SMELTING candidates reduce allocations, recipe lookups and repeated network traversals. Direct apiary AE output also merges identical products before insertion.
+
+#### Tests
+
+- **Regression coverage**: added tests for tag-expression parsing, apiary/fluid flush policies, zero-duration batching, low-TPS gating, AE2 exact-key indexing, cost accounting, persistence paths and hot-path wiring.
+- **Continuous integration**: added a NeoForge 1.21.1 GitHub Actions workflow that restores development dependencies with Java 21, validates the Gradle Wrapper, runs the full build and uploads the mod JAR.
 
 ## [1.0.5] - 2026-08-23
 

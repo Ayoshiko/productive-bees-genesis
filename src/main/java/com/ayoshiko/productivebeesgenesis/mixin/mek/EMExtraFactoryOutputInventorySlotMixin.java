@@ -40,17 +40,27 @@ public abstract class EMExtraFactoryOutputInventorySlotMixin {
 	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true, require = 1)
 	private void productivebeesgenesis$overrideGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		if (this instanceof TieredInputSlot tiered) {
+			// 已乘倍率的最终上限缓存（同 Item + 同倍率版本即命中）：
+			// 输出槽的 getLimit 在配方产出与 AE2 推送路径上同样每刻被调用数千次。
+			int cached = tiered.productivebeesgenesis$peekEffectiveLimit(stack);
+			if (cached >= 0) {
+				cir.setReturnValue(cached);
+				return;
+			}
 			int mult = tiered.productivebeesgenesis$getCachedMultiplier();
 			if (mult >= 0) {
 				BasicInventorySlotAccessor accessor = (BasicInventorySlotAccessor) this;
 				int rawLimit = accessor.productivebeesgenesis$getLimit();
 				boolean obeyLimit = accessor.productivebeesgenesis$getObeyStackLimit() && !stack.isEmpty();
 				int baseLimit = tiered.productivebeesgenesis$getCachedBaseLimit(stack, rawLimit, obeyLimit, mult);
+				int effective;
 				try {
-					cir.setReturnValue(Math.multiplyExact(baseLimit, mult));
+					effective = Math.multiplyExact(baseLimit, mult);
 				} catch (ArithmeticException ignored) {
-					cir.setReturnValue(Integer.MAX_VALUE);
+					effective = Integer.MAX_VALUE;
 				}
+				tiered.productivebeesgenesis$storeEffectiveLimit(stack, effective);
+				cir.setReturnValue(effective);
 			}
 		}
 	}

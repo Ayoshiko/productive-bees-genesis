@@ -23,7 +23,6 @@ import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CapabilityRegistrar;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.ayoshiko.productivebeesgenesis.network.ModPayloads;
 import com.ayoshiko.productivebeesgenesis.network.PayloadRateLimiter;
@@ -152,7 +151,7 @@ public final class ProductiveBeesGenesis {
 	 */
 	private void registerConfigListeners(IEventBus eventBus) {
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
-			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
+			if (isOwnServerConfig(event.getConfig())) {
 				boolean changed = BalanceConfigCompatibility.migrateLegacyConfig(event.getConfig());
 				changed |= ModConfig.validateAndFixCrossFields();
 				changed |= BalanceConfig.refresh(false);
@@ -164,7 +163,7 @@ public final class ProductiveBeesGenesis {
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
-			if (event.getConfig().getSpec() == ModConfig.SERVER_SPEC) {
+			if (isOwnServerConfig(event.getConfig())) {
 				boolean changed = ModConfig.validateAndFixCrossFields();
 				changed |= BalanceConfig.refresh(true);
 				if (changed) {
@@ -182,13 +181,20 @@ public final class ProductiveBeesGenesis {
 				// 槽位首次 getLimit 时读取配置并永久缓存（MULTIPLIER_VERSION 永不递增），
 				// 配置文件修改不影响已运行的槽位实例，避免热重载导致的性能抖动。
 			}
-			// 通知 RecipeReloadRetryManager 检测 EM/ME 配置死循环（Task 8）
-			// 注：放在 SERVER_SPEC 判断之外 — EM/ME 配置重载事件不匹配我们的 spec，
-			// 但仍需通知死循环检测器进行死循环判定
-			RecipeReloadRetryManager.onConfigFileChanged(
-					event.getConfig().getFullPath().toString(),
-					event.getConfig().getModId());
+			// 同步到客户端的配置是内存对象，没有本地路径；重试检测只需要 mod id。
+			RecipeReloadRetryManager.onConfigChanged(event.getConfig().getModId());
 		});
+	}
+
+	/**
+	 * 仅处理本模组注册的 SERVER 配置，避免其他模组的配置事件触发本模组逻辑。
+	 * 配置同步到客户端后 spec 身份仍保持不变，mod id 和类型则提供额外边界校验。
+	 */
+	private static boolean isOwnServerConfig(net.neoforged.fml.config.ModConfig config) {
+		return config != null
+				&& MOD_ID.equals(config.getModId())
+				&& config.getType() == Type.SERVER
+				&& config.getSpec() == ModConfig.SERVER_SPEC;
 	}
 
 	/**
@@ -269,7 +275,7 @@ public final class ProductiveBeesGenesis {
 
 	/**
 	 * 标签/配方重载完成回调 — 递增配方版本号、失效缓存、重建离心配方索引。
-	 * 失效 BeeInfoHelper/BeeProduceProcessor/PbRecipeCompleter/MyriadBatchPlanner/CombFuzzyMatcher 缓存。
+	 * 失效 BeeInfoHelper/BeeProduceProcessor/PbRecipeCompleter/MyriadBatchPlanner 缓存。
 	 * Task 16.3 同步失效 BeeProduceProcessor 产出配方缓存(静态共享)。
 	 */
 	private void onTagsReload(TagsUpdatedEvent event) {
@@ -283,10 +289,7 @@ public final class ProductiveBeesGenesis {
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
-		// 失效 AE2 蜜脾模糊匹配缓存（AE2 未加载时跳过，避免 NoClassDefFoundError）（Task 20）
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			CombFuzzyMatcher.clearCache();
-		}
+		// CombFuzzyMatcher 已改为无缓存直读组件（AEItemKey.equals 比重算更贵），无需失效
 		// 失效万象创世 bee_type 缓存（标签重载可能变更 BeeReloadListener 数据，5 秒过期窗口消除）
 		MyriadBeeTypeCache.invalidate();
 		// 重建离心配方索引 — 服务端用 MinecraftServer，客户端用 ClientLevel
@@ -353,7 +356,7 @@ public final class ProductiveBeesGenesis {
 	 * 服务器停止回调 — 清理静态缓存防止跨存档数据泄漏:
 	 * CentrifugeRecipeIndex/BeeInfoHelper/BeeProduceProcessor/MyriadCreationsEventHandler/
 	 * RecipeReloadRetryManager/AbstractCombEventHandler.ThreadLocals/PayloadRateLimiter/MyriadBatchPlanner/
-	 * CombFuzzyMatcher/ServerTickTimeMonitor。每个清理独立 try-catch,单个失败不中断后续。
+	 * ServerTickTimeMonitor。每个清理独立 try-catch,单个失败不中断后续。
 	 */
 	private void onServerStopped(ServerStoppedEvent event) {
 		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
@@ -374,12 +377,6 @@ public final class ProductiveBeesGenesis {
 		safeClear(MyriadBatchPlanner::clearTemplateCache, "MyriadBatchPlanner.TEMPLATE_CACHE");
 		// 清理万象批量规划器 ThreadLocal 快照缓存 — 防止线程池复用场景下的引用残留
 		safeClear(MyriadBatchPlanner::clearThreadLocals, "MyriadBatchPlanner.snapshotCache");
-		// 清理 AE2 蜜脾模糊匹配缓存（AE2 未加载时跳过，避免 NoClassDefFoundError）（Task 20）
-		safeClear(() -> {
-			if (Ae2IntegrationLoader.isAe2Loaded()) {
-				CombFuzzyMatcher.clearCache();
-			}
-		}, "CombFuzzyMatcher.aeItemKeyToBeeTypeCache");
 		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
 		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
 		safeClear(LogThrottle::clearAll, "LogThrottle");

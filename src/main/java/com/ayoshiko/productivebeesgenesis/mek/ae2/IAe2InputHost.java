@@ -164,6 +164,19 @@ public interface IAe2InputHost extends IAe2OutputHostBase {
 	}
 
 	/**
+	 * 获取 smelt 输入标签过滤（白/黑名单表达式）
+	 * <br/>
+	 * 默认实现委托给 {@link Ae2OutputStateHolder#getAeTagFilter()}。
+	 * 与蜜脾种类过滤相互独立：标签表达式只收窄 smelt 配方输入的候选范围。
+	 *
+	 * @return 标签过滤实例，holder 为 null 时返回 null
+	 */
+	default Ae2TagFilter productivebeesgenesis$getAeTagFilter() {
+		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
+		return holder != null ? holder.getAeTagFilter() : null;
+	}
+
+	/**
 	 * 获取并递增类型轮转索引（用于 N > processCount 时的类型轮转）
 	 * <br/>
 	 * 默认实现委托给 Ae2OutputStateHolder。

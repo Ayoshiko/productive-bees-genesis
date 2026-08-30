@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
+import com.ayoshiko.productivebeesgenesis.mek.ZeroTickBatchMath;
+import com.ayoshiko.productivebeesgenesis.mek.ZeroTickCoalesceState;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -108,6 +110,18 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	@Unique
 	private boolean productivebeesgenesis$marginalEnergyPricing;
 
+	/**
+	 * 零耗时配方（CREATIVE 升级，{@code requiredTicks <= 1}）的 per-tile 合并窗口。
+	 * <br/>
+	 * null 表示该配方不属于本模组的零耗时合并路径（保持旧行为）。
+	 */
+	@Unique
+	private ZeroTickCoalesceState productivebeesgenesis$zeroTickCoalesce;
+
+	/** 本次合并调用实际使用的倍数（1 = 未合并），供能量按刻分摊与虚拟刻扣减。 */
+	@Unique
+	private int productivebeesgenesis$activeCoalesceFactor = 1;
+
 	// ===== 接口实现 =====
 
 	@Override
@@ -116,15 +130,63 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	}
 
 	@Override
+	public void productivebeesgenesis$bindZeroTickCoalesce(ZeroTickCoalesceState state) {
+		productivebeesgenesis$zeroTickCoalesce = state;
+	}
+
+	@Override
 	public void productivebeesgenesis$startBatch(int ticks) {
 		productivebeesgenesis$batchTicksLeft = Math.max(0, ticks);
 		productivebeesgenesis$batchFastOps = 0;
 		productivebeesgenesis$awaitingFinalOperations = false;
+		productivebeesgenesis$endZeroTickCoalesce();
+		// 本批次的单刻上限只取一次：供应商内部虽按 gameTick 记忆化，但仍要先读
+		// level.getGameTime()，而零耗时配方每个虚拟刻都要开窗一次，
+		// 于是 getGameTime 被放大到每真实刻上千次（spark gUqyZmn5q6：464ms / 1.55%）。
+		// 一个批次必然落在同一 gameTick 内，故批内复用快照与逐次查询等价。
+		ZeroTickCoalesceState state = productivebeesgenesis$zeroTickCoalesce;
+		if (state != null) {
+			if (productivebeesgenesis$batchTicksLeft > 0) {
+				state.beginBatch();
+			} else {
+				state.endBatch();
+			}
+		}
 	}
 
 	@Override
 	public boolean productivebeesgenesis$isBatchExhausted() {
 		return productivebeesgenesis$batchTicksLeft <= 0;
+	}
+
+	/**
+	 * 尝试为零耗时配方打开合并窗口。
+	 * <p>
+	 * 原有快速路径以「周期内只推进 operatingTicks」为前提；CREATIVE 升级下
+	 * {@code requiredTicks} 为 0，每个配方 tick 就是一个完整周期，必然第一次推进即退出快速路径，
+	 * 于是每个虚拟刻都要跑一次完整 {@code calculateOperationsThisTick} 和一次输出槽
+	 * {@code insertItem}（spark XnLugba3Cw：1940ms + 1208ms）。
+	 * <p>
+	 * 打开窗口后单刻并行上限被放大 ticksLeft 倍，Mekanism 一次调用即承担整批；
+	 * 输入/输出空间/能量的裁剪仍全部由原版执行，产出与逐刻推进等价
+	 * （{@code finishProcessing(ops)} 对 ops 线性）。
+	 */
+	@Unique
+	private void productivebeesgenesis$beginZeroTickCoalesce() {
+		productivebeesgenesis$activeCoalesceFactor = 1;
+		ZeroTickCoalesceState state = productivebeesgenesis$zeroTickCoalesce;
+		if (state == null || !productivebeesgenesis$marginalEnergyPricing) return;
+		int ticksLeft = productivebeesgenesis$batchTicksLeft;
+		if (ticksLeft <= 1 || !ZeroTickBatchMath.isCoalescible(requiredTicks.getAsInt())) return;
+		state.begin(ticksLeft);
+		productivebeesgenesis$activeCoalesceFactor = state.factor();
+	}
+
+	@Unique
+	private void productivebeesgenesis$endZeroTickCoalesce() {
+		productivebeesgenesis$activeCoalesceFactor = 1;
+		ZeroTickCoalesceState state = productivebeesgenesis$zeroTickCoalesce;
+		if (state != null) state.end();
 	}
 
 	/**
@@ -139,6 +201,13 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		if (!productivebeesgenesis$marginalEnergyPricing) {
 			return linearAffordableOperations;
 		}
+		int factor = productivebeesgenesis$activeCoalesceFactor;
+		if (factor > 1) {
+			// 合并调用：先算「单虚拟刻可承担量」再乘回倍数。直接对总操作数套边际曲线是错的 ——
+			// 曲线次线性，会让 1024 倍加速几乎不耗电。
+			return ZeroTickBatchMath.affordableCoalescedOperations(perTickEnergy.getAsLong(),
+					productivebeesgenesis$zeroTickCoalesce.base(), storedEnergy.getAsLong(), factor);
+		}
 		return MekCentrifugeEnergyScaling.affordableOperations(
 				perTickEnergy.getAsLong(), Math.max(0, baselineMaxOperations.getAsInt()),
 				storedEnergy.getAsLong());
@@ -150,8 +219,18 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		if (!productivebeesgenesis$marginalEnergyPricing) return;
 		long energyPerTick = perTickEnergy.getAsLong();
 		if (energyPerTick > 0L && operations > 0) {
-			useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
-					energyPerTick, operations, 1));
+			int factor = productivebeesgenesis$activeCoalesceFactor;
+			if (factor > 1) {
+				// 合并调用代表多个虚拟刻：按刻分摊后逐刻计费，总额与逐刻推进一致。
+				int base = productivebeesgenesis$zeroTickCoalesce.base();
+				int virtualTicks = ZeroTickBatchMath.virtualTicksFor(operations, base);
+				int perTickOps = ZeroTickBatchMath.operationsPerVirtualTick(operations, virtualTicks);
+				useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
+						energyPerTick, perTickOps, virtualTicks));
+			} else {
+				useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
+						energyPerTick, operations, 1));
+			}
 		}
 		ci.cancel();
 	}
@@ -180,6 +259,8 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		int ops = productivebeesgenesis$batchFastOps;
 		if (ops <= 0) {
 			productivebeesgenesis$awaitingFinalOperations = true;
+			// 零耗时配方（CREATIVE）永远走这条分支：开合并窗口，让本次完整计算承担整批虚拟刻。
+			productivebeesgenesis$beginZeroTickCoalesce();
 			return; // 需要完整重算：本次调用走原版逻辑，onAfterCalculate 恢复快速模式
 		}
 		productivebeesgenesis$awaitingFinalOperations = false;
@@ -261,6 +342,19 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		if (ops <= 0) {
 			productivebeesgenesis$batchTicksLeft = 0;
 			productivebeesgenesis$batchFastOps = 0;
+			productivebeesgenesis$endZeroTickCoalesce();
+			return ops;
+		}
+		int factor = productivebeesgenesis$activeCoalesceFactor;
+		if (factor > 1) {
+			// 合并调用一次承担多个虚拟刻：按实际获批的操作数反推消耗了几刻，
+			// 否则只扣 1 刻，剩余预算会把同一批产出重复执行上千次。
+			int consumed = ZeroTickBatchMath.virtualTicksFor(ops,
+					productivebeesgenesis$zeroTickCoalesce.base());
+			productivebeesgenesis$batchTicksLeft = Math.max(0,
+					productivebeesgenesis$batchTicksLeft - Math.max(1, consumed));
+			// 零耗时配方本次调用即完成周期，快速路径无中间状态可复用。
+			productivebeesgenesis$batchFastOps = 0;
 			return ops;
 		}
 		productivebeesgenesis$batchFastOps = ops;
@@ -280,6 +374,9 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	/** paused/canHolder 等分支可能在最终操作数字段读取前返回；此时停止本轮补调。 */
 	@Inject(method = "process", at = @At("RETURN"))
 	private void productivebeesgenesis$stopBatchAfterEarlyReturn(CallbackInfo ci) {
+		// 合并窗口必须在完整 process 调用结束后关闭：useEnergy 与输出空间探测
+		// 都发生在本次调用内部，提前关闭会让计费与探测退回单刻上限。
+		productivebeesgenesis$endZeroTickCoalesce();
 		if (productivebeesgenesis$awaitingFinalOperations) {
 			productivebeesgenesis$awaitingFinalOperations = false;
 			productivebeesgenesis$batchTicksLeft = 0;

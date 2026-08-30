@@ -5,8 +5,10 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter.EntryInfo;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2TagFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeInputFilterModePayload;
 import com.ayoshiko.productivebeesgenesis.network.NetworkSecurityConstants;
 import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
@@ -60,6 +62,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	private final MekanismButton filterModeBtn;
 	private final MekanismButton preciseBtn;
 	private final ReserveModeButton reserveBtn;
+	private final MekanismButton tagFilterBtn;
 	private final GlobalGearButton globalGearBtn;
 	private final MekanismButton prevPageBtn;
 	private final MekanismButton nextPageBtn;
@@ -131,6 +134,14 @@ public final class GuiAeInputConfig extends GuiWindow {
 				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterNetworkStockPayload(pos))));
 		reserveBtn.setTooltip(Tooltip.create(Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.reserve_button.tooltip")));
+		btnX += AeInputConfigLayout.RESERVE_BTN_WIDTH + 2;
+		// 标签过滤入口（T）：打开表达式编辑窗口，只作用于 smelt 配方输入的候选筛选
+		tagFilterBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
+				AeInputConfigLayout.controlY(relativeY),
+				AeInputConfigLayout.TAG_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "T",
+				(e, mx, my) -> { onOpenTagFilter(); return true; }));
+		tagFilterBtn.setTooltip(Tooltip.create(
+				Component.translatable("productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip")));
 
 		// Page buttons (prev / clear / next)
 		prevPageBtn = addChild(new CtrlButton(gui(), relativeX + AeInputConfigLayout.WINDOW_WIDTH
@@ -318,6 +329,16 @@ public final class GuiAeInputConfig extends GuiWindow {
 		drawScaledScrollingString(guiGraphics, reserveText, startX, startY + 99, TextAlignment.LEFT,
 				globalStock ? 0x55FF55 : screenTextColor(),
 				panelWidth, 3, false, 0.7F);
+
+		// 标签过滤状态：仅作用于 smelt 输入；语法错误用红色提示该侧已失效
+		Ae2TagFilter tagFilter = host.productivebeesgenesis$getAeTagFilter();
+		boolean tagActive = tagFilter != null && tagFilter.isActive();
+		boolean tagError = tagFilter != null && tagFilter.hasError();
+		Component tagText = Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.info.tag_filter", stateLabel(tagActive));
+		drawScaledScrollingString(guiGraphics, tagText, startX, startY + 108, TextAlignment.LEFT,
+				tagError ? 0xFF5555 : (tagActive ? 0x55FF55 : screenTextColor()),
+				panelWidth, 3, false, 0.7F);
 	}
 
 	@Override
@@ -432,6 +453,14 @@ public final class GuiAeInputConfig extends GuiWindow {
 		globalGearBtn.setUnlimitedAllFallback(filter != null && filter.isUnlimitedAllFallback());
 		reserveBtn.active = filter != null;
 		reserveBtn.setGlobalStock(filter != null && filter.isGlobalNetworkStock());
+		Ae2TagFilter tagFilter = host.productivebeesgenesis$getAeTagFilter();
+		tagFilterBtn.active = tagFilter != null;
+		// 标签过滤只作用于熔炼配方输入，前置条件是「兼容电力熔炼炉配方」开关（全局 AND per-tile）已开；
+		// 未开时 tooltip 明确提示前置，否则玩家会以为过滤器坏了
+		tagFilterBtn.setTooltip(Tooltip.create(Component.translatable(
+				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(host)
+						? "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip"
+						: "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip_needs_smelting")));
 	}
 
 	private void changePage(int delta) {
@@ -522,12 +551,17 @@ public final class GuiAeInputConfig extends GuiWindow {
 	}
 
 	/** Opens the explicit global network-stock reserve editor. */
-	private void onOpenGlobalReserve() {
-		Ae2InputFilter filter = getFilter();
+	private void onOpenGlobalReserve() {		Ae2InputFilter filter = getFilter();
 		if (filter == null) return;
 		long initial = filter.getGlobalReserveAmount();
 		gui().addWindow(new GuiAeInputAmountConfig(gui(), relativeX + 38, relativeY + 18,
 				pos, ItemStack.EMPTY, initial, true));
+	}
+
+	/** Opens the smelt-input tag expression editor (whitelist / blacklist). */
+	private void onOpenTagFilter() {
+		gui().addWindow(new GuiAeInputTagFilterConfig(gui(), relativeX + 14, relativeY + 26,
+				pos, host.productivebeesgenesis$getAeTagFilter()));
 	}
 
 	/** Toggle the unlimited-provide marker for a direct AE2 entry. */

@@ -90,6 +90,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	private final PbUpgradeInstallHandler pbUpgradeInstallHandler;
 	/** AE2 集成处理器 — 封装网格节点生命周期、per-tile 开关切换与容器同步 */
 	private final MekCentrifugeAe2Handler ae2Handler;
+	/** operationsPerTick 每游戏刻记忆化 — CachedRecipe 每次完整计算都会调用该供应商（spark XnLugba3Cw 首位热点） */
+	private final OperationsPerTickCache operationsPerTickCache = new OperationsPerTickCache();
 
 	/**
 	 * 掉落数据已序列化标志 — getDrops 幂等防护
@@ -324,6 +326,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
 		// SPEED/ENERGY 变化影响时间倍率 — 失效 PB 升级倍率缓存（Spark 优化）
 		pbUpgradeHandler.invalidateMultiplierCache();
+		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻
+		operationsPerTickCache.invalidate();
 	}
 
 	@NotNull
@@ -395,7 +399,10 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public float stabilityBonus() { return pbUpgradeHandler.getStabilityBonus(); }
 	@Override
-	public int operationsPerTick() { return MekCentrifugeUpgradeOps.calcOperationsPerTick(this); }
+	public int operationsPerTick() {
+		long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		return operationsPerTickCache.get(gameTick, () -> MekCentrifugeUpgradeOps.calcOperationsPerTick(this));
+	}
 	@Override
 	public int getTicksForBase(int baseTime) {
 		return MekCentrifugeUpgradeOps.calcTicksForBase(this, baseTime, pbUpgradeHandler.getTimeMultiplier());

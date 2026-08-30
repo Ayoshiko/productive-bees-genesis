@@ -345,6 +345,8 @@ final class Ae2FilterPayloadHandlers {
 		}
 		// Polling an open GUI only needs to update its owner, not every player tracking the chunk.
 		syncFilterToClient(be, serverPlayer);
+		// 同步标签过滤表达式：GUI 打开时客户端需要拿到当前表达式文本用于回显
+		Ae2TagFilterPayloadHandlers.syncTagFilterToClient(be, serverPlayer);
 	}
 
 	/**

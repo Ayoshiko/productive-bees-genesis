@@ -35,6 +35,12 @@ public class ServerTickTimeMonitor {
 	/** 下降沿恢复阈值（ms）— 恢复满倍率 */
 	private static final double UPGRADE_THRESHOLD = 45.0;
 
+	/**
+	 * 单样本上限（ms）— 10 秒。一次真正的 10 秒卡顿（区块生成、存档保存）
+	 * 已经远超所有降级阈值，再大的数值只会让 100-tick 窗口长时间无法恢复。
+	 */
+	static final double MAX_SAMPLE_MS = 10_000.0;
+
 	/** 单例实例 */
 	private static final ServerTickTimeMonitor INSTANCE = new ServerTickTimeMonitor();
 
@@ -53,8 +59,22 @@ public class ServerTickTimeMonitor {
 	/** 短期 MSPT 指数平均；预算取长期平均与该值的较大者。 */
 	private double responsiveMspt = 0.0;
 
-	/** ServerTickEvent.Pre 时记录的起始时间（纳秒） */
-	private long tickStartNanos = 0L;
+	/**
+	 * ServerTickEvent.Pre 时记录的起始时间（纳秒）。
+	 * <p>
+	 * <b>UNSET 哨兵不可省</b>：原实现初值为 0，一旦 Post 先于 Pre 到达
+	 * （事件总线注册时序、其他模组取消 Pre、存档切换后 invalidate 归零），
+	 * {@code System.nanoTime() - 0} 得到的是自系统启动以来的纳秒数（天文数字），
+	 * 写入滚动数组后 avgMspt 永久巨大 → {@link #getTps} 恒小于
+	 * {@code Ae2LowTpsGate.LOW_TPS_THRESHOLD} → AE2 输入拉取永久降级。
+	 * 表现正是玩家反馈的「机器在线、加工与产物回送正常，但完全不从 AE2 拉取」。
+	 */
+	static final long UNSET_TICK_START = Long.MIN_VALUE;
+
+	/** 无效采样标记（无配对 Pre、时钟回拨），调用方直接丢弃。 */
+	static final double INVALID_SAMPLE = -1.0;
+
+	private volatile long tickStartNanos = UNSET_TICK_START;
 
 	/** 缓存的有效 MSPT（长期滚动平均与短期指数平均的较大者）。 */
 	private double cachedAvgMspt = 0.0;
@@ -94,12 +114,18 @@ public class ServerTickTimeMonitor {
 	 * ServerTickEvent.Post 监听器 — 计算并记录本 tick 耗时到滚动数组
 	 * <br/>
 	 * 性能约束：仅算术运算 + 数组写入，禁止 I/O 或字符串操作。
+	 * <p>
+	 * 没有配对的 Pre 时直接丢弃本次采样：宁可少一个样本，也不能把
+	 * 「nanoTime 绝对值」当成 tick 耗时污染滚动平均（见 {@link #UNSET_TICK_START}）。
+	 * 同时对单样本上限做钳制，防御任意来源的异常大值长期占据 100-tick 窗口。
 	 *
 	 * @param event 服务端 tick Post 事件
 	 */
 	public void onTickPost(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
-		long durationNanos = System.nanoTime() - tickStartNanos;
-		double durationMs = Math.max(0.0, durationNanos / 1_000_000.0);
+		long start = tickStartNanos;
+		tickStartNanos = UNSET_TICK_START;
+		double durationMs = sampleMsFor(start, System.nanoTime());
+		if (durationMs == INVALID_SAMPLE) return;
 		if (sampleCount == SAMPLE_SIZE) {
 			rollingDurationTotal -= tickDurations[sampleIndex];
 		} else {
@@ -109,6 +135,21 @@ public class ServerTickTimeMonitor {
 		rollingDurationTotal += durationMs;
 		responsiveMspt = nextResponsiveMspt(responsiveMspt, durationMs);
 		sampleIndex = (sampleIndex + 1) % SAMPLE_SIZE;
+	}
+
+	/**
+	 * 把一对 Pre/Post 时间戳换算为一个合法样本，非法输入返回 {@link #INVALID_SAMPLE}。
+	 * <p>
+	 * 拆成纯函数便于单测覆盖三类污染源：无配对 Pre、时钟回拨、超长停顿。
+	 *
+	 * @param startNanos Pre 记录的时间戳（{@link #UNSET_TICK_START} 表示缺失）
+	 * @param nowNanos   Post 时的时间戳
+	 */
+	static double sampleMsFor(long startNanos, long nowNanos) {
+		if (startNanos == UNSET_TICK_START) return INVALID_SAMPLE;
+		long durationNanos = nowNanos - startNanos;
+		if (durationNanos < 0L) return INVALID_SAMPLE;
+		return Math.min(MAX_SAMPLE_MS, durationNanos / 1_000_000.0);
 	}
 
 	/**
@@ -236,7 +277,7 @@ public class ServerTickTimeMonitor {
 		sampleCount = 0;
 		rollingDurationTotal = 0.0;
 		responsiveMspt = 0.0;
-		tickStartNanos = 0L;
+		tickStartNanos = UNSET_TICK_START;
 		cachedAvgMspt = 0.0;
 		cachedTpsFactor = 1.0;
 		lastFactorCacheTick = Long.MIN_VALUE;

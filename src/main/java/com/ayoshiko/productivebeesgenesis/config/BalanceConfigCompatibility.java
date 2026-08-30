@@ -41,7 +41,15 @@ public final class BalanceConfigCompatibility {
 	 */
 	public static boolean migrateLegacyConfig(ModConfig config) {
 		if (config == null) return false;
-		Path currentPath = config.getFullPath();
+		Path currentPath;
+		try {
+			// 服务端配置同步到客户端时由内存承载，没有可迁移的文件路径。
+			currentPath = config.getFullPath();
+		} catch (IllegalStateException exception) {
+			LOGGER.log(System.Logger.Level.DEBUG,
+					"Skipping legacy migration for non-file server config");
+			return false;
+		}
 		Path backupPath = recentLegacyBackup(currentPath);
 		if (backupPath == null) return false;
 		try {

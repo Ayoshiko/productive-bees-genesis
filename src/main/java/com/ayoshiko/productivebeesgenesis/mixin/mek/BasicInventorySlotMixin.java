@@ -122,6 +122,10 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		this.productivebeesgenesis$inputMultiplier = supplier;
 		// 重置缓存，确保新 supplier 立即生效
 		this.productivebeesgenesis$cachedInputMultiplier = -1;
+		// 已乘倍率的最终上限缓存也必须清：替换 supplier 不递增全局 MULTIPLIER_VERSION，
+		// 否则旧倍率算出的上限会继续命中。
+		SlotLimitCache limitCache = productivebeesgenesis$limitCache;
+		if (limitCache != null) limitCache.invalidate();
 	}
 
 	@Override
@@ -224,6 +228,16 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		return productivebeesgenesis$getLimitCache().getBaseLimit(stack, rawLimit, obeyLimit, multiplier);
 	}
 
+	@Override
+	public int productivebeesgenesis$peekEffectiveLimit(@NotNull ItemStack stack) {
+		return productivebeesgenesis$getLimitCache().peekEffectiveLimit(stack);
+	}
+
+	@Override
+	public void productivebeesgenesis$storeEffectiveLimit(@NotNull ItemStack stack, int limit) {
+		productivebeesgenesis$getLimitCache().storeEffectiveLimit(stack, limit);
+	}
+
 	/**
 	 * 在 BasicInventorySlot.getLimit 头部用缓存直接替换原始计算。
 	 * <br/>
@@ -233,9 +247,22 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	 * 倍率为 -1 表示非本模组分等级输入槽，保持 Mekanism 原逻辑不变。
 	 * 对于已覆盖 getLimit 的子类（ME/EME 工厂输入槽），本 Mixin 不生效，
 	 * 由各自的专用 Mixin（ExtraFactoryInputInventorySlotMixin 等）处理。
+	 * <p>
+	 * 进一步：先查「已乘倍率的最终上限」缓存（同 Item + 同倍率版本即命中），
+	 * 命中时连倍率读取与乘法钳制都跳过。时间加速下本方法每真实刻被调用数千次
+	 * （spark gUqyZmn5q6：getCachedBaseLimit 自耗 1272ms / 4.24%，全服第 2 热点）。
 	 */
 	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$cachedTieredGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
+		if (productivebeesgenesis$inputMultiplier == null) {
+			return; // 非本模组分等级槽位：不触碰缓存，保持 Mekanism 原逻辑
+		}
+		SlotLimitCache limitCache = productivebeesgenesis$getLimitCache();
+		int cached = limitCache.peekEffectiveLimit(stack);
+		if (cached >= 0) {
+			cir.setReturnValue(cached);
+			return;
+		}
 		int multiplier = productivebeesgenesis$getCachedMultiplier();
 		if (multiplier < 0) {
 			return;
@@ -243,12 +270,15 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		BasicInventorySlotAccessor accessor = (BasicInventorySlotAccessor) this;
 		int rawLimit = accessor.productivebeesgenesis$getLimit();
 		boolean obeyLimit = accessor.productivebeesgenesis$getObeyStackLimit();
-		int baseLimit = productivebeesgenesis$getCachedBaseLimit(stack, rawLimit, obeyLimit, multiplier);
+		int baseLimit = limitCache.getBaseLimit(stack, rawLimit, obeyLimit, multiplier);
+		int effective;
 		if (multiplier > 1) {
 			long scaled = (long) baseLimit * multiplier;
-			cir.setReturnValue((int) Math.min(Integer.MAX_VALUE, Math.max(0L, scaled)));
+			effective = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, scaled));
 		} else {
-			cir.setReturnValue(baseLimit);
+			effective = baseLimit;
 		}
+		limitCache.storeEffectiveLimit(stack, effective);
+		cir.setReturnValue(effective);
 	}
 }

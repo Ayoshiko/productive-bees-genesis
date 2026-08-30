@@ -169,6 +169,12 @@ public final class CentrifugeUpgradeDataHelper {
 		}
 		ItemStack energyItem = energySlot.getStack().copy();
 
+		// smelt 输入标签过滤：本身不依赖 AE2 类，故无条件保存（与 smeltingCompatEnabled 同理）。
+		// save 在表达式为空时不写任何键，此时置 null 以省掉一个空子标签。
+		CompoundTag aeTagFilterNbt = new CompoundTag();
+		ae2StateHolder.getAeTagFilter().save(aeTagFilterNbt);
+		if (aeTagFilterNbt.isEmpty()) aeTagFilterNbt = null;
+
 		return new CentrifugeUpgradeData(provider, redstone, controlType,
 				energyContainer, progress, energySlot, inputSlots, outputSlots,
 				sorting, components,
@@ -182,7 +188,8 @@ public final class CentrifugeUpgradeDataHelper {
 				outputItems,
 				inputItems,
 				energyItem,
-				aeInputFilterNbt);
+				aeInputFilterNbt,
+				aeTagFilterNbt);
 	}
 
 	/**
@@ -281,6 +288,13 @@ public final class CentrifugeUpgradeDataHelper {
 		// 恢复 AE2 per-tile 设置（AE2 未加载时跳过，新方块使用默认值）
 		// Restore per-tile smelting compat (independent of AE2)
 		ae2StateHolder.setSmeltingCompatEnabled(data.smeltingCompatEnabled);
+		// smelt 输入标签过滤：同样不依赖 AE2，无条件恢复；无快照即重置为空表达式，
+		// 防止新方块沿用自身构造时的默认值之外的残留状态。
+		if (data.aeTagFilterNbt != null) {
+			ae2StateHolder.getAeTagFilter().load(data.aeTagFilterNbt.copy());
+		} else {
+			ae2StateHolder.getAeTagFilter().reset();
+		}
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
 			ae2StateHolder.setCentrifugeDirectAeOutputEnabled(data.centrifugeDirectAeOutputEnabled);
 			ae2StateHolder.setAeItemInputEnabled(data.aeItemInputEnabled);
@@ -316,6 +330,17 @@ public final class CentrifugeUpgradeDataHelper {
 		restoreItemStackDeepCopies(data, targetInputSlots, targetOutputSlots, targetEnergySlot);
 	}
 
+	/**
+	 * 旧升级数据的回退恢复路径（{@code aeInputFilterNbt == null}）。
+	 * <p>
+	 * 只能恢复 legacy 三张平行 map 携带的 mode/precise/entries/amounts/unlimited。
+	 * <b>保留库存相关字段（directReserveAmounts / directNetworkStock /
+	 * globalNetworkStock / globalReserveAmount / unlimitedAllFallback）在 legacy 格式里
+	 * 根本不存在</b>，因此这里无可恢复之物 —— 它们随 {@link Ae2InputFilter#save} 的完整
+	 * 快照走 {@code aeInputFilterNbt} 主链路，当前版本产生的升级数据一律带 NBT 快照，
+	 * 只有「升级器物品在旧版本里就已装好状态、跨版本再粘贴」才会落到本方法，
+	 * 此时新过滤器保持构造默认值（无保留、无全局库存模式）是唯一可能且安全的行为。
+	 */
 	private static void restoreLegacyFilterData(CentrifugeUpgradeData data, Ae2InputFilter filter) {
 		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
 		if (data.aeInputFilterMode >= 0 && data.aeInputFilterMode < modes.length) {

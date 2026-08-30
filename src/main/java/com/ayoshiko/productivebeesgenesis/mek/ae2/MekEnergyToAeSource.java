@@ -21,7 +21,7 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 	 * 所有操作委托给 {@link MachineEnergyContainer}（其内部使用原子类型保证线程安全）。
 	 * container 引用来自宿主且在宿主生命周期内固定不变，故可安全复用。
 	 * <p>
-	 * <b>复用机制</b>：由 {@link Ae2OutputPusher.ReusableBuffers} 懒初始化并跨 tick 持有，
+	 * <b>复用机制</b>：由 {@link Ae2PushBuffers} 懒初始化并跨 tick 持有，
 	 * 避免每 tick 创建临时对象。物品推送和流体推送共享同一适配器实例。
 	 */
 public final class MekEnergyToAeSource implements IEnergySource {

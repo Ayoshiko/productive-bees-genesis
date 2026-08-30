@@ -10,8 +10,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
 	 * 蜜脾模糊匹配器
 	 * <br/>
@@ -25,8 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * <b>可选依赖说明</b>：本类直接 import appeng 类（AEItemKey），编译期需要 AE2 API。
 	 * 调用方必须通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 守卫，确保 AE2 未加载时不触发类加载。
 	 * <p>
-	 * <b>线程安全</b>：AEItemKey → BEE_TYPE 缓存使用 {@link ConcurrentHashMap}，防御性保证并发遍历安全。
-	 * 实际由离心机服务端 tick 线程独占访问，参考 {@link AeItemKeyCache} 的线程模型。
+	 * <b>线程安全</b>：全部方法无共享可变状态（只读静态引用 + 入参），天然线程安全。
 	 */
 public final class CombFuzzyMatcher {
 
@@ -38,18 +35,6 @@ public final class CombFuzzyMatcher {
 	private static final ResourceLocation GHOSTLY_TYPE = ResourceLocation.parse("productivebees:ghostly");
 	private static final ResourceLocation MILKY_TYPE = ResourceLocation.parse("productivebees:milky");
 	private static final ResourceLocation POWDERY_TYPE = ResourceLocation.parse("productivebees:powdery");
-
-	/**
-	 * AEItemKey → BEE_TYPE 映射缓存
-	 * <br/>
-	 * 避免每次遍历 MEStorage 可用栈时重复调用 {@link ItemStack#get} 读取 BEE_TYPE 组件。
-	 * 键为 AEItemKey（其 equals/hashCode 基于物品+组件快照，值稳定），值为蜜蜂类型 ID。
-	 * <p>
-	 * 注意：{@link ConcurrentHashMap#computeIfAbsent} 不存储 null 值，故非蜜脾物品不会进入缓存。
-	 * 调用方应先通过 {@link #isCombItem(AEItemKey)} 过滤，避免对非蜜脾 key 重复计算。
-	 */
-	private static final ConcurrentHashMap<AEItemKey, ResourceLocation> aeItemKeyToBeeTypeCache =
-			new ConcurrentHashMap<>();
 
 	/**
 	 * Registered item references are stable for the lifetime of a server. Resolve
@@ -145,21 +130,8 @@ public final class CombFuzzyMatcher {
 	public static ResourceLocation getBeeType(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		Item item = stack.getItem();
-		if (item == Items.HONEYCOMB || item == Items.HONEYCOMB_BLOCK) {
-			return VANILLA_HONEYCOMB_TYPE;
-		}
-		if (isExternalCentrifugeComb(item)) {
-			return FEYWILD_HONEYCOMB_TYPE;
-		}
-		if (item == ItemRefs.HONEYCOMB_GHOSTLY || item == ItemRefs.COMB_GHOSTLY) {
-			return GHOSTLY_TYPE;
-		}
-		if (item == ItemRefs.HONEYCOMB_MILKY || item == ItemRefs.COMB_MILKY) {
-			return MILKY_TYPE;
-		}
-		if (item == ItemRefs.HONEYCOMB_POWDERY || item == ItemRefs.COMB_POWDERY) {
-			return POWDERY_TYPE;
-		}
+		ResourceLocation fixed = fixedBeeType(item);
+		if (fixed != null) return fixed;
 		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB
 				|| item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
 			return stack.get(ModDataComponents.BEE_TYPE.get());
@@ -224,40 +196,42 @@ public final class CombFuzzyMatcher {
 	}
 
 	/**
-	 * 从 AEItemKey 提取蜜蜂类型 ID（带缓存）
+	 * 从 AEItemKey 提取蜜蜂类型 ID（无缓存，直读组件）
 	 * <br/>
-	 * AEItemKey 内部包含 ItemStack 的组件快照，通过 {@link AEItemKey#toStack(int)} 获取
-	 * ItemStack 后委托 {@link #getBeeType(ItemStack)}。
+	 * <b>为什么去掉缓存</b>：本方法在拉取热路径上按「候选 key × 过滤槽位」的量级调用，
+	 * 旧实现用 {@code ConcurrentHashMap<AEItemKey, ResourceLocation>} 记忆结果，
+	 * 但缓存查找本身比重新计算更贵 —— AEItemKey 的 hash 桶命中后必须走 equals，
+	 * 而 {@code AEItemKey.equals} 会调用 {@code ItemStack.isSameItemSameComponents}
+	 * （在装有 geckolib 的环境还被其 mixin 包裹），spark 报告 vVh8WfPCN3 实测
+	 * {@code ConcurrentHashMap.computeIfAbsent} 自身 self 时间就达 508ms。
 	 * <p>
-	 * <b>性能优化</b>：使用 {@link ConcurrentHashMap} 缓存 AEItemKey → BEE_TYPE 映射，
-	 * 避免每次遍历 MEStorage 可用栈时重复调用 {@link ItemStack#get} 读取组件。
-	 * <p>
-	 * <b>调用约定</b>：调用方应先通过 {@link #isCombItem(AEItemKey)} 过滤非蜜脾 key，
-	 * 避免对非蜜脾 key 重复触发 toStack + getBeeType（ConcurrentHashMap 不缓存 null 值）。
+	 * 现在的实现只做固定 Item 引用比较；仅「可配置蜜脾/蜜脾块」这一种情况才读一次
+	 * BEE_TYPE 组件，且经 {@link AEItemKey#get} 直读内部栈，不再 {@code toStack(1)} 拷贝。
+	 * 结果不再驻留任何静态映射，同时消除了旧缓存无界增长的内存风险。
 	 *
 	 * @param key AE2 物品键
 	 * @return 蜜蜂类型 ID，或 null（非蜜脾物品）
 	 */
 	public static ResourceLocation getBeeType(AEItemKey key) {
 		if (key == null) return null;
-		return aeItemKeyToBeeTypeCache.computeIfAbsent(key, k -> {
-			// AEItemKey.toStack(int) 创建包含完整组件快照的 ItemStack
-			ItemStack stack = k.toStack(1);
-			return getBeeType(stack);
-		});
+		Item item = key.getItem();
+		ResourceLocation fixed = fixedBeeType(item);
+		if (fixed != null) return fixed;
+		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB || item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
+			// AEItemKey.get 直读内部只读栈的组件表，无 ItemStack 拷贝
+			return key.get(ModDataComponents.BEE_TYPE.get());
+		}
+		return null;
 	}
 
-	/**
-	 * 清空 AEItemKey → BEE_TYPE 缓存
-	 * <br/>
-	 * 当前为预留方法，未在节点销毁时调用。AEItemKey → BEE_TYPE 映射是全局通用的
-	 * （不依赖具体离心机节点），故全局缓存不需要在节点销毁时清空。
-	 * 缓存条目通过 {@link ConcurrentHashMap#computeIfAbsent} 懒初始化，
-	 * 非蜜脾物品不会进入缓存（调用方应先通过 {@link #isCombItem(AEItemKey)} 过滤）。
-	 * 若未来需要强制刷新缓存（如配置变更），可调用此方法。
-	 */
-	public static void clearCache() {
-		aeItemKeyToBeeTypeCache.clear();
+	/** 无 BEE_TYPE 组件的固定蜜脾/蜜脾块 → 保留类型键；非固定蜜脾返回 null。 */
+	private static ResourceLocation fixedBeeType(Item item) {
+		if (item == Items.HONEYCOMB || item == Items.HONEYCOMB_BLOCK) return VANILLA_HONEYCOMB_TYPE;
+		if (isExternalCentrifugeComb(item)) return FEYWILD_HONEYCOMB_TYPE;
+		if (item == ItemRefs.HONEYCOMB_GHOSTLY || item == ItemRefs.COMB_GHOSTLY) return GHOSTLY_TYPE;
+		if (item == ItemRefs.HONEYCOMB_MILKY || item == ItemRefs.COMB_MILKY) return MILKY_TYPE;
+		if (item == ItemRefs.HONEYCOMB_POWDERY || item == ItemRefs.COMB_POWDERY) return POWDERY_TYPE;
+		return null;
 	}
 }
 

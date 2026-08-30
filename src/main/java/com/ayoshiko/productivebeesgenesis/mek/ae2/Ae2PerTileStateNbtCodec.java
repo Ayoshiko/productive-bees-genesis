@@ -34,6 +34,12 @@ final class Ae2PerTileStateNbtCodec {
 			filter.save(filterTag);
 			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, filterTag);
 		}
+		// 标签过滤表达式独立子标签；无配置时 save 不写任何键，子标签为空则不落盘
+		CompoundTag tagFilterTag = new CompoundTag();
+		holder.getAeTagFilter().save(tagFilterTag);
+		if (!tagFilterTag.isEmpty()) {
+			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER, tagFilterTag);
+		}
 	}
 
 	/**
@@ -61,6 +67,13 @@ final class Ae2PerTileStateNbtCodec {
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT) : false);
 		holder.setCentrifugeDirectAeOutputEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false);
+		// 标签过滤：无子标签的旧存档重置为空表达式，保持与 clear() 一致的默认值。
+		// 本类不依赖 AE2，故不受 Issue #8 类加载守卫约束，可无条件加载。
+		if (tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER)) {
+			holder.getAeTagFilter().load(tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER));
+		} else {
+			holder.getAeTagFilter().reset();
+		}
 		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
 		// AE2 未安装时跳过：无 AE2 环境不应创建过滤器（方块实体从存档恢复即触发构造，
 		// Issue #8 类加载安全）；save 侧用 getAeInputFilter() 不创建，天然对称

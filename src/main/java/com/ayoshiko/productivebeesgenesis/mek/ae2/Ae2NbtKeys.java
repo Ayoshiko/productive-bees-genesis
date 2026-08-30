@@ -27,6 +27,9 @@ public final class Ae2NbtKeys {
 	/** AE2 输入过滤器状态子标签 */
 	public static final String NBT_KEY_AE_INPUT_FILTER = "productivebeesgenesis_ae_input_filter";
 
+	/** AE2 smelt 输入标签过滤表达式子标签 */
+	public static final String NBT_KEY_AE_INPUT_TAG_FILTER = "productivebeesgenesis_ae_input_tag_filter";
+
 	/** 离心机 per-tile 电力熔炼炉配方兼容开关 */
 	public static final String NBT_KEY_SMELTING_COMPAT = "productivebeesgenesis_smelting_compat";
 

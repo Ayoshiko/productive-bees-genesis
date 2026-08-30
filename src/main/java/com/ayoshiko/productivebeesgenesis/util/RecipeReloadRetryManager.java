@@ -142,10 +142,9 @@ public final class RecipeReloadRetryManager {
 	 * 线程安全：FileWatcher 线程与主线程并发访问，使用 volatile 字段保证可见性。
 	 * 计数采用非原子自增为有意的启发式设计 — 死循环频率远超阈值，偶发竞争不影响判定。
 	 *
-	 * @param path  配置文件路径（保留供未来日志扩展使用）
 	 * @param modId 配置所属 modId
 	 */
-	public static void onConfigFileChanged(String path, String modId) {
+	public static void onConfigChanged(String modId) {
 		// 仅缓解 EvolvedMekanism 和 Mekanism-Extras 模组的死循环
 		if (!"evolvedmekanism".equals(modId) && !"mekanism_extras".equals(modId)) {
 			return;

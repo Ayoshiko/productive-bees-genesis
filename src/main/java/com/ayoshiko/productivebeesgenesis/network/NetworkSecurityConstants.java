@@ -40,6 +40,16 @@ public final class NetworkSecurityConstants {
 	/** 过滤模式枚举名称最大长度（DISABLED/WHITELIST/BLACKLIST 远小于此值，留足冗余） */
 	public static final int MAX_FILTER_MODE_NAME_LENGTH = 64;
 
+	/**
+	 * smelt 输入标签表达式最大长度。
+	 * 与 {@code TagExpressionParser.MAX_EXPRESSION_LENGTH} 对齐：
+	 * 编解码层先拒绝超长字符串，服务端 handler 再复校验一次（双层防御）。
+	 */
+	public static final int MAX_TAG_EXPRESSION_LENGTH = 512;
+
+	/** 标签表达式语法错误键最大长度（如 unclosed_paren / too_complex）。 */
+	public static final int MAX_TAG_FILTER_ERROR_KEY_LENGTH = 64;
+
 	/** PB 升级类型 ID 最大长度（与 PbUpgradeExtractPayload StreamCodec stringUtf8(64) 对齐） */
 	public static final int MAX_UPGRADE_TYPE_ID_LENGTH = 64;
 

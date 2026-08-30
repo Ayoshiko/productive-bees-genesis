@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2DirectItemPushSession;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2EnergyInjector;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
@@ -117,7 +118,7 @@ class ApiaryAe2HostAdapter {
 			long now = System.nanoTime();
 			if (level != null && pushState.tryStartBufferedItemPush(level.getGameTime())
 					&& !pushState.getBufferedItemBackoff().shouldSkip(now)) {
-				Ae2OutputPusher.DirectItemPushSession session =
+				Ae2DirectItemPushSession session =
 						Ae2OutputPusher.prepareDirectItemPush(tile);
 				if (session != null) {
 					// 离心机优先：hold 蜜脾保留在缓冲区等待离心机，不推 AE
@@ -156,7 +157,7 @@ class ApiaryAe2HostAdapter {
 		if (pushState.getItemBackoff().shouldSkip(System.nanoTime())) return 0;
 		if (!pushState.tryAcquireGeneratedItemPush(level.getGameTime(),
 				MAX_DIRECT_GENERATED_ITEM_PUSHES_PER_TICK)) return 0;
-		Ae2OutputPusher.DirectItemPushSession session =
+		Ae2DirectItemPushSession session =
 				Ae2OutputPusher.prepareDirectItemPush(tile);
 		if (session == null) return 0;
 		int pushed = session.applyAsInt(stack);

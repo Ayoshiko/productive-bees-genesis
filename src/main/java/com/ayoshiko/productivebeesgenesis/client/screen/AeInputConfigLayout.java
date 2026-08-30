@@ -28,6 +28,8 @@ final class AeInputConfigLayout {
 	static final int CTRL_Y = 22;
 	static final int CTRL_BTN_HEIGHT = 14;
 	static final int TOGGLE_BTN_WIDTH = 26;
+	/** 标签过滤按钮宽度（单字母 T，比模式按钮更窄以腾出控制行空间）。 */
+	static final int TAG_BTN_WIDTH = 16;
 	static final int RESERVE_BTN_WIDTH = 28;
 	static final int PAGE_BTN_WIDTH = 18;
 	static final int PIN_X_OFFSET = 16;

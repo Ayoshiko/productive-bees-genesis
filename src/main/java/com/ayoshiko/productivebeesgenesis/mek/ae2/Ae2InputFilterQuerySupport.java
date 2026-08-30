@@ -198,8 +198,30 @@ final class Ae2InputFilterQuerySupport {
 			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
 			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
 			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve) {
+		return pullLimitIfAllowed(key, visibleStock, ignoreNbt, mode, precise, slots, fuzzyEntries,
+				keys, amounts, reserves, unlimited, networkStock, unlimitedAll, globalNetworkStock,
+				globalReserve, null);
+	}
+
+	/**
+	 * 索引加速重载：{@code index} 非 null 且适用时，用 {@code AEItemKey → 槽位} 精确索引
+	 * 替代全槽位线性扫描（O(slots) → O(1)）。
+	 * <p>
+	 * 适用条件见 {@link Ae2DirectKeyIndex}：索引完备、候选键无 bee_type、未开启 ignoreNbt。
+	 * 此三者同时成立时，模糊条目与 matchesDirect 的模糊分支都不可能命中，
+	 * 精确索引的结果与线性扫描<b>完全等价</b>；否则回退线性路径，语义不变。
+	 */
+	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
+			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve,
+			Ae2DirectKeyIndex<AEItemKey> index) {
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
+		if (!ignoreNbt && candidateBeeType == null && index != null && index.isComplete()) {
+			return indexedPullLimit(key, visibleStock, mode, amounts, reserves, unlimited, networkStock,
+					unlimitedAll, globalNetworkStock, globalReserve, index.slotsFor(key));
+		}
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
 		boolean filterMatched = false;
 		boolean directFound = false;
@@ -243,6 +265,44 @@ final class Ae2InputFilterQuerySupport {
 		boolean admitted = switch (mode) {
 			case BLACKLIST -> !filterMatched;
 			case WHITELIST -> filterMatched;
+			case DISABLED -> true;
+		};
+		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
+				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
+				Ae2InputFilter.getMaxDirectAmount());
+	}
+
+	/**
+	 * 索引快路径：只遍历命中槽位（通常 0 或 1 个），不再扫描全部槽位。
+	 * <p>
+	 * 语义与线性路径逐项对齐：命中即 {@code filterMatched}，BLACKLIST 命中立即拒绝；
+	 * 同键多槽位的 requested/reserve 累加顺序与线性路径一致（索引按下标升序构建）。
+	 *
+	 * @param hitSlots 精确命中的槽位下标；null 表示无命中
+	 */
+	private static long indexedPullLimit(AEItemKey key, long visibleStock, FilterMode mode,
+			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve, int[] hitSlots) {
+		boolean directFound = false;
+		boolean liveStock = false;
+		boolean unlimitedPull = false;
+		long requested = 0L;
+		long reserve = 0L;
+		if (hitSlots != null) {
+			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
+			directFound = true;
+			for (int i : hitSlots) {
+				if (i < networkStock.length && networkStock[i]) {
+					liveStock = true;
+					if (i < reserves.length) reserve = Ae2PullAmountMath.addConfigured(reserve, reserves[i]);
+				}
+				if (i < unlimited.length && unlimited[i]) unlimitedPull = true;
+				if (i < amounts.length) requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
+			}
+		}
+		boolean admitted = switch (mode) {
+			case BLACKLIST -> true; // 命中已在上面提前返回，走到这里必然未命中
+			case WHITELIST -> directFound;
 			case DISABLED -> true;
 		};
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,

@@ -131,6 +131,8 @@ public final class Ae2InputFilter {
 	private volatile List<DirectEntry> directEntriesCache;
 	/** Parsed fuzzy entries keyed by the copy-on-write slots array identity. */
 	private volatile FuzzyEntriesCache fuzzyEntriesCache;
+	/** 精确条目 {@code AEItemKey → 槽位} 索引，按 slots+keys 两个数组身份判版本 */
+	private volatile Ae2DirectKeyIndex<AEItemKey> directKeyIndexCache;
 
 	/** 过滤器准入后对所有允许蜜脾生效的全局无限拉取开关。 */
 	private volatile boolean unlimitedAllFallback = false;
@@ -574,6 +576,19 @@ public final class Ae2InputFilter {
 		return entries;
 	}
 
+	/**
+	 * 精确条目索引（懒构建 + 数组身份判版本）。
+	 * <p>
+	 * 与 {@link #getFuzzyEntries} 同一模式：所有写操作 clone→发布，故数组对象身份即版本号。
+	 * 这里必须同时比较 slots 与 resolvedDirectKeys 两个身份，因为
+	 * {@link #resolveDirectKey(int, AEItemKey)} 只替换 keys 数组而不动 slots。
+	 */
+	private Ae2DirectKeyIndex<AEItemKey> getDirectKeyIndex(String[] currentSlots, AEItemKey[] currentKeys) {
+		Ae2DirectKeyIndex<AEItemKey> index = Ae2DirectKeyIndex.of(currentSlots, currentKeys, directKeyIndexCache);
+		directKeyIndexCache = index;
+		return index;
+	}
+
 	private record FuzzyEntriesCache(String[] slots, Ae2InputFilterQuerySupport.FuzzyEntry[] entries) {
 	}
 
@@ -611,10 +626,12 @@ public final class Ae2InputFilter {
 	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt) {
 		String[] currentSlots = slots;
+		AEItemKey[] currentKeys = resolvedDirectKeys;
 		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
-				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), resolvedDirectKeys,
+				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), currentKeys,
 				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
-				unlimitedAllFallback, globalNetworkStock, globalReserveAmount);
+				unlimitedAllFallback, globalNetworkStock, globalReserveAmount,
+				getDirectKeyIndex(currentSlots, currentKeys));
 	}
 
 	/** Returns the reserve floor that must be rechecked immediately before extracting this key. */

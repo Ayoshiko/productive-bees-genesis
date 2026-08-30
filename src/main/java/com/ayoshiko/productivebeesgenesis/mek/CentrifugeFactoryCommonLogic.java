@@ -483,6 +483,11 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull Runnable markForSave,
 			@NotNull IntSupplier operationsPerTick,
 			int[] progress) {
+		// 零耗时合并窗口：CREATIVE 升级下 ticksRequired 为 0，每个配方 tick 就是一个完整周期，
+		// 逐刻推进只能每刻跑一次完整计算 + 一次输出槽 insert。把并行上限供应商换成合并窗口，
+		// 时间加速批量期间一次调用承担整批（裁剪仍由 Mekanism 原逻辑负责）。
+		// 每个 cacheIndex 独立一份，避免多 lane 串用同一窗口。
+		ZeroTickCoalesceState coalesce = new ZeroTickCoalesceState(operationsPerTick);
 		CachedRecipe<ItemStackToItemStackRecipe> configured = OneInputCachedRecipe.itemToItem(
 				recipe, recheckAllRecipeErrors[cacheIndex],
 				inputHandlers[cacheIndex], outputHandlers[cacheIndex])
@@ -494,10 +499,11 @@ public final class CentrifugeFactoryCommonLogic {
 						hasCreativeUpgrade.getAsBoolean(), energyContainer.getEnergyPerTick()), energyContainer)
 				.setRequiredTicks(ticksRequired)
 				.setOnFinish(markForSave)
-				.setBaselineMaxOperations(operationsPerTick)
+				.setBaselineMaxOperations(coalesce)
 				.setOperatingTicksChanged(operatingTicks -> progress[cacheIndex] = operatingTicks);
 		if (configured instanceof ICachedRecipeBatchAccel accel) {
 			accel.productivebeesgenesis$enableMarginalEnergyPricing();
+			accel.productivebeesgenesis$bindZeroTickCoalesce(coalesce);
 		}
 		return configured;
 	}
@@ -515,6 +521,21 @@ public final class CentrifugeFactoryCommonLogic {
 		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
 		return MekExtrasUpgradeSemantics.operationsPerTick(
 				MekUpgradeSupport.hasCreativeUpgrade(tile), maxOps, speedAdjustedOps);
+	}
+
+	/**
+	 * 同上，但按游戏刻记忆化。
+	 * <br/>
+	 * CachedRecipe 把本方法作为 {@code baselineMaxOperations} 供应商持有，
+	 * 每次完整配方计算都会调用；JDTE 1024 倍加速下每真实刻被调用上千次
+	 * （spark XnLugba3Cw 里 operationsPerTick 自耗 776ms / 2.59%，为本模组最大热点）。
+	 * 升级数量一刻内恒定，故按 gameTick 缓存无语义损失。
+	 */
+	public static int operationsPerTick(@NotNull TileEntityMekanism tile, int baseTicksRequired,
+			@NotNull OperationsPerTickCache cache) {
+		Level level = tile.getLevel();
+		long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		return cache.get(gameTick, () -> operationsPerTick(tile, baseTicksRequired));
 	}
 
 	/**

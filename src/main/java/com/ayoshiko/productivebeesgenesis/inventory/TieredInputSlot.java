@@ -100,4 +100,34 @@ public interface TieredInputSlot {
 			int rawLimit, boolean obeyLimit, int multiplier) {
 		return obeyLimit ? Math.min(rawLimit, stack.getMaxStackSize()) : rawLimit;
 	}
+
+	/**
+	 * 查询「已乘倍率」的最终上限缓存（命中返回非负值，未命中返回 -1）。
+	 * <br/>
+	 * {@code getLimit} 是本模组唯一被外部物流高频轰击的方法：AE2 拉取的逐槽探测、
+	 * Mekanism 的 {@code insertItem}/{@code setStackSize} 每次都要问一遍上限，
+	 * 时间加速把它放大到每真实刻数千次（spark BHSGIz87Uw 中
+	 * {@code getCachedBaseLimit} 自耗 1464ms / 2.44%，spark gUqyZmn5q6 中 1272ms / 4.24%，
+	 * 均为全服第 2-3 热点）。缓存最终值可在命中时跳过整条
+	 * 「倍率读取 → accessor 取字段 → baseLimit 计算 → 乘法钳制」链路。
+	 * <p>
+	 * 缓存键为 {@link net.minecraft.world.item.Item} 引用 + {@link #MULTIPLIER_VERSION}：
+	 * 同一槽位的 {@code limit}/{@code obeyStackLimit} 字段在生命周期内不变，
+	 * 最大堆叠数只由 Item 决定，故同键结果恒定。
+	 *
+	 * @param stack 被查询的物品栈
+	 * @return 命中的最终上限，未命中返回 -1
+	 */
+	default int productivebeesgenesis$peekEffectiveLimit(@NotNull ItemStack stack) {
+		return -1;
+	}
+
+	/**
+	 * 记录本次算出的最终上限（已乘倍率并钳制），供下次同 Item 命中。
+	 *
+	 * @param stack 被查询的物品栈
+	 * @param limit 最终上限；负值忽略
+	 */
+	default void productivebeesgenesis$storeEffectiveLimit(@NotNull ItemStack stack, int limit) {
+	}
 }

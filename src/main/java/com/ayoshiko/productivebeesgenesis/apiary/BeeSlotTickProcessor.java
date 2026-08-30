@@ -44,15 +44,14 @@ class BeeSlotTickProcessor {
 	private static final int BATCH_FLUSH_INTERVAL = 10;
 
 	/**
-	 * 累积产出阈值 — 达到此值时提前 flush，避免满升级时单次 flush 量过大导致 MSPT 尖刺。
+	 * 累积产出提前刷新阈值的判定已移至 {@link ApiaryFlushPolicy}。
 	 * <br/>
-	 * Spark 分析显示 v2.0.2 满升级场景 MSPT max=54.6ms，主因是每 10 tick 一次的
-	 * 批量 flush 瞬间处理数百次累积产出。提前触发将大批量拆为小批量，
-	 * 平滑 flush 负载到多个 tick。
-	 * <p>
-	 * 正常低升级场景 10 tick 内累积量通常 < 10，不受影响。
+	 * 基础阈值 {@link ApiaryFlushPolicy#BASE_ACCUMULATION_THRESHOLD} 按本刻批量倍率放大：
+	 * Spark 分析显示满升级场景 MSPT max=54.6ms，主因是每 10 tick 一次的批量 flush
+	 * 瞬间处理数百次累积产出，故用累积量提前触发把大批量拆小；但 CREATIVE 升级下
+	 * 单只蜜蜂单刻即累积 tickMultiplier 次产出，固定阈值会让提前 flush 每刻触发，
+	 * 反而把 flush 的固定开销放大 10 倍。
 	 */
-	private static final int FLUSH_ACCUMULATION_THRESHOLD = 64;
 
 	/** 所属方块实体引用 */
 	private final TileEntityMekApiary tile;
@@ -236,14 +235,17 @@ class BeeSlotTickProcessor {
 		boolean hasCreativeUpgrade = upgradeHandler.hasCreativeUpgrade();
 		// MachineEnergyContainer 已按 Mekanism 官方公式实时应用速度/能量升级，
 		// 直接读取可同时保留普通蜂箱配置和各工厂等级的基础能耗。
-		long beeEnergyCost = ApiaryEnergyMath.calculateBeeEnergyCost(energyContainer.getEnergyPerTick());
+		long beeEnergyCost = ApiaryEnergyMath.calculateBeeEnergyCost(
+				energyContainer.getEnergyPerTick(), hasCreativeUpgrade);
 		// Task 1.2：STACK 升级产出次数倍率 — 循环外计算一次，所有蜜蜂共享
 		int stackProductionCount = upgradeHandler.getStackProductionCount();
 
-		// 批量刷新周期判断 — 累积量阈值提前触发，避免满升级时单次 flush 量过大导致 MSPT 尖刺
+		// 批量刷新周期判断 — 累积量阈值提前触发，避免满升级时单次 flush 量过大导致 MSPT 尖刺。
+		// 阈值随本刻批量倍率放大（见 ApiaryFlushPolicy）：CREATIVE 升级下单只蜜蜂单刻就累积
+		// tickMultiplier 次产出，固定 64 阈值会让提前 flush 每刻触发，把 flush 固定开销 ×10。
 		tickCounter++;
-		boolean shouldFlush = (tickCounter >= BATCH_FLUSH_INTERVAL)
-				|| (accumulatedProgress.get() >= FLUSH_ACCUMULATION_THRESHOLD);
+		boolean shouldFlush = ApiaryFlushPolicy.shouldFlush(tickCounter, BATCH_FLUSH_INTERVAL,
+				accumulatedProgress.get(), tickMultiplier);
 		if (shouldFlush) tickCounter = 0;
 
 		BeeSlot[] beeSlots = slotManager.getBeeSlots();

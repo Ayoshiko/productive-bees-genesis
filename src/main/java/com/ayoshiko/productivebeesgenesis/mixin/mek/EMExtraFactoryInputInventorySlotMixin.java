@@ -45,6 +45,13 @@ public abstract class EMExtraFactoryInputInventorySlotMixin {
 	private void productivebeesgenesis$overrideGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		// 仅当 TieredInputSlot 接口已注入（BasicInventorySlotMixin 已应用）时处理
 		if (this instanceof TieredInputSlot tiered) {
+			// 先查已乘倍率的最终上限缓存：命中即跳过倍率读取、字段访问与乘法钳制。
+			// 本方法在时间加速下每真实刻被 AE2/Mekanism 调用数千次（spark gUqyZmn5q6 全服第 2 热点）。
+			int cached = tiered.productivebeesgenesis$peekEffectiveLimit(stack);
+			if (cached >= 0) {
+				cir.setReturnValue(cached);
+				return;
+			}
 			int mult = tiered.productivebeesgenesis$getCachedMultiplier();
 			if (mult >= 0) {
 				// 读取 BasicInventorySlot 的 limit 和 obeyStackLimit 字段
@@ -52,11 +59,14 @@ public abstract class EMExtraFactoryInputInventorySlotMixin {
 				int rawLimit = accessor.productivebeesgenesis$getLimit();
 				boolean obeyLimit = accessor.productivebeesgenesis$getObeyStackLimit() && !stack.isEmpty();
 				int baseLimit = tiered.productivebeesgenesis$getCachedBaseLimit(stack, rawLimit, obeyLimit, mult);
+				int effective;
 				try {
-					cir.setReturnValue(Math.multiplyExact(baseLimit, mult));
+					effective = Math.multiplyExact(baseLimit, mult);
 				} catch (ArithmeticException ignored) {
-					cir.setReturnValue(Integer.MAX_VALUE);
+					effective = Integer.MAX_VALUE;
 				}
+				tiered.productivebeesgenesis$storeEffectiveLimit(stack, effective);
+				cir.setReturnValue(effective);
 			}
 		}
 		// 倍率为 -1 时（非我们的离心机工厂），EME 原逻辑正常运行

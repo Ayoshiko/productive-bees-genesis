@@ -25,7 +25,7 @@ public final class Ae2OutputStateHolder {
 	/** 节点是否待创建（clearRemoved 时置 true，首个 server tick 时执行 connectNode） */
 	private volatile boolean ae2NodePending;
 
-	/** AE2 推送器复用缓冲区（ReusableBuffers）— Object 类型保持依赖隔离，volatile 保证可见性 */
+	/** AE2 推送器复用缓冲区（{@link Ae2PushBuffers}）— Object 类型保持依赖隔离，volatile 保证可见性 */
 	private volatile Object reusableBuffers;
 
 	/** Task 21: AE2 流体推送批处理缓冲（Ae2PendingBatchBuffer）— 10 tick 累积 + AEFluidKey 合并 */
@@ -127,6 +127,14 @@ public final class Ae2OutputStateHolder {
 	/** per-tile 输入过滤器实例（懒初始化，避免 AE2 未加载时创建） */
 	private volatile Ae2InputFilter aeInputFilter;
 
+	/**
+	 * per-tile smelt 输入标签过滤（白/黑名单表达式）。
+	 * <br/>
+	 * 与 {@link #aeInputFilter} 不同，本类不引用任何 AE2 类型（Issue #8 安全），
+	 * 因此可直接 final 初始化，无需懒创建。
+	 */
+	private final Ae2TagFilter aeTagFilter = new Ae2TagFilter();
+
 	/** 类型轮转索引（用于 N > processCount 时按周期轮转拉取类型） */
 	private volatile int typeRotationIndex = 0;
 
@@ -205,6 +213,8 @@ public final class Ae2OutputStateHolder {
 		tickAccelTracker.reset();
 		// 重置过滤器实例，方块重建后通过懒初始化重新创建
 		aeInputFilter = null;
+		// 重置标签过滤表达式（与字段默认值一致）
+		aeTagFilter.reset();
 		// 重置类型轮转索引，方块重建后从 0 开始轮转
 		typeRotationIndex = 0;
 		inputCandidateCursor = null;
@@ -359,8 +369,11 @@ public final class Ae2OutputStateHolder {
 		cachedStorage = null;
 		cachedMeStorage = null;
 		inputInventoryViewCache = null;
-		if (reusableBuffers instanceof Ae2OutputPusher.ReusableBuffers buffers) {
+		if (reusableBuffers instanceof Ae2PushBuffers buffers) {
 			buffers.invalidateScanCandidateCache();
+			// 网格变化说明可能换接到另一个 ME 网络：旧网络的 insert 成本均值不得
+			// 继续限制新网络的推送配额，否则从病态网络拆到健康网络后仍被降频。
+			buffers.insertCostTracker.reset();
 		}
 		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
 		pushState.invalidateNodeStateCache();
@@ -557,6 +570,11 @@ public final class Ae2OutputStateHolder {
 	/** 包私有 — 仅读取现有过滤器（不创建），供 NBT 编解码使用 */
 	Ae2InputFilter getAeInputFilter() {
 		return aeInputFilter;
+	}
+
+	/** 获取 per-tile smelt 输入标签过滤（永不为 null）。 */
+	public Ae2TagFilter getAeTagFilter() {
+		return aeTagFilter;
 	}
 
 	/**

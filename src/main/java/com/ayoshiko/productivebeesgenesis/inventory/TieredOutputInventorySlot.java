@@ -95,12 +95,24 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 	 * <p>
 	 * 倍率值在配置 reload 后通过 {@link TieredInputSlot#invalidateMultiplierCache()}
 	 * 递增版本号自动失效，无 reload 期间直接返回缓存值，零 ModConfig 读取开销。
+	 * <p>
+	 * 最终上限（已乘倍率）再做一层按 Item 的记忆化：本方法在 AE2 推送、物流探测与
+	 * Mekanism 插入路径上每刻被调用数千次，命中时可跳过 synchronized 块内的
+	 * 倍率检查、baseLimit 查表与饱和乘法（同类热点见 spark gUqyZmn5q6 中
+	 * {@code getCachedBaseLimit} 自耗 1272ms / 4.24%）。
 	 *
 	 * @param stack 待查询的物品栈
 	 * @return 槽位上限 = 基础上限 × 等级倍率
 	 */
 	@Override
-	public synchronized int getLimit(@NotNull ItemStack stack) {
+	public int getLimit(@NotNull ItemStack stack) {
+		int cachedEffective = limitCache.peekEffectiveLimit(stack);
+		if (cachedEffective >= 0) return cachedEffective;
+		return computeLimit(stack);
+	}
+
+	/** 缓存未命中时的完整计算；synchronized 保持与原实现一致的写入互斥。 */
+	private synchronized int computeLimit(@NotNull ItemStack stack) {
 		int multiplier = cachedMultiplier;
 		long currentVersion = TieredInputSlot.MULTIPLIER_VERSION.get();
 		if (cachedVersion != currentVersion || multiplier < 0) {
@@ -110,7 +122,9 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 		}
 		// 使用单条目缓存避免每次调用 ItemStack.getMaxStackSize() 触发 DataComponent 链
 		int baseLimit = limitCache.getBaseLimit(stack, 64, !stack.isEmpty(), multiplier);
-		return SaturatingMath.saturatingToInt(
+		int effective = SaturatingMath.saturatingToInt(
 				SaturatingMath.saturatingMultiply(baseLimit, multiplier));
+		limitCache.storeEffectiveLimit(stack, effective);
+		return effective;
 	}
 }

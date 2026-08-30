@@ -51,7 +51,7 @@ public final class DevModeCommand {
 
 	/** 已知子功能白名单 — 与 {@code DevLog} 各调用点的 feature 名保持一致；未知名称直接拒绝 */
 	private static final Set<String> KNOWN_FEATURES = Set.of(
-			"ae2_fluid_push", "apiary_speed", "bee_cache", "bee_info", "bee_nbt",
+			"ae2_expensive_network", "ae2_fluid_push", "apiary_speed", "bee_cache", "bee_info", "bee_nbt",
 			"bee_renderer", "bee_tooltip", "centrifuge_batch", "centrifuge_mixin",
 			"config_apply", "fluid_eject", "fluid_tank", "jei", "nbt_serialize",
 			"pb_recipe", "pb_upgrade_slot", "pb_upgrade_truncated", "recipe_reload",
