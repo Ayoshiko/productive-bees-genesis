@@ -82,4 +82,7 @@ compose_logo_final.py
 # Trae spec 文件目录（内部使用，不入库）
 .trae/
 
+# Codex/Agent 工作区规则（仅本地使用，不入库）
+AGENTS.md
+
 disabled_features/
