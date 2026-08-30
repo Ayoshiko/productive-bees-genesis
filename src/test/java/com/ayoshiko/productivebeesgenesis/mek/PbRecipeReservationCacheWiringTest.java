@@ -44,4 +44,18 @@ class PbRecipeReservationCacheWiringTest {
 		assertTrue(processor.contains("clearReservedPbRecipeCache();\n\t}"));
 		assertTrue(processor.contains("checkRecipeVersion();\n\t\treservedPbRecipeCacheTick = tick;"));
 	}
+
+	@Test
+	@DisplayName("多流体预留按唯一流体类型执行且缓冲大小有界")
+	void reservationScanDeduplicatesFluidTypes() throws Exception {
+		String processor = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeProcessor.java");
+		String helper = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeProcessorStateHelper.java");
+
+		assertTrue(processor.contains("private final FluidStack[] reservedFluidTypes"),
+				"唯一类型缓冲必须按进程数固定分配并跨 tick 复用");
+		assertTrue(helper.contains("FluidStack.isSameFluidSameComponents("),
+				"相同流体与组件不得重复调用 reserveFluidOutputType");
+		assertTrue(helper.contains("reservedTypeCount >= reservationLimit"),
+				"预留类型数不得超过真实输出槽数量或复用缓冲大小");
+	}
 }

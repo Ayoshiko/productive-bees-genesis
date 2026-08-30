@@ -160,4 +160,46 @@ class Ae2HotPathCacheWiringTest {
 		assertFalse(source.contains("filter.matchesAnyEntry(entry.key"),
 				"黑白名单准入结果已确定 marked 状态，不得为排序再次扫描过滤槽");
 	}
+
+	@Test
+	@DisplayName("组件快速路径保留异常物品的完整堆叠语义")
+	void componentFastPathsRequireCanonicalIdentityComponents() throws Exception {
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("stack.has(ModDataComponents.BEE_TYPE.get())"
+				+ " && probe.has(ModDataComponents.BEE_TYPE.get())"),
+				"可配置蜜脾只有双方显式携带 bee_type 时才能绕过完整组件比较");
+
+		String validation = read("src/main/java/com/ayoshiko/productivebeesgenesis/util/"
+				+ "InputValidationCache.java");
+		assertTrue(validation.contains("if (stack.getComponentsPatch().isEmpty())"),
+				"普通无补丁熔炼输入必须跳过完整组件哈希");
+		assertTrue(validation.contains("ItemStack.hashItemAndComponents(stack)"),
+				"带组件补丁的普通输入必须保留完整哈希回退");
+	}
+
+	@Test
+	@DisplayName("空 pending 与空输出账本跳过快照和逐槽检查")
+	void emptyPersistentStateSkipsHotPathWork() throws Exception {
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("if (hadPendingItems) {\n\t\t\tretryPendingItems"),
+				"pending 为空时不得构建回送快照");
+
+		String pusher = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2OutputPusher.java");
+		assertTrue(pusher.contains("outputLedger.size() == 0 ? 0"),
+				"空账本不得进入结算快照");
+		assertTrue(pusher.contains("if (outputLedger.size() > 0) {\n\t\t\tentries.removeIf"),
+				"空账本不得为每个输出槽查询账本");
+	}
+
+	@Test
+	@DisplayName("多流体推送在同一轮复用稳定槽位列表")
+	void multiFluidPushReusesOneTankSnapshot() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FluidPusher.java");
+		assertTrue(source.contains("multiFluidHost.getFluidTanks()"),
+				"多槽宿主必须只在推送轮开始获取槽位列表");
+		assertTrue(source.contains("outputTank(host, tankSnapshot, i)"),
+				"统计、匹配和扣减阶段必须复用同一槽位列表");
+		assertTrue(source.contains("shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount)"),
+				"实际扣减不得退回到重复构建槽位列表的查询路径");
+	}
 }

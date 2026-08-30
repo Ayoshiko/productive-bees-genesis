@@ -182,18 +182,8 @@ public class FeederSlotManager {
 	 * @return true 如果喂食槽中有匹配的花朵物品
 	 */
 	public boolean hasValidFlower(ResourceLocation beeTypeKey) {
-		// 配方重载后转化配方可能变化，失效花朵缓存保证转化花朵判定不过期
-		if (lastConversionQueriesVersion != BeeConversionQueries.getVersion()) {
-			flowerValidityCache.invalidate();
-			lastConversionQueriesVersion = BeeConversionQueries.getVersion();
-		}
-		// per-tile 转化开关变化会改变「转化原料是否算有效花朵」的结论，必须同样失效缓存，
-		// 否则关闭开关后仍读到开启时缓存的 true（反之亦然）
-		boolean conversionEnabled = conversionEnabledSupplier.getAsBoolean();
-		if (lastConversionEnabled != conversionEnabled) {
-			flowerValidityCache.invalidate();
-			lastConversionEnabled = conversionEnabled;
-		}
+		refreshFlowerCacheState();
+		boolean conversionEnabled = lastConversionEnabled;
 		Boolean cached = flowerValidityCache.get(beeTypeKey);
 		if (cached != null) {
 			return cached;
@@ -233,7 +223,22 @@ public class FeederSlotManager {
 
 	/** 当前花朵缓存版本号（供外部缓存层判断失效） */
 	public int getFlowerCacheVersion() {
+		refreshFlowerCacheState();
 		return flowerValidityCache.version();
+	}
+
+	/** 在外层版本缓存命中前同步所有会改变花朵语义的状态。 */
+	private void refreshFlowerCacheState() {
+		int conversionQueriesVersion = BeeConversionQueries.getVersion();
+		if (lastConversionQueriesVersion != conversionQueriesVersion) {
+			flowerValidityCache.invalidate();
+			lastConversionQueriesVersion = conversionQueriesVersion;
+		}
+		boolean conversionEnabled = conversionEnabledSupplier.getAsBoolean();
+		if (lastConversionEnabled != conversionEnabled) {
+			flowerValidityCache.invalidate();
+			lastConversionEnabled = conversionEnabled;
+		}
 	}
 
 	private boolean computeHasValidFlower(ResourceLocation beeTypeKey, boolean conversionEnabled) {

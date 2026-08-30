@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.Level;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
@@ -193,8 +195,10 @@ public final class Ae2InputPuller {
 		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
 		boolean hadPendingItems = holder.getPendingItemBuffer().size() > 0;
-		retryPendingItems(level, holder, meStorage, inputSlots, pos, currentTick);
-		if (hadPendingItems) host.productivebeesgenesis$markAe2StateChanged();
+		if (hadPendingItems) {
+			retryPendingItems(level, holder, meStorage, inputSlots, pos, currentTick);
+			host.productivebeesgenesis$markAe2StateChanged();
+		}
 
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2PushBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
@@ -947,6 +951,14 @@ public final class Ae2InputPuller {
 			// 同一 Item 的双方都没有组件补丁时，默认组件必然一致。普通矿物/原料走这里，
 			// 避免进入 GeckoLib 包装后的完整 PatchedDataComponentMap 比较。
 			if (stack.getComponentsPatch().isEmpty() && probe.getComponentsPatch().isEmpty()) return true;
+			// PB 标准可配置蜜脾只有 bee_type 补丁；直接比较该组件可避开完整组件 Map.equals。
+			// 玩家重命名等附加组件会使 patch.size() > 1，仍回退原版完整比较，保证堆叠语义。
+			if (CombFuzzyMatcher.isConfigurableCombItem(stack.getItem())
+					&& stack.getComponentsPatch().size() == 1 && probe.getComponentsPatch().size() == 1
+					&& stack.has(ModDataComponents.BEE_TYPE.get()) && probe.has(ModDataComponents.BEE_TYPE.get())) {
+				return Objects.equals(stack.get(ModDataComponents.BEE_TYPE.get()),
+						probe.get(ModDataComponents.BEE_TYPE.get()));
+			}
 			if (slotIndex < 0 || slotIndex >= componentMatchStacks.length) {
 				return ItemStack.isSameItemSameComponents(stack, probe);
 			}

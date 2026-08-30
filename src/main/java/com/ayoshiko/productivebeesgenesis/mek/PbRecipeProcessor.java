@@ -17,6 +17,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -56,6 +57,8 @@ public class PbRecipeProcessor {
 	/** 多流体预留阶段的配方结果，null 表示该输入已确认没有 PB 配方。 */
 	@Nullable
 	private final RecipeHolder<CentrifugeRecipe>[] reservedPbRecipes;
+	/** 多流体预留阶段复用的唯一流体类型缓冲，避免同流体按进程重复查映射。 */
+	private final FluidStack[] reservedFluidTypes;
 
 	/** 配方查找器（双层缓存：inputRecipeCache 指纹TTL + pbRecipeCache LRU） */
 	private final PbRecipeFinder recipeFinder;
@@ -130,6 +133,7 @@ public class PbRecipeProcessor {
 		this.cachedPbRecipes = new RecipeHolder[processes];
 		this.reservedPbInputs = new ItemStack[processes];
 		this.reservedPbRecipes = new RecipeHolder[processes];
+		this.reservedFluidTypes = new FluidStack[processes];
 		this.energyCache = new PbRecipeEnergyCache(context);
 		// 子组件：查找器自拥有缓存；输出聚合器自拥有 pending 缓冲；
 		// 万象处理器持有共享数组引用（Java 数组为引用语义，本类对其的变更对万象处理器可见，反之亦然）
@@ -206,7 +210,7 @@ public class PbRecipeProcessor {
 		reservedPbRecipeCacheTick = tick;
 		reservedPbRecipeCacheVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
-				reservedPbInputs, reservedPbRecipes);
+				reservedPbInputs, reservedPbRecipes, reservedFluidTypes);
 	}
 
 	// ===== SMELTING配方缓存检查 =====

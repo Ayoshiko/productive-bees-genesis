@@ -10,6 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -33,7 +34,10 @@ final class PbRecipeProcessorStateHelper {
 	static void reserveActiveFluidOutputTypes(@NotNull PbRecipeContext context,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull PbRecipeFinder recipeFinder,
 			@NotNull ItemStack[] cachedInputs,
-			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes) {
+			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes,
+			@NotNull FluidStack[] reservedFluidTypes) {
+		int reservedTypeCount = 0;
+		int reservationLimit = Math.min(context.fluidOutputTankCount(), reservedFluidTypes.length);
 		for (int i = 0, size = inputSlots.size(); i < size; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
 			if (i < cachedInputs.length) {
@@ -47,10 +51,19 @@ final class PbRecipeProcessorStateHelper {
 			}
 			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
 			if (i < cachedRecipes.length) cachedRecipes[i] = recipe;
-			if (recipe == null) continue;
+			if (recipe == null || reservedTypeCount >= reservationLimit) continue;
 			var fluid = recipe.value().getFluidOutputs();
 			if (!fluid.isEmpty() && !(context.suppressesUselessByproducts()
 					&& UselessByproductUpgradeHelper.isHoney(fluid))) {
+				boolean alreadyReserved = false;
+				for (int reservedIndex = 0; reservedIndex < reservedTypeCount; reservedIndex++) {
+					if (FluidStack.isSameFluidSameComponents(reservedFluidTypes[reservedIndex], fluid)) {
+						alreadyReserved = true;
+						break;
+					}
+				}
+				if (alreadyReserved) continue;
+				reservedFluidTypes[reservedTypeCount++] = fluid;
 				context.reserveFluidOutputType(fluid);
 			}
 		}

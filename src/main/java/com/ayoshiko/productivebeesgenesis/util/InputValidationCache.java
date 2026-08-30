@@ -74,7 +74,11 @@ public class InputValidationCache {
 			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
 				return new InputFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()), 0);
 			}
-		return new InputFingerprint(item, null, ItemStack.hashItemAndComponents(stack));
+			// 普通熔炼原料通常没有组件补丁；同 Item 的默认组件固定，无需每次计算完整组件哈希。
+			if (stack.getComponentsPatch().isEmpty()) {
+				return new InputFingerprint(item, null, 0);
+			}
+			return new InputFingerprint(item, null, ItemStack.hashItemAndComponents(stack));
 		}
 	}
 

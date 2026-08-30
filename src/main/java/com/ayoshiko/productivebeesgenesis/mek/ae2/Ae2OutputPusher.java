@@ -53,8 +53,9 @@ public final class Ae2OutputPusher {
 		if (holder == null) return;
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
-		int settled = Ae2OutputCommitter.settleOutputLedger(host, holder.getOutputLedger(),
-				level.registryAccess());
+		Ae2OutputLedger outputLedger = holder.getOutputLedger();
+		int settled = outputLedger.size() == 0 ? 0
+				: Ae2OutputCommitter.settleOutputLedger(host, outputLedger, level.registryAccess());
 		if (settled > 0) {
 			host.productivebeesgenesis$onAe2PushComplete(settled);
 			host.productivebeesgenesis$markAe2StateChanged();
@@ -119,7 +120,9 @@ public final class Ae2OutputPusher {
 					level.registryAccess());
 		}
 		// 账本中已预留的槽位本轮不得再次提交，否则会重复推送同一批物品
-		entries.removeIf(entry -> holder.getOutputLedger().hasSlot(entry.process, entry.slotIdx));
+		if (outputLedger.size() > 0) {
+			entries.removeIf(entry -> outputLedger.hasSlot(entry.process, entry.slotIdx));
+		}
 		if (entries.isEmpty()) return;
 
 		Ae2OutputPushContext ctx = new Ae2OutputPushContext(host, holder, buffers, meStorage,

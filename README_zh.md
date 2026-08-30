@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.5-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.6-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -84,7 +84,7 @@
 - **弹出速度优化**：所有变体使用可配置的四状态弹出策略（活动/空闲/阻塞/繁忙），支持跳过未变化 tick、最大速度模式、高负载冷却等精细化控制。
 - **流体自动弹出**：默认 16384 mB/tick，覆盖 Mekanism 原版的 1024 mB/tick。
 - **多流体罐模式**：可配置按流体类型动态分配独立槽位，避免不同蜂蜜混合。
-- **AE2 深度集成**：作为 AE2 网格节点接入 ME 网络，支持产物直接推送、蜜脾拉取、ME 网络能量输入（5 层优先级）。
+- **AE2 深度集成**：作为 AE2 网格节点接入 ME 网络，支持物品/流体直接输出、蜜脾与 SMELTING 输入拉取、ME 网络能量输入（5 层优先级）。
 - **Jade 悬停面板**：显示 AE2 网络状态、内部物品/流体/能量等信息。
 
 #### 离心机等级（17 个工厂等级 + 1 个基础变体）
@@ -140,7 +140,7 @@
 - **槽位体系**：蜜蜂槽 / 输出槽 / 蜂笼槽（双向转移）/ 能量槽 / 蜂蜜流体罐 / PB 升级槽。
 - **喂食器系统**：自研MEK风格独立窗口管理花朵物品。基础版使用固定 3×3 = 9 槽布局；工厂版按蜜蜂槽数量动态布局。
 - **PB 升级系统**：自研升级卡 — 生产力（α/β/γ/Ω）、时间（I/II）、基因采样、蜜脾块、副产物销毁，外加内置的模拟升级 — 详见 [PB 升级系统](#pb-升级系统) 章节。
-- **AE2 集成**：物品 / 流体 输出到 ME 网络，兼容 AppliedFlux ，支持使用能量优先级切换。
+- **AE2 集成**：物品和流体可推送至 ME 网络；机器能量可从 AppliedFlux 存储的 FE 或 AE2 原生能源补充，并支持优先级切换。
 - **直接弹出**：蜂箱相邻方块为离心机时，绕过通用机械弹出器节流，将蜜脾直接转移到离心机输入槽 — 详见[蜂箱直连离心机](#蜂箱直连离心机)。
 - **离心机优先**：按机器独立的开关，开启后蜜脾不进入 AE 网络、专供相邻离心机 — 蜜脾产出经快速通道直写离心机输入槽，不经蜂箱输出槽中转；缓冲区中的蜜脾永不被 FIFO 淘汰（溢出先回 AE 网络，FIFO 仅作最后兜底）。
 - **Jade 悬停面板**：显示蜜蜂数量、生产进度、AE2 网络状态。
@@ -235,6 +235,7 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 - 直接与 AE2 智能线缆和相邻机器连接。
 - 自动被附属扩展模组线缆发现。
 - **ME 直接输出**：将输出槽物品推送到 ME 网络，绕过外部物流。物品和流体均有开关按钮。可在 Mekanism 配置界面中控制功能总开关。
+- **流体直接输出**：蜂蜜和离心流体与物品输出共用网络感知批处理、按键退避和有界插入成本预算。
 - **ME 能量输入**：从 ME 网络抽取 FE 能量为机器供能 — 注入目标为填满内部能量容器（能量条不再显示为接近空），且单次提取最多取网络存量的 95%，多台机器同时补能也不会抽干共享网络。支持 5 层能量优先级切换：
   1. 本地 FE 缓存
   2. 外部直接供能（Mekanism 配置组件 + 能量槽）
@@ -242,7 +243,10 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
   4. 其他能量（由 Mekanism 父类处理）
   5. AE2 原生网络能量（转换为 FE）
 - **AE2 原生能量提取开关**（`aeNativeEnergyInputEnabled`，仅安装 Applied Flux 时出现）：关闭后仅从 AppliedFlux 存储的 FE 提取能量，避免网络 FE 不足时过量抽取 AE 能量导致 ME 网络断电。
-- **蜜脾拉取**（仅离心机）：离心机可主动从连接的 ME 网络拉取蜜脾到机器内进行处理，拉取行为可配置。
+- **输入拉取**（仅离心机）：可从连接的 ME 网络主动拉取模糊匹配蜜脾、精确蜜脾/蜜脾块条目或普通 Mekanism SMELTING 输入。
+- **拉取过滤**：支持关闭/黑名单/白名单、精确匹配、忽略 NBT、单项拉取量、单项或全局无限拉取，以及整机或单项网络库存保留线。大型精确白名单按游标轮转，后续条目不会饿死。
+- **SMELTING 标签门**：普通熔炼候选可使用独立黑白名单表达式过滤，支持物品 id、标签、`&|^!()` 运算符和 `*` 通配符。
+- **事务安全**：拉取后无法落槽的剩余物进入有界且持久化的机器 pending 缓冲，不再掉落到世界；物品输出使用持久化“预留—提交—确认”账本，只有源槽安全扣减后才最终确认网络插入。
 - **Jade 悬停面板**：显示 AE2 网络连接状态（离线 / 加载中 / 缺少频道 / 在线）。
 - 节点生命周期与产物输出开关解耦 — 关闭产物推送不会让设备离线，ME 能量输入通道不受影响。
 
@@ -289,12 +293,16 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 | [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | 进化通用机械：扩展 等级工厂（绝对超频 / 至尊量子 / 宇宙致密 / 无限多元） |
 | [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | 扩展升级上限 |
 | [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | 强化速度 / 强化能量 / IO 容量 / 自动插入器 / 快速物品插入 / 快速物品弹出升级（离心机 6 种，蜂箱 5 种） |
-| [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | 网络连接 + ME 网络产物输出 + ME 网络能量输入 |
+| [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | 网络连接、物品/流体输出、离心机输入拉取与 ME 网络能量输入 |
 | [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME 网络存储的 FE 作为机器能量来源 |
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 网络状态悬停显示 + 蜂箱蜜蜂数量 / 生产进度 |
 | [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | 宇宙渲染光影兼容 |
 | [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | 配方查看  |
 | [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | 通过 `MyriadBeeEvents.REGISTER` 在运行时注册蜜蜂配方 |
+| [Super Factory Manager](https://www.curseforge.com/minecraft/mc-mods/super-factory-manager) | 通过 NeoForge capability 自动化物品、流体和能量 |
+| Just Dire Things Extras | 合并 256x/1024x 机器加速，避免每个虚拟 tick 重复完整管线 |
+| Building Gadgets 2 | 客户端方块实体渲染加载时序兼容 |
+| Mek Energistics | 为本模组 AE 直连机器保护安装器与目标解析 |
 
 ## 配置系统
 
@@ -400,23 +408,13 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 **弹出策略**：与离心机的弹出策略对应，参数名前缀为"蜂箱"。
 
 **输出槽堆叠倍率**：17 个工厂等级各自的输出槽堆叠倍率：
-- 基础蜂箱（3 进程，30 输出槽，每页15格）默认 1×
-- 高级蜂箱（5 进程，30 输出槽，每页15格）默认 2×
-- 精英蜂箱（7 进程，30 输出槽，每页15格）默认 4×
-- 终极蜂箱（9 进程，60 输出槽，每页30格）默认 8×
-- 通用机械：扩展 绝对蜂箱（11 进程，78 输出槽，每页39格）默认 16×
-- 通用机械：扩展 至尊蜂箱（13 进程，60 输出槽，每页30格）默认 32×
-- 通用机械：扩展 寰宇支配蜂箱（15 进程，72 输出槽，每页36格）默认 64×
-- 通用机械：扩展 悖论无限蜂箱（17 进程，84 输出槽，每页42格）默认 128×
-- 进化通用机械 超频蜂箱（11 进程，78 输出槽，每页39格）默认 16×
-- 进化通用机械 量子蜂箱（13 进程，60 输出槽，每页30格）默认 32×
-- 进化通用机械 致密蜂箱（15 进程，72 输出槽，每页36格）默认 64×
-- 进化通用机械 多元宇宙蜂箱（17 进程，84 输出槽，每页42格）默认 128×
-- 进化通用机械 创造蜂箱（19 进程，90 输出槽，每页45格）默认 256×
-- 进化通用机械：扩展 绝对超频蜂箱（12 进程，90 输出槽，每页45格）默认 256×
-- 进化通用机械：扩展 至尊量子蜂箱（14 进程，102 输出槽，每页51格）默认 512×
-- 进化通用机械：扩展 宇宙致密蜂箱（16 进程，78 输出槽，每页39格）默认 1024×
-- 进化通用机械：扩展 无限多元蜂箱（18 进程，84 输出槽，每页42格）默认 4096×
+- 基础蜂箱（5 蜜蜂槽，30 输出槽，每页 15）默认 1×
+- 高级蜂箱（10 蜜蜂槽，30 输出槽，每页 15）默认 2×
+- 精英蜂箱（15 蜜蜂槽，30 输出槽，每页 15）默认 4×
+- 终极蜂箱（20 蜜蜂槽，60 输出槽，每页 30）默认 8×
+- 通用机械：扩展 绝对 / 至尊 / 寰宇支配 / 悖论无限蜂箱：26 / 30 / 36 / 42 蜜蜂槽，78 / 60 / 72 / 84 输出槽，默认 16× / 32× / 64× / 128×
+- 进化通用机械 超频 / 量子 / 致密 / 多元宇宙 / 创造蜂箱：26 / 30 / 36 / 42 / 45 蜜蜂槽，78 / 60 / 72 / 84 / 90 输出槽，默认 16× / 32× / 64× / 128× / 256×
+- 进化通用机械：扩展 绝对超频 / 至尊量子 / 宇宙致密 / 无限多元蜂箱：45 / 51 / 55 / 60 蜜蜂槽，90 / 102 / 78 / 84 输出槽，默认 256× / 512× / 1024× / 4096×
 
 **AE2 集成**（仅当 AE2 已安装时注册）：AE2 输出开关 + AppliedFlux 优先级切换 + AE2 原生能量提取开关，与离心机的 AE2 集成对应。
 
@@ -457,7 +455,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-正式发布产物为 `build/libs/productivebeesgenesis-1.0.5.jar`。
+正式发布产物为 `build/libs/productivebeesgenesis-1.0.6.jar`。
 
 > 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
 >
@@ -485,25 +483,32 @@ com.ayoshiko.productivebeesgenesis/
 │   ├── jade/            Jade 插件 — AE2 状态 + 蜂箱蜜蜂数量/进度显示
 │   ├── render/cosmic/   宇宙着色器系统、烘焙模型、Iris 兼容
 │   └── screen/          配置界面和通用机械离心机 GUI + 状态管理
-├── command/            （保留供未来指令扩展）
+├── command/            仅 OP 可用的运行时开发诊断指令
 ├── compat/             可选模组集成
 │   ├── kubejs/          KubeJS 插件 — MyriadBeeEvents.REGISTER + 配方序列化器
-│   └── emextras/        进化通用机械：扩展 方块 / 方块实体注册
+│   ├── mekanism_extras/ 通用机械：扩展 方块、工厂、菜单与委托
+│   ├── emextras/        进化通用机械：扩展 方块 / 方块实体注册
+│   └── mekenergistics/  Mek Energistics 安装器/目标保护
 ├── config/             客户端/通用/服务端配置，支持中英文双语
 ├── datagen/            方块标签、配方、战利品表、语言文件
 ├── init/               DeferredRegister 注册（方块、物品、方块实体等）
 ├── item/               自定义物品
 ├── mek/                通用机械离心机方块、方块实体、配方处理
-│   └── ae2/            AE2 集成（产物推送、网格节点管理、能量注入器）
+│   └── ae2/            AE2 网格、输入过滤/拉取、pending 所有权、输出账本、
+│                       物品/流体推送、外部存储与能量注入
 ├── menu/               容器菜单定义
 ├── mixin/              Mixin 类，含 MixinConfigPlugin 条件加载器
 │   ├── accessor/       访问器 mixin
+│   ├── ae2/            各机器家族的可选 AE2 宿主适配
 │   ├── beehive/        蜂箱库存防抖与缓存 mixin
+│   ├── buildinggadgets/ Building Gadgets 方块实体渲染兼容
 │   ├── client/         客户端 mixin（蜜蜂颜色、宇宙物品渲染）
 │   ├── iris/           Iris 着色器兼容，含 IrisConfigPlugin
+│   ├── jdte/           合并加速适配
 │   ├── mek/            通用机械离心机/工厂/弹出器 mixin
+│   ├── mekenergistics/ Mek Energistics 兼容保护
 │   └── recipe/         配方序列化兜底 mixin
-├── network/            网络载荷（过滤配置同步）
+├── network/            经校验/限频的 GUI 操作与过滤器/状态同步
 └── util/               蜜蜂信息助手、配方缓存管理器、离心机配方索引等
 ```
 
@@ -517,7 +522,9 @@ com.ayoshiko.productivebeesgenesis/
 - **`ApiaryTierMultiplierResolver`** + 各家族代理（`MEDelegate` 等）：在 17 个工厂等级之间解析每等级的蜜蜂槽数量、输出槽数量、流体罐容量和堆叠倍率。
 - **`MyriadBeeRegisterEventJS`** / **`MyriadBeeEvents`**：KubeJS 事件组 + 事件对象，暴露 `addBreeding` / `addFishing` / `addConversion` / `addSpawning` / `addCentrifuge` / `addBeeProduce` / `addMekData` 配方构建器。
 - **`AbstractBakedModelCosmic`**：宇宙渲染管线（着色器 uniform、mask 精灵、Iris 延迟），为 `BakedModelCosmic` / `BakedModelHell` / `BakedModelHalo` 的基类。
-- **`Ae2GridNodeManager`** / **`Ae2OutputPusher`** / **`Ae2EnergyInjector`**：AE2 节点生命周期、产物推送、ME 网络能量注入（5 层优先级）。
+- **`Ae2GridNodeManager`** / **`Ae2InputPuller`** / **`Ae2InputFilter`**：AE2 节点生命周期，以及公平、有界的蜜脾/SMELTING 发现、过滤、库存保留和 pending 物品所有权。
+- **`Ae2OutputPusher`** / **`Ae2OutputLedger`** / **`Ae2FluidPusher`**：事务化物品输出与多流体批量输出，带按键退避和插入成本预算。
+- **`Ae2EnergyInjector`**：ME 网络能量注入，支持 5 层优先级与网络保留。
 - **`MixinConfigPlugin`**：条件 Mixin 加载器 — ME/EME 未安装时跳过相关 Mixin，防止崩溃。
 
 ### 线程安全

@@ -7,6 +7,7 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
+import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -15,6 +16,7 @@ import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -203,10 +205,12 @@ public final class Ae2FluidPusher {
 
 		// 9. Task 21: 累积阶段
 		//     第一遍：廉价统计槽内流体总量（仅 getFluid/getAmount，不构建 AEFluidKey）
-		int tankCount = host.fluidOutputTankCount();
+		List<IExtendedFluidTank> tankSnapshot = host instanceof IMultiFluidTankHost multiFluidHost
+				? multiFluidHost.getFluidTanks() : null;
+		int tankCount = tankSnapshot == null ? host.fluidOutputTankCount() : tankSnapshot.size();
 		long totalInTanks = 0L;
 		for (int i = 0; i < tankCount; i++) {
-			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
 			if (tank == null || tank.isEmpty()) continue;
 			totalInTanks = SaturatingMath.saturatingAdd(totalInTanks, tank.getFluid().getAmount());
 		}
@@ -218,7 +222,7 @@ public final class Ae2FluidPusher {
 		// 第二遍：每个真实游戏刻采样一次。加速子 tick 已在入口合并，不会放大组件哈希开销。
 		batchBuffer.beginSample();
 		for (int i = 0; i < tankCount; i++) {
-			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty()) continue;
@@ -293,7 +297,7 @@ public final class Ae2FluidPusher {
 				// clamp 到当前实际库存可保证「推入 AE 的量 ≤ 实际库存」，
 				// 之后按实际接收量 shrink 精确扣除，未接收部分天然留在 tank，
 				// 无需回填，杜绝"先 shrink 后推送失败再回填"路径中的流体丢失。
-				long tankTotal = currentTankAmount(host, fluidKey, tankCount);
+				long tankTotal = currentTankAmount(host, tankSnapshot, fluidKey, tankCount);
 				if (tankTotal <= 0) continue; // tank 已空，跳过推送
 				long pushed = Math.min(amount, tankTotal);
 
@@ -310,7 +314,7 @@ public final class Ae2FluidPusher {
 				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
 				// 正常情况下 shrink 必然足额；不足仅可能出现在极端并发/异常，
 				// 记录 error 防止静默复制（防御性）。
-				long shrunk = shrinkStackSafely(host, fluidKey, inserted, tankCount);
+				long shrunk = shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount);
 				totalActualShrunk = SaturatingMath.saturatingAdd(totalActualShrunk, shrunk);
 				if (shrunk < inserted) {
 					LogThrottle.error("ae2_fluid_shrink_mismatch",
@@ -362,16 +366,23 @@ public final class Ae2FluidPusher {
 	 * @param tankCount 流体罐总数
 	 * @return 当前实际总量(mB)；0 表示该流体当前不在任何 tank
 	 */
-	private static long currentTankAmount(IAe2OutputHostBase host, AEFluidKey fluidKey, int tankCount) {
+	private static long currentTankAmount(IAe2OutputHostBase host,
+			List<IExtendedFluidTank> tankSnapshot, AEFluidKey fluidKey, int tankCount) {
 		long total = 0L;
 		for (int i = 0; i < tankCount; i++) {
-			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty() || !fluidKey.matches(stack)) continue;
 			total = SaturatingMath.saturatingAdd(total, stack.getAmount());
 		}
 		return total;
+	}
+
+	/** 多槽宿主复用稳定列表；单槽宿主保持原接口语义。 */
+	private static IExtendedFluidTank outputTank(IAe2OutputHostBase host,
+			List<IExtendedFluidTank> tankSnapshot, int index) {
+		return tankSnapshot == null ? host.fluidOutputTank(index) : tankSnapshot.get(index);
 	}
 
 	/**
@@ -507,7 +518,8 @@ public final class Ae2FluidPusher {
 	 * @param tankCount      流体罐总数
 	 * @return 实际 shrink 总量(mB),小于 totalToShrink 表示有复制风险
 	 */
-	private static long shrinkStackSafely(IAe2OutputHostBase host, AEFluidKey fluidKey,
+	private static long shrinkStackSafely(IAe2OutputHostBase host,
+			List<IExtendedFluidTank> tankSnapshot, AEFluidKey fluidKey,
 			long totalToShrink, int tankCount) {
 		if (totalToShrink <= 0) return 0;
 		long remaining = totalToShrink;
@@ -515,7 +527,7 @@ public final class Ae2FluidPusher {
 
 		// 遍历所有匹配 fluidKey 的非空 tank,顺序 shrink
 		for (int i = 0; i < tankCount && remaining > 0; i++) {
-			IExtendedFluidTank tank = host.fluidOutputTank(i);
+			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
 			if (tank == null || tank.isEmpty()) continue;
 			FluidStack stack = tank.getFluid();
 			if (stack.isEmpty()) continue;

@@ -269,9 +269,9 @@ class BeeSlotTickProcessor {
 		// 花朵有效性缓存：使用 BeeSlot 内部 volatile 字段直接缓存 — 比 per-tick HashMap 更便宜：
 		//   - cache hit: 2 次 volatile 读（cachedFlowerValidTick、cachedFlowerValid）≈ 10ns
 		//   - cache miss: 1 次 LinkedHashMap.get + 2 次 volatile 写
-		// 同 tick 内同种蜜蜂 cache hit，避免重复调用 hasValidFlower。
-		// 使用 long 类型避免 long-running 服务器上 getGameTime() 溢出（int 上限约 3.4 年游戏时间）
+		// currentTick 供进度推进使用；花朵判定按喂食槽语义版本跨 tick 复用。
 		long currentTick = (level != null) ? level.getGameTime() : 0L;
+		int flowerCacheVersion = feederManager.getFlowerCacheVersion();
 		boolean checkBeeGenes = level != null && BalanceConfig.apiaryBeeGenesAffectWork();
 		boolean fixedTime = checkBeeGenes && level.dimensionType().hasFixedTime();
 		boolean night = checkBeeGenes && level.isNight();
@@ -306,7 +306,7 @@ class BeeSlotTickProcessor {
 					continue;
 				}
 			}
-			if (!ApiaryFlowerValidation.check(slot, beeTypeKey, currentTick, feederManager)) {
+			if (!ApiaryFlowerValidation.check(slot, beeTypeKey, flowerCacheVersion, feederManager)) {
 				slot.setState(BeeState.WAITING_FLOWER);
 				activationCounter.onBeeDeactivated(i);
 				continue;

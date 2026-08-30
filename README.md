@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.5-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.6-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -81,7 +81,7 @@ An industrialized Mekanism-style centrifuge that extends Mekanism's native elect
 - **Ejection optimization**: All variants use a configurable four-state ejection policy (active/idle/blocked/busy) with fine-grained controls like skip-unchanged-ticks, max-speed mode, and busy cooldown.
 - **Fluid auto-eject**: Default 16384 mB/tick, overriding Mekanism's native 1024 mB/tick.
 - **Multi-fluid tank mode**: Configurable dynamic slot allocation per fluid type, preventing different honey types from mixing.
-- **AE2 integration**: Acts as an AE2 grid node — direct output push, honeycomb pulling, and ME-network energy input (5-tier priority).
+- **AE2 integration**: Acts as an AE2 grid node — direct item/fluid output, comb and SMELTING input pulling, and ME-network energy input (5-tier priority).
 - **Jade tooltip**: Shows AE2 network status, internal items/fluids/energy, etc.
 
 #### Centrifuge Tiers (17 factory tiers + 1 base variant)
@@ -137,7 +137,7 @@ The page is a client/container view only. AE2, Mekanism ejectors, adjacent centr
 - **Slot layout**: bee slots / output slots / cage slots (bidirectional transfer) / energy slot / honey fluid tank / PB upgrade slots.
 - **Feeder system**: dedicated window managing flower items. Base variant uses a fixed 3×3 = 9-slot grid; factory variants use a dynamic layout scaling with bee slot count.
 - **PB upgrade system**: self-developed upgrade cards — productivity (α/β/γ/Ω), time (I/II), gene sampler, honeycomb block, byproduct destruction, plus the built-in simulation upgrade; see [PB Upgrade System](#pb-upgrade-system) section.
-- **AE2 integration**: outputs (items / fluids / energy) push into the ME network; AppliedFlux priority switching supported.
+- **AE2 integration**: items and fluids can push into the ME network, while machine energy can be refilled from AppliedFlux-stored FE or AE2 native power with configurable priority.
 - **Direct ejection**: when a centrifuge is adjacent to the apiary, the apiary bypasses the MEK Ejector throttling and pushes honeycombs straight into the centrifuge's input slot — see [Direct Centrifuge Connection](#direct-centrifuge-connection).
 - **Centrifuge priority**: a per-tile toggle that keeps honeycombs out of the AE network and routes them to adjacent centrifuges — produced honeycombs take a fast path straight into centrifuge input slots without passing through the apiary's output slots, and buffered honeycombs are never FIFO-evicted (overflow returns to the AE network first, FIFO only as the last resort).
 - **Jade tooltip**: shows bee count, production progress, and AE2 network status.
@@ -232,6 +232,7 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
 - Connect directly with AE2 smart cables and adjacent machines.
 - Auto-discovered by addon-mod cables (ExtendedAE, AdvancedAE, ae2cs, ae2lt, Glodium, AppliedFlux).
 - **Direct ME output**: push output slot items into the ME network, bypassing external logistics. Toggleable in the Mekanism config screen.
+- **Direct fluid output**: honey and centrifuge fluids use the same network-aware batching, per-key backoff and bounded insert-cost budgets as item output.
 - **ME energy input**: drain FE stored in the ME network to power the machine — the injection target fills the internal energy container (no more near-empty energy bars), and a single extraction takes at most 95% of the network stock so several machines filling up at once can never power down the shared network. Supports 5-tier energy priority:
   1. Local FE cache
   2. External direct supply (Mekanism config component + energy slot)
@@ -239,7 +240,10 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
   4. Other energy (handled by Mekanism parent)
   5. AE2 native network energy (converted to FE)
 - **AE2 native energy toggle** (`aeNativeEnergyInputEnabled`, shown only when Applied Flux is installed): disable it to draw energy only from AppliedFlux-stored FE, preventing excessive AE drain from powering down the ME network when FE runs low.
-- **Honeycomb pulling** (centrifuge only): the centrifuge can actively pull honeycombs from the connected ME network for processing, with pulling behavior configurable.
+- **Input pulling** (centrifuge only): actively pulls fuzzy-matched combs, precise comb/block entries, or ordinary Mekanism SMELTING inputs from the connected ME network.
+- **Pull filters**: disabled / blacklist / whitelist modes, precise matching, NBT-ignore mode, per-entry pull amounts, per-entry or global unlimited pulling, and machine-wide or per-entry network reserve floors. Exact whitelists are cursor-rotated so large lists do not starve later entries.
+- **SMELTING tag gate**: ordinary smelting candidates can be filtered with a separate whitelist/blacklist expression supporting item ids, tags, `&|^!()` operators, and `*` wildcards.
+- **Transaction safety**: extracted leftovers use a bounded, persistent per-machine pending buffer instead of world drops. Item output uses a persistent reserve-commit-confirm ledger, so accepted network inserts are only finalized after the source slot is safely decremented.
 - **Jade tooltip**: Shows AE2 network status (Offline / Booting / Missing Channel / Online).
 - Node lifecycle is decoupled from the output toggle — closing output push does not disconnect the machine, allowing ME energy input to continue.
 
@@ -286,7 +290,7 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | EME-tier factories (Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal) |
 | [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | Extended upgrade limits |
 | [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | Empowered Speed / Empowered Energy / IO Capacity / Auto Inserter / Fast Item Insert / Fast Item Eject upgrades (centrifuge 6 types, apiary 5 types) |
-| [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection + ME network output + ME energy input |
+| [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection, item/fluid output, centrifuge input pulling, and ME energy input |
 | [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for machines |
 | [ExtendedAE](https://www.curseforge.com/minecraft/mc-mods/ex-pattern-provider) | Auto-discovered cable connection |
 | [AdvancedAE](https://www.curseforge.com/minecraft/mc-mods/advanced-ae) | Auto-discovered cable connection |
@@ -294,6 +298,10 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | Shader compatibility for cosmic rendering |
 | [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | Recipe viewing + recipe hiding when bee disabled |
 | [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | Runtime bee recipe registration via `MyriadBeeEvents.REGISTER` |
+| [Super Factory Manager](https://www.curseforge.com/minecraft/mc-mods/super-factory-manager) | Item, fluid, and energy automation through NeoForge capabilities |
+| Just Dire Things Extras | Coalesced 256x/1024x machine acceleration without repeating the full pipeline per virtual tick |
+| Building Gadgets 2 | Client-side block-entity render load-order compatibility |
+| Mek Energistics | Guards installer and target resolution for this mod's AE-connected machines |
 
 ## Configuration
 
@@ -399,23 +407,13 @@ Apiary config mirrors the centrifuge structure and adds apiary-specific tuning:
 **Ejection policy**: mirrors the centrifuge's ejection policy, with "apiary" prefix.
 
 **Output slot stack multiplier**: per-tier output slot stack multiplier across 17 factory tiers:
-- Basic apiary (3 processes, 30 output slots, 15 per page) default 1×
-- Advanced apiary (5 processes, 30 output slots, 15 per page) default 2×
-- Elite apiary (7 processes, 30 output slots, 15 per page) default 4×
-- Ultimate apiary (9 processes, 60 output slots, 30 per page) default 8×
-- Mekanism Extras Absolute apiary (11 processes, 78 output slots, 39 per page) default 16×
-- Mekanism Extras Supreme apiary (13 processes, 60 output slots, 30 per page) default 32×
-- Mekanism Extras Cosmic apiary (15 processes, 72 output slots, 36 per page) default 64×
-- Mekanism Extras Infinite apiary (17 processes, 84 output slots, 42 per page) default 128×
-- Evolved Mekanism Overclocked apiary (11 processes, 78 output slots, 39 per page) default 16×
-- Evolved Mekanism Quantum apiary (13 processes, 60 output slots, 30 per page) default 32×
-- Evolved Mekanism Dense apiary (15 processes, 72 output slots, 36 per page) default 64×
-- Evolved Mekanism Multiversal apiary (17 processes, 84 output slots, 42 per page) default 128×
-- Evolved Mekanism Creative apiary (19 processes, 90 output slots, 45 per page) default 256×
-- Evolved Mekanism Extras Absolute Overclocked apiary (12 processes, 90 output slots, 45 per page) default 256×
-- Evolved Mekanism Extras Supreme Quantum apiary (14 processes, 102 output slots, 51 per page) default 512×
-- Evolved Mekanism Extras Cosmic Dense apiary (16 processes, 78 output slots, 39 per page) default 1024×
-- Evolved Mekanism Extras Infinite Multiversal apiary (18 processes, 84 output slots, 42 per page) default 4096×
+- Basic apiary (5 bee slots, 30 output slots, 15 per page) default 1×
+- Advanced apiary (10 bee slots, 30 output slots, 15 per page) default 2×
+- Elite apiary (15 bee slots, 30 output slots, 15 per page) default 4×
+- Ultimate apiary (20 bee slots, 60 output slots, 30 per page) default 8×
+- Mekanism Extras Absolute / Supreme / Cosmic / Infinite apiaries: 26 / 30 / 36 / 42 bee slots and 78 / 60 / 72 / 84 output slots, default 16× / 32× / 64× / 128×
+- Evolved Mekanism Overclocked / Quantum / Dense / Multiversal / Creative apiaries: 26 / 30 / 36 / 42 / 45 bee slots and 78 / 60 / 72 / 84 / 90 output slots, default 16× / 32× / 64× / 128× / 256×
+- Evolved Mekanism Extras Absolute Overclocked / Supreme Quantum / Cosmic Dense / Infinite Multiversal apiaries: 45 / 51 / 55 / 60 bee slots and 90 / 102 / 78 / 84 output slots, default 256× / 512× / 1024× / 4096×
 
 **AE2 integration** (only registered when AE2 is loaded): AE2 output toggle + AppliedFlux priority switch + the AE2 native energy input toggle, mirroring the centrifuge's AE2 integration.
 
@@ -456,7 +454,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The release jar is `build/libs/productivebeesgenesis-1.0.5.jar`.
+The release jar is `build/libs/productivebeesgenesis-1.0.6.jar`.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 >
@@ -484,25 +482,32 @@ com.ayoshiko.productivebeesgenesis/
 │   ├── jade/            Jade plugin — AE2 status + apiary bee/progress display
 │   ├── render/cosmic/   Cosmic shader system, baked models, Iris compat
 │   └── screen/          Configuration and MEK centrifuge GUIs + state
-├── command/            (Reserved for future commands)
+├── command/            OP-only runtime developer diagnostics command
 ├── compat/             Optional mod integrations
 │   ├── kubejs/          KubeJS plugin — MyriadBeeEvents.REGISTER + recipe serializers
-│   └── emextras/        Evolved Mekanism Extras block / block-entity registration
+│   ├── mekanism_extras/ Mekanism Extras blocks, factories, menus and delegates
+│   ├── emextras/        Evolved Mekanism Extras block / block-entity registration
+│   └── mekenergistics/  Mek Energistics installer/target guards
 ├── config/             Client / Common / Server config, bilingual
 ├── datagen/            Block tags, recipes, loot tables, language provider
 ├── init/               DeferredRegister registrations
 ├── item/               Custom items
 ├── mek/                Mekanism centrifuge blocks, tile entities, recipe processing
-│   └── ae2/            AE2 integration (output pusher, grid node manager, energy injector)
+│   └── ae2/            AE2 grid, input filters/puller, pending ownership, output ledger,
+│                       item/fluid pushers, external storage and energy injection
 ├── menu/               Container menu definitions
 ├── mixin/              Mixin classes with MixinConfigPlugin conditional loader
 │   ├── accessor/       Accessor mixins
+│   ├── ae2/            Optional AE2 host adapters for every machine family
 │   ├── beehive/        Beehive inventory debounce and cache mixins
+│   ├── buildinggadgets/ Building Gadgets block-entity render compatibility
 │   ├── client/         Client-side mixins (bee color, cosmic item renderer)
 │   ├── iris/           Iris shader compat with IrisConfigPlugin
+│   ├── jdte/           Coalesced acceleration adapters
 │   ├── mek/            Mekanism centrifuge / factory / ejector mixins
+│   ├── mekenergistics/ Mek Energistics compatibility guards
 │   └── recipe/         Recipe serializer fallback mixins
-├── network/            Network payloads (filter config sync)
+├── network/            Validated/rate-limited GUI actions and filter/state synchronization
 └── util/               BeeInfoHelper, RecipeCacheManager, CentrifugeRecipeIndex, etc.
 ```
 
@@ -516,7 +521,9 @@ com.ayoshiko.productivebeesgenesis/
 - **`ApiaryTierMultiplierResolver`** + per-family delegates (`MEDelegate`, …): resolve per-tier bee slot count, output slot count, fluid tank capacity, and stack multiplier across the 17 factory tiers.
 - **`MyriadBeeRegisterEventJS`** / **`MyriadBeeEvents`**: KubeJS event group + event object exposing `addBreeding` / `addFishing` / `addConversion` / `addSpawning` / `addCentrifuge` / `addBeeProduce` / `addMekData` recipe builders.
 - **`AbstractBakedModelCosmic`**: Cosmic render pipeline (shader uniforms, mask sprites, Iris defer) for `BakedModelCosmic` / `BakedModelHell` / `BakedModelHalo`.
-- **`Ae2GridNodeManager`** / **`Ae2OutputPusher`** / **`Ae2EnergyInjector`**: AE2 node lifecycle, output push, and ME-network energy injection (5-tier priority).
+- **`Ae2GridNodeManager`** / **`Ae2InputPuller`** / **`Ae2InputFilter`**: AE2 node lifecycle plus fair, bounded comb/SMELTING discovery, filtering, reserve floors and pending-item ownership.
+- **`Ae2OutputPusher`** / **`Ae2OutputLedger`** / **`Ae2FluidPusher`**: transactional item output and batched multi-fluid output with per-key backoff and insert-cost budgets.
+- **`Ae2EnergyInjector`**: ME-network energy injection with 5-tier priority and a network reserve.
 - **`MixinConfigPlugin`**: Conditional Mixin loader — skips ME/EME-specific mixins when those mods are absent.
 
 ### Thread Safety

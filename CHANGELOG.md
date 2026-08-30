@@ -31,7 +31,7 @@
 
 ## [Unreleased]
 
-## [1.0.6] - 未发布
+## [1.0.6] - 2026-08-30
 
 ### 新增
 
@@ -80,6 +80,9 @@
 - **PB 配方与零耗时批处理**：多流体预留扫描的配方结果在同 tick 处理阶段按输入引用和配方版本安全复用；ME/EME 工厂每个 lane 复用零耗时合并窗口，批量加速只发布一次最终进度，减少重复配方查找、临时状态创建和同步数组写入。
 - **AE2 网络自适应限流**：物品与流体直连共享插入成本记账，结合单机/全服预算、慢操作退避、连续零接收短路和低成本高频 EWMA，降低满存储或昂贵第三方存储造成的主线程尖峰；健康网络不受额外吞吐限制。
 - **热路径缓存与批处理**：复用 AE2 扫描/提交缓冲区，按游戏刻缓存 `operationsPerTick`，并缓存 `AEItemKey` 指纹、槽位最终上限和 SMELTING 候选；蜂箱直连 AE 输出会先合并同物品产物，减少时间加速下的对象创建、配方查询和重复网络遍历。
+- **花朵判定跨刻复用**：每只蜜蜂的花朵有效性改为按“喂食槽内容 + 转化开关 + 转化配方版本”缓存；语义未变化时不再每 tick 查询类型映射，蜜蜂更换、槽位变化、开关翻转和配方重载仍会立即失效。
+- **组件与空状态快路径**：普通无组件熔炼输入跳过完整组件哈希，标准可配置蜜脾只比较 `bee_type`（附加名称等组件仍回退完整比较）；空 pending 缓冲和空输出确认账本不再创建快照或逐槽查询。
+- **多流体预留与推送去重**：PB 配方预留按唯一流体类型执行，同流体不再按处理进程重复查找输出槽；AE2 流体推送在统计、匹配和扣减阶段复用一次稳定槽位列表，减少多槽工厂的列表复制与重复定位。
 
 ### 测试
 
@@ -135,6 +138,9 @@
 - **PB recipe and zero-duration batching**: multi-fluid reservation results are reused by the same-tick processing phase after validating the input reference and recipe version. Each ME/EME factory lane now reuses its zero-duration coalescing window, and accelerated batches publish only the final progress value, reducing repeated recipe lookup, temporary state creation, and synchronized-array writes.
 - **Adaptive AE2 throttling**: item and fluid direct output share insert-cost accounting with per-machine/global budgets, slow-operation backoff, consecutive-zero short-circuiting and EWMA limits for cheap-but-frequent calls. Healthy networks retain full throughput.
 - **Hot-path caching and batching**: reusable AE2 scan/submit buffers, per-game-tick `operationsPerTick` caching, cached item fingerprints, final slot limits and SMELTING candidates reduce allocations, recipe lookups and repeated network traversals. Direct apiary AE output also merges identical products before insertion.
+- **Cross-tick flower validation**: each bee reuses its flower-valid result while feeder contents, the conversion toggle and conversion-recipe version remain unchanged. Replacing a bee, editing a feeder, flipping the toggle or reloading recipes still invalidates immediately.
+- **Component and empty-state fast paths**: ordinary component-free smelting inputs skip full component hashing, while standard configurable combs compare only `bee_type` and fall back for custom names or other extra components. Empty pending buffers and empty output ledgers no longer build snapshots or scan slots.
+- **Deduplicated multi-fluid work**: PB reservation runs once per unique fluid type instead of once per process, and AE2 fluid output reuses one stable tank list through counting, matching and shrinking, avoiding repeated list copies in multi-tank factories.
 
 #### Tests
 

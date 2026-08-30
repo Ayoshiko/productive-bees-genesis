@@ -40,4 +40,18 @@ class FeederConversionFlowerGateTest {
 		String source = Files.readString(Path.of(TILE));
 		assertTrue(source.contains("feederSlotManager.setConversionEnabledSupplier(this::isFeederConversionEnabled)"));
 	}
+
+	@Test
+	void perBeeFlowerResultUsesFeederSemanticVersionAcrossTicks() throws Exception {
+		String manager = Files.readString(Path.of(FEEDER_MANAGER));
+		String validation = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiaryFlowerValidation.java"));
+		String processor = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeSlotTickProcessor.java"));
+
+		assertTrue(manager.contains("public int getFlowerCacheVersion()"));
+		assertTrue(manager.contains("refreshFlowerCacheState();\n\t\treturn flowerValidityCache.version();"));
+		assertTrue(validation.contains("consumeCachedFlowerValid(cacheVersion)"));
+		assertTrue(processor.contains("int flowerCacheVersion = feederManager.getFlowerCacheVersion();"));
+	}
 }

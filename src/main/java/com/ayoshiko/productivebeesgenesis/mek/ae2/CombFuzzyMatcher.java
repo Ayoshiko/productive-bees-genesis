@@ -86,6 +86,11 @@ public final class CombFuzzyMatcher {
 				|| isExternalCentrifugeComb(item);
 	}
 
+	/** 标准可配置蜜脾/蜜脾块；供组件比较热路径使用稳定 Item 引用。 */
+	static boolean isConfigurableCombItem(Item item) {
+		return item == ItemRefs.CONFIGURABLE_HONEYCOMB || item == ItemRefs.CONFIGURABLE_COMB_BLOCK;
+	}
+
 	/**
 	 * 判断 AEItemKey 是否为蜜脾块（用于拉取排序优先级）
 	 * <br/>

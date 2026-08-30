@@ -28,7 +28,7 @@ import org.jetbrains.annotations.Nullable;
 	 *       导致脏标志丢失</li>
 	 *   <li>{@code dirty} 字段本身也声明为 {@code volatile}，与 synchronized 协同保证
 	 *       可见性</li>
-	 *   <li>{@code cachedFlowerValidTick} / {@code cachedFlowerValid} 已是 volatile，
+	 *   <li>{@code cachedFlowerValidVersion} / {@code cachedFlowerValid} 已是 volatile，
 	 *       仅在同一 server tick 线程内读写，volatile 足够</li>
 	 * </ul>
 	 */
@@ -65,18 +65,16 @@ public class BeeSlot {
 	private volatile boolean dirty;
 
 	/**
-	 * 花朵有效性缓存：每 tick 缓存当前蜜蜂类型的花朵是否有效，避免重复调用 feederManager.hasValidFlower
+	 * 花朵有效性缓存：按喂食槽缓存版本复用当前蜜蜂类型的判定结果。
 	 * <br/>
-	 * 使用 {@code -1} 初始 tick 标记未缓存；与 {@link #cachedFlowerValidTick} 配合：
-	 * tick 匹配时为 cache hit，否则 cache miss。
+	 * 喂食槽内容、转化开关或转化配方变化时版本递增；版本匹配即为 cache hit。
 	 * <p>
 	 * <b>线程安全</b>：写者（tick 主线程）+ 读者（API）均在同一 server tick 线程访问，
 	 * GUI 线程仅通过 NBT 同步（不读此字段），故使用 {@code volatile} 足够。
 	 * <p>
-	 * <b>类型</b>：使用 {@code long} 而非 {@code int}，避免长期运行服务器上
-	 * {@code level.getGameTime()}（返回 long）强转 int 时溢出导致缓存命中率异常。
+	 * 蜜蜂更换时主动失效，避免同一槽位沿用上一只蜜蜂的判定。
 	 */
-	private volatile long cachedFlowerValidTick = -1L;
+	private volatile int cachedFlowerValidVersion = Integer.MIN_VALUE;
 	private volatile boolean cachedFlowerValid;
 
 	/**
@@ -93,15 +91,15 @@ public class BeeSlot {
 	/**
 	 * 消费缓存的花朵有效性（cache miss 返回 {@code null}，避免哨兵值歧义）
 	 * <br/>
-	 * processBeeSlots 在循环内对每只蜜蜂调用：同 tick 内同蜜蜂 cache hit，
-	 * 避免每次都调用 {@code feederManager.hasValidFlower(beeTypeKey)} 访问 LinkedHashMap。
+	 * processBeeSlots 在循环内对每只蜜蜂调用；喂食槽状态未变化时跨 tick 命中，
+	 * 避免每 tick 都调用 {@code feederManager.hasValidFlower(beeTypeKey)} 访问类型映射。
 	 *
-	 * @param currentTick 当前 server tick（{@code level.getGameTime()}）
+	 * @param cacheVersion 当前喂食槽花朵缓存版本
 	 * @return 缓存的花朵有效性，cache miss 返回 {@code null}
 	 */
 	@Nullable
-	public Boolean consumeCachedFlowerValid(long currentTick) {
-		if (cachedFlowerValidTick == currentTick) {
+	public Boolean consumeCachedFlowerValid(int cacheVersion) {
+		if (cachedFlowerValidVersion == cacheVersion) {
 			return cachedFlowerValid;
 		}
 		return null;
@@ -110,12 +108,12 @@ public class BeeSlot {
 	/**
 	 * 写入缓存的花朵有效性
 	 *
-	 * @param currentTick 当前 server tick
+	 * @param cacheVersion 当前喂食槽花朵缓存版本
 	 * @param valid       花朵是否有效
 	 */
-	public void setCachedFlowerValid(long currentTick, boolean valid) {
+	public void setCachedFlowerValid(int cacheVersion, boolean valid) {
 		cachedFlowerValid = valid;
-		cachedFlowerValidTick = currentTick;
+		cachedFlowerValidVersion = cacheVersion;
 	}
 
 	/**
@@ -153,6 +151,7 @@ public class BeeSlot {
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
 		this.cachedProductivityLevel = -1;
+		this.cachedFlowerValidVersion = Integer.MIN_VALUE;
 		this.cachedGeneSampleProfile = null;
 		this.cachedGeneSampleSource = null;
 		this.dirty = true;
@@ -334,6 +333,7 @@ public class BeeSlot {
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
 		this.cachedProductivityLevel = -1;
+		this.cachedFlowerValidVersion = Integer.MIN_VALUE;
 		this.cachedGeneSampleProfile = null;
 		this.cachedGeneSampleSource = null;
 		this.dirty = true;
