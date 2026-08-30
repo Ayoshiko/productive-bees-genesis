@@ -287,7 +287,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		return CentrifugeFactoryCommonLogic.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
 				inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction,
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
-				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress);
+				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress, null);
 	}
 
 	/** JDTE 累计钩子（委托 AbstractMekCentrifugeFactoryJdteSupport） */

@@ -305,13 +305,15 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 				break;
 			}
 			useResources(ops);
-			if (ticksRequired > 1) {
-				operatingTicksChanged.accept(operatingTicks);
-			}
 		}
 		// 批量能量一次性扣除（等价于逐虚拟 tick useEnergy(ops) 的累加总额）
 		if (energyPerTick > 0L && ran > 0) {
 			useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, ran));
+		}
+		// 这些额外 process 调用发生在同一服务端 tick 内，进度只需发布最终值一次；
+		// operatingTicksChanged 在本模组工厂中只写入同步数组，逐虚拟刻回调没有观察者。
+		if (ticksRequired > 1 && ran > 0) {
+			operatingTicksChanged.accept(operatingTicks);
 		}
 		// 剩余预算处理（区分退出原因）：
 		// - 能量预算耗尽（ticksToRun < ticksLeft）：终止批量，下个虚拟 tick 走原版完整重算，

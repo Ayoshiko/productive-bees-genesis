@@ -84,4 +84,14 @@ final class Ae2CursorScan {
 		collectMapped(out, prefixScratch, prioritizedKeys, cursor, maxTypes, Function.identity(), acceptable);
 		collectMapped(out, prefixScratch, fallbackKeys, cursor, maxTypes, Function.identity(), acceptable);
 	}
+
+	/** 返回包含游标的起始下标；游标为空或已消失时从 0 开始。 */
+	static <S, T> int cursorStartIndex(List<S> values, T cursor, Function<S, T> mapper) {
+		if (cursor == null || values == null || values.isEmpty()) return 0;
+		for (int i = 0; i < values.size(); i++) {
+			T value = mapper.apply(values.get(i));
+			if (cursor.equals(value)) return i;
+		}
+		return 0;
+	}
 }

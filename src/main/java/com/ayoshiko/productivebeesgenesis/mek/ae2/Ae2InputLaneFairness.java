@@ -52,4 +52,14 @@ final class Ae2InputLaneFairness {
 		long types = typeCount;
 		return Math.max(1L, (normalQuota + types - 1L) / types);
 	}
+
+	/**
+	 * 判断当前容量规划轮是否应执行。
+	 * <p>
+	 * 第 0 轮始终执行：单类型场景只有这一轮。第 1 轮仅在公平上限确实截断过
+	 * 候选时补齐，避免再次遍历全部「类型 x 槽位」。
+	 */
+	static boolean shouldRunPass(int pass, boolean fairPassTruncated) {
+		return pass == 0 || fairPassTruncated;
+	}
 }

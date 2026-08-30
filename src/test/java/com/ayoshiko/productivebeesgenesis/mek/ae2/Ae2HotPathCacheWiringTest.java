@@ -103,4 +103,61 @@ class Ae2HotPathCacheWiringTest {
 		assertTrue(mixin.contains("if (productivebeesgenesis$inputMultiplier == null)"),
 				"非本模组分等级槽位必须提前返回，不得污染缓存或改变 Mekanism 原逻辑");
 	}
+
+	@Test
+	@DisplayName("输入槽容量查询复现 BasicInventorySlot 语义并保留自定义槽回退")
+	void inputCapacityProbeOwnsItemMatching() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		int methodStart = source.indexOf("private static long getSlotRemainingCapacity(");
+		int methodEnd = source.indexOf("\n\t/**", methodStart);
+		String method = source.substring(methodStart, methodEnd);
+
+		assertTrue(method.contains("slot instanceof BasicInventorySlot basicSlot"),
+				"标准 Mekanism 槽位必须走无分配的直接容量探测");
+		assertTrue(method.contains("stack.getItem() != key.getItem()"),
+				"物品不同的槽位必须在组件比较前廉价拒绝");
+		assertTrue(source.contains("ItemStack.isSameItemSameComponents(stack, probe)"),
+				"标准槽位必须保留组件级物品匹配语义");
+		assertTrue(source.contains("stack.getComponentsPatch().isEmpty()"
+				+ " && probe.getComponentsPatch().isEmpty()"),
+				"普通无组件物品必须绕过完整组件映射比较");
+		assertTrue(method.contains("entry.matchesComponents(slotIndex, stack, probe)"),
+				"容量规划必须通过条目缓存组件匹配结果");
+		assertTrue(method.contains("basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)"),
+				"标准槽位必须保留 validator 和 AutomationType 语义");
+		assertTrue(method.contains("slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL)"),
+				"非标准 IInventorySlot 必须保留完整模拟插入回退");
+		assertFalse(method.contains("key.matches(stack)"),
+				"容量探测不得调用 AEItemKey.matches 造成重复组件比较");
+	}
+
+	@Test
+	@DisplayName("公平轮容量规划复用有界组件匹配缓存并及时释放栈引用")
+	void componentMatchCacheIsBoundedToPullEntriesAndOnePass() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(source.contains("entry.beginComponentMatchCache(processCount)"),
+				"每次容量规划必须为条目开启当前轮次缓存");
+		assertTrue(source.contains("entry.clearComponentMatchCache()"),
+				"容量规划结束后必须清除栈引用，避免复用池延长对象生命周期");
+		assertTrue(source.contains("private ItemStack[] componentMatchStacks"),
+				"组件缓存必须按条目和槽位有界保存");
+		assertTrue(source.contains("componentMatchGenerations"),
+				"组件缓存必须用轮次标记避免每次候选重置数组");
+	}
+
+	@Test
+	@DisplayName("候选缓存命中后不重复分类，默认非无限模式不重复遍历过滤槽")
+	void candidateSelectionReusesClassificationAndFilterAdmission() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		int methodStart = source.indexOf("private static int getPullCandidateAmount(");
+		int methodEnd = source.indexOf("\n\t/**", methodStart);
+		String method = source.substring(methodStart, methodEnd);
+
+		assertFalse(method.contains("Ae2InputCandidatePolicy.classify"),
+				"已按版本缓存的候选列表不得在每轮选择时重复做 SMELTING 分类");
+		assertTrue(source.contains("unlimitedMode && filter.isUnlimitedForKey"),
+				"默认无无限配置时必须跳过逐键过滤槽遍历");
+		assertFalse(source.contains("filter.matchesAnyEntry(entry.key"),
+				"黑白名单准入结果已确定 marked 状态，不得为排序再次扫描过滤槽");
+	}
 }

@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MultiFluidTankHostDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
+import com.ayoshiko.productivebeesgenesis.mek.ZeroTickCoalesceState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
@@ -121,10 +122,10 @@ final class TileEntityExtraFactoryDelegates {
 			@NotNull BooleanSupplier canFunction, @NotNull ObjIntConsumer<Boolean> setActiveState,
 			@NotNull BooleanSupplier hasCreativeUpgrade, @NotNull MachineEnergyContainer<?> energyContainer,
 			@NotNull IntSupplier ticksRequired, @NotNull Runnable markForSave, @NotNull IntSupplier operationsPerTick,
-			int[] progress) {
+			int[] progress, ZeroTickCoalesceState coalesceState) {
 		return CentrifugeFactoryCommonLogic.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
 				inputHandlers, outputHandlers, errorsChanged, canFunction, setActiveState, hasCreativeUpgrade,
-				energyContainer, ticksRequired, markForSave, operationsPerTick, progress);
+				energyContainer, ticksRequired, markForSave, operationsPerTick, progress, coalesceState);
 	}
 
 	/** PB处理时返回PB进度 */

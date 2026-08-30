@@ -176,8 +176,11 @@ class ZeroTickBatchMathTest {
 	@Test
 	void bothRecipeFactoriesBindCoalesceWindow() throws Exception {
 		String factory = Files.readString(SRC.resolve("mek/CentrifugeFactoryCommonLogic.java"));
-		assertTrue(factory.contains("ZeroTickCoalesceState coalesce = new ZeroTickCoalesceState(operationsPerTick)"),
-				"工厂路径必须建立合并窗口");
+		assertTrue(factory.contains("coalesceState == null")
+				&& factory.contains("new ZeroTickCoalesceState(operationsPerTick)"),
+				"工厂路径必须支持建立默认合并窗口");
+		assertTrue(factory.contains("ZeroTickCoalesceState coalesce ="),
+				"工厂路径必须解析可复用的合并窗口");
 		assertTrue(factory.contains(".setBaselineMaxOperations(coalesce)"),
 				"工厂路径的并行上限供应商必须换成合并窗口");
 		assertTrue(factory.contains("accel.productivebeesgenesis$bindZeroTickCoalesce(coalesce)"),

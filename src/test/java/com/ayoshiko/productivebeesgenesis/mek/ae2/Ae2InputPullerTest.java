@@ -179,6 +179,39 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
+	void prioritizedScanKeepsSingleSmeltingCandidateAtItsCursor() {
+		List<String> out = new ArrayList<>();
+		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
+				List.of("raw_gold"), List.of(), "raw_gold", 2, key -> true);
+		assertEquals(List.of("raw_gold"), out);
+	}
+
+	@Test
+	void prioritizedScanKeepsSingleCombCandidateAtItsCursor() {
+		List<String> out = new ArrayList<>();
+		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
+				List.of(), List.of("gold_comb"), "gold_comb", 2, key -> true);
+		assertEquals(List.of("gold_comb"), out);
+	}
+
+	@Test
+	void prioritizedScanFindsAllowedKeyAcrossPriorityGroups() {
+		List<String> out = new ArrayList<>();
+		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
+				List.of("raw_gold", "raw_iron"), List.of("gold_comb"), "gold_comb", 2,
+				key -> key.equals("raw_gold"));
+		assertEquals(List.of("raw_gold"), out);
+	}
+
+	@Test
+	void directEntryCursorRotatesBoundedWhitelistWithoutStarvation() {
+		List<String> entries = List.of("raw_gold", "raw_iron", "raw_copper");
+		assertEquals(0, Ae2CursorScan.cursorStartIndex(entries, null, key -> key));
+		assertEquals(1, Ae2CursorScan.cursorStartIndex(entries, "raw_iron", key -> key));
+		assertEquals(0, Ae2CursorScan.cursorStartIndex(entries, "missing", key -> key));
+	}
+
+	@Test
 	void laneBudgetSplitsSlotsAcrossCompetingTypesAndNeverStarves() {
 		// 单类型不设限：吞吐与旧实现完全一致
 		assertEquals(Ae2InputLaneFairness.UNLIMITED_LANES,
@@ -201,12 +234,20 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
+	void firstCapacityPassAlwaysRunsForSingleAndMultipleTypes() {
+		assertTrue(Ae2InputLaneFairness.shouldRunPass(0, false));
+		assertTrue(Ae2InputLaneFairness.shouldRunPass(0, true));
+		assertFalse(Ae2InputLaneFairness.shouldRunPass(1, false));
+		assertTrue(Ae2InputLaneFairness.shouldRunPass(1, true));
+	}
+
+	@Test
 	void pullerRunsFairPassBeforeUnboundedFillPass() throws Exception {
 		String source = java.nio.file.Files.readString(java.nio.file.Path.of(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
 		// 公平轮 + 补齐轮的双轮结构，且补齐轮只在被截断时才跑（避免重复 SIMULATE 探测）
 		assertTrue(source.contains("int passes = typeCount > 1 ? 2 : 1;"));
-		assertTrue(source.contains("if (!fairPass && !fairPassTruncated) break;"));
+		assertTrue(source.contains("Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)"));
 		// 空槽车道上限与速率份额上限都只在公平轮生效
 		assertTrue(source.contains("Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount)"));
 		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));

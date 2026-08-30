@@ -332,7 +332,12 @@ public final class MekCentrifugeFactoryHelper {
 			remainingInputLanes--;
 			boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
-			RecipeHolder<CentrifugeRecipe> preFoundRecipe = isMyriad ? null : pbProcessor.findPbRecipe(input);
+			RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
+			if (!isMyriad) {
+				preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
+						? pbProcessor.getReservedPbRecipe(i)
+						: pbProcessor.findPbRecipe(input);
+			}
 			if (isMyriad || preFoundRecipe != null) {
 				pbProcessor.setTickMultiplier(batchMultiplier);
 				long energyBeforeProcess = energyContainer.getEnergy();

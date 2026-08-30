@@ -10,7 +10,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,22 +30,23 @@ final class PbRecipeProcessorStateHelper {
 	 * 在工厂处理各进程前为不同流体输出预留槽位。
 	 * 配方查找命中现有缓存，且只在多槽工厂启用；不会为同一种流体重复扩容。
 	 */
-	static long reserveActiveFluidOutputTypes(@NotNull PbRecipeContext context,
+	static void reserveActiveFluidOutputTypes(@NotNull PbRecipeContext context,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull PbRecipeFinder recipeFinder,
-			long lastFluidReservationTick) {
-		if (context.fluidOutputTankCount() <= 1) return lastFluidReservationTick;
-		Level level = context.level();
-		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
-		if (tick == lastFluidReservationTick) return lastFluidReservationTick;
-		lastFluidReservationTick = tick;
+			@NotNull ItemStack[] cachedInputs,
+			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes) {
 		for (int i = 0, size = inputSlots.size(); i < size; i++) {
 			ItemStack input = inputSlots.get(i).getStack();
+			if (i < cachedInputs.length) {
+				cachedInputs[i] = input;
+				cachedRecipes[i] = null;
+			}
 			if (input.isEmpty()
 					|| MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
 				continue;
 			}
 			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
+			if (i < cachedRecipes.length) cachedRecipes[i] = recipe;
 			if (recipe == null) continue;
 			var fluid = recipe.value().getFluidOutputs();
 			if (!fluid.isEmpty() && !(context.suppressesUselessByproducts()
@@ -54,7 +54,6 @@ final class PbRecipeProcessorStateHelper {
 				context.reserveFluidOutputType(fluid);
 			}
 		}
-		return lastFluidReservationTick;
 	}
 
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */

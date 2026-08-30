@@ -8,6 +8,15 @@ final class Ae2FilterPullPolicy {
 	private Ae2FilterPullPolicy() {
 	}
 
+	/** 统一黑白名单准入真值表，供线性与精确索引路径共用。 */
+	static boolean isAdmitted(Ae2InputFilter.FilterMode mode, boolean filterMatched) {
+		return switch (mode) {
+			case BLACKLIST -> !filterMatched;
+			case WHITELIST -> filterMatched;
+			case DISABLED -> true;
+		};
+	}
+
 	/** Clamps an extract request to the amount currently above its reserve floor. */
 	static int reserveSafeRequest(int requested, long liveExtractable, long reserveFloor) {
 		if (requested <= 0 || liveExtractable < 0L || reserveFloor < 0L) return 0;

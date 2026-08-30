@@ -54,6 +54,7 @@
 - **库存保留被同刻并发抽取击穿**：AE2 的 `KeyCounter` 要到 tick 末才刷新，过去按快照算出的请求量可能在同刻被其他离心机或外部设备抢先消耗，导致网络存量跌破保留线。现在启用保留（精确条目或全局默认）的 key 在 `MODULATE` 前会重新做一次实时 `SIMULATE`，按当前可抽取量裁剪请求；查询异常或已触保留线则整轮跳过，并按 key 做墙钟退避把空探针压到最高每秒一次。
 - **精确条目保留量与全局默认的优先级**：条目级与全局保留线的解析统一到 `Ae2FilterPullPolicy.effectiveReserveFloor`，精确条目的保留量优先，未命中条目时才回落到全局默认；界面查询、拉取上限计算和最终抽取门三处不再各算一套。
 - **过滤器条目校验**：客户端拖入非蜜脾物品时不再回落成"蜜脾条目 + 精确 key"的混合写法；服务端对蜜脾要求 beeType/isBlock 与实际物品一致，对普通物品要求确实存在 SMELTING 配方，并校验指纹长度上限，非法请求直接丢弃。
+- **单条过滤标记不拉取**：公平调度的补齐轮判断曾误跳过单候选唯一的执行轮，导致白名单只标记一个粗矿、蜜脾或蜜脾块时完全不拉取，加入第二条后才恢复。现在首轮无条件执行，并统一复核白名单、黑名单、NBT 忽略、精确模式、蜜脾/蜜脾块和 SMELTING 标签门；多条精确白名单超过单轮上限时也会按游标轮转，不会长期只服务前几条。
 - **黑名单被全量拉取绕过**：开启全量无限拉取时，黑名单/白名单的准入判定现在先于无限开关生效，被黑名单排除的蜜脾不会再被拉进机器；全局库存保留量在无限模式下同样继续生效。
 - **喂食槽转化关闭时的采蜜判定**：转化开关关闭时，喂食槽里的转化原料不再被算作有效花朵，蜜蜂不会再"凭黑曜石"照常采蜜产出本应依赖真实花朵的蜜脾。开关翻转会立即失效花朵判定缓存。
 - **蜂箱 CREATIVE 能耗兜底**：蜂箱生产路径现在显式将 CREATIVE 升级的单蜜蜂能耗设为 0，不再依赖 MEKExtras 能量容器 Mixin 的返回值；自定义能量容器或加载时序变化也不会意外扣除能量。
@@ -75,12 +76,14 @@
 - **基因采样热路径去分配**：采样结果改用固定域 `long[]` 计数器（6 属性 × 19 枚举值 × 4 纯度）并跨批次复用，蜂种分组不再新建 List/record；单批产出次数超过 128 时聚合命中数与分布，主线程开销不随 JDT/JDTE 倍率线性增长；`BeeSlot` 按 NBT 引用缓存属性快照，避免每轮重复解析五个字符串。
 - **SMELTING 配方查询缓存**：新增按宿主的有界 LRU 缓存（上限 1024 条，只保存 `AEItemKey` 与布尔结果），配方重载通过 `RECIPE_VERSION` 失效，AE2 网格拓扑变化时随复用缓冲一起清理，避免每 tick 对整网物品重复走 Mekanism 配方查询。
 - **候选键分组缓存**：网络库存扫描一次同时产出 SMELTING 与蜜脾两组候选列表，刷新条件加入配方版本与兼容开关状态，开关或数据包变化会立即重建而不必等到下一个刷新窗口。
+- **AE2 输入规划热路径**：精确白名单可直接探测已解析键，普通白名单条目优先使用 AE2 聚合库存；候选缓存命中后不再重复做 SMELTING 分类，黑白名单准入结果直接复用于排序，默认无无限标记时跳过逐键过滤槽遍历。输入槽规划按条目/槽位复用组件匹配，无组件普通原料直接走等价快路径，减少 Spark 中候选扫描、过滤判定和组件比较热点。
+- **PB 配方与零耗时批处理**：多流体预留扫描的配方结果在同 tick 处理阶段按输入引用和配方版本安全复用；ME/EME 工厂每个 lane 复用零耗时合并窗口，批量加速只发布一次最终进度，减少重复配方查找、临时状态创建和同步数组写入。
 - **AE2 网络自适应限流**：物品与流体直连共享插入成本记账，结合单机/全服预算、慢操作退避、连续零接收短路和低成本高频 EWMA，降低满存储或昂贵第三方存储造成的主线程尖峰；健康网络不受额外吞吐限制。
 - **热路径缓存与批处理**：复用 AE2 扫描/提交缓冲区，按游戏刻缓存 `operationsPerTick`，并缓存 `AEItemKey` 指纹、槽位最终上限和 SMELTING 候选；蜂箱直连 AE 输出会先合并同物品产物，减少时间加速下的对象创建、配方查询和重复网络遍历。
 
 ### 测试
 
-- **新增回归覆盖**：补充标签表达式解析、蜂箱/流体刷新策略、零耗时批处理、低 TPS 闸门、AE2 精确键索引、成本记账、持久化路径和热路径接线测试。
+- **新增回归覆盖**：补充标签表达式解析、蜂箱/流体刷新策略、零耗时批处理、低 TPS 闸门、AE2 精确键索引、单/多候选执行轮、黑白名单准入、蜜脾与 SMELTING 游标、PB 预留缓存、成本记账、持久化路径和热路径接线测试。
 - **持续集成构建**：新增 NeoForge 1.21.1 GitHub Actions 工作流，使用 Java 21 恢复开发依赖、校验 Gradle Wrapper、执行完整构建并上传模组 JAR。
 
 ### English
@@ -106,6 +109,7 @@
 - **Reserve floor pierced by same-tick concurrent extraction**: AE2's `KeyCounter` only refreshes at the end of a tick, so a request sized from the snapshot could be undercut within the same tick by another centrifuge or an external device, dropping network stock below the reserve. Keys with a reserve (exact entry or global default) are now re-simulated live immediately before `MODULATE` and clamped to the currently extractable amount. A failed query or a reached floor skips the round, with per-key wall-clock backoff limiting empty probes to at most once per second.
 - **Exact-entry reserve versus global default precedence**: entry-level and global floors are resolved in one place (`Ae2FilterPullPolicy.effectiveReserveFloor`); an exact entry's reserve wins and the global default applies only when no entry matches. GUI queries, pull-limit math and the final extraction gate no longer each compute their own variant.
 - **Filter entry validation**: dragging a non-comb item on the client no longer falls back to a mixed "comb entry plus exact key" write. The server requires beeType/isBlock to match the actual item for combs, requires an existing SMELTING recipe for ordinary items, and enforces the fingerprint length limit, dropping malformed requests outright.
+- **Single filter marker not pulling**: the fair scheduler's fill-pass guard accidentally skipped the only execution pass when there was one candidate, so a whitelist containing one raw ore, comb, or comb block pulled nothing until a second marker was added. The first pass now always runs, with whitelist, blacklist, NBT-ignore, precise comb/block, SMELTING, and tag-gate paths checked together. Exact whitelists larger than one candidate window also rotate by cursor instead of permanently serving only their first entries.
 - **Blacklist bypassed by unlimited-all**: blacklist/whitelist admission is now resolved before the unlimited flag, so blacklisted combs are never pulled while unlimited-all is enabled. Global stock reserves still apply in unlimited mode.
 - **Harvest check with conversion disabled**: while the conversion toggle is off, conversion ingredients in the feeder no longer count as valid flowers, so bees can no longer "harvest from obsidian" and produce combs that should require a real flower. Flipping the toggle invalidates the flower cache immediately.
 - **Apiary CREATIVE energy fallback**: the apiary production path now explicitly treats CREATIVE as zero per-bee energy, instead of relying only on the MEKExtras energy-container Mixin return value; custom containers or load-order differences cannot accidentally consume energy.
@@ -127,12 +131,14 @@
 - **Allocation-free gene sampling hot path**: sampling results now use a fixed-domain `long[]` counter (6 attributes × 19 enum values × 4 purities) reused across batches, so bee-type groups no longer allocate lists or records. Batches above 128 produce events aggregate the hit count and its distribution, keeping main-thread cost independent of JDT/JDTE multipliers, and `BeeSlot` caches the attribute snapshot per NBT reference instead of re-parsing five strings every round.
 - **SMELTING recipe lookup cache**: a bounded per-host LRU cache (1024 entries, storing only `AEItemKey` and a boolean) backs recipe queries. It is invalidated by `RECIPE_VERSION` on datapack reloads and cleared with the reusable buffers on AE2 grid topology changes, so a full network inventory no longer re-runs Mekanism recipe lookups every tick.
 - **Grouped candidate key cache**: one network inventory scan now produces both the SMELTING and comb candidate lists, and the refresh condition includes the recipe version and the compat switch state, so toggling the switch or reloading data rebuilds the lists immediately instead of waiting for the next refresh window.
+- **AE2 input planning hot path**: exact whitelists can probe resolved keys directly, while ordinary marked entries prefer AE2's aggregated stock. Cached candidates no longer repeat SMELTING classification, admission results are reused for ordering, and the default no-unlimited case skips per-key filter-slot walks. Slot planning reuses component matches per entry/slot and bypasses full component-map comparison for ordinary component-free inputs.
+- **PB recipe and zero-duration batching**: multi-fluid reservation results are reused by the same-tick processing phase after validating the input reference and recipe version. Each ME/EME factory lane now reuses its zero-duration coalescing window, and accelerated batches publish only the final progress value, reducing repeated recipe lookup, temporary state creation, and synchronized-array writes.
 - **Adaptive AE2 throttling**: item and fluid direct output share insert-cost accounting with per-machine/global budgets, slow-operation backoff, consecutive-zero short-circuiting and EWMA limits for cheap-but-frequent calls. Healthy networks retain full throughput.
 - **Hot-path caching and batching**: reusable AE2 scan/submit buffers, per-game-tick `operationsPerTick` caching, cached item fingerprints, final slot limits and SMELTING candidates reduce allocations, recipe lookups and repeated network traversals. Direct apiary AE output also merges identical products before insertion.
 
 #### Tests
 
-- **Regression coverage**: added tests for tag-expression parsing, apiary/fluid flush policies, zero-duration batching, low-TPS gating, AE2 exact-key indexing, cost accounting, persistence paths and hot-path wiring.
+- **Regression coverage**: added tests for tag-expression parsing, apiary/fluid flush policies, zero-duration batching, low-TPS gating, AE2 exact-key indexing, single/multi-candidate execution, blacklist/whitelist admission, comb and SMELTING cursors, PB reservation caching, cost accounting, persistence paths and hot-path wiring.
 - **Continuous integration**: added a NeoForge 1.21.1 GitHub Actions workflow that restores development dependencies with Java 21, validates the Gradle Wrapper, runs the full build and uploads the mod JAR.
 
 ## [1.0.5] - 2026-08-23

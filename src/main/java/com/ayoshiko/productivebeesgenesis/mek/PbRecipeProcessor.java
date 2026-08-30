@@ -51,6 +51,12 @@ public class PbRecipeProcessor {
 	@Nullable
 	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
 
+	/** 多流体预留阶段的同 tick 输入快照；只用于复用已完成的配方查找。 */
+	private final ItemStack[] reservedPbInputs;
+	/** 多流体预留阶段的配方结果，null 表示该输入已确认没有 PB 配方。 */
+	@Nullable
+	private final RecipeHolder<CentrifugeRecipe>[] reservedPbRecipes;
+
 	/** 配方查找器（双层缓存：inputRecipeCache 指纹TTL + pbRecipeCache LRU） */
 	private final PbRecipeFinder recipeFinder;
 
@@ -106,6 +112,9 @@ public class PbRecipeProcessor {
 	private long lastFluidFullCacheTick = Long.MIN_VALUE;
 	/** Prevents repeated recipe scans used only to reserve multi-fluid lanes. */
 	private long lastFluidReservationTick = Long.MIN_VALUE;
+	/** 预留查找缓存的有效 tick/配方版本，任一变化都会使缓存失效。 */
+	private long reservedPbRecipeCacheTick = Long.MIN_VALUE;
+	private long reservedPbRecipeCacheVersion = Long.MIN_VALUE;
 
 	/** @param context PB配方处理上下文 @param logPrefix 日志前缀 */
 	@SuppressWarnings("unchecked")
@@ -119,6 +128,8 @@ public class PbRecipeProcessor {
 		this.pbProcessingTime = new int[processes];
 		this.smeltingCache = new SmeltingRecipeCache(processes);
 		this.cachedPbRecipes = new RecipeHolder[processes];
+		this.reservedPbInputs = new ItemStack[processes];
+		this.reservedPbRecipes = new RecipeHolder[processes];
 		this.energyCache = new PbRecipeEnergyCache(context);
 		// 子组件：查找器自拥有缓存；输出聚合器自拥有 pending 缓冲；
 		// 万象处理器持有共享数组引用（Java 数组为引用语义，本类对其的变更对万象处理器可见，反之亦然）
@@ -184,9 +195,18 @@ public class PbRecipeProcessor {
 	 * {@link PbRecipeProcessorStateHelper#reserveActiveFluidOutputTypes}).
 	 */
 	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
-		lastFluidReservationTick = PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots,
-				recipeFinder,
-				lastFluidReservationTick);
+		Level level = context.level();
+		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		if (tick == lastFluidReservationTick) return;
+		lastFluidReservationTick = tick;
+		clearReservedPbRecipeCache();
+		if (level == null || context.fluidOutputTankCount() <= 1) return;
+		// 预留阶段本身会查配方，先处理热重载，避免把旧版本结果写入同 tick 缓存。
+		checkRecipeVersion();
+		reservedPbRecipeCacheTick = tick;
+		reservedPbRecipeCacheVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
+				reservedPbInputs, reservedPbRecipes);
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -226,6 +246,32 @@ public class PbRecipeProcessor {
 	public void clearSmeltingCacheAll() {
 		smeltingCache.clearAll();
 		Arrays.fill(cachedPbRecipes, null);
+		clearReservedPbRecipeCache();
+	}
+
+	/** 判断输入是否命中本 tick 多流体预留阶段的配方快照。 */
+	boolean hasReservedPbRecipe(int processIndex, ItemStack input) {
+		Level level = context.level();
+		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
+		return processIndex >= 0 && processIndex < reservedPbInputs.length
+				&& reservedPbRecipeCacheTick == tick
+				&& reservedPbRecipeCacheVersion == ProductiveBeesGenesis.RECIPE_VERSION.get()
+				&& reservedPbInputs[processIndex] == input;
+	}
+
+	/** 读取已验证命中的本 tick PB 配方结果；调用方应先检查 {@link #hasReservedPbRecipe}。 */
+	@Nullable
+	RecipeHolder<CentrifugeRecipe> getReservedPbRecipe(int processIndex) {
+		return processIndex < 0 || processIndex >= reservedPbRecipes.length
+				? null : reservedPbRecipes[processIndex];
+	}
+
+	/** 清除预留阶段的输入/配方快照，避免跨 tick 或跨配方版本复用。 */
+	private void clearReservedPbRecipeCache() {
+		Arrays.fill(reservedPbInputs, null);
+		Arrays.fill(reservedPbRecipes, null);
+		reservedPbRecipeCacheTick = Long.MIN_VALUE;
+		reservedPbRecipeCacheVersion = Long.MIN_VALUE;
 	}
 
 	/** 检查指定进程的输入是否有SMELTING配方（委托 SmeltingRecipeCache，带缓存优化） */

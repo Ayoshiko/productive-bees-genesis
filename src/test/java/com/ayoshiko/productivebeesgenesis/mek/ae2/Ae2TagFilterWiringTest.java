@@ -156,8 +156,9 @@ class Ae2TagFilterWiringTest {
 				"Ae2InputCandidatePolicy\\.classify\\( level, ", -1).length - 1;
 		assertTrue(gateUses >= 3,
 				"标签门必须覆盖全部候选路径，当前 classify(level, ...) 调用点数=" + gateUses);
-		assertTrue(normalized.contains("smeltingInputCache, tagGate).isAllowed()"),
-				"getPullCandidateAmount（扫描路径谓词）必须传入 tagGate");
+		assertTrue(normalized.contains("buffers.markScanCandidateRefresh(availableStacks, currentTick, "
+				+ "recipeVersion, smeltingEnabled, tagGeneration)"),
+				"扫描候选分类结果必须随标签代号失效，选择阶段才能安全复用");
 
 		// 2) reserveFloor 对 pullList 中每个条目无条件计算 —— 与该条目是蜜脾还是
 		//    标签过滤放行的 smelt 输入无关，保留库存因此对两类候选一致生效。

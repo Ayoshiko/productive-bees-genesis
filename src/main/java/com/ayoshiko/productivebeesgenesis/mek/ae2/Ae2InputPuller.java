@@ -15,10 +15,12 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -239,19 +241,36 @@ public final class Ae2InputPuller {
 				&& filter.hasNetworkStockEntries();
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
-				&& filter.hasOnlyNetworkStockEntries()
-				&& !filter.isGlobalNetworkStock()
-				&& !ignoreNbt;
+				&& !filter.hasFuzzyEntries()
+				&& !ignoreNbt
+				&& !directEntries.isEmpty();
 		if (directOnly) {
-			// Network-stock whitelist entries use exact keys and avoid a full inventory scan.
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
+				// 非精确蜜脾条目还会匹配同 bee_type 的蜜脾块，不能只探测配置键。
+				if (direct.key() == null
+						|| (!filter.isPreciseMode() && CombFuzzyMatcher.isCombItem(direct.key()))) {
+					directOnly = false;
+					break;
+				}
+			}
+		}
+		if (directOnly) {
+			// 精确白名单的候选集合就是已解析配置键，无需扫描整个网络类型列表。
+			int directStart = Ae2CursorScan.cursorStartIndex(
+					directEntries, candidateCursor, Ae2InputFilter.DirectEntry::key);
+			for (int directOffset = 0; directOffset < directEntries.size(); directOffset++) {
 				if (pullList.size() >= maxTypesToCollect) break;
+				Ae2InputFilter.DirectEntry direct = directEntries.get(
+						(directStart + directOffset) % directEntries.size());
 				AEItemKey key = direct.key();
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
-				long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
+				boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
+				long available = liveStockEntry
+						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+								availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
+						: Math.max(0L, availableStacks.get(key));
 				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
@@ -262,26 +281,33 @@ public final class Ae2InputPuller {
 				}
 				if (available > 0) {
 					pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-							filter.isUnlimitedForKey(key, ignoreNbt)));
+							unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
 				} else {
 					pullKeys.remove(key);
 				}
 			}
 		} else {
-			// Probe configured network-stock keys directly. This also covers disabled
-			// filters and AE2 storage providers whose simulated stock is not present in
-			// the cached KeyCounter. Blacklist entries remain excluded by the normal
-			// filter path below.
+			// 白名单精确条目优先直探：过滤配置刚变更时无需等待候选缓存刷新，且单条
+			// SMELTING 指纹也不会依赖游标扫描。库存模式继续用实时可见量探测外部存储；
+			// 普通条目沿用 AE2 已聚合的 KeyCounter，避免额外网络模拟。黑名单仍只走扫描。
 			if (filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.BLACKLIST) {
-				for (Ae2InputFilter.DirectEntry direct : directEntries) {
+				int directStart = Ae2CursorScan.cursorStartIndex(
+						directEntries, candidateCursor, Ae2InputFilter.DirectEntry::key);
+				for (int directOffset = 0; directOffset < directEntries.size(); directOffset++) {
 					if (pullList.size() >= maxTypesToCollect) break;
+					Ae2InputFilter.DirectEntry direct = directEntries.get(
+							(directStart + directOffset) % directEntries.size());
 					AEItemKey key = direct.key();
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate);
-					if ((!direct.networkStock() && !filter.isGlobalNetworkStock())
+					boolean whitelistEntry = filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST;
+					boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
+					if ((!whitelistEntry && !liveStockEntry)
 							|| !kind.isAllowed() || !pullKeys.add(key)) continue;
-					long available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-						availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE);
+					long available = liveStockEntry
+							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+									availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
+							: Math.max(0L, availableStacks.get(key));
 					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
@@ -292,7 +318,7 @@ public final class Ae2InputPuller {
 					}
 					if (available > 0) {
 						pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-								filter.isUnlimitedForKey(key, ignoreNbt)));
+								unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
 					} else {
 						pullKeys.remove(key);
 					}
@@ -332,9 +358,9 @@ public final class Ae2InputPuller {
 				boolean reserveGuarded = globalNetworkStock || (hasNetworkStockEntries
 						&& filter.getReserveFloorForKey(key, ignoreNbt) >= 0L);
 				long available = reserveGuarded ? Long.MAX_VALUE : availableStacks.get(key);
-				int amount = getPullCandidateAmount(
-						level, key, available, filter, ignoreNbt,
-						smeltingEnabled, buffers.smeltingInputCache, tagGate);
+				// 两个候选列表仅由上面的 classify 构建，并按配方/开关/标签代号失效；
+				// 此处不再为每次拉取重复查询候选类型。
+				int amount = getPullCandidateAmount(key, available, filter, ignoreNbt);
 				if (amount <= 0) return false;
 				candidateAmounts.put(key, amount);
 				return true;
@@ -345,7 +371,7 @@ public final class Ae2InputPuller {
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
 					pullList.add(buffers.borrowPullEntry(key, amount,
-						filter != null && filter.isUnlimitedForKey(key, ignoreNbt)));
+						unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
 				}
 			}
 			candidateAmounts.clear();
@@ -364,12 +390,15 @@ public final class Ae2InputPuller {
 
 		// 14. Marked-first ordering (AE2LT: pull what is marked first);
 		//      among marked entries comb blocks stay ahead (higher yield).
-		//      marked flags are pre-computed once per pull (matchesAnyEntry walks the
-		//      filter slots; doing it inside the comparator would cost N*logN walks).
+		//      marked flags derive from the already completed filter admission; doing
+		//      another slot walk inside the comparator would cost N*logN walks.
 		boolean sortIgnoreNbt = holder.isAeInputNbtIgnore();
-		boolean rankMarked = filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.DISABLED;
+		Ae2InputFilter.FilterMode filterMode = filter == null
+				? Ae2InputFilter.FilterMode.DISABLED : filter.getFilterMode();
 		for (PullEntry entry : pullList) {
-			entry.marked = rankMarked && filter.matchesAnyEntry(entry.key, sortIgnoreNbt);
+			// 经过统一准入后，白名单候选必然命中标记，黑名单候选必然未命中。
+			// 无需为排序再遍历一次全部过滤槽位。
+			entry.marked = filterMode == Ae2InputFilter.FilterMode.WHITELIST;
 			entry.reserveFloor = filter == null ? -1L
 					: filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);
 			entry.smelting = Ae2InputCandidatePolicy.classify(
@@ -377,7 +406,7 @@ public final class Ae2InputPuller {
 			entry.combBlock = CombFuzzyMatcher.isCombBlock(entry.key);
 			entry.servedInWindow = fairness.served(entry.key);
 		}
-		pullList.sort(PULL_ENTRY_ORDER);
+		if (pullList.size() > 1) pullList.sort(PULL_ENTRY_ORDER);
 
 		long totalPulled = 0;
 		long normalPulled = 0;
@@ -400,11 +429,14 @@ public final class Ae2InputPuller {
 		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
 		int passes = typeCount > 1 ? 2 : 1;
 		boolean fairPassTruncated = false;
+		for (PullEntry entry : pullList) {
+			entry.beginComponentMatchCache(processCount);
+		}
 		for (int pass = 0; pass < passes && totalPulled < inputCapacity; pass++) {
 			boolean fairPass = pass == 0 && typeCount > 1;
 			// 补齐轮只在公平轮确实被上限截断时才跑：否则会为每个类型重复一遍
 			// 逐槽 SIMULATE 探测（processCount × typeCount 次），纯属浪费。
-			if (!fairPass && !fairPassTruncated) break;
+			if (!Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)) break;
 			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity; typeOffset++) {
 				PullEntry entry = pullList.get(typeOffset);
 				if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
@@ -421,7 +453,7 @@ public final class Ae2InputPuller {
 					IInventorySlot slot = inputSlots.get(slotIdx);
 					long slotQuota = entry.unlimited ? Long.MAX_VALUE : perSlotQuota;
 					long slotCapacity = slot == null ? 0L
-							: Math.min(slotQuota, getSlotRemainingCapacity(slot, entry.key, slotProbe));
+							: Math.min(slotQuota, getSlotRemainingCapacity(slot, slotIdx, entry, slotProbe));
 					if (slotCapacity > 0L && fairPass && slot.getStack().isEmpty()) {
 						// 空槽 = 一条新车道；超出份额的空槽本轮留给其他类型
 						if (newLanes >= laneBudget) {
@@ -483,6 +515,9 @@ public final class Ae2InputPuller {
 				}
 			}
 		}
+		for (PullEntry entry : pullList) {
+			entry.clearComponentMatchCache();
+		}
 		// Update the whole-tile storage backoff once per pull pass. A slow key wins over
 		// a later healthy key in the same pass; otherwise a healthy pass clears the window
 		// immediately, while leftover fallback remains a degraded result.
@@ -512,12 +547,9 @@ public final class Ae2InputPuller {
 		pullList.clear();
 	}
 
-	private static int getPullCandidateAmount(Level level, Object rawKey, long available, Ae2InputFilter filter,
-			boolean ignoreNbt, boolean smeltingEnabled, Ae2SmeltingInputCache smeltingInputCache,
-			Ae2InputCandidatePolicy.SmeltingTagGate tagGate) {
-		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)
-				|| !Ae2InputCandidatePolicy.classify(level, itemKey, smeltingEnabled,
-						smeltingInputCache, tagGate).isAllowed()) return 0;
+	private static int getPullCandidateAmount(Object rawKey, long available, Ae2InputFilter filter,
+			boolean ignoreNbt) {
+		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)) return 0;
 		if (filter != null) {
 			long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt);
 			if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
@@ -585,25 +617,31 @@ public final class Ae2InputPuller {
 	 * 槽内已有不同类型物品时返回 0，使 round-robin 跳过该槽寻找空槽或同类型槽。
 	 *
 	 * @param slot 输入槽（null 时返回 0）
-	 * @param key  待插入的 AE2 物品键（null 时返回 0）
+	 * @param entry 当前候选条目（key 为 null 时返回 0）
 	 * @return 剩余容量（槽内物品与 key 不匹配时返回 0）
 	 */
-	private static long getSlotRemainingCapacity(IInventorySlot slot, AEItemKey key, ItemStack probe) {
-		if (slot == null || key == null) return 0;
+	private static long getSlotRemainingCapacity(IInventorySlot slot, int slotIndex, PullEntry entry,
+			ItemStack probe) {
+		if (slot == null || entry == null || entry.key == null) return 0;
+		AEItemKey key = entry.key;
 		ItemStack stack = slot.getStack();
 		try {
-			if (!stack.isEmpty() && !key.matches(stack)) return 0;
-			// validator 全语义预检（SIMULATE 探测 1 个，不写入）：
-			// 工厂输入槽的 validator 含 inputProducesOutput 配方检查 — 被拒时 insertItem
-			// 会整栈退回，extract 到的物品只能经 returnLeftoverToMe 回送 ME，在 EnderDrives
-			// 类网络上每次回送都是一次主线程 WAL fsync（spark w4xREcN1HI 回送链路 1.26s/27s）。
-			// 预检被拒 → 容量记 0，从源头不拉取。不触碰 getLimit 语义，高堆叠槽位不受影响。
-			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
-				return 0;
+			// 物品不同必然无法插入，先做廉价身份判断，避免进入昂贵的组件比较。
+			if (!stack.isEmpty() && stack.getItem() != key.getItem()) return 0;
+			if (slot instanceof BasicInventorySlot basicSlot) {
+				// BasicInventorySlot.insertItem 的 INTERNAL 语义由三步组成：组件匹配、
+				// 上限判断、validator/canInsert 判断。这里直接复现，避免为每个候选类型
+				// 创建模拟返回栈，并复用同一次 getLimit 结果。
+				if (!stack.isEmpty() && !entry.matchesComponents(slotIndex, stack, probe)) return 0;
+				int limit = slot.getLimit(probe);
+				if (limit <= stack.getCount()
+						|| !basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) return 0;
+				if (stack.isEmpty()) return slot.getLimit(ItemStack.EMPTY);
+				return (long) limit - stack.getCount();
 			}
-			if (stack.isEmpty()) {
-				return slot.getLimit(ItemStack.EMPTY);
-			}
+			// 保留非 BasicInventorySlot 实现的完整回退路径，兼容自定义 IInventorySlot。
+			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) return 0;
+			if (stack.isEmpty()) return slot.getLimit(ItemStack.EMPTY);
 			int limit = slot.getLimit(stack);
 			return Math.max(0, (long) limit - stack.getCount());
 		} catch (RuntimeException e) {
@@ -870,6 +908,11 @@ public final class Ae2InputPuller {
 		long reserveFloor;
 		boolean combBlock;
 		long servedInWindow;
+		/** 当前拉取轮次按槽位记忆的组件匹配结果，容量数值不在此缓存。 */
+		private ItemStack[] componentMatchStacks = new ItemStack[0];
+		private boolean[] componentMatchResults = new boolean[0];
+		private int[] componentMatchGenerations = new int[0];
+		private int componentMatchGeneration;
 
 		PullEntry(AEItemKey key, int amount) {
 			reset(key, amount, false);
@@ -884,6 +927,43 @@ public final class Ae2InputPuller {
 			this.reserveFloor = -1L;
 			this.combBlock = false;
 			this.servedInWindow = 0L;
+		}
+
+		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */
+		void beginComponentMatchCache(int slotCount) {
+			if (slotCount > componentMatchStacks.length) {
+				componentMatchStacks = Arrays.copyOf(componentMatchStacks, slotCount);
+				componentMatchResults = Arrays.copyOf(componentMatchResults, slotCount);
+				componentMatchGenerations = Arrays.copyOf(componentMatchGenerations, slotCount);
+			}
+			if (++componentMatchGeneration == 0) {
+				Arrays.fill(componentMatchGenerations, 0);
+				componentMatchGeneration = 1;
+			}
+		}
+
+		/** 按「槽位当前栈对象 + 当前 PullEntry key」缓存昂贵的组件匹配。 */
+		boolean matchesComponents(int slotIndex, ItemStack stack, ItemStack probe) {
+			// 同一 Item 的双方都没有组件补丁时，默认组件必然一致。普通矿物/原料走这里，
+			// 避免进入 GeckoLib 包装后的完整 PatchedDataComponentMap 比较。
+			if (stack.getComponentsPatch().isEmpty() && probe.getComponentsPatch().isEmpty()) return true;
+			if (slotIndex < 0 || slotIndex >= componentMatchStacks.length) {
+				return ItemStack.isSameItemSameComponents(stack, probe);
+			}
+			if (componentMatchGenerations[slotIndex] == componentMatchGeneration
+					&& componentMatchStacks[slotIndex] == stack) {
+				return componentMatchResults[slotIndex];
+			}
+			boolean matches = ItemStack.isSameItemSameComponents(stack, probe);
+			componentMatchGenerations[slotIndex] = componentMatchGeneration;
+			componentMatchStacks[slotIndex] = stack;
+			componentMatchResults[slotIndex] = matches;
+			return matches;
+		}
+
+		/** 清除槽位对象引用，避免复用池在两次拉取之间保留旧 ItemStack。 */
+		void clearComponentMatchCache() {
+			Arrays.fill(componentMatchStacks, null);
 		}
 	}
 }

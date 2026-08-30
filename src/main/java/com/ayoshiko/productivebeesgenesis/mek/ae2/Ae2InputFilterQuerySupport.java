@@ -262,11 +262,7 @@ final class Ae2InputFilterQuerySupport {
 			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
 		}
 
-		boolean admitted = switch (mode) {
-			case BLACKLIST -> !filterMatched;
-			case WHITELIST -> filterMatched;
-			case DISABLED -> true;
-		};
+		boolean admitted = Ae2FilterPullPolicy.isAdmitted(mode, filterMatched);
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());
@@ -300,11 +296,8 @@ final class Ae2InputFilterQuerySupport {
 				if (i < amounts.length) requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 			}
 		}
-		boolean admitted = switch (mode) {
-			case BLACKLIST -> true; // 命中已在上面提前返回，走到这里必然未命中
-			case WHITELIST -> directFound;
-			case DISABLED -> true;
-		};
+		// BLACKLIST 命中已在上面提前返回；走到这里时 directFound 必为 false。
+		boolean admitted = Ae2FilterPullPolicy.isAdmitted(mode, directFound);
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());

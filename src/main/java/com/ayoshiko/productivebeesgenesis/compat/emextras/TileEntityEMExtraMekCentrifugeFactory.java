@@ -27,6 +27,7 @@ import com.ayoshiko.productivebeesgenesis.mek.OperationsPerTickCache;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
+import com.ayoshiko.productivebeesgenesis.mek.ZeroTickCoalesceState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -126,6 +127,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	private final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
 	/** operationsPerTick 每游戏刻记忆化 — CachedRecipe 每次完整计算都会调用该供应商（spark XnLugba3Cw 首位热点） */
 	private final OperationsPerTickCache productivebeesgenesis$operationsPerTickCache = new OperationsPerTickCache();
+	/** 每个 SMELTING lane 共用的零耗时合并窗口，同时供 ExtraOutputHelper 做容量裁剪。 */
+	private ZeroTickCoalesceState[] productivebeesgenesis$zeroTickCoalesceStates;
 
 	/**
 	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
@@ -192,6 +195,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		outputHandlers = new IOutputHandler[tier.processes];
 		processInfoSlots = new ProcessInfo[tier.processes];
 		tertiaryOutputSlots = new EMExtraFactoryOutputInventorySlot[tier.processes];
+		productivebeesgenesis$zeroTickCoalesceStates = new ZeroTickCoalesceState[tier.processes];
 		delegate = FactoryPbContextDelegate.create(this, updateSortingListener, recipeCacheLookupMonitors);
 
 		int baseX = 27;
@@ -227,6 +231,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 
 			EMExtraFactoryInputInventorySlot inputSlot = EMExtraFactoryInputInventorySlot.create(
 					this, i, outputSlot, secondaryOutputSlot, lookupMonitor, xPos, 13);
+			productivebeesgenesis$zeroTickCoalesceStates[i] = new ZeroTickCoalesceState(this::getOperationsPerTick);
 			// Task 7: 注入输入槽分等级堆叠倍率（按 EMExtraFactoryTier.ordinal 索引配置，替换 EME 默认 8/16/32/64 倍率）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 					CentrifugeInputStackMultipliers.forEMEFactory(tier.ordinal()));
@@ -244,7 +249,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 
 			inputHandlers[i] = InputHelper.getInputHandler(inputSlot, RecipeError.NOT_ENOUGH_INPUT);
 			outputHandlers[i] = ExtraOutputHelper.getOutputHandler(outputSlot, RecipeError.NOT_ENOUGH_OUTPUT_SPACE,
-				this::getOperationsPerTick);
+				productivebeesgenesis$zeroTickCoalesceStates[i]);
 			processInfoSlots[i] = new ProcessInfo(i, inputSlot, outputSlot, secondaryOutputSlot);
 		}
 	}
@@ -365,7 +370,8 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		return TileEntityEMExtraFactoryDelegates.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
 				inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction,
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
-				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress);
+				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress,
+				productivebeesgenesis$zeroTickCoalesceStates[cacheIndex]);
 	}
 
 	/**
