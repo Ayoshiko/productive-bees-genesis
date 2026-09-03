@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.6-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.7-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -455,7 +455,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-正式发布产物为 `build/libs/productivebeesgenesis-1.0.6.jar`。
+正式发布产物为 `build/libs/productivebeesgenesis-1.0.7.jar`。
 
 > 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
 >
