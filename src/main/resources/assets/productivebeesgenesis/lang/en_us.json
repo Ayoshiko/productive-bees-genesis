@@ -718,6 +718,7 @@
   "productivebeesgenesis.gui.ae_input_config.reserve_button.status_off": "Stock",
   "productivebeesgenesis.gui.ae_input_config.info.reserve_status": "Global stock: %s, keep: %s",
   "productivebeesgenesis.gui.ae_input_config.info.tag_filter": "Tag filter: %s",
+  "productivebeesgenesis.gui.ae_input_config.unprocessable.tooltip": "§cThis centrifuge has no recipe for it§r\nThis comb is handled by another mod's machine (chemical oxidizer, dissolver, electrolyzer, ...).\nIt is skipped on purpose, so this entry has no effect - pulling it in would only burn ticks.",
   "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip": "Tag filter: narrows smelting recipe inputs by tag expression (combs are unaffected)\nSupports &|^!() and * wildcards; item ids work as literals",
   "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip_needs_smelting": "Tag filter: narrows smelting recipe inputs by tag expression (combs are unaffected)\nSupports &|^!() and * wildcards; item ids work as literals\n§cEnable the \"Smelting recipe compat\" toggle first, otherwise the filter has no effect",
   "productivebeesgenesis.gui.ae_input_tag_filter.title": "Smelting Input Tag Filter",

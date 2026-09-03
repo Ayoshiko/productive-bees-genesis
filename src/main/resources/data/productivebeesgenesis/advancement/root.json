@@ -6,7 +6,7 @@
     "frame": "task",
     "show_toast": true,
     "announce_to_chat": true,
-    "background": "productivebeesgenesis:textures/block/mekanism_centrifuge/mekanism_centrifuge_front.png"
+    "background": "productivebeesgenesis:textures/block/mekanism_centrifuge/honey_mixer/honey_mixer_f.png"
   },
   "criteria": {
     "has_mek_centrifuge": {

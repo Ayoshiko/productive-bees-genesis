@@ -833,6 +833,7 @@
   "productivebeesgenesis.gui.ae_input_config.reserve_button.status_off": "库存",
   "productivebeesgenesis.gui.ae_input_config.info.reserve_status": "全局库存：%s，保留：%s",
   "productivebeesgenesis.gui.ae_input_config.info.tag_filter": "标签过滤：%s",
+  "productivebeesgenesis.gui.ae_input_config.unprocessable.tooltip": "§c本离心机没有它的配方§r\n这种蜜脾要用别的模组的机器处理（化学氧化机、分解机、电解机等）。\n本机会主动跳过它，所以这条配置不会生效 —— 拉进来只会白耗性能。",
   "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip": "标签过滤：按标签表达式筛选熔炼配方输入（不影响蜜脾拉取）\n支持 &|^!() 与 * 通配，可直接写物品 id",
   "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip_needs_smelting": "标签过滤：按标签表达式筛选熔炼配方输入（不影响蜜脾拉取）\n支持 &|^!() 与 * 通配，可直接写物品 id\n§c需要先开启「兼容电力熔炼炉配方」开关，否则过滤不生效",
   "productivebeesgenesis.gui.ae_input_tag_filter.title": "熔炼输入标签过滤",
