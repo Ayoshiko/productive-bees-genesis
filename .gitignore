@@ -66,6 +66,11 @@ Thumbs.db
 *.swo
 *~
 
+# 某进程以仓库根为 cwd、拿未展开的 %SystemDrive% 字面量当路径写 Windows 缓存
+# （内容为 ProgramData\Microsoft\Windows\Caches\*.db）。删除后会再次出现，
+# 未定位到创建者，此处仅屏蔽以免污染 git status。
+%SystemDrive%/
+
 # 开发辅助文件
 run_output*.txt
 *.tmp
