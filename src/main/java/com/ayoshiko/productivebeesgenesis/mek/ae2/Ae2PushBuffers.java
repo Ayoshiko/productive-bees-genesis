@@ -87,6 +87,11 @@ final class Ae2PushBuffers {
 	final Ae2SmeltingInputCache smeltingInputCache = new Ae2SmeltingInputCache();
 	/** Per-host 标签过滤判定缓存；与配方缓存同生命周期。 */
 	final Ae2TagFilterCache tagFilterCache = new Ae2TagFilterCache();
+	/**
+	 * Per-host 「本机能否加工该蜜脾」判定缓存；与配方缓存同生命周期。
+	 * 阻止无 PB 离心配方（需其它模组机器处理）的蜜脾每轮反复进入候选空转。
+	 */
+	final Ae2CombProcessableCache combProcessableCache = new Ae2CombProcessableCache();
 
 	/**
 	 * Per-host 的 AEItemKey → SNBT 指纹缓存。
@@ -191,6 +196,7 @@ final class Ae2PushBuffers {
 		scanCandidateTagGeneration = Integer.MIN_VALUE;
 		smeltingInputCache.clear();
 		tagFilterCache.clear();
+		combProcessableCache.clear();
 	}
 
 	/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */

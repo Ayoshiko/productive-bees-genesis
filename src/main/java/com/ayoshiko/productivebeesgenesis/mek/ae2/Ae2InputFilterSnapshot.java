@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -27,13 +28,14 @@ final class Ae2InputFilterSnapshot {
 	 * @param reserveAmounts  直连条目网络库存保留量（与 indices 平行）
 	 * @param visibleAmounts  直连条目可见库存（与 indices 平行，仅客户端展示）
 	 * @param unlimitedFlags  直连条目无限提供标记（与 indices 平行）
+	 * @param processableFlags 该槽位物品本机能否加工（与 indices 平行，仅客户端展示）
 	 * @param currentCapacity 当前数组容量
 	 * @return 构建完成的快照
 	 */
 	static Snapshot build(Ae2InputFilter.FilterMode mode, boolean precise,
 			List<Integer> indices, List<String> entries, List<Long> amounts, List<Long> reserveAmounts,
 			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, List<Boolean> networkStockFlags,
-			int currentCapacity) {
+			List<Boolean> processableFlags, int currentCapacity) {
 		int capacity = Math.max(Ae2InputFilter.getDefaultCapacity(), currentCapacity);
 		for (int index : indices) {
 			if (index >= 0 && index < Ae2InputFilter.getMaxFilterSlots()) {
@@ -47,11 +49,18 @@ final class Ae2InputFilterSnapshot {
 		long[] newVisible = new long[capacity];
 		boolean[] newUnlimited = new boolean[capacity];
 		boolean[] newNetworkStock = new boolean[capacity];
+		// 未提示的槽位一律按「可加工」，与灰显提示的 fail-open 语义一致
+		boolean[] newProcessable = new boolean[capacity];
+		java.util.Arrays.fill(newProcessable, true);
 		for (int i = 0; i < indices.size(); i++) {
 			int index = indices.get(i);
 			if (index < 0 || index >= Ae2InputFilter.getMaxFilterSlots()) continue;
 			String entry = entries.get(i);
 			newSlots[index] = entry == null || entry.isBlank() ? null : entry;
+			// 可加工标记对精确条目与模糊（bee_type）条目同样有效，故不受指纹判定约束
+			if (newSlots[index] != null && processableFlags != null && i < processableFlags.size()) {
+				newProcessable[index] = !Boolean.FALSE.equals(processableFlags.get(i));
+			}
 			if (Ae2InputFilter.isDirectFingerprint(newSlots[index])) {
 				newAmounts[index] = Math.max(0L, Math.min(Ae2InputFilter.getMaxDirectAmount(), amounts.get(i)));
 				newReserves[index] = Ae2InputFilter.clampDirectReserveAmount(reserveAmounts.get(i));
@@ -61,12 +70,12 @@ final class Ae2InputFilterSnapshot {
 			}
 		}
 		return new Snapshot(mode, precise, newSlots, newKeys, newAmounts, newReserves, newVisible,
-				newUnlimited, newNetworkStock);
+				newUnlimited, newNetworkStock, newProcessable);
 	}
 
 	/** 快照结果（数组均为新分配，可直接发布） */
 	record Snapshot(Ae2InputFilter.FilterMode mode, boolean precise,
 			String[] slots, AEItemKey[] keys, long[] amounts, long[] reserves, long[] visible,
-			boolean[] unlimited, boolean[] networkStock) {
+			boolean[] unlimited, boolean[] networkStock, boolean[] processable) {
 	}
 }

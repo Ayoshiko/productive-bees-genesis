@@ -210,6 +210,13 @@ public final class Ae2InputPuller {
 		Ae2InputCandidatePolicy.SmeltingTagGate tagGate = tagFilterActive
 				? key -> buffers.tagFilterCache.allows(tagFilter, key)
 				: Ae2InputCandidatePolicy.SmeltingTagGate.ALLOW_ALL;
+		// 蜜脾可处理性门：本机无对应离心配方的蜜脾（只有蜂、需其它模组机器处理）
+		// 在分类阶段就被拒，避免占用候选类型窗口并每轮空转探测槽位。
+		// 判定按 (Item, bee_type) 记忆化，只在 10 tick 候选刷新与条目极少的直探路径调用；
+		// 每轮限速首次判定次数，防止配方重载后的首轮刷新把全量遍历堆在同一 tick。
+		buffers.combProcessableCache.beginProbeWindow();
+		Ae2InputCandidatePolicy.CombProcessGate combGate =
+				key -> buffers.combProcessableCache.canProcess(host, key, smeltingEnabled);
 		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateKeyBackoff(holder);
 		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
 		fairness.roll(currentTick);
@@ -268,7 +275,7 @@ public final class Ae2InputPuller {
 						(directStart + directOffset) % directEntries.size());
 				AEItemKey key = direct.key();
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
-						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate);
+						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
 				boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
 				long available = liveStockEntry
@@ -303,7 +310,7 @@ public final class Ae2InputPuller {
 							(directStart + directOffset) % directEntries.size());
 					AEItemKey key = direct.key();
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
-							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate);
+							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 					boolean whitelistEntry = filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST;
 					boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
 					if ((!whitelistEntry && !liveStockEntry)
@@ -345,7 +352,7 @@ public final class Ae2InputPuller {
 				for (var entry : availableStacks) {
 					if (!(entry.getKey() instanceof AEItemKey itemKey)) continue;
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
-							level, itemKey, smeltingEnabled, buffers.smeltingInputCache, tagGate);
+							level, itemKey, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 					if (kind.isSmelting()) smeltingCandidateKeys.add(itemKey);
 					else if (kind == Ae2InputCandidatePolicy.CandidateKind.COMB) candidateKeys.add(itemKey);
 				}
@@ -452,6 +459,8 @@ public final class Ae2InputPuller {
 				long typeAvailable = 0L;
 				int newLanes = 0;
 				boolean lanesSuppressed = false;
+				// 每轮容量规划重新归因，避免公平轮的结论被补齐轮沿用
+				entry.validatorRejected = false;
 				for (int slotOffset = 0; slotOffset < processCount; slotOffset++) {
 					int slotIdx = (slotStart + slotOffset) % processCount;
 					IInventorySlot slot = inputSlots.get(slotIdx);
@@ -475,6 +484,12 @@ public final class Ae2InputPuller {
 				if (typeAvailable <= 0L) {
 					// 车道被压制导致本类型这轮完全拿不到槽：补齐轮必须再给它一次机会
 					if (lanesSuppressed) fairPassTruncated = true;
+					// 槽位 validator 明确拒绝（不是暂时没位置）时记一次 per-key 退避：
+					// 这类键永远走不到 pullBatchForType，若不在此归因就会被全速重复探测。
+					// 兜底防线，正常情况下候选分类阶段的可处理性门已把它们挡在外面。
+					else if (entry.validatorRejected) {
+						keyBackoff.recordFailure(entry.key, System.nanoTime());
+					}
 					continue;
 				}
 				long entryQuota = entry.unlimited
@@ -638,13 +653,23 @@ public final class Ae2InputPuller {
 				// 创建模拟返回栈，并复用同一次 getLimit 结果。
 				if (!stack.isEmpty() && !entry.matchesComponents(slotIndex, stack, probe)) return 0;
 				int limit = slot.getLimit(probe);
-				if (limit <= stack.getCount()
-						|| !basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) return 0;
+				// 先做「槽已满」的廉价判断（原顺序，避免多付一次 validator 调用）；
+				// validator 拒绝与槽满必须分开归因：前者说明本机永远不接受该物品，
+				// 是可据此进入 per-key 退避的持久信号，后者只是暂时没位置。
+				if (limit <= stack.getCount()) return 0;
+				if (!basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) {
+					entry.validatorRejected = true;
+					return 0;
+				}
 				if (stack.isEmpty()) return slot.getLimit(ItemStack.EMPTY);
 				return (long) limit - stack.getCount();
 			}
 			// 保留非 BasicInventorySlot 实现的完整回退路径，兼容自定义 IInventorySlot。
-			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) return 0;
+			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
+				// 空槽都插不进 = 该实现永久拒绝此物品（非「暂时没位置」）
+				if (stack.isEmpty()) entry.validatorRejected = true;
+				return 0;
+			}
 			if (stack.isEmpty()) return slot.getLimit(ItemStack.EMPTY);
 			int limit = slot.getLimit(stack);
 			return Math.max(0, (long) limit - stack.getCount());
@@ -912,6 +937,13 @@ public final class Ae2InputPuller {
 		long reserveFloor;
 		boolean combBlock;
 		long servedInWindow;
+		/**
+		 * 本轮容量规划中是否被槽位 validator 判为「永不接受」（非「暂时没位置」）。
+		 * <p>
+		 * 用于给这类键记一次 per-key 退避：它们从不进入 {@code pullBatchForType}，
+		 * 因此原先永远不会触发 {@code keyBackoff.recordFailure}，只能全速重复空转探测。
+		 */
+		boolean validatorRejected;
 		/** 当前拉取轮次按槽位记忆的组件匹配结果，容量数值不在此缓存。 */
 		private ItemStack[] componentMatchStacks = new ItemStack[0];
 		private boolean[] componentMatchResults = new boolean[0];
@@ -931,6 +963,7 @@ public final class Ae2InputPuller {
 			this.reserveFloor = -1L;
 			this.combBlock = false;
 			this.servedInWindow = 0L;
+			this.validatorRejected = false;
 		}
 
 		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */

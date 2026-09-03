@@ -1,7 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
@@ -149,6 +151,29 @@ public interface IAe2InputHost extends IAe2OutputHostBase {
 	 * @return 输入槽列表（非空，按填充优先级排序）
 	 */
 	List<IInventorySlot> productivebeesgenesis$getInputSlotsForPull();
+
+	/**
+	 * 本机是否真的能加工该输入 —— AE2 候选准入闸门。
+	 * <br/>
+	 * 委托 {@link IMekCentrifugeTile#productivebeesgenesis$isValidInput}，从而复用
+	 * 「万象创世 → PB 蜜脾走 PB 配方 → 其余可查熔炼」这一套已有语义，
+	 * 不在 AE2 侧重复实现配方判定（DIP：拉取器依赖本抽象，不依赖具体配方系统）。
+	 * <p>
+	 * <b>为什么需要</b>：整合包中大量蜜脾只有蜂、没有 PB 离心配方（需其它模组机器处理，
+	 * 如 chemlib 元素蜜脾走氧化机/分解机）。这类键靠 Item 引用判定仍是「蜜脾」，
+	 * 会挤占候选类型窗口并每轮空转探测槽位，却永远无法插入，形成
+	 * 「反复拉取、卡但 TPS 不掉」的类 AE2 卡顿。
+	 * <p>
+	 * 未知实现者（例如未来的第三方 Mixin 宿主）默认返回 true 保持旧行为，
+	 * 既不破坏编译，也不会因判定缺失而误饿死合法输入。
+	 *
+	 * @param stack 候选输入的探针栈（只读，实现方不得修改）
+	 * @return true 表示本机存在可处理该输入的配方
+	 */
+	default boolean productivebeesgenesis$canProcessInput(ItemStack stack) {
+		return !(this instanceof IMekCentrifugeTile tile)
+				|| tile.productivebeesgenesis$isValidInput(stack);
+	}
 
 	/**
 	 * 获取输入过滤器

@@ -121,6 +121,14 @@ public final class Ae2InputFilter {
 	private volatile long[] directReserveAmounts = new long[DEFAULT_CAPACITY];
 	/** Client-side network stock snapshot; this is never persisted or trusted for pulls. */
 	private volatile long[] directVisibleAmounts = new long[DEFAULT_CAPACITY];
+	/**
+	 * 客户端快照：该槽位配置的物品「本机能否加工」。
+	 * <p>
+	 * 仅用于配置界面灰显提示，不参与任何拉取判定（拉取侧由
+	 * {@link Ae2CombProcessableCache} 在服务端独立判定），也不持久化。
+	 * 服务端始终按 true 填充，避免服务端逻辑误读这份展示态数据。
+	 */
+	private volatile boolean[] directProcessable = new boolean[DEFAULT_CAPACITY];
 	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
 	private volatile boolean[] directNetworkStock = new boolean[DEFAULT_CAPACITY];
 	/** Filter-level network stock policy applied to every allowed comb candidate. */
@@ -332,6 +340,17 @@ public final class Ae2InputFilter {
 	public synchronized void setDirectVisibleAmountAt(int index, long amount) {
 		if (index < 0 || index >= directVisibleAmounts.length) return;
 		directVisibleAmounts = Ae2InputFilterSlotOps.setVisible(directVisibleAmounts, index, amount);
+	}
+
+	/**
+	 * 该槽位配置的物品本机能否加工（客户端展示态）。
+	 * <p>
+	 * 越界或尚未收到同步时返回 true（fail-open）：宁可不提示，也不要在界面上误标灰
+	 * 让玩家以为配置坏了。
+	 */
+	public boolean isDirectProcessableAt(int index) {
+		boolean[] current = directProcessable;
+		return index < 0 || index >= current.length || current[index];
 	}
 
 	/**
