@@ -44,8 +44,24 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+sourceSets {
+    datagen {
+        // 数据生成代码只在开发期运行；发布 JAR 仅包含 main 输出。
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    datagenImplementation.extendsFrom implementation
+    datagenCompileOnly.extendsFrom compileOnly
+    datagenRuntimeOnly.extendsFrom runtimeOnly
+}
+
 neoForge {
     version = project.neo_version
+    addModdingDependenciesTo sourceSets.datagen
+    addModdingDependenciesTo sourceSets.test
 
     runs {
         client {
@@ -79,6 +95,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.datagen)
         }
     }
 }
@@ -186,7 +203,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft/NeoForge supply these in-game; plain JVM tests need them explicitly.
     testRuntimeOnly 'com.electronwill.night-config:toml:3.8.3'
-    testRuntimeOnly 'it.unimi.dsi:fastutil:8.5.15'
+    testRuntimeOnly 'it.unimi.dsi:fastutil:8.5.12'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -243,6 +260,9 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
         if (!artifact.isFile()) {
             throw new GradleException("Release artifact was not created: ${artifact}")
         }
+        if (artifact.length() > 1_800_000L) {
+            throw new GradleException("Release artifact is larger than 1,800,000 bytes: ${artifact.length()}")
+        }
 
         def zip = new java.util.zip.ZipFile(artifact)
         try {
@@ -256,6 +276,41 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
             requiredEntries.each { entryName ->
                 if (zip.getEntry(entryName) == null) {
                     throw new GradleException("Release artifact is missing ${entryName}")
+                }
+            }
+
+            def iconEntry = zip.getEntry('productivebeesgenesis.png')
+            if (iconEntry.size > 32 * 1024L) {
+                throw new GradleException("Mod icon entry is larger than 32 KiB: ${iconEntry.size}")
+            }
+            def icon = javax.imageio.ImageIO.read(zip.getInputStream(iconEntry))
+            if (icon == null || icon.width > 256 || icon.height > 256) {
+                throw new GradleException('Mod icon must be a readable image no larger than 256x256')
+            }
+
+            def unusedEntries = [
+                    'assets/productivebeesgenesis/textures/item/infinitycreation_comb_block.png',
+                    'assets/productivebeesgenesis/textures/item/infinitycreation_comb_block.png.mcmeta',
+                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/mekanism_centrifuge_front.png',
+                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/factory_enriching/enriching_factory_front.png',
+                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/factory_enriching/enriching_factory_front_active.png',
+                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/honey_mixer/honey_mixer_s2.png'
+            ]
+            unusedEntries.each { entryName ->
+                if (zip.getEntry(entryName) != null) {
+                    throw new GradleException("Release artifact contains unused duplicate resource: ${entryName}")
+                }
+            }
+
+            def forbiddenPrefixes = [
+                    'com/ayoshiko/productivebeesgenesis/datagen/',
+                    'assets/productivebeesgenesis/models/block/factory/mek_apiary/front_led/'
+            ]
+            zip.entries().each { entry ->
+                forbiddenPrefixes.each { prefix ->
+                    if (entry.name.startsWith(prefix)) {
+                        throw new GradleException("Release artifact contains development or duplicate entry: ${entry.name}")
+                    }
                 }
             }
 
@@ -280,6 +335,44 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
     }
 }
 
+def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
+    group = 'verification'
+    description = 'Writes a size breakdown for the distributable JAR.'
+    def releaseJar = tasks.named('jar', Jar)
+    dependsOn releaseJar
+    def artifactFile = releaseJar.flatMap { it.archiveFile }
+    def reportFile = layout.buildDirectory.file('reports/release-artifact.txt')
+    inputs.file(artifactFile)
+    outputs.file(reportFile)
+
+    doLast {
+        File artifact = artifactFile.get().asFile
+        def entries = []
+        def zip = new java.util.zip.ZipFile(artifact)
+        try {
+            zip.entries().each { entry ->
+                if (!entry.isDirectory()) {
+                    entries << [name: entry.name, size: entry.size]
+                }
+            }
+        } finally {
+            zip.close()
+        }
+        entries.sort { left, right -> right.size <=> left.size }
+        File destination = reportFile.get().asFile
+        destination.parentFile.mkdirs()
+        destination.text = ("artifact=${artifact.name}\n"
+                + "bytes=${artifact.length()}\n"
+                + "entries=${entries.size()}\n"
+                + "top_entries:\n"
+                + entries.take(25).collect { "${it.size}\t${it.name}" }.join('\n')
+                + '\n')
+        logger.lifecycle("Release artifact: ${artifact.length()} bytes; report: ${destination}")
+    }
+}
+
 tasks.named('check') {
     dependsOn verifyReleaseArtifact
+    dependsOn reportReleaseArtifact
+    dependsOn tasks.named('compileDatagenJava')
 }
