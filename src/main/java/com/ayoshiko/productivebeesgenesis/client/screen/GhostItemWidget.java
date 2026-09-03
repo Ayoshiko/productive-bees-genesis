@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.mojang.blaze3d.vertex.PoseStack;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.slot.SlotType;
@@ -55,11 +56,24 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 	/** ghost slot 尺寸（宽=高，与 SlotType.NORMAL 一致） */
 	public static final int SIZE = 18;
 
+	/** 「本机无法处理」灰罩颜色（ARGB，约 55% 不透明的深灰，保留图标可辨识度）。 */
+	private static final int UNPROCESSABLE_OVERLAY_COLOR = 0x8C303030;
+
+	/** 灰罩 z 偏移：高于物品层（+150），低于堆叠数字（190）与下一窗口层（200）。 */
+	private static final float UNPROCESSABLE_Z_OFFSET = 170.0F;
+
 	private ResourceLocation beeType;
 	private boolean isBlock;
 	private ItemStack directIcon = ItemStack.EMPTY;
 	private String directFingerprint;
 	private final int slotIndex;
+	/**
+	 * 本机能否加工该条目（服务端同步的展示态）。
+	 * <p>
+	 * false 时在图标上叠一层半透明灰罩，提示「配了但这台机器处理不了」。
+	 * 默认 true：同步包到达前不误标灰。
+	 */
+	private boolean processable = true;
 
 	private final BiConsumer<Integer, ItemStack> placeCallback;
 	private final Consumer<Integer> removeCallback;
@@ -129,6 +143,12 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 		this.isBlock = false;
 		this.directIcon = ItemStack.EMPTY;
 		this.directFingerprint = null;
+		this.processable = true;
+	}
+
+	/** 设置「本机可加工」展示态；false 会在图标上叠灰罩。 */
+	public void setProcessable(boolean processable) {
+		this.processable = processable;
 	}
 
 	public int getSlotIndex() {
@@ -194,6 +214,23 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 			// 走 renderFakeItem 路径，使 3D 蜜脾块应用 MekGuiBlockItemDepthMixin 的深度修复。
 			guiGraphics.renderFakeItem(icon, relativeX + 1, relativeY + 1);
 		}
+		if (!processable) renderUnprocessableOverlay(guiGraphics);
+	}
+
+	/**
+	 * 「本机无法处理」灰罩。
+	 * <p>
+	 * 必须抬 z：物品渲染在 +150 层，直接 fill 会被物品盖住；
+	 * 取 {@value #UNPROCESSABLE_Z_OFFSET} 位于物品之上、堆叠数字（190）与
+	 * Mekanism 下一窗口层（200）之下，因此不会遮住数量标签也不会盖到别的窗口。
+	 */
+	private void renderUnprocessableOverlay(GuiGraphics guiGraphics) {
+		PoseStack pose = guiGraphics.pose();
+		pose.pushPose();
+		pose.translate(0.0F, 0.0F, UNPROCESSABLE_Z_OFFSET);
+		guiGraphics.fill(relativeX + 1, relativeY + 1, relativeX + SIZE - 1, relativeY + SIZE - 1,
+				UNPROCESSABLE_OVERLAY_COLOR);
+		pose.popPose();
 	}
 
 	private ItemStack resolveIcon() {

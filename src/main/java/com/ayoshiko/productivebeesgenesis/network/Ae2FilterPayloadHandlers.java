@@ -5,6 +5,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.me.helpers.BaseActionSource;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FilterProcessabilityView;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NetworkInventoryView;
@@ -375,12 +376,14 @@ final class Ae2FilterPayloadHandlers {
 		List<Long> visibleAmounts = payload.visibleAmounts();
 		List<Boolean> unlimited = payload.unlimited();
 		List<Boolean> networkStock = payload.networkStock();
+		List<Boolean> processable = payload.processable();
 		// 平行数组防御性校验：防止恶意服务端发送不一致的 indices/entries
 		if (indices.size() != entries.size() || amounts.size() != entries.size()
 				|| reserveAmounts.size() != entries.size()
 				|| visibleAmounts.size() != entries.size()
 				|| unlimited.size() != entries.size()
-				|| networkStock.size() != entries.size()) return;
+				|| networkStock.size() != entries.size()
+				|| processable.size() != entries.size()) return;
 		int count = entries.size();
 		for (int i = 0; i < count; i++) {
 			int idx = indices.get(i);
@@ -397,6 +400,7 @@ final class Ae2FilterPayloadHandlers {
 		if (payload.filterMode() < 0 || payload.filterMode() >= modes.length) return;
 		filter.replaceClientSnapshot(modes[payload.filterMode()], payload.preciseMode(),
 				indices, entries, amounts, reserveAmounts, visibleAmounts, unlimited, networkStock,
+				processable,
 				payload.unlimitedAllFallback(), payload.globalNetworkStock(), payload.globalReserveAmount());
 	}
 
@@ -435,6 +439,7 @@ final class Ae2FilterPayloadHandlers {
 		List<Long> visibleAmounts = new ArrayList<>(nonEmpty.size());
 		List<Boolean> unlimited = new ArrayList<>(nonEmpty.size());
 		List<Boolean> networkStock = new ArrayList<>(nonEmpty.size());
+		List<Boolean> processable = new ArrayList<>(nonEmpty.size());
 		List<Ae2InputFilter.DirectEntry> directEntries = filter.hasDirectEntries()
 				? filter.getDirectEntries() : List.of();
 		var resolvedKeys = Ae2ItemFingerprint.resolve(
@@ -468,6 +473,10 @@ final class Ae2FilterPayloadHandlers {
 			visibleAmounts.add(Math.max(0L, visibleAmount));
 			unlimited.add(filter.isDirectUnlimitedAt(ie.index()));
 			networkStock.add(filter.isDirectNetworkStockAt(ie.index()));
+			// 本机可加工性：与拉取器同一判定入口（宿主 canProcessInput），供界面灰显提示。
+			// 必须在服务端算：客户端的万象 bee_type 缓存与 per-tile 熔炼开关未必同步，
+			// 自行判定会给出与实际拉取行为不一致的假红。
+			processable.add(Ae2FilterProcessabilityView.canProcess(host, filter, ie.index()));
 		}
 		return new SyncAeInputFilterEntriesPayload(
 				be.getBlockPos(),
@@ -480,6 +489,7 @@ final class Ae2FilterPayloadHandlers {
 				visibleAmounts,
 				unlimited,
 				networkStock,
+				processable,
 				filter.isUnlimitedAllFallback(), filter.isGlobalNetworkStock(), filter.getGlobalReserveAmount());
 	}
 

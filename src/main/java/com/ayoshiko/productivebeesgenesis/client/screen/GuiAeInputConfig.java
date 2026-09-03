@@ -371,6 +371,10 @@ public final class GuiAeInputConfig extends GuiWindow {
 			stockButtons[i].visible = false;
 			stockButtons[i].setTooltip((Tooltip) null);
 			if (filter != null) {
+				// 服务端同步的「本机能否加工」展示态；false 时叠灰罩并在 tooltip 追加原因说明。
+				// 每个分支单独调用 setProcessable：setEntry/setDirectEntry 不重置该标记，
+				// 而 clear() 会重置为 true，故空槽自然不会残留灰罩。
+				boolean processable = filter.isDirectProcessableAt(globalIdx);
 				EntryInfo info = filter.getEntryAt(globalIdx);
 				if (info != null && info.directFingerprint != null) {
 					AEItemKey key = filter.getResolvedDirectKey(globalIdx);
@@ -390,14 +394,18 @@ public final class GuiAeInputConfig extends GuiWindow {
 					if (key != null) {
 						ItemStack icon = key.toStack(1);
 						ghostSlots[i].setDirectEntry(icon, info.directFingerprint);
-						ghostSlots[i].setTooltip(Tooltip.create(icon.getHoverName()));
+						ghostSlots[i].setProcessable(processable);
+						ghostSlots[i].setTooltip(Tooltip.create(
+								withUnprocessableHint(icon.getHoverName(), processable)));
 						outputSlots[i].setDirectEntry(icon, visibleAmount, networkStock, globalIdx);
 						outputSlots[i].setTooltip(Tooltip.create(Component.translatable(
 								"productivebeesgenesis.gui.ae_input_config.output_slot.tooltip",
 								AeInputConfigText.formatCompactAmount(visibleAmount))));
 					} else {
 						ghostSlots[i].setDirectFingerprint(info.directFingerprint);
-						ghostSlots[i].setTooltip(Tooltip.create(Component.literal(info.directFingerprint)));
+						ghostSlots[i].setProcessable(processable);
+						ghostSlots[i].setTooltip(Tooltip.create(withUnprocessableHint(
+								Component.literal(info.directFingerprint), processable)));
 					}
 					stockButtons[i].visible = true;
 					stockButtons[i].active = true;
@@ -419,10 +427,12 @@ public final class GuiAeInputConfig extends GuiWindow {
 				}
 				if (info != null && info.beeType != null) {
 					ghostSlots[i].setEntry(info.beeType, info.isBlock);
+					ghostSlots[i].setProcessable(processable);
 					ItemStack icon = BeeInfoHelper.resolveBeeIcon(
 							Minecraft.getInstance().level, info.beeType, info.isBlock);
 					if (!icon.isEmpty()) {
-						ghostSlots[i].setTooltip(Tooltip.create(icon.getHoverName()));
+						ghostSlots[i].setTooltip(Tooltip.create(
+								withUnprocessableHint(icon.getHoverName(), processable)));
 					}
 					continue;
 				}
@@ -430,6 +440,18 @@ public final class GuiAeInputConfig extends GuiWindow {
 			ghostSlots[i].clear();
 			ghostSlots[i].setTooltip((Tooltip) null);
 		}
+	}
+
+	/**
+	 * 可加工时原样返回，不可加工时追加一行红色说明。
+	 * <p>
+	 * 说明必须写清「配置没错、是这台机器没有对应配方」，否则玩家会以为过滤器坏了 ——
+	 * 这正是本提示要解决的问题：原先只能靠卡顿反推。
+	 */
+	private static Component withUnprocessableHint(Component base, boolean processable) {
+		if (processable) return base;
+		return base.copy().append("\n").append(Component.translatable(
+				"productivebeesgenesis.gui.ae_input_config.unprocessable.tooltip"));
 	}
 
 	private void updateButtonStates(Ae2InputFilter filter) {

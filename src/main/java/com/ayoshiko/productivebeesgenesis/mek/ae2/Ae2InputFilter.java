@@ -127,8 +127,12 @@ public final class Ae2InputFilter {
 	 * 仅用于配置界面灰显提示，不参与任何拉取判定（拉取侧由
 	 * {@link Ae2CombProcessableCache} 在服务端独立判定），也不持久化。
 	 * 服务端始终按 true 填充，避免服务端逻辑误读这份展示态数据。
+	 * <p>
+	 * 初值必须全 true：首次同步包到达前按「可加工」呈现，否则玩家一打开界面就看到满屏灰。
+	 * 数组长度可能小于 {@code slots}（grow 不同步扩容），越界读由
+	 * {@link #isDirectProcessableAt(int)} 兜底为 true。
 	 */
-	private volatile boolean[] directProcessable = new boolean[DEFAULT_CAPACITY];
+	private volatile boolean[] directProcessable = allProcessable(DEFAULT_CAPACITY);
 	private volatile boolean[] directUnlimited = new boolean[DEFAULT_CAPACITY];
 	private volatile boolean[] directNetworkStock = new boolean[DEFAULT_CAPACITY];
 	/** Filter-level network stock policy applied to every allowed comb candidate. */
@@ -564,9 +568,20 @@ public final class Ae2InputFilter {
 			List<Integer> indices, List<String> entries, List<Long> amounts, List<Long> reserveAmounts,
 			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, List<Boolean> networkStockFlags,
 			boolean unlimitedAllFallbackFlag, boolean globalNetworkStockFlag, long globalReserveAmountValue) {
+		replaceClientSnapshot(mode, precise, indices, entries, amounts, reserveAmounts, visibleAmounts,
+				unlimitedFlags, networkStockFlags, null, unlimitedAllFallbackFlag, globalNetworkStockFlag,
+				globalReserveAmountValue);
+	}
+
+	/** 带「本机可加工」展示态标记的客户端快照替换。 */
+	public synchronized void replaceClientSnapshot(FilterMode mode, boolean precise,
+			List<Integer> indices, List<String> entries, List<Long> amounts, List<Long> reserveAmounts,
+			List<Long> visibleAmounts, List<Boolean> unlimitedFlags, List<Boolean> networkStockFlags,
+			List<Boolean> processableFlags,
+			boolean unlimitedAllFallbackFlag, boolean globalNetworkStockFlag, long globalReserveAmountValue) {
 		Ae2InputFilterSnapshot.Snapshot snapshot = Ae2InputFilterSnapshot.build(
 				mode, precise, indices, entries, amounts, reserveAmounts, visibleAmounts, unlimitedFlags,
-				networkStockFlags, slots.length);
+				networkStockFlags, processableFlags, slots.length);
 		filterMode = snapshot.mode();
 		preciseMode = snapshot.precise();
 		resolvedDirectKeys = snapshot.keys();
@@ -575,6 +590,7 @@ public final class Ae2InputFilter {
 		directVisibleAmounts = snapshot.visible();
 		directUnlimited = snapshot.unlimited();
 		directNetworkStock = snapshot.networkStock();
+		directProcessable = snapshot.processable();
 		slots = snapshot.slots();
 		unlimitedAllFallback = unlimitedAllFallbackFlag;
 		globalNetworkStock = globalNetworkStockFlag;
@@ -703,9 +719,18 @@ public final class Ae2InputFilter {
 			directVisibleAmounts = new long[result.slots().length];
 			directUnlimited = result.directUnlimited();
 			directNetworkStock = result.directNetworkStock();
+			// 展示态标记不持久化：重置为「可加工」，等下一次同步包填真值
+			directProcessable = allProcessable(result.slots().length);
 			slots = result.slots();
 		}
 		invalidateDirectEntries();
+	}
+
+	/** 展示态「可加工」标记的中性初值：全 true（fail-open，避免误标灰）。 */
+	private static boolean[] allProcessable(int capacity) {
+		boolean[] flags = new boolean[Math.max(DEFAULT_CAPACITY, capacity)];
+		java.util.Arrays.fill(flags, true);
+		return flags;
 	}
 
 	/** Resets every persisted setting when loading legacy data without a filter payload. */
@@ -719,6 +744,7 @@ public final class Ae2InputFilter {
 		directVisibleAmounts = new long[DEFAULT_CAPACITY];
 		directUnlimited = new boolean[DEFAULT_CAPACITY];
 		directNetworkStock = new boolean[DEFAULT_CAPACITY];
+		directProcessable = allProcessable(DEFAULT_CAPACITY);
 		unlimitedAllFallback = false;
 		globalNetworkStock = false;
 		globalReserveAmount = 0L;

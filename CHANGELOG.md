@@ -38,6 +38,7 @@
 - **整合包更新时的二次迁移**：整合包作者往往继续在自己的整合包里分发并调校旧的单文件。现在已经存在 `.migrated.bak` 不再让迁移整体失效——旧文件与最新备份逐字节相同时判定为"重复分发同一份文件"并静默跳过；内容不同则视为整合包新版调校，备份轮转为 `.migrated-2.bak`、`.migrated-3.bak`…，并把新值按键叠加到现有拆分配置上。叠加时会先用上一次的备份重算"玩家若从未改动应有的内容"，与当前文件逐键比较，玩家自己改过的键一律保留；容量矩阵按整组判断，避免出现半旧半新的容量阶梯。
 - **升级前没有平衡性配置的老存档**：旧文件里没有 `balanceProfile` 时，迁移会写入"自定义"预设并填入旧版行为值，同时还原旧版的产量/时间升级上限与扩展堆叠升级上限，保证老存档的机器行为不因为新增的平衡性预设而改变。
 - **离心机输入返还按钮**：基础机和所有工厂版离心机界面新增一个返还按钮，把输入槽里的物品退回来。AE2 在线时优先送回 ME 网络（塞不进的部分进入待处理缓冲，不会掉在地上）；AE2 不可用时按机器已配置的 Mekanism 物品输出面送往相邻容器；没有配置输出面、没有相邻容器或对方塞满时会有对应提示，物品始终留在原处不丢失。
+- **AE2 输入过滤器标记出本机处理不了的蜜脾**：在 AE2 输入配置界面里，如果标记的蜜脾本机根本没有离心配方（要靠别的模组的机器处理，例如锂蜜脾走化学氧化机），该标记槽会盖一层半透明灰罩，鼠标悬停时提示"本离心机没有它的配方 / 这种蜜脾要用别的模组的机器处理 / 本机会主动跳过它，所以这条配置不会生效"。原因：拉取侧现在会主动跳过这类蜜脾（见"修复"里的对应条目），但界面上毫无反应，玩家会误以为过滤器坏了，只能靠卡顿反推。判定与拉取器共用同一个入口，在服务端算好后随过滤器同步包下发（客户端的万象 bee_type 缓存与本机熔炼兼容开关未必与服务端一致，客户端自行判定会给出与实际拉取行为不符的假提示），因此界面显示与实际行为一定一致。精确指纹条目和按蜂种的模糊条目都会标记；判定不出来时按"可处理"呈现，不会误标灰。
 - **客户端窗口位置键迁移**：更老版本使用的 `pb_upgrade` / `ae_input` / `feeder` / `multi_fluid_tanks` 窗口位置会迁移到带 `window_` 前缀的新键，并保留旧键以便回退旧版本。已经设置过的新键始终优先，NeoForge 纠正配置产生的备份文件也会被读取，避免升级时窗口位置归零。
 
 ### 变更
@@ -47,7 +48,7 @@
 - **工厂倍率改为按游戏会话快照**：三类离心机倍率和蜂箱输出倍率在配置加载时一次性读入不可变快照，运行期只读快照。原因：原来每次 `getLimit` 都要走配置读取，Spark 显示 256× 加速下占 5.33% CPU；快照还避免了运行中改倍率导致已存在槽位容量突变。代价是修改容量矩阵需要重启游戏生效（配置界面已注明）。矩阵顺序不合法时只在本次运行回退该组默认值，配置文件本身不改写。
 - **配置界面分为三屏**：模组列表里的配置入口现在分别进入玩法配置、机器配置和容量矩阵；玩法配置保留原有的过滤器与平衡性预设自定义界面。
 - **数据生成代码移出发布产物**：`datagen` 移到独立源集，只在开发期编译运行，发布 JAR 不再包含 `com/ayoshiko/productivebeesgenesis/datagen/` 类。配方 id（`productivebeesgenesis:mek_apiary`、`productivebeesgenesis:mek_centrifuge` 等）和生成结果完全未变。
-- **发布产物校验加严**：构建时校验 JAR 不超过 1,800,000 字节、模组图标不超过 32 KiB 且不超过 256×256、不包含 datagen 类和已删除的重复资源，并输出一份体积明细报告。当前产物 1,747,152 字节。
+- **发布产物校验加严**：构建时校验 JAR 不超过 1,800,000 字节、模组图标不超过 32 KiB 且不超过 256×256、不包含 datagen 类和已删除的重复资源，并输出一份体积明细报告。当前产物 1,750,021 字节。
 - **移除已失效的平衡性兼容层**：`BalanceConfigCompatibility` 的旧版兼容逻辑已并入新的迁移服务，该类与其测试删除，避免两套等价实现并存。同时清理 3 个只断言常量或源码字符串的低价值测试（`BalanceConfigCompatibilityTest`、`Ae2PerTileStateNbtCodecTest`、`UselessByproductUpgradeHelperTest`），以及需要外部环境变量才运行的 `externalMigrationMatchesGeneratedFilesWhenRequested`（其覆盖范围已被两个整合包回归测试取代）。
 
 ### 修复
@@ -68,6 +69,7 @@
 - **整合包回归**：新增以本机 Beebeeblock - The Skyhive 3.05 与 New Age Science and Technology hard096 两份真实配置为输入的测试，断言旧配置无未识别键、每个键唯一归属一个新文件且值不变、容量矩阵通过顺序校验、万象蜜蜂转化与获取键完整落进玩法文件；New Age 还完整跑了一遍"首次迁移 → 重复分发 → 整合包新版再改 + 玩家已改"的落盘链路。两个整合包的 KubeJS 配方覆盖都只依赖稳定的配方 id（`event.remove({ id: … })` / `event.remove({ output: … })`），不依赖旧配置文件名。
 - **快照与界面**：覆盖倍率快照只读一次后保持稳定、非法顺序回退默认值、非法组在发布前被拒绝、等级键与默认值表未漂移、返还功能在 AE2 缺失时的类加载安全性。
 - **AE2 蜜脾准入接线**：新增源码级接线断言，钉住"蜜脾被可处理性门拒绝后直接终止、不下落熔炼分支"、判定按 `(Item, bee_type)` 记忆化、每轮限速与整表失效条件、槽位校验器拒绝时记退避这几处 —— 这些接线被改掉后行为依旧"正确"（只是重新开始空转），纯逻辑单测发现不了。
+- **界面灰显提示接线**：钉住判定在服务端完成且复用宿主同一入口、标记随同步包下发并校验平行数组长度、客户端初值全 true 且不持久化、灰罩 z 位于物品层之上与数量标签之下、三种条目形态（已解析精确键、仅有指纹、模糊蜂种）都设标记、两个语言文件都有该翻译键。这条链路断开时界面只是"没有提示"而不报错。
 
 ### English
 
@@ -78,6 +80,7 @@
 - **Second migration when a modpack updates**: modpack authors keep shipping and tuning the legacy single file, so an existing `.migrated.bak` no longer aborts migration. If the legacy file is byte-identical to the newest backup it is treated as the same file shipped again and silently skipped; if it differs, the backup rotates to `.migrated-2.bak`, `.migrated-3.bak`, … and the new values are overlaid onto the existing split files key by key. The overlay first replays the previous backup to reconstruct "what the files would contain if the player never touched them" and compares that against the current files, so any key the player edited is preserved. Capacity matrices are decided per group to avoid a half-old, half-new capacity ladder.
 - **Saves from before the balance presets existed**: when the old file has no `balanceProfile`, migration writes the "custom" preset with the legacy behaviour values and restores the legacy productivity/time upgrade caps and extras stack-upgrade cap, so an old save does not change behaviour because of the newer balance presets.
 - **Centrifuge input return button**: the basic machine and every factory tier gained a button that returns the items in the input slots. With AE2 online they go back to the ME network (anything that does not fit enters the bounded pending buffer instead of being dropped); without AE2 they are pushed to adjacent containers through the machine's configured Mekanism item output sides. Missing output sides, missing containers and full targets each report their own message, and items always stay put rather than being lost.
+- **The AE2 input filter marks combs this machine cannot process**: in the AE2 input config screen, a marked comb that has no centrifuge recipe here (it belongs to another mod's machine — a lithium comb goes through the chemical oxidizer, for example) now gets a translucent grey overlay, and hovering it explains "this centrifuge has no recipe for it / this comb is handled by another mod's machine / it is skipped on purpose, so this entry has no effect". The pull side already skips these combs (see the matching entry under Fixed), but nothing showed up in the UI, so players assumed the filter was broken and could only infer the cause from the lag. The decision shares the pull side's entry point and is computed server-side before riding along the filter sync payload — the client's Myriad `bee_type` cache and per-machine smelting toggle are not necessarily in sync, so a client-side decision could contradict actual pull behaviour. Both precise fingerprint entries and fuzzy per-bee-type entries are marked; an undecidable entry is shown as processable so nothing is greyed out by mistake.
 - **Client window position migration**: window positions saved by much older versions under `pb_upgrade` / `ae_input` / `feeder` / `multi_fluid_tanks` are migrated to the `window_`-prefixed keys while the old keys are kept for downgrading. Already-set new keys always win, and NeoForge's config-correction backup is read as a fallback so window positions are not reset on upgrade.
 
 #### Changed
@@ -108,6 +111,7 @@
 - **Modpack regressions**: tests driven by two real local packs — Beebeeblock - The Skyhive 3.05 and New Age Science and Technology hard096 — assert that the old file has no unrecognised keys, that every key lands in exactly one new file with an unchanged value, that the capacity matrices pass ordering validation, and that the Myriad Creations conversion/acquisition keys land in the gameplay file. The New Age test also drives the full on-disk chain: first migration → same file shipped again → pack update plus a player edit. Both packs' KubeJS recipe overrides depend only on stable recipe ids (`event.remove({ id: … })` / `event.remove({ output: … })`), not on the old config file name.
 - **Snapshot and screen**: multiplier snapshots read once and then stay stable, invalid ordering falls back to defaults, an invalid group is rejected before publication, tier keys and default tables have not drifted, and the return feature stays class-load safe without AE2.
 - **AE2 comb admission wiring**: source-level assertions pin down that a comb rejected by the capability gate stops there instead of falling through to smelting, that the decision is memoised by `(Item, bee_type)`, the per-window probe limit and whole-table invalidation conditions, and that a slot-validator rejection records a backoff entry — these wirings still behave "correctly" if broken (they just start spinning again), which pure logic tests cannot catch.
+- **Grey-out hint wiring**: assertions pin down that the decision is made server-side through the host's single entry point, that the flag rides the sync payload and its parallel-array length is validated, that the client default is all-true and not persisted, that the overlay's z sits above the item layer and below the count label, that all three entry shapes (resolved precise key, fingerprint only, fuzzy bee type) set the flag, and that both language files carry the translation key. A broken link here produces a missing hint rather than an error.
 
 ## [1.0.6] - 2026-08-30
 

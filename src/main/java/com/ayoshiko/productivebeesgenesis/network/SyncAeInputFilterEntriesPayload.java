@@ -42,6 +42,7 @@ import java.util.List;
 	 * @param reserveAmounts 直连条目的网络库存保留量（与 entries 平行，非直连条目为 0）
 	 * @param unlimited    直连条目的无限提供状态（与 entries 平行，非直连条目为 false）
 	 * @param networkStock 直连条目的库存模式状态（与 entries 平行，非直连条目为 false）
+ * @param processable  该条目配置的物品本机能否加工（与 entries 平行，仅用于界面灰显提示）
 	 * @param globalNetworkStock 是否对所有过滤器允许的蜜脾应用默认库存保留
 	 * @param globalReserveAmount 过滤器级默认库存保留量
 	 */
@@ -56,6 +57,7 @@ public record SyncAeInputFilterEntriesPayload(
 	List<Long> visibleAmounts,
 	List<Boolean> unlimited,
 	List<Boolean> networkStock,
+	List<Boolean> processable,
 	boolean unlimitedAllFallback,
 	boolean globalNetworkStock,
 	long globalReserveAmount
@@ -69,7 +71,8 @@ public record SyncAeInputFilterEntriesPayload(
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), 0L),
 				Collections.nCopies(entries.size(), false),
-				Collections.nCopies(entries.size(), false), false, false, 0L);
+				Collections.nCopies(entries.size(), false),
+				Collections.nCopies(entries.size(), true), false, false, 0L);
 	}
 
 	/**
@@ -78,11 +81,19 @@ public record SyncAeInputFilterEntriesPayload(
 	 */
 	private record DirectState(List<Long> amounts, List<Long> reserveAmounts, List<Long> visibleAmounts,
 			List<Boolean> unlimited, List<Boolean> networkStock, StockDefaults defaults) {}
-	private record StockDefaults(boolean unlimitedAllFallback, boolean globalNetworkStock, long globalReserveAmount) {}
+	/**
+	 * 每条目「本机可加工」标记与三个全局默认值打包在同一复合字段里。
+	 * <p>
+	 * 原因：{@code StreamCodec.composite} 在本 NeoForge 版本最多六个字段，
+	 * {@link DirectState} 已经用满，故把这份展示态标记并入 StockDefaults 这一层。
+	 */
+	private record StockDefaults(boolean unlimitedAllFallback, boolean globalNetworkStock, long globalReserveAmount,
+			List<Boolean> processable) {}
 	private static final StreamCodec<ByteBuf, StockDefaults> STOCK_DEFAULTS_CODEC = StreamCodec.composite(
 			ByteBufCodecs.BOOL, StockDefaults::unlimitedAllFallback,
 			ByteBufCodecs.BOOL, StockDefaults::globalNetworkStock,
 			ByteBufCodecs.VAR_LONG, StockDefaults::globalReserveAmount,
+			ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), StockDefaults::processable,
 			StockDefaults::new);
 
 	private static final StreamCodec<ByteBuf, DirectState> DIRECT_STATE_CODEC =
@@ -113,11 +124,12 @@ public record SyncAeInputFilterEntriesPayload(
 					payload -> new DirectState(payload.amounts(), payload.reserveAmounts(), payload.visibleAmounts(),
 							payload.unlimited(), payload.networkStock(),
 							new StockDefaults(payload.unlimitedAllFallback(), payload.globalNetworkStock(),
-									payload.globalReserveAmount())),
+									payload.globalReserveAmount(), payload.processable())),
 					(pos, filterMode, preciseMode, indices, entries, directState) -> new SyncAeInputFilterEntriesPayload(
 							pos, filterMode, preciseMode, indices, entries,
 							directState.amounts(), directState.reserveAmounts(), directState.visibleAmounts(),
 							directState.unlimited(), directState.networkStock(),
+							directState.defaults().processable(),
 							directState.defaults().unlimitedAllFallback(),
 							directState.defaults().globalNetworkStock(),
 							directState.defaults().globalReserveAmount())
