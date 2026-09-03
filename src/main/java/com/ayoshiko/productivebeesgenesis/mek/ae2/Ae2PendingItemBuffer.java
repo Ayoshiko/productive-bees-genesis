@@ -68,7 +68,8 @@ public final class Ae2PendingItemBuffer {
 	 */
 	public boolean canRegister(String fingerprint) {
 		if (fingerprint == null || fingerprint.isBlank()) return false;
-		return find(fingerprint) != null || entries.size() < MAX_ENTRIES;
+		// 未满时任何有效指纹都可登记，避免正常路径每次线性扫描最多 64 个条目。
+		return entries.size() < MAX_ENTRIES || find(fingerprint) != null;
 	}
 
 	/** 返回当前可重试条目的快照，避免调用方迭代时修改内部列表。 */

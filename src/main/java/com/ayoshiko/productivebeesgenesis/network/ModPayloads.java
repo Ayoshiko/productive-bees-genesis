@@ -132,6 +132,12 @@ public final class ModPayloads {
 				ToggleSmeltingCompatPayload.STREAM_CODEC,
 				SmeltingCompatPayloadHandler::handle
 		);
+		// 核心返还包不依赖 AE2：在线时延迟进入 AE2 服务，离线时走 Mekanism 物品输出面。
+		registrar.playToServer(
+				ReturnCentrifugeInputPayload.TYPE,
+				ReturnCentrifugeInputPayload.STREAM_CODEC,
+				CentrifugeInputReturnPayloadHandler::handle
+		);
 		// Do not create method handles for classes with direct AE2 API references unless AE2 is present.
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
 		// per-tile AE2 输出切换包 — 由 AeOutputButton 点击发送
@@ -287,7 +293,7 @@ public final class ModPayloads {
 		}
 
 		// 2. 配置加载状态校验（防御性，理论上 join 后已加载）
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.not_loaded"));
 			// 热路径日志：多玩家场景下可累积刷屏（10 玩家 × 3 次/秒 = 30 条/秒），使用 LogThrottle 全局节流
@@ -331,7 +337,7 @@ public final class ModPayloads {
 		try {
 			ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(validated);
 			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
-			ModConfig.SERVER_SPEC.save();
+			ModConfig.saveGameplayServerSpec();
 			// 6. 失效过滤缓存
 			MyriadCreationsEventHandler.invalidateFilterCache();
 		} catch (Exception e) {

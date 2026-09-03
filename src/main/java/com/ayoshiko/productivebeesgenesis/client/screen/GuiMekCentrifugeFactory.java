@@ -153,6 +153,9 @@ public class GuiMekCentrifugeFactory
 					FactoryLayoutHelper.getFluidTankX(tile.tier),
 					FactoryLayoutHelper.getFluidTankY(tile.tier)));
 		}
+		CentrifugeInputReturnButton inputReturnButton = CentrifugeInputReturnButton.createForFactory(
+				this, imageWidth, tile.getBlockPos());
+		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);
 		// AE2 输出按钮已移至 MEK 侧面配置 Tab，由 AeOutputOverlay 动态注入
 		// Tab 显示条件基于 isMultiFluidModeSynced 同步值(选项 A 决策,放弃旧存档隐藏约束):
 		// GUI 构造期 tile.getLevel() 可能为 null,isMultiFluidMode() 会走 holder 类型判断导致 Tab 不显示

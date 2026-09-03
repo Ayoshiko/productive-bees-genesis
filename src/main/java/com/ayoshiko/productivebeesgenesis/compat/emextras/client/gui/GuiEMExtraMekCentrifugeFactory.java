@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui;
 
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
 import com.ayoshiko.productivebeesgenesis.client.screen.CompactStackCountScreen;
+import com.ayoshiko.productivebeesgenesis.client.screen.CentrifugeInputReturnButton;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksTab;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMultiFluidTanksWindow;
@@ -123,6 +124,9 @@ public class GuiEMExtraMekCentrifugeFactory
 				() -> tile.getFluidTanks(null),
 				EMEFactoryLayoutHelper.getFluidTankX(tile.tier),
 				EMEFactoryLayoutHelper.getFluidTankY(tile.tier)));
+		CentrifugeInputReturnButton inputReturnButton = CentrifugeInputReturnButton.createForFactory(
+				this, imageWidth, tile.getBlockPos());
+		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);
 		// Tab 显示条件基于 isMultiFluidModeSynced 同步值(选项 A 决策,放弃旧存档隐藏约束):
 		// GUI 构造期 tile.getLevel() 可能为 null,isMultiFluidMode() 会走 holder 类型判断导致 Tab 不显示
 		if (tile instanceof IMultiFluidTankHost host && host.isMultiFluidModeSynced()) {

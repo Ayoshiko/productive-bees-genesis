@@ -85,6 +85,9 @@ public class GuiMekCentrifuge
 				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING,
 						jeiViewerTypeOrNull())
 				.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
+		CentrifugeInputReturnButton inputReturnButton = CentrifugeInputReturnButton.createForCentrifuge(
+				this, imageWidth, tile.getBlockPos());
+		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);
 	}
 
 
