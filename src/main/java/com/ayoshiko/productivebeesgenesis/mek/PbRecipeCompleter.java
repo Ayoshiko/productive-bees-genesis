@@ -13,6 +13,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -115,8 +116,10 @@ public class PbRecipeCompleter {
 		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
 		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
 		selectRecipe(recipe);
+		boolean discardWax = context.suppressesUselessByproducts();
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
+			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
 			// stability bonus 提升非保底产物概率，截断到 1.0
@@ -186,8 +189,10 @@ public class PbRecipeCompleter {
 
 		// v2.0.9 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
 		selectRecipe(recipe);
+		boolean discardWax = context.suppressesUselessByproducts();
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
+			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
 			ChancedOutput chanced = entry.getValue();
 			float chance = chanced.chance();
 			int min = Math.max(0, chanced.min());
@@ -288,6 +293,18 @@ public class PbRecipeCompleter {
 	/** 本 tick 已聚合的物品总数量(供协调器判断是否达到 flush 阈值) */
 	public int pendingItemCount() {
 		return pendingItemCount;
+	}
+
+	/** Drops wax that was buffered before the upgrade was installed. */
+	void discardSuppressedWaxOutputs() {
+		if (!context.suppressesUselessByproducts() || pendingOutputs.isEmpty()) return;
+		Iterator<Map.Entry<ItemStack, Integer>> iterator = pendingOutputs.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<ItemStack, Integer> entry = iterator.next();
+			if (!UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
+			pendingItemCount = Math.max(0, pendingItemCount - Math.max(0, entry.getValue()));
+			iterator.remove();
+		}
 	}
 
 	/** 本 tick 尚未扣除的输入数量(供协调器判断剩余输入是否足够) */

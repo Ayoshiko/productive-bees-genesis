@@ -383,7 +383,7 @@ public class PbRecipeProcessor {
 			// 计算并存储PB配方处理时间（同步到客户端用于进度条显示）
 			int processingTime = energyCache.getPbProcessingTime(recipeValue);
 			pbProcessingTime[processIndex] = processingTime;
-			boolean hasItemOutputs = !recipeValue.getRecipeOutputs().isEmpty();
+			boolean hasItemOutputs = PbRecipeOutputChecker.hasItemOutput(context, recipeValue);
 			boolean hasFluidOutputs = PbRecipeOutputChecker.hasFluidOutput(context, recipeValue);
 
 			// 计算每tick并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
@@ -503,6 +503,11 @@ public class PbRecipeProcessor {
 	@Nullable
 	public RecipeHolder<CentrifugeRecipe> findPbRecipe(ItemStack input) {
 		return recipeFinder.findPbRecipe(input);
+	}
+
+	/** Returns whether this processor's host has the byproduct destruction upgrade installed. */
+	boolean suppressesUselessByproducts() {
+		return context.suppressesUselessByproducts();
 	}
 
 	// ===== 辅助方法 =====

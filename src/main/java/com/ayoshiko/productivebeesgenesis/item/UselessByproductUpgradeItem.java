@@ -10,7 +10,7 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.List;
 
 /**
- * Functional upgrade that discards honey and optional pollen-puff byproducts.
+ * Functional upgrade that discards honey, wax and optional pollen-puff byproducts.
  */
 public final class UselessByproductUpgradeItem extends UpgradeItem {
 

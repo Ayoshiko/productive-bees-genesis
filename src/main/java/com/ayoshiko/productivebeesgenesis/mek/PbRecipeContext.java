@@ -262,7 +262,7 @@ public interface PbRecipeContext {
 		return 0.0f;
 	}
 
-	/** Whether this machine currently discards honey and pollen-puff byproducts. */
+	/** Whether this machine currently discards honey, wax and pollen-puff byproducts. */
 	default boolean suppressesUselessByproducts() {
 		return this instanceof IPbUpgradeProvider provider
 				&& provider.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;

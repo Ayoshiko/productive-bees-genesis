@@ -266,7 +266,7 @@ public final class MekCentrifugeFactoryHelper {
 			return false;
 		}
 		return PbRecipeOutputChecker.isPbOutputCompatible(pbRecipe.value(), outputSlot, secondaryOutputSlot,
-				tertiaryOutputSlot);
+				tertiaryOutputSlot, pbProcessor.suppressesUselessByproducts());
 	}
 
 	// ===== onUpdateServer 公共逻辑 =====

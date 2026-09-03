@@ -69,6 +69,8 @@ public final class PbRecipeFlusher {
 	 * @return true 全部输出成功插入并扣除输入;false 输出空间不足,未执行任何修改
 	 */
 	public boolean flush(PbRecipeCompleter completer, int processIndex) {
+		PbRecipeContext context = completer.getContext();
+		completer.discardSuppressedWaxOutputs();
 		// 修复:纯流体输出配方(如 oritech 石油蜜蜂的蜜脾)没有物品输出,但仍有流体和输入扣除待处理
 		if ((completer.getPendingRecipe() == null && !completer.hasCommittedPendingOutputs())
 				|| (completer.getPendingOutputs().isEmpty()
@@ -78,7 +80,6 @@ public final class PbRecipeFlusher {
 			return true;
 		}
 
-		PbRecipeContext context = completer.getContext();
 		FluidStack bufferedFluid = completer.getPendingFluidTemplate();
 		if (context.suppressesUselessByproducts()
 				&& bufferedFluid != null

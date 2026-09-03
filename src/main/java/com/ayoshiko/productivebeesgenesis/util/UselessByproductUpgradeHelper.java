@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModFluids;
+import cy.jdkdigital.productivebees.init.ModTags;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -32,6 +33,11 @@ public final class UselessByproductUpgradeHelper {
 
 	public static boolean isPollenPuff(ItemStack stack) {
 		return !stack.isEmpty() && POLLEN_PUFF_ID.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()));
+	}
+
+	/** Returns whether the item belongs to the common wax tag used by centrifuge recipes. */
+	public static boolean isWax(ItemStack stack) {
+		return !stack.isEmpty() && stack.is(ModTags.Common.WAXES);
 	}
 
 	public static boolean isHoney(FluidStack stack) {

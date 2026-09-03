@@ -56,6 +56,15 @@ final class PbRecipeOutputChecker {
 			@NotNull IInventorySlot outputSlot,
 			@Nullable IInventorySlot secondaryOutputSlot,
 			@Nullable IInventorySlot tertiaryOutputSlot) {
+		return isPbOutputCompatible(recipe, outputSlot, secondaryOutputSlot, tertiaryOutputSlot, false);
+	}
+
+	/** 检查输出槽兼容性，并可忽略已由副产物销毁升级过滤的蜜蜡。 */
+	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
+			@NotNull IInventorySlot outputSlot,
+			@Nullable IInventorySlot secondaryOutputSlot,
+			@Nullable IInventorySlot tertiaryOutputSlot,
+			boolean discardWax) {
 		Map<ItemStack, ChancedOutput> outputs = recipe.getRecipeOutputs();
 		if (outputs.isEmpty()) {
 			return true;
@@ -72,6 +81,7 @@ final class PbRecipeOutputChecker {
 		for (Map.Entry<ItemStack, ChancedOutput> entry : outputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			if (chanced == null || chanced.chance() <= 0.0f || Math.max(0, chanced.max()) <= 0) continue;
+			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
 			templates.add(entry.getKey());
 		}
 		if (templates.isEmpty()) return true;
@@ -86,6 +96,18 @@ final class PbRecipeOutputChecker {
 					new boolean[slots.size()])) return false;
 		}
 		return true;
+	}
+
+	/** 检查配方是否有实际物品输出，已安装升级时蜜蜡输出不计入阻塞判定。 */
+	public static boolean hasItemOutput(PbRecipeContext context, CentrifugeRecipe recipe) {
+		for (Map.Entry<ItemStack, ChancedOutput> entry : recipe.getRecipeOutputs().entrySet()) {
+			ChancedOutput chanced = entry.getValue();
+			if (chanced == null || chanced.chance() <= 0.0f || Math.max(0, chanced.max()) <= 0) continue;
+			if (context.suppressesUselessByproducts()
+					&& UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
+			return true;
+		}
+		return false;
 	}
 
 	private static boolean tryMatchTemplate(int templateIndex, List<ItemStack> templates,
