@@ -11,13 +11,15 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
@@ -986,11 +988,14 @@ public final class Ae2InputPuller {
 			if (stack.getComponentsPatch().isEmpty() && probe.getComponentsPatch().isEmpty()) return true;
 			// PB 标准可配置蜜脾只有 bee_type 补丁；直接比较该组件可避开完整组件 Map.equals。
 			// 玩家重命名等附加组件会使 patch.size() > 1，仍回退原版完整比较，保证堆叠语义。
+			// 组件类型经 PbDataComponents 一次性解析：原先这里连续 4 次 DeferredHolder.get()
+			// 注册表查找，在每槽 × 每类型的规划循环里被放大（spark AHlDkwd9n9 中
+			// DeferredHolder.get 自耗 884ms / 1.47%，为全服第 2 热方法）。
+			DataComponentType<ResourceLocation> beeTypeComponent = PbDataComponents.beeType();
 			if (CombFuzzyMatcher.isConfigurableCombItem(stack.getItem())
 					&& stack.getComponentsPatch().size() == 1 && probe.getComponentsPatch().size() == 1
-					&& stack.has(ModDataComponents.BEE_TYPE.get()) && probe.has(ModDataComponents.BEE_TYPE.get())) {
-				return Objects.equals(stack.get(ModDataComponents.BEE_TYPE.get()),
-						probe.get(ModDataComponents.BEE_TYPE.get()));
+					&& stack.has(beeTypeComponent) && probe.has(beeTypeComponent)) {
+				return Objects.equals(stack.get(beeTypeComponent), probe.get(beeTypeComponent));
 			}
 			if (slotIndex < 0 || slotIndex >= componentMatchStacks.length) {
 				return ItemStack.isSameItemSameComponents(stack, probe);

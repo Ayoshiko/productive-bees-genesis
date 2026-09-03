@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -55,7 +54,7 @@ public class InputOutputCompatibilityCache {
 			Item item = stack.getItem();
 			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
 			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-				return new SlotFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()));
+				return new SlotFingerprint(item, stack.get(PbDataComponents.beeType()));
 			}
 			return new SlotFingerprint(item, null);
 		}

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModBlocks;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
@@ -139,7 +140,7 @@ public final class CombFuzzyMatcher {
 		if (fixed != null) return fixed;
 		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB
 				|| item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
-			return stack.get(ModDataComponents.BEE_TYPE.get());
+			return stack.get(PbDataComponents.beeType());
 		}
 		return null;
 	}
@@ -224,7 +225,7 @@ public final class CombFuzzyMatcher {
 		if (fixed != null) return fixed;
 		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB || item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
 			// AEItemKey.get 直读内部只读栈的组件表，无 ItemStack 拷贝
-			return key.get(ModDataComponents.BEE_TYPE.get());
+			return key.get(PbDataComponents.beeType());
 		}
 		return null;
 	}

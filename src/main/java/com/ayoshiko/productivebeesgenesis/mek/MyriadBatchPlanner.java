@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
 import mekanism.api.inventory.IInventorySlot;
@@ -303,7 +303,7 @@ public final class MyriadBatchPlanner {
 				slotLimits[i] = limit;
 				Item item = stack.getItem();
 				if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-					slotBeeTypes[i] = stack.get(ModDataComponents.BEE_TYPE.get());
+					slotBeeTypes[i] = stack.get(PbDataComponents.beeType());
 					totalRemainingCapacity += (long) limit - count;
 				}
 			}
@@ -530,7 +530,7 @@ public final class MyriadBatchPlanner {
 			return cached;
 		}
 		ItemStack template = new ItemStack(baseItem);
-		template.set(ModDataComponents.BEE_TYPE.get(), beeType);
+		template.set(PbDataComponents.beeType(), beeType);
 		// 有界缓存：超过容量时直接丢弃，由 GC 回收
 		if (TEMPLATE_CACHE.size() < TEMPLATE_CACHE_CAPACITY) {
 			TEMPLATE_CACHE.put(key, template);

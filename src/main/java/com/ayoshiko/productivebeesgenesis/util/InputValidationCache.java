@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -21,7 +20,8 @@ import java.util.function.Supplier;
 	 * SFM / AE2 等自动化模组会每 tick 多次探测输入槽有效性（{@code isItemValidForSlot} / {@code isValidInputItem}），
 	 * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
 	 * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用；
-	 * 默认保留最近 4 个输入，避免多进程工厂交替输入时单条目缓存反复失效。
+	 * 默认保留最近 {@value #DEFAULT_MAX_ENTRIES} 个输入，覆盖最高等级工厂的进程数，
+	 * 避免多进程工厂交替输入时缓存槽位互相驱逐。
 	 * <p>
 	 * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
 	 * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
@@ -50,8 +50,15 @@ public class InputValidationCache {
 	 */
 	public static final int DEFAULT_TTL = 100;
 
-	/** Default number of recent inputs retained for alternating factory lanes. */
-	private static final int DEFAULT_MAX_ENTRIES = 4;
+	/**
+	 * Default number of recent inputs retained for alternating factory lanes.
+	 * <p>
+	 * 取 20 覆盖最高等级工厂的进程数（EM CREATIVE 为 19 进程，每进程可放不同蜜脾类型）。
+	 * 此前的 4 在多进程工厂上会让各进程的输入互相驱逐，退化成每次探测都重跑配方查找。
+	 * 未命中时的代价是最多 20 次 {@link InputFingerprint} 记录比较（Item 引用 + 可空
+	 * ResourceLocation + int）与一次数组移位，远低于一次 SMELTING/PB 配方查找。
+	 */
+	private static final int DEFAULT_MAX_ENTRIES = 20;
 
 	/**
 	 * 输入指纹 — Item + beeType + 通用组件哈希，不含 count
@@ -72,7 +79,7 @@ public class InputValidationCache {
 			Item item = stack.getItem();
 			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
 			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-				return new InputFingerprint(item, stack.get(ModDataComponents.BEE_TYPE.get()), 0);
+				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), 0);
 			}
 			// 普通熔炼原料通常没有组件补丁；同 Item 的默认组件固定，无需每次计算完整组件哈希。
 			if (stack.getComponentsPatch().isEmpty()) {

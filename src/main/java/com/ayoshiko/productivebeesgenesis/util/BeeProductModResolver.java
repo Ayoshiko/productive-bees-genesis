@@ -22,7 +22,6 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves a Productive Bees bee to the mod namespace of its final resource output.
@@ -35,7 +34,24 @@ public final class BeeProductModResolver {
 
 	private static final TagKey<Item> WAXES_TAG = TagKey.create(
 			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "waxes"));
-	private static final Map<ResourceLocation, BeeProductModProfile> PRODUCT_MOD_CACHE = new ConcurrentHashMap<>();
+
+	/**
+	 * 产物归属缓存上限
+	 * <p>
+	 * 蜜蜂类型数量本身由注册表/配方数据界定（通常数百），此上限只作为内存防线：
+	 * 防止自定义数据包生成大量一次性 bee_type 时缓存无界增长。
+	 */
+	private static final int MAX_CACHE_ENTRIES = 512;
+
+	/**
+	 * 产物归属缓存 — 访问顺序 LRU，超限淘汰最久未使用条目
+	 * <p>
+	 * 查询在 GUI 排序/搜索路径调用（非每 tick 热路径），全表锁开销可接受。
+	 * 真正昂贵的 {@link #resolveUncached} 在锁外执行，并发争用时最多重复计算一次
+	 * （结果幂等），不会长时间持锁做配方查找。
+	 */
+	private static final Map<ResourceLocation, BeeProductModProfile> PRODUCT_MOD_CACHE =
+			BoundedLruMap.synchronizedAccessOrdered(MAX_CACHE_ENTRIES);
 
 	private BeeProductModResolver() {
 	}
@@ -57,7 +73,13 @@ public final class BeeProductModResolver {
 	@Nonnull
 	public static BeeProductModProfile resolveProfile(
 			@Nonnull Level level, @Nonnull ResourceLocation beeType) {
-		return PRODUCT_MOD_CACHE.computeIfAbsent(beeType, key -> resolveUncached(level, key));
+		// 先查缓存（持锁仅为哈希查找），未命中时在锁外解析，避免长时间持锁做配方查询。
+		BeeProductModProfile cached = PRODUCT_MOD_CACHE.get(beeType);
+		if (cached != null) return cached;
+		BeeProductModProfile resolved = resolveUncached(level, beeType);
+		// 并发争用时可能重复解析，结果幂等；putIfAbsent 保证同一 beeType 只保留一份实例。
+		BeeProductModProfile existing = PRODUCT_MOD_CACHE.putIfAbsent(beeType, resolved);
+		return existing != null ? existing : resolved;
 	}
 
 	@Nonnull

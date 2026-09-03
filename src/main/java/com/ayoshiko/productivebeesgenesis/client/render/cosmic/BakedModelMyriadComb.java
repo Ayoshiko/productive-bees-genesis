@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.mojang.blaze3d.vertex.PoseStack;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
@@ -34,7 +34,7 @@ public class BakedModelMyriadComb extends WrappedItemModel {
 	@Override
 	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
 			MultiBufferSource buffers, int packedLight, int packedOverlay) {
-		ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+		ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(beeType) && cosmicModel instanceof PerspectiveModel cosmicPerspective) {
 			cosmicPerspective.renderItem(stack, context, poseStack, buffers, packedLight, packedOverlay);
 		} else {

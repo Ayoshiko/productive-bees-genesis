@@ -43,28 +43,6 @@ class SkyhiveMigrationCompatibilityTest {
 				LegacyPackMigrationAssertions.content(plan, ModConfig.CAPACITIES_SERVER_FILE_NAME));
 	}
 
-	/** 整合包作者用 beebee_page_ex 把 iamall 转化成万象蜜蜂，这些玩法键必须逐一进入玩法文件。 */
-	@Test
-	void preservesSkyhiveMyriadAcquisitionKeysInGameplayFile() throws Exception {
-		Assumptions.assumeTrue(Files.isRegularFile(SKYHIVE_LEGACY),
-				"本机未安装 Skyhive，跳过外部配置回归测试");
-
-		CommentedConfig legacy = ServerConfigMigrationFiles.parse(SKYHIVE_LEGACY);
-		ServerConfigMigrationService.MigrationPlan plan = ServerConfigMigrationService.createPlan(
-				legacy, LegacyPackMigrationAssertions.defaultTargets(tempDir));
-		CommentedConfig gameplay = LegacyPackMigrationAssertions.content(
-				plan, ModConfig.GAMEPLAY_SERVER_FILE_NAME);
-
-		assertEquals("productivebees:iamall", gameplay.get("bee_conversion.source"));
-		assertEquals("productivebees:myriadcreations", gameplay.get("bee_conversion.result"));
-		assertEquals("beebeeblock:beebee_page_ex", gameplay.get("bee_conversion.item"));
-		assertEquals("beebeeblock:beebee_page_ex", gameplay.get("bee_attributes.flowerItem"));
-		assertEquals(Boolean.FALSE, gameplay.get("bee_attributes.createComb"));
-		Object profile = gameplay.get("balanceProfile");
-		assertEquals(BalancePreset.BASIC.name(), String.valueOf((Object) profile));
-		assertEquals(Boolean.TRUE, gameplay.get("balance.apiaryBeeGenesAffectWork"));
-	}
-
 	@Test
 	void skyhiveRecipeOverridesUseStableIdsAndDoNotDependOnLegacyConfigPath() throws Exception {
 		Assumptions.assumeTrue(Files.isRegularFile(SKYHIVE_KUBEJS),

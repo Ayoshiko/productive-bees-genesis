@@ -6,8 +6,8 @@ import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.RecipeCacheLookupMonitorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -221,7 +221,7 @@ public final class MekCentrifugeFactoryHelper {
 		// 熔炼配方会抢占输入，或在熔炼兼容关闭时把万象物品误判为无效。
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) {
 			return new InputValidationCache.ValidationResult(true, null,
-					stack.get(ModDataComponents.BEE_TYPE.get()),
+					stack.get(PbDataComponents.beeType()),
 					stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get());
 		}
 		if (allowSmelting && containsSmeltingInput(recipeType, level, stack)) {
@@ -231,7 +231,7 @@ public final class MekCentrifugeFactoryHelper {
 		if (recipe == null) {
 			return InputValidationCache.ValidationResult.INVALID;
 		}
-		ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+		ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 		boolean isCombBlock = stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get();
 		return new InputValidationCache.ValidationResult(true, recipe, beeType, isCombBlock);
 	}

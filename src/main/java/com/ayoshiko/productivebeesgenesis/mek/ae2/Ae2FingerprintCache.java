@@ -1,9 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
+import com.ayoshiko.productivebeesgenesis.util.BoundedLruMap;
 import net.minecraft.core.HolderLookup;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -24,19 +24,22 @@ import java.util.Map;
  * item + 数据组件决定，与指纹的编码输入完全一致；同一 {@code HolderLookup.Provider}
  * 下同一 key 的编码结果恒定。provider 变化（换存档/重启）时整表清空。
  * <p>
- * <b>有界性</b>：条目数超过 {@link #MAX_ENTRIES} 时整表清空（而非 LRU）——
- * 单台机器实际接触的物品种类远小于该上限，清空只在异常场景发生，避免内存无界增长。
+ * <b>有界性</b>：由 {@link BoundedLruMap#accessOrdered} 提供访问顺序 LRU，超出
+ * {@link #MAX_ENTRIES} 时仅淘汰最久未使用的一条。此前的实现是"满即整表清空"，
+ * 在物品种类超过上限的大网络里会周期性丢弃全部热条目导致命中率塌陷（清空后所有键都要重新编码）；
+ * LRU 让稳定复用的键始终驻留，代价只是每次命中多一次链表节点移动。
  * <p>
  * <b>线程安全</b>：与 {@link Ae2PushBuffers} 其他字段一致，仅服务端 tick 线程访问，
- * 因此使用普通 {@link HashMap}，不引入同步开销。客户端 GUI 走
+ * 因此使用非同步容器，不引入同步开销。客户端 GUI 走
  * {@link Ae2ItemFingerprint#encode} 原路径，不共享本缓存。
  */
 final class Ae2FingerprintCache {
 
-	/** 单台机器指纹条目上限；超出即整表清空。 */
+	/** 单台机器指纹条目上限；超出即按 LRU 淘汰最久未使用的一条。 */
 	private static final int MAX_ENTRIES = 128;
 
-	private final Map<AEItemKey, String> cache = new HashMap<>();
+	/** 访问顺序 LRU：get/put 都会把条目移到最近使用端，淘汰最久未使用的一条。 */
+	private final Map<AEItemKey, String> cache = BoundedLruMap.accessOrdered(MAX_ENTRIES);
 
 	/** 上次编码使用的注册表访问器；变化即视为整表失效。 */
 	private HolderLookup.Provider registries;
@@ -57,7 +60,7 @@ final class Ae2FingerprintCache {
 		if (cached != null) return cached;
 		String encoded = Ae2ItemFingerprint.encode(key, provider);
 		if (encoded.isEmpty()) return encoded;
-		if (cache.size() >= MAX_ENTRIES) cache.clear();
+		// put 触发 removeEldestEntry，超限时淘汰最久未使用条目（不再整表清空）
 		cache.put(key, encoded);
 		return encoded;
 	}

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
@@ -106,6 +106,6 @@ public interface IMekCentrifugeTile {
 			return true;
 		}
 		// PB 蜜脾（带 BEE_TYPE 组件）
-		return input.has(ModDataComponents.BEE_TYPE.get());
+		return input.has(PbDataComponents.beeType());
 	}
 }

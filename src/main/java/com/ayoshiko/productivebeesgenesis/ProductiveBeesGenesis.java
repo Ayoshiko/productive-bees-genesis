@@ -31,6 +31,7 @@ import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
+import com.ayoshiko.productivebeesgenesis.util.SingleIngredientCraftingIndex;
 import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.capabilities.ICapabilityAware;
 import net.minecraft.core.registries.Registries;
@@ -332,6 +333,8 @@ public final class ProductiveBeesGenesis {
 		BeeProduceProcessor.invalidateCache();
 		// 失效物品/方块转化配方索引（配方重载后转化原料花朵判定需重建）
 		BeeConversionQueries.invalidate();
+		// 失效单原料合成配方索引（染料蜜蜂花→染料查找，配方重载后产出映射可能变化）
+		SingleIngredientCraftingIndex.invalidate();
 		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）

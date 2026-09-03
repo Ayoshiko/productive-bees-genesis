@@ -2,9 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import net.minecraft.resources.ResourceLocation;
@@ -104,7 +104,7 @@ public class PbRecipeFinder {
 
 		// 蜜脾块 — 优先从静态索引查找（O(1)），未命中回退到全量遍历（防御性）
 		if (input.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-			ResourceLocation beeType = input.get(ModDataComponents.BEE_TYPE.get());
+			ResourceLocation beeType = input.get(PbDataComponents.beeType());
 			if (beeType != null) {
 				RecipeHolder<CentrifugeRecipe> blockRecipe = CentrifugeRecipeIndex.getCombBlock(beeType);
 				if (blockRecipe != null) {
@@ -146,7 +146,7 @@ public class PbRecipeFinder {
 		}
 
 		// 普通蜜脾 — 优先从索引查找（O(1)），未命中再全量遍历（防御性回退）
-		ResourceLocation beeType = input.get(ModDataComponents.BEE_TYPE.get());
+		ResourceLocation beeType = input.get(PbDataComponents.beeType());
 		if (beeType != null) {
 			RecipeHolder<CentrifugeRecipe> indexed = CentrifugeRecipeIndex.get(beeType);
 			if (indexed != null && indexed.value().ingredient.test(input)) {

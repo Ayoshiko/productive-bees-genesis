@@ -53,15 +53,18 @@ class Ae2HotPathCacheWiringTest {
 	}
 
 	@Test
-	@DisplayName("指纹缓存有界且随注册表切换整表失效")
+	@DisplayName("指纹缓存按 LRU 有界且随注册表切换整表失效")
 	void fingerprintCacheIsBoundedAndRegistryAware() throws Exception {
 		String cache = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2FingerprintCache.java");
 		assertTrue(cache.contains("MAX_ENTRIES"), "必须有条目上限，防止内存无界增长");
 		assertTrue(cache.contains("if (registries != provider)"),
 				"注册表访问器变化（换存档/重启）必须整表清空，否则可能返回旧注册表的编码");
-		assertTrue(cache.contains("if (cache.size() >= MAX_ENTRIES) cache.clear();"),
-				"超上限时整表清空（单机器物品种类远小于上限，仅异常场景触发）");
+		assertTrue(cache.contains("BoundedLruMap.accessOrdered(MAX_ENTRIES)"),
+				"超上限必须按 LRU 淘汰最久未使用条目；旧的\"满即整表清空\"在物品种类超上限的"
+						+ "大网络里会周期性丢弃全部热条目，命中率塌陷");
+		assertFalse(cache.contains("if (cache.size() >= MAX_ENTRIES) cache.clear();"),
+				"不得回退到满即整表清空");
 	}
 
 	@Test
@@ -165,9 +168,12 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("组件快速路径保留异常物品的完整堆叠语义")
 	void componentFastPathsRequireCanonicalIdentityComponents() throws Exception {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		assertTrue(puller.contains("stack.has(ModDataComponents.BEE_TYPE.get())"
-				+ " && probe.has(ModDataComponents.BEE_TYPE.get())"),
+		// 组件类型已提到局部变量（spark：DeferredHolder.get 曾占 1.47%），但"双方都必须显式
+		// 携带 bee_type 才能绕过完整组件比较"这一堆叠语义约束不变。
+		assertTrue(puller.contains("stack.has(beeTypeComponent) && probe.has(beeTypeComponent)"),
 				"可配置蜜脾只有双方显式携带 bee_type 时才能绕过完整组件比较");
+		assertFalse(puller.contains("ModDataComponents.BEE_TYPE.get()"),
+				"热路径不得回退到逐次 DeferredHolder 注册表查找");
 
 		String validation = read("src/main/java/com/ayoshiko/productivebeesgenesis/util/"
 				+ "InputValidationCache.java");

@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
@@ -203,7 +203,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		while (count > 0) {
 			int stackSize = Math.min(64, count);
 			ItemStack stack = new ItemStack(item, stackSize);
-			stack.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+			stack.set(PbDataComponents.beeType(), PBConstants.MYRIADCREATIONS_TYPE);
 			out.add(stack);
 			count -= stackSize;
 		}
@@ -254,7 +254,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()) {
-				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
@@ -273,7 +273,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-				ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
@@ -311,7 +311,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	private static ResourceLocation getBeeTypeFromStack(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		if (isConfigurableHoneycomb(stack) || isConfigurableCombBlock(stack)) {
-			return stack.get(ModDataComponents.BEE_TYPE.get());
+			return stack.get(PbDataComponents.beeType());
 		}
 		return null;
 	}
