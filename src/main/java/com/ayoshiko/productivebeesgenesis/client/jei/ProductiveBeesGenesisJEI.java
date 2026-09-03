@@ -428,7 +428,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	@Override
 	public void onRuntimeAvailable(IJeiRuntime runtime) {
 		// 检查配置是否加载以及万象创世是否被禁用
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			return;
 		}
 		if (ModConfig.SERVER.myriadCreationsEnabled.get()) {

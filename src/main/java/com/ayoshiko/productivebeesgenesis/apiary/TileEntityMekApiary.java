@@ -210,7 +210,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		}
 	}
 
-	/** 失效所有蜂箱槽位上限缓存 — 委托 ApiarySlotManager.invalidateCache()，配置 reload 时调用 */
+	/** 失效所有蜂箱槽位上限缓存 — 委托 ApiarySlotManager.invalidateCache()，供显式失效场景调用。 */
 	public static void invalidateSlotManagerCache() {
 		ApiarySlotManager.invalidateCache();
 	}

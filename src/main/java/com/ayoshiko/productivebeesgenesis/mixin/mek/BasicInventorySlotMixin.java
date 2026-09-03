@@ -26,9 +26,8 @@ import java.util.function.IntSupplier;
 	 * 通过 {@link TieredInputSlot} 接口为 {@link BasicInventorySlot} 注入可配置的堆叠倍率。
 	 * 当倍率已设置时，{@code getLimit} 返回 {@code baseLimit × multiplier}。
 	 * <p>
-	 * 性能优化：倍率值使用版本号缓存，配置 reload 时递增
-	 * {@link TieredInputSlot#MULTIPLIER_VERSION}，本实例检测到版本号不匹配时重新读取。
-	 * 无 reload 期间零 ModConfig 读取开销。
+	 * 性能优化：倍率值使用版本号缓存，当前游戏会话内保持稳定；配置 reload 不失效，
+	 * 修改后重启生效。仅显式递增版本号时重新读取会话快照。
 	 * <p>
 	 * 生效范围：
 	 * <ul>
@@ -122,7 +121,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		this.productivebeesgenesis$inputMultiplier = supplier;
 		// 重置缓存，确保新 supplier 立即生效
 		this.productivebeesgenesis$cachedInputMultiplier = -1;
-		// 已乘倍率的最终上限缓存也必须清：替换 supplier 不递增全局 MULTIPLIER_VERSION，
+		// 已乘倍率的最终上限缓存也必须清：替换 supplier 不递增全局版本号，
 		// 否则旧倍率算出的上限会继续命中。
 		SlotLimitCache limitCache = productivebeesgenesis$limitCache;
 		if (limitCache != null) limitCache.invalidate();

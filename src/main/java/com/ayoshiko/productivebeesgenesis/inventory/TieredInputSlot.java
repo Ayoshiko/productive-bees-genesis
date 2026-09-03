@@ -15,10 +15,8 @@ import java.util.function.IntSupplier;
 	 * 通过此接口可在槽位创建后注入 {@link IntSupplier}，运行时由 getLimit 乘以该倍率，
 	 * 实现不同等级离心机/工厂输入槽的独立堆叠上限配置。
 	 * <p>
-	 * 倍率缓存采用版本号机制：配置 reload 时递增 {@link #MULTIPLIER_VERSION}，
-	 * 各槽位实例检测到版本号不匹配时重新从 IntSupplier 读取倍率值。
-	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis} 在
-	 * {@code ModConfigEvent.Reloading} 事件中调用 {@link #invalidateMultiplierCache()}。
+	 * 倍率缓存保留版本号失效机制，但服务端配置 reload 不递增版本号；倍率快照只在
+	 * 配置 Loading 时发布，因此当前游戏会话内保持稳定，修改配置后重启生效。
 	 * <p>
 	 * 设计原则：
 	 * <ul>
@@ -28,7 +26,7 @@ import java.util.function.IntSupplier;
 	 */
 public interface TieredInputSlot {
 
-	/** 全局倍率缓存版本号 — 配置 reload 时递增，触发所有实例重新读取倍率 */
+	/** 全局倍率缓存版本号 — 仅供显式失效场景触发所有实例重新读取倍率。 */
 	AtomicLong MULTIPLIER_VERSION = new AtomicLong(0);
 
 	/**
@@ -37,8 +35,6 @@ public interface TieredInputSlot {
 	 * 递增 {@link #MULTIPLIER_VERSION}，所有槽位实例下次调用
 	 * {@link #productivebeesgenesis$getCachedMultiplier()} 时检测到版本号不匹配
 	 * 将主动重新从 IntSupplier 读取倍率值。
-	 * <p>
-	 * 由主类在 {@code ModConfigEvent.Reloading} 事件中调用。
 	 */
 	static void invalidateMultiplierCache() {
 		MULTIPLIER_VERSION.incrementAndGet();
@@ -50,7 +46,7 @@ public interface TieredInputSlot {
 	 * 设置后，getLimit 返回值将乘以该倍率。
 	 * 未设置（null）时 getLimit 行为不变。
 	 *
-	 * @param supplier 堆叠倍率供应商（每次 getLimit 调用时读取），null 清除倍率
+	 * @param supplier 堆叠倍率供应商（缓存首次读取，显式失效后重读），null 清除倍率
 	 */
 	void productivebeesgenesis$setInputStackMultiplier(IntSupplier supplier);
 

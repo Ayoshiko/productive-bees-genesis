@@ -21,7 +21,7 @@ public final class BeeConfigApplier {
 	/** 应用配置覆盖到万象创世蜜蜂数据 */
 	public static void applyOverrides() {
 		// 配置未加载时跳过（首次启动时常见）
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			return;
 		}
 

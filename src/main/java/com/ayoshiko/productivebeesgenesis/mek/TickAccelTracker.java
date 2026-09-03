@@ -242,7 +242,7 @@ public class TickAccelTracker {
 			lastBudgetRefreshTick = currentTick;
 			int max = MAX_BATCH_TICKS;
 			try {
-				if (ModConfig.SERVER_SPEC.isLoaded()) {
+				if (ModConfig.areServerSpecsLoaded()) {
 					max = Math.max(1, Math.min(1024, ModConfig.SERVER.maxBatchTicksPerTick.get()));
 				}
 			} catch (RuntimeException ignored) {

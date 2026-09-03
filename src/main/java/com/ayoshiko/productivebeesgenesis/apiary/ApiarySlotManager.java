@@ -225,7 +225,7 @@ public class ApiarySlotManager {
 		builder.addSlot(cageOutSlot);
 
 		// 物理输出库存按页追加；每页复用同一套 GUI 坐标，由容器代理槽选择当前页。
-		// 使用 TieredOutputInventorySlot 支持分等级堆叠倍率，倍率由 ApiaryTierMultiplierResolver 动态提供
+		// 使用 TieredOutputInventorySlot 支持分等级堆叠倍率，倍率由会话快照按等级提供
 		// Bug 10: 绑定 NO_SPACE_IN_OUTPUT 警告，输出槽满时在警告Tab显示
 		IntSupplier stackMultiplier = ApiaryTierMultiplierResolver.getStackMultiplierForTier(tile);
 		IContentsListener outputListener = () -> {
@@ -304,9 +304,8 @@ public class ApiarySlotManager {
 	/**
 	 * 失效槽位上限缓存 — 委托至 {@link SlotLimitCache}
 	 * <br/>
-	 * 由主类在 {@code ModConfigEvent.Reloading} 事件中调用，确保配置 reload 后
-	 * 依赖 stackMultiplier 的 limit 缓存立即失效。保留为静态方法以维持对外 API 不变
-	 * （{@link TileEntityMekApiary} 通过 {@code ApiarySlotManager.invalidateCache()} 调用）。
+	 * 配置 reload 不调用此方法，倍率在当前游戏会话内保持稳定。保留为静态方法以维持
+	 * 对外 API 不变，并允许显式失效场景通过 {@link TileEntityMekApiary} 调用。
 	 */
 	static void invalidateCache() {
 		SlotLimitCache.invalidateCache();

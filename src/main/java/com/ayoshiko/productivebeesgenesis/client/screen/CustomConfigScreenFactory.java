@@ -21,8 +21,15 @@ public final class CustomConfigScreenFactory implements IConfigScreenFactory {
 	@Override
 	public Screen createScreen(ModContainer container, Screen modListScreen) {
 		return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
-			if (type == ModConfig.Type.SERVER) {
+			if (type == ModConfig.Type.SERVER
+					&& modConfig.getSpec()
+					== com.ayoshiko.productivebeesgenesis.config.ModConfig.GAMEPLAY_SERVER_SPEC) {
 				return new ServerConfigScreen(screen, modConfig);
+			}
+			if (type == ModConfig.Type.SERVER
+					&& modConfig.getSpec()
+					== com.ayoshiko.productivebeesgenesis.config.ModConfig.CAPACITIES_SERVER_SPEC) {
+				return new FixedOrderConfigurationScreen(screen, type, modConfig, title);
 			}
 			return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
 		});

@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
+import com.ayoshiko.productivebeesgenesis.config.FactoryTierKey;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 
 import java.util.Optional;
@@ -24,6 +25,10 @@ final class ApiaryTierMultiplierResolverDelegate {
 	private ApiaryTierMultiplierResolverDelegate() {
 	}
 
+	private static IntSupplier supplier(FactoryTierKey tier) {
+		return () -> FactoryTierConfigService.current().apiaryOutputStack(tier);
+	}
+
 	/**
 	 * 解析 EME 蜂箱工厂的堆叠倍率供应商
 	 * <br/>
@@ -39,18 +44,13 @@ final class ApiaryTierMultiplierResolverDelegate {
 		EMExtraFactoryTier t = eme.getEMETier();
 		if (t != null) {
 			return Optional.of(switch (t) {
-				case ABSOLUTE_OVERCLOCKED -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackEmeAbsoluteOverclocked.get());
-				case SUPREME_QUANTUM -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackEmeSupremeQuantum.get());
-				case COSMIC_DENSE -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackEmeCosmicDense.get());
-				case INFINITE_MULTIVERSAL -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackEmeInfiniteMultiversal.get());
-				default -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackBasic.get());
+				case ABSOLUTE_OVERCLOCKED -> supplier(FactoryTierKey.EME_ABSOLUTE_OVERCLOCKED);
+				case SUPREME_QUANTUM -> supplier(FactoryTierKey.EME_SUPREME_QUANTUM);
+				case COSMIC_DENSE -> supplier(FactoryTierKey.EME_COSMIC_DENSE);
+				case INFINITE_MULTIVERSAL -> supplier(FactoryTierKey.EME_INFINITE_MULTIVERSAL);
+				default -> supplier(FactoryTierKey.BASIC);
 			});
 		}
-		return Optional.of(() -> configStackValue(() -> ModConfig.SERVER.apiaryStackBasic.get()));
-	}
-
-	private static int configStackValue(IntSupplier source) {
-		if (ModConfig.SERVER == null) return 1;
-		return source.getAsInt();
+		return Optional.of(supplier(FactoryTierKey.BASIC));
 	}
 }

@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
+import com.ayoshiko.productivebeesgenesis.config.FactoryTierKey;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 
 import java.util.Optional;
@@ -21,6 +22,10 @@ final class ApiaryTierMultiplierResolverMEDelegate {
 	private ApiaryTierMultiplierResolverMEDelegate() {
 	}
 
+	private static IntSupplier supplier(FactoryTierKey tier) {
+		return () -> FactoryTierConfigService.current().apiaryOutputStack(tier);
+	}
+
 	/**
 	 * 解析 ME 蜂箱工厂的堆叠倍率供应商
 	 * <br/>
@@ -36,18 +41,13 @@ final class ApiaryTierMultiplierResolverMEDelegate {
 		ExtraFactoryTier t = me.getMETier();
 		if (t != null) {
 			return Optional.of(switch (t) {
-				case ABSOLUTE -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackMeAbsolute.get());
-				case SUPREME -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackMeSupreme.get());
-				case COSMIC -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackMeCosmic.get());
-				case INFINITE -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackMeInfinite.get());
-				default -> () -> configStackValue(() -> ModConfig.SERVER.apiaryStackBasic.get());
+				case ABSOLUTE -> supplier(FactoryTierKey.ME_ABSOLUTE);
+				case SUPREME -> supplier(FactoryTierKey.ME_SUPREME);
+				case COSMIC -> supplier(FactoryTierKey.ME_COSMIC);
+				case INFINITE -> supplier(FactoryTierKey.ME_INFINITE);
+				default -> supplier(FactoryTierKey.BASIC);
 			});
 		}
-		return Optional.of(() -> configStackValue(() -> ModConfig.SERVER.apiaryStackBasic.get()));
-	}
-
-	private static int configStackValue(IntSupplier source) {
-		if (ModConfig.SERVER == null) return 1;
-		return source.getAsInt();
+		return Optional.of(supplier(FactoryTierKey.BASIC));
 	}
 }

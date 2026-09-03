@@ -28,7 +28,8 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 
 	public ServerConfigScreen(Screen parent, ModConfig modConfig) {
 		super(parent, Minecraft.getInstance().options,
-				Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"));
+				Component.translatable(
+						"productivebeesgenesis.configuration.section.productivebeesgenesis.gameplay.server.toml.title"));
 		this.modConfig = modConfig;
 		// Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
 		// 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
@@ -59,19 +60,21 @@ public final class ServerConfigScreen extends OptionsSubScreen {
 
 		// 2. 其他服务端配置 — 基于 NeoForge，并为平衡性预设提供列表选择器
 		Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.server.other"));
+				Component.translatable("productivebeesgenesis.configuration.gameplay.other"));
 		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel,
 			font).alignLeft();
 		otherLabelWidget.setTooltip(Tooltip.create(
-				Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")));
+				Component.translatable("productivebeesgenesis.configuration.gameplay.other.tooltip")));
 
 		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.server.other.button"));
+				Component.translatable("productivebeesgenesis.configuration.gameplay.other.button"));
 		Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
 						new BalanceConfigurationScreen(
 								this, ModConfig.Type.SERVER, modConfig,
-								Component.translatable("productivebeesgenesis.configuration.section.productivebeesgenesis.server.toml.title"))))
-				.tooltip(Tooltip.create(Component.translatable("productivebeesgenesis.configuration.server.other.tooltip")))
+								Component.translatable(
+										"productivebeesgenesis.configuration.section.productivebeesgenesis.gameplay.server.toml.title"))))
+				.tooltip(Tooltip.create(Component.translatable(
+						"productivebeesgenesis.configuration.gameplay.other.tooltip")))
 				.width(Button.DEFAULT_WIDTH)
 				.build();
 

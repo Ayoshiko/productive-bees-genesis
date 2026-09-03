@@ -103,6 +103,15 @@ class ConfigTranslationResourcesTest {
 			keys.add(definition.translationKey() == null
 					? PREFIX + definition.leafName() : definition.translationKey());
 		}
+		// 等级项由 FactoryTierConfigValues 循环注册，源码扫描无法从参数中推断完整键集合。
+		keys.addAll(FactoryTierConfigValues.translationKeys(
+				PREFIX + "mek_centrifuge.stack_multiplier"));
+		keys.addAll(FactoryTierConfigValues.translationKeys(
+				PREFIX + "mek_centrifuge.input_stack_multiplier"));
+		keys.addAll(FactoryTierConfigValues.translationKeys(
+				PREFIX + "mek_centrifuge.fluid_tank_multiplier"));
+		keys.addAll(FactoryTierConfigValues.translationKeys(
+				PREFIX + "mek_apiary.stack_multiplier"));
 		return keys;
 	}
 

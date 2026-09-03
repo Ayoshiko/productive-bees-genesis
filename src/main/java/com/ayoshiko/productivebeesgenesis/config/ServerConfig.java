@@ -9,7 +9,8 @@ import java.util.List;
 	 * <p>
 	 * 从 {@link ModConfig} 抽取的独立配置类(Task 21),遵循单一职责原则(SRP)。
 	 * 随存档保存,不同存档可拥有不同配置。世界加载时自动生效,无需执行 /reload。
-	 * 实例由 {@link ModConfig#SERVER} 聚合持有,外部访问路径 {@code ModConfig.SERVER.xxx} 保持不变。
+	 * 实例由 {@link ModConfig#SERVER} 聚合持有；基础配置和非倍率委托字段继续通过
+	 * {@code ModConfig.SERVER.xxx} 访问，等级倍率统一通过各配置段访问。
 	 * <p>
 	 * 校验逻辑(颜色、ResourceLocation、枚举值集合)复用 {@link ModConfig} 中的 package-private
 	 * validator 方法与常量,保证配置文件 validator 与网络包服务端校验逻辑单一来源(SRP)。
@@ -22,16 +23,16 @@ import java.util.List;
 	 *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置(mek_centrifuge.*)</li>
 	 *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置(mek_apiary.*,Task 18 新增)</li>
 	 * </ul>
-	 * 配置键名、层级、注册顺序与抽取前完全一致,纯重构无行为变更。
+	 * 各配置段内的键名和层级保持稳定；服务端持久化文件由迁移服务从旧单文件事务式拆分，
+	 * 运行时委托字段继续指向同一 ConfigValue，避免业务逻辑行为变化。
 	 * <p>
-	 * <b>v2.0.0 条件化注册与 null 守卫</b>:AE2/EM 相关委托字段在对应附属未加载时为 null。
-	 * 访问处需通过 {@code Ae2IntegrationLoader.isAe2Loaded()} 或
-	 * {@code MekCompatHooks.isEvolvedMekanismLoaded()} 守卫避免 NPE。
+	 * <b>可选集成配置稳定性</b>:AE2/AppliedFlux 配置键始终注册，确保依赖临时移除后配置值不丢失；
+	 * 运行时功能仍由集成层的依赖检测保护。
 	 * <p>
 	 * <b>v2.0.0 子段抽取</b>:离心机堆叠倍率/流体罐倍率已抽取至
 	 * {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
-	 * 外部访问需通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.xxx.get()}
-	 * 或 {@code ModConfig.SERVER.centrifuge().fluidTankMultiplier.xxx.get()}。
+	 * 外部访问需通过 {@code ModConfig.SERVER.centrifuge().stackMultiplier.outputStack.get(tier)}
+	 * 或 {@code ModConfig.SERVER.centrifuge().fluidTankMultiplier.values.get(tier)}。
 	 */
 public final class ServerConfig {
 
@@ -155,16 +156,16 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 	// Task 2: 单 tick 最大 PB 配方操作数上限(0=无限制),防止 256× 加速下 CPU 过载
 	public final ModConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
-	// AE2 直接输出集成开关 — AE2 未加载时为 null(条件化注册)
+	// AE2 直接输出集成开关
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
-	// AE2 流体输出集成开关(独立于物品输出)— AE2 未加载时为 null
+	// AE2 流体输出集成开关（独立于物品输出）
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
-	// v2.0.0: AE 网络能量输入集成 — AE2/AppliedFlux 未加载时为 null(条件化注册)
+	// AE 网络能量输入集成
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
-	// 允许提取 AE2 原生能量 — AppliedFlux 未加载时为 null(条件化注册)
+	// 允许提取 AE2 原生能量
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
-	// AE2 输入拉取集成 — AE2 未加载时为 null(条件化注册)
+	// AE2 输入拉取集成
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
@@ -188,31 +189,13 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue apiaryEjectMaxPerTick;
 	public final ModConfigSpec.IntValue apiaryEjectBlockedThreshold;
 	public final ModConfigSpec.IntValue apiaryEjectBlockedCooldown;
-	public final ModConfigSpec.IntValue apiaryStackBasic;
-	public final ModConfigSpec.IntValue apiaryStackAdvanced;
-	public final ModConfigSpec.IntValue apiaryStackElite;
-	public final ModConfigSpec.IntValue apiaryStackUltimate;
-	public final ModConfigSpec.IntValue apiaryStackMeAbsolute;
-	public final ModConfigSpec.IntValue apiaryStackMeSupreme;
-	public final ModConfigSpec.IntValue apiaryStackMeCosmic;
-	public final ModConfigSpec.IntValue apiaryStackMeInfinite;
-	// EM 工厂蜂箱堆叠倍率 — EM 未加载时为 null(条件化注册)
-	public final ModConfigSpec.IntValue apiaryStackEmOverclocked;
-	public final ModConfigSpec.IntValue apiaryStackEmQuantum;
-	public final ModConfigSpec.IntValue apiaryStackEmDense;
-	public final ModConfigSpec.IntValue apiaryStackEmMultiversal;
-	public final ModConfigSpec.IntValue apiaryStackEmCreative;
-	public final ModConfigSpec.IntValue apiaryStackEmeAbsoluteOverclocked;
-	public final ModConfigSpec.IntValue apiaryStackEmeSupremeQuantum;
-	public final ModConfigSpec.IntValue apiaryStackEmeCosmicDense;
-	public final ModConfigSpec.IntValue apiaryStackEmeInfiniteMultiversal;
-	// AE2 集成 — AE2 未加载时为 null(条件化注册)
+	// AE2 集成
 	public final ModConfigSpec.BooleanValue apiaryAeOutputEnabled;
 	public final ModConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
 	public final ModConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
-	// AE 网络能量优先级 — AppliedFlux 未加载时为 null(条件化注册)
+	// AE 网络能量优先级
 	public final ModConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
-	// 允许提取 AE2 原生能量 — AppliedFlux 未加载时为 null(条件化注册)
+	// 允许提取 AE2 原生能量
 	public final ModConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
 	// PB升级上限
 	public final ModConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
@@ -220,7 +203,10 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
 	public final ModConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
 
-	ServerConfig(ModConfigSpec.Builder builder) {
+	ServerConfig(
+			ModConfigSpec.Builder builder,
+			ModConfigSpec.Builder machineBuilder,
+			ModConfigSpec.Builder capacityBuilder) {
 		this.sections = new ConfigSectionRegistry();
 
 		// 万象创世蜜蜂总开关
@@ -432,7 +418,8 @@ public final class ServerConfig {
 		builder.pop(); // advanced_beehive
 
 		// MEK离心机配置(抽取至 CentrifugeConfigSection,Task 12 委托至 ConfigSectionRegistry)
-		CentrifugeConfigSection centrifuge = this.sections.registerCentrifuge(builder);
+		CentrifugeConfigSection centrifuge = this.sections.registerCentrifuge(
+				machineBuilder, capacityBuilder);
 		// 向后兼容委托字段赋值(指向同一 ConfigValue 实例,零开销)
 		this.mekCentrifugeEnergyPerTick = centrifuge.mekCentrifugeEnergyPerTick;
 		this.mekCentrifugeEnergyStorage = centrifuge.mekCentrifugeEnergyStorage;
@@ -457,7 +444,7 @@ public final class ServerConfig {
 		this.mekCentrifugeEjectBusyCooldown = centrifuge.mekCentrifugeEjectBusyCooldown;
 		this.mekCentrifugeEjectMaxPerTick = centrifuge.mekCentrifugeEjectMaxPerTick;
 		this.mekCentrifugeMaxOpsPerTick = centrifuge.mekCentrifugeMaxOpsPerTick;
-		// 堆叠倍率/流体罐倍率已迁移至子段,外部访问通过 centrifuge().stackMultiplier.xxx / centrifuge().fluidTankMultiplier.xxx
+		// 堆叠倍率和流体罐倍率已迁移至各自的类型化等级集合。
 		this.mekCentrifugeAeOutputEnabled = centrifuge.mekCentrifugeAeOutputEnabled;
 		this.mekCentrifugeAeFluidOutputEnabled = centrifuge.mekCentrifugeAeFluidOutputEnabled;
 		// v2.0.0: AE 网络能量输入集成 — 向后兼容委托字段赋值
@@ -479,7 +466,7 @@ public final class ServerConfig {
 		this.mekCentrifugeSmeltingCompatEnabled = centrifuge.mekCentrifugeSmeltingCompatEnabled;
 
 		// MEK通用机械蜂箱配置(抽取至 ApiaryConfigSection,Task 12 委托至 ConfigSectionRegistry)
-		ApiaryConfigSection apiary = this.sections.registerApiary(builder);
+		ApiaryConfigSection apiary = this.sections.registerApiary(machineBuilder, capacityBuilder);
 		// 向后兼容委托字段赋值(指向同一 ConfigValue 实例,零开销)
 		this.apiaryEnergyPerTick = apiary.apiaryEnergyPerTick;
 		this.apiaryProcessingTime = apiary.apiaryProcessingTime;
@@ -490,24 +477,6 @@ public final class ServerConfig {
 		this.apiaryEjectMaxPerTick = apiary.apiaryEjectMaxPerTick;
 		this.apiaryEjectBlockedThreshold = apiary.apiaryEjectBlockedThreshold;
 		this.apiaryEjectBlockedCooldown = apiary.apiaryEjectBlockedCooldown;
-		this.apiaryStackBasic = apiary.apiaryStackBasic;
-		this.apiaryStackAdvanced = apiary.apiaryStackAdvanced;
-		this.apiaryStackElite = apiary.apiaryStackElite;
-		this.apiaryStackUltimate = apiary.apiaryStackUltimate;
-		this.apiaryStackMeAbsolute = apiary.apiaryStackMeAbsolute;
-		this.apiaryStackMeSupreme = apiary.apiaryStackMeSupreme;
-		this.apiaryStackMeCosmic = apiary.apiaryStackMeCosmic;
-		this.apiaryStackMeInfinite = apiary.apiaryStackMeInfinite;
-		// EM 工厂蜂箱堆叠倍率委托字段赋值(指向同一 ConfigValue 实例,零开销;EM 未加载时为 null)
-		this.apiaryStackEmOverclocked = apiary.apiaryStackEmOverclocked;
-		this.apiaryStackEmQuantum = apiary.apiaryStackEmQuantum;
-		this.apiaryStackEmDense = apiary.apiaryStackEmDense;
-		this.apiaryStackEmMultiversal = apiary.apiaryStackEmMultiversal;
-		this.apiaryStackEmCreative = apiary.apiaryStackEmCreative;
-		this.apiaryStackEmeAbsoluteOverclocked = apiary.apiaryStackEmeAbsoluteOverclocked;
-		this.apiaryStackEmeSupremeQuantum = apiary.apiaryStackEmeSupremeQuantum;
-		this.apiaryStackEmeCosmicDense = apiary.apiaryStackEmeCosmicDense;
-		this.apiaryStackEmeInfiniteMultiversal = apiary.apiaryStackEmeInfiniteMultiversal;
 		this.apiaryAeOutputEnabled = apiary.apiaryAeOutputEnabled;
 		this.apiaryAeFluidOutputEnabled = apiary.apiaryAeFluidOutputEnabled;
 		this.apiaryAeEnergyInputEnabled = apiary.apiaryAeEnergyInputEnabled;

@@ -116,6 +116,23 @@ public final class ModConfig {
 	public static final ModConfigSpec COMMON_SPEC;
 	public static final CommonConfig COMMON;
 
+	public static final String LEGACY_SERVER_FILE_NAME = "productivebeesgenesis-server.toml";
+	public static final String GAMEPLAY_SERVER_FILE_NAME =
+			"productivebeesgenesis-gameplay-server.toml";
+	public static final String MACHINES_SERVER_FILE_NAME =
+			"productivebeesgenesis-machines-server.toml";
+	public static final String CAPACITIES_SERVER_FILE_NAME =
+			"productivebeesgenesis-capacities-server.toml";
+
+	public static final ModConfigSpec GAMEPLAY_SERVER_SPEC;
+	public static final ModConfigSpec MACHINES_SERVER_SPEC;
+	public static final ModConfigSpec CAPACITIES_SERVER_SPEC;
+
+	/**
+	 * 旧代码兼容别名，仅代表玩法配置规格。
+	 * 新代码应使用 {@link #areServerSpecsLoaded()} 或三个具名规格。
+	 */
+	@Deprecated(forRemoval = false)
 	public static final ModConfigSpec SERVER_SPEC;
 	public static final ServerConfig SERVER;
 
@@ -128,9 +145,40 @@ public final class ModConfig {
 		COMMON = commonPair.getKey();
 		COMMON_SPEC = commonPair.getValue();
 
-		var serverPair = new ModConfigSpec.Builder().configure(ServerConfig::new);
-		SERVER = serverPair.getKey();
-		SERVER_SPEC = serverPair.getValue();
+		var gameplayBuilder = new ModConfigSpec.Builder();
+		var machinesBuilder = new ModConfigSpec.Builder();
+		var capacitiesBuilder = new ModConfigSpec.Builder();
+		SERVER = new ServerConfig(gameplayBuilder, machinesBuilder, capacitiesBuilder);
+		GAMEPLAY_SERVER_SPEC = gameplayBuilder.build();
+		MACHINES_SERVER_SPEC = machinesBuilder.build();
+		CAPACITIES_SERVER_SPEC = capacitiesBuilder.build();
+		SERVER_SPEC = GAMEPLAY_SERVER_SPEC;
+	}
+
+	/** 返回三个服务端配置规格是否均已加载。 */
+	public static boolean areServerSpecsLoaded() {
+		return GAMEPLAY_SERVER_SPEC.isLoaded()
+				&& MACHINES_SERVER_SPEC.isLoaded()
+				&& CAPACITIES_SERVER_SPEC.isLoaded();
+	}
+
+	/** 判断规格是否属于本模组拆分后的服务端配置。 */
+	public static boolean isServerSpec(Object spec) {
+		return spec == GAMEPLAY_SERVER_SPEC
+				|| spec == MACHINES_SERVER_SPEC
+				|| spec == CAPACITIES_SERVER_SPEC;
+	}
+
+	/** 保存全部服务端配置规格。 */
+	public static void saveServerSpecs() {
+		GAMEPLAY_SERVER_SPEC.save();
+		MACHINES_SERVER_SPEC.save();
+		CAPACITIES_SERVER_SPEC.save();
+	}
+
+	/** 保存玩法服务端配置。 */
+	public static void saveGameplayServerSpec() {
+		GAMEPLAY_SERVER_SPEC.save();
 	}
 
 	// ========== 跨字段联合校验（Task 13）==========
@@ -165,7 +213,7 @@ public final class ModConfig {
 	 * @return true 如果至少修正了一项配置（调用方据此决定是否需要 spec.save() 持久化）
 	 */
 	public static boolean validateAndFixCrossFields() {
-		if (!SERVER_SPEC.isLoaded()) {
+		if (!areServerSpecsLoaded()) {
 			// SERVER 配置仅在服务端/单人存档加载时可用，客户端未加载时跳过
 			return false;
 		}

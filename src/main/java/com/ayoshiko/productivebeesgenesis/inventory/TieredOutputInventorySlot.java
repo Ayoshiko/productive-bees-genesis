@@ -17,13 +17,12 @@ import java.util.function.IntSupplier;
 	 * <br/>
 	 * 继承 {@link BasicInventorySlot} 复刻 {@code OutputInventorySlot} 的行为
 	 * （OutputInventorySlot 构造器为 private 无法继承），重写 {@link #getLimit(ItemStack)}
-	 * 返回 {@code baseLimit × multiplier}，multiplier 由 {@link IntSupplier} 动态提供，
-	 * 按机器等级从配置读取。
+	 * 返回 {@code baseLimit × multiplier}，multiplier 由 {@link IntSupplier} 提供，
+	 * 按机器等级从当前游戏会话快照读取。
 	 * <p>
 	 * 性能优化：Spark 分析显示 getLimit 在 256× 加速场景下消耗 5.33% CPU，
-	 * 主因是每次调用都通过 IntSupplier 读取 ModConfig。
-	 * 改为版本号缓存：配置 reload 时递增 {@link TieredInputSlot#MULTIPLIER_VERSION}，
-	 * 本实例检测到版本号不匹配时重新读取倍率值。无 reload 期间零开销。
+	 * 主因是每次调用都通过 IntSupplier 读取 ModConfig。当前实现首次读取后缓存倍率，
+	 * 配置 reload 不失效；如有显式版本失效才重新从会话快照读取。
 	 * <p>
 	 * 设计原则：
 	 * <ul>
@@ -35,11 +34,11 @@ import java.util.function.IntSupplier;
 	 * 线程安全：cachedMultiplier / cachedVersion 使用 volatile 保证跨线程可见性
 	 * （getLimit 可能从同步线程调用）。{@link #getLimit} 使用 synchronized 守卫
 	 * check-then-update 临界区，避免并发线程读到 cachedVersion 已更新但 cachedMultiplier 仍为旧值。
-	 * MULTIPLIER_VERSION 为 AtomicLong，保证原子递增。
+	 * MULTIPLIER_VERSION 为 AtomicLong，保证显式失效时原子递增。
 	 */
 public class TieredOutputInventorySlot extends BasicInventorySlot {
 
-	/** 堆叠倍率供应商 — 按机器等级从配置读取 */
+	/** 堆叠倍率供应商 — 按机器等级从当前游戏会话快照读取。 */
 	private final IntSupplier multiplierSupplier;
 
 	/** 缓存的倍率值 — volatile 保证跨线程可见性 */
@@ -54,7 +53,7 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 	/**
 	 * 创建分等级输出槽
 	 *
-	 * @param multiplierSupplier 堆叠倍率供应商（每次 getLimit 调用时读取）
+	 * @param multiplierSupplier 堆叠倍率供应商（首次计算或显式失效后读取）
 	 * @param listener           内容变更监听器
 	 * @param x                  GUI x 坐标
 	 * @param y                  GUI y 坐标
@@ -93,8 +92,7 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 	 * {@code super.getLimit(stack)} 返回 {@code Math.min(ABSOLUTE_MAX_STACK_SIZE, stack.getMaxStackSize())}，
 	 * 乘以配置的等级倍率后得到实际槽位上限。
 	 * <p>
-	 * 倍率值在配置 reload 后通过 {@link TieredInputSlot#invalidateMultiplierCache()}
-	 * 递增版本号自动失效，无 reload 期间直接返回缓存值，零 ModConfig 读取开销。
+	 * 倍率值在当前游戏会话内保持缓存；配置 reload 不改变快照，修改后重启生效。
 	 * <p>
 	 * 最终上限（已乘倍率）再做一层按 Item 的记忆化：本方法在 AE2 推送、物流探测与
 	 * Mekanism 插入路径上每刻被调用数千次，命中时可跳过 synchronized 块内的

@@ -229,7 +229,7 @@ public final class RecipeReloadRetryManager {
 		}
 
 		// 检查配置是否已加载
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			int currentRetry = retryCount.incrementAndGet();
 			if (currentRetry >= MAX_RETRY_COUNT) {
 				// P3-2: 重试次数超上限为严重错误（配方不会应用），使用 error 级别便于排查

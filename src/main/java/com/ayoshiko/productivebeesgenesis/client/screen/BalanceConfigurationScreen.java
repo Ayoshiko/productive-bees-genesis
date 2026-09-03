@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
-import com.ayoshiko.productivebeesgenesis.config.ModConfig.FilterMode;
 import com.ayoshiko.productivebeesgenesis.config.BalancePreset;
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
 import net.minecraft.client.OptionInstance;
@@ -15,7 +14,6 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -26,6 +24,7 @@ public final class BalanceConfigurationScreen
 		extends ConfigurationScreen.ConfigurationSectionScreen {
 
 	private static final String BALANCE_PROFILE_KEY = "balanceProfile";
+	private static final String FILTER_SECTION_KEY = "myriad_creations_filter";
 	private static final String SECTION_KEY = "neoforge.configuration.uitext.section";
 	private static final String SECTION_TEXT_KEY = "neoforge.configuration.uitext.sectiontext";
 
@@ -51,28 +50,6 @@ public final class BalanceConfigurationScreen
 			ModConfigSpec.ValueSpec spec,
 			Supplier<T> source,
 			Consumer<T> target) {
-		if (source.get() instanceof FilterMode) {
-			Class<T> enumClass = (Class<T>) spec.getClazz();
-			List<T> modes = Arrays.stream(enumClass.getEnumConstants())
-					.filter(spec::test)
-					.toList();
-			return new Element(
-					getTranslationComponent(key),
-					getTooltipComponent(key, null),
-					new OptionInstance<>(
-							getTranslationKey(key),
-							getTooltip(key, null),
-							(caption, value) -> filterModeName((FilterMode) value),
-							new Custom<>(modes),
-							source.get(),
-							newValue -> undoManager.add(value -> {
-								target.accept(value);
-								onChanged(key);
-							}, newValue, value -> {
-								target.accept(value);
-								onChanged(key);
-							}, source.get())));
-		}
 		if (!BALANCE_PROFILE_KEY.equals(key) || !(source.get() instanceof BalancePreset)) {
 			return super.createEnumValue(key, spec, source, target);
 		}
@@ -96,6 +73,9 @@ public final class BalanceConfigurationScreen
 	@SuppressWarnings("deprecation")
 	protected Element createSection(
 			String key, UnmodifiableConfig subconfig, UnmodifiableConfig subsection) {
+		// 过滤配置由 ServerConfigScreen 的 FilterListScreen 独立呈现，
+		// 隐藏原生 section 以避免同一份值出现两个编辑入口。
+		if (FILTER_SECTION_KEY.equals(key)) return null;
 		if (subconfig.isEmpty()) return null;
 		Component tooltip = getTooltipComponent(key, null);
 		String buttonKey = getTranslationKey(key) + ".button";
@@ -155,11 +135,5 @@ public final class BalanceConfigurationScreen
 
 	private static Component presetName(BalancePreset preset) {
 		return Component.translatable(preset.getTranslationKey());
-	}
-
-	private static Component filterModeName(FilterMode mode) {
-		return Component.translatable(
-				"productivebeesgenesis.configuration.filter_mode."
-						+ mode.name().toLowerCase(Locale.ROOT));
 	}
 }

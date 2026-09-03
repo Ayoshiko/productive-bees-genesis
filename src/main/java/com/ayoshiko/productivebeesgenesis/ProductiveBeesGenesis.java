@@ -4,12 +4,10 @@ import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
 import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
-import com.ayoshiko.productivebeesgenesis.config.BalanceConfigCompatibility;
+import com.ayoshiko.productivebeesgenesis.config.ClientConfigMigrationService;
+import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.datagen.ConditionalBlockLootProvider;
-import com.ayoshiko.productivebeesgenesis.datagen.ModBlockTagsProvider;
-import com.ayoshiko.productivebeesgenesis.datagen.ModLootTables;
-import com.ayoshiko.productivebeesgenesis.datagen.ModRecipes;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigMigrationService;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModCreativeTabs;
@@ -37,27 +35,31 @@ import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.capabilities.ICapabilityAware;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.config.ConfigTracker;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig.Type;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -72,9 +74,11 @@ public final class ProductiveBeesGenesis {
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	private static final String PRODUCTIVE_BEES_MOD_ID = "productivebees";
+	private static final LevelResource SERVER_CONFIG_DIRECTORY = new LevelResource("serverconfig");
 
 	/** 配方版本号 — 每次 /reload 或数据包重载时递增,通知所有 PB 配方处理器清空缓存。AtomicLong 保证原子递增。 */
 	public static final AtomicLong RECIPE_VERSION = new AtomicLong(0L);
+	private boolean serverConfigsInitialized;
 
 	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
@@ -130,12 +134,17 @@ public final class ProductiveBeesGenesis {
 	}
 
 	/**
-	 * 注册配置文件（CLIENT / COMMON / SERVER）
+	 * 注册配置文件（CLIENT / COMMON / 三个 SERVER 领域文件）
 	 */
 	private void registerConfigs(ModContainer modContainer) {
 		modContainer.registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
 		modContainer.registerConfig(Type.COMMON, ModConfig.COMMON_SPEC);
-		modContainer.registerConfig(Type.SERVER, ModConfig.SERVER_SPEC);
+		modContainer.registerConfig(
+				Type.SERVER, ModConfig.GAMEPLAY_SERVER_SPEC, ModConfig.GAMEPLAY_SERVER_FILE_NAME);
+		modContainer.registerConfig(
+				Type.SERVER, ModConfig.MACHINES_SERVER_SPEC, ModConfig.MACHINES_SERVER_FILE_NAME);
+		modContainer.registerConfig(
+				Type.SERVER, ModConfig.CAPACITIES_SERVER_SPEC, ModConfig.CAPACITIES_SERVER_FILE_NAME);
 	}
 
 	/**
@@ -151,23 +160,20 @@ public final class ProductiveBeesGenesis {
 	 */
 	private void registerConfigListeners(IEventBus eventBus) {
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
+			if (isOwnClientConfig(event.getConfig())) {
+				ClientConfigMigrationService.onConfigLoading(event.getConfig());
+			}
 			if (isOwnServerConfig(event.getConfig())) {
-				boolean changed = BalanceConfigCompatibility.migrateLegacyConfig(event.getConfig());
-				changed |= ModConfig.validateAndFixCrossFields();
-				changed |= BalanceConfig.refresh(false);
-				if (changed) {
-					ModConfig.SERVER_SPEC.save();
-				}
-				BeeConfigApplier.applyOverrides();
-				MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
+				ServerConfigMigrationService.onConfigLoading(event.getConfig());
+				initializeServerConfigs();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
-			if (isOwnServerConfig(event.getConfig())) {
+			if (isOwnServerConfig(event.getConfig()) && ModConfig.areServerSpecsLoaded()) {
 				boolean changed = ModConfig.validateAndFixCrossFields();
 				changed |= BalanceConfig.refresh(true);
 				if (changed) {
-					ModConfig.SERVER_SPEC.save();
+					ModConfig.saveServerSpecs();
 				}
 				BeeConfigApplier.applyOverrides();
 				MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
@@ -176,14 +182,30 @@ public final class ProductiveBeesGenesis {
 				MyriadCreationsEventHandler.invalidateFilterCache();
 				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
 				MyriadCreationsEventHandler.invalidateEnabledCache();
-				// 槽位倍率配置不采用热更新 — 输入/输出槽倍率（apiaryStackXxx、
-				// mekCentrifugeStackXxx、mekCentrifugeInputStackXxx）仅在游戏重启后生效。
-				// 槽位首次 getLimit 时读取配置并永久缓存（MULTIPLIER_VERSION 永不递增），
-				// 配置文件修改不影响已运行的槽位实例，避免热重载导致的性能抖动。
+				// 工厂倍率快照只在 Loading 构建，Reloading 不替换；修改后仍需重启游戏生效。
 			}
 			// 同步到客户端的配置是内存对象，没有本地路径；重试检测只需要 mod id。
 			RecipeReloadRetryManager.onConfigChanged(event.getConfig().getModId());
 		});
+	}
+
+	private static boolean isOwnClientConfig(net.neoforged.fml.config.ModConfig config) {
+		return config != null
+				&& MOD_ID.equals(config.getModId())
+				&& config.getType() == Type.CLIENT
+				&& config.getSpec() == ModConfig.CLIENT_SPEC;
+	}
+
+	/** 三个服务端规格全部就绪后只初始化一次运行时配置快照。 */
+	private synchronized void initializeServerConfigs() {
+		if (serverConfigsInitialized || !ModConfig.areServerSpecsLoaded()) return;
+		serverConfigsInitialized = true;
+		boolean changed = ModConfig.validateAndFixCrossFields();
+		changed |= BalanceConfig.refresh(false);
+		FactoryTierConfigService.load(ModConfig.SERVER);
+		if (changed) ModConfig.saveServerSpecs();
+		BeeConfigApplier.applyOverrides();
+		MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
 	}
 
 	/**
@@ -194,7 +216,7 @@ public final class ProductiveBeesGenesis {
 		return config != null
 				&& MOD_ID.equals(config.getModId())
 				&& config.getType() == Type.SERVER
-				&& config.getSpec() == ModConfig.SERVER_SPEC;
+				&& ModConfig.isServerSpec(config.getSpec());
 	}
 
 	/**
@@ -204,8 +226,6 @@ public final class ProductiveBeesGenesis {
 		eventBus.addListener(this::onCommonSetup);
 		// 注册 MEK 离心机的 Capability（安全、能量等）— 使 tooltip 能正确显示拥有者/安全等级/储能
 		eventBus.addListener(this::onRegisterCapabilities);
-		// 注册数据生成器
-		eventBus.addListener(this::gatherData);
 		// 模块 3 修复：在物品注册完成后调用 IAttachmentAware.attachAttachments，
 		// 补全 MEK 原版的附件注册流程（项目使用标准 DeferredRegister.Items，不会自动调用）
 		eventBus.addListener(EventPriority.LOWEST, (RegisterEvent event) -> onRegisterItemAttachments(event, eventBus));
@@ -270,7 +290,34 @@ public final class ProductiveBeesGenesis {
 		// 通过重写 MekanismShapedRecipe.assemble 在输入消耗前转移 BLOCK_ENTITY_DATA，
 		// 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
+		NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+	}
+
+	/**
+	 * 迁移落盘后重新按 NeoForge 的存档覆盖规则加载三个 SERVER 配置。
+	 * <p>
+	 * 仅当存档 {@code serverconfig/} 里原本没有拆分文件、NeoForge 已把配置绑定到全局
+	 * config 目录时才需要重载；整合包只改全局 config 的情况由迁移服务直接替换内存对象。
+	 * {@code unloadConfigs} 是全局操作，会让所有模组多收一轮 Unloading/Loading 事件，
+	 * 因此这里限定为“确实发生了存档级迁移”这一次，并捕获异常避免拖垮开服流程。
+	 */
+	private void onServerAboutToStart(ServerAboutToStartEvent event) {
+		if (!ServerConfigMigrationService.consumeReloadRequired()) return;
+		Path serverConfigDirectory = event.getServer().getWorldPath(SERVER_CONFIG_DIRECTORY);
+		try {
+			serverConfigsInitialized = false;
+			ConfigTracker.INSTANCE.unloadConfigs(Type.SERVER);
+			ConfigTracker.INSTANCE.loadConfigs(
+					Type.SERVER, FMLPaths.CONFIGDIR.get(), serverConfigDirectory);
+			LOGGER.info("存档级配置迁移完成，已按存档覆盖规则重新加载服务端配置：{}",
+					serverConfigDirectory);
+		} catch (RuntimeException exception) {
+			LOGGER.error("重新加载存档级服务端配置失败，本次会话使用迁移前的配置对象：{}",
+					serverConfigDirectory, exception);
+		} finally {
+			initializeServerConfigs();
+		}
 	}
 
 	/**
@@ -359,6 +406,8 @@ public final class ProductiveBeesGenesis {
 	 * ServerTickTimeMonitor。每个清理独立 try-catch,单个失败不中断后续。
 	 */
 	private void onServerStopped(ServerStoppedEvent event) {
+		serverConfigsInitialized = false;
+		safeClear(ServerConfigMigrationService::reset, "ServerConfigMigrationService");
 		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
 		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
@@ -380,6 +429,7 @@ public final class ProductiveBeesGenesis {
 		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
 		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
 		safeClear(LogThrottle::clearAll, "LogThrottle");
+		safeClear(FactoryTierConfigService::resetToDefaults, "FactoryTierConfigService");
 	}
 
 	/**
@@ -401,25 +451,6 @@ public final class ProductiveBeesGenesis {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
 		});
-	}
-
-	/** 注册数据生成器 */
-	private void gatherData(GatherDataEvent event) {
-		var generator = event.getGenerator();
-		var packOutput = generator.getPackOutput();
-		var lookupProvider = event.getLookupProvider();
-
-		// 配方
-		generator.addProvider(event.includeServer(), new ModRecipes(packOutput, lookupProvider));
-		// 战利品表
-		generator.addProvider(event.includeServer(), ModLootTables.create(packOutput, lookupProvider));
-		// F9: 条件战利品表 — 为 EM/ME/EME 方块生成带 neoforge:conditions 的 dropSelf 战利品表
-		generator.addProvider(event.includeServer(), new ConditionalBlockLootProvider(packOutput));
-		// 方块标签（镐/锄挖掘工具）
-		generator.addProvider(event.includeServer(), new ModBlockTagsProvider(packOutput, lookupProvider,
-			event.getExistingFileHelper()));
-		// 语言文件：主 lang（src/main/resources）已包含全部键（GUI + configuration + config.*），
-		// 不再通过 ModLanguageProvider 生成，避免 generated lang 与主 lang 键重叠触发 DuplicatesStrategy.EXCLUDE。
 	}
 
 	/**

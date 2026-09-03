@@ -231,7 +231,7 @@ public final class FilterListScreen extends Screen {
 		beeTypes.clear();
 		selectionManager.clear();
 		try {
-			if (ModConfig.SERVER_SPEC.isLoaded()) {
+			if (ModConfig.areServerSpecsLoaded()) {
 				beeTypes.addAll(ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get());
 				filterMode = ModConfig.SERVER.myriadCreationsFilterMode.get();
 			} else {

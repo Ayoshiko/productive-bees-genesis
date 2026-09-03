@@ -236,7 +236,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 同步万象创世启用状态缓存值 — 由 {@link ProductiveBeesGenesis} 在 ModConfigEvent.Reloading 中调用
 	 */
 	public static void invalidateEnabledCache() {
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			cachedMyriadEnabled = true;
 		} else {
 			cachedMyriadEnabled = ModConfig.SERVER.myriadCreationsEnabled.get();

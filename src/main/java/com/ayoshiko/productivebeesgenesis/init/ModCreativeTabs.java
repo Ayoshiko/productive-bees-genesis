@@ -37,7 +37,7 @@ public final class ModCreativeTabs {
 					.displayItems((parameters, output) -> {
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						// 使用 SERVER 配置并加 isLoaded 保护，避免多人游戏客户端未加载服务端配置时崩溃
-						boolean isServerLoaded = ModConfig.SERVER_SPEC.isLoaded();
+						boolean isServerLoaded = ModConfig.areServerSpecsLoaded();
 						// 万象创世蜜蜂总开关：禁用后隐藏所有万象创世相关物品
 						boolean myriadEnabled = isServerLoaded && ModConfig.SERVER.myriadCreationsEnabled.get();
 						// 开发者模式由命令控制，客户端通过 ClientDevModeState 镜像状态决定开发物品可见性

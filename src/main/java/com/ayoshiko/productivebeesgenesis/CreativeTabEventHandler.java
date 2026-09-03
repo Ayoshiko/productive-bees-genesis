@@ -47,7 +47,7 @@ public final class CreativeTabEventHandler {
 	@SubscribeEvent
 	public static void onBuildCreativeModeTabContents(BuildCreativeModeTabContentsEvent event) {
 		// 检查配置是否加载
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			return; // 配置未加载，不干预（保持默认行为）
 		}
 

@@ -13,17 +13,17 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * <p>
 	 * 每个窗口通过 saveName（如 "window_pb_upgrade"）索引，包含 x、y、pinned 三个配置项。
 	 * <p>
-	 * <b>Breaking change</b>：自本版本起 WINDOW_NAMES 由 {"pb_upgrade", "ae_input", "feeder"}
-	 * 重命名为 {"window_pb_upgrade", "window_ae_input", "window_feeder"}。
+	 * <b>键名重构</b>：WINDOW_NAMES 由 {"pb_upgrade", "ae_input", "feeder"}
+	 * 重命名为 {"window_pb_upgrade", "window_ae_input", "window_feeder"}，
+	 * 旧键由客户端迁移服务保留并兼容读取。
 	 * 原因：NeoForge 1.21.1 配置项翻译键使用 SIMPLE 格式 {@code modid.configuration.<local_name>}，
 	 * 不使用完整路径；旧 saveName "pb_upgrade" 与 mek_centrifuge 段的同名 local_name 在
 	 * SIMPLE 翻译键上发生冲突（均映射到 {@code productivebeesgenesis.configuration.pb_upgrade}）。
 	 * 加前缀 "window_" 既消除冲突，又保证 toml 子节名称可读。
 	 * <p>
-	 * <b>toml 持久化迁移</b>：saveName 作为 {@link ModConfigSpec.Builder#push(String)} 的参数，
-	 * 会成为 toml 子节标题。旧 toml 中的 {@code [window_positions.pb_upgrade]} 等子节在新版本中
-	 * 会被 NeoForge 默认忽略（unknown key），用户需要重新设置窗口位置。位置持久化仅为便利功能，
-	 * 不影响功能正确性，故不提供自动迁移代码。
+	 * <b>toml 持久化迁移</b>：{@link ClientConfigMigrationService} 在 CLIENT 配置加载时，
+	 * 会将旧 {@code [window_positions.pb_upgrade]} 等子节逐字段迁移到新键，并保留旧键，
+	 * 已设置的新键优先于旧键。
 	 * <p>
 	 * 设计原则：
 	 * <ul>

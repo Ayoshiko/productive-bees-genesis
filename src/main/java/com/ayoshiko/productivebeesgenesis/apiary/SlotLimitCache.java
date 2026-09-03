@@ -23,10 +23,10 @@ import java.util.concurrent.atomic.AtomicLong;
 	 * 缓存约束说明（v5 CP-59）：
 	 * <ul>
 	 *   <li>ItemStack 为可变对象，count 增减不改变引用 identity，故 count 变化时缓存仍有效</li>
-	 *   <li>limit 值依赖 {@link TieredOutputInventorySlot} 的 stackMultiplier（动态读取
-	 *       {@code ModConfig}），NeoForge 配置运行时可通过 reload 变更</li>
-	 *   <li>配置 reload 时通过 {@link #invalidateCache()} 递增 {@link #CACHE_VERSION}，
-	 *       本类检测到版本号不匹配时主动重新计算 limit，确保配置变更后缓存立即失效</li>
+	 *   <li>limit 值依赖 {@link TieredOutputInventorySlot} 的当前游戏会话倍率快照，
+	 *       配置 reload 不改变该值，修改后重启生效</li>
+	 *   <li>显式调用 {@link #invalidateCache()} 时递增 {@link #CACHE_VERSION}，
+	 *       本类检测到版本号不匹配后重新计算 limit</li>
 	 *   <li>线程安全：服务端 tick 与外部物流能力调用均在主线程执行；
 	 *       {@code CACHE_VERSION} 为 AtomicLong，{@code cachedVersion} 为 volatile。
 	 *       极端并发调用下最坏仅重复计算一次 limit，不影响正确性</li>
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
 final class SlotLimitCache {
 
 	/**
-	 * 缓存全局版本号 — 配置 reload 时递增，使所有实例的缓存失效。
+	 * 缓存全局版本号 — 仅在显式失效时递增，使所有实例的缓存失效。
 	 * <br/>
 	 * 采用版本号方案而非维护实例集合：
 	 * <ul>
@@ -91,8 +91,7 @@ final class SlotLimitCache {
 	 * 递增全局版本号 {@link #CACHE_VERSION}，所有实例下次调用 {@link #getCachedSlotLimit}
 	 * 时检测到版本号不匹配将主动重新计算 limit。
 	 * <p>
-	 * 由主类在 {@code ModConfigEvent.Reloading} 事件中调用，确保配置 reload 后
-	 * 依赖 stackMultiplier 的 limit 缓存立即失效。
+	 * 配置 reload 不调用此方法；倍率快照在当前游戏会话内保持稳定。
 	 */
 	static void invalidateCache() {
 		CACHE_VERSION.incrementAndGet();

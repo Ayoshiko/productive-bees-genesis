@@ -91,7 +91,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	private void overrideRecipes() {
 		try {
 			// 配置未加载时安排延迟重试（首次进入世界时常见）
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			RecipeReloadRetryManager.scheduleRetry(this.recipeManager, this.registryAccess);
 			return;
 		}
@@ -107,7 +107,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 */
 	private void overrideRecipesInternal() {
 		// 防御性检查：确保配置已加载
-		if (!ModConfig.SERVER_SPEC.isLoaded()) {
+		if (!ModConfig.areServerSpecsLoaded()) {
 			DevLog.warn("recipe_reload", "配置未加载，跳过配方覆盖");
 			return;
 		}

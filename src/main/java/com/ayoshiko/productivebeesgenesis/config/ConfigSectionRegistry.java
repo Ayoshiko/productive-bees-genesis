@@ -69,8 +69,10 @@ public final class ConfigSectionRegistry {
 	 * @param builder NeoForge 配置构建器
 	 * @return 已注册的离心机配置段实例
 	 */
-	public CentrifugeConfigSection registerCentrifuge(ModConfigSpec.Builder builder) {
-		this.centrifuge = CentrifugeConfigSection.create(builder);
+	public CentrifugeConfigSection registerCentrifuge(
+			ModConfigSpec.Builder builder,
+			ModConfigSpec.Builder capacityBuilder) {
+		this.centrifuge = CentrifugeConfigSection.create(builder, capacityBuilder);
 		return this.centrifuge;
 	}
 
@@ -83,8 +85,10 @@ public final class ConfigSectionRegistry {
 	 * @param builder NeoForge 配置构建器
 	 * @return 已注册的蜂箱配置段实例
 	 */
-	public ApiaryConfigSection registerApiary(ModConfigSpec.Builder builder) {
-		this.apiary = ApiaryConfigSection.create(builder);
+	public ApiaryConfigSection registerApiary(
+			ModConfigSpec.Builder builder,
+			ModConfigSpec.Builder capacityBuilder) {
+		this.apiary = ApiaryConfigSection.create(builder, capacityBuilder);
 		return this.apiary;
 	}
 

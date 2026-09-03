@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.AppliedFluxIntegrationLoader;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
@@ -10,8 +8,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 	 * 子分类:basic / ejection / io_limit / ae2 / pb_upgrade / me_upgrade。
 	 * 堆叠倍率和流体罐倍率已抽取至 {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
 	 * <p>
-	 * 条件化注册:AE2 子 section 仅在 AE2 加载时注册;EM 工厂配置项仅在 EM 加载时注册,
-	 * 访问处通过模组守卫避免 NPE。
+	 * AE2 与 AppliedFlux 配置键始终注册，运行时访问仍由依赖检测保护。
 	 *
 	 * @since 2.0.0
 	 * @see StackMultiplierConfigSection 堆叠倍率子段
@@ -63,12 +60,12 @@ public final class CentrifugeConfigSection {
 	/** 流体罐倍率子段(fluid_tank_multiplier section) */
 	public final FluidTankMultiplierConfigSection fluidTankMultiplier;
 
-	// ========== AE2 集成(条件化注册)==========
+	// ========== AE2 集成 ==========
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
-	/** 允许提取 AE2 原生能量（仅 AppliedFlux 加载时注册；关闭后仅从 AppliedFlux FE 提取） */
+	/** 允许提取 AE2 原生能量；关闭后仅从 AppliedFlux FE 提取。 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
 	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
 	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
@@ -85,7 +82,9 @@ public final class CentrifugeConfigSection {
 	// ========== 熔炉配方兼容（总开关） ==========
 	public final ModConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
 
-	private CentrifugeConfigSection(ModConfigSpec.Builder builder) {
+	private CentrifugeConfigSection(
+			ModConfigSpec.Builder builder,
+			ModConfigSpec.Builder capacityBuilder) {
 		builder.comment("通用机械离心机设置").push("mek_centrifuge");
 		// ===== 基础参数 =====
 		builder.comment("基础参数").push("basic");
@@ -191,70 +190,47 @@ public final class CentrifugeConfigSection {
 				.defineInRange("maxExtractPerTick", 0, 0, 1024);
 		builder.pop(); // io_limit
 
-		// ===== 堆叠倍率(委托至 StackMultiplierConfigSection)=====
-		this.stackMultiplier = StackMultiplierConfigSection.create(builder);
-
-		// ===== 流体罐倍率(委托至 FluidTankMultiplierConfigSection)=====
-		this.fluidTankMultiplier = FluidTankMultiplierConfigSection.create(builder);
-
-		// ===== AE2 集成(条件化注册)=====
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			builder.comment("AE2 集成").push("ae2");
-			mekCentrifugeAeOutputEnabled = builder
-					.comment("启用 AE2 直接输出（推送输出槽物品到 AE2 网络）")
-					.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeOutputEnabled")
-					.define("aeOutputEnabled", true);
-			mekCentrifugeAeFluidOutputEnabled = builder
-					.comment("启用 AE2 流体输出（推送蜂蜜到 AE2 网络，独立于物品输出）")
-					.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeFluidOutputEnabled")
-					.define("aeFluidOutputEnabled", true);
-			mekCentrifugeAeEnergyInputEnabled = builder
-					.comment("启用 AE 网络能量输入（从 ME 网络提取 FE 注入本地能量容器）", "默认开启")
-					.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeEnergyInputEnabled")
-					.define("aeEnergyInputEnabled", true);
-			if (AppliedFluxIntegrationLoader.isAppliedFluxLoaded()) {
-				mekCentrifugePreferAppliedFluxOverAeEnergy = builder
-						.comment("AE 网络能量优先级（true=优先 AppliedFlux，false=优先 AE2 原生能量）")
-						.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.preferAppliedFluxOverAeEnergy")
-						.define("preferAppliedFluxOverAeEnergy", true);
-				mekCentrifugeAeNativeEnergyInputEnabled = builder
-						.comment("允许提取 AE2 原生能量（关闭后仅从 AppliedFlux 存储的 FE 提取，",
-								"避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电）", "默认开启")
-						.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeNativeEnergyInputEnabled")
-						.define("aeNativeEnergyInputEnabled", true);
-			} else {
-				mekCentrifugePreferAppliedFluxOverAeEnergy = null;
-				mekCentrifugeAeNativeEnergyInputEnabled = null;
-			}
-			mekCentrifugeAeInputEnabled = builder
-					.comment("启用 AE2 输入拉取（离心机主动从 ME 网络拉取输入物品）",
-							"默认开启；每台离心机默认关闭，需在机器上单独开启")
-					.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputEnabled")
-					.define("aeInputEnabled", true);
-			mekCentrifugeAeInputRatePerTick = builder
-					.comment("每次拉取最大物品数量（1-2147483647，过大可能增加 CPU 开销）")
-					.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputRatePerTick")
-					.defineInRange("aeInputRatePerTick", 1024, 1, Integer.MAX_VALUE);
-			mekCentrifugeAeInputIntervalTicks = builder
+		// 配置键始终注册，依赖缺失时仅由运行时集成层忽略。
+		builder.comment("AE2 集成（未安装对应模组时保留配置但不生效）").push("ae2");
+		mekCentrifugeAeOutputEnabled = builder
+				.comment("启用 AE2 直接输出（推送输出槽物品到 AE2 网络）")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeOutputEnabled")
+				.define("aeOutputEnabled", true);
+		mekCentrifugeAeFluidOutputEnabled = builder
+				.comment("启用 AE2 流体输出（推送蜂蜜到 AE2 网络，独立于物品输出）")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeFluidOutputEnabled")
+				.define("aeFluidOutputEnabled", true);
+		mekCentrifugeAeEnergyInputEnabled = builder
+				.comment("启用 AE 网络能量输入（从 ME 网络提取 FE 注入本地能量容器）", "默认开启")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeEnergyInputEnabled")
+				.define("aeEnergyInputEnabled", true);
+		mekCentrifugePreferAppliedFluxOverAeEnergy = builder
+				.comment("AE 网络能量优先级（true=优先 AppliedFlux，false=优先 AE2 原生能量）")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.preferAppliedFluxOverAeEnergy")
+				.define("preferAppliedFluxOverAeEnergy", true);
+		mekCentrifugeAeNativeEnergyInputEnabled = builder
+				.comment("允许提取 AE2 原生能量（关闭后仅从 AppliedFlux 存储的 FE 提取，",
+						"避免网络 FE 不足时过量抽取 AE 原生能量导致 ME 网络断电）", "默认开启")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeNativeEnergyInputEnabled")
+				.define("aeNativeEnergyInputEnabled", true);
+		mekCentrifugeAeInputEnabled = builder
+				.comment("启用 AE2 输入拉取（离心机主动从 ME 网络拉取输入物品）",
+						"默认开启；每台离心机默认关闭，需在机器上单独开启")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputEnabled")
+				.define("aeInputEnabled", true);
+		mekCentrifugeAeInputRatePerTick = builder
+				.comment("每次拉取最大物品数量（1-2147483647，过大可能增加 CPU 开销）")
+				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputRatePerTick")
+				.defineInRange("aeInputRatePerTick", 1024, 1, Integer.MAX_VALUE);
+		mekCentrifugeAeInputIntervalTicks = builder
 				.comment("拉取触发间隔（游戏刻，值越大 CPU 开销越低但响应越慢）")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputIntervalTicks")
 				.defineInRange("aeInputIntervalTicks", 10, 1, 200);
-			mekCentrifugeAeInputMinPages = builder
+		mekCentrifugeAeInputMinPages = builder
 				.comment("AE2 输入过滤窗口最小页数（1-16）")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.ae2.aeInputMinPages")
 				.defineInRange("aeInputMinPages", 4, 1, 16);
-			builder.pop(); // ae2
-		} else {
-			mekCentrifugeAeOutputEnabled = null;
-			mekCentrifugeAeFluidOutputEnabled = null;
-			mekCentrifugeAeEnergyInputEnabled = null;
-			mekCentrifugePreferAppliedFluxOverAeEnergy = null;
-			mekCentrifugeAeNativeEnergyInputEnabled = null;
-			mekCentrifugeAeInputEnabled = null;
-			mekCentrifugeAeInputRatePerTick = null;
-			mekCentrifugeAeInputIntervalTicks = null;
-			mekCentrifugeAeInputMinPages = null;
-		}
+		builder.pop(); // ae2
 
 		// ===== PB升级上限 =====
 		builder.comment("PB升级上限").push("pb_upgrade");
@@ -295,15 +271,23 @@ public final class CentrifugeConfigSection {
 		builder.pop(); // smelting_compat
 
 		builder.pop(); // mek_centrifuge
+
+		capacityBuilder.comment("通用机械离心机容量矩阵").push("mek_centrifuge");
+		this.stackMultiplier = StackMultiplierConfigSection.create(capacityBuilder);
+		this.fluidTankMultiplier = FluidTankMultiplierConfigSection.create(capacityBuilder);
+		capacityBuilder.pop();
 	}
 
 	/**
 	 * 工厂方法:注册全部 MEK离心机配置项并返回实例。
 	 *
-	 * @param builder NeoForge 配置构建器
+	 * @param builder 机器参数配置构建器
+	 * @param capacityBuilder 容量矩阵配置构建器
 	 * @return 已注册全部离心机配置项的实例
 	 */
-	public static CentrifugeConfigSection create(ModConfigSpec.Builder builder) {
-		return new CentrifugeConfigSection(builder);
+	public static CentrifugeConfigSection create(
+			ModConfigSpec.Builder builder,
+			ModConfigSpec.Builder capacityBuilder) {
+		return new CentrifugeConfigSection(builder, capacityBuilder);
 	}
 }
