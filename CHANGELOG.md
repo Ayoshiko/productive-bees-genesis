@@ -33,7 +33,7 @@
 
 ### 新增
 
-- **精华转化升级**：蜂箱与离心机可将具有明确纯同物压缩配方的低级精华、粒和碎片按配方比例转化，每台机器最多安装一个。只转换压缩链最下级的一跳，保留不足一组的余数；混合原料、粗矿、锭、宝石及方块输入和方块输出不参与转换，多候选时仅接受唯一可逆配方。同步提供物品、合成配方、解锁进度、贴图和中英文升级说明。
+- **精华转化升级**：蜂箱与离心机可将具有明确纯同物压缩配方的低级精华、粒和碎片按配方比例转化，每台机器最多安装一个。一般只转换压缩链最下级的一跳，保留不足一组的余数；混合原料、粗矿、锭、宝石及存储块不参与转换，多候选时优先使用明确的正向压缩配方。黑曜石碎片可合成黑曜石；下界之星精华可在同一批次连续经过碎片合成下界之星。配方索引构建改用标签候选交集，转换批次复用一次不可变索引快照，减少大型整合包的临时对象和重复缓存检查。同步提供物品、合成配方、解锁进度、贴图和中英文升级说明。
 - **粗矿熔炼升级**：Productive Bees 离心机及本模组离心机可将粗矿产物直接转成对应锭，每台离心机最多安装一个。要求输入属于 `c`/`forge` 的 `raw_materials` 或 `raw_ores` 标签，且 Mekanism 或原版熔炼配方的输出属于 `ingots` 标签，避免误处理食物等普通熔炼产物；不足整组的粗矿保留。
 - **喂食槽逐格禁用与批量恢复**：机械蜂箱可单独停用有物品的喂食槽，也可批量禁用或恢复。禁用槽不参与花朵匹配、蜜蜂转化及多花/琥珀战利品采样；状态随存档、机器升级和容器同步保留，取空后清除禁用标志。服务端校验容器、距离和槽位范围，单格与批量操作共用限频预算。
 - **每台机器独立控制产物直通**：蜂箱与离心机界面新增直通开关和输出面提示，单机状态支持保存、升级继承和客户端同步；全局 `external_logistics.directContainerOutput` 关闭时，单机开关随之禁用。
@@ -121,7 +121,7 @@
 
 #### Added
 
-- **Essence Conversion upgrade**: hives and centrifuges can convert low-tier essence, nuggets and fragments using unambiguous same-item compression recipes, with a limit of one upgrade per machine. Only the lowest step in a compression chain is converted; incomplete groups are preserved. Mixed ingredients, raw ores, ingots, gems and block inputs/outputs are excluded; ambiguous recipes require exactly one reversible candidate. Includes recipes, unlock advancements, textures and bilingual tooltips.
+- **Essence Conversion upgrade**: hives and centrifuges can convert low-tier essence, nuggets and fragments using unambiguous same-item compression recipes, with a limit of one upgrade per machine. Incomplete groups are preserved, explicit compression recipes win ambiguous unified-material candidates, and mixed ingredients, raw ores, ingots, gems and storage blocks remain excluded. Obsidian shards can form obsidian, while nether-star essence can continue through its shard intermediate to a nether star in one batch. Tag candidates now use set intersection and each conversion batch reuses one immutable index snapshot to reduce temporary allocations and repeated cache checks in large modpacks. Includes recipes, unlock advancements, textures and bilingual tooltips.
 - **Raw Ore Smelting upgrade**: Productive Bees centrifuges and this addon's centrifuges can turn raw ore outputs into ingots, with a limit of one upgrade per centrifuge. Inputs must have a `c`/`forge` `raw_materials` or `raw_ores` tag and a Mekanism or vanilla smelting recipe producing a tagged ingot. Incomplete groups remain as raw ore.
 - **Per-slot feeder disabling and bulk restore**: occupied apiary feeder slots can be disabled individually or together. Disabled slots are excluded from flower matching, bee conversion and multi-flower/amber loot sampling. State is saved, carried through upgrades and synchronized to clients; emptying a slot clears its flag. Server handlers validate the open menu, distance and slot bounds, with a shared rate limit for individual and bulk operations.
 - **Direct output to neighboring containers**: products can go straight to adjacent containers on configured item-output faces before falling back to local output slots. The global `external_logistics.directContainerOutput` setting defaults to enabled. Each apiary and centrifuge also has a saved, synchronized per-machine toggle and output-face hints. Mekanism logistical transporters retain their native routing path.

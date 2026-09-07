@@ -1,54 +1,30 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.Conversion;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.ConversionSnapshot;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.BlockEntityItemStackHandler;
-import net.minecraft.core.component.DataComponentPatch;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.CraftingRecipe;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * 精华转化升级的配方解析和输出转换工具。
+ * 精华转化升级的输出转换与库存原子写回工具。
  * <p>
  * “精华”在这里表示任意具有纯同物压缩配方的低级资源形态，因此覆盖粒、尘埃、碎片和整合包
  * 自定义资源。唯一候选无需反向配方；存在多个候选时，仅接受其中唯一可逆的一项。粗矿、锭、
  * 宝石和方块输入不参与转换，并通过压缩关系图只保留最下级的一跳，避免后续生产周期继续压缩。
  * <p>
- * 配方解析缓存按主类的配方版本号失效，缓存值为不可变配方快照，适合服务端 tick 和
- * 客户端配方查询并发访问。
+ * 配方查询由独立的不可变索引提供；无候选库存会在创建聚合列表和容量快照前返回。
  */
 public final class EssenceConversionUpgradeHelper {
-
-	private static final List<TagKey<Item>> EXCLUDED_INPUT_TAGS = List.of(
-			itemTag("c", "raw_materials"), itemTag("c", "raw_ores"),
-			itemTag("forge", "raw_materials"), itemTag("forge", "raw_ores"),
-			itemTag("c", "ingots"), itemTag("forge", "ingots"),
-			itemTag("c", "gems"), itemTag("forge", "gems"));
-	private static final long BUILD_RETRY_INTERVAL_TICKS = 100L;
-	private static volatile ConversionSnapshot conversionSnapshot = ConversionSnapshot.EMPTY;
-	private static volatile boolean conversionSnapshotLoaded;
-	private static volatile long cachedRecipeVersion = Long.MIN_VALUE;
-	private static volatile long lastFailedBuildTick = Long.MIN_VALUE;
 
 	private EssenceConversionUpgradeHelper() {
 	}
@@ -71,6 +47,10 @@ public final class EssenceConversionUpgradeHelper {
 	 */
 	public static List<ItemStack> convert(Level level, List<ItemStack> drops) {
 		if (level == null || drops == null || drops.isEmpty()) return drops;
+		return convert(EssenceConversionRecipeIndex.snapshotFor(level), drops);
+	}
+
+	private static List<ItemStack> convert(ConversionSnapshot snapshot, List<ItemStack> drops) {
 		List<ItemStack> merged = new ArrayList<>(drops.size());
 		for (ItemStack stack : drops) {
 			if (stack != null && !stack.isEmpty()) addAmount(merged, stack, stack.getCount());
@@ -79,19 +59,46 @@ public final class EssenceConversionUpgradeHelper {
 
 		List<ItemStack> converted = new ArrayList<>(merged.size());
 		for (ItemStack stack : merged) {
-			Conversion conversion = findConversion(level, stack);
-			if (conversion == null) {
-				addAmount(converted, stack, stack.getCount());
-				continue;
-			}
-			long crafts = stack.getCount() / (long) conversion.inputCount();
-			int remainder = stack.getCount() % conversion.inputCount();
-			if (crafts > 0) {
-				addAmount(converted, conversion.result(), crafts * conversion.result().getCount());
-			}
-			if (remainder > 0) addAmount(converted, stack, remainder);
+			convertStack(snapshot, converted, stack);
 		}
 		return converted;
+	}
+
+	private static void convertStack(ConversionSnapshot snapshot, List<ItemStack> converted,
+			ItemStack source) {
+		Conversion conversion = snapshot.find(source);
+		if (conversion == null) {
+			addAmount(converted, source, source.getCount());
+			return;
+		}
+
+		AmountConversion first = calculateAmounts(
+				source.getCount(), conversion.inputCount(), conversion.result().getCount());
+		if (first.resultAmount() == 0) {
+			addAmount(converted, source, source.getCount());
+			return;
+		}
+		addAmount(converted, source, first.remainder());
+
+		if (!conversion.continueChain()) {
+			addAmount(converted, conversion.result(), first.resultAmount());
+			return;
+		}
+		Conversion next = snapshot.find(conversion.resultKey());
+		if (next == null) {
+			addAmount(converted, conversion.result(), first.resultAmount());
+			return;
+		}
+		AmountConversion second = calculateAmounts(
+				first.resultAmount(), next.inputCount(), next.result().getCount());
+		addAmount(converted, conversion.result(), second.remainder());
+		addAmount(converted, next.result(), second.resultAmount());
+	}
+
+	static AmountConversion calculateAmounts(long sourceAmount, int inputCount, int resultCount) {
+		if (sourceAmount <= 0 || inputCount <= 0 || resultCount <= 0) return AmountConversion.EMPTY;
+		long crafts = sourceAmount / inputCount;
+		return new AmountConversion(sourceAmount % inputCount, crafts * resultCount);
 	}
 
 	/**
@@ -100,12 +107,14 @@ public final class EssenceConversionUpgradeHelper {
 	 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
+		ConversionSnapshot conversionSnapshot = EssenceConversionRecipeIndex.snapshotFor(level);
+		if (!containsConversionCandidate(outputs, conversionSnapshot)) return false;
 		List<ItemStack> source = new ArrayList<>(outputs.size());
 		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
 			int count = Math.max(0, entry.getValue());
 			if (count > 0) source.add(entry.getKey().copyWithCount(count));
 		}
-		List<ItemStack> converted = convert(level, source);
+		List<ItemStack> converted = convert(conversionSnapshot, source);
 		if (sameStacks(source, converted)) return false;
 		outputs.clear();
 		for (ItemStack stack : converted) {
@@ -125,6 +134,8 @@ public final class EssenceConversionUpgradeHelper {
 		}
 		int[] outputSlots = resolveOutputSlots(handler);
 		if (outputSlots.length == 0) return false;
+		ConversionSnapshot conversionSnapshot = EssenceConversionRecipeIndex.snapshotFor(level);
+		if (!containsConversionCandidate(handler, outputSlots, conversionSnapshot)) return false;
 
 		// 先建立整个输出库存的快照，再做一次转换。不能逐候选修改库存，
 		// 否则 A -> B 与 B -> C 同时存在时，刚生成的 B 可能被再次转换。
@@ -135,7 +146,7 @@ public final class EssenceConversionUpgradeHelper {
 		}
 		if (source.isEmpty()) return false;
 
-		List<ItemStack> replacement = convert(level, source);
+		List<ItemStack> replacement = convert(conversionSnapshot, source);
 		if (sameStacks(source, replacement) || !canFitReplacement(handler, outputSlots, replacement)) {
 			return false;
 		}
@@ -153,176 +164,7 @@ public final class EssenceConversionUpgradeHelper {
 
 	/** 清空配方转换缓存，服务器停止或 /reload 时调用。 */
 	public static void invalidateCache() {
-		conversionSnapshot = ConversionSnapshot.EMPTY;
-		conversionSnapshotLoaded = false;
-		cachedRecipeVersion = Long.MIN_VALUE;
-		lastFailedBuildTick = Long.MIN_VALUE;
-	}
-
-	private static Conversion findConversion(Level level, ItemStack stack) {
-		if (level == null || stack == null || stack.isEmpty()) return null;
-		refreshCacheVersion();
-		ConversionSnapshot snapshot = ensureConversionSnapshot(level);
-		StackKey key = new StackKey(stack.getItem(), stack.getComponentsPatch());
-		return snapshot.byInput().get(key);
-	}
-
-	private static void refreshCacheVersion() {
-		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
-		if (cachedRecipeVersion == version) return;
-		synchronized (EssenceConversionUpgradeHelper.class) {
-			if (cachedRecipeVersion != version) {
-				conversionSnapshot = ConversionSnapshot.EMPTY;
-				conversionSnapshotLoaded = false;
-				cachedRecipeVersion = version;
-				lastFailedBuildTick = Long.MIN_VALUE;
-			}
-		}
-	}
-
-	private static ConversionSnapshot ensureConversionSnapshot(Level level) {
-		if (conversionSnapshotLoaded) return conversionSnapshot;
-		if (isBuildRetryThrottled(level)) return conversionSnapshot;
-		synchronized (EssenceConversionUpgradeHelper.class) {
-			if (conversionSnapshotLoaded || isBuildRetryThrottled(level)) return conversionSnapshot;
-			try {
-				ConversionSnapshot rebuilt = buildConversionSnapshot(level);
-				conversionSnapshot = rebuilt;
-				conversionSnapshotLoaded = true;
-				lastFailedBuildTick = Long.MIN_VALUE;
-			} catch (RuntimeException exception) {
-				lastFailedBuildTick = level.getGameTime();
-				LogThrottle.error("essence_conversion_index",
-						"精华转化配方索引构建失败，将在 5 秒后重试", exception);
-			}
-			return conversionSnapshot;
-		}
-	}
-
-	private static boolean isBuildRetryThrottled(Level level) {
-		if (lastFailedBuildTick == Long.MIN_VALUE) return false;
-		long elapsed = level.getGameTime() - lastFailedBuildTick;
-		return elapsed >= 0 && elapsed < BUILD_RETRY_INTERVAL_TICKS;
-	}
-
-	private static ConversionSnapshot buildConversionSnapshot(Level level) {
-		Map<StackKey, Map<RecipeSignature, RecipePattern>> patternsByInput = new HashMap<>();
-		for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager()
-				.getAllRecipesFor(RecipeType.CRAFTING)) {
-			try {
-				RecipePattern pattern = parseRecipe(level, holder.value());
-				if (pattern != null) {
-					patternsByInput.computeIfAbsent(pattern.inputKey(), ignored -> new HashMap<>())
-							.putIfAbsent(pattern.signature(), pattern);
-				}
-			} catch (RuntimeException exception) {
-				LogThrottle.warn("essence_conversion_recipe", "精华转化跳过无法解析的合成配方 {}", holder.id());
-			}
-		}
-
-		Map<StackKey, List<RecipePattern>> patterns = new HashMap<>(patternsByInput.size());
-		for (Map.Entry<StackKey, Map<RecipeSignature, RecipePattern>> entry : patternsByInput.entrySet()) {
-			patterns.put(entry.getKey(), List.copyOf(entry.getValue().values()));
-		}
-
-		Map<StackKey, RecipePattern> selected = new HashMap<>();
-		for (Map.Entry<StackKey, List<RecipePattern>> entry : patterns.entrySet()) {
-			RecipePattern candidate = selectCompression(entry.getValue(), patterns);
-			if (candidate != null) selected.put(entry.getKey(), candidate);
-		}
-
-		Set<StackKey> producedItems = new HashSet<>();
-		for (RecipePattern pattern : selected.values()) producedItems.add(pattern.resultKey());
-		Map<StackKey, Conversion> conversions = new HashMap<>(selected.size());
-		for (Map.Entry<StackKey, RecipePattern> entry : selected.entrySet()) {
-			// 若输入本身由另一条压缩产生，则它不是最低级形态，不能继续自动压缩。
-			if (producedItems.contains(entry.getKey())) continue;
-			RecipePattern pattern = entry.getValue();
-			conversions.put(entry.getKey(), new Conversion(pattern.inputCount(), pattern.result()));
-		}
-		return new ConversionSnapshot(Map.copyOf(conversions));
-	}
-
-	private static RecipePattern parseRecipe(Level level, CraftingRecipe recipe) {
-		ItemStack input = ItemStack.EMPTY;
-		int inputCount = 0;
-		for (Ingredient ingredient : recipe.getIngredients()) {
-			if (ingredient.isEmpty()) continue;
-			ItemStack[] choices = ingredient.getItems();
-			if (choices.length != 1 || choices[0].isEmpty()) return null;
-			if (input.isEmpty()) {
-				input = choices[0].copyWithCount(1);
-			} else if (!ItemStack.isSameItemSameComponents(input, choices[0])) {
-				return null;
-			}
-			inputCount++;
-		}
-		ItemStack result = recipe.getResultItem(level.registryAccess());
-		if (input.isEmpty() || result.isEmpty() || ItemStack.isSameItemSameComponents(result, input)) return null;
-		boolean inputIsBlock = input.getItem() instanceof BlockItem;
-		boolean resultIsBlock = result.getItem() instanceof BlockItem;
-		boolean excludedInput = isExcludedInput(input);
-		return new RecipePattern(
-				new StackKey(input.getItem(), input.getComponentsPatch()), inputCount,
-				result.copy(), new StackKey(result.getItem(), result.getComponentsPatch()),
-				inputIsBlock, resultIsBlock, excludedInput);
-	}
-
-	/** 判断是否为允许参与智能判优的低级资源压缩形状。 */
-	static boolean isCompressionShape(int inputCount, int resultCount,
-			boolean inputIsBlock, boolean excludedInput) {
-		return isCompressionShape(inputCount, resultCount, inputIsBlock, false, excludedInput);
-	}
-
-	/**
-	 * 判断低级资源压缩形状，并拒绝会生成方块的配方。
-	 * <p>
-	 * 方块产物往往是不可逆的整合包加工品；纯精华到精华的压缩仍然保留。
-	 */
-	static boolean isCompressionShape(int inputCount, int resultCount,
-			boolean inputIsBlock, boolean resultIsBlock, boolean excludedInput) {
-		return inputCount >= 2 && resultCount > 0 && inputCount > resultCount
-				&& !inputIsBlock && !resultIsBlock && !excludedInput;
-	}
-
-	private static RecipePattern selectCompression(List<RecipePattern> candidates,
-			Map<StackKey, List<RecipePattern>> patterns) {
-		RecipePattern onlyCandidate = null;
-		RecipePattern reversibleCandidate = null;
-		int eligibleCount = 0;
-		int reversibleCount = 0;
-		for (RecipePattern candidate : candidates) {
-			if (!candidate.isCompression()) continue;
-			eligibleCount++;
-			onlyCandidate = candidate;
-			if (hasExactReverse(candidate, patterns)) {
-				reversibleCount++;
-				reversibleCandidate = candidate;
-			}
-		}
-		if (eligibleCount == 1) return onlyCandidate;
-		return reversibleCount == 1 ? reversibleCandidate : null;
-	}
-
-	private static boolean hasExactReverse(RecipePattern forward,
-			Map<StackKey, List<RecipePattern>> patterns) {
-		List<RecipePattern> reverseCandidates = patterns.get(forward.resultKey());
-		if (reverseCandidates == null) return false;
-		for (RecipePattern reverse : reverseCandidates) {
-			if (reverse.inputCount() == forward.result().getCount()
-					&& reverse.result().getCount() == forward.inputCount()
-					&& reverse.resultKey().equals(forward.inputKey())) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean isExcludedInput(ItemStack input) {
-		for (TagKey<Item> tag : EXCLUDED_INPUT_TAGS) {
-			if (input.is(tag)) return true;
-		}
-		return false;
+		EssenceConversionRecipeIndex.invalidate();
 	}
 
 	private static int[] resolveOutputSlots(IItemHandler handler) {
@@ -333,6 +175,25 @@ public final class EssenceConversionUpgradeHelper {
 		int[] slots = new int[handler.getSlots()];
 		for (int i = 0; i < slots.length; i++) slots[i] = i;
 		return slots;
+	}
+
+	private static boolean containsConversionCandidate(IItemHandler handler, int[] slots,
+			ConversionSnapshot snapshot) {
+		for (int slot : slots) {
+			ItemStack stack = handler.getStackInSlot(slot);
+			if (!stack.isEmpty() && snapshot.find(stack) != null) return true;
+		}
+		return false;
+	}
+
+	private static boolean containsConversionCandidate(Map<ItemStack, Integer> outputs,
+			ConversionSnapshot snapshot) {
+		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
+			if (entry.getValue() > 0 && !entry.getKey().isEmpty() && snapshot.find(entry.getKey()) != null) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean canFitReplacement(IItemHandler handler, int[] outputSlots,
@@ -426,38 +287,7 @@ public final class EssenceConversionUpgradeHelper {
 		}
 	}
 
-	private static TagKey<Item> itemTag(String namespace, String path) {
-		return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(namespace, path));
-	}
-
-	private record StackKey(Item item, DataComponentPatch components) {
-	}
-
-	private record ConversionSnapshot(Map<StackKey, Conversion> byInput) {
-		private static final ConversionSnapshot EMPTY = new ConversionSnapshot(Map.of());
-	}
-
-	private record RecipePattern(StackKey inputKey, int inputCount, ItemStack result, StackKey resultKey,
-			boolean inputIsBlock, boolean resultIsBlock, boolean excludedInput) {
-		private RecipePattern {
-			result = result.copy();
-		}
-
-		private boolean isCompression() {
-			return isCompressionShape(inputCount, result.getCount(), inputIsBlock, resultIsBlock, excludedInput);
-		}
-
-		private RecipeSignature signature() {
-			return new RecipeSignature(inputCount, resultKey, result.getCount());
-		}
-	}
-
-	private record RecipeSignature(int inputCount, StackKey resultKey, int resultCount) {
-	}
-
-	private record Conversion(int inputCount, ItemStack result) {
-		private Conversion {
-			result = result.copy();
-		}
+	record AmountConversion(long remainder, long resultAmount) {
+		private static final AmountConversion EMPTY = new AmountConversion(0, 0);
 	}
 }
