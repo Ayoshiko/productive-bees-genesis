@@ -166,6 +166,31 @@ public final class CombFuzzyMatcher {
 		return ItemStack.EMPTY;
 	}
 
+	/**
+	 * 按 {@code bee_type} 还原蜜脾/蜜脾块的代表物品栈。
+	 * <p>
+	 * 供两处共用：GUI 灰显判定的探针（{@link Ae2FilterProcessabilityView}）与模糊蜜脾条目
+	 * 升级为精确指纹条目（{@link Ae2LegacyCombEntryUpgrade}）。
+	 * <p>
+	 * 固定蜜脾（原版/feywild/ghostly/milky/powdery）没有 BEE_TYPE 组件，必须先走
+	 * {@link #getFixedDisplayStack} 的 Item 映射，否则会造出「带 bee_type 的可配置蜜脾」
+	 * 这种网络里不存在、配方也匹配不上的键。
+	 *
+	 * @param beeType 蜜蜂类型 ID
+	 * @param isBlock true 表示蜜脾块
+	 * @return 代表物品栈，或 {@link ItemStack#EMPTY}（类型为 null / 物品未注册）
+	 */
+	public static ItemStack createCombStack(ResourceLocation beeType, boolean isBlock) {
+		if (beeType == null) return ItemStack.EMPTY;
+		ItemStack fixed = getFixedDisplayStack(beeType, isBlock);
+		if (!fixed.isEmpty()) return fixed;
+		Item item = isBlock ? ItemRefs.CONFIGURABLE_COMB_BLOCK : ItemRefs.CONFIGURABLE_HONEYCOMB;
+		if (item == null) return ItemStack.EMPTY;
+		ItemStack stack = new ItemStack(item);
+		stack.set(PbDataComponents.beeType(), beeType);
+		return stack;
+	}
+
 	private static boolean isFixedComb(Item item) {
 		return item == ItemRefs.HONEYCOMB_GHOSTLY
 				|| item == ItemRefs.HONEYCOMB_MILKY

@@ -126,13 +126,16 @@ public final class FixedOrderConfigurationScreen
 
 		@Override
 		protected AbstractWidget createListLabel(int index) {
-			String label = FactoryTierKey.groupTiers(key).stream()
+			FactoryTierKey factoryTier = FactoryTierKey.groupTiers(key).stream()
 					.filter(tier -> tier.groupIndex() == index)
-					.map(FactoryTierKey::configKey)
 					.findFirst()
-					.orElseGet(() -> Integer.toString(index + 1));
+					.orElse(null);
+			Component label = factoryTier == null
+					? Component.literal(Integer.toString(index + 1))
+					: Component.translatable("productivebeesgenesis.configuration.factory_tier."
+							+ factoryTier.configKey());
 			return new FixedOrderListLabelWidget(
-					this, Component.literal(label), index);
+					this, label, index);
 		}
 
 		@Override

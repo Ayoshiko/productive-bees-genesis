@@ -2,15 +2,13 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.BoundedBooleanMemo;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import javax.annotation.Nullable;
-
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 
 /**
  * Per-host bounded cache answering “can this machine actually process this comb?”.
@@ -35,8 +33,9 @@ import java.util.LinkedHashMap;
  * 与 per-machine 熔炼兼容开关。后者必须纳入：固定蜜脾（ghostly/milky/powdery）与
  * 原版蜜脾不带 bee_type 组件，其可处理性依赖熔炼兼容是否开启。
  * <p>
- * <b>线程安全</b>：全部方法 synchronized。网格回调可能在非 tick 线程调用
- * {@link #clear()}，而 tick 线程正在查询；锁为 per-host，不会串行化不同机器。
+ * <b>线程安全</b>：判定只在服务端 tick 线程发生，因此容器不加锁
+ * （{@link BoundedBooleanMemo} 已按此约定实现）。网格回调的 {@link #clear()}
+ * 只投递失效请求，真正清表推迟到 tick 线程下一次查询。
  * <p>
  * <b>异常语义与 {@link Ae2SmeltingInputCache} 相反，是刻意的</b>：这里查询失败按
  * 「可处理」放行。误判为假会让合法蜜脾被永久饿死（功能回退，机器直接停摆），
@@ -45,10 +44,10 @@ import java.util.LinkedHashMap;
 final class Ae2CombProcessableCache {
 
 	/**
-	 * 条目上限。取 2048 而非同族缓存的 1024：本整合包蜂种并集达 489 种，
+	 * 单代条目上限。取 2048 而非同族缓存的 1024：本整合包蜂种并集达 489 种，
 	 * 每种对应「蜜脾 + 蜜脾块」两个身份（≈978），加固定/原版蜜脾已贴近 1024。
-	 * 上限恰好卡在扫描量级时，10 tick 的全量刷新会按迭代顺序不断淘汰下一个要用的条目
-	 * （LRU 遇顺序扫描的经典退化），等于缓存失效。留出余量避免该退化。
+	 * 上限恰好卡在扫描量级时，10 tick 的全量刷新会不断淘汰下一个要用的条目
+	 * （缓存遇顺序扫描的经典退化），等于缓存失效。留出余量避免该退化。
 	 */
 	static final int MAX_ENTRIES = 2_048;
 
@@ -66,13 +65,13 @@ final class Ae2CombProcessableCache {
 	private record CombIdentity(Item item, @Nullable ResourceLocation beeType) {
 	}
 
-	private final LinkedHashMap<CombIdentity, Boolean> entries = new LinkedHashMap<>(64, 0.75f, true);
+	private final BoundedBooleanMemo<CombIdentity> entries = new BoundedBooleanMemo<>(MAX_ENTRIES);
 	private long observedRecipeVersion = Long.MIN_VALUE;
 	private boolean observedSmeltingEnabled;
 	private int remainingProbes;
 
 	/** 开启一个新的判定窗口（每次拉取调用一次），重置未缓存判定的限速额度。 */
-	synchronized void beginProbeWindow() {
+	void beginProbeWindow() {
 		remainingProbes = MAX_PROBES_PER_WINDOW;
 	}
 
@@ -87,13 +86,15 @@ final class Ae2CombProcessableCache {
 	 * @param smeltingEnabled 本机熔炼兼容开关快照（同时作为失效条件）
 	 * @return true 表示本机存在可处理该输入的配方
 	 */
-	synchronized boolean canProcess(IAe2InputHost host, AEItemKey key, boolean smeltingEnabled) {
+	boolean canProcess(IAe2InputHost host, AEItemKey key, boolean smeltingEnabled) {
 		if (key == null) return false;
 		if (host == null) return true;
 		refreshInvalidation(smeltingEnabled);
 		CombIdentity identity = new CombIdentity(key.getItem(), CombFuzzyMatcher.getBeeType(key));
-		Boolean cached = entries.get(identity);
-		if (cached != null) return cached;
+		int state = entries.state(identity);
+		if (state != BoundedBooleanMemo.STATE_UNKNOWN) {
+			return state == BoundedBooleanMemo.STATE_TRUE;
+		}
 		// 限速用尽：本轮放行且不缓存，等下个窗口再判定（见 MAX_PROBES_PER_WINDOW）
 		if (remainingProbes <= 0) return true;
 		remainingProbes--;
@@ -109,26 +110,20 @@ final class Ae2CombProcessableCache {
 					"AE2 蜜脾可处理性判定异常，本次按可处理放行 key={}: {}", key, error.toString());
 			result = true;
 		}
-		if (entries.size() >= MAX_ENTRIES) {
-			Iterator<CombIdentity> iterator = entries.keySet().iterator();
-			if (iterator.hasNext()) {
-				iterator.next();
-				iterator.remove();
-			}
-		}
-		entries.put(identity, result);
-		return result;
+		return entries.remember(identity, result);
 	}
 
-	/** 清空缓存，例如 AE2 网格拓扑变化或配方重载后。 */
-	synchronized void clear() {
-		entries.clear();
-		observedRecipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
-		remainingProbes = 0;
+	/**
+	 * 清空缓存，例如 AE2 网格拓扑变化或配方重载后。可从任意线程调用。
+	 * <p>
+	 * 只投递失效请求；{@code observed*} 与 {@code remainingProbes} 由 tick 线程独占。
+	 */
+	void clear() {
+		entries.requestClear();
 	}
 
 	/** 当前缓存条目数，供诊断与测试使用。 */
-	synchronized int size() {
+	int size() {
 		return entries.size();
 	}
 
@@ -136,7 +131,7 @@ final class Ae2CombProcessableCache {
 	private void refreshInvalidation(boolean smeltingEnabled) {
 		long currentVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		if (observedRecipeVersion == currentVersion && observedSmeltingEnabled == smeltingEnabled) return;
-		entries.clear();
+		entries.clearNow();
 		observedRecipeVersion = currentVersion;
 		observedSmeltingEnabled = smeltingEnabled;
 	}

@@ -169,6 +169,8 @@ final class ApiaryTilePersistence {
 		// 等级升级（ApiaryUpgradeData.feederConversionEnabled）三条路径都已持久化，
 		// 唯独配置卡漏了，导致复制配置时该开关被静默重置为默认关闭。
 		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION, tile.isFeederConversionEnabled());
+		data.putBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_CONTAINER_OUTPUT,
+				tile.isDirectContainerOutputEnabled());
 	}
 
 	/** 从配置卡读取 — 恢复AE2状态和产物路由开关（PB升级粘贴在 setConfigurationData 中处理） */
@@ -191,6 +193,10 @@ final class ApiaryTilePersistence {
 		// 与 writeSustainedData 对称：旧配置卡无此键时保持当前值，不强制关闭。
 		if (data.contains(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION)) {
 			tile.setFeederConversionEnabled(data.getBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION));
+		}
+		if (data.contains(ApiaryNbtSerializer.NBT_KEY_DIRECT_CONTAINER_OUTPUT)) {
+			tile.setDirectContainerOutputEnabled(
+					data.getBoolean(ApiaryNbtSerializer.NBT_KEY_DIRECT_CONTAINER_OUTPUT));
 		}
 	}
 

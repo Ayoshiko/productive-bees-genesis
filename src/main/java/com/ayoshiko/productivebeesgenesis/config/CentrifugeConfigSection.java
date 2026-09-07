@@ -5,8 +5,9 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 /**
 	 * MEK离心机配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
 	 * <p>
-	 * 子分类:basic / ejection / io_limit / ae2 / pb_upgrade / me_upgrade。
+	 * 子分类:basic / ae2 / pb_upgrade / me_upgrade / smelting_compat。
 	 * 堆叠倍率和流体罐倍率已抽取至 {@link StackMultiplierConfigSection} / {@link FluidTankMultiplierConfigSection}。
+	 * 外部物流互操作开关见 {@link ExternalLogisticsConfigSection}（离心机与蜂箱通用）。
 	 * <p>
 	 * AE2 与 AppliedFlux 配置键始终注册，运行时访问仍由依赖检测保护。
 	 *
@@ -20,8 +21,6 @@ public final class CentrifugeConfigSection {
 	public final ModConfigSpec.LongValue mekCentrifugeEnergyPerTick;
 	public final ModConfigSpec.LongValue mekCentrifugeEnergyStorage;
 	public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectDelay;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectDelayActive;
 	public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
@@ -33,26 +32,8 @@ public final class CentrifugeConfigSection {
 	 * >0=手动指定配额。
 	 */
 	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
-	/**
-	 * Task 6: 流体弹出速率(mB/tick),控制 Ejector/侧面配置每次弹出的流体量上限
-	 * <br/>
-	 * 默认 256,范围 1-Integer.MAX_VALUE。允许玩家根据工厂等级调整弹出速率,
-	 * 由 {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidSideConfigHandler#getCachedEjectRate}
-	 * 通过 100-tick CAS 缓存读取,避免 TPS 退化。
-	 */
-	public final ModConfigSpec.IntValue mekCentrifugeFluidEjectRate;
 	public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
-	public final ModConfigSpec.IntValue mekCentrifugeMaxExtractPerTick;
 	public final ModConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedThreshold;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedCooldown;
-	public final ModConfigSpec.BooleanValue mekCentrifugeEjectSkipUnchanged;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectSkipTicks;
-	public final ModConfigSpec.BooleanValue mekCentrifugeEjectMaxSpeedMode;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectMinInterval;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBusyThreshold;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBusyCooldown;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 
 	// ========== 子配置段引用(组合关系,保持外部访问兼容)==========
 	/** 输出槽 + 输入槽堆叠倍率子段(stack_multiplier + input_stack_multiplier section) */
@@ -120,10 +101,6 @@ public final class CentrifugeConfigSection {
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 配置,maxTanks 直接使用 tier.processes(作为上限,按需创建)
 		// 原理:MultiFluidTankHolder 的 maxTanks 是上限,槽位通过 getTankForInsert 按需创建
 		// Tab 窗口显示当前已分配槽位数(通过同步值 fluidOutputTankCount),而非 tier.processes
-		mekCentrifugeFluidEjectRate = builder
-				.comment("每 tick 流体弹出量（mB）", "数值越高，物流传输开销越大")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.fluidEjectRate")
-				.defineInRange("fluidEjectRate", 256, 1, Integer.MAX_VALUE);
 		mekCentrifugeCombBlockMultiplier = builder
 				.comment("万象创世蜜脾块相对于蜜脾的产物倍率")
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.combBlockMultiplier")
@@ -133,62 +110,6 @@ public final class CentrifugeConfigSection {
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.basic.maxOpsPerTick")
 				.defineInRange("maxOpsPerTick", 0, 0, Integer.MAX_VALUE);
 		builder.pop(); // basic
-
-		// ===== 弹出策略 =====
-		builder.comment("弹出策略").push("ejection");
-		mekCentrifugeEjectDelay = builder
-				.comment("输出槽自动弹出延迟(tick，原版 10，推荐 2)")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectDelay")
-				.defineInRange("ejectDelay", 2, 0, 20);
-		mekCentrifugeEjectDelayActive = builder
-				.comment("输出槽仍有物品时的弹出延迟(tick，推荐 1，不超过 ejectDelay)")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectDelayActive")
-				.defineInRange("ejectDelayActive", 1, 0, 20);
-		mekCentrifugeEjectSkipUnchanged = builder
-				.comment("输出槽内容未变化时跳过 Ejector 输出以降低 CPU 开销")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectSkipUnchanged")
-				.define("ejectSkipUnchanged", true);
-		mekCentrifugeEjectSkipTicks = builder
-				.comment("输出未变化时连续跳过的 tick 数（0=不跳过）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectSkipTicks")
-				.defineInRange("ejectSkipTicks", 1, 0, 20);
-		mekCentrifugeEjectMaxSpeedMode = builder
-				.comment("最大弹出速度模式（跳过节流逻辑，需目标容器空间充足）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectMaxSpeedMode")
-				.define("ejectMaxSpeedMode", false);
-		mekCentrifugeEjectMinInterval = builder
-				.comment("输出持续变化时两次调用的最小间隔（0=关闭）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectMinInterval")
-				.defineInRange("ejectMinInterval", 0, 0, 20);
-		mekCentrifugeEjectBusyThreshold = builder
-				.comment("连续未减少输出总量多少次后进入长冷却")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectBusyThreshold")
-				.defineInRange("ejectBusyThreshold", 5, 1, 50);
-		mekCentrifugeEjectBusyCooldown = builder
-				.comment("高负载长冷却跳过的 tick 数（0=关闭）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectBusyCooldown")
-				.defineInRange("ejectBusyCooldown", 40, 0, 600);
-		mekCentrifugeEjectMaxPerTick = builder
-				.comment("单 tick 最大 outputItems 调用次数（0=无限制，最大速度模式下跳过）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectMaxPerTick")
-				.defineInRange("ejectMaxPerTick", 64, 0, 4096);
-		mekCentrifugeEjectBlockedThreshold = builder
-				.comment("连续未弹出物品多少次后进入冷却")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectBlockedThreshold")
-				.defineInRange("ejectBlockedThreshold", 3, 1, 20);
-		mekCentrifugeEjectBlockedCooldown = builder
-				.comment("阻塞冷却跳过的 tick 数（0=关闭）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.ejection.ejectBlockedCooldown")
-				.defineInRange("ejectBlockedCooldown", 15, 0, 200);
-		builder.pop(); // ejection
-
-		// ===== IO 限流 =====
-		builder.comment("IO 限流").push("io_limit");
-		mekCentrifugeMaxExtractPerTick = builder
-				.comment("每tick外部通过管道/AE2拉取的最大物品数（0=无限制）")
-				.translation("productivebeesgenesis.configuration.mek_centrifuge.io_limit.maxExtractPerTick")
-				.defineInRange("maxExtractPerTick", 0, 0, 1024);
-		builder.pop(); // io_limit
 
 		// 配置键始终注册，依赖缺失时仅由运行时集成层忽略。
 		builder.comment("AE2 集成（未安装对应模组时保留配置但不生效）").push("ae2");

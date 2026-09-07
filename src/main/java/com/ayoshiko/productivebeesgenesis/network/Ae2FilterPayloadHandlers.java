@@ -4,10 +4,12 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.me.helpers.BaseActionSource;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2CombKeyAlignment;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FilterProcessabilityView;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2LegacyCombEntryUpgrade;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NetworkInventoryView;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.CombFuzzyMatcher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
@@ -213,15 +215,14 @@ final class Ae2FilterPayloadHandlers {
 				ResourceLocation actualBeeType = CombFuzzyMatcher.getBeeType(directKey);
 				if (beeType == null || !beeType.equals(actualBeeType)
 						|| payload.isBlock() != CombFuzzyMatcher.isCombBlock(directKey)) return;
-				// 蜜脾保持 fuzzy 语义；兼容旧客户端同时发送 direct key 的请求。
-				directFingerprint = null;
-				directKey = null;
+				// 蜜脾同样存精确指纹：逐槽齿轮（拉取数量/库存保留/无限/库存模式）与下方网络
+				// 库存行只对指纹条目生效。蜜脾与蜜脾块共用配额的模糊语义由
+				// Ae2FilterEntryMatcher.matchesDirect 在非精确模式下按 bee_type 分组保证。
 			} else {
 				if (beeType != null || payload.isBlock() || !isSmeltingInput(serverPlayer, directKey)) return;
-				directFingerprint = Ae2ItemFingerprint.encode(directKey, serverPlayer.registryAccess());
-				if (directFingerprint.isBlank()
-						|| directFingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH) return;
 			}
+			directFingerprint = canonicalFingerprint(serverPlayer, directKey);
+			if (directFingerprint == null) return;
 		}
 		switch (payload.operation()) {
 			// V15: setEntryAt 直接覆盖目标位置（位置固定语义，拖到哪格放哪格）
@@ -244,6 +245,12 @@ final class Ae2FilterPayloadHandlers {
 		}
 		// 推送完整条目列表到客户端（tracker 无法同步集合数据）
 		syncFilterToClient(be, serverPlayer);
+	}
+
+	/** 重新编码为规范指纹（不信任客户端串的写法）；空串或超长返回 null 表示拒绝该请求。 */
+	private static String canonicalFingerprint(ServerPlayer player, AEItemKey key) {
+		return Ae2ItemFingerprint.encodeBounded(key, player.registryAccess(),
+				NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
 	}
 
 	private static boolean isSmeltingInput(ServerPlayer player, AEItemKey key) {
@@ -341,13 +348,52 @@ final class Ae2FilterPayloadHandlers {
 					serverPlayer.getName().getString(), Math.sqrt(distance));
 			return;
 		}
-		if (!(be instanceof IAe2InputHost)) {
+		if (!(be instanceof IAe2InputHost host)) {
 			return;
+		}
+		// 1.0.6~1.0.7 期间蜜脾标记被存成模糊条目，齿轮与库存行都不渲染。玩家一打开界面
+		// 就地升级为精确条目，并把按蜂种构造的键对齐到网络里真实存在的那一个变体。
+		if (maintainFilterEntries(host, serverPlayer) && be instanceof TileEntityMekanism mek) {
+			mek.markForSave();
 		}
 		// Polling an open GUI only needs to update its owner, not every player tracking the chunk.
 		syncFilterToClient(be, serverPlayer);
 		// 同步标签过滤表达式：GUI 打开时客户端需要拿到当前表达式文本用于回显
 		Ae2TagFilterPayloadHandlers.syncTagFilterToClient(be, serverPlayer);
+	}
+
+	/**
+	 * 打开配置界面时的条目维护：模糊蜜脾条目升级为精确条目 + 蜜脾键按网络快照对齐。
+	 * <p>
+	 * 放在这里而不是同步包构建里：构建被广播路径共用，不应改写配置；而本方法只在玩家
+	 * 主动打开/轮询自己那扇窗口时执行（已限频 500ms），改动量为 0 时不落盘。
+	 *
+	 * @return true 表示条目确实被改写，需要 markForSave
+	 */
+	private static boolean maintainFilterEntries(IAe2InputHost host, ServerPlayer player) {
+		Ae2InputFilter filter = host.productivebeesgenesis$getAeInputFilter();
+		if (filter == null) return false;
+		int changed = 0;
+		try {
+			KeyCounter inventory = cachedNetworkInventory(host);
+			changed = Ae2LegacyCombEntryUpgrade.upgrade(filter, inventory, player.registryAccess(),
+					NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
+			changed += Ae2CombKeyAlignment.realign(filter, inventory, player.registryAccess(),
+					NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
+		} catch (LinkageError | RuntimeException error) {
+			// 维护失败不能影响配置窗口本身：照常同步当前状态，下次打开再试；
+			// 已完成的那部分改动仍按 changed 落盘，避免只改内存不落盘
+			LogThrottle.warn("ae2_filter_entry_maintenance",
+					"AE2 过滤器条目维护失败，本次跳过: {}", error.toString());
+		}
+		return changed > 0;
+	}
+
+	/** 已缓存的 ME 网络物品快照；AE2 未连接或无存储服务时返回 null。 */
+	private static KeyCounter cachedNetworkInventory(IAe2InputHost host) {
+		var holder = host.productivebeesgenesis$getAe2StateHolder();
+		var storageService = holder == null ? null : Ae2GridNodeManager.getCachedStorage(holder, host);
+		return storageService == null ? null : storageService.getCachedInventory();
 	}
 
 	/**

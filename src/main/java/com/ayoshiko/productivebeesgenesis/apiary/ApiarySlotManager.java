@@ -346,7 +346,7 @@ public class ApiarySlotManager {
 	/**
 	 * 统计所有输出槽的物品总数 — 供 Ejector Mixin 比较弹出前后物品量
 	 * <br/>
-	 * 用于 TileComponentEjectorCooldownMixin 判断是否成功弹出。
+	 * 用于弹出通道判断是否成功弹出。
 	 *
 	 * @return 所有输出槽物品总数
 	 */

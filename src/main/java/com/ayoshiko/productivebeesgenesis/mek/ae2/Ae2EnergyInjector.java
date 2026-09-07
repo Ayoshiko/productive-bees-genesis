@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,17 +22,17 @@ import org.jetbrains.annotations.Nullable;
 	 *   <li>tick 时机控制（由调用方 tick 处理器负责）</li>
 	 * </ul>
 	 * <p>
-	 * <b>提取流程（正常容量差额提取）</b>：
+	 * <b>提取流程（批次预算差额提取）</b>：
 	 * <ol>
 	 *   <li>双重守卫：AE2 已安装 + grid 非 null</li>
-	 *   <li>容量由调用入口按当前 ENERGY 升级归一化，可修复旧存档异常容量</li>
-	 *   <li>以正常最大容量与当前缓存的差额作为有界提取目标，不设置固定 FE/t 截断</li>
+	 *   <li>调用入口直接设置当前负载的稳定目标容量，相同负载下不执行缩容/扩容往返</li>
+	 *   <li>活动批次只提取预算缺口；批次结束后补满保留的当前容量，不设置固定 FE/t 截断</li>
 	 *   <li>按优先级直接 MODULATE 提取，返回多少就注入多少，避免重复网络遍历</li>
 	 *   <li>用 setEnergy 注入到容器（clamp 到 maxEnergy 防止溢出）</li>
 	 * </ol>
 	 * <p>
-	 * 填充上限始终是升级派生的确定容量，而不是历史峰值或 {@code Long.MAX_VALUE}。
-	 * 因此创造能源网络可以真正填满机器，同时不会重新引入旧存档的无界取电问题。
+	 * 批次容量跨 tick 保留，使普通 FE 电缆有机会在两次机器 tick 之间完成充能；
+	 * 负载、倍率或升级变化时，入口直接调整到新目标，不会先裁能再扩回相同容量。
 	 * <p>
 	 * <b>线程安全</b>：本类无状态，所有方法均为静态方法。AE2 网络操作在主线程进行，
 	 * MachineEnergyContainer 内部使用原子类型保证线程安全。
@@ -48,8 +49,8 @@ public final class Ae2EnergyInjector {
 	 * <br/>
 	 * 按 {@link ModConfig#SERVER} 的优先级配置决定 AppliedFlux 与 AE2 原生能量的提取顺序。
 	 * <p>
-	 * 注入量由归一化容器的剩余容量（{@code maxEnergy - currentEnergy}）决定，
-	 * 最终注入量 = {@code min(容器剩余容量, ME 网络实际提取量)}。
+	 * 正批次倍率按熔炼整批预算缺口注能；非正倍率补满当前保留的批次容量。
+	 * 最终注入量始终受容器剩余容量和 ME 网络实际可提取量共同限制。
 	 * <p>
 	 * <b>守卫</b>：
 	 * <ul>
@@ -69,6 +70,7 @@ public final class Ae2EnergyInjector {
 	 * 注入到容器使用 setEnergy + clamp，避免依赖 canInsert 谓词。
 	 *
 	 * @param host AE2 输出宿主（离心机方块实体）
+	 * @param batchMultiplier 正数表示当前批次虚拟 tick 数；非正数表示批次后按当前容量补电
 	 * @return 实际注入到容器的 FE 总量
 	 *
 	 * @since 2.0.0
@@ -78,11 +80,28 @@ public final class Ae2EnergyInjector {
 	}
 
 	/**
-	 * Refills the normalized local buffer. The multiplier is retained in the tick-facing
-	 * API, but capacity filling is intentionally independent of current recipe activity so
-	 * an idle machine can charge fully.
+	 * 按当前熔炼批次预算缺口或已准备容量差额，从 AE2 网络补充本地能量。
+	 *
+	 * @param host AE2 输出宿主
+	 * @param batchMultiplier 正数表示活动批次倍率；非正数表示补满当前容量
+	 * @return 实际注入的 FE
 	 */
-	public static long injectEnergy(IAe2OutputHostBase host, int ignoredBatchMultiplier) {
+	public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier) {
+		long requiredEnergy = batchMultiplier > 0 && host != null
+				&& host.productivebeesgenesis$usesSmeltingEnergyBudget()
+				? host.productivebeesgenesis$getRequiredEnergyForBatch(batchMultiplier) : 0L;
+		return injectEnergy(host, batchMultiplier, requiredEnergy);
+	}
+
+	/**
+	 * 使用调用入口已计算的批次需求补充能量，避免再次扫描全部输入通道。
+	 *
+	 * @param host AE2 输出宿主
+	 * @param batchMultiplier 正数表示活动批次；非正数表示补满当前已准备容量
+	 * @param requiredEnergy 当前熔炼批次的 FE 需求
+	 * @return 实际注入的 FE
+	 */
+	public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier, long requiredEnergy) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		if (host == null) return 0;
 
@@ -91,10 +110,9 @@ public final class Ae2EnergyInjector {
 
 		long currentEnergy = container.getEnergy();
 		long maxEnergy = container.getMaxEnergy();
-		// 创意升级（无限容量）守卫：能耗恒为 0 无需外部供能；若能量未满，
-		// remainingCapacity 为天文数字，缺失此守卫会一次性抽干 ME 网络存量
-		// 填入无限容器（修改前因 target=2×需求=0 天然短路，此处显式防御）
-		if (maxEnergy == Long.MAX_VALUE) return 0;
+		// 创意升级（无限容量）无需外部供能。有限升级在极高倍率下也可能被
+		// Mekanism 夹到 Long.MAX_VALUE，不能仅凭容量数值把这两种情况混为一谈。
+		if (maxEnergy == Long.MAX_VALUE && host.hasCreativeUpgrade()) return 0;
 		// 调用入口已先归一化容量；这里只使用确定容量计算严格有界的差额。
 		long remainingCapacity = Ae2EnergyMath.remainingCapacity(currentEnergy, maxEnergy);
 		if (remainingCapacity <= 0) return 0;
@@ -104,8 +122,18 @@ public final class Ae2EnergyInjector {
 		Ae2PushBackoff energyBackoff = holder == null ? null : holder.getPushState().getEnergyBackoff();
 		long nowNanos = System.nanoTime();
 		if (energyBackoff != null && energyBackoff.shouldSkip(nowNanos)) return 0;
-		// 容量已经归一化，因此剩余容量本身就是安全且确定的填充目标。
-		long toExtract = remainingCapacity;
+		// 有活动批次时只请求本批次预算，避免把整个超大容量作为一次 AE2 请求。
+		// 空闲机器仍按剩余容量补满，保持原有自动充能语义。
+		long normalizedRequired = Math.max(0L, requiredEnergy);
+		long toExtract;
+		if (batchMultiplier > 0 && host.productivebeesgenesis$usesSmeltingEnergyBudget()
+				&& normalizedRequired > 0L) {
+			toExtract = Ae2EnergyMath.requiredShortfall(
+					currentEnergy, normalizedRequired, remainingCapacity);
+		} else {
+			toExtract = remainingCapacity;
+		}
+		if (toExtract <= 0L) return 0;
 		IGrid grid = getConnectedGrid(host);
 		if (grid == null) return 0;
 

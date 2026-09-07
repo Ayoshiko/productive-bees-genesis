@@ -37,6 +37,10 @@ public final class Ae2NbtKeys {
 	public static final String NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT =
 			"productivebeesgenesis_centrifuge_direct_ae_output";
 
+	/** per-tile 产物直通（相邻容器）开关；与 AE2 无关，未装 AE2 也持久化 */
+	public static final String NBT_KEY_DIRECT_CONTAINER_OUTPUT =
+			"productivebeesgenesis_direct_container_output";
+
 	/** AE2 输入剩余物有界持久化缓冲。 */
 	public static final String NBT_KEY_AE_PENDING_ITEMS = "productivebeesgenesis_ae_pending_items";
 

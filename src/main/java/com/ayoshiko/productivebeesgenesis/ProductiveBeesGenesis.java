@@ -29,6 +29,8 @@ import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.SingleIngredientCraftingIndex;
@@ -183,6 +185,8 @@ public final class ProductiveBeesGenesis {
 				MyriadCreationsEventHandler.invalidateFilterCache();
 				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
 				MyriadCreationsEventHandler.invalidateEnabledCache();
+				// 外部物流开关走 100 刻缓存，重载后立即失效以免等待 5 秒
+				com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings.invalidate();
 				// 工厂倍率快照只在 Loading 构建，Reloading 不替换；修改后仍需重启游戏生效。
 			}
 			// 同步到客户端的配置是内存对象，没有本地路径；重试检测只需要 mod id。
@@ -337,6 +341,10 @@ public final class ProductiveBeesGenesis {
 		SingleIngredientCraftingIndex.invalidate();
 		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
+		// 失效精华转化合成配方缓存，确保 /reload 后使用最新唯一配方
+		EssenceConversionUpgradeHelper.invalidateCache();
+		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
+		RawOreSmeltingUpgradeHelper.invalidateCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
 		// CombFuzzyMatcher 已改为无缓存直读组件（AEItemKey.equals 比重算更贵），无需失效
@@ -416,6 +424,8 @@ public final class ProductiveBeesGenesis {
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
 		// 清理机械蜂箱产出配方缓存（Task 16.3 — 静态缓存防止跨存档泄漏）
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
+		safeClear(EssenceConversionUpgradeHelper::invalidateCache, "EssenceConversionUpgradeHelper");
+		safeClear(RawOreSmeltingUpgradeHelper::invalidateCache, "RawOreSmeltingUpgradeHelper");
 		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
 		safeClear(BeeConversionQueries::invalidate, "BeeConversionQueries");
 		safeClear(MyriadCreationsEventHandler::clearAllCaches, "MyriadCreationsEventHandler");

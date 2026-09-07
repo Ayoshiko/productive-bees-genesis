@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
@@ -153,6 +154,8 @@ public class BeeProduceProcessor {
 		long[] productivityCounts = reusableProductivityCounts;
 		Arrays.fill(productivityCounts, 0L);
 		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
+		ServerLevel wannaBeeLevel = level instanceof ServerLevel serverLevel
+				&& PBConstants.WANNA_TYPE.equals(beeTypeKey) ? serverLevel : null;
 
 		// 循环外预算生产力倍率 — 升级安装数量不随蜜蜂槽变化，
 		// 避免每次采样重复触发 4 次 getInstalledUpgrades EnumMap 查询
@@ -213,11 +216,10 @@ public class BeeProduceProcessor {
 					BeeProduceBatchSampler.sampleInto(allItems, produceList,
 							sampledProductionCount, productivityMultiplier, 0.0f, productivityLevel);
 				}
-				if (PBConstants.WANNA_TYPE.equals(beeTypeKey)
-						&& level instanceof ServerLevel serverLevel) {
-					allItems.addAll(WannaBeeAmberAdapter.sampleBatch(serverLevel, origin, feederManager,
-							sampledProductionCount, productivityMultiplier, productivityLevel));
-				}
+			}
+			if (wannaBeeLevel != null) {
+				allItems.addAll(WannaBeeAmberAdapter.sampleBatches(wannaBeeLevel, origin, feederManager,
+						productivityCounts, productivityMultiplier));
 			}
 		}
 		// 万象创世追加产物也按每只蜜蜂的生产力等级计算，避免与主产物倍率脱节。
@@ -287,6 +289,12 @@ public class BeeProduceProcessor {
 		if (upgradeHandler.hasCombBlockUpgrade()) {
 			allItems = combBlockConverter.convertCombsToBlocksInPlace(allItems);
 		}
+		// 精华转化升级在所有输出路由前执行，确保转换结果优先进入 AE、离心机或本地槽位。
+		// 转换器只处理唯一同物配方，数量不足整组时保留余数。
+		if (apiary.getPbUpgradeInstalledCount(PbUpgradeType.ESSENCE_CONVERSION) > 0
+				&& level != null) {
+			allItems = EssenceConversionUpgradeHelper.convert(level, allItems);
+		}
 
 		// 批量插入合并后的物品到输出槽
 		if (apiary.isDirectAeOutputEnabled() && !allItems.isEmpty()) {
@@ -319,6 +327,10 @@ public class BeeProduceProcessor {
 				&& apiary.isDirectEjectEnabled()) {
 			allItems = apiary.directTransferProducedToCentrifuges(allItems);
 		}
+		// 产物直通：离心机直连之后、写输出槽之前，把产物直接交给已配置输出面的相邻容器。
+		// 与离心机 PbRecipeFlusher 同级的收益（跳过输出槽中转、不占用输出容量）；
+		// 待离心的蜜脾（shouldHoldForCentrifuge）不直通，否则离心机优先会被外部容器抢走产物。
+		allItems = pushProducedToNeighbors(allItems);
 		List<ItemStack> leftovers = outputDispatcher.distribute(slotManager.getOutputSlots(), allItems);
 		// F4: 将未成功插入的剩余产物送入缓冲区，下 tick 重试注入
 		// 离心机优先：蜜脾满时不淘汰，超出输出上限的溢出部分推 AE（不再丢弃）
@@ -343,6 +355,41 @@ public class BeeProduceProcessor {
 				apiary.addPendingHoneyFluid(fluidTemplate, remainingFluid);
 			}
 		}
+	}
+
+	/**
+	 * 产物直通相邻容器 — 写输出槽前的最后一道快速通道
+	 * <br/>
+	 * 与离心机 {@code PbRecipeFlusher.pushPendingDirectToNeighbors} 同构的入账协议：
+	 * 按<b>实际</b>接收量扣减（外部容器写入不可回滚），全部接收则移出列表，
+	 * 部分接收则回写剩余数量继续走输出槽 → 缓冲区，因此永不丢物。
+	 * <p>
+	 * 待离心蜜脾（{@link TileEntityMekApiary#shouldHoldForCentrifuge}）跳过直通：
+	 * 否则相邻箱子/管道会先把蜜脾拿走，离心机优先功能失效。
+	 * <p>
+	 * 性能：全部保留时返回原列表（零分配）；只在真正发生直通时才建新列表。
+	 *
+	 * @param stacks 产出列表（元素会被原地扣减 count）
+	 * @return 未被相邻容器接收的剩余列表
+	 */
+	private List<ItemStack> pushProducedToNeighbors(List<ItemStack> stacks) {
+		if (stacks.isEmpty() || !apiary.isDirectContainerOutputEnabled()) return stacks;
+		List<ItemStack> remaining = null;
+		for (int i = 0; i < stacks.size(); i++) {
+			ItemStack stack = stacks.get(i);
+			if (stack == null || stack.isEmpty()) continue;
+			if (!apiary.shouldHoldForCentrifuge(stack)) {
+				int accepted = Math.max(0, Math.min(stack.getCount(),
+						apiary.pushGeneratedItemToNeighbors(stack)));
+				// 按实际接收量原地扣减：外部写入已发生，绝不能按请求量记账
+				if (accepted > 0) stack.shrink(accepted);
+			}
+			if (!stack.isEmpty()) {
+				if (remaining == null) remaining = new ArrayList<>(stacks.size());
+				remaining.add(stack);
+			}
+		}
+		return remaining == null ? stacks : remaining;
 	}
 
 	/**

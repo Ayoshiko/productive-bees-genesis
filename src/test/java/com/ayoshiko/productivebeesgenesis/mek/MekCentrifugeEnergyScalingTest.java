@@ -54,6 +54,17 @@ class MekCentrifugeEnergyScalingTest {
 		assertEquals(53_200_000L, perLane * 19L);
 	}
 
+	@Test
+	void smeltingDemandDoesNotIncludePbParallelModifier() {
+		long smeltingDemand = MekCentrifugeEnergyScaling.requiredEnergyPerTick(
+				100_000L, 65_536, 1, 19, 256);
+		long honeycombDemand = MekCentrifugeEnergyScaling.requiredEnergyPerTick(
+				100_000L, 65_536, 480, 19, 256);
+
+		assertEquals(53_200_000L * 256L, smeltingDemand);
+		assertTrue(honeycombDemand > smeltingDemand);
+	}
+
 	@ParameterizedTest(name = "{0}, STACK {1}: {4} FE/t")
 	@MethodSource("fullFactoryEnergyConfigurations")
 	void fullFactoryEnergyConfigurations(String upgradeConfiguration, int stackLevel,
@@ -99,6 +110,14 @@ class MekCentrifugeEnergyScalingTest {
 	}
 
 	@Test
+	void smeltingCacheUsesTheSameBaseBalanceAsHoneycombProcessing() {
+		assertEquals(136L,
+				MekCentrifugeEnergyScaling.balancedSmeltingEnergyPerTick(680L));
+		assertEquals(0L,
+				MekCentrifugeEnergyScaling.balancedSmeltingEnergyPerTick(0L));
+	}
+
+	@Test
 	void capacityDependsOnlyOnRegisteredBaseAndCurrentEnergyUpgrades() {
 		long baseCapacity = 50_000L;
 
@@ -106,6 +125,15 @@ class MekCentrifugeEnergyScalingTest {
 				MekCentrifugeEnergyScaling.normalCapacity(baseCapacity, 500_000_000L));
 		assertEquals(baseCapacity,
 				MekCentrifugeEnergyScaling.normalCapacity(baseCapacity, 1L));
+	}
+
+	@Test
+	void batchCapacityKeepsOneStableTargetForTheCurrentDemand() {
+		assertEquals(500_000_000L,
+				MekCentrifugeEnergyScaling.batchCapacity(500_000_000L, 100_000_000L));
+		assertEquals(13_619_200_000L,
+				MekCentrifugeEnergyScaling.batchCapacity(500_000_000L, 13_619_200_000L));
+		assertEquals(1L, MekCentrifugeEnergyScaling.batchCapacity(0L, -1L));
 	}
 
 	@Test

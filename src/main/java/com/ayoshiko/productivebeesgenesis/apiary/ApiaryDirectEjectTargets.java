@@ -45,15 +45,46 @@ final class ApiaryDirectEjectTargets {
 		final CentrifugeInputSlotManager inputSlotManager = new CentrifugeInputSlotManager();
 		int inputSlotCount;
 
+		/** 上次完成预扫描的游戏刻（同刻复用，避免重复读 19 个输入槽）。 */
+		private long lastScanTick = Long.MIN_VALUE;
+
+		/** 本刻预扫描结果是否已被绕过同步的写入弄脏。 */
+		private boolean scanDirty;
+
 		Target(BlockPos pos, BlockEntity blockEntity, IMekCentrifugeTile centrifuge) {
 			this.pos = pos;
 			this.blockEntity = blockEntity;
 			this.centrifuge = centrifuge;
 		}
 
-		void preScanInputSlots() {
+		/** 无条件重新预扫描（每批产出/每次直连弹出的起点）。 */
+		void refreshInputScan(long gameTick) {
 			inputSlotCount = Math.max(0, centrifuge.productivebeesgenesis$getInputSlotCount());
 			inputSlotManager.preScanInputSlots(centrifuge, inputSlotCount);
+			scanDirty = false;
+			lastScanTick = gameTick;
+		}
+
+		/**
+		 * 同刻至多预扫描一次。
+		 * <br/>
+		 * 「蜜脾是否该留给离心机」的判定（{@code shouldHoldForCentrifuge}）在 AE2 推送与
+		 * 产物直通路径上是「每产物每刻」级调用，而每次全量预扫描要读 19 个输入槽的
+		 * stack 与 limit。同刻复用把这部分从 O(产物数 × 目标数 × 19) 压回 O(目标数 × 19)。
+		 * <p>
+		 * 正确性：本包内的转移都会经 {@code updateSlotAfterTransfer} 同步预扫描数组，
+		 * 绕过同步的写入调用 {@link #markScanDirty()} 失效；离心机自身在同刻消耗输入造成的
+		 * 一刻内偏差只影响 hold 判定时机（下一刻自动纠正），且实际插入前仍有
+		 * {@code SIMULATE} 兜底，不会造成物品丢失或超量写入。
+		 */
+		void ensureInputScan(long gameTick) {
+			if (!scanDirty && lastScanTick == gameTick) return;
+			refreshInputScan(gameTick);
+		}
+
+		/** 标记预扫描结果失效（未经 updateSlotAfterTransfer 同步的写入后调用）。 */
+		void markScanDirty() {
+			scanDirty = true;
 		}
 	}
 

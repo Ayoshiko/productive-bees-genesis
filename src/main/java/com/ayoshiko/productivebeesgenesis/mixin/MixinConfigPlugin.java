@@ -51,6 +51,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final String MEKENERGISTICS_MOD_ID = "mekenergistics";
 	/** Building Gadgets 2 的 modId */
 	private static final String BUILDING_GADGETS_MOD_ID = "buildinggadgets2";
+	/** Just Enough Items 的 modId（JEI 拖拽预览层级标记） */
+	private static final String JEI_MOD_ID = "jei";
 
 	/** Just Dire Things Extras 的 modId（CoalescedAcceleratedMachine 合并接口注入） */
 	private static final String JDTE_MOD_ID = "jdte";
@@ -147,6 +149,11 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"RenderBlockBeLoadFixMixin"
 	);
 
+	/** 仅引用 JEI GhostIngredientDrag 的客户端 Mixin。 */
+	private static final Set<String> JEI_MIXINS = Set.of(
+			"JeiGhostIngredientDragMixin"
+	);
+
 	/**
 	 * Holder 模式 — 线程安全的懒加载
 	 * <br/>
@@ -164,6 +171,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean BUILDING_GADGETS_LOADED = isModLoaded(BUILDING_GADGETS_MOD_ID);
+		/** JEI 是否加载（Mixin 阶段检测，仅计算一次） */
+		static final boolean JEI_LOADED = isModLoaded(JEI_MOD_ID);
 
 		/** JDTE 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean JDTE_LOADED = isModLoaded(JDTE_MOD_ID);
@@ -258,6 +267,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 		if (BUILDING_GADGETS_MIXINS.contains(simpleName)) {
 			return Holder.BUILDING_GADGETS_LOADED;
+		}
+		if (JEI_MIXINS.contains(simpleName)) {
+			return Holder.JEI_LOADED;
 		}
 		if (JDTE_MIXINS.contains(simpleName)) {
 			return Holder.JDTE_LOADED;

@@ -68,6 +68,14 @@ final class Ae2PushBuffers {
 
 	/** 游标扫描选中键缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 游标扫描使用） */
 	final List<AEItemKey> scanSelectedKeys = new ArrayList<>();
+	/**
+	 * 游标扫描的去重集合 — 与 {@link #scanSelectedKeys} 配对复用。
+	 * <p>
+	 * 替代 {@code out.contains} 的线性去重：候选列表在大型 AE 网络可达数千项，
+	 * 线性去重会使整轮扫描付出 O(候选数 × 选中上限) 次 {@code AEItemKey.equals}
+	 * （spark BkTP3d9oSc 中该方法自身 self 时间 1416ms / 2.36%）。
+	 */
+	final Set<AEItemKey> scanSeenKeys = new HashSet<>();
 	final Ae2PullCandidateAmounts scanCandidateAmounts = new Ae2PullCandidateAmounts();
 	/**
 	 * Cached SMELTING keys observed in the AE2 inventory. Keeping this list separate
@@ -202,6 +210,11 @@ final class Ae2PushBuffers {
 	/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
 	List<AEItemKey> borrowScanSelectedKeys() {
 		return scanSelectedKeys;
+	}
+
+	/** 借用游标扫描去重集合（调用方须与 {@link #borrowScanSelectedKeys} 同时 clear） */
+	Set<AEItemKey> borrowScanSeenKeys() {
+		return scanSeenKeys;
 	}
 
 	Ae2PullCandidateAmounts borrowScanCandidateAmounts() {

@@ -57,6 +57,12 @@ public enum PbUpgradeType {
 	/** 无用副产物升级 — 丢弃蜂蜜和可选的花粉球副产物（功能型，最多安装 1 个） */
 	USELESS_BYPRODUCT("useless_byproduct", 0xFFE6A23C, 0f, 1),
 
+	/** 精华转化升级 — 将唯一同物合成配方的物品按比例转为产物（功能型，最多安装 1 个） */
+	ESSENCE_CONVERSION("essence_conversion", 0xFFCE93D8, 0f, 1),
+
+	/** 粗矿熔炼升级 — 将具有熔炼配方的粗矿产物直接转为对应锭（仅离心机，最多安装 1 个） */
+	RAW_ORE_SMELTING("raw_ore_smelting", 0xFFB87333, 0f, 1),
+
 	/** 模拟升级 — 模拟生产（机械蜂箱内置，不占槽位） */
 	SIMULATION("simulation", 0xFF607D8B, 0f, 8);
 

@@ -55,6 +55,22 @@ public final class Ae2PendingItemBuffer {
 	}
 
 	/**
+	 * 类型条目表是否还有空位（O(1)，不需要指纹）。
+	 * <p>
+	 * 这是抽取前兜底闸门真正需要的信息：只要还有空位，<b>任何</b>有效指纹都能登记成功，
+	 * 因此调用方无需先付一次 SNBT 指纹编码（{@code AEItemKey.toTag} 的 Mojang Codec
+	 * 编码 + {@code CompoundTag.toString} 的 StringTagVisitor 遍历）。
+	 * spark BkTP3d9oSc 中这次「只为闸门服务」的编码在拉取侧占 372ms（0.62%），
+	 * 而缓冲在正常稳态下恒为空 —— 全部属于纯浪费。
+	 * <p>
+	 * 返回 false 只在 {@value #MAX_ENTRIES} 种类型全部积压时出现，
+	 * 此时调用方才需要编码指纹并走 {@link #canRegister} 精确查重。
+	 */
+	public boolean hasFreeEntrySlot() {
+		return entries.size() < MAX_ENTRIES;
+	}
+
+	/**
 	 * 该指纹是否还能登记（仅检查类型条目表是否有位置）。
 	 * <p>
 	 * 调用方（{@code Ae2InputPuller}）在 ME extract 之前用它做兜底判定：抽取一旦发生就无法撤回，
@@ -69,7 +85,7 @@ public final class Ae2PendingItemBuffer {
 	public boolean canRegister(String fingerprint) {
 		if (fingerprint == null || fingerprint.isBlank()) return false;
 		// 未满时任何有效指纹都可登记，避免正常路径每次线性扫描最多 64 个条目。
-		return entries.size() < MAX_ENTRIES || find(fingerprint) != null;
+		return hasFreeEntrySlot() || find(fingerprint) != null;
 	}
 
 	/** 返回当前可重试条目的快照，避免调用方迭代时修改内部列表。 */

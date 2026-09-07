@@ -135,7 +135,10 @@ final class FeederWindowLayoutSupport {
 	/**
 	 * 统计喂食槽中已放置的不同花朵类型数量
 	 * <br/>
-	 * 按物品 + 组件（ItemStack.isSameItemSameComponents）去重，与 {@link GuiFeederWindow#renderInfoPanel} 统计逻辑一致。
+	 * 去重规则委托 {@link FeederStatsCache#addDistinct}，与信息面板统计保持一致（DRY）。
+	 * <p>
+	 * 本方法只在窗口构造期用于计算窗口/面板高度，不在每帧路径上；
+	 * 每帧统计走 {@link FeederStatsCache} 的版本号缓存。
 	 *
 	 * @param tile 蜂箱方块实体
 	 * @return 不同类型花朵数
@@ -145,16 +148,7 @@ final class FeederWindowLayoutSupport {
 		for (var slot : tile.getFeederSlots()) {
 			ItemStack stack = slot.getStack();
 			if (stack.isEmpty()) continue;
-			boolean found = false;
-			for (ItemStack existing : types) {
-				if (ItemStack.isSameItemSameComponents(existing, stack)) {
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				types.add(stack);
-			}
+			FeederStatsCache.addDistinct(types, stack);
 		}
 		return types.size();
 	}

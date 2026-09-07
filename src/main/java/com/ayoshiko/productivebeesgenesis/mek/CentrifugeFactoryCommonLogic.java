@@ -303,6 +303,9 @@ public final class CentrifugeFactoryCommonLogic {
 			ae2StateHolder::setSmeltingCompatEnabled));
 		container.track(SyncableBoolean.create(ae2StateHolder::isCentrifugeDirectAeOutputEnabled,
 				ae2StateHolder::setCentrifugeDirectAeOutputEnabled));
+		// per-tile 产物直通开关（与 AE2 无关，无条件注册保持客户端/服务端 tracker 数量一致）
+		container.track(SyncableBoolean.create(ae2StateHolder::isDirectContainerOutputEnabled,
+				ae2StateHolder::setDirectContainerOutputEnabled));
 	}
 
 	// ===== AE2 生命周期 =====
@@ -498,7 +501,8 @@ public final class CentrifugeFactoryCommonLogic {
 				.setCanHolderFunction(canFunction)
 				.setActive(active -> setActiveState.accept(active, cacheIndex))
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
-						hasCreativeUpgrade.getAsBoolean(), energyContainer.getEnergyPerTick()), energyContainer)
+						hasCreativeUpgrade.getAsBoolean(), MekCentrifugeEnergyScaling
+							.balancedSmeltingEnergyPerTick(energyContainer.getEnergyPerTick())), energyContainer)
 				.setRequiredTicks(ticksRequired)
 				.setOnFinish(markForSave)
 				.setBaselineMaxOperations(coalesce)

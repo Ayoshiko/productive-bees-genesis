@@ -32,14 +32,18 @@ class Ae2CombProcessableWiringTest {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2InputCandidatePolicy.java");
 		assertTrue(source.contains("interface CombProcessGate"), "蜜脾门必须是独立的函数式抽象");
-		assertTrue(source.contains("CombProcessGate.ALLOW_ALL"), "必须提供零开销放行门");
+		// 断言常量声明本身而不是某个重载里的引用：分类方法只保留「全参数」一个入口，
+		// 便捷重载会让调用方绕过可处理性门 —— 正是本测试要防的缺陷复发路径。
+		assertTrue(source.contains("CombProcessGate ALLOW_ALL = key -> true;"),
+				"必须提供零开销放行门（无宿主上下文时使用）");
 
 		String normalized = source.replaceAll("\\s+", " ");
 		// 关键语义：蜜脾被拒 → REJECTED。若改成 break/fall-through 走到 SMELTING 分支，
 		// modularbees 等为 c:honeycombs 注册的熔炼配方会重新抢占 PB 输入并产出错误结果。
-		assertTrue(normalized.contains("return combGate == null || combGate.canProcess(key) "
-				+ "? CandidateKind.COMB : CandidateKind.REJECTED;"),
+		assertTrue(normalized.contains("if (combGate != null && !combGate.canProcess(key)) return CandidateKind.REJECTED;"),
 				"蜜脾未通过可处理性门时必须直接 REJECTED，不得下落 SMELTING 分支");
+		assertTrue(normalized.contains("return comb ? CandidateKind.COMB : CandidateKind.SMELTING;"),
+				"通过标签门后才返回蜜脾分类，不能绕过统一准入");
 
 		int combIndex = source.indexOf("CombFuzzyMatcher.isCombItem(key)");
 		int smeltIndex = source.indexOf("smeltingCache.contains(level, key)");

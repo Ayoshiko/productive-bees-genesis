@@ -46,8 +46,7 @@
     "mek.ExtraFactoryOutputInventorySlotMixin",
     "mek.ExtraUpgradeStackMixin",
     "mek.PoweredCentrifugeBlockEntityMixin",
-    "mek.TileComponentEjectorCooldownMixin",
-    "mek.TileComponentEjectorMixin",
+    "mek.TileComponentEjectorFastPathMixin",
     "mekenergistics.MekEnergisticsInstallerGuardMixin",
     "mekenergistics.MekEnergisticsTargetResolverGuardMixin",
     "recipe.AdvancedBeehiveRecipeSerializerMixin",
@@ -62,6 +61,7 @@
   "client": [
     "client.ContainerSlotCountMixin",
     "client.MekGuiBlockItemDepthMixin",
+    "client.JeiGhostIngredientDragMixin",
     "client.IBlockEntityExtensionMixin",
     "client.ConfigurableBeeColorMixin",
     "client.CosmicItemRendererMixin",

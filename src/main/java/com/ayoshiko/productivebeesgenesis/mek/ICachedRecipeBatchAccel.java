@@ -25,6 +25,12 @@ public interface ICachedRecipeBatchAccel {
 	 */
 	void productivebeesgenesis$enableMarginalEnergyPricing();
 
+	/** 绑定当前工厂批次共享的能量账本。 */
+	void productivebeesgenesis$bindBatchEnergyLedger(BatchEnergyLedger ledger);
+
+	/** 结束本次批次会话；账本由外层工厂统一提交。 */
+	void productivebeesgenesis$finishBatch();
+
 	/**
 	 * 绑定 per-tile 的零耗时合并窗口（CREATIVE 升级路径）。
 	 * <br/>

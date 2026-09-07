@@ -32,8 +32,14 @@ class Ae2FilterProcessabilityWiringTest {
 		// 必须走宿主同一入口，否则界面提示会与实际拉取行为不一致
 		assertTrue(view.contains("host.productivebeesgenesis$canProcessInput(probe)"),
 				"必须复用宿主判定入口，不得自建一套配方判定");
-		// 固定蜜脾（ghostly/milky/powdery 与原版/feywild）无 bee_type 组件，必须走 Item 映射
-		assertTrue(view.contains("CombFuzzyMatcher.getFixedDisplayStack(beeType, isBlock)"),
+		// 固定蜜脾（ghostly/milky/powdery 与原版/feywild）无 bee_type 组件，必须走 Item 映射；
+		// 还原入口与「模糊条目升级」共用一份实现，避免两处各造一次探针键
+		assertTrue(view.contains("CombFuzzyMatcher.createCombStack(info.beeType, info.isBlock)"),
+				"模糊条目探针必须走共用还原入口");
+		String matcher = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "CombFuzzyMatcher.java");
+		assertTrue(matcher.replaceAll("\\s+", " ").contains(
+				"ItemStack fixed = getFixedDisplayStack(beeType, isBlock); if (!fixed.isEmpty()) return fixed;"),
 				"固定蜜脾必须按 Item 还原，否则造出的探针键在网络里不存在");
 		// fail-open：判定不出来时按可加工呈现，避免误标灰让玩家以为配置坏了
 		assertTrue(view.replaceAll("\\s+", " ").contains("if (probe.isEmpty()) return true;"),

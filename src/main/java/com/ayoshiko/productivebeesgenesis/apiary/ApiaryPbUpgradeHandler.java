@@ -277,6 +277,8 @@ public class ApiaryPbUpgradeHandler {
 						: type.getMaxCount();
 		// STABILITY 仅离心机生效，蜂箱一律拒绝（双保险：即使绕过 isPbUpgradeSupported 也无法安装）
 		case STABILITY -> 0;
+		// RAW_ORE_SMELTING 仅离心机生效
+		case RAW_ORE_SMELTING -> 0;
 		default -> type.getMaxCount();
 		};
 	}

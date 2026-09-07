@@ -292,10 +292,11 @@ public final class PbConfigCardDataHelper {
 		return switch (machineType) {
 			case CENTRIFUGE -> switch (type) {
 				case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-						TIME, TIME_2, STABILITY, USELESS_BYPRODUCT -> true;
+						TIME, TIME_2, STABILITY, USELESS_BYPRODUCT, ESSENCE_CONVERSION, RAW_ORE_SMELTING -> true;
 				default -> false;
 			};
-			case APIARY -> type != PbUpgradeType.STABILITY;
+			case APIARY -> type != PbUpgradeType.STABILITY
+					&& type != PbUpgradeType.RAW_ORE_SMELTING;
 		};
 	}
 }

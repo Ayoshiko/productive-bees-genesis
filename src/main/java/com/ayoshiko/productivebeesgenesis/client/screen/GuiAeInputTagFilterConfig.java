@@ -19,13 +19,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * smelt 输入标签过滤表达式编辑窗口（白名单 / 黑名单表达式 + 运算符图例 + 标签选取器 + 保存）。
+ * AE2 输入标签过滤表达式编辑窗口（白名单 / 黑名单表达式 + 运算符图例 + 标签选取器 + 保存）。
  * <p>
  * 布局参考 ExtendedAE 的「ME 标签输出总线」：运算符图例直接写在输入框下方的窗口正文里，
  * 而不是靠悬停 tooltip —— 图例是常读信息，悬浮层会遮住输入框，正文常驻更符合直觉。
  * <p>
- * 标签选取器参考精妙存储高级虚空升级的加/删标签交互：放物品、滚轮选标签、点加号/减号
- * 写入或移出表达式。仅参考行为，未使用其代码（该仓库为 ARR 协议）。
+ * 标签选取器参考精妙存储高级虚空升级的标签过滤交互：放物品、单击标签行加入/移出表达式。
+ * 仅参考行为，未使用其代码（该仓库为 ARR 协议）。
+ * <p>
+ * <b>窗口高度必须留在一屏之内</b>：{@link #WINDOW_HEIGHT} 由各段内容推出而不是写死，且被刻意
+ * 压在 210px 以内 —— 原版界面缩放最小可用高度是 240px，本窗口开在父窗口下方 4px 处，
+ * 再高就会把保存按钮顶到屏幕外，重演「标签列表超出屏幕」那类问题。
  * <p>
  * 文字统一用 {@link #titleTextColor()}：窗口底色偏白，MEK 的 {@code screenTextColor()}
  * 是为深色内屏设计的亮绿色，压在白底上可读性差。
@@ -38,16 +42,22 @@ import org.jetbrains.annotations.NotNull;
 final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpressionEditor {
 
 	private static final int WINDOW_WIDTH = 230;
-	private static final int WINDOW_HEIGHT = 164;
 	private static final int FIELD_X = 10;
 	private static final int FIELD_WIDTH = WINDOW_WIDTH - 2 * FIELD_X;
 	private static final int FIELD_HEIGHT = 18;
-	private static final int WHITELIST_Y = 32;
-	private static final int BLACKLIST_Y = 66;
-	/** 图例两行 + 一行提示（对齐 ExtendedAE 的正文式排布）。 */
-	private static final int LEGEND_Y = 87;
+	private static final int LABEL_OFFSET = 10;
+	private static final int WHITELIST_Y = 26;
+	private static final int BLACKLIST_Y = 56;
+	/** 图例两行（对齐 ExtendedAE 的正文式排布）。 */
+	private static final int LEGEND_Y = 76;
 	private static final int LEGEND_LINE_HEIGHT = 9;
-	private static final int PICKER_Y = 116;
+	private static final int PICKER_Y = 94;
+	private static final int SAVE_WIDTH = 38;
+	private static final int SAVE_HEIGHT = 18;
+	private static final int BOTTOM_PADDING = 6;
+	/** 窗口高度由内容推出：选取器面板底 + 间隙 + 保存按钮 + 下边距。 */
+	private static final int WINDOW_HEIGHT = PICKER_Y + TagPickerWidget.HEIGHT + 4
+			+ SAVE_HEIGHT + BOTTOM_PADDING;
 	private static final int NORMAL_TEXT_COLOR = 0xFFFFFF;
 	private static final int ERROR_TEXT_COLOR = 0xFF5555;
 
@@ -70,9 +80,10 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 		configureField(whitelistField, tagFilter == null ? "" : tagFilter.getWhitelistSource());
 		configureField(blacklistField, tagFilter == null ? "" : tagFilter.getBlacklistSource());
 
-		addChild(new TagPickerWidget(gui(), relativeX + FIELD_X, relativeY + PICKER_Y,
-				FIELD_WIDTH, titleTextColor(), this));
-		addChild(new SaveButton(gui(), relativeX + WINDOW_WIDTH - 48, relativeY + WINDOW_HEIGHT - 24,
+		addChild(new TagPickerWidget(gui(), this, relativeX + FIELD_X, relativeY + PICKER_Y,
+				FIELD_WIDTH, this));
+		addChild(new SaveButton(gui(), relativeX + WINDOW_WIDTH - FIELD_X - SAVE_WIDTH,
+				relativeY + WINDOW_HEIGHT - BOTTOM_PADDING - SAVE_HEIGHT,
 				Component.translatable("productivebeesgenesis.gui.ae_input_tag_filter.save"), this::save));
 		validate(whitelistField);
 		validate(blacklistField);
@@ -105,14 +116,14 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 		super.renderForeground(guiGraphics, mouseX, mouseY);
 		drawTitleText(guiGraphics,
 				Component.translatable("productivebeesgenesis.gui.ae_input_tag_filter.title"), 5);
-		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.whitelist", WHITELIST_Y - 10, 0.75F);
-		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.blacklist", BLACKLIST_Y - 10, 0.75F);
+		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.whitelist",
+				WHITELIST_Y - LABEL_OFFSET, 0.75F);
+		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.blacklist",
+				BLACKLIST_Y - LABEL_OFFSET, 0.75F);
 		// 图例常驻正文（ExtendedAE 范式），不再用 tooltip 遮挡输入框
 		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.legend.line1", LEGEND_Y, 0.7F);
 		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.legend.line2",
 				LEGEND_Y + LEGEND_LINE_HEIGHT, 0.7F);
-		drawLabel(guiGraphics, "productivebeesgenesis.gui.ae_input_tag_filter.hint",
-				LEGEND_Y + LEGEND_LINE_HEIGHT * 2, 0.7F);
 	}
 
 	private void drawLabel(GuiGraphics guiGraphics, String key, int y, float scale) {
@@ -152,7 +163,7 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 
 	private static final class SaveButton extends MekanismButton {
 		SaveButton(IGuiWrapper gui, int x, int y, Component message, Runnable callback) {
-			super(gui, x, y, 38, 18, message, (element, mouseX, mouseY) -> {
+			super(gui, x, y, SAVE_WIDTH, SAVE_HEIGHT, message, (element, mouseX, mouseY) -> {
 				callback.run();
 				return true;
 			});

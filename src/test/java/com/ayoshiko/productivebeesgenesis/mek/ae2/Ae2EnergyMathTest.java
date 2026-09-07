@@ -34,6 +34,20 @@ class Ae2EnergyMathTest {
 	}
 
 	@Test
+	void activeBatchRequestsOnlyItsMissingEnergy() {
+		assertEquals(25L, Ae2EnergyMath.requiredShortfall(75L, 100L, 925L));
+		assertEquals(0L, Ae2EnergyMath.requiredShortfall(100L, 100L, 900L));
+		assertEquals(0L, Ae2EnergyMath.requiredShortfall(150L, 100L, 850L));
+		assertEquals(40L, Ae2EnergyMath.requiredShortfall(0L, 100L, 40L));
+		assertEquals(5L,
+				Ae2EnergyMath.requiredShortfall(Long.MAX_VALUE - 5L, Long.MAX_VALUE, Long.MAX_VALUE));
+		assertEquals(Long.MAX_VALUE,
+				Ae2EnergyMath.requiredShortfall(0L, Long.MAX_VALUE, Long.MAX_VALUE));
+		assertEquals(0L, Ae2EnergyMath.requiredShortfall(0L, -1L, 100L));
+		assertEquals(0L, Ae2EnergyMath.requiredShortfall(0L, 100L, -1L));
+	}
+
+	@Test
 	void clampsFloatingPointAeConversionToRequestedFe() {
 		assertEquals(Long.MAX_VALUE,
 				Ae2EnergyMath.aeToFe((double) Long.MAX_VALUE / 2D, Long.MAX_VALUE, 2D));

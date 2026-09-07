@@ -21,7 +21,7 @@ class Ae2TagFilterWiringTest {
 	}
 
 	@Test
-	@DisplayName("smelt 分类经过标签门，且蜜脾判定仍在标签门之前")
+	@DisplayName("候选分类统一经过标签门，且蜜脾判定仍在标签门之前")
 	void candidatePolicyAppliesTagGateAfterCombAndRecipe() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2InputCandidatePolicy.java");
@@ -29,10 +29,14 @@ class Ae2TagFilterWiringTest {
 		int recipeIndex = source.indexOf("smeltingCache.contains(level, key)");
 		int gateIndex = source.indexOf("tagGate.allows(key)");
 		assertTrue(combIndex >= 0 && recipeIndex >= 0 && gateIndex >= 0);
-		// 顺序保证：蜜脾 -> SMELTING 配方 -> 标签门；标签门只能收窄 smelt 输入
+		// 顺序保证：蜜脾能力 -> SMELTING 配方 -> 标签门；标签门统一收窄 AE2 候选
 		assertTrue(combIndex < recipeIndex);
 		assertTrue(recipeIndex < gateIndex);
-		assertTrue(source.contains("SmeltingTagGate.ALLOW_ALL"));
+		assertTrue(source.contains("return comb ? CandidateKind.COMB : CandidateKind.SMELTING;"),
+				"同一个标签门必须覆盖蜜脾与熔炼候选，不能让蜜脾块绕过过滤");
+		// 断言常量声明本身：分类方法只保留「全参数」一个入口，便捷重载已删除，
+		// 否则调用方可以绕过标签门/可处理性门。零开销放行门由调用方显式传入。
+		assertTrue(source.contains("SmeltingTagGate ALLOW_ALL = key -> true;"));
 	}
 
 	@Test
@@ -42,6 +46,8 @@ class Ae2TagFilterWiringTest {
 		assertTrue(source.contains("Ae2TagFilter tagFilter = holder.getAeTagFilter()"));
 		assertTrue(source.contains("Ae2InputCandidatePolicy.SmeltingTagGate.ALLOW_ALL"));
 		assertTrue(source.contains("buffers.tagFilterCache.allows(tagFilter, key)"));
+		assertTrue(source.contains("? key -> buffers.tagFilterCache.allows(tagFilter, key)"),
+				"标签表达式必须独立筛选所有候选物品，不能绑定 F 标记模式");
 		// 表达式变更必须立刻重建候选列表，而不是等 10 tick 刷新窗口
 		assertTrue(source.contains("recipeVersion, smeltingEnabled, tagGeneration)"));
 		assertTrue(source.replaceAll("\\s+", " ")
@@ -93,9 +99,10 @@ class Ae2TagFilterWiringTest {
 		assertTrue(source.contains("item instanceof BlockItem"));
 		// builtInRegistryHolder() 已废弃，javac 警告会让 gradle 构建失败；注释里提及不算调用
 		assertTrue(!source.contains(".builtInRegistryHolder()"));
-		// 判定缓存必须走同一候选面，不得自建一份
+		// 判定缓存必须走同一候选面，不得自建一份。断言带 allows( 前缀以确保匹配到真实调用点
+		// 而不是类注释里的说明文字（缓存键已改为 Item，注释中仍会提到 key.getItem()）。
 		String cache = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2TagFilterCache.java");
-		assertTrue(cache.contains("Ae2ItemTagView.candidateOf(key.getItem())"));
+		assertTrue(cache.contains("allows(Ae2ItemTagView.candidateOf(item))"));
 	}
 
 	@Test
@@ -133,14 +140,42 @@ class Ae2TagFilterWiringTest {
 	void pickerRefreshIsIncremental() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
 				+ "TagPickerWidget.java");
-		// tick 是每帧路径：表达式未变必须整轮跳过，否则每帧扫描表达式 + 重建 tooltip 列表
+		// tick 是每帧路径：表达式未变必须整轮跳过，否则每帧扫描表达式 + 重建候选行列表
 		assertTrue(source.contains("if (blacklistTarget == lastTargetWasBlacklist "
 				+ "&& expression.equals(lastExpression)) return;"));
-		// 可加候选须剔除已写入项（精妙存储同语义），可删候选来自表达式词法扫描
+		// 勾选态按「该字面量是否已在表达式里」判定（精妙存储同语义），候选并入表达式里的词法字面量，
+		// 这样手打或从别的物品加进来的标签也能一键移除
 		String state = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
 				+ "TagPickerState.java");
 		assertTrue(state.contains("TagExpressionText.containsLiteral(expression, tag)"));
 		assertTrue(state.contains("TagExpressionText.listLiterals(expression)"));
+	}
+
+	@Test
+	@DisplayName("标签候选走定高滚动列表，不得再整表塞进 tooltip")
+	void tagCandidatesUseBoundedScrollList() throws Exception {
+		String list = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
+				+ "TagListWidget.java");
+		// 复用 MEK 滚动列表：控件高度只取决于可见行数，候选再多只是滚动条变长
+		assertTrue(list.contains("extends GuiScrollList"));
+		assertTrue(list.contains("visibleRows * ROW_HEIGHT + 2"));
+
+		String picker = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
+				+ "TagPickerWidget.java");
+		assertTrue(picker.contains("new TagListWidget("));
+		// 原版 DefaultTooltipPositioner 只把过高的 tooltip 往上顶（y = guiHeight - h）、从不裁剪高度：
+		// 候选一旦回到 tooltip，整合包里几十个标签的物品会把顶部若干条顶出屏幕，玩家看不到也滚不到。
+		assertTrue(!picker.contains("buildLines"), "候选行不得再逐条塞进 tooltip");
+		assertTrue(!picker.contains("addTooltipLines"), "候选行不得再逐条塞进 tooltip");
+
+		// 窗口高度必须由内容推出（改布局时自动跟随），且父窗口只让 4px 层叠偏移 ——
+		// 最小界面可用高度 240px，偏移越大越容易把底部保存按钮顶出屏幕
+		String window = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
+				+ "GuiAeInputTagFilterConfig.java");
+		assertTrue(window.contains("PICKER_Y + TagPickerWidget.HEIGHT"));
+		String parent = read("src/main/java/com/ayoshiko/productivebeesgenesis/client/screen/"
+				+ "GuiAeInputConfig.java");
+		assertTrue(parent.contains("new GuiAeInputTagFilterConfig(gui(), relativeX + 14, relativeY + 4,"));
 	}
 
 	@Test

@@ -284,7 +284,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	/**
 	 * 获取指定类型的安装上限
 	 * <br/>
-	 * 离心机支持产量系列、时间系列和稳定性升级，上限由离心机独立配置段控制，
+	 * 离心机支持产量系列、时间系列、稳定性和功能型升级，上限由离心机独立配置段控制，
 	 * 配置未加载时回退到枚举默认值。
 	 */
 	int getLimit(PbUpgradeType type) {
@@ -305,6 +305,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 					ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount != null
 							? ModConfig.SERVER.mekCentrifugePbUpgradeStabilityMaxCount.get()
 							: type.getMaxCount();
+			case RAW_ORE_SMELTING -> 1;
 			default -> type.getMaxCount();
 		};
 	}
@@ -312,14 +313,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	/**
 	 * 是否支持指定升级类型
 	 * <br/>
-	 * 离心机支持产量系列（PRODUCTIVITY α/β/γ/Ω）、时间系列（TIME/TIME_2）和稳定性（STABILITY）。
+	 * 离心机支持产量系列（PRODUCTIVITY α/β/γ/Ω）、时间系列（TIME/TIME_2）、稳定性及功能型升级。
 	 * STABILITY 仅离心机生效，对齐 PB 原版 CentrifugeBlockEntity 的升级白名单。
 	 */
 	boolean isSupported(PbUpgradeType type) {
 		if (type == null || type.isBuiltin()) return false;
 		return switch (type) {
 			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4,
-					TIME, TIME_2, STABILITY, USELESS_BYPRODUCT -> true;
+					TIME, TIME_2, STABILITY, USELESS_BYPRODUCT, ESSENCE_CONVERSION, RAW_ORE_SMELTING -> true;
 			default -> false;
 		};
 	}

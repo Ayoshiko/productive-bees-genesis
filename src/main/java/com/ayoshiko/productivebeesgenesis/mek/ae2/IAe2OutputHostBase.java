@@ -97,6 +97,20 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	 */
 	MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource();
 
+	/**
+	 * 返回当前加速批次所有处理槽的预计 FE 需求。
+	 * <p>
+	 * 该值只用于在批次开始前扩展本地缓冲并进行一次 AE2 注能；虚拟 tick 期间不重复访问网络。
+	 */
+	default long productivebeesgenesis$getRequiredEnergyForBatch(int batchMultiplier) {
+		return MekCentrifugeEnergyScaling.requiredSmeltingEnergyPerTick(this, batchMultiplier);
+	}
+
+	/** Whether this host should bound AE2 requests by a Mekanism SMELTING batch budget. */
+	default boolean productivebeesgenesis$usesSmeltingEnergyBudget() {
+		return false;
+	}
+
 	/** 获取方块实体所在世界 */
 	Level productivebeesgenesis$getAe2Level();
 
@@ -407,12 +421,19 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	}
 
 	/**
-	 * AE2 energy input for one real game tick. The multiplier remains part of the host tick API,
-	 * but charging no longer scans recipe demand and is independent of current activity.
+	 * 为一个真实游戏刻的处理批次注入 AE2 能量。
+	 * <p>
+	 * 熔炼与蜜脾统一使用升级派生的标准容量，时间加速不改变本地储能上限。
 	 */
 	default void productivebeesgenesis$injectAe2Energy(int batchMultiplier) {
-		// Capacity coordination also repairs oversized legacy buffers when AE2 is disabled.
+		// 同时恢复此前由熔炼批次扩大的容量；只按标准容器的剩余空间补电。
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		productivebeesgenesis$injectAe2EnergyIntoPreparedCapacity(0, 0L);
+	}
+
+	/** 对当前已准备好的容量执行一次 AE2 注能，不改变容量。 */
+	private void productivebeesgenesis$injectAe2EnergyIntoPreparedCapacity(
+			int batchMultiplier, long requiredEnergy) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2OutputStateHolder holder = productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
@@ -421,7 +442,16 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 			holder.refreshConfigCache(level.getGameTime());
 		}
 		if (!holder.isCachedEnergyInputEnabled()) return;
-		Ae2EnergyInjector.injectEnergy(this, batchMultiplier);
+		Ae2EnergyInjector.injectEnergy(this, batchMultiplier, requiredEnergy);
+	}
+
+	/**
+	 * 批次完成后补满标准容量，不再调整容量。
+	 * <p>
+	 * AE2 只补回实际消耗的差额，普通 FE 电缆仍可在两次机器 tick 之间充能。
+	 */
+	default void productivebeesgenesis$refillAe2EnergyAfterBatch() {
+		productivebeesgenesis$injectAe2EnergyIntoPreparedCapacity(0, 0L);
 	}
 
 	/**

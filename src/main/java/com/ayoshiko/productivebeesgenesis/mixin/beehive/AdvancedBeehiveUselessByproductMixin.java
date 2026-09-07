@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.beehive;
 
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.core.BlockPos;
@@ -18,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 
-/** Applies useless-byproduct filtering to Productive Bees advanced hives. */
+/** Applies output filtering and essence conversion to Productive Bees advanced hives. */
 @Mixin(AdvancedBeehiveBlockEntity.class)
 public abstract class AdvancedBeehiveUselessByproductMixin {
 
@@ -56,6 +57,17 @@ public abstract class AdvancedBeehiveUselessByproductMixin {
 			if (current.getValue(BeehiveBlock.HONEY_LEVEL) != originalLevel) {
 				level.setBlockAndUpdate(pos, current.setValue(BeehiveBlock.HONEY_LEVEL, originalLevel));
 			}
+		}
+	}
+
+	/** 在蜂箱完成一次蜜蜂释放后，将已写入输出槽的产物按精华升级转换。 */
+	@Inject(method = "beeReleasePostAction", at = @At("TAIL"))
+	private void productivebeesgenesis$convertEssence(Level level, Bee bee, BlockState state,
+			BeehiveBlockEntity.BeeReleaseStatus releaseStatus, CallbackInfo ci) {
+		AdvancedBeehiveBlockEntity blockEntity = (AdvancedBeehiveBlockEntity) (Object) this;
+		if (releaseStatus == BeehiveBlockEntity.BeeReleaseStatus.HONEY_DELIVERED
+				&& EssenceConversionUpgradeHelper.hasUpgrade(blockEntity)) {
+			EssenceConversionUpgradeHelper.convertStored(level, blockEntity.inventoryHandler);
 		}
 	}
 }

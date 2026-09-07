@@ -9,6 +9,8 @@ import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationComb;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationCombBlock;
+import com.ayoshiko.productivebeesgenesis.item.EssenceConversionUpgradeItem;
+import com.ayoshiko.productivebeesgenesis.item.RawOreSmeltingUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.item.UselessByproductUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
@@ -159,6 +161,16 @@ public final class ModItems {
 	public static final DeferredItem<UselessByproductUpgradeItem> BYPRODUCT_DESTRUCTION_UPGRADE =
 			ITEMS.register("byproduct_destruction_upgrade",
 					() -> new UselessByproductUpgradeItem(new Item.Properties()));
+
+	/** 将唯一同物合成配方的产物按比例自动转化的 PB 升级。 */
+	public static final DeferredItem<EssenceConversionUpgradeItem> ESSENCE_CONVERSION_UPGRADE =
+			ITEMS.register("essence_conversion_upgrade",
+					() -> new EssenceConversionUpgradeItem(new Item.Properties()));
+
+	/** 将资源蜜蜂离心产出的粗矿按熔炼配方直接转为锭。 */
+	public static final DeferredItem<RawOreSmeltingUpgradeItem> RAW_ORE_SMELTING_UPGRADE =
+			ITEMS.register("raw_ore_smelting_upgrade",
+					() -> new RawOreSmeltingUpgradeItem(new Item.Properties()));
 
 	/**
 	 * EM工厂BlockItem映射 — 由registerEMFactoryItems()在EM加载时填充

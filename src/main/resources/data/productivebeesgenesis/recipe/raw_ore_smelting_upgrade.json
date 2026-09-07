@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "RFR",
+    "IUI",
+    "RFR"
+  ],
+  "key": {
+    "F": {
+      "item": "minecraft:furnace"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "U": {
+      "item": "productivelib:upgrade_base"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:raw_ore_smelting_upgrade"
+  }
+}

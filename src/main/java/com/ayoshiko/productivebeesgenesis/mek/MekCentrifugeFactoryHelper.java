@@ -24,7 +24,7 @@ import mekanism.common.inventory.slot.EnergyInventorySlot;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
-import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
+import mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentConfig;
 import mekanism.common.tile.component.TileComponentEjector;
@@ -39,8 +39,10 @@ import net.neoforged.neoforge.common.util.TriPredicate;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
@@ -97,53 +99,134 @@ public final class MekCentrifugeFactoryHelper {
 			(recipe, input, output) -> InventoryUtils.areItemsStackable(recipe.getOutput(input), output);
 
 	/**
-	 * 轻量 SMELTING 补调 — 仅推进已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
+	 * 轻量推进熔炼配方，并将本批次的虚拟 tick 能耗合并为一次容器写入。
 	 * <br/>
-	 * 对比完整 super 补调（每 tick 包含 ejector tick + 能量槽回填 + getUpdatedCache 配方重查），
-	 * 本方法只调用 {@code CachedRecipe.process()} 推进已缓存配方，跳过全部重复开销：
-	 * <ul>
-	 *   <li>ejector tick（TileEntityConfigurableMachine.ejectorComponent.tickServer）— 每 gameTick 由首次完整 super 执行一次</li>
-	 *   <li>energySlot.fillContainerOrConvert()（能量槽回填）— 同上</li>
-	 *   <li>getUpdatedCache（每 tick 的 isInputValid + 配方重查）— 同一 gameTick 内输入不变，
-	 *       首次完整 super 已重查，此处直接复用缓存配方</li>
-	 *   <li>无缓存配方的 lane（输入为空/PB 配方/万象蜜脾）— getCachedRecipe 为 null 直接跳过</li>
-	 * </ul>
-	 * 语义等价于 Mekanism 管线真实推进 batchMultiplier 次 tick（能量消耗、输入消费、产出一致），
-	 * 仅省去每次重复的查找/弹射/回填开销，降低高倍加速下的 MSPT 占用。
+	 * 已注入批处理接口的 lane 共享同一个 {@link BatchEnergyLedger}：每次配方计算只从
+	 * 「本地能量 - 已记账能量」读取预算，虚拟 tick 期间不访问 AE2 网络，
+	 * 批次结束后统一从 Mekanism 能量容器提取累计能耗。
 	 *
-	 * @param monitors        工厂的 recipeCacheLookupMonitors（受保护字段，由工厂实例方法传入）
+	 * @param monitors 工厂的配方缓存监视器
 	 * @param batchMultiplier 批量倍率（≥2 时才有补调意义）
-	 * @return 是否有任意一次补调执行（调用方用于触发发送更新包）
+	 * @param energyContainer 工厂本地能量容器
+	 * @return 是否有任意一次补调执行
 	 */
-	public static boolean runLightSmeltingTicks(@NotNull FactoryRecipeCacheLookupMonitor<?>[] monitors, int batchMultiplier) {
-		boolean updated = false;
-		for (int i = 0; i < monitors.length; i++) {
-			CachedRecipe<?> cached = monitors[i].getCachedRecipe(i);
-			if (cached == null) {
-				// 该 lane 无已缓存熔炉配方（空输入/被 PB 或万象路径独占），跳过
-				continue;
-			}
-			int extraTicks = batchMultiplier - 1;
+	public static boolean runLightSmeltingTicks(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
+			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer) {
+		if (batchMultiplier <= 1 || monitors.length == 0) {
+			return false;
+		}
+		BatchEnergyLedger ledger = new BatchEnergyLedger();
+		List<ICachedRecipeBatchAccel> acceleratedRecipes = new ArrayList<>();
+		List<CachedRecipe<?>> cachedRecipes = currentSmeltingRecipes(monitors);
+		if (cachedRecipes.isEmpty()) {
+			return false;
+		}
+		int extraTicks = batchMultiplier - 1;
+		for (CachedRecipe<?> cached : cachedRecipes) {
 			if (cached instanceof ICachedRecipeBatchAccel accel) {
-				// 批量快速推进（JDTE 合并 flush 思路）：一次完整计算 + 预算内循环推进，
-				// 跨周期自动重算，完整计算次数从 M 降到 ~M/配方时长；预算耗尽立即停止补调
+				accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
 				accel.productivebeesgenesis$startBatch(extraTicks);
-				for (int j = 1; j < batchMultiplier; j++) {
-					cached.process();
-					updated = true;
-					if (accel.productivebeesgenesis$isBatchExhausted()) {
-						break;
-					}
-				}
-			} else {
-				// Mixin 未应用（防御回退）：逐 tick 轻量推进
-				for (int j = 1; j < batchMultiplier; j++) {
-					cached.process();
-					updated = true;
-				}
+				acceleratedRecipes.add(accel);
 			}
 		}
+
+		boolean updated = false;
+		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
+			for (int index = 0; index < cachedRecipes.size(); index++) {
+				CachedRecipe<?> cached = cachedRecipes.get(index);
+				if (cached instanceof ICachedRecipeBatchAccel accel) {
+					// 一次完整计算 + 预算内字段级推进；跨周期时自动回到完整计算。
+					for (int j = 0; j < extraTicks; j++) {
+						cached.process();
+						updated = true;
+						if (accel.productivebeesgenesis$isBatchExhausted()) {
+							break;
+						}
+					}
+				} else {
+					// Mixin 未应用时保留原版逐 tick 回退；正常路径不会进入这里。
+					for (int j = 0; j < extraTicks; j++) {
+						cached.process();
+						updated = true;
+					}
+				}
+			}
+		} finally {
+			for (ICachedRecipeBatchAccel accel : acceleratedRecipes) {
+				accel.productivebeesgenesis$finishBatch();
+			}
+			ledger.flush(energyContainer);
+		}
 		return updated;
+	}
+
+	/**
+	 * Runs one complete SMELTING tick and its accelerated remainder under one energy ledger.
+	 * <p>
+	 * This mirrors the PB batch boundary: the first real tick and all virtual ticks only
+	 * accumulate energy, then the caller's container is charged once. Recipes are read after
+	 * the full tick so newly created or replaced monitor caches receive the accelerated remainder.
+	 */
+	public static boolean runSmeltingBatch(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
+			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer,
+			@NotNull BooleanSupplier fullTick) {
+		if (batchMultiplier <= 1 || monitors.length == 0) {
+			return fullTick.getAsBoolean();
+		}
+
+		BatchEnergyLedger ledger = new BatchEnergyLedger();
+		List<ICachedRecipeBatchAccel> acceleratedRecipes = new ArrayList<>();
+		boolean updated = false;
+		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
+			// AE2 注能是否触发容器 listener 取决于兼容工厂的父类接线；显式解除旧暂停，
+			// 保证本次完整计算能在预算充足时立即清除 NOT_ENOUGH_ENERGY。
+			for (RecipeCacheLookupMonitor<?> monitor : monitors) {
+				monitor.unpause();
+			}
+			// 先完整执行一次，让监视器创建、替换并正常清除各 lane 的错误状态。
+			// 作用域会让本次完整 tick（包括新建缓存）只向账本记账，不立即写能量容器。
+			updated = fullTick.getAsBoolean();
+			int extraTicks = batchMultiplier - 1;
+			List<CachedRecipe<?>> cachedRecipes = currentSmeltingRecipes(monitors);
+			for (CachedRecipe<?> cached : cachedRecipes) {
+				if (cached instanceof ICachedRecipeBatchAccel accel) {
+					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
+					accel.productivebeesgenesis$startBatch(extraTicks);
+					acceleratedRecipes.add(accel);
+				}
+			}
+			for (int index = 0; index < cachedRecipes.size(); index++) {
+				CachedRecipe<?> cached = cachedRecipes.get(index);
+				if (cached instanceof ICachedRecipeBatchAccel accel) {
+					for (int j = 0; j < extraTicks && !accel.productivebeesgenesis$isBatchExhausted(); j++) {
+						cached.process();
+						updated = true;
+					}
+				} else {
+					for (int j = 0; j < extraTicks; j++) {
+						cached.process();
+						updated = true;
+					}
+				}
+			}
+		} finally {
+			for (ICachedRecipeBatchAccel accel : acceleratedRecipes) {
+				accel.productivebeesgenesis$finishBatch();
+			}
+			ledger.flush(energyContainer);
+		}
+		return updated;
+	}
+
+	/** 在完整 tick 后读取监视器当前持有的缓存，避免继续处理已被替换的旧引用。 */
+	private static List<CachedRecipe<?>> currentSmeltingRecipes(
+			@NotNull RecipeCacheLookupMonitor<?>[] monitors) {
+		List<CachedRecipe<?>> cachedRecipes = new ArrayList<>(monitors.length);
+		for (int i = 0; i < monitors.length; i++) {
+			CachedRecipe<?> cached = monitors[i].getCachedRecipe(i);
+			if (cached != null) cachedRecipes.add(cached);
+		}
+		return cachedRecipes;
 	}
 
 	/** 工厂跟踪的配方错误类型（原版工厂构造函数使用） */
@@ -316,6 +399,9 @@ public final class MekCentrifugeFactoryHelper {
 			int i = (processStart + processOffset) % processes;
 			ItemStack input = inputSlots.get(i).getStack();
 			if (input.isEmpty()) {
+				// 输入清空后仍可能有「已扣除输入、尚未写出」的产物（种类溢出延迟提交 / 直输 AE 回退），
+				// 必须继续排空，否则产物滞留在不可见缓冲里
+				pbProcessor.drainCommittedPendingOutputs(i);
 				// 空输入：重置缓存并跳过
 				pbProcessor.resetSmeltingCache(i);
 				// 修复：空输入时必须重置 PB 状态（pbOperatingTicks/pbProcessing/cachedPbRecipes）

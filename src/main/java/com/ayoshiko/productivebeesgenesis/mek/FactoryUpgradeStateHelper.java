@@ -166,7 +166,7 @@ public final class FactoryUpgradeStateHelper {
 	 * 已移入 if (!skipPb) 块内,与 PB 一致地批处理。256x 加速下仅第 1 次 tick 执行完整 AE2 操作,
 	 * 第 2-256 次 tick 完全跳过（含 tryConnectNode / injectAe2Energy / AE2 推送拉取）。
 	 * SMELTING 配方进度推进由首次完整 super + 轻量补调
-	 * （{@link MekCentrifugeFactoryHelper#runLightSmeltingTicks}，仅推进已缓存配方）
+	 * （{@link MekCentrifugeFactoryHelper#runSmeltingBatch}，首 tick 与补调共用能量账本）
 	 * 处理，能量消耗按真实 tick 数计费，不损失产出速率。
 	 *
 	 * @param factory		工厂实例
@@ -200,7 +200,9 @@ public final class FactoryUpgradeStateHelper {
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
-		boolean sendUpdatePacket = superCall.getAsBoolean(); // super 始终调用
+		boolean sendUpdatePacket = batchMultiplier > 1
+				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)
+				: superCall.getAsBoolean();
 
 		boolean result;
 		if (!skipPb) {
@@ -208,14 +210,7 @@ public final class FactoryUpgradeStateHelper {
 			// 与 JDTE flush 均被同 gameTick 门控跳过），Mekanism 管线无法按倍率推进。
 			// 存在 SMELTING 配方通道时补调 super，使熔炉配方按批量倍率 M 推进
 			// （JDTE 时间加速器与 JDT 时间手杖均生效）；PB 通道由 PbVirtualTickPlan 内部加速。
-			// 放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差（lastUsage 显示）。
-			if (batchMultiplier > 1) {
-				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
-				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
-				if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
-					sendUpdatePacket = true;
-				}
-			}
+			// 首个真实 tick 与额外虚拟 tick 已在同一批次账本中完成。
 			// 输入槽状态变化频率低,每 gameTick 1 次足够,跳过 256x 下 255 次无意义操作
 			factory.pbUpgradeDelegate.processPbUpgradeInput();
 			factory.delegate.resetSortingMark();
@@ -233,8 +228,8 @@ public final class FactoryUpgradeStateHelper {
 			result = sendUpdatePacket;
 		}
 
-		// 工厂本 tick 消耗完成后补回正常容量，下一 tick 的前置注入会自然短路。
-		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
+		// 本 tick 消耗完成后补回当前批次容量，但保留扩容供普通 FE 电缆跨 tick 填充。
+		factory.productivebeesgenesis$refillAe2EnergyAfterBatch();
 
 		return result;
 	}
@@ -260,16 +255,9 @@ public final class FactoryUpgradeStateHelper {
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
-		boolean sendUpdatePacket = superCall.getAsBoolean();
-		// SMELTING 配方加速（与 onUpdateServer 的 !skipPb 分支一致）— 补调 super 使熔炉管线
-		// 按批量倍率推进；放在 PB 处理前执行，使额外消耗计入 energyBeforeSuper 的能量差。
-		if (batchMultiplier > 1) {
-			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
-			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
-			if (factory.productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
-				sendUpdatePacket = true;
-			}
-		}
+		boolean sendUpdatePacket = batchMultiplier > 1
+				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)
+				: superCall.getAsBoolean();
 		// 升级输入、排序重置、PB 配方处理（批量倍率由调用方传入）
 		factory.pbUpgradeDelegate.processPbUpgradeInput();
 		factory.delegate.resetSortingMark();
@@ -280,7 +268,7 @@ public final class FactoryUpgradeStateHelper {
 				v -> accessor.productivebeesgenesis$setLastUsage(v));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
 		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
-		// Coalesced flush 同样在所有配方消耗完成后补回正常容量。
-		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
+		// Coalesced flush 同样补回当前批次容量而不缩容。
+		factory.productivebeesgenesis$refillAe2EnergyAfterBatch();
 	}
 }

@@ -68,7 +68,7 @@ final class TagSampleSlotWidget extends GuiElement implements IRecipeViewerGhost
 	public void drawBackground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		super.drawBackground(guiGraphics, mouseX, mouseY, partialTicks);
 		if (!sample.isEmpty()) {
-			guiGraphics.renderFakeItem(sample, relativeX + 1, relativeY + 1);
+			gui().renderItem(guiGraphics, sample, relativeX + 1, relativeY + 1);
 		}
 	}
 

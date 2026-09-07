@@ -268,6 +268,18 @@ public interface PbRecipeContext {
 				&& provider.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;
 	}
 
+	/** 判断当前 PB 机器是否启用了精华转化升级。 */
+	default boolean productivebeesgenesis$hasEssenceConversionUpgrade() {
+		return this instanceof IPbUpgradeProvider provider
+				&& provider.getPbUpgradeInstalledCount(PbUpgradeType.ESSENCE_CONVERSION) > 0;
+	}
+
+	/** 判断当前离心机是否启用了粗矿熔炼升级。蜂箱适配器不实现 IPbUpgradeProvider，因此默认关闭。 */
+	default boolean productivebeesgenesis$hasRawOreSmeltingUpgrade() {
+		return this instanceof IPbUpgradeProvider provider
+				&& provider.getPbUpgradeInstalledCount(PbUpgradeType.RAW_ORE_SMELTING) > 0;
+	}
+
 	/** 新产物是否优先直接写入 AE；默认关闭，保持原本地输出槽行为。 */
 	default boolean productivebeesgenesis$isDirectAeOutputEnabled() {
 		return false;
@@ -289,6 +301,24 @@ public interface PbRecipeContext {
 	 */
 	default long productivebeesgenesis$pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return 0L;
+	}
+
+	/**
+	 * 产物直通：先模拟再放入，把新生成的产物直接送给已配置输出面的相邻容器，跳过输出槽中转。
+	 * <p>
+	 * 默认实现从 Mekanism 的侧面配置接口取弹出器组件，委托给
+	 * {@link com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost}
+	 * （由弹出器的 Mixin 实现，天然持有输出面与相邻容器能力缓存）。
+	 * 目标塞不下的部分回落输出槽，因此永不丢物；机器自动弹出关闭或未启用直通时返回 0。
+	 *
+	 * @param stack 待推送产物（不会被修改）
+	 * @return 相邻容器实际接收的数量
+	 */
+	default int productivebeesgenesis$pushGeneratedItemToNeighbors(ItemStack stack) {
+		return this instanceof mekanism.common.tile.interfaces.ISideConfiguration sideConfiguration
+				? com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost.push(
+						sideConfiguration.getEjector(), stack)
+				: 0;
 	}
 
 	/** Simulates direct AE fluid acceptance without mutating the network. */

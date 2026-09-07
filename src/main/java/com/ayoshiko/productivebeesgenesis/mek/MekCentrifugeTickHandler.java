@@ -176,20 +176,11 @@ class MekCentrifugeTickHandler {
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
 		long energyBefore = energyContainer.getEnergy();
 
-		boolean sendUpdatePacket = tile.callSuperOnUpdateServer();
-
-		// SMELTING（电力熔炼炉）配方加速 — Mekanism 管线每调用 super 推进 1 tick，
-		// 但批量收获模式下 super 每 gameTick 只调用一次（时间手杖的后续 ticker 调用
-		// 与 JDTE flush 均被同 gameTick 门控跳过）。输入为 SMELTING 配方时轻量补调，
-		// 使熔炉配方按批量倍率 M 推进（JDTE 时间加速器与 JDT 时间手杖均生效）。
-		// PB 配方路径不需要补调：PbVirtualTickPlan 已在内部按倍率推进。
-		if (batchMultiplier > 1) {
-			// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
-			// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
-			if (tile.runLightSmeltingTicks(batchMultiplier)) {
-				sendUpdatePacket = true;
-			}
-		}
+		// SMELTING 的首个真实 tick 与额外虚拟 tick 共享一次账本提交；
+		// PB 配方仍由 PbVirtualTickPlan 在自己的批次内一次扣能。
+		boolean sendUpdatePacket = batchMultiplier > 1
+				? tile.runSmeltingBatch(batchMultiplier, tile::callSuperOnUpdateServer)
+				: tile.callSuperOnUpdateServer();
 
 		// 在配方处理前释放上 tick 遗留流体，避免满罐使本 tick 的高并行批次提前暂停。
 		// LinkageError 兜底：present-but-incompatible AE2 在 pusher 类链接/校验阶段抛
@@ -235,9 +226,9 @@ class MekCentrifugeTickHandler {
 			}
 		}
 
-		// 配方扣能后补回正常容量；稳态下 tick 开头会因容量已满而短路，
-		// 因此不会把实际 AE2 取电调用翻倍，并可消除客户端能量条的锯齿同步。
-		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
+		// 配方扣能后补回当前批次容量但不缩容，让普通 FE 电缆可在下个机器 tick 前填充，
+		// AE2 则只补回本批实际消耗的差额。
+		tile.productivebeesgenesis$refillAe2EnergyAfterBatch();
 
 		return sendUpdatePacket;
 	}
@@ -279,6 +270,8 @@ class MekCentrifugeTickHandler {
 
 			ItemStack input = tile.accessor().productivebeesgenesis$getInputSlot().getStack();
 			if (input.isEmpty()) {
+				// 输入清空后仍可能有「已扣除输入、尚未写出」的产物（种类溢出延迟提交 / 直输 AE 回退）
+				pbProcessor.drainCommittedPendingOutputs(0);
 				// 空输入：重置 PB 状态和 SMELTING 缓存（与原版 clearPbState + lastCheckedInput=EMPTY 一致）
 				pbProcessor.resetPbState(0);
 				pbProcessor.resetSmeltingCache(0);

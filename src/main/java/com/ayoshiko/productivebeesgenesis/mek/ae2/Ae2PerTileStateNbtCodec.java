@@ -27,6 +27,7 @@ final class Ae2PerTileStateNbtCodec {
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_INPUT_NBT_IGNORE, holder.isAeInputNbtIgnore());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT, holder.isSmeltingCompatEnabled());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT, holder.isCentrifugeDirectAeOutputEnabled());
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_DIRECT_CONTAINER_OUTPUT, holder.isDirectContainerOutputEnabled());
 		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
 		Ae2InputFilter filter = holder.getAeInputFilter();
 		if (filter != null) {
@@ -67,6 +68,9 @@ final class Ae2PerTileStateNbtCodec {
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT) : false);
 		holder.setCentrifugeDirectAeOutputEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false);
+		// 产物直通默认 true（与字段声明一致），旧存档无此键时保持既有直通行为
+		holder.setDirectContainerOutputEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_DIRECT_CONTAINER_OUTPUT)
+				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_DIRECT_CONTAINER_OUTPUT) : true);
 		// 标签过滤：无子标签的旧存档重置为空表达式，保持与 clear() 一致的默认值。
 		// 本类不依赖 AE2，故不受 Issue #8 类加载守卫约束，可无条件加载。
 		if (tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER)) {

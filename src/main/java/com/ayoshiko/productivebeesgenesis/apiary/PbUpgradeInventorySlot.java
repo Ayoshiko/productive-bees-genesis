@@ -28,19 +28,10 @@ import java.util.function.Predicate;
 	 * 本类仅负责物理槽位的物品插入/提取校验,不涉及 DataSlot(SyncableInt)注册。
 	 * DataSlot 实际注册位置:{@link com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate#addContainerTrackers}
 	 * <br/>
-	 * 注册顺序(与 PbUpgradeType 枚举序数对应,跳过 SIMULATION=8):
-	 * <ol>
-	 *   <li>idx=0 → PRODUCTIVITY (ordinal=0)</li>
-	 *   <li>idx=1 → PRODUCTIVITY_2 (ordinal=1)</li>
-	 *   <li>idx=2 → PRODUCTIVITY_3 (ordinal=2)</li>
-	 *   <li>idx=3 → PRODUCTIVITY_4 (ordinal=3)</li>
-	 *   <li>idx=4 → TIME (ordinal=4)</li>
-	 *   <li>idx=5 → TIME_2 (ordinal=5)</li>
-	 *   <li>idx=6 → GENE_SAMPLER (ordinal=6)</li>
-	 *   <li>idx=7 → BLOCK (ordinal=7)</li>
-	 *   <li>idx=8 → INSTALL_TICKS (非枚举,安装进度计数器)</li>
-	 * </ol>
-	 * 共 9 个 SyncableInt。17 条越界警告(117/123/126)的根因需通过 DEV 日志确认,
+	 * 注册顺序严格按 {@link PbUpgradeType#values()} 遍历，跳过内置 SIMULATION，最后追加安装进度计数器；
+	 * 不再在注释中固定 ordinal，新增功能升级不会破坏客户端/服务端 tracker 对齐。
+	 * <br/>
+	 * 共 13 个 SyncableInt（当前 12 个可安装类型 + 安装进度）。17 条越界警告(117/123/126)的根因需通过 DEV 日志确认,
 	 * 可能是 MEK broadcastChanges 使用了错误的索引范围,或子类 addContainerTrackers 重写顺序不一致。
 	 */
 public class PbUpgradeInventorySlot extends BasicInventorySlot {
@@ -84,7 +75,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	/**
 	 * 创建升级输入槽 — 使用自定义校验器
 	 * <br/>
-	 * 离心机仅支持产量与时间系列，传入
+	 * 离心机支持产量、时间、稳定性和本模组功能升级，传入
 	 * {@link #isCentrifugeSupportedUpgradeItem} 拒绝 GENE_SAMPLER/BLOCK 物品。
 	 *
 	 * @param validator 物品校验器
@@ -105,7 +96,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	 * 离心机支持的 PB 升级物品校验
 	 * <br/>
 	 * 接受产量（α/β/γ/Ω）、时间（TIME/TIME_2）和稳定性（STABILITY）系列，
-	 * 拒绝 GENE_SAMPLER/BLOCK/SIMULATOR。STABILITY 仅离心机生效（对齐 PB 原版）。
+	 * 拒绝 GENE_SAMPLER/BLOCK/SIMULATOR。STABILITY 和粗矿熔炼仅离心机生效。
 	 */
 	public static boolean isCentrifugeSupportedUpgradeItem(ItemStack stack) {
 		if (stack.isEmpty()) return false;
@@ -117,7 +108,9 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_TIME.get()
 				|| item == LibItems.UPGRADE_TIME_2.get()
 				|| item == LibItems.UPGRADE_STABILITY.get()
-				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
+				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()
+				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get()
+				|| item == ModItems.RAW_ORE_SMELTING_UPGRADE.get();
 	}
 
 	/**
@@ -165,7 +158,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_TIME_2.get()
 				|| item == LibItems.UPGRADE_GENE_SAMPLER.get()
 				|| item == LibItems.UPGRADE_BLOCK.get()
-				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
+				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()
+				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get();
 	}
 
 	/**
@@ -214,6 +208,12 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 		if (item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()) {
 			return PbUpgradeType.USELESS_BYPRODUCT;
 		}
+		if (item == ModItems.ESSENCE_CONVERSION_UPGRADE.get()) {
+			return PbUpgradeType.ESSENCE_CONVERSION;
+		}
+		if (item == ModItems.RAW_ORE_SMELTING_UPGRADE.get()) {
+			return PbUpgradeType.RAW_ORE_SMELTING;
+		}
 		return null;
 	}
 
@@ -239,6 +239,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case SIMULATION -> new ItemStack(LibItems.UPGRADE_SIMULATOR.get());
 			case STABILITY -> new ItemStack(LibItems.UPGRADE_STABILITY.get());
 			case USELESS_BYPRODUCT -> new ItemStack(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
+			case ESSENCE_CONVERSION -> new ItemStack(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
+			case RAW_ORE_SMELTING -> new ItemStack(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
 			default -> ItemStack.EMPTY;
 		};
 	}
@@ -268,6 +270,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case SIMULATION -> item == LibItems.UPGRADE_SIMULATOR.get();
 			case STABILITY -> item == LibItems.UPGRADE_STABILITY.get();
 			case USELESS_BYPRODUCT -> item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
+			case ESSENCE_CONVERSION -> item == ModItems.ESSENCE_CONVERSION_UPGRADE.get();
+			case RAW_ORE_SMELTING -> item == ModItems.RAW_ORE_SMELTING_UPGRADE.get();
 			default -> false;
 		};
 	}

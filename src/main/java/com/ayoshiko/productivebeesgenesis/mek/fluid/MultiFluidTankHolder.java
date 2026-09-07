@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 
 /**
 	 * 多流体槽管理器 — 构造时预分配全部 maxTanks 个空槽
@@ -36,8 +37,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 	 * </ul>
 	 * <p>
 	 * <b>Task 5 MEK 原生侧面配置集成：</b>实现 {@link IFluidTankHolder},
-	 * 通过 {@link #getTanks(Direction)} 暴露所有槽位给 MEK 原生 Ejector。
-	 * 路由策略由 {@link MultiFluidSideConfigHandler} 封装,本类仅负责槽位数据暴露。
+	 * 通过 {@link #getTanks(Direction)} 的 {@code side == null} 路径暴露所有槽位给 MEK 原生 Ejector。
+	 * 本类仅负责槽位数据暴露与按流体类型的路由。
 	 *
 	 * @since 1.0.0
 	 */
@@ -84,6 +85,12 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/** 不可变视图 — 避免每次 getTanks() 创建新 ArrayList */
 	private final List<IExtendedFluidTank> unmodifiableTanksView;
 
+	/** 外部能力访问的非空槽快照与轮转视图。 */
+	private final ExternalFluidTankView externalTankView;
+
+	/** 游戏刻提供器 — 驱动轮转视图；无世界时返回 0 */
+	private final LongSupplier gameTimeSupplier;
+
 	/** 最大槽位数(构造时传入,等于预分配数量) */
 	private final int maxTanks;
 
@@ -116,9 +123,10 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * @param tankCapacity          单槽容量(mB)
 	 * @param listener              槽位内容变更监听器
 	 * @param maxTanksPerFluidConfig 每种流体最大槽位数配置（0=自动计算 maxTanks/2）
+	 * @param gameTimeSupplier      游戏刻提供器（驱动外部轮转视图；null 视为恒 0）
 	 */
 	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
-			int maxTanksPerFluidConfig) {
+			int maxTanksPerFluidConfig, @Nullable LongSupplier gameTimeSupplier) {
 		if (maxTanks < 1) {
 			throw new IllegalArgumentException("maxTanks 必须 >= 1，实际: " + maxTanks);
 		}
@@ -133,12 +141,22 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		this.maxTanksPerFluid = (maxTanksPerFluidConfig <= 0)
 				? Math.max(1, maxTanks / 2)
 				: maxTanksPerFluidConfig;
-		// 预分配 maxTanks 个空槽,直接使用原始 listener(预分配后槽位固定,无需脏标记机制)
+		this.externalTankView = new ExternalFluidTankView(tanksInOrder);
+		// 预分配 maxTanks 个空槽；监听器同时失效外部快照并转发原始 listener。
 		// output 模式:可提取不可外部插入,符合离心机输出槽语义
 		for (int i = 0; i < maxTanks; i++) {
-			tanksInOrder.add(BasicFluidTank.output(tankCapacity, listener));
+			tanksInOrder.add(BasicFluidTank.output(tankCapacity, this::onTankContentsChanged));
 		}
 		this.unmodifiableTanksView = Collections.unmodifiableList(tanksInOrder);
+		this.gameTimeSupplier = gameTimeSupplier == null ? () -> 0L : gameTimeSupplier;
+	}
+
+	/** 槽内容变更时使外部活跃槽快照失效，并转发原有 Mekanism 监听器。 */
+	private void onTankContentsChanged() {
+		externalTankView.invalidate();
+		if (listener != null) {
+			listener.onContentsChanged();
+		}
 	}
 
 	/**
@@ -252,7 +270,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * 供 Ejector / Ae2FluidPusher 遍历弹出。返回不可变视图,调用方修改会抛出
 	 * {@link UnsupportedOperationException};由于 tanksInOrder 构造后结构固定,
 	 * 视图内容与内部状态实时同步。第 0 个槽为主槽,配合
-	 * {@link MultiFluidSideConfigHandler#ejectToSide} 路由策略。
+	 * 主槽优先的弹出顺序。
 	 *
 	 * @return 槽位列表的不可变视图(按预分配顺序,第 0 个为主槽)
 	 */
@@ -264,8 +282,22 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	/**
 	 * IFluidTankHolder 接口实现 — 按侧面返回槽列表
 	 * <br/>
-	 * 多槽模式下所有侧面均返回全部槽位(侧面过滤由上层 ConfigHolder 处理)。
-	 * MEK 原生 Ejector 通过 IProxiedSlotInfo.FluidProxy 调用本方法动态获取槽列表。
+	 * <b>side == null（内部访问）</b>：返回原始顺序的不可变视图。GUI 的 SyncableFluidStack、
+	 * NBT 序列化、MEK Ejector 都走这条路径，槽位索引必须稳定，绝不能轮转。
+	 * <p>
+	 * <b>side != null（外部能力访问）</b>：返回当前非空槽的按游戏刻轮转视图。
+	 * Mekanism 把本方法的结果直接暴露成 {@code IFluidHandler}
+	 * （{@code FluidHandlerManager} → {@code ProxyFluidHandler}），而大量物流模组的抽取实现是
+	 * 「{@code drain(int)}」或「从 tank 0 开始扫到配额用尽」，前者在 Mekanism 内部会锁定
+	 * <em>第一个非空罐</em>的流体类型。结果是主槽被反复清空、其余槽永远排不上队，
+	 * 高等级工厂（processes 个流体槽）很快因流体槽满而停机。
+	 * 轮转视图让每个槽都能周期性地成为「第 0 个」，且同刻内索引语义保持稳定
+	 * （见 {@link ExternalFluidTankView}）。该行为固定启用，无需配置。
+	 * <p>
+	 * 侧面过滤仍不在此处做：所有侧面都暴露当前非空槽位（空仓保留一个哨兵槽）。这是有意为之——
+	 * 物流网络类模组在能力返回 null 时会把该节点/网络长期挂起，
+	 * 「按侧面隐藏流体能力」会让贴错面的节点永久失效，得不偿失。
+	 * 输出方向控制由 MEK Ejector 的侧面配置负责（弹出走 side == null 路径）。
 	 *
 	 * @param side 侧面方向(null 表示内部访问)
 	 * @return 槽位列表
@@ -273,7 +305,8 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	@NotNull
 	@Override
 	public List<IExtendedFluidTank> getTanks(@Nullable Direction side) {
-		return getTanks();
+		if (side == null) return unmodifiableTanksView;
+		return externalTankView.forTick(gameTimeSupplier.getAsLong());
 	}
 
 	/**
@@ -368,6 +401,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * <b>线程安全：</b>synchronized 保护回收过程，防止与 getTankForInsert 并发冲突
 	 */
 	public synchronized void reclaimEmptyTanks() {
+		externalTankView.invalidate();
 		// 回收 tanksByFluidKey 中的空映射（tanksInOrder 槽位固定不变）
 		var it = tanksByFluidKey.entrySet().iterator();
 		while (it.hasNext()) {

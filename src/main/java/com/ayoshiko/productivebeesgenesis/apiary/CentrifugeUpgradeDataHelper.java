@@ -115,6 +115,8 @@ public final class CentrifugeUpgradeDataHelper {
 		boolean smeltingCompatEnabled = ae2StateHolder.isSmeltingCompatEnabled();
 		boolean centrifugeDirectAeOutputEnabled = aeLoaded
 				&& ae2StateHolder.isCentrifugeDirectAeOutputEnabled();
+		// 产物直通与 AE2 无关（写相邻容器能力），无条件保留 per-tile 开关
+		boolean directContainerOutputEnabled = ae2StateHolder.isDirectContainerOutputEnabled();
 		int aeInputFilterMode = 0;
 		Map<Integer, String> aeInputFilterEntries = new HashMap<>();
 		Map<Integer, Long> aeInputFilterAmounts = new HashMap<>();
@@ -184,6 +186,7 @@ public final class CentrifugeUpgradeDataHelper {
 				aeInputFilterMode, aeInputFilterEntries, aeInputFilterAmounts, aeInputFilterUnlimited, preciseMode,
 				aeItemOutputEnabled, aeFluidOutputEnabled,
 				smeltingCompatEnabled, centrifugeDirectAeOutputEnabled,
+				directContainerOutputEnabled,
 				multiFluidTanksNbt,
 				outputItems,
 				inputItems,
@@ -288,6 +291,8 @@ public final class CentrifugeUpgradeDataHelper {
 		// 恢复 AE2 per-tile 设置（AE2 未加载时跳过，新方块使用默认值）
 		// Restore per-tile smelting compat (independent of AE2)
 		ae2StateHolder.setSmeltingCompatEnabled(data.smeltingCompatEnabled);
+		// 产物直通同样不依赖 AE2，无条件恢复（旧升级数据缺省 true 保持既有行为）
+		ae2StateHolder.setDirectContainerOutputEnabled(data.directContainerOutputEnabled);
 		// smelt 输入标签过滤：同样不依赖 AE2，无条件恢复；无快照即重置为空表达式，
 		// 防止新方块沿用自身构造时的默认值之外的残留状态。
 		if (data.aeTagFilterNbt != null) {

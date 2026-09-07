@@ -637,6 +637,23 @@ public final class ApiaryOutputBuffer {
 	 */
 	public synchronized AeBufferPushResult pushToAe(java.util.function.ToIntFunction<ItemStack> pushSingle,
 			Predicate<ItemStack> holdFilter) {
+		return pushToSink(pushSingle, holdFilter);
+	}
+
+	/**
+	 * 通用外部下游推送（AE2 网络 / 相邻容器共用同一遍历与入账逻辑）
+	 * <br/>
+	 * 回调按组返回实际接收量，本方法负责组快照、hold 过滤、轮转起点、剩余回写与版本号递增。
+	 * AE2 与产物直通只是"下游"不同，遍历/记账语义完全一致，故共用实现（DRY），
+	 * 由 {@link #pushToAe} 保留原语义化入口。
+	 *
+	 * @param pushSingle 单组推送回调（返回实际接收数量，异常时按 0 处理）
+	 * @param holdFilter hold 判定（null 表示不过滤）；判定在缓冲区锁内执行，
+	 *                   实现不得回调本缓冲区方法（防死锁）
+	 * @return 推送结果（pushed=推送总量，heldCount=被 hold 跳过的组数）
+	 */
+	public synchronized AeBufferPushResult pushToSink(java.util.function.ToIntFunction<ItemStack> pushSingle,
+			Predicate<ItemStack> holdFilter) {
 		if (bufferedStacks.isEmpty()) return AeBufferPushResult.EMPTY;
 		remainingBuffer.clear();
 		int groupCount = bufferedStacks.size();

@@ -115,6 +115,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	public final boolean centrifugePriorityEnabled;
 	/** 喂食槽转化开关（升级时保留用户设置，默认关闭）。 */
 	public final boolean feederConversionEnabled;
+	/** 产物直通（相邻容器）开关；旧升级数据缺省 true，保持既有直通行为。 */
+	public final boolean directContainerOutputEnabled;
 
 	/**
 	 * 蜂箱工厂升级数据构造函数
@@ -158,6 +160,28 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
 			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
 			boolean feederConversionEnabled) {
+		this(provider, redstone, controlType, energyContainer, progress, energySlot,
+				inputSlots, outputSlots, sorting, components, beeSlotsNbt, feederSlotsNbt,
+				pbUpgradeCountsNbt, pbUpgradeInputNbt, pbUpgradeOutputNbt, fluidNbt, cageOutSlotNbt,
+				outputItems, cageInSlotNbt, energySlotNbt, outputBufferNbt, selectedBeeSlot,
+				aeItemOutputEnabled, aeFluidOutputEnabled, directEjectEnabled, directAeOutputEnabled,
+				centrifugePriorityEnabled, feederConversionEnabled, true);
+	}
+
+	/** 当前构造器：额外携带产物直通（相邻容器）开关。 */
+	public ApiaryUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
+			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
+			List<IInventorySlot> inputSlots, List<IInventorySlot> outputSlots, boolean sorting,
+			List<ITileComponent> components,
+			CompoundTag beeSlotsNbt, CompoundTag feederSlotsNbt, CompoundTag pbUpgradeCountsNbt,
+			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
+			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
+			@Nullable List<ItemStack> outputItems,
+			@Nullable CompoundTag cageInSlotNbt, @Nullable CompoundTag energySlotNbt,
+			@Nullable CompoundTag outputBufferNbt, int selectedBeeSlot,
+			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
+			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
+			boolean feederConversionEnabled, boolean directContainerOutputEnabled) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -178,5 +202,6 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.directAeOutputEnabled = directAeOutputEnabled;
 		this.centrifugePriorityEnabled = centrifugePriorityEnabled;
 		this.feederConversionEnabled = feederConversionEnabled;
+		this.directContainerOutputEnabled = directContainerOutputEnabled;
 	}
 }

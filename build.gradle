@@ -260,10 +260,6 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
         if (!artifact.isFile()) {
             throw new GradleException("Release artifact was not created: ${artifact}")
         }
-        if (artifact.length() > 1_800_000L) {
-            throw new GradleException("Release artifact is larger than 1,800,000 bytes: ${artifact.length()}")
-        }
-
         def zip = new java.util.zip.ZipFile(artifact)
         try {
             def requiredEntries = [

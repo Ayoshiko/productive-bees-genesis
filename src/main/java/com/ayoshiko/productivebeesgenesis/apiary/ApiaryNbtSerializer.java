@@ -43,6 +43,8 @@ class ApiaryNbtSerializer {
 	static final String NBT_KEY_DIRECT_EJECT = "productivebeesgenesis_direct_eject";
 	static final String NBT_KEY_DIRECT_AE_OUTPUT = "productivebeesgenesis_direct_ae_output";
 	static final String NBT_KEY_CENTRIFUGE_PRIORITY = "productivebeesgenesis_centrifuge_priority";
+	/** NBT key — 产物直通（相邻容器）开关（默认开启，旧存档无此键时保持开启） */
+	static final String NBT_KEY_DIRECT_CONTAINER_OUTPUT = "productivebeesgenesis_direct_container_output";
 	/** NBT key — 喂食槽转化开关（默认关闭，旧存档无此键时保持关闭） */
 	static final String NBT_KEY_FEEDER_CONVERSION = "productivebeesgenesis_feeder_conversion";
 
@@ -123,6 +125,7 @@ class ApiaryNbtSerializer {
 		nbt.putBoolean(NBT_KEY_DIRECT_EJECT, tile.isDirectEjectEnabled());
 		nbt.putBoolean(NBT_KEY_DIRECT_AE_OUTPUT, tile.isDirectAeOutputEnabled());
 		nbt.putBoolean(NBT_KEY_CENTRIFUGE_PRIORITY, tile.isCentrifugePriorityEnabled());
+		nbt.putBoolean(NBT_KEY_DIRECT_CONTAINER_OUTPUT, tile.isDirectContainerOutputEnabled());
 		nbt.putBoolean(NBT_KEY_FEEDER_CONVERSION, tile.isFeederConversionEnabled());
 		// 修复 v14：序列化流体罐内容（非空时写入，避免空标签）
 		FluidStack fluid = tile.getFluidTank().getFluid();
@@ -178,6 +181,10 @@ class ApiaryNbtSerializer {
 		}
 		if (nbt.contains(NBT_KEY_CENTRIFUGE_PRIORITY, Tag.TAG_BYTE)) {
 			tile.setCentrifugePriorityEnabled(nbt.getBoolean(NBT_KEY_CENTRIFUGE_PRIORITY));
+		}
+		// 旧存档没有该键，保留默认开启（直通此前只由全局配置控制）。
+		if (nbt.contains(NBT_KEY_DIRECT_CONTAINER_OUTPUT, Tag.TAG_BYTE)) {
+			tile.setDirectContainerOutputEnabled(nbt.getBoolean(NBT_KEY_DIRECT_CONTAINER_OUTPUT));
 		}
 		// 旧存档没有该键，保留默认关闭行为（转化需玩家显式开启）。
 		if (nbt.contains(NBT_KEY_FEEDER_CONVERSION, Tag.TAG_BYTE)) {
@@ -386,7 +393,7 @@ class ApiaryNbtSerializer {
 				cageInSlotNbt, energySlotNbt, outputBufferNbt, tile.getSelectedBeeSlot(),
 				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled(),
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
-				tile.isFeederConversionEnabled());
+				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled());
 	}
 
 	/**
@@ -484,6 +491,7 @@ class ApiaryNbtSerializer {
 			tile.setDirectAeOutputEnabled(data.directAeOutputEnabled);
 			tile.setCentrifugePriorityEnabled(data.centrifugePriorityEnabled);
 			tile.setFeederConversionEnabled(data.feederConversionEnabled);
+			tile.setDirectContainerOutputEnabled(data.directContainerOutputEnabled);
 			// 修复 MEDIUM-2: 显式恢复 SORTING 字段（模板方法,基础蜂箱为 no-op,工厂版重写设置 sorting）
 			tile.setSortingFromUpgradeData(data.sorting);
 		} catch (RuntimeException e) {

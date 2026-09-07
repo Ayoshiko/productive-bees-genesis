@@ -23,6 +23,12 @@ import org.junit.jupiter.api.Test;
  *   <li>ejYMNQjDf7（无加速）：{@code Ae2ItemFingerprint.encode} 拉取侧 432ms / 1.44%
  *       + 推送侧 408ms / 1.36%，成本来自 {@code AEItemKey.toTag} 的 Codec 编码与
  *       {@code CompoundTag.toString} 的 StringTagVisitor 遍历。</li>
+ *   <li>BkTP3d9oSc（JDTE 时间加速 + 398 mods，TPS 12.13）：本模组 total 5.88%，其中
+ *       {@code Ae2InputPuller.pullInputs} 4.55%。四条子热点分别是
+ *       保留下限实时探测 612ms、指纹编码 372ms（仅为 pending 闸门服务）、
+ *       SMELTING 分类链 784ms（含 {@code DeferredHolder.value} 320ms）、
+ *       逐槽 validator 探测 236ms；全服第 5 热方法 {@code AEItemKey.equals} 1416ms
+ *       亦主要来自候选去重与按完整键记忆的缓存。</li>
  * </ul>
  */
 class Ae2HotPathCacheWiringTest {
@@ -126,8 +132,12 @@ class Ae2HotPathCacheWiringTest {
 				"普通无组件物品必须绕过完整组件映射比较");
 		assertTrue(method.contains("entry.matchesComponents(slotIndex, stack, probe)"),
 				"容量规划必须通过条目缓存组件匹配结果");
-		assertTrue(method.contains("basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)"),
+		assertTrue(method.contains("entry.acceptsProbe(basicSlot, probe)"),
+				"validator 判定必须走按轮次记忆的入口，不得为每个槽位重复调用整条校验链");
+		assertTrue(source.contains("slot.isItemValidForInsertion(probe, AutomationType.INTERNAL)"),
 				"标准槽位必须保留 validator 和 AutomationType 语义");
+		assertTrue(source.contains("if (validatorState >= 0 && validatorSlotType == slotType)"),
+				"validator 记忆必须以槽位实现类为守卫，遇自定义槽实现立即重新判定");
 		assertTrue(method.contains("slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL)"),
 				"非标准 IInventorySlot 必须保留完整模拟插入回退");
 		assertFalse(method.contains("key.matches(stack)"),
@@ -207,5 +217,130 @@ class Ae2HotPathCacheWiringTest {
 				"统计、匹配和扣减阶段必须复用同一槽位列表");
 		assertTrue(source.contains("shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount)"),
 				"实际扣减不得退回到重复构建槽位列表的查询路径");
+	}
+
+	@Test
+	@DisplayName("多流体外部能力只扫描非空槽，且空仓保留 capability 哨兵")
+	void externalFluidCapabilityUsesActiveTankSnapshot() throws Exception {
+		String holder = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/fluid/MultiFluidTankHolder.java");
+		String view = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/fluid/ExternalFluidTankView.java");
+		assertTrue(view.contains("new CopyOnWriteArrayList<>(refreshed)"),
+				"外部流体能力必须持有可复用的活跃槽视图");
+		assertTrue(view.contains("refreshIfNeeded();"),
+				"带方向的外部访问必须在返回列表前刷新失效快照");
+		assertTrue(view.contains("private final AtomicLong invalidationVersion"),
+				"活跃槽失效必须使用代数计数，避免并发刷新丢失通知");
+		assertTrue(holder.contains("BasicFluidTank.output(tankCapacity, this::onTankContentsChanged)"),
+				"槽内容变化必须使活跃槽快照失效");
+		assertTrue(view.contains("refreshed.add(source.get(0));"),
+				"空仓必须保留一个哨兵槽，避免 capability 缓存为空");
+		assertTrue(holder.contains("return externalTankView.forTick(gameTimeSupplier.getAsLong());"),
+				"活跃槽仍需按游戏刻轮转，避免单一流体槽饥饿");
+		assertTrue(holder.contains("if (side == null) return unmodifiableTanksView;"),
+				"内部/MEK 弹出访问必须保留完整槽位顺序");
+	}
+
+	@Test
+	@DisplayName("三处 per-host 布尔判定缓存统一走无锁分代表，不得回退到同步 LRU")
+	void perHostBooleanCachesUseLockFreeGenerationalMemo() throws Exception {
+		String[] caches = {
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2SmeltingInputCache.java",
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2TagFilterCache.java",
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2CombProcessableCache.java",
+		};
+		for (String path : caches) {
+			String source = read(path);
+			// 断言构造调用而不是类型名：三个类的注释里都会提到这个容器，只匹配类型名
+			// 会让断言被注释"意外满足"，改了实现也不报警。
+			assertTrue(source.contains("new BoundedBooleanMemo<>("),
+					path + " 必须使用无锁分代记忆表");
+			assertFalse(source.contains("synchronized "),
+					path + " 热路径不得加锁：只有 tick 线程读写，跨线程失效走 requestClear");
+			assertFalse(source.contains("new LinkedHashMap<>(64, 0.75f, true)"),
+					path + " 不得回退到访问顺序 LinkedHashMap（命中也要重排链表）");
+			assertTrue(source.contains(".requestClear();"),
+					path + " 跨线程失效必须只投递请求，由 tick 线程惰性清表");
+		}
+	}
+
+	@Test
+	@DisplayName("SMELTING 判定按 Item 分档记忆，并把 Mekanism 输入缓存句柄随配方版本缓存")
+	void smeltingCacheKeysByItemAndCachesRecipeHandle() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2SmeltingInputCache.java");
+		assertTrue(source.contains("BoundedBooleanMemo<Item> plainItems"),
+				"无组件补丁的键必须按 Item 引用记忆，避开 AEItemKey.equals 的组件比较");
+		assertTrue(source.contains("if (input.getComponentsPatch().isEmpty())"),
+				"分档条件必须是「有无组件补丁」，否则会牺牲组件敏感配方的正确性");
+		assertTrue(source.contains("BoundedBooleanMemo<AEItemKey> componentKeys"),
+				"带组件补丁的键必须退化为完整键，保持 ComponentSensitiveInputCache 语义");
+		assertTrue(source.contains("private InputRecipeCache.SingleItem<ItemStackToItemStackRecipe> inputCache"),
+				"Mekanism 输入缓存句柄必须缓存，避免每次未命中都穿一层 DeferredHolder.value");
+		assertTrue(source.contains("inputCache = MekanismRecipeType.SMELTING.getInputCache();"),
+				"句柄必须在配方版本变化时重新解析，否则会按过期配方表作答");
+		assertFalse(source.contains("MekanismRecipeType.SMELTING.getInputCache().containsInput"),
+				"查询路径不得回退到每次重新解析句柄");
+	}
+
+	@Test
+	@DisplayName("标签过滤判定以 Item 为键：结果本就只由 Item 决定")
+	void tagFilterCacheKeysByItem() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2TagFilterCache.java");
+		assertTrue(source.contains("BoundedBooleanMemo<Item> results"),
+				"标签判定输入只有 key.getItem()，按完整键记忆纯属浪费命中率与比较成本");
+		assertTrue(source.contains("Ae2ItemTagView.candidateOf(item)"),
+				"必须复用已取出的 Item，不得再从 key 二次取值");
+	}
+
+	@Test
+	@DisplayName("保留下限的实时探测按 (key, game tick) 记忆，且提交抽取后同步扣减")
+	void reserveProbeIsMemoizedPerGameTick() throws Exception {
+		String view = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2NetworkInventoryView.java");
+		assertTrue(view.contains("static long reserveProbeAmount("),
+				"必须提供按刻记忆化的保留探测入口");
+		assertTrue(view.contains("reserveAmounts") && view.contains("reserveCaps"),
+				"必须同时记录探测结果与当时使用的上限，才能判断结果是否被截断");
+		assertTrue(view.contains("if (cachedCap >= cap || cached < cachedCap)"),
+				"只有「上限不小于本次」或「未被截断」时才可复用，否则必须重新探测");
+		assertTrue(view.contains("long reserved = cache.reserveAmounts.getLong(key);"),
+				"recordExtract 必须扣减保留视图，漏扣会让同刻后续抽取越过保留线");
+
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("Ae2NetworkInventoryView.reserveProbeAmount(holder, gameTick,"),
+				"保留校验必须走记忆化入口；直接 liveExtractableAmount 会在时间加速下每刻重复穿透全部存储元件");
+	}
+
+	@Test
+	@DisplayName("候选分类结果随条目传递，排序阶段不再重跑分类")
+	void classificationIsCarriedByPullEntry() throws Exception {
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("entry.smelting = kind.isSmelting();"),
+				"直探路径必须直接沿用 classify 的返回值");
+		assertTrue(puller.contains("entry.smelting = index < smeltingSelected;"),
+				"扫描路径必须用优先组分界还原分类，而不是再查一次配方缓存");
+		assertFalse(puller.contains("entry.smelting = Ae2InputCandidatePolicy.classify("),
+				"排序阶段不得为每个条目重跑 classify");
+	}
+
+	@Test
+	@DisplayName("游标扫描用哈希集合去重，不得退回 out.contains 线性比较")
+	void cursorScanDeduplicatesWithHashSet() throws Exception {
+		String scan = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2CursorScan.java");
+		assertTrue(scan.contains("if (key == null || seen.contains(key)) continue;"),
+				"主扫描必须用哈希去重：候选列表可达数千项，线性去重会放大 AEItemKey.equals");
+		assertFalse(scan.contains("out.contains(key)"),
+				"不得回退到 O(候选数 × 选中上限) 的线性去重");
+
+		String buffers = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PushBuffers.java");
+		assertTrue(buffers.contains("final Set<AEItemKey> scanSeenKeys = new HashSet<>()"),
+				"去重集合必须跨 tick 复用，避免每次拉取分配");
+
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("Set<AEItemKey> seenKeys = buffers.borrowScanSeenKeys();"),
+				"拉取必须借用复用集合");
+		assertTrue(puller.contains("seenKeys.clear();"),
+				"借用后必须与 selectedKeys 一起清空，否则会跨轮次误判已选中");
 	}
 }

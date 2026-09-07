@@ -27,6 +27,15 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	/** 获取工厂的PB上下文委托实例 — 供默认方法转发使用 */
 	FactoryPbContextDelegate productivebeesgenesis$getDelegate();
 
+	/**
+	 * 工厂熔炼路径按整批需求扩展本地能量缓冲并从 AE2 一次注能。
+	 * 蜜脾仍由 PB 处理器按自己的批次预算扣能，不受此开关影响。
+	 */
+	@Override
+	default boolean productivebeesgenesis$usesSmeltingEnergyBudget() {
+		return true;
+	}
+
 	// ===== Task 5: 输出槽状态标志位 =====
 
 	@Override

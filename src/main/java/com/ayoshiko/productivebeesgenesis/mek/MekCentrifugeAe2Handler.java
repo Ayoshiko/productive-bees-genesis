@@ -178,6 +178,10 @@ class MekCentrifugeAe2Handler {
 		container.track(SyncableBoolean.create(
 				holder::isCentrifugeDirectAeOutputEnabled,
 				holder::setCentrifugeDirectAeOutputEnabled));
+		// per-tile 产物直通开关同步（与 AE2 无关，无条件注册保持 tracker 数量一致）
+		container.track(SyncableBoolean.create(
+				holder::isDirectContainerOutputEnabled,
+				holder::setDirectContainerOutputEnabled));
 		// per-tile AE2 输入过滤模式同步（ordinal：0=DISABLED, 1=WHITELIST, 2=BLACKLIST）
 		// 供 GUI 按钮实时反映模式切换；条目列表由 SyncAeInputFilterEntriesPayload 单独推送
 		// AE2 未安装时不注册：GUI 打开时 initMenu→broadcastChanges 会立即执行 getter，

@@ -31,6 +31,16 @@ public final class MekCentrifugeEnergyScaling {
 		return dividePositive(configuredEnergyPerTick, BASE_ENERGY_USAGE_DIVISOR);
 	}
 
+	/**
+	 * Returns the energy price exposed to the SMELTING cache.
+	 * Mekanism's upgraded container value includes the machine-side base price;
+	 * applying the same built-in balance here keeps SMELTING aligned with PB honeycomb work.
+	 */
+	public static long balancedSmeltingEnergyPerTick(long upgradedEnergyPerTick) {
+		if (upgradedEnergyPerTick <= 0L) return 0L;
+		return dividePositive(upgradedEnergyPerTick, BASE_ENERGY_USAGE_DIVISOR);
+	}
+
 	/** Applies the built-in balance reduction to a configured base storage capacity. */
 	public static long balancedBaseCapacity(long configuredCapacity) {
 		return dividePositive(configuredCapacity, BASE_CAPACITY_DIVISOR);
@@ -64,12 +74,40 @@ public final class MekCentrifugeEnergyScaling {
 	}
 
 	/**
+	 * Returns the FE demand for Mekanism SMELTING lanes.
+	 * <p>
+	 * SMELTING uses the cached recipe's {@code operationsPerTick} directly. The PB
+	 * productivity-parallel modifier belongs to the honeycomb processor and must not
+	 * be applied to a Mekanism cached recipe.
+	 */
+	public static long requiredSmeltingEnergyPerTick(PbRecipeContext context, int batchMultiplier) {
+		MachineEnergyContainer<?> container = context.energyContainer();
+		if (container == null) return 0L;
+		long energyPerOperation = Math.max(0L, container.getEnergyPerTick());
+		int operationsPerTick = Math.max(1, context.operationsPerTick());
+		int processes = Math.max(1, context.processes());
+		long activeDemand = activeEnergyDemand(context, energyPerOperation,
+				operationsPerTick, 1, processes, true);
+		if (activeDemand >= 0L) {
+			return SaturatingMath.saturatingMultiply(activeDemand, Math.max(1, batchMultiplier));
+		}
+		return requiredEnergyPerTick(energyPerOperation, operationsPerTick,
+				1, processes, batchMultiplier);
+	}
+
+	/**
 	 * Returns current input-limited operations, or {@code -1} when a host cannot expose a
 	 * complete input-slot snapshot. A zero result is meaningful: an empty machine should not
 	 * pull a full worst-case energy batch merely because its upgrade count is high.
 	 */
 	private static long activeEnergyDemand(PbRecipeContext context, long energyPerOperation,
 			int operationsPerTick, int productivityParallel, int processes) {
+		return activeEnergyDemand(context, energyPerOperation, operationsPerTick,
+				productivityParallel, processes, false);
+	}
+
+	private static long activeEnergyDemand(PbRecipeContext context, long energyPerOperation,
+			int operationsPerTick, int productivityParallel, int processes, boolean smeltingOnly) {
 		long perProcessMaximum = SaturatingMath.saturatingMultiply(
 				Math.max(1, operationsPerTick), Math.max(1, productivityParallel));
 		long totalDemand = 0L;
@@ -81,7 +119,15 @@ public final class MekCentrifugeEnergyScaling {
 				return -1L;
 			}
 			if (slot == null) return -1L;
-			int count = slot.getStack().isEmpty() ? 0 : slot.getStack().getCount();
+			if (slot.getStack().isEmpty()) continue;
+			if (smeltingOnly) {
+				try {
+					if (!context.containsSmeltingInput(slot.getStack())) continue;
+				} catch (RuntimeException ignored) {
+					return -1L;
+				}
+			}
+			int count = slot.getStack().getCount();
 			long activeOperations = Math.min(perProcessMaximum, Math.max(0, count));
 			totalDemand = SaturatingMath.saturatingAdd(totalDemand,
 					parallelEnergyCost(energyPerOperation, activeOperations));
@@ -152,6 +198,26 @@ public final class MekCentrifugeEnergyScaling {
 	static long normalCapacity(long baseCapacity, long upgradedCapacity) {
 		long base = Math.max(1L, baseCapacity);
 		return Math.max(base, upgradedCapacity);
+	}
+
+	/** Returns the stable local-buffer target for the current accelerated batch. */
+	static long batchCapacity(long normalCapacity, long requiredBatchEnergy) {
+		return Math.max(Math.max(1L, normalCapacity), Math.max(0L, requiredBatchEnergy));
+	}
+
+	/**
+	 * 将本地缓冲直接调整为当前批次的稳定目标容量。
+	 * <p>
+	 * 目标为升级派生标准容量与整批熔炼需求的较大值。相同负载下不会先缩容再扩容，
+	 * 因而不会裁掉上一 tick 由普通 FE 电缆填入的批次储备；批次末也应只补能而不缩容。
+	 */
+	public static void prepareBatchCapacity(PbRecipeContext context, long required) {
+		MachineEnergyContainer<?> container = context.energyContainer();
+		if (container == null || context.hasCreativeUpgrade()) return;
+		long baseCapacity = Math.max(1L, container.getBaseMaxEnergy());
+		long normalCapacity = normalCapacityFor(context, container, baseCapacity);
+		long targetCapacity = batchCapacity(normalCapacity, required);
+		if (container.getMaxEnergy() != targetCapacity) container.setMaxEnergy(targetCapacity);
 	}
 
 	/**

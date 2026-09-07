@@ -7,7 +7,7 @@ import net.minecraft.nbt.CompoundTag;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * per-tile 标签过滤状态 — 白名单/黑名单表达式的持有者与编译缓存。
+ * per-tile AE2 输入标签过滤状态 — 白名单/黑名单表达式的持有者与编译缓存。
  * <p>
  * 职责（SRP）：仅负责表达式文本的持久化、编译与版本号发布；
  * 匹配语义由 {@link TagFilterSpec} 承担，候选枚举由 {@link Ae2TagFilterCache} 承担。

@@ -119,7 +119,8 @@ final class MekCentrifugeUpgradeOps {
 		ZeroTickCoalesceState coalesce = new ZeroTickCoalesceState(tile::getOperationsPerTick);
 		CachedRecipe<ItemStackToItemStackRecipe> configured = cached
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
-						MekUpgradeSupport.hasCreativeUpgrade(tile), tile.energyContainer().getEnergyPerTick()),
+						MekUpgradeSupport.hasCreativeUpgrade(tile), MekCentrifugeEnergyScaling
+							.balancedSmeltingEnergyPerTick(tile.energyContainer().getEnergyPerTick())),
 						tile.energyContainer())
 				.setBaselineMaxOperations(coalesce);
 		if (configured instanceof ICachedRecipeBatchAccel accel) {

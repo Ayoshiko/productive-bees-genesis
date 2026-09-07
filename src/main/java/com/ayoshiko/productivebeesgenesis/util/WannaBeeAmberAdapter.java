@@ -36,7 +36,7 @@ public final class WannaBeeAmberAdapter {
 	}
 
 	/**
-	 * 按生产事件采样并聚合掉落。普通批次逐次精确采样；超过上限时以 128 个独立样本
+	 * 按生产事件采样并聚合掉落。普通批次逐次精确采样；超过上限时以最多 16 个独立样本
 	 * 分层代表整个批次。每批仅扫描一次喂食槽，并按候选槽位惰性构建实体战利品上下文；
 	 * 战利品表仍按样本独立执行，避免把一次随机结果复制到整个批次。
 	 */
@@ -58,15 +58,47 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatch(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			int productionCount, float multiplier, int productivityLevel) {
+		long[] productionCounts = new long[Math.max(BeeProductivityGene.VERY_HIGH + 1, productivityLevel + 1)];
+		productionCounts[Math.max(0, productivityLevel)] = productionCount;
+		return sampleBatches(level, origin, feeder, productionCounts, multiplier);
+	}
+
+	/**
+	 * 按生产力等级合并采样一个 Wanna Bee 蜂种组。
+	 * <br/>
+	 * 组级共享 16 次独立 LootTable 抽样预算，避免混合生产力等级时每个等级分别执行预算。
+	 * 当总轮数不超过预算时仍保持每轮一次的精确采样；超过预算时按各等级轮数比例分层，
+	 * 每个样本的权重总和仍等于该等级的完整轮数。
+	 *
+	 * @param level 服务端世界
+	 * @param origin 蜂箱位置
+	 * @param feeder 喂食槽
+	 * @param productionCounts 按生产力等级索引的生产次数
+	 * @param multiplier 蜂箱生产力升级倍率
+	 * @return 聚合后的战利品栈
+	 */
+	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
+			long[] productionCounts, float multiplier) {
 		if (level == null || origin == null || feeder == null
-				|| productionCount <= 0 || multiplier <= 0.0F) return List.of();
+				|| productionCounts == null || multiplier <= 0.0F) return List.of();
 		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
 		if (candidates.isEmpty()) return List.of();
-		int rollCount = BeeProduceBatchSampler.sampleRollCount(
-				ThreadLocalRandom.current(), productionCount, multiplier);
-		if (rollCount <= 0) return List.of();
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		int[] rollCounts = new int[productionCounts.length];
+		for (int levelIndex = 0; levelIndex < productionCounts.length; levelIndex++) {
+			int productionCount = SaturatingMath.saturatingToInt(productionCounts[levelIndex]);
+			rollCounts[levelIndex] = BeeProduceBatchSampler.sampleRollCount(random, productionCount, multiplier);
+		}
+		int[] sampleCounts = WannaBeeBatchPlan.allocateSampleCounts(rollCounts);
+		boolean hasSamples = false;
+		for (int sampleCount : sampleCounts) {
+			if (sampleCount > 0) {
+				hasSamples = true;
+				break;
+			}
+		}
+		if (!hasSamples) return List.of();
 
-		int sampleCount = WannaBeeBatchPlan.sampleCount(rollCount);
 		BatchSampler sampler;
 		try {
 			sampler = new BatchSampler(level, origin, candidates);
@@ -76,14 +108,18 @@ public final class WannaBeeAmberAdapter {
 			return List.of();
 		}
 		List<AggregatedDrop> aggregated = new ArrayList<>();
-		for (int i = 0; i < sampleCount; i++) {
-			ItemStack sampled = sampler.sample();
-			if (sampled.isEmpty()) continue;
-			long representedEvents = WannaBeeBatchPlan.weightAt(rollCount, i);
-			int adjustedCount = BeeProductivityGene.adjustStackCount(
-					sampled.getCount(), productivityLevel);
-			long amount = (long) adjustedCount * representedEvents;
-			merge(aggregated, sampled, amount);
+		for (int productivityLevel = 0; productivityLevel < sampleCounts.length; productivityLevel++) {
+			int samplesForLevel = sampleCounts[productivityLevel];
+			int rollCount = rollCounts[productivityLevel];
+			for (int i = 0; i < samplesForLevel; i++) {
+				ItemStack sampled = sampler.sample();
+				if (sampled.isEmpty()) continue;
+				long representedEvents = WannaBeeBatchPlan.weightAt(rollCount, samplesForLevel, i);
+				int adjustedCount = BeeProductivityGene.adjustStackCount(
+						sampled.getCount(), productivityLevel);
+				long amount = (long) adjustedCount * representedEvents;
+				merge(aggregated, sampled, amount);
+			}
 		}
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());

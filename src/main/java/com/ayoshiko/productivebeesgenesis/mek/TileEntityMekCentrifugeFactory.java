@@ -73,7 +73,6 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 				? CentrifugeInputStackMultipliers.forEMFactory(tier.ordinal() - 4)
 				: CentrifugeInputStackMultipliers.forVanillaFactory(tier.ordinal());
 		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
-				() -> level == null ? Long.MIN_VALUE : level.getGameTime(),
 				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
 						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
 						productivityParallelModifier()));

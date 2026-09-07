@@ -211,8 +211,8 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 		}
 		ItemStack icon = resolveIcon();
 		if (!icon.isEmpty()) {
-			// 走 renderFakeItem 路径，使 3D 蜜脾块应用 MekGuiBlockItemDepthMixin 的深度修复。
-			guiGraphics.renderFakeItem(icon, relativeX + 1, relativeY + 1);
+			// 与 MEK 原版 GuiSequencedSlotDisplay 一致，使用带实体上下文的标准槽位渲染路径。
+			gui().renderItem(guiGraphics, icon, relativeX + 1, relativeY + 1);
 		}
 		if (!processable) renderUnprocessableOverlay(guiGraphics);
 	}
@@ -281,7 +281,7 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 	/**
 	 * 接收幽灵物品 — 统一入口
 	 * <br/>
-	 * 蜜脾沿用 fuzzy 标记；普通物品仅在客户端存在 Mekanism SMELTING 配方时接受。
+	 * 蜜脾直接接受；普通物品仅在客户端存在 Mekanism SMELTING 配方时接受。
 	 * 客户端判断只改善界面交互，服务端仍会对完整 AE2 指纹重新验证配方。
 	 * 校验通过后触发 placeCallback 由上层处理网络同步，
 	 * 本地 beeType/isBlock 状态由服务端推送 {@link com.ayoshiko.productivebeesgenesis.network.SyncAeInputFilterEntriesPayload} 后刷新。

@@ -62,6 +62,8 @@ final class LegacyPackMigrationAssertions {
 			ServerConfigMigrationService.MigrationPlan plan) {
 		for (String path : leafPaths(legacy)) {
 			if (isLegacyMatrixPath(path)) continue;
+			// 已停用的键不再有归属文件（值只留在备份里），见 ServerConfigMigrationPlanner.RETIRED_LEGACY_PATHS
+			if (ServerConfigMigrationPlanner.RETIRED_LEGACY_PATHS.contains(path)) continue;
 			List<CommentedConfig> matchingTargets = plan.targets().stream()
 					.map(ServerConfigMigrationService.PlannedTarget::content)
 					.filter(config -> config.contains(path))

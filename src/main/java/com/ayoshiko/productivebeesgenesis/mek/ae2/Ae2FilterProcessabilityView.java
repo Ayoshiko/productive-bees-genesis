@@ -1,10 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
-import cy.jdkdigital.productivebees.init.ModItems;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -61,24 +57,8 @@ public final class Ae2FilterProcessabilityView {
 			AEItemKey key = filter.getResolvedDirectKey(index);
 			return key == null ? ItemStack.EMPTY : key.toStack(1);
 		}
-		if (info.beeType == null) return ItemStack.EMPTY;
-		return combStack(info.beeType, info.isBlock);
-	}
-
-	/**
-	 * 按 bee_type 构造蜜脾/蜜脾块探针。
-	 * <p>
-	 * 固定蜜脾（ghostly/milky/powdery 与原版/feywild）没有 BEE_TYPE 组件，必须走
-	 * {@link CombFuzzyMatcher#getFixedDisplayStack} 的 Item 映射，否则会造出
-	 * 「带 bee_type 的可配置蜜脾」这种网络里不存在、配方也匹配不上的键。
-	 */
-	private static ItemStack combStack(ResourceLocation beeType, boolean isBlock) {
-		ItemStack fixed = CombFuzzyMatcher.getFixedDisplayStack(beeType, isBlock);
-		if (!fixed.isEmpty()) return fixed;
-		Item item = isBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
-		if (item == null) return ItemStack.EMPTY;
-		ItemStack stack = new ItemStack(item);
-		stack.set(ModDataComponents.BEE_TYPE.get(), beeType);
-		return stack;
+		// 模糊条目：按 bee_type 还原蜜脾/蜜脾块探针（与条目升级共用同一还原入口，
+		// 固定蜜脾必须按 Item 映射，不能造「带 bee_type 的可配置蜜脾」这种不存在的键）
+		return CombFuzzyMatcher.createCombStack(info.beeType, info.isBlock);
 	}
 }

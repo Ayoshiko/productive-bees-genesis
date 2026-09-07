@@ -13,6 +13,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 	 *   <li>{@link BeeAttributeConfigSection} — 万象创世蜜蜂属性覆盖配置（bee_attributes.*）</li>
 	 *   <li>{@link CentrifugeConfigSection} — MEK 离心机配置（mek_centrifuge.*）</li>
 	 *   <li>{@link ApiaryConfigSection} — MEK 通用机械蜂箱配置（mek_apiary.*）</li>
+ *   <li>{@link ExternalLogisticsConfigSection} — 外部物流互操作配置（external_logistics.*）</li>
 	 * </ul>
 	 * <p>
 	 * 注册方法（{@link #registerBeeAttributes}、{@link #registerCentrifuge}、{@link #registerApiary}）
@@ -35,6 +36,8 @@ public final class ConfigSectionRegistry {
 	private CentrifugeConfigSection centrifuge;
 	/** MEK 通用机械蜂箱配置段（注册后非 null） */
 	private ApiaryConfigSection apiary;
+	/** 外部物流互操作配置段（注册后非 null） */
+	private ExternalLogisticsConfigSection externalLogistics;
 
 	/**
 	 * 构造空的配置段注册表。
@@ -93,6 +96,20 @@ public final class ConfigSectionRegistry {
 	}
 
 	/**
+	 * 注册外部物流互操作配置段。
+	 * <p>
+	 * 委托至 {@link ExternalLogisticsConfigSection#create(ModConfigSpec.Builder)}，
+	 * 执行 {@code builder.push("external_logistics")} ... {@code builder.pop()}。
+	 *
+	 * @param builder 机器参数配置构建器
+	 * @return 已注册的外部物流配置段实例
+	 */
+	public ExternalLogisticsConfigSection registerExternalLogistics(ModConfigSpec.Builder builder) {
+		this.externalLogistics = ExternalLogisticsConfigSection.create(builder);
+		return this.externalLogistics;
+	}
+
+	/**
 	 * 获取万象创世蜜蜂属性配置段。
 	 *
 	 * @return 蜜蜂属性配置段实例（未注册时为 {@code null}）
@@ -117,5 +134,14 @@ public final class ConfigSectionRegistry {
 	 */
 	public ApiaryConfigSection apiary() {
 		return apiary;
+	}
+
+	/**
+	 * 获取外部物流互操作配置段。
+	 *
+	 * @return 外部物流配置段实例（未注册时为 {@code null}）
+	 */
+	public ExternalLogisticsConfigSection externalLogistics() {
+		return externalLogistics;
 	}
 }

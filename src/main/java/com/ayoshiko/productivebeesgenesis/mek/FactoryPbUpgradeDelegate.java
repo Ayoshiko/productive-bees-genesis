@@ -211,8 +211,7 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 	 * 在工厂 addContainerTrackers 中调用，同步所有非内置升级类型的数量和安装计数器。
 	 */
 	public void addContainerTrackers(MekanismContainer container) {
-		// 枚举顺序:PRODUCTIVITY=0, PRODUCTIVITY_2=1, PRODUCTIVITY_3=2, PRODUCTIVITY_4=3,
-		// TIME=4, TIME_2=5, GENE_SAMPLER=6, BLOCK=7, SIMULATION=8(内置,跳过)
+		// 枚举顺序由 PbUpgradeType.values() 统一提供；内置 SIMULATION 自动跳过。
 		int idx = 0;
 		for (PbUpgradeType type : PbUpgradeType.values()) {
 			if (type.isBuiltin()) continue;

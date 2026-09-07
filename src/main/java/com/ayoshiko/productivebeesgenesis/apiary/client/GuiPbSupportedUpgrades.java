@@ -49,6 +49,7 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	 * Bug 5：包含 α/β/γ/Ω 四级产量升级。
 	 * Bug 3：包含 TIME_2（双倍时间升级）。
 	 * 包含 BLOCK（蜜脾块升级，独立于 Ω）。
+	 * 包含 USELESS_BYPRODUCT 与 ESSENCE_CONVERSION 两个功能型升级。
 	 */
 	private static final PbUpgradeType[] APIARY_UPGRADE_TYPES = {
 			PbUpgradeType.PRODUCTIVITY,
@@ -59,7 +60,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 			PbUpgradeType.TIME_2,
 			PbUpgradeType.GENE_SAMPLER,
 			PbUpgradeType.BLOCK,
-			PbUpgradeType.USELESS_BYPRODUCT
+			PbUpgradeType.USELESS_BYPRODUCT,
+			PbUpgradeType.ESSENCE_CONVERSION
 	};
 
 	/** 本实例显示的升级类型（构造时注入） */

@@ -36,6 +36,8 @@ public final class ModCreativeTabs {
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
+						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
+						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
 						// 使用 SERVER 配置并加 isLoaded 保护，避免多人游戏客户端未加载服务端配置时崩溃
 						boolean isServerLoaded = ModConfig.areServerSpecsLoaded();
 						// 万象创世蜜蜂总开关：禁用后隐藏所有万象创世相关物品

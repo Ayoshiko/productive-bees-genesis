@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -26,6 +27,8 @@ import mekanism.common.tile.component.config.ConfigInfo;
 import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.component.config.slot.IProxiedSlotInfo;
 import mekanism.common.tile.interfaces.ISideConfiguration;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -92,8 +95,10 @@ final class MekCentrifugeIoConfigHelper {
 			int maxTanks = processes;
 			int tankCapacity = Integer.MAX_VALUE;
 			// v2.0.9: 传入 maxTanksPerFluidConfig（0=自动计算 maxTanks/2），由 Holder 构造时解析
+			// 外部轮转视图需要游戏刻：ISideConfiguration 的实现类均为 BlockEntity，取其 level 即可；
+			// 保持本方法签名不变，避免四个调用点连锁修改（OCP）。
 			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener,
-				maxTanksPerFluidConfig);
+				maxTanksPerFluidConfig, gameTimeSupplier(factory));
 			// Task 2: 调用 tankSetter 设置主槽引用,修复 fluidOutputTank 字段为 null 的核心 bug
 			// Task 5: 构造时已预分配全部槽位,getTanks().get(0) 返回预分配的第 0 个槽
 			tankSetter.accept(multiHolder.getTanks().get(0));
@@ -127,6 +132,22 @@ final class MekCentrifugeIoConfigHelper {
 		} catch (NullPointerException e) {
 			return 256000L;
 		}
+	}
+
+	/**
+	 * 构造多流体槽轮转视图所需的游戏刻提供器。
+	 * <br/>
+	 * 方块实体在构造期尚未 setLevel，因此必须懒读 {@code getLevel()} 而不是构造时快照。
+	 */
+	@NotNull
+	private static LongSupplier gameTimeSupplier(@NotNull ISideConfiguration factory) {
+		if (factory instanceof BlockEntity blockEntity) {
+			return () -> {
+				Level level = blockEntity.getLevel();
+				return level == null ? 0L : level.getGameTime();
+			};
+		}
+		return () -> 0L;
 	}
 
 	// ===== 构造函数公共逻辑 =====

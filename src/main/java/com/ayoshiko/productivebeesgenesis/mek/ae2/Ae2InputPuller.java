@@ -205,10 +205,12 @@ public final class Ae2InputPuller {
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2PushBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
 		boolean smeltingEnabled = MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(host);
-		// smelt 输入的标签表达式过滤：未配置时使用 ALLOW_ALL，热路径零额外开销。
+		// 标签表达式过滤：未配置时使用 ALLOW_ALL，热路径零额外开销。
 		Ae2TagFilter tagFilter = holder.getAeTagFilter();
 		boolean tagFilterActive = tagFilter != null && tagFilter.isActive();
 		int tagGeneration = tagFilter == null ? 0 : tagFilter.getGeneration();
+		boolean ignoreNbt = holder.isAeInputNbtIgnore();
+		// 标签表达式独立筛选候选物品；F 过滤模式只决定已标记槽位的白/黑名单准入。
 		Ae2InputCandidatePolicy.SmeltingTagGate tagGate = tagFilterActive
 				? key -> buffers.tagFilterCache.allows(tagFilter, key)
 				: Ae2InputCandidatePolicy.SmeltingTagGate.ALLOW_ALL;
@@ -248,7 +250,6 @@ public final class Ae2InputPuller {
 			}
 			directEntries = filter.getDirectEntries();
 		}
-		boolean ignoreNbt = holder.isAeInputNbtIgnore();
 		boolean globalNetworkStock = filter != null && filter.isGlobalNetworkStock();
 		boolean hasNetworkStockEntries = filter != null && !globalNetworkStock
 				&& filter.hasNetworkStockEntries();
@@ -293,8 +294,12 @@ public final class Ae2InputPuller {
 					available = Math.min(available, configuredLimit);
 				}
 				if (available > 0) {
-					pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-							unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
+					PullEntry entry = buffers.borrowPullEntry(key,
+							SaturatingMath.saturatingToInt(available),
+							unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+					// 分类结果随条目传递：排序阶段不再重跑 classify（会穿过配方/标签缓存）
+					entry.smelting = kind.isSmelting();
+					pullList.add(entry);
 				} else {
 					pullKeys.remove(key);
 				}
@@ -330,8 +335,12 @@ public final class Ae2InputPuller {
 						available = Math.min(available, configuredLimit);
 					}
 					if (available > 0) {
-						pullList.add(buffers.borrowPullEntry(key, SaturatingMath.saturatingToInt(available),
-								unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
+						PullEntry entry = buffers.borrowPullEntry(key,
+								SaturatingMath.saturatingToInt(available),
+								unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+						// 分类结果随条目传递：排序阶段不再重跑 classify
+						entry.smelting = kind.isSmelting();
+						pullList.add(entry);
 					} else {
 						pullKeys.remove(key);
 					}
@@ -341,6 +350,8 @@ public final class Ae2InputPuller {
 			// wraparound without copying every key in a large AE network into each tile.
 			List<AEItemKey> selectedKeys = buffers.borrowScanSelectedKeys();
 			selectedKeys.clear();
+			Set<AEItemKey> seenKeys = buffers.borrowScanSeenKeys();
+			seenKeys.clear();
 			Ae2PullCandidateAmounts candidateAmounts = buffers.borrowScanCandidateAmounts();
 			candidateAmounts.clear();
 			List<AEItemKey> prefixKeys = buffers.borrowScanPrefixKeys();
@@ -378,16 +389,22 @@ public final class Ae2InputPuller {
 				candidateAmounts.put(key, amount);
 				return true;
 			};
-			Ae2CursorScan.collectPrioritized(selectedKeys, prefixKeys, smeltingCandidateKeys,
-					candidateKeys, candidateCursor, scanCap, acceptableCandidate);
-			for (AEItemKey key : selectedKeys) {
+			// 返回值 = 优先（SMELTING）组贡献的条目数：selectedKeys 的前这么多项是 smelt 候选，
+			// 其余是蜜脾候选。据此直接给 PullEntry 打标记，排序阶段不必再跑一次分类判定。
+			int smeltingSelected = Ae2CursorScan.collectPrioritized(selectedKeys, prefixKeys, seenKeys,
+					smeltingCandidateKeys, candidateKeys, candidateCursor, scanCap, acceptableCandidate);
+			for (int index = 0; index < selectedKeys.size(); index++) {
+				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
-					pullList.add(buffers.borrowPullEntry(key, amount,
-						unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt)));
+					PullEntry entry = buffers.borrowPullEntry(key, amount,
+						unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+					entry.smelting = index < smeltingSelected;
+					pullList.add(entry);
 				}
 			}
 			candidateAmounts.clear();
+			seenKeys.clear();
 		}
 
 		if (pullList.isEmpty()) {
@@ -414,8 +431,11 @@ public final class Ae2InputPuller {
 			entry.marked = filterMode == Ae2InputFilter.FilterMode.WHITELIST;
 			entry.reserveFloor = filter == null ? -1L
 					: filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);
-			entry.smelting = Ae2InputCandidatePolicy.classify(
-					level, entry.key, smeltingEnabled, buffers.smeltingInputCache, tagGate).isSmelting();
+			// entry.smelting 已在候选准入阶段写入（直探路径用 classify 的返回值，
+			// 扫描路径用 collectPrioritized 返回的优先组分界）。此处曾为排序再跑一次
+			// classify，等于每次拉取额外穿过 typeCount 次 SMELTING 配方缓存与标签缓存 ——
+			// spark BkTP3d9oSc 中整条分类链路占 784ms（1.31%），其中含每次未命中都要重解的
+			// DeferredHolder.value 320ms。分类结果只由候选身份决定，与排序无关，不需要重算。
 			entry.combBlock = CombFuzzyMatcher.isCombBlock(entry.key);
 			entry.servedInWindow = fairness.served(entry.key);
 		}
@@ -659,7 +679,7 @@ public final class Ae2InputPuller {
 				// validator 拒绝与槽满必须分开归因：前者说明本机永远不接受该物品，
 				// 是可据此进入 per-key 退避的持久信号，后者只是暂时没位置。
 				if (limit <= stack.getCount()) return 0;
-				if (!basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) {
+				if (!entry.acceptsProbe(basicSlot, probe)) {
 					entry.validatorRejected = true;
 					return 0;
 				}
@@ -719,11 +739,16 @@ public final class Ae2InputPuller {
 		// 注意：这里不能用数量额度去截断 request —— 无限拉取模式要求一次拉满槽位堆叠上限
 		// （无限多元工厂单槽 17M），按缓冲额度限流会把吞吐压到 131K，属功能回退。
 		// 缓冲只承载「分发 + 回送 ME 之后仍剩下的」少量物品，数量本身不占 NBT 体积。
-		// 指纹按 AEItemKey 记忆化：编码本身是 Codec + StringTagVisitor 遍历，
-		// 时间加速下每刻上千次（spark ejYMNQjDf7 中本处 432ms / 1.44%）。
-		String fingerprint = fingerprintCache.get(key, level.registryAccess());
+		//
+		// 闸门只需要「条目表还有位置」这一位信息（hasFreeEntrySlot，O(1)）。
+		// 旧实现为此先无条件编码一次 SNBT 指纹（AEItemKey.toTag 的 Mojang Codec 编码
+		// + CompoundTag.toString 的 StringTagVisitor 遍历），而缓冲在正常稳态下恒为空 ——
+		// spark BkTP3d9oSc 中这次纯粹为闸门服务的编码占 372ms（0.62%，含 Codec 244ms）。
+		// 现在只有 64 种类型全部积压时才编码指纹去精确查重，指纹本身推迟到真正需要
+		// 登记剩余物时才算（见下方 leftover 分支的 pendingFingerprint）。
 		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
-		if (!pending.canRegister(fingerprint)) {
+		if (!pending.hasFreeEntrySlot()
+				&& !pending.canRegister(fingerprintCache.get(key, level.registryAccess()))) {
 			LogThrottle.warn("ae2_pending_item_capacity",
 					"AE2 输入剩余物缓冲类型已满（{} 种），本轮跳过抽取（物品留在 ME 网络无损）key={}",
 					Ae2PendingItemBuffer.MAX_ENTRIES, key);
@@ -736,11 +761,19 @@ public final class Ae2InputPuller {
 		if (reserveFloor >= 0L) {
 			// AE2 的 KeyCounter 直到 tick 末才刷新。实际抽取前重新模拟，确保同刻的
 			// 其他离心机或外部设备已提交的消耗也会压低本次请求量。
+			//
+			// 该模拟按 (key, 本 game tick) 记忆化：SIMULATE extract 会穿透网络上每一个
+			// 存储元件（omnicell / megacells 大宗盘的压缩链 / neoecoae 无限存储），
+			// spark BkTP3d9oSc 中它占 612ms（1.02%）。时间加速模组会在同一个 game tick 内
+			// 把 onUpdateServer 调用 N 次，而「同刻反复实时探测同一个键」得到的信息量为零：
+			// 本机自己的消耗由 recordExtract 精确扣减，其它设备的消耗在原实现里也同样
+			// 只能在两次 extract 之间的窗口里被看见。因此每 game tick 保留一次真实探测、
+			// 其余 N-1 次复用扣减后的同刻视图，安全语义与「每 game tick 拉取一次」等价。
 			long queryCap = SaturatingMath.saturatingAdd(reserveFloor, amount);
 			long queryStart = System.nanoTime();
 			long liveExtractable;
 			try {
-				liveExtractable = Ae2NetworkInventoryView.liveExtractableAmount(
+				liveExtractable = Ae2NetworkInventoryView.reserveProbeAmount(holder, gameTick,
 						meStorage, key, queryCap, actionSource);
 			} catch (LinkageError | RuntimeException e) {
 				reserveQueryCost = System.nanoTime() - queryStart;
@@ -826,10 +859,14 @@ public final class Ae2InputPuller {
 					holder.getPushState().getReturnBackoff(), level, pos, inputSlots);
 			if (leftoverRemaining > 0) {
 				// 既没落槽也没回送成功的部分才登记 pending，由下一轮 retryPendingItems 处理。
-				// 抽取前的条目位检查保证这里必定登记成功（数量无上限，只用饱和加法防溢出）。
+				// 指纹推迟到此刻才算：正常稳态下这条分支永不进入（剩余物都能回送 ME），
+				// 于是每次抽取都省掉一次 Codec + StringTagVisitor 编码。
+				// fingerprintCache.get 内部走 encodeOrLegacy，绝不抛异常 —— 抽取已不可撤回，
+				// 此刻抛出就等于丢物品；最坏情况只是拿到 legacy 键并在重试时告警保留。
+				String pendingFingerprint = fingerprintCache.get(key, level.registryAccess());
 				leftoverStranded = true;
-				pending.enqueue(fingerprint, leftoverRemaining, gameTick);
-				pending.recordFailure(fingerprint, gameTick);
+				pending.enqueue(pendingFingerprint, leftoverRemaining, gameTick);
+				pending.recordFailure(pendingFingerprint, gameTick);
 				if (level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
 				LogThrottle.warn("ae2_pull_leftover_pending",
 						"AE2 批量拉取剩余物品已登记 pending，等待下一轮回送 key={} count={}",
@@ -951,6 +988,10 @@ public final class Ae2InputPuller {
 		private boolean[] componentMatchResults = new boolean[0];
 		private int[] componentMatchGenerations = new int[0];
 		private int componentMatchGeneration;
+		/** 本轮 validator 判定：-1 未判定 / 0 拒绝 / 1 接受。 */
+		private int validatorState = -1;
+		/** 产生上述判定的槽位实现类；换实现即重新判定。 */
+		private Class<?> validatorSlotType;
 
 		PullEntry(AEItemKey key, int amount) {
 			reset(key, amount, false);
@@ -966,6 +1007,8 @@ public final class Ae2InputPuller {
 			this.combBlock = false;
 			this.servedInWindow = 0L;
 			this.validatorRejected = false;
+			this.validatorState = -1;
+			this.validatorSlotType = null;
 		}
 
 		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */
@@ -979,6 +1022,36 @@ public final class Ae2InputPuller {
 				Arrays.fill(componentMatchGenerations, 0);
 				componentMatchGeneration = 1;
 			}
+			validatorState = -1;
+			validatorSlotType = null;
+		}
+
+		/**
+		 * 槽位 validator 是否接受本条目的探针栈，结果按「本轮 + 槽位实现类」记忆一次。
+		 * <p>
+		 * <b>为什么可以只判一次</b>：{@code BasicInventorySlot.isItemValidForInsertion}
+		 * 等于 {@code validator.test(stack) && canInsert.test(stack, automationType)}，
+		 * 两个谓词都只看物品栈，不看槽位下标；Mekanism 工厂的全部输入槽由同一循环
+		 * 用同一 tile 方法引用创建，语义上就是「要么都接受，要么都不接受」。
+		 * 而旧实现按「类型 × 槽位」调用，在无限多元工厂（进程数可达 19+）上把
+		 * {@code tile.isValidInputItem} → {@code InputValidationCache} →
+		 * {@code ItemStack.hashItemAndComponents} 这条链重复了槽位数遍 ——
+		 * spark BkTP3d9oSc 中 {@code isItemValidForInsertion} 140ms、
+		 * 本模组的 {@code isValidInputItem} 96ms，全部来自这次重复。
+		 * <p>
+		 * 用槽位实现类做守卫：一旦出现另一种 {@code IInventorySlot} 实现（自定义附属），
+		 * 立即重新判定，不把结论跨实现复用。判定缓存只在本轮容量规划内有效
+		 * （{@link #beginComponentMatchCache} 重置），因此升级/配置变化会在下一轮生效。
+		 */
+		boolean acceptsProbe(BasicInventorySlot slot, ItemStack probe) {
+			Class<?> slotType = slot.getClass();
+			if (validatorState >= 0 && validatorSlotType == slotType) {
+				return validatorState == 1;
+			}
+			boolean accepted = slot.isItemValidForInsertion(probe, AutomationType.INTERNAL);
+			validatorState = accepted ? 1 : 0;
+			validatorSlotType = slotType;
+			return accepted;
 		}
 
 		/** 按「槽位当前栈对象 + 当前 PullEntry key」缓存昂贵的组件匹配。 */
@@ -1014,6 +1087,8 @@ public final class Ae2InputPuller {
 		/** 清除槽位对象引用，避免复用池在两次拉取之间保留旧 ItemStack。 */
 		void clearComponentMatchCache() {
 			Arrays.fill(componentMatchStacks, null);
+			validatorState = -1;
+			validatorSlotType = null;
 		}
 	}
 }

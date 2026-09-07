@@ -31,6 +31,43 @@ final class ServerConfigMigrationPlanner {
 			"mek_centrifuge.fluid_tank_multiplier",
 			"mek_apiary.stack_multiplier");
 
+	/**
+	 * 已停用的旧配置键：功能被移除或被更好的机制取代，迁移时视为「已识别但不再搬运」。
+	 * <p>
+	 * 与「未知键」区分开来：未知键说明我们漏了迁移映射（需要修代码），
+	 * 停用键是有意为之（值留在备份文件里，不再写入新配置，也不产生告警噪音）。
+	 * <ul>
+	 *   <li>{@code mek_centrifuge.io_limit.maxExtractPerTick} — 外部拉取限流从未接线，
+	 *       且与「让物流模组尽可能快地取走产物」的目标相反。</li>
+	 *   <li>{@code mek_centrifuge.ejection.*} / {@code mek_apiary.ejection.*}
+	 *       — Mekanism 弹出器时代的节流参数（弹出延迟、跳过刻数、最小间隔、长冷却、
+	 *       单刻次数上限、最大速度模式…）。物品弹出改为自研全量通道后，这些参数要么
+	 *       没有对应实现，要么只会拖慢吞吐；阻塞退避已内置为自适应常量，无需调参。</li>
+	 *   <li>{@code mek_centrifuge.basic.fluidEjectRate} — 流体弹出固定为不限速，
+	 *       实际速率由目标容器接收能力决定。</li>
+	 * </ul>
+	 */
+	static final Set<String> RETIRED_LEGACY_PATHS = Set.of(
+			"mek_centrifuge.io_limit.maxExtractPerTick",
+			"mek_centrifuge.basic.fluidEjectRate",
+			"mek_centrifuge.ejection.ejectDelay",
+			"mek_centrifuge.ejection.ejectDelayActive",
+			"mek_centrifuge.ejection.ejectSkipUnchanged",
+			"mek_centrifuge.ejection.ejectSkipTicks",
+			"mek_centrifuge.ejection.ejectMaxSpeedMode",
+			"mek_centrifuge.ejection.ejectMinInterval",
+			"mek_centrifuge.ejection.ejectBusyThreshold",
+			"mek_centrifuge.ejection.ejectBusyCooldown",
+			"mek_centrifuge.ejection.ejectMaxPerTick",
+			"mek_centrifuge.ejection.ejectBlockedThreshold",
+			"mek_centrifuge.ejection.ejectBlockedCooldown",
+			"mek_apiary.ejection.ejectDelay",
+			"mek_apiary.ejection.ejectDelayActive",
+			"mek_apiary.ejection.ejectMaxSpeedMode",
+			"mek_apiary.ejection.ejectMaxPerTick",
+			"mek_apiary.ejection.ejectBlockedThreshold",
+			"mek_apiary.ejection.ejectBlockedCooldown");
+
 	private ServerConfigMigrationPlanner() {
 	}
 
@@ -86,6 +123,8 @@ final class ServerConfigMigrationPlanner {
 
 		Set<String> unknownPaths = ConfigTraversal.leafPaths(legacy);
 		unknownPaths.removeAll(recognizedLegacyPaths);
+		// 停用键不算「未知」：它们只保留在备份文件中，不需要提醒服主，也不该让迁移回归测试报警
+		unknownPaths.removeAll(RETIRED_LEGACY_PATHS);
 		if (!unknownPaths.isEmpty()) {
 			LOGGER.warn("旧配置包含 {} 个已停用或未知键；这些键保留在备份中：{}",
 					unknownPaths.size(), unknownPaths);

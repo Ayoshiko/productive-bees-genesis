@@ -135,7 +135,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		reserveBtn.setTooltip(Tooltip.create(Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.reserve_button.tooltip")));
 		btnX += AeInputConfigLayout.RESERVE_BTN_WIDTH + 2;
-		// 标签过滤入口（T）：打开表达式编辑窗口，只作用于 smelt 配方输入的候选筛选
+		// 标签过滤入口（T）：打开表达式编辑窗口，约束所有 AE2 输入候选
 		tagFilterBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY),
 				AeInputConfigLayout.TAG_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "T",
@@ -330,7 +330,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 				globalStock ? 0x55FF55 : screenTextColor(),
 				panelWidth, 3, false, 0.7F);
 
-		// 标签过滤状态：仅作用于 smelt 输入；语法错误用红色提示该侧已失效
+		// 标签过滤状态：约束所有 AE2 输入候选；语法错误用红色提示该侧已失效
 		Ae2TagFilter tagFilter = host.productivebeesgenesis$getAeTagFilter();
 		boolean tagActive = tagFilter != null && tagFilter.isActive();
 		boolean tagError = tagFilter != null && tagFilter.hasError();
@@ -477,12 +477,10 @@ public final class GuiAeInputConfig extends GuiWindow {
 		reserveBtn.setGlobalStock(filter != null && filter.isGlobalNetworkStock());
 		Ae2TagFilter tagFilter = host.productivebeesgenesis$getAeTagFilter();
 		tagFilterBtn.active = tagFilter != null;
-		// 标签过滤只作用于熔炼配方输入，前置条件是「兼容电力熔炼炉配方」开关（全局 AND per-tile）已开；
-		// 未开时 tooltip 明确提示前置，否则玩家会以为过滤器坏了
+		// 标签过滤按钮始终可用；熔炼兼容开关只决定普通熔炼物品是否进入候选，
+		// 不应阻止玩家为蜜脾输入配置标签约束。
 		tagFilterBtn.setTooltip(Tooltip.create(Component.translatable(
-				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(host)
-						? "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip"
-						: "productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip_needs_smelting")));
+				"productivebeesgenesis.gui.ae_input_config.tag_filter.tooltip")));
 	}
 
 	private void changePage(int delta) {
@@ -502,32 +500,47 @@ public final class GuiAeInputConfig extends GuiWindow {
 		this.minPages = Math.max(1, minPages);
 	}
 
-	/** Sends an ADD operation (with isBlock and global slot index) for a placed item. */
+	/**
+	 * Sends an ADD operation (with isBlock and global slot index) for a placed item.
+	 * <p>
+	 * 蜜脾与普通物品一律先按<b>精确指纹</b>标记：逐槽齿轮（拉取数量/库存保留/无限/库存模式）
+	 * 与下方网络库存行只对指纹条目渲染，1.0.6 把蜜脾降级成模糊条目正是这些控件消失的原因。
+	 * 「蜜脾与蜜脾块共用一份配额」的模糊语义由服务端匹配层在非精确模式下按 bee_type 分组
+	 * 保证（见 {@code Ae2FilterEntryMatcher.matchesDirect}），不需要牺牲条目形态。
+	 * 蜜脾仍附带 beeType/isBlock，供服务端交叉校验指纹与声明是否一致。
+	 */
 	private void onSlotPlaced(int pageSlotIndex, ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return;
-		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(stack);
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
-		if (beeType != null) {
-			boolean isBlock = CombFuzzyMatcher.isCombBlock(stack);
+		ResourceLocation beeType = CombFuzzyMatcher.getBeeType(stack);
+		boolean isBlock = beeType != null && CombFuzzyMatcher.isCombBlock(stack);
+		String fingerprint = encodeFingerprint(stack);
+		if (fingerprint != null) {
 			PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
-					pos, Optional.of(beeType), Optional.empty(), isBlock, globalSlotIndex, OperationType.ADD));
-			ghostSlots[pageSlotIndex].setEntry(beeType, isBlock);
+					pos, Optional.ofNullable(beeType), Optional.of(fingerprint), isBlock,
+					globalSlotIndex, OperationType.ADD));
+			ghostSlots[pageSlotIndex].setDirectEntry(stack, fingerprint);
 			return;
 		}
-
-		String fingerprint;
-		try {
-			if (Minecraft.getInstance().level == null) return;
-			fingerprint = Ae2ItemFingerprint.encode(AEItemKey.of(stack),
-					Minecraft.getInstance().level.registryAccess());
-		} catch (RuntimeException error) {
-			return;
-		}
-		if (fingerprint.isBlank()
-				|| fingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH) return;
+		// 指纹编码失败（世界未就绪 / AE 键构造异常）时蜜脾退回模糊条目；普通物品无从退回。
+		if (beeType == null) return;
 		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
-				pos, Optional.empty(), Optional.of(fingerprint), false, globalSlotIndex, OperationType.ADD));
-		ghostSlots[pageSlotIndex].setDirectEntry(stack, fingerprint);
+				pos, Optional.of(beeType), Optional.empty(), isBlock, globalSlotIndex, OperationType.ADD));
+		ghostSlots[pageSlotIndex].setEntry(beeType, isBlock);
+	}
+
+	/** 客户端指纹编码：世界未就绪、编码异常、空串或超长都返回 null 交由调用方回退。 */
+	private static String encodeFingerprint(ItemStack stack) {
+		if (Minecraft.getInstance().level == null) return null;
+		try {
+			String fingerprint = Ae2ItemFingerprint.encode(AEItemKey.of(stack),
+					Minecraft.getInstance().level.registryAccess());
+			return fingerprint.isBlank()
+					|| fingerprint.length() > NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH
+					? null : fingerprint;
+		} catch (RuntimeException error) {
+			return null;
+		}
 	}
 
 	/** Sends a REMOVE operation for the given page-local slot. */
@@ -580,9 +593,14 @@ public final class GuiAeInputConfig extends GuiWindow {
 				pos, ItemStack.EMPTY, initial, true));
 	}
 
-	/** Opens the smelt-input tag expression editor (whitelist / blacklist). */
+	/**
+	 * Opens the smelt-input tag expression editor (whitelist / blacklist).
+	 * <p>
+	 * 只让出 4px 的层叠偏移：标签窗口比本窗口更高（内含定高标签滚动列表），
+	 * 偏移越大越容易在最小界面缩放（240px 可用高度）下把底部的保存按钮顶出屏幕。
+	 */
 	private void onOpenTagFilter() {
-		gui().addWindow(new GuiAeInputTagFilterConfig(gui(), relativeX + 14, relativeY + 26,
+		gui().addWindow(new GuiAeInputTagFilterConfig(gui(), relativeX + 14, relativeY + 4,
 				pos, host.productivebeesgenesis$getAeTagFilter()));
 	}
 

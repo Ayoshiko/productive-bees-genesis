@@ -7,7 +7,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
 	 * MEK 离心机统一标记接口。
-	 * 用于 TileComponentEjectorMixin 通过 instanceof 统一判断所有离心机类型，
+	 * 供弹出器快速通道 Mixin 通过 instanceof 统一判断所有离心机类型，
 	 * 避免硬依赖 ME/EME 可选模组类引发 ClassNotFoundException。
 	 * <p>
 	 * Task 16: 暴露输出槽内容版本号，供 Ejector Mixin 在输出槽内容未变化时跳过
@@ -48,6 +48,21 @@ public interface IMekCentrifugeTile {
 	 */
 	default long productivebeesgenesis$outputItemCount() {
 		return 0L;
+	}
+
+	/**
+	 * 产物直通（相邻容器）的 per-tile 开关。
+	 * <br/>
+	 * 默认委托 per-tile 状态持有者（{@code Ae2OutputStateHolder}），使基础离心机与三个工厂版
+	 * 共用同一份状态，无需各自重写（对齐 {@code IAe2InputHost} 的委托写法）。
+	 * 状态持有者不依赖 AE2 类，未装 AE2 时同样可用（与熔炼兼容开关同理）。
+	 * <p>
+	 * 与全局配置 {@code external_logistics.directContainerOutput} 是 AND 关系。
+	 */
+	default boolean productivebeesgenesis$isDirectContainerOutputEnabled() {
+		if (!(this instanceof com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase host)) return true;
+		var holder = host.productivebeesgenesis$getAe2StateHolder();
+		return holder == null || holder.isDirectContainerOutputEnabled();
 	}
 
 	/**

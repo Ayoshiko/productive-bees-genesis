@@ -34,7 +34,7 @@ final class ApiaryConfigCache {
 	/**
 	 * 刷新配置缓存 — 每 {@link #CONFIG_REFRESH_INTERVAL} tick 刷新一次
 	 * <br/>
-	 * 参考离心机 {@link com.ayoshiko.productivebeesgenesis.mixin.mek.TileComponentEjectorCooldownMixin}
+	 * 参考离心机弹出通道（{@code logistics/FastItemEjector}）的缓存策略
 	 * 的配置缓存模式，将 {@link ApiaryConfigSection} 的 basic 和 ejection 配置值缓存到 volatile 字段，
 	 * 避免 256× 加速场景下每 tick 高频读取 NeoForge 配置。
 	 * <p>

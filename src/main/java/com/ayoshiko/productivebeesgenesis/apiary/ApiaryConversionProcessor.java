@@ -193,12 +193,17 @@ final class ApiaryConversionProcessor {
 		if (!hasBlockRecipes && !hasItemRecipes) {
 			return null;
 		}
-		for (int i = 0; i < feederManager.getFeederSlotCount(); i++) {
-			IInventorySlot slot = feederManager.getFeederSlot(i);
-			ItemStack stack = slot.getStack();
-			if (stack.isEmpty()) {
+		// 单次遍历直接读 FeederInventorySlot：一次列表查找即拿到"非空 + 未禁用"判定（isActive），
+		// 比 getFeederSlot(i) + isSlotDisabled(i) 两次带边界检查的查找便宜一半。
+		List<FeederInventorySlot> slots = feederManager.getFeederInventorySlots();
+		for (int i = 0; i < slots.size(); i++) {
+			// 逐格禁用：被禁用的格子不参与转化（与花朵匹配语义一致），
+			// 否则玩家禁用某格后原料仍会被转化消耗。
+			FeederInventorySlot slot = slots.get(i);
+			if (!slot.isActive()) {
 				continue;
 			}
+			ItemStack stack = slot.getStack();
 			// 饲养板 BlockItem 方块转化（对应 PB Feeder 内 BlockItem 转化分支）
 			if (hasBlockRecipes) {
 				try {
@@ -242,12 +247,19 @@ final class ApiaryConversionProcessor {
 	 */
 	private ConversionOutcome applyMatch(ConversionMatch match, Level level) {
 		try {
-			IInventorySlot slot = feederManager.getFeederSlot(match.slotIndex);
-			ItemStack stack = slot.getStack();
-			if (stack.isEmpty()) {
-				// 原料已被消耗（防御：缓存失效前被外部取走）
+			List<FeederInventorySlot> slots = feederManager.getFeederInventorySlots();
+			if (match.slotIndex < 0 || match.slotIndex >= slots.size()) {
 				return ConversionOutcome.NONE;
 			}
+			FeederInventorySlot slot = slots.get(match.slotIndex);
+			// isActive 一次判定同时覆盖两种防御：
+			//   1) 原料已被外部取走（缓存失效前）
+			//   2) 该格已被玩家禁用（缓存键含饲养板版本号本应已失效，此处复查兜底，
+			//      避免未来新增不递增版本的状态变更路径导致禁用格被消耗）
+			if (!slot.isActive()) {
+				return ConversionOutcome.NONE;
+			}
+			ItemStack stack = slot.getStack();
 			if (level.random.nextFloat() <= match.chance) {
 				consumeFromFeeder(slot, stack);
 				if (match.output != null && !match.output.isEmpty()) {

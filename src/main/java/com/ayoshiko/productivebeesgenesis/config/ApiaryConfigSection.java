@@ -2,18 +2,17 @@ package com.ayoshiko.productivebeesgenesis.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/** 通用机械蜂箱配置段。 */
+/**
+ * 通用机械蜂箱配置段。
+ * <p>
+ * 不再提供「弹出策略」子段：物品弹出已由自研的高性能直通/全量弹出通道接管
+ * （见 {@code logistics/} 包），无需玩家调参。
+ */
 public final class ApiaryConfigSection {
 
 	public final ModConfigSpec.LongValue apiaryEnergyPerTick;
 	public final ModConfigSpec.IntValue apiaryProcessingTime;
 	public final ModConfigSpec.IntValue apiaryFluidTankCapacity;
-	public final ModConfigSpec.IntValue apiaryEjectDelay;
-	public final ModConfigSpec.IntValue apiaryEjectDelayActive;
-	public final ModConfigSpec.BooleanValue apiaryEjectMaxSpeedMode;
-	public final ModConfigSpec.IntValue apiaryEjectMaxPerTick;
-	public final ModConfigSpec.IntValue apiaryEjectBlockedThreshold;
-	public final ModConfigSpec.IntValue apiaryEjectBlockedCooldown;
 
 	/** 蜂箱产物输出槽倍率。 */
 	public final FactoryTierConfigValues stackMultiplier;
@@ -46,27 +45,6 @@ public final class ApiaryConfigSection {
 				"工厂版容量按等级计算")
 				.translation("productivebeesgenesis.configuration.mek_apiary.basic.fluidTankCapacity")
 				.defineInRange("fluidTankCapacity", 256_000, 1000, Integer.MAX_VALUE);
-		builder.pop();
-
-		builder.comment("弹出策略").push("ejection");
-		apiaryEjectDelay = builder.comment("输出槽自动弹出延迟（tick，推荐 2）")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectDelay")
-				.defineInRange("ejectDelay", 2, 0, 20);
-		apiaryEjectDelayActive = builder.comment("输出槽仍有物品时的弹出延迟（tick，推荐 1）")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectDelayActive")
-				.defineInRange("ejectDelayActive", 1, 0, 20);
-		apiaryEjectMaxSpeedMode = builder.comment("最大弹出速度模式（跳过节流逻辑）")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectMaxSpeedMode")
-				.define("ejectMaxSpeedMode", false);
-		apiaryEjectMaxPerTick = builder.comment("单 tick 最大弹出次数（0=无限制）")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectMaxPerTick")
-				.defineInRange("ejectMaxPerTick", 64, 0, 4096);
-		apiaryEjectBlockedThreshold = builder.comment("连续未弹出物品多少次后进入冷却")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectBlockedThreshold")
-				.defineInRange("ejectBlockedThreshold", 3, 1, 20);
-		apiaryEjectBlockedCooldown = builder.comment("阻塞冷却跳过的 tick 数（0=关闭）")
-				.translation("productivebeesgenesis.configuration.mek_apiary.ejection.ejectBlockedCooldown")
-				.defineInRange("ejectBlockedCooldown", 15, 0, 200);
 		builder.pop();
 
 		capacityBuilder.comment("通用机械蜂箱容量矩阵").push("mek_apiary");

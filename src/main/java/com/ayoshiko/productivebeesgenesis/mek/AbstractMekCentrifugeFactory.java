@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
@@ -49,6 +48,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
 	 * 工厂版MEK离心机抽象基类 — 模板方法模式，封装原版工厂公共逻辑。
@@ -61,7 +61,7 @@ import java.util.List;
 	 * @since Task 21
 	 */
 public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemFactory<ItemStackToItemStackRecipe>
-		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
+		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess,
 		IAe2InputHost, IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost {
 
@@ -141,11 +141,11 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		guiAccessor = new FactoryGuiAccessor(this);
 		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
 		// Task 5/6/13: 传入 fluidOutputHolder/fluidOutputTank,通过 setupFluidOutputConfig 暴露给
-		// MEK 侧面配置 GUI;fluidEjectRate 由 ModConfig 提供
+		// MEK 侧面配置 GUI;流体弹出固定不限速，实际速率由目标容器接收能力决定
 		ejectorComponent = MekCentrifugeFactoryHelper.setupTertiarySlotsAndIO(
 				this, configComponent, inputSlots, outputSlots, tertiaryOutputSlots,
 				tier.processes, energySlot, energyContainer, fluidOutputHolder, fluidOutputTank,
-				() -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
+				() -> Integer.MAX_VALUE);
 	}
 
 	/** 子类提供PB处理器名称（用于日志标识） */
@@ -308,12 +308,19 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/**
 	 * 轻量 SMELTING 补调 — 仅推进各 lane 已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
 	 * <br/>
-	 * 见 {@link MekCentrifugeFactoryHelper#runLightSmeltingTicks}：跳过 ejector/能量回填/配方重查，
-	 * 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
+	 * 见 {@link MekCentrifugeFactoryHelper#runSmeltingBatch}：首个真实 tick 与补调共享账本，
+	 * 只跳过虚拟 tick 的 ejector/能量回填/配方重查，256x 加速下 MSPT 占用极低。
 	 * 本方法供 {@link FactoryUpgradeStateHelper} 访问受保护的 {@code recipeCacheLookupMonitors}。
 	 */
 	public boolean productivebeesgenesis$runLightSmeltingTicks(int batchMultiplier) {
-		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(recipeCacheLookupMonitors, batchMultiplier);
+		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(recipeCacheLookupMonitors, batchMultiplier,
+				energyContainer);
+	}
+
+	/** Runs the full SMELTING batch with one shared deferred-energy ledger. */
+	public boolean productivebeesgenesis$runSmeltingBatch(int batchMultiplier, BooleanSupplier fullTick) {
+		return MekCentrifugeFactoryHelper.runSmeltingBatch(recipeCacheLookupMonitors, batchMultiplier,
+				energyContainer, fullTick);
 	}
 
 	/** 按钮显示与 ME/EME 一致：返回 sorting 字段实际值（委托 StateSupport，绕过原版死锁） */
@@ -399,6 +406,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	@Override
 	public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return energyContainer; }
+	@Override
+	public boolean productivebeesgenesis$usesSmeltingEnergyBudget() { return true; }
 
 	@Override
 	public Level productivebeesgenesis$getAe2Level() { return level; }

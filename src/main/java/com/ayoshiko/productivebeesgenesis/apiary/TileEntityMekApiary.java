@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
@@ -56,7 +55,7 @@ import java.util.function.BooleanSupplier;
 	 * BeeProduceProcessor、ApiaryUpgradeHandler、ApiaryAe2HostAdapter、ApiaryPbUpgradeHandler、ApiaryNbtSerializer。
 	 */
 public class TileEntityMekApiary extends TileEntityElectricMachine implements IAe2OutputHostBase,
-		IUpgradeableBlockEntity, IMekApiaryTile, IHasEjectorCooldown, IPbUpgradeProvider,
+		IUpgradeableBlockEntity, IMekApiaryTile, IPbUpgradeProvider,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable {
 
 	/** 生产周期：1200 ticks = 60秒（MEK原版标准） */
@@ -72,6 +71,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);
+	/** 产物直通（相邻容器）的缓冲区排空通道 — 与「缓冲区直推 AE」对称 */
+	private final ApiaryDirectContainerOutput directContainerOutput = new ApiaryDirectContainerOutput(this);
 	/**
 	 * 掉落数据已序列化标志 — getDrops 幂等防护
 	 * <br/>
@@ -110,6 +111,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	private boolean directEjectEnabled = true;
 	private boolean directAeOutputEnabled = false;
 	private boolean centrifugePriorityEnabled = true;
+	/**
+	 * 产物直通（相邻容器）per-tile 开关；默认开启，与全局配置
+	 * {@code external_logistics.directContainerOutput} 是 AND 关系。
+	 * <br/>
+	 * 与「直连离心机」不同：本开关控制的是把产物先模拟再放入相邻普通容器/管道，
+	 * 跳过蜂箱输出槽中转（等价于离心机侧 PbRecipeFlusher 的直通路径）。
+	 */
+	private boolean directContainerOutputEnabled = true;
 	/**
 	 * 喂食槽转化开关（默认关闭）
 	 * <br/>
@@ -332,6 +341,11 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		// LinkageError 兜底：NoClassDefFoundError 属 Error 非 Exception，原 catch 拦不住类加载失败；
 		// 漏守卫路径降级为节流日志而非 tick 崩溃（Issue #8 防御深度）
 		try { directEjectHandler.tryDirectEject(); } catch (Exception | LinkageError e) { logAe2(e, "tryDirectEject"); }
+		// 缓冲区产物直通：在 AE 推送之前，先让相邻容器把积压产物取走
+		// （顺序与产出阶段一致：离心机直连 → 相邻容器直通 → AE）
+		try { directContainerOutput.drainBuffer(); } catch (Exception | LinkageError e) {
+			logAe2(e, "drainDirectContainerOutput");
+		}
 		try { ae2HostAdapter.pushOutputs(); } catch (Exception | LinkageError e) { logAe2(e, "pushOutputs"); }
 	}
 	private void logAe2(Throwable e, String n) {
@@ -413,6 +427,45 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		setCentrifugePriorityEnabled(!centrifugePriorityEnabled);
 	}
 
+	/** 产物直通（相邻容器）per-tile 开关 — 与全局配置 AND，供 GUI 按钮与产出路径读取 */
+	public boolean isDirectContainerOutputEnabled() { return directContainerOutputEnabled; }
+
+	public void setDirectContainerOutputEnabled(boolean enabled) {
+		if (directContainerOutputEnabled == enabled) return;
+		directContainerOutputEnabled = enabled;
+		// 重新开启后立即恢复满速重试，不必等上一次拒收的退避窗口过期
+		directContainerOutput.clearBackoff();
+		setChanged();
+	}
+
+	public void toggleDirectContainerOutput() {
+		setDirectContainerOutputEnabled(!directContainerOutputEnabled);
+	}
+
+	/** {@link IMekApiaryTile} 实现 — 弹出器 Mixin 与产出路径共用同一开关 */
+	@Override
+	public boolean productivebeesgenesis$isDirectContainerOutputEnabled() {
+		return directContainerOutputEnabled;
+	}
+
+	/**
+	 * 产物直通：把一件产物先模拟再直接放入已配置输出面的相邻容器。
+	 * <br/>
+	 * 委托 {@link PbRecipeContext#productivebeesgenesis$pushGeneratedItemToNeighbors}
+	 * （经弹出器 Mixin 实现的 {@code IFastEjectHost}），与离心机 {@code PbRecipeFlusher}
+	 * 走完全相同的通道：天然复用输出面解析与相邻容器能力缓存，逻辑运输管道自动跳过。
+	 * per-tile 开关关闭时直接返回 0，不触碰相邻容器。
+	 *
+	 * @param stack 待推送产物（不会被修改）
+	 * @return 相邻容器实际接收的数量
+	 */
+	int pushGeneratedItemToNeighbors(ItemStack stack) {
+		if (!directContainerOutputEnabled || stack == null || stack.isEmpty()) return 0;
+		// 蜂箱本身就是 Mekanism ISideConfiguration，直接走 PbRecipeContext 的默认实现，
+		// 由弹出器组件（IFastEjectHost）完成"先模拟再放入"，无需再包一层适配器。
+		return productivebeesgenesis$pushGeneratedItemToNeighbors(stack);
+	}
+
 	/** 喂食槽转化功能是否开启（默认关闭）— 由 {@link ApiaryConversionProcessor} 在转化入口读取 */
 	public boolean isFeederConversionEnabled() { return feederConversionEnabled; }
 
@@ -423,6 +476,33 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	}
 
 	public void toggleFeederConversion() { setFeederConversionEnabled(!feederConversionEnabled); }
+
+	/**
+	 * 切换指定喂食槽的禁用状态（服务端权威入口，由网络包 handler 调用）
+	 * <br/>
+	 * 空格子与越界索引由 {@link FeederSlotManager#toggleSlotDisabled} 拒绝并返回 false，
+	 * 仅在状态真正改变时标记存档脏，避免无谓的区块保存。
+	 *
+	 * @param slotIndex 喂食槽索引
+	 */
+	public void toggleFeederSlotDisabled(int slotIndex) {
+		if (feederSlotManager.toggleSlotDisabled(slotIndex)) {
+			setChanged();
+		}
+	}
+
+	/**
+	 * 批量设置全部喂食槽的禁用状态（服务端权威入口，由网络包 handler 调用）
+	 * <br/>
+	 * 空格子由 {@link FeederSlotManager#setAllSlotsDisabled} 跳过；无实际变化时不标记存档脏。
+	 *
+	 * @param disabled true = 全部停用，false = 全部恢复
+	 */
+	public void setAllFeederSlotsDisabled(boolean disabled) {
+		if (feederSlotManager.setAllSlotsDisabled(disabled)) {
+			setChanged();
+		}
+	}
 
 	/**
 	 * 离心机优先判定：该产物是否应保留给相邻离心机处理（不推 AE2）。
@@ -613,7 +693,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@Override
 	public boolean isPbUpgradeSupported(PbUpgradeType type) {
 		// STABILITY 仅离心机生效，蜂箱不接受（对齐 PB 原版 AdvancedBeehiveBlockEntity 不含 stability 白名单）
-		return type != null && !type.isBuiltin() && type != PbUpgradeType.STABILITY;
+		return type != null && !type.isBuiltin()
+				&& type != PbUpgradeType.STABILITY
+				&& type != PbUpgradeType.RAW_ORE_SMELTING;
 	}
 
 	// ===== 选中蜜蜂槽位 + 桶式操作 =====

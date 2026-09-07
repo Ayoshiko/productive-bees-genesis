@@ -24,6 +24,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 	 *   <li>处理桶式蜂笼操作（{@link ApiaryCageOperationPayload}）</li>
 	 *   <li>处理工厂蜂箱排序切换（{@link ApiaryToggleSortingPayload}）</li>
 	 *   <li>处理 PB 升级卸载（{@link PbUpgradeExtractPayload}）</li>
+	 *   <li>处理喂食槽逐格禁用（{@link ToggleFeederSlotDisabledPayload}）</li>
+	 *   <li>处理喂食槽批量禁用/恢复（{@link SetAllFeederSlotsDisabledPayload}）</li>
 	 * </ol>
 	 * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
 	 * <p>
@@ -31,6 +33,14 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 	 * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
 	 */
 final class ApiaryPayloadHandlers {
+
+	/**
+	 * 喂食槽禁用类操作共用的限频 key
+	 * <br/>
+	 * 单格切换与批量设置共用同一预算：批量代价高于单格，若各自计费会给恶意客户端
+	 * 留出"交替发两种包绕过限频"的空间。
+	 */
+	private static final String FEEDER_SLOT_TOGGLE_RATE_KEY = "feeder_slot_toggle";
 
 	private ApiaryPayloadHandlers() {
 	}
@@ -66,6 +76,65 @@ final class ApiaryPayloadHandlers {
 		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
 				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
 		apiary.toggleFeederConversion();
+	}
+
+	/**
+	 * 服务端处理：切换单个喂食槽的禁用状态
+	 * <br/>
+	 * 安全模型与 {@link #handleToggleApiaryDirectEject} 一致（玩家身份 → 容器指向同一方块
+	 * → 方块实体类型 → 8 格交互距离），额外做槽位索引边界校验。
+	 * 空格子由 {@code toggleFeederSlotDisabled} 内部拒绝（"格子没有物品时无效"）。
+	 * <p>
+	 * 限频：单格切换是低频 GUI 操作，但一次切换会触发容器状态广播，
+	 * 故与 AE2 过滤类包同款按玩家 500ms 限频，防止恶意客户端高频发包放大流量。
+	 */
+	static void handleToggleFeederSlotDisabled(ToggleFeederSlotDisabledPayload payload, IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)
+				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
+				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			return;
+		}
+		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
+		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
+				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		int slotIndex = payload.slotIndex();
+		if (slotIndex < 0 || slotIndex >= apiary.getFeederSlotManager().getFeederSlotCount()) {
+			LogThrottle.warn("feeder_slot_toggle_invalid", "玩家 {} 尝试切换无效喂食槽位：{}（总槽位 {}）",
+					serverPlayer.getName().getString(), slotIndex,
+					apiary.getFeederSlotManager().getFeederSlotCount());
+			return;
+		}
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, FEEDER_SLOT_TOGGLE_RATE_KEY,
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
+			return;
+		}
+		apiary.toggleFeederSlotDisabled(slotIndex);
+	}
+
+	/**
+	 * 服务端处理：批量设置全部喂食槽禁用状态（Shift + 点击「禁」按钮）
+	 * <br/>
+	 * 校验链与 {@link #handleToggleFeederSlotDisabled} 一致（少了槽位索引校验，因为本包不带索引），
+	 * 并共用 {@link #FEEDER_SLOT_TOGGLE_RATE_KEY} 限频预算。
+	 * 空格子由 {@code setAllFeederSlotsDisabled} 内部跳过。
+	 */
+	static void handleSetAllFeederSlotsDisabled(SetAllFeederSlotsDisabledPayload payload,
+			IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer serverPlayer)
+				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
+				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
+			return;
+		}
+		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
+		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
+				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, FEEDER_SLOT_TOGGLE_RATE_KEY,
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
+			return;
+		}
+		apiary.setAllFeederSlotsDisabled(payload.disabled());
 	}
 
 	/**

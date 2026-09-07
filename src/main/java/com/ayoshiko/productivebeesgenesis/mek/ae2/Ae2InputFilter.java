@@ -103,8 +103,9 @@ public final class Ae2InputFilter {
 	 * 使用 volatile 发布，每次修改都 clone→set→publish（CopyOnWrite 语义）。
 	 * null 表示空槽位，非 null 字符串为条目。
 	 * <p>
-	 * 精确模式下，条目格式为 {@code beeType} 或 {@code beeType#block}（后缀 #block 表示蜜脾块）。
-	 * 非精确模式下，条目仅为 {@code beeType}，蜜脾和蜜脾块共享同一过滤条目。
+	 * 模糊条目格式为 {@code beeType} 或 {@code beeType#block}（后缀 #block 表示蜜脾块）：
+	 * 后缀始终写入，只有精确模式才参与匹配判定，非精确模式下仅用于界面还原图标。
+	 * 精确条目则以 {@code @} 前缀 + AE 物品指纹存储。
 	 */
 	private volatile String[] slots = new String[DEFAULT_CAPACITY];
 	/**
@@ -184,20 +185,9 @@ public final class Ae2InputFilter {
 	public synchronized void setPreciseMode(boolean precise) {
 		if (this.preciseMode == precise) return;
 		this.preciseMode = precise;
-		// Normalize old precise entries when returning to fuzzy mode.
-		if (!precise) {
-			String[] current = slots;
-			String[] normalized = current.clone();
-			boolean changed = false;
-			for (int i = 0; i < normalized.length; i++) {
-				String entry = normalized[i];
-				if (entry != null && !isDirectFingerprint(entry) && entry.endsWith("#block")) {
-					normalized[i] = entry.substring(0, entry.length() - 6);
-					changed = true;
-				}
-			}
-			if (changed) slots = normalized;
-		}
+		// 关精确模式时不再抹掉 #block 后缀：匹配层在非精确模式下本就忽略该后缀
+		// （见 Ae2FilterEntryMatcher.matches），抹掉只会让蜜脾块标记退化成蜜脾图标，
+		// 而且是不可逆的信息丢失 —— 再开精确模式时形态已经找不回来了。
 		invalidateDirectEntries();
 	}
 
@@ -209,11 +199,14 @@ public final class Ae2InputFilter {
 	/**
 	 * Sets the filter entry at the given slot index (position-fixed semantics).
 	 * Implementation moved to {@link Ae2InputFilterSlotOps#setEntry}.
+	 * <p>
+	 * 条目一律带上形态后缀：非精确模式的匹配层会忽略 {@code #block}，但界面要靠它把
+	 * 蜜脾块画成蜜脾块（否则从 JEI 拖蜜脾块会显示成蜜脾），切换精确模式也不再丢形态。
 	 */
 	public synchronized void setEntryAt(int index, ResourceLocation beeType, boolean isBlock) {
 		if (beeType == null || index < 0 || index >= MAX_FILTER_SLOTS) return;
 		ensureCapacity(index + 1);
-		String entry = preciseMode ? Ae2FilterEntrySupport.formatEntry(beeType, isBlock) : beeType.toString();
+		String entry = Ae2FilterEntrySupport.formatEntry(beeType, isBlock);
 		publish(Ae2InputFilterSlotOps.setEntry(slots, ensureKeys(), directAmounts, directReserveAmounts,
 				directVisibleAmounts, directUnlimited, directNetworkStock,
 				index, entry, DEFAULT_DIRECT_AMOUNT));
@@ -302,6 +295,32 @@ public final class Ae2InputFilter {
 
 	public AEItemKey getResolvedDirectKey(int index) {
 		return Ae2InputFilterQuerySupport.resolvedDirectKey(resolvedDirectKeys, index);
+	}
+
+	/**
+	 * 改写某个精确条目指向的键，<b>保留</b>该槽位已配置的拉取量/保留量/无限与库存模式。
+	 * <p>
+	 * 与 {@link #setDirectEntryFingerprintAt} 的区别：后者语义是「在这一格放一个新标记」，
+	 * 会把逐槽设置复位为默认值；本方法只是把同一个标记对齐到网络里真实存在的键
+	 * （见 {@link Ae2CombKeyAlignment}），玩家调过的数值必须原样留下。
+	 *
+	 * @return true 表示确实改写了（调用方据此决定是否 markForSave）
+	 */
+	synchronized boolean repointDirectEntryAt(int index, String fingerprint, AEItemKey key) {
+		if (fingerprint == null || fingerprint.isBlank() || key == null) return false;
+		if (index < 0 || index >= slots.length || !isDirectFingerprint(slots[index])) return false;
+		String entry = DIRECT_ENTRY_PREFIX + fingerprint;
+		if (entry.equals(slots[index])) return false;
+		AEItemKey[] keys = ensureKeys();
+		if (index >= keys.length) return false;
+		// 先发布键、再发布条目串：匹配层在键已解析时只看键（Ae2FilterEntrySupport.matchesDirectEntry），
+		// 因此中间态读到的语义就是新键，不会出现「新串配旧键」的错配。
+		resolvedDirectKeys = Ae2InputFilterSlotOps.setKey(keys, index, key);
+		String[] updated = slots.clone();
+		updated[index] = entry;
+		slots = updated;
+		invalidateDirectEntries();
+		return true;
 	}
 
 	public synchronized void resolveDirectKey(int index, AEItemKey key) {

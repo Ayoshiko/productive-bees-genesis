@@ -7,24 +7,19 @@ import cy.jdkdigital.productivebees.init.ModTags;
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.material.Fluid;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BooleanSupplier;
 
 
@@ -35,12 +30,18 @@ import java.util.function.BooleanSupplier;
 	 * <p>
 	 * 设计原则：
 	 * <ul>
-	 *   <li>单一职责：仅管理喂食槽数据结构，不涉及蜜蜂生产逻辑或 tick 处理</li>
+	 *   <li>单一职责：仅管理喂食槽数据结构与判定编排，不涉及蜜蜂生产逻辑或 tick 处理；
+	 *       具体匹配规则拆到 {@link BlockFlowerMatcher}（blocks 类）、
+	 *       {@link AmberEntityFlowerHelper}（entity_types 类）与 {@link FeederTagSampler}（产物抽样）</li>
 	 *   <li>开闭原则：花朵有效性检测通过 {@link #hasValidFlower} 按 PB 花朵配方系统精确匹配（Task E-2）</li>
 	 * </ul>
 	 * <p>
 	 * 阶段五改造：喂食槽数量改为构造参数传入，支持工厂版动态数量（初始版9=3×3，
 	 * 工厂版按 ceil(max(蜂蜂数,9)/3)*3 计算，最高 60 槽 3×20），保留 DEFAULT_FEEDER_SLOT_COUNT 作为初始版默认值。
+	 * <p>
+	 * 逐格禁用：每个槽位可被玩家单独禁用（见 {@link FeederInventorySlot#isActive()}），
+	 * 禁用格的物品不参与花朵匹配、转化与多花蜜蜂产物推断，等价于"该格物品对应的蜜蜂产出停用"。
+	 * 全部扫描路径统一以 {@code slot.isActive()} 为判据，避免遗漏某条通路造成语义不一致。
 	 */
 public class FeederSlotManager {
 
@@ -90,6 +91,27 @@ public class FeederSlotManager {
 	private boolean lastConversionEnabled = false;
 
 	/**
+	 * 喂食槽状态版本号 — 槽位内容或禁用标志任一变化即递增
+	 * <br/>
+	 * 与 {@link FlowerValidityCache#version()} 区别开来的原因：后者还会因配方重载 / 转化开关翻转
+	 * 而递增（那两者不改变槽位内容），把它当作"内容指纹"会让位掩码与 GUI 统计做无谓重算。
+	 * 本字段是纯粹的"喂食槽内容 + 禁用状态"指纹，供下方各缓存与客户端 GUI 统计做失效判定。
+	 */
+	private int stateVersion;
+
+	/**
+	 * {@link #hasAnyFlower()} 结果缓存
+	 * <br/>
+	 * 转化处理器对每个蜜蜂类型组都会调一次，混养 + 60 槽场景下原本是 O(槽位数 × 组数)；
+	 * 按 {@link #stateVersion} 缓存后每次内容变化只算一次。
+	 */
+	private boolean cachedHasAnyFlower;
+	private int cachedHasAnyFlowerVersion = -1;
+
+	/** 逐格禁用状态（标志读写 + 同步位掩码 + NBT 持久化，见 {@link FeederSlotDisableState}） */
+	private final FeederSlotDisableState disableState;
+
+	/**
 	 * 默认构造（初始版参数：3×3=9 个喂食槽）
 	 * <br/>
 	 * 向后兼容：保留与原版相同的参数。
@@ -110,6 +132,8 @@ public class FeederSlotManager {
 		this.feederCols = feederCols;
 		this.feederRows = feederRows;
 		this.feederSlots = new ArrayList<>(feederSlotCount);
+		// 共享同一个 List 引用：buildFeederSlots 只 clear + add，列表实例本身不会被替换
+		this.disableState = new FeederSlotDisableState(feederSlots, feederSlotCount);
 	}
 
 	/**
@@ -211,15 +235,87 @@ public class FeederSlotManager {
 
 
 	/**
-	 * 失效花朵有效性缓存 — 喂食槽内容变化时由外部调用
+	 * 失效花朵有效性缓存 — 喂食槽内容或禁用状态变化时调用
 	 * <br/>
 	 * 由 FeederInventorySlot 的 IContentsListener 在 setStack 变更时调用，
-	 * 确保缓存与喂食槽实际内容保持一致。
+	 * 确保缓存与喂食槽实际内容保持一致；同时推进 {@link #stateVersion}，
+	 * 让位掩码缓存、hasAnyFlower 缓存与客户端 GUI 统计缓存一并失效。
 	 */
 	public void invalidateFlowerCache() {
 		flowerValidityCache.invalidate();
+		stateVersion++;
 	}
 
+	/**
+	 * 当前喂食槽状态版本号（内容 + 禁用标志指纹）
+	 * <br/>
+	 * 供客户端 GUI 缓存统计结果：版本未变时无需重扫 60 个槽位去重花朵种类。
+	 */
+	public int getStateVersion() {
+		return stateVersion;
+	}
+
+	// ===== 逐格禁用（判定与编解码委托 FeederSlotDisableState，本类只负责缓存失效与存档标脏） =====
+
+	/** 指定格是否被玩家禁用（索引越界返回 false） */
+	public boolean isSlotDisabled(int index) {
+		return disableState.isDisabled(index);
+	}
+
+	/** 指定格是否处于"有物品但被禁用"状态 — 供 GUI 渲染灰色遮罩使用 */
+	public boolean isSlotBlocked(int index) {
+		return disableState.isBlocked(index);
+	}
+
+	/**
+	 * 切换指定格的禁用状态（服务端权威路径）
+	 * <br/>
+	 * 状态变化后失效花朵缓存：禁用格不再参与花朵匹配，缓存版本号递增会连带失效
+	 * {@link ApiaryConversionProcessor} 的饲养板匹配缓存与 {@code BeeSlot} 的逐蜂花朵缓存。
+	 *
+	 * @param index 槽位索引
+	 * @return true 表示状态已改变（调用方据此决定是否 setChanged）
+	 */
+	public boolean toggleSlotDisabled(int index) {
+		if (!disableState.toggle(index)) return false;
+		invalidateFlowerCache();
+		return true;
+	}
+
+	/**
+	 * 批量设置全部格子的禁用状态（服务端权威路径，Shift + 点击「禁」按钮）
+	 * <br/>
+	 * 整批只失效缓存一次，避免 60 次版本号递增导致下游缓存被反复重建。
+	 *
+	 * @param disabled true = 全部停用，false = 全部恢复
+	 * @return true 表示至少有一格状态改变
+	 */
+	public boolean setAllSlotsDisabled(boolean disabled) {
+		if (!disableState.setAll(disabled)) return false;
+		invalidateFlowerCache();
+		return true;
+	}
+
+	/** 禁用位掩码同步字数量 — 供容器 tracker 注册（客户端/服务端必须一致） */
+	public int getDisabledWordCount() {
+		return disableState.wordCount();
+	}
+
+	/** 读取指定同步字的禁用位掩码（服务端 → 客户端，按状态版本号缓存打包结果） */
+	public long getDisabledWord(int wordIndex) {
+		return disableState.word(wordIndex, stateVersion);
+	}
+
+	/**
+	 * 写入指定同步字的禁用位掩码（客户端同步回调）
+	 * <br/>
+	 * 客户端同样需要失效缓存：{@code GuiFeederWindow} 底部提示与信息面板会读取
+	 * 生效格子数，缓存不失效会让统计停留在旧值。
+	 */
+	public void setDisabledWord(int wordIndex, long word) {
+		disableState.applyWord(wordIndex, word);
+		invalidateFlowerCache();
+	}
 
 	/** 当前花朵缓存版本号（供外部缓存层判断失效） */
 	public int getFlowerCacheVersion() {
@@ -270,9 +366,9 @@ public class FeederSlotManager {
 
 		// 精确匹配：遍历喂食槽检查是否有匹配的花朵物品（转化原料已在函数开头统一检查）
 		for (int i = 0; i < feederSlots.size(); i++) {
-			ItemStack stack = feederSlots.get(i).getStack();
-			if (stack.isEmpty()) continue;
-			if (matchesFlowerPreference(stack, pref)) {
+			FeederInventorySlot slot = feederSlots.get(i);
+			if (!slot.isActive()) continue;
+			if (BlockFlowerMatcher.matches(slot.getStack(), pref)) {
 				return true;
 			}
 		}
@@ -289,76 +385,12 @@ public class FeederSlotManager {
 	 */
 	private boolean hasConversionFlowerInFeeder(ResourceLocation beeTypeKey) {
 		for (int i = 0; i < feederSlots.size(); i++) {
-			ItemStack stack = feederSlots.get(i).getStack();
-			if (stack.isEmpty()) {
+			FeederInventorySlot slot = feederSlots.get(i);
+			if (!slot.isActive()) {
 				continue;
 			}
-			if (BeeConversionQueries.hasFeederConversionFlower(beeTypeKey, stack)) {
+			if (BeeConversionQueries.hasFeederConversionFlower(beeTypeKey, slot.getStack())) {
 				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * 检查物品栈是否匹配花朵偏好
-	 * <br/>
-	 * 参考 PB ConfigurableBee.isFlowerBlock / isFlowerItem 和 JDTE matchesConfiguredBlockFlower 的匹配逻辑：
-	 * <ol>
-	 *   <li>flowerTag：先检查物品标签（TagKey&lt;Item&gt;），若不匹配且物品为 BlockItem，再检查方块标签（TagKey&lt;Block&gt;）</li>
-	 *   <li>flowerItem：ItemStack.is(Item)</li>
-	 *   <li>flowerBlock：BlockItem 对应方块的注册表 ID 精确匹配</li>
-	 *   <li>flowerFluid：BucketItem.content 匹配流体或流体标签</li>
-	 * </ol>
-	 * 任一匹配即返回 true。不检查 inverseFlower（与 PB isFlowerItem 行为一致）。
-	 * <p>
-	 * flowerTag 双重检查原理：PB 的 flowerTag 字段在 isFlowerBlock 中检查方块标签（TagKey&lt;Block&gt;），
-	 * 在 isFlowerItem 中检查物品标签（TagKey&lt;Item&gt;）。部分模组（如 JDTE）仅创建方块标签而无对应物品标签，
-	 * 例如 jdte:life_fluid_bee_flowers 仅包含 jdte:advanced_life_extractor 和 jdte:extended_life_extractor 两个方块。
-	 * 当玩家将此类方块作为物品放入采蜜槽时，仅检查物品标签会漏匹配，必须同时检查方块标签。
-	 *
-	 * @param stack 待检查的物品栈
-	 * @param pref  花朵偏好
-	 * @return true 如果物品匹配任一花朵定义
-	 */
-	private boolean matchesFlowerPreference(ItemStack stack, FlowerPreference pref) {
-		// flowerTag：先检查物品标签，再检查方块标签（BlockItem 场景）
-		if (!pref.flowerTag().isEmpty()) {
-			ResourceLocation tagId = ResourceLocation.parse(pref.flowerTag());
-			// 1. 检查物品标签（与 PB isFlowerItem 一致）
-			TagKey<Item> itemTag = TagKey.create(BuiltInRegistries.ITEM.key(), tagId);
-			if (stack.is(itemTag)) return true;
-			// 2. 当物品为 BlockItem 时，同时检查方块标签（与 PB isFlowerBlock / JDTE matchesConfiguredBlockFlower 一致）
-			if (stack.getItem() instanceof BlockItem blockItem) {
-				TagKey<Block> blockTag = TagKey.create(BuiltInRegistries.BLOCK.key(), tagId);
-				if (blockItem.getBlock().defaultBlockState().is(blockTag)) return true;
-			}
-		}
-		// flowerItem：检查具体物品
-		if (!pref.flowerItem().isEmpty()) {
-			Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(pref.flowerItem()));
-			if (stack.is(item)) return true;
-		}
-		// flowerBlock：检查方块物品（如 sculk_bee 对应 minecraft:sculk_catalyst）
-		// 仅当 stack 为 BlockItem 时通过方块注册表 ID 精确比对
-		if (!pref.flowerBlock().isEmpty()) {
-			if (stack.getItem() instanceof BlockItem blockItem) {
-				ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
-				if (blockId.toString().equals(pref.flowerBlock())) return true;
-			}
-		}
-		// flowerFluid：检查流体桶
-		if (!pref.flowerFluid().isEmpty() && stack.getItem() instanceof BucketItem bucket) {
-			String fluidId = pref.flowerFluid();
-			if (fluidId.startsWith("#")) {
-				// 流体标签匹配 — 使用 Holder.is(TagKey) 替代 deprecated 的 Fluid.is(TagKey)
-				TagKey<Fluid> fluidTag = TagKey.create(BuiltInRegistries.FLUID.key(),
-						ResourceLocation.parse(fluidId.substring(1)));
-				if (BuiltInRegistries.FLUID.wrapAsHolder(bucket.content).is(fluidTag)) return true;
-			} else {
-				// 具体流体匹配
-				Fluid fluid = BuiltInRegistries.FLUID.get(ResourceLocation.parse(fluidId));
-				if (bucket.content.isSame(fluid)) return true;
 			}
 		}
 		return false;
@@ -367,16 +399,26 @@ public class FeederSlotManager {
 	/**
 	 * 检查喂食器是否有任意花朵
 	 * <br/>
-	 * 遍历所有喂食槽，任意非空槽位即视为有花朵。
+	 * 遍历所有喂食槽，任意生效（非空且未禁用）槽位即视为有花朵。
 	 * 用于 tick 流程前置检查，避免无花朵时推进生产计时。
+	 * <p>
+	 * 结果按 {@link #stateVersion} 缓存：转化处理器对每个蜜蜂类型组都会调一次，
+	 * 混养 60 槽场景下原本是 O(槽位数 × 组数)，缓存后每次内容变化只扫一遍。
 	 */
 	public boolean hasAnyFlower() {
+		if (cachedHasAnyFlowerVersion == stateVersion) {
+			return cachedHasAnyFlower;
+		}
+		boolean any = false;
 		for (int i = 0; i < feederSlots.size(); i++) {
-			if (!feederSlots.get(i).isEmpty()) {
-				return true;
+			if (feederSlots.get(i).isActive()) {
+				any = true;
+				break;
 			}
 		}
-		return false;
+		cachedHasAnyFlower = any;
+		cachedHasAnyFlowerVersion = stateVersion;
+		return any;
 	}
 
 	/** NBT key — 喂食槽列表 */
@@ -385,29 +427,14 @@ public class FeederSlotManager {
 	/**
 	 * 从喂食槽中随机获取一个匹配指定方块标签的 BlockItem（模块 1 修复）
 	 * <br/>
-	 * 复刻 PB 原版 FeederBlockEntity.getRandomBlockFromInventory 逻辑：
-	 * 遍历喂食槽，筛选 BlockItem 且对应方块在指定标签中的物品，随机返回一个。
-	 * 用于 lumber_bee/quarry_bee 等多花蜜脾蜜蜂从喂食槽推断产物。
-	 * <p>
-	 * 性能：仅在 multi-flower 蜜蜂产出时调用（低频），使用 ThreadLocalRandom 避免竞争。
-	 * 喂食槽数量固定（≤60），遍历 O(N) 开销可忽略。
+	 * 用于 lumber_bee/quarry_bee 等多花蜜脾蜜蜂从喂食槽推断产物，
+	 * 抽样规则委托 {@link FeederTagSampler#randomBlock}（禁用格不参与抽样）。
 	 *
 	 * @param blockTag 方块标签（如 ModTags.LUMBER、ModTags.QUARRY）
 	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
 	 */
 	public ItemStack getRandomBlockFromFeeder(TagKey<Block> blockTag) {
-		ThreadLocalRandom random = ThreadLocalRandom.current();
-		Block selected = null;
-		int matches = 0;
-		for (int i = 0; i < feederSlots.size(); i++) {
-			ItemStack stack = feederSlots.get(i).getStack();
-			if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) continue;
-			Block block = ((BlockItem) stack.getItem()).getBlock();
-			// 用 BlockState.is 替代废弃的 Block.builtInRegistryHolder().is()
-			if (!block.defaultBlockState().is(blockTag)) continue;
-			if (random.nextInt(++matches) == 0) selected = block;
-		}
-		return selected == null ? ItemStack.EMPTY : new ItemStack(selected);
+		return FeederTagSampler.randomBlock(feederSlots, blockTag);
 	}
 
 	/**
@@ -419,15 +446,7 @@ public class FeederSlotManager {
 	 * @return 匹配的 ItemStack，喂食槽无匹配返回 ItemStack.EMPTY
 	 */
 	public ItemStack getRandomItemFromFeeder(TagKey<Item> itemTag) {
-		ThreadLocalRandom random = ThreadLocalRandom.current();
-		ItemStack selected = ItemStack.EMPTY;
-		int matches = 0;
-		for (int i = 0; i < feederSlots.size(); i++) {
-			ItemStack stack = feederSlots.get(i).getStack();
-			if (stack.isEmpty() || !stack.is(itemTag)) continue;
-			if (random.nextInt(++matches) == 0) selected = stack;
-		}
-		return selected.isEmpty() ? ItemStack.EMPTY : selected.copy();
+		return FeederTagSampler.randomItem(feederSlots, itemTag);
 	}
 
 	/** 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照（委托琥珀工具类） */
@@ -464,6 +483,8 @@ public class FeederSlotManager {
 	 * 保存喂食槽到 NBT
 	 * <br/>
 	 * 每个槽位序列化为 CompoundTag（含 Item 组件），空槽跳过以减小存档体积。
+	 * 逐格禁用状态以独立位掩码键保存（{@link FeederSlotDisableState}），
+	 * 不侵入 Mekanism 的槽位 NBT 结构，旧存档缺键时全部按启用处理。
 	 */
 	void saveFeederSlots(CompoundTag nbt, HolderLookup.Provider provider) {
 		if (feederSlots.isEmpty()) return;
@@ -472,6 +493,7 @@ public class FeederSlotManager {
 			list.add(feederSlots.get(i).serializeNBT(provider));
 		}
 		nbt.put(NBT_KEY_FEEDER_SLOTS, list);
+		disableState.save(nbt);
 	}
 
 	/**
@@ -479,14 +501,20 @@ public class FeederSlotManager {
 	 * <br/>
 	 * 必须在 buildFeederSlots() 之后调用（槽位需已存在）。
 	 * 兼容存档中槽位数量少于当前槽位数量（工厂版降级场景），多余槽位保持空。
+	 * <p>
+	 * 禁用位掩码必须在槽位内容之后加载：{@link FeederInventorySlot#onContentsChanged()}
+	 * 会在槽位为空时清除禁用标志，顺序颠倒会把刚读出的标志清掉。
 	 */
 	void loadFeederSlots(CompoundTag nbt, HolderLookup.Provider provider) {
 		if (feederSlots.isEmpty()) return;
-		if (!nbt.contains(NBT_KEY_FEEDER_SLOTS, Tag.TAG_LIST)) return;
-		ListTag list = nbt.getList(NBT_KEY_FEEDER_SLOTS, Tag.TAG_COMPOUND);
-		for (int i = 0; i < feederSlots.size() && i < list.size(); i++) {
-			feederSlots.get(i).deserializeNBT(provider, list.getCompound(i));
+		if (nbt.contains(NBT_KEY_FEEDER_SLOTS, Tag.TAG_LIST)) {
+			ListTag list = nbt.getList(NBT_KEY_FEEDER_SLOTS, Tag.TAG_COMPOUND);
+			for (int i = 0; i < feederSlots.size() && i < list.size(); i++) {
+				feederSlots.get(i).deserializeNBT(provider, list.getCompound(i));
+			}
 		}
+		disableState.load(nbt);
+		invalidateFlowerCache();
 	}
 
 }

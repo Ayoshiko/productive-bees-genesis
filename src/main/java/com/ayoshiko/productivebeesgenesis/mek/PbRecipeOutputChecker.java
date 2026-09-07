@@ -12,8 +12,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,14 +34,13 @@ final class PbRecipeOutputChecker {
 	/**
 	 * 检查PB配方输出与现有输出槽内容是否兼容
 	 * <br/>
-	 * 把每个可能产出的模板与物理输出槽做一对一可行匹配。PB 输出写入器会把输出路由到
-	 * 任意可用槽位，而不是按配方 Map 的迭代顺序固定槽位，因此不能把第一个/第二个 Map
-	 * 条目硬绑定到主槽/副槽，也不能让多个模板错误共享同一个已占用槽。
+	 * 判定标准：<b>至少一种产物能落进某个输出槽</b>（槽位为空或可与之堆叠）。
+	 * PB 输出写入器会把产物路由到任意可用槽位，不按配方 Map 顺序绑定固定槽。
 	 *
 	 * @param recipe				PB离心配方
 	 * @param outputSlot			主输出槽
 	 * @param secondaryOutputSlot	副输出槽1（可为null）
-	 * @return true 如果所有输出都与现有槽内容兼容
+	 * @return true 如果配方输出与现有槽内容兼容
 	 */
 	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
 			@NotNull IInventorySlot outputSlot,
@@ -51,7 +48,7 @@ final class PbRecipeOutputChecker {
 		return isPbOutputCompatible(recipe, outputSlot, secondaryOutputSlot, null);
 	}
 
-	/** 检查主、副1、副2三个物品输出槽是否都能接收此 PB 配方。 */
+	/** 检查主、副1、副2三个物品输出槽是否能接收此 PB 配方。 */
 	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
 			@NotNull IInventorySlot outputSlot,
 			@Nullable IInventorySlot secondaryOutputSlot,
@@ -59,7 +56,15 @@ final class PbRecipeOutputChecker {
 		return isPbOutputCompatible(recipe, outputSlot, secondaryOutputSlot, tertiaryOutputSlot, false);
 	}
 
-	/** 检查输出槽兼容性，并可忽略已由副产物销毁升级过滤的蜜蜡。 */
+	/**
+	 * 检查输出槽兼容性，并可忽略已由副产物销毁升级过滤的蜜蜡。
+	 * <br/>
+	 * <b>为什么是「任一产物可放」而不是「全部产物一对一完全匹配」：</b>
+	 * 产物种类可能多于三个物理输出槽（如屠夫蜜脾的 4 种肉，安装 7 个稳定性升级后概率产物
+	 * 100% 触发；多模组整合包中种类更多）。完全匹配判定对这类配方永远返回 false，
+	 * 会让工厂输入槽直接拒收（AE2/SFM 都送不进去）。放不下的种类由
+	 * {@link PbRecipeFlusher} 延迟提交后续排空，机器只要能写出一种产物就能推进。
+	 */
 	public static boolean isPbOutputCompatible(CentrifugeRecipe recipe,
 			@NotNull IInventorySlot outputSlot,
 			@Nullable IInventorySlot secondaryOutputSlot,
@@ -69,33 +74,28 @@ final class PbRecipeOutputChecker {
 		if (outputs.isEmpty()) {
 			return true;
 		}
-		List<IInventorySlot> slots = new ArrayList<>(3);
-		slots.add(outputSlot);
-		if (secondaryOutputSlot != null) slots.add(secondaryOutputSlot);
-		if (tertiaryOutputSlot != null) slots.add(tertiaryOutputSlot);
-
-		// TagOutputRecipe outputs are independent candidates. Reserve one physical slot
-		// per candidate while checking the gate, otherwise two occupied slots containing
-		// the same item can both match output A and incorrectly leave output B unplaceable.
-		List<ItemStack> templates = new ArrayList<>(outputs.size());
+		boolean hasCandidate = false;
 		for (Map.Entry<ItemStack, ChancedOutput> entry : outputs.entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			if (chanced == null || chanced.chance() <= 0.0f || Math.max(0, chanced.max()) <= 0) continue;
 			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
-			templates.add(entry.getKey());
+			hasCandidate = true;
+			ItemStack template = entry.getKey();
+			if (canPlace(template, outputSlot)
+					|| canPlace(template, secondaryOutputSlot)
+					|| canPlace(template, tertiaryOutputSlot)) {
+				return true;
+			}
 		}
-		if (templates.isEmpty()) return true;
+		// 全部产物都被过滤（如仅蜜蜡且已装副产物销毁升级）时不阻塞输入
+		return !hasCandidate;
+	}
 
-		// Use augmenting paths instead of greedy claiming: an early template may fit an
-		// empty slot while a later template only fits the occupied slot, and both are
-		// placeable after reassigning the first template to the occupied slot.
-		int[] matchedTemplateBySlot = new int[slots.size()];
-		java.util.Arrays.fill(matchedTemplateBySlot, -1);
-		for (int templateIndex = 0; templateIndex < templates.size(); templateIndex++) {
-			if (!tryMatchTemplate(templateIndex, templates, slots, matchedTemplateBySlot,
-					new boolean[slots.size()])) return false;
-		}
-		return true;
+	/** 槽位为空或可与模板堆叠时视为可放置（不判满：数量不足由 flusher 按批量回退处理）。 */
+	private static boolean canPlace(ItemStack template, @Nullable IInventorySlot slot) {
+		if (slot == null) return false;
+		ItemStack existing = slot.getStack();
+		return existing.isEmpty() || InventoryUtils.areItemsStackable(template, existing);
 	}
 
 	/** 检查配方是否有实际物品输出，已安装升级时蜜蜡输出不计入阻塞判定。 */
@@ -106,25 +106,6 @@ final class PbRecipeOutputChecker {
 			if (context.suppressesUselessByproducts()
 					&& UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
 			return true;
-		}
-		return false;
-	}
-
-	private static boolean tryMatchTemplate(int templateIndex, List<ItemStack> templates,
-			List<IInventorySlot> slots, int[] matchedTemplateBySlot, boolean[] visited) {
-		ItemStack template = templates.get(templateIndex);
-		for (int i = 0; i < slots.size(); i++) {
-			if (visited[i]) continue;
-			visited[i] = true;
-			IInventorySlot slot = slots.get(i);
-			ItemStack existing = slot.getStack();
-			if (existing.isEmpty() || InventoryUtils.areItemsStackable(template, existing)) {
-				int previous = matchedTemplateBySlot[i];
-				if (previous < 0 || tryMatchTemplate(previous, templates, slots, matchedTemplateBySlot, visited)) {
-					matchedTemplateBySlot[i] = templateIndex;
-					return true;
-				}
-			}
 		}
 		return false;
 	}

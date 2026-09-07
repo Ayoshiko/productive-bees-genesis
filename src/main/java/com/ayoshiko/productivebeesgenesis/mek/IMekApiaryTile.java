@@ -3,8 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mek;
 /**
 	 * MEK 通用机械蜂箱统一标记接口。
 	 * <br/>
-	 * 参照 {@link IMekCentrifugeTile} 的设计模式，用于 TileComponentEjectorMixin 和
-	 * TileComponentEjectorCooldownMixin 通过 instanceof 统一识别所有蜂箱类型，
+	 * 参照 {@link IMekCentrifugeTile} 的设计模式，供弹出器快速通道 Mixin
+	 * 通过 instanceof 统一识别所有蜂箱类型，
 	 * 避免硬依赖工厂版子类引发 ClassNotFoundException。
 	 * <p>
 	 * 覆盖范围（通过基类 {@code TileEntityMekApiary} 实现此接口自动覆盖所有子类）：
@@ -49,5 +49,16 @@ public interface IMekApiaryTile {
 	 */
 	default long productivebeesgenesis$outputItemCount() {
 		return 0L;
+	}
+
+	/**
+	 * 产物直通（相邻容器）的 per-tile 开关。
+	 * <br/>
+	 * 与全局配置 {@code external_logistics.directContainerOutput} 是 AND 关系：
+	 * 全局关闭时整台机器都不直通，全局开启时由本开关按台决定（对齐 AE2 的按台输出开关）。
+	 * 默认 true 保持既有行为，未实现的宿主一律视为开启。
+	 */
+	default boolean productivebeesgenesis$isDirectContainerOutputEnabled() {
+		return true;
 	}
 }

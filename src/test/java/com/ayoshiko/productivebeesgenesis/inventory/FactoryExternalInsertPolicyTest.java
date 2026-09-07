@@ -21,15 +21,26 @@ class FactoryExternalInsertPolicyTest {
 	}
 
 	@Test
-	void insertionQuantumExposesOneTickOfDemandPerMachine() {
-		assertEquals(16, FactoryExternalInsertPolicy.insertionQuantum(64));
-		assertEquals(1_024, FactoryExternalInsertPolicy.insertionQuantum(4_096));
-		assertEquals(262_144, FactoryExternalInsertPolicy.insertionQuantum(1_048_576));
+	void externalInsertionSeesWorkingSetInsteadOfFullSlotCapacity() {
+		// 槽位真实上限 100 万，工作集 4096：外部只能填到 4096，机器内部写入不受影响
+		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(1_000_000, 0, 4_096));
+		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(1_000_000, 512, 4_096));
 	}
 
 	@Test
-	void externalSimulationUsesRealSlotCapacityInsteadOfSixteenItemQuantum() {
-		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(4_096, 0));
-		assertEquals(4_096L, FactoryExternalInsertPolicy.effectiveSlotLimit(4_096, 512));
+	void slotCapacitySmallerThanWorkingSetStillWins() {
+		assertEquals(64L, FactoryExternalInsertPolicy.effectiveSlotLimit(64, 0, 4_096));
+	}
+
+	@Test
+	void workingSetNeverDropsBelowOneVanillaStack() {
+		// 物流模组按 min(getSlotLimit, maxStackSize)=64 规划，低于 64 会造成"已提交 < 已规划"
+		assertEquals(64L, FactoryExternalInsertPolicy.effectiveSlotLimit(1_000_000, 0, 1));
+	}
+
+	@Test
+	void overfilledSlotReportsItsOwnCountSoExternalSpaceIsZero() {
+		// 机器内部（INTERNAL）可以写满到真实上限；此时外部看到的上限等于现有数量 → 空间 0
+		assertEquals(9_000L, FactoryExternalInsertPolicy.effectiveSlotLimit(1_000_000, 9_000, 4_096));
 	}
 }

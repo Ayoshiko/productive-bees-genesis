@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -144,8 +146,7 @@ public class PbRecipeCompleter {
 
 		FluidStack fluidOutput = pendingFluidTemplate;
 		if (fluidOutput != null && !fluidOutput.isEmpty()
-				&& !(context.suppressesUselessByproducts()
-						&& UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
+				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
 			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
 				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier));
 		}
@@ -228,8 +229,7 @@ public class PbRecipeCompleter {
 
 		FluidStack fluidOutput = pendingFluidTemplate;
 		if (fluidOutput != null && !fluidOutput.isEmpty()
-				&& !(context.suppressesUselessByproducts()
-						&& UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
+				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
 			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
 				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier, batchCount));
 		}
@@ -261,13 +261,45 @@ public class PbRecipeCompleter {
 	/**
 	 * 将聚合的 PB 配方输出实际插入槽位并扣除输入 — 委托给 {@link PbRecipeFlusher}
 	 * <br/>
-	 * 调用方语义保持不变:返回 true 全部输出成功;false 空间不足未执行任何修改。
+	 * 调用方语义保持不变:返回 true 全部输出成功;false 空间不足未执行任何修改
+	 * （输入已扣除的 pending 例外：会尽量部分排空，返回 false 表示仍有剩余）。
 	 *
 	 * @param processIndex 进程索引
-	 * @return true 全部输出成功插入并扣除输入;false 输出空间不足,未执行任何修改
+	 * @return true 全部输出成功插入并扣除输入;false 输出空间不足或仍有剩余 pending
 	 */
 	public boolean flushPendingPbOutputs(int processIndex) {
 		return flusher.flush(this, processIndex);
+	}
+
+	/**
+	 * 允许延迟提交的 flush — 产物种类多于物理输出槽时的唯一推进方式。
+	 * <br/>
+	 * 写入放得下的产物、扣除一次输入，剩余产物留在 pending（随方块持久化）等待排空。
+	 * 「已提交 pending」存在期间上层不再累积新产物，因此缓冲有界。
+	 *
+	 * @param processIndex       进程索引
+	 * @param maxDeferredPerType 单种产物允许延迟的最大数量（隐形缓冲上限）
+	 * @return true 表示输入已提交（全部或部分产物已写出）
+	 */
+	boolean flushPendingPbOutputsWithDeferral(int processIndex, int maxDeferredPerType) {
+		PbRecipeFlusher.Outcome outcome = flusher.flush(this, processIndex, maxDeferredPerType);
+		return outcome == PbRecipeFlusher.Outcome.COMMITTED
+				|| outcome == PbRecipeFlusher.Outcome.DEFERRED;
+	}
+
+	/** 上一次 flush 规划中是否存在「完全无处安放」的产物种类（减半批量无效） */
+	boolean lastPlanHasUnplaceableType() {
+		return flusher.lastPlanHasUnplaceableType();
+	}
+
+	/** 上一次 flush 规划中单种产物需要延迟的最大数量 */
+	int lastPlanMaxDeferredPerType() {
+		return flusher.lastPlanMaxDeferredPerType();
+	}
+
+	/** 上一次 flush 规划观测到的单槽容量（延迟量预算基准） */
+	int lastPlanSlotCapacity() {
+		return flusher.lastPlanSlotCapacity();
 	}
 
 	/**
@@ -305,6 +337,30 @@ public class PbRecipeCompleter {
 			pendingItemCount = Math.max(0, pendingItemCount - Math.max(0, entry.getValue()));
 			iterator.remove();
 		}
+	}
+
+	/** 将当前 pending 物品输出按精华转化升级规则重建，并同步数量统计。 */
+	void convertPendingEssenceOutputs() {
+		if (!context.productivebeesgenesis$hasEssenceConversionUpgrade()
+				|| pendingOutputs.isEmpty() || context.level() == null) return;
+		if (!EssenceConversionUpgradeHelper.convertPendingOutputs(context.level(), pendingOutputs)) return;
+		long total = 0L;
+		for (int count : pendingOutputs.values()) {
+			total = SaturatingMath.saturatingAdd(total, Math.max(0, count));
+		}
+		pendingItemCount = SaturatingMath.saturatingToInt(total);
+	}
+
+	/** 将当前 pending 物品输出按粗矿熔炼升级重建，并同步数量统计。 */
+	void convertPendingRawOreOutputs() {
+		if (!context.productivebeesgenesis$hasRawOreSmeltingUpgrade()
+				|| pendingOutputs.isEmpty() || context.level() == null) return;
+		if (!RawOreSmeltingUpgradeHelper.convertPendingOutputs(context.level(), pendingOutputs)) return;
+		long total = 0L;
+		for (int count : pendingOutputs.values()) {
+			total = SaturatingMath.saturatingAdd(total, Math.max(0, count));
+		}
+		pendingItemCount = SaturatingMath.saturatingToInt(total);
 	}
 
 	/** 本 tick 尚未扣除的输入数量(供协调器判断剩余输入是否足够) */

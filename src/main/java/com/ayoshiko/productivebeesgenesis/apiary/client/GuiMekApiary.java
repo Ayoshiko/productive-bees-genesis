@@ -1,16 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
 import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
-import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.client.screen.CompactStackCountScreen;
 import com.ayoshiko.productivebeesgenesis.client.screen.EnergyUsageDisplaySmoother;
-import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
-import com.ayoshiko.productivebeesgenesis.network.ApiaryFeedBeePayload;
-import com.ayoshiko.productivebeesgenesis.network.ApiarySelectBeePayload;
-import cy.jdkdigital.productivebees.common.item.HoneyTreat;
-import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.client.gui.GuiConfigurableTile;
 import mekanism.client.gui.element.bar.GuiVerticalPowerBar;
@@ -27,39 +21,39 @@ import mekanism.common.inventory.warning.IWarningTracker;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 /**
-	 * MEK 蜂箱 GUI 渲染主类
-	 * <br/>
-	 * 基于 Mekanism 的 {@link GuiConfigurableTile}，负责 MEK 蜂箱的客户端 GUI 渲染职责：
-	 * <ul>
-	 *   <li>蜜蜂实体展示：通过 {@link BeeEntityRenderer} 在槽位内渲染蜜蜂模型与状态灯</li>
-	 *   <li>蜜蜂名称展示：通过 {@link BeeNameRenderer} 渲染蜜蜂显示名（紧凑模式跳过）</li>
-	 *   <li>蜜蜂 Tooltip：通过 {@link BeeTooltipRenderer} 在鼠标悬停时显示蜜蜂信息</li>
-	 *   <li>Tab 管理：喂食 Tab（{@link GuiFeederTab}）、PB 升级 Tab（{@link GuiPbUpgradeTab}）、
-	 *       能量 Tab、红石 Tab、警告 Tab 的布局创建与位移调整</li>
-	 *   <li>槽位交互：左键选中蜜蜂槽位、右键桶式蜂笼操作（取出/放入）</li>
-	 * </ul>
-	 * <p>
-	 * 子类扩展点（protected 方法，子类可覆盖以适配不同规模的蜂箱）：
-	 * <ul>
-	 *   <li>{@link #getBeeCols()} / {@link #getBeeRows()} / {@link #getOutputCols()}：蜜蜂与输出槽位规模</li>
-	 *   <li>{@link #getBeeRowH()}：蜜蜂行高（紧凑模式返回较小值）</li>
-	 *   <li>{@link #addBeeSlotBackgrounds()}：蜜蜂槽位背景渲染</li>
-	 *   <li>{@link #renderBeeVisuals(GuiGraphics, int, int)}：蜜蜂可视化内容渲染</li>
-	 *   <li>{@link #renderBeeTooltipIfHovered(GuiGraphics, int, int)}：蜜蜂 Tooltip 渲染</li>
-	 * </ul>
-	 *
-	 * @param <TILE>      蜂箱方块实体类型，必须继承 {@link TileEntityMekApiary}
-	 * @param <CONTAINER> 蜂箱容器类型，必须继承 {@link MekanismTileContainer}
-	 */
+ * MEK 蜂箱 GUI 主类（编排层）
+ * <br/>
+ * 基于 Mekanism 的 {@link GuiConfigurableTile}，只负责"装配元素 + 在正确时机把渲染/交互
+ * 转交给专职协作者"，具体实现按职责拆分到：
+ * <ul>
+ *   <li>{@link ApiaryBeeSlotGeometry} — 蜜蜂槽坐标换算与命中判定（唯一坐标真源）</li>
+ *   <li>{@link ApiaryBeeVisualsRenderer} — 蜜蜂模型/状态灯/名称/Tooltip 渲染与批处理</li>
+ *   <li>{@link ApiaryBeeSlotInteraction} — 蜜蜂槽点击派发（选中 / 喂食小食 / 桶式蜂笼）</li>
+ *   <li>{@link ApiaryOutputPageControls} — 输出区翻页按钮与页码文本</li>
+ *   <li>{@link FeederSlotTooltipDecorator} — 喂食槽禁用状态的 Tooltip 追加</li>
+ * </ul>
+ * 本类保留的职责：GUI 尺寸/布局参数、MEK Tab 的创建与位移修正、生命周期钩子。
+ * <p>
+ * 子类扩展点（protected 方法，子类可覆盖以适配不同规模的蜂箱）：
+ * <ul>
+ *   <li>{@link #getBeeCols()} / {@link #getBeeRows()} / {@link #getOutputCols()}：蜜蜂与输出槽位规模</li>
+ *   <li>{@link #getBeeRowH()}：蜜蜂行高（紧凑模式返回较小值）</li>
+ *   <li>{@link #addBeeSlotBackgrounds()}：蜜蜂槽位背景渲染</li>
+ *   <li>{@link #renderBeeVisuals(GuiGraphics, int, int)}：蜜蜂可视化内容渲染</li>
+ *   <li>{@link #renderBeeTooltipIfHovered(GuiGraphics, int, int)}：蜜蜂 Tooltip 渲染</li>
+ * </ul>
+ *
+ * @param <TILE>      蜂箱方块实体类型，必须继承 {@link TileEntityMekApiary}
+ * @param <CONTAINER> 蜂箱容器类型，必须继承 {@link MekanismTileContainer}
+ */
 public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends MekanismTileContainer<TILE>>
 		extends GuiConfigurableTile<TILE, CONTAINER>
 		implements CompactStackCountScreen {
@@ -71,9 +65,19 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	private GuiFeederTab feederTab;
 	private GuiPbUpgradeTab<TileEntityMekApiary> pbUpgradeTab;
 
-	protected BeeEntityRenderer beeEntityRenderer;
-	protected BeeNameRenderer beeNameRenderer;
-	protected BeeTooltipRenderer beeTooltipRenderer;
+	/** 蜜蜂可视化渲染器（持有实体/名称/Tooltip 三个子渲染器） */
+	protected final ApiaryBeeVisualsRenderer beeVisuals = new ApiaryBeeVisualsRenderer();
+
+	/**
+	 * 蜜蜂槽几何 — 懒初始化后缓存
+	 * <br/>
+	 * 蜂箱尺寸在构造后即固定（子类在构造器里就设好 beeCols/beeRows），
+	 * 缓存后渲染与命中判定每帧不再重算布局常量。
+	 */
+	private ApiaryBeeSlotGeometry beeGeometry;
+
+	/** 输出区翻页控件布局 — 仅多页容器时创建 */
+	private ApiaryOutputPageControls outputPageControls;
 
 	public GuiMekApiary(CONTAINER container, Inventory inv, Component title) {
 		super(container, inv, title);
@@ -103,7 +107,21 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	}
 
 	/**
-	 * 添加 GUI 元素：能量条、流体槽、能量 Tab、喂食 Tab、PB 升级 Tab、蜜蜂槽位背景与渲染器
+	 * 蜜蜂槽几何（渲染、命中判定、背景装配共用同一份坐标换算）
+	 * <br/>
+	 * 懒初始化而非在构造器里建：子类的 beeCols/beeRows 字段在 super() 之后才赋值，
+	 * 构造期取值会拿到 0。首次使用（addGuiElements 阶段）时尺寸已确定。
+	 */
+	protected final ApiaryBeeSlotGeometry beeGeometry() {
+		if (beeGeometry == null) {
+			beeGeometry = ApiaryBeeSlotGeometry.of(imageWidth, getBeeCols(), getBeeRows(),
+					getBeeRowH(), tile.getBeeSlotCount());
+		}
+		return beeGeometry;
+	}
+
+	/**
+	 * 添加 GUI 元素：能量条、流体槽、能量 Tab、喂食 Tab、PB 升级 Tab、蜜蜂槽位背景与翻页控件
 	 * <br/>
 	 * 调用父类后追加蜂箱专属元素，并下移 MEK 能量 Tab 避免与喂食 Tab 视觉冲突。
 	 * 子类覆盖时应先调用 super 以保留基础元素。
@@ -112,16 +130,14 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	protected void addGuiElements() {
 		super.addGuiElements();
 
-		int imgW = imageWidth;
 		int beeRows = getBeeRows();
-
 		// 能量条高度：从顶部延伸至输出区底部（MEK标准布局）
 		int beeBottom = ApiaryGuiLayoutHelper.getBeeBottom(beeRows);
 		int outputBottom = ApiaryGuiLayoutHelper.getOutputY(beeBottom, beeRows) + ApiaryGuiLayoutHelper.getOutputH();
 		int powerBarHeight = ApiaryGuiLayoutHelper.getPowerBarHeight(outputBottom);
 
 		addRenderableWidget(new GuiVerticalPowerBar(this, tile.getEnergyContainer(),
-				ApiaryGuiLayoutHelper.getPowerBarX(imgW),
+				ApiaryGuiLayoutHelper.getPowerBarX(imageWidth),
 				ApiaryGuiLayoutHelper.getPowerBarY(), powerBarHeight)
 				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY)));
 
@@ -142,7 +158,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));
 
 		// 下移 MEK 能量 Tab 至警告 Tab 下方，避免与喂食 Tab 视觉冲突
-		int energyDeltaY = ApiaryGuiLayoutHelper.getEnergyTabDeltaY(getBeeRows());
+		int energyDeltaY = ApiaryGuiLayoutHelper.getEnergyTabDeltaY(beeRows);
 		if (energyDeltaY != 0) {
 			for (GuiEventListener child : children()) {
 				if (child instanceof GuiEnergyTab energyTab) {
@@ -153,44 +169,15 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		}
 
 		addBeeSlotBackgrounds();
-
-		beeEntityRenderer = new BeeEntityRenderer();
-		beeNameRenderer = new BeeNameRenderer();
-		beeTooltipRenderer = new BeeTooltipRenderer();
 		addOutputPageControls();
 		// AE2 输出按钮已移至 MEK 侧面配置 Tab，由 AeOutputOverlay 动态注入
 	}
 
+	/** 装配输出区翻页控件（单页容器不装配，控件布局对象也保持 null 以跳过页码绘制） */
 	private void addOutputPageControls() {
 		if (!(menu instanceof IPagedOutputContainer paged) || paged.getOutputPageCount() <= 1) return;
-		int outputX = ApiaryGuiLayoutHelper.getOutputX(
-				ApiaryGuiLayoutHelper.getBeeX(imageWidth, getBeeCols()),
-				ApiaryGuiLayoutHelper.getBeeW(getBeeCols()),
-				ApiaryGuiLayoutHelper.getOutputW(getOutputCols()));
-		int outputBottom = ApiaryGuiLayoutHelper.getOutputY(
-				ApiaryGuiLayoutHelper.getBeeBottom(getBeeRows()), getBeeRows())
-				+ ApiaryGuiLayoutHelper.getOutputH();
-		int outputWidth = ApiaryGuiLayoutHelper.getOutputW(getOutputCols());
-		int buttonY = ApiaryGuiLayoutHelper.getOutputPageButtonY(outputBottom);
-		FeederPageButton previous = new FeederPageButton(this,
-				ApiaryGuiLayoutHelper.getOutputPagePreviousButtonX(outputX, outputWidth), buttonY,
-				12, 12, "\u25C0", () -> changeOutputPage(paged, -1, IPagedOutputContainer.PREVIOUS_OUTPUT_PAGE_BUTTON));
-		previous.setTooltip(Tooltip.create(Component.translatable(
-				"gui.productivebeesgenesis.output_page.prev.tooltip")));
-		FeederPageButton next = new FeederPageButton(this,
-				ApiaryGuiLayoutHelper.getOutputPageNextButtonX(outputX, outputWidth), buttonY,
-				12, 12, "\u25B6", () -> changeOutputPage(paged, 1, IPagedOutputContainer.NEXT_OUTPUT_PAGE_BUTTON));
-		next.setTooltip(Tooltip.create(Component.translatable(
-				"gui.productivebeesgenesis.output_page.next.tooltip")));
-		addRenderableWidget(previous);
-		addRenderableWidget(next);
-	}
-
-	private void changeOutputPage(IPagedOutputContainer paged, int delta, int buttonId) {
-		paged.changeOutputPage(delta);
-		if (minecraft.gameMode != null) {
-			minecraft.gameMode.handleInventoryButtonClick(menu.containerId, buttonId);
-		}
+		outputPageControls = ApiaryOutputPageControls.of(imageWidth, getBeeCols(), getBeeRows(), getOutputCols());
+		outputPageControls.addButtons(this, paged, menu, this::addRenderableWidget);
 	}
 
 	/**
@@ -231,30 +218,22 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	/**
 	 * 渲染蜜蜂槽位背景与蜂笼输入/输出槽位叠加层
 	 * <br/>
-	 * 遍历所有蜜蜂槽位添加 GuiSlot 背景，并在输入/输出槽位上叠加 modularbees 风格纹理。
+	 * 遍历所有蜜蜂槽位添加 GuiSlot 背景（坐标取自 {@link #beeGeometry()}），
+	 * 并在输入/输出槽位上叠加 modularbees 风格纹理。
 	 * 槽位有物品时不渲染叠加纹理，避免遮挡蜜蜂笼。子类可覆盖以自定义槽位背景。
 	 */
 	protected void addBeeSlotBackgrounds() {
-		int imgW = imageWidth;
-		int beeCols = getBeeCols();
-		int beeRows = getBeeRows();
-		int beeRowH = getBeeRowH();
-		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY(beeRows);
-		int beeSlotCount = tile.getBeeSlotCount();
-		for (int i = 0; i < beeSlotCount; i++) {
-			int col = i % beeCols;
-			int row = i / beeCols;
-			int slotX = beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
-			int slotY = beeY + row * beeRowH;
-			addRenderableWidget(new GuiSlot(SlotType.NORMAL, this, slotX, slotY));
+		ApiaryBeeSlotGeometry geometry = beeGeometry();
+		for (int i = 0; i < geometry.getSlotCount(); i++) {
+			addRenderableWidget(new GuiSlot(SlotType.NORMAL, this, geometry.slotX(i), geometry.slotY(i)));
 		}
 		// 蜂笼输入/输出槽：dynamicSlots=true 已由 MEK 自动渲染槽位边框（输入红框/输出蓝框）
 		// 此处分别在输入槽、输出槽上叠加 modularbees 风格纹理（16×16），不重复渲染槽位边框
 		// 槽位有物品时不渲染纹理，避免遮挡蜜蜂笼
-		int cageInX = ApiaryGuiLayoutHelper.getCageInX(imgW, beeCols);
-		int cageOutX = ApiaryGuiLayoutHelper.getCageOutX(imgW, beeCols);
-		int cageY = ApiaryGuiLayoutHelper.getCageY(beeRows);
+		int beeCols = getBeeCols();
+		int cageInX = ApiaryGuiLayoutHelper.getCageInX(imageWidth, beeCols);
+		int cageOutX = ApiaryGuiLayoutHelper.getCageOutX(imageWidth, beeCols);
+		int cageY = ApiaryGuiLayoutHelper.getCageY(getBeeRows());
 		addRenderableWidget(GuiCageSlotOverlay.input(this, cageInX, cageY, () -> tile.getCageInSlot().isEmpty()));
 		addRenderableWidget(GuiCageSlotOverlay.output(this, cageOutX, cageY, () -> tile.getCageOutSlot().isEmpty()));
 	}
@@ -262,7 +241,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	/**
 	 * 绘制前景文本与蜜蜂可视化
 	 * <br/>
-	 * 依次渲染标题、物品栏标签、蜜蜂可视化（高亮/模型/状态灯/名称），再调用父类。
+	 * 依次渲染标题、物品栏标签、输出页码、蜜蜂可视化（高亮/模型/状态灯/名称），再调用父类。
 	 *
 	 * @param guiGraphics GUI 绘图上下文
 	 * @param mouseX      鼠标 X 坐标
@@ -272,19 +251,8 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
 		renderInventoryText(guiGraphics);
-		if (menu instanceof IPagedOutputContainer paged && paged.getOutputPageCount() > 1) {
-			int outputX = ApiaryGuiLayoutHelper.getOutputX(
-					ApiaryGuiLayoutHelper.getBeeX(imageWidth, getBeeCols()),
-					ApiaryGuiLayoutHelper.getBeeW(getBeeCols()),
-					ApiaryGuiLayoutHelper.getOutputW(getOutputCols()));
-			int outputWidth = ApiaryGuiLayoutHelper.getOutputW(getOutputCols());
-			int outputBottom = ApiaryGuiLayoutHelper.getOutputY(
-					ApiaryGuiLayoutHelper.getBeeBottom(getBeeRows()), getBeeRows())
-					+ ApiaryGuiLayoutHelper.getOutputH();
-			String pageText = (paged.getOutputPage() + 1) + "/" + paged.getOutputPageCount();
-			int textX = outputX + (outputWidth - font.width(pageText)) / 2;
-			guiGraphics.drawString(font, pageText, textX,
-					ApiaryGuiLayoutHelper.getOutputPageButtonY(outputBottom) + 2, 0x404040, false);
+		if (outputPageControls != null && menu instanceof IPagedOutputContainer paged) {
+			outputPageControls.renderPageText(guiGraphics, font, paged);
 		}
 		renderBeeVisuals(guiGraphics, mouseX, mouseY);
 		super.drawForegroundText(guiGraphics, mouseX, mouseY);
@@ -295,210 +263,43 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	 * <br/>
 	 * 在 drawForegroundText 阶段调用，使用局部坐标（已被父类 translate）。
 	 * 紧凑模式（5行及以上蜂箱）跳过名称渲染以节省垂直空间。
-	 * 子类可覆盖以扩展蜜蜂可视化渲染。
+	 * 保留为 protected 扩展点，子类可覆盖以扩展蜜蜂可视化渲染。
 	 *
 	 * @param guiGraphics GUI 绘图上下文
 	 * @param mouseX      鼠标 X 坐标（保留供子类覆盖使用）
 	 * @param mouseY      鼠标 Y 坐标（保留供子类覆盖使用）
 	 */
 	protected void renderBeeVisuals(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-		int imgW = imageWidth;
-		int beeCols = getBeeCols();
-		int beeRows = getBeeRows();
-		int beeRowH = getBeeRowH();
-		boolean compactMode = beeRows >= ApiaryGuiLayoutHelper.COMPACT_MODE_THRESHOLD;
-		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY(beeRows);
-		float partialTick = mekanism.client.render.MekanismRenderer.getPartialTick();
-
-		// Bug 9：渲染选中槽位高亮边框（在蜜蜂下方渲染，避免遮挡蜜蜂模型）
-		int selectedSlot = tile.getClientSelectedBeeSlot();
-		if (selectedSlot >= 0 && selectedSlot < tile.getBeeSlotCount()) {
-			int selCol = selectedSlot % beeCols;
-			int selRow = selectedSlot / beeCols;
-			int selX = beeX + selCol * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP) - 1;
-			int selY = beeY + selRow * beeRowH - 1;
-			// 青色边框高亮，与正常槽位形成对比（GuiGraphics.fill 自动管理 blend 状态）
-			guiGraphics.fill(selX, selY,
-					selX + ApiaryGuiLayoutHelper.SLOT + 2, selY + ApiaryGuiLayoutHelper.SLOT + 2,
-					0x40FF00A0);
-		}
-
-		BeeSlot[] beeSlots = tile.getBeeSlots();
-		// 先提交整批实体渲染，再绘制状态灯和名称，避免每只蜜蜂都 endBatch() 并切换深度测试。
-		boolean batchStarted = false;
-		try {
-			for (int i = 0; i < beeSlots.length; i++) {
-				BeeSlot beeSlot = beeSlots[i];
-				if (beeSlot.isEmpty()) continue;
-
-				int col = i % beeCols;
-				int row = i / beeCols;
-				int slotX = beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
-				int slotY = beeY + row * beeRowH;
-				if (!batchStarted) {
-					beeEntityRenderer.beginBatch();
-					batchStarted = true;
-				}
-				beeEntityRenderer.renderBee(guiGraphics, slotX, slotY, beeSlot, partialTick);
-			}
-		} finally {
-			if (batchStarted) {
-				beeEntityRenderer.endBatch();
-			}
-		}
-
-		for (int i = 0; i < beeSlots.length; i++) {
-			int col = i % beeCols;
-			int row = i / beeCols;
-			// Bug 1修复：drawForegroundText 的 PoseStack 已被父类 translate(leftPos, topPos)，
-			// 此处必须使用局部坐标，否则蜜蜂/状态灯/名字会偏移到 GUI 右下角
-			int slotX = beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
-			int slotY = beeY + row * beeRowH;
-
-			BeeSlot beeSlot = beeSlots[i];
-			if (beeSlot.isEmpty()) continue;
-
-			beeEntityRenderer.renderStatusLight(guiGraphics, slotX, slotY, beeSlot.getState());
-			// 紧凑模式（5行蜂箱）不渲染名称，节省垂直空间适配scale=4@1080p
-			if (!compactMode) {
-				beeNameRenderer.renderName(guiGraphics, slotX, slotY, beeSlot, font(), i);
-			}
-		}
+		boolean compactMode = getBeeRows() >= ApiaryGuiLayoutHelper.COMPACT_MODE_THRESHOLD;
+		beeVisuals.render(guiGraphics, tile, beeGeometry(), font(), compactMode);
 	}
 
 	/**
-	 * 蜜蜂槽位点击处理 — 左键选中 + 右键桶式操作
+	 * 蜜蜂槽位点击处理 — 左键选中 + 右键桶式操作/喂食
 	 * <br/>
-	 * 左键（button=0）：选中目标槽位（支持空格子和非空格子），再次点击同一槽位取消选择。
-	 * 右键（button=1）：桶式蜂笼操作，根据光标蜂笼状态和目标格子状态决定操作类型：
-	 * <ul>
-	 *   <li>空蜂笼 + 有蜜蜂 → 取出蜜蜂到蜂笼</li>
-	 *   <li>含蜜蜂蜂笼 + 空格子 → 放入蜜蜂到格子</li>
-	 * </ul>
-	 * 与"放入蜂笼自动处理"和"点击选中"机制并存，不破坏现有功能。
+	 * 命中判定与具体动作分别委托 {@link ApiaryBeeSlotGeometry} 与
+	 * {@link ApiaryBeeSlotInteraction}，本方法只做"该不该拦这次点击"的编排。
 	 * <p>
-	 * Bug修复：本方法在 super.mouseClicked 之前执行蜜蜂选择逻辑，而 super 才负责将点击派发给窗口。
-	 * 当喂食器/升级窗口覆盖在蜜蜂格子上时，点击会先穿透到蜜蜂选择逻辑。
-	 * 修复方式：先检查点击是否落在已打开窗口内，若是则交给 super 派发给窗口处理（拖动等），跳过蜜蜂选择。
+	 * Bug 修复保留：本方法在 super.mouseClicked 之前执行蜜蜂选择逻辑，而 super 才负责
+	 * 将点击派发给窗口。当喂食器/升级窗口覆盖在蜜蜂格子上时，必须先判断点击是否落在
+	 * 已打开窗口内，否则拖动窗口会误选蜜蜂。
 	 */
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		// 点击落在已打开窗口内时，交由窗口处理，避免拖动窗口误选蜜蜂
 		if (isClickOnOpenWindow(mouseX, mouseY)) {
 			return super.mouseClicked(mouseX, mouseY, button);
 		}
-		int clickedSlot = getClickedBeeSlot(mouseX, mouseY);
+		int clickedSlot = beeGeometry().hitTest(leftPos, topPos, mouseX, mouseY);
 		if (clickedSlot >= 0) {
-			if (button == 0) {
-				// 左键：选中槽位（支持空格子和非空格子）
-				int newSelection = (tile.getClientSelectedBeeSlot() == clickedSlot) ? -1 : clickedSlot;
-				PacketDistributor.sendToServer(new ApiarySelectBeePayload(tile.getBlockPos(), newSelection));
+			if (button == 0 && ApiaryBeeSlotInteraction.handleSelect(tile, clickedSlot)) {
 				return true;
-			} else if (button == 1) {
-				if (handleHoneyTreatFeeding(clickedSlot)) {
-					return true;
-				}
-				// 未手持基因小食时，继续处理桶式蜂笼操作
-				if (handleCageOperation(clickedSlot)) {
-					return true;
-				}
+			}
+			if (button == 1 && ApiaryBeeSlotInteraction.handleRightClick(
+					tile, getMenu().getCarried(), clickedSlot)) {
+				return true;
 			}
 		}
 		return super.mouseClicked(mouseX, mouseY, button);
-	}
-
-	/**
-	 * 检查光标上的基因小食，并请求服务端喂食指定槽位内的蜜蜂。
-	 *
-	 * @param slotIndex 目标蜜蜂槽位索引
-	 * @return 满足喂食条件并已发送请求时返回 {@code true}
-	 */
-	private boolean handleHoneyTreatFeeding(int slotIndex) {
-		if (slotIndex < 0 || slotIndex >= tile.getBeeSlotCount()) return false;
-		BeeSlot beeSlot = tile.getBeeSlots()[slotIndex];
-		ItemStack cursor = getMenu().getCarried();
-		if (beeSlot.isEmpty() || !(cursor.getItem() instanceof HoneyTreat) || !HoneyTreat.hasGene(cursor)) {
-			return false;
-		}
-		PacketDistributor.sendToServer(new ApiaryFeedBeePayload(tile.getBlockPos(), slotIndex));
-		return true;
-	}
-
-	/**
-	 * 获取鼠标点击的蜜蜂槽位索引
-	 *
-	 * @return 槽位索引（0~beeSlotCount-1），-1 表示未点击任何蜜蜂槽位
-	 */
-	private int getClickedBeeSlot(double mouseX, double mouseY) {
-		int imgW = imageWidth;
-		int beeCols = getBeeCols();
-		int beeRowH = getBeeRowH();
-		int beeX = leftPos + ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = topPos + ApiaryGuiLayoutHelper.getBeeY(getBeeRows());
-		int beeSlotCount = tile.getBeeSlotCount();
-		for (int i = 0; i < beeSlotCount; i++) {
-			int col = i % beeCols;
-			int row = i / beeCols;
-			int slotX = beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
-			int slotY = beeY + row * beeRowH;
-			if (mouseX >= slotX && mouseX < slotX + ApiaryGuiLayoutHelper.SLOT
-					&& mouseY >= slotY && mouseY < slotY + ApiaryGuiLayoutHelper.SLOT) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	/**
-	 * 桶式蜂笼操作：检测光标蜂笼状态并发送操作包
-	 * <br/>
-	 * 根据光标蜂笼是否含蜜蜂 + 目标格子是否有蜜蜂，决定操作类型：
-	 * <ul>
-	 *   <li>空蜂笼 + 有蜜蜂 → EXTRACT（取出）</li>
-	 *   <li>含蜜蜂蜂笼 + 空格子 → INSERT（放入）</li>
-	 * </ul>
-	 *
-	 * @param slotIndex 目标蜜蜂槽位索引
-	 * @return true 如果发送了操作包
-	 */
-	private boolean handleCageOperation(int slotIndex) {
-		// 边界检查：防止 slotIndex 越界访问 beeSlots 数组
-		if (slotIndex < 0 || slotIndex >= tile.getBeeSlotCount()) return false;
-		ItemStack cursor = getMenu().getCarried();
-		if (!isCageItem(cursor)) return false;
-
-		BeeSlot beeSlot = tile.getBeeSlots()[slotIndex];
-		boolean cursorHasBee = isFilledCage(cursor);
-
-		ApiaryCageOperationPayload.OperationType op = null;
-		if (!cursorHasBee && !beeSlot.isEmpty()) {
-			// 空蜂笼 + 有蜜蜂 → 取出
-			op = ApiaryCageOperationPayload.OperationType.EXTRACT;
-		} else if (cursorHasBee && beeSlot.isEmpty()) {
-			// 含蜜蜂蜂笼 + 空格子 → 放入
-			op = ApiaryCageOperationPayload.OperationType.INSERT;
-		}
-
-		if (op != null) {
-			PacketDistributor.sendToServer(new ApiaryCageOperationPayload(
-					tile.getBlockPos(), slotIndex, op));
-			return true;
-		}
-		return false;
-	}
-
-	/** 检查物品栈是否为蜂笼（普通蜂笼或坚固蜂笼） */
-	private static boolean isCageItem(ItemStack stack) {
-		return stack.is(ModItems.BEE_CAGE.get()) || stack.is(ModItems.STURDY_BEE_CAGE.get());
-	}
-
-	/** 检查蜂笼是否装有蜜蜂（CUSTOM_DATA 含 entity 字段） */
-	private static boolean isFilledCage(ItemStack stack) {
-		var data = stack.get(DataComponents.CUSTOM_DATA);
-		if (data == null) return false;
-		// copyTag() 必返回非 null CompoundTag，无需冗余 null 检查
-		return data.copyTag().contains("entity");
 	}
 
 	/**
@@ -534,19 +335,10 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		super.renderTooltip(guiGraphics, mouseX, mouseY);
 	}
 
-	@Override
-	public void removed() {
-		super.removed();
-		if (beeNameRenderer != null) {
-			beeNameRenderer.clearCache();
-		}
-	}
-
 	/**
 	 * 渲染鼠标悬停蜜蜂槽位的 Tooltip
 	 * <br/>
-	 * 遍历所有蜜蜂槽位，若鼠标悬停在含蜜蜂的槽位上则渲染该蜜蜂的 Tooltip。
-	 * 子类可覆盖以自定义 Tooltip 渲染逻辑。
+	 * 委托 {@link ApiaryBeeVisualsRenderer}；保留为 protected 扩展点供子类覆盖。
 	 *
 	 * @param guiGraphics GUI 绘图上下文
 	 * @param mouseX      鼠标 X 坐标（屏幕坐标）
@@ -554,28 +346,26 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	 * @return true 表示鼠标悬停在蜜蜂槽位上并已渲染 Tooltip；false 表示未悬停
 	 */
 	protected boolean renderBeeTooltipIfHovered(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-		int imgW = imageWidth;
-		int beeCols = getBeeCols();
-		int beeRowH = getBeeRowH();
-		int beeX = ApiaryGuiLayoutHelper.getBeeX(imgW, beeCols);
-		int beeY = ApiaryGuiLayoutHelper.getBeeY(getBeeRows());
+		return beeVisuals.renderTooltipIfHovered(guiGraphics, tile, beeGeometry(),
+				mouseX, mouseY, leftPos, topPos);
+	}
 
-		BeeSlot[] beeSlots = tile.getBeeSlots();
-		for (int i = 0; i < beeSlots.length; i++) {
-			int col = i % beeCols;
-			int row = i / beeCols;
-			int slotX = leftPos + beeX + col * (ApiaryGuiLayoutHelper.SLOT + ApiaryGuiLayoutHelper.GAP);
-			int slotY = topPos + beeY + row * beeRowH;
+	/**
+	 * 悬停物品 Tooltip — 已禁用的喂食槽追加禁用说明
+	 * <br/>
+	 * 挂在原版 Tooltip 通道（而非 MEK widget tooltip）避免两个浮窗叠加渲染，
+	 * 具体判定委托 {@link FeederSlotTooltipDecorator}（SRP）。
+	 */
+	@NotNull
+	@Override
+	protected List<Component> getTooltipFromContainerItem(@NotNull ItemStack stack) {
+		return FeederSlotTooltipDecorator.decorate(super.getTooltipFromContainerItem(stack),
+				tile, menu, getSlotUnderMouse());
+	}
 
-			BeeSlot beeSlot = beeSlots[i];
-			if (beeSlot.isEmpty()) continue;
-
-			if (mouseX >= slotX && mouseX < slotX + ApiaryGuiLayoutHelper.SLOT
-					&& mouseY >= slotY && mouseY < slotY + ApiaryGuiLayoutHelper.SLOT) {
-				beeTooltipRenderer.renderTooltip(guiGraphics, mouseX, mouseY, beeSlot, slotX, slotY);
-				return true;
-			}
-		}
-		return false;
+	@Override
+	public void removed() {
+		super.removed();
+		beeVisuals.clearCaches();
 	}
 }

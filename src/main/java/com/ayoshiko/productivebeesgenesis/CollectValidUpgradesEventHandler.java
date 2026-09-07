@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.block.entity.AdvancedBeehiveBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
@@ -25,8 +27,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 	 * <p>
 	 * 注册策略（按方块实体类型差异化）：
 	 * <ul>
-	 *   <li>蜂箱：8种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器）</li>
-	 *   <li>离心机（含工厂版）：7种（产量×4 + 时间×2 + 稳定性，不支持蜜脾块和基因采样器）</li>
+	 *   <li>蜂箱：10种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两种功能升级）</li>
+	 *   <li>离心机（含工厂版）：10种（产量×4 + 时间×2 + 稳定性 + 三种功能升级）</li>
 	 * </ul>
 	 * <p>
 	 * 注：ANTI_TELEPORT（防传送）和 RANGE（范围）升级对机械蜂箱模拟模式无效，已移除支持。
@@ -59,8 +61,8 @@ public final class CollectValidUpgradesEventHandler {
 	 * <p>
 	 * 升级注册策略（按方块实体类型差异化）：
 	 * <ul>
-	 *   <li>蜂箱：8种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器）</li>
-	 *   <li>离心机（含工厂版）：7种（产量×4 + 时间×2 + 稳定性，不支持蜜脾块和基因采样器）</li>
+	 *   <li>蜂箱：10种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两种功能升级）</li>
+	 *   <li>离心机（含工厂版）：10种（产量×4 + 时间×2 + 稳定性 + 三种功能升级）</li>
 	 * </ul>
 	 * <p>
 	 * 蜂箱/离心机区分：{@link IPbUpgradeProvider} 的实现者只有蜂箱和离心机两类，
@@ -79,10 +81,18 @@ public final class CollectValidUpgradesEventHandler {
 			return;
 		}
 
+		boolean isApiary = be instanceof TileEntityMekApiary
+				|| be instanceof AdvancedBeehiveBlockEntity;
 		// ProductiveLib 每次插入都会重新收集白名单。安装后不再加入列表，
 		// 因而 PB 原版的四个独立升级槽也只能接受一个该升级。
 		if (!UselessByproductUpgradeHelper.hasUpgrade(be)) {
 			event.addValidUpgrade(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
+		}
+		if (!EssenceConversionUpgradeHelper.hasUpgrade(be)) {
+			event.addValidUpgrade(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
+		}
+		if (!isApiary && !RawOreSmeltingUpgradeHelper.hasUpgrade(be)) {
+			event.addValidUpgrade(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
 		}
 
 		// PB 原版机器自己的事件处理器负责其余升级；下方白名单仅属于本模组机器。
@@ -91,7 +101,7 @@ public final class CollectValidUpgradesEventHandler {
 		}
 		// 蜂箱基础类是必选依赖，所有蜂箱工厂子类都继承它
 		// IPbUpgradeProvider 实现者只有蜂箱和离心机两类，非蜂箱即离心机
-		boolean isApiary = be instanceof TileEntityMekApiary;
+		isApiary = be instanceof TileEntityMekApiary;
 		// 生产力升级（4种）— 蜂箱和离心机均支持
 		event.addValidUpgrade(LibItems.UPGRADE_PRODUCTIVITY.get());
 		event.addValidUpgrade(LibItems.UPGRADE_PRODUCTIVITY_2.get());

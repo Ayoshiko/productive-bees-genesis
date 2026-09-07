@@ -119,8 +119,6 @@ public final class ServerConfig {
 	/** 能量存储容量(FE),工厂版按并行数倍增。Task 3 从硬编码 20000L 改为 config */
 	public final ModConfigSpec.LongValue mekCentrifugeEnergyStorage;
 	public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectDelay;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectDelayActive;
 	public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
 	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
@@ -130,30 +128,7 @@ public final class ServerConfig {
 	 * 0=自动计算 maxTanks/2,>0=手动指定配额,防止高产出流体占用所有槽位
 	 */
 	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
-	/**
-	 * Task 6: 流体弹出速率(mB/tick),默认 256,范围 1-Integer.MAX_VALUE
-	 * <br/>
-	 * 委托自 CentrifugeConfigSection,由 AbstractMekCentrifugeFactory 构造函数注入 Ejector。
-	 * 100-tick CAS 缓存读取避免 TPS 退化(参考 MultiFluidSideConfigHandler.getCachedEjectRate)。
-	 */
-	public final ModConfigSpec.IntValue mekCentrifugeFluidEjectRate;
 	public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
-	// Task 13: AE2/管道拉取限流(防止 ME 接口过载拉取触发全量排序扫描)
-	public final ModConfigSpec.IntValue mekCentrifugeMaxExtractPerTick;
-	// Task 14: Ejector 输出阻塞冷却参数(解决输出侧阻塞时 outputItems 高频尝试导致 TPS 暴跌)
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedThreshold;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBlockedCooldown;
-	// Task 16: 输出槽内容未变化时跳过 outputItems,降低高倍加速下的 CPU 开销
-	public final ModConfigSpec.BooleanValue mekCentrifugeEjectSkipUnchanged;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectSkipTicks;
-	// Task 24: 最大弹出速度模式:关闭 Ejector 节流以最大化物品弹出速度
-	public final ModConfigSpec.BooleanValue mekCentrifugeEjectMaxSpeedMode;
-	// Task 23: Ejector 持续高负载下降频:最小调用间隔与长冷却
-	public final ModConfigSpec.IntValue mekCentrifugeEjectMinInterval;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBusyThreshold;
-	public final ModConfigSpec.IntValue mekCentrifugeEjectBusyCooldown;
-	// Step 5: 单 tick 最大弹出次数上限(0=无限制),限制 256× 加速下高频 outputItems 调用
-	public final ModConfigSpec.IntValue mekCentrifugeEjectMaxPerTick;
 	// Task 2: 单 tick 最大 PB 配方操作数上限(0=无限制),防止 256× 加速下 CPU 过载
 	public final ModConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
 	// AE2 直接输出集成开关
@@ -183,12 +158,6 @@ public final class ServerConfig {
 	public final ModConfigSpec.LongValue apiaryEnergyPerTick;
 	public final ModConfigSpec.IntValue apiaryProcessingTime;
 	public final ModConfigSpec.IntValue apiaryFluidTankCapacity;
-	public final ModConfigSpec.IntValue apiaryEjectDelay;
-	public final ModConfigSpec.IntValue apiaryEjectDelayActive;
-	public final ModConfigSpec.BooleanValue apiaryEjectMaxSpeedMode;
-	public final ModConfigSpec.IntValue apiaryEjectMaxPerTick;
-	public final ModConfigSpec.IntValue apiaryEjectBlockedThreshold;
-	public final ModConfigSpec.IntValue apiaryEjectBlockedCooldown;
 	// AE2 集成
 	public final ModConfigSpec.BooleanValue apiaryAeOutputEnabled;
 	public final ModConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
@@ -202,6 +171,10 @@ public final class ServerConfig {
 	public final ModConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
 	public final ModConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
 	public final ModConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
+
+	// ========== 外部物流互操作 —— 向后兼容委托字段（离心机与蜂箱通用）==========
+	/** 产物直通相邻容器（跳过输出槽缓存） */
+	public final ModConfigSpec.BooleanValue externalDirectContainerOutput;
 
 	ServerConfig(
 			ModConfigSpec.Builder builder,
@@ -424,25 +397,12 @@ public final class ServerConfig {
 		this.mekCentrifugeEnergyPerTick = centrifuge.mekCentrifugeEnergyPerTick;
 		this.mekCentrifugeEnergyStorage = centrifuge.mekCentrifugeEnergyStorage;
 		this.mekCentrifugeProcessingTime = centrifuge.mekCentrifugeProcessingTime;
-		this.mekCentrifugeEjectDelay = centrifuge.mekCentrifugeEjectDelay;
-		this.mekCentrifugeEjectDelayActive = centrifuge.mekCentrifugeEjectDelayActive;
 		this.mekCentrifugeFluidTankCapacity = centrifuge.mekCentrifugeFluidTankCapacity;
 		this.mekCentrifugeMultiFluidTank = centrifuge.mekCentrifugeMultiFluidTank;
 		// v2.0.9: 每种流体类型最大占用槽位数(配额机制)
 		this.mekCentrifugeMaxTanksPerFluid = centrifuge.mekCentrifugeMaxTanksPerFluid;
 		// Task 3: 移除 mekCentrifugeMaxFluidTanks 委托字段(maxTanks 直接使用 tier.processes)
-		this.mekCentrifugeFluidEjectRate = centrifuge.mekCentrifugeFluidEjectRate;
 		this.mekCentrifugeCombBlockMultiplier = centrifuge.mekCentrifugeCombBlockMultiplier;
-		this.mekCentrifugeMaxExtractPerTick = centrifuge.mekCentrifugeMaxExtractPerTick;
-		this.mekCentrifugeEjectBlockedThreshold = centrifuge.mekCentrifugeEjectBlockedThreshold;
-		this.mekCentrifugeEjectBlockedCooldown = centrifuge.mekCentrifugeEjectBlockedCooldown;
-		this.mekCentrifugeEjectSkipUnchanged = centrifuge.mekCentrifugeEjectSkipUnchanged;
-		this.mekCentrifugeEjectSkipTicks = centrifuge.mekCentrifugeEjectSkipTicks;
-		this.mekCentrifugeEjectMaxSpeedMode = centrifuge.mekCentrifugeEjectMaxSpeedMode;
-		this.mekCentrifugeEjectMinInterval = centrifuge.mekCentrifugeEjectMinInterval;
-		this.mekCentrifugeEjectBusyThreshold = centrifuge.mekCentrifugeEjectBusyThreshold;
-		this.mekCentrifugeEjectBusyCooldown = centrifuge.mekCentrifugeEjectBusyCooldown;
-		this.mekCentrifugeEjectMaxPerTick = centrifuge.mekCentrifugeEjectMaxPerTick;
 		this.mekCentrifugeMaxOpsPerTick = centrifuge.mekCentrifugeMaxOpsPerTick;
 		// 堆叠倍率和流体罐倍率已迁移至各自的类型化等级集合。
 		this.mekCentrifugeAeOutputEnabled = centrifuge.mekCentrifugeAeOutputEnabled;
@@ -471,12 +431,6 @@ public final class ServerConfig {
 		this.apiaryEnergyPerTick = apiary.apiaryEnergyPerTick;
 		this.apiaryProcessingTime = apiary.apiaryProcessingTime;
 		this.apiaryFluidTankCapacity = apiary.apiaryFluidTankCapacity;
-		this.apiaryEjectDelay = apiary.apiaryEjectDelay;
-		this.apiaryEjectDelayActive = apiary.apiaryEjectDelayActive;
-		this.apiaryEjectMaxSpeedMode = apiary.apiaryEjectMaxSpeedMode;
-		this.apiaryEjectMaxPerTick = apiary.apiaryEjectMaxPerTick;
-		this.apiaryEjectBlockedThreshold = apiary.apiaryEjectBlockedThreshold;
-		this.apiaryEjectBlockedCooldown = apiary.apiaryEjectBlockedCooldown;
 		this.apiaryAeOutputEnabled = apiary.apiaryAeOutputEnabled;
 		this.apiaryAeFluidOutputEnabled = apiary.apiaryAeFluidOutputEnabled;
 		this.apiaryAeEnergyInputEnabled = apiary.apiaryAeEnergyInputEnabled;
@@ -486,5 +440,10 @@ public final class ServerConfig {
 		this.apiaryPbUpgradeTimeMaxCount = apiary.apiaryPbUpgradeTimeMaxCount;
 		this.apiaryPbUpgradeGeneSamplerMaxCount = apiary.apiaryPbUpgradeGeneSamplerMaxCount;
 		this.apiaryPbUpgradeBlockMaxCount = apiary.apiaryPbUpgradeBlockMaxCount;
+
+		// 外部物流互操作配置（离心机与蜂箱通用，注册在机器参数文件末尾）
+		ExternalLogisticsConfigSection externalLogistics =
+				this.sections.registerExternalLogistics(machineBuilder);
+		this.externalDirectContainerOutput = externalLogistics.externalDirectContainerOutput;
 	}
 }

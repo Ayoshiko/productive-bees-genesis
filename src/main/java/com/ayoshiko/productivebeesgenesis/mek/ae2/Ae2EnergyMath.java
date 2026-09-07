@@ -19,7 +19,14 @@ final class Ae2EnergyMath {
 		return Math.min(extracted, requested);
 	}
 
-
+	/** Returns the bounded FE shortfall needed to reach an active batch budget. */
+	static long requiredShortfall(long currentEnergy, long requiredEnergy, long remainingCapacity) {
+		long current = Math.max(0L, currentEnergy);
+		long required = Math.max(0L, requiredEnergy);
+		long remaining = Math.max(0L, remainingCapacity);
+		if (current >= required || remaining == 0L) return 0L;
+		return Math.min(remaining, required - current);
+	}
 
 	static long aeToFe(double extractedAe, long requestedFe, double ratio) {
 		if (extractedAe <= 0D || requestedFe <= 0L || ratio <= 0D || Double.isNaN(extractedAe)) return 0L;

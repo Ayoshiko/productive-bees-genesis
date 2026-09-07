@@ -6,7 +6,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
@@ -34,6 +33,7 @@ import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
+import mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor;
 import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.prefab.TileEntityElectricMachine;
 import mekanism.common.upgrade.IUpgradeData;
@@ -53,6 +53,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
 	 * 基础MEK离心机方块实体 — 继承TileEntityElectricMachine，复用能量/侧面配置/升级/GUI体系。
@@ -134,7 +135,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		configComponent.setupInputConfig(TransmissionType.ENERGY, accessor().productivebeesgenesis$getEnergyContainer());
 		configComponent.setupOutputConfig(TransmissionType.FLUID, slotManager.getFluidOutputTank(), RelativeSide.RIGHT);
 		ejectorComponent = new TileComponentEjector(this, MekanismConfig.general.chemicalAutoEjectRate,
-				() -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
+				() -> Integer.MAX_VALUE);
 		((TileEntityEjectorAccessor) ejectorComponent).productivebeesgenesis$setTickDelay(1);
 		ejectorComponent.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
 	}
@@ -169,28 +170,16 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * @return 是否有任意一次补调执行（调用方用于触发发送更新包）
 	 */
 	boolean runLightSmeltingTicks(int batchMultiplier) {
-		CachedRecipe<ItemStackToItemStackRecipe> cached = recipeCacheLookupMonitor.getCachedRecipe(0);
-		if (cached == null) {
-			return false;
-		}
-		int extraTicks = batchMultiplier - 1;
-		if (cached instanceof ICachedRecipeBatchAccel accel) {
-			// 批量快速推进（JDTE 合并 flush 思路）：一次完整计算 + 预算内循环推进，
-			// 跨周期自动重算，完整计算次数从 M 降到 ~M/配方时长；预算耗尽立即停止补调
-			accel.productivebeesgenesis$startBatch(extraTicks);
-			for (int i = 1; i < batchMultiplier; i++) {
-				cached.process();
-				if (accel.productivebeesgenesis$isBatchExhausted()) {
-					return true;
-				}
-			}
-			return true;
-		}
-		// Mixin 未应用（防御回退）：逐 tick 轻量推进
-		for (int i = 1; i < batchMultiplier; i++) {
-			cached.process();
-		}
-		return true;
+		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(
+				new RecipeCacheLookupMonitor<?>[] {recipeCacheLookupMonitor}, batchMultiplier,
+				accessor().productivebeesgenesis$getEnergyContainer());
+	}
+
+	/** Runs the full SMELTING batch with one shared deferred-energy ledger. */
+	boolean runSmeltingBatch(int batchMultiplier, BooleanSupplier fullTick) {
+		return MekCentrifugeFactoryHelper.runSmeltingBatch(
+				new RecipeCacheLookupMonitor<?>[] {recipeCacheLookupMonitor}, batchMultiplier,
+				accessor().productivebeesgenesis$getEnergyContainer(), fullTick);
 	}
 
 	/**
@@ -467,7 +456,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 * <br/>
 	 * PB原版 AbstractUpgradeItem.useOn 要求返回 UpgradeHandler 实例并调用 insertItem 安装。
 	 * 桥接器拦截 insertItem 委托给 pbUpgradeHandler.installPbUpgrade，使升级物品由自定义 EnumMap 管理数量。
-	 * 离心机仅接受产量（PRODUCTIVITY）和时间（TIME）系列升级。
+	 * 离心机接受产量、时间、稳定性及本模组功能升级。
 	 */
 	@NotNull
 	@Override
@@ -594,6 +583,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	}
 	@Override
 	public MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource() { return energyContainer(); }
+	@Override
+	public boolean productivebeesgenesis$usesSmeltingEnergyBudget() { return true; }
 	@Override
 	public Level productivebeesgenesis$getAe2Level() { return level; }
 	@Override

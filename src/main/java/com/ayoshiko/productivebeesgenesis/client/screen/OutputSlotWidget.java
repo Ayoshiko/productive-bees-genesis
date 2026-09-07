@@ -70,7 +70,7 @@ public final class OutputSlotWidget extends GuiElement {
 	public void drawBackground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		super.drawBackground(guiGraphics, mouseX, mouseY, partialTicks);
 		if (!visible || !hasEntry) return;
-		guiGraphics.renderFakeItem(icon, relativeX + 1, relativeY + 1);
+		gui().renderItem(guiGraphics, icon, relativeX + 1, relativeY + 1);
 		if (amount > 0L) {
 			drawAmount(guiGraphics, Minecraft.getInstance().font, amount);
 		}

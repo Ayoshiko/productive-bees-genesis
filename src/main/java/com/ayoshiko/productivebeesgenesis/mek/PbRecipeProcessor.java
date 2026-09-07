@@ -375,8 +375,11 @@ public class PbRecipeProcessor {
 				cachedPbRecipes[processIndex] = pbRecipe;
 				pbOperatingTicks[processIndex] = 0;
 				// v2.0.9 修复产物锁定 bug：配方变更时重置 completer 的 pendingRecipeOutputs
-				// 防止上一个配方的 outputs 残留，导致新蜜脾沿用旧配方产出
-				recipeCompleters[processIndex].resetPendingRecipe();
+				// 防止上一个配方的 outputs 残留，导致新蜜脾沿用旧配方产出。
+				// 已扣除输入但尚未写出的产物不能随配方切换被丢弃，否则物品凭空消失。
+				if (!recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
+					recipeCompleters[processIndex].resetPendingRecipe();
+				}
 			}
 
 			CentrifugeRecipe recipeValue = pbRecipe.value();
@@ -494,9 +497,29 @@ public class PbRecipeProcessor {
 
 			return true;
 		} finally {
-			// 无论正常返回还是异常，都确保本 tick 已完成的 PB 产物写入槽位
-			recipeCompleters[processIndex].flushPendingPbOutputs(processIndex);
+			// 无论正常返回还是异常，都确保本 tick 已完成的 PB 产物写入槽位。
+			// 已扣除输入的 pending 在本 tick 入口/批量路径已尝试过写出，同一 tick 内槽位不会变化，
+			// 不再重复规划（避免种类溢出时每 tick 多做一次无用的规划）。
+			if (!recipeCompleters[processIndex].hasCommittedPendingOutputs()) {
+				recipeCompleters[processIndex].flushPendingPbOutputs(processIndex);
+			}
 		}
+	}
+
+	/**
+	 * 排空「已扣除输入但尚未写出」的产物。
+	 * <br/>
+	 * 输入槽为空时上层会跳过 {@link #tryProcessPbRecipe}，但延迟提交（产物种类多于输出槽）
+	 * 或直输 AE 回退留下的 pending 必须继续排空，否则产物会滞留在不可见缓冲里。
+	 *
+	 * @param processIndex 进程索引
+	 * @return true 表示 pending 已全部写出
+	 */
+	public boolean drainCommittedPendingOutputs(int processIndex) {
+		if (processIndex < 0 || processIndex >= recipeCompleters.length) return false;
+		PbRecipeCompleter completer = recipeCompleters[processIndex];
+		if (!completer.hasCommittedPendingOutputs()) return false;
+		return completer.flushPendingPbOutputs(processIndex);
 	}
 
 	/** 查找匹配输入物品的PB离心配方 — 委托给 {@link PbRecipeFinder}，保留为公共方法供外部调用方使用 */

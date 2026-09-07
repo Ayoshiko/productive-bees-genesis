@@ -126,11 +126,29 @@ public final class ModPayloads {
 				ToggleApiaryFeederConversionPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleToggleApiaryFeederConversion
 		);
+		// 喂食槽逐格禁用包 — 由 GuiFeederWindow 在禁用编辑模式（或 Alt+左键）点击格子发送
+		registrar.playToServer(
+				ToggleFeederSlotDisabledPayload.TYPE,
+				ToggleFeederSlotDisabledPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleToggleFeederSlotDisabled
+		);
+		// 喂食槽批量禁用/恢复包 — 由 Shift + 点击「禁」按钮发送
+		registrar.playToServer(
+				SetAllFeederSlotsDisabledPayload.TYPE,
+				SetAllFeederSlotsDisabledPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleSetAllFeederSlotsDisabled
+		);
 		// Smelting compatibility is a core centrifuge feature and remains available without AE2.
 		registrar.playToServer(
 				ToggleSmeltingCompatPayload.TYPE,
 				ToggleSmeltingCompatPayload.STREAM_CODEC,
 				SmeltingCompatPayloadHandler::handle
+		);
+		// 产物直通 per-tile 开关（蜂箱/离心机共用）：写相邻容器能力，与 AE2 无关，无条件注册
+		registrar.playToServer(
+				ToggleDirectContainerOutputPayload.TYPE,
+				ToggleDirectContainerOutputPayload.STREAM_CODEC,
+				DirectContainerOutputPayloadHandler::handle
 		);
 		// 核心返还包不依赖 AE2：在线时延迟进入 AE2 服务，离线时走 Mekanism 物品输出面。
 		registrar.playToServer(
@@ -261,7 +279,7 @@ public final class ModPayloads {
 		}
 
 		// 0. 频率限制：每玩家 3 秒冷却，防止恶意客户端高频发包
-		// 采用 ConcurrentHashMap + AtomicLong + CAS 模式，借鉴 RateLimitedItemHandler 的并发安全思路
+		// 采用 ConcurrentHashMap + AtomicLong + CAS 模式，采用与其它热路径缓存一致的并发安全思路
 		UUID playerId = serverPlayer.getUUID();
 		long now = System.currentTimeMillis();
 		// 惰性清理：每处理 64 个包清理一次过期条目，防止离线玩家条目累积导致内存泄漏

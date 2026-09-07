@@ -250,7 +250,7 @@ class BeeSlotTickProcessor {
 
 		BeeSlot[] beeSlots = slotManager.getBeeSlots();
 
-		// 刷新配置缓存（每 100 tick 一次，参考离心机 TileComponentEjectorCooldownMixin）
+		// 刷新配置缓存（每 100 tick 一次，与离心机热路径配置读取一致）
 		if (level != null) {
 			configCache.refresh(level.getGameTime());
 		}

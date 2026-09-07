@@ -19,6 +19,9 @@ import java.util.List;
  * 从 {@link FeederSlotManager} 拆分而来，职责（SRP）：Butcher / Rancher 等
  * entity_type 蜜蜂的花朵判定 —— 从琥珀方块物品的实体数据组件读取封存实体 ID，
  * 与花朵偏好声明的实体 ID 或实体类型标签匹配，全程不实例化实体。
+ * <p>
+ * 所有扫描均跳过被玩家禁用的格子（{@link FeederInventorySlot#isActive()}），
+ * 与 {@link FeederSlotManager} 的 blocks 类花朵路径语义一致。
  */
 final class AmberEntityFlowerHelper {
 
@@ -48,6 +51,7 @@ final class AmberEntityFlowerHelper {
 				return false;
 			}
 			for (FeederInventorySlot slot : slots) {
+				if (!slot.isActive()) continue;
 				ResourceLocation contained = getAmberEntityId(slot.getStack());
 				if (contained != null && expected.equals(contained) != inverse) return true;
 			}
@@ -73,6 +77,7 @@ final class AmberEntityFlowerHelper {
 	static boolean hasContainedEntityAmberMatching(List<FeederInventorySlot> slots,
 			TagKey<EntityType<?>> entityTag, boolean inverse) {
 		for (FeederInventorySlot slot : slots) {
+			if (!slot.isActive()) continue;
 			ResourceLocation entityId = getAmberEntityId(slot.getStack());
 			if (entityId == null) continue;
 			var entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(entityId);
@@ -94,6 +99,7 @@ final class AmberEntityFlowerHelper {
 	static List<CustomData> getAmberEntityDataSnapshot(List<FeederInventorySlot> slots) {
 		List<CustomData> candidates = null;
 		for (FeederInventorySlot slot : slots) {
+			if (!slot.isActive()) continue;
 			CustomData entityData = getAmberEntityData(slot.getStack());
 			if (entityData == null || readEntityId(entityData) == null) continue;
 			if (candidates == null) candidates = new java.util.ArrayList<>(slots.size());

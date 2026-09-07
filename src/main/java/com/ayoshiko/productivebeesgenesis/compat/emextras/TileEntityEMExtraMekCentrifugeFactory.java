@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
@@ -14,7 +13,6 @@ import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
-import com.ayoshiko.productivebeesgenesis.mek.IHasEjectorCooldown;
 import com.ayoshiko.productivebeesgenesis.mek.IJdteCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugePbUpgradeHost;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
@@ -87,7 +85,7 @@ import java.util.function.IntSupplier;
 	 * 公共逻辑委托给 {@link CentrifugeFactoryCommonLogic}，与 {@link TileEntityExtraMekCentrifugeFactory} 复用同一份实现。
 	 */
 public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItemStackToItemStackFactory
-		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess, IHasEjectorCooldown,
+		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess,
 		IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost,
 		IJdteCentrifugeFactory {
@@ -165,7 +163,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 				this, configComponent, inputSlots, outputSlots, tertiaryOutputSlots,
 				tier.processes, getEnergySlot(), energyContainer,
 				getOrCreateDelegate().getFluidOutputHolder(), getOrCreateDelegate().getFluidOutputTank(),
-				() -> ModConfig.SERVER.mekCentrifugeFluidEjectRate.get());
+				() -> Integer.MAX_VALUE);
 	}
 
 	/**
@@ -201,7 +199,6 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		int baseX = 27;
 		int baseXMult = 19;
 		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
-				() -> level == null ? Long.MIN_VALUE : level.getGameTime(),
 				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
 						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
 						productivityParallelModifier()));
@@ -432,21 +429,12 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityEMExtraFactoryAccessor accessor = (TileEntityEMExtraFactoryAccessor) this;
 		long energyBeforeSuper = energyContainer.getEnergy();
-		boolean sendUpdatePacket = super.onUpdateServer();
+		boolean sendUpdatePacket = batchMultiplier > 1
+				? productivebeesgenesis$runSmeltingBatch(batchMultiplier)
+				: super.onUpdateServer();
 
 		boolean result;
 		if (!skipPb) {
-			// SMELTING（电力熔炼炉）配方加速 — 与基础机/原版工厂一致：批量倍率 > 1
-			// 且存在 SMELTING 配方通道时轻量补调，使熔炉管线按倍率 M 推进
-			// （JDTE 时间加速器与 JDT 时间手杖均生效）。JDTE coalesced flush 与
-			// 普通 ticker 共用这一轻量路径，保证两种加速入口语义一致。
-			if (batchMultiplier > 1) {
-				// 轻量补调：仅推进已缓存熔炉配方（跳过 ejector/能量回填/每 tick 配方重查），
-				// 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
-				if (productivebeesgenesis$runLightSmeltingTicks(batchMultiplier)) {
-					sendUpdatePacket = true;
-				}
-			}
 			// 执行 PB：设置批量倍率（虚拟 tick 银行取款）
 			pbProcessor.setTickMultiplier(batchMultiplier);
 			result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
@@ -463,21 +451,21 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			result = sendUpdatePacket;
 		}
 
-		// 消耗后补回完整正常容量，稳定客户端能量条并保证下一批有完整储备。
-		productivebeesgenesis$injectAe2Energy(batchMultiplier);
+		// 消耗后补回当前批次容量且不缩容，兼容 AE2 直供与普通 FE 电缆跨 tick 充能。
+		productivebeesgenesis$refillAe2EnergyAfterBatch();
 
 		return result;
 	}
 
 	/**
-	 * 轻量 SMELTING 补调 — 仅推进各 lane 已缓存的熔炉配方（batchMultiplier - 1 次额外配方 tick）。
+	 * 批量推进 SMELTING：首个真实 tick 与全部虚拟 tick 共用一个能量账本，
+	 * 批次结束时只写入能量容器一次。
 	 * <br/>
-	 * 见 {@link MekCentrifugeFactoryHelper#runLightSmeltingTicks}：跳过 ejector/能量回填/配方重查，
-	 * 语义等价于真实推进 batchMultiplier 次 tick，256x 加速下 MSPT 占用极低。
-	 * 本方法供 onUpdateServer 访问受保护的 {@code recipeCacheLookupMonitors}。
+	 * 本方法保留在具体工厂内，以便安全调用其父类 {@code onUpdateServer()}。
 	 */
-	public boolean productivebeesgenesis$runLightSmeltingTicks(int batchMultiplier) {
-		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(recipeCacheLookupMonitors, batchMultiplier);
+	public boolean productivebeesgenesis$runSmeltingBatch(int batchMultiplier) {
+		return MekCentrifugeFactoryHelper.runSmeltingBatch(recipeCacheLookupMonitors, batchMultiplier,
+				energyContainer, () -> super.onUpdateServer());
 	}
 
 	/** PB处理时返回PB进度 */

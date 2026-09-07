@@ -4,8 +4,10 @@
 	 * 定义自定义 Capability 接口和包装器：
 	 * <ol>
 	 *   <li>{@code IInventoryDirtyDebouncer} — 物品栏脏标记去抖接口</li>
-	 *   <li>{@code RateLimitedItemHandler} — 按 tick 限流的物品处理器包装器</li>
 	 * </ol>
+	 * <p>
+	 * 面向第三方物流模组的吞吐/公平性适配层见
+	 * {@link com.ayoshiko.productivebeesgenesis.logistics}。
 	 */
 @ParametersAreNonnullByDefault
 @FieldsAreNonnullByDefault

@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
+import com.ayoshiko.productivebeesgenesis.mek.BatchEnergyLedger;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.ZeroTickBatchMath;
 import com.ayoshiko.productivebeesgenesis.mek.ZeroTickCoalesceState;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -110,6 +112,14 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	@Unique
 	private boolean productivebeesgenesis$marginalEnergyPricing;
 
+	/** 当前工厂批次共享的能量账本。 */
+	@Unique
+	private BatchEnergyLedger productivebeesgenesis$batchEnergyLedger;
+
+	/** 是否处于延迟扣能的批次会话。 */
+	@Unique
+	private boolean productivebeesgenesis$batchEnergySession;
+
 	/**
 	 * 零耗时配方（CREATIVE 升级，{@code requiredTicks <= 1}）的 per-tile 合并窗口。
 	 * <br/>
@@ -130,6 +140,25 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	}
 
 	@Override
+	public void productivebeesgenesis$bindBatchEnergyLedger(BatchEnergyLedger ledger) {
+		productivebeesgenesis$batchEnergyLedger = ledger;
+	}
+
+	@Override
+	public void productivebeesgenesis$finishBatch() {
+		productivebeesgenesis$batchEnergySession = false;
+		productivebeesgenesis$batchTicksLeft = 0;
+		productivebeesgenesis$batchFastOps = 0;
+		productivebeesgenesis$awaitingFinalOperations = false;
+		productivebeesgenesis$endZeroTickCoalesce();
+		productivebeesgenesis$batchEnergyLedger = null;
+		ZeroTickCoalesceState state = productivebeesgenesis$zeroTickCoalesce;
+		if (state != null) {
+			state.endBatch();
+		}
+	}
+
+	@Override
 	public void productivebeesgenesis$bindZeroTickCoalesce(ZeroTickCoalesceState state) {
 		productivebeesgenesis$zeroTickCoalesce = state;
 	}
@@ -139,6 +168,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		productivebeesgenesis$batchTicksLeft = Math.max(0, ticks);
 		productivebeesgenesis$batchFastOps = 0;
 		productivebeesgenesis$awaitingFinalOperations = false;
+		productivebeesgenesis$batchEnergySession = ticks > 0 && productivebeesgenesis$batchEnergyLedger != null;
 		productivebeesgenesis$endZeroTickCoalesce();
 		// 本批次的单刻上限只取一次：供应商内部虽按 gameTick 记忆化，但仍要先读
 		// level.getGameTime()，而零耗时配方每个虚拟刻都要开窗一次，
@@ -199,36 +229,76 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 					target = "Lmekanism/api/math/MathUtils;clampToInt(J)I"))
 	private int productivebeesgenesis$priceFullRecipeTick(int linearAffordableOperations) {
 		if (!productivebeesgenesis$marginalEnergyPricing) {
-			return linearAffordableOperations;
+			BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
+			long energyPerOperation = perTickEnergy.getAsLong();
+			if (ledger == null || energyPerOperation <= 0L) return linearAffordableOperations;
+			long affordable = ledger.available(storedEnergy.getAsLong()) / energyPerOperation;
+			return affordable >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) affordable;
 		}
 		int factor = productivebeesgenesis$activeCoalesceFactor;
 		if (factor > 1) {
 			// 合并调用：先算「单虚拟刻可承担量」再乘回倍数。直接对总操作数套边际曲线是错的 ——
 			// 曲线次线性，会让 1024 倍加速几乎不耗电。
 			return ZeroTickBatchMath.affordableCoalescedOperations(perTickEnergy.getAsLong(),
-					productivebeesgenesis$zeroTickCoalesce.base(), storedEnergy.getAsLong(), factor);
+					productivebeesgenesis$zeroTickCoalesce.base(),
+					productivebeesgenesis$availableStoredEnergy(), factor);
 		}
 		return MekCentrifugeEnergyScaling.affordableOperations(
 				perTickEnergy.getAsLong(), Math.max(0, baselineMaxOperations.getAsInt()),
-				storedEnergy.getAsLong());
+				productivebeesgenesis$availableStoredEnergy());
+	}
+
+	@Unique
+	private long productivebeesgenesis$availableStoredEnergy() {
+		long stored = storedEnergy.getAsLong();
+		BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
+		return ledger == null ? stored : ledger.available(stored);
+	}
+
+	@Unique
+	private void productivebeesgenesis$chargeEnergy(long amount) {
+		if (amount <= 0L) return;
+		BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
+		if (ledger != null) {
+			ledger.add(amount);
+		} else {
+			useEnergy.accept(amount);
+		}
+	}
+
+	/**
+	 * 显式绑定覆盖虚拟 tick；线程作用域覆盖完整 tick 内刚创建或刚替换的缓存。
+	 */
+	@Unique
+	private BatchEnergyLedger productivebeesgenesis$effectiveEnergyLedger() {
+		if (productivebeesgenesis$batchEnergySession && productivebeesgenesis$batchEnergyLedger != null) {
+			return productivebeesgenesis$batchEnergyLedger;
+		}
+		return BatchEnergyLedger.active();
 	}
 
 	/** Charges a normal full-calculation tick with the same curve as the accelerated fast path. */
 	@Inject(method = "useEnergy", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$chargeFullRecipeTick(int operations, CallbackInfo ci) {
-		if (!productivebeesgenesis$marginalEnergyPricing) return;
+		BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
+		if (!productivebeesgenesis$marginalEnergyPricing && ledger == null) return;
 		long energyPerTick = perTickEnergy.getAsLong();
 		if (energyPerTick > 0L && operations > 0) {
+			if (!productivebeesgenesis$marginalEnergyPricing) {
+				ledger.add(SaturatingMath.saturatingMultiply(energyPerTick, operations));
+				ci.cancel();
+				return;
+			}
 			int factor = productivebeesgenesis$activeCoalesceFactor;
 			if (factor > 1) {
 				// 合并调用代表多个虚拟刻：按刻分摊后逐刻计费，总额与逐刻推进一致。
 				int base = productivebeesgenesis$zeroTickCoalesce.base();
 				int virtualTicks = ZeroTickBatchMath.virtualTicksFor(operations, base);
 				int perTickOps = ZeroTickBatchMath.operationsPerVirtualTick(operations, virtualTicks);
-				useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
+				productivebeesgenesis$chargeEnergy(MekCentrifugeEnergyScaling.batchEnergyCost(
 						energyPerTick, perTickOps, virtualTicks));
 			} else {
-				useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(
+				productivebeesgenesis$chargeEnergy(MekCentrifugeEnergyScaling.batchEnergyCost(
 						energyPerTick, operations, 1));
 			}
 		}
@@ -275,7 +345,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		// 能量预算：storedEnergy 可支撑的虚拟 tick 数（与原版 capAtMaxForEnergy 语义一致）
 		int ticksToRun = ticksLeft;
 		if (energyPerTick > 0L) {
-			long stored = storedEnergy.getAsLong();
+			long stored = productivebeesgenesis$availableStoredEnergy();
 			long perVirtualTick = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, 1);
 			ticksToRun = (int) Math.min(ticksLeft, stored / perVirtualTick);
 			if (ticksToRun <= 0) {
@@ -283,6 +353,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 				// （原版会 cap 降 ops 继续或标记 NOT_ENOUGH_ENERGY，语义与逐 tick 一致）
 				productivebeesgenesis$batchTicksLeft = 0;
 				productivebeesgenesis$batchFastOps = 0;
+				ci.cancel();
 				return;
 			}
 		}
@@ -308,7 +379,8 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		}
 		// 批量能量一次性扣除（等价于逐虚拟 tick useEnergy(ops) 的累加总额）
 		if (energyPerTick > 0L && ran > 0) {
-			useEnergy.accept(MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, ran));
+			productivebeesgenesis$chargeEnergy(
+					MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, ran));
 		}
 		// 这些额外 process 调用发生在同一服务端 tick 内，进度只需发布最终值一次；
 		// operatingTicksChanged 在本模组工厂中只写入同步数组，逐虚拟刻回调没有观察者。

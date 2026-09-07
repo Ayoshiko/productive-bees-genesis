@@ -147,6 +147,13 @@ public final class Ae2OutputStateHolder {
 	/** 离心机新产物优先直接写入 AE；默认关闭以保留本地输出链路。 */
 	private volatile boolean centrifugeDirectAeOutputEnabled = false;
 
+	/**
+	 * per-tile 产物直通（相邻容器）开关；默认开启，与全局配置 AND。
+	 * <br/>
+	 * 本开关不引用任何 AE2 类型，未装 AE2 也参与持久化与同步（与熔炼兼容开关同理）。
+	 */
+	private volatile boolean directContainerOutputEnabled = true;
+
 	// ===== AE2 推送退避和计数器状态（Task 2 新增，封装到独立类以控制主类行数 ≤ 500） =====
 	/** 推送退避和计数器状态（per-tile 独立，封装 fluid/item backoff 与计数器） */
 	private final Ae2PushStateHolder pushState = new Ae2PushStateHolder();
@@ -235,6 +242,8 @@ public final class Ae2OutputStateHolder {
 		// 熔炉兼容开关重置为默认关闭（与字段声明一致）
 		smeltingCompatEnabled = false;
 		centrifugeDirectAeOutputEnabled = false;
+		// 产物直通重置为默认开启（与字段声明一致）
+		directContainerOutputEnabled = true;
 		// Task 2：重置 AE2 推送退避和计数器状态（fluid/item backoff + 计数器全部归零）
 		pushState.reset();
 		pendingItemBuffer.clear();
@@ -294,6 +303,17 @@ public final class Ae2OutputStateHolder {
 	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) { centrifugeDirectAeOutputEnabled = enabled; }
 	public void toggleCentrifugeDirectAeOutputEnabled() {
 		centrifugeDirectAeOutputEnabled = !centrifugeDirectAeOutputEnabled;
+	}
+
+	/** 获取 per-tile 产物直通（相邻容器）开关 */
+	public boolean isDirectContainerOutputEnabled() { return directContainerOutputEnabled; }
+
+	/** 设置 per-tile 产物直通开关 */
+	public void setDirectContainerOutputEnabled(boolean enabled) { directContainerOutputEnabled = enabled; }
+
+	/** 取反 per-tile 产物直通开关 */
+	public void toggleDirectContainerOutputEnabled() {
+		directContainerOutputEnabled = !directContainerOutputEnabled;
 	}
 
 	// ===== 按槽 AEFluidKey 缓存（Task 24） =====

@@ -161,6 +161,45 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		cir.setReturnValue(extracted);
 	}
 
+	/**
+	 * 允许外部把「刚从本槽取走的同种物品」原样退回，避免第三方物流模组在插入失败时丢物。
+	 * <p>
+	 * <b>为什么必须支持：</b>多个主流物流模组（天穹物流、物流网络等）搬运物品的收尾都是
+	 * 「目标 {@code insertItem} 还有剩余 → 调用<b>源</b> handler 把剩余部分退回」，退不回去时
+	 * 只打一行 WARN 就<b>把物品丢弃</b>。Mekanism 输出槽的插入谓词是 internalOnly，
+	 * 外部退回一律被拒 → 正好命中对方的丢物路径。
+	 * <p>
+	 * 放宽范围被严格限制在「回填」语义上：
+	 * <ul>
+	 *   <li>只对「外部不可插入、内部可插入」的槽位（即输出槽）生效，输入槽逻辑不变；</li>
+	 *   <li>只接受与槽内现有内容<b>完全同类型</b>的物品，因此不会变成隐藏的输入口；</li>
+	 *   <li>槽位为空时不接受，真正的外部插入仍被拒绝。</li>
+	 * </ul>
+	 * order = 900 保证在外部插入配额策略（{@link #productivebeesgenesis$limitExternalInsert}）之前生效。
+	 */
+	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At("HEAD"), cancellable = true, order = 900)
+	private void productivebeesgenesis$allowOutputRollback(ItemStack stack, Action action,
+			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		if (automationType != AutomationType.EXTERNAL || stack.isEmpty() || current.isEmpty()) return;
+		if (!ItemStack.isSameItemSameComponents(current, stack)) return;
+		if (isItemValidForInsertion(stack, AutomationType.EXTERNAL)) return;
+		if (!isItemValidForInsertion(stack, AutomationType.INTERNAL)) return;
+
+		int needed = getLimit(stack) - current.getCount();
+		if (needed <= 0) {
+			cir.setReturnValue(stack);
+			return;
+		}
+		int toAdd = Math.min(stack.getCount(), needed);
+		if (action.execute()) {
+			current.grow(toAdd);
+			onContentsChanged();
+		}
+		cir.setReturnValue(stack.copyWithCount(stack.getCount() - toAdd));
+	}
+
 	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
 			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
 			at = @At("HEAD"), cancellable = true)

@@ -1,20 +1,27 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
+import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 
-/** Suppresses Productive Bees honey fluid and tagged wax outputs when the upgrade is installed. */
+/** Applies Productive Bees byproduct filtering and essence conversion to centrifuges. */
 @Mixin(CentrifugeBlockEntity.class)
 public abstract class CentrifugeUselessByproductMixin {
 
@@ -64,5 +71,37 @@ public abstract class CentrifugeUselessByproductMixin {
 			return 0;
 		}
 		return tank.fill(stack, action);
+	}
+
+	/** 在资源蜜蜂离心机完成配方输出后，转换已聚合的物品产物。 */
+	@Inject(
+			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;"
+					+ "Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			at = @At("TAIL")
+	)
+	private void productivebeesgenesis$convertEssence(
+			RecipeHolder<CentrifugeRecipe> recipe,
+			net.neoforged.neoforge.items.IItemHandlerModifiable inventory,
+			RandomSource random, boolean stripWax, int productivityModifier, CallbackInfo ci) {
+		CentrifugeBlockEntity blockEntity = (CentrifugeBlockEntity) (Object) this;
+		if (EssenceConversionUpgradeHelper.hasUpgrade(blockEntity)) {
+			EssenceConversionUpgradeHelper.convertStored(blockEntity.getLevel(), inventory);
+		}
+	}
+
+	/** 在资源蜜蜂离心机完成配方输出后，将粗矿按 Mekanism 熔炼配方转换为锭。 */
+	@Inject(
+			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;"
+					+ "Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			at = @At("TAIL")
+	)
+	private void productivebeesgenesis$convertRawOre(
+			RecipeHolder<CentrifugeRecipe> recipe,
+			net.neoforged.neoforge.items.IItemHandlerModifiable inventory,
+			RandomSource random, boolean stripWax, int productivityModifier, CallbackInfo ci) {
+		CentrifugeBlockEntity blockEntity = (CentrifugeBlockEntity) (Object) this;
+		if (RawOreSmeltingUpgradeHelper.hasUpgrade(blockEntity)) {
+			RawOreSmeltingUpgradeHelper.convertStored(blockEntity.getLevel(), inventory);
+		}
 	}
 }

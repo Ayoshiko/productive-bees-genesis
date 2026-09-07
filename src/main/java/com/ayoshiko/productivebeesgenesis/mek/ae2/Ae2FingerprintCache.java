@@ -46,6 +46,10 @@ final class Ae2FingerprintCache {
 
 	/**
 	 * 返回该 key 的 SNBT 指纹，命中缓存时零编码开销。
+	 * <p>
+	 * <b>绝不抛异常</b>：编码失败时退回 {@link Ae2ItemFingerprint#encodeOrLegacy} 的
+	 * legacy 键。调用方（输入剩余物登记、输出账本）都在「资源已经离开原位、必须有键
+	 * 才能记账」的时刻取指纹，抛异常等于丢物品或丢账。
 	 *
 	 * @param key      AE2 物品键，null 返回空串（与 {@link Ae2ItemFingerprint#encode} 一致）
 	 * @param provider 注册表访问器，null 返回空串
@@ -58,7 +62,7 @@ final class Ae2FingerprintCache {
 		}
 		String cached = cache.get(key);
 		if (cached != null) return cached;
-		String encoded = Ae2ItemFingerprint.encode(key, provider);
+		String encoded = Ae2ItemFingerprint.encodeOrLegacy(key, provider);
 		if (encoded.isEmpty()) return encoded;
 		// put 触发 removeEldestEntry，超限时淘汰最久未使用条目（不再整表清空）
 		cache.put(key, encoded);

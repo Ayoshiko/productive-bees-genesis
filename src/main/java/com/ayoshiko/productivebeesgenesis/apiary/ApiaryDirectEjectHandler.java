@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
@@ -127,20 +126,13 @@ class ApiaryDirectEjectHandler {
 	 */
 	private final List<IInventorySlot> bufferInputSlots = new ArrayList<>(8);
 
-	/** 最多缓存的离心机可处理性结果，固定容量防止高混养场景无界增长。 */
-	private static final int PROCESSABILITY_CACHE_CAPACITY = 64;
-	private final ItemStack[] processabilityStacks = new ItemStack[PROCESSABILITY_CACHE_CAPACITY];
-	private final long[] processabilityTargetMasks = new long[PROCESSABILITY_CACHE_CAPACITY];
 	/**
-	 * 掩码缓存对应的直连目标列表引用 — targets 重建（拓扑变化：离心机增删/侧面配置/朝向变化）时失效。
+	 * 离心机可处理性掩码缓存（跨 tick，拓扑/配方变化时失效）。
 	 * <br/>
-	 * 跨 tick 缓存（原每 gameTick 清空）：离心机优先的 hold 判定被 AE2 推送路径
-	 * 高频调用（每输出槽每 tick），isValidInput 内部走配方查找，跨 tick 缓存消除重复调用。
+	 * 拆分理由见 {@link ApiaryCentrifugeAcceptanceCache}：本类只负责搬运，
+	 * 判定缓存与失效策略独立演进。
 	 */
-	private List<ApiaryDirectEjectTargets.Target> maskTargetsRef = null;
-	/** 掩码缓存对应的配方版本 — /reload 或数据包重载时失效（蜜脾配方变更会改变可处理性） */
-	private long maskRecipeVersion = Long.MIN_VALUE;
-	private int processabilityCacheSize;
+	private final ApiaryCentrifugeAcceptanceCache acceptanceCache = new ApiaryCentrifugeAcceptanceCache();
 	private final SameTickFailureGate failedTransferGate = new SameTickFailureGate();
 
 	/**
@@ -200,11 +192,13 @@ class ApiaryDirectEjectHandler {
 		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
 		long acceptedTargets = acceptedTargetMask(stack, targetList);
 		if (acceptedTargets == 0L) return false;
+		long gameTick = level.getGameTime();
 		for (int targetIndex = 0; targetIndex < targetList.size() && targetIndex < Long.SIZE; targetIndex++) {
 			if ((acceptedTargets & (1L << targetIndex)) == 0L) continue;
 			ApiaryDirectEjectTargets.Target target = targetList.get(targetIndex);
 			try {
-				target.preScanInputSlots();
+				// 同刻复用预扫描：本判定被每个产物调用，全量重扫会把 19 槽读取放大到产物数倍
+				target.ensureInputScan(gameTick);
 				int slotCount = target.inputSlotCount;
 				if (target.inputSlotManager.prepareSameTypeSlots(stack, slotCount) > 0
 						|| target.inputSlotManager.prepareEmptySlotsSortedByRemainingDesc(stack, slotCount) > 0) {
@@ -221,48 +215,16 @@ class ApiaryDirectEjectHandler {
 	/**
 	 * Returns a bit mask of adjacent centrifuges accepting this item.
 	 * <br/>
-	 * 跨 tick 缓存：失效条件为 targets 列表重建（拓扑变化）或配方版本变更，
-	 * 输入槽内容物不影响"可处理性"（那是配方层面判定），无需按刻失效。
+	 * 委托 {@link ApiaryCentrifugeAcceptanceCache}：跨 tick 缓存，
+	 * 失效条件为 targets 列表重建（拓扑变化）或配方版本变更。
 	 */
 	private long acceptedTargetMask(ItemStack stack,
 			List<ApiaryDirectEjectTargets.Target> targetList) {
-		if (targetList != maskTargetsRef
-				|| maskRecipeVersion != ProductiveBeesGenesis.RECIPE_VERSION.get()) {
-			clearProcessabilityCache();
-			maskTargetsRef = targetList;
-			maskRecipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
-		}
-		for (int i = 0; i < processabilityCacheSize; i++) {
-			if (ItemStack.isSameItemSameComponents(processabilityStacks[i], stack)) {
-				return processabilityTargetMasks[i];
-			}
-		}
-		long acceptedTargets = 0L;
-		int targetCount = Math.min(targetList.size(), Long.SIZE);
-		for (int i = 0; i < targetCount; i++) {
-			try {
-				if (targetList.get(i).centrifuge.productivebeesgenesis$isValidInput(stack)) {
-					acceptedTargets |= 1L << i;
-				}
-			} catch (Exception | LinkageError e) {
-				// 跨方块实体调用防御：离心机侧异常按"不可处理"降级，不阻断蜂箱 tick
-				LogThrottle.warn("apiary_hold_input_check",
-						"离心机可处理性判定异常，按不可处理降级: {}", stack.getItem(), e);
-			}
-		}
-		if (processabilityCacheSize < PROCESSABILITY_CACHE_CAPACITY) {
-			processabilityStacks[processabilityCacheSize] = stack.copyWithCount(1);
-			processabilityTargetMasks[processabilityCacheSize] = acceptedTargets;
-			processabilityCacheSize++;
-		}
-		return acceptedTargets;
+		return acceptanceCache.maskFor(stack, targetList);
 	}
 
 	private void clearProcessabilityCache() {
-		for (int i = 0; i < processabilityCacheSize; i++) {
-			processabilityStacks[i] = null;
-		}
-		processabilityCacheSize = 0;
+		acceptanceCache.clear();
 	}
 
 	/**
@@ -369,6 +331,8 @@ class ApiaryDirectEjectHandler {
 	 */
 	private void transferStackToTargetInputs(ApiaryDirectEjectTargets.Target target, ItemStack stack) {
 		int slotCount = Math.max(0, target.centrifuge.productivebeesgenesis$getInputSlotCount());
+		// 本方法直写输入槽、不同步预扫描数组，先失效缓存避免同刻 hold 判定读到旧值
+		target.markScanDirty();
 		for (int i = 0; i < slotCount && !stack.isEmpty(); i++) {
 			IInventorySlot slot = target.centrifuge.productivebeesgenesis$getInputSlot(i);
 			if (slot == null) continue;
@@ -451,7 +415,7 @@ class ApiaryDirectEjectHandler {
 		// Snapshot each centrifuge once per batch. The previous product x target scan repeated all 19
 		// input-slot reads for every mixed product type, which scaled poorly under accelerated ticks.
 		for (ApiaryDirectEjectTargets.Target target : targetList) {
-			target.preScanInputSlots();
+			target.refreshInputScan(gameTick);
 		}
 
 		List<BasicInventorySlot> outputSlots = apiary.getOutputSlots();
@@ -578,10 +542,14 @@ class ApiaryDirectEjectHandler {
 			// Reuse the same target mask cache as generated and slotted products. This avoids repeating
 			// recipe-manager validation for buffer groups already seen earlier in the production batch.
 			long targetBit = 1L << targetIndex;
-			total = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(total,
-					outputBuffer.tryRedistributeToExternalSlots(
-							bufferInputSlots,
-							stack -> (acceptedTargetMask(stack, targets) & targetBit) != 0L)));
+			int transferred = outputBuffer.tryRedistributeToExternalSlots(
+					bufferInputSlots,
+					stack -> (acceptedTargetMask(stack, targets) & targetBit) != 0L);
+			if (transferred > 0) {
+				// 缓冲区直写输入槽不经 updateSlotAfterTransfer，需失效预扫描避免同刻读旧值
+				target.markScanDirty();
+			}
+			total = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(total, transferred));
 		}
 		return total;
 	}
