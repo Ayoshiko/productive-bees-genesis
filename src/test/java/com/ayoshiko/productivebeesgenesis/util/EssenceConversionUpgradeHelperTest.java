@@ -19,6 +19,7 @@ class EssenceConversionUpgradeHelperTest {
 		assertTrue(EssenceConversionRecipeIndex.isCompressionShape(9, 1, false, false));
 		assertTrue(EssenceConversionRecipeIndex.isCompressionShape(4, 1, false, false));
 		assertFalse(EssenceConversionRecipeIndex.isCompressionShape(1, 9, false, false));
+		assertFalse(EssenceConversionRecipeIndex.isCompressionShape(8, 12, false, false));
 		assertFalse(EssenceConversionRecipeIndex.isCompressionShape(9, 1, true, false));
 		assertFalse(EssenceConversionRecipeIndex.isCompressionShape(9, 1, false, true));
 		assertFalse(EssenceConversionRecipeIndex.isCompressionShape(4, 1, false, true, false));
@@ -84,6 +85,11 @@ class EssenceConversionUpgradeHelperTest {
 				"黑曜石碎片到黑曜石是唯一允许方块产物的例外");
 		assertTrue(source.contains("OBSIDIAN_SHARD_ID"));
 		assertTrue(source.contains("OBSIDIAN_ID"));
+		assertTrue(source.contains("isAllowedRedstoneEssenceConversion"));
+		assertTrue(source.contains("inputCount == 8 && result.getCount() == 12"),
+				"只允许红石精华使用精确的 8:12 扩量配方");
+		assertTrue(source.contains("REDSTONE_ESSENCE_ID"));
+		assertTrue(source.contains("REDSTONE_ID"));
 		assertTrue(source.contains("NETHER_STAR_ESSENCE_ID"));
 		assertTrue(source.contains("NETHER_STAR_SHARD_ID"));
 		assertTrue(source.contains("isNetherStarShardStep(entry.getKey(), pattern)"),

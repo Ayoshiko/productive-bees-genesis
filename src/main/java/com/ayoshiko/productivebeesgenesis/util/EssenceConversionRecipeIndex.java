@@ -41,6 +41,10 @@ final class EssenceConversionRecipeIndex {
 			ResourceLocation.fromNamespaceAndPath("productivebees", "obsidian_shard");
 	private static final ResourceLocation OBSIDIAN_ID =
 			ResourceLocation.fromNamespaceAndPath("minecraft", "obsidian");
+	private static final ResourceLocation REDSTONE_ESSENCE_ID =
+			ResourceLocation.fromNamespaceAndPath("mysticalagriculture", "redstone_essence");
+	private static final ResourceLocation REDSTONE_ID =
+			ResourceLocation.fromNamespaceAndPath("minecraft", "redstone");
 	private static final ResourceLocation NETHER_STAR_ESSENCE_ID =
 			ResourceLocation.fromNamespaceAndPath("mysticalagriculture", "nether_star_essence");
 	private static final ResourceLocation NETHER_STAR_SHARD_ID =
@@ -307,6 +311,7 @@ final class EssenceConversionRecipeIndex {
 		private boolean isCompression() {
 			return isCompressionShape(inputCount, result.getCount(), inputIsBlock, resultIsBlock, excludedInput)
 					|| isAllowedObsidianShardConversion()
+					|| isAllowedRedstoneEssenceConversion()
 					|| isAllowedNetherStarConversion();
 		}
 
@@ -314,6 +319,12 @@ final class EssenceConversionRecipeIndex {
 			return inputCount == 9 && result.getCount() == 1
 					&& hasItemId(inputKey, OBSIDIAN_SHARD_ID)
 					&& hasItemId(resultKey, OBSIDIAN_ID);
+		}
+
+		private boolean isAllowedRedstoneEssenceConversion() {
+			return inputCount == 8 && result.getCount() == 12
+					&& hasItemId(inputKey, REDSTONE_ESSENCE_ID)
+					&& hasItemId(resultKey, REDSTONE_ID);
 		}
 
 		private boolean isAllowedNetherStarConversion() {

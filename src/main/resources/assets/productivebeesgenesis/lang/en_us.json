@@ -1039,7 +1039,7 @@
   "gui.productivebeesgenesis.pb_upgrade.type.useless_byproduct.desc": "Destroys hive honey products/pollen puffs and centrifuge Productive Bees honey fluid/wax; other outputs are preserved",
   "item.productivebeesgenesis.essence_conversion_upgrade": "Upgrade: Essence Conversion",
   "item.productivebeesgenesis.essence_conversion_upgrade.description.machine": "Automatically crafts reversible outputs and compresses low-tier essence, nuggets and fragments",
-  "item.productivebeesgenesis.essence_conversion_upgrade.description.rule": "Ignores mixed recipes, storage blocks and raw ores; obsidian shards and the nether-star essence chain are exceptions",
+  "item.productivebeesgenesis.essence_conversion_upgrade.description.rule": "Ignores mixed recipes, storage blocks and raw ores; redstone essence, obsidian shards and the nether-star chain are exceptions",
   "item.productivebeesgenesis.essence_conversion_upgrade.description.limit": "Maximum one per machine",
   "gui.productivebeesgenesis.pb_upgrade.type.essence_conversion": "Essence Conversion",
   "gui.productivebeesgenesis.pb_upgrade.type.essence_conversion.desc": "Compresses reversible essence, nuggets and fragments; supports obsidian shards and the nether-star essence chain",
