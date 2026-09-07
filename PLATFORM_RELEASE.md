@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | `1.0.7` |
 | CurseForge 待发布版本 | `1.0.7` |
-| 发布状态 | 准备中，尚未创建本版本标签或发布 Release |
+| 发布状态 | GitHub Release `v1.0.7` 正式版 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -41,22 +41,22 @@ CurseForge 的 `1.0.7` 与 NeoForge 元数据、Manifest `Implementation-Version
 其 Git 标签统一使用 `dev-v...` 前缀，Release 标题使用 `dev-...` 前缀并标记为 Pre-release；新的
 `v1.0.0` 和 `v1.0.1` 是不带该前缀的正式标签。历史 Release 的 JAR 资产维持原文件名和校验和，不重新打包或改名。
 
-## 1.0.7 待发布产物
+## 1.0.7 正式发布产物
 
 ```text
 文件: build/libs/productivebeesgenesis-1.0.7.jar
-大小: 1,836,452 bytes
-SHA-256: 2AF7958F7F66BC1317D6E539C49A9F7B55A0C802E681C365638D957EE88FDF3E
+大小: 1,841,637 bytes
+SHA-256: 28D63A6EA6B1BAF3E6F155C8C2732ACC143AC5C2230C70241CE825E0C1647366
 ```
 
 发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
 
 2026-09-07 发布准备验证：
 
-- `.\gradlew cleanTest build --no-build-cache --no-daemon`：构建成功，90 个测试类共 521 项测试实际执行，零失败、零错误、零跳过。
+- `.\gradlew cleanTest build --no-build-cache --no-daemon`：构建成功，共 523 项测试，零失败、零错误，1 项按环境条件跳过。
 - `verifyReleaseArtifact`：版本元数据、许可证、图标及开发资源排除检查通过。JAR 不再使用 1,800,000 字节硬上限，体积明细保存在 `build/reports/release-artifact.txt`。
 - 288 个资源 JSON 可解析；中英文语言文件各 1,100 个键，键集合一致。
-- 本轮未执行客户端/专用服务器游戏内冒烟测试，正式发布前仍需完成下方第 7 项。
+- 测试整合包已完成客户端与集成服务器启动，并实测离心机精华转化；本轮未另行启动专用服务器。
 
 ## 图标
 
