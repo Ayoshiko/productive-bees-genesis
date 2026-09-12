@@ -15,7 +15,7 @@ class WannaBeeBatchPlanTest {
 	}
 
 	@Test
-	void acceleratedBatchKeepsBoundedSamplesWithoutLosingWeight() {
+	void acceleratedBatchKeepsBoundedEventSamplesWithoutLosingWeight() {
 		int productionCount = 1_000;
 		int sampleCount = WannaBeeBatchPlan.sampleCount(productionCount);
 		int totalWeight = 0;
@@ -47,6 +47,12 @@ class WannaBeeBatchPlanTest {
 		for (int i = 0; i < 16; i++) {
 			assertEquals(1, WannaBeeBatchPlan.weightAt(16, i));
 		}
+	}
+
+	@Test
+	void multiplierDoesNotIncreaseLootOutcomeSamples() {
+		assertEquals(1, WannaBeeBatchPlan.sampleCount(1));
+		assertEquals(1, WannaBeeBatchPlan.weightAt(1, 0));
 	}
 
 	@Test

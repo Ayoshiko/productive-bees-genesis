@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import cy.jdkdigital.productivebees.init.ModFluids;
@@ -222,6 +223,8 @@ public class ApiarySlotManager {
 		// 同样设置 obeyStackLimit=false，与输入槽堆叠上限一致（64）
 		cageOutSlot = OutputInventorySlot.at(listener, cageOutX, cageY);
 		((BasicInventorySlotAccessor) cageOutSlot).productivebeesgenesis$setObeyStackLimit(false);
+		// 同离心机主输出槽：原版槽类需显式声明归属，外部退回保护只对本模组槽位放宽插入语义
+		((TieredInputSlot) cageOutSlot).productivebeesgenesis$markOwnSlot();
 		builder.addSlot(cageOutSlot);
 
 		// 物理输出库存按页追加；每页复用同一套 GUI 坐标，由容器代理槽选择当前页。

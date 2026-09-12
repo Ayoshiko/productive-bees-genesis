@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
 import com.ayoshiko.productivebeesgenesis.config.FactoryTierKey;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
+import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
@@ -122,6 +123,15 @@ class MekCentrifugeSlotManager {
 		// Task 7: 注入输入槽分等级堆叠倍率（基础离心机使用 basic 配置）
 		((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 				CentrifugeInputStackMultipliers.forBasic());
+		// 外部插入配额：输入槽真实上限是 64 × 配置倍率（BASIC 默认 16384，约百万），
+		// 原样暴露给自动化会让 AE2 外部存储/物流模组的第一次请求就把整条产线的物料搬进机器
+		// 内部（既看不见也难取回）。工作集随操作数、时间加速倍率（JDTE 手杖）与产量并行度放大，
+		// 保证加速下依然不会供料不足；内部搬运（AE2 拉取、蜂箱直连）走 INTERNAL，不受本策略约束。
+		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
+				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
+						tile.operationsPerTick(), tile.productivebeesgenesis$getAccelerationMultiplier(),
+						tile.productivityParallelModifier()));
+		externalInputPolicy.register(inputSlot);
 		builder.addSlot(inputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_INPUT)));
@@ -133,6 +143,9 @@ class MekCentrifugeSlotManager {
 		// 主输出槽 — 竖排第1个（x=134, y=17）
 		OutputInventorySlot outputSlot = OutputInventorySlot.at(outputListener,
 				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(0));
+		// 原版 OutputInventorySlot 不会经由倍率 setter 自动置位，需显式声明归属本模组：
+		// 外部退回保护靠该标记限定作用域，否则会改写原版 Mekanism 机器的插入语义
+		((TieredInputSlot) outputSlot).productivebeesgenesis$markOwnSlot();
 		builder.addSlot(outputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_OUTPUT_SPACE)));

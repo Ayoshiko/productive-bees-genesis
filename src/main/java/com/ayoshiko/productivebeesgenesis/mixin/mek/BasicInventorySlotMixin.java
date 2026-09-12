@@ -2,7 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
+import com.ayoshiko.productivebeesgenesis.inventory.SlotRollbackWindow;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -77,6 +79,33 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	@Unique
 	private ExternalInsertPolicy productivebeesgenesis$externalInsertPolicy;
 
+	/**
+	 * 该槽位是否归本模组机器所有。
+	 * <p>
+	 * 只有外部退回保护（{@link #productivebeesgenesis$allowOutputRollback}）读取此标记：
+	 * 该保护放宽了槽位的外部插入谓词，若不限定作用域就会改写 Mekanism 原版机器的行为。
+	 * 默认 false；本模组装配槽位时经 {@link TieredInputSlot#productivebeesgenesis$markOwnSlot()}
+	 * 或下列两个 setter 隐式置位。
+	 */
+	@Unique
+	private boolean productivebeesgenesis$ownSlot;
+
+	/**
+	 * 外部退回窗口（懒创建）：只在首次发生外部提取时分配，未被外部自动化碰过的槽位零开销。
+	 */
+	@Unique
+	private SlotRollbackWindow productivebeesgenesis$rollbackWindow;
+
+	@Unique
+	private SlotRollbackWindow productivebeesgenesis$rollbackWindow() {
+		SlotRollbackWindow window = productivebeesgenesis$rollbackWindow;
+		if (window == null) {
+			window = new SlotRollbackWindow();
+			productivebeesgenesis$rollbackWindow = window;
+		}
+		return window;
+	}
+
 	/** 缓存的倍率值 — -1 表示未初始化 */
 	@Unique
 	private volatile int productivebeesgenesis$cachedInputMultiplier;
@@ -118,6 +147,8 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	@Override
 	public void productivebeesgenesis$setInputStackMultiplier(IntSupplier supplier) {
 		productivebeesgenesis$ensureTieredState();
+		// 本方法只由本模组机器调用，被调用即认定槽位归本模组所有（供退回保护限定作用域）
+		this.productivebeesgenesis$ownSlot = true;
 		this.productivebeesgenesis$inputMultiplier = supplier;
 		// 重置缓存，确保新 supplier 立即生效
 		this.productivebeesgenesis$cachedInputMultiplier = -1;
@@ -134,7 +165,19 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	@Override
 	public void productivebeesgenesis$setExternalInsertPolicy(ExternalInsertPolicy policy) {
+		// 同 setInputStackMultiplier：调用方只可能是本模组机器
+		this.productivebeesgenesis$ownSlot = true;
 		this.productivebeesgenesis$externalInsertPolicy = policy;
+	}
+
+	@Override
+	public void productivebeesgenesis$markOwnSlot() {
+		this.productivebeesgenesis$ownSlot = true;
+	}
+
+	@Override
+	public boolean productivebeesgenesis$isOwnSlot() {
+		return this.productivebeesgenesis$ownSlot;
 	}
 
 	@Override
@@ -162,6 +205,30 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	}
 
 	/**
+	 * 记录一次成功的外部提取，作为随后「原样退回」的凭据。
+	 * <p>
+	 * 只在外部自动化且真正执行（EXECUTE）时记录：SIMULATE 探测与内部搬运（机器自耗、
+	 * AE2 拉取）都不产生退回额度。本注入同样覆盖
+	 * {@link #productivebeesgenesis$bulkExtractOverstackedOutput} 提前返回的分支 ——
+	 * 那也是一次真实的外部提取，理应拿到凭据。
+	 */
+	@Inject(method = "extractItem(ILmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At("RETURN"), require = 0)
+	private void productivebeesgenesis$recordExternalExtraction(int amount, Action action,
+			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		// 本注入落在槽位提取的最热路径上：时间加速（JDTE 手杖 256× 等）会把机器自身的
+		// 内部搬运放大到每真实刻数千次。因此第一道判定必须是「本模组槽位」这一次布尔读，
+		// 原版 Mekanism 机器的槽位在此直接返回，语义与开销都等同于未安装本模组。
+		if (!productivebeesgenesis$ownSlot) return;
+		if (automationType != AutomationType.EXTERNAL || !action.execute()) return;
+		ItemStack extracted = cir.getReturnValue();
+		if (extracted == null || extracted.isEmpty()) return;
+		// 只有走到这里才可能创建窗口对象并复制样本，且仅发生在真正的外部提取上
+		productivebeesgenesis$rollbackWindow().record(extracted, ServerTickClock.now());
+	}
+
+	/**
 	 * 允许外部把「刚从本槽取走的同种物品」原样退回，避免第三方物流模组在插入失败时丢物。
 	 * <p>
 	 * <b>为什么必须支持：</b>多个主流物流模组（天穹物流、物流网络等）搬运物品的收尾都是
@@ -176,26 +243,50 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	 *   <li>槽位为空时不接受，真正的外部插入仍被拒绝。</li>
 	 * </ul>
 	 * order = 900 保证在外部插入配额策略（{@link #productivebeesgenesis$limitExternalInsert}）之前生效。
+	 * <p>
+	 * <b>作用域（关键）</b>：只对本模组机器的槽位生效。本类注入的是 Mekanism 所有机器共用的
+	 * 槽位基类，而本方法放宽的是「外部可否插入」这一基础语义，若不加归属判断就等于替原版
+	 * 机器（粉碎机、熔炼炉、富集仓…）改了行为。实测后果：AE2 样板供应器按槽序 0..n 顺序遍历
+	 * 目标容器（{@code ExternalStorageFacade$ItemHandlerFacade#insertExternal}），当工厂的
+	 * 输入槽被同一种原料占满时，后续样板的原料会继续命中输出槽里残留的同种产物而被插入 ——
+	 * 机器不会加工这些物品，AE2 合成 CPU 已记账却永远等不到产物，合成任务卡在最后一段。
+	 * <p>
+	 * <b>凭据（关键）</b>：即使已限定在本模组槽位，也不能「只要同种就收」——否则外部任何一次
+	 * 新推送都会命中。本方法改为只接受 {@link SlotRollbackWindow} 里那笔「本槽刚被外部取走」
+	 * 的等量同种物品（窗口 {@value SlotRollbackWindow#WINDOW_TICKS} 刻）；没有凭据一律拒绝，
+	 * 输出槽对任何外部来源都保持不可插入。
 	 */
 	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
 			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
 			at = @At("HEAD"), cancellable = true, order = 900)
 	private void productivebeesgenesis$allowOutputRollback(ItemStack stack, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		if (!productivebeesgenesis$ownSlot) return;
 		if (automationType != AutomationType.EXTERNAL || stack.isEmpty() || current.isEmpty()) return;
 		if (!ItemStack.isSameItemSameComponents(current, stack)) return;
 		if (isItemValidForInsertion(stack, AutomationType.EXTERNAL)) return;
 		if (!isItemValidForInsertion(stack, AutomationType.INTERNAL)) return;
+
+		// 精确回滚凭据：必须与本槽刚被外部取走的物品同类型、未过期、且不超出那笔提取的数量。
+		// 缺任何一条都按原版拒绝，输出槽因此不会退化成半开放的输入口。
+		// 前置短路只用普通字段读（window == null / isArmed），把 ServerTickClock 的 volatile
+		// 读推迟到确有凭据时 —— 时间加速放大的是机器内部路径，这里必须保持无感成本。
+		SlotRollbackWindow window = productivebeesgenesis$rollbackWindow;
+		if (window == null || !window.isArmed()) return;
+		int credit = window.creditFor(stack, ServerTickClock.now());
+		if (credit <= 0) return;
 
 		int needed = getLimit(stack) - current.getCount();
 		if (needed <= 0) {
 			cir.setReturnValue(stack);
 			return;
 		}
-		int toAdd = Math.min(stack.getCount(), needed);
+		int toAdd = Math.min(Math.min(stack.getCount(), needed), credit);
 		if (action.execute()) {
 			current.grow(toAdd);
 			onContentsChanged();
+			// 按实际退回量扣减，避免同一笔提取被反复退回
+			window.consume(toAdd);
 		}
 		cir.setReturnValue(stack.copyWithCount(stack.getCount() - toAdd));
 	}

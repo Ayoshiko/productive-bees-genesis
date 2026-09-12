@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import net.minecraft.resources.ResourceLocation;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -108,6 +110,23 @@ class EssenceConversionUpgradeHelperTest {
 				"反向推断只允许锭和宝石，不能复用粗矿排除标签");
 		assertTrue(source.contains("producedItems.contains(entry.getKey())"),
 				"除下界之星白名单外，转换产物不能在后续生产周期继续压缩");
+	}
+
+	@Test
+	@DisplayName("工业先锋吸管配方不得被精华转化升级自动合成")
+	void excludesIndustrialForegoingStrawRecipe() throws Exception {
+		ResourceLocation strawRecipe =
+				ResourceLocation.fromNamespaceAndPath("industrialforegoing", "straw");
+		ResourceLocation unrelatedRecipe =
+				ResourceLocation.fromNamespaceAndPath("industrialforegoing", "plastic");
+		assertTrue(EssenceConversionRecipeIndex.isRecipeExcluded(strawRecipe));
+		assertFalse(EssenceConversionRecipeIndex.isRecipeExcluded(unrelatedRecipe),
+				"黑名单必须精确匹配配方 ID，不能禁用整个模组的配方");
+
+		String source = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/util/EssenceConversionRecipeIndex.java"));
+		assertTrue(source.contains("if (isRecipeExcluded(holder.id())) continue;"),
+				"配方黑名单必须在解析配方前生效");
 	}
 
 	@Test

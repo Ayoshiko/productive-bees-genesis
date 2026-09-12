@@ -51,6 +51,8 @@ final class EssenceConversionRecipeIndex {
 			ResourceLocation.fromNamespaceAndPath("mysticalagradditions", "nether_star_shard");
 	private static final ResourceLocation NETHER_STAR_ID =
 			ResourceLocation.fromNamespaceAndPath("minecraft", "nether_star");
+	private static final Set<ResourceLocation> EXCLUDED_RECIPE_IDS = Set.of(
+			ResourceLocation.fromNamespaceAndPath("industrialforegoing", "straw"));
 	private static final long BUILD_RETRY_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(5);
 	private static volatile ConversionSnapshot conversionSnapshot = ConversionSnapshot.EMPTY;
 	private static volatile boolean conversionSnapshotLoaded;
@@ -69,6 +71,10 @@ final class EssenceConversionRecipeIndex {
 			conversionSnapshot = ConversionSnapshot.EMPTY;
 			lastFailedBuildNanos = Long.MIN_VALUE;
 		}
+	}
+
+	static boolean isRecipeExcluded(ResourceLocation recipeId) {
+		return EXCLUDED_RECIPE_IDS.contains(recipeId);
 	}
 
 	private static ConversionSnapshot ensureConversionSnapshot(Level level) {
@@ -99,6 +105,7 @@ final class EssenceConversionRecipeIndex {
 		Map<StackKey, Map<RecipeSignature, RecipePattern>> patternsByInput = new HashMap<>();
 		for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager()
 				.getAllRecipesFor(RecipeType.CRAFTING)) {
+			if (isRecipeExcluded(holder.id())) continue;
 			try {
 				for (RecipePattern pattern : parseRecipes(level, holder.value())) {
 					patternsByInput.computeIfAbsent(pattern.inputKey(), ignored -> new HashMap<>())

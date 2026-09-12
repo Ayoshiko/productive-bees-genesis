@@ -268,11 +268,27 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 
 	/**
 	 * 显式绑定覆盖虚拟 tick；线程作用域覆盖完整 tick 内刚创建或刚替换的缓存。
+	 * <p>
+	 * <b>归属边界（重要）</b>：{@code CachedRecipe} 是 Mekanism API 的公共配方缓存基类，
+	 * 全服每一台 MEK 机器（含其它模组的附属机器）的缓存配方都继承它，而本 mixin 的
+	 * 注入点作用在该基类上。{@code BatchEnergyLedger.active()} 是线程作用域静态量：
+	 * 一旦本模组的批次作用域处于打开状态（{@code MekCentrifugeFactoryHelper} 把它包在
+	 * 完整 tick 回调外层），作用域内任何一台<b>其它</b>机器的 {@code useEnergy} 都会被
+	 * 取消并把电费记进本模组机器的账本 —— 对方白嫖加工、我方代付。
+	 * <p>
+	 * 因此线程作用域回落必须叠加归属判定：只有本模组创建、并显式开启边际计费的缓存配方
+	 * （{@code CentrifugeFactoryCommonLogic#createNewCachedRecipe} 与
+	 * {@code MekCentrifugeUpgradeOps#configureCachedRecipe} 是仅有的两个开启点）
+	 * 才允许回落到线程作用域账本；显式绑定路径不受影响，本模组机器的计费语义完全不变。
 	 */
 	@Unique
 	private BatchEnergyLedger productivebeesgenesis$effectiveEnergyLedger() {
 		if (productivebeesgenesis$batchEnergySession && productivebeesgenesis$batchEnergyLedger != null) {
 			return productivebeesgenesis$batchEnergyLedger;
+		}
+		if (!productivebeesgenesis$marginalEnergyPricing) {
+			// 非本模组配方：不得借道线程作用域账本（既不记账也不取消其 useEnergy）
+			return null;
 		}
 		return BatchEnergyLedger.active();
 	}

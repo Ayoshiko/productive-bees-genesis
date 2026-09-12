@@ -31,7 +31,10 @@ class DirectContainerOutputWiringTest {
 	void apiaryProduceUsesDirectOutputBeforeSlots() throws Exception {
 		String processor = read("apiary/BeeProduceProcessor.java");
 
-		int directIndex = processor.indexOf("allItems = pushProducedToNeighbors(allItems);");
+		// 直通开关由本轮 flush 的机器级快照提供（见 ApiaryBatchUpgradeSnapshot）：
+		// processBatchProduce 按蜂种分组逐组调用，per-tile 开关逐组读取会随分组数放大。
+		int directIndex = processor.indexOf(
+				"allItems = pushProducedToNeighbors(allItems, upgrades.directContainerOutputEnabled());");
 		int distributeIndex = processor.indexOf("outputDispatcher.distribute(slotManager.getOutputSlots()");
 		int centrifugeIndex = processor.indexOf("apiary.directTransferProducedToCentrifuges(allItems)");
 		assertTrue(directIndex > 0, "产出路径必须调用直通");

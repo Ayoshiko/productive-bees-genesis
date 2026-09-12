@@ -23,14 +23,10 @@ public final class EssenceConversionUpgradeItem extends UpgradeItem {
 	public void appendHoverText(ItemStack stack, Item.TooltipContext context,
 			List<Component> tooltip, TooltipFlag flag) {
 		tooltip.add(Component.translatable(
-				"item.productivebeesgenesis.essence_conversion_upgrade.description.machine")
-				.withStyle(ChatFormatting.GRAY));
-		tooltip.add(Component.translatable(
-				"item.productivebeesgenesis.essence_conversion_upgrade.description.rule")
+				"item.productivebeesgenesis.essence_conversion_upgrade.description.summary")
 				.withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable(
 				"item.productivebeesgenesis.essence_conversion_upgrade.description.limit")
 				.withStyle(ChatFormatting.DARK_GRAY));
-		super.appendHoverText(stack, context, tooltip, flag);
 	}
 }

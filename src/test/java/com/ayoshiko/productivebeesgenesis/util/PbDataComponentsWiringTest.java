@@ -34,6 +34,7 @@ class PbDataComponentsWiringTest {
 	/** 必须走缓存访问器的热路径文件（每 tick 或每槽 × 每类型被调用）。 */
 	private static final List<String> HOT_PATH_FILES = List.of(
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java",
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputLaneSnapshot.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CombFuzzyMatcher.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeFinder.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/MekCentrifugeFactoryHelper.java",
@@ -57,8 +58,9 @@ class PbDataComponentsWiringTest {
 			if (source.contains("ModDataComponents.BEE_TYPE.get()")) {
 				offenders.add(path);
 			}
-			assertTrue(source.contains("PbDataComponents.beeType()"),
-					path + " 必须经 PbDataComponents.beeType() 解析组件类型");
+			assertTrue(source.contains("PbDataComponents.beeType()")
+							|| source.contains("Ae2InputLaneSnapshot.singleBeeType("),
+					path + " 必须经 PbDataComponents.beeType() 解析组件类型（或经共享签名提取入口间接解析）");
 		}
 		assertTrue(offenders.isEmpty(),
 				() -> "以下热路径仍在直接做注册表查找（spark 中 DeferredHolder.get 曾占 1.47%）: "
@@ -66,18 +68,34 @@ class PbDataComponentsWiringTest {
 	}
 
 	@Test
-	@DisplayName("PullEntry.matchesComponents 单次调用只解析一次组件类型")
-	void componentMatchResolvesTypeOnce() throws Exception {
+	@DisplayName("组件匹配内层循环不再做注册表/组件表查找，改由预采签名驱动")
+	void componentMatchUsesPrecomputedSignatures() throws Exception {
 		String source = read(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
 		int methodStart = source.indexOf("boolean matchesComponents(");
 		assertTrue(methodStart > 0, "找不到 matchesComponents 方法");
 		int methodEnd = source.indexOf("\n\t\t/**", methodStart);
 		String method = source.substring(methodStart, methodEnd > 0 ? methodEnd : source.length());
-		assertTrue(method.contains("DataComponentType<ResourceLocation> beeTypeComponent"),
-				"必须把组件类型提到局部变量，避免同一方法内重复解析");
-		assertEquals(1, countOccurrences(method, "PbDataComponents.beeType()"),
-				"matchesComponents 内只应解析一次组件类型（原实现连续 4 次 DeferredHolder.get）");
+		// 「类型 × 车道」内层循环：必须只做数组读与值比较，不得再触碰组件映射或注册表
+		assertFalse(method.contains("PbDataComponents.beeType()"),
+				"内层循环不得再解析组件类型：bee_type 签名须由调用方预采后作为参数传入");
+		assertFalse(method.contains("getComponentsPatch()"),
+				"补丁数须由调用方预采（车道快照 / 条目准备），内层循环不得重复读取");
+		assertFalse(method.contains("CombFuzzyMatcher.isConfigurableCombItem"),
+				"可配置蜜脾判定属预采内容，不得留在内层循环");
+		assertTrue(method.contains("lanePatchSize == 0 && keyPatchSize == 0"),
+				"普通无组件物品必须仍走绕过完整组件映射比较的快径");
+
+		// 两侧签名必须同源：统一由 Ae2InputLaneSnapshot.singleBeeType 提取，且只解析一次组件类型
+		String snapshot = read(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputLaneSnapshot.java");
+		int helperStart = snapshot.indexOf("static ResourceLocation singleBeeType(");
+		assertTrue(helperStart > 0, "找不到统一的 bee_type 签名提取入口");
+		String helper = snapshot.substring(helperStart);
+		assertEquals(1, countOccurrences(helper, "PbDataComponents.beeType()"),
+				"签名提取入口只应解析一次组件类型（原实现同一方法内连续 4 次 DeferredHolder.get）");
+		assertTrue(source.contains("Ae2InputLaneSnapshot.singleBeeType("),
+				"条目侧与车道侧必须共用同一套签名判定，否则快径会给出错误结论");
 	}
 
 	@Test

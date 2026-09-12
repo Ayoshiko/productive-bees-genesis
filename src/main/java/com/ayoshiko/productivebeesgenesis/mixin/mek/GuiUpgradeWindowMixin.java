@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.jerry.mekextras.api.ExtraUpgrade;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -78,17 +80,17 @@ public class GuiUpgradeWindowMixin {
 	/**
 	 * 判断 tile 是否是离心机工厂
 	 * <br/>
-	 * 通过类名前缀检查，避免直接引用离心机类（可能导致 ME/EME 未加载时类加载失败）。
-	 * 覆盖 ME 工厂与 EME 工厂两种变体（已迁移至 compat 包）。
+	 * 与 {@code ExtraUpgradeStackMixin} 同源：原实现比对三段硬编码类名前缀，已因包重构
+	 * （{@code mek} → {@code compat.mekanism_extras} / {@code compat.emextras}）失效过一次，
+	 * 再重构即静默失效。改判本模组自有接口 —— 接口在本模组 jar 内，{@code instanceof}
+	 * 不会触发 ME/EME 类加载，原始约束不变。两处判定必须保持同源，否则会出现
+	 * 「能装 16 个但 GUI 显示 8 个」这类双向不一致。
 	 *
 	 * @return true 如果 tile 是离心机工厂类
 	 */
 	@Unique
 	private boolean productivebeesgenesis$isCentrifugeFactory() {
 		if (tile == null) return false;
-		String name = tile.getClass().getName();
-		return name.startsWith("com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge")
-				|| name.startsWith("com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory")
-				|| name.startsWith("com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory");
+		return tile instanceof IFactoryPbDelegateAccess || tile instanceof IMekCentrifugeTile;
 	}
 }

@@ -437,6 +437,12 @@ class BeeSlotTickProcessor {
 			return;
 		}
 
+		// 机器级升级/per-tile 状态一轮采集一次，供所有蜂种分组共享。
+		// 混养场景（每个蜜蜂格子一种蜜蜂）下分组数 = 槽位数，逐组查询会把
+		// ApiaryUpgradeCache 的 AtomicLong 刷新计数与 PB 升级查询放大 N 倍。
+		// 采集点必须在输出空间检查之后：无需 flush 时不做任何采集。
+		ApiaryBatchUpgradeSnapshot upgrades = ApiaryBatchUpgradeSnapshot.capture(tile, upgradeHandler);
+
 		// 对每个蜜蜂类型键组批量处理
 		// finally 确保异常时也清零 pendingProductions，防止下次 flush 重复分发导致产出翻倍
 		// 异常时未分发的产出会丢失，但优于产出翻倍
@@ -463,6 +469,8 @@ class BeeSlotTickProcessor {
 				// 同组共享一次配方查询（缓存命中 O(1)）
 				// 模块 2+3：getCachedProduce 返回 Map<ItemStack, ChancedOutput>（配方原始数据，不执行概率检查）
 				// 模块 1：传入 feederManager 支持 lumber_bee/quarry_bee/dye_bee 从喂食槽推断产物
+				// 多花蜂判定是本组唯一的 per-type 结果，直接传给 processBatchProduce：
+				// 原先该方法内部还会为同一 typeKey 再判定两次（含守卫），属重复计算。
 				boolean feederDependentProduce = MultiFlowerBeeAdapter.isMultiFlowerBee(typeKey);
 				Map<ItemStack, ChancedOutput> produceList = feederDependentProduce
 						? Map.of()
@@ -476,7 +484,7 @@ class BeeSlotTickProcessor {
 				// F4: 传入 outputBuffer，输出槽满载时剩余产物送入缓冲区下 tick 重试
 				produceProcessor.processBatchProduce(beeSlots, pendingProductions, group.slotIndices,
 						typeKey, produceList, slotManager, feederManager, tile.getBlockPos(),
-						level, tile.getOutputBuffer());
+						level, tile.getOutputBuffer(), upgrades, feederDependentProduce);
 			}
 		} finally {
 			// 清零所有累积计数（含 accumulatedProgress），异常时也执行，防止产出翻倍

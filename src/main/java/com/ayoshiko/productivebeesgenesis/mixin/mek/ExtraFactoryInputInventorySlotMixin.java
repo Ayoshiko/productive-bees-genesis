@@ -57,7 +57,7 @@ public abstract class ExtraFactoryInputInventorySlotMixin {
 	 * @param stack 被查询的物品栈
 	 * @param cir   返回值回调信息
 	 */
-	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true, require = 1)
+	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true, require = 0)
 	private void productivebeesgenesis$overrideGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		// 仅当 TieredInputSlot 接口已注入（BasicInventorySlotMixin 已应用）时处理
 		if (this instanceof TieredInputSlot tiered) {

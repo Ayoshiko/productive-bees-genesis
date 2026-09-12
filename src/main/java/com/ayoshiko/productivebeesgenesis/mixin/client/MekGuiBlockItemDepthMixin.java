@@ -14,9 +14,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
 	 * 修复 MEK GUI 中 JEI 拖拽预览与幽灵槽内 3D 方块物品的深度精度问题。
@@ -52,44 +50,18 @@ public class MekGuiBlockItemDepthMixin {
 	private static final float OVERLAY_Z_MARGIN = 400.0F;
 
 	/**
-	 * JEI 在屏幕绘制完成后调用 {@code renderFakeItem}，此时窗口已经写入深度缓冲。
-	 * 方块模型是立体几何，单纯提高 Z 仍可能被已有深度值拒绝，因此对这条专用路径
-	 * 暂时关闭深度测试。使用线程局部状态，保证异常或嵌套调用不会误恢复其他渲染路径。
-	 */
-	private static final ThreadLocal<Boolean> DEPTH_OVERRIDE = ThreadLocal.withInitial(() -> false);
-
-	@Inject(method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;III)V", at = @At("HEAD"))
-	private void productivebeesgenesis$beginFakeItemOverlay(ItemStack stack, int x, int y, int seed,
-			CallbackInfo callbackInfo) {
-		boolean ownMekScreen = productivebeesgenesis$isOwnMekScreen();
-		if (ownMekScreen && MekGuiBlockItemRenderContext.isJeiDragRender()
-				&& stack.getItem() instanceof BlockItem) {
-			// JEI 拖拽预览在 MEK 窗口绘制完成后调用，提升到本帧最深窗口之上。
-			RenderSystem.disableDepthTest();
-			DEPTH_OVERRIDE.set(true);
-		}
-		if (ownMekScreen && !MekGuiBlockItemRenderContext.isJeiDragRender()
-				&& stack.getItem() instanceof BlockItem) {
-			// 窗口内部的方块物品保留 MEK 的深度压缩，避免进入远裁剪边界。
-			DEPTH_OVERRIDE.set(true);
-		}
-	}
-
-	@Inject(method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;III)V", at = @At("RETURN"))
-	private void productivebeesgenesis$endFakeItemOverlay(ItemStack stack, int x, int y, int seed,
-			CallbackInfo callbackInfo) {
-		if (DEPTH_OVERRIDE.get()) {
-			DEPTH_OVERRIDE.remove();
-			if (MekGuiBlockItemRenderContext.isJeiDragRender()) {
-				RenderSystem.enableDepthTest();
-			}
-		}
-	}
-
-	/**
 	 * 包裹 {@code renderFakeItem(ItemStack, int, int, int)} 内部对
 	 * {@code renderItem(LivingEntity, Level, ItemStack, int, int, int)} 的调用，
-	 * 在 try/finally 中保护临时的 PoseStack 平移。
+	 * 在 try/finally 中保护临时的 PoseStack 平移与深度测试开关。
+	 * <p>
+	 * <b>为什么把深度开关并进来</b>：原实现在 {@code renderFakeItem} 的 HEAD 关闭深度测试、
+	 * 在 RETURN 恢复。RETURN 注入在方法抛异常时不会执行，深度测试便会保持关闭并污染
+	 * 整帧后续渲染（作用域外泄漏，影响所有在本模组 MEK 界面之后绘制的内容）。
+	 * 而方块物品真正需要关深度测试的只有内部这一次 {@code renderItem}，因此改为
+	 * 单点 WrapOperation + {@code try/finally}：异常路径同样恢复。
+	 * <p>
+	 * 同时去掉了原先的布尔线程局部标志：{@code renderFakeItem} 嵌套时内层 RETURN 会把
+	 * 标志提前清掉，使外层的深度测试再也无法恢复（同一个泄漏的另一种触发方式）。
 	 */
 	@WrapOperation(
 		method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;III)V",
@@ -103,27 +75,35 @@ public class MekGuiBlockItemDepthMixin {
 	private void productivebeesgenesis$wrapRenderFakeItem(GuiGraphics instance,
 			LivingEntity entity, Level level, ItemStack stack, int x, int y, int seed,
 			Operation<Void> original) {
-		if (productivebeesgenesis$isOwnMekScreen() && stack.getItem() instanceof BlockItem) {
-			PoseStack pose = instance.pose();
-			float poseZ = pose.last().pose().m32();
-			// 窗口内渲染已经处于 MEK 的层级树中，保留原有深度压缩；
-			// JEI 覆盖层从 z=0 开始，按本帧实际最深层级抬到所有窗口内容之上。
-			float targetZ = GuiMekanism.maxZOffset + OVERLAY_Z_MARGIN;
-			float deltaZ = MekGuiBlockItemRenderContext.isJeiDragRender()
-					? targetZ - poseZ
-					: (poseZ > 100.0F ? -Z_COMPRESSION : 0.0F);
-			if (Math.abs(deltaZ) > 0.001F) {
+		if (!productivebeesgenesis$isOwnMekScreen() || !(stack.getItem() instanceof BlockItem)) {
+			original.call(instance, entity, level, stack, x, y, seed);
+			return;
+		}
+		boolean jeiDrag = MekGuiBlockItemRenderContext.isJeiDragRender();
+		PoseStack pose = instance.pose();
+		float poseZ = pose.last().pose().m32();
+		// 窗口内渲染已经处于 MEK 的层级树中，保留原有深度压缩；
+		// JEI 覆盖层从 z=0 开始，按本帧实际最深层级抬到所有窗口内容之上。
+		float targetZ = GuiMekanism.maxZOffset + OVERLAY_Z_MARGIN;
+		float deltaZ = jeiDrag ? targetZ - poseZ : (poseZ > 100.0F ? -Z_COMPRESSION : 0.0F);
+		boolean pushed = Math.abs(deltaZ) > 0.001F;
+		if (jeiDrag) {
+			RenderSystem.disableDepthTest();
+		}
+		try {
+			if (pushed) {
 				pose.pushPose();
-				try {
-					pose.translate(0.0F, 0.0F, deltaZ);
-					original.call(instance, entity, level, stack, x, y, seed);
-				} finally {
-					pose.popPose();
-				}
-				return;
+				pose.translate(0.0F, 0.0F, deltaZ);
+			}
+			original.call(instance, entity, level, stack, x, y, seed);
+		} finally {
+			if (pushed) {
+				pose.popPose();
+			}
+			if (jeiDrag) {
+				RenderSystem.enableDepthTest();
 			}
 		}
-		original.call(instance, entity, level, stack, x, y, seed);
 	}
 
 	/** 只允许本附属模组注册的机器界面使用深度压缩，避免影响其他模组的 MEK GUI。 */

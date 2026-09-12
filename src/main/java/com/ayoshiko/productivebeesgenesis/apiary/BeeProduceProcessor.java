@@ -134,11 +134,12 @@ public class BeeProduceProcessor {
 									ResourceLocation beeTypeKey, Map<ItemStack, ChancedOutput> produceList,
 									ApiarySlotManager slotManager, FeederSlotManager feederManager,
 									BlockPos origin, Level level,
-									ApiaryOutputBuffer outputBuffer) {
+									ApiaryOutputBuffer outputBuffer,
+									ApiaryBatchUpgradeSnapshot upgrades, boolean multiFlowerBee) {
 		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
 				|| produceList == null
 				|| (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(beeTypeKey)
-						&& !MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey))) {
+						&& !multiFlowerBee)) {
 			return;
 		}
 
@@ -150,18 +151,18 @@ public class BeeProduceProcessor {
 		// 基因采样批次复用固定数组，避免高等级工厂每个蜂种组创建 List/record/NBT 引用。
 		GeneSampler.SampleBatch geneSampleBatch = reusableGeneSampleBatch;
 		geneSampleBatch.clear();
-		int geneSamplerCount = upgradeHandler.getGeneSamplerCount();
+		// 机器级状态一律取自本轮 flush 共享快照（详见 ApiaryBatchUpgradeSnapshot）：
+		// 这些取值与蜂种分组无关，逐组查询会把 ApiaryUpgradeCache 的 AtomicLong
+		// 刷新计数放大 N 倍（N = 本轮分组数，混养时 N 可达槽位数）。
+		int geneSamplerCount = upgrades.geneSamplerCount();
 		long[] productivityCounts = reusableProductivityCounts;
 		Arrays.fill(productivityCounts, 0L);
 		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
 		ServerLevel wannaBeeLevel = level instanceof ServerLevel serverLevel
 				&& PBConstants.WANNA_TYPE.equals(beeTypeKey) ? serverLevel : null;
 
-		// 循环外预算生产力倍率 — 升级安装数量不随蜜蜂槽变化，
-		// 避免每次采样重复触发 4 次 getInstalledUpgrades EnumMap 查询
-		float productivityMultiplier = upgradeHandler.getProductivityMultiplier();
-		boolean discardUselessByproducts =
-				apiary.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;
+		float productivityMultiplier = upgrades.productivityMultiplier();
+		boolean discardUselessByproducts = upgrades.discardUselessByproducts();
 
 		// 模块 2+3：循环外查询流体输出类型（同组蜜蜂共享 beeTypeKey，流体类型一致）
 		// BeeFluidOutputResolver 从离心配方推断流体类型：蜂蜜返回 FluidStack(honey, 250)，
@@ -200,7 +201,6 @@ public class BeeProduceProcessor {
 
 		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
 		if (aggregatedCount > 0) {
-			boolean multiFlowerBee = MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey);
 			for (int productivityLevel = BeeProductivityGene.NORMAL;
 					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
 				int sampledProductionCount = SaturatingMath.saturatingToInt(
@@ -245,7 +245,7 @@ public class BeeProduceProcessor {
 				// cappedMyriadCount 作为 totalCount 上限保护输出槽总容量（9 槽 × 64 = 576，实际 ItemStack ≤9）
 				int cappedMyriadCount = Math.min(effectiveMyriadCount, MYRIAD_RANDOM_CAP);
 				List<ItemStack> randomItems;
-				if (upgradeHandler.hasCombBlockUpgrade()) {
+				if (upgrades.hasCombBlockUpgrade()) {
 					// 有 Block/Omega 升级：buildAggregatedCombBlocks 内部已 4× 缩放（与 Mixin 单次 4 个比例一致）
 					randomItems = myriadAggregatedBuilder.buildAggregatedCombBlocks(
 							cappedMyriadCount, level, this /* factoryKey */);
@@ -286,18 +286,17 @@ public class BeeProduceProcessor {
 
 		// Bug 5修复：安装omega升级后，将蜜脾转换为蜜脾块（1:1替换，保持数量）
 		// 转换结果不写入静态缓存 BeeProduceCache（不同蜂箱升级状态不同），每次动态转换
-		if (upgradeHandler.hasCombBlockUpgrade()) {
+		if (upgrades.hasCombBlockUpgrade()) {
 			allItems = combBlockConverter.convertCombsToBlocksInPlace(allItems);
 		}
 		// 精华转化升级在所有输出路由前执行，确保转换结果优先进入 AE、离心机或本地槽位。
 		// 转换器只处理唯一同物配方，数量不足整组时保留余数。
-		if (apiary.getPbUpgradeInstalledCount(PbUpgradeType.ESSENCE_CONVERSION) > 0
-				&& level != null) {
+		if (upgrades.hasEssenceConversionUpgrade() && level != null) {
 			allItems = EssenceConversionUpgradeHelper.convert(level, allItems);
 		}
 
 		// 批量插入合并后的物品到输出槽
-		if (apiary.isDirectAeOutputEnabled() && !allItems.isEmpty()) {
+		if (upgrades.directAeOutputEnabled() && !allItems.isEmpty()) {
 			// 推 AE 前先按物品+组件聚合：四档生产力基因会为同一蜜脾各生成一个栈，
 			// 逐栈 insert 就是 N 次完整 ME 网络遍历（昂贵外部存储单次 0.3-10ms）。
 			// 聚合后 insert 次数 = 物品种类数，产物数量一件不少（AE insert 接受任意 count）。
@@ -323,14 +322,13 @@ public class BeeProduceProcessor {
 		// 离心机优先产出直连：蜜脾跳过输出槽中转直接进离心机输入槽（低频 flush 路径）
 		// 输出槽保留给非蜜脾产物，降低输出满触发蜜蜂停工的概率；
 		// 离心机也满时剩余回落输出槽 → 缓冲区 → 直连重试（渐进降级，防溢出语义不变）
-		if (!allItems.isEmpty() && apiary.isCentrifugePriorityEnabled()
-				&& apiary.isDirectEjectEnabled()) {
+		if (!allItems.isEmpty() && upgrades.centrifugeDirectTransferEnabled()) {
 			allItems = apiary.directTransferProducedToCentrifuges(allItems);
 		}
 		// 产物直通：离心机直连之后、写输出槽之前，把产物直接交给已配置输出面的相邻容器。
 		// 与离心机 PbRecipeFlusher 同级的收益（跳过输出槽中转、不占用输出容量）；
 		// 待离心的蜜脾（shouldHoldForCentrifuge）不直通，否则离心机优先会被外部容器抢走产物。
-		allItems = pushProducedToNeighbors(allItems);
+		allItems = pushProducedToNeighbors(allItems, upgrades.directContainerOutputEnabled());
 		List<ItemStack> leftovers = outputDispatcher.distribute(slotManager.getOutputSlots(), allItems);
 		// F4: 将未成功插入的剩余产物送入缓冲区，下 tick 重试注入
 		// 离心机优先：蜜脾满时不淘汰，超出输出上限的溢出部分推 AE（不再丢弃）
@@ -342,7 +340,7 @@ public class BeeProduceProcessor {
 		// fluidTemplate 为 EMPTY 时 totalFluidAmount 始终为 0，不会注入
 		if (totalFluidAmount > 0 && !fluidTemplate.isEmpty()) {
 			long remainingFluid = totalFluidAmount;
-			if (apiary.isDirectAeOutputEnabled()) {
+			if (upgrades.directAeOutputEnabled()) {
 				long accepted = apiary.pushGeneratedFluidToAe(fluidTemplate, remainingFluid);
 				remainingFluid -= Math.min(remainingFluid, Math.max(0L, accepted));
 			}
@@ -370,10 +368,11 @@ public class BeeProduceProcessor {
 	 * 性能：全部保留时返回原列表（零分配）；只在真正发生直通时才建新列表。
 	 *
 	 * @param stacks 产出列表（元素会被原地扣减 count）
+	 * @param directContainerOutputEnabled per-tile 产物直通开关（由本轮快照提供，避免逐组重复读取）
 	 * @return 未被相邻容器接收的剩余列表
 	 */
-	private List<ItemStack> pushProducedToNeighbors(List<ItemStack> stacks) {
-		if (stacks.isEmpty() || !apiary.isDirectContainerOutputEnabled()) return stacks;
+	private List<ItemStack> pushProducedToNeighbors(List<ItemStack> stacks, boolean directContainerOutputEnabled) {
+		if (stacks.isEmpty() || !directContainerOutputEnabled) return stacks;
 		List<ItemStack> remaining = null;
 		for (int i = 0; i < stacks.size(); i++) {
 			ItemStack stack = stacks.get(i);

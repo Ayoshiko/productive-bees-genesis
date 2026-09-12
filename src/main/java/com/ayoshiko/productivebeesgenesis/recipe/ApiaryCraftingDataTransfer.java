@@ -71,10 +71,24 @@ final class ApiaryCraftingDataTransfer {
 			transferBlockEntityDataDirect(inputs.get(0), dest, targetTileId);
 		} else {
 			// 多输入场景：按合并策略合并 NBT 后写入输出
-			CompoundTag mergedNbt = mergeMachineInputs(inputs, outputBlock, isApiary, targetTileId);
+			CompoundTag mergedNbt = mergeMachineInputs(inputs, outputBlock, isApiary, targetTileId, dest);
 			if (mergedNbt != null) {
 				dest.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(mergedNbt));
 			}
+		}
+	}
+
+	/** 读取 ItemStack 上的 BLOCK_ENTITY_DATA 深拷贝；无数据或读取失败返回 null。 */
+	@Nullable
+	private static CompoundTag readBlockEntityData(@Nullable ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return null;
+		CustomData data = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+		if (data == null) return null;
+		try {
+			return data.copyTag();
+		} catch (Exception e) {
+			DevLog.error("合成升级: 读取输出已有 BLOCK_ENTITY_DATA 失败", e);
+			return null;
 		}
 	}
 
@@ -172,10 +186,11 @@ final class ApiaryCraftingDataTransfer {
 	 * @param outputBlock  合成输出方块（用于查询目标容量）
 	 * @param isApiary     输出是否为蜂箱（决定是否合并蜜蜂槽）
 	 * @param targetTileId 目标方块的 BlockEntityType 注册键，null 时保留源 id
+	 * @param dest         合成结果物品；其上可能已有 MEK 合并好的 BLOCK_ENTITY_DATA
 	 * @return 合并后的 CompoundTag，所有输入均无数据时返回 null
 	 */
 	static CompoundTag mergeMachineInputs(List<ItemStack> inputs, Block outputBlock, boolean isApiary,
-			@Nullable String targetTileId) {
+			@Nullable String targetTileId, @Nullable ItemStack dest) {
 		// 收集所有输入的 NBT（深拷贝）
 		List<CompoundTag> nbts = new ArrayList<>(inputs.size());
 		for (ItemStack input : inputs) {
@@ -187,20 +202,38 @@ final class ApiaryCraftingDataTransfer {
 				DevLog.error("合成升级: 读取输入 BLOCK_ENTITY_DATA 失败,跳过该输入", e);
 			}
 		}
-		if (nbts.isEmpty()) {
-			return null;
+
+		// base 选择：优先沿用 dest 上已有的 BLOCK_ENTITY_DATA。
+		// 正常路径下它是 MekanismShapedRecipe 已经合并好的结果 —— MEK 的
+		// ItemRecipeData.merge 会把**每一个**输入的物品栏并进同一份 NBT，并已按目标等级
+		// 建立好槽位布局。原实现无条件用「首个输入的原始 NBT」作 base，等于把 MEK 合并
+		// 进来的第 2..N 个输入的物品栏整体覆盖掉：4 个基础蜂箱合成 1 个工厂蜂箱时，
+		// 后 3 个蜂箱输出槽里的物品会静默消失（无日志、无告警）。
+		// 降级路径下 dest 的 NBT 本就是首输入的副本，行为与原先完全一致 ——
+		// 因此这次改动只会「多保留」数据，不会少保留。
+		CompoundTag merged = readBlockEntityData(dest);
+		if (merged == null) {
+			if (nbts.isEmpty()) {
+				return null;
+			}
+			merged = nbts.get(0);
+		} else if (nbts.isEmpty()) {
+			// dest 有数据但输入都读不出来：只需修正 id 即可返回
+			if (targetTileId != null) {
+				merged.putString("id", targetTileId);
+			}
+			return merged;
 		}
 
-		// 第一个非空 NBT 作为 base，保留所有 "其他字段"（喂食槽/能量槽/流体罐/蜂笼 I/O/选中槽位等）
-		CompoundTag merged = nbts.get(0);
-
-		// 合并蜜蜂槽（仅蜂箱）
+		// 合并蜜蜂槽（仅蜂箱）—— 从全部输入重建，结果与 base 来源无关
 		if (isApiary) {
 			int targetCapacity = resolveApiaryBeeSlotCapacity(outputBlock);
 			mergeBeeSlots(merged, nbts, targetCapacity);
 		}
 
 		// 合并 PB 升级数量（蜂箱用 ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS,离心机用 MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS）
+		// 同样从全部输入重新求和：若仍沿用「首输入已在 base 中」的假设，一旦 base 换成
+		// MEK 的合并结果（其中不含我们的 PB 字段），首输入的升级数就会被漏算。
 		String pbUpgradeKey = isApiary ? ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS
 				: MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS;
 		mergePbUpgradeCounts(merged, nbts, pbUpgradeKey);
@@ -214,33 +247,26 @@ final class ApiaryCraftingDataTransfer {
 	}
 
 	/**
-	 * 合并蜜蜂槽数据 — 取并集，按输入顺序填充到目标容量上限
+	 * 合并蜜蜂槽数据 — 从<b>全部输入</b>重建，取并集并按输入顺序填充到目标容量上限
 	 * <br/>
-	 * 原理：遍历所有输入 NBT 的 {@link ApiarySlotSerializer#NBT_KEY_BEE_SLOTS} ListTag，
-	 * 依次将每个蜜蜂槽 CompoundTag 追加到 merged 的 bee_slots 列表，
-	 * 达到目标容量上限后停止追加，超出部分记录 WARN。
+	 * 原理：清空 merged 中已有的 {@link ApiarySlotSerializer#NBT_KEY_BEE_SLOTS}，按输入顺序
+	 * 依次追加每个输入的蜜蜂槽 CompoundTag，达到目标容量上限后停止追加，超出部分记录 WARN。
 	 * <p>
-	 * 向后兼容：输入 NBT 无 bee_slots 字段时跳过该输入。
+	 * <b>为什么从零重建而不是「base 续接」</b>：base 可能是首输入的原始 NBT，也可能是 MEK 的
+	 * 合并结果（见 {@link #mergeMachineInputs}）。若沿用「首输入已在 base 中」的假设，
+	 * base 一换就会重复计入或漏算首输入的蜜蜂。从零重建让结果与 base 来源完全无关，
+	 * 且输出顺序与原先逐字一致（首输入的蜜蜂仍在最前）。
+	 * <p>
+	 * 向后兼容：输入 NBT 无 bee_slots 字段时跳过该输入；空列表也写入，确保字段存在。
 	 *
-	 * @param merged          合并目标 NBT（首输入 NBT 作为 base，已包含其 bee_slots）
+	 * @param merged          合并目标 NBT
 	 * @param inputs          所有输入 NBT 列表
 	 * @param targetCapacity  目标机器的蜜蜂槽容量上限
 	 */
 	static void mergeBeeSlots(CompoundTag merged, List<CompoundTag> inputs, int targetCapacity) {
-		// 从 base 中取出已有蜜蜂槽（首输入的蜜蜂）
-		ListTag mergedBeeSlots = merged.contains(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_LIST)
-				? merged.getList(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_COMPOUND)
-				: new ListTag();
-		// 容量校验：base 蜜蜂数已超目标容量时截断
+		ListTag mergedBeeSlots = new ListTag();
 		int dropped = 0;
-		while (mergedBeeSlots.size() > targetCapacity) {
-			mergedBeeSlots.remove(mergedBeeSlots.size() - 1);
-			dropped++;
-		}
-
-		// 追加后续输入的蜜蜂槽（跳过首输入 NBT,已作为 base）
-		for (int i = 1; i < inputs.size(); i++) {
-			CompoundTag inputNbt = inputs.get(i);
+		for (CompoundTag inputNbt : inputs) {
 			if (!inputNbt.contains(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_LIST)) continue;
 			ListTag inputBeeSlots = inputNbt.getList(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_COMPOUND);
 			for (int j = 0; j < inputBeeSlots.size(); j++) {
@@ -265,26 +291,22 @@ final class ApiaryCraftingDataTransfer {
 	}
 
 	/**
-	 * 合并 PB 升级数量 — 累加所有输入的数量，按类型上限限制
+	 * 合并 PB 升级数量 — 从<b>全部输入</b>重新求和，按类型上限限制
 	 * <br/>
-	 * 原理：遍历所有输入 NBT 的 PB 升级数量 CompoundTag（key=类型id,value=数量），
-	 * 按类型累加数量，超过 {@link PbUpgradeType#getMaxCount()} 时截断并 WARN。
+	 * 原理：清空 merged 中已有的升级计数，遍历所有输入 NBT 的 PB 升级数量 CompoundTag
+	 * （key=类型id,value=数量），按类型累加，超过 {@link PbUpgradeType#getMaxCount()} 时截断并 WARN。
 	 * <p>
-	 * 向后兼容：输入 NBT 无 PB 升级字段时跳过该输入。
+	 * 与 {@link #mergeBeeSlots} 同理：从零求和不依赖 base 来源，避免 base 换成 MEK 合并结果后
+	 * 首输入升级数被漏算。
 	 *
 	 * @param merged       合并目标 NBT
 	 * @param inputs       所有输入 NBT 列表
 	 * @param pbUpgradeKey PB 升级数量的 NBT key（蜂箱 / 离心机不同）
 	 */
 	static void mergePbUpgradeCounts(CompoundTag merged, List<CompoundTag> inputs, String pbUpgradeKey) {
-		CompoundTag mergedCounts = merged.contains(pbUpgradeKey, Tag.TAG_COMPOUND)
-				? merged.getCompound(pbUpgradeKey)
-				: new CompoundTag();
+		CompoundTag mergedCounts = new CompoundTag();
 		boolean overflowed = false;
-
-		// 累加所有输入的数量（首输入已在 mergedCounts 中作为 base）
-		for (int i = 1; i < inputs.size(); i++) {
-			CompoundTag inputNbt = inputs.get(i);
+		for (CompoundTag inputNbt : inputs) {
 			if (!inputNbt.contains(pbUpgradeKey, Tag.TAG_COMPOUND)) continue;
 			CompoundTag inputCounts = inputNbt.getCompound(pbUpgradeKey);
 			for (String typeId : inputCounts.getAllKeys()) {

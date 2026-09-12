@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.logistics.NeighborItemTargets;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputWakeNotifier;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -154,7 +155,7 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 			}
 		}
 		notifier.onOutputStateTick(level, tile.getBlockPos(),
-				productivebeesgenesis$outputItemCount(tile) > 0L);
+				productivebeesgenesis$hasAnyOutputItem(tile));
 	}
 
 	/**
@@ -183,7 +184,7 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 		boolean needsVanilla = productivebeesgenesis$ensureFastEjector(tile).tick(
 				tile, ejector, info, level.getGameTime(),
 				productivebeesgenesis$outputContentsVersion(tile),
-				productivebeesgenesis$outputItemCount(tile) > 0L);
+				productivebeesgenesis$hasAnyOutputItem(tile));
 		if (needsVanilla) {
 			original.call(ejector, facing, info);
 			// 原版 outputItems 结尾会把 tickDelay 设成 10（半秒）；压回 1 保持最大速度
@@ -226,6 +227,22 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 			return apiary.productivebeesgenesis$outputItemCount();
 		}
 		return 0L;
+	}
+
+	/**
+	 * 输出槽是否非空 —— 调用点只关心「有没有」，不需要总数。
+	 * <p>
+	 * 原调用点用 {@code outputItemCount() > 0}：离心机家族是 O(1) 增量计数（无所谓），
+	 * 但蜂箱的 {@code outputItemCount()} 会遍历全部输出槽求和，且本 mixin **每个 tick 调两次**
+	 * （唤醒沿 + 弹出前判空），spark 报告里该方法是蜂箱侧自耗最高的方法之一。
+	 * 改走 {@code hasOutputItems()}：离心机读维护好的 O(1) 标志位，蜂箱命中首个非空槽即返回。
+	 */
+	@Unique
+	private static boolean productivebeesgenesis$hasAnyOutputItem(TileEntityMekanism tile) {
+		if (tile instanceof PbRecipeContext context) {
+			return context.productivebeesgenesis$hasOutputItems();
+		}
+		return productivebeesgenesis$outputItemCount(tile) > 0L;
 	}
 
 	/** 输出槽内容版本号（用于阻塞退避与同刻重复调用拦截）。 */

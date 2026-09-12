@@ -57,6 +57,20 @@ public interface TieredInputSlot {
 	ExternalInsertPolicy productivebeesgenesis$getExternalInsertPolicy();
 
 	/**
+	 * 显式标记该槽位归本模组机器所有。
+	 * <br/>
+	 * 外部「退回」保护会放宽槽位的外部插入谓词，因此必须限定作用域 —— 见
+	 * {@link com.ayoshiko.productivebeesgenesis.mixin.mek.BasicInventorySlotMixin}。
+	 * 本模组槽位在装配时调用本方法（或经由 {@link #productivebeesgenesis$setInputStackMultiplier}
+	 * 与 {@link #productivebeesgenesis$setExternalInsertPolicy} 隐式置位）；
+	 * Mekanism 原版机器的槽位永远保持未标记状态。
+	 */
+	void productivebeesgenesis$markOwnSlot();
+
+	/** 该槽位是否由本模组机器创建；原版机器槽位恒为 {@code false}。 */
+	boolean productivebeesgenesis$isOwnSlot();
+
+	/**
 	 * 获取输入槽堆叠倍率供应商
 	 *
 	 * @return 倍率供应商，未设置时返回 null

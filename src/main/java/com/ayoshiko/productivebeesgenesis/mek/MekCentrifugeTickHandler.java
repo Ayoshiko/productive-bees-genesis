@@ -122,6 +122,17 @@ class MekCentrifugeTickHandler {
 	}
 
 	/**
+	 * 当前批量倍率（JDTE 时间加速下同一 gameTick 内合并的虚拟刻数；无加速时为 1）。
+	 * <p>
+	 * 供输入槽外部插入配额估算工作集：加速倍率越高，机器每真实刻消耗越多，
+	 * 外部一次能填的缓冲深度也必须同步放大，否则手杖加速下会供料不足。
+	 * {@link TickBatchSkipState#getBatchMultiplier()} 的取值范围是 [1, 1024]。
+	 */
+	int batchMultiplier() {
+		return skipState.getBatchMultiplier();
+	}
+
+	/**
 	 * JDTE {@code CoalescedAcceleratedMachine.accumulateAcceleratedTicks} 委托入口
 	 * <br/>
 	 * 仅入账虚拟 tick 银行，不执行处理（flush 时统一执行一次完整批量）。

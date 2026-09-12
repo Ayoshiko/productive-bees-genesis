@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.jerry.mekextras.api.ExtraUpgrade;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -90,24 +92,24 @@ public class ExtraUpgradeStackMixin {
 	/**
 	 * 判断 tile 是否是我们的离心机工厂
 	 * <br/>
-	 * 通过类名前缀检查，避免直接引用离心机类（可能导致 ME/EME 未加载时类加载失败）。
-	 * 覆盖：
+	 * <b>为什么用接口而不是类名前缀</b>：原实现比对 {@code com.ayoshiko...TileEntityMekCentrifuge*}
+	 * 三段硬编码类名前缀来「避免引用离心机类（ME/EME 未加载时类加载失败）」。该白名单已经
+	 * 因包重构（{@code mek} → {@code compat.mekanism_extras} / {@code compat.emextras}）失效过一次，
+	 * 注释里也留了记录；再重构一次就是<b>静默失效</b>（安装上限与 GUI 显示双向不一致，且不报错）。
+	 * <p>
+	 * 改判本模组自有接口：两个接口都在本模组 jar 内，{@code instanceof} 只做已加载类的
+	 * 类型检查、不会触发 ME/EME 的类加载，因此原始约束（ME/EME 未安装时不得加载其类）依然成立。
+	 * 覆盖范围与原白名单等价：
 	 * <ul>
-	 *   <li>TileEntityMekCentrifuge — 基础离心机（不支持 STACK，但安全过滤）</li>
-	 *   <li>TileEntityMekCentrifugeFactory — 原版工厂（继承 AbstractMekCentrifugeFactory）</li>
-	 *   <li>TileEntityExtraMekCentrifugeFactory — ME 工厂（compat.mekanism_extras）</li>
-	 *   <li>TileEntityEMExtraMekCentrifugeFactory — EME 工厂（compat.emextras）</li>
+	 *   <li>{@code IFactoryPbDelegateAccess} — 原版工厂 + ME 工厂 + EME 工厂</li>
+	 *   <li>{@code IMekCentrifugeTile} — 基础离心机（不支持 STACK，但安全过滤）</li>
 	 * </ul>
-	 * 类名检查在 upgrade == STACK 时才触发，频率极低，性能开销可忽略。
 	 *
 	 * @return true 如果 tile 是我们的离心机类
 	 */
 	@Unique
 	private boolean productivebeesgenesis$isCentrifugeFactory() {
 		if (tile == null) return false;
-		String name = tile.getClass().getName();
-		return name.startsWith("com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge")
-				|| name.startsWith("com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory")
-				|| name.startsWith("com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory");
+		return tile instanceof IFactoryPbDelegateAccess || tile instanceof IMekCentrifugeTile;
 	}
 }

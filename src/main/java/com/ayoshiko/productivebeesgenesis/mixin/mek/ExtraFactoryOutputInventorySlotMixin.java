@@ -41,7 +41,7 @@ public abstract class ExtraFactoryOutputInventorySlotMixin {
 	 * @param stack 被查询的物品栈
 	 * @param cir   返回值回调信息
 	 */
-	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true, require = 1)
+	@Inject(method = "getLimit(Lnet/minecraft/world/item/ItemStack;)I", at = @At("HEAD"), cancellable = true, require = 0)
 	private void productivebeesgenesis$overrideGetLimit(@NotNull ItemStack stack, CallbackInfoReturnable<Integer> cir) {
 		if (this instanceof TieredInputSlot tiered) {
 			// 已乘倍率的最终上限缓存：命中即跳过倍率读取、accessor 字段访问与乘法钳制。

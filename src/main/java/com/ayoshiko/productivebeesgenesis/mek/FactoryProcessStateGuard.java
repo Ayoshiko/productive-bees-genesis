@@ -32,8 +32,12 @@ public final class FactoryProcessStateGuard {
 	 */
 	public static void onProcessActivated(int process, @NotNull AtomicIntegerArray pbActiveStates,
 			@NotNull AtomicInteger activeProcessCount) {
-		// CAS 0→1：成功表示本线程是状态转换的获胜者，负责递增计数器
-		if (pbActiveStates.compareAndSet(process, 0, 1)) {
+		// 快径：先做一次普通读（volatile load，约 1ns）。稳态下同一进程每 tick 都会调用本方法，
+		// 而状态绝大多数时刻并不改变；直接 CAS 意味着每次都要付一条 locked cmpxchg（约 20ns），
+		// 且失败也要付。19 进程 × 数十台工厂 × 20 tick/s 会放大成可观测的自耗
+		// （spark 4l77qmbvh7 中 onProcessDeactivated 接口链自耗 108ms / 0.36%）。
+		// 语义不变：真正的状态转换仍由 CAS 裁决，普通读只用来跳过必然失败的那次 CAS。
+		if (pbActiveStates.get(process) == 0 && pbActiveStates.compareAndSet(process, 0, 1)) {
 			activeProcessCount.incrementAndGet();
 		}
 	}
@@ -49,8 +53,9 @@ public final class FactoryProcessStateGuard {
 	 */
 	public static void onProcessDeactivated(int process, @NotNull AtomicIntegerArray pbActiveStates,
 											@NotNull AtomicInteger activeProcessCount) {
-		// CAS 1→0：成功表示本线程是状态转换的获胜者，负责递减计数器
-		if (pbActiveStates.compareAndSet(process, 1, 0)) {
+		// 快径同 onProcessActivated：已处于 0 时直接跳过 locked cmpxchg。
+		// 「已失活再失活」正是堵塞场景（输出槽满/无输入）下的稳态调用形态。
+		if (pbActiveStates.get(process) == 1 && pbActiveStates.compareAndSet(process, 1, 0)) {
 			activeProcessCount.decrementAndGet();
 		}
 	}

@@ -385,7 +385,8 @@ public final class CentrifugeFactoryCommonLogic {
 		// 在 pusher/puller 类链接阶段抛 Error，降级为节流日志而非工厂 tick 崩溃。
 		try {
 			Ae2OutputPusher.pushOutputs(factory);
-			// 收尾排空本 batch 写入本地罐的流体；直接产出模式仍保持正常批处理。
+			// 收尾排空本 batch 写入本地罐的流体：只要罐里有流体就在本刻推走（有就推送），
+			// 这里只提供每真实游戏刻一次的采样时机。
 			Ae2FluidPusher.pushLocalTankContentsNow(factory);
 			if (factory instanceof IAe2InputHost inputHost) {
 				Ae2InputPuller.pullInputs(inputHost, batchMultiplier);
