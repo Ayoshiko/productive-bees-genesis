@@ -44,10 +44,21 @@ jobs:
         id: release_meta
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_VERSION_TYPE: ${{ github.event.inputs.version_type }}
         shell: bash
         run: |
           version="${RELEASE_TAG#v}"
+          version_type="${INPUT_VERSION_TYPE:-}"
+          if [ -z "$version_type" ]; then
+            if [ "$RELEASE_PRERELEASE" = "true" ]; then
+              version_type="beta"
+            else
+              version_type="release"
+            fi
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_type=$version_type" >> "$GITHUB_OUTPUT"
 
       - name: Download verified release artifact
         env:
@@ -95,7 +106,7 @@ jobs:
           # Match historical CurseForge entries: derive the version name from the JAR filename.
           curseforge-name: ""
           version: ${{ steps.release_meta.outputs.version }}
-          version-type: ${{ github.event.inputs.version_type || 'release' }}
+          version-type: ${{ steps.release_meta.outputs.version_type }}
           changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
 
           dependencies: |
