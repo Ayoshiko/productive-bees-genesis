@@ -29,6 +29,75 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.8-beta.1] - 2026-09-12
+
+> 这是 `1.0.8` 的首个预发布版本。按照 SemVer，`beta.1` 表示修复需要尽快交付，但计划中的 1.0.8 内容尚未全部完成；后续可继续发布 `beta.2`，最终完成后再发布稳定版 `1.0.8`。
+
+### 新增
+
+- 新增 GuideME 与 Patchouli 双语内置教程，覆盖入门、机器、升级、AE2 自动化、过滤器、配置与故障排查；两者均为可选依赖。
+- 新增 AE2 网络级候选目录与工作协调器：同一 ME 网络上的机器共享基础候选枚举，并按网络分别分配昂贵存储操作预算。
+
+### 变更
+
+- AE2 流体输出改为“有新产物或槽已满时立即推送、被拒绝的旧批次按窗口重试”，并限制时间加速下的直推次数。
+- AE2 输入拉取预先快照输入车道，复用候选分类、组件签名和网络库存；首次扫描按方块坐标错峰。
+- 机械蜂箱每轮输出共享一次升级状态快照；Wanna Bee 大批量战利品采样按生产事件分层，减少重复升级查询和 LootModifier 遍历。
+- 收紧 Mixin 与兼容逻辑作用域：Building Gadgets 粘贴修复、Mekanism 槽位回滚、批次能耗记账只影响本模组机器；第三方调用点改用可组合的 WrapOperation。
+- 精简三个生产升级的物品提示，并将详细说明集中到内置教程；无尽创世内部材质物品不再进入普通创造物品栏。
+
+### 修复
+
+- **AE2 白名单与标签过滤组合**：标签表达式先筛选候选；存在标记条目时，白名单/黑名单再进行第二阶段过滤；没有标记条目时，纯标签过滤不再被空白名单错误拦截。全局无限拉取仍不能绕过准入规则。
+- 修复 AE2 安装探测回退仍检查已移除的 `appeng.api.AEApi`，导致部分加载阶段把已安装的 AE2 静默误判为缺失。
+- 修复外部自动化可把同种物品错误塞入输出槽并卡住 AE2 合成：现在只有本模组槽位在短时凭据窗口内接受“刚从该槽提取”的等量原样退回。
+- 修复多个机械蜂箱/离心机合成升级时，后续输入机器的物品栏、蜜蜂槽或 PB 升级数据可能被首个输入的 NBT 覆盖。
+- 修复时间加速或异常渲染路径下 Mekanism 界面的深度测试状态可能泄漏；修复副产物过滤原地修改不可变列表及第三方 Redirect 冲突。
+- 修复精华转换误采用 Industrial Foregoing 的 `industrialforegoing:straw` 合成配方。
+
+### 性能
+
+- AE2 外部存储输出快照改为有界数组，避免历史物品主键持续累积；共享网络缓存会在服务器停止时清理。
+- AE2 保留库存查询在缓存计数已覆盖请求上限时跳过实时全网探针，并记录每个网络的真实操作成本用于退避。
+- 工厂进程活跃状态在稳态下先普通读取再执行 CAS；蜂箱弹出判空改为命中首个非空槽即返回。
+
+### 测试
+
+- 补充 AE2 白名单/标签组合、网络候选共享、网络成本协调、输入车道快照与流体批处理测试。
+- 补充槽位回滚凭据与作用域、Mixin 边界、蜂箱批次升级快照、机器合成数据保留、Wanna Bee 抽样及可选教程依赖回归测试。
+
+### English
+
+#### Added
+
+- Added bilingual GuideME and Patchouli tutorials as optional, data-driven integrations.
+- Added per-network AE2 candidate sharing and work coordination to reduce duplicate scans and isolate pathological storage costs.
+
+#### Changed
+
+- Reworked AE2 fluid pushing to flush new/full-tank output immediately while retrying rejected leftovers on a bounded window; accelerated direct inserts now have a real-tick budget.
+- Reused AE2 input-lane, candidate, component and inventory snapshots, with position-based initial scan staggering.
+- Shared one apiary upgrade snapshot per output batch and bounded Wanna Bee loot-table event sampling.
+- Restricted cross-mod Mixins and rollback/accounting behavior to this addon's machines, using composable wrap operations where applicable.
+
+#### Fixed
+
+- **AE2 whitelist plus tag filtering**: tag expressions select candidates first; configured marks then apply whitelist/blacklist admission as a second stage. A tag-only setup with no marks is no longer rejected by an empty whitelist, and unlimited pulling still cannot bypass admission.
+- Fixed AE2 fallback detection probing the removed `appeng.api.AEApi` class.
+- Fixed external automation inserting matching items into output slots without a real rollback credit and stalling AE2 crafting jobs.
+- Fixed multi-machine upgrade recipes potentially dropping later inputs' inventories, bee slots or addon-upgrade data.
+- Fixed GUI depth state leaks, immutable-list mutation during byproduct filtering, and the unintended Industrial Foregoing straw recipe being indexed for essence conversion.
+
+#### Performance
+
+- Replaced the external AE storage's accumulating `KeyCounter` snapshot with bounded arrays and clear shared network caches on server stop.
+- Skip reserve-stock network probes when the cached counter already satisfies the capped request; track real operation cost per network.
+- Avoid redundant steady-state CAS operations and full apiary output-slot counts.
+
+#### Tests
+
+- Added regression coverage for AE2 whitelist/tag composition, network sharing/cost coordination, fluid batching, rollback scope, Mixin boundaries, crafting data preservation, apiary snapshots, Wanna Bee sampling and optional guide resources.
+
 ## [1.0.7] - 2026-09-07
 
 ### 新增
