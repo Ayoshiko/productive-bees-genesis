@@ -1,0 +1,11 @@
+{
+  "name": "过滤器",
+  "icon": "minecraft:hopper",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "三种模式", "text": "过滤器就是一张允许或拒绝清单。关闭过滤时不看名单；黑名单拒绝名单内容，适合排除少数东西；白名单只允许名单内容，适合严格自动化，但空白白名单会拦住全部内容。" },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_honeycomb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "万象创世名单", "text": "在“玩法设置 → 万象创世过滤”中按玩家看到的名称搜索并添加蜜蜂。取消勾选可以暂时停用，导入或编辑后要点保存。普通玩家不需要输入“模组名:蜜蜂名”；这种注册 ID 主要用于整合包批量导入。" },
+    { "type": "patchouli:spotlight", "item": "ae2:item_storage_cell_1k", "title": "离心机 AE2 输入", "text": "先建只含一种蜜脾的白名单，开启精确匹配，把每次拉取量设小，并设置网络保留量。确认离心机能处理、产物也能回网后，再增加条目。可配置蜜脾的类型数据会影响配方，通常不要忽略。" },
+    { "type": "patchouli:text", "title": "高级熔炼规则", "text": "高级用户可以用标签和通配表达式筛选熔炼输入：& 表示同时满足，| 表示满足任意一个，! 表示排除，括号控制先后，* 匹配一段名称。新手不需要使用；先从一条短规则开始，写错时只会拒绝该候选。" }
+  ]
+}

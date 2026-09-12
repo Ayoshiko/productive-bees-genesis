@@ -1,0 +1,20 @@
+{
+  "name": "Upgrades and Integrations",
+  "icon": "productivebeesgenesis:raw_ore_smelting_upgrade",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "PB upgrade slots", "text": "Install PB upgrades from the apiary or centrifuge PB Upgrades tab. Productivity increases output, Time shortens processing, Stability improves non-guaranteed chances, and Gene Sampler/Block affect genetics and block products. Server limits apply per type." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct destruction", "text": "Discards honey and pollen-puff byproducts in supported machines to prevent clogging. Keep a separate line if those byproducts are still needed." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence conversion", "text": "Converts products through a unique same-item recipe at its configured ratio. Available recipes depend on Productive Bees and the modpack." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw ore smelting", "text": "Smelts eligible raw-ore outputs into matching ingots. First allow Smelting Compatibility in Machine Settings, install this upgrade, and enable the button on that centrifuge. Items without a safe furnace result remain unchanged." },
+    { "type": "patchouli:text", "title": "Mekanism extensions", "text": "Mekanism factory tiers add parallel slots. Optional Mekanism addons can add higher factories, stack upgrades, or creative upgrades. Expand storage and power first, then raise parallelism and speed so products do not jam the next machine." },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw Ore Smelting recipe" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence Conversion recipe" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct Destruction recipe" }
+  ],
+  "extra_recipe_mappings": {
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 5,
+    "productivebeesgenesis:essence_conversion_upgrade": 6,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 7
+  }
+}

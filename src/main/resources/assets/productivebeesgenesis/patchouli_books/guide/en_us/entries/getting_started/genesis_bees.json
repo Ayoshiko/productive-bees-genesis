@@ -1,0 +1,9 @@
+{
+  "name": "Genesis Bees and Combs",
+  "icon": "productivebees:spawn_egg_configurable_bee[minecraft:entity_data={id:'productivebees:configurable_bee',type:'productivebees:myriadcreations'}]",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "text": "Productive Bees stores the bee type in data components. The apiary reads the same data, so it replaces entity hives while adding parallel slots. Search a bee in JEI to see outputs, probabilities, flowers and byproducts." },
+    { "type": "patchouli:text", "title": "Processing combs", "text": "Feed combs to the centrifuge. Comb blocks are processed directly and their output multiplier follows the current server setting. A recipe may produce both items and fluids, so route both channels or install the Byproduct Destruction Upgrade only after deciding those byproducts are no longer needed." }
+  ]
+}

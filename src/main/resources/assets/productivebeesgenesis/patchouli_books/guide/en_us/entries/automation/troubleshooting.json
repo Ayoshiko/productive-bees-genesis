@@ -1,0 +1,10 @@
+{
+  "name": "Troubleshooting",
+  "icon": "minecraft:comparator",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "text": "When a machine stops, check in order: FE and energy storage; bee, comb and flower recipe match; redstone control; side configuration; and free space in item slots and fluid tanks." },
+    { "type": "patchouli:text", "title": "Pipes or AE2", "text": "Verify the ME network has power, a free channel, and storage space. For Mekanism pipes, set the connected face to the correct item or fluid input/output and enable automatic ejection when the machine should push. Check security permissions on shared servers." },
+    { "type": "patchouli:text", "title": "Restore a setting", "text": "Leave the world or stop the server normally, then restore only the setting group you just changed through the mod configuration screen. Restart the world after server-side changes. If validation still fails, use the generated comments and log warning to identify the option rather than deleting every configuration file." }
+  ]
+}

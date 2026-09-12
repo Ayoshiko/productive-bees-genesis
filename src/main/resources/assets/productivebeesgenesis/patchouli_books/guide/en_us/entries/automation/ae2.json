@@ -1,0 +1,11 @@
+{
+  "name": "AE2 and Logistics",
+  "icon": "ae2:fluix_smart_cable",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:spotlight", "item": "ae2:fluix_smart_cable", "title": "Start with one machine", "text": "Connect the machine to a powered ME network with a free channel and storage space. In the machine's AE2 Integration settings, enable item output first and fluid output only when the recipe needs it. Centrifuge auto-input is also enabled per machine in its AE2 Input window, so a new connection will not immediately drain storage." },
+    { "type": "patchouli:text", "title": "Safe input test", "text": "Add one exact comb to the centrifuge input list, choose a small pull amount, and set a network reserve so the last emergency stack stays in storage. Exact matching is recommended for configurable combs because their bee type changes the recipe. Use blacklist or whitelist mode only after this one-item test works." },
+    { "type": "patchouli:text", "title": "Power priority", "text": "Machines can receive FE through the connected network. With Applied Flux installed, keep “Prefer Applied Flux” enabled to use FE stored in the network first. Disable “Native AE Energy Input” only when the machines must use Applied Flux FE exclusively. A disconnected network pauses safely without deleting machine contents." },
+    { "type": "patchouli:text", "title": "Avoid network stalls", "text": "Give products and fluids enough storage. If a large network starts stuttering, lower the pull amount or increase the pull interval in the translated configuration screen. Change one setting at a time and watch whether machine inputs remain stable before increasing throughput again." }
+  ]
+}

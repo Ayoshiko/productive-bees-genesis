@@ -167,6 +167,22 @@ config="${mod_id}.iris.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
+# GuideME 可选依赖（安装后自动发现本模组的数据驱动 Markdown 教程）
+# 教程资源不引用 GuideME Java API，未安装时只作为未使用的静态资源保留。
+[[dependencies.${mod_id}]]
+    modId="guideme"
+    type="optional"
+    ordering="AFTER"
+    side="BOTH"
+
+# Patchouli 可选依赖（安装后自动发现本模组的教程书）
+# 书籍完全由 data/assets 资源驱动，未安装时不会触发任何类加载。
+[[dependencies.${mod_id}]]
+    modId="patchouli"
+    type="optional"
+    ordering="AFTER"
+    side="BOTH"
+
 # Building Gadgets 2 可选依赖（渲染方块实体加载时序修复 Mixin）
 [[dependencies.${mod_id}]]
     modId="buildinggadgets2"

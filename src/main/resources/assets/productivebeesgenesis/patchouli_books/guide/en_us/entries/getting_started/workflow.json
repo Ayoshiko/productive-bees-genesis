@@ -1,0 +1,18 @@
+{
+  "name": "First Startup",
+  "icon": "productivebeesgenesis:mek_apiary",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "title": "Your first goal", "text": "Make one bee produce a comb in the apiary, then process that comb in the centrifuge. FE is the power unit used by technology mods; side configuration decides which machine face accepts power or items and which face outputs products. Keep the first line small so problems are easy to find." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:mek_apiary", "title": "Prepare the line", "text": "You also need a centrifuge, an FE source, cable, a barrel or chest, one Productive Bees bee, and its matching flower or pollen. Hover an item and use JEI's recipe key to check how your modpack obtains it." },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:mek_apiary", "title": "Apiary recipe", "text": "If the modpack replaces this recipe, use the recipe currently shown by JEI." },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:mek_centrifuge", "title": "Centrifuge recipe", "text": "Build one normal machine of each type before upgrading to factories." },
+    { "type": "patchouli:text", "title": "Follow these steps", "text": "1. Power both machines and confirm their energy bars contain FE.$(br)2. Insert a bee or filled cage into the apiary.$(br)3. Put the JEI-listed flower or pollen in the Feeder.$(br)4. Wait for a comb, then move it into the centrifuge.$(br)5. Remove items and route honey or other fluids to separate fluid storage." },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_comb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "Success", "text": "The apiary progress bar moves and produces a typed comb; the centrifuge then runs and produces resources. Full outputs pause safely. Typed comb blocks can be processed directly, and their actual output multiplier follows the server setting." },
+    { "type": "patchouli:text", "title": "No progress?", "text": "Check in this order: empty energy bar; redstone mode not set to Ignore; mismatched bee and flower; full item or fluid output; then an incorrect side setting. Change only one thing at a time so the cause stays obvious." }
+  ],
+  "extra_recipe_mappings": {
+    "productivebeesgenesis:mek_apiary": 2,
+    "productivebeesgenesis:mek_centrifuge": 3
+  }
+}

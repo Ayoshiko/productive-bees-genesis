@@ -1,0 +1,17 @@
+{
+  "default_language": "zh_cn",
+  "item_settings": {
+    "display_name": {
+      "type": "translatable",
+      "translate": "productivebeesgenesis.guide.name"
+    },
+    "tooltip_lines": [
+      {
+        "type": "translatable",
+        "translate": "productivebeesgenesis.guide.tooltip",
+        "color": "dark_gray"
+      }
+    ],
+    "model": "productivebeesgenesis:item/guide"
+  }
+}

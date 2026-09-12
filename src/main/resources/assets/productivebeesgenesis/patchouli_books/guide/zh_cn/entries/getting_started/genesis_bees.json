@@ -1,0 +1,9 @@
+{
+  "name": "创世蜜蜂与蜜脾",
+  "icon": "productivebees:spawn_egg_configurable_bee[minecraft:entity_data={id:'productivebees:configurable_bee',type:'productivebees:myriadcreations'}]",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "text": "Productive Bees 的每只资源蜜蜂都记着自己的类型，产物和需要的花也由这个类型决定。机械蜂箱会读取同一份信息，所以不需要让蜜蜂实体在外面飞，也能按原来的规则工作。用 JEI 搜索蜜蜂名称，可以查看产物、概率、花朵和副产物。" },
+    { "type": "patchouli:text", "title": "蜜脾处理", "text": "蜜蜂产出的蜜脾交给机械离心机。蜜脾块通常一次能处理更多产物；离心配方也可能同时给出物品和流体，所以两边都要留空间。副产物堵塞时，可以接管道、送回 AE2，或在确认不再需要后安装副产物销毁升级。" }
+  ]
+}

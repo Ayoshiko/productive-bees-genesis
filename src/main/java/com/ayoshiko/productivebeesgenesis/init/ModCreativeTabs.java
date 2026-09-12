@@ -2,8 +2,6 @@ package com.ayoshiko.productivebeesgenesis.init;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.ItemBlockMekApiaryFactory;
-import com.ayoshiko.productivebeesgenesis.client.ClientDevModeState;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import mekanism.common.tier.FactoryTier;
@@ -38,16 +36,8 @@ public final class ModCreativeTabs {
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
-						// 使用 SERVER 配置并加 isLoaded 保护，避免多人游戏客户端未加载服务端配置时崩溃
-						boolean isServerLoaded = ModConfig.areServerSpecsLoaded();
-						// 万象创世蜜蜂总开关：禁用后隐藏所有万象创世相关物品
-						boolean myriadEnabled = isServerLoaded && ModConfig.SERVER.myriadCreationsEnabled.get();
-						// 开发者模式由命令控制，客户端通过 ClientDevModeState 镜像状态决定开发物品可见性
-						boolean devModeEnabled = ClientDevModeState.isEnabled();
-						if (myriadEnabled && devModeEnabled) {
-							output.accept(ModItems.INFINITY_CREATION_COMB.get());
-							output.accept(ModItems.INFINITY_CREATION_COMB_BLOCK_ITEM.get());
-						}
+						// 无尽创世物品仅承担宇宙材质模型，始终不进入普通创造物品栏。
+						// 万象创世蜜脾由 CreativeTabEventHandler 以 PB 可配置蜜脾 + bee_type 组件加入资源蜜蜂标签页。
 						// 添加所有MEK离心机方块（按指定顺序）
 						// 1. 基础机器
 						output.accept(ModItems.MEK_CENTRIFUGE.get());

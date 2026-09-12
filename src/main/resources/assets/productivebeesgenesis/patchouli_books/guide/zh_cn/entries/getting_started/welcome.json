@@ -1,0 +1,9 @@
+{
+  "name": "欢迎",
+  "icon": "minecraft:book",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "title": "欢迎来到创世蜂群", "text": "资源蜜蜂：创世把 Productive Bees 的蜜蜂和蜜脾接入 Mekanism 机器。第一目标是一条小型手动生产线：给一台机械蜂箱供电，把蜜脾搬进一台离心机，再取走资源。确认这条线能跑后，再学习工厂、AE2 和高倍升级。$(br2)必需依赖为 NeoForge、Productive Bees、Productive Lib 和 Mekanism；AE2、Applied Flux 与 Mekanism 扩展属于后续可选联动。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:mek_apiary", "title": "从这里开始", "text": "右键放好的机器打开界面；按住 Shift 点击通常可以快速搬运整组物品。放入蜜蜂和对应花朵或花粉，接通 FE，并给物品与流体输出留出空间。每只蜜蜂的准确工作条件可以在 JEI 查看。" }
+  ]
+}

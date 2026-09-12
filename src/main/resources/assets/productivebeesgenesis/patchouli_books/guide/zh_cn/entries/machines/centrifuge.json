@@ -1,0 +1,28 @@
+{
+  "name": "通用机械离心机",
+  "icon": "productivebeesgenesis:mek_centrifuge",
+  "category": "productivebeesgenesis:machines",
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "离心机用途",
+      "text": "机械离心机读取 Productive Bees 的离心配方，将蜜脾、蜜脾块和蜂蜜副产物转换为资源。它支持 FE、物品和流体通道；基础机器单并行，工厂等级会增加并行处理。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "多流体与熔炼",
+      "text": "打开多流体槽后，每种流体会分开存放，默认由机器自动分配空间。PB 配方按钮可跳转 JEI 查看完整配方。要让离心机顺手把粗矿变成锭，先在机器设置中允许熔炼兼容，再给离心机安装粗矿熔炼升级并打开本机按钮。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:basic_mek_centrifuge_factory",
+      "title": "工厂与物流",
+      "text": "工厂等级提高并行数和能量缓存，输入/输出堆叠倍率与流体罐倍率由服务器配置控制。侧面配置中将物品设为输入、流体设为输出；AE2 输出开启后可由 ME 网络接收结果。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "没有进度怎么办？",
+      "text": "确认输入是有效蜜脾而非普通蜂蜜瓶；检查 FE 储量、红石模式与安全权限；确认每个输出槽和流体罐有空位。若只缺某一种流体，打开多流体槽标签检查该流体的槽位上限。"
+    }
+  ]
+}

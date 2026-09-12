@@ -1,0 +1,11 @@
+{
+  "name": "Mekanism Centrifuge",
+  "icon": "productivebeesgenesis:mek_centrifuge",
+  "category": "productivebeesgenesis:machines",
+  "pages": [
+    { "type": "patchouli:text", "title": "Purpose", "text": "The centrifuge reads Productive Bees centrifuge recipes and turns combs, comb blocks and honey byproducts into resources. It supports FE, item and fluid channels; factory tiers add parallel processing." },
+    { "type": "patchouli:text", "title": "Fluids and smelting", "text": "Keep Multi-fluid Tanks enabled so different fluids receive separate storage; automatic allocation is suitable for most players. The PB Recipe button opens JEI. To turn eligible raw ore into ingots, allow Smelting Compatibility in Machine Settings, install the Raw Ore Smelting Upgrade, then enable the button on that centrifuge." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:basic_mek_centrifuge_factory", "title": "Factories and logistics", "text": "Factory tier controls parallelism and energy storage. Stack and tank multipliers are server settings. Set item sides to input, fluid sides to output, and enable AE2 output to send results to an ME network." },
+    { "type": "patchouli:text", "title": "No progress?", "text": "Use valid combs rather than honey bottles. Check FE, redstone mode, security and free space in every item slot and fluid tank. The multi-fluid tab shows per-fluid capacity and allocated slots." }
+  ]
+}

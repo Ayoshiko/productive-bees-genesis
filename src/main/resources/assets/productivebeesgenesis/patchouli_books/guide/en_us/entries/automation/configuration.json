@@ -1,0 +1,12 @@
+{
+  "name": "Configuration",
+  "icon": "minecraft:comparator",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "Keep defaults first", "text": "A first playthrough does not require editing configuration files or memorising raw option names. Open the mod list, select Productive Bees Genesis, and choose Configure. The translated screen groups everyday choices into Gameplay, Machines, Capacity, and Client Settings." },
+    { "type": "patchouli:text", "title": "Machine settings", "text": "Use the Apiary or Centrifuge Basic Settings pages for power use, processing time, and fluid capacity. PB Upgrade Limits controls how many bee upgrades fit. Keep Multi-fluid Tanks enabled unless a modpack has a specific reason to combine fluids. Test changes on one normal machine before a factory." },
+    { "type": "patchouli:text", "title": "AE2 and performance", "text": "Item output, fluid output, and network power normally work well at their defaults. Centrifuge auto-input is also enabled per machine from its AE2 Input window. If a large network stutters, lower the pull amount or increase the pull interval instead of maximizing every speed and parallel setting." },
+    { "type": "patchouli:text", "title": "Change settings safely", "text": "Leave the world or stop the server normally, back up the world and configuration, then change one related group and record the old value. Re-enter with one test machine and check power, speed, items, and fluids. Restore that group if behavior is unexpected." },
+    { "type": "patchouli:text", "title": "Raw files are advanced", "text": "Raw option names are useful only for pack distribution, scripting, or migration. World gameplay, machine, and capacity settings live in the world's server configuration directory; client visuals and custom window positions affect only the local player. Prefer the current screen labels and generated comments over old file examples." }
+  ]
+}

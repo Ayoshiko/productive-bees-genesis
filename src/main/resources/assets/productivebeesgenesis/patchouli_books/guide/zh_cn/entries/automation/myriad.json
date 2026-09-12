@@ -1,0 +1,13 @@
+{
+  "name": "万象创世蜜蜂",
+  "icon": "productivebees:spawn_egg_configurable_bee[minecraft:entity_data={id:'productivebees:configurable_bee',type:'productivebees:myriadcreations'}]",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:spawn_egg_configurable_bee", "components": { "minecraft:entity_data": { "id": "productivebees:configurable_bee", "type": "productivebees:myriadcreations" } } }, "title": "它会产出什么？", "text": "万象创世蜜蜂每次工作时，会从当前整合包已经注册、并且允许使用的资源蜜蜂中挑一个类型，再把类型记在蜜脾上。离心机读到这条记录，就会按对应资源蜜蜂的配方处理。它不是固定只产一种资源。" },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_honeycomb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "带类型的蜜脾", "text": "万象创世产出的实际物品是带 bee_type 数据的 Productive Bees 可配置蜜脾。不要把静态动画纹理表当作成品；正常堆叠、管道和 AE2 搬运都会保留这条类型记录。" },
+    { "type": "patchouli:text", "title": "生存模式怎么获得", "text": "默认示例是拿木棍右键普通蜜蜂进行转化，也可以通过符合规则的亲本繁殖。整合包可能修改转化物品、概率和亲本。钓鱼获得与蜂巢自然生成默认关闭；请在“玩法设置 → 蜜蜂获得方式”查看当前世界规则。" },
+    { "type": "patchouli:text", "title": "控制候选资源", "text": "在“玩法设置 → 万象创世过滤”里选择不过滤、黑名单或白名单。黑名单适合排除少数资源；白名单只允许名单内容，空白白名单会让它没有可选资源。普通玩家直接按中文名称搜索添加，不必手敲注册 ID。" },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_comb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "蜜脾块与类型信息", "text": "安装蜜脾块升级后，蜂箱会优先输出节省槽位的带类型方块，离心机可以直接处理。实际产量倍率以服务器设置为准。正常堆叠、管道和 AE2 会保留蜜蜂类型；没有类型信息的空白可配置蜜脾无法找到正确配方。" },
+    { "type": "patchouli:text", "title": "外观不影响产量", "text": "彩虹、粒子、光晕和颜色只改变本地画面。生产概率、候选名单、蜜蜂属性和获得方式由世界或服务器决定；多人游戏以服务器设置为准。" }
+  ]
+}

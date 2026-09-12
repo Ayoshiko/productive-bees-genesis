@@ -1,0 +1,11 @@
+{
+  "name": "Filters",
+  "icon": "minecraft:hopper",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "Three modes", "text": "A filter is an allow or deny list. Disabled ignores the list. Blacklist rejects listed entries and is useful for a few exclusions. Whitelist accepts only listed entries and gives strict automation, but an empty whitelist blocks everything." },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_honeycomb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "Myriad candidate list", "text": "In Gameplay Settings → Myriad Creations Filter, search the player-facing bee name and add it. Uncheck an entry to suspend it without deleting it, and press Save after editing or importing. Registry IDs are mainly for modpack authors performing bulk imports." },
+    { "type": "patchouli:spotlight", "item": "ae2:item_storage_cell_1k", "title": "Centrifuge AE2 input", "text": "Begin with a whitelist containing one comb, enable exact matching, choose a small pull amount, and set a network reserve. Add more entries only after processing and output return both work. Configurable comb type data changes recipes and normally should not be ignored." },
+    { "type": "patchouli:text", "title": "Advanced smelting rules", "text": "Advanced users can filter smelting inputs with tags and expressions: & requires both sides, | accepts either side, ! excludes, parentheses control order, and * matches part of a name. This is optional; start with one short rule, and an invalid expression rejects only that candidate." }
+  ]
+}

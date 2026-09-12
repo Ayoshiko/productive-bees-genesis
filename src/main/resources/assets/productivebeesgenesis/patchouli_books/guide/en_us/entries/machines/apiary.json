@@ -1,0 +1,11 @@
+{
+  "name": "Mekanism Apiary",
+  "icon": "productivebeesgenesis:mek_apiary",
+  "category": "productivebeesgenesis:machines",
+  "pages": [
+    { "type": "patchouli:text", "title": "How it works", "text": "The apiary simulates a Productive Bees hive without placing bee entities. Each bee slot checks its matching flower or pollen and writes products to item and fluid outputs. Factory tiers add parallel slots, capacity and energy storage." },
+    { "type": "patchouli:text", "title": "GUI areas", "text": "Left: bee and flower/pollen inputs. Centre: progress and energy. Right: item matrix and fluid tanks. PB Upgrades opens the Productive Bees upgrade window; Feeder shows work-medium use. Energy, redstone, security, side configuration and ejector tabs are clickable." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:basic_mek_apiary_factory", "title": "Factory tiers", "text": "Basic, Advanced, Elite and Ultimate factories provide 5, 10, 15 and 20 bee slots. Evolved Mekanism, Mekanism: Extras and Evolved Mekanism Extras add higher tiers when installed." },
+    { "type": "patchouli:text", "title": "Automation", "text": "Set the connected machine face to item or fluid input/output, then enable automatic ejection when the machine should push products. An ME network can receive outputs when AE2 integration is enabled. When stalled, check the bee and flower match, FE, redstone mode, side settings, and output room—in that order." }
+  ]
+}

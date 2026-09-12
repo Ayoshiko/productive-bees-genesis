@@ -1,0 +1,20 @@
+{
+	DataVersion: 3955,
+	size: [6, 1, 1],
+	data: [
+		{pos: [0, 0, 0], state: "mekanism:basic_energy_cube"},
+		{pos: [1, 0, 0], state: "mekanism:basic_universal_cable", nbt: {id: "mekanism:basic_universal_cable", redstone: false, connections: 0b, acceptors: 48b, connection: [I; 0, 0, 0, 0, 0, 0]}},
+		{pos: [2, 0, 0], state: "productivebeesgenesis:mek_apiary{active:false,facing:south}"},
+		{pos: [3, 0, 0], state: "mekanism:basic_universal_cable", nbt: {id: "mekanism:basic_universal_cable", redstone: false, connections: 0b, acceptors: 48b, connection: [I; 0, 0, 0, 0, 0, 0]}},
+		{pos: [4, 0, 0], state: "productivebeesgenesis:mek_centrifuge{active:false,facing:south}"},
+		{pos: [5, 0, 0], state: "minecraft:barrel{facing:up,open:false}"}
+	],
+	entities: [],
+	palette: [
+		"mekanism:basic_energy_cube",
+		"mekanism:basic_universal_cable",
+		"productivebeesgenesis:mek_apiary{active:false,facing:south}",
+		"productivebeesgenesis:mek_centrifuge{active:false,facing:south}",
+		"minecraft:barrel{facing:up,open:false}"
+	]
+}

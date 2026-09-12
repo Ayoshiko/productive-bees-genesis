@@ -1,0 +1,20 @@
+{
+  "name": "升级与联动",
+  "icon": "productivebeesgenesis:raw_ore_smelting_upgrade",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "PB 升级槽", "text": "PB 升级要放进机器侧边的“PB 升级”窗口。生产力升级增加每轮产量，时间升级缩短等待；基因采样与蜜脾块升级主要给蜂箱使用，稳定性升级主要给离心机使用。每种升级能装多少由服务器设置决定。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "副产物销毁", "text": "自动销毁蜂蜜、花粉团等副产物，避免输出槽被低价值物品占满。仅对支持的蜂箱和离心机生效；安装后仍建议保留必要副产物的独立生产线。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "精华转化", "text": "将唯一同物合成配方的产物按比例自动转化，适合把蜜脾副产物压缩成目标资源。实际比例与可用配方由 Productive Bees/整合包决定。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "粗矿熔炼", "text": "将资源蜜蜂离心产出的粗矿直接按熔炼配方转为锭。先在机器设置中允许熔炼兼容，再到这台离心机的界面打开熔炼按钮；没有匹配熔炼配方的物品会保持原样。" },
+    { "type": "patchouli:text", "title": "Mekanism 与扩展", "text": "Mekanism 工厂等级决定能同时工作的槽位。安装相应扩展模组后，还会出现更高等级工厂、堆叠升级或创造升级。扩建时先保证供电和输出搬运跟得上，再提高并行和速度。" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "粗矿熔炼升级配方" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:essence_conversion_upgrade", "title": "精华转化升级配方" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "副产物销毁升级配方" }
+  ],
+  "extra_recipe_mappings": {
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 5,
+    "productivebeesgenesis:essence_conversion_upgrade": 6,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 7
+  }
+}

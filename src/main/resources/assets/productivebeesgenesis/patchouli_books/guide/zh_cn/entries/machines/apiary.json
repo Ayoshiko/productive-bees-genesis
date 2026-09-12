@@ -1,0 +1,11 @@
+{
+  "name": "通用机械蜂箱",
+  "icon": "productivebeesgenesis:mek_apiary",
+  "category": "productivebeesgenesis:machines",
+  "pages": [
+    { "type": "patchouli:text", "title": "工作原理", "text": "机械蜂箱模拟 Productive Bees 蜂箱，不需要在世界中放置蜜蜂实体。每个输入蜜蜂槽独立寻找匹配的花朵/花粉，并把产物写入输出矩阵与流体罐。基础蜂箱只有一个并行槽；工厂等级会增加槽位、输出容量和能量缓存。" },
+    { "type": "patchouli:text", "title": "GUI 区域", "text": "左侧：蜜蜂输入与花朵/花粉槽；中央：进度与能量条；右侧：产物矩阵和流体罐。PB 升级标签打开 Productive Bees 升级窗口，喂食器标签显示工作介质消耗。能量、红石、安全、侧面配置和弹出器标签均可点击查看或修改。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:basic_mek_apiary_factory", "title": "工厂等级", "text": "基础/高级/精英/终极工厂分别提供 5/10/15/20 个蜜蜂槽，并增加输出槽和能量缓存。安装 Evolved Mekanism、Mekanism: Extras 或 Evolved Mekanism Extras 后，会按模组可用性注册更高等级。" },
+    { "type": "patchouli:text", "title": "自动化与排错", "text": "把接管道的机器面设成对应输入或输出，再按需要打开自动弹出，Mekanism 管道才会自动搬运。接入 AE2 后可从 ME 网络拿取所需物品，并把产物送回存储。停机时依次检查蜜蜂类型、花朵、FE、红石控制、侧面配置和输出空间。" }
+  ]
+}

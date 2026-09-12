@@ -1,0 +1,9 @@
+{
+  "name": "Welcome to Genesis",
+  "icon": "minecraft:book",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "title": "Welcome to the hive", "text": "Productive Bees Genesis connects Productive Bees bees and combs to Mekanism machines. Your first goal is a small manual line: power one Apiary, move its comb to one Centrifuge, and collect the result. After that works, continue to factories, AE2, and advanced upgrades.$(br2)Required: NeoForge, Productive Bees, Productive Lib, and Mekanism. AE2, Applied Flux, and Mekanism addons are optional integrations covered later." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:mek_apiary", "title": "Begin here", "text": "Right-click a placed machine to open it. Shift-click usually moves a stack quickly. Insert a bee and its matching flower or pollen, connect FE, and leave room for both item and fluid outputs. JEI lists each bee's exact work condition." }
+  ]
+}

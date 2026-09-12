@@ -1,0 +1,10 @@
+{
+  "name": "GUI Buttons and Windows",
+  "icon": "minecraft:comparator",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:text", "title": "Main tabs", "text": "The energy tab shows FE and capacity; hovering progress shows recipe, time and products. Redstone control offers ignore, low-power and signal modes. Security manages access, side configuration sets item/fluid/energy directions, and ejector controls automatic output." },
+    { "type": "patchouli:text", "title": "Centrifuge buttons", "text": "The PB Recipe button opens JEI centrifuge recipes; the input-return button restores the previous input search. The multi-fluid tab opens a paged window showing fluid type, capacity and allocated slots. Arrows below the output matrix page through parallel slots." },
+    { "type": "patchouli:text", "title": "Window positions", "text": "The client remembers tab and window positions. If a window disappears after changing resolution or GUI scale, open Client Settings → Custom Window Positions and reset that window instead of deleting the entire configuration. Hover every slot for a detailed status tooltip." }
+  ]
+}

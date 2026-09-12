@@ -1,0 +1,11 @@
+{
+  "name": "AE2 与物流",
+  "icon": "ae2:fluix_smart_cable",
+  "category": "productivebeesgenesis:automation",
+  "pages": [
+    { "type": "patchouli:spotlight", "item": "ae2:fluix_smart_cable", "title": "先接一台机器", "text": "先确认 ME 网络有电、有空闲频道，也有存储空间，再用智能线缆连接机器。在机器设置的“AE2 集成”中先开物品输出，有流体产物时再开流体输出。离心机主动取料还要在每台机器自己的 AE2 输入窗口中开启，刚接上线不会立刻抽空库存。" },
+    { "type": "patchouli:text", "title": "安全测试主动取料", "text": "先在离心机输入名单里只加一种蜜脾，选择精确匹配，把每次拉取量设小，并设置网络保留量，防止最后一组应急库存也被拿走。确认能稳定工作后，再决定使用黑名单还是白名单。可配置蜜脾携带的蜜蜂类型会影响配方，通常不要忽略额外数据。" },
+    { "type": "patchouli:text", "title": "能量优先级", "text": "机器可以从 ME 网络获得运行所需的 FE。安装 Applied Flux（应用通量）后，保持“优先使用 Applied Flux”即可先用网络里专门存放的 FE。只有明确要求机器只用 Applied Flux 时，才关闭“允许使用 AE2 原生能量”。网络断开时机器会安全暂停。" },
+    { "type": "patchouli:text", "title": "防止网络卡住", "text": "给成品和流体留下足够存储。大型网络开始卡顿时，在中文配置界面降低单次拉取量或延长拉取间隔；一次只改一项，先观察机器输入是否稳定，再逐步提高吞吐。" }
+  ]
+}

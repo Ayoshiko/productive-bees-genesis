@@ -1,0 +1,18 @@
+{
+  "name": "第一次开机",
+  "icon": "productivebeesgenesis:mek_apiary",
+  "category": "productivebeesgenesis:getting_started",
+  "pages": [
+    { "type": "patchouli:text", "title": "本章目标", "text": "先只完成一件事：让一只蜜蜂在机械蜂箱里产出蜜脾，再让离心机把蜜脾变成资源。$(br2)FE 是科技模组常用的电力单位；侧面配置决定机器哪一面进电、进物品或出产物。第一次开机先别做大工厂，最短生产线更容易排错。" },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:mek_apiary", "title": "准备机械蜂箱", "text": "还需要机械离心机、能量来源、线缆、木桶或箱子，以及一只 Productive Bees 蜜蜂和它需要的花朵或花粉。把鼠标放在物品上并按 JEI 的查看配方键，可以确认当前整合包中的获取方法。" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:mek_apiary", "title": "机械蜂箱配方", "text": "配方若被整合包替换，以 JEI 当前显示为准。" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:mek_centrifuge", "title": "离心机配方", "text": "先各做一台普通机器，跑通后再升级工厂。" },
+    { "type": "patchouli:text", "title": "照着做", "text": "1. 给两台机器接电，确认能量条有数值。$(br)2. 把蜜蜂或装着蜜蜂的笼子放进蜂箱。$(br)3. 在喂食器里放入 JEI 提示的花朵或花粉。$(br)4. 等蜜脾出现，再手动搬进离心机。$(br)5. 从离心机取走物品；有蜂蜜等流体时还要另接流体储存。" },
+    { "type": "patchouli:spotlight", "item": { "item": "productivebees:configurable_comb", "components": { "productivebees:bee_type": "productivebees:myriadcreations" } }, "title": "看到这些就成功了", "text": "蜂箱进度条前进并产出带类型蜜脾；离心机随后开始工作并产出资源。输出满时机器会等待，不会悄悄吞掉输入。带类型蜜脾块可以直接放进离心机，实际产量倍率以服务器设置为准。" },
+    { "type": "patchouli:text", "title": "没有动静？", "text": "按顺序检查：能量条是否为 0；红石控制是否为“忽略”；蜜蜂和花朵是否匹配；输出槽或流体罐是否已满；接管道的那一面是否真的设成输入或输出。一次只改一处，最容易找到原因。" }
+  ],
+  "extra_recipe_mappings": {
+    "productivebeesgenesis:mek_apiary": 2,
+    "productivebeesgenesis:mek_centrifuge": 3
+  }
+}
