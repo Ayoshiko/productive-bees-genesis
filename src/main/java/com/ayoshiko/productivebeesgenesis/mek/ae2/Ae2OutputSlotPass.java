@@ -41,10 +41,9 @@ final class Ae2OutputSlotPass {
 				heldEntries++;
 				continue;
 			}
-			// 全服预算：多台机器共享同一病态网络（EnderDrives fsync）时钳制同 tick insert 总量；
-			// 预算判断前置 — 耗尽时 break 跳过后续所有 keyBackoff 查找
+			// 本机预算负责限制单次推送；跨机器协调由 per-network 令牌负责，
+			// 不再使用旧全服硬闸门，以免一个病态网络阻塞其它健康网络。
 			if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
-					|| Ae2GlobalInsertBudget.isExhausted(gameTick)
 					|| costTracker.isExhausted(gameTick)) break;
 			if (ctx.keyBackoff().shouldSkip(entry.key, nowNanos)) continue;
 			if (firstAttemptedEntry == null) firstAttemptedEntry = entry;
@@ -60,6 +59,8 @@ final class Ae2OutputSlotPass {
 				slowInsertDetected = true;
 			}
 			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			ctx.holder().recordNetworkCost(ctx.meStorage(), gameTick, insertCost,
+					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
 			// 自适应记账：全额计入 EWMA 与 tick 预算，覆盖「中等昂贵 + 极高频」外部存储
 			costTracker.record(gameTick, insertCost);
 			if (pushed > 0) {

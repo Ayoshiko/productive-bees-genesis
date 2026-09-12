@@ -28,7 +28,7 @@ public final class Ae2OutputStateHolder {
 	/** AE2 推送器复用缓冲区（{@link Ae2PushBuffers}）— Object 类型保持依赖隔离，volatile 保证可见性 */
 	private volatile Object reusableBuffers;
 
-	/** Task 21: AE2 流体推送批处理缓冲（Ae2PendingBatchBuffer）— 10 tick 累积 + AEFluidKey 合并 */
+	/** AE2 流体推送待推送缓冲（Ae2PendingBatchBuffer）— 按 AEFluidKey 合并本刻槽内库存 */
 	private volatile Object pendingBatchBuffer;
 
 	/** AE2 输入抽取后无法立即归还的物品，宿主级有界持久化状态。 */
@@ -62,6 +62,12 @@ public final class Ae2OutputStateHolder {
 	private volatile Object cachedGrid;
 	private volatile Object cachedStorage;
 	private volatile Object cachedMeStorage;
+	/** 网络级昂贵工作协调器使用的稳定宿主令牌。 */
+	private final long networkWorkerId = Ae2NetworkWorkCoordinator.createWorkerId();
+	/** 已登记令牌的网络身份；仅用于换网/卸载时显式注销。 */
+	private volatile Object coordinatedNetworkIdentity;
+	/** 已解析的网络状态句柄（{@code Ae2NetworkWorkCoordinator} 内部类型），随身份一起缓存。 */
+	private volatile Object coordinatedNetworkState;
 	/** Per-game-tick direct-input stock cache; Object keeps AE2 optional at class load time. */
 	private volatile Object inputInventoryViewCache;
 	/** Per-side native centrifuge MEStorage adapters and their shared snapshots. */
@@ -105,8 +111,10 @@ public final class Ae2OutputStateHolder {
 	 */
 	private volatile long pullCallCounter = 0L;
 
-	/** 上次实际拉取时的 pullCallCounter 值（初始 Long.MIN_VALUE/2 保证首次调用即可触发） */
-	private volatile long lastPullCounter = Long.MIN_VALUE / 2;
+	/** 上次实际拉取时的 pullCallCounter 值。 */
+	private volatile long lastPullCounter;
+	/** 是否已完成过一次拉取尝试；首次尝试按方块坐标稳定错峰。 */
+	private volatile boolean inputPullInitialized;
 	/**
 	 * AE2LT-style input pull cooldown: success shortens the next interval
 	 * (1 tick with an unlimited entry, 5 otherwise), failures back off.
@@ -192,6 +200,7 @@ public final class Ae2OutputStateHolder {
 	 * 重置节点、缓存和待创建标志，防止方块重建后残留旧状态。
 	 */
 	public void clear() {
+		releaseNetworkCoordination();
 		ae2GridNode = null;
 		aeItemKeyCache = null;
 		ae2NodePending = false;
@@ -214,7 +223,8 @@ public final class Ae2OutputStateHolder {
 		lastPullTick.set(-PULL_INTERVAL_DEFAULT);
 		// Task 12：重置内部调用计数器，方块重建后从初始状态开始节流
 		pullCallCounter = 0L;
-		lastPullCounter = Long.MIN_VALUE / 2;
+		lastPullCounter = 0L;
+		inputPullInitialized = false;
 		inputPullCooldown.reset();
 		// 修复 #4：重置加速倍率检测器，方块重建后从初始状态重新统计 multiplier
 		tickAccelTracker.reset();
@@ -257,6 +267,7 @@ public final class Ae2OutputStateHolder {
 	 * 因此不能调用 {@link #clear()} 丢弃尚未归还的物品。
 	 */
 	public void clearForChunkUnload() {
+		releaseNetworkCoordination();
 		ae2GridNode = null;
 		aeItemKeyCache = null;
 		ae2NodePending = false;
@@ -385,6 +396,7 @@ public final class Ae2OutputStateHolder {
 
 	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
 	public void onGridChanged() {
+		releaseNetworkCoordination();
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
@@ -402,7 +414,8 @@ public final class Ae2OutputStateHolder {
 		pushState.getFluidBackoff().reset();
 		pushState.getReturnBackoff().reset();
 		inputPullCooldown.reset();
-		lastPullCounter = Long.MIN_VALUE / 2;
+		lastPullCounter = 0L;
+		inputPullInitialized = false;
 		Object inputRegistry = pushState.getInputKeyBackoffRegistry();
 		if (inputRegistry instanceof Ae2KeyBackoffRegistry<?> inputKeyRegistry) {
 			inputKeyRegistry.clear();
@@ -423,6 +436,54 @@ public final class Ae2OutputStateHolder {
 	public void setCachedStorage(Object storage) { this.cachedStorage = storage; }
 	public Object getCachedMeStorage() { return cachedMeStorage; }
 	public void setCachedMeStorage(Object meStorage) { this.cachedMeStorage = meStorage; }
+
+	/**
+	 * 尝试取得当前网络的昂贵工作令牌；健康网络始终放行。
+	 * <p>
+	 * 若存储身份发生变化，先注销旧网络，避免旧轮转表保留无效宿主，并重新解析状态句柄。
+	 * <p>
+	 * <b>为什么要缓存句柄</b>：{@code Ae2NetworkWorkCoordinator} 的网络表以身份弱引用为键，
+	 * 每次按 identity 查询都要分配一个弱引用对象再做一次 map 查找；而一台机器每真实游戏刻
+	 * 会取多次令牌（物品直推 / 批量输出 / 流体推送各一次）。身份不变时直接复用上次解析的
+	 * 句柄，把每次调用降到一次同步块进入。
+	 */
+	public boolean tryAcquireNetworkWork(Object networkIdentity, long gameTick) {
+		if (networkIdentity == null) return false;
+		return Ae2NetworkWorkCoordinator.tryAcquireResolved(
+				coordinatedStateFor(networkIdentity), networkWorkerId, gameTick);
+	}
+
+	/** 将一次网络操作成本反馈给当前网络级协调器。 */
+	public void recordNetworkCost(Object networkIdentity, long gameTick, long costNanos, long thresholdNanos) {
+		if (networkIdentity == null) return;
+		Ae2NetworkWorkCoordinator.recordResolvedCost(
+				coordinatedStateFor(networkIdentity), gameTick, costNanos, thresholdNanos);
+	}
+
+	/** 解析并缓存当前网络的状态句柄；身份变化时先注销旧网络的宿主登记。 */
+	private Object coordinatedStateFor(Object networkIdentity) {
+		Object previous = coordinatedNetworkIdentity;
+		if (previous == networkIdentity) {
+			Object cached = coordinatedNetworkState;
+			if (cached != null) return cached;
+		} else if (previous != null) {
+			Ae2NetworkWorkCoordinator.release(previous, networkWorkerId);
+		}
+		Object resolved = Ae2NetworkWorkCoordinator.resolve(networkIdentity);
+		coordinatedNetworkIdentity = networkIdentity;
+		coordinatedNetworkState = resolved;
+		return resolved;
+	}
+
+	private void releaseNetworkCoordination() {
+		Object networkIdentity = coordinatedNetworkIdentity;
+		coordinatedNetworkIdentity = null;
+		coordinatedNetworkState = null;
+		if (networkIdentity != null) {
+			Ae2NetworkWorkCoordinator.release(networkIdentity, networkWorkerId);
+		}
+	}
+
 	public Object getInputInventoryViewCache() { return inputInventoryViewCache; }
 	public void setInputInventoryViewCache(Object cache) { this.inputInventoryViewCache = cache; }
 	public Object getCentrifugeExternalStorageCache() { return centrifugeExternalStorageCache; }
@@ -496,7 +557,11 @@ public final class Ae2OutputStateHolder {
 	public long incrementPullCallCounter() { return ++pullCallCounter; }
 	public long getPullCallCounter() { return pullCallCounter; }
 	public long getLastPullCounter() { return lastPullCounter; }
-	public void updateLastPullCounter(long counter) { lastPullCounter = counter; }
+	public boolean hasCompletedInputPull() { return inputPullInitialized; }
+	public void updateLastPullCounter(long counter) {
+		lastPullCounter = counter;
+		inputPullInitialized = true;
+	}
 
 	/** Current input pull cooldown in pull-call counts (AE2LT-style adaptive). */
 	public int getInputPullCooldownTicks() { return inputPullCooldown.current(); }

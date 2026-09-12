@@ -679,13 +679,35 @@ public final class Ae2InputFilter {
 
 	/** Returns admission and the effective direct pull limit from one filter-slot traversal. */
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt) {
+		return getPullLimitIfAllowed(key, visibleStock, ignoreNbt, false);
+	}
+
+	/**
+	 * 返回已通过独立标签过滤候选的准入结果和精确条目有效拉取上限。
+	 * 存在标记时，黑白名单会对标签候选执行二次过滤；没有标记时仅使用标签结果。
+	 *
+	 * @param tagFilterActive true 表示标签过滤已负责候选的第一层准入
+	 */
+	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			boolean tagFilterActive) {
 		String[] currentSlots = slots;
 		AEItemKey[] currentKeys = resolvedDirectKeys;
+		Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries = getFuzzyEntries(currentSlots);
+		boolean hasConfiguredEntries = hasConfiguredEntries(currentSlots, fuzzyEntries);
 		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
-				filterMode, preciseMode, currentSlots, getFuzzyEntries(currentSlots), currentKeys,
+				filterMode, preciseMode, currentSlots, fuzzyEntries, currentKeys,
 				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
-				unlimitedAllFallback, globalNetworkStock, globalReserveAmount,
-				getDirectKeyIndex(currentSlots, currentKeys));
+				unlimitedAllFallback, tagFilterActive, hasConfiguredEntries,
+				globalNetworkStock, globalReserveAmount, getDirectKeyIndex(currentSlots, currentKeys));
+	}
+
+	private static boolean hasConfiguredEntries(String[] currentSlots,
+			Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries) {
+		for (int i = 0; i < currentSlots.length; i++) {
+			if (Ae2InputFilter.isDirectFingerprint(currentSlots[i])
+					|| (i < fuzzyEntries.length && fuzzyEntries[i] != null)) return true;
+		}
+		return false;
 	}
 
 	/** Returns the reserve floor that must be rechecked immediately before extracting this key. */

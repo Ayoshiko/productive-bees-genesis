@@ -48,11 +48,28 @@ class Ae2TagFilterWiringTest {
 		assertTrue(source.contains("buffers.tagFilterCache.allows(tagFilter, key)"));
 		assertTrue(source.contains("? key -> buffers.tagFilterCache.allows(tagFilter, key)"),
 				"标签表达式必须独立筛选所有候选物品，不能绑定 F 标记模式");
-		// 表达式变更必须立刻重建候选列表，而不是等 10 tick 刷新窗口
-		assertTrue(source.contains("recipeVersion, smeltingEnabled, tagGeneration)"));
+		// 表达式变更必须让宿主分类缓存失效；基础目录仍只做网络级粗分类
+		assertTrue(source.contains("networkDirectory.generation(),"));
 		assertTrue(source.replaceAll("\\s+", " ")
-				.contains("markScanCandidateRefresh(availableStacks, currentTick, recipeVersion, "
-						+ "smeltingEnabled, tagGeneration)"));
+				.contains("markScanCandidateRefresh(availableStacks, networkDirectory.generation(), recipeVersion, "
+				+ "smeltingEnabled, tagGeneration)"));
+	}
+
+	@Test
+	@DisplayName("标签准入后，有标记时外层模式二次过滤；无标记时保持纯标签拉取")
+	void tagFilterAndMarkedEntriesComposeInTwoStages() throws Exception {
+		String policy = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FilterPullPolicy.java");
+		assertTrue(policy.contains("tagFilterActive && !hasConfiguredEntries"));
+
+		String query = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2InputFilterQuerySupport.java");
+		assertTrue(query.contains("mode, filterMatched, tagFilterActive, hasConfiguredEntries"));
+		assertTrue(query.contains("mode, directFound, tagFilterActive, hasConfiguredEntries"));
+
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java")
+				.replaceAll("\\s+", " ");
+		assertTrue(puller.contains("&& !ignoreNbt && !tagFilterActive && !directEntries.isEmpty()"));
+		assertTrue(puller.contains("getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive)"));
 	}
 
 	@Test
@@ -191,9 +208,9 @@ class Ae2TagFilterWiringTest {
 				"Ae2InputCandidatePolicy\\.classify\\( level, ", -1).length - 1;
 		assertTrue(gateUses >= 3,
 				"标签门必须覆盖全部候选路径，当前 classify(level, ...) 调用点数=" + gateUses);
-		assertTrue(normalized.contains("buffers.markScanCandidateRefresh(availableStacks, currentTick, "
-				+ "recipeVersion, smeltingEnabled, tagGeneration)"),
-				"扫描候选分类结果必须随标签代号失效，选择阶段才能安全复用");
+		assertTrue(normalized.contains("buffers.markScanCandidateRefresh(availableStacks, "
+				+ "networkDirectory.generation(), recipeVersion, smeltingEnabled, tagGeneration)"),
+				"扫描候选分类结果必须随共享目录代号和标签代号失效，选择阶段才能安全复用");
 
 		// 2) reserveFloor 对 pullList 中每个条目无条件计算 —— 与该条目是蜜脾还是
 		//    标签过滤放行的 smelt 输入无关，保留库存因此对两类候选一致生效。

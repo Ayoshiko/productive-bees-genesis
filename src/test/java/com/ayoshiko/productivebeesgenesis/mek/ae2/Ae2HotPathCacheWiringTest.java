@@ -127,11 +127,14 @@ class Ae2HotPathCacheWiringTest {
 				"物品不同的槽位必须在组件比较前廉价拒绝");
 		assertTrue(source.contains("ItemStack.isSameItemSameComponents(stack, probe)"),
 				"标准槽位必须保留组件级物品匹配语义");
-		assertTrue(source.contains("stack.getComponentsPatch().isEmpty()"
-				+ " && probe.getComponentsPatch().isEmpty()"),
+		// 无组件物品快径与 bee_type 快径都已下沉到预采签名：内层循环只比较数组读到的补丁数，
+		// 不再逐对读取组件映射（「每格一种蜜蜂」下 Item 身份剪枝完全失效，这里是主要成本）
+		assertTrue(source.contains("lanePatchSize == 0 && keyPatchSize == 0"),
 				"普通无组件物品必须绕过完整组件映射比较");
-		assertTrue(method.contains("entry.matchesComponents(slotIndex, stack, probe)"),
-				"容量规划必须通过条目缓存组件匹配结果");
+		assertTrue(source.contains("lanePatchSize == 1 && keyPatchSize == 1"),
+				"可配置蜜脾必须走 bee_type 单组件快径，避免完整 PatchedDataComponentMap 比较");
+		assertTrue(method.contains("entry.matchesComponents(slotIndex, stack, probe,"),
+				"容量规划必须通过条目缓存组件匹配结果，并由调用方传入预采签名");
 		assertTrue(method.contains("entry.acceptsProbe(basicSlot, probe)"),
 				"validator 判定必须走按轮次记忆的入口，不得为每个槽位重复调用整条校验链");
 		assertTrue(source.contains("slot.isItemValidForInsertion(probe, AutomationType.INTERNAL)"),
@@ -170,18 +173,26 @@ class Ae2HotPathCacheWiringTest {
 				"已按版本缓存的候选列表不得在每轮选择时重复做 SMELTING 分类");
 		assertTrue(source.contains("unlimitedMode && filter.isUnlimitedForKey"),
 				"默认无无限配置时必须跳过逐键过滤槽遍历");
-		assertFalse(source.contains("filter.matchesAnyEntry(entry.key"),
-				"黑白名单准入结果已确定 marked 状态，不得为排序再次扫描过滤槽");
+		assertTrue(source.contains("boolean resolveMarkedEntries = tagFilterActive && filter != null"),
+				"标签过滤激活时必须区分标记与未标记候选");
+		assertTrue(source.contains("filter.matchesAnyEntry(entry.key, sortIgnoreNbt)"),
+				"标签过滤放行的未标记候选不得被误判为外层标记物品");
 	}
 
 	@Test
 	@DisplayName("组件快速路径保留异常物品的完整堆叠语义")
 	void componentFastPathsRequireCanonicalIdentityComponents() throws Exception {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		// 组件类型已提到局部变量（spark：DeferredHolder.get 曾占 1.47%），但"双方都必须显式
-		// 携带 bee_type 才能绕过完整组件比较"这一堆叠语义约束不变。
-		assertTrue(puller.contains("stack.has(beeTypeComponent) && probe.has(beeTypeComponent)"),
-				"可配置蜜脾只有双方显式携带 bee_type 时才能绕过完整组件比较");
+		// 组件类型已提到局部变量并进一步下沉到共享签名提取入口（spark：DeferredHolder.get 曾占 1.47%），
+		// 但"双方都必须显式携带 bee_type 才能绕过完整组件比较"这一堆叠语义约束不变：
+		// 车道侧与条目侧都只在「补丁数 1 + 可配置蜜脾 + 显式 has(bee_type)」时才产出非空签名。
+		String snapshot = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2InputLaneSnapshot.java");
+		assertTrue(snapshot.contains("stack.has(beeTypeComponent) ? stack.get(beeTypeComponent) : null"),
+				"可配置蜜脾只有显式携带 bee_type 时才能生成快径签名，否则必须退回完整组件比较");
+		assertTrue(puller.contains("lanePatchSize == 1 && keyPatchSize == 1"
+						+ " && laneBeeType != null && keyBeeType != null"),
+				"快径要求双方签名都非空，即双方都显式携带 bee_type");
 		assertFalse(puller.contains("ModDataComponents.BEE_TYPE.get()"),
 				"热路径不得回退到逐次 DeferredHolder 注册表查找");
 
@@ -217,6 +228,122 @@ class Ae2HotPathCacheWiringTest {
 				"统计、匹配和扣减阶段必须复用同一槽位列表");
 		assertTrue(source.contains("shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount)"),
 				"实际扣减不得退回到重复构建槽位列表的查询路径");
+	}
+
+	@Test
+	@DisplayName("流体推送单趟扫描 + 三条推送通道，且不设满槽阈值、不取网络令牌")
+	void fluidPushClampsThroughTheSinglePassSampleIndex() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FluidPusher.java");
+		assertTrue(source.contains("Object2LongOpenHashMap<AEFluidKey> tankTotals = batchBuffer.beginTankSample();"),
+				"槽位扫描必须借用批处理缓冲的复用采样表（跨 tick 零分配）");
+		assertTrue(source.contains("batchBuffer.commitTankSample();"),
+				"采样必须先并入待推送表再判定触发，否则本刻新增量会漏记");
+		assertTrue(source.contains("long tankTotal = tankTotals.getLong(fluidKey);"),
+				"推送上限必须查采样索引 O(1) 取得");
+		assertFalse(source.contains("currentTankAmount(host, tankSnapshot, fluidKey, tankCount)"),
+				"不得回退到「每个 key 重扫全部槽位」的 O(流体键数 × 槽数) 路径");
+
+		// 三条通道：新增流体 / 该流体槽位已满 / 成熟窗口到期
+		assertTrue(source.contains(
+				"if (!batchBuffer.needsPush(tankTotals, tankCapacities) && !batchBuffer.isRipe()) return;"),
+				"触发条件必须包含「槽位已满即推」：满槽时液面无法再上升，只比液面会退化成 10 刻一次");
+		assertTrue(source.contains("Object2LongOpenHashMap<AEFluidKey> tankCapacities = batchBuffer.tankSampleCapacities();"),
+				"满槽判定必须用采样期统计的该流体槽位容量之和");
+		assertTrue(source.contains("if (firstPushThisTick) batchBuffer.tick();"),
+				"成熟窗口必须每个真实游戏刻只推进一次（加速子 tick 在入口合并）");
+		assertFalse(source.contains("saturationThreshold"),
+				"不得恢复「满槽阈值」延迟推送：槽满才推会让流体在本地罐滞留");
+
+		// 网络级令牌在昂贵网络下每刻只放行一个宿主，会让多机同网的流体推送被整轮跳过
+		assertFalse(source.contains("tryAcquireNetworkWork"),
+				"流体路径不得取网络级工作令牌（git 基线语义），节流交给配额/退避/成本预算");
+	}
+
+	@Test
+	@DisplayName("推送尝试必须回写槽内余量，否则同一批被拒流体会每刻重推")
+	void fluidPushRecordsRemainingAfterEachAttempt() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FluidPusher.java");
+		assertTrue(source.contains("batchBuffer.recordAttempt(fluidKey, tankTotal);"),
+				"被拒绝/退避跳过的流体必须登记槽内余量");
+		assertTrue(source.contains("batchBuffer.recordAttempt(fluidKey, Math.max(0L, tankTotal - shrunk));"),
+				"部分成功后必须登记剩余量，只有新增产出才触发下一轮直推");
+		assertTrue(source.contains("batchBuffer.recordAttempt(fluidKey, 0L);"),
+				"槽已空时必须清零余量，下一次产出才会被判定为新增");
+
+		String buffer = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PendingBatchBuffer.java");
+		assertTrue(buffer.contains(
+				"boolean needsPush(Object2LongMap<AEFluidKey> sample, Object2LongMap<AEFluidKey> capacities)"),
+				"推送判定必须同时考虑「新增流体」与「该流体槽位已满」");
+		assertTrue(buffer.contains("public static final int RIPE_TICKS = 10;"),
+				"成熟窗口取参考实现 useless PendingAEBatch 的 10 刻");
+	}
+
+	@Test
+	@DisplayName("直推流体与物品路径同构：按 key 退避 + 每真实刻配额")
+	void directGeneratedFluidSharesBackoffAndPerTickQuota() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FluidPusher.java")
+				.replaceAll("\\s+", " ");
+		assertTrue(source.contains("if (keyBackoff.shouldSkip(key, nanoNow)) return 0L;"),
+				"被拒的流体键必须在退避窗口内跳过直推（避免每刻重复发起注定失败的全量网络遍历）");
+		assertTrue(source.contains(
+				"!pushState.tryAcquireGeneratedFluidInsert(gameTick, MAX_DIRECT_FLUID_INSERTS_PER_TICK)"),
+				"加速子 tick 必须受每真实游戏刻配额约束");
+		assertTrue(source.contains("keyBackoff.recordSuccess(key);"),
+				"真实插入成功必须清除该 key 的退避");
+		assertTrue(source.contains("keyBackoff.recordFailure(key, System.nanoTime());"),
+				"零接收或抛异常必须记入该 key 的退避");
+		assertFalse(source.contains("pushState.getFluidBackoff().recordFailure("),
+				"直推不得写整机级 fluidBackoff：单种流体被拒不该连带压制同机其它流体");
+
+		String state = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PushStateHolder.java");
+		assertTrue(state.contains("public boolean tryAcquireGeneratedFluidInsert(long gameTick, int maxInserts)"),
+				"配额必须由 per-tile 状态持有者提供（与 tryAcquireGeneratedItemPush 对称）");
+		assertTrue(state.contains("generatedFluidInsertGameTick = Long.MIN_VALUE;"),
+				"reset() 必须重置流体直推配额，避免方块重建后沿用旧刻计数");
+	}
+
+	@Test
+	@DisplayName("上报量已覆盖上限时跳过实时探测，不得回退到每键全网络遍历")
+	void liveProbeIsSkippedWhenTheReportedStockAlreadyCoversTheCap() throws Exception {
+		String view = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2NetworkInventoryView.java");
+		// 保留校验探针：上报量 ≥ cap 时结论恒为 cap，探测只是白花一次 NetworkStorage.extract
+		assertTrue(view.contains(
+				"if (cachedInventory != null && Math.max(0L, cachedInventory.get(key)) >= cap) return cap;"),
+				"保留下限探针必须在报量足够时短路");
+		// 可见量探针：min(max(上报, 实时), cap) 在上报 ≥ cap 时同样是 cap
+		assertTrue(view.contains("if (reported >= cap) return cap;"),
+				"可见量探针必须在上报量覆盖上限时短路");
+		// 短路必须发生在探针之前，否则等于没省
+		int fastPath = view.indexOf("if (reported >= cap) return cap;");
+		int probeCall = view.indexOf("simulated = liveExtractableAmount(network, key, Long.MAX_VALUE, source);");
+		assertTrue(fastPath > 0 && probeCall > fastPath,
+				"上报量短路必须位于 liveExtractableAmount 之前");
+
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		assertTrue(puller.contains("Ae2NetworkInventoryView.reserveProbeAmount(holder, gameTick,\n"
+				+ "\t\t\t\t\t\tcachedInventory, meStorage, key, queryCap, actionSource)"),
+				"拉取路径必须把 AE2 库存快照传给探针，否则报量短路永远不生效");
+		assertTrue(puller.contains("entry.reserveFloor, availableStacks, meStorage,"),
+				"批处理必须携带同一份库存快照，同刻不得重新获取");
+	}
+
+	@Test
+	@DisplayName("外部存储物品快照用定长数组，禁止复用 KeyCounter 累积历史键")
+	void externalStorageSnapshotAvoidsReusedKeyCounter() throws Exception {
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "CentrifugeExternalAeStorage.java");
+		// AE2 的 KeyCounter.clear() 只清内层 VariantCounter，外层子映射会永久保留归零条目，
+		// 复用会让 clear/add/iterator 成本随历史物品种类单调增长
+		assertFalse(source.contains("itemSnapshot.clear()"),
+				"不得复用 KeyCounter 做快照（clear 不清外层子映射）");
+		assertFalse(source.contains("out.addAll(shared.itemSnapshot)"),
+				"不得整表复制快照，应逐条写入调用方计数器");
+		assertTrue(source.contains("private Object[] itemSnapshotKeys = new Object[0];"),
+				"快照必须是定长数组，长度由输出槽数封顶");
+		assertTrue(source.contains("out.add((AEItemKey) shared.itemSnapshotKeys[i], "
+				+ "shared.itemSnapshotAmounts[i]);"),
+				"必须逐条写入（KeyCounter.add 为累加语义，多槽同物品自动合并）");
 	}
 
 	@Test

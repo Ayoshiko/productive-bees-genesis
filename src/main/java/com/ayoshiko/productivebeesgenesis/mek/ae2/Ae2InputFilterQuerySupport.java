@@ -199,8 +199,21 @@ final class Ae2InputFilterQuerySupport {
 			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
 			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve) {
 		return pullLimitIfAllowed(key, visibleStock, ignoreNbt, mode, precise, slots, fuzzyEntries,
-				keys, amounts, reserves, unlimited, networkStock, unlimitedAll, globalNetworkStock,
-				globalReserve, null);
+				keys, amounts, reserves, unlimited, networkStock, unlimitedAll, false, true,
+				globalNetworkStock, globalReserve, null);
+	}
+
+	/**
+	 * 标签感知重载：候选已通过独立标签表达式，外层模式只再次筛选标记条目。
+	 */
+	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
+			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve) {
+		return pullLimitIfAllowed(key, visibleStock, ignoreNbt, mode, precise, slots, fuzzyEntries,
+				keys, amounts, reserves, unlimited, networkStock, unlimitedAll, tagFilterActive,
+				hasConfiguredEntries, globalNetworkStock, globalReserve, null);
 	}
 
 	/**
@@ -214,13 +227,15 @@ final class Ae2InputFilterQuerySupport {
 	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
 			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
-			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve,
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve,
 			Ae2DirectKeyIndex<AEItemKey> index) {
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		if (!ignoreNbt && candidateBeeType == null && index != null && index.isComplete()) {
 			return indexedPullLimit(key, visibleStock, mode, amounts, reserves, unlimited, networkStock,
-					unlimitedAll, globalNetworkStock, globalReserve, index.slotsFor(key));
+					unlimitedAll, tagFilterActive, hasConfiguredEntries,
+					globalNetworkStock, globalReserve, index.slotsFor(key));
 		}
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
 		boolean filterMatched = false;
@@ -262,7 +277,8 @@ final class Ae2InputFilterQuerySupport {
 			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
 		}
 
-		boolean admitted = Ae2FilterPullPolicy.isAdmitted(mode, filterMatched);
+		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
+				mode, filterMatched, tagFilterActive, hasConfiguredEntries);
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());
@@ -278,7 +294,8 @@ final class Ae2InputFilterQuerySupport {
 	 */
 	private static long indexedPullLimit(AEItemKey key, long visibleStock, FilterMode mode,
 			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
-			boolean unlimitedAll, boolean globalNetworkStock, long globalReserve, int[] hitSlots) {
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve, int[] hitSlots) {
 		boolean directFound = false;
 		boolean liveStock = false;
 		boolean unlimitedPull = false;
@@ -297,7 +314,8 @@ final class Ae2InputFilterQuerySupport {
 			}
 		}
 		// BLACKLIST 命中已在上面提前返回；走到这里时 directFound 必为 false。
-		boolean admitted = Ae2FilterPullPolicy.isAdmitted(mode, directFound);
+		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
+				mode, directFound, tagFilterActive, hasConfiguredEntries);
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());

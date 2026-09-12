@@ -19,6 +19,28 @@ class Ae2InputFilterUnlimitedTest {
 	}
 
 	@Test
+	void activeTagFilterWithoutMarksIgnoresOuterMode() {
+		for (Ae2InputFilter.FilterMode mode : Ae2InputFilter.FilterMode.values()) {
+			assertTrue(Ae2FilterPullPolicy.isAdmitted(mode, false, true, false),
+					"tag-only candidate should pass " + mode + " when no marks exist");
+		}
+	}
+
+	@Test
+	void activeTagFilterWithMarksAppliesOuterModeAsSecondStage() {
+		assertTrue(Ae2FilterPullPolicy.isAdmitted(
+				Ae2InputFilter.FilterMode.DISABLED, false, true, true));
+		assertFalse(Ae2FilterPullPolicy.isAdmitted(
+				Ae2InputFilter.FilterMode.WHITELIST, false, true, true));
+		assertTrue(Ae2FilterPullPolicy.isAdmitted(
+				Ae2InputFilter.FilterMode.WHITELIST, true, true, true));
+		assertTrue(Ae2FilterPullPolicy.isAdmitted(
+				Ae2InputFilter.FilterMode.BLACKLIST, false, true, true));
+		assertFalse(Ae2FilterPullPolicy.isAdmitted(
+				Ae2InputFilter.FilterMode.BLACKLIST, true, true, true));
+	}
+
+	@Test
 	void unlimitedAllNeverBypassesBlacklistOrWhitelistAdmission() {
 		assertEquals(Ae2FilterPullPolicy.PULL_DISALLOWED, decide(false, false));
 		assertEquals(-1L, decide(true, false));

@@ -86,11 +86,12 @@ final class Ae2PushBuffers {
 	/** Cached Productive Bees comb keys used as the lower-priority candidate group. */
 	final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
 	volatile Object scanCandidateSource;
-	volatile long scanCandidateRefreshTick = Long.MIN_VALUE;
 	volatile long scanCandidateRecipeVersion = Long.MIN_VALUE;
 	volatile boolean scanCandidateSmeltingEnabled;
 	/** 标签表达式配置代号快照：变更后必须立即重建候选列表，而非等 10 tick 到期。 */
 	volatile int scanCandidateTagGeneration = Integer.MIN_VALUE;
+	/** 当前 per-network 基础目录代号；共享目录重建后宿主分类缓存必须同步刷新。 */
+	volatile long scanCandidateDirectoryGeneration = Long.MIN_VALUE;
 	/** Per-host Mekanism recipe lookup cache; released with the reusable buffers. */
 	final Ae2SmeltingInputCache smeltingInputCache = new Ae2SmeltingInputCache();
 	/** Per-host 标签过滤判定缓存；与配方缓存同生命周期。 */
@@ -112,6 +113,19 @@ final class Ae2PushBuffers {
 
 	/** Per-input-slot capacity snapshot reused between pull planning and local insertion. */
 	private long[] inputSlotCapacities = new long[16];
+
+	/**
+	 * 拉取容量规划用的车道快照（per-host 复用）。
+	 * <p>
+	 * 把「候选类型 × 输入槽」嵌套循环里的逐对槽位读取压成每轮一次快照；
+	 * 见 {@link Ae2InputLaneSnapshot} 的成本说明。
+	 */
+	private final Ae2InputLaneSnapshot inputLaneSnapshot = new Ae2InputLaneSnapshot();
+
+	/** 借用车道快照（每轮拉取开始时 capture，执行阶段按插入刷新）。 */
+	Ae2InputLaneSnapshot inputLaneSnapshot() {
+		return inputLaneSnapshot;
+	}
 
 	/**
 	 * 获取能量适配器（懒初始化，volatile + double-checked locking 保证线程安全）
@@ -175,21 +189,19 @@ final class Ae2PushBuffers {
 		return scanSmeltingCandidateKeys;
 	}
 
-	boolean needsScanCandidateRefresh(Object source, long gameTick, long intervalTicks,
+	boolean needsScanCandidateRefresh(Object source, long directoryGeneration,
 			long recipeVersion, boolean smeltingEnabled, int tagGeneration) {
 		return scanCandidateSource != source
-				|| scanCandidateRefreshTick == Long.MIN_VALUE
-				|| gameTick < scanCandidateRefreshTick
-				|| gameTick - scanCandidateRefreshTick >= Math.max(1L, intervalTicks)
+				|| scanCandidateDirectoryGeneration != directoryGeneration
 				|| scanCandidateRecipeVersion != recipeVersion
 				|| scanCandidateSmeltingEnabled != smeltingEnabled
 				|| scanCandidateTagGeneration != tagGeneration;
 	}
 
-	void markScanCandidateRefresh(Object source, long gameTick, long recipeVersion,
+	void markScanCandidateRefresh(Object source, long directoryGeneration, long recipeVersion,
 			boolean smeltingEnabled, int tagGeneration) {
 		scanCandidateSource = source;
-		scanCandidateRefreshTick = gameTick;
+		scanCandidateDirectoryGeneration = directoryGeneration;
 		scanCandidateRecipeVersion = recipeVersion;
 		scanCandidateSmeltingEnabled = smeltingEnabled;
 		scanCandidateTagGeneration = tagGeneration;
@@ -199,7 +211,7 @@ final class Ae2PushBuffers {
 		// Grid callbacks may run off the server thread. Publish list invalidation
 		// markers only; the recipe cache provides its own synchronized clear path.
 		scanCandidateSource = null;
-		scanCandidateRefreshTick = Long.MIN_VALUE;
+		scanCandidateDirectoryGeneration = Long.MIN_VALUE;
 		scanCandidateRecipeVersion = Long.MIN_VALUE;
 		scanCandidateTagGeneration = Integer.MIN_VALUE;
 		smeltingInputCache.clear();

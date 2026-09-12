@@ -32,6 +32,10 @@ public final class Ae2NetworkInventoryView {
 		long visible = cache.amounts.getLong(key);
 		if (visible < 0L) {
 			long reported = Math.max(0L, cachedInventory.get(key));
+			// 上报量已覆盖本次上限 → 本方法最终返回 min(max(上报, 实时), cap) = cap，
+			// 实时探针不可能改变结果。跳过探针即为「零语义变化的纯节省」；
+			// 只有上报量不足（占位/无限存储的典型场景）时探针才有意义。
+			if (reported >= cap) return cap;
 			long simulated = 0L;
 			// AE2LT probes configured keys even when the cached counter is positive:
 			// special/infinite storage may report a finite placeholder that is lower than
@@ -78,13 +82,22 @@ public final class Ae2NetworkInventoryView {
 	 * <b>cap 语义</b>：缓存同时记录探测时使用的 cap。只有「上次 cap ≥ 本次 cap」或
 	 * 「上次结果小于上次 cap（说明已探到底，即真实总量）」时才复用，否则重新探测 ——
 	 * 避免用小 cap 的截断结果去回答大 cap 的提问。
+	 * <p>
+	 * <b>上报量足够时直接短路</b>：本方法的全部结论都来自
+	 * {@code min(cap, 实时可提取量)}。AE2 的 KeyCounter 只会「少报」（占位/无限存储把
+	 * 真实可提取量报小，这正是探针存在的理由），因此一旦上报量已经 ≥ cap，
+	 * 实时值必然也 ≥ cap，答案恒为 cap —— 此时探测只是白花一次全网络遍历
+	 * （spark 报告中 {@code reserveProbeAmount → NetworkStorage.extract} 是拉取路径上
+	 * 最大的一条外部调用链）。只有上报量不足（需要知道到底有多少余量）时才真正探测。
 	 *
+	 * @param cachedInventory AE2 已聚合的网络库存快照（只读）
 	 * @param cap 本次请求的上限（{@code reserveFloor + amount}）
 	 * @return 至多 {@code cap} 的实时可提取量
 	 */
-	static long reserveProbeAmount(Ae2OutputStateHolder holder, long gameTick, MEStorage network,
-			AEItemKey key, long cap, IActionSource source) {
+	static long reserveProbeAmount(Ae2OutputStateHolder holder, long gameTick, KeyCounter cachedInventory,
+			MEStorage network, AEItemKey key, long cap, IActionSource source) {
 		if (network == null || key == null || source == null || cap <= 0L) return 0L;
+		if (cachedInventory != null && Math.max(0L, cachedInventory.get(key)) >= cap) return cap;
 		if (holder == null) return liveExtractableAmount(network, key, cap, source);
 
 		TickCache cache = getTickCache(holder, gameTick, network);

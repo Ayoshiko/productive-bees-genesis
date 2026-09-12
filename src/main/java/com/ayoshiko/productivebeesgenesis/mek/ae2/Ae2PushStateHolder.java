@@ -65,6 +65,9 @@ public final class Ae2PushStateHolder {
 	private volatile long lastBufferedItemPushGameTick = Long.MIN_VALUE;
 	private volatile long generatedItemPushGameTick = Long.MIN_VALUE;
 	private volatile int generatedItemPushesThisTick;
+	/** 直推流体的真实游戏刻配额（与 {@link #generatedItemPushGameTick} 对称，独立计数） */
+	private volatile long generatedFluidInsertGameTick = Long.MIN_VALUE;
+	private volatile int generatedFluidInsertsThisTick;
 	private volatile long lastFluidPushGameTick = Long.MIN_VALUE;
 	/** Real tick that owns the additional local-fluid drain budget. */
 	private volatile long localFluidDrainGameTick = Long.MIN_VALUE;
@@ -162,6 +165,34 @@ public final class Ae2PushStateHolder {
 		return true;
 	}
 
+	/**
+	 * Reserves one direct generated-fluid insert from a fixed real-tick budget.
+	 * <p>
+	 * <b>为什么需要</b>：一次真正的 {@code MEStorage.insert} 会完整遍历网络挂载表，
+	 * 且 AE2 对每个挂载点还会额外做一次 SIMULATE extract；加速模组（JDTE 等）让同一真实
+	 * 游戏刻内可推进 {@code processes × batchMultiplier} 个配方虚拟刻，每个虚拟刻的产出
+	 * 都会各自发起一次完整网络遍历（spark 报告中 {@code Ae2FluidPusher.pushGeneratedFluid}
+	 * 是流体路径唯一可见开销）。本配额把每刻直推次数钳到常数，超出部分由调用方留在本地罐，
+	 * 交给 {@code Ae2FluidPusher.pushFluids} 的批处理路径（同刻合并 + 失败退避）统一推送，
+	 * 因此不丢流体、不降吞吐。
+	 * <p>
+	 * <b>与物品路径的关系</b>：{@link #tryAcquireGeneratedItemPush} 的流体孪生实现，
+	 * 两套计数独立（流体键少但同刻调用频次更高）。
+	 *
+	 * @param gameTick   当前游戏刻（JDTE 加速下同一刻可多次进入）
+	 * @param maxInserts 本刻允许的直推次数上限
+	 * @return true 表示取得一次直推配额
+	 */
+	public boolean tryAcquireGeneratedFluidInsert(long gameTick, int maxInserts) {
+		if (generatedFluidInsertGameTick != gameTick) {
+			generatedFluidInsertGameTick = gameTick;
+			generatedFluidInsertsThisTick = 0;
+		}
+		if (generatedFluidInsertsThisTick >= Math.max(0, maxInserts)) return false;
+		generatedFluidInsertsThisTick++;
+		return true;
+	}
+
 	public boolean tryStartFluidPush(long gameTick) {
 		if (lastFluidPushGameTick == gameTick) return false;
 		lastFluidPushGameTick = gameTick;
@@ -241,6 +272,8 @@ public final class Ae2PushStateHolder {
 		lastBufferedItemPushGameTick = Long.MIN_VALUE;
 		generatedItemPushGameTick = Long.MIN_VALUE;
 		generatedItemPushesThisTick = 0;
+		generatedFluidInsertGameTick = Long.MIN_VALUE;
+		generatedFluidInsertsThisTick = 0;
 		lastFluidPushGameTick = Long.MIN_VALUE;
 		localFluidDrainGameTick = Long.MIN_VALUE;
 		localFluidDrainsThisTick = 0;

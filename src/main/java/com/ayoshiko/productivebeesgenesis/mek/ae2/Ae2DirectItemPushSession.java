@@ -33,6 +33,7 @@ import java.util.function.ToIntFunction;
 public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> {
 
 	private MEStorage meStorage;
+	private Ae2OutputStateHolder holder;
 	private Ae2KeyBackoffRegistry<AEItemKey> keyBackoff;
 	private long nowNanos;
 	/** 会话创建时的游戏刻 — 用于全服 insert 预算的 tick 归属 */
@@ -50,13 +51,15 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 	/** 本轮允许的 insert 次数上限 — 健康网络等于 MAX_ITEM_KEYS_PER_TICK（无损） */
 	private int insertQuota;
 
-	Ae2DirectItemPushSession(MEStorage meStorage, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff,
-			long gameTick, Ae2InsertCostTracker costTracker) {
-		reset(meStorage, keyBackoff, gameTick, costTracker);
+	Ae2DirectItemPushSession(Ae2OutputStateHolder holder, MEStorage meStorage,
+			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, long gameTick, Ae2InsertCostTracker costTracker) {
+		reset(holder, meStorage, keyBackoff, gameTick, costTracker);
 	}
 
-	void reset(MEStorage meStorage, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, long gameTick,
+	void reset(Ae2OutputStateHolder holder, MEStorage meStorage,
+			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, long gameTick,
 			Ae2InsertCostTracker costTracker) {
+		this.holder = holder;
 		this.meStorage = meStorage;
 		this.keyBackoff = keyBackoff;
 		this.nowNanos = System.nanoTime();
@@ -93,6 +96,10 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 			slowInsertDetected = true;
 		}
 		Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+		if (holder != null) {
+			holder.recordNetworkCost(meStorage, gameTick, insertCost,
+					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
+		}
 		// 自适应记账：全额计入 EWMA 与 tick 预算，覆盖 ae2lt 样板解码这类中等昂贵高频 insert
 		if (costTracker != null) costTracker.record(gameTick, insertCost);
 	}
@@ -104,7 +111,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
 				|| zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT
 				|| attemptedCount >= insertQuota
-				|| Ae2GlobalInsertBudget.isExhausted(gameTick)
 				|| (costTracker != null
 						&& (costTracker.isExhausted(gameTick)
 								|| !costTracker.canInsertNow(gameTick, Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK)))) {

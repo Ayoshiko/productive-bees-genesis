@@ -33,6 +33,7 @@ import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
+import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
 import com.ayoshiko.productivebeesgenesis.util.SingleIngredientCraftingIndex;
 import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.capabilities.ICapabilityAware;
@@ -57,6 +58,7 @@ import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
@@ -281,6 +283,8 @@ public final class ProductiveBeesGenesis {
 		// 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用
 		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPre);
 		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPost);
+		// 推进全局游戏刻时钟 — 槽位对象拿不到 Level，「外部退回窗口」靠它判断凭据是否过期
+		NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> ServerTickClock.tick());
 		// 注册开发者模式命令 — /productivebeesgenesis dev on|off|status|<feature> on|off
 		// 使用内存状态而非配置文件，避免生产环境意外持久化
 		NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
@@ -441,6 +445,9 @@ public final class ProductiveBeesGenesis {
 		safeClear(MyriadBatchPlanner::clearThreadLocals, "MyriadBatchPlanner.snapshotCache");
 		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
 		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
+		// 复位全局游戏刻时钟 — 槽位的「外部退回窗口」依赖它判定过期，跨存档必须归零
+		safeClear(ServerTickClock::reset, "ServerTickClock");
+		safeClear(Ae2IntegrationLoader::clearServerCaches, "AE2 network caches");
 		safeClear(LogThrottle::clearAll, "LogThrottle");
 		safeClear(FactoryTierConfigService::resetToDefaults, "FactoryTierConfigService");
 	}

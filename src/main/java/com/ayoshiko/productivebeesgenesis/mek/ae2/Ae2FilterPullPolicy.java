@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-/** Pure pull-limit policy applied after blacklist/whitelist admission. */
+/** 在黑白名单准入后计算 AE2 输入上限的纯策略。 */
 final class Ae2FilterPullPolicy {
 
 	static final long PULL_DISALLOWED = Long.MIN_VALUE;
@@ -15,6 +15,19 @@ final class Ae2FilterPullPolicy {
 			case WHITELIST -> filterMatched;
 			case DISABLED -> true;
 		};
+	}
+
+	/**
+	 * 在独立标签过滤放行候选后解析外层标记条目模式。
+	 * <p>
+	 * 未配置任何标记时，标签表达式独立决定候选范围；存在标记时，外层黑白名单必须
+	 * 对标签结果再过滤一次。这样白名单只拉取「标签命中且已标记」的物品，黑名单仍排除
+	 * 标签命中且已标记的物品。
+	 */
+	static boolean isAdmitted(Ae2InputFilter.FilterMode mode, boolean filterMatched,
+			boolean tagFilterActive, boolean hasConfiguredEntries) {
+		if (tagFilterActive && !hasConfiguredEntries) return true;
+		return isAdmitted(mode, filterMatched);
 	}
 
 	/** Clamps an extract request to the amount currently above its reserve floor. */

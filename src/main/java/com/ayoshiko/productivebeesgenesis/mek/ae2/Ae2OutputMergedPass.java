@@ -77,7 +77,6 @@ final class Ae2OutputMergedPass {
 		}
 		for (Object2LongMap.Entry<AEItemKey> keyEntry : keyToTotalCount.object2LongEntrySet()) {
 			if (attemptedKeys >= keyQuota || spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
-					|| Ae2GlobalInsertBudget.isExhausted(gameTick)
 					|| costTracker.isExhausted(gameTick)) {
 				if (firstDeferredKey == null) firstDeferredKey = keyEntry.getKey();
 				break;
@@ -111,6 +110,8 @@ final class Ae2OutputMergedPass {
 				slowInsertDetected = true;
 			}
 			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			ctx.holder().recordNetworkCost(ctx.meStorage(), gameTick, insertCost,
+					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
 			// 自适应记账：全额计入 EWMA 与 tick 预算（下一 tick 的 keyQuota 据此收缩/放开）
 			costTracker.record(gameTick, insertCost);
 			if (pushed > 0) {

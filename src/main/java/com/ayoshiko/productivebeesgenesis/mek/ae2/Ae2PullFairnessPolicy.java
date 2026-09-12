@@ -12,6 +12,24 @@ final class Ae2PullFairnessPolicy {
 		return Math.max(1, (interval + multiplier - 1) / multiplier);
 	}
 
+	/** 首次拉取按方块坐标稳定错峰，避免大量机器在同一冷却边界同步扫描网络。 */
+	static boolean isInitialPhaseReady(long pullCounter, int interval, long positionSeed) {
+		int safeInterval = Math.max(1, interval);
+		if (safeInterval == 1) return true;
+		return Math.floorMod(pullCounter, safeInterval) == initialPhase(safeInterval, positionSeed);
+	}
+
+	static int initialPhase(int interval, long positionSeed) {
+		int safeInterval = Math.max(1, interval);
+		long mixed = positionSeed;
+		mixed ^= mixed >>> 33;
+		mixed *= 0xff51afd7ed558ccdl;
+		mixed ^= mixed >>> 33;
+		mixed *= 0xc4ceb9fe1a85ec53l;
+		mixed ^= mixed >>> 33;
+		return (int) Math.floorMod(mixed, safeInterval);
+	}
+
 	static int resolveAccelerationMultiplier(int executedBatchMultiplier,
 			int currentTrackerMultiplier, int previousTrackerMultiplier) {
 		if (executedBatchMultiplier > 0) {

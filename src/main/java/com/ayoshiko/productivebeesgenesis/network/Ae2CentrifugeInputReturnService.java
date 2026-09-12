@@ -137,7 +137,7 @@ final class Ae2CentrifugeInputReturnService {
 	private static int returnRemainder(IAe2InputHost host, Ae2OutputStateHolder holder,
 			MEStorage storage, List<IInventorySlot> inputSlots, AEItemKey key, ItemStack remainder) {
 		int before = remainder.getCount();
-		int remaining = Ae2LeftoverReturner.returnLeftoverToMe(storage, key, remainder,
+		int remaining = Ae2LeftoverReturner.returnLeftoverToMe(holder, storage, key, remainder,
 				ACTION_SOURCE, holder.getPushState().getReturnBackoff(),
 				host.productivebeesgenesis$getAe2Level(), host.productivebeesgenesis$getAe2BlockPos(),
 				inputSlots);

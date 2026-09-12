@@ -126,7 +126,11 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	public void getAvailableStacks(KeyCounter out) {
 		if (allows(TransmissionType.ITEM, true)) {
 			refreshItemSnapshot();
-			out.addAll(shared.itemSnapshot);
+			// 定长数组快照直接逐条写入调用方的计数器：KeyCounter.add 是累加语义，
+			// 同一物品出现在多个输出槽时会自动合并，与旧的 addAll 结果一致。
+			for (int i = 0; i < shared.itemSnapshotCount; i++) {
+				out.add((AEItemKey) shared.itemSnapshotKeys[i], shared.itemSnapshotAmounts[i]);
+			}
 		}
 		if (allows(TransmissionType.FLUID, true)) {
 			int tankCount = Math.max(0, shared.host.fluidOutputTankCount());
@@ -214,16 +218,30 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	private void refreshItemSnapshot() {
 		long version = shared.centrifuge.productivebeesgenesis$outputContentsVersion();
 		if (version == shared.itemSnapshotVersion) return;
-		shared.itemSnapshot.clear();
 		int slotCount = Math.max(0, shared.host.processes()) * 3;
+		if (shared.itemSnapshotKeys.length < slotCount) {
+			shared.itemSnapshotKeys = new Object[slotCount];
+			shared.itemSnapshotAmounts = new long[slotCount];
+		}
+		int count = 0;
 		for (int i = 0; i < slotCount; i++) {
 			IInventorySlot slot = outputSlot(i);
 			if (slot == null || slot.isEmpty()) continue;
 			ItemStack stack = slot.getStack();
 			if (stack.isEmpty() || stack.getCount() <= 0) continue;
 			AEItemKey key = AEItemKey.of(stack);
-			if (key != null) shared.itemSnapshot.add(key, stack.getCount());
+			if (key == null) continue;
+			shared.itemSnapshotKeys[count] = key;
+			shared.itemSnapshotAmounts[count] = stack.getCount();
+			count++;
 		}
+		// 快照条数由输出槽位数量封顶（进程数×3），不会随「历史上出现过的物品种类」增长。
+		// 旧实现复用一只 KeyCounter 并每轮 clear()：AE2 的 KeyCounter.clear() 只清内层
+		// VariantCounter，外层按主键（Item）索引的子映射会永久保留归零条目，
+		// 于是每轮 clear/add/iterator 的成本随历史物品种类单调增长（Mek-Engergistics 作者
+		// 在 AE2NativeMachineAdapter 中记录过同类写法曾占服务端 77% tick）。改用定长数组后
+		// 既无累积，也省掉了 out.addAll 的整表复制。
+		shared.itemSnapshotCount = count;
 		shared.itemSnapshotVersion = version;
 	}
 
@@ -290,7 +308,10 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		private final IAe2OutputHostBase host;
 		private final IMekCentrifugeTile centrifuge;
 		private final ISideConfiguration sideConfiguration;
-		private final KeyCounter itemSnapshot = new KeyCounter();
+		/** 输出槽快照（复用定长数组，长度随进程数增长后被复用），仅服务端 tick 线程访问。 */
+		private Object[] itemSnapshotKeys = new Object[0];
+		private long[] itemSnapshotAmounts = new long[0];
+		private int itemSnapshotCount;
 		private long itemSnapshotVersion = Long.MIN_VALUE;
 		private int itemExtractCursor;
 		private int fluidExtractCursor;

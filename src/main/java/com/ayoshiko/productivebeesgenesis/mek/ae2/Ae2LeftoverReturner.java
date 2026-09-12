@@ -51,10 +51,9 @@ public final class Ae2LeftoverReturner {
 	 * @param inputSlots     输入槽列表（兜底回插目标）
 	 * @return 剩余未回送的数量（0 表示全部回送成功，> 0 表示部分失败，调用方应保留对应数量在源槽位）
 	 */
-	public static int returnLeftoverToMe(MEStorage meStorage, AEItemKey key, ItemStack leftover,
-			IActionSource actionSource, Ae2PushBackoff returnBackoff,
-			Level level, BlockPos pos,
-			List<IInventorySlot> inputSlots) {
+	public static int returnLeftoverToMe(Ae2OutputStateHolder holder, MEStorage meStorage,
+			AEItemKey key, ItemStack leftover, IActionSource actionSource, Ae2PushBackoff returnBackoff,
+			Level level, BlockPos pos, List<IInventorySlot> inputSlots) {
 		int remaining = leftover.getCount();
 		if (remaining <= 0) return 0;
 
@@ -64,10 +63,12 @@ public final class Ae2LeftoverReturner {
 		for (int attempt = 1; attempt <= maxRetries; attempt++) {
 			if (remaining <= 0) break;
 			try {
-				long simulated = meStorage.insert(key, remaining, Actionable.SIMULATE, actionSource);
+				long simulated = timedInsert(holder, meStorage, key, remaining,
+						Actionable.SIMULATE, actionSource, level);
 				long target = Math.min(remaining, Math.max(0L, simulated));
 				if (target <= 0L) continue;
-				long inserted = meStorage.insert(key, target, Actionable.MODULATE, actionSource);
+				long inserted = timedInsert(holder, meStorage, key, target,
+						Actionable.MODULATE, actionSource, level);
 				int accepted = Math.min(remaining,
 						SaturatingMath.saturatingToInt(Math.max(0L, inserted)));
 				remaining -= accepted;
@@ -101,6 +102,26 @@ public final class Ae2LeftoverReturner {
 		if (returnBackoff != null) returnBackoff.recordFailure(System.nanoTime());
 		// M4-2 修复：返回剩余未回送数量，调用方据此决定是否清空源槽位
 		return remaining - returnedToSlot;
+	}
+
+	private static long timedInsert(Ae2OutputStateHolder holder, MEStorage meStorage, AEItemKey key,
+			long amount, Actionable action, IActionSource actionSource, Level level) {
+		long gameTick = level == null ? 0L : level.getGameTime();
+		long start = System.nanoTime();
+		try {
+			return meStorage.insert(key, amount, action, actionSource);
+		} finally {
+			long cost = System.nanoTime() - start;
+			Ae2GlobalInsertBudget.recordCost(gameTick, cost);
+			if (holder != null) {
+				holder.recordNetworkCost(meStorage, gameTick, cost,
+						Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
+				Object reusable = holder.getReusableBuffers();
+				if (reusable instanceof Ae2PushBuffers buffers) {
+					buffers.insertCostTracker.record(gameTick, cost);
+				}
+			}
+		}
 	}
 
 	/**

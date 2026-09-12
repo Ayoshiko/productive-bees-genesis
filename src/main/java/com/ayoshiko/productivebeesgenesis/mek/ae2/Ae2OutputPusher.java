@@ -96,6 +96,7 @@ public final class Ae2OutputPusher {
 		if (storageService == null) return;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
+		if (!holder.tryAcquireNetworkWork(meStorage, gameTick)) return;
 
 		Ae2PushBuffers buffers = getReusableBuffers(holder, host);
 
@@ -168,13 +169,15 @@ public final class Ae2OutputPusher {
 		if (storageService == null) return null;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return null;
+		if (!holder.tryAcquireNetworkWork(meStorage, gameTick)) return null;
 		Ae2PushBuffers buffers = getReusableBuffers(holder, host);
 		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateOutputKeyBackoff(holder);
 		if (buffers.directItemPushSession == null) {
-			buffers.directItemPushSession = new Ae2DirectItemPushSession(meStorage, keyBackoff, gameTick,
+			buffers.directItemPushSession = new Ae2DirectItemPushSession(holder, meStorage, keyBackoff, gameTick,
 					buffers.insertCostTracker);
 		} else {
-			buffers.directItemPushSession.reset(meStorage, keyBackoff, gameTick, buffers.insertCostTracker);
+			buffers.directItemPushSession.reset(holder, meStorage, keyBackoff, gameTick,
+					buffers.insertCostTracker);
 		}
 		return buffers.directItemPushSession;
 	}
