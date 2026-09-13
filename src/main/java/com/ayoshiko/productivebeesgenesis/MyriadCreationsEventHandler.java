@@ -337,11 +337,12 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		RandomSource random,
 		int productivityModifier
 	) {
+		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
 		appendRandomCombsInternal(
 				input, invHandler, random, productivityModifier,
 				MyriadCreationsEventHandler::isMyriadCreationsHoneycomb,
 				MyriadCreationsEventHandler::isMyriadCreationsCombBlock,
-				MyriadBeeTypeCache.cachedBeeTypes());
+				snapshot.beeTypes(), snapshot.honeycombTemplateByType(), snapshot.combBlockTemplateByType());
 	}
 
 	/** 从蜜蜂缓存中随机选取指定数量的不同类型 */

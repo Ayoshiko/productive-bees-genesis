@@ -188,8 +188,9 @@ public class MyriadAggregatedStacksBuilder {
 				continue;
 			}
 			int remaining = count;
+			int maxStackSize = Math.max(1, template.getMaxStackSize());
 			while (remaining > 0) {
-				int stackSize = Math.min(MAX_STACK_SIZE, remaining);
+				int stackSize = Math.min(maxStackSize, remaining);
 				result.add(template.copyWithCount(stackSize));
 				remaining -= stackSize;
 			}

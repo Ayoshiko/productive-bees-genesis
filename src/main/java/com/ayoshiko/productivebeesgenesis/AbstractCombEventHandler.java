@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
@@ -143,24 +144,32 @@ public abstract class AbstractCombEventHandler {
 	 */
 	protected static boolean hasCentrifugeRecipe(ServerLevel level, ResourceLocation beeType) {
 		try {
-			// 每线程独立的 Handler 与 ItemStack，避免多线程竞态
+			// 特殊蜜蜂使用独立蜜脾物品（如 honeycomb_ghostly），不能只探测 configurable_honeycomb。
+			List<ItemStack> produces = BeeInfoHelper.getBeeProduceStacks(level, beeType);
+			for (ItemStack produce : produces) {
+				if (!(produce.getItem() instanceof net.minecraft.world.item.HoneycombItem)) continue;
+				if (findCentrifugeRecipe(level, produce)) return true;
+			}
+			// 普通资源蜂的配方可能省略 bee_type 组件，PB 会按 ingredient 蜂种补全。
 			ItemStack testComb = THREAD_LOCAL_TEST_COMB.get();
-			InventoryHandlerHelper.BlockEntityItemStackHandler handler = THREAD_LOCAL_HANDLER.get();
-			// 重置 bee_type 组件（线程内复用时上次写入的值仍残留）
 			testComb.set(ModDataComponents.BEE_TYPE.get(), beeType);
-			handler.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, testComb);
-
-			RecipeHolder<CentrifugeRecipe> recipe = level.getRecipeManager()
-					.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(),
-							(RecipeInput) handler, level)
-					.orElse(null);
-			return recipe != null;
+			return findCentrifugeRecipe(level, testComb);
 		} catch (Exception e) {
 			// M9: LogThrottle 节流（for 循环内高频调用，异常持续时每秒触发 N 次）
 			LogThrottle.warn("has_centrifuge_recipe",
 					"hasCentrifugeRecipe 检查异常，保守返回 true (5秒内仅首条输出): {}", e.toString());
 			return true;
 		}
+	}
+
+	/** 使用线程本地输入处理器探测单个真实蜜脾模板的 PB 离心配方。 */
+	private static boolean findCentrifugeRecipe(ServerLevel level, ItemStack input) {
+		InventoryHandlerHelper.BlockEntityItemStackHandler handler = THREAD_LOCAL_HANDLER.get();
+		handler.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, input.copyWithCount(1));
+		RecipeHolder<CentrifugeRecipe> recipe = level.getRecipeManager()
+				.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(), (RecipeInput) handler, level)
+				.orElse(null);
+		return recipe != null;
 	}
 
 	/**
@@ -210,6 +219,8 @@ public abstract class AbstractCombEventHandler {
 	 * @param isTargetComb       判断是否为目标蜜脾
 	 * @param isTargetBlock      判断是否为目标蜜脾块
 	 * @param cachedBeeTypes     蜜蜂类型缓存
+	 * @param honeycombTemplates 实际蜜脾模板映射
+	 * @param combBlockTemplates 实际蜜脾块模板映射
 	 */
 	protected static void appendRandomCombsInternal(
 			ItemStack input,
@@ -218,7 +229,9 @@ public abstract class AbstractCombEventHandler {
 			int productivityModifier,
 			Predicate<ItemStack> isTargetComb,
 			Predicate<ItemStack> isTargetBlock,
-			List<ResourceLocation> cachedBeeTypes) {
+			List<ResourceLocation> cachedBeeTypes,
+			Map<ResourceLocation, ItemStack> honeycombTemplates,
+			Map<ResourceLocation, ItemStack> combBlockTemplates) {
 		if (!isTargetComb.test(input) && !isTargetBlock.test(input)) return;
 		if (!CombBlockCheckCache.hasOutputSpace(invHandler)) return;
 
@@ -237,11 +250,18 @@ public abstract class AbstractCombEventHandler {
 				WeightedAllocation.allocateByWeight(totalCount, selectedTypes, weights);
 
 		Item baseItem = isCombBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
+		Map<ResourceLocation, ItemStack> outputTemplates = isCombBlock ? combBlockTemplates : honeycombTemplates;
 		if (invHandler instanceof InventoryHandlerHelper.BlockEntityItemStackHandler outputHandler) {
 			for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
 				try {
-					ItemStack output = new ItemStack(baseItem, entry.getValue());
-					output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
+					ItemStack template = outputTemplates.get(entry.getKey());
+					ItemStack output;
+					if (template != null && !template.isEmpty()) {
+						output = template.copyWithCount(entry.getValue());
+					} else {
+						output = new ItemStack(baseItem, entry.getValue());
+						output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
+					}
 					outputHandler.addOutput(output);
 				} catch (Exception e) {
 					// M9: LogThrottle 节流（for 循环内，离心机完成配方时高频触发）

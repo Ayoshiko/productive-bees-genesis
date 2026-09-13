@@ -303,7 +303,11 @@ public class MyriadCreationsHandler {
 		buildOutputSlots(processIndex);
 
 		// 用 MyriadBatchPlanner 规划插入（纯模拟），plan 失败时不 apply 不扣输入
-		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(reusableOutputSlots, baseItem, allocation, currentTick);
+		Map<ResourceLocation, ItemStack> templateByType = isCombBlock
+				? MyriadBeeTypeCache.snapshot().combBlockTemplateByType()
+				: MyriadBeeTypeCache.snapshot().honeycombTemplateByType();
+		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(
+				reusableOutputSlots, baseItem, allocation, currentTick, templateByType);
 		if (!plan.isSuccess()) {
 			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{}", logPrefix, processIndex);
 			return 0;
@@ -408,8 +412,11 @@ public class MyriadCreationsHandler {
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
 		int outputPerOperation = SaturatingMath.saturatingToInt(
 				SaturatingMath.saturatingMultiply(multiplier, productivityMod));
-		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(snapshot, baseItem, outputPerOperation, selectedTypes,
-			effectiveBatchSize);
+		Map<ResourceLocation, ItemStack> templateByType = isCombBlock
+				? MyriadBeeTypeCache.snapshot().combBlockTemplateByType()
+				: MyriadBeeTypeCache.snapshot().honeycombTemplateByType();
+		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(
+				snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
 		if (maxBatch <= 0) {
 			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
 					logPrefix, processIndex,
@@ -429,7 +436,7 @@ public class MyriadCreationsHandler {
 		Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes,
 			activeWeights);
 
-		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation);
+		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
 		// v9-L3 修复：逐步降级重试（MAX_DEGRADATION_ATTEMPTS 次，每次减半），替代原先仅尝试一次的保守降级
 		int degradationAttempts = 0;
 		while (!plan.isSuccess() && currentBatch > 1 && degradationAttempts < MAX_DEGRADATION_ATTEMPTS) {
@@ -441,7 +448,7 @@ public class MyriadCreationsHandler {
 			activeTypes = selectedTypes.subList(0, typesToUse);
 			activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
 			allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
-			plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation);
+			plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
 			degradationAttempts++;
 		}
 		if (!plan.isSuccess()) {

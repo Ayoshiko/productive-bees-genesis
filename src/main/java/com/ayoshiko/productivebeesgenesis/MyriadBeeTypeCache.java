@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.CompiledBeeTypeFilter;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -186,25 +187,28 @@ public final class MyriadBeeTypeCache {
 		if (newCache.isEmpty()) {
 			logEmptyResult(filter, currentTick);
 		}
-		publishSnapshot(newCache);
+		publishSnapshot(newCache, level);
 	}
 
 	/** 原子发布类型、模板和索引；空列表也必须覆盖旧快照并通知下游缓存。 */
-	private static void publishSnapshot(List<ResourceLocation> beeTypes) {
+	private static void publishSnapshot(List<ResourceLocation> beeTypes, ServerLevel level) {
 		List<ResourceLocation> immutableTypes = List.copyOf(beeTypes);
 		if (immutableTypes.isEmpty()) {
 			beeTypeCacheSnapshot = BeeTypeCacheSnapshot.EMPTY;
 		} else {
-			// 高倍加速下通过模板 copy 替代重复构造 ItemStack，降低 GC 压力。
-			ItemStack[] newHoneycombTemplates = RandomHoneycombSelector.buildHoneycombTemplates(immutableTypes);
-			ItemStack[] newCombBlockTemplates = RandomHoneycombSelector.buildCombBlockTemplates(immutableTypes);
+			// 蜂箱配方才是蜜蜂真实蜜脾形态的权威来源。特殊蜜蜂不能一律伪造为 configurable_honeycomb。
+			ItemStack[] newHoneycombTemplates = new ItemStack[immutableTypes.size()];
+			ItemStack[] newCombBlockTemplates = new ItemStack[immutableTypes.size()];
 			Map<ResourceLocation, ItemStack> honeycombByType = new HashMap<>(immutableTypes.size() * 2);
-			for (int i = 0; i < immutableTypes.size(); i++) {
-				honeycombByType.put(immutableTypes.get(i), newHoneycombTemplates[i]);
-			}
 			Map<ResourceLocation, ItemStack> combBlockByType = new HashMap<>(immutableTypes.size() * 2);
 			for (int i = 0; i < immutableTypes.size(); i++) {
-				combBlockByType.put(immutableTypes.get(i), newCombBlockTemplates[i]);
+				ResourceLocation beeType = immutableTypes.get(i);
+				ItemStack honeycomb = resolveHoneycombTemplate(level, beeType);
+				ItemStack combBlock = RandomHoneycombSelector.buildCombBlockTemplate(beeType, honeycomb);
+				newHoneycombTemplates[i] = honeycomb;
+				newCombBlockTemplates[i] = combBlock;
+				honeycombByType.put(beeType, honeycomb);
+				combBlockByType.put(beeType, combBlock);
 			}
 			beeTypeCacheSnapshot = new BeeTypeCacheSnapshot(
 					immutableTypes, newHoneycombTemplates, newCombBlockTemplates,
@@ -214,6 +218,16 @@ public final class MyriadBeeTypeCache {
 		warmupComplete = true;
 		MyriadSelectionCache.onBeeTypesUpdated();
 		WeightedTypeSelector.getInstance().onTypesUpdated(immutableTypes);
+	}
+
+	/** 从蜂箱配方中提取首个蜜脾产物；普通资源蜂回退为带 bee_type 的可配置蜜脾。 */
+	private static ItemStack resolveHoneycombTemplate(ServerLevel level, ResourceLocation beeType) {
+		for (ItemStack output : BeeInfoHelper.getBeeProduceStacks(level, beeType)) {
+			if (output.getItem() instanceof net.minecraft.world.item.HoneycombItem) {
+				return RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, output);
+			}
+		}
+		return RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, ItemStack.EMPTY);
 	}
 
 	private static void logEmptyResult(CompiledBeeTypeFilter filter, long currentTick) {
