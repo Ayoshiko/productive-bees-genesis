@@ -1,9 +1,9 @@
 ---
 navigation:
-  parent: index.md
+  parent: reference-index.md
   title: Configuration
   icon: "minecraft:comparator"
-  position: 7
+  position: 1
 ---
 # Configuration
 

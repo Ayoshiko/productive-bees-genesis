@@ -3,18 +3,86 @@
   "icon": "productivebeesgenesis:raw_ore_smelting_upgrade",
   "category": "productivebeesgenesis:automation",
   "pages": [
-    { "type": "patchouli:text", "title": "PB 升级槽", "text": "PB 升级要放进机器侧边的“PB 升级”窗口。生产力升级增加每轮产量，时间升级缩短等待；基因采样与蜜脾块升级主要给蜂箱使用，稳定性升级主要给离心机使用。每种升级能装多少由服务器设置决定。" },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "副产物销毁", "text": "自动销毁蜂蜜、花粉团等副产物，避免输出槽被低价值物品占满。仅对支持的蜂箱和离心机生效；安装后仍建议保留必要副产物的独立生产线。" },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "精华转化", "text": "将唯一同物合成配方的产物按比例自动转化，适合把蜜脾副产物压缩成目标资源。实际比例与可用配方由 Productive Bees/整合包决定。" },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "粗矿熔炼", "text": "将资源蜜蜂离心产出的粗矿直接按熔炼配方转为锭。先在机器设置中允许熔炼兼容，再到这台离心机的界面打开熔炼按钮；没有匹配熔炼配方的物品会保持原样。" },
-    { "type": "patchouli:text", "title": "Mekanism 与扩展", "text": "Mekanism 工厂等级决定能同时工作的槽位。安装相应扩展模组后，还会出现更高等级工厂、堆叠升级或创造升级。扩建时先保证供电和输出搬运跟得上，再提高并行和速度。" },
-    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "粗矿熔炼升级配方" },
-    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:essence_conversion_upgrade", "title": "精华转化升级配方" },
-    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "副产物销毁升级配方" }
+    {
+      "type": "patchouli:text",
+      "title": "两套升级入口",
+      "text": "每台机器都有两个升级窗口：橙色的“PB 升级”装资源蜜蜂升级，向上箭头的“MEK 升级”装 Mekanism 的速度/能量/消音升级。两套同时生效，互不占槽。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "PB 升级窗口",
+      "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_list.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "窗口怎么读",
+      "text": "左上是已安装列表（行底色就是该升级类型的颜色），右上信息屏显示名称与“已装/上限”，左下“支持：”列出本机可装的升级，右下是安装输入槽、卸载按钮与卸载输出槽。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "信息屏与卸载",
+      "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_actions.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:image",
+      "title": "支持列表",
+      "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_supported.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "灰罩就是不支持",
+      "text": "“支持：”一行里盖了灰罩的图标表示本机不接受：悬停时名字变红并显示“…（不支持）”。蜂箱支持产量α/β/γ/Ω、速度、速度+、基因采样器、蜜脾块、副产物销毁、精华转化；离心机支持产量系列、速度系列、稳定性、粗矿熔炼、副产物销毁、精华转化。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "安装与卸载",
+      "text": "把升级物品放进输入槽，进度条走完即安装成功。先在左上列表里点一行选中，右下“卸载”按钮才会亮起：左键卸载一个，Shift+左键卸载全部，物品会被放进卸载按钮下方的输出槽。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:byproduct_destruction_upgrade",
+      "title": "副产物销毁",
+      "text": "蜂箱会清理蜂蜜类副产物与花粉球，离心机清理 PB 蜂蜜流体与蜜蜡，主要产物不受影响。适合已经不需要这些副产物的后期生产线。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:essence_conversion_upgrade",
+      "title": "精华转化",
+      "text": "把“能用单一材料逆向合成”的低级产物自动压缩成更省地方的形态。混合材料配方与不明确的配方会跳过，避免误吃珍贵材料。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:raw_ore_smelting_upgrade",
+      "title": "粗矿熔炼",
+      "text": "将离心产出的粗矿按熔炼配方直接转为锭。先在机器设置中允许熔炼兼容，再到这台离心机的侧面配置里打开 F 按钮；没有匹配熔炼配方的物品会保持原样。仅离心机可用。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "上限与平衡模式",
+      "text": "每种升级的上限由服务器配置决定，蜂箱与离心机各一套。全局平衡模式的“基础”会让产量等级互斥、速度等级互斥；“悖论无限”允许共存。切换模式不会移除已装升级，但可能阻止装入不合规则的新升级。"
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade",
+      "title": "粗矿熔炼升级配方"
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "productivebeesgenesis:essence_conversion_upgrade",
+      "title": "精华转化升级配方"
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "productivebeesgenesis:byproduct_destruction_upgrade",
+      "title": "副产物销毁升级配方"
+    }
   ],
   "extra_recipe_mappings": {
-    "productivebeesgenesis:raw_ore_smelting_upgrade": 5,
-    "productivebeesgenesis:essence_conversion_upgrade": 6,
-    "productivebeesgenesis:byproduct_destruction_upgrade": 7
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 11,
+    "productivebeesgenesis:essence_conversion_upgrade": 12,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 13
   }
 }

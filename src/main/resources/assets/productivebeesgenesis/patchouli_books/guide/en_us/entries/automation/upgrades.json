@@ -3,18 +3,24 @@
   "icon": "productivebeesgenesis:raw_ore_smelting_upgrade",
   "category": "productivebeesgenesis:automation",
   "pages": [
-    { "type": "patchouli:text", "title": "PB upgrade slots", "text": "Install PB upgrades from the apiary or centrifuge PB Upgrades tab. Productivity increases output, Time shortens processing, Stability improves non-guaranteed chances, and Gene Sampler/Block affect genetics and block products. Server limits apply per type." },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct destruction", "text": "Discards honey and pollen-puff byproducts in supported machines to prevent clogging. Keep a separate line if those byproducts are still needed." },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence conversion", "text": "Converts products through a unique same-item recipe at its configured ratio. Available recipes depend on Productive Bees and the modpack." },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw ore smelting", "text": "Smelts eligible raw-ore outputs into matching ingots. First allow Smelting Compatibility in Machine Settings, install this upgrade, and enable the button on that centrifuge. Items without a safe furnace result remain unchanged." },
-    { "type": "patchouli:text", "title": "Mekanism extensions", "text": "Mekanism factory tiers add parallel slots. Optional Mekanism addons can add higher factories, stack upgrades, or creative upgrades. Expand storage and power first, then raise parallelism and speed so products do not jam the next machine." },
+    { "type": "patchouli:text", "title": "Two upgrade systems", "text": "Every machine has two upgrade windows: the orange PB Upgrades tab holds Productive Bees upgrades, and the up-arrow MEK Upgrades tab holds Mekanism Speed/Energy/Muffling upgrades. Both apply at the same time and neither consumes the other's slots." },
+    { "type": "patchouli:image", "title": "PB Upgrade window", "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_list.png" ], "border": true },
+    { "type": "patchouli:text", "title": "Reading the window", "text": "Top left is the installed list (each row uses its upgrade type's colour), the info screen shows the name and \"installed / limit\", the Supported row lists what this machine accepts, and the lower right holds the install slot, the Uninstall button and the uninstall output slot." },
+    { "type": "patchouli:image", "title": "Info screen and uninstall", "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_actions.png" ], "border": true },
+    { "type": "patchouli:image", "title": "Supported list", "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_supported.png" ], "border": true },
+    { "type": "patchouli:text", "title": "Grey means unsupported", "text": "A greyed icon in the Supported row means this machine will not take it: hovering turns the name red and appends \"(unsupported)\". The apiary accepts Productivity a/b/g/O, Time, Time+, Gene Sampler, Comb Block, Byproduct Destruction and Essence Conversion; the centrifuge accepts the Productivity and Time series, Stability, Raw Ore Smelting, Byproduct Destruction and Essence Conversion." },
+    { "type": "patchouli:text", "title": "Installing and uninstalling", "text": "Put the upgrade item into the input slot and the install bar completes. Click a row in the installed list first: only then does the Uninstall button light up. Left-click removes one, Shift+left-click removes all, and the items appear in the output slot below the button." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct destruction", "text": "Apiaries discard honey-type byproducts and pollen puffs; centrifuges discard PB honey fluid and beeswax. Main products are untouched, so it suits late-game lines that no longer need these byproducts." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence conversion", "text": "Compacts low-tier products that have a single-ingredient reverse recipe. Mixed-ingredient and unclear recipes are skipped so precious materials are never consumed by mistake." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw ore smelting", "text": "Smelts centrifuge raw-ore output directly into ingots. First allow Smelting Compatibility in Machine Settings, then enable the F button in that centrifuge's side configuration. Items without a matching smelting recipe stay unchanged. Centrifuge only." },
+    { "type": "patchouli:text", "title": "Limits and balance", "text": "Per-type limits come from server configuration, with separate settings for the apiary and the centrifuge. The Basic balance profile makes productivity tiers and speed tiers mutually exclusive; Paradox Infinity allows them to coexist. Switching profiles never removes installed upgrades but can block new ones that break the rules." },
     { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw Ore Smelting recipe" },
     { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence Conversion recipe" },
     { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct Destruction recipe" }
   ],
   "extra_recipe_mappings": {
-    "productivebeesgenesis:raw_ore_smelting_upgrade": 5,
-    "productivebeesgenesis:essence_conversion_upgrade": 6,
-    "productivebeesgenesis:byproduct_destruction_upgrade": 7
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 11,
+    "productivebeesgenesis:essence_conversion_upgrade": 12,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 13
   }
 }

@@ -1,9 +1,9 @@
 ---
 navigation:
-  parent: index.md
+  parent: upgrades/upgrades-index.md
   title: Filters
   icon: "minecraft:hopper"
-  position: 6
+  position: 2
 ---
 # Filters
 
@@ -26,6 +26,15 @@ Use localized search in the Myriad filter editor when possible. Drag entries to 
   <ItemIcon id="ae2:item_storage_cell_1k" />
 </ItemGrid>
 
-Start with a whitelist containing one comb, exact matching enabled, a small pull amount, and a network reserve. Increase the list only after processing and output return both work.
+In the centrifuge [AE2 Input window](upgrades/ae2-input.md):
+
+1. Start with a whitelist (an empty whitelist blocks everything).
+2. Mark one comb in a marker cell as a test.
+3. Turn **precise mode** on: combs and comb blocks match separately. With it off they share one quota.
+4. Keep **NBT matching** (`N:off`); a configurable comb's bee type lives in its data, and ignoring it picks the wrong recipe.
+5. Set a small pull amount and a network reserve (a reserve higher than the network stock pulls nothing at all).
+6. Only once processing and output return both work, add more entries.
+
+Every button and click combination is documented in [AE2 Input Window](upgrades/ae2-input.md).
 
 Advanced smelting filters support `&`, `|`, `^`, `!`, parentheses, tags, and `*` wildcards. For example, `#c:ores & !#c:ores/iron` excludes iron ores. Invalid expressions reject only that candidate.

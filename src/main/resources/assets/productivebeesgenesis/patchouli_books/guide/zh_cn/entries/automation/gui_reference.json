@@ -3,8 +3,57 @@
   "icon": "minecraft:comparator",
   "category": "productivebeesgenesis:automation",
   "pages": [
-    { "type": "patchouli:text", "title": "主窗口标签", "text": "能量标签显示 FE 与容量；进度条悬停显示配方、剩余时间和产物。红石控制可切换忽略、低电量和红石信号模式；安全标签管理访问权限；侧面配置决定物品、流体和能量方向；弹出器控制自动输出。" },
-    { "type": "patchouli:text", "title": "离心机专用按钮", "text": "PB 配方按钮跳转 JEI 离心配方；输入返回按钮重新定位上次查看的输入。多流体槽标签打开独立分页窗口，显示每种流体、容量和占用槽位。输出矩阵下方箭头可翻页查看并行槽。" },
-    { "type": "patchouli:text", "title": "窗口位置", "text": "客户端会记住标签和窗口位置。分辨率或界面缩放改变后，如果窗口跑出屏幕，请到模组配置的“客户端设置 → 自定义窗口位置”重置对应窗口。所有机器槽位都支持悬停提示，建议先看提示再调整升级或物流。" }
+    {
+      "type": "patchouli:text",
+      "title": "窗口的公共部分",
+      "text": "左侧与右侧贴着标签；标题栏左边是关闭与图钉，拖动标题栏可移动窗口。竖条是能量条，悬停可看具体 FE；进度条悬停写明在做什么、还缺什么。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "红石控制",
+      "text": "四种模式循环：红石检测忽略、高、低、脉冲。“忽略”是默认值。设成高或低之后忘了接红石，是“机器有电却不动”最常见的原因。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "侧面配置窗口",
+      "text": "点机器窗口左侧最上方的标签（方块图标）打开。顶部的类型标签切换物品/流体/能量/热量/化学品，每种类型各记一套设置。中间六个面按立方体展开图排列，左键点一下换下一档，Shift+左键退回上一档。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "四种面状态",
+      "text": "无：完全封闭；输入：只许外部送进来；输出：只许机器送出去；输入/输出：双向。颜色只是提示，以按钮上的文字为准。右下角是清空按钮（Shift+点击清空全部类型）。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "自动弹出",
+      "text": "侧面配置右上角的 14×14 按钮是自动弹出开关，只对当前选中的类型生效。注意：只把一面设成“输出”并不会让机器主动推送，还要打开自动弹出、让管道抽取，或使用本模组的直连按钮。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "蜂箱：注入的按钮",
+      "images": [ "productivebeesgenesis:textures/guide/p_side_config_apiary.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "蜂箱的按钮",
+      "text": "都是 14×14 灰底小方块，中间一个字母，开启时字母变绿。左列：A 输出到 AE、M 产物直入 AE、O 产物直通相邻容器；右列：Mekanism 原生自动弹出、D 离心机特殊直连、P 离心机优先。装 AE2 才会出现 A/M/P。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "离心机：注入的按钮",
+      "images": [ "productivebeesgenesis:textures/guide/p_side_config_centrifuge.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "离心机的按钮",
+      "text": "左列自上而下：A 输出到 AE、I 打开 AE2 输入窗口、F 兼容电力熔炼炉配方、A 新产物直入 AE、O 产物直通相邻容器；右列顶部是 Mekanism 原生自动弹出。装 AE2 才会出现 A 与 I。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "窗口位置",
+      "text": "喂食槽、多流体槽、PB 升级与 AE2 输入窗口会记住位置与钉住状态。分辨率或界面缩放改变后窗口跑出屏幕时，到模组配置的“客户端设置 → 自定义窗口位置”重置对应窗口，不必删除整个配置。"
+    }
   ]
 }

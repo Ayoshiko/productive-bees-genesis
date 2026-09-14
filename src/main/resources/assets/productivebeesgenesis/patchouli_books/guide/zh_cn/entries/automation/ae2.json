@@ -3,9 +3,58 @@
   "icon": "ae2:fluix_smart_cable",
   "category": "productivebeesgenesis:automation",
   "pages": [
-    { "type": "patchouli:spotlight", "item": "ae2:fluix_smart_cable", "title": "先接一台机器", "text": "先确认 ME 网络有电、有空闲频道，也有存储空间，再用智能线缆连接机器。在机器设置的“AE2 集成”中先开物品输出，有流体产物时再开流体输出。离心机主动取料还要在每台机器自己的 AE2 输入窗口中开启，刚接上线不会立刻抽空库存。" },
-    { "type": "patchouli:text", "title": "安全测试主动取料", "text": "先在离心机输入名单里只加一种蜜脾，选择精确匹配，把每次拉取量设小，并设置网络保留量，防止最后一组应急库存也被拿走。确认能稳定工作后，再决定使用黑名单还是白名单。可配置蜜脾携带的蜜蜂类型会影响配方，通常不要忽略额外数据。" },
-    { "type": "patchouli:text", "title": "能量优先级", "text": "机器可以从 ME 网络获得运行所需的 FE。安装 Applied Flux（应用通量）后，保持“优先使用 Applied Flux”即可先用网络里专门存放的 FE。只有明确要求机器只用 Applied Flux 时，才关闭“允许使用 AE2 原生能量”。网络断开时机器会安全暂停。" },
-    { "type": "patchouli:text", "title": "防止网络卡住", "text": "给成品和流体留下足够存储。大型网络开始卡顿时，在中文配置界面降低单次拉取量或延长拉取间隔；一次只改一项，先观察机器输入是否稳定，再逐步提高吞吐。" }
+    {
+      "type": "patchouli:spotlight",
+      "item": "ae2:fluix_smart_cable",
+      "title": "先接一台机器",
+      "text": "确认 ME 网络有电、有空闲频道、有存储空间，再用线缆连接机器。然后到侧面配置的物品页打开 A（输出到 AE）；需要离心机自己去拿料时再打开 I。刚接上线不会立刻抽空库存。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "在哪里打开输入窗口",
+      "text": "打开离心机界面 → 左侧最上方的“侧面配置” → 切到物品页 → 点左列第 2 格的 I 按钮（悬停显示“AE2 输入配置”）。窗口会浮在机器界面上，点左上角 × 或按 Esc 关闭（被图钉钉住的窗口 Esc 关不掉）。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "输入窗口的控制行",
+      "images": [ "productivebeesgenesis:textures/guide/p_ae2_controls.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "控制行按钮",
+      "text": "I 拉取总开关（入:开/关）；N 的 NBT 忽略（处理可配置蜜脾时保持“匹配”）；F 过滤模式循环禁用/白名单/黑名单；P 精确模式（开时蜜脾与蜜脾块分开，关时共用配额）；齿轮改全部拉取量；库存改全局保留量；T 打开标签表达式。右边 ◀ C ▶ 是翻页与清空。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "每一格的三行",
+      "images": [ "productivebeesgenesis:textures/guide/p_ae2_cells.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "逐格操作",
+      "text": "每格自上而下是齿轮、标记格、网络输出格。带着物品左键或右键点标记格即添加，空手点已填充的格子即移除，也可以从 JEI 拖入。齿轮：左键设拉取量、右键切换库存模式、Shift+左键切换无限拉取、Shift+右键设保留量。网络输出格可直接取出或塞回网络。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "安全测试主动取料",
+      "text": "第一次只加一种蜜脾，拉取量设小（1~4 个），并设置网络保留量，防止最后一组应急库存也被拿走。注意：保留量高于网络存量时一个都拉不到。网格上盖灰罩的条目表示本机没有该蜜脾的配方，配置不会生效。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "冷却与排错",
+      "text": "面板上的“冷却”会自适应：拉到东西回到 5 刻（无限条目 1 刻），拉不满退到 10 刻，什么都没拉到最多退到 40 刻。冷却长期停在 40 刻通常表示网络里没有可拉的东西。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "能量优先级",
+      "text": "机器可以从 ME 网络获得运行所需的 FE。安装 Applied Flux 后，保持“优先使用 Applied Flux”即可先用网络里专门存放的 FE。只有明确要求机器只用 Applied Flux 时，才关闭“允许使用 AE2 原生能量”。网络断开时机器会安全暂停。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "防止网络卡住",
+      "text": "给成品和流体留下足够存储。大型网络开始卡顿时，在配置界面降低单次拉取量或延长拉取间隔；一次只改一项，先观察机器输入是否稳定，再逐步提高吞吐。"
+    }
   ]
 }

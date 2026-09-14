@@ -1,6 +1,6 @@
 ---
 navigation:
-  parent: index.md
+  parent: getting_started/index.md
   title: Myriad Creations Bee
   icon: "productivebees:spawn_egg_configurable_bee"
   icon_components:

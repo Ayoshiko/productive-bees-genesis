@@ -31,6 +31,8 @@ class OptionalGuideCompatibilityTest {
 	private static final Pattern STRUCTURE_SOURCE = Pattern.compile("<ImportStructure\\s+src=\"([^\"]+)\"");
 	private static final Pattern RECIPE_FOR_ITEM = Pattern.compile("<RecipeFor\\s+id=\"([^\"]+)\"");
 	private static final Pattern UNSUPPORTED_COMPONENT = Pattern.compile("</?Row(?:\\s|>)");
+	/** 代码块单行宽度上限（半角单位），超过该值就会把整页撑宽。 */
+	private static final int MAX_CODE_BLOCK_WIDTH = 90;
 	private static final Set<String> EXPECTED_RECIPE_OUTPUTS = Set.of(
 			"productivebeesgenesis:mek_apiary",
 			"productivebeesgenesis:mek_centrifuge",
@@ -145,6 +147,57 @@ class OptionalGuideCompatibilityTest {
 				"能量立方必须与线缆相邻连接");
 		assertTrue(structure.contains("pos: [3, 0, 0], state: \"mekanism:basic_universal_cable\""),
 				"第二段线缆必须连接蜂箱和离心机");
+	}
+
+	@Test
+	@DisplayName("GuideME 页面不得包含同页锚点链接或超宽代码块（会撑宽整页）")
+	void guideMePagesAvoidLayoutBreakingContent() throws Exception {
+		List<String> problems = new ArrayList<>();
+		for (Path page : relativeMarkdownPages(GUIDE_ROOT, true)) {
+			checkLayoutBreakingContent(GUIDE_ROOT, page, problems);
+			checkLayoutBreakingContent(ENGLISH_GUIDE_ROOT, page, problems);
+		}
+		assertTrue(problems.isEmpty(),
+				() -> "GuideME 页面存在会撑宽整页的内容（GuideME 会把超宽子元素回填给整页，导致正文被裁切、表格列被挤出屏幕）:\n"
+						+ String.join("\n", problems));
+	}
+
+	private static void checkLayoutBreakingContent(Path languageRoot, Path relativePage, List<String> problems)
+			throws Exception {
+		String content = Files.readString(languageRoot.resolve(relativePage));
+
+		// GuideME 不支持同页锚点：`](` + `#` 会被解析成"页面不存在"的错误块，
+		// 而错误块会把整行源码原样渲染出来，等于给页面塞进一段不可控的超宽文本。
+		Matcher linkMatcher = MARKDOWN_LINK.matcher(content);
+		while (linkMatcher.find()) {
+			if (linkMatcher.group(1).startsWith("#")) {
+				problems.add(relativePage + ": 同页锚点链接 " + linkMatcher.group(1) + "（GuideME 会报页面不存在）");
+			}
+		}
+
+		// 代码块按 PRE 渲染：框线字符之间没有断行机会，宽度会积累到远超页面宽度。
+		boolean inFence = false;
+		int lineNumber = 0;
+		for (String line : content.split("\n", -1)) {
+			lineNumber++;
+			if (line.stripLeading().startsWith("```")) {
+				inFence = !inFence;
+				continue;
+			}
+			if (inFence && displayWidth(line) > MAX_CODE_BLOCK_WIDTH) {
+				problems.add(relativePage + ":" + lineNumber + ": 代码块单行宽度 "
+						+ displayWidth(line) + " 超过 " + MAX_CODE_BLOCK_WIDTH);
+			}
+		}
+	}
+
+	/** 全角字符按 2 个半角宽度估算，用于近似 GuideME 的字符步进。 */
+	private static int displayWidth(String line) {
+		int width = 0;
+		for (int i = 0; i < line.length(); i++) {
+			width += line.charAt(i) > 0x2E7F ? 2 : 1;
+		}
+		return width;
 	}
 
 	private static boolean contains(Path path, String needle) {

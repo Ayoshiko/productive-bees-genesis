@@ -6,23 +6,45 @@
     {
       "type": "patchouli:text",
       "title": "离心机用途",
-      "text": "机械离心机读取 Productive Bees 的离心配方，将蜜脾、蜜脾块和蜂蜜副产物转换为资源。它支持 FE、物品和流体通道；基础机器单并行，工厂等级会增加并行处理。"
+      "text": "机械离心机读取蜜脾里的蜜蜂类型，按 Productive Bees 配方把蜜脾、蜜脾块转成资源，并可能同时产出蜂蜜等流体。基础机一次处理一份；基础/高级/精英/终极工厂分别并行 3/5/7/9 份。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "输入返还按钮",
+      "images": [ "productivebeesgenesis:textures/guide/p_centrifuge_input_return.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "“R”按钮怎么用",
+      "text": "输出槽下方靠右的 R 按钮会“把输入槽里的物品原样退回去”，不是清空：接着 AE2 就退回网络，没接 AE2 就按物品输出方向送进相邻容器；退不掉的部分留在输入槽，不会消失。"
     },
     {
       "type": "patchouli:text",
       "title": "多流体与熔炼",
-      "text": "打开多流体槽后，每种流体会分开存放，默认由机器自动分配空间。PB 配方按钮可跳转 JEI 查看完整配方。要让离心机顺手把粗矿变成锭，先在机器设置中允许熔炼兼容，再给离心机安装粗矿熔炼升级并打开本机按钮。"
+      "text": "多流体模式下每种流体单独占一个分槽，多流体槽标签打开的是“除主罐以外”的分槽窗口。要让离心机顺手把粗矿变成锭，先在机器设置里允许熔炼兼容，再安装粗矿熔炼升级并打开本机的 F 按钮。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "侧面配置里的离心机按钮",
+      "images": [ "productivebeesgenesis:textures/guide/p_side_config_centrifuge.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "离心机专属开关",
+      "text": "左列自上而下：A 输出到 AE；I 打开 AE2 输入窗口（主动从 ME 网络拿料，仅物品页）；F 兼容电力熔炼炉配方；A 新产物直入 AE（跳过本地缓存，拒收部分回落）；O 产物直通相邻容器。装 AE2 才会出现 A 与 I。"
     },
     {
       "type": "patchouli:spotlight",
       "item": "productivebeesgenesis:basic_mek_centrifuge_factory",
       "title": "工厂与物流",
-      "text": "工厂等级提高并行数和能量缓存，输入/输出堆叠倍率与流体罐倍率由服务器配置控制。侧面配置中将物品设为输入、流体设为输出；AE2 输出开启后可由 ME 网络接收结果。"
+      "text": "工厂把一整排并行槽塞进一个方块：每份一个红色输入槽加三个蓝色输出槽，每份各有一条进度条，共享一个流体罐。等级越高并行越多，供电与输出端要同步跟上。"
     },
     {
       "type": "patchouli:text",
       "title": "没有进度怎么办？",
-      "text": "确认输入是有效蜜脾而非普通蜂蜜瓶；检查 FE 储量、红石模式与安全权限；确认每个输出槽和流体罐有空位。若只缺某一种流体，打开多流体槽标签检查该流体的槽位上限。"
+      "text": "确认输入是有效蜜脾而不是蜂蜜瓶；检查 FE、红石模式与安全权限；确认每个输出槽和流体罐有空位。若只缺某一种流体，打开多流体槽窗口检查该流体的分槽是否已满。"
     }
   ]
 }

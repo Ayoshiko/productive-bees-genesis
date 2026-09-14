@@ -1,6 +1,5 @@
 ---
 navigation:
-  parent: index.md
   title: First Startup
   icon: "minecraft:crafting_table"
   position: 1
@@ -55,3 +54,7 @@ A successful line has moving progress bars, combs leaving the apiary, and resour
 ## If it does not run
 
 Check power, redstone mode, bee and flower matching, output space, and side configuration—in that order. Continue with the [Apiary guide](../machines/apiary.md) or open [Troubleshooting](../troubleshooting.md).
+
+This chapter also holds two orientation pages: [Myriad Creations Bee](../myriad.md) explains the random-resource bee, and [Common Screens and Controls](../gui.md) covers the energy, progress, redstone, security, and side configuration shared by every machine.
+
+<SubPages />

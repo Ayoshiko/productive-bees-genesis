@@ -1,9 +1,9 @@
 ---
 navigation:
-  parent: index.md
+  parent: reference-index.md
   title: 故障排查
   icon: "minecraft:redstone_torch"
-  position: 8
+  position: 2
 ---
 # 故障排查
 
@@ -26,7 +26,7 @@ navigation:
 ## 蜂箱不生产
 
 - 蜜蜂是否真的在工作槽，而不是仍在普通物品栏？
-- 喂食器里是否是这只蜜蜂需要的花朵或花粉？
+- 喂食槽里是否是这只蜜蜂需要的花朵或花粉？
 - 这只蜜蜂是否有可加载的 PB 产出配方？
 - 若开启基因工作限制，当前时间和天气是否符合它的行为与耐候基因？
 - 输出物品槽或流体空间是否已满？

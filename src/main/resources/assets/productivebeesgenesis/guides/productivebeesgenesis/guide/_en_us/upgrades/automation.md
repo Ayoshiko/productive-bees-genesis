@@ -1,6 +1,6 @@
 ---
 navigation:
-  parent: index.md
+  parent: upgrades/upgrades-index.md
   title: Upgrade and Automation Details
   icon: "productivebeesgenesis:essence_conversion_upgrade"
   position: 1
@@ -62,6 +62,21 @@ The scene shows an Energy Cube, a first cable, the apiary, a second cable, the c
 </ItemGrid>
 
 Connect the machine to a powered network with a channel and available storage. Enable item output first, fluid output if needed, then test centrifuge input pulling with one exact comb entry and a small amount. Network reserve keeps a chosen quantity in storage.
+
+### AE2 Input window (quick version)
+
+![AE2 input pulling configuration](../assets/images/gui_ae2_input.png)
+
+Open this window with the **`I` (AE2 input config)** button in the machine's side configuration:
+
+1. Leave **Filter mode** at its default and mark **one** comb in a marker cell.
+2. Choose **Precise mode** deliberately: on, combs and comb blocks match separately; off, they share one quota.
+3. **Set a small pull amount** (1–4) so the input slots are not flooded.
+4. Set a **network reserve** so the last emergency stack or crafting template is never drained.
+5. Only after a few clean cycles, add more entries and consider **unlimited pull** or **tag expressions**.
+
+> This window has more than twenty clickable elements — the pull toggle, NBT, filter mode, precise mode, global gear, stock, tag filter, four different click combinations on each per-cell gear, and three take/insert actions on each network output slot.
+> The complete reference, click table, expression syntax, every info-panel line, and all troubleshooting live on their own page: [AE2 Input Window](ae2-input.md).
 
 With Applied Flux, machines can draw FE stored in the ME network. Keep **Prefer Applied Flux** enabled for that behavior; disable **Native AE Energy Input** only when the machines must use Applied Flux FE exclusively.
 

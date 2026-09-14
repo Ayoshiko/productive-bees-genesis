@@ -1,6 +1,6 @@
 ---
 navigation:
-  parent: index.md
+  parent: getting_started/index.md
   title: 万象创世蜜蜂
   icon: "productivebees:spawn_egg_configurable_bee"
   icon_components:

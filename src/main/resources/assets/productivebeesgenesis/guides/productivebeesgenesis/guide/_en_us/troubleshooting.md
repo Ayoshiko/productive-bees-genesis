@@ -1,9 +1,9 @@
 ---
 navigation:
-  parent: index.md
+  parent: reference-index.md
   title: Troubleshooting
   icon: "minecraft:redstone_torch"
-  position: 8
+  position: 2
 ---
 # Troubleshooting
 

@@ -3,9 +3,69 @@
   "icon": "productivebeesgenesis:mek_apiary",
   "category": "productivebeesgenesis:machines",
   "pages": [
-    { "type": "patchouli:text", "title": "工作原理", "text": "机械蜂箱模拟 Productive Bees 蜂箱，不需要在世界中放置蜜蜂实体。每个输入蜜蜂槽独立寻找匹配的花朵/花粉，并把产物写入输出矩阵与流体罐。基础蜂箱只有一个并行槽；工厂等级会增加槽位、输出容量和能量缓存。" },
-    { "type": "patchouli:text", "title": "GUI 区域", "text": "左侧：蜜蜂输入与花朵/花粉槽；中央：进度与能量条；右侧：产物矩阵和流体罐。PB 升级标签打开 Productive Bees 升级窗口，喂食器标签显示工作介质消耗。能量、红石、安全、侧面配置和弹出器标签均可点击查看或修改。" },
-    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:basic_mek_apiary_factory", "title": "工厂等级", "text": "基础/高级/精英/终极工厂分别提供 5/10/15/20 个蜜蜂槽，并增加输出槽和能量缓存。安装 Evolved Mekanism、Mekanism: Extras 或 Evolved Mekanism Extras 后，会按模组可用性注册更高等级。" },
-    { "type": "patchouli:text", "title": "自动化与排错", "text": "把接管道的机器面设成对应输入或输出，再按需要打开自动弹出，Mekanism 管道才会自动搬运。接入 AE2 后可从 ME 网络拿取所需物品，并把产物送回存储。停机时依次检查蜜蜂类型、花朵、FE、红石控制、侧面配置和输出空间。" }
+    {
+      "type": "patchouli:text",
+      "title": "工作原理",
+      "text": "机械蜂箱模拟 Productive Bees 蜂箱，不需要在世界中放置蜜蜂实体。每个蜜蜂槽独立寻找匹配的花朵/花粉，并把产物写入输出区与流体罐。一只蜜蜂停工时，其他槽照常产出。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "等级与槽位",
+      "text": "基础蜂箱有 3 个蜜蜂槽与 9 格输出区。基础/高级/精英/终极工厂分别有 5/10/15/20 个蜜蜂槽，输出区分成两页。安装扩展模组后还会出现更高等级。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "蜜蜂槽与输出区",
+      "images": [ "productivebeesgenesis:textures/guide/p_apiary_slots.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "看图说明",
+      "text": "左侧红框是蜂笼输入槽，右侧蓝框是蜂笼输出槽，中间每格一只蜜蜂，槽内直接画出蜜蜂模型与状态灯。下方是输出区，工厂版会在底部显示“◀ 1/2 ▶”翻页。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "蜜蜂提示",
+      "text": "左键点蜜蜂槽会选中该槽并高亮。悬停显示名称、年龄、生命值、进度、状态与花蜜；按住 Shift 追加花朵需求、产量、耐力、性格、行为和天气耐受性。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "喂食槽窗口的开关",
+      "images": [ "productivebeesgenesis:textures/guide/p_feeder_controls.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "“禁”与“转”",
+      "text": "“转”：开启后喂食槽里的可转化物品会被消耗并转成产物；默认关闭，此时物品只当花朵用，永不消耗。“禁”：左键进入逐格禁用模式（字母变橙），此后左键点格子即停用/恢复；不进模式时按住 Alt 点格子同效；Shift 点“禁”= 一次性全禁或全启。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "喂食槽统计",
+      "text": "右侧面板显示槽位使用率、活动中/空闲、页码与已放置花朵；有格子被禁用时标题会写成“花朵（禁 N）”。底部提示会随状态变化，写明“物品不会被消耗”或“转化开启：原料会被消耗”。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:basic_mek_apiary_factory",
+      "title": "工厂等级",
+      "text": "每一级工厂都由前一级升级而来，升级时会保留里面的蜜蜂和已装升级。不要只看速度：蜜脾堆得越快，后面的离心机、箱子和网络也要跟得上。"
+    },
+    {
+      "type": "patchouli:image",
+      "title": "侧面配置里的蜂箱按钮",
+      "images": [ "productivebeesgenesis:textures/guide/p_side_config_apiary.png" ],
+      "border": true
+    },
+    {
+      "type": "patchouli:text",
+      "title": "蜂箱专属开关",
+      "text": "侧面配置的物品页里有这些 14×14 小按钮，字母变绿即开启：A 输出到 AE、M 产物直入 AE、O 产物直通相邻容器、D 离心机特殊直连、P 离心机优先（离心机满时先暂存，超出上限才回 AE）。装 AE2 才会出现 A/M/P。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "排错顺序",
+      "text": "没进度：查 FE、蜜蜂、花朵（是否被禁用）。进度满却不出货：输出区或流体罐满了。只有部分蜜蜂不动：逐个悬停看缺什么条件。升级装不上：确认机型与上限。"
+    }
   ]
 }
