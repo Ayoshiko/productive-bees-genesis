@@ -29,6 +29,88 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.8] - 2026-09-16
+
+> 正式版汇总 `1.0.8-beta.1` 的全部内容，以及预发布后完成的真实蜜脾模板、双语教程扩充、机械蜂箱基因自动化和稳定性修复。
+
+### 新增
+
+- 新增 GuideME 与 Patchouli 双语内置教程，覆盖入门、机器界面、升级、AE2 自动化、过滤器、配置、故障排查和本版新增功能；两者均为纯资源可选依赖。GuideME 为两个基因插件补齐物品帮助索引，按 G 可直接打开对应页面，两套教程都能展示其实际配方。
+- 新增 AE2 网络级候选目录与工作协调器：同一 ME 网络上的机器共享基础候选枚举，并按网络分别分配昂贵存储操作预算。
+- 机械蜂箱支持资源蜜蜂刷怪蛋直接右键空蜜蜂槽，或从蜂笼输入槽按空槽数量批量入驻，无需先在世界中生成并捕捉蜜蜂。
+- 蜂笼输入槽支持带基因蜂蜜小食自动喂食：选中蜜蜂槽时只处理该蜜蜂，否则优先选择属性缺口最大的目标；无可提升属性时不消耗小食。
+- 新增“基因种类筛选”和“基因满纯度”两个蜂箱专用采样插件。前者只产出 TYPE 基因，后者让产出固定为 100% 纯度，二者可组合且每台蜂箱各限一个。
+
+### 变更
+
+- AE2 流体输出改为“有新产物或槽已满时立即推送、被拒绝的旧批次按窗口重试”，并限制时间加速下的直推次数。
+- AE2 输入拉取预先快照输入车道，复用候选分类、组件签名和网络库存；首次扫描按方块坐标错峰。
+- 机械蜂箱每轮输出共享一次升级状态快照；Wanna Bee 大批量战利品采样按生产事件分层，减少重复升级查询和 LootModifier 遍历。
+- 收紧 Mixin 与兼容逻辑作用域：Building Gadgets 粘贴修复、Mekanism 槽位回滚、批次能耗记账只影响本模组机器；第三方调用点改用可组合的 WrapOperation。
+- 万象创世不再为所有蜂种伪造通用蜜脾，而是从蜂箱产出配方解析真实蜜脾模板，并通过 PB 映射对应蜜脾块；聚合物品按实际最大堆叠数拆分。
+- 两个基因插件配方改用生存模式可取得、带真实基因组件的基因瓶；满纯度配方不再显示或要求命令才能获得的 0% 裸基因。
+- 精简三个生产升级的物品提示，并将完整操作、组合规则和配方说明集中到扩充后的双语教程；无尽创世内部材质物品不再进入普通创造物品栏。
+
+### 修复
+
+- **刷怪蛋蜜蜂基因丢失**：刷怪蛋直入蜂箱时改为创建不加入世界的临时 PB 蜜蜂，按蜂种初始化默认属性，再复用 PB 蜂笼捕获逻辑序列化完整附件。刷怪蛋放入、蜂箱 Tooltip、转入蜂笼三条路径现在都会显示正确基因。
+- 为旧版本已经写入蜂箱的简化蜜蜂 NBT 增加按需迁移：从自动蜂笼槽或玩家右键取出时会补齐属性附件，无需先把蜜蜂放到世界中再抓回。
+- **AE2 白名单与标签过滤组合**：标签表达式先筛选候选；存在标记条目时，白名单/黑名单再进行第二阶段过滤；没有标记条目时，纯标签过滤不再被空白名单错误拦截。全局无限拉取仍不能绕过准入规则。
+- 修复 AE2 安装探测回退仍检查已移除的 `appeng.api.AEApi`，导致部分加载阶段把已安装的 AE2 静默误判为缺失。
+- 修复外部自动化可把同种物品错误塞入输出槽并卡住 AE2 合成；只有本模组槽位在短时凭据窗口内接受刚提取物品的等量原样退回。
+- 修复多个机械蜂箱/离心机合成升级时，后续输入机器的物品栏、蜜蜂槽或 PB 升级数据可能被首个输入的 NBT 覆盖。
+- 修复时间加速或异常渲染路径下 Mekanism 界面深度状态泄漏、副产物过滤修改不可变列表、第三方 Redirect 冲突，以及精华转换误采用 Industrial Foregoing 的稻草配方。
+
+### 性能
+
+- 自动基因喂食从每 20 tick 一次提升到每 5 tick 一次；同一真实游戏刻严格限一次并按方块位置错峰，在提高到每秒最多四只的同时防止高倍加速放大临时实体创建。
+- 自动喂食缓存当前小食的基因列表，并用忽略数量的组件快照检测原地修改；空槽和非基因小食仍在昂贵路径前短路。
+- 基因采样在小批次保留精确随机语义，大于 128 次事件时使用有界聚合分配；批次复用属性快照和固定数组，适配高等级工厂与高倍加速。
+- AE2 外部存储输出快照改为有界数组，共享网络缓存会在服务器停止时清理；保留库存命中缓存上限时跳过实时全网探针并记录真实操作成本用于退避。
+- 工厂进程活跃状态在稳态下先普通读取再执行 CAS；蜂箱弹出判空改为命中首个非空槽即返回。
+
+### 测试
+
+- 补充刷怪蛋完整属性序列化、旧 NBT 迁移、自动喂食节流与缓存、基因插件配方、真实蜜脾模板和双语教程索引回归测试。
+- 保留并扩充 AE2 白名单/标签组合、网络共享与成本协调、流体批处理、槽位回滚作用域、Mixin 边界、机器合成数据保留、蜂箱批次快照和 Wanna Bee 抽样测试。
+
+### English
+
+#### Added
+
+- Added bilingual GuideME and Patchouli tutorials covering onboarding, machines, upgrades, AE2 automation, filters, configuration, troubleshooting and all features in this release. Both remain optional, data-driven integrations. The two gene plugins now have GuideME G-key item indexes and live recipe displays in both guide systems.
+- Added per-network AE2 candidate sharing and work coordination to reduce duplicate scans and isolate pathological storage costs.
+- Resource bee spawn eggs can now be right-clicked into an empty apiary bee slot or batch-inserted through the cage input without spawning and catching bees in the world first.
+- Gene-bearing honey treats can be automated through the cage input. A selected slot is preferred; otherwise the bee with the largest trait shortfall is fed, and treats are not consumed when no bee can improve.
+- Added apiary-only Gene Type Filter and Full Purity Gene sampler plugins. They may be combined, are independently limited to one, and produce type-only and/or 100%-pure samples.
+
+#### Changed
+
+- Reworked AE2 fluid pushing to flush new or full-tank output immediately while retrying rejected leftovers on a bounded window; accelerated direct inserts now have a real-tick budget.
+- Reused AE2 input-lane, candidate, component and inventory snapshots, with position-based initial scan staggering.
+- Shared one apiary upgrade snapshot per output batch, bounded Wanna Bee loot-table event sampling, and restricted cross-mod Mixins and rollback/accounting behavior to this addon's machines.
+- Myriad Creations now resolves each bee's real comb template from advanced-beehive recipes, maps its real comb block through Productive Bees, and splits aggregated output by the item's actual stack limit.
+- Both gene-plugin recipes now use survival-obtainable gene bottles with real components. The Full Purity recipe no longer displays or requires an unobtainable blank 0% gene.
+- Expanded both in-game guides with exact controls, plugin combinations and recipes while keeping compact item tooltips.
+
+#### Fixed
+
+- **Missing spawn-egg bee genes**: direct insertion now initializes a temporary PB bee's species defaults and serializes it through PB's cage capture path without adding the entity to the world. Apiary tooltips and cages now retain the complete gene attachment.
+- Legacy simplified bee data is normalized on either cage-extraction path, so old apiaries recover gene tooltips without releasing and recapturing the bee.
+- Fixed AE2 whitelist plus tag filtering, removed-class fallback detection, unauthorized output-slot reinsertion, and multi-machine upgrade recipes losing later inputs' inventories or addon data.
+- Fixed GUI depth-state leaks, immutable-list mutation during byproduct filtering, third-party redirect conflicts, and the unintended Industrial Foregoing straw recipe being indexed for essence conversion.
+
+#### Performance
+
+- Increased automatic gene feeding from once per 20 ticks to once per 5 ticks while enforcing one run per real game tick and position-based phasing. It can feed up to four bees per second without accelerated ticks multiplying entity creation.
+- Cached parsed treat genes with a component snapshot that ignores count changes but detects in-place component replacement.
+- Kept exact random gene sampling up to 128 events and uses bounded aggregate allocation above that threshold, reusing per-bee profiles and fixed arrays for accelerated factories.
+- Bounded AE2 output snapshots, cleared shared caches on server stop, skipped covered reserve probes, and reduced redundant steady-state CAS and output scans.
+
+#### Tests
+
+- Added regression coverage for full spawn-egg attribute serialization, legacy data normalization, feed throttling and cache invalidation, gene-plugin recipes, real comb templates, bilingual guide indexes, AE2 coordination and existing machine safety contracts.
+
 ## [1.0.8-beta.1] - 2026-09-12
 
 > 这是 `1.0.8` 的首个预发布版本。按照 SemVer，`beta.1` 表示修复需要尽快交付，但计划中的 1.0.8 内容尚未全部完成；后续可继续发布 `beta.2`，最终完成后再发布稳定版 `1.0.8`。

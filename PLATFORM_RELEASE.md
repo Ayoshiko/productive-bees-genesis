@@ -8,9 +8,9 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 内部/构建版本 | `1.0.7` |
-| CurseForge 待发布版本 | `1.0.7` |
-| 发布状态 | GitHub Release `v1.0.7` 正式版 |
+| 内部/构建版本 | `1.0.8` |
+| CurseForge 待发布版本 | `1.0.8` |
+| 发布状态 | 待创建 GitHub Release `v1.0.8` 正式版 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -23,17 +23,17 @@
 
 ## 版本映射
 
-内部版本 `1.0.7` 与计划发布的 CurseForge 版本 `1.0.7` 使用同一个 JAR：
+内部版本 `1.0.8` 与计划发布的 CurseForge 版本 `1.0.8` 使用同一个 JAR：
 
 ```text
-CurseForge 文件展示名: productivebeesgenesis-1.0.7.jar (MC 1.21.1)
-上传文件: productivebeesgenesis-1.0.7.jar
-JAR 内部版本: 1.0.7
-CurseForge 版本: 1.0.7
+CurseForge 文件展示名: productivebeesgenesis-1.0.8.jar (MC 1.21.1)
+上传文件: productivebeesgenesis-1.0.8.jar
+JAR 内部版本: 1.0.8
+CurseForge 版本: 1.0.8
 发布渠道: Release
 ```
 
-CurseForge 的 `1.0.7` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
+CurseForge 的 `1.0.8` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
 
 ## 历史开发版本
 
@@ -41,22 +41,22 @@ CurseForge 的 `1.0.7` 与 NeoForge 元数据、Manifest `Implementation-Version
 其 Git 标签统一使用 `dev-v...` 前缀，Release 标题使用 `dev-...` 前缀并标记为 Pre-release；新的
 `v1.0.0` 和 `v1.0.1` 是不带该前缀的正式标签。历史 Release 的 JAR 资产维持原文件名和校验和，不重新打包或改名。
 
-## 1.0.7 正式发布产物
+## 1.0.8 正式发布产物
 
 ```text
-文件: build/libs/productivebeesgenesis-1.0.7.jar
-大小: 1,841,637 bytes
-SHA-256: 28D63A6EA6B1BAF3E6F155C8C2732ACC143AC5C2230C70241CE825E0C1647366
+文件: build/libs/productivebeesgenesis-1.0.8.jar
+大小: 2,727,569 bytes
+SHA-256: 702FA92275E5514B944E2740FCD5271CA4B15A5FD9C26822D1A3B95ED8277206
 ```
 
 发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
 
-2026-09-07 发布准备验证：
+2026-09-16 发布准备验证：
 
-- `.\gradlew cleanTest build --no-build-cache --no-daemon`：构建成功，共 523 项测试，零失败、零错误，1 项按环境条件跳过。
-- `verifyReleaseArtifact`：版本元数据、许可证、图标及开发资源排除检查通过。JAR 不再使用 1,800,000 字节硬上限，体积明细保存在 `build/reports/release-artifact.txt`。
-- 288 个资源 JSON 可解析；中英文语言文件各 1,100 个键，键集合一致。
-- 测试整合包已完成客户端与集成服务器启动，并实测离心机精华转化；本轮未另行启动专用服务器。
+- `.\gradlew test --no-daemon`：完整测试成功，共 618 项，零失败、零错误，2 项按环境条件跳过。
+- `.\gradlew clean build verifyReleaseArtifact --no-daemon`：干净构建成功；版本元数据、许可证、图标及开发资源排除检查通过，体积明细保存在 `build/reports/release-artifact.txt`。
+- 253 个主资源 JSON 全部可解析；中英文语言文件各 1,117 个键，键集合一致。
+- 本轮未启动游戏客户端、集成服务器或专用服务器，也未执行 Spark/MSPT 实机性能采样；发布前仍需完成游戏内冒烟测试。
 
 ## 图标
 
@@ -91,19 +91,21 @@ SHA-256: 28D63A6EA6B1BAF3E6F155C8C2732ACC143AC5C2230C70241CE825E0C1647366
 - Super Factory Manager
 - KubeJS
 - Just Enough Items
+- GuideME
+- Patchouli
 
 若平台没有对应项目，保留在项目介绍的兼容列表中，不要错误标记为必需依赖。
 
 ## 每次发布前
 
-1. 确认 `gradle.properties` 中 `mod_version=1.0.7`、`curseforge_release_version=1.0.7`。
-2. 以 `CHANGELOG.md` 的 `[1.0.7]` 中英文内容整理发布说明，不使用过期的本地草稿。GitHub Release body 必须包含 `## English` 段落（从 changelog 提取时将 `### English` 调整为该标题），工作流会将其后的英文段落同步到 CurseForge。
+1. 确认 `gradle.properties` 中 `mod_version=1.0.8`、`curseforge_release_version=1.0.8`。
+2. 以 `CHANGELOG.md` 的 `[1.0.8]` 中英文内容整理发布说明，不使用过期的本地草稿。GitHub Release body 必须包含 `## English` 段落（从 changelog 提取时将 `### English` 调整为该标题），工作流会将其后的英文段落同步到 CurseForge。
 3. 在 PowerShell 运行 `.\gradlew cleanTest build --no-build-cache --no-daemon`。
-4. 确认 `build/libs/productivebeesgenesis-1.0.7.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
+4. 确认 `build/libs/productivebeesgenesis-1.0.8.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
 5. `verifyReleaseArtifact` 必须确认 JAR 内含 NeoForge 元数据、图标、Manifest、MIT 许可证和第三方许可说明。
-6. 检查 `neoforge.mods.toml` 中版本 `1.0.7`、依赖范围、主页、问题反馈和 `logoFile`。
+6. 检查 `neoforge.mods.toml` 中版本 `1.0.8`、依赖范围、主页、问题反馈和 `logoFile`。
 7. 在干净的测试实例中至少完成客户端启动、服务器启动、蜂箱/离心机放置及 AE2 连接测试。
-8. CurseForge 文件版本填写 `1.0.7`，渠道固定选择 `Release`，上传第 4 步的同一 JAR。
+8. CurseForge 文件版本填写 `1.0.8`，渠道固定选择 `Release`，上传第 4 步的同一 JAR。
 9. 正式发布时将 changelog 的 `未发布` 改为实际日期、更新本文发布状态，并核对中英文 README 的平台链接。
 
 ## 文件命名
@@ -111,7 +113,7 @@ SHA-256: 28D63A6EA6B1BAF3E6F155C8C2732ACC143AC5C2230C70241CE825E0C1647366
 构建产物由 Gradle 统一命名：
 
 ```text
-productivebeesgenesis-1.0.7.jar
+productivebeesgenesis-1.0.8.jar
 ```
 
 不要为平台上传手工重命名 JAR，以便校验哈希并确认各平台提供的是同一构建产物。

@@ -104,6 +104,7 @@ The left strip holds this machine's own entries; the right strip holds the gener
   - a **resource bee spawn egg**, which moves a bee straight into a free slot (a full stack fills as many empty slots as it can);
   - a **honey treat carrying genes**, which starts automatic feeding — see "Automatic gene feeding" section below.
 - **Bee slots** (one or more rows in the middle): one bee per slot. Bee items and cages both work.
+- You can also hold a filled cage or resource bee spawn egg and **right-click an empty bee slot** to insert it directly. Right-click an occupied slot with an empty cage to take that bee out.
 - **Cage output slot** (blue border, right of the bee slots): collect filled cages.
 - Bee slots evaluate their conditions separately — **one idle bee never drags the others down**.
 
@@ -228,7 +229,7 @@ Example: insert a treat with *Productivity: very high + Weather tolerance: any +
 - **Temper runs the other way.** In Productive Bees a calmer temper is better, so the machine only ever pushes bees **towards passive** — it will never make a calm bee aggressive.
 - **Genes at 0% purity do not count.** Purity *is* the success chance in PB, so a 0% gene almost never lands and never justifies spending a treat.
 - **Treats carrying a bee *type* gene are rejected.** Vanilla PB refuses to apply genes from those treats (hand-feeding one only prints an "invalid use" message), so accepting them would just delete items.
-- **At most one bee per second.** Feeding temporarily restores a real bee entity, which is not cheap. The rate limit keeps 45-slot factories and time-accelerated setups smooth.
+- **At most four bees per second.** A feed window opens every 5 ticks. Each apiary runs at most once per real game tick, and block-position phasing spreads temporary entity creation across ticks under large factories and time acceleration.
 
 > Note: feeding still obeys PB's **purity probability** — 80% purity means an 80% chance per attempt. A miss is normal; as long as treats remain, the machine keeps trying.
 
@@ -248,7 +249,7 @@ Click the orange **PB Upgrades** tab on the right. The window layout, how every 
 
 Three things to remember for the apiary:
 
-1. The apiary accepts **Productivity α/β/γ/Ω, Time, Time+, Gene Sampler, Comb Block, Byproduct Destruction, and Essence Conversion**;
+1. The apiary accepts **Productivity α/β/γ/Ω, Time, Time+, Gene Sampler, Gene Type Filter, Full Purity Gene, Comb Block, Byproduct Destruction, and Essence Conversion**;
 2. It **rejects Stability and Raw Ore Smelting** — those are centrifuge-only and will refuse to install;
 3. The Simulation upgrade is **built in** for apiaries: it takes no slot and shows as "Simulation ✓" in the supported list.
 

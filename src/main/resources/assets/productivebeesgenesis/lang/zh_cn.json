@@ -641,7 +641,7 @@
   "gui.productivebeesgenesis.upgrades.stack": "并行：%s×",
   "gui.productivebeesgenesis.energy_consumption": "能量：%s",
   "gui.productivebeesgenesis.apiary.creative_tick_produce": "每 tick 产出",
-  "gui.productivebeesgenesis.apiary.cage_in_slot.tooltip": "蜂笼输入槽：放入蜂笼装入/取出蜜蜂，放入资源蜜蜂刷怪蛋直接入驻，放入带基因的蜂蜜小食则自动喂给属性最需要提升的蜜蜂（每秒最多一只）。左键选中某个蜜蜂格子后，小食只喂那一只。",
+  "gui.productivebeesgenesis.apiary.cage_in_slot.tooltip": "蜂笼输入槽：放入蜂笼装入/取出蜜蜂，放入资源蜜蜂刷怪蛋直接入驻，放入带基因的蜂蜜小食则自动喂给属性最需要提升的蜜蜂（每秒最多四只）。左键选中某个蜜蜂格子后，小食只喂那一只。",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity": "产量α",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity.desc": "提升蜜脾产出数量",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity_2": "产量β",

@@ -3,12 +3,12 @@
   "category": "misc",
   "pattern": [
     "RHR",
-    "HUG",
+    "BUB",
     "RHR"
   ],
   "key": {
-    "G": {
-      "item": "minecraft:glass"
+    "B": {
+      "item": "productivebees:gene_bottle"
     },
     "H": {
       "item": "productivebees:honey_treat"

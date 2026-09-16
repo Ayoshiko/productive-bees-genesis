@@ -2,16 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "DGD",
-    "GUG",
-    "DGD"
+    "DBD",
+    "BUB",
+    "DBD"
   ],
   "key": {
     "D": {
       "item": "minecraft:diamond"
     },
-    "G": {
-      "item": "productivebees:gene"
+    "B": {
+      "item": "productivebees:gene_bottle"
     },
     "U": {
       "item": "productivelib:upgrade_gene_sampler"

@@ -514,7 +514,7 @@
   "gui.productivebeesgenesis.upgrades.stack": "Parallel: %sx",
   "gui.productivebeesgenesis.energy_consumption": "Energy: %s",
   "gui.productivebeesgenesis.apiary.creative_tick_produce": "Produce every tick",
-  "gui.productivebeesgenesis.apiary.cage_in_slot.tooltip": "Cage input slot: insert a bee cage to add/remove bees, a resource bee spawn egg to place a bee directly, or a honey treat with genes to auto-feed the bee that needs those traits most (at most one per second). Left-click a bee slot first to feed only that bee.",
+  "gui.productivebeesgenesis.apiary.cage_in_slot.tooltip": "Cage input slot: insert a bee cage to add/remove bees, a resource bee spawn egg to place a bee directly, or a honey treat with genes to auto-feed the bee that needs those traits most (at most four per second). Left-click a bee slot first to feed only that bee.",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity": "Productivity α",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity.desc": "Increases comb output",
   "gui.productivebeesgenesis.pb_upgrade.type.productivity_2": "Productivity β",

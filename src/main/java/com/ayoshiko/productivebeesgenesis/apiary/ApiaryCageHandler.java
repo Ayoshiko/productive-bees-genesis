@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import cy.jdkdigital.productivebees.common.item.BeeCage;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import mekanism.api.Action;
@@ -9,6 +11,9 @@ import mekanism.api.AutomationType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -233,13 +238,13 @@ class ApiaryCageHandler {
 		if (occupiedSlot == null) return false;
 
 		// 创建含蜜蜂的蜂笼：将 beeData 写入 CUSTOM_DATA
-		CompoundTag beeData = occupiedSlot.getBeeData();
+		CompoundTag beeData = normalizeBeeData(occupiedSlot.getBeeData());
 		if (beeData == null) return false;
 
 		ItemStack filledCage = cageStack.copy();
 		filledCage.setCount(1);
 		// 防御性 copy，避免共享 BeeSlot 内部引用（与 tryInsertBeeFromCage 一致）
-		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData.copy()));
+		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData));
 
 		// 尝试将含蜜蜂的蜂笼插入输出槽
 		ItemStack remainder = manager.getCageOutSlot().insertItem(filledCage, Action.EXECUTE, AutomationType.INTERNAL);
@@ -276,12 +281,12 @@ class ApiaryCageHandler {
 		BeeSlot targetSlot = manager.getBeeSlot(slotIndex);
 		if (targetSlot.isEmpty()) return ItemStack.EMPTY;
 
-		CompoundTag beeData = targetSlot.getBeeData();
+		CompoundTag beeData = normalizeBeeData(targetSlot.getBeeData());
 		if (beeData == null) return ItemStack.EMPTY;
 
 		// 创建含蜜蜂的蜂笼：将 beeData 写入 CUSTOM_DATA（防御性 copy，避免共享 BeeSlot 内部引用）
 		ItemStack filledCage = cursorCage.copyWithCount(1);
-		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData.copy()));
+		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData));
 		return filledCage;
 	}
 
@@ -386,7 +391,6 @@ class ApiaryCageHandler {
 
 	/**
 	 * 从刷怪蛋构建蜂笼等价的 beeData NBT
-	 * <br/>
 	 * 刷怪蛋存储格式：ENTITY_DATA → { type: "productivebees:iron", ... }
 	 * 蜂笼存储格式：CUSTOM_DATA → { entity: "productivebees:configurable_bee", type: "productivebees:iron", ... }
 	 * 此方法将刷怪蛋格式转换为蜂笼格式，使 BeeSlot 无需区分来源。
@@ -394,16 +398,30 @@ class ApiaryCageHandler {
 	 * @param beeType 已通过 BeeReloadListener 校验的具体资源蜜蜂类型
 	 * @return 等价蜂笼 beeData，解析失败返回 null
 	 */
-	private static CompoundTag buildBeeDataFromSpawnEgg(ResourceLocation beeType) {
-		if (beeType == null) return null;
-		// 构造蜂笼等价 NBT：entity 固定为 configurable_bee，type 为具体蜜蜂类型
-		CompoundTag beeData = new CompoundTag();
-		beeData.putString("entity", BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID);
-		// 同时保留 Occupant 使用的 id，便于通用 NBT 解析器走直接注册表快径。
-		beeData.putString("id", BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID);
-		beeData.putString("type", beeType.toString());
-		beeData.putBoolean("isProductiveBee", true);
-		return beeData;
+	private CompoundTag buildBeeDataFromSpawnEgg(ResourceLocation beeType) {
+		if (beeType == null || manager.getLevel() == null || manager.getLevel().isClientSide) return null;
+		try {
+			EntityType<?> entityType = EntityType.byString(BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID).orElse(null);
+			if (entityType == null) return null;
+			Entity entity = entityType.create(manager.getLevel());
+			if (!(entity instanceof ConfigurableBee bee)) return null;
+
+			// 使用 PB 原版默认属性初始化，保证刷怪蛋直入与正常放出/捕获完全一致。
+			bee.setBeeType(beeType.toString());
+			bee.setDefaultAttributes();
+			bee.setHasNectar(false);
+
+			// BeeCage.captureEntity 会写入 entity、type、完整实体 NBT、属性附件及 PB 标记，
+			// 避免手工拼接遗漏字段导致客户端属性 Tooltip 为空。
+			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
+			BeeCage.captureEntity(bee, cage);
+			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
+			return customData == null ? null : customData.copyTag();
+		} catch (RuntimeException e) {
+			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
+					ProductiveBeesGenesis.LOGGER.warn("构造刷怪蛋蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
+			return null;
+		}
 	}
 
 	// ===== 槽位填充工具方法 =====
@@ -418,7 +436,7 @@ class ApiaryCageHandler {
 	 * @param beeData 蜜蜂 NBT（来自蜂笼 CUSTOM_DATA，方法内部 copy 避免共享引用）
 	 */
 	private void populateBeeSlotFromData(BeeSlot slot, CompoundTag beeData) {
-		CompoundTag copy = beeData.copy();
+		CompoundTag copy = normalizeBeeData(beeData);
 		slot.setBeeData(copy);
 		slot.setTicksInHive(0);
 		slot.setMinOccupationTicks(0);
@@ -427,6 +445,41 @@ class ApiaryCageHandler {
 		slot.setHasNectar(copy.getBoolean("HasNectar"));
 		slot.setState(BeeState.IDLE);
 		slot.setProgress(0.0f);
+	}
+
+	/**
+	 * 为旧版/外部简化蜂笼数据补齐 PB 属性附件。
+	 * 早期刷怪蛋直入逻辑只保存了 entity/type，旧存档或旧蜂笼仍可能携带这种数据。
+	 * 仅在缺少属性附件时走一次临时实体初始化，避免正常完整 NBT 在每次转移时重复创建实体。
+	 */
+	private CompoundTag normalizeBeeData(CompoundTag source) {
+		CompoundTag copy = source == null ? null : source.copy();
+		if (copy == null || !copy.contains("type") || hasAttributeAttachment(copy)) return copy;
+		if (manager.getLevel() == null || manager.getLevel().isClientSide) return copy;
+		try {
+			EntityType<?> entityType = BeeNbtHelper.resolveEntityType(copy);
+			if (entityType == null) return copy;
+			Entity entity = entityType.create(manager.getLevel());
+			if (!(entity instanceof Bee bee)) return copy;
+			bee.load(copy);
+			if (bee instanceof ConfigurableBee configurable) {
+				configurable.setDefaultAttributes();
+			}
+			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
+			BeeCage.captureEntity(bee, cage);
+			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
+			return customData == null ? copy : customData.copyTag();
+		} catch (RuntimeException e) {
+			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
+					ProductiveBeesGenesis.LOGGER.warn("迁移简化蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
+			return copy;
+		}
+	}
+
+	private static boolean hasAttributeAttachment(CompoundTag beeData) {
+		if (!beeData.contains("neoforge:attachments")) return false;
+		CompoundTag attachments = beeData.getCompound("neoforge:attachments");
+		return attachments.contains("productivebees:attributes_handler");
 	}
 
 	// ===== 蜂笼判定工具方法 =====

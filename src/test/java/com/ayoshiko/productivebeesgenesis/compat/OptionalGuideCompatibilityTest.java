@@ -38,7 +38,9 @@ class OptionalGuideCompatibilityTest {
 			"productivebeesgenesis:mek_centrifuge",
 			"productivebeesgenesis:raw_ore_smelting_upgrade",
 			"productivebeesgenesis:essence_conversion_upgrade",
-			"productivebeesgenesis:byproduct_destruction_upgrade");
+			"productivebeesgenesis:byproduct_destruction_upgrade",
+			"productivebeesgenesis:gene_type_only_upgrade",
+			"productivebeesgenesis:gene_full_purity_upgrade");
 
 	@Test
 	@DisplayName("GuideME 使用数据驱动定义、双语页面和物品帮助入口")
@@ -67,6 +69,8 @@ class OptionalGuideCompatibilityTest {
 		assertTrue(indexedItems.contains("productivebees:configurable_comb"));
 		assertTrue(indexedItems.contains("productivebees:spawn_egg_configurable_bee"));
 		assertTrue(indexedItems.contains("productivebeesgenesis:raw_ore_smelting_upgrade"));
+		assertTrue(indexedItems.contains("productivebeesgenesis:gene_type_only_upgrade"));
+		assertTrue(indexedItems.contains("productivebeesgenesis:gene_full_purity_upgrade"));
 		assertAllFactoryItemsIndexed(indexedItems);
 		for (String redundantPage : List.of("machines/index.md", "upgrades/index.md")) {
 			assertFalse(Files.exists(GUIDE_ROOT.resolve(redundantPage)),

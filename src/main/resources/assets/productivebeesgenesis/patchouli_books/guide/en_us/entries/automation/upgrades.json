@@ -8,19 +8,25 @@
     { "type": "patchouli:text", "title": "Reading the window", "text": "Top left is the installed list (each row uses its upgrade type's colour), the info screen shows the name and \"installed / limit\", the Supported row lists what this machine accepts, and the lower right holds the install slot, the Uninstall button and the uninstall output slot." },
     { "type": "patchouli:image", "title": "Info screen and uninstall", "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_actions.png" ], "border": true },
     { "type": "patchouli:image", "title": "Supported list", "images": [ "productivebeesgenesis:textures/guide/p_pb_upgrade_supported.png" ], "border": true },
-    { "type": "patchouli:text", "title": "Grey means unsupported", "text": "A greyed icon in the Supported row means this machine will not take it: hovering turns the name red and appends \"(unsupported)\". The apiary accepts Productivity a/b/g/O, Time, Time+, Gene Sampler, Comb Block, Byproduct Destruction and Essence Conversion; the centrifuge accepts the Productivity and Time series, Stability, Raw Ore Smelting, Byproduct Destruction and Essence Conversion." },
+    { "type": "patchouli:text", "title": "Grey means unsupported", "text": "A greyed icon in the Supported row means this machine will not take it: hovering turns the name red and appends \"(unsupported)\". The apiary accepts Productivity a/b/g/O, Time, Time+, Gene Sampler, Gene Type Filter, Full Purity Gene, Comb Block, Byproduct Destruction and Essence Conversion; the centrifuge accepts the Productivity and Time series, Stability, Raw Ore Smelting, Byproduct Destruction and Essence Conversion." },
     { "type": "patchouli:text", "title": "Installing and uninstalling", "text": "Put the upgrade item into the input slot and the install bar completes. Click a row in the installed list first: only then does the Uninstall button light up. Left-click removes one, Shift+left-click removes all, and the items appear in the output slot below the button." },
     { "type": "patchouli:spotlight", "item": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct destruction", "text": "Apiaries discard honey-type byproducts and pollen puffs; centrifuges discard PB honey fluid and beeswax. Main products are untouched, so it suits late-game lines that no longer need these byproducts." },
     { "type": "patchouli:spotlight", "item": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence conversion", "text": "Compacts low-tier products that have a single-ingredient reverse recipe. Mixed-ingredient and unclear recipes are skipped so precious materials are never consumed by mistake." },
     { "type": "patchouli:spotlight", "item": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw ore smelting", "text": "Smelts centrifuge raw-ore output directly into ingots. First allow Smelting Compatibility in Machine Settings, then enable the F button in that centrifuge's side configuration. Items without a matching smelting recipe stay unchanged. Centrifuge only." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:gene_type_only_upgrade", "title": "Gene Type Filter", "text": "Makes the gene sampler output only bee type (TYPE) genes. Maximum one per apiary; it does nothing without a Gene Sampler installed." },
+    { "type": "patchouli:spotlight", "item": "productivebeesgenesis:gene_full_purity_upgrade", "title": "Full Purity Gene", "text": "Makes every sampled gene 100% pure. Maximum one per apiary. Install it with Gene Type Filter to output only 100%-pure bee type genes." },
     { "type": "patchouli:text", "title": "Limits and balance", "text": "Per-type limits come from server configuration, with separate settings for the apiary and the centrifuge. The Basic balance profile makes productivity tiers and speed tiers mutually exclusive; Paradox Infinity allows them to coexist. Switching profiles never removes installed upgrades but can block new ones that break the rules." },
     { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:raw_ore_smelting_upgrade", "title": "Raw Ore Smelting recipe" },
     { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:essence_conversion_upgrade", "title": "Essence Conversion recipe" },
-    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct Destruction recipe" }
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:byproduct_destruction_upgrade", "title": "Byproduct Destruction recipe" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:gene_type_only_upgrade", "title": "Gene Type Filter recipe" },
+    { "type": "patchouli:crafting", "recipe": "productivebeesgenesis:gene_full_purity_upgrade", "title": "Full Purity Gene recipe" }
   ],
   "extra_recipe_mappings": {
-    "productivebeesgenesis:raw_ore_smelting_upgrade": 11,
-    "productivebeesgenesis:essence_conversion_upgrade": 12,
-    "productivebeesgenesis:byproduct_destruction_upgrade": 13
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 13,
+    "productivebeesgenesis:essence_conversion_upgrade": 14,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 15,
+    "productivebeesgenesis:gene_type_only_upgrade": 16,
+    "productivebeesgenesis:gene_full_purity_upgrade": 17
   }
 }

@@ -34,7 +34,7 @@
     {
       "type": "patchouli:text",
       "title": "灰罩就是不支持",
-      "text": "“支持：”一行里盖了灰罩的图标表示本机不接受：悬停时名字变红并显示“…（不支持）”。蜂箱支持产量α/β/γ/Ω、速度、速度+、基因采样器、蜜脾块、副产物销毁、精华转化；离心机支持产量系列、速度系列、稳定性、粗矿熔炼、副产物销毁、精华转化。"
+      "text": "“支持：”一行里盖了灰罩的图标表示本机不接受：悬停时名字变红并显示“…（不支持）”。蜂箱支持产量α/β/γ/Ω、速度、速度+、基因采样器、基因种类筛选、基因满纯度、蜜脾块、副产物销毁、精华转化；离心机支持产量系列、速度系列、稳定性、粗矿熔炼、副产物销毁、精华转化。"
     },
     {
       "type": "patchouli:text",
@@ -60,6 +60,18 @@
       "text": "将离心产出的粗矿按熔炼配方直接转为锭。先在机器设置中允许熔炼兼容，再到这台离心机的侧面配置里打开 F 按钮；没有匹配熔炼配方的物品会保持原样。仅离心机可用。"
     },
     {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:gene_type_only_upgrade",
+      "title": "基因种类筛选",
+      "text": "让基因采样器只产出蜜蜂种类（TYPE）基因。每台蜂箱最多安装 1 个，必须同时有基因采样器才有效。"
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "productivebeesgenesis:gene_full_purity_upgrade",
+      "title": "基因满纯度",
+      "text": "让基因采样器产出的每份基因直接达到 100% 纯度。每台蜂箱最多安装 1 个；与种类筛选同时安装时，只产出 100% 纯度的蜜蜂种类基因。"
+    },
+    {
       "type": "patchouli:text",
       "title": "上限与平衡模式",
       "text": "每种升级的上限由服务器配置决定，蜂箱与离心机各一套。全局平衡模式的“基础”会让产量等级互斥、速度等级互斥；“悖论无限”允许共存。切换模式不会移除已装升级，但可能阻止装入不合规则的新升级。"
@@ -78,11 +90,23 @@
       "type": "patchouli:crafting",
       "recipe": "productivebeesgenesis:byproduct_destruction_upgrade",
       "title": "副产物销毁升级配方"
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "productivebeesgenesis:gene_type_only_upgrade",
+      "title": "基因种类筛选配方"
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "productivebeesgenesis:gene_full_purity_upgrade",
+      "title": "基因满纯度配方"
     }
   ],
   "extra_recipe_mappings": {
-    "productivebeesgenesis:raw_ore_smelting_upgrade": 11,
-    "productivebeesgenesis:essence_conversion_upgrade": 12,
-    "productivebeesgenesis:byproduct_destruction_upgrade": 13
+    "productivebeesgenesis:raw_ore_smelting_upgrade": 13,
+    "productivebeesgenesis:essence_conversion_upgrade": 14,
+    "productivebeesgenesis:byproduct_destruction_upgrade": 15,
+    "productivebeesgenesis:gene_type_only_upgrade": 16,
+    "productivebeesgenesis:gene_full_purity_upgrade": 17
   }
 }

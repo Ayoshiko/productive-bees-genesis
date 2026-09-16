@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GeneSamplerTest {
@@ -80,5 +81,13 @@ class GeneSamplerTest {
 				"src/main/resources/data/productivebeesgenesis/recipe/gene_type_only_upgrade.json")));
 		assertTrue(Files.exists(Path.of(
 				"src/main/resources/data/productivebeesgenesis/recipe/gene_full_purity_upgrade.json")));
+		String typeRecipe = Files.readString(Path.of(
+				"src/main/resources/data/productivebeesgenesis/recipe/gene_type_only_upgrade.json"));
+		String purityRecipe = Files.readString(Path.of(
+				"src/main/resources/data/productivebeesgenesis/recipe/gene_full_purity_upgrade.json"));
+		assertTrue(typeRecipe.contains("\"productivebees:gene_bottle\""));
+		assertTrue(purityRecipe.contains("\"productivebees:gene_bottle\""));
+		assertFalse(purityRecipe.contains("\"productivebees:gene\""),
+				"无组件基因在 JEI 中显示为生存不可得的 0% 占位物");
 	}
 }

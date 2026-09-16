@@ -17,7 +17,7 @@ item_ids:
 
 <ItemImage id="productivebees:spawn_egg_configurable_bee" components="minecraft:entity_data={id:'productivebees:configurable_bee',type:'productivebees:myriadcreations'}" scale="2" />
 
-Myriad Creations selects an allowed registered resource-bee type for each output and records that type on the comb. The centrifuge uses the stored type to find the correct recipe.
+Myriad Creations selects an allowed registered resource-bee type for each output, then resolves that bee's real advanced-beehive product. Most bees use a typed configurable comb; bees with independent comb items, such as Ghostly, Milky, and Powdery, keep their own real comb.
 
 <ItemGrid>
   <ItemIcon id="productivebees:configurable_honeycomb" components="productivebees:bee_type='productivebees:myriadcreations'" />
@@ -47,6 +47,6 @@ Use the localized search-and-select editor when possible. Registry IDs such as `
 
 <ItemImage id="productivebees:configurable_honeycomb" components="productivebees:bee_type='productivebees:myriadcreations'" scale="2" />
 
-Normal machine and network transport preserves bee-type data. A blank configurable honeycomb created without that data may look similar but cannot select the correct recipe. The Comb Block upgrade lets apiaries prefer compact block output, which centrifuges process directly.
+For configurable combs, normal machine and network transport preserves bee-type data. A blank configurable honeycomb without that data may look similar but cannot select the correct recipe. Independent comb items identify themselves and are never replaced with a blank configurable comb. The Comb Block upgrade uses Productive Bees' matching real block where one exists, and centrifuges process it directly.
 
 Rainbow, particle, glow, and color settings are client visuals. Production rules and the candidate list remain server-authoritative.

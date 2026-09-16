@@ -10,6 +10,8 @@ item_ids:
   - productivelib:upgrade_gene_sampler
   - productivelib:upgrade_block
   - productivelib:upgrade_stability
+  - productivebeesgenesis:gene_type_only_upgrade
+  - productivebeesgenesis:gene_full_purity_upgrade
 ---
 # PB Upgrade Window
 
@@ -26,7 +28,7 @@ Every machine actually has **two** upgrade entry points holding two different se
 | Tab colour | Orange | Mekanism default |
 | Icon | This addon's upgrade icon | Up arrow |
 | Contents | Productive Bees and Productive Bees Genesis upgrades | Vanilla Mekanism upgrades |
-| Typical items | Productivity α/β/γ/Ω, Time, Time+, Stability, Gene Sampler, Comb Block, Raw Ore Smelting, Essence Conversion, Byproduct Destruction | Speed, Energy, Muffling; plus Stack and Creative with addons |
+| Typical items | Productivity α/β/γ/Ω, Time, Time+, Stability, Gene Sampler, both gene plugins, Comb Block, Raw Ore Smelting, Essence Conversion, Byproduct Destruction | Speed, Energy, Muffling; plus Stack and Creative with addons |
 | Typical effects | More output per cycle, shorter cycles, changed product form | Shorter cycles, larger energy buffer, less noise |
 
 Both can be installed **at the same time and their effects stack**; neither consumes the other's slots.
@@ -107,8 +109,16 @@ This is the easiest thing to get wrong. The same window accepts different sets o
 **Apiary only**
 
 - **Gene Sampler**: samples bee genes.
+- **Gene Type Filter**: makes the sampler output only bee type (TYPE) genes; maximum one per apiary.
+- **Full Purity Gene**: makes every sampled gene 100% pure; maximum one per apiary.
 - **Comb Block**: turns comb output into comb blocks to save output slots.
 - **Simulation**: ships with apiaries; takes no slot and needs no item.
+
+Both gene plugins require a **Gene Sampler** to do anything and may be installed together. The combination outputs only bee type genes, all at 100% purity. Each plugin has its own limit of one and does not consume the sampler's install limit.
+
+<RecipeFor id="productivebeesgenesis:gene_type_only_upgrade" fallbackText="This modpack replaced or disabled the Gene Type Filter recipe. Search JEI." />
+
+<RecipeFor id="productivebeesgenesis:gene_full_purity_upgrade" fallbackText="This modpack replaced or disabled the Full Purity Gene recipe. Search JEI." />
 
 **Centrifuge only**
 
@@ -127,6 +137,7 @@ Each type has its own **limit**, set by **server configuration**, and **the apia
 | Time, Time+ | 8 (each counted separately) | `Time Upgrade Limit` |
 | Stability (centrifuge only) | 7 | `Stability Upgrade Limit` |
 | Gene Sampler (apiary only) | 4 | `Gene Sampler Upgrade Limit` |
+| Gene Type Filter, Full Purity Gene (apiary only) | 1 each | — |
 | Comb Block (apiary only) | 1 | `Comb Block Upgrade Limit` |
 | Byproduct Destruction / Essence Conversion / Raw Ore Smelting | 1 (functional, one is enough) | — |
 | Simulation | built into apiaries | — |

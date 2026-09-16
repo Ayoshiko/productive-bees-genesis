@@ -99,10 +99,24 @@ class GeneTreatAutoFeederTest {
 	@Test
 	void feederIsThrottledByRealGameTicks() throws Exception {
 		String source = Files.readString(Path.of(FEEDER));
-		assertTrue(source.contains("FEED_INTERVAL_TICKS"),
+		assertTrue(source.contains("FEED_INTERVAL_TICKS = 5"),
 				"喂食要创建临时实体，必须节流避免工厂版 tick 尖峰");
 		assertTrue(source.contains("level.getGameTime()"),
 				"节流必须基于真实游戏刻，tick 加速下才不会放大实体创建开销");
+		assertTrue(source.contains("if (lastFeedTick == now) return false;"),
+				"时间加速器在同一游戏刻重复调用时不得重复创建实体");
+		assertTrue(source.contains("Math.floorMod(now + feedPhase, FEED_INTERVAL_TICKS)"),
+				"不同位置的蜂箱必须错峰，避免同刻实体创建尖峰");
+	}
+
+	@Test
+	void feederCachesGenesAndInvalidatesOnComponentChanges() throws Exception {
+		String source = Files.readString(Path.of(FEEDER));
+		assertTrue(source.contains("getCachedTreatGenes(treat)"));
+		assertTrue(source.contains("ItemStack.isSameItemSameComponents(treat, cachedTreatSnapshot)"),
+				"同一栈被自动化原地改写组件后必须重新解析基因");
+		assertTrue(source.contains("cachedTreatSnapshot = treat.copyWithCount(1)"),
+				"缓存快照不应因正常扣减数量而失效");
 	}
 
 	@Test

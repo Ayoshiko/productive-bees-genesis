@@ -39,16 +39,32 @@ class ApiarySpawnEggWiringTest {
 	}
 
 	@Test
-	void serverValidatesLoadedBeeTypeAndDoesNotCopyArbitraryEggNbt() throws Exception {
+	void serverBuildsCompletePbBeeDataWithoutSpawningAnEntity() throws Exception {
 		String source = Files.readString(Path.of(HANDLER));
 		assertTrue(source.contains("BeeReloadListener.INSTANCE.getData(beeType) == null"));
 		assertTrue(source.contains("if (!targetSlot.isEmpty()) return false;"));
-		assertTrue(source.contains("beeData.putString(\"entity\""));
-		assertTrue(source.contains("beeData.putString(\"id\""));
-		assertTrue(source.contains("beeData.putString(\"type\""));
-		assertTrue(source.contains("beeData.putBoolean(\"isProductiveBee\", true)"));
+		assertTrue(source.contains("bee.setBeeType(beeType.toString())"));
+		assertTrue(source.contains("bee.setDefaultAttributes()"),
+				"必须先让 PB 按蜂种初始化默认基因属性");
+		assertTrue(source.contains("BeeCage.captureEntity(bee, cage)"),
+				"必须复用 PB 蜂笼序列化以保存属性附件");
+		assertFalse(source.contains("bee.getData(ProductiveBees.ATTRIBUTE_HANDLER)"),
+				"提前创建空附件会让 setDefaultAttributes 跳过蜂种默认值");
+		assertFalse(source.contains("addFreshEntity"),
+				"临时实体只用于序列化，不得加入世界");
 		assertFalse(source.contains("eggNbt.getAllKeys()"),
 				"不得把客户端刷怪蛋的任意 NBT 写入蜂箱蜜蜂数据");
+	}
+
+	@Test
+	void legacySimplifiedBeeDataIsNormalizedBeforeCaging() throws Exception {
+		String source = Files.readString(Path.of(HANDLER));
+		assertTrue(source.contains("normalizeBeeData(occupiedSlot.getBeeData())"),
+				"自动蜂笼取出路径必须迁移旧简化 NBT");
+		assertTrue(source.contains("normalizeBeeData(targetSlot.getBeeData())"),
+				"玩家点槽取出路径必须迁移旧简化 NBT");
+		assertTrue(source.contains("hasAttributeAttachment(copy)"));
+		assertTrue(source.contains("attachments.contains(\"productivebees:attributes_handler\")"));
 	}
 
 	@Test

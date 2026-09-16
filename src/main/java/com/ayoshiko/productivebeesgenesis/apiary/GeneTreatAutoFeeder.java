@@ -39,7 +39,7 @@ import java.util.List;
  *       purity=0 时几乎必然失败，不应因此判定「可提升」而持续消耗</li>
  * </ul>
  * <p>
- * <b>性能</b>：{@link #FEED_INTERVAL_TICKS} 节流（默认每 20 tick 一次 = 每秒最多喂一只），
+ * <b>性能</b>：{@link #FEED_INTERVAL_TICKS} 节流（默认每 5 tick 一次 = 每秒最多喂四只），
  * 避免 45 槽工厂版在 tick 加速下每 tick 创建临时蜜蜂实体造成的 CPU 尖峰；
  * 输入槽为空时提前短路，稳态零开销。
  * <p>
@@ -51,10 +51,10 @@ class GeneTreatAutoFeeder {
 	 * 自动喂食间隔（tick）
 	 * <br/>
 	 * 每次喂食都要创建并加载一个临时蜜蜂实体（{@code EntityType.create} + {@code bee.load}），
-	 * 单次成本远高于普通槽位扫描。20 tick（1 秒）一次在「自动化足够快」与
-	 * 「大规模工厂不产生 tick 尖峰」之间取平衡，且与 PB 原版手动喂食的节奏接近。
+	 * 单次成本远高于普通槽位扫描。5 tick（250ms）一次提升自动化响应速度；同一真实游戏刻
+	 * 每台蜂箱最多执行一次，并按方块坐标错峰，避免高倍加速和大规模工厂把实体创建集中到同一刻。
 	 */
-	private static final int FEED_INTERVAL_TICKS = 20;
+	private static final int FEED_INTERVAL_TICKS = 5;
 
 	/** 错误日志节流（tick 模式，避免持续异常每秒刷屏） */
 	private static final LogThrottle ERROR_THROTTLE = new LogThrottle(100L, 5000L);
@@ -65,6 +65,14 @@ class GeneTreatAutoFeeder {
 	/** 上次执行喂食尝试的游戏刻（-1 表示尚未执行过） */
 	private long lastFeedTick = -1L;
 
+	/** 按方块坐标错峰，避免同一批蜂箱在同一游戏刻同时创建临时实体。 */
+	private final long feedPhase;
+
+	/** 输入栈引用未变时复用解析后的基因列表，避免每个窗口重复读取组件。 */
+	private ItemStack cachedTreatReference;
+	private ItemStack cachedTreatSnapshot = ItemStack.EMPTY;
+	private List<GeneGroup> cachedTreatGenes = List.of();
+
 	/**
 	 * 构造自动喂食器
 	 *
@@ -74,6 +82,7 @@ class GeneTreatAutoFeeder {
 	GeneTreatAutoFeeder(TileEntityMekApiary tile, ApiarySlotManager slotManager) {
 		this.tile = tile;
 		this.slotManager = slotManager;
+		this.feedPhase = Math.floorMod(tile.getBlockPos().asLong(), FEED_INTERVAL_TICKS);
 	}
 
 	/**
@@ -96,7 +105,7 @@ class GeneTreatAutoFeeder {
 			// 2. 节流：实体创建路径较贵，限制为每 FEED_INTERVAL_TICKS 一次
 			if (!tryBeginFeedWindow()) return false;
 
-			List<GeneGroup> genes = HoneyTreat.getGenes(treat);
+			List<GeneGroup> genes = getCachedTreatGenes(treat);
 			if (genes.isEmpty()) return false;
 			// PB 对含 TYPE 的小食走 invalid_use 分支，不施加任何基因：整体拒绝，避免白扣
 			if (HoneyTreat.hasBeeType(treat)) return false;
@@ -115,11 +124,11 @@ class GeneTreatAutoFeeder {
 	}
 
 	/**
-	 * 节流窗口判定 — 距上次尝试满 {@link #FEED_INTERVAL_TICKS} 才放行。
+	 * 节流窗口判定：按方块位置分配相位，每 {@link #FEED_INTERVAL_TICKS} 个游戏刻放行一次。
 	 * <br/>
 	 * 使用真实游戏刻而非调用计数，使 tick 加速（JDTE / 时间权杖）下的喂食速率
 	 * 仍与真实时间挂钩，不会因加速倍率放大实体创建开销。
-	 * 同时兼容存档回档 / 世界切换造成的游戏刻回退（检测到回退即重置窗口）。
+	 * 同一游戏刻最多放行一次，避免时间加速器重复调用方块 tick 时放大实体创建开销。
 	 *
 	 * @return true 表示本 tick 允许执行一次喂食尝试
 	 */
@@ -127,12 +136,27 @@ class GeneTreatAutoFeeder {
 		var level = tile.getLevel();
 		if (level == null) return false;
 		long now = level.getGameTime();
-		// 回退（回档/换世界）时重置，避免 lastFeedTick 停留在未来导致永久不喂
-		if (lastFeedTick >= 0 && now >= lastFeedTick && now - lastFeedTick < FEED_INTERVAL_TICKS) {
-			return false;
-		}
+		// 同一 gameTime 可能被时间加速器重复调用，严格限制每台蜂箱每刻最多一次。
+		if (lastFeedTick == now) return false;
+		// 以方块坐标错峰；游戏刻回退/换世界时仍可在新的相位重新开始。
+		if (Math.floorMod(now + feedPhase, FEED_INTERVAL_TICKS) != 0L) return false;
 		lastFeedTick = now;
 		return true;
+	}
+
+	/**
+	 * 复用当前输入栈的基因解析结果。
+	 * <p>
+	 * 数量消耗不会使缓存失效；组件快照用于识别自动化原地替换基因数据的少见情况。
+	 */
+	private List<GeneGroup> getCachedTreatGenes(ItemStack treat) {
+		if (treat != cachedTreatReference || !ItemStack.isSameItemSameComponents(treat, cachedTreatSnapshot)) {
+			cachedTreatReference = treat;
+			cachedTreatSnapshot = treat.copyWithCount(1);
+			List<GeneGroup> genes = HoneyTreat.getGenes(treat);
+			cachedTreatGenes = genes == null || genes.isEmpty() ? List.of() : List.copyOf(genes);
+		}
+		return cachedTreatGenes;
 	}
 
 	/**
