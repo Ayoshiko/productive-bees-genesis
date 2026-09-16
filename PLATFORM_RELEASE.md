@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | `1.0.8` |
 | CurseForge 待发布版本 | `1.0.8` |
-| 发布状态 | 待创建 GitHub Release `v1.0.8` 正式版 |
+| 发布状态 | GitHub Release `v1.0.8` 与 CurseForge 正式版已发布 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -45,18 +45,19 @@ CurseForge 的 `1.0.8` 与 NeoForge 元数据、Manifest `Implementation-Version
 
 ```text
 文件: build/libs/productivebeesgenesis-1.0.8.jar
-大小: 2,727,569 bytes
-SHA-256: 702FA92275E5514B944E2740FCD5271CA4B15A5FD9C26822D1A3B95ED8277206
+大小: 2,731,509 bytes
+SHA-256: 6DE8B5DF224961D88EA9BDF24A462FF253DD3FC355C67CEA010F9BC5F2867FE5
 ```
 
 发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
 
-2026-09-16 发布准备验证：
+2026-09-16 正式发布验证：
 
-- `.\gradlew test --no-daemon`：完整测试成功，共 618 项，零失败、零错误，2 项按环境条件跳过。
+- `.\gradlew cleanTest test --no-build-cache --no-daemon`：完整测试成功，共 628 项，零失败、零错误，2 项按环境条件跳过。
 - `.\gradlew clean build verifyReleaseArtifact --no-daemon`：干净构建成功；版本元数据、许可证、图标及开发资源排除检查通过，体积明细保存在 `build/reports/release-artifact.txt`。
 - 253 个主资源 JSON 全部可解析；中英文语言文件各 1,117 个键，键集合一致。
-- 本轮未启动游戏客户端、集成服务器或专用服务器，也未执行 Spark/MSPT 实机性能采样；发布前仍需完成游戏内冒烟测试。
+- GitHub Release 正文、Latest 状态、标签指向、附件大小与 SHA-256 已反查；CurseForge 自动发布工作流成功。
+- 本轮未启动游戏客户端、集成服务器或专用服务器，也未执行 Spark/MSPT 实机性能采样；发布后仍建议补做游戏内冒烟测试。
 
 ## 图标
 
