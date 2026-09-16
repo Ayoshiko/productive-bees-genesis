@@ -99,7 +99,10 @@ The left strip holds this machine's own entries; the right strip holds the gener
 
 ### Bee slots and cage slots
 
-- **Cage input slot** (red border, left of the bee slots): insert an empty or filled bee cage to move bees in and out of the machine.
+- **Cage input slot** (red border, left of the bee slots) accepts **three kinds of item**:
+  - an empty or filled **bee cage**, to move bees in and out of the machine;
+  - a **resource bee spawn egg**, which moves a bee straight into a free slot (a full stack fills as many empty slots as it can);
+  - a **honey treat carrying genes**, which starts automatic feeding — see "Automatic gene feeding" section below.
 - **Bee slots** (one or more rows in the middle): one bee per slot. Bee items and cages both work.
 - **Cage output slot** (blue border, right of the bee slots): collect filled cages.
 - Bee slots evaluate their conditions separately — **one idle bee never drags the others down**.
@@ -199,6 +202,44 @@ The line at the very bottom reflects the current state and is the most direct an
 - With conversion on: **Conversion ON: ingredients will be consumed**
 - In disable edit mode: **Click a slot to toggle disable** (highest priority)
 
+## Automatic gene feeding
+
+A honey treat combined with gene samples becomes a **gene-carrying treat**. Feeding it to a bee has a chance to rewrite the matching trait to the value on the treat. Modpacks usually ship a recipe for a "fully loaded" treat, and you can always add genes to a treat one at a time yourself.
+
+The mechanical apiary supports two ways to feed:
+
+| Method | How | Best for |
+| --- | --- | --- |
+| Manual | Hold a gene treat on the cursor and **right-click a bee slot** | Feeding one specific bee |
+| Automatic | Drop the gene treat **into the cage input slot** and let the machine pick | Rebuilding a whole apiary |
+
+### How the machine picks a bee
+
+Automatic feeding does **not** feed the first bee it finds. It ranks bees by "who needs these genes most":
+
+1. **You selected a bee slot** (left-click it; the slot gains a highlight border) → only that bee is fed, until its traits can no longer improve. This is the "I only want to rebuild this one" workflow.
+2. **No slot selected** → every bee is scanned, the machine measures how far each one falls short on the traits this treat covers, and **feeds the bee with the largest shortfall first**.
+
+Example: insert a treat with *Productivity: very high + Weather tolerance: any + Behaviour: metaturnal*, and the machine starts with the bees that are unproductive, rain-shy and day-only. Bees that already have all three are skipped.
+
+### Rules that stop treats being wasted
+
+- **No improvement, no consumption.** When every bee already matches or beats the treat, it simply stays in the slot.
+- **Temper runs the other way.** In Productive Bees a calmer temper is better, so the machine only ever pushes bees **towards passive** — it will never make a calm bee aggressive.
+- **Genes at 0% purity do not count.** Purity *is* the success chance in PB, so a 0% gene almost never lands and never justifies spending a treat.
+- **Treats carrying a bee *type* gene are rejected.** Vanilla PB refuses to apply genes from those treats (hand-feeding one only prints an "invalid use" message), so accepting them would just delete items.
+- **At most one bee per second.** Feeding temporarily restores a real bee entity, which is not cheap. The rate limit keeps 45-slot factories and time-accelerated setups smooth.
+
+> Note: feeding still obeys PB's **purity probability** — 80% purity means an 80% chance per attempt. A miss is normal; as long as treats remain, the machine keeps trying.
+
+### Automating the supply
+
+The cage input slot is an ordinary Mekanism input slot, so **pipes, hoppers and AE2 can all insert treats**:
+
+- Feed gene treats from an AE2 interface or export bus to rebuild bees while the apiary keeps producing combs.
+- Treats and cages share the slot safely: each tick the machine checks for a treat first and only falls through to cage handling otherwise, so the two never interfere.
+- Pair it with the [gene sampler upgrade](../upgrades/pb-upgrades.md): sample genes on one side, craft them back into treats, and you have a closed breeding loop.
+
 ## PB upgrades on the apiary side
 
 ![PB upgrade window](../assets/images/gui_pb_upgrades.png)
@@ -241,3 +282,5 @@ Recommended first line (energy cube → apiary → centrifuge → barrel):
 4. **Only some bees idle**: hover each slot to see what each one lacks instead of dismantling the machine.
 5. **An upgrade will not install**: check that it targets the right machine (Stability and Raw Ore Smelting are centrifuge-only) or that the limit is reached.
 6. **Products pile up in the output area**: inspect the item output faces and auto-eject, or switch to `D` / `P` direct transfer.
+7. **A treat will not go into the input slot**: only treats that **carry genes** are accepted; a blank treat has no automation value and is refused.
+8. **The treat sits there without being consumed**: no bee currently benefits from those genes — either they already match or beat the treat, or the treat only holds 0%-purity or bee-type genes.

@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationComb;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationCombBlock;
 import com.ayoshiko.productivebeesgenesis.item.EssenceConversionUpgradeItem;
+import com.ayoshiko.productivebeesgenesis.item.GeneSamplerPluginItem;
 import com.ayoshiko.productivebeesgenesis.item.RawOreSmeltingUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.item.UselessByproductUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
@@ -171,6 +172,20 @@ public final class ModItems {
 	public static final DeferredItem<RawOreSmeltingUpgradeItem> RAW_ORE_SMELTING_UPGRADE =
 			ITEMS.register("raw_ore_smelting_upgrade",
 					() -> new RawOreSmeltingUpgradeItem(new Item.Properties()));
+
+	/** 将基因采样限制为蜜蜂种类（TYPE）基因。 */
+	public static final DeferredItem<GeneSamplerPluginItem> GENE_TYPE_ONLY_UPGRADE =
+			ITEMS.register("gene_type_only_upgrade", () -> new GeneSamplerPluginItem(
+					new Item.Properties(),
+					"item.productivebeesgenesis.gene_type_only_upgrade.description.summary",
+					"item.productivebeesgenesis.gene_type_only_upgrade.description.limit"));
+
+	/** 让基因采样器直接生成 100% 纯度基因。 */
+	public static final DeferredItem<GeneSamplerPluginItem> GENE_FULL_PURITY_UPGRADE =
+			ITEMS.register("gene_full_purity_upgrade", () -> new GeneSamplerPluginItem(
+					new Item.Properties(),
+					"item.productivebeesgenesis.gene_full_purity_upgrade.description.summary",
+					"item.productivebeesgenesis.gene_full_purity_upgrade.description.limit"));
 
 	/**
 	 * EM工厂BlockItem映射 — 由registerEMFactoryItems()在EM加载时填充

@@ -185,11 +185,12 @@ final class ApiaryPayloadHandlers {
 	/**
 	 * 服务端处理：桶式蜂笼操作
 	 * <br/>
-	 * 玩家手持蜂笼右键点击蜜蜂槽位时触发。校验玩家身份、方块实体类型、
+	 * 玩家手持蜂笼或 PB 资源蜜蜂刷怪蛋右键点击蜜蜂槽位时触发。校验玩家身份、方块实体类型、
 	 * 8格交互距离、槽位索引合法性后，从 containerMenu 获取光标蜂笼：
 	 * <ul>
 	 *   <li>EXTRACT（取出）：委托 {@link #handleCageExtraction} 按光标→物品栏→cageOutSlot 优先级分配</li>
 	 *   <li>INSERT（放入）：调用 releaseBeeAtSlot，内部处理 cursor.shrink 和 cageOutSlot 输出</li>
+	 *   <li>INSERT_SPAWN_EGG（刷怪蛋放入）：服务端校验 PB 类型后直接写入空槽</li>
 	 * </ul>
 	 */
 	static void handleApiaryCageOperation(ApiaryCageOperationPayload payload, IPayloadContext context) {
@@ -234,12 +235,22 @@ final class ApiaryPayloadHandlers {
 		}
 		// 获取玩家光标手持物品
 		ItemStack cursor = serverPlayer.containerMenu.getCarried();
-		if (payload.operation() == ApiaryCageOperationPayload.OperationType.EXTRACT) {
+		ApiaryCageOperationPayload.OperationType operation = payload.operation();
+		if (operation == null) return;
+		if (operation == ApiaryCageOperationPayload.OperationType.EXTRACT) {
 			// 取出操作：按光标→物品栏→cageOutSlot 优先级分配蜂笼去向
 			handleCageExtraction(serverPlayer, apiary, slotIndex, cursor);
-		} else {
+		} else if (operation == ApiaryCageOperationPayload.OperationType.INSERT) {
 			// 放入操作：releaseBeeAtSlot 内部处理 cursor.shrink 和 cageOutSlot 输出
 			boolean success = apiary.releaseBeeAtSlot(slotIndex, cursor);
+			if (success) {
+				if (cursor.isEmpty()) {
+					serverPlayer.containerMenu.setCarried(ItemStack.EMPTY);
+				}
+				serverPlayer.containerMenu.broadcastChanges();
+			}
+		} else if (operation == ApiaryCageOperationPayload.OperationType.INSERT_SPAWN_EGG) {
+			boolean success = apiary.insertBeeFromSpawnEgg(slotIndex, cursor, serverPlayer);
 			if (success) {
 				if (cursor.isEmpty()) {
 					serverPlayer.containerMenu.setCarried(ItemStack.EMPTY);

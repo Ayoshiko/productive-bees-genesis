@@ -9,22 +9,23 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
-	 * 客户端 → 服务端：桶式蜂笼操作数据包
-	 * <br/>
-	 * 玩家手持蜂笼右键点击蜜蜂槽位时发送，服务端根据操作类型执行取出或放入。
+ * 客户端 → 服务端：蜜蜂槽容器操作数据包
+ * <br/>
+ * 玩家手持蜂笼或 PB 资源蜜蜂刷怪蛋右键点击蜜蜂槽位时发送，服务端根据操作类型执行取出或放入。
 	 * 与现有"放入蜂笼自动处理"和"点击选中"机制并存，提供即时精准操作。
 	 * <p>
 	 * 操作类型：
 	 * <ul>
 	 *   <li>{@link OperationType#EXTRACT} — 手持空蜂笼 + 选中格子有蜜蜂 → 取出蜜蜂到蜂笼</li>
 	 *   <li>{@link OperationType#INSERT} — 手持装有蜜蜂的蜂笼 + 选中格子为空 → 放入蜜蜂到格子</li>
+	 *   <li>{@link OperationType#INSERT_SPAWN_EGG} — 手持 PB 资源蜜蜂刷怪蛋 + 空格子 → 直接放入</li>
 	 * </ul>
 	 * <p>
 	 * 安全性：服务端校验方块实体类型与玩家距离（标准 8 格 GUI 交互距离）。
 	 *
 	 * @param pos       蜂箱方块坐标
 	 * @param slotIndex 蜜蜂槽位索引（0~beeSlotCount-1）
-	 * @param operation 操作类型（EXTRACT 或 INSERT）
+	 * @param operation 操作类型（EXTRACT、INSERT 或 INSERT_SPAWN_EGG）
 	 */
 public record ApiaryCageOperationPayload(
 		BlockPos pos,
@@ -37,7 +38,9 @@ public record ApiaryCageOperationPayload(
 		/** 取出：空蜂笼 → 从选中格子取出蜜蜂 */
 		EXTRACT,
 		/** 放入：含蜜蜂的蜂笼 → 放入到空格子 */
-		INSERT;
+		INSERT,
+		/** 放入：资源蜜蜂刷怪蛋 → 直接放入空格子（省去蜂笼捕捉步骤） */
+		INSERT_SPAWN_EGG;
 
 		private static final OperationType[] VALUES = values();
 

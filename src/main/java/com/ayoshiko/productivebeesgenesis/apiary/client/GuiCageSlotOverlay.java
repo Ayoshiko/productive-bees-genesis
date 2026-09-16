@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiTextureOnlyElement;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
 
@@ -37,7 +39,12 @@ public class GuiCageSlotOverlay extends GuiTextureOnlyElement {
 
 	/** 创建输入槽 Overlay（叠加在 cageInSlot 之上） */
 	public static GuiCageSlotOverlay input(IGuiWrapper gui, int slotX, int slotY, Supplier<Boolean> isEmptyChecker) {
-		return new GuiCageSlotOverlay(INPUT_TEXTURE, gui, slotX, slotY, isEmptyChecker);
+		GuiCageSlotOverlay overlay = new GuiCageSlotOverlay(INPUT_TEXTURE, gui, slotX, slotY, isEmptyChecker);
+		// 输入槽现在同时接受蜂笼 / 资源蜂刷怪蛋 / 带基因小食，用 tooltip 说明三种用法，
+		// 否则玩家无从得知小食可以直接放进这个槽做自动喂食。
+		overlay.setTooltip(Tooltip.create(
+				Component.translatable("gui.productivebeesgenesis.apiary.cage_in_slot.tooltip")));
+		return overlay;
 	}
 
 	/** 创建输出槽 Overlay（叠加在 cageOutSlot 之上） */

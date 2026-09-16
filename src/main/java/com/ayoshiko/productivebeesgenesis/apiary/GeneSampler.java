@@ -90,6 +90,18 @@ public class GeneSampler {
 	/** 将一组成年蜜蜂的采样结果直接追加到产出列表，避免创建中间列表。 */
 	void generateGeneSamplesInto(List<ItemStack> output, SampleBatch sources,
 			ResourceLocation beeTypeKey, int samplerCount, Level level) {
+		generateGeneSamplesInto(output, sources, beeTypeKey, samplerCount, level, false, false);
+	}
+
+	/**
+	 * 将一组成年蜜蜂的采样结果追加到产出列表，并应用基因采样插件策略。
+	 * <p>
+	 * 类型插件只保留 TYPE；纯度插件把输出纯度固定为 100。两个插件可以同时安装，
+	 * 这时结果就是 100% 纯度的 TYPE 基因。
+	 */
+	void generateGeneSamplesInto(List<ItemStack> output, SampleBatch sources,
+			ResourceLocation beeTypeKey, int samplerCount, Level level,
+			boolean typeOnly, boolean fullPurity) {
 		if (output == null || sources == null || sources.isEmpty() || beeTypeKey == null
 				|| samplerCount <= 0 || level == null) return;
 
@@ -98,12 +110,12 @@ public class GeneSampler {
 		RandomSource random = level.getRandom();
 		try {
 			if (sources.totalProduceCount <= MAX_EXACT_EVENTS) {
-				generateExactSamples(sources, chance, random);
+				generateExactSamples(sources, chance, random, typeOnly, fullPurity);
 			} else {
 				long hitCount = approximateHitCount(sources.totalProduceCount, chance, random);
-				generateAggregatedSamples(sources, hitCount, random);
+				generateAggregatedSamples(sources, hitCount, random, typeOnly, fullPurity);
 			}
-			emitSamples(output, beeTypeKey.toString());
+			emitSamples(output, beeTypeKey.toString(), fullPurity);
 		} finally {
 			clearAccumulator();
 		}
@@ -121,19 +133,23 @@ public class GeneSampler {
 		return cachedChance;
 	}
 
-	private void generateExactSamples(SampleBatch sources, float chance, RandomSource random) {
+	private void generateExactSamples(SampleBatch sources, float chance, RandomSource random,
+			boolean typeOnly, boolean fullPurity) {
 		for (int sourceIndex = 0; sourceIndex < sources.size; sourceIndex++) {
 			GeneSampleProfile profile = sources.profiles[sourceIndex];
 			long produceCount = sources.produceCounts[sourceIndex];
 			for (long event = 0; event < produceCount; event++) {
 				if (random.nextFloat() > chance) continue;
-				GeneAttribute attribute = ATTRIBUTES[random.nextInt(ATTRIBUTES.length)];
-				addSample(profile, attribute, random.nextInt(PURITY_COUNT), 1L);
+				GeneAttribute attribute = typeOnly
+						? GeneAttribute.TYPE : ATTRIBUTES[random.nextInt(ATTRIBUTES.length)];
+				int purityIndex = fullPurity ? PURITY_COUNT - 1 : random.nextInt(PURITY_COUNT);
+				addSample(profile, attribute, purityIndex, 1L);
 			}
 		}
 	}
 
-	private void generateAggregatedSamples(SampleBatch sources, long hitCount, RandomSource random) {
+	private void generateAggregatedSamples(SampleBatch sources, long hitCount, RandomSource random,
+			boolean typeOnly, boolean fullPurity) {
 		if (hitCount <= 0) return;
 		double allocationOffset = random.nextDouble();
 		long cumulativeProduce = 0L;
@@ -148,12 +164,17 @@ public class GeneSampler {
 							sources.totalProduceCount, allocationOffset);
 			long sourceHits = Math.max(0L, cumulativeHits - allocatedHits);
 			allocatedHits = cumulativeHits;
-			distributeSourceHits(sources.profiles[sourceIndex], sourceHits, random);
+			distributeSourceHits(sources.profiles[sourceIndex], sourceHits, random, typeOnly, fullPurity);
 		}
 	}
 
-	private void distributeSourceHits(GeneSampleProfile profile, long sourceHits, RandomSource random) {
+	private void distributeSourceHits(GeneSampleProfile profile, long sourceHits, RandomSource random,
+			boolean typeOnly, boolean fullPurity) {
 		if (sourceHits <= 0) return;
+		if (typeOnly) {
+			distributeTypeHits(profile, sourceHits, random, fullPurity);
+			return;
+		}
 		long perAttribute = sourceHits / ATTRIBUTES.length;
 		int attributeRemainder = (int) (sourceHits % ATTRIBUTES.length);
 		int attributeStart = random.nextInt(ATTRIBUTES.length);
@@ -161,14 +182,32 @@ public class GeneSampler {
 			long attributeHits = perAttribute + (offset < attributeRemainder ? 1L : 0L);
 			if (attributeHits <= 0) continue;
 			GeneAttribute attribute = ATTRIBUTES[(attributeStart + offset) % ATTRIBUTES.length];
-			long perPurity = attributeHits / PURITY_COUNT;
-			int purityRemainder = (int) (attributeHits % PURITY_COUNT);
-			int purityStart = random.nextInt(PURITY_COUNT);
-			for (int purityOffset = 0; purityOffset < PURITY_COUNT; purityOffset++) {
-				long count = perPurity + (purityOffset < purityRemainder ? 1L : 0L);
-				int purityIndex = (purityStart + purityOffset) % PURITY_COUNT;
-				addSample(profile, attribute, purityIndex, count);
+			if (fullPurity) {
+				addSample(profile, attribute, PURITY_COUNT - 1, attributeHits);
+			} else {
+				distributePurityHits(profile, attribute, attributeHits, random);
 			}
+		}
+	}
+
+	private void distributeTypeHits(GeneSampleProfile profile, long sourceHits,
+			RandomSource random, boolean fullPurity) {
+		if (fullPurity) {
+			addSample(profile, GeneAttribute.TYPE, PURITY_COUNT - 1, sourceHits);
+			return;
+		}
+		distributePurityHits(profile, GeneAttribute.TYPE, sourceHits, random);
+	}
+
+	private void distributePurityHits(GeneSampleProfile profile, GeneAttribute attribute,
+			long attributeHits, RandomSource random) {
+		long perPurity = attributeHits / PURITY_COUNT;
+		int purityRemainder = (int) (attributeHits % PURITY_COUNT);
+		int purityStart = random.nextInt(PURITY_COUNT);
+		for (int purityOffset = 0; purityOffset < PURITY_COUNT; purityOffset++) {
+			long count = perPurity + (purityOffset < purityRemainder ? 1L : 0L);
+			int purityIndex = (purityStart + purityOffset) % PURITY_COUNT;
+			addSample(profile, attribute, purityIndex, count);
 		}
 	}
 
@@ -183,7 +222,7 @@ public class GeneSampler {
 		sampledCounts[index] = previous > Long.MAX_VALUE - count ? Long.MAX_VALUE : previous + count;
 	}
 
-	private void emitSamples(List<ItemStack> output, String beeType) {
+	private void emitSamples(List<ItemStack> output, String beeType, boolean fullPurity) {
 		for (int touched = 0; touched < touchedCount; touched++) {
 			int index = touchedIndices[touched];
 			long count = sampledCounts[index];
@@ -191,7 +230,7 @@ public class GeneSampler {
 			int attributeIndex = index / COUNTS_PER_ATTRIBUTE;
 			int attributeOffset = index % COUNTS_PER_ATTRIBUTE;
 			int valueIndex = attributeOffset / PURITY_COUNT;
-			int purity = attributeOffset % PURITY_COUNT + 1;
+			int purity = fullPurity ? 100 : attributeOffset % PURITY_COUNT + 1;
 			GeneAttribute attribute = ATTRIBUTES[attributeIndex];
 			String value = attribute == GeneAttribute.TYPE
 					? beeType : GENE_VALUES[valueIndex].getSerializedName();

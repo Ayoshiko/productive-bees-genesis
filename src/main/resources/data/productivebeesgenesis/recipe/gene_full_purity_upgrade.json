@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "DGD",
+    "GUG",
+    "DGD"
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:diamond"
+    },
+    "G": {
+      "item": "productivebees:gene"
+    },
+    "U": {
+      "item": "productivelib:upgrade_gene_sampler"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:gene_full_purity_upgrade"
+  }
+}

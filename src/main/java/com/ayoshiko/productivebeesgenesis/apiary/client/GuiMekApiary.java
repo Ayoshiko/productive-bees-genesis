@@ -36,7 +36,7 @@ import java.util.List;
  * <ul>
  *   <li>{@link ApiaryBeeSlotGeometry} — 蜜蜂槽坐标换算与命中判定（唯一坐标真源）</li>
  *   <li>{@link ApiaryBeeVisualsRenderer} — 蜜蜂模型/状态灯/名称/Tooltip 渲染与批处理</li>
- *   <li>{@link ApiaryBeeSlotInteraction} — 蜜蜂槽点击派发（选中 / 喂食小食 / 桶式蜂笼）</li>
+	 *   <li>{@link ApiaryBeeSlotInteraction} — 蜜蜂槽点击派发（选中 / 喂食小食 / 蜂笼 / 刷怪蛋）</li>
  *   <li>{@link ApiaryOutputPageControls} — 输出区翻页按钮与页码文本</li>
  *   <li>{@link FeederSlotTooltipDecorator} — 喂食槽禁用状态的 Tooltip 追加</li>
  * </ul>

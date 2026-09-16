@@ -3,10 +3,13 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.init.ModItems;
+import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
@@ -16,7 +19,7 @@ import net.minecraft.world.item.component.CustomData;
 	 * 从 {@link ApiarySlotManager} 拆分，专门负责蜂笼与蜜蜂槽之间的双向转移逻辑：
 	 * <ul>
 	 *   <li>tick 驱动的自动装入/取出（{@link #processCageInput}）</li>
-	 *   <li>玩家右键触发的桶式操作（{@link #tryCageBeeAtSlot} / {@link #tryReleaseBeeAtSlot}）</li>
+	 *   <li>玩家右键触发的蜂笼/刷怪蛋操作（{@link #tryCageBeeAtSlot} / {@link #tryReleaseBeeAtSlot}）</li>
 	 * </ul>
 	 * <p>
 	 * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问槽位数据与方块实体回调。
@@ -45,12 +48,13 @@ class ApiaryCageHandler {
 	// ===== tick 驱动的蜂笼 I/O =====
 
 	/**
-	 * 处理蜂笼输入 — 双向转移蜜蜂
+	 * 处理蜂笼输入 — 双向转移蜜蜂，或批量消费资源蜂刷怪蛋
 	 * <br/>
-	 * 每次服务端 tick 由 {@link ApiaryTickHandler} 调用。支持两种操作：
+	 * 每次服务端 tick 由 {@link ApiaryTickHandler} 调用。支持三种操作：
 	 * <ol>
 	 *   <li>装入蜜蜂：cageInSlot 有含蜜蜂的蜂笼 → 蜜蜂转移到空 BeeSlot → 空蜂笼输出到 cageOutSlot</li>
 	 *   <li>取出蜜蜂：cageInSlot 有空蜂笼 + 存在非空 BeeSlot → 蜜蜂从 BeeSlot 转移到蜂笼 → 含蜜蜂的蜂笼输出到 cageOutSlot</li>
+	 *   <li>批量装入：cageInSlot 有资源蜂刷怪蛋 → 按空槽数量直接写入 BeeSlot</li>
 	 * </ol>
 	 * <p>
 	 * 优先执行装入操作（含蜜蜂的蜂笼优先处理），装入失败时尝试取出操作。
@@ -62,10 +66,17 @@ class ApiaryCageHandler {
 		if (cageInSlot.isEmpty()) return;
 
 		ItemStack cageStack = cageInSlot.getStack();
-		if (cageStack.isEmpty()
-				|| (!cageStack.is(ModItems.BEE_CAGE.get()) && !cageStack.is(ModItems.STURDY_BEE_CAGE.get()))) return;
+		if (cageStack.isEmpty()) return;
 
 		try {
+			// 刷怪蛋不走蜂笼输出逻辑，按空槽数量批量直接写入蜜蜂数据。
+			ResourceLocation spawnEggType = BeeSpawnEggHelper.getBeeType(cageStack);
+			if (spawnEggType != null) {
+				tryInsertBeesFromSpawnEggInput(cageStack, spawnEggType);
+				return;
+			}
+			if (!isCageItem(cageStack)) return;
+
 			// 优先尝试装入蜜蜂（蜂笼含蜜蜂时）
 			if (tryInsertBeeFromCage(cageStack)) {
 				return;
@@ -76,6 +87,47 @@ class ApiaryCageHandler {
 			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.error("处理蜂笼输入时异常（已抑制 {} 次类似警告）", suppressed, e));
 		}
+	}
+
+	/**
+	 * 将输入槽中的一叠资源蜂刷怪蛋批量分配到空蜜蜂槽。
+	 * <br/>
+	 * 只解析一次刷怪蛋类型，并按选中槽位优先、其余槽位顺序填充，避免每个槽位重复读取组件。
+	 * 输入槽仅按实际写入数量扣除，蜂箱已满时保留剩余刷怪蛋。
+	 */
+	private void tryInsertBeesFromSpawnEggInput(ItemStack eggStack, ResourceLocation beeType) {
+		if (BeeReloadListener.INSTANCE.getData(beeType) == null) return;
+		CompoundTag beeData = buildBeeDataFromSpawnEgg(beeType);
+		if (beeData == null) return;
+
+		BeeSlot[] beeSlots = manager.getBeeSlots();
+		int toInsert = Math.min(eggStack.getCount(), countEmptyBeeSlots(beeSlots));
+		if (toInsert <= 0) return;
+
+		int inserted = 0;
+		int selected = manager.getTile().getSelectedBeeSlot();
+		if (selected >= 0 && selected < beeSlots.length && beeSlots[selected].isEmpty()) {
+			populateBeeSlotFromData(beeSlots[selected], beeData);
+			inserted++;
+		}
+		for (int index = 0; index < beeSlots.length && inserted < toInsert; index++) {
+			if (index == selected || !beeSlots[index].isEmpty()) continue;
+			populateBeeSlotFromData(beeSlots[index], beeData);
+			inserted++;
+		}
+
+		if (inserted > 0) {
+			manager.getCageInSlot().shrinkStack(inserted, Action.EXECUTE);
+			manager.getTile().setChanged();
+		}
+	}
+
+	private static int countEmptyBeeSlots(BeeSlot[] beeSlots) {
+		int empty = 0;
+		for (BeeSlot slot : beeSlots) {
+			if (slot.isEmpty()) empty++;
+		}
+		return empty;
 	}
 
 	/**
@@ -293,6 +345,65 @@ class ApiaryCageHandler {
 		cursorCage.shrink(1);
 		manager.getTile().setChanged();
 		return true;
+	}
+
+	// ===== 刷怪蛋直接放入（第四种机制，省去蜂笼捕捉步骤） =====
+
+	/**
+	 * 刷怪蛋放入：将资源蜜蜂刷怪蛋直接放入指定空槽位
+	 * <br/>
+	 * 玩家手持 PB 资源蜜蜂刷怪蛋右键点击空蜜蜂格子时触发。
+	 * 从刷怪蛋 ENTITY_DATA 读取蜜蜂类型，构造与蜂笼捕获等价的 beeData 写入 BeeSlot。
+	 * 与蜂笼路径的区别：无需 cageOutSlot 输出空容器，直接消耗刷怪蛋。
+	 *
+	 * @param slotIndex    目标蜜蜂槽位索引
+	 * @param cursorEgg    玩家手持的刷怪蛋（生存模式消耗 1 个）
+	 * @param player       执行操作的玩家（用于保留创造模式无限材料语义）
+	 * @return true 如果成功放入
+	 */
+	boolean tryInsertBeeFromSpawnEgg(int slotIndex, ItemStack cursorEgg, Player player) {
+		if (slotIndex < 0 || slotIndex >= manager.getBeeSlotCount()) return false;
+		if (player == null) return false;
+		BeeSlot targetSlot = manager.getBeeSlot(slotIndex);
+		if (!targetSlot.isEmpty()) return false;
+
+		ResourceLocation beeType = BeeSpawnEggHelper.getBeeType(cursorEgg);
+		if (beeType == null || BeeReloadListener.INSTANCE.getData(beeType) == null) return false;
+
+		// 从刷怪蛋 ENTITY_DATA 提取蜜蜂类型，构造等价蜂笼 beeData
+		CompoundTag beeData = buildBeeDataFromSpawnEgg(beeType);
+		if (beeData == null) return false;
+
+		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态，与蜂笼路径一致）
+		populateBeeSlotFromData(targetSlot, beeData);
+
+		// 成功：消耗刷怪蛋1个（刷怪蛋为一次性消耗品，无容器返还）
+		// 对齐原版刷怪蛋：生存模式消耗，创造模式保留无限材料。
+		cursorEgg.consume(1, player);
+		manager.getTile().setChanged();
+		return true;
+	}
+
+	/**
+	 * 从刷怪蛋构建蜂笼等价的 beeData NBT
+	 * <br/>
+	 * 刷怪蛋存储格式：ENTITY_DATA → { type: "productivebees:iron", ... }
+	 * 蜂笼存储格式：CUSTOM_DATA → { entity: "productivebees:configurable_bee", type: "productivebees:iron", ... }
+	 * 此方法将刷怪蛋格式转换为蜂笼格式，使 BeeSlot 无需区分来源。
+	 *
+	 * @param beeType 已通过 BeeReloadListener 校验的具体资源蜜蜂类型
+	 * @return 等价蜂笼 beeData，解析失败返回 null
+	 */
+	private static CompoundTag buildBeeDataFromSpawnEgg(ResourceLocation beeType) {
+		if (beeType == null) return null;
+		// 构造蜂笼等价 NBT：entity 固定为 configurable_bee，type 为具体蜜蜂类型
+		CompoundTag beeData = new CompoundTag();
+		beeData.putString("entity", BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID);
+		// 同时保留 Occupant 使用的 id，便于通用 NBT 解析器走直接注册表快径。
+		beeData.putString("id", BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID);
+		beeData.putString("type", beeType.toString());
+		beeData.putBoolean("isProductiveBee", true);
+		return beeData;
 	}
 
 	// ===== 槽位填充工具方法 =====

@@ -36,6 +36,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -715,6 +716,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void confirmCageExtraction(int slotIndex) { slotManager.confirmCageExtraction(slotIndex); }
 	public boolean releaseBeeAtSlot(int slotIndex, ItemStack cursorCage) {
 		return slotManager.tryReleaseBeeAtSlot(slotIndex, cursorCage);
+	}
+	public boolean insertBeeFromSpawnEgg(int slotIndex, ItemStack cursorEgg, Player player) {
+		return slotManager.tryInsertBeeFromSpawnEgg(slotIndex, cursorEgg, player);
 	}
 	@NotNull public BeeProduceProcessor getProduceProcessor() { return produceProcessor; }
 

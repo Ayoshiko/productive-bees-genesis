@@ -33,7 +33,7 @@ import java.util.List;
 	 * </ul>
 	 * <p>
 	 * 重构：将 UPGRADE_TYPES 与 SUPPORTED_TYPES 改为实例字段，由构造函数注入。
-	 * 蜂箱版传入 8 种升级类型，离心机版仅传入 6 种（无 GENE_SAMPLER/BLOCK）。
+	 * 蜂箱版传入 12 种升级类型，离心机版仅传入 6 种（无基因采样与蜂箱专属插件）。
 	 */
 public class GuiPbSupportedUpgrades extends GuiElement {
 
@@ -59,6 +59,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 			PbUpgradeType.TIME,
 			PbUpgradeType.TIME_2,
 			PbUpgradeType.GENE_SAMPLER,
+			PbUpgradeType.GENE_TYPE_ONLY,
+			PbUpgradeType.GENE_FULL_PURITY,
 			PbUpgradeType.BLOCK,
 			PbUpgradeType.USELESS_BYPRODUCT,
 			PbUpgradeType.ESSENCE_CONVERSION

@@ -23,7 +23,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 	 *（由 {@link ApiaryUpgradeHandler#hasCombBlockUpgrade} 判定，二者任一安装即生效）。
 	 * <p>
 	 * 按类型差异化上限：GENE_SAMPLER 上限由配置驱动（默认4，最大20），
-	 * BLOCK 为功能型升级 1 个即满；其他叠加型升级保持 8 个上限。
+	 * BLOCK 与基因插件为功能型升级 1 个即满；其他叠加型升级保持 8 个上限。
 	 */
 public enum PbUpgradeType {
 
@@ -47,6 +47,12 @@ public enum PbUpgradeType {
 
 	/** 基因采样升级 — 采样蜜蜂基因（上限由配置驱动，枚举值4为配置未加载时的回退默认值） */
 	GENE_SAMPLER("gene_sampler", 0xFF9C27B0, 0f, 4),
+
+	/** 基因种类采样插件 — 仅输出 TYPE 基因，功能型升级最多安装 1 个。 */
+	GENE_TYPE_ONLY("gene_type_only", 0xFF26A69A, 0f, 1),
+
+	/** 基因纯度插件 — 采样结果直接为 100% 纯度，功能型升级最多安装 1 个。 */
+	GENE_FULL_PURITY("gene_full_purity", 0xFFE91E63, 0f, 1),
 
 	/** 蜜脾块升级 — 将蜜脾产出转换为蜜脾块形式（功能型，1 个即满，独立于 Ω） */
 	BLOCK("block", 0xFF8D6E63, 0f, 1),

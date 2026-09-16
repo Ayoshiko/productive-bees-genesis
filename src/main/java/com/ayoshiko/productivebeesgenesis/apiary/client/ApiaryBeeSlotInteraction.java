@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeSpawnEggHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryCageOperationPayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryFeedBeePayload;
@@ -18,8 +19,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * 与 GUI 渲染/布局职责分离。所有分支只做客户端判定并发包，服务端仍是唯一权威
  * （{@code ApiaryPayloadHandlers} 会重新校验容器、距离、索引与光标物品）。
  * <p>
- * 分支优先级（右键）：基因小食喂食 → 桶式蜂笼操作。前者优先是因为手持带基因的小食时，
- * 玩家意图必然是喂食而非取蜂。
+ * 分支优先级（右键）：基因小食喂食 → 资源蜜蜂刷怪蛋放入 → 桶式蜂笼操作。
+ * 前者优先是因为手持带基因的小食时，玩家意图必然是喂食而非取蜂。
  */
 final class ApiaryBeeSlotInteraction {
 
@@ -40,7 +41,7 @@ final class ApiaryBeeSlotInteraction {
 	}
 
 	/**
-	 * 右键：基因小食喂食 → 桶式蜂笼操作
+	 * 右键：基因小食喂食 → 资源蜜蜂刷怪蛋放入 → 桶式蜂笼操作
 	 *
 	 * @param tile      蜂箱方块实体
 	 * @param cursor    玩家光标物品（客户端镜像，服务端会重新读取）
@@ -51,6 +52,7 @@ final class ApiaryBeeSlotInteraction {
 		if (slotIndex < 0 || slotIndex >= tile.getBeeSlotCount()) return false;
 		BeeSlot beeSlot = tile.getBeeSlots()[slotIndex];
 		if (handleHoneyTreatFeeding(tile, beeSlot, cursor, slotIndex)) return true;
+		if (handleSpawnEggOperation(tile, beeSlot, cursor, slotIndex)) return true;
 		return handleCageOperation(tile, beeSlot, cursor, slotIndex);
 	}
 
@@ -65,6 +67,15 @@ final class ApiaryBeeSlotInteraction {
 			return false;
 		}
 		PacketDistributor.sendToServer(new ApiaryFeedBeePayload(tile.getBlockPos(), slotIndex));
+		return true;
+	}
+
+	/** PB 资源蜜蜂刷怪蛋 + 空槽位 → 请求服务端直接放入蜜蜂。 */
+	private static boolean handleSpawnEggOperation(TileEntityMekApiary tile, BeeSlot beeSlot,
+			ItemStack cursor, int slotIndex) {
+		if (!beeSlot.isEmpty() || !BeeSpawnEggHelper.isResourceBeeSpawnEgg(cursor)) return false;
+		PacketDistributor.sendToServer(new ApiaryCageOperationPayload(tile.getBlockPos(), slotIndex,
+				ApiaryCageOperationPayload.OperationType.INSERT_SPAWN_EGG));
 		return true;
 	}
 

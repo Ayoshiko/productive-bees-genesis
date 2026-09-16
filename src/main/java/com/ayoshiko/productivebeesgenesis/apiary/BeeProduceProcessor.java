@@ -270,7 +270,8 @@ public class BeeProduceProcessor {
 		if (!geneSampleBatch.isEmpty() && beeTypeKey != null && level != null && geneSamplerCount > 0) {
 			try {
 				geneSampler.generateGeneSamplesInto(
-						allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level);
+						allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level,
+						upgrades.geneTypeOnly(), upgrades.geneFullPurity());
 			} finally {
 				geneSampleBatch.clear();
 			}

@@ -159,7 +159,9 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 				|| item == LibItems.UPGRADE_GENE_SAMPLER.get()
 				|| item == LibItems.UPGRADE_BLOCK.get()
 				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()
-				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get();
+				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get()
+				|| item == ModItems.GENE_TYPE_ONLY_UPGRADE.get()
+				|| item == ModItems.GENE_FULL_PURITY_UPGRADE.get();
 	}
 
 	/**
@@ -201,6 +203,12 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 		if (item == LibItems.UPGRADE_GENE_SAMPLER.get()) {
 			return PbUpgradeType.GENE_SAMPLER;
 		}
+		if (item == ModItems.GENE_TYPE_ONLY_UPGRADE.get()) {
+			return PbUpgradeType.GENE_TYPE_ONLY;
+		}
+		if (item == ModItems.GENE_FULL_PURITY_UPGRADE.get()) {
+			return PbUpgradeType.GENE_FULL_PURITY;
+		}
 		// STABILITY 升级 — 仅离心机支持（蜂箱不接受）
 		if (item == LibItems.UPGRADE_STABILITY.get()) {
 			return PbUpgradeType.STABILITY;
@@ -235,6 +243,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case TIME -> new ItemStack(LibItems.UPGRADE_TIME.get());
 			case TIME_2 -> new ItemStack(LibItems.UPGRADE_TIME_2.get());
 			case GENE_SAMPLER -> new ItemStack(LibItems.UPGRADE_GENE_SAMPLER.get());
+			case GENE_TYPE_ONLY -> new ItemStack(ModItems.GENE_TYPE_ONLY_UPGRADE.get());
+			case GENE_FULL_PURITY -> new ItemStack(ModItems.GENE_FULL_PURITY_UPGRADE.get());
 			case BLOCK -> new ItemStack(LibItems.UPGRADE_BLOCK.get());
 			case SIMULATION -> new ItemStack(LibItems.UPGRADE_SIMULATOR.get());
 			case STABILITY -> new ItemStack(LibItems.UPGRADE_STABILITY.get());
@@ -266,6 +276,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			case TIME -> item == LibItems.UPGRADE_TIME.get();
 			case TIME_2 -> item == LibItems.UPGRADE_TIME_2.get();
 			case GENE_SAMPLER -> item == LibItems.UPGRADE_GENE_SAMPLER.get();
+			case GENE_TYPE_ONLY -> item == ModItems.GENE_TYPE_ONLY_UPGRADE.get();
+			case GENE_FULL_PURITY -> item == ModItems.GENE_FULL_PURITY_UPGRADE.get();
 			case BLOCK -> item == LibItems.UPGRADE_BLOCK.get();
 			case SIMULATION -> item == LibItems.UPGRADE_SIMULATOR.get();
 			case STABILITY -> item == LibItems.UPGRADE_STABILITY.get();

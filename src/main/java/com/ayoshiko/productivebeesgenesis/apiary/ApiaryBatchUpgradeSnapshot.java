@@ -28,6 +28,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
  * {@code invalidate()} 立即失效，不依赖计数。
  *
  * @param geneSamplerCount            基因采样器已安装数量
+ * @param geneTypeOnly                是否仅采样 TYPE 基因
+ * @param geneFullPurity              是否将采样基因直接提升为 100% 纯度
  * @param productivityMultiplier      生产力倍率
  * @param discardUselessByproducts    是否安装了无用副产物升级
  * @param hasCombBlockUpgrade         是否安装了蜜脾块（BLOCK/Ω）升级
@@ -38,6 +40,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
  */
 record ApiaryBatchUpgradeSnapshot(
 		int geneSamplerCount,
+		boolean geneTypeOnly,
+		boolean geneFullPurity,
 		float productivityMultiplier,
 		boolean discardUselessByproducts,
 		boolean hasCombBlockUpgrade,
@@ -56,6 +60,8 @@ record ApiaryBatchUpgradeSnapshot(
 	static ApiaryBatchUpgradeSnapshot capture(TileEntityMekApiary apiary, ApiaryUpgradeHandler upgradeHandler) {
 		return new ApiaryBatchUpgradeSnapshot(
 				upgradeHandler.getGeneSamplerCount(),
+				apiary.getPbUpgradeInstalledCount(PbUpgradeType.GENE_TYPE_ONLY) > 0,
+				apiary.getPbUpgradeInstalledCount(PbUpgradeType.GENE_FULL_PURITY) > 0,
 				upgradeHandler.getProductivityMultiplier(),
 				apiary.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0,
 				upgradeHandler.hasCombBlockUpgrade(),

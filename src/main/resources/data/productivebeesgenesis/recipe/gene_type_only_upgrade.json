@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "RHR",
+    "HUG",
+    "RHR"
+  ],
+  "key": {
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "H": {
+      "item": "productivebees:honey_treat"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "U": {
+      "item": "productivelib:upgrade_gene_sampler"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "productivebeesgenesis:gene_type_only_upgrade"
+  }
+}

@@ -51,4 +51,34 @@ class GeneSamplerTest {
 		assertTrue(source.contains("allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level"));
 		assertTrue(source.contains("geneSampleBatch.clear()"));
 	}
+
+	@Test
+	void samplerPluginsAreAppliedAtTheSamplingBoundary() throws Exception {
+		String sampler = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/GeneSampler.java"));
+		String snapshot = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiaryBatchUpgradeSnapshot.java"));
+		String processor = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProduceProcessor.java"));
+
+		assertTrue(sampler.contains("boolean typeOnly, boolean fullPurity"));
+		assertTrue(sampler.contains("? GeneAttribute.TYPE : ATTRIBUTES[random.nextInt(ATTRIBUTES.length)]"));
+		assertTrue(sampler.contains("int purity = fullPurity ? 100 : attributeOffset % PURITY_COUNT + 1"));
+		assertTrue(snapshot.contains("geneTypeOnly") && snapshot.contains("geneFullPurity"));
+		assertTrue(processor.contains("upgrades.geneTypeOnly(), upgrades.geneFullPurity()"));
+	}
+
+	@Test
+	void pluginItemsHaveIndependentModelsAndRecipes() throws Exception {
+		String typeModel = Files.readString(Path.of(
+				"src/main/resources/assets/productivebeesgenesis/models/item/gene_type_only_upgrade.json"));
+		String purityModel = Files.readString(Path.of(
+				"src/main/resources/assets/productivebeesgenesis/models/item/gene_full_purity_upgrade.json"));
+		assertTrue(typeModel.contains("gene_type_only"));
+		assertTrue(purityModel.contains("gene_full_purity"));
+		assertTrue(Files.exists(Path.of(
+				"src/main/resources/data/productivebeesgenesis/recipe/gene_type_only_upgrade.json")));
+		assertTrue(Files.exists(Path.of(
+				"src/main/resources/data/productivebeesgenesis/recipe/gene_full_purity_upgrade.json")));
+	}
 }

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_gene_sampler": {
+      "conditions": {
+        "items": [
+          {
+            "items": "productivelib:upgrade_gene_sampler"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "productivebeesgenesis:gene_full_purity_upgrade"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_gene_sampler"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "productivebeesgenesis:gene_full_purity_upgrade"
+    ]
+  }
+}

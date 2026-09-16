@@ -36,6 +36,8 @@ public final class ModCreativeTabs {
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
+						output.accept(ModItems.GENE_TYPE_ONLY_UPGRADE.get());
+						output.accept(ModItems.GENE_FULL_PURITY_UPGRADE.get());
 						// 无尽创世物品仅承担宇宙材质模型，始终不进入普通创造物品栏。
 						// 万象创世蜜脾由 CreativeTabEventHandler 以 PB 可配置蜜脾 + bee_type 组件加入资源蜜蜂标签页。
 						// 添加所有MEK离心机方块（按指定顺序）

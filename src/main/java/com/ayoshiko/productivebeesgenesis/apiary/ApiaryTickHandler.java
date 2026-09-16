@@ -92,7 +92,8 @@ class ApiaryTickHandler {
 		this.beeSlotProcessor = new BeeSlotTickProcessor(tile, slotManager, produceProcessor,
 				upgradeHandler, feederManager, activationCounter, slotErrorThrottle,
 				conversionProcessor);
-		this.cageProcessor = new CageTickProcessor(slotManager);
+		this.cageProcessor = new CageTickProcessor(slotManager,
+				new GeneTreatAutoFeeder(tile, slotManager));
 	}
 
 	/**

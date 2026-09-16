@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
@@ -27,7 +28,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 	 * <p>
 	 * 注册策略（按方块实体类型差异化）：
 	 * <ul>
-	 *   <li>蜂箱：10种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两种功能升级）</li>
+	 *   <li>蜂箱：12种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两个基因插件 + 两种功能升级）</li>
 	 *   <li>离心机（含工厂版）：10种（产量×4 + 时间×2 + 稳定性 + 三种功能升级）</li>
 	 * </ul>
 	 * <p>
@@ -61,7 +62,7 @@ public final class CollectValidUpgradesEventHandler {
 	 * <p>
 	 * 升级注册策略（按方块实体类型差异化）：
 	 * <ul>
-	 *   <li>蜂箱：10种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两种功能升级）</li>
+	 *   <li>蜂箱：12种（产量×4 + 时间×2 + 蜜脾块 + 基因采样器 + 两个基因插件 + 两种功能升级）</li>
 	 *   <li>离心机（含工厂版）：10种（产量×4 + 时间×2 + 稳定性 + 三种功能升级）</li>
 	 * </ul>
 	 * <p>
@@ -111,9 +112,17 @@ public final class CollectValidUpgradesEventHandler {
 		event.addValidUpgrade(LibItems.UPGRADE_TIME.get());
 		event.addValidUpgrade(LibItems.UPGRADE_TIME_2.get());
 		if (isApiary) {
-			// 蜜脾块升级 + 基因采样器升级 — 仅蜂箱支持
+			// 蜜脾块升级 + 基因采样器及其功能插件 — 仅机械蜂箱支持
 			event.addValidUpgrade(LibItems.UPGRADE_BLOCK.get());
 			event.addValidUpgrade(LibItems.UPGRADE_GENE_SAMPLER.get());
+			if (be instanceof IPbUpgradeProvider provider) {
+				if (provider.getPbUpgradeInstalledCount(PbUpgradeType.GENE_TYPE_ONLY) == 0) {
+					event.addValidUpgrade(ModItems.GENE_TYPE_ONLY_UPGRADE.get());
+				}
+				if (provider.getPbUpgradeInstalledCount(PbUpgradeType.GENE_FULL_PURITY) == 0) {
+					event.addValidUpgrade(ModItems.GENE_FULL_PURITY_UPGRADE.get());
+				}
+			}
 		} else {
 			// 稳定性升级 — 仅离心机支持（对齐 PB 原版 CentrifugeBlockEntity 升级白名单）
 			event.addValidUpgrade(LibItems.UPGRADE_STABILITY.get());
