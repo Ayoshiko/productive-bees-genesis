@@ -2,16 +2,19 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "DBD",
-    "BUB",
-    "DBD"
+    "DND",
+    "HUH",
+    "DND"
   ],
   "key": {
     "D": {
-      "item": "minecraft:diamond"
+      "item": "minecraft:diamond_block"
     },
-    "B": {
-      "item": "productivebees:gene_bottle"
+    "H": {
+      "item": "minecraft:honey_block"
+    },
+    "N": {
+      "item": "minecraft:nether_star"
     },
     "U": {
       "item": "productivelib:upgrade_gene_sampler"

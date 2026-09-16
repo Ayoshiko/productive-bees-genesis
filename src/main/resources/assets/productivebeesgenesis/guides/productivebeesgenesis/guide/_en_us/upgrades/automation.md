@@ -8,6 +8,8 @@ item_ids:
   - productivebeesgenesis:raw_ore_smelting_upgrade
   - productivebeesgenesis:essence_conversion_upgrade
   - productivebeesgenesis:byproduct_destruction_upgrade
+  - productivebeesgenesis:gene_type_only_upgrade
+  - productivebeesgenesis:gene_full_purity_upgrade
 ---
 # Upgrade and Automation Details
 
@@ -42,6 +44,18 @@ Productivity increases output, Time shortens operations, Gene Sampler and Comb B
 **Byproduct Destruction** removes selected honey, wax, or pollen byproducts. Install it only after confirming that your pack no longer needs those materials.
 
 <RecipeFor id="productivebeesgenesis:byproduct_destruction_upgrade" fallbackText="This modpack replaced or disabled the Byproduct Destruction Upgrade recipe. Search JEI." />
+
+<ItemImage id="productivebeesgenesis:gene_type_only_upgrade" scale="2" />
+
+**Gene Type Filter** makes an installed Gene Sampler output only bee type (TYPE) genes. It is limited to one per apiary and has no effect without a Gene Sampler.
+
+<RecipeFor id="productivebeesgenesis:gene_type_only_upgrade" fallbackText="This modpack replaced or disabled the Gene Type Filter recipe. Search JEI." />
+
+<ItemImage id="productivebeesgenesis:gene_full_purity_upgrade" scale="2" />
+
+**Full Purity Gene** makes every sampled gene 100% pure. Install it with Gene Type Filter to output only 100%-pure bee type genes.
+
+<RecipeFor id="productivebeesgenesis:gene_full_purity_upgrade" fallbackText="This modpack replaced or disabled the Full Purity Gene recipe. Search JEI." />
 
 ## Direct apiary-to-centrifuge transfer
 

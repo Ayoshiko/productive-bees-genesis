@@ -10,8 +10,6 @@ item_ids:
   - productivelib:upgrade_gene_sampler
   - productivelib:upgrade_block
   - productivelib:upgrade_stability
-  - productivebeesgenesis:gene_type_only_upgrade
-  - productivebeesgenesis:gene_full_purity_upgrade
 ---
 # PB Upgrade Window
 
@@ -116,9 +114,7 @@ This is the easiest thing to get wrong. The same window accepts different sets o
 
 Both gene plugins require a **Gene Sampler** to do anything and may be installed together. The combination outputs only bee type genes, all at 100% purity. Each plugin has its own limit of one and does not consume the sampler's install limit.
 
-<RecipeFor id="productivebeesgenesis:gene_type_only_upgrade" fallbackText="This modpack replaced or disabled the Gene Type Filter recipe. Search JEI." />
-
-<RecipeFor id="productivebeesgenesis:gene_full_purity_upgrade" fallbackText="This modpack replaced or disabled the Full Purity Gene recipe. Search JEI." />
+Their detailed behavior, combinations, and recipes are grouped with the addon's other three functional upgrades in [Upgrade and Automation Details](automation.md).
 
 **Centrifuge only**
 
@@ -178,5 +174,5 @@ The four independent Custom rules (tooltips quoted):
 
 - Full apiary interface: [Mekanism Apiary](../machines/apiary.md)
 - Full centrifuge interface: [Mekanism Centrifuge](../machines/centrifuge.md)
-- Details of the three addon upgrades (Raw Ore Smelting, Essence Conversion, Byproduct Destruction): [Upgrade and Automation Details](automation.md)
+- Detailed behavior and recipes for all five addon upgrades: [Upgrade and Automation Details](automation.md)
 - Config entries for limits and balance: [Configuration](../configuration.md)

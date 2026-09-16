@@ -2,22 +2,25 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "RHR",
-    "BUB",
-    "RHR"
+    "CWC",
+    "RUR",
+    "CPC"
   ],
   "key": {
-    "B": {
-      "item": "productivebees:gene_bottle"
+    "C": {
+      "tag": "c:storage_blocks/honeycombs"
     },
-    "H": {
-      "item": "productivebees:honey_treat"
+    "P": {
+      "item": "minecraft:comparator"
     },
     "R": {
-      "item": "minecraft:redstone"
+      "tag": "c:dusts/redstone"
     },
     "U": {
       "item": "productivelib:upgrade_gene_sampler"
+    },
+    "W": {
+      "item": "minecraft:writable_book"
     }
   },
   "result": {

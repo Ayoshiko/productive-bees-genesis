@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.logistics.EjectItemMapBuilder;
 import com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings;
+import com.ayoshiko.productivebeesgenesis.logistics.FastFluidEjector;
 import com.ayoshiko.productivebeesgenesis.logistics.FastItemEjector;
 import com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost;
 import com.ayoshiko.productivebeesgenesis.logistics.NeighborItemTargets;
@@ -63,6 +64,8 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 	/** 自研弹出通道（懒创建，仅本模组机器持有） */
 	@Unique
 	private volatile FastItemEjector productivebeesgenesis$fastEjector;
+	@Unique
+	private volatile FastFluidEjector productivebeesgenesis$fastFluidEjector;
 
 	/** 输出边沿唤醒器 */
 	@Unique
@@ -101,6 +104,28 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 							ignored -> created.onConfigChanged());
 				}
 				productivebeesgenesis$fastEjector = ejector;
+			}
+		}
+		return ejector;
+	}
+
+	/** 懒创建整罐流体弹出通道，并随 FLUID 侧面配置主动失效方向缓存。 */
+	@Unique
+	private FastFluidEjector productivebeesgenesis$ensureFastFluidEjector(TileEntityMekanism tile) {
+		FastFluidEjector ejector = productivebeesgenesis$fastFluidEjector;
+		if (ejector != null) return ejector;
+		synchronized (this) {
+			ejector = productivebeesgenesis$fastFluidEjector;
+			if (ejector == null) {
+				ejector = new FastFluidEjector(tile);
+				TileComponentConfig config = tile instanceof ISideConfiguration sideConfiguration
+						? sideConfiguration.getConfig() : null;
+				if (config != null) {
+					FastFluidEjector created = ejector;
+					config.addConfigChangeListener(TransmissionType.FLUID,
+							ignored -> created.onConfigChanged());
+				}
+				productivebeesgenesis$fastFluidEjector = ejector;
 			}
 		}
 		return ejector;
@@ -190,6 +215,36 @@ public abstract class TileComponentEjectorFastPathMixin implements IFastEjectHos
 			// 原版 outputItems 结尾会把 tickDelay 设成 10（半秒）；压回 1 保持最大速度
 			((TileEntityEjectorAccessor) (Object) this).productivebeesgenesis$setTickDelay(1);
 		}
+	}
+
+	/**
+	 * 接管本模组机器的流体弹出。原版路径每刻为每个槽重建 IdentityHashMap、方向集合和能力列表；
+	 * 快速通道复用能力缓存并整罐传输，Mekanism 管道仍通过标准 IFluidHandler 完整兼容。
+	 */
+	@WrapOperation(
+			method = "tickServer",
+			at = @At(
+					value = "INVOKE",
+					target = "Lmekanism/common/tile/component/TileComponentEjector;eject("
+							+ "Lmekanism/common/lib/transmitter/TransmissionType;"
+							+ "Lnet/minecraft/core/Direction;"
+							+ "Lmekanism/common/tile/component/config/ConfigInfo;)V"
+			),
+			require = 0
+	)
+	private void productivebeesgenesis$fastOutputFluids(
+			TileComponentEjector ejector,
+			TransmissionType transmission,
+			Direction facing,
+			ConfigInfo info,
+			Operation<Void> original) {
+		TileEntityMekanism tile = productivebeesgenesis$ownTile();
+		Level level = tile == null ? null : tile.getLevel();
+		if (transmission != TransmissionType.FLUID || tile == null || level == null || level.isClientSide) {
+			original.call(ejector, transmission, facing, info);
+			return;
+		}
+		productivebeesgenesis$ensureFastFluidEjector(tile).tick(tile, info, level.getGameTime());
 	}
 
 	/**

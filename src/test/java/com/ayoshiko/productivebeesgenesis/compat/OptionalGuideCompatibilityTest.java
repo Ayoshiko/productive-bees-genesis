@@ -71,6 +71,13 @@ class OptionalGuideCompatibilityTest {
 		assertTrue(indexedItems.contains("productivebeesgenesis:raw_ore_smelting_upgrade"));
 		assertTrue(indexedItems.contains("productivebeesgenesis:gene_type_only_upgrade"));
 		assertTrue(indexedItems.contains("productivebeesgenesis:gene_full_purity_upgrade"));
+		String automation = Files.readString(GUIDE_ROOT.resolve("upgrades/automation.md"));
+		String pbUpgrades = Files.readString(GUIDE_ROOT.resolve("upgrades/pb-upgrades.md"));
+		assertTrue(automation.contains("productivebeesgenesis:gene_type_only_upgrade")
+				&& automation.contains("productivebeesgenesis:gene_full_purity_upgrade"),
+				"两个基因插件必须与另外三个附属功能升级集中在 automation 页面");
+		assertFalse(pbUpgrades.contains("<RecipeFor id=\"productivebeesgenesis:gene_"),
+				"PB 窗口页只保留支持关系，插件配方不得再次分散索引位置");
 		assertAllFactoryItemsIndexed(indexedItems);
 		for (String redundantPage : List.of("machines/index.md", "upgrades/index.md")) {
 			assertFalse(Files.exists(GUIDE_ROOT.resolve(redundantPage)),

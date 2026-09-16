@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccess
 import mekanism.api.RelativeSide;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.config.MekanismConfig;
 import mekanism.common.tile.component.TileComponentEjector;
 
 import java.util.ArrayList;
@@ -41,7 +42,9 @@ final class ApiarySideConfigSupport {
 		tile.configComponent.setupOutputConfig(TransmissionType.FLUID,
 				tile.slotManager().getFluidTank(), RelativeSide.RIGHT);
 		// 创建弹出器组件，设置 tickDelay 为 1（实际延迟由 Mixin 动态调整）
-		tile.ejectorComponent = new TileComponentEjector(tile);
+		// 流体快速通道会整罐弹出；若 Mixin 因第三方冲突未生效，原版回退也保持单次最大量。
+		tile.ejectorComponent = new TileComponentEjector(tile,
+				MekanismConfig.general.chemicalAutoEjectRate, () -> Integer.MAX_VALUE);
 		((TileEntityEjectorAccessor) tile.ejectorComponent).productivebeesgenesis$setTickDelay(1);
 		// 同时弹出物品和流体
 		tile.ejectorComponent.setOutputData(tile.configComponent, TransmissionType.ITEM, TransmissionType.FLUID);

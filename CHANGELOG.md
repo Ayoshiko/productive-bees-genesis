@@ -48,8 +48,8 @@
 - 机械蜂箱每轮输出共享一次升级状态快照；Wanna Bee 大批量战利品采样按生产事件分层，减少重复升级查询和 LootModifier 遍历。
 - 收紧 Mixin 与兼容逻辑作用域：Building Gadgets 粘贴修复、Mekanism 槽位回滚、批次能耗记账只影响本模组机器；第三方调用点改用可组合的 WrapOperation。
 - 万象创世不再为所有蜂种伪造通用蜜脾，而是从蜂箱产出配方解析真实蜜脾模板，并通过 PB 映射对应蜜脾块；聚合物品按实际最大堆叠数拆分。
-- 两个基因插件配方改用生存模式可取得、带真实基因组件的基因瓶；满纯度配方不再显示或要求命令才能获得的 0% 裸基因。
-- 精简三个生产升级的物品提示，并将完整操作、组合规则和配方说明集中到扩充后的双语教程；无尽创世内部材质物品不再进入普通创造物品栏。
+- 两个基因插件配方按 ProductiveLib 升级结构重新设计，只使用普通生存材料与基因采样器；不再显示或要求带组件的压榨蜜蜂产物、空白基因瓶或命令物品。
+- 精简功能升级的物品提示，并将粗矿熔炼、精华转化、副产物销毁及两个基因插件集中到同一双语教程页面；无尽创世内部材质物品不再进入普通创造物品栏。
 
 ### 修复
 
@@ -64,8 +64,9 @@
 ### 性能
 
 - 自动基因喂食从每 20 tick 一次提升到每 5 tick 一次；同一真实游戏刻严格限一次并按方块位置错峰，在提高到每秒最多四只的同时防止高倍加速放大临时实体创建。
-- 自动喂食缓存当前小食的基因列表，并用忽略数量的组件快照检测原地修改；空槽和非基因小食仍在昂贵路径前短路。
+- 自动喂食把当前小食预编译为固定属性目标数组，并用忽略数量的组件快照检测原地修改；目标扫描不再为每只蜜蜂重复解析基因字符串，空槽和非基因小食仍在昂贵路径前短路。
 - 基因采样在小批次保留精确随机语义，大于 128 次事件时使用有界聚合分配；批次复用属性快照和固定数组，适配高等级工厂与高倍加速。
+- 机械蜂箱和各级离心机的普通流体弹出改为整罐快速通道：每槽单次可提供最多 `Integer.MAX_VALUE` mB，复用输出方向与相邻能力缓存，并通过按刻合并、轮转和内容感知退避降低高倍加速下的空转扫描。
 - AE2 外部存储输出快照改为有界数组，共享网络缓存会在服务器停止时清理；保留库存命中缓存上限时跳过实时全网探针并记录真实操作成本用于退避。
 - 工厂进程活跃状态在稳态下先普通读取再执行 CAS；蜂箱弹出判空改为命中首个非空槽即返回。
 
@@ -90,8 +91,8 @@
 - Reused AE2 input-lane, candidate, component and inventory snapshots, with position-based initial scan staggering.
 - Shared one apiary upgrade snapshot per output batch, bounded Wanna Bee loot-table event sampling, and restricted cross-mod Mixins and rollback/accounting behavior to this addon's machines.
 - Myriad Creations now resolves each bee's real comb template from advanced-beehive recipes, maps its real comb block through Productive Bees, and splits aggregated output by the item's actual stack limit.
-- Both gene-plugin recipes now use survival-obtainable gene bottles with real components. The Full Purity recipe no longer displays or requires an unobtainable blank 0% gene.
-- Expanded both in-game guides with exact controls, plugin combinations and recipes while keeping compact item tooltips.
+- Rebuilt both gene-plugin recipes around ProductiveLib's upgrade structure using only ordinary survival materials and a Gene Sampler. They no longer display or require component-bearing squashed-bee material, blank gene bottles, or command-only items.
+- Grouped Raw Ore Smelting, Essence Conversion, Byproduct Destruction, and both gene plugins on the same bilingual guide page while keeping compact item tooltips.
 
 #### Fixed
 
@@ -103,8 +104,9 @@
 #### Performance
 
 - Increased automatic gene feeding from once per 20 ticks to once per 5 ticks while enforcing one run per real game tick and position-based phasing. It can feed up to four bees per second without accelerated ticks multiplying entity creation.
-- Cached parsed treat genes with a component snapshot that ignores count changes but detects in-place component replacement.
+- Compiled the current treat into a fixed trait-target array, with a component snapshot that ignores count changes but detects in-place replacement. Bee scans no longer reparse gene strings per candidate.
 - Kept exact random gene sampling up to 128 events and uses bounded aggregate allocation above that threshold, reusing per-bee profiles and fixed arrays for accelerated factories.
+- Replaced normal fluid ejection on apiaries and all centrifuge tiers with a whole-tank fast path. Each tank can offer up to `Integer.MAX_VALUE` mB per call while output-side and neighbor-capability caches, real-tick coalescing, round-robin fairness, and content-aware backoff cut accelerated idle work.
 - Bounded AE2 output snapshots, cleared shared caches on server stop, skipped covered reserve probes, and reduced redundant steady-state CAS and output scans.
 
 #### Tests

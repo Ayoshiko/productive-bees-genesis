@@ -9,6 +9,7 @@ import cy.jdkdigital.productivebees.util.GeneValue;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -55,6 +56,13 @@ class GeneTreatAutoFeeder {
 	 * 每台蜂箱最多执行一次，并按方块坐标错峰，避免高倍加速和大规模工厂把实体创建集中到同一刻。
 	 */
 	private static final int FEED_INTERVAL_TICKS = 5;
+	private static final GeneAttribute[] RANKABLE_ATTRIBUTES = {
+			GeneAttribute.PRODUCTIVITY,
+			GeneAttribute.ENDURANCE,
+			GeneAttribute.TEMPER,
+			GeneAttribute.BEHAVIOR,
+			GeneAttribute.WEATHER_TOLERANCE
+	};
 
 	/** 错误日志节流（tick 模式，避免持续异常每秒刷屏） */
 	private static final LogThrottle ERROR_THROTTLE = new LogThrottle(100L, 5000L);
@@ -68,10 +76,12 @@ class GeneTreatAutoFeeder {
 	/** 按方块坐标错峰，避免同一批蜂箱在同一游戏刻同时创建临时实体。 */
 	private final long feedPhase;
 
-	/** 输入栈引用未变时复用解析后的基因列表，避免每个窗口重复读取组件。 */
+	/** 输入栈引用未变时复用编译后的目标期望度，避免按蜜蜂重复解析基因值。 */
 	private ItemStack cachedTreatReference;
 	private ItemStack cachedTreatSnapshot = ItemStack.EMPTY;
-	private List<GeneGroup> cachedTreatGenes = List.of();
+	private final int[] cachedTargetScores = new int[GeneAttribute.values().length];
+	private boolean cachedTreatHasType;
+	private boolean cachedTreatHasTargets;
 
 	/**
 	 * 构造自动喂食器
@@ -105,12 +115,11 @@ class GeneTreatAutoFeeder {
 			// 2. 节流：实体创建路径较贵，限制为每 FEED_INTERVAL_TICKS 一次
 			if (!tryBeginFeedWindow()) return false;
 
-			List<GeneGroup> genes = getCachedTreatGenes(treat);
-			if (genes.isEmpty()) return false;
+			if (!prepareCachedTreat(treat)) return false;
 			// PB 对含 TYPE 的小食走 invalid_use 分支，不施加任何基因：整体拒绝，避免白扣
-			if (HoneyTreat.hasBeeType(treat)) return false;
+			if (cachedTreatHasType) return false;
 
-			int targetIndex = selectTarget(genes);
+			int targetIndex = selectTarget();
 			if (targetIndex < 0) return false;
 
 			// 复用实体喂食路径，成功后从小食所在槽消耗 1 个
@@ -145,18 +154,41 @@ class GeneTreatAutoFeeder {
 	}
 
 	/**
-	 * 复用当前输入栈的基因解析结果。
+	 * 把当前输入栈的基因列表预编译为按属性索引的目标期望度。
 	 * <p>
 	 * 数量消耗不会使缓存失效；组件快照用于识别自动化原地替换基因数据的少见情况。
+	 * 同属性出现多次时只保留最高目标，后续扫描每只蜜蜂只做固定五次数组读取，
+	 * 不再重复执行 {@link GeneValue#byName(String)} 或遍历原始 {@link GeneGroup}。
 	 */
-	private List<GeneGroup> getCachedTreatGenes(ItemStack treat) {
+	private boolean prepareCachedTreat(ItemStack treat) {
 		if (treat != cachedTreatReference || !ItemStack.isSameItemSameComponents(treat, cachedTreatSnapshot)) {
 			cachedTreatReference = treat;
 			cachedTreatSnapshot = treat.copyWithCount(1);
+			Arrays.fill(cachedTargetScores, -1);
+			cachedTreatHasType = false;
+			cachedTreatHasTargets = false;
 			List<GeneGroup> genes = HoneyTreat.getGenes(treat);
-			cachedTreatGenes = genes == null || genes.isEmpty() ? List.of() : List.copyOf(genes);
+			if (genes != null) {
+				for (int i = 0; i < genes.size(); i++) {
+					GeneGroup gene = genes.get(i);
+					GeneAttribute attribute = gene.attribute();
+					if (attribute == GeneAttribute.TYPE) {
+						cachedTreatHasType = true;
+						continue;
+					}
+					if (attribute == null || !GeneAttributeRanking.isRankable(attribute)) continue;
+					Integer purity = gene.purity();
+					if (purity == null || purity <= 0) continue;
+					GeneValue target = GeneValue.byName(gene.value());
+					if (target == null) continue;
+					int index = attribute.ordinal();
+					int score = GeneAttributeRanking.desirability(attribute, target);
+					cachedTargetScores[index] = Math.max(cachedTargetScores[index], score);
+					cachedTreatHasTargets = true;
+				}
+			}
 		}
-		return cachedTreatGenes;
+		return cachedTreatHasTargets;
 	}
 
 	/**
@@ -164,21 +196,20 @@ class GeneTreatAutoFeeder {
 	 * <br/>
 	 * 优先级：玩家选中槽 → 缺口最大的蜜蜂。
 	 *
-	 * @param genes 小食携带的基因列表（已确保不含 TYPE）
 	 * @return 目标蜜蜂槽索引；无可提升蜜蜂返回 -1
 	 */
-	private int selectTarget(List<GeneGroup> genes) {
+	private int selectTarget() {
 		BeeSlot[] slots = slotManager.getBeeSlots();
 		int selected = tile.getSelectedBeeSlot();
 		// 1. 玩家选中槽 — 只要该槽蜜蜂确有可提升属性就独占喂食权（尊重玩家显式意图）
-		if (selected >= 0 && selected < slots.length && improvementGap(slots[selected], genes) > 0) {
+		if (selected >= 0 && selected < slots.length && improvementGap(slots[selected]) > 0) {
 			return selected;
 		}
 		// 2. 扫描全部蜜蜂槽，喂「缺口最大」的那只；相同缺口取索引更小者（行为可预测）
 		int bestIndex = -1;
 		int bestGap = 0;
 		for (int i = 0; i < slots.length; i++) {
-			int gap = improvementGap(slots[i], genes);
+			int gap = improvementGap(slots[i]);
 			if (gap > bestGap) {
 				bestGap = gap;
 				bestIndex = i;
@@ -198,26 +229,17 @@ class GeneTreatAutoFeeder {
 	 * purity=0 时命中概率仅 1%，不足以支撑「持续消耗小食」的判定。
 	 *
 	 * @param slot  候选蜜蜂槽
-	 * @param genes 小食基因列表
 	 * @return 可提升缺口总量（0 表示无收益）
 	 */
-	private static int improvementGap(BeeSlot slot, List<GeneGroup> genes) {
+	private int improvementGap(BeeSlot slot) {
 		if (slot == null || slot.isEmpty()) return 0;
 		GeneSampleProfile profile = slot.getGeneSampleProfile();
 		if (profile == null) return 0;
 
 		int totalGap = 0;
-		for (int i = 0; i < genes.size(); i++) {
-			GeneGroup gene = genes.get(i);
-			GeneAttribute attribute = gene.attribute();
-			if (attribute == null || !GeneAttributeRanking.isRankable(attribute)) continue;
-			// 纯度 0 视为无效基因项：施加概率过低，不应据此判定"可提升"
-			Integer purity = gene.purity();
-			if (purity == null || purity <= 0) continue;
-
-			GeneValue target = GeneValue.byName(gene.value());
-			if (target == null) continue;
-			int targetScore = GeneAttributeRanking.desirability(attribute, target);
+		for (GeneAttribute attribute : RANKABLE_ATTRIBUTES) {
+			int targetScore = cachedTargetScores[attribute.ordinal()];
+			if (targetScore < 0) continue;
 			int currentScore = GeneAttributeRanking.desirability(attribute, profile.value(attribute));
 			if (targetScore > currentScore) {
 				totalGap += targetScore - currentScore;

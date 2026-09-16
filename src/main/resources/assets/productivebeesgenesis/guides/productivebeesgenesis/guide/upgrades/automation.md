@@ -8,6 +8,8 @@ item_ids:
   - productivebeesgenesis:raw_ore_smelting_upgrade
   - productivebeesgenesis:essence_conversion_upgrade
   - productivebeesgenesis:byproduct_destruction_upgrade
+  - productivebeesgenesis:gene_type_only_upgrade
+  - productivebeesgenesis:gene_full_purity_upgrade
 ---
 # 升级与自动化详解
 
@@ -31,7 +33,7 @@ item_ids:
 
 “基础”平衡模式会限制同类不同等级混装；“悖论无限”允许更自由的组合；“自定义”由整合包作者决定。切换模式不会删掉已装升级，但可能阻止继续装入不合规则的新升级。
 
-## 本模组的三个功能升级
+## 本模组的五个功能升级
 
 ### 粗矿熔炼
 
@@ -56,6 +58,22 @@ item_ids:
 适合已经不需要蜂蜜或蜜蜡的后期生产线。蜂箱中会清理指定蜂蜜类副产物；离心机中会清理 PB 蜂蜜流体和蜜蜡，其他主要产物继续保留。安装前先确认这些副产物真的没有用途。
 
 <RecipeFor id="productivebeesgenesis:byproduct_destruction_upgrade" fallbackText="当前整合包替换或关闭了副产物销毁升级配方，请在 JEI 中搜索。" />
+
+### 基因种类筛选
+
+<ItemImage id="productivebeesgenesis:gene_type_only_upgrade" scale="2" />
+
+与基因采样器配合时，只产出蜜蜂种类（TYPE）基因。每台蜂箱最多安装一个；没有基因采样器时不会单独产出基因。
+
+<RecipeFor id="productivebeesgenesis:gene_type_only_upgrade" fallbackText="当前整合包替换或关闭了基因种类筛选升级配方，请在 JEI 中搜索。" />
+
+### 基因满纯度
+
+<ItemImage id="productivebeesgenesis:gene_full_purity_upgrade" scale="2" />
+
+让基因采样器产出的每份基因直接达到 100% 纯度。它可以与基因种类筛选同时安装，组合后只产出 100% 纯度的蜜蜂种类基因。
+
+<RecipeFor id="productivebeesgenesis:gene_full_purity_upgrade" fallbackText="当前整合包替换或关闭了基因满纯度升级配方，请在 JEI 中搜索。" />
 
 ## 工厂与 Mekanism 升级
 

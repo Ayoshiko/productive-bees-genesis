@@ -85,9 +85,15 @@ class GeneSamplerTest {
 				"src/main/resources/data/productivebeesgenesis/recipe/gene_type_only_upgrade.json"));
 		String purityRecipe = Files.readString(Path.of(
 				"src/main/resources/data/productivebeesgenesis/recipe/gene_full_purity_upgrade.json"));
-		assertTrue(typeRecipe.contains("\"productivebees:gene_bottle\""));
-		assertTrue(purityRecipe.contains("\"productivebees:gene_bottle\""));
-		assertFalse(purityRecipe.contains("\"productivebees:gene\""),
-				"无组件基因在 JEI 中显示为生存不可得的 0% 占位物");
+		assertTrue(typeRecipe.contains("\"productivelib:upgrade_gene_sampler\""));
+		assertTrue(typeRecipe.contains("\"minecraft:comparator\""));
+		assertTrue(typeRecipe.contains("\"minecraft:writable_book\""));
+		assertTrue(purityRecipe.contains("\"productivelib:upgrade_gene_sampler\""));
+		assertTrue(purityRecipe.contains("\"minecraft:nether_star\""));
+		assertTrue(purityRecipe.contains("\"minecraft:diamond_block\""));
+		assertFalse(typeRecipe.contains("productivebees:gene"),
+				"配方不得依赖带数据组件的基因产物或不可得的空白占位物");
+		assertFalse(purityRecipe.contains("productivebees:gene"),
+				"配方不得依赖带数据组件的基因产物或不可得的空白占位物");
 	}
 }

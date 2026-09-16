@@ -92,7 +92,7 @@ class GeneTreatAutoFeederTest {
 		String source = Files.readString(Path.of(FEEDER));
 		assertTrue(source.contains("purity <= 0"),
 				"纯度 0 的基因几乎不会命中，不应据此判定可提升并持续消耗小食");
-		assertTrue(source.contains("HoneyTreat.hasBeeType(treat)"),
+		assertTrue(source.contains("attribute == GeneAttribute.TYPE"),
 				"含 TYPE 的小食在 PB 原版不会施加基因，必须拒绝避免白扣");
 	}
 
@@ -112,11 +112,15 @@ class GeneTreatAutoFeederTest {
 	@Test
 	void feederCachesGenesAndInvalidatesOnComponentChanges() throws Exception {
 		String source = Files.readString(Path.of(FEEDER));
-		assertTrue(source.contains("getCachedTreatGenes(treat)"));
+		assertTrue(source.contains("prepareCachedTreat(treat)"));
 		assertTrue(source.contains("ItemStack.isSameItemSameComponents(treat, cachedTreatSnapshot)"),
 				"同一栈被自动化原地改写组件后必须重新解析基因");
 		assertTrue(source.contains("cachedTreatSnapshot = treat.copyWithCount(1)"),
 				"缓存快照不应因正常扣减数量而失效");
+		assertTrue(source.contains("cachedTargetScores[index]"),
+				"基因值应在输入变化时预编译，不能对每只蜜蜂重复解析字符串");
+		assertTrue(source.contains("for (GeneAttribute attribute : RANKABLE_ATTRIBUTES)"),
+				"目标扫描应为固定属性数组读取，成本不得随原始基因列表重复放大");
 	}
 
 	@Test
@@ -124,7 +128,7 @@ class GeneTreatAutoFeederTest {
 		String source = Files.readString(Path.of(FEEDER));
 		assertTrue(source.contains("tile.getSelectedBeeSlot()"),
 				"玩家点选蜜蜂格子后必须只喂那一只");
-		assertTrue(source.contains("improvementGap(slots[selected], genes) > 0"));
+		assertTrue(source.contains("improvementGap(slots[selected]) > 0"));
 		assertTrue(source.contains("gap > bestGap"),
 				"未选中时应喂属性缺口最大的蜜蜂");
 	}

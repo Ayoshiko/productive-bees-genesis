@@ -10,8 +10,6 @@ item_ids:
   - productivelib:upgrade_gene_sampler
   - productivelib:upgrade_block
   - productivelib:upgrade_stability
-  - productivebeesgenesis:gene_type_only_upgrade
-  - productivebeesgenesis:gene_full_purity_upgrade
 ---
 # PB 升级窗口详解
 
@@ -118,9 +116,7 @@ item_ids:
 
 两种基因插件都要配合**基因采样器**才有效，也可以同时安装：组合后只产出 100% 纯度的蜜蜂种类基因。插件各自最多安装 1 个，不占用基因采样器的数量上限。
 
-<RecipeFor id="productivebeesgenesis:gene_type_only_upgrade" fallbackText="当前整合包替换或关闭了基因种类筛选升级配方，请在 JEI 中搜索。" />
-
-<RecipeFor id="productivebeesgenesis:gene_full_purity_upgrade" fallbackText="当前整合包替换或关闭了基因满纯度升级配方，请在 JEI 中搜索。" />
+两个插件的用途、组合方式和配方与本模组另外三个功能升级集中在[升级与自动化详解](automation.md)。
 
 **只有离心机能装的**
 
@@ -180,5 +176,5 @@ item_ids:
 
 - 蜂箱侧的完整界面说明：[机械蜂箱](../machines/apiary.md)
 - 离心机侧的完整界面说明：[通用机械离心机](../machines/centrifuge.md)
-- 三个功能升级的详细用途（粗矿熔炼、精华转化、副产物销毁）：[升级与自动化详解](automation.md)
+- 五个功能升级的详细用途与配方：[升级与自动化详解](automation.md)
 - 上限与平衡模式的配置入口：[配置](../configuration.md)
