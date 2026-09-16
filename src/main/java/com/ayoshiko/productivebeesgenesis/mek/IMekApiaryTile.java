@@ -3,8 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mek;
 /**
 	 * MEK 通用机械蜂箱统一标记接口。
 	 * <br/>
-	 * 参照 {@link IMekCentrifugeTile} 的设计模式，供弹出器快速通道 Mixin
-	 * 通过 instanceof 统一识别所有蜂箱类型，
+	 * 参照 {@link IMekCentrifugeTile} 的设计模式，供本模组专用弹出组件
+	 * 统一识别所有蜂箱类型，
 	 * 避免硬依赖工厂版子类引发 ClassNotFoundException。
 	 * <p>
 	 * 覆盖范围（通过基类 {@code TileEntityMekApiary} 实现此接口自动覆盖所有子类）：
@@ -34,7 +34,7 @@ public interface IMekApiaryTile {
 	long productivebeesgenesis$outputContentsVersion();
 
 	/**
-	 * 返回输出槽是否已满，供 Ejector Mixin 在输出槽满时取消跳过。
+	 * 返回输出槽是否已满，供机器调度在输出槽满时立即重试。
 	 * <br/>
 	 * 当所有物品输出槽均无剩余空间时返回 true；此时若继续跳过 outputItems，可能导致产物积压、机器停机，
 	 * 因此 Mixin 会立即重置跳过计数器并尝试输出。
@@ -42,10 +42,10 @@ public interface IMekApiaryTile {
 	boolean productivebeesgenesis$outputSlotsFull();
 
 	/**
-	 * 返回所有输出槽的物品总数，供 Ejector Mixin 替代 O(n) 遍历计数。
+	 * 返回所有输出槽的物品总数，供专用 Ejector 判断输出状态。
 	 * <br/>
 	 * 蜂箱输出槽数量有限（9-51），直接遍历计数足够高效。
-	 * 用于 Mixin 比较调用 outputItems 前后的物品总量，判断是否成功弹出。
+	 * 用于快速路径判断是否需要扫描输出目标。
 	 */
 	default long productivebeesgenesis$outputItemCount() {
 		return 0L;

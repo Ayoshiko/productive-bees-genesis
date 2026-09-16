@@ -106,12 +106,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.DoubleValue produceOutputChance;
 	public final ModConfigSpec.IntValue myriadProduceThrottlePerTick;
 
-	// ========== 高级蜂箱性能优化配置 ==========
-	// 注意:isSim() / hasNectar() 缓存是默认开启且不可关闭的内部优化,
-	// 不在配置界面暴露,避免玩家误操作导致性能回退。
-	public final ModConfigSpec.IntValue advancedBeehiveSimulateCooldown;
-	// 高级蜂箱 NBT 保存间隔(tick),降低高倍加速下的 CompoundTag 序列化开销
-	public final ModConfigSpec.IntValue advancedBeehiveSaveInterval;
+	// ========== 高倍加速批处理配置 ==========
 	public final ModConfigSpec.IntValue maxBatchTicksPerTick;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段(基础参数,堆叠/流体倍率已迁移至子段)==========
@@ -370,17 +365,7 @@ public final class ServerConfig {
 				.defineInRange("myriadProduceThrottlePerTick", 0, 0, 20);
 		builder.pop(); // bee_produce
 
-		builder.comment("高级蜂箱性能优化（缓解大量模拟蜂箱导致的CPU压力）").push("advanced_beehive");
-
-		advancedBeehiveSimulateCooldown = builder
-				.comment("模拟行为查询冷却(tick)", "0=原版，1-5降低高倍加速CPU开销")
-				.translation("productivebeesgenesis.configuration.advanced_beehive.simulateCooldown")
-				.defineInRange("simulateCooldown", 0, 0, 20);
-
-		advancedBeehiveSaveInterval = builder
-				.comment("NBT保存间隔(tick)", "默认20，值越大性能越好但宕机风险增加")
-				.translation("productivebeesgenesis.configuration.advanced_beehive.saveInterval")
-				.defineInRange("saveInterval", 20, 1, 200);
+		builder.comment("高倍加速批处理预算").push("advanced_beehive");
 
 		maxBatchTicksPerTick = builder
 				.comment("批量加速每个真实游戏刻的虚拟 tick 上限",

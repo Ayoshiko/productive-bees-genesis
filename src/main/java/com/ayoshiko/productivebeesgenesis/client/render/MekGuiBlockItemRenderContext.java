@@ -8,20 +8,25 @@ package com.ayoshiko.productivebeesgenesis.client.render;
  */
 public final class MekGuiBlockItemRenderContext {
 
-	private static final ThreadLocal<Boolean> JEI_DRAG_RENDER = ThreadLocal.withInitial(() -> false);
+	private static final ThreadLocal<Integer> JEI_DRAG_DEPTH = ThreadLocal.withInitial(() -> 0);
 
 	private MekGuiBlockItemRenderContext() {
 	}
 
 	public static void beginJeiDragRender() {
-		JEI_DRAG_RENDER.set(true);
+		JEI_DRAG_DEPTH.set(JEI_DRAG_DEPTH.get() + 1);
 	}
 
 	public static void endJeiDragRender() {
-		JEI_DRAG_RENDER.remove();
+		int depth = JEI_DRAG_DEPTH.get() - 1;
+		if (depth <= 0) {
+			JEI_DRAG_DEPTH.remove();
+		} else {
+			JEI_DRAG_DEPTH.set(depth);
+		}
 	}
 
 	public static boolean isJeiDragRender() {
-		return JEI_DRAG_RENDER.get();
+		return JEI_DRAG_DEPTH.get() > 0;
 	}
 }

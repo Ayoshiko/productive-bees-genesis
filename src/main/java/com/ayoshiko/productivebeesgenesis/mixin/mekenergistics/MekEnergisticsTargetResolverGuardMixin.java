@@ -35,7 +35,7 @@ public abstract class MekEnergisticsTargetResolverGuardMixin {
 	 * Intercepts the static {@code resolve(BlockState)} entry: our machines are
 	 * never convertible, so return null to stop every provider path.
 	 */
-	@Inject(method = "resolve", at = @At("HEAD"), cancellable = true, remap = false)
+	@Inject(method = "resolve", at = @At("HEAD"), cancellable = true, remap = false, require = 0)
 	private static void productivebeesgenesis$blockInstallerConversion(BlockState state,
 			CallbackInfoReturnable<Object> cir) {
 		if (state != null && MekEnergisticsBlockGuard.isProtectedMachine(state.getBlock())) {

@@ -5,15 +5,9 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeFactoryType;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.api.Upgrade;
 import mekanism.api.security.IItemSecurityUtils;
 import mekanism.api.text.EnumColor;
-import mekanism.api.text.TextComponentUtil;
 import mekanism.common.MekanismLang;
 import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
@@ -33,7 +27,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -76,8 +69,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			// 避免覆盖离心机专用侧面配置（MEK_CENTRIFUGE_SIDE_CONFIG包含流体右侧输出）
 		}
 		// EME工厂使用EMExtraAttributeFactoryType — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
-		else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()
-				&& Attribute.has(block, EMExtraAttributeFactoryType.class)) {
+		else if (OptionalFactoryItemSupport.hasEmeFactoryType(block)) {
 			properties.component(MekanismDataComponents.SORTING, false);
 			// EJECTOR和SIDE_CONFIG已在machineItemProperties中设置，此处不再覆盖
 		}
@@ -117,26 +109,9 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	@NotNull
 	@Override
 	public Component getName(@NotNull ItemStack stack) {
-		// 检查ME等级（Mekanism Extras）
-		if (MekCompatHooks.isMekanismExtrasLoaded()) {
-			ExtraAttributeTier<ExtraFactoryTier> meTier = Attribute.get(getBlock(), ExtraAttributeTier.class);
-			if (meTier != null) {
-				TextColor color = meTier.tier().getAdvanceTier().getColor();
-				return TextComponentUtil.build(color, super.getName(stack));
-			}
-		}
-
-		// 检查EME等级（Evolved Mekanism Extras）
-		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-			EMExtraAttributeTier<EMExtraFactoryTier> emeTier = Attribute.get(getBlock(), EMExtraAttributeTier.class);
-			if (emeTier != null) {
-				TextColor color = TextColor.fromRgb(emeTier.tier().getEMExtraTier().getRgbSupplier().getAsInt());
-				return TextComponentUtil.build(color, super.getName(stack));
-			}
-		}
-
-		// 原版/EM等级使用默认行为（通过getTier()获取颜色）
-		return super.getName(stack);
+		Component baseName = super.getName(stack);
+		Component optionalName = OptionalFactoryItemSupport.colorizeName(getBlock(), baseName);
+		return optionalName == null ? baseName : optionalName;
 	}
 
 	/**
@@ -347,12 +322,8 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 						EnumColor.INDIGO, EnumColor.GRAY, factoryType.getFactoryType()));
 			}
 			// EME工厂 — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
-			else if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-				EMExtraAttributeFactoryType emeFactoryType = Attribute.get(getBlock(), EMExtraAttributeFactoryType.class);
-				if (emeFactoryType != null) {
-					tooltip.add(MekanismLang.FACTORY_TYPE.translateColored(
-							EnumColor.INDIGO, EnumColor.GRAY, emeFactoryType.getFactoryType()));
-				}
+			else {
+				OptionalFactoryItemSupport.appendEmeFactoryType(getBlock(), tooltip);
 			}
 			// 储能与流体显示由 super.addTypeDetails 内部统一处理（MEK原版行为）
 			super.addTypeDetails(stack, context, tooltip, flag);

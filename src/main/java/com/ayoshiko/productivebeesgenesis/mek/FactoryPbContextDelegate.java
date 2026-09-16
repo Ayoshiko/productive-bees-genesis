@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 	 * </ul>
 	 * <p>
 	 * 线程安全：方块实体在服务端单线程执行，字段无需同步锁；
-	 * outputContentsVersion 使用 AtomicLong 保证原子自增（可能被 Ejector Mixin 跨线程读取）；
+	 * outputContentsVersion 使用 AtomicLong 保证原子自增（可能被外部能力线程读取）；
 	 * sortingMarkedThisTick 为 volatile boolean，单线程 check-then-set 安全。
 	 */
 public class FactoryPbContextDelegate {
@@ -46,7 +46,7 @@ public class FactoryPbContextDelegate {
 	/** 每进程 PB 激活状态跟踪（CAS 状态守卫防重复计数；0=false/1=true） */
 	private final java.util.concurrent.atomic.AtomicIntegerArray pbActiveStates;
 
-	/** 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否跳过 outputItems） */
+	/** 输出槽内容版本号（输出槽内容变更时递增，供本模组专用 Ejector 解除退避） */
 	private final AtomicLong outputContentsVersion = new AtomicLong(0L);
 
 	/** sortInventory 去抖标志（同 tick 内只标记一次 sortingNeeded，避免 AE2 高频拉取触发全量排序） */
@@ -133,7 +133,7 @@ public class FactoryPbContextDelegate {
 	 * 在 addSlots 中为每个进程的输出槽创建 listener。封装公共逻辑：
 	 * <ol>
 	 *   <li>通知 {@link OutputSlotFlagManager} 槽位变更（批量模式下只标记 dirty）</li>
-	 *   <li>递增 {@link #outputContentsVersion}（通知 Ejector Mixin 需要重新尝试输出）</li>
+	 *   <li>递增 {@link #outputContentsVersion}（通知专用 Ejector 需要重新尝试输出）</li>
 	 *   <li>去抖触发排序（同 tick 内只触发一次，避免 AE2 高频拉取触发全量排序）</li>
 	 *   <li>独立触发 unpause（每进程独立，不被 sorting 去抖抑制）</li>
 	 * </ol>
@@ -186,7 +186,7 @@ public class FactoryPbContextDelegate {
 		return outputSlotFlagManager.outputSlotsFull(process);
 	}
 
-	/** 所有输出槽的物品总数（O(1) 读取，供 Ejector Mixin 替代 countOutputItems 遍历） */
+	/** 所有输出槽的物品总数（O(1) 读取，供专用 Ejector 避免 countOutputItems 遍历） */
 	public long outputItemCount() {
 		return outputSlotFlagManager.outputItemCount();
 	}
@@ -233,7 +233,7 @@ public class FactoryPbContextDelegate {
 		}
 	}
 
-	/** 输出槽内容版本号（供 Ejector Mixin 判断是否跳过 outputItems） */
+	/** 输出槽内容版本号（供专用 Ejector 判断是否解除退避） */
 	public long outputContentsVersion() {
 		return outputContentsVersion.get();
 	}

@@ -1,22 +1,21 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import mekanism.common.tier.FactoryTier;
 
 /**
 	 * 工厂版MEK离心机GUI布局参数辅助类
 	 * <br/>
-	 * 统一管理原版4等级、EM高等级、ME 4等级的布局参数。
+	 * 统一管理原版4等级与 EM 高等级的布局参数。
 	 * 布局公式来源：
 	 * <ul>
 	 *   <li>原版4等级：Mekanism GuiFactory / FactoryContainer</li>
 	 *   <li>EM高等级：EvolvedMekanism GuiFactoryMixin / FactoryContainerMixin</li>
-	 *   <li>ME 4等级：MekanismExtras GuiExtraFactory / ExtraFactoryContainer</li>
 	 * </ul>
 	 * <p>
-	 * <b>EME 隔离</b>：EME 4等级的布局参数已移至
+	 * <b>可选依赖隔离</b>：ME/EME 的布局参数分别位于
+	 * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEFactoryLayoutHelper} 与
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEFactoryLayoutHelper}，
-	 * 避免基础类方法签名直接引用 EME 类，降低未安装 EME 时的类加载风险。
+	 * 避免基础类方法签名直接引用可选模组类型。
 	 */
 public final class FactoryLayoutHelper {
 
@@ -234,44 +233,6 @@ public final class FactoryLayoutHelper {
 			return getEnergyTabY(tier) - getPowerBarY(tier) - 2;
 		}
 		return 73;
-	}
-
-	// ===== ExtraFactoryTier 重载（ME 4等级） =====
-
-	/** ME等级imageWidth增量：公式 (36*(ordinal+2)) + (2*ordinal) */
-	public static int getImageWidthAddition(ExtraFactoryTier tier) {
-		int index = tier.ordinal();
-		return (36 * (index + 2)) + (2 * index);
-	}
-
-	/** ME等级inventoryLabelX：公式 (22*(ordinal+2)) - (3*ordinal) */
-	public static int getInventoryLabelX(ExtraFactoryTier tier) {
-		int index = tier.ordinal();
-		return (22 * (index + 2)) - (3 * index);
-	}
-
-	/** ME等级baseX */
-	public static int getBaseX(ExtraFactoryTier tier) {
-		return 27;
-	}
-
-	/** ME等级baseXMult */
-	public static int getBaseXMult(ExtraFactoryTier tier) {
-		return 19;
-	}
-
-	/**
-	 * ME等级流体槽X坐标
-	 * <br/>
-	 * 流体槽在左侧，与能源槽(X=7)对齐。
-	 */
-	public static int getFluidTankX(ExtraFactoryTier tier) {
-		return 7;
-	}
-
-	/** ME等级流体槽Y坐标 — 比第三排输出槽底边上移1px，补偿Gauge边框视觉偏差 */
-	public static int getFluidTankY(ExtraFactoryTier tier) {
-		return TERTIARY_OUTPUT_Y + SLOT_HEIGHT - FLUID_TANK_HEIGHT - 1;
 	}
 
 	// ===== 非工厂版离心机（单进程） =====

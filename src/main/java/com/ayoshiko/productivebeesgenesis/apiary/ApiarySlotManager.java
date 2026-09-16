@@ -376,7 +376,7 @@ public class ApiarySlotManager {
 	}
 
 	/**
-	 * 统计所有输出槽的物品总数 — 供 Ejector Mixin 比较弹出前后物品量
+	 * 统计所有输出槽的物品总数 — 供本模组专用 Ejector 判断输出状态
 	 * <br/>
 	 * 用于弹出通道判断是否成功弹出。
 	 *

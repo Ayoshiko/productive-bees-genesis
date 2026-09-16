@@ -36,7 +36,7 @@ public abstract class MekEnergisticsInstallerGuardMixin {
 	 * Intercepts {@code resolveOriginalMachine(BlockState)}: our machines are
 	 * never convertible, so return null to stop the installer.
 	 */
-	@Inject(method = "resolveOriginalMachine", at = @At("HEAD"), cancellable = true, remap = false)
+	@Inject(method = "resolveOriginalMachine", at = @At("HEAD"), cancellable = true, remap = false, require = 0)
 	private void productivebeesgenesis$blockCentrifugeConversion(BlockState state,
 			CallbackInfoReturnable<Object> cir) {
 		if (state != null && MekEnergisticsBlockGuard.isProtectedMachine(state.getBlock())) {

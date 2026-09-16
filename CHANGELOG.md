@@ -58,6 +58,7 @@
 - **AE2 白名单与标签过滤组合**：标签表达式先筛选候选；存在标记条目时，白名单/黑名单再进行第二阶段过滤；没有标记条目时，纯标签过滤不再被空白名单错误拦截。全局无限拉取仍不能绕过准入规则。
 - 修复 AE2 安装探测回退仍检查已移除的 `appeng.api.AEApi`，导致部分加载阶段把已安装的 AE2 静默误判为缺失。
 - 修复外部自动化可把同种物品错误塞入输出槽并卡住 AE2 合成；只有本模组槽位在短时凭据窗口内接受刚提取物品的等量原样退回。
+- **Mixin 作用域隔离**：移除针对 Mekanism 全局 `TileComponentEjector` 的 Mixin 与私有字段 Accessor，改为只由本模组蜂箱和离心机实例化专用弹出组件；Mekanism 原版及其它附属机器的弹出延迟、物品/流体路径与 AE2 合成发配不再受本模组影响。逻辑运输管道改走 Mekanism 公开 `TransitRequest` 路由协议，继续保留颜色与路由语义。同步移除作用于所有 PB 蜂箱的 `BeeData` 采蜜缓存、`isSim()` 缓存、模拟扫描节流和物品栏存盘去抖，避免改变未安装本模组升级的 PB 原版蜂箱行为。
 - 修复多个机械蜂箱/离心机合成升级时，后续输入机器的物品栏、蜜蜂槽或 PB 升级数据可能被首个输入的 NBT 覆盖。
 - 修复时间加速或异常渲染路径下 Mekanism 界面深度状态泄漏、副产物过滤修改不可变列表、第三方 Redirect 冲突，以及精华转换误采用 Industrial Foregoing 的稻草配方。
 
@@ -73,7 +74,7 @@
 ### 测试
 
 - 补充刷怪蛋完整属性序列化、旧 NBT 迁移、自动喂食节流与缓存、基因插件配方、真实蜜脾模板和双语教程索引回归测试。
-- 保留并扩充 AE2 白名单/标签组合、网络共享与成本协调、流体批处理、槽位回滚作用域、Mixin 边界、机器合成数据保留、蜂箱批次快照和 Wanna Bee 抽样测试。
+- 保留并扩充 AE2 白名单/标签组合、网络共享与成本协调、流体批处理、槽位回滚作用域、Mixin 边界、专用弹出组件安装范围、机器合成数据保留、蜂箱批次快照和 Wanna Bee 抽样测试。
 
 ### English
 
@@ -99,6 +100,7 @@
 - **Missing spawn-egg bee genes**: direct insertion now initializes a temporary PB bee's species defaults and serializes it through PB's cage capture path without adding the entity to the world. Apiary tooltips and cages now retain the complete gene attachment.
 - Legacy simplified bee data is normalized on either cage-extraction path, so old apiaries recover gene tooltips without releasing and recapturing the bee.
 - Fixed AE2 whitelist plus tag filtering, removed-class fallback detection, unauthorized output-slot reinsertion, and multi-machine upgrade recipes losing later inputs' inventories or addon data.
+- Removed the global Mekanism `TileComponentEjector` Mixin and private-field accessor. Fast item/fluid ejection now exists only on a dedicated component instantiated by this addon's apiaries and centrifuges, leaving Mekanism and third-party addon machines, their eject delays, and AE2 crafting dispatch untouched. Logistical transporters use Mekanism's public `TransitRequest` routing protocol. Global PB hive Mixins for `BeeData` nectar caching, `isSim()` caching, simulation-query throttling, and inventory-save debouncing were also removed so unupgraded PB hives retain upstream behavior.
 - Fixed GUI depth-state leaks, immutable-list mutation during byproduct filtering, third-party redirect conflicts, and the unintended Industrial Foregoing straw recipe being indexed for essence conversion.
 
 #### Performance
@@ -111,7 +113,7 @@
 
 #### Tests
 
-- Added regression coverage for full spawn-egg attribute serialization, legacy data normalization, feed throttling and cache invalidation, gene-plugin recipes, real comb templates, bilingual guide indexes, AE2 coordination and existing machine safety contracts.
+- Added regression coverage for full spawn-egg attribute serialization, legacy data normalization, feed throttling and cache invalidation, gene-plugin recipes, real comb templates, bilingual guide indexes, AE2 coordination, dedicated ejector installation boundaries, and existing machine safety contracts.
 
 ## [1.0.8-beta.1] - 2026-09-12
 

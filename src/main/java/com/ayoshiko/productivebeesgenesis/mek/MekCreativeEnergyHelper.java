@@ -1,8 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.jerry.mekextras.api.mixin.IMixinMachineEnergyContainer;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECreativeEnergySupport;
 import mekanism.api.Upgrade;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
 	 * CREATIVE升级能量容器辅助类
@@ -14,13 +17,13 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 	 *   <li>{@code setEnergy(Long.MAX_VALUE)} — 设置当前能量为满</li>
 	 * </ul>
 	 * <p>
-	 * <b>类加载安全</b>：本类直接引用{@link IMixinMachineEnergyContainer}（MEKExtras的API类），
-	 * 仅在MEKExtras加载时由{@link AbstractMekCentrifugeFactory#recalculateUpgrades}委托调用。
-	 * 未安装MEKExtras时本类不会被加载。
+	 * <b>类加载安全</b>：本公共门面不在字段或方法签名中引用 MEKExtras 类型，
+	 * 只有加载守卫通过后才进入隔离兼容类。
 	 *
 	 * @see com.jerry.mekextras.mixin.MixinMachineEnergyContainer#mekanism_Extras$extraRecalculateUpgrades
 	 */
 public final class MekCreativeEnergyHelper {
+	private static final AtomicBoolean FAILURE_LOGGED = new AtomicBoolean();
 
 	private MekCreativeEnergyHelper() {}
 
@@ -40,11 +43,11 @@ public final class MekCreativeEnergyHelper {
 	 * @param energyContainer 机器能量容器（必须实现IMixinMachineEnergyContainer）
 	 */
 	public static void applyCreativeMaxEnergy(MachineEnergyContainer<?> energyContainer) {
-		if (energyContainer instanceof IMixinMachineEnergyContainer mixin) {
-			mixin.mekanism_Extras$extraUpdateMaxEnergy();
-			if (energyContainer.getMaxEnergy() == Long.MAX_VALUE) {
-				energyContainer.setEnergy(Long.MAX_VALUE);
-			}
+		if (!MekCompatHooks.isMekanismExtrasLoaded()) return;
+		try {
+			MECreativeEnergySupport.applyCreativeMaxEnergy(energyContainer);
+		} catch (LinkageError | RuntimeException error) {
+			logFailure(error);
 		}
 	}
 
@@ -56,13 +59,17 @@ public final class MekCreativeEnergyHelper {
 	 */
 	public static void recalculateCreativeEnergy(MachineEnergyContainer<?> energyContainer,
 			Upgrade upgrade, boolean creativeInstalled) {
-		if (!(energyContainer instanceof IMixinMachineEnergyContainer mixin)) {
-			return;
+		if (!MekCompatHooks.isMekanismExtrasLoaded()) return;
+		try {
+			MECreativeEnergySupport.recalculateCreativeEnergy(energyContainer, upgrade, creativeInstalled);
+		} catch (LinkageError | RuntimeException error) {
+			logFailure(error);
 		}
-		if (creativeInstalled) {
-			applyCreativeMaxEnergy(energyContainer);
-		} else if (MekUpgradeSupport.isCreativeUpgrade(upgrade)) {
-			mixin.mekanism_Extras$extraRecalculateUpgrades(upgrade);
+	}
+
+	private static void logFailure(Throwable error) {
+		if (FAILURE_LOGGED.compareAndSet(false, true)) {
+			ProductiveBeesGenesis.LOGGER.warn("Mekanism Extras 创造升级兼容层不可用，已安全降级", error);
 		}
 	}
 }

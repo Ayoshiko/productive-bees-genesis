@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeSlotContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEFactoryLayoutHelper;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
@@ -87,7 +87,7 @@ public class ExtraMekCentrifugeFactoryContainer extends MekanismTileContainer<Ti
 	 */
 	@Override
 	protected int getInventoryXOffset() {
-		int imageWidthAddition = FactoryLayoutHelper.getImageWidthAddition(tile.tier);
+		int imageWidthAddition = MEFactoryLayoutHelper.getImageWidthAddition(tile.tier);
 		if (imageWidthAddition > 0) {
 			// ME等级：动态居中公式
 			int imageWidth = 176 + imageWidthAddition;

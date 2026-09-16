@@ -443,7 +443,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		setDirectContainerOutputEnabled(!directContainerOutputEnabled);
 	}
 
-	/** {@link IMekApiaryTile} 实现 — 弹出器 Mixin 与产出路径共用同一开关 */
+	/** {@link IMekApiaryTile} 实现 — 专用弹出组件与产出路径共用同一开关 */
 	@Override
 	public boolean productivebeesgenesis$isDirectContainerOutputEnabled() {
 		return directContainerOutputEnabled;
@@ -453,7 +453,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 * 产物直通：把一件产物先模拟再直接放入已配置输出面的相邻容器。
 	 * <br/>
 	 * 委托 {@link PbRecipeContext#productivebeesgenesis$pushGeneratedItemToNeighbors}
-	 * （经弹出器 Mixin 实现的 {@code IFastEjectHost}），与离心机 {@code PbRecipeFlusher}
+	 * （经专用弹出器实现的 {@code IFastEjectHost}），与离心机 {@code PbRecipeFlusher}
 	 * 走完全相同的通道：天然复用输出面解析与相邻容器能力缓存，逻辑运输管道自动跳过。
 	 * per-tile 开关关闭时直接返回 0，不触碰相邻容器。
 	 *
@@ -879,7 +879,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	}
 	@Override public boolean productivebeesgenesis$hasActiveProcess() { return ae2HostAdapter.hasActiveProcess(); }
 
-	// ===== IMekApiaryTile — 供 Ejector Mixin 读取蜂箱输出槽状态 =====
+	// ===== IMekApiaryTile — 供本模组专用 Ejector 读取蜂箱输出槽状态 =====
 
 	@Override public long productivebeesgenesis$outputContentsVersion() { return outputBuffer.getOutputVersion(); }
 

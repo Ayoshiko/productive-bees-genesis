@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import java.util.List;
@@ -191,12 +191,13 @@ final class MekCentrifugeIoConfigHelper {
 		//   直接调用 config.addSlotInfo 绕过 createInfo 的 List 强转(因为 MultiFluidTankHolder 不是 List)
 		// SINGLE 模式：传入单个槽,通过 setupOutputConfig 走原版路径
 		setupFluidOutputConfig(configComponent, fluidOutputHolder, primaryFluidOutputTank);
-		// 重写ejectorComponent添加FLUID弹出（父类TileEntityFactory只配置了ITEM）
-		// 使用自定义流体弹出速率，并把物品弹出 tickDelay 设为 1 tick
+		// 重写 ejectorComponent 添加 FLUID 弹出（父类 TileEntityFactory 只配置 ITEM）。
+		// 快速路径只存在于本模组专用实例，不注入 Mekanism 全局弹出器类。
 		// 注：chemicalAutoEjectRate 在此作为物品弹出速率参数，与 Mekanism 原版 TileEntityFactory 一致
-		TileComponentEjector ejector = new TileComponentEjector(factory, MekanismConfig.general.chemicalAutoEjectRate,
-			fluidEjectRate);
-		((TileEntityEjectorAccessor) ejector).productivebeesgenesis$setTickDelay(1);
+		TileComponentEjector previous = factory instanceof ISideConfiguration sideConfiguration
+				? sideConfiguration.getEjector() : null;
+		TileComponentEjector ejector = GenesisTileComponentEjector.replace(factory, previous,
+				MekanismConfig.general.chemicalAutoEjectRate, fluidEjectRate);
 		ejector.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
 		return ejector;
 	}

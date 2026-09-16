@@ -308,7 +308,7 @@ public interface PbRecipeContext {
 	 * <p>
 	 * 默认实现从 Mekanism 的侧面配置接口取弹出器组件，委托给
 	 * {@link com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost}
-	 * （由弹出器的 Mixin 实现，天然持有输出面与相邻容器能力缓存）。
+	 * （由本模组专用弹出器实现，天然持有输出面与相邻容器能力缓存）。
 	 * 目标塞不下的部分回落输出槽，因此永不丢物；机器自动弹出关闭或未启用直通时返回 0。
 	 *
 	 * @param stack 待推送产物（不会被修改）

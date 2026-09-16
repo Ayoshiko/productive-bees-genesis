@@ -7,12 +7,12 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInstallHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityElectricMachineAccessor;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import mekanism.api.IContentsListener;
@@ -34,7 +34,6 @@ import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
 import mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor;
-import mekanism.common.tile.component.TileComponentEjector;
 import mekanism.common.tile.prefab.TileEntityElectricMachine;
 import mekanism.common.upgrade.IUpgradeData;
 import net.minecraft.core.BlockPos;
@@ -134,9 +133,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 				accessor().productivebeesgenesis$getEnergySlot(), false);
 		configComponent.setupInputConfig(TransmissionType.ENERGY, accessor().productivebeesgenesis$getEnergyContainer());
 		configComponent.setupOutputConfig(TransmissionType.FLUID, slotManager.getFluidOutputTank(), RelativeSide.RIGHT);
-		ejectorComponent = new TileComponentEjector(this, MekanismConfig.general.chemicalAutoEjectRate,
-				() -> Integer.MAX_VALUE);
-		((TileEntityEjectorAccessor) ejectorComponent).productivebeesgenesis$setTickDelay(1);
+		ejectorComponent = GenesisTileComponentEjector.replace(this, ejectorComponent,
+				MekanismConfig.general.chemicalAutoEjectRate, () -> Integer.MAX_VALUE);
 		ejectorComponent.setOutputData(configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
 	}
 
@@ -331,7 +329,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		return tickHandler.onUpdateServer();
 	}
 
-	// ===== IMekCentrifugeTile 接口实现（委托 slotManager；Ejector Mixin 读取） =====
+	// ===== IMekCentrifugeTile 接口实现（委托 slotManager；专用 Ejector 读取） =====
 
 	@Override
 	public boolean productivebeesgenesis$hasOutputItems() { return slotManager.hasOutputItems(); }

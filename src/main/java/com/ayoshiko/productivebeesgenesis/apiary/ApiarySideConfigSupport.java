@@ -1,11 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityEjectorAccessor;
+import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import mekanism.api.RelativeSide;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.config.MekanismConfig;
-import mekanism.common.tile.component.TileComponentEjector;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,7 +24,7 @@ final class ApiarySideConfigSupport {
 
 	/**
 	 * 设置蜂箱侧面配置和弹出器 — 覆盖父类单输入/输出配置；
-	 * 蜂笼输出槽不参与弹出；tickDelay=1 由 Mixin 动态调整
+	 * 蜂笼输出槽不参与弹出；快速路径仅由本模组专用弹出器承载
 	 */
 	static void setupSideConfig(TileEntityMekApiary tile) {
 		// 物品 IO 配置：蜂笼输入槽作为输入，仅产物输出槽作为输出（蜂笼输出槽不参与 Ejector 弹出）
@@ -41,11 +40,9 @@ final class ApiarySideConfigSupport {
 		// 流体输出配置（右侧）
 		tile.configComponent.setupOutputConfig(TransmissionType.FLUID,
 				tile.slotManager().getFluidTank(), RelativeSide.RIGHT);
-		// 创建弹出器组件，设置 tickDelay 为 1（实际延迟由 Mixin 动态调整）
-		// 流体快速通道会整罐弹出；若 Mixin 因第三方冲突未生效，原版回退也保持单次最大量。
-		tile.ejectorComponent = new TileComponentEjector(tile,
+		// 专用组件不修改 Mekanism 全局弹出器，原版及其它附属机器保持原行为。
+		tile.ejectorComponent = GenesisTileComponentEjector.replace(tile, tile.ejectorComponent,
 				MekanismConfig.general.chemicalAutoEjectRate, () -> Integer.MAX_VALUE);
-		((TileEntityEjectorAccessor) tile.ejectorComponent).productivebeesgenesis$setTickDelay(1);
 		// 同时弹出物品和流体
 		tile.ejectorComponent.setOutputData(tile.configComponent, TransmissionType.ITEM, TransmissionType.FLUID);
 		// 直连输出路由：侧面配置变化时立即标记直连检测，重新扫描目标离心机

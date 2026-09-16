@@ -1,16 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
-import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
-import mekanism.api.text.TextComponentUtil;
+import com.ayoshiko.productivebeesgenesis.mek.OptionalFactoryItemSupport;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -67,8 +61,8 @@ public class ItemBlockMekApiaryFactory extends ItemBlockMekApiary {
 	 * <p>
 	 * 实现与离心机 {@link com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge#getName} 一致：
 	 * <ul>
-	 *   <li>ME 等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）：通过 {@link ExtraAttributeTier} 获取颜色</li>
-	 *   <li>EME 等级（ABSOLUTE_OVERCLOCKED 等）：通过 {@link EMExtraAttributeTier} 获取颜色</li>
+	 *   <li>ME 等级（ABSOLUTE/SUPREME/COSMIC/INFINITE）：通过隔离兼容层获取颜色</li>
+	 *   <li>EME 等级（ABSOLUTE_OVERCLOCKED 等）：通过隔离兼容层获取颜色</li>
 	 *   <li>原版 4 等级：使用默认行为（通过 {@link #getTier()} 获取颜色）</li>
 	 * </ul>
 	 * <p>
@@ -78,25 +72,8 @@ public class ItemBlockMekApiaryFactory extends ItemBlockMekApiary {
 	@NotNull
 	@Override
 	public Component getName(@NotNull ItemStack stack) {
-		// 检查 ME 等级（Mekanism Extras）— 守卫避免 ME 未加载时引用 ME 类
-		if (MekCompatHooks.isMekanismExtrasLoaded()) {
-			ExtraAttributeTier<ExtraFactoryTier> meTier = Attribute.get(getBlock(), ExtraAttributeTier.class);
-			if (meTier != null) {
-				TextColor color = meTier.tier().getAdvanceTier().getColor();
-				return TextComponentUtil.build(color, super.getName(stack));
-			}
-		}
-
-		// 检查 EME 等级（Evolved Mekanism Extras）— 守卫避免 EME 未加载时引用 EME 类
-		if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-			EMExtraAttributeTier<EMExtraFactoryTier> emeTier = Attribute.get(getBlock(), EMExtraAttributeTier.class);
-			if (emeTier != null) {
-				TextColor color = TextColor.fromRgb(emeTier.tier().getEMExtraTier().getRgbSupplier().getAsInt());
-				return TextComponentUtil.build(color, super.getName(stack));
-			}
-		}
-
-		// 原版 4 等级使用默认行为（通过 getTier() 获取 BaseTier 颜色）
-		return super.getName(stack);
+		Component baseName = super.getName(stack);
+		Component optionalName = OptionalFactoryItemSupport.colorizeName(getBlock(), baseName);
+		return optionalName == null ? baseName : optionalName;
 	}
 }

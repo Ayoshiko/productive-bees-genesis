@@ -7,6 +7,8 @@ import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.item.CursedTransporterItemHandler;
+import mekanism.common.lib.inventory.HandlerTransitRequest;
+import mekanism.common.lib.inventory.TransitRequest;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentEjector;
@@ -40,8 +42,7 @@ import java.util.List;
  * </ul>
  * <p>
  * <b>与 Mekanism 物流管道的兼容：</b>目标是 {@link CursedTransporterItemHandler}（逻辑运输管道）
- * 时必须走原版 {@code TransitRequest} 协议才能带上颜色与路由信息，本通道跳过该方向并请调用方
- * 回退到原版 {@code outputItems}。
+ * 时直接使用公开的 {@link TransitRequest} 协议，保留输出颜色与路由信息，不修改原版弹出器。
  * <p>
  * 线程安全：仅服务端 tick 线程访问。
  *
@@ -80,6 +81,10 @@ public final class FastItemEjector {
 	/** 同刻重复调用拦截（时间加速模组会在同一游戏刻内多次 tick 机器） */
 	private final SameTickFailureGate sameTickGate = new SameTickFailureGate();
 
+	/** 逻辑运输管道请求使用的槽位视图，实例复用以避免每次包装列表。 */
+	private final SlotListItemHandler transporterSource = new SlotListItemHandler();
+	private int transporterCursor;
+
 	/**
 	 * @param tile 所属机器
 	 */
@@ -103,24 +108,22 @@ public final class FastItemEjector {
 	 * @param gameTime      当前游戏刻
 	 * @param outputVersion 输出槽内容版本（用于退避解除与同刻拦截）
 	 * @param hasOutput     输出槽当前是否有物品（O(1) 读取）
-	 * @return true 表示存在必须交给 Mekanism 原版处理的目标（逻辑运输管道），调用方应回退
 	 */
-	public boolean tick(TileEntityMekanism tile, TileComponentEjector ejector,
+	public void tick(TileEntityMekanism tile, TileComponentEjector ejector,
 			@Nullable ConfigInfo itemConfig, long gameTime, long outputVersion, boolean hasOutput) {
-		if (itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return false;
+		if (itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return;
 		if (!hasOutput) {
 			consecutiveIdleTicks = 0;
 			clearBackoff();
 			sameTickGate.clear();
-			return false;
+			return;
 		}
-		if (isBackingOff(gameTime, outputVersion)) return false;
-		if (sameTickGate.shouldSkip(gameTime, outputVersion)) return false;
+		if (isBackingOff(gameTime, outputVersion)) return;
+		if (sameTickGate.shouldSkip(gameTime, outputVersion)) return;
 
 		List<Direction> sides = targets.outputSides(itemConfig);
-		if (sides.isEmpty()) return false;
+		if (sides.isEmpty()) return;
 
-		boolean needsVanillaFallback = false;
 		long moved = 0L;
 		for (DataType dataType : itemConfig.getSupportedDataTypes()) {
 			if (!dataType.canOutput()) continue;
@@ -136,7 +139,7 @@ public final class FastItemEjector {
 				IItemHandler target = targets.handler(side);
 				if (target == null) continue;
 				if (target instanceof CursedTransporterItemHandler) {
-					needsVanillaFallback = true;
+					moved += pushToTransporter(tile, ejector, slots, target);
 					continue;
 				}
 				moved += pushSlots(slots, target);
@@ -147,7 +150,7 @@ public final class FastItemEjector {
 			consecutiveIdleTicks = 0;
 			clearBackoff();
 			sameTickGate.clear();
-		} else if (!needsVanillaFallback) {
+		} else {
 			sameTickGate.recordFailure(gameTime, outputVersion);
 			if (++consecutiveIdleTicks >= IDLE_BACKOFF_THRESHOLD) {
 				consecutiveIdleTicks = 0;
@@ -155,7 +158,27 @@ public final class FastItemEjector {
 				backoffVersion = outputVersion;
 			}
 		}
-		return needsVanillaFallback;
+	}
+
+	/** 通过 Mekanism 公共路由协议向逻辑运输管道发送一种物品。 */
+	private long pushToTransporter(TileEntityMekanism tile, TileComponentEjector ejector,
+			List<IInventorySlot> slots, IItemHandler target) {
+		transporterSource.setSlots(slots);
+		HandlerTransitRequest request = new HandlerTransitRequest(transporterSource);
+		transporterCursor = EjectItemMapBuilder.build(request, slots, transporterCursor);
+		if (request.isEmpty()) return 0L;
+		try {
+			TransitRequest.TransitResponse response = request.eject(
+					tile, target, 0, ignored -> ejector.getOutputColor());
+			if (response.isEmpty()) return 0L;
+			int sendingAmount = response.getSendingAmount();
+			response.useAll();
+			return sendingAmount;
+		} catch (Exception exception) {
+			LogThrottle.warn("fast_eject_transporter",
+					"逻辑运输管道路由异常，已停止本次发送: {}", exception.toString());
+			return 0L;
+		}
 	}
 
 	/**
@@ -177,8 +200,8 @@ public final class FastItemEjector {
 		for (Direction side : sides) {
 			if (inserted >= total) break;
 			IItemHandler target = targets.handler(side);
-			// 逻辑运输管道必须走原版 TransitRequest 协议（颜色/路由），直通路径跳过，
-			// 这部分产物回落输出槽后由原版弹出接管。
+			// 逻辑运输管道必须从真实输出槽构建 TransitRequest；未入槽产物先回落输出槽，
+			// 再由逐刻快速通道按颜色与路由协议发送。
 			if (target == null || target instanceof CursedTransporterItemHandler) continue;
 			ItemStack remaining = stack.copyWithCount(total - inserted);
 			int accepted = ItemPushHelper.simulateInsert(target, remaining);
@@ -267,5 +290,52 @@ public final class FastItemEjector {
 	private void clearBackoff() {
 		backoffUntilTick = Long.MIN_VALUE;
 		backoffVersion = Long.MIN_VALUE;
+	}
+
+	/** 将输出槽列表适配为 TransitRequest 所需的 IItemHandler。 */
+	private static final class SlotListItemHandler implements IItemHandler {
+		private List<IInventorySlot> slots = List.of();
+
+		private void setSlots(List<IInventorySlot> slots) {
+			this.slots = slots;
+		}
+
+		@Override
+		public int getSlots() {
+			return slots.size();
+		}
+
+		@Override
+		public ItemStack getStackInSlot(int slot) {
+			return valid(slot) ? slots.get(slot).getStack() : ItemStack.EMPTY;
+		}
+
+		@Override
+		public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+			return stack;
+		}
+
+		@Override
+		public ItemStack extractItem(int slot, int amount, boolean simulate) {
+			if (!valid(slot) || amount <= 0) return ItemStack.EMPTY;
+			return slots.get(slot).extractItem(amount,
+					simulate ? Action.SIMULATE : Action.EXECUTE, AutomationType.EXTERNAL);
+		}
+
+		@Override
+		public int getSlotLimit(int slot) {
+			if (!valid(slot)) return 0;
+			IInventorySlot inventorySlot = slots.get(slot);
+			return inventorySlot.getLimit(inventorySlot.getStack());
+		}
+
+		@Override
+		public boolean isItemValid(int slot, ItemStack stack) {
+			return false;
+		}
+
+		private boolean valid(int slot) {
+			return slot >= 0 && slot < slots.size() && slots.get(slot) != null;
+		}
 	}
 }

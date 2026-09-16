@@ -14,13 +14,14 @@ class FastFluidEjectorTest {
 	}
 
 	@Test
-	void mixinReplacesOnlyThisModsFluidEjection() throws Exception {
-		String mixin = read("src/main/java/com/ayoshiko/productivebeesgenesis/mixin/mek/"
-				+ "TileComponentEjectorFastPathMixin.java");
-		assertTrue(mixin.contains("productivebeesgenesis$ownTile()"));
-		assertTrue(mixin.contains("transmission != TransmissionType.FLUID"));
-		assertTrue(mixin.contains("TileComponentEjector;eject("));
-		assertTrue(mixin.contains("ensureFastFluidEjector(tile).tick"));
+	void dedicatedComponentOwnsOnlyThisModsFluidEjection() throws Exception {
+		String component = read("src/main/java/com/ayoshiko/productivebeesgenesis/logistics/"
+				+ "GenesisTileComponentEjector.java");
+		assertTrue(component.contains("extends TileComponentEjector implements IFastEjectHost"));
+		assertTrue(component.contains("isEjecting(fluidConfig, TransmissionType.FLUID)"));
+		assertTrue(component.contains("fluidEjector.tick(tile, fluidConfig, gameTime)"));
+		assertTrue(component.contains("tile.getComponents().remove(previous)"),
+				"替换父类组件时必须移除旧实例，避免重复同步和序列化状态残留");
 	}
 
 	@Test

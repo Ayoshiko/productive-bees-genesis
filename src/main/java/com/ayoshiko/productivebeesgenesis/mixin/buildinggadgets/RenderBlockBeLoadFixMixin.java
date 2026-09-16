@@ -51,7 +51,7 @@ public abstract class RenderBlockBeLoadFixMixin {
 					remap = false
 			),
 			remap = false,
-			require = 1
+			require = 0
 	)
 	private static void productivebeesgenesis$loadWithComponents(BlockEntity blockEntity,
 			CompoundTag tag, HolderLookup.Provider provider, Operation<Void> original) {

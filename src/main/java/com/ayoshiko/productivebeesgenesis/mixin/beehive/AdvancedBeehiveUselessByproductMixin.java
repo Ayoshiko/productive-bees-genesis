@@ -34,7 +34,7 @@ public abstract class AdvancedBeehiveUselessByproductMixin {
 	 * <p>
 	 * <b>{@code require = 0}</b>：目标属第三方模组（Productive Bees）。若上游重构该方法体，
 	 * 最坏结果是回到「不过滤花粉团」的原版行为，而不是让游戏启动崩溃 ——
-	 * 与本项目 {@code TileComponentEjectorFastPathMixin} 的既定约定一致。
+	 * 与本项目其它第三方兼容 Mixin 的既定约定一致。
 	 */
 	@WrapOperation(
 			method = "beeReleasePostAction",

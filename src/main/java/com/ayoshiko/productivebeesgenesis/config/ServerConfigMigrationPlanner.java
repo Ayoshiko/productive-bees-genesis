@@ -45,9 +45,13 @@ final class ServerConfigMigrationPlanner {
 	 *       没有对应实现，要么只会拖慢吞吐；阻塞退避已内置为自适应常量，无需调参。</li>
 	 *   <li>{@code mek_centrifuge.basic.fluidEjectRate} — 流体弹出固定为不限速，
 	 *       实际速率由目标容器接收能力决定。</li>
+	 *   <li>{@code advanced_beehive.simulateCooldown/saveInterval} — 对所有 PB 高级蜂箱生效的
+	 *       扫描节流与存盘去抖已移除，避免改变未安装本模组升级的上游机器行为。</li>
 	 * </ul>
 	 */
 	static final Set<String> RETIRED_LEGACY_PATHS = Set.of(
+			"advanced_beehive.simulateCooldown",
+			"advanced_beehive.saveInterval",
 			"mek_centrifuge.io_limit.maxExtractPerTick",
 			"mek_centrifuge.basic.fluidEjectRate",
 			"mek_centrifuge.ejection.ejectDelay",

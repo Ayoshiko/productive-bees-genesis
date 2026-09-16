@@ -38,7 +38,7 @@ public abstract class EMExtraFactoryMixin extends BlockType {
 		super(null);
 	}
 
-	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false, require = 0)
 	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
 			EMExtraMachine.EMExtraFactoryMachine<?> origMachine,
 			EMExtraFactoryTier tier, CallbackInfo ci) {

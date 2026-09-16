@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.mek.FactoryLayoutHelper;
+import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEFactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import com.jerry.mekextras.client.gui.element.tab.ExtraGuiSortingTab;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -59,10 +59,10 @@ public class GuiExtraMekCentrifugeFactory
 		inventoryLabelY = 125;
 
 		// 使用FactoryLayoutHelper的ExtraFactoryTier重载方法动态计算imageWidth增量
-		imageWidth += FactoryLayoutHelper.getImageWidthAddition(tile.tier);
+		imageWidth += MEFactoryLayoutHelper.getImageWidthAddition(tile.tier);
 
 		// 使用FactoryLayoutHelper动态计算inventoryLabelX
-		inventoryLabelX = FactoryLayoutHelper.getInventoryLabelX(tile.tier);
+		inventoryLabelX = MEFactoryLayoutHelper.getInventoryLabelX(tile.tier);
 		titleLabelY = 4;
 		dynamicSlots = true;
 	}
@@ -88,8 +88,8 @@ public class GuiExtraMekCentrifugeFactory
 		}
 
 		// 进度条循环（输入槽与主输出槽之间，双配方跳转）
-		int baseX = FactoryLayoutHelper.getBaseX(tile.tier);
-		int baseXMult = FactoryLayoutHelper.getBaseXMult(tile.tier);
+		int baseX = MEFactoryLayoutHelper.getBaseX(tile.tier);
+		int baseXMult = MEFactoryLayoutHelper.getBaseXMult(tile.tier);
 		for (GuiProgress bar : GuiMekCentrifugeFactoryHelper.createProgressBars(
 				this, tile, tile.tier.processes,
 				i -> tile.getScaledProgress(1, i),
@@ -103,8 +103,8 @@ public class GuiExtraMekCentrifugeFactory
 				this,
 				tile::getFluidOutputTank,
 				() -> tile.getFluidTanks(null),
-				FactoryLayoutHelper.getFluidTankX(tile.tier),
-				FactoryLayoutHelper.getFluidTankY(tile.tier)));
+				MEFactoryLayoutHelper.getFluidTankX(tile.tier),
+				MEFactoryLayoutHelper.getFluidTankY(tile.tier)));
 		CentrifugeInputReturnButton inputReturnButton = CentrifugeInputReturnButton.createForFactory(
 				this, imageWidth, tile.getBlockPos());
 		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);

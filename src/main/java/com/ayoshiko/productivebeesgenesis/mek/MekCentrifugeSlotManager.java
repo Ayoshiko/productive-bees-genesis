@@ -39,7 +39,7 @@ import java.util.function.IntSupplier;
 	 *   <li>依赖倒置：持有 {@link TileEntityMekCentrifuge} 引用访问父类字段和回调</li>
 	 * </ul>
 	 * <p>
-	 * 线程安全：方块实体在服务端单线程执行，volatile 字段保证可见性（标志位可能被 Ejector Mixin 读取）。
+	 * 线程安全：方块实体在服务端单线程执行，volatile 字段保证外部能力线程的可见性。
 	 */
 class MekCentrifugeSlotManager {
 
@@ -60,13 +60,13 @@ class MekCentrifugeSlotManager {
 	/** 输出槽是否已满（供 areOutputSlotsFull 读取，避免每次完成配方遍历3个槽） */
 	private volatile boolean outputSlotsFull = false;
 
-	/** Task 16: 输出槽内容版本号（输出槽内容变更时递增，供 Ejector Mixin 判断是否需要跳过 outputItems） */
+	/** Task 16: 输出槽内容版本号（输出槽内容变更时递增，供专用 Ejector 解除退避） */
 	private final AtomicLong outputContentsVersion = new AtomicLong(0L);
 
 	/**
 	 * Step 5: 输出槽物品总数（主+副1+副2）
 	 * <br/>
-	 * 由 {@link #updateOutputSlotFlags} 维护，供 Ejector Mixin O(1) 读取，
+	 * 由 {@link #updateOutputSlotFlags} 维护，供专用 Ejector O(1) 读取，
 	 * 替代 O(processes×3) 遍历的 countOutputItems。volatile 保证可见性。
 	 */
 	private volatile long outputItemCount = 0L;
@@ -225,7 +225,7 @@ class MekCentrifugeSlotManager {
 				recipeCacheUnpauseListener.onContentsChanged();
 			}
 			updateOutputSlotFlags();
-			// Task 16: 输出槽内容变化时递增版本号，通知 Ejector Mixin 需要重新尝试输出
+			// Task 16: 输出槽内容变化时递增版本号，通知专用 Ejector 需要重新尝试输出
 			outputContentsVersion.incrementAndGet();
 		};
 	}

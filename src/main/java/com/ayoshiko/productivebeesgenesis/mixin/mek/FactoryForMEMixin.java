@@ -43,7 +43,7 @@ public abstract class FactoryForMEMixin extends BlockType {
 		super(null);
 	}
 
-	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false, require = 0)
 	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
 			Machine.FactoryMachine<?> origMachine, FactoryTier tier,
 			CallbackInfo ci) {

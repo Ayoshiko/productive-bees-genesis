@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.logistics;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 快速弹出宿主 —— 由 {@code TileComponentEjector} 的 Mixin 实现，
+ * 快速弹出宿主 —— 由本模组专用 {@link GenesisTileComponentEjector} 实现，
  * 让配方输出侧（{@code PbRecipeFlusher} 等）无需知道弹出实现细节即可发起「产物直通」。
  * <p>
  * 弹出器天然持有「哪些侧面是输出面、相邻容器能力缓存、自动弹出是否开启」这些信息，
@@ -27,7 +27,7 @@ public interface IFastEjectHost {
 	/**
 	 * 便捷委托：把机器的弹出器组件当作直通宿主使用。
 	 *
-	 * @param ejectorComponent Mekanism 弹出器组件（可为 null 或未被 Mixin 增强）
+	 * @param ejectorComponent Mekanism 弹出器组件（可为 null 或非本模组专用实例）
 	 * @param stack            待推送产物
 	 * @return 实际被接收的数量；宿主不可用时返回 0
 	 */

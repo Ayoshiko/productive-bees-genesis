@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -87,6 +87,30 @@ class MixinBoundaryConventionTest {
 		}
 		assertTrue(offenders.isEmpty(),
 				() -> "以下文件位于 mixin 包下却没有 @Mixin 声明，可能是误放或漏写: " + offenders);
+	}
+
+	@Test
+	@DisplayName("ThreadLocal 调用上下文必须通过 WrapMethod 的 finally 清理")
+	void threadLocalContextsAreExceptionSafe() throws Exception {
+		String jei = Files.readString(Path.of(MIXIN_ROOT + "client/JeiGhostIngredientDragMixin.java"));
+		assertTrue(jei.contains("@WrapMethod") && jei.contains("finally"),
+				"JEI 拖拽渲染上下文必须覆盖异常退出路径");
+		assertFalse(jei.contains("@Inject("),
+				"禁止恢复为 HEAD/RETURN 成对注入；目标方法异常时 RETURN 不执行并会泄漏上下文");
+	}
+
+	@Test
+	@DisplayName("不得用全局性能 mixin 改写未安装本模组升级的 PB 高级蜂箱")
+	void productiveBeesHiveOptimizationsStayOutOfGlobalTargets() throws Exception {
+		String config = Files.readString(Path.of("src/main/resources/productivebeesgenesis.mixins.json"));
+		for (String forbidden : List.of(
+				"AdvancedBeehiveBlockEntityAbstractSimCacheMixin",
+				"AdvancedBeehiveBlockEntityAbstractSimulateThrottleMixin",
+				"AdvancedBeehiveInventoryDebounceMixin",
+				"BlockEntityItemStackHandlerDebounceMixin")) {
+			assertFalse(config.contains(forbidden),
+					forbidden + " 会改变所有 PB 高级蜂箱的扫描或存盘语义，不能全局登记");
+		}
 	}
 
 	/** 列出 mixin 源码树中的全部 .java 文件（不含 package-info）。 */

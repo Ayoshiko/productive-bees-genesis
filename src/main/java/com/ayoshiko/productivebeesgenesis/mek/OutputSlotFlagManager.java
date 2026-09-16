@@ -36,7 +36,7 @@ public final class OutputSlotFlagManager {
 	/**
 	 * 每进程输出槽物品数量（主+副1+副2）
 	 * <br/>
-	 * Step 5: 供 {@link #outputItemCount()} O(1) 读取，替代 Ejector Mixin 中
+	 * Step 5: 供 {@link #outputItemCount()} O(1) 读取，替代专用 Ejector 中
 	 * O(processes×3) 遍历的 {@code countOutputItems}。在 {@link #updateProcessInternal}
 	 * / {@link #updateProcessAggregate} 中更新，{@link #updateAll} 中维护总量。
 	 */
@@ -103,7 +103,7 @@ public final class OutputSlotFlagManager {
 	/**
 	 * 所有输出槽的物品总数（O(1) 读取，dirty 时触发一次全量刷新）
 	 * <br/>
-	 * Step 5: 供 Ejector Mixin 替代 O(processes×3) 遍历的 countOutputItems。
+	 * Step 5: 供专用 Ejector 替代 O(processes×3) 遍历的 countOutputItems。
 	 * 在 {@link #updateProcessInternal} / {@link #updateProcessAggregate} / {@link #updateAll} 中维护。
 	 */
 	public long outputItemCount() {

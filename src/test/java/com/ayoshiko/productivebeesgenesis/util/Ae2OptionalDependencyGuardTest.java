@@ -8,7 +8,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -98,14 +104,16 @@ class Ae2OptionalDependencyGuardTest {
 	}
 
 	@Test
-	@DisplayName("mods.toml 必须把 ae2 / appflux 声明为 optional 依赖")
+	@DisplayName("mods.toml 中所有代码级可选集成都必须声明为 optional 依赖")
 	void modsTomlDeclaresOptionalDependencies() throws Exception {
 		String toml = Files.readString(Path.of("src/main/templates/META-INF/neoforge.mods.toml"));
-		assertTrue(toml.contains("modId=\"ae2\""), "mods.toml 必须声明 ae2 依赖");
-		assertTrue(toml.contains("modId=\"appflux\""), "mods.toml 必须声明 appflux 依赖");
 		// 逐个依赖块检查 type="optional"：非 optional 会让加载器强制要求该模组存在
-		for (String modId : List.of("ae2", "appflux")) {
+		for (String modId : List.of(
+				"ae2", "appflux", "mekanism_extras", "emextras", "evolvedmekanism",
+				"mekanism_empowered", "jei", "jade", "kubejs", "jdte", "iris",
+				"buildinggadgets2", "mekenergistics")) {
 			int blockStart = toml.indexOf("modId=\"" + modId + "\"");
+			assertTrue(blockStart >= 0, "mods.toml 必须声明 " + modId + " 依赖");
 			int blockEnd = toml.indexOf("[[", blockStart + 1);
 			String block = toml.substring(blockStart, blockEnd > 0 ? blockEnd : toml.length());
 			assertTrue(block.contains("type=\"optional\""),
@@ -170,7 +178,7 @@ class Ae2OptionalDependencyGuardTest {
 	}
 
 	@Test
-	@DisplayName("引用可选模组类的 mixin 必须在 MixinConfigPlugin 中登记门控")
+	@DisplayName("全部服务端/客户端可选依赖 mixin 必须登记到正确的加载门控集合")
 	void optionalModMixinsAreRegisteredInConfigPlugin() throws Exception {
 		// 兜底 return true：漏登记的 mixin 会被无条件应用，直接复现 issue #8
 		// （mixin 的目标类若引用了未安装模组的类型，应用阶段即 NoClassDefFoundError）。
@@ -178,27 +186,126 @@ class Ae2OptionalDependencyGuardTest {
 				Path.of(SOURCE_ROOT + "mixin/MixinConfigPlugin.java"));
 		String config = Files.readString(
 				Path.of("src/main/resources/productivebeesgenesis.mixins.json"));
-		int listStart = config.indexOf("\"mixins\": [");
-		assertTrue(listStart > 0, "找不到 mixins 数组");
-		int listEnd = config.indexOf(']', listStart);
-		String entries = config.substring(listStart, listEnd);
-
-		List<String> optionalPrefixes = List.of("ae2.", "jdte.", "mekenergistics.", "buildinggadgets.");
+		Map<String, Set<String>> memberships = parsePluginMemberships(plugin);
 		List<String> unregistered = new ArrayList<>();
-		java.util.regex.Matcher matcher =
-				java.util.regex.Pattern.compile("\"([A-Za-z0-9_$.]+)\"").matcher(entries);
+		List<String> strictOptionalInjectors = new ArrayList<>();
+		Matcher matcher = Pattern.compile("\"([A-Za-z0-9_$.]+)\"").matcher(config);
 		while (matcher.find()) {
 			String entry = matcher.group(1);
-			if (optionalPrefixes.stream().noneMatch(entry::startsWith)) continue;
+			Path sourcePath = Path.of(SOURCE_ROOT + "mixin/" + entry.replace('.', '/') + ".java");
+			if (!Files.isRegularFile(sourcePath)) continue;
+			String source = Files.readString(sourcePath);
+			Set<String> requiredGates = requiredMixinGates(entry, source);
+			if (requiredGates.isEmpty()) continue;
+			if (hasMethodBodyInjector(source) && !source.matches("(?s).*require\\s*=\\s*0.*")) {
+				strictOptionalInjectors.add(entry);
+			}
 			String simpleName = entry.substring(entry.lastIndexOf('.') + 1);
-			if (!plugin.contains("\"" + simpleName + "\"")) {
-				unregistered.add(entry);
+			Set<String> registeredSets = memberships.getOrDefault(simpleName, Set.of());
+			for (String gate : requiredGates) {
+				if (registeredSets.stream().noneMatch(setName -> setProvidesGate(setName, gate))) {
+					unregistered.add(entry + " 缺少 " + gate + " 门控，当前集合=" + registeredSets);
+				}
 			}
 		}
 		assertTrue(unregistered.isEmpty(),
 				() -> "以下 mixin 引用了可选模组的类，却没有登记进 MixinConfigPlugin 的门控集合，"
 						+ "在该模组未安装时会被无条件应用并抛 NoClassDefFoundError（issue #8 同类）: "
 						+ unregistered);
+		assertTrue(strictOptionalInjectors.isEmpty(),
+				() -> "可选第三方模组的方法体注入必须 require=0；上游改签名时应降级功能而不是阻止整合包启动: "
+						+ strictOptionalInjectors);
+
+		String irisConfig = Files.readString(
+				Path.of("src/main/resources/productivebeesgenesis.iris.mixins.json"));
+		String irisPlugin = Files.readString(Path.of(SOURCE_ROOT + "mixin/iris/IrisConfigPlugin.java"));
+		String irisMixin = Files.readString(Path.of(SOURCE_ROOT + "mixin/iris/ShaderInstanceMixin.java"));
+		assertTrue(irisConfig.contains("IrisConfigPlugin") && irisPlugin.contains("Holder.IRIS_LOADED"),
+				"Iris 可选 Mixin 必须由独立插件按加载状态门控");
+		assertTrue(!hasMethodBodyInjector(irisMixin) || irisMixin.matches("(?s).*require\\s*=\\s*0.*"),
+				"Iris 方法体注入必须 require=0，版本变化时安全降级");
+	}
+
+	@Test
+	@DisplayName("基础宿主包不得直接链接 ME/EME 等可选模组类型")
+	void alwaysLoadedHostPackagesDoNotImportOptionalTypes() throws Exception {
+		List<String> hostPrefixes = List.of("apiary/", "mek/", "init/", "inventory/", "menu/", "item/");
+		List<String> isolatedFiles = List.of(
+				"apiary/ApiaryTierMultiplierResolverDelegate.java",
+				"apiary/ApiaryTierMultiplierResolverMEDelegate.java",
+				"mek/MekExtraUpgradeSupport.java");
+		List<String> optionalImports = List.of(
+				"import appeng.", "import com.glodblock.", "import com.jerry.mekextras.",
+				"import io.github.masyumero.emextras.", "import com.jdte.", "import mezz.jei.",
+				"import snownee.jade.", "import dev.latvian.mods.kubejs.", "import net.irisshaders.");
+		List<String> offenders = new ArrayList<>();
+		try (Stream<Path> files = Files.walk(Path.of(SOURCE_ROOT))) {
+			for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+				String relative = file.toString().replace('\\', '/').substring(SOURCE_ROOT.length());
+				if (hostPrefixes.stream().noneMatch(relative::startsWith)) continue;
+				if (relative.startsWith("mek/ae2/") || isolatedFiles.contains(relative)) continue;
+				String source = Files.readString(file);
+				for (String optionalImport : optionalImports) {
+					if (source.contains(optionalImport)) offenders.add(relative + " 含 " + optionalImport);
+				}
+			}
+		}
+		assertTrue(offenders.isEmpty(),
+				() -> "基础方块实体、物品、菜单或注册类直接链接可选模组类型，缺失依赖时可能复现 issue #8。"
+						+ "请移入 compat 隔离类，并由无可选类型签名的门面在加载守卫后调用: " + offenders);
+	}
+
+	private static Map<String, Set<String>> parsePluginMemberships(String plugin) {
+		Map<String, Set<String>> memberships = new HashMap<>();
+		Matcher sets = Pattern.compile(
+				"private\\s+static\\s+final\\s+Set<String>\\s+(\\w+)\\s*=\\s*Set\\.of\\((.*?)\\);",
+				Pattern.DOTALL).matcher(plugin);
+		while (sets.find()) {
+			String setName = sets.group(1);
+			Matcher names = Pattern.compile("\"([A-Za-z0-9_$]+)\"").matcher(sets.group(2));
+			while (names.find()) {
+				memberships.computeIfAbsent(names.group(1), ignored -> new HashSet<>()).add(setName);
+			}
+		}
+		return memberships;
+	}
+
+	private static boolean hasMethodBodyInjector(String source) {
+		return source.contains("@Inject(") || source.contains("@WrapOperation(")
+				|| source.contains("@WrapMethod(") || source.contains("@ModifyArg(")
+				|| source.contains("@ModifyVariable(") || source.contains("@ModifyExpressionValue(");
+	}
+
+	private static Set<String> requiredMixinGates(String entry, String source) {
+		Set<String> required = new HashSet<>();
+		if (entry.startsWith("ae2.") || source.contains("import appeng.")) required.add("AE2");
+		if (source.contains("import com.jerry.mekextras")
+				|| source.contains("targets = \"com.ayoshiko.productivebeesgenesis.compat.mekanism_extras")) {
+			required.add("ME");
+		}
+		if (source.contains("import io.github.masyumero.emextras")
+				|| source.contains("targets = \"com.ayoshiko.productivebeesgenesis.compat.emextras")) {
+			required.add("EME");
+		}
+		if (entry.startsWith("jdte.") || source.contains("import com.jdte.")) required.add("JDTE");
+		if (entry.startsWith("mekenergistics.")) required.add("MEKENERGISTICS");
+		if (entry.startsWith("buildinggadgets.")) required.add("BUILDING_GADGETS");
+		if (source.contains("import mezz.jei.")) required.add("JEI");
+		return required;
+	}
+
+	private static boolean setProvidesGate(String setName, String gate) {
+		return switch (gate) {
+			case "ME" -> setName.equals("ME_MIXINS") || setName.startsWith("ME_")
+					|| setName.contains("_ME_") || setName.endsWith("_ME_MIXINS");
+			case "EME" -> setName.contains("EME");
+			case "AE2" -> setName.startsWith("AE2_");
+			case "JDTE" -> setName.startsWith("JDTE_");
+			case "MEKENERGISTICS" -> setName.startsWith("MEKENERGISTICS_");
+			case "BUILDING_GADGETS" -> setName.startsWith("BUILDING_GADGETS_");
+			case "JEI" -> setName.startsWith("JEI_");
+			default -> false;
+		};
 	}
 
 	private static Path findAe2Jar() throws IOException {		Path libs = Path.of("libs");

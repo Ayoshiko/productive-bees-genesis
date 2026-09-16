@@ -11,11 +11,13 @@
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.ItemPushHelper}
  *       — 两段式插入：先模拟得到可接收量，再精确执行，避免“取出后塞不下”的回填往返</li>
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost}
- *       — 产物直通入口（由弹出器 Mixin 实现，配方提交侧只依赖该接口）</li>
+ *       — 产物直通入口（由本模组专用弹出器实现，配方提交侧只依赖该接口）</li>
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.RotatingContainerView}
  *       — 按游戏刻轮转的容器视图，消除“外部只抽前几个槽/罐”导致的饿死</li>
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.OutputWakeNotifier}
  *       — 输出“空→非空”边沿唤醒相邻物流网络，消除对端退避造成的空转延迟</li>
+ *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector}
+ *       — 仅由本模组机器实例化的弹出组件，隔离 Mekanism 原版与其它附属机器</li>
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.EjectItemMapBuilder}
  *       — 回退到 Mekanism 原版弹出（逻辑运输管道）时用的 O(n) 无分配清单构建</li>
  *   <li>{@link com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings}

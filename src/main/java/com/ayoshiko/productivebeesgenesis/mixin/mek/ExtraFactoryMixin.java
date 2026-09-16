@@ -34,7 +34,7 @@ public abstract class ExtraFactoryMixin extends BlockType {
 		super(null);
 	}
 
-	@Inject(method = "<init>", at = @At("RETURN"), remap = false)
+	@Inject(method = "<init>", at = @At("RETURN"), remap = false, require = 0)
 	private void productivebeesgenesis$onInit(Supplier<?> tileEntityRegistrar, Supplier<?> containerRegistrar,
 			ExtraMachine.ExtraFactoryMachine<?> origMachine,
 			ExtraFactoryTier tier, CallbackInfo ci) {

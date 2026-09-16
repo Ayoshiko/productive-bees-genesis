@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.client;
 
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.MyriadCombModelData;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.common.block.entity.CombBlockBlockEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.client.model.data.ModelData;
@@ -16,8 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * NeoForge 的 {@code getModelData()} 是 {@link IBlockEntityExtension} 接口的 default 方法，
 	 * 不在 BlockEntity 类字节码中，因此必须 Mixin 接口本身而非具体子类。
 	 * <p>
-	 * 当目标 BlockEntity 为 {@link CombBlockBlockEntity} 时，将 combType 传递给 BakedModel，
-	 * 使万象创世蜜脾块方块可以切换为无尽创世蜜脾块的纹理。
+	 * 当目标 BlockEntity 是万象创世类型的 {@link CombBlockBlockEntity} 时，将 combType 传递给 BakedModel，
+	 * 使对应蜜脾块方块可以切换为无尽创世蜜脾块的纹理。
 	 * 其他 BlockEntity 不受影响，继续返回默认的 {@link ModelData#EMPTY}。
 	 */
 @Mixin(IBlockEntityExtension.class)
@@ -28,7 +29,7 @@ public interface IBlockEntityExtensionMixin {
 	private void productivebeesgenesis$getModelData(CallbackInfoReturnable<ModelData> cir) {
 		if ((Object) this instanceof CombBlockBlockEntity self) {
 			ResourceLocation combType = self.getCombType();
-			if (combType != null) {
+			if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
 				cir.setReturnValue(ModelData.builder()
 						.with(MyriadCombModelData.COMB_TYPE, combType)
 						.build());

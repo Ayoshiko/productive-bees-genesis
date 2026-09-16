@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  * 覆盖三件容易漏的事：
  * <ol>
  *   <li>蜂箱产出路径与缓冲区排空路径都接上了直通，且按实际接收量记账；</li>
- *   <li>per-tile 开关在弹出器 Mixin 处与全局开关是 AND 关系；</li>
+	 *   <li>per-tile 开关在专用弹出组件中与全局开关是 AND 关系；</li>
  *   <li>per-tile 开关走完蜂箱五条持久化路径与离心机状态持有者三条路径。</li>
  * </ol>
  */
@@ -70,16 +70,15 @@ class DirectContainerOutputWiringTest {
 	}
 
 	@Test
-	@DisplayName("per-tile 开关与全局开关 AND：Mixin 两侧都检查")
-	void mixinAndsGlobalWithPerTileSwitch() throws Exception {
-		String mixin = read("mixin/mek/TileComponentEjectorFastPathMixin.java");
+	@DisplayName("per-tile 开关与全局开关 AND：专用弹出组件两侧都检查")
+	void dedicatedEjectorAndsGlobalWithPerTileSwitch() throws Exception {
+		String component = read("logistics/GenesisTileComponentEjector.java");
 
-		int globalIndex = mixin.indexOf("ExternalLogisticsSettings.directContainerOutput(level.getGameTime())");
-		int perTileIndex = mixin.indexOf("if (!productivebeesgenesis$perTileDirectOutput(tile)) return 0;");
-		assertTrue(globalIndex > 0 && perTileIndex > globalIndex,
-				"全局开关先短路，再检查 per-tile 开关");
-		assertTrue(mixin.contains("centrifuge.productivebeesgenesis$isDirectContainerOutputEnabled()")
-						&& mixin.contains("apiary.productivebeesgenesis$isDirectContainerOutputEnabled()"),
+		assertTrue(component.contains("ExternalLogisticsSettings.directContainerOutput(level.getGameTime())")
+						&& component.contains("!perTileDirectOutput(tile)"),
+				"全局开关与 per-tile 开关必须共同准入");
+		assertTrue(component.contains("centrifuge.productivebeesgenesis$isDirectContainerOutputEnabled()")
+						&& component.contains("apiary.productivebeesgenesis$isDirectContainerOutputEnabled()"),
 				"离心机与蜂箱都要参与 per-tile 判定");
 	}
 
