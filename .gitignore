@@ -51,8 +51,9 @@ tmp_pb_inspect/
 tmp_texture_sources/
 tmp_texture_sources.zip
 
-# 审查文档（内部使用，不入库）
-docs/
+# 内部文档默认不入库，仅保留长期开发设计
+docs/*
+!docs/bee-processing-network-design.md
 CODE_WIKI.md
 debug-energy-input-regression.md
 
