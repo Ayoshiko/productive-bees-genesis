@@ -1,10 +1,10 @@
 # 蜂箱—离心机处理子网络：大型更新设计方案
 
-状态：实施前审查版，生产功能尚未实现。日期：2026-09-17。代码基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
+状态：D01 行为冻结与基线实施版，网络生产功能尚未实现。日期：2026-09-17。生产代码基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
 
 本方案针对 Minecraft 1.21.1、NeoForge 21.1.214、Java 21；核心依赖为 Productive Bees 13.13.5、ProductiveLib 0.2.0、Mekanism 10.7.19.85，AE2 19.2.17 为可选集成。以上是开发基线，不代表已经验证所有元数据允许的低版本依赖。
 
-本次交付包括设计修订、逐步开发计划、开发分支及参考源码整理，尚未改变游戏行为。第 11 节按依赖列出每步交付物和验收条件，第 13 节记录参考源码版本与证据。
+本次交付包括设计修订、逐步开发计划、开发分支及参考源码整理，以及 D01 的行为测试和独立专服基线夹具，尚未改变发布模组的游戏行为。第 10.4 节记录 D01 证据与验证范围，第 11 节按依赖列出后续每步交付物和验收条件，第 13 节记录参考源码版本与证据。
 
 ## 1. 推荐结论与目标
 
@@ -447,7 +447,7 @@ BE 保存身份、连接面、显示所需最小状态及迁移标记；托管�
 
 ## 10. 验证、性能目标与发布门槛
 
-本次未进行游戏运行和 Spark 采样，未使用 SparkMCP：当前任务为源码设计，未提供与拟建网络相对应的基线／对照 profile，功能也尚未实现。下面均为待验证假设及验收要求，不是已有性能结论。实现后环境可用时优先用 SparkMCP 读取原始 profile。
+D01 已增加独立专服现状基线，采样证据见第 10.4 节。拟建网络尚未实现，下述优化假设与公开测试门槛仍待同场景对照验证；当前独立机测量不能证明新网络收益。性能分析使用 SparkMCP 读取原始 profile，保留其完整 tick 指标与夹具事件计时的区别。
 
 ### 10.1 可证伪假设
 
@@ -489,9 +489,58 @@ BE 保存身份、连接面、显示所需最小状态及迁移标记；托管�
 
 拓扑扫描起始预算可为每网 256 节点／tick、UI 更新 2 Hz、无效供给请求退避 20→40→80→最多 200 tick，相关状态变化立即唤醒。调度还需时间预算、操作数预算与全服公平上限；参数通过上述数据调整，不能靠硬截断产量达到目标。内部稳定查改平均 O(1)，到期任务堆调度 O(log G)，动态战利品可能仍与真实抽样次数成正比。
 
+### 10.4 D01 行为冻结与实测记录（2026-09-17）
+
+生产代码仍为 `f2ae0b8`，首个已推送设计提交为 `f76a917`。D01 只增加行为测试、显式启用的 `src/baseline/java` 夹具和构建校验，不改变独立机的运行行为。所有夹具可变状态由服务器线程拥有，不引入后台世界访问；Spark 自行管理其采样线程。
+
+| 已追踪路径 | 当前事实与网络实现必须保留的边界 |
+| --- | --- |
+| 蜂箱及全部蜂箱工厂 | `TileEntityMekApiaryFactory`、Extras／EMExtras 蜂箱继承同一蜂箱生产入口；`ApiaryTickHandler` 的普通入口与 JDTE flush 共享 gameTick 门控。`runTick` 包含父类、蜂笼、产出、升级、缓冲分发，外层还执行直连／AE2 输出，不能只停止 `BeeSlotTickProcessor` |
+| 蜜蜂计时／基因／喂食 | `ApiaryProgressAdvancer` 用基础 occupation period 计算调整周期，保留余数，按实际推进 tick 计费；`BeeSlotTickProcessor` 检查环境与真实饲养板，`BeeProduceProcessor` 使用基因、配方概率及升级快照生成产出。当前饲养板按蜂种共享匹配；网络一蜂位一格是显式新规则，不复制旧共享样本 |
+| 升级能力 | 蜂箱 `ApiaryUpgradeHandler` 明确不支持 STACK：升级数为 0、周期产出次数倍率为 1。`BalanceConfig` 决定预设、PB 等级互斥与安装上限，必须读取实际安装数和生效规则，不能按请求安装数计算。蜂箱速度／PB 产量／创造升级各走现有公式；离心机 STACK 与 PB 生产力组合影响单通道并行，JDTE 改变虚拟时间，不能将二者重复乘算 |
+| 基础离心机 | `MekCentrifugeTickHandler.runTick` 依次协调父类 SMELTING、PB 独立处理、AE2 拉取／推送和补电；查配方的优先规则与 PB pending 一起核对，接管后不能继续调父类以维持“活跃” |
+| 标准离心工厂 | `AbstractMekCentrifugeFactory` → `AbstractMekCentrifugeFactoryJdteSupport` → `FactoryUpgradeStateHelper`；普通入口和 coalesced flush 都会进入 super／SMELTING、各 lane PB、AE2 与能量回填；另有多流体空槽回收 |
+| Extras／EMExtras 离心工厂 | 各自 `onUpdateServer`／`productivebeesgenesis$runTick`／`flushAcceleratedTicks` 是独立入口，拥有自己的 Mekanism 附属父类；共享 PB 算法不能替代对这些入口的模式隔离 |
+| Mekanism 父类 | `TileEntityMekanism.tickServer` 在子类前执行 frequency、upgrade、chunkloader；`TileEntityConfigurableMachine.onUpdateServer` 执行 ejector，electric machine／factory 父类继续填充能量槽、排序／处理 recipe monitor。D11 必须逐项保留生命周期或代理修改，不能假设子类提前返回覆盖所有副作用 |
+| 能耗聚合 | `MekCentrifugeEnergyScaling` 在并行超过 16 后采用阶梯计费：基础成本 100 时，两条 17 并行通道合计 3400，而把它们错误合成一条 34 并行通道只计 1800。先逐 lane 计算再汇总，批处理必须保持此差异 |
+| 离心 committed pending | `PbRecipeFlusher` 按实际接受量扣减输出；外部部分插入后只扣一次输入，剩余结果经 `PbRecipeCompleter.saveCommittedPending` 持久化，排空前不开始下一批。接管不能重新抽样或再次扣料；尚未消费输入的临时计划与它分开处理 |
+| 蜂箱未生成结果的 pending | `BeeSlotTickProcessor.pendingProductions` 为私有内存数组，按批量 flush 结算；`ApiarySlotSerializer` 保存蜜蜂与进度，`ApiaryNbtSerializer` 保存已生成物品缓冲和 pending 流体，均未保存此数组。当前保存边界存在待核实／修复的产出损失风险；D01 记录该事实，不把它当成新网络可继承的保证。D12 必须排空或显式迁移，并覆盖重启测试 |
+
+新增 `ApiaryProgressBaselineTest`：直接调用真实推进入口，用固定种子覆盖 250×20 批次、基础周期不反馈污染、速度变化、创造模式与默认周期；其中随机 stack 参数测试方法边界，不意味着蜂箱支持安装 STACK。新增 `PbProcessingBaselineTest`：2,000 组固定种子场景对照独立逐 tick 解释器，并检查并行阶梯、通道汇总和缺电暂停。既有基因／工作条件／升级公式／批次账本／虚拟 tick／AE pending 测试继续作为回归集。
+
+专服夹具由 `gradle/d01-baseline.gradle` 管理，显式命令为 `./gradlew.bat -Pd01Baseline=true -Pd01CodeRevision=f76a917 runD01Server --no-daemon --no-configuration-cache`。仅使用已经接受的 `run/eula.txt` 与本地依赖副本，在 `build/d01-server` 建立独立世界；检测到已有世界就拒绝覆盖，重跑前将旧测试目录改名保留。默认构建不创建该源集，发布 JAR 校验禁止出现 baseline 包。启动返回码不足以证明成功，任务还校验两份结果的生产标志及 `D01_COMPLETE`。
+
+场景为固定种子 17092026、超平坦、晴天正午、关闭自然刷怪与随机刻、无玩家／无 GUI、强制加载夹具区块，使用新世界默认 BASIC 平衡预设。普通场景是 16 对基础蜂箱＋相邻基础离心机，共 48 蜂位；IO 场景是 64 对 ultimate 工厂，共 1,280 蜂位，每对独立供电 ME 网、真实 256k 物品／流体元件、直接逻辑连接、蜂箱输出到 AE2、离心机主动拉取。各蜂位填充铁蜂，基础周期 1200，首个真实喂食槽放一个铁块；普通 productivity.normal，IO productivity.very_high。后者两种机器各装 SPEED 8、ENERGY 8，蜂箱调用批量安装请求 TIME 8／TIME_2 8，**实际 NBT 为 TIME 4、TIME_2 0**，符合 BASIC 的上限与互斥，生效 occupation period 为 75 tick。夹具在每 tick 前补满机器 FE，关闭机器 AE 补电以防回填掩盖消耗；ME 自身由创造能量元件供电。磁盘默认配置与运行时 AE 补电覆盖分别记录，不能仅用 TOML 中未选中的自定义参数推断实际能力。
+
+每场景预热 1200 tick（另留 20 tick 初始化），采样 2400 tick，采样间隔 4 ms，切场景前留 200 tick 写盘。JSON 保存逐机完整 NBT、前后元件精确键库存、物品数／流体 mB 分开记账的 IO 计数、FE 消耗、依赖版本及事件计时分位数。`ServerTickEvent.Pre→Post` 计时排除夹具补电／快照，**不是完整 MSPT**；完整 tick 健康指标另由 SparkMCP 读取。启动环境中 EMExtras 缺少未安装的其他工厂附属对应配方，产生加载错误；保留原始日志，已运行的基础／ultimate 铁蜂场景与这些缺失配方分开核验，不据此声称附属组合全兼容。
+
+最终夹具复测于北京时间 17:13–17:20 完成，采样期间未并行构建。Windows 10、i7-10875H、Java HotSpot 21.0.9、最大堆约 4074 MiB；使用 Spark 1.10.124 的 Java 采样器。场景 JSON 位于 `build/d01-server/results/`，原始 profile 位于 `build/d01-server/config/spark/`；SparkMCP 工具返回值与夹具源码／配置 SHA-256 也保存在 results 目录。前一轮夹具联调结果留在 `build/d01-server-pilot-20260917-1706`，不用于下表。
+
+| 指标／证据 | 普通 16 对基础机 | IO 64 对 ultimate 工厂 |
+| --- | --- | --- |
+| 原始 JSON | `normal-16-base-pairs.json` | `io-64-ultimate-pairs.json` |
+| Spark 文件 | `profile-2026-09-17_17.16.54.sparkprofile` | `profile-2026-09-17_17.20.05.sparkprofile` |
+| SparkMCP profileId | `347b17ce4af6` | `51b1bfb34db9` |
+| 服务器线程采样窗口 | 17:14:54–17:16:54，约 119.924 s | 17:18:05–17:20:05，约 119.972 s |
+| 事件计时平均／p95／p99／最大（ms） | 0.367／0.512／1.603／27.733 | 1.416／1.901／2.752／13.984 |
+| Spark 最近 1 分钟 TPS | 20 | 20 |
+| Spark 最近 1 分钟 MSPT 平均／中位／p95／最大（ms） | 0.34／0.27／0.38／27.72 | 1.49／1.36／1.95／39.68 |
+| 采样内机器实际耗能（FE） | 1,440,000 | 322,560,000 |
+| 生产核验 | 离心机输出槽总物品从 0 增至 150；逐机 NBT 保存配方、输入、流体及进度 | 64 个元件均有执行存入／提取／流体写入；原铁净增 25,385、蜂蜡净增 46,080、蜂蜜净增 14,848,000 mB |
+| 元件 insert／extract／枚举调用 | 未挂载测量元件 | 34,737／2,048／28,672 |
+| 元件执行存入物品／取出物品 | 无 | 235,305／163,840（包含蜜脾中间流转，不等于最终产物数） |
+
+两个 profile 均已调用 SparkMCP 的 `get_summary`、`get_health`、`get_sources_breakdown(excludeNative=true)`、`get_top_self_time`、调用树搜索与 `diagnose`。IO 调用树中 PB 处理累计采样约 828 ms、蜜蜂 tick 264 ms、AE2 主动拉取 168 ms；这些是含子调用的采样时间，不能相加当总 CPU。来源 self time 中本模组为 2124 ms、AE2 为 380 ms，但本模组类别还包含测试夹具补电的 576 ms。普通场景分别为 260 ms、372 ms，夹具补电占 180 ms。当前轻负载、4 ms 采样分辨率下不据这些数值宣称某条路径已成为瓶颈。
+
+工具返回的 `excludeNative=true` 结果仍包含 `Unsafe.park`，因此其百分比／activeMs 不能当作排除空闲后的 CPU 占比。GC collector 信息缺失，不能把返回的零值解释为没有 GC。`diagnose` 的普通场景尖峰提示使用了含预热／初始化的 5 分钟最大值 110.47 ms，IO 的 5 分钟值也跨场景；上表明确使用最近 1 分钟统计，不混称为整段 2400 tick 的分位数。自动 JVM 参数建议缺少本次 GC 证据，不据此改服务器参数。
+
+验证结果：新增 8 个行为测试通过；全量测试统计为 636 个，634 通过、2 个既有 Skyhive 条件用例跳过、0 失败／错误。`test build verifyReleaseArtifact` 通过，发布 JAR 未包含 baseline 包；最终 `runD01Server` 完成两个生产校验并正常停止，无遗留测试服务器进程。尚未测试的新网络、客户端与兼容组合仍按后续阶段验收，不能把 D01 完成标记为整个 P0 或网络功能完成。
+
+这些是 D01 的短时现状基线，普通和 IO 两场景数量、升级与拓扑不同，不能互作性能 A/B。它不覆盖共享大型 ME 网络、电缆路由、多人终端、全部特殊蜂种、Extras／EMExtras 每级工厂、JDTE 64×／256×、保存故障或客户端；后续按 10.2–10.3、D26／D29／D30 补齐同吞吐的长时对照。当前没有新网络性能收益结论。
+
 ## 11. 阶段路线与可独立评审的提交
 
-以下步骤是尚待实施的开发清单，不代表已经写完代码。新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
+以下为开发清单；D01 的当前交付和验证边界见第 10.4 节，其余步骤尚待实施。新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
 
 | 阶段 | 步骤 | 玩家／开发者可见交付 | 退出门槛 | 估算 |
 | --- | --- | --- | --- | --- |
@@ -532,9 +581,9 @@ BE 保存身份、连接面、显示所需最小状态及迁移标记；托管�
 
 **D10 — 控制核心与只读拓扑。** 前置：D09。注册核心、连接状态、菜单入口和服务端配置；实现单区块六面连通、脏队列、预算 BFS、双核心冲突以及 owner 检查。先只展示结构，不接管旧机库存。测试反复放拆、朝向／断开面、邻居事件合并、恶意跨所有者接入。通过条件为仅合法成员贡献预览能力，拓扑重建没有无界扫描。
 
-**D11 — 运行模式与父类副作用隔离。** 前置：D10。在 `ApiaryTickHandler`、`MekCentrifugeTickHandler`、`TileEntityMekApiaryFactory`、`TileEntityMekCentrifugeFactory` 及后续适配点建立统一模式守卫；托管时关闭独立生产、父类熔炼、ejector、直连弹出和逐机 AE2 节点。保留明确必要的生命周期服务。验收用计数探针／行为测试证明网络运行时成员产物、配方推进及作业能耗调用为零，独立模式未回归。
+**D11 — 运行模式与父类副作用隔离。** 前置：D10。在 `ApiaryTickHandler`、`MekCentrifugeTickHandler`、`AbstractMekCentrifugeFactoryJdteSupport/FactoryUpgradeStateHelper` 及 Extras／EMExtras 独立入口建立统一模式守卫，同时覆盖普通 ticker 与 JDTE flush。Mekanism `tickServer` 在子类 `onUpdateServer` 之前运行 frequency／upgrade／chunkloader 组件，不能仅在子类返回 false；逐项决定托管模式下保留或代理的组件服务。托管时关闭独立生产、父类熔炼、ejector、直连弹出和逐机 AE2 节点。验收用计数探针／行为测试证明网络运行时成员产物、配方推进及作业能耗调用为零，独立模式未回归。
 
-**D12 — 蜜蜂、升级与库存交接。** 前置：D09、D11。实现 `OwnershipTransferService` 的冻结、待接管、封存、绑定、发布及逆向交还；验证真实蜂笼、逐位喂食槽、升级和储能容量。对每个阶段保存退出，注入旧 BE 数据重现、核心复制、身份冲突及拆机。通过条件为正常重启唯一所有权，不确定代际进入 RECOVERY；在此之前禁止接管正式存档。
+**D12 — 蜜蜂、升级与库存交接。** 前置：D09、D11。实现 `OwnershipTransferService` 的冻结、待接管、封存、绑定、发布及逆向交还；验证真实蜂笼、逐位喂食槽、升级和储能容量。蜂箱内存中的 `pendingProductions` 不能仅靠现有 BE NBT 迁移：先停止推进并排空到可持久化结果，或增加显式周期快照与一次性迁移协议；排空失败保持 JOINING 暂停。离心机区分未消费输入的暂存计划与已经扣料的 committed pending，后者只转移剩余结果、不重新执行配方。对每个阶段保存退出，注入旧 BE 数据重现、核心复制、身份冲突及拆机。通过条件为正常重启唯一所有权，不确定代际进入 RECOVERY；在此之前禁止接管正式存档。
 
 ### 11.4 P3：所有工作真正转入网络
 
@@ -596,7 +645,7 @@ BE 保存身份、连接面、显示所需最小状态及迁移标记；托管�
 
 ## 12. 分支与维护策略
 
-**长期开发分支为 `bees-processing-network/1.21.1`。** 起点为维护分支 `main-neo/1.21.1` 的 `f2ae0b8`；首次提交先保存审查后的设计和文档跟踪规则，推送新分支后再开始 D01 实现。远端旧 `Alpha` 不用于本次开发。
+**长期开发分支为 `bees-processing-network/1.21.1`。** 起点为维护分支 `main-neo/1.21.1` 的 `f2ae0b8`；首次设计与文档跟踪规则提交 `f76a917` 已推送并建立远端跟踪，随后实施 D01。远端旧 `Alpha` 不用于本次开发。
 
 | 分支 | 用途 | 合入方向 |
 | --- | --- | --- |
@@ -661,4 +710,4 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 最大的风险依次为：托管与独立模式双重所有权、存档／区块保存不一致、异构机器能力汇总失真、特殊蜂种和喂食语义遗漏、保留组额度重复分配、AE2 自拉取及异常重试复制，以及把 IO 热点转移成无限类型账本的保存／枚举热点。以上已分别给出策略和测试闸门，仍需 P0 原型证明。
 
-下一步执行 D01，再执行 D02：先固定独立机生产、升级、并行和喂食语义，并取得同场景基线，再以数量／索引候选和双向 MEStorage 原型验证技术选择。完成后才进入核心代码；P3 形成基础生产闭环，P5 形成终端＋主动拉取＋保留闭环。当前完成的是研究、设计、分支和参考资料整理，没有把未实现功能或未实测收益标记为完成。
+下一步执行 D02：在独立源集中比较数量／索引候选，并实现双向 MEStorage 和 SavedData 原型，专门验证原生 AE2 的 long 聚合边界、精确大数状态、保存时长和缺失文件处理；同等持久化保证下才比较性能。D01 的父类副作用清单、逐通道能耗反例和蜂箱 pending 保存边界成为 D11–D15 的强制输入。P3 形成基础生产闭环，P5 形成终端＋主动拉取＋保留闭环；网络功能与优化收益尚未实现或验证。

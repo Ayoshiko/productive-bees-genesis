@@ -1,0 +1,91 @@
+sourceSets {
+    baseline {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    baselineImplementation.extendsFrom implementation
+    baselineCompileOnly.extendsFrom compileOnly
+    baselineRuntimeOnly.extendsFrom runtimeOnly
+}
+dependencies {
+    baselineRuntimeOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
+}
+
+def baselineDirectory = layout.buildDirectory.dir('d01-server')
+def acceptedEula = layout.projectDirectory.file('run/eula.txt')
+def baselineModFiles = ['spark-1.10.124-neoforge.jar', 'guideme-21.1.16.jar', 'igleelib-1.21.1-1.2.7.jar']
+def prepareBaseline = tasks.register('prepareD01Baseline') {
+    doLast {
+        if (!acceptedEula.asFile.isFile() || !acceptedEula.asFile.text.contains('eula=true')) {
+            throw new GradleException('D01 requires an already accepted run/eula.txt')
+        }
+        baselineModFiles.each { name ->
+            if (!file("run/mods/${name}").isFile()) {
+                throw new GradleException("D01 requires the existing local dependency: ${name}")
+            }
+        }
+        File directory = baselineDirectory.get().asFile
+        directory.mkdirs()
+        // 重跑不得覆盖已有测量世界；改名保留旧目录后重新运行。
+        if (new File(directory, 'world/level.dat').exists()) {
+            throw new GradleException('D01 world already exists; preserve it before starting a fresh baseline')
+        }
+        new File(directory, 'eula.txt').setText(acceptedEula.asFile.getText('UTF-8'), 'UTF-8')
+        new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
+server-port=25578
+online-mode=false
+level-name=world
+level-seed=17092026
+level-type=minecraft:flat
+generate-structures=false
+spawn-protection=0
+view-distance=5
+simulation-distance=5
+sync-chunk-writes=true
+max-tick-time=120000
+''', 'UTF-8')
+        File modsDirectory = new File(directory, 'mods')
+        modsDirectory.mkdirs()
+        baselineModFiles.each { name ->
+            java.nio.file.Files.copy(file("run/mods/${name}").toPath(), new File(modsDirectory, name).toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+
+neoForge {
+    addModdingDependenciesTo sourceSets.baseline
+    mods.named(mod_id.toString()) { sourceSet(sourceSets.baseline) }
+    runs {
+        d01Server {
+            server()
+            sourceSet = sourceSets.baseline
+            gameDirectory = baselineDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.d01.enabled', 'true'
+            systemProperty 'pbg.d01.warmupTicks', providers.gradleProperty('d01WarmupTicks').getOrElse('1200')
+            systemProperty 'pbg.d01.sampleTicks', providers.gradleProperty('d01SampleTicks').getOrElse('2400')
+            systemProperty 'pbg.d01.codeRevision', providers.gradleProperty('d01CodeRevision').getOrElse('unrecorded')
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareBaseline
+        }
+    }
+}
+
+// NeoForge 加载失败也可能让启动进程返回 0；必须验证夹具完成标志。
+tasks.named('runD01Server') {
+    doLast {
+        File directory = baselineDirectory.get().asFile
+        ['normal-16-base-pairs', 'io-64-ultimate-pairs'].each { scene ->
+            File result = new File(directory, "results/${scene}.json")
+            if (!result.isFile() || !new groovy.json.JsonSlurper().parse(result).productionVerified) {
+                throw new GradleException("D01 did not complete a productive scene: ${scene}")
+            }
+        }
+        if (!new File(directory, 'logs/latest.log').getText('UTF-8').contains('D01_COMPLETE')) {
+            throw new GradleException('D01 server stopped before completing both scenes')
+        }
+    }
+}

@@ -223,6 +223,11 @@ tasks.named('test', Test) {
     useJUnitPlatform()
 }
 
+// D01 基线仅在显式启用时加入开发运行，不进入发布源集和 JAR。
+if (providers.gradleProperty('d01Baseline').isPresent()) {
+    apply from: 'gradle/d01-baseline.gradle'
+}
+
 def releaseModId = mod_id.toString()
 def releaseModVersion = mod_version.toString()
 def releaseCurseForgeVersion = curseforge_release_version.toString()
@@ -300,6 +305,7 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
 
             def forbiddenPrefixes = [
                     'com/ayoshiko/productivebeesgenesis/datagen/',
+                    'com/ayoshiko/productivebeesgenesis/baseline/',
                     'assets/productivebeesgenesis/models/block/factory/mek_apiary/front_led/'
             ]
             zip.entries().each { entry ->
