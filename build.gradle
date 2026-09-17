@@ -227,6 +227,9 @@ tasks.named('test', Test) {
 if (providers.gradleProperty('d01Baseline').isPresent()) {
     apply from: 'gradle/d01-baseline.gradle'
 }
+if (providers.gradleProperty('d02Prototype').isPresent()) {
+    apply from: 'gradle/d02-prototype.gradle'
+}
 
 def releaseModId = mod_id.toString()
 def releaseModVersion = mod_version.toString()
@@ -306,6 +309,7 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
             def forbiddenPrefixes = [
                     'com/ayoshiko/productivebeesgenesis/datagen/',
                     'com/ayoshiko/productivebeesgenesis/baseline/',
+                    'com/ayoshiko/productivebeesgenesis/storageprototype/',
                     'assets/productivebeesgenesis/models/block/factory/mek_apiary/front_led/'
             ]
             zip.entries().each { entry ->

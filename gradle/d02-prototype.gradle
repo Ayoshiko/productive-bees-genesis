@@ -1,0 +1,95 @@
+sourceSets {
+    storagePrototype {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+    storagePrototypeTest {
+        compileClasspath += sourceSets.storagePrototype.output
+        runtimeClasspath += sourceSets.storagePrototype.output
+    }
+}
+configurations {
+    storagePrototypeImplementation.extendsFrom implementation
+    storagePrototypeCompileOnly.extendsFrom compileOnly
+    storagePrototypeRuntimeOnly.extendsFrom runtimeOnly
+    storagePrototypeTestImplementation.extendsFrom testImplementation, storagePrototypeImplementation
+    storagePrototypeTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+dependencies {
+    storagePrototypeImplementation 'it.unimi.dsi:fastutil:8.5.12'
+    storagePrototypeRuntimeOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
+}
+neoForge {
+    addModdingDependenciesTo sourceSets.storagePrototype
+    addModdingDependenciesTo sourceSets.storagePrototypeTest
+    mods.named(mod_id.toString()) { sourceSet(sourceSets.storagePrototype) }
+}
+tasks.register('testD02', Test) {
+    testClassesDirs = sourceSets.storagePrototypeTest.output.classesDirs
+    classpath = sourceSets.storagePrototypeTest.runtimeClasspath
+    useJUnitPlatform()
+}
+def benchmarkRuns = (0..<3).collect { fork ->
+    tasks.register("d02Benchmark${fork}", JavaExec) {
+        dependsOn tasks.named('testD02')
+        classpath = sourceSets.storagePrototype.runtimeClasspath
+        mainClass = 'com.ayoshiko.productivebeesgenesis.storageprototype.bench.AmountBenchmark'
+        maxHeapSize = '3G'
+        args layout.buildDirectory.file("reports/d02/amounts-${fork}.json").get().asFile.absolutePath, fork.toString()
+        if (fork > 0) mustRunAfter "d02Benchmark${fork - 1}"
+    }
+}
+tasks.register('runD02Benchmarks') { dependsOn benchmarkRuns }
+
+def serverDirectory = layout.buildDirectory.dir('d02-server')
+def prepareServer = tasks.register('prepareD02Server') {
+    doLast {
+        File directory = serverDirectory.get().asFile
+        if (new File(directory, 'world/level.dat').exists()) {
+            throw new GradleException('Preserve the existing D02 test directory before a fresh run')
+        }
+        File eula = file('run/eula.txt')
+        if (!eula.isFile() || !eula.getText('UTF-8').contains('eula=true')) {
+            throw new GradleException('D02 requires an already accepted local EULA')
+        }
+        directory.mkdirs()
+        new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
+        new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
+server-port=25579
+online-mode=false
+level-name=world
+level-seed=17092026
+level-type=minecraft:flat
+generate-structures=false
+view-distance=3
+simulation-distance=3
+max-tick-time=300000
+''', 'UTF-8')
+        File mods = new File(directory, 'mods')
+        mods.mkdirs()
+        ['guideme-21.1.16.jar', 'igleelib-1.21.1-1.2.7.jar'].each { name ->
+            java.nio.file.Files.copy(file("run/mods/${name}").toPath(), new File(mods, name).toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+neoForge.runs {
+    d02Server {
+        server()
+        sourceSet = sourceSets.storagePrototype
+        gameDirectory = serverDirectory
+        programArgument '--nogui'
+        jvmArgument '-Xmx4G'
+        systemProperty 'pbg.d02.enabled', 'true'
+        logLevel = org.slf4j.event.Level.INFO
+        taskBefore prepareServer
+    }
+}
+tasks.named('runD02Server') {
+    doLast {
+        File report = new File(serverDirectory.get().asFile, 'results/d02-api.json')
+        if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
+            throw new GradleException('D02 did not finish all API and persistence assertions')
+        }
+    }
+}
