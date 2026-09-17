@@ -5,6 +5,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -37,6 +38,15 @@ final class FeederTagSampler {
 	 * @return 匹配的 ItemStack；无匹配返回 {@link ItemStack#EMPTY}
 	 */
 	static ItemStack randomBlock(List<FeederInventorySlot> slots, TagKey<Block> blockTag) {
+		return randomBlock(slots, blockTag, null);
+	}
+
+	/**
+	 * 随机取一个匹配方块标签且不在排除标签中的 BlockItem。
+	 * PB 的木材蜂和石料蜂用此重载排除 dupe_blacklist，避免复制机器等高价值方块。
+	 */
+	static ItemStack randomBlock(List<FeederInventorySlot> slots, TagKey<Block> blockTag,
+			@Nullable TagKey<Block> excludedTag) {
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		Block selected = null;
 		int matches = 0;
@@ -48,9 +58,27 @@ final class FeederTagSampler {
 			Block block = blockItem.getBlock();
 			// 用 BlockState.is 替代废弃的 Block.builtInRegistryHolder().is()
 			if (!block.defaultBlockState().is(blockTag)) continue;
+			if (excludedTag != null && block.defaultBlockState().is(excludedTag)) continue;
 			if (random.nextInt(++matches) == 0) selected = block;
 		}
 		return selected == null ? ItemStack.EMPTY : new ItemStack(selected);
+	}
+
+	/** 检查生效格中是否存在匹配必需标签且未命中排除标签的方块。 */
+	static boolean containsBlock(List<FeederInventorySlot> slots, TagKey<Block> blockTag,
+			@Nullable TagKey<Block> excludedTag) {
+		for (int i = 0; i < slots.size(); i++) {
+			FeederInventorySlot slot = slots.get(i);
+			if (!slot.isActive()) continue;
+			ItemStack stack = slot.getStack();
+			if (!(stack.getItem() instanceof BlockItem blockItem)) continue;
+			Block block = blockItem.getBlock();
+			if (block.defaultBlockState().is(blockTag)
+					&& (excludedTag == null || !block.defaultBlockState().is(excludedTag))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -74,5 +102,15 @@ final class FeederTagSampler {
 			if (random.nextInt(++matches) == 0) selected = stack;
 		}
 		return selected.isEmpty() ? ItemStack.EMPTY : selected.copy();
+	}
+
+	/** 检查生效格中是否存在匹配物品标签的物品。 */
+	static boolean containsItem(List<FeederInventorySlot> slots, TagKey<Item> itemTag) {
+		for (int i = 0; i < slots.size(); i++) {
+			FeederInventorySlot slot = slots.get(i);
+			if (!slot.isActive()) continue;
+			if (slot.getStack().is(itemTag)) return true;
+		}
+		return false;
 	}
 }

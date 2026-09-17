@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
+import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import cy.jdkdigital.productivebees.init.ModTags;
 import mekanism.api.IContentsListener;
 import mekanism.api.inventory.IInventorySlot;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.Block;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -349,6 +351,11 @@ public class FeederSlotManager {
 				&& hasConversionFlowerInFeeder(beeTypeKey)) {
 			return true;
 		}
+		// 木材/石料/染料蜂没有 configurable 花朵数据，其有效花源由动态产物策略定义。
+		// 在这里复用同一策略，避免黑名单方块被误判为可采蜜后持续空转耗能。
+		if (MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey)) {
+			return MultiFlowerBeeAdapter.hasValidFlower(beeTypeKey, this);
+		}
 		FlowerPreference pref = BeeInfoHelper.getFlowerPreference(beeTypeKey);
 
 		// Rancher 是固定蜜蜂，不经过 BeeReloadListener 的 configurable flower 数据。
@@ -437,6 +444,16 @@ public class FeederSlotManager {
 		return FeederTagSampler.randomBlock(feederSlots, blockTag);
 	}
 
+	/** 按必需标签抽样，并排除 PB 明确禁止复制的方块。 */
+	public ItemStack getRandomBlockFromFeeder(TagKey<Block> blockTag, TagKey<Block> excludedTag) {
+		return FeederTagSampler.randomBlock(feederSlots, blockTag, excludedTag);
+	}
+
+	/** 检查是否存在匹配必需标签且未命中排除标签的生效方块格。 */
+	public boolean containsBlockInFeeder(TagKey<Block> blockTag, @Nullable TagKey<Block> excludedTag) {
+		return FeederTagSampler.containsBlock(feederSlots, blockTag, excludedTag);
+	}
+
 	/**
 	 * 从喂食槽中随机获取一个匹配指定物品标签的物品（模块 1 修复）
 	 * <br/>
@@ -447,6 +464,11 @@ public class FeederSlotManager {
 	 */
 	public ItemStack getRandomItemFromFeeder(TagKey<Item> itemTag) {
 		return FeederTagSampler.randomItem(feederSlots, itemTag);
+	}
+
+	/** 检查是否存在匹配物品标签的生效格。 */
+	public boolean containsItemInFeeder(TagKey<Item> itemTag) {
+		return FeederTagSampler.containsItem(feederSlots, itemTag);
 	}
 
 	/** 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照（委托琥珀工具类） */

@@ -34,6 +34,7 @@ import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
+import com.ayoshiko.productivebeesgenesis.util.SharedPbRecipeCache;
 import com.ayoshiko.productivebeesgenesis.util.SingleIngredientCraftingIndex;
 import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.capabilities.ICapabilityAware;
@@ -345,6 +346,8 @@ public final class ProductiveBeesGenesis {
 		SingleIngredientCraftingIndex.invalidate();
 		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
+		// 失效 PB 离心配方静态共享查找缓存（P1 优化：跨机器共享 LRU，与 CentrifugeRecipeIndex 原子替换同步）
+		SharedPbRecipeCache.invalidate();
 		// 失效精华转化合成配方缓存，确保 /reload 后使用最新唯一配方
 		EssenceConversionUpgradeHelper.invalidateCache();
 		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
@@ -425,6 +428,8 @@ public final class ProductiveBeesGenesis {
 		safeClear(ServerConfigMigrationService::reset, "ServerConfigMigrationService");
 		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
 		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
+		// 清理 PB 离心配方静态共享查找缓存 — 防止跨存档残留旧 RecipeHolder 引用（P1 优化）
+		safeClear(SharedPbRecipeCache::invalidate, "SharedPbRecipeCache");
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
 		// 清理机械蜂箱产出配方缓存（Task 16.3 — 静态缓存防止跨存档泄漏）
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");

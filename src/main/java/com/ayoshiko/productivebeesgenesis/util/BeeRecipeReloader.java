@@ -149,5 +149,8 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		// 修复：onTagsReload 触发时 ServerLifecycleHooks.getCurrentServer() 可能为 null（服务器启动早期），
 		// 导致服务端跳过索引重建，所有配方查找走 FALLBACK 全量遍历路径（性能 O(N) 而非 O(1)）
 		CentrifugeRecipeIndex.rebuild(recipeManager);
+		// 延迟重试可能晚于 TagsUpdatedEvent 完成，必须在真正重建点同步清理长短两层查找缓存。
+		SharedPbRecipeCache.invalidate();
+		ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
 	}
 }

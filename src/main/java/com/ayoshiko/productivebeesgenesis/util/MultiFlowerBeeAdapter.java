@@ -59,6 +59,13 @@ public final class MultiFlowerBeeAdapter {
 		return STRATEGIES.containsKey(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
 	}
 
+	/** 使用与动态产物抽样相同的标签规则检查喂食槽中是否有合法花源。 */
+	public static boolean hasValidFlower(ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder) {
+		if (feeder == null) return false;
+		MultiFlowerStrategy strategy = STRATEGIES.get(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
+		return strategy != null && strategy.hasValidFlower(feeder);
+	}
+
 	/**
 	 * 从喂食槽推断多花蜜脾蜜蜂的产物
 	 * <br/>
@@ -94,6 +101,8 @@ public final class MultiFlowerBeeAdapter {
 	 */
 	private interface MultiFlowerStrategy {
 		ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level);
+
+		boolean hasValidFlower(FeederSlotManager feeder);
 	}
 
 	/**
@@ -105,7 +114,12 @@ public final class MultiFlowerBeeAdapter {
 	private static final class LumberStrategy implements MultiFlowerStrategy {
 		@Override
 		public ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
-			return feeder.getRandomBlockFromFeeder(ModTags.LUMBER);
+			return feeder.getRandomBlockFromFeeder(ModTags.LUMBER, ModTags.DUPE_BLACKLIST);
+		}
+
+		@Override
+		public boolean hasValidFlower(FeederSlotManager feeder) {
+			return feeder.containsBlockInFeeder(ModTags.LUMBER, ModTags.DUPE_BLACKLIST);
 		}
 	}
 
@@ -118,7 +132,12 @@ public final class MultiFlowerBeeAdapter {
 	private static final class QuarryStrategy implements MultiFlowerStrategy {
 		@Override
 		public ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
-			return feeder.getRandomBlockFromFeeder(ModTags.QUARRY);
+			return feeder.getRandomBlockFromFeeder(ModTags.QUARRY, ModTags.DUPE_BLACKLIST);
+		}
+
+		@Override
+		public boolean hasValidFlower(FeederSlotManager feeder) {
+			return feeder.containsBlockInFeeder(ModTags.QUARRY, ModTags.DUPE_BLACKLIST);
 		}
 	}
 
@@ -145,6 +164,12 @@ public final class MultiFlowerBeeAdapter {
 			}
 			// 2. 向后兼容：喂食槽直接放入染料时产出该染料
 			return feeder.getRandomItemFromFeeder(ModTags.Common.DYES);
+		}
+
+		@Override
+		public boolean hasValidFlower(FeederSlotManager feeder) {
+			return feeder.containsBlockInFeeder(net.minecraft.tags.BlockTags.FLOWERS, null)
+					|| feeder.containsItemInFeeder(ModTags.Common.DYES);
 		}
 	}
 }
