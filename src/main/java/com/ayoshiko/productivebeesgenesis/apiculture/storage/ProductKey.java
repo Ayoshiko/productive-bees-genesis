@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.StringTagVisitor;
 import net.minecraft.resources.ResourceLocation;
 
 /** 数量不参与身份；冻结完整持久组件，避免调用方修改嵌套 NBT 后破坏索引。 */
@@ -13,6 +14,7 @@ public final class ProductKey {
 	private final ResourceLocation id;
 	private final CompoundTag components;
 	private final int hash;
+	private volatile String orderingKey;
 
 	public ProductKey(Kind kind, ResourceLocation id, CompoundTag components) {
 		this.kind = Objects.requireNonNull(kind);
@@ -25,6 +27,12 @@ public final class ProductKey {
 	public ResourceLocation id() { return id; }
 	public CompoundTag components() { return components.copy(); }
 	public boolean hasComponent(String id) { return components.contains(id); }
+	/** StringTagVisitor 在本版本递归排序复合键；完整带类型 SNBT 消解哈希碰撞。 */
+	public String orderingKey() {
+		String value = orderingKey;
+		if (value == null) orderingKey = value = kind.name() + "\n" + id + "\n" + new StringTagVisitor().visit(components);
+		return value;
+	}
 	public Optional<Tag> component(String id) {
 		Tag value = components.get(id);
 		return value == null ? Optional.empty() : Optional.of(value.copy());
