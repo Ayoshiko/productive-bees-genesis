@@ -56,15 +56,20 @@ public final class ProductLedger {
 		return guarded(() -> eligible(normalize(inputs), normalize(outputs), policyRevision));
 	}
 	public LedgerTransaction prepare(Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs, long policyRevision) {
-		return guarded(() -> {
-			var debit = normalize(inputs);
-			var credit = normalize(outputs);
-			if (!eligible(debit, credit, policyRevision)) return null;
-			var transaction = new LedgerTransaction(authority, policyRevision, debit, credit);
-			advanceRevision();
-			reservations.add(transaction);
-			return transaction;
-		});
+		return guarded(() -> prepareInternal(inputs, outputs, policyRevision));
+	}
+	public LedgerTransaction prepareAtRevision(Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs,
+			long expectedLedgerRevision, long policyRevision) {
+		return guarded(() -> revision == expectedLedgerRevision ? prepareInternal(inputs, outputs, policyRevision) : null);
+	}
+	private LedgerTransaction prepareInternal(Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs, long policyRevision) {
+		var debit = normalize(inputs);
+		var credit = normalize(outputs);
+		if (!eligible(debit, credit, policyRevision)) return null;
+		var transaction = new LedgerTransaction(authority, policyRevision, debit, credit);
+		advanceRevision();
+		reservations.add(transaction);
+		return transaction;
 	}
 	private boolean eligible(Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs, long policyRevision) {
 		if (reservations.size() >= maxPending || policy.snapshot().revision() != policyRevision || inputs.isEmpty() && outputs.isEmpty()) return false;

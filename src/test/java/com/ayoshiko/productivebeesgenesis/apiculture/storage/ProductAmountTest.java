@@ -19,6 +19,16 @@ class ProductAmountTest {
 		assertSame(ProductAmount.ZERO, huge.subtract(huge));
 	}
 	@Test
+	void batchMultiplicationAndDivisionRetainLargeRemainders() {
+		var unit = ProductAmount.of(Long.MAX_VALUE);
+		var total = unit.multiply(300).add(ProductAmount.of(19));
+		assertEquals(ProductAmount.of(300), total.divide(unit));
+		assertEquals(ProductAmount.of(19), total.subtract(unit.multiply(300)));
+		assertEquals(ProductAmount.ZERO, total.multiply(0));
+		assertThrows(IllegalArgumentException.class, () -> unit.multiply(-1));
+		assertThrows(IllegalArgumentException.class, () -> unit.divide(ProductAmount.ZERO));
+	}
+	@Test
 	void signedInputsAndUnderflowAreRejected() {
 		assertThrows(IllegalArgumentException.class, () -> ProductAmount.of(-1));
 		assertThrows(IllegalArgumentException.class, () -> ProductAmount.of(Long.MIN_VALUE));

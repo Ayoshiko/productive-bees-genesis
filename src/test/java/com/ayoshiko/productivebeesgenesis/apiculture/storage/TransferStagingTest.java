@@ -78,6 +78,22 @@ class TransferStagingTest {
 		assertEquals(amount(4), ledger.available(KEY));
 	}
 	@Test
+	void policyCallbackCannotResolveAnotherTransferDuringSettlement() {
+		var registry = new ProductPolicyRegistry(policy(1, KEY));
+		var ledger = new ProductLedger(registry, 4);
+		var staging = new TransferStaging(ledger, 2, 64);
+		var unknown = staging.transfer("first", KEY, 10, TransferStaging.Direction.IMPORT, n -> { throw new IllegalStateException("unknown"); });
+		var held = staging.transfer("second", KEY, 10, TransferStaging.Direction.IMPORT, n -> { registry.replace(policy(2)); return 5; });
+		var dynamic = new DynamicProductRule("test:reentrant", KEY.kind(), KEY.id(), false, key -> {
+			staging.resolve(unknown, 10); return true;
+		});
+		registry.replace(new ProductPolicySnapshot(3, java.util.List.of(), java.util.List.of(dynamic)));
+		assertFalse(staging.settle(held));
+		assertEquals(TransferStaging.Phase.UNKNOWN, unknown.view().phase());
+		assertEquals(amount(5), held.view().held());
+		assertEquals(ProductAmount.ZERO, ledger.available(KEY));
+	}
+	@Test
 	void invalidExternalAmountDoesNotMintOrRefundItems() {
 		var ledger = new ProductLedger(new ProductPolicyRegistry(policy(1, KEY)), 4);
 		ledger.insert(KEY, amount(50), ProductLedger.Action.EXECUTE);

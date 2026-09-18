@@ -19,7 +19,7 @@ import net.minecraft.world.item.component.ItemContainerContents;
 import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.require;
 
 final class ProductPolicyProbe {
-	static void verify(ServerLevel level, JsonObject report) {
+	static ProductPolicySnapshot verify(ServerLevel level, JsonObject report) {
 		var compiled = PbProductPolicyCompiler.compile(level, 1);
 		var registry = new ProductPolicyRegistry(compiled.snapshot());
 		report.addProperty("staticDescriptorCount", compiled.snapshot().descriptorCount());
@@ -50,5 +50,6 @@ final class ProductPolicyProbe {
 		registry.replace(new ProductPolicySnapshot(2, List.of(), List.of()));
 		require(!registry.evaluate(ProductKeyCodec.item(new ItemStack(Items.DIAMOND), level.registryAccess())).allowed(), "Old policy survived replacement");
 		report.addProperty("productPolicyAdmission", true);
+		return compiled.snapshot();
 	}
 }

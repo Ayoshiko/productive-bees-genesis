@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** 在显式库存快照上一次联合分配；返回额度不是预约，消费前必须重验账本 revision。 */
@@ -21,18 +22,25 @@ public final class GroupAllowanceAllocator {
 	private GroupAllowanceAllocator() { }
 
 	public static Plan allocate(ProductLedger.Snapshot snapshot, ReservePolicy policy) {
+		return allocate(snapshot, policy, snapshot.balances().keySet());
+	}
+	public static Plan allocate(ProductLedger.Snapshot snapshot, ReservePolicy policy, Set<ProductKey> candidates) {
 		Map<ProductKey, ProductAmount> available = new ConcurrentHashMap<>();
 		snapshot.balances().forEach((key, amount) -> available.put(key,
 				amount.subtract(snapshot.reserved().getOrDefault(key, ProductAmount.ZERO))));
 		if (snapshot.reserved().keySet().stream().anyMatch(key -> !available.containsKey(key))) {
 			throw new IllegalArgumentException("Reservation has no balance");
 		}
-		return new Plan(snapshot.revision(), policy.scope(), allocateAvailable(available, policy));
+		return new Plan(snapshot.revision(), policy.scope(), allocateAvailable(available, policy, candidates));
 	}
 	public static Map<ProductKey, ProductAmount> allocateAvailable(Map<ProductKey, ProductAmount> stock, ReservePolicy policy) {
+		return allocateAvailable(stock, policy, stock.keySet());
+	}
+	private static Map<ProductKey, ProductAmount> allocateAvailable(Map<ProductKey, ProductAmount> stock, ReservePolicy policy, Set<ProductKey> candidates) {
 		var available = Map.copyOf(stock);
 		var keys = available.keySet().stream().sorted(Comparator.comparing(ProductKey::orderingKey)).toList();
 		Map<ProductKey, ProductAmount> caps = new ConcurrentHashMap<>(available);
+		caps.replaceAll((key, amount) -> candidates.contains(key) ? amount : ProductAmount.ZERO);
 		Map<ProductKey, List<Budget>> constraints = new ConcurrentHashMap<>();
 		for (var layer : List.of(policy.global(), policy.rule())) {
 			addLayer(layer, keys, available, caps, constraints);

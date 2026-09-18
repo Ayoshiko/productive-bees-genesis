@@ -35,6 +35,15 @@ public final class ProductAmount implements Comparable<ProductAmount> {
 		return large == null ? of(small - other.small) : of(large.subtract(other.exact()));
 	}
 	public ProductAmount min(ProductAmount other) { return compareTo(other) <= 0 ? this : other; }
+	public ProductAmount multiply(long count) {
+		if (count < 0) throw new IllegalArgumentException("Negative multiplier");
+		if (count == 0 || isZero()) return ZERO;
+		return large == null && small <= Long.MAX_VALUE / count ? of(small * count) : of(exact().multiply(BigInteger.valueOf(count)));
+	}
+	public ProductAmount divide(ProductAmount divisor) {
+		if (divisor.isZero()) throw new IllegalArgumentException("Zero divisor");
+		return large == null && divisor.large == null ? of(small / divisor.small) : of(exact().divide(divisor.exact()));
+	}
 	@Override
 	public int compareTo(ProductAmount other) {
 		if (large == null) return other.large == null ? Long.compare(small, other.small) : -1;
