@@ -1,0 +1,64 @@
+sourceSets {
+    domainProbe {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    domainProbeImplementation.extendsFrom implementation
+    domainProbeCompileOnly.extendsFrom compileOnly
+    domainProbeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
+if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
+def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
+def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
+    doLast {
+        File directory = probeDirectory.get().asFile
+        if (directory.exists()) throw new GradleException('Use a new networkProbeRun; existing evidence is preserved')
+        File eula = file('run/eula.txt')
+        if (!eula.isFile() || !eula.getText('UTF-8').contains('eula=true')) {
+            throw new GradleException('Probe requires the already accepted local EULA')
+        }
+        directory.mkdirs()
+        new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
+        new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
+server-port=25581
+online-mode=false
+level-name=world
+level-seed=18092026
+level-type=minecraft:flat
+generate-structures=false
+view-distance=3
+simulation-distance=3
+''', 'UTF-8')
+        File mods = new File(directory, 'mods')
+        mods.mkdirs()
+        java.nio.file.Files.copy(file('run/mods/igleelib-1.21.1-1.2.7.jar').toPath(),
+                new File(mods, 'igleelib-1.21.1-1.2.7.jar').toPath())
+    }
+}
+neoForge {
+    addModdingDependenciesTo sourceSets.domainProbe
+    mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
+    runs {
+        networkDomainServer {
+            server()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.domain.enabled', 'true'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+    }
+}
+tasks.named('runNetworkDomainServer') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/domain.json')
+        if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
+            throw new GradleException('Network domain assertions did not complete')
+        }
+    }
+}
