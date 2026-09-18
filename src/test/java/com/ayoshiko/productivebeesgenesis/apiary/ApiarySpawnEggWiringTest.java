@@ -30,20 +30,28 @@ class ApiarySpawnEggWiringTest {
 			"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiarySlotManager.java";
 
 	@Test
-	void helperUsesPBConfigurableEggAndStructuredComponents() throws Exception {
+	void helperUsesPbSpawnEggCatalogAndStructuredComponents() throws Exception {
 		String source = Files.readString(Path.of(HELPER));
-		assertTrue(source.contains("ModItems.CONFIGURABLE_SPAWN_EGG.get()"));
+		assertTrue(source.contains("ModItems.SPAWN_EGGS"),
+				"所有 PB 专用蜜蜂刷怪蛋都必须走同一个注册列表入口");
+		assertTrue(source.contains("spawnEgg.getType(ItemStack.EMPTY)"),
+				"专用刷怪蛋必须使用注册时绑定的实体类型");
 		assertTrue(source.contains("DataComponents.ENTITY_DATA"));
-		assertTrue(source.contains("ResourceLocation.tryParse(type)"));
+		assertTrue(source.contains("!entityId.toString().equals(tag.getString(\"id\"))"),
+				"必须拒绝被 ENTITY_DATA.id 篡改为其他实体的 PB 刷怪蛋");
+		assertTrue(source.contains("ResourceLocation.tryParse(tag.getString(\"type\"))"));
 		assertTrue(source.contains("CONFIGURABLE_ENTITY_ID"));
 	}
 
 	@Test
 	void serverBuildsCompletePbBeeDataWithoutSpawningAnEntity() throws Exception {
 		String source = Files.readString(Path.of(HANDLER));
-		assertTrue(source.contains("BeeReloadListener.INSTANCE.getData(beeType) == null"));
+		assertTrue(source.contains("isKnownConfigurableBee(spawnEgg)"));
 		assertTrue(source.contains("if (!targetSlot.isEmpty()) return false;"));
-		assertTrue(source.contains("bee.setBeeType(beeType.toString())"));
+		assertTrue(source.contains("spawnEgg.entityType().create(manager.getLevel())"));
+		assertTrue(source.contains("entity instanceof ProductiveBee bee"),
+				"必须在服务端拒绝被篡改为非 PB 蜜蜂实体的刷怪蛋");
+		assertTrue(source.contains("configurable.setBeeType(spawnEgg.configurableBeeType().toString())"));
 		assertTrue(source.contains("bee.setDefaultAttributes()"),
 				"必须先让 PB 按蜂种初始化默认基因属性");
 		assertTrue(source.contains("BeeCage.captureEntity(bee, cage)"),
@@ -92,7 +100,7 @@ class ApiarySpawnEggWiringTest {
 		assertTrue(slotManager.contains("BeeSpawnEggHelper.isResourceBeeSpawnEgg(stack)"));
 
 		String handler = Files.readString(Path.of(HANDLER));
-		assertTrue(handler.contains("tryInsertBeesFromSpawnEggInput(cageStack, spawnEggType)"));
+		assertTrue(handler.contains("tryInsertBeesFromSpawnEggInput(cageStack, spawnEgg)"));
 		assertTrue(handler.contains("Math.min(eggStack.getCount(), countEmptyBeeSlots(beeSlots))"));
 		assertTrue(handler.contains("shrinkStack(inserted, Action.EXECUTE)"));
 		assertTrue(handler.contains("if (toInsert <= 0) return;"));

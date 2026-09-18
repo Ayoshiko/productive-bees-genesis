@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
-import com.ayoshiko.productivebeesgenesis.util.RecipeCacheManager;
+import com.ayoshiko.productivebeesgenesis.util.SharedPbRecipeCache;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
@@ -25,45 +25,40 @@ import java.util.Optional;
 	 * 双层缓存策略：
 	 * <ul>
 	 *   <li>上层 {@link #inputRecipeCache}：TTL 100 tick + 指纹比对（Item + bee_type），减少每 tick 重复查找</li>
-	 *   <li>下层 {@link #pbRecipeCache}：LRU 长期缓存，支持缓存"无配方"结果，避免重复全量遍历</li>
+	 *   <li>下层 {@link SharedPbRecipeCache}：静态共享 LRU 长期缓存，支持缓存"无配方"结果，
+	 *       消除 N 台离心机各自持有长期缓存造成的重复全量遍历与内存占用</li>
 	 * </ul>
-	 * 配方重载时由 {@link PbRecipeProcessor#checkRecipeVersion()} 调用 {@link #clearCaches()} 失效。
+	 * 配方重载时由 {@link PbRecipeProcessor#checkRecipeVersion()} 调用 {@link #clearCaches()} 失效；
+	 * 静态缓存在 {@code ProductiveBeesGenesis#onTagsReload} 经 {@link SharedPbRecipeCache#invalidate()} 全局清空。
 	 * <p>
-	 * 线程安全：方块实体在服务端单线程执行，无需同步锁（参考 {@link RecipeCacheManager} 的设计）。
+	 * 线程安全：方块实体在服务端单线程执行；静态缓存自身用 synchronizedMap 防御 JEI 客户端并发访问。
 	 */
 public class PbRecipeFinder {
 
 	/** PB离心配方类型 */
 	private static final RecipeType<CentrifugeRecipe> CENTRIFUGE_RECIPE_TYPE = ModRecipeTypes.CENTRIFUGE_TYPE.get();
 
-	/** 配方缓存最大条目数 */
-	private static final int MAX_RECIPE_CACHE_SIZE = 256;
-
 	/** PB配方处理上下文 — 由Factory TileEntity提供 */
 	private final PbRecipeContext context;
 
-	/** PB离心配方查找缓存（实例级LRU，避免每tick全量遍历） */
-	private final RecipeCacheManager<RecipeHolder<CentrifugeRecipe>> pbRecipeCache;
-
 	/**
-	 * PB配方查找的短期缓存（TTL 100 tick + 最近 4 个指纹条目）
+	 * PB配方查找的短期缓存（TTL 100 tick + 最近 20 个指纹条目）
 	 * <br/>
-	 * 作为 {@link #pbRecipeCache} 的上层缓存：tryProcessPbRecipe 每 tick 调用 findPbRecipe 时，
-	 * 通过指纹（Item + bee_type/组件哈希）快速命中缓存，跳过 pbRecipeCache 的
-	 * {@link ItemStack#hashItemAndComponents} 计算。配方重载时由 {@link #clearCaches()} 清空。
+	 * 作为 {@link SharedPbRecipeCache} 的上层缓存：tryProcessPbRecipe 每 tick 调用 findPbRecipe 时，
+	 * 通过指纹（Item + bee_type/组件哈希）快速命中缓存，跳过下层缓存的 key 计算。
+	 * 配方重载时由 {@link #clearCaches()} 清空。
 	 */
 	private final InputValidationCache inputRecipeCache = new InputValidationCache();
 
 	public PbRecipeFinder(PbRecipeContext context) {
 		this.context = context;
-		this.pbRecipeCache = new RecipeCacheManager<>(MAX_RECIPE_CACHE_SIZE);
 	}
 
 	/**
-	 * 查找匹配输入物品的PB离心配方（双层缓存：inputRecipeCache + pbRecipeCache）
+	 * 查找匹配输入物品的PB离心配方（双层缓存：inputRecipeCache + SharedPbRecipeCache）
 	 * <br/>
-	 * 上层 {@link #inputRecipeCache}（TTL 100 tick + 指纹比对）减少每 tick 重复查找；
-	 * 下层 {@link #pbRecipeCache}（LRU，配方重载时清空）提供长期缓存。
+	 * 上层 {@link #inputRecipeCache}（TTL + 指纹比对）减少每 tick 重复查找；
+	 * 下层 {@link SharedPbRecipeCache}（静态共享 LRU，配方重载时清空）提供跨机器长期缓存。
 	 * 普通蜜脾路径优先用 {@link CentrifugeRecipeIndex} O(1) 查找，未命中再回退到全量遍历（防御性）。
 	 * 蜜脾块路径优先用 {@link CentrifugeRecipeIndex#getCombBlock} O(1) 查找静态预生成配方，
 	 * 未命中再回退到全量遍历（防御性，仅索引构建遗漏时触发）。
@@ -76,7 +71,7 @@ public class PbRecipeFinder {
 		Level level = context.level();
 		if (level == null) return null;
 
-		// 上层短期缓存（TTL + 指纹比对），减少 pbRecipeCache 的 hashItemAndComponents 开销
+		// 上层短期缓存（TTL + 指纹比对），减少 SharedPbRecipeCache 的 hashItemAndComponents 开销
 		InputValidationCache.ValidationResult cached = inputRecipeCache.getResult(level, input,
 				() -> {
 					RecipeHolder<CentrifugeRecipe> recipe = findPbRecipeUncached(input);
@@ -86,18 +81,18 @@ public class PbRecipeFinder {
 	}
 
 	/**
-	 * 查找PB配方的底层实现（仅查 pbRecipeCache LRU + 全量遍历，不经 inputRecipeCache）
+	 * 查找PB配方的底层实现（仅查 SharedPbRecipeCache 静态 LRU + 全量遍历，不经 inputRecipeCache）
 	 * <br/>
 	 * 由 {@link #findPbRecipe} 的 inputRecipeCache 未命中时通过 validator 调用。
-	 * 查找结果会写入 pbRecipeCache 供后续长期复用。
+	 * 查找结果会写入静态共享缓存供后续跨机器长期复用。
 	 */
 	@Nullable
 	private RecipeHolder<CentrifugeRecipe> findPbRecipeUncached(ItemStack input) {
 		Level level = context.level();
 		if (level == null) return null;
 
-		// 查询 LRU 缓存（支持缓存"无配方"结果，避免重复全量遍历）
-		Optional<RecipeHolder<CentrifugeRecipe>> cached = pbRecipeCache.get(input);
+		// 查询静态共享 LRU 缓存（支持缓存"无配方"结果，避免重复全量遍历）
+		Optional<RecipeHolder<CentrifugeRecipe>> cached = SharedPbRecipeCache.get(input);
 		if (cached != null) {
 			return cached.orElse(null);
 		}
@@ -108,7 +103,7 @@ public class PbRecipeFinder {
 			if (beeType != null) {
 				RecipeHolder<CentrifugeRecipe> blockRecipe = CentrifugeRecipeIndex.getCombBlock(beeType);
 				if (blockRecipe != null) {
-					pbRecipeCache.put(input, blockRecipe);
+					SharedPbRecipeCache.put(input, blockRecipe);
 					return blockRecipe;
 				}
 			}
@@ -116,11 +111,11 @@ public class PbRecipeFinder {
 			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
 					.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
 				if (holder.value().ingredient.test(input)) {
-					pbRecipeCache.put(input, holder);
+					SharedPbRecipeCache.put(input, holder);
 					return holder;
 				}
 			}
-			pbRecipeCache.put(input, null);
+			SharedPbRecipeCache.put(input, null);
 			return null;
 		}
 
@@ -130,18 +125,18 @@ public class PbRecipeFinder {
 		if (CentrifugeRecipeIndex.isStorageBlockHoneycomb(input)) {
 			RecipeHolder<CentrifugeRecipe> specialRecipe = CentrifugeRecipeIndex.getSpecialCombBlock(input);
 			if (specialRecipe != null) {
-				pbRecipeCache.put(input, specialRecipe);
+				SharedPbRecipeCache.put(input, specialRecipe);
 				return specialRecipe;
 			}
 			// 索引未命中 — 全量遍历回退（防御性）
 			for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
 					.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
 				if (holder.value().ingredient.test(input)) {
-					pbRecipeCache.put(input, holder);
+					SharedPbRecipeCache.put(input, holder);
 					return holder;
 				}
 			}
-			pbRecipeCache.put(input, null);
+			SharedPbRecipeCache.put(input, null);
 			return null;
 		}
 
@@ -150,7 +145,7 @@ public class PbRecipeFinder {
 		if (beeType != null) {
 			RecipeHolder<CentrifugeRecipe> indexed = CentrifugeRecipeIndex.get(beeType);
 			if (indexed != null && indexed.value().ingredient.test(input)) {
-				pbRecipeCache.put(input, indexed);
+				SharedPbRecipeCache.put(input, indexed);
 				return indexed;
 			}
 		}
@@ -159,19 +154,18 @@ public class PbRecipeFinder {
 		for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
 				.getAllRecipesFor(CENTRIFUGE_RECIPE_TYPE)) {
 			if (holder.value().ingredient.test(input)) {
-				pbRecipeCache.put(input, holder);
+				SharedPbRecipeCache.put(input, holder);
 				return holder;
 			}
 		}
 
 		// 缓存"无配方"结果，避免下次重复全量遍历
-		pbRecipeCache.put(input, null);
+		SharedPbRecipeCache.put(input, null);
 		return null;
 	}
 
-	/** 配方重载时清空所有查找缓存（由 PbRecipeProcessor.checkRecipeVersion 调用） */
+	/** 配方重载时清空本实例的短期缓存（静态共享缓存由 ProductiveBeesGenesis.onTagsReload 统一失效） */
 	public void clearCaches() {
-		pbRecipeCache.clear();
 		inputRecipeCache.clear();
 	}
 }

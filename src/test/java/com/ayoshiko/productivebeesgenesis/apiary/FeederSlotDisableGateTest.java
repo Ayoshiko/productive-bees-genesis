@@ -70,7 +70,7 @@ class FeederSlotDisableGateTest {
 	 * 花朵判定与产物抽样的全部扫描路径统一以 isActive 为判据
 	 * <br/>
 	 * 管理器侧三条：hasAnyFlower / blocks 精确匹配 / 转化原料花朵；
-	 * 抽样侧两条：lumber-quarry 方块抽样 / dye 物品抽样。
+	 * 动态策略侧四条：方块/物品的产物抽样与花源存在性检查。
 	 */
 	@Test
 	void flowerScanPathsSkipDisabledSlots() throws Exception {
@@ -83,8 +83,8 @@ class FeederSlotDisableGateTest {
 		assertTrue(manager.contains("invalidateFlowerCache();"));
 
 		String sampler = Files.readString(Path.of(TAG_SAMPLER));
-		assertEquals(2, countOccurrences(sampler, "if (!slot.isActive()) continue;"),
-				"多花蜜蜂的方块抽样与物品抽样都必须跳过禁用格");
+		assertEquals(4, countOccurrences(sampler, "if (!slot.isActive()) continue;"),
+				"多花蜜蜂的产物抽样与花源检查都必须跳过禁用格");
 
 		String state = Files.readString(Path.of(DISABLE_STATE));
 		assertTrue(state.contains("if (slot.isEmpty()) return false;"),

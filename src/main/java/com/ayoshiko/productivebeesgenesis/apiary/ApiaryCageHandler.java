@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import cy.jdkdigital.productivebees.common.item.BeeCage;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
@@ -75,9 +76,9 @@ class ApiaryCageHandler {
 
 		try {
 			// 刷怪蛋不走蜂笼输出逻辑，按空槽数量批量直接写入蜜蜂数据。
-			ResourceLocation spawnEggType = BeeSpawnEggHelper.getBeeType(cageStack);
-			if (spawnEggType != null) {
-				tryInsertBeesFromSpawnEggInput(cageStack, spawnEggType);
+			BeeSpawnEggHelper.BeeSpawnEggData spawnEgg = BeeSpawnEggHelper.resolve(cageStack);
+			if (spawnEgg != null) {
+				tryInsertBeesFromSpawnEggInput(cageStack, spawnEgg);
 				return;
 			}
 			if (!isCageItem(cageStack)) return;
@@ -100,9 +101,10 @@ class ApiaryCageHandler {
 	 * 只解析一次刷怪蛋类型，并按选中槽位优先、其余槽位顺序填充，避免每个槽位重复读取组件。
 	 * 输入槽仅按实际写入数量扣除，蜂箱已满时保留剩余刷怪蛋。
 	 */
-	private void tryInsertBeesFromSpawnEggInput(ItemStack eggStack, ResourceLocation beeType) {
-		if (BeeReloadListener.INSTANCE.getData(beeType) == null) return;
-		CompoundTag beeData = buildBeeDataFromSpawnEgg(beeType);
+	private void tryInsertBeesFromSpawnEggInput(
+			ItemStack eggStack, BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
+		if (!isKnownConfigurableBee(spawnEgg)) return;
+		CompoundTag beeData = buildBeeDataFromSpawnEgg(spawnEgg);
 		if (beeData == null) return;
 
 		BeeSlot[] beeSlots = manager.getBeeSlots();
@@ -372,11 +374,11 @@ class ApiaryCageHandler {
 		BeeSlot targetSlot = manager.getBeeSlot(slotIndex);
 		if (!targetSlot.isEmpty()) return false;
 
-		ResourceLocation beeType = BeeSpawnEggHelper.getBeeType(cursorEgg);
-		if (beeType == null || BeeReloadListener.INSTANCE.getData(beeType) == null) return false;
+		BeeSpawnEggHelper.BeeSpawnEggData spawnEgg = BeeSpawnEggHelper.resolve(cursorEgg);
+		if (spawnEgg == null || !isKnownConfigurableBee(spawnEgg)) return false;
 
-		// 从刷怪蛋 ENTITY_DATA 提取蜜蜂类型，构造等价蜂笼 beeData
-		CompoundTag beeData = buildBeeDataFromSpawnEgg(beeType);
+		// 按刷怪蛋实体类型构造等价蜂笼 beeData；可配置蜂额外应用 ENTITY_DATA.type。
+		CompoundTag beeData = buildBeeDataFromSpawnEgg(spawnEgg);
 		if (beeData == null) return false;
 
 		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态，与蜂笼路径一致）
@@ -390,24 +392,23 @@ class ApiaryCageHandler {
 	}
 
 	/**
-	 * 从刷怪蛋构建蜂笼等价的 beeData NBT
-	 * 刷怪蛋存储格式：ENTITY_DATA → { type: "productivebees:iron", ... }
-	 * 蜂笼存储格式：CUSTOM_DATA → { entity: "productivebees:configurable_bee", type: "productivebees:iron", ... }
-	 * 此方法将刷怪蛋格式转换为蜂笼格式，使 BeeSlot 无需区分来源。
+	 * 从 PB 刷怪蛋构建蜂笼等价的 beeData NBT。
+	 * 可配置蜂从 ENTITY_DATA.type 恢复具体蜂种；石料、木材等专用蜂直接创建刷怪蛋绑定的实体类型。
 	 *
-	 * @param beeType 已通过 BeeReloadListener 校验的具体资源蜜蜂类型
+	 * @param spawnEgg 已通过注册项与组件校验的 PB 蜜蜂蛋描述
 	 * @return 等价蜂笼 beeData，解析失败返回 null
 	 */
-	private CompoundTag buildBeeDataFromSpawnEgg(ResourceLocation beeType) {
-		if (beeType == null || manager.getLevel() == null || manager.getLevel().isClientSide) return null;
+	private CompoundTag buildBeeDataFromSpawnEgg(BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
+		if (spawnEgg == null || manager.getLevel() == null || manager.getLevel().isClientSide) return null;
 		try {
-			EntityType<?> entityType = EntityType.byString(BeeSpawnEggHelper.CONFIGURABLE_ENTITY_ID).orElse(null);
-			if (entityType == null) return null;
-			Entity entity = entityType.create(manager.getLevel());
-			if (!(entity instanceof ConfigurableBee bee)) return null;
+			Entity entity = spawnEgg.entityType().create(manager.getLevel());
+			if (!(entity instanceof ProductiveBee bee)) return null;
 
 			// 使用 PB 原版默认属性初始化，保证刷怪蛋直入与正常放出/捕获完全一致。
-			bee.setBeeType(beeType.toString());
+			if (bee instanceof ConfigurableBee configurable) {
+				if (spawnEgg.configurableBeeType() == null) return null;
+				configurable.setBeeType(spawnEgg.configurableBeeType().toString());
+			}
 			bee.setDefaultAttributes();
 			bee.setHasNectar(false);
 
@@ -422,6 +423,12 @@ class ApiaryCageHandler {
 					ProductiveBeesGenesis.LOGGER.warn("构造刷怪蛋蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
 			return null;
 		}
+	}
+
+	/** 专用实体蜂无需数据包定义；只有 configurable_bee 必须验证具体蜂种存在。 */
+	private static boolean isKnownConfigurableBee(BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
+		ResourceLocation configurableType = spawnEgg.configurableBeeType();
+		return configurableType == null || BeeReloadListener.INSTANCE.getData(configurableType) != null;
 	}
 
 	// ===== 槽位填充工具方法 =====
