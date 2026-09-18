@@ -1,0 +1,70 @@
+sourceSets {
+    capacityProbe {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    capacityProbeImplementation.extendsFrom implementation
+    capacityProbeCompileOnly.extendsFrom compileOnly
+    capacityProbeRuntimeOnly.extendsFrom runtimeOnly
+}
+def withAe = providers.gradleProperty('d03WithAe').map { it.toBoolean() }.getOrElse(false)
+if (withAe) {
+    dependencies { capacityProbeRuntimeOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar') }
+}
+def probeDirectory = layout.buildDirectory.dir(withAe ? 'd03-server-ae' : 'd03-server-no-ae')
+def prepareProbe = tasks.register('prepareD03Probe') {
+    doLast {
+        File directory = probeDirectory.get().asFile
+        if (new File(directory, 'world/level.dat').exists()) {
+            throw new GradleException('Preserve the existing D03 directory before a fresh probe')
+        }
+        File eula = file('run/eula.txt')
+        if (!eula.isFile() || !eula.getText('UTF-8').contains('eula=true')) {
+            throw new GradleException('D03 requires the already accepted local EULA')
+        }
+        directory.mkdirs()
+        new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
+        new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
+server-port=25580
+online-mode=false
+level-name=world
+level-seed=17092026
+level-type=minecraft:flat
+generate-structures=false
+view-distance=3
+simulation-distance=3
+''', 'UTF-8')
+        File mods = new File(directory, 'mods')
+        mods.mkdirs()
+        def jars = withAe ? ['igleelib-1.21.1-1.2.7.jar', 'guideme-21.1.16.jar'] : ['igleelib-1.21.1-1.2.7.jar']
+        jars.each { name ->
+            java.nio.file.Files.copy(file("run/mods/${name}").toPath(), new File(mods, name).toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+neoForge {
+    addModdingDependenciesTo sourceSets.capacityProbe
+    mods.named(mod_id.toString()) { sourceSet(sourceSets.capacityProbe) }
+    runs {
+        d03Server {
+            server()
+            sourceSet = sourceSets.capacityProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.d03.enabled', 'true'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+    }
+}
+tasks.named('runD03Server') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/d03-capacity.json')
+        if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
+            throw new GradleException('D03 did not complete all capability assertions')
+        }
+    }
+}

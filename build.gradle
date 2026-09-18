@@ -230,6 +230,9 @@ if (providers.gradleProperty('d01Baseline').isPresent()) {
 if (providers.gradleProperty('d02Prototype').isPresent()) {
     apply from: 'gradle/d02-prototype.gradle'
 }
+if (providers.gradleProperty('d03Probe').isPresent()) {
+    apply from: 'gradle/d03-capacity.gradle'
+}
 
 def releaseModId = mod_id.toString()
 def releaseModVersion = mod_version.toString()
@@ -310,6 +313,7 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
                     'com/ayoshiko/productivebeesgenesis/datagen/',
                     'com/ayoshiko/productivebeesgenesis/baseline/',
                     'com/ayoshiko/productivebeesgenesis/storageprototype/',
+                    'com/ayoshiko/productivebeesgenesis/capacityprobe/',
                     'assets/productivebeesgenesis/models/block/factory/mek_apiary/front_led/'
             ]
             zip.entries().each { entry ->
