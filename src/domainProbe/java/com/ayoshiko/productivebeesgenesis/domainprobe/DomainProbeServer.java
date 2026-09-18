@@ -21,6 +21,7 @@ public final class DomainProbeServer {
 		try {
 			ProductKeyProbe.verify(event.getServer().registryAccess());
 			report.addProperty("productKeyRoundTrip", true);
+			ProductPolicyProbe.verify(event.getServer().overworld(), report);
 			report.addProperty("passed", true);
 			LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 		} catch (Exception failure) {

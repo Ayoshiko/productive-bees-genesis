@@ -24,6 +24,7 @@ public final class ProductKey {
 	public Kind kind() { return kind; }
 	public ResourceLocation id() { return id; }
 	public CompoundTag components() { return components.copy(); }
+	public boolean hasComponent(String id) { return components.contains(id); }
 	public Optional<Tag> component(String id) {
 		Tag value = components.get(id);
 		return value == null ? Optional.empty() : Optional.of(value.copy());
