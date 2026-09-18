@@ -29,6 +29,23 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [Unreleased] — 蜂业处理网络开发分支
+
+### 第一阶段：领域核心（P1，2026-09-18）
+
+- 完成 D03–D08：逐机能力快照与异构产能汇总、不可变产物键、long／BigInteger 精确数量、版本化合法产物策略、事务预约账本及有限转移暂存。
+- 增加 EXACT／BEE_TYPE／BASE_ITEM 三作用域、全局／规则双层保留和共享组额度；支持规则优先级、公平调度与低／高水位滞回，避免重叠规则重复预约同一份输入。
+- 加固模拟无副作用、重复结算、回调重入、部分外部接受和结果未知时的隔离；超 long 数量不截断，内部返回失败不生成掉落物实体。
+- 已合入 `1.0.8-hotfix` 维护修复。P1 仍是内存领域服务与显式适配器，尚未注册网络核心、接管机器或接入网络生产和正式存档。
+- P1 验收记录：687 项测试，685 通过、2 项既有条件用例跳过；独立领域专服探针及 `test build verifyReleaseArtifact` 通过。探针不进入发行 JAR；这些证据不代表完整网络的游戏性能或恢复验证。
+
+### Phase 1: domain core (P1, 2026-09-18)
+
+- Implemented D03–D08: per-machine capacity snapshots, heterogeneous throughput, immutable product keys, exact long/BigInteger quantities, versioned admission rules, reservations, and bounded transfer staging.
+- Added layered reserve policies, shared group allowances, priority/fair scheduling, and watermark hysteresis. Hardened simulation, duplicate settlement, reentrancy, partial transfers, and unknown-result quarantine.
+- Merged the `1.0.8-hotfix` maintenance fixes. Network blocks, machine takeover, production, and authoritative persistence are not enabled yet.
+- P1 evidence: 685 tests passed and 2 existing conditional tests skipped; the isolated domain server probe and build/artifact checks passed. This does not establish full-network runtime performance or recovery guarantees.
+
 ## [1.0.8-hotfix] - 2026-09-18
 
 > 本热修复解决机械蜂箱中两项 Productive Bees 特殊蜜蜂兼容问题，并将 PB 离心配方长期缓存改为跨机器共享。
