@@ -29,22 +29,52 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
-## [Unreleased] — 蜂业处理网络开发分支
+## [Unreleased]
 
-### 第一阶段：领域核心（P1，2026-09-18）
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1 及合入的维护修复。网络功能仍处于开发阶段，尚未启用机器接管与网络生产。
 
-- 完成 D03–D08：逐机能力快照与异构产能汇总、不可变产物键、long／BigInteger 精确数量、版本化合法产物策略、事务预约账本及有限转移暂存。
-- 增加 EXACT／BEE_TYPE／BASE_ITEM 三作用域、全局／规则双层保留和共享组额度；支持规则优先级、公平调度与低／高水位滞回，避免重叠规则重复预约同一份输入。
-- 加固模拟无副作用、重复结算、回调重入、部分外部接受和结果未知时的隔离；超 long 数量不截断，内部返回失败不生成掉落物实体。
-- 已合入 `1.0.8-hotfix` 维护修复。P1 仍是内存领域服务与显式适配器，尚未注册网络核心、接管机器或接入网络生产和正式存档。
-- P1 验收记录：687 项测试，685 通过、2 项既有条件用例跳过；独立领域专服探针及 `test build verifyReleaseArtifact` 通过。探针不进入发行 JAR；这些证据不代表完整网络的游戏性能或恢复验证。
+### 新增
 
-### Phase 1: domain core (P1, 2026-09-18)
+- **网络设计与分阶段计划**：确定六面相邻构网、统一虚拟生产、一蜂位一喂食槽、逐机升级、合法产物无限存储、分层保留及单一 AE2 桥的职责；补齐唯一所有权、持久化／恢复协议、兼容矩阵与 D01–D32 验收条件，并记录本地参考模组版本和源码依据。
+- **P0／D01 行为基线**：新增独立机进度、并行与能量行为测试，以及普通／IO 密集场景的隔离专服夹具，记录真实产出、能耗和 Spark 基线。
+- **P0／D02 存储原型**：比较稀疏 long＋BigInteger、索引分段数组和全 BigInteger 三种后端，覆盖百万键及超 long 数量；新增真实 AE2 双向存取、模拟、挂载生命周期和 SavedData 缺文件／坏数据／写失败探针。
+- **P1／D03 逐机能力模型**：新增不可变成员快照、异构能力池和虚拟通道余数计算，以及真实蜂箱／离心机只读适配；按成员分别计算升级、进程、周期和能耗，离线成员不贡献工作能力。
+- **P1／D04 精确产物模型**：新增物品／流体完整组件键和稀疏 long＋BigInteger 数量表，支持任意精度、数量降级与零键回收，不设库存种类或字节配额。
+- **P1／D05 合法产物准入**：新增版本化 PB 配方产物目录、动态产物验证和发现记录；重载失效准入缓存，合法外部同类产物可存入，普通物品和未确认变体拒收。
+- **P1／D06 事务与暂存**：新增输入预约、已付费结果冻结、幂等结算和有限外部转移保管区；区分部分接受、可归还结果与必须等待可靠收据的未知结果。
+- **P1／D07 库存保留**：支持 EXACT／BEE_TYPE／BASE_ITEM 匹配、ALL、处理／对外提取／外部来源三个作用域，以及全局／规则双层保留和跨变体共享额度。
+- **P1／D08 规则调度**：支持输入、标签、蜂型和目标产物规则，增加严格优先、公平轮转、低／高水位滞回及按能力匹配的原子预约。
+- **隔离验证入口**：新增按需启用的 baseline、storagePrototype、capacityProbe 和 domainProbe 源集及回归测试。P1 退出共 687 项测试，685 通过、2 项既有条件用例跳过；领域专服与构建／产物核验通过。
 
-- Implemented D03–D08: per-machine capacity snapshots, heterogeneous throughput, immutable product keys, exact long/BigInteger quantities, versioned admission rules, reservations, and bounded transfer staging.
-- Added layered reserve policies, shared group allowances, priority/fair scheduling, and watermark hysteresis. Hardened simulation, duplicate settlement, reentrancy, partial transfers, and unknown-result quarantine.
-- Merged the `1.0.8-hotfix` maintenance fixes. Network blocks, machine takeover, production, and authoritative persistence are not enabled yet.
-- P1 evidence: 685 tests passed and 2 existing conditional tests skipped; the isolated domain server probe and build/artifact checks passed. This does not establish full-network runtime performance or recovery guarantees.
+### 变更
+
+- 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
+- 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
+- 同步 `main-neo/1.21.1` 的 `1.0.8-hotfix`，版本元数据更新为 `1.0.8-hotfix`；PB 离心配方缓存改为跨机器共享的有界缓存，并在配方重载及服务器停止时清理。
+
+### 修复
+
+- 修正 P1 联调中的完整组件恢复、哈希碰撞、组保留额度分配和转移回调重入边界；避免不同变体误合并、重叠规则重复预约、模拟改写权威数据或重复结算，失败返回不生成掉落物实体。
+- 合入维护分支的石料蜂／木材蜂复制黑名单修复、全部 PB 蜜蜂刷怪蛋入驻支持及实体类型校验；禁用喂食槽不再参与特殊蜂种花源判断。详情见下方 `1.0.8-hotfix`。
+
+### English
+
+#### Added
+
+- Defined the bee processing network architecture, ownership/recovery invariants, local reference sources, and staged D01–D32 acceptance plan.
+- Added P0 standalone production/Spark baselines, three exact-quantity storage prototypes, million-key benchmarks, and real AE2/SavedData failure probes.
+- Implemented P1 per-machine capacity snapshots, immutable component keys, exact quantities, versioned admission, reservations, transfer staging, layered reserves, priority/fair scheduling, and watermark hysteresis.
+- Added isolated development source sets and regression coverage. P1 completed with 685 passing tests and 2 existing conditional skips, plus domain server and build/artifact checks.
+
+#### Changed
+
+- Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
+- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Machine takeover, network production, and authoritative persistence remain disabled at the P1 boundary.
+
+#### Fixed
+
+- Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
+- Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
 
 ## [1.0.8-hotfix] - 2026-09-18
 
