@@ -16,11 +16,13 @@ public final class ProcessingRuleIndex {
 	public record Binding(ProcessingRule rule, ProcessingRecipe recipe) { }
 	private record Domain(ProductKey.Kind kind, ResourceLocation id) { }
 	private final List<ProcessingRule> rules;
+	private final List<ProcessingRule> configuredRules;
 	private final Map<Domain, List<Binding>> byInput;
 	public ProcessingRuleIndex(Collection<ProcessingRule> rules, Collection<ProcessingRecipe> recipes,
 			Map<TagId, Set<ResourceLocation>> tags) {
 		var ids = ConcurrentHashMap.<String>newKeySet();
 		for (var rule : rules) if (!ids.add(rule.id())) throw new IllegalArgumentException("Duplicate processing rule identity");
+		this.configuredRules = List.copyOf(rules);
 		this.rules = rules.stream().filter(ProcessingRule::enabled)
 				.sorted(Comparator.comparingInt(ProcessingRule::priority).reversed().thenComparing(ProcessingRule::id)).toList();
 		Map<Domain, List<Binding>> compiled = new ConcurrentHashMap<>();
@@ -41,6 +43,7 @@ public final class ProcessingRuleIndex {
 		byInput = Map.copyOf(compiled);
 	}
 	public List<ProcessingRule> rules() { return rules; }
+	public List<ProcessingRule> configuredRules() { return configuredRules; }
 	public List<Binding> candidates(ProductKey key) {
 		return byInput.getOrDefault(new Domain(key.kind(), key.id()), List.of()).stream()
 				.filter(binding -> binding.recipe().input().matches(key)

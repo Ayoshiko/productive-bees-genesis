@@ -13,11 +13,23 @@ public final class TransferStaging {
 	public enum Direction { IMPORT, EXPORT }
 	public enum Phase { CALLING, UNKNOWN, HELD, COMPLETE }
 	public record View(UUID id, String endpoint, ProductKey key, Direction direction, long offered,
-			ProductAmount held, Phase phase, String failure) { }
+			ProductAmount held, Phase phase, String failure) {
+		public View {
+			Objects.requireNonNull(id); Objects.requireNonNull(key); Objects.requireNonNull(direction);
+			Objects.requireNonNull(held); Objects.requireNonNull(phase); Objects.requireNonNull(failure);
+			if (endpoint == null || endpoint.isBlank() || offered <= 0 || held.compareTo(ProductAmount.of(offered)) > 0) {
+				throw new IllegalArgumentException("Invalid transfer checkpoint");
+			}
+			if ((phase == Phase.CALLING || phase == Phase.UNKNOWN)
+					&& !held.equals(direction == Direction.EXPORT ? ProductAmount.of(offered) : ProductAmount.ZERO)) {
+				throw new IllegalArgumentException("Unknown transfer has inconsistent custody");
+			}
+		}
+	}
 	public static final class Transfer {
 		private final Object authority;
 		private final Thread owner = Thread.currentThread();
-		private final UUID id = UUID.randomUUID();
+		private final UUID id;
 		private final String endpoint;
 		private final ProductKey key;
 		private final Direction direction;
@@ -26,8 +38,15 @@ public final class TransferStaging {
 		private Phase phase = Phase.CALLING;
 		private String failure = "";
 		private Transfer(Object authority, String endpoint, ProductKey key, Direction direction, long offered, ProductAmount held) {
+			this.id = UUID.randomUUID();
 			this.authority = authority;
 			this.endpoint = endpoint; this.key = key; this.direction = direction; this.offered = offered; this.held = held;
+		}
+		private Transfer(Object authority, View saved) {
+			this.authority = authority; id = saved.id(); endpoint = saved.endpoint(); key = saved.key();
+			direction = saved.direction(); offered = saved.offered(); held = saved.held();
+			phase = saved.phase() == Phase.CALLING ? Phase.UNKNOWN : saved.phase();
+			failure = saved.phase() == Phase.CALLING ? "Interrupted external call; receipt required" : saved.failure();
 		}
 		public View view() {
 			if (Thread.currentThread() != owner) throw new IllegalStateException("Read a staging snapshot on its server thread");
@@ -48,6 +67,19 @@ public final class TransferStaging {
 		this.maxTransfers = maxTransfers; this.maxUnits = maxUnits;
 	}
 	public synchronized List<View> snapshot() { check(); return pending.values().stream().map(Transfer::view).toList(); }
+	public static TransferStaging restore(ProductLedger ledger, int maxTransfers, long maxUnits, List<View> saved) {
+		var staging = new TransferStaging(ledger, maxTransfers, maxUnits);
+		if (saved.size() > maxTransfers) throw new IllegalArgumentException("Recovery exceeds transfer budget");
+		for (var view : saved) {
+			if (view.phase() == Phase.COMPLETE || view.offered() > maxUnits
+					|| view.phase() == Phase.HELD && view.held().isZero()) throw new IllegalArgumentException("Invalid pending transfer");
+			if (staging.pending.putIfAbsent(view.id(), new Transfer(staging.authority, view)) != null) {
+				throw new IllegalArgumentException("Duplicate transfer identity");
+			}
+		}
+		return staging;
+	}
+	public synchronized Transfer pending(UUID id) { check(); return pending.get(Objects.requireNonNull(id)); }
 	public synchronized Transfer transfer(String endpoint, ProductKey key, long requested, Direction direction, LongUnaryOperator external) {
 		return guarded(() -> transferInternal(endpoint, key, requested, direction, external));
 	}

@@ -10,7 +10,12 @@ public final class ProductPolicyRegistry {
 	public record Decision(long revision, Verdict verdict, String source) {
 		public boolean allowed() { return verdict == Verdict.ALLOWED; }
 	}
-	private record Discovery(String adapterId, ProductKey key) { }
+	public record Discovery(String adapterId, ProductKey key) {
+		public Discovery {
+			if (adapterId == null || adapterId.isBlank()) throw new IllegalArgumentException("Missing discovery adapter");
+			Objects.requireNonNull(key);
+		}
+	}
 	private static final int CACHE_LIMIT = 4096;
 	private ProductPolicySnapshot snapshot;
 	private final ConcurrentHashMap<ProductKey, Decision> cache = new ConcurrentHashMap<>();
@@ -19,6 +24,26 @@ public final class ProductPolicyRegistry {
 
 	public ProductPolicyRegistry(ProductPolicySnapshot snapshot) { this.snapshot = Objects.requireNonNull(snapshot); }
 	public synchronized ProductPolicySnapshot snapshot() { return snapshot; }
+	public synchronized Set<Discovery> discoveries() {
+		if (evaluating) throw new IllegalStateException("Reentrant discovery snapshot");
+		return Set.copyOf(discoveries);
+	}
+	/** 重建当前配方策略后重新验证发现；旧版本发现不得直接给新配方授予准入。 */
+	public synchronized void restoreDiscoveries(long policyRevision, Set<Discovery> saved) {
+		if (evaluating || !discoveries.isEmpty()) throw new IllegalStateException("Discovery restore requires an unused registry");
+		if (policyRevision != snapshot.revision()) return;
+		var restored = ConcurrentHashMap.<Discovery>newKeySet();
+		evaluating = true;
+		try {
+			for (var discovery : saved) {
+				boolean valid = snapshot.dynamicRules(discovery.key()).stream().anyMatch(rule -> rule.requiresDiscovery()
+						&& rule.adapterId().equals(discovery.adapterId()) && rule.validator().test(discovery.key()));
+				if (!valid) throw new IllegalArgumentException("Saved discovery no longer matches its policy");
+				restored.add(discovery);
+			}
+			discoveries.addAll(restored); cache.clear();
+		} finally { evaluating = false; }
+	}
 	public synchronized void replace(ProductPolicySnapshot next) {
 		if (evaluating) throw new IllegalStateException("Policy callback cannot replace its registry");
 		if (next.revision() <= snapshot.revision()) throw new IllegalArgumentException("Policy revision must advance");

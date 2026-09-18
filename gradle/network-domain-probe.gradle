@@ -57,7 +57,9 @@ neoForge {
 tasks.named('runNetworkDomainServer') {
     doLast {
         File report = new File(probeDirectory.get().asFile, 'results/domain.json')
-        if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
+        if (!report.isFile()) throw new GradleException('Network domain report is missing')
+        def result = new groovy.json.JsonSlurper().parse(report)
+        if (!result.passed || !result.normalShutdownCheckpointSaved) {
             throw new GradleException('Network domain assertions did not complete')
         }
     }

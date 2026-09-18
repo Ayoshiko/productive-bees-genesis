@@ -21,4 +21,6 @@ final class ReservationBook {
 		active.remove(transaction.id());
 	}
 	Map<ProductKey, ProductAmount> snapshot() { return reserved.snapshot(); }
+	java.util.List<LedgerCheckpoint.Pending> checkpoint() { return active.values().stream().map(LedgerTransaction::checkpoint).toList(); }
+	LedgerTransaction find(UUID id) { return active.get(id); }
 }

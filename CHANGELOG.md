@@ -31,7 +31,7 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1 及合入的维护修复。网络功能仍处于开发阶段，尚未启用机器接管与网络生产。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2 已实现步骤及合入的维护修复。网络功能仍处于开发阶段，尚未启用机器接管与网络生产。
 
 ### 新增
 
@@ -45,12 +45,15 @@
 - **P1／D07 库存保留**：支持 EXACT／BEE_TYPE／BASE_ITEM 匹配、ALL、处理／对外提取／外部来源三个作用域，以及全局／规则双层保留和跨变体共享额度。
 - **P1／D08 规则调度**：支持输入、标签、蜂型和目标产物规则，增加严格优先、公平轮转、低／高水位滞回及按能力匹配的原子预约。
 - **隔离验证入口**：新增按需启用的 baseline、storagePrototype、capacityProbe 和 domainProbe 源集及回归测试。P1 退出共 687 项测试，685 通过、2 项既有条件用例跳过；领域专服与构建／产物核验通过。
+- **P2／D09a 持久化边界**：新增世界网络目录、每网权威 checkpoint、严格 NBT 读取和恢复入口，完整保存现有 P1 的余额、预约／已付费结果、未知转移、动态发现、成员能力／通道和规则状态；缺失或损坏数据隔离，保留原文件。
+- **保存成功回执**：后台原子写入成功后才推进持久化 revision，失败保留待保存状态并退避重试；正常停服等待实际写入结果。新增 18 项行为测试及真实专服保存／停服探针；全量 705 项测试中 703 通过、2 项既有条件用例跳过。
 
 ### 变更
 
 - 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
 - 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
 - 同步 `main-neo/1.21.1` 的 `1.0.8-hotfix`，版本元数据更新为 `1.0.8-hotfix`；PB 离心配方缓存改为跨机器共享的有界缓存，并在配方重载及服务器停止时清理。
+- 更新本地参考至 DataEnergistics `1.21`／3.3.0（`4a33f128`）和 NeoECOAEExtension `v21.1.2`（`f26aab47`），在现有设计文档中补充 D01–D32 逐步学习入口、差异与验收要求。D09b 的预算化快照／加载仍为进入拓扑与接管前的必要步骤。
 
 ### 修复
 
@@ -65,11 +68,14 @@
 - Added P0 standalone production/Spark baselines, three exact-quantity storage prototypes, million-key benchmarks, and real AE2/SavedData failure probes.
 - Implemented P1 per-machine capacity snapshots, immutable component keys, exact quantities, versioned admission, reservations, transfer staging, layered reserves, priority/fair scheduling, and watermark hysteresis.
 - Added isolated development source sets and regression coverage. P1 completed with 685 passing tests and 2 existing conditional skips, plus domain server and build/artifact checks.
+- Added P2/D09a persistence for the existing P1 authority, including reservations, paid outputs, unknown transfers, discoveries, capacity/lane state, and scheduler progress. Strict loading quarantines damaged domains without overwriting their files.
+- Added successful-write receipts, bounded retry, and shutdown flushing. All 703 active tests passed, with 2 existing conditional skips; the dedicated-server probe also verified the final checkpoint after normal shutdown.
 
 #### Changed
 
 - Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
-- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Machine takeover, network production, and authoritative persistence remain disabled at the P1 boundary.
+- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Machine takeover and network production remain disabled; P2 persistence currently covers the existing P1 domain state.
+- Updated local references to DataEnergistics `1.21`/3.3.0 (`4a33f128`) and NeoECOAEExtension `v21.1.2` (`f26aab47`), and expanded the per-step source/validation roadmap. Budgeted snapshots and loading in D09b remain required before topology and takeover work.
 
 #### Fixed
 
@@ -2656,3 +2662,5 @@ v2.0.0 是 SemVer MAJOR 版本，标志 MEK 蜂箱系统正式发布。本次更
 - Mixin 条件加载系统（ME/EME 兼容）
 - 配置系统（CLIENT/COMMON/SERVER）
 - 数据生成（配方、战利品表、语言文件）
+
+[Unreleased]: https://github.com/Ayoshiko/productive-bees-genesis/compare/f2ae0b8...bees-processing-network/1.21.1

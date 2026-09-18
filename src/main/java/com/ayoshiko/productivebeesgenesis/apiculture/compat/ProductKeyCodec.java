@@ -34,6 +34,18 @@ public final class ProductKeyCodec {
 	public static DataComponentMap components(ProductKey key, HolderLookup.Provider registries) {
 		return DataComponentMap.CODEC.parse(registries.createSerializationContext(NbtOps.INSTANCE), key.components()).getOrThrow();
 	}
+	public static void validatePersisted(ProductKey key, HolderLookup.Provider registries) {
+		if (key.kind() == ProductKey.Kind.ITEM) {
+			var item = BuiltInRegistries.ITEM.getOptional(key.id()).orElseThrow(() -> new IllegalArgumentException("Missing item: " + key.id()));
+			if (new ItemStack(item).isEmpty()) throw new IllegalArgumentException("Empty persisted item");
+		} else {
+			var fluid = BuiltInRegistries.FLUID.getOptional(key.id()).orElseThrow(() -> new IllegalArgumentException("Missing fluid: " + key.id()));
+			if (new FluidStack(fluid, 1).isEmpty()) throw new IllegalArgumentException("Empty persisted fluid");
+		}
+		if (!capture(key.kind(), key.id(), components(key, registries), registries).equals(key)) {
+			throw new IllegalArgumentException("Persisted components cannot be restored losslessly");
+		}
+	}
 	public static ItemStack item(ProductKey key, int count, HolderLookup.Provider registries) {
 		if (key.kind() != ProductKey.Kind.ITEM || count <= 0) throw new IllegalArgumentException("Invalid item projection");
 		var item = BuiltInRegistries.ITEM.getOptional(key.id()).orElseThrow(() -> new IllegalArgumentException("Missing item: " + key.id()));

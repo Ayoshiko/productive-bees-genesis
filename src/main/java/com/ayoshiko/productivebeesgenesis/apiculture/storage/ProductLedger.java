@@ -29,6 +29,20 @@ public final class ProductLedger {
 	public Snapshot snapshot() {
 		return guarded(() -> new Snapshot(revision, balances.snapshot(), reservations.snapshot(), reservations.size()));
 	}
+	public LedgerCheckpoint checkpoint() {
+		return guarded(() -> new LedgerCheckpoint(revision, balances.snapshot(), reservations.checkpoint()));
+	}
+	public static ProductLedger restore(ProductPolicyRegistry policy, int maxPending, LedgerCheckpoint checkpoint) {
+		Objects.requireNonNull(checkpoint);
+		if (checkpoint.transactions().size() > maxPending) throw new IllegalArgumentException("Pending recovery exceeds configured work budget");
+		var ledger = new ProductLedger(policy, maxPending);
+		checkpoint.balances().forEach(ledger.balances::set);
+		checkpoint.transactions().forEach(pending -> ledger.reservations.add(new LedgerTransaction(ledger.authority, pending)));
+		ledger.revision = checkpoint.revision();
+		return ledger;
+	}
+	/** 只返回本次加载重建的句柄；旧实例句柄不能跨恢复重用。 */
+	public LedgerTransaction pending(java.util.UUID id) { return guarded(() -> reservations.find(Objects.requireNonNull(id))); }
 	public ProductAmount available(ProductKey key) { return guarded(() -> availableInternal(key)); }
 	private ProductAmount availableInternal(ProductKey key) { return balances.amount(key).subtract(reservations.amount(key)); }
 
