@@ -31,7 +31,7 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2 已实现步骤及合入的维护修复。网络功能仍处于开发阶段，尚未启用机器接管与网络生产。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2 已实现步骤及合入的维护修复。P2 已验收；机器接管默认关闭，托管生产尚未接入。
 
 ### 新增
 
@@ -51,17 +51,20 @@
 - **P2／D09b2 全域冻结与流式保存**：统一冻结余额、交易、转移、发现、成员／通道和规则状态；保存文件时主线程只提交不可变快照，后台逐项编码、压缩与原子替换。每服限制一个未完成快照和 32 KiB 流缓冲，等待请求合并最新版本，失败退避重试，旧回执不能清除新变更。新增大记录／慢写／失败恢复测试、百万键全域写入基准和跨 tick 专服保存探针；全量 730 项测试中 728 通过、2 项既有条件跳过，构建／产物核验及专服最终落盘通过。预算化加载仍为下一步闸门。
 - **P2／D09b3a 有界文件读取**：新增独立后台 NBT 事件传输、8 KiB 数组分片及按批次／字节双重背压，支持非阻塞消费、取消、失败隔离和完整压缩流 CRC 检查。新增截断／大声明长度／重复字段保留／停服交接回归，以及百万键事件摘要和真实 tick 专服探针。语法读取完成不授予可写资格，领域校验、索引恢复与非阻塞发布仍为后续闸门。
 
+- **P2／D09b3b–D12 阶段交付**：完成预算化领域校验、索引恢复与双回执发布，加入核心方块、单区块六面拓扑、托管父 ticker／能力／菜单／AE2 隔离和基础蜂箱／离心机资产往返协议。共享喂食实物、升级、储能与已付费 pending 原样保管，未知状态保留资产并隔离。全量 764 项中 762 通过、2 项既有跳过；无 AE2／有 AE2 专服、8 类故障、16 个跨进程阶段恢复和真实客户端菜单已通过，证据与限制见设计文档 10.21。
+
 ### 变更
 
 - 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
 - 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
 - 同步 `main-neo/1.21.1` 的 `1.0.8-hotfix`，版本元数据更新为 `1.0.8-hotfix`；PB 离心配方缓存改为跨机器共享的有界缓存，并在配方重载及服务器停止时清理。
-- 更新本地参考至 DataEnergistics `1.21`／3.3.0（`4a33f128`）和 NeoECOAEExtension `v21.1.2`（`f26aab47`），在现有设计文档中补充 D01–D32 逐步学习入口、差异与验收要求。D09b 按余额冻结、全域捕获／流式保存、预算化加载拆分；前两项已实现，加载与非阻塞创建发布仍为进入拓扑与接管前的必要步骤。
+- 更新本地参考至 DataEnergistics `1.21`／3.3.0（`dbdfe17e`）、NeoECOAEExtension `v21.1.2`（`1cae738a`）和 Useless 2.3.8（`267b38a6`），补充 D01–D32 逐步学习入口、整批数量交付与恢复回执边界。D09b 的余额冻结、流式保存、预算化加载与非阻塞发布均已交付。
 - 根据同数据测量将网络账本切换为哈希定位的写时复制页。百万合成组件键的余额捕获降至约 0.023–0.044 ms，但持续变更中位成本约为原后端的 1.7–2.4 倍；编码／磁盘／游戏性能不包含在该测量内，详细取舍记录于设计文档。
 
 ### 修复
 
 - 修正 P1 联调中的完整组件恢复、哈希碰撞、组保留额度分配和转移回调重入边界；避免不同变体误合并、重叠规则重复预约、模拟改写权威数据或重复结算，失败返回不生成掉落物实体。
+- 修复核心同进程重建时误用旧目录回执的问题；交还必须等当前释放版本落盘后解锁。基础机流体恢复改为幂等替换，避免原生与自定义字段重复恢复；蜂箱已付费周期纳入保存与升级迁移。
 - 合入维护分支的石料蜂／木材蜂复制黑名单修复、全部 PB 蜜蜂刷怪蛋入驻支持及实体类型校验；禁用喂食槽不再参与特殊蜂种花源判断。详情见下方 `1.0.8-hotfix`。
 
 ### English
@@ -78,16 +81,19 @@
 - Added P2/D09b2 consistent full-domain capture and streamed saves. The server submits immutable checkpoints; one worker encodes nested records, compresses and atomically replaces the file. Pending requests coalesce revisions, with one unfinished snapshot and 32 KiB of stream buffers per server. Added large-record, backpressure, retry and failure-recovery tests, million-key write benchmarks, and a server probe spanning real ticks. Validation passed: 728 tests, 2 existing conditional skips, build/artifact checks, and final shutdown persistence. Budgeted loading remains a required gate.
 - Added P2/D09b3a bounded background NBT event reads, 8 KiB array chunks, byte/batch backpressure, nonblocking polling, cancellation and complete gzip CRC checks. Added malformed-file and shutdown-handoff regressions, million-key event digest validation, and a dedicated-server tick probe. Syntactic completion does not grant writable authority; domain validation, index recovery and nonblocking publication remain required.
 
+- Completed P2/D09b3b–D12: budgeted domain recovery, receipt-gated publication, core/topology, managed-machine isolation, and physical asset transfers for the base apiary and centrifuge. Validation: 762 passing tests, 2 existing skips, dedicated servers with and without AE2, eight fault cases, sixteen cross-process recovery stages, and real client menu actions. See design section 10.21 for evidence and limits.
+
 #### Changed
 
 - Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
-- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Machine takeover and network production remain disabled; P2 persistence currently covers the existing P1 domain state.
-- Updated local references to DataEnergistics `1.21`/3.3.0 (`4a33f128`) and NeoECOAEExtension `v21.1.2` (`f26aab47`), and expanded the per-step source/validation roadmap. D09b separates balance freezing, full-domain capture/streamed saves, and budgeted loading. Loading and nonblocking creation/publication remain required before topology and takeover work.
+- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Takeover remains disabled by default; managed machines do not produce yet.
+- Updated local references to DataEnergistics `1.21`/3.3.0 (`dbdfe17e`), NeoECOAEExtension `v21.1.2` (`1cae738a`), and Useless 2.3.8 (`267b38a6`). Documented exact batch delivery and recovery receipt boundaries. All D09b capture, save, recovery and publication steps are complete.
 - Switched network balances to hash-indexed copy-on-write pages after comparative measurements. Capturing one million synthetic component keys took 0.023–0.044 ms, with 1.7–2.4 times the baseline median mutation cost. These measurements exclude encoding, disk I/O, and game performance.
 
 #### Fixed
 
 - Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
+- Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
 
 ## [1.0.8-hotfix] - 2026-09-18

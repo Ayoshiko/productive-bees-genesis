@@ -69,6 +69,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	protected ApiaryUpgradeHandler upgradeHandler;
 	protected BeeProduceProcessor produceProcessor;
 	protected ApiaryTickHandler tickHandler;
+	public boolean pendingCyclesReadable() { return tickHandler == null || tickHandler.pendingCyclesReadable(); }
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);

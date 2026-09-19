@@ -13,11 +13,16 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 1;
+	public static final int SCHEMA = 2;
 	private final ProductRecordCodec products;
+	private final Consumer<ProductKey> validateKey;
 	private final RuleRecordCodec rules;
 	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey) {
+		this.validateKey = java.util.Objects.requireNonNull(validateKey);
 		products = new ProductRecordCodec(validateKey); rules = new RuleRecordCodec(products);
+	}
+	CheckpointDecoder decoder(com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadSession input) {
+		return new CheckpointDecoder(input, validateKey);
 	}
 	public static NetworkCheckpointCodec forRegistries(HolderLookup.Provider registries) {
 		return new NetworkCheckpointCodec(key -> ProductKeyCodec.validatePersisted(key, registries));
@@ -60,6 +65,7 @@ public final class NetworkCheckpointCodec {
 		var discoveries = new ListTag(); checkpoint.discoveries().forEach(value -> discoveries.add(discovery(value))); tag.put("discoveries", discoveries);
 		var members = new ListTag(); checkpoint.members().forEach(value -> members.add(CapacityRecordCodec.member(value))); tag.put("members", members);
 		var lanes = new ListTag(); checkpoint.lanes().forEach(value -> lanes.add(CapacityRecordCodec.lane(value))); tag.put("lanes", lanes);
+		var owned = new ListTag(); checkpoint.ownedMachines().values().forEach(value -> owned.add(OwnershipRecordCodec.owned(value))); tag.put("ownership", owned);
 		tag.put("scheduler", RuleRecordCodec.scheduler(checkpoint.scheduler())); return tag;
 	}
 	public static CompoundTag encode(NetworkCheckpoint checkpoint) {
@@ -80,7 +86,14 @@ public final class NetworkCheckpointCodec {
 		}
 		var members = new ArrayList<MemberCapabilitySnapshot>(); StrictNbt.list(tag, "members").forEach(raw -> members.add(CapacityRecordCodec.readMember((CompoundTag) raw)));
 		var lanes = new ArrayList<VirtualLaneState>(); StrictNbt.list(tag, "lanes").forEach(raw -> lanes.add(CapacityRecordCodec.readLane((CompoundTag) raw)));
-		return new NetworkCheckpoint(readIdentity(StrictNbt.compound(tag, "identity")), StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "policy"),
+		var checkpoint = new NetworkCheckpoint(readIdentity(StrictNbt.compound(tag, "identity")), StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "policy"),
 				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")));
+		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
+		for (var raw : StrictNbt.list(tag, "ownership")) {
+			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw);
+			if (!record.claim().network().equals(checkpoint.identity().networkId()) || !record.claim().origin().dimension().equals(checkpoint.identity().origin().dimension())) throw new IllegalArgumentException("Foreign ownership");
+			owned.add(record);
+		}
+		return checkpoint.restoredOwnership(owned.finish());
 	}
 }

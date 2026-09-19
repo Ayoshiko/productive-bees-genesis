@@ -38,7 +38,18 @@ public final class SnapshotRecords<K, V> {
 		while (node.right != null) node = node.right;
 		return node.key;
 	}
-	public synchronized Map<K, V> snapshot() { return Collections.unmodifiableMap(new FrozenMap<>(root, order)); }
+	public synchronized Map<K, V> snapshot() { return new FrozenMap<>(root, order); }
+	/** 不可变根分叉；恢复后单条更新不能退化为整表复制。 */
+	public static <K, V> SnapshotRecords<K, V> fork(Map<K, V> values, Comparator<? super K> order) {
+		var result = new SnapshotRecords<K, V>(order);
+		if (values instanceof FrozenMap<K, V> frozen) { result = new SnapshotRecords<>(frozen.order); result.root = frozen.root; }
+		else values.forEach(result::put);
+		return result;
+	}
+	/** 仅复用本类私有的不可变根；普通输入仍完整防御复制。 */
+	public static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
+		return values instanceof FrozenMap<?, ?> ? values : Map.copyOf(values);
+	}
 	public synchronized List<V> valuesSnapshot() { return Collections.unmodifiableList(new FrozenValues<>(root)); }
 	public synchronized Set<K> keysSnapshot() { return snapshot().keySet(); }
 	private static int height(Node<?, ?> node) { return node == null ? 0 : node.height; }

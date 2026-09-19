@@ -12,6 +12,7 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	private final NetworkIdentity identity;
 	private NetworkCheckpoint checkpoint;
 	private final String recoveryReason;
+	private boolean closed;
 	private NetworkSavedData(NetworkIdentity identity, NetworkCheckpoint checkpoint, long persistedRevision,
 			String recoveryReason, CheckpointSaveQueue queue) {
 		super(persistedRevision, queue);
@@ -34,18 +35,20 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	public String recoveryReason() { return recoveryReason; }
 	public NetworkCheckpoint checkpoint() {
 		checkThread();
+		if (closed) throw new IllegalStateException("Network authority session closed");
 		if (checkpoint == null) throw new IllegalStateException("No readable authority: " + recoveryReason);
 		return checkpoint;
 	}
 	public void publish(NetworkCheckpoint next) {
 		checkThread(); Objects.requireNonNull(next);
-		if (!writable() || !next.identity().equals(identity) || next.revision() <= checkpoint.revision()) {
+		if (!writable() || !next.identity().equals(identity) || next.revision() <= checkpoint.revision() || !next.ownedMachines().follows(checkpoint.ownedMachines())) {
 			throw new IllegalArgumentException("Invalid authority or checkpoint revision");
 		}
 		checkpoint = next;
 	}
 	@Override protected long revision() { return checkpoint == null ? -1 : checkpoint.revision(); }
-	@Override protected boolean writable() { return checkpoint != null; }
+	@Override protected boolean writable() { return checkpoint != null && !closed; }
+	void closeAuthority() { checkThread(); closed = true; }
 	@Override protected CheckpointPayload capture() {
 		return new CheckpointPayload.Network(checkpoint(), SharedConstants.getCurrentVersion().getDataVersion().getVersion());
 	}

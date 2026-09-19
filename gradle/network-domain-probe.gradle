@@ -13,15 +13,35 @@ configurations {
 def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
 if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
+def probeEula = file('run/eula.txt')
+def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
+        ? file(providers.gradleProperty('networkProbeSeedWorld').get()) : null
+def probeDependencies = [file('run/mods/igleelib-1.21.1-1.2.7.jar')]
+if (providers.gradleProperty('networkProbeAe2').isPresent()) {
+    probeDependencies.addAll(['appliedenergistics2-1.21.1-19.2.17.jar', 'AppliedFlux-1.21-2.1.5-neoforge.jar'].collect { file('libs/' + it) })
+    probeDependencies.addAll(['guideme-21.1.16.jar', 'Glodium-1.21-2.2-neoforge.jar'].collect { file('run/mods/' + it) })
+}
 def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
     doLast {
         File directory = probeDirectory.get().asFile
         if (directory.exists()) throw new GradleException('Use a new networkProbeRun; existing evidence is preserved')
-        File eula = file('run/eula.txt')
+        File eula = probeEula
         if (!eula.isFile() || !eula.getText('UTF-8').contains('eula=true')) {
             throw new GradleException('Probe requires the already accepted local EULA')
         }
         directory.mkdirs()
+        if (seedWorld != null) {
+            File sourceWorld = seedWorld
+            if (!sourceWorld.isDirectory() || !new File(sourceWorld, 'ownership-probe.dat').isFile()) throw new GradleException('Missing restart fixture world')
+            def target = new File(directory, 'world').toPath()
+            java.nio.file.Files.walk(sourceWorld.toPath()).withCloseable { paths ->
+                paths.forEach { path ->
+                    def destination = target.resolve(sourceWorld.toPath().relativize(path))
+                    if (java.nio.file.Files.isDirectory(path)) java.nio.file.Files.createDirectories(destination)
+                    else java.nio.file.Files.copy(path, destination)
+                }
+            }
+        }
         new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
         new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
 server-port=25581
@@ -32,25 +52,58 @@ level-type=minecraft:flat
 generate-structures=false
 view-distance=3
 simulation-distance=3
+max-tick-time=-1
 ''', 'UTF-8')
         File mods = new File(directory, 'mods')
         mods.mkdirs()
-        java.nio.file.Files.copy(file('run/mods/igleelib-1.21.1-1.2.7.jar').toPath(),
-                new File(mods, 'igleelib-1.21.1-1.2.7.jar').toPath())
+        for (File dependency : probeDependencies) {
+            java.nio.file.Files.copy(dependency.toPath(), new File(mods, dependency.name).toPath())
+        }
     }
 }
 neoForge {
     addModdingDependenciesTo sourceSets.domainProbe
     mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
     runs {
+        networkDomainClient {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.client.enabled', 'true'
+            programArgument '--width'
+            programArgument '1000'
+            programArgument '--height'
+            programArgument '700'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
         networkDomainServer {
             server()
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+            if (providers.gradleProperty('networkOwnershipMode').isPresent()) {
+                def mode = providers.gradleProperty('networkOwnershipMode').get()
+                if (!(mode in ['write', 'read'])) throw new GradleException('Invalid ownership mode')
+                systemProperty 'pbg.ownership.mode', mode
+            }
+			if (providers.gradleProperty('networkRestoreMode').isPresent()) {
+				systemProperty 'pbg.restore.mode', providers.gradleProperty('networkRestoreMode').get()
+				systemProperty 'pbg.restore.report', runId
+				systemProperty 'pbg.restore.keys', providers.gradleProperty('networkRestoreKeys').getOrElse('1000000')
+				systemProperty 'pbg.restore.folder', file(providers.gradleProperty('networkRestoreFolder').getOrElse('build/reports/network-restore/p2-d09b3')).absolutePath
+			}
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
+        }
+    }
+}
+tasks.named('runNetworkDomainClient') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/client.json')
+        if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
+            throw new GradleException('Network client assertions did not complete')
         }
     }
 }

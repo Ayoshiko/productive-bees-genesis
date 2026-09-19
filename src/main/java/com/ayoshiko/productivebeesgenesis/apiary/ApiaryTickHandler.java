@@ -53,6 +53,10 @@ class ApiaryTickHandler {
 
 	/** 蜜蜂槽位 tick 处理器 — 推进生产计时/批量产出/能量扣除 */
 	private final BeeSlotTickProcessor beeSlotProcessor;
+	void savePendingCycles(net.minecraft.nbt.CompoundTag tag) { beeSlotProcessor.savePendingCycles(tag); }
+	void loadPendingCycles(net.minecraft.nbt.CompoundTag tag) { beeSlotProcessor.loadPendingCycles(tag); }
+	boolean pendingCyclesReadable() { return beeSlotProcessor.pendingCyclesReadable(); }
+	void clearTransferredCycles() { beeSlotProcessor.clearTransferredCycles(); }
 
 	/** 蜂笼输入 tick 处理器 — 蜜蜂在蜂笼与蜂槽间双向转移 */
 	private final CageTickProcessor cageProcessor;
@@ -137,6 +141,7 @@ class ApiaryTickHandler {
 	 */
 	boolean onUpdateServer() {
 		handledLastInvocation = false;
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return false;
 		// Task 6 批量收获模式：虚拟 tick 银行 + 每 tick 预算（对齐 JDTE 调度器哲学）
 		// decideAction 内部完成 onTick 计数、同 gameTick 门控与共享预算取款，消除 1024x 尖峰。
 		boolean skipBeeProcessing = false;
@@ -169,6 +174,7 @@ class ApiaryTickHandler {
 	 * 仅入账虚拟 tick 银行，不执行处理（flush 时统一执行一次完整批量）。
 	 */
 	void accumulateAcceleratedTicks(int ticks) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return;
 		tickAccelTracker.addVirtualTicks(ticks);
 	}
 
@@ -184,6 +190,7 @@ class ApiaryTickHandler {
 	 */
 	void flushAcceleratedTicks() {
 		handledLastInvocation = false;
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return;
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide) {
 			return;

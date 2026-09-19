@@ -105,6 +105,30 @@ class BeeSlotTickProcessor {
 	 * 在构造时按蜜蜂槽位数初始化，避免运行时扩容。
 	 */
 	private final int[] pendingProductions;
+	private CompoundTag unreadablePendingCycles;
+
+	void savePendingCycles(CompoundTag tag) {
+		if (unreadablePendingCycles != null) tag.merge(unreadablePendingCycles.copy());
+		else PendingBeeCycles.save(tag, pendingProductions, tickCounter, beeSlotRotationIndex);
+	}
+	void loadPendingCycles(CompoundTag tag) {
+		try {
+			var snapshot = PendingBeeCycles.read(tag, pendingProductions.length);
+			System.arraycopy(snapshot.counts(), 0, pendingProductions, 0, pendingProductions.length);
+			accumulatedProgress.set(snapshot.total()); tickCounter = snapshot.flushTicks(); beeSlotRotationIndex = snapshot.rotation();
+			var slots = slotManager.getBeeSlots();
+			for (int i = 0; i < pendingProductions.length; i++) {
+				if (pendingProductions[i] == 0) continue;
+				if (slots[i].isEmpty() || (beeTypeKeyBySlot[i] = resolveBeeTypeKeyForSlot(slots[i], i)) == null) throw new IllegalArgumentException("Orphaned pending bee cycle");
+			}
+			unreadablePendingCycles = null;
+		} catch (RuntimeException error) {
+			unreadablePendingCycles = new CompoundTag(); unreadablePendingCycles.put(PendingBeeCycles.KEY, tag.get(PendingBeeCycles.KEY).copy());
+			ProductiveBeesGenesis.LOGGER.error("Apiary pending cycles unreadable at {}; production suspended and original data retained", tile.getBlockPos(), error);
+		}
+	}
+	boolean pendingCyclesReadable() { return unreadablePendingCycles == null; }
+	void clearTransferredCycles() { clearPendingProductions(); unreadablePendingCycles = null; tickCounter = 0; beeSlotRotationIndex = 0; }
 
 	/**
 	 * 每只蜜蜂上次解析 beeData 的引用（用于 BeeTypeKey 缓存）。
@@ -203,6 +227,7 @@ class BeeSlotTickProcessor {
 	 * 避免 ticksInHive 已推进、pendingEnergyCost 已累积但能量未扣除的不一致状态。
 	 */
 	void tick() {
+		if (unreadablePendingCycles != null) return;
 		// Task 6：读取批量倍率（由 ApiaryTickHandler 设置），读取后立即重置字段
 		// 使用局部变量避免循环内多次读取字段，且保证即使 tick 中途 return 字段也已重置
 		int tickMultiplier = this.tickMultiplier;
@@ -404,6 +429,7 @@ class BeeSlotTickProcessor {
 	 * @param level    世界实例（配方查询用）
 	 */
 	private void flushPendingProductions(BeeSlot[] beeSlots, Level level) {
+		if (unreadablePendingCycles != null) return;
 		if (level == null) {
 			// 无世界实例时清空累积，防止数据残留
 			clearPendingProductions();

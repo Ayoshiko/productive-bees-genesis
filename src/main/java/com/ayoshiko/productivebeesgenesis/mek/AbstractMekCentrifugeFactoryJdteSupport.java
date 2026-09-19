@@ -38,6 +38,7 @@ final class AbstractMekCentrifugeFactoryJdteSupport {
 	 * 无论 JDTE flush 在 ticker 之前还是之后调用，同一 gameTick 只执行一次完整处理，避免双跑。
 	 */
 	static void accumulateAcceleratedTicks(@NotNull AbstractMekCentrifugeFactory factory, int ticks) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(factory)) return;
 		TickAccelTracker tracker = factory.productivebeesgenesis$getTickAccelTracker();
 		if (tracker != null) {
 			tracker.addVirtualTicks(ticks);
@@ -47,6 +48,7 @@ final class AbstractMekCentrifugeFactoryJdteSupport {
 	/** JDTE 合并接口 flush 委托（见 {@link #productivebeesgenesis$accumulateAcceleratedTicks}） */
 	static void flushAcceleratedTicks(@NotNull AbstractMekCentrifugeFactory factory,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull BooleanSupplier superCall) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(factory)) return;
 		Level level = factory.productivebeesgenesis$getAe2Level();
 		if (level == null || level.isClientSide) {
 			return;

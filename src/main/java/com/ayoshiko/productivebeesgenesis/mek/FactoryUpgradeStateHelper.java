@@ -176,6 +176,7 @@ public final class FactoryUpgradeStateHelper {
 	 */
 	public static boolean onUpdateServer(@NotNull AbstractMekCentrifugeFactory factory,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull BooleanSupplier superCall) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(factory)) return false;
 		// 入口处通过 TickBatchSkipState 判断是否跳过 PB（内部已调用 tracker.onTick,避免重复计数）
 		TickAccelTracker tracker = factory.productivebeesgenesis$getTickAccelTracker();
 		Level level = factory.productivebeesgenesis$getAe2Level();
@@ -250,6 +251,7 @@ public final class FactoryUpgradeStateHelper {
 	public static void onCoalescedFlush(@NotNull AbstractMekCentrifugeFactory factory,
 			@NotNull List<IInventorySlot> inputSlots, int batchMultiplier,
 			@NotNull BooleanSupplier superCall) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(factory)) return;
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		// 与 onUpdateServer 的 !skipPb 分支对齐：tryConnectNode 与能量注入在 super 前执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);

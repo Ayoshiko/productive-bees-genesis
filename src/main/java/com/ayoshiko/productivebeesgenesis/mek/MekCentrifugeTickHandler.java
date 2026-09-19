@@ -94,6 +94,7 @@ class MekCentrifugeTickHandler {
 	 * @return 是否需要发送客户端同步包（由 super 返回）
 	 */
 	boolean onUpdateServer() {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return false;
 		// Task 4 批量收获模式：虚拟 tick 银行 + 每 tick 预算（对齐 JDTE 调度器哲学）
 		// decideAction 内部完成 onTick 计数、同 gameTick 门控与共享预算取款
 		boolean skipPb = false;
@@ -138,6 +139,7 @@ class MekCentrifugeTickHandler {
 	 * 仅入账虚拟 tick 银行，不执行处理（flush 时统一执行一次完整批量）。
 	 */
 	void accumulateAcceleratedTicks(int ticks) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return;
 		if (tickAccelTracker != null) {
 			tickAccelTracker.addVirtualTicks(ticks);
 		}
@@ -153,6 +155,7 @@ class MekCentrifugeTickHandler {
 	 * 无论 JDTE flush 在 ticker 之前还是之后调用，同一 gameTick 只执行一次完整处理，避免双跑。
 	 */
 	void flushAcceleratedTicks() {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return;
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide || tickAccelTracker == null) {
 			return;

@@ -1,6 +1,6 @@
 # 蜂箱—离心机处理子网络：大型更新设计方案
 
-状态：P1 领域核心 D03–D08 已交付（D01–D02 基线／原型已完成）；P2 已实现 D09a 持久化边界、D09b1 不可变余额页、D09b2a 全域冻结及 D09b2b 后台流式保存；D09b3a 有界流式读取已实现，D09b3b 校验／索引恢复和 D09b3c 非阻塞发布尚未完成，网络生产尚未接入。日期：2026-09-19。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
+状态：P2（D09–D12）已完成并通过阶段退出验收：完整持久化、预算恢复、核心拓扑、托管隔离及基础蜂箱／基础离心机资产交接；无 AE2／有 AE2 专服、8 类故障、16 个跨进程阶段恢复、真实客户端菜单和正常保存退出已通过，证据见 10.21。P1 领域核心 D03–D08 已交付，下一步为 P3／D13，网络生产尚未接入。日期：2026-09-19。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
 
 本方案针对 Minecraft 1.21.1、NeoForge 21.1.214、Java 21；核心依赖为 Productive Bees 13.13.5、ProductiveLib 0.2.0、Mekanism 10.7.19.85，AE2 19.2.17 为可选集成。以上是开发基线，不代表已经验证所有元数据允许的低版本依赖。
 
@@ -228,8 +228,8 @@ AE2LT 的 `DualLong126` 是有限双 long 表示，不能直接满足本方案�
 | --- | --- | --- | --- |
 | AE2LT 2.1.0-beta.5 + Thunderbolt beta.3 | `IndexedStorage` 的键 ID、lo／hi 数组、脏队列、序列化键缓存；`DualLong126` | 按键索引、低分配数量更新、结构变化与数量变化分离 | 双 long 数值上界、int 类型数、逐盘字节模型；不是 BigInteger 无限盘 |
 | EAEP 1.21.1，提交 `85a50ea5` | `InfinityDataStorage.longAmounts/bigAmounts`，升降级、总数增量缓存、模拟不分配 UUID | long 常见路径、只读模拟、按需物化大数、世界数据与物品引用分离 | 全部盘写入同一个 SavedData 的保存规模和逐盘回调开销 |
-| Neo ECO AE `v21.1.2` 分支，提交 `2a7e4375` | `InfiniteStorageAmounts` 的 long 主表和 BigInteger 溢出表；SavedData 快照与逐次操作强制落盘日志；ExactAmountSource | 数量与外部 long 投影分离、独立域、序号重放、增量类型统计、精确数量扩展 | 实际 insert／extract 的 FileChannel.force(true) 成本不可忽略；ExactAmountSource 是 ECO 自有接口，不能冒充 AE2 原生 API |
-| 数据能源 3.1.1 Trinity Data Core | UUID→HostState、BigInteger 数量、分类总数、排序视图缓存 | 按宿主隔离、分类统计、只在变更时重建查询视图 | `InfiniteDataCellInventory` 是特定自定义资源的创造供给，并非有限真实物品的无限容量记账 |
+| Neo ECO AE `v21.1.2` 分支，提交 `1cae738a` | `InfiniteStorageAmounts` 的 long 主表和 BigInteger 溢出表；SavedData 快照与逐次操作强制落盘日志；ExactAmountSource | 数量与外部 long 投影分离、独立域、序号重放、增量类型统计、精确数量扩展 | 实际 insert／extract 的 FileChannel.force(true) 成本不可忽略；ExactAmountSource 是 ECO 自有接口，不能冒充 AE2 原生 API |
+| DataEnergistics 3.3.0，提交 `dbdfe17e` | UUID→HostState、BigInteger 数量、分类总数、排序视图缓存 | 按宿主隔离、分类统计、只在变更时重建查询视图 | `InfiniteDataCellInventory` 是特定自定义资源的创造供给，并非有限真实物品的无限容量记账 |
 | Mekanism QIO 10.7.19.85 | 键索引、脏物品集合、查看者订阅 | 只更新变化和实际查看者、清理失效会话 | 不继承 QIO 磁盘容量和全量客户端列表模型 |
 
 ECO `v21.1.2` 的域管理器创建 `SavedDataInfiniteStorageEngine`，由 `ECOInfiniteStorageData` 持有数量和恢复状态。实际普通存取先写带序号的 `.journal` 并执行 `force(true)`，再变更内存；快照记录 journalSequence，使用临时文件和安全替换，重放忽略已包含的记录。这是明确的耐久性取舍，不能将“SavedData 后端”理解为只有世界保存才进行磁盘 I/O，也不能无条件把它称为最高吞吐实现。
@@ -708,7 +708,7 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 
 全量 `-PnetworkDomainProbe=true test build verifyReleaseArtifact`：705 项测试，703 通过、2 项既有条件用例跳过、0 失败／错误。独立专服 `-PnetworkDomainProbe=true -PnetworkProbeRun=p2-d09a-shutdown runNetworkDomainServer --no-daemon --no-configuration-cache` 覆盖真实注册表／未知组件、256 位以上数量、原生 DimensionDataStorage 保存、新目录实例读取、已付费结果单次结算及 UNKNOWN 不自动解锁；停服后额外读取正式世界 data 路径核对最后 checkpoint。证据位于 `build/network-probe-p2-d09a-shutdown/results/domain.json`、`build/p2-final-verification.log` 和 `build/p2-shutdown-probe.log`。探针不进入发行 JAR，未修改用户 run 世界。
 
-**边界：D09 整体和 P2 尚未完成。** 目前持久化的是已经存在的 P1 领域状态；蜜蜂／有限供给／升级实物／真实能量账户和机器交接记录在 D12–D16 形成时必须加入同一权威 schema 和验证链，不能只保存余额。D09a 交付时 `NetworkCheckpoint` 的整表不可变复制及 NBT 编码都在主线程，读取也尚未预算化；后续余额冻结改进见 10.13，仍没有声称解决 D02 百万键完整保存停顿。D09b 必须完成预算化捕获／编码／加载和一致发布后才能进入 D10；D10–D12 的核心、拓扑、父类隔离与接管均未启用。专服验证不代表客户端、生产守恒全矩阵或网络性能 A/B 已通过。
+**D09a 交付时的边界（P2 最终验收见 10.21）：D09 整体和 P2 当时尚未完成。** 目前持久化的是已经存在的 P1 领域状态；蜜蜂／有限供给／升级实物／真实能量账户和机器交接记录在 D12–D16 形成时必须加入同一权威 schema 和验证链，不能只保存余额。D09a 交付时 `NetworkCheckpoint` 的整表不可变复制及 NBT 编码都在主线程，读取也尚未预算化；后续余额冻结改进见 10.13，仍没有声称解决 D02 百万键完整保存停顿。D09b 必须完成预算化捕获／编码／加载和一致发布后才能进入 D10；D10–D12 的核心、拓扑、父类隔离与接管均未启用。专服验证不代表客户端、生产守恒全矩阵或网络性能 A/B 已通过。
 
 ### 10.13 D09b1 不可变余额页与捕获成本（2026-09-18）
 
@@ -760,7 +760,7 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 
 最终验收：`-PnetworkDomainProbe=true test build verifyReleaseArtifact` 共 730 项，728 通过、2 项既有条件跳过、0 失败／错误；日志 `build/d09b2b-final-verification.log`。隔离专服 `p2-d09b2b-stream-server-1` 未安装 AE2，原生保存请求后 2 个真实 tick 收到最新回执；随后仅修改到 revision 3，正常停服最终文件仍正确。`build/network-probe-p2-d09b2b-stream-server-1/results/domain.json` 的 `tickDrivenStreamSave`、`normalShutdownCheckpointSaved`、`passed` 均为 true，日志为 `build/d09b2b-server.log`。发行包不含开发探针，未使用用户 run 世界、未推送或发布。源码／报告／JAR 摘要登记在 `build/reports/p2-d09b2b/evidence-manifest.json`。已有附属模组缺配方及升级窗口位置诊断仍保留，不扩张兼容声明。
 
-**D09b2b 完成不等于 D09 或 P2 完成。** D09b3 的流式读取、注册表校验、恢复索引和非阻塞创建发布尚未实现；D10–D12 仍未启用。先验收这些依赖，再进入拓扑与接管。
+**D09b2b 交付时的边界（P2 最终验收见 10.21）：该子步骤完成不等于 D09 或 P2 完成。** D09b3 的流式读取、注册表校验、恢复索引和非阻塞创建发布尚未实现；D10–D12 仍未启用。先验收这些依赖，再进入拓扑与接管。
 
 ### 10.16 D09b3a 有界读取传输与完整文件检查（2026-09-19）
 
@@ -789,15 +789,75 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 
 **D09b3a 只完成文件传输；不是百万键冷加载、注册表验证、领域恢复或 D09 整体验收。D10 仍不得开始。**
 
+### 10.17 D09b3b／c 分段恢复与发布（2026-09-19）
+
+`CheckpointDecoder` 在所属线程按事件数与软时间预算推进。`CheckpointSchema` 将领域列表逐条送入恢复构建器，余额、交易的输入／输出、动态发现、暂存、成员／通道、能力替代项、规则／保留和滞回均参与预算；只有单个产品组件或大数实体化为原生 NBT。跨记录验证逐步汇总预约和检查引用，结束时复用不可变根，不在最终回调重建整表。未知字段、重复字段／身份、未来版本、坏注册内容、孤立通道、超额预约等使候选整体作废。
+
+`NetworkDirectory` 的打开和新建返回 `NetworkOpenHandle`。目录及域共用唯一读取器；加载期间 `ready()` 拒绝访问。新建依次等待域文件和目录文件的实际成功回执，只有两者都成功才发布。慢盘不会让普通 tick 等待 future；写失败沿用保存队列的退避重试。读取／配方重载代际变化会丢弃候选，显式重新加载可以重试修复后的文件；服务器关闭撤销句柄。尚未开始、且没有发布的空域创建可以取消，不视为已接管机器。
+
+本地参考继续核对 DataEnergistics `HostState.putLoaded/readEntries` 和 ECO `ECOInfiniteStorageDomains`：采用逐条建立索引及会话级生命周期，不沿用坏记录跳过、未知域自动创建或同步整域读取。原生组件 codec 的执行、复制、哈希和大数操作不可抢占，单记录成本必须独立披露。实际注册表／配方运行时索引由后续作业适配层按当前版本建立，不可把已恢复 checkpoint 当作机器生产授权。
+
+验证证据：`build/network-probe-p2-d09b3-server-1/results/domain.json` 在 NeoForge 21.1.214 独立专服（AE2 未加载）通过真实 tick 创建、保存、全域解码及正常停服落盘；丰富领域夹具在 10 个消费 tick 内恢复，单步最大约 0.405 ms。`build/reports/network-restore/p2-d09b3/restore-1000000.json` 在新的 NeoForge JVM 恢复一百万个金锭 custom_data 变体，每 64 个键包含一个超 long 数量；逐键精确比较、组件验证及原文件 SHA-256 全部通过。初次通过记录恢复耗时 10.508 s，工作段 p95 2.005 ms／p99 2.013 ms／最大 44.640 ms，单步最大 43.958 ms；所属线程累计分配 12,534,407,784 B，结束采样堆使用 1,410,451,072 B（不是峰值或强制 GC 后驻留量）。最终消除逐字段邮箱统计调用后，`restore-1000000-p2-d09b3-final.json` 记录 10.596 s、p99 2.017 ms、最大 42.040 ms、累计分配 12,532,503,568 B；差异不足以证明性能提升。全量 test／build／专服命令通过，结果在 `build/p2-d09b3-final.log` 与 `build/network-probe-p2-d09b3-final/results/domain.json`。
+
+**验收口径修订：** 原文件摘要证明传输未改动字节；跨 JVM 恢复用逐键完整组件和精确数量核对语义，不要求重新保存后的字节摘要相同。当前 trie 使用包含枚举哈希的进程内键哈希，跨 JVM 的合法记录顺序可以不同；这不改变账户身份与数量，也不值得为了字节排序增加整域排序。上述百万键测量紧密推进预算工作段，未清空 OS 文件缓存，不是百万键实际 tick 延迟或 Spark/MSPT 证据。1 MiB 单组件、百万位数量、取消、重复原始字段、坏引用、双回执门控均有聚焦行为用例。D09b3 交付时 P2 仍需完成 D10–D12；最终验收见 10.21。
+
+### 10.18 D10 核心与只读拓扑（2026-09-19）
+
+新增控制核心、只读结构菜单、核心连接面、服务端开关与预算项（同步原生 NeoForge 配置界面及中英文）。核心默认不接管机器。`TopologyScan` 使用单区块六面 BFS，`NetworkTopologyService` 为全服提供唯一 FIFO 扫描队列和节点／软时间预算；区块内多核心共用事件 epoch，放拆、邻居事件与区块变化立即使旧视图不可用。仅记录含核心的区块，停服清理会话，200 tick 的按区块巡检补偿遗漏事件，不强制加载成员区块。
+
+本地复核 ECO `NEClusterCalculator` 和 Mekanism `TileEntityMekanism`：借鉴形成／失效生命周期，任意邻接图仍用有预算的 BFS，不使用定形包围盒扫描。修复了关闭面的节点首次被碰到就标记 visited 的陷阱：关闭入边不阻止其通过其他开放路径连接。只有同所有者成员贡献蜂位或进程；不同所有者不被自动接管，双核心显示冲突。菜单命令校验当前菜单、核心实例、距离和所有者，计数分成原生短字段传输后还原 long，避免 32767 截断。
+
+`TopologyScanTest` 覆盖预算步长、单区块边界、斜角、异主成员、关闭面的替代路径、拆分和过期 epoch。`build/network-probe-p2-d10-1/results/domain.json` 在真实专服以全服每 tick 一个候选节点验证跨 tick 重建、真实蜂箱／离心机计数、双核心冲突、断开核心连接面以及拆机撤销能力；同轮 `test build` 通过。尚未检查客户端实际界面观感。托管隔离与交接由 D11／D12 继续实现。
+
+### 10.19 D11 托管入口与原生副作用隔离（2026-09-19）
+
+`MemberBinding` 统一约束独立 ticker、JDTE 直接累计／flush、缓存能力代理、成员菜单及逐机 AE2 生命周期。拦截点位于 Mekanism `TileEntityMekanism.tickServer` 的父组件执行之前，绑定或目录占用存在时不执行 frequency、upgrade、chunkloader、熔炼、PB 生产和 ejector。网络目录尚在加载时暂停候选机器，避免旧 BE 没有绑定字段就先生产一 tick；返回必须先释放权威占用，再恢复独立能力和 AE2 节点。
+
+`build/network-probe-p2-d11-4/results/domain.json` 与 `build/network-probe-p2-d12-3/results/domain.json` 覆盖 36 类蜂箱／离心机变体、256 次父 ticker 与 JDTE 委托、冻结前取得的 item／fluid／FE／strict energy 代理，确认状态不变且独立 ticker 能恢复。此处的工厂隔离不代表其资产迁移已获准，逐级迁移和升级矩阵仍归 D24。
+
+### 10.20 D12 真实资产与回执交接（2026-09-19，已验收）
+
+`OwnershipTransferService` 以目录占用、域记录及当前 BE 引用组成身份链，目录新增位置／member／transfer 索引，域的 `OwnedMachines` 使用不可变记录与位置／transfer 索引。阶段顺序为目录 claim 落盘 → PREPARE → SEALED 域落盘 → 清空源并绑定 MANAGED → OWNED 域落盘。未通过预检的机器保持独立；外部 AE2 已接受但尚未扣减的欠账必须先在独立路径结清，不能冻结后永远等待普通 ticker。
+
+逆向顺序为 RETURNING 意图落盘 → 检查空目标及容量 → 恢复实物并写 BE RETURNED 标记 → 等待原生区块写完成 → 域 RETURNED 删除资产并落盘 → 释放目录占用并落盘 → 删除 BE 绑定。RETURNED 域只保留指纹收据，不能再发放资产。BE 的 RETURNED 是恢复完成标记，不等同于 LEAVING；源／目标／代际无法核实时保留权威资产并隔离，不能因为核心缺失而恢复生产。
+
+P2 的基础蜂箱／基础离心机使用有限迁移保管映像，记录原生物品槽、真实蜂笼与完整蜂位、原有喂食实物、PB／Mekanism 升级、有限储能、流体、输出缓冲和待产出状态。原有共享喂食板只保存一份真实物品及原布局；不复制成 H 份。D14 再把这些实物事务化分配到 H 个喂食槽，D16 建立统一有限供给／储能账户；P2 保管数据不执行生产，不提前把所有物品当合法无限产物。特殊蜂种和工厂即便已有隔离守卫，也必须等对应生产／资产适配验收；核心明确拒绝未实现的工厂资产适配器。
+
+蜂箱新增 schema 1 的 pending 周期快照，保存逐位已付费周期、刷新计数与轮转游标，普通保存、物品保存和等级升级同步携带；无法解析或对应蜂位消失时保留原字段并暂停。离心只保存已经扣料的 committed pending 剩余物品／流体和已有进度，丢弃未扣料的暂存计划，不重新抽样或重复扣料。预检在未加入世界的同型 BE 上恢复并重新捕获，逐字段比较完整映像，拒绝原生 codec 静默裁剪、未知资产及容量不足。
+
+本地参考了 Mekanism `TileComponentUpgrade.deserialize` 的升级重算及槽位恢复顺序、NeoForge 21.1.214 `ChunkMap.save` → `ChunkStorage.write` → `IOWorker.store` 的真实 future，以及 ECO `ECOInfiniteStorageDomains` 的 acquire／release 生命周期。交还复用原生区块写队列及 `ChunkDataEvent.Save`，不另开会覆盖新版区块的文件写入器；正常 tick 不 join 未完成 IO。单机 NBT 捕获、注册表 round-trip 和整个区块序列化仍是不可抢占工作：全服每 tick 至多 4 步、2 ms 软预算不是硬时长保证。收据属于正常保存完成语义，不宣称整世界断电原子事务。
+
+核心已提供接管／整批交还菜单命令、身份引用保存和重建后的阶段恢复。所有者、距离、当前菜单和核心实例在服务端重查；复制核心坐标或代际不符时拒绝。结构改变会停止尚未开始的接管，已完成成员仍由原权威域持有；先交还再使用扳手、等级安装器或拆机，强制破坏的掉落路径也禁止再次实体化旧源库存。被强制移除或状态不明的机器保留资产进入恢复检查，自动补发与管理取回界面归 D23。
+
+实测证据：`build/network-probe-p2-d12-3/results/domain.json` 完成真实蜂笼、已安装升级、喂食、储能、流体、两种 pending、BE 重建、核心命令调度／核心重建及复制核心拒绝。`build/network-probe-p2-d12-restart-write-1` 在 PREPARE、SEAL、OWNED、RETURN_INTENT、RETURN_WRITE、RETURN_RECEIPT、RELEASE_CLAIM、RELEASE_BINDING 各保存两类机器后正常退出；`build/network-probe-p2-d12-restart-read-4/results/domain.json` 在独立新 JVM 读取复制的保存世界，16 台机器完整交还且权威副本清空。该测试发现并修复两类基础机流体被原生字段与自定义 NBT 重复恢复的问题，改为幂等替换，未放宽指纹校验。
+
+故障注入、AE2 组合与客户端检查现已完成，见 10.21；网络生产和整体性能收益仍属于 P3 及后续 A/B 验收。
+
+### 10.21 P2 退出验收与本轮修正（2026-09-19）
+
+本轮自审修复了**同进程重建核心可能绕过目录回执**的漏洞：恢复 CLAIM 和 RELEASE_BINDING 时必须记住当前目录 revision，等该版本实际落盘，不能拿旧 persistedRevision 当作新操作的回执。`OwnershipTransferTest` 用可控延迟执行器验证未完成 claim 写入时不封存、未完成释放写入时不解锁；正常跨进程恢复保留同样的门控。`OwnedMachines.activeCount` 复用现有位置索引，整批交还后恢复“独立模式”并拒绝重复空交还，不遍历历史收据计算界面状态。中英文结构提示统一为“结构可用”，托管状态单列。
+
+| 验收 | 本地可复核证据 | 结果与边界 |
+| --- | --- | --- |
+| 全量回归与产物 | `build/p2-exit-build.stdout.log`；`build/test-results/test`；`build/reports/release-artifact.txt` | `test build verifyReleaseArtifact --no-daemon` 通过；764 项中 762 通过、2 项原有跳过，0 失败；正常 JAR 已核对无开发探针类 |
+| 无 AE2 专服 | `build/network-probe-p2-exit-noae2-final/results/domain.json` | 36 类真实机器的父 ticker／加速直接入口与缓存能力隔离，基础机往返，核心重建、拓扑、8 类故障及正常停服保存全部通过 |
+| AE2＋Applied Flux 专服 | `build/network-probe-p2-exit-ae2-final/results/domain.json` | AE2 节点在独立模式创建、接管时销毁、交还后重建；上述同一矩阵全部通过。测试副本补齐本地 GuideME／Glodium，未替换用户运行依赖 |
+| 跨进程恢复 | `build/network-probe-p2-exit-restart-write/results/domain.json`；`build/network-probe-p2-exit-restart-read/results/domain.json` | 两类基础机 × 八个阶段，共 16 台，写进程正常退出后复制测试世界给独立新 JVM，完整交还并清除可执行域副本 |
+| 客户端与菜单 | `build/network-probe-p2-exit-client-final/results/client.json`；同目录 `before.png`、`managed.png`、`returned.png` | 实际客户端同步 2 成员／3 蜂位／1 离心进程，点击真实按钮经原版菜单包完成接管与交还；越权、超距、未知命令、非当前菜单拒绝；中文布局与状态截图已检查，正常退世界保存并退出通过 |
+
+8 类故障为两类基础机分别注入旧无绑定 BE 回现、绑定代际篡改、强制破坏、所有者变更；所有案例保留目录占用和权威资产进入 RECOVERY，并检查旧源掉落被阻止。容量预检拒绝不可还原能量映像且不修改源机。客户端探针自身的强制渲染 tick 重入和缺少 `ClientLevel.disconnect` 的退出问题已修正，最终报告只引用修正后完整通过的运行；失败运行保留供诊断。
+
+**P2 已满足“结构与唯一所有权”的阶段目标。** 正常世界接管开关仍默认关闭；当前只有基础蜂箱／基础离心机具有已验收的资产适配器，托管状态不生产。工厂生产／资产适配、特殊蜂种、逐位喂食迁移、统一供给与能量账户、管理取回界面、长稳断电故障和性能 A/B 按原路线进入 P3–P7，不把专服或菜单通过解释为这些后续功能已完成。未实施线上发布或修改正式测试世界。
+
 ## 11. 阶段路线与可独立评审的提交
 
-以下为开发清单；D01–D08 的交付和验证边界见第 10.4–10.11 节，D09a／D09b1／D09b2 见第 10.12–10.15 节，D09b3a 见第 10.16 节，D09b3b／c 及 D10 起仍待实施。生产新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
+以下为开发清单；D01–D08 的交付和验证边界见第 10.4–10.11 节，D09a／D09b1／D09b2 见第 10.12–10.15 节，D09b3a 见第 10.16 节，D09b3b／c 见第 10.17 节，D10–D12 的 P2 退出记录见 10.21。生产新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
 
 | 阶段 | 步骤 | 玩家／开发者可见交付 | 退出门槛 | 估算 |
 | --- | --- | --- | --- | --- |
 | P0：风险与基线 | D01–D02 | 当前行为基线、存储候选数据、API／保存可行性 | 选择有证据的核心方案 | 1–2 人周 |
 | P1：纯领域核心 | D03–D08 | 能力、键／大数、资格、账本、保留、优先级 | 算法守恒及边界测试通过 | 3–4 人周 |
-| P2：结构与所有权 | D09–D12 | 控制核心、持久化、接管、停机／恢复 | 不出现双重生产或双重库存 | 2–3 人周 |
+| P2：结构与所有权（已验收） | D09–D12 | 控制核心、持久化、接管、停机／恢复 | 不出现双重生产或双重库存 | 2–3 人周 |
 | P3：最小生产闭环 | D13–D16 | 基础蜂箱＋离心机，逐蜂位喂食，全网络虚拟运行 | 无 AE2 可生产、加工、保存、取回 | 2–4 人周 |
 | P4：终端与升级 | D17–D19 | 两类终端、逐机升级、分页与权限 | 多人管理不复制、不越权 | 2–3 人周 |
 | P5：AE2 与库存策略 | D20–D23 | 双向无限存储、主动拉取、保留、目标库存及普通端口 | 无自拉取、无重复预约、合法退回可用 | 2–4 人周 |
@@ -826,7 +886,7 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 
 **D08 — 规则编译、优先级和滞回（已实现，见 10.11）。** 前置：D03、D07。实现 `ProcessingRuleIndex`、按配方能力匹配的候选队列、带权轮转与低／高水位状态机；支持输入键、标签、bee_type 和目标产物到合法配方的索引。测试规则重叠、无适用能力、被保留堵塞、高优先级缺料、严格优先选择和反复水位变化。通过条件为一次输入只有一个预约拥有者，默认公平模式低优先级可推进。
 
-### 11.3 P2：先解决安全接管再生产
+### 11.3 P2：先解决安全接管再生产（已验收，见 10.21）
 
 **D09 — 持久化状态域。** 前置：D03–D08。新增 `NetworkDirectory`、`NetworkSavedData`、记录 codecs，保存所有账户、蜜蜂、喂食槽、升级、能力来源、在制计划和规则版本；索引从权威记录重建。拆成 D09a 完整权威 checkpoint／严格读取／显式创建／保存完成回执（查询 Snapshot 不含活跃事务明细，不能直接作为存档），D09b 预算化编码、不可变快照页与统一 checkpoint，后者的可行性验证从原 D28 前移，不能把 D02 百万键整表保存的秒级主线程暂停带入大规模闭环。测试 round-trip、未知版本、截断数据、缺键占位符、域丢失、重复身份、写失败重试和保存期间再次变更。通过条件为无法解码时隔离并保留原始数据，正常保存加载摘要一致，新 revision 不被旧保存回执清除，不默默生成空网络；分页后的账户与在制作业仍共享一次一致快照。
 
@@ -836,8 +896,8 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 | D09b2a（已实现，见 10.14） | D09b1；元数据不可变根、统一捕获与更新时约束 | 余额、交易、转移、发现、成员／通道、规则／滞回在同一边界冻结；公开输入仍严格校验；百万余额键与大量元数据的捕获／持续变更单列测量，真实保存恢复保持一致 |
 | D09b2b（已实现，见 10.15） | D09b2a；后台流式编码、背压与原子发布 | 主线程请求／捕获不枚举，tick 检查有界；每服一个未完成快照与固定流缓冲，目录及嵌套记录逐项写入；无整域 NBT／byte[]、无历史快照积压；失败及旧回执不清除新变更，停服实际落盘 |
 | D09b3a（已实现，见 10.16） | D09b2b；有界后台读入、完整 NBT 事件传输、取消／失败 | 全字段与大数组保持精确，邮箱按批次和字节背压，不物化整域；截断／CRC／异常长度／取消不改原文件，百万键文件事件摘要一致；不授予 READY |
-| D09b3b | D09b3a；主线程分段 schema／注册表／组件校验、跨记录检查及索引构建 | 目录、余额、交易内嵌明细、发现、暂存、成员／通道、规则／保留／滞回全部计入预算；拒绝重复字段／身份和坏引用，候选状态不逃逸，最终封装不做隐藏整表复制；单记录 codec 成本单列 |
-| D09b3c | D09b3b；目录／加载会话代际、非阻塞打开／创建及完整发布 | 加载／创建期间不可写且不可生产；全部校验完成或创建获得实际落盘回执后才发布 READY；百万组件键冷加载、读取中重载／取消、慢写时新建、失败重试及停服全部通过，再进入 D10 |
+| D09b3b（已验收，见 10.17） | D09b3a；主线程分段 schema／注册表／组件校验、跨记录检查及索引构建 | 目录、余额、交易内嵌明细、发现、暂存、成员／通道、规则／保留／滞回全部计入预算；拒绝重复字段／身份和坏引用，候选状态不逃逸，最终封装不做隐藏整表复制；单记录 codec 成本单列 |
+| D09b3c（已验收，见 10.17） | D09b3b；目录／加载会话代际、非阻塞打开／创建及完整发布 | 加载／创建期间不可写且不可生产；全部校验完成或创建获得实际落盘回执后才发布 READY；百万组件键冷加载、读取中重载／取消、慢写时新建、失败重试及停服全部通过，再进入 D10 |
 
 分页的工作条数不是绝对时长保证：单个超大组件／大数的编码、校验和比较也可能耗时。b2 将纯编码移至唯一后台任务，分别记录主线程请求／tick 的 P95／P99／最大时间、后台累计分配／全文件耗时及峰值流缓冲；超大单记录单独验证，不能把 32 KiB 当作整个保存的内存上限。b3 仍须给主线程注册表验证与索引构建设步长并记录单条最大成本，元数据及目录不能绕开该预算。硬件不足时背压／暂停工作，不截断数量或拒收新的合法类型。
 
@@ -903,7 +963,7 @@ D09a 当时的 `AcknowledgedSavedData` 覆盖文件保存入口，在所属服�
 
 纯新增服务失败可以撤销本步；已被旧路径调用的抽象改动必须同时回退适配器并跑独立机回归；已有测试世界数据后，只能使用兼容读取／恢复模式或恢复一致备份，不能随便删除序列化字段和退回不认识网络的旧 JAR。调试指标放既有日志／开发统计入口，按需启用，不为每步新增操作指南。
 
-P1／D08 已验收并推送，当前继续 P2。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
+P1／D08 已验收并推送；P2／D09–D12 已通过阶段验收，当前网络工作区保留未提交实现，后续进入 P3。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
 
 ### 11.10 执行效率与逐步参考清单
 
@@ -945,11 +1005,13 @@ P1／D08 已验收并推送，当前继续 P2。D03–D08 各自经过聚焦测�
 
 AE2LT 唯一主参考为 `E:/mczuixin/MCkaifa/1.21.1kaifa/闪电全版本/ae2lt-src-2.1.0-beta.5`，提交 `1d4589b6bd50672051f78d766505530beacfebc0`。EAEP 已从用户指定的 [1.21.1 分支](https://github.com/GaLicn/ExtendedAE_Plus/tree/1.21.1) 下载到下表目录，提交 `85a50ea5ca7cf25387be1604981e4ef99a3a8f5f`，版本 1.6.2。两者当前本地工作树干净。
 
-ECO 主参考为用户指定的 [v21.1.2 维护分支](https://github.com/DancingSnow0517/NeoECOAEExtension/tree/v21.1.2)，2026-09-18 fetch 后由 `2a7e4375` 快进至 `f26aab470fa075bedd62388040097a2c9ae85397`（同日更新“兼容 EAEP 自适应翻倍”）；本地分支与远端一致且工作树干净。gradle.properties 声明 mod_version 为 `21.2.0-beta3`，分支名与发布版本号分别记录。旧 `neoecoaeextension-21.2.0-source` 仅保留作历史比较。
+ECO 主参考为用户指定的 [v21.1.2 维护分支](https://github.com/DancingSnow0517/NeoECOAEExtension/tree/v21.1.2)，2026-09-19 fetch 并快进到 `1cae738ad9761d8c06b1902f828dc06dc57548b6`（“优化网络同步增量传输与发包预算”）；本次核对时本地分支与远端一致且工作树干净。gradle.properties 声明 mod_version 为 `21.2.0-beta4`，分支名与发布版本号分别记录。旧 `neoecoaeextension-21.2.0-source` 仅保留作历史比较。
 
-DataEnergistics 已从 [ModularMCLib/DataEnergistics](https://github.com/ModularMCLib/DataEnergistics) 的远端默认分支 `1.21` 克隆最新源码到 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，固定 `4a33f1282df9615feb54a01b062d23e0990dbd3e`（2026-09-18，“重构三位一体样板核心并修复迁移死锁 #336”），版本为 `3.3.0`。原 `dataenergistics-3.1.1-source` 是无 Git 元数据的旧源码副本，保留历史资料但不再作为当前主参考。
+DataEnergistics 已从 [ModularMCLib/DataEnergistics](https://github.com/ModularMCLib/DataEnergistics) 的远端默认分支 `1.21` 克隆最新源码到 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，本轮 fetch 并快进至 `dbdfe17e23cf614f48c30ed13ab356237824546a`（2026-09-19，“修复三位一体自动搭建首次冲突判定 #342”），版本为 `3.3.0`。原 `dataenergistics-3.1.1-source` 是无 Git 元数据的旧源码副本，保留历史资料但不再作为当前主参考。
 
-AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233；本项目仍是 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
+Useless 最新主参考为本地 `.tmp_useless_src`，来自 [SorrowMist/UselessMod 的 1.21 分支](https://github.com/SorrowMist/UselessMod/tree/1.21)，2026-09-19 fetch 并快进至 `267b38a68eea533a8966785949e34fafb2624e7e`，版本 `1.21.1-2.3.8`。重点读取同日 `6dd8e784` 新增的 `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs` 及 `AdvancedAlloyFurnaceAeManager` 整批交付路径；旧 `uselessmod-1.21.1-2.2.4-fix1-source` 只作历史参考。
+
+AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；本项目仍是 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
 
 | 来源与本地位置 | 已检查内容 | 借鉴及边界 |
 | --- | --- | --- |
@@ -957,6 +1019,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `run/mods/thunderbolt-2.0.0-beta.3.jar` | javap 核对 `core.storage.cell.IndexedStorage`、`DualLong126`、`IndexedStorageCellInventory`、`IndexedCellStorageSavedData`、`core.crafting.pattern.CraftingStockPolicy` | 对齐上述 AE2LT 声明的依赖；确认 primitive 数组与有限双 long、存储生命周期及非原生的合成策略接口 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/extendedae-plus-1.21.1-source` | `util/storage/InfinityDataStorage`、`InfinityStorageManager`、`api/storage/InfinityBigIntegerCellInventory` | long／BigInteger 双层、降级、总数增量缓存、storageRevision、纯模拟、饱和上报；已替换旧 1.20.1 副本 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/neoecoaeextension-v21.1.2-source` | `ECOInfiniteStorageDomains`、`SavedDataInfiniteStorageEngine`、`ECOInfiniteStorageData`、`InfiniteStorageAmounts`、`InfiniteStorageJournalRecord`、`ECOInfiniteStorage` | 原生 long 投影＋大数溢出表、逐次强制日志、快照序号重放与转移收据、ECO 自有精确数量接口；实际热路径以此分支为准 |
+| `.tmp_useless_src`（2.3.8） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources` | `common/content/qio/QIOFrequency`、`common/inventory/container/QIOItemViewerContainer` | 库存键索引、updatedItems、只向查看者同步、避免同时保存的思路；QIO 有容量且其终端协议不等于本方案的服务端分页 |
@@ -964,20 +1027,26 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `.tmp_gtceu_src` | `MEStockingBusPartMachine`、`ExportOnlyAEItemSlot` | 库存视图与真实消耗分离、周期刷新及防重复匹配；本地摘录未核实发行版本，不照搬 API 或轮询频率 |
 | `.tmp_gtnh_src` | KubaTech `MTEMegaIndustrialApiary`、`MTEIndustrialApiary` | 集中蜜蜂数据、花朵需求去重、缺失原因可见；属于旧 Forestry／Forge 技术栈，只借鉴职责，不套用 1.21.1 API |
 
-相关项目：[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)、[Mekanism](https://github.com/mekanism/Mekanism)、[GTCEu Modern](https://github.com/GregTechCEu/GregTech-Modern)、[KubaTech](https://github.com/GTNewHorizons/KubaTech)。这些仓库主页是定位入口；DataEnergistics 与 ECO 在参考准备阶段已联网更新，EAEP 为此前取得的指定分支源码，本轮按上表固定提交核对本地实现，没有重新宣称远端最新状态，也没有将未经读取的网上介绍作为性能排名。
+相关项目：[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)、[Mekanism](https://github.com/mekanism/Mekanism)、[GTCEu Modern](https://github.com/GregTechCEu/GregTech-Modern)、[KubaTech](https://github.com/GTNewHorizons/KubaTech)。这些仓库主页是定位入口；DataEnergistics、ECO 与 Useless 本轮均已联网 fetch 并固定上述提交；EAEP 为此前取得的指定分支源码，不宣称其远端最新状态，也没有将未经读取的网上介绍作为性能排名。
 
 本地旧研究 `docs/2026-09-15-天枢库存保留研究与对齐方案.md` 是背景资料，其中旧 AE2LT 路径属于历史锚点；合成库存策略的实施结论以本文第 6.6 节及新版源码为准。无需为使用保留算法强行引入 Thunderbolt；只有其可选合成扩展需要独立兼容边界。
 
-### 13.3 进一步优化与逐步参考路线（2026-09-18）
+### 13.3 进一步优化与逐步参考路线（2026-09-19 更新）
 
 设计的进一步优化集中在实现顺序、证据边界和故障协议。前轮已复读 DataEnergistics 的 `TrinityDataCoreStorageSavedData`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket`，ECO 的 `ECOInfiniteStorageDomains/Data/Transfer`、`NEClusterCalculator` 及 AE2LT `InfiniteStorageCellItem`。D09b2a／b2b 实际继续核对 DataEnergistics `HostState.insert/extract/orderedEntries/invalidateView`、ECO `ECOInfiniteStorageData.save(File, ...)`，以及本项目 NeoForge 21.1.214 的 `SavedData`／`DimensionDataStorage`：增量维护状态可借鉴，整表 UI 缓存不能代替权威冻结，原生保存还会整棵复制 NBT，后台写盘不等于主线程工作已预算化。
 
-1. **先区分持久化正确性与保存性能。** D09a 已建立完整 P1 权威 checkpoint、严格读取和真实写入回执；D09b1／b2a 解决余额与元数据的一致冻结，D09b2b 已将纯编码／压缩／原子发布交给唯一后台流任务，b3 继续预算化加载。异步任务只读封闭的不可变 payload；加载注册表校验不可据此转到后台，累计分配及大文件等待仍要计量。内存分页不强制磁盘分文件，优先验证单文件续写与原子替换，避免过早增加 manifest／文件回收协议。D09b 未验证前不开放大规模接管。后续新增蜜蜂、供给、储能、升级、交接记录时必须同步升级 schema 和全域恢复测试，不能只往 BE 添一段 NBT。
+1. **先区分持久化正确性与保存性能。** D09a 已建立完整 P1 权威 checkpoint、严格读取和真实写入回执；D09b1／b2a 解决余额与元数据的一致冻结，D09b2b 已将纯编码／压缩／原子发布交给唯一后台流任务，b3 已完成预算加载及一致发布。异步任务只读封闭的不可变 payload；加载注册表校验不可据此转到后台，累计分配及大文件等待仍要计量。内存分页不强制磁盘分文件，优先验证单文件续写与原子替换，避免过早增加 manifest／文件回收协议。D09b 未验证前不开放大规模接管。后续新增蜜蜂、供给、储能、升级、交接记录时必须同步升级 schema 和全域恢复测试，不能只往 BE 添一段 NBT。
 2. **参考失败路径同样重要。** DataEnergistics 的 detached runtime 保管、claimant、fingerprint 适合学习；它的产物存储 `load/readEntries` 对部分错误返回空对象或跳过记录，不适合本项目的数量守恒目标。ECO 保存 override 的原子替换、成功后推进 durableRevision 适合学习；逐操作 `journalChannel.force(true)` 属于不同的耐久性合同，不能移到每份蜜蜂产物路径。
 3. **身份引用不等于可执行所有权。** DataEnergistics 的 host/storage/removal 身份和窗口 generation 可用于 D12／D19；ECO 的 seal → cursor → insertOnce receipt → commit → complete 可用于交接。我们仍须覆盖区块与世界数据不同步、旧 BE 残留、source/target 冲突和未知外部结果，不能照搬它们后宣称跨模组原子性。
 4. **拓扑算法必须匹配形状。** ECO `NEClusterCalculator` 使用定形结构的包围盒扫描和 AE2 MBCalculator，适合作生命周期对照；本项目为任意六面连通图，仍需 epoch 绑定的预算 BFS、断边分裂和 owner 校验，不能换成无界范围扫描，也不能因此引入 AE2 硬依赖。
 5. **查询优化与权威库存分开。** 学习 DataEnergistics 的分类总量、排序缓存和不可变 UI frame，Mekanism QIO 的脏键／订阅；大数精确显示参考 ECO 的独立精确数量协议。排序、统计、终端同步和 AE2 long 投影都不能回写精确余额。AE2LT 实际存储委托 Thunderbolt，数组和数值范围结论必须核对依赖实现。
 6. **把不变量维护前移，但保留不可信输入校验。** 内存中的预约状态、成员／通道和滞回由所属服务在更新时维护；统一捕获只冻结已验证的根。文件、外部 Map／List 及恢复构造仍逐项检查，不能用一个公开“trusted”开关跳过校验。新 API 必须拒绝混用不同账本、跨线程／重入捕获、能力版本倒退与未来策略。记录构造和变更、快照冻结、编码、回执分开计量，不能把整表扫描藏在捕获前的构造器中。
+
+**本轮最新存储与交付核对：** ECO `SavedDataInfiniteStorageEngine` 仍按键增量更新数量和类型总量；`InfiniteStorageAmounts` 保持 long 主表与稀疏 BigInteger。`ECOInfiniteStorageData.appendJournalChange` 缓存单个最近键的编码模板（超过 64 KiB 不缓存），复用打开的 FileChannel，但每次普通修改仍 `force(true)`；`insertOnce` 是数量和迁移收据共同进入快照的另一条合同。不能把这几条路径混成一种吞吐结果。用户提供的“约 37R 物品／tick、6 ms”目前只有场景描述，没有同场景原始 Spark／基准报告，本文不把它记为已复现指标。
+
+下一轮 D13／D15／D20／D28 的基准须同时记录精确总量、不同键数、组件大小、存取调用数、Long.MAX_VALUE 分段次数、实际接受量、持久化方式、查看者数量及计时范围。Useless 新增 `claimOutputs` 说明大数产物可由 CPU 的精确账本整批接收，从而减少重复 long 分段；本项目内部产物与中间投入也应按键汇总直接在领域账本结算，仅在外部 long 接口边界切段。外部回调抛异常时，不能沿用“视为零接收并重试”的降级：接收结果未知时保留暂存并隔离，须有幂等收据才能重试。
+
+ECO 本轮 `ExactMapSync`／`MenuDataTransport` 采用全量基线加增量、每菜单／通道一个在途消息、每玩家共享发送预算和关闭时取消；这些用于 D18／D19 的同步设计。其整消息大小限制属于传输限制，不能转成产物库容量限制。DataEnergistics `196ca488` 的恢复修复在 `stateRestoreDepth` 内合并脏标记，直到正常服务器 tick 才发布，避免 `setLevel/onLoad` 中重入区块加载；本项目 D12 继续保持 NBT 读取只恢复引用、所有权状态机在服务器 tick 推进。恢复服务必须以当前目录 revision 等待回执，不能拿最后已保存 revision 为同进程重建后的新操作背书。
 
 下表给每一步增加明确的本地学习入口、拟采用内容和必须自行验证的差异。简称路径均见 13.2；已完成步骤用于补查回归，未来步骤是实施前的必读清单，不代表其全部调用链已经验证或允许直接复制代码。
 
@@ -1000,13 +1069,13 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | D09b3c | ECO `ECOInfiniteStorageDomains`；DataEnergistics detached runtime／host generation；NeoForge `DimensionDataStorage` | 显式创建／加载、代际失效及成功回执后发布；重载和旧完成回调不能恢复已取消域，正常 tick 不等待 IO |
 | D10 | ECO `NEClusterCalculator`；Mekanism 邻接／多方块生命周期；AE2 节点生命周期 | 学习形成／失效与事件合并，拓扑仍为单区块预算 BFS，不沿用定形扫描 |
 | D11 | Mekanism `TileEntityMekanism.tickServer`；本地 JDTE 合并接口 | 审计父类组件、ticker、flush、能力写入口；不能只 return 子类生产方法 |
-| D12 | ECO seal／迁移收据／restoreTarget；DataEnergistics detached runtime 认领 | 完整交接阶段、源封存和去重；真实蜂笼、pending 与能量需专属适配 |
+| D12 | ECO seal／迁移收据／restoreTarget；DataEnergistics detached runtime 与恢复深度；Useless 整批交付 | 当前 revision 回执门控、恢复不得重入区块加载、接收即转移所有权；真实蜂笼／pending／能量专属适配，异常不推断零接收 |
 | D13 | PB 生产／模拟；KubaTech 集中蜂群管理 | 复用业务条件，按原位置验证环境；旧 Forestry 实现只作职责参考 |
 | D14 | PB 喂食与多花路径；KubaTech 花源去重 | 共享只读判定，不共享物品所有权；逐蜂位槽和消费预约独立守恒 |
 | D15 | Mekanism 并行／配方；ECO execution／dispatch accounting | 分开 lane 预约、输入消费、结果冻结与交付，拒绝免费重开作业 |
 | D16 | ECO 任务调度／能量事务；AE2 网络服务 tick | 真实 tick 编排、预算公平和付费段结算，不异步调用世界或 AE2 |
 | D17 | Mekanism 升级组件；DataEnergistics hosted action | 按 member revision 安装／拆卸，先预约接收空间，逐机返回真实结果 |
-| D18 | QIO 订阅／updatedItems；DataEnergistics StorageView／ContentsList | 同一不可变查询 frame、服务端分页、增量刷新，不能全表每帧排序 |
+| D18 | QIO 订阅／updatedItems；DataEnergistics StorageView／ContentsList；ECO ExactMapSync／MenuDataTransport | 同一不可变查询 frame、服务端分页、增量刷新，不能全表每帧排序 |
 | D19 | DataEnergistics `TrinityHostedActionTicket`；AE2 菜单权限；本项目 `PayloadRateLimiter` | 会话 generation／sequence、成员 revision、真实来源槽、频率及距离校验 |
 | D20 | AE2 `MEStorage/IStorageProvider/StorageService`；ECO 精确数量协议 | 稳定单桥、实际量结算、超 long 聚合回归；核心无 AE2 类型依赖 |
 | D21 | GTCEu `MEStockingBusPartMachine`；AE2LT 维护服务 | 候选缓存与实际提取分离，排除自身、共享来源协调及最终保留校验 |
@@ -1016,7 +1085,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | D25 | PB 13.13.5 特殊蜂；现有 WannaBee／Myriad 适配 | 每种动态产物独立冻结与恢复，禁用条件／关联概率不能省略 |
 | D26 | JDTE 0.5.9-alpha4 合并接口；Mekanism 区块生命周期 | ticker／flush 顺序、64×／256×、路径失联和代际校验 |
 | D27 | PB／Mekanism 重载；DataEnergistics 持久核心 hydrate | 新计划用新版本，旧已付费结果可结算；NeoForge 配置和双语界面同步 |
-| D28 | D02 全部候选；DataEnergistics／ECO／Thunderbolt 当前后端 | 以本项目真实热点决定优化；把保存合同、内存和尾延迟分别报告 |
+| D28 | D02 全部候选；DataEnergistics／ECO／Thunderbolt 后端；Useless claimOutputs | 按键汇总与外部 long 分段分别计数；比较相同保存合同、键分布、内存和尾延迟，不以总物品量替代操作量 |
 | D29 | ECO 存储／迁移故障测试；DataEnergistics 恢复／重复身份测试 | 逐阶段故障注入和独立守恒模型，不只覆盖成功 round-trip |
 | D30 | D01 当前基线；各模组真实安装组合 | 同产出同能耗 A/B、Spark 调用树和客户端／专服，不能用微基准替代 |
 | D31 | 本项目 verifyReleaseArtifact 与第三方依赖元数据 | 检查无探针／参考源码泄漏、依赖与资源归属，再准备发布候选 |
@@ -1038,4 +1107,4 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 最大的风险依次为：托管与独立模式双重所有权、存档／区块保存不一致、异构机器能力汇总失真、特殊蜂种和喂食语义遗漏、保留组额度重复分配、AE2 自拉取及异常重试复制，以及把 IO 热点转移成无限类型账本的保存／枚举热点。P0 原型及 P1 领域验收已证明基础数量／API／守恒选择；完整网络的恢复、接管、真实生产与性能仍须按后续闸门验证。
 
-下一次开发从 D09b3b 开始：在 D09b3a 的有界 NBT 事件传输基础上，完成主线程分段 schema／注册表验证、跨记录检查与索引恢复；随后 b3c 完成非阻塞打开／创建发布和百万键全链路验收。允许把纯字节读取／NBT 解析置于有界后台任务，不能先物化整域 NBT／Map 再把恢复藏进最终回调；实际注册内容和组件验证仍在所属服务器线程，加载中保持不可写，只有全部验证成功后才一次发布 READY。目录、预约、规则、发现、暂存、成员／通道及加载索引都要计入预算，不能把整个普通 Map 的恢复藏在最终回调。闸门通过前不进入 D10 接管准备；本轮流式读取及事件摘要通过不代表百万键冷加载已经通过。后续账户／机器所有权加入时同步扩展 schema，D09a／b1 不能冒充 D09 全部完成。D03 提供只读能力与满载进度数学，D06／D08 已提供物料预约，能量与通道唯一预约仍由 D15／D16 完成。D01 的父类副作用与 pending 保存边界、D02 的保存回执／大快照成本和 AE2 聚合限制分别成为 D09、D11–D15、D20 的强制输入。P3 形成基础生产闭环，P5 形成终端＋主动拉取＋保留闭环；网络优化收益仍待实测。
+P2／D09–D12 已通过第 10.21 节的阶段验收。下一步 D13 先抽取蜜蜂生产内核，用相同物理适配器保持独立机语义，再接入网络适配器；对照 PB 真实条件、Useless 大数整批交付和 ECO 数量账本，把按键汇总放在内部，外部边界才做 long 分段。D14 把封存的共享喂食实物事务化迁移至逐蜂位槽，D15 接入已扣料结果，D16 建立统一有限供给／储能及服务器调度。P3 验收完成前仍保持接管默认关闭，不提前启用托管生产；P5 再形成终端、主动拉取和保留闭环。网络收益与用户提供的 ECO 吞吐描述仍须同场景 Spark／MSPT 实测。

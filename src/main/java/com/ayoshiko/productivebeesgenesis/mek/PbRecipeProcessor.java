@@ -606,6 +606,15 @@ public class PbRecipeProcessor {
 		if (!pendingList.isEmpty()) nbt.put(NBT_COMMITTED_PENDING, pendingList);
 		else nbt.remove(NBT_COMMITTED_PENDING);
 	}
+	/** 交接后物理处理器必须无进度、已扣料剩余结果或未扣料计划。 */
+	public boolean hasOwnershipWork() {
+		for (int i = 0; i < recipeCompleters.length; i++) {
+			if (pbOperatingTicks[i] != 0 || pbProcessing[i] || recipeCompleters[i].hasCommittedPendingOutputs()) return true;
+		}
+		var residual = new CompoundTag(); myriadHandler.saveAdditional(residual);
+		for (String key : residual.getAllKeys()) for (long amount : residual.getLongArray(key)) if (amount != 0) return true;
+		return false;
+	}
 
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {

@@ -40,6 +40,34 @@ public final class SchedulerCheckpoint {
 		return new SchedulerCheckpoint(index.configuredRules(), mode, watermarks.snapshot(),
 				index.rules().isEmpty() ? "" : index.rules().get(cursor).id(), used, true);
 	}
+	public static final class RestoreBuilder {
+		private final SnapshotRecords<Integer, ProcessingRule> rules = new SnapshotRecords<>(Integer::compare);
+		private final SnapshotRecords<String, ProcessingRule> byId = new SnapshotRecords<>(String::compareTo);
+		private final SnapshotRecords<String, Boolean> watermarks = new SnapshotRecords<>(String::compareTo);
+		private java.util.Iterator<String> checks;
+		public void rule(ProcessingRule rule) {
+			if (checks != null || byId.get(rule.id()) != null) throw new IllegalArgumentException("Duplicate rule identity");
+			byId.put(rule.id(), rule); rules.put(rules.size(), rule);
+		}
+		public void watermark(String id, boolean value) {
+			if (checks != null || watermarks.get(id) != null) throw new IllegalArgumentException("Duplicate watermark");
+			watermarks.put(id, value);
+		}
+		public boolean validateStep() {
+			if (checks == null) checks = watermarks.keysSnapshot().iterator();
+			if (!checks.hasNext()) return true;
+			var rule = byId.get(checks.next());
+			if (rule == null || !rule.enabled() || !(rule.selector() instanceof ProcessingRule.Goal)) throw new IllegalArgumentException("Orphaned watermark");
+			return false;
+		}
+		public SchedulerCheckpoint finish(ProcessingRuleScheduler.Mode mode, String cursorRule, int used) {
+			if (checks == null || checks.hasNext()) throw new IllegalStateException("Scheduler validation incomplete");
+			var cursor = byId.get(cursorRule);
+			if (used < 0 || cursorRule.isEmpty() && used != 0 || !cursorRule.isEmpty()
+					&& (cursor == null || !cursor.enabled() || used >= cursor.weight())) throw new IllegalArgumentException("Invalid scheduler cursor");
+			return new SchedulerCheckpoint(rules.valuesSnapshot(), mode, watermarks.snapshot(), cursorRule, used, true);
+		}
+	}
 	public List<ProcessingRule> rules() { return rules; }
 	public ProcessingRuleScheduler.Mode mode() { return mode; }
 	public Map<String, Boolean> watermarks() { return watermarks; }

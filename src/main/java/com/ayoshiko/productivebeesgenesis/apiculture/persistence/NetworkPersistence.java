@@ -19,7 +19,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class NetworkPersistence {
 	private record Session(NetworkDirectory directory, ThreadPoolExecutor writer) { }
 	private static final Map<MinecraftServer, Session> SESSIONS = new ConcurrentHashMap<>();
+	private static final java.util.Set<MinecraftServer> CLOSING = ConcurrentHashMap.newKeySet();
 	private NetworkPersistence() { }
+	public static boolean holdsMember(net.minecraft.world.level.block.entity.BlockEntity tile) {
+		if (!(tile.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) return false;
+		if (!level.getServer().isSameThread()) return true;
+		return CLOSING.contains(level.getServer()) || directory(level.getServer()).holdsMember(tile);
+	}
 	public static NetworkDirectory directory(MinecraftServer server) {
 		if (!server.isSameThread()) throw new IllegalStateException("Open network storage on the server thread");
 		return SESSIONS.computeIfAbsent(server, current -> {
@@ -35,11 +41,19 @@ public final class NetworkPersistence {
 		var session = SESSIONS.get(event.getServer());
 		if (session != null) session.directory().tick();
 	}
+	@SubscribeEvent public static void tagsReloaded(net.neoforged.neoforge.event.TagsUpdatedEvent event) {
+		if (event.getUpdateCause() != net.neoforged.neoforge.event.TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) return;
+		var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+		if (server == null) return;
+		server.execute(() -> { var session = SESSIONS.get(server); if (session != null) session.directory().invalidateLoads(); });
+	}
 	@SubscribeEvent public static void stopping(ServerStoppingEvent event) {
+		CLOSING.add(event.getServer());
 		var session = SESSIONS.remove(event.getServer());
 		if (session == null) return;
 		try { session.directory().flush(); }
 		catch (IOException failure) { LogUtils.getLogger().error("Bee network checkpoint flush failed during shutdown; previous files retained", failure); }
-		finally { session.writer().shutdown(); }
+		finally { session.directory().close(); session.writer().shutdown(); }
 	}
+	@SubscribeEvent public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) { CLOSING.remove(event.getServer()); }
 }

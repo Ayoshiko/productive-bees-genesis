@@ -22,6 +22,7 @@ public final class NetworkCheckpoint {
 	private final List<MemberCapabilitySnapshot> members;
 	private final List<VirtualLaneState> lanes;
 	private final SchedulerCheckpoint scheduler;
+	private final com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines ownedMachines;
 	public NetworkCheckpoint(NetworkIdentity identity, long revision, long policyRevision,
 			LedgerCheckpoint ledger, List<TransferStaging.View> transfers, Set<ProductPolicyRegistry.Discovery> discoveries,
 			List<MemberCapabilitySnapshot> members, List<VirtualLaneState> lanes, SchedulerCheckpoint scheduler) {
@@ -34,9 +35,20 @@ public final class NetworkCheckpoint {
 		this.identity = Objects.requireNonNull(identity); this.ledger = Objects.requireNonNull(ledger);
 		this.scheduler = Objects.requireNonNull(scheduler); this.revision = revision; this.policyRevision = policyRevision;
 		this.transfers = transfers; this.discoveries = discoveries; this.members = members; this.lanes = lanes;
+		this.ownedMachines = com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.EMPTY;
 		if (revision < 0 || policyRevision < 0) throw new IllegalArgumentException("Negative checkpoint revision");
 		if (!captured) validate();
 	}
+	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines) {
+		identity = source.identity; this.revision = revision; policyRevision = source.policyRevision; ledger = source.ledger;
+		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; scheduler = source.scheduler; ownedMachines = machines;
+	}
+	public NetworkCheckpoint withOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record) {
+		if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership record");
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record));
+	}
+	NetworkCheckpoint restoredOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines) { return new NetworkCheckpoint(this, revision, machines); }
+	public com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines ownedMachines() { return ownedMachines; }
 	private void validate() {
 		Map<UUID, MemberCapabilitySnapshot> owners = new ConcurrentHashMap<>();
 		var positions = ConcurrentHashMap.newKeySet();
@@ -64,6 +76,11 @@ public final class NetworkCheckpoint {
 		return new NetworkCheckpoint(source.identity(), revision, source.policyRevision(), source.ledger(), source.transfers(),
 				source.discoveries(), source.members(), source.lanes(), source.scheduler(), true);
 	}
+	static NetworkCheckpoint restore(NetworkRestoreState source) {
+		return new NetworkCheckpoint(source.identity, source.revision, source.policyRevision, source.ledger.finish(source.ledgerRevision),
+				source.transfers.valuesSnapshot(), source.discoveries.keysSnapshot(), source.members.valuesSnapshot(),
+				source.lanes.valuesSnapshot(), source.schedulerCheckpoint(), true).restoredOwnership(source.ownedSnapshot);
+	}
 	public NetworkIdentity identity() { return identity; }
 	public long revision() { return revision; }
 	public long policyRevision() { return policyRevision; }
@@ -77,9 +94,9 @@ public final class NetworkCheckpoint {
 		return this == other || other instanceof NetworkCheckpoint checkpoint && revision == checkpoint.revision
 				&& policyRevision == checkpoint.policyRevision && identity.equals(checkpoint.identity) && ledger.equals(checkpoint.ledger)
 				&& transfers.equals(checkpoint.transfers) && discoveries.equals(checkpoint.discoveries) && members.equals(checkpoint.members)
-				&& lanes.equals(checkpoint.lanes) && scheduler.equals(checkpoint.scheduler);
+				&& lanes.equals(checkpoint.lanes) && scheduler.equals(checkpoint.scheduler) && ownedMachines.equals(checkpoint.ownedMachines);
 	}
-	@Override public int hashCode() { return Objects.hash(identity, revision, policyRevision, ledger, transfers, discoveries, members, lanes, scheduler); }
+	@Override public int hashCode() { return Objects.hash(identity, revision, policyRevision, ledger, transfers, discoveries, members, lanes, scheduler, ownedMachines); }
 	@Override public String toString() {
 		return "NetworkCheckpoint[network=" + identity.networkId() + ", revision=" + revision + ", policy=" + policyRevision + ", " + ledger + "]";
 	}

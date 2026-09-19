@@ -66,6 +66,7 @@ public final class MekAe2LifecycleHandler {
 	 * @param host 输出宿主（离心机方块实体）
 	 */
 	public void prepareForLoad(IAe2OutputHostBase host) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(host)) return;
 		// AE2 未安装守卫：必须在调用 Ae2GridNodeManager 之前拦截，
 		// 否则类加载验证会解析 IGridNodeListener 触发 NoClassDefFoundError（Issue #8）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
@@ -137,6 +138,7 @@ public final class MekAe2LifecycleHandler {
 	 * @param host 输出宿主
 	 */
 	public void tryConnectNode(IAe2OutputHostBase host) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(host)) return;
 		// AE2 未安装守卫：方法体内 IManagedGridNode 模式匹配与 connectNode 调用均会触发 AE2 类解析
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 快速路径：已连接则跳过 synchronized，避免 256× 加速下每 tick 256 次锁竞争
@@ -178,6 +180,7 @@ public final class MekAe2LifecycleHandler {
 	 * @param tag  方块实体的 NBT 根标签
 	 */
 	public void loadNodeNBT(IAe2OutputHostBase host, CompoundTag tag) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(host)) return;
 		// AE2 未安装守卫：无需恢复节点状态，同时避免触发 Ae2GridNodeManager 类加载
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		Ae2GridNodeManager.loadNodeNBT(host, tag);

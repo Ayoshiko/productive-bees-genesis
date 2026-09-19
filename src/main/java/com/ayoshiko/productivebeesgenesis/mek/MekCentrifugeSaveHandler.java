@@ -284,6 +284,8 @@ class MekCentrifugeSaveHandler {
 		if (!fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) return;
 		FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
 		if (!fluid.isEmpty()) {
+			// 原生与自定义字段可能描述同一罐；读取快照不得重复累加。
+			tile.fluidOutputTank().setStack(FluidStack.EMPTY);
 			tile.fluidOutputTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 		}
 	}

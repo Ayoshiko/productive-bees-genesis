@@ -379,6 +379,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	 */
 	@Override
 	protected boolean onUpdateServer() {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(this)) return false;
 		// Spark 优化：走基类懒缓存 getter（原每 tick 3 层接口链分发是模组最大热点）
 		TickAccelTracker tracker = productivebeesgenesis$getTickAccelTracker();
 		Level level = getLevel();
@@ -395,6 +396,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	/** JDTE coalesced path: credit virtual ticks without entering the expensive factory ticker. */
 	@Override
 	public void productivebeesgenesis$accumulateAcceleratedTicks(int ticks) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(this)) return;
 		TickAccelTracker tracker = productivebeesgenesis$getTickAccelTracker();
 		if (tracker != null) {
 			tracker.addVirtualTicks(ticks);
@@ -404,6 +406,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	/** JDTE coalesced path: execute the full factory pipeline once for this real game tick. */
 	@Override
 	public void productivebeesgenesis$flushAcceleratedTicks() {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(this)) return;
 		Level level = getLevel();
 		if (level == null || level.isClientSide) {
 			return;

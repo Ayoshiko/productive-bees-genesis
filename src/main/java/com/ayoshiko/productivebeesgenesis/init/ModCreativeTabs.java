@@ -33,6 +33,7 @@ public final class ModCreativeTabs {
 					.title(Component.translatable("itemGroup.productivebeesgenesis"))
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
+						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.CORE_ITEM.get());
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());

@@ -99,6 +99,7 @@ public interface IAe2OutputHost extends IAe2OutputHostBase, IInWorldGridNodeHost
 	 * @return 该方向暴露的网格节点，未创建/未连接/方向未暴露时返回 null
 	 */
 	static @Nullable IGridNode resolveGridNode(IAe2OutputHost host, Direction dir) {
+		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(host)) return null;
 		Object nodeObj = host.productivebeesgenesis$getAe2GridNode();
 		if (!(nodeObj instanceof IManagedGridNode managedNode)) return null;
 		IGridNode node = managedNode.getNode();

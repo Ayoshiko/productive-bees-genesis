@@ -15,9 +15,11 @@ sealed interface CheckpointPayload {
 		@Override public long revision() { return checkpoint.revision(); }
 		@Override public void write(DataOutput output) throws IOException {
 			var stream = new NbtStream(output); stream.root(dataVersion);
-			stream.integer("schema", 1); stream.number("revision", revision());
+			stream.integer("schema", 2); stream.number("revision", revision());
 			stream.list("networks", checkpoint.identities().size());
 			for (var identity : checkpoint.identities().values()) NetworkCheckpointCodec.identity(identity).write(output);
+			stream.list("claims", checkpoint.claims().size());
+			for (var claim : checkpoint.claims().values()) OwnershipRecordCodec.claim(claim).write(output);
 			stream.end(); stream.end();
 		}
 	}

@@ -14,10 +14,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class DomainProbeServer {
 	private static JsonObject pendingReport;
+	private static boolean persistenceComplete;
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (System.getProperty("pbg.ownership.mode") != null) return;
 		CheckpointReadProbe.close();
+		TopologyProbe.close();
 		Path file = Path.of("results/domain.json");
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
@@ -32,9 +35,22 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (System.getProperty("pbg.ownership.mode") != null) {
+			try {
+				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); OwnershipRestartProbe.start(event.getServer()); }
+				if (pendingReport != null && OwnershipRestartProbe.advance(event.getServer(), pendingReport)) { finish(event, pendingReport); pendingReport = null; }
+			} catch (Exception error) { if (pendingReport == null) pendingReport = new JsonObject(); failed(pendingReport, error); finish(event, pendingReport); pendingReport = null; }
+			return;
+		}
 		if (pendingReport != null) {
 			try {
-				if (!NetworkPersistenceProbe.advance(event.getServer(), pendingReport)) return;
+				if (!persistenceComplete) persistenceComplete = NetworkPersistenceProbe.advance(event.getServer(), pendingReport);
+				boolean topologyComplete = TopologyProbe.advance(event.getServer(), pendingReport);
+				boolean ownershipComplete = OwnershipProbe.advance(event.getServer(), pendingReport);
+				boolean coreOwnershipComplete = CoreOwnershipProbe.advance(event.getServer(), pendingReport);
+				boolean faultComplete = OwnershipFaultProbe.advance(event.getServer(), pendingReport);
+				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete) return;
+				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }
 			finish(event, pendingReport); pendingReport = null; return;
@@ -47,7 +63,12 @@ public final class DomainProbeServer {
 			report.addProperty("productKeyRoundTrip", true);
 			var policy = ProductPolicyProbe.verify(event.getServer().overworld(), report);
 			P1FlowProbe.verify(event.getServer().overworld(), policy, report);
+			MemberIsolationProbe.verify(event.getServer().overworld(), report);
 			NetworkPersistenceProbe.verify(event.getServer(), report);
+			TopologyProbe.start(event.getServer());
+			OwnershipProbe.start(event.getServer());
+			CoreOwnershipProbe.start(event.getServer());
+			OwnershipFaultProbe.start(event.getServer());
 			pendingReport = report; return;
 		} catch (Exception failure) {
 			failed(report, failure);

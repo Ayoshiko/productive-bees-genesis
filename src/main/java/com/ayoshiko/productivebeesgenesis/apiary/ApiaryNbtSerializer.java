@@ -195,6 +195,8 @@ class ApiaryNbtSerializer {
 			CompoundTag fluidNbt = nbt.getCompound(NBT_KEY_APIARY_FLUID);
 			if (fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
 				FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
+				// super 已可能恢复同一罐；自定义快照是替换值，不能再次累加。
+				tile.getFluidTank().setStack(FluidStack.EMPTY);
 				if (!fluid.isEmpty()) {
 					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
@@ -384,6 +386,7 @@ class ApiaryNbtSerializer {
 		boolean aeFluidOutputEnabled = Ae2IntegrationLoader.isAe2Loaded()
 				&& tile.productivebeesgenesis$isAeFluidOutputEnabled();
 
+		tile.tickHandler.savePendingCycles(beeSlotsNbt);
 		return new ApiaryUpgradeData(provider, redstone, tile.getControlType(),
 				tile.getEnergyContainer(), new int[]{tile.getOperatingTicks()}, tile.getEnergySlot(),
 				inputSlots, outputSlots, sorting, tile.getComponents(),
@@ -457,6 +460,7 @@ class ApiaryNbtSerializer {
 			// 恢复蜂箱特有数据
 			// PB 升级槽位与数量均按快照恢复；当前配置上限仅限制后续安装。
 			tile.getSlotManager().loadBeeSlots(data.beeSlotsNbt);
+			tile.tickHandler.loadPendingCycles(data.beeSlotsNbt);
 			tile.feederSlotManager.loadFeederSlots(data.feederSlotsNbt, provider);
 			tile.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
 			tile.getPbUpgradeOutputSlot().deserializeNBT(provider, data.pbUpgradeOutputNbt);

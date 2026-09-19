@@ -73,7 +73,7 @@ public final class CheckpointWriteBenchmark {
 		var state = CheckpointCaptureBenchmark.fixture(keyCount, metadata); var frozen = state.source().capture(1);
 		var result = new JsonObject(); result.addProperty("balanceKeys", keyCount); result.addProperty("recordsPerMetadataDomain", metadata);
 		try (var writer = new Writer()) {
-			var directory = new NetworkDirectory(folder, null, writer, null); var data = directory.create(frozen.identity());
+			var directory = new NetworkDirectory(folder, null, writer, null); var data = ProbeOpenAwait.await(directory, directory.create(frozen.identity()));
 			Path file = folder.resolve("productivebeesgenesis_network_" + frozen.identity().networkId() + ".dat");
 			var target = file.toFile(); writer.awaitIdle(); writer.measurements.clear(); writer.hold(); data.publish(frozen);
 			long allocated = allocated(); long started = System.nanoTime(); data.save(target, null);
@@ -126,7 +126,7 @@ public final class CheckpointWriteBenchmark {
 				new MemberCapabilitySnapshot.Origin("minecraft:overworld", 0, 64, 0));
 		var result = new JsonObject();
 		try (var writer = new Writer()) {
-			var directory = new NetworkDirectory(folder, null, writer, null); var data = directory.create(identity);
+			var directory = new NetworkDirectory(folder, null, writer, null); var data = ProbeOpenAwait.await(directory, directory.create(identity));
 			var file = folder.resolve("productivebeesgenesis_network_" + identity.networkId() + ".dat");
 			writer.awaitIdle(); writer.measurements.clear();
 			for (int i = 1; i <= 5; i++) {

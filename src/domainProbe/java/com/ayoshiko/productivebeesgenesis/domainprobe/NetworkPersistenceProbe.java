@@ -26,6 +26,8 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class NetworkPersistenceProbe {
 	private static NetworkCheckpoint shutdownCheckpoint;
 	private static NetworkSavedData managedDomain;
+	private static NetworkOpenHandle managedOpening;
+	private static NetworkCheckpoint firstCheckpoint;
 	private static int saveRequestedTick;
 	private NetworkPersistenceProbe() { }
 	static void verify(MinecraftServer server, JsonObject report) throws Exception {
@@ -66,19 +68,16 @@ final class NetworkPersistenceProbe {
 				&& later.scheduler().rules().isEmpty(), "Live metadata did not advance");
 		require(checkpoint.transfers().size() == 1 && checkpoint.discoveries().size() == 1 && checkpoint.members().size() == 1
 				&& checkpoint.lanes().getFirst().progress() == 7 && checkpoint.scheduler().equals(savedScheduler), "Frozen metadata observed later mutations");
-		managedDomain = NetworkPersistence.directory(server).create(identity);
-		managedDomain.publish(checkpoint);
-		server.overworld().getDataStorage().save();
-		managedDomain.publish(later); server.overworld().getDataStorage().save();
+		managedOpening = NetworkPersistence.directory(server).create(identity); firstCheckpoint = checkpoint;
 		saveRequestedTick = server.getTickCount(); shutdownCheckpoint = later;
 		Path folder = Path.of("p2-persistence"); Files.createDirectories(folder);
 		try (var writer = Executors.newSingleThreadExecutor()) {
 			var nativeStorage = new DimensionDataStorage(folder.toFile(), DataFixers.getDataFixer(), registries);
-			var directory = new NetworkDirectory(folder, registries, writer, nativeStorage);
-			var domain = directory.create(identity); domain.publish(checkpoint); nativeStorage.save(); directory.flush();
+			try (var directory = new NetworkDirectory(folder, registries, writer, nativeStorage)) {
+			var domain = ProbeOpenAwait.await(directory, directory.create(identity)); domain.publish(checkpoint); nativeStorage.save(); directory.flush();
 			require(domain.persistedRevision() == 1 && !domain.isDirty(), "No durable-save receipt");
-			var fresh = new NetworkDirectory(folder, registries, writer, new DimensionDataStorage(folder.toFile(), DataFixers.getDataFixer(), registries));
-			var restored = fresh.loadExisting(identity); require(checkpoint.equals(restored.checkpoint()), "Checkpoint round-trip lost a domain");
+			try (var fresh = new NetworkDirectory(folder, registries, writer, new DimensionDataStorage(folder.toFile(), DataFixers.getDataFixer(), registries))) {
+			var restored = ProbeOpenAwait.await(fresh, fresh.loadExisting(identity)); require(checkpoint.equals(restored.checkpoint()), "Checkpoint round-trip lost a domain");
 			var recoveredPolicy = new ProductPolicyRegistry(policySnapshot);
 			recoveredPolicy.restoreDiscoveries(3, restored.checkpoint().discoveries());
 			var recoveredLedger = ProductLedger.restore(recoveredPolicy, 8, restored.checkpoint().ledger());
@@ -97,14 +96,23 @@ final class NetworkPersistenceProbe {
 			rejected = false; try { ProductKeyCodec.validatePersisted(new ProductKey(unknown.kind(), unknown.id(), unknownComponents), registries); }
 			catch (IllegalArgumentException | IllegalStateException error) { rejected = true; }
 			require(rejected, "Unknown component was silently stripped");
+			}
+			}
 		}
 		report.addProperty("networkCheckpointRoundTrip", true); report.addProperty("pendingWorkAndUnknownTransferRecovery", true);
 		report.addProperty("strictRegistryAndComponentRead", true); report.addProperty("acknowledgedNativeSavedData", true);
 		report.addProperty("frozenCheckpointIsolatedFromLiveSettlement", true);
 		report.addProperty("fullDomainCaptureIsolatedFromMetadataChanges", true);
-		CheckpointReadProbe.start(folder.resolve("productivebeesgenesis_network_" + identity.networkId() + ".dat"), checkpoint);
+		CheckpointReadProbe.start(folder.resolve("productivebeesgenesis_network_" + identity.networkId() + ".dat"), checkpoint, registries);
 	}
 	static boolean advance(MinecraftServer server, JsonObject report) throws Exception {
+		if (managedDomain == null) {
+			require(server.getTickCount() - saveRequestedTick < 200, "Managed create did not finish");
+			if (managedOpening.pending()) return false;
+			managedDomain = managedOpening.ready(); managedDomain.publish(firstCheckpoint);
+			server.overworld().getDataStorage().save(); managedDomain.publish(shutdownCheckpoint); server.overworld().getDataStorage().save();
+			report.addProperty("tickDrivenCreateAfterBothReceipts", true);
+		}
 		var status = NetworkPersistence.directory(server).saveStatus();
 		require(status.activeSnapshots() <= 1 && status.reservedBufferBytes() <= 32 * 1024, "Unbounded checkpoint buffering");
 		require(managedDomain.lastFailure().isEmpty(), "Managed save failed: " + managedDomain.lastFailure());

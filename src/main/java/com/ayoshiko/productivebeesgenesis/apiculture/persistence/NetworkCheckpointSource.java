@@ -34,6 +34,13 @@ public final class NetworkCheckpointSource {
 		if (revision < 0) throw new IllegalArgumentException("Negative checkpoint revision");
 		return NetworkCheckpoint.capture(this, revision);
 	}
+	/** 捕获运行账户时沿用当前权威所有权根，不能用旧来源覆盖交接服务的新记录。 */
+	public NetworkCheckpoint capture(NetworkSavedData authority, long revision) {
+		checkThread();
+		var current = authority.checkpoint();
+		if (!identity.equals(current.identity()) || revision <= current.revision()) throw new IllegalArgumentException("Stale or foreign authority capture");
+		return capture(revision).restoredOwnership(current.ownedMachines());
+	}
 	public void putMember(MemberCapabilitySnapshot member) { checkThread(); members.putMember(member); }
 	public void removeMember(UUID member) { checkThread(); members.removeMember(member); }
 	public void putLane(VirtualLaneState lane) { checkThread(); members.putLane(lane); }

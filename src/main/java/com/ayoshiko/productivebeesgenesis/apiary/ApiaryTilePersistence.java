@@ -30,6 +30,7 @@ final class ApiaryTilePersistence {
 	static void saveAdditional(TileEntityMekApiary tile, @NotNull CompoundTag nbt,
 			@NotNull HolderLookup.Provider provider) {
 		tile.nbtSerializer().saveApiaryState(nbt, provider);
+		tile.tickHandler.savePendingCycles(nbt);
 		tile.ae2HostAdapter().saveNodeNBT(nbt);
 		tile.ae2HostAdapter().savePerTileState(nbt);
 		tile.ae2HostAdapter().savePendingItems(nbt);
@@ -45,6 +46,7 @@ final class ApiaryTilePersistence {
 	@NotNull
 	static CompoundTag saveCustomDataForItem(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider) {
 		CompoundTag nbt = tile.nbtSerializer().saveCustomData(provider);
+		tile.tickHandler.savePendingCycles(nbt);
 		tile.ae2HostAdapter().savePendingItems(nbt);
 		return nbt;
 	}
@@ -53,6 +55,7 @@ final class ApiaryTilePersistence {
 	static void loadAdditional(TileEntityMekApiary tile, @NotNull CompoundTag nbt,
 			@NotNull HolderLookup.Provider provider) {
 		tile.nbtSerializer().loadApiaryState(nbt, provider);
+		tile.tickHandler.loadPendingCycles(nbt);
 		tile.ae2HostAdapter().loadNodeNBT(nbt);
 		tile.ae2HostAdapter().loadPerTileState(nbt);
 		tile.ae2HostAdapter().loadPendingItems(nbt);
@@ -94,6 +97,7 @@ final class ApiaryTilePersistence {
 	 * </ul>
 	 */
 	static void saveAllItemsForDrop(TileEntityMekApiary tile) {
+		tile.tickHandler.clearTransferredCycles();
 		// 蜜蜂槽数组清空（BeeSlot.clear() 重置全部字段并标记 dirty）
 		try {
 			for (BeeSlot slot : tile.slotManager().getBeeSlots()) {

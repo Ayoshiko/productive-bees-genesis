@@ -4,6 +4,13 @@
   "plugin": "com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "mek.ManagedMemberTickMixin",
+    "mek.ManagedProxyHandlerMixin",
+    "mek.ManagedItemProxyMixin",
+    "mek.ManagedFluidProxyMixin",
+    "mek.ManagedEnergyProxyMixin",
+    "mek.ManagedMemberMenuMixin",
+    "mek.ManagedMemberDropsMixin",
     "accessor.BasicInventorySlotAccessor",
     "accessor.CentrifugeBlockEntityAccessor",
     "accessor.RecipeCacheLookupMonitorAccessor",

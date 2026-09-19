@@ -38,6 +38,7 @@ public final class ServerConfig {
 
 	// ========== 配置段注册表(Task 12 抽取)==========
 	private final ConfigSectionRegistry sections;
+	public final NetworkConfigSection beeNetwork;
 
 	/** 获取万象创世蜜蜂属性配置段(供新代码使用,旧代码可继续通过委托字段访问) */
 	public BeeAttributeConfigSection beeAttributes() { return sections.beeAttributes(); }
@@ -176,6 +177,7 @@ public final class ServerConfig {
 			ModConfigSpec.Builder machineBuilder,
 			ModConfigSpec.Builder capacityBuilder) {
 		this.sections = new ConfigSectionRegistry();
+		this.beeNetwork = new NetworkConfigSection(machineBuilder);
 
 		// 万象创世蜜蜂总开关
 		myriadCreationsEnabled = builder

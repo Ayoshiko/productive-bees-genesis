@@ -80,6 +80,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	private MekCentrifugeSlotManager slotManager;
 	/** PB配方处理器 — 封装所有PB离心配方处理逻辑（与工厂版共用） */
 	private final PbRecipeProcessor pbProcessor;
+	public com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection ownershipAssets() {
+		return new CentrifugeOwnershipAssets(this, pbProcessor, pbUpgradeHandler, this::setOperatingTicks);
+	}
 	/** 持久化处理器 — 封装 NBT/容器同步/配置卡/升级数据逻辑 */
 	private final MekCentrifugeSaveHandler saveHandler;
 	/** 服务端 tick 处理器 — 封装 onUpdateServer/PB配方处理逻辑 */

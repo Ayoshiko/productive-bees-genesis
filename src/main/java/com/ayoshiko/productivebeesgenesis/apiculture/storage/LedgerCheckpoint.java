@@ -45,6 +45,43 @@ public final class LedgerCheckpoint {
 	static LedgerCheckpoint capture(long revision, PagedProductAmounts balances, ReservationBook reservations) {
 		return new LedgerCheckpoint(revision, balances.snapshot(), reservations.checkpoint(), true);
 	}
+	/** 逐记录恢复；输入摘要与余额的比较必须由调用者按预算推进，结束才可封装。 */
+	public static final class RestoreBuilder {
+		private final PagedProductAmounts balances = new PagedProductAmounts();
+		private final PagedProductAmounts reserved = new PagedProductAmounts();
+		private final SnapshotRecords<Integer, Pending> transactions = new SnapshotRecords<>(Integer::compare);
+		private final java.util.Set<UUID> identities = ConcurrentHashMap.newKeySet();
+		private java.util.Iterator<Map.Entry<ProductKey, ProductAmount>> checks;
+		private java.util.Iterator<Map.Entry<ProductKey, ProductAmount>> inputs = java.util.Collections.emptyIterator();
+		private java.util.Iterator<Pending> pending;
+		private boolean checking;
+		public void balance(ProductKey key, ProductAmount amount) {
+			if (checking || amount.isZero() || !balances.amount(key).isZero()) throw new IllegalArgumentException("Duplicate or invalid balance");
+			balances.set(key, amount);
+		}
+		public void transaction(Pending value) {
+			if (checking || !identities.add(value.id())) throw new IllegalArgumentException("Duplicate transaction");
+			transactions.put(transactions.size(), value);
+		}
+		public boolean validateStep() {
+			if (!checking) { checking = true; pending = transactions.valuesSnapshot().iterator(); }
+			if (inputs.hasNext()) {
+				var entry = inputs.next(); reserved.set(entry.getKey(), reserved.amount(entry.getKey()).add(entry.getValue())); return false;
+			}
+			if (pending.hasNext()) { inputs = pending.next().inputs().entrySet().iterator(); return false; }
+			if (checks == null) checks = reserved.snapshot().entrySet().iterator();
+			if (checks.hasNext()) {
+				var entry = checks.next();
+				if (entry.getValue().compareTo(balances.amount(entry.getKey())) > 0) throw new IllegalArgumentException("Reservation exceeds owned balance");
+				return false;
+			}
+			return true;
+		}
+		public LedgerCheckpoint finish(long revision) {
+			if (!checking || checks == null || checks.hasNext()) throw new IllegalStateException("Ledger validation incomplete");
+			return new LedgerCheckpoint(revision, balances.snapshot(), transactions.valuesSnapshot(), true);
+		}
+	}
 	public long revision() { return revision; }
 	public Map<ProductKey, ProductAmount> balances() { return balances; }
 	public List<Pending> transactions() { return transactions; }
