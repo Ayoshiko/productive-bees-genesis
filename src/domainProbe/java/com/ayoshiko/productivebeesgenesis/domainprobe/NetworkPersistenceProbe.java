@@ -102,15 +102,19 @@ final class NetworkPersistenceProbe {
 		report.addProperty("strictRegistryAndComponentRead", true); report.addProperty("acknowledgedNativeSavedData", true);
 		report.addProperty("frozenCheckpointIsolatedFromLiveSettlement", true);
 		report.addProperty("fullDomainCaptureIsolatedFromMetadataChanges", true);
+		CheckpointReadProbe.start(folder.resolve("productivebeesgenesis_network_" + identity.networkId() + ".dat"), checkpoint);
 	}
-	static boolean advance(MinecraftServer server, JsonObject report) {
+	static boolean advance(MinecraftServer server, JsonObject report) throws Exception {
 		var status = NetworkPersistence.directory(server).saveStatus();
 		require(status.activeSnapshots() <= 1 && status.reservedBufferBytes() <= 32 * 1024, "Unbounded checkpoint buffering");
 		require(managedDomain.lastFailure().isEmpty(), "Managed save failed: " + managedDomain.lastFailure());
-		require(server.getTickCount() - saveRequestedTick < 200, "Managed save did not finish within 200 real ticks");
-		if (managedDomain.persistedRevision() < 2) return false;
-		report.addProperty("tickDrivenStreamSave", true); report.addProperty("ticksUntilSaveReceipt", server.getTickCount() - saveRequestedTick);
-		report.addProperty("maxActiveSaveSnapshots", 1); report.addProperty("streamBufferBudgetBytes", 32 * 1024);
+		require(server.getTickCount() - saveRequestedTick < 200, "Managed save/read did not finish within 200 real ticks");
+		if (managedDomain.persistedRevision() >= 2 && !report.has("tickDrivenStreamSave")) {
+			report.addProperty("tickDrivenStreamSave", true); report.addProperty("ticksUntilSaveReceipt", server.getTickCount() - saveRequestedTick);
+			report.addProperty("maxActiveSaveSnapshots", 1); report.addProperty("streamBufferBudgetBytes", 32 * 1024);
+		}
+		boolean readComplete = CheckpointReadProbe.advance(report);
+		if (managedDomain.persistedRevision() < 2 || !readComplete) return false;
 		var previous = shutdownCheckpoint;
 		shutdownCheckpoint = new NetworkCheckpoint(previous.identity(), 3, previous.policyRevision(), previous.ledger(), previous.transfers(),
 				previous.discoveries(), previous.members(), previous.lanes(), previous.scheduler());

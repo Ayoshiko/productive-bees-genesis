@@ -17,6 +17,7 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		CheckpointReadProbe.close();
 		Path file = Path.of("results/domain.json");
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
@@ -54,6 +55,7 @@ public final class DomainProbeServer {
 		finish(event, report);
 	}
 	private static void failed(JsonObject report, Exception failure) {
+		CheckpointReadProbe.close();
 		report.addProperty("passed", false); report.addProperty("failure", failure.toString());
 		LogUtils.getLogger().error("NETWORK_DOMAIN_FAILED", failure);
 	}

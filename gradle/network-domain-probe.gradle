@@ -87,3 +87,11 @@ tasks.register('runNetworkCheckpointWriteBenchmark', JavaExec) {
     maxHeapSize = '4G'
     args layout.buildDirectory.file("reports/network-write/${runId}.json").get().asFile.absolutePath
 }
+
+tasks.register('runNetworkCheckpointReadBenchmark', JavaExec) {
+    classpath = sourceSets.domainProbe.runtimeClasspath
+    mainClass = 'com.ayoshiko.productivebeesgenesis.domainprobe.CheckpointReadBenchmark'
+    maxHeapSize = '512M'
+    args layout.buildDirectory.file("reports/network-read/${runId}.json").get().asFile.absolutePath,
+            file(providers.gradleProperty('networkReadSource').getOrElse('build/reports/network-write/p2-d09b2b-final-2.json')).absolutePath
+}

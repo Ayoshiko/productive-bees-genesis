@@ -49,6 +49,7 @@
 - **保存成功回执**：后台原子写入成功后才推进持久化 revision，失败保留待保存状态并退避重试；正常停服等待实际写入结果。新增 18 项行为测试及真实专服保存／停服探针；全量 705 项测试中 703 通过、2 项既有条件用例跳过。
 - **P2／D09b1 不可变余额页**：账本冻结只保留页根，后续增删使用写时复制，完整哈希碰撞仍精确区分组件；普通数量保留 long，超界使用 BigInteger，降级及归零回收。新增快照／恢复实例隔离测试、百万键捕获与变更基准，以及冻结后继续结算的专服保存验证。全量 711 项测试中 709 通过、2 项既有条件跳过，构建／产物核验及隔离专服验证通过。
 - **P2／D09b2 全域冻结与流式保存**：统一冻结余额、交易、转移、发现、成员／通道和规则状态；保存文件时主线程只提交不可变快照，后台逐项编码、压缩与原子替换。每服限制一个未完成快照和 32 KiB 流缓冲，等待请求合并最新版本，失败退避重试，旧回执不能清除新变更。新增大记录／慢写／失败恢复测试、百万键全域写入基准和跨 tick 专服保存探针；全量 730 项测试中 728 通过、2 项既有条件跳过，构建／产物核验及专服最终落盘通过。预算化加载仍为下一步闸门。
+- **P2／D09b3a 有界文件读取**：新增独立后台 NBT 事件传输、8 KiB 数组分片及按批次／字节双重背压，支持非阻塞消费、取消、失败隔离和完整压缩流 CRC 检查。新增截断／大声明长度／重复字段保留／停服交接回归，以及百万键事件摘要和真实 tick 专服探针。语法读取完成不授予可写资格，领域校验、索引恢复与非阻塞发布仍为后续闸门。
 
 ### 变更
 
@@ -75,6 +76,7 @@
 - Added successful-write receipts, bounded retry, and shutdown flushing. All 703 active tests passed, with 2 existing conditional skips; the dedicated-server probe also verified the final checkpoint after normal shutdown.
 - Added P2/D09b1 immutable balance pages, copy-on-write mutations, exact full-hash collision handling, and isolated restore branches. Added snapshot/model tests, million-key benchmarks, and a server probe that saves an earlier checkpoint after live work has settled. Validation passed: 709 tests, 2 existing conditional skips, build/artifact checks, and the isolated dedicated-server probe.
 - Added P2/D09b2 consistent full-domain capture and streamed saves. The server submits immutable checkpoints; one worker encodes nested records, compresses and atomically replaces the file. Pending requests coalesce revisions, with one unfinished snapshot and 32 KiB of stream buffers per server. Added large-record, backpressure, retry and failure-recovery tests, million-key write benchmarks, and a server probe spanning real ticks. Validation passed: 728 tests, 2 existing conditional skips, build/artifact checks, and final shutdown persistence. Budgeted loading remains a required gate.
+- Added P2/D09b3a bounded background NBT event reads, 8 KiB array chunks, byte/batch backpressure, nonblocking polling, cancellation and complete gzip CRC checks. Added malformed-file and shutdown-handoff regressions, million-key event digest validation, and a dedicated-server tick probe. Syntactic completion does not grant writable authority; domain validation, index recovery and nonblocking publication remain required.
 
 #### Changed
 
