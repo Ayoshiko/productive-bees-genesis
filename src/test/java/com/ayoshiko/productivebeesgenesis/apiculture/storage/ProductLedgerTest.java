@@ -16,6 +16,44 @@ class ProductLedgerTest {
 	private static ProductAmount amount(long value) { return ProductAmount.of(value); }
 
 	@Test
+	void frozenReservationIndexKeepsEveryPaymentStateAcrossMassSettlementAndPolicyReload() {
+		var registry = new ProductPolicyRegistry(policy(1, RAW, PRODUCT)); var ledger = new ProductLedger(registry, 1024);
+		ledger.insert(RAW, amount(2048), ProductLedger.Action.EXECUTE); var pending = new ArrayList<LedgerTransaction>();
+		for (int i = 0; i < 1024; i++) {
+			var transaction = ledger.prepare(Map.of(RAW, amount(1)), Map.of(PRODUCT, amount(1)), 1); pending.add(transaction);
+			if (i % 2 == 0) assertTrue(ledger.markPaid(transaction));
+		}
+		var frozen = ledger.checkpoint(); registry.replace(policy(2, RAW, PRODUCT));
+		for (int i = 0; i < pending.size(); i++) assertEquals(i % 2 == 0, ledger.commit(pending.get(i)));
+		ledger.validateCheckpointPolicy(registry);
+		assertTrue(ledger.checkpoint().transactions().isEmpty()); assertEquals(amount(1536), ledger.available(RAW));
+		assertEquals(amount(512), ledger.available(PRODUCT)); assertEquals(amount(2048), frozen.balances().get(RAW));
+		assertEquals(512, frozen.transactions().stream().filter(value -> value.state() == LedgerTransaction.State.PAID).count());
+		assertEquals(512, frozen.transactions().stream().filter(value -> value.state() == LedgerTransaction.State.RESERVED).count());
+		var restored = ProductLedger.restore(registry, 1024, frozen); assertEquals(amount(1024), restored.available(RAW));
+		assertEquals(frozen, restored.checkpoint());
+	}
+
+	@Test
+	void captureAndTwoRestoredAuthoritiesKeepBalancesAndPaymentStatesAtTheSameBoundary() {
+		var policy = new ProductPolicyRegistry(policy(1, RAW, PRODUCT));
+		var ledger = new ProductLedger(policy, 4);
+		ledger.insert(RAW, amount(100), ProductLedger.Action.EXECUTE);
+		var pending = ledger.prepare(Map.of(RAW, amount(80)), Map.of(PRODUCT, amount(8)), 1);
+		var reserved = ledger.checkpoint();
+		ledger.markPaid(pending); var paid = ledger.checkpoint(); ledger.commit(pending);
+		var a = ProductLedger.restore(policy, 4, paid); var b = ProductLedger.restore(policy, 4, paid);
+		assertEquals(LedgerTransaction.State.RESERVED, reserved.transactions().getFirst().state());
+		assertEquals(LedgerTransaction.State.PAID, paid.transactions().getFirst().state());
+		assertEquals(amount(100), paid.balances().get(RAW)); assertFalse(paid.balances().containsKey(PRODUCT));
+		assertTrue(a.commit(a.pending(pending.id())));
+		assertEquals(amount(8), a.extract(PRODUCT, amount(100), ProductLedger.Action.EXECUTE));
+		assertEquals(amount(20), b.available(RAW)); assertEquals(ProductAmount.ZERO, b.available(PRODUCT));
+		assertEquals(paid, b.checkpoint()); assertEquals(amount(8), ledger.available(PRODUCT));
+		assertTrue(b.commit(b.pending(pending.id()))); assertEquals(amount(8), b.available(PRODUCT));
+	}
+
+	@Test
 	void simulationDoesNotAllocateReservationsChangeRevisionOrBalance() {
 		var ledger = new ProductLedger(new ProductPolicyRegistry(policy(1, RAW, PRODUCT)), 4);
 		ledger.insert(RAW, amount(100), ProductLedger.Action.EXECUTE);

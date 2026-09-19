@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.storage;
 
 import java.util.List;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -57,6 +58,7 @@ public final class TransferStaging {
 	private final ProductLedger ledger;
 	private final Thread owner = Thread.currentThread();
 	private final Map<UUID, Transfer> pending = new ConcurrentHashMap<>();
+	private final SnapshotRecords<UUID, View> records = new SnapshotRecords<>(Comparator.naturalOrder());
 	private final int maxTransfers;
 	private final long maxUnits;
 	private boolean calling;
@@ -66,7 +68,11 @@ public final class TransferStaging {
 		if (maxTransfers <= 0 || maxUnits <= 0) throw new IllegalArgumentException("Invalid staging budget");
 		this.maxTransfers = maxTransfers; this.maxUnits = maxUnits;
 	}
-	public synchronized List<View> snapshot() { check(); return pending.values().stream().map(Transfer::view).toList(); }
+	public synchronized List<View> snapshot() { check(); return records.valuesSnapshot(); }
+	public synchronized void validateCheckpointLedger(ProductLedger expected) {
+		check();
+		if (ledger != expected) throw new IllegalArgumentException("Transfer staging belongs to a different ledger");
+	}
 	public static TransferStaging restore(ProductLedger ledger, int maxTransfers, long maxUnits, List<View> saved) {
 		var staging = new TransferStaging(ledger, maxTransfers, maxUnits);
 		if (saved.size() > maxTransfers) throw new IllegalArgumentException("Recovery exceeds transfer budget");
@@ -76,6 +82,7 @@ public final class TransferStaging {
 			if (staging.pending.putIfAbsent(view.id(), new Transfer(staging.authority, view)) != null) {
 				throw new IllegalArgumentException("Duplicate transfer identity");
 			}
+			staging.refresh(staging.pending.get(view.id()));
 		}
 		return staging;
 	}
@@ -95,22 +102,24 @@ public final class TransferStaging {
 		if (direction == Direction.EXPORT) transfer.held = ledger.extract(key, accepted, ProductLedger.Action.EXECUTE);
 		pending.put(transfer.id, transfer);
 		try {
-			long actual = ledger.externalCall(() -> external.applyAsLong(transfer.offered));
-			applyActual(transfer, actual);
-		} catch (RuntimeException failure) {
-			transfer.phase = Phase.UNKNOWN;
-			transfer.failure = failure.toString();
-		}
-		if (transfer.phase == Phase.HELD) settleInternal(transfer);
-		return transfer;
+			try {
+				long actual = ledger.externalCall(() -> external.applyAsLong(transfer.offered));
+				applyActual(transfer, actual);
+			} catch (RuntimeException failure) {
+				transfer.phase = Phase.UNKNOWN;
+				transfer.failure = failure.toString();
+			}
+			if (transfer.phase == Phase.HELD) settleInternal(transfer);
+			return transfer;
+		} finally { refresh(transfer); }
 	}
 	/** 外部适配器获得可靠收据后显式消除不确定性；不得以重试结果冒充原调用收据。 */
 	public synchronized void resolve(Transfer transfer, long confirmedActual) {
 		guarded(() -> {
 			requirePending(transfer);
 			if (transfer.phase != Phase.UNKNOWN) throw new IllegalStateException("Transfer is not unknown");
-			applyActual(transfer, confirmedActual);
-			settleInternal(transfer);
+			try { applyActual(transfer, confirmedActual); settleInternal(transfer); }
+			finally { refresh(transfer); }
 			return null;
 		});
 	}
@@ -120,7 +129,8 @@ public final class TransferStaging {
 			if (transfer.phase == Phase.COMPLETE) return true;
 			requirePending(transfer);
 			if (transfer.phase != Phase.HELD) return false;
-			settleInternal(transfer);
+			try { settleInternal(transfer); }
+			finally { refresh(transfer); }
 			return transfer.phase == Phase.COMPLETE;
 		});
 	}
@@ -131,6 +141,7 @@ public final class TransferStaging {
 		transfer.failure = "";
 	}
 	private void settleInternal(Transfer transfer) {
+		if (transfer.held.isZero()) { complete(transfer); return; }
 		if (transfer.direction == Direction.EXPORT) {
 			ledger.restoreStaged(transfer.key, transfer.held);
 			transfer.held = ProductAmount.ZERO;
@@ -139,9 +150,13 @@ public final class TransferStaging {
 			transfer.held = transfer.held.subtract(accepted);
 		}
 		if (transfer.held.isZero()) {
-			transfer.phase = Phase.COMPLETE;
-			pending.remove(transfer.id);
+			complete(transfer);
 		}
+	}
+	private void complete(Transfer transfer) { transfer.phase = Phase.COMPLETE; pending.remove(transfer.id); }
+	private void refresh(Transfer transfer) {
+		if (pending.containsKey(transfer.id)) records.put(transfer.id, transfer.view());
+		else records.remove(transfer.id);
 	}
 	private void requirePending(Transfer transfer) {
 		if (pending.get(transfer.id) != transfer) throw new IllegalArgumentException("Foreign transfer");

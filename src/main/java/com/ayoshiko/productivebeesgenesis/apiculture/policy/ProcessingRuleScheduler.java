@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.LedgerTransaction;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductLedger;
+import com.ayoshiko.productivebeesgenesis.apiculture.storage.SnapshotRecords;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -40,7 +41,7 @@ public final class ProcessingRuleScheduler {
 	private final Mode mode;
 	private ProcessingRuleIndex index;
 	private Object epoch = new Object();
-	private final Map<String, WatermarkState> watermarks = new ConcurrentHashMap<>();
+	private final SnapshotRecords<String, Boolean> watermarks = new SnapshotRecords<>(Comparator.naturalOrder());
 	private int cursor;
 	private int used;
 	private boolean claiming;
@@ -52,14 +53,16 @@ public final class ProcessingRuleScheduler {
 	}
 	public SchedulerCheckpoint checkpoint() {
 		checkThread();
-		Map<String, Boolean> saved = new ConcurrentHashMap<>();
-		watermarks.forEach((id, state) -> saved.put(id, state.replenishing()));
-		return new SchedulerCheckpoint(index.configuredRules(), mode, saved, index.rules().isEmpty() ? "" : index.rules().get(cursor).id(), used);
+		return SchedulerCheckpoint.capture(index, mode, watermarks, cursor, used);
+	}
+	public void validateCheckpointLedger(ProductLedger expected) {
+		checkThread();
+		if (ledger != expected) throw new IllegalArgumentException("Scheduler belongs to a different ledger");
 	}
 	public static ProcessingRuleScheduler restore(ProductLedger ledger, ProcessingRuleIndex rebuilt, SchedulerCheckpoint checkpoint) {
 		if (!rebuilt.configuredRules().equals(checkpoint.rules())) throw new IllegalArgumentException("Rebuilt rules differ from checkpoint");
 		var scheduler = new ProcessingRuleScheduler(ledger, rebuilt, checkpoint.mode());
-		checkpoint.watermarks().forEach((id, active) -> scheduler.watermarks.put(id, new WatermarkState(active)));
+		checkpoint.watermarks().forEach(scheduler.watermarks::put);
 		if (!checkpoint.cursorRule().isEmpty()) {
 			for (int i = 0; i < rebuilt.rules().size(); i++) if (rebuilt.rules().get(i).id().equals(checkpoint.cursorRule())) scheduler.cursor = i;
 		}
@@ -124,8 +127,8 @@ public final class ProcessingRuleScheduler {
 	private boolean demanding(ProcessingRule rule, ProductLedger.Snapshot stock, Map<ProductKey, ProductAmount> inFlight) {
 		if (!(rule.selector() instanceof ProcessingRule.Goal goal)) return true;
 		var current = stock.balances().getOrDefault(goal.product(), ProductAmount.ZERO).add(inFlight.getOrDefault(goal.product(), ProductAmount.ZERO));
-		var next = watermarks.getOrDefault(rule.id(), new WatermarkState(false)).update(current, goal.lower(), goal.upper());
-		watermarks.put(rule.id(), next);
+		var next = new WatermarkState(Boolean.TRUE.equals(watermarks.get(rule.id()))).update(current, goal.lower(), goal.upper());
+		watermarks.put(rule.id(), next.replenishing());
 		return next.replenishing();
 	}
 	private void checkThread() {

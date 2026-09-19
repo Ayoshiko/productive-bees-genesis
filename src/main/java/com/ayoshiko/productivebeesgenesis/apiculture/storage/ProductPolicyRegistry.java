@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.storage;
 
 import java.util.Objects;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,34 +18,43 @@ public final class ProductPolicyRegistry {
 		}
 	}
 	private static final int CACHE_LIMIT = 4096;
+	private static final Comparator<Discovery> DISCOVERY_ORDER = Comparator.comparing(Discovery::adapterId)
+			.thenComparingInt(value -> value.key().hashCode()).thenComparing(value -> value.key().orderingKey());
+	private final Thread owner = Thread.currentThread();
 	private ProductPolicySnapshot snapshot;
 	private final ConcurrentHashMap<ProductKey, Decision> cache = new ConcurrentHashMap<>();
-	private final Set<Discovery> discoveries = ConcurrentHashMap.newKeySet();
+	private SnapshotRecords<Discovery, Boolean> discoveries = new SnapshotRecords<>(DISCOVERY_ORDER);
 	private boolean evaluating;
 
 	public ProductPolicyRegistry(ProductPolicySnapshot snapshot) { this.snapshot = Objects.requireNonNull(snapshot); }
 	public synchronized ProductPolicySnapshot snapshot() { return snapshot; }
 	public synchronized Set<Discovery> discoveries() {
+		validateCheckpoint();
+		return discoveries.keysSnapshot();
+	}
+	public synchronized void validateCheckpoint() {
+		checkThread();
 		if (evaluating) throw new IllegalStateException("Reentrant discovery snapshot");
-		return Set.copyOf(discoveries);
 	}
 	/** 重建当前配方策略后重新验证发现；旧版本发现不得直接给新配方授予准入。 */
 	public synchronized void restoreDiscoveries(long policyRevision, Set<Discovery> saved) {
+		checkThread();
 		if (evaluating || !discoveries.isEmpty()) throw new IllegalStateException("Discovery restore requires an unused registry");
 		if (policyRevision != snapshot.revision()) return;
-		var restored = ConcurrentHashMap.<Discovery>newKeySet();
+		var restored = new SnapshotRecords<Discovery, Boolean>(DISCOVERY_ORDER);
 		evaluating = true;
 		try {
 			for (var discovery : saved) {
 				boolean valid = snapshot.dynamicRules(discovery.key()).stream().anyMatch(rule -> rule.requiresDiscovery()
 						&& rule.adapterId().equals(discovery.adapterId()) && rule.validator().test(discovery.key()));
 				if (!valid) throw new IllegalArgumentException("Saved discovery no longer matches its policy");
-				restored.add(discovery);
+				restored.put(discovery, true);
 			}
-			discoveries.addAll(restored); cache.clear();
+			discoveries = restored; cache.clear();
 		} finally { evaluating = false; }
 	}
 	public synchronized void replace(ProductPolicySnapshot next) {
+		checkThread();
 		if (evaluating) throw new IllegalStateException("Policy callback cannot replace its registry");
 		if (next.revision() <= snapshot.revision()) throw new IllegalArgumentException("Policy revision must advance");
 		snapshot = next;
@@ -52,6 +62,7 @@ public final class ProductPolicyRegistry {
 		discoveries.clear();
 	}
 	public synchronized Decision evaluate(ProductKey key) {
+		checkThread();
 		Objects.requireNonNull(key);
 		if (evaluating) throw new IllegalStateException("Reentrant product policy callback");
 		Decision cached = cache.get(key);
@@ -73,7 +84,7 @@ public final class ProductPolicyRegistry {
 		for (var rule : snapshot.dynamicRules(key)) {
 			try {
 				if (!rule.validator().test(key)) continue;
-				if (!rule.requiresDiscovery() || discoveries.contains(new Discovery(rule.adapterId(), key))) {
+				if (!rule.requiresDiscovery() || discoveries.get(new Discovery(rule.adapterId(), key)) != null) {
 					return decision(Verdict.ALLOWED, rule.adapterId());
 				}
 				rejected = Verdict.UNCONFIRMED_VARIANT;
@@ -87,13 +98,14 @@ public final class ProductPolicyRegistry {
 	}
 	/** 仅供已经验证真实生成结果的服务端适配器调用；尚未接入玩家、管道或数据包。 */
 	public synchronized boolean recordVerifiedProduction(String adapterId, ProductKey key, long expectedRevision) {
+		checkThread();
 		if (evaluating) throw new IllegalStateException("Reentrant discovery");
 		if (snapshot.revision() != expectedRevision) return false;
 		evaluating = true;
 		try {
 			for (var rule : snapshot.dynamicRules(key)) {
 				if (rule.adapterId().equals(adapterId) && rule.requiresDiscovery() && rule.validator().test(key)) {
-					discoveries.add(new Discovery(adapterId, key));
+					discoveries.put(new Discovery(adapterId, key), true);
 					cache.remove(key);
 					return true;
 				}
@@ -103,4 +115,7 @@ public final class ProductPolicyRegistry {
 		finally { evaluating = false; }
 	}
 	private Decision decision(Verdict verdict, String source) { return new Decision(snapshot.revision(), verdict, source); }
+	private void checkThread() {
+		if (Thread.currentThread() != owner) throw new IllegalStateException("Product policy belongs to its server thread");
+	}
 }

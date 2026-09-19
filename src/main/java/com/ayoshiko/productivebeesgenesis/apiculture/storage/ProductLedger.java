@@ -15,28 +15,38 @@ public final class ProductLedger {
 	private final Object authority = new Object();
 	private final Thread owner = Thread.currentThread();
 	private final ProductPolicyRegistry policy;
-	private final SparseProductAmounts<ProductKey> balances = new SparseProductAmounts<>();
+	private final PagedProductAmounts balances;
 	private final ReservationBook reservations = new ReservationBook();
 	private final int maxPending;
 	private long revision;
 	private boolean entered;
 
 	public ProductLedger(ProductPolicyRegistry policy, int maxPending) {
+		this(policy, maxPending, new PagedProductAmounts());
+	}
+	private ProductLedger(ProductPolicyRegistry policy, int maxPending, PagedProductAmounts balances) {
 		this.policy = Objects.requireNonNull(policy);
 		if (maxPending <= 0) throw new IllegalArgumentException("Invalid pending work budget");
-		this.maxPending = maxPending;
+		this.maxPending = maxPending; this.balances = balances;
 	}
 	public Snapshot snapshot() {
 		return guarded(() -> new Snapshot(revision, balances.snapshot(), reservations.snapshot(), reservations.size()));
 	}
 	public LedgerCheckpoint checkpoint() {
-		return guarded(() -> new LedgerCheckpoint(revision, balances.snapshot(), reservations.checkpoint()));
+		return guarded(() -> LedgerCheckpoint.capture(revision, balances, reservations));
+	}
+	public void validateCheckpointPolicy(ProductPolicyRegistry expected) {
+		guarded(() -> {
+			if (policy != expected || reservations.newestPolicyRevision() > policy.snapshot().revision()) {
+				throw new IllegalArgumentException("Checkpoint policy differs from ledger authority");
+			}
+			return null;
+		});
 	}
 	public static ProductLedger restore(ProductPolicyRegistry policy, int maxPending, LedgerCheckpoint checkpoint) {
 		Objects.requireNonNull(checkpoint);
 		if (checkpoint.transactions().size() > maxPending) throw new IllegalArgumentException("Pending recovery exceeds configured work budget");
-		var ledger = new ProductLedger(policy, maxPending);
-		checkpoint.balances().forEach(ledger.balances::set);
+		var ledger = new ProductLedger(policy, maxPending, PagedProductAmounts.restore(checkpoint.balances()));
 		checkpoint.transactions().forEach(pending -> ledger.reservations.add(new LedgerTransaction(ledger.authority, pending)));
 		ledger.revision = checkpoint.revision();
 		return ledger;
@@ -102,6 +112,7 @@ public final class ProductLedger {
 			}
 			advanceRevision();
 			transaction.state(LedgerTransaction.State.PAID);
+			reservations.changed(transaction);
 			return true;
 		});
 	}

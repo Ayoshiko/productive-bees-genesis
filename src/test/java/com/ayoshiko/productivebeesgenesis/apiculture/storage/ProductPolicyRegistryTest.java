@@ -13,6 +13,28 @@ class ProductPolicyRegistryTest {
 				.map(key -> new AllowedProductDescriptor(key, "test", "test:recipe")).toList(), List.of());
 	}
 	@Test
+	void fullHashCollisionDiscoveriesRemainExactAcrossFreezeAdaptersAndReload() {
+		var keys = new java.util.ArrayList<ProductKey>();
+		for (int i = 0; i < 512; i++) {
+			var text = new StringBuilder();
+			for (int bit = 0; bit < 9; bit++) text.append((i & (1 << bit)) == 0 ? "Aa" : "BB");
+			var components = new CompoundTag(); components.putString("test:collision", text.toString());
+			keys.add(new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("test:dynamic"), components));
+			assertEquals(keys.getFirst().hashCode(), keys.getLast().hashCode());
+		}
+		var first = new DynamicProductRule("test:first", keys.getFirst().kind(), keys.getFirst().id(), true, key -> true);
+		var second = new DynamicProductRule("test:second", first.kind(), first.id(), true, key -> true);
+		var policy = new ProductPolicySnapshot(1, List.of(), List.of(first, second)); var registry = new ProductPolicyRegistry(policy);
+		for (int i = 0; i < 256; i++) assertTrue(registry.recordVerifiedProduction("test:first", keys.get(i), 1));
+		var frozen = registry.discoveries();
+		for (int i = 0; i < 512; i++) assertTrue(registry.recordVerifiedProduction("test:second", keys.get(i), 1));
+		assertEquals(768, registry.discoveries().size()); registry.replace(new ProductPolicySnapshot(2, List.of(), List.of(first, second)));
+		assertTrue(registry.discoveries().isEmpty()); assertEquals(256, frozen.size());
+		var restored = new ProductPolicyRegistry(policy); restored.restoreDiscoveries(1, frozen);
+		for (int i = 0; i < 512; i++) assertEquals(i < 256, restored.evaluate(keys.get(i)).allowed());
+		assertTrue(frozen.stream().allMatch(value -> value.adapterId().equals("test:first")));
+	}
+	@Test
 	void externalProductsAllowCosmeticsButRejectNewContentsOrWrongBee() {
 		var gold = item("minecraft:gold_ingot");
 		var bee = new CompoundTag(); bee.putString("productivebees:bee_type", "productivebees:iron");

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.persistence;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 
@@ -12,18 +13,21 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	private NetworkCheckpoint checkpoint;
 	private final String recoveryReason;
 	private NetworkSavedData(NetworkIdentity identity, NetworkCheckpoint checkpoint, long persistedRevision,
-			String recoveryReason, Executor executor, Writer writer) {
-		super(persistedRevision, executor, writer);
+			String recoveryReason, CheckpointSaveQueue queue) {
+		super(persistedRevision, queue);
 		this.identity = Objects.requireNonNull(identity); this.checkpoint = checkpoint; this.recoveryReason = recoveryReason;
 	}
 	static NetworkSavedData create(NetworkCheckpoint checkpoint, Executor executor, Writer writer) {
-		return new NetworkSavedData(checkpoint.identity(), checkpoint, -1, "", executor, writer);
+		return create(checkpoint, new CheckpointSaveQueue(executor, writer));
 	}
-	static NetworkSavedData loaded(NetworkCheckpoint checkpoint, Executor executor, Writer writer) {
-		return new NetworkSavedData(checkpoint.identity(), checkpoint, checkpoint.revision(), "", executor, writer);
+	static NetworkSavedData create(NetworkCheckpoint checkpoint, CheckpointSaveQueue queue) {
+		return new NetworkSavedData(checkpoint.identity(), checkpoint, -1, "", queue);
 	}
-	static NetworkSavedData recovery(NetworkIdentity identity, String reason, Executor executor, Writer writer) {
-		return new NetworkSavedData(identity, null, -1, Objects.requireNonNull(reason), executor, writer);
+	static NetworkSavedData loaded(NetworkCheckpoint checkpoint, CheckpointSaveQueue queue) {
+		return new NetworkSavedData(checkpoint.identity(), checkpoint, checkpoint.revision(), "", queue);
+	}
+	static NetworkSavedData recovery(NetworkIdentity identity, String reason, CheckpointSaveQueue queue) {
+		return new NetworkSavedData(identity, null, -1, Objects.requireNonNull(reason), queue);
 	}
 	public NetworkIdentity identity() { return identity; }
 	public Status status() { return checkpoint == null ? Status.RECOVERY : Status.READY; }
@@ -42,6 +46,9 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	}
 	@Override protected long revision() { return checkpoint == null ? -1 : checkpoint.revision(); }
 	@Override protected boolean writable() { return checkpoint != null; }
+	@Override protected CheckpointPayload capture() {
+		return new CheckpointPayload.Network(checkpoint(), SharedConstants.getCurrentVersion().getDataVersion().getVersion());
+	}
 	@Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
 		checkThread(); tag.merge(NetworkCheckpointCodec.encode(checkpoint())); return tag;
 	}

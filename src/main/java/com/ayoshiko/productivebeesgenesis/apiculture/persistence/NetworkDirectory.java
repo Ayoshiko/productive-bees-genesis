@@ -16,12 +16,12 @@ import net.minecraft.world.level.storage.DimensionDataStorage;
 
 /** 显式创建与已有身份读取分离；域坏损只隔离该域，目录坏损拒绝新建。 */
 public final class NetworkDirectory {
+	public record SaveStatus(int waitingDomains, int activeSnapshots, int reservedBufferBytes, long submitted, long completed) { }
 	private static final String NAME = "productivebeesgenesis_network_directory";
 	private final Path folder;
 	private final HolderLookup.Provider registries;
 	private final NetworkCheckpointCodec codec;
-	private final Executor executor;
-	private final AcknowledgedSavedData.Writer writer;
+	private final CheckpointSaveQueue saves;
 	private final NetworkDirectoryData index;
 	private final String failure;
 	private final Map<UUID, NetworkSavedData> loaded = new ConcurrentHashMap<>();
@@ -32,10 +32,10 @@ public final class NetworkDirectory {
 	}
 	NetworkDirectory(Path folder, HolderLookup.Provider registries, Executor executor, DimensionDataStorage storage,
 			NetworkCheckpointCodec codec, AcknowledgedSavedData.Writer writer) {
-		this.folder = folder.toAbsolutePath().normalize(); this.registries = registries; this.executor = executor;
-		this.storage = storage; this.codec = codec; this.writer = writer;
+		this.folder = folder.toAbsolutePath().normalize(); this.registries = registries;
+		this.storage = storage; this.codec = codec; saves = new CheckpointSaveQueue(executor, writer);
 		NetworkDirectoryData data = null; String problem = "";
-		try { data = Files.exists(file(NAME)) ? NetworkDirectoryData.load(read(file(NAME)), executor, writer) : NetworkDirectoryData.create(executor, writer); }
+		try { data = Files.exists(file(NAME)) ? NetworkDirectoryData.load(read(file(NAME)), saves) : NetworkDirectoryData.create(saves); }
 		catch (IOException | RuntimeException error) { problem = error.toString(); }
 		index = data; failure = problem;
 		if (index != null && storage != null) storage.set(NAME, index);
@@ -48,7 +48,7 @@ public final class NetworkDirectory {
 			throw new IllegalArgumentException("Refusing to overwrite an existing network identity");
 		}
 		index.validateAddition(identity);
-		var domain = NetworkSavedData.create(NetworkCheckpoint.empty(identity), executor, writer);
+		var domain = NetworkSavedData.create(NetworkCheckpoint.empty(identity), saves);
 		// 新建通常为空域；完整域落盘之前不发布目录和可执行句柄。
 		domain.flush(domainFile(identity.networkId()).toFile(), registries);
 		index.add(identity); index.flush(file(NAME).toFile(), registries);
@@ -57,7 +57,7 @@ public final class NetworkDirectory {
 	public NetworkSavedData loadExisting(NetworkIdentity expected) {
 		check();
 		if (index == null || !expected.equals(index.find(expected.networkId()))) {
-			return NetworkSavedData.recovery(expected, "Missing or mismatched directory identity: " + failure, executor, writer);
+			return NetworkSavedData.recovery(expected, "Missing or mismatched directory identity: " + failure, saves);
 		}
 		var cached = loaded.get(expected.networkId());
 		if (cached != null) return cached;
@@ -65,9 +65,9 @@ public final class NetworkDirectory {
 		try {
 			var checkpoint = codec.decode(read(domainFile(expected.networkId())));
 			if (!expected.equals(checkpoint.identity())) throw new IllegalArgumentException("Directory/domain identity mismatch");
-			domain = NetworkSavedData.loaded(checkpoint, executor, writer);
+			domain = NetworkSavedData.loaded(checkpoint, saves);
 		} catch (IOException | RuntimeException error) {
-			domain = NetworkSavedData.recovery(expected, error.toString(), executor, writer);
+			domain = NetworkSavedData.recovery(expected, error.toString(), saves);
 			LogUtils.getLogger().error("Bee network {} quarantined; original data retained", expected.networkId(), error);
 		}
 		register(domain); return domain;
@@ -79,10 +79,9 @@ public final class NetworkDirectory {
 		loaded.remove(expected.networkId()); return loadExisting(expected);
 	}
 	public void tick() {
-		check();
-		if (index != null) index.retry(file(NAME).toFile(), registries);
-		for (var domain : loaded.values()) domain.retry(domainFile(domain.identity().networkId()).toFile(), registries);
+		check(); saves.tick();
 	}
+	public SaveStatus saveStatus() { check(); return saves.status(); }
 	public void flush() throws IOException {
 		check(); IOException combined = null;
 		for (var domain : loaded.values()) {

@@ -14,7 +14,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-/** 按需打开世界目录，正常保存由 DimensionDataStorage 发起，tick 仅收回执和重试。 */
+/** 所有维度共享一个保存队列；工作线程仅编码不可变 checkpoint 并流式写盘。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class NetworkPersistence {
 	private record Session(NetworkDirectory directory, ThreadPoolExecutor writer) { }
@@ -23,7 +23,8 @@ public final class NetworkPersistence {
 	public static NetworkDirectory directory(MinecraftServer server) {
 		if (!server.isSameThread()) throw new IllegalStateException("Open network storage on the server thread");
 		return SESSIONS.computeIfAbsent(server, current -> {
-			var writer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(8), action -> {
+			// 完成回执可能先于线程重新等待任务；一个交接槽避免停服连写时误报拒绝。
+			var writer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(1), action -> {
 				Thread thread = new Thread(action, "pbg-network-checkpoints"); thread.setDaemon(true); return thread;
 			}, new ThreadPoolExecutor.AbortPolicy());
 			return new Session(new NetworkDirectory(current.getWorldPath(LevelResource.ROOT).resolve("data"),

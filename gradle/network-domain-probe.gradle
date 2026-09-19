@@ -64,3 +64,26 @@ tasks.named('runNetworkDomainServer') {
         }
     }
 }
+
+tasks.register('runNetworkSnapshotBenchmark', JavaExec) {
+    classpath = sourceSets.domainProbe.runtimeClasspath
+    mainClass = 'com.ayoshiko.productivebeesgenesis.domainprobe.SnapshotBenchmark'
+    maxHeapSize = '4G'
+    args layout.buildDirectory.file("reports/network-snapshot/${runId}.json").get().asFile.absolutePath,
+            providers.gradleProperty('networkBenchmarkFork').getOrElse('0')
+}
+
+tasks.register('runNetworkCheckpointCaptureBenchmark', JavaExec) {
+    classpath = sourceSets.domainProbe.runtimeClasspath
+    mainClass = 'com.ayoshiko.productivebeesgenesis.domainprobe.CheckpointCaptureBenchmark'
+    maxHeapSize = '4G'
+    args layout.buildDirectory.file("reports/network-capture/${runId}.json").get().asFile.absolutePath,
+            providers.gradleProperty('networkBenchmarkFork').getOrElse('0')
+}
+
+tasks.register('runNetworkCheckpointWriteBenchmark', JavaExec) {
+    classpath = sourceSets.domainProbe.runtimeClasspath
+    mainClass = 'com.ayoshiko.productivebeesgenesis.domainprobe.CheckpointWriteBenchmark'
+    maxHeapSize = '4G'
+    args layout.buildDirectory.file("reports/network-write/${runId}.json").get().asFile.absolutePath
+}
