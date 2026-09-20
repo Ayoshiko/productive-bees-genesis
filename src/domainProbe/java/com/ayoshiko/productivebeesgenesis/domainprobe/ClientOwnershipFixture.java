@@ -20,6 +20,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 public final class ClientOwnershipFixture {
 	static volatile int stage;
 	static volatile String failure;
+	static final long ENERGY_CAPACITY = (1L << 40) + 77, ENERGY_STORED = 3_000_000_009L;
 	private static final BlockPos POS = new BlockPos(8, 100, 8);
 	private static NetworkCoreBlockEntity core;
 	private static AssetImage[] originals;
@@ -31,6 +32,7 @@ public final class ClientOwnershipFixture {
 		try {
 			if (core == null) {
 				ModConfig.SERVER.beeNetwork.enabled.set(true);
+				ModConfig.SERVER.beeNetwork.energyCapacity.set(ENERGY_CAPACITY);
 				level.setChunkForced(0, 0, true);
 				level.setBlockAndUpdate(POS, NetworkContent.CORE.get().defaultBlockState());
 				core = (NetworkCoreBlockEntity) level.getBlockEntity(POS); core.initializeOwner(player.getUUID());
@@ -62,6 +64,9 @@ public final class ClientOwnershipFixture {
 				stage = 1; return;
 			}
 			if (stage == 1 && !core.ownership().busy() && core.ownership().status() == CoreOwnershipController.Status.MANAGED) {
+				var energy = level.getCapability(net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK, POS, net.minecraft.core.Direction.UP);
+				require(energy != null, "Client fixture missing core FE");
+				for (int i = 0; i < 3; i++) require(energy.receiveEnergy(1_000_000_003, false) == 1_000_000_003, "Client fixture FE input failed");
 				for (int i = 0; i < 2; i++) {
 					var tile = (TileEntityMekanism) level.getBlockEntity(POS.east(i + 1));
 					require(MemberBinding.isolated(tile) && new MachineAssetStore(tile).empty(), "Client join did not seal physical source");

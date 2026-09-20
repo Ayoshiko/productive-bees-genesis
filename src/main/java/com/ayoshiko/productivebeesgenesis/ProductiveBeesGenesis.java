@@ -493,6 +493,8 @@ public final class ProductiveBeesGenesis {
 	 * 能自动发现并连接离心机。AE2 未安装时安全跳过，不触发类加载失败。
 	 */
 	private void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
+		event.registerBlockEntity(net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.BLOCK,
+				com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.CORE_TILE.get(), (core, side) -> core.energyPort());
 		for (var entry : ModItems.ITEMS.getEntries()) {
 			Item item = entry.get();
 			if (item instanceof ICapabilityAware aware) {

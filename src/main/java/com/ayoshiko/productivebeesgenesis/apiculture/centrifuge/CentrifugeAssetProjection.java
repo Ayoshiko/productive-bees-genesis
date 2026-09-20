@@ -18,7 +18,7 @@ public final class CentrifugeAssetProjection {
 	}
 	public static void validateMigration(AssetImage source, CentrifugeWorkState state) {
 		var tag = source.copy(); var extra = tag.getCompound("extra");
-		if (state.revision() != 0 || !state.drained() || state.laneCount() != 1 || !tag.contains("energy", 4) || !tag.contains("energyCapacity", 4)
+		if (state.revision() != 0 || state.networkPowered() || !state.drained() || state.laneCount() != 1 || !tag.contains("energy", 4) || !tag.contains("energyCapacity", 4)
 				|| state.energy() != tag.getLong("energy") || state.energyCapacity() != tag.getLong("energyCapacity"))
 			throw new IllegalArgumentException("Centrifuge migration differs from sealed assets");
 		// 旧物理进度没有记录周期内并行数，不能凭当前输入猜测已付费工作量。

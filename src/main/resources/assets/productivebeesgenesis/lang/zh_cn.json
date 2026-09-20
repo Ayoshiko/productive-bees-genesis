@@ -1132,5 +1132,8 @@
   "screen.productivebeesgenesis.network.ownership.6": "接管被拒绝，请检查机器",
   "screen.productivebeesgenesis.network.ownership.7": "该机型尚不支持接管",
   "screen.productivebeesgenesis.network.ownership.8": "请先结清外部输出账目",
-  "screen.productivebeesgenesis.network.ownership.9": "资产或容量预检未通过"
+  "screen.productivebeesgenesis.network.ownership.9": "资产或容量预检未通过",
+  "productivebeesgenesis.configuration.bee_network.energyCapacity": "核心共享 FE 容量",
+  "productivebeesgenesis.configuration.bee_network.energyCapacity.tooltip": "所有已迁移成员共用的有限能源账户。降低到当前余额以下时，待余额降低后应用；不会丢弃能源。",
+  "screen.productivebeesgenesis.network.energy": "共享能源：%s / %s FE"
 }

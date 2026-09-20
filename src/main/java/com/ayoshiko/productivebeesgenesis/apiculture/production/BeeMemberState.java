@@ -6,12 +6,15 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore;
 
-/** 基础蜂箱有限保管账户；D16 接统一能量账户前，FE 仅在这里持有一次。 */
-public record BeeMemberState(UUID member, long revision, long energy, long energyCapacity, List<BeeRecord> bees, FeedingSlotStore feeding) {
+/** 基础蜂箱保管状态；迁入共享供能后，本地 FE 恒为零。 */
+public record BeeMemberState(UUID member, long revision, long energy, long energyCapacity, List<BeeRecord> bees, FeedingSlotStore feeding, boolean networkPowered) {
+	public BeeMemberState(UUID member, long revision, long energy, long energyCapacity, List<BeeRecord> bees, FeedingSlotStore feeding) {
+		this(member, revision, energy, energyCapacity, bees, feeding, false);
+	}
 	public BeeMemberState(UUID member, long revision, long energy, long energyCapacity, List<BeeRecord> bees) { this(member, revision, energy, energyCapacity, bees, null); }
 	public BeeMemberState {
 		Objects.requireNonNull(member); bees = List.copyOf(bees);
-		if (revision < 0 || energy < 0 || energyCapacity < energy || bees.size() > 3) throw new IllegalArgumentException("Invalid basic apiary state");
+		if (revision < 0 || energy < 0 || energyCapacity < energy || bees.size() > 3 || networkPowered && energy != 0) throw new IllegalArgumentException("Invalid basic apiary state");
 		var slots = ConcurrentHashMap.newKeySet();
 		var ids = ConcurrentHashMap.newKeySet();
 		for (var bee : bees) if (!member.equals(bee.member()) || bee.slot() >= 3 || !slots.add(bee.slot()) || !ids.add(bee.id())) throw new IllegalArgumentException("Duplicate or foreign bee slot");
@@ -23,25 +26,42 @@ public record BeeMemberState(UUID member, long revision, long energy, long energ
 				|| next.revision() != Math.incrementExact(old.revision()) || remainingEnergy < 0 || remainingEnergy > energy)
 			throw new IllegalArgumentException("Invalid bee successor");
 		return new BeeMemberState(member, Math.incrementExact(revision), remainingEnergy, energyCapacity,
-				bees.stream().map(bee -> bee.slot() == next.slot() ? next : bee).toList(), feeding);
+				bees.stream().map(bee -> bee.slot() == next.slot() ? next : bee).toList(), feeding, networkPowered);
 	}
 	public BeeMemberState withFeeding(FeedingSlotStore next) {
 		if (feeding == next) return this;
 		if (feeding == null ? next == null || next.revision() != 0 : next == null) throw new IllegalArgumentException("Invalid feeding migration");
 		if (feeding != null) feeding.validateSuccessor(next);
-		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity, bees, next);
+		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity, bees, next, networkPowered);
 	}
 	public BeeMemberState moveBee(int from, int to, boolean withFeeding) {
 		var moved = bee(from).relocate(to);
 		if (to < 0 || to >= 3 || bees.stream().anyMatch(bee -> bee.slot() == to)) throw new IllegalArgumentException("Bee target occupied or out of range");
 		var nextFeeding = withFeeding ? Objects.requireNonNull(feeding).moveWithBee(from, to) : feeding;
 		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity,
-				bees.stream().map(bee -> bee.slot() == from ? moved : bee).sorted(java.util.Comparator.comparingInt(BeeRecord::slot)).toList(), nextFeeding);
+				bees.stream().map(bee -> bee.slot() == from ? moved : bee).sorted(java.util.Comparator.comparingInt(BeeRecord::slot)).toList(), nextFeeding, networkPowered);
+	}
+	public BeeMemberState transferEnergy() {
+		return networkPowered ? this : new BeeMemberState(member, Math.incrementExact(revision), 0, energyCapacity, bees, feeding, true);
+	}
+	/** 喂食和移位可沿用通用所有权更新；推进／冻结产物必须走带付款证明的入口。 */
+	public boolean sameProduction(BeeMemberState next) {
+		if (bees.size() != next.bees.size()) return false;
+		for (var bee : bees) {
+			var other = next.bees.stream().filter(value -> value.id().equals(bee.id())).findFirst().orElse(null);
+			if (other == null || !bee.plan().equals(other.plan()) || bee.progress() != other.progress()
+					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen())) return false;
+		}
+		return true;
 	}
 	public boolean drained() { return bees.stream().allMatch(BeeRecord::drained); }
 	public void validateSuccessor(BeeMemberState next) {
 		if (!member.equals(next.member) || next.revision != Math.incrementExact(revision) || next.energy > energy
 				|| energyCapacity != next.energyCapacity || bees.size() != next.bees.size()) throw new IllegalArgumentException("Invalid member production successor");
+		if (networkPowered != next.networkPowered) {
+			if (networkPowered || !bees.equals(next.bees) || !Objects.equals(feeding, next.feeding) || next.energy != 0) throw new IllegalArgumentException("Invalid bee energy transfer");
+			return;
+		}
 		int changed = 0;
 		for (var previous : bees) {
 			var candidate = next.bees.stream().filter(bee -> bee.id().equals(previous.id())).findFirst().orElseThrow();

@@ -32,6 +32,7 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	}
 	public NetworkIdentity identity() { return identity; }
 	public Status status() { return checkpoint == null ? Status.RECOVERY : Status.READY; }
+	public boolean active() { checkThread(); return writable(); }
 	public String recoveryReason() { return recoveryReason; }
 	public NetworkCheckpoint checkpoint() {
 		checkThread();

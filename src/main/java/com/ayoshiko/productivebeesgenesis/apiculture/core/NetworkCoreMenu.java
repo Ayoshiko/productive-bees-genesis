@@ -11,12 +11,18 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final ContainerData data;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
-		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; data = new SimpleContainerData(18); addDataSlots(data);
+		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; data = new SimpleContainerData(26); addDataSlots(data);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core;
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index >= 18) {
+					var authority = core.ownership().readyAuthority(); if (authority == null) return 0;
+					var energy = authority.checkpoint().energy();
+					long amount = index < 22 ? energy.stored() : energy.capacity();
+					return (int) (amount >>> (((index - 18) % 4) * 16)) & 65535;
+				}
 				if (index == 17) return core.validNetworkReference() ? core.ownership().status().ordinal() : com.ayoshiko.productivebeesgenesis.apiculture.ownership.CoreOwnershipController.Status.RECOVERY.ordinal();
 				var view = core.topology();
 				if (index == 0) return !ModConfig.SERVER.beeNetwork.enabled.get() ? 0 : view == null ? 1 : !view.valid() ? 3 : 2;
@@ -25,7 +31,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 18; }
+			@Override public int getCount() { return 26; }
 		}; addDataSlots(data);
 	}
 	public long value(int index) {
@@ -34,6 +40,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return result;
 	}
 	public int ownershipStatus() { return data.get(17); }
+	public long energy(boolean capacity) {
+		long result = 0; int start = capacity ? 22 : 18;
+		for (int part = 0; part < 4; part++) result |= (data.get(start + part) & 65535L) << (part * 16);
+		return result;
+	}
 	@Override public boolean stillValid(Player player) { return core == null || core.allowed(player) && player.level().getBlockEntity(core.getBlockPos()) == core; }
 	@Override public boolean clickMenuButton(Player player, int id) {
 		if (core == null || player.containerMenu != this || !stillValid(player)) return false;

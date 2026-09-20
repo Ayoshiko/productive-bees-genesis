@@ -49,7 +49,7 @@ public final class CentrifugeLaneAllocator {
 			if (!policy.evaluate(plan.input()).allowed() || plan.outputs().stream().anyMatch(output -> !policy.evaluate(output.key()).allowed())) continue;
 			if (ledger == null) ledger = ProductLedger.restore(policy, Math.addExact(checkpoint.ledger().transactions().size(), 1), checkpoint.ledger());
 			int operations = (int) Math.min(Math.min(operationLimit, plan.maxParallel()), ledger.available(plan.input()).longSaturated());
-			operations = CentrifugeEnergyPricing.affordableOperations(plan.unitEnergyPerTick(), operations, state.energy());
+			operations = CentrifugeEnergyPricing.affordableOperations(plan.unitEnergyPerTick(), operations, state.networkPowered() ? checkpoint.energy().stored() : state.energy());
 			if (operations > 0) return new Scan(new Selection(checkpoint, candidate, operations), next, inspected);
 		}
 		return new Scan(null, next, limit);
@@ -57,7 +57,7 @@ public final class CentrifugeLaneAllocator {
 	public static NetworkCheckpoint commit(NetworkCheckpoint checkpoint, ProductPolicyRegistry policy, Selection selection, long seed) {
 		if (selection == null || !selection.matches(checkpoint)) return checkpoint;
 		var candidate = selection.candidate(); var state = checkpoint.ownedMachines().get(candidate.member()).centrifuge();
-		var transaction = CentrifugeWorkTransaction.assign(state, checkpoint.ledger(), policy, candidate.lane(), candidate.plan(), selection.operations(), seed);
+		var transaction = CentrifugeWorkTransaction.assign(state, checkpoint.ledger(), policy, candidate.lane(), candidate.plan(), selection.operations(), seed, state.networkPowered() ? checkpoint.energy().stored() : state.energy());
 		return transaction == null ? checkpoint : checkpoint.applyCentrifuge(candidate.member(), transaction);
 	}
 	private CentrifugeLaneAllocator() { }

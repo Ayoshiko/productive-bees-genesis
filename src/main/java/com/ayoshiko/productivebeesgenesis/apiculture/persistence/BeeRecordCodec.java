@@ -14,7 +14,7 @@ final class BeeRecordCodec {
 	static CompoundTag encode(BeeMemberState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision());
-		tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
+		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var list = new ListTag();
 		for (var bee : state.bees()) {
 			var value = new CompoundTag(); value.putUUID("id", bee.id()); value.putInt("slot", bee.slot());
@@ -26,7 +26,7 @@ final class BeeRecordCodec {
 	}
 	static BeeMemberState decode(CompoundTag tag, Consumer<ProductKey> validate, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
 		if (tag.isEmpty()) return null;
-		fields(tag, "member", "revision", "energy", "capacity", "bees", "feeding");
+		fields(tag, "member", "revision", "energy", "capacity", "bees", "feeding", "networkPowered");
 		var member = StrictNbt.uuid(tag, "member"); var list = StrictNbt.list(tag, "bees");
 		if (list.size() > 3) throw new IllegalArgumentException("Unverified factory bee state");
 		var bees = new ArrayList<BeeRecord>();
@@ -37,7 +37,7 @@ final class BeeRecordCodec {
 					StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen")));
 		}
 		return new BeeMemberState(member, StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), bees,
-				FeedingRecordCodec.decode(StrictNbt.compound(tag, "feeding"), validateFeeding));
+				FeedingRecordCodec.decode(StrictNbt.compound(tag, "feeding"), validateFeeding), StrictNbt.bool(tag, "networkPowered"));
 	}
 	private static CompoundTag plan(StaticBeePlan plan) {
 		var tag = new CompoundTag(); tag.putString("type", plan.beeType()); tag.putString("recipe", plan.recipe());

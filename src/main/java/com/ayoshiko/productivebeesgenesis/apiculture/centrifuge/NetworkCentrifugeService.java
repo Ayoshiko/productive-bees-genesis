@@ -65,7 +65,7 @@ public final class NetworkCentrifugeService {
 			var job = state.jobs().get(0); return job != null && job.paid() && !job.sampled();
 		}
 		var transaction = switch (action) {
-			case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, ticks, true, tile.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get());
+			case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, ticks, true, tile.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), state.networkPowered() ? current.energy().stored() : state.energy());
 			case FREEZE -> CentrifugeWorkTransaction.freeze(state, current.ledger(), 0);
 			case SETTLE -> CentrifugeWorkTransaction.settle(state, current.ledger(), 0, current.policyRevision());
 			case CANCEL -> CentrifugeWorkTransaction.cancel(state, current.ledger(), 0, current.policyRevision());

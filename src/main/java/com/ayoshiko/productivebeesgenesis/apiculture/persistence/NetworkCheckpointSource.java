@@ -39,7 +39,7 @@ public final class NetworkCheckpointSource {
 		checkThread();
 		var current = authority.checkpoint();
 		if (!identity.equals(current.identity()) || revision <= current.revision()) throw new IllegalArgumentException("Stale or foreign authority capture");
-		return capture(revision).restoredOwnership(current.ownedMachines());
+		return capture(revision).restoredOwnership(current.ownedMachines()).restoredEnergy(current.energy());
 	}
 	public void putMember(MemberCapabilitySnapshot member) { checkThread(); members.putMember(member); }
 	public void removeMember(UUID member) { checkThread(); members.removeMember(member); }

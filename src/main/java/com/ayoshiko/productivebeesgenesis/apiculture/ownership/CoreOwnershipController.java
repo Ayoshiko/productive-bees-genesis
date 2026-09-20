@@ -30,6 +30,7 @@ public final class CoreOwnershipController {
 	public CoreOwnershipController(NetworkCoreBlockEntity core) { this.core = core; }
 	public Status status() { return status; }
 	public String failure() { return failure; }
+	public NetworkSavedData readyAuthority() { return busy() || status == Status.RECOVERY || domain == null || !domain.active() ? null : domain; }
 	public boolean busy() { return core.network() != null && domain == null || transfer != null || records != null || candidates != null || scanClaims; }
 	public boolean command(boolean join) {
 		if (!(core.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread() || !core.validNetworkReference() || busy() || status == Status.RECOVERY) return false;
@@ -65,6 +66,8 @@ public final class CoreOwnershipController {
 				domain = opening.ready();
 				if (action == Action.RECOVER) { records = domain.checkpoint().ownedMachines().values().iterator(); scanClaims = true; }
 			}
+			var energyConfigured = domain.checkpoint().configureEnergy(ModConfig.SERVER.beeNetwork.energyCapacity.get());
+			if (energyConfigured != domain.checkpoint()) { domain.publish(energyConfigured); directory.requestSave(domain); }
 			if (transfer != null) { advanceTransfer(level); return; }
 			if (records != null) {
 				if (!records.hasNext()) { records = null; return; }

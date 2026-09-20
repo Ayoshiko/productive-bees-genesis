@@ -35,6 +35,7 @@
 
 ### 新增
 
+- **P3／D16a 核心共享供能**：新增有限 long FE 账户、标准核心受电口、容量配置和菜单长数同步；成员旧 FE 与共享标记原子迁入，蜂箱／离心作业按实际进度共同扣费，缺电补电后沿用原作业。schema 6 保存共享余额，交还成员不复制已迁入 FE；自动调度与最小玩家管理事务仍待 D16b／c。
 - **P3／D15b2c 真实重启与恢复修复**：新增蜜脾／蜜脾块共 16 个真实网络事务阶段的跨 JVM 世界恢复验证；失效成员不再向生产调度抛身份异常，恢复扫描遇到拓扑变更会等待新视图重试。固定旧配方、进度和费用，旧实物产物只在交还时恢复。自动离心升级经核对仍属未实现方案，未宣称已有该生产路径。
 - **P3／D15b2b 异构分配与显式服务**：增加有预算的逐通道轮转、状态绑定预览、真实成员校验及离心事务服务；保护已有预约，重复请求不再占用投入。两台异构基础机专服验证暂停、核心重载、物品／流体结算和剩余 FE 交还；自动调度与完整重启矩阵仍待后续。
 - **P3／D15b2a 配方与升级适配**：基础网络离心机读取封存的 SPEED／ENERGY 和 PB 升级，共享物理倍率公式与蜜脾块索引；未适配的转换和速度改写组合明确拒绝。真实专服验证清空实体后能力不变及物品／流体同种子对照，自动调度仍关闭。
@@ -75,6 +76,7 @@
 
 #### Added
 
+- Added P3/D16a shared finite long FE storage, an input-only core FE capability, capacity configuration, and full-width menu synchronization. Member migration and bee/centrifuge payment commit atomically; replenished jobs retain their progress and price. Schema 6 preserves shared balances, which remain in the network when members return. Automatic scheduling and player inventory transactions remain in D16b/c.
 - Added P3/D15b2c full-world restart checks for 16 comb/comb-block transaction stages across independent JVMs. Invalid members now reject production without leaking identity exceptions; recovery retries stale topology scans. Existing jobs retain their recipe, progress, and price, while sealed physical outputs remain return-only. The separate auto-centrifuge upgrade remains a future feature.
 - Added P3/D15b2b bounded heterogeneous lane selection, checkpoint-bound previews, live member validation, and an explicit centrifuge transaction service. Dedicated-server checks cover reservation/replay protection, pause, core replacement, exact item/fluid settlement, and remaining-energy return. Automatic scheduling and the full restart matrix remain pending.
 - Added P3/D15b2a sealed basic centrifuge recipe and upgrade adaptation, sharing PB multiplier formulas and the existing comb-block index. Unsupported conversion and modified-speed combinations are rejected. Dedicated-server comparisons cover cleared physical upgrades and seeded item/fluid outputs; automatic scheduling remains disabled.

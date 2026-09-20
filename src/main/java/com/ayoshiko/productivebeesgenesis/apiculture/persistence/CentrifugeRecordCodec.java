@@ -14,7 +14,7 @@ final class CentrifugeRecordCodec {
 	static CompoundTag encode(CentrifugeWorkState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision()); tag.putInt("lanes", state.laneCount());
-		tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
+		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var jobs = new ListTag();
 		state.jobs().forEach((lane, job) -> {
 			var value = new CompoundTag(); value.putInt("lane", lane); value.putUUID("id", job.id()); value.put("plan", plan(job.plan()));
@@ -25,7 +25,7 @@ final class CentrifugeRecordCodec {
 	}
 	static CentrifugeWorkState decode(CompoundTag tag, Consumer<ProductKey> validate) {
 		if (tag.isEmpty()) return null;
-		fields(tag, "member", "revision", "lanes", "energy", "capacity", "jobs");
+		fields(tag, "member", "revision", "lanes", "energy", "capacity", "jobs", "networkPowered");
 		var jobs = new ConcurrentHashMap<Integer, CentrifugeJob>(); var codec = new ProductRecordCodec(validate);
 		for (var raw : StrictNbt.list(tag, "jobs")) {
 			var value = (CompoundTag) raw;
@@ -37,7 +37,7 @@ final class CentrifugeRecordCodec {
 			if (jobs.putIfAbsent(StrictNbt.integer(value, "lane"), job) != null) throw new IllegalArgumentException("Duplicate centrifuge lane");
 		}
 		return new CentrifugeWorkState(StrictNbt.uuid(tag, "member"), StrictNbt.number(tag, "revision"), StrictNbt.integer(tag, "lanes"),
-				StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), jobs);
+				StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), jobs, StrictNbt.bool(tag, "networkPowered"));
 	}
 	private static CompoundTag plan(CentrifugeRecipePlan plan) {
 		var tag = new CompoundTag(); tag.putString("recipe", plan.recipe()); tag.putLong("recipeRevision", plan.recipeRevision());

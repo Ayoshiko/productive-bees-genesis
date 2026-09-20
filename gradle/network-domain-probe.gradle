@@ -84,6 +84,7 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'
 			if (providers.gradleProperty('networkCentrifugeMode').isPresent()) {
 				def mode = providers.gradleProperty('networkCentrifugeMode').get()
 				if (!(mode in ['write', 'read'])) throw new GradleException('Invalid centrifuge restart mode')

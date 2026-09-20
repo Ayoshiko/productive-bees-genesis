@@ -25,6 +25,7 @@ public final class NetworkCheckpointStream {
 	static void write(NetworkCheckpoint checkpoint, int dataVersion, DataOutput output) throws IOException {
 		var stream = new NbtStream(output); stream.root(dataVersion);
 		stream.integer("schema", NetworkCheckpointCodec.SCHEMA);
+		stream.tag("energy", EnergyRecordCodec.encode(checkpoint.energy()));
 		stream.tag("identity", NetworkCheckpointCodec.identity(checkpoint.identity()));
 		stream.number("revision", checkpoint.revision()); stream.number("policy", checkpoint.policyRevision());
 		stream.number("ledgerRevision", checkpoint.ledger().revision());

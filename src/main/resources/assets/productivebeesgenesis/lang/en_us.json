@@ -1132,5 +1132,8 @@
   "screen.productivebeesgenesis.network.ownership.6": "Rejected; check member machines",
   "screen.productivebeesgenesis.network.ownership.7": "Member type not supported yet",
   "screen.productivebeesgenesis.network.ownership.8": "Settle external outputs first",
-  "screen.productivebeesgenesis.network.ownership.9": "Asset or capacity check failed"
+  "screen.productivebeesgenesis.network.ownership.9": "Asset or capacity check failed",
+  "productivebeesgenesis.configuration.bee_network.energyCapacity": "Shared core FE capacity",
+  "productivebeesgenesis.configuration.bee_network.energyCapacity.tooltip": "Finite energy shared by migrated members. A reduction below the current balance takes effect after energy is spent; energy is retained.",
+  "screen.productivebeesgenesis.network.energy": "Shared energy: %s / %s FE"
 }

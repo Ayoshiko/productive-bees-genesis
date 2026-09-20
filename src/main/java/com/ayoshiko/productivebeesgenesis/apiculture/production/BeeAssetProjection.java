@@ -24,7 +24,7 @@ public final class BeeAssetProjection {
 	}
 	public static void validateMigration(AssetImage source, BeeMemberState state) {
 		var tag = source.copy(); var extra = tag.getCompound("extra"); var slots = extra.getList(SLOTS, 10);
-		if (state.revision() != 0 || state.energy() != tag.getLong("energy") || state.energyCapacity() != tag.getLong("energyCapacity") || slots.size() != state.bees().size())
+		if (state.revision() != 0 || state.networkPowered() || state.energy() != tag.getLong("energy") || state.energyCapacity() != tag.getLong("energyCapacity") || slots.size() != state.bees().size())
 			throw new IllegalArgumentException("Bee migration differs from sealed inventory");
 		int[] pending = extra.contains(PENDING) ? extra.getCompound(PENDING).getIntArray("counts") : new int[0];
 		for (var raw : slots) {

@@ -25,6 +25,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	private boolean invalidNetwork;
 	private CompoundTag invalidNetworkData;
 	private CoreOwnershipController ownership = new CoreOwnershipController(this);
+	private com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort energyPort;
 	public NetworkCoreBlockEntity(BlockPos pos, BlockState state) { super(NetworkContent.CORE_TILE.get(), pos, state); }
 	public UUID owner() { return owner; }
 	public UUID controller() { return controller; }
@@ -32,7 +33,11 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	public NetworkIdentity network() { return network; }
 	public boolean validNetworkReference() { return !invalidNetwork; }
 	public CoreOwnershipController ownership() { return ownership; }
-	public void bindNetwork(NetworkIdentity value) { if (network != null || invalidNetwork) throw new IllegalStateException("Core already bound"); network = value; setChanged(); }
+	public void bindNetwork(NetworkIdentity value) { if (network != null || invalidNetwork) throw new IllegalStateException("Core already bound"); network = value; energyPort = null; invalidateCapabilities(); setChanged(); }
+	public com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort energyPort() {
+		if (energyPort == null) energyPort = new com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort(this);
+		return energyPort;
+	}
 	public void initializeOwner(UUID player) { if (owner == null) { owner = player; setChanged(); requestRebuild(); } }
 	public boolean allowed(Player player) { return owner != null && owner.equals(player.getUUID()) && !isRemoved() && player.distanceToSqr(worldPosition.getCenter()) <= 64; }
 	public void toggleFace(Direction face) { closedFaces ^= 1 << face.ordinal(); setChanged(); requestRebuild(); }
@@ -68,6 +73,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 			catch (RuntimeException failure) { invalidNetwork = true; invalidNetworkData = tag.getCompound("network").copy(); }
 		}
 		ownership = new CoreOwnershipController(this);
+		energyPort = null;
 	}
 	@Override public Component getDisplayName() { return Component.translatable("block.productivebeesgenesis.bee_network_core"); }
 	@Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) { return allowed(player) ? new NetworkCoreMenu(id, inventory, this) : null; }

@@ -76,6 +76,8 @@ final class CentrifugeRestartFixture {
 				if (stage == Stage.SETTLED) work(level, service, NetworkCentrifugeService.Action.SETTLE, 0);
 			}
 		}
+		if (Boolean.getBoolean("pbg.centrifuge.sharedEnergy")) require(com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyService.migrate(
+				level, data, directory, member, data.checkpoint().revision(), false), "Shared energy fixture migration failed");
 		saved = data.checkpoint(); expected = finishCandidate(saved);
 		require(new MachineAssetStore(tile).empty(), "Managed machine retained real assets");
 		if (stage == Stage.STARVED) {
@@ -89,7 +91,7 @@ final class CentrifugeRestartFixture {
 		balances.merge(input, ProductAmount.of(amount), ProductAmount::add);
 		var ledger = new LedgerCheckpoint(current.ledger().revision() + 1, balances, current.ledger().transactions());
 		data.publish(new NetworkCheckpoint(current.identity(), current.revision() + 1, current.policyRevision(), ledger, current.transfers(),
-				current.discoveries(), current.members(), current.lanes(), current.scheduler()).restoredOwnership(current.ownedMachines()));
+				current.discoveries(), current.members(), current.lanes(), current.scheduler(), current.energy()).restoredOwnership(current.ownedMachines()));
 	}
 	NetworkCheckpoint finishCandidate(NetworkCheckpoint current) {
 		var state = current.ownedMachines().get(member).centrifuge();
@@ -97,7 +99,7 @@ final class CentrifugeRestartFixture {
 		for (var action : List.of(NetworkCentrifugeService.Action.ADVANCE, NetworkCentrifugeService.Action.FREEZE, NetworkCentrifugeService.Action.SETTLE)) {
 			state = current.ownedMachines().get(member).centrifuge();
 			var transaction = switch (action) {
-				case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, Integer.MAX_VALUE, true, true);
+				case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, Integer.MAX_VALUE, true, true, state.networkPowered() ? current.energy().stored() : state.energy());
 				case FREEZE -> CentrifugeWorkTransaction.freeze(state, current.ledger(), 0);
 				case SETTLE -> CentrifugeWorkTransaction.settle(state, current.ledger(), 0, current.policyRevision());
 				default -> throw new IllegalStateException();

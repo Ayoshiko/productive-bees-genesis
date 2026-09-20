@@ -67,7 +67,7 @@ public final class CentrifugeNetworkProbe {
 			// 唯一的开发初始库存注入，在启动任何离心作业前完成。
 			var ledger = new LedgerCheckpoint(before.ledger().revision() + 1, Map.of(input, ProductAmount.of(20)), before.ledger().transactions());
 			data.publish(new NetworkCheckpoint(before.identity(), before.revision() + 1, before.policyRevision(), ledger, before.transfers(),
-					before.discoveries(), before.members(), before.lanes(), before.scheduler()).restoredOwnership(before.ownedMachines()));
+					before.discoveries(), before.members(), before.lanes(), before.scheduler(), before.energy()).restoredOwnership(before.ownedMachines()));
 			policy = new ProductPolicyRegistry(PbProductPolicyCompiler.compile(level, before.policyRevision()).snapshot());
 			service = new NetworkCentrifugeService(data, directory, policy);
 			for (var record : data.checkpoint().ownedMachines().values()) members.add(record.claim().member());

@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 
 /** schema 1 的流式领域映射；集合直接进入对应候选索引，不生成整域 NBT。 */
 final class CheckpointSchema {
-	enum Kind { ROOT, NETWORK, DIRECTORY, IDENTITY, ORIGIN, KEY, AMOUNT_ENTRY, TRANSACTION, TRANSFER, DISCOVERY,
+	enum Kind { ROOT, NETWORK, ENERGY, DIRECTORY, IDENTITY, ORIGIN, KEY, AMOUNT_ENTRY, TRANSACTION, TRANSFER, DISCOVERY,
 		MEMBER, LANE, CAPACITY, EFFECTS, SCHEDULER, WATERMARKS, RULE, SELECTOR, MATCHER, LIMIT, LAYER, RESERVE_ENTRY, CLAIM, OWNERSHIP, RAW }
 	record Field(int type, Kind nested, Kind element) { }
 	record AmountEntry(ProductKey key, ProductAmount amount) { }
@@ -20,7 +20,8 @@ final class CheckpointSchema {
 	private static Map<Kind, Map<String, Field>> definitions() {
 		Map<Kind, Map<String, Field>> result = new EnumMap<>(Kind.class);
 		define(result, Kind.ROOT, "DataVersion:i data:NETWORK");
-		define(result, Kind.NETWORK, "schema:i identity:IDENTITY revision:l policy:l ledgerRevision:l balances:[AMOUNT_ENTRY transactions:[TRANSACTION transfers:[TRANSFER discoveries:[DISCOVERY members:[MEMBER lanes:[LANE scheduler:SCHEDULER ownership:[OWNERSHIP");
+		define(result, Kind.NETWORK, "schema:i energy:ENERGY identity:IDENTITY revision:l policy:l ledgerRevision:l balances:[AMOUNT_ENTRY transactions:[TRANSACTION transfers:[TRANSFER discoveries:[DISCOVERY members:[MEMBER lanes:[LANE scheduler:SCHEDULER ownership:[OWNERSHIP");
+		define(result, Kind.ENERGY, "stored:l capacity:l");
 		define(result, Kind.DIRECTORY, "schema:i revision:l networks:[IDENTITY claims:[CLAIM");
 		define(result, Kind.CLAIM, "network:u member:u transfer:u origin:ORIGIN machine:s");
 		define(result, Kind.OWNERSHIP, "claim:CLAIM phase:s assets:RAW fingerprint:s failure:s bees:RAW centrifuge:RAW");
@@ -163,12 +164,13 @@ final class CheckpointSchema {
 				case NETWORK -> {
 					if (integer("schema") != NetworkCheckpointCodec.SCHEMA) throw new IllegalArgumentException("Unsupported network schema");
 					var network = (NetworkRestoreState) state; network.identity = value("identity"); network.revision = nonnegative("revision");
-					network.policyRevision = nonnegative("policy"); network.ledgerRevision = nonnegative("ledgerRevision"); network.scheduler = value("scheduler"); yield network;
+					network.policyRevision = nonnegative("policy"); network.ledgerRevision = nonnegative("ledgerRevision"); network.scheduler = value("scheduler"); network.energy = value("energy"); yield network;
 				}
 				case DIRECTORY -> {
 					if (integer("schema") != 2) throw new IllegalArgumentException("Unsupported directory schema");
 					var index = (DirectoryState) state; index.revision = nonnegative("revision"); yield index;
 				}
+				case ENERGY -> new com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyAccount(number("stored"), number("capacity"));
 				case IDENTITY -> new NetworkIdentity(uuid("network"), uuid("controller"), uuid("owner"), number("generation"), value("origin"));
 				case CLAIM -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim(uuid("network"), uuid("member"), uuid("transfer"), value("origin"), string("machine"));
 				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding), CentrifugeRecordCodec.decode(value("centrifuge"), validateKey));

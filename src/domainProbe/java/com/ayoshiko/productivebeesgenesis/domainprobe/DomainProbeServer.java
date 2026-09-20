@@ -15,6 +15,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class DomainProbeServer {
 	private static JsonObject pendingReport;
 	private static boolean persistenceComplete;
+	private static boolean energyStarted;
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
@@ -65,6 +66,9 @@ public final class DomainProbeServer {
 				boolean beesComplete = BeeNetworkProbe.advance(event.getServer(), pendingReport);
 				boolean centrifugesComplete = com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.advance(event.getServer(), pendingReport);
 				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete || !beesComplete || !centrifugesComplete) return;
+				// 拓扑夹具会恢复全局开关；供能夹具在它完成后独立验证开关行为。
+				if (!energyStarted) { com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkEnergyProbe.start(event.getServer()); energyStarted = true; return; }
+				if (!com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkEnergyProbe.advance(event.getServer(), pendingReport)) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }

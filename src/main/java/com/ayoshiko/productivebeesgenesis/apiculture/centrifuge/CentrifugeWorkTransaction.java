@@ -10,9 +10,14 @@ public final class CentrifugeWorkTransaction {
 	private final CentrifugeWorkState expectedState, state;
 	private final LedgerCheckpoint expectedLedger, ledger;
 	private final int executedTicks;
-	private final long expectedPolicy;
+	private final long expectedPolicy, energyUsed;
 	private CentrifugeWorkTransaction(CentrifugeWorkState source, LedgerCheckpoint balances,
 			CentrifugeWorkState next, LedgerCheckpoint result, int ticks, long expectedPolicy) {
+		this(source, balances, next, result, ticks, expectedPolicy, 0);
+	}
+	private CentrifugeWorkTransaction(CentrifugeWorkState source, LedgerCheckpoint balances,
+			CentrifugeWorkState next, LedgerCheckpoint result, int ticks, long expectedPolicy, long energyUsed) {
+		this.energyUsed = energyUsed;
 		expectedState = source; expectedLedger = balances; state = next; ledger = result; executedTicks = ticks; this.expectedPolicy = expectedPolicy;
 	}
 	public boolean matches(CentrifugeWorkState current, LedgerCheckpoint balances) { return expectedState == current && expectedLedger == balances; }
@@ -20,16 +25,22 @@ public final class CentrifugeWorkTransaction {
 	public CentrifugeWorkState state() { return state; }
 	public LedgerCheckpoint ledger() { return ledger; }
 	public int executedTicks() { return executedTicks; }
+	public long energyUsed() { return energyUsed; }
 
 	/** 输入预留采用所有权移动：余额减去的量只存在于新作业，不受普通提取或其它 lane 使用。 */
 	public static CentrifugeWorkTransaction assign(CentrifugeWorkState state, LedgerCheckpoint ledger,
 			ProductPolicyRegistry policy, int lane, CentrifugeRecipePlan plan, int requested, long seed) {
+		return assign(state, ledger, policy, lane, plan, requested, seed, state.energy());
+	}
+	public static CentrifugeWorkTransaction assign(CentrifugeWorkState state, LedgerCheckpoint ledger,
+			ProductPolicyRegistry policy, int lane, CentrifugeRecipePlan plan, int requested, long seed, long energyBudget) {
+		checkBudget(state, energyBudget);
 		if (lane < 0 || lane >= state.laneCount() || requested <= 0) throw new IllegalArgumentException("Invalid lane assignment");
 		if (state.jobs().containsKey(lane) || plan.recipeRevision() != policy.snapshot().revision()) return null;
 		for (var output : plan.outputs()) if (!policy.evaluate(output.key()).allowed()) return null;
 		var candidate = restore(policy, ledger);
 		int operations = (int) Math.min(Math.min(requested, plan.maxParallel()), candidate.available(plan.input()).longSaturated());
-		operations = CentrifugeEnergyPricing.affordableOperations(plan.unitEnergyPerTick(), operations, state.energy());
+		operations = CentrifugeEnergyPricing.affordableOperations(plan.unitEnergyPerTick(), operations, energyBudget);
 		if (operations == 0) return null;
 		// 拒绝溢出能耗，不把饱和值当作真实报价。
 		plan.energyPerTick(operations);
@@ -40,13 +51,18 @@ public final class CentrifugeWorkTransaction {
 	}
 	public static CentrifugeWorkTransaction advance(CentrifugeWorkState state, LedgerCheckpoint ledger,
 			int lane, int ticks, boolean loaded, boolean enabled) {
+		return advance(state, ledger, lane, ticks, loaded, enabled, state.energy());
+	}
+	public static CentrifugeWorkTransaction advance(CentrifugeWorkState state, LedgerCheckpoint ledger,
+			int lane, int ticks, boolean loaded, boolean enabled, long energyBudget) {
+		checkBudget(state, energyBudget);
 		if (ticks < 0) throw new IllegalArgumentException("Negative work budget");
 		var job = state.jobs().get(lane);
 		if (job == null || !loaded || !enabled) return null;
-		var result = job.advance(ticks, state.energy());
+		var result = job.advance(ticks, energyBudget);
 		if (result.executedTicks() == 0) return null;
 		return new CentrifugeWorkTransaction(state, ledger,
-				state.replace(lane, result.job(), state.energy() - result.energyUsed()), ledger, result.executedTicks(), -1);
+				state.replace(lane, result.job(), state.networkPowered() ? 0 : state.energy() - result.energyUsed()), ledger, result.executedTicks(), -1, result.energyUsed());
 	}
 	public static CentrifugeWorkTransaction freeze(CentrifugeWorkState state, LedgerCheckpoint ledger, int lane) {
 		var job = state.jobs().get(lane);
@@ -78,6 +94,9 @@ public final class CentrifugeWorkTransaction {
 			next = candidate.checkpoint();
 		}
 		return new CentrifugeWorkTransaction(state, ledger, state.replace(lane, null, state.energy()), next, 0, policyRevision);
+	}
+	private static void checkBudget(CentrifugeWorkState state, long budget) {
+		if (budget < 0 || !state.networkPowered() && budget != state.energy()) throw new IllegalArgumentException("Foreign centrifuge energy budget");
 	}
 	private static ProductLedger restore(ProductPolicyRegistry policy, LedgerCheckpoint ledger) {
 		return ProductLedger.restore(policy, Math.addExact(ledger.transactions().size(), 1), ledger);

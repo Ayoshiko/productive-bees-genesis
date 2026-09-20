@@ -13,16 +13,16 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 @EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCoreMenu> {
-	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); imageWidth = 260; imageHeight = 195; }
+	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); imageWidth = 260; imageHeight = 217; }
 	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) { event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new); }
 	@Override protected void init() {
 		super.init();
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.rebuild"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 0))
-				.bounds(leftPos + 10, topPos + 140, 240, 20).build());
+				.bounds(leftPos + 10, topPos + 162, 240, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.join"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 1))
-				.bounds(leftPos + 10, topPos + 166, 116, 20).build());
+				.bounds(leftPos + 10, topPos + 188, 116, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.return"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 2))
-				.bounds(leftPos + 134, topPos + 166, 116, 20).build());
+				.bounds(leftPos + 134, topPos + 188, 116, 20).build());
 	}
 	@Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
 		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xff292720);
@@ -33,5 +33,8 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.state." + menu.value(0)), 10, 32, 0xffdddddd, false);
 		for (int i = 1; i <= 4; i++) graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.count." + i, menu.value(i)), 10, 35 + i * 16, 0xffdddddd, false);
 		graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.ownership." + menu.ownershipStatus()), 10, 118, 0xfff0d78d, false);
+		graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.energy",
+				com.ayoshiko.productivebeesgenesis.util.NumberFormatter.formatCompact(menu.energy(false)),
+				com.ayoshiko.productivebeesgenesis.util.NumberFormatter.formatCompact(menu.energy(true))), 10, 140, 0xffdddddd, false);
 	}
 }

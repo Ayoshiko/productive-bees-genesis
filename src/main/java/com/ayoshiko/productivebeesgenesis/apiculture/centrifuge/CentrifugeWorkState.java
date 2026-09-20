@@ -5,20 +5,31 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** 逐成员有限 FE 与占用 lane；空闲 lane 不分配占位作业。 */
+/** 逐成员供能模式与占用 lane；共享模式不保留本地 FE，空闲 lane 不分配占位作业。 */
 public record CentrifugeWorkState(UUID member, long revision, int laneCount, long energy,
-		long energyCapacity, Map<Integer, CentrifugeJob> jobs) {
+		long energyCapacity, Map<Integer, CentrifugeJob> jobs, boolean networkPowered) {
+	public CentrifugeWorkState(UUID member, long revision, int laneCount, long energy, long energyCapacity, Map<Integer, CentrifugeJob> jobs) {
+		this(member, revision, laneCount, energy, energyCapacity, jobs, false);
+	}
 	public CentrifugeWorkState {
 		Objects.requireNonNull(member); jobs = Map.copyOf(jobs);
-		if (revision < 0 || laneCount < 1 || energy < 0 || energyCapacity < energy) throw new IllegalArgumentException("Invalid centrifuge state");
+		if (revision < 0 || laneCount < 1 || energy < 0 || energyCapacity < energy || networkPowered && energy != 0) throw new IllegalArgumentException("Invalid centrifuge state");
 		var ids = ConcurrentHashMap.newKeySet();
 		for (var entry : jobs.entrySet()) if (entry.getKey() < 0 || entry.getKey() >= laneCount || !ids.add(entry.getValue().id()))
 			throw new IllegalArgumentException("Duplicate or out of range centrifuge lane");
 	}
 	public boolean drained() { return jobs.isEmpty(); }
+	public CentrifugeWorkState transferEnergy() {
+		if (networkPowered) return this;
+		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, 0, energyCapacity, jobs, true);
+	}
 	public void validateSuccessor(CentrifugeWorkState next) {
 		if (!member.equals(next.member) || next.revision != Math.incrementExact(revision) || laneCount != next.laneCount
 				|| next.energy > energy || energyCapacity != next.energyCapacity) throw new IllegalArgumentException("Invalid centrifuge successor");
+		if (networkPowered != next.networkPowered) {
+			if (networkPowered || !jobs.equals(next.jobs) || next.energy != 0) throw new IllegalArgumentException("Invalid energy transfer");
+			return;
+		}
 		var lanes = ConcurrentHashMap.<Integer>newKeySet(); lanes.addAll(jobs.keySet()); lanes.addAll(next.jobs.keySet());
 		int changed = 0;
 		long spent = 0;
@@ -37,12 +48,12 @@ public record CentrifugeWorkState(UUID member, long revision, int laneCount, lon
 				spent = Math.multiplyExact(job.progress() - old.progress(), old.plan().energyPerTick(old.operations()));
 			}
 		}
-		if (changed != 1 || energy - next.energy != spent) throw new IllegalArgumentException("Expected one exactly funded centrifuge lane transition");
+		if (changed != 1 || !networkPowered && energy - next.energy != spent) throw new IllegalArgumentException("Expected one exactly funded centrifuge lane transition");
 	}
 	CentrifugeWorkState replace(int lane, CentrifugeJob job, long remainingEnergy) {
 		if (lane < 0 || lane >= laneCount || remainingEnergy < 0 || remainingEnergy > energy) throw new IllegalArgumentException("Invalid centrifuge successor");
 		var next = new ConcurrentHashMap<>(jobs);
 		if (job == null) next.remove(lane); else next.put(lane, job);
-		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, remainingEnergy, energyCapacity, next);
+		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, remainingEnergy, energyCapacity, next, networkPowered);
 	}
 }

@@ -22,6 +22,7 @@ final class NetworkRestoreState {
 	private record LaneId(UUID member, int index) { }
 	private final Set<LaneId> laneIds = ConcurrentHashMap.newKeySet();
 	NetworkIdentity identity;
+	com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyAccount energy;
 	long revision, policyRevision, ledgerRevision;
 	CheckpointSchema.SchedulerState scheduler;
 	private int phase;
@@ -81,6 +82,7 @@ final class NetworkRestoreState {
 				if (checks.hasNext()) {
 					var record = (com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord) checks.next();
 					NetworkCheckpoint.validateOwnership(record, identity, policyRevision);
+					NetworkCheckpoint.validateEnergyOwnership(record, energy);
 				} else complete = true;
 			}
 			default -> throw new IllegalStateException("Invalid validation phase");

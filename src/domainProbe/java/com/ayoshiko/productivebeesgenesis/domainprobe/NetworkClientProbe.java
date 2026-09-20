@@ -57,6 +57,7 @@ public final class NetworkClientProbe {
 				require(menu.value(1) == 2 && menu.value(2) > 0 && menu.value(3) == 1, "Client counts did not synchronize");
 				capture(client, "before"); press(screen, "join"); step = 2; settled = 0;
 			} else if (step == 2 && ClientOwnershipFixture.stage == 2 && menu.ownershipStatus() == CoreOwnershipController.Status.MANAGED.ordinal()) {
+				require(menu.energy(false) == ClientOwnershipFixture.ENERGY_STORED && menu.energy(true) == ClientOwnershipFixture.ENERGY_CAPACITY, "Long FE values did not synchronize exactly");
 				capture(client, "managed"); press(screen, "return"); step = 3; settled = 0;
 			} else if (step == 3 && ClientOwnershipFixture.stage == 3 && menu.ownershipStatus() == CoreOwnershipController.Status.STANDALONE.ordinal()) {
 				capture(client, "returned"); client.player.closeContainer(); step = 5;
@@ -77,7 +78,8 @@ public final class NetworkClientProbe {
 		finished = true;
 		var report = new JsonObject(); report.addProperty("passed", error == null); report.addProperty("completedStage", ClientOwnershipFixture.stage);
 		report.addProperty("menuCountsAndButtons", error == null); report.addProperty("permissionsAndStaleMenu", error == null);
-		report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
+			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
+			report.addProperty("longCoreEnergySynchronized", error == null);
 		if (error != null) { report.addProperty("failure", error.toString()); com.mojang.logging.LogUtils.getLogger().error("P2_CLIENT_FAILED", error); }
 		try { Files.createDirectories(Path.of("results")); Files.writeString(Path.of("results/client.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
 		catch (Exception failure) { com.mojang.logging.LogUtils.getLogger().error("Cannot write client probe report", failure); }

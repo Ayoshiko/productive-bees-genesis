@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
@@ -14,7 +15,7 @@ public final class NetworkBeeService {
 	public NetworkBeeService(NetworkSavedData authority, NetworkDirectory directory) { this.authority = authority; this.directory = directory; }
 	public boolean activate(ServerLevel level, UUID member, long expectedCheckpoint, long capabilityRevision) {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
-		if (current.revision() != expectedCheckpoint || record == null || record.bees() != null) return false;
+		if (!ModConfig.SERVER.beeNetwork.enabled.get() || current.revision() != expectedCheckpoint || record == null || record.bees() != null) return false;
 		var hive = member(level, record); if (hive == null) return false;
 		var state = StaticApiaryAdapter.compile(level, hive, record, current.policyRevision(), capabilityRevision);
 		authority.publish(current.withOwnership(record.withBees(state))); directory.requestSave(authority); return true;
@@ -27,11 +28,11 @@ public final class NetworkBeeService {
 		if (ticks > 0 && (!StaticApiaryAdapter.currentPlan(level, hive, record.bees().bee(slot)) || recipeRevision != current.policyRevision())) return BeeWorkExecutor.Status.STALE_PLAN;
 		boolean flower = record.bees().feeding() != null && com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.flower(
 				record.bees().feeding(), slot, net.minecraft.resources.ResourceLocation.parse(record.bees().bee(slot).plan().beeType()), level.registryAccess());
-		var context = new BeeWorkExecutor.Context(true, hive.canFunction(), flower,
+		var context = new BeeWorkExecutor.Context(true, hive.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), flower,
 				recipeRevision, capabilityRevision, new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
-		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget);
+		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget, record.bees().networkPowered() ? current.energy().stored() : record.bees().energy());
 		if (!simulate && result.status() == BeeWorkExecutor.Status.READY) {
-			authority.publish(current.withOwnership(record.withBees(result.candidate()))); directory.requestSave(authority);
+			authority.publish(current.applyBeeWork(member, result)); directory.requestSave(authority);
 		}
 		return result.status();
 	}

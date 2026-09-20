@@ -68,6 +68,7 @@ public final class CentrifugeRestartProbe {
 			report.addProperty("ae2Loaded", net.neoforged.fml.ModList.get().isLoaded("ae2"));
 			report.addProperty("producerPid", reading ? producerPid : ProcessHandle.current().pid());
 			report.addProperty("currentPid", ProcessHandle.current().pid());
+			report.addProperty("sharedEnergyStages", fixtures.stream().filter(f -> f.saved.ownedMachines().get(f.member).centrifuge().networkPowered()).count());
 			report.addProperty("passed", true); return true;
 		}
 		var fixture = fixtures.get(cursor++ % fixtures.size());
@@ -120,13 +121,14 @@ public final class CentrifugeRestartProbe {
 				fixture.work(level, service, NetworkCentrifugeService.Action.SETTLE, 0);
 			}
 			var result = fixture.data.checkpoint();
-			require(result.ledger().balances().equals(fixture.expected.ledger().balances())
+			require(result.energy().equals(fixture.expected.energy()) && result.ledger().balances().equals(fixture.expected.ledger().balances())
 					&& result.ownedMachines().get(fixture.member).centrifuge().equals(fixture.expected.ownedMachines().get(fixture.member).centrifuge()),
 					"Recovered work changed quantities or energy at " + fixture.stage);
 			fixture.tile.setControlType(RedstoneControl.HIGH);
 			require(core.ownership().command(false), "Recovered completed work cannot return"); fixture.started = true; return false;
 		}
 		if (fixture.started && core.ownership().status() == CoreOwnershipController.Status.STANDALONE) {
+			require(fixture.data.checkpoint().energy().equals(fixture.expected.energy()), "Returning a member changed the shared balance");
 			var returned = new MachineAssetStore(fixture.tile).capture(level.registryAccess()); var original = fixture.original.copy();
 			original.putLong("energy", fixture.expected.ownedMachines().get(fixture.member).centrifuge().energy());
 			require(returned.equals(new AssetImage(original)), "Restart return duplicated or lost sealed old outputs");

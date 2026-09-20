@@ -13,7 +13,7 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 5;
+	public static final int SCHEMA = 6;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
@@ -64,7 +64,7 @@ public final class NetworkCheckpointCodec {
 	}
 	/** 元数据与余额使用同一个 checkpoint；调用者不得分别捕获不同 revision。 */
 	static CompoundTag metadata(NetworkCheckpoint checkpoint) {
-		var tag = new CompoundTag(); tag.putInt("schema", SCHEMA); tag.put("identity", identity(checkpoint.identity()));
+		var tag = new CompoundTag(); tag.putInt("schema", SCHEMA); tag.put("energy", EnergyRecordCodec.encode(checkpoint.energy())); tag.put("identity", identity(checkpoint.identity()));
 		tag.putLong("revision", checkpoint.revision()); tag.putLong("policy", checkpoint.policyRevision()); tag.putLong("ledgerRevision", checkpoint.ledger().revision());
 		var transactions = new ListTag(); checkpoint.ledger().transactions().forEach(value -> transactions.add(transaction(value))); tag.put("transactions", transactions);
 		var transfers = new ListTag(); checkpoint.transfers().forEach(value -> transfers.add(transfer(value))); tag.put("transfers", transfers);
@@ -93,11 +93,12 @@ public final class NetworkCheckpointCodec {
 		var members = new ArrayList<MemberCapabilitySnapshot>(); StrictNbt.list(tag, "members").forEach(raw -> members.add(CapacityRecordCodec.readMember((CompoundTag) raw)));
 		var lanes = new ArrayList<VirtualLaneState>(); StrictNbt.list(tag, "lanes").forEach(raw -> lanes.add(CapacityRecordCodec.readLane((CompoundTag) raw)));
 		var checkpoint = new NetworkCheckpoint(readIdentity(StrictNbt.compound(tag, "identity")), StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "policy"),
-				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")));
+				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")), EnergyRecordCodec.decode(StrictNbt.compound(tag, "energy")));
 		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
 		for (var raw : StrictNbt.list(tag, "ownership")) {
 			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding);
 			NetworkCheckpoint.validateOwnership(record, checkpoint.identity(), checkpoint.policyRevision());
+			NetworkCheckpoint.validateEnergyOwnership(record, checkpoint.energy());
 			owned.add(record);
 		}
 		return checkpoint.restoredOwnership(owned.finish());
