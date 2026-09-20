@@ -1,12 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.util.MekanismUtils;
 import net.minecraft.core.HolderLookup;
@@ -507,13 +504,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * {@code 1.0 + Σ(factor_i × count_i)}
 	 */
 	private float computeProductivityMultiplier() {
-		if (!BalanceConfig.centrifugeProductivityAffectsOutput()) return 1.0f;
-		double mod = 1.0D;
-		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_2);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_3);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledCount(PbUpgradeType.PRODUCTIVITY_4);
-		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
+		return CentrifugePbMultipliers.productivity(this::getInstalledCount);
 	}
 
 	/**
@@ -522,14 +513,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * PRODUCTIVITY/2/3/4 分别贡献 4/8/16/32。
 	 */
 	private int computeProductivityParallelModifier() {
-		long modifier = SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY), 4);
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_2), 8));
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_3), 16));
-		modifier = SaturatingMath.saturatingAdd(modifier,
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.PRODUCTIVITY_4), 32));
-		return Math.max(1, SaturatingMath.saturatingToInt(modifier));
+		return CentrifugePbMultipliers.parallel(this::getInstalledCount);
 	}
 
 	/**
@@ -538,24 +522,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 公式：{@code mekTimeMultiplier / (1 + timeBonus × effectiveTimeUpgrades)}
 	 */
 	private float computeTimeMultiplier() {
-		float mekTimeMultiplier = getMekSpeedTimeMultiplier();
-		long effectiveTimeUpgrades = SaturatingMath.saturatingAdd(
-				getInstalledCount(PbUpgradeType.TIME),
-				SaturatingMath.saturatingMultiply(getInstalledCount(PbUpgradeType.TIME_2), 2));
-		float timeBonus = PbUpgradeConfig.timeBonus();
-		if (Float.isNaN(timeBonus) || timeBonus <= 0.0f) return mekTimeMultiplier;
-		float pbTimeDivisor = SaturatingMath.positiveFiniteFloat(
-				1.0D + (double) timeBonus * effectiveTimeUpgrades, 1.0f);
-		return SaturatingMath.positiveFiniteFloat((double) mekTimeMultiplier / pbTimeDivisor, 1.0f);
+		return CentrifugePbMultipliers.time(this::getInstalledCount, getMekSpeedTimeMultiplier());
 	}
 
 	/**
 	 * 计算稳定性概率加成（不走缓存）— 供 {@link #refreshMultiplierCacheIfNeeded} 调用
 	 */
 	private float computeStabilityBonus() {
-		int count = getInstalledCount(PbUpgradeType.STABILITY);
-		return (float) PbOutputChance.stabilityBonus(
-				count, ProductiveBeesConfig.UPGRADES.stabilityChanceIncrease.get());
+		return CentrifugePbMultipliers.stability(this::getInstalledCount);
 	}
 
 	/**
