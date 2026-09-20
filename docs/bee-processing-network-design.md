@@ -915,6 +915,35 @@ checkpoint schema 升至 4，增加喂食账户。普通解码与预算解码均
 
 共享后两只铁蜂仍按 2＋8＝10 个蜜脾、200 FE 结算，迁移、移动和交还前后花样本总数均为 1。D14 基础范围完成；没有新增玩家界面或开启自动生产，没有 MSPT 性能结论。下一步进入 D15，D16 再组装外部有限供给、统一能源与正式调度。
 
+### 10.25 D15a 共享离心计算内核与物理路径回接（2026-09-20）
+
+D14 已自审并以 `f624e86ddde7bed3413305e94b96160b86d4a1cb` 提交推送，开始本步时工作区干净且与远端一致。进入 D15 前再次对五个独立 Git 参考仓库执行 `pull --ff-only`；DataEnergistics 更新至 `47a416e0`，其余四个 HEAD 不变，详情见 13.2。固定 PB／Mekanism 源码继续与本项目运行 JAR 对齐。
+
+将 `PbVirtualTickPlan` 移入 `apiculture.centrifuge`，公开纯参数入口；`CentrifugeEnergyPricing` 承担每进程计费和可负担并行量，原 `MekCentrifugeEnergyScaling` 保留物理容量／升级／AE2 供能职责并委托该算法。物理 PB 和万象处理器调用同一个计划。未改变现有分段推进、少量输入、缺电、零 tick 折算和高并行计费算法，也未给能力池提供合并进程后的额外能耗折扣。
+
+`CentrifugeProductionSampling` 只计算有界段的基础产量，`PbRecipeOutputSampler.QuantityOutput` 传递只读物品／流体模板、基础数量和倍率；`PbRecipeCompleter` 的单次和批量路径均已回接。基础量最大为 `Integer.MAX_VALUE²`，可精确保存在 long；网络接收方再用 `ProductAmount.multiply` 应用倍率，物理接收方继续按既有 int／long 边界饱和投影。没有把巨大数量展开成物品栈列表。回调只写本次私有结果；失败必须丢弃整个未提交结果，不能直接在回调内执行库存、AE2 或世界 IO。
+
+本步固定以下语义，作为 D15b 的实施约束：
+
+- **输入与倍率分离。** PB 原版 `CentrifugeBlockEntity` 把生产力数量同时用于扣输入；本项目既有行为是每完成一次操作扣 1 个输入，生产力仅放大物品和流体输出。本步保留后者，不能因为参考原版而改变已经采用的平衡。
+- **批量概率属于兼容模式。** 单次保留概率检查的 nextFloat 与数量 nextLong 顺序，必定输出不消耗概率随机数。多次采用 `floor(Np)` 保底加剩余抽样、数量和沿用 CLT；它不是原始逐次二项分布，整数 Np 会得到确定的成功次数。网络必须记录有界采样段和冻结结果，不得把不同批量切分称为同一随机分布，更不能在重试时重抽已付费产物。
+- **每进程独立计费。** 16 并行以内线性，之后每翻倍增加 1 个计费操作；例如两个 17 并行进程每 tick 共计 34 份单价，不能合并成 34 并行后只付 18 份。Mekanism `CachedRecipe.process` 的进度／输入／输出职责可参考，不能让网络运行隐藏方块实体 ticker 来借用其副作用。
+- **进度值不足以恢复网络作业。** `PbVirtualTickPlan` 保留物理路径的预算分段合同；它本身不拥有配方、输入或付款收据。D15b 必须固定作业的成员／lane、配方与能力版本、并行批次、周期、单位 FE、已付费余数和预留输入；周期中途不能因补料、供电恢复、移机或升级而用旧余数完成更多操作。拆机先排空或转入唯一可恢复托管记录，不能免费重开。
+- **实际接受量与通知分离。** ECO `ECOCraftingDispatchAccounting.apply/applyExact` 先把已接受作业量、结果与余料记入账本，再通知观察者；DataEnergistics `routeExact/consumeCurrent` 只减少已接受数量，余量仍归原记录。借鉴这两条边界，网络内部仍须由自己的 checkpoint 原子提交，外部异常的未知接受量不能当作零重试。
+
+物理缓存仍在配方重载时失效，采样前过滤蜡／蜂蜜；精华、粗矿等升级转换继续留在物理适配器。D15a 没有因此声明这些升级已完成网络适配，也没有把物理 pending 的宽容 NBT 读取用作网络恢复器。新增内核无全局可变状态，数量接收器按物理 completer 生命周期复用，未增加逐操作扫描或无界缓存。
+
+| 验证 | 证据 | 结果与范围 |
+| --- | --- | --- |
+| 数量／周期／能耗回归 | `build/p3-d15a-focused.log` | 64 个固定种子覆盖单次与批量、概率／稳定性、负范围归一化、大数量及后续随机序列；原有周期与逐 lane 计费基线通过 |
+| 无 AE2 专服 | `build/network-probe-p3-d15a-noae2/results/domain.json` | 真实基础离心机输入／输出／流体罐、倍率只放大输出、配方切换、暂停余数与恢复通过；完整域探针和正常停服保存通过 |
+| AE2＋Applied Flux 专服 | `build/network-probe-p3-d15a-ae2-final/results/domain.json` | 相同离心行为与旧域探针通过；物品、流体各自精确记录 `2147483647³`，模板组件不变、采样前副产物过滤通过；3 周期合计 300 FE |
+| 全量／构建／产物 | `build/p3-d15a-verified.log`；`build/test-results/test`；`build/reports/release-artifact.txt` | 797 项中 795 通过、2 项既有跳过，0 失败；`test build verifyReleaseArtifact compileDomainProbeJava` 通过，发布 JAR 不含 domainProbe 源集类 |
+
+首次组合验证的专服通过，但两项源码接线断言因本轮写入的 CRLF 行尾失败；已按仓库 `.gitattributes` 恢复 LF，未放宽断言，最终全量复验通过。原日志保留在 `build/p3-d15a-final.log`。自审确认数量算法、逐 lane 计费和已有 pending 处理职责保持，新增内核不连接外部存储或生产 ticker。
+
+D15a 范围完成。专服配方为确定性蜜脾／蜜脾块测试夹具，验证真实处理器、槽位与罐的交互；不代表全部数据包配方、机器升级或特殊蜂种已通过网络验收。D15b 仍须实现网络作业／库存／严格恢复与异构进程分配，整个 D15 保持未完成，网络自动生产开关仍默认关闭；本步没有 Spark／MSPT 性能结论。
+
 ## 11. 阶段路线与可独立评审的提交
 
 以下为开发清单；D01–D08 的交付和验证边界见第 10.4–10.11 节，D09a／D09b1／D09b2 见第 10.12–10.15 节，D09b3a 见第 10.16 节，D09b3b／c 见第 10.17 节，D10–D12 的 P2 退出记录见 10.21。生产新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
@@ -990,6 +1019,8 @@ D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产
 
 **D15 — 虚拟离心能力池。** 前置：D03、D06、D08、D12。从 `PbRecipeContext` 中抽出计算和数量输出小接口；保留 `PbVirtualTickPlan` 的周期／能耗语义，替代物理槽位与罐操作。实现一类离心机及异构进程分配，支持蜜脾和蜜脾块、物品与流体结果。通过条件为逐机升级分别生效、累计吞吐正确、处理中拆机不免费重开、既有自动离心输出不被二次离心。
 
+**D15 拆分验收：** D15a 共享数量／周期／计费内核、物理回接和回归见 10.25；D15b 实现基础离心机的权威作业、精确投入／结果结算、异构 lane 分配、所有权迁移和严格 checkpoint 恢复。D15b 还须测升级变化／补料／缺电发生在周期中途、暂停与重启、物品＋流体、蜜脾块和自动离心来源防重入。D15a 单独通过不能解除 D16 的 D15 前置条件。
+
 **D16 — 统一调度与能量账户。** 前置：D13–D15。组装 `NetworkRuntime`，按真实 tick 编排到期生产、离心、回收、通知；实现统一 FE 入口、工作段预算、全服公平及压缩积压状态。核心最小菜单通过正式事务提供手动补料、有限数量取出和装笼，保证原型闭环不依赖后续完整终端／端口或调试指令。测试只有蜂箱／只有离心机／完整闭环、缺电、缺料、无适用配方、暂停和重启。通过条件为无 AE2 也能完整运行，已付费工作不因预算丢失，全部成员实际生产计数仍为零。
 
 ### 11.5 P4：管理终端与真实升级事务
@@ -1038,7 +1069,7 @@ D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产
 
 纯新增服务失败可以撤销本步；已被旧路径调用的抽象改动必须同时回退适配器并跑独立机回归；已有测试世界数据后，只能使用兼容读取／恢复模式或恢复一致备份，不能随便删除序列化字段和退回不认识网络的旧 JAR。调试指标放既有日志／开发统计入口，按需启用，不为每步新增操作指南。
 
-P1／D08 已验收并推送；P2／D09–D12 已以 `f960f32` 提交推送，P3／D13 已以 `583ecee` 提交推送。D14 的本轮工作区实现与证据见 10.24，后续进入 D15。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
+P1／D08 已验收并推送；P2／D09–D12 已以 `f960f32` 提交推送，P3／D13 已以 `583ecee` 提交推送。D14 已以 `f624e86` 提交推送，证据见 10.24；D15a 共享内核与物理回接见 10.25，D15b 网络作业仍待实现。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
 
 ### 11.10 执行效率与逐步参考清单
 
@@ -1071,7 +1102,7 @@ P1／D08 已验收并推送；P2／D09–D12 已以 `f960f32` 提交推送，P3�
 ### 13.1 本仓库源码入口
 
 - [蜂箱分组与进度](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeSlotTickProcessor.java)、[产出处理](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProduceProcessor.java)、[蜜蜂数据](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeSlot.java)。说明可以复用已有业务知识，但当前仍与成员槽位和方块上下文耦合。
-- [离心上下文](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeContext.java)、[虚拟刻计划](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbVirtualTickPlan.java)、[批量采样](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/BatchProbabilitySampler.java)。采样源码明确区分小批精确、大批近似，设计与验收必须如实反映。
+- [离心上下文](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeContext.java)、[共享虚拟刻计划](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/centrifuge/PbVirtualTickPlan.java)、[共享数量采样](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/centrifuge/CentrifugeProductionSampling.java)。离心批量保底与原始二项分布不同，数量和仍采用现有近似，设计与验收必须如实反映。
 - [现有 AE2 外部存储](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CentrifugeExternalAeStorage.java)、[节点生命周期](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2GridNodeManager.java)。已支持 long 数量接口、物品／流体提取和实际插入数量，但后端是本机物理槽位。
 
 ### 13.2 本地其他模组参考
@@ -1082,7 +1113,7 @@ AE2LT 唯一主参考为 `E:/mczuixin/MCkaifa/1.21.1kaifa/闪电全版本/ae2lt-
 
 ECO 主参考为用户指定的 [v21.1.2 维护分支](https://github.com/DancingSnow0517/NeoECOAEExtension/tree/v21.1.2)，2026-09-20 再次拉取后 HEAD 仍为 `1cae738ad9761d8c06b1902f828dc06dc57548b6`（“优化网络同步增量传输与发包预算”），拉取到新 tag `21.2.0-beta4`；分支与远端一致，工作树干净。gradle.properties 声明 mod_version 为 `21.2.0-beta4`，分支名与发布版本号分别记录。旧 `neoecoaeextension-21.2.0-source` 仅保留作历史比较。
 
-DataEnergistics 的 [1.21 分支](https://github.com/ModularMCLib/DataEnergistics) 位于 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，2026-09-20 从 `dbdfe17e` 快进至 `26219f0209903d2502dc51ba1af2d95c1d53b7b0`（“修复开放问题并集中注册三位一体恢复命令 #347”），版本仍为 `3.3.0`。本轮重点复核 `routeExact` 的精确接收与剩余量，以及 `consumeCurrent(BigInteger)` 的扣减；工作树干净。原 `dataenergistics-3.1.1-source` 仅保留历史比较。
+DataEnergistics 的 [1.21 分支](https://github.com/ModularMCLib/DataEnergistics) 位于 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，2026-09-20 先更新至 `26219f02`，D15 前再次拉取并快进至 `47a416e0aa7f161d8f229cd6b263fcce6c2ac207`（“统一 ProjectE 依赖声明与版本管理 #348”，只涉及依赖声明文件），版本仍为 `3.3.0`。本轮重点复核 `routeExact` 的精确接收与剩余量，以及 `consumeCurrent(BigInteger)` 的扣减；工作树干净。原 `dataenergistics-3.1.1-source` 仅保留历史比较。
 
 Useless 主参考为 `.tmp_useless_src` 的 [1.21 分支](https://github.com/SorrowMist/UselessMod/tree/1.21)，2026-09-20 从 `267b38a6` 快进至 `951e8bd8fda9b07d596b5547b13bf3eaabffdee6`（“增加无限配置”），版本 `1.21.1-2.3.8.3`，工作树干净。前轮核对的 `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs` 仍是所有权交付参考；本轮不把新配置功能视为已经完成审查或直接采用的设计。旧 `uselessmod-1.21.1-2.2.4-fix1-source` 只作历史参考。
 
@@ -1104,7 +1135,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `.tmp_gtceu_src` | `MEStockingBusPartMachine`、`ExportOnlyAEItemSlot` | 库存视图与真实消耗分离、周期刷新及防重复匹配；本地摘录未核实发行版本，不照搬 API 或轮询频率 |
 | `.tmp_gtnh_src` | KubaTech `MTEMegaIndustrialApiary`、`MTEIndustrialApiary` | 集中蜜蜂数据、花朵需求去重、缺失原因可见；属于旧 Forestry／Forge 技术栈，只借鉴职责，不套用 1.21.1 API |
 
-相关项目：[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)、[Mekanism](https://github.com/mekanism/Mekanism)、[GTCEu Modern](https://github.com/GregTechCEu/GregTech-Modern)、[KubaTech](https://github.com/GTNewHorizons/KubaTech)。这些仓库主页是定位入口；DataEnergistics、ECO 与 Useless 本轮均已联网 fetch 并固定上述提交；EAEP 为此前取得的指定分支源码，不宣称其远端最新状态，也没有将未经读取的网上介绍作为性能排名。
+相关项目：[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)、[Mekanism](https://github.com/mekanism/Mekanism)、[GTCEu Modern](https://github.com/GregTechCEu/GregTech-Modern)、[KubaTech](https://github.com/GTNewHorizons/KubaTech)。这些仓库主页是定位入口；五个独立 Git 参考仓库均已在 D15 前联网 `pull --ff-only` 并固定上述提交；更新状态以拉取时刻为准，也没有将未经读取的网上介绍作为性能排名。
 
 本地旧研究 `docs/2026-09-15-天枢库存保留研究与对齐方案.md` 是背景资料，其中旧 AE2LT 路径属于历史锚点；合成库存策略的实施结论以本文第 6.6 节及新版源码为准。无需为使用保留算法强行引入 Thunderbolt；只有其可选合成扩展需要独立兼容边界。
 
@@ -1149,7 +1180,7 @@ ECO 本轮 `ExactMapSync`／`MenuDataTransport` 采用全量基线加增量、�
 | D12 | ECO seal／迁移收据／restoreTarget；DataEnergistics detached runtime 与恢复深度；Useless 整批交付 | 当前 revision 回执门控、恢复不得重入区块加载、接收即转移所有权；真实蜂笼／pending／能量专属适配，异常不推断零接收 |
 | D13 | PB `beeReleasePostAction/simulateBee`、`anvil_repair*`；KubaTech `onStorageContentChanged`；Useless `claimOutputs`；ECO `InfiniteStorageAmounts` | 已核对逐栈基因、世界副作用、只读花源和按键交付。D13b 以关闭转化为静态铁蜂前提，逐蜂保存未处理轮数与冻结数量；旧映像迁出资产，交还重建当前值；旧 Forestry 只作职责参考 |
 | D14 | PB `FeederBlockEntity.getInventoryItems`；Mekanism `getLimit/OVERSIZED_ITEM_CODEC`；更新后的 DataEnergistics `routeExact/consumeCurrent` | 已采用有限原始实物、严格组件往返、实际接收量与同批剩余量。三格容量不足整体拒绝，显式共享不复制样本；旧 KubaTech 摘录仅保留前轮职责背景 |
-| D15 | Mekanism 并行／配方；ECO execution／dispatch accounting | 分开 lane 预约、输入消费、结果冻结与交付，拒绝免费重开作业 |
+| D15 | PB `CentrifugeBlockEntity/CentrifugeRecipe`；Mekanism `CachedRecipe.process`；ECO `ECOCraftingDispatchAccounting`；DataEnergistics `routeExact/consumeCurrent` | D15a 保留本项目输入／倍率、保底概率和逐 lane 计费差异；D15b 分开预约、付费推进、结果冻结与实际量交付，固定周期内能力和并行数，拒绝免费重开作业 |
 | D16 | ECO 任务调度／能量事务；AE2 网络服务 tick | 真实 tick 编排、预算公平和付费段结算，不异步调用世界或 AE2 |
 | D17 | Mekanism 升级组件；DataEnergistics hosted action | 按 member revision 安装／拆卸，先预约接收空间，逐机返回真实结果 |
 | D18 | QIO 订阅／updatedItems；DataEnergistics StorageView／ContentsList；ECO ExactMapSync／MenuDataTransport | 同一不可变查询 frame、服务端分页、增量刷新，不能全表每帧排序 |
@@ -1184,4 +1215,4 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 最大的风险依次为：托管与独立模式双重所有权、存档／区块保存不一致、异构机器能力汇总失真、特殊蜂种和喂食语义遗漏、保留组额度重复分配、AE2 自拉取及异常重试复制，以及把 IO 热点转移成无限类型账本的保存／枚举热点。P0 原型及 P1 领域验收已证明基础数量／API／守恒选择；完整网络的恢复、接管、真实生产与性能仍须按后续闸门验证。
 
-P2 已验收推送；D13 本轮已提交推送 `583ecee`，D14 基础成员的逐位喂食与迁移恢复见 10.24。下一步 D15 抽取离心配方数量输出，按逐机 lane 能力预约输入、保留已付费进度和物品／流体结果；继续先更新参考仓库，再核对本地 Mekanism 配方并行和 ECO／DataEnergistics 的执行、余量交付边界。D16 组装全网有限供给／储能与服务器调度，移交已有 FE 保管余额并将喂食消费和产物冻结接进同一事务；新装入蜜蜂应分配新 beeId，不能复用已迁走蜜蜂的旧槽身份。P3 验收前保持默认关闭，P5 再形成完整终端和 AE2 闭环；性能收益仍须同场景 Spark／MSPT 实测。
+P2 已验收推送；D13 已提交推送 `583ecee`，D14 已提交推送 `f624e86`，逐位喂食与迁移恢复见 10.24。D15a 共享计算内核和物理回接见 10.25。下一步 D15b 按逐机 lane 能力预约输入，固定并行批次和能力版本，保存已付费进度、物品／流体冻结结果与唯一托管所有权；补料／升级／移机／重启均不能扩大旧作业的产出。实施前继续更新参考仓库，并复核本地 Mekanism、ECO／DataEnergistics 的执行和余量交付边界。D16 组装全网有限供给／储能与服务器调度，移交已有 FE 保管余额并将喂食消费和产物冻结接进同一事务；新装入蜜蜂应分配新 beeId，不能复用已迁走蜜蜂的旧槽身份。P3 验收前保持默认关闭，P5 再形成完整终端和 AE2 闭环；性能收益仍须同场景 Spark／MSPT 实测。

@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeProductionSampling;
+
 /** Shared probability math for Productive Bees centrifuge outputs. */
 final class PbOutputChance {
 
@@ -14,9 +16,6 @@ final class PbOutputChance {
 	}
 
 	static double adjustedChance(float recipeChance, double stabilityBonus) {
-		if (Float.isNaN(recipeChance)) {
-			return 0.0D;
-		}
-		return Math.max(0.0D, Math.min(1.0D, recipeChance + stabilityBonus));
+		return CentrifugeProductionSampling.adjustedChance(recipeChance, stabilityBonus);
 	}
 }

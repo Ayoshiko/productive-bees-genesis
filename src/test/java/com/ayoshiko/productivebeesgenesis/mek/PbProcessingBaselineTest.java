@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.PbVirtualTickPlan;
+
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 

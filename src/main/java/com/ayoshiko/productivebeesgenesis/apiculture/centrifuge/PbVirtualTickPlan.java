@@ -1,16 +1,16 @@
-package com.ayoshiko.productivebeesgenesis.mek;
+package com.ayoshiko.productivebeesgenesis.apiculture.centrifuge;
 
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
 /**
-	 * Collapses repeated accelerator ticks into one PB recipe update. The plan keeps
-	 * progress, input and energy limits equivalent to repeated Mekanism recipe ticks
-	 * without rerunning the complete block-entity tick for every virtual tick.
-	 */
-record PbVirtualTickPlan(int completedOperations, int remainingProgress,
+ * 独立进程的虚拟 tick 计划，不读写物理库存或能量容器。
+ * 保留原物理机的分段预算语义；调用方负责提交输入和 FE。
+ * 网络跨段恢复还须保存作业的配方、并行数、能力版本和已付费状态，不能仅保存 remainingProgress。
+ */
+public record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 		int executedTicks, long energyUsed) {
 
-	static PbVirtualTickPlan create(int currentProgress, int virtualTicks, int processingTime,
+	public static PbVirtualTickPlan create(int currentProgress, int virtualTicks, int processingTime,
 			int operationsPerCycle, int availableInputs, long energyPerOperation, long availableEnergy) {
 		int required = Math.max(1, processingTime);
 		int progress = Math.max(0, Math.min(currentProgress, required - 1));
@@ -91,7 +91,7 @@ record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 	private static int affordableOperationsForOneTick(int requestedOperations, int availableInputs,
 			long energyPerOperation, long availableEnergy) {
 		int operations = Math.min(Math.max(0, requestedOperations), Math.max(0, availableInputs));
-		return MekCentrifugeEnergyScaling.affordableOperations(
+		return CentrifugeEnergyPricing.affordableOperations(
 				energyPerOperation, operations, availableEnergy);
 	}
 
@@ -99,7 +99,7 @@ record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 			long availableEnergy) {
 		if (requestedTicks <= 0 || operations <= 0) return 0;
 		if (energyPerOperation == 0L) return requestedTicks;
-		long perTick = MekCentrifugeEnergyScaling.parallelEnergyCost(
+		long perTick = CentrifugeEnergyPricing.parallelEnergyCost(
 				energyPerOperation, operations);
 		if (perTick <= 0L) return 0;
 		long affordable = availableEnergy / perTick;
@@ -108,7 +108,7 @@ record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 
 	private static long energyFor(int ticks, int operations, long energyPerOperation) {
 		if (ticks <= 0 || operations <= 0 || energyPerOperation <= 0L) return 0L;
-		return MekCentrifugeEnergyScaling.batchEnergyCost(energyPerOperation, operations, ticks);
+		return CentrifugeEnergyPricing.batchEnergyCost(energyPerOperation, operations, ticks);
 	}
 
 	private static int saturatedAdd(int first, int second) {

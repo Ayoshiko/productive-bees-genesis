@@ -12,7 +12,7 @@ import java.util.random.RandomGenerator;
 	 * <p>
 	 * 数学等价性:
 	 * <ul>
-	 *   <li>n=1: 走原版精确路径 (nextFloat),与单次采样完全一致</li>
+	 *   <li>n=1: 走原版精确路径 (nextLong),与单次采样完全一致</li>
 	 *   <li>min==max: 固定数量,无随机,返回 min * n * modifier</li>
 	 *   <li>n&gt;1 且 min&lt;max: Normal 近似 N 次均匀分布之和</li>
 	 * </ul>
@@ -28,7 +28,7 @@ public final class SampleUniformSum {
 	/**
 	 * Normal 近似 N 次 [min, max] 均匀分布之和(中心极限定理 CLT)
 	 * <br/>
-	 * n=1 时走原版精确采样(nextFloat),保持完全等价。min==max 时无随机。
+	 * n=1 时走原版精确采样(nextLong),保持完全等价。min==max 时无随机。
 	 *
 	 * @param random   随机数生成器
 	 * @param min      单次最小产出

@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeEnergyPricing;
 import mekanism.api.Upgrade;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -14,14 +15,10 @@ import mekanism.common.util.MekanismUtils;
 public final class MekCentrifugeEnergyScaling {
 
 	/** Parallel work up to this amount keeps Mekanism's original linear per-operation price. */
-	public static final int LINEAR_PARALLEL_OPERATIONS = 16;
+	public static final int LINEAR_PARALLEL_OPERATIONS = CentrifugeEnergyPricing.LINEAR_PARALLEL_OPERATIONS;
 
-	/** Additional billable operations charged whenever high parallelism doubles. */
-	private static final int BILLABLE_OPERATIONS_PER_DOUBLING = 1;
 	private static final long BASE_ENERGY_USAGE_DIVISOR = 5L;
 	private static final long BASE_CAPACITY_DIVISOR = 2L;
-
-	private static final double LOG_2 = Math.log(2.0D);
 
 	private MekCentrifugeEnergyScaling() {
 	}
@@ -150,48 +147,19 @@ public final class MekCentrifugeEnergyScaling {
 	 * has a predictable marginal energy cost without multiplying demand by its full throughput.
 	 */
 	static long billableOperations(long operations) {
-		long active = Math.max(0L, operations);
-		if (active <= LINEAR_PARALLEL_OPERATIONS) return active;
-		double doublings = Math.log((double) active / LINEAR_PARALLEL_OPERATIONS) / LOG_2;
-		double scaled = LINEAR_PARALLEL_OPERATIONS
-				+ BILLABLE_OPERATIONS_PER_DOUBLING * doublings;
-		return SaturatingMath.saturatingCeilToLong(scaled);
+		return CentrifugeEnergyPricing.billableOperations(operations);
 	}
 
-	/** Overflow-safe energy charge for simultaneous operations in one process. */
 	static long parallelEnergyCost(long energyPerOperation, long operations) {
-		return SaturatingMath.saturatingMultiply(
-				Math.max(0L, energyPerOperation), billableOperations(operations));
+		return CentrifugeEnergyPricing.parallelEnergyCost(energyPerOperation, operations);
 	}
 
-	/** Returns the most operations affordable for one tick under the shared pricing curve. */
 	public static int affordableOperations(long energyPerOperation, int requestedOperations, long availableEnergy) {
-		int requested = Math.max(0, requestedOperations);
-		if (requested == 0 || energyPerOperation <= 0L) return requested;
-		long billableBudget = Math.max(0L, availableEnergy) / energyPerOperation;
-		if (billableBudget <= 0L) return 0;
-		if (billableOperations(requested) <= billableBudget) return requested;
-		if (billableBudget <= LINEAR_PARALLEL_OPERATIONS) {
-			return (int) Math.min(requested, billableBudget);
-		}
-		double affordableDoublings = (double) (billableBudget - LINEAR_PARALLEL_OPERATIONS)
-				/ BILLABLE_OPERATIONS_PER_DOUBLING;
-		double estimatedOperations = LINEAR_PARALLEL_OPERATIONS
-				* Math.pow(2.0D, affordableDoublings);
-		int affordable = estimatedOperations >= Integer.MAX_VALUE
-				? Integer.MAX_VALUE : Math.max(0, (int) Math.floor(estimatedOperations));
-		affordable = Math.min(requested, affordable);
-		// Correct the at-most-few-ULP error at doubling boundaries so pricing and affordability
-		// remain exact inverses even for very large configured operation counts.
-		while (affordable > 0 && billableOperations(affordable) > billableBudget) affordable--;
-		while (affordable < requested && billableOperations((long) affordable + 1L) <= billableBudget) affordable++;
-		return affordable;
+		return CentrifugeEnergyPricing.affordableOperations(energyPerOperation, requestedOperations, availableEnergy);
 	}
 
-	/** Overflow-safe energy charge for a cached-recipe or virtual-tick batch. */
 	public static long batchEnergyCost(long energyPerTick, int operations, int ticks) {
-		return SaturatingMath.saturatingMultiply(
-				parallelEnergyCost(energyPerTick, Math.max(0, operations)), Math.max(0, ticks));
+		return CentrifugeEnergyPricing.batchEnergyCost(energyPerTick, operations, ticks);
 	}
 
 	/** Returns Mekanism's deterministic capacity for a registered base and current upgrades. */

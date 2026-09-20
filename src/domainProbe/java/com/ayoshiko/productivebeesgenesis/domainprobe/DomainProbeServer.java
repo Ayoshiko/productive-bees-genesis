@@ -65,6 +65,7 @@ public final class DomainProbeServer {
 			var policy = ProductPolicyProbe.verify(event.getServer().overworld(), report);
 			P1FlowProbe.verify(event.getServer().overworld(), policy, report);
 			com.ayoshiko.productivebeesgenesis.apiary.BeeKernelProbe.verify(event.getServer().overworld(), report);
+			com.ayoshiko.productivebeesgenesis.mek.CentrifugeKernelProbe.verify(event.getServer().overworld(), report);
 			if (System.getProperty("pbg.bee.restartSource") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.read(
 					event.getServer().overworld(), Path.of(System.getProperty("pbg.bee.restartSource")), report);
 			MemberIsolationProbe.verify(event.getServer().overworld(), report);

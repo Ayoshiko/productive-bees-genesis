@@ -31,7 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 	 * <ul>
 	 *   <li>{@link PbRecipeCompleter} — 聚合缓冲区状态管理 + accumulate 方法</li>
 	 *   <li>{@link PbRecipeFlusher} — flush 执行(planAndExecute + 流体插入 + 输入扣除)</li>
-	 *   <li>{@link SampleUniformSum} — 均匀分布求和采样(CLT 数学工具)</li>
+	 *   <li>{@link PbRecipeOutputSampler} — 数量采样与只读模板适配</li>
 	 * </ul>
 	 * <p>
 	 * 不持有进程级共享状态,仅管理自身 pending 缓冲区,可安全从协调器委托调用。
@@ -81,14 +81,14 @@ public class PbRecipeCompleter {
 	@Nullable
 	private Map<ItemStack, ChancedOutput> pendingRecipeOutputs;
 
-	/** 本 tick 尚未插入的流体输出模板(amount=0) */
+	/** 本 tick 尚未插入的流体输出模板(保留单次配方量) */
 	@Nullable
 	private FluidStack pendingFluidTemplate;
 
 	/** 本 tick 尚未插入的流体输出总量(long 防止高倍加速下累加溢出) */
 	private long pendingFluidAmount;
 
-	/** 本 tick 尚未扣除的输入数量(= 已完成配方数 × 生产力倍率) */
+	/** 本 tick 尚未扣除的输入数量(= 已完成配方数) */
 	private int pendingInputShrink;
 
 	/** 本 tick 已聚合的物品总数量,用于触发提前 flush */
@@ -98,143 +98,38 @@ public class PbRecipeCompleter {
 		this.context = context;
 	}
 
-	/**
-	 * 聚合一次 PB 配方完成所产生的输出。
-	 * <br/>
-	 * 不立即调用 insertItem,而是把物品/流体数量累加到 {@link #pendingOutputs},
-	 * 在 tick 结束或达到阈值后统一 flush,减少高倍加速下 listener 触发次数。
-	 *
-	 * @param recipe               PB离心配方
-	 * @param processIndex         进程索引
-	 * @param productivityModifier 生产力倍率
-	 */
-	public void accumulatePbRecipeOutputs(CentrifugeRecipe recipe, int processIndex, int productivityModifier) {
-		ThreadLocalRandom random = ThreadLocalRandom.current();
-		int modifier = Math.max(1, productivityModifier);
-		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
-		float stabilityBonus = context.stabilityBonus();
-
-		// v2.0.9 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
-		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
-		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
-		selectRecipe(recipe);
-		boolean discardWax = context.suppressesUselessByproducts();
-
-		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
-			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
-			ChancedOutput chanced = entry.getValue();
-			float chance = chanced.chance();
-			// stability bonus 提升非保底产物概率，截断到 1.0
-			float adjustedChance = (float) PbOutputChance.adjustedChance(chance, stabilityBonus);
-			// adjustedChance >= 1.0 必定通过,跳过 nextFloat
-			if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) {
-				continue;
-			}
-			int min = Math.max(0, chanced.min());
-			int max = Math.max(min, chanced.max());
-			int count = SampleUniformSum.sampleSingle(random, min, max);
-			// long 域计算防止溢出为负,溢出截断到 Integer.MAX_VALUE
-			long totalCount = SaturatingMath.saturatingMultiply(count, modifier);
-			if (totalCount <= 0) {
-				continue;
-			}
-			count = (int) Math.min(totalCount, Integer.MAX_VALUE);
-			addPendingOutput(entry.getKey(), count);
-			pendingItemCount = SaturatingMath.saturatingToInt(
-				SaturatingMath.saturatingAdd(pendingItemCount, count));
+	private final PbRecipeOutputSampler.QuantityOutput quantityOutput = new PbRecipeOutputSampler.QuantityOutput() {
+		@Override
+		public void item(ItemStack template, long baseAmount, int multiplier) {
+			int count = SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(baseAmount, multiplier));
+			addPendingOutput(template, count);
+			pendingItemCount = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(pendingItemCount, count));
 		}
-
-		FluidStack fluidOutput = pendingFluidTemplate;
-		if (fluidOutput != null && !fluidOutput.isEmpty()
-				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
+		@Override
+		public void fluid(FluidStack template, long baseAmount, int multiplier) {
 			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
-				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier));
+					SaturatingMath.saturatingMultiply(baseAmount, multiplier));
 		}
+	};
 
-		// 修复:每次操作只消耗1个输入,productivityModifier 只影响输出数量不影响输入消耗
-		pendingInputShrink = SaturatingMath.saturatingToInt(
-			SaturatingMath.saturatingAdd(pendingInputShrink, 1));
+	/** 聚合单次结果；与批量入口共用数量内核及物理投影。 */
+	public void accumulatePbRecipeOutputs(CentrifugeRecipe recipe, int processIndex, int productivityModifier) {
+		accumulatePbRecipeOutputsBatch(recipe, processIndex, productivityModifier, 1);
 	}
 
 	/**
-	 * 批量聚合 N 次 PB 配方完成的输出 — 使用统计期望值计算,将 N 次循环减为 O(outputs) 次。
-	 * <br/>
-	 * 设计动机:STACK 升级满级时 effectiveOps=65536,原版循环是 TPS 下降首要根因(20+ ms/tick)。
-	 * <p>
-	 * 数学等价性(N=1 时与 {@link #accumulatePbRecipeOutputs} 完全一致):
-	 * <ul>
-	 *   <li>chance=1.0 且 min=max: N * min * modifier(无随机)</li>
-	 *   <li>chance=1.0 且 min&lt;max: Normal 近似 N 次 [min,max] 均匀分布之和(CLT)</li>
-	 *   <li>chance&lt;1.0: 保底机制 + 自适应 Binomial 采样(委托 {@link BatchProbabilitySampler})</li>
-	 * </ul>
-	 * N&gt;1 时分布近似但数学期望一致。概率产物采样:remaining≤30 精确 Binomial;
-	 * remaining&gt;30 且 λ&lt;5 Poisson;remaining&gt;30 且 λ≥5 CLT 正态近似。
-	 *
-	 * @param recipe               PB离心配方
-	 * @param processIndex         进程索引
-	 * @param productivityModifier 生产力倍率
-	 * @param batchCount           批量操作数(必须 &gt; 0)
+	 * 聚合有界批次；N=1 保留单次随机顺序，N>1 沿用保底及 CLT 近似。
+	 * 输入只扣完成次数；生产力倍率仅放大输出，不放大输入消耗。
 	 */
 	public void accumulatePbRecipeOutputsBatch(CentrifugeRecipe recipe, int processIndex,
 			int productivityModifier, int batchCount) {
 		if (batchCount <= 0) return;
-		if (batchCount == 1) {
-			// N=1 走原版路径,保持完全等价
-			accumulatePbRecipeOutputs(recipe, processIndex, productivityModifier);
-			return;
-		}
-		ThreadLocalRandom random = ThreadLocalRandom.current();
-		int modifier = Math.max(1, productivityModifier);
-		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
-		float stabilityBonus = context.stabilityBonus();
-
-		// v2.0.9 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
 		selectRecipe(recipe);
-		boolean discardWax = context.suppressesUselessByproducts();
-
-		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
-			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
-			ChancedOutput chanced = entry.getValue();
-			float chance = chanced.chance();
-			int min = Math.max(0, chanced.min());
-			int max = chanced.max();
-			if (max < min) max = min; // 防御性处理
-
-			// stability bonus 提升非保底产物概率，截断到 1.0
-			float adjustedChance = (float) PbOutputChance.adjustedChance(chance, stabilityBonus);
-
-			long totalCount;
-			if (adjustedChance >= 1.0f) {
-				// 必定通过 — 直接采样 N 次 [min, max] 之和
-				totalCount = SampleUniformSum.sample(random, min, max, batchCount, modifier);
-			} else {
-				// adjustedChance < 1.0 — 保底机制 + 自适应 Binomial 采样(SubTask 4.2/4.3/4.4)
-				// 委托 BatchProbabilitySampler:N≤30 精确 Binomial;N>30 且 λ<5 Poisson;否则 CLT
-				// 保底:guaranteed=floor(N×p) 确定性产量 + Binomial(remaining, adjustedP) 随机部分
-				long k = BatchProbabilitySampler.sampleBinomialWithGuarantee(random, batchCount, adjustedChance);
-				if (k <= 0) {
-					continue;
-				}
-				totalCount = SampleUniformSum.sample(random, min, max, k, modifier);
-			}
-
-			if (totalCount <= 0) {
-				continue;
-			}
-			int countInt = (int) Math.min(totalCount, Integer.MAX_VALUE);
-			addPendingOutput(entry.getKey(), countInt);
-			pendingItemCount = SaturatingMath.saturatingToInt(
-				SaturatingMath.saturatingAdd(pendingItemCount, countInt));
-		}
-
-		FluidStack fluidOutput = pendingFluidTemplate;
-		if (fluidOutput != null && !fluidOutput.isEmpty()
-				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
-			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
-				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier, batchCount));
-		}
+		PbRecipeOutputSampler.sampleAmounts(quantityOutput, pendingRecipeOutputs, pendingFluidTemplate,
+				batchCount, productivityModifier, context.stabilityBonus(),
+				context.suppressesUselessByproducts(), ThreadLocalRandom.current());
 		pendingInputShrink = SaturatingMath.saturatingToInt(
-			SaturatingMath.saturatingAdd(pendingInputShrink, batchCount));
+				SaturatingMath.saturatingAdd(pendingInputShrink, batchCount));
 	}
 
 	/** Adds an output without allocating the BiFunction/boxing path used by Map.merge. */
