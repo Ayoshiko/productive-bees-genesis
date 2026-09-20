@@ -32,7 +32,8 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            if (!sourceWorld.isDirectory() || !new File(sourceWorld, 'ownership-probe.dat').isFile()) throw new GradleException('Missing restart fixture world')
+            def marker = providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
             def target = new File(directory, 'world').toPath()
             java.nio.file.Files.walk(sourceWorld.toPath()).withCloseable { paths ->
                 paths.forEach { path ->
@@ -83,6 +84,12 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+			if (providers.gradleProperty('networkCentrifugeMode').isPresent()) {
+				def mode = providers.gradleProperty('networkCentrifugeMode').get()
+				if (!(mode in ['write', 'read'])) throw new GradleException('Invalid centrifuge restart mode')
+				if (mode == 'read' && seedWorld == null) throw new GradleException('Centrifuge restart requires its saved fixture world')
+				systemProperty 'pbg.centrifuge.mode', mode
+			}
 			if (providers.gradleProperty('networkBeeRestartSource').isPresent()) {
 				systemProperty 'pbg.bee.restartSource', file(providers.gradleProperty('networkBeeRestartSource').get()).absolutePath
 			}

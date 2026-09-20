@@ -74,12 +74,18 @@ public final class CoreOwnershipController {
 				current = record.claim(); transfer = OwnershipTransferService.resume(directory, domain, current, new BlockEntityOwnershipEndpoint(tile)); return;
 			}
 			if (scanClaims) {
-				var view = core.topology(); if (view == null) return;
+				var view = core.topology(); if (view == null || !view.valid()) return;
 				candidates = view.members().iterator(); topologyEpoch = view.epoch(); scanClaims = false;
 			}
 			if (candidates != null) {
 				var view = core.topology();
-				if (view == null || view.epoch() != topologyEpoch || !view.valid()) { reject("Topology changed; completed transfers remain owned"); return; }
+				if (view == null || view.epoch() != topologyEpoch || !view.valid()) {
+					if (action == Action.RECOVER) {
+						// 加载期间的邻接事件可能使恢复扫描过期；等待新视图重扫，不能永久停在 REJECTED。
+						candidates = null; scanClaims = true; status = Status.LOADING; return;
+					}
+					reject("Topology changed; completed transfers remain owned"); return;
+				}
 				if (!candidates.hasNext()) { candidates = null; return; }
 				var candidate = candidates.next(); var memberPos = candidate.position();
 				var memberOrigin = new Origin(level.dimension().location().toString(), memberPos.getX(), memberPos.getY(), memberPos.getZ());

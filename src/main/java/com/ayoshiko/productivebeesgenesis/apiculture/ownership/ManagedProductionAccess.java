@@ -25,8 +25,11 @@ public final class ManagedProductionAccess {
 		var tile = level.getBlockEntity(position);
 		if (tile == null || tile.getClass() != type) return null;
 		var member = type.cast(tile); var endpoint = new BlockEntityOwnershipEndpoint(member);
-		endpoint.validate(identity, record.claim());
-		return endpoint.matches(identity, record.claim(), MemberBinding.Mode.MANAGED) && endpoint.empty() ? member : null;
+		// 方块仍在时 getBlockEntity 可能重建一个无主空 BE；失效候选只拒绝工作，不向调度器抛身份异常。
+		try {
+			endpoint.validate(identity, record.claim());
+			return endpoint.matches(identity, record.claim(), MemberBinding.Mode.MANAGED) && endpoint.empty() ? member : null;
+		} catch (IllegalArgumentException | IllegalStateException unavailable) { return null; }
 	}
 	private ManagedProductionAccess() { }
 }

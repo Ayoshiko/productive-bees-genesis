@@ -24,7 +24,10 @@ public final class DomainProbeServer {
 		Path file = Path.of("results/domain.json");
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
-			try { NetworkPersistenceProbe.verifyShutdown(event.getServer(), report); }
+			try {
+				if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
+				else NetworkPersistenceProbe.verifyShutdown(event.getServer(), report);
+			}
 			catch (Exception failure) {
 				report.addProperty("passed", false); report.addProperty("shutdownFailure", failure.toString());
 				LogUtils.getLogger().error("NETWORK_SHUTDOWN_FAILED", failure);
@@ -35,6 +38,16 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (System.getProperty("pbg.centrifuge.mode") != null) {
+			try {
+				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.start(event.getServer()); }
+				if (pendingReport != null && com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.advance(event.getServer(), pendingReport)) { finish(event, pendingReport); pendingReport = null; }
+			} catch (Exception error) {
+				com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.restoreRecipes(event.getServer());
+				if (pendingReport == null) pendingReport = new JsonObject(); failed(pendingReport, error); finish(event, pendingReport); pendingReport = null;
+			}
+			return;
+		}
 		if (System.getProperty("pbg.ownership.mode") != null) {
 			try {
 				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); OwnershipRestartProbe.start(event.getServer()); }

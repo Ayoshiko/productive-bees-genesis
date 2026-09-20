@@ -35,6 +35,7 @@
 
 ### 新增
 
+- **P3／D15b2c 真实重启与恢复修复**：新增蜜脾／蜜脾块共 16 个真实网络事务阶段的跨 JVM 世界恢复验证；失效成员不再向生产调度抛身份异常，恢复扫描遇到拓扑变更会等待新视图重试。固定旧配方、进度和费用，旧实物产物只在交还时恢复。自动离心升级经核对仍属未实现方案，未宣称已有该生产路径。
 - **P3／D15b2b 异构分配与显式服务**：增加有预算的逐通道轮转、状态绑定预览、真实成员校验及离心事务服务；保护已有预约，重复请求不再占用投入。两台异构基础机专服验证暂停、核心重载、物品／流体结算和剩余 FE 交还；自动调度与完整重启矩阵仍待后续。
 - **P3／D15b2a 配方与升级适配**：基础网络离心机读取封存的 SPEED／ENERGY 和 PB 升级，共享物理倍率公式与蜜脾块索引；未适配的转换和速度改写组合明确拒绝。真实专服验证清空实体后能力不变及物品／流体同种子对照，自动调度仍关闭。
 - **P3／D15b1 离心作业与恢复**：固定逐 lane 周期、并行数、投入、费用与随机结果，原子发布作业和精确物品／流体账本；缺电暂停，付费中途保留托管，未开始预约可取消。schema 5 严格保存／恢复，旧格式保持隔离；新增 15 项领域与压缩文件测试，全量 810 通过、2 项既有跳过，构建及产物核验通过。真实基础机适配与异构分配仍待 D15b2。
@@ -74,6 +75,7 @@
 
 #### Added
 
+- Added P3/D15b2c full-world restart checks for 16 comb/comb-block transaction stages across independent JVMs. Invalid members now reject production without leaking identity exceptions; recovery retries stale topology scans. Existing jobs retain their recipe, progress, and price, while sealed physical outputs remain return-only. The separate auto-centrifuge upgrade remains a future feature.
 - Added P3/D15b2b bounded heterogeneous lane selection, checkpoint-bound previews, live member validation, and an explicit centrifuge transaction service. Dedicated-server checks cover reservation/replay protection, pause, core replacement, exact item/fluid settlement, and remaining-energy return. Automatic scheduling and the full restart matrix remain pending.
 - Added P3/D15b2a sealed basic centrifuge recipe and upgrade adaptation, sharing PB multiplier formulas and the existing comb-block index. Unsupported conversion and modified-speed combinations are rejected. Dedicated-server comparisons cover cleared physical upgrades and seeded item/fluid outputs; automatic scheduling remains disabled.
 - Added P3/D15b1 pinned centrifuge jobs, atomic exact item/fluid settlement, finite energy custody, and strict schema 5 recovery. Unstarted work can return its inputs; paid work stays owned until settled. Added 15 domain and compressed-file tests; all 810 active tests, build, and artifact checks passed, with 2 existing skips. Live machine adaptation and heterogeneous allocation remain in D15b2.

@@ -44,6 +44,7 @@ public final class CentrifugeNetworkProbe {
 			if (pos.equals(POS.east())) {
 				tile.getComponent().addUpgrades(Upgrade.SPEED, 2); tile.getComponent().addUpgrades(Upgrade.ENERGY, 1);
 				require(tile.installPbUpgradeBulk(PbUpgradeType.PRODUCTIVITY, 1) == 1, "Productivity fixture failed");
+				require(tile.installPbUpgradeBulk(PbUpgradeType.TIME, 1) == 1, "Time fixture failed");
 			}
 			tile.energyContainer().setEnergy(tile.energyContainer().getMaxEnergy());
 		}
@@ -73,6 +74,7 @@ public final class CentrifugeNetworkProbe {
 			for (UUID member : members) require(service.activate(level, member, data.checkpoint().revision(), input), "Centrifuge activation rejected");
 			for (var tile : tiles) tile.setControlType(RedstoneControl.DISABLED);
 			var offers = members.stream().map(member -> service.candidate(level, member, input)).toList();
+			CentrifugeRequestProbe.verify(level, data, service, policy, offers, report);
 			require(offers.get(0).plan().cycleTicks() != offers.get(1).plan().cycleTicks()
 					&& offers.get(0).plan().maxParallel() != offers.get(1).plan().maxParallel(), "Heterogeneous fixture collapsed");
 			int cursor = 0, consumed = 0;
