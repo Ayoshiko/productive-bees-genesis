@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.ownership;
 import java.util.Objects;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeMemberState;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeAssetProjection;
+import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingAssetProjection;
 
 /** RETURNED 只留收据，不能再发放资产；不确定的源／目标保持 RECOVERY。 */
 public record OwnedMachineRecord(MemberClaim claim, Phase phase, AssetImage assets, String fingerprint, String failure, BeeMemberState bees) {
@@ -19,15 +20,20 @@ public record OwnedMachineRecord(MemberClaim claim, Phase phase, AssetImage asse
 			if (phase != Phase.OWNED && phase != Phase.RECOVERY || !claim.member().equals(bees.member())
 					|| !claim.machine().equals("productivebeesgenesis:mek_apiary")) throw new IllegalArgumentException("Bee authority outside owned basic apiary");
 			BeeAssetProjection.validate(assets, bees);
-		} else if (assets.copy().contains(BeeAssetProjection.MARKER)) throw new IllegalArgumentException("Missing detached bee authority");
+		} else if (assets.copy().contains(BeeAssetProjection.MARKER) || assets.copy().contains(FeedingAssetProjection.MARKER)) throw new IllegalArgumentException("Missing detached bee authority");
 	}
 	public OwnedMachineRecord withBees(BeeMemberState state) {
 		if (phase != Phase.OWNED) throw new IllegalStateException("Member is not owned");
 		if (bees == null) BeeAssetProjection.validateMigration(assets, state); else bees.validateSuccessor(state);
-		var residual = bees == null ? BeeAssetProjection.detach(assets) : assets;
+		var residual = residualFor(state);
 		return new OwnedMachineRecord(claim, phase, residual, residual.fingerprint(), "", state);
 	}
-	public AssetImage returnImage() { return bees == null ? assets : BeeAssetProjection.attach(assets, bees); }
+	private AssetImage residualFor(BeeMemberState state) {
+		var residual = bees == null ? BeeAssetProjection.detach(assets) : assets;
+		if (state.feeding() != null && (bees == null || bees.feeding() == null)) residual = FeedingAssetProjection.detach(residual, state.feeding());
+		return residual;
+	}
+	public AssetImage returnImage() { return bees == null ? assets : FeedingAssetProjection.attach(BeeAssetProjection.attach(assets, bees), bees.feeding()); }
 	public OwnedMachineRecord phase(Phase next) {
 		if (!canAdvance(phase, next)) throw new IllegalStateException("Invalid ownership transition: " + phase + " -> " + next);
 		var image = next == Phase.RETURNING ? returnImage() : assets;
@@ -43,8 +49,8 @@ public record OwnedMachineRecord(MemberClaim claim, Phase phase, AssetImage asse
 	}
 	void validateSuccessor(OwnedMachineRecord next) {
 		if (phase == Phase.OWNED && next.phase == Phase.OWNED && claim.equals(next.claim) && next.bees != null) {
-			if (bees == null ? next.bees.revision() != 0 || !BeeAssetProjection.detach(assets).equals(next.assets)
-					: next.bees.revision() != Math.incrementExact(bees.revision()) || !assets.equals(next.assets)) throw new IllegalArgumentException("Stale bee authority update");
+			if ((bees == null ? next.bees.revision() != 0 : next.bees.revision() != Math.incrementExact(bees.revision()))
+					|| !residualFor(next.bees).equals(next.assets)) throw new IllegalArgumentException("Stale bee authority update");
 			if (bees == null) BeeAssetProjection.validateMigration(assets, next.bees); else bees.validateSuccessor(next.bees);
 			return;
 		}

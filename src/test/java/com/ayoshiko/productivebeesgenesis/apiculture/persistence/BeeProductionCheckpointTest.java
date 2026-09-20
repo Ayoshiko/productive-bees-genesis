@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.persistence;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.feeding.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadService;
 import java.math.BigInteger;
@@ -30,6 +31,7 @@ class BeeProductionCheckpointTest {
 		var entity = new CompoundTag(); entity.putString("id", "productivebees:configurable_bee"); entity.putString("type", "productivebees:iron"); entity.putString("custom", "原始完整数据");
 		var slot = new CompoundTag(); slot.putInt("slot_index", 2); slot.put("entity_data", entity); slot.putInt("ticks_in_hive", 0);
 		var slots = new ListTag(); slots.add(slot); var extra = new CompoundTag(); extra.put(BeeAssetProjection.SLOTS, slots);
+		var feeders = new ListTag(); for (int i = 0; i < 9; i++) feeders.add(new CompoundTag()); extra.put(FeedingAssetProjection.SLOTS, feeders);
 		if (pending > 0) { var paid = new CompoundTag(); paid.putIntArray("counts", new int[]{0, 0, Math.toIntExact(pending)}); extra.put(BeeAssetProjection.PENDING, paid); }
 		var image = new CompoundTag(); image.put("extra", extra); image.putLong("energy", 1000); image.putLong("energyCapacity", 2000);
 		var assets = new AssetImage(image); var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
@@ -149,6 +151,55 @@ class BeeProductionCheckpointTest {
 				com.ayoshiko.productivebeesgenesis.apiculture.policy.ProcessingRuleScheduler.Mode.FAIR));
 		assertThrows(IllegalArgumentException.class, () -> data.publish(source.capture(data, settled.revision() + 1)));
 		assertSame(settled, data.checkpoint());
+	}
+	private static Fixture feedingFixture() {
+		var f = fixture(0, 0); var raw = f.original.assets().copy(); var list = new ListTag();
+		var item = new CompoundTag(); item.putString("id", "minecraft:iron_block"); item.putInt("count", 1);
+		for (int i = 0; i < 9; i++) { var slot = new CompoundTag(); if (i == 2) slot.put("item", item.copy()); list.add(slot); }
+		raw.getCompound("extra").put(FeedingAssetProjection.SLOTS, list); var image = new AssetImage(raw);
+		var sealed = new OwnedMachineRecord(f.original.claim(), OwnedMachineRecord.Phase.SEALED, image, image.fingerprint(), "");
+		var owned = sealed.phase(OwnedMachineRecord.Phase.OWNED);
+		var before = NetworkCheckpoint.empty(f.before.identity()).withOwnership(sealed).withOwnership(owned);
+		var food = new FeedingItem(new AssetImage(item), 64);
+		var feeding = new FeedingSlotStore(0, 9, FeedingAssetProjection.fingerprint(image), List.of(new FeedingSlotStore.Slot(null, 0, false, 0),
+				new FeedingSlotStore.Slot(null, 0, false, 1), new FeedingSlotStore.Slot(food, 1, false, 2)));
+		return new Fixture(before, owned, new BeeMemberState(f.bees.member(), 0, 1000, 2000, f.bees.bees(), feeding));
+	}
+	@Test void feedingAuthorityAndGroupsSurviveBudgetedCheckpointRestore() throws Exception {
+		var f = feedingFixture(); var active = f.active(); var record = record(active, f);
+		assertFalse(record.assets().copy().getCompound("extra").contains(FeedingAssetProjection.SLOTS));
+		assertEquals(f.original.assets(), record.returnImage());
+		var feeding = record.bees().feeding(); var grouped = feeding.groups(List.of(0, 0, 0)).apply(feeding);
+		var updated = active.withOwnership(record.withBees(record.bees().withFeeding(grouped)));
+		var read = roundTrip(updated, "feeding"); assertTrue(record(read, f).bees().feeding().matches(0, item -> true));
+		var encoded = NetworkCheckpointCodec.encode(read); var raw = encoded.getList("ownership", 10).getCompound(0).getCompound("bees");
+		raw.put("feeding", new CompoundTag()); assertThrows(IllegalArgumentException.class, () -> CODEC.decode(encoded));
+		encoded.getList("ownership", 10).getCompound(0).getCompound("assets").remove(FeedingAssetProjection.MARKER);
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(encoded));
+		var missingItem = new NetworkCheckpointCodec(key -> { }, item -> { throw new IllegalArgumentException("Missing feeding content"); });
+		assertThrows(IllegalArgumentException.class, () -> missingItem.decode(NetworkCheckpointCodec.encode(read)));
+	}
+	@Test void productionProgressDoesNotInvalidateAnUnchangedFeedingPlan() {
+		var f = feedingFixture(); var plan = f.bees.feeding().groups(List.of(0, 0, 0));
+		var paid = BeeWorkExecutor.advance(f.bees, 2, 0, context(), 5, 0).candidate();
+		var changed = paid.withFeeding(plan.apply(paid.feeding()));
+		assertEquals(paid.bee(2), changed.bee(2)); assertEquals(paid.energy(), changed.energy());
+		var active = f.active(); var next = active.withOwnership(record(active, f).withBees(paid));
+		assertDoesNotThrow(() -> next.withOwnership(record(next, f).withBees(changed)));
+	}
+	@Test void movingBeePreservesIdentityAndOnlyMovesFoodWhenExplicit() throws Exception {
+		var f = feedingFixture(); var active = f.active(); var original = record(active, f);
+		var moveOnly = original.bees().moveBee(2, 1, false);
+		assertEquals(original.bees().bee(2).id(), moveOnly.bee(1).id()); assertEquals(1, moveOnly.feeding().slots().get(2).count());
+		assertEquals(0, moveOnly.feeding().slots().get(1).count());
+		var moveTogether = original.bees().moveBee(2, 1, true);
+		assertEquals(0, moveTogether.feeding().slots().get(2).count()); assertEquals(1, moveTogether.feeding().slots().get(1).count());
+		var moved = active.withOwnership(original.withBees(moveTogether)); var read = roundTrip(moved, "moved-bee");
+		var image = record(read, f).returnImage().copy().getCompound("extra");
+		assertEquals(1, image.getList(BeeAssetProjection.SLOTS, 10).getCompound(0).getInt("slot_index"));
+		assertEquals(1, image.getList(FeedingAssetProjection.SLOTS, 10).getCompound(1).getCompound("item").getInt("count"));
+		var pending = BeeWorkExecutor.advance(original.bees(), 2, 0, context(), 5, 0).candidate();
+		assertThrows(IllegalStateException.class, () -> pending.moveBee(2, 1, true));
 	}
 	private NetworkCheckpoint roundTrip(NetworkCheckpoint expected, String name) throws Exception {
 		assertEquals(expected, CODEC.decode(NetworkCheckpointCodec.encode(expected)));

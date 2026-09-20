@@ -26,7 +26,9 @@ public final class NetworkBeeService {
 		if (record == null || record.bees() == null) return BeeWorkExecutor.Status.DISABLED;
 		var hive = member(level, record); if (hive == null) return BeeWorkExecutor.Status.UNLOADED;
 		if (ticks > 0 && (!StaticApiaryAdapter.currentPlan(level, hive, record.bees().bee(slot)) || recipeRevision != current.policyRevision())) return BeeWorkExecutor.Status.STALE_PLAN;
-		var context = new BeeWorkExecutor.Context(true, hive.canFunction(), StaticApiaryAdapter.flower(level, record.assets()),
+		boolean flower = record.bees().feeding() != null && com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.flower(
+				record.bees().feeding(), slot, net.minecraft.resources.ResourceLocation.parse(record.bees().bee(slot).plan().beeType()), level.registryAccess());
+		var context = new BeeWorkExecutor.Context(true, hive.canFunction(), flower,
 				recipeRevision, capabilityRevision, new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
 		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget);
 		if (!simulate && result.status() == BeeWorkExecutor.Status.READY) {
@@ -41,7 +43,7 @@ public final class NetworkBeeService {
 		if (next == current) return false;
 		authority.publish(next); directory.requestSave(authority); return true;
 	}
-	private TileEntityMekApiary member(ServerLevel level, OwnedMachineRecord record) {
+	TileEntityMekApiary member(ServerLevel level, OwnedMachineRecord record) {
 		if (!level.getServer().isSameThread()) throw new IllegalStateException("Bee production belongs to the server thread");
 		var coreOrigin = authority.identity().origin();
 		if (!coreOrigin.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(coreOrigin.x() >> 4, coreOrigin.z() >> 4)) return null;

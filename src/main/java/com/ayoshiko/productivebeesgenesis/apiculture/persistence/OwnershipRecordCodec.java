@@ -16,9 +16,10 @@ final class OwnershipRecordCodec {
 		tag.put("assets", record.assets().copy()); tag.putString("fingerprint", record.fingerprint()); tag.putString("failure", record.failure());
 		tag.put("bees", BeeRecordCodec.encode(record.bees())); return tag;
 	}
-	static OwnedMachineRecord readOwned(CompoundTag tag, java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> validate) {
+	static OwnedMachineRecord readOwned(CompoundTag tag, java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> validate,
+			java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
 		return new OwnedMachineRecord(readClaim(StrictNbt.compound(tag, "claim")), StrictNbt.choice(tag, "phase", OwnedMachineRecord.Phase.class),
-				new AssetImage(StrictNbt.compound(tag, "assets")), StrictNbt.string(tag, "fingerprint"), StrictNbt.string(tag, "failure"), BeeRecordCodec.decode(StrictNbt.compound(tag, "bees"), validate));
+				new AssetImage(StrictNbt.compound(tag, "assets")), StrictNbt.string(tag, "fingerprint"), StrictNbt.string(tag, "failure"), BeeRecordCodec.decode(StrictNbt.compound(tag, "bees"), validate, validateFeeding));
 	}
 	private OwnershipRecordCodec() { }
 }

@@ -92,12 +92,14 @@ final class CheckpointSchema {
 		final Kind kind;
 		private final boolean directory;
 		private final Consumer<ProductKey> validateKey;
+		private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 		private final Map<String, Object> values = new ConcurrentHashMap<>();
 		private final Set<String> seen = ConcurrentHashMap.newKeySet();
 		private final Object state;
 		Node watermarkTarget;
-		Node(Kind kind, boolean directory, Consumer<ProductKey> validateKey) {
+		Node(Kind kind, boolean directory, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
 			this.kind = kind; this.directory = directory; this.validateKey = validateKey;
+			this.validateFeeding = validateFeeding;
 			state = switch (kind) {
 				case NETWORK -> new NetworkRestoreState();
 				case DIRECTORY -> new DirectoryState();
@@ -169,7 +171,7 @@ final class CheckpointSchema {
 				}
 				case IDENTITY -> new NetworkIdentity(uuid("network"), uuid("controller"), uuid("owner"), number("generation"), value("origin"));
 				case CLAIM -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim(uuid("network"), uuid("member"), uuid("transfer"), value("origin"), string("machine"));
-				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey));
+				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding));
 				case ORIGIN -> new MemberCapabilitySnapshot.Origin(ResourceLocation.parse(string("dimension")).toString(), integer("x"), integer("y"), integer("z"));
 				case KEY -> { var key = new ProductKey(choice("kind", ProductKey.Kind.class), ResourceLocation.parse(string("id")), value("components")); validateKey.accept(key); yield key; }
 				case AMOUNT_ENTRY -> new AmountEntry(value("key"), amount("amount"));

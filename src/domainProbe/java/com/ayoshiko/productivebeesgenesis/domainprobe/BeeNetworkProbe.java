@@ -72,6 +72,8 @@ final class BeeNetworkProbe {
 			report.addProperty("beeNetworkUnsupportedConversionBeeAndUpgradeRejected", true);
 			var service = new NetworkBeeService(data, directory);
 			require(service.activate(level, member, data.checkpoint().revision(), 0), "Static bee activation rejected");
+			hive.setControlType(RedstoneControl.DISABLED);
+			FeedingNetworkProbe.beforeProduction(level, data, directory, member, report);
 			com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.write(data.checkpoint());
 			require(!service.activate(level, member, data.checkpoint().revision(), 0), "Duplicate bee migration accepted");
 			hive.setControlType(RedstoneControl.DISABLED);
@@ -104,6 +106,7 @@ final class BeeNetworkProbe {
 			require(new MachineAssetStore(hive).empty(), "Network results entered physical machine");
 			report.addProperty("beeNetworkMixedGeneCombs", 10); report.addProperty("beeNetworkEnergyDebit", energy - state.energy());
 			report.addProperty("beeNetworkCoreReloadFrozenAndExactlyOnce", true);
+			FeedingNetworkProbe.afterProduction(level, data, directory, member, report);
 			hive.setControlType(RedstoneControl.HIGH);
 			require(core.ownership().command(false), "Bee return rejected after settling"); phase++; return false;
 		}

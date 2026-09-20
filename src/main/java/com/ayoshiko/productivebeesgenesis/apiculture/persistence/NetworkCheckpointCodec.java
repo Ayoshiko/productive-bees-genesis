@@ -13,19 +13,25 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 3;
+	public static final int SCHEMA = 4;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
+	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 	private final RuleRecordCodec rules;
 	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey) {
+		this(validateKey, item -> { });
+	}
+	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
 		this.validateKey = java.util.Objects.requireNonNull(validateKey);
+		this.validateFeeding = java.util.Objects.requireNonNull(validateFeeding);
 		products = new ProductRecordCodec(validateKey); rules = new RuleRecordCodec(products);
 	}
 	CheckpointDecoder decoder(com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadSession input) {
-		return new CheckpointDecoder(input, validateKey);
+		return new CheckpointDecoder(input, validateKey, validateFeeding);
 	}
 	public static NetworkCheckpointCodec forRegistries(HolderLookup.Provider registries) {
-		return new NetworkCheckpointCodec(key -> ProductKeyCodec.validatePersisted(key, registries));
+		return new NetworkCheckpointCodec(key -> ProductKeyCodec.validatePersisted(key, registries),
+				item -> com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.validate(item, registries));
 	}
 	public static CompoundTag identity(NetworkIdentity identity) {
 		var tag = new CompoundTag(); tag.putUUID("network", identity.networkId()); tag.putUUID("controller", identity.controllerId());
@@ -90,7 +96,7 @@ public final class NetworkCheckpointCodec {
 				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")));
 		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
 		for (var raw : StrictNbt.list(tag, "ownership")) {
-			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey);
+			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding);
 			NetworkCheckpoint.validateOwnership(record, checkpoint.identity(), checkpoint.policyRevision());
 			owned.add(record);
 		}

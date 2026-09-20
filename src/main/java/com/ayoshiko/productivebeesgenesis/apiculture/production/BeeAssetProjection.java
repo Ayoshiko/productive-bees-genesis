@@ -16,6 +16,7 @@ public final class BeeAssetProjection {
 		return new AssetImage(tag);
 	}
 	public static void validate(AssetImage residual, BeeMemberState state) {
+		com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingAssetProjection.validate(residual, state.feeding());
 		var tag = residual.copy(); var extra = tag.getCompound("extra");
 		if (!tag.contains(MARKER, 1) || tag.getByte(MARKER) != 1 || !tag.contains("energy", 4) || tag.getLong("energy") != 0
 				|| !tag.contains("energyCapacity", 4) || tag.getLong("energyCapacity") != state.energyCapacity() || !tag.contains("extra", 10)
@@ -39,6 +40,7 @@ public final class BeeAssetProjection {
 		var list = new ListTag();
 		for (var bee : state.bees()) {
 			var slot = bee.originalSlot().copy();
+			slot.putInt("slot_index", bee.slot());
 			if (bee.revision() > 0) {
 				slot.putInt("ticks_in_hive", bee.progress()); slot.putInt("min_occupation_ticks", bee.plan().cycleTicks());
 				slot.putFloat("progress", Math.min(1F, (float) bee.progress() / bee.plan().cycleTicks()));

@@ -10,7 +10,6 @@ import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import java.util.ArrayList;
 import mekanism.api.Upgrade;
-import mekanism.api.SerializerHelper;
 import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -53,19 +52,8 @@ public final class StaticApiaryAdapter {
 			int slot = i;
 			if (counts[i] > 0 && bees.stream().noneMatch(bee -> bee.slot() == slot)) throw new IllegalArgumentException("Orphaned paid bee cycles");
 		}
-		return new BeeMemberState(record.claim().member(), 0, image.getLong("energy"), image.getLong("energyCapacity"), bees);
-	}
-	public static boolean flower(ServerLevel level, AssetImage residual) {
-		var extra = residual.copy().getCompound("extra");
-		var slots = extra.getList("productivebeesgenesis_feeder_slots", Tag.TAG_COMPOUND);
-		long[] disabled = extra.getLongArray("productivebeesgenesis_feeder_disabled");
-		var pref = BeeInfoHelper.getFlowerPreference(IRON);
-		for (int i = 0; i < slots.size(); i++) {
-			if (i / 64 < disabled.length && (disabled[i / 64] & 1L << (i % 64)) != 0) continue;
-			var stack = SerializerHelper.parseOversizedOptional(level.registryAccess(), slots.getCompound(i).getCompound("item"));
-			if (!stack.isEmpty() && BlockFlowerMatcher.matches(stack, pref)) return true;
-		}
-		return false;
+		return new BeeMemberState(record.claim().member(), 0, image.getLong("energy"), image.getLong("energyCapacity"), bees,
+				StaticFeedingAdapter.migrate(record.assets(), level.registryAccess()));
 	}
 	public static boolean currentPlan(ServerLevel level, TileEntityMekApiary hive, BeeRecord bee) {
 		var plan = bee.plan(); var pref = BeeInfoHelper.getFlowerPreference(IRON);

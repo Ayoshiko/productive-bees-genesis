@@ -22,11 +22,11 @@ final class BeeRecordCodec {
 			value.putLong("revision", bee.revision()); value.putInt("progress", bee.progress());
 			value.putLong("pending", bee.pendingCycles()); value.put("frozen", ProductRecordCodec.amount(bee.frozen())); list.add(value);
 		}
-		tag.put("bees", list); return tag;
+		tag.put("bees", list); tag.put("feeding", FeedingRecordCodec.encode(state.feeding())); return tag;
 	}
-	static BeeMemberState decode(CompoundTag tag, Consumer<ProductKey> validate) {
+	static BeeMemberState decode(CompoundTag tag, Consumer<ProductKey> validate, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
 		if (tag.isEmpty()) return null;
-		fields(tag, "member", "revision", "energy", "capacity", "bees");
+		fields(tag, "member", "revision", "energy", "capacity", "bees", "feeding");
 		var member = StrictNbt.uuid(tag, "member"); var list = StrictNbt.list(tag, "bees");
 		if (list.size() > 3) throw new IllegalArgumentException("Unverified factory bee state");
 		var bees = new ArrayList<BeeRecord>();
@@ -36,7 +36,8 @@ final class BeeRecordCodec {
 					new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate),
 					StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen")));
 		}
-		return new BeeMemberState(member, StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), bees);
+		return new BeeMemberState(member, StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), bees,
+				FeedingRecordCodec.decode(StrictNbt.compound(tag, "feeding"), validateFeeding));
 	}
 	private static CompoundTag plan(StaticBeePlan plan) {
 		var tag = new CompoundTag(); tag.putString("type", plan.beeType()); tag.putString("recipe", plan.recipe());

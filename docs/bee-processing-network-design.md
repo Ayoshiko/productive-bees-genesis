@@ -1,6 +1,6 @@
 # 蜂箱—离心机处理子网络：大型更新设计方案
 
-状态：P2（D09–D12）已完成，见 10.21；P3／D13a 共享内核与独立机接回见 10.22，D13b 逐蜂权威记录、关闭转化的基础铁蜂生产与恢复见 10.23。下一步为 D14 逐蜂位喂食迁移；D14–D16 和 P3 阶段退出尚未完成，生产仅有显式开发入口，未接自动调度。日期：2026-09-20。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
+状态：P2（D09–D12）已完成，见 10.21；P3／D13 已以 `583ecee` 提交推送，见 10.22–10.23；D14 基础蜂箱逐位喂食、共享组与迁移恢复已实现，见 10.24。下一步为 D15 虚拟离心能力池；D15–D16 和 P3 阶段退出尚未完成，生产仅有显式开发入口，未接自动调度。日期：2026-09-20。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
 
 本方案针对 Minecraft 1.21.1、NeoForge 21.1.214、Java 21；核心依赖为 Productive Bees 13.13.5、ProductiveLib 0.2.0、Mekanism 10.7.19.85，AE2 19.2.17 为可选集成。以上是开发基线，不代表已经验证所有元数据允许的低版本依赖。
 
@@ -84,6 +84,10 @@ AE2 通过一个桥接端口双向访问产物库存：合法产物可存入、�
 
 支持多花需求时，允许玩家将已经存在的喂食槽组成显式共享组，界面仍为每蜂位一格，组内仅共享真实存在的样本；消耗性物料依然预约扣除。不能增加隐藏无限喂食库存，也不能把一个物品复制填满所有槽。蜂位重新分配默认不搬走槽中食物；提供显式“连同喂食配置迁移”事务。旧蜂箱的共享饲养板接管时只移动真实物品，无法覆盖的蜂位显示缺少喂食，不免费补齐。
 
+D14 的基础布局从旧 9 个共享槽迁往 3 个逐蜂位槽。迁移先合并同完整组件身份、同禁用状态的物品栈，再填空位；每格上限为 `min(64, 物品实际堆叠上限)`。全量放不下则拒绝生产激活，保留原封存映像供交还，不能只迁前三格或另设不可见溢出库。即使没有蜜蜂，三个喂食位仍存在。默认每格独立，显式共享只改变匹配范围；多个消费请求在同一私有候选中共用剩余量。
+
+蜂位移动保留 beeId，槽位只是当前位置。当前仅支持同一基础成员内移到空蜂位，默认保留食物；携带食物要求目标喂食槽为空且双方未共享，先解除共享再移动，避免隐式重写其他蜂位配置。已付费积压先结算。跨成员移动会改变能力／环境归属，留给逐机能力事务与终端接入阶段。喂食编辑校验独立 feeding revision；正常生产进度变化不会使未改动的喂食计划失效，发布时仍携带最新蜜蜂状态。
+
 升级终端使用 `memberId + expectedRevision` 定位具体机器，显示本机已安装数量、上限、适用类型及预计能力变化。安装扣真实玩家／供给槽物品，拆除预留接收空间；来源不一定是产物库，因为升级件通常不是合法蜜蜂产物。批量安装按确定顺序逐台执行，清楚返回成功、缺料、不兼容、达到上限和离线等结果。
 
 升级变更在调度边界提交：已预约且已开始的有界工作段按旧能力快照结算，新的工作段使用新版本；不能把所有旧作业清零、重抽产物或重新扣费。托管时机器原 GUI 转为同一服务的代理，禁止其继续修改另一份本机升级库存。独立模式保留原逻辑。
@@ -157,7 +161,7 @@ flowchart LR
 
 动态战利品、Wanna Bee 琥珀、多花型蜜蜂、基因采样、万象创世随机输出、精华转化、副产物过滤及自动离心升级分别适配。首个原型只接纳已验证的静态蜂种；不支持的成员在接管预览中明确阻止接入，不能少产一部分后声称已支持。原有自动离心升级必须定义其产能来源与计费，禁止网络再离心同一份已转换输出。
 
-D13b 已核实铁蜂也有修复铁砧的转化配方，因此首个生产适配要求**基础蜂箱、无已安装生产升级、喂食转化关闭、铁蜂、一个固定数量必定产物**，不能只检查蜂种 ID。花源继续使用 PB 当前定义及本模组的物品／方块标签匹配；原物理喂食槽保存在残余映像中，只读共享样本，D14 才迁入逐位账户。不支持的生产组合拒绝激活，保留 P2 的完整保管和交还能力；P2 接管按钮仍只执行保管，D16 接生产预览时须串联准入检查。
+D13b 已核实铁蜂也有修复铁砧的转化配方，因此首个生产适配要求**基础蜂箱、无已安装生产升级、喂食转化关闭、铁蜂、一个固定数量必定产物**，不能只检查蜂种 ID。花源继续使用 PB 当前定义及本模组的物品／方块标签匹配；D14 已将原共享实物迁入逐位账户，按本位或显式共享组提供样本。不支持的生产组合拒绝激活，保留 P2 的完整保管和交还能力；P2 接管按钮仍只执行保管，D16 接生产预览时须串联准入和喂食容量预检。
 
 ### 4.2 调度、概率与能量
 
@@ -363,6 +367,7 @@ UI 示例：优先级 100 的铁蜜脾规则优先喂给可处理它的能力池
 | `NetworkRecord` | networkId、ownerId、controllerId、dimension、generation、topologyRevision、schemaVersion | 一份权威记录对应一个网络 |
 | `MemberRecord` | memberId、position、bindingGeneration、mode、capabilityRevision、upgradeInventory | 升级只有一份权威库存；不可变能力快照派生自它 |
 | `BeeRecord` | beeId、完整原始蜂位／蜜蜂数据、memberId／slot、progress、stateRevision、冻结配方／能力版本、未采样轮数、冻结产物 | 唯一归属，分组只引用 beeId；旧模板不可直接作为当前进度交还 |
+| `FeedingSlotStore` | 独立 revision、原喂食布局与迁移指纹、H 个有限槽、完整物品身份／数量／上限、禁用标记、显式共享组 | 只保存真实实物；不属于产物白名单；计划不持有第二份库存，提交时校验原快照 |
 | `FeedingSlotRecord` | memberId、slotIndex、实际物品、共享组、revision | 数量恰等于该成员提供的蜂位数，未加载不删除内容 |
 | `ProductEntry` | ProductKey、ProductAmount、reservedAmount、revision | 只有账本保存真实产物数量；保留策略不伪装成扣库 |
 | `WorkRecord` | jobId、sourceAccount、recipeVersion、reservationId、progress、paidEnergy、preparedOutputs | 预约引用源账户，不复制原料 |
@@ -886,7 +891,29 @@ checkpoint schema 从 2 升至 3，生产状态随每成员所有权记录编码
 | AE2＋Applied Flux／跨 JVM | `build/network-probe-p3-d13b-ae2-restart-final/results/domain.json`；输入来自 `build/network-probe-p3-d13b-noae2-final/results/bee-restart` | 专服矩阵通过；独立新 JVM 读取迁移后、部分进度、未采样、冻结、部分入账、完成六个 checkpoint，数量与 FE 守恒。区别于 P2 整世界交接重启和强断电恢复 |
 | 全量回归／构建／产物 | `build/p3-d13b-verified.log`；`build/test-results/test`；`build/reports/release-artifact.txt` | 782 项测试，780 通过、2 项既有跳过，0 失败；`test build verifyReleaseArtifact` 通过，JAR 无开发探针。此前组合运行的保存夹具失败保留在原日志，最终以上述复核为准 |
 
-**本步只完成 D13 的首个确定性网络生产路径。** 尚未接逐位喂食、统一全网供能、服务器自动调度或玩家取回菜单，默认开关保持关闭；不声称 P3 可玩闭环或 MSPT 收益。`NetworkBeeService` 的显式入口目前逐次检查环境与拓扑，D16 应按一次已验证的调度边界共享快照，不能把开发探针的调用频率当作最终性能设计。下一步 D14 先证明共享喂食实物迁移守恒，再接 D15／D16。
+**D13 交付时只完成首个确定性网络生产路径。** 当时尚未接逐位喂食；D14 的后续结果见下节。统一全网供能、服务器自动调度和玩家取回菜单仍未完成，默认开关保持关闭。D16 应按一次已验证的调度边界共享环境／拓扑快照，不能把开发探针的调用频率当作最终性能设计。
+
+### 10.24 D14 逐蜂位喂食与有限实物迁移（2026-09-20）
+
+先复核工作区 D13 的独立机、所有权与 checkpoint 差异，重新执行构建／产物核验，通过后提交并推送 `583eceebce04a7e7127b02e9593026c63bc621d8`。随后按本轮要求对五个独立 Git 参考仓库执行 `pull --ff-only`，结果见 13.2。PB／Mekanism 的固定版本源码没有 Git 元数据，继续用于核实本项目编译依赖的精确行为；未替换运行 JAR，也未将旧 KubaTech 摘录冒充最新源码。
+
+新增 `apiculture.feeding` 的不可变物品身份、有限槽、共享组和工作计划；`StaticFeedingAdapter` 将版本相关物品 codec 与花源读取隔离，`NetworkFeedingService` 只在当前加载、有效归属的服务器边界提交。初次激活把蜂记录和喂食迁移候选一起发布；失败不留下半份可执行域。喂食从原映像移出后写 `feedingAuthority` 标记，保存和恢复同时要求账户与标记一致。交还按当前数量重建原 9 格物理布局，余格为空，不读取迁移前旧数量。
+
+普通编辑与补料采用独立喂食 revision 和原不可变根校验，模拟不修改库存；补料仅移动实际可容纳量，剩余量留在来源槽。禁用槽不参加匹配／消耗，槽清空后解除禁用。共享消费的全部请求先在同一私有候选中扣除；缺料返回无计划，重复或过期计划不可提交。当前补料是成员有限槽之间的移动，外部供给入口属于 D16／D23；消费预约已做领域验证，实际转化／消耗性蜂种仍受 D25 准入限制，不能把纯计划接口称为已实现这些蜂种。
+
+beeId 与当前位置解耦，移动蜂位保留完整 NBT、基因与已付费余数；原始槽数据只作交还模板，写回时采用当前 slotIndex。默认移动不带食物，显式带食物移动同时提交；共享状态不满足移动条件、目标占用或仍有待结算工作时拒绝。所有当前实现仅覆盖已验收的基础 3 蜂位，工厂和跨成员迁移按后续能力矩阵扩展。
+
+checkpoint schema 升至 4，增加喂食账户。普通解码与预算解码均检查物品注册／组件完整往返、有限上限、数量、分组根及所属映像；不使用 Mekanism 的宽容解析把坏物品变成空栈。缺失账户和旧映像、重复保管或未知内容使整个域隔离。旧 schema 3 测试存档保持原文件并进入恢复状态，本步未自动迁移历史测试世界。物品只在有限喂食域保管，不会因此取得无限产物准入资格。
+
+本轮进一步参考：PB `FeederBlockEntity.getInventoryItems` 只是实际非空槽的视图，不能当作每蜂位一份实物；Mekanism `BasicInventorySlot.getLimit` 与 `SerializerHelper.OVERSIZED_ITEM_CODEC` 明确了堆叠上限和严格编码边界；更新后的 DataEnergistics `TrinityPatternOutputRouter.routeExact/consumeCurrent` 按真实接受量减少源数量，支持本步的补料余量归属。跨模组回调不提供本项目的原子性，因此这里仍采用同 checkpoint 私有候选提交。EAEP 本次新增上传菜单／屏幕小接口留作 D18–D19 的职责拆分参考，没有提前引入其 API。
+
+| 验证 | 证据 | 结果与范围 |
+| --- | --- | --- |
+| 全量／构建／产物 | `build/p3-d14-final-build.log`；`build/test-results/test`；`build/reports/release-artifact.txt` | 792 项中 790 通过、2 项既有跳过，0 失败；`test build verifyReleaseArtifact` 通过 |
+| 无 AE2 专服 | `build/network-probe-p3-d14-noae2-final/results/domain.json` | 默认槽隔离、显式共享、禁用／恢复、模拟／重复请求、容量失败与可合并旧栈、完整组件、移动蜂位与安全交还通过；旧 P2／D13 矩阵、正常停服保存通过 |
+| AE2／独立 JVM 恢复 | `build/network-probe-p3-d14-ae2-restart-final/results/domain.json` | AE2＋Applied Flux 专服矩阵通过，独立新 JVM 成功读取无 AE2 进程的六个付费阶段 checkpoint，喂食数量与共享组不变，正常停服保存通过；这是 checkpoint 恢复验证，不是整世界强断电测试 |
+
+共享后两只铁蜂仍按 2＋8＝10 个蜜脾、200 FE 结算，迁移、移动和交还前后花样本总数均为 1。D14 基础范围完成；没有新增玩家界面或开启自动生产，没有 MSPT 性能结论。下一步进入 D15，D16 再组装外部有限供给、统一能源与正式调度。
 
 ## 11. 阶段路线与可独立评审的提交
 
@@ -955,9 +982,11 @@ checkpoint schema 从 2 升至 3，生产状态随每成员所有权记录编码
 | D13a（已实现，见 10.22） | 环境／进度／数量计算与物理适配器；PB 生产公式、KubaTech 花源缓存职责、Useless／ECO 数量边界 | 独立机进度／基因／能耗不变，确定性与固定种子分布测试通过；真实物理输出及超 int／long 私有数量聚合可复核 |
 | D13b（已实现，见 10.23） | 逐蜂权威记录、关闭转化的基础铁蜂准入与网络适配；PB 铁砧转化配方、D06 事务及 D12 封存映像 | 单一所有者、逐蜂版本／余数／积压／冻结结果进入一致 checkpoint；重复提交、缺条件、版本变化、各付费边界恢复和交还；不调用物理 ticker、输出槽或 AE2。自动调度仍待 D16 |
 
-D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产物的铁蜂；真实花样本不消耗。特殊蜂种、转化、自动离心、基因采样及概率配方在激活前明确拒绝，不能先生产再跳过副产物。没有构造隐藏蜂箱运行生产。D14 再把旧共享喂食实物迁入 H 个有限槽，D16 才把有限供给／能量和真实服务器调度接成玩家可运行闭环。
+D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产物的铁蜂；真实花样本不消耗。特殊蜂种、转化、自动离心、基因采样及概率配方在激活前明确拒绝，不能先生产再跳过副产物。D14 已接逐位有限喂食，D16 才把外部供给／能量和真实服务器调度接成玩家可运行闭环。
 
 **D14 — 一蜂位一喂食槽。** 前置：D12–D13。实现 `FeedingSlotStore`、槽绑定、补料计划及共享组；迁移旧 `FeederSlotManager` 的匹配语义到快照接口。测试 H 个蜂位恰有 H 个喂食槽、空蜂位、蜂位迁移、共享样本和并发消耗、特殊花条件及缺料。通过条件为一个物品不被重复搬运／消费／复制，卸载和拆机仍能取回内容。
+
+基础成员范围已实现并验证，见 10.24。特殊花／消费性蜂种仍须 D25 的逐项生产适配；D14 不为它们绕过 D13 准入。跨成员移动随 D17／D18 验证新能力和环境，外部供给补料随 D16／D23 接入。
 
 **D15 — 虚拟离心能力池。** 前置：D03、D06、D08、D12。从 `PbRecipeContext` 中抽出计算和数量输出小接口；保留 `PbVirtualTickPlan` 的周期／能耗语义，替代物理槽位与罐操作。实现一类离心机及异构进程分配，支持蜜脾和蜜脾块、物品与流体结果。通过条件为逐机升级分别生效、累计吞吐正确、处理中拆机不免费重开、既有自动离心输出不被二次离心。
 
@@ -1009,7 +1038,7 @@ D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产
 
 纯新增服务失败可以撤销本步；已被旧路径调用的抽象改动必须同时回退适配器并跑独立机回归；已有测试世界数据后，只能使用兼容读取／恢复模式或恢复一致备份，不能随便删除序列化字段和退回不认识网络的旧 JAR。调试指标放既有日志／开发统计入口，按需启用，不为每步新增操作指南。
 
-P1／D08 已验收并推送；P2／D09–D12 已通过阶段验收并以 `f960f32` 提交推送。P3／D13 的实现及验证见 10.22–10.23，后续进入 D14。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
+P1／D08 已验收并推送；P2／D09–D12 已以 `f960f32` 提交推送，P3／D13 已以 `583ecee` 提交推送。D14 的本轮工作区实现与证据见 10.24，后续进入 D15。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
 
 ### 11.10 执行效率与逐步参考清单
 
@@ -1049,13 +1078,15 @@ P1／D08 已验收并推送；P2／D09–D12 已通过阶段验收并以 `f960f3
 
 下列路径以仓库根目录为参照，本地参考目录不随仓库分发；记录版本与类名，供开发者定位对应源码。反编译源码用于确认行为和 API，最终实现需独立编写；涉及复制代码时另行核对其许可证及现有第三方声明，本设计未复制第三方实现。
 
-AE2LT 唯一主参考为 `E:/mczuixin/MCkaifa/1.21.1kaifa/闪电全版本/ae2lt-src-2.1.0-beta.5`，提交 `1d4589b6bd50672051f78d766505530beacfebc0`。EAEP 已从用户指定的 [1.21.1 分支](https://github.com/GaLicn/ExtendedAE_Plus/tree/1.21.1) 下载到下表目录，提交 `85a50ea5ca7cf25387be1604981e4ef99a3a8f5f`，版本 1.6.2。两者当前本地工作树干净。
+AE2LT 唯一主参考为 `E:/mczuixin/MCkaifa/1.21.1kaifa/闪电全版本/ae2lt-src-2.1.0-beta.5`，2026-09-20 `pull --ff-only` 后仍为 `1d4589b6bd50672051f78d766505530beacfebc0`。EAEP 的 [1.21.1 分支](https://github.com/GaLicn/ExtendedAE_Plus/tree/1.21.1) 同日从 `85a50ea5` 快进至 `93a08b673eaf2145920c1a9bbfb8e36ad1c683f1`，新增上传终端小接口等改动。两个工作树均干净。
 
-ECO 主参考为用户指定的 [v21.1.2 维护分支](https://github.com/DancingSnow0517/NeoECOAEExtension/tree/v21.1.2)，2026-09-19 fetch 并快进到 `1cae738ad9761d8c06b1902f828dc06dc57548b6`（“优化网络同步增量传输与发包预算”）；本次核对时本地分支与远端一致且工作树干净。gradle.properties 声明 mod_version 为 `21.2.0-beta4`，分支名与发布版本号分别记录。旧 `neoecoaeextension-21.2.0-source` 仅保留作历史比较。
+ECO 主参考为用户指定的 [v21.1.2 维护分支](https://github.com/DancingSnow0517/NeoECOAEExtension/tree/v21.1.2)，2026-09-20 再次拉取后 HEAD 仍为 `1cae738ad9761d8c06b1902f828dc06dc57548b6`（“优化网络同步增量传输与发包预算”），拉取到新 tag `21.2.0-beta4`；分支与远端一致，工作树干净。gradle.properties 声明 mod_version 为 `21.2.0-beta4`，分支名与发布版本号分别记录。旧 `neoecoaeextension-21.2.0-source` 仅保留作历史比较。
 
-DataEnergistics 已从 [ModularMCLib/DataEnergistics](https://github.com/ModularMCLib/DataEnergistics) 的远端默认分支 `1.21` 克隆最新源码到 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，本轮 fetch 并快进至 `dbdfe17e23cf614f48c30ed13ab356237824546a`（2026-09-19，“修复三位一体自动搭建首次冲突判定 #342”），版本为 `3.3.0`。原 `dataenergistics-3.1.1-source` 是无 Git 元数据的旧源码副本，保留历史资料但不再作为当前主参考。
+DataEnergistics 的 [1.21 分支](https://github.com/ModularMCLib/DataEnergistics) 位于 `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source`，2026-09-20 从 `dbdfe17e` 快进至 `26219f0209903d2502dc51ba1af2d95c1d53b7b0`（“修复开放问题并集中注册三位一体恢复命令 #347”），版本仍为 `3.3.0`。本轮重点复核 `routeExact` 的精确接收与剩余量，以及 `consumeCurrent(BigInteger)` 的扣减；工作树干净。原 `dataenergistics-3.1.1-source` 仅保留历史比较。
 
-Useless 最新主参考为本地 `.tmp_useless_src`，来自 [SorrowMist/UselessMod 的 1.21 分支](https://github.com/SorrowMist/UselessMod/tree/1.21)，2026-09-19 fetch 并快进至 `267b38a68eea533a8966785949e34fafb2624e7e`，版本 `1.21.1-2.3.8`。重点读取同日 `6dd8e784` 新增的 `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs` 及 `AdvancedAlloyFurnaceAeManager` 整批交付路径；旧 `uselessmod-1.21.1-2.2.4-fix1-source` 只作历史参考。
+Useless 主参考为 `.tmp_useless_src` 的 [1.21 分支](https://github.com/SorrowMist/UselessMod/tree/1.21)，2026-09-20 从 `267b38a6` 快进至 `951e8bd8fda9b07d596b5547b13bf3eaabffdee6`（“增加无限配置”），版本 `1.21.1-2.3.8.3`，工作树干净。前轮核对的 `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs` 仍是所有权交付参考；本轮不把新配置功能视为已经完成审查或直接采用的设计。旧 `uselessmod-1.21.1-2.2.4-fix1-source` 只作历史参考。
+
+每次参考前先确认独立仓库边界、工作树和上游，再执行 `pull --ff-only`；若有本地改动或不能快进，保留现场并记录原因，不自动 stash／reset。PB 13.13.5、Mekanism 10.7.19.85 的版本源码、`.tmp_gtnh_src`／`.tmp_gtceu_src` 摘录与 Thunderbolt JAR 没有可拉取的独立 Git 元数据，不能报为已更新；固定依赖 API 继续以实际编译 JAR 为准。第 5.4 节保留存储算法原审查提交，最新工作副本与本轮新增核对范围以本节为准。
 
 AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；本项目仍是 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
 
@@ -1065,7 +1096,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `run/mods/thunderbolt-2.0.0-beta.3.jar` | javap 核对 `core.storage.cell.IndexedStorage`、`DualLong126`、`IndexedStorageCellInventory`、`IndexedCellStorageSavedData`、`core.crafting.pattern.CraftingStockPolicy` | 对齐上述 AE2LT 声明的依赖；确认 primitive 数组与有限双 long、存储生命周期及非原生的合成策略接口 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/extendedae-plus-1.21.1-source` | `util/storage/InfinityDataStorage`、`InfinityStorageManager`、`api/storage/InfinityBigIntegerCellInventory` | long／BigInteger 双层、降级、总数增量缓存、storageRevision、纯模拟、饱和上报；已替换旧 1.20.1 副本 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/neoecoaeextension-v21.1.2-source` | `ECOInfiniteStorageDomains`、`SavedDataInfiniteStorageEngine`、`ECOInfiniteStorageData`、`InfiniteStorageAmounts`、`InfiniteStorageJournalRecord`、`ECOInfiniteStorage` | 原生 long 投影＋大数溢出表、逐次强制日志、快照序号重放与转移收据、ECO 自有精确数量接口；实际热路径以此分支为准 |
-| `.tmp_useless_src`（2.3.8） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接 |
+| `.tmp_useless_src`（2.3.8.3） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources` | `common/content/qio/QIOFrequency`、`common/inventory/container/QIOItemViewerContainer` | 库存键索引、updatedItems、只向查看者同步、避免同时保存的思路；QIO 有容量且其终端协议不等于本方案的服务端分页 |
@@ -1117,7 +1148,7 @@ ECO 本轮 `ExactMapSync`／`MenuDataTransport` 采用全量基线加增量、�
 | D11 | Mekanism `TileEntityMekanism.tickServer`；本地 JDTE 合并接口 | 审计父类组件、ticker、flush、能力写入口；不能只 return 子类生产方法 |
 | D12 | ECO seal／迁移收据／restoreTarget；DataEnergistics detached runtime 与恢复深度；Useless 整批交付 | 当前 revision 回执门控、恢复不得重入区块加载、接收即转移所有权；真实蜂笼／pending／能量专属适配，异常不推断零接收 |
 | D13 | PB `beeReleasePostAction/simulateBee`、`anvil_repair*`；KubaTech `onStorageContentChanged`；Useless `claimOutputs`；ECO `InfiniteStorageAmounts` | 已核对逐栈基因、世界副作用、只读花源和按键交付。D13b 以关闭转化为静态铁蜂前提，逐蜂保存未处理轮数与冻结数量；旧映像迁出资产，交还重建当前值；旧 Forestry 只作职责参考 |
-| D14 | PB 喂食与多花路径；KubaTech 花源去重 | 共享只读判定，不共享物品所有权；逐蜂位槽和消费预约独立守恒 |
+| D14 | PB `FeederBlockEntity.getInventoryItems`；Mekanism `getLimit/OVERSIZED_ITEM_CODEC`；更新后的 DataEnergistics `routeExact/consumeCurrent` | 已采用有限原始实物、严格组件往返、实际接收量与同批剩余量。三格容量不足整体拒绝，显式共享不复制样本；旧 KubaTech 摘录仅保留前轮职责背景 |
 | D15 | Mekanism 并行／配方；ECO execution／dispatch accounting | 分开 lane 预约、输入消费、结果冻结与交付，拒绝免费重开作业 |
 | D16 | ECO 任务调度／能量事务；AE2 网络服务 tick | 真实 tick 编排、预算公平和付费段结算，不异步调用世界或 AE2 |
 | D17 | Mekanism 升级组件；DataEnergistics hosted action | 按 member revision 安装／拆卸，先预约接收空间，逐机返回真实结果 |
@@ -1153,4 +1184,4 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 最大的风险依次为：托管与独立模式双重所有权、存档／区块保存不一致、异构机器能力汇总失真、特殊蜂种和喂食语义遗漏、保留组额度重复分配、AE2 自拉取及异常重试复制，以及把 IO 热点转移成无限类型账本的保存／枚举热点。P0 原型及 P1 领域验收已证明基础数量／API／守恒选择；完整网络的恢复、接管、真实生产与性能仍须按后续闸门验证。
 
-P2／D09–D12 已验收并提交推送；D13a 共享内核见 10.22，D13b 逐蜂所有权及首个静态生产路径见 10.23。下一步 D14 把残余封存映像的共享喂食实物事务化迁移至逐蜂位槽：同一铁块样本不能在三个蜂位中各变成一块，禁用标记、空位及退回均需保留。继续参考 PB 花源／转化判定、现有 FeederSlotManager 的禁用语义与 KubaTech 的需求去重，但不照搬其旧加载器 API。D15 接离心已扣料结果，D16 接全网有限供给／储能及服务器调度；届时移交 D13b 的 FE 保管余额，不能按原接管量再次注资。P3 验收前保持默认关闭，P5 再形成完整终端和 AE2 闭环；性能收益仍须同场景 Spark／MSPT 实测。
+P2 已验收推送；D13 本轮已提交推送 `583ecee`，D14 基础成员的逐位喂食与迁移恢复见 10.24。下一步 D15 抽取离心配方数量输出，按逐机 lane 能力预约输入、保留已付费进度和物品／流体结果；继续先更新参考仓库，再核对本地 Mekanism 配方并行和 ECO／DataEnergistics 的执行、余量交付边界。D16 组装全网有限供给／储能与服务器调度，移交已有 FE 保管余额并将喂食消费和产物冻结接进同一事务；新装入蜜蜂应分配新 beeId，不能复用已迁走蜜蜂的旧槽身份。P3 验收前保持默认关闭，P5 再形成完整终端和 AE2 闭环；性能收益仍须同场景 Spark／MSPT 实测。

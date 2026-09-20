@@ -43,6 +43,9 @@ public final class BeeRestartProbe {
 					require(decoder.progress().state() == CheckpointDecoder.State.COMPLETE, decoder.progress().failure()); checkpoint = decoder.checkpoint();
 				}
 				var owned = checkpoint.ownedMachines().values().iterator().next(); var member = owned.claim().member(); var original = owned.bees();
+				require(original.feeding() != null && original.feeding().slots().size() == 3
+						&& original.feeding().slots().stream().mapToInt(slot -> slot.count()).sum() == 1
+						&& original.feeding().matches(1, item -> true), "Feeding inventory or shared group changed during restart");
 				long expectedEnergy = completed == 0 ? 10000 : completed == 1 ? 9970 : 9800;
 				require(original.energy() == expectedEnergy, "Bee restart restored old energy");
 				for (var bee : original.bees()) {
@@ -58,6 +61,7 @@ public final class BeeRestartProbe {
 			}
 		}
 		report.addProperty("beeCheckpointCrossJvmPaidBoundaries", completed);
+		report.addProperty("feedingCheckpointCrossJvmInventoryAndGroups", true);
 	}
 	private static NetworkCheckpoint workIfPending(NetworkCheckpoint checkpoint, UUID member, int slot) {
 		return checkpoint.ownedMachines().get(member).bees().bee(slot).pendingCycles() == 0 ? checkpoint : work(checkpoint, member, slot, 0, 8);
