@@ -50,7 +50,8 @@ public final class DomainProbeServer {
 				boolean coreOwnershipComplete = CoreOwnershipProbe.advance(event.getServer(), pendingReport);
 				boolean faultComplete = OwnershipFaultProbe.advance(event.getServer(), pendingReport);
 				boolean beesComplete = BeeNetworkProbe.advance(event.getServer(), pendingReport);
-				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete || !beesComplete) return;
+				boolean centrifugesComplete = com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.advance(event.getServer(), pendingReport);
+				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete || !beesComplete || !centrifugesComplete) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }
@@ -76,6 +77,7 @@ public final class DomainProbeServer {
 			CoreOwnershipProbe.start(event.getServer());
 			OwnershipFaultProbe.start(event.getServer());
 			BeeNetworkProbe.start(event.getServer());
+			com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.start(event.getServer());
 			pendingReport = report; return;
 		} catch (Exception failure) {
 			failed(report, failure);

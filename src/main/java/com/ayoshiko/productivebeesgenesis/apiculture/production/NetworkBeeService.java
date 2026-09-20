@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 /** 显式开发入口；D16 之前不接服务器 ticker。每次提交重新校验加载、身份和预期版本。 */
@@ -44,22 +43,6 @@ public final class NetworkBeeService {
 		authority.publish(next); directory.requestSave(authority); return true;
 	}
 	TileEntityMekApiary member(ServerLevel level, OwnedMachineRecord record) {
-		if (!level.getServer().isSameThread()) throw new IllegalStateException("Bee production belongs to the server thread");
-		var coreOrigin = authority.identity().origin();
-		if (!coreOrigin.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(coreOrigin.x() >> 4, coreOrigin.z() >> 4)) return null;
-		var coreTile = level.getBlockEntity(new BlockPos(coreOrigin.x(), coreOrigin.y(), coreOrigin.z()));
-		if (!(coreTile instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreBlockEntity core) || core.isRemoved()
-				|| !core.validNetworkReference() || !authority.identity().equals(core.network()) || !authority.identity().ownerId().equals(core.owner())
-				|| !authority.identity().controllerId().equals(core.controller())) return null;
-		var topology = core.topology();
-		var position = new BlockPos(record.claim().origin().x(), record.claim().origin().y(), record.claim().origin().z());
-		if (topology == null || !topology.valid() || topology.members().stream().noneMatch(node -> node.position().equals(position))) return null;
-		if (record.phase() != OwnedMachineRecord.Phase.OWNED || !record.claim().equals(directory.claimAt(record.claim().origin()))) return null;
-		var origin = record.claim().origin();
-		if (!origin.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(origin.x() >> 4, origin.z() >> 4)) return null;
-		var tile = level.getBlockEntity(new BlockPos(origin.x(), origin.y(), origin.z()));
-		if (!(tile instanceof TileEntityMekApiary hive) || hive.getClass() != TileEntityMekApiary.class) return null;
-		var endpoint = new BlockEntityOwnershipEndpoint(hive); endpoint.validate(authority.identity(), record.claim());
-		return endpoint.matches(authority.identity(), record.claim(), MemberBinding.Mode.MANAGED) && endpoint.empty() ? hive : null;
+		return ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class);
 	}
 }

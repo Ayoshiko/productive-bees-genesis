@@ -35,6 +35,7 @@
 
 ### 新增
 
+- **P3／D15b2b 异构分配与显式服务**：增加有预算的逐通道轮转、状态绑定预览、真实成员校验及离心事务服务；保护已有预约，重复请求不再占用投入。两台异构基础机专服验证暂停、核心重载、物品／流体结算和剩余 FE 交还；自动调度与完整重启矩阵仍待后续。
 - **P3／D15b2a 配方与升级适配**：基础网络离心机读取封存的 SPEED／ENERGY 和 PB 升级，共享物理倍率公式与蜜脾块索引；未适配的转换和速度改写组合明确拒绝。真实专服验证清空实体后能力不变及物品／流体同种子对照，自动调度仍关闭。
 - **P3／D15b1 离心作业与恢复**：固定逐 lane 周期、并行数、投入、费用与随机结果，原子发布作业和精确物品／流体账本；缺电暂停，付费中途保留托管，未开始预约可取消。schema 5 严格保存／恢复，旧格式保持隔离；新增 15 项领域与压缩文件测试，全量 810 通过、2 项既有跳过，构建及产物核验通过。真实基础机适配与异构分配仍待 D15b2。
 - **网络设计与分阶段计划**：确定六面相邻构网、统一虚拟生产、一蜂位一喂食槽、逐机升级、合法产物无限存储、分层保留及单一 AE2 桥的职责；补齐唯一所有权、持久化／恢复协议、兼容矩阵与 D01–D32 验收条件，并记录本地参考模组版本和源码依据。
@@ -73,6 +74,7 @@
 
 #### Added
 
+- Added P3/D15b2b bounded heterogeneous lane selection, checkpoint-bound previews, live member validation, and an explicit centrifuge transaction service. Dedicated-server checks cover reservation/replay protection, pause, core replacement, exact item/fluid settlement, and remaining-energy return. Automatic scheduling and the full restart matrix remain pending.
 - Added P3/D15b2a sealed basic centrifuge recipe and upgrade adaptation, sharing PB multiplier formulas and the existing comb-block index. Unsupported conversion and modified-speed combinations are rejected. Dedicated-server comparisons cover cleared physical upgrades and seeded item/fluid outputs; automatic scheduling remains disabled.
 - Added P3/D15b1 pinned centrifuge jobs, atomic exact item/fluid settlement, finite energy custody, and strict schema 5 recovery. Unstarted work can return its inputs; paid work stays owned until settled. Added 15 domain and compressed-file tests; all 810 active tests, build, and artifact checks passed, with 2 existing skips. Live machine adaptation and heterogeneous allocation remain in D15b2.
 - Defined the bee processing network architecture, ownership/recovery invariants, local reference sources, and staged D01–D32 acceptance plan.
