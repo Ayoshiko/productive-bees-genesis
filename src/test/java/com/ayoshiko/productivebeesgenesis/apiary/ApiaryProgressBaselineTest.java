@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** D01：直接验证现有进度入口，避免只测一份重新抄写的公式。 */
 class ApiaryProgressBaselineTest {
@@ -75,6 +76,18 @@ class ApiaryProgressBaselineTest {
         advance(fallback, 1, 1.0F, false, 50, 1, fallbackPending, new AtomicInteger());
         assertEquals(1, fallbackPending[0]);
         assertEquals(1_200, fallback.getMinOccupationTicks());
+    }
+
+    @Test
+    void unpayableOverflowIsRejectedBeforePhysicalProgressChanges() {
+        BeeSlot slot = slot(5, 3);
+        int[] pending = {7};
+        AtomicInteger total = new AtomicInteger(7);
+        assertThrows(ArithmeticException.class, () -> advance(slot, 2, 1, false,
+                Long.MAX_VALUE, 1, pending, total));
+        assertEquals(3, slot.getTicksInHive());
+        assertEquals(7, pending[0]);
+        assertEquals(7, total.get());
     }
 
     private static BeeSlot slot(int period, int progress) {

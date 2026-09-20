@@ -52,7 +52,7 @@ public final class OwnershipTransferService {
 					if (!record.assets().equals(endpoint.capture())) throw new IllegalStateException("Sealed source changed");
 					service.step = Step.SEAL;
 				}
-				case OWNED -> { service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint); endpoint.validateReturn(record.assets()); service.step = Step.OWNED_RECEIPT; }
+				case OWNED -> { service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint); if (record.bees() == null) endpoint.validateReturn(record.assets()); service.step = Step.OWNED_RECEIPT; }
 				case RETURNING -> {
 					if (endpoint.matches(authority.identity(), claim, MemberBinding.Mode.LEAVING)) {
 						service.requireEmpty(endpoint); service.step = Step.RETURN_INTENT;
@@ -79,10 +79,11 @@ public final class OwnershipTransferService {
 	public String failure() { check(); return failure; }
 	public void requestReturn(OwnershipEndpoint endpoint) {
 		check(); if (advancing || step != Step.OWNED) throw new IllegalStateException("Member is not available for return");
+		if (record().bees() != null && !record().bees().drained()) throw new IllegalStateException("Settle paid bee work before return");
 		advancing = true;
 		try {
 			endpoint.validate(authority.identity(), claim); requireClaim(); requireBinding(endpoint, MemberBinding.Mode.MANAGED); requireEmpty(endpoint);
-			var record = record(); endpoint.validateReturn(record.assets());
+			var record = record(); endpoint.validateReturn(record.returnImage());
 			endpoint.mode(MemberBinding.Mode.LEAVING); publish(record.phase(RETURNING)); step = Step.RETURN_INTENT;
 		} catch (RuntimeException error) { quarantine(endpoint, error); }
 		finally { advancing = false; }

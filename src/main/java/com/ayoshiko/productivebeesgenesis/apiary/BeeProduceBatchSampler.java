@@ -1,7 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
-import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProductionSampling;
+import java.util.function.ObjLongConsumer;
+import java.util.random.RandomGenerator;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import net.minecraft.world.item.ItemStack;
@@ -21,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
 	 * 算法参考：
 	 * <ul>
 	 *   <li>{@link BatchProbabilitySampler#sampleBinomial} — 自适应 Binomial/Poisson/CLT 采样</li>
-	 *   <li>{@link SampleUniformSum#sample} — 均匀分布求和 CLT 近似</li>
+	 *   <li>{@link com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum#sample} — 均匀分布求和 CLT 近似</li>
 	 *   <li>{@code PbRecipeCompleter.accumulatePbRecipeOutputsBatch} — 离心机批量聚合参考实现</li>
 	 * </ul>
 	 * <p>
@@ -81,48 +83,26 @@ public final class BeeProduceBatchSampler {
 	public static void sampleInto(List<ItemStack> output,
 			Map<ItemStack, ChancedOutput> recipeOutputs,
 			int batchCount, float multiplier, float stabilityBonus, int productivityLevel) {
+		if (output == null) return;
+		sampleAmounts((template, count) -> output.add(template.copyWithCount((int) Math.min(count, Integer.MAX_VALUE))),
+				recipeOutputs, batchCount, multiplier, stabilityBonus, productivityLevel, ThreadLocalRandom.current());
+	}
+
+	/**
+	 * 保留物理蜂箱轮数策略的数量输出入口；模板只读，回调只写本次私有结果，不执行外部 IO。
+	 * 网络作业应预算化分配完整轮数后调用 BeeProductionSampling，不能沿用本入口的 int 轮数饱和。
+	 */
+	public static void sampleAmounts(ObjLongConsumer<ItemStack> output, Map<ItemStack, ChancedOutput> recipeOutputs,
+			int batchCount, float multiplier, float stabilityBonus, int productivityLevel, RandomGenerator random) {
 		if (output == null || recipeOutputs == null || recipeOutputs.isEmpty() || batchCount <= 0
-				|| !Float.isFinite(multiplier) || multiplier <= 0.0f) return;
-		ThreadLocalRandom random = ThreadLocalRandom.current();
-		int rollCount = sampleRollCount(random, batchCount, multiplier);
-		if (rollCount <= 0) return;
-
-		for (Map.Entry<ItemStack, ChancedOutput> entry : recipeOutputs.entrySet()) {
-			ChancedOutput chanced = entry.getValue();
-			float chance = chanced.chance();
-			if (Float.isNaN(chance) || chance <= 0.0f) continue;
-			float safeStabilityBonus = Float.isFinite(stabilityBonus)
-					? Math.max(0.0f, stabilityBonus)
-					: (stabilityBonus > 0.0f ? 1.0f : 0.0f);
-			// stability bonus 提升非保底产物概率，截断到 1.0（与 PbRecipeCompleter 一致）
-			float adjustedChance = chance >= 1.0f ? 1.0f : Math.min(1.0f, chance + safeStabilityBonus);
-			if (adjustedChance <= 0.0f) continue;
-
-			int min = Math.max(0, chanced.min());
-			int max = Math.max(chanced.max(), min);
-
-			// PB 在每个成功生成的原始 ItemStack 上应用生产力基因，不能对混合等级取平均。
-			long successCount;
-			if (rollCount == 1) {
-				// 单次路径 — 与 PbRecipeCompleter.accumulatePbRecipeOutputs 完全等价
-				if (adjustedChance < 1.0f && random.nextFloat() >= adjustedChance) continue;
-				successCount = 1L;
-			} else if (adjustedChance >= 1.0f) {
-				successCount = rollCount;
-			} else {
-				// PB 对每个升级轮次独立判定配方概率；批量路径使用自适应二项采样。
-				successCount = BatchProbabilitySampler.sampleBinomial(
-						random, rollCount, adjustedChance);
-			}
-
-			if (successCount <= 0) continue;
-			long geneAdjustedSum = sampleGeneAdjustedSum(
-					random, min, max, successCount, productivityLevel);
-			if (geneAdjustedSum <= 0) continue;
-			// 最终 clamp 到 Integer.MAX_VALUE（ItemStack count 上限）
-			long totalCount = Math.min(geneAdjustedSum, Integer.MAX_VALUE);
-			if (totalCount <= 0) continue;
-			output.add(entry.getKey().copyWithCount((int) totalCount));
+				|| !Float.isFinite(multiplier) || multiplier <= 0) return;
+		int rolls = sampleRollCount(random, batchCount, multiplier);
+		if (rolls <= 0) return;
+		for (var entry : recipeOutputs.entrySet()) {
+			var chanced = entry.getValue();
+			long count = BeeProductionSampling.sampleOutput(random, rolls, chanced.min(), chanced.max(),
+					chanced.chance(), stabilityBonus, productivityLevel);
+			if (count > 0) output.accept(entry.getKey(), count);
 		}
 	}
 
@@ -176,7 +156,7 @@ public final class BeeProduceBatchSampler {
 	 * @param multiplier  蜂箱生产力升级倍率
 	 * @return 聚合轮数，溢出时截断到 {@link Integer#MAX_VALUE}
 	 */
-	public static int sampleRollCount(ThreadLocalRandom random, int batchCount, float multiplier) {
+	public static int sampleRollCount(RandomGenerator random, int batchCount, float multiplier) {
 		if (random == null || batchCount <= 0 || !Float.isFinite(multiplier) || multiplier <= 0.0F) {
 			return 0;
 		}
@@ -200,52 +180,6 @@ public final class BeeProduceBatchSampler {
 	 */
 	static long sampleGeneAdjustedSum(ThreadLocalRandom random, int min, int max,
 			long sampleCount, int productivityLevel) {
-		if (sampleCount <= 0 || min < 0 || max < min) return 0L;
-		int level = Math.max(BeeProductivityGene.NORMAL,
-				Math.min(BeeProductivityGene.VERY_HIGH, productivityLevel));
-		if (level == BeeProductivityGene.NORMAL) {
-			return SampleUniformSum.sample(random, min, max, sampleCount, 1);
-		}
-		if (sampleCount <= 32L) {
-			long sum = 0L;
-			for (long i = 0L; i < sampleCount; i++) {
-				int sampled = SampleUniformSum.sampleSingle(random, min, max);
-				sum = SaturatingMath.saturatingAdd(
-						sum, BeeProductivityGene.adjustStackCount(sampled, level));
-			}
-			return sum;
-		}
-		if (min == max) {
-			return SaturatingMath.saturatingMultiply(
-					BeeProductivityGene.adjustStackCount(min, level), sampleCount);
-		}
-
-		long range = (long) max - min + 1L;
-		if (range > 4_096L) {
-			long baseSum = SampleUniformSum.sample(random, min, max, sampleCount, 1);
-			double baseMean = ((double) min + max) / 2.0D;
-			int representative = (int) Math.round(baseMean);
-			double ratio = baseMean <= 0.0D ? 1.0D
-					: BeeProductivityGene.adjustStackCount(representative, level) / baseMean;
-			return SaturatingMath.saturatingRoundToLong(baseSum * ratio);
-		}
-
-		double mean = 0.0D;
-		double squareSum = 0.0D;
-		for (long rawValue = min; rawValue <= max; rawValue++) {
-			int value = (int) rawValue;
-			int adjusted = BeeProductivityGene.adjustStackCount(value, level);
-			mean += adjusted;
-			squareSum += (double) adjusted * adjusted;
-		}
-		mean /= range;
-		double variance = Math.max(0.0D, squareSum / range - mean * mean);
-		double sampled = mean * sampleCount
-				+ random.nextGaussian() * Math.sqrt(variance * sampleCount);
-		long lower = SaturatingMath.saturatingMultiply(
-				BeeProductivityGene.adjustStackCount(min, level), sampleCount);
-		long upper = SaturatingMath.saturatingMultiply(
-				BeeProductivityGene.adjustStackCount(max, level), sampleCount);
-		return Math.max(lower, Math.min(upper, SaturatingMath.saturatingRoundToLong(sampled)));
+		return BeeProductionSampling.sampleGeneAdjustedSum(random, min, max, sampleCount, productivityLevel);
 	}
 }

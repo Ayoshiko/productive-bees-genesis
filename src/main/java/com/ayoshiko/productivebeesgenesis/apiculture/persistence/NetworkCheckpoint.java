@@ -40,12 +40,35 @@ public final class NetworkCheckpoint {
 		if (!captured) validate();
 	}
 	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines) {
-		identity = source.identity; this.revision = revision; policyRevision = source.policyRevision; ledger = source.ledger;
+		this(source, revision, machines, source.ledger);
+	}
+	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines, LedgerCheckpoint ledger) {
+		identity = source.identity; this.revision = revision; policyRevision = source.policyRevision; this.ledger = ledger;
 		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; scheduler = source.scheduler; ownedMachines = machines;
 	}
+	/** 已付费蜂结果移交：旧蜂记录与新余额使用同一个不可变根，不暴露中途状态。 */
+	public NetworkCheckpoint settleBee(java.util.UUID member, int slot, long beeRevision) {
+		var record = ownedMachines.get(member);
+		if (record == null || record.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED || record.bees() == null) throw new IllegalStateException("No owned bee state");
+		var bee = record.bees().bee(slot);
+		if (bee.revision() != beeRevision || bee.frozen().isZero()) return this;
+		var policy = new ProductPolicyRegistry(new ProductPolicySnapshot(policyRevision, List.of(), List.of()));
+		var candidate = ProductLedger.restore(policy, Math.addExact(ledger.transactions().size(), 1), ledger);
+		var paid = candidate.importPaidOutput(new LedgerCheckpoint.Pending(bee.id(), bee.plan().recipeRevision(), LedgerTransaction.State.PAID,
+				Map.of(), Map.of(bee.plan().output(), bee.frozen())));
+		if (!candidate.commit(paid)) throw new IllegalStateException("Paid bee settlement failed");
+		var state = record.bees().update(bee.work(bee.progress(), bee.pendingCycles(), ProductAmount.ZERO), record.bees().energy());
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record.withBees(state)), candidate.checkpoint());
+	}
 	public NetworkCheckpoint withOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record) {
-		if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership record");
+		validateOwnership(record, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record));
+	}
+	static void validateOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record, NetworkIdentity identity, long policyRevision) {
+		if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership record");
+		if (record.bees() != null) for (var bee : record.bees().bees()) {
+			if (bee.plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Bee work refers to a future recipe policy");
+		}
 	}
 	NetworkCheckpoint restoredOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines) { return new NetworkCheckpoint(this, revision, machines); }
 	public com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines ownedMachines() { return ownedMachines; }

@@ -41,7 +41,9 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	}
 	public void publish(NetworkCheckpoint next) {
 		checkThread(); Objects.requireNonNull(next);
-		if (!writable() || !next.identity().equals(identity) || next.revision() <= checkpoint.revision() || !next.ownedMachines().follows(checkpoint.ownedMachines())) {
+		if (!writable() || !next.identity().equals(identity) || next.revision() <= checkpoint.revision() || next.policyRevision() < checkpoint.policyRevision() || !next.ownedMachines().follows(checkpoint.ownedMachines())
+				|| next.ledger().revision() < checkpoint.ledger().revision()
+				|| next.ledger().revision() == checkpoint.ledger().revision() && !next.ledger().equals(checkpoint.ledger())) {
 			throw new IllegalArgumentException("Invalid authority or checkpoint revision");
 		}
 		checkpoint = next;

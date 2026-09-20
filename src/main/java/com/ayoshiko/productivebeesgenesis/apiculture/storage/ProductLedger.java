@@ -53,6 +53,16 @@ public final class ProductLedger {
 	}
 	/** 只返回本次加载重建的句柄；旧实例句柄不能跨恢复重用。 */
 	public LedgerTransaction pending(java.util.UUID id) { return guarded(() -> reservations.find(Objects.requireNonNull(id))); }
+	/** 领域私有候选接收已付费产物；调用方必须把来源清空与本账本一同发布，不能用于外部存入。 */
+	public LedgerTransaction importPaidOutput(LedgerCheckpoint.Pending paid) {
+		return guarded(() -> {
+			if (paid.state() != LedgerTransaction.State.PAID || !paid.inputs().isEmpty()
+					|| paid.policyRevision() > policy.snapshot().revision() || reservations.find(paid.id()) != null
+					|| reservations.size() >= maxPending) throw new IllegalArgumentException("Invalid paid output receipt");
+			var transaction = new LedgerTransaction(authority, paid);
+			advanceRevision(); reservations.add(transaction); return transaction;
+		});
+	}
 	public ProductAmount available(ProductKey key) { return guarded(() -> availableInternal(key)); }
 	private ProductAmount availableInternal(ProductKey key) { return balances.amount(key).subtract(reservations.amount(key)); }
 

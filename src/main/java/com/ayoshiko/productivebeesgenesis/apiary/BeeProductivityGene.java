@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProductionSampling;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,17 +62,6 @@ public final class BeeProductivityGene {
 	 * @return 应用基因后的数量，溢出时截断到 {@link Integer#MAX_VALUE}
 	 */
 	public static int adjustStackCount(int baseCount, int productivityLevel) {
-		if (baseCount <= 0) return 0;
-		int level = Math.max(NORMAL, Math.min(VERY_HIGH, productivityLevel));
-		if (level == NORMAL) return baseCount;
-
-		long adjusted;
-		if (baseCount == 1) {
-			adjusted = 1L + level;
-		} else {
-			float modifier = (1.0F / (level + 2.0F) + (level + 1.0F) / 2.0F) * baseCount;
-			adjusted = (long) baseCount + Math.round(modifier);
-		}
-		return adjusted >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) adjusted;
+		return BeeProductionSampling.adjustStackCount(baseCount, productivityLevel);
 	}
 }

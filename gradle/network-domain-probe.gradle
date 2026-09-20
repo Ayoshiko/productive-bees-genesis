@@ -83,6 +83,9 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+			if (providers.gradleProperty('networkBeeRestartSource').isPresent()) {
+				systemProperty 'pbg.bee.restartSource', file(providers.gradleProperty('networkBeeRestartSource').get()).absolutePath
+			}
             if (providers.gradleProperty('networkOwnershipMode').isPresent()) {
                 def mode = providers.gradleProperty('networkOwnershipMode').get()
                 if (!(mode in ['write', 'read'])) throw new GradleException('Invalid ownership mode')

@@ -80,7 +80,7 @@ final class NetworkRestoreState {
 			case 5 -> {
 				if (checks.hasNext()) {
 					var record = (com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord) checks.next();
-					if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership");
+					NetworkCheckpoint.validateOwnership(record, identity, policyRevision);
 				} else complete = true;
 			}
 			default -> throw new IllegalStateException("Invalid validation phase");

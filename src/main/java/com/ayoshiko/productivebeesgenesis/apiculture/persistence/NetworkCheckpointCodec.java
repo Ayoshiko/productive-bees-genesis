@@ -13,7 +13,7 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 2;
+	public static final int SCHEMA = 3;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
 	private final RuleRecordCodec rules;
@@ -90,8 +90,8 @@ public final class NetworkCheckpointCodec {
 				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")));
 		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
 		for (var raw : StrictNbt.list(tag, "ownership")) {
-			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw);
-			if (!record.claim().network().equals(checkpoint.identity().networkId()) || !record.claim().origin().dimension().equals(checkpoint.identity().origin().dimension())) throw new IllegalArgumentException("Foreign ownership");
+			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey);
+			NetworkCheckpoint.validateOwnership(record, checkpoint.identity(), checkpoint.policyRevision());
 			owned.add(record);
 		}
 		return checkpoint.restoredOwnership(owned.finish());

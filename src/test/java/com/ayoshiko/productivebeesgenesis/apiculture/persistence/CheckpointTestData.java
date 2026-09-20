@@ -30,7 +30,8 @@ final class CheckpointTestData {
 	static NetworkCheckpoint rich(NetworkIdentity identity, long revision) {
 		var pending = new LedgerCheckpoint.Pending(UUID.randomUUID(), 3, LedgerTransaction.State.PAID,
 				Map.of(RAW, ProductAmount.of(7)), Map.of(PRODUCT, ProductAmount.of(2)));
-		var ledger = new LedgerCheckpoint(8, Map.of(RAW, ProductAmount.of(BigInteger.ONE.shiftLeft(256)), PRODUCT, ProductAmount.of(5)), List.of(pending));
+		// 每次夹具都会生成新的事务身份，账本版本必须随之推进。
+		var ledger = new LedgerCheckpoint(Math.addExact(8, revision), Map.of(RAW, ProductAmount.of(BigInteger.ONE.shiftLeft(256)), PRODUCT, ProductAmount.of(5)), List.of(pending));
 		var transfer = new TransferStaging.View(UUID.randomUUID(), "test-endpoint", PRODUCT, TransferStaging.Direction.EXPORT,
 				19, ProductAmount.of(19), TransferStaging.Phase.UNKNOWN, "unknown external outcome");
 		var work = new WorkCapacity(new WorkKey(WorkKey.Kind.CENTRIFUGE_RECIPE, "test:recipe", 3, "default"), 128, 30, 40, 500, 2.0, 0.5, Map.of("stack", 3));

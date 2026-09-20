@@ -120,7 +120,7 @@ class CheckpointStreamingTest {
 		previous = Files.readAllBytes(file);
 		var badTransfer = new TransferStaging.View(UUID.randomUUID(), "x".repeat(65536), PRODUCT, TransferStaging.Direction.EXPORT, 1,
 				ProductAmount.of(1), TransferStaging.Phase.UNKNOWN, "");
-		var bad = new NetworkCheckpoint(checkpoint.identity(), 3, 3, checkpoint.ledger(), List.of(badTransfer), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
+		var bad = new NetworkCheckpoint(checkpoint.identity(), 3, 3, data.checkpoint().ledger(), List.of(badTransfer), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
 		data.publish(bad); assertThrows(IOException.class, () -> data.flush(file.toFile(), null));
 		assertTrue(data.isDirty()); assertEquals(2, data.persistedRevision()); assertArrayEquals(previous, Files.readAllBytes(file));
 		assertEquals(0, queue.status().reservedBufferBytes());

@@ -49,7 +49,8 @@ public final class DomainProbeServer {
 				boolean ownershipComplete = OwnershipProbe.advance(event.getServer(), pendingReport);
 				boolean coreOwnershipComplete = CoreOwnershipProbe.advance(event.getServer(), pendingReport);
 				boolean faultComplete = OwnershipFaultProbe.advance(event.getServer(), pendingReport);
-				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete) return;
+				boolean beesComplete = BeeNetworkProbe.advance(event.getServer(), pendingReport);
+				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete || !beesComplete) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }
@@ -63,12 +64,16 @@ public final class DomainProbeServer {
 			report.addProperty("productKeyRoundTrip", true);
 			var policy = ProductPolicyProbe.verify(event.getServer().overworld(), report);
 			P1FlowProbe.verify(event.getServer().overworld(), policy, report);
+			com.ayoshiko.productivebeesgenesis.apiary.BeeKernelProbe.verify(event.getServer().overworld(), report);
+			if (System.getProperty("pbg.bee.restartSource") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.read(
+					event.getServer().overworld(), Path.of(System.getProperty("pbg.bee.restartSource")), report);
 			MemberIsolationProbe.verify(event.getServer().overworld(), report);
 			NetworkPersistenceProbe.verify(event.getServer(), report);
 			TopologyProbe.start(event.getServer());
 			OwnershipProbe.start(event.getServer());
 			CoreOwnershipProbe.start(event.getServer());
 			OwnershipFaultProbe.start(event.getServer());
+			BeeNetworkProbe.start(event.getServer());
 			pendingReport = report; return;
 		} catch (Exception failure) {
 			failed(report, failure);

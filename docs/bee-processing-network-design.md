@@ -1,10 +1,10 @@
 # 蜂箱—离心机处理子网络：大型更新设计方案
 
-状态：P2（D09–D12）已完成并通过阶段退出验收：完整持久化、预算恢复、核心拓扑、托管隔离及基础蜂箱／基础离心机资产交接；无 AE2／有 AE2 专服、8 类故障、16 个跨进程阶段恢复、真实客户端菜单和正常保存退出已通过，证据见 10.21。P1 领域核心 D03–D08 已交付，下一步为 P3／D13，网络生产尚未接入。日期：2026-09-19。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
+状态：P2（D09–D12）已完成，见 10.21；P3／D13a 共享内核与独立机接回见 10.22，D13b 逐蜂权威记录、关闭转化的基础铁蜂生产与恢复见 10.23。下一步为 D14 逐蜂位喂食迁移；D14–D16 和 P3 阶段退出尚未完成，生产仅有显式开发入口，未接自动调度。日期：2026-09-20。D01 独立机测量基线：`f2ae0b8ba586d1a9f8ee6d512d959b4bc2fb1de6`，模组版本 `1.0.8`；开发分支为 `bees-processing-network/1.21.1`，维护分支为 `main-neo/1.21.1`。
 
 本方案针对 Minecraft 1.21.1、NeoForge 21.1.214、Java 21；核心依赖为 Productive Bees 13.13.5、ProductiveLib 0.2.0、Mekanism 10.7.19.85，AE2 19.2.17 为可选集成。以上是开发基线，不代表已经验证所有元数据允许的低版本依赖。
 
-当前代码已合入维护提交 `62d646b`／`1.0.8-hotfix`，D01 的旧 Spark 数据不能当作 hotfix 后测量。网络领域模块尚未接入独立机生产；独立机修复来自同步的 hotfix。第 10.4 起记录证据与验证范围，第 11 节按依赖列出后续每步交付物和验收条件，第 13 节记录参考源码版本与证据。
+当前代码已合入维护提交 `62d646b`／`1.0.8-hotfix`，D01 的旧 Spark 数据不能当作 hotfix 后测量。D13a 共享计算内核已用于独立机；D13b 可通过开发入口将已付费蜂产物结算至网络账本，服务器自动调度留给 D16。第 10.4 起记录证据与验证范围，第 11 节按依赖列出后续每步交付物和验收条件，第 13 节记录参考源码版本与证据。
 
 ## 1. 推荐结论与目标
 
@@ -156,6 +156,8 @@ flowchart LR
 日夜、天气、维度、群系与特殊环境按蜂箱成员原位置判断，不能统一替换成核心的位置。组共享可复用检查；环境变化事件和有预算的周期复核共同驱动失效。采蜜表现可虚拟化，生产条件不能省略。
 
 动态战利品、Wanna Bee 琥珀、多花型蜜蜂、基因采样、万象创世随机输出、精华转化、副产物过滤及自动离心升级分别适配。首个原型只接纳已验证的静态蜂种；不支持的成员在接管预览中明确阻止接入，不能少产一部分后声称已支持。原有自动离心升级必须定义其产能来源与计费，禁止网络再离心同一份已转换输出。
+
+D13b 已核实铁蜂也有修复铁砧的转化配方，因此首个生产适配要求**基础蜂箱、无已安装生产升级、喂食转化关闭、铁蜂、一个固定数量必定产物**，不能只检查蜂种 ID。花源继续使用 PB 当前定义及本模组的物品／方块标签匹配；原物理喂食槽保存在残余映像中，只读共享样本，D14 才迁入逐位账户。不支持的生产组合拒绝激活，保留 P2 的完整保管和交还能力；P2 接管按钮仍只执行保管，D16 接生产预览时须串联准入检查。
 
 ### 4.2 调度、概率与能量
 
@@ -360,7 +362,7 @@ UI 示例：优先级 100 的铁蜜脾规则优先喂给可处理它的能力池
 | --- | --- | --- |
 | `NetworkRecord` | networkId、ownerId、controllerId、dimension、generation、topologyRevision、schemaVersion | 一份权威记录对应一个网络 |
 | `MemberRecord` | memberId、position、bindingGeneration、mode、capabilityRevision、upgradeInventory | 升级只有一份权威库存；不可变能力快照派生自它 |
-| `BeeRecord` | beeId、完整蜜蜂数据、memberId／休眠位、progress、stateRevision | 唯一归属，分组只引用 beeId |
+| `BeeRecord` | beeId、完整原始蜂位／蜜蜂数据、memberId／slot、progress、stateRevision、冻结配方／能力版本、未采样轮数、冻结产物 | 唯一归属，分组只引用 beeId；旧模板不可直接作为当前进度交还 |
 | `FeedingSlotRecord` | memberId、slotIndex、实际物品、共享组、revision | 数量恰等于该成员提供的蜂位数，未加载不删除内容 |
 | `ProductEntry` | ProductKey、ProductAmount、reservedAmount、revision | 只有账本保存真实产物数量；保留策略不伪装成扣库 |
 | `WorkRecord` | jobId、sourceAccount、recipeVersion、reservationId、progress、paidEnergy、preparedOutputs | 预约引用源账户，不复制原料 |
@@ -429,6 +431,8 @@ a 的 `VERIFIED` 仅表示完整语法和压缩流 EOF／CRC 通过，既不等�
 ### 8.3 独立机接管与取回
 
 接管步骤：冻结机器全部生产／能力写入口 → 生成带身份、源版本和数量摘要的交接记录 → 在权威数据建立待接管记录 → 清空或封存源有效内容并写入绑定 → 发布网络可执行所有权。加载时成员必须先查询权威绑定；旧区块 NBT 残留不能再次导入。
+
+封存完成不等于生产数据永远不变。D13b 激活时从旧映像移出蜂位、待产周期和 FE，残余映像带 `beeAuthority` 标记；逐蜂记录与有限 FE 保管账户成为唯一所有者。正常生产只替换成员运行状态，残余物品／花样本不变。交还前排空已付费工作，以当前余数和剩余 FE 重建完整映像，再进入原 RETURNING／区块写入／RETURNED 回执流程。交还指纹对应这份当前映像，不复用接管前的资产数量；待结算时拒绝交还请求，不把正常积压升级成不可恢复故障。
 
 只有验证过的蜜蜂转入蜂群；现存物品／流体按合法产物类型校验，符合的可通过交接事务入账，不要求自产来源证明。不合格但玩家真实拥有的内容留在容量固定的迁移保管区供取回。蜂笼、逐位喂食物品、升级和供给分别进入对应账户；空间不足拒绝接管，不丢弃。已有生产进度与待输出结果只有在适配器能证明其计费及所有权时导入，否则要求停机排空后接管。
 
@@ -849,6 +853,41 @@ P2 的基础蜂箱／基础离心机使用有限迁移保管映像，记录原�
 
 **P2 已满足“结构与唯一所有权”的阶段目标。** 正常世界接管开关仍默认关闭；当前只有基础蜂箱／基础离心机具有已验收的资产适配器，托管状态不生产。工厂生产／资产适配、特殊蜂种、逐位喂食迁移、统一供给与能量账户、管理取回界面、长稳断电故障和性能 A/B 按原路线进入 P3–P7，不把专服或菜单通过解释为这些后续功能已完成。未实施线上发布或修改正式测试世界。
 
+### 10.22 D13a 共享计算内核与独立机接回（2026-09-19）
+
+P2 未提交工作经审查、实际重跑全量测试和构建／产物检查后，以 `f960f32` 提交并推送。D13a 将无世界副作用的计算移到 `apiculture.production`：`BeeWorkConditions` 只接收工作基因和环境值，`BeeProgressPlan` 只规划已分配的虚拟 tick，`BeeProductionSampling` 只对一个有界轮数段计算数量。NBT 解析、真实物理槽修改、喂食、转化与物流仍由独立蜂箱适配器负责；能力预览与实际推进共用周期公式，不从已加速周期再次乘速度。
+
+进度计划保留 long 完成周期与 STACK 周期数，先检查能耗乘法再允许物理状态改变；未获分配 tick 时，不因升级缩短周期而免费结算旧进度。正常调用方沿用已有按可支付 FE 分配 tick 的流程。物理 pending 的 int 饱和和旧升级轮数限制留在旧适配器中，不能将它们当作网络数量上限；D13b 必须持久化未处理轮数，按工作预算消费。结果入口返回模板与 long 数量，物理适配器才投影为 ItemStack；私有结果可直接使用现有 `ProductAmount`／分页表逐键相加，不能先截成 ItemStack 再反推精确余额。该入口的回调只是本次私有结果构建，不代表入库、付款或转移回执。
+
+采样依赖由固定的 ThreadLocalRandom 类型改为调用方提供的 `RandomGenerator`，独立机仍传原线程随机源，算法和随机调用顺序保持原路径。确定性固定数量不消耗随机；二项轮数小批精确、大批沿用 Poisson／正态近似；普通基因的非定长数量和仍沿用原 `SampleUniformSum`，不能笼统声称所有小批逐次精确。非普通基因 ≤32 个成功样本逐栈取整，较大批次保持原分布近似；没有添加期望保底。未来网络的规划／SIMULATE 不可调用执行采样器，已付费结果冻结后不得再次抽样。
+
+本地进一步核对 PB 13.13.5 的 `beeReleasePostAction`（基因逐栈取整、HasConverted 抑制蜜脾）及 `simulateBee`（会采收、收集、postPollinate 和调用产出），因此不把 PB 模拟入口作为纯函数复用。KubaTech `onStorageContentChanged` 的花源要求去重和加载期跳过世界检查可作缓存职责参考，不复制其 Forestry API。Useless `claimOutputs` 的按键整批所有权交付、ECO `InfiniteStorageAmounts` 的精确值与 long 投影分离用于明确数量边界；本轮没有复制参考实现或新增依赖。
+
+验证记录：`build/p3-d13a-build.log` 的全量测试／构建／产物核验与探针编译通过；D13 阶段最终复核见 10.23。`build/network-probe-p3-d13a-noae2-1/results/domain.json` 在无 AE2 的 NeoForge 21.1.214 专服执行真实基础蜂箱生产处理器：两个铁蜂位分别为普通／极高生产力，10 个分配 tick 生成 2＋8＝10 个蜜脾，扣除 200 FE，喂食样本保持 1，余数与 pending 均为 0。另用合成极端数量配方证明三次数量回调可精确汇总 `13835058042397261827`，完整组件和原模板不变，物理投影仍为 int 上限。原 P2 托管隔离、往返、拓扑、8 类故障和正常停服也通过。该夹具在一个服务器 tick 内直接推进生产处理器，用于行为核对，不是 10 个真实服务器 tick 的性能测量；旧报告的 `realProductionExecuted=false` 属于 P1 夹具，D13a 的物理产出另列 `beeKernelPhysical*` 字段。
+
+**D13a 交付时只完成共享计算和独立机接回。** 当时没有新增网络可执行蜜蜂记录、喂食账户或能量账户，也未改变 checkpoint schema。后续 D13b 见下节；未新增客户端界面，不将 P2 的截图作为生产验证。
+
+### 10.23 D13b 逐蜂所有权、静态生产与恢复（2026-09-20）
+
+`BeeRecord` 保留稳定 beeId、member／slot、完整原始数据、逐蜂生产力与工作基因、计划版本、付费余数、long 未采样轮数和 `ProductAmount` 冻结数量。`BeeMemberState` 只覆盖基础蜂箱的三个物理蜂位及有限 FE 保管账户；三个蜂位是本适配器已验证的物理布局，不是产物库存配额。工厂布局留给 D24，D16 再把有限 FE 从保管账户事务化移入全网账户，不能同时保留两份可用能量。
+
+`StaticApiaryAdapter` 只读取封存映像和成员原位置，`NetworkBeeService` 验证当前核心、拓扑、目录 claim、成员绑定与空物理源后调用共享进度内核。付款与首段冻结结果先形成私有候选，再一次发布 checkpoint；预算为零时只保留已付费轮数，存在积压时不再接受新 tick。模拟不发布状态，也不调用随机源。无升级铁蜂为确定性路径，未将它包装成通用随机生产适配；D13a 原有概率模式边界仍成立。
+
+结算复用 D06 的 PAID 事务语义，在私有账本候选中按精确键交付，再与清空蜂结果一起发布。已付费积压按保存计划恢复，不重新扣 FE、不依赖当前花源或重新选择配方；新工作重新检查条件、配方及能力版本。重复请求必须携带当前蜂 revision，旧 revision 不再入账。账本／策略版本不得回退，同一账本版本不得携带不同内容，防止旧运行来源覆盖刚结算的余额。现有保存测试的公共夹具也同步推进账本版本，因为它每次都会生成新的事务身份。
+
+本地 PB JAR 的 `recipe/block_conversion/anvil_repair.json` 与 `anvil_repair_chipper.json` 证实铁蜂转化并非空集。第一次专服运行因此被保守准入拒绝；修正为显式要求关闭转化，并在探针中验证转化开启、Wanna 蜂和基因采样升级均被拒绝。使用铁块作为非消耗性样本时，普通／极高生产力两只蜂分别生成 2／8 蜜脾，总计 10，消耗 200 FE，与 D13a 独立机夹具一致。核心重建前已冻结一轮、保留一轮积压，恢复后结算一次，物理槽和储能始终为空；交还恢复两只原蜂、一个花样本和当前剩余 FE。
+
+checkpoint schema 从 2 升至 3，生产状态随每成员所有权记录编码，并进入现有流式读取／预算恢复。错误类型、缺失生产状态、重复蜂位、未来配方版本和未知产物键导致整个域隔离；不会把错误当作空蜂箱。旧 schema 2 开发存档保持原文件并进入恢复状态，本步没有自动迁移旧测试世界。每成员最多三个记录的解码有明确范围，后续工厂扩展不能直接放宽为无界 RAW 列表。
+
+| 验证 | 证据 | 边界 |
+| --- | --- | --- |
+| 聚焦行为／保存测试 | `BeeProductionCheckpointTest`、`OwnershipTransferTest`、现有 checkpoint 回归 | 缺条件、缺电、预算、旧 revision、原始 NBT、超 long 数量、各付费阶段、单次结算、交还及旧账本拒绝 |
+| 无 AE2 专服 | `build/network-probe-p3-d13b-noae2-verified/results/domain.json` | 真实基础蜂箱接管、生产、核心重建、积压交还拒绝及安全交还；原 P2 隔离／故障矩阵和正常停服保存也通过 |
+| AE2＋Applied Flux／跨 JVM | `build/network-probe-p3-d13b-ae2-restart-final/results/domain.json`；输入来自 `build/network-probe-p3-d13b-noae2-final/results/bee-restart` | 专服矩阵通过；独立新 JVM 读取迁移后、部分进度、未采样、冻结、部分入账、完成六个 checkpoint，数量与 FE 守恒。区别于 P2 整世界交接重启和强断电恢复 |
+| 全量回归／构建／产物 | `build/p3-d13b-verified.log`；`build/test-results/test`；`build/reports/release-artifact.txt` | 782 项测试，780 通过、2 项既有跳过，0 失败；`test build verifyReleaseArtifact` 通过，JAR 无开发探针。此前组合运行的保存夹具失败保留在原日志，最终以上述复核为准 |
+
+**本步只完成 D13 的首个确定性网络生产路径。** 尚未接逐位喂食、统一全网供能、服务器自动调度或玩家取回菜单，默认开关保持关闭；不声称 P3 可玩闭环或 MSPT 收益。`NetworkBeeService` 的显式入口目前逐次检查环境与拓扑，D16 应按一次已验证的调度边界共享快照，不能把开发探针的调用频率当作最终性能设计。下一步 D14 先证明共享喂食实物迁移守恒，再接 D15／D16。
+
 ## 11. 阶段路线与可独立评审的提交
 
 以下为开发清单；D01–D08 的交付和验证边界见第 10.4–10.11 节，D09a／D09b1／D09b2 见第 10.12–10.15 节，D09b3a 见第 10.16 节，D09b3b／c 见第 10.17 节，D10–D12 的 P2 退出记录见 10.21。生产新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
@@ -911,6 +950,13 @@ P2 的基础蜂箱／基础离心机使用有限迁移保管映像，记录原�
 
 **D13 — 抽取蜜蜂生产内核。** 前置：D03–D06、D12。从 `BeeSlotTickProcessor`、`BeeWorkConditionEvaluator` 和 `BeeProduceProcessor` 拆出上下文输入、进度规划、数量型结果汇聚接口；先由物理适配器接回独立模式，再由网络适配器接管一类基础蜂箱和静态蜂种。确定性路径核对逐周期输出、基因和能耗，随机路径按声明模式核对。通过条件为没有调用旧整机 tick 来伪装虚拟化。
 
+| D13 子步骤 | 交付与本地参考 | 独立退出门槛 |
+| --- | --- | --- |
+| D13a（已实现，见 10.22） | 环境／进度／数量计算与物理适配器；PB 生产公式、KubaTech 花源缓存职责、Useless／ECO 数量边界 | 独立机进度／基因／能耗不变，确定性与固定种子分布测试通过；真实物理输出及超 int／long 私有数量聚合可复核 |
+| D13b（已实现，见 10.23） | 逐蜂权威记录、关闭转化的基础铁蜂准入与网络适配；PB 铁砧转化配方、D06 事务及 D12 封存映像 | 单一所有者、逐蜂版本／余数／积压／冻结结果进入一致 checkpoint；重复提交、缺条件、版本变化、各付费边界恢复和交还；不调用物理 ticker、输出槽或 AE2。自动调度仍待 D16 |
+
+D13b 首个适配为关闭转化、无已安装升级、固定数量必定单产物的铁蜂；真实花样本不消耗。特殊蜂种、转化、自动离心、基因采样及概率配方在激活前明确拒绝，不能先生产再跳过副产物。没有构造隐藏蜂箱运行生产。D14 再把旧共享喂食实物迁入 H 个有限槽，D16 才把有限供给／能量和真实服务器调度接成玩家可运行闭环。
+
 **D14 — 一蜂位一喂食槽。** 前置：D12–D13。实现 `FeedingSlotStore`、槽绑定、补料计划及共享组；迁移旧 `FeederSlotManager` 的匹配语义到快照接口。测试 H 个蜂位恰有 H 个喂食槽、空蜂位、蜂位迁移、共享样本和并发消耗、特殊花条件及缺料。通过条件为一个物品不被重复搬运／消费／复制，卸载和拆机仍能取回内容。
 
 **D15 — 虚拟离心能力池。** 前置：D03、D06、D08、D12。从 `PbRecipeContext` 中抽出计算和数量输出小接口；保留 `PbVirtualTickPlan` 的周期／能耗语义，替代物理槽位与罐操作。实现一类离心机及异构进程分配，支持蜜脾和蜜脾块、物品与流体结果。通过条件为逐机升级分别生效、累计吞吐正确、处理中拆机不免费重开、既有自动离心输出不被二次离心。
@@ -963,7 +1009,7 @@ P2 的基础蜂箱／基础离心机使用有限迁移保管映像，记录原�
 
 纯新增服务失败可以撤销本步；已被旧路径调用的抽象改动必须同时回退适配器并跑独立机回归；已有测试世界数据后，只能使用兼容读取／恢复模式或恢复一致备份，不能随便删除序列化字段和退回不认识网络的旧 JAR。调试指标放既有日志／开发统计入口，按需启用，不为每步新增操作指南。
 
-P1／D08 已验收并推送；P2／D09–D12 已通过阶段验收，当前网络工作区保留未提交实现，后续进入 P3。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
+P1／D08 已验收并推送；P2／D09–D12 已通过阶段验收并以 `f960f32` 提交推送。P3／D13 的实现及验证见 10.22–10.23，后续进入 D14。D03–D08 各自经过聚焦测试、自审和全量回归再单独提交，未启用机器接管。P1 退出检查确认领域算法和真实 API 能组合；D09 的权威 checkpoint 须包含交易明细、动态发现、暂存及规则状态，不能直接把 D06 的余额查询 Snapshot 当完整存档。任何阶段只完成接口而未通过行为验收时均保持未完成状态。
 
 ### 11.10 执行效率与逐步参考清单
 
@@ -1023,7 +1069,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources` | `common/content/qio/QIOFrequency`、`common/inventory/container/QIOItemViewerContainer` | 库存键索引、updatedItems、只向查看者同步、避免同时保存的思路；QIO 有容量且其终端协议不等于本方案的服务端分页 |
-| `../decompiled-reference/productive-bees-addon-1.21.1/productivebees-13.13.5-decompiled` | `AdvancedBeehiveBlockEntity` 的模拟与蜂笼入口 | 保留 PB 身份与模拟语义；不直接托管未经适配的原版蜂箱 |
+| `../decompiled-reference/productive-bees-addon-1.21.1/productivebees-13.13.5-decompiled`；`libs/productivebees-1.21.1-13.13.5.jar` | `AdvancedBeehiveBlockEntity` 的模拟／蜂笼／释放入口、`ConfigurableBee` 花源；JAR 的两条 `anvil_repair*` 配方 | 保留身份与真实副作用边界；铁蜂只有在关闭转化的已审查路径中才属于当前静态适配，不直接托管原版蜂箱 |
 | `.tmp_gtceu_src` | `MEStockingBusPartMachine`、`ExportOnlyAEItemSlot` | 库存视图与真实消耗分离、周期刷新及防重复匹配；本地摘录未核实发行版本，不照搬 API 或轮询频率 |
 | `.tmp_gtnh_src` | KubaTech `MTEMegaIndustrialApiary`、`MTEIndustrialApiary` | 集中蜜蜂数据、花朵需求去重、缺失原因可见；属于旧 Forestry／Forge 技术栈，只借鉴职责，不套用 1.21.1 API |
 
@@ -1044,7 +1090,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 
 **本轮最新存储与交付核对：** ECO `SavedDataInfiniteStorageEngine` 仍按键增量更新数量和类型总量；`InfiniteStorageAmounts` 保持 long 主表与稀疏 BigInteger。`ECOInfiniteStorageData.appendJournalChange` 缓存单个最近键的编码模板（超过 64 KiB 不缓存），复用打开的 FileChannel，但每次普通修改仍 `force(true)`；`insertOnce` 是数量和迁移收据共同进入快照的另一条合同。不能把这几条路径混成一种吞吐结果。用户提供的“约 37R 物品／tick、6 ms”目前只有场景描述，没有同场景原始 Spark／基准报告，本文不把它记为已复现指标。
 
-下一轮 D13／D15／D20／D28 的基准须同时记录精确总量、不同键数、组件大小、存取调用数、Long.MAX_VALUE 分段次数、实际接受量、持久化方式、查看者数量及计时范围。Useless 新增 `claimOutputs` 说明大数产物可由 CPU 的精确账本整批接收，从而减少重复 long 分段；本项目内部产物与中间投入也应按键汇总直接在领域账本结算，仅在外部 long 接口边界切段。外部回调抛异常时，不能沿用“视为零接收并重试”的降级：接收结果未知时保留暂存并隔离，须有幂等收据才能重试。
+后续 D15／D16／D20／D28 的基准须同时记录精确总量、不同键数、组件大小、存取调用数、Long.MAX_VALUE 分段次数、实际接受量、持久化方式、查看者数量及计时范围。Useless 新增 `claimOutputs` 说明大数产物可由 CPU 的精确账本整批接收，从而减少重复 long 分段；本项目内部产物与中间投入也应按键汇总直接在领域账本结算，仅在外部 long 接口边界切段。外部回调抛异常时，不能沿用“视为零接收并重试”的降级：接收结果未知时保留暂存并隔离，须有幂等收据才能重试。
 
 ECO 本轮 `ExactMapSync`／`MenuDataTransport` 采用全量基线加增量、每菜单／通道一个在途消息、每玩家共享发送预算和关闭时取消；这些用于 D18／D19 的同步设计。其整消息大小限制属于传输限制，不能转成产物库容量限制。DataEnergistics `196ca488` 的恢复修复在 `stateRestoreDepth` 内合并脏标记，直到正常服务器 tick 才发布，避免 `setLevel/onLoad` 中重入区块加载；本项目 D12 继续保持 NBT 读取只恢复引用、所有权状态机在服务器 tick 推进。恢复服务必须以当前目录 revision 等待回执，不能拿最后已保存 revision 为同进程重建后的新操作背书。
 
@@ -1070,7 +1116,7 @@ ECO 本轮 `ExactMapSync`／`MenuDataTransport` 采用全量基线加增量、�
 | D10 | ECO `NEClusterCalculator`；Mekanism 邻接／多方块生命周期；AE2 节点生命周期 | 学习形成／失效与事件合并，拓扑仍为单区块预算 BFS，不沿用定形扫描 |
 | D11 | Mekanism `TileEntityMekanism.tickServer`；本地 JDTE 合并接口 | 审计父类组件、ticker、flush、能力写入口；不能只 return 子类生产方法 |
 | D12 | ECO seal／迁移收据／restoreTarget；DataEnergistics detached runtime 与恢复深度；Useless 整批交付 | 当前 revision 回执门控、恢复不得重入区块加载、接收即转移所有权；真实蜂笼／pending／能量专属适配，异常不推断零接收 |
-| D13 | PB 生产／模拟；KubaTech 集中蜂群管理 | 复用业务条件，按原位置验证环境；旧 Forestry 实现只作职责参考 |
+| D13 | PB `beeReleasePostAction/simulateBee`、`anvil_repair*`；KubaTech `onStorageContentChanged`；Useless `claimOutputs`；ECO `InfiniteStorageAmounts` | 已核对逐栈基因、世界副作用、只读花源和按键交付。D13b 以关闭转化为静态铁蜂前提，逐蜂保存未处理轮数与冻结数量；旧映像迁出资产，交还重建当前值；旧 Forestry 只作职责参考 |
 | D14 | PB 喂食与多花路径；KubaTech 花源去重 | 共享只读判定，不共享物品所有权；逐蜂位槽和消费预约独立守恒 |
 | D15 | Mekanism 并行／配方；ECO execution／dispatch accounting | 分开 lane 预约、输入消费、结果冻结与交付，拒绝免费重开作业 |
 | D16 | ECO 任务调度／能量事务；AE2 网络服务 tick | 真实 tick 编排、预算公平和付费段结算，不异步调用世界或 AE2 |
@@ -1107,4 +1153,4 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 最大的风险依次为：托管与独立模式双重所有权、存档／区块保存不一致、异构机器能力汇总失真、特殊蜂种和喂食语义遗漏、保留组额度重复分配、AE2 自拉取及异常重试复制，以及把 IO 热点转移成无限类型账本的保存／枚举热点。P0 原型及 P1 领域验收已证明基础数量／API／守恒选择；完整网络的恢复、接管、真实生产与性能仍须按后续闸门验证。
 
-P2／D09–D12 已通过第 10.21 节的阶段验收。下一步 D13 先抽取蜜蜂生产内核，用相同物理适配器保持独立机语义，再接入网络适配器；对照 PB 真实条件、Useless 大数整批交付和 ECO 数量账本，把按键汇总放在内部，外部边界才做 long 分段。D14 把封存的共享喂食实物事务化迁移至逐蜂位槽，D15 接入已扣料结果，D16 建立统一有限供给／储能及服务器调度。P3 验收完成前仍保持接管默认关闭，不提前启用托管生产；P5 再形成终端、主动拉取和保留闭环。网络收益与用户提供的 ECO 吞吐描述仍须同场景 Spark／MSPT 实测。
+P2／D09–D12 已验收并提交推送；D13a 共享内核见 10.22，D13b 逐蜂所有权及首个静态生产路径见 10.23。下一步 D14 把残余封存映像的共享喂食实物事务化迁移至逐蜂位槽：同一铁块样本不能在三个蜂位中各变成一块，禁用标记、空位及退回均需保留。继续参考 PB 花源／转化判定、现有 FeederSlotManager 的禁用语义与 KubaTech 的需求去重，但不照搬其旧加载器 API。D15 接离心已扣料结果，D16 接全网有限供给／储能及服务器调度；届时移交 D13b 的 FE 保管余额，不能按原接管量再次注资。P3 验收前保持默认关闭，P5 再形成完整终端和 AE2 闭环；性能收益仍须同场景 Spark／MSPT 实测。

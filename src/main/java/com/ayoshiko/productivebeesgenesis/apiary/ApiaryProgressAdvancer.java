@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProgressPlan;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 
@@ -38,8 +39,6 @@ final class ApiaryProgressAdvancer {
 			int cachedProcessingTime, ApiaryUpgradeHandler upgradeHandler, int[] pendingProductions,
 			AtomicInteger accumulatedProgress) {
 
-		long acceleratedEnergyCost = ApiaryEnergyMath.calculateAcceleratedEnergyCost(beeEnergyCost, tickMultiplier);
-
 		// 推进计时
 		int currentTicks = slot.getTicksInHive();
 		// 模块1修复：从 baseMinOccupationTicks 读取原始基础值，而非 minOccupationTicks（adjusted 值）。
@@ -52,9 +51,9 @@ final class ApiaryProgressAdvancer {
 		}
 		// 应用时间倍率（< 1.0 加速，> 1.0 减速）
 		// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
-		float safeTimeMultiplier = SaturatingMath.positiveFiniteFloat(timeMultiplier, 1.0f);
-		int adjustedMinTicks = hasCreativeUpgrade ? 1
-				: Math.max(1, SaturatingMath.saturatingRoundToInt((double) baseMinTicks * safeTimeMultiplier));
+		int adjustedMinTicks = BeeProgressPlan.cycleTicks(baseMinTicks, cachedProcessingTime, timeMultiplier, hasCreativeUpgrade);
+		var plan = BeeProgressPlan.plan(Math.max(0, currentTicks), Math.max(1, tickMultiplier),
+				adjustedMinTicks, Math.max(0, beeEnergyCost), Math.max(0, stackProductionCount));
 		// 模块1：蜂箱速度调试日志 — 每 100 tick 采样一次，仅在 dev 模式开启时输出
 		// 外层 isEnabled() 守卫避免 dev 关闭时调用 DevLog.debug 的方法调用开销
 		// DevLog.debug 内部还会检查 apiary_speed feature 开关并做 1000ms 节流
@@ -79,26 +78,21 @@ final class ApiaryProgressAdvancer {
 		// Tick 加速器会在同一 game tick 重复调用方块实体；后续调用被跳过时，
 		// 这里一次推进对应数量的虚拟 tick。这样进度和完成节奏真实加速，
 		// 不再等到周期结束后才一次性乘产出，同时总产量保持与原批处理策略一致。
-		long advancedTicks = SaturatingMath.saturatingAdd(
-				Math.max(0, currentTicks), Math.max(1, tickMultiplier));
-		int completedCycles = (int) Math.min(Integer.MAX_VALUE,
-				advancedTicks / adjustedMinTicks);
-		int newTicks = (int) (advancedTicks % adjustedMinTicks);
+		int newTicks = plan.remainingTicks();
 		slot.setTicksInHive(newTicks);
 
 		// 更新进度（供 GUI 进度条渲染）
 		slot.setProgress((float) newTicks / adjustedMinTicks);
 
 		// 完成累积 — 达到最小 occupation ticks 时累积待产出次数（不立即产出）
-		if (completedCycles > 0 && slotIndex < pendingProductions.length) {
+		if (plan.completedCycles() > 0 && slotIndex < pendingProductions.length) {
 			// STACK 倍率作用于每个真实完成周期；概率产出仍由后续批量采样处理。
-			int pendingCount = SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(
-					Math.max(0, stackProductionCount), completedCycles));
+			int pendingCount = SaturatingMath.saturatingToInt(plan.productionCycles());
 			pendingProductions[slotIndex] = ApiaryEnergyMath.saturatingAdd(pendingProductions[slotIndex], pendingCount);
 			saturatingAdd(accumulatedProgress, pendingCount);
 		}
 
-		return acceleratedEnergyCost;
+		return plan.energyCost();
 	}
 
 	private static void saturatingAdd(AtomicInteger counter, int amount) {

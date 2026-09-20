@@ -51,12 +51,12 @@ class BeeWorkConditionEvaluatorTest {
 		assertEquals(BeeState.WAITING_RAIN, blocking(malformed, false, true, false));
 	}
 
-	private static BeeWorkConditionEvaluator.WorkTraits traits(String behavior, String weatherTolerance) {
+	private static com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkConditions.Traits traits(String behavior, String weatherTolerance) {
 		return BeeWorkConditionEvaluator.readTraits(behavior, weatherTolerance);
 	}
 
 	private static BeeState blocking(
-			BeeWorkConditionEvaluator.WorkTraits traits,
+			com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkConditions.Traits traits,
 			boolean night,
 			boolean raining,
 			boolean thundering) {

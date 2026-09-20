@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.compat;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.capacity.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProgressPlan;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
@@ -48,13 +49,12 @@ public final class MachineCapacityReader {
 		requireServerThread(tile);
 		var upgrades = tile.getApiaryUpgradeHandler();
 		boolean creative = upgrades.hasCreativeUpgrade();
-		float time = SaturatingMath.positiveFiniteFloat(upgrades.getTimeMultiplier(), 1);
+		float time = upgrades.getTimeMultiplier();
 		long energy = creative ? 0 : Math.max(0, tile.energyContainer().getEnergyPerTick());
 		Map<String, Integer> effects = effects(tile, tile);
 		List<WorkCapacity> work = new ArrayList<>();
 		for (BeeCycleQuery query : queries) {
-			int base = query.baseOccupationTicks() > 0 ? query.baseOccupationTicks() : ModConfig.SERVER.apiaryProcessingTime.get();
-			int ticks = creative ? 1 : Math.max(1, SaturatingMath.saturatingRoundToInt((double) base * time));
+			int ticks = BeeProgressPlan.cycleTicks(query.baseOccupationTicks(), ModConfig.SERVER.apiaryProcessingTime.get(), time, creative);
 			work.add(new WorkCapacity(query.work(), upgrades.getStackProductionCount(), ticks,
 					energy, energy, upgrades.getProductivityMultiplier(), 0, effects));
 		}
