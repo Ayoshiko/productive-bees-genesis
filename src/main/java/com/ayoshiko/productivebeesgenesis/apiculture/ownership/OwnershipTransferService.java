@@ -52,7 +52,7 @@ public final class OwnershipTransferService {
 					if (!record.assets().equals(endpoint.capture())) throw new IllegalStateException("Sealed source changed");
 					service.step = Step.SEAL;
 				}
-				case OWNED -> { service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint); if (record.bees() == null) endpoint.validateReturn(record.assets()); service.step = Step.OWNED_RECEIPT; }
+				case OWNED -> { service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint); if (record.bees() == null && record.centrifuge() == null) endpoint.validateReturn(record.assets()); service.step = Step.OWNED_RECEIPT; }
 				case RETURNING -> {
 					if (endpoint.matches(authority.identity(), claim, MemberBinding.Mode.LEAVING)) {
 						service.requireEmpty(endpoint); service.step = Step.RETURN_INTENT;
@@ -80,6 +80,7 @@ public final class OwnershipTransferService {
 	public void requestReturn(OwnershipEndpoint endpoint) {
 		check(); if (advancing || step != Step.OWNED) throw new IllegalStateException("Member is not available for return");
 		if (record().bees() != null && !record().bees().drained()) throw new IllegalStateException("Settle paid bee work before return");
+		if (record().centrifuge() != null && !record().centrifuge().drained()) throw new IllegalStateException("Settle held centrifuge work before return");
 		advancing = true;
 		try {
 			endpoint.validate(authority.identity(), claim); requireClaim(); requireBinding(endpoint, MemberBinding.Mode.MANAGED); requireEmpty(endpoint);

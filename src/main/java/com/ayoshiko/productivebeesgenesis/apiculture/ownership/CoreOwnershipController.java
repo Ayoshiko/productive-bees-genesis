@@ -36,8 +36,9 @@ public final class CoreOwnershipController {
 		var view = core.topology();
 		if (join && (!ModConfig.SERVER.beeNetwork.enabled.get() || view == null || !view.valid())) return false;
 		if (!join && (domain == null || domain.checkpoint().ownedMachines().activeCount() == 0)) return false;
-		if (!join && domain.checkpoint().ownedMachines().values().stream().anyMatch(record -> record.bees() != null && !record.bees().drained())) {
-			failure = "Settle paid bee work before returning members"; status = Status.REJECTED; return false;
+		if (!join && domain.checkpoint().ownedMachines().values().stream().anyMatch(record -> record.bees() != null && !record.bees().drained()
+				|| record.centrifuge() != null && !record.centrifuge().drained())) {
+			failure = "Settle held production work before returning members"; status = Status.REJECTED; return false;
 		}
 		failure = "";
 		if (core.network() == null) {

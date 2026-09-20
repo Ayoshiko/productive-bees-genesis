@@ -23,7 +23,7 @@ final class CheckpointSchema {
 		define(result, Kind.NETWORK, "schema:i identity:IDENTITY revision:l policy:l ledgerRevision:l balances:[AMOUNT_ENTRY transactions:[TRANSACTION transfers:[TRANSFER discoveries:[DISCOVERY members:[MEMBER lanes:[LANE scheduler:SCHEDULER ownership:[OWNERSHIP");
 		define(result, Kind.DIRECTORY, "schema:i revision:l networks:[IDENTITY claims:[CLAIM");
 		define(result, Kind.CLAIM, "network:u member:u transfer:u origin:ORIGIN machine:s");
-		define(result, Kind.OWNERSHIP, "claim:CLAIM phase:s assets:RAW fingerprint:s failure:s bees:RAW");
+		define(result, Kind.OWNERSHIP, "claim:CLAIM phase:s assets:RAW fingerprint:s failure:s bees:RAW centrifuge:RAW");
 		define(result, Kind.IDENTITY, "network:u controller:u owner:u generation:l origin:ORIGIN");
 		define(result, Kind.ORIGIN, "dimension:s x:i y:i z:i");
 		define(result, Kind.KEY, "kind:s id:s components:RAW");
@@ -171,7 +171,7 @@ final class CheckpointSchema {
 				}
 				case IDENTITY -> new NetworkIdentity(uuid("network"), uuid("controller"), uuid("owner"), number("generation"), value("origin"));
 				case CLAIM -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim(uuid("network"), uuid("member"), uuid("transfer"), value("origin"), string("machine"));
-				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding));
+				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding), CentrifugeRecordCodec.decode(value("centrifuge"), validateKey));
 				case ORIGIN -> new MemberCapabilitySnapshot.Origin(ResourceLocation.parse(string("dimension")).toString(), integer("x"), integer("y"), integer("z"));
 				case KEY -> { var key = new ProductKey(choice("kind", ProductKey.Kind.class), ResourceLocation.parse(string("id")), value("components")); validateKey.accept(key); yield key; }
 				case AMOUNT_ENTRY -> new AmountEntry(value("key"), amount("amount"));

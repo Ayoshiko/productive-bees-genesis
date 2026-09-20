@@ -61,13 +61,26 @@ public final class NetworkCheckpoint {
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record.withBees(state)), candidate.checkpoint());
 	}
 	public NetworkCheckpoint withOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record) {
+		var old = ownedMachines.get(record.claim().member());
+		if (old != null && old.centrifuge() != null && record.centrifuge() != null && old.centrifuge() != record.centrifuge())
+			throw new IllegalArgumentException("Centrifuge work and ledger must be committed together");
 		validateOwnership(record, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record));
+	}
+	public NetworkCheckpoint applyCentrifuge(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkTransaction transaction) {
+		var old = ownedMachines.get(member);
+		if (old == null || old.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED
+				|| old.centrifuge() == null || !transaction.matches(old.centrifuge(), ledger) || !transaction.acceptsPolicy(policyRevision)) return this;
+		var next = old.withCentrifuge(transaction.state()); validateOwnership(next, identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), transaction.ledger());
 	}
 	static void validateOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record, NetworkIdentity identity, long policyRevision) {
 		if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership record");
 		if (record.bees() != null) for (var bee : record.bees().bees()) {
 			if (bee.plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Bee work refers to a future recipe policy");
+		}
+		if (record.centrifuge() != null) for (var job : record.centrifuge().jobs().values()) {
+			if (job.plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Centrifuge work refers to a future recipe policy");
 		}
 	}
 	NetworkCheckpoint restoredOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines) { return new NetworkCheckpoint(this, revision, machines); }

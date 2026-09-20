@@ -13,7 +13,7 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 4;
+	public static final int SCHEMA = 5;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;

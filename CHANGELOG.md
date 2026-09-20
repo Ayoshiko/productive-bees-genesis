@@ -31,10 +31,11 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的全部开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2 已实现步骤及合入的维护修复。P2 已验收；机器接管默认关闭，托管生产尚未接入。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 已验收；机器接管默认关闭，自动托管生产尚未接入。
 
 ### 新增
 
+- **P3／D15b1 离心作业与恢复**：固定逐 lane 周期、并行数、投入、费用与随机结果，原子发布作业和精确物品／流体账本；缺电暂停，付费中途保留托管，未开始预约可取消。schema 5 严格保存／恢复，旧格式保持隔离；新增 15 项领域与压缩文件测试，全量 810 通过、2 项既有跳过，构建及产物核验通过。真实基础机适配与异构分配仍待 D15b2。
 - **网络设计与分阶段计划**：确定六面相邻构网、统一虚拟生产、一蜂位一喂食槽、逐机升级、合法产物无限存储、分层保留及单一 AE2 桥的职责；补齐唯一所有权、持久化／恢复协议、兼容矩阵与 D01–D32 验收条件，并记录本地参考模组版本和源码依据。
 - **P0／D01 行为基线**：新增独立机进度、并行与能量行为测试，以及普通／IO 密集场景的隔离专服夹具，记录真实产出、能耗和 Spark 基线。
 - **P0／D02 存储原型**：比较稀疏 long＋BigInteger、索引分段数组和全 BigInteger 三种后端，覆盖百万键及超 long 数量；新增真实 AE2 双向存取、模拟、挂载生命周期和 SavedData 缺文件／坏数据／写失败探针。
@@ -71,6 +72,7 @@
 
 #### Added
 
+- Added P3/D15b1 pinned centrifuge jobs, atomic exact item/fluid settlement, finite energy custody, and strict schema 5 recovery. Unstarted work can return its inputs; paid work stays owned until settled. Added 15 domain and compressed-file tests; all 810 active tests, build, and artifact checks passed, with 2 existing skips. Live machine adaptation and heterogeneous allocation remain in D15b2.
 - Defined the bee processing network architecture, ownership/recovery invariants, local reference sources, and staged D01–D32 acceptance plan.
 - Added P0 standalone production/Spark baselines, three exact-quantity storage prototypes, million-key benchmarks, and real AE2/SavedData failure probes.
 - Implemented P1 per-machine capacity snapshots, immutable component keys, exact quantities, versioned admission, reservations, transfer staging, layered reserves, priority/fair scheduling, and watermark hysteresis.
