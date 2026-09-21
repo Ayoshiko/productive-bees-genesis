@@ -20,6 +20,9 @@ public final class ProductLedger {
 	private final int maxPending;
 	private long revision;
 	private boolean entered;
+	private LedgerCheckpoint captured;
+	private final java.util.Set<ProductKey> changedKeys = ConcurrentHashMap.newKeySet();
+	private boolean changesOverflowed;
 
 	public ProductLedger(ProductPolicyRegistry policy, int maxPending) {
 		this(policy, maxPending, new PagedProductAmounts());
@@ -33,7 +36,13 @@ public final class ProductLedger {
 		return guarded(() -> new Snapshot(revision, balances.snapshot(), reservations.snapshot(), reservations.size()));
 	}
 	public LedgerCheckpoint checkpoint() {
-		return guarded(() -> LedgerCheckpoint.capture(revision, balances, reservations));
+		return guarded(() -> {
+			if (captured == null || captured.revision() != revision) {
+				captured = LedgerCheckpoint.capture(revision, balances, reservations, changesOverflowed ? null : captured, changedKeys);
+				changedKeys.clear(); changesOverflowed = false;
+			}
+			return captured;
+		});
 	}
 	public void validateCheckpointPolicy(ProductPolicyRegistry expected) {
 		guarded(() -> {
@@ -49,6 +58,7 @@ public final class ProductLedger {
 		var ledger = new ProductLedger(policy, maxPending, PagedProductAmounts.restore(checkpoint.balances()));
 		checkpoint.transactions().forEach(pending -> ledger.reservations.add(new LedgerTransaction(ledger.authority, pending)));
 		ledger.revision = checkpoint.revision();
+		ledger.captured = checkpoint;
 		return ledger;
 	}
 	/** 只返回本次加载重建的句柄；旧实例句柄不能跨恢复重用。 */
@@ -82,6 +92,7 @@ public final class ProductLedger {
 				ProductAmount after = balances.amount(key).subtract(taken);
 				advanceRevision();
 				balances.set(key, after);
+				changed(key);
 			}
 			return taken;
 		});
@@ -103,6 +114,7 @@ public final class ProductLedger {
 		var transaction = new LedgerTransaction(authority, policyRevision, debit, credit);
 		advanceRevision();
 		reservations.add(transaction);
+		debit.keySet().forEach(this::changed);
 		return transaction;
 	}
 	private boolean eligible(Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs, long policyRevision) {
@@ -142,6 +154,7 @@ public final class ProductLedger {
 			transaction.outputs().forEach((key, value) -> updates.put(key, updates.getOrDefault(key, balances.amount(key)).add(value)));
 			advanceRevision();
 			updates.forEach(balances::set);
+			updates.keySet().forEach(this::changed);
 			reservations.remove(transaction);
 			transaction.state(LedgerTransaction.State.COMMITTED);
 			return true;
@@ -159,6 +172,7 @@ public final class ProductLedger {
 	}
 	private void cancelInternal(LedgerTransaction transaction) {
 		advanceRevision();
+		transaction.inputs().keySet().forEach(this::changed);
 		reservations.remove(transaction);
 		transaction.state(LedgerTransaction.State.CANCELLED);
 	}
@@ -180,6 +194,12 @@ public final class ProductLedger {
 		ProductAmount after = balances.amount(key).add(amount);
 		advanceRevision();
 		balances.set(key, after);
+		changed(key);
+	}
+	private void changed(ProductKey key) {
+		if (captured == null || changesOverflowed) return;
+		changedKeys.add(key);
+		if (changedKeys.size() > 4096) { changedKeys.clear(); changesOverflowed = true; }
 	}
 	/** 仅归还由 TransferStaging 实际扣出但未交付的本账本资产，不能供外部普通存入调用。 */
 	void restoreStaged(ProductKey key, ProductAmount amount) { guarded(() -> { addOwned(key, amount); return null; }); }

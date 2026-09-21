@@ -13,6 +13,7 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	private NetworkCheckpoint checkpoint;
 	private final String recoveryReason;
 	private boolean closed;
+	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProcessingStockIndex processingStock;
 	private NetworkSavedData(NetworkIdentity identity, NetworkCheckpoint checkpoint, long persistedRevision,
 			String recoveryReason, CheckpointSaveQueue queue) {
 		super(persistedRevision, queue);
@@ -40,6 +41,12 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 		if (checkpoint == null) throw new IllegalStateException("No readable authority: " + recoveryReason);
 		return checkpoint;
 	}
+	/** 首次读取只创建扫描游标，调用方必须按工作预算推进 step；索引不进入存档。 */
+	public com.ayoshiko.productivebeesgenesis.apiculture.storage.ProcessingStockIndex processingStock() {
+		var current = checkpoint();
+		if (processingStock == null) processingStock = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProcessingStockIndex(current.ledger());
+		return processingStock;
+	}
 	public void publish(NetworkCheckpoint next) {
 		checkThread(); Objects.requireNonNull(next);
 		if (!writable() || !next.identity().equals(identity) || next.revision() <= checkpoint.revision() || next.policyRevision() < checkpoint.policyRevision() || !next.ownedMachines().follows(checkpoint.ownedMachines())
@@ -48,10 +55,11 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 			throw new IllegalArgumentException("Invalid authority or checkpoint revision");
 		}
 		checkpoint = next;
+		if (processingStock != null) processingStock.update(next.ledger());
 	}
 	@Override protected long revision() { return checkpoint == null ? -1 : checkpoint.revision(); }
 	@Override protected boolean writable() { return checkpoint != null && !closed; }
-	void closeAuthority() { checkThread(); closed = true; }
+	void closeAuthority() { checkThread(); closed = true; processingStock = null; }
 	@Override protected CheckpointPayload capture() {
 		return new CheckpointPayload.Network(checkpoint(), SharedConstants.getCurrentVersion().getDataVersion().getVersion());
 	}

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** 完整恢复边界；预约汇总由明细重建，不能使用查询 Snapshot 代替。 */
@@ -11,6 +12,10 @@ public final class LedgerCheckpoint {
 	private final long revision;
 	private final Map<ProductKey, ProductAmount> balances;
 	private final List<Pending> transactions;
+	private final Map<ProductKey, ProductAmount> reserved;
+	private final Object token = new Object();
+	private final Object previousToken;
+	private final Set<ProductKey> changedKeys;
 	public record Pending(UUID id, long policyRevision, LedgerTransaction.State state,
 			Map<ProductKey, ProductAmount> inputs, Map<ProductKey, ProductAmount> outputs) {
 		public Pending {
@@ -23,12 +28,14 @@ public final class LedgerCheckpoint {
 		}
 	}
 	public LedgerCheckpoint(long revision, Map<ProductKey, ProductAmount> balances, List<Pending> transactions) {
-		this(revision, positive(balances), List.copyOf(transactions), false);
+		this(revision, positive(balances), List.copyOf(transactions), null, null, Set.of());
 	}
-	private LedgerCheckpoint(long revision, Map<ProductKey, ProductAmount> balances, List<Pending> transactions, boolean captured) {
+	private LedgerCheckpoint(long revision, Map<ProductKey, ProductAmount> balances, List<Pending> transactions,
+			Map<ProductKey, ProductAmount> capturedReserved, Object previousToken, Set<ProductKey> changedKeys) {
 		if (revision < 0) throw new IllegalArgumentException("Negative ledger revision");
 		this.revision = revision; this.balances = balances; this.transactions = transactions;
-		if (captured) return;
+		this.previousToken = previousToken; this.changedKeys = changedKeys;
+		if (capturedReserved != null) { reserved = capturedReserved; return; }
 		var identities = ConcurrentHashMap.<UUID>newKeySet();
 		Map<ProductKey, ProductAmount> reserved = new ConcurrentHashMap<>();
 		for (var transaction : transactions) {
@@ -40,11 +47,15 @@ public final class LedgerCheckpoint {
 				throw new IllegalArgumentException("Reservation exceeds owned balance");
 			}
 		}
+		this.reserved = Map.copyOf(reserved);
 	}
 	/** 仅账本在同一临界区提供已经维护好约束的余额与预约根；外部构造仍完整校验。 */
-	static LedgerCheckpoint capture(long revision, PagedProductAmounts balances, ReservationBook reservations) {
-		return new LedgerCheckpoint(revision, balances.snapshot(), reservations.checkpoint(), true);
+	static LedgerCheckpoint capture(long revision, PagedProductAmounts balances, ReservationBook reservations, LedgerCheckpoint previous, Set<ProductKey> changed) {
+		return new LedgerCheckpoint(revision, balances.snapshot(), reservations.checkpoint(), reservations.snapshot(), previous == null ? null : previous.token, Set.copyOf(changed));
 	}
+	/** 只由账本签发相邻根的键变化；不保留历史根链，未知来源必须分步重建索引。 */
+	public Set<ProductKey> changesSince(LedgerCheckpoint previous) { return previous != null && previous.token == previousToken ? changedKeys : null; }
+	public ProductAmount available(ProductKey key) { return balances.getOrDefault(key, ProductAmount.ZERO).subtract(reserved.getOrDefault(key, ProductAmount.ZERO)); }
 	/** 逐记录恢复；输入摘要与余额的比较必须由调用者按预算推进，结束才可封装。 */
 	public static final class RestoreBuilder {
 		private final PagedProductAmounts balances = new PagedProductAmounts();
@@ -79,7 +90,7 @@ public final class LedgerCheckpoint {
 		}
 		public LedgerCheckpoint finish(long revision) {
 			if (!checking || checks == null || checks.hasNext()) throw new IllegalStateException("Ledger validation incomplete");
-			return new LedgerCheckpoint(revision, balances.snapshot(), transactions.valuesSnapshot(), true);
+			return new LedgerCheckpoint(revision, balances.snapshot(), transactions.valuesSnapshot(), reserved.snapshot(), null, Set.of());
 		}
 	}
 	public long revision() { return revision; }

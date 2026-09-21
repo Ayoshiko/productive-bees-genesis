@@ -26,6 +26,16 @@ public final class CentrifugeWorkTransaction {
 	public LedgerCheckpoint ledger() { return ledger; }
 	public int executedTicks() { return executedTicks; }
 	public long energyUsed() { return energyUsed; }
+	/** 自动占料必须携带当前账本的保留检查；任何余额／预约变化都使旧额度失效。 */
+	public static CentrifugeWorkTransaction assignReserved(CentrifugeWorkState state, LedgerCheckpoint ledger,
+			ProductPolicyRegistry policy, int lane, CentrifugeRecipePlan plan, int requested, long seed, long energyBudget,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.ReservePolicy reserves,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.ReserveAllowanceScan.Permit permit) {
+		if (reserves.scope() != com.ayoshiko.productivebeesgenesis.apiculture.policy.ReservePolicy.Scope.LOCAL_PROCESSING
+				|| permit == null || !permit.matches(ledger, reserves, plan.input())) return null;
+		int allowed = (int) Math.min(Math.max(0, requested), permit.amount().longSaturated());
+		return allowed == 0 ? null : assign(state, ledger, policy, lane, plan, allowed, seed, energyBudget);
+	}
 
 	/** 输入预留采用所有权移动：余额减去的量只存在于新作业，不受普通提取或其它 lane 使用。 */
 	public static CentrifugeWorkTransaction assign(CentrifugeWorkState state, LedgerCheckpoint ledger,

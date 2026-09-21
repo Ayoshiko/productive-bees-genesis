@@ -10,14 +10,14 @@ final class ReservationBook {
 	private final Map<UUID, LedgerTransaction> active = new ConcurrentHashMap<>();
 	private final SnapshotRecords<UUID, LedgerCheckpoint.Pending> records = new SnapshotRecords<>(Comparator.naturalOrder());
 	private final SnapshotRecords<Long, Integer> policies = new SnapshotRecords<>(Comparator.naturalOrder());
-	private final SparseProductAmounts<ProductKey> reserved = new SparseProductAmounts<>();
+	private final PagedProductAmounts reserved = new PagedProductAmounts();
 	private long newestPolicyRevision = -1;
 	ProductAmount amount(ProductKey key) { return reserved.amount(key); }
 	int size() { return active.size(); }
 	boolean owns(LedgerTransaction transaction) { return active.get(transaction.id()) == transaction; }
 	void add(LedgerTransaction transaction) {
 		if (active.containsKey(transaction.id())) throw new IllegalArgumentException("Duplicate reservation identity");
-		transaction.inputs().forEach(reserved::add);
+		transaction.inputs().forEach((key, value) -> reserved.set(key, reserved.amount(key).add(value)));
 		active.put(transaction.id(), transaction);
 		records.put(transaction.id(), transaction.checkpoint());
 		Integer count = policies.get(transaction.policyRevision());
