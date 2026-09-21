@@ -1136,6 +1136,8 @@
   "productivebeesgenesis.configuration.bee_network.energyCapacity": "核心共享 FE 容量",
   "productivebeesgenesis.configuration.bee_network.energyCapacity.tooltip": "所有已迁移成员共用的有限能源账户。降低到当前余额以下时，待余额降低后应用；不会丢弃能源。",
   "screen.productivebeesgenesis.network.energy": "共享能源：%s / %s FE",
+  "productivebeesgenesis.configuration.bee_network.maintenanceFe": "核心工作维护费",
+  "productivebeesgenesis.configuration.bee_network.maintenanceFe.tooltip": "每网每个成功推进新工作的真实 tick 收取一次 FE；暂停和已付费结算免费，不补扣休眠时间。默认 0，待平衡测试定值。",
   "productivebeesgenesis.configuration.bee_network.totalSteps": "全服网络总检查次数",
   "productivebeesgenesis.configuration.bee_network.totalSteps.tooltip": "加载、拓扑、交接和生产共同消费的每刻检查次数；包含空队列检查。",
   "productivebeesgenesis.configuration.bee_network.totalMicros": "全服网络总时间预算",

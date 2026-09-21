@@ -30,6 +30,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 
 /** 正式 ticker 驱动异构双离心机及蜂箱串联；仅在启动前注入测试库存／规则。 */
 public final class AutomaticCentrifugeProbe {
+	private static final long MAINTENANCE = 7;
+	private static long previousMaintenance;
 	private static final ReservePolicy NONE = new ReservePolicy(ReservePolicy.Scope.LOCAL_PROCESSING, ReservePolicy.Layer.NONE, ReservePolicy.Layer.NONE);
 	private static final class Fixture {
 		final BlockPos pos; final boolean chain;
@@ -41,6 +43,8 @@ public final class AutomaticCentrifugeProbe {
 		final Map<TileEntityMekCentrifuge, Integer> tickers = new ConcurrentHashMap<>();
 		final Set<UUID> seenJobs = ConcurrentHashMap.newKeySet();
 		final Map<UUID, Integer> lastProgress = new ConcurrentHashMap<>();
+		Map<UUID, CentrifugeJob> previousJobs = Map.of();
+		int previousBeeProgress, maintenanceTicks;
 		final Map<ProductKey, ProductAmount> expected = new ConcurrentHashMap<>();
 		long charged, plannedCost; int hiveTicker;
 		boolean joined, beeStopped;
@@ -75,10 +79,13 @@ public final class AutomaticCentrifugeProbe {
 			require(port != null && port.receiveEnergy(amount, false) == amount, "Automatic core power input failed"); charged += amount;
 		}
 		void observe() {
+			boolean progressed = false;
+			var currentJobs = new ConcurrentHashMap<UUID, CentrifugeJob>();
 			for (var tile : tiles) require(tile.ticker == tickers.get(tile) && new MachineAssetStore(tile).empty(), "Automatic centrifuge executed a physical ticker or inventory");
 			if (hive != null) {
 				require(hive.ticker == hiveTicker && new MachineAssetStore(hive).empty(), "Automatic chain executed physical bee work");
 				var state = data.checkpoint().ownedMachines().get(hiveId).bees();
+				if (state != null) { progressed = state.bee(0).progress() != previousBeeProgress; previousBeeProgress = state.bee(0).progress(); }
 				if (state != null && !beeStopped && state.bee(0).revision() > 0 && state.bee(0).progress() == 0 && state.bee(0).drained()) {
 					var bee = state.bee(0); hive.setControlType(RedstoneControl.HIGH); beeStopped = true;
 					plannedCost += Math.multiplyExact(bee.plan().cycleTicks(), bee.plan().energyPerTick());
@@ -86,11 +93,17 @@ public final class AutomaticCentrifugeProbe {
 			}
 			for (var record : data.checkpoint().ownedMachines().values()) if (record.centrifuge() != null) for (var job : record.centrifuge().jobs().values()) {
 				int previous = lastProgress.getOrDefault(job.id(), 0); require(job.progress() >= previous && job.progress() - previous <= 1, "Automatic centrifuge advanced more than one real tick");
+				progressed |= job.progress() > previous; currentJobs.put(job.id(), job);
 				lastProgress.put(job.id(), job.progress()); if (!seenJobs.add(job.id())) continue;
 				require(job.plan().cycleTicks() > 1, "Fixture needs an observable multi-tick job");
 				plannedCost += Math.multiplyExact(job.plan().cycleTicks(), job.plan().energyPerTick(job.operations()));
 				job.plan().sample(job.operations(), job.seed()).forEach((key, amount) -> expected.merge(key, amount, ProductAmount::add));
 			}
+			for (var job : previousJobs.values()) if (!currentJobs.containsKey(job.id()) && !job.paid()) {
+				require(job.progress() == job.plan().cycleTicks() - 1, "An unfinished job disappeared"); progressed = true;
+			}
+			previousJobs = currentJobs;
+			if (progressed) maintenanceTicks++;
 		}
 		boolean drained() { return data.checkpoint().ownedMachines().values().stream().allMatch(record -> record.centrifuge() == null || record.centrifuge().drained()); }
 		ProductAmount balance(ProductKey key) { return data.checkpoint().ledger().balances().getOrDefault(key, ProductAmount.ZERO); }
@@ -102,6 +115,8 @@ public final class AutomaticCentrifugeProbe {
 	private static NetworkCheckpoint paused;
 	private static SchedulerCheckpoint configured;
 	public static void start(MinecraftServer server) {
+		previousMaintenance = com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.get();
+		com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.set(MAINTENANCE);
 		started = server.getTickCount(); for (var fixture : FIXTURES) fixture.create(server.overworld());
 		a = comb(server.overworld(), false, "a"); b = comb(server.overworld(), false, "b"); block = comb(server.overworld(), true, null);
 	}
@@ -132,7 +147,7 @@ public final class AutomaticCentrifugeProbe {
 			if (RULES.seenJobs.isEmpty() || RULES.drained()) return false;
 			long stored = RULES.data.checkpoint().energy().stored();
 			for (var record : RULES.data.checkpoint().ownedMachines().values()) if (record.centrifuge() != null)
-				for (var job : record.centrifuge().jobs().values()) if (job.paid() || job.plan().energyPerTick(job.operations()) <= stored) return false;
+				for (var job : record.centrifuge().jobs().values()) if (job.paid() || job.plan().energyPerTick(job.operations()) + MAINTENANCE <= stored) return false;
 			paused = RULES.data.checkpoint(); until = server.getTickCount() + 12; phase = 2; return false;
 		}
 		if (phase == 2) {
@@ -155,7 +170,7 @@ public final class AutomaticCentrifugeProbe {
 				var expected = new ConcurrentHashMap<>(f.expected);
 				if (!f.chain) { expected.put(a, f.balance(a)); expected.put(b, f.balance(b)); expected.put(block, ProductAmount.of(1)); }
 				require(f.data.checkpoint().ledger().balances().equals(expected), "Automatic sampled item/fluid amounts differ");
-				require(f.data.checkpoint().energy().stored() == f.charged - f.plannedCost, "Automatic exact FE debit differs");
+				require(f.data.checkpoint().energy().stored() == f.charged - f.plannedCost - MAINTENANCE * f.maintenanceTicks, "Automatic exact FE debit differs including per-tick maintenance");
 			}
 			var goal = new ProcessingRule("goal", 0, true, 1000, 1, 1, new ProcessingRule.Goal(a, ProductAmount.of(100), ProductAmount.of(200)), NONE);
 			publishFixture(RULES.data, RULES.data.checkpoint().ledger(), new SchedulerCheckpoint(List.of(goal), ProcessingRuleScheduler.Mode.FAIR, Map.of(), "", 0));
@@ -177,6 +192,10 @@ public final class AutomaticCentrifugeProbe {
 			report.addProperty("automaticCentrifugeStarvationPauseCoreReloadAndExactFees", true);
 			report.addProperty("automaticBeeCentrifugeChainAndSeededItemFluidOutputs", true);
 			report.addProperty("automaticCentrifugeJobsObserved", RULES.seenJobs.size() + CHAIN.seenJobs.size());
+			report.addProperty("automaticRulesMaintenanceTicks", RULES.maintenanceTicks);
+			report.addProperty("automaticChainMaintenanceTicks", CHAIN.maintenanceTicks);
+			report.addProperty("automaticMaintenanceSharedPerTickAndAtomicWithWork", true);
+			com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.set(previousMaintenance);
 			phase = 7; return true;
 		}
 		return false;

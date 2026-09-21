@@ -26,7 +26,8 @@ final class BeeRuntimeStep {
 				state = data.checkpoint().ownedMachines().get(member).bees(); bee = state.bee(slot);
 			}
 		}
-		var result = service.advance(level, member, slot, bee.revision(), data.checkpoint().policyRevision(), bee.plan().capabilityRevision(), ticks, 1, false);
+		var result = service.advance(level, member, slot, bee.revision(), data.checkpoint().policyRevision(), bee.plan().capabilityRevision(), ticks, 1, false,
+				com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.get());
 		if (result == BeeWorkExecutor.Status.READY) {
 			var updated = data.checkpoint().ownedMachines().get(member).bees().bee(slot);
 			if (!updated.frozen().isZero()) service.settle(level, member, slot, updated.revision());

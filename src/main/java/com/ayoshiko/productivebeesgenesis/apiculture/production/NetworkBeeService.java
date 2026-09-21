@@ -22,6 +22,10 @@ public final class NetworkBeeService {
 	}
 	public BeeWorkExecutor.Status advance(ServerLevel level, UUID member, int slot, long beeRevision,
 			long recipeRevision, long capabilityRevision, int ticks, int samplingBudget, boolean simulate) {
+		return advance(level, member, slot, beeRevision, recipeRevision, capabilityRevision, ticks, samplingBudget, simulate, 0);
+	}
+	public BeeWorkExecutor.Status advance(ServerLevel level, UUID member, int slot, long beeRevision,
+			long recipeRevision, long capabilityRevision, int ticks, int samplingBudget, boolean simulate, long maintenanceFee) {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
 		if (record == null || record.bees() == null) return BeeWorkExecutor.Status.DISABLED;
 		var hive = member(level, record); if (hive == null) return BeeWorkExecutor.Status.UNLOADED;
@@ -30,10 +34,13 @@ public final class NetworkBeeService {
 				record.bees().feeding(), slot, net.minecraft.resources.ResourceLocation.parse(record.bees().bee(slot).plan().beeType()), level.registryAccess());
 		var context = new BeeWorkExecutor.Context(true, hive.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), flower,
 				recipeRevision, capabilityRevision, new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
-		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget, record.bees().networkPowered() ? current.energy().stored() : record.bees().energy());
+		long tick = level.getServer().getTickCount(), fee = ticks > 0 ? maintenanceFee : 0;
+		long due = authority.maintenanceDue(tick, fee);
+		if (due > 0 && (!record.bees().networkPowered() || current.energy().stored() < due)) return BeeWorkExecutor.Status.ENERGY;
+		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget, record.bees().networkPowered() ? current.energy().stored() - due : record.bees().energy());
 		if (!simulate && result.status() == BeeWorkExecutor.Status.READY) {
 			// publish 的 revision 即为脏状态；常规生产随世界保存，不逐蜂启动整域写盘。
-			authority.publish(current.applyBeeWork(member, result));
+			authority.publishMaintainedWork(current, current.applyBeeWork(member, result), tick, fee);
 		}
 		return result.status();
 	}

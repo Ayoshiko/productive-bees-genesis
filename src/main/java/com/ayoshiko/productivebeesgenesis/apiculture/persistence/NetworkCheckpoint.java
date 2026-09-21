@@ -71,6 +71,11 @@ public final class NetworkCheckpoint {
 		long accepted = energy.accept(offered);
 		return accepted == 0 ? this : new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger, energy.credit(accepted));
 	}
+	NetworkCheckpoint spendMaintenance(long amount) {
+		if (amount < 0) throw new IllegalArgumentException("Negative maintenance fee");
+		if (amount == 0 || amount > energy.stored()) return this;
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger, energy.spend(amount));
+	}
 	/** 旧 FE 与共享标记同时移动；容量不足不清空任何成员，不改动已付费作业。 */
 	public NetworkCheckpoint migrateEnergy(UUID member) {
 		var old = ownedMachines.get(member);

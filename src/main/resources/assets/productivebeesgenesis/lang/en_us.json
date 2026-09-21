@@ -1136,6 +1136,8 @@
   "productivebeesgenesis.configuration.bee_network.energyCapacity": "Shared core FE capacity",
   "productivebeesgenesis.configuration.bee_network.energyCapacity.tooltip": "Finite energy shared by migrated members. A reduction below the current balance takes effect after energy is spent; energy is retained.",
   "screen.productivebeesgenesis.network.energy": "Shared energy: %s / %s FE",
+  "productivebeesgenesis.configuration.bee_network.maintenanceFe": "Core work maintenance fee",
+  "productivebeesgenesis.configuration.bee_network.maintenanceFe.tooltip": "FE charged once per network per real tick that advances new work. Pauses and paid settlement are free; sleeping time is not charged. Defaults to 0 pending balance testing.",
   "productivebeesgenesis.configuration.bee_network.totalSteps": "Total network checks per tick",
   "productivebeesgenesis.configuration.bee_network.totalSteps.tooltip": "Shared by loading, topology, ownership and production, including empty queue checks.",
   "productivebeesgenesis.configuration.bee_network.totalMicros": "Total network time budget",

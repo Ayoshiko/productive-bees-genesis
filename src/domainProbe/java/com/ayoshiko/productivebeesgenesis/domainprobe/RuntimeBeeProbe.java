@@ -36,8 +36,11 @@ final class RuntimeBeeProbe {
 		long output() { return data.checkpoint().ledger().balances().getOrDefault(bee().plan().output(), com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount.ZERO).longSaturated(); }
 		long cycles() { return output() / bee().plan().countPerCycle(); }
 		void charge(ServerLevel level) {
+			charge(level, cost);
+		}
+		void charge(ServerLevel level, long amount) {
 			var port = level.getCapability(Capabilities.EnergyStorage.BLOCK, position, Direction.UP);
-			require(port != null && port.receiveEnergy(Math.toIntExact(cost), false) == cost, "Runtime FE input failed");
+			require(port != null && port.receiveEnergy(Math.toIntExact(amount), false) == amount, "Runtime FE input failed");
 		}
 	}
 	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(72, 150, 4))};
@@ -45,7 +48,10 @@ final class RuntimeBeeProbe {
 	private static final int[] serviceChecks = new int[4];
 	private static final long[] longestStep = new long[4];
 	private static long previousWork, savesBeforePaidWork;
+	private static final long MAINTENANCE = 7;
+	private static long previousMaintenance;
 	static void start(MinecraftServer server) {
+		previousMaintenance = ModConfig.SERVER.beeNetwork.maintenanceFe.get(); ModConfig.SERVER.beeNetwork.maintenanceFe.set(MAINTENANCE);
 		previousTotalBudget = ModConfig.SERVER.beeNetwork.totalSteps.get();
 		started = server.getTickCount(); previousBudget = ModConfig.SERVER.beeNetwork.runtimeSteps.get(); ModConfig.SERVER.beeNetwork.runtimeSteps.set(1);
 		var level = server.overworld();
@@ -95,7 +101,7 @@ final class RuntimeBeeProbe {
 				if (state == null || !state.networkPowered()) return false;
 				require(f.bee().progress() == 0 && f.cycles() == 0, "Unfunded runtime progressed");
 			}
-			for (var f : FIXTURES) { f.cost = Math.multiplyExact(f.bee().plan().cycleTicks(), f.bee().plan().energyPerTick()); require(f.cost > 0, "Fixture must charge FE"); f.charge(level); }
+			for (var f : FIXTURES) { f.cost = Math.multiplyExact(f.bee().plan().cycleTicks(), f.bee().plan().energyPerTick() + MAINTENANCE); require(f.cost > 0, "Fixture must charge FE"); f.charge(level); }
 			phase = 2; return false;
 		}
 		if (phase == 2) {
@@ -131,7 +137,7 @@ final class RuntimeBeeProbe {
 		if (phase == 6) {
 			if (FIXTURES[1].cycles() != 2 || !ready(FIXTURES[0])) return false;
 			for (var f : FIXTURES) require(f.core.setProductionRunning(false), "Final pause failed");
-			var f = FIXTURES[0]; f.charge(level);
+			var f = FIXTURES[0]; f.charge(level, Math.multiplyExact(f.bee().plan().cycleTicks(), f.bee().plan().energyPerTick()));
 			savesBeforePaidWork = directory.saveStatus().submitted();
 			var bee = f.bee(); require(new NetworkBeeService(f.data, directory).advance(level, f.member, 0, bee.revision(), 0, 0,
 					bee.plan().cycleTicks(), 0, false) == BeeWorkExecutor.Status.READY, "Paid pending fixture failed");
@@ -164,6 +170,8 @@ final class RuntimeBeeProbe {
 				level.removeBlock(f.position.east(), false); level.removeBlock(f.position, false); level.setChunkForced(f.position.getX() >> 4, 0, false);
 			}
 			ModConfig.SERVER.beeNetwork.runtimeSteps.set(previousBudget); ModConfig.SERVER.beeNetwork.totalSteps.set(previousTotalBudget); phase = 11;
+			ModConfig.SERVER.beeNetwork.maintenanceFe.set(previousMaintenance);
+			report.addProperty("runtimeBeeMaintenanceExactAndPaidSettlementFree", true);
 			for (int i = 0; i < 4; i++) {
 				require(serviceChecks[i] > 0, "A service was starved"); report.addProperty("sharedBudgetServiceChecks" + i, serviceChecks[i]);
 				report.addProperty("sharedBudgetLongestStepNanos" + i, longestStep[i]);

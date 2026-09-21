@@ -104,7 +104,8 @@ final class CentrifugeRuntimeStep {
 			if (!running) return NetworkRuntime.Status.STOPPED;
 			if (!state.networkPowered() && !NetworkEnergyService.migrate(level, data, directory, member, data.checkpoint().revision(), false)) return NetworkRuntime.Status.ENERGY;
 			state = data.checkpoint().ownedMachines().get(member).centrifuge();
-			if (!service.work(level, member, state.revision(), NetworkCentrifugeService.Action.ADVANCE, 1, false)) return NetworkRuntime.Status.ENERGY;
+			if (!service.work(level, member, state.revision(), NetworkCentrifugeService.Action.ADVANCE, 1, false,
+					com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.get())) return NetworkRuntime.Status.ENERGY;
 			advanced = true;
 			job = data.checkpoint().ownedMachines().get(member).centrifuge().jobs().get(0);
 		}

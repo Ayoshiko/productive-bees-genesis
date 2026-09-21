@@ -75,6 +75,9 @@ public final class NetworkCentrifugeService {
 	}
 	/** 旧配方已付费结果可冻结／结算；推进始终沿用固定计划，只额外检查在线和红石状态。 */
 	public boolean work(ServerLevel level, UUID member, long expectedRevision, Action action, int ticks, boolean simulate) {
+		return work(level, member, expectedRevision, action, ticks, simulate, 0);
+	}
+	public boolean work(ServerLevel level, UUID member, long expectedRevision, Action action, int ticks, boolean simulate, long maintenanceFee) {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
 		if (record == null || record.centrifuge() == null || record.centrifuge().revision() != expectedRevision) return false;
 		var tile = ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekCentrifuge.class);
@@ -83,8 +86,11 @@ public final class NetworkCentrifugeService {
 		if (simulate && action == Action.FREEZE) {
 			var job = state.jobs().get(0); return job != null && job.paid() && !job.sampled();
 		}
+		long tick = level.getServer().getTickCount(), fee = action == Action.ADVANCE ? maintenanceFee : 0;
+		long due = authority.maintenanceDue(tick, fee);
+		if (due > 0 && (!state.networkPowered() || current.energy().stored() < due)) return false;
 		var transaction = switch (action) {
-			case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, ticks, true, tile.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), state.networkPowered() ? current.energy().stored() : state.energy());
+			case ADVANCE -> CentrifugeWorkTransaction.advance(state, current.ledger(), 0, ticks, true, tile.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), state.networkPowered() ? current.energy().stored() - due : state.energy());
 			case FREEZE -> CentrifugeWorkTransaction.freeze(state, current.ledger(), 0);
 			case SETTLE -> CentrifugeWorkTransaction.settle(state, current.ledger(), 0, current.policyRevision());
 			case CANCEL -> CentrifugeWorkTransaction.cancel(state, current.ledger(), 0, current.policyRevision());
@@ -93,7 +99,7 @@ public final class NetworkCentrifugeService {
 		if (simulate) return true;
 		var next = current.applyCentrifuge(member, transaction);
 		if (next == current) return false;
-		authority.publish(next); return true;
+		authority.publishMaintainedWork(current, next, tick, fee); return true;
 	}
 	private boolean enabled() { return ModConfig.SERVER.beeNetwork.enabled.get() && recipeEpoch == ProductiveBeesGenesis.RECIPE_VERSION.get(); }
 }

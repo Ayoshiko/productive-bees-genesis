@@ -13,6 +13,8 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 	private NetworkCheckpoint checkpoint;
 	private final String recoveryReason;
 	private boolean closed;
+	private long maintenanceTick;
+	private boolean maintenancePaid;
 	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProcessingStockIndex processingStock;
 	private NetworkSavedData(NetworkIdentity identity, NetworkCheckpoint checkpoint, long persistedRevision,
 			String recoveryReason, CheckpointSaveQueue queue) {
@@ -56,6 +58,20 @@ public final class NetworkSavedData extends AcknowledgedSavedData {
 		}
 		checkpoint = next;
 		if (processingStock != null) processingStock.update(next.ledger());
+	}
+	/** 仅成功推进新工作时收取一次；收据属于权威会话，核心 BE 重建不能重复扣款。 */
+	public long maintenanceDue(long tick, long fee) {
+		checkpoint();
+		if (fee < 0) throw new IllegalArgumentException("Negative maintenance fee");
+		return maintenancePaid && maintenanceTick == tick ? 0 : fee;
+	}
+	public void publishMaintainedWork(NetworkCheckpoint expected, NetworkCheckpoint work, long tick, long fee) {
+		if (checkpoint() != expected || work == expected) throw new IllegalArgumentException("Stale or empty maintained work");
+		long due = maintenanceDue(tick, fee);
+		if (work.energy().stored() > expected.energy().stored() || work.energy().stored() < due) throw new IllegalArgumentException("Unfunded maintained work");
+		// 工作进度、工作耗能和维护费作为一个根发布，不先扣费后发现工作被拒绝。
+		publish(work.spendMaintenance(due));
+		if (due > 0) { maintenanceTick = tick; maintenancePaid = true; }
 	}
 	@Override protected long revision() { return checkpoint == null ? -1 : checkpoint.revision(); }
 	@Override protected boolean writable() { return checkpoint != null && !closed; }
