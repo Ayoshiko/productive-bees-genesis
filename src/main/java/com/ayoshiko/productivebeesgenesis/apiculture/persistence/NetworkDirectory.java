@@ -117,8 +117,14 @@ public final class NetworkDirectory implements AutoCloseable {
 	}
 	public void tick() { tick(2048, 2_000_000); }
 	public void tick(int steps, long budgetNanos) {
+		tick(steps, budgetNanos, 32);
+	}
+	public boolean hasPendingWork() {
+		checkOpen(); return state == State.LOADING || active != null || !waiting.isEmpty() || saves.pending();
+	}
+	void tick(int steps, long budgetNanos, int saveChecks) {
 		checkOpen(); if (steps <= 0 || budgetNanos <= 0) throw new IllegalArgumentException("Positive load budget required");
-		saves.tick();
+		saves.tick(saveChecks);
 		try {
 			if (state == State.LOADING) { advanceDirectory(steps, budgetNanos); return; }
 			if (active == null) { active = waiting.pollFirst(); if (active == null) return; }

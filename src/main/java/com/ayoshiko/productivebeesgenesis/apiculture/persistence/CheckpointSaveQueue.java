@@ -34,10 +34,13 @@ final class CheckpointSaveQueue {
 		if (data != active && data.requested() && enqueued.add(data)) waiting.addLast(data);
 	}
 	private AcknowledgedSavedData take() { var data = waiting.removeFirst(); enqueued.remove(data); return data; }
-	void tick() {
+	boolean pending() { check(); return active != null || !waiting.isEmpty(); }
+	void tick() { tick(TICK_SCAN_LIMIT); }
+	void tick(int maxChecks) {
+		if (maxChecks <= 0) throw new IllegalArgumentException("Positive save scan budget required");
 		check(); poll();
 		if (active != null) return;
-		int candidates = Math.min(TICK_SCAN_LIMIT, waiting.size());
+		int candidates = Math.min(maxChecks, waiting.size());
 		for (int i = 0; i < candidates; i++) {
 			var data = take();
 			if (data.ready()) { start(data); return; }

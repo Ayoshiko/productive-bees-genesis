@@ -18,7 +18,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** 每服一个公平扫描队列；只跟踪有核心的区块，事件失效不遍历机器或强制加载区块。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
@@ -84,25 +83,22 @@ public final class NetworkTopologyService {
 			var pos = event.getChunk().getPos(); level.getServer().execute(() -> dirty(level, new BlockPos(pos.getMinBlockX(), 0, pos.getMinBlockZ())));
 		}
 	}
-	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
-		var session = SESSIONS.get(event.getServer()); if (session == null || !ModConfig.SERVER.beeNetwork.enabled.get()) return;
-		long start = System.nanoTime(), budget = ModConfig.SERVER.beeNetwork.topologyMicros.get() * 1000L;
-		int steps = ModConfig.SERVER.beeNetwork.topologyNodes.get();
-		for (int i = 0; i < steps && (i == 0 || System.nanoTime() - start < budget); i++) {
-			if (session.active == null) {
-				session.active = session.waiting.pollFirst(); if (session.active == null) return;
-				session.queued.remove(session.active);
-			}
-			var core = session.active;
-			if (core.isRemoved() || !(core.getLevel() instanceof ServerLevel level) || core.owner() == null
-					|| !level.hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || level.getBlockEntity(core.getBlockPos()) != core) { clear(session); continue; }
-			long epoch = epoch(level, core.getBlockPos());
-			if (session.scan != null && session.scanEpoch != epoch) {
-				clear(session); if (session.queued.add(core)) session.waiting.addLast(core); continue;
-			}
-			if (session.scan == null) { session.scanEpoch = epoch; session.scan = new TopologyScan(core.getBlockPos(), core.owner(), epoch, pos -> node(level, pos)); }
-			if (session.scan.step(epoch)) { core.publishTopology(session.scan.finish()); clear(session); }
+	public static boolean step(MinecraftServer server) {
+		var session = SESSIONS.get(server); if (session == null || !ModConfig.SERVER.beeNetwork.enabled.get()) return false;
+		if (session.active == null) {
+			session.active = session.waiting.pollFirst(); if (session.active == null) return false;
+			session.queued.remove(session.active);
 		}
+		var core = session.active;
+		if (core.isRemoved() || !(core.getLevel() instanceof ServerLevel level) || core.owner() == null
+				|| !level.hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || level.getBlockEntity(core.getBlockPos()) != core) { clear(session); return true; }
+		long epoch = epoch(level, core.getBlockPos());
+		if (session.scan != null && session.scanEpoch != epoch) {
+			clear(session); if (session.queued.add(core)) session.waiting.addLast(core); return true;
+		}
+		if (session.scan == null) { session.scanEpoch = epoch; session.scan = new TopologyScan(core.getBlockPos(), core.owner(), epoch, pos -> node(level, pos)); }
+		if (session.scan.step(epoch)) { core.publishTopology(session.scan.finish()); clear(session); }
+		return true;
 	}
 	private static void clear(Session session) { session.active = null; session.scan = null; }
 	@SubscribeEvent public static void stopped(ServerStoppedEvent event) { SESSIONS.remove(event.getServer()); }

@@ -41,9 +41,12 @@ final class RuntimeBeeProbe {
 		}
 	}
 	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(72, 150, 4))};
-	private static int phase, started, until, previousBudget;
+	private static int phase, started, until, previousBudget, previousTotalBudget;
+	private static final int[] serviceChecks = new int[4];
+	private static final long[] longestStep = new long[4];
 	private static long previousWork, savesBeforePaidWork;
 	static void start(MinecraftServer server) {
+		previousTotalBudget = ModConfig.SERVER.beeNetwork.totalSteps.get();
 		started = server.getTickCount(); previousBudget = ModConfig.SERVER.beeNetwork.runtimeSteps.get(); ModConfig.SERVER.beeNetwork.runtimeSteps.set(1);
 		var level = server.overworld();
 		for (int i = 0; i < FIXTURES.length; i++) {
@@ -61,7 +64,16 @@ final class RuntimeBeeProbe {
 	}
 	static boolean advance(MinecraftServer server, JsonObject report) {
 		if (phase == 11) return true;
-		require(server.getTickCount() - started < 1400, "Runtime probe timeout at phase " + phase);
+		var budget = com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.budget(server);
+		if (phase > 0 && server.getTickCount() > started && budget != null) {
+			require(budget.attempts() <= 1, "Subsystems overspent the total one-step budget");
+			for (int i = 0; i < 4; i++) {
+				serviceChecks[i] += budget.used(i); longestStep[i] = Math.max(longestStep[i], budget.longestStepNanos(i));
+			}
+		}
+		if (server.getTickCount() - started >= 2400) throw new IllegalStateException("Runtime probe timeout at phase " + phase
+				+ ": " + java.util.Arrays.stream(FIXTURES).map(f -> f.core.ownership().status() + "/" + f.core.runtime().status()
+				+ "/running=" + f.core.productionRunning() + "/topology=" + (f.core.topology() != null)).toList());
 		var level = server.overworld(); var directory = NetworkPersistence.directory(server);
 		for (var f : FIXTURES) require(f.core.ownership().status() != CoreOwnershipController.Status.RECOVERY, f.core.ownership().failure());
 		if (phase == 0) {
@@ -74,7 +86,7 @@ final class RuntimeBeeProbe {
 				require(record.bees() == null && !f.core.hasProductionSession(), "Custody unexpectedly started production");
 				f.physicalTicker = f.hive.ticker; f.hive.setControlType(RedstoneControl.DISABLED); require(f.core.setProductionRunning(true), "Runtime start failed");
 			}
-			phase = 1; return false;
+			ModConfig.SERVER.beeNetwork.totalSteps.set(1); started = server.getTickCount(); phase = 1; return false;
 		}
 		if (phase < 10) for (var f : FIXTURES) require(f.hive.ticker == f.physicalTicker && new MachineAssetStore(f.hive).empty(), "Runtime executed a physical member ticker or inventory");
 		if (phase == 1) {
@@ -90,6 +102,7 @@ final class RuntimeBeeProbe {
 			long work = 0; for (var f : FIXTURES) work += f.cycles() * f.bee().plan().cycleTicks() + f.bee().progress();
 			require(work >= previousWork && work - previousWork <= 1, "Networks exceeded their one-step shared budget"); previousWork = work;
 			for (var f : FIXTURES) if (f.cycles() != 1 || !f.bee().drained()) return false;
+			for (var f : FIXTURES) if (!ready(f)) return false;
 			for (var f : FIXTURES) { require(f.data.checkpoint().energy().stored() == 0, "Runtime charged a wrong cycle price"); f.charge(level); }
 			require(FIXTURES[0].core.setProductionRunning(false), "Pause failed"); FIXTURES[1].hive.setControlType(RedstoneControl.HIGH); flower(level, directory, FIXTURES[1], true);
 			until = server.getTickCount() + 30; phase = 3; return false;
@@ -97,6 +110,7 @@ final class RuntimeBeeProbe {
 		if (phase == 3) {
 			for (var f : FIXTURES) require(f.cycles() == 1 && f.bee().progress() == 0 && f.data.checkpoint().energy().stored() == f.cost, "Paused member advanced");
 			if (server.getTickCount() < until) return false;
+			if (!ready(FIXTURES[0])) return false;
 			require(FIXTURES[0].core.setProductionRunning(true), "Resume failed"); phase = 4; return false;
 		}
 		if (phase == 4) {
@@ -110,12 +124,12 @@ final class RuntimeBeeProbe {
 		}
 		if (phase == 5) {
 			var blocked = FIXTURES[1]; require(blocked.cycles() == 1 && blocked.bee().progress() == 0 && blocked.data.checkpoint().energy().stored() == blocked.cost, "Missing flower produced output");
-			if (FIXTURES[0].cycles() != 2) return false;
+			if (FIXTURES[0].cycles() != 2 || !ready(blocked)) return false;
 			require(FIXTURES[0].data.checkpoint().energy().stored() == 0, "Reload duplicated energy or progress");
 			flower(level, directory, blocked, false); phase = 6; return false;
 		}
 		if (phase == 6) {
-			if (FIXTURES[1].cycles() != 2) return false;
+			if (FIXTURES[1].cycles() != 2 || !ready(FIXTURES[0])) return false;
 			for (var f : FIXTURES) require(f.core.setProductionRunning(false), "Final pause failed");
 			var f = FIXTURES[0]; f.charge(level);
 			savesBeforePaidWork = directory.saveStatus().submitted();
@@ -132,7 +146,7 @@ final class RuntimeBeeProbe {
 		if (phase == 8) {
 			var f = FIXTURES[0]; if (!f.core.productionRunning() && f.core.topology() != null) require(f.core.setProductionRunning(true), "Disconnected core start failed");
 			require(f.cycles() == 3 && f.bee().progress() == 0 && f.data.checkpoint().energy().stored() == f.cost, "Disconnected member progressed");
-			if (server.getTickCount() < until) return false;
+			if (server.getTickCount() < until || !f.core.productionRunning()) return false;
 			f.core.toggleFace(Direction.EAST); phase = 9; return false;
 		}
 		if (phase == 9) {
@@ -149,7 +163,12 @@ final class RuntimeBeeProbe {
 				require(f.hive.energyContainer().getEnergy() == 0 && !f.hive.getBeeSlot(0).isEmpty(), "Runtime return lost bee or duplicated FE");
 				level.removeBlock(f.position.east(), false); level.removeBlock(f.position, false); level.setChunkForced(f.position.getX() >> 4, 0, false);
 			}
-			ModConfig.SERVER.beeNetwork.runtimeSteps.set(previousBudget); phase = 11;
+			ModConfig.SERVER.beeNetwork.runtimeSteps.set(previousBudget); ModConfig.SERVER.beeNetwork.totalSteps.set(previousTotalBudget); phase = 11;
+			for (int i = 0; i < 4; i++) {
+				require(serviceChecks[i] > 0, "A service was starved"); report.addProperty("sharedBudgetServiceChecks" + i, serviceChecks[i]);
+				report.addProperty("sharedBudgetLongestStepNanos" + i, longestStep[i]);
+			}
+			report.addProperty("allNetworkServicesShareOneRealTickBudget", true);
 			report.addProperty("runtimeTwoNetworksShareOneStepAndRetainIndividualGenes", true);
 			report.addProperty("runtimeBeePauseFlowerEnergyCoreReloadAndTopology", true);
 			report.addProperty("runtimePausedPaidOutputSettlesWithoutPhysicalTicks", true); return true;
@@ -159,6 +178,10 @@ final class RuntimeBeeProbe {
 	private static void flower(ServerLevel level, NetworkDirectory directory, Fixture fixture, boolean disabled) {
 		var feeding = fixture.data.checkpoint().ownedMachines().get(fixture.member).bees().feeding();
 		require(new NetworkFeedingService(fixture.data, directory).apply(level, fixture.member, feeding.revision(), feeding.disabled(0, disabled), false), "Flower fixture failed");
+	}
+	private static boolean ready(Fixture fixture) {
+		var topology = fixture.core.topology();
+		return topology != null && topology.valid() && fixture.core.ownership().readyAuthority() != null;
 	}
 	private RuntimeBeeProbe() { }
 }

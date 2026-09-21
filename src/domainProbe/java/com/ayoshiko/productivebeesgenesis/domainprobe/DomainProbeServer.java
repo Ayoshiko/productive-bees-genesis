@@ -15,6 +15,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class DomainProbeServer {
 	private static JsonObject pendingReport;
 	private static boolean persistenceComplete;
+	private static int ownershipPhase;
 	private static boolean energyStarted;
 	private static boolean runtimeStarted;
 	private static boolean automaticCentrifugeStarted;
@@ -62,12 +63,9 @@ public final class DomainProbeServer {
 			try {
 				if (!persistenceComplete) persistenceComplete = NetworkPersistenceProbe.advance(event.getServer(), pendingReport);
 				boolean topologyComplete = TopologyProbe.advance(event.getServer(), pendingReport);
-				boolean ownershipComplete = OwnershipProbe.advance(event.getServer(), pendingReport);
-				boolean coreOwnershipComplete = CoreOwnershipProbe.advance(event.getServer(), pendingReport);
-				boolean faultComplete = OwnershipFaultProbe.advance(event.getServer(), pendingReport);
-				boolean beesComplete = BeeNetworkProbe.advance(event.getServer(), pendingReport);
-				boolean centrifugesComplete = com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.advance(event.getServer(), pendingReport);
-				if (!persistenceComplete || !topologyComplete || !ownershipComplete || !coreOwnershipComplete || !faultComplete || !beesComplete || !centrifugesComplete) return;
+				// 拓扑夹具会破坏同区块结构并修改全服预算，完成后再开始资产接管。
+				if (!topologyComplete) return;
+				if (!advanceOwnership(event.getServer(), pendingReport) || !persistenceComplete) return;
 				// 拓扑夹具会恢复全局开关；供能夹具在它完成后独立验证开关行为。
 				if (!energyStarted) { com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkEnergyProbe.start(event.getServer()); energyStarted = true; return; }
 				if (!com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkEnergyProbe.advance(event.getServer(), pendingReport)) return;
@@ -96,11 +94,6 @@ public final class DomainProbeServer {
 			MemberIsolationProbe.verify(event.getServer().overworld(), report);
 			NetworkPersistenceProbe.verify(event.getServer(), report);
 			TopologyProbe.start(event.getServer());
-			OwnershipProbe.start(event.getServer());
-			CoreOwnershipProbe.start(event.getServer());
-			OwnershipFaultProbe.start(event.getServer());
-			BeeNetworkProbe.start(event.getServer());
-			com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.start(event.getServer());
 			pendingReport = report; return;
 		} catch (Exception failure) {
 			failed(report, failure);
@@ -111,6 +104,19 @@ public final class DomainProbeServer {
 		CheckpointReadProbe.close();
 		report.addProperty("passed", false); report.addProperty("failure", failure.toString());
 		LogUtils.getLogger().error("NETWORK_DOMAIN_FAILED", failure);
+	}
+	private static boolean advanceOwnership(net.minecraft.server.MinecraftServer server, JsonObject report) {
+		// 这些夹具复用区块并故意破坏成员，不能依赖彼此完成的偶然先后顺序。
+		switch (ownershipPhase) {
+			case 0 -> OwnershipProbe.start(server);
+			case 1 -> { if (!OwnershipProbe.advance(server, report)) return false; CoreOwnershipProbe.start(server); }
+			case 2 -> { if (!CoreOwnershipProbe.advance(server, report)) return false; OwnershipFaultProbe.start(server); }
+			case 3 -> { if (!OwnershipFaultProbe.advance(server, report)) return false; BeeNetworkProbe.start(server); }
+			case 4 -> { if (!BeeNetworkProbe.advance(server, report)) return false; com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.start(server); }
+			case 5 -> { if (!com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeNetworkProbe.advance(server, report)) return false; }
+			default -> { return true; }
+		}
+		ownershipPhase++; return false;
 	}
 	private static void finish(ServerTickEvent.Post event, JsonObject report) {
 		try {

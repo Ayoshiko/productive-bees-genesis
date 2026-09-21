@@ -12,7 +12,6 @@ import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** 所有维度共享一个保存队列；工作线程仅编码不可变 checkpoint 并流式写盘。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
@@ -37,9 +36,11 @@ public final class NetworkPersistence {
 					current.registryAccess(), writer, current.overworld().getDataStorage()), writer);
 		}).directory();
 	}
-	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
-		var session = SESSIONS.get(event.getServer());
-		if (session != null) session.directory().tick();
+	public static boolean step(MinecraftServer server) {
+		var session = SESSIONS.get(server);
+		if (session == null || !session.directory().hasPendingWork()) return false;
+		// 一次名额最多解码 64 个字段并检查一个保存候选，不把整域读取藏在单步内。
+		session.directory().tick(64, 2_000_000, 1); return true;
 	}
 	@SubscribeEvent public static void tagsReloaded(net.neoforged.neoforge.event.TagsUpdatedEvent event) {
 		if (event.getUpdateCause() != net.neoforged.neoforge.event.TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) return;
