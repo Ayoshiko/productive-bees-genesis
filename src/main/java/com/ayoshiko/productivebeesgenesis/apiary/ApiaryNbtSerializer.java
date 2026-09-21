@@ -17,7 +17,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -72,6 +71,7 @@ class ApiaryNbtSerializer {
 
 	/** NBT key — 蜂笼输出槽（BasicInventorySlot.serializeNBT） */
 	private static final String NBT_KEY_DROP_CAGE_OUT_SLOT = "productivebeesgenesis_drop_cage_out_slot";
+	private static final String NBT_KEY_DROP_GENE_TREAT_SLOT = "productivebeesgenesis_drop_gene_treat_slot";
 
 	/** NBT key — 能量槽（EnergyInventorySlot.serializeNBT） */
 	private static final String NBT_KEY_DROP_ENERGY_SLOT = "productivebeesgenesis_drop_energy_slot";
@@ -252,6 +252,9 @@ class ApiaryNbtSerializer {
 		if (nbt.contains(NBT_KEY_DROP_CAGE_OUT_SLOT, Tag.TAG_COMPOUND)) {
 			tile.getCageOutSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_CAGE_OUT_SLOT));
 		}
+		if (nbt.contains(NBT_KEY_DROP_GENE_TREAT_SLOT, Tag.TAG_COMPOUND)) {
+			tile.getGeneTreatSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_GENE_TREAT_SLOT));
+		}
 		// 能量槽
 		if (nbt.contains(NBT_KEY_DROP_ENERGY_SLOT, Tag.TAG_COMPOUND)) {
 			tile.getEnergySlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_ENERGY_SLOT));
@@ -312,6 +315,7 @@ class ApiaryNbtSerializer {
 		nbt.put(NBT_KEY_DROP_CAGE_IN_SLOT, tile.getCageInSlot().serializeNBT(provider));
 		// 蜂笼输出槽
 		nbt.put(NBT_KEY_DROP_CAGE_OUT_SLOT, tile.getCageOutSlot().serializeNBT(provider));
+		nbt.put(NBT_KEY_DROP_GENE_TREAT_SLOT, tile.getGeneTreatSlot().serializeNBT(provider));
 		// 能量槽
 		nbt.put(NBT_KEY_DROP_ENERGY_SLOT, tile.getEnergySlot().serializeNBT(provider));
 	}
@@ -335,7 +339,7 @@ class ApiaryNbtSerializer {
 	@NotNull
 	ApiaryUpgradeData buildUpgradeData(HolderLookup.Provider provider, boolean redstone, boolean sorting) {
 		List<mekanism.api.inventory.IInventorySlot> inputSlots =
-				Collections.singletonList(tile.getCageInSlot());
+				List.of(tile.getCageInSlot(), tile.getGeneTreatSlot());
 		List<mekanism.api.inventory.IInventorySlot> outputSlots = new ArrayList<>(tile.getOutputSlots());
 
 		// 模块 3 Bug 2：深拷贝产物输出槽 ItemStack，独立于父类 outputSlots 引用列表
@@ -393,7 +397,8 @@ class ApiaryNbtSerializer {
 				cageInSlotNbt, energySlotNbt, outputBufferNbt, tile.getSelectedBeeSlot(),
 				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled(),
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
-				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled());
+				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled(),
+				tile.getGeneTreatSlot().serializeNBT(provider));
 	}
 
 	/**
@@ -475,6 +480,9 @@ class ApiaryNbtSerializer {
 			loadPendingHoneyFluid(data.fluidNbt, provider);
 			// 恢复蜂笼输出槽
 			tile.getCageOutSlot().deserializeNBT(provider, data.cageOutSlotNbt);
+			if (data.geneTreatSlotNbt != null) {
+				tile.getGeneTreatSlot().deserializeNBT(provider, data.geneTreatSlotNbt);
+			}
 			// 恢复选中蜜蜂槽（边界检查，超出当前槽位数量时重置为未选择）
 			int maxBeeSlot = tile.getBeeSlotCount();
 			if (data.selectedBeeSlot >= 0 && data.selectedBeeSlot < maxBeeSlot) {

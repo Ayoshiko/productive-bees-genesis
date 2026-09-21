@@ -65,9 +65,18 @@ public final class ApiaryGuiLayoutHelper {
 	public static final int ENERGY_X = 7;
 	public static final int ENERGY_Y = 13;
 
-	/** 流体罐坐标 */
-	public static final int TANK_X = 7;
+	/**
+	 * 流体罐外框坐标。
+	 * <br/>
+	 * GuiFluidGauge 直接使用外框坐标，而动态物品槽会从方块实体槽坐标减一绘制，
+	 * 因此这里比能量槽的内坐标左移一像素，保证两种外框左边缘一致。
+	 */
+	public static final int TANK_X = ENERGY_X - 1;
 	public static final int TANK_Y = 35;
+
+	/** 小食槽沿用能量槽的内坐标；槽框与 30px 流体槽保持 4px 留白。 */
+	public static final int GENE_TREAT_X = ENERGY_X;
+	public static final int GENE_TREAT_Y = TANK_Y + 30 + 5;
 
 	/** 电力条 Y 坐标 */
 	public static final int POWER_Y = 16;

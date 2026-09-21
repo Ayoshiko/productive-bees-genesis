@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
@@ -21,6 +22,7 @@ import mezz.jei.api.constants.RecipeTypes;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.runtime.IIngredientManager;
@@ -414,6 +416,12 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 		for (var entry : ModBlocks.EME_APIARY_FACTORIES.entrySet()) {
 			registry.addRecipeCatalyst(new ItemStack(entry.getValue().get()), advBeehiveType);
 		}
+	}
+
+	@Override
+	public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+		registration.addGenericGuiContainerHandler(GuiMekApiary.class,
+				new ApiaryJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
 	}
 
 	/**

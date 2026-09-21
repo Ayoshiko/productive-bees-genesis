@@ -52,6 +52,7 @@ public class TickAccelTracker {
 
 	/** 上次被调用的游戏刻 — 用于检测同一游戏刻内多次调用 */
 	private long lastGameTick = Long.MIN_VALUE;
+	private long lastMaintenanceTick = Long.MIN_VALUE;
 
 	/** 当前游戏刻内真实 ticker 的调用次数 — 即加速倍率 M 的原始值 */
 	private int callsInCurrentTick = 0;
@@ -90,7 +91,20 @@ public class TickAccelTracker {
 	 * @param level 当前世界（仅用于获取 getGameTime，不进行任何其他访问）
 	 */
 	public void onTick(Level level) {
-		long currentTick = level.getGameTime();
+		onTick(level.getGameTime());
+	}
+
+	/** 外层组件每真实刻执行一次；重复 ticker 仍入账，首调由内部处理器入账。 */
+	boolean beginMachineTick(long gameTick) {
+		if (lastMaintenanceTick == gameTick) {
+			onTick(gameTick);
+			return false;
+		}
+		lastMaintenanceTick = gameTick;
+		return true;
+	}
+
+	void onTick(long currentTick) {
 		if (currentTick == lastGameTick) {
 			if (callsInCurrentTick < Integer.MAX_VALUE) {
 				callsInCurrentTick++;
@@ -294,6 +308,7 @@ public class TickAccelTracker {
 	 */
 	public void reset() {
 		lastGameTick = Long.MIN_VALUE;
+		lastMaintenanceTick = Long.MIN_VALUE;
 		callsInCurrentTick = 0;
 		callsInPreviousTick = 1;
 		pendingVirtualTicks = 0L;

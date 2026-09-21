@@ -27,6 +27,7 @@ import java.util.List;
 	 *   <li>PB 升级输入/输出槽（PbUpgradeInventorySlot，独立于主物品槽位体系）</li>
 	 *   <li>蜂蜜流体罐内容（IExtendedFluidTank 的 FluidStack）</li>
 	 *   <li>蜂笼输出槽（OutputInventorySlot，独立于产物输出槽，不注册到ejector）</li>
+	 *   <li>基因小食输入槽（InputInventorySlot，独立于蜂笼输入槽）</li>
 	 *   <li>选中的蜜蜂槽索引（GUI 高亮状态）</li>
 	 * </ul>
 	 * <p>
@@ -58,6 +59,9 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 
 	/** 蜂笼输出槽 NBT（由 OutputInventorySlot.serializeNBT 序列化，独立于产物输出槽） */
 	public final CompoundTag cageOutSlotNbt;
+
+	@Nullable
+	public final CompoundTag geneTreatSlotNbt;
 
 	/**
 	 * 蜂笼输入槽 NBT 快照（由 serializeNBT 序列化）
@@ -127,7 +131,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	 * @param energyContainer      能量容器（用于读取当前能量值）
 	 * @param progress             进度数组（蜂箱为单进度，传入长度1的数组）
 	 * @param energySlot           能量槽（含物品内容）
-	 * @param inputSlots           输入槽列表（蜂箱为蜂笼输入槽，单元素列表）
+	 * @param inputSlots           输入槽列表（蜂箱为蜂笼输入槽、基因小食槽）
 	 * @param outputSlots          输出槽列表（蜂箱产物输出槽，多元素列表，父类引用）
 	 * @param sorting              排序开关状态
 	 * @param components           组件列表（ITileComponent，由父类序列化为 CompoundTag）
@@ -165,10 +169,10 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 				pbUpgradeCountsNbt, pbUpgradeInputNbt, pbUpgradeOutputNbt, fluidNbt, cageOutSlotNbt,
 				outputItems, cageInSlotNbt, energySlotNbt, outputBufferNbt, selectedBeeSlot,
 				aeItemOutputEnabled, aeFluidOutputEnabled, directEjectEnabled, directAeOutputEnabled,
-				centrifugePriorityEnabled, feederConversionEnabled, true);
+				centrifugePriorityEnabled, feederConversionEnabled, true, null);
 	}
 
-	/** 当前构造器：额外携带产物直通（相邻容器）开关。 */
+	/** 当前构造器：额外携带产物直通开关与独立基因小食槽快照。 */
 	public ApiaryUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
 			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
 			List<IInventorySlot> inputSlots, List<IInventorySlot> outputSlots, boolean sorting,
@@ -181,7 +185,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			@Nullable CompoundTag outputBufferNbt, int selectedBeeSlot,
 			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
 			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
-			boolean feederConversionEnabled, boolean directContainerOutputEnabled) {
+			boolean feederConversionEnabled, boolean directContainerOutputEnabled,
+			@Nullable CompoundTag geneTreatSlotNbt) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -191,6 +196,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.pbUpgradeOutputNbt = pbUpgradeOutputNbt;
 		this.fluidNbt = fluidNbt;
 		this.cageOutSlotNbt = cageOutSlotNbt;
+		this.geneTreatSlotNbt = geneTreatSlotNbt;
 		this.outputItems = outputItems;
 		this.cageInSlotNbt = cageInSlotNbt;
 		this.energySlotNbt = energySlotNbt;

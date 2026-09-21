@@ -44,9 +44,13 @@ public final class AeItemKeyCache {
 	 * @return AEItemKey，stack 为空时返回 null
 	 */
 	public AEItemKey get(int index, ItemStack stack) {
-		if (stack.isEmpty()) return null;
 		if (index < 0 || index >= cachedStacks.length) {
-			return AEItemKey.of(stack);
+			return stack.isEmpty() ? null : AEItemKey.of(stack);
+		}
+		if (stack.isEmpty()) {
+			cachedStacks[index] = null;
+			cachedKeys[index] = null;
+			return null;
 		}
 		if (stack == cachedStacks[index]) {
 			return cachedKeys[index];

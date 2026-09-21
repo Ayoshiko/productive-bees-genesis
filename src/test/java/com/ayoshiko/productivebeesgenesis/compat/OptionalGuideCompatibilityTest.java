@@ -237,6 +237,29 @@ class OptionalGuideCompatibilityTest {
 	}
 
 	@Test
+	@DisplayName("Patchouli 指南可用两种蜂笼在生存合成，且不与 PB 原书冲突")
+	void patchouliGuideHasOptionalSurvivalRecipes() throws Exception {
+		for (String suffix : List.of("", "_sturdy")) {
+			JsonObject recipe = readJson(RESOURCE_ROOT.resolve(
+					"data/productivebeesgenesis/recipe/guide_book" + suffix + ".json"));
+			assertEquals("minecraft:crafting_shapeless", recipe.get("type").getAsString());
+			Set<String> ingredients = new HashSet<>();
+			for (var ingredient : recipe.getAsJsonArray("ingredients")) {
+				ingredients.add(ingredient.getAsJsonObject().get("item").getAsString());
+			}
+			assertEquals(Set.of("minecraft:book", "minecraft:honeycomb",
+					suffix.isEmpty() ? "productivebees:bee_cage" : "productivebees:sturdy_bee_cage"), ingredients);
+			JsonObject result = recipe.getAsJsonObject("result");
+			assertEquals("patchouli:guide_book", result.get("id").getAsString());
+			assertEquals("productivebeesgenesis:guide",
+					result.getAsJsonObject("components").get("patchouli:book").getAsString());
+			JsonObject condition = recipe.getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject();
+			assertEquals("neoforge:mod_loaded", condition.get("type").getAsString());
+			assertEquals("patchouli", condition.get("modid").getAsString());
+		}
+	}
+
+	@Test
 	@DisplayName("两个教程框架只声明可选依赖且生产 Java 不链接其 API")
 	void integrationsRemainOptionalAndClassloaderSafe() throws Exception {
 		String metadata = Files.readString(Path.of("src/main/templates/META-INF/neoforge.mods.toml"));

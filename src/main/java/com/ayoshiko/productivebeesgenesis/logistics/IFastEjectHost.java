@@ -14,7 +14,7 @@ import net.minecraft.world.item.ItemStack;
 public interface IFastEjectHost {
 
 	/**
-	 * 先模拟再放入：把刚生成的产物直接推给已配置输出面的相邻容器。
+	 * 把刚生成产物的拷贝推给已配置输出面的相邻容器，返回实际接收量。
 	 * <p>
 	 * 不会修改传入的 {@link ItemStack}；调用方按返回值扣减待提交产物即可。
 	 * 机器自动弹出关闭、没有输出面、没有相邻容器或目标塞不下时返回 0。

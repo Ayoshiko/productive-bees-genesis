@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
 import com.ayoshiko.productivebeesgenesis.apiary.ApiaryGuiLayoutHelper;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.IPagedOutputContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.client.screen.CompactStackCountScreen;
@@ -21,12 +22,15 @@ import mekanism.common.inventory.warning.IWarningTracker;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * MEK 蜂箱 GUI 主类（编排层）
@@ -236,6 +240,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		int cageY = ApiaryGuiLayoutHelper.getCageY(getBeeRows());
 		addRenderableWidget(GuiCageSlotOverlay.input(this, cageInX, cageY, () -> tile.getCageInSlot().isEmpty()));
 		addRenderableWidget(GuiCageSlotOverlay.output(this, cageOutX, cageY, () -> tile.getCageOutSlot().isEmpty()));
+		addRenderableWidget(new GuiGeneTreatSlotOverlay(this, () -> tile.getGeneTreatSlot().isEmpty()));
 	}
 
 	/**
@@ -320,6 +325,21 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		return false;
 	}
 
+	/** 配方查看器与实际渲染共用命中范围，浮窗覆盖的蜜蜂不参与查询。 */
+	public Optional<HoveredBee> getBeeUnderMouse(double mouseX, double mouseY) {
+		if (isClickOnOpenWindow(mouseX, mouseY)) return Optional.empty();
+		ApiaryBeeSlotGeometry geometry = beeGeometry();
+		int index = geometry.hitTest(leftPos, topPos, mouseX, mouseY);
+		if (index < 0) return Optional.empty();
+		ResourceLocation type = BeeNbtHelper.resolveBeeTypeKey(tile.getBeeSlot(index).getBeeData());
+		if (type == null) return Optional.empty();
+		return Optional.of(new HoveredBee(type, new Rect2i(leftPos + geometry.slotX(index),
+				topPos + geometry.slotY(index), ApiaryGuiLayoutHelper.SLOT, ApiaryGuiLayoutHelper.SLOT)));
+	}
+
+	public record HoveredBee(ResourceLocation type, Rect2i area) {
+	}
+
 	/**
 	 * 渲染 Tooltip — 优先显示蜜蜂 Tooltip，未悬停蜜蜂时回退到父类默认行为
 	 *
@@ -346,6 +366,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	 * @return true 表示鼠标悬停在蜜蜂槽位上并已渲染 Tooltip；false 表示未悬停
 	 */
 	protected boolean renderBeeTooltipIfHovered(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+		if (isClickOnOpenWindow(mouseX, mouseY)) return false;
 		return beeVisuals.renderTooltipIfHovered(guiGraphics, tile, beeGeometry(),
 				mouseX, mouseY, leftPos, topPos);
 	}

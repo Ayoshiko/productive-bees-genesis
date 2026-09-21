@@ -230,12 +230,24 @@ final class Ae2InputFilterQuerySupport {
 			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
 			boolean globalNetworkStock, long globalReserve,
 			Ae2DirectKeyIndex<AEItemKey> index) {
+		return pullLimitIfAllowed(key, visibleStock, ignoreNbt, mode, precise, slots, fuzzyEntries,
+				keys, amounts, reserves, unlimited, networkStock, unlimitedAll, tagFilterActive,
+				hasConfiguredEntries, globalNetworkStock, globalReserve, index, null);
+	}
+
+	static long pullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			FilterMode mode, boolean precise, String[] slots, FuzzyEntry[] fuzzyEntries,
+			AEItemKey[] keys, long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve,
+			Ae2DirectKeyIndex<AEItemKey> index, Ae2PullDecision decision) {
+		if (decision != null) decision.set(false, false, false, -1L);
 		if (key == null) return Ae2InputFilter.PULL_DISALLOWED;
 		ResourceLocation candidateBeeType = CombFuzzyMatcher.getBeeType(key);
 		if (!ignoreNbt && candidateBeeType == null && index != null && index.isComplete()) {
 			return indexedPullLimit(key, visibleStock, mode, amounts, reserves, unlimited, networkStock,
 					unlimitedAll, tagFilterActive, hasConfiguredEntries,
-					globalNetworkStock, globalReserve, index.slotsFor(key));
+					globalNetworkStock, globalReserve, index.slotsFor(key), decision);
 		}
 		boolean candidateBlock = CombFuzzyMatcher.isCombBlock(key);
 		boolean filterMatched = false;
@@ -279,6 +291,9 @@ final class Ae2InputFilterQuerySupport {
 
 		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
 				mode, filterMatched, tagFilterActive, hasConfiguredEntries);
+		if (decision != null) decision.set(admitted, mode == FilterMode.WHITELIST && filterMatched,
+				unlimitedPull || unlimitedAll, Ae2FilterPullPolicy.effectiveReserveFloor(
+						liveStock, reserve, globalNetworkStock, globalReserve));
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());
@@ -295,7 +310,7 @@ final class Ae2InputFilterQuerySupport {
 	private static long indexedPullLimit(AEItemKey key, long visibleStock, FilterMode mode,
 			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
 			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
-			boolean globalNetworkStock, long globalReserve, int[] hitSlots) {
+			boolean globalNetworkStock, long globalReserve, int[] hitSlots, Ae2PullDecision decision) {
 		boolean directFound = false;
 		boolean liveStock = false;
 		boolean unlimitedPull = false;
@@ -316,6 +331,9 @@ final class Ae2InputFilterQuerySupport {
 		// BLACKLIST 命中已在上面提前返回；走到这里时 directFound 必为 false。
 		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
 				mode, directFound, tagFilterActive, hasConfiguredEntries);
+		if (decision != null) decision.set(admitted, mode == FilterMode.WHITELIST && directFound,
+				unlimitedPull || unlimitedAll, Ae2FilterPullPolicy.effectiveReserveFloor(
+						liveStock, reserve, globalNetworkStock, globalReserve));
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
 				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
 				Ae2InputFilter.getMaxDirectAmount());

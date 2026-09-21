@@ -35,6 +35,9 @@ final class Ae2PushBuffers {
 	 */
 	final Ae2InsertCostTracker insertCostTracker = new Ae2InsertCostTracker();
 
+	/** 输入尝试的成本预算，与机器及输出成本统计同生命周期。 */
+	final Ae2ExtractBudget extractBudget = new Ae2ExtractBudget();
+
 	/**
 	 * 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变
 	 * <p>
@@ -77,6 +80,7 @@ final class Ae2PushBuffers {
 	 */
 	final Set<AEItemKey> scanSeenKeys = new HashSet<>();
 	final Ae2PullCandidateAmounts scanCandidateAmounts = new Ae2PullCandidateAmounts();
+	final Ae2PullDecision pullDecision = new Ae2PullDecision();
 	/**
 	 * Cached SMELTING keys observed in the AE2 inventory. Keeping this list separate
 	 * lets the puller fill its bounded candidate window with SMELTING keys before

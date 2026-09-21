@@ -252,9 +252,9 @@ public final class Ae2InputPuller {
 			}
 			directEntries = filter.getDirectEntries();
 		}
-		boolean globalNetworkStock = filter != null && filter.isGlobalNetworkStock();
-		boolean hasNetworkStockEntries = filter != null && !globalNetworkStock
-				&& filter.hasNetworkStockEntries();
+		Ae2PullDecision decision = buffers.pullDecision;
+		boolean stockPolicyActive = filter != null
+				&& (filter.isGlobalNetworkStock() || filter.hasNetworkStockEntries());
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
 				&& !filter.hasFuzzyEntries()
@@ -288,7 +288,7 @@ public final class Ae2InputPuller {
 						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 								availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
 						: Math.max(0L, availableStacks.get(key));
-				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive);
+				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
 					continue;
@@ -299,7 +299,9 @@ public final class Ae2InputPuller {
 				if (available > 0) {
 					PullEntry entry = buffers.borrowPullEntry(key,
 							SaturatingMath.saturatingToInt(available),
-							unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+							unlimitedMode && decision.unlimited);
+					entry.marked = decision.marked;
+					entry.reserveFloor = decision.reserveFloor;
 					// 分类结果随条目传递：排序阶段不再重跑 classify（会穿过配方/标签缓存）
 					entry.smelting = kind.isSmelting();
 					pullList.add(entry);
@@ -329,7 +331,7 @@ public final class Ae2InputPuller {
 							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 									availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
 							: Math.max(0L, availableStacks.get(key));
-					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive);
+					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
@@ -340,7 +342,9 @@ public final class Ae2InputPuller {
 					if (available > 0) {
 						PullEntry entry = buffers.borrowPullEntry(key,
 								SaturatingMath.saturatingToInt(available),
-								unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+								unlimitedMode && decision.unlimited);
+						entry.marked = decision.marked;
+						entry.reserveFloor = decision.reserveFloor;
 						// 分类结果随条目传递：排序阶段不再重跑 classify
 						entry.smelting = kind.isSmelting();
 						pullList.add(entry);
@@ -389,14 +393,22 @@ public final class Ae2InputPuller {
 			// clamps every guarded key immediately before MODULATE.
 			Predicate<AEItemKey> acceptableCandidate = key -> {
 				if (pullKeys.contains(key)) return false;
-				boolean reserveGuarded = globalNetworkStock || (hasNetworkStockEntries
-						&& filter.getReserveFloorForKey(key, ignoreNbt) >= 0L);
-				long available = reserveGuarded ? Long.MAX_VALUE : availableStacks.get(key);
+				long cachedAvailable = availableStacks.get(key);
+				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
+				long limit;
+				if (filter == null) {
+					decision.set(true, false, false, -1L);
+					limit = -1L;
+				} else {
+					limit = filter.getPullLimitIfAllowed(key, Long.MAX_VALUE, ignoreNbt, tagFilterActive, decision);
+				}
+				if (!decision.admitted) return false;
+				long available = decision.reserveFloor >= 0L ? Long.MAX_VALUE : cachedAvailable;
 				// 两个候选列表仅由上面的 classify 构建，并按配方/开关/标签代号失效；
 				// 此处不再为每次拉取重复查询候选类型。
-				int amount = getPullCandidateAmount(key, available, filter, ignoreNbt, tagFilterActive);
+				int amount = SaturatingMath.saturatingToInt(limit < 0L ? available : Math.min(available, limit));
 				if (amount <= 0) return false;
-				candidateAmounts.put(key, amount);
+				candidateAmounts.put(key, amount, decision);
 				return true;
 			};
 			// 返回值 = 优先（SMELTING）组贡献的条目数：selectedKeys 的前这么多项是 smelt 候选，
@@ -407,8 +419,8 @@ public final class Ae2InputPuller {
 				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
-					PullEntry entry = buffers.borrowPullEntry(key, amount,
-						unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+					PullEntry entry = buffers.borrowPullEntry(key, amount);
+					candidateAmounts.apply(key, entry, unlimitedMode);
 					entry.smelting = index < smeltingSelected;
 					pullList.add(entry);
 				}
@@ -428,23 +440,8 @@ public final class Ae2InputPuller {
 		}
 		holder.setInputCandidateCursor(pullList.getLast().key);
 
-		// 14. Marked-first ordering (AE2LT: pull what is marked first);
-		//      among marked entries comb blocks stay ahead (higher yield).
-		//      标签过滤关闭时 marked 可由准入结果直接推出；标签过滤开启且存在外层条目时，
-		//      只做一次额外标记判定，避免把标签放行的未标记候选误当成外层标记物品。
-		boolean sortIgnoreNbt = holder.isAeInputNbtIgnore();
-		Ae2InputFilter.FilterMode filterMode = filter == null
-				? Ae2InputFilter.FilterMode.DISABLED : filter.getFilterMode();
-		boolean resolveMarkedEntries = tagFilterActive && filter != null
-				&& (filter.hasDirectEntries() || filter.hasFuzzyEntries());
+		// 准入、无限提供、库存保留线与标记排序共用同一次过滤遍历的结果。
 		for (PullEntry entry : pullList) {
-			// 未启用标签过滤时，白名单候选必然命中标记；启用后，标签放行的
-			// 未标记物品也会进入列表，只有实际命中外层条目才算 marked。
-			entry.marked = filterMode == Ae2InputFilter.FilterMode.WHITELIST
-					&& (!tagFilterActive || (resolveMarkedEntries
-							&& filter.matchesAnyEntry(entry.key, sortIgnoreNbt)));
-			entry.reserveFloor = filter == null ? -1L
-					: filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);
 			// entry.smelting 已在候选准入阶段写入（直探路径用 classify 的返回值，
 			// 扫描路径用 collectPrioritized 返回的优先组分界）。此处曾为排序再跑一次
 			// classify，等于每次拉取额外穿过 typeCount 次 SMELTING 配方缓存与标签缓存 ——
@@ -483,6 +480,8 @@ public final class Ae2InputPuller {
 		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
 		int passes = typeCount > 1 ? 2 : 1;
 		boolean fairPassTruncated = false;
+		// 预算跨公平轮与补齐轮累计，未提取的类型留待后续拉取。
+		boolean extractBudgetExhausted = false;
 		for (PullEntry entry : pullList) {
 			entry.beginComponentMatchCache(processCount);
 		}
@@ -494,6 +493,13 @@ public final class Ae2InputPuller {
 			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity; typeOffset++) {
 				PullEntry entry = pullList.get(typeOffset);
 				if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
+
+				// 在逐槽规划前检查累计耗时，同时考虑本机本刻已发生的输出成本。
+				if (!buffers.extractBudget.canExtractNow(currentTick, typeCount,
+						buffers.insertCostTracker.tileSpentThisTickNanos(currentTick))) {
+					extractBudgetExhausted = true;
+					break;
+				}
 
 				// 先汇总该类型在所有可用槽位中的容量，然后一次 ME extract，再本地分发。
 				// 同一类型的模拟探针在所有输入槽中复用；SIMULATE 不会修改传入栈，
@@ -556,7 +562,7 @@ public final class Ae2InputPuller {
 							entry.reserveFloor, availableStacks, meStorage,
 							ActionSourceHolder.INSTANCE,
 						inputSlots, inputSlotCapacities, laneSnapshot, slotStart, pos, keyBackoff,
-						buffers.fingerprintCache);
+						buffers.fingerprintCache, buffers.extractBudget);
 					int pulled = batchResult.insertedCount();
 					entry.remaining -= pulled;
 					totalPulled += pulled;
@@ -577,6 +583,8 @@ public final class Ae2InputPuller {
 					degradedExtractDetected = true;
 				}
 			}
+			// 调用预算耗尽时，补齐轮也不再尝试。
+			if (extractBudgetExhausted) break;
 		}
 		for (PullEntry entry : pullList) {
 			entry.clearComponentMatchCache();
@@ -609,18 +617,6 @@ public final class Ae2InputPuller {
 		// 拉取列表已使用完毕，clear 而非新建（复用 ReusableBuffers）
 		pullList.clear();
 	}
-
-	private static int getPullCandidateAmount(Object rawKey, long available, Ae2InputFilter filter,
-			boolean ignoreNbt, boolean tagFilterActive) {
-		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)) return 0;
-		if (filter != null) {
-			long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt, tagFilterActive);
-			if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
-			if (configuredLimit >= 0L) available = Math.min(available, configuredLimit);
-		}
-		return available <= 0L ? 0 : SaturatingMath.saturatingToInt(available);
-	}
-
 
 	/**
 	 * 获取每次拉取的最大物品数量
@@ -806,7 +802,8 @@ public final class Ae2InputPuller {
 			long reserveFloor, KeyCounter cachedInventory, MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, Ae2InputLaneSnapshot laneSnapshot,
 			int slotStart, BlockPos pos,
-			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache) {
+			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache,
+			Ae2ExtractBudget extractBudget) {
 		// 网络级协调已在拉取入口取得令牌；此处只记录实际成本，不再使用旧全服硬闸门，
 		// 避免一个病态网络让其它互不相关的健康网络同 tick 停止拉取。
 		long gameTick = level.getGameTime();
@@ -862,6 +859,7 @@ public final class Ae2InputPuller {
 						cachedInventory, meStorage, key, queryCap, actionSource);
 			} catch (LinkageError | RuntimeException e) {
 				reserveQueryCost = System.nanoTime() - queryStart;
+				extractBudget.recordProbe(gameTick, reserveQueryCost);
 				Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 						Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 				holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
@@ -873,6 +871,7 @@ public final class Ae2InputPuller {
 						Ae2StorageHealth.isPathological(reserveQueryCost), true, false);
 			}
 			reserveQueryCost = System.nanoTime() - queryStart;
+			extractBudget.recordProbe(gameTick, reserveQueryCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 			holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
@@ -897,6 +896,7 @@ public final class Ae2InputPuller {
 					meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
 		} catch (LinkageError | RuntimeException error) {
 			long extractCost = System.nanoTime() - extractStart;
+			extractBudget.record(gameTick, extractCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 			holder.recordNetworkCost(meStorage, gameTick, extractCost,
@@ -904,6 +904,7 @@ public final class Ae2InputPuller {
 			throw error;
 		}
 		long extractCost = System.nanoTime() - extractStart;
+		extractBudget.record(gameTick, extractCost);
 		Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 				Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 		holder.recordNetworkCost(meStorage, gameTick, extractCost,

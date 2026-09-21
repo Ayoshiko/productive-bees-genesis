@@ -60,12 +60,14 @@ class RecipeLookupCacheWiringTest {
 	}
 
 	@Test
-	@DisplayName("配方/标签重载时失效单原料合成索引")
-	void tagsReloadInvalidatesSingleIngredientIndex() throws Exception {
+	@DisplayName("配方/标签重载及服务器停止时失效单原料合成索引")
+	void reloadAndServerStopInvalidateSingleIngredientIndex() throws Exception {
 		String main = read("src/main/java/com/ayoshiko/productivebeesgenesis/"
 				+ "ProductiveBeesGenesis.java");
 		assertTrue(main.contains("SingleIngredientCraftingIndex.invalidate();"),
 				"onTagsReload 必须失效索引，否则重载后仍返回旧配方产物");
+		assertTrue(main.contains("SingleIngredientCraftingIndex::invalidate"),
+				"onServerStopped 必须释放旧配方产出快照");
 	}
 
 	@Test

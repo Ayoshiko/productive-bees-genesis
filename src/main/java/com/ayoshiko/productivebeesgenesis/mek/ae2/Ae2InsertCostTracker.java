@@ -152,6 +152,11 @@ final class Ae2InsertCostTracker {
 		return averageNanos;
 	}
 
+	/** 本机本刻的输出墙钟耗时，供输入预算避免双向成本叠加。 */
+	long tileSpentThisTickNanos(long gameTick) {
+		return gameTick == tileTick ? tileSpentNanos : 0L;
+	}
+
 	/** 方块销毁/重建时清空统计，避免旧网络的成本估计影响新网络 */
 	void reset() {
 		averageNanos = 0L;

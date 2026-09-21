@@ -130,7 +130,7 @@ public class MekApiaryContainerRegistrar {
 	 * <br/>
 	 * 基础版：18 个物理输出槽（3×3，每页 9 格）
 	 * 工厂版：由 {@link FactoryApiaryConfig} 根据蜜蜂列数动态对齐并创建两页物理槽（ME/EME 同样适用）
-	 * 物品槽位总数 = 输出槽 + 3（1蜂笼输入 + 1蜂笼输出 + 1能量槽）
+	 * 物品槽位总数 = 输出槽 + 4（蜂笼输入、蜂笼输出、能量、基因小食）
 	 * <p>
 	 * ME/EME 等级识别与 {@link #getFluidCapacity} 一致，通过 compat 辅助类隔离软依赖。
 	 */
@@ -166,13 +166,14 @@ public class MekApiaryContainerRegistrar {
 	 *   <li>蜂笼输出槽（OutputInventorySlot）— internalOnly 提取谓词</li>
 	 *   <li>输出槽 × N（OutputInventorySlot）— internalOnly 提取谓词</li>
 	 *   <li>能量槽（EnergyInventorySlot）— 特殊能量谓词</li>
+	 *   <li>基因小食输入槽 — 仅接受带基因的小食</li>
 	 * </ol>
 	 */
-	private static ItemSlotListCreator buildApiaryItemSlots(int outputSlots) {
+	static BaseContainerCreator<AttachedItems, ComponentBackedInventorySlot> buildApiaryItemSlots(int outputSlots) {
 		List<IBasicContainerCreator<? extends ComponentBackedInventorySlot>> creators = new ArrayList<>();
 		// 蜂笼输入槽
 		creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
-				ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrue()));
+				ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ApiarySlotManager::isCageInputCandidate));
 		// 蜂笼输出槽
 		creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
 				ConstantPredicates.alwaysTrueBi(), ConstantPredicates.internalOnly(), ConstantPredicates.alwaysTrue()));
@@ -183,6 +184,9 @@ public class MekApiaryContainerRegistrar {
 		}
 		// 能量槽
 		creators.add(createEnergySlotCreator());
+		// 与方块实体保持相同槽位顺序，拆卸和合成升级才能完整搬运小食。
+		creators.add((type, attachedTo, containerIndex) -> new ComponentBackedInventorySlot(attachedTo, containerIndex,
+				ConstantPredicates.notExternal(), ConstantPredicates.alwaysTrueBi(), ApiarySlotManager::isGeneTreat));
 		return new ItemSlotListCreator(creators);
 	}
 

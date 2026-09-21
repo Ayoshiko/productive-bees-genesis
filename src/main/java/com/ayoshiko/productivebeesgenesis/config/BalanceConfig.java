@@ -9,6 +9,8 @@ import java.util.Map;
 public final class BalanceConfig {
 
 	static final BalancePreset DEFAULT_PRESET = BalancePreset.BASIC;
+	static final String CUSTOM_SETTING_COMMENT =
+			"受基础/悖论无限预设约束；请先将玩法配置中的 balanceProfile 改为 CUSTOM 并保存，再修改此项。";
 	static final boolean DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE = true;
 	static final boolean DEFAULT_CUSTOM_SPEED_EXCLUSIVE = true;
 	static final boolean DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT = false;

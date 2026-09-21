@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.init;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.GenesisMachineTicker;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlockType;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryBlockType;
@@ -46,7 +47,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifuge> MEK_CENTRIFUGE =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.MEK_CENTRIFUGE,
 					(pos, state) -> new TileEntityMekCentrifuge(ModBlocks.MEK_CENTRIFUGE, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -55,7 +56,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiary> MEK_APIARY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.MEK_APIARY,
 					(pos, state) -> new TileEntityMekApiary(ModBlocks.MEK_APIARY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -64,7 +65,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.BASIC_MEK_APIARY_FACTORY,
 					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.BASIC_MEK_APIARY_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -73,7 +74,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ADVANCED_MEK_APIARY_FACTORY,
 					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ADVANCED_MEK_APIARY_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -82,7 +83,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ELITE_MEK_APIARY_FACTORY,
 					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ELITE_MEK_APIARY_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -91,7 +92,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY,
 					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -100,7 +101,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> BASIC_MEK_CENTRIFUGE_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY,
 					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -109,7 +110,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ADVANCED_MEK_CENTRIFUGE_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY,
 					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -118,7 +119,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ELITE_MEK_CENTRIFUGE_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY,
 					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -127,7 +128,7 @@ public final class ModBlockEntities {
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
 			BLOCK_ENTITIES.mekBuilder(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY,
 					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY, pos, state))
-					.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 					.withSimple(Capabilities.CONFIG_CARD)
 					.build();
@@ -177,7 +178,7 @@ public final class ModBlockEntities {
 			TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> tileType =
 					BLOCK_ENTITIES.mekBuilder(deferredBlock,
 							(pos, state) -> new TileEntityMekCentrifugeFactory(deferredBlock, pos, state))
-							.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 							.withSimple(Capabilities.CONFIG_CARD)
 							.build();
@@ -249,7 +250,7 @@ public final class ModBlockEntities {
 			TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> tileType =
 					BLOCK_ENTITIES.mekBuilder(deferredBlock,
 							(pos, state) -> new TileEntityMekApiaryFactory(deferredBlock, pos, state))
-							.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 							.withSimple(Capabilities.CONFIG_CARD)
 							.build();

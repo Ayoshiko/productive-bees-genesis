@@ -79,10 +79,11 @@ public final class ApiaryConfigSection {
 		builder.pop();
 
 		builder.comment("PB 升级上限").push("pb_upgrade");
-		apiaryPbUpgradeProductivityMaxCount = builder.comment("产量升级（α/β/γ/Ω）最大安装数量")
+		apiaryPbUpgradeProductivityMaxCount = builder.comment("产量升级（α/β/γ/Ω）最大安装数量",
+				BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.mek_apiary.pb_upgrade.productivityMaxCount")
 				.defineInRange("productivityMaxCount", BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT, 1, 64);
-		apiaryPbUpgradeTimeMaxCount = builder.comment("时间升级最大安装数量")
+		apiaryPbUpgradeTimeMaxCount = builder.comment("时间升级最大安装数量", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.mek_apiary.pb_upgrade.timeMaxCount")
 				.defineInRange("timeMaxCount", BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT, 1, 64);
 		apiaryPbUpgradeGeneSamplerMaxCount = builder.comment("基因采样升级最大安装数量")

@@ -690,6 +690,11 @@ public final class Ae2InputFilter {
 	 */
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			boolean tagFilterActive) {
+		return getPullLimitIfAllowed(key, visibleStock, ignoreNbt, tagFilterActive, null);
+	}
+
+	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
+			boolean tagFilterActive, Ae2PullDecision decision) {
 		String[] currentSlots = slots;
 		AEItemKey[] currentKeys = resolvedDirectKeys;
 		Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries = getFuzzyEntries(currentSlots);
@@ -698,7 +703,7 @@ public final class Ae2InputFilter {
 				filterMode, preciseMode, currentSlots, fuzzyEntries, currentKeys,
 				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
 				unlimitedAllFallback, tagFilterActive, hasConfiguredEntries,
-				globalNetworkStock, globalReserveAmount, getDirectKeyIndex(currentSlots, currentKeys));
+				globalNetworkStock, globalReserveAmount, getDirectKeyIndex(currentSlots, currentKeys), decision);
 	}
 
 	private static boolean hasConfiguredEntries(String[] currentSlots,

@@ -633,6 +633,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@NotNull public EnergyInventorySlot getEnergySlot() { return slotManager.getEnergySlot(); }
 	@NotNull public BasicInventorySlot getCageInSlot() { return slotManager.getCageInSlot(); }
 	@NotNull public BasicInventorySlot getCageOutSlot() { return slotManager.getCageOutSlot(); }
+	@NotNull public BasicInventorySlot getGeneTreatSlot() { return slotManager.getGeneTreatSlot(); }
 	@NotNull public List<BasicInventorySlot> getOutputSlots() { return slotManager.getOutputSlots(); }
 	@NotNull public BeeSlot[] getBeeSlots() { return slotManager.getBeeSlots(); }
 	@NotNull public BeeSlot getBeeSlot(int index) { return slotManager.getBeeSlot(index); }

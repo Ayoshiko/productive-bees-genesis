@@ -165,18 +165,17 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("候选缓存命中后不重复分类，默认非无限模式不重复遍历过滤槽")
 	void candidateSelectionReusesClassificationAndFilterAdmission() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		int methodStart = source.indexOf("private static int getPullCandidateAmount(");
-		int methodEnd = source.indexOf("\n\t/**", methodStart);
+		int methodStart = source.indexOf("Predicate<AEItemKey> acceptableCandidate = key -> {");
+		int methodEnd = source.indexOf("\n\t\t\t};", methodStart);
 		String method = source.substring(methodStart, methodEnd);
 
 		assertFalse(method.contains("Ae2InputCandidatePolicy.classify"),
 				"已按版本缓存的候选列表不得在每轮选择时重复做 SMELTING 分类");
-		assertTrue(source.contains("unlimitedMode && filter.isUnlimitedForKey"),
-				"默认无无限配置时必须跳过逐键过滤槽遍历");
-		assertTrue(source.contains("boolean resolveMarkedEntries = tagFilterActive && filter != null"),
-				"标签过滤激活时必须区分标记与未标记候选");
-		assertTrue(source.contains("filter.matchesAnyEntry(entry.key, sortIgnoreNbt)"),
-				"标签过滤放行的未标记候选不得被误判为外层标记物品");
+		assertTrue(source.contains("unlimitedMode && decision.unlimited"));
+		assertTrue(source.contains("candidateAmounts.apply(key, entry, unlimitedMode)"));
+		assertFalse(source.contains("filter.isUnlimitedForKey("), "无限提供必须复用准入结果");
+		assertFalse(source.contains("filter.matchesAnyEntry("), "标记排序必须复用准入结果");
+		assertFalse(source.contains("filter.getReserveFloorForKey("), "库存保留线必须复用准入结果");
 	}
 
 	@Test

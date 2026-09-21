@@ -191,21 +191,22 @@ public final class ServerConfig {
 
 		builder.comment("平衡性规则；仅在全局平衡性配置为“自定义”时直接生效").push("balance");
 		productivityUpgradeTiersExclusive = builder
-				.comment("禁止产量升级 α/β/γ/Ω 在同一台机器中混装")
+				.comment("禁止产量升级 α/β/γ/Ω 在同一台机器中混装", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.productivityUpgradeTiersExclusive")
 				.define("productivityUpgradeTiersExclusive",
 						BalanceConfig.DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE);
 		speedUpgradeTiersExclusive = builder
-				.comment("禁止时间 I 与时间 II 两种速度升级在同一台机器中混装")
+				.comment("禁止时间 I 与时间 II 两种速度升级在同一台机器中混装", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.speedUpgradeTiersExclusive")
 				.define("speedUpgradeTiersExclusive", BalanceConfig.DEFAULT_CUSTOM_SPEED_EXCLUSIVE);
 		centrifugeProductivityAffectsOutput = builder
-				.comment("离心机产量升级是否额外增加单次产出；无论此项如何，资源蜜蜂原版并行能力始终保留")
+				.comment("离心机产量升级是否额外增加单次产出；无论此项如何，资源蜜蜂原版并行能力始终保留",
+						BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.centrifugeProductivityAffectsOutput")
 				.define("centrifugeProductivityAffectsOutput",
 						BalanceConfig.DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT);
 		apiaryBeeGenesAffectWork = builder
-				.comment("机械蜂箱是否根据蜜蜂的昼夜行为与天气耐受基因暂停工作")
+				.comment("机械蜂箱是否根据蜜蜂的昼夜行为与天气耐受基因暂停工作", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.apiaryBeeGenesAffectWork")
 				.define("apiaryBeeGenesAffectWork",
 						BalanceConfig.DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);

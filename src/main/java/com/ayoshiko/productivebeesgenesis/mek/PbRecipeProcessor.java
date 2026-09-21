@@ -65,6 +65,7 @@ public class PbRecipeProcessor {
 
 	/** 输出聚合器数组（每进程独立，批量插入减少 listener 触发次数） */
 	private final PbRecipeCompleter[] recipeCompleters;
+	private final boolean[] emptyFactoryProcesses;
 
 	/** 万象创世处理器（持有共享数组引用） */
 	private final MyriadCreationsHandler myriadHandler;
@@ -128,6 +129,7 @@ public class PbRecipeProcessor {
 		this.pbOperatingTicks = new int[processes];
 		this.syncedOperatingTicks = new int[processes];
 		this.pbProcessing = new boolean[processes];
+		this.emptyFactoryProcesses = new boolean[processes];
 		this.pbProcessingTime = new int[processes];
 		this.smeltingCache = new SmeltingRecipeCache(processes);
 		this.cachedPbRecipes = new RecipeHolder[processes];
@@ -522,6 +524,21 @@ public class PbRecipeProcessor {
 		return completer.flushPendingPbOutputs(processIndex);
 	}
 
+	/** 空进程只在进入空闲时清理一次，已提交产物仍每刻重试排空。 */
+	public void updateFactoryInputState(int process, boolean empty) {
+		if (!empty) {
+			emptyFactoryProcesses[process] = false;
+			return;
+		}
+		drainCommittedPendingOutputs(process);
+		if (!emptyFactoryProcesses[process]) {
+			resetSmeltingCache(process);
+			resetPbState(process);
+			context.productivebeesgenesis$onProcessDeactivated(process);
+			emptyFactoryProcesses[process] = true;
+		}
+	}
+
 	/** 查找匹配输入物品的PB离心配方 — 委托给 {@link PbRecipeFinder}，保留为公共方法供外部调用方使用 */
 	@Nullable
 	public RecipeHolder<CentrifugeRecipe> findPbRecipe(ItemStack input) {
@@ -609,6 +626,7 @@ public class PbRecipeProcessor {
 
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
+		java.util.Arrays.fill(emptyFactoryProcesses, false);
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.loadAdditional(nbt);
 		for (PbRecipeCompleter completer : recipeCompleters) completer.resetPendingRecipe();

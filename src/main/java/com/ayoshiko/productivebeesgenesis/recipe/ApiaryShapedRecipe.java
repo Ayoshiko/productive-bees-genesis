@@ -145,9 +145,19 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 			//    保证输出槽有物品时仍可合成且 MEK 升级与自定义数据均不丢失。
 			ItemStack fallback = template.copy();
 			fallback.applyComponents(machineInputs.get(0).getComponents());
+			if (isApiary) {
+				if (!ApiaryCraftingInventoryTransfer.transfer(machineInputs, fallback)) return ItemStack.EMPTY;
+			} else {
+				if (!ApiaryCraftingDataTransfer.mergeAttachedItemDataIntoFallback(machineInputs, fallback)) {
+					return ItemStack.EMPTY;
+				}
+			}
 			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
 			return fallback;
 		}
+
+		// 覆盖 MEK 按可插入顺序重排的库存；源组件始终只读，不从错误结果反推槽位。
+		if (isApiary && !ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)) return ItemStack.EMPTY;
 
 		// 3. 转移/合并自定义 BLOCK_ENTITY_DATA（蜜蜂槽/PB升级等）
 		try {

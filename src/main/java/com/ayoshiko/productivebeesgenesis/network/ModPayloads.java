@@ -428,4 +428,10 @@ public final class ModPayloads {
 	public static void clearFilterSyncRateLimit(UUID uuid) {
 		FILTER_SYNC_LAST_ACCEPT.remove(uuid);
 	}
+
+	/** 服务器停止时释放全部配置同步限频记录，并复位惰性清理计数。 */
+	public static void clearFilterSyncRateLimits() {
+		FILTER_SYNC_LAST_ACCEPT.clear();
+		packetCounter.set(0);
+	}
 }

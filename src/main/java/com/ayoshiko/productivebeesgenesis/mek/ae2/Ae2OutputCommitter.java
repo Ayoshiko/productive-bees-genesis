@@ -35,12 +35,12 @@ final class Ae2OutputCommitter {
 			HolderLookup.Provider registries) {
 		if (slot == null) return;
 		ItemStack stack = slot.getStack();
-		if (stack.isEmpty()) return;
 
 		AEItemKey key;
 		if (cache != null) {
 			key = cache.get(process * AeItemKeyCache.SLOTS_PER_PROCESS + slotIdx, stack);
 		} else {
+			if (stack.isEmpty()) return;
 			key = AEItemKey.of(stack);
 		}
 		if (key == null) return;

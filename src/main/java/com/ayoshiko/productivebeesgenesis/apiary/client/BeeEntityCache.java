@@ -81,6 +81,8 @@ public final class BeeEntityCache {
 
 		String key = buildCacheKey(beeData);
 		if (key.isEmpty()) return null;
+		Entity cached = cache.get(key);
+		if (cached != null) return cached;
 
 		// 容量超限时清空全部缓存，防止内存泄漏
 		if (cache.size() >= MAX_CACHE_SIZE) {

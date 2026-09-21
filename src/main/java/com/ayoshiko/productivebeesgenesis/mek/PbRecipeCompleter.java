@@ -253,7 +253,7 @@ public class PbRecipeCompleter {
 		if (pendingRecipe == recipe) return;
 		if (pendingRecipe != null) clearPendingOutputs();
 		pendingRecipe = recipe;
-		pendingRecipeOutputs = recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
+		pendingRecipeOutputs = getRecipeOutputsCached(recipe);
 		FluidStack fluidOutput = recipe.getFluidOutputs();
 		pendingFluidTemplate = fluidOutput.isEmpty() ? null : fluidOutput.copy();
 	}
@@ -308,7 +308,8 @@ public class PbRecipeCompleter {
 	 * 不清空 {@link #pendingFluidTemplate},同配方流体模板可复用,避免重新调用 getFluidOutputs()。
 	 */
 	void clearPendingOutputs() {
-		pendingOutputs.clear();
+		// IdentityHashMap.clear 即使为空也遍历底层数组；空闲进程每刻都会重置。
+		if (!pendingOutputs.isEmpty()) pendingOutputs.clear();
 		pendingFluidAmount = 0;
 		pendingInputShrink = 0;
 		pendingItemCount = 0;
@@ -419,7 +420,7 @@ public class PbRecipeCompleter {
 
 	/** 本地槽已完整接收本轮 pending 物品。 */
 	void consumeAllPendingItems() {
-		pendingOutputs.clear();
+		if (!pendingOutputs.isEmpty()) pendingOutputs.clear();
 		pendingItemCount = 0;
 		if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
 	}
@@ -503,7 +504,7 @@ public class PbRecipeCompleter {
 	}
 
 	/**
-	 * 静态缓存查询 — 供 PbRecipeFlusher 在 pendingRecipeOutputs 为 null 时回退使用
+	 * 共享只读输出模板，供输出检查、聚合和 flush 复用，避免 PB 每次复制产物表。
 	 *
 	 * @param recipe PB配方
 	 * @return 配方输出表(可能为 null,若 recipe 为 null)

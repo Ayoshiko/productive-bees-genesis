@@ -398,17 +398,8 @@ public final class MekCentrifugeFactoryHelper {
 		for (int processOffset = 0; processOffset < processes; processOffset++) {
 			int i = (processStart + processOffset) % processes;
 			ItemStack input = inputSlots.get(i).getStack();
+			pbProcessor.updateFactoryInputState(i, input.isEmpty());
 			if (input.isEmpty()) {
-				// 输入清空后仍可能有「已扣除输入、尚未写出」的产物（种类溢出延迟提交 / 直输 AE 回退），
-				// 必须继续排空，否则产物滞留在不可见缓冲里
-				pbProcessor.drainCommittedPendingOutputs(i);
-				// 空输入：重置缓存并跳过
-				pbProcessor.resetSmeltingCache(i);
-				// 修复：空输入时必须重置 PB 状态（pbOperatingTicks/pbProcessing/cachedPbRecipes）
-				// 否则进度条残留、配方缓存残留导致切换异常（与基础机器 MekCentrifugeTickHandler 对齐）
-				pbProcessor.resetPbState(i);
-				// Task 11: 空输入确保 PB 进程失活（状态守卫防重复，super 已重置 activeStates）
-				context.productivebeesgenesis$onProcessDeactivated(i);
 				continue;
 			}
 			// PB配方短路 — 万象创世蜜脾/蜜脾块或有PB离心配方的物品跳过 SMELTING 检查
@@ -428,7 +419,6 @@ public final class MekCentrifugeFactoryHelper {
 				pbProcessor.setTickMultiplier(batchMultiplier);
 				long energyBeforeProcess = energyContainer.getEnergy();
 				if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
-					context.productivebeesgenesis$onProcessActivated(i);
 					context.setPbActiveState(true, i);
 				} else {
 					context.productivebeesgenesis$onProcessDeactivated(i);
@@ -450,8 +440,7 @@ public final class MekCentrifugeFactoryHelper {
 			pbProcessor.setTickMultiplier(batchMultiplier);
 			long energyBeforeProcess = energyContainer.getEnergy();
 			if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
-				// Task 11: PB 进程激活（onProcessActivated 递增计数器；setPbActiveState 内部状态守卫防重复 + setActiveState）
-				context.productivebeesgenesis$onProcessActivated(i);
+				// setPbActiveState 同时更新激活计数和 Mekanism 状态。
 				context.setPbActiveState(true, i);
 			} else {
 				// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）

@@ -190,6 +190,8 @@ public class ApiarySlotSerializer {
 		for (int i = 0; i < beeSlotCount; i++) {
 			final BeeSlot slot = beeSlots[i];
 			final int slotIndex = i;
+			BeeProgressSyncState progressSync = new BeeProgressSyncState(slot,
+					() -> manager.getLevel() == null ? 0L : manager.getLevel().getGameTime());
 			// 状态枚举 — 通过 ordinal 同步
 			container.track(SyncableEnum.create(
 					ApiarySlotSerializer::stateByOrdinal,
@@ -199,7 +201,7 @@ public class ApiarySlotSerializer {
 			));
 			// 生产进度 — 供 GUI 进度条渲染
 			container.track(SyncableFloat.create(
-					slot::getProgress,
+					progressSync::progress,
 					slot::setProgress
 			));
 			// 是否有蜜 — 供 GUI 状态灯渲染
@@ -219,7 +221,7 @@ public class ApiarySlotSerializer {
 			));
 			// 已居住 tick 数 — tooltip 进度显示
 			container.track(SyncableInt.create(
-					slot::getTicksInHive,
+					progressSync::ticks,
 					slot::setTicksInHive
 			));
 			// 最小 occupation ticks — tooltip 进度显示
@@ -242,7 +244,11 @@ public class ApiarySlotSerializer {
 	 */
 	private byte[] serializeBeeDataCached(int slotIndex, BeeSlot slot) {
 		CompoundTag beeData = slot.getBeeData();
-		if (beeData == null) return EMPTY_BEE_DATA;
+		if (beeData == null) {
+			serializedSourceCache[slotIndex] = null;
+			serializedBeeDataCache[slotIndex] = null;
+			return EMPTY_BEE_DATA;
+		}
 		if (beeData == serializedSourceCache[slotIndex]) {
 			return serializedBeeDataCache[slotIndex];
 		}

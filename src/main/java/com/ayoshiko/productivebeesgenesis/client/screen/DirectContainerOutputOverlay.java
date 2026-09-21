@@ -26,6 +26,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -49,8 +50,8 @@ public final class DirectContainerOutputOverlay {
 	private static final int BUTTON_Y_OFFSET = 78;
 	private static final int BUTTON_SIZE = 14;
 
-	/** 按钮缓存：key=侧面配置窗口实例，WeakHashMap 在窗口 GC 后自动回收 */
-	private static final Map<GuiSideConfiguration<?>, DirectContainerOutputButton> BUTTONS = new WeakHashMap<>();
+	/** 值也使用弱引用，避免按钮经 GUI 反向持有窗口使弱键无法回收。 */
+	private static final Map<GuiSideConfiguration<?>, WeakReference<DirectContainerOutputButton>> BUTTONS = new WeakHashMap<>();
 
 	private DirectContainerOutputOverlay() {
 	}
@@ -60,14 +61,15 @@ public final class DirectContainerOutputOverlay {
 		Target target = findTarget(Minecraft.getInstance().screen);
 		if (target == null) return;
 		GuiSideConfiguration<?> sideConfig = target.sideConfig();
-		DirectContainerOutputButton button = BUTTONS.computeIfAbsent(sideConfig, config -> {
-			DirectContainerOutputButton created = new DirectContainerOutputButton(target.gui(),
-					config.getRelativeX() + BUTTON_X_OFFSET,
-					config.getRelativeY() + BUTTON_Y_OFFSET,
+		DirectContainerOutputButton button = getButton(sideConfig);
+		if (button == null) {
+			button = new DirectContainerOutputButton(target.gui(),
+					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
+					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
 					target.tile());
-			config.children().add(created);
-			return created;
-		});
+			sideConfig.children().add(button);
+			BUTTONS.put(sideConfig, new WeakReference<>(button));
+		}
 		BlockEntity tile = target.tile();
 		button.tile = tile;
 		button.visible = target.type() == TransmissionType.ITEM;
@@ -88,7 +90,7 @@ public final class DirectContainerOutputOverlay {
 		if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
 		Target target = findTarget(event.getScreen());
 		if (target == null || target.type() != TransmissionType.ITEM) return;
-		DirectContainerOutputButton button = BUTTONS.get(target.sideConfig());
+		DirectContainerOutputButton button = getButton(target.sideConfig());
 		if (button == null || !button.visible) return;
 		int x = target.gui().getGuiLeft() + target.sideConfig().getRelativeX() + BUTTON_X_OFFSET;
 		int y = target.gui().getGuiTop() + target.sideConfig().getRelativeY() + BUTTON_Y_OFFSET;
@@ -118,6 +120,11 @@ public final class DirectContainerOutputOverlay {
 	/** 发送切换包（按钮点击与鼠标命中两条路径共用） */
 	static void sendToggle(BlockEntity tile) {
 		PacketDistributor.sendToServer(new ToggleDirectContainerOutputPayload(tile.getBlockPos()));
+	}
+
+	private static DirectContainerOutputButton getButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<DirectContainerOutputButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
 	}
 
 	private static Target findTarget(Screen screen) {

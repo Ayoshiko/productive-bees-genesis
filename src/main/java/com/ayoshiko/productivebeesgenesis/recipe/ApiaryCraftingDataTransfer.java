@@ -14,6 +14,9 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.attachments.containers.ContainerType;
+import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
@@ -29,6 +32,7 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -343,6 +347,33 @@ final class ApiaryCraftingDataTransfer {
 
 		// 写回合并后的 PB 升级数量（空 CompoundTag 也写入,确保字段存在）
 		merged.put(pbUpgradeKey, mergedCounts);
+	}
+
+	/**
+	 * 回退合成路径复制第一个输入的组件后，继续把其余机器的 ATTACHED_ITEMS 合并进去。
+	 * <br/>
+	 * 正常路径由 MekanismShapedRecipe 完成相同工作；回退路径必须显式补齐，
+	 * 否则第二个及后续输入中的基因小食、能量物品和输出物品会静默丢失。
+	 */
+	static boolean mergeAttachedItemDataIntoFallback(List<ItemStack> inputs, ItemStack fallback) {
+		ComponentBackedItemHandler target = ContainerType.ITEM.createHandler(fallback);
+		if (target == null) return false;
+		for (int inputIndex = 1; inputIndex < inputs.size(); inputIndex++) {
+			ComponentBackedItemHandler source = ContainerType.ITEM.createHandler(inputs.get(inputIndex));
+			if (source == null) continue;
+			for (IInventorySlot slot : source.getInventorySlots(null)) {
+				ItemStack stack = slot.getStack();
+				if (stack.isEmpty()) continue;
+				ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, stack.copy(), false);
+				if (!remainder.isEmpty()) {
+					DevLog.warn(DEV_FEATURE,
+							"合成升级回退路径无法容纳输入物品 {}，拒绝合成",
+							remainder.getHoverName().getString());
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	/**
