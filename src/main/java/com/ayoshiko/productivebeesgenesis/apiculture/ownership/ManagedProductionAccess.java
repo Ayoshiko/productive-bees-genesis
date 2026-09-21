@@ -19,7 +19,7 @@ public final class ManagedProductionAccess {
 				|| !identity.equals(core.network()) || !identity.ownerId().equals(core.owner()) || !identity.controllerId().equals(core.controller())) return null;
 		var topology = core.topology(); var location = record.claim().origin();
 		var position = new BlockPos(location.x(), location.y(), location.z());
-		if (topology == null || !topology.valid() || topology.members().stream().noneMatch(node -> node.position().equals(position))) return null;
+		if (topology == null || !topology.valid() || !topology.hasMember(position)) return null;
 		if (record.phase() != OwnedMachineRecord.Phase.OWNED || !record.claim().equals(directory.claimAt(location))
 				|| !location.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(location.x() >> 4, location.z() >> 4)) return null;
 		var tile = level.getBlockEntity(position);

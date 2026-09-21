@@ -18,6 +18,14 @@ public final class OwnedMachines {
 	public OwnedMachineRecord get(UUID member) { return records.get(member); }
 	public OwnedMachineRecord at(Origin origin) { var member = positions.get(origin); return member == null ? null : records.get(member); }
 	public Collection<OwnedMachineRecord> values() { return records.values(); }
+	/** 调度发现只遍历当前保管成员，不反复扫描已交还的历史记录。 */
+	public Iterable<OwnedMachineRecord> activeValues() {
+		return () -> new Iterator<>() {
+			private final Iterator<UUID> ids = positions.values().iterator();
+			@Override public boolean hasNext() { return ids.hasNext(); }
+			@Override public OwnedMachineRecord next() { return records.get(ids.next()); }
+		};
+	}
 	public int size() { return records.size(); }
 	public int activeCount() { return positions.size(); }
 	public boolean follows(OwnedMachines old) { return this == old || previous == old.token || old.size() == 0 && size() == 0; }

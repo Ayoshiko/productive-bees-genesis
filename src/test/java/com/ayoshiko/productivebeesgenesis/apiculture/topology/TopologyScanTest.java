@@ -22,6 +22,8 @@ class TopologyScanTest {
 		scan.step(1); assertEquals(1, reads.get()); assertThrows(IllegalStateException.class, scan::finish);
 		while (!scan.step(1)) { }
 		var view = scan.finish(); assertEquals(1, view.members().size()); assertEquals(5, view.beeSlots()); assertEquals(1, view.denied());
+		assertTrue(view.hasMember(core.east())); assertFalse(view.hasMember(core)); assertFalse(view.hasMember(core.west())); assertFalse(view.hasMember(core.above()));
+		assertThrows(UnsupportedOperationException.class, () -> view.membersByPosition().clear());
 	}
 	@Test void closedFirstApproachDoesNotHideAnotherOpenPathAndRemovalSplits() {
 		node(core, true, 0); node(core.east(), false, 1 << Direction.WEST.ordinal());

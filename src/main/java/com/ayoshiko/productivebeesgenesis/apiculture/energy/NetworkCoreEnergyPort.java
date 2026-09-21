@@ -29,7 +29,7 @@ public final class NetworkCoreEnergyPort implements IEnergyStorage {
 		var data = authority(); if (data == null) return 0;
 		var current = data.checkpoint(); int accepted = (int) current.energy().accept(offered);
 		if (accepted > 0 && !simulate) {
-			data.publish(current.receiveEnergy(accepted)); NetworkPersistence.directory(((ServerLevel) core.getLevel()).getServer()).requestSave(data);
+			data.publish(current.receiveEnergy(accepted));
 		}
 		return accepted;
 	}

@@ -13,17 +13,22 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 @EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCoreMenu> {
-	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); imageWidth = 260; imageHeight = 217; }
+	private Button production;
+	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); imageWidth = 260; imageHeight = 263; }
 	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) { event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new); }
 	@Override protected void init() {
 		super.init();
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.rebuild"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 0))
-				.bounds(leftPos + 10, topPos + 162, 240, 20).build());
+				.bounds(leftPos + 10, topPos + 184, 240, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.join"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 1))
-				.bounds(leftPos + 10, topPos + 188, 116, 20).build());
+				.bounds(leftPos + 10, topPos + 210, 116, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("screen.productivebeesgenesis.network.return"), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 2))
-				.bounds(leftPos + 134, topPos + 188, 116, 20).build());
+				.bounds(leftPos + 134, topPos + 210, 116, 20).build());
+		production = addRenderableWidget(Button.builder(productionLabel(), button -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 3))
+				.bounds(leftPos + 10, topPos + 236, 240, 20).build());
 	}
+	private Component productionLabel() { return Component.translatable("screen.productivebeesgenesis.network." + (menu.productionRunning() ? "pause" : "start")); }
+	@Override protected void containerTick() { super.containerTick(); production.setMessage(productionLabel()); }
 	@Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
 		graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xff292720);
 		graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 22, 0xff65592e);
@@ -36,5 +41,6 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.energy",
 				com.ayoshiko.productivebeesgenesis.util.NumberFormatter.formatCompact(menu.energy(false)),
 				com.ayoshiko.productivebeesgenesis.util.NumberFormatter.formatCompact(menu.energy(true))), 10, 140, 0xffdddddd, false);
+		graphics.drawString(font, Component.translatable("screen.productivebeesgenesis.network.runtime." + menu.runtimeStatus()), 10, 162, 0xffdddddd, false);
 	}
 }

@@ -72,6 +72,8 @@ public final class OwnershipTransferService {
 				case RECOVERY -> throw new IllegalStateException(record.failure());
 			}
 			service.domainRevision = authority.checkpoint().revision();
+			// 同进程重建可能遇到尚待世界保存的生产进度；主动请求一次回执，不能只等待未发起的保存。
+			if (authority.persistedRevision() < service.domainRevision) directory.requestSave(authority);
 		} catch (RuntimeException error) { service.quarantine(endpoint, error); }
 		return service;
 	}

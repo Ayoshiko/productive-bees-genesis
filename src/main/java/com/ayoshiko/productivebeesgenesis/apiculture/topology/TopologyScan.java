@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.SnapshotRecords;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,8 +21,9 @@ public final class TopologyScan {
 		}
 		boolean open(Direction side) { return (closedFaces & (1 << side.ordinal())) == 0; }
 	}
-	public record View(long epoch, List<Node> members, long beeSlots, long lanes, int cores, int denied) {
+	public record View(long epoch, List<Node> members, long beeSlots, long lanes, int cores, int denied, Map<BlockPos, Node> membersByPosition) {
 		public boolean valid() { return cores == 1; }
+		public boolean hasMember(BlockPos position) { return membersByPosition.containsKey(position); }
 	}
 	private record Edge(BlockPos position, Direction entering) { }
 	private final BlockPos origin;
@@ -62,6 +64,6 @@ public final class TopologyScan {
 	}
 	public View finish() {
 		if (!complete) throw new IllegalStateException("Incomplete topology");
-		return new View(epoch, members.valuesSnapshot(), bees, lanes, cores, denied);
+		return new View(epoch, members.valuesSnapshot(), bees, lanes, cores, denied, members.snapshot());
 	}
 }

@@ -26,6 +26,8 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	private CompoundTag invalidNetworkData;
 	private CoreOwnershipController ownership = new CoreOwnershipController(this);
 	private com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort energyPort;
+	private int productionMode;
+	private com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntime runtime;
 	public NetworkCoreBlockEntity(BlockPos pos, BlockState state) { super(NetworkContent.CORE_TILE.get(), pos, state); }
 	public UUID owner() { return owner; }
 	public UUID controller() { return controller; }
@@ -33,6 +35,19 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	public NetworkIdentity network() { return network; }
 	public boolean validNetworkReference() { return !invalidNetwork; }
 	public CoreOwnershipController ownership() { return ownership; }
+	public boolean productionRunning() { return productionMode == 1; }
+	public boolean hasProductionSession() { return productionMode != 0; }
+	public com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntime runtime() {
+		if (runtime == null) runtime = new com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntime();
+		return runtime;
+	}
+	public boolean setProductionRunning(boolean running) {
+		if (!(level instanceof ServerLevel server) || !server.getServer().isSameThread() || isRemoved()
+				|| !server.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4) || server.getBlockEntity(worldPosition) != this || network == null || invalidNetwork) return false;
+		if (running && (!ModConfig.SERVER.beeNetwork.enabled.get() || ownership.readyAuthority() == null || topology() == null || !topology().valid())) return false;
+		productionMode = running ? 1 : 2; setChanged();
+		com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.watch(this, true); return true;
+	}
 	public void bindNetwork(NetworkIdentity value) { if (network != null || invalidNetwork) throw new IllegalStateException("Core already bound"); network = value; energyPort = null; invalidateCapabilities(); setChanged(); }
 	public com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort energyPort() {
 		if (energyPort == null) energyPort = new com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort(this);
@@ -45,6 +60,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	public void serverTick() {
 		if (owner == null || invalidNetwork) return;
 		NetworkOwnershipService.watch(this);
+		com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.watch(this, false);
 		if (!ModConfig.SERVER.beeNetwork.enabled.get() && network == null) return;
 		NetworkTopologyService.watch(this);
 	}
@@ -54,11 +70,15 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	}
 	public void publishTopology(TopologyScan.View view) { topology = view; }
 	@Override public void setRemoved() {
-		if (level instanceof ServerLevel server) NetworkTopologyService.remove(server, this);
+		if (level instanceof ServerLevel server) {
+			NetworkTopologyService.remove(server, this);
+			com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.remove(server, this);
+		}
 		super.setRemoved();
 	}
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("controller", controller); tag.putInt("closedFaces", closedFaces); if (owner != null) tag.putUUID("owner", owner);
+		tag.putInt("productionMode", productionMode);
 		if (network != null) tag.put("network", NetworkCheckpointCodec.identity(network));
 		else if (invalidNetworkData != null) tag.put("network", invalidNetworkData.copy());
 		if (invalidNetwork) tag.putBoolean("invalidNetwork", true);
@@ -74,6 +94,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 		}
 		ownership = new CoreOwnershipController(this);
 		energyPort = null;
+		int mode = tag.getInt("productionMode"); productionMode = mode >= 0 && mode <= 2 ? mode : 2; runtime = null;
 	}
 	@Override public Component getDisplayName() { return Component.translatable("block.productivebeesgenesis.bee_network_core"); }
 	@Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) { return allowed(player) ? new NetworkCoreMenu(id, inventory, this) : null; }

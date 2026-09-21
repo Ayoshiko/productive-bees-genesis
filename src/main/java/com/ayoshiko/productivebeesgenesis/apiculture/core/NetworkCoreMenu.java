@@ -11,12 +11,14 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final ContainerData data;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
-		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; data = new SimpleContainerData(26); addDataSlots(data);
+		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; data = new SimpleContainerData(28); addDataSlots(data);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core;
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index == 26) return core.productionRunning() ? 1 : 0;
+				if (index == 27) return core.hasProductionSession() ? core.runtime().status().ordinal() : 0;
 				if (index >= 18) {
 					var authority = core.ownership().readyAuthority(); if (authority == null) return 0;
 					var energy = authority.checkpoint().energy();
@@ -31,7 +33,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 26; }
+			@Override public int getCount() { return 28; }
 		}; addDataSlots(data);
 	}
 	public long value(int index) {
@@ -40,6 +42,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return result;
 	}
 	public int ownershipStatus() { return data.get(17); }
+	public boolean productionRunning() { return data.get(26) != 0; }
+	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
 		for (int part = 0; part < 4; part++) result |= (data.get(start + part) & 65535L) << (part * 16);
@@ -50,6 +54,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (core == null || player.containerMenu != this || !stillValid(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
 		if (id == 1 || id == 2) return core.ownership().command(id == 1);
+		if (id == 3) return core.setProductionRunning(!core.productionRunning());
 		return false;
 	}
 	@Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }

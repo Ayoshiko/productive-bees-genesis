@@ -35,6 +35,7 @@
 
 ### 新增
 
+- **P3／D16b1 自动蜂箱调度**：核心新增开始／暂停自动生产，基础铁蜂通过全服共享步数和时间预算公平执行；缺电、缺花、暂停及重载不补产，暂停仍结清已付费结果。成员发现和实时位置检查使用索引，普通蜂工作与核心受电随世界保存，避免逐 tick 写整域文件。自动离心与玩家库存闭环仍待后续。
 - **P3／D16a 核心共享供能**：新增有限 long FE 账户、标准核心受电口、容量配置和菜单长数同步；成员旧 FE 与共享标记原子迁入，蜂箱／离心作业按实际进度共同扣费，缺电补电后沿用原作业。schema 6 保存共享余额，交还成员不复制已迁入 FE；自动调度与最小玩家管理事务仍待 D16b／c。
 - **P3／D15b2c 真实重启与恢复修复**：新增蜜脾／蜜脾块共 16 个真实网络事务阶段的跨 JVM 世界恢复验证；失效成员不再向生产调度抛身份异常，恢复扫描遇到拓扑变更会等待新视图重试。固定旧配方、进度和费用，旧实物产物只在交还时恢复。自动离心升级经核对仍属未实现方案，未宣称已有该生产路径。
 - **P3／D15b2b 异构分配与显式服务**：增加有预算的逐通道轮转、状态绑定预览、真实成员校验及离心事务服务；保护已有预约，重复请求不再占用投入。两台异构基础机专服验证暂停、核心重载、物品／流体结算和剩余 FE 交还；自动调度与完整重启矩阵仍待后续。
@@ -76,6 +77,7 @@
 
 #### Added
 
+- Added P3/D16b1 core start/pause controls and automatic basic iron-bee production under shared server step/time budgets. Pauses, missing flowers, energy starvation, and reloads grant no catch-up production; paid output still settles. Active-member and topology indexes avoid repeated whole-network checks, and routine work/FE input use world saves instead of requesting a full checkpoint every tick. Automatic centrifuges and player inventory transactions remain pending.
 - Added P3/D16a shared finite long FE storage, an input-only core FE capability, capacity configuration, and full-width menu synchronization. Member migration and bee/centrifuge payment commit atomically; replenished jobs retain their progress and price. Schema 6 preserves shared balances, which remain in the network when members return. Automatic scheduling and player inventory transactions remain in D16b/c.
 - Added P3/D15b2c full-world restart checks for 16 comb/comb-block transaction stages across independent JVMs. Invalid members now reject production without leaking identity exceptions; recovery retries stale topology scans. Existing jobs retain their recipe, progress, and price, while sealed physical outputs remain return-only. The separate auto-centrifuge upgrade remains a future feature.
 - Added P3/D15b2b bounded heterogeneous lane selection, checkpoint-bound previews, live member validation, and an explicit centrifuge transaction service. Dedicated-server checks cover reservation/replay protection, pause, core replacement, exact item/fluid settlement, and remaining-energy return. Automatic scheduling and the full restart matrix remain pending.

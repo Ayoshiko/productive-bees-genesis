@@ -56,6 +56,7 @@ public final class ClientOwnershipFixture {
 				var stranger = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(UUID.randomUUID(), "P2Stranger"));
 				stranger.containerMenu = menu;
 				require(!menu.clickMenuButton(stranger, 1), "Foreign player could join");
+				require(!menu.clickMenuButton(stranger, 3), "Foreign player could start production");
 				stranger.containerMenu = stranger.inventoryMenu;
 				player.setPos(40, 102, 40);
 				require(!menu.clickMenuButton(player, 1), "Distant player could join");

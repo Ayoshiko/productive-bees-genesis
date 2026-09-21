@@ -86,6 +86,25 @@ class OwnershipTransferTest {
 			} finally { writes.complete(); }
 		}
 	}
+	@Test void liveCoreRebuildRequestsAndWaitsForPreviouslyUnrequestedDirtyWork() {
+		var writes = new DelayedWrites();
+		try (var directory = new NetworkDirectory(folder, null, writes, null, CheckpointTestData.CODEC, CheckpointFiles::write)) {
+			try {
+				var identity = CheckpointTestData.identity(); var data = ready(directory, directory.create(identity)); var claim = claim(identity); var endpoint = new Endpoint();
+				var service = OwnershipTransferService.begin(directory, data, claim, endpoint); reach(directory, service, endpoint, OWNED);
+				long submitted = directory.saveStatus().submitted();
+				data.publish(data.checkpoint().configureEnergy(100).receiveEnergy(17));
+				assertTrue(data.isDirty()); assertEquals(submitted, directory.saveStatus().submitted());
+				writes.delayed = true;
+				var resumed = OwnershipTransferService.resume(directory, data, claim, endpoint);
+				assertEquals(submitted + 1, directory.saveStatus().submitted());
+				for (int i = 0; i < 5; i++) { directory.tick(); resumed.advance(endpoint); }
+				assertEquals(OWNED_RECEIPT, resumed.step()); assertEquals(1, endpoint.clears); assertEquals(0, endpoint.restores);
+				writes.complete(); reach(directory, resumed, endpoint, OWNED);
+				assertEquals(17, data.checkpoint().energy().stored()); assertEquals(data.checkpoint().revision(), data.persistedRevision());
+			} finally { writes.complete(); }
+		}
+	}
 	@Test void bothDirectionsWaitForReceiptsAndNeverIssueAssetsTwice() throws Exception {
 		try (var directory = directory()) {
 			var identity = CheckpointTestData.identity(); var data = ready(directory, directory.create(identity)); var claim = claim(identity); var endpoint = new Endpoint(); var original = endpoint.assets;
@@ -100,6 +119,7 @@ class OwnershipTransferTest {
 			assertEquals(OwnedMachineRecord.Phase.RETURNING, data.checkpoint().ownedMachines().get(claim.member()).phase());
 			endpoint.write.complete(null); reach(directory, service, endpoint, RETURNED);
 			assertNull(directory.claimAt(claim.origin())); assertNull(endpoint.binding); assertEquals(original, endpoint.assets);
+			assertFalse(data.checkpoint().ownedMachines().activeValues().iterator().hasNext());
 			assertTrue(data.checkpoint().ownedMachines().get(claim.member()).assets().isEmpty());
 			service.advance(endpoint); assertEquals(1, endpoint.restores); assertEquals(1, endpoint.releases);
 			assertThrows(IllegalStateException.class, () -> service.requestReturn(endpoint));

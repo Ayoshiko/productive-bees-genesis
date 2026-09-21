@@ -8,7 +8,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
-/** 显式开发入口；D16 之前不接服务器 ticker。每次提交重新校验加载、身份和预期版本。 */
+/** 服务器蜂工作事务；每次提交重新校验加载、身份和预期版本，调度器不直接改写进度。 */
 public final class NetworkBeeService {
 	private final NetworkSavedData authority;
 	private final NetworkDirectory directory;
@@ -32,7 +32,8 @@ public final class NetworkBeeService {
 				recipeRevision, capabilityRevision, new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
 		var result = BeeWorkExecutor.advance(record.bees(), slot, beeRevision, context, ticks, samplingBudget, record.bees().networkPowered() ? current.energy().stored() : record.bees().energy());
 		if (!simulate && result.status() == BeeWorkExecutor.Status.READY) {
-			authority.publish(current.applyBeeWork(member, result)); directory.requestSave(authority);
+			// publish 的 revision 即为脏状态；常规生产随世界保存，不逐蜂启动整域写盘。
+			authority.publish(current.applyBeeWork(member, result));
 		}
 		return result.status();
 	}
@@ -41,7 +42,7 @@ public final class NetworkBeeService {
 		if (record == null || member(level, record) == null) return false;
 		var next = current.settleBee(member, slot, beeRevision);
 		if (next == current) return false;
-		authority.publish(next); directory.requestSave(authority); return true;
+		authority.publish(next); return true;
 	}
 	TileEntityMekApiary member(ServerLevel level, OwnedMachineRecord record) {
 		return ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class);
