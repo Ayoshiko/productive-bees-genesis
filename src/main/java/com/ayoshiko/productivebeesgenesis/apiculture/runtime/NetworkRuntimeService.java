@@ -40,6 +40,6 @@ public final class NetworkRuntimeService {
 			}
 		});
 	}
-	@SubscribeEvent public static void stopped(ServerStoppedEvent event) { SESSIONS.remove(event.getServer()); }
+	@SubscribeEvent public static void stopped(ServerStoppedEvent event) { SESSIONS.remove(event.getServer()); RuntimeProductPolicies.clear(event.getServer()); }
 	private NetworkRuntimeService() { }
 }

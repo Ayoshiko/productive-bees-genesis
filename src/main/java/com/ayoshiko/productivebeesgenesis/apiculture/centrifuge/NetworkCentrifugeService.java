@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
-/** 显式服务端开发入口，D16 前不注册 ticker；身份验证与领域候选提交分离。 */
+/** 服务端离心事务；显式调用和自动调度复用相同的真实成员校验。 */
 public final class NetworkCentrifugeService {
 	public enum Action { ADVANCE, FREEZE, SETTLE, CANCEL }
 	private final NetworkSavedData authority;
@@ -52,7 +52,26 @@ public final class NetworkCentrifugeService {
 		if (simulate) return true;
 		var next = CentrifugeLaneAllocator.commit(current, policy, selection, seed);
 		if (next == current) return false;
-		authority.publish(next); directory.requestSave(authority); return true;
+		authority.publish(next); return true;
+	}
+	public boolean assignReserved(ServerLevel level, CentrifugeLaneAllocator.Candidate offered,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.RuntimeProcessingRules.Claim claim,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.ReservePolicy reserves,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.ReserveAllowanceScan.Permit permit, int limit, long seed) {
+		var current = authority.checkpoint();
+		if (offered == null || claim == null || !claim.matches(current.scheduler()) || !offered.equals(candidate(level, offered.member(), offered.plan().input()))
+				|| authority.checkpoint() != current) return false;
+		if (!com.ayoshiko.productivebeesgenesis.apiculture.compat.RuntimeProcessingMatch.accepts(claim.rule(), offered.plan().input())) return false;
+		if (claim.rule() != null && (claim.rule().reserves() != reserves || limit > claim.rule().batchLimit())) return false;
+		if (claim.rule() == null && (!current.scheduler().rules().isEmpty() || !reserves.global().equals(com.ayoshiko.productivebeesgenesis.apiculture.policy.ReservePolicy.Layer.NONE)
+				|| !reserves.rule().equals(com.ayoshiko.productivebeesgenesis.apiculture.policy.ReservePolicy.Layer.NONE))) return false;
+		var state = current.ownedMachines().get(offered.member()).centrifuge();
+		if (!state.networkPowered()) return false;
+		var work = CentrifugeWorkTransaction.assignReserved(state, current.ledger(), policy, offered.lane(), offered.plan(), limit, seed,
+				state.networkPowered() ? current.energy().stored() : state.energy(), reserves, permit);
+		if (work == null) return false;
+		var next = current.applyCentrifuge(offered.member(), work, claim); if (next == current) return false;
+		authority.publish(next); return true;
 	}
 	/** 旧配方已付费结果可冻结／结算；推进始终沿用固定计划，只额外检查在线和红石状态。 */
 	public boolean work(ServerLevel level, UUID member, long expectedRevision, Action action, int ticks, boolean simulate) {
@@ -74,7 +93,7 @@ public final class NetworkCentrifugeService {
 		if (simulate) return true;
 		var next = current.applyCentrifuge(member, transaction);
 		if (next == current) return false;
-		authority.publish(next); directory.requestSave(authority); return true;
+		authority.publish(next); return true;
 	}
 	private boolean enabled() { return ModConfig.SERVER.beeNetwork.enabled.get() && recipeEpoch == ProductiveBeesGenesis.RECIPE_VERSION.get(); }
 }

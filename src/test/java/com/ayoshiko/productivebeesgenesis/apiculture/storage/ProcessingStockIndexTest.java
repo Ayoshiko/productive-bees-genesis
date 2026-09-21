@@ -60,4 +60,12 @@ class ProcessingStockIndexTest {
 		var index = new ProcessingStockIndex(first); index.update(next); assertEquals(5001, finish(index));
 		assertEquals(ProductAmount.of(5000), index.view().group(new ProductMatcher(ProductMatcher.Mode.BASE_ITEM, key(0))));
 	}
+	@Test void cursorLookupContinuesAfterRemovedKeysWithoutEnumeratingOrMutatingOldViews() {
+		var first = new LedgerCheckpoint(0, Map.of(key(1), ProductAmount.of(1), key(2), ProductAmount.of(2)), List.of());
+		var index = new ProcessingStockIndex(first); finish(index); var view = index.view();
+		var a = view.nextKey(null); var b = view.nextKey(a); assertNotNull(b); assertNull(view.nextKey(b));
+		var ledger = ProductLedger.restore(policy(), 1, first); ledger.extract(a, ProductAmount.of(10), ProductLedger.Action.EXECUTE);
+		index.update(ledger.checkpoint()); finish(index);
+		assertEquals(b, index.view().nextKey(a)); assertEquals(a, view.nextKey(null));
+	}
 }

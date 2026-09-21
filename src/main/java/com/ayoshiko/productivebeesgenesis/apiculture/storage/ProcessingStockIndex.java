@@ -19,6 +19,8 @@ public final class ProcessingStockIndex {
 		}
 		public LedgerCheckpoint ledger() { return ledger; }
 		public Iterable<ProductKey> keys() { return available.keySet(); }
+		public int size() { return available.size(); }
+		public ProductKey nextKey(ProductKey after) { var entry = SnapshotRecords.nextEntry(available, after); return entry == null ? null : entry.getKey(); }
 		public ProductAmount amount(ProductKey key) { return available.getOrDefault(key, ProductAmount.ZERO); }
 		public ProductAmount group(ProductMatcher matcher) { return matcher.mode() == ProductMatcher.Mode.EXACT ? amount(matcher.template()) : groups.getOrDefault(matcher, ProductAmount.ZERO); }
 	}

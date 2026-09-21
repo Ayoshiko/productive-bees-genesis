@@ -52,6 +52,16 @@ public final class SnapshotRecords<K, V> {
 	}
 	public synchronized List<V> valuesSnapshot() { return Collections.unmodifiableList(new FrozenValues<>(root)); }
 	public synchronized Set<K> keysSnapshot() { return snapshot().keySet(); }
+	/** 在已冻结的有序索引中续查，避免为轮转游标复制全部键。null 从首项开始。 */
+	public static <K, V> Map.Entry<K, V> nextEntry(Map<K, V> snapshot, K after) {
+		if (!(snapshot instanceof FrozenMap<K, V> frozen)) throw new IllegalArgumentException("Expected a frozen ordered index");
+		var node = frozen.root; Node<K, V> next = null;
+		while (node != null) {
+			if (after == null || frozen.order.compare(node.key, after) > 0) { next = node; node = node.left; }
+			else node = node.right;
+		}
+		return next == null ? null : Map.entry(next.key, next.value);
+	}
 	private static int height(Node<?, ?> node) { return node == null ? 0 : node.height; }
 	private static int size(Node<?, ?> node) { return node == null ? 0 : node.size; }
 	private static <K, V> V find(Node<K, V> node, K key, Comparator<? super K> order) {

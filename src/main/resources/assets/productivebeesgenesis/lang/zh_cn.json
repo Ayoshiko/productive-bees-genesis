@@ -1153,5 +1153,8 @@
   "screen.productivebeesgenesis.network.runtime.8": "调度：存在未支持的生产组合",
   "screen.productivebeesgenesis.network.runtime.9": "调度：结算已付费产出",
   "screen.productivebeesgenesis.network.runtime.10": "调度：预算延期，逐步恢复",
-  "screen.productivebeesgenesis.network.runtime.11": "调度：执行异常，等待重试"
+  "screen.productivebeesgenesis.network.runtime.11": "调度：执行异常，等待重试",
+  "screen.productivebeesgenesis.network.runtime.12": "调度：等待规则匹配的蜜脾",
+  "screen.productivebeesgenesis.network.runtime.13": "调度：输入受保留规则保护",
+  "screen.productivebeesgenesis.network.runtime.14": "调度：目标库存规则尚未接入"
 }

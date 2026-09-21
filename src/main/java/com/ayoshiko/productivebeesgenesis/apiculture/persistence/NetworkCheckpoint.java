@@ -54,9 +54,12 @@ public final class NetworkCheckpoint {
 		this(source, revision, machines, ledger, source.energy);
 	}
 	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines, LedgerCheckpoint ledger, NetworkEnergyAccount energy) {
+		this(source, revision, machines, ledger, energy, source.scheduler);
+	}
+	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines, LedgerCheckpoint ledger, NetworkEnergyAccount energy, SchedulerCheckpoint scheduler) {
 		this.energy = energy;
 		identity = source.identity; this.revision = revision; policyRevision = source.policyRevision; this.ledger = ledger;
-		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; scheduler = source.scheduler; ownedMachines = machines;
+		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; this.scheduler = scheduler; ownedMachines = machines;
 	}
 	public NetworkEnergyAccount energy() { return energy; }
 	public NetworkCheckpoint configureEnergy(long capacity) {
@@ -123,6 +126,12 @@ public final class NetworkCheckpoint {
 		if (cost > energy.stored()) return this;
 		var next = old.withCentrifuge(transaction.state()); validateOwnership(next, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), transaction.ledger(), energy.spend(cost));
+	}
+	public NetworkCheckpoint applyCentrifuge(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkTransaction transaction,
+			com.ayoshiko.productivebeesgenesis.apiculture.policy.RuntimeProcessingRules.Claim claim) {
+		if (claim == null || !claim.matches(scheduler)) return this;
+		var next = applyCentrifuge(member, transaction);
+		return next == this ? this : new NetworkCheckpoint(next, next.revision, next.ownedMachines, next.ledger, next.energy, claim.next());
 	}
 	static void validateEnergyOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record, NetworkEnergyAccount energy) {
 		if (energy.capacity() == 0 && (record.bees() != null && record.bees().networkPowered() || record.centrifuge() != null && record.centrifuge().networkPowered()))

@@ -69,6 +69,7 @@ public final class SchedulerCheckpoint {
 		}
 	}
 	public List<ProcessingRule> rules() { return rules; }
+	SchedulerCheckpoint cursor(String id, int count) { return new SchedulerCheckpoint(rules, mode, watermarks, id, count, true); }
 	public ProcessingRuleScheduler.Mode mode() { return mode; }
 	public Map<String, Boolean> watermarks() { return watermarks; }
 	public String cursorRule() { return cursorRule; }

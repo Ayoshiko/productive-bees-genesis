@@ -1153,5 +1153,8 @@
   "screen.productivebeesgenesis.network.runtime.8": "Scheduler: unsupported production setup",
   "screen.productivebeesgenesis.network.runtime.9": "Scheduler: settling paid output",
   "screen.productivebeesgenesis.network.runtime.10": "Scheduler: delayed by work budget",
-  "screen.productivebeesgenesis.network.runtime.11": "Scheduler: failed, waiting to retry"
+  "screen.productivebeesgenesis.network.runtime.11": "Scheduler: failed, waiting to retry",
+  "screen.productivebeesgenesis.network.runtime.12": "Scheduler: waiting for matching combs",
+  "screen.productivebeesgenesis.network.runtime.13": "Scheduler: input protected by reserves",
+  "screen.productivebeesgenesis.network.runtime.14": "Scheduler: stock goals not yet supported"
 }
