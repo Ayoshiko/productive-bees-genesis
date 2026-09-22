@@ -1,7 +1,8 @@
 Set-StrictMode -Version Latest
 
 function Assert-NetworkProbeReport {
-    param($Report, [bool]$Ae2, [ValidateSet('domain', 'write', 'read')][string]$Mode)
+    param($Report, [bool]$Ae2, [ValidateSet('domain', 'write', 'read')][string]$Mode,
+        [ValidateSet('D16b', 'D16c1a')][string]$Gate = 'D16b')
     if ($Report.passed -ne $true -or $Report.normalShutdownCheckpointSaved -ne $true -or $Report.ae2Loaded -ne $Ae2) {
         throw 'Probe failed, did not save normally, or used the wrong dependency combination'
     }
@@ -11,6 +12,12 @@ function Assert-NetworkProbeReport {
                 'automaticCentrifugeStarvationPauseCoreReloadAndExactFees', 'automaticBeeCentrifugeChainAndSeededItemFluidOutputs',
                 'automaticMaintenanceSharedPerTickAndAtomicWithWork')) {
             if ($Report.$field -ne $true) { throw "Missing joint gate: $field" }
+        }
+        if ($Gate -eq 'D16c1a') {
+            foreach ($field in @('playerFeedingFiniteExchangePermissionsAndConservation', 'playerFeedingComponentsDisabledGroupsAndFiniteLimits',
+                    'playerFeedingNormalReturnUsesCurrentRemainder', 'playerFeedingShutdownRemainderSaved', 'playerFeedingSyncProtocolAndReentry')) {
+                if ($Report.$field -ne $true) { throw "Missing player feeding gate: $field" }
+            }
         }
         return
     }

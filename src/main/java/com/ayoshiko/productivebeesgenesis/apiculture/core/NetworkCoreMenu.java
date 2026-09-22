@@ -10,11 +10,13 @@ import net.minecraft.world.item.ItemStack;
 public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final ContainerData data;
+	private final com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity exchangeNetwork;
+	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
-		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; data = new SimpleContainerData(28); addDataSlots(data);
+		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null; data = new SimpleContainerData(28); addDataSlots(data);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
-		super(NetworkContent.CORE_MENU.get(), id); this.core = core;
+		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
 		data = new ContainerData() {
 			@Override public int get(int index) {
 				if (index == 26) return core.productionRunning() ? 1 : 0;
@@ -58,4 +60,18 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return false;
 	}
 	@Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
+	NetworkCoreBlockEntity exchangeCore(net.minecraft.server.level.ServerPlayer player) {
+		if (!player.serverLevel().getServer().isSameThread() || core == null || exchangeNetwork == null
+				|| !exchangeNetwork.equals(core.network()) || !core.validNetworkReference() || !player.isAlive() || player.isSpectator()
+				|| player.containerMenu != this || player.level() != core.getLevel()
+				|| !player.serverLevel().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || !stillValid(player)) return null;
+		return core;
+	}
+	public CoreFeedingExchange.Result exchangeFeeding(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
+			int feedingSlot, long expectedRevision, int inventorySlot, int requested, CoreFeedingExchange.Action action, boolean simulate) {
+		if (exchangeCore(player) == null || exchanging) return new CoreFeedingExchange.Result(CoreFeedingExchange.Status.UNAVAILABLE, 0);
+		exchanging = true;
+		try { return CoreFeedingExchange.exchange(this, player, member, feedingSlot, expectedRevision, inventorySlot, requested, action, simulate); }
+		finally { exchanging = false; }
+	}
 }

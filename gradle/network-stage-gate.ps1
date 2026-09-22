@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param([ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('d16b-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
+param(
+    [ValidateSet('D16b', 'D16c1a')][string]$Gate = 'D16b',
+    [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'network-stage-evidence.ps1')
@@ -17,12 +19,12 @@ try {
     $fingerprint = Get-NetworkSourceFingerprint
     $dependencies = @(Get-NetworkDependencyHashes)
     $summary = [ordered]@{
-        schema = 1; gate = 'D16b'; runId = $RunId; passed = $false
+        schema = 1; gate = $Gate; runId = $RunId; passed = $false
         startedUtc = [DateTime]::UtcNow.ToString('o'); sourceRevision = $revision
         sourceFingerprint = $fingerprint; worktree = $workspace
         dependencyHashes = $dependencies
         workingTree = @(& git status --short); checks = @()
-        limits = @('No client or player-inventory gate', 'No Spark/MSPT or cold-latency acceptance', 'No forced-crash durability claim')
+        limits = @('No client or cross-JVM player-file gate', 'No Spark/MSPT or cold-latency acceptance', 'No forced-crash durability claim')
     }
 
     function Invoke-GateGradle {
@@ -44,7 +46,7 @@ try {
         Invoke-GateGradle $Name $arguments
         $reportPath = Join-Path $workspace "build/network-probe-$probeId/results/domain.json"
         $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
-        Assert-NetworkProbeReport $report $Ae2 $Mode
+        Assert-NetworkProbeReport $report $Ae2 $Mode $Gate
         $summary.checks += [ordered]@{ name = "$Name-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
         return $report
     }

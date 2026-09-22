@@ -61,6 +61,23 @@ public record FeedingSlotStore(long revision, int legacySlots, String sourceFing
 		}
 		return plan(changed, accepted);
 	}
+	/** 外部供给计划仅增加实际容纳量；调用方须在同一提交中扣减真实来源。 */
+	public Plan deposit(int index, FeedingItem item, int offered) {
+		Objects.requireNonNull(item);
+		if (offered < 1) throw new IllegalArgumentException("Invalid feeding offer");
+		var target = slots.get(index); var changed = new ArrayList<>(slots);
+		if (target.item() != null && !target.item().equals(item)) return plan(changed, 0);
+		int accepted = Math.min(offered, item.limit() - target.count());
+		if (accepted > 0) changed.set(index, new Slot(item, target.count() + accepted, target.disabled(), target.group()));
+		return plan(changed, accepted);
+	}
+	/** 手动取回只触及选中实物槽，不从共享组的其它槽代扣。 */
+	public Plan withdraw(int index, int requested) {
+		if (requested < 1) throw new IllegalArgumentException("Invalid feeding request");
+		var source = slots.get(index); int taken = Math.min(requested, source.count());
+		var changed = new ArrayList<>(slots); changed.set(index, source.amount(source.count() - taken));
+		return plan(changed, taken);
+	}
 	/** 同批请求共用一份扣减候选，不会让两个蜂位同时预约最后一份食物。 */
 	public Optional<Plan> consume(List<Demand> demands) {
 		var changed = new ArrayList<>(slots); int consumed = 0;

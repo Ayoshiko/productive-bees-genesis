@@ -20,6 +20,7 @@ public final class DomainProbeServer {
 	private static boolean energyStarted;
 	private static boolean runtimeStarted;
 	private static boolean automaticCentrifugeStarted;
+	private static boolean playerFeedingStarted;
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
@@ -33,7 +34,7 @@ public final class DomainProbeServer {
 			try {
 				if (System.getProperty("pbg.automatic.mode") != null) AutomaticRestartProbe.verifyShutdown(event.getServer(), report);
 				else if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
-				else NetworkPersistenceProbe.verifyShutdown(event.getServer(), report);
+				else { NetworkPersistenceProbe.verifyShutdown(event.getServer(), report); PlayerFeedingProbe.verifyShutdown(event.getServer(), report); }
 			}
 			catch (Exception failure) {
 				report.addProperty("passed", false); report.addProperty("shutdownFailure", failure.toString());
@@ -94,6 +95,8 @@ public final class DomainProbeServer {
 				if (!RuntimeBeeProbe.advance(event.getServer(), pendingReport)) return;
 				if (!automaticCentrifugeStarted) { com.ayoshiko.productivebeesgenesis.apiculture.persistence.AutomaticCentrifugeProbe.start(event.getServer()); automaticCentrifugeStarted = true; return; }
 				if (!com.ayoshiko.productivebeesgenesis.apiculture.persistence.AutomaticCentrifugeProbe.advance(event.getServer(), pendingReport)) return;
+				if (!playerFeedingStarted) { PlayerFeedingProbe.start(event.getServer()); playerFeedingStarted = true; return; }
+				if (!PlayerFeedingProbe.advance(event.getServer(), pendingReport)) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }

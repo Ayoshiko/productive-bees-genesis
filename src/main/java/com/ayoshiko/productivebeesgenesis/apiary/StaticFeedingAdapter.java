@@ -47,6 +47,14 @@ public final class StaticFeedingAdapter {
 		if (item.limit() != Math.min(64, stack.getMaxStackSize()) || PbUpgradeInventorySlot.isValidUpgradeItem(stack)
 				|| !item.unit().copy().equals(SerializerHelper.saveOversized(registries, stack))) throw new IllegalArgumentException("Unrestorable feeding item");
 	}
+	public static FeedingItem fromStack(ItemStack stack, HolderLookup.Provider registries) {
+		if (stack.isEmpty()) throw new IllegalArgumentException("Empty feeding offer");
+		var item = new FeedingItem(new AssetImage((CompoundTag) SerializerHelper.saveOversized(registries, stack.copyWithCount(1))), Math.min(64, stack.getMaxStackSize()));
+		validate(item, registries); return item;
+	}
+	public static ItemStack toStack(FeedingItem item, int count, HolderLookup.Provider registries) {
+		validate(item, registries); return parse(item.stack(count), registries);
+	}
 	public static boolean flower(FeedingSlotStore store, int beeSlot, ResourceLocation type, HolderLookup.Provider registries) {
 		var pref = BeeInfoHelper.getFlowerPreference(type);
 		if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) return false;
