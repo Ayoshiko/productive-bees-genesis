@@ -28,7 +28,7 @@ public final class LedgerCheckpoint {
 		}
 	}
 	public LedgerCheckpoint(long revision, Map<ProductKey, ProductAmount> balances, List<Pending> transactions) {
-		this(revision, positive(balances), List.copyOf(transactions), null, null, Set.of());
+		this(revision, PagedProductAmounts.frozenPositive(balances), List.copyOf(transactions), null, null, Set.of());
 	}
 	private LedgerCheckpoint(long revision, Map<ProductKey, ProductAmount> balances, List<Pending> transactions,
 			Map<ProductKey, ProductAmount> capturedReserved, Object previousToken, Set<ProductKey> changedKeys) {
@@ -56,6 +56,14 @@ public final class LedgerCheckpoint {
 	/** 只由账本签发相邻根的键变化；不保留历史根链，未知来源必须分步重建索引。 */
 	public Set<ProductKey> changesSince(LedgerCheckpoint previous) { return previous != null && previous.token == previousToken ? changedKeys : null; }
 	public ProductAmount available(ProductKey key) { return balances.getOrDefault(key, ProductAmount.ZERO).subtract(reserved.getOrDefault(key, ProductAmount.ZERO)); }
+	/** 单键精确扣减，只分叉余额页；既有预约和变化键凭据随同保留。 */
+	public LedgerCheckpoint withdrawExact(ProductKey key, ProductAmount amount) {
+		Objects.requireNonNull(key); Objects.requireNonNull(amount);
+		if (amount.isZero() || amount.compareTo(available(key)) > 0) throw new IllegalArgumentException("Unfunded product withdrawal");
+		var changed = PagedProductAmounts.restore(balances);
+		changed.set(key, balances.get(key).subtract(amount));
+		return new LedgerCheckpoint(Math.incrementExact(revision), changed.snapshot(), transactions, reserved, token, Set.of(key));
+	}
 	/** 逐记录恢复；输入摘要与余额的比较必须由调用者按预算推进，结束才可封装。 */
 	public static final class RestoreBuilder {
 		private final PagedProductAmounts balances = new PagedProductAmounts();

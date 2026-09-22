@@ -74,4 +74,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return CoreFeedingExchange.exchange(this, player, member, feedingSlot, expectedRevision, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
 	}
+	public CoreProductWithdrawal.Result withdrawProduct(net.minecraft.server.level.ServerPlayer player,
+			com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey key, long expectedLedgerRevision,
+			int inventorySlot, int requested, boolean simulate) {
+		if (exchangeCore(player) == null || exchanging) return new CoreProductWithdrawal.Result(CoreProductWithdrawal.Status.UNAVAILABLE, 0);
+		exchanging = true;
+		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
+		finally { exchanging = false; }
+	}
 }

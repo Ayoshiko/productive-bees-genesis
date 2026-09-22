@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D16c1b 有限产物取回服务**：核心菜单服务器接口按实际量向一个背包槽交付物品或已验证的单桶流体，保留超 long 精确余额、在制预约及完整组件；支持模拟、版本／权限检查、单槽同步与跨服务重入保护。单键扣减沿用分页根及增量库存索引，修复冻结根重复包装；界面和真实玩家文件恢复仍待 D16c2／c3。
+
 - **D16c1a 有限玩家喂食服务**：核心菜单服务器接口支持指定背包槽与喂食槽按实际量双向交换，保留完整组件、有限堆叠上限、禁用状态及共享组边界；校验权限、旧菜单和喂食版本，模拟不变，提交后单槽同步，满载／同步失败不生成掉落物或回滚已交付物品。玩家操作界面、产物取回与蜂笼交换仍按 D16c 后续步骤交付。
 
 - **D16b 自动关门工具**：顺序运行全量测试、构建、产物排除检查和两种依赖组合的累计／跨 JVM 回归；保存源码、依赖与报告哈希，拒绝不完整矩阵或运行中变更。设计文档明确本步、联合阶段及性能验收的不同边界。
@@ -90,6 +92,8 @@
 ### English
 
 #### Added
+
+- Added D16c1b finite product withdrawal through the server-side core menu: one inventory slot receives items or a verified bucket while exact large balances, reservations, and components are preserved. Simulation, revision/permission checks, slot sync, and cross-service reentry protection are covered. Single-key withdrawals reuse frozen pages and incremental stock indexes; player controls and real player-file restart checks remain in D16c2/D16c3.
 
 - Added the D16c1a server-side core-menu service for finite player/feeding-slot exchanges. Transfers preserve components, stack limits, disabled state, and explicit group boundaries, with permission/revision checks, pure simulation, and post-commit single-slot synchronization. Full inventories and sync failures never drop items or undo completed transfers. Player controls, product withdrawal, and bee-cage exchanges remain in subsequent D16c steps.
 

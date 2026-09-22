@@ -7,7 +7,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersiste
 import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import java.util.UUID;
-import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
@@ -51,12 +50,7 @@ public final class CoreFeedingExchange {
 			player.getInventory().items.set(inventorySlot, prepared.inventory());
 			player.getInventory().setChanged();
 			// 常规交换随正常世界／玩家保存，不为每次点按提交整域异步保存。
-			try {
-				player.connection.send(new ClientboundContainerSetSlotPacket(ClientboundContainerSetSlotPacket.PLAYER_INVENTORY, 0, inventorySlot, prepared.inventory()));
-			} catch (RuntimeException failure) {
-				// 同步失败不能回滚已完成的实物交换；重新打开背包会读取服务端真值。
-				com.mojang.logging.LogUtils.getLogger().warn("Committed bee feeding exchange could not sync player {}", player.getUUID(), failure);
-			}
+			CoreInventorySync.committed(player, inventorySlot, prepared.inventory());
 		}
 		return new Result(Status.MOVED, prepared.feeding().moved());
 	}

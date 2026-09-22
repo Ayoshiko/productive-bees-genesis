@@ -43,6 +43,10 @@ public final class PagedProductAmounts {
 		if (copy.values().stream().anyMatch(ProductAmount::isZero)) throw new IllegalArgumentException("Zero stored amount");
 		return copy;
 	}
+	/** 余额须支持单键分叉；已经冻结的根保持身份，避免重复包装。 */
+	static Map<ProductKey, ProductAmount> frozenPositive(Map<ProductKey, ProductAmount> amounts) {
+		return amounts instanceof Frozen ? amounts : restore(immutablePositive(amounts)).snapshot();
+	}
 
 	/** 构造器私有；只有本后端可发放“已冻结且所有余额为正”的快照。 */
 	private static final class Frozen extends AbstractMap<ProductKey, ProductAmount> {

@@ -62,6 +62,12 @@ public final class NetworkCheckpoint {
 		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; this.scheduler = scheduler; ownedMachines = machines;
 	}
 	public NetworkEnergyAccount energy() { return energy; }
+	/** 仅用于已准备好实际接收结果的有限交付；不修改作业、FE 或在制预约。 */
+	public NetworkCheckpoint withdrawProduct(long expectedLedgerRevision, ProductKey key, int amount) {
+		if (amount <= 0) throw new IllegalArgumentException("Positive withdrawal required");
+		if (ledger.revision() != expectedLedgerRevision || ledger.available(key).compareTo(ProductAmount.of(amount)) < 0) return this;
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger.withdrawExact(key, ProductAmount.of(amount)));
+	}
 	public NetworkCheckpoint configureEnergy(long capacity) {
 		if (capacity <= 0) throw new IllegalArgumentException("Positive energy capacity required");
 		if (capacity == energy.capacity() || capacity < energy.stored()) return this;
