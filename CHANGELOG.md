@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M01 独立矩形多方块基础**：补充独立机器与蜂业网络的职责、交接、端口和核心动画设计，新增无第三方框架依赖的矩形几何、四向可逆变换、核心视觉锚点与有限剔除范围。12 项测试验证非立方体、半格定位、懒索引和溢出边界；实际机器、联网接入与动画渲染按 M02–M07 继续交付。
+
 - **D16c1b 有限产物取回服务**：核心菜单服务器接口按实际量向一个背包槽交付物品或已验证的单桶流体，保留超 long 精确余额、在制预约及完整组件；支持模拟、版本／权限检查、单槽同步与跨服务重入保护。单键扣减沿用分页根及增量库存索引，修复冻结根重复包装；界面和真实玩家文件恢复仍待 D16c2／c3。
 
 - **D16c1a 有限玩家喂食服务**：核心菜单服务器接口支持指定背包槽与喂食槽按实际量双向交换，保留完整组件、有限堆叠上限、禁用状态及共享组边界；校验权限、旧菜单和喂食版本，模拟不变，提交后单槽同步，满载／同步失败不生成掉落物或回滚已交付物品。玩家操作界面、产物取回与蜂笼交换仍按 D16c 后续步骤交付。
@@ -92,6 +94,8 @@
 ### English
 
 #### Added
+
+- Defined standalone rectangular machines, network handoff, ports, and core visuals, and added the M01 geometry foundation without third-party multiblock frameworks. Rectangular indexing, reversible horizontal transforms, core anchors, and finite render bounds are covered by 12 tests. Playable machines, network integration, and animation rendering remain in M02–M07.
 
 - Added D16c1b finite product withdrawal through the server-side core menu: one inventory slot receives items or a verified bucket while exact large balances, reservations, and components are preserved. Simulation, revision/permission checks, slot sync, and cross-service reentry protection are covered. Single-key withdrawals reuse frozen pages and incremental stock indexes; player controls and real player-file restart checks remain in D16c2/D16c3.
 
