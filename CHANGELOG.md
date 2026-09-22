@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D16b 自动关门工具**：顺序运行全量测试、构建、产物排除检查和两种依赖组合的累计／跨 JVM 回归；保存源码、依赖与报告哈希，拒绝不完整矩阵或运行中变更。设计文档明确本步、联合阶段及性能验收的不同边界。
+
 - **P3／D16b2c3b 自动重启恢复**：接通九场景跨 JVM 专服探针，逐 tick 独立核对物品／流体、共享 FE、维护费及禁止补产／掉落物。修复关闭网络功能后已有网络无法重建拓扑、恢复永久等待的问题；新接管和新生产仍受开关限制。
 
 - **P3／D16b2c3a 初始化预算**：产物目录按配方／输入／输出逐步编译，多网络共享一个配方代际任务，重载丢弃旧半成品；不可变目录一次发布，避免同步整表编译及按网络版本重复建表。增加独立旧算法对照、冷／热分段计时和缓存生命周期回归；单个外部 API／组件处理仍受软预算限制。
@@ -86,6 +88,8 @@
 ### English
 
 #### Added
+
+- Added an executable D16b stage gate for tests, builds, probe-class exclusion, and cumulative/restart checks with and without AE2. Evidence binds source, dependencies, artifacts, and reports; incomplete matrices or changes during validation fail the gate. Functional acceptance remains separate from client and performance gates.
 
 - Added P3/D16b2c3b cross-JVM automatic restart probes for nine topology/state combinations, with independent per-tick item/fluid, FE, maintenance, and no-catch-up/drop checks. Existing networks can now rebuild topology and recover while the feature is disabled; new takeovers and production remain gated.
 
