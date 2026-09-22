@@ -21,6 +21,13 @@ public final class NetworkRuntime {
 	private Status status = Status.STOPPED;
 	private final CentrifugeRuntimeStep centrifuges = new CentrifugeRuntimeStep();
 	public Status status() { return status; }
+	/** 已提交的单蜂更换只更新一个到期项；新蜜蜂最早从下一真实 tick 工作。 */
+	public void beeChanged(UUID member, int slot, boolean inserted, long now) {
+		if (slot < 0 || slot >= 3) throw new IllegalArgumentException("Invalid basic bee slot");
+		var work = new Work(member, slot);
+		tasks.remove(work);
+		if (inserted) tasks.offer(work, Math.incrementExact(now));
+	}
 	void failed() { status = Status.FAILED; }
 	long step(NetworkCoreBlockEntity core, long now) {
 		var level = (ServerLevel) core.getLevel(); var data = core.ownership().readyAuthority(); var topology = core.topology();

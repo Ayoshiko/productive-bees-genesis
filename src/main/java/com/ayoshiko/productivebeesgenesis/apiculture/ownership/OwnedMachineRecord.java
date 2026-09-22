@@ -44,6 +44,13 @@ public record OwnedMachineRecord(MemberClaim claim, Phase phase, AssetImage asse
 		var residual = residualFor(state);
 		return new OwnedMachineRecord(claim, phase, residual, residual.fingerprint(), "", state);
 	}
+	/** 单蜂进出使用专门的原根凭据，不放宽普通生产后继的固定名册约束。 */
+	OwnedMachineRecord exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
+		if (phase != Phase.OWNED || bees == null || !change.matches(bees)) {
+			throw new IllegalArgumentException("Stale or unavailable bee roster exchange");
+		}
+		return new OwnedMachineRecord(claim, phase, assets, fingerprint, "", change.candidate());
+	}
 	private AssetImage residualFor(BeeMemberState state) {
 		var residual = bees == null ? BeeAssetProjection.detach(assets) : assets;
 		if (state.feeding() != null && (bees == null || bees.feeding() == null)) residual = FeedingAssetProjection.detach(residual, state.feeding());

@@ -7,7 +7,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
-import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import java.util.ArrayList;
 import mekanism.api.Upgrade;
 import net.minecraft.nbt.*;
@@ -21,30 +20,12 @@ public final class StaticApiaryAdapter {
 		if (!level.getServer().isSameThread() || hive.getClass() != TileEntityMekApiary.class
 				|| record.phase() != OwnedMachineRecord.Phase.OWNED || record.bees() != null) throw new IllegalArgumentException("Only sealed basic apiaries are supported");
 		var image = record.assets().copy(); var extra = image.getCompound("extra");
-		if (!extra.contains(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION, Tag.TAG_BYTE) || extra.getBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION))
-			throw new IllegalArgumentException("Disable feeder conversion before static iron production");
-		if (!Upgrade.buildMap(image.getCompound("upgrades")).isEmpty() || !extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).isEmpty())
-			throw new IllegalArgumentException("Production upgrades require a dedicated network adapter");
+		validateMachine(record);
 		var counts = PendingBeeCycles.read(extra, 3).counts();
 		var source = extra.getList(BeeAssetProjection.SLOTS, Tag.TAG_COMPOUND); var bees = new ArrayList<BeeRecord>();
 		for (var raw : source) {
-			var slot = (CompoundTag) raw; int index = slot.getInt("slot_index"); var data = slot.getCompound("entity_data");
-			if (BeeNbtHelper.resolveEntityType(data) != cy.jdkdigital.productivebees.init.ModEntities.CONFIGURABLE_BEE.get() || !IRON.equals(BeeNbtHelper.resolveBeeTypeKey(data))
-					|| data.getBoolean("HasConverted") || index < 0 || index >= 3)
-				throw new IllegalArgumentException("Only unconverted static iron bees are supported");
-			var pref = BeeInfoHelper.getFlowerPreference(IRON);
-			if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) throw new IllegalArgumentException("Unsupported iron bee flower definition");
-			var holder = level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get()).stream()
-					.filter(value -> value.value().ingredient.get() != null && IRON.equals(value.value().ingredient.get().getBeeType())).findFirst().orElseThrow();
-			var outputs = holder.value().getRecipeOutputs();
-			if (outputs.size() != 1) throw new IllegalArgumentException("Static iron adapter requires exactly one output");
-			var entry = outputs.entrySet().iterator().next(); var output = entry.getValue();
-			if (entry.getKey().isEmpty() || output.chance() != 1 || output.min() < 1 || output.min() != output.max()) throw new IllegalArgumentException("Random output requires a dedicated adapter");
-			var key = ProductKeyCodec.item(entry.getKey(), level.registryAccess());
-			var plan = new StaticBeePlan(IRON.toString(), holder.id().toString(), recipeRevision, capabilityRevision,
-					BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), 1, false),
-					hive.energyContainer().getEnergyPerTick(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
-					BeeWorkConditionEvaluator.readTraits(data), key, output.min());
+			var slot = (CompoundTag) raw; int index = slot.getInt("slot_index");
+			var plan = compilePlan(level, hive, slot, recipeRevision, capabilityRevision);
 			bees.add(new BeeRecord(BeeRecord.identity(record.claim().member(), index), record.claim().member(), index,
 					new AssetImage(slot), plan, 0, slot.getInt("ticks_in_hive"), counts[index], ProductAmount.ZERO));
 		}
@@ -54,6 +35,58 @@ public final class StaticApiaryAdapter {
 		}
 		return new BeeMemberState(record.claim().member(), 0, image.getLong("energy"), image.getLong("energyCapacity"), bees,
 				StaticFeedingAdapter.migrate(record.assets(), level.registryAccess()));
+	}
+	/** 将蜂笼完整数据编译为新的静态蜂计划，不创建实体或修改托管物理蜂位。 */
+	public static BeeRosterChange insertCaged(ServerLevel level, TileEntityMekApiary hive,
+			OwnedMachineRecord record, int index, CompoundTag data, long recipeRevision) {
+		if (!level.getServer().isSameThread() || hive.getClass() != TileEntityMekApiary.class
+				|| record.phase() != OwnedMachineRecord.Phase.OWNED || record.bees() == null) {
+			throw new IllegalArgumentException("Only activated basic apiaries accept caged bees");
+		}
+		validateMachine(record);
+		var slot = new CompoundTag();
+		slot.putInt("slot_index", index); slot.put("entity_data", data.copy());
+		slot.putInt("ticks_in_hive", 0); slot.putInt("min_occupation_ticks", 0);
+		slot.putInt("base_min_occupation_ticks", 0); slot.putBoolean("has_nectar", data.getBoolean("HasNectar"));
+		slot.putString("state", BeeState.IDLE.name()); slot.putFloat("progress", 0);
+		return BeeRosterChange.insert(record.bees(), index, new AssetImage(slot), compilePlan(level, hive, slot, recipeRevision, 0));
+	}
+	private static void validateMachine(OwnedMachineRecord record) {
+		var image = record.assets().copy(); var extra = image.getCompound("extra");
+		if (!extra.contains(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION, Tag.TAG_BYTE)
+				|| extra.getBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION)) {
+			throw new IllegalArgumentException("Disable feeder conversion before static iron production");
+		}
+		if (!Upgrade.buildMap(image.getCompound("upgrades")).isEmpty()
+				|| !extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).isEmpty()) {
+			throw new IllegalArgumentException("Production upgrades require a dedicated network adapter");
+		}
+	}
+	private static StaticBeePlan compilePlan(ServerLevel level, TileEntityMekApiary hive, CompoundTag slot,
+			long recipeRevision, long capabilityRevision) {
+		var data = slot.getCompound("entity_data"); int index = slot.getInt("slot_index");
+		if (BeeNbtHelper.resolveEntityType(data) != cy.jdkdigital.productivebees.init.ModEntities.CONFIGURABLE_BEE.get()
+				|| !IRON.equals(BeeNbtHelper.resolveBeeTypeKey(data)) || data.getBoolean("HasConverted") || index < 0 || index >= 3) {
+			throw new IllegalArgumentException("Only unconverted static iron bees are supported");
+		}
+		var pref = BeeInfoHelper.getFlowerPreference(IRON);
+		if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) {
+			throw new IllegalArgumentException("Unsupported iron bee flower definition");
+		}
+		var holder = BeeInfoHelper.getBeeProductionRecipe(level, IRON);
+		if (holder == null || holder.value().ingredient.get() == null || !IRON.equals(holder.value().ingredient.get().getBeeType())) {
+			throw new IllegalArgumentException("Missing static iron recipe");
+		}
+		var outputs = holder.value().getRecipeOutputs();
+		if (outputs.size() != 1) throw new IllegalArgumentException("Static iron adapter requires exactly one output");
+		var entry = outputs.entrySet().iterator().next(); var output = entry.getValue();
+		if (entry.getKey().isEmpty() || output.chance() != 1 || output.min() < 1 || output.min() != output.max()) {
+			throw new IllegalArgumentException("Random output requires a dedicated adapter");
+		}
+		return new StaticBeePlan(IRON.toString(), holder.id().toString(), recipeRevision, capabilityRevision,
+				BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), 1, false),
+				hive.energyContainer().getEnergyPerTick(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
+				BeeWorkConditionEvaluator.readTraits(data), ProductKeyCodec.item(entry.getKey(), level.registryAccess()), output.min());
 	}
 	public static boolean currentPlan(ServerLevel level, TileEntityMekApiary hive, BeeRecord bee) {
 		var plan = bee.plan(); var pref = BeeInfoHelper.getFlowerPreference(IRON);

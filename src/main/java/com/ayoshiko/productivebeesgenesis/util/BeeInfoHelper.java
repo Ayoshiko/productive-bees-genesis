@@ -231,6 +231,13 @@ public final class BeeInfoHelper {
 		return BeeProduceQueries.getBeeProduce(level, beeType);
 	}
 
+	/** 查询当前蜜蜂产物配方；与已有产物查询共享索引及重载／停服失效，不持有另一份缓存。 */
+	@Nullable
+	public static net.minecraft.world.item.crafting.RecipeHolder<cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe>
+			getBeeProductionRecipe(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		return BeeProduceQueries.getBeeRecipe(level, beeType);
+	}
+
 	/**
 	 * 查询指定蜜蜂类型的产物 ItemStack 列表（显示用途）— 委托 {@link BeeProduceQueries#getBeeProduceStacks}
 	 */

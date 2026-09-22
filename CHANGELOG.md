@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D16c1c 有限蜂笼交换服务**：核心菜单服务器接口支持单个普通／加固蜂笼与基础蜂箱静态铁蜂双向交换，保留完整数据、原版笼消耗差异与唯一身份；已付费产物结清前拒绝取出，未完成周期装笼时取消且不退 FE。喂食和其它资产不随蜂迁走，提交后单槽同步并更新对应调度项，不生成掉落物。静态蜂计划复用已有配方索引；实际操作界面与真实玩家文件恢复仍在 D16c2／c3。
+
 - **M01 独立矩形多方块基础**：补充独立机器与蜂业网络的职责、交接、端口和核心动画设计，新增无第三方框架依赖的矩形几何、四向可逆变换、核心视觉锚点与有限剔除范围。12 项测试验证非立方体、半格定位、懒索引和溢出边界；实际机器、联网接入与动画渲染按 M02–M07 继续交付。
 
 - **D16c1b 有限产物取回服务**：核心菜单服务器接口按实际量向一个背包槽交付物品或已验证的单桶流体，保留超 long 精确余额、在制预约及完整组件；支持模拟、版本／权限检查、单槽同步与跨服务重入保护。单键扣减沿用分页根及增量库存索引，修复冻结根重复包装；界面和真实玩家文件恢复仍待 D16c2／c3。
@@ -94,6 +96,8 @@
 ### English
 
 #### Added
+
+- Added D16c1c server-side single-cage exchanges for static iron bees in basic apiaries, preserving full bee data, ordinary/sturdy cage semantics, and fresh network bee identities. Paid outputs must settle before extraction; caging cancels partial-cycle progress without an energy refund. Feeding and unrelated assets stay in place, committed slots sync without drops, and only the affected runtime task changes. Static plans reuse the existing recipe index; player controls and real player-file recovery remain in D16c2/D16c3.
 
 - Defined standalone rectangular machines, network handoff, ports, and core visuals, and added the M01 geometry foundation without third-party multiblock frameworks. Rectangular indexing, reversible horizontal transforms, core anchors, and finite render bounds are covered by 12 tests. Playable machines, network integration, and animation rendering remain in M02–M07.
 

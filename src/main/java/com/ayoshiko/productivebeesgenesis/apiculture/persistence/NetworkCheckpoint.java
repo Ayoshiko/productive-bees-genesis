@@ -129,6 +129,12 @@ public final class NetworkCheckpoint {
 		validateOwnership(record, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record));
 	}
+	/** 只在有限蜂笼接收结果已准备好时提交，账本／FE／喂食和其它工作不变。 */
+	public NetworkCheckpoint exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
+		var next = ownedMachines.exchangeBee(change);
+		validateOwnership(next.get(change.bee().member()), identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), next);
+	}
 	public NetworkCheckpoint applyCentrifuge(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkTransaction transaction) {
 		var old = ownedMachines.get(member);
 		if (old == null || old.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED

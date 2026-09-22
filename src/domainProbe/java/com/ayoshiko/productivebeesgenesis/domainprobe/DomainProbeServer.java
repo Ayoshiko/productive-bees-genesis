@@ -22,6 +22,7 @@ public final class DomainProbeServer {
 	private static boolean automaticCentrifugeStarted;
 	private static boolean playerFeedingStarted;
 	private static boolean playerProductsStarted;
+	private static boolean playerCagesStarted;
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
@@ -35,7 +36,12 @@ public final class DomainProbeServer {
 			try {
 				if (System.getProperty("pbg.automatic.mode") != null) AutomaticRestartProbe.verifyShutdown(event.getServer(), report);
 				else if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
-				else { NetworkPersistenceProbe.verifyShutdown(event.getServer(), report); PlayerFeedingProbe.verifyShutdown(event.getServer(), report); PlayerProductProbe.verifyShutdown(event.getServer(), report); }
+				else {
+					NetworkPersistenceProbe.verifyShutdown(event.getServer(), report);
+					PlayerFeedingProbe.verifyShutdown(event.getServer(), report);
+					PlayerProductProbe.verifyShutdown(event.getServer(), report);
+					PlayerCageProbe.verifyShutdown(event.getServer(), report);
+				}
 			}
 			catch (Exception failure) {
 				report.addProperty("passed", false); report.addProperty("shutdownFailure", failure.toString());
@@ -100,6 +106,8 @@ public final class DomainProbeServer {
 				if (!PlayerFeedingProbe.advance(event.getServer(), pendingReport)) return;
 				if (!playerProductsStarted) { PlayerProductProbe.start(event.getServer()); playerProductsStarted = true; return; }
 				if (!PlayerProductProbe.advance(event.getServer(), pendingReport)) return;
+				if (!playerCagesStarted) { PlayerCageProbe.start(event.getServer()); playerCagesStarted = true; return; }
+				if (!PlayerCageProbe.advance(event.getServer(), pendingReport)) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }

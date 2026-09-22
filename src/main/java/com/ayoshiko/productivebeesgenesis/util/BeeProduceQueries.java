@@ -11,6 +11,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,19 +81,8 @@ final class BeeProduceQueries {
 			Map<ItemStack, ChancedOutput> cached = recipeOutputsCache.get(beeType);
 			if (cached != null) return cached;
 
-			String beeTypeKey = BeeTypeNormalizer.resolveLoadedBeeType(beeType).toString();
-			// 2. 优先走索引（O(1)）
-			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
-			if (matched == null) {
-				// 3. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
-				if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) {
-					rebuildBeehiveRecipeIndex(level);
-					matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
-				}
-				if (matched == null) {
-					return Map.of();
-				}
-			}
+			RecipeHolder<AdvancedBeehiveRecipe> matched = getBeeRecipe(level, beeType);
+			if (matched == null) return Map.of();
 			// 返回配方原始输出表，不执行概率检查（由 BeeProduceBatchSampler 统一处理）
 			Map<ItemStack, ChancedOutput> outputs = matched.value().getRecipeOutputs();
 			// 缓存不可变视图，防止外部修改污染静态共享缓存
@@ -103,6 +93,14 @@ final class BeeProduceQueries {
 			ProductiveBeesGenesis.LOGGER.warn("查询蜜蜂产物配方失败: {}", beeType, e);
 			return Map.of();
 		}
+	}
+
+	/** 复用同一配方索引；命中后不扫描配方表，也不提前调用产物生成。 */
+	@Nullable
+	static RecipeHolder<AdvancedBeehiveRecipe> getBeeRecipe(Level level, ResourceLocation beeType) {
+		String key = BeeTypeNormalizer.resolveLoadedBeeType(beeType).toString();
+		if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) rebuildBeehiveRecipeIndex(level);
+		return beehiveRecipeIndex.byBeeType.get(key);
 	}
 
 	/**

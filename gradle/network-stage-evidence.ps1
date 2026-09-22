@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 
 function Assert-NetworkProbeReport {
     param($Report, [bool]$Ae2, [ValidateSet('domain', 'write', 'read')][string]$Mode,
-        [ValidateSet('D16b', 'D16c1a', 'D16c1b')][string]$Gate = 'D16b')
+        [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c')][string]$Gate = 'D16b')
     if ($Report.passed -ne $true -or $Report.normalShutdownCheckpointSaved -ne $true -or $Report.ae2Loaded -ne $Ae2) {
         throw 'Probe failed, did not save normally, or used the wrong dependency combination'
     }
@@ -13,16 +13,23 @@ function Assert-NetworkProbeReport {
                 'automaticMaintenanceSharedPerTickAndAtomicWithWork')) {
             if ($Report.$field -ne $true) { throw "Missing joint gate: $field" }
         }
-        if ($Gate -in @('D16c1a', 'D16c1b')) {
+        if ($Gate -in @('D16c1a', 'D16c1b', 'D16c1c')) {
             foreach ($field in @('playerFeedingFiniteExchangePermissionsAndConservation', 'playerFeedingComponentsDisabledGroupsAndFiniteLimits',
                     'playerFeedingNormalReturnUsesCurrentRemainder', 'playerFeedingShutdownRemainderSaved', 'playerFeedingSyncProtocolAndReentry')) {
                 if ($Report.$field -ne $true) { throw "Missing player feeding gate: $field" }
             }
         }
-        if ($Gate -eq 'D16c1b') {
+        if ($Gate -in @('D16c1b', 'D16c1c')) {
             foreach ($field in @('playerProductsExactUnreservedFiniteDelivery', 'playerProductsSingleKeyIndexAndUnchangedWork',
                     'playerProductsPermissionsSyncAndReentry', 'playerProductsVerifiedBucketsAndComponentRejection', 'playerProductsShutdownExactRemainderSaved')) {
                 if ($Report.$field -ne $true) { throw "Missing product withdrawal gate: $field" }
+            }
+        }
+        if ($Gate -eq 'D16c1c') {
+            foreach ($field in @('playerCagesFiniteTransferAndUniqueIdentity', 'playerCagesPaidWorkComponentsAndNoDrops',
+                    'playerCagesPermissionsSyncAndReentry', 'playerCagesInsertedBeeResumesWithinSharedBudget',
+                    'playerCagesReturnUsesCurrentRoster', 'playerCagesShutdownCurrentRosterSaved')) {
+                if ($Report.$field -ne $true) { throw "Missing player cage gate: $field" }
             }
         }
         return

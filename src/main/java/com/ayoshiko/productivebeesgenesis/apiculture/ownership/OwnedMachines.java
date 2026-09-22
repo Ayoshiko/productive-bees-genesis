@@ -29,6 +29,14 @@ public final class OwnedMachines {
 	public int size() { return records.size(); }
 	public int activeCount() { return positions.size(); }
 	public boolean follows(OwnedMachines old) { return this == old || previous == old.token || old.size() == 0 && size() == 0; }
+	/** 有限蜂笼交接只替换对应记录；原位置和机器交接收据沿用原根。 */
+	public OwnedMachines exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
+		var member = change.bee().member();
+		var old = Objects.requireNonNull(records.get(member), "Missing bee owner");
+		var next = SnapshotRecords.fork(records, UUID::compareTo);
+		next.put(member, old.exchangeBee(change));
+		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+	}
 	public OwnedMachines put(OwnedMachineRecord record) {
 		var next = SnapshotRecords.fork(records, UUID::compareTo); var locations = SnapshotRecords.fork(positions, POSITIONS);
 		var intents = SnapshotRecords.fork(transfers, UUID::compareTo);
