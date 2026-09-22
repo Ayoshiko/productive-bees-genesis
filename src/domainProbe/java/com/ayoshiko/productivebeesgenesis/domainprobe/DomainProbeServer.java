@@ -22,6 +22,7 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (Boolean.getBoolean("pbg.cold.enabled")) return;
 		if (System.getProperty("pbg.ownership.mode") != null) return;
 		CheckpointReadProbe.close();
 		TopologyProbe.close();
@@ -42,6 +43,15 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (Boolean.getBoolean("pbg.cold.enabled")) {
+			if (event.getServer().getTickCount() == 40) {
+				var report = new JsonObject(); report.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
+				try { ColdInitializationProbe.verify(event.getServer().overworld(), report); report.addProperty("passed", true); }
+				catch (Exception failure) { failed(report, failure); }
+				finish(event, report);
+			}
+			return;
+		}
 		if (System.getProperty("pbg.centrifuge.mode") != null) {
 			try {
 				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.start(event.getServer()); }

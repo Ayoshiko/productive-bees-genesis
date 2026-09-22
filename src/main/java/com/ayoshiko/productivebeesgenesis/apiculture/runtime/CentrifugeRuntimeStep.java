@@ -51,7 +51,9 @@ final class CentrifugeRuntimeStep {
 		if (rules.size() == 0) return NetworkRuntime.Status.NO_INPUT;
 		long epoch = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		if (policy == null || recipeEpoch != epoch || policy.snapshot().revision() != current.policyRevision()) {
-			policy = new ProductPolicyRegistry(RuntimeProductPolicies.get(level, current.policyRevision())); recipeEpoch = epoch; searches.clear();
+			policy = null; searches.clear();
+			var compiled = RuntimeProductPolicies.get(level, current.policyRevision());
+			if (compiled != null) { policy = new ProductPolicyRegistry(compiled); recipeEpoch = epoch; }
 			return NetworkRuntime.Status.PREPARING;
 		}
 		var index = data.processingStock(); if (!index.ready() && !index.step()) return NetworkRuntime.Status.PREPARING;

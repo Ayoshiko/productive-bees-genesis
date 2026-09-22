@@ -13,6 +13,7 @@ configurations {
 def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
 if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
+def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeEula = file('run/eula.txt')
 def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
         ? file(providers.gradleProperty('networkProbeSeedWorld').get()) : null
@@ -84,6 +85,8 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+            if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
+            if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
 			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'
 			if (providers.gradleProperty('networkCentrifugeMode').isPresent()) {
 				def mode = providers.gradleProperty('networkCentrifugeMode').get()
@@ -123,7 +126,7 @@ tasks.named('runNetworkDomainServer') {
         File report = new File(probeDirectory.get().asFile, 'results/domain.json')
         if (!report.isFile()) throw new GradleException('Network domain report is missing')
         def result = new groovy.json.JsonSlurper().parse(report)
-        if (!result.passed || !result.normalShutdownCheckpointSaved) {
+        if (!result.passed || (!coldProbe && !result.normalShutdownCheckpointSaved)) {
             throw new GradleException('Network domain assertions did not complete')
         }
     }
