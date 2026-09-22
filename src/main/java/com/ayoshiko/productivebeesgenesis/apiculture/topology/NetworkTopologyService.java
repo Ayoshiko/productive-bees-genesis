@@ -84,12 +84,14 @@ public final class NetworkTopologyService {
 		}
 	}
 	public static boolean step(MinecraftServer server) {
-		var session = SESSIONS.get(server); if (session == null || !ModConfig.SERVER.beeNetwork.enabled.get()) return false;
+		var session = SESSIONS.get(server); if (session == null) return false;
 		if (session.active == null) {
 			session.active = session.waiting.pollFirst(); if (session.active == null) return false;
 			session.queued.remove(session.active);
 		}
 		var core = session.active;
+		// 关闭新建／生产后，已有权威域仍需拓扑完成恢复与安全交还。
+		if (!ModConfig.SERVER.beeNetwork.enabled.get() && core.network() == null) { clear(session); return true; }
 		if (core.isRemoved() || !(core.getLevel() instanceof ServerLevel level) || core.owner() == null
 				|| !level.hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || level.getBlockEntity(core.getBlockPos()) != core) { clear(session); return true; }
 		long epoch = epoch(level, core.getBlockPos());

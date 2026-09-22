@@ -14,9 +14,16 @@ def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
 if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
+def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
+if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
 def probeEula = file('run/eula.txt')
 def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
         ? file(providers.gradleProperty('networkProbeSeedWorld').get()) : null
+if (automaticMode == 'read' && seedWorld == null) throw new GradleException('Automatic restart requires its saved fixture world')
+if (automaticMode == 'write' && seedWorld != null) throw new GradleException('Automatic writer requires a fresh world')
+if (automaticMode != null && (coldProbe || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode'].any { providers.gradleProperty(it).isPresent() })) {
+    throw new GradleException('Automatic restart cannot be combined with another probe mode')
+}
 def probeDependencies = [file('run/mods/igleelib-1.21.1-1.2.7.jar')]
 if (providers.gradleProperty('networkProbeAe2').isPresent()) {
     probeDependencies.addAll(['appliedenergistics2-1.21.1-19.2.17.jar', 'AppliedFlux-1.21-2.1.5-neoforge.jar'].collect { file('libs/' + it) })
@@ -33,8 +40,16 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
+            if (automaticMode == 'read') {
+                File writerReport = new File(sourceWorld.parentFile, 'results/domain.json')
+                if (!writerReport.isFile()) throw new GradleException('Missing automatic writer shutdown report')
+                def writer = new groovy.json.JsonSlurper().parse(writerReport)
+                if (!writer.passed || !writer.normalShutdownCheckpointSaved || writer.automaticRestartIsNewJvm != false) {
+                    throw new GradleException('Automatic reader requires a successfully stopped writer')
+                }
+            }
             def target = new File(directory, 'world').toPath()
             java.nio.file.Files.walk(sourceWorld.toPath()).withCloseable { paths ->
                 paths.forEach { path ->
@@ -85,6 +100,7 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+            if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
 			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'

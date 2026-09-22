@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **P3／D16b2c3b 自动重启恢复**：接通九场景跨 JVM 专服探针，逐 tick 独立核对物品／流体、共享 FE、维护费及禁止补产／掉落物。修复关闭网络功能后已有网络无法重建拓扑、恢复永久等待的问题；新接管和新生产仍受开关限制。
+
 - **P3／D16b2c3a 初始化预算**：产物目录按配方／输入／输出逐步编译，多网络共享一个配方代际任务，重载丢弃旧半成品；不可变目录一次发布，避免同步整表编译及按网络版本重复建表。增加独立旧算法对照、冷／热分段计时和缓存生命周期回归；单个外部 API／组件处理仍受软预算限制。
 
 - **P3／D16b2c2 核心工作维护费**：按网络、真实 tick 收取一次，与成功的蜂箱／离心进度和 FE 原子提交；模拟、缺条件、缺电、暂停及已付费结算不收费，不追补休眠时间。费率可配置，研发默认 0，正式定价待平衡测试；双语配置文本同步。
@@ -84,6 +86,8 @@
 ### English
 
 #### Added
+
+- Added P3/D16b2c3b cross-JVM automatic restart probes for nine topology/state combinations, with independent per-tick item/fluid, FE, maintenance, and no-catch-up/drop checks. Existing networks can now rebuild topology and recover while the feature is disabled; new takeovers and production remain gated.
 
 - Added P3/D16b2c3a budgeted product-policy compilation, shared per recipe generation across networks. Reloads discard unfinished catalogs, and immutable indexes publish once without a final full copy. Added pre-change compiler comparisons, cold/warm stage measurements, and lifecycle regression checks; individual external API calls and component processing still have soft time limits.
 

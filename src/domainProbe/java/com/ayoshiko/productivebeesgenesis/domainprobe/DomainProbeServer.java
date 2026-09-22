@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.domainprobe;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.persistence.AutomaticRestartProbe;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
@@ -30,7 +31,8 @@ public final class DomainProbeServer {
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
 			try {
-				if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
+				if (System.getProperty("pbg.automatic.mode") != null) AutomaticRestartProbe.verifyShutdown(event.getServer(), report);
+				else if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
 				else NetworkPersistenceProbe.verifyShutdown(event.getServer(), report);
 			}
 			catch (Exception failure) {
@@ -43,6 +45,15 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (System.getProperty("pbg.automatic.mode") != null) {
+			try {
+				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); AutomaticRestartProbe.start(event.getServer()); }
+				if (pendingReport != null && AutomaticRestartProbe.advance(event.getServer(), pendingReport)) { finish(event, pendingReport); pendingReport = null; }
+			} catch (Exception error) {
+				if (pendingReport == null) pendingReport = new JsonObject(); failed(pendingReport, error); finish(event, pendingReport); pendingReport = null;
+			}
+			return;
+		}
 		if (Boolean.getBoolean("pbg.cold.enabled")) {
 			if (event.getServer().getTickCount() == 40) {
 				var report = new JsonObject(); report.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
@@ -130,6 +141,11 @@ public final class DomainProbeServer {
 	}
 	private static void finish(ServerTickEvent.Post event, JsonObject report) {
 		try {
+			report.addProperty("javaVersion", System.getProperty("java.version"));
+			report.addProperty("os", System.getProperty("os.name") + "/" + System.getProperty("os.arch"));
+			var mods = new JsonObject();
+			ModList.get().getMods().forEach(mod -> mods.addProperty(mod.getModId(), mod.getVersion().toString()));
+			report.add("loadedMods", mods);
 			Files.createDirectories(Path.of("results"));
 			Files.writeString(Path.of("results/domain.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report));
 		} catch (Exception failure) {
