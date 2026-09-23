@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.*;
@@ -11,12 +12,15 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final ContainerData data;
 	private final com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity exchangeNetwork;
+	private final NetworkSelectionSession selections;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
-		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null; data = new SimpleContainerData(28); addDataSlots(data);
+		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		selections = null; data = new SimpleContainerData(28); addDataSlots(data);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
+		selections = new NetworkSelectionSession();
 		data = new ContainerData() {
 			@Override public int get(int index) {
 				if (index == 26) return core.productionRunning() ? 1 : 0;
@@ -60,6 +64,32 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return false;
 	}
 	@Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
+	@Override public void removed(Player player) {
+		super.removed(player);
+		if (selections != null) selections.close();
+	}
+	@Override public void broadcastChanges() {
+		super.broadcastChanges();
+		if (selections != null && core.getLevel() != null) selections.expire(core.getLevel().getGameTime());
+	}
+	/** 首次／刷新传 0；后续页须携带当前 generation，不接受客户端页偏移或资产数据。 */
+	public NetworkSelectionSession.Page querySelections(
+			net.minecraft.server.level.ServerPlayer player,
+			NetworkSelectionSession.Kind kind, long generation) {
+		if (exchangeCore(player) == null || exchanging || kind == null || generation < 0) return null;
+		if (generation != 0 && (selections.page() == null || selections.page().kind() != kind)) return null;
+		var authority = core.ownership().readyAuthority(); if (authority == null) return null;
+		long tick = player.serverLevel().getGameTime();
+		return generation == 0 ? selections.begin(authority, authority.checkpoint(), kind, tick)
+				: selections.next(authority, authority.checkpoint(), generation, tick);
+	}
+	/** 只返回仍属于当前权威会话的已展示行；业务命令还需实时核对成员／名册。 */
+	public NetworkSelectionSession.Row selectedRow(
+			net.minecraft.server.level.ServerPlayer player, java.util.UUID session, long generation, int row) {
+		if (exchangeCore(player) == null || exchanging || !selections.id().equals(session)) return null;
+		var authority = core.ownership().readyAuthority(); if (authority == null) return null;
+		return selections.resolve(authority, authority.checkpoint(), generation, row, player.serverLevel().getGameTime());
+	}
 	NetworkCoreBlockEntity exchangeCore(net.minecraft.server.level.ServerPlayer player) {
 		if (!player.serverLevel().getServer().isSameThread() || core == null || exchangeNetwork == null
 				|| !exchangeNetwork.equals(core.network()) || !core.validNetworkReference() || !player.isAlive() || player.isSpectator()

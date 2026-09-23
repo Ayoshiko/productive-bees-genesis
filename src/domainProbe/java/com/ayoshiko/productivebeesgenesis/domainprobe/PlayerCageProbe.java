@@ -116,7 +116,9 @@ final class PlayerCageProbe {
 			require(data.checkpoint().energy().stored() == paidEnergy, "Paid settlement charged extra FE");
 			require(data.checkpoint().ledger().balances().get(state().bee(0).plan().output()).equals(ProductAmount.of(1)),
 					"Paid cage fixture did not settle exactly one normal iron output");
+			PlayerSelectionProbe.beforeExchanges(menu, player);
 			runExchanges(); permissions(server); synchronization();
+			PlayerSelectionProbe.beforeRuntime(menu, player, data);
 			var inventory = player.getInventory().save(new ListTag()); var restored = new Inventory(player); restored.load(inventory);
 			require(inventory.equals(restored.save(new ListTag())), "Cage inventory components did not round-trip");
 			require(NetworkCheckpointCodec.forRegistries(player.registryAccess()).decode(NetworkCheckpointCodec.encode(data.checkpoint()))
@@ -127,6 +129,7 @@ final class PlayerCageProbe {
 		if (phase == 3) {
 			require(server.getTickCount() - wakeStarted < 40, "Inserted bee did not advance: " + core.runtime().status());
 			if (state().bee(2).progress() == 0) return false;
+			PlayerSelectionProbe.afterRuntime(menu, player, data, report);
 			require(core.setProductionRunning(false), "Cage runtime repause failed");
 			report.addProperty("playerCagesInsertedBeeResumesWithinSharedBudget", true);
 			report.addProperty("playerCagesWakeTicks", server.getTickCount() - wakeStarted);
@@ -137,6 +140,10 @@ final class PlayerCageProbe {
 		if (phase == 4) {
 			if (core.topology() == null || !core.topology().valid() || core.ownership().busy()) return false;
 			check(EXTRACT, 2, revision(), id(2), true, MOVED);
+			PlayerSelectionProbe.beginExpiry(menu, player); phase = 7; return false;
+		}
+		if (phase == 7) {
+			if (!PlayerSelectionProbe.finishExpiry(menu, player, core, report)) return false;
 			require(core.ownership().command(false), "Cage fixture cannot return member"); phase = 5; return false;
 		}
 		if (core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;

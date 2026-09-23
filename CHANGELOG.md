@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D16c2a 菜单选择会话**：核心服务器菜单提供八行成员／蜂位及精确产物页，保留完全预约项，按固定快照翻页，100 tick 到期并在关闭时释放。生产、喂食和供能保持蜂位选择，换蜂／移位／恢复使旧选择失效，存档格式保持不变。全量 905 项测试及有／无 AE2 六次专服矩阵通过；客户端协议和操作界面仍在 c2b／c2c。
+
 - **一体机与直出升级设计**：首台独立矩形多方块确定为蜂箱与离心一体机，按主机升级插件首发、结构升级方块可扩展的方案准备；补齐复合工作状态、逐机能力、单次转换／计费、有限背压、升级交接及核心动画边界。此项为设计更新，实际机器和直出生产按 M 系列／D25-auto 逐步实现。
 
 - **D16c1c 有限蜂笼交换服务**：核心菜单服务器接口支持单个普通／加固蜂笼与基础蜂箱静态铁蜂双向交换，保留完整数据、原版笼消耗差异与唯一身份；已付费产物结清前拒绝取出，未完成周期装笼时取消且不退 FE。喂食和其它资产不随蜂迁走，提交后单槽同步并更新对应调度项，不生成掉落物。静态蜂计划复用已有配方索引；实际操作界面与真实玩家文件恢复仍在 D16c2／c3。
@@ -98,6 +100,8 @@
 ### English
 
 #### Added
+
+- Added D16c2a server-side menu selections: eight-row member/bee and exact-product pages include fully reserved stock, retain one snapshot, expire after 100 ticks, and release on close. Production, feeding, and energy transfer preserve roster selections; bee changes, moves, and restoration invalidate them without changing the save schema. Validation completed with 903 tests passed, two existing skips, and all six dedicated-server runs passed with/without AE2; client protocol and controls remain in c2b/c2c.
 
 - Defined the first standalone rectangular machine as a combined apiary and centrifuge, with a controller upgrade plugin first and structural upgrade blocks as a future carrier. The design covers composite work state, per-machine capacity, single-pass conversion and fees, bounded backpressure, upgrade custody, and core visuals. Playable machines and inline centrifuging remain in the M stages and D25-auto.
 

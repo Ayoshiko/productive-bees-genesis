@@ -17,6 +17,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.StaticBeePlan;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession;
 import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -184,6 +185,56 @@ class BeeCageCheckpointTest {
 				List.of(), source.feeding(), true);
 		assertThrows(ArithmeticException.class, () -> BeeRosterChange.insert(last, 0, slot(0), PLAN));
 		assertTrue(source.bees().isEmpty());
+	}
+
+	@Test void selectedRosterSurvivesProductionFeedingAndEnergyButNotMovementOrEmptySlotAba() {
+		var f = fixture(); var empty = f.checkpoint(); var authority = new Object();
+		try (var session = new NetworkSelectionSession()) {
+			var selectedEmpty = (NetworkSelectionSession.MemberRow) session.begin(authority, empty,
+					NetworkSelectionSession.Kind.MEMBERS, 0).rows().getFirst();
+			assertEquals(3, selectedEmpty.bees().size());
+			assertTrue(selectedEmpty.bees().stream().allMatch(row -> row.id() == null));
+			var source = state(empty, f.member());
+			var inserted = empty.exchangeBee(BeeRosterChange.insert(source, 0, slot(0), PLAN));
+			var record = inserted.ownedMachines().get(f.member()); var start = record.bees();
+			assertFalse(NetworkSelectionSession.sameRoster(selectedEmpty, record));
+			var selected = (NetworkSelectionSession.MemberRow) session.begin(authority, inserted,
+					NetworkSelectionSession.Kind.MEMBERS, 1).rows().getFirst();
+			assertEquals(start.bee(0).id(), selected.bees().getFirst().id());
+			var advanced = inserted.applyBeeWork(f.member(), BeeWorkExecutor.advance(start, 0, 0, context(), 2, 0, 1000));
+			var current = advanced.ownedMachines().get(f.member());
+			assertTrue(NetworkSelectionSession.sameRoster(selected, current));
+			assertFalse(NetworkSelectionSession.sameRoster(selected, current.quarantine("test recovery")));
+			var quarantined = new NetworkSelectionSession.MemberRow(selected.claim(), OwnedMachineRecord.Phase.RECOVERY,
+					selected.rosterVersion(), selected.feedingRevision(), selected.bees());
+			assertFalse(NetworkSelectionSession.sameRoster(quarantined, current));
+			assertEquals(0, selected.bees().getFirst().progress());
+			assertEquals(2, current.bees().bee(0).progress());
+			var feeding = current.bees().feeding();
+			current = current.withBees(current.bees().withFeeding(feeding.groups(List.of(0, 1, 2)).apply(feeding)));
+			assertTrue(NetworkSelectionSession.sameRoster(selected, current));
+			assertFalse(NetworkSelectionSession.sameRoster(selected, current.withBees(current.bees().moveBee(0, 1, false))));
+			var removed = inserted.exchangeBee(BeeRosterChange.extract(start, 0, start.bee(0).id()));
+			assertTrue(state(removed, f.member()).bees().isEmpty());
+			assertFalse(NetworkSelectionSession.sameRoster(selectedEmpty, removed.ownedMachines().get(f.member())));
+			assertFalse(NetworkSelectionSession.sameRoster(selected, removed.ownedMachines().get(f.member())));
+			var local = new BeeMemberState(start.member(), 0, 1000, 2000, start.bees(), start.feeding());
+			assertSame(local.rosterVersion(), local.transferEnergy().rosterVersion());
+		}
+	}
+
+	@Test void bothRestorePathsReissueRosterTokensWithoutChangingValueEqualityOrSchema() throws Exception {
+		var f = fixture(); var empty = f.checkpoint();
+		var source = empty.exchangeBee(BeeRosterChange.insert(state(empty, f.member()), 0, slot(0), PLAN));
+		var encoded = NetworkCheckpointCodec.encode(source); var original = state(source, f.member());
+		var restored = roundTrip(source, "selection-roster");
+		var synchronous = CODEC.decode(encoded);
+		for (var checkpoint : List.of(restored, synchronous)) {
+			var next = state(checkpoint, f.member());
+			assertEquals(original, next); assertEquals(original.hashCode(), next.hashCode());
+			assertNotSame(original.rosterVersion(), next.rosterVersion());
+			assertEquals(encoded, NetworkCheckpointCodec.encode(checkpoint));
+		}
 	}
 
 	private NetworkCheckpoint roundTrip(NetworkCheckpoint expected, String name) throws Exception {
