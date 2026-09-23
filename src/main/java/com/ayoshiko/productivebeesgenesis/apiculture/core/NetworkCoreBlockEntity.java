@@ -98,4 +98,12 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	}
 	@Override public Component getDisplayName() { return Component.translatable("block.productivebeesgenesis.bee_network_core"); }
 	@Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) { return allowed(player) ? new NetworkCoreMenu(id, inventory, this) : null; }
+	/** 会话 UUID 随原版开菜单数据传输，旧 containerId 的迟到回复不能绑定新菜单。 */
+	public void openTerminal(net.minecraft.server.level.ServerPlayer player) {
+		if (!allowed(player)) return;
+		var session = java.util.UUID.randomUUID();
+		player.openMenu(new net.minecraft.world.SimpleMenuProvider((id, inventory, viewer) ->
+				allowed(viewer) ? new NetworkCoreMenu(id, inventory, this, session) : null, getDisplayName()),
+				buffer -> { buffer.writeBlockPos(worldPosition); buffer.writeUUID(session); });
+	}
 }

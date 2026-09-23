@@ -41,7 +41,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	}
 
 	private final Thread owner = Thread.currentThread();
-	private final UUID id = UUID.randomUUID();
+	private final UUID id;
 	private Object authority;
 	private NetworkIdentity identity;
 	private LedgerCheckpoint ledger;
@@ -50,6 +50,11 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	private Page page;
 	private long generation, openedAt;
 	private boolean closed;
+
+	public NetworkSelectionSession() { this(UUID.randomUUID()); }
+	public NetworkSelectionSession(UUID id) { this.id = Objects.requireNonNull(id); }
+	/** 客户端取消或动作完成后立即释放快照；序号和页代际仍保留。 */
+	public void cancel() { check(); clear(); }
 
 	/** 重新查询会丢弃旧游标；两个遍历器中只有当前页面类型的一个存活。 */
 	public Page begin(Object authority, NetworkCheckpoint snapshot, Kind kind, long tick) {

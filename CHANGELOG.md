@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D16c2b 有界终端协议**：接入仅含选择令牌和真实背包槽的喂食、产物／水桶取回及单蜂笼命令，加入菜单 UUID、单调序号、每玩家限流与固定包体预算；未建网时打开的菜单可绑定首个网络，关闭／取消后释放选择。显示投影不传完整组件，超大数量明确显示下界且不修改精确账本。909 项测试通过、2 项既有跳过，有／无 AE2 六次专服矩阵及原有客户端菜单回归通过；新操作控件和真实玩家文件恢复继续由 c2c／c3 验收。
+
 - **D16c2a 菜单选择会话**：核心服务器菜单提供八行成员／蜂位及精确产物页，保留完全预约项，按固定快照翻页，100 tick 到期并在关闭时释放。生产、喂食和供能保持蜂位选择，换蜂／移位／恢复使旧选择失效，存档格式保持不变。全量 905 项测试及有／无 AE2 六次专服矩阵通过；客户端协议和操作界面仍在 c2b／c2c。
 
 - **一体机与直出升级设计**：首台独立矩形多方块确定为蜂箱与离心一体机，按主机升级插件首发、结构升级方块可扩展的方案准备；补齐复合工作状态、逐机能力、单次转换／计费、有限背压、升级交接及核心动画边界。此项为设计更新，实际机器和直出生产按 M 系列／D25-auto 逐步实现。
@@ -100,6 +102,8 @@
 ### English
 
 #### Added
+
+- Added the D16c2b bounded terminal protocol for feeding, finite item/bucket withdrawals, and single-cage exchanges through server selection tokens and real inventory slots. Menu UUIDs, monotonic sequences, shared player rate limits, bounded display packets, first-network binding, and cancellation prevent stale or repeated transfers. Large display values explicitly indicate a lower bound while authoritative balances remain exact. Validation: 909 tests passed, two existing skips, six dedicated-server runs with/without AE2, and existing client menu regression passed. New controls and real player-file recovery remain in c2c/c3.
 
 - Added D16c2a server-side menu selections: eight-row member/bee and exact-product pages include fully reserved stock, retain one snapshot, expire after 100 ticks, and release on close. Production, feeding, and energy transfer preserve roster selections; bee changes, moves, and restoration invalidate them without changing the save schema. Validation completed with 903 tests passed, two existing skips, and all six dedicated-server runs passed with/without AE2; client protocol and controls remain in c2b/c2c.
 

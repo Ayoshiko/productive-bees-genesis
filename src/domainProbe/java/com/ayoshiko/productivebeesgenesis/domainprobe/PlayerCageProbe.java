@@ -17,6 +17,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkBeeService;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkFeedingService;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
@@ -68,7 +69,7 @@ final class PlayerCageProbe {
 	private static NetworkCheckpoint shutdown;
 	private static int phase, started, physicalTicker, checks, wakeStarted;
 	private static long paidEnergy, maxNanos;
-	private static boolean joined;
+	private static boolean joined, selectionExpired;
 
 	static void start(MinecraftServer server) {
 		started = server.getTickCount(); var level = server.overworld(); ModConfig.SERVER.beeNetwork.enabled.set(true);
@@ -77,6 +78,9 @@ final class PlayerCageProbe {
 		player.setPos(POS.getX() + 0.5, POS.getY(), POS.getZ() + 0.5); sync = new PlayerInventorySyncProbe(player);
 		level.setBlockAndUpdate(POS, NetworkContent.CORE.get().defaultBlockState());
 		core = (NetworkCoreBlockEntity) level.getBlockEntity(POS); core.initializeOwner(player.getUUID());
+		openMenu(71);
+		require(core.network() == null && menu.querySelections(player, NetworkSelectionSession.Kind.MEMBERS, 0) == null,
+				"Unbound core unexpectedly exposed selections");
 		level.setBlockAndUpdate(POS.east(), ModBlocks.MEK_APIARY.get().defaultBlockState());
 		hive = (TileEntityMekApiary) level.getBlockEntity(POS.east());
 		hive.setOwnerUUID(player.getUUID()); hive.setControlType(RedstoneControl.HIGH); hive.setFeederConversionEnabled(false);
@@ -105,7 +109,9 @@ final class PlayerCageProbe {
 		}
 		if (phase == 1) {
 			var state = state(); if (state == null || !state.networkPowered()) return false;
-			require(core.setProductionRunning(false), "Cage pause failed"); openMenu(71);
+			require(core.setProductionRunning(false), "Cage pause failed");
+			require(menu.querySelections(player, NetworkSelectionSession.Kind.MEMBERS, 0) != null, "Pre-opened menu did not bind its first network");
+			report.addProperty("terminalProtocolFirstNetworkBinding", true);
 			var feeding = state.feeding();
 			require(new NetworkFeedingService(data, NetworkPersistence.directory(server)).apply(player.serverLevel(),
 					member, feeding.revision(), feeding.groups(List.of(0, 0, 0)), false), "Cage shared-flower setup failed");
@@ -143,7 +149,8 @@ final class PlayerCageProbe {
 			PlayerSelectionProbe.beginExpiry(menu, player); phase = 7; return false;
 		}
 		if (phase == 7) {
-			if (!PlayerSelectionProbe.finishExpiry(menu, player, core, report)) return false;
+			if (!selectionExpired) selectionExpired = PlayerSelectionProbe.finishExpiry(menu, player, core, report);
+			if (!selectionExpired || !TerminalProtocolProbe.advance(menu, player, core, data, sync, member, report)) return false;
 			require(core.ownership().command(false), "Cage fixture cannot return member"); phase = 5; return false;
 		}
 		if (core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;

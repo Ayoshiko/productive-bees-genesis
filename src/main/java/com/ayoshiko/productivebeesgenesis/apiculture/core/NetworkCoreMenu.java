@@ -1,26 +1,35 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
-import com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.*;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.*;
+import java.util.UUID;
 
-/** 使用原版菜单按钮和只读计数同步；所有命令再次校验当前菜单、距离和所有者。 */
+/** 核心菜单生命周期、只读同步与命令入口；资产变化委托独立有限交换服务。 */
 public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final ContainerData data;
-	private final com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity exchangeNetwork;
+	private com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity exchangeNetwork;
 	private final NetworkSelectionSession selections;
+	private final UUID terminalSession;
+	private final TerminalSequence terminalSequence = new TerminalSequence();
+	private TerminalReply terminalReply;
+	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		terminalSession = buffer.readUUID();
 		selections = null; data = new SimpleContainerData(28); addDataSlots(data);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
+		this(id, inventory, core, UUID.randomUUID());
+	}
+	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
-		selections = new NetworkSelectionSession();
+		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
 				if (index == 26) return core.productionRunning() ? 1 : 0;
@@ -55,7 +64,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		for (int part = 0; part < 4; part++) result |= (data.get(start + part) & 65535L) << (part * 16);
 		return result;
 	}
-	@Override public boolean stillValid(Player player) { return core == null || core.allowed(player) && player.level().getBlockEntity(core.getBlockPos()) == core; }
+	@Override public boolean stillValid(Player player) {
+		return !closed && (core == null || player.level() == core.getLevel() && core.allowed(player)
+				&& player.level().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4)
+				&& player.level().getBlockEntity(core.getBlockPos()) == core);
+	}
 	@Override public boolean clickMenuButton(Player player, int id) {
 		if (core == null || player.containerMenu != this || !stillValid(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
@@ -67,6 +80,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	@Override public void removed(Player player) {
 		super.removed(player);
 		if (selections != null) selections.close();
+		closed = true; terminalSequence.close(); terminalReply = null;
 	}
 	@Override public void broadcastChanges() {
 		super.broadcastChanges();
@@ -91,11 +105,30 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return selections.resolve(authority, authority.checkpoint(), generation, row, player.serverLevel().getGameTime());
 	}
 	NetworkCoreBlockEntity exchangeCore(net.minecraft.server.level.ServerPlayer player) {
-		if (!player.serverLevel().getServer().isSameThread() || core == null || exchangeNetwork == null
-				|| !exchangeNetwork.equals(core.network()) || !core.validNetworkReference() || !player.isAlive() || player.isSpectator()
+		if (!player.serverLevel().getServer().isSameThread() || core == null || closed
+				|| !core.validNetworkReference() || !player.isAlive() || player.isSpectator()
 				|| player.containerMenu != this || player.level() != core.getLevel()
 				|| !player.serverLevel().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || !stillValid(player)) return null;
+		// 未建网打开的菜单只能绑定一次；已绑定身份永远不能自动切换。
+		if (exchangeNetwork == null && core.network() != null) exchangeNetwork = core.network();
+		if (exchangeNetwork == null || !exchangeNetwork.equals(core.network())) return null;
 		return core;
+	}
+	public UUID terminalSession() { return terminalSession; }
+	public TerminalReply terminalReply() { return terminalReply; }
+	/** 客户端只接收本次打开的菜单且顺序更新的只读回复。 */
+	public void acceptTerminalReply(TerminalReply reply) {
+		if (core == null && !closed && containerId == reply.containerId() && terminalSession.equals(reply.session())
+				&& (terminalReply == null || reply.sequence() > terminalReply.sequence())) terminalReply = reply;
+	}
+	/** 正式网络入口；提前消费序号，发送槽同步时的回调也不能重入下一条动作。 */
+	public TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
+		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
+				|| player.containerMenu != this || request.containerId() != containerId
+				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
+				|| !terminalSequence.begin(request.sequence())) return null;
+		try { return TerminalPayloads.allow(player) ? CoreTerminalCommands.execute(this, player, request, selections) : null; }
+		finally { terminalSequence.finish(); }
 	}
 	public CoreFeedingExchange.Result exchangeFeeding(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int feedingSlot, long expectedRevision, int inventorySlot, int requested, CoreFeedingExchange.Action action, boolean simulate) {

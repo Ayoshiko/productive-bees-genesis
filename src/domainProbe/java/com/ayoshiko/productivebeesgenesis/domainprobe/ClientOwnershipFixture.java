@@ -51,7 +51,7 @@ public final class ClientOwnershipFixture {
 			if (stage == 0) {
 				if (core.topology() == null || !core.topology().valid()) return;
 				require(core.topology().members().size() == 2, "Client fixture topology differs");
-				player.openMenu(core, POS);
+				core.openTerminal(player);
 				var menu = (NetworkCoreMenu) player.containerMenu;
 				var stranger = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(UUID.randomUUID(), "P2Stranger"));
 				stranger.containerMenu = menu;

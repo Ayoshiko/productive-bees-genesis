@@ -59,6 +59,7 @@ final class PlayerProductProbe {
 		while (!data.processingStock().ready()) data.processingStock().step();
 		items(); PlayerSelectionProbe.products(menu, player, data, report);
 		buckets(report); permissions(server); synchronization();
+		TerminalProtocolProbe.bucket(menu, player, data, water, report);
 		require(NetworkCheckpointCodec.forRegistries(player.registryAccess()).decode(NetworkCheckpointCodec.encode(data.checkpoint())).equals(data.checkpoint()), "Product withdrawal checkpoint round-trip failed");
 		shutdown = data.checkpoint(); player.containerMenu = player.inventoryMenu;
 		report.addProperty("playerProductsExactUnreservedFiniteDelivery", true);
