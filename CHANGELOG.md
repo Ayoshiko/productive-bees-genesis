@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M02b 多方块预算扫描**：使用同一矩形模板分批验证，区分缺区块、错误角色／朝向、越界与歧义；逐批校验机器和定义代际，阻止过期／取消／重入结果发布，不强制加载区块。新增 14 项测试，全量 936 项测试（2 项既有跳过）、构建及产物核验通过。M02 纯查询阶段完成，真实形成、占位和生命周期继续在 M03 实施。
+
 - **M02a 一体机模板**：明确 7×5×5／7／9 的蜂箱与离心一体机、唯一主核和两个工作单元，提供共享的不可变角色／方向规则。角棱框架、外壳玻璃、端口朝向及内部空气分别校验，增大外壳不额外贡献产能；方块注册和实际形成继续在后续步骤交付。全量 922 项测试（2 项既有跳过）及构建通过。
 
 - **D16c2c 核心操作界面**：新增概览／蜜蜂／产物页、八行选择、只读背包格选择及有限喂食、物品／桶、单蜂笼交换控件。请求状态随菜单保留，过期／超时／动作后要求刷新，不自动重发资产命令；显示实际结果、取消进度与有界组件摘要。同步维护双语提示、客户端点击探针与联合检验门；网络仍默认关闭，P3 双玩家和玩家文件恢复尚待 c3。
@@ -106,6 +108,8 @@
 ### English
 
 #### Added
+
+- Added the M02b incremental multiblock validator with shared candidate budgets, explicit unloaded-chunk and layout diagnostics, ambiguity rejection, and generation/definition checks. Cancelled, stale or reentrant scans cannot publish a match; unloaded chunks are never read. Added 14 tests; all 936 tests completed with two existing skips, and build/artifact checks passed. M02 pure validation is complete; actual formation, occupancy and lifecycle integration remain M03.
 
 - Added immutable M02a combined apiary/centrifuge templates for 7×5×5, 7×5×7 and 7×5×9 layouts, with one core and two work units. Shared role/direction rules distinguish frames, shell/glass, outward ports and required air. Larger shells grant no extra production; block registration and formation remain subsequent work. Full test/build validation passed: 922 tests, including two existing skips.
 
