@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M03a 机器目录与形成事务**：按完整矩形（含空气）检查排他占位，邻接允许、重叠双方暂停；重复机器身份、旧扫描／部件引用、回调重入和异常均不能发布有效绑定。新增空间事件索引和清理路径，真实方块接入仍在 M03b。全量 947 项测试（2 项既有跳过）、构建及产物核验通过。
+
 - **M02b 多方块预算扫描**：使用同一矩形模板分批验证，区分缺区块、错误角色／朝向、越界与歧义；逐批校验机器和定义代际，阻止过期／取消／重入结果发布，不强制加载区块。新增 14 项测试，全量 936 项测试（2 项既有跳过）、构建及产物核验通过。M02 纯查询阶段完成，真实形成、占位和生命周期继续在 M03 实施。
 
 - **M02a 一体机模板**：明确 7×5×5／7／9 的蜂箱与离心一体机、唯一主核和两个工作单元，提供共享的不可变角色／方向规则。角棱框架、外壳玻璃、端口朝向及内部空气分别校验，增大外壳不额外贡献产能；方块注册和实际形成继续在后续步骤交付。全量 922 项测试（2 项既有跳过）及构建通过。
@@ -108,6 +110,8 @@
 ### English
 
 #### Added
+
+- Added the M03a machine directory and formation transaction. Full rectangular claims include reserved air; adjacent structures coexist while overlapping or duplicate identities become inactive. Stale scans/references, reentry and failed binding callbacks cannot publish an active machine. Added spatial event indices and cleanup; real block integration remains M03b. Full test/build/artifact checks passed: 947 tests, including two existing skips.
 
 - Added the M02b incremental multiblock validator with shared candidate budgets, explicit unloaded-chunk and layout diagnostics, ambiguity rejection, and generation/definition checks. Cancelled, stale or reentrant scans cannot publish a match; unloaded chunks are never read. Added 14 tests; all 936 tests completed with two existing skips, and build/artifact checks passed. M02 pure validation is complete; actual formation, occupancy and lifecycle integration remain M03.
 
