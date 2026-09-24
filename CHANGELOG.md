@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M02a 一体机模板**：明确 7×5×5／7／9 的蜂箱与离心一体机、唯一主核和两个工作单元，提供共享的不可变角色／方向规则。角棱框架、外壳玻璃、端口朝向及内部空气分别校验，增大外壳不额外贡献产能；方块注册和实际形成继续在后续步骤交付。全量 922 项测试（2 项既有跳过）及构建通过。
+
 - **D16c2c 核心操作界面**：新增概览／蜜蜂／产物页、八行选择、只读背包格选择及有限喂食、物品／桶、单蜂笼交换控件。请求状态随菜单保留，过期／超时／动作后要求刷新，不自动重发资产命令；显示实际结果、取消进度与有界组件摘要。同步维护双语提示、客户端点击探针与联合检验门；网络仍默认关闭，P3 双玩家和玩家文件恢复尚待 c3。
 
 - **D16c2b 有界终端协议**：接入仅含选择令牌和真实背包槽的喂食、产物／水桶取回及单蜂笼命令，加入菜单 UUID、单调序号、每玩家限流与固定包体预算；未建网时打开的菜单可绑定首个网络，关闭／取消后释放选择。显示投影不传完整组件，超大数量明确显示下界且不修改精确账本。909 项测试通过、2 项既有跳过，有／无 AE2 六次专服矩阵及原有客户端菜单回归通过；新操作控件和真实玩家文件恢复继续由 c2c／c3 验收。
@@ -104,6 +106,8 @@
 ### English
 
 #### Added
+
+- Added immutable M02a combined apiary/centrifuge templates for 7×5×5, 7×5×7 and 7×5×9 layouts, with one core and two work units. Shared role/direction rules distinguish frames, shell/glass, outward ports and required air. Larger shells grant no extra production; block registration and formation remain subsequent work. Full test/build validation passed: 922 tests, including two existing skips.
 
 - Added the D16c2c core interface with overview, bee and product tabs, eight-row selection, a read-only inventory selector, and finite feeding, item/bucket and single-cage controls. Menu-owned request state survives resizing; expiry, timeout and completed actions require a refresh without automatic asset retries. Actual transfer results, cancelled progress and bounded component previews are displayed. Added bilingual text and real client-click validation to the joint gate. Networks remain disabled by default; the P3 two-player and player-file restart gates are still pending.
 
