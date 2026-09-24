@@ -31,7 +31,7 @@ class TerminalProtocolTest {
 	}
 	@Test void maximumUnicodeDisplayFitsOnePacketAndRoundTrips() {
 		var bee = new TerminalView.Bee(0, true, "蜂".repeat(80), Integer.MAX_VALUE, Integer.MAX_VALUE, true);
-		var row = new TerminalView.Row("蜂".repeat(80), true, "量".repeat(96), "量".repeat(96), false, List.of(bee, bee, bee));
+		var row = new TerminalView.Row("蜂".repeat(80), true, "量".repeat(96), "量".repeat(96), false, List.of(bee, bee, bee), "组".repeat(80));
 		var view = new TerminalView(NetworkSelectionSession.Kind.MEMBERS, Long.MAX_VALUE, true, java.util.Collections.nCopies(8, row));
 		var reply = new TerminalReply(1, UUID.randomUUID(), Long.MAX_VALUE, TerminalReply.Status.MOVED, 1000, Integer.MAX_VALUE, view);
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());

@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 
 function Assert-NetworkProbeReport {
     param($Report, [bool]$Ae2, [ValidateSet('domain', 'write', 'read')][string]$Mode,
-        [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b')][string]$Gate = 'D16b')
+        [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c')][string]$Gate = 'D16b')
     if ($Report.passed -ne $true -or $Report.normalShutdownCheckpointSaved -ne $true -or $Report.ae2Loaded -ne $Ae2) {
         throw 'Probe failed, did not save normally, or used the wrong dependency combination'
     }
@@ -13,33 +13,33 @@ function Assert-NetworkProbeReport {
                 'automaticMaintenanceSharedPerTickAndAtomicWithWork')) {
             if ($Report.$field -ne $true) { throw "Missing joint gate: $field" }
         }
-        if ($Gate -in @('D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b')) {
+        if ($Gate -in @('D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c')) {
             foreach ($field in @('playerFeedingFiniteExchangePermissionsAndConservation', 'playerFeedingComponentsDisabledGroupsAndFiniteLimits',
                     'playerFeedingNormalReturnUsesCurrentRemainder', 'playerFeedingShutdownRemainderSaved', 'playerFeedingSyncProtocolAndReentry')) {
                 if ($Report.$field -ne $true) { throw "Missing player feeding gate: $field" }
             }
         }
-        if ($Gate -in @('D16c1b', 'D16c1c', 'D16c2a', 'D16c2b')) {
+        if ($Gate -in @('D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c')) {
             foreach ($field in @('playerProductsExactUnreservedFiniteDelivery', 'playerProductsSingleKeyIndexAndUnchangedWork',
                     'playerProductsPermissionsSyncAndReentry', 'playerProductsVerifiedBucketsAndComponentRejection', 'playerProductsShutdownExactRemainderSaved')) {
                 if ($Report.$field -ne $true) { throw "Missing product withdrawal gate: $field" }
             }
         }
-        if ($Gate -in @('D16c1c', 'D16c2a', 'D16c2b')) {
+        if ($Gate -in @('D16c1c', 'D16c2a', 'D16c2b', 'D16c2c')) {
             foreach ($field in @('playerCagesFiniteTransferAndUniqueIdentity', 'playerCagesPaidWorkComponentsAndNoDrops',
                     'playerCagesPermissionsSyncAndReentry', 'playerCagesInsertedBeeResumesWithinSharedBudget',
                     'playerCagesReturnUsesCurrentRoster', 'playerCagesShutdownCurrentRosterSaved')) {
                 if ($Report.$field -ne $true) { throw "Missing player cage gate: $field" }
             }
         }
-        if ($Gate -in @('D16c2a', 'D16c2b')) {
+        if ($Gate -in @('D16c2a', 'D16c2b', 'D16c2c')) {
             foreach ($field in @('playerSelectionsExactProductsAndReservations', 'playerSelectionsStableProductionAndRosterInvalidation',
                     'playerSelectionsExpiryPermissionsAndClose')) {
                 if ($Report.$field -ne $true) { throw "Missing player selection gate: $field" }
             }
             if ($Report.playerSelectionsLifetimeTicks -lt 100) { throw 'Selection expiry did not cross its lifetime' }
         }
-        if ($Gate -eq 'D16c2b') {
+        if ($Gate -in @('D16c2b', 'D16c2c')) {
             foreach ($field in @('terminalProtocolFirstNetworkBinding', 'terminalProtocolFiniteFeedingAndReentry',
                     'terminalProtocolCagesReplayAndCommittedSyncFailure', 'terminalProtocolProductTransfer', 'terminalProtocolBucketTransfer',
                     'terminalProtocolPermissionsCancelRateAndClientSession')) {
@@ -69,6 +69,16 @@ function Assert-NetworkProbeReport {
                 throw "No paid work observed: $kind/$state"
             }
         }
+    }
+}
+
+function Assert-NetworkClientReport {
+    param([object]$Report, [bool]$Ae2)
+    if ($Report.completedStage -ne 4 -or $Report.ae2Present -ne $Ae2) { throw 'Client stage or dependency combination differs' }
+    foreach ($field in @('passed', 'menuCountsAndButtons', 'permissionsAndStaleMenu', 'physicalAssetsReturned',
+            'normalIntegratedShutdown', 'longCoreEnergySynchronized', 'automaticProductionButtonsSynchronized',
+            'terminalWidgetsFiniteExchangesAndRefresh', 'terminalServerConservation')) {
+        if ($Report.$field -ne $true) { throw "Missing terminal client gate: $field" }
     }
 }
 

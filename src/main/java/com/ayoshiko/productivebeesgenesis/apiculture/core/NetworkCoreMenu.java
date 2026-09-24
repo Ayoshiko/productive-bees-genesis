@@ -17,12 +17,15 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final UUID terminalSession;
 	private final TerminalSequence terminalSequence = new TerminalSequence();
 	private TerminalReply terminalReply;
+	private TerminalClientState clientState;
+	private boolean inventoryVisible;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
 		terminalSession = buffer.readUUID();
 		selections = null; data = new SimpleContainerData(28); addDataSlots(data);
+		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
 		this(id, inventory, core, UUID.randomUUID());
@@ -49,8 +52,22 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 			}
 			@Override public void set(int index, int value) { }
 			@Override public int getCount() { return 28; }
-		}; addDataSlots(data);
+		}; addDataSlots(data); addInventory(inventory);
 	}
+	private void addInventory(Inventory inventory) {
+		for (int row = 0; row < 4; row++) for (int column = 0; column < 9; column++) {
+			int index = row == 3 ? column : (row + 1) * 9 + column;
+			addSlot(new Slot(inventory, index, 12 + column * 18, 80 + row * 18) {
+				@Override public boolean isActive() { return inventoryVisible; }
+				@Override public boolean mayPlace(ItemStack stack) { return false; }
+				@Override public boolean mayPickup(Player player) { return false; }
+			});
+		}
+	}
+	public void inventoryVisible(boolean visible) { inventoryVisible = visible; }
+	public TerminalClientState clientState() { return clientState; }
+	/** 背包槽只同步和选择；包括丢弃、热键交换和创造复制在内的原版搬运均关闭。 */
+	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
 	public long value(int index) {
 		if (index == 0) return data.get(0);
 		long result = 0; for (int part = 0; part < 4; part++) result |= (data.get(1 + (index - 1) * 4 + part) & 65535L) << (part * 16);
@@ -81,6 +98,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		super.removed(player);
 		if (selections != null) selections.close();
 		closed = true; terminalSequence.close(); terminalReply = null;
+		if (clientState != null) clientState.close();
 	}
 	@Override public void broadcastChanges() {
 		super.broadcastChanges();
@@ -119,7 +137,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	/** 客户端只接收本次打开的菜单且顺序更新的只读回复。 */
 	public void acceptTerminalReply(TerminalReply reply) {
 		if (core == null && !closed && containerId == reply.containerId() && terminalSession.equals(reply.session())
-				&& (terminalReply == null || reply.sequence() > terminalReply.sequence())) terminalReply = reply;
+				&& (terminalReply == null || reply.sequence() > terminalReply.sequence())) {
+			terminalReply = reply;
+			clientState.accept(reply, net.minecraft.Util.getMillis());
+		}
 	}
 	/** 正式网络入口；提前消费序号，发送槽同步时的回调也不能重入下一条动作。 */
 	public TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {

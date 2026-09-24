@@ -11,7 +11,7 @@ public final class TerminalViewProjection {
 		for (var row : page.rows()) {
 			if (row instanceof NetworkSelectionSession.ProductRow product) {
 				rows.add(new TerminalView.Row(shortText(product.key().id().toString()), product.key().kind() == ProductKey.Kind.FLUID,
-						amount(product.owned()), amount(product.available()), exact(product.owned()) && exact(product.available()), java.util.List.of()));
+						amount(product.owned()), amount(product.available()), exact(product.owned()) && exact(product.available()), java.util.List.of(), product.key().componentPreview()));
 			} else if (row instanceof NetworkSelectionSession.MemberRow member) {
 				var origin = member.claim().origin();
 				rows.add(new TerminalView.Row(shortText(member.claim().machine() + " @ " + origin.x() + "," + origin.y() + "," + origin.z()),

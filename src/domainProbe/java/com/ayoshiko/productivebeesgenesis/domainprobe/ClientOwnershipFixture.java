@@ -41,13 +41,15 @@ public final class ClientOwnershipFixture {
 					var pos = POS.east(i + 1);
 					level.setBlockAndUpdate(pos, (i == 0 ? ModBlocks.MEK_APIARY.get() : ModBlocks.MEK_CENTRIFUGE.get()).defaultBlockState());
 					var tile = (TileEntityMekanism) level.getBlockEntity(pos); tile.setOwnerUUID(player.getUUID());
+					if (tile instanceof com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary hive) hive.setFeederConversionEnabled(false);
 					((PbRecipeContext) tile).primaryOutputSlot(0).setStack(new ItemStack(Items.DIAMOND, 13 + i));
 					originals[i] = new BlockEntityOwnershipEndpoint(tile).capture();
 				}
 				player.teleportTo(8.5, 102, 8.5); player.setNoGravity(true);
 				return;
 			}
-			require(core.ownership().status() != CoreOwnershipController.Status.RECOVERY, core.ownership().failure());
+				require(core.ownership().status() != CoreOwnershipController.Status.RECOVERY, core.ownership().failure());
+			if (stage == 2) ClientTerminalFixture.tick(core, player);
 			if (stage == 0) {
 				if (core.topology() == null || !core.topology().valid()) return;
 				require(core.topology().members().size() == 2, "Client fixture topology differs");

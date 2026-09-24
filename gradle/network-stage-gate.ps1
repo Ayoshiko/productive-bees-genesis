@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b')][string]$Gate = 'D16b',
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c')][string]$Gate = 'D16b',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 
 $ErrorActionPreference = 'Stop'
@@ -83,7 +83,22 @@ try {
         $world = Join-Path $workspace "build/network-probe-$RunId-$combination-write/world"
         $reader = Invoke-GateProbe "$combination-read" $ae2 'read' $world
         if ($reader.producerPid -ne $writer.currentPid) { throw 'Reader consumed another writer fixture' }
+        if ($Gate -eq 'D16c2c') {
+            $clientId = "$RunId-$combination-client"
+            $arguments = @('runNetworkDomainClient', '-PnetworkDomainProbe', "-PnetworkProbeRun=$clientId")
+            if ($ae2) { $arguments += '-PnetworkProbeAe2' }
+            Invoke-GateGradle "$combination-client" $arguments
+            $clientFolder = Join-Path $workspace "build/network-probe-$clientId/results"
+            $reportPath = Join-Path $clientFolder 'client.json'
+            Assert-NetworkClientReport (Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json) $ae2
+            $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
+            foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'returned')) {
+                $screenshot = Join-Path $clientFolder "$name.png"
+                $summary.checks += [ordered]@{ name = "$combination-$name-image"; path = $screenshot; sha256 = (Get-FileHash -LiteralPath $screenshot).Hash }
+            }
+        }
     }
+    if ($Gate -eq 'D16c2c') { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
     if ((Get-NetworkSourceFingerprint) -ne $fingerprint -or (& git rev-parse HEAD).Trim() -ne $revision) {
         throw 'Source changed during the gate; rerun the affected gate before accepting it'
     }

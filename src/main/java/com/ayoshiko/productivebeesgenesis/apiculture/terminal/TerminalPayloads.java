@@ -16,7 +16,7 @@ import net.neoforged.neoforge.network.registration.HandlerThread;
 public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-		var registrar = event.registrar("1").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("2").executesOn(HandlerThread.MAIN);
 		registrar.playToServer(TerminalRequest.TYPE, TerminalRequest.STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player) {
 				var reply = handle(player, request);

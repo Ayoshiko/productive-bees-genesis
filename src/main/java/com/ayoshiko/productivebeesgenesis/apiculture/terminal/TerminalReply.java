@@ -43,11 +43,12 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 		var rows = new ArrayList<TerminalView.Row>(size);
 		for (int i = 0; i < size; i++) {
 			String label = b.readUtf(TerminalView.TEXT_LIMIT); boolean fluid = b.readBoolean();
+			String detail = b.readUtf(TerminalView.TEXT_LIMIT);
 			String owned = b.readUtf(TerminalView.AMOUNT_LIMIT), available = b.readUtf(TerminalView.AMOUNT_LIMIT); boolean exact = b.readBoolean();
 			int count = boundedSize(b, 3); var bees = new ArrayList<TerminalView.Bee>(count);
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
-			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees));
+			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail));
 		}
 		return new TerminalView(kind, generation, next, rows);
 	}
@@ -58,6 +59,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 		b.writeEnum(view.kind()); b.writeLong(view.generation()); b.writeBoolean(view.hasNext()); b.writeByte(view.rows().size());
 		for (var row : view.rows()) {
 			b.writeUtf(row.label(), TerminalView.TEXT_LIMIT); b.writeBoolean(row.fluid());
+			b.writeUtf(row.detail(), TerminalView.TEXT_LIMIT);
 			b.writeUtf(row.owned(), TerminalView.AMOUNT_LIMIT); b.writeUtf(row.available(), TerminalView.AMOUNT_LIMIT);
 			b.writeBoolean(row.exact()); b.writeByte(row.bees().size());
 			for (var bee : row.bees()) {

@@ -12,9 +12,12 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 			if (slot < 0 || slot >= 3 || progress < 0 || cycleTicks < 0) throw new IllegalArgumentException("Invalid bee display");
 		}
 	}
-	public record Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees) {
+	public record Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees, String detail) {
+		public Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees) {
+			this(label, fluid, owned, available, exact, bees, "");
+		}
 		public Row {
-			text(label, TEXT_LIMIT); text(owned, AMOUNT_LIMIT); text(available, AMOUNT_LIMIT); bees = List.copyOf(bees);
+			text(label, TEXT_LIMIT); text(owned, AMOUNT_LIMIT); text(available, AMOUNT_LIMIT); text(detail, TEXT_LIMIT); bees = List.copyOf(bees);
 			if (bees.size() > 3) throw new IllegalArgumentException("Too many displayed bee slots");
 		}
 	}
