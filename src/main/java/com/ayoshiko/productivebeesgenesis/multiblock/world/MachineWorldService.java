@@ -14,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.state.BlockState;
 
 /** 一个全服队列；每次 step 至多推进一个扫描格，唯一调度入口为 NetworkTickService。 */
 public final class MachineWorldService {
@@ -22,12 +23,30 @@ public final class MachineWorldService {
 		final Set<MachineControllerEntity> watched = ConcurrentHashMap.newKeySet(), queued = ConcurrentHashMap.newKeySet();
 		final ArrayDeque<MachineControllerEntity> waiting = new ArrayDeque<>(), audit = new ArrayDeque<>();
 		final Map<MachineControllerEntity, StructureScan> scans = new ConcurrentHashMap<>();
+		boolean auditTurn;
 	}
 	private static final Map<MinecraftServer, Session> SESSIONS = new ConcurrentHashMap<>();
+	public static boolean watches(Level world) {
+		if (!(world instanceof ServerLevel level) || !level.getServer().isSameThread()) return false;
+		var session = SESSIONS.get(level.getServer());
+		var directory = session == null ? null : session.directories.get(level);
+		return directory != null && directory.size() != 0;
+	}
+	public static void blockChanged(Level world, BlockPos pos, BlockState before, BlockState after) {
+		if (before == after || before.getBlock() == after.getBlock()
+				&& (!before.hasProperty(MachinePartBlock.FACING) || before.getValue(MachinePartBlock.FACING) == after.getValue(MachinePartBlock.FACING))) return;
+		changed(world, pos);
+	}
 	public static boolean active(Level level, MachineDirectory.Binding binding) {
 		if (!(level instanceof ServerLevel server) || !server.getServer().isSameThread()) return false;
 		var session = SESSIONS.get(server.getServer()); var directory = session == null ? null : session.directories.get(server);
-		return directory != null && directory.active(binding);
+		if (directory == null || !directory.active(binding)) return false;
+		// FULL 票据可能先降级，实际 Unload 事件因邻区依赖滞后；访问本身也必须关门。
+		for (var chunk : binding.handle().chunks()) if (!server.hasChunk(chunk.x, chunk.z)) {
+			invalidateHandle(session, server, binding.handle(), MachineDirectory.State.SUSPENDED);
+			return false;
+		}
+		return true;
 	}
 	public static int tracked(MinecraftServer server) { var session = SESSIONS.get(server); return session == null ? 0 : session.watched.size(); }
 	public static void watch(MachineControllerEntity core) {
@@ -82,15 +101,17 @@ public final class MachineWorldService {
 	public static boolean step(MinecraftServer server) {
 		if (!server.isSameThread()) throw new IllegalStateException("Advance machine validation on the server thread");
 		var session = SESSIONS.get(server); if (session == null) return false;
-		var core = session.waiting.pollFirst();
-		if (core == null) {
-			core = session.audit.pollFirst(); if (core == null) return false;
+		// 审计与扫描交替消费工作单位；持续排队不能饿死低频补漏。
+		if (session.waiting.isEmpty() || (session.auditTurn = !session.auditTurn)) {
+			var core = session.audit.pollFirst(); if (core == null) return false;
 			session.audit.addLast(core);
-			if (server.getTickCount() - core.auditedAt >= 200 && core.status() != MachineDirectory.State.RECOVERY) {
+			if (server.getTickCount() - core.auditedAt >= 200 && !session.queued.contains(core)
+					&& !session.scans.containsKey(core) && core.status() != MachineDirectory.State.RECOVERY) {
 				core.auditedAt = server.getTickCount(); invalidate(session, core, MachineDirectory.State.REBUILDING); return true;
 			}
-			return false;
+			return !session.waiting.isEmpty();
 		}
+		var core = session.waiting.pollFirst();
 		session.queued.remove(core);
 		if (!(core.getLevel() instanceof ServerLevel level) || core.isRemoved() || core.handle == null
 				|| !level.hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || level.getBlockEntity(core.getBlockPos()) != core) { remove(core); return true; }

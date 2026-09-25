@@ -4,6 +4,7 @@
   "plugin": "com.ayoshiko.productivebeesgenesis.mixin.MixinConfigPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "multiblock.StructureMutationMixin",
     "mek.ManagedMemberTickMixin",
     "mek.ManagedProxyHandlerMixin",
     "mek.ManagedItemProxyMixin",

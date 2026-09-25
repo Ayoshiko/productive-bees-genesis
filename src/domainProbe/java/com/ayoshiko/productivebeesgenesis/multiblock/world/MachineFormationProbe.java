@@ -30,7 +30,7 @@ public final class MachineFormationProbe {
 	private static long longest;
 	private static MachineDirectory.Binding oldBinding;
 	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
-		if (!Boolean.getBoolean("pbg.multiblock.enabled") || phase == 99) return;
+		if (!Boolean.getBoolean("pbg.multiblock.enabled") || System.getProperty("pbg.multiblock.mode") != null || phase == 99) return;
 		var server = event.getServer(); var level = server.overworld();
 		if (server.getTickCount() < 40) return;
 		try {
@@ -136,7 +136,7 @@ public final class MachineFormationProbe {
 		write(); event.getServer().halt(false);
 	}
 	@SubscribeEvent public static void stopped(ServerStoppedEvent event) {
-		if (Boolean.getBoolean("pbg.multiblock.enabled")) { report.addProperty("normalShutdown", true); write(); }
+		if (Boolean.getBoolean("pbg.multiblock.enabled") && System.getProperty("pbg.multiblock.mode") == null) { report.addProperty("normalShutdown", true); write(); }
 	}
 	private static void write() {
 		try { Files.createDirectories(Path.of("results")); Files.writeString(Path.of("results/multiblock.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }

@@ -15,12 +15,16 @@ if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network pr
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
+def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
+if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
 def probeEula = file('run/eula.txt')
 def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
         ? file(providers.gradleProperty('networkProbeSeedWorld').get()) : null
 if (automaticMode == 'read' && seedWorld == null) throw new GradleException('Automatic restart requires its saved fixture world')
+if (multiblockMode == 'read' && seedWorld == null) throw new GradleException('Machine restart reader requires saved writer world')
+if (multiblockMode == 'write' && seedWorld != null) throw new GradleException('Machine restart writer requires fresh world')
 if (automaticMode == 'write' && seedWorld != null) throw new GradleException('Automatic writer requires a fresh world')
 if (automaticMode != null && (coldProbe || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode'].any { providers.gradleProperty(it).isPresent() })) {
     throw new GradleException('Automatic restart cannot be combined with another probe mode')
@@ -41,8 +45,16 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
+            if (multiblockMode == 'read') {
+                File writerReport = new File(sourceWorld.parentFile, 'results/multiblock.json')
+                if (!writerReport.isFile()) throw new GradleException('Missing machine writer report')
+                def writer = new groovy.json.JsonSlurper().parse(writerReport)
+                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) {
+                    throw new GradleException('Machine reader requires successfully stopped matching writer')
+                }
+            }
             if (automaticMode == 'read') {
                 File writerReport = new File(sourceWorld.parentFile, 'results/domain.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing automatic writer shutdown report')
@@ -89,6 +101,7 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.multiblock.enabled', 'true'
+            if (multiblockMode != null) systemProperty 'pbg.multiblock.mode', multiblockMode
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
         }
@@ -147,9 +160,17 @@ tasks.named('runNetworkMultiblockServer') {
         def required = ['threeSizesFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
                         'wrongRoleAndFacingRejectedAndRepaired', 'adjacentStructuresRemainIndependent',
                         'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected']
+        if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
+                'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
+                'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup']
+        if (multiblockMode in ['write', 'read']) {
+            required = ['identityOwnerAndGenerationRetained', 'formalQueueReformedAndPartsBound', 'malformedIdentityRemainsIsolated', 'singleRegisteredController']
+            if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm']
+        }
         if (result.passed != true || result.normalShutdown != true || required.any { result[it] != true }
                 || result.ae2Loaded != probeAe2
-                || !(result.maxStructureSteps instanceof Number) || result.maxStructureSteps < 1 || result.maxStructureSteps > 32) {
+                || (multiblockMode != null && result.mode != multiblockMode)
+                || (!(multiblockMode in ['write', 'read']) && (!(result.maxStructureSteps instanceof Number) || result.maxStructureSteps < 1 || result.maxStructureSteps > 32))) {
             throw new GradleException('Multiblock assertions failed or incomplete')
         }
     }

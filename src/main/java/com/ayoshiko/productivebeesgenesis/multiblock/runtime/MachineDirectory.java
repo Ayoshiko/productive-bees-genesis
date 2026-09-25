@@ -51,6 +51,7 @@ public final class MachineDirectory {
 		public Direction facing() { return facing; }
 		public State state() { return state; }
 		public MachineRegion candidates() { return candidates; }
+		public Set<ChunkPos> chunks() { return chunks; }
 		public StructureScanStamp stamp() { return new StructureScanStamp(id, generation, epoch, definition.id(), definition.layoutVersion()); }
 		public Optional<Binding> binding() { return Optional.ofNullable(binding); }
 		public Optional<RuntimeException> failure() { return Optional.ofNullable(failure); }
