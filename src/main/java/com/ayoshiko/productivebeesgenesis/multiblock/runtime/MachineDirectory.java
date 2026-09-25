@@ -67,6 +67,7 @@ public final class MachineDirectory {
 	public int size() { checkThread(); return controllers.size(); }
 	public int indexedSections() { checkThread(); return sections.size(); }
 	public int indexedChunks() { checkThread(); return chunks.size(); }
+	public List<Handle> sameIdentity(Handle handle) { checkThread(); var entries = identities.get(handle.id); return entries == null ? List.of() : List.copyOf(entries); }
 	public boolean current(Handle handle) { checkThread(); return handle != null && controllers.get(handle.controller) == handle && handle.state != State.REMOVED; }
 	public boolean active(Binding binding) {
 		return binding != null && current(binding.handle) && binding.handle.state == State.FORMED && binding.handle.binding == binding;

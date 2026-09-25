@@ -16,11 +16,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /** 唯一网络后台调度入口；世界保存和正常停服的耐久等待不属于可延期工作。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class NetworkTickService {
-	public enum Service { PERSISTENCE, TOPOLOGY, OWNERSHIP, PRODUCTION }
+	public enum Service { PERSISTENCE, TOPOLOGY, OWNERSHIP, PRODUCTION, STRUCTURES }
 	private static final class Session {
-		final FairServiceBudget budget = new FairServiceBudget(4);
-		final int[] limits = new int[4];
-		final long[] times = new long[4];
+		final FairServiceBudget budget = new FairServiceBudget(Service.values().length);
+		final int[] limits = new int[Service.values().length];
+		final long[] times = new long[Service.values().length];
 	}
 	private static final Map<MinecraftServer, Session> SESSIONS = new ConcurrentHashMap<>();
 	@SubscribeEvent(priority = EventPriority.LOWEST) public static void tick(ServerTickEvent.Post event) {
@@ -29,12 +29,14 @@ public final class NetworkTickService {
 		session.limits[0] = 32; session.limits[1] = config.topologyNodes.get(); session.limits[2] = 4; session.limits[3] = config.runtimeSteps.get();
 		session.times[0] = 2_000_000; session.times[1] = config.topologyMicros.get() * 1000L;
 		session.times[2] = 2_000_000; session.times[3] = config.runtimeMicros.get() * 1000L;
+		session.limits[4] = 32; session.times[4] = 500_000;
 		session.budget.run(server.getTickCount(), config.totalSteps.get(), config.totalMicros.get() * 1000L, session.limits, session.times,
 				service -> switch (service) {
 					case 0 -> NetworkPersistence.step(server);
 					case 1 -> NetworkTopologyService.step(server);
 					case 2 -> NetworkOwnershipService.step(server);
 					case 3 -> NetworkRuntimeService.step(server);
+					case 4 -> com.ayoshiko.productivebeesgenesis.multiblock.world.MachineWorldService.step(server);
 					default -> throw new IllegalArgumentException("Unknown network service");
 				});
 	}

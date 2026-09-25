@@ -14,6 +14,7 @@ def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
 if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
+def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
 def probeEula = file('run/eula.txt')
@@ -25,7 +26,7 @@ if (automaticMode != null && (coldProbe || ['networkOwnershipMode', 'networkCent
     throw new GradleException('Automatic restart cannot be combined with another probe mode')
 }
 def probeDependencies = [file('run/mods/igleelib-1.21.1-1.2.7.jar')]
-if (providers.gradleProperty('networkProbeAe2').isPresent()) {
+if (probeAe2) {
     probeDependencies.addAll(['appliedenergistics2-1.21.1-19.2.17.jar', 'AppliedFlux-1.21-2.1.5-neoforge.jar'].collect { file('libs/' + it) })
     probeDependencies.addAll(['guideme-21.1.16.jar', 'Glodium-1.21-2.2-neoforge.jar'].collect { file('run/mods/' + it) })
 }
@@ -82,6 +83,15 @@ neoForge {
     addModdingDependenciesTo sourceSets.domainProbe
     mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
     runs {
+        networkMultiblockServer {
+            server()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.multiblock.enabled', 'true'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
         networkDomainClient {
             client()
             sourceSet = sourceSets.domainProbe
@@ -129,6 +139,22 @@ neoForge {
         }
     }
 }
+tasks.named('runNetworkMultiblockServer') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/multiblock.json')
+        if (!report.isFile()) throw new GradleException('Missing multiblock report')
+        def result = new groovy.json.JsonSlurper().parse(report)
+        def required = ['threeSizesFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
+                        'wrongRoleAndFacingRejectedAndRepaired', 'adjacentStructuresRemainIndependent',
+                        'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected']
+        if (result.passed != true || result.normalShutdown != true || required.any { result[it] != true }
+                || result.ae2Loaded != probeAe2
+                || !(result.maxStructureSteps instanceof Number) || result.maxStructureSteps < 1 || result.maxStructureSteps > 32) {
+            throw new GradleException('Multiblock assertions failed or incomplete')
+        }
+    }
+}
+
 tasks.named('runNetworkDomainClient') {
     doLast {
         File report = new File(probeDirectory.get().asFile, 'results/client.json')

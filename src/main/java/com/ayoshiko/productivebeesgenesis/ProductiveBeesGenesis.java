@@ -138,6 +138,7 @@ public final class ProductiveBeesGenesis {
 		ModStats.register(eventBus);
 		ModMenuTypes.register(eventBus);
 		com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.register(eventBus);
+		com.ayoshiko.productivebeesgenesis.multiblock.world.MachineContent.register(eventBus);
 	}
 
 	/**

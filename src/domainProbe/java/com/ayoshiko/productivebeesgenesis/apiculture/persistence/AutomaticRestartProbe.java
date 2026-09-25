@@ -26,7 +26,7 @@ public final class AutomaticRestartProbe {
 	private static long producerPid;
 	private static com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreBlockEntity unbound;
 	private static int maxChecks, observedTicks;
-	private static final long[] checks = new long[4], longestStepNanos = new long[4];
+	private static final long[] checks = new long[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length], longestStepNanos = new long[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length];
 	public static void start(MinecraftServer server) throws Exception {
 		reading = "read".equals(System.getProperty("pbg.automatic.mode")); started = server.getTickCount();
 		ModConfig.SERVER.beeNetwork.enabled.set(!reading); ModConfig.SERVER.beeNetwork.maintenanceFe.set(MAINTENANCE);

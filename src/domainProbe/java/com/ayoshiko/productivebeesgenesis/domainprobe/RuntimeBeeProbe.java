@@ -45,8 +45,8 @@ final class RuntimeBeeProbe {
 	}
 	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(72, 150, 4))};
 	private static int phase, started, until, previousBudget, previousTotalBudget;
-	private static final int[] serviceChecks = new int[4];
-	private static final long[] longestStep = new long[4];
+	private static final int[] serviceChecks = new int[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length];
+	private static final long[] longestStep = new long[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length];
 	private static long previousWork, savesBeforePaidWork;
 	private static final long MAINTENANCE = 7;
 	private static long previousMaintenance;
@@ -73,7 +73,7 @@ final class RuntimeBeeProbe {
 		var budget = com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.budget(server);
 		if (phase > 0 && server.getTickCount() > started && budget != null) {
 			require(budget.attempts() <= 1, "Subsystems overspent the total one-step budget");
-			for (int i = 0; i < 4; i++) {
+			for (int i = 0; i < com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length; i++) {
 				serviceChecks[i] += budget.used(i); longestStep[i] = Math.max(longestStep[i], budget.longestStepNanos(i));
 			}
 		}
@@ -172,7 +172,7 @@ final class RuntimeBeeProbe {
 			ModConfig.SERVER.beeNetwork.runtimeSteps.set(previousBudget); ModConfig.SERVER.beeNetwork.totalSteps.set(previousTotalBudget); phase = 11;
 			ModConfig.SERVER.beeNetwork.maintenanceFe.set(previousMaintenance);
 			report.addProperty("runtimeBeeMaintenanceExactAndPaidSettlementFree", true);
-			for (int i = 0; i < 4; i++) {
+			for (int i = 0; i < com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length; i++) {
 				require(serviceChecks[i] > 0, "A service was starved"); report.addProperty("sharedBudgetServiceChecks" + i, serviceChecks[i]);
 				report.addProperty("sharedBudgetLongestStepNanos" + i, longestStep[i]);
 			}

@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "productivebeesgenesis:block/combined_apiary_output_port",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "productivebeesgenesis:block/combined_apiary_output_port",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "productivebeesgenesis:block/combined_apiary_output_port",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "productivebeesgenesis:block/combined_apiary_output_port",
+      "y": 270
+    }
+  }
+}
