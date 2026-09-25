@@ -29,6 +29,8 @@ public final class MachineFormationProbe {
 	private static int phase, started, maxSteps;
 	private static long longest;
 	private static MachineDirectory.Binding oldBinding;
+	private static List<MachineDirectory.Binding> stableBindings;
+	private static int stableSince;
 	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.multiblock.enabled") || System.getProperty("pbg.multiblock.mode") != null || phase == 99) return;
 		var server = event.getServer(); var level = server.overworld();
@@ -68,9 +70,21 @@ public final class MachineFormationProbe {
 					check(crossThreadRejected && activeCore.formed(), "Off-thread request changed the machine");
 					report.addProperty("crossThreadRequestRejected", true);
 					report.addProperty("threeSizesFourDirectionsAndParts", true);
+					stableBindings = fixtures.stream().map(f -> f.core().handle.binding().orElseThrow()).toList();
+					stableSince = server.getTickCount(); phase = 20;
+				}
+				case 20 -> {
+					for (int i = 0; i < fixtures.size(); i++) {
+						var core = fixtures.get(i).core();
+						check(core.formed() && core.handle.binding().orElse(null) == stableBindings.get(i)
+								&& core.getBlockState().getValue(MachinePartBlock.FORMED), "Read-only audit interrupted an intact machine");
+					}
+					if (server.getTickCount() - stableSince < 500) return;
+					check(fixtures.stream().allMatch(f -> f.core().auditedAt > stableSince), "Stable audit never progressed");
+					report.addProperty("readOnlyAuditsKeepAllTwelveBindingsFor500Ticks", true); stableBindings = null;
 					var f = fixtures.getFirst(); oldBinding = f.core().handle.binding().orElseThrow();
 					level.removeBlock(f.world(BlockPos.ZERO), false);
-					check(!f.core().formed() && !MachineWorldService.active(level, oldBinding), "Removal left a live binding"); phase++;
+					check(!f.core().formed() && !MachineWorldService.active(level, oldBinding), "Removal left a live binding"); phase = 2;
 				}
 				case 2 -> {
 					var f = fixtures.getFirst(); if (f.core().status() != MachineDirectory.State.UNFORMED) return;

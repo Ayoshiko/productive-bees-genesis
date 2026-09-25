@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
 import com.ayoshiko.productivebeesgenesis.multiblock.definition.CombinedApiaryDefinition;
+import com.ayoshiko.productivebeesgenesis.multiblock.definition.StructureDefinition;
 import com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory;
 import com.ayoshiko.productivebeesgenesis.multiblock.validation.StructureScan;
 import com.mojang.logging.LogUtils;
@@ -18,11 +19,14 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** 一个全服队列；每次 step 至多推进一个扫描格，唯一调度入口为 NetworkTickService。 */
 public final class MachineWorldService {
+	private record ScanJob(StructureScan scan, MachineDirectory.Binding auditing) {
+		void cancel() { scan.cancel(); }
+	}
 	private static final class Session {
 		final Map<ServerLevel, MachineDirectory> directories = new ConcurrentHashMap<>();
 		final Set<MachineControllerEntity> watched = ConcurrentHashMap.newKeySet(), queued = ConcurrentHashMap.newKeySet();
 		final ArrayDeque<MachineControllerEntity> waiting = new ArrayDeque<>(), audit = new ArrayDeque<>();
-		final Map<MachineControllerEntity, StructureScan> scans = new ConcurrentHashMap<>();
+		final Map<MachineControllerEntity, ScanJob> scans = new ConcurrentHashMap<>();
 		boolean auditTurn;
 	}
 	private static final Map<MinecraftServer, Session> SESSIONS = new ConcurrentHashMap<>();
@@ -107,7 +111,7 @@ public final class MachineWorldService {
 			session.audit.addLast(core);
 			if (server.getTickCount() - core.auditedAt >= 200 && !session.queued.contains(core)
 					&& !session.scans.containsKey(core) && core.status() != MachineDirectory.State.RECOVERY) {
-				core.auditedAt = server.getTickCount(); invalidate(session, core, MachineDirectory.State.REBUILDING); return true;
+				core.auditedAt = server.getTickCount(); beginAudit(session, core); return true;
 			}
 			return !session.waiting.isEmpty();
 		}
@@ -118,15 +122,24 @@ public final class MachineWorldService {
 		if (core.handle.facing() != core.getBlockState().getValue(MachinePartBlock.FACING)) { remove(core); watch(core); return true; }
 		var directory = session.directories.get(level);
 		try {
-			var scan = session.scans.get(core);
-			if (scan == null) {
+			var job = session.scans.get(core);
+			if (job == null) {
 				if (!directory.beginValidation(core.handle)) return true;
-				scan = new StructureScan(CombinedApiaryDefinition.DEFINITION, core.handle.stamp(), core.getBlockPos(), core.handle.facing()); session.scans.put(core, scan);
+				job = new ScanJob(new StructureScan(CombinedApiaryDefinition.DEFINITION, core.handle.stamp(), core.getBlockPos(), core.handle.facing()), null);
+				session.scans.put(core, job);
 			}
+			var scan = job.scan();
 			var step = scan.advance(1, new StructureWorldAccess(level, core.handle));
 			if (step.status() == StructureScan.Status.SCANNING) { enqueue(session, core); return true; }
 			session.scans.remove(core); core.auditedAt = server.getTickCount();
-			if (step.status() == StructureScan.Status.MATCHED) {
+			if (job.auditing() != null) {
+				// 只读复核不能重发绑定，也不能让一个过期作业复活旧资格。
+				if (step.status() != StructureScan.Status.MATCHED || !directory.active(job.auditing())
+						|| scan.readyMatch(core.handle.stamp()).isEmpty()) {
+					invalidate(session, core, step.status() == StructureScan.Status.FAILED ? MachineDirectory.State.RECOVERY
+							: step.status() == StructureScan.Status.SUSPENDED ? MachineDirectory.State.SUSPENDED : MachineDirectory.State.REBUILDING);
+				}
+			} else if (step.status() == StructureScan.Status.MATCHED) {
 				var match = scan.readyMatch(core.handle.stamp()).orElseThrow(); var controller = core;
 				directory.form(core.handle, match, binding -> bindParts(level, controller, match, binding));
 				var affected = ConcurrentHashMap.<MachineDirectory.Handle>newKeySet();
@@ -148,6 +161,23 @@ public final class MachineWorldService {
 			LogUtils.getLogger().warn("Machine validation failed at {}", core.getBlockPos(), failure);
 		}
 		return true;
+	}
+	private static void beginAudit(Session session, MachineControllerEntity core) {
+		try {
+			var binding = core.handle.binding().orElse(null);
+			if (binding == null || !active(core.getLevel(), binding)) {
+				invalidate(session, core, MachineDirectory.State.REBUILDING); return;
+			}
+			var definition = CombinedApiaryDefinition.DEFINITION;
+			var template = definition.candidates().stream().filter(candidate -> candidate.variant().equals(binding.variant())).findFirst().orElseThrow();
+			// 已形成的唯一模板逐格复核；事件失效或审计失败后才重新遍历全部候选。
+			var scan = new StructureScan(new StructureDefinition(definition.id(), definition.layoutVersion(), List.of(template)),
+					binding.stamp(), core.getBlockPos(), core.handle.facing());
+			session.scans.put(core, new ScanJob(scan, binding)); enqueue(session, core);
+		} catch (RuntimeException failure) {
+			invalidate(session, core, MachineDirectory.State.RECOVERY);
+			LogUtils.getLogger().warn("Cannot start machine audit at {}", core.getBlockPos(), failure);
+		}
 	}
 	private static void bindParts(ServerLevel level, MachineControllerEntity core, StructureScan.Match match, MachineDirectory.Binding binding) {
 		var transform = match.template().geometry().at(core.getBlockPos(), match.facing());

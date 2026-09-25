@@ -159,7 +159,8 @@ tasks.named('runNetworkMultiblockServer') {
         def result = new groovy.json.JsonSlurper().parse(report)
         def required = ['threeSizesFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
                         'wrongRoleAndFacingRejectedAndRepaired', 'adjacentStructuresRemainIndependent',
-                        'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected']
+                        'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected',
+                        'readOnlyAuditsKeepAllTwelveBindingsFor500Ticks']
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
                 'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup']
