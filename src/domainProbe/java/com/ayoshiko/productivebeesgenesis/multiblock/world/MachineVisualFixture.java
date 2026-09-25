@@ -28,6 +28,8 @@ public final class MachineVisualFixture {
 	public static volatile String failure;
 	private static CompoundTag secondOriginal;
 	private static int normalBudget;
+	private static int fixtureTicks;
+	private static boolean initialViewReady;
 	public static void request(int command) {
 		if (!requested.compareAndSet(-1, command)) throw new IllegalStateException("Visual command still pending");
 	}
@@ -41,11 +43,39 @@ public final class MachineVisualFixture {
 				level.setDayTime(6000); level.setWeatherParameters(0, 12000, false, false);
 				level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
 				for (int i=0; i<4; i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(i%3), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
-				player.setGameMode(GameType.SPECTATOR); player.setNoGravity(true); camera(player, 0); done = 0;
+				for (var fixture : fixtures) {
+					var size = fixture.template().geometry().size();
+					for (long i=0; i<size.volume(); i++) {
+						var local = size.positionAt(i);
+						if (local.getY() == 3 && fixture.template().cellAt(local).roles().contains(StructureRole.GLASS)) {
+							level.setBlockAndUpdate(fixture.world(local), MachineContent.block(StructureRole.GLASS).defaultBlockState());
+						}
+					}
+				}
+				player.setGameMode(GameType.SPECTATOR); player.setNoGravity(true);
+				player.connection.teleport(1024.5, 140, 1024.5, 0, 0);
+				return;
+			}
+			if (++fixtureTicks == 100) {
+				for (int i=0; i<fixtures.size(); i++) {
+					var fixture = fixtures.get(i);
+					var transform = fixture.template().geometry().at(fixture.pos(), fixture.facing());
+					for (var prop : com.ayoshiko.productivebeesgenesis.multiblock.visual.CombinedApiaryScene.props(i%3)) {
+						var lightPos = BlockPos.containing(transform.toWorldPoint(prop.center()));
+						com.mojang.logging.LogUtils.getLogger().info("SCENE_SERVER_LIGHT {} {} sky={} lightWork={}",
+								lightPos, prop.kind(), level.getBrightness(net.minecraft.world.level.LightLayer.SKY, lightPos), level.getLightEngine().hasLightWork());
+					}
+				}
+			}
+			if (!initialViewReady) {
+				if (fixtureTicks < 120 || level.getLightEngine().hasLightWork()
+						|| fixtures.stream().anyMatch(fixture -> !fixture.core().formed())) return;
+				initialViewReady = true; camera(player, 0); done = 0;
 				return;
 			}
 			int command = requested.getAndSet(-1); if (command < 0) return;
 			if (command < 4) camera(player, command);
+			else if (command >= 20 && command <= 23) oblique(player, command - 20);
 			else switch (command) {
 				case 10 -> level.removeBlock(fixtures.getFirst().world(BlockPos.ZERO), false);
 				case 11 -> {
@@ -70,6 +100,16 @@ public final class MachineVisualFixture {
 	private static void camera(ServerPlayer player, int index) {
 		var pos = POSITIONS.get(index); var facing = FACINGS.get(index);
 		player.connection.teleport(pos.getX()+0.5+facing.getStepX()*9, pos.getY()+0.1, pos.getZ()+0.5+facing.getStepZ()*9, facing.toYRot()+180, 4);
+	}
+	private static void oblique(ServerPlayer player, int index) {
+		var fixture = fixtures.get(index); var geometry = fixture.template().geometry();
+		var transform = geometry.at(fixture.pos(), fixture.facing());
+		var eye = transform.toWorldPoint(new net.minecraft.world.phys.Vec3(10, 5.5, -6));
+		var target = transform.toWorldPoint(geometry.coreCenter().add(0, 0.25, 0));
+		var delta = target.subtract(eye);
+		float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+		float pitch = (float) -Math.toDegrees(Math.atan2(delta.y, Math.hypot(delta.x, delta.z)));
+		player.connection.teleport(eye.x, eye.y - player.getEyeHeight(), eye.z, yaw, pitch);
 	}
 	@SubscribeEvent public static void stopped(ServerStoppedEvent event) {
 		if (Boolean.getBoolean("pbg.machineClient.enabled")) { fixtures.clear(); secondOriginal = null; requested.set(-1); done = -1; }

@@ -48,6 +48,7 @@ public final class MachineVisualClientProbe {
 	private static CompletableFuture<Void> reload;
 	private static com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualSnapshot originalFrame;
 	private static MachineControllerEntity departed;
+	private static Object originalRenderer;
 	@SubscribeEvent public static void tick(ClientTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.machineClient.enabled") || advancing || finished) return;
 		var client = Minecraft.getInstance(); advancing = true;
@@ -82,6 +83,8 @@ public final class MachineVisualClientProbe {
 					capture(client, "ready-" + MachineVisualFixture.FACINGS.get(direction).getName());
 					if (++direction < 4) { MachineVisualFixture.request(direction); return; }
 					validateModels(client); report.addProperty("fourDirectionsAndInitialChunkStates", true);
+					MachineSceneClientChecks.ready(client); originalRenderer = MachineSceneClientChecks.renderer(client);
+					report.addProperty("sceneVerticesMatchAirAnchorsAndFiniteBounds", true);
 					report.addProperty("versionedFramesForThreeLayoutsWithoutAuthority", true);
 					originalFrame = ((MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst())).visualSnapshot().orElseThrow();
 					CreativeModeTabs.tryRebuildTabContents(client.level.enabledFeatures(), true, client.level.registryAccess());
@@ -93,6 +96,7 @@ public final class MachineVisualClientProbe {
 				case 3 -> {
 					if (!waitFor(state(client, 0) == MachineVisualState.UNFORMED)) return;
 					capture(client, "unformed"); report.addProperty("unformedUpdate", true);
+					MachineSceneClientChecks.hidden(client, 0); report.addProperty("inactiveSceneEmitsNoVertices", true);
 					MachineVisualFixture.request(11); step = 4;
 				}
 				case 4 -> {
@@ -108,6 +112,7 @@ public final class MachineVisualClientProbe {
 				case 6 -> {
 					if (!waitFor(state(client, 0) == MachineVisualState.FAULT && state(client, 1) == MachineVisualState.FAULT)) return;
 					capture(client, "fault"); report.addProperty("duplicateFaultUpdate", true);
+					MachineSceneClientChecks.hidden(client, 0); MachineSceneClientChecks.hidden(client, 1);
 					MachineVisualFixture.request(14); step = 7;
 				}
 				case 7 -> {
@@ -123,6 +128,9 @@ public final class MachineVisualClientProbe {
 				case 8 -> {
 					if (!reload.isDone() || !waitFor(allReady(client))) return;
 					reload.join(); validateModels(client); capture(client, "resource-reloaded");
+					MachineSceneClientChecks.ready(client);
+					check(MachineSceneClientChecks.renderer(client) != originalRenderer, "Resource reload reused scene models");
+					originalRenderer = null; report.addProperty("sceneResourcesRebuiltAfterReload", true);
 					report.addProperty("resourceReloadKeepsModelsAndStates", true);
 					departed = (MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst());
 					MachineVisualFixture.request(15); step = 9;
@@ -138,7 +146,14 @@ public final class MachineVisualClientProbe {
 					if (!waitFor(allReady(client) && MachineVisualFixture.done == 16)) return;
 					check(client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst()) != departed, "Retracking reused removed BE");
 					capture(client, "retracked"); report.addProperty("unloadAndRetrackingRestoreFullFrame", true);
-					departed = null; originalFrame = null; finish(client, null);
+					MachineSceneClientChecks.ready(client); departed = null; originalFrame = null;
+					direction = 0; MachineVisualFixture.request(20); step = 11;
+				}
+				case 11 -> {
+					if (!waitFor(allReady(client) && MachineVisualFixture.done == 20 + direction)) return;
+					capture(client, "oblique-" + MachineVisualFixture.FACINGS.get(direction).getName());
+					if (++direction < 4) { MachineVisualFixture.request(20 + direction); return; }
+					report.addProperty("fourObliqueSceneViews", true); finish(client, null);
 				}
 			}
 		} catch (Exception failure) { finish(client, failure); }
@@ -156,7 +171,7 @@ public final class MachineVisualClientProbe {
 		check(frame.variant() == (status == MachineVisualState.READY ? index%3 : -1), "Visual frame layout does not match formed structure");
 		return status;
 	}
-	private static boolean allReady(Minecraft client) { for (int i=0;i<4;i++) if (state(client,i) != MachineVisualState.READY) return false; return true; }
+	private static boolean allReady(Minecraft client) { for (int i=0;i<4;i++) if (state(client,i) != MachineVisualState.READY) return false; return MachineSceneClientChecks.lightingReady(client); }
 	private static boolean waitFor(boolean condition) { if (!condition) { settled=0; return false; } if (++settled < 25) return false; settled=0; return true; }
 	private static void validateModels(Minecraft client) {
 		var random = RandomSource.create(25092026); var missing = client.getModelManager().getMissingModel(); int combinations=0;
