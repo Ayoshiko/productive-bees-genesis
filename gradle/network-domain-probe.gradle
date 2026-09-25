@@ -174,7 +174,7 @@ tasks.named('runNetworkMultiblockServer') {
         def required = ['threeSizesFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
                         'wrongRoleAndFacingRejectedAndRepaired', 'adjacentStructuresRemainIndependent',
                         'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected',
-                        'readOnlyAuditsKeepAllTwelveBindingsFor500Ticks']
+                        'readOnlyAuditsKeepAllTwelveBindingsFor500Ticks', 'boundedVisualFramesRemainStableFor500Ticks']
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
                 'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup',
@@ -197,8 +197,9 @@ tasks.named('runNetworkMultiblockClient') {
         File report = new File(probeDirectory.get().asFile, 'results/machine-client.json')
         if (!report.isFile()) throw new GradleException('Missing machine client report')
         def result = new groovy.json.JsonSlurper().parse(report)
-        def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
+        def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'versionedFramesForThreeLayoutsWithoutAuthority', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
                 'checkingUpdate', 'reformedUpdate', 'duplicateFaultUpdate', 'resourceReloadKeepsModelsAndStates',
+                'oldFrameRejectedAfterRebuild', 'unloadAndRetrackingRestoreFullFrame',
                 'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']
         if (required.any { result[it] != true } || result.ae2Loaded != probeAe2) throw new GradleException('Machine visual checks failed or incomplete')
     }

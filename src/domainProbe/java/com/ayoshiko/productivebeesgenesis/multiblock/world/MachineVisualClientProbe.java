@@ -42,13 +42,22 @@ public final class MachineVisualClientProbe {
 	private static final JsonObject report = new JsonObject();
 	private static int step, settled, direction;
 	private static long started;
+	private static long stepStarted;
+	private static int observedStep = -1;
 	private static boolean advancing, finished;
 	private static CompletableFuture<Void> reload;
+	private static com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualSnapshot originalFrame;
+	private static MachineControllerEntity departed;
 	@SubscribeEvent public static void tick(ClientTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.machineClient.enabled") || advancing || finished) return;
 		var client = Minecraft.getInstance(); advancing = true;
 		try {
 			if (started == 0) started = System.nanoTime();
+			if (observedStep != step) {
+				observedStep = step; stepStarted = System.nanoTime();
+				com.mojang.logging.LogUtils.getLogger().info("MACHINE_VISUAL_STEP {}", step);
+			}
+			check(System.nanoTime()-stepStarted < (step <= 1 ? 90_000_000_000L : 45_000_000_000L), "Visual phase timeout at step " + step);
 			check(!(client.screen instanceof AccessibilityOnboardingScreen), "Unexpected first-run onboarding");
 			check(System.nanoTime()-started < 300_000_000_000L, "Visual client timeout at step " + step);
 			check(MachineVisualFixture.failure == null, MachineVisualFixture.failure);
@@ -73,6 +82,8 @@ public final class MachineVisualClientProbe {
 					capture(client, "ready-" + MachineVisualFixture.FACINGS.get(direction).getName());
 					if (++direction < 4) { MachineVisualFixture.request(direction); return; }
 					validateModels(client); report.addProperty("fourDirectionsAndInitialChunkStates", true);
+					report.addProperty("versionedFramesForThreeLayoutsWithoutAuthority", true);
+					originalFrame = ((MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst())).visualSnapshot().orElseThrow();
 					CreativeModeTabs.tryRebuildTabContents(client.level.enabledFeatures(), true, client.level.registryAccess());
 					check(MachineContent.registeredBlocks().stream().allMatch(block -> ModCreativeTabs.MEK_CENTRIFUGE_TAB.get().contains(new ItemStack(block))), "Structure items missing from creative tab");
 					report.addProperty("allElevenCreativeItems", true);
@@ -101,13 +112,33 @@ public final class MachineVisualClientProbe {
 				}
 				case 7 -> {
 					if (!waitFor(allReady(client))) return;
+					var core = (MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst());
+					var current = core.visualSnapshot().orElseThrow();
+					check(current.revision() > originalFrame.revision(), "Rebuild did not advance visual revision");
+					core.handleUpdateTag(originalFrame.encode(), client.level.registryAccess());
+					check(core.visualSnapshot().orElseThrow().equals(current), "Old frame replaced rebuilt machine view");
+					report.addProperty("oldFrameRejectedAfterRebuild", true);
 					reload = client.reloadResourcePacks(); step = 8;
 				}
 				case 8 -> {
 					if (!reload.isDone() || !waitFor(allReady(client))) return;
 					reload.join(); validateModels(client); capture(client, "resource-reloaded");
 					report.addProperty("resourceReloadKeepsModelsAndStates", true);
-					finish(client, null);
+					departed = (MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst());
+					MachineVisualFixture.request(15); step = 9;
+				}
+				case 9 -> {
+					var position = MachineVisualFixture.POSITIONS.getFirst();
+					if (!waitFor(client.level.getChunkSource().getChunk(position.getX() >> 4, position.getZ() >> 4,
+							net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false) == null)) return;
+					check(departed.visualSnapshot().isEmpty(), "Untracked client BE retained display");
+					MachineVisualFixture.request(16); step = 10;
+				}
+				case 10 -> {
+					if (!waitFor(allReady(client) && MachineVisualFixture.done == 16)) return;
+					check(client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst()) != departed, "Retracking reused removed BE");
+					capture(client, "retracked"); report.addProperty("unloadAndRetrackingRestoreFullFrame", true);
+					departed = null; originalFrame = null; finish(client, null);
 				}
 			}
 		} catch (Exception failure) { finish(client, failure); }
@@ -119,6 +150,10 @@ public final class MachineVisualClientProbe {
 		check(state.getValue(MachinePartBlock.FACING) == MachineVisualFixture.FACINGS.get(index), "Facing did not synchronize");
 		var status = state.getValue(MachineControllerBlock.STATUS);
 		check(state.getValue(MachinePartBlock.FORMED) == (status == MachineVisualState.READY), "Coarse state and formed flag diverged");
+		if (!(client.level.getBlockEntity(MachineVisualFixture.POSITIONS.get(index)) instanceof MachineControllerEntity core)) return null;
+		var frame = core.visualSnapshot().orElse(null); if (frame == null) return null;
+		check(core.ownerId() == null && !core.readyIdentity() && !core.formed(), "Visual sync loaded authoritative identity or binding");
+		check(frame.variant() == (status == MachineVisualState.READY ? index%3 : -1), "Visual frame layout does not match formed structure");
 		return status;
 	}
 	private static boolean allReady(Minecraft client) { for (int i=0;i<4;i++) if (state(client,i) != MachineVisualState.READY) return false; return true; }

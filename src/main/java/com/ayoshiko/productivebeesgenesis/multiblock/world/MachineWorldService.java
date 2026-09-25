@@ -28,8 +28,15 @@ public final class MachineWorldService {
 		final ArrayDeque<MachineControllerEntity> waiting = new ArrayDeque<>(), audit = new ArrayDeque<>();
 		final Map<MachineControllerEntity, ScanJob> scans = new ConcurrentHashMap<>();
 		boolean auditTurn;
+		long visualRevision;
 	}
 	private static final Map<MinecraftServer, Session> SESSIONS = new ConcurrentHashMap<>();
+	static long nextVisualRevision(ServerLevel level) {
+		if (!level.getServer().isSameThread()) throw new IllegalStateException("Publish visuals on the server thread");
+		var session = SESSIONS.computeIfAbsent(level.getServer(), ignored -> new Session());
+		// 耗尽时停止扩展展示，不能让视觉计数溢出破坏结构或业务状态。
+		return session.visualRevision == Long.MAX_VALUE ? 0 : ++session.visualRevision;
+	}
 	public static boolean watches(Level world) {
 		if (!(world instanceof ServerLevel level) || !level.getServer().isSameThread()) return false;
 		var session = SESSIONS.get(level.getServer());

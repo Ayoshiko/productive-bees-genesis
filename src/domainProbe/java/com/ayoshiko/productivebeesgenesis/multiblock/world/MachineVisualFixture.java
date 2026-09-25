@@ -40,7 +40,7 @@ public final class MachineVisualFixture {
 				normalBudget = ModConfig.SERVER.beeNetwork.totalSteps.get();
 				level.setDayTime(6000); level.setWeatherParameters(0, 12000, false, false);
 				level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
-				for (int i=0; i<4; i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().getFirst(), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
+				for (int i=0; i<4; i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(i%3), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
 				player.setGameMode(GameType.SPECTATOR); player.setNoGravity(true); camera(player, 0); done = 0;
 				return;
 			}
@@ -58,6 +58,8 @@ public final class MachineVisualFixture {
 					fixtures.get(1).core().loadWithComponents(fixtures.getFirst().core().saveWithFullMetadata(level.registryAccess()), level.registryAccess());
 				}
 				case 14 -> fixtures.get(1).core().loadWithComponents(secondOriginal, level.registryAccess());
+				case 15 -> player.connection.teleport(1024.5, 140, 1024.5, 0, 0);
+				case 16 -> camera(player, 0);
 				default -> throw new IllegalArgumentException("Unknown visual command");
 			}
 			done = command;

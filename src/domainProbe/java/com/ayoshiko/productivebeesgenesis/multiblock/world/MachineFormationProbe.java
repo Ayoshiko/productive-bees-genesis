@@ -30,6 +30,7 @@ public final class MachineFormationProbe {
 	private static long longest;
 	private static MachineDirectory.Binding oldBinding;
 	private static List<MachineDirectory.Binding> stableBindings;
+	private static List<net.minecraft.nbt.CompoundTag> stableVisuals;
 	private static int stableSince;
 	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.multiblock.enabled") || System.getProperty("pbg.multiblock.mode") != null || phase == 99) return;
@@ -71,17 +72,28 @@ public final class MachineFormationProbe {
 					report.addProperty("crossThreadRequestRejected", true);
 					report.addProperty("threeSizesFourDirectionsAndParts", true);
 					stableBindings = fixtures.stream().map(f -> f.core().handle.binding().orElseThrow()).toList();
+					stableVisuals = fixtures.stream().map(f -> f.core().getUpdateTag(level.registryAccess())).toList();
+					for (int i=0;i<fixtures.size();i++) {
+						var frame = com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualSnapshot.decode(stableVisuals.get(i)).orElseThrow();
+						check(frame.template().orElseThrow().equals(fixtures.get(i).template()) && frame.facing() == fixtures.get(i).facing(), "Published wrong visual geometry");
+						var bytes = new java.io.ByteArrayOutputStream(); net.minecraft.nbt.NbtIo.write(stableVisuals.get(i), new java.io.DataOutputStream(bytes));
+						check(bytes.size() <= 256 && !stableVisuals.get(i).contains("owner"), "Visual tag leaked authority or exceeded byte limit");
+						check(!fixtures.get(i).core().saveWithFullMetadata(level.registryAccess()).contains("revision"), "Transient visual revision was saved");
+					}
 					stableSince = server.getTickCount(); phase = 20;
 				}
 				case 20 -> {
 					for (int i = 0; i < fixtures.size(); i++) {
 						var core = fixtures.get(i).core();
+						core.publishState();
+						check(core.getUpdateTag(level.registryAccess()).equals(stableVisuals.get(i)), "Unchanged machine republished visual state");
 						check(core.formed() && core.handle.binding().orElse(null) == stableBindings.get(i)
 								&& core.getBlockState().getValue(MachinePartBlock.FORMED), "Read-only audit interrupted an intact machine");
 					}
 					if (server.getTickCount() - stableSince < 500) return;
 					check(fixtures.stream().allMatch(f -> f.core().auditedAt > stableSince), "Stable audit never progressed");
 					report.addProperty("readOnlyAuditsKeepAllTwelveBindingsFor500Ticks", true); stableBindings = null;
+					report.addProperty("boundedVisualFramesRemainStableFor500Ticks", true); stableVisuals = null;
 					var f = fixtures.getFirst(); oldBinding = f.core().handle.binding().orElseThrow();
 					level.removeBlock(f.world(BlockPos.ZERO), false);
 					check(!f.core().formed() && !MachineWorldService.active(level, oldBinding), "Removal left a live binding"); phase = 2;

@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M06b1 结构展示帧**：用不超过 256 字节的版本化原生 BE 数据同步三种布局、身份、朝向与结构状态，客户端不接收权威库存和所有者。补齐旧帧拒绝、视距失效与卸载重跟踪检查，并修复自动客户端探针的卸载判断和超时退出；两种依赖客户端、四组专服与 952 项测试（2 项既有跳过）通过。
+
 - **M06a 静态结构状态**：控制器增加五种颜色／形状标志，观察窗使用透明渲染，十一种角色方块加入创造页并标明结构原型。真实客户端验证四向、拆除重建、身份故障恢复、面级亮度与资源重载；复杂的蜜蜂入箱、蜜脾压榨和资源收纳演出已列入设计，尚未实现。
 
 - **M03b–d 世界结构接入**：三尺寸、四方向的一体机使用正式预算扫描形成，缺区块／拆除／身份重放立即撤销资格；区块恢复和正常跨 JVM 重启重新验证。完整结构的只读审计保持原绑定，避免周期性退出形成状态；独立生产与插件仍待 M04。
@@ -115,6 +117,8 @@
 ### English
 
 #### Added
+
+- Added M06b1 versioned structure display frames bounded to 256 NBT bytes, with fixed layouts and no owner or inventory authority. Clients reject old frames and hide untracked instances; retracking restores the full view. Fixed the automated client's unload check and added phase timeouts. Both dependency configurations, four dedicated-server probes and 952 tests (two existing skips) passed.
 
 - Added M06a static structure feedback: five controller glyphs, transparent observation windows, all eleven role blocks in the creative tab, and a prototype tooltip. Real clients verify facing, rebuilds, identity-fault recovery, surface brightness and resource reloads. The bee/hive, comb-squeezing and resource-collection sequence is documented for later implementation.
 
