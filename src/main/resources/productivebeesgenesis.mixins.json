@@ -18,6 +18,8 @@
     "jdte.JdteExtraCentrifugeFactoryCoalescedMixin",
     "jdte.JdteEMExtraCentrifugeFactoryCoalescedMixin",
     "ae2.Ae2ApiaryMixin",
+    "ae2.Ae2PatternProviderTargetMixin",
+    "ae2.Ae2PatternProviderTargetCacheMixin",
     "ae2.Ae2CentrifugeFactoryMixin",
     "ae2.Ae2CentrifugeMixin",
     "ae2.Ae2EMExtraCentrifugeFactoryInputMixin",

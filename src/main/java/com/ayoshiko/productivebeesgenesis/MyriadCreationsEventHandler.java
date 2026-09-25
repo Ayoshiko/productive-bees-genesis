@@ -253,7 +253,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
-			if (stack.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()) {
+			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.honeycomb()) {
 				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 				return isMyriadCreationsBeeType(beeType);
 			}
@@ -272,7 +272,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
-			if (stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.combBlock()) {
 				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 				return isMyriadCreationsBeeType(beeType);
 			}

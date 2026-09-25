@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.Test;
  * Mekanism 全部机器共用的槽位基类上。一旦丢掉作用域限定或丢掉凭据判定，AE2 样板供应器
  * 在输入槽占满后就会把原料塞进输出槽，机器不加工，合成 CPU 永远等不到产物。
  * 这些约束无法在纯 JVM 单测里跑真实槽位，因此以源码断言形式固化。
+ * <p>
+ * 同时限定样板目标的调用预算作用域，禁止每槽工作集限制或裁剪第三方已选定的单批数量。
  */
 class SlotInsertScopeWiringTest {
 
@@ -23,6 +26,8 @@ class SlotInsertScopeWiringTest {
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/MekCentrifugeSlotManager.java";
 	private static final String VANILLA_FACTORY_SLOTS =
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/TileEntityMekCentrifugeFactory.java";
+	private static final String PATTERN_PROVIDER_TARGET =
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CentrifugePatternProviderTarget.java";
 
 	private static String read(String relativePath) throws Exception {
 		return Files.readString(Path.of(relativePath));
@@ -33,6 +38,23 @@ class SlotInsertScopeWiringTest {
 		String source = read(BASIC_SLOT_MIXIN);
 		assertTrue(source.contains("if (!productivebeesgenesis$ownSlot) return;"),
 				"退回保护必须先判定槽位归属，否则会改写原版 Mekanism 机器的外部插入语义");
+	}
+
+	@Test
+	void outputRollbackShortCircuitsForInputSlots() throws Exception {
+		String mixin = read(BASIC_SLOT_MIXIN);
+		// 性能优化：输入槽无需输出槽退回保护，发配插入热路径上应提前短路（省去每次插入的冗余配方校验）；
+		// 短路必须先于 ownSlot 判定与昂贵的 isItemValidForInsertion。
+		int inputGuard = mixin.indexOf("if (productivebeesgenesis$inputSlot) return;");
+		assertTrue(inputGuard > 0, "退回保护应对输入槽提前短路");
+		int externalValidCheck = mixin.indexOf("isItemValidForInsertion(stack, AutomationType.EXTERNAL)");
+		assertTrue(externalValidCheck < 0 || inputGuard < externalValidCheck,
+				"输入槽短路必须排在昂贵的 isItemValidForInsertion(EXTERNAL) 之前");
+		// 输入槽装配点必须显式标记，否则优化不生效（漏标只是少一次优化、不影响正确性）。
+		assertTrue(read(BASIC_CENTRIFUGE_SLOTS).contains("productivebeesgenesis$markInputSlot()"),
+				"基础离心机输入槽应标记为输入槽以启用退回保护短路");
+		assertTrue(read(VANILLA_FACTORY_SLOTS).contains("productivebeesgenesis$markInputSlot()"),
+				"原版等级工厂输入槽应标记为输入槽以启用退回保护短路");
 	}
 
 	@Test
@@ -57,18 +79,29 @@ class SlotInsertScopeWiringTest {
 	}
 
 	@Test
-	void basicCentrifugeLimitsExternalInputDepth() throws Exception {
-		String source = read(BASIC_CENTRIFUGE_SLOTS);
-		assertTrue(source.contains("externalInputPolicy.register(inputSlot)"),
-				"基础离心机输入槽上限是 64 × 配置倍率（BASIC 默认 16384），必须限制外部一次填入的深度");
-		assertTrue(source.contains("productivebeesgenesis$getAccelerationMultiplier()"),
-				"工作集必须随 JDTE 时间加速倍率放大，否则手杖加速下会供料不足");
+	void dispatchGuardIsScopedToOwnTargetAndNeverClipsBatchSize() throws Exception {
+		String source = read(PATTERN_PROVIDER_TARGET);
+		assertTrue(source.contains("storage instanceof CentrifugeExternalAeStorage"));
+		assertTrue(source.contains("return delegate.insert(what, amount, mode);"));
+		assertTrue(source.contains("mode == Actionable.MODULATE && amount > 0"));
+		assertTrue(source.contains("CentrifugeDispatchScope.externalPushOverBudget()"));
+		assertFalse(read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "CentrifugeExternalAeStorage.java").contains("externalPushOverBudget"),
+				"普通存储总线/接口不得消耗样板发配预算");
+		assertTrue(read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
+				+ "Ae2IntegrationLoader.java").contains("CentrifugeDispatchScope.reset()"));
 	}
 
 	@Test
-	void vanillaFactoryKeepsExternalInsertPolicy() throws Exception {
-		String source = read(VANILLA_FACTORY_SLOTS);
-		assertTrue(source.contains("externalInputPolicy.register(inputSlot)"),
-				"原版等级工厂的外部插入配额不得被移除");
+	void machinesDoNotReintroducePerSlotExternalInsertThrottle() throws Exception {
+		// 防回归：工厂/基础离心机绝不能再注册每槽「工作集」节流——那会把 ECO/EAEP/闪电 的大批次
+		// 翻倍截断成小批、退化成逐份滴流，且填不满机器真实容量（超大堆叠）。外部插入放行到真实容量。
+		for (String path : new String[]{VANILLA_FACTORY_SLOTS, BASIC_CENTRIFUGE_SLOTS}) {
+			String source = read(path);
+			assertFalse(source.contains("externalInputPolicy.register"),
+					"不得重新引入每槽工作集节流：" + path);
+			assertFalse(source.contains("recommendedWorkingSet"),
+					"不得重新引入工作集深度估算：" + path);
+		}
 	}
 }

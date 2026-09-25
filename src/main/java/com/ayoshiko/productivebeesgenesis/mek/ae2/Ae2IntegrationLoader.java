@@ -82,6 +82,7 @@ public final class Ae2IntegrationLoader {
 		if (!isAe2Loaded()) return;
 		Ae2NetworkCandidateDirectory.clearAll();
 		Ae2NetworkWorkCoordinator.clearAll();
+		CentrifugeDispatchScope.reset();
 	}
 
 	/**

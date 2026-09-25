@@ -157,15 +157,25 @@ public class FactoryPbContextDelegate {
 	 */
 	private void notifyOutputChanged(int process) {
 		outputContentsVersion.incrementAndGet();
+		markSortingNeeded();
+		// unpause 独立于 sorting 去抖，每进程独立触发
+		if (unpauseCallback != null) {
+			unpauseCallback.unpause(process);
+		}
+	}
+
+	/**
+	 * 去抖标记「需要排序」：同一真实刻内只触发一次 Mekanism 排序，供输出变更与外部样板发配插入共用。
+	 * <br/>
+	 * 样板供应器逐槽发配后调用本方法，让 Mekanism 原生自动均摊把输入摊到所有产线（需机器开启排序），
+	 * 修复过载供应器少次大批次只填几个槽、并行吃不满的问题；去抖确保 AE2 高频插入不会触发全量重排。
+	 */
+	public void markSortingNeeded() {
 		if (!sortingMarkedThisTick) {
 			sortingMarkedThisTick = true;
 			if (updateSortingListener != null) {
 				updateSortingListener.onContentsChanged();
 			}
-		}
-		// unpause 独立于 sorting 去抖，每进程独立触发
-		if (unpauseCallback != null) {
-			unpauseCallback.unpause(process);
 		}
 	}
 

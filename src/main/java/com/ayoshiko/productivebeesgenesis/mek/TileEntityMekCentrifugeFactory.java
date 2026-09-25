@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import mekanism.api.IContentsListener;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -72,11 +71,9 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 		IntSupplier inputMultiplier = isEMFactory
 				? CentrifugeInputStackMultipliers.forEMFactory(tier.ordinal() - 4)
 				: CentrifugeInputStackMultipliers.forVanillaFactory(tier.ordinal());
-		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
-				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
-						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
-						productivityParallelModifier()));
-
+		// 外部样板发配不再按「工作集」压小到每槽 ~4 刻消耗量：那会把 ECO/EAEP/闪电 的大批次翻倍
+		// 截断成小批、退化成逐份滴流，且填不满机器的超大堆叠。改为放行到槽位真实容量，让翻倍一次填满；
+		// 单批数量由供应器决定；AE2 样板目标另外共享每真实刻调用预算，不压小槽位容量。
 		for (int i = 0; i < tier.processes; i++) {
 			int xPos = baseX + (i * baseXMult);
 			var lookupMonitor = recipeCacheLookupMonitors[i];
@@ -96,7 +93,8 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 					13);
 			// Task 7: 注入输入槽分等级堆叠倍率（按 FactoryTier.ordinal 索引配置）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(inputMultiplier);
-			externalInputPolicy.register(inputSlot);
+			// 性能：标记输入槽 → 退回保护在发配插入热路径上对本槽提前短路，省去每次插入的冗余配方校验。
+			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,

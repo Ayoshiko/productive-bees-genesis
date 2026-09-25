@@ -29,9 +29,9 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
-## [Unreleased] - 未发布
+## [Unreleased] - 1.0.9（未发布）
 
-> 以下汇总 `1.0.8-hotfix` 发布后的维护变更，尚未发布。
+> 以下汇总 `1.0.8-hotfix` 发布后的维护变更，目标版本为 `1.0.9`，尚未发布。 / Target version: `1.0.9`; unreleased.
 
 ### 新增
 
@@ -42,6 +42,8 @@
 
 ### 性能
 
+- **样板发配调用预算**：仅向本模组离心机提交的 AE2 样板目标共享每真实 tick 的自适应调用预算，以滞回和退避冷却约束逐份洪水；模拟不计数、不缩小第三方选定的单批数量，普通存储总线、接口和其它机器不消耗此预算。停服复位，不持有机器或世界引用。
+- **发配输入热路径**：输入槽跳过仅用于输出槽的外部回填保护检查；成功的 AE2 外部插入复用工厂排序标记去抖，保留原插入游标。PB 可配置蜜脾及蜜脾块采用惰性物品引用缓存，减少重复注册项访问。
 - **JDT/JDTE 高倍加速入口**：普通蜂箱、离心机及 MEK/ME/EM/EME 工厂统一使用本模组 ticker。同一真实游戏刻内，额外 ticker 调用仅计入虚拟 tick 银行，Mekanism 外层组件维护仅执行一次，减少 256/1024 次重复的升级组件、频率、比较器、红石与外观同步处理。组件维护按真实 tick 推进，生产仍使用既有批量预算；JDTE 合并接口与生产门控保持兼容，先 flush 也不会跳过本刻组件维护。
 - **AE2 候选筛选合并**：一次过滤槽遍历同时解析准入、无限提供、库存保留线与排序标记，直探和扫描路径都复用结果，移除后续重复的组件匹配与过滤遍历。复用表仅保留本轮候选，不跨配置变更缓存；正式提取前继续检查实时库存保留线。
 - **工厂空进程**：只在输入转为空闲时重置 PB/熔炼缓存及激活计数，移除成功路径的重复激活回调。已扣除输入的待提交产物仍每刻尝试排空，NBT 恢复和重新放入物品会重新启用状态清理。
@@ -55,6 +57,9 @@
 
 ### 修复
 
+- **离心机自适应大批发配**：移除输入槽按工作集压小外部容量的限制，恢复真实超堆叠容量，使 ECO 自适应批量、闪电过载供应器倍增和 EAEP 智能翻倍保留各自的批量策略。预算耗尽时返回零接收，未接管物品留在来源，已接管余量由供应器暂存并恢复发送。
+- **样板阻挡模式**：普通与缓存供应器目标均可检测本模组离心机的输入原料；外部可提取库存仍只公开产物，遵循实时侧面配置。
+- **普通测试发现**：排除仅供原生测试调用的 AE2 辅助夹具，修复无 AE2 运行时的普通 JUnit 发现失败。
 - **客户端窗口引用泄漏**：AE 输入、离心机直输 AE、相邻容器直出和熔炼兼容按钮的静态缓存改为弱键加弱值，解除“缓存 → 按钮 → 窗口/GUI → 世界”的强引用链。存活窗口继续通过子元素列表持有按钮，防止正常打开期间重复创建或提前回收。
 - **停止清理补全**：服务器停止时清空配置同步 UUID 限频表并复位清理计数，同时释放单原料合成配方索引的产出快照，避免退出后继续保留会话数据。
 - 合成回退路径合并其它离心机库存时，如果目标库存无法容纳剩余物品，拒绝合成并保留原输入，避免仅记录日志后丢失余量。
@@ -65,6 +70,9 @@
 
 ### 验证
 
+- 本轮维护工作区普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests -PecoCompatTests -Pae2ltCompatTests` 共 59 项（57 通过、2 跳过）。覆盖调用预算、真实容量、阻挡检测，以及 ECO/闪电限流后的原料守恒与恢复；ECO 使用真实 AE2 供应器暂存逻辑，闪电使用真实倍增及适配器归属判断、测试夹具模拟源库存扣账，EAEP 覆盖真实缩放路径，均不等同完整合成 CPU 端到端验收。
+- 隔离专服探针 `verify_20260925_c01` 通过：321 个连续 tick 样本、320 次耗尽后恢复；稳定段预算中位数 21,143，区间 16,023–21,364，振幅 25.26%，滚动 MSPT 中位数 66.02ms、洪水耗时 P95 70.36ms。通过条件同时检查预算计数、同刻拒收、模拟容量、恢复、样本完整性、稳定性和耗时；使用真实 tick/目标/Mixin，每次推送另注入 3µs 模拟成本，不作为玩家存档性能改善比例。完整客户端交互及无可选依赖启动矩阵尚未复验。
+- 开发环境使用 NeoForge 21.1.216 与 JEI 19.39.0.368 以满足本地 LDLib2 测试依赖，发布最低 NeoForge 要求仍为 21.1.214；目标版本 1.0.9 保持未发布。本轮 `build verifyReleaseArtifact` 通过，并确认 JAR 元数据正确、未包含测试或专服探针类。
 - 使用 SparkMCP 复核修改后报告 [ch4aOwUunf](https://spark.lucko.me/ch4aOwUunf)（`0a349d79fe66`）与 [2sSlgi1lre](https://spark.lucko.me/2sSlgi1lre)（`2613730cacbc`）：均约 60 秒、1200 tick、采样线程为 `Server thread`，最近一分钟 TPS 均为 20，MSPT 均值/P95/最大值分别为 13.29/16.63/53.23 和 16.96/21.15/55.13 ms。本模组 self-time 占完整线程样本的 8.06%/10.92%；等待占 71.85%/64.59%，不能把完整样本百分比当作忙时 CPU 占比。新 ticker 已出现在调用树中，第二份 JDT 时间手杖调用链为 7.536 秒；机器数、精确倍率和负载未固定，不能据此量化相对旧报告的提升。
 - 完成维护工作区 `test build` 与 `test -PminecraftTests`：普通测试 687 项（685 通过、2 跳过），NeoForge 原生测试 37 项全部通过，发布 JAR 校验通过。新增六类侧面配置覆盖层的编译后缓存所有权检查，防止按钮强引用重新引入窗口泄漏。
 - 使用 SparkMCP 分析 `2FoOnJ8u6N`、`iyI4N8fjIo`、`S216ULHoof`：最近一分钟 MSPT 均值/P95 分别为 13.65/18.79、18.44/24.80、15.27/20.87 ms；采样中等待占 70.63%、65.50%、67.24%，不计作计算热点。第二份 JDT 时间手杖调用链累计约 12.8 秒，确认重复外层 ticker、AE2 输入筛选和空进程失活等共同热点，并观察到 Thunderbolt/AE2LT 提取后的存储摘要复制开销。
@@ -88,6 +96,8 @@
 
 #### Performance
 
+- Added a shared adaptive call budget only for AE2 pattern-provider submissions into Genesis centrifuges. Hysteresis and backoff cooldown constrain per-copy floods without charging simulation or reducing third-party batch sizes. Ordinary storage buses, interfaces and other machines do not consume this budget; shutdown resets it, and no machine or world references are retained.
+- Input slots skip output-only rollback checks. Successful external AE2 insertions reuse debounced factory sorting marks while preserving the insertion cursor. Lazy PB comb-item references reduce repeated registry-holder access.
 - All apiary and centrifuge tiers now use a Genesis ticker that credits repeated calls to the existing virtual-tick bank while running Mekanism component maintenance once per real tick. This removes repeated upgrade, frequency, comparator, redstone and visual-update work under JDT 256x/1024x calls. Maintenance follows real ticks; production retains the existing batch budget and shared JDTE gate, including flush-before-ticker ordering.
 - AE2 candidate admission now also supplies unlimited mode, reserve floors and sorting marks in the same filter traversal. Both direct probes and scans reuse these results within the current pull, while extraction retains its live reserve check.
 - Empty factory lanes reset PB/smelting caches and activation counts only on transition to idle. Committed outputs still drain every tick; new inputs and NBT restoration invalidate idle state. Removed redundant activation callbacks after successful PB processing.
@@ -101,6 +111,9 @@
 
 #### Fixed
 
+- Restored actual oversized input capacity by removing per-slot working-set limits, preserving ECO adaptive batches, Lightning overloaded-provider doubling and EAEP smart scaling. Exhausted budgets return zero acceptance; unowned inputs remain at the source and owned remainders remain in provider buffers for retry.
+- Both normal and cached pattern-provider targets can detect buffered centrifuge inputs for blocking mode. Extractable inventories remain output-only and respect live side configuration.
+- Excluded the native-test-only AE2 fixture from ordinary JUnit discovery, fixing discovery failures without AE2 on the runtime classpath.
 - Fixed retained client windows in the AE input, centrifuge direct-AE output, adjacent-container output and smelting-compatibility overlays. Button caches now use weak values as well as weak keys, breaking the cache-to-button-to-window/GUI-to-world reference chain. Open windows retain their buttons through their child lists, preventing duplicate creation or premature collection.
 - Server shutdown now clears configuration-sync UUID rate limits and their cleanup counter, and releases the single-ingredient crafting index's output snapshot.
 - Centrifuge crafting fallback now rejects inventory merges that leave excess items, preserving inputs instead of logging and dropping the remainder.
@@ -111,6 +124,9 @@
 
 #### Validation
 
+- This maintenance pass ran 693 ordinary tests (691 passed, two skipped) and 59 native tests with `-PminecraftTests -PecoCompatTests -Pae2ltCompatTests` (57 passed, two skipped). Coverage includes budgets, real capacity, blocking and input conservation/recovery. ECO exercises actual AE2 provider buffering; Lightning exercises actual doubling and adapter ownership with fixture-managed source deductions; EAEP exercises actual scaling. These are not full crafting-CPU end-to-end acceptance tests.
+- Isolated server probe `verify_20260925_c01` passed with 321 consecutive samples and 320 recoveries after exhaustion. Stable budget median: 21,143; range: 16,023–21,364; swing: 25.26%; median rolling MSPT: 66.02ms; flood P95: 70.36ms. Passing requires matching counts, same-tick rejection, honest simulated capacity, recovery, complete samples, stability and timing limits. The probe uses real ticks/targets/Mixins plus an injected 3µs per push; it is not a measured player-world speedup. Full client interaction and startup without optional dependencies have not been rerun.
+- Development uses NeoForge 21.1.216 and JEI 19.39.0.368 for local LDLib2 test dependencies; the release minimum remains NeoForge 21.1.214. Version 1.0.9 remains unreleased. This pass also passed `build verifyReleaseArtifact`; JAR metadata was verified and no test or dedicated-server probe classes were packaged.
 - Reviewed post-change profiles [ch4aOwUunf](https://spark.lucko.me/ch4aOwUunf) (`0a349d79fe66`) and [2sSlgi1lre](https://spark.lucko.me/2sSlgi1lre) (`2613730cacbc`) with SparkMCP: about 60 seconds and 1,200 ticks each on `Server thread`, both at 20 last-minute TPS, with mean/P95/max MSPT of 13.29/16.63/53.23 and 16.96/21.15/55.13 ms. Mod self-time is 8.06%/10.92% of the full thread sample; waiting occupies 71.85%/64.59%, so these are not busy-CPU percentages. The new ticker is present, and the second profile includes 7.536 seconds under the JDT time-wand call tree. Machine count, exact acceleration and load were not controlled, so this is not a quantified before/after improvement.
 - Passed `test build` and `test -PminecraftTests` in the maintenance worktree: 687 ordinary tests (685 passed, two skipped), all 37 native NeoForge tests, and release-JAR verification. Added compiled-cache ownership checks for six side-configuration overlays to prevent strong button references from retaining windows again.
 - Analyzed `2FoOnJ8u6N`, `iyI4N8fjIo` and `S216ULHoof` with SparkMCP. Last-minute mean/P95 MSPT were 13.65/18.79, 18.44/24.80 and 15.27/20.87 ms. Waiting accounts for 70.63%, 65.50% and 67.24% of the samples and is not treated as CPU work. The second profile contains about 12.8 seconds in the JDT time-wand call tree, with repeated outer ticking, AE2 candidate filtering and idle-process callbacks; extraction also reaches Thunderbolt/AE2LT storage-summary copies.

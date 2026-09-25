@@ -7,7 +7,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
@@ -198,10 +197,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 
 		int baseX = 27;
 		int baseXMult = 19;
-		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
-				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
-						operationsPerTick(), productivebeesgenesis$getTickBatchSkipState().getBatchMultiplier(),
-						productivityParallelModifier()));
+		// 外部发配使用真实槽容量；单批数量由供应器决定，样板目标另有共享调用预算。
 
 		for (int i = 0; i < tier.processes; i++) {
 			int xPos = baseX + (i * baseXMult);
@@ -231,7 +227,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 			// Task 7: 注入输入槽分等级堆叠倍率（按 ExtraFactoryTier.ordinal 索引配置，替换 ME 默认 8<<tier 倍率）
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 					CentrifugeInputStackMultipliers.forMEFactory(tier.ordinal()));
-			externalInputPolicy.register(inputSlot);
+			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,

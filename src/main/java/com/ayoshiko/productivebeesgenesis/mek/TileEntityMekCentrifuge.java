@@ -392,10 +392,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	}
 
 	/**
-	 * 时间加速批量倍率 — 供输入槽外部插入配额估算工作集（见 {@code FactoryExternalInsertPolicy}）。
+	 * 时间加速批量倍率 — 基础离心机每真实刻的批量处理倍率（JDTE 手杖加速时 &gt; 1）。
 	 * <p>
-	 * 与工厂版直接读 {@code TickBatchSkipState} 等价。加速倍率越高，机器每真实刻消耗越多，
-	 * 外部一次能填的缓冲深度也必须同步放大，否则 JDTE 手杖加速下会出现供料不足。
+	 * 与工厂版直接读 {@code TickBatchSkipState} 等价，供批量处理逻辑估算每刻消耗。
 	 * 该 supplier 在插入时惰性求值，此时构造器早已完成，{@code tickHandler} 必然就绪。
 	 *
 	 * @return 批量倍率，未加速或尚未取款时为 1

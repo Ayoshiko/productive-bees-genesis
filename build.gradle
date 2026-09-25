@@ -108,12 +108,17 @@ neoForge {
     }
 }
 
+// 自动化发配基准（隔离专用服务器，参考网络分支做法）；仅在 -PdispatchBenchmark 下引入，不影响常规构建。
+if (providers.gradleProperty('dispatchBenchmark').isPresent()) {
+    apply from: 'gradle/dispatch-benchmark.gradle'
+}
+
 // 模板文件处理 - 生成模组元数据
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
@@ -178,8 +183,8 @@ dependencies {
 
     // JEI API（仅编译时需要，运行时由JEI提供）
     compileOnly files('libs/jei-1.21.1-neoforge-19.36.0.360.jar')
-    // JEI本体（测试环境运行时依赖）
-    runtimeOnly files('libs/jei-1.21.1-neoforge-19.36.0.360.jar')
+    // LDLib2 2.2.31 要求 JEI 19.39.0.368+；编译仍使用原有 API 基线。
+    runtimeOnly files('libs/jei-1.21.1-neoforge-19.39.0.368.jar')
 
     // Iris 光影兼容（仅编译时需要，运行时由 Iris 提供）
     // 用于编译 Iris Mixin 中引用的 net.irisshaders.iris.* 类
@@ -208,6 +213,7 @@ dependencies {
 
     // 单元测试依赖（JUnit 5）
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
     testCompileOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft/NeoForge supply these in-game; plain JVM tests need them explicitly.
@@ -219,6 +225,26 @@ dependencies {
                 'run/mods/Patchouli-1.21.1-93-NEOFORGE.jar',
                 'run/mods/guideme-21.1.16.jar',
                 'libs/appliedenergistics2-1.21.1-19.2.17.jar')
+        if (providers.gradleProperty('ecoCompatTests').isPresent()) {
+            def ecoTestMods = files(providers.gradleProperty('ecoCompatJar')
+                    .getOrElse('run/mods/neoecoae-21.2.0-beta6.jar'),
+                    'run/mods/ldlib2-neoforge-1.21.1-2.2.31-all.jar',
+                    'run/mods/extendedae_plus-1.6.2.jar',
+                    'run/mods/ExtendedAE-1.21-2.2.35-neoforge.jar',
+                    'run/mods/Glodium-1.21-2.2-neoforge.jar')
+            ecoTestMods.each { jar ->
+                if (!jar.isFile()) throw new GradleException("Missing ECO compatibility test mod: ${jar}")
+            }
+            testRuntimeOnly ecoTestMods
+        }
+        if (providers.gradleProperty('ae2ltCompatTests').isPresent()) {
+            def dispatchTestMods = files('run/mods/ae2lt-2.1.0-beta.5.jar',
+                    'run/mods/thunderbolt-2.0.0-beta.3.jar')
+            dispatchTestMods.each { jar ->
+                if (!jar.isFile()) throw new GradleException("Missing AE2LT test mod: ${jar}")
+            }
+            testRuntimeOnly dispatchTestMods
+        }
     }
 }
 
@@ -236,8 +262,12 @@ tasks.withType(ProcessResources).configureEach {
 
 // 单元测试配置 — 启用JUnit 5 Platform
 tasks.named('test', Test) {
+    // 辅助夹具只由原生测试调用，避免普通 JUnit 发现阶段反射加载缺失的 AE2 类型。
+    exclude '**/ActualPatternProviderFixture.class'
     if (providers.gradleProperty('minecraftTests').isPresent()) {
         include '**/*MinecraftTest.class'
+        systemProperty 'productivebeesgenesis.test.ecoCompat', providers.gradleProperty('ecoCompatTests').isPresent()
+        systemProperty 'productivebeesgenesis.test.ae2ltCompat', providers.gradleProperty('ae2ltCompatTests').isPresent()
     } else {
         exclude '**/*MinecraftTest.class'
     }

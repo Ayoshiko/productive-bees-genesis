@@ -52,8 +52,8 @@ public class InputOutputCompatibilityCache {
 				return EMPTY;
 			}
 			Item item = stack.getItem();
-			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
-			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分（缓存物品引用，避免每次 DeferredHolder.value）
+			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				return new SlotFingerprint(item, stack.get(PbDataComponents.beeType()));
 			}
 			return new SlotFingerprint(item, null);

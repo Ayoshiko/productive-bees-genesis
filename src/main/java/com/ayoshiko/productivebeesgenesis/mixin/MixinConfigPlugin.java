@@ -121,6 +121,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	/** AE2 接口注入 Mixin（目标类始终可加载，仅要求 AE2 已安装） */
 	private static final Set<String> AE2_MIXINS = Set.of(
+			"Ae2PatternProviderTargetMixin",
+			"Ae2PatternProviderTargetCacheMixin",
 			"Ae2ApiaryMixin",
 			"Ae2CentrifugeMixin",
 			"Ae2CentrifugeFactoryMixin"

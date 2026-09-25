@@ -55,7 +55,7 @@ public final class SharedPbRecipeCache {
 			DataComponentPatch components, int cachedHash) {
 		static CacheKey of(ItemStack stack) {
 			Item item = stack.getItem();
-			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				// 轻量哈希：只用 bee_type 分桶；完整组件补丁仍参与 equals 消解碰撞。
 				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
 				int hash = 31 * item.hashCode() + (beeType == null ? 0 : beeType.hashCode());

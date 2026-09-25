@@ -103,6 +103,19 @@ public interface IMekCentrifugeTile {
 	}
 
 	/**
+	 * 标记「输入已变更、需要 Mekanism 重新均摊到各产线」。
+	 * <br/>
+	 * 样板供应器逐槽发配（尤其过载供应器少次大批次）会把料只填进游标经过的少数输入槽，
+	 * 其余产线空转。工厂版重写本方法，去抖触发 Mekanism 原生自动均摊（需机器开启排序），
+	 * 把输入摊到所有产线以吃满并行；基础离心机只有 1 条产线，默认 no-op。
+	 * <br/>
+	 * 去抖保证 AE2 高频插入每真实刻至多触发一次排序，不会引入全量重排的性能问题。
+	 */
+	default void productivebeesgenesis$markInputSortingNeeded() {
+		// no-op：基础离心机无多产线排序
+	}
+
+	/**
 	 * 判断是否为 PB 蜜脾/蜜脾块输入
 	 * <br/>
 	 * Bug 2 修复：PB 蜜脾/蜜脾块必须走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配。
@@ -116,8 +129,8 @@ public interface IMekCentrifugeTile {
 	 */
 	default boolean productivebeesgenesis$isPbCombInput(ItemStack input) {
 		if (input.isEmpty()) return false;
-		// PB 蜜脾块
-		if (input.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+		// PB 蜜脾块（缓存物品引用，避免热路径每次 DeferredHolder.value）
+		if (input.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.combBlock()) {
 			return true;
 		}
 		// PB 蜜脾（带 BEE_TYPE 组件）
