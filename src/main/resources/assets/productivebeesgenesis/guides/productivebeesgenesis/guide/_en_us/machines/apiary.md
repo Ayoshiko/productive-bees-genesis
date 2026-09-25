@@ -48,7 +48,7 @@ Drag the scene to inspect the other faces; the initial view faces the front. The
 
 | Machine | Bee slots | Output |
 | --- | --- | --- |
-| Mekanism Apiary (basic) | 3 (3×1) | 9 slots, single page |
+| Mekanism Apiary (basic) | 3 (3×1) | 9 slots × 2 pages, 18 total |
 | Basic factory | 5 | Two pages |
 | Advanced factory | 10 | Two pages |
 | Elite factory | 15 | Two pages |
@@ -99,14 +99,20 @@ The left strip holds this machine's own entries; the right strip holds the gener
 
 ### Bee slots and cage slots
 
-- **Cage input slot** (red border, left of the bee slots) accepts **three kinds of item**:
+- **Cage input slot** (red border, left of the bee slots) accepts two kinds of item:
   - an empty or filled **bee cage**, to move bees in and out of the machine;
-  - a **resource bee spawn egg**, which moves a bee straight into a free slot (a full stack fills as many empty slots as it can);
-  - a **honey treat carrying genes**, which starts automatic feeding — see "Automatic gene feeding" section below.
+  - a **resource bee spawn egg**, which moves a bee straight into a free slot (a full stack fills as many empty slots as it can).
+- **Gene treat input** (below the fluid tank, with a grey treat icon) accepts gene-carrying honey treats separately. The **R** button below it controls AE2 restocking and starts disabled.
 - **Bee slots** (one or more rows in the middle): one bee per slot. Bee items and cages both work.
 - You can also hold a filled cage or resource bee spawn egg and **right-click an empty bee slot** to insert it directly. Right-click an occupied slot with an empty cage to take that bee out.
 - **Cage output slot** (blue border, right of the bee slots): collect filled cages.
 - Bee slots evaluate their conditions separately — **one idle bee never drags the others down**.
+
+### Quick insertion without opening the screen
+
+Hold a filled bee cage or resource bee spawn egg and **Shift + right-click the apiary block** to insert one bee. The selected empty slot is preferred; otherwise the first empty slot is used. A full apiary keeps the held item and does not release the bee into the world.
+
+Use the same interaction with a gene treat to fill the **dedicated treat slot** up to its available capacity. Remainders stay in your hand. Empty cages retain their bee-removal use; quick insertion respects machine security.
 
 ### Bee visuals and tooltips
 
@@ -120,7 +126,7 @@ The left strip holds this machine's own entries; the right strip holds the gener
 ### Output area and paging
 
 - The output area sits below the bee slots and holds combs and byproducts.
-- Factory tiers split it into **two pages**, with **`◀ 1/2 ▶`** centred underneath:
+- Both the basic apiary and factories split it into **two pages**, with **`◀ 1/2 ▶`** centred underneath:
   - `◀` and `▶` switch pages; their tooltips read "Previous output page" and "Next output page".
   - **Paging only changes what you see.** It never hides real slots — pipes and AE2 still see and take every product.
 - When the output is full the machine **pauses safely**; progress stops instead of silently voiding input.
@@ -203,6 +209,15 @@ The line at the very bottom reflects the current state and is the most direct an
 - With conversion on: **Conversion ON: ingredients will be consumed**
 - In disable edit mode: **Click a slot to toggle disable** (highest priority)
 
+### Produce from every flower
+
+Enable **Gameplay Settings → Balance Rules → Produce from Every Apiary Flower** to make lumber, quarry and dye bees produce from every distinct valid feeder source each cycle. With oak and birch in the feeder, a lumber bee produces both kinds of wood in one cycle.
+
+- **Off in Basic, on in Paradox Infinity.** Fresh Custom settings start off; switching from a preset to Custom inherits its effective value. Switch to Custom and save before editing this rule independently.
+- Duplicate slots and stack size do not add rolls. Disabled slots are excluded; lumber and quarry sources still respect the duplication blacklist.
+- Dye bees resolve each distinct flower separately. Different flowers producing the same dye each count once. When no flower can be resolved, distinct directly inserted dyes provide the fallback.
+- Switching off retains random selection of one valid source. This rule does not consume flowers or multiply independent fluid output. Ingredient-consuming conversion remains a separate toggle.
+
 ## Automatic gene feeding
 
 A honey treat combined with gene samples becomes a **gene-carrying treat**. Feeding it to a bee has a chance to rewrite the matching trait to the value on the treat. Modpacks usually ship a recipe for a "fully loaded" treat, and you can always add genes to a treat one at a time yourself.
@@ -212,7 +227,7 @@ The mechanical apiary supports two ways to feed:
 | Method | How | Best for |
 | --- | --- | --- |
 | Manual | Hold a gene treat on the cursor and **right-click a bee slot** | Feeding one specific bee |
-| Automatic | Drop the gene treat **into the cage input slot** and let the machine pick | Rebuilding a whole apiary |
+| Automatic | Put the treat **in the dedicated gene treat slot**, or Shift + right-click the apiary while holding it | Rebuilding a whole apiary |
 
 ### How the machine picks a bee
 
@@ -228,18 +243,28 @@ Example: insert a treat with *Productivity: very high + Weather tolerance: any +
 - **No improvement, no consumption.** When every bee already matches or beats the treat, it simply stays in the slot.
 - **Temper runs the other way.** In Productive Bees a calmer temper is better, so the machine only ever pushes bees **towards passive** — it will never make a calm bee aggressive.
 - **Genes at 0% purity do not count.** Purity *is* the success chance in PB, so a 0% gene almost never lands and never justifies spending a treat.
-- **Treats carrying a bee *type* gene are rejected.** Vanilla PB refuses to apply genes from those treats (hand-feeding one only prints an "invalid use" message), so accepting them would just delete items.
+- **Treats carrying a bee type gene cannot be fed.** They may enter the treat slot, but automatic feeding does not consume them. Being insertable does not mean their genes can improve a bee.
 - **At most four bees per second.** A feed window opens every 5 ticks. Each apiary runs at most once per real game tick, and block-position phasing spreads temporary entity creation across ticks under large factories and time acceleration.
 
 > Note: feeding still obeys PB's **purity probability** — 80% purity means an 80% chance per attempt. A miss is normal; as long as treats remain, the machine keeps trying.
 
 ### Automating the supply
 
-The cage input slot is an ordinary Mekanism input slot, so **pipes, hoppers and AE2 can all insert treats**:
+Gene treats have a dedicated Mekanism input slot. **Pipes, hoppers and AE2 export buses can supply it through an item-input face**:
 
 - Feed gene treats from an AE2 interface or export bus to rebuild bees while the apiary keeps producing combs.
-- Treats and cages share the slot safely: each tick the machine checks for a treat first and only falls through to cage handling otherwise, so the two never interfere.
+- Treats and cages use separate slots and can be supplied at the same time.
 - Pair it with the [gene sampler upgrade](../upgrades/pb-upgrades.md): sample genes on one side, craft them back into treats, and you have a closed breeding loop.
+
+### Restocking from the connected AE2 network
+
+1. Put the desired gene treat in the dedicated treat slot.
+2. Connect the apiary to an online, powered ME network containing matching treats.
+3. Click **R** below the slot. Green means enabled, grey disabled, and red suspended after an error. Without AE2, its tooltip says unavailable.
+
+Restocking matches the **item and every component**, including all gene types, values, purity and custom names. Sharing only a gene type is insufficient. An empty slot retains the last template; inserting a different valid treat updates it. Disabling clears the template while preserving treats already extracted but not yet delivered.
+
+Only this apiary's treat slot is replenished. Product AE output and the centrifuge input filter are independent. Empty stock, disconnection or a full slot cause waiting; repeated empty stock increases the retry delay. For a red button, check server logs and stock first. Ordinary errors may recover by toggling off and on; corrupt data or unknown extraction/delivery results remain quarantined. Removal, installer upgrades and crafting preserve the state and extracted treats; crafting is rejected when they cannot be retained completely.
 
 ## PB upgrades on the apiary side
 
@@ -284,4 +309,5 @@ Recommended first line (energy cube → apiary → centrifuge → barrel):
 5. **An upgrade will not install**: check that it targets the right machine (Stability and Raw Ore Smelting are centrifuge-only) or that the limit is reached.
 6. **Products pile up in the output area**: inspect the item output faces and auto-eject, or switch to `D` / `P` direct transfer.
 7. **A treat will not go into the input slot**: only treats that **carry genes** are accepted; a blank treat has no automation value and is refused.
-8. **The treat sits there without being consumed**: no bee currently benefits from those genes — either they already match or beat the treat, or the treat only holds 0%-purity or bee-type genes.
+8. **The treat sits there without being consumed**: no eligible bee benefits, or the selected bee needs no improvement. Treats with only 0%-purity genes or any bee-type gene are not fed automatically.
+9. **Restocking does nothing**: check R, the saved treat template, the online network and stock with identical components. A red button indicates an error suspension.

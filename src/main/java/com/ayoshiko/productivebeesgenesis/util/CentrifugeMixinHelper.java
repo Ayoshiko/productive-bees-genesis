@@ -1,13 +1,19 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.CentrifugeBlockEntityAccessor;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
+import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import cy.jdkdigital.productivebees.init.ModTags;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -18,7 +24,7 @@ import java.util.function.Function;
 	 * <ol>
 	 *   <li>canOperate RETURN 输出满检查</li>
 	 *   <li>canProcessRecipe HEAD 输出满检查</li>
-	 *   <li>completeRecipeProcessing TAIL 追加随机蜜脾</li>
+	 *   <li>completeRecipeProcessing HEAD 预留全部产物空间并追加随机蜜脾</li>
 	 * </ol>
 	 * Mixin 类必须针对不同目标类独立定义，但方法体可委托给本工具类的静态方法，
 	 * 通过函数式参数注入差异化的 EventHandler 调用，遵循 DRY 原则。
@@ -81,34 +87,38 @@ public final class CentrifugeMixinHelper {
 	}
 
 	/**
-	 * completeRecipeProcessing TAIL 追加随机蜜脾产出
+	 * 在 PB 扣料之前追加随机蜜脾，返回 false 时调用方必须取消配方完成。
+	 * 仅在服务器生产线程调用；提交异常向上传播，不能吞掉后重试部分提交的产物。
 	 *
+	 * @param recipe      本次 PB 配方
 	 * @param invHandler   物品处理器
 	 * @param random       随机源
 	 * @param entity       离心机实例（Mixin this 强转）
-	 * @param appendFunc   追加产出函数：(input, invHandler, random, modifier) -> void
-	 * @param errorMessage 异常日志消息
+	 * @param heated       热能机去蜡及蜜脾块四次处理规则
+	 * @return 是否允许 PB 继续完成并扣除输入
 	 */
-	public static void appendRandomCombs(
+	public static boolean appendRandomCombs(
+			RecipeHolder<CentrifugeRecipe> recipe,
 			IItemHandlerModifiable invHandler,
 			RandomSource random,
 			CentrifugeBlockEntity entity,
-			QuadConsumer<ItemStack, IItemHandlerModifiable, RandomSource, Integer> appendFunc,
-			String errorMessage) {
-		try {
-			ItemStack input = invHandler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT);
-			int modifier = ((CentrifugeBlockEntityAccessor) entity).productivebeesgenesis$getProductivityModifier();
-			appendFunc.accept(input, invHandler, random, modifier);
-		} catch (Exception e) {
-			// M9: LogThrottle 节流，避免 completeRecipeProcessing TAIL 高频触发刷屏
-			LogThrottle.error("centrifuge_append_combs",
-					"{} (5秒内仅首条输出): {}", errorMessage, e.toString());
+			boolean heated) {
+		ItemStack input = invHandler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT);
+		if (!MyriadCreationsEventHandler.isMyriadCreationsItem(input)) return true;
+		if (recipe == null) return false;
+		int modifier = Math.min(input.getCount(), Math.min(64,
+				((CentrifugeBlockEntityAccessor) entity).productivebeesgenesis$getProductivityModifier()));
+		int repetitions = heated && input.is(ModTags.Common.STORAGE_BLOCK_HONEYCOMBS)
+				&& !recipe.value().ingredient.test(input) ? 4 : 1;
+		List<ItemStack> reserved = new ArrayList<>();
+		// 按 PB 最大可能副产物预留，避免随机蜜脾抢占蜡等配方产物的空间。
+		for (int i = 0; i < repetitions; i++) {
+			for (var entry : recipe.value().getRecipeOutputs().entrySet()) {
+				if (heated && entry.getKey().is(ModTags.Common.WAXES)) continue;
+				int amount = Math.multiplyExact(Math.max(0, entry.getValue().max()), modifier);
+				if (amount > 0) reserved.add(entry.getKey().copyWithCount(amount));
+			}
 		}
-	}
-
-	/** 四参数消费者接口 */
-	@FunctionalInterface
-	public interface QuadConsumer<T, U, V, W> {
-		void accept(T t, U u, V v, W w);
+		return MyriadCreationsEventHandler.appendRandomCombs(input, invHandler, random, modifier, reserved);
 	}
 }

@@ -38,19 +38,20 @@ public abstract class CentrifugeBlockEntityMixin {
 	}
 
 	/**
-	 * completeRecipeProcessing TAIL — 万象创世蜜脾追加随机产出
+	 * completeRecipeProcessing HEAD — 扣料前预留产物空间，保留最后一份输入的类型。
 	 * <p>
 	 * 注入3参数版本（唯一可匹配的签名）。
 	 */
-	@Inject(method = "completeRecipeProcessing", at = @At("TAIL"))
+	@Inject(method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;)V",
+			at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$appendRandomCombs(
-			RecipeHolder<?> recipe,
+			RecipeHolder<CentrifugeRecipe> recipe,
 			IItemHandlerModifiable invHandler,
 			RandomSource random,
 			CallbackInfo ci) {
-		CentrifugeMixinHelper.appendRandomCombs(
-				invHandler, random, (CentrifugeBlockEntity) (Object) this,
-				MyriadCreationsEventHandler::appendRandomCombs,
-				"Centrifuge Mixin 异常");
+		if (!CentrifugeMixinHelper.appendRandomCombs(
+				recipe, invHandler, random, (CentrifugeBlockEntity) (Object) this, false)) {
+			ci.cancel();
+		}
 	}
 }

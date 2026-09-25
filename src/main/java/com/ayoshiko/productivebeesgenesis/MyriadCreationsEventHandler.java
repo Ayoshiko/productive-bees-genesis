@@ -170,12 +170,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (!isMyriadCreationsEnabled()) return List.of();
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snap = MyriadBeeTypeCache.snapshot();
 		return RandomHoneycombSelector.generateAggregatedStacks(
-				totalCount,
-				ModItems.CONFIGURABLE_HONEYCOMB.get(),
-				snap.beeTypes(),
-				snap.honeycombTemplates(),
-				snap.honeycombTemplateByType(),
-				random);
+				totalCount, snap, false, random);
 	}
 
 	/**
@@ -185,12 +180,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (!isMyriadCreationsEnabled()) return List.of();
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snap = MyriadBeeTypeCache.snapshot();
 		return RandomHoneycombSelector.generateAggregatedStacks(
-				totalCount,
-				ModItems.CONFIGURABLE_COMB_BLOCK.get(),
-				snap.beeTypes(),
-				snap.combBlockTemplates(),
-				snap.combBlockTemplateByType(),
-				random);
+				totalCount, snap, true, random);
 	}
 
 	/**
@@ -331,18 +321,19 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	}
 
 	/** 离心机追加随机蜜脾产出（万象核心机制：转化） */
-	public static void appendRandomCombs(
+	public static boolean appendRandomCombs(
 		ItemStack input,
 		IItemHandlerModifiable invHandler,
 		RandomSource random,
-		int productivityModifier
+		int productivityModifier,
+		List<ItemStack> reservedOutputs
 	) {
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
-		appendRandomCombsInternal(
+		return appendRandomCombsInternal(
 				input, invHandler, random, productivityModifier,
 				MyriadCreationsEventHandler::isMyriadCreationsHoneycomb,
 				MyriadCreationsEventHandler::isMyriadCreationsCombBlock,
-				snapshot.beeTypes(), snapshot.honeycombTemplateByType(), snapshot.combBlockTemplateByType());
+				snapshot, reservedOutputs);
 	}
 
 	/** 从蜜蜂缓存中随机选取指定数量的不同类型 */
@@ -353,6 +344,10 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	/** 带缓存的随机类型选择（Task 23） */
 	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level) {
 		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, MyriadBeeTypeCache.cachedBeeTypes());
+	}
+
+	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level, boolean blocks) {
+		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, MyriadBeeTypeCache.cachedBeeTypes(blocks));
 	}
 
 	/** 将 total 均匀分配到各蜜蜂类型上 */

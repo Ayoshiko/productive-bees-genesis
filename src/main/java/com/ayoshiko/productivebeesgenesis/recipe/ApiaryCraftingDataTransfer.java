@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotSerializer;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.apiary.GeneTreatRestockState;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
@@ -197,13 +198,25 @@ final class ApiaryCraftingDataTransfer {
 			@Nullable String targetTileId, @Nullable ItemStack dest) {
 		// 收集所有输入的 NBT（深拷贝）
 		List<CompoundTag> nbts = new ArrayList<>(inputs.size());
+		List<CompoundTag> restockStates = new ArrayList<>(inputs.size());
 		for (ItemStack input : inputs) {
 			CustomData data = input.get(DataComponents.BLOCK_ENTITY_DATA);
-			if (data == null) continue;
+			if (data == null) {
+				if (isApiary) restockStates.add(new CompoundTag());
+				continue;
+			}
 			try {
-				nbts.add(data.copyTag());
+				CompoundTag nbt = data.copyTag();
+				nbts.add(nbt);
+				if (isApiary) {
+					if (nbt.contains(GeneTreatRestockState.NBT_KEY)
+							&& !nbt.contains(GeneTreatRestockState.NBT_KEY, Tag.TAG_COMPOUND)) {
+						throw new IllegalArgumentException("Invalid gene-treat restock root");
+					}
+					restockStates.add(nbt.getCompound(GeneTreatRestockState.NBT_KEY));
+				}
 			} catch (Exception e) {
-				DevLog.error("合成升级: 读取输入 BLOCK_ENTITY_DATA 失败,跳过该输入", e);
+				throw new IllegalArgumentException("Cannot read machine input data", e);
 			}
 		}
 
@@ -233,6 +246,7 @@ final class ApiaryCraftingDataTransfer {
 		if (isApiary) {
 			int targetCapacity = resolveApiaryBeeSlotCapacity(outputBlock);
 			mergeBeeSlots(merged, nbts, targetCapacity);
+			merged.put(GeneTreatRestockState.NBT_KEY, GeneTreatRestockState.mergeSaved(restockStates));
 		}
 
 		// 合并 PB 升级数量（蜂箱用 ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS,离心机用 MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS）

@@ -109,7 +109,7 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 	 *
 	 * @param inv      合成矩阵快照
 	 * @param provider 注册表访问器
-	 * @return 合成结果物品（已转移自定义 NBT），失败时返回 super.assemble 结果
+	 * @return 合成结果物品（已转移自定义 NBT）；无法完整转移时返回 EMPTY，拒绝消耗输入
 	 */
 	@Override
 	public ItemStack assemble(CraftingInput inv, HolderLookup.Provider provider) {
@@ -152,7 +152,12 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 					return ItemStack.EMPTY;
 				}
 			}
-			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
+			try {
+				ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
+			} catch (RuntimeException e) {
+				DevLog.error("合成升级: 自定义数据无法完整转移，拒绝合成", e);
+				return ItemStack.EMPTY;
+			}
 			return fallback;
 		}
 
@@ -163,8 +168,8 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 		try {
 			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, result, outputBlock, isApiary);
 		} catch (RuntimeException e) {
-			// 防御：数据转移失败不应影响正常合成流程，返回 super.assemble 的结果
-			DevLog.error("合成升级: BLOCK_ENTITY_DATA 转移失败,返回未转移自定义数据的结果", e);
+			DevLog.error("合成升级: 自定义数据无法完整转移，拒绝合成", e);
+			return ItemStack.EMPTY;
 		}
 
 		return result;

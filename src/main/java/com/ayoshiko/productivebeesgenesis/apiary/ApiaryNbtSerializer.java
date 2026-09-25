@@ -127,6 +127,7 @@ class ApiaryNbtSerializer {
 		nbt.putBoolean(NBT_KEY_CENTRIFUGE_PRIORITY, tile.isCentrifugePriorityEnabled());
 		nbt.putBoolean(NBT_KEY_DIRECT_CONTAINER_OUTPUT, tile.isDirectContainerOutputEnabled());
 		nbt.putBoolean(NBT_KEY_FEEDER_CONVERSION, tile.isFeederConversionEnabled());
+		nbt.put(GeneTreatRestockState.NBT_KEY, tile.getGeneTreatRestock().save(provider));
 		// 修复 v14：序列化流体罐内容（非空时写入，避免空标签）
 		FluidStack fluid = tile.getFluidTank().getFluid();
 		FluidStack pendingTemplate = tile.getPendingHoneyFluidTemplate();
@@ -157,6 +158,7 @@ class ApiaryNbtSerializer {
 	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadApiaryState(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		tile.getGeneTreatRestock().loadRoot(nbt, provider);
 		int schemaVersion = nbt.getInt(NBT_KEY_SCHEMA_VERSION);
 		if (schemaVersion < 1) {
 			schemaVersion = 1; // 向后兼容：旧存档无此字段时按 version=1 处理
@@ -398,7 +400,7 @@ class ApiaryNbtSerializer {
 				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled(),
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
 				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled(),
-				tile.getGeneTreatSlot().serializeNBT(provider));
+				tile.getGeneTreatSlot().serializeNBT(provider), tile.getGeneTreatRestock().save(provider));
 	}
 
 	/**
@@ -482,6 +484,9 @@ class ApiaryNbtSerializer {
 			tile.getCageOutSlot().deserializeNBT(provider, data.cageOutSlotNbt);
 			if (data.geneTreatSlotNbt != null) {
 				tile.getGeneTreatSlot().deserializeNBT(provider, data.geneTreatSlotNbt);
+			}
+			if (data.geneTreatRestockNbt != null) {
+				tile.getGeneTreatRestock().load(data.geneTreatRestockNbt, provider);
 			}
 			// 恢复选中蜜蜂槽（边界检查，超出当前槽位数量时重置为未选择）
 			int maxBeeSlot = tile.getBeeSlotCount();

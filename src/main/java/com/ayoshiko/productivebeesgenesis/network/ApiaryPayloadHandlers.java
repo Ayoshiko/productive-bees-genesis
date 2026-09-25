@@ -45,6 +45,23 @@ final class ApiaryPayloadHandlers {
 	private ApiaryPayloadHandlers() {
 	}
 
+	static void handleToggleApiaryGeneTreatRestock(ToggleApiaryGeneTreatRestockPayload payload,
+			IPayloadContext context) {
+		if (!(context.player() instanceof ServerPlayer player)
+				|| !(player.containerMenu instanceof MekanismTileContainer<?> container)
+				|| !(container.getTileEntity() instanceof TileEntityMekApiary apiary)
+				|| !apiary.getBlockPos().equals(payload.pos())
+				|| player.level().getBlockEntity(payload.pos()) != apiary
+				|| !container.stillValid(player) || player.isSpectator()
+				|| player.distanceToSqr(payload.pos().getCenter())
+						> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ
+				|| !mekanism.api.security.IBlockSecurityUtils.INSTANCE.canAccess(
+						player, player.level(), payload.pos(), apiary)) return;
+		if (!PayloadRateLimiter.tryAccept(player, "gene_treat_restock_toggle",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		apiary.setGeneTreatRestockEnabled(!apiary.isGeneTreatRestockEnabled());
+	}
+
 	static void handleToggleApiaryDirectEject(ToggleApiaryDirectEjectPayload payload, IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)

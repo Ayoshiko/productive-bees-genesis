@@ -35,6 +35,11 @@
 
 ### 新增
 
+- **全部花源产出**：新增平衡性开关 `balance.apiaryProduceAllFlowers`，基础及全新自定义配置默认关闭，悖论无限预设开启。木厂蜂、采石蜂、染料蜂等可在同一生产周期分别产出喂食槽内所有不同的有效花源；忽略空槽与禁用槽，重复槽位或堆叠数量不增加次数，继续遵守复制黑名单及原有生产力倍率，独立流体产出不按花源数量倍增。
+- **AE2 基因小食精确补货**：独立小食槽下方新增“补 / R”开关，每台蜂箱默认关闭。按槽内样本的物品与全部组件精确提取，空槽保留模板，替换小食更新模板；每 5 个真实 tick 至多尝试一次，缺货退避至 200 tick，并遵守在线状态、槽容量与网络工作预算。补货设置、模板及已提取待交付物品随存档、拆卸和升级保留。
+- **Shift 右键快捷放入**：手持资源蜜蜂刷怪蛋或装蜂蜂笼，Shift 右键蜂箱可直接放蜂；手持带基因小食可直接补入独立小食槽。服务端检查交互与机器权限，满槽或拒收时保留物品并阻止默认放蜂行为。
+- **双语教程同步**：更新 GuideME 与 Patchouli 的蜂箱、AE2、平衡配置及升级说明，补充全部花源、精确补货与快捷放入，修正独立小食槽和基础蜂箱两页共 18 格输出区的说明。
+- **教程图片与补货提示**：使用新版蜂箱截图替换两套教程图片，GuideME 等比缩放至 555×485，Patchouli 使用 256×256 透明画布等比居中。小食补货按钮按开启、关闭、异常暂停、未安装 AE2 四种状态显示简短分行提示。
 - **指南书生存配方**：参照 Productive Bees 指南书，新增“书 + 普通蜂笼/坚固蜂笼 + 原版蜜脾”的两种无序合成，产出本模组 Patchouli 指南。额外蜜脾用于区分 PB 原书配方；未安装 Patchouli 时不加载配方。
 - **平衡性配置提示**：蜂箱/离心机的产量与时间升级上限、离心机堆叠升级上限，以及受预设控制的平衡性规则，均补充中英文悬停提示和配置文件注释：先在“玩法配置 → 全局平衡性配置”切换并保存为“自定义”，再修改具体数值，避免预设覆盖或切换时继承原值。
 - **独立基因小食输入槽**：普通机械蜂箱及 MEK/ME/EM/EME 全部工厂等级在流体槽下方增加小食槽，与能量槽对齐并保留间距；流体槽外框同步左移一像素，与能量槽和小食槽的可见边缘一致；空槽显示 PB 基因小食的灰色图标。槽位仅接受带基因的小食，沿用智能选蜂、指定蜜蜂、无提升不消耗及喂食节流逻辑；蜂笼槽改为只接收蜂笼和资源蜜蜂刷怪蛋。同步接入侧面物品输入、容器同步、方块物品库存、存档及等级升级数据。
@@ -42,6 +47,8 @@
 
 ### 性能
 
+- **全部花源与补货热路径**：每台蜂箱最多缓存三种多花源策略的只读产物模板，喂食槽版本、配方版本或世界变化时失效；关闭模式仍逐次随机采样。补货关闭且无待交付物品时立即返回，满槽不复制模板或查询网络；完整组件键复用至样本变化。
+- **万象批量规划**：容量快照只在一次生产事务的二分与重试中复用，移除跨生产调用的库存快照缓存；每个真实模板在该事务内复用各槽的模拟接收容量。按实际请求数量生成选型缓存，减少未使用的 1–9 种预采样。
 - **样板发配调用预算**：仅向本模组离心机提交的 AE2 样板目标共享每真实 tick 的自适应调用预算，以滞回和退避冷却约束逐份洪水；模拟不计数、不缩小第三方选定的单批数量，普通存储总线、接口和其它机器不消耗此预算。停服复位，不持有机器或世界引用。
 - **发配输入热路径**：输入槽跳过仅用于输出槽的外部回填保护检查；成功的 AE2 外部插入复用工厂排序标记去抖，保留原插入游标。PB 可配置蜜脾及蜜脾块采用惰性物品引用缓存，减少重复注册项访问。
 - **JDT/JDTE 高倍加速入口**：普通蜂箱、离心机及 MEK/ME/EM/EME 工厂统一使用本模组 ticker。同一真实游戏刻内，额外 ticker 调用仅计入虚拟 tick 银行，Mekanism 外层组件维护仅执行一次，减少 256/1024 次重复的升级组件、频率、比较器、红石与外观同步处理。组件维护按真实 tick 推进，生产仍使用既有批量预算；JDTE 合并接口与生产门控保持兼容，先 flush 也不会跳过本刻组件维护。
@@ -57,6 +64,10 @@
 
 ### 修复
 
+- **万象特殊蜜脾覆盖**：候选改从全部已加载蜂箱配方枚举，同时包含固定实体蜂与可配置蜂，不再要求存在离心配方。Ghostly、Milky、Powdery 及须在 MEK 化学氧化器处理的 Wasted Radioactive 蜜脾保留真实物品和组件；同蜂种的多配方、多组件变体均可参与。蜂箱、PB 离心和 MEK 批量路径统一使用真实模板，缺失模板时不伪造产物；没有真实块映射的蜜脾只参与单蜜脾生产。
+- **万象选型与重载**：蜜脾和蜜脾块候选池、世界身份分别校验缓存，权重记账覆盖完整蜂种列表，不再截断到 512 种；未就绪配方按 20 tick 退避恢复，实际延迟重载完成时失效蜂箱索引与万象模板。
+- **离心产物容量与末份输入**：PB 普通/动力与热能离心机在扣料前检查并追加随机产物，同时按 PB 整组入槽规则预留原配方副产物空间；容量不足保留输入，修复最后一份万象蜜脾漏产。MEK 按真实物品组件和槽位内部接收规则规划，保留合法超堆叠容量，共享蜜脾模板的分配正确合并；提交检查实际增长数量。
+- **补货与快捷插入资产保护**：网络提取先登记待交付物品，再按槽位真实增量扣账；小食入槽后监听器抛异常仍按实际接收量扣除手持物品。损坏 NBT 与未知提取、交付状态持久化隔离，不能通过切换开关解除；多输入合成合并待交付物品并继承第一台机器的开关，冲突、超限或无损转移无法保证时拒绝合成。
 - **离心机自适应大批发配**：移除输入槽按工作集压小外部容量的限制，恢复真实超堆叠容量，使 ECO 自适应批量、闪电过载供应器倍增和 EAEP 智能翻倍保留各自的批量策略。预算耗尽时返回零接收，未接管物品留在来源，已接管余量由供应器暂存并恢复发送。
 - **样板阻挡模式**：普通与缓存供应器目标均可检测本模组离心机的输入原料；外部可提取库存仍只公开产物，遵循实时侧面配置。
 - **普通测试发现**：排除仅供原生测试调用的 AE2 辅助夹具，修复无 AE2 运行时的普通 JUnit 发现失败。
@@ -70,6 +81,9 @@
 
 ### 验证
 
+- **2026-09-25 收尾验证**：53 项定向 NeoForge 原生测试与 23 项普通定向测试全部通过，`build verifyReleaseArtifact` 通过。覆盖四种特殊蜜脾、无离心配方准入、多配方组件变体、重载/延迟就绪、候选池隔离、600 种蜂权重记账、实际 PB Mixin 末份输入与满槽保留、整组副产物容量、MEK 真实组件容量与超堆叠，以及全花源、补货和升级资产守恒。证据保存在维护 worktree 的 `build/verification/closeout-20260925/`。两张教程图已检查；真实玩家双手/创造模式交互、在线 ME 端到端补货、无可选依赖启动及完整教程界面仍待游戏内验收。
+- **本轮性能依据**：前序已用 SparkMCP 分析 `2kbQ61ircq`（`4ba9b69ebefa`），约 60 秒/1200 tick，MSPT 平均/中位/P95/最大为 14.67/13.99/19.45/51.3 ms；等待占完整线程样本 68.51%，本模组 self-time 9.39%。结合调用链优化全花源、补货和万象规划；没有优化后同场景报告，不宣称 MSPT 改善比例。
+- **前一轮蜂箱功能验证**：普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests` 共 75 项（66 通过、9 跳过），无失败；`build verifyReleaseArtifact` 通过。覆盖全花源去重/禁用/黑名单与生产力、补货模板组件匹配、退避、监听器异常后的数量守恒、损坏数据和未知提取隔离、拆卸/升级及多输入合成保留。44 个变更文本通过严格 UTF-8/无 BOM 检查，10 个 JSON 解析通过，双语新增键一致，JAR 内变更资源与源码一致且未混入测试类。此为后续蜜脾和性能补丁之前的基线，收尾结果以上条为准。
 - 本轮维护工作区普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests -PecoCompatTests -Pae2ltCompatTests` 共 59 项（57 通过、2 跳过）。覆盖调用预算、真实容量、阻挡检测，以及 ECO/闪电限流后的原料守恒与恢复；ECO 使用真实 AE2 供应器暂存逻辑，闪电使用真实倍增及适配器归属判断、测试夹具模拟源库存扣账，EAEP 覆盖真实缩放路径，均不等同完整合成 CPU 端到端验收。
 - 隔离专服探针 `verify_20260925_c01` 通过：321 个连续 tick 样本、320 次耗尽后恢复；稳定段预算中位数 21,143，区间 16,023–21,364，振幅 25.26%，滚动 MSPT 中位数 66.02ms、洪水耗时 P95 70.36ms。通过条件同时检查预算计数、同刻拒收、模拟容量、恢复、样本完整性、稳定性和耗时；使用真实 tick/目标/Mixin，每次推送另注入 3µs 模拟成本，不作为玩家存档性能改善比例。完整客户端交互及无可选依赖启动矩阵尚未复验。
 - 开发环境使用 NeoForge 21.1.216 与 JEI 19.39.0.368 以满足本地 LDLib2 测试依赖，发布最低 NeoForge 要求仍为 21.1.214；目标版本 1.0.9 保持未发布。本轮 `build verifyReleaseArtifact` 通过，并确认 JAR 元数据正确、未包含测试或专服探针类。
@@ -89,6 +103,11 @@
 
 #### Added
 
+- Added `balance.apiaryProduceAllFlowers`, off for Basic and fresh Custom configurations and on for Paradox Infinity. Lumber, quarry, dye and other multi-source bees can produce every distinct valid feeder source per cycle. Empty/disabled slots and duplicate stacks add no runs; duplication blacklists and existing productivity multipliers still apply, while independent fluid output is not multiplied.
+- Added per-apiary exact AE2 gene-treat restocking through the off-by-default R button below the dedicated treat slot. Matching includes the item and every component. Empty slots retain the template and new treats update it. Attempts run at most every five real ticks, back off to 200 ticks when stock is missing, and respect online state, slot capacity and network work budgets. Settings, templates and withdrawn items survive saves, dismantling and upgrades.
+- Added Shift-right-click insertion for resource bee spawn eggs, filled bee cages and gene treats. Server-side interaction and machine permissions are checked; rejected items remain in hand and a full apiary does not trigger default bee spawning.
+- Updated Chinese and English GuideME/Patchouli apiary, AE2, balance and upgrade pages for all-source production, exact restocking and quick insertion. Corrected the dedicated treat slot and the basic apiary's two output pages with 18 slots total.
+- Replaced both tutorial screenshots with the updated apiary image: 555×485 for GuideME and an aspect-preserving image centered on a transparent 256×256 Patchouli canvas. Restocking tooltips use short lines for enabled, disabled, suspended and AE2-unavailable states.
 - Added two survival recipes for the Patchouli guide: a book, a regular or sturdy bee cage, and a vanilla honeycomb. The honeycomb distinguishes these shapeless recipes from PB's own guide; both recipes load only when Patchouli is installed.
 - Added localized tooltips and config comments to preset-controlled upgrade limits and balance rules. Players are directed to switch and save Gameplay Settings > Global Balance Profile as Custom before editing individual values, since named presets and preset transitions can override them.
 - Added a dedicated gene honey treat input below the fluid gauge in every mechanical apiary and MEK/ME/EM/EME factory, aligned with the energy slot and marked with a grayscale PB gene treat icon. The fluid gauge frame is offset by one pixel so its visible edge matches the energy and treat slots. Retained smart targeting, selected-bee feeding and throttling; cages and bee spawn eggs keep their own input. Connected the new slot to sided insertion, container sync, block-item storage, persistence and tier upgrades.
@@ -96,6 +115,8 @@
 
 #### Performance
 
+- Each apiary caches read-only outputs for up to three multi-source strategies, invalidated by feeder state, recipe version or world changes; random mode still samples each time. Disabled restocking without pending items returns immediately, full slots avoid template copies/network lookups, and exact component keys are reused until the sample changes.
+- Myriad capacity snapshots and per-template simulated acceptance are reused only within one production transaction, including capacity search and retries. Removed cross-transaction inventory snapshots and unused pre-sampling for all selection counts from one to nine.
 - Added a shared adaptive call budget only for AE2 pattern-provider submissions into Genesis centrifuges. Hysteresis and backoff cooldown constrain per-copy floods without charging simulation or reducing third-party batch sizes. Ordinary storage buses, interfaces and other machines do not consume this budget; shutdown resets it, and no machine or world references are retained.
 - Input slots skip output-only rollback checks. Successful external AE2 insertions reuse debounced factory sorting marks while preserving the insertion cursor. Lazy PB comb-item references reduce repeated registry-holder access.
 - All apiary and centrifuge tiers now use a Genesis ticker that credits repeated calls to the existing virtual-tick bank while running Mekanism component maintenance once per real tick. This removes repeated upgrade, frequency, comparator, redstone and visual-update work under JDT 256x/1024x calls. Maintenance follows real ticks; production retains the existing batch budget and shared JDTE gate, including flush-before-ticker ordering.
@@ -111,6 +132,10 @@
 
 #### Fixed
 
+- Myriad candidates now cover every loaded beehive recipe, including fixed-entity and configurable bees, without requiring a centrifuge recipe. Ghostly, Milky, Powdery and Wasted Radioactive combs retain their real items/components; all recipes and component variants for a bee participate. Apiary, PB centrifuge and Mekanism paths use actual templates. Missing templates no longer fabricate output, and combs without a real block mapping only participate in single-comb production.
+- Selection caches distinguish comb/block candidate pools and world identity. Weight accounting covers the entire bee list instead of truncating at 512. Incomplete recipes retry after 20 ticks; completion of delayed reloads invalidates beehive indexes and Myriad templates.
+- PB ordinary/powered and heated centrifuges now check and append random products before consuming input, reserving side-product space using PB's whole-chunk insertion rules. Full output preserves input and the final comb no longer loses its conversion. Mekanism planning uses actual component limits and internal acceptance rules, preserves legal oversized stacks, correctly merges shared templates and checks applied growth.
+- Restocking records withdrawn items before delivery and accounts for actual slot changes. Quick treat insertion also charges the held stack after a listener throws following a successful insert. Damaged NBT and unknown extraction/delivery states remain persistently quarantined across toggles. Multi-input crafting preserves pending items and the first machine's toggle; conflicts, capacity limits or unsafe transfers reject crafting.
 - Restored actual oversized input capacity by removing per-slot working-set limits, preserving ECO adaptive batches, Lightning overloaded-provider doubling and EAEP smart scaling. Exhausted budgets return zero acceptance; unowned inputs remain at the source and owned remainders remain in provider buffers for retry.
 - Both normal and cached pattern-provider targets can detect buffered centrifuge inputs for blocking mode. Extractable inventories remain output-only and respect live side configuration.
 - Excluded the native-test-only AE2 fixture from ordinary JUnit discovery, fixing discovery failures without AE2 on the runtime classpath.
@@ -124,6 +149,9 @@
 
 #### Validation
 
+- **September 25, 2026 closeout**: all 53 targeted native NeoForge tests and 23 ordinary targeted tests passed, along with `build verifyReleaseArtifact`. Coverage includes four special combs, admission without centrifuge recipes, multiple recipe/component variants, reload/readiness recovery, isolated candidate caches, 600-type weight accounting, actual PB Mixin final-input/full-output behavior, whole-chunk side products, real Mekanism capacity/oversized stacks, all-source production, restocking and upgrade conservation. Evidence is in the maintenance worktree's `build/verification/closeout-20260925/`. Both tutorial images were inspected; actual player offhand/creative interactions, live ME end-to-end restocking, startup without optional dependencies and full tutorial-screen acceptance remain pending.
+- The earlier SparkMCP analysis of `2kbQ61ircq` (`4ba9b69ebefa`) covered about 60 seconds/1,200 ticks: mean/median/P95/max MSPT 14.67/13.99/19.45/51.3 ms, waiting 68.51% and mod self-time 9.39% of the full thread sample. It informed the all-source, restocking and Myriad-planning changes. No matched post-change profile is available, so no MSPT improvement percentage is claimed.
+- **Earlier apiary feature baseline**: 693 ordinary tests (691 passed, two skipped) and 75 tests with `test -PminecraftTests` (66 passed, nine skipped), with no failures; `build verifyReleaseArtifact` passed. Coverage includes distinct/disabled/blacklisted flower sources and productivity, exact template components, backoff, listener-failure accounting, corrupt-data and unknown-extraction quarantine, removal/upgrades and multi-input crafting preservation. All 44 changed text files passed strict UTF-8/no-BOM checks, all 10 changed JSON files parsed, new bilingual keys matched, and packaged resources matched source without test classes. These results predate the subsequent comb/performance patches; current closeout results are listed above.
 - This maintenance pass ran 693 ordinary tests (691 passed, two skipped) and 59 native tests with `-PminecraftTests -PecoCompatTests -Pae2ltCompatTests` (57 passed, two skipped). Coverage includes budgets, real capacity, blocking and input conservation/recovery. ECO exercises actual AE2 provider buffering; Lightning exercises actual doubling and adapter ownership with fixture-managed source deductions; EAEP exercises actual scaling. These are not full crafting-CPU end-to-end acceptance tests.
 - Isolated server probe `verify_20260925_c01` passed with 321 consecutive samples and 320 recoveries after exhaustion. Stable budget median: 21,143; range: 16,023–21,364; swing: 25.26%; median rolling MSPT: 66.02ms; flood P95: 70.36ms. Passing requires matching counts, same-tick rejection, honest simulated capacity, recovery, complete samples, stability and timing limits. The probe uses real ticks/targets/Mixins plus an injected 3µs per push; it is not a measured player-world speedup. Full client interaction and startup without optional dependencies have not been rerun.
 - Development uses NeoForge 21.1.216 and JEI 19.39.0.368 for local LDLib2 test dependencies; the release minimum remains NeoForge 21.1.214. Version 1.0.9 remains unreleased. This pass also passed `build verifyReleaseArtifact`; JAR metadata was verified and no test or dedicated-server probe classes were packaged.

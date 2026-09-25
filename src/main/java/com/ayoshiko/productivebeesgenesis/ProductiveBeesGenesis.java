@@ -449,8 +449,6 @@ public final class ProductiveBeesGenesis {
 		safeClear(ModPayloads::clearFilterSyncRateLimits, "ModPayloads.filterSyncRateLimits");
 		// 清理万象批量规划器模板缓存 — 防止跨存档 bee_type 模板残留（Task 19）
 		safeClear(MyriadBatchPlanner::clearTemplateCache, "MyriadBatchPlanner.TEMPLATE_CACHE");
-		// 清理万象批量规划器 ThreadLocal 快照缓存 — 防止线程池复用场景下的引用残留
-		safeClear(MyriadBatchPlanner::clearThreadLocals, "MyriadBatchPlanner.snapshotCache");
 		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
 		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
 		// 复位全局游戏刻时钟 — 槽位的「外部退回窗口」依赖它判定过期，跨存档必须归零

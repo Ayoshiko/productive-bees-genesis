@@ -146,18 +146,19 @@ Default limits are also **affected by the global balance profile**, described ne
 
 Under **mod config → Gameplay Settings → Balance Rules** you can switch the global balance profile (click "Global balance profile" to open the list):
 
-- **Basic**: closer to stock Mekanism and Productive Bees. Productivity tiers α/β/γ/Ω are **mutually exclusive**, as are Time I and Time II; centrifuge productivity upgrades **only add parallelism, not output**; apiaries are affected by bee **behaviour and weather-tolerance genes**; resource-bee upgrade limit defaults to **4** and the centrifuge stack upgrade limit to **8**.
-- **Paradox Infinity**: all productivity tiers **can coexist**, and so can Time I and Time II; centrifuge productivity upgrades **raise both output and parallelism**; apiaries keep the old behaviour and are **not** affected by behaviour or weather-tolerance genes; resource-bee upgrade limit defaults to **8** and the centrifuge stack upgrade limit to **16**.
+- **Basic**: closer to stock Mekanism and Productive Bees. Productivity tiers α/β/γ/Ω are **mutually exclusive**, as are Time I and Time II; centrifuge productivity upgrades **only add parallelism, not output**; apiaries are affected by bee **behaviour and weather-tolerance genes**, and multi-source bees **randomly select one valid flower source per cycle**; resource-bee upgrade limit defaults to **4** and the centrifuge stack upgrade limit to **8**.
+- **Paradox Infinity**: all productivity tiers **can coexist**, and so can Time I and Time II; centrifuge productivity upgrades **raise both output and parallelism**; apiaries are **not** affected by behaviour or weather-tolerance genes and produce **every distinct valid source in the feeder in the same cycle**; resource-bee upgrade limit defaults to **8** and the centrifuge stack upgrade limit to **16**.
 - **Custom**: every individual rule and numeric limit is yours to fill in. Switching from Basic or Paradox Infinity **inherits the settings that were actually in effect**.
 
 > **Switching profiles never removes upgrades already installed in a machine.** It can, however, **block installing new upgrades that break the new rules** — for example, after switching from Paradox Infinity to Basic you can no longer mix productivity tiers in one machine, while what is already installed stays as it is.
 
-The four independent Custom rules (tooltips quoted):
+The five independent Custom rules:
 
 - **Productivity tiers exclusive**: prevents productivity α, β, γ, and Ω from coexisting in one machine.
 - **Speed tiers exclusive**: prevents Time I and Time II from coexisting in one machine.
 - **Centrifuge productivity adds output**: when on, productivity upgrades add output *and* parallelism; when off, only the original Productive Bees parallelism remains.
 - **Bee genes affect apiary work**: when on, a bee whose behaviour or weather tolerance does not match the current day/night or weather pauses production.
+- **Apiary produces all flower sources** (`apiaryProduceAllFlowers`): off by default. When enabled, multi-source bees produce each distinct valid source currently in the feeder per cycle. Empty or disabled slots do not count, duplicate sources add no extra runs, and independent fluid output is not multiplied. See [Mekanism Apiary](../machines/apiary.md) for the full rules.
 
 ## Common questions
 

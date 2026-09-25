@@ -70,6 +70,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	protected BeeProduceProcessor produceProcessor;
 	protected ApiaryTickHandler tickHandler;
 	private final ApiaryAe2HostAdapter ae2HostAdapter = new ApiaryAe2HostAdapter(this);
+	private final GeneTreatRestockState geneTreatRestock = new GeneTreatRestockState();
 	/** 蜂箱→离心机直连快速弹出通道 — 相邻离心机时绕过Ejector节流直接转移蜜脾 */
 	private final ApiaryDirectEjectHandler directEjectHandler = new ApiaryDirectEjectHandler(this);
 	/** 产物直通（相邻容器）的缓冲区排空通道 — 与「缓冲区直推 AE」对称 */
@@ -634,6 +635,20 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	@NotNull public BasicInventorySlot getCageInSlot() { return slotManager.getCageInSlot(); }
 	@NotNull public BasicInventorySlot getCageOutSlot() { return slotManager.getCageOutSlot(); }
 	@NotNull public BasicInventorySlot getGeneTreatSlot() { return slotManager.getGeneTreatSlot(); }
+
+	/** 返回补货状态，仅由服务端 tick 和持久化路径修改资产。 */
+	public GeneTreatRestockState getGeneTreatRestock() { return geneTreatRestock; }
+
+	/** 小食槽下方的独立 AE2 补货开关，默认关闭。 */
+	public boolean isGeneTreatRestockEnabled() { return geneTreatRestock.isEnabled(); }
+
+	/** 服务端设置开关并捕获当前小食模板；客户端仅接收 tracker 值。 */
+	public void setGeneTreatRestockEnabled(boolean enabled) {
+		if (geneTreatRestock.isEnabled() == enabled) return;
+		geneTreatRestock.setEnabled(enabled);
+		if (level != null && !level.isClientSide) geneTreatRestock.observe(getGeneTreatSlot().getStack());
+		setChanged();
+	}
 	@NotNull public List<BasicInventorySlot> getOutputSlots() { return slotManager.getOutputSlots(); }
 	@NotNull public BeeSlot[] getBeeSlots() { return slotManager.getBeeSlots(); }
 	@NotNull public BeeSlot getBeeSlot(int index) { return slotManager.getBeeSlot(index); }

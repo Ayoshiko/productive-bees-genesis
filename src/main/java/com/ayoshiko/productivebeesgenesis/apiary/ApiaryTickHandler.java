@@ -223,6 +223,7 @@ class ApiaryTickHandler {
 		if (!skipBeeProcessing) {
 			beeSlotProcessor.setTickMultiplier(batchMultiplier);
 			try {
+				tile.ae2HostAdapter().restockGeneTreat();
 				// 蜂笼输入 — 蜜蜂从蜂笼转移到蜂槽（在生产逻辑前执行）
 				cageProcessor.tick();
 				// 蜜蜂生产逻辑独立处理（花朵检查/推进计时/批量产出/能量扣除）

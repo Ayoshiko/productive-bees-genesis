@@ -38,14 +38,19 @@ final class BeeProduceQueries {
 	 * 从 O(N²) 降为 O(N)。
 	 */
 	private record AdvancedBeehiveRecipeIndex(
-			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> byBeeType) {
+			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> byBeeType,
+			Map<ResourceLocation, List<RecipeHolder<AdvancedBeehiveRecipe>>> allByBeeType,
+			boolean complete) {
 		static final AdvancedBeehiveRecipeIndex EMPTY =
-				new AdvancedBeehiveRecipeIndex(Map.of());
+				new AdvancedBeehiveRecipeIndex(Map.of(), Map.of(), false);
 	}
 
 	/** 当前配方索引 — volatile 引用保证原子替换 */
 	private static volatile AdvancedBeehiveRecipeIndex beehiveRecipeIndex =
 			AdvancedBeehiveRecipeIndex.EMPTY;
+	private static net.minecraft.world.item.crafting.RecipeManager indexedManager;
+	private static long nextIndexRetryTick = Long.MIN_VALUE;
+	private static final long INDEX_RETRY_TICKS = 20L;
 
 	/**
 	 * 配方输出表缓存 — 缓存 AdvancedBeehiveRecipe.getRecipeOutputs() 结果
@@ -59,6 +64,55 @@ final class BeeProduceQueries {
 			new ConcurrentHashMap<>();
 
 	private BeeProduceQueries() {
+	}
+
+	/** 蜂箱配方覆盖固定实体蜂与可配置蜂，不以离心机可处理性筛选。 */
+	static List<ResourceLocation> getBeeTypesWithProduce(Level level) {
+		ensureRecipeIndex(level);
+		return beehiveRecipeIndex.byBeeType.keySet().stream().map(ResourceLocation::parse).sorted().toList();
+	}
+
+	/** 万象枚举全部配方；普通蜂箱仍使用首条匹配配方，避免改变原有产量。 */
+	static List<ItemStack> getAllBeeProduce(Level level, ResourceLocation beeType) {
+		ensureRecipeIndex(level);
+		List<ItemStack> outputs = new ArrayList<>();
+		for (RecipeHolder<AdvancedBeehiveRecipe> holder : beehiveRecipeIndex.allByBeeType
+				.getOrDefault(beeType, List.of())) {
+			try {
+				for (var entry : holder.value().getRecipeOutputs().entrySet()) {
+					if (entry.getValue().chance() > 0 && entry.getValue().max() >= 1 && !entry.getKey().isEmpty()) {
+						outputs.add(entry.getKey().copyWithCount(1));
+					}
+				}
+			} catch (RuntimeException e) {
+				markIndexIncomplete();
+				LogThrottle.warn("myriad_recipe_outputs", "读取万象蜜脾配方 {} 失败，将重试: {}", holder.id(), e.toString());
+			}
+		}
+		return outputs;
+	}
+
+	static boolean isProduceIndexComplete() {
+		return beehiveRecipeIndex.complete;
+	}
+
+	/** 部分就绪时按世界时间退避；数据重载和世界切换仍立即重建。 */
+	private static synchronized void ensureRecipeIndex(Level level) {
+		if (indexedManager != level.getRecipeManager()) {
+			invalidate();
+			indexedManager = level.getRecipeManager();
+		}
+		if (!beehiveRecipeIndex.complete && level.getGameTime() >= nextIndexRetryTick) {
+			nextIndexRetryTick = level.getGameTime() + INDEX_RETRY_TICKS;
+			rebuildBeehiveRecipeIndex(level);
+		}
+	}
+
+	private static void markIndexIncomplete() {
+		AdvancedBeehiveRecipeIndex index = beehiveRecipeIndex;
+		if (index.complete) {
+			beehiveRecipeIndex = new AdvancedBeehiveRecipeIndex(index.byBeeType, index.allByBeeType, false);
+		}
 	}
 
 	/**
@@ -76,6 +130,7 @@ final class BeeProduceQueries {
 	@Nonnull
 	static Map<ItemStack, ChancedOutput> getBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
 		try {
+			ensureRecipeIndex(level);
 			// 1. 优先查配方输出表缓存（避免 getRecipeOutputs() 每次新建 LinkedHashMap）
 			Map<ItemStack, ChancedOutput> cached = recipeOutputsCache.get(beeType);
 			if (cached != null) return cached;
@@ -84,14 +139,7 @@ final class BeeProduceQueries {
 			// 2. 优先走索引（O(1)）
 			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
 			if (matched == null) {
-				// 3. 索引未命中时检查是否需要重建（避免 N 个蜜蜂各自重建 N 次的浪费）
-				if (beehiveRecipeIndex == AdvancedBeehiveRecipeIndex.EMPTY) {
-					rebuildBeehiveRecipeIndex(level);
-					matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
-				}
-				if (matched == null) {
-					return Map.of();
-				}
+				return Map.of();
 			}
 			// 返回配方原始输出表，不执行概率检查（由 BeeProduceBatchSampler 统一处理）
 			Map<ItemStack, ChancedOutput> outputs = matched.value().getRecipeOutputs();
@@ -100,7 +148,8 @@ final class BeeProduceQueries {
 			recipeOutputsCache.put(beeType, immutable);
 			return immutable;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("查询蜜蜂产物配方失败: {}", beeType, e);
+			markIndexIncomplete();
+			LogThrottle.warn("bee_recipe_outputs", "查询蜜蜂产物配方失败 {}: {}", beeType, e.toString());
 			return Map.of();
 		}
 	}
@@ -142,29 +191,44 @@ final class BeeProduceQueries {
 			List<RecipeHolder<AdvancedBeehiveRecipe>> recipes = level.getRecipeManager()
 					.getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get());
 			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> newIndex = new HashMap<>(recipes.size() * 2);
+			Map<ResourceLocation, List<RecipeHolder<AdvancedBeehiveRecipe>>> allRecipes = new HashMap<>();
+			boolean complete = true;
 			for (RecipeHolder<AdvancedBeehiveRecipe> recipe : recipes) {
 				try {
 					// AdvancedBeehiveRecipe.ingredient 是 Supplier<BeeIngredient>，
 					// 通过 supplier.get() 获取 BeeIngredient 后调用 getBeeType() 提取 beeType
 					BeeIngredient ing = recipe.value().ingredient.get();
-					if (ing == null) continue;
+					if (ing == null) {
+						complete = false;
+						continue;
+					}
 					ResourceLocation beeType = ing.getBeeType();
-					if (beeType == null) continue;
+					if (beeType == null) {
+						complete = false;
+						continue;
+					}
 					newIndex.putIfAbsent(beeType.toString(), recipe);
+					allRecipes.computeIfAbsent(beeType, ignored -> new ArrayList<>()).add(recipe);
 				} catch (Exception e) {
-					ProductiveBeesGenesis.LOGGER.warn("构建 AdvancedBeehiveRecipe 索引时跳过无法解析的配方 {}", recipe.id(), e);
+					complete = false;
+					LogThrottle.warn("bee_recipe_index", "构建蜂箱配方索引时无法解析 {}，将重试: {}", recipe.id(), e.toString());
 				}
 			}
 			// 原子替换：发布不可变快照
-			beehiveRecipeIndex = new AdvancedBeehiveRecipeIndex(Map.copyOf(newIndex));
+			allRecipes.replaceAll((type, holders) -> List.copyOf(holders));
+			recipeOutputsCache.clear();
+			beehiveRecipeIndex = new AdvancedBeehiveRecipeIndex(Map.copyOf(newIndex), Map.copyOf(allRecipes), complete);
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("重建 AdvancedBeehiveRecipe 索引失败", e);
+			markIndexIncomplete();
+			LogThrottle.warn("bee_recipe_index_rebuild", "重建蜂箱配方索引失败，将重试: {}", e.toString());
 		}
 	}
 
 	/** 失效索引与输出表缓存（数据包/标签重载时调用） */
 	static void invalidate() {
 		beehiveRecipeIndex = AdvancedBeehiveRecipeIndex.EMPTY;
+		indexedManager = null;
+		nextIndexRetryTick = Long.MIN_VALUE;
 		recipeOutputsCache.clear();
 	}
 }

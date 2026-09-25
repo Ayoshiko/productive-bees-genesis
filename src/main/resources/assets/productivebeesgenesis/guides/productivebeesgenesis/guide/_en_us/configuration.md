@@ -24,7 +24,8 @@ Production, power use, capacities, and bee rules are controlled by the server in
 This section controls the Myriad Creations Bee, balance profile, acquisition methods, resource filter, attributes, and accelerated-work budget.
 
 - **Myriad master switch** disables only that bee; machines and upgrades remain available.
-- **Balance profile**: use Basic for a normal pack, Paradox Infinite for unrestricted high-scale play, and Custom only when every limit is understood.
+- **Balance profile**: use Basic for a normal pack, Paradox Infinity for unrestricted high-scale play, and Custom only when every limit is understood.
+- **Produce from Every Apiary Flower**: lumber, quarry and dye bees produce from every distinct valid feeder source each cycle. Off in Basic and on in Paradox Infinity. Switch to Custom and save to edit independently; the previous preset value is inherited. Duplicate slots and stack counts add no rolls.
 - **Myriad filter** excludes resources with a blacklist or keeps only selected resources with a whitelist.
 - **Acquisition methods** separately control item conversion, breeding, fishing, and natural nest generation.
 
@@ -42,6 +43,8 @@ This section controls apiary and centrifuge processing, AE2 integration, upgrade
 | Push to adjacent containers | External Logistics | Enable for simple pipe lines |
 
 AE2 input pulling has a server master switch, but each centrifuge still starts disabled until a player enables its AE2 Input window. This prevents a newly connected machine from draining the network unexpectedly.
+
+Apiary **gene treat restocking** has its own button below each machine's treat slot and starts disabled. Insert a template treat first; only items with identical components are extracted from the apiary's online ME network. Centrifuge input and apiary product-output toggles are independent. See [Mekanism Apiary](machines/apiary.md).
 
 ### Capacity Matrices
 

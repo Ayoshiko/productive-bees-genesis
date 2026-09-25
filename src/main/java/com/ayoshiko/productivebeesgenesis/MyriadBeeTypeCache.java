@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,10 +57,26 @@ public final class MyriadBeeTypeCache {
 			ItemStack[] honeycombTemplates,
 			ItemStack[] combBlockTemplates,
 			Map<ResourceLocation, ItemStack> honeycombTemplateByType,
-			Map<ResourceLocation, ItemStack> combBlockTemplateByType) {
+			Map<ResourceLocation, ItemStack> combBlockTemplateByType,
+			Map<ResourceLocation, List<ItemStack>> honeycombVariants,
+			Map<ResourceLocation, List<ItemStack>> combBlockVariants,
+			List<ResourceLocation> combBlockBeeTypes) {
 		// EMPTY 使用 List.of()，避免共享可变列表实例。
 		static final BeeTypeCacheSnapshot EMPTY = new BeeTypeCacheSnapshot(
-				List.of(), new ItemStack[0], new ItemStack[0], Map.of(), Map.of());
+				List.of(), new ItemStack[0], new ItemStack[0], Map.of(), Map.of(), Map.of(), Map.of(), List.of());
+
+		/** 每次事务固定每蜂种的一个真实模板，预检、重试与提交必须共用返回值。 */
+		public Map<ResourceLocation, ItemStack> selectTemplates(List<ResourceLocation> selected,
+				boolean blocks, net.minecraft.util.RandomSource random) {
+			Map<ResourceLocation, List<ItemStack>> variants = blocks ? combBlockVariants : honeycombVariants;
+			Map<ResourceLocation, ItemStack> result = new HashMap<>(selected.size());
+			for (ResourceLocation type : selected) {
+				List<ItemStack> choices = variants.get(type);
+				if (choices == null || choices.isEmpty()) continue;
+				result.put(type, choices.get(choices.size() == 1 ? 0 : random.nextInt(choices.size())));
+			}
+			return result;
+		}
 	}
 
 	/** 当前快照 — volatile 引用保证原子替换 */
@@ -74,6 +91,7 @@ public final class MyriadBeeTypeCache {
 	 * BeeReloadListener 数据可用后，无论过滤结果是否为空，都发布快照并完成预热。
 	 */
 	private static volatile boolean warmupComplete = false;
+	private static long nextWarmupTick = Long.MIN_VALUE;
 
 	/** "缓存未就绪"日志冷却器（info 级别，5 秒冷却） */
 	private static final LogThrottle cacheNotReadyThrottle = new LogThrottle(100L);
@@ -101,6 +119,11 @@ public final class MyriadBeeTypeCache {
 		return snapshot().beeTypes;
 	}
 
+	public static List<ResourceLocation> cachedBeeTypes(boolean blocks) {
+		BeeTypeCacheSnapshot current = snapshot();
+		return blocks ? current.combBlockBeeTypes : current.beeTypes;
+	}
+
 	/**
 	 * 兼容性访问：返回当前的蜜脾模板数组
 	 * <br/>
@@ -124,7 +147,7 @@ public final class MyriadBeeTypeCache {
 	/**
 	 * 服务器 tick — 检查是否有事件驱动的重建请求
 	 * <br/>
-	 * 服务器启动后首次获得 BeeReloadListener 数据前，每 tick 都触发更新尝试。
+	 * 服务器启动后首次获得完整配方数据前，最多每 20 tick 尝试更新。
 	 * 数据就绪并发布结果后返回 {@code false}，因此正常蜂箱工作期间不会读取配置、
 	 * 扫描蜜蜂注册数据或查询配方。配置、标签或配方重载会调用 {@link #invalidate()}
 	 * 重新进入待构建状态。
@@ -153,13 +176,13 @@ public final class MyriadBeeTypeCache {
 	 * 过滤逻辑：
 	 * <ol>
 	 *   <li>排除万象创世自身</li>
-	 *   <li>排除没有离心配方的蜜蜂</li>
+	 *   <li>保留蜂箱配方中的真实蜜脾，包括须在其它机器处理的蜜脾</li>
 	 *   <li>应用配置文件的黑白名单过滤</li>
 	 * </ol>
 	 * <p>
 	 * <b>预热与空缓存区分</b>：
 	 * <ul>
-	 *   <li>BeeReloadListener 未加载 — info 日志"缓存未就绪"，每 tick 重试，不更新 snapshot</li>
+	 *   <li>BeeReloadListener 未加载 — info 日志"缓存未就绪"，每 20 tick 重试，不更新 snapshot</li>
 	 *   <li>BeeReloadListener 已加载 — 发布最新快照；合法的空过滤结果同样会覆盖旧快照</li>
 	 * </ul>
 	 *
@@ -167,9 +190,11 @@ public final class MyriadBeeTypeCache {
 	 */
 	public static void updateBeeTypeCache(ServerLevel level) {
 		long currentTick = level.getGameTime();
+		if (!warmupComplete && currentTick < nextWarmupTick) return;
+		nextWarmupTick = currentTick + 20L;
 		if (!AbstractCombEventHandler.isBeeReloadListenerReady()) {
 			cacheNotReadyThrottle.tryLog(currentTick, suppressed ->
-					DevLog.info("bee_cache", "蜜蜂数据尚未就绪，万象创世类型缓存将在下一 tick 重试"
+					DevLog.info("bee_cache", "蜜蜂数据尚未就绪，万象创世类型缓存将稍后重试"
 							+ "（抑制 {} 次类似日志）", suppressed));
 			return;
 		}
@@ -192,43 +217,70 @@ public final class MyriadBeeTypeCache {
 
 	/** 原子发布类型、模板和索引；空列表也必须覆盖旧快照并通知下游缓存。 */
 	private static void publishSnapshot(List<ResourceLocation> beeTypes, ServerLevel level) {
-		List<ResourceLocation> immutableTypes = List.copyOf(beeTypes);
-		if (immutableTypes.isEmpty()) {
-			beeTypeCacheSnapshot = BeeTypeCacheSnapshot.EMPTY;
-		} else {
-			// 蜂箱配方才是蜜蜂真实蜜脾形态的权威来源。特殊蜜蜂不能一律伪造为 configurable_honeycomb。
-			ItemStack[] newHoneycombTemplates = new ItemStack[immutableTypes.size()];
-			ItemStack[] newCombBlockTemplates = new ItemStack[immutableTypes.size()];
-			Map<ResourceLocation, ItemStack> honeycombByType = new HashMap<>(immutableTypes.size() * 2);
-			Map<ResourceLocation, ItemStack> combBlockByType = new HashMap<>(immutableTypes.size() * 2);
-			for (int i = 0; i < immutableTypes.size(); i++) {
-				ResourceLocation beeType = immutableTypes.get(i);
-				ItemStack honeycomb = resolveHoneycombTemplate(level, beeType);
-				ItemStack combBlock = RandomHoneycombSelector.buildCombBlockTemplate(beeType, honeycomb);
-				newHoneycombTemplates[i] = honeycomb;
-				newCombBlockTemplates[i] = combBlock;
-				honeycombByType.put(beeType, honeycomb);
-				combBlockByType.put(beeType, combBlock);
+		List<ResourceLocation> resolvedTypes = new ArrayList<>();
+		List<ResourceLocation> blockTypes = new ArrayList<>();
+		List<ItemStack> honeycombs = new ArrayList<>();
+		List<ItemStack> blocks = new ArrayList<>();
+		Map<ResourceLocation, ItemStack> honeycombByType = new HashMap<>();
+		Map<ResourceLocation, ItemStack> blockByType = new HashMap<>();
+		Map<ResourceLocation, List<ItemStack>> honeycombVariants = new HashMap<>();
+		Map<ResourceLocation, List<ItemStack>> blockVariants = new HashMap<>();
+		for (ResourceLocation type : beeTypes) {
+			List<ItemStack> variants = resolveHoneycombTemplates(level, type);
+			if (variants.isEmpty()) continue;
+			resolvedTypes.add(type);
+			honeycombByType.put(type, variants.getFirst());
+			honeycombVariants.put(type, variants);
+			List<ItemStack> mappedBlocks = new ArrayList<>();
+			for (ItemStack comb : variants) {
+				addDistinct(honeycombs, comb);
+				ItemStack block = RandomHoneycombSelector.buildCombBlockTemplate(type, comb);
+				if (!block.isEmpty()) addDistinct(mappedBlocks, block);
 			}
-			beeTypeCacheSnapshot = new BeeTypeCacheSnapshot(
-					immutableTypes, newHoneycombTemplates, newCombBlockTemplates,
-					Map.copyOf(honeycombByType), Map.copyOf(combBlockByType));
+			if (!mappedBlocks.isEmpty()) {
+				blockTypes.add(type);
+				blockByType.put(type, mappedBlocks.getFirst());
+				blockVariants.put(type, List.copyOf(mappedBlocks));
+				for (ItemStack block : mappedBlocks) addDistinct(blocks, block);
+			}
 		}
-
-		warmupComplete = true;
+		List<ResourceLocation> immutableTypes = List.copyOf(resolvedTypes);
+		beeTypeCacheSnapshot = new BeeTypeCacheSnapshot(immutableTypes,
+				honeycombs.toArray(ItemStack[]::new), blocks.toArray(ItemStack[]::new),
+				Map.copyOf(honeycombByType), Map.copyOf(blockByType),
+				Map.copyOf(honeycombVariants), Map.copyOf(blockVariants), List.copyOf(blockTypes));
+		warmupComplete = BeeInfoHelper.isProduceIndexComplete();
 		MyriadSelectionCache.onBeeTypesUpdated();
 		WeightedTypeSelector.getInstance().onTypesUpdated(immutableTypes);
 	}
 
-	/** 从蜂箱配方中提取首个蜜脾产物；普通资源蜂回退为带 bee_type 的可配置蜜脾。 */
-	private static ItemStack resolveHoneycombTemplate(ServerLevel level, ResourceLocation beeType) {
-		for (ItemStack output : BeeInfoHelper.getBeeProduceStacks(level, beeType)) {
-			if (output.getItem() instanceof net.minecraft.world.item.HoneycombItem) {
-				return RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, output);
+	/** 枚举同蜂种的所有配方，按完整组件去重；缺失时等待重载，不伪造蜜脾。 */
+	private static List<ItemStack> resolveHoneycombTemplates(ServerLevel level, ResourceLocation beeType) {
+		List<ItemStack> result = new ArrayList<>();
+		for (ItemStack output : BeeInfoHelper.getAllBeeProduce(level, beeType)) {
+			if (isHoneycomb(output)) {
+				addDistinct(result, RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, output));
 			}
 		}
-		return RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, ItemStack.EMPTY);
+		return List.copyOf(result);
 	}
+
+	private static void addDistinct(List<ItemStack> templates, ItemStack candidate) {
+		for (ItemStack template : templates) {
+			if (ItemStack.isSameItemSameComponents(template, candidate)) return;
+		}
+		templates.add(candidate.copyWithCount(1));
+	}
+
+	/** 原生蜜脾及数据包声明的通用蜜脾标签均可参与万象生产。 */
+	static boolean isHoneycomb(ItemStack stack) {
+		return !stack.isEmpty() && (stack.getItem() instanceof net.minecraft.world.item.HoneycombItem
+				|| stack.is(HONEYCOMBS));
+	}
+
+	private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> HONEYCOMBS =
+			net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
+					ResourceLocation.fromNamespaceAndPath("c", "honeycombs"));
 
 	private static void logEmptyResult(CompiledBeeTypeFilter filter, long currentTick) {
 		if (filter.isEmptyWhitelist()) {
@@ -268,6 +320,7 @@ public final class MyriadBeeTypeCache {
 
 	/** Clears every published view before a rebuild so no consumer can use stale types. */
 	private static void clearPublishedSnapshot() {
+		nextWarmupTick = Long.MIN_VALUE;
 		beeTypeCacheSnapshot = BeeTypeCacheSnapshot.EMPTY;
 		MyriadSelectionCache.invalidate();
 		WeightedTypeSelector.getInstance().onTypesUpdated(List.of());

@@ -241,6 +241,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 		addRenderableWidget(GuiCageSlotOverlay.input(this, cageInX, cageY, () -> tile.getCageInSlot().isEmpty()));
 		addRenderableWidget(GuiCageSlotOverlay.output(this, cageOutX, cageY, () -> tile.getCageOutSlot().isEmpty()));
 		addRenderableWidget(new GuiGeneTreatSlotOverlay(this, () -> tile.getGeneTreatSlot().isEmpty()));
+		addRenderableWidget(new GeneTreatRestockButton(this, tile));
 	}
 
 	/**

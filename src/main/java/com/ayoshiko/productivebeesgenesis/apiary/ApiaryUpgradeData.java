@@ -63,6 +63,10 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 	@Nullable
 	public final CompoundTag geneTreatSlotNbt;
 
+	/** 补货模板、开关和已提取物品的独立升级快照。 */
+	@Nullable
+	public final CompoundTag geneTreatRestockNbt;
+
 	/**
 	 * 蜂笼输入槽 NBT 快照（由 serializeNBT 序列化）
 	 * <br/>
@@ -187,6 +191,30 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
 			boolean feederConversionEnabled, boolean directContainerOutputEnabled,
 			@Nullable CompoundTag geneTreatSlotNbt) {
+		this(provider, redstone, controlType, energyContainer, progress, energySlot,
+				inputSlots, outputSlots, sorting, components, beeSlotsNbt, feederSlotsNbt,
+				pbUpgradeCountsNbt, pbUpgradeInputNbt, pbUpgradeOutputNbt, fluidNbt, cageOutSlotNbt,
+				outputItems, cageInSlotNbt, energySlotNbt, outputBufferNbt, selectedBeeSlot,
+				aeItemOutputEnabled, aeFluidOutputEnabled, directEjectEnabled, directAeOutputEnabled,
+				centrifugePriorityEnabled, feederConversionEnabled, directContainerOutputEnabled,
+				geneTreatSlotNbt, null);
+	}
+
+	/** 完整升级快照；旧构造器保留默认关闭的兼容行为。 */
+	public ApiaryUpgradeData(HolderLookup.Provider provider, boolean redstone, RedstoneControl controlType,
+			IEnergyContainer energyContainer, int[] progress, EnergyInventorySlot energySlot,
+			List<IInventorySlot> inputSlots, List<IInventorySlot> outputSlots, boolean sorting,
+			List<ITileComponent> components,
+			CompoundTag beeSlotsNbt, CompoundTag feederSlotsNbt, CompoundTag pbUpgradeCountsNbt,
+			CompoundTag pbUpgradeInputNbt, CompoundTag pbUpgradeOutputNbt,
+			CompoundTag fluidNbt, CompoundTag cageOutSlotNbt,
+			@Nullable List<ItemStack> outputItems,
+			@Nullable CompoundTag cageInSlotNbt, @Nullable CompoundTag energySlotNbt,
+			@Nullable CompoundTag outputBufferNbt, int selectedBeeSlot,
+			boolean aeItemOutputEnabled, boolean aeFluidOutputEnabled, boolean directEjectEnabled,
+			boolean directAeOutputEnabled, boolean centrifugePriorityEnabled,
+			boolean feederConversionEnabled, boolean directContainerOutputEnabled,
+			@Nullable CompoundTag geneTreatSlotNbt, @Nullable CompoundTag geneTreatRestockNbt) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.beeSlotsNbt = beeSlotsNbt;
@@ -197,6 +225,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 		this.fluidNbt = fluidNbt;
 		this.cageOutSlotNbt = cageOutSlotNbt;
 		this.geneTreatSlotNbt = geneTreatSlotNbt;
+		this.geneTreatRestockNbt = geneTreatRestockNbt == null ? null : geneTreatRestockNbt.copy();
 		this.outputItems = outputItems;
 		this.cageInSlotNbt = cageInSlotNbt;
 		this.energySlotNbt = energySlotNbt;

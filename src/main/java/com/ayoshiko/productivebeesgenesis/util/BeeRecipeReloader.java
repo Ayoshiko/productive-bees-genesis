@@ -151,6 +151,9 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		CentrifugeRecipeIndex.rebuild(recipeManager);
 		// 延迟重试可能晚于 TagsUpdatedEvent 完成，必须在真正重建点同步清理长短两层查找缓存。
 		SharedPbRecipeCache.invalidate();
+		// 延迟重试可能晚于标签事件，蜂箱索引与万象模板也必须在实际完成点失效。
+		BeeInfoHelper.invalidateCache();
+		com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache.invalidate();
 		ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
 	}
 }

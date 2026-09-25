@@ -126,6 +126,11 @@ public final class ModPayloads {
 				ToggleApiaryFeederConversionPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleToggleApiaryFeederConversion
 		);
+		registrar.playToServer(
+				ToggleApiaryGeneTreatRestockPayload.TYPE,
+				ToggleApiaryGeneTreatRestockPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleToggleApiaryGeneTreatRestock
+		);
 		// 喂食槽逐格禁用包 — 由 GuiFeederWindow 在禁用编辑模式（或 Alt+左键）点击格子发送
 		registrar.playToServer(
 				ToggleFeederSlotDisabledPayload.TYPE,

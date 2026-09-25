@@ -57,6 +57,10 @@ final class ApiaryContainerTrackers {
 		container.track(SyncableBoolean.create(
 				tile::isFeederConversionEnabled,
 				tile::setFeederConversionEnabled));
+		container.track(SyncableBoolean.create(
+				tile::isGeneTreatRestockEnabled, tile::setGeneTreatRestockEnabled));
+		container.track(SyncableBoolean.create(
+				tile.getGeneTreatRestock()::isSuspended, tile.getGeneTreatRestock()::setClientSuspended));
 		// 喂食槽逐格禁用位掩码：60 槽最多 1 个 long，按槽位数注册 ceil(N/64) 个 tracker，
 		// 比"每格一个 SyncableBoolean"少两个数量级的 tracker，且 MEK 只在值变化时发包。
 		// 字数量由 getDisabledWordCount 统一计算，客户端与服务端读同一个 tile 配置，必然一致。

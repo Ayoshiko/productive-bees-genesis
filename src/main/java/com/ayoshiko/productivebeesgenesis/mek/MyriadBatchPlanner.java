@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
+import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -15,6 +16,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,8 +26,8 @@ import java.util.function.BiConsumer;
 	 * 万象创世产物批量插入规划器：将按 bee_type 分配的数量转换为槽位索引执行计划，
 	 * 避免传统 insertItem 路径的 copy/组件派生/listener 扫描开销。
 	 * <p>
-	 * 设计原则：单一职责、零模拟副本、对象池化、Snapshot 跨 tick 缓存。
-	 * 线程安全：plan/apply 主线程执行，对象池无需并发安全；Snapshot 缓存用 ThreadLocal 隔离。
+	 * 设计原则：单一职责、零模拟副本、对象池化、单次生产事务内复用容量快照。
+	 * 线程安全：plan/apply 主线程执行；库存变更后必须重新拍摄快照。
 	 */
 public final class MyriadBatchPlanner {
 
@@ -37,9 +39,6 @@ public final class MyriadBatchPlanner {
 
 	/** Plan 对象池 */
 	private static final Deque<Plan> planPool = new ArrayDeque<>(POOL_CAPACITY);
-
-	/** Snapshot 跨 tick 缓存：按 tick + slots identity 复用 */
-	private static final ThreadLocal<SnapshotCache> snapshotCache = ThreadLocal.withInitial(SnapshotCache::new);
 
 	/**
 	 * bee_type 模板缓存（按 baseItem + beeType）。高倍加速下高频创建仅 bee_type 不同的模板，
@@ -189,27 +188,18 @@ public final class MyriadBatchPlanner {
 		plan.recycle();
 	}
 
-	// ===== Snapshot 缓存与拍摄 =====
-
-	/** Snapshot 缓存条目：按 tick + slots identity 复用 */
-	private static final class SnapshotCache {
-		private long tick = -1L;
-		// The handler reuses one mutable list across processes, so list identity alone
-		// is insufficient. Retain the element identities captured with the snapshot.
-		private IInventorySlot[] slotIdentities;
-		private Item baseItem;
-		@Nullable
-		private SlotCapacitySnapshot snapshot;
-	}
+	// ===== 容量快照 =====
 
 	/**
 	 * 槽位容量快照（只读）
 	 * <br/>
 	 * 一次性读取每个输出槽的 limit/count/bee_type，避免批量规划过程中反复调用
 	 * {@link IInventorySlot#getLimit(ItemStack)} 等可能开销较大的方法。
-	 * 同一 tick 内同一 slots 实例的 limit 不变，因此一次 complete 调用只需拍一张快照。
+	 * 一次 complete 调用的二分预检与最终规划共用快照；后续生产调用重新读取库存。
 	 */
 	public static final class SlotCapacitySnapshot {
+		private final List<IInventorySlot> slots;
+		private final Map<ItemStack, int[]> candidateLimits = new IdentityHashMap<>();
 		public final long tick;
 		public final int slotCount;
 		public final boolean[] empty;
@@ -219,9 +209,10 @@ public final class MyriadBatchPlanner {
 		/** 可用于万象产物的剩余总容量（仅统计空槽与候选模板兼容槽） */
 		public final long totalRemainingCapacity;
 
-		private SlotCapacitySnapshot(long tick, int slotCount, boolean[] empty,
+		private SlotCapacitySnapshot(List<IInventorySlot> slots, long tick, int slotCount, boolean[] empty,
 				ItemStack[] slotTemplates, int[] slotCounts,
 				int[] slotLimits, long totalRemainingCapacity) {
+			this.slots = new ArrayList<>(slots);
 			this.tick = tick;
 			this.slotCount = slotCount;
 			this.empty = empty;
@@ -230,36 +221,34 @@ public final class MyriadBatchPlanner {
 			this.slotLimits = slotLimits;
 			this.totalRemainingCapacity = totalRemainingCapacity;
 		}
+
+		/** 同一事务内，每个真实模板仅模拟一次各槽的内部接收容量。 */
+		private int[] limitsFor(ItemStack template) {
+			return candidateLimits.computeIfAbsent(template, key -> {
+				int[] limits = new int[slotCount];
+				for (int i = 0; i < slotCount; i++) {
+					IInventorySlot slot = slots.get(i);
+					if (slot == null || (!empty[i] && (slotTemplates[i] == null
+							|| !ItemStack.isSameItemSameComponents(slotTemplates[i], key)))) continue;
+					int remaining = safeGetSlotLimit(slot, key) - slotCounts[i];
+					if (remaining <= 0) continue;
+					ItemStack rejected = slot.insertItem(key.copyWithCount(remaining), Action.SIMULATE, AutomationType.INTERNAL);
+					limits[i] = slotCounts[i] + Math.max(0, remaining - rejected.getCount());
+				}
+				return limits;
+			});
+		}
 	}
 
 	/**
-	 * 拍摄输出槽容量快照（带跨 tick 缓存）。同 tick+同一槽位元素身份直接返回缓存；snapshot 只读可跨工厂复用。
+	 * 拍摄当前输出槽容量。槽位身份和 tick 相同不代表库存未变，不能跨生产调用复用。
 	 * <br/>
-	 * 空槽容量用 {@link IInventorySlot#getLimit(ItemStack)}，异常/非正回退到 {@link Item#getMaxStackSize(ItemStack)}；
-	 * 非空槽用 {@code slot.getLimit(stack) - stack.getCount()}。
+	 * 空槽先记录基础上限，规划时按真实模板及内部模拟插入校验；
+	 * 非正容量视为拒收，无法确定容量的异常向上传播。
 	 */
 	@NotNull
 	public static SlotCapacitySnapshot takeSnapshot(List<IInventorySlot> slots, Item baseItem, long tick) {
-		SnapshotCache cache = snapshotCache.get();
-		if (cache.snapshot != null && cache.tick == tick && cache.baseItem == baseItem
-				&& sameSlotIdentities(cache.slotIdentities, slots)) {
-			return cache.snapshot;
-		}
-		SlotCapacitySnapshot snapshot = doTakeSnapshot(slots, baseItem, tick);
-		cache.tick = tick;
-		cache.slotIdentities = slots.toArray(new IInventorySlot[0]);
-		cache.baseItem = baseItem;
-		cache.snapshot = snapshot;
-		return snapshot;
-	}
-
-	private static boolean sameSlotIdentities(@Nullable IInventorySlot[] cached,
-			List<IInventorySlot> current) {
-		if (cached == null || cached.length != current.size()) return false;
-		for (int i = 0; i < cached.length; i++) {
-			if (cached[i] != current.get(i)) return false;
-		}
-		return true;
+		return doTakeSnapshot(slots, baseItem, tick);
 	}
 
 	/** 实际拍摄快照（无缓存） */
@@ -284,7 +273,6 @@ public final class MyriadBatchPlanner {
 			if (stack.isEmpty()) {
 				empty[i] = true;
 				int limit = safeGetSlotLimit(slot, emptyTemplate);
-				if (limit <= 0) limit = emptyTemplate.getMaxStackSize();
 				slotLimits[i] = limit;
 				totalRemainingCapacity += limit;
 			} else {
@@ -301,16 +289,15 @@ public final class MyriadBatchPlanner {
 			}
 		}
 
-		return new SlotCapacitySnapshot(tick, slotCount, empty, slotTemplates,
+		return new SlotCapacitySnapshot(slots, tick, slotCount, empty, slotTemplates,
 				slotCounts, slotLimits, totalRemainingCapacity);
 	}
 
 	private static int safeGetSlotLimit(IInventorySlot slot, ItemStack stack) {
 		try {
-			return slot.getLimit(stack);
+			return slot.isItemValid(stack) ? Math.max(0, slot.getLimit(stack)) : 0;
 		} catch (Exception e) {
-			// 某些槽位实现可能因组件派生抛出异常，回退到物品自身上限保证稳定性
-			return stack.getItem().getMaxStackSize(stack);
+			throw new IllegalStateException("Cannot determine Myriad output slot capacity", e);
 		}
 	}
 
@@ -320,7 +307,7 @@ public final class MyriadBatchPlanner {
 	@NotNull
 	public static Plan plan(List<IInventorySlot> slots, Item baseItem,
 							Map<ResourceLocation, Integer> allocation, long tick) {
-		return plan(takeSnapshot(slots, baseItem, tick), baseItem, allocation, Map.of());
+		return plan(takeSnapshot(slots, baseItem, tick), baseItem, allocation, null);
 	}
 
 	/** 规划批量插入，并使用缓存中的真实蜜脾模板。 */
@@ -335,7 +322,7 @@ public final class MyriadBatchPlanner {
 	@NotNull
 	public static Plan plan(SlotCapacitySnapshot snapshot, Item baseItem,
 							Map<ResourceLocation, Integer> allocation) {
-		return plan(snapshot, baseItem, allocation, Map.of());
+		return plan(snapshot, baseItem, allocation, null);
 	}
 
 	/** 基于快照和真实蜜脾模板规划批量插入。 */
@@ -356,16 +343,18 @@ public final class MyriadBatchPlanner {
 			int remaining = entry.getValue();
 			if (remaining <= 0) continue;
 			ItemStack outputTemplate = resolveTemplate(baseItem, beeType, templateByType);
+			if (outputTemplate.isEmpty()) return Plan.failure();
+			int[] limits = snapshot.limitsFor(outputTemplate);
 
 			// 第一优先级：已有相同物品及组件的槽位。
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
-				if (availableAsEmpty[i] || workingTemplates[i] == null
+				int space = limits[i] - workingCounts[i];
+				if (space <= 0 || availableAsEmpty[i] || workingTemplates[i] == null
 						|| !ItemStack.isSameItemSameComponents(workingTemplates[i], outputTemplate)) continue;
-				int space = snapshot.slotLimits[i] - workingCounts[i];
-				if (space <= 0) continue;
 				int add = Math.min(space, remaining);
 				addAmounts[i] += add;
-				wasEmpty[i] = false;
+				if (templates[i] == null) templates[i] = outputTemplate;
+				// 本轮先占用的空槽仍须 setStack，后续同模板分配不能改成 growStack。
 				workingCounts[i] += add;
 				remaining -= add;
 			}
@@ -373,7 +362,7 @@ public final class MyriadBatchPlanner {
 			// 第二优先级：空槽；上限必须按真实模板重新计算。
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
 				if (!availableAsEmpty[i]) continue;
-				int limit = snapshot.slotLimits[i];
+				int limit = limits[i];
 				int space = limit - workingCounts[i];
 				if (space <= 0) continue;
 				int add = Math.min(space, remaining);
@@ -480,9 +469,7 @@ public final class MyriadBatchPlanner {
 			}
 			for (SlotPlan slotPlan : plans) {
 				IInventorySlot slot = slots.get(slotPlan.slotIndex());
-				if (slot == null) {
-					continue;
-				}
+				if (slot == null) throw new IllegalStateException("Missing planned Myriad output slot");
 				if (slotPlan.wasEmpty()) {
 					ItemStack toSet = slotPlan.template().copyWithCount(slotPlan.amount());
 					beforeSlotMutation.run();
@@ -491,7 +478,10 @@ public final class MyriadBatchPlanner {
 				} else {
 					// Task 4 修复：growStack 触发 listener，替代直接修改 getStack 返回值
 					beforeSlotMutation.run();
-					slot.growStack(slotPlan.amount(), Action.EXECUTE);
+					int accepted = slot.growStack(slotPlan.amount(), Action.EXECUTE);
+					if (accepted != slotPlan.amount()) {
+						throw new IllegalStateException("Myriad output slot accepted " + accepted + " of " + slotPlan.amount());
+					}
 					afterSlotMutation.accept(slotPlan.slotIndex(), slot);
 				}
 			}
@@ -512,21 +502,19 @@ public final class MyriadBatchPlanner {
 		}
 	}
 
-	/** 创建实际产物模板；模板快照缺失时回退到带 bee_type 的可配置蜜脾。 */
+	/** 创建实际产物模板；仅旧签名允许构造可配置模板，显式映射缺项时暂停。 */
 	private static ItemStack resolveTemplate(Item baseItem, ResourceLocation beeType,
 			Map<ResourceLocation, ItemStack> templateByType) {
 		ItemStack resolved = templateByType == null ? null : templateByType.get(beeType);
-		Item outputItem = resolved == null || resolved.isEmpty() ? baseItem : resolved.getItem();
-		TemplateKey key = new TemplateKey(baseItem, beeType, outputItem);
+		// 发布的真实模板只读，可直接复用；仅按物品缓存会丢失重载后的组件变化。
+		if (resolved != null && !resolved.isEmpty()) return resolved;
+		// 显式真实模板映射缺项时暂停；只有旧签名允许合成可配置模板。
+		if (templateByType != null) return ItemStack.EMPTY;
+		TemplateKey key = new TemplateKey(baseItem, beeType, baseItem);
 		ItemStack cached = TEMPLATE_CACHE.get(key);
 		if (cached != null) return cached;
-		ItemStack template;
-		if (resolved != null && !resolved.isEmpty()) {
-			template = resolved.copyWithCount(1);
-		} else {
-			template = new ItemStack(baseItem);
-			template.set(PbDataComponents.beeType(), beeType);
-		}
+		ItemStack template = new ItemStack(baseItem);
+		template.set(PbDataComponents.beeType(), beeType);
 		if (TEMPLATE_CACHE.size() < TEMPLATE_CACHE_CAPACITY) TEMPLATE_CACHE.put(key, template);
 		return template;
 	}
@@ -536,10 +524,4 @@ public final class MyriadBatchPlanner {
 		TEMPLATE_CACHE.clear();
 	}
 
-	/**
-	 * 清理 ThreadLocal 快照缓存（服务端停止时调用，防止线程池复用场景下的引用残留）
-	 */
-	public static void clearThreadLocals() {
-		snapshotCache.remove();
-	}
 }

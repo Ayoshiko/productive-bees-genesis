@@ -53,6 +53,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.BooleanValue speedUpgradeTiersExclusive;
 	public final ModConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
 	public final ModConfigSpec.BooleanValue apiaryBeeGenesAffectWork;
+	public final ModConfigSpec.BooleanValue apiaryProduceAllFlowers;
 
 	// ========== 万象创世过滤配置(存档级别)==========
 	// 使用枚举类型,ConfigurationScreen自动渲染循环切换按钮
@@ -210,6 +211,11 @@ public final class ServerConfig {
 				.translation("productivebeesgenesis.configuration.balance.apiaryBeeGenesAffectWork")
 				.define("apiaryBeeGenesAffectWork",
 						BalanceConfig.DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);
+		apiaryProduceAllFlowers = builder
+				.comment("多花源蜜蜂每轮同时生产饲养槽内所有不同的有效花源；关闭时随机选择一种",
+						"仅作用于机械蜂箱，禁用槽和 PB 复制黑名单中的方块不参与。", BalanceConfig.CUSTOM_SETTING_COMMENT)
+				.translation("productivebeesgenesis.configuration.balance.apiaryProduceAllFlowers")
+				.define("apiaryProduceAllFlowers", BalanceConfig.DEFAULT_CUSTOM_APIARY_ALL_FLOWERS);
 		builder.pop();
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");

@@ -15,6 +15,7 @@ public final class BalanceConfig {
 	static final boolean DEFAULT_CUSTOM_SPEED_EXCLUSIVE = true;
 	static final boolean DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT = false;
 	static final boolean DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK = true;
+	static final boolean DEFAULT_CUSTOM_APIARY_ALL_FLOWERS = false;
 	static final int DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT = 4;
 	static final int DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT = 8;
 	static final boolean LEGACY_PRODUCTIVITY_EXCLUSIVE = false;
@@ -56,7 +57,7 @@ public final class BalanceConfig {
 				persisted.productivityTiersExclusive(),
 				persisted.speedTiersExclusive(),
 				persisted.centrifugeProductivityAffectsOutput(),
-				persisted.apiaryBeeGenesAffectWork());
+				persisted.apiaryBeeGenesAffectWork(), persisted.apiaryProduceAllFlowers());
 		initialized = true;
 		return changed;
 	}
@@ -80,6 +81,11 @@ public final class BalanceConfig {
 	/** Return whether mechanical apiaries obey each bee's behavior and weather-tolerance genes. */
 	public static boolean apiaryBeeGenesAffectWork() {
 		return activeRules.apiaryBeeGenesAffectWork();
+	}
+
+	/** 多花源蜜蜂每轮生产所有已放入的有效花源，基础预设保持随机单种。 */
+	public static boolean apiaryProduceAllFlowers() {
+		return activeRules.apiaryProduceAllFlowers();
 	}
 
 	/**
@@ -120,7 +126,7 @@ public final class BalanceConfig {
 				configured.productivityTiersExclusive(),
 				configured.speedTiersExclusive(),
 				configured.centrifugeProductivityAffectsOutput(),
-				configured.apiaryBeeGenesAffectWork());
+				configured.apiaryBeeGenesAffectWork(), configured.apiaryProduceAllFlowers());
 		return new CustomSettings(
 				rules.productivityTiersExclusive(),
 				rules.speedTiersExclusive(),
@@ -130,7 +136,8 @@ public final class BalanceConfig {
 				pbUpgradeLimit(preset, configured.apiaryTimeLimit()),
 				pbUpgradeLimit(preset, configured.centrifugeProductivityLimit()),
 				pbUpgradeLimit(preset, configured.centrifugeTimeLimit()),
-				centrifugeStackLimit(preset, configured.centrifugeStackLimit()));
+				centrifugeStackLimit(preset, configured.centrifugeStackLimit()),
+				rules.apiaryProduceAllFlowers());
 	}
 
 	/**
@@ -184,7 +191,7 @@ public final class BalanceConfig {
 			boolean customProductivityExclusive,
 			boolean customSpeedExclusive,
 			boolean customCentrifugeOutput,
-			boolean customApiaryBeeGenesAffectWork) {
+			boolean customApiaryBeeGenesAffectWork, boolean customApiaryProduceAllFlowers) {
 		BalancePreset safePreset = preset == null ? DEFAULT_PRESET : preset;
 		return switch (safePreset) {
 			case BASIC -> Rules.basic();
@@ -194,7 +201,7 @@ public final class BalanceConfig {
 					customProductivityExclusive,
 					customSpeedExclusive,
 					customCentrifugeOutput,
-					customApiaryBeeGenesAffectWork);
+					customApiaryBeeGenesAffectWork, customApiaryProduceAllFlowers);
 		};
 	}
 
@@ -247,7 +254,8 @@ public final class BalanceConfig {
 				readInt(ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount,
 						DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT),
 				readInt(ModConfig.SERVER.mekCentrifugeMaxStackUpgrades,
-						DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT));
+						DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT),
+				readBoolean(ModConfig.SERVER.apiaryProduceAllFlowers, DEFAULT_CUSTOM_APIARY_ALL_FLOWERS));
 	}
 
 	private static boolean writeCustomSettings(CustomSettings settings) {
@@ -260,6 +268,8 @@ public final class BalanceConfig {
 				settings.centrifugeProductivityAffectsOutput());
 		changed |= setBoolean(ModConfig.SERVER.apiaryBeeGenesAffectWork,
 				settings.apiaryBeeGenesAffectWork());
+		changed |= setBoolean(ModConfig.SERVER.apiaryProduceAllFlowers,
+				settings.apiaryProduceAllFlowers());
 		changed |= setInt(ModConfig.SERVER.apiaryPbUpgradeProductivityMaxCount,
 				settings.apiaryProductivityLimit());
 		changed |= setInt(ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount,
@@ -313,10 +323,10 @@ public final class BalanceConfig {
 			boolean productivityTiersExclusive,
 			boolean speedTiersExclusive,
 			boolean centrifugeProductivityAffectsOutput,
-			boolean apiaryBeeGenesAffectWork) {
+			boolean apiaryBeeGenesAffectWork, boolean apiaryProduceAllFlowers) {
 
 		static Rules basic() {
-			return new Rules(BalancePreset.BASIC, true, true, false, true);
+			return new Rules(BalancePreset.BASIC, true, true, false, true, false);
 		}
 
 		static Rules paradoxInfinity() {
@@ -325,7 +335,7 @@ public final class BalanceConfig {
 					LEGACY_PRODUCTIVITY_EXCLUSIVE,
 					LEGACY_SPEED_EXCLUSIVE,
 					LEGACY_CENTRIFUGE_OUTPUT,
-					LEGACY_APIARY_BEE_GENES_AFFECT_WORK);
+					LEGACY_APIARY_BEE_GENES_AFFECT_WORK, true);
 		}
 
 		static Rules customDefaults() {
@@ -334,7 +344,7 @@ public final class BalanceConfig {
 					DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE,
 					DEFAULT_CUSTOM_SPEED_EXCLUSIVE,
 					DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT,
-					DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);
+					DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK, DEFAULT_CUSTOM_APIARY_ALL_FLOWERS);
 		}
 	}
 
@@ -347,6 +357,6 @@ public final class BalanceConfig {
 			int apiaryTimeLimit,
 			int centrifugeProductivityLimit,
 			int centrifugeTimeLimit,
-			int centrifugeStackLimit) {
+			int centrifugeStackLimit, boolean apiaryProduceAllFlowers) {
 	}
 }

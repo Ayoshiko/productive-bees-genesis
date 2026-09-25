@@ -94,6 +94,7 @@ final class ApiaryTilePersistence {
 	 * </ul>
 	 */
 	static void saveAllItemsForDrop(TileEntityMekApiary tile) {
+		tile.getGeneTreatRestock().clearAfterTransfer();
 		// 蜜蜂槽数组清空（BeeSlot.clear() 重置全部字段并标记 dirty）
 		try {
 			for (BeeSlot slot : tile.slotManager().getBeeSlots()) {

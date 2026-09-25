@@ -104,6 +104,24 @@ class ApiaryAe2HostAdapter {
 		ae2LifecycleHandler.tryConnectNode(tile);
 	}
 
+	/** 每个真实 tick 在喂食前捕获模板并处理已付费库存，外部 API 经加载守卫隔离。 */
+	void restockGeneTreat() {
+		var state = tile.getGeneTreatRestock();
+		if (state.isSuspended() || (!state.isEnabled() && !state.hasPending())) return;
+		var slot = tile.getGeneTreatSlot();
+		if (state.observe(slot.getStack())) tile.setChanged();
+		try {
+			if (state.deliverPending(slot)) tile.setChanged();
+		} catch (RuntimeException e) {
+			state.suspend();
+			tile.setChanged();
+			com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.LOGGER.error(
+					"Gene-treat delivery suspended at {}", tile.getBlockPos(), e);
+		}
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
+		com.ayoshiko.productivebeesgenesis.mek.ae2.ApiaryGeneTreatRestocker.tick(tile);
+	}
+
 	/** tick 末尾尝试将输出槽物品推送到 AE2 网络 */
 	void pushOutputs() {
 		// AE2 未安装守卫：Ae2OutputPusher 方法体验证需解析 AEItemKey&lt;:AEKey 子类型层级，

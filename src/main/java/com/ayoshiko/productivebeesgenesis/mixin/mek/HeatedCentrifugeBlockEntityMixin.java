@@ -29,16 +29,16 @@ public abstract class HeatedCentrifugeBlockEntityMixin {
 			MyriadCreationsEventHandler::shouldBlockOperation);
 	}
 
-	/** completeRecipeProcessing TAIL — 追加随机蜜脾产出（支持Omega升级倍率） */
-	@Inject(method = "completeRecipeProcessing", at = @At("TAIL"))
+	/** 扣料前预留热能配方产物空间，失败时保留输入（支持 Omega 升级倍率）。 */
+	@Inject(method = "completeRecipeProcessing", at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$appendRandomCombsForHeated(
 			RecipeHolder<CentrifugeRecipe> recipe,
 			IItemHandlerModifiable invHandler,
 			RandomSource random,
 			CallbackInfo ci) {
-		CentrifugeMixinHelper.appendRandomCombs(
-				invHandler, random, (CentrifugeBlockEntity) (Object) this,
-				MyriadCreationsEventHandler::appendRandomCombs,
-				"热能离心机 Mixin 异常");
+		if (!CentrifugeMixinHelper.appendRandomCombs(
+				recipe, invHandler, random, (CentrifugeBlockEntity) (Object) this, true)) {
+			ci.cancel();
+		}
 	}
 }

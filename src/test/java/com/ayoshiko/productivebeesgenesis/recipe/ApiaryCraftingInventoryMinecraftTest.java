@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.apiary.GeneTreatRestockState;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.util.GeneAttribute;
@@ -244,6 +245,62 @@ class ApiaryCraftingInventoryMinecraftTest {
 		placed.saveToItem(savedAgain, provider);
 		assertStack(treat(31, "productivity"), ContainerType.ITEM.getOrEmpty(savedAgain).containers().getLast());
 		assertStack(treat(31, "productivity"), original.getGeneTreatSlot().getStack());
+	}
+
+	@Test
+	void restockAssetsSurviveBlockItemAndInstallerSnapshots() {
+		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		var source = new ItemStack(ModItems.MEK_APIARY.get());
+		var original = tile(source);
+		var state = original.getGeneTreatRestock();
+		state.setEnabled(true);
+		state.observe(treat(1, "productivity"));
+		state.acceptExtracted(treat(12, "productivity"));
+		var expected = state.save(provider);
+		original.saveToItem(source, provider);
+		var restored = tile(source);
+		restored.loadCustomOnly(source.get(DataComponents.BLOCK_ENTITY_DATA).copyTag(), provider);
+		assertEquals(expected, restored.getGeneTreatRestock().save(provider));
+		original.saveAllItemsForDrop();
+		assertFalse(state.hasPending());
+		assertFalse(state.isEnabled());
+		var upgrade = restored.getUpgradeData(provider);
+		assertFalse(restored.getGeneTreatRestock().hasPending());
+		var upgraded = tile(new ItemStack(ModItems.BASIC_MEK_APIARY_FACTORY.get()));
+		upgraded.parseUpgradeData(provider, upgrade);
+		assertEquals(expected, upgraded.getGeneTreatRestock().save(provider));
+		assertTrue(upgraded.getGeneTreatRestock().deliverPending(upgraded.getGeneTreatSlot()));
+		assertEquals(12, upgraded.getGeneTreatSlot().getCount());
+		assertFalse(upgraded.getGeneTreatRestock().hasPending());
+	}
+
+	@ParameterizedTest
+	@ValueSource(ints = {0, 1_000_000})
+	void craftingRetainsPendingTreatsAndFirstInputDefaultSetting(int productCount) {
+		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		var first = new ItemStack(ModItems.MEK_APIARY.get());
+		var second = first.copy();
+		var original = tile(second);
+		original.getGeneTreatRestock().setEnabled(true);
+		original.getGeneTreatRestock().observe(treat(1, "productivity"));
+		original.getGeneTreatRestock().acceptExtracted(treat(12, "productivity"));
+		if (productCount > 0) original.getOutputSlots().getFirst().setStack(new ItemStack(Items.DIAMOND, productCount));
+		original.saveToItem(second, provider);
+		var before = second.copy();
+		var wrapper = new ApiaryShapedRecipe(recipe(first, new ItemStack(ModItems.BASIC_MEK_APIARY_FACTORY.get())));
+		var result = wrapper.assemble(CraftingInput.of(2, 1, List.of(first, second)), provider);
+		assertFalse(result.isEmpty());
+		var placed = tile(result);
+		placed.loadCustomOnly(result.get(DataComponents.BLOCK_ENTITY_DATA).copyTag(), provider);
+		assertFalse(placed.getGeneTreatRestock().isEnabled(), "First input has the default disabled setting");
+		assertTrue(placed.getGeneTreatRestock().deliverPending(placed.getGeneTreatSlot()));
+		assertEquals(12, placed.getGeneTreatSlot().getCount());
+		assertStack(before, second);
+		var invalid = second.get(DataComponents.BLOCK_ENTITY_DATA).copyTag();
+		invalid.putString(GeneTreatRestockState.NBT_KEY, "malformed assets");
+		second.set(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.CustomData.of(invalid));
+		assertTrue(wrapper.assemble(CraftingInput.of(2, 1, List.of(first, second)), provider).isEmpty());
+		assertEquals(invalid, second.get(DataComponents.BLOCK_ENTITY_DATA).copyTag());
 	}
 
 	private static TileEntityMekApiary tile(ItemStack stack) {

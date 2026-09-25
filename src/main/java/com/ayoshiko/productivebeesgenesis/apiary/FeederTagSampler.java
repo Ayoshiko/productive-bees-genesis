@@ -8,6 +8,8 @@ import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -22,6 +24,32 @@ import java.util.concurrent.ThreadLocalRandom;
 final class FeederTagSampler {
 
 	private FeederTagSampler() {
+	}
+
+	/** 每种有效方块只计一次，忽略堆叠数、重复槽和物品组件，保持 PB 的方块复制语义。 */
+	static List<ItemStack> allBlocks(List<FeederInventorySlot> slots, TagKey<Block> blockTag,
+			@Nullable TagKey<Block> excludedTag) {
+		LinkedHashSet<Block> blocks = new LinkedHashSet<>();
+		for (FeederInventorySlot slot : slots) {
+			if (!slot.isActive() || !(slot.getStack().getItem() instanceof BlockItem item)) continue;
+			Block block = item.getBlock();
+			if (block.defaultBlockState().is(blockTag)
+					&& (excludedTag == null || !block.defaultBlockState().is(excludedTag))) blocks.add(block);
+		}
+		List<ItemStack> result = new ArrayList<>(blocks.size());
+		for (Block block : blocks) result.add(new ItemStack(block));
+		return result;
+	}
+
+	/** 染料直放兼容路径：按物品种类去重，每种产出一个，不复制输入堆叠数。 */
+	static List<ItemStack> allItems(List<FeederInventorySlot> slots, TagKey<Item> itemTag) {
+		LinkedHashSet<Item> items = new LinkedHashSet<>();
+		for (FeederInventorySlot slot : slots) {
+			if (slot.isActive() && slot.getStack().is(itemTag)) items.add(slot.getStack().getItem());
+		}
+		List<ItemStack> result = new ArrayList<>(items.size());
+		for (Item item : items) result.add(new ItemStack(item));
+		return result;
 	}
 
 	/**

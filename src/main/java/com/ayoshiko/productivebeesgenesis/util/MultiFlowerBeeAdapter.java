@@ -8,6 +8,7 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
@@ -94,6 +95,14 @@ public final class MultiFlowerBeeAdapter {
 		return strategy == null ? ItemStack.EMPTY : strategy.sampleFromFeeder(feeder, level);
 	}
 
+	/** 枚举当前饲养槽内全部不同花源；不枚举注册表，也不凭空补齐未放入的花源。 */
+	public static List<ItemStack> allProduceFromFeeder(
+			ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder, @Nullable Level level) {
+		if (feeder == null) return List.of();
+		MultiFlowerStrategy strategy = STRATEGIES.get(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
+		return strategy == null ? List.of() : strategy.allFromFeeder(feeder, level);
+	}
+
 	/**
 	 * 多花蜜蜂策略接口
 	 * <br/>
@@ -101,6 +110,8 @@ public final class MultiFlowerBeeAdapter {
 	 */
 	private interface MultiFlowerStrategy {
 		ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level);
+
+		List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level);
 
 		boolean hasValidFlower(FeederSlotManager feeder);
 	}
@@ -112,6 +123,11 @@ public final class MultiFlowerBeeAdapter {
 	 * getFloweringBlockFromTag(level, flowerPos, ModTags.LUMBER, beeEntity)
 	 */
 	private static final class LumberStrategy implements MultiFlowerStrategy {
+		@Override
+		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
+			return feeder.getAllBlocksFromFeeder(ModTags.LUMBER, ModTags.DUPE_BLACKLIST);
+		}
+
 		@Override
 		public ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			return feeder.getRandomBlockFromFeeder(ModTags.LUMBER, ModTags.DUPE_BLACKLIST);
@@ -130,6 +146,11 @@ public final class MultiFlowerBeeAdapter {
 	 * getFloweringBlockFromTag(level, flowerPos, ModTags.QUARRY, beeEntity)
 	 */
 	private static final class QuarryStrategy implements MultiFlowerStrategy {
+		@Override
+		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
+			return feeder.getAllBlocksFromFeeder(ModTags.QUARRY, ModTags.DUPE_BLACKLIST);
+		}
+
 		@Override
 		public ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			return feeder.getRandomBlockFromFeeder(ModTags.QUARRY, ModTags.DUPE_BLACKLIST);
@@ -150,6 +171,19 @@ public final class MultiFlowerBeeAdapter {
 	 * 喂食槽内没有花时回退到旧行为：直接取 c:dyes 物品标签内的染料产物（向后兼容）。
 	 */
 	private static final class DyeStrategy implements MultiFlowerStrategy {
+		@Override
+		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
+			List<ItemStack> outputs = new ArrayList<>();
+			if (level != null) {
+				for (ItemStack flower : feeder.getAllBlocksFromFeeder(net.minecraft.tags.BlockTags.FLOWERS, null)) {
+					ItemStack output = DyeProduceResolver.resolveBotaniaPetal(flower);
+					if (output.isEmpty()) output = DyeProduceResolver.resolveDyeFromFlower(level, flower);
+					if (!output.isEmpty()) outputs.add(output);
+				}
+			}
+			return outputs.isEmpty() ? feeder.getAllItemsFromFeeder(ModTags.Common.DYES) : outputs;
+		}
+
 		@Override
 		public ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			// 1. PB 原版语义：从喂食槽随机取一朵花（minecraft:flowers 方块标签）

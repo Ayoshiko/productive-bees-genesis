@@ -231,6 +231,20 @@ public final class BeeInfoHelper {
 		return BeeProduceQueries.getBeeProduce(level, beeType);
 	}
 
+	/** 返回已加载蜂箱产物配方中的蜂种，包含不经过 BeeReloadListener 的固定实体蜂。 */
+	public static List<ResourceLocation> getBeeTypesWithProduce(@Nonnull Level level) {
+		return BeeProduceQueries.getBeeTypesWithProduce(level);
+	}
+
+	/** 枚举全部蜂箱配方的真实产物，不改变普通蜂箱的首条配方语义。 */
+	public static List<ItemStack> getAllBeeProduce(@Nonnull Level level, @Nonnull ResourceLocation beeType) {
+		return BeeProduceQueries.getAllBeeProduce(level, beeType);
+	}
+
+	public static boolean isProduceIndexComplete() {
+		return BeeProduceQueries.isProduceIndexComplete();
+	}
+
 	/**
 	 * 查询指定蜜蜂类型的产物 ItemStack 列表（显示用途）— 委托 {@link BeeProduceQueries#getBeeProduceStacks}
 	 */

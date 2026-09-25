@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /** 万象创世随机产物必须复用蜂箱配方中的真实蜜脾形态。 */
 class MyriadSpecialCombOutputWiringTest {
@@ -24,17 +25,19 @@ class MyriadSpecialCombOutputWiringTest {
 	@Test
 	void candidateGateTestsActualSpecialHoneycombRecipes() throws Exception {
 		String source = Files.readString(ABSTRACT_HANDLER);
-		assertTrue(source.contains("BeeInfoHelper.getBeeProduceStacks(level, beeType)"));
-		assertTrue(source.contains("produce.getItem() instanceof net.minecraft.world.item.HoneycombItem"));
-		assertTrue(source.contains("findCentrifugeRecipe(level, produce)"));
+		String gate = source.substring(source.indexOf("public static List<ResourceLocation> buildBeeTypeCache("),
+				source.indexOf("protected static boolean hasCentrifugeRecipe("));
+		assertTrue(gate.contains("BeeInfoHelper.getAllBeeProduce(level, beeType)"));
+		assertTrue(gate.contains("MyriadBeeTypeCache::isHoneycomb"));
+		assertFalse(gate.contains("hasCentrifugeRecipe(level"));
 	}
 
 	@Test
 	void cacheResolvesRealHoneycombAndCombBlockTemplates() throws Exception {
 		String cache = Files.readString(CACHE);
 		String selector = Files.readString(SELECTOR);
-		assertTrue(cache.contains("BeeInfoHelper.getBeeProduceStacks(level, beeType)"));
-		assertTrue(cache.contains("output.getItem() instanceof net.minecraft.world.item.HoneycombItem"));
+		assertTrue(cache.contains("BeeInfoHelper.getAllBeeProduce(level, beeType)"));
+		assertTrue(cache.contains("if (isHoneycomb(output))"));
 		assertTrue(cache.contains("RandomHoneycombSelector.normalizeHoneycombTemplate(beeType, output)"));
 		assertTrue(selector.contains("BeeHelper\n\t\t\t\t\t.getCombBlockFromHoneyComb(honeycombTemplate)"));
 	}
@@ -43,13 +46,13 @@ class MyriadSpecialCombOutputWiringTest {
 	void mekanismPlannerUsesTheSameRealTemplates() throws Exception {
 		String handler = Files.readString(HANDLER);
 		String planner = Files.readString(PLANNER);
-		assertTrue(handler.contains("snapshot().honeycombTemplateByType()"));
-		assertTrue(handler.contains("snapshot().combBlockTemplateByType()"));
+		assertTrue(handler.contains(".selectTemplates(selectedTypes, isCombBlock, level.getRandom())"));
+		assertTrue(handler.contains("MyriadBeeTypeCache.cachedBeeTypes(isCombBlock)"));
 		assertTrue(handler.contains("selectedTypes, effectiveBatchSize, templateByType"));
 		assertTrue(handler.contains("allocation, currentTick, templateByType"));
 		assertTrue(handler.contains("allocation, templateByType"));
 		assertTrue(planner.contains("ItemStack.isSameItemSameComponents(workingTemplates[i], outputTemplate)"));
-		assertTrue(planner.contains("int space = snapshot.slotLimits[i] - workingCounts[i]"));
+		assertTrue(planner.contains("int[] limits = snapshot.limitsFor(outputTemplate)"));
 		assertTrue(planner.contains("Plan plan = plan(snapshot, baseItem, allocation, templateByType)"));
 		assertTrue(planner.contains("resolveTemplate(baseItem, beeType, templateByType)"));
 	}

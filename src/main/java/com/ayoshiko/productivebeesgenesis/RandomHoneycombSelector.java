@@ -215,26 +215,20 @@ public final class RandomHoneycombSelector {
 	 */
 	public static List<ItemStack> generateAggregatedStacks(
 			int totalCount,
-			Item baseItem,
-			List<ResourceLocation> cachedBeeTypes,
-			ItemStack[] templates,
-			Map<ResourceLocation, ItemStack> templateByType,
+			MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot,
+			boolean blocks,
 			RandomSource random) {
 		if (totalCount <= 0) {
 			return List.of();
 		}
 
-		List<ResourceLocation> selectedTypes;
-		if (cachedBeeTypes == null || cachedBeeTypes.isEmpty()) {
-			selectedTypes = List.of(FALLBACK_BEE_TYPE);
-		} else {
-			int maxTypes = Math.min(9, totalCount);
-			selectedTypes = selectDistinctBeeTypes(maxTypes, random, cachedBeeTypes);
-		}
+		List<ResourceLocation> candidates = blocks ? snapshot.combBlockBeeTypes() : snapshot.beeTypes();
+		List<ResourceLocation> selectedTypes = selectDistinctBeeTypes(Math.min(9, totalCount), random, candidates);
 		if (selectedTypes.isEmpty()) {
 			return List.of();
 		}
 
+		Map<ResourceLocation, ItemStack> templateByType = snapshot.selectTemplates(selectedTypes, blocks, random);
 		List<ItemStack> result = new ArrayList<>(selectedTypes.size() * 2);
 		int typeCount = selectedTypes.size();
 		int baseAllocation = totalCount / typeCount;
@@ -243,19 +237,11 @@ public final class RandomHoneycombSelector {
 			ResourceLocation type = selectedTypes.get(typeIndex);
 			int count = baseAllocation + (typeIndex < allocationRemainder ? 1 : 0);
 			int remaining = count;
-			// O(1) Map 查找优先；Map 为空（向后兼容）时回退到 O(N) 数组扫描
-			ItemStack template = (templateByType != null && !templateByType.isEmpty())
-					? templateByType.get(type)
-					: findTemplate(templates, type);
+			ItemStack template = templateByType.get(type);
+			if (template == null || template.isEmpty()) return List.of();
 			while (remaining > 0) {
-				int stackSize = Math.min(64, remaining);
-				if (template != null) {
-					result.add(template.copyWithCount(stackSize));
-				} else {
-					ItemStack stack = new ItemStack(baseItem, stackSize);
-					stack.set(ModDataComponents.BEE_TYPE.get(), type);
-					result.add(stack);
-				}
+				int stackSize = Math.min(Math.max(1, template.getMaxStackSize()), remaining);
+				result.add(template.copyWithCount(stackSize));
 				remaining -= stackSize;
 			}
 		}
@@ -332,7 +318,7 @@ public final class RandomHoneycombSelector {
 	 * 为实际蜜脾模板构建对应的蜜脾块模板。
 	 * <p>
 	 * 优先调用 PB 自身映射，正确覆盖 Ghostly/Milky/Powdery 等独立蜜脾；
-	 * 仅在映射不可用时回退为带 bee_type 的 configurable_comb。
+	 * 外部蜜脾没有真实块映射时返回空，只参与单蜜脾生产。
 	 *
 	 * @param beeType 蜜蜂类型
 	 * @param honeycombTemplate 实际单蜜脾模板
@@ -346,11 +332,9 @@ public final class RandomHoneycombSelector {
 					.getCombBlockFromHoneyComb(honeycombTemplate);
 			if (!block.isEmpty()) return block.copyWithCount(1);
 		} catch (RuntimeException ignored) {
-			// 数据包可能声明无法映射到蜜脾块的外部蜜脾；下方使用兼容回退。
+			// 外部蜜脾可能没有块形态，不能伪造 configurable_comb。
 		}
-		ItemStack fallback = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
-		fallback.set(ModDataComponents.BEE_TYPE.get(), beeType);
-		return fallback;
+		return ItemStack.EMPTY;
 	}
 
 	/**
