@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.state.properties.*;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-public final class MachinePartBlock extends BaseEntityBlock implements MachineContent.RoleBlock {
+public class MachinePartBlock extends BaseEntityBlock implements MachineContent.RoleBlock {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 	public static final BooleanProperty FORMED = BooleanProperty.create("formed");
 	private final StructureRole role;

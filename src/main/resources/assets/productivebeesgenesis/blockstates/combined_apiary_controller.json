@@ -1,19 +1,83 @@
 {
   "variants": {
-    "facing=north": {
+    "facing=north,status=unformed": {
       "model": "productivebeesgenesis:block/combined_apiary_controller",
       "y": 0
     },
-    "facing=east": {
+    "facing=north,status=checking": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_checking",
+      "y": 0
+    },
+    "facing=north,status=ready": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_ready",
+      "y": 0
+    },
+    "facing=north,status=waiting": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_waiting",
+      "y": 0
+    },
+    "facing=north,status=fault": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_fault",
+      "y": 0
+    },
+    "facing=east,status=unformed": {
       "model": "productivebeesgenesis:block/combined_apiary_controller",
       "y": 90
     },
-    "facing=south": {
+    "facing=east,status=checking": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_checking",
+      "y": 90
+    },
+    "facing=east,status=ready": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_ready",
+      "y": 90
+    },
+    "facing=east,status=waiting": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_waiting",
+      "y": 90
+    },
+    "facing=east,status=fault": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_fault",
+      "y": 90
+    },
+    "facing=south,status=unformed": {
       "model": "productivebeesgenesis:block/combined_apiary_controller",
       "y": 180
     },
-    "facing=west": {
+    "facing=south,status=checking": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_checking",
+      "y": 180
+    },
+    "facing=south,status=ready": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_ready",
+      "y": 180
+    },
+    "facing=south,status=waiting": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_waiting",
+      "y": 180
+    },
+    "facing=south,status=fault": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_fault",
+      "y": 180
+    },
+    "facing=west,status=unformed": {
       "model": "productivebeesgenesis:block/combined_apiary_controller",
+      "y": 270
+    },
+    "facing=west,status=checking": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_checking",
+      "y": 270
+    },
+    "facing=west,status=ready": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_ready",
+      "y": 270
+    },
+    "facing=west,status=waiting": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_waiting",
+      "y": 270
+    },
+    "facing=west,status=fault": {
+      "model": "productivebeesgenesis:block/combined_apiary_controller_fault",
       "y": 270
     }
   }

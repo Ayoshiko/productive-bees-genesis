@@ -35,6 +35,10 @@
 
 ### 新增
 
+- **M06a 静态结构状态**：控制器增加五种颜色／形状标志，观察窗使用透明渲染，十一种角色方块加入创造页并标明结构原型。真实客户端验证四向、拆除重建、身份故障恢复、面级亮度与资源重载；复杂的蜜蜂入箱、蜜脾压榨和资源收纳演出已列入设计，尚未实现。
+
+- **M03b–d 世界结构接入**：三尺寸、四方向的一体机使用正式预算扫描形成，缺区块／拆除／身份重放立即撤销资格；区块恢复和正常跨 JVM 重启重新验证。完整结构的只读审计保持原绑定，避免周期性退出形成状态；独立生产与插件仍待 M04。
+
 - **M03a 机器目录与形成事务**：按完整矩形（含空气）检查排他占位，邻接允许、重叠双方暂停；重复机器身份、旧扫描／部件引用、回调重入和异常均不能发布有效绑定。新增空间事件索引和清理路径，真实方块接入仍在 M03b。全量 947 项测试（2 项既有跳过）、构建及产物核验通过。
 
 - **M02b 多方块预算扫描**：使用同一矩形模板分批验证，区分缺区块、错误角色／朝向、越界与歧义；逐批校验机器和定义代际，阻止过期／取消／重入结果发布，不强制加载区块。新增 14 项测试，全量 936 项测试（2 项既有跳过）、构建及产物核验通过。M02 纯查询阶段完成，真实形成、占位和生命周期继续在 M03 实施。
@@ -103,6 +107,7 @@
 
 ### 修复
 
+- 新建隔离测试目录默认使用简体中文并跳过首次辅助功能／语言确认页，客户端设置正常保存，自动测试无需手动确认。
 - 修正 P1 联调中的完整组件恢复、哈希碰撞、组保留额度分配和转移回调重入边界；避免不同变体误合并、重叠规则重复预约、模拟改写权威数据或重复结算，失败返回不生成掉落物实体。
 - 修复核心同进程重建时误用旧目录回执的问题；交还必须等当前释放版本落盘后解锁。基础机流体恢复改为幂等替换，避免原生与自定义字段重复恢复；蜂箱已付费周期纳入保存与升级迁移。
 - 合入维护分支的石料蜂／木材蜂复制黑名单修复、全部 PB 蜜蜂刷怪蛋入驻支持及实体类型校验；禁用喂食槽不再参与特殊蜂种花源判断。详情见下方 `1.0.8-hotfix`。
@@ -110,6 +115,10 @@
 ### English
 
 #### Added
+
+- Added M06a static structure feedback: five controller glyphs, transparent observation windows, all eleven role blocks in the creative tab, and a prototype tooltip. Real clients verify facing, rebuilds, identity-fault recovery, surface brightness and resource reloads. The bee/hive, comb-squeezing and resource-collection sequence is documented for later implementation.
+
+- Added M03b–d world integration for three sizes and four directions through the shared validation budget. Unloads, removals and identity replay revoke bindings; chunk recovery and normal cross-JVM restarts revalidate them. Read-only audits retain intact bindings without periodic unforming. Standalone production and upgrades remain M04 work.
 
 - Added the M03a machine directory and formation transaction. Full rectangular claims include reserved air; adjacent structures coexist while overlapping or duplicate identities become inactive. Stale scans/references, reentry and failed binding callbacks cannot publish an active machine. Added spatial event indices and cleanup; real block integration remains M03b. Full test/build/artifact checks passed: 947 tests, including two existing skips.
 
@@ -168,6 +177,7 @@
 
 #### Fixed
 
+- Fresh isolated test directories now default to Simplified Chinese and skip first-run accessibility/language onboarding. Client settings persist without manual confirmation.
 - Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
 - Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.

@@ -1229,5 +1229,6 @@
   "message.productivebeesgenesis.machine.recovery": "结构冲突或身份异常；请检查搭建。",
   "message.productivebeesgenesis.machine.formed": "结构就绪。",
   "message.productivebeesgenesis.machine.suspended": "等待结构所在区块加载。",
-  "message.productivebeesgenesis.machine.removed": "控制器已移除。"
+  "message.productivebeesgenesis.machine.removed": "控制器已移除。",
+  "tooltip.productivebeesgenesis.machine.prototype": "结构原型，生产功能尚未开放。"
 }

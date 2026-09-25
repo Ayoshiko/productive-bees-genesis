@@ -6,7 +6,7 @@
     "casing": "minecraft:block/copper_block",
     "top": "minecraft:block/cut_copper",
     "screen": "minecraft:block/black_concrete",
-    "signal": "minecraft:block/gray_concrete"
+    "signal": "minecraft:block/yellow_concrete"
   },
   "elements": [
     {
@@ -101,12 +101,12 @@
     {
       "from": [
         4,
-        11,
+        7,
         -0.02
       ],
       "to": [
-        12,
-        12,
+        10,
+        8,
         -0.02
       ],
       "shade": false,
@@ -127,37 +127,11 @@
     {
       "from": [
         4,
-        5,
+        10,
         -0.02
       ],
       "to": [
-        5,
-        11,
-        -0.02
-      ],
-      "shade": false,
-      "faces": {
-        "north": {
-          "cullface": "north",
-          "texture": "#signal",
-          "neoforge_data": { "block_light": 15, "sky_light": 15 },
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ]
-        }
-      }
-    },
-    {
-      "from": [
-        11,
-        5,
-        -0.02
-      ],
-      "to": [
-        12,
+        8,
         11,
         -0.02
       ],

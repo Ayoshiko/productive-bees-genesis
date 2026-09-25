@@ -31,9 +31,10 @@ public final class MachineControllerEntity extends BlockEntity {
 	void publishState() {
 		if (level != null && !level.isClientSide && !isRemoved() && level.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4) && level.getBlockEntity(worldPosition) == this) {
 			var state = getBlockState(); boolean formed = formed();
-			if (state.hasProperty(MachinePartBlock.FORMED) && state.getValue(MachinePartBlock.FORMED) != formed) {
+			var projected = state.setValue(MachinePartBlock.FORMED, formed).setValue(MachineControllerBlock.STATUS, MachineVisualState.from(status()));
+			if (projected != state) {
 				// 纯展示位不改变形状；邻居形状查询会把边界外已卸载区块重新取回。
-				level.setBlock(worldPosition, state.setValue(MachinePartBlock.FORMED, formed), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+				level.setBlock(worldPosition, projected, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
 			}
 		}
 	}

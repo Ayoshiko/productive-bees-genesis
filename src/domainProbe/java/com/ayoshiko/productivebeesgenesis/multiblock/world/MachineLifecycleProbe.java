@@ -97,6 +97,8 @@ public final class MachineLifecycleProbe {
 				case 6 -> {
 					if (level.hasChunk(missing.x, missing.z)) return;
 					check(!fixture.core().formed() && !MachineWorldService.active(level, oldBinding) && !oldPart.bound(), "Unload retained old machine/part");
+					check(fixture.core().getBlockState().getValue(MachineControllerBlock.STATUS) == MachineVisualState.WAITING, "Missing chunk did not project waiting state");
+					report.addProperty("waitingStateProjectedWithoutChunkLoad", true);
 					until = server.getTickCount() + 30; phase++;
 				}
 				case 7 -> {

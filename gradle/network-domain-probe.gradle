@@ -73,6 +73,8 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
             }
         }
         new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
+        // Fresh probe directories otherwise open the language/accessibility onboarding screen.
+        new File(directory, 'options.txt').setText('lang:zh_cn\nonboardAccessibility:false\n', 'UTF-8')
         new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
 server-port=25581
 online-mode=false
@@ -95,6 +97,18 @@ neoForge {
     addModdingDependenciesTo sourceSets.domainProbe
     mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
     runs {
+        networkMultiblockClient {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.machineClient.enabled', 'true'
+            programArgument '--width'
+            programArgument '1000'
+            programArgument '--height'
+            programArgument '700'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
         networkMultiblockServer {
             server()
             sourceSet = sourceSets.domainProbe
@@ -163,7 +177,8 @@ tasks.named('runNetworkMultiblockServer') {
                         'readOnlyAuditsKeepAllTwelveBindingsFor500Ticks']
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
-                'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup']
+                'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup',
+                'waitingStateProjectedWithoutChunkLoad']
         if (multiblockMode in ['write', 'read']) {
             required = ['identityOwnerAndGenerationRetained', 'formalQueueReformedAndPartsBound', 'malformedIdentityRemainsIsolated', 'singleRegisteredController']
             if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm']
@@ -174,6 +189,18 @@ tasks.named('runNetworkMultiblockServer') {
                 || (!(multiblockMode in ['write', 'read']) && (!(result.maxStructureSteps instanceof Number) || result.maxStructureSteps < 1 || result.maxStructureSteps > 32))) {
             throw new GradleException('Multiblock assertions failed or incomplete')
         }
+    }
+}
+
+tasks.named('runNetworkMultiblockClient') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/machine-client.json')
+        if (!report.isFile()) throw new GradleException('Missing machine client report')
+        def result = new groovy.json.JsonSlurper().parse(report)
+        def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
+                'checkingUpdate', 'reformedUpdate', 'duplicateFaultUpdate', 'resourceReloadKeepsModelsAndStates',
+                'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']
+        if (required.any { result[it] != true } || result.ae2Loaded != probeAe2) throw new GradleException('Machine visual checks failed or incomplete')
     }
 }
 

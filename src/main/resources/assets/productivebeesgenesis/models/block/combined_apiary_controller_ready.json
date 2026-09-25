@@ -6,7 +6,7 @@
     "casing": "minecraft:block/copper_block",
     "top": "minecraft:block/cut_copper",
     "screen": "minecraft:block/black_concrete",
-    "signal": "minecraft:block/gray_concrete"
+    "signal": "minecraft:block/lime_concrete"
   },
   "elements": [
     {
@@ -75,12 +75,12 @@
     {
       "from": [
         4,
-        4,
+        7,
         -0.02
       ],
       "to": [
-        12,
-        5,
+        6,
+        9,
         -0.02
       ],
       "shade": false,
@@ -100,13 +100,13 @@
     },
     {
       "from": [
-        4,
-        11,
+        6,
+        5,
         -0.02
       ],
       "to": [
-        12,
-        12,
+        8,
+        7,
         -0.02
       ],
       "shade": false,
@@ -126,13 +126,13 @@
     },
     {
       "from": [
-        4,
-        5,
+        8,
+        7,
         -0.02
       ],
       "to": [
-        5,
-        11,
+        10,
+        9,
         -0.02
       ],
       "shade": false,
@@ -152,8 +152,8 @@
     },
     {
       "from": [
-        11,
-        5,
+        10,
+        9,
         -0.02
       ],
       "to": [

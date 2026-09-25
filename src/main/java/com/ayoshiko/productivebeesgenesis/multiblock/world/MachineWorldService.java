@@ -62,7 +62,7 @@ public final class MachineWorldService {
 		if (session.watched.contains(core)) return;
 		var directory = session.directories.computeIfAbsent(level, ignored -> new MachineDirectory(CombinedApiaryDefinition.DEFINITION));
 		try { core.handle = directory.attach(core.machineId(), core.generation(), core.getBlockPos(), core.getBlockState().getValue(MachinePartBlock.FACING)); }
-		catch (RuntimeException failure) { core.registrationFailed = true; LogUtils.getLogger().warn("Machine registration failed at {}", core.getBlockPos(), failure); return; }
+		catch (RuntimeException failure) { core.registrationFailed = true; core.publishState(); LogUtils.getLogger().warn("Machine registration failed at {}", core.getBlockPos(), failure); return; }
 		session.watched.add(core); session.audit.addLast(core); enqueue(session, core);
 		// 重复 UUID 会使原有控制器也失效，显示只是投影；运行资格已在目录中同步撤销。
 		for (var other : directory.sameIdentity(core.handle)) sync(level, other);
@@ -125,6 +125,7 @@ public final class MachineWorldService {
 			var job = session.scans.get(core);
 			if (job == null) {
 				if (!directory.beginValidation(core.handle)) return true;
+				core.publishState();
 				job = new ScanJob(new StructureScan(CombinedApiaryDefinition.DEFINITION, core.handle.stamp(), core.getBlockPos(), core.handle.facing()), null);
 				session.scans.put(core, job);
 			}
@@ -196,9 +197,15 @@ public final class MachineWorldService {
 	public static void remove(MachineControllerEntity core) {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
-		var directory = session.directories.get(level); if (directory != null && core.handle != null) directory.remove(core.handle);
+		var directory = session.directories.get(level); var removed = core.handle;
+		var peers = directory != null && removed != null ? directory.sameIdentity(removed) : List.<MachineDirectory.Handle>of();
+		if (directory != null && removed != null) directory.remove(removed);
 		core.handle = null; session.watched.remove(core); session.queued.remove(core); session.waiting.remove(core); session.audit.remove(core);
 		var scan = session.scans.remove(core); if (scan != null) scan.cancel();
+		for (var peer : peers) if (peer != removed && directory.current(peer)) {
+			if (peer.state() == MachineDirectory.State.REBUILDING) invalidateHandle(session, level, peer, MachineDirectory.State.REBUILDING);
+			else sync(level, peer);
+		}
 	}
 	static void unload(ServerLevel level) {
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;

@@ -1229,5 +1229,6 @@
   "message.productivebeesgenesis.machine.recovery": "Structure conflict or invalid identity. Check the build.",
   "message.productivebeesgenesis.machine.formed": "Structure ready.",
   "message.productivebeesgenesis.machine.suspended": "Waiting for structure chunks to load.",
-  "message.productivebeesgenesis.machine.removed": "Controller removed."
+  "message.productivebeesgenesis.machine.removed": "Controller removed.",
+  "tooltip.productivebeesgenesis.machine.prototype": "Structure prototype; production is not available yet."
 }

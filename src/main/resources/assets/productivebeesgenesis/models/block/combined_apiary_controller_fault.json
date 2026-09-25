@@ -6,7 +6,7 @@
     "casing": "minecraft:block/copper_block",
     "top": "minecraft:block/cut_copper",
     "screen": "minecraft:block/black_concrete",
-    "signal": "minecraft:block/gray_concrete"
+    "signal": "minecraft:block/red_concrete"
   },
   "elements": [
     {
@@ -79,8 +79,8 @@
         -0.02
       ],
       "to": [
-        12,
-        5,
+        6,
+        6,
         -0.02
       ],
       "shade": false,
@@ -100,8 +100,60 @@
     },
     {
       "from": [
-        4,
-        11,
+        6,
+        6,
+        -0.02
+      ],
+      "to": [
+        8,
+        8,
+        -0.02
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "cullface": "north",
+          "texture": "#signal",
+          "neoforge_data": { "block_light": 15, "sky_light": 15 },
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        8,
+        8,
+        -0.02
+      ],
+      "to": [
+        10,
+        10,
+        -0.02
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "cullface": "north",
+          "texture": "#signal",
+          "neoforge_data": { "block_light": 15, "sky_light": 15 },
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        10,
+        10,
         -0.02
       ],
       "to": [
@@ -127,12 +179,12 @@
     {
       "from": [
         4,
-        5,
+        10,
         -0.02
       ],
       "to": [
-        5,
-        11,
+        6,
+        12,
         -0.02
       ],
       "shade": false,
@@ -152,13 +204,65 @@
     },
     {
       "from": [
-        11,
-        5,
+        6,
+        8,
+        -0.02
+      ],
+      "to": [
+        8,
+        10,
+        -0.02
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "cullface": "north",
+          "texture": "#signal",
+          "neoforge_data": { "block_light": 15, "sky_light": 15 },
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        8,
+        6,
+        -0.02
+      ],
+      "to": [
+        10,
+        8,
+        -0.02
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "cullface": "north",
+          "texture": "#signal",
+          "neoforge_data": { "block_light": 15, "sky_light": 15 },
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        10,
+        4,
         -0.02
       ],
       "to": [
         12,
-        11,
+        6,
         -0.02
       ],
       "shade": false,
