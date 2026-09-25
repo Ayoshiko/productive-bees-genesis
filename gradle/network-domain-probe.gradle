@@ -201,6 +201,8 @@ tasks.named('runNetworkMultiblockClient') {
                 'checkingUpdate', 'reformedUpdate', 'duplicateFaultUpdate', 'resourceReloadKeepsModelsAndStates',
                 'oldFrameRejectedAfterRebuild', 'unloadAndRetrackingRestoreFullFrame',
                 'sceneVerticesMatchAirAnchorsAndFiniteBounds', 'inactiveSceneEmitsNoVertices', 'sceneResourcesRebuiltAfterReload', 'fourObliqueSceneViews',
+                'activityClearedOnStructureInvalidation', 'activityIdentityAndDuplicateRejected', 'activityClearedOnResourceReload',
+                'activityClearedOnUntracking', 'activityFollowsRealPauseAndResume', 'activityClearedOnWorldDisconnect',
                 'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']
         if (required.any { result[it] != true } || result.ae2Loaded != probeAe2) throw new GradleException('Machine visual checks failed or incomplete')
     }

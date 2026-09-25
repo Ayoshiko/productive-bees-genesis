@@ -49,6 +49,7 @@ public final class MachineVisualClientProbe {
 	private static com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualSnapshot originalFrame;
 	private static MachineControllerEntity departed;
 	private static Object originalRenderer;
+	private static int pausedTicks;
 	@SubscribeEvent public static void tick(ClientTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.machineClient.enabled") || advancing || finished) return;
 		var client = Minecraft.getInstance(); advancing = true;
@@ -90,6 +91,7 @@ public final class MachineVisualClientProbe {
 					CreativeModeTabs.tryRebuildTabContents(client.level.enabledFeatures(), true, client.level.registryAccess());
 					check(MachineContent.registeredBlocks().stream().allMatch(block -> ModCreativeTabs.MEK_CENTRIFUGE_TAB.get().contains(new ItemStack(block))), "Structure items missing from creative tab");
 					report.addProperty("allElevenCreativeItems", true);
+					MachineActivityClientChecks.start(client);
 					MachineVisualFixture.request(0); step = 2;
 				}
 				case 2 -> { if (waitFor(MachineVisualFixture.done == 0)) { MachineVisualFixture.request(10); step = 3; } }
@@ -97,6 +99,7 @@ public final class MachineVisualClientProbe {
 					if (!waitFor(state(client, 0) == MachineVisualState.UNFORMED)) return;
 					capture(client, "unformed"); report.addProperty("unformedUpdate", true);
 					MachineSceneClientChecks.hidden(client, 0); report.addProperty("inactiveSceneEmitsNoVertices", true);
+					MachineActivityClientChecks.invalidated(); report.addProperty("activityClearedOnStructureInvalidation", true);
 					MachineVisualFixture.request(11); step = 4;
 				}
 				case 4 -> {
@@ -123,6 +126,7 @@ public final class MachineVisualClientProbe {
 					core.handleUpdateTag(originalFrame.encode(), client.level.registryAccess());
 					check(core.visualSnapshot().orElseThrow().equals(current), "Old frame replaced rebuilt machine view");
 					report.addProperty("oldFrameRejectedAfterRebuild", true);
+					MachineActivityClientChecks.start(client); report.addProperty("activityIdentityAndDuplicateRejected", true);
 					reload = client.reloadResourcePacks(); step = 8;
 				}
 				case 8 -> {
@@ -132,6 +136,8 @@ public final class MachineVisualClientProbe {
 					check(MachineSceneClientChecks.renderer(client) != originalRenderer, "Resource reload reused scene models");
 					originalRenderer = null; report.addProperty("sceneResourcesRebuiltAfterReload", true);
 					report.addProperty("resourceReloadKeepsModelsAndStates", true);
+					MachineActivityClientChecks.cleared("Resource reload"); report.addProperty("activityClearedOnResourceReload", true);
+					MachineActivityClientChecks.start(client);
 					departed = (MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst());
 					MachineVisualFixture.request(15); step = 9;
 				}
@@ -140,6 +146,7 @@ public final class MachineVisualClientProbe {
 					if (!waitFor(client.level.getChunkSource().getChunk(position.getX() >> 4, position.getZ() >> 4,
 							net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false) == null)) return;
 					check(departed.visualSnapshot().isEmpty(), "Untracked client BE retained display");
+					MachineActivityClientChecks.cleared("Chunk unload"); report.addProperty("activityClearedOnUntracking", true);
 					MachineVisualFixture.request(16); step = 10;
 				}
 				case 10 -> {
@@ -153,7 +160,23 @@ public final class MachineVisualClientProbe {
 					if (!waitFor(allReady(client) && MachineVisualFixture.done == 20 + direction)) return;
 					capture(client, "oblique-" + MachineVisualFixture.FACINGS.get(direction).getName());
 					if (++direction < 4) { MachineVisualFixture.request(20 + direction); return; }
-					report.addProperty("fourObliqueSceneViews", true); finish(client, null);
+					report.addProperty("fourObliqueSceneViews", true);
+					MachineActivityClientChecks.start(client);
+					client.setScreen(new net.minecraft.client.gui.screens.PauseScreen(true)); step = 12;
+				}
+				case 12 -> {
+					if (!client.isPaused()) return;
+					MachineActivityClientChecks.pauseBaseline(client); pausedTicks = 0; step = 13;
+				}
+				case 13 -> {
+					MachineActivityClientChecks.paused(client);
+					if (++pausedTicks < 20) return;
+					client.setScreen(null); step = 14;
+				}
+				case 14 -> {
+					if (!MachineActivityClientChecks.resumed(client)) return;
+					report.addProperty("activityFollowsRealPauseAndResume", true);
+					MachineActivityClientChecks.start(client); finish(client, null);
 				}
 			}
 		} catch (Exception failure) { finish(client, failure); }
@@ -204,6 +227,7 @@ public final class MachineVisualClientProbe {
 		if (finished) return; finished=true;
 		try {
 			if(client.level!=null) { client.level.disconnect(); client.disconnect(new TitleScreen()); }
+			if (failure == null) { MachineActivityClientChecks.disconnected(); report.addProperty("activityClearedOnWorldDisconnect", true); }
 			boolean closed = client.getSingleplayerServer()==null && client.level==null;
 			report.addProperty("normalIntegratedShutdown",closed); report.addProperty("passed",failure==null && closed);
 			report.addProperty("ae2Loaded",ModList.get().isLoaded("ae2")); report.addProperty("completedStep",step);

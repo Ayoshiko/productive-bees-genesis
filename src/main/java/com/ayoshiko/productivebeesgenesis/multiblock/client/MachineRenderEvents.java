@@ -14,5 +14,10 @@ public final class MachineRenderEvents {
 	public static void register(EntityRenderersEvent.RegisterRenderers event) {
 		event.registerBlockEntityRenderer(MachineContent.CONTROLLER_TILE.get(), CombinedApiaryRenderer::new);
 	}
+	/** 此事件在每次资源重载的模型应用阶段触发，运行于客户端线程。 */
+	@SubscribeEvent
+	public static void modelsReloaded(EntityRenderersEvent.AddLayers event) {
+		MachineActivityClient.resourcesReloaded();
+	}
 	private MachineRenderEvents() { }
 }

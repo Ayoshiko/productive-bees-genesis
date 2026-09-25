@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory;
 import com.ayoshiko.productivebeesgenesis.multiblock.definition.CombinedApiaryDefinition;
 import com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualInbox;
 import com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineVisualSnapshot;
+import com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineActivityInbox;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,7 @@ public final class MachineControllerEntity extends BlockEntity {
 	private boolean invalidIdentity;
 	private MachineVisualSnapshot publishedVisual;
 	private final MachineVisualInbox visualInbox = new MachineVisualInbox();
+	private final MachineActivityInbox visualActivity = new MachineActivityInbox();
 	MachineDirectory.Handle handle;
 	boolean registrationFailed;
 	long auditedAt;
@@ -66,11 +68,13 @@ public final class MachineControllerEntity extends BlockEntity {
 		if (level == null || !level.isClientSide || isRemoved()) return Optional.empty();
 		// 客户端视距中心先移动，旧缓存槽可能稍后才触发卸载回调。
 		var chunk = level.getChunkSource().getChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4, ChunkStatus.FULL, false);
-		if (chunk == null || chunk.getBlockEntity(worldPosition) != this) { visualInbox.clear(); return Optional.empty(); }
+		if (chunk == null || chunk.getBlockEntity(worldPosition) != this) { visualInbox.clear(); visualActivity.invalidate(); return Optional.empty(); }
 		return visualInbox.current().filter(frame -> frame.facing() == getBlockState().getValue(MachinePartBlock.FACING)
 				&& frame.state() == getBlockState().getValue(MachineControllerBlock.STATUS)
 				&& (frame.variant() >= 0) == getBlockState().getValue(MachinePartBlock.FORMED));
 	}
+	/** 只含展示事件的收件槽，永不编码进权威或区块同步 NBT。 */
+	public MachineActivityInbox visualActivity() { return visualActivity; }
 	@Override public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
 		return publishedVisual == null ? new CompoundTag() : publishedVisual.encode();
 	}
@@ -82,8 +86,8 @@ public final class MachineControllerEntity extends BlockEntity {
 		handleUpdateTag(packet.getTag(), registries);
 	}
 	@Override public void onLoad() { super.onLoad(); MachineWorldService.watch(this); }
-	@Override public void onChunkUnloaded() { visualInbox.clear(); publishedVisual = null; super.onChunkUnloaded(); }
-	@Override public void setRemoved() { MachineWorldService.remove(this); visualInbox.clear(); publishedVisual = null; super.setRemoved(); }
+	@Override public void onChunkUnloaded() { visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.onChunkUnloaded(); }
+	@Override public void setRemoved() { MachineWorldService.remove(this); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.setRemoved(); }
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("machine", machine); tag.putLong("generation", generation);
 		if (owner != null) tag.putUUID("owner", owner); tag.putBoolean("invalidIdentity", invalidIdentity); tag.putInt("layout", 1);
