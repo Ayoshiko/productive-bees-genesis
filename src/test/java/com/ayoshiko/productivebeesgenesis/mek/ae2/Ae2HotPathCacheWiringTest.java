@@ -135,12 +135,14 @@ class Ae2HotPathCacheWiringTest {
 				"可配置蜜脾必须走 bee_type 单组件快径，避免完整 PatchedDataComponentMap 比较");
 		assertTrue(method.contains("entry.matchesComponents(slotIndex, stack, probe,"),
 				"容量规划必须通过条目缓存组件匹配结果，并由调用方传入预采签名");
-		assertTrue(method.contains("entry.acceptsProbe(basicSlot, probe)"),
-				"validator 判定必须走按轮次记忆的入口，不得为每个槽位重复调用整条校验链");
+		assertTrue(method.contains("entry.acceptsProbe(slotIndex, basicSlot, probe)"),
+				"validator 判定必须按槽位记忆，不得跨同类但不同校验器的槽位复用");
 		assertTrue(source.contains("slot.isItemValidForInsertion(probe, AutomationType.INTERNAL)"),
 				"标准槽位必须保留 validator 和 AutomationType 语义");
-		assertTrue(source.contains("if (validatorState >= 0 && validatorSlotType == slotType)"),
-				"validator 记忆必须以槽位实现类为守卫，遇自定义槽实现立即重新判定");
+		assertTrue(source.contains("validatorSlots[slotIndex] == slot"),
+				"缓存命中必须校验槽位对象身份，不能只看实现类");
+		assertTrue(source.contains("Arrays.fill(validatorSlots, null);"),
+				"每轮规划和复用池归还时必须释放槽位引用");
 		assertTrue(method.contains("slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL)"),
 				"非标准 IInventorySlot 必须保留完整模拟插入回退");
 		assertFalse(method.contains("key.matches(stack)"),
@@ -262,6 +264,16 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("推送尝试必须回写槽内余量，否则同一批被拒流体会每刻重推")
 	void fluidPushRecordsRemainingAfterEachAttempt() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2FluidPusher.java");
+		int budgetCheck = source.indexOf("if (costTracker.isExhausted(gameTick)) {", source.indexOf("long pushed = Math.min(amount, tankTotal);"));
+		int batchPush = source.indexOf("long inserted = batchPush(", budgetCheck);
+		assertTrue(budgetCheck >= 0 && batchPush > budgetCheck,
+				"预算耗尽时没有发起 AE insert，不得作为网络拒收进入退避");
+		assertTrue(source.substring(budgetCheck, batchPush).contains("batchBuffer.recordAttempt(fluidKey, tankTotal);"),
+				"预算中性顺延必须保留槽内余量并登记已观察库存");
+		assertTrue(source.substring(budgetCheck, batchPush).contains("budgetDeferred = true;"),
+				"混合批次中有未尝试流体时不得将整机记作全部拒收");
+		assertTrue(source.contains("if (allFailed && !budgetDeferred &&"),
+				"仅全部已尝试流体真实拒收时才允许整机短退避");
 		assertTrue(source.contains("batchBuffer.recordAttempt(fluidKey, tankTotal);"),
 				"被拒绝/退避跳过的流体必须登记槽内余量");
 		assertTrue(source.contains("batchBuffer.recordAttempt(fluidKey, Math.max(0L, tankTotal - shrunk));"),
@@ -275,6 +287,24 @@ class Ae2HotPathCacheWiringTest {
 				"推送判定必须同时考虑「新增流体」与「该流体槽位已满」");
 		assertTrue(buffer.contains("public static final int RIPE_TICKS = 10;"),
 				"成熟窗口取参考实现 useless PendingAEBatch 的 10 刻");
+	}
+
+	@Test
+	@DisplayName("同刻直推会话共享已尝试次数，换存储或换刻才重置")
+	void directPushSessionKeepsPerTickLimits() throws Exception {
+		String pusher = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2OutputPusher.java");
+		String session = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2DirectItemPushSession.java");
+		String apiary = read("src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiaryAe2HostAdapter.java");
+		assertTrue(pusher.contains("else if (!buffers.directItemPushSession.isFor(holder, meStorage, gameTick))"),
+				"同一机器、ME 存储和游戏刻内重复准备直推不能清空尝试计数");
+		assertTrue(session.contains("this.holder == holder && this.meStorage == meStorage && this.gameTick == gameTick"),
+				"切换机器、网络或游戏刻时必须重建会话预算");
+		assertTrue(session.contains("attemptedCount >= insertQuota"),
+				"共享会话仍须对本刻 AE insert 次数设上限");
+		assertTrue(apiary.contains("session.attemptedCount() > attemptsBefore || result.heldCount() > 0"),
+				"缓冲区预算顺延不得被本刻此前的插入尝试误判为本次拒收");
+		assertTrue(apiary.contains("pushed <= 0 && session.attemptedCount() > attemptsBefore"),
+				"生成物预算顺延不得被本刻此前的插入尝试误判为本次拒收");
 	}
 
 	@Test

@@ -22,13 +22,13 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
  * </ul>
  * <b>为什么这样不伤吞吐</b>：配额限制的是「不同键的数量」而非物品数量——单次 insert 的 count
  * 不受限（合并路径把同键各槽数量累加后一次提交），产物<b>件数</b>吞吐基本不变，
- * 只是把「同 tick 塞进 32 种不同产物」摊到几个 tick；未提交的物品留在原槽，
+ * 只是把「同 tick 塞进大量不同产物」摊到几个 tick；未提交的物品留在原槽，
  * 由既有轮转游标下 tick 恢复，无饥饿、无丢失。健康网络下本类只做几次整数运算，无任何限制。
  * <p>
  * <b>作用域</b>：EWMA 与单机预算是实例字段（每台机器独立），因为不同机器可能接在不同 ME 网络上，
  * 一个网络病态不应拖慢另一网络上的机器；总额预算是静态字段（全服共享），
  * 兜住「N 台机器 × 中等成本」的合计尖峰。两个硬预算都取得足够宽松，
- * 健康网络（32 键 × 100µs ≈ 3.2ms）永远不会触发。
+ * 健康网络不触发成本硬预算，保持既有吞吐。
  * <p>
  * <b>线程模型</b>：仅服务端 tick 线程访问（与 {@link Ae2PushBackoff}/{@link Ae2GlobalInsertBudget} 同一假设）。
  * 最坏竞态只让统计偏差几毫秒，不会崩溃或丢物品。
@@ -94,8 +94,8 @@ final class Ae2InsertCostTracker {
 	/**
 	 * 逐次直推路径的限流闸门（{@code DirectItemPushSession} 每个物品一次调用）。
 	 * <p>
-	 * 直推会话每个物品都会被 {@code prepareDirectItemPush} 重置，会话内计数无法跨物品累计，
-	 * 因此把「本 tick 已发起次数」放在 per-tile 记账器里判定。
+	 * 直推会话同刻复用，但输出槽推送和流体推送也会消耗同一网络成本预算，
+	 * 因此把「本 tick 已发起次数」放在 per-tile 记账器里统一判定。
 	 * <b>健康网络恒返回 true</b>（零限流，产物直推效率不变）；
 	 * 仅当 EWMA 判定网络昂贵时，才把本 tick insert 次数限制到 {@link #keyQuota(int)}。
 	 *
@@ -113,7 +113,7 @@ final class Ae2InsertCostTracker {
 	 * 本 tick 是否已用完单机或全服 insert 时间硬预算。
 	 * <p>
 	 * <b>健康网络恒返回 false</b>：均值不超过 {@link #HEALTHY_INSERT_NANOS} 时完全不介入，
-	 * 一台机器同 tick 可能发起「输出槽 32 键 + 生成物直推 32 次 + 缓冲直推」共近百次 insert，
+	 * 一台机器同 tick 可能从输出槽、生成物及缓冲区发起多次 insert，
 	 * 健康网络下合计仍只有几毫秒，若用硬预算去卡就会误伤正常推送吞吐。
 	 * 只有 EWMA 判定网络昂贵后，硬预算才作为灾难兜底生效。
 	 * <br/>

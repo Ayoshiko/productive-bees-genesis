@@ -14,7 +14,7 @@ import appeng.me.helpers.BaseActionSource;
 final class Ae2PushLimits {
 
 	/** 每台机器每游戏刻最多提交的不同物品键数，限制大型两页库存的 AE 网络尖峰。 */
-	static final int MAX_ITEM_KEYS_PER_TICK = 32;
+	static final int MAX_ITEM_KEYS_PER_TICK = 64;
 
 	/**
 	 * 单次推送剩余 key 的时间预算（纳秒）— 时间维度保护，与 key 数量限制互补。

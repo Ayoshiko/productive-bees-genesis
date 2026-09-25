@@ -195,7 +195,8 @@ public final class Ae2InputPuller {
 		if (storageService == null) return;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
-		if (!holder.tryAcquireNetworkWork(meStorage, currentTick)) return;
+		// Input has its own per-host extract budget. The shared output token can be
+		// consumed before this pass, leaving an otherwise healthy input idle.
 		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
 		boolean hadPendingItems = holder.getPendingItemBuffer().size() > 0;
@@ -695,7 +696,7 @@ public final class Ae2InputPuller {
 		if (laneItem == null) {
 			// 空槽：validator 仍要过一遍（区分「永久拒绝」与「暂时没位置」），
 			// 上限用快照值（与候选 key 无关，只由槽位分等级堆叠决定）。
-			if (!entry.acceptsProbe(basicSlot, probe)) {
+			if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
 				entry.validatorRejected = true;
 				return 0;
 			}
@@ -711,7 +712,7 @@ public final class Ae2InputPuller {
 		if (limit <= count) return 0;
 		if (!entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
 				lanes.patchSize(slotIdx), lanes.beeType(slotIdx))) return 0;
-		if (!entry.acceptsProbe(basicSlot, probe)) {
+		if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
 			entry.validatorRejected = true;
 			return 0;
 		}
@@ -744,7 +745,7 @@ public final class Ae2InputPuller {
 				// 上限判断、validator/canInsert 判断。这里直接复现，避免为每个候选类型
 				// 创建模拟返回栈，并复用同一次 getLimit 结果。
 				if (stack.isEmpty()) {
-					if (!entry.acceptsProbe(basicSlot, probe)) {
+					if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
 						entry.validatorRejected = true;
 						return 0;
 					}
@@ -760,7 +761,7 @@ public final class Ae2InputPuller {
 				// validator 拒绝与槽满必须分开归因：前者说明本机永远不接受该物品，
 				// 是可据此进入 per-key 退避的持久信号，后者只是暂时没位置。
 				if (limit <= stack.getCount()) return 0;
-				if (!entry.acceptsProbe(basicSlot, probe)) {
+				if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
 					entry.validatorRejected = true;
 					return 0;
 				}
@@ -804,8 +805,8 @@ public final class Ae2InputPuller {
 			int slotStart, BlockPos pos,
 			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache,
 			Ae2ExtractBudget extractBudget) {
-		// 网络级协调已在拉取入口取得令牌；此处只记录实际成本，不再使用旧全服硬闸门，
-		// 避免一个病态网络让其它互不相关的健康网络同 tick 停止拉取。
+		// 拉取不使用共享输出令牌；这里只记录实际成本，由本机提取预算限制慢网络，
+		// 避免输出先占令牌时输入无机会执行。
 		long gameTick = level.getGameTime();
 		// 抽取前的兜底闸门：只要求 pending 缓冲还有「类型条目位」可登记，不限制抽取数量。
 		// extract 一旦执行就无法撤回，若之后既无法落槽、又无法回送 ME、也无处登记，
@@ -1097,10 +1098,9 @@ public final class Ae2InputPuller {
 		private boolean[] componentMatchResults = new boolean[0];
 		private int[] componentMatchGenerations = new int[0];
 		private int componentMatchGeneration;
-		/** 本轮 validator 判定：-1 未判定 / 0 拒绝 / 1 接受。 */
-		private int validatorState = -1;
-		/** 产生上述判定的槽位实现类；换实现即重新判定。 */
-		private Class<?> validatorSlotType;
+		/** Validator predicates may capture a slot or process index. Cache by slot identity. */
+		private BasicInventorySlot[] validatorSlots = new BasicInventorySlot[0];
+		private byte[] validatorStates = new byte[0];
 		/** 本条目 key 的组件补丁数（每轮准备一次，供内层循环直接比较）。 */
 		private int keyPatchSize;
 		/** 本条目 key 的「唯一 bee_type」签名；不满足快径条件时为 null。 */
@@ -1120,8 +1120,7 @@ public final class Ae2InputPuller {
 			this.combBlock = false;
 			this.servedInWindow = 0L;
 			this.validatorRejected = false;
-			this.validatorState = -1;
-			this.validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 		}
 
 		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */
@@ -1131,12 +1130,15 @@ public final class Ae2InputPuller {
 				componentMatchResults = Arrays.copyOf(componentMatchResults, slotCount);
 				componentMatchGenerations = Arrays.copyOf(componentMatchGenerations, slotCount);
 			}
+			if (slotCount > validatorSlots.length) {
+				validatorSlots = Arrays.copyOf(validatorSlots, slotCount);
+				validatorStates = Arrays.copyOf(validatorStates, slotCount);
+			}
 			if (++componentMatchGeneration == 0) {
 				Arrays.fill(componentMatchGenerations, 0);
 				componentMatchGeneration = 1;
 			}
-			validatorState = -1;
-			validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 			prepareKeyComponents();
 		}
 
@@ -1167,30 +1169,17 @@ public final class Ae2InputPuller {
 		}
 
 		/**
-		 * 槽位 validator 是否接受本条目的探针栈，结果按「本轮 + 槽位实现类」记忆一次。
-		 * <p>
-		 * <b>为什么可以只判一次</b>：{@code BasicInventorySlot.isItemValidForInsertion}
-		 * 等于 {@code validator.test(stack) && canInsert.test(stack, automationType)}，
-		 * 两个谓词都只看物品栈，不看槽位下标；Mekanism 工厂的全部输入槽由同一循环
-		 * 用同一 tile 方法引用创建，语义上就是「要么都接受，要么都不接受」。
-		 * 而旧实现按「类型 × 槽位」调用，在无限多元工厂（进程数可达 19+）上把
-		 * {@code tile.isValidInputItem} → {@code InputValidationCache} →
-		 * {@code ItemStack.hashItemAndComponents} 这条链重复了槽位数遍 ——
-		 * spark BkTP3d9oSc 中 {@code isItemValidForInsertion} 140ms、
-		 * 本模组的 {@code isValidInputItem} 96ms，全部来自这次重复。
-		 * <p>
-		 * 用槽位实现类做守卫：一旦出现另一种 {@code IInventorySlot} 实现（自定义附属），
-		 * 立即重新判定，不把结论跨实现复用。判定缓存只在本轮容量规划内有效
-		 * （{@link #beginComponentMatchCache} 重置），因此升级/配置变化会在下一轮生效。
+		 * 同类槽位也可能绑定不同的 validator；只在同一规划轮内复用同一槽的结果。
 		 */
-		boolean acceptsProbe(BasicInventorySlot slot, ItemStack probe) {
-			Class<?> slotType = slot.getClass();
-			if (validatorState >= 0 && validatorSlotType == slotType) {
-				return validatorState == 1;
+		boolean acceptsProbe(int slotIndex, BasicInventorySlot slot, ItemStack probe) {
+			if (slotIndex >= 0 && slotIndex < validatorSlots.length && validatorSlots[slotIndex] == slot) {
+				return validatorStates[slotIndex] == 1;
 			}
 			boolean accepted = slot.isItemValidForInsertion(probe, AutomationType.INTERNAL);
-			validatorState = accepted ? 1 : 0;
-			validatorSlotType = slotType;
+			if (slotIndex >= 0 && slotIndex < validatorSlots.length) {
+				validatorSlots[slotIndex] = slot;
+				validatorStates[slotIndex] = (byte) (accepted ? 1 : 0);
+			}
 			return accepted;
 		}
 
@@ -1239,8 +1228,7 @@ public final class Ae2InputPuller {
 		/** 清除槽位对象引用，避免复用池在两次拉取之间保留旧 ItemStack。 */
 		void clearComponentMatchCache() {
 			Arrays.fill(componentMatchStacks, null);
-			validatorState = -1;
-			validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 		}
 	}
 }

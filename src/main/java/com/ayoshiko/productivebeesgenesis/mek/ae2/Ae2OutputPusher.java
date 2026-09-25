@@ -175,7 +175,7 @@ public final class Ae2OutputPusher {
 		if (buffers.directItemPushSession == null) {
 			buffers.directItemPushSession = new Ae2DirectItemPushSession(holder, meStorage, keyBackoff, gameTick,
 					buffers.insertCostTracker);
-		} else {
+		} else if (!buffers.directItemPushSession.isFor(holder, meStorage, gameTick)) {
 			buffers.directItemPushSession.reset(holder, meStorage, keyBackoff, gameTick,
 					buffers.insertCostTracker);
 		}

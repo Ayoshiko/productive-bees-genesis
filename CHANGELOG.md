@@ -47,6 +47,7 @@
 
 ### 性能
 
+- **高并行离心机 AE2 回送**：健康网络的输出槽合并批次及直推会话各自采用 64 键上限（原为 32）；同宿主、同存储、同真实游戏刻复用直推会话的尝试计数，避免多份产物重置限额。蜂箱缓冲和生成物仅按本次实际插入尝试判定拒收，预算顺延不误触发退避。昂贵网络继续按实测插入成本收缩配额，未接收产物留在输出槽或待提交缓冲。
 - **全部花源与补货热路径**：每台蜂箱最多缓存三种多花源策略的只读产物模板，喂食槽版本、配方版本或世界变化时失效；关闭模式仍逐次随机采样。补货关闭且无待交付物品时立即返回，满槽不复制模板或查询网络；完整组件键复用至样本变化。
 - **万象批量规划**：容量快照只在一次生产事务的二分与重试中复用，移除跨生产调用的库存快照缓存；每个真实模板在该事务内复用各槽的模拟接收容量。按实际请求数量生成选型缓存，减少未使用的 1–9 种预采样。
 - **样板发配调用预算**：仅向本模组离心机提交的 AE2 样板目标共享每真实 tick 的自适应调用预算，以滞回和退避冷却约束逐份洪水；模拟不计数、不缩小第三方选定的单批数量，普通存储总线、接口和其它机器不消耗此预算。停服复位，不持有机器或世界引用。
@@ -64,6 +65,8 @@
 
 ### 修复
 
+- **AE2 输入偶发停拉**：输入拉取不再受可先被输出消耗的共享网络工作令牌拦截，仍受本机实际提取成本预算约束；规划期的槽位校验结果改按槽位对象身份缓存，避免同类但不同校验器的输入槽互相传播拒收。多机同网的输入准入因此可能比旧版更宽，需在玩家高负载网络复测。
+- **AE2 流体误退避与诊断**：本机插入预算耗尽时未调用 AE2，流体保留在罐中等待后续窗口，不再计为零接收；混合批次中只要有预算未尝试的流体，就不触发整机“全部拒收”短退避。真正零接收或异常仍逐流体退避；整机退避日志每分钟全服至多一条，附位置、首个失败键、请求量及失败键数。真实拒收的外部原因尚待现场存储状态确认。
 - **万象特殊蜜脾覆盖**：候选改从全部已加载蜂箱配方枚举，同时包含固定实体蜂与可配置蜂，不再要求存在离心配方。Ghostly、Milky、Powdery 及须在 MEK 化学氧化器处理的 Wasted Radioactive 蜜脾保留真实物品和组件；同蜂种的多配方、多组件变体均可参与。蜂箱、PB 离心和 MEK 批量路径统一使用真实模板，缺失模板时不伪造产物；没有真实块映射的蜜脾只参与单蜜脾生产。
 - **万象选型与重载**：蜜脾和蜜脾块候选池、世界身份分别校验缓存，权重记账覆盖完整蜂种列表，不再截断到 512 种；未就绪配方按 20 tick 退避恢复，实际延迟重载完成时失效蜂箱索引与万象模板。
 - **离心产物容量与末份输入**：PB 普通/动力与热能离心机在扣料前检查并追加随机产物，同时按 PB 整组入槽规则预留原配方副产物空间；容量不足保留输入，修复最后一份万象蜜脾漏产。MEK 按真实物品组件和槽位内部接收规则规划，保留合法超堆叠容量，共享蜜脾模板的分配正确合并；提交检查实际增长数量。
@@ -81,6 +84,7 @@
 
 ### 验证
 
+- **2026-09-26 AE2 维护检查**：维护 worktree 普通测试 694 项（692 通过、2 跳过）、NeoForge 原生测试 91 项（82 通过、9 跳过），`build verifyReleaseArtifact` 通过。新增同类不同校验器槽位的缓存回归，以及旧 `StringTag` Ghostly 蜜脾在黑白名单下的读取和判定回归；后者证明该旧格式路径可用，不代表已复现或修复所有玩家旧存档异常。用户报告 [PlykuMtauQ](https://spark.lucko.me/PlykuMtauQ) 用于定位输入/输出热点；尚无修改后同场景 Spark、在线 AE2 流体存储及玩家存档端到端验证，不宣称 MSPT 或流体成功率改善比例。
 - **2026-09-25 收尾验证**：53 项定向 NeoForge 原生测试与 23 项普通定向测试全部通过，`build verifyReleaseArtifact` 通过。覆盖四种特殊蜜脾、无离心配方准入、多配方组件变体、重载/延迟就绪、候选池隔离、600 种蜂权重记账、实际 PB Mixin 末份输入与满槽保留、整组副产物容量、MEK 真实组件容量与超堆叠，以及全花源、补货和升级资产守恒。证据保存在维护 worktree 的 `build/verification/closeout-20260925/`。两张教程图已检查；真实玩家双手/创造模式交互、在线 ME 端到端补货、无可选依赖启动及完整教程界面仍待游戏内验收。
 - **本轮性能依据**：前序已用 SparkMCP 分析 `2kbQ61ircq`（`4ba9b69ebefa`），约 60 秒/1200 tick，MSPT 平均/中位/P95/最大为 14.67/13.99/19.45/51.3 ms；等待占完整线程样本 68.51%，本模组 self-time 9.39%。结合调用链优化全花源、补货和万象规划；没有优化后同场景报告，不宣称 MSPT 改善比例。
 - **前一轮蜂箱功能验证**：普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests` 共 75 项（66 通过、9 跳过），无失败；`build verifyReleaseArtifact` 通过。覆盖全花源去重/禁用/黑名单与生产力、补货模板组件匹配、退避、监听器异常后的数量守恒、损坏数据和未知提取隔离、拆卸/升级及多输入合成保留。44 个变更文本通过严格 UTF-8/无 BOM 检查，10 个 JSON 解析通过，双语新增键一致，JAR 内变更资源与源码一致且未混入测试类。此为后续蜜脾和性能补丁之前的基线，收尾结果以上条为准。
@@ -115,6 +119,7 @@
 
 #### Performance
 
+- Raised the healthy-network item-key limit from 32 to 64 for each merged output-slot batch and direct-push session. Direct pushes now retain one attempt counter across the same host, storage and real tick; apiary buffer and generated-item backoff count only inserts attempted by the current call, not budget deferrals. Expensive networks still shrink their quota by measured insert cost, and unaccepted output remains locally owned.
 - Each apiary caches read-only outputs for up to three multi-source strategies, invalidated by feeder state, recipe version or world changes; random mode still samples each time. Disabled restocking without pending items returns immediately, full slots avoid template copies/network lookups, and exact component keys are reused until the sample changes.
 - Myriad capacity snapshots and per-template simulated acceptance are reused only within one production transaction, including capacity search and retries. Removed cross-transaction inventory snapshots and unused pre-sampling for all selection counts from one to nine.
 - Added a shared adaptive call budget only for AE2 pattern-provider submissions into Genesis centrifuges. Hysteresis and backoff cooldown constrain per-copy floods without charging simulation or reducing third-party batch sizes. Ordinary storage buses, interfaces and other machines do not consume this budget; shutdown resets it, and no machine or world references are retained.
@@ -132,6 +137,8 @@
 
 #### Fixed
 
+- Removed the shared output-work token from AE2 input pulling because prior output activity could silently block an otherwise healthy pull. The per-machine extraction cost budget remains. Input-slot validation results are now cached by slot identity within a planning pass, preventing one slot's rejection from spreading to another slot of the same class. Concurrent admission across machines on one network may be wider and needs player-load validation.
+- Deferred fluid keys without a real AE2 insert when the local cost budget is exhausted; mixed batches with such keys no longer trigger whole-machine rejection backoff. Real zero acceptance and exceptions retain per-key backoff. Whole-machine rejection warnings are globally limited to once a minute and include the machine position, first failed fluid, requested amount and failed-key count. The external cause of real rejections still needs an in-world storage trace.
 - Myriad candidates now cover every loaded beehive recipe, including fixed-entity and configurable bees, without requiring a centrifuge recipe. Ghostly, Milky, Powdery and Wasted Radioactive combs retain their real items/components; all recipes and component variants for a bee participate. Apiary, PB centrifuge and Mekanism paths use actual templates. Missing templates no longer fabricate output, and combs without a real block mapping only participate in single-comb production.
 - Selection caches distinguish comb/block candidate pools and world identity. Weight accounting covers the entire bee list instead of truncating at 512. Incomplete recipes retry after 20 ticks; completion of delayed reloads invalidates beehive indexes and Myriad templates.
 - PB ordinary/powered and heated centrifuges now check and append random products before consuming input, reserving side-product space using PB's whole-chunk insertion rules. Full output preserves input and the final comb no longer loses its conversion. Mekanism planning uses actual component limits and internal acceptance rules, preserves legal oversized stacks, correctly merges shared templates and checks applied growth.
@@ -149,6 +156,7 @@
 
 #### Validation
 
+- **September 26, 2026 AE2 maintenance**: 694 ordinary tests (692 passed, two skipped), 91 native NeoForge tests (82 passed, nine skipped), and `build verifyReleaseArtifact` passed in the maintenance worktree. New regressions cover same-class slots with different validators and legacy `StringTag` Ghostly entries under whitelist and blacklist modes. The latter validates that persistence path, not every reported legacy-world case. Player profile [PlykuMtauQ](https://spark.lucko.me/PlykuMtauQ) identified pull/push hotspots; no matched post-change Spark profile, live AE2 fluid-storage trace or player-world end-to-end test is available, so no MSPT or fluid acceptance improvement is claimed.
 - **September 25, 2026 closeout**: all 53 targeted native NeoForge tests and 23 ordinary targeted tests passed, along with `build verifyReleaseArtifact`. Coverage includes four special combs, admission without centrifuge recipes, multiple recipe/component variants, reload/readiness recovery, isolated candidate caches, 600-type weight accounting, actual PB Mixin final-input/full-output behavior, whole-chunk side products, real Mekanism capacity/oversized stacks, all-source production, restocking and upgrade conservation. Evidence is in the maintenance worktree's `build/verification/closeout-20260925/`. Both tutorial images were inspected; actual player offhand/creative interactions, live ME end-to-end restocking, startup without optional dependencies and full tutorial-screen acceptance remain pending.
 - The earlier SparkMCP analysis of `2kbQ61ircq` (`4ba9b69ebefa`) covered about 60 seconds/1,200 ticks: mean/median/P95/max MSPT 14.67/13.99/19.45/51.3 ms, waiting 68.51% and mod self-time 9.39% of the full thread sample. It informed the all-source, restocking and Myriad-planning changes. No matched post-change profile is available, so no MSPT improvement percentage is claimed.
 - **Earlier apiary feature baseline**: 693 ordinary tests (691 passed, two skipped) and 75 tests with `test -PminecraftTests` (66 passed, nine skipped), with no failures; `build verifyReleaseArtifact` passed. Coverage includes distinct/disabled/blacklisted flower sources and productivity, exact template components, backoff, listener-failure accounting, corrupt-data and unknown-extraction quarantine, removal/upgrades and multi-input crafting preservation. All 44 changed text files passed strict UTF-8/no-BOM checks, all 10 changed JSON files parsed, new bilingual keys matched, and packaged resources matched source without test classes. These results predate the subsequent comb/performance patches; current closeout results are listed above.

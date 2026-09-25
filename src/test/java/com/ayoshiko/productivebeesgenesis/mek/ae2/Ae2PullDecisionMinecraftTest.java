@@ -6,11 +6,15 @@ import appeng.api.stacks.AEItemKey;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -113,6 +117,63 @@ class Ae2PullDecisionMinecraftTest {
 		assertEquals(-1, entry.reserveFloor);
 		amounts.clear();
 		assertEquals(0, amounts.get(iron));
+	}
+
+	@Test
+	void validatorResultsStayBoundToTheirSlotWithinOnePlanningPass() {
+		var entry = new Ae2InputPuller.PullEntry(AEItemKey.of(Items.IRON_INGOT), 1);
+		var acceptedCalls = new AtomicInteger();
+		var rejectedCalls = new AtomicInteger();
+		var accepted = BasicInventorySlot.at(stack -> true, stack -> {
+			acceptedCalls.incrementAndGet();
+			return true;
+		}, null, 0, 0);
+		var rejected = BasicInventorySlot.at(stack -> true, stack -> {
+			rejectedCalls.incrementAndGet();
+			return false;
+		}, null, 0, 0);
+		var probe = new ItemStack(Items.IRON_INGOT);
+
+		entry.beginComponentMatchCache(2);
+		assertTrue(entry.acceptsProbe(0, accepted, probe));
+		assertFalse(entry.acceptsProbe(1, rejected, probe));
+		assertTrue(entry.acceptsProbe(0, accepted, probe));
+		assertFalse(entry.acceptsProbe(1, rejected, probe));
+		assertEquals(1, acceptedCalls.get());
+		assertEquals(1, rejectedCalls.get());
+
+		entry.beginComponentMatchCache(2);
+		assertFalse(entry.acceptsProbe(0, rejected, probe));
+		assertTrue(entry.acceptsProbe(1, accepted, probe));
+		assertEquals(2, acceptedCalls.get());
+		assertEquals(2, rejectedCalls.get());
+		entry.clearComponentMatchCache();
+	}
+
+	@Test
+	void legacyGhostlyCombEntrySurvivesLoadAndFilterModes() {
+		var oldEntries = new ListTag();
+		oldEntries.add(StringTag.valueOf("productivebees:ghostly"));
+		var oldData = new CompoundTag();
+		oldData.put("entries", oldEntries);
+		var ghostly = AEItemKey.of(ModItems.HONEYCOMB_GHOSTLY.get());
+		var milky = AEItemKey.of(ModItems.HONEYCOMB_MILKY.get());
+		assertEquals(ResourceLocation.parse("productivebees:ghostly"), CombFuzzyMatcher.getBeeType(ghostly));
+
+		var filter = new Ae2InputFilter();
+		oldData.putByte("mode", (byte) Ae2InputFilter.FilterMode.WHITELIST.ordinal());
+		filter.load(oldData);
+		assertNotEquals(Ae2InputFilter.PULL_DISALLOWED,
+				filter.getPullLimitIfAllowed(ghostly, 64, false));
+		assertEquals(Ae2InputFilter.PULL_DISALLOWED,
+				filter.getPullLimitIfAllowed(milky, 64, false));
+
+		oldData.putByte("mode", (byte) Ae2InputFilter.FilterMode.BLACKLIST.ordinal());
+		filter.load(oldData);
+		assertEquals(Ae2InputFilter.PULL_DISALLOWED,
+				filter.getPullLimitIfAllowed(ghostly, 64, false));
+		assertNotEquals(Ae2InputFilter.PULL_DISALLOWED,
+				filter.getPullLimitIfAllowed(milky, 64, false));
 	}
 
 	private static void add(Ae2InputFilter filter, int slot, AEItemKey key, long amount, long reserve,

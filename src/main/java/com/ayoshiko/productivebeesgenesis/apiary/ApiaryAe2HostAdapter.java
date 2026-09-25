@@ -139,6 +139,7 @@ class ApiaryAe2HostAdapter {
 				Ae2DirectItemPushSession session =
 						Ae2OutputPusher.prepareDirectItemPush(tile);
 				if (session != null) {
+					int attemptsBefore = session.attemptedCount();
 					// 离心机优先：hold 蜜脾保留在缓冲区等待离心机，不推 AE
 					ApiaryOutputBuffer.AeBufferPushResult result =
 							tile.getOutputBuffer().pushToAe(session, tile::shouldHoldForCentrifuge);
@@ -151,7 +152,7 @@ class ApiaryAe2HostAdapter {
 						pushState.getBufferedItemBackoff().recordFailure(System.nanoTime());
 					} else if (pushed > 0) {
 						pushState.getBufferedItemBackoff().recordSuccess();
-					} else if (session.attemptedCount() > 0 || result.heldCount() > 0) {
+					} else if (session.attemptedCount() > attemptsBefore || result.heldCount() > 0) {
 						// 真实尝试被拒，或全部组被离心机优先 hold 保留 — 都进入退避，
 						// 避免满缓冲蜜脾场景每 tick 重复全量遍历（满缓存深度优化）
 						pushState.getBufferedItemBackoff().recordFailure(now);
@@ -178,8 +179,9 @@ class ApiaryAe2HostAdapter {
 		Ae2DirectItemPushSession session =
 				Ae2OutputPusher.prepareDirectItemPush(tile);
 		if (session == null) return 0;
+		int attemptsBefore = session.attemptedCount();
 		int pushed = session.applyAsInt(stack);
-		if (session.shouldTriggerBackoff() || (pushed <= 0 && session.attemptedCount() > 0)) {
+		if (session.shouldTriggerBackoff() || (pushed <= 0 && session.attemptedCount() > attemptsBefore)) {
 			// 慢 insert/连续零接收，或零接收（真实 insert 被拒）→ 联动整体退避；
 			// 慢 insert 时指数不被成功分支复位，可累积至 1s 封顶（病态网络降频 ~20 倍）
 			pushState.getItemBackoff().recordFailure(System.nanoTime());
