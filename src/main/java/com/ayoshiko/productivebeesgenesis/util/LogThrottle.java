@@ -104,6 +104,27 @@ public class LogThrottle {
 	 * @param args       占位符参数
 	 */
 	public static void warnWithCooldown(String key, long cooldownMs, String message, Object... args) {
+		if (shouldLog(key, cooldownMs)) {
+			ProductiveBeesGenesis.LOGGER.warn(message, args);
+		}
+	}
+
+	/**
+	 * 全局限频 INFO 日志，与 WARN 共用按固定 key 分组的单调时钟冷却。
+	 * 调用方负责开发者模式等开关，关闭时不要进入日志热路径。
+	 *
+	 * @param key        固定业务键，不应包含机器、坐标或进程
+	 * @param cooldownMs 冷却间隔（毫秒）
+	 * @param message    常量消息模板
+	 * @param args       占位符参数
+	 */
+	public static void infoWithCooldown(String key, long cooldownMs, String message, Object... args) {
+		if (shouldLog(key, cooldownMs)) {
+			ProductiveBeesGenesis.LOGGER.info(message, args);
+		}
+	}
+
+	private static boolean shouldLog(String key, long cooldownMs) {
 		lazyCleanup();
 		long now = System.nanoTime();
 		long cooldownNs = cooldownMs * 1_000_000L;
@@ -115,10 +136,7 @@ public class LogThrottle {
 			}
 			return last; // 节流：保留旧时间戳
 		});
-		if (shouldOutput.get()) {
-			Logger logger = ProductiveBeesGenesis.LOGGER;
-			logger.warn(message, args);
-		}
+		return shouldOutput.get();
 	}
 
 	/**

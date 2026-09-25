@@ -45,9 +45,6 @@ public class MyriadCreationsHandler {
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
 
-	/** 日志前缀（区分原版/ME/EME工厂） */
-	private final String logPrefix;
-
 	/** PB配方处理进度（tick） — 每进程独立，与协调器共享 */
 	private final int[] pbOperatingTicks;
 
@@ -89,14 +86,13 @@ public class MyriadCreationsHandler {
 			int[] pbProcessingTime, RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
 			PbRecipeFinder recipeFinder) {
 		this.context = context;
-		this.logPrefix = logPrefix;
 		this.pbOperatingTicks = pbOperatingTicks;
 		this.pbProcessing = pbProcessing;
 		this.pbProcessingTime = pbProcessingTime;
 		this.cachedPbRecipes = cachedPbRecipes;
 		int processes = context.processes();
 		this.fluidOutputHandler = new MyriadFluidOutputHandler(context, recipeFinder, logPrefix, processes);
-		this.logger = new MyriadCreationsLogger(logPrefix, context, processes);
+		this.logger = new MyriadCreationsLogger(logPrefix);
 		this.myriadProductPools = new MyriadProductPool[processes];
 		for (int i = 0; i < processes; i++) {
 			// factoryKey = context（工厂实例），用于 WeightedTypeSelector 工厂级 tick 缓存的 WeakHashMap key
@@ -171,9 +167,7 @@ public class MyriadCreationsHandler {
 			long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
 			if (gameTick != lastFluidBlockedProbeTick) {
 				lastFluidBlockedProbeTick = gameTick;
-				logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
-						"{}万象创世流体槽已满，暂停完成批次：进程{} batchSize={}",
-						logPrefix, processIndex, effectiveOps);
+				logger.logOutputBlocked(processIndex, effectiveOps, true);
 			}
 			return true;
 		}
@@ -308,7 +302,7 @@ public class MyriadCreationsHandler {
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(
 				reusableOutputSlots, baseItem, allocation, currentTick, templateByType);
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{}", logPrefix, processIndex);
+			logger.logOutputBlocked(processIndex, 1, false);
 			return 0;
 		}
 
@@ -366,8 +360,7 @@ public class MyriadCreationsHandler {
 		int productivityMod = Math.max(1, context.productivityModifier());
 		int maxFluidBatch = fluidOutputHandler.getMaxBatchForFluid(input, productivityMod);
 		if (maxFluidBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
-					"{}万象创世流体槽已满，暂停处理：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, true);
 			return 0;
 		}
 		int effectiveBatchSize = Math.min(batchSize, maxFluidBatch);
@@ -417,9 +410,7 @@ public class MyriadCreationsHandler {
 		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(
 				snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
 		if (maxBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
-					logPrefix, processIndex,
-				batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, false);
 			return 0;
 		}
 
@@ -451,9 +442,7 @@ public class MyriadCreationsHandler {
 			degradationAttempts++;
 		}
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
-					logPrefix, processIndex,
-				batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, false);
 			return 0;
 		}
 
