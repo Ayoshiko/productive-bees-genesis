@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | `1.0.9` |
 | CurseForge 待发布版本 | `1.0.9` |
-| 发布状态 | 待创建 GitHub Release `v1.0.9` 正式版 |
+| 发布状态 | GitHub Release `v1.0.9` 与 CurseForge 正式版已发布 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -51,11 +51,12 @@ SHA-256: CBD6280828A5AF08A92A9F857FB886B4CBC3E1C05773765AE80A12675E1FA2E5
 
 发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
 
-2026-09-26 发布准备验证：
+2026-09-26 正式发布验证：
 
 - `.\gradlew cleanTest test --no-build-cache --no-daemon`：完整普通测试成功，共 694 项，零失败、零错误，2 项按环境条件跳过。
 - `.\gradlew clean build verifyReleaseArtifact --no-daemon`：干净构建成功；版本元数据、许可证、图标及开发资源排除检查通过，体积明细保存在 `build/reports/release-artifact.txt`。
 - ECO `21.2.0-beta6-hotfix3` 的定向 NeoForge 原生兼容用例通过；详情见 `CHANGELOG.md` 的 1.0.9 验证记录。
+- GitHub Release `v1.0.9` 已成为 Latest；远端附件大小、重新下载的 SHA-256 和 GitHub API 摘要一致。CurseForge 自动发布工作流 `36215349725` 成功，使用同一 GitHub Release JAR。
 - 本轮未完成真实玩家存档中的客户端交互、在线 AE2 网络端到端及固定场景 Spark/MSPT 对照；不据此宣称实机性能提升比例。
 
 ## 图标
