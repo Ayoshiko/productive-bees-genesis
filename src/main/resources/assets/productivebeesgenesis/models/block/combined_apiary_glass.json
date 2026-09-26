@@ -2,6 +2,6 @@
   "parent": "minecraft:block/cube_all",
   "render_type": "minecraft:translucent",
   "textures": {
-    "all": "minecraft:block/glass"
+    "all": "productivebeesgenesis:block/combined_apiary_glass"
   }
 }

@@ -1,8 +1,8 @@
 {
   "parent": "minecraft:block/orientable",
   "textures": {
-    "top": "minecraft:block/cut_copper",
+    "top": "productivebeesgenesis:block/combined_apiary_frame",
     "front": "minecraft:block/crafter_north",
-    "side": "minecraft:block/copper_block"
+    "side": "productivebeesgenesis:block/combined_apiary_casing"
   }
 }

@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "minecraft:block/cut_copper"
+    "all": "productivebeesgenesis:block/combined_apiary_frame"
   }
 }

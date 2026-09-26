@@ -20,8 +20,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /** 仅交换有限测试命令；客户端从真实区块包读取展示状态，不读取服务器 BE。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class MachineVisualFixture {
-	public static final List<BlockPos> POSITIONS = List.of(new BlockPos(8,128,8), new BlockPos(28,128,8), new BlockPos(8,128,28), new BlockPos(28,128,28));
-	public static final List<Direction> FACINGS = List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST);
+	public static final List<BlockPos> POSITIONS = java.util.stream.IntStream.range(0, 24)
+			.mapToObj(i -> new BlockPos(8 + (i % 6) * 18, 128, 8 + (i / 6) * 18)).toList();
+	public static final List<Direction> FACINGS = java.util.stream.IntStream.range(0, 24)
+			.mapToObj(i -> List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST).get(i % 4)).toList();
+	public static int variant(int index) { return index / 4; }
 	private static final List<MachineProbeFixture> fixtures = new ArrayList<>();
 	private static final AtomicInteger requested = new AtomicInteger(-1);
 	public static volatile int done = -1;
@@ -42,12 +45,12 @@ public final class MachineVisualFixture {
 				normalBudget = ModConfig.SERVER.beeNetwork.totalSteps.get();
 				level.setDayTime(6000); level.setWeatherParameters(0, 12000, false, false);
 				level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
-				for (int i=0; i<4; i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(i%3), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
+				for (int i=0; i<POSITIONS.size(); i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(variant(i)), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
 				for (var fixture : fixtures) {
 					var size = fixture.template().geometry().size();
 					for (long i=0; i<size.volume(); i++) {
 						var local = size.positionAt(i);
-						if (local.getY() == 3 && fixture.template().cellAt(local).roles().contains(StructureRole.GLASS)) {
+						if (local.getY() >= 2 && local.getY() < size.height() - 1 && fixture.template().cellAt(local).roles().contains(StructureRole.GLASS)) {
 							level.setBlockAndUpdate(fixture.world(local), MachineContent.block(StructureRole.GLASS).defaultBlockState());
 						}
 					}
@@ -56,17 +59,7 @@ public final class MachineVisualFixture {
 				player.connection.teleport(1024.5, 140, 1024.5, 0, 0);
 				return;
 			}
-			if (++fixtureTicks == 100) {
-				for (int i=0; i<fixtures.size(); i++) {
-					var fixture = fixtures.get(i);
-					var transform = fixture.template().geometry().at(fixture.pos(), fixture.facing());
-					for (var prop : com.ayoshiko.productivebeesgenesis.multiblock.visual.CombinedApiaryScene.props(i%3)) {
-						var lightPos = BlockPos.containing(transform.toWorldPoint(prop.center()));
-						com.mojang.logging.LogUtils.getLogger().info("SCENE_SERVER_LIGHT {} {} sky={} lightWork={}",
-								lightPos, prop.kind(), level.getBrightness(net.minecraft.world.level.LightLayer.SKY, lightPos), level.getLightEngine().hasLightWork());
-					}
-				}
-			}
+			fixtureTicks++;
 			if (!initialViewReady) {
 				if (fixtureTicks < 120 || level.getLightEngine().hasLightWork()
 						|| fixtures.stream().anyMatch(fixture -> !fixture.core().formed())) return;
@@ -74,7 +67,8 @@ public final class MachineVisualFixture {
 				return;
 			}
 			int command = requested.getAndSet(-1); if (command < 0) return;
-			if (command < 4) camera(player, command);
+			if (command >= 100 && command < 100 + POSITIONS.size()) camera(player, command - 100);
+			else if (command < 4) camera(player, command);
 			else if (command >= 20 && command <= 23) oblique(player, command - 20);
 			else switch (command) {
 				case 10 -> level.removeBlock(fixtures.getFirst().world(BlockPos.ZERO), false);

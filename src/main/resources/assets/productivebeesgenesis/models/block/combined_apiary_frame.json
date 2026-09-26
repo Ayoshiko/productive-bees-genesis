@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "minecraft:block/copper_block"
+    "all": "productivebeesgenesis:block/combined_apiary_casing"
   }
 }

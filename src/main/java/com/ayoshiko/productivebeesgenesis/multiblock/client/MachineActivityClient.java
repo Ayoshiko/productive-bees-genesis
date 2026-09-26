@@ -11,6 +11,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 /** 客户端活动入口；尚无网络调用者。只跟踪最多 16 台活动机器，结束即释放强引用。 */
@@ -61,13 +62,14 @@ public final class MachineActivityClient {
 			if (!inbox.active()) iterator.remove();
 		}
 	}
+	@SubscribeEvent public static void beginFrame(RenderFrameEvent.Pre event) { CombinedApiaryRenderer.beginFrame(); }
 	/** 资源模型重建时清空活动，仍保留各 BE 的序号水位。 */
 	public static void resourcesReloaded() { clear(); }
 	@SubscribeEvent public static void levelUnloaded(LevelEvent.Unload event) {
 		if (event.getLevel().isClientSide()) clear();
 	}
 	private static void clear() {
-		client(); ACTIVE.values().forEach(MachineActivityInbox::cancel); ACTIVE.clear();
+		client(); ACTIVE.values().forEach(MachineActivityInbox::cancel); ACTIVE.clear(); CombinedApiaryRenderer.beginFrame();
 	}
 	public static int activeCount() { client(); return ACTIVE.size(); }
 	private MachineActivityClient() { }

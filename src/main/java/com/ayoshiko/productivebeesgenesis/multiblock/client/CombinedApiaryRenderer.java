@@ -1,67 +1,73 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.client;
 
-import com.ayoshiko.productivebeesgenesis.multiblock.visual.CombinedApiaryScene;
+import com.ayoshiko.productivebeesgenesis.multiblock.visual.CoreFrameBudget;
+import com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineCoreScene;
 import com.ayoshiko.productivebeesgenesis.multiblock.world.MachineControllerEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
-import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.Sheets;
-import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.AABB;
-import net.neoforged.neoforge.client.model.data.ModelData;
 
-/** 客户端静态内部场景；没有实体、库存访问、世界修改或逐机动画缓存。 */
+/** 大型分层悬浮核心；READY 仅驱动环境动效，不伪造生产事件。 */
 public final class CombinedApiaryRenderer implements BlockEntityRenderer<MachineControllerEntity> {
-	private final BlockRenderDispatcher blocks;
-	private final ModelPart chest;
+	private static final CoreFrameBudget<MachineControllerEntity> DETAILS = new CoreFrameBudget<>();
+	public CombinedApiaryRenderer(BlockEntityRendererProvider.Context context) { }
+	public static void beginFrame() { DETAILS.clear(); }
+	public static int detailedCount() { return DETAILS.retained(); }
 
-	/** 原版资源重载重建 BER，同时重新烘焙箱子模型。 */
-	public CombinedApiaryRenderer(BlockEntityRendererProvider.Context context) {
-		blocks = context.getBlockRenderDispatcher();
-		chest = context.bakeLayer(ModelLayers.CHEST);
-	}
-
-	@Override
-	public void render(MachineControllerEntity controller, float partialTick, PoseStack pose,
+	@Override public void render(MachineControllerEntity controller, float partialTick, PoseStack pose,
 			MultiBufferSource buffers, int packedLight, int packedOverlay) {
-		var frame = controller.visualSnapshot().orElse(null);
-		if (frame == null || frame.template().isEmpty()) return;
-		var transform = frame.template().orElseThrow().geometry().at(controller.getBlockPos(), frame.facing());
-		for (var prop : CombinedApiaryScene.props(frame.variant())) {
-			var worldCenter = transform.toWorldPoint(prop.center());
-			var lightPos = BlockPos.containing(worldCenter);
-			// 直接读光照缓存，不通过控制器的不透明外壳取样，也不加载邻区块。
-			int light = LightTexture.pack(controller.getLevel().getBrightness(LightLayer.BLOCK, lightPos),
-					controller.getLevel().getBrightness(LightLayer.SKY, lightPos));
-			var center = worldCenter.subtract(
-					controller.getBlockPos().getX(), controller.getBlockPos().getY(), controller.getBlockPos().getZ());
-			pose.pushPose();
-			pose.translate(center.x, center.y, center.z);
-			pose.mulPose(Axis.YP.rotationDegrees(180 - frame.facing().toYRot()));
-			pose.scale(prop.scale(), prop.scale(), prop.scale());
-			// 原版箱子模型正面朝南；蜂箱默认朝北。
-			if (prop.kind() == CombinedApiaryScene.Kind.CHEST) pose.mulPose(Axis.YP.rotationDegrees(180));
-			pose.translate(-0.5, -0.5, -0.5);
-			switch (prop.kind()) {
-				case HIVE -> blocks.renderSingleBlock(Blocks.BEEHIVE.defaultBlockState(), pose, buffers, light, packedOverlay, ModelData.EMPTY, null);
-				case COMB -> blocks.renderSingleBlock(Blocks.HONEYCOMB_BLOCK.defaultBlockState(), pose, buffers, light, packedOverlay, ModelData.EMPTY, null);
-				case CHEST -> chest.render(pose, Sheets.CHEST_LOCATION.buffer(buffers, RenderType::entityCutout), light, packedOverlay);
+		var snapshot = controller.visualSnapshot().orElse(null);
+		if (snapshot == null || snapshot.template().isEmpty()) return;
+		var client = Minecraft.getInstance();
+		if (controller.getLevel() != client.level) return;
+		boolean detailed = DETAILS.allow(controller);
+		var space = MachineCoreScene.space(snapshot.variant());
+		var geometry = snapshot.template().orElseThrow().geometry();
+		var center = geometry.at(controller.getBlockPos(), snapshot.facing()).toWorldPoint(space.center())
+				.subtract(controller.getBlockPos().getX(), controller.getBlockPos().getY(), controller.getBlockPos().getZ());
+		var motion = MachineCoreScene.sample(detailed ? client.level.getGameTime() : 0,
+				detailed ? client.getTimer().getGameTimeDeltaPartialTick(true) : 0);
+		pose.pushPose();
+		pose.translate(center.x, center.y, center.z);
+		pose.mulPose(Axis.YP.rotationDegrees(180 - snapshot.facing().toYRot()));
+		pose.scale((float) space.radius().x, (float) space.radius().y, (float) space.radius().z);
+		var core = buffers.getBuffer(MachineSceneRenderTypes.CORE);
+		pose.pushPose(); pose.mulPose(Axis.YP.rotationDegrees(motion.yaw())); pose.mulPose(Axis.XP.rotationDegrees(motion.pitch()));
+		if (detailed) {
+			// 26 个同形子块的层转终点仍为相同几何集合，不积累旋转误差或保存姿态。
+			pose.scale(0.76F, 0.76F, 0.76F);
+			for (int x=-1;x<=1;x++) for (int y=-1;y<=1;y++) for (int z=-1;z<=1;z++) {
+				if (x == 0 && y == 0 && z == 0) continue;
+				pose.pushPose();
+				int layer = motion.axis() == 0 ? x : motion.axis() == 1 ? y : z;
+				if (layer == motion.layer()) pose.mulPose((motion.axis() == 0 ? Axis.XP : motion.axis() == 1 ? Axis.YP : Axis.ZP).rotationDegrees(motion.turn()));
+				pose.translate(x * 0.4, y * 0.4, z * 0.4);
+				MachineCoreMesh.cube(pose, core, 0.17F, true); pose.popPose();
 			}
-			pose.popPose();
+		} else MachineCoreMesh.cube(pose, core, 0.45F, true);
+		pose.popPose();
+		if (detailed) {
+			var glow = buffers.getBuffer(MachineSceneRenderTypes.GLOW);
+			for (int orbit=0;orbit<2;orbit++) {
+				pose.pushPose();
+				pose.mulPose(Axis.YP.rotationDegrees(motion.orbit() * (orbit == 0 ? 1 : -0.7F)));
+				pose.mulPose(Axis.XP.rotationDegrees(orbit == 0 ? 63 : 112));
+				MachineCoreMesh.ring(pose, glow, orbit == 0 ? 0.94F : 0.87F, motion.pulse() * 0.7F, orbit == 1);
+				for (int node=0;node<3;node++) {
+					pose.pushPose(); pose.mulPose(Axis.YP.rotationDegrees(node * 120 + motion.orbit() * 1.4F));
+					pose.translate(orbit == 0 ? 0.94 : 0.87, 0, 0); pose.mulPose(Axis.ZP.rotationDegrees(45));
+					MachineCoreMesh.cube(pose, glow, 0.025F, false); pose.popPose();
+				}
+				pose.popPose();
+			}
 		}
+		pose.popPose();
 	}
-
-	@Override
-	public AABB getRenderBoundingBox(MachineControllerEntity controller) {
+	@Override public AABB getRenderBoundingBox(MachineControllerEntity controller) {
 		return controller.visualSnapshot().flatMap(frame -> frame.template().map(template ->
 				template.geometry().renderBoundsAt(controller.getBlockPos(), frame.facing())))
 				.orElseGet(() -> new AABB(controller.getBlockPos()));

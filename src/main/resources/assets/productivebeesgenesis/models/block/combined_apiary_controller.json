@@ -2,9 +2,9 @@
   "parent": "minecraft:block/block",
   "ambientocclusion": false,
   "textures": {
-    "particle": "minecraft:block/copper_block",
-    "casing": "minecraft:block/copper_block",
-    "top": "minecraft:block/cut_copper",
+    "particle": "productivebeesgenesis:block/combined_apiary_casing",
+    "casing": "productivebeesgenesis:block/combined_apiary_casing",
+    "top": "productivebeesgenesis:block/combined_apiary_frame",
     "screen": "minecraft:block/black_concrete",
     "signal": "minecraft:block/gray_concrete"
   },

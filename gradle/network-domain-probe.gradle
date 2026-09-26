@@ -197,10 +197,10 @@ tasks.named('runNetworkMultiblockClient') {
         File report = new File(probeDirectory.get().asFile, 'results/machine-client.json')
         if (!report.isFile()) throw new GradleException('Missing machine client report')
         def result = new groovy.json.JsonSlurper().parse(report)
-        def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'versionedFramesForThreeLayoutsWithoutAuthority', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
+        def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'versionedFramesForSixLayoutsWithoutAuthority', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
                 'checkingUpdate', 'reformedUpdate', 'duplicateFaultUpdate', 'resourceReloadKeepsModelsAndStates',
                 'oldFrameRejectedAfterRebuild', 'unloadAndRetrackingRestoreFullFrame',
-                'sceneVerticesMatchAirAnchorsAndFiniteBounds', 'inactiveSceneEmitsNoVertices', 'sceneResourcesRebuiltAfterReload', 'fourObliqueSceneViews',
+                'coreVerticesMatchSixLayoutsFourDirectionsAndFiniteBounds', 'sharedSixteenDetailedScenesAndStaticOverflow', 'coreFollowsRealPauseAndResume', 'coreBudgetClearedOnWorldDisconnect', 'inactiveSceneEmitsNoVertices', 'sceneResourcesRebuiltAfterReload', 'fourObliqueSceneViews',
                 'activityClearedOnStructureInvalidation', 'activityIdentityAndDuplicateRejected', 'activityClearedOnResourceReload',
                 'activityClearedOnUntracking', 'activityFollowsRealPauseAndResume', 'activityClearedOnWorldDisconnect',
                 'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']

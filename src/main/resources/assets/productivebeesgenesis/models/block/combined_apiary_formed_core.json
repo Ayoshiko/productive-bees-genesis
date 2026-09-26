@@ -1,0 +1,137 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "productivebeesgenesis:block/combined_apiary_casing",
+    "marker": "productivebeesgenesis:block/combined_apiary_frame"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        2,
+        2,
+        2
+      ],
+      "faces": {
+        "north": {
+          "texture": "#marker"
+        },
+        "east": {
+          "texture": "#marker"
+        },
+        "south": {
+          "texture": "#marker"
+        },
+        "west": {
+          "texture": "#marker"
+        },
+        "up": {
+          "texture": "#marker"
+        },
+        "down": {
+          "texture": "#marker"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        14
+      ],
+      "to": [
+        2,
+        2,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#marker"
+        },
+        "east": {
+          "texture": "#marker"
+        },
+        "south": {
+          "texture": "#marker"
+        },
+        "west": {
+          "texture": "#marker"
+        },
+        "up": {
+          "texture": "#marker"
+        },
+        "down": {
+          "texture": "#marker"
+        }
+      }
+    },
+    {
+      "from": [
+        14,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        2,
+        2
+      ],
+      "faces": {
+        "north": {
+          "texture": "#marker"
+        },
+        "east": {
+          "texture": "#marker"
+        },
+        "south": {
+          "texture": "#marker"
+        },
+        "west": {
+          "texture": "#marker"
+        },
+        "up": {
+          "texture": "#marker"
+        },
+        "down": {
+          "texture": "#marker"
+        }
+      }
+    },
+    {
+      "from": [
+        14,
+        0,
+        14
+      ],
+      "to": [
+        16,
+        2,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#marker"
+        },
+        "east": {
+          "texture": "#marker"
+        },
+        "south": {
+          "texture": "#marker"
+        },
+        "west": {
+          "texture": "#marker"
+        },
+        "up": {
+          "texture": "#marker"
+        },
+        "down": {
+          "texture": "#marker"
+        }
+      }
+    }
+  ]
+}

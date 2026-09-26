@@ -23,8 +23,13 @@ public class MachinePartBlock extends BaseEntityBlock implements MachineContent.
 	public static final BooleanProperty FORMED = BooleanProperty.create("formed");
 	private final StructureRole role;
 	MachinePartBlock(StructureRole role) {
-		super(Properties.of().mapColor(MapColor.COLOR_ORANGE).strength(4).sound(SoundType.METAL)); this.role = role;
+		super(properties(role)); this.role = role;
 		registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(FORMED, false));
+	}
+	private static Properties properties(StructureRole role) {
+		var properties = Properties.of().mapColor(MapColor.COLOR_ORANGE).strength(4).sound(SoundType.METAL);
+		return role == StructureRole.CORE || role == StructureRole.APIARY_UNIT || role == StructureRole.CENTRIFUGE_UNIT || role == StructureRole.INTERFACE
+				? properties.noOcclusion() : properties;
 	}
 	@Override protected MapCodec<? extends BaseEntityBlock> codec() { return MapCodec.unit(this); }
 	@Override public StructureRole role() { return role; }

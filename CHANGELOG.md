@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M06c2a 几何核心**：以分层悬浮核心、双轨道和公转节点替换静态蜂箱道具；按客户端时间播放环境动画，每帧共享 16 台详细配额，余者静态简化，成型方块保留固定标记。两种依赖的 24 台真实客户端验证六布局四向顶点、暂停／重载／卸载及专服恢复；974 项测试无失败（2 项既有跳过）。工作触发、效果设置和兼容／性能联合门另验。
+
 - **M02c 高版一体机**：追加 7×7×5／7／9，保留原三种尺寸和索引；体积不增加工作单元。布局 1 身份可在布局 2 重新扫描恢复；两种依赖的 24 台结构检查、旧世界恢复及高版跨 JVM 保存恢复通过。大型抽象核心渲染与效果设置分步验收。
 
 - **M06b2 内部静态场景**：形成后显示原版蜂箱、蜜脾与箱子模型，共用结构坐标和有限剔除盒；按模型所在空气格取光，失效即隐藏，资源重载重新烘焙。真实客户端核对三尺寸四向、斜视、顶点范围、重载及重新跟踪，改善夹具首次光照同步；两种依赖专服和 954 项测试（2 项既有跳过）通过。完整加工演出仍待后续实现。
@@ -121,6 +123,8 @@
 ### English
 
 #### Added
+
+- Added M06c2a layered geometric cores, twin orbits and orbiting nodes, replacing the static hive props. Ambient motion uses client game time with one shared 16-scene detail budget and a static overflow model. Both dependency configurations passed 24-machine client geometry/lifecycle checks and dedicated-server recovery; 974 tests passed with two existing skips. Production triggers, effect settings and compatibility/performance gates remain separate.
 
 - Added M02c tall 7x7x5/7/9 layouts, preserving the original three indices and single set of work units. Layout 1 identities rescan under layout 2. Verified 24 structures with and without AE2, legacy-world recovery, and a tall-layout JVM restart. Abstract core visuals and effect settings remain separate steps.
 

@@ -59,9 +59,9 @@ public final class MachineVisualClientProbe {
 				observedStep = step; stepStarted = System.nanoTime();
 				com.mojang.logging.LogUtils.getLogger().info("MACHINE_VISUAL_STEP {}", step);
 			}
-			check(System.nanoTime()-stepStarted < (step <= 1 ? 90_000_000_000L : 45_000_000_000L), "Visual phase timeout at step " + step);
+			check(System.nanoTime()-stepStarted < (step <= 1 ? 210_000_000_000L : 45_000_000_000L), "Visual phase timeout at step " + step);
 			check(!(client.screen instanceof AccessibilityOnboardingScreen), "Unexpected first-run onboarding");
-			check(System.nanoTime()-started < 300_000_000_000L, "Visual client timeout at step " + step);
+			check(System.nanoTime()-started < 480_000_000_000L, "Visual client timeout at step " + step);
 			check(MachineVisualFixture.failure == null, MachineVisualFixture.failure);
 			if (step == 0) {
 				if (!(client.screen instanceof TitleScreen) || client.getOverlay() != null) return;
@@ -69,7 +69,7 @@ public final class MachineVisualClientProbe {
 						&& client.getLanguageManager().getSelected().equals("zh_cn"), "Test client did not load Simplified Chinese defaults");
 				report.addProperty("simplifiedChineseWithoutOnboarding", true);
 				client.options.pauseOnLostFocus = false; client.options.hideGui = true;
-				client.options.renderDistance().set(6); client.options.fov().set(60); client.options.gamma().set(1.0);
+				client.options.renderDistance().set(10); client.options.fov().set(60); client.options.gamma().set(1.0);
 				client.options.save();
 				step = 1;
 				client.createWorldOpenFlows().createFreshLevel("m06a-client", new LevelSettings("Machine Visual Probe", GameType.CREATIVE, false,
@@ -80,21 +80,21 @@ public final class MachineVisualClientProbe {
 			if (client.level == null || client.player == null || client.getOverlay() != null) return;
 			switch (step) {
 				case 1 -> {
-					if (!waitFor(allReady(client) && MachineVisualFixture.done == direction)) return;
-					capture(client, "ready-" + MachineVisualFixture.FACINGS.get(direction).getName());
-					if (++direction < 4) { MachineVisualFixture.request(direction); return; }
+					if (!waitFor(allReady(client) && MachineVisualFixture.done == (direction == 0 ? 0 : 100 + direction))) return;
+					capture(client, "ready-layout-" + MachineVisualFixture.variant(direction) + "-" + MachineVisualFixture.FACINGS.get(direction).getName());
+					if (++direction < MachineVisualFixture.POSITIONS.size()) { MachineVisualFixture.request(100 + direction); return; }
 					validateModels(client); report.addProperty("fourDirectionsAndInitialChunkStates", true);
 					MachineSceneClientChecks.ready(client); originalRenderer = MachineSceneClientChecks.renderer(client);
-					report.addProperty("sceneVerticesMatchAirAnchorsAndFiniteBounds", true);
-					report.addProperty("versionedFramesForThreeLayoutsWithoutAuthority", true);
+					report.addProperty("coreVerticesMatchSixLayoutsFourDirectionsAndFiniteBounds", true);
+					report.addProperty("sharedSixteenDetailedScenesAndStaticOverflow", true);
+					report.addProperty("versionedFramesForSixLayoutsWithoutAuthority", true);
 					originalFrame = ((MachineControllerEntity) client.level.getBlockEntity(MachineVisualFixture.POSITIONS.getFirst())).visualSnapshot().orElseThrow();
 					CreativeModeTabs.tryRebuildTabContents(client.level.enabledFeatures(), true, client.level.registryAccess());
 					check(MachineContent.registeredBlocks().stream().allMatch(block -> ModCreativeTabs.MEK_CENTRIFUGE_TAB.get().contains(new ItemStack(block))), "Structure items missing from creative tab");
 					report.addProperty("allElevenCreativeItems", true);
-					MachineActivityClientChecks.start(client);
 					MachineVisualFixture.request(0); step = 2;
 				}
-				case 2 -> { if (waitFor(MachineVisualFixture.done == 0)) { MachineVisualFixture.request(10); step = 3; } }
+				case 2 -> { if (waitFor(MachineVisualFixture.done == 0)) { MachineActivityClientChecks.start(client); MachineVisualFixture.request(10); step = 3; } }
 				case 3 -> {
 					if (!waitFor(state(client, 0) == MachineVisualState.UNFORMED)) return;
 					capture(client, "unformed"); report.addProperty("unformedUpdate", true);
@@ -161,21 +161,26 @@ public final class MachineVisualClientProbe {
 					capture(client, "oblique-" + MachineVisualFixture.FACINGS.get(direction).getName());
 					if (++direction < 4) { MachineVisualFixture.request(20 + direction); return; }
 					report.addProperty("fourObliqueSceneViews", true);
+					MachineVisualFixture.request(0); step = 15;
+				}
+				case 15 -> {
+					if (!waitFor(MachineVisualFixture.done == 0)) return;
 					MachineActivityClientChecks.start(client);
 					client.setScreen(new net.minecraft.client.gui.screens.PauseScreen(true)); step = 12;
 				}
 				case 12 -> {
 					if (!client.isPaused()) return;
-					MachineActivityClientChecks.pauseBaseline(client); pausedTicks = 0; step = 13;
+					MachineActivityClientChecks.pauseBaseline(client); MachineSceneClientChecks.pauseBaseline(client); pausedTicks = 0; step = 13;
 				}
 				case 13 -> {
-					MachineActivityClientChecks.paused(client);
+					MachineActivityClientChecks.paused(client); MachineSceneClientChecks.paused(client);
 					if (++pausedTicks < 20) return;
 					client.setScreen(null); step = 14;
 				}
 				case 14 -> {
-					if (!MachineActivityClientChecks.resumed(client)) return;
+					if (!MachineActivityClientChecks.resumed(client) || !MachineSceneClientChecks.resumed(client)) return;
 					report.addProperty("activityFollowsRealPauseAndResume", true);
+					report.addProperty("coreFollowsRealPauseAndResume", true);
 					MachineActivityClientChecks.start(client); finish(client, null);
 				}
 			}
@@ -191,10 +196,10 @@ public final class MachineVisualClientProbe {
 		if (!(client.level.getBlockEntity(MachineVisualFixture.POSITIONS.get(index)) instanceof MachineControllerEntity core)) return null;
 		var frame = core.visualSnapshot().orElse(null); if (frame == null) return null;
 		check(core.ownerId() == null && !core.readyIdentity() && !core.formed(), "Visual sync loaded authoritative identity or binding");
-		check(frame.variant() == (status == MachineVisualState.READY ? index%3 : -1), "Visual frame layout does not match formed structure");
+		check(frame.variant() == (status == MachineVisualState.READY ? MachineVisualFixture.variant(index) : -1), "Visual frame layout does not match formed structure");
 		return status;
 	}
-	private static boolean allReady(Minecraft client) { for (int i=0;i<4;i++) if (state(client,i) != MachineVisualState.READY) return false; return MachineSceneClientChecks.lightingReady(client); }
+	private static boolean allReady(Minecraft client) { for (int i=0;i<MachineVisualFixture.POSITIONS.size();i++) if (state(client,i) != MachineVisualState.READY) return false; return true; }
 	private static boolean waitFor(boolean condition) { if (!condition) { settled=0; return false; } if (++settled < 25) return false; settled=0; return true; }
 	private static void validateModels(Minecraft client) {
 		var random = RandomSource.create(25092026); var missing = client.getModelManager().getMissingModel(); int combinations=0;
@@ -227,7 +232,9 @@ public final class MachineVisualClientProbe {
 		if (finished) return; finished=true;
 		try {
 			if(client.level!=null) { client.level.disconnect(); client.disconnect(new TitleScreen()); }
-			if (failure == null) { MachineActivityClientChecks.disconnected(); report.addProperty("activityClearedOnWorldDisconnect", true); }
+			if (failure == null) { MachineActivityClientChecks.disconnected();
+				check(com.ayoshiko.productivebeesgenesis.multiblock.client.CombinedApiaryRenderer.detailedCount() == 0, "World unload retained core budget");
+				report.addProperty("coreBudgetClearedOnWorldDisconnect", true); report.addProperty("activityClearedOnWorldDisconnect", true); }
 			boolean closed = client.getSingleplayerServer()==null && client.level==null;
 			report.addProperty("normalIntegratedShutdown",closed); report.addProperty("passed",failure==null && closed);
 			report.addProperty("ae2Loaded",ModList.get().isLoaded("ae2")); report.addProperty("completedStep",step);
