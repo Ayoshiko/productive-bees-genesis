@@ -70,7 +70,9 @@ public final class MachineFormationProbe {
 					}).join();
 					check(crossThreadRejected && activeCore.formed(), "Off-thread request changed the machine");
 					report.addProperty("crossThreadRequestRejected", true);
-					report.addProperty("threeSizesFourDirectionsAndParts", true);
+					report.addProperty("allLayoutsFourDirectionsAndParts", true);
+					report.addProperty("formedLayoutCount", CombinedApiaryDefinition.DEFINITION.candidates().size());
+					report.addProperty("formedMachineCount", fixtures.size());
 					stableBindings = fixtures.stream().map(f -> f.core().handle.binding().orElseThrow()).toList();
 					stableVisuals = fixtures.stream().map(f -> f.core().getUpdateTag(level.registryAccess())).toList();
 					for (int i=0;i<fixtures.size();i++) {
@@ -92,7 +94,7 @@ public final class MachineFormationProbe {
 					}
 					if (server.getTickCount() - stableSince < 500) return;
 					check(fixtures.stream().allMatch(f -> f.core().auditedAt > stableSince), "Stable audit never progressed");
-					report.addProperty("readOnlyAuditsKeepAllTwelveBindingsFor500Ticks", true); stableBindings = null;
+					report.addProperty("readOnlyAuditsKeepAllBindingsFor500Ticks", true); stableBindings = null;
 					report.addProperty("boundedVisualFramesRemainStableFor500Ticks", true); stableVisuals = null;
 					var f = fixtures.getFirst(); oldBinding = f.core().handle.binding().orElseThrow();
 					level.removeBlock(f.world(BlockPos.ZERO), false);

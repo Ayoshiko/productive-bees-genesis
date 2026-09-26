@@ -14,7 +14,7 @@ import net.minecraft.nbt.Tag;
 /** 有限结构展示帧；不含所有者、库存、工作数据或任意尺寸。revision 仅在本次服务器连接内排序。 */
 public record MachineVisualSnapshot(long revision, UUID machine, long generation, int variant,
                                     Direction facing, MachineVisualState state) {
-	public static final int SCHEMA = 1;
+	public static final int SCHEMA = 2;
 	public static final int MAX_TAG_BYTES = 256;
 	private static final Set<String> KEYS = Set.of("schema", "layout", "revision", "machine", "generation", "variant", "facing", "state");
 	public MachineVisualSnapshot {

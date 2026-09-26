@@ -35,7 +35,10 @@ public final class MachineRestartProbe {
 		if (!enabled()) return;
 		var server = event.getServer(); var level = server.overworld();
 		try {
-			var template = CombinedApiaryDefinition.DEFINITION.candidates().getLast();
+			if (mode().equals("read")) marker = NbtIo.readCompressed(markerFile(server), NbtAccounter.unlimitedHeap());
+			int variant = mode().equals("write") ? CombinedApiaryDefinition.DEFINITION.candidates().size() - 1
+					: marker.contains("variant", net.minecraft.nbt.Tag.TAG_INT) ? marker.getInt("variant") : 2;
+			var template = CombinedApiaryDefinition.DEFINITION.candidates().get(variant);
 			if (mode().equals("write")) {
 				fixture = MachineProbeFixture.place(level, template, POSITION, Direction.NORTH, UUID.randomUUID());
 				bad = MachineProbeFixture.place(level, template, BAD_POSITION, Direction.NORTH, UUID.randomUUID());
@@ -43,9 +46,8 @@ public final class MachineRestartProbe {
 				bad.core().loadWithComponents(broken, level.registryAccess()); bad.core().setChanged();
 				marker = new CompoundTag(); marker.putLong("writerPid", ProcessHandle.current().pid());
 				marker.putUUID("machine", fixture.core().machineId()); marker.putUUID("owner", fixture.core().ownerId());
-				marker.putLong("generation", fixture.core().generation());
+				marker.putLong("generation", fixture.core().generation()); marker.putInt("variant", variant);
 			} else {
-				marker = NbtIo.readCompressed(markerFile(server), NbtAccounter.unlimitedHeap());
 				check(marker.getLong("writerPid") != ProcessHandle.current().pid(), "Restart reused writer JVM");
 				// force 仅属于夹具，正式机器服务不持区块票据。
 				for (var pos : new BlockPos[]{POSITION, BAD_POSITION}) {

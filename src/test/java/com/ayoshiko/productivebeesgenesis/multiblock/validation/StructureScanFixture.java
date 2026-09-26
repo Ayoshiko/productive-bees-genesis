@@ -46,15 +46,18 @@ final class StructureScanFixture implements StructureScanAccess {
 
 	/** 独立按产品布局摆放，不调用被测模板的 cellAt。 */
 	static StructureScanFixture combined(int depth, BlockPos controller, Direction facing) {
+		return combined(depth, 5, controller, facing);
+	}
+	static StructureScanFixture combined(int depth, int height, BlockPos controller, Direction facing) {
 		var transform = new StructureTransform(controller, new BlockPos(3, 1, 0), facing);
 		var placed = new ConcurrentHashMap<BlockPos, State>();
-		for (int x = 0; x < 7; x++) for (int y = 0; y < 5; y++) for (int z = 0; z < depth; z++) {
-			int boundaries = (x == 0 || x == 6 ? 1 : 0) + (y == 0 || y == 4 ? 1 : 0) + (z == 0 || z == depth - 1 ? 1 : 0);
+		for (int x = 0; x < 7; x++) for (int y = 0; y < height; y++) for (int z = 0; z < depth; z++) {
+			int boundaries = (x == 0 || x == 6 ? 1 : 0) + (y == 0 || y == height - 1 ? 1 : 0) + (z == 0 || z == depth - 1 ? 1 : 0);
 			placed.put(transform.toWorld(new BlockPos(x, y, z)), state(boundaries >= 2 ? FRAME : boundaries == 1 ? CASING : AIR));
 		}
 		placed.put(controller, new State(CONTROLLER, facing));
 		placed.put(transform.toWorld(new BlockPos(3, 2, 0)), new State(INTERFACE, facing));
-		placed.put(transform.toWorld(new BlockPos(3, 2, depth / 2)), state(CORE));
+		placed.put(transform.toWorld(new BlockPos(3, height / 2, depth / 2)), state(CORE));
 		placed.put(transform.toWorld(new BlockPos(2, 1, depth / 2)), new State(APIARY_UNIT, facing));
 		placed.put(transform.toWorld(new BlockPos(4, 1, depth / 2)), new State(CENTRIFUGE_UNIT, facing));
 		placed.put(transform.toWorld(new BlockPos(0, 1, 2)), new State(ENERGY_PORT, facing.getCounterClockWise()));

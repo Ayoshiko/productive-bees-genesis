@@ -17,18 +17,18 @@ import static org.junit.jupiter.api.Assertions.*;
 class StructureScanTest {
 	private static final StructureDefinition COMBINED = CombinedApiaryDefinition.DEFINITION;
 	private static final BlockPos CONTROLLER = new BlockPos(-32, 65, -48);
-	private StructureDefinition definition(StructureTemplate... templates) { return new StructureDefinition(COMBINED.id(), 1, List.of(templates)); }
+	private StructureDefinition definition(StructureTemplate... templates) { return new StructureDefinition(COMBINED.id(), COMBINED.layoutVersion(), List.of(templates)); }
 	private StructureScan scan(StructureDefinition definition, StructureScanFixture source) { return new StructureScan(definition, source.current, CONTROLLER, Direction.NORTH); }
 
 	@Test void allSizesAndOrientationsResolveOneCandidateUnderSharedCellBudget() {
-		for (int depth : List.of(5, 7, 9)) for (var facing : Direction.Plane.HORIZONTAL) {
-			var source = combined(depth, CONTROLLER, facing);
+		for (int height : List.of(5, 7)) for (int depth : List.of(5, 7, 9)) for (var facing : Direction.Plane.HORIZONTAL) {
+			var source = combined(depth, height, CONTROLLER, facing);
 			var scan = new StructureScan(COMBINED, source.current, CONTROLLER, facing);
 			finish(scan, source, 7);
-			assertEquals(MATCHED, scan.status()); assertEquals(List.of("7x5x" + depth), scan.matchedVariants());
+			assertEquals(MATCHED, scan.status()); assertEquals(List.of("7x" + height + "x" + depth), scan.matchedVariants());
 			assertEquals(depth, scan.readyMatch(source.current).orElseThrow().template().geometry().size().depth());
-			assertTrue(source.reads >= 7 * 5 * depth);
-			assertTrue(source.reads <= 7 * 5 * (5 + 7 + 9));
+			assertTrue(source.reads >= 7 * height * depth);
+			assertTrue(source.reads <= 7 * (5 + 7) * (5 + 7 + 9));
 			int reads = source.reads; scan.advance(7, source); assertEquals(reads, source.reads);
 		}
 	}
@@ -101,16 +101,16 @@ class StructureScanTest {
 	}
 	@Test void everyIdentityAndRevisionFieldInvalidatesBeforeBlockQueries() {
 		var source = combined(5, CONTROLLER, Direction.NORTH); var original = source.current;
-		var changed = List.of(new StructureScanStamp(UUID.randomUUID(), 1, 0, COMBINED.id(), 1),
-				new StructureScanStamp(original.machineId(), 2, 0, COMBINED.id(), 1),
-				new StructureScanStamp(original.machineId(), 1, 1, COMBINED.id(), 1),
-				new StructureScanStamp(original.machineId(), 1, 0, ResourceLocation.parse("test:other"), 1),
-				new StructureScanStamp(original.machineId(), 1, 0, COMBINED.id(), 2));
+		var changed = List.of(new StructureScanStamp(UUID.randomUUID(), 1, 0, COMBINED.id(), original.layoutVersion()),
+				new StructureScanStamp(original.machineId(), 2, 0, COMBINED.id(), original.layoutVersion()),
+				new StructureScanStamp(original.machineId(), 1, 1, COMBINED.id(), original.layoutVersion()),
+				new StructureScanStamp(original.machineId(), 1, 0, ResourceLocation.parse("test:other"), original.layoutVersion()),
+				new StructureScanStamp(original.machineId(), 1, 0, COMBINED.id(), COMBINED.layoutVersion() + 1));
 		for (var stamp : changed) {
 			source.current = stamp; var scan = new StructureScan(COMBINED, original, CONTROLLER, Direction.NORTH);
 			assertEquals(STALE, scan.advance(5, source).status()); assertEquals(0, source.reads); assertEquals(0, source.availabilityChecks);
 		}
-		var staleDefinition = new StructureScan(new StructureDefinition(COMBINED.id(), 2, COMBINED.candidates()), original, CONTROLLER, Direction.NORTH);
+		var staleDefinition = new StructureScan(new StructureDefinition(COMBINED.id(), COMBINED.layoutVersion() + 1, COMBINED.candidates()), original, CONTROLLER, Direction.NORTH);
 		assertEquals(STALE, staleDefinition.status());
 	}
 	@Test void mutationInLastReadOrBetweenStepsCannotPublishMixedWorldState() {

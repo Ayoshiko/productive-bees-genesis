@@ -14,19 +14,28 @@ import static org.junit.jupiter.api.Assertions.*;
 class CombinedApiaryDefinitionTest {
 	private final StructureDefinition definition = CombinedApiaryDefinition.DEFINITION;
 	@Test void eachDepthHasExactlyOneCoreAndTwoWorkUnitsWithReservedAir() {
-		assertEquals(List.of(5, 7, 9), definition.candidates().stream().map(t -> t.geometry().size().depth()).toList());
+		assertEquals(List.of(5, 7, 9, 5, 7, 9), definition.candidates().stream().map(t -> t.geometry().size().depth()).toList());
 		for (var template : definition.candidates()) {
 			var size = template.geometry().size();
-			assertEquals(7, size.width()); assertEquals(5, size.height());
+			assertEquals(7, size.width()); assertTrue(size.height() == 5 || size.height() == 7);
 			var counts = new EnumMap<StructureRole, Integer>(StructureRole.class);
 			for (long i = 0; i < size.volume(); i++) for (var role : template.cellAt(size.positionAt(i)).roles()) counts.merge(role, 1, Integer::sum);
 			for (var role : List.of(CONTROLLER, CORE, APIARY_UNIT, CENTRIFUGE_UNIT, INTERFACE, ENERGY_PORT, INPUT_PORT, OUTPUT_PORT)) {
 				assertEquals(1, counts.get(role));
 			}
-			assertEquals(8 + 4 * ((7 - 2) + (5 - 2) + (size.depth() - 2)), counts.get(FRAME));
-			assertEquals((7 - 2) * (5 - 2) * (size.depth() - 2) - 3, counts.get(AIR));
+			assertEquals(8 + 4 * ((7 - 2) + (size.height() - 2) + (size.depth() - 2)), counts.get(FRAME));
+			assertEquals((7 - 2) * (size.height() - 2) * (size.depth() - 2) - 3, counts.get(AIR));
 			assertFalse(counts.containsKey(UPGRADE)); assertFalse(counts.containsKey(NETWORK_PORT));
-			assertEquals(Set.of(AIR), template.cellAt(new BlockPos(3, 3, size.depth() / 2)).roles());
+			assertEquals(Set.of(AIR), template.cellAt(new BlockPos(3, size.height() / 2 + 1, size.depth() / 2)).roles());
+		}
+	}
+	@Test void originalLayoutIndicesAndAnchorsRemainStable() {
+		assertEquals(List.of("7x5x5", "7x5x7", "7x5x9", "7x7x5", "7x7x7", "7x7x9"),
+				definition.candidates().stream().map(StructureTemplate::variant).toList());
+		for (var template : definition.candidates()) {
+			assertEquals(new BlockPos(3, 1, 0), template.geometry().controllerAnchor());
+			assertEquals(Set.of(CORE), template.cellAt(BlockPos.containing(template.geometry().coreCenter())).roles());
+			assertEquals(template.geometry().size().height() / 2 + 0.5, template.geometry().coreCenter().y);
 		}
 	}
 	@Test void fullRectangleSeparatesFrameFacesAndInteriorWithoutWildcardCells() {

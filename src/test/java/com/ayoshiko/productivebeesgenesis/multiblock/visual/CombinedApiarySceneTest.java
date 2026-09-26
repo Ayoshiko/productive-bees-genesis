@@ -41,6 +41,6 @@ class CombinedApiarySceneTest {
 	}
 	@Test void inactiveAndUnknownLayoutsHaveNoProps() {
 		assertTrue(CombinedApiaryScene.props(-1).isEmpty());
-		assertTrue(CombinedApiaryScene.props(3).isEmpty());
+		assertTrue(CombinedApiaryScene.props(CombinedApiaryDefinition.DEFINITION.candidates().size()).isEmpty());
 	}
 }

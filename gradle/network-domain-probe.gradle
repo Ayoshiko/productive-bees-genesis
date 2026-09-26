@@ -171,10 +171,10 @@ tasks.named('runNetworkMultiblockServer') {
         File report = new File(probeDirectory.get().asFile, 'results/multiblock.json')
         if (!report.isFile()) throw new GradleException('Missing multiblock report')
         def result = new groovy.json.JsonSlurper().parse(report)
-        def required = ['threeSizesFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
+        def required = ['allLayoutsFourDirectionsAndParts', 'removalAirObstructionAndTwoRebuilds',
                         'wrongRoleAndFacingRejectedAndRepaired', 'adjacentStructuresRemainIndependent',
                         'sharedWallConflictsDisableBoth', 'noDuplicatedTickersAndCleanup', 'crossThreadRequestRejected',
-                        'readOnlyAuditsKeepAllTwelveBindingsFor500Ticks', 'boundedVisualFramesRemainStableFor500Ticks']
+                        'readOnlyAuditsKeepAllBindingsFor500Ticks', 'boundedVisualFramesRemainStableFor500Ticks']
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
                 'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup',

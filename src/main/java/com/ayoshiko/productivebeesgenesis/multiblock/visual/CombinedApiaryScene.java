@@ -21,10 +21,10 @@ public final class CombinedApiaryScene {
 			.map(template -> {
 				double z = template.geometry().coreCenter().z;
 				return List.of(new Prop(Kind.HIVE, new Vec3(2.5, 2.5, z), 0.8F),
-						new Prop(Kind.COMB, new Vec3(3.5, 3.5, z), 0.65F),
+						new Prop(Kind.COMB, new Vec3(3.5, template.geometry().coreCenter().y + 1, z), 0.65F),
 						new Prop(Kind.CHEST, new Vec3(4.5, 2.5, z), 0.8F));
 			}).toList();
-	/** 固定三种布局共享不可变锚点；非法索引返回空场景。 */
+	/** 所有固定布局共享不可变锚点；非法索引返回空场景。 */
 	public static List<Prop> props(int variant) {
 		return variant < 0 || variant >= LAYOUTS.size() ? List.of() : LAYOUTS.get(variant);
 	}

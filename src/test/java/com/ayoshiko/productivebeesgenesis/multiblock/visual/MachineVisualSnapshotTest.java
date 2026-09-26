@@ -17,7 +17,7 @@ class MachineVisualSnapshotTest {
 	}
 	@Test void allLayoutsDirectionsAndInactiveStatesRoundTripWithinFixedByteLimit() throws Exception {
 		for (var direction : Direction.Plane.HORIZONTAL) for (var state : MachineVisualState.values()) {
-			for (int variant = state == MachineVisualState.READY ? 0 : -1; variant <= (state == MachineVisualState.READY ? 2 : -1); variant++) {
+			for (int variant = state == MachineVisualState.READY ? 0 : -1; variant <= (state == MachineVisualState.READY ? com.ayoshiko.productivebeesgenesis.multiblock.definition.CombinedApiaryDefinition.DEFINITION.candidates().size() - 1 : -1); variant++) {
 				var frame = new MachineVisualSnapshot(Long.MAX_VALUE, MACHINE, Long.MAX_VALUE, variant, direction, state);
 				var tag = frame.encode(); assertEquals(frame, MachineVisualSnapshot.decode(tag).orElseThrow());
 				var bytes = new ByteArrayOutputStream(); NbtIo.write(tag, new DataOutputStream(bytes));

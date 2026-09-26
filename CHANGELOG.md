@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M02c 高版一体机**：追加 7×7×5／7／9，保留原三种尺寸和索引；体积不增加工作单元。布局 1 身份可在布局 2 重新扫描恢复；两种依赖的 24 台结构检查、旧世界恢复及高版跨 JVM 保存恢复通过。大型抽象核心渲染与效果设置分步验收。
+
 - **M06b2 内部静态场景**：形成后显示原版蜂箱、蜜脾与箱子模型，共用结构坐标和有限剔除盒；按模型所在空气格取光，失效即隐藏，资源重载重新烘焙。真实客户端核对三尺寸四向、斜视、顶点范围、重载及重新跟踪，改善夹具首次光照同步；两种依赖专服和 954 项测试（2 项既有跳过）通过。完整加工演出仍待后续实现。
 
 - **M06b1 结构展示帧**：用不超过 256 字节的版本化原生 BE 数据同步三种布局、身份、朝向与结构状态，客户端不接收权威库存和所有者。补齐旧帧拒绝、视距失效与卸载重跟踪检查，并修复自动客户端探针的卸载判断和超时退出；两种依赖客户端、四组专服与 952 项测试（2 项既有跳过）通过。
@@ -119,6 +121,8 @@
 ### English
 
 #### Added
+
+- Added M02c tall 7x7x5/7/9 layouts, preserving the original three indices and single set of work units. Layout 1 identities rescan under layout 2. Verified 24 structures with and without AE2, legacy-world recovery, and a tall-layout JVM restart. Abstract core visuals and effect settings remain separate steps.
 
 - Added M06b2 static internal hive, comb and chest models using shared structure transforms and finite render bounds. Models sample light at their air-space anchors, hide on invalidation and rebuild on resource reload. Client probes verify geometry, facing, oblique views and retracking; startup fixtures now settle lighting before observation. Both dedicated-server configurations and 954 tests (two existing skips) passed. Processing animations remain future work.
 

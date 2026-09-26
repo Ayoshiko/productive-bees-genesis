@@ -90,14 +90,15 @@ public final class MachineControllerEntity extends BlockEntity {
 	@Override public void setRemoved() { MachineWorldService.remove(this); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.setRemoved(); }
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("machine", machine); tag.putLong("generation", generation);
-		if (owner != null) tag.putUUID("owner", owner); tag.putBoolean("invalidIdentity", invalidIdentity); tag.putInt("layout", 1);
+		if (owner != null) tag.putUUID("owner", owner); tag.putBoolean("invalidIdentity", invalidIdentity); tag.putInt("layout", CombinedApiaryDefinition.DEFINITION.layoutVersion());
 	}
 	@Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		MachineWorldService.remove(this);
 		super.loadAdditional(tag, registries);
 		invalidIdentity = tag.getBoolean("invalidIdentity") || !tag.hasUUID("machine") || !tag.hasUUID("owner")
 				|| !tag.contains("generation", Tag.TAG_LONG) || tag.getLong("generation") < 1
-				|| !tag.contains("layout", Tag.TAG_INT) || tag.getInt("layout") != 1;
+				// 布局 1 只含身份且尚无独立机资产；保留身份后按含旧模板的布局 2 重扫。
+				|| !tag.contains("layout", Tag.TAG_INT) || (tag.getInt("layout") != 1 && tag.getInt("layout") != 2);
 		if (tag.hasUUID("machine")) machine = tag.getUUID("machine"); generation = Math.max(1, tag.getLong("generation"));
 		owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null; handle = null; registrationFailed = false; MachineWorldService.watch(this);
 	}
