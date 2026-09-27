@@ -366,9 +366,11 @@ public final class Ae2FluidPusher {
 
 		boolean anySuccess = false;
 		boolean allFailed = true;
+		boolean budgetDeferred = false;
 		long totalRequested = 0L;
 		long totalActualShrunk = 0L; // 实际从 tank shrink 的总量（区分 tank 已空和推送失败）
-		long rejectedCount = 0L; // 被网络完全拒绝的流体种类数（用于触发退避）
+		long rejectedCount = 0L; // 零接收或异常的流体种类数（用于触发退避）
+		AEFluidKey firstFailedKey = null;
 		long nanoNow = System.nanoTime();
 		Ae2KeyBackoffRegistry<AEFluidKey> keyBackoff = getOrCreateFluidKeyBackoff(holder);
 		// 与物品推送共享同一 per-tile 成本记账器：同一 ME 网络的昂贵外部存储对流体同样昂贵，
@@ -397,10 +399,17 @@ public final class Ae2FluidPusher {
 					continue;
 				}
 				long pushed = Math.min(amount, tankTotal);
+				if (costTracker.isExhausted(gameTick)) {
+					// No AE insert was attempted. Keep the tank and retry on a later tick.
+					budgetDeferred = true;
+					batchBuffer.recordAttempt(fluidKey, tankTotal);
+					continue;
+				}
 
 				long inserted = batchPush(holder, meStorage, fluidKey, pushed, gameTick, costTracker);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发按 key 退避，并登记余量等窗口重试
+					if (firstFailedKey == null) firstFailedKey = fluidKey;
 					keyBackoff.recordFailure(fluidKey, nanoNow);
 					batchBuffer.recordAttempt(fluidKey, tankTotal);
 					rejectedCount = SaturatingMath.saturatingAdd(rejectedCount, 1L);
@@ -426,6 +435,7 @@ public final class Ae2FluidPusher {
 
 				logPushResult(fluidKey, pushed, inserted);
 			} catch (Exception e) {
+				if (firstFailedKey == null) firstFailedKey = fluidKey;
 				keyBackoff.recordFailure(fluidKey, nanoNow);
 				batchBuffer.recordAttempt(fluidKey, tankTotal);
 				rejectedCount = SaturatingMath.saturatingAdd(rejectedCount, 1L);
@@ -436,11 +446,12 @@ public final class Ae2FluidPusher {
 		// 12. Only a batch where every attempted key was rejected enters short backoff.
 		// Any accepted key resets it so another fluid cannot hold the whole host offline.
 		Ae2PushBackoff fluidBackoff = pushState.getFluidBackoff();
-		if (allFailed && (totalActualShrunk > 0 || rejectedCount > 0)) {
+		if (allFailed && !budgetDeferred && (totalActualShrunk > 0 || rejectedCount > 0)) {
 			fluidBackoff.recordFailure(System.nanoTime());
-			LogThrottle.warn("ae2_fluid_backoff",
-					"AE2 流体推送全部失败，进入短退避 totalRequested={}, 指数={}",
-					totalRequested, fluidBackoff.getBackoffExponent());
+			LogThrottle.warnWithCooldown("ae2_fluid_backoff", 60_000L,
+					"AE2 流体推送未被接收，进入短退避 pos={}, firstFluid={}, requested={}, failedKeys={}, 指数={}",
+					host.productivebeesgenesis$getAe2BlockPos(), firstFailedKey,
+					totalRequested, rejectedCount, fluidBackoff.getBackoffExponent());
 		} else if (anySuccess) {
 			fluidBackoff.recordSuccess();
 		}
@@ -558,7 +569,7 @@ public final class Ae2FluidPusher {
 		long remaining = Math.max(0L, amount);
 		long insertedTotal = 0L;
 		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
-			// 网络级令牌已在入口取得；循环内仅保留本机成本预算，跨网络不共享硬闸门。
+			// The first call is admitted by the caller; later calls remain bounded by cost.
 			if (costTracker.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
 			long insertStart = System.nanoTime();

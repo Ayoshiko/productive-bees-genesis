@@ -25,6 +25,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -35,7 +36,8 @@ public final class CentrifugeDirectAeOutputOverlay {
 	private static final int BUTTON_X_OFFSET = 120;
 	private static final int BUTTON_Y_OFFSET = 60;
 	private static final int BUTTON_SIZE = 14;
-	private static final Map<GuiSideConfiguration<?>, CentrifugeDirectAeOutputButton> BUTTONS = new WeakHashMap<>();
+	/** 值也使用弱引用，避免按钮反向持有窗口使弱键无法回收。 */
+	private static final Map<GuiSideConfiguration<?>, WeakReference<CentrifugeDirectAeOutputButton>> BUTTONS = new WeakHashMap<>();
 
 	private CentrifugeDirectAeOutputOverlay() {
 	}
@@ -47,16 +49,18 @@ public final class CentrifugeDirectAeOutputOverlay {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		AeInputOverlay.OverlayTarget target = findTarget(Minecraft.getInstance().screen);
 		if (target == null) return;
-		CentrifugeDirectAeOutputButton button = BUTTONS.computeIfAbsent(target.sideConfig(), sideConfig -> {
-			CentrifugeDirectAeOutputButton created = new CentrifugeDirectAeOutputButton(target.gui(),
+		GuiSideConfiguration<?> sideConfig = target.sideConfig();
+		CentrifugeDirectAeOutputButton button = getButton(sideConfig);
+		if (button == null) {
+			button = new CentrifugeDirectAeOutputButton(target.gui(),
 					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
 					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
 					Component.literal("A"),
 					t -> PacketDistributor.sendToServer(new CycleAeOutputPayload(t.tile().getBlockPos(),
 							CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT)), target);
-			sideConfig.children().add(created);
-			return created;
-		});
+			sideConfig.children().add(button);
+			BUTTONS.put(sideConfig, new WeakReference<>(button));
+		}
 		button.target = target;
 		button.visible = target.type() == TransmissionType.ITEM;
 		boolean enabled = target.tile() instanceof IAe2OutputHostBase host
@@ -74,7 +78,7 @@ public final class CentrifugeDirectAeOutputOverlay {
 		if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
 		AeInputOverlay.OverlayTarget target = findTarget(event.getScreen());
 		if (target == null) return;
-		CentrifugeDirectAeOutputButton button = BUTTONS.get(target.sideConfig());
+		CentrifugeDirectAeOutputButton button = getButton(target.sideConfig());
 		if (button == null || !button.visible) return;
 		int x = target.gui().getGuiLeft() + target.sideConfig().getRelativeX() + BUTTON_X_OFFSET;
 		int y = target.gui().getGuiTop() + target.sideConfig().getRelativeY() + BUTTON_Y_OFFSET;
@@ -83,6 +87,11 @@ public final class CentrifugeDirectAeOutputOverlay {
 		PacketDistributor.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(),
 				CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT));
 		event.setCanceled(true);
+	}
+
+	private static CentrifugeDirectAeOutputButton getButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<CentrifugeDirectAeOutputButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
 	}
 
 	private static AeInputOverlay.OverlayTarget findTarget(Screen screen) {

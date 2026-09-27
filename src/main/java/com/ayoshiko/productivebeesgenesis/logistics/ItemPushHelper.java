@@ -5,16 +5,13 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
 
 /**
- * 物品推送助手 —— 统一「先模拟、再放入」的两段式插入。
+ * 物品推送助手，提供模拟容量与执行插入两个入口。
  * <p>
- * <b>为什么必须先模拟：</b>我们要在<em>动手之前</em>知道目标到底能吃下多少。
+ * 输出槽先模拟再抽取；缓冲产物直出可直接插入拷贝，按实际剩余量记账。
  * <ul>
  *   <li>从输出槽弹出时：先模拟得到 {@code accepted}，再从槽里精确取出这么多，
  *       避免「先取出、目标却塞不下」而必须回填的往返（回填会额外触发监听器与同步）。</li>
- *   <li>产物直通时：产物还在待提交缓冲里，先模拟能确认目标可接收，再执行插入并按
- *       <b>实际</b>插入量记账；目标违反 simulate/execute 一致性时也不会多扣产物。</li>
- *   <li>目标一点都吃不下时（0 接受）可以立刻短路，把该物品类型记入本刻拒收备忘，
- *       后续同类型槽位直接跳过，省掉整轮遍历。</li>
+ *   <li>目标拒收时可记住相同组件与数量的请求，避免本刻反复遍历。</li>
  * </ul>
  * <p>
  * 使用 {@link ItemHandlerHelper#insertItemStacked} 而不是逐槽 {@code insertItem}：

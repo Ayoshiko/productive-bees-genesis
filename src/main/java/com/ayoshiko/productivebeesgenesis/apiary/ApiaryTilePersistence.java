@@ -87,7 +87,7 @@ final class ApiaryTilePersistence {
 	 * 重复掉落物品到世界。
 	 * <p>
 	 * 清空范围：蜜蜂槽、喂食槽、PB升级槽（输入+输出）、产物输出槽、蜂笼输入槽、
-	 * 蜂笼输出槽、能量槽、流体罐、产物缓冲区（outputBuffer）、选中槽位。
+	 * 蜂笼输出槽、基因小食槽、能量槽、流体罐、产物缓冲区（outputBuffer）、选中槽位。
 	 * <p>
 	 * 设计原则：
 	 * <ul>
@@ -98,6 +98,7 @@ final class ApiaryTilePersistence {
 	 */
 	static void saveAllItemsForDrop(TileEntityMekApiary tile) {
 		tile.tickHandler.clearTransferredCycles();
+		tile.getGeneTreatRestock().clearAfterTransfer();
 		// 蜜蜂槽数组清空（BeeSlot.clear() 重置全部字段并标记 dirty）
 		try {
 			for (BeeSlot slot : tile.slotManager().getBeeSlots()) {
@@ -135,6 +136,11 @@ final class ApiaryTilePersistence {
 			tile.slotManager().getCageOutSlot().setStack(ItemStack.EMPTY);
 		} catch (RuntimeException e) {
 			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空蜂笼槽异常", e);
+		}
+		try {
+			tile.slotManager().getGeneTreatSlot().setStack(ItemStack.EMPTY);
+		} catch (RuntimeException e) {
+			ProductiveBeesGenesis.LOGGER.warn("saveAllItemsForDrop: 清空基因小食槽异常", e);
 		}
 		// 能量槽清空
 		try {

@@ -54,6 +54,7 @@ public final class ServerConfig {
 	public final ModConfigSpec.BooleanValue speedUpgradeTiersExclusive;
 	public final ModConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
 	public final ModConfigSpec.BooleanValue apiaryBeeGenesAffectWork;
+	public final ModConfigSpec.BooleanValue apiaryProduceAllFlowers;
 
 	// ========== 万象创世过滤配置(存档级别)==========
 	// 使用枚举类型,ConfigurationScreen自动渲染循环切换按钮
@@ -193,24 +194,30 @@ public final class ServerConfig {
 
 		builder.comment("平衡性规则；仅在全局平衡性配置为“自定义”时直接生效").push("balance");
 		productivityUpgradeTiersExclusive = builder
-				.comment("禁止产量升级 α/β/γ/Ω 在同一台机器中混装")
+				.comment("禁止产量升级 α/β/γ/Ω 在同一台机器中混装", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.productivityUpgradeTiersExclusive")
 				.define("productivityUpgradeTiersExclusive",
 						BalanceConfig.DEFAULT_CUSTOM_PRODUCTIVITY_EXCLUSIVE);
 		speedUpgradeTiersExclusive = builder
-				.comment("禁止时间 I 与时间 II 两种速度升级在同一台机器中混装")
+				.comment("禁止时间 I 与时间 II 两种速度升级在同一台机器中混装", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.speedUpgradeTiersExclusive")
 				.define("speedUpgradeTiersExclusive", BalanceConfig.DEFAULT_CUSTOM_SPEED_EXCLUSIVE);
 		centrifugeProductivityAffectsOutput = builder
-				.comment("离心机产量升级是否额外增加单次产出；无论此项如何，资源蜜蜂原版并行能力始终保留")
+				.comment("离心机产量升级是否额外增加单次产出；无论此项如何，资源蜜蜂原版并行能力始终保留",
+						BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.centrifugeProductivityAffectsOutput")
 				.define("centrifugeProductivityAffectsOutput",
 						BalanceConfig.DEFAULT_CUSTOM_CENTRIFUGE_OUTPUT);
 		apiaryBeeGenesAffectWork = builder
-				.comment("机械蜂箱是否根据蜜蜂的昼夜行为与天气耐受基因暂停工作")
+				.comment("机械蜂箱是否根据蜜蜂的昼夜行为与天气耐受基因暂停工作", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.balance.apiaryBeeGenesAffectWork")
 				.define("apiaryBeeGenesAffectWork",
 						BalanceConfig.DEFAULT_CUSTOM_APIARY_BEE_GENES_AFFECT_WORK);
+		apiaryProduceAllFlowers = builder
+				.comment("多花源蜜蜂每轮同时生产饲养槽内所有不同的有效花源；关闭时随机选择一种",
+						"仅作用于机械蜂箱，禁用槽和 PB 复制黑名单中的方块不参与。", BalanceConfig.CUSTOM_SETTING_COMMENT)
+				.translation("productivebeesgenesis.configuration.balance.apiaryProduceAllFlowers")
+				.define("apiaryProduceAllFlowers", BalanceConfig.DEFAULT_CUSTOM_APIARY_ALL_FLOWERS);
 		builder.pop();
 
 		builder.comment("万象创世蜜蜂过滤配置（存档级别）").push("myriad_creations_filter");

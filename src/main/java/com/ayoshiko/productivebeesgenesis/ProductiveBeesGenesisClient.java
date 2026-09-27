@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainer;
+import com.ayoshiko.productivebeesgenesis.apiary.client.BeeEntityCache;
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.AbstractBakedModelCosmic;
@@ -34,6 +35,8 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
@@ -55,6 +58,21 @@ public final class ProductiveBeesGenesisClient {
 		// 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
 		// 直接传递实例避免 registerExtensionPoint 重载歧义
 		container.registerExtensionPoint(IConfigScreenFactory.class, new CustomConfigScreenFactory());
+	}
+
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class WorldCacheLifecycle {
+		@SubscribeEvent
+		public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+			BeeEntityCache.clearCache();
+		}
+
+		@SubscribeEvent
+		public static void onLevelUnload(LevelEvent.Unload event) {
+			if (event.getLevel().isClientSide()) {
+				BeeEntityCache.clearCache();
+			}
+		}
 	}
 
 	/**

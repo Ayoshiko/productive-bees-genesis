@@ -1,0 +1,86 @@
+// 自动化发配基准：参考网络分支 gradle/network-domain-probe.gradle 的隔离服务器做法。
+// 用「平坦世界 + 关结构生成 + 低视距」的真实专用服务器（moddev server run），启动快、有真实 tick，
+// 从而能测真实 MSPT 与 CentrifugeDispatchScope 的自适应收敛。探针类在独立源集 dispatchProbe 里，
+// 只在 -PdispatchBenchmark 下编译运行，完成即写 JSON 报告并正常停服。
+sourceSets {
+    dispatchProbe {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    dispatchProbeImplementation.extendsFrom implementation
+    dispatchProbeCompileOnly.extendsFrom compileOnly
+    dispatchProbeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+def runId = providers.gradleProperty('dispatchProbeRun').getOrElse('b01')
+if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid dispatch probe run id')
+def probeDirectory = layout.buildDirectory.dir("dispatch-benchmark-${runId}")
+def probeEula = file('run/eula.txt')
+def sourceMods = file('run/mods')
+
+def prepareBench = tasks.register('prepareDispatchBenchmark') {
+    doLast {
+        File directory = probeDirectory.get().asFile
+        if (directory.exists()) throw new GradleException('Use a new -PdispatchProbeRun; existing evidence is preserved')
+        if (!probeEula.isFile() || !probeEula.getText('UTF-8').contains('eula=true')) {
+            throw new GradleException('Benchmark requires the already accepted local EULA (run/eula.txt)')
+        }
+        directory.mkdirs()
+        new File(directory, 'eula.txt').setText(probeEula.getText('UTF-8'), 'UTF-8')
+        // 平坦世界、关结构、低视距 → 世界生成几乎瞬时，启动瓶颈只剩模组加载（这是之前 EphemeralTestServer
+        // 用默认世界卡死的根因）。max-tick-time=-1 让测量期的长 tick 不触发看门狗崩溃。
+        new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
+server-port=25583
+online-mode=false
+level-name=world
+level-seed=13092026
+level-type=minecraft:flat
+generate-structures=false
+view-distance=3
+simulation-distance=3
+max-tick-time=-1
+''', 'UTF-8')
+        File mods = new File(directory, 'mods')
+        mods.mkdirs()
+        // 复制整包依赖（我们自己的 mod 不在 run/mods，由 dispatchProbe 源集提供，无冲突），满足全部前置。
+        sourceMods.listFiles({ f -> f.name.endsWith('.jar') } as java.io.FileFilter).each { jar ->
+            java.nio.file.Files.copy(jar.toPath(), new File(mods, jar.name).toPath())
+        }
+    }
+}
+
+neoForge {
+    addModdingDependenciesTo sourceSets.dispatchProbe
+    mods.named(mod_id.toString()) { sourceSet(sourceSets.dispatchProbe) }
+    runs {
+        dispatchBenchmarkServer {
+            server()
+            sourceSet = sourceSets.dispatchProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.dispatchBenchmark.enabled', 'true'
+            systemProperty 'pbg.dispatchBenchmark.order',
+                    providers.gradleProperty('dispatchBenchmarkOrder').getOrElse('100000000')
+            systemProperty 'pbg.benchPerPushNanos',
+                    providers.gradleProperty('benchPerPushNanos').getOrElse('3000')
+            systemProperty 'pbg.benchSpikeEveryTicks',
+                    providers.gradleProperty('benchSpikeEveryTicks').getOrElse('0')
+            systemProperty 'pbg.benchSpikeMillis',
+                    providers.gradleProperty('benchSpikeMillis').getOrElse('90')
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareBench
+        }
+    }
+}
+
+tasks.named('runDispatchBenchmarkServer') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/dispatch-benchmark.json')
+        if (!report.isFile()) throw new GradleException('Dispatch benchmark report is missing (server did not complete the probe)')
+        def result = new groovy.json.JsonSlurper().parse(report)
+        if (!result.passed) throw new GradleException('Dispatch benchmark assertions failed: ' + report.absolutePath)
+        logger.lifecycle('Dispatch benchmark report: ' + report.absolutePath)
+    }
+}

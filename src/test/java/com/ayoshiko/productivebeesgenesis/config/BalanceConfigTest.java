@@ -33,69 +33,76 @@ class BalanceConfigTest {
 		assertTrue(rules.speedTiersExclusive());
 		assertFalse(rules.centrifugeProductivityAffectsOutput());
 		assertTrue(rules.apiaryBeeGenesAffectWork());
+		assertFalse(rules.apiaryProduceAllFlowers());
+		assertFalse(BalanceConfig.Rules.customDefaults().apiaryProduceAllFlowers());
 		assertEquals(4, BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT);
 		assertEquals(8, BalanceConfig.DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT);
 	}
 
 	@Test
 	void namedProfilesResolveEveryBalanceRuleTogether() {
-		BalanceConfig.Rules basic = BalanceConfig.resolve(BalancePreset.BASIC, false, false, true, false);
+		BalanceConfig.Rules basic = BalanceConfig.resolve(BalancePreset.BASIC, false, false, true, false, true);
 		BalanceConfig.Rules paradox = BalanceConfig.resolve(
-				BalancePreset.PARADOX_INFINITY, true, true, false, true);
+				BalancePreset.PARADOX_INFINITY, true, true, false, true, false);
 
 		assertTrue(basic.productivityTiersExclusive());
 		assertTrue(basic.speedTiersExclusive());
 		assertFalse(basic.centrifugeProductivityAffectsOutput());
 		assertTrue(basic.apiaryBeeGenesAffectWork());
+		assertFalse(basic.apiaryProduceAllFlowers());
 		assertFalse(paradox.productivityTiersExclusive());
 		assertFalse(paradox.speedTiersExclusive());
 		assertTrue(paradox.centrifugeProductivityAffectsOutput());
 		assertFalse(paradox.apiaryBeeGenesAffectWork());
+		assertTrue(paradox.apiaryProduceAllFlowers());
 	}
 
 	@Test
 	void customProfileUsesIndividualRuleValues() {
-		BalanceConfig.Rules custom = BalanceConfig.resolve(BalancePreset.CUSTOM, true, false, false, false);
+		BalanceConfig.Rules custom = BalanceConfig.resolve(BalancePreset.CUSTOM, true, false, false, false, true);
 
 		assertTrue(custom.productivityTiersExclusive());
 		assertFalse(custom.speedTiersExclusive());
 		assertFalse(custom.centrifugeProductivityAffectsOutput());
 		assertFalse(custom.apiaryBeeGenesAffectWork());
+		assertTrue(custom.apiaryProduceAllFlowers());
+		assertFalse(BalanceConfig.resolve(BalancePreset.CUSTOM, true, false, false, false, false)
+				.apiaryProduceAllFlowers());
 	}
 
 	@Test
 	void basicToCustomCopiesEveryEffectiveSetting() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				false, false, true, false,
-				8, 2, 12, 3, 24);
+				8, 2, 12, 3, 24, true);
 
 		BalanceConfig.CustomSettings inherited =
 				BalanceConfig.settingsForPreset(BalancePreset.BASIC, configured);
 
 		assertEquals(new BalanceConfig.CustomSettings(
 				true, true, false, true,
-				4, 2, 4, 3, 8), inherited);
+				4, 2, 4, 3, 8, false), inherited);
 	}
 
 	@Test
 	void paradoxToCustomCopiesEveryEffectiveSetting() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				true, true, false, true,
-				4, 12, 2, 20, 8);
+				4, 12, 2, 20, 8, false);
 
 		BalanceConfig.CustomSettings inherited =
 				BalanceConfig.settingsForPreset(BalancePreset.PARADOX_INFINITY, configured);
 
 		assertEquals(new BalanceConfig.CustomSettings(
 				false, false, true, false,
-				8, 12, 8, 20, 16), inherited);
+				8, 12, 8, 20, 16, true), inherited);
 	}
 
 	@Test
 	void customSettingsRemainUntouchedWhenAlreadyCustom() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				false, true, false, false,
-				2, 7, 3, 9, 24);
+				2, 7, 3, 9, 24, true);
 
 		assertEquals(configured,
 				BalanceConfig.settingsForPreset(BalancePreset.CUSTOM, configured));
@@ -105,7 +112,7 @@ class BalanceConfigTest {
 	void namedProfileMirrorsEffectiveValuesForOfflineCustomSwitch() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				false, false, true, false,
-				8, 2, 12, 3, 24);
+				8, 2, 12, 3, 24, true);
 
 		assertEquals(
 				BalanceConfig.settingsForPreset(BalancePreset.BASIC, configured),
@@ -122,7 +129,7 @@ class BalanceConfigTest {
 	void liveNamedToCustomTransitionCopiesPreviousEffectiveValues() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				true, true, false, true,
-				4, 12, 2, 20, 8);
+				4, 12, 2, 20, 8, false);
 
 		assertEquals(
 				BalanceConfig.settingsForPreset(BalancePreset.PARADOX_INFINITY, configured),
@@ -135,7 +142,7 @@ class BalanceConfigTest {
 	void customStartupAndCustomReloadDoNotRewriteSettings() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
 				false, true, false, false,
-				2, 7, 3, 9, 24);
+				2, 7, 3, 9, 24, true);
 
 		assertEquals(configured, BalanceConfig.settingsToPersist(
 				false, false, BalancePreset.CUSTOM, BalancePreset.BASIC, configured));

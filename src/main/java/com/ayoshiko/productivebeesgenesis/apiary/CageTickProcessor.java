@@ -9,7 +9,7 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
  * <ul>
  *   <li>装入蜜蜂：cageInSlot 含蜜蜂的蜂笼或资源蜂刷怪蛋 → 蜜蜂转移到空 BeeSlot</li>
  *   <li>取出蜜蜂：cageInSlot 空蜂笼 + 存在非空 BeeSlot → 蜜蜂转移到蜂笼 → 含蜜蜂的蜂笼输出到 cageOutSlot</li>
- *   <li>自动喂食：cageInSlot 内为带基因小食时，先由 {@link GeneTreatAutoFeeder} 挑蜜蜂喂食</li>
+ *   <li>自动喂食：独立小食槽内有带基因小食时，先由 {@link GeneTreatAutoFeeder} 挑蜜蜂喂食</li>
  * </ul>
  * <p>
  * 本处理器仅负责 tick 驱动时机（在蜜蜂生产逻辑之前执行），实际的蜂笼转移细节由
@@ -47,7 +47,7 @@ class CageTickProcessor {
 	 * 之后由 {@link BeeSlotTickProcessor} 推进生产逻辑，使新装入的蜜蜂能在同一 tick 开始工作。
 	 */
 	void tick() {
-		// 自动喂食：cageInSlot 内若为带基因小食，按属性缺口挑蜜蜂喂食（消耗 1 个）
+		// 自动喂食：从独立小食槽按属性缺口挑蜜蜂喂食（消耗 1 个）
 		// 异常已由 GeneTreatAutoFeeder 内部节流捕获，这里只兜底 Error 级别的类加载问题，
 		// 避免可选依赖缺失时中断蜂笼处理。
 		if (autoFeeder != null) {

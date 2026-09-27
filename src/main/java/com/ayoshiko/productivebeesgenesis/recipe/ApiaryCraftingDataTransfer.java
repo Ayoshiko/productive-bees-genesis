@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotSerializer;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.apiary.GeneTreatRestockState;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
@@ -14,6 +15,9 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.attachments.containers.ContainerType;
+import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
@@ -29,6 +33,7 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -193,13 +198,25 @@ final class ApiaryCraftingDataTransfer {
 			@Nullable String targetTileId, @Nullable ItemStack dest) {
 		// 收集所有输入的 NBT（深拷贝）
 		List<CompoundTag> nbts = new ArrayList<>(inputs.size());
+		List<CompoundTag> restockStates = new ArrayList<>(inputs.size());
 		for (ItemStack input : inputs) {
 			CustomData data = input.get(DataComponents.BLOCK_ENTITY_DATA);
-			if (data == null) continue;
+			if (data == null) {
+				if (isApiary) restockStates.add(new CompoundTag());
+				continue;
+			}
 			try {
-				nbts.add(data.copyTag());
+				CompoundTag nbt = data.copyTag();
+				nbts.add(nbt);
+				if (isApiary) {
+					if (nbt.contains(GeneTreatRestockState.NBT_KEY)
+							&& !nbt.contains(GeneTreatRestockState.NBT_KEY, Tag.TAG_COMPOUND)) {
+						throw new IllegalArgumentException("Invalid gene-treat restock root");
+					}
+					restockStates.add(nbt.getCompound(GeneTreatRestockState.NBT_KEY));
+				}
 			} catch (Exception e) {
-				DevLog.error("合成升级: 读取输入 BLOCK_ENTITY_DATA 失败,跳过该输入", e);
+				throw new IllegalArgumentException("Cannot read machine input data", e);
 			}
 		}
 
@@ -229,6 +246,7 @@ final class ApiaryCraftingDataTransfer {
 		if (isApiary) {
 			int targetCapacity = resolveApiaryBeeSlotCapacity(outputBlock);
 			mergeBeeSlots(merged, nbts, targetCapacity);
+			merged.put(GeneTreatRestockState.NBT_KEY, GeneTreatRestockState.mergeSaved(restockStates));
 		}
 
 		// 合并 PB 升级数量（蜂箱用 ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS,离心机用 MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS）
@@ -343,6 +361,33 @@ final class ApiaryCraftingDataTransfer {
 
 		// 写回合并后的 PB 升级数量（空 CompoundTag 也写入,确保字段存在）
 		merged.put(pbUpgradeKey, mergedCounts);
+	}
+
+	/**
+	 * 回退合成路径复制第一个输入的组件后，继续把其余机器的 ATTACHED_ITEMS 合并进去。
+	 * <br/>
+	 * 正常路径由 MekanismShapedRecipe 完成相同工作；回退路径必须显式补齐，
+	 * 否则第二个及后续输入中的基因小食、能量物品和输出物品会静默丢失。
+	 */
+	static boolean mergeAttachedItemDataIntoFallback(List<ItemStack> inputs, ItemStack fallback) {
+		ComponentBackedItemHandler target = ContainerType.ITEM.createHandler(fallback);
+		if (target == null) return false;
+		for (int inputIndex = 1; inputIndex < inputs.size(); inputIndex++) {
+			ComponentBackedItemHandler source = ContainerType.ITEM.createHandler(inputs.get(inputIndex));
+			if (source == null) continue;
+			for (IInventorySlot slot : source.getInventorySlots(null)) {
+				ItemStack stack = slot.getStack();
+				if (stack.isEmpty()) continue;
+				ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, stack.copy(), false);
+				if (!remainder.isEmpty()) {
+					DevLog.warn(DEV_FEATURE,
+							"合成升级回退路径无法容纳输入物品 {}，拒绝合成",
+							remainder.getHoverName().getString());
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	/**

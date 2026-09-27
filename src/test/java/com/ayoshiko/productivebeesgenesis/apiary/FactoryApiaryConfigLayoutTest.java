@@ -33,6 +33,20 @@ class FactoryApiaryConfigLayoutTest {
 				ApiaryGuiLayoutHelper.getBeeBottom(beeRows), beeRows);
 		int cageY = ApiaryGuiLayoutHelper.getCageY(beeRows);
 
+		// 真实物品槽框从内坐标 -1 开始；同时校验所有工厂布局的留白。
+		int treatLeft = ApiaryGuiLayoutHelper.GENE_TREAT_X - 1;
+		int treatTop = ApiaryGuiLayoutHelper.GENE_TREAT_Y - 1;
+		int treatRight = treatLeft + ApiaryGuiLayoutHelper.SLOT;
+		int treatBottom = treatTop + ApiaryGuiLayoutHelper.SLOT;
+		assertEquals(ApiaryGuiLayoutHelper.ENERGY_X - 1, treatLeft);
+		assertEquals(ApiaryGuiLayoutHelper.ENERGY_X - 1, ApiaryGuiLayoutHelper.TANK_X,
+				"fluid gauge outer frame must align with the energy slot frame");
+		assertTrue(treatTop >= ApiaryGuiLayoutHelper.TANK_Y + 30 + 4,
+				name + " gene treat slot must leave space below the fluid gauge");
+		assertTrue(treatRight + 4 <= outputX - 1);
+		assertTrue(treatRight + 4 <= ApiaryGuiLayoutHelper.getCageInX(imageWidth, beeCols) - 1);
+		assertTrue(treatBottom + 4 <= ApiaryGuiLayoutHelper.getInventoryLabelY(beeRows));
+
 		int beeCenterTwice = beeX * 2 + beeWidth;
 		int outputCenterTwice = outputX * 2 + outputWidth;
 		assertTrue(Math.abs(beeCenterTwice - outputCenterTwice) <= 1,
@@ -60,6 +74,7 @@ class FactoryApiaryConfigLayoutTest {
 
 	private static Stream<Arguments> factoryLayouts() {
 		return Stream.of(
+				Arguments.of("single apiary", 3, 1, 3, 3, 9),
 				Arguments.of("basic", 5, 1, 3, 5, 15),
 				Arguments.of("advanced", 5, 2, 4, 5, 15),
 				Arguments.of("elite", 5, 3, 5, 5, 15),

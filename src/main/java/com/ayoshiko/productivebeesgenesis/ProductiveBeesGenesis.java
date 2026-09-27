@@ -432,6 +432,7 @@ public final class ProductiveBeesGenesis {
 		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
 		// 清理 PB 离心配方静态共享查找缓存 — 防止跨存档残留旧 RecipeHolder 引用（P1 优化）
 		safeClear(SharedPbRecipeCache::invalidate, "SharedPbRecipeCache");
+		safeClear(PbRecipeCompleter::invalidateRecipeOutputsCache, "PbRecipeCompleter.recipeOutputsCache");
 		safeClear(BeeInfoHelper::invalidateCache, "BeeInfoHelper");
 		// 清理机械蜂箱产出配方缓存（Task 16.3 — 静态缓存防止跨存档泄漏）
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
@@ -439,6 +440,7 @@ public final class ProductiveBeesGenesis {
 		safeClear(RawOreSmeltingUpgradeHelper::invalidateCache, "RawOreSmeltingUpgradeHelper");
 		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
 		safeClear(BeeConversionQueries::invalidate, "BeeConversionQueries");
+		safeClear(SingleIngredientCraftingIndex::invalidate, "SingleIngredientCraftingIndex");
 		safeClear(MyriadCreationsEventHandler::clearAllCaches, "MyriadCreationsEventHandler");
 		// 清理 BeeRecipeReloader 延迟重试上下文 — 防止持有的 RecipeManager / HolderLookup.Provider 引用阻碍 GC
 		safeClear(RecipeReloadRetryManager::clearPendingRetryContext, "RecipeReloadRetryManager");
@@ -446,10 +448,9 @@ public final class ProductiveBeesGenesis {
 		safeClear(AbstractCombEventHandler::clearThreadLocals, "AbstractCombEventHandler.ThreadLocals");
 		// 清理网络包频次限制器映射 — 防止跨存档玩家数据残留
 		safeClear(PayloadRateLimiter::clearAll, "PayloadRateLimiter");
+		safeClear(ModPayloads::clearFilterSyncRateLimits, "ModPayloads.filterSyncRateLimits");
 		// 清理万象批量规划器模板缓存 — 防止跨存档 bee_type 模板残留（Task 19）
 		safeClear(MyriadBatchPlanner::clearTemplateCache, "MyriadBatchPlanner.TEMPLATE_CACHE");
-		// 清理万象批量规划器 ThreadLocal 快照缓存 — 防止线程池复用场景下的引用残留
-		safeClear(MyriadBatchPlanner::clearThreadLocals, "MyriadBatchPlanner.snapshotCache");
 		// 清理服务端 tick 时间监测器状态 — 防止跨存档 MSPT 样本与 tpsFactor 缓存残留
 		safeClear(ServerTickTimeMonitor.getInstance()::invalidate, "ServerTickTimeMonitor");
 		// 复位全局游戏刻时钟 — 槽位的「外部退回窗口」依赖它判定过期，跨存档必须归零

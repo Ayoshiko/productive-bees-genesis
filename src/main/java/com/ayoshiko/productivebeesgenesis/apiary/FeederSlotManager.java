@@ -449,6 +449,16 @@ public class FeederSlotManager {
 		return FeederTagSampler.randomBlock(feederSlots, blockTag, excludedTag);
 	}
 
+	/** 当前启用槽中不同有效方块的快照；仅在生产批次开始时构建。 */
+	public List<ItemStack> getAllBlocksFromFeeder(TagKey<Block> blockTag, @Nullable TagKey<Block> excludedTag) {
+		return FeederTagSampler.allBlocks(feederSlots, blockTag, excludedTag);
+	}
+
+	/** 当前启用槽中不同有效物品的快照。 */
+	public List<ItemStack> getAllItemsFromFeeder(TagKey<Item> itemTag) {
+		return FeederTagSampler.allItems(feederSlots, itemTag);
+	}
+
 	/** 检查是否存在匹配必需标签且未命中排除标签的生效方块格。 */
 	public boolean containsBlockInFeeder(TagKey<Block> blockTag, @Nullable TagKey<Block> excludedTag) {
 		return FeederTagSampler.containsBlock(feederSlots, blockTag, excludedTag);

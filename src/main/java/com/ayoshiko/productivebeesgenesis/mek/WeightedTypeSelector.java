@@ -40,9 +40,6 @@ public final class WeightedTypeSelector {
 	/** 单例 */
 	private static final WeightedTypeSelector INSTANCE = new WeightedTypeSelector();
 
-	/** 预留 200+ 类型上限 */
-	static final int MAX_TYPES = 512;
-
 	/** 权重表重建间隔（tick）— 1 秒 */
 	static final int REBUILD_INTERVAL = 20;
 
@@ -129,7 +126,7 @@ public final class WeightedTypeSelector {
 	 */
 	public synchronized void onTypesUpdated(List<ResourceLocation> newTypes) {
 		int newVersion = typesVersion + 1;
-		int size = Math.min(newTypes.size(), MAX_TYPES);
+		int size = newTypes.size();
 		ResourceLocation[] newTypesArr = new ResourceLocation[size];
 		Map<ResourceLocation, Integer> newIndex = new HashMap<>(size * 2);
 		for (int i = 0; i < size; i++) {
@@ -243,7 +240,7 @@ public final class WeightedTypeSelector {
 			currentCallCount = callCounter.incrementAndGet();
 			Long factoryId = (long) System.identityHashCode(factoryKey);
 			CachedSelection cached = tickCache.get(factoryId);
-			if (cached != null && cached.matches(count, currentCallCount, typesVersion, factoryKey)) {
+			if (cached != null && cached.matches(count, currentCallCount, typesVersion, factoryKey, level, allTypes)) {
 				return cached.selected;
 			}
 		}
@@ -270,6 +267,8 @@ public final class WeightedTypeSelector {
 				cs.cachedCount = count;
 				cs.cachedVersion = typesVersion;
 				cs.selected = List.copyOf(result);
+				cs.pool = allTypes;
+				cs.levelRef = new WeakReference<>(level);
 				tickCache.put(factoryId, cs);
 			}
 		}
@@ -482,6 +481,8 @@ public final class WeightedTypeSelector {
 		int cachedVersion = -1;
 
 		List<ResourceLocation> selected = List.of();
+		List<ResourceLocation> pool = List.of();
+		WeakReference<Level> levelRef = new WeakReference<>(null);
 
 		CachedSelection(Object factory) {
 			this.factoryRef = new WeakReference<>(factory);
@@ -492,8 +493,10 @@ public final class WeightedTypeSelector {
 		 * <p>
 		 * Bug 2 修复：缓存有效期基于调用计数差值，{@code currentCallCount - cachedCallCount < CALL_COUNTER_REFRESH_INTERVAL} 时命中。
 		 */
-		boolean matches(int count, long currentCallCount, int version, Object factoryKey) {
+		boolean matches(int count, long currentCallCount, int version, Object factoryKey,
+				Level level, List<ResourceLocation> allTypes) {
 			if (factoryRef.get() != factoryKey) return false;
+			if (pool != allTypes || levelRef.get() != level) return false;
 			if (currentCallCount - cachedCallCount >= CALL_COUNTER_REFRESH_INTERVAL) return false;
 			return cachedCount == count && cachedVersion == version;
 		}

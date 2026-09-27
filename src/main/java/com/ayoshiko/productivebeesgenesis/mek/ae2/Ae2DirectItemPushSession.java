@@ -16,8 +16,8 @@ import java.util.function.ToIntFunction;
  * <p>
  * 满存储专项四重保护（玩家反馈：ME 磁盘满时单机 24-50ms/tick）：
  * insert 返回 0 时 AE2 仍完整遍历网络（每个存储单元尝试后拒绝），
- * 缓冲直推（32 组/次）与生成物直推（32 次/tick）在满存储下每 tick
- * 触发最多 64 次完整网络遍历。会话内短路消除该浪费：
+ * 缓冲直推与生成物直推在满存储下可能反复触发完整网络遍历。
+ * 同一真实游戏刻复用会话计数并短路：
  * <ol>
  *   <li>耗时预算 — 累计慢 insert 超出耗时超 {@link Ae2PushLimits#INSERT_TIME_BUDGET_NANOS} 后短路
  *       （健康网络累计恒 0，满速推送不受限）</li>
@@ -35,7 +35,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 	private MEStorage meStorage;
 	private Ae2OutputStateHolder holder;
 	private Ae2KeyBackoffRegistry<AEItemKey> keyBackoff;
-	private long nowNanos;
 	/** 会话创建时的游戏刻 — 用于全服 insert 预算的 tick 归属 */
 	private long gameTick;
 	private int attemptedCount;
@@ -62,7 +61,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		this.holder = holder;
 		this.meStorage = meStorage;
 		this.keyBackoff = keyBackoff;
-		this.nowNanos = System.nanoTime();
 		this.gameTick = gameTick;
 		this.attemptedCount = 0;
 		this.deferredCount = 0;
@@ -73,6 +71,10 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		this.insertQuota = costTracker == null
 				? Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK
 				: costTracker.keyQuota(Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK);
+	}
+
+	boolean isFor(Ae2OutputStateHolder holder, MEStorage meStorage, long gameTick) {
+		return this.holder == holder && this.meStorage == meStorage && this.gameTick == gameTick;
 	}
 
 	public int attemptedCount() { return attemptedCount; }
@@ -119,7 +121,7 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		}
 		AEItemKey key = AEItemKey.of(stack);
 		if (key == null) return 0;
-		if (keyBackoff != null && keyBackoff.shouldSkip(key, nowNanos)) {
+		if (keyBackoff != null && keyBackoff.shouldSkip(key, System.nanoTime())) {
 			deferredCount++;
 			return 0;
 		}

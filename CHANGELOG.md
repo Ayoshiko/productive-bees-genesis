@@ -121,7 +121,6 @@
 - 修正 P1 联调中的完整组件恢复、哈希碰撞、组保留额度分配和转移回调重入边界；避免不同变体误合并、重叠规则重复预约、模拟改写权威数据或重复结算，失败返回不生成掉落物实体。
 - 修复核心同进程重建时误用旧目录回执的问题；交还必须等当前释放版本落盘后解锁。基础机流体恢复改为幂等替换，避免原生与自定义字段重复恢复；蜂箱已付费周期纳入保存与升级迁移。
 - 合入维护分支的石料蜂／木材蜂复制黑名单修复、全部 PB 蜜蜂刷怪蛋入驻支持及实体类型校验；禁用喂食槽不再参与特殊蜂种花源判断。详情见下方 `1.0.8-hotfix`。
-
 ### English
 
 #### Added
@@ -201,6 +200,153 @@
 - Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
 - Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
+
+## [1.0.9] - 2026-09-26
+
+> 以下汇总 `1.0.8-hotfix` 发布后的维护变更。 / Maintenance changes since `1.0.8-hotfix`.
+
+### 新增
+
+- **全部花源产出**：新增平衡性开关 `balance.apiaryProduceAllFlowers`，基础及全新自定义配置默认关闭，悖论无限预设开启。木厂蜂、采石蜂、染料蜂等可在同一生产周期分别产出喂食槽内所有不同的有效花源；忽略空槽与禁用槽，重复槽位或堆叠数量不增加次数，继续遵守复制黑名单及原有生产力倍率，独立流体产出不按花源数量倍增。
+- **AE2 基因小食精确补货**：独立小食槽下方新增“补 / R”开关，每台蜂箱默认关闭。按槽内样本的物品与全部组件精确提取，空槽保留模板，替换小食更新模板；每 5 个真实 tick 至多尝试一次，缺货退避至 200 tick，并遵守在线状态、槽容量与网络工作预算。补货设置、模板及已提取待交付物品随存档、拆卸和升级保留。
+- **Shift 右键快捷放入**：手持资源蜜蜂刷怪蛋或装蜂蜂笼，Shift 右键蜂箱可直接放蜂；手持带基因小食可直接补入独立小食槽。服务端检查交互与机器权限，满槽或拒收时保留物品并阻止默认放蜂行为。
+- **双语教程同步**：更新 GuideME 与 Patchouli 的蜂箱、AE2、平衡配置及升级说明，补充全部花源、精确补货与快捷放入，修正独立小食槽和基础蜂箱两页共 18 格输出区的说明。
+- **教程图片与补货提示**：使用新版蜂箱截图替换两套教程图片，GuideME 等比缩放至 555×485，Patchouli 使用 256×256 透明画布等比居中。小食补货按钮按开启、关闭、异常暂停、未安装 AE2 四种状态显示简短分行提示。
+- **指南书生存配方**：参照 Productive Bees 指南书，新增“书 + 普通蜂笼/坚固蜂笼 + 原版蜜脾”的两种无序合成，产出本模组 Patchouli 指南。额外蜜脾用于区分 PB 原书配方；未安装 Patchouli 时不加载配方。
+- **平衡性配置提示**：蜂箱/离心机的产量与时间升级上限、离心机堆叠升级上限，以及受预设控制的平衡性规则，均补充中英文悬停提示和配置文件注释：先在“玩法配置 → 全局平衡性配置”切换并保存为“自定义”，再修改具体数值，避免预设覆盖或切换时继承原值。
+- **独立基因小食输入槽**：普通机械蜂箱及 MEK/ME/EM/EME 全部工厂等级在流体槽下方增加小食槽，与能量槽对齐并保留间距；流体槽外框同步左移一像素，与能量槽和小食槽的可见边缘一致；空槽显示 PB 基因小食的灰色图标。槽位仅接受带基因的小食，沿用智能选蜂、指定蜜蜂、无提升不消耗及喂食节流逻辑；蜂笼槽改为只接收蜂笼和资源蜜蜂刷怪蛋。同步接入侧面物品输入、容器同步、方块物品库存、存档及等级升级数据。
+- **蜂箱蜜蜂 JEI 查询**：鼠标悬停蜂箱中的蜜蜂时，可使用 JEI 自定义的配方/用途查询按键，打开 PB 原生蜜蜂配方，查看采蜜方块、产出及相关信息。普通资源蜂与特殊实体蜂共用类型解析；空槽、槽间空隙和被 MEK 弹窗遮挡的蜜蜂不参与查询，未安装 JEI 时不加载该集成。
+
+### 性能
+
+- **高并行离心机 AE2 回送**：健康网络的输出槽合并批次及直推会话各自采用 64 键上限（原为 32）；同宿主、同存储、同真实游戏刻复用直推会话的尝试计数，避免多份产物重置限额。蜂箱缓冲和生成物仅按本次实际插入尝试判定拒收，预算顺延不误触发退避。昂贵网络继续按实测插入成本收缩配额，未接收产物留在输出槽或待提交缓冲。
+- **全部花源与补货热路径**：每台蜂箱最多缓存三种多花源策略的只读产物模板，喂食槽版本、配方版本或世界变化时失效；关闭模式仍逐次随机采样。补货关闭且无待交付物品时立即返回，满槽不复制模板或查询网络；完整组件键复用至样本变化。
+- **万象批量规划**：容量快照只在一次生产事务的二分与重试中复用，移除跨生产调用的库存快照缓存；每个真实模板在该事务内复用各槽的模拟接收容量。按实际请求数量生成选型缓存，减少未使用的 1–9 种预采样。
+- **样板发配调用预算**：仅向本模组离心机提交的 AE2 样板目标共享每真实 tick 的自适应调用预算，以滞回和退避冷却约束逐份洪水；模拟不计数、不缩小第三方选定的单批数量，普通存储总线、接口和其它机器不消耗此预算。停服复位，不持有机器或世界引用。
+- **发配输入热路径**：输入槽跳过仅用于输出槽的外部回填保护检查；成功的 AE2 外部插入复用工厂排序标记去抖，保留原插入游标。PB 可配置蜜脾及蜜脾块采用惰性物品引用缓存，减少重复注册项访问。
+- **JDT/JDTE 高倍加速入口**：普通蜂箱、离心机及 MEK/ME/EM/EME 工厂统一使用本模组 ticker。同一真实游戏刻内，额外 ticker 调用仅计入虚拟 tick 银行，Mekanism 外层组件维护仅执行一次，减少 256/1024 次重复的升级组件、频率、比较器、红石与外观同步处理。组件维护按真实 tick 推进，生产仍使用既有批量预算；JDTE 合并接口与生产门控保持兼容，先 flush 也不会跳过本刻组件维护。
+- **AE2 候选筛选合并**：一次过滤槽遍历同时解析准入、无限提供、库存保留线与排序标记，直探和扫描路径都复用结果，移除后续重复的组件匹配与过滤遍历。复用表仅保留本轮候选，不跨配置变更缓存；正式提取前继续检查实时库存保留线。
+- **工厂空进程**：只在输入转为空闲时重置 PB/熔炼缓存及激活计数，移除成功路径的重复激活回调。已扣除输入的待提交产物仍每刻尝试排空，NBT 恢复和重新放入物品会重新启用状态清理。
+- **蜂箱界面同步**：进度条与居住 tick 使用同一份每 5 个真实 tick 更新的显示快照，平稳生产时这两项属性更新次数最多减少 80%；换蜂、状态/花蜜/周期长度变化、观察到周期回绕和游戏时间回退立即采样。每个查看者独立初始化，实际生产、能耗与存档计时不受影响。
+- **缓存内存边界**：客户端退服和客户端世界卸载时释放蜜蜂实体缓存，避免静态缓存继续引用旧世界；满容量时的命中不再清空整表。空蜜蜂槽同步时释放旧 NBT/压缩数组，AE 物品键缓存读取空槽时释放原栈引用；按键失败退避记录限制为每个注册表 512 项，仅淘汰重试调度记录，不丢弃物品或流体缓冲。
+- **离心配方检查复用产物表**：根据开发环境 Spark 调用链，并核对 ProductiveLib 0.2.0 的实现，输出兼容性与产物存在性检查共用既有配方缓存，减少 `getRecipeOutputs()` 重复复制 `LinkedHashMap`。概率、数量和副产物销毁升级仍逐次判定；配方/标签重载继续失效缓存，并补齐服务器停止时的清理。
+- **空闲离心进程减少清空开销**：仅在待提交物品缓冲非空时调用 `IdentityHashMap.clear()`，避免高并行工厂空闲进程每刻扫描空表；流体、输入扣除量及产物数量仍完整重置。
+- **AE2 输入成本控制**：按每台机器的实际提取耗时自适应减少昂贵存储上的调用次数，并累计同一真实游戏刻的耗时，避免多种蜜脾、高并行及时间加速反复触发存储扫描或同步落盘。单次请求量仍遵循原有槽容量、过滤器、保留线与并行规则；尚未提取的物品留在 ME 网络。
+- **相邻容器产物直出**：缓冲产物直接插入拷贝，按实际剩余量扣账，省去写入前的重复模拟。普通输出槽仍先模拟容量、再抽取插入，并回填未被接收的物品；逻辑运输管道继续使用 Mekanism 公开路由协议。
+- **相邻目标耗时预算与拒收复用**：直出和输出槽弹出按输出面共享真实游戏刻的成本统计，慢目标不会占用其它方向的预算；两条路径各保留一次尝试机会。相同目标、组件和请求数量的拒收结果在本刻复用，减少配方批量回退及时间加速下的重复遍历。槽位游标从实际停止位置继续轮转。
+
+### 修复
+
+- **离心机等待日志刷屏**：创建世界、加载区块或重载时的万象类型缓存预热，以及高并行／时间加速下的产物槽、流体槽背压等待，默认不再打印 INFO／WARN。需要排查时可通过现有开发者模式的 `bee_cache`、`centrifuge_batch` 开关启用 INFO 诊断；预热和输出等待各自跨机器、进程、维度共享 60 秒单调时钟冷却，物品与流体等待共用输出窗口。已就绪但过滤结果为空仍保留全局限频 WARN，实际异常告警不变；暂停、重试、进度和物品／流体／能量记账规则不变。
+- **AE2 输入偶发停拉**：输入拉取不再受可先被输出消耗的共享网络工作令牌拦截，仍受本机实际提取成本预算约束；规划期的槽位校验结果改按槽位对象身份缓存，避免同类但不同校验器的输入槽互相传播拒收。多机同网的输入准入因此可能比旧版更宽，需在玩家高负载网络复测。
+- **AE2 流体误退避与诊断**：本机插入预算耗尽时未调用 AE2，流体保留在罐中等待后续窗口，不再计为零接收；混合批次中只要有预算未尝试的流体，就不触发整机“全部拒收”短退避。真正零接收或异常仍逐流体退避；整机退避日志每分钟全服至多一条，附位置、首个失败键、请求量及失败键数。真实拒收的外部原因尚待现场存储状态确认。
+- **万象特殊蜜脾覆盖**：候选改从全部已加载蜂箱配方枚举，同时包含固定实体蜂与可配置蜂，不再要求存在离心配方。Ghostly、Milky、Powdery 及须在 MEK 化学氧化器处理的 Wasted Radioactive 蜜脾保留真实物品和组件；同蜂种的多配方、多组件变体均可参与。蜂箱、PB 离心和 MEK 批量路径统一使用真实模板，缺失模板时不伪造产物；没有真实块映射的蜜脾只参与单蜜脾生产。
+- **万象选型与重载**：蜜脾和蜜脾块候选池、世界身份分别校验缓存，权重记账覆盖完整蜂种列表，不再截断到 512 种；未就绪配方按 20 tick 退避恢复，实际延迟重载完成时失效蜂箱索引与万象模板。
+- **离心产物容量与末份输入**：PB 普通/动力与热能离心机在扣料前检查并追加随机产物，同时按 PB 整组入槽规则预留原配方副产物空间；容量不足保留输入，修复最后一份万象蜜脾漏产。MEK 按真实物品组件和槽位内部接收规则规划，保留合法超堆叠容量，共享蜜脾模板的分配正确合并；提交检查实际增长数量。
+- **补货与快捷插入资产保护**：网络提取先登记待交付物品，再按槽位真实增量扣账；小食入槽后监听器抛异常仍按实际接收量扣除手持物品。损坏 NBT 与未知提取、交付状态持久化隔离，不能通过切换开关解除；多输入合成合并待交付物品并继承第一台机器的开关，冲突、超限或无损转移无法保证时拒绝合成。
+- **离心机自适应大批发配**：移除输入槽按工作集压小外部容量的限制，恢复真实超堆叠容量，使 ECO 自适应批量、闪电过载供应器倍增和 EAEP 智能翻倍保留各自的批量策略。预算耗尽时返回零接收，未接管物品留在来源，已接管余量由供应器暂存并恢复发送。
+- **样板阻挡模式**：普通与缓存供应器目标均可检测本模组离心机的输入原料；外部可提取库存仍只公开产物，遵循实时侧面配置。
+- **普通测试发现**：排除仅供原生测试调用的 AE2 辅助夹具，修复无 AE2 运行时的普通 JUnit 发现失败。
+- **客户端窗口引用泄漏**：AE 输入、离心机直输 AE、相邻容器直出和熔炼兼容按钮的静态缓存改为弱键加弱值，解除“缓存 → 按钮 → 窗口/GUI → 世界”的强引用链。存活窗口继续通过子元素列表持有按钮，防止正常打开期间重复创建或提前回收。
+- **停止清理补全**：服务器停止时清空配置同步 UUID 限频表并复位清理计数，同时释放单原料合成配方索引的产出快照，避免退出后继续保留会话数据。
+- 合成回退路径合并其它离心机库存时，如果目标库存无法容纳剩余物品，拒绝合成并保留原输入，避免仅记录日志后丢失余量。
+- **工作台升级小食错位**：Mekanism 通用合成转移按“第一个可接收槽”插入，会把基因小食塞入蜂笼输出槽。蜂箱正常合成与超堆叠回退路径现按槽位用途重建目标等级库存，分别保留蜂笼、产物、能量与基因小食；多输入只合并兼容组件，专用槽冲突或库存无法容纳时拒绝合成，避免溢出或静默丢失。
+- 加固本轮新增的 AE2 输入预算：移除会波及无关网络的全服静态额度；零返回、异常及保留线探针也计入实际成本，探针不混入真实提取的平均成本。换网时重置本机统计，输出耗时已超额时仍为首次输入尝试保留机会。
+- 修复基因小食持久化边界：普通方块实体/扳手拆卸、工厂安装器的标准升级数据和自定义升级数据均恢复小食槽；工作台合成的 Mekanism 降级回退路径继续合并后续机器的物品组件，避免小食和其它槽位物品静默丢失。
+- 拒收缓存保留完整物品组件和请求数量，避免“大批量拒收”错误拦截缩小批量后的重试；记录有界，换刻清理，目标对象或侧面配置变化时重建。预算暂停只延后外部调用，剩余产物继续走原有输出槽或待提交缓冲，不生成掉落物实体。
+
+### 验证
+
+- **2026-09-26 ECO hotfix3 兼容检查**：将 `neoecoae-21.2.0-beta6-hotfix3.jar` 临时用于维护 worktree 的 NeoForge 原生测试后已恢复原有测试依赖。`EcoScaledDispatchMinecraftTest` 3 项通过；`CentrifugePatternProviderMinecraftTest` 8 项通过、1 项按条件跳过。此为发配与样板目标的定向兼容回归，不等同真实玩家存档中 Omnicell、原版 CPU、量子 CPU 的完整批量合成验收。静态反编译显示本模组当前无需针对该 hotfix 修改接口。
+- **2026-09-26 离心机日志维护**：16 项定向 NeoForge 原生测试全部通过，含 6 项实际日志捕获回归；日志入口模拟 8 台机器 × 19 个进程 × 256 次调用，默认模式下预热／满槽等待零输出，开启两个诊断开关后各输出一条。验证一分钟冷却、开关隔离、预热转为空过滤的独立 WARN，以及原有 WARN／ERROR 的级别和异常原因。普通测试 694 项（692 通过、2 跳过），`build verifyReleaseArtifact` 通过；证据保存在维护 worktree 的 `build/verification/myriad-logging-20260926/`。此为日志入口压力回归及既有产物规划测试，尚未在真实 JDT 256 倍玩家存档中复测，不作为吞吐或 MSPT 改善证据。
+- **2026-09-26 AE2 维护检查**：维护 worktree 普通测试 694 项（692 通过、2 跳过）、NeoForge 原生测试 91 项（82 通过、9 跳过），`build verifyReleaseArtifact` 通过。新增同类不同校验器槽位的缓存回归，以及旧 `StringTag` Ghostly 蜜脾在黑白名单下的读取和判定回归；后者证明该旧格式路径可用，不代表已复现或修复所有玩家旧存档异常。用户报告 [PlykuMtauQ](https://spark.lucko.me/PlykuMtauQ) 用于定位输入/输出热点；尚无修改后同场景 Spark、在线 AE2 流体存储及玩家存档端到端验证，不宣称 MSPT 或流体成功率改善比例。
+- **2026-09-25 收尾验证**：53 项定向 NeoForge 原生测试与 23 项普通定向测试全部通过，`build verifyReleaseArtifact` 通过。覆盖四种特殊蜜脾、无离心配方准入、多配方组件变体、重载/延迟就绪、候选池隔离、600 种蜂权重记账、实际 PB Mixin 末份输入与满槽保留、整组副产物容量、MEK 真实组件容量与超堆叠，以及全花源、补货和升级资产守恒。证据保存在维护 worktree 的 `build/verification/closeout-20260925/`。两张教程图已检查；真实玩家双手/创造模式交互、在线 ME 端到端补货、无可选依赖启动及完整教程界面仍待游戏内验收。
+- **本轮性能依据**：前序已用 SparkMCP 分析 `2kbQ61ircq`（`4ba9b69ebefa`），约 60 秒/1200 tick，MSPT 平均/中位/P95/最大为 14.67/13.99/19.45/51.3 ms；等待占完整线程样本 68.51%，本模组 self-time 9.39%。结合调用链优化全花源、补货和万象规划；没有优化后同场景报告，不宣称 MSPT 改善比例。
+- **前一轮蜂箱功能验证**：普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests` 共 75 项（66 通过、9 跳过），无失败；`build verifyReleaseArtifact` 通过。覆盖全花源去重/禁用/黑名单与生产力、补货模板组件匹配、退避、监听器异常后的数量守恒、损坏数据和未知提取隔离、拆卸/升级及多输入合成保留。44 个变更文本通过严格 UTF-8/无 BOM 检查，10 个 JSON 解析通过，双语新增键一致，JAR 内变更资源与源码一致且未混入测试类。此为后续蜜脾和性能补丁之前的基线，收尾结果以上条为准。
+- 本轮维护工作区普通测试 693 项（691 通过、2 跳过），`test -PminecraftTests -PecoCompatTests -Pae2ltCompatTests` 共 59 项（57 通过、2 跳过）。覆盖调用预算、真实容量、阻挡检测，以及 ECO/闪电限流后的原料守恒与恢复；ECO 使用真实 AE2 供应器暂存逻辑，闪电使用真实倍增及适配器归属判断、测试夹具模拟源库存扣账，EAEP 覆盖真实缩放路径，均不等同完整合成 CPU 端到端验收。
+- 隔离专服探针 `verify_20260925_c01` 通过：321 个连续 tick 样本、320 次耗尽后恢复；稳定段预算中位数 21,143，区间 16,023–21,364，振幅 25.26%，滚动 MSPT 中位数 66.02ms、洪水耗时 P95 70.36ms。通过条件同时检查预算计数、同刻拒收、模拟容量、恢复、样本完整性、稳定性和耗时；使用真实 tick/目标/Mixin，每次推送另注入 3µs 模拟成本，不作为玩家存档性能改善比例。完整客户端交互及无可选依赖启动矩阵尚未复验。
+- 开发环境使用 NeoForge 21.1.216 与 JEI 19.39.0.368 以满足本地 LDLib2 测试依赖，发布最低 NeoForge 要求仍为 21.1.214。本轮 `build verifyReleaseArtifact` 通过，并确认 JAR 元数据正确、未包含测试或专服探针类。
+- 使用 SparkMCP 复核修改后报告 [ch4aOwUunf](https://spark.lucko.me/ch4aOwUunf)（`0a349d79fe66`）与 [2sSlgi1lre](https://spark.lucko.me/2sSlgi1lre)（`2613730cacbc`）：均约 60 秒、1200 tick、采样线程为 `Server thread`，最近一分钟 TPS 均为 20，MSPT 均值/P95/最大值分别为 13.29/16.63/53.23 和 16.96/21.15/55.13 ms。本模组 self-time 占完整线程样本的 8.06%/10.92%；等待占 71.85%/64.59%，不能把完整样本百分比当作忙时 CPU 占比。新 ticker 已出现在调用树中，第二份 JDT 时间手杖调用链为 7.536 秒；机器数、精确倍率和负载未固定，不能据此量化相对旧报告的提升。
+- 完成维护工作区 `test build` 与 `test -PminecraftTests`：普通测试 687 项（685 通过、2 跳过），NeoForge 原生测试 37 项全部通过，发布 JAR 校验通过。新增六类侧面配置覆盖层的编译后缓存所有权检查，防止按钮强引用重新引入窗口泄漏。
+- 使用 SparkMCP 分析 `2FoOnJ8u6N`、`iyI4N8fjIo`、`S216ULHoof`：最近一分钟 MSPT 均值/P95 分别为 13.65/18.79、18.44/24.80、15.27/20.87 ms；采样中等待占 70.63%、65.50%、67.24%，不计作计算热点。第二份 JDT 时间手杖调用链累计约 12.8 秒，确认重复外层 ticker、AE2 输入筛选和空进程失活等共同热点，并观察到 Thunderbolt/AE2LT 提取后的存储摘要复制开销。
+- 对照本地 Mekanism 10.7.19.85、AE2 19.2.17、PB 13.13.5/ProductiveLib 0.2.0、JDTE 0.5.9 源码及 JDT 1.5.7 实现核对调用与缓存契约。增加 1/256/1024 倍多刻记账守恒、JDTE 先后时序、时间回退、退避容量和过滤组合回归；原生测试扩展至 37 项，含已提交产物堵塞/恢复、合成拒绝边界和空输出槽缓存释放。
+- 检查网络目录/协调器弱引用、宿主卸载清理、服务端停止清理与玩家退出限频记录回收。最新堆快照为 1900/1818 MB（上限 4074 MB），宿主物理内存占用为 93.1%/94.6%；这不能单独归因于模组泄漏。采样缺少 GC 收集器统计、保留堆和网络字节数据，不能把 GC 显示为 0 当作没有 GC；本次最后的窗口引用修复尚无堆转储或游戏内回收量验证。网络优化已验证显示采样频率，尚未测量整机网络包数和字节数下降比例。
+- 新增可选 NeoForge 原生 JUnit 测试入口 `test -PminecraftTests`，覆盖实际指南配方解码与匹配、真实 PB 基因小食及多等级槽位迁移、正常/超堆叠合成分支、多输入冲突、方块物品保存与库存恢复、产物缓存复用/失效和动态副产物过滤。未启动真实游戏世界验收放置交互。
+- 使用 SparkMCP 分析开发客户端报告 `kCrcnvfP9I`：采样仅包含集成服务器 `Server thread`，30 秒中 76.72% 为 `Unsafe.park` 等待；最近一分钟 MSPT 均值 12.56 ms、P95 16.19 ms、最大值 56.01 ms。确认空闲进程清空与产物表复制开销，也观察到 AE2 提取调用 Thunderbolt/AE2LT 存储摘要更新。该报告不含渲染线程，不能用于判断客户端帧率；本轮局部优化尚无同场景前后性能实测。
+- 补充普通蜂箱和各扩展工厂等级的小食槽布局留白检查、方块物品库存容量检查，并更新自动喂食输入槽回归测试。维护工作区构建与自动测试通过；新增界面和 JEI 按键尚未进行游戏内人工验收。
+- 补充输入预算隔离、成本累计、恢复、溢出保护和 256 次同刻调用的单元测试，以及直出/槽位两条路径的预算推进、实际接收量记账和回填接线检查。
+- 使用两份玩家 Spark 报告分别核对 ECO 无限存储同步落盘和 AE2LT 接入 ECO MEGA 大宗盘时的重复扫描热点；核对 NeoECOAEExtension `v21.1.2` 的 `1cae738a` 源码。两份报告来自不同玩家环境，不作为优化前后对照。
+- 已收到上一轮修改后的用户实测报告，但尚无固定场景、固定 256/1024 倍率的前后对照。耗时预算只能阻止后续调用，无法中断正在执行的第三方慢操作；昂贵存储上的输入/输出可能分摊到后续刻，实际吞吐与 MSPT 改善仍需同场景复测。
+### English
+
+#### Added
+
+- Added `balance.apiaryProduceAllFlowers`, off for Basic and fresh Custom configurations and on for Paradox Infinity. Lumber, quarry, dye and other multi-source bees can produce every distinct valid feeder source per cycle. Empty/disabled slots and duplicate stacks add no runs; duplication blacklists and existing productivity multipliers still apply, while independent fluid output is not multiplied.
+- Added per-apiary exact AE2 gene-treat restocking through the off-by-default R button below the dedicated treat slot. Matching includes the item and every component. Empty slots retain the template and new treats update it. Attempts run at most every five real ticks, back off to 200 ticks when stock is missing, and respect online state, slot capacity and network work budgets. Settings, templates and withdrawn items survive saves, dismantling and upgrades.
+- Added Shift-right-click insertion for resource bee spawn eggs, filled bee cages and gene treats. Server-side interaction and machine permissions are checked; rejected items remain in hand and a full apiary does not trigger default bee spawning.
+- Updated Chinese and English GuideME/Patchouli apiary, AE2, balance and upgrade pages for all-source production, exact restocking and quick insertion. Corrected the dedicated treat slot and the basic apiary's two output pages with 18 slots total.
+- Replaced both tutorial screenshots with the updated apiary image: 555×485 for GuideME and an aspect-preserving image centered on a transparent 256×256 Patchouli canvas. Restocking tooltips use short lines for enabled, disabled, suspended and AE2-unavailable states.
+- Added two survival recipes for the Patchouli guide: a book, a regular or sturdy bee cage, and a vanilla honeycomb. The honeycomb distinguishes these shapeless recipes from PB's own guide; both recipes load only when Patchouli is installed.
+- Added localized tooltips and config comments to preset-controlled upgrade limits and balance rules. Players are directed to switch and save Gameplay Settings > Global Balance Profile as Custom before editing individual values, since named presets and preset transitions can override them.
+- Added a dedicated gene honey treat input below the fluid gauge in every mechanical apiary and MEK/ME/EM/EME factory, aligned with the energy slot and marked with a grayscale PB gene treat icon. The fluid gauge frame is offset by one pixel so its visible edge matches the energy and treat slots. Retained smart targeting, selected-bee feeding and throttling; cages and bee spawn eggs keep their own input. Connected the new slot to sided insertion, container sync, block-item storage, persistence and tier upgrades.
+- Added JEI recipe/use lookup for bees hovered inside apiaries using PB's native bee ingredients and the player's JEI key bindings. Supports configurable and special entity bees, ignores empty slots, gaps and bees covered by Mekanism windows, and remains optional when JEI is absent.
+
+#### Performance
+
+- Raised the healthy-network item-key limit from 32 to 64 for each merged output-slot batch and direct-push session. Direct pushes now retain one attempt counter across the same host, storage and real tick; apiary buffer and generated-item backoff count only inserts attempted by the current call, not budget deferrals. Expensive networks still shrink their quota by measured insert cost, and unaccepted output remains locally owned.
+- Each apiary caches read-only outputs for up to three multi-source strategies, invalidated by feeder state, recipe version or world changes; random mode still samples each time. Disabled restocking without pending items returns immediately, full slots avoid template copies/network lookups, and exact component keys are reused until the sample changes.
+- Myriad capacity snapshots and per-template simulated acceptance are reused only within one production transaction, including capacity search and retries. Removed cross-transaction inventory snapshots and unused pre-sampling for all selection counts from one to nine.
+- Added a shared adaptive call budget only for AE2 pattern-provider submissions into Genesis centrifuges. Hysteresis and backoff cooldown constrain per-copy floods without charging simulation or reducing third-party batch sizes. Ordinary storage buses, interfaces and other machines do not consume this budget; shutdown resets it, and no machine or world references are retained.
+- Input slots skip output-only rollback checks. Successful external AE2 insertions reuse debounced factory sorting marks while preserving the insertion cursor. Lazy PB comb-item references reduce repeated registry-holder access.
+- All apiary and centrifuge tiers now use a Genesis ticker that credits repeated calls to the existing virtual-tick bank while running Mekanism component maintenance once per real tick. This removes repeated upgrade, frequency, comparator, redstone and visual-update work under JDT 256x/1024x calls. Maintenance follows real ticks; production retains the existing batch budget and shared JDTE gate, including flush-before-ticker ordering.
+- AE2 candidate admission now also supplies unlimited mode, reserve floors and sorting marks in the same filter traversal. Both direct probes and scans reuse these results within the current pull, while extraction retains its live reserve check.
+- Empty factory lanes reset PB/smelting caches and activation counts only on transition to idle. Committed outputs still drain every tick; new inputs and NBT restoration invalidate idle state. Removed redundant activation callbacks after successful PB processing.
+- Apiary progress and residence-tick properties share a five-real-tick display snapshot, reducing their update count by up to 80% during steady progress. Bee, state, nectar and duration changes, observed cycle wraps and clock rollback refresh immediately. Viewers initialize independently; production, energy and persisted timing remain unchanged.
+- Client logout/world unload now release cached bee entities and their old world references; a cache hit at capacity no longer clears the entire cache. Empty bee-data sync and empty AE item-key lookups release stale references. Per-key backoff registries are capped at 512 entries and evict only retry metadata, never owned items or fluids.
+- Output compatibility and presence checks now reuse the existing centrifuge recipe output cache, avoiding repeated `LinkedHashMap` copies in ProductiveLib 0.2.0. Chance, quantity and byproduct-upgrade checks remain dynamic. Recipe/tag reloads invalidate the cache, and server shutdown now clears it as well.
+- Empty centrifuge processes skip `IdentityHashMap.clear()` when no items are buffered, avoiding repeated array scans while retaining all fluid, input-consumption and output-count resets.
+- Added per-machine AE2 extraction cost budgets to limit repeated expensive storage calls across item types and accelerated updates within the same real game tick. Individual requests retain existing capacity, filter, reserve-floor and parallel-processing rules; unextracted items remain in ME storage.
+- Generated items now go directly from a copy of the pending output to adjacent containers, with accounting based on the actual remainder, removing the preliminary simulation. Output-slot ejection retains capacity simulation and remainder recovery; logistical transporters retain Mekanism's public routing protocol.
+- Added per-output-face cost accounting shared by direct production and output-slot ejection, with one progress opportunity for each path. Cached identical rejected requests within the real tick and resumed slot traversal from its actual stopping point to reduce repeated scans during batch retries and acceleration.
+
+#### Fixed
+
+- Removed the shared output-work token from AE2 input pulling because prior output activity could silently block an otherwise healthy pull. The per-machine extraction cost budget remains. Input-slot validation results are now cached by slot identity within a planning pass, preventing one slot's rejection from spreading to another slot of the same class. Concurrent admission across machines on one network may be wider and needs player-load validation.
+- Deferred fluid keys without a real AE2 insert when the local cost budget is exhausted; mixed batches with such keys no longer trigger whole-machine rejection backoff. Real zero acceptance and exceptions retain per-key backoff. Whole-machine rejection warnings are globally limited to once a minute and include the machine position, first failed fluid, requested amount and failed-key count. The external cause of real rejections still needs an in-world storage trace.
+- Myriad candidates now cover every loaded beehive recipe, including fixed-entity and configurable bees, without requiring a centrifuge recipe. Ghostly, Milky, Powdery and Wasted Radioactive combs retain their real items/components; all recipes and component variants for a bee participate. Apiary, PB centrifuge and Mekanism paths use actual templates. Missing templates no longer fabricate output, and combs without a real block mapping only participate in single-comb production.
+- Selection caches distinguish comb/block candidate pools and world identity. Weight accounting covers the entire bee list instead of truncating at 512. Incomplete recipes retry after 20 ticks; completion of delayed reloads invalidates beehive indexes and Myriad templates.
+- PB ordinary/powered and heated centrifuges now check and append random products before consuming input, reserving side-product space using PB's whole-chunk insertion rules. Full output preserves input and the final comb no longer loses its conversion. Mekanism planning uses actual component limits and internal acceptance rules, preserves legal oversized stacks, correctly merges shared templates and checks applied growth.
+- Restocking records withdrawn items before delivery and accounts for actual slot changes. Quick treat insertion also charges the held stack after a listener throws following a successful insert. Damaged NBT and unknown extraction/delivery states remain persistently quarantined across toggles. Multi-input crafting preserves pending items and the first machine's toggle; conflicts, capacity limits or unsafe transfers reject crafting.
+- Restored actual oversized input capacity by removing per-slot working-set limits, preserving ECO adaptive batches, Lightning overloaded-provider doubling and EAEP smart scaling. Exhausted budgets return zero acceptance; unowned inputs remain at the source and owned remainders remain in provider buffers for retry.
+- Both normal and cached pattern-provider targets can detect buffered centrifuge inputs for blocking mode. Extractable inventories remain output-only and respect live side configuration.
+- Excluded the native-test-only AE2 fixture from ordinary JUnit discovery, fixing discovery failures without AE2 on the runtime classpath.
+- Fixed retained client windows in the AE input, centrifuge direct-AE output, adjacent-container output and smelting-compatibility overlays. Button caches now use weak values as well as weak keys, breaking the cache-to-button-to-window/GUI-to-world reference chain. Open windows retain their buttons through their child lists, preventing duplicate creation or premature collection.
+- Server shutdown now clears configuration-sync UUID rate limits and their cleanup counter, and releases the single-ingredient crafting index's output snapshot.
+- Centrifuge crafting fallback now rejects inventory merges that leave excess items, preserving inputs instead of logging and dropping the remainder.
+- Fixed gene treats moving into cage-output slots during crafting upgrades. Both normal and oversized-inventory fallback paths rebuild the target apiary inventory by slot role, preserving cages, products, energy items and treats. Multiple inputs merge only compatible stacks; conflicting dedicated slots or insufficient capacity reject crafting without consuming inputs.
+- Hardened the new extraction budget: removed cross-network static throttling, charged zero-result and failed attempts, and accounted for reserve probes without mixing their cost into extraction averages. Network changes reset local statistics, and expensive output still leaves an opportunity for the first input attempt.
+- Fixed gene-treat persistence across block drops, wrench removal, factory installer upgrades and crafting. The Mekanism crafting fallback now merges attached item components from later machine inputs instead of retaining only the first input.
+- Rejection records include full item components and request counts, so a rejected large batch does not block a smaller retry. Records are bounded, expire each tick and reset when targets or side configuration change. Deferred calls retain existing local output and pending-buffer handling without spawning item entities.
+
+#### Validation
+
+- **September 26, 2026 AE2 maintenance**: 694 ordinary tests (692 passed, two skipped), 91 native NeoForge tests (82 passed, nine skipped), and `build verifyReleaseArtifact` passed in the maintenance worktree. New regressions cover same-class slots with different validators and legacy `StringTag` Ghostly entries under whitelist and blacklist modes. The latter validates that persistence path, not every reported legacy-world case. Player profile [PlykuMtauQ](https://spark.lucko.me/PlykuMtauQ) identified pull/push hotspots; no matched post-change Spark profile, live AE2 fluid-storage trace or player-world end-to-end test is available, so no MSPT or fluid acceptance improvement is claimed.
+- **September 25, 2026 closeout**: all 53 targeted native NeoForge tests and 23 ordinary targeted tests passed, along with `build verifyReleaseArtifact`. Coverage includes four special combs, admission without centrifuge recipes, multiple recipe/component variants, reload/readiness recovery, isolated candidate caches, 600-type weight accounting, actual PB Mixin final-input/full-output behavior, whole-chunk side products, real Mekanism capacity/oversized stacks, all-source production, restocking and upgrade conservation. Evidence is in the maintenance worktree's `build/verification/closeout-20260925/`. Both tutorial images were inspected; actual player offhand/creative interactions, live ME end-to-end restocking, startup without optional dependencies and full tutorial-screen acceptance remain pending.
+- The earlier SparkMCP analysis of `2kbQ61ircq` (`4ba9b69ebefa`) covered about 60 seconds/1,200 ticks: mean/median/P95/max MSPT 14.67/13.99/19.45/51.3 ms, waiting 68.51% and mod self-time 9.39% of the full thread sample. It informed the all-source, restocking and Myriad-planning changes. No matched post-change profile is available, so no MSPT improvement percentage is claimed.
+- **Earlier apiary feature baseline**: 693 ordinary tests (691 passed, two skipped) and 75 tests with `test -PminecraftTests` (66 passed, nine skipped), with no failures; `build verifyReleaseArtifact` passed. Coverage includes distinct/disabled/blacklisted flower sources and productivity, exact template components, backoff, listener-failure accounting, corrupt-data and unknown-extraction quarantine, removal/upgrades and multi-input crafting preservation. All 44 changed text files passed strict UTF-8/no-BOM checks, all 10 changed JSON files parsed, new bilingual keys matched, and packaged resources matched source without test classes. These results predate the subsequent comb/performance patches; current closeout results are listed above.
+- This maintenance pass ran 693 ordinary tests (691 passed, two skipped) and 59 native tests with `-PminecraftTests -PecoCompatTests -Pae2ltCompatTests` (57 passed, two skipped). Coverage includes budgets, real capacity, blocking and input conservation/recovery. ECO exercises actual AE2 provider buffering; Lightning exercises actual doubling and adapter ownership with fixture-managed source deductions; EAEP exercises actual scaling. These are not full crafting-CPU end-to-end acceptance tests.
+- Isolated server probe `verify_20260925_c01` passed with 321 consecutive samples and 320 recoveries after exhaustion. Stable budget median: 21,143; range: 16,023–21,364; swing: 25.26%; median rolling MSPT: 66.02ms; flood P95: 70.36ms. Passing requires matching counts, same-tick rejection, honest simulated capacity, recovery, complete samples, stability and timing limits. The probe uses real ticks/targets/Mixins plus an injected 3µs per push; it is not a measured player-world speedup. Full client interaction and startup without optional dependencies have not been rerun.
+- Development uses NeoForge 21.1.216 and JEI 19.39.0.368 for local LDLib2 test dependencies; the release minimum remains NeoForge 21.1.214. This pass also passed `build verifyReleaseArtifact`; JAR metadata was verified and no test or dedicated-server probe classes were packaged.
+- Reviewed post-change profiles [ch4aOwUunf](https://spark.lucko.me/ch4aOwUunf) (`0a349d79fe66`) and [2sSlgi1lre](https://spark.lucko.me/2sSlgi1lre) (`2613730cacbc`) with SparkMCP: about 60 seconds and 1,200 ticks each on `Server thread`, both at 20 last-minute TPS, with mean/P95/max MSPT of 13.29/16.63/53.23 and 16.96/21.15/55.13 ms. Mod self-time is 8.06%/10.92% of the full thread sample; waiting occupies 71.85%/64.59%, so these are not busy-CPU percentages. The new ticker is present, and the second profile includes 7.536 seconds under the JDT time-wand call tree. Machine count, exact acceleration and load were not controlled, so this is not a quantified before/after improvement.
+- Passed `test build` and `test -PminecraftTests` in the maintenance worktree: 687 ordinary tests (685 passed, two skipped), all 37 native NeoForge tests, and release-JAR verification. Added compiled-cache ownership checks for six side-configuration overlays to prevent strong button references from retaining windows again.
+- Analyzed `2FoOnJ8u6N`, `iyI4N8fjIo` and `S216ULHoof` with SparkMCP. Last-minute mean/P95 MSPT were 13.65/18.79, 18.44/24.80 and 15.27/20.87 ms. Waiting accounts for 70.63%, 65.50% and 67.24% of the samples and is not treated as CPU work. The second profile contains about 12.8 seconds in the JDT time-wand call tree, with repeated outer ticking, AE2 candidate filtering and idle-process callbacks; extraction also reaches Thunderbolt/AE2LT storage-summary copies.
+- Checked local Mekanism 10.7.19.85, AE2 19.2.17, PB 13.13.5/ProductiveLib 0.2.0, JDTE 0.5.9 sources and JDT 1.5.7 implementation. Added sustained 1x/256x/1024x credit-conservation, JDTE ordering, rollback, bounded-backoff and filter-policy regressions. Native Minecraft coverage now includes 37 tests, including committed-output blocking/recovery, crafting rejection and empty-output cache release.
+- Audited weak network keys, host unload cleanup, server-stop cleanup and player-logout rate-limit cleanup. Latest heap snapshots report 1,900/1,818 MB out of 4,074 MB, with host physical memory at 93.1%/94.6%; these values alone cannot be attributed to a mod leak. Collector statistics, retained-heap data and network-byte measurements are absent; reported zero GC does not establish that no GC occurred. The final window-reference fixes have no heap-dump or in-world reclamation measurement yet. Display sampling frequency is tested, but whole-machine packet-count and byte reductions have not been measured.
+- Added optional NeoForge JUnit execution via `test -PminecraftTests`, covering actual guide recipe decoding and matching, PB gene-treat components, tier layouts, normal/fallback assembly, input conflicts, block-item serialization and inventory restoration, cache invalidation and dynamic byproduct filtering. Actual placement interactions have not been tested in a running world.
+- Analyzed development profile `kCrcnvfP9I` with SparkMCP. It samples only the integrated server thread: 76.72% of the 30-second sample is `Unsafe.park` waiting, with last-minute mean/P95/max MSPT of 12.56/16.19/56.01 ms. Confirmed empty-buffer clears and output-map copies, plus Thunderbolt/AE2LT storage-summary updates reached through AE2 extraction. No render thread or post-change comparative benchmark is available.
+- Added layout clearance and block-item inventory capacity checks across apiary tiers, and updated automatic-feeding regressions. Build and automated tests passed in the maintenance worktree; in-game acceptance of the new UI and JEI shortcuts remains pending.
+- Added regression coverage for budget isolation, recovery, overflow, 256 calls within one tick, progress for both ejection paths, actual-remainder accounting and output-slot recovery wiring.
+- Reviewed two player Spark profiles and NeoECOAEExtension `v21.1.2` at `1cae738a`. Those profiles represent different environments, not a before/after comparison. New user profiles cover the preceding changes, but controlled 256x/1024x comparisons remain unavailable: budgets stop subsequent calls but cannot interrupt a running third-party operation, and expensive transfers may span additional ticks.
 
 ## [1.0.8-hotfix] - 2026-09-18
 

@@ -112,7 +112,7 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 				|| !perTileDirectOutput(tile)) {
 			return 0;
 		}
-		return itemEjector.pushDirect(this, itemConfig, stack);
+		return itemEjector.pushDirect(this, itemConfig, stack, level.getGameTime());
 	}
 
 	private static boolean perTileDirectOutput(TileEntityMekanism tile) {

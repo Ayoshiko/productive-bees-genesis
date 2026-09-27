@@ -126,6 +126,11 @@ public final class ModPayloads {
 				ToggleApiaryFeederConversionPayload.STREAM_CODEC,
 				ApiaryPayloadHandlers::handleToggleApiaryFeederConversion
 		);
+		registrar.playToServer(
+				ToggleApiaryGeneTreatRestockPayload.TYPE,
+				ToggleApiaryGeneTreatRestockPayload.STREAM_CODEC,
+				ApiaryPayloadHandlers::handleToggleApiaryGeneTreatRestock
+		);
 		// 喂食槽逐格禁用包 — 由 GuiFeederWindow 在禁用编辑模式（或 Alt+左键）点击格子发送
 		registrar.playToServer(
 				ToggleFeederSlotDisabledPayload.TYPE,
@@ -427,5 +432,11 @@ public final class ModPayloads {
 	 */
 	public static void clearFilterSyncRateLimit(UUID uuid) {
 		FILTER_SYNC_LAST_ACCEPT.remove(uuid);
+	}
+
+	/** 服务器停止时释放全部配置同步限频记录，并复位惰性清理计数。 */
+	public static void clearFilterSyncRateLimits() {
+		FILTER_SYNC_LAST_ACCEPT.clear();
+		packetCounter.set(0);
 	}
 }

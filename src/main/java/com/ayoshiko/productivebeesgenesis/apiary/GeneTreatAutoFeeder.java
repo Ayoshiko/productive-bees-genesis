@@ -15,7 +15,7 @@ import java.util.List;
 /**
  * 基因小食自动喂食器（智能属性提升调度）
  * <br/>
- * 服务端 tick 驱动：读取蜂笼输入槽（{@code cageInSlot}）中的带基因小食，解析其基因列表，
+ * 服务端 tick 驱动：读取独立小食输入槽中的带基因小食，解析其基因列表，
  * 再从蜜蜂槽中挑选「喂食后确实能提升属性」的蜜蜂喂食。喂食复用
  * {@link ApiaryHoneyTreatFeeder} 的实体路径（临时蜜蜂实体 + PB 原版
  * {@code HoneyTreat.interactLivingEntity}），保证基因概率、幼蜂成长、治疗行为与手持喂食一致。
@@ -99,17 +99,16 @@ class GeneTreatAutoFeeder {
 	 * 每服务端 tick 尝试喂食一只蜜蜂（受 {@link #FEED_INTERVAL_TICKS} 节流）。
 	 * <br/>
 	 * 输入槽为空 / 物品非带基因小食 / 含 TYPE 基因 / 无可提升蜜蜂时不做任何操作，不消耗物品。
-	 * 小食与蜂笼共用同一输入槽，本方法在 {@link ApiarySlotManager#processCageInput} 之前调用，
-	 * 但小食既非蜂笼也非刷怪蛋，蜂笼处理器会直接跳过，二者互不干扰。
+	 * 本方法在 {@link ApiarySlotManager#processCageInput} 之前调用，两个输入槽独立处理。
 	 *
 	 * @return true 表示本次成功喂食了一只蜜蜂（小食已消耗 1 个）
 	 */
 	boolean tryAutoFeed() {
 		try {
 			// 1. 便宜的短路检查放最前：输入槽空 / 非小食时不进入节流记账，稳态零开销
-			BasicInventorySlot cageInSlot = slotManager.getCageInSlot();
-			if (cageInSlot == null || cageInSlot.isEmpty()) return false;
-			ItemStack treat = cageInSlot.getStack();
+			BasicInventorySlot treatSlot = slotManager.getGeneTreatSlot();
+			if (treatSlot == null || treatSlot.isEmpty()) return false;
+			ItemStack treat = treatSlot.getStack();
 			if (!ApiarySlotManager.isGeneTreat(treat)) return false;
 
 			// 2. 节流：实体创建路径较贵，限制为每 FEED_INTERVAL_TICKS 一次
@@ -123,7 +122,7 @@ class GeneTreatAutoFeeder {
 			if (targetIndex < 0) return false;
 
 			// 复用实体喂食路径，成功后从小食所在槽消耗 1 个
-			return ApiaryHoneyTreatFeeder.feedGeneTreatFromSlot(tile, targetIndex, treat, cageInSlot);
+			return ApiaryHoneyTreatFeeder.feedGeneTreatFromSlot(tile, targetIndex, treat, treatSlot);
 		} catch (Exception e) {
 			long gameTime = tile.getLevel() == null ? 0L : tile.getLevel().getGameTime();
 			ERROR_THROTTLE.tryLog(gameTime, suppressed -> ProductiveBeesGenesis.LOGGER.error(

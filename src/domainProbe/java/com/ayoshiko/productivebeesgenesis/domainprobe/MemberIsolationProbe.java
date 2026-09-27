@@ -63,7 +63,10 @@ final class MemberIsolationProbe {
 			var before = tile.saveWithFullMetadata(level.registryAccess());
 			var accumulate = tile.getClass().getMethod("productivebeesgenesis$accumulateAcceleratedTicks", int.class);
 			var flush = tile.getClass().getMethod("productivebeesgenesis$flushAcceleratedTicks");
-			for (int i = 0; i < 256; i++) { TileEntityMekanism.tickServer(level, pos, tile.getBlockState(), tile); accumulate.invoke(tile, 256); flush.invoke(tile); }
+			for (int i = 0; i < 256; i++) {
+				com.ayoshiko.productivebeesgenesis.mek.GenesisMachineTicker.tickServer(level, pos, tile.getBlockState(), tile);
+				TileEntityMekanism.tickServer(level, pos, tile.getBlockState(), tile); accumulate.invoke(tile, 256); flush.invoke(tile);
+			}
 			for (var handler : itemHandlers) {
 				for (int slot = 0; slot < handler.getSlots(); slot++) {
 					require(handler.extractItem(slot, 1, false).isEmpty() && handler.extractItem(slot, 1, true).isEmpty(), "Cached item capability extracted managed inventory");

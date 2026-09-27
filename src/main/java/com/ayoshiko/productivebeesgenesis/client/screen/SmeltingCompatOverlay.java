@@ -25,6 +25,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -50,8 +51,8 @@ public final class SmeltingCompatOverlay {
 	/** 按钮尺寸（宽=高） */
 	private static final int BUTTON_SIZE = 14;
 
-	/** 按钮缓存：key=侧面配置窗口实例。WeakHashMap 在窗口 GC 后自动回收 */
-	private static final Map<GuiSideConfiguration<?>, SmeltingCompatButton> BUTTONS = new WeakHashMap<>();
+	/** 值也使用弱引用，避免按钮反向持有窗口使弱键无法回收。 */
+	private static final Map<GuiSideConfiguration<?>, WeakReference<SmeltingCompatButton>> BUTTONS = new WeakHashMap<>();
 
 	private SmeltingCompatOverlay() {
 	}
@@ -75,7 +76,7 @@ public final class SmeltingCompatOverlay {
 		if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
 		AeInputOverlay.OverlayTarget target = findTarget(event.getScreen());
 		if (target == null) return;
-		SmeltingCompatButton button = BUTTONS.get(target.sideConfig());
+		SmeltingCompatButton button = getButton(target.sideConfig());
 		if (button == null || !button.visible) return;
 		ButtonBounds bounds = bounds(target.gui(), target.sideConfig());
 		if (!bounds.contains(event.getMouseX(), event.getMouseY())) return;
@@ -87,22 +88,22 @@ public final class SmeltingCompatOverlay {
 
 	private static void ensureButton(AeInputOverlay.OverlayTarget target) {
 		if (target == null) return;
-		BUTTONS.computeIfAbsent(target.sideConfig(), sideConfig -> {
-			SmeltingCompatButton button = new SmeltingCompatButton(
-					target.gui(),
-					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
-					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
-					Component.literal("F"),
-					t -> PacketDistributor.sendToServer(new ToggleSmeltingCompatPayload(t.tile().getBlockPos())),
-					target);
-			sideConfig.children().add(button);
-			return button;
-		});
+		GuiSideConfiguration<?> sideConfig = target.sideConfig();
+		if (getButton(sideConfig) != null) return;
+		SmeltingCompatButton button = new SmeltingCompatButton(
+				target.gui(),
+				sideConfig.getRelativeX() + BUTTON_X_OFFSET,
+				sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
+				Component.literal("F"),
+				t -> PacketDistributor.sendToServer(new ToggleSmeltingCompatPayload(t.tile().getBlockPos())),
+				target);
+		sideConfig.children().add(button);
+		BUTTONS.put(sideConfig, new WeakReference<>(button));
 	}
 
 	private static void updateButton(AeInputOverlay.OverlayTarget target) {
 		if (target == null) return;
-		SmeltingCompatButton button = BUTTONS.get(target.sideConfig());
+		SmeltingCompatButton button = getButton(target.sideConfig());
 		if (button == null) return;
 		button.target = target;
 		button.visible = shouldRender(target.type());
@@ -119,6 +120,11 @@ public final class SmeltingCompatOverlay {
 					perTile ? "productivebeesgenesis.gui.smelting_compat.on"
 							: "productivebeesgenesis.gui.smelting_compat.off")));
 		}
+	}
+
+	private static SmeltingCompatButton getButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<SmeltingCompatButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
 	}
 
 	private static AeInputOverlay.OverlayTarget findTarget(Screen screen) {

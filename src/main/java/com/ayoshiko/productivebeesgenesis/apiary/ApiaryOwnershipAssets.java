@@ -14,7 +14,13 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 	public ApiaryOwnershipAssets(TileEntityMekApiary tile) { this.tile = tile; }
 	@Override public CompoundTag capture(HolderLookup.Provider registries) {
 		if (!tile.pendingCyclesReadable()) throw new IllegalStateException("Unreadable apiary pending cycles");
-		var tag = new CompoundTag(); tile.nbtSerializer().saveApiaryState(tag, registries); tile.tickHandler.savePendingCycles(tag); return tag;
+		var tag = new CompoundTag(); tile.nbtSerializer().saveApiaryState(tag, registries); tile.tickHandler.savePendingCycles(tag);
+		var restock = tile.getGeneTreatRestock();
+		// 默认补货状态用缺省字段表示，保持 1.0.8-hotfix 网络资产映像及回执指纹兼容。
+		if (!restock.isEnabled() && !restock.isSuspended() && !restock.hasPending() && restock.template().isEmpty()) {
+			tag.remove(GeneTreatRestockState.NBT_KEY);
+		}
+		return tag;
 	}
 	@Override public void restore(CompoundTag tag, HolderLookup.Provider registries) {
 		tile.nbtSerializer().loadApiaryState(tag, registries); tile.tickHandler.loadPendingCycles(tag);
@@ -26,6 +32,7 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 		tile.pbUpgradeHandler.getInputSlot().setStack(ItemStack.EMPTY); tile.pbUpgradeHandler.getOutputSlot().setStack(ItemStack.EMPTY);
 		tile.pbUpgradeHandler.loadPbUpgradeCounts(new CompoundTag(), registries); tile.getFluidTank().setStack(FluidStack.EMPTY);
 		tile.getOutputBuffer().clear(); tile.clearPendingHoneyFluid(); tile.tickHandler.clearTransferredCycles();
+		tile.getGeneTreatRestock().clearAfterTransfer();
 	}
 	@Override public void validateWorld(ServerLevel level) {
 		for (var slot : tile.getSlotManager().getBeeSlots()) {
@@ -38,6 +45,8 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 		}
 	}
 	@Override public boolean empty() {
+		var restock = tile.getGeneTreatRestock();
+		if (restock.hasPending() || restock.isSuspended() || restock.isEnabled() || !restock.template().isEmpty()) return false;
 		for (var slot : tile.getSlotManager().getBeeSlots()) if (!slot.isEmpty()) return false;
 		for (var slot : tile.feederSlotManager.getFeederInventorySlots()) if (!slot.isEmpty()) return false;
 		for (var type : PbUpgradeType.values()) if (!type.isBuiltin() && tile.getPbUpgradeInstalledCount(type) > 0) return false;

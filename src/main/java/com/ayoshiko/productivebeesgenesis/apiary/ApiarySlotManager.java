@@ -32,7 +32,7 @@ import java.util.function.IntSupplier;
 /**
 	 * 通用机械蜂箱槽位管理器
 	 * <br/>
-	 * 管理 BeeSlot 数组、蜂笼 I/O 槽、输出槽、能量槽、流体罐，
+	 * 管理 BeeSlot 数组、蜂笼 I/O 槽、基因小食槽、输出槽、能量槽、流体罐，
 	 * 通过组合委托 NBT 序列化至 {@link ApiarySlotSerializer}、蜂笼操作至 {@link ApiaryCageHandler}。
 	 * <p>
 	 * 设计原则：
@@ -117,6 +117,8 @@ public class ApiarySlotManager {
 	/** 蜂笼输入槽（玩家放入空蜂笼） — 通过 Mixin Accessor 设置 obeyStackLimit=false，使蜂笼固定堆叠 64 */
 	private InputInventorySlot cageInSlot;
 
+	private InputInventorySlot geneTreatSlot;
+
 	/** 蜂笼输出槽（装入蜜蜂的蜂笼自动输出至此） — 通过 Mixin Accessor 设置 obeyStackLimit=false，使蜂笼固定堆叠 64 */
 	private OutputInventorySlot cageOutSlot;
 
@@ -187,23 +189,11 @@ public class ApiarySlotManager {
 
 	// ===== 槽位初始化 =====
 
-	/**
-	 * 蜂笼输入槽准入判定 — 蜂笼 / 资源蜂刷怪蛋 / 带基因蜂蜜小食
-	 * <br/>
-	 * 小食与蜂笼共用同一输入槽（不额外占 GUI 位置也不新增 NBT/tracker），
-	 * 三类物品在 tick 中各走独立分支：
-	 * <ul>
-	 *   <li>带基因小食 → {@link GeneTreatAutoFeeder} 自动喂食</li>
-	 *   <li>资源蜂刷怪蛋 / 蜂笼 → {@link ApiaryCageHandler} 装入/取出</li>
-	 * </ul>
-	 * 仅接受<b>带基因</b>的小食：无基因小食喂食只会随机改善性格，
-	 * 自动化收益极低且会被无限消耗，故不允许进入自动化槽。
-	 */
-	private static boolean isCageInputCandidate(ItemStack stack) {
+	/** 蜂笼输入槽只接受蜂笼或资源蜜蜂刷怪蛋，小食使用独立输入槽。 */
+	static boolean isCageInputCandidate(ItemStack stack) {
 		return stack.is(ModItems.BEE_CAGE.get())
 				|| stack.is(ModItems.STURDY_BEE_CAGE.get())
-				|| BeeSpawnEggHelper.isResourceBeeSpawnEgg(stack)
-				|| isGeneTreat(stack);
+				|| BeeSpawnEggHelper.isResourceBeeSpawnEgg(stack);
 	}
 
 	/** 判断是否为带基因的 PB 蜂蜜小食（自动喂食的唯一合法输入）。 */
@@ -215,7 +205,7 @@ public class ApiarySlotManager {
 	/**
 	 * 构建物品槽位持有者
 	 * <br/>
-	 * 布局：蜜蜂槽（BeeSlot 数组）、输出槽矩阵、蜂笼输入/输出、能量槽。
+	 * 布局：蜜蜂槽（BeeSlot 数组）、输出槽矩阵、蜂笼输入/输出、能量槽、基因小食槽。
 	 * 槽位坐标由 ApiaryGuiLayoutHelper 计算（区分初始版/工厂版布局）。
 	 * 通过 accessor 设置父类的 inputSlot/outputSlot/energySlot 字段。
 	 */
@@ -236,12 +226,10 @@ public class ApiarySlotManager {
 		int outputX = ApiaryGuiLayoutHelper.getOutputX(beeX, beeW, outputW);
 		int outputY = ApiaryGuiLayoutHelper.getOutputY(beeBottom, beeRows);
 
-		// 蜂笼输入槽 — 同时作为父类的 inputSlot，接受蜂笼、合法资源蜂刷怪蛋和带基因的蜂蜜小食
+		// 蜂笼输入槽 — 同时作为父类的 inputSlot，接受蜂笼和合法资源蜂刷怪蛋
 		// 通过 BasicInventorySlotAccessor 设置 obeyStackLimit=false，使 getLimit() 返回 limit
 		// （默认 Item.ABSOLUTE_MAX_STACK_SIZE=64），与蜂笼物品自身 maxStackSize 解耦，
 		// 坚固蜂笼（默认 stacksTo(16)）也能堆叠 64
-		// 小食共用本槽（不新增槽位）：tick 时由 GeneTreatAutoFeeder 优先消费，
-		// 非蜂笼/非刷怪蛋的小食不会被 ApiaryCageHandler 误当蜂笼处理。
 		cageInSlot = InputInventorySlot.at(
 				ApiarySlotManager::isCageInputCandidate,
 				recipeCacheListener, cageInX, cageY);
@@ -282,6 +270,11 @@ public class ApiarySlotManager {
 				tile.accessor().productivebeesgenesis$getEnergyContainer(),
 				tile::getLevel, listener, ApiaryGuiLayoutHelper.ENERGY_X, ApiaryGuiLayoutHelper.ENERGY_Y);
 		builder.addSlot(energySlot);
+
+		// 追加在原有库存末尾，保留输出槽与能量槽的持久化编号。
+		geneTreatSlot = InputInventorySlot.at(ApiarySlotManager::isGeneTreat, listener,
+				ApiaryGuiLayoutHelper.GENE_TREAT_X, ApiaryGuiLayoutHelper.GENE_TREAT_Y);
+		builder.addSlot(geneTreatSlot);
 
 		// 通过 accessor 设置父类的包私有字段
 		// inputSlot = cageInSlot, outputSlot = cageOutSlot（产物输出槽为 TieredOutputInventorySlot
@@ -452,6 +445,10 @@ public class ApiarySlotManager {
 	/** 获取蜂笼输入槽 */
 	BasicInventorySlot getCageInSlot() {
 		return cageInSlot;
+	}
+
+	BasicInventorySlot getGeneTreatSlot() {
+		return geneTreatSlot;
 	}
 
 	/** 获取蜂笼输出槽 */

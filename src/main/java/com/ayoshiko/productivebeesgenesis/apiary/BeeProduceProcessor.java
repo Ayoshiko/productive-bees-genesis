@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
@@ -84,6 +85,7 @@ public class BeeProduceProcessor {
 	private final ArrayList<ItemStack> reusableProducedItems = new ArrayList<>();
 	/** 每次 flush 复用的四档生产力基因计数，避免按蜜蜂类型分组时反复分配数组。 */
 	private final long[] reusableProductivityCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
+	private final MultiFlowerProductionCache multiFlowerProductionCache = new MultiFlowerProductionCache();
 
 
 	/**
@@ -200,6 +202,8 @@ public class BeeProduceProcessor {
 		}
 
 		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
+		List<ItemStack> allFlowerOutputs = aggregatedCount > 0 && multiFlowerBee && BalanceConfig.apiaryProduceAllFlowers()
+				? multiFlowerProductionCache.get(beeTypeKey, feederManager, level) : null;
 		if (aggregatedCount > 0) {
 			for (int productivityLevel = BeeProductivityGene.NORMAL;
 					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
@@ -207,7 +211,12 @@ public class BeeProduceProcessor {
 						productivityCounts[productivityLevel]);
 				if (sampledProductionCount <= 0) continue;
 				// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
-				if (multiFlowerBee) {
+				if (allFlowerOutputs != null) {
+					for (ItemStack output : allFlowerOutputs) {
+						BeeProduceBatchSampler.sampleGuaranteedInto(allItems, output,
+								sampledProductionCount, productivityMultiplier, productivityLevel);
+					}
+				} else if (multiFlowerBee) {
 					ItemStack feederProduce = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
 							beeTypeKey, feederManager, level);
 					BeeProduceBatchSampler.sampleGuaranteedInto(allItems, feederProduce,
@@ -469,9 +478,11 @@ public class BeeProduceProcessor {
 			FeederSlotManager feeder) {
 		if (beeTypeKey == null || level == null) return Map.of();
 
-		// 模块 1：multi-flower 蜜蜂走喂食槽推断路径，不经过缓存
+		// 全花源模式按槽位和配方版本复用模板；随机模式仍每次抽样。
 		if (MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey)) {
-			List<ItemStack> feederItems = MultiFlowerBeeAdapter.sampleProduceFromFeeder(beeTypeKey, feeder, level);
+			List<ItemStack> feederItems = BalanceConfig.apiaryProduceAllFlowers()
+					? multiFlowerProductionCache.get(beeTypeKey, feeder, level)
+					: MultiFlowerBeeAdapter.sampleProduceFromFeeder(beeTypeKey, feeder, level);
 			if (feederItems.isEmpty()) return Map.of();
 			// 包装为 ChancedOutput（min=max=1, chance=1.0 必产），由 BeeProduceBatchSampler 处理 rolls
 			Map<ItemStack, ChancedOutput> result = new LinkedHashMap<>(feederItems.size());

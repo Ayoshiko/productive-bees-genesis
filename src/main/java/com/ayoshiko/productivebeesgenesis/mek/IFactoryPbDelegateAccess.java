@@ -53,6 +53,12 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 		productivebeesgenesis$getDelegate().updateOutputSlotFlags();
 	}
 
+	/** 工厂版：外部样板发配后去抖触发 Mekanism 原生自动均摊，把输入摊到所有产线（委托 delegate）。 */
+	@Override
+	default void productivebeesgenesis$markInputSortingNeeded() {
+		productivebeesgenesis$getDelegate().markSortingNeeded();
+	}
+
 	@Override
 	default boolean productivebeesgenesis$outputSlotsFull(int process) {
 		return productivebeesgenesis$getDelegate().outputSlotsFull(process);

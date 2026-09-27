@@ -26,7 +26,14 @@ public final class MachineAssetStore {
 		else throw new IllegalArgumentException("No verified ownership asset adapter for " + tile.getClass().getName());
 		host = (IAe2OutputHostBase) tile;
 	}
-	public boolean prepared() { return host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().size() == 0; }
+	public boolean prepared() {
+		if (tile instanceof TileEntityMekApiary apiary) {
+			var restock = apiary.getGeneTreatRestock();
+			// 补货尚有已提取物品或结果未知时，保留独立机的结算／隔离入口，不能先冻结。
+			if (restock.hasPending() || restock.isSuspended()) return false;
+		}
+		return host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().size() == 0;
+	}
 	public AssetImage capture(HolderLookup.Provider registries) {
 		if (!prepared()) throw new IllegalStateException("Outstanding external output settlement");
 		var tag = new CompoundTag(); tag.putInt("schema", 1); tag.putString("machine", BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString());

@@ -1,17 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-/** Per-key failure backoff shared by AE2 item input and output scheduling. */
+/** 有界的按键失败退避；由宿主的服务端 tick 线程独占访问。 */
 final class Ae2KeyBackoffRegistry<K> {
 
 	private static final long PRUNE_INTERVAL_NS = 5_000_000_000L;
 	private static final long STALE_AFTER_NS = 30_000_000_000L;
 	private static final int PRUNE_THRESHOLD = 64;
+	static final int MAX_ENTRIES = 512;
 
-	private final Map<K, Ae2PushBackoff> backoffs = new HashMap<>();
+	private final Map<K, Ae2PushBackoff> backoffs = new ConcurrentHashMap<>();
 	private long lastPruneNanos;
 
 	boolean shouldSkip(K key, long now) {
@@ -21,13 +22,22 @@ final class Ae2KeyBackoffRegistry<K> {
 
 	void recordFailure(K key, long now) {
 		if (key == null) return;
+		pruneIfNeeded(now);
 		Ae2PushBackoff backoff = backoffs.get(key);
 		if (backoff == null) {
+			// 仅淘汰调度记录，不持有物品；容量满时允许旧类型提前重试。
+			if (backoffs.size() >= MAX_ENTRIES) {
+				Iterator<K> keys = backoffs.keySet().iterator();
+				if (keys.hasNext()) backoffs.remove(keys.next());
+			}
 			backoff = new Ae2PushBackoff();
 			backoffs.put(key, backoff);
 		}
 		backoff.recordFailure(now);
-		pruneIfNeeded(now);
+	}
+
+	int size() {
+		return backoffs.size();
 	}
 
 	void recordSuccess(K key) {

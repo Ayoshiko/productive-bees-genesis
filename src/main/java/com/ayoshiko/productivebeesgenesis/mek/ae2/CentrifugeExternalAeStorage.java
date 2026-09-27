@@ -25,6 +25,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import java.util.Set;
+
 /**
  * Native AE2 storage view used by adjacent interfaces for centrifuge item and fluid IO.
  * It avoids rebuilding generic capability facades and shares snapshots across all queried sides.
@@ -106,6 +108,9 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		}
 		if (!mode.isSimulate() && inserted > 0 && lastUsed >= 0) {
 			shared.inputCursor = (lastUsed + 1) % slotCount;
+			// 外部样板发配（尤其过载供应器少次大批次）只填游标经过的少数槽；去抖触发 Mekanism 原生
+			// 自动均摊把输入摊到所有产线以吃满并行。不改游标（多蜜脾语义保持），去抖保证每刻至多一次排序。
+			shared.centrifuge.productivebeesgenesis$markInputSortingNeeded();
 		}
 		return Math.min(inserted, amount);
 	}
@@ -148,6 +153,18 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	@Override
 	public Component getDescription() {
 		return DESCRIPTION;
+	}
+
+	/** 供应器阻挡需要看到原料；存储总线的可提取库存仍只公开产物。 */
+	boolean containsPatternInput(Set<AEKey> patternInputs) {
+		if (patternInputs.isEmpty() || !allows(TransmissionType.ITEM, false)) return false;
+		int count = shared.centrifuge.productivebeesgenesis$getInputSlotCount();
+		for (int i = 0; i < count; i++) {
+			IInventorySlot slot = shared.centrifuge.productivebeesgenesis$getInputSlot(i);
+			if (slot == null || slot.isEmpty()) continue;
+			if (patternInputs.contains(AEItemKey.of(slot.getStack().getItem()))) return true;
+		}
+		return false;
 	}
 
 	private long extractItem(AEItemKey key, long amount, Actionable mode) {

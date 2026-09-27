@@ -109,7 +109,7 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 	 *
 	 * @param inv      合成矩阵快照
 	 * @param provider 注册表访问器
-	 * @return 合成结果物品（已转移自定义 NBT），失败时返回 super.assemble 结果
+	 * @return 合成结果物品（已转移自定义 NBT）；无法完整转移时返回 EMPTY，拒绝消耗输入
 	 */
 	@Override
 	public ItemStack assemble(CraftingInput inv, HolderLookup.Provider provider) {
@@ -145,16 +145,31 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 			//    保证输出槽有物品时仍可合成且 MEK 升级与自定义数据均不丢失。
 			ItemStack fallback = template.copy();
 			fallback.applyComponents(machineInputs.get(0).getComponents());
-			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
+			if (isApiary) {
+				if (!ApiaryCraftingInventoryTransfer.transfer(machineInputs, fallback)) return ItemStack.EMPTY;
+			} else {
+				if (!ApiaryCraftingDataTransfer.mergeAttachedItemDataIntoFallback(machineInputs, fallback)) {
+					return ItemStack.EMPTY;
+				}
+			}
+			try {
+				ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
+			} catch (RuntimeException e) {
+				DevLog.error("合成升级: 自定义数据无法完整转移，拒绝合成", e);
+				return ItemStack.EMPTY;
+			}
 			return fallback;
 		}
+
+		// 覆盖 MEK 按可插入顺序重排的库存；源组件始终只读，不从错误结果反推槽位。
+		if (isApiary && !ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)) return ItemStack.EMPTY;
 
 		// 3. 转移/合并自定义 BLOCK_ENTITY_DATA（蜜蜂槽/PB升级等）
 		try {
 			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, result, outputBlock, isApiary);
 		} catch (RuntimeException e) {
-			// 防御：数据转移失败不应影响正常合成流程，返回 super.assemble 的结果
-			DevLog.error("合成升级: BLOCK_ENTITY_DATA 转移失败,返回未转移自定义数据的结果", e);
+			DevLog.error("合成升级: 自定义数据无法完整转移，拒绝合成", e);
+			return ItemStack.EMPTY;
 		}
 
 		return result;

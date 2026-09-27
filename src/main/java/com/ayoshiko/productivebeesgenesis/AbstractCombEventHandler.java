@@ -95,9 +95,9 @@ public abstract class AbstractCombEventHandler {
 	 * <p>
 	 * 通用流程：
 	 * <ol>
-	 *   <li>从PB数据源读取所有蜜蜂类型</li>
+	 *   <li>从已加载蜂箱配方读取固定实体蜂与可配置蜂</li>
 	 *   <li>排除子类指定的类型（如自身、避免循环转化的类型）</li>
-	 *   <li>排除没有离心配方的蜜蜂</li>
+	 *   <li>只保留实际产出蜜脾的蜜蜂，不要求存在离心配方</li>
 	 *   <li>应用子类提供的额外过滤（如配置文件过滤）</li>
 	 * </ol>
 	 *
@@ -111,16 +111,13 @@ public abstract class AbstractCombEventHandler {
 			Set<ResourceLocation> excludedTypes,
 			Predicate<ResourceLocation> extraFilter) {
 		try {
-			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
-			if (beeData == null || beeData.isEmpty()) {
-				return new CopyOnWriteArrayList<>();
-			}
-
-			List<ResourceLocation> newTypes = new ArrayList<>(beeData.size());
-			for (ResourceLocation beeType : beeData.keySet()) {
+			List<ResourceLocation> candidates = BeeInfoHelper.getBeeTypesWithProduce(level);
+			List<ResourceLocation> newTypes = new ArrayList<>(candidates.size());
+			for (ResourceLocation beeType : candidates) {
 				if (excludedTypes.contains(beeType)) continue;
-				if (!hasCentrifugeRecipe(level, beeType)) continue;
 				if (extraFilter != null && !extraFilter.test(beeType)) continue;
+				if (BeeInfoHelper.getAllBeeProduce(level, beeType).stream()
+						.noneMatch(MyriadBeeTypeCache::isHoneycomb)) continue;
 				newTypes.add(beeType);
 			}
 
@@ -218,30 +215,31 @@ public abstract class AbstractCombEventHandler {
 	 * @param productivityModifier PB升级倍率
 	 * @param isTargetComb       判断是否为目标蜜脾
 	 * @param isTargetBlock      判断是否为目标蜜脾块
-	 * @param cachedBeeTypes     蜜蜂类型缓存
-	 * @param honeycombTemplates 实际蜜脾模板映射
-	 * @param combBlockTemplates 实际蜜脾块模板映射
+	 * @param snapshot           本次候选及真实模板快照
+	 * @param reservedOutputs    PB 原配方可能产生的最大副产物
+	 * @return 所有产物可容纳且随机产物已提交时返回 true
 	 */
-	protected static void appendRandomCombsInternal(
+	protected static boolean appendRandomCombsInternal(
 			ItemStack input,
 			IItemHandlerModifiable invHandler,
 			RandomSource random,
 			int productivityModifier,
 			Predicate<ItemStack> isTargetComb,
 			Predicate<ItemStack> isTargetBlock,
-			List<ResourceLocation> cachedBeeTypes,
-			Map<ResourceLocation, ItemStack> honeycombTemplates,
-			Map<ResourceLocation, ItemStack> combBlockTemplates) {
-		if (!isTargetComb.test(input) && !isTargetBlock.test(input)) return;
-		if (!CombBlockCheckCache.hasOutputSpace(invHandler)) return;
+			MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot,
+			List<ItemStack> reservedOutputs) {
+		if (!isTargetComb.test(input) && !isTargetBlock.test(input)) return true;
+		if (!(invHandler instanceof InventoryHandlerHelper.BlockEntityItemStackHandler outputHandler)) return false;
 
 		boolean isCombBlock = isTargetBlock.test(input);
-		int totalCount = Math.max(1, productivityModifier);
+		int totalCount = Math.min(input.getCount(), Math.max(0, productivityModifier));
+		if (totalCount == 0) return false;
+		List<ResourceLocation> cachedBeeTypes = isCombBlock ? snapshot.combBlockBeeTypes() : snapshot.beeTypes();
 
 		int maxTypes = Math.min(9, totalCount);
 		List<ResourceLocation> selectedTypes =
 				RandomHoneycombSelector.selectDistinctBeeTypes(maxTypes, random, cachedBeeTypes);
-		if (selectedTypes.isEmpty()) return;
+		if (selectedTypes.isEmpty()) return false;
 
 		// SubTask 6.1: 按权重比例分配 totalCount（替代 allocateEvenly），与工厂离心机路径统一
 		// SubTask 6.2: 保留 maxTypes = Math.min(9, totalCount) 限制（基础离心机无 STACK 升级）
@@ -249,29 +247,71 @@ public abstract class AbstractCombEventHandler {
 		Map<ResourceLocation, Integer> allocation =
 				WeightedAllocation.allocateByWeight(totalCount, selectedTypes, weights);
 
-		Item baseItem = isCombBlock ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get();
-		Map<ResourceLocation, ItemStack> outputTemplates = isCombBlock ? combBlockTemplates : honeycombTemplates;
-		if (invHandler instanceof InventoryHandlerHelper.BlockEntityItemStackHandler outputHandler) {
-			for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
-				try {
-					ItemStack template = outputTemplates.get(entry.getKey());
-					ItemStack output;
-					if (template != null && !template.isEmpty()) {
-						output = template.copyWithCount(entry.getValue());
-					} else {
-						output = new ItemStack(baseItem, entry.getValue());
-						output.set(ModDataComponents.BEE_TYPE.get(), entry.getKey());
-					}
-					outputHandler.addOutput(output);
-				} catch (Exception e) {
-					// M9: LogThrottle 节流（for 循环内，离心机完成配方时高频触发）
-					LogThrottle.warn("append_random_comb",
-							"追加随机蜜脾产出异常 (5秒内仅首条输出): {}", e.toString());
+		Map<ResourceLocation, ItemStack> outputTemplates = snapshot.selectTemplates(selectedTypes, isCombBlock, random);
+		Map<Integer, ItemStack> staged = new java.util.LinkedHashMap<>();
+		for (int slot : outputHandler.getOutputSlots()) {
+			staged.put(slot, outputHandler.getStackInSlot(slot).copy());
+		}
+		for (var entry : allocation.entrySet()) {
+			if (entry.getValue() <= 0) continue;
+			ItemStack template = outputTemplates.get(entry.getKey());
+			if (template == null || template.isEmpty()
+					|| !stageOutput(outputHandler, staged, template, entry.getValue())) return false;
+		}
+		// 同时为 PB 原配方保留空间；只有全部产物可容纳时才写入随机蜜脾。
+		Map<Integer, ItemStack> committed = new java.util.LinkedHashMap<>();
+		staged.forEach((slot, stack) -> committed.put(slot, stack.copy()));
+		for (ItemStack output : reservedOutputs) {
+			if (!reservePbOutput(outputHandler, staged, output)) return false;
+		}
+		committed.forEach((slot, stack) -> {
+			if (!ItemStack.matches(outputHandler.getStackInSlot(slot), stack)) outputHandler.setStackInSlot(slot, stack);
+		});
+		WeightedTypeSelector.getInstance().recordOutputs(allocation);
+		return true;
+	}
+
+	/** PB addOutput 按 64 一组整体找槽，不会把一组拆进多个非空槽。 */
+	private static boolean reservePbOutput(InventoryHandlerHelper.BlockEntityItemStackHandler handler,
+			Map<Integer, ItemStack> staged, ItemStack output) {
+		int remaining = output.getCount();
+		while (remaining > 0) {
+			int amount = Math.min(64, remaining);
+			Integer selected = null;
+			for (var entry : staged.entrySet()) {
+				int limit = Math.min(handler.getSlotLimit(entry.getKey()), output.getMaxStackSize());
+				if (!handler.isItemValid(entry.getKey(), output, false)) continue;
+				ItemStack current = entry.getValue();
+				if (current.isEmpty()) {
+					if (selected == null && amount <= limit) selected = entry.getKey();
+				} else if (ItemStack.isSameItemSameComponents(current, output)
+						&& amount <= limit - current.getCount()) {
+					selected = entry.getKey();
 					break;
 				}
 			}
-			// SubTask 6.3: 基础离心机路径同样记录产出,共用 WeightedTypeSelector 权重表
-			WeightedTypeSelector.getInstance().recordOutputs(allocation);
+			if (selected == null) return false;
+			staged.put(selected, output.copyWithCount(staged.get(selected).getCount() + amount));
+			remaining -= amount;
 		}
+		return true;
+	}
+
+	private static boolean stageOutput(InventoryHandlerHelper.BlockEntityItemStackHandler handler,
+			Map<Integer, ItemStack> staged, ItemStack template, int remaining) {
+		for (int pass = 0; pass < 2 && remaining > 0; pass++) {
+			for (var entry : staged.entrySet()) {
+				ItemStack current = entry.getValue();
+				if ((pass == 0) == current.isEmpty()
+						|| (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template))
+						|| !handler.isItemValid(entry.getKey(), template, false)) continue;
+				int limit = Math.min(handler.getSlotLimit(entry.getKey()), template.getMaxStackSize());
+				int added = Math.min(remaining, Math.max(0, limit - current.getCount()));
+				if (added > 0) entry.setValue(template.copyWithCount(current.getCount() + added));
+				remaining -= added;
+				if (remaining == 0) break;
+			}
+		}
+		return remaining == 0;
 	}
 }

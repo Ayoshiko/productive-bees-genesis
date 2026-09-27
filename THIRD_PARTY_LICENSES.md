@@ -7,7 +7,7 @@
 - **项目**: Productive Bees
 - **作者**: Copyright (c) 2024-2026 cy.jdkdigital and contributors
 - **许可证**: MIT License
-- **使用方式**: 本模组作为 Productive Bees 的附属模组，引用了其 API
+- **使用方式**: 本模组作为 Productive Bees 的附属模组，引用了其 API；蜂箱基因小食输入槽图标由 PB 13.13.5 的 `textures/item/honey_treat_gene.png` 灰度化生成。
 - **源码**: https://github.com/JDKDigital/productive-bees
 
 ## Re:Avaritia

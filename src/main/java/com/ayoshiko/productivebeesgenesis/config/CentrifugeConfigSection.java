@@ -156,12 +156,12 @@ public final class CentrifugeConfigSection {
 		// ===== PB升级上限 =====
 		builder.comment("PB升级上限").push("pb_upgrade");
 		mekCentrifugePbUpgradeProductivityMaxCount = builder
-				.comment("产量升级（α/β/γ/Ω）最大安装数量")
+				.comment("产量升级（α/β/γ/Ω）最大安装数量", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.pb_upgrade.productivityMaxCount")
 				.defineInRange("productivityMaxCount",
 						BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT, 1, 64);
 		mekCentrifugePbUpgradeTimeMaxCount = builder
-				.comment("时间升级最大安装数量")
+				.comment("时间升级最大安装数量", BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.pb_upgrade.timeMaxCount")
 				.defineInRange("timeMaxCount",
 						BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT, 1, 64);
@@ -175,7 +175,8 @@ public final class CentrifugeConfigSection {
 		// ===== 通用机械:扩展 升级上限 =====
 		builder.comment("通用机械:扩展 升级上限").push("me_upgrade");
 		mekCentrifugeMaxStackUpgrades = builder
-				.comment("通用机械:扩展 堆叠升级最大数量（2^N 倍并行，仅作用于本模组离心机工厂）")
+				.comment("通用机械:扩展 堆叠升级最大数量（2^N 倍并行，仅作用于本模组离心机工厂）",
+						BalanceConfig.CUSTOM_SETTING_COMMENT)
 				.translation("productivebeesgenesis.configuration.mek_centrifuge.me_upgrade.maxStackUpgrades")
 				.defineInRange("maxStackUpgrades",
 						BalanceConfig.DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT, 8, 32);

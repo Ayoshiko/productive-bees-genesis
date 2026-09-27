@@ -26,6 +26,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -75,8 +76,8 @@ public final class AeInputOverlay {
 	/** 按钮尺寸（宽=高） */
 	private static final int BUTTON_SIZE = 14;
 
-	/** 按钮缓存：key=侧面配置窗口实例。WeakHashMap 在窗口 GC 后自动回收 */
-	private static final Map<GuiSideConfiguration<?>, AeInputButton> BUTTONS = new WeakHashMap<>();
+	/** 值也使用弱引用，避免按钮反向持有窗口使弱键无法回收。 */
+	private static final Map<GuiSideConfiguration<?>, WeakReference<AeInputButton>> BUTTONS = new WeakHashMap<>();
 
 	private AeInputOverlay() {
 	}
@@ -144,11 +145,10 @@ public final class AeInputOverlay {
 		OverlayTarget target = findTarget(event.getScreen());
 		if (target == null || !shouldRender(target.type())) return;
 		if (!isGlobalEnabled(target.tile())) return;
-		if (!BUTTONS.containsKey(target.sideConfig())) return;
 		ButtonBounds bounds = bounds(target.gui(), target.sideConfig());
 		boolean triggered = bounds.contains(event.getMouseX(), event.getMouseY());
 		// 按钮可见性检查:仅按钮可见时才取消事件,避免不可见按钮阻止事件传递给 MEK Ejector 等原生按钮
-		AeInputButton button = BUTTONS.get(target.sideConfig());
+		AeInputButton button = getButton(target.sideConfig());
 		boolean buttonVisible = button != null && button.visible;
 		// isCanceled 逻辑:仅按钮可见且点击命中时才取消事件,允许事件传递给 MEK Ejector
 		if (triggered && buttonVisible) {
@@ -189,35 +189,34 @@ public final class AeInputOverlay {
 	/**
 	 * 创建按钮并添加为窗口子元素（仅在非渲染阶段调用）
 	 * <br/>
-	 * 修复 v14 渲染阶段不修改状态：使用 computeIfAbsent 保证每个窗口只创建一次按钮，
+	 * 弱引用缓存保证每个存活窗口只创建一次按钮，
 	 * 创建后调用 sideConfig.children().add() 注入到 Mekanism GUI 渲染管线。
-	 * 此方法不更新按钮状态，状态更新由 {@link #updateButton} 在渲染阶段处理。
+	 * 此方法不更新按钮状态，状态更新由 {@link #updateButton} 在客户端 tick 处理。
 	 */
 	private static void ensureButton(OverlayTarget target) {
 		if (target == null) return;
-		BUTTONS.computeIfAbsent(target.sideConfig(), sideConfig -> {
-			// Task 12: 按钮文字统一为单字符 "I"（Input），与 AeOutputButton 的 "A" 风格一致
-			AeInputButton open = new AeInputButton(
-					target.gui(),
-					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
-					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
-					Component.literal("I"),
-					AeInputOverlay::openConfigWindow,
-					target);
-			sideConfig.children().add(open);
-			return open;
-		});
+		GuiSideConfiguration<?> sideConfig = target.sideConfig();
+		if (getButton(sideConfig) != null) return;
+		AeInputButton open = new AeInputButton(
+				target.gui(),
+				sideConfig.getRelativeX() + BUTTON_X_OFFSET,
+				sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
+				Component.literal("I"),
+				AeInputOverlay::openConfigWindow,
+				target);
+		sideConfig.children().add(open);
+		BUTTONS.put(sideConfig, new WeakReference<>(open));
 	}
 
 	/**
-	 * 更新按钮状态（仅在渲染阶段调用，不修改 children 列表）
+	 * 更新按钮状态（仅在客户端 tick 调用，不修改 children 列表）
 	 * <br/>
 	 * 修复 v14 渲染阶段不修改状态：仅更新 target 引用、visible、active、tooltip，
 	 * 保证状态与当前 TransmissionType 同步。按钮不存在时（屏幕刚打开首帧）跳过。
 	 */
 	private static void updateButton(OverlayTarget target) {
 		if (target == null) return;
-		AeInputButton button = BUTTONS.get(target.sideConfig());
+		AeInputButton button = getButton(target.sideConfig());
 		// 按钮尚未创建（屏幕刚打开首帧，tick 尚未执行），跳过更新
 		if (button == null) return;
 
@@ -236,6 +235,11 @@ public final class AeInputOverlay {
 		} else {
 			button.setTooltip(Tooltip.create(Component.translatable("productivebeesgenesis.gui.ae_input_config.open")));
 		}
+	}
+
+	private static AeInputButton getButton(GuiSideConfiguration<?> sideConfig) {
+		WeakReference<AeInputButton> reference = BUTTONS.get(sideConfig);
+		return reference == null ? null : reference.get();
 	}
 
 	/**

@@ -69,7 +69,7 @@ class Ae2TagFilterWiringTest {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java")
 				.replaceAll("\\s+", " ");
 		assertTrue(puller.contains("&& !ignoreNbt && !tagFilterActive && !directEntries.isEmpty()"));
-		assertTrue(puller.contains("getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive)"));
+		assertTrue(puller.contains("getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision)"));
 	}
 
 	@Test
@@ -212,11 +212,12 @@ class Ae2TagFilterWiringTest {
 				+ "networkDirectory.generation(), recipeVersion, smeltingEnabled, tagGeneration)"),
 				"扫描候选分类结果必须随共享目录代号和标签代号失效，选择阶段才能安全复用");
 
-		// 2) reserveFloor 对 pullList 中每个条目无条件计算 —— 与该条目是蜜脾还是
-		//    标签过滤放行的 smelt 输入无关，保留库存因此对两类候选一致生效。
-		assertTrue(normalized.contains("entry.reserveFloor = filter == null ? -1L "
-				+ ": filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);"),
-				"每个拉取条目都必须携带 reserveFloor，不得按候选种类区分");
+		// 两条直探路径和扫描路径都复制准入阶段计算的保留线。
+		assertTrue(normalized.split("entry.reserveFloor = decision.reserveFloor;", -1).length - 1 == 2);
+		assertTrue(normalized.contains("candidateAmounts.apply(key, entry, unlimitedMode)"));
+		String amounts = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PullCandidateAmounts.java");
+		assertTrue(amounts.contains("reserves.put(key, decision.reserveFloor)"));
+		assertTrue(amounts.contains("entry.reserveFloor = reserves.getLong(key)"));
 
 		// 3) 抽取前的实时闸门：liveExtractable → reserveSafeRequest → extract，
 		//    且 extract 只有这一处（全模组唯一 AE2 输入抽取点）。
@@ -230,8 +231,8 @@ class Ae2TagFilterWiringTest {
 
 		// 4) 候选谓词对 reserve 守卫键先按 MAX_VALUE 放行，由第 3 步收口 ——
 		//    这样外部存储（其模拟库存不在 KeyCounter 里）不会被误判为 0 而永不拉取。
-		assertTrue(normalized.contains("long available = reserveGuarded ? Long.MAX_VALUE "
-				+ ": availableStacks.get(key);"),
+		assertTrue(normalized.contains("long available = decision.reserveFloor >= 0L ? Long.MAX_VALUE "
+				+ ": cachedAvailable;"),
 				"reserve 守卫键必须在候选阶段放行，最终由实时闸门裁剪");
 
 		// 5) 非直连（模糊/未配置）候选也受全局 reserve 约束

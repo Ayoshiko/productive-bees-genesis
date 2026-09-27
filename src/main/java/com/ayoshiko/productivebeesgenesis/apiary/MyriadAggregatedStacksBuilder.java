@@ -93,7 +93,8 @@ public class MyriadAggregatedStacksBuilder {
 		if (totalCount <= 0) {
 			return List.of();
 		}
-		List<ResourceLocation> allTypes = MyriadBeeTypeCache.cachedBeeTypes();
+		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
+		List<ResourceLocation> allTypes = snapshot.beeTypes();
 		if (allTypes == null || allTypes.isEmpty()) {
 			return List.of();
 		}
@@ -108,8 +109,7 @@ public class MyriadAggregatedStacksBuilder {
 			Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(
 					totalCount, selectedTypes, weights);
 
-			MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
-			return buildStacksFromAllocation(allocation, snapshot.honeycombTemplateByType());
+			return buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, false, level.getRandom()));
 		} catch (Exception e) {
 			return degradeToHoneycombs(totalCount, level, e);
 		}
@@ -133,7 +133,8 @@ public class MyriadAggregatedStacksBuilder {
 		if (totalCount <= 0) {
 			return List.of();
 		}
-		List<ResourceLocation> allTypes = MyriadBeeTypeCache.cachedBeeTypes();
+		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
+		List<ResourceLocation> allTypes = snapshot.combBlockBeeTypes();
 		if (allTypes == null || allTypes.isEmpty()) {
 			return List.of();
 		}
@@ -150,8 +151,7 @@ public class MyriadAggregatedStacksBuilder {
 			Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(
 					scaledTotal, selectedTypes, weights);
 
-			MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
-			return buildStacksFromAllocation(allocation, snapshot.combBlockTemplateByType());
+			return buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, true, level.getRandom()));
 		} catch (Exception e) {
 			return degradeToCombBlocks(totalCount, level, e);
 		}
@@ -185,7 +185,7 @@ public class MyriadAggregatedStacksBuilder {
 			}
 			ItemStack template = templateByType.get(entry.getKey());
 			if (template == null || template.isEmpty()) {
-				continue;
+				return List.of();
 			}
 			int remaining = count;
 			int maxStackSize = Math.max(1, template.getMaxStackSize());

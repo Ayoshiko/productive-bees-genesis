@@ -304,7 +304,7 @@ public interface PbRecipeContext {
 	}
 
 	/**
-	 * 产物直通：先模拟再放入，把新生成的产物直接送给已配置输出面的相邻容器，跳过输出槽中转。
+	 * 产物直通：把新生成产物的拷贝送给已配置输出面的相邻容器，按实际接收量记账。
 	 * <p>
 	 * 默认实现从 Mekanism 的侧面配置接口取弹出器组件，委托给
 	 * {@link com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost}

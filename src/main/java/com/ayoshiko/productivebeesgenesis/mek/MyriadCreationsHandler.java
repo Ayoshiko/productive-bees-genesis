@@ -47,9 +47,6 @@ public class MyriadCreationsHandler {
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
 
-	/** 日志前缀（区分原版/ME/EME工厂） */
-	private final String logPrefix;
-
 	/** PB配方处理进度（tick） — 每进程独立，与协调器共享 */
 	private final int[] pbOperatingTicks;
 
@@ -91,14 +88,13 @@ public class MyriadCreationsHandler {
 			int[] pbProcessingTime, RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
 			PbRecipeFinder recipeFinder) {
 		this.context = context;
-		this.logPrefix = logPrefix;
 		this.pbOperatingTicks = pbOperatingTicks;
 		this.pbProcessing = pbProcessing;
 		this.pbProcessingTime = pbProcessingTime;
 		this.cachedPbRecipes = cachedPbRecipes;
 		int processes = context.processes();
 		this.fluidOutputHandler = new MyriadFluidOutputHandler(context, recipeFinder, logPrefix, processes);
-		this.logger = new MyriadCreationsLogger(logPrefix, context, processes);
+		this.logger = new MyriadCreationsLogger(logPrefix);
 		this.myriadProductPools = new MyriadProductPool[processes];
 		for (int i = 0; i < processes; i++) {
 			// factoryKey = context（工厂实例），用于 WeightedTypeSelector 工厂级 tick 缓存的 WeakHashMap key
@@ -173,9 +169,7 @@ public class MyriadCreationsHandler {
 			long gameTick = level == null ? Long.MIN_VALUE : level.getGameTime();
 			if (gameTick != lastFluidBlockedProbeTick) {
 				lastFluidBlockedProbeTick = gameTick;
-				logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
-						"{}万象创世流体槽已满，暂停完成批次：进程{} batchSize={}",
-						logPrefix, processIndex, effectiveOps);
+				logger.logOutputBlocked(processIndex, effectiveOps, true);
 			}
 			return true;
 		}
@@ -284,7 +278,7 @@ public class MyriadCreationsHandler {
 		int maxTypes = Math.min(OUTPUT_SLOT_COUNT, totalCount);
 		// Task 23: 使用带缓存的类型选择，降低 256x 加速下每 tick 多次随机采样的开销
 		List<ResourceLocation> selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(maxTypes,
-			context.level());
+			context.level(), isCombBlock);
 		if (selectedTypes.isEmpty()) {
 			// 缓存为空时保留进度等待预热完成（不扣能量、不扣输入）
 			logger.logEmptyCacheAndPreserve(processIndex);
@@ -305,13 +299,12 @@ public class MyriadCreationsHandler {
 		buildOutputSlots(processIndex);
 
 		// 用 MyriadBatchPlanner 规划插入（纯模拟），plan 失败时不 apply 不扣输入
-		Map<ResourceLocation, ItemStack> templateByType = isCombBlock
-				? MyriadBeeTypeCache.snapshot().combBlockTemplateByType()
-				: MyriadBeeTypeCache.snapshot().honeycombTemplateByType();
+		Map<ResourceLocation, ItemStack> templateByType = MyriadBeeTypeCache.snapshot()
+				.selectTemplates(selectedTypes, isCombBlock, level.getRandom());
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(
 				reusableOutputSlots, baseItem, allocation, currentTick, templateByType);
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{}", logPrefix, processIndex);
+			logger.logOutputBlocked(processIndex, 1, false);
 			return 0;
 		}
 
@@ -369,8 +362,7 @@ public class MyriadCreationsHandler {
 		int productivityMod = Math.max(1, context.productivityModifier());
 		int maxFluidBatch = fluidOutputHandler.getMaxBatchForFluid(input, productivityMod);
 		if (maxFluidBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle,
-					"{}万象创世流体槽已满，暂停处理：进程{} batchSize={}", logPrefix, processIndex, batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, true);
 			return 0;
 		}
 		int effectiveBatchSize = Math.min(batchSize, maxFluidBatch);
@@ -385,7 +377,7 @@ public class MyriadCreationsHandler {
 		// 低 STACK（batchSize < 1024）走原版 selectDistinctBeeTypesCached + MyriadProductPool 委托
 		List<ResourceLocation> selectedTypes;
 		if (batchSize >= WEIGHTED_SELECTOR_THRESHOLD) {
-			List<ResourceLocation> allBeeTypes = MyriadBeeTypeCache.cachedBeeTypes();
+			List<ResourceLocation> allBeeTypes = MyriadBeeTypeCache.cachedBeeTypes(isCombBlock);
 			if (allBeeTypes.isEmpty()) {
 				logger.logEmptyCacheAndPreserve(processIndex);
 				return 0;
@@ -394,7 +386,7 @@ public class MyriadCreationsHandler {
 					processIndex, context.processes(), level, allBeeTypes, context);
 		} else {
 			selectedTypes = MyriadCreationsEventHandler.selectDistinctBeeTypesCached(
-					Math.min(OUTPUT_SLOT_COUNT, 9), level);
+					Math.min(OUTPUT_SLOT_COUNT, 9), level, isCombBlock);
 			if (selectedTypes.isEmpty()) {
 				logger.logEmptyCacheAndPreserve(processIndex);
 				return 0;
@@ -414,15 +406,13 @@ public class MyriadCreationsHandler {
 		// 根据输出槽剩余总容量与产物倍率直接计算最大可行 batch size，避免从 operationsPerTick 逐级减半
 		int outputPerOperation = SaturatingMath.saturatingToInt(
 				SaturatingMath.saturatingMultiply(multiplier, productivityMod));
-		Map<ResourceLocation, ItemStack> templateByType = isCombBlock
-				? MyriadBeeTypeCache.snapshot().combBlockTemplateByType()
-				: MyriadBeeTypeCache.snapshot().honeycombTemplateByType();
+		// 固定本次事务的变体，容量二分、降级重试及最终插入不得重新随机。
+		Map<ResourceLocation, ItemStack> templateByType = MyriadBeeTypeCache.snapshot()
+				.selectTemplates(selectedTypes, isCombBlock, level.getRandom());
 		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(
 				snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
 		if (maxBatch <= 0) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
-					logPrefix, processIndex,
-				batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, false);
 			return 0;
 		}
 
@@ -454,9 +444,7 @@ public class MyriadCreationsHandler {
 			degradationAttempts++;
 		}
 		if (!plan.isSuccess()) {
-			logger.logThrottledWarnGlobal(logger.globalFullLogThrottle, "{}万象创世产物无法完全插入，暂停：进程{} batchSize={}",
-					logPrefix, processIndex,
-				batchSize);
+			logger.logOutputBlocked(processIndex, batchSize, false);
 			return 0;
 		}
 

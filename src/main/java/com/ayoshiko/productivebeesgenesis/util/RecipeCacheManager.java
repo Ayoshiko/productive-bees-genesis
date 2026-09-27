@@ -44,7 +44,7 @@ public class RecipeCacheManager<T> {
 		 */
 		static CacheKey of(ItemStack stack) {
 			Item item = stack.getItem();
-			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				// 轻量路径：只提取 bee_type，跳过 hashItemAndComponents
 				return new CacheKey(item, stack.get(PbDataComponents.beeType()), 0);
 			}

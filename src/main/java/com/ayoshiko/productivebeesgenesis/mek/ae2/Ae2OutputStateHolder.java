@@ -406,6 +406,8 @@ public final class Ae2OutputStateHolder {
 			// 网格变化说明可能换接到另一个 ME 网络：旧网络的 insert 成本均值不得
 			// 继续限制新网络的推送配额，否则从病态网络拆到健康网络后仍被降频。
 			buffers.insertCostTracker.reset();
+			// 输入成本同样随换网重置。
+			buffers.extractBudget.reset();
 		}
 		// 模块2.1：同步失效 grid node 状态缓存，确保下次 getCachedNodeState 重新查询
 		pushState.invalidateNodeStateCache();

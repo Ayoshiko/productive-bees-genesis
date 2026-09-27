@@ -169,10 +169,11 @@ class GeneTreatAutoFeederTest {
 	// ===== 输入槽接线 =====
 
 	@Test
-	void cageInputSlotAcceptsGeneTreats() throws Exception {
+	void geneTreatsHaveTheirOwnInputSlot() throws Exception {
 		String source = Files.readString(Path.of(SLOT_MANAGER));
-		assertTrue(source.contains("isGeneTreat(stack)"),
-				"蜂笼输入槽必须接受带基因小食，否则玩家根本放不进去");
+		assertTrue(source.contains("geneTreatSlot = InputInventorySlot.at(ApiarySlotManager::isGeneTreat"));
+		assertFalse(source.contains("|| isGeneTreat(stack)"), "小食不应再占用蜂笼槽");
+		assertTrue(Files.readString(Path.of(FEEDER)).contains("slotManager.getGeneTreatSlot()"));
 		assertTrue(source.contains("HoneyTreat.hasGene(stack)"),
 				"只接受带基因的小食，无基因小食自动化收益为零");
 	}
@@ -183,6 +184,6 @@ class GeneTreatAutoFeederTest {
 		int feedIndex = source.indexOf("autoFeeder.tryAutoFeed()");
 		int cageIndex = source.indexOf("slotManager.processCageInput()");
 		assertTrue(feedIndex >= 0 && cageIndex > feedIndex,
-				"喂食必须先于蜂笼处理，保证共用输入槽时语义清晰");
+				"保留喂食先于蜂笼处理的既有顺序");
 	}
 }

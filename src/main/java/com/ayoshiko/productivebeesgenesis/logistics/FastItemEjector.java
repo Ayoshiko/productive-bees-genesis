@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -29,14 +30,14 @@ import java.util.List;
  * <b>为什么不用 Mekanism 的 {@code outputItems}：</b>原版实现每个输出面每次只送走<b>一种</b>物品
  * （{@code TransitRequest.addToInventoryUnchecked} 插入成功即返回），构建弹出清单还要复制列表、
  * 洗牌、再用 {@code indexOf} 反查下标（O(n²)）。18 进程工厂有 54 个物品输出槽、同时产出十几种蜜脾，
- * 原版语义下每刻只能送走几种，其余积压到「输出满」直接停机——早期版本因此堆了十来个节流配置
- * 去缓解症状。本通道改为<b>一次遍历全部输出槽、全部种类一次送完</b>，并且：
+ * 原版语义下每刻只能送走几种，其余容易积压。本通道批量遍历输出槽，昂贵目标用耗时预算
+ * 控制后续调用，并且：
  * <ul>
  *   <li><b>先模拟再放入</b>（{@link ItemPushHelper}）：先算出目标能吃多少，再精确取出、插入，
  *       避免「取出后塞不下」的回填往返。</li>
  *   <li><b>轮转起点</b>：替代原版洗牌，同样避免靠后槽位饿死，但零分配、顺序跨刻可预测。</li>
- *   <li><b>本刻拒收备忘</b>：某个物品类型被目标拒收后，同一目标同一刻内不再为同类型槽位
- *       重复模拟，把「目标满」场景从 O(槽数 × 目标槽数) 压到常数级。</li>
+ *   <li><b>本刻拒收备忘</b>：同一目标拒收相同组件、数量的请求后，本刻不再重复尝试；
+ *       记录有界，缩小批量后仍可重试。</li>
  *   <li><b>自适应阻塞退避</b>：连续多刻搬不动且输出内容没有变化时短暂降频，
  *       产出版本一变立刻恢复满速。这些阈值是内置常量，不再暴露为配置。</li>
  * </ul>
@@ -56,18 +57,11 @@ public final class FastItemEjector {
 	/** 退避跳过的刻数（产出版本变化会立即解除） */
 	private static final int IDLE_BACKOFF_TICKS = 10;
 
-	/** 本刻拒收备忘容量（产物种类通常 ≤ 十几种，超出部分退化为正常模拟） */
-	private static final int REJECT_MEMO_CAPACITY = 12;
-
 	/** 目标解析与能力缓存 */
 	private final NeighborItemTargets targets;
 
-	/** 输出槽轮转游标 */
-	private int slotCursor;
-
-	/** 本刻拒收备忘（每个目标独立清空） */
-	private final ItemStack[] rejectedTypes = new ItemStack[REJECT_MEMO_CAPACITY];
-	private int rejectedCount;
+	/** 每个输出面独立计费，避免慢目标阻塞其它方向的普通容器。 */
+	private final NeighborItemTransferState[] transferStates = new NeighborItemTransferState[6];
 
 	/** 连续搬不动的刻数 */
 	private int consecutiveIdleTicks;
@@ -95,6 +89,7 @@ public final class FastItemEjector {
 	/** 侧面配置变更时调用。 */
 	public void onConfigChanged() {
 		targets.invalidate();
+		Arrays.fill(transferStates, null);
 		sameTickGate.clear();
 		clearBackoff();
 	}
@@ -142,7 +137,7 @@ public final class FastItemEjector {
 					moved += pushToTransporter(tile, ejector, slots, target);
 					continue;
 				}
-				moved += pushSlots(slots, target);
+				moved += pushSlots(slots, transferState(side, target), gameTime);
 			}
 		}
 
@@ -182,14 +177,19 @@ public final class FastItemEjector {
 	}
 
 	/**
-	 * 产物直通：先模拟再放入，把还没进输出槽的产物直接送给相邻容器。
+	 * 产物直通：把还没进输出槽的产物直接送给相邻容器。
+	 * <p>
+	 * 产物仍由调用方缓冲持有，直接插入拷贝并按剩余量记账，省去重复模拟。
+	 * 拒收备忘与耗时预算跨本刻的配方重试复用；未接收部分继续回落本地输出。
 	 *
 	 * @param ejector    弹出器组件
 	 * @param itemConfig ITEM 侧面配置
 	 * @param stack      待推送产物（不修改）
+	 * @param gameTime   当前游戏刻（用于拒收备忘的跨迭代复用与换刻清空）
 	 * @return 实际被接收的数量
 	 */
-	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig, ItemStack stack) {
+	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig,
+			ItemStack stack, long gameTime) {
 		if (stack.isEmpty() || itemConfig == null) return 0;
 		if (!ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return 0;
 		List<Direction> sides = targets.outputSides(itemConfig);
@@ -203,11 +203,20 @@ public final class FastItemEjector {
 			// 逻辑运输管道必须从真实输出槽构建 TransitRequest；未入槽产物先回落输出槽，
 			// 再由逐刻快速通道按颜色与路由协议发送。
 			if (target == null || target instanceof CursedTransporterItemHandler) continue;
-			ItemStack remaining = stack.copyWithCount(total - inserted);
-			int accepted = ItemPushHelper.simulateInsert(target, remaining);
-			if (accepted <= 0) continue;
-			ItemStack leftover = ItemPushHelper.insert(target, remaining.copyWithCount(accepted));
-			inserted += accepted - (leftover.isEmpty() ? 0 : leftover.getCount());
+			NeighborItemTransferState state = transferState(side, target);
+			if (!state.budget.canAttempt(gameTime, true)) continue;
+			int want = total - inserted;
+			if (state.isRejected(stack, want, gameTime)) continue;
+			ItemStack offered = stack.copyWithCount(want);
+			long started = System.nanoTime();
+			try {
+				ItemStack leftover = ItemPushHelper.insert(target, offered);
+				int accepted = Math.max(0, want - (leftover.isEmpty() ? 0 : leftover.getCount()));
+				inserted += accepted;
+				if (accepted == 0) state.rememberRejected(offered, gameTime);
+			} finally {
+				state.budget.record(gameTime, true, System.nanoTime() - started);
+			}
 		}
 		if (inserted > 0) {
 			// 直通成功说明目标有空间：解除可能残留的退避，让逐刻弹出立刻跟进
@@ -219,29 +228,35 @@ public final class FastItemEjector {
 	}
 
 	/** 把一组输出槽尽量送进一个目标，返回搬运数量。 */
-	private long pushSlots(List<IInventorySlot> slots, IItemHandler target) {
+	private long pushSlots(List<IInventorySlot> slots, NeighborItemTransferState state, long gameTime) {
 		int slotCount = slots.size();
-		int start = RoundRobinSlotTraversal.normalize(slotCursor, slotCount);
-		slotCursor = RoundRobinSlotTraversal.advance(start, slotCount);
-		rejectedCount = 0;
+		int start = RoundRobinSlotTraversal.normalize(state.slotCursor, slotCount);
 		long moved = 0L;
 		for (int offset = 0; offset < slotCount; offset++) {
-			IInventorySlot slot = slots.get(RoundRobinSlotTraversal.index(start, offset, slotCount));
+			if (!state.budget.canAttempt(gameTime, false)) break;
+			int slotIndex = RoundRobinSlotTraversal.index(start, offset, slotCount);
+			state.slotCursor = RoundRobinSlotTraversal.advance(slotIndex, slotCount);
+			IInventorySlot slot = slots.get(slotIndex);
 			if (slot == null || slot.isEmpty()) continue;
 			// 与 Mekanism 一致：用 EXTERNAL 模拟抽取判定真实可弹出量（尊重槽位抽取谓词）
 			ItemStack available = slot.extractItem(slot.getCount(), Action.SIMULATE, AutomationType.EXTERNAL);
-			if (available.isEmpty() || isRejected(available)) continue;
+			if (available.isEmpty() || state.isRejected(available, gameTime)) continue;
 
-			int accepted = ItemPushHelper.simulateInsert(target, available);
-			if (accepted <= 0) {
-				rememberRejected(available);
-				continue;
+			long started = System.nanoTime();
+			try {
+				int accepted = ItemPushHelper.simulateInsert(state.target, available);
+				if (accepted <= 0) {
+					state.rememberRejected(available, gameTime);
+					continue;
+				}
+				ItemStack taken = slot.extractItem(accepted, Action.EXECUTE, AutomationType.EXTERNAL);
+				if (taken.isEmpty()) continue;
+				ItemStack leftover = ItemPushHelper.insert(state.target, taken);
+				moved += taken.getCount() - (leftover.isEmpty() ? 0 : leftover.getCount());
+				if (!leftover.isEmpty()) returnHome(slots, slot, leftover);
+			} finally {
+				state.budget.record(gameTime, false, System.nanoTime() - started);
 			}
-			ItemStack taken = slot.extractItem(accepted, Action.EXECUTE, AutomationType.EXTERNAL);
-			if (taken.isEmpty()) continue;
-			ItemStack leftover = ItemPushHelper.insert(target, taken);
-			moved += taken.getCount() - (leftover.isEmpty() ? 0 : leftover.getCount());
-			if (!leftover.isEmpty()) returnHome(slots, slot, leftover);
 		}
 		return moved;
 	}
@@ -266,16 +281,14 @@ public final class FastItemEjector {
 		}
 	}
 
-	private boolean isRejected(ItemStack stack) {
-		for (int i = 0; i < rejectedCount; i++) {
-			if (ItemStack.isSameItemSameComponents(rejectedTypes[i], stack)) return true;
+	private NeighborItemTransferState transferState(Direction side, IItemHandler target) {
+		int index = side.ordinal();
+		NeighborItemTransferState state = transferStates[index];
+		if (state == null || state.target != target) {
+			state = new NeighborItemTransferState(target);
+			transferStates[index] = state;
 		}
-		return false;
-	}
-
-	private void rememberRejected(ItemStack stack) {
-		if (rejectedCount >= REJECT_MEMO_CAPACITY) return;
-		rejectedTypes[rejectedCount++] = stack.copyWithCount(1);
+		return state;
 	}
 
 	private boolean isBackingOff(long gameTime, long outputVersion) {

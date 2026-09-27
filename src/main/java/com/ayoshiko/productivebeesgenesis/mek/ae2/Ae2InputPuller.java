@@ -195,7 +195,8 @@ public final class Ae2InputPuller {
 		if (storageService == null) return;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
-		if (!holder.tryAcquireNetworkWork(meStorage, currentTick)) return;
+		// Input has its own per-host extract budget. The shared output token can be
+		// consumed before this pass, leaving an otherwise healthy input idle.
 		BlockPos pos = host.productivebeesgenesis$getAe2BlockPos();
 		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
 		boolean hadPendingItems = holder.getPendingItemBuffer().size() > 0;
@@ -252,9 +253,9 @@ public final class Ae2InputPuller {
 			}
 			directEntries = filter.getDirectEntries();
 		}
-		boolean globalNetworkStock = filter != null && filter.isGlobalNetworkStock();
-		boolean hasNetworkStockEntries = filter != null && !globalNetworkStock
-				&& filter.hasNetworkStockEntries();
+		Ae2PullDecision decision = buffers.pullDecision;
+		boolean stockPolicyActive = filter != null
+				&& (filter.isGlobalNetworkStock() || filter.hasNetworkStockEntries());
 		boolean directOnly = filter != null
 				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
 				&& !filter.hasFuzzyEntries()
@@ -288,7 +289,7 @@ public final class Ae2InputPuller {
 						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 								availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
 						: Math.max(0L, availableStacks.get(key));
-				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive);
+				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
 					continue;
@@ -299,7 +300,9 @@ public final class Ae2InputPuller {
 				if (available > 0) {
 					PullEntry entry = buffers.borrowPullEntry(key,
 							SaturatingMath.saturatingToInt(available),
-							unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+							unlimitedMode && decision.unlimited);
+					entry.marked = decision.marked;
+					entry.reserveFloor = decision.reserveFloor;
 					// 分类结果随条目传递：排序阶段不再重跑 classify（会穿过配方/标签缓存）
 					entry.smelting = kind.isSmelting();
 					pullList.add(entry);
@@ -329,7 +332,7 @@ public final class Ae2InputPuller {
 							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 									availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
 							: Math.max(0L, availableStacks.get(key));
-					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive);
+					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
@@ -340,7 +343,9 @@ public final class Ae2InputPuller {
 					if (available > 0) {
 						PullEntry entry = buffers.borrowPullEntry(key,
 								SaturatingMath.saturatingToInt(available),
-								unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+								unlimitedMode && decision.unlimited);
+						entry.marked = decision.marked;
+						entry.reserveFloor = decision.reserveFloor;
 						// 分类结果随条目传递：排序阶段不再重跑 classify
 						entry.smelting = kind.isSmelting();
 						pullList.add(entry);
@@ -389,14 +394,22 @@ public final class Ae2InputPuller {
 			// clamps every guarded key immediately before MODULATE.
 			Predicate<AEItemKey> acceptableCandidate = key -> {
 				if (pullKeys.contains(key)) return false;
-				boolean reserveGuarded = globalNetworkStock || (hasNetworkStockEntries
-						&& filter.getReserveFloorForKey(key, ignoreNbt) >= 0L);
-				long available = reserveGuarded ? Long.MAX_VALUE : availableStacks.get(key);
+				long cachedAvailable = availableStacks.get(key);
+				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
+				long limit;
+				if (filter == null) {
+					decision.set(true, false, false, -1L);
+					limit = -1L;
+				} else {
+					limit = filter.getPullLimitIfAllowed(key, Long.MAX_VALUE, ignoreNbt, tagFilterActive, decision);
+				}
+				if (!decision.admitted) return false;
+				long available = decision.reserveFloor >= 0L ? Long.MAX_VALUE : cachedAvailable;
 				// 两个候选列表仅由上面的 classify 构建，并按配方/开关/标签代号失效；
 				// 此处不再为每次拉取重复查询候选类型。
-				int amount = getPullCandidateAmount(key, available, filter, ignoreNbt, tagFilterActive);
+				int amount = SaturatingMath.saturatingToInt(limit < 0L ? available : Math.min(available, limit));
 				if (amount <= 0) return false;
-				candidateAmounts.put(key, amount);
+				candidateAmounts.put(key, amount, decision);
 				return true;
 			};
 			// 返回值 = 优先（SMELTING）组贡献的条目数：selectedKeys 的前这么多项是 smelt 候选，
@@ -407,8 +420,8 @@ public final class Ae2InputPuller {
 				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
-					PullEntry entry = buffers.borrowPullEntry(key, amount,
-						unlimitedMode && filter.isUnlimitedForKey(key, ignoreNbt));
+					PullEntry entry = buffers.borrowPullEntry(key, amount);
+					candidateAmounts.apply(key, entry, unlimitedMode);
 					entry.smelting = index < smeltingSelected;
 					pullList.add(entry);
 				}
@@ -428,23 +441,8 @@ public final class Ae2InputPuller {
 		}
 		holder.setInputCandidateCursor(pullList.getLast().key);
 
-		// 14. Marked-first ordering (AE2LT: pull what is marked first);
-		//      among marked entries comb blocks stay ahead (higher yield).
-		//      标签过滤关闭时 marked 可由准入结果直接推出；标签过滤开启且存在外层条目时，
-		//      只做一次额外标记判定，避免把标签放行的未标记候选误当成外层标记物品。
-		boolean sortIgnoreNbt = holder.isAeInputNbtIgnore();
-		Ae2InputFilter.FilterMode filterMode = filter == null
-				? Ae2InputFilter.FilterMode.DISABLED : filter.getFilterMode();
-		boolean resolveMarkedEntries = tagFilterActive && filter != null
-				&& (filter.hasDirectEntries() || filter.hasFuzzyEntries());
+		// 准入、无限提供、库存保留线与标记排序共用同一次过滤遍历的结果。
 		for (PullEntry entry : pullList) {
-			// 未启用标签过滤时，白名单候选必然命中标记；启用后，标签放行的
-			// 未标记物品也会进入列表，只有实际命中外层条目才算 marked。
-			entry.marked = filterMode == Ae2InputFilter.FilterMode.WHITELIST
-					&& (!tagFilterActive || (resolveMarkedEntries
-							&& filter.matchesAnyEntry(entry.key, sortIgnoreNbt)));
-			entry.reserveFloor = filter == null ? -1L
-					: filter.getReserveFloorForKey(entry.key, sortIgnoreNbt);
 			// entry.smelting 已在候选准入阶段写入（直探路径用 classify 的返回值，
 			// 扫描路径用 collectPrioritized 返回的优先组分界）。此处曾为排序再跑一次
 			// classify，等于每次拉取额外穿过 typeCount 次 SMELTING 配方缓存与标签缓存 ——
@@ -483,6 +481,8 @@ public final class Ae2InputPuller {
 		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
 		int passes = typeCount > 1 ? 2 : 1;
 		boolean fairPassTruncated = false;
+		// 预算跨公平轮与补齐轮累计，未提取的类型留待后续拉取。
+		boolean extractBudgetExhausted = false;
 		for (PullEntry entry : pullList) {
 			entry.beginComponentMatchCache(processCount);
 		}
@@ -494,6 +494,13 @@ public final class Ae2InputPuller {
 			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity; typeOffset++) {
 				PullEntry entry = pullList.get(typeOffset);
 				if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
+
+				// 在逐槽规划前检查累计耗时，同时考虑本机本刻已发生的输出成本。
+				if (!buffers.extractBudget.canExtractNow(currentTick, typeCount,
+						buffers.insertCostTracker.tileSpentThisTickNanos(currentTick))) {
+					extractBudgetExhausted = true;
+					break;
+				}
 
 				// 先汇总该类型在所有可用槽位中的容量，然后一次 ME extract，再本地分发。
 				// 同一类型的模拟探针在所有输入槽中复用；SIMULATE 不会修改传入栈，
@@ -556,7 +563,7 @@ public final class Ae2InputPuller {
 							entry.reserveFloor, availableStacks, meStorage,
 							ActionSourceHolder.INSTANCE,
 						inputSlots, inputSlotCapacities, laneSnapshot, slotStart, pos, keyBackoff,
-						buffers.fingerprintCache);
+						buffers.fingerprintCache, buffers.extractBudget);
 					int pulled = batchResult.insertedCount();
 					entry.remaining -= pulled;
 					totalPulled += pulled;
@@ -577,6 +584,8 @@ public final class Ae2InputPuller {
 					degradedExtractDetected = true;
 				}
 			}
+			// 调用预算耗尽时，补齐轮也不再尝试。
+			if (extractBudgetExhausted) break;
 		}
 		for (PullEntry entry : pullList) {
 			entry.clearComponentMatchCache();
@@ -609,18 +618,6 @@ public final class Ae2InputPuller {
 		// 拉取列表已使用完毕，clear 而非新建（复用 ReusableBuffers）
 		pullList.clear();
 	}
-
-	private static int getPullCandidateAmount(Object rawKey, long available, Ae2InputFilter filter,
-			boolean ignoreNbt, boolean tagFilterActive) {
-		if (available <= 0 || !(rawKey instanceof AEItemKey itemKey)) return 0;
-		if (filter != null) {
-			long configuredLimit = filter.getPullLimitIfAllowed(itemKey, available, ignoreNbt, tagFilterActive);
-			if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) return 0;
-			if (configuredLimit >= 0L) available = Math.min(available, configuredLimit);
-		}
-		return available <= 0L ? 0 : SaturatingMath.saturatingToInt(available);
-	}
-
 
 	/**
 	 * 获取每次拉取的最大物品数量
@@ -699,7 +696,7 @@ public final class Ae2InputPuller {
 		if (laneItem == null) {
 			// 空槽：validator 仍要过一遍（区分「永久拒绝」与「暂时没位置」），
 			// 上限用快照值（与候选 key 无关，只由槽位分等级堆叠决定）。
-			if (!entry.acceptsProbe(basicSlot, probe)) {
+			if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
 				entry.validatorRejected = true;
 				return 0;
 			}
@@ -715,7 +712,7 @@ public final class Ae2InputPuller {
 		if (limit <= count) return 0;
 		if (!entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
 				lanes.patchSize(slotIdx), lanes.beeType(slotIdx))) return 0;
-		if (!entry.acceptsProbe(basicSlot, probe)) {
+		if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
 			entry.validatorRejected = true;
 			return 0;
 		}
@@ -748,7 +745,7 @@ public final class Ae2InputPuller {
 				// 上限判断、validator/canInsert 判断。这里直接复现，避免为每个候选类型
 				// 创建模拟返回栈，并复用同一次 getLimit 结果。
 				if (stack.isEmpty()) {
-					if (!entry.acceptsProbe(basicSlot, probe)) {
+					if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
 						entry.validatorRejected = true;
 						return 0;
 					}
@@ -764,7 +761,7 @@ public final class Ae2InputPuller {
 				// validator 拒绝与槽满必须分开归因：前者说明本机永远不接受该物品，
 				// 是可据此进入 per-key 退避的持久信号，后者只是暂时没位置。
 				if (limit <= stack.getCount()) return 0;
-				if (!entry.acceptsProbe(basicSlot, probe)) {
+				if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
 					entry.validatorRejected = true;
 					return 0;
 				}
@@ -806,9 +803,10 @@ public final class Ae2InputPuller {
 			long reserveFloor, KeyCounter cachedInventory, MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, Ae2InputLaneSnapshot laneSnapshot,
 			int slotStart, BlockPos pos,
-			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache) {
-		// 网络级协调已在拉取入口取得令牌；此处只记录实际成本，不再使用旧全服硬闸门，
-		// 避免一个病态网络让其它互不相关的健康网络同 tick 停止拉取。
+			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache,
+			Ae2ExtractBudget extractBudget) {
+		// 拉取不使用共享输出令牌；这里只记录实际成本，由本机提取预算限制慢网络，
+		// 避免输出先占令牌时输入无机会执行。
 		long gameTick = level.getGameTime();
 		// 抽取前的兜底闸门：只要求 pending 缓冲还有「类型条目位」可登记，不限制抽取数量。
 		// extract 一旦执行就无法撤回，若之后既无法落槽、又无法回送 ME、也无处登记，
@@ -862,6 +860,7 @@ public final class Ae2InputPuller {
 						cachedInventory, meStorage, key, queryCap, actionSource);
 			} catch (LinkageError | RuntimeException e) {
 				reserveQueryCost = System.nanoTime() - queryStart;
+				extractBudget.recordProbe(gameTick, reserveQueryCost);
 				Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 						Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 				holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
@@ -873,6 +872,7 @@ public final class Ae2InputPuller {
 						Ae2StorageHealth.isPathological(reserveQueryCost), true, false);
 			}
 			reserveQueryCost = System.nanoTime() - queryStart;
+			extractBudget.recordProbe(gameTick, reserveQueryCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 			holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
@@ -897,6 +897,7 @@ public final class Ae2InputPuller {
 					meStorage.extract(key, amount, Actionable.MODULATE, actionSource), amount);
 		} catch (LinkageError | RuntimeException error) {
 			long extractCost = System.nanoTime() - extractStart;
+			extractBudget.record(gameTick, extractCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 			holder.recordNetworkCost(meStorage, gameTick, extractCost,
@@ -904,6 +905,7 @@ public final class Ae2InputPuller {
 			throw error;
 		}
 		long extractCost = System.nanoTime() - extractStart;
+		extractBudget.record(gameTick, extractCost);
 		Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 				Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
 		holder.recordNetworkCost(meStorage, gameTick, extractCost,
@@ -1096,10 +1098,9 @@ public final class Ae2InputPuller {
 		private boolean[] componentMatchResults = new boolean[0];
 		private int[] componentMatchGenerations = new int[0];
 		private int componentMatchGeneration;
-		/** 本轮 validator 判定：-1 未判定 / 0 拒绝 / 1 接受。 */
-		private int validatorState = -1;
-		/** 产生上述判定的槽位实现类；换实现即重新判定。 */
-		private Class<?> validatorSlotType;
+		/** Validator predicates may capture a slot or process index. Cache by slot identity. */
+		private BasicInventorySlot[] validatorSlots = new BasicInventorySlot[0];
+		private byte[] validatorStates = new byte[0];
 		/** 本条目 key 的组件补丁数（每轮准备一次，供内层循环直接比较）。 */
 		private int keyPatchSize;
 		/** 本条目 key 的「唯一 bee_type」签名；不满足快径条件时为 null。 */
@@ -1119,8 +1120,7 @@ public final class Ae2InputPuller {
 			this.combBlock = false;
 			this.servedInWindow = 0L;
 			this.validatorRejected = false;
-			this.validatorState = -1;
-			this.validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 		}
 
 		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */
@@ -1130,12 +1130,15 @@ public final class Ae2InputPuller {
 				componentMatchResults = Arrays.copyOf(componentMatchResults, slotCount);
 				componentMatchGenerations = Arrays.copyOf(componentMatchGenerations, slotCount);
 			}
+			if (slotCount > validatorSlots.length) {
+				validatorSlots = Arrays.copyOf(validatorSlots, slotCount);
+				validatorStates = Arrays.copyOf(validatorStates, slotCount);
+			}
 			if (++componentMatchGeneration == 0) {
 				Arrays.fill(componentMatchGenerations, 0);
 				componentMatchGeneration = 1;
 			}
-			validatorState = -1;
-			validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 			prepareKeyComponents();
 		}
 
@@ -1166,30 +1169,17 @@ public final class Ae2InputPuller {
 		}
 
 		/**
-		 * 槽位 validator 是否接受本条目的探针栈，结果按「本轮 + 槽位实现类」记忆一次。
-		 * <p>
-		 * <b>为什么可以只判一次</b>：{@code BasicInventorySlot.isItemValidForInsertion}
-		 * 等于 {@code validator.test(stack) && canInsert.test(stack, automationType)}，
-		 * 两个谓词都只看物品栈，不看槽位下标；Mekanism 工厂的全部输入槽由同一循环
-		 * 用同一 tile 方法引用创建，语义上就是「要么都接受，要么都不接受」。
-		 * 而旧实现按「类型 × 槽位」调用，在无限多元工厂（进程数可达 19+）上把
-		 * {@code tile.isValidInputItem} → {@code InputValidationCache} →
-		 * {@code ItemStack.hashItemAndComponents} 这条链重复了槽位数遍 ——
-		 * spark BkTP3d9oSc 中 {@code isItemValidForInsertion} 140ms、
-		 * 本模组的 {@code isValidInputItem} 96ms，全部来自这次重复。
-		 * <p>
-		 * 用槽位实现类做守卫：一旦出现另一种 {@code IInventorySlot} 实现（自定义附属），
-		 * 立即重新判定，不把结论跨实现复用。判定缓存只在本轮容量规划内有效
-		 * （{@link #beginComponentMatchCache} 重置），因此升级/配置变化会在下一轮生效。
+		 * 同类槽位也可能绑定不同的 validator；只在同一规划轮内复用同一槽的结果。
 		 */
-		boolean acceptsProbe(BasicInventorySlot slot, ItemStack probe) {
-			Class<?> slotType = slot.getClass();
-			if (validatorState >= 0 && validatorSlotType == slotType) {
-				return validatorState == 1;
+		boolean acceptsProbe(int slotIndex, BasicInventorySlot slot, ItemStack probe) {
+			if (slotIndex >= 0 && slotIndex < validatorSlots.length && validatorSlots[slotIndex] == slot) {
+				return validatorStates[slotIndex] == 1;
 			}
 			boolean accepted = slot.isItemValidForInsertion(probe, AutomationType.INTERNAL);
-			validatorState = accepted ? 1 : 0;
-			validatorSlotType = slotType;
+			if (slotIndex >= 0 && slotIndex < validatorSlots.length) {
+				validatorSlots[slotIndex] = slot;
+				validatorStates[slotIndex] = (byte) (accepted ? 1 : 0);
+			}
 			return accepted;
 		}
 
@@ -1238,8 +1228,7 @@ public final class Ae2InputPuller {
 		/** 清除槽位对象引用，避免复用池在两次拉取之间保留旧 ItemStack。 */
 		void clearComponentMatchCache() {
 			Arrays.fill(componentMatchStacks, null);
-			validatorState = -1;
-			validatorSlotType = null;
+			Arrays.fill(validatorSlots, null);
 		}
 	}
 }

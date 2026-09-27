@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
 import com.ayoshiko.productivebeesgenesis.config.FactoryTierKey;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
-import com.ayoshiko.productivebeesgenesis.inventory.FactoryExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
@@ -123,15 +122,9 @@ class MekCentrifugeSlotManager {
 		// Task 7: 注入输入槽分等级堆叠倍率（基础离心机使用 basic 配置）
 		((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 				CentrifugeInputStackMultipliers.forBasic());
-		// 外部插入配额：输入槽真实上限是 64 × 配置倍率（BASIC 默认 16384，约百万），
-		// 原样暴露给自动化会让 AE2 外部存储/物流模组的第一次请求就把整条产线的物料搬进机器
-		// 内部（既看不见也难取回）。工作集随操作数、时间加速倍率（JDTE 手杖）与产量并行度放大，
-		// 保证加速下依然不会供料不足；内部搬运（AE2 拉取、蜂箱直连）走 INTERNAL，不受本策略约束。
-		FactoryExternalInsertPolicy externalInputPolicy = new FactoryExternalInsertPolicy(
-				() -> FactoryExternalInsertPolicy.recommendedWorkingSet(
-						tile.operationsPerTick(), tile.productivebeesgenesis$getAccelerationMultiplier(),
-						tile.productivityParallelModifier()));
-		externalInputPolicy.register(inputSlot);
+		// 性能：标记为输入槽 → 输出槽退回保护在发配插入热路径上对本槽提前短路，省去每次插入的冗余配方校验。
+		((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
+		// 外部发配使用真实槽容量；单批数量由供应器决定，样板目标另有共享调用预算。
 		builder.addSlot(inputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 						tile.getWarningCheck(RecipeError.NOT_ENOUGH_INPUT)));

@@ -40,8 +40,6 @@ public class GuiCageSlotOverlay extends GuiTextureOnlyElement {
 	/** 创建输入槽 Overlay（叠加在 cageInSlot 之上） */
 	public static GuiCageSlotOverlay input(IGuiWrapper gui, int slotX, int slotY, Supplier<Boolean> isEmptyChecker) {
 		GuiCageSlotOverlay overlay = new GuiCageSlotOverlay(INPUT_TEXTURE, gui, slotX, slotY, isEmptyChecker);
-		// 输入槽现在同时接受蜂笼 / 资源蜂刷怪蛋 / 带基因小食，用 tooltip 说明三种用法，
-		// 否则玩家无从得知小食可以直接放进这个槽做自动喂食。
 		overlay.setTooltip(Tooltip.create(
 				Component.translatable("gui.productivebeesgenesis.apiary.cage_in_slot.tooltip")));
 		return overlay;

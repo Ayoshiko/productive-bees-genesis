@@ -7,7 +7,6 @@ import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.config.MekanismConfig;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
@@ -27,11 +26,11 @@ final class ApiarySideConfigSupport {
 	 * 蜂笼输出槽不参与弹出；快速路径仅由本模组专用弹出器承载
 	 */
 	static void setupSideConfig(TileEntityMekApiary tile) {
-		// 物品 IO 配置：蜂笼输入槽作为输入，仅产物输出槽作为输出（蜂笼输出槽不参与 Ejector 弹出）
+		// 两个专用输入槽共享输入面；仅产物槽参与自动弹出。
 		List<mekanism.api.inventory.IInventorySlot> outputSlots = new ArrayList<>();
 		outputSlots.addAll(tile.slotManager().getOutputSlots());
 		tile.configComponent.setupItemIOConfig(
-				Collections.singletonList(tile.slotManager().getCageInSlot()),
+				List.of(tile.slotManager().getCageInSlot(), tile.slotManager().getGeneTreatSlot()),
 				outputSlots,
 				tile.slotManager().getEnergySlot(), false);
 		// 能量输入配置

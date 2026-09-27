@@ -70,7 +70,7 @@ final class PbRecipeOutputChecker {
 			@Nullable IInventorySlot secondaryOutputSlot,
 			@Nullable IInventorySlot tertiaryOutputSlot,
 			boolean discardWax) {
-		Map<ItemStack, ChancedOutput> outputs = recipe.getRecipeOutputs();
+		Map<ItemStack, ChancedOutput> outputs = PbRecipeCompleter.getRecipeOutputsCached(recipe);
 		if (outputs.isEmpty()) {
 			return true;
 		}
@@ -100,7 +100,7 @@ final class PbRecipeOutputChecker {
 
 	/** 检查配方是否有实际物品输出，已安装升级时蜜蜡输出不计入阻塞判定。 */
 	public static boolean hasItemOutput(PbRecipeContext context, CentrifugeRecipe recipe) {
-		for (Map.Entry<ItemStack, ChancedOutput> entry : recipe.getRecipeOutputs().entrySet()) {
+		for (Map.Entry<ItemStack, ChancedOutput> entry : PbRecipeCompleter.getRecipeOutputsCached(recipe).entrySet()) {
 			ChancedOutput chanced = entry.getValue();
 			if (chanced == null || chanced.chance() <= 0.0f || Math.max(0, chanced.max()) <= 0) continue;
 			if (context.suppressesUselessByproducts()

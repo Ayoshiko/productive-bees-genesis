@@ -127,6 +127,7 @@ public final class DomainProbeServer {
 			if (System.getProperty("pbg.bee.restartSource") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.read(
 					event.getServer().overworld(), Path.of(System.getProperty("pbg.bee.restartSource")), report);
 			MemberIsolationProbe.verify(event.getServer().overworld(), report);
+			ApiaryOwnershipMergeProbe.verify(event.getServer().overworld(), report);
 			NetworkPersistenceProbe.verify(event.getServer(), report);
 			TopologyProbe.start(event.getServer());
 			pendingReport = report; return;

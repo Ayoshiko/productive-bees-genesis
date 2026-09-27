@@ -93,8 +93,11 @@ class CentrifugeOutputOverflowWiringTest {
 
 		assertTrue(processor.contains("public boolean drainCommittedPendingOutputs(int processIndex)"),
 				"必须提供输入为空时的排空入口");
-		assertTrue(factoryHelper.contains("pbProcessor.drainCommittedPendingOutputs(i);"),
+		assertTrue(factoryHelper.contains("pbProcessor.updateFactoryInputState(i, input.isEmpty());"),
 				"工厂空输入分支必须继续排空 pending");
+		assertTrue(processor.indexOf("drainCommittedPendingOutputs(process);")
+				< processor.indexOf("if (!emptyFactoryProcesses[process])"),
+				"持续排空必须在一次性空闲清理的门控之外");
 		assertTrue(tickHandler.contains("pbProcessor.drainCommittedPendingOutputs(0);"),
 				"基础离心机空输入分支必须继续排空 pending");
 		assertTrue(processor.contains("if (!recipeCompleters[processIndex].hasCommittedPendingOutputs()) {\n"

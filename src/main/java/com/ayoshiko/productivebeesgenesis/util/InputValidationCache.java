@@ -77,8 +77,8 @@ public class InputValidationCache {
 				return EMPTY;
 			}
 			Item item = stack.getItem();
-			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分
-			if (item == ModItems.CONFIGURABLE_HONEYCOMB.get() || item == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
+			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分（缓存物品引用，避免每次 DeferredHolder.value）
+			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), 0);
 			}
 			// 普通熔炼原料通常没有组件补丁；同 Item 的默认组件固定，无需每次计算完整组件哈希。

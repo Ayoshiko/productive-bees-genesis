@@ -91,6 +91,13 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	private boolean productivebeesgenesis$ownSlot;
 
 	/**
+	 * 是否为<b>输入槽</b>（性能优化标记，默认 false）。输出槽退回保护只对输出槽有意义；输入槽在发配插入
+	 * 热路径上标记后可提前短路，省去每次插入的冗余配方校验。漏标只是少一次优化、不影响正确性。
+	 */
+	@Unique
+	private boolean productivebeesgenesis$inputSlot;
+
+	/**
 	 * 外部退回窗口（懒创建）：只在首次发生外部提取时分配，未被外部自动化碰过的槽位零开销。
 	 */
 	@Unique
@@ -173,6 +180,16 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	@Override
 	public void productivebeesgenesis$markOwnSlot() {
 		this.productivebeesgenesis$ownSlot = true;
+	}
+
+	@Override
+	public void productivebeesgenesis$markInputSlot() {
+		this.productivebeesgenesis$inputSlot = true;
+	}
+
+	@Override
+	public boolean productivebeesgenesis$isInputSlot() {
+		return this.productivebeesgenesis$inputSlot;
 	}
 
 	@Override
@@ -261,6 +278,9 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 			at = @At("HEAD"), cancellable = true, order = 900)
 	private void productivebeesgenesis$allowOutputRollback(ItemStack stack, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+		// 性能优化：输入槽无需输出槽退回保护——发配插入热路径上第一步即短路，省去下方 isItemValidForInsertion
+		// (对输入槽=一次配方查找) 的冗余开销。输出槽/原版槽不受影响。
+		if (productivebeesgenesis$inputSlot) return;
 		if (!productivebeesgenesis$ownSlot) return;
 		if (automationType != AutomationType.EXTERNAL || stack.isEmpty() || current.isEmpty()) return;
 		if (!ItemStack.isSameItemSameComponents(current, stack)) return;

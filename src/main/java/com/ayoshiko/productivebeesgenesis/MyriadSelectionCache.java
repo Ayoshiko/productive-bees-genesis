@@ -9,6 +9,7 @@ import net.minecraft.world.level.Level;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import java.util.List;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -59,6 +60,8 @@ public final class MyriadSelectionCache {
 		volatile long cachedTick = -1L;
 		volatile int cachedVersion = -1;
 		volatile List<ResourceLocation> selected = List.of();
+		WeakReference<Level> level = new WeakReference<>(null);
+		List<ResourceLocation> pool = List.of();
 	}
 
 	/**
@@ -86,6 +89,8 @@ public final class MyriadSelectionCache {
 			entry.cachedTick = -1L;
 			entry.cachedVersion = -1;
 			entry.selected = List.of();
+			entry.level.clear();
+			entry.pool = List.of();
 		}
 	}
 
@@ -130,24 +135,20 @@ public final class MyriadSelectionCache {
 		int currentVersion = BEE_TYPES_VERSION.get();
 		SelectionCache entry = SELECTION_CACHES[count];
 		// 双重检查：先尝试读（volatile 读保证可见性）
-		if (entry.cachedTick == currentTick && entry.cachedVersion == currentVersion) {
+		if (entry.cachedTick == currentTick && entry.cachedVersion == currentVersion
+				&& entry.level.get() == level && entry.pool == cachedBeeTypes) {
 			return entry.selected;
 		}
 
 		// 缓存失效时一次性预生成 1..MAX_SELECTION_CACHE 的候选列表，
 		// 避免同一 tick 内多个 count 各自触发随机采样（高倍加速下仍可能每 tick 多次完成万象配方）
 		// Task 4: 移除 synchronized，服务端单线程无竞争
-		RandomSource random = level.getRandom();
-		for (int i = 1; i <= MAX_SELECTION_CACHE; i++) {
-			SelectionCache e = SELECTION_CACHES[i];
-			if (poolSize <= i) {
-				e.selected = List.copyOf(cachedBeeTypes);
-			} else {
-				e.selected = List.copyOf(RandomHoneycombSelector.selectDistinctBeeTypes(i, random, cachedBeeTypes));
-			}
-			e.cachedTick = currentTick;
-			e.cachedVersion = currentVersion;
-		}
+		// 仅计算实际请求的 count；候选池是缓存快照发布的不可变列表。
+		entry.selected = List.copyOf(RandomHoneycombSelector.selectDistinctBeeTypes(count, level.getRandom(), cachedBeeTypes));
+		entry.level = new WeakReference<>(level);
+		entry.pool = cachedBeeTypes;
+		entry.cachedVersion = currentVersion;
+		entry.cachedTick = currentTick;
 		return entry.selected;
 	}
 }

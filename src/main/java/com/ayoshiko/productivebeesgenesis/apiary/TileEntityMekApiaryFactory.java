@@ -273,6 +273,11 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 			if (!data.inputSlots.isEmpty()) {
 				getCageInSlot().deserializeNBT(provider, data.inputSlots.get(0).serializeNBT(provider));
 			}
+			// 兼容旧版/外部 Mekanism 生成的 MachineUpgradeData：若第二个输入槽存在，
+			// 它对应新增的基因小食槽；旧数据没有该槽时保持目标槽为空。
+			if (data.inputSlots.size() > 1) {
+				getGeneTreatSlot().deserializeNBT(provider, data.inputSlots.get(1).serializeNBT(provider));
+			}
 			List<BasicInventorySlot> currentOutputs = getOutputSlots();
 			for (int i = 0; i < data.outputSlots.size() && i < currentOutputs.size(); i++) {
 				// v9-P1 修复：与 ApiaryNbtSerializer.applyUpgradeData 保持一致，copy() 防止

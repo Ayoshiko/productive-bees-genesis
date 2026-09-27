@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.GenesisMachineTicker;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
@@ -51,7 +52,7 @@ public final class EMEBlockEntityRegistration {
 			TileEntityTypeRegistryObject<TileEntityEMExtraMekCentrifugeFactory> tileType =
 					ModBlockEntities.BLOCK_ENTITIES.mekBuilder(deferredBlock,
 							(pos, state) -> new TileEntityEMExtraMekCentrifugeFactory(deferredBlock, pos, state))
-							.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 							.withSimple(Capabilities.CONFIG_CARD)
 							.build();
@@ -81,7 +82,7 @@ public final class EMEBlockEntityRegistration {
 			TileEntityTypeRegistryObject<TileEntityEMExtraMekApiaryFactory> tileType =
 					ModBlockEntities.BLOCK_ENTITIES.mekBuilder(deferredBlock,
 							(pos, state) -> new TileEntityEMExtraMekApiaryFactory(deferredBlock, pos, state))
-							.serverTicker((level, pos, state, tile) -> TileEntityMekanism.tickServer(level, pos, state, tile))
+							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
 							.withSimple(Capabilities.CONFIG_CARD)
 							.build();

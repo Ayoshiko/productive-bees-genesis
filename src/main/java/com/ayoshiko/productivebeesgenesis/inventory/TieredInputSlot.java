@@ -71,6 +71,19 @@ public interface TieredInputSlot {
 	boolean productivebeesgenesis$isOwnSlot();
 
 	/**
+	 * 显式标记为<b>输入槽</b>（性能优化）。
+	 * <p>输出槽退回保护（{@code allowOutputRollback}）只对输出槽有意义。输入槽在样板发配的插入热路径上
+	 * 每次都会跑到「校验外部可插入性」这一步——对输入槽而言就是一次配方查找，属冗余（发配前已校验过）。
+	 * 标记后，退回保护在输入槽上第一步即短路，省去每次插入的配方查找。</p>
+	 * <p><b>安全性：</b>漏标只是少一次优化，仍按原逻辑判断；因此本标记
+	 * 只在明确的输入槽装配点调用，输出槽绝不调用。</p>
+	 */
+	void productivebeesgenesis$markInputSlot();
+
+	/** 该槽位是否被显式标记为输入槽（供退回保护热路径短路）。 */
+	boolean productivebeesgenesis$isInputSlot();
+
+	/**
 	 * 获取输入槽堆叠倍率供应商
 	 *
 	 * @return 倍率供应商，未设置时返回 null
