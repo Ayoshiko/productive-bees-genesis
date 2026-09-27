@@ -59,7 +59,8 @@ public final class MachineFormationProbe {
 					for (var f : fixtures) {
 						check(f.core().getBlockState().getValue(MachinePartBlock.FORMED), "Formed blockstate missing");
 						for (var local : f.template().features().keySet()) if (!f.world(local).equals(f.pos())) {
-							check(level.getBlockEntity(f.world(local)) instanceof MachinePartEntity part && part.bound(), "Part missing current binding");
+							check(level.getBlockEntity(f.world(local)) instanceof MachinePartEntity part && part.bound()
+									&& part.getBlockState().getValue(MachinePartBlock.FORMED), "Part missing current binding or formed visual");
 						}
 						check(level.getBlockEntity(f.world(BlockPos.ZERO)) == null, "Frame acquired a ticker/entity");
 					}

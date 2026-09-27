@@ -200,11 +200,12 @@ tasks.named('runNetworkMultiblockClient') {
         def required = ['passed', 'simplifiedChineseWithoutOnboarding', 'versionedFramesForSixLayoutsWithoutAuthority', 'fourDirectionsAndInitialChunkStates', 'allElevenCreativeItems', 'unformedUpdate',
                 'checkingUpdate', 'reformedUpdate', 'duplicateFaultUpdate', 'resourceReloadKeepsModelsAndStates',
                 'oldFrameRejectedAfterRebuild', 'unloadAndRetrackingRestoreFullFrame',
-                'coreVerticesMatchSixLayoutsFourDirectionsAndFiniteBounds', 'sharedSixteenDetailedScenesAndStaticOverflow', 'coreFollowsRealPauseAndResume', 'coreBudgetClearedOnWorldDisconnect', 'inactiveSceneEmitsNoVertices', 'sceneResourcesRebuiltAfterReload', 'fourObliqueSceneViews',
+                'coreVerticesMatchSixLayoutsFourDirectionsAndFiniteBounds', 'sharedSixteenDetailedScenesAndStaticOverflow', 'coreFollowsRealPauseAndResume', 'coreBudgetClearedOnWorldDisconnect', 'effectSettingsGuiSavedAndReloaded', 'reducedAndDisabledCoreKeepStaticFallback', 'enlargedProceduralMeshPreview', 'orbitMotionSequence', 'inactiveSceneEmitsNoVertices', 'sceneResourcesRebuiltAfterReload', 'fourObliqueSceneViews',
                 'activityClearedOnStructureInvalidation', 'activityIdentityAndDuplicateRejected', 'activityClearedOnResourceReload',
                 'activityClearedOnUntracking', 'activityFollowsRealPauseAndResume', 'activityClearedOnWorldDisconnect',
                 'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']
-        if (required.any { result[it] != true } || result.ae2Loaded != probeAe2) throw new GradleException('Machine visual checks failed or incomplete')
+        if (required.any { result[it] != true } || result.ae2Loaded != probeAe2
+                || result.detailedVertices != 11928 || result.reducedVertices != 1008) throw new GradleException('Machine visual checks failed or incomplete')
     }
 }
 

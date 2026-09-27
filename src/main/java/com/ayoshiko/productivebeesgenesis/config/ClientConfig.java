@@ -10,6 +10,15 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 	 */
 public final class ClientConfig {
 
+	public enum CoreEffects implements net.neoforged.neoforge.common.TranslatableEnum {
+		FULL, REDUCED, OFF;
+		@Override public net.minecraft.network.chat.Component getTranslatedName() {
+			return net.minecraft.network.chat.Component.translatable("productivebeesgenesis.configuration.multiblock_visuals.coreEffects."
+					+ name().toLowerCase(java.util.Locale.ROOT));
+		}
+	}
+	public final ModConfigSpec.EnumValue<CoreEffects> machineCoreEffects;
+
 	// ========== 彩虹特效（纯客户端渲染）==========
 	public final ModConfigSpec.BooleanValue rainbowMode;
 	public final ModConfigSpec.BooleanValue particleEffectEnabled;
@@ -63,6 +72,13 @@ public final class ClientConfig {
 				.defineInRange("portColorRenderRange", 16, 4, 32);
 
 		builder.pop(); // mek_port_visualization
+
+		builder.comment("一体机核心显示，仅影响客户端").push("multiblock_visuals");
+		machineCoreEffects = builder
+				.comment("FULL: 中心蜂巢、反向卫星蜜蜂和长拖尾；REDUCED: 静态蜂巢；OFF: 仅方块标记")
+				.translation("productivebeesgenesis.configuration.multiblock_visuals.coreEffects")
+				.defineEnum("coreEffects", CoreEffects.FULL);
+		builder.pop();
 
 		// PB 自定义窗口位置持久化
 		windowPositions.registerAll(builder);

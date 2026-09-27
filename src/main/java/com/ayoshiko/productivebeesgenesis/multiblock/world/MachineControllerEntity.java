@@ -26,6 +26,7 @@ public final class MachineControllerEntity extends BlockEntity {
 	private long generation = 1;
 	private boolean invalidIdentity;
 	private MachineVisualSnapshot publishedVisual;
+	private final MachinePartVisuals partVisuals = new MachinePartVisuals();
 	private final MachineVisualInbox visualInbox = new MachineVisualInbox();
 	private final MachineActivityInbox visualActivity = new MachineActivityInbox();
 	MachineDirectory.Handle handle;
@@ -43,6 +44,7 @@ public final class MachineControllerEntity extends BlockEntity {
 	void publishState() {
 		if (level != null && !level.isClientSide && !isRemoved() && level.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4) && level.getBlockEntity(worldPosition) == this) {
 			var state = getBlockState(); boolean formed = formed();
+			partVisuals.sync((ServerLevel) level, formed ? handle.binding().orElseThrow() : null);
 			var projected = state.setValue(MachinePartBlock.FORMED, formed).setValue(MachineControllerBlock.STATUS, MachineVisualState.from(status()));
 			boolean visualChanged = publishVisual((ServerLevel) level, projected, formed);
 			if (projected != state) {
@@ -86,7 +88,8 @@ public final class MachineControllerEntity extends BlockEntity {
 		handleUpdateTag(packet.getTag(), registries);
 	}
 	@Override public void onLoad() { super.onLoad(); MachineWorldService.watch(this); }
-	@Override public void onChunkUnloaded() { visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.onChunkUnloaded(); }
+	void clearPartVisuals() { if (level instanceof ServerLevel server) partVisuals.sync(server, null); }
+	@Override public void onChunkUnloaded() { clearPartVisuals(); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.onChunkUnloaded(); }
 	@Override public void setRemoved() { MachineWorldService.remove(this); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.setRemoved(); }
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("machine", machine); tag.putLong("generation", generation);

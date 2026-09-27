@@ -203,6 +203,7 @@ public final class MachineWorldService {
 	}
 	public static void remove(MachineControllerEntity core) {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
+		core.clearPartVisuals();
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
 		var directory = session.directories.get(level); var removed = core.handle;
 		var peers = directory != null && removed != null ? directory.sameIdentity(removed) : List.<MachineDirectory.Handle>of();

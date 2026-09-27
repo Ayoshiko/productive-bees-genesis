@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** 捕获真实 BER 顶点验证有限包络与共享预算；仅开发源集，无资产操作。 */
 final class MachineSceneClientChecks {
-	private static final int DETAILED_VERTICES = 1904, SIMPLE_VERTICES = 48;
+	private static final int DETAILED_VERTICES = 11928, SIMPLE_VERTICES = 1008;
 	private static long pausedHash;
 	static Object renderer(Minecraft client) {
 		return client.getBlockEntityRenderDispatcher().getRenderer(
@@ -29,12 +29,12 @@ final class MachineSceneClientChecks {
 				check(renderer.getRenderBoundingBox(core).equals(geometry.renderBoundsAt(pos, frame.facing())), "Bounds diverged from definition");
 				check(!renderer.shouldRenderOffScreen(core) && !renderer.shouldRender(core, pos.getCenter().add(100, 0, 0)), "Core bypassed culling");
 				long previous = 0;
-				// 覆盖完整 18 次层转及其中的插值，而非只取层转的静止端点。
-				for (int tick = 0; tick < 1440; tick += 20) {
+				// 两圈覆盖莫比乌斯截面恢复；实际本体棱长检查拦截长方体空腔的非等比拉伸。
+				for (int tick = 0; tick < 720; tick += 17) {
 					client.level.setGameTime(tick);
 					CombinedApiaryRenderer.beginFrame();
 					var sink = capture(client, core);
-					check(sink.count == DETAILED_VERTICES, "Detailed mesh changed its vertex budget");
+					check(sink.count == DETAILED_VERTICES, "Detailed mesh changed its vertex budget: " + sink.count);
 					if (tick > 0) check(sink.hash != previous, "Core animation did not change geometry");
 					check(sink.hash == capture(client, core).hash, "Repeated render changed pose");
 					previous = sink.hash;
@@ -83,6 +83,11 @@ final class MachineSceneClientChecks {
 		var pose = new PoseStack();
 		renderer.render(core, 0, pose, type -> sink, 0, OverlayTexture.NO_OVERLAY);
 		check(pose.clear(), "Core leaked a pose");
+		if (sink.count >= 240) {
+			check(sink.maxEdge - sink.minEdge < 0.00001, "Rendered dodecahedron has unequal edges");
+			var center = transform.toWorldPoint(space.center()).subtract(core.getBlockPos().getX(), core.getBlockPos().getY(), core.getBlockPos().getZ());
+			check(center.distanceTo(new Vec3(sink.sumX / 240, sink.sumY / 240, sink.sumZ / 240)) < 0.00001, "Central hive moved from its anchor");
+		}
 		return sink;
 	}
 	static void hidden(Minecraft client, int index) {
@@ -96,8 +101,17 @@ final class MachineSceneClientChecks {
 	static class Sink implements VertexConsumer {
 		int count;
 		long hash = 1;
+		double minEdge = Double.POSITIVE_INFINITY, maxEdge;
+		float ax, ay, az;
+		double sumX, sumY, sumZ;
 		@Override public VertexConsumer addVertex(float x, float y, float z) {
 			check(Float.isFinite(x) && Float.isFinite(y) && Float.isFinite(z), "Non-finite vertex");
+			if (count < 240) { sumX += x; sumY += y; sumZ += z; }
+			if (count < 240 && count % 4 == 1) { ax = x; ay = y; az = z; }
+			if (count < 240 && count % 4 == 2) {
+				double edge = Math.sqrt(Math.pow(x - ax, 2) + Math.pow(y - ay, 2) + Math.pow(z - az, 2));
+				minEdge = Math.min(minEdge, edge); maxEdge = Math.max(maxEdge, edge);
+			}
 			count++; hash = 31 * hash + Float.floatToIntBits(x); hash = 31 * hash + Float.floatToIntBits(y); hash = 31 * hash + Float.floatToIntBits(z);
 			return this;
 		}

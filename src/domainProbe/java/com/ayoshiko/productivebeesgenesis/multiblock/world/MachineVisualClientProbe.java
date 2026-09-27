@@ -40,7 +40,8 @@ import net.neoforged.neoforge.client.model.IQuadTransformer;
 @EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT)
 public final class MachineVisualClientProbe {
 	private static final JsonObject report = new JsonObject();
-	private static int step, settled, direction;
+	private static int step, settled, direction, motionFrame;
+	private static long nextMotionFrame;
 	private static long started;
 	private static long stepStarted;
 	private static int observedStep = -1;
@@ -181,6 +182,32 @@ public final class MachineVisualClientProbe {
 					if (!MachineActivityClientChecks.resumed(client) || !MachineSceneClientChecks.resumed(client)) return;
 					report.addProperty("activityFollowsRealPauseAndResume", true);
 					report.addProperty("coreFollowsRealPauseAndResume", true);
+					step = 16;
+				}
+				case 16 -> {
+					if (!MachineEffectClientChecks.advance(client)) return;
+					report.addProperty("effectSettingsGuiSavedAndReloaded", true);
+					report.addProperty("reducedAndDisabledCoreKeepStaticFallback", true);
+					client.setScreen(new com.ayoshiko.productivebeesgenesis.multiblock.client.MachineMeshPreviewScreen()); settled = 0; step = 17;
+				}
+				case 17 -> {
+					if (!waitFor(true)) return;
+					capture(client, "mesh-details");
+					client.setScreen(null);
+					report.addProperty("enlargedProceduralMeshPreview", true);
+					report.addProperty("detailedVertices", 11928); report.addProperty("reducedVertices", 1008);
+					MachineVisualFixture.request(120); settled = 0; step = 18;
+				}
+				case 18 -> {
+					if (!waitFor(MachineVisualFixture.done == 120 && allReady(client))) return;
+					motionFrame = 0; nextMotionFrame = client.level.getGameTime(); step = 19;
+				}
+				case 19 -> {
+					if (client.level.getGameTime() < nextMotionFrame) return;
+					capture(client, String.format(java.util.Locale.ROOT, "orbit-motion-%03d", motionFrame++));
+					nextMotionFrame += 6;
+					if (motionFrame < 120) return;
+					report.addProperty("orbitMotionSequence", true);
 					MachineActivityClientChecks.start(client); finish(client, null);
 				}
 			}
@@ -197,6 +224,15 @@ public final class MachineVisualClientProbe {
 		var frame = core.visualSnapshot().orElse(null); if (frame == null) return null;
 		check(core.ownerId() == null && !core.readyIdentity() && !core.formed(), "Visual sync loaded authoritative identity or binding");
 		check(frame.variant() == (status == MachineVisualState.READY ? MachineVisualFixture.variant(index) : -1), "Visual frame layout does not match formed structure");
+		var template = com.ayoshiko.productivebeesgenesis.multiblock.definition.CombinedApiaryDefinition.DEFINITION
+				.candidates().get(MachineVisualFixture.variant(index));
+		var transform = template.geometry().at(core.getBlockPos(), MachineVisualFixture.FACINGS.get(index));
+		for (var local : template.features().keySet()) {
+			var pos = transform.toWorld(local); if (pos.equals(core.getBlockPos())) continue;
+			var part = client.level.getBlockState(pos);
+			check(part.hasProperty(MachinePartBlock.FORMED) && part.getValue(MachinePartBlock.FORMED) == (status == MachineVisualState.READY),
+					"Part formed visual did not follow controller");
+		}
 		return status;
 	}
 	private static boolean allReady(Minecraft client) { for (int i=0;i<MachineVisualFixture.POSITIONS.size();i++) if (state(client,i) != MachineVisualState.READY) return false; return true; }

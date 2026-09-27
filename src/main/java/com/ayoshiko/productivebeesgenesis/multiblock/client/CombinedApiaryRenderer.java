@@ -1,71 +1,78 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.client;
 
+import com.ayoshiko.productivebeesgenesis.config.ClientConfig.CoreEffects;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.multiblock.visual.CoreFrameBudget;
 import com.ayoshiko.productivebeesgenesis.multiblock.visual.MachineCoreScene;
 import com.ayoshiko.productivebeesgenesis.multiblock.world.MachineControllerEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.world.phys.AABB;
+import org.joml.Quaternionf;
 
-/** 大型分层悬浮核心；READY 仅驱动环境动效，不伪造生产事件。 */
+/** 中央蜂巢自转与反向卫星蜜蜂；全部为有预算的渲染几何，不创建世界实体。 */
 public final class CombinedApiaryRenderer implements BlockEntityRenderer<MachineControllerEntity> {
 	private static final CoreFrameBudget<MachineControllerEntity> DETAILS = new CoreFrameBudget<>();
 	public CombinedApiaryRenderer(BlockEntityRendererProvider.Context context) { }
 	public static void beginFrame() { DETAILS.clear(); }
 	public static int detailedCount() { return DETAILS.retained(); }
-
 	@Override public void render(MachineControllerEntity controller, float partialTick, PoseStack pose,
 			MultiBufferSource buffers, int packedLight, int packedOverlay) {
+		var effects = ModConfig.CLIENT.machineCoreEffects.get();
+		if (effects == CoreEffects.OFF) return;
 		var snapshot = controller.visualSnapshot().orElse(null);
 		if (snapshot == null || snapshot.template().isEmpty()) return;
 		var client = Minecraft.getInstance();
 		if (controller.getLevel() != client.level) return;
-		boolean detailed = DETAILS.allow(controller);
+		boolean detailed = effects == CoreEffects.FULL && DETAILS.allow(controller);
 		var space = MachineCoreScene.space(snapshot.variant());
-		var geometry = snapshot.template().orElseThrow().geometry();
-		var center = geometry.at(controller.getBlockPos(), snapshot.facing()).toWorldPoint(space.center())
+		var center = snapshot.template().orElseThrow().geometry().at(controller.getBlockPos(), snapshot.facing()).toWorldPoint(space.center())
 				.subtract(controller.getBlockPos().getX(), controller.getBlockPos().getY(), controller.getBlockPos().getZ());
-		var motion = MachineCoreScene.sample(detailed ? client.level.getGameTime() : 0,
-				detailed ? client.getTimer().getGameTimeDeltaPartialTick(true) : 0);
-		pose.pushPose();
-		pose.translate(center.x, center.y, center.z);
+		long tick = client.level.getGameTime();
+		float partial = client.getTimer().getGameTimeDeltaPartialTick(true);
+		pose.pushPose(); pose.translate(center.x, center.y, center.z);
 		pose.mulPose(Axis.YP.rotationDegrees(180 - snapshot.facing().toYRot()));
-		pose.scale((float) space.radius().x, (float) space.radius().y, (float) space.radius().z);
-		var core = buffers.getBuffer(MachineSceneRenderTypes.CORE);
-		pose.pushPose(); pose.mulPose(Axis.YP.rotationDegrees(motion.yaw())); pose.mulPose(Axis.XP.rotationDegrees(motion.pitch()));
+		var solid = buffers.getBuffer(MachineSceneRenderTypes.CORE);
+		core(pose, solid, space, tick, partial, detailed, false);
 		if (detailed) {
-			// 26 个同形子块的层转终点仍为相同几何集合，不积累旋转误差或保存姿态。
-			pose.scale(0.76F, 0.76F, 0.76F);
-			for (int x=-1;x<=1;x++) for (int y=-1;y<=1;y++) for (int z=-1;z<=1;z++) {
-				if (x == 0 && y == 0 && z == 0) continue;
-				pose.pushPose();
-				int layer = motion.axis() == 0 ? x : motion.axis() == 1 ? y : z;
-				if (layer == motion.layer()) pose.mulPose((motion.axis() == 0 ? Axis.XP : motion.axis() == 1 ? Axis.YP : Axis.ZP).rotationDegrees(motion.turn()));
-				pose.translate(x * 0.4, y * 0.4, z * 0.4);
-				MachineCoreMesh.cube(pose, core, 0.17F, true); pose.popPose();
+			for (int bee = 0; bee < MachineCoreScene.BEES; bee++) {
+				pose.pushPose(); beePose(pose, space, tick, partial, bee);
+				MachineBeeMesh.body(pose, solid); pose.popPose();
 			}
-		} else MachineCoreMesh.cube(pose, core, 0.45F, true);
-		pose.popPose();
-		if (detailed) {
+			var transparent = buffers.getBuffer(MachineSceneRenderTypes.TRAIL);
+			for (int bee = 0; bee < MachineCoreScene.BEES; bee++) {
+				pose.pushPose(); beePose(pose, space, tick, partial, bee);
+				MachineBeeMesh.wings(pose, transparent, MachineCoreScene.beeTime(tick, partial, bee, 0)); pose.popPose();
+			}
+			MachineCoreMesh.trail(pose, transparent, space, tick, partial, false);
 			var glow = buffers.getBuffer(MachineSceneRenderTypes.GLOW);
-			for (int orbit=0;orbit<2;orbit++) {
-				pose.pushPose();
-				pose.mulPose(Axis.YP.rotationDegrees(motion.orbit() * (orbit == 0 ? 1 : -0.7F)));
-				pose.mulPose(Axis.XP.rotationDegrees(orbit == 0 ? 63 : 112));
-				MachineCoreMesh.ring(pose, glow, orbit == 0 ? 0.94F : 0.87F, motion.pulse() * 0.7F, orbit == 1);
-				for (int node=0;node<3;node++) {
-					pose.pushPose(); pose.mulPose(Axis.YP.rotationDegrees(node * 120 + motion.orbit() * 1.4F));
-					pose.translate(orbit == 0 ? 0.94 : 0.87, 0, 0); pose.mulPose(Axis.ZP.rotationDegrees(45));
-					MachineCoreMesh.cube(pose, glow, 0.025F, false); pose.popPose();
-				}
-				pose.popPose();
-			}
+			MachineCoreMesh.trail(pose, glow, space, tick, partial, true);
+			core(pose, glow, space, tick, partial, true, true);
 		}
 		pose.popPose();
+	}
+	private static void core(PoseStack pose, VertexConsumer out, MachineCoreScene.Space space,
+			long tick, float partial, boolean detailed, boolean glow) {
+		pose.pushPose();
+		if (detailed) pose.mulPose(Axis.ZP.rotationDegrees(MachineCoreScene.bodyAngle(tick, partial)));
+		pose.mulPose(Axis.XP.rotationDegrees(23)); pose.mulPose(Axis.YP.rotationDegrees(31));
+		float radius = space.bodyRadius(); pose.scale(radius, radius, radius);
+		if (glow) MachineCoreMesh.glow(pose, out);
+		else MachineCoreMesh.hive(pose, out, detailed);
+		pose.popPose();
+	}
+	private static void beePose(PoseStack pose, MachineCoreScene.Space space, long tick, float partial, int bee) {
+		var motion = MachineCoreScene.atTime(MachineCoreScene.beeTime(tick, partial, bee, 0), bee);
+		var position = motion.edge(1).multiply(space.radius());
+		var tangent = motion.tangent().multiply(space.radius()).normalize();
+		pose.translate(position.x, position.y, position.z);
+		pose.mulPose(new Quaternionf().rotationTo(0, 0, 1, (float) tangent.x, (float) tangent.y, (float) tangent.z));
+		float scale = space.beeScale(); pose.scale(scale, scale, scale);
 	}
 	@Override public AABB getRenderBoundingBox(MachineControllerEntity controller) {
 		return controller.visualSnapshot().flatMap(frame -> frame.template().map(template ->

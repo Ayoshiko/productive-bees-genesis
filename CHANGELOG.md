@@ -35,7 +35,9 @@
 
 ### 新增
 
-- **M06c2a 几何核心**：以分层悬浮核心、双轨道和公转节点替换静态蜂箱道具；按客户端时间播放环境动画，每帧共享 16 台详细配额，余者静态简化，成型方块保留固定标记。两种依赖的 24 台真实客户端验证六布局四向顶点、暂停／重载／卸载及专服恢复；974 项测试无失败（2 项既有跳过）。工作触发、效果设置和兼容／性能联合门另验。
+- **M06c2b 正十二面蜂巢与卫星蜜蜂**：中央主体采用光滑蜂蜜金分面、12 个大块封盖蜂房、琥珀蜜液和克制的金色边缘光；五只原版比例的几何蜜蜂沿独立倾角的莫比乌斯轨道反向飞行，保留清晰的双层金色拖尾和 18 秒渐隐。补齐蜜蜂眼部、触角、六腿、尾针及阶梯振翅，提供完整／降低／关闭设置，并修复成型部件仍显示整块模型遮挡核心的问题。无需贴图或世界实体；纯木纹及木板分段实验已撤销。客户端、结构生命周期、跨 JVM 恢复分层验证，兼容／性能联合门仍待完成。
+
+- **M06c2a 几何核心基础（历史造型已由 c2b 替换）**：以分层悬浮核心、双轨道和公转节点替换静态蜂箱道具；按客户端时间播放环境动画，每帧共享 16 台详细配额，余者静态简化，成型方块保留固定标记。两种依赖的 24 台真实客户端验证六布局四向顶点、暂停／重载／卸载及专服恢复；974 项测试无失败（2 项既有跳过）。工作触发、效果设置和兼容／性能联合门另验。
 
 - **M02c 高版一体机**：追加 7×7×5／7／9，保留原三种尺寸和索引；体积不增加工作单元。布局 1 身份可在布局 2 重新扫描恢复；两种依赖的 24 台结构检查、旧世界恢复及高版跨 JVM 保存恢复通过。大型抽象核心渲染与效果设置分步验收。
 
@@ -124,7 +126,9 @@
 
 #### Added
 
-- Added M06c2a layered geometric cores, twin orbits and orbiting nodes, replacing the static hive props. Ambient motion uses client game time with one shared 16-scene detail budget and a static overflow model. Both dependency configurations passed 24-machine client geometry/lifecycle checks and dedicated-server recovery; 974 tests passed with two existing skips. Production triggers, effect settings and compatibility/performance gates remain separate.
+- Added M06c2b regular dodecahedral hive cores with smooth honey-gold facets, 12 large sealed wax cells with broad bevels, amber honey and restrained edge glow. Five detailed bees at vanilla proportions fly in the opposite direction on separate tilted Möbius tracks, leaving visible two-layer golden trails that fade over 18 seconds. Added full/reduced/off settings and fixed formed parts obscuring the core. No textures or world entities are used; woodgrain and plank-pattern experiments were discarded. Client, structure lifecycle and cross-JVM recovery checks remain separate from the compatibility/performance gate.
+
+- Added the M06c2a foundation (its original appearance is superseded by c2b): layered geometric cores, twin orbits and orbiting nodes, replacing the static hive props. Ambient motion uses client game time with one shared 16-scene detail budget and a static overflow model. Both dependency configurations passed 24-machine client geometry/lifecycle checks and dedicated-server recovery; 974 tests passed with two existing skips. Production triggers, effect settings and compatibility/performance gates remain separate.
 
 - Added M02c tall 7x7x5/7/9 layouts, preserving the original three indices and single set of work units. Layout 1 identities rescan under layout 2. Verified 24 structures with and without AE2, legacy-world recovery, and a tall-layout JVM restart. Abstract core visuals and effect settings remain separate steps.
 
