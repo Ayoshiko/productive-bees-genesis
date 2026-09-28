@@ -19,8 +19,7 @@ import java.util.function.Function;
 /**
 	 * 离心机 Mixin 公共逻辑工具类
 	 * <br/>
-	 * 抽取 6 个离心机 Mixin（Centrifuge / HeatedCentrifuge / PoweredCentrifuge × Myriad/Infinity）
-	 * 中重复的以下逻辑：
+	 * 抽取普通、动力和热能离心机 Mixin 中重复的以下逻辑：
 	 * <ol>
 	 *   <li>canOperate RETURN 输出满检查</li>
 	 *   <li>canProcessRecipe HEAD 输出满检查</li>

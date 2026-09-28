@@ -29,6 +29,16 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.0.10] - 2026-09-28
+
+- **Productive Bees 13.14.0 兼容热修复**：保留 PB 13.13.5+ 的运行时兼容范围；针对 13.14.0 热能离心机改为从动力离心机继承 `canOperate()` 的变化，按目标类字节码条件应用旧版专用 Mixin，保留两代版本的能量门控、万象蜜脾产物空间检查与输入守恒。
+- **兼容性说明**：1.0.9 及更早版本均不兼容 Productive Bees 13.14.0；升级到 1.0.10 后可继续使用 PB 13.13.5，并兼容 PB 13.14.0。
+
+### English
+
+- **Productive Bees 13.14.0 compatibility hotfix**: retained the PB 13.13.5+ runtime range and conditionally applies the legacy heated-centrifuge Mixin only when the target class declares its own `canOperate()`, preserving energy gating, Myriad comb output-space checks and input conservation across both PB generations.
+- **Compatibility note**: Productive Bees Genesis 1.0.9 and earlier are incompatible with Productive Bees 13.14.0. Upgrade to 1.0.10 to keep PB 13.13.5 support and add PB 13.14.0 support.
+
 ## [1.0.9] - 2026-09-26
 
 > 以下汇总 `1.0.8-hotfix` 发布后的维护变更。 / Maintenance changes since `1.0.8-hotfix`.

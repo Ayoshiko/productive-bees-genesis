@@ -142,7 +142,7 @@ sourceSets.main.resources.exclude '**/texture_backups/**', '**/tmp_*/**', '**/*b
 neoForge.ideSyncTask generateModMetadata
 
 dependencies {
-    implementation name: 'productivebees-1.21.1-13.13.5'
+    implementation name: 'productivebees-1.21.1-13.14.0'
     implementation name: 'productivelib-1.21.1-0.2.0'
 
     // RenderBlender 渲染库：官方仅支持 1.20.1，不兼容 1.21.1
@@ -227,7 +227,7 @@ dependencies {
                 'libs/appliedenergistics2-1.21.1-19.2.17.jar')
         if (providers.gradleProperty('ecoCompatTests').isPresent()) {
             def ecoTestMods = files(providers.gradleProperty('ecoCompatJar')
-                    .getOrElse('run/mods/neoecoae-21.2.0-beta6.jar'),
+                    .getOrElse('run/mods/neoecoae-21.2.0.jar'),
                     'run/mods/ldlib2-neoforge-1.21.1-2.2.31-all.jar',
                     'run/mods/extendedae_plus-1.6.2.jar',
                     'run/mods/ExtendedAE-1.21-2.2.35-neoforge.jar',

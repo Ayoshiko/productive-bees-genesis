@@ -1,10 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
 import net.neoforged.fml.loading.FMLLoader;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Set;
 
@@ -31,7 +34,7 @@ import java.util.Set;
 	 *       目标类均为本模组自有方块实体；接口由应用类加载器（NeoForge mod classloader）加载，
 	 *       MixinClassLoader 委托父加载器解析，与目标类看到的是同一 Class 实例，无类加载约束冲突。</li>
 	 * </ul>
-	 * 其他 Mixin（离心机/PB原版类等）不依赖可选 mod，始终应用。
+	 * 其他 Mixin（离心机/PB原版类等）不依赖可选 mod，始终应用；旧版 PB 专用注入由目标类字节码决定。
 	 * <br/>
 	 * <b>注意</b>：不要在 {@link #onLoad(String)} 中通过 {@code Class.forName} 反射加载 Mekanism 类，
 	 * 因为 Mixin 加载阶段是 JVM 类加载的敏感窗口期，强制加载 Mekanism 类会触发其父类/接口链的早期链接，
@@ -99,6 +102,13 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final Set<String> JDTE_EME_MIXINS = Set.of(
 		"JdteEMExtraCentrifugeFactoryCoalescedMixin"
 	);
+
+	/** PB 13.13.5 的热能离心机专用注入，13.14.0 起目标方法已由父类继承。 */
+	private static final Set<String> PB_LEGACY_MIXINS = Set.of(
+		"HeatedCentrifugeLegacyCanOperateMixin"
+	);
+	private static final String HEATED_CENTRIFUGE_CLASS_RESOURCE =
+		"cy/jdkdigital/productivebees/common/block/entity/HeatedCentrifugeBlockEntity.class";
 
 	/** 引用 EME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 EME 的类）
 	 * <br/>
@@ -178,6 +188,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 		/** JDTE 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean JDTE_LOADED = isModLoaded(JDTE_MOD_ID);
+		/** PB 热能类是否声明旧版 canOperate()（13.14.0 起为 false） */
+		static final boolean PB_LEGACY_HEATED_CAN_OPERATE =
+			declaresMethod(HEATED_CENTRIFUGE_CLASS_RESOURCE, "canOperate", "()Z");
 	}
 
 	/**
@@ -205,6 +218,41 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static String simpleClassName(String className) {
 		int idx = className.lastIndexOf('.');
 		return idx < 0 ? className : className.substring(idx + 1);
+	}
+
+	/**
+	 * 读取目标类字节码判断方法是否由该类直接声明，避免在 Mixin 早期阶段触发目标类加载。
+	 */
+	private static boolean declaresMethod(String resourceName, String methodName, String descriptor) {
+		try (InputStream stream = openClassResource(resourceName)) {
+			if (stream == null) {
+				System.err.println("[ProductiveBeesGenesis] 无法读取 PB 目标类字节码，跳过旧版热能 Mixin: "
+						+ resourceName);
+				return false;
+			}
+			ClassNode node = new ClassNode();
+			new ClassReader(stream).accept(node,
+				ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+			return node.methods.stream().anyMatch(method -> methodName.equals(method.name)
+					&& descriptor.equals(method.desc));
+		} catch (IOException | RuntimeException e) {
+			System.err.println("[ProductiveBeesGenesis] 读取 PB 目标类失败，跳过旧版热能 Mixin: " + e);
+			return false;
+		}
+	}
+
+	private static InputStream openClassResource(String resourceName) {
+		ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+		if (contextLoader != null) {
+			InputStream stream = contextLoader.getResourceAsStream(resourceName);
+			if (stream != null) return stream;
+		}
+		ClassLoader ownLoader = MixinConfigPlugin.class.getClassLoader();
+		if (ownLoader != null) {
+			InputStream stream = ownLoader.getResourceAsStream(resourceName);
+			if (stream != null) return stream;
+		}
+		return ClassLoader.getSystemResourceAsStream(resourceName);
 	}
 
 	@Override
@@ -243,6 +291,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (PB_LEGACY_MIXINS.contains(simpleName)) {
+			return Holder.PB_LEGACY_HEATED_CAN_OPERATE;
+		}
 		if (ME_MIXINS.contains(simpleName)) {
 			return Holder.ME_LOADED;
 		}

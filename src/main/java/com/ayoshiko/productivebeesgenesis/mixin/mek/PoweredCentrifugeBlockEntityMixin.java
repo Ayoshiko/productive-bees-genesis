@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * <p>
 	 * 继承关系: HeatedCentrifugeBlockEntity → PoweredCentrifugeBlockEntity → CentrifugeBlockEntity
 	 * <ul>
-	 *   <li>Powered 重写 canOperate() 仅检查能量，忽略输出槽空间检查 → 需要此Mixin</li>
+	 *   <li>Powered 的 canOperate() 负责能量门控（13.14.0 起也由 Heated 继承），忽略输出槽空间检查 → 需要此Mixin</li>
 	 *   <li>completeRecipeProcessing 未被重写 → 父类 CentrifugeBlockEntityMixin 已覆盖</li>
 	 * </ul>
 	 * 公共逻辑委托给 {@link CentrifugeMixinHelper}。
@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(PoweredCentrifugeBlockEntity.class)
 public abstract class PoweredCentrifugeBlockEntityMixin {
 
-	/** canOperate RETURN — 能量充足但输出满时阻止启动 */
+	/** canOperate RETURN — 能量充足但输出满时阻止启动（同时覆盖继承该门控的 Heated） */
 	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)
 	private void productivebeesgenesis$checkOutputSpace(CallbackInfoReturnable<Boolean> cir) {
 		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this,
