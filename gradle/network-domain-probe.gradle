@@ -166,6 +166,13 @@ neoForge {
         }
     }
 }
+// ModDev 的 Run 准备任务也会创建 gameDirectory，必须先完成探针的空目录检查与初始化。
+tasks.configureEach {
+    if (name in ['prepareNetworkDomainClientRun', 'prepareNetworkDomainServerRun',
+                 'prepareNetworkMultiblockClientRun', 'prepareNetworkMultiblockServerRun']) {
+        dependsOn prepareProbe
+    }
+}
 tasks.named('runNetworkMultiblockServer') {
     doLast {
         File report = new File(probeDirectory.get().asFile, 'results/multiblock.json')

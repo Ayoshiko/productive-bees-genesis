@@ -18,6 +18,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /** 核心身份及只读结构视图；账户和转移意图由世界级权威域保存。 */
 public final class NetworkCoreBlockEntity extends BlockEntity implements MenuProvider {
 	private UUID owner;
+	private CoreAccessState access = new CoreAccessState();
 	private UUID controller = UUID.randomUUID();
 	private int closedFaces;
 	private TopologyScan.View topology;
@@ -54,7 +55,25 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 		return energyPort;
 	}
 	public void initializeOwner(UUID player) { if (owner == null) { owner = player; setChanged(); requestRebuild(); } }
-	public boolean allowed(Player player) { return owner != null && owner.equals(player.getUUID()) && !isRemoved() && player.distanceToSqr(worldPosition.getCenter()) <= 64; }
+	private boolean usableBy(Player player) {
+		return level instanceof ServerLevel server && server.getServer().isSameThread()
+				&& !isRemoved() && player.level() == level && player.isAlive() && !player.isSpectator()
+				&& player.distanceToSqr(worldPosition.getCenter()) <= 64
+				&& server.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4)
+				&& server.getBlockEntity(worldPosition) == this;
+	}
+	public boolean allowed(Player player) { return usableBy(player) && owner != null && (owner.equals(player.getUUID()) || access.allows(player.getUUID())); }
+	public boolean ownerAllowed(Player player) { return usableBy(player) && owner != null && owner.equals(player.getUUID()); }
+	Object accessToken() { return access.sessionToken(); }
+	public CoreAccessState.Change changeGuest(net.minecraft.server.level.ServerPlayer player, UUID target, boolean grant) {
+		if (!ownerAllowed(player)) return CoreAccessState.Change.DENIED;
+		var result = access.change(owner, target, grant);
+		if (result == CoreAccessState.Change.CHANGED) setChanged();
+		return result;
+	}
+	public java.util.List<UUID> guests(net.minecraft.server.level.ServerPlayer player) {
+		return ownerAllowed(player) && access.valid() ? access.guests() : null;
+	}
 	public void toggleFace(Direction face) { closedFaces ^= 1 << face.ordinal(); setChanged(); requestRebuild(); }
 	public void requestRebuild() { if (level instanceof ServerLevel server) NetworkTopologyService.dirty(server, worldPosition); }
 	public void serverTick() {
@@ -79,6 +98,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("controller", controller); tag.putInt("closedFaces", closedFaces); if (owner != null) tag.putUUID("owner", owner);
 		tag.putInt("productionMode", productionMode);
+		var accessTag = access.save(owner, controller); if (accessTag != null) tag.put("access", accessTag);
 		if (network != null) tag.put("network", NetworkCheckpointCodec.identity(network));
 		else if (invalidNetworkData != null) tag.put("network", invalidNetworkData.copy());
 		if (invalidNetwork) tag.putBoolean("invalidNetwork", true);
@@ -86,6 +106,9 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	@Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.loadAdditional(tag, registries);
 		controller = tag.hasUUID("controller") ? tag.getUUID("controller") : UUID.randomUUID(); owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null;
+		access = CoreAccessState.read(tag.get("access"), owner, controller);
+		if (!access.valid()) com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.LOGGER.error(
+				"Invalid network core access at {}: {}; original data retained", worldPosition, access.failure());
 		closedFaces = tag.getInt("closedFaces") & 63; topology = null;
 		invalidNetwork = tag.getBoolean("invalidNetwork"); network = null; invalidNetworkData = null;
 		if (tag.contains("network")) {

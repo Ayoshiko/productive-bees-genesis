@@ -35,6 +35,10 @@
 
 ### 新增
 
+- **D16c3a 核心访客授权**：所有者可按 UUID 授予／撤销单核心的有限资产操作权限，默认关闭共享；访客不能接管、交还、启停、改面或再授权。菜单绑定具体玩家及授权代际，撤销后再授权不能复活旧菜单；严格保存和保留损坏授权数据，同步双语提示与管理按钮状态。真实双玩家及玩家文件恢复仍待后续验收。
+
+- **维护版 1.0.9 同步**：吸收蜂箱自动化、离心机调度与 AE2 修复；补齐网络配方查询重试、补货资产接管边界和旧映像兼容，并修复新 ticker 在托管拦截前积累加速额度的问题。
+
 - **M06c2b 正十二面蜂巢与卫星蜜蜂**：中央主体采用光滑蜂蜜金分面、12 个大块封盖蜂房、琥珀蜜液和克制的金色边缘光；五只原版比例的几何蜜蜂沿独立倾角的莫比乌斯轨道反向飞行，保留清晰的双层金色拖尾和 18 秒渐隐。补齐蜜蜂眼部、触角、六腿、尾针及阶梯振翅，提供完整／降低／关闭设置，并修复成型部件仍显示整块模型遮挡核心的问题。无需贴图或世界实体；纯木纹及木板分段实验已撤销。客户端、结构生命周期、跨 JVM 恢复分层验证，兼容／性能联合门仍待完成。
 
 - **M06c2a 几何核心基础（历史造型已由 c2b 替换）**：以分层悬浮核心、双轨道和公转节点替换静态蜂箱道具；按客户端时间播放环境动画，每帧共享 16 台详细配额，余者静态简化，成型方块保留固定标记。两种依赖的 24 台真实客户端验证六布局四向顶点、暂停／重载／卸载及专服恢复；974 项测试无失败（2 项既有跳过）。工作触发、效果设置和兼容／性能联合门另验。
@@ -124,6 +128,10 @@
 ### English
 
 #### Added
+
+- Added D16c3a per-controller guest access managed by owner-only UUID grant/revoke commands. Guests can use finite asset exchanges; controller management remains owner-only. Menus bind both the player and an access generation, so revocation followed by reauthorization cannot revive an old menu. Strict persistence preserves invalid access data; real multiplayer and player-file restart acceptance remain pending.
+
+- Merged 1.0.9 maintenance fixes, adapting recipe-index retries and gene-treat restock ownership to the network. Preserved legacy asset images and blocked acceleration accounting before the managed-member ticker boundary.
 
 - Added M06c2b regular dodecahedral hive cores with smooth honey-gold facets, 12 large sealed wax cells with broad bevels, amber honey and restrained edge glow. Five detailed bees at vanilla proportions fly in the opposite direction on separate tilted Möbius tracks, leaving visible two-layer golden trails that fade over 18 seconds. Added full/reduced/off settings and fixed formed parts obscuring the core. No textures or world entities are used; woodgrain and plank-pattern experiments were discarded. Client, structure lifecycle and cross-JVM recovery checks remain separate from the compatibility/performance gate.
 

@@ -31,7 +31,10 @@ public final class NetworkCoreBlock extends BaseEntityBlock {
 	@Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 		if (player instanceof ServerPlayer serverPlayer && level.getBlockEntity(pos) instanceof NetworkCoreBlockEntity core && core.allowed(player)) {
-			if (player.isShiftKeyDown()) core.toggleFace(hit.getDirection()); else core.openTerminal(serverPlayer);
+			if (player.isShiftKeyDown()) {
+				if (!core.ownerAllowed(player)) return InteractionResult.FAIL;
+				core.toggleFace(hit.getDirection());
+			} else core.openTerminal(serverPlayer);
 			return InteractionResult.CONSUME;
 		}
 		return InteractionResult.FAIL;

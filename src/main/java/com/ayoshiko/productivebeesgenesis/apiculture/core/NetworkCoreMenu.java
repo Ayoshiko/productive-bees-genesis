@@ -11,6 +11,9 @@ import java.util.UUID;
 /** 核心菜单生命周期、只读同步与命令入口；资产变化委托独立有限交换服务。 */
 public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
+	private final Player viewer;
+	private final UUID viewerId;
+	private final Object accessToken;
 	private final ContainerData data;
 	private com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity exchangeNetwork;
 	private final NetworkSelectionSession selections;
@@ -23,8 +26,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = null;
 		terminalSession = buffer.readUUID();
-		selections = null; data = new SimpleContainerData(28); addDataSlots(data);
+		selections = null; data = new SimpleContainerData(29); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
@@ -32,9 +36,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
+		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = core.accessToken();
 		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index == 28) return core.ownerAllowed(viewer) ? 1 : 0;
 				if (index == 26) return core.productionRunning() ? 1 : 0;
 				if (index == 27) return core.hasProductionSession() ? core.runtime().status().ordinal() : 0;
 				if (index >= 18) {
@@ -51,7 +57,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 28; }
+			@Override public int getCount() { return 29; }
 		}; addDataSlots(data); addInventory(inventory);
 	}
 	private void addInventory(Inventory inventory) {
@@ -75,6 +81,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	public int ownershipStatus() { return data.get(17); }
 	public boolean productionRunning() { return data.get(26) != 0; }
+	public boolean canManage() { return data.get(28) != 0; }
 	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
@@ -82,12 +89,13 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return result;
 	}
 	@Override public boolean stillValid(Player player) {
-		return !closed && (core == null || player.level() == core.getLevel() && core.allowed(player)
+		return !closed && viewerId.equals(player.getUUID()) && (core == null || accessToken == core.accessToken()
+				&& player.level() == core.getLevel() && core.allowed(player)
 				&& player.level().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4)
 				&& player.level().getBlockEntity(core.getBlockPos()) == core);
 	}
 	@Override public boolean clickMenuButton(Player player, int id) {
-		if (core == null || player.containerMenu != this || !stillValid(player)) return false;
+		if (core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
 		if (id == 1 || id == 2) return core.ownership().command(id == 1);
 		if (id == 3) return core.setProductionRunning(!core.productionRunning());
@@ -101,6 +109,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (clientState != null) clientState.close();
 	}
 	@Override public void broadcastChanges() {
+		if (core != null && !stillValid(viewer)) {
+			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; return;
+		}
 		super.broadcastChanges();
 		if (selections != null && core.getLevel() != null) selections.expire(core.getLevel().getGameTime());
 	}

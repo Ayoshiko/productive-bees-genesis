@@ -54,6 +54,7 @@ public final class NetworkClientProbe {
 			if (lastStatus != menu.ownershipStatus()) { lastStatus = menu.ownershipStatus(); settled = 0; }
 			if (++settled < 10) return;
 			if (step == 1 && ClientOwnershipFixture.stage == 1 && menu.value(0) == 2) {
+				require(menu.canManage(), "Owner management role did not synchronize");
 				require(menu.value(1) == 2 && menu.value(2) > 0 && menu.value(3) == 1, "Client counts did not synchronize");
 				capture(client, "before"); press(screen, "join"); step = 2; settled = 0;
 			} else if (step == 2 && ClientOwnershipFixture.stage == 2 && menu.ownershipStatus() == CoreOwnershipController.Status.MANAGED.ordinal()) {
@@ -72,6 +73,7 @@ public final class NetworkClientProbe {
 	private static void press(NetworkCoreScreen screen, String key) {
 		String label = Component.translatable("screen.productivebeesgenesis.network." + key).getString();
 		var button = screen.children().stream().filter(child -> child instanceof Button b && b.getMessage().getString().equals(label)).findFirst().orElseThrow();
+		require(((Button) button).active && ((Button) button).visible, "Owner control was disabled: " + key);
 		((Button) button).onPress();
 	}
 	private static void capture(Minecraft client, String name) throws java.io.IOException {
@@ -83,6 +85,7 @@ public final class NetworkClientProbe {
 		var report = new JsonObject(); report.addProperty("passed", error == null); report.addProperty("completedStage", ClientOwnershipFixture.stage);
 		report.addProperty("ae2Present", net.neoforged.fml.ModList.get().isLoaded("ae2"));
 		report.addProperty("menuCountsAndButtons", error == null); report.addProperty("permissionsAndStaleMenu", error == null);
+		report.addProperty("coreOwnerRoleSynchronized", error == null);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

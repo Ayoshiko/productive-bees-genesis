@@ -28,6 +28,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private final TerminalClientState state;
 	private final Inventory playerInventory;
 	private final List<Button> requests = new ArrayList<>();
+	private final List<Button> management = new ArrayList<>();
 	private int tab, selected = -1, target, inventorySlot, amount = 1;
 	private boolean choosingInventory, confirmCage;
 	private TerminalView displayed;
@@ -47,7 +48,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		var button = button(label, x, y, width, 18, action); requests.add(button); return button;
 	}
 	private void rebuild() {
-		clearWidgets(); requests.clear(); production = null;
+		clearWidgets(); requests.clear(); management.clear(); production = null;
 		menu.inventoryVisible(choosingInventory && tab != 0);
 		for (int i = 0; i < 3; i++) {
 			int page = i;
@@ -55,10 +56,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			if (i == tab) control.setMessage(Component.literal("• ").append(tr("tab." + i)));
 		}
 		if (tab == 0) {
-			button(tr("rebuild"), 8, 156, 302, 20, () -> coreCommand(0));
-			button(tr("join"), 8, 181, 147, 20, () -> coreCommand(1));
-			button(tr("return"), 163, 181, 147, 20, () -> coreCommand(2));
+			management.add(button(tr("rebuild"), 8, 156, 302, 20, () -> coreCommand(0)));
+			management.add(button(tr("join"), 8, 181, 147, 20, () -> coreCommand(1)));
+			management.add(button(tr("return"), 163, 181, 147, 20, () -> coreCommand(2)));
 			production = button(productionLabel(), 8, 206, 302, 20, () -> coreCommand(3));
+			management.add(production);
 		} else if (choosingInventory) {
 			button(tr("back"), 8, 184, 166, 20, () -> { choosingInventory = false; rebuild(); });
 		} else {
@@ -129,6 +131,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private void updateEnabled() {
 		boolean ready = state.ready(Util.getMillis());
 		for (var button : requests) button.active = ready;
+		for (var button : management) button.active = menu.canManage();
 	}
 	@Override protected void containerTick() {
 		super.containerTick(); state.tick(Util.getMillis());
