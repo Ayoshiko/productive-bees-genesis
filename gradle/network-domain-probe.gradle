@@ -19,9 +19,19 @@ def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
+def playerMode = providers.gradleProperty('networkPlayerMode').orNull
+if (playerMode != null && !(playerMode in ['write', 'read'])) throw new GradleException('Invalid player login mode')
+if (playerMode == null && gradle.startParameter.taskNames.any { it.tokenize(':').last() in ['runNetworkPlayerServer', 'runNetworkPlayerClient'] }) {
+    throw new GradleException('Player probes require -PnetworkPlayerMode=write or read')
+}
+if (playerMode != null && (automaticMode != null || multiblockMode != null || coldProbe)) throw new GradleException('Conflicting player probe mode')
+def playerPort = providers.gradleProperty('networkPlayerPort').getOrElse('25582')
+if (!(playerPort ==~ /[0-9]{4,5}/) || playerPort.toInteger() < 1024 || playerPort.toInteger() > 65535) throw new GradleException('Invalid local player port')
 def probeEula = file('run/eula.txt')
 def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
         ? file(providers.gradleProperty('networkProbeSeedWorld').get()) : null
+if (playerMode == 'read' && seedWorld == null) throw new GradleException('Player reader requires its stopped writer world')
+if (playerMode == 'write' && seedWorld != null) throw new GradleException('Player writer requires a fresh world')
 if (automaticMode == 'read' && seedWorld == null) throw new GradleException('Automatic restart requires its saved fixture world')
 if (multiblockMode == 'read' && seedWorld == null) throw new GradleException('Machine restart reader requires saved writer world')
 if (multiblockMode == 'write' && seedWorld != null) throw new GradleException('Machine restart writer requires fresh world')
@@ -45,8 +55,16 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
+            if (playerMode == 'read') {
+                File writerReport = new File(sourceWorld.parentFile, 'results/player-login-server.json')
+                if (!writerReport.isFile()) throw new GradleException('Missing player writer report')
+                def writer = new groovy.json.JsonSlurper().parse(writerReport)
+                if (writer.passed != true || writer.normalPlayerFileVerified != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) {
+                    throw new GradleException('Player reader requires successfully stopped matching writer')
+                }
+            }
             if (multiblockMode == 'read') {
                 File writerReport = new File(sourceWorld.parentFile, 'results/multiblock.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing machine writer report')
@@ -86,6 +104,10 @@ view-distance=3
 simulation-distance=3
 max-tick-time=-1
 ''', 'UTF-8')
+        if (playerMode != null) {
+            def properties = new File(directory, 'server.properties')
+            properties.setText(properties.getText('UTF-8').replace('server-port=25581', "server-port=${playerPort}") + 'enforce-secure-profile=false\n', 'UTF-8')
+        }
         File mods = new File(directory, 'mods')
         mods.mkdirs()
         for (File dependency : probeDependencies) {
@@ -97,6 +119,32 @@ neoForge {
     addModdingDependenciesTo sourceSets.domainProbe
     mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
     runs {
+        networkPlayerServer {
+            server()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.login.server', 'true'
+            systemProperty 'pbg.login.mode', playerMode ?: 'write'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+        networkPlayerClient {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.login.client', 'true'
+            systemProperty 'pbg.login.mode', playerMode ?: 'write'
+            systemProperty 'pbg.login.port', playerPort
+            programArgument '--username'
+            programArgument 'PbgLoginOwner'
+            programArgument '--width'
+            programArgument '1000'
+            programArgument '--height'
+            programArgument '700'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
         networkMultiblockClient {
             client()
             sourceSet = sourceSets.domainProbe
@@ -169,7 +217,8 @@ neoForge {
 // ModDev 的 Run 准备任务也会创建 gameDirectory，必须先完成探针的空目录检查与初始化。
 tasks.configureEach {
     if (name in ['prepareNetworkDomainClientRun', 'prepareNetworkDomainServerRun',
-                 'prepareNetworkMultiblockClientRun', 'prepareNetworkMultiblockServerRun']) {
+                 'prepareNetworkMultiblockClientRun', 'prepareNetworkMultiblockServerRun',
+                 'prepareNetworkPlayerClientRun', 'prepareNetworkPlayerServerRun']) {
         dependsOn prepareProbe
     }
 }
