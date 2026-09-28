@@ -45,8 +45,8 @@ jobs:
             fetch "https://www.cursemaven.com/curse/maven/$1/$2/$1-$2.jar" "$3"
           }
 
-          curse_maven productivebees-377897 8022994 productivebees-1.21.1-13.13.5.jar
-          unzip -p libs/productivebees-1.21.1-13.13.5.jar \
+          curse_maven productivebees-377897 8987967 productivebees-1.21.1-13.14.0.jar
+          unzip -p libs/productivebees-1.21.1-13.14.0.jar \
             META-INF/jarjar/productivelib-1.21.1-0.2.0.jar \
             > libs/productivelib-1.21.1-0.2.0.jar
           test -s libs/productivelib-1.21.1-0.2.0.jar
