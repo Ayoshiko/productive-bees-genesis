@@ -313,15 +313,19 @@ AE2LT 的 `DualLong126` 是有限双 long 表示，不能直接满足本方案�
 
 | 参考 | 当前已核实实现 | 借鉴点 | 不直接照搬的部分 |
 | --- | --- | --- | --- |
-| AE2LT 2.1.0-beta.5 + Thunderbolt beta.3 | `IndexedStorage` 的键 ID、lo／hi 数组、脏队列、序列化键缓存；`DualLong126` | 按键索引、低分配数量更新、结构变化与数量变化分离 | 双 long 数值上界、int 类型数、逐盘字节模型；不是 BigInteger 无限盘 |
+| Thunderbolt-Core-Reborn `42e0e7d2`（另保留 beta.3 历史参考） | `IndexedStorage` 的键 ID、lo／hi 数组、脏队列及键缓存；可选 `wideAmounts` 与 `BigStorageOps` | 数量／结构脏分离、按实际接受量的有界桥、空槽回收 | 默认 126 位、精确模式 16,384 位仍是容量上限；精确模式的 long 操作也转入 BigInteger，不能套用普通模式零分配结论 |
 | EAEP 1.21.1，提交 `85a50ea5` | `InfinityDataStorage.longAmounts/bigAmounts`，升降级、总数增量缓存、模拟不分配 UUID | long 常见路径、只读模拟、按需物化大数、世界数据与物品引用分离 | 全部盘写入同一个 SavedData 的保存规模和逐盘回调开销 |
-| Neo ECO AE `v21.1.2` 分支，提交 `1cae738a` | `InfiniteStorageAmounts` 的 long 主表和 BigInteger 溢出表；SavedData 快照与逐次操作强制落盘日志；ExactAmountSource | 数量与外部 long 投影分离、独立域、序号重放、增量类型统计、精确数量扩展 | 实际 insert／extract 的 FileChannel.force(true) 成本不可忽略；ExactAmountSource 是 ECO 自有接口，不能冒充 AE2 原生 API |
+| Neo ECO AE `main / 21.2.0`，提交 `70cea49f` | long 投影主表＋BigInteger 溢出；世界保存周期的原子异步快照；遗留 journal 只在升级时重放；所有可见键的 ExactAmountSource | 坏记录保留／拒覆盖、结构缓存 revision、迁移收据与精确合计 | 主线程全量构造 NBT、后台写盘与完成回执分别计量；结构 revision 不可代替资产事务 revision；精确接口不是 AE2 原生 API |
 | DataEnergistics 3.3.0，提交 `dbdfe17e` | UUID→HostState、BigInteger 数量、分类总数、排序视图缓存 | 按宿主隔离、分类统计、只在变更时重建查询视图 | `InfiniteDataCellInventory` 是特定自定义资源的创造供给，并非有限真实物品的无限容量记账 |
 | Mekanism QIO 10.7.19.85 | 键索引、脏物品集合、查看者订阅 | 只更新变化和实际查看者、清理失效会话 | 不继承 QIO 磁盘容量和全量客户端列表模型 |
 
-ECO `v21.1.2` 的域管理器创建 `SavedDataInfiniteStorageEngine`，由 `ECOInfiniteStorageData` 持有数量和恢复状态。实际普通存取先写带序号的 `.journal` 并执行 `force(true)`，再变更内存；快照记录 journalSequence，使用临时文件和安全替换，重放忽略已包含的记录。这是明确的耐久性取舍，不能将“SavedData 后端”理解为只有世界保存才进行磁盘 I/O，也不能无条件把它称为最高吞吐实现。
+2026-09-28 根据更新的 `build/infinite-storage-research/notes.md` 重新核对本地 ECO `70cea49f`：`ECOInfiniteStorageData.save(File,...)` 在服务器线程构造快照，交 IO worker 原子写盘；普通 add／subtract 仅标脏，没有逐操作 `force(true)`。`replayJournal` 是旧世界迁移入口，快照成功后才删除遗留日志。旧 `1cae738a/f26aab47` 的 WAL 说明仅适用于历史实现，不能用来评估当前吞吐。后台完成状态、失败重试、停服等待及坏文件拒覆盖仍需分别验证，不能由“SavedData”名称推断耐久性。
 
-`InfiniteStorageAmounts` 的主表对超 long 键保留 Long.MAX_VALUE 投影，溢出表保存真实大数；枚举从主表逐键读取，不是旧参考的 visibleStacks 缓存。ExactAmountSource 另外提供精确大数观察，且可用性受宿主门控。以上为源码和字节码证据，速度排名仍须比较相同耐久性和查询语义。
+`InfiniteStorageAmounts` 主表对超 long 键保留 Long.MAX_VALUE 投影，溢出表保存真实大数。ECO 当前对所有可见键提供精确观察：即使每个库存单独小于 long 上限，聚合也可能饱和；D18／D20 的精确显示须包含这些普通键，不能只发送超 long 条目。精确数量／long 投影只共享同一份权威资产，不建立第二库存。
+
+**本轮采纳与验证门：** 保留 `ProductAmount` 的 long 快路与任意精度、`ProductLedger` 的逐次资产 revision 及 `PagedProductAmounts` 的冻结根。当前账本已不用旧 `SparseProductAmounts` 作余额后端；分页快照为 O(1) 根冻结，枚举仍 O(K)，不可将旧 sparse 全表复制基准外推为当前热路径。ECO 的结构 revision 仅用于键目录／格式缓存，数量变化仍推进本项目资产 revision 和保存脏状态。Thunderbolt 的脏队列仅证明内存 NBT 增量更新，不等于磁盘 O(changed) 写入；全量编码、压缩、发布及恢复分开计量。
+
+**模型实验先于后端替换：** `runInfiniteStorageComparisonBenchmark` 的 schema 2 比较当前分页、旧 sparse、数组加稀疏宽值模型及纯大数模型；共享真实 ProductKey、统一完整 NBT 格式，分别测变更、遍历、标签构造与字节编码。逐键精确 oracle、模拟不变、126 位进位／宽值连续变更、提取降级／归零、真实 NBT 往返、坏结果拒绝全部通过后才写 passed。它不包含上游脏队列／压缩、真实 AEKey、预约／收据、活网同步或磁盘 I/O，也不提供模组排名。D28 必须在 D20／D27 后以真实账本和相同耐久性重测；只有生产调用链与 Spark 共同确认热点，才考虑有预算 visitor、增量结构缓存或存储布局替换。
 
 ## 6. AE2 与普通物流集成
 
@@ -1586,6 +1590,14 @@ D16b1 不解除 D16b 的整体门槛：自动离心及保留规则串联、完�
 
 **未完成边界：** 假玩家验证不等于两名真实玩家登录；当前客户端回归针对所有者界面和已存在的有限交换。访客实际客户端、正常玩家文件跨 JVM 恢复与两个独立登录客户端竞争继续按 c3b／c3c；异常断电仍留 D29。访问表损坏的显式修复界面、玩家名辅助选择和更细角色留 D19。D16c／P3、M04 和 M06 父门均不随 c3a 关闭。
 
+### 10.63 无限存储研究复核与模型校验（2026-09-28，研究工具子步已验收）
+
+按更新的 `build/infinite-storage-research/notes.md` 复核源码与旧 `isbench1/2`。旧程序缺少逐键 oracle，序列化异常仍可能写 passed，宽值连续插入遗漏 overflow，并以旧 sparse 快照冒充当前账本；旧排名不作为优化依据。保留原始报告，使用 schema 2 的四模型工具重新建立证据，修复数量、模拟、降级、归零及 NBT 验证，失败立即退出；实现范围与本地参考取舍见 5.4。
+
+两次独立 JVM 报告为 `build/reports/infinite-storage/isbench-reviewed-20260928-f0.json` 与 `isbench-reviewed-20260928-f1.json`，源码哈希一致、顺序相反，1 万／100 万键各四模型均通过；每次先做边界和固定种子 512 步独立守恒校验，再验证每个键和完整 NBT 往返，统一格式字节数一致。分别记录构造标签与编码时间／分配，GC 后堆估计仅作近似，不比较有不同合同的上游实际吞吐。百万键当前分页遍历在两次实测中与旧 sparse 显著不同，证实必须测实际后端；不将模型结果记作 Spark／MSPT 收益。
+
+网络工作区 `test build verifyReleaseArtifact compileDomainProbeJava` 检查通过（既有生产测试复用未变化的 Gradle 结果），探针未进入运行 JAR。详细参考文档维持原本本地忽略状态，正式合同和证据索引记录在本设计中。D28／D30 未验收，主线继续 D16c3b，不能因此开放 P3 或多方块生产。
+
 ## 11. 阶段路线与可独立评审的提交
 
 以下为开发清单；D01–D08 的交付和验证边界见第 10.4–10.11 节，D09a／D09b1／D09b2 见第 10.12–10.15 节，D09b3a 见第 10.16 节，D09b3b／c 见第 10.17 节，D10–D12 的 P2 退出记录见 10.21。生产新类位于第 7 节建议的 `apiculture` 包，测试放入对应 `src/test/java` 包；文件名为实施目标，可以因职责拆分调整。每步先满足前置依赖与验收条件，再进入下一步，不能一次提交所有网络逻辑。
@@ -1709,7 +1721,7 @@ D16b2 进一步按依赖拆分：**b2a** 增量可用量索引和保留占料凭
 
 ### 11.8 P7：后端定稿、故障验证与候选发布
 
-**D28 — 根据实测优化存储／保存。** 前置：D02、D09、D20、D27。重跑候选基准与真实网络，只有热点证据支持时才切换索引数组、大数中间层、快照分页或 WAL；完整网络 checkpoint 协议先于分文件优化。验证任意精度、不断增长的合法类型、冷启动、保存时长、断写和回退。通过条件为优化没有引入配额或降低实际产量，持久化升级可检测并拒绝不兼容格式。
+**D28 — 根据实测优化存储／保存。** 前置：D02、D09、D20、D27。模型校验工具可提前独立交付（10.63），不解除上述前置或授权更换生产后端。重跑候选基准与真实网络，只有热点证据支持时才切换索引数组、大数中间层、快照分页或 WAL；完整网络 checkpoint 协议先于分文件优化。验证任意精度、不断增长的合法类型、冷启动、保存时长、断写和回退。通过条件为优化没有引入配额或降低实际产量，持久化升级可检测并拒绝不兼容格式。
 
 **D29 — 故障与长稳测试。** 前置：D28。做随机生产／提取／保留修改／拆连序列及长期运行，覆盖每个交接阶段、磁盘写失败、保存中断、重复 ID、旧快照、重启、多玩家和恶意包。核对物品／流体／蜜蜂／食物／升级／能量独立守恒与 pending 状态。通过条件为正常保存绝不复制或吞数据，无法确认的状态隔离且有恢复信息，不假装跨模组强制断电原子性。
 
@@ -1859,14 +1871,15 @@ D16b2c3b 于 2026-09-22 使用当前系统代理再次 `pull --ff-only`，DataEn
 
 每次参考前先确认独立仓库边界、工作树和上游，再执行 `pull --ff-only`；若有本地改动或不能快进，保留现场并记录原因，不自动 stash／reset。PB 13.13.5、Mekanism 10.7.19.85 的版本源码、`.tmp_gtnh_src`／`.tmp_gtceu_src` 摘录与 Thunderbolt JAR 没有可拉取的独立 Git 元数据，不能报为已更新；固定依赖 API 继续以实际编译 JAR 为准。第 5.4 节保留存储算法原审查提交，最新工作副本与本轮新增核对范围以本节为准。
 
-AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；本项目仍是 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
+AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；这些是历史参考快照的 API 基线；本项目当前开发基线为 21.1.216、发布最低为 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
 
 | 来源与本地位置 | 已检查内容 | 借鉴及边界 |
 | --- | --- | --- |
 | `../../闪电全版本/ae2lt-src-2.1.0-beta.5` | `InfiniteStorageCellItem`、`ModItems`、`LayeredReservedStockPolicy`、`ReservedStockRepository`、`InventoryMaintenanceDecision`、`TianshuInventoryMaintenanceService` | 索引存储定义、双层组保留、滞回和 requester；库存实现委托 Thunderbolt，不把外壳类当完整存储引擎 |
 | `run/mods/thunderbolt-2.0.0-beta.3.jar` | javap 核对 `core.storage.cell.IndexedStorage`、`DualLong126`、`IndexedStorageCellInventory`、`IndexedCellStorageSavedData`、`core.crafting.pattern.CraftingStockPolicy` | 对齐上述 AE2LT 声明的依赖；确认 primitive 数组与有限双 long、存储生命周期及非原生的合成策略接口 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/extendedae-plus-1.21.1-source` | `util/storage/InfinityDataStorage`、`InfinityStorageManager`、`api/storage/InfinityBigIntegerCellInventory` | long／BigInteger 双层、降级、总数增量缓存、storageRevision、纯模拟、饱和上报；已替换旧 1.20.1 副本 |
-| `../decompiled-reference/productive-bees-addon-1.21.1/neoecoaeextension-v21.1.2-source` | `ECOInfiniteStorageDomains`、`SavedDataInfiniteStorageEngine`、`ECOInfiniteStorageData`、`InfiniteStorageAmounts`、`InfiniteStorageJournalRecord`、`ECOInfiniteStorage` | 原生 long 投影＋大数溢出表、逐次强制日志、快照序号重放与转移收据、ECO 自有精确数量接口；实际热路径以此分支为准 |
+| `.tmp_neoccoaeextension_src`（main／21.2.0，`70cea49f`） | `ECOInfiniteStorageData.save/add/subtract/replayJournal`、`ECOInfiniteStorage.neoecoae$visitExactAmounts` | 普通量变标脏、结构缓存 revision、原子快照、旧日志迁移和所有可见键的精确观察；早期 `neoecoaeextension-v21.1.2-source` 仅保留历史依据 |
+| `../../闪电全版本/Thunderbolt-Core-Reborn`（`42e0e7d2`） | `IndexedStorage.insert/insertExact/setAmountExact`、`BigAmounts`、`BigStorageOps` | 按键数组、结构／数量脏分离和实际接受量桥；精确模式仍有 16,384 位上限及大数开销，不采用其容量限制 |
 | `.tmp_useless_src`（2.3.8.3） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
@@ -1885,13 +1898,13 @@ D16c2b 于 2026-09-23 核对独立 Git 根和干净工作树后更新本轮实�
 设计的进一步优化集中在实现顺序、证据边界和故障协议。前轮已复读 DataEnergistics 的 `TrinityDataCoreStorageSavedData`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket`，ECO 的 `ECOInfiniteStorageDomains/Data/Transfer`、`NEClusterCalculator` 及 AE2LT `InfiniteStorageCellItem`。D09b2a／b2b 实际继续核对 DataEnergistics `HostState.insert/extract/orderedEntries/invalidateView`、ECO `ECOInfiniteStorageData.save(File, ...)`，以及本项目 NeoForge 21.1.214 的 `SavedData`／`DimensionDataStorage`：增量维护状态可借鉴，整表 UI 缓存不能代替权威冻结，原生保存还会整棵复制 NBT，后台写盘不等于主线程工作已预算化。
 
 1. **先区分持久化正确性与保存性能。** D09a 已建立完整 P1 权威 checkpoint、严格读取和真实写入回执；D09b1／b2a 解决余额与元数据的一致冻结，D09b2b 已将纯编码／压缩／原子发布交给唯一后台流任务，b3 已完成预算加载及一致发布。异步任务只读封闭的不可变 payload；加载注册表校验不可据此转到后台，累计分配及大文件等待仍要计量。内存分页不强制磁盘分文件，优先验证单文件续写与原子替换，避免过早增加 manifest／文件回收协议。D09b 未验证前不开放大规模接管。后续新增蜜蜂、供给、储能、升级、交接记录时必须同步升级 schema 和全域恢复测试，不能只往 BE 添一段 NBT。
-2. **参考失败路径同样重要。** DataEnergistics 的 detached runtime 保管、claimant、fingerprint 适合学习；它的产物存储 `load/readEntries` 对部分错误返回空对象或跳过记录，不适合本项目的数量守恒目标。ECO 保存 override 的原子替换、成功后推进 durableRevision 适合学习；逐操作 `journalChannel.force(true)` 属于不同的耐久性合同，不能移到每份蜜蜂产物路径。
+2. **参考失败路径同样重要。** DataEnergistics 的 detached runtime 保管、claimant、fingerprint 适合学习；它的产物存储 `load/readEntries` 对部分错误返回空对象或跳过记录，不适合本项目的数量守恒目标。ECO 当前原子快照、坏记录保留与写失败重试可作参考；历史逐操作 WAL 与当前 SavedData 周期保存是不同合同。我们继续以自己的完整 checkpoint、真实完成回执和当前 revision 为准，不复制异步回调对可变域状态的访问。
 3. **身份引用不等于可执行所有权。** DataEnergistics 的 host/storage/removal 身份和窗口 generation 可用于 D12／D19；ECO 的 seal → cursor → insertOnce receipt → commit → complete 可用于交接。我们仍须覆盖区块与世界数据不同步、旧 BE 残留、source/target 冲突和未知外部结果，不能照搬它们后宣称跨模组原子性。
 4. **拓扑算法必须匹配形状。** ECO `NEClusterCalculator` 使用定形结构的包围盒扫描和 AE2 MBCalculator，适合作生命周期对照；本项目为任意六面连通图，仍需 epoch 绑定的预算 BFS、断边分裂和 owner 校验，不能换成无界范围扫描，也不能因此引入 AE2 硬依赖。
 5. **查询优化与权威库存分开。** 学习 DataEnergistics 的分类总量、排序缓存和不可变 UI frame，Mekanism QIO 的脏键／订阅；大数精确显示参考 ECO 的独立精确数量协议。排序、统计、终端同步和 AE2 long 投影都不能回写精确余额。AE2LT 实际存储委托 Thunderbolt，数组和数值范围结论必须核对依赖实现。
 6. **把不变量维护前移，但保留不可信输入校验。** 内存中的预约状态、成员／通道和滞回由所属服务在更新时维护；统一捕获只冻结已验证的根。文件、外部 Map／List 及恢复构造仍逐项检查，不能用一个公开“trusted”开关跳过校验。新 API 必须拒绝混用不同账本、跨线程／重入捕获、能力版本倒退与未来策略。记录构造和变更、快照冻结、编码、回执分开计量，不能把整表扫描藏在捕获前的构造器中。
 
-**本轮最新存储与交付核对：** ECO `SavedDataInfiniteStorageEngine` 仍按键增量更新数量和类型总量；`InfiniteStorageAmounts` 保持 long 主表与稀疏 BigInteger。`ECOInfiniteStorageData.appendJournalChange` 缓存单个最近键的编码模板（超过 64 KiB 不缓存），复用打开的 FileChannel，但每次普通修改仍 `force(true)`；`insertOnce` 是数量和迁移收据共同进入快照的另一条合同。不能把这几条路径混成一种吞吐结果。用户提供的“约 37R 物品／tick、6 ms”目前只有场景描述，没有同场景原始 Spark／基准报告，本文不把它记为已复现指标。
+**2026-09-28 存储与交付复核：** 基于更新的 `notes.md` 和已固定的本地 ECO `70cea49f`、Thunderbolt Reborn `42e0e7d2` 逐项核对，工作副本独立且干净，本次没有切换或更新参考分支。ECO 已退役逐操作日志，仅在加载旧世界时重放并在快照成功后清理；数量变更只标脏、结构变更推进缓存 revision，不能直接照搬到本项目资产 revision。Thunderbolt 的精确模式将普通 long 调用也导向大数运算；`BigStorageOps` 的单次 long 退化只返回实际接受量，剩余量必须由原所有者继续保管，整表 `snapshotBig` 也不能进入有预算的终端热路径。用户提供的“约 37R 物品／tick、6 ms”仍缺少同场景原始 Spark／活网证据，不作为已复现指标。
 
 后续 D15／D16／D20／D28 的基准须同时记录精确总量、不同键数、组件大小、存取调用数、Long.MAX_VALUE 分段次数、实际接受量、持久化方式、查看者数量及计时范围。Useless 新增 `claimOutputs` 说明大数产物可由 CPU 的精确账本整批接收，从而减少重复 long 分段；本项目内部产物与中间投入也应按键汇总直接在领域账本结算，仅在外部 long 接口边界切段。外部回调抛异常时，不能沿用“视为零接收并重试”的降级：接收结果未知时保留暂存并隔离，须有幂等收据才能重试。
 

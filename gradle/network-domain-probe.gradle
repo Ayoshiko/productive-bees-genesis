@@ -265,3 +265,12 @@ tasks.register('runNetworkCheckpointReadBenchmark', JavaExec) {
     args layout.buildDirectory.file("reports/network-read/${runId}.json").get().asFile.absolutePath,
             file(providers.gradleProperty('networkReadSource').getOrElse('build/reports/network-write/p2-d09b2b-final-2.json')).absolutePath
 }
+
+// 无限存储元件「数量后端」横向复现微基准（研究报告 §10 用；隔离 JVM，无头，无需真实 AE2 运行时）。
+tasks.register('runInfiniteStorageComparisonBenchmark', JavaExec) {
+    classpath = sourceSets.domainProbe.runtimeClasspath
+    mainClass = 'com.ayoshiko.productivebeesgenesis.domainprobe.storagebench.InfiniteStorageComparisonBenchmark'
+    maxHeapSize = '6G'
+    args layout.buildDirectory.file("reports/infinite-storage/${runId}.json").get().asFile.absolutePath,
+            providers.gradleProperty('networkBenchmarkFork').getOrElse('0')
+}
