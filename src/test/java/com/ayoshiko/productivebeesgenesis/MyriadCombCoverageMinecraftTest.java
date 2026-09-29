@@ -9,6 +9,7 @@ import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.HeatedCentrifugeBlockEntity;
+import cy.jdkdigital.productivebees.common.block.entity.PoweredCentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
@@ -220,6 +221,28 @@ class MyriadCombCoverageMinecraftTest {
 			method.invoke(entity, recipe, inventory, RandomSource.create(1));
 			assertEquals(1, inventory.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT).getCount());
 			for (int slot : inventory.getOutputSlots()) assertEquals(64, inventory.getStackInSlot(slot).getCount());
+		}
+	}
+
+	@Test
+	void poweredAndHeatedCanOperateHonorEnergyAndOutputSpaceAcrossPbVersions() throws Exception {
+		var canOperate = PoweredCentrifugeBlockEntity.class.getDeclaredMethod("canOperate");
+		canOperate.setAccessible(true);
+		for (boolean heated : new boolean[]{false, true}) {
+			CentrifugeBlockEntity entity = heated
+					? new HeatedCentrifugeBlockEntity(BlockPos.ZERO, ModBlocks.HEATED_CENTRIFUGE.get().defaultBlockState())
+					: new PoweredCentrifugeBlockEntity(BlockPos.ZERO, ModBlocks.POWERED_CENTRIFUGE.get().defaultBlockState());
+			var inventory = (InventoryHandlerHelper.BlockEntityItemStackHandler) entity.inventoryHandler;
+			var input = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+			input.set(PbDataComponents.beeType(), PBConstants.MYRIADCREATIONS_TYPE);
+			inventory.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, input);
+			assertFalse((boolean) canOperate.invoke(entity), "Insufficient energy must stop the centrifuge");
+
+			var powered = (PoweredCentrifugeBlockEntity) entity;
+			powered.getEnergyHandler().receiveEnergy(powered.getEnergyHandler().getMaxEnergyStored(), false);
+			assertTrue((boolean) canOperate.invoke(entity), "A powered centrifuge with room must operate");
+			for (int slot : inventory.getOutputSlots()) inventory.setStackInSlot(slot, new ItemStack(Items.DIAMOND, 64));
+			assertFalse((boolean) canOperate.invoke(entity), "A full output must stop the centrifuge");
 		}
 	}
 

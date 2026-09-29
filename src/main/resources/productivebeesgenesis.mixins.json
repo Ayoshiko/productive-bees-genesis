@@ -39,6 +39,7 @@
     "mek.CentrifugeBlockEntityMixin",
     "mek.CentrifugeUselessByproductMixin",
     "mek.HeatedCentrifugeBlockEntityMixin",
+    "mek.HeatedCentrifugeLegacyCanOperateMixin",
     "mek.EMExtraFactoryMixin",
     "mek.ExtraFactoryMixin",
     "mek.ExtraFactoryForEMEMixin",

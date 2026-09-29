@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.9-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.10-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -279,8 +279,10 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 | --- | --- | --- |
 | [Minecraft](https://www.minecraft.net/) | 1.21.1 | 游戏版本 |
 | [NeoForge](https://neoforged.net/) | 21.1.214+ | 模组加载器 |
-| [Productive Bees](https://www.curseforge.com/minecraft/mc-mods/productive-bees) | 1.21.1-13.13.5+ | 蜜蜂系统与蜜脾机制 |
+| [Productive Bees](https://www.curseforge.com/minecraft/mc-mods/productive-bees) | 1.21.1-13.13.5+（已验证 13.14.0） | 蜜蜂系统与蜜脾机制 |
 | [Mekanism](https://www.curseforge.com/minecraft/mc-mods/mekanism) | 1.21.1-10.7.14.79+ | 通用机械离心机功能必需 |
+
+> Productive Bees Genesis 1.0.10 同时支持资源蜜蜂 13.13.5 和 13.14.0；1.0.9 及更早版本均不兼容资源蜜蜂 13.14.0。
 
 ## 兼容模组
 
@@ -455,12 +457,12 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-正式发布产物为 `build/libs/productivebeesgenesis-1.0.9.jar`。
+正式发布产物为 `build/libs/productivebeesgenesis-1.0.10.jar`。
 
 > 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
 >
 > **开发环境依赖（`libs/` 本地 jar）**：仓库不包含 `libs/` 下的二进制 jar，全新环境编译前需手动放置：
-> `productivebees-1.21.1-13.13.5.jar`、`productivelib-1.21.1-0.2.0.jar`、`Mekanism-1.21.1-10.7.19.85.jar`、
+> `productivebees-1.21.1-13.14.0.jar`、`productivelib-1.21.1-0.2.0.jar`、`Mekanism-1.21.1-10.7.19.85.jar`、
 > `mekanism_extras-1.21.1-1.4.0.jar`、`Evolved Mekanism-1.21.1-1.2.1-fix3.jar`、`EvolvedMekanismExtras-1.21.1-1.2.1.jar`、
 > `jdte-0.5.9-alpha1.jar`、`sponge-mixin.jar`、`jei-1.21.1-neoforge-19.36.0.360.jar`、
 > `appliedenergistics2-1.21.1-19.2.17.jar`、`AppliedFlux-1.21-2.1.5-neoforge.jar`、`Jade-1.21.1-NeoForge-15.10.5.jar`、

@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **维护版 1.0.10／PB 13.14.0 同步**：合入新版 PB 离心机条件 Mixin、依赖与 CI 更新，保留网络托管隔离和 PB 13.13.5 最低声明；网络检验门显式按 UTF-8 读取测试／运行报告，兼容 Windows PowerShell 5.1 的中文测试名。
+
 - **D16c3a 核心访客授权**：所有者可按 UUID 授予／撤销单核心的有限资产操作权限，默认关闭共享；访客不能接管、交还、启停、改面或再授权。菜单绑定具体玩家及授权代际，撤销后再授权不能复活旧菜单；严格保存和保留损坏授权数据，同步双语提示与管理按钮状态。真实双玩家及玩家文件恢复仍待后续验收。
 
 - **维护版 1.0.9 同步**：吸收蜂箱自动化、离心机调度与 AE2 修复；补齐网络配方查询重试、补货资产接管边界和旧映像兼容，并修复新 ticker 在托管拦截前积累加速额度的问题。
@@ -129,6 +131,8 @@
 
 #### Added
 
+- Merged 1.0.10 maintenance with PB 13.14.0 conditional centrifuge Mixins, dependency and CI updates, preserving managed-network isolation and the PB 13.13.5 minimum. Network gates now read test/runtime reports explicitly as UTF-8, including Chinese test names under Windows PowerShell 5.1.
+
 - Added D16c3a per-controller guest access managed by owner-only UUID grant/revoke commands. Guests can use finite asset exchanges; controller management remains owner-only. Menus bind both the player and an access generation, so revocation followed by reauthorization cannot revive an old menu. Strict persistence preserves invalid access data; real multiplayer and player-file restart acceptance remain pending.
 
 - Merged 1.0.9 maintenance fixes, adapting recipe-index retries and gene-treat restock ownership to the network. Preserved legacy asset images and blocked acceleration accounting before the managed-member ticker boundary.
@@ -208,6 +212,16 @@
 - Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
 - Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
+
+## [1.0.10] - 2026-09-28
+
+- **Productive Bees 13.14.0 兼容热修复**：保留 PB 13.13.5+ 的运行时兼容范围；针对 13.14.0 热能离心机改为从动力离心机继承 `canOperate()` 的变化，按目标类字节码条件应用旧版专用 Mixin，保留两代版本的能量门控、万象蜜脾产物空间检查与输入守恒。
+- **兼容性说明**：1.0.9 及更早版本均不兼容 Productive Bees 13.14.0；升级到 1.0.10 后可继续使用 PB 13.13.5，并兼容 PB 13.14.0。
+
+### English
+
+- **Productive Bees 13.14.0 compatibility hotfix**: retained the PB 13.13.5+ runtime range and conditionally applies the legacy heated-centrifuge Mixin only when the target class declares its own `canOperate()`, preserving energy gating, Myriad comb output-space checks and input conservation across both PB generations.
+- **Compatibility note**: Productive Bees Genesis 1.0.9 and earlier are incompatible with Productive Bees 13.14.0. Upgrade to 1.0.10 to keep PB 13.13.5 support and add PB 13.14.0 support.
 
 ## [1.0.9] - 2026-09-26
 

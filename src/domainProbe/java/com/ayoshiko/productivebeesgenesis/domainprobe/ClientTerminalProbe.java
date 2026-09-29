@@ -55,8 +55,16 @@ final class ClientTerminalProbe {
 				result(menu, TerminalReply.Status.MOVED, 1000); require(client.player.getInventory().getItem(2).is(Items.WATER_BUCKET), "Client bucket not synchronized");
 				press(screen, "refresh"); step++;
 			}
-			case 15 -> { if (!product(screen, menu, "minecraft:iron_ingot", "variant-red")) return false; step++; }
-			case 16 -> { capture(client, "terminal-variants"); chooseSlot(screen, menu, 5); press(screen, "take_product"); step++; }
+			case 15 -> {
+				if (!product(screen, menu, "minecraft:iron_ingot", "variant-red")) return false;
+				capture(client, "terminal-variants");
+				// 截图可能耗尽页面有效期；重新查询和选择后才发送一次资产命令。
+				press(screen, "refresh"); step++;
+			}
+			case 16 -> {
+				if (!product(screen, menu, "minecraft:iron_ingot", "variant-red")) return false;
+				chooseSlot(screen, menu, 5); press(screen, "take_product"); step++;
+			}
 			case 17 -> { result(menu, TerminalReply.Status.MOVED, 2); press(screen, "refresh"); step++; }
 			case 18 -> {
 				if (menu.clientState().notice() != TerminalClientState.Notice.EXPIRED) return false;

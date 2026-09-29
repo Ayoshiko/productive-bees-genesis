@@ -209,7 +209,7 @@ public final class CombFuzzyMatcher {
 	}
 
 	/**
-	 * PB 13.13.5 内置离心配方中唯一使用外部模组物品作为直接输入的蜜脾。
+	 * PB 13.14.0 内置离心配方中唯一使用外部模组物品作为直接输入的蜜脾。
 	 * 保持精确白名单，避免把仅由其他模组机器处理的蜜脾误加入 AE 输入过滤。
 	 */
 	static boolean isExternalCentrifugeCombId(ResourceLocation itemId) {

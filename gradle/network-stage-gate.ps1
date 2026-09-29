@@ -31,8 +31,15 @@ try {
         param([string]$Name, [string[]]$Arguments)
         $log = Join-Path $folder "$Name.log"
         Write-Host "Gate $Name started; log: $log"
-        & .\gradlew.bat @Arguments '--no-daemon' '--no-configuration-cache' *> $log
-        if ($LASTEXITCODE -ne 0) { throw "Gradle gate $Name failed; inspect $log" }
+        # Windows PowerShell turns redirected native stderr into error records.
+        # Preserve those diagnostics, but let the actual process exit code decide.
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            & .\gradlew.bat @Arguments '--no-daemon' '--no-configuration-cache' *> $log
+            $gradleExit = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previousPreference }
+        if ($null -eq $gradleExit -or $gradleExit -ne 0) { throw "Gradle gate $Name failed ($gradleExit); inspect $log" }
         $summary.checks += [ordered]@{ name = $Name; log = $log; sha256 = (Get-FileHash -LiteralPath $log).Hash }
         Write-Host "Gate $Name passed"
     }
@@ -45,7 +52,7 @@ try {
         if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
         Invoke-GateGradle $Name $arguments
         $reportPath = Join-Path $workspace "build/network-probe-$probeId/results/domain.json"
-        $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+        $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
         Assert-NetworkProbeReport $report $Ae2 $Mode $Gate
         $summary.checks += [ordered]@{ name = "$Name-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
         return $report
@@ -57,13 +64,13 @@ try {
     $xmlFiles = @(Get-ChildItem -LiteralPath 'build/test-results/test' -Filter 'TEST-*.xml')
     if ($xmlFiles.Count -eq 0) { throw 'JUnit reports are missing' }
     foreach ($file in $xmlFiles) {
-        [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
+        [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
         foreach ($key in @('tests', 'failures', 'errors', 'skipped')) { $totals[$key] += [int]$xml.testsuite.$key }
     }
     if ($totals.tests -le 0 -or $totals.failures -ne 0 -or $totals.errors -ne 0 -or $totals.tests -eq $totals.skipped) { throw 'JUnit gate failed' }
     $summary.junit = $totals
 
-    $properties = Get-Content -LiteralPath 'gradle.properties' -Raw | ConvertFrom-StringData
+    $properties = Get-Content -LiteralPath 'gradle.properties' -Raw -Encoding UTF8 | ConvertFrom-StringData
     $artifact = Join-Path $workspace "build/libs/$($properties.mod_id)-$($properties.mod_version).jar"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($artifact)
@@ -90,7 +97,7 @@ try {
             Invoke-GateGradle "$combination-client" $arguments
             $clientFolder = Join-Path $workspace "build/network-probe-$clientId/results"
             $reportPath = Join-Path $clientFolder 'client.json'
-            Assert-NetworkClientReport (Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json) $ae2
+            Assert-NetworkClientReport (Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json) $ae2
             $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
             foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'returned')) {
                 $screenshot = Join-Path $clientFolder "$name.png"

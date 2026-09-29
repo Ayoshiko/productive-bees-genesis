@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
-import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeMixinHelper;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.block.entity.HeatedCentrifugeBlockEntity;
@@ -12,22 +11,16 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
-	 * 热能离心机Mixin：HeatedCentrifugeBlockEntity 重写了父类方法，需独立注入（万象创世体系）
+	 * 热能离心机 Mixin：追加万象蜜脾产物空间检查（万象创世体系）。
 	 * <p>
+	 * Productive Bees 13.14.0 让热能离心机继承 PoweredCentrifugeBlockEntity 的
+	 * {@code canOperate()}；父类已经提供能量门控，因此这里只保留产物提交前的守恒检查。
 	 * 公共逻辑委托给 {@link CentrifugeMixinHelper}。
 	 */
 @Mixin(HeatedCentrifugeBlockEntity.class)
 public abstract class HeatedCentrifugeBlockEntityMixin {
-
-	/** canOperate RETURN — 输出满时阻止启动 */
-	@Inject(method = "canOperate", at = @At("RETURN"), cancellable = true)
-	private void productivebeesgenesis$checkOutputSpace(CallbackInfoReturnable<Boolean> cir) {
-		CentrifugeMixinHelper.checkCanOperate(cir, (CentrifugeBlockEntity) (Object) this,
-			MyriadCreationsEventHandler::shouldBlockOperation);
-	}
 
 	/** 扣料前预留热能配方产物空间，失败时保留输入（支持 Omega 升级倍率）。 */
 	@Inject(method = "completeRecipeProcessing", at = @At("HEAD"), cancellable = true)
