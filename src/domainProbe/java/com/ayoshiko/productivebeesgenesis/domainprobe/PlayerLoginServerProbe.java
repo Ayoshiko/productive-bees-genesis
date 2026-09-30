@@ -43,7 +43,7 @@ public final class PlayerLoginServerProbe {
     private static UUID session;
 
     static UUID offline(String name) { return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)); }
-    private static boolean enabled() { return Boolean.getBoolean("pbg.login.server"); }
+    private static boolean enabled() { return Boolean.getBoolean("pbg.login.server") && !Boolean.getBoolean("pbg.exchange.enabled"); }
     private static boolean reader() { return "read".equals(System.getProperty("pbg.login.mode")); }
     private static Path manifestPath(MinecraftServer server) { return server.getWorldPath(LevelResource.ROOT).resolve("player-login-probe.dat"); }
 

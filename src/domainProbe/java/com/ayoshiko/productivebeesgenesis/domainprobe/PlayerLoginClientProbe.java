@@ -26,7 +26,7 @@ public final class PlayerLoginClientProbe {
     private static boolean finished, advancing;
     private static String session, marker;
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
-        if (!Boolean.getBoolean("pbg.login.client") || finished || advancing) return;
+        if (!Boolean.getBoolean("pbg.login.client") || Boolean.getBoolean("pbg.exchange.enabled") || finished || advancing) return;
         advancing = true; var client = Minecraft.getInstance();
         try {
             if (started == 0) started = System.nanoTime();

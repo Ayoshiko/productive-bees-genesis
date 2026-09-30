@@ -147,3 +147,12 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 - [NeoForge 1.21.1 Saved Data](https://docs.neoforged.net/docs/1.21.1/datastorage/saveddata/)：本次联网确认 `SavedData.Factory`、`DimensionDataStorage`、`setDirty` 生命周期。
 - [NeoForge 1.21.1 Payload](https://docs.neoforged.net/docs/1.21.1/networking/payload/)：本次联网确认 `PayloadRegistrar`、`CustomPacketPayload`、`enqueueWork`；处理线程仍以实际注册方式校验，主线程变更不得直接在网络线程执行。
 - 能力注册接入以当前项目 `Ae2CapabilityRegistrar` 及编译基线 NeoForge API 为依据；其生命周期与失效行为在实施时核对对应版本源码。
+
+<a id="s13-7"></a>
+### 13.7 真实访客交换与玩家恢复参考（2026-09-30）
+
+本步复读固定 Mekanism 10.7.19.85 的 `SecurityUtils.canAccessObject` 和 `SecurityFrequency.isTrusted/addTrusted/removeTrusted`：采用服务器 UUID 授权和变化标脏；本项目继续拒绝客户端乐观授权、PUBLIC 模式与 OP 绕过，所有者和访客的管理能力分开。
+
+从本 worktree 的 `build/moddev/artifacts/neoforge-21.1.216-sources.jar` 复核 Minecraft 1.21.1 的 `PlayerList.remove/save/load`、`PlayerDataStorage.save/load` 与 `Util.safeReplaceFile`：让真正 TCP 登录触发原版 player.dat 保存和下一 JVM 加载，探针只在首次新世界种子阶段设置资产，恢复阶段不加载替代玩家 NBT、不重建核心或注入背包。这是固定依赖源码核对，不声称更新了上游参考仓库。
+
+恢复比较须尊重数据语义：产物余额是按完整 ProductKey 标识的映射，序列化列表的遍历顺序不是资产身份。c3b2 使用本项目严格 checkpoint 解码器后比较全部状态，保留完整组件、精确数量、revision、蜂位、食物、授权和调度检查；不删除发生差异的字段，也不放宽非法／重复键验证。实际运行与失败修复见[10.68](bee-processing-network-evidence-current.md#s10-68)。

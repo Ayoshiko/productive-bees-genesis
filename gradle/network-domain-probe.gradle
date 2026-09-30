@@ -25,6 +25,10 @@ if (playerMode == null && gradle.startParameter.taskNames.any { it.tokenize(':')
     throw new GradleException('Player probes require -PnetworkPlayerMode=write or read')
 }
 if (playerMode != null && (automaticMode != null || multiblockMode != null || coldProbe)) throw new GradleException('Conflicting player probe mode')
+def playerExchange = providers.gradleProperty('networkPlayerExchange').isPresent()
+def playerRole = providers.gradleProperty('networkPlayerRole').getOrElse('owner')
+if (!(playerRole in ['owner', 'guest', 'stranger'])) throw new GradleException('Invalid player role')
+if (playerExchange && playerMode == null) throw new GradleException('Guest exchange requires a player mode')
 def playerPort = providers.gradleProperty('networkPlayerPort').getOrElse('25582')
 if (!(playerPort ==~ /[0-9]{4,5}/) || playerPort.toInteger() < 1024 || playerPort.toInteger() > 65535) throw new GradleException('Invalid local player port')
 def probeEula = file('run/eula.txt')
@@ -61,7 +65,7 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
                 File writerReport = new File(sourceWorld.parentFile, 'results/player-login-server.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing player writer report')
                 def writer = new groovy.json.JsonSlurper().parse(writerReport)
-                if (writer.passed != true || writer.normalPlayerFileVerified != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) {
+                if (writer.passed != true || writer.normalPlayerFileVerified != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2 || (writer.guestExchange == true) != playerExchange) {
                     throw new GradleException('Player reader requires successfully stopped matching writer')
                 }
             }
@@ -125,6 +129,7 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.login.server', 'true'
+            systemProperty 'pbg.exchange.enabled', playerExchange.toString()
             systemProperty 'pbg.login.mode', playerMode ?: 'write'
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
@@ -134,10 +139,12 @@ neoForge {
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
             systemProperty 'pbg.login.client', 'true'
+            systemProperty 'pbg.exchange.enabled', playerExchange.toString()
+            systemProperty 'pbg.exchange.role', playerRole
             systemProperty 'pbg.login.mode', playerMode ?: 'write'
             systemProperty 'pbg.login.port', playerPort
             programArgument '--username'
-            programArgument 'PbgLoginOwner'
+            programArgument (playerRole == 'guest' ? 'PbgLoginGuest' : playerRole == 'stranger' ? 'PbgLoginStranger' : 'PbgLoginOwner')
             programArgument '--width'
             programArgument '1000'
             programArgument '--height'

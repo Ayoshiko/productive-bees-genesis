@@ -19,9 +19,12 @@ final class ClientTerminalProbe {
 	private static long nextAt, resizeSequence;
 	static boolean complete() { return step == 25; }
 	static boolean advance(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu) throws Exception {
+		return advance(client, screen, menu, false);
+	}
+	static boolean advance(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu, boolean remote) throws Exception {
 		verifyLayout(screen, menu);
-		ClientTerminalFixture.requested = true;
-		if (!ClientTerminalFixture.ready || Util.getMillis() < nextAt || menu.clientState().waiting() || !menu.clientState().ready(Util.getMillis())) return false;
+		if (!remote) ClientTerminalFixture.requested = true;
+		if ((!remote && !ClientTerminalFixture.ready) || Util.getMillis() < nextAt || menu.clientState().waiting() || !menu.clientState().ready(Util.getMillis())) return false;
 		// 回复可能在界面 tick 后到达；等控件消费新状态，不在同 tick 使用旧的禁用按钮。
 		String refresh = Component.translatable("screen.productivebeesgenesis.network.refresh").getString();
 		if (screen.children().stream().anyMatch(child -> child instanceof Button button
@@ -75,12 +78,12 @@ final class ClientTerminalProbe {
 			}
 			case 21 -> { capture(client, "terminal-inventory"); press(screen, "refresh"); step++; }
 			case 22 -> { if (!verifyBeeIcons(client, screen, menu)) return false; step++; }
-			case 23 -> { capture(client, "terminal-bee-icons"); ClientTerminalFixture.done = true; step++; }
-			case 24 -> { if (!ClientTerminalFixture.verified) return false; press(screen, "tab.0"); step++; }
+			case 23 -> { capture(client, "terminal-bee-icons"); if (!remote) ClientTerminalFixture.done = true; step++; }
+			case 24 -> { if (!remote && !ClientTerminalFixture.verified) return false; press(screen, "tab.0"); step++; }
 		}
 		return complete();
 	}
-	private static boolean member(NetworkCoreScreen screen, NetworkCoreMenu menu) {
+	static boolean member(NetworkCoreScreen screen, NetworkCoreMenu menu) {
 		var view = menu.clientState().view(); if (view == null) return false;
 		for (int i = 0; i < view.rows().size(); i++) if (!view.rows().get(i).bees().isEmpty()) { click(screen, 80, 48 + i * 11); return true; }
 		throw new IllegalStateException("Client missing active apiary row");
@@ -94,11 +97,11 @@ final class ClientTerminalProbe {
 		}
 		require(view.hasNext(), "Client missing product " + label + " " + detail); press(screen, "next"); return false;
 	}
-	private static void chooseSlot(NetworkCoreScreen screen, NetworkCoreMenu menu, int inventorySlot) {
+	static void chooseSlot(NetworkCoreScreen screen, NetworkCoreMenu menu, int inventorySlot) {
 		var slot = menu.slots.stream().filter(value -> value.getContainerSlot() == inventorySlot).findFirst().orElseThrow();
 		click(screen, slot.x + 8, slot.y + 8);
 	}
-	private static void result(NetworkCoreMenu menu, TerminalReply.Status status, int moved) {
+	static void result(NetworkCoreMenu menu, TerminalReply.Status status, int moved) {
 		var result = menu.clientState().exchangeResult(); require(result != null && result.status() == status && result.moved() == moved,
 				"Client result mismatch at step " + step + ": " + result);
 		require(menu.clientState().view() == null || menu.terminalReply().sequence() > result.sequence(), "Asset command left clickable stale rows");
@@ -106,7 +109,7 @@ final class ClientTerminalProbe {
 	private static boolean autoRefreshed(NetworkCoreMenu menu) {
 		return menu.clientState().view() != null && menu.terminalReply().sequence() > menu.clientState().exchangeResult().sequence();
 	}
-	private static void press(NetworkCoreScreen screen, String key) {
+	static void press(NetworkCoreScreen screen, String key) {
 		String label = Component.translatable("screen.productivebeesgenesis.network." + key).getString();
 		var button = screen.children().stream().filter(child -> child instanceof Button b && b.getMessage().getString().endsWith(label))
 				.map(Button.class::cast).findFirst().orElseThrow(() -> new IllegalStateException("Missing button " + key + " at " + step));
