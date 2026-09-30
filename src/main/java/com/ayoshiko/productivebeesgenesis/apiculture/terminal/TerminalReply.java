@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-/** 每个已接纳请求只回复一次，包体最多 16 KiB，无分片队列或 NBT。 */
+/** 每个已接纳请求只回复一次，包体最多 16 KiB，无分片队列，图标组件 NBT 每项最多 512 字节。 */
 public record TerminalReply(int containerId, UUID session, long sequence, Status status,
 		int moved, int interruptedTicks, TerminalView view) implements CustomPacketPayload {
 	public enum Status { OK, MOVED, STALE, INVALID, UNAVAILABLE, NO_SPACE, EMPTY_OR_RESERVED, DRAIN_FIRST,
@@ -44,11 +44,12 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 		for (int i = 0; i < size; i++) {
 			String label = b.readUtf(TerminalView.TEXT_LIMIT); boolean fluid = b.readBoolean();
 			String detail = b.readUtf(TerminalView.TEXT_LIMIT);
+			String icon = b.readUtf(com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductIconPreview.MAX_TEXT);
 			String owned = b.readUtf(TerminalView.AMOUNT_LIMIT), available = b.readUtf(TerminalView.AMOUNT_LIMIT); boolean exact = b.readBoolean();
 			int count = boundedSize(b, 3); var bees = new ArrayList<TerminalView.Bee>(count);
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
-			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail));
+			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon));
 		}
 		return new TerminalView(kind, generation, next, rows);
 	}
@@ -60,6 +61,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 		for (var row : view.rows()) {
 			b.writeUtf(row.label(), TerminalView.TEXT_LIMIT); b.writeBoolean(row.fluid());
 			b.writeUtf(row.detail(), TerminalView.TEXT_LIMIT);
+			b.writeUtf(row.icon(), com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductIconPreview.MAX_TEXT);
 			b.writeUtf(row.owned(), TerminalView.AMOUNT_LIMIT); b.writeUtf(row.available(), TerminalView.AMOUNT_LIMIT);
 			b.writeBoolean(row.exact()); b.writeByte(row.bees().size());
 			for (var bee : row.bees()) {

@@ -34,9 +34,13 @@ final class ClientTerminalFixture {
 			water = ProductKeyCodec.fluid(new FluidStack(Fluids.WATER, 1), player.registryAccess());
 			var stock = new ConcurrentHashMap<ProductKey, ProductAmount>();
 			stock.put(iron, ProductAmount.of(65)); stock.put(red, ProductAmount.of(2)); stock.put(blue, ProductAmount.of(3)); stock.put(water, ProductAmount.of(2000));
-			for (int i = 0; i < 9; i++) {
-				decorated.set(DataComponents.CUSTOM_NAME, Component.literal("filler-" + i));
-				stock.put(ProductKeyCodec.item(decorated, player.registryAccess()), ProductAmount.of(1));
+			for (Item item : new Item[]{Items.GOLD_INGOT, Items.DIAMOND, Items.EMERALD, Items.LAPIS_LAZULI, Items.REDSTONE, Items.COPPER_INGOT, Items.COAL}) {
+				stock.put(ProductKeyCodec.item(new ItemStack(item), player.registryAccess()), ProductAmount.of(1024));
+			}
+			for (String type : new String[]{"iron", "gold"}) {
+				var comb = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_HONEYCOMB.get());
+				comb.set(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get(), net.minecraft.resources.ResourceLocation.parse("productivebees:" + type));
+				stock.put(ProductKeyCodec.item(comb, player.registryAccess()), ProductAmount.of(64));
 			}
 			com.ayoshiko.productivebeesgenesis.apiculture.persistence.ClientTerminalStockFixture.seed(data, stock);
 			for (int i = 0; i < 36; i++) player.getInventory().setItem(i, new ItemStack(Items.STONE, 64));

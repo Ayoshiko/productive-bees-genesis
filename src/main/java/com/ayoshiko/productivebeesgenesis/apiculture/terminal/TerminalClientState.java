@@ -10,7 +10,8 @@ public final class TerminalClientState {
 	private final UUID session;
 	private long sequence, pending, sentAt, nextSendAt, expiresAt;
 	private TerminalView view;
-	private TerminalReply result;
+	private TerminalReply result, exchangeResult;
+	private boolean pendingExchange;
 	private Notice notice = Notice.IDLE;
 	private boolean closed;
 
@@ -18,6 +19,8 @@ public final class TerminalClientState {
 	public boolean ready(long now) { return !closed && pending == 0 && now >= nextSendAt && sequence < Long.MAX_VALUE; }
 	public TerminalView view() { return view; }
 	public TerminalReply result() { return result; }
+	/** 查询刷新不会抹去刚确认的交换结果；下一次资产请求开始即清除。 */
+	public TerminalReply exchangeResult() { return exchangeResult; }
 	public Notice notice() { return notice; }
 	public boolean waiting() { return pending != 0; }
 
@@ -30,6 +33,8 @@ public final class TerminalClientState {
 				|| operation != TerminalRequest.Operation.NEXT && (row < 0 || row >= view.rows().size()))) return null;
 		long generation = query || cancel ? 0 : view.generation();
 		var request = new TerminalRequest(container, session, sequence + 1, operation, generation, row, target, inventory, amount);
+		pendingExchange = !query && !cancel && operation != TerminalRequest.Operation.NEXT;
+		if (pendingExchange) exchangeResult = null;
 		pending = ++sequence; sentAt = now; nextSendAt = now + SEND_INTERVAL_MILLIS;
 		if (query) expiresAt = now + TIMEOUT_MILLIS;
 		view = null; result = null; notice = Notice.WAITING;
@@ -37,6 +42,8 @@ public final class TerminalClientState {
 	}
 	public void accept(TerminalReply reply, long now) {
 		if (closed || pending == 0 || reply.sequence() != pending || reply.containerId() != container || !reply.session().equals(session)) return;
+		if (pendingExchange) exchangeResult = reply;
+		pendingExchange = false;
 		pending = 0; result = reply; view = reply.view(); notice = Notice.REPLY;
 		tick(now);
 	}
@@ -45,5 +52,5 @@ public final class TerminalClientState {
 		if (pending != 0 && now - sentAt >= TIMEOUT_MILLIS) { pending = 0; view = null; notice = Notice.TIMEOUT; }
 		if (view != null && now >= expiresAt) { view = null; notice = Notice.EXPIRED; }
 	}
-	public void close() { closed = true; view = null; result = null; pending = 0; }
+	public void close() { closed = true; view = null; result = null; exchangeResult = null; pending = 0; pendingExchange = false; }
 }

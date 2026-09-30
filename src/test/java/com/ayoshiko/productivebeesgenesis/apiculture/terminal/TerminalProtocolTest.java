@@ -71,6 +71,20 @@ class TerminalProtocolTest {
 			assertTrue(buffer.readableBytes() < 512);
 		} finally { buffer.release(); }
 	}
+	@Test void eightComponentIconsFitTheExistingBudgetAndRoundTrip() {
+		var components = new CompoundTag(); components.putString("productivebees:bee_type", "productivebees:iron");
+		var key = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:configurable_honeycomb"), components);
+		var row = new TerminalView.Row("蜂".repeat(80), false, "9".repeat(96), "9".repeat(96), true, List.of(), "组".repeat(80), key.iconPreview());
+		var view = new TerminalView(NetworkSelectionSession.Kind.PRODUCTS, 1, true, java.util.Collections.nCopies(8, row));
+		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, view);
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			TerminalReply.STREAM_CODEC.encode(buffer, reply);
+			assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
+			assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer));
+			assertEquals(components, com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductIconPreview.decode(row.icon()));
+		} finally { buffer.release(); }
+	}
 	@Test void sequenceCannotReplayReenterOrReopenAfterClose() {
 		var sequence = new TerminalSequence();
 		assertTrue(sequence.begin(1)); assertFalse(sequence.begin(2)); sequence.finish();

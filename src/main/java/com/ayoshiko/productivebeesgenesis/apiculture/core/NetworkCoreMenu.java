@@ -21,7 +21,6 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final TerminalSequence terminalSequence = new TerminalSequence();
 	private TerminalReply terminalReply;
 	private TerminalClientState clientState;
-	private boolean inventoryVisible;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -63,14 +62,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private void addInventory(Inventory inventory) {
 		for (int row = 0; row < 4; row++) for (int column = 0; column < 9; column++) {
 			int index = row == 3 ? column : (row + 1) * 9 + column;
-			addSlot(new Slot(inventory, index, 12 + column * 18, 80 + row * 18) {
-				@Override public boolean isActive() { return inventoryVisible; }
+			addSlot(new Slot(inventory, index, 47 + column * 18, 154 + row * 18 + (row == 3 ? 4 : 0)) {
 				@Override public boolean mayPlace(ItemStack stack) { return false; }
 				@Override public boolean mayPickup(Player player) { return false; }
 			});
 		}
 	}
-	public void inventoryVisible(boolean visible) { inventoryVisible = visible; }
 	public TerminalClientState clientState() { return clientState; }
 	/** 背包槽只同步和选择；包括丢弃、热键交换和创造复制在内的原版搬运均关闭。 */
 	@Override public void clicked(int slot, int button, ClickType type, Player player) { }

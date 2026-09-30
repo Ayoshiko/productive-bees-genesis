@@ -53,7 +53,7 @@ final class CoreTerminalCommands {
 					operation == TerminalRequest.Operation.CAGE_IN ? CoreBeeCageExchange.Action.INSERT : CoreBeeCageExchange.Action.EXTRACT, false);
 			return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), result.interruptedTicks(), null);
 		} finally {
-			// 结果不再携带可继续点按的旧页；客户端显式刷新，不自动重试资产命令。
+			// 结果不再携带可继续点按的旧页；客户端仅可重新查询显示，不自动重试资产命令。
 			selections.cancel();
 		}
 	}

@@ -21,7 +21,8 @@ function Assert-NetworkProbeReport {
         }
         if ($Gate -in @('D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a')) {
             foreach ($field in @('playerProductsExactUnreservedFiniteDelivery', 'playerProductsSingleKeyIndexAndUnchangedWork',
-                    'playerProductsPermissionsSyncAndReentry', 'playerProductsVerifiedBucketsAndComponentRejection', 'playerProductsShutdownExactRemainderSaved')) {
+                    'playerProductsPermissionsSyncAndReentry', 'playerProductsVerifiedBucketsAndComponentRejection', 'playerProductsShutdownExactRemainderSaved',
+                    'playerProductsAutomaticDestinationAndLimits')) {
                 if ($Report.$field -ne $true) { throw "Missing product withdrawal gate: $field" }
             }
         }
@@ -84,7 +85,8 @@ function Assert-NetworkClientReport {
     if ($Report.completedStage -ne 4 -or $Report.ae2Present -ne $Ae2) { throw 'Client stage or dependency combination differs' }
     foreach ($field in @('passed', 'menuCountsAndButtons', 'permissionsAndStaleMenu', 'physicalAssetsReturned',
             'normalIntegratedShutdown', 'longCoreEnergySynchronized', 'automaticProductionButtonsSynchronized',
-            'terminalWidgetsFiniteExchangesAndRefresh', 'terminalServerConservation', 'coreOwnerRoleSynchronized')) {
+            'terminalWidgetsFiniteExchangesAndRefresh', 'terminalServerConservation', 'coreOwnerRoleSynchronized',
+            'permanentInventoryAndMinimumViewport', 'componentItemGridAndPbTint')) {
         if ($Report.$field -ne $true) { throw "Missing terminal client gate: $field" }
     }
 }

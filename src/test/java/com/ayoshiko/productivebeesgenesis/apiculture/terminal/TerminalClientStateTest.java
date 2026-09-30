@@ -39,6 +39,20 @@ class TerminalClientStateTest {
 		state.begin(PRODUCTS, -1, -1, -1, 0, 5100); state.close(); state.accept(reply(3, page(3)), 5200);
 		assertNull(state.view()); assertNull(state.result()); assertFalse(state.ready(6000));
 	}
+	@Test void confirmedExchangeSurvivesReadRefreshButCannotAuthorizeAnotherAction() {
+		state.begin(PRODUCTS, -1, -1, -1, 0, 0); state.accept(reply(1, page(1)), 10);
+		var request = state.begin(TAKE_PRODUCT, 0, -1, -1, 64, 150);
+		assertEquals(-1, request.inventorySlot());
+		var moved = new TerminalReply(7, session, 2, TerminalReply.Status.MOVED, 1, 0, null);
+		state.accept(moved, 160); assertSame(moved, state.exchangeResult()); assertNull(state.view());
+		assertNull(state.begin(TAKE_PRODUCT, 0, -1, -1, 64, 300));
+		state.begin(PRODUCTS, -1, -1, -1, 0, 300); state.accept(reply(3, page(2)), 310);
+		assertSame(moved, state.exchangeResult()); assertEquals(2, state.view().generation());
+		state.begin(TAKE_PRODUCT, 0, -1, -1, 1, 450); assertNull(state.exchangeResult());
+		state.tick(5450); assertEquals(TerminalClientState.Notice.TIMEOUT, state.notice()); assertNull(state.exchangeResult());
+		state.accept(moved, 5451); assertNull(state.exchangeResult());
+		state.close(); assertNull(state.exchangeResult());
+	}
 	@Test void wrongSessionAndUnrequestedReplyCannotCompletePendingQuery() {
 		state.begin(MEMBERS, -1, -1, -1, 0, 0);
 		state.accept(new TerminalReply(7, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, page(1)), 1);

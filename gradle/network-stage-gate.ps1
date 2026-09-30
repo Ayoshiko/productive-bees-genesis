@@ -99,7 +99,7 @@ try {
             $reportPath = Join-Path $clientFolder 'client.json'
             Assert-NetworkClientReport (Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json) $ae2
             $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
-            foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'returned')) {
+            foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'terminal-products', 'terminal-bee-icons', 'returned')) {
                 $screenshot = Join-Path $clientFolder "$name.png"
                 $summary.checks += [ordered]@{ name = "$combination-$name-image"; path = $screenshot; sha256 = (Get-FileHash -LiteralPath $screenshot).Hash }
             }

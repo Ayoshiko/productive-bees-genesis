@@ -29,6 +29,7 @@ public final class ProductKey {
 	public boolean hasComponent(String id) { return components.contains(id); }
 	/** 固定小预算显示，不复制完整组件；不同条目仍由服务端页行区分。 */
 	public String componentPreview() { return ProductComponentPreview.describe(components, 80); }
+	public String iconPreview() { return ProductIconPreview.capture(components); }
 	/** StringTagVisitor 在本版本递归排序复合键；完整带类型 SNBT 消解哈希碰撞。 */
 	public String orderingKey() {
 		String value = orderingKey;

@@ -57,13 +57,14 @@ final class PlayerProductProbe {
 		data = core.ownership().readyAuthority(); if (data == null) return false;
 		seed(); openMenu(61); player.getInventory().clearContent();
 		while (!data.processingStock().ready()) data.processingStock().step();
-		items(); PlayerSelectionProbe.products(menu, player, data, report);
+		items(); automatic(); PlayerSelectionProbe.products(menu, player, data, report);
 		buckets(report); permissions(server); synchronization();
 		TerminalProtocolProbe.bucket(menu, player, data, water, report);
 		CoreAccessProbe.verify(core, player, data, iron, report);
 		require(NetworkCheckpointCodec.forRegistries(player.registryAccess()).decode(NetworkCheckpointCodec.encode(data.checkpoint())).equals(data.checkpoint()), "Product withdrawal checkpoint round-trip failed");
 		shutdown = data.checkpoint(); player.containerMenu = player.inventoryMenu;
 		report.addProperty("playerProductsExactUnreservedFiniteDelivery", true);
+		report.addProperty("playerProductsAutomaticDestinationAndLimits", true);
 		report.addProperty("playerProductsSingleKeyIndexAndUnchangedWork", true);
 		report.addProperty("playerProductsPermissionsSyncAndReentry", true);
 		report.addProperty("playerProductsChecks", checks); report.addProperty("playerProductsMaxWithdrawalNanos", maxNanos);
@@ -104,9 +105,25 @@ final class PlayerProductProbe {
 		check(named, 5, 1, false, EMPTY_OR_RESERVED, 0, revision());
 		for (int i = 0; i < 36; i++) slot(i, new ItemStack(Items.COBBLESTONE, 64));
 		check(iron, 0, 1, false, NO_SPACE, 0, revision()); slot(0, ItemStack.EMPTY);
-		check(iron, -1, 1, false, INVALID, 0, revision()); check(iron, 0, 65, false, INVALID, 0, revision());
+		check(iron, -2, 1, false, INVALID, 0, revision()); check(iron, 0, 65, false, INVALID, 0, revision());
 		var absent = ProductKeyCodec.item(new ItemStack(Items.DIRT), player.registryAccess()); check(absent, 0, 1, false, EMPTY_OR_RESERVED, 0, revision());
 		ModConfig.SERVER.beeNetwork.enabled.set(false); check(iron, 0, 1, false, MOVED, 1, revision()); ModConfig.SERVER.beeNetwork.enabled.set(true);
+	}
+	private static void automatic() {
+		for (int i = 0; i < 36; i++) slot(i, new ItemStack(Items.COBBLESTONE, 64));
+		slot(0, namedItem.copyWithCount(63)); slot(1, ItemStack.EMPTY); slot(9, new ItemStack(Items.IRON_INGOT, 63));
+		long previous = revision();
+		check(iron, -1, 64, true, MOVED, 1, previous, 9);
+		check(iron, -1, 64, false, MOVED, 1, previous, 9);
+		check(iron, -1, 64, false, STALE, 0, previous, -1);
+		check(iron, -1, 64, false, MOVED, 64, revision(), 1);
+		check(iron, -1, 1, false, NO_SPACE, 0, revision(), -1);
+		require(ItemStack.matches(namedItem.copyWithCount(63), player.getInventory().items.get(0)), "Auto destination mixed item components");
+		slot(6, new ItemStack(Items.BUCKET, 2));
+		var custom = new ItemStack(Items.BUCKET); custom.set(DataComponents.CUSTOM_NAME, Component.literal("保留桶组件")); slot(7, custom);
+		slot(8, new ItemStack(Items.BUCKET));
+		check(water, -1, 1000, true, MOVED, 1000, revision(), 8);
+		check(componentFluid, -1, 1000, false, UNSUPPORTED_CONTAINER, 0, revision(), -1);
 	}
 	private static void buckets(JsonObject report) {
 		slot(6, new ItemStack(Items.BUCKET)); long revision = revision();
@@ -145,8 +162,11 @@ final class PlayerProductProbe {
 		require(nested.get().status() == UNAVAILABLE && feeding.get().status() == CoreFeedingExchange.Status.UNAVAILABLE, "Cross-service exchange reentered");
 	}
 	private static void check(ProductKey key, int slot, int requested, boolean simulate, CoreProductWithdrawal.Status status, int amount, long revision) {
+		check(key, slot, requested, simulate, status, amount, revision, slot);
+	}
+	private static void check(ProductKey key, int slot, int requested, boolean simulate, CoreProductWithdrawal.Status status, int amount, long revision, int destination) {
 		var before = data.checkpoint(); var inventory = player.getInventory().save(new ListTag());
-		var original = slot < 0 || slot >= 36 ? ItemStack.EMPTY : player.getInventory().items.get(slot).copy();
+		var original = destination < 0 || destination >= 36 ? ItemStack.EMPTY : player.getInventory().items.get(destination).copy();
 		Map<ProductKey, ProductAmount> expected = new ConcurrentHashMap<>(before.ledger().balances());
 		int packets = sync.packets; boolean failedSync = sync.failNext;
 		long start = System.nanoTime(); var result = menu.withdrawProduct(player, key, revision, slot, requested, simulate);
@@ -156,7 +176,7 @@ final class PlayerProductProbe {
 		if (simulate || amount == 0) require(after == before && inventory.equals(player.getInventory().save(new ListTag())), "Rejected/simulated withdrawal changed authority");
 		else {
 			var remaining = expected.get(key).subtract(ProductAmount.of(amount)); if (remaining.isZero()) expected.remove(key); else expected.put(key, remaining);
-			var received = player.getInventory().items.get(slot);
+			var received = player.getInventory().items.get(destination);
 			if (key.kind() == ProductKey.Kind.ITEM) require(ProductKeyCodec.item(received, player.registryAccess()).equals(key) && received.getCount() == original.getCount() + amount, "Item delivery changed count/components");
 			else { var contents = new FluidBucketWrapper(received).getFluid(); require(contents.getAmount() == amount && ProductKeyCodec.fluid(contents, player.registryAccess()).equals(key), "Bucket delivery lost fluid"); }
 			require(data.processingStock().step(), "Withdrawal rebuilt the stock index");
@@ -165,7 +185,7 @@ final class PlayerProductProbe {
 		require(before.ledger().transactions() == after.ledger().transactions() && before.energy() == after.energy() && before.ownedMachines() == after.ownedMachines()
 				&& before.scheduler() == after.scheduler() && before.transfers() == after.transfers(), "Withdrawal touched reservations, FE or work");
 		require(sync.packets - packets == (simulate || amount == 0 ? 0 : 1), "Withdrawal emitted speculative/duplicate sync");
-		if (!simulate && amount > 0 && !failedSync) require(sync.last.getContainerId() == -2 && sync.last.getSlot() == slot && ItemStack.matches(sync.last.getItem(), player.getInventory().items.get(slot)), "Product sync differs from committed inventory");
+		if (!simulate && amount > 0 && !failedSync) require(sync.last.getContainerId() == -2 && sync.last.getSlot() == destination && ItemStack.matches(sync.last.getItem(), player.getInventory().items.get(destination)), "Product sync differs from committed inventory");
 		require(player.serverLevel().getEntitiesOfClass(ItemEntity.class, new AABB(POS).inflate(3)).isEmpty(), "Product withdrawal dropped items");
 	}
 	static void verifyShutdown(MinecraftServer server, JsonObject report) throws Exception {

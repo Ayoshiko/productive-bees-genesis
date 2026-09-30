@@ -86,6 +86,8 @@ public final class NetworkClientProbe {
 		report.addProperty("ae2Present", net.neoforged.fml.ModList.get().isLoaded("ae2"));
 		report.addProperty("menuCountsAndButtons", error == null); report.addProperty("permissionsAndStaleMenu", error == null);
 		report.addProperty("coreOwnerRoleSynchronized", error == null);
+		report.addProperty("permanentInventoryAndMinimumViewport", error == null && ClientTerminalProbe.complete());
+		report.addProperty("componentItemGridAndPbTint", error == null && ClientTerminalProbe.complete());
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);
