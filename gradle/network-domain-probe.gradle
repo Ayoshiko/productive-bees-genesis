@@ -19,9 +19,10 @@ def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
+def playerConcurrent = providers.gradleProperty('networkConcurrentProbe').isPresent()
 def playerMode = providers.gradleProperty('networkPlayerMode').orNull
 if (playerMode != null && !(playerMode in ['write', 'read'])) throw new GradleException('Invalid player login mode')
-if (playerMode == null && gradle.startParameter.taskNames.any { it.tokenize(':').last() in ['runNetworkPlayerServer', 'runNetworkPlayerClient'] }) {
+if (playerMode == null && gradle.startParameter.taskNames.any { it.tokenize(':').last() in ['runNetworkPlayerServer', 'runNetworkPlayerClient', 'runNetworkConcurrentServer', 'runNetworkConcurrentOwner', 'runNetworkConcurrentGuest'] }) {
     throw new GradleException('Player probes require -PnetworkPlayerMode=write or read')
 }
 if (playerMode != null && (automaticMode != null || multiblockMode != null || coldProbe)) throw new GradleException('Conflicting player probe mode')
@@ -29,7 +30,8 @@ def playerExchange = providers.gradleProperty('networkPlayerExchange').isPresent
 def playerRole = providers.gradleProperty('networkPlayerRole').getOrElse('owner')
 if (!(playerRole in ['owner', 'guest', 'stranger'])) throw new GradleException('Invalid player role')
 if (playerExchange && playerMode == null) throw new GradleException('Guest exchange requires a player mode')
-def playerPort = providers.gradleProperty('networkPlayerPort').getOrElse('25582')
+if (playerConcurrent && (playerMode == null || playerExchange)) throw new GradleException('Concurrent mode needs a player mode and cannot use the sequential fixture')
+def playerPort = providers.gradleProperty('networkPlayerPort').getOrElse(playerConcurrent ? '25583' : '25582')
 if (!(playerPort ==~ /[0-9]{4,5}/) || playerPort.toInteger() < 1024 || playerPort.toInteger() > 65535) throw new GradleException('Invalid local player port')
 def probeEula = file('run/eula.txt')
 def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
@@ -59,9 +61,17 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = playerConcurrent ? 'concurrent-probe.dat' : playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
-            if (playerMode == 'read') {
+            if (playerMode == 'read' && playerConcurrent) {
+                File report = new File(sourceWorld.parentFile, 'results/concurrent-server.json')
+                if (!report.isFile()) throw new GradleException('Missing concurrent writer report')
+                def writer = new groovy.json.JsonSlurper().parse(report)
+                if (writer.passed != true || writer.normalPlayerFilesVerified != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) {
+                    throw new GradleException('Concurrent reader requires its successfully stopped writer')
+                }
+            }
+            if (playerMode == 'read' && !playerConcurrent) {
                 File writerReport = new File(sourceWorld.parentFile, 'results/player-login-server.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing player writer report')
                 def writer = new groovy.json.JsonSlurper().parse(writerReport)
@@ -123,6 +133,40 @@ neoForge {
     addModdingDependenciesTo sourceSets.domainProbe
     mods.named(mod_id.toString()) { sourceSet(sourceSets.domainProbe) }
     runs {
+        networkConcurrentServer {
+            server()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.concurrent.server', 'true'
+            systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+        networkConcurrentOwner {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.concurrent.client', 'true'
+            systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
+            systemProperty 'pbg.concurrent.role', 'owner'
+            systemProperty 'pbg.concurrent.port', playerPort
+            programArguments.addAll('--username', 'PbgLoginOwner', '--width', '1000', '--height', '700')
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+        networkConcurrentGuest {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.concurrent.client', 'true'
+            systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
+            systemProperty 'pbg.concurrent.role', 'guest'
+            systemProperty 'pbg.concurrent.port', playerPort
+            programArguments.addAll('--username', 'PbgLoginGuest', '--width', '1000', '--height', '700')
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
         networkPlayerServer {
             server()
             sourceSet = sourceSets.domainProbe
@@ -225,7 +269,8 @@ neoForge {
 tasks.configureEach {
     if (name in ['prepareNetworkDomainClientRun', 'prepareNetworkDomainServerRun',
                  'prepareNetworkMultiblockClientRun', 'prepareNetworkMultiblockServerRun',
-                 'prepareNetworkPlayerClientRun', 'prepareNetworkPlayerServerRun']) {
+                 'prepareNetworkPlayerClientRun', 'prepareNetworkPlayerServerRun',
+                  'prepareNetworkConcurrentServerRun', 'prepareNetworkConcurrentOwnerRun', 'prepareNetworkConcurrentGuestRun']) {
         dependsOn prepareProbe
     }
 }

@@ -156,3 +156,12 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 从本 worktree 的 `build/moddev/artifacts/neoforge-21.1.216-sources.jar` 复核 Minecraft 1.21.1 的 `PlayerList.remove/save/load`、`PlayerDataStorage.save/load` 与 `Util.safeReplaceFile`：让真正 TCP 登录触发原版 player.dat 保存和下一 JVM 加载，探针只在首次新世界种子阶段设置资产，恢复阶段不加载替代玩家 NBT、不重建核心或注入背包。这是固定依赖源码核对，不声称更新了上游参考仓库。
 
 恢复比较须尊重数据语义：产物余额是按完整 ProductKey 标识的映射，序列化列表的遍历顺序不是资产身份。c3b2 使用本项目严格 checkpoint 解码器后比较全部状态，保留完整组件、精确数量、revision、蜂位、食物、授权和调度检查；不删除发生差异的字段，也不放宽非法／重复键验证。实际运行与失败修复见[10.68](bee-processing-network-evidence-current.md#s10-68)。
+
+<a id="s13-8"></a>
+### 13.8 同时在线玩家与请求顺序参考（2026-09-30）
+
+复读固定 Mekanism 10.7.19.85 的 `PacketQIOItemViewerSlotTake.handle`：即使玩家已看到库存，执行时仍重新校验当前菜单、同组件堆叠和实际接收空间，并使用真实提取量更新接收方。本项目采用“显示快照不授予资产所有权”的原则，继续通过当前账本和有限背包服务提交，不引入 QIO 鼠标携带栈或回存失败后的掉落补偿。
+
+本地 NeoForge 21.1.216 `PayloadRegistrar.playBidirectional/executesOn` 用于核对 MAIN 队列。开发探针用独立的小型阶段信号确认两名玩家都已读取提交前库存，并在重放请求之后通过同一连接确认服务器已处理；信号仅同步验收阶段与结果，不包含资产键、权限或转移方法。实际存取使用正式 GUI／TerminalRequest 的 TCP 路径。阶段信号和服务器／客户端驱动仅位于 domainProbe 源集，发布 JAR 必须排除。
+
+同时启动两个真实客户端须使用不同的 ModDev run 名称，否则同一工作区生成的启动配置可能被另一个角色覆盖。两个客户端目录、专服世界和正常重启副本各自独立；客户端不共享可写世界。实际证据见[10.69](bee-processing-network-evidence-current.md#s10-69)。

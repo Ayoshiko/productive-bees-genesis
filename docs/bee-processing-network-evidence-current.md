@@ -274,3 +274,20 @@
 **验证结果：** `build/network-gates/d16c3b2-20260930-complete/gate.json` 已通过：有／无 AE2 各 writer／reader，共 4 个专服 JVM、12 次真实客户端登录，正常退出均由原版保存玩家文件；每个专服 3 次登录／退出，三方资产守恒与陌生玩家拒绝全部通过。`test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 成功，现有 1,050 项 JUnit 报告零失败／错误、2 项既有跳过；JAR 不含开发探针类。源码指纹 `952D6F5E451BC4C383FB5020BA4F0759D5A3C4FB6BFBB9A7CF228AAF41A7DB52`、依赖与产物哈希在矩阵前后相同，74 项报告／日志／玩家文件／网络文件／截图证据纳入索引。最终 JAR SHA-256 保持 `A842EFF06B63EA887971351C342E2E4879AB8E39A2E1D2C44FCCB316633136E5`。已核对访客身份、禁用管理按钮和实际背包截图；测试进程均正常退出。c3b2 至此签收，下一步为 c3c，P3 仍未关闭。
 
 **边界：** 本机 offline-mode 的真实 TCP 登录证明客户端／专服及正常玩家文件生命周期，不代表外部账号认证。三个角色顺序登录，不代替 c3c 的两名授权玩家同时竞争；正常停服不代替 D29 强制断电耐久性，也没有新增 Spark／MSPT 结论。D16c／P3 和 M06 的父门继续开放。
+
+<a id="s10-69"></a>
+### 10.69 D16c3c 双玩家竞争与 P3 联合门（2026-09-30，已验收）
+
+**实现：** 两个独立客户端保持同时在线，通过阶段屏障先读取同一提交前资产再点击正式 GUI。覆盖单物品竞争、双方仅剩一个同组件堆叠空间、双方满背包、同一桶流体、同 ID 组件变体、同一份食物和同一只蜜蜂；明确回执之后重放原始正式请求，确认不再次交付。所有者通过正式 UUID 命令撤销／重新授予访客，再检查旧菜单请求拒绝和新菜单真实接收；访客正常断线并在同一客户端重新连接，验证旧连接的待提交请求不能用于新菜单。最后正常停服，两个新客户端从新 JVM 恢复两个原版玩家文件、核心访问表与网络域。
+
+**独立核算：** 每步在服务器线程把网络余额、两名玩家背包、有限喂食和完整蜜蜂数据归并为精确守恒总账，不预设先到达者；同时检查本次目标键的真实余量、回执实际量、未涉及的余额、FE／调度状态和无掉落实体。阶段信号只负责协调与处理屏障，不调用资产服务。源码参考与启动隔离见[13.8](bee-processing-network-references.md#s13-8)。
+
+**双玩家证据：** `build/network-gates/d16c3c-20260930-first/gate.json` 通过有／无 AE2 的 writer／reader 四组：4 个专服 JVM、8 个客户端 JVM、10 次 TCP 登录。每个 writer 完成 9 个场景和 8 轮原请求重放，两名玩家同时在线；reader 核对两个原版玩家文件、核心授权、完整网络 checkpoint 与新菜单会话。2026-09-30 续接时复核全部 62 项证据哈希，仍与记录一致；所有者／访客恢复截图显示相同网络余量，玩家背包符合实际竞争结果。
+
+**累计联合证据：** `build/network-gates/p3-joint-20260930-resumed/gate.json` 已通过，索引 35 项联合证据并引用上述双玩家矩阵。累计有／无 AE2 各覆盖 domain、writer、reader、client，共 6 个成功专服 JVM 与 2 个集成客户端：D16b 的基础蜂箱／离心／串联、共享预算、维护费、保留／缺料／暂停／拓扑及每组 9 场景的新 JVM 恢复，c1 的喂食／物品／桶／蜂笼守恒，c2 的选择、重放、限流和界面同步，c3a 的最小授权、撤销重授及损坏数据保留均通过。客户端截图核对有限取回、完整背包、身份显示及成员交还。对应合同为[单一所有权不变量](bee-processing-network-design.md#s1-2)与[玩家联合门](bee-processing-network-roadmap.md#s11-11)；本步无需改变正式资产交换实现。
+
+**中断与续接：** 原 `p3-joint-20260930` 在 AE2 reader 启动期间中断，没有完成报告。保留原目录及日志，复核已成功的六组报告和构建日志，只在全新目录补跑 AE2 reader／client；reader 从原已正常停服 writer 的独立副本恢复，并验证原世界文件未变化。既有源码指纹受 PowerShell 运行时排序影响，本次使用原 Windows PowerShell 5.1 复验，前后均为 `08B27058485B02F0D38493228F28C6FE74DE1EAE67BF5F5A7F799C50E4E4501E`，依赖哈希相同；未将未完成的 reader 计作通过。
+
+**构建与结论：** 同一源码的 `test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 已成功，1,050 项 JUnit 报告中 1,048 通过、2 项既有跳过、零失败／错误。再次核对发布 JAR 排除全部 domainProbe 类，SHA-256 为 `A842EFF06B63EA887971351C342E2E4879AB8E39A2E1D2C44FCCB316633136E5`，与运行前一致。D16c3c、D16c 与 P3 的最小玩家生产闭环联合签收；下一步状态只在[实施路线](bee-processing-network-roadmap.md#current)维护。
+
+**边界：** 本机 offline-mode 真实 TCP 登录不代表外部账号认证；正常退出与重启不代表强制断电、第三方回调的未知结果恢复或同场景 Spark 性能结论。P3 仅覆盖已准入的基础成员和静态蜂种，默认开关未改，尚未实现的工厂／特殊蜂种不因此获得准入。M04 仍需 D17，完整 M06、D29 故障耐久性与 D30 性能门独立维护。
