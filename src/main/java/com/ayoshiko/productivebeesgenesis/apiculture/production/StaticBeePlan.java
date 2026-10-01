@@ -12,5 +12,11 @@ public record StaticBeePlan(String beeType, String recipe, long recipeRevision, 
 		if (beeType.isBlank() || recipe.isBlank() || recipeRevision < 0 || capabilityRevision < 0 || cycleTicks < 1
 				|| energyPerTick < 0 || productivity < 0 || productivity > 3 || count < 1) throw new IllegalArgumentException("Invalid static bee plan");
 	}
+	/** 周期边界只切换耗时与单价，不改蜂种、基因、产物或配方身份。 */
+	public StaticBeePlan retime(int ticks, long energy) {
+		return cycleTicks == ticks && energyPerTick == energy ? this
+				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision),
+						ticks, energy, productivity, genesAffectWork, traits, output, count);
+	}
 	public int countPerCycle() { return BeeProductionSampling.adjustStackCount(count, productivity); }
 }

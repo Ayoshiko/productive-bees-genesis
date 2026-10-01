@@ -47,8 +47,18 @@ public final class BeeMemberState {
 	public RosterVersion rosterVersion() { return rosterVersion; }
 	public BeeRecord bee(int slot) { return bees.stream().filter(bee -> bee.slot() == slot).findFirst().orElseThrow(); }
 	public BeeMemberState update(BeeRecord next, long remainingEnergy) {
+		return update(next, remainingEnergy, false);
+	}
+	/** 仅供带付款证明的工作执行器发布周期起点的时间／单价切换。 */
+	BeeMemberState updateTiming(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
-		if (!old.id().equals(next.id()) || !old.originalSlot().equals(next.originalSlot()) || !old.plan().equals(next.plan())
+		if (old.progress() != 0 || !old.drained() || !old.plan().retime(next.plan().cycleTicks(), next.plan().energyPerTick()).equals(next.plan()))
+			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
+		return update(next, remainingEnergy, true);
+	}
+	private BeeMemberState update(BeeRecord next, long remainingEnergy, boolean timing) {
+		var old = bee(next.slot());
+		if (!old.id().equals(next.id()) || !old.originalSlot().equals(next.originalSlot()) || !timing && !old.plan().equals(next.plan())
 				|| next.revision() != Math.incrementExact(old.revision()) || remainingEnergy < 0 || remainingEnergy > energy)
 			throw new IllegalArgumentException("Invalid bee successor");
 		return new BeeMemberState(member, Math.incrementExact(revision), remainingEnergy, energyCapacity,
@@ -66,6 +76,11 @@ public final class BeeMemberState {
 		var nextFeeding = withFeeding ? Objects.requireNonNull(feeding).moveWithBee(from, to) : feeding;
 		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity,
 				bees.stream().map(bee -> bee.slot() == from ? moved : bee).sorted(java.util.Comparator.comparingInt(BeeRecord::slot)).toList(), nextFeeding, networkPowered);
+	}
+	/** 只由升级实物凭据发布；容量改变不移动 FE、名册或既有工作。 */
+	public BeeMemberState upgradeCapacity(long capacity) {
+		if (capacity < energy || capacity <= 0) throw new IllegalArgumentException("Insufficient upgraded apiary capacity");
+		return new BeeMemberState(member, Math.incrementExact(revision), energy, capacity, bees, feeding, networkPowered, rosterVersion);
 	}
 	public BeeMemberState transferEnergy() {
 		return networkPowered ? this : new BeeMemberState(member, Math.incrementExact(revision), 0, energyCapacity, bees, feeding, true, rosterVersion);

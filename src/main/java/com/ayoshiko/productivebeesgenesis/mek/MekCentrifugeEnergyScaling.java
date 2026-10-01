@@ -163,7 +163,7 @@ public final class MekCentrifugeEnergyScaling {
 	}
 
 	/** Returns Mekanism's deterministic capacity for a registered base and current upgrades. */
-	static long normalCapacity(long baseCapacity, long upgradedCapacity) {
+	public static long normalCapacity(long baseCapacity, long upgradedCapacity) {
 		long base = Math.max(1L, baseCapacity);
 		return Math.max(base, upgradedCapacity);
 	}

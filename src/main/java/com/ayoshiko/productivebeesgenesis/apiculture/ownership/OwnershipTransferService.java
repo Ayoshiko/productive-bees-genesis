@@ -83,6 +83,7 @@ public final class OwnershipTransferService {
 		check(); if (advancing || step != Step.OWNED) throw new IllegalStateException("Member is not available for return");
 		if (record().bees() != null && !record().bees().drained()) throw new IllegalStateException("Settle paid bee work before return");
 		if (record().centrifuge() != null && !record().centrifuge().drained()) throw new IllegalStateException("Settle held centrifuge work before return");
+		if (!endpoint.readyToReturn(record())) throw new IllegalStateException("Finish the old upgraded bee cycle before return");
 		advancing = true;
 		try {
 			endpoint.validate(authority.identity(), claim); requireClaim(); requireBinding(endpoint, MemberBinding.Mode.MANAGED); requireEmpty(endpoint);

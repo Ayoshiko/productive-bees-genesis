@@ -25,7 +25,7 @@ public final class MemberUpgradeChange {
 	/** 新安装受当前上限约束；旧超限数量允许逐次取回，不能在加载或拆除时裁掉。 */
 	public static MemberUpgradeChange pb(OwnedMachineRecord source, PbUpgradeType upgrade, int delta, int installLimit) {
 		validateSource(source, delta);
-		if (!PbCentrifugeUpgradeCounts.supported(upgrade)) throw new IllegalArgumentException("Unsupported PB upgrade");
+		if (source.centrifuge() == null || !PbCentrifugeUpgradeCounts.supported(upgrade)) throw new IllegalArgumentException("Unsupported PB upgrade");
 		var image = source.assets().copy(); var extra = image.getCompound("extra");
 		int count = Math.addExact(PbCentrifugeUpgradeCounts.read(extra).getOrDefault(upgrade, 0), delta);
 		if (delta > 0 && (installLimit < 1 || count > installLimit)) throw new IllegalArgumentException("PB install limit exceeded");
@@ -33,9 +33,10 @@ public final class MemberUpgradeChange {
 		return finish(source, image, source.centrifuge().energyCapacity(), delta, count);
 	}
 	private static void validateSource(OwnedMachineRecord source, int delta) {
-		if (source == null || source.phase() != OwnedMachineRecord.Phase.OWNED || source.centrifuge() == null
-				|| !source.claim().machine().equals("productivebeesgenesis:mek_centrifuge") || delta == 0 || delta < -64 || delta > 64)
-			throw new IllegalArgumentException("Upgrade exchange requires an activated basic centrifuge");
+		if (source == null || source.phase() != OwnedMachineRecord.Phase.OWNED || delta == 0 || delta < -64 || delta > 64
+				|| !(source.centrifuge() != null && source.claim().machine().equals("productivebeesgenesis:mek_centrifuge")
+				|| source.bees() != null && source.claim().machine().equals("productivebeesgenesis:mek_apiary")))
+			throw new IllegalArgumentException("Upgrade exchange requires an activated basic member");
 	}
 	private static MemberUpgradeChange prepare(OwnedMachineRecord source, Upgrade upgrade, int delta, long capacity) {
 		validateSource(source, delta);
@@ -46,14 +47,19 @@ public final class MemberUpgradeChange {
 		if (old > upgrade.getMax()) throw new IllegalArgumentException("Existing upgrade count exceeds current limit");
 		int count = Math.addExact(old, delta);
 		image.put("upgrades", NativeUpgradeCounts.withCount(component, upgrade, count));
-		var work = source.centrifuge();
-		if (upgrade == Upgrade.SPEED) capacity = work.energyCapacity();
-		if (capacity < work.energy()) throw new IllegalArgumentException("Member energy exceeds the new capacity");
+		long stored = source.bees() != null ? source.bees().energy() : source.centrifuge().energy();
+		if (upgrade == Upgrade.SPEED) capacity = source.bees() != null ? source.bees().energyCapacity() : source.centrifuge().energyCapacity();
+		if (capacity < stored) throw new IllegalArgumentException("Member energy exceeds the new capacity");
 		image.putLong("energyCapacity", capacity);
 		return finish(source, image, capacity, delta, count);
 	}
 	private static MemberUpgradeChange finish(OwnedMachineRecord source, net.minecraft.nbt.CompoundTag image, long capacity, int delta, int count) {
-		var assets = new AssetImage(image); var work = source.centrifuge();
+		var assets = new AssetImage(image);
+		if (source.bees() != null) {
+			var next = new OwnedMachineRecord(source.claim(), source.phase(), assets, assets.fingerprint(), "", source.bees().upgradeCapacity(capacity));
+			return new MemberUpgradeChange(source, next, delta, count);
+		}
+		var work = source.centrifuge();
 		// 作业对象及其投入、种子、费用、进度保持不变；revision 使所有旧候选失效。
 		var nextWork = new CentrifugeWorkState(work.member(), Math.incrementExact(work.revision()), work.laneCount(),
 				work.energy(), capacity, work.jobs(), work.networkPowered());

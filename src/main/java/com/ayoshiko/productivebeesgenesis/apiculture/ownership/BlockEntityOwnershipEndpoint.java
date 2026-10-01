@@ -42,6 +42,11 @@ public final class BlockEntityOwnershipEndpoint implements OwnershipEndpoint {
 	}
 	@Override public boolean empty() { level(); return assets.empty(); }
 	@Override public void mode(MemberBinding.Mode mode) { level(); MemberBinding.phase(tile, MemberBinding.read(tile), mode); }
+	@Override public boolean readyToReturn(OwnedMachineRecord record) {
+		level();
+		return OwnershipEndpoint.super.readyToReturn(record) && (!(tile instanceof com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary hive)
+				|| com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter.returnReady(hive, record));
+	}
 	@Override public void validateReturn(AssetImage image) { assets.validate(image, level()); }
 	@Override public void restore(AssetImage image) { assets.restore(image, level()); }
 	@Override public CompletionStage<Void> saveReturn() {

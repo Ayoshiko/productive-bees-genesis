@@ -37,8 +37,7 @@ public final class CoreOwnershipController {
 		var view = core.topology();
 		if (join && (!ModConfig.SERVER.beeNetwork.enabled.get() || view == null || !view.valid())) return false;
 		if (!join && (domain == null || domain.checkpoint().ownedMachines().activeCount() == 0)) return false;
-		if (!join && domain.checkpoint().ownedMachines().values().stream().anyMatch(record -> record.bees() != null && !record.bees().drained()
-				|| record.centrifuge() != null && !record.centrifuge().drained())) {
+		if (!join && domain.checkpoint().ownedMachines().values().stream().anyMatch(record -> !readyToReturn(level, record))) {
 			failure = "Settle held production work before returning members"; status = Status.REJECTED; return false;
 		}
 		failure = "";
@@ -125,6 +124,14 @@ public final class CoreOwnershipController {
 		if (transfer.step() == OwnershipTransferService.Step.OWNED) {
 			if (action == Action.RETURN) transfer.requestReturn(endpoint); else { transfer = null; current = null; }
 		} else if (transfer.step() == OwnershipTransferService.Step.RETURNED) { transfer = null; current = null; }
+	}
+	private static boolean readyToReturn(ServerLevel level, OwnedMachineRecord record) {
+		if (record.bees() != null && !record.bees().drained() || record.centrifuge() != null && !record.centrifuge().drained()) return false;
+		if (record.bees() == null || record.bees().bees().stream().noneMatch(bee -> bee.progress() > 0)) return true;
+		var member = tile(level, record.claim());
+		if (member == null) return false;
+		try { return new BlockEntityOwnershipEndpoint(member).readyToReturn(record); }
+		catch (IllegalArgumentException | IllegalStateException invalid) { return false; }
 	}
 	private static TileEntityMekanism tile(ServerLevel level, MemberClaim claim) {
 		var origin = claim.origin(); if (!origin.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(origin.x() >> 4, origin.z() >> 4)) return null;

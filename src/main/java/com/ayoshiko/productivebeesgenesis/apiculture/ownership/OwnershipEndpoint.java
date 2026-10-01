@@ -15,6 +15,9 @@ public interface OwnershipEndpoint {
 	boolean empty();
 	void mode(MemberBinding.Mode mode);
 	/** 必须在改动目标前验证完整容量、注册表和组件；返回失败不能部分写入。 */
+	default boolean readyToReturn(OwnedMachineRecord record) {
+		return (record.bees() == null || record.bees().drained()) && (record.centrifuge() == null || record.centrifuge().drained());
+	}
 	void validateReturn(AssetImage assets);
 	void restore(AssetImage assets);
 	CompletionStage<Void> saveReturn();

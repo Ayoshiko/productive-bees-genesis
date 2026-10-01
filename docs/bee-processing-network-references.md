@@ -186,3 +186,10 @@ D17b1 从本地固定 Mekanism 10.7.19.85 源码复核 `MekanismUtils.getMaxEner
 D17b2a 复核当前 1.0.10 的 `MekCentrifugePbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/loadCounts/getLimit/refreshMultiplierCacheIfNeeded`、`BalanceConfig.canInstall/pbUpgradeLimit/refresh` 及 `PbUpgradeInventorySlot.getRepresentativeStack`：安装使用当前白名单、上限和等级互斥，数量变更递增版本使物理倍率缓存失效；旧存档数量保留，取回按真实槽位空间交付。网络沿用相同物品与配置规则，但权威数量只写入封存映像，能力候选由成员 revision 失效；不把升级临时装回托管机器，不使用物理输入槽 ticker，也不采用宽松加载时跳过未知类型的行为。严格数量读取改用服务器局部 EnumMap，不增加缓存或后台任务。
 
 本步复读固定 Mekanism 10.7.19.85 `TileComponentUpgrade.addUpgrades/removeUpgrade/serialize/deserialize` 的预检接收量、成功后重算及输入／输出槽分离，继续采用 [13.9](#s13-9) 的实物交付与会话合同；未引入新的外部框架。实际 PB 依赖为 13.14.0，使用本地 JAR 的 `CentrifugeBlockEntity` API 和本项目当前独立机作对照，不将旧 13.13.5 反编译目录称为当前源码。验证覆盖八种升级的单件／满上限物理能力、上限降低及旧互斥组合取回、旧计划与新效果分离、标准组件守恒、实际保存及最新实物交还；具体结果见[10.72](bee-processing-network-evidence-current.md#s10-72)。
+
+<a id="s13-12"></a>
+### 13.12 蜂箱原生升级与周期边界（2026-10-01）
+
+D17b2b1 复核当前 1.0.10 的 `ApiaryUpgradeMath.computeMekSpeedTimeMultiplier`、`ApiaryUpgradeHandler.getTimeMultiplier/invalidateUpgradeCache`、`TileEntityMekApiary.recalculateUpgrades`、`BeeProgressPlan`，继续使用固定 Mekanism 10.7.19.85 的升级单价与容量口径。封存读取仅支持基础蜂箱的 SPEED／ENERGY；PB 原生依赖仍为 13.14.0，静态铁蜂的基因、花朵、配方与气候准入保持原合同。已知改写原生公式的 Unleashed／Empowered、创造与扩展工厂不自动准入。新 `SealedApiaryProfile` 读取本机已经平衡的基础 FE，不重乘平衡系数；物理对照在独立蜂箱安装真实升级，核对每档耗时、单价及容量。
+
+本步沿用 [13.9](#s13-9) 的实物交付和 [13.10](#s13-10) 的危险缩容拒绝。蜂箱与离心机的状态差异决定实现边界：蜂计划属于长期蜂记录，故在旧周期结清后由付款证明同时发布新耗时／单价与首次工作；通用所有权更新仍拒绝任意改计划。名册代际、蜂身份、喂食及产物不因此改变。交还前比较当前升级与部分周期的时间／单价，尚不一致时先拒绝，避免物理机丢失旧收费上下文。升级映像与旧计划本已持久化，恢复后可重新计算下一周期能力，无需新增存档字段、全局缓存或后台队列；原有部分周期在能力一致时仍可交还。正式调度每次一 tick，只有周期起点与冷交还预检读取封存能力；具体证据见[10.73](bee-processing-network-evidence-current.md#s10-73)。

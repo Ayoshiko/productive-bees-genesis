@@ -34,6 +34,7 @@ class BeeProductionCheckpointTest {
 		var feeders = new ListTag(); for (int i = 0; i < 9; i++) feeders.add(new CompoundTag()); extra.put(FeedingAssetProjection.SLOTS, feeders);
 		if (pending > 0) { var paid = new CompoundTag(); paid.putIntArray("counts", new int[]{0, 0, Math.toIntExact(pending)}); extra.put(BeeAssetProjection.PENDING, paid); }
 		var image = new CompoundTag(); image.put("extra", extra); image.putLong("energy", 1000); image.putLong("energyCapacity", 2000);
+		image.put("upgrades", new CompoundTag());
 		var assets = new AssetImage(image); var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
 		var original = sealed.phase(OwnedMachineRecord.Phase.OWNED);
 		var before = NetworkCheckpoint.empty(identity).withOwnership(sealed).withOwnership(original);
@@ -200,6 +201,60 @@ class BeeProductionCheckpointTest {
 		assertEquals(1, image.getList(FeedingAssetProjection.SLOTS, 10).getCompound(1).getCompound("item").getInt("count"));
 		var pending = BeeWorkExecutor.advance(original.bees(), 2, 0, context(), 5, 0).candidate();
 		assertThrows(IllegalStateException.class, () -> pending.moveBee(2, 1, true));
+	}
+	@Test void nativeApiaryUpgradeKeepsTheOldCycleAndExactLocalEnergy() throws Exception {
+		var f = fixture(0, 0); var active = f.active(); var member = f.bees.member();
+		active = active.applyBeeWork(member, BeeWorkExecutor.advance(record(active, f).bees(), 2, 0, context(), 2, 0));
+		var old = record(active, f); var bee = old.bees().bee(2);
+		var speed = MemberUpgradeChange.speed(old, 1); var upgraded = active.exchangeUpgrade(speed);
+		assertSame(bee, record(upgraded, f).bees().bee(2)); assertSame(old.bees().rosterVersion(), record(upgraded, f).bees().rosterVersion());
+		assertSame(active.energy(), upgraded.energy()); assertSame(active.ledger(), upgraded.ledger());
+		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.energy(record(upgraded, f), 1, 979));
+		var exact = upgraded.exchangeUpgrade(MemberUpgradeChange.energy(record(upgraded, f), 1, 980));
+		assertEquals(980, record(exact, f).bees().energy()); assertEquals(980, record(exact, f).bees().energyCapacity());
+		assertEquals(bee, record(roundTrip(exact, "native-partial"), f).bees().bee(2));
+		assertThrows(IllegalArgumentException.class, () -> upgraded.exchangeUpgrade(speed));
+		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record(upgraded, f),
+				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.TIME, 1, 4));
+	}
+	@Test void timingAndFirstNewPaymentPublishTogetherAfterDrainingOldWork() throws Exception {
+		var f = fixture(0, 3); var member = f.bees.member();
+		var current = f.active().configureEnergy(5000).migrateEnergy(member);
+		var old = record(current, f).bees().bee(2).plan();
+		current = current.applyBeeWork(member, BeeWorkExecutor.advance(record(current, f).bees(), 2, 0, context(), 2, 0, current.energy().stored()));
+		current = current.exchangeUpgrade(MemberUpgradeChange.speed(record(current, f), 1));
+		var state = record(current, f).bees();
+		current = current.applyBeeWork(member, BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 3, 0, current.energy().stored()));
+		assertEquals(950, current.energy().stored()); assertSame(old, record(current, f).bees().bee(2).plan());
+		state = record(current, f).bees();
+		current = current.applyBeeWork(member, BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 0, 1, current.energy().stored()));
+		current = current.settleBee(member, 2, record(current, f).bees().bee(2).revision());
+		assertEquals(ProductAmount.of(4), current.ledger().balances().get(COMB));
+		state = record(current, f).bees(); var timing = new BeeWorkExecutor.Timing(2, 3);
+		var denied = BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 2, 1, 5, timing);
+		assertEquals(BeeWorkExecutor.Status.ENERGY, denied.status()); assertSame(state, denied.candidate());
+		var next = BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 2, 1, current.energy().stored(), timing);
+		var source = record(current, f); assertSame(old, source.bees().bee(2).plan());
+		assertThrows(IllegalArgumentException.class, () -> source.withBees(next.candidate()));
+		var data = NetworkSavedData.create(current, Runnable::run, (path, payload) -> { });
+		var paid = current.applyBeeWork(member, next); data.publish(paid);
+		assertEquals(944, paid.energy().stored()); assertEquals(2, record(paid, f).bees().bee(2).plan().cycleTicks());
+		assertEquals(old.capabilityRevision() + 1, record(paid, f).bees().bee(2).plan().capabilityRevision());
+		assertEquals(ProductAmount.of(4), record(paid, f).bees().bee(2).frozen());
+		assertSame(paid, paid.applyBeeWork(member, next));
+		assertSame(record(current, f).bees().rosterVersion(), record(paid, f).bees().rosterVersion());
+		assertEquals(paid, roundTrip(paid, "new-native-cycle"));
+	}
+	@Test void newTimingCannotOverwritePartialOrPendingWork() {
+		var state = fixture(0, 0).bees; var timing = new BeeWorkExecutor.Timing(2, 3);
+		var partial = BeeWorkExecutor.advance(state, 2, 0, context(), 2, 0).candidate();
+		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(partial, 2, 1, context(), 1, 1, partial.energy(), timing));
+		var pending = BeeWorkExecutor.advance(state, 2, 0, context(), 5, 0).candidate();
+		assertEquals(BeeWorkExecutor.Status.DRAIN_FIRST, BeeWorkExecutor.advance(pending, 2, 1, context(), 2, 1, pending.energy(), timing).status());
+		var sampled = BeeWorkExecutor.advance(pending, 2, 1, context(), 0, 1, pending.energy(), timing);
+		assertSame(state.bee(2).plan(), sampled.candidate().bee(2).plan());
+		var noFlower = new BeeWorkExecutor.Context(true, true, false, 0, 0, context().environment());
+		assertSame(state, BeeWorkExecutor.advance(state, 2, 0, noFlower, 1, 1, state.energy(), timing).candidate());
 	}
 	private NetworkCheckpoint roundTrip(NetworkCheckpoint expected, String name) throws Exception {
 		assertEquals(expected, CODEC.decode(NetworkCheckpointCodec.encode(expected)));

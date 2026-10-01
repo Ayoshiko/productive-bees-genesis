@@ -37,6 +37,16 @@ public final class OwnedMachines {
 		next.put(member, change.candidate());
 		return new OwnedMachines(next.snapshot(), positions, transfers, token);
 	}
+	/** 付款证明绑定原蜂状态；允许执行器在空周期切换时间，不放宽通用 put。 */
+	public OwnedMachines applyBeeWork(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor.Result result) {
+		var old = Objects.requireNonNull(records.get(member), "Missing bee owner");
+		if (old.phase() != OwnedMachineRecord.Phase.OWNED || old.bees() == null
+				|| result.status() != com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor.Status.READY
+				|| !result.matches(old.bees())) throw new IllegalArgumentException("Stale bee work");
+		var next = SnapshotRecords.fork(records, UUID::compareTo);
+		next.put(member, new OwnedMachineRecord(old.claim(), old.phase(), old.assets(), old.fingerprint(), "", result.candidate()));
+		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+	}
 	/** 有限蜂笼交接只替换对应记录；原位置和机器交接收据沿用原根。 */
 	public OwnedMachines exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
 		var member = change.bee().member();

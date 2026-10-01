@@ -102,8 +102,8 @@ public final class NetworkCheckpoint {
 				|| old.bees() == null || result.status() != BeeWorkExecutor.Status.READY || !result.matches(old.bees())) return this;
 		long cost = old.bees().networkPowered() ? result.energyUsed() : 0;
 		if (cost > energy.stored()) return this;
-		var next = old.withBees(result.candidate()); validateOwnership(next, identity, policyRevision);
-		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), ledger, energy.spend(cost));
+		var next = ownedMachines.applyBeeWork(member, result); validateOwnership(next.get(member), identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), next, ledger, energy.spend(cost));
 	}
 	/** 已付费蜂结果移交：旧蜂记录与新余额使用同一个不可变根，不暴露中途状态。 */
 	public NetworkCheckpoint settleBee(java.util.UUID member, int slot, long beeRevision) {
