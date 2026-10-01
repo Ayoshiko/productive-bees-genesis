@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and usage guide / 文档与使用指南
+    url: https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README_zh.md
+    about: Check supported features, dependencies, configuration, and usage before opening an issue. / 提交 Issue 前请先查看功能、依赖、配置与使用说明。
+  - name: Latest releases / 最新版本
+    url: https://github.com/Ayoshiko/productive-bees-genesis/releases
+    about: Update to the latest release before reporting a problem. / 报告问题前请先更新到最新发布版本。

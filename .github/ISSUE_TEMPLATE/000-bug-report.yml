@@ -1,0 +1,131 @@
+name: Bug Report / 错误报告
+description: Report a reproducible problem with Productive Bees Genesis. / 反馈资源蜜蜂：创世中可复现的问题。
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈问题。提交前请先搜索开放和已关闭的 Issue，并确认问题仍能在最新版本中复现。
+
+        Thanks for reporting an issue. Please search open and closed issues first, then confirm that the problem still occurs on the latest version.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checklist / 提交检查清单
+      options:
+        - label: "I searched existing issues and found no duplicate. / 我已搜索现有 Issue，未发现重复报告。"
+          required: true
+        - label: "I tested the latest available version. / 我已使用当前可用的最新版本进行测试。"
+          required: true
+
+  - type: dropdown
+    id: mc-version
+    attributes:
+      label: Minecraft and loader / Minecraft 与加载器
+      description: This project currently supports the listed environment only. / 本项目当前仅支持列表中的环境。
+      options:
+        - "Minecraft 1.21.1 + NeoForge"
+    validations:
+      required: true
+
+  - type: input
+    id: addon-version
+    attributes:
+      label: Productive Bees Genesis version / 本模组版本
+      description: Find the version in the mod list or the jar filename. / 可在游戏模组列表或 jar 文件名中找到版本。
+      placeholder: "Example: 1.0.10 / 例如：1.0.10"
+    validations:
+      required: true
+
+  - type: input
+    id: dependency-versions
+    attributes:
+      label: Relevant dependency versions / 相关前置模组版本
+      description: Include Productive Bees, Mekanism, and any mod directly involved. / 请填写 Productive Bees、Mekanism 及直接相关模组的版本。
+      placeholder: "Example: Productive Bees 13.14.0; Mekanism 10.7.19.85; AE2 19.2.17"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Play environment / 游戏环境
+      options:
+        - "Singleplayer / 单人游戏"
+        - "Open to LAN / 开放局域网"
+        - "Dedicated server / 专用服务器"
+        - "Other / 其他"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened? / 发生了什么？
+      description: Describe the problem briefly and include the affected block, item, bee, recipe, GUI, or integration. / 简述问题，并注明受影响的方块、物品、蜜蜂、配方、界面或联动功能。
+      placeholder: "Example: The MEK Apiary stops inserting honeycombs into an adjacent centrifuge after reloading the world. / 例如：重载世界后，通用机械蜂箱不再将蜜脾插入相邻离心机。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+      description: What did you expect to happen? / 你原本期望发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+      description: What happened instead? Include visible errors or lost/duplicated items if relevant. / 实际发生了什么？如有可见错误、物品丢失或复制，请一并说明。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce / 重现步骤
+      description: Provide the smallest reliable sequence, including setup, inputs, and actions. / 提供最小且可靠的重现流程，包括环境、输入和操作。
+      placeholder: |
+        1. Place ... / 放置……
+        2. Insert ... / 放入……
+        3. Observe ... / 观察……
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash report, latest.log, or debug output / 崩溃报告、latest.log 或调试输出
+      description: Drag files here or paste a relevant excerpt. Please remove passwords, tokens, and private paths. / 可将文件拖到这里或粘贴相关片段。请先移除密码、令牌和私人路径。
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Modpack and other mods / 整合包与其他模组
+      description: Include the modpack name/version or the smallest list of mods that still reproduces the issue. / 请填写整合包名称与版本，或能重现问题的最小模组列表。
+      placeholder: "Example: Productive Bees, Mekanism, AE2, Jade, ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional information / 附加信息
+      description: Add screenshots, videos, configs, world-save notes, or compatibility details. / 可补充截图、视频、配置、存档说明或兼容性信息。
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认日志中没有敏感信息。完整、可复现的报告会更容易被定位和修复。
+
+        Please check your logs for sensitive information before submitting. Complete, reproducible reports are easier to diagnose and fix.
