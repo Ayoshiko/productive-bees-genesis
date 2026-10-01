@@ -3,6 +3,9 @@ package com.ayoshiko.productivebeesgenesis.apiculture.persistence;
 import com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin;
 import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.NativeUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbCentrifugeUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import java.util.List;
@@ -28,7 +31,9 @@ class MemberUpgradeChangeTest {
 					new Origin("minecraft:overworld", x, 64, 1), "productivebeesgenesis:mek_centrifuge");
 			var tag = new CompoundTag(); tag.putLong("energy", 1000); tag.putLong("energyCapacity", 1000);
 			var component = new CompoundTag(); component.putString("unchanged", "input/output slot metadata");
-			tag.put("upgrades", component); tag.put("extra", new CompoundTag());
+			tag.put("upgrades", component);
+			var extra = new CompoundTag(); extra.put(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, new CompoundTag());
+			extra.putString("unchanged", "PB slots and other work metadata"); tag.put("extra", extra);
 			var image = new AssetImage(tag); var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, image, image.fingerprint(), "");
 			var owned = sealed.phase(OwnedMachineRecord.Phase.OWNED);
 			checkpoint = checkpoint.withOwnership(sealed).withOwnership(owned).withOwnership(owned.withCentrifuge(
@@ -107,9 +112,46 @@ class MemberUpgradeChangeTest {
 		for (int delta : new int[] {0, -1, 65, Upgrade.ENERGY.getMax() + 1})
 			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.energy(record, delta, 2000));
 	}
+	@Test void allReviewedPbTypesRoundTripWithoutChangingOtherAssets() {
+		var before = fixture(); var member = first(before); var old = before.ownedMachines().get(member);
+		for (var type : PbUpgradeType.values()) if (PbCentrifugeUpgradeCounts.supported(type)) {
+			var change = MemberUpgradeChange.pb(old, type, 1, 1); var after = before.exchangeUpgrade(change);
+			var record = after.ownedMachines().get(member);
+			assertSame(before.energy(), after.energy()); assertSame(before.ledger(), after.ledger());
+			assertEquals(old.centrifuge().energyCapacity(), record.centrifuge().energyCapacity());
+			assertEquals(old.assets().copy().getCompound("upgrades"), record.assets().copy().getCompound("upgrades"));
+			assertEquals("PB slots and other work metadata", record.assets().copy().getCompound("extra").getString("unchanged"));
+			assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
+			assertThrows(IllegalArgumentException.class, () -> after.exchangeUpgrade(change));
+			var back = after.exchangeUpgrade(MemberUpgradeChange.pb(record, type, -1, 0));
+			assertEquals(old.assets(), back.ownedMachines().get(member).assets());
+			assertThrows(IllegalArgumentException.class, () -> back.exchangeUpgrade(change));
+		}
+	}
+	@Test void legacyPbCountsAreNotTruncatedByANewInstallLimit() {
+		var before = fixture(); var member = first(before);
+		var legacy = before.exchangeUpgrade(MemberUpgradeChange.pb(before.ownedMachines().get(member), PbUpgradeType.TIME, 16, 32));
+		var record = legacy.ownedMachines().get(member);
+		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, PbUpgradeType.TIME, 1, 4));
+		var after = legacy.exchangeUpgrade(MemberUpgradeChange.pb(record, PbUpgradeType.TIME, -1, 4));
+		assertEquals(15, PbCentrifugeUpgradeCounts.read(after.ownedMachines().get(member).assets().copy().getCompound("extra")).get(PbUpgradeType.TIME));
+		assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
+	}
+	@Test void invalidPbCountsAndUnsupportedEffectsCannotBeNormalizedIntoAssets() {
+		var record = fixture().ownedMachines().activeValues().iterator().next();
+		for (var type : PbUpgradeType.values()) if (!PbCentrifugeUpgradeCounts.supported(type))
+			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, type, 1, 64));
+		for (int delta : new int[] {0, -1, 65}) assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, PbUpgradeType.TIME, delta, 64));
+		assertThrows(IllegalArgumentException.class, () -> PbCentrifugeUpgradeCounts.read(new CompoundTag()));
+		for (String key : new String[] {"time", "unknown", "raw_ore_smelting"}) {
+			var extra = record.assets().copy().getCompound("extra"); var counts = extra.getCompound(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS);
+			counts.putString(key, "1"); assertThrows(IllegalArgumentException.class, () -> PbCentrifugeUpgradeCounts.read(extra));
+			counts.putInt(key, key.equals("time") ? 0 : 1); assertThrows(IllegalArgumentException.class, () -> PbCentrifugeUpgradeCounts.read(extra));
+		}
+	}
 	@Test void heldPartialAndFrozenWorkKeepTheOriginalPriceSeedAndOutputs() {
 		var policy = new ProductPolicyRegistry(new ProductPolicySnapshot(0, List.of(new AllowedProductDescriptor(OUTPUT, "test", "test:recipe")), List.of()));
-		for (boolean energyUpgrade : new boolean[] {false, true}) for (int progress : new int[] {0, 2, 5}) {
+		for (int upgradeKind = 0; upgradeKind < 3; upgradeKind++) for (int progress : new int[] {0, 2, 5}) {
 			var before = fixture(); var member = first(before); var state = before.ownedMachines().get(member).centrifuge();
 			var plan = new CentrifugeRecipePlan("test:recipe", 0, 0, INPUT, 5, 2, 7, 1, 0,
 					List.of(new CentrifugeRecipePlan.Output(OUTPUT, 3, 3, 1)));
@@ -117,7 +159,11 @@ class MemberUpgradeChangeTest {
 			if (progress > 0) before = before.applyCentrifuge(member, CentrifugeWorkTransaction.advance(before.ownedMachines().get(member).centrifuge(), before.ledger(), 0, progress, true, true));
 			if (progress == 5) before = before.applyCentrifuge(member, CentrifugeWorkTransaction.freeze(before.ownedMachines().get(member).centrifuge(), before.ledger(), 0));
 			var record = before.ownedMachines().get(member); var job = record.centrifuge().jobs().get(0);
-			var after = before.exchangeUpgrade(energyUpgrade ? MemberUpgradeChange.energy(record, 1, 2000) : MemberUpgradeChange.speed(record, 1));
+			var after = before.exchangeUpgrade(switch (upgradeKind) {
+				case 1 -> MemberUpgradeChange.energy(record, 1, 2000);
+				case 2 -> MemberUpgradeChange.pb(record, PbUpgradeType.TIME, 1, 4);
+				default -> MemberUpgradeChange.speed(record, 1);
+			});
 			assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
 			assertSame(job, after.ownedMachines().get(member).centrifuge().jobs().get(0));
 			assertSame(before.ledger(), after.ledger()); assertEquals(record.centrifuge().energy(), after.ownedMachines().get(member).centrifuge().energy());

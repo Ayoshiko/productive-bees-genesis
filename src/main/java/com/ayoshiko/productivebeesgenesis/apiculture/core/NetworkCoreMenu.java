@@ -183,6 +183,15 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return MemberUpgradeService.exchange(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
 	}
+	/** PB 升级共用同一菜单及重入边界；客户端入口仍由后续终端协议接入。 */
+	public MemberUpgradeService.Result exchangePbUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
+			long expectedRevision, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType upgrade, int inventorySlot, int requested,
+			MemberUpgradeService.Action action, boolean simulate) {
+		if (exchangeCore(player) == null || exchanging) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		exchanging = true;
+		try { return MemberUpgradeService.exchangePb(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
+		finally { exchanging = false; }
+	}
 	/** 单个蜂笼交换；与喂食和产物取回共用会话与重入保护。 */
 	public CoreBeeCageExchange.Result exchangeBee(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int beeSlot, long expectedRevision, java.util.UUID expectedBee, int inventorySlot,

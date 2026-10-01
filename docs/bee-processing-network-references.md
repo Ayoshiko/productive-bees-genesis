@@ -179,3 +179,10 @@ D17a 复核固定 Mekanism 10.7.19.85 `TileComponentUpgrade.tickServer/addUpgrad
 D17b1 从本地固定 Mekanism 10.7.19.85 源码复核 `MekanismUtils.getMaxEnergy(int,long)`、`MachineEnergyContainer.getBaseMaxEnergy/setMaxEnergy/updateMaxEnergy` 及 `TileComponentUpgrade.deserialize/removeUpgrade`：直接使用原生数量重载和本机已平衡的基础容量，对齐当前配置的 long 取整／饱和语义；不读取托管后已清空的升级组件，也不重乘平衡系数。原生 `setMaxEnergy` 会裁掉超出容量的电量，因此网络在发布前按成员本地余额拒绝危险缩容，不在物理组件试装／回退。既有 `MachineAssetStore` 在独立的预检机器中先反序列化升级、重算容量，再恢复 FE 并验证整个映像往返；实际交还沿用同一顺序，不增设第二份能源暂存。
 
 本步确认 `.tmp_dataenergistics_src` 独立且干净后，从 `965b9d98` fast-forward 到 `ddef032e`（`1.21`）；上游变化为封包神秘学仪式回收，与本步升级无关。复读现版 `TrinityHostedActionTicket` 和 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的失效／单次认领边界，继续采用 [13.9](#s13-9) 已有服务器菜单与成员 revision 保护，不引入外部恢复流程。
+
+<a id="s13-11"></a>
+### 13.11 PB 升级数量、互斥与能力失效（2026-10-01）
+
+D17b2a 复核当前 1.0.10 的 `MekCentrifugePbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/loadCounts/getLimit/refreshMultiplierCacheIfNeeded`、`BalanceConfig.canInstall/pbUpgradeLimit/refresh` 及 `PbUpgradeInventorySlot.getRepresentativeStack`：安装使用当前白名单、上限和等级互斥，数量变更递增版本使物理倍率缓存失效；旧存档数量保留，取回按真实槽位空间交付。网络沿用相同物品与配置规则，但权威数量只写入封存映像，能力候选由成员 revision 失效；不把升级临时装回托管机器，不使用物理输入槽 ticker，也不采用宽松加载时跳过未知类型的行为。严格数量读取改用服务器局部 EnumMap，不增加缓存或后台任务。
+
+本步复读固定 Mekanism 10.7.19.85 `TileComponentUpgrade.addUpgrades/removeUpgrade/serialize/deserialize` 的预检接收量、成功后重算及输入／输出槽分离，继续采用 [13.9](#s13-9) 的实物交付与会话合同；未引入新的外部框架。实际 PB 依赖为 13.14.0，使用本地 JAR 的 `CentrifugeBlockEntity` API 和本项目当前独立机作对照，不将旧 13.13.5 反编译目录称为当前源码。验证覆盖八种升级的单件／满上限物理能力、上限降低及旧互斥组合取回、旧计划与新效果分离、标准组件守恒、实际保存及最新实物交还；具体结果见[10.72](bee-processing-network-evidence-current.md#s10-72)。

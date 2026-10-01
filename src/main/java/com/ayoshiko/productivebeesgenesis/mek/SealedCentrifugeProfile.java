@@ -5,7 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbCentrifugeUpgradeCounts;
 import mekanism.api.Upgrade;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.NativeUpgradeCounts;
 import mekanism.api.math.MathUtils;
@@ -33,15 +33,7 @@ final class SealedCentrifugeProfile {
 			if (entry.getValue() < 0 || entry.getValue() > entry.getKey().getMax())
 				throw new IllegalArgumentException("Unsupported native upgrade count");
 		}
-		var counts = tag.getCompound("extra").getCompound(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS);
-		Map<PbUpgradeType, Integer> values = new ConcurrentHashMap<>();
-		for (var key : counts.getAllKeys()) {
-			var type = PbUpgradeType.byId(key);
-			if (type == null || !supported(type) || !counts.contains(key, Tag.TAG_INT) || counts.getInt(key) <= 0)
-				throw new IllegalArgumentException("Unsupported sealed PB upgrade: " + key);
-			values.put(type, counts.getInt(key));
-		}
-		pb = Map.copyOf(values);
+		pb = Map.copyOf(PbCentrifugeUpgradeCounts.read(tag.getCompound("extra")));
 		double speed = nativeUpgrades.getOrDefault(Upgrade.SPEED, 0) / (double) Upgrade.SPEED.getMax();
 		double saving = nativeUpgrades.getOrDefault(Upgrade.ENERGY, 0) / (double) Upgrade.ENERGY.getMax();
 		double multiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
@@ -55,12 +47,6 @@ final class SealedCentrifugeProfile {
 		double price = tile.energyContainer().getBaseEnergyPerTick() * Math.pow(multiplier, 2 * speed - saving);
 		if (!Double.isFinite(price) || price < 0 || price >= 0x1.0p63) throw new IllegalArgumentException("Unrepresentable native energy price");
 		energy = MathUtils.ceilToLong(price);
-	}
-	private static boolean supported(PbUpgradeType type) {
-		return switch (type) {
-			case PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4, TIME, TIME_2, STABILITY, USELESS_BYPRODUCT -> true;
-			default -> false;
-		};
 	}
 	private int count(PbUpgradeType type) { return pb.getOrDefault(type, 0); }
 	int ticks(int base) { return MekExtrasUpgradeSemantics.processingTicks(false, base, time); }
