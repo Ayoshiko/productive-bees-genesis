@@ -174,6 +174,15 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
 		finally { exchanging = false; }
 	}
+	/** 服务器升级入口；首次适配仅限所有者操作基础离心机 SPEED。 */
+	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
+			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
+			MemberUpgradeService.Action action, boolean simulate) {
+		if (exchangeCore(player) == null || exchanging) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		exchanging = true;
+		try { return MemberUpgradeService.exchange(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
+		finally { exchanging = false; }
+	}
 	/** 单个蜂笼交换；与喂食和产物取回共用会话与重入保护。 */
 	public CoreBeeCageExchange.Result exchangeBee(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int beeSlot, long expectedRevision, java.util.UUID expectedBee, int inventorySlot,

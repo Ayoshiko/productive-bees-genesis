@@ -20,6 +20,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 public final class ClientOwnershipFixture {
 	static volatile int stage;
 	static volatile String failure;
+	static volatile boolean retryJoin;
 	static final long ENERGY_CAPACITY = (1L << 40) + 77, ENERGY_STORED = 3_000_000_009L;
 	private static final BlockPos POS = new BlockPos(8, 100, 8);
 	private static NetworkCoreBlockEntity core;
@@ -49,6 +50,10 @@ public final class ClientOwnershipFixture {
 				return;
 			}
 				require(core.ownership().status() != CoreOwnershipController.Status.RECOVERY, core.ownership().failure());
+			// 仅已明确拒绝、已结束且拓扑重新有效的接管允许再次点击；旧成员由同网络收据跳过。
+			retryJoin = stage == 1 && core.ownership().status() == CoreOwnershipController.Status.REJECTED && !core.ownership().busy()
+					&& core.ownership().failure().equals("Topology changed; completed transfers remain owned")
+					&& core.topology() != null && core.topology().valid() && core.topology().members().size() == 2;
 			if (stage == 2) ClientTerminalFixture.tick(core, player);
 			if (stage == 0) {
 				if (core.topology() == null || !core.topology().valid()) return;

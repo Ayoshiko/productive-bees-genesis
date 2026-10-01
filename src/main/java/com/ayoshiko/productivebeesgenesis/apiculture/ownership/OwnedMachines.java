@@ -29,6 +29,14 @@ public final class OwnedMachines {
 	public int size() { return records.size(); }
 	public int activeCount() { return positions.size(); }
 	public boolean follows(OwnedMachines old) { return this == old || previous == old.token || old.size() == 0 && size() == 0; }
+	/** 升级只接受从当前记录签发的专用凭据，不放宽通用生产后继的资产约束。 */
+	public OwnedMachines exchangeUpgrade(MemberUpgradeChange change) {
+		var member = change.candidate().claim().member();
+		if (!change.matches(records.get(member))) throw new IllegalArgumentException("Stale member upgrade exchange");
+		var next = SnapshotRecords.fork(records, UUID::compareTo);
+		next.put(member, change.candidate());
+		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+	}
 	/** 有限蜂笼交接只替换对应记录；原位置和机器交接收据沿用原根。 */
 	public OwnedMachines exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
 		var member = change.bee().member();

@@ -59,5 +59,10 @@ public final class StaticCentrifugeAdapter {
 				profile.ticks(base > 0 ? base : tile.baseTicksRequired()), profile.parallel(), profile.energy(),
 				profile.productivity(), profile.stability(), outputs);
 	}
+	/** 升级候选复用生产准入和计费校验；不触及物理组件或当前作业。 */
+	public static void validateUpgrades(TileEntityMekCentrifuge tile, com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage assets) {
+		if (tile.getClass() != TileEntityMekCentrifuge.class) throw new IllegalArgumentException("Only basic centrifuges are supported");
+		new SealedCentrifugeProfile(tile, assets);
+	}
 	private StaticCentrifugeAdapter() { }
 }

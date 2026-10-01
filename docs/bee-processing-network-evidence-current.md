@@ -291,3 +291,22 @@
 **构建与结论：** 同一源码的 `test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 已成功，1,050 项 JUnit 报告中 1,048 通过、2 项既有跳过、零失败／错误。再次核对发布 JAR 排除全部 domainProbe 类，SHA-256 为 `A842EFF06B63EA887971351C342E2E4879AB8E39A2E1D2C44FCCB316633136E5`，与运行前一致。D16c3c、D16c 与 P3 的最小玩家生产闭环联合签收；下一步状态只在[实施路线](bee-processing-network-roadmap.md#current)维护。
 
 **边界：** 本机 offline-mode 真实 TCP 登录不代表外部账号认证；正常退出与重启不代表强制断电、第三方回调的未知结果恢复或同场景 Spark 性能结论。P3 仅覆盖已准入的基础成员和静态蜂种，默认开关未改，尚未实现的工厂／特殊蜂种不因此获得准入。M04 仍需 D17，完整 M06、D29 故障耐久性与 D30 性能门独立维护。
+
+<a id="s10-70"></a>
+### 10.70 D17a 基础离心机 SPEED 有限交换（2026-09-30，服务器服务已验收）
+
+**合同与实现：** 按[升级实物及旧工作段合同](bee-processing-network-design.md#s2-3)，`NetworkCoreMenu.exchangeUpgrade` 进入 `MemberUpgradeService`，复用当前菜单、玩家、权限、距离、成员绑定与重入守卫，仅所有者可在一个真实主背包槽与已激活基础离心机之间安装／拆除 SPEED。`MemberUpgradeChange` 只接受从当前记录签发的候选，一次发布升级资产映像、递增成员 revision 及玩家槽；账本、FE、其它成员和已有作业对象保持不变。新作业读取新映像，旧候选因 revision 拒绝。标准升级件以完整组件匹配，自定义组件物品拒收；原生严格解析器与 `SealedCentrifugeProfile` 共用，保留组件输入／输出槽，拒绝坏类型、重复或越界 ordinal，不调用宽松 `Upgrade.buildMap` 来修复损坏资产。
+
+**范围与成本：** 沿用现有 checkpoint schema；未增加异步任务或缓存。成员定位及不可变树更新为 O(log N)，一个成员的有限升级列表为 O(U)，资产副本与指纹按该成员 NBT 字节 B 为 O(B)，不枚举全网库存。所有权发布完成后才同步单槽；同步失败仍返回已提交结果，旧 revision 不能再次发放。参考版本、成功／失败、恢复及线程取舍见[13.9](bee-processing-network-references.md#s13-9)。
+
+**自动化与运行结果：** 4 项新增纯事务测试覆盖单成员隔离、旧凭据及数量回到原值后的重放拒绝、严格恢复、当前升级交还、坏 NBT，以及未开始／部分付费／已冻结作业保持原费用和结果。全量 `test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 成功：1,054 项中 1,052 通过、2 项既有跳过、零失败／错误。`build/network-gates/d17a-20260930-complete/gate.json` 联合通过有／无 AE2 各 domain、writer、reader、client，共 6 个成功专服 JVM、2 个集成客户端；两组 domain 各完成 23 项升级交换／拒绝检查，验证完整背包满载、部分接收、同组件匹配、旧菜单／revision、访客拒绝、远距／非服务器线程／断边、同步失败／重入、原费用完成旧作业、新能力对齐独立物理离心机、运行中冻结结果实际落盘及最新升级实物交还。writer／reader 为既有九场景自动恢复回归；客户端为已有界面和交换回归，截图核对取回与成员交还，不冒充新升级 GUI 验收。
+
+**失败与修复：** `d17a-20260930-first` 的探针初始化把已配置容量的同一根再次发布，被正式 revision 校验拒绝；改为断言容量而不重复发布，未改生产校验。`d17a-20260930-final` 的无 AE2 三组专服已成功，客户端首次接管却因启动期拓扑变化明确拒绝，旧探针一直等待 MANAGED 而超时。客户端驱动改为仅在这一明确失败、服务端已不忙且拓扑重新有效时，再点击正式接管按钮，累计最多 3 次，未知结果不重试，原封存／交还资产断言保留。最终两组客户端均一次接管成功，新增重试分支未在这两次运行中触发；拒绝原因与安全重试条件另经源码核对。两次失败日志保留在原目录。
+
+**来源一致性与产物：** 最终索引有 35 项证据。复用无 AE2 三组专服前，把两份仅由 `pbg.client.enabled` 启用的客户端探针旧文件哈希代回全源码指纹，确认其余源码与原运行完全相同；旧指纹为 `4E1C2873A453784593DE744585D190E6E8F68AD931A0B9638E67A2990B0FEA0B`，最终 Windows PowerShell 5.1 指纹为 `27E29700419D422830CF3E4187EEB3E3AEF5EA1CD0F95C2BD109116ABAFD2C3E`，依赖前后一致。修正客户端后仅补跑受影响客户端及尚未执行的 AE2 四组，未把失败运行计为通过。JAR SHA-256 为 `ACE82CF94D1637B93337239DBC695C7CAFA6B04608CEE102657CDD62B512A4DF`，发布 JAR 排除全部 domainProbe 类，测试进程已退出。
+
+**耗时与结论：** 23 次有限交换调用中，无／有 AE2 观测最大耗时分别为 3.638／4.981 ms；这是小夹具的单次调用记录，未拆分冷热，不能作为 Spark／MSPT 收益或大组件延迟验收。D17a 的服务器服务范围签收，下一步及父门只在[实施路线](bee-processing-network-roadmap.md#s11-5)维护。
+
+**续接复核（2026-10-01）：** 提交前确认当前源码指纹与最终验收一致，35 项证据、57 个依赖文件及 JAR 共 93 项 SHA-256 全部匹配；8 份运行报告重新通过当前 D17a 验收断言。再次执行上述 Gradle 命令成功，编译与测试为 UP-TO-DATE，产物校验实际执行；现存 182 份测试报告合计 1,054 项、零失败／错误、2 项跳过。本次复核未重新启动游戏矩阵，代码审查未发现新增阻塞项。
+
+**未完成边界：** 本步服务器菜单服务不等于客户端升级按钮已交付；新升级的真实玩家 TCP 操作、跨 JVM 玩家文件及升级在制联合恢复仍属 D17c。ENERGY 容量变更、PB 升级、蜂箱能力、供给来源、批量及创造升级按[拆分路线](bee-processing-network-roadmap.md#s11-5)继续；D17 父门与 M04 前置仍开放，性能收益不由构建或本步耗时推断。

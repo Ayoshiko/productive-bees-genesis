@@ -23,6 +23,7 @@ public final class DomainProbeServer {
 	private static boolean playerFeedingStarted;
 	private static boolean playerProductsStarted;
 	private static boolean playerCagesStarted;
+	private static boolean memberUpgradesStarted;
 	@SubscribeEvent
 	public static void stopped(net.neoforged.neoforge.event.server.ServerStoppedEvent event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
@@ -41,6 +42,7 @@ public final class DomainProbeServer {
 					PlayerFeedingProbe.verifyShutdown(event.getServer(), report);
 					PlayerProductProbe.verifyShutdown(event.getServer(), report);
 					PlayerCageProbe.verifyShutdown(event.getServer(), report);
+					MemberUpgradeProbe.verifyShutdown(event.getServer(), report);
 				}
 			}
 			catch (Exception failure) {
@@ -108,6 +110,8 @@ public final class DomainProbeServer {
 				if (!PlayerProductProbe.advance(event.getServer(), pendingReport)) return;
 				if (!playerCagesStarted) { PlayerCageProbe.start(event.getServer()); playerCagesStarted = true; return; }
 				if (!PlayerCageProbe.advance(event.getServer(), pendingReport)) return;
+				if (!memberUpgradesStarted) { MemberUpgradeProbe.start(event.getServer()); memberUpgradesStarted = true; return; }
+				if (!MemberUpgradeProbe.advance(event.getServer(), pendingReport)) return;
 				if (System.getProperty("pbg.restore.mode") != null) CheckpointRestoreBenchmark.run(event.getServer());
 				pendingReport.addProperty("passed", true); LogUtils.getLogger().info("NETWORK_DOMAIN_COMPLETE");
 			} catch (Exception failure) { failed(pendingReport, failure); }

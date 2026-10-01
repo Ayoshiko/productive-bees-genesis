@@ -129,6 +129,12 @@ public final class NetworkCheckpoint {
 		validateOwnership(record, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record));
 	}
+	/** 单个升级实物的双方接收已准备好；不改产物、预约、FE 或任何旧作业。 */
+	public NetworkCheckpoint exchangeUpgrade(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberUpgradeChange change) {
+		var next = ownedMachines.exchangeUpgrade(change);
+		validateOwnership(change.candidate(), identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), next);
+	}
 	/** 只在有限蜂笼接收结果已准备好时提交，账本／FE／喂食和其它工作不变。 */
 	public NetworkCheckpoint exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
 		var next = ownedMachines.exchangeBee(change);

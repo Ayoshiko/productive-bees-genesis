@@ -7,7 +7,7 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import mekanism.api.Upgrade;
-import mekanism.api.SerializationConstants;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.NativeUpgradeCounts;
 import mekanism.api.math.MathUtils;
 import mekanism.common.config.MekanismConfig;
 import net.minecraft.nbt.Tag;
@@ -26,7 +26,7 @@ final class SealedCentrifugeProfile {
 		if (!tag.contains("upgrades", Tag.TAG_COMPOUND) || !tag.contains("extra", Tag.TAG_COMPOUND)
 				|| !tag.getCompound("extra").contains(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, Tag.TAG_COMPOUND))
 			throw new IllegalArgumentException("Missing sealed upgrade records");
-		var nativeUpgrades = nativeCounts(tag.getCompound("upgrades"));
+		var nativeUpgrades = NativeUpgradeCounts.read(tag.getCompound("upgrades"));
 		for (var entry : nativeUpgrades.entrySet()) {
 			if (entry.getKey() != Upgrade.SPEED && entry.getKey() != Upgrade.ENERGY)
 				throw new IllegalArgumentException("Unsupported network upgrade: " + entry.getKey());
@@ -55,20 +55,6 @@ final class SealedCentrifugeProfile {
 		double price = tile.energyContainer().getBaseEnergyPerTick() * Math.pow(multiplier, 2 * speed - saving);
 		if (!Double.isFinite(price) || price < 0 || price >= 0x1.0p63) throw new IllegalArgumentException("Unrepresentable native energy price");
 		energy = MathUtils.ceilToLong(price);
-	}
-	private static Map<Upgrade, Integer> nativeCounts(net.minecraft.nbt.CompoundTag tag) {
-		Map<Upgrade, Integer> result = new ConcurrentHashMap<>();
-		if (!tag.contains(SerializationConstants.UPGRADES)) return result;
-		if (!(tag.get(SerializationConstants.UPGRADES) instanceof net.minecraft.nbt.ListTag list)
-				|| !list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND) throw new IllegalArgumentException("Malformed native upgrades");
-		for (var raw : list) {
-			var entry = (net.minecraft.nbt.CompoundTag) raw;
-			int ordinal = entry.getInt(SerializationConstants.TYPE), count = entry.getInt(SerializationConstants.AMOUNT);
-			if (entry.size() != 2 || !entry.contains(SerializationConstants.TYPE, Tag.TAG_INT) || !entry.contains(SerializationConstants.AMOUNT, Tag.TAG_INT)
-					|| ordinal < 0 || ordinal >= Upgrade.values().length || count <= 0
-					|| result.putIfAbsent(Upgrade.values()[ordinal], count) != null) throw new IllegalArgumentException("Invalid or duplicate native upgrade");
-		}
-		return result;
 	}
 	private static boolean supported(PbUpgradeType type) {
 		return switch (type) {

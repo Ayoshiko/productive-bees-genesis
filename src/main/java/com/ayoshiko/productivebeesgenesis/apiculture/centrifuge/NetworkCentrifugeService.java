@@ -41,7 +41,7 @@ public final class NetworkCentrifugeService {
 		if (!enabled() || current.policyRevision() != policy.snapshot().revision() || record == null || record.centrifuge() == null) return null;
 		var tile = ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekCentrifuge.class);
 		if (tile == null || !tile.canFunction() || !record.centrifuge().drained()) return null;
-		var plan = StaticCentrifugeAdapter.compile(level, tile, record, policy, input, 0);
+		var plan = StaticCentrifugeAdapter.compile(level, tile, record, policy, input, record.centrifuge().revision());
 		return new CentrifugeLaneAllocator.Candidate(member, 0, record.centrifuge().revision(), plan);
 	}
 	public boolean assign(ServerLevel level, CentrifugeLaneAllocator.Selection selection, long seed, boolean simulate) {

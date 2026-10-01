@@ -165,3 +165,10 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 本地 NeoForge 21.1.216 `PayloadRegistrar.playBidirectional/executesOn` 用于核对 MAIN 队列。开发探针用独立的小型阶段信号确认两名玩家都已读取提交前库存，并在重放请求之后通过同一连接确认服务器已处理；信号仅同步验收阶段与结果，不包含资产键、权限或转移方法。实际存取使用正式 GUI／TerminalRequest 的 TCP 路径。阶段信号和服务器／客户端驱动仅位于 domainProbe 源集，发布 JAR 必须排除。
 
 同时启动两个真实客户端须使用不同的 ModDev run 名称，否则同一工作区生成的启动配置可能被另一个角色覆盖。两个客户端目录、专服世界和正常重启副本各自独立；客户端不共享可写世界。实际证据见[10.69](bee-processing-network-evidence-current.md#s10-69)。
+
+<a id="s13-9"></a>
+### 13.9 逐机升级实物与旧工作段（2026-09-30）
+
+D17a 复核固定 Mekanism 10.7.19.85 `TileComponentUpgrade.tickServer/addUpgrades/removeUpgrade/serialize/deserialize`、`Upgrade.getMax/getTag/buildMap`：采用服务器线程、当前上限、先预检接收空间再按实际量扣除、安装记录与输入／输出槽分离。其已安装状态只保存类型／数量，本项目只接收标准完整组件，拒绝有自定义组件的升级件；不采用宽松反序列化的 ordinal 回绕、重复键覆盖或非正数忽略。网络直接改唯一封存映像，原生物理组件保持清空，不调用其 ticker 或产生第二份已安装状态。
+
+本步检查 `.tmp_dataenergistics_src` 为独立干净根后，从 `c95a1244` fast-forward 到 `965b9d98`（`1.21`）；本次上游变化为 AE2 合成 CPU 列表修正及版本／变更记录，不扩大审查范围。复读 `TrinityHostedActionTicket` 与 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的会话、代际、实际菜单和单次认领边界；沿用本项目核心菜单的服务器线程／查看者／关闭／重入守卫，并使用目标成员 revision 拒绝旧升级请求。D17a 尚未新增客户端 payload，完整协议与真实客户端联合验证留 D17c；本步服务器服务证据见[10.70](bee-processing-network-evidence-current.md#s10-70)。

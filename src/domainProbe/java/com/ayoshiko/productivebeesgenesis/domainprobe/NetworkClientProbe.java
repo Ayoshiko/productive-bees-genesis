@@ -24,7 +24,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 /** 真实客户端菜单、原版按钮数据包和正常退世界验证，仅存在于显式开发源集。 */
 @EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT)
 public final class NetworkClientProbe {
-	private static int step, settled, lastStatus = -1;
+	private static int step, settled, joinAttempts, lastStatus = -1;
 	private static long started;
 	private static boolean finished, advancing;
 	@SubscribeEvent public static void tick(ClientTickEvent.Post event) {
@@ -56,7 +56,10 @@ public final class NetworkClientProbe {
 			if (step == 1 && ClientOwnershipFixture.stage == 1 && menu.value(0) == 2) {
 				require(menu.canManage(), "Owner management role did not synchronize");
 				require(menu.value(1) == 2 && menu.value(2) > 0 && menu.value(3) == 1, "Client counts did not synchronize");
-				capture(client, "before"); press(screen, "join"); step = 2; settled = 0;
+				capture(client, "before"); press(screen, "join"); joinAttempts++; step = 2; settled = 0;
+			} else if (step == 2 && ClientOwnershipFixture.retryJoin && menu.ownershipStatus() == CoreOwnershipController.Status.REJECTED.ordinal() && menu.value(1) == 2) {
+				require(joinAttempts < 3, "Repeated topology changes prevented client takeover");
+				press(screen, "join"); joinAttempts++; settled = 0;
 			} else if (step == 2 && ClientOwnershipFixture.stage == 2 && menu.ownershipStatus() == CoreOwnershipController.Status.MANAGED.ordinal()) {
 				require(menu.energy(false) == ClientOwnershipFixture.ENERGY_STORED && menu.energy(true) == ClientOwnershipFixture.ENERGY_CAPACITY, "Long FE values did not synchronize exactly");
 				capture(client, "managed"); press(screen, "start"); step = 6; settled = 0;
@@ -84,6 +87,7 @@ public final class NetworkClientProbe {
 		finished = true;
 		var report = new JsonObject(); report.addProperty("passed", error == null); report.addProperty("completedStage", ClientOwnershipFixture.stage);
 		report.addProperty("ae2Present", net.neoforged.fml.ModList.get().isLoaded("ae2"));
+		report.addProperty("takeoverAttempts", joinAttempts);
 		report.addProperty("menuCountsAndButtons", error == null); report.addProperty("permissionsAndStaleMenu", error == null);
 		report.addProperty("coreOwnerRoleSynchronized", error == null);
 		report.addProperty("permanentInventoryAndMinimumViewport", error == null && ClientTerminalProbe.complete());
