@@ -384,3 +384,14 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 **构建及证据：** 网络 worktree 基线 `cfa8979`，NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85。针对性测试通过后，`test build verifyReleaseArtifact --no-daemon --no-configuration-cache` 成功，183 份 JUnit 报告共 1,073 项，1,071 通过、2 项既有跳过、零失败／错误。证据索引及报告副本为 `build/network-gates/d17-rolls-20261001/gate.json`。PowerShell 7.6.5 源码指纹为 `26A9A5D68FE0D9A4E4E5C2BFF2B18E40C1B8512C5CC3360ADCB4509AA8EBF853`；本次构建 JAR SHA-256 为 `9C9B378E9F1686C9845EB268F0D9C78C47B87A428248773C462370EE0D6DD7A1`，包含新内核且排除 domainProbe。额外核验初次误枚举 build/libs 的历史 JAR，随后按正式产物报告定位当前 JAR，原历史文件未改动。
 
 **成本及边界：** 每次只计算一个周期，无按轮数逐项展开；普通倍率使用 long，超 long 的精确 float 整数最多 128 bit，单固定产物汇总最多 159 bit，成本受数值位数约束。测试的超大轮数实际执行同一常量次数的比较／算术，不依赖耗时断言。不把物理入口的 int 饱和变成网络库存容量；概率／多产物仍需预算采样。没有新增游戏、真实玩家、跨 JVM 或 Spark 证据；D17b2b2b、D17、M04 与性能门保持开放。同步了合同、拆分路线、参考与双语未发布变更，并纠正 changelog 总览中已过时的 P3 状态。
+
+<a id="s10-77"></a>
+### 10.77 D17b2b2b2 付费周期随机状态与恢复（2026-10-01，已验收）
+
+**合同及实现：** 按[2.3](bee-processing-network-design.md#s2-3)持久化冻结生产力倍率、蜂种子与采样游标，只有付款证明可发布工作候选；游标和冻结数量同时提交，结算／移位／时间升级保持原流。小数倍率每步最多采样 64 个周期且服从调用者预算，整数倍率精确聚合；序号溢出拒绝推进。checkpoint 写 schema 7，完整和预算 decoder 严格迁移 schema 6，拒绝混合、缺失、错误类型与未知版本。参考和排除项见[13.15](bee-processing-network-references.md#s13-15)。
+
+**测试及游戏证据：** 新增 8 项测试覆盖 12,288 个 JDK 固定流样本、候选丢弃／证明重放、分段与结算、移位／重新装入、超 long 结果、坏数据及 schema 后置的真实压缩文件。全量 1,081 项测试，1,079 通过、2 项既有跳过、零失败／错误；`test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 通过。有／无 AE2 各完成 domain、write、read 专服进程，使用不同 JVM 读取 partial／pending／sampled／credited／complete 五个付费阶段及 schema 6 文件，按两只铁蜂各 129 周期的独立 JDK 模型核对产物与 FE、源文件不变和两个 decoder 一致；既有两组客户端交换、最小界面和正常交还也通过。随机倍率由隔离领域夹具设置，不能视为正式升级实物入口验收。
+
+**失败及续验：** 初次单测夹具遗漏旧喂食库存，补齐后通过，原报告为 `build/network-gates/d17-random-unit-20261001/first-failed.xml`。初次整门 `d17-random-20261001-first` 在 AE2 客户端最小界面断言失败，其 automatic 截图仅 1×1 像素。源码／依赖／JAR 均未改变，保留失败报告和全部 37 条原证据，逐条核验哈希及服务器报告后，在新目录重跑 AE2 客户端。后续截图检查又发现原无 AE2 客户端虽通过交互断言，但部分截图也是 1×1，因此该组也单独补跑；最终两组 1000×700 截图回读和全部原断言通过，没有放宽布局或资产条件。中间续验 `d17-random-20261001-complete` 保留，最终联合记录为 `build/network-gates/d17-random-20261001-verified/gate.json`（49 条哈希证据）。
+
+**基线及边界：** 实际网络 worktree 基线 `c3a4257`，NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；源码指纹 `7E7251E75E31E1289C6376FF7E3B88D8284348B34AD2EC8DACFAF3CEB80A670C`，JAR SHA-256 `2457294963A186E4AAE897B5B3046FE02356D013D64B43EBD14432737C6D176C`，开发探针不入发布包。没有新增正式升级 GUI、双玩家升级／玩家文件联合恢复、强杀耐久性或 Spark／MSPT 证据；D17b2b2b3、Ω／BLOCK、D17c、M04 和性能父门保持开放。

@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 
 /** 私有候选计算；只有外层发布整个 checkpoint 才产生付款或生产。 */
 public final class BeeWorkExecutor {
+	public static final int MAX_RANDOM_CYCLES_PER_STEP = 64;
 	public enum Status { READY, STALE_PLAN, UNLOADED, DISABLED, FLOWER, ENVIRONMENT, ENERGY, DRAIN_FIRST, BUDGET }
 	public record Timing(int cycleTicks, long energyPerTick) {
 		public Timing { if (cycleTicks < 1 || energyPerTick < 0) throw new IllegalArgumentException("Invalid bee timing"); }
@@ -55,11 +56,24 @@ public final class BeeWorkExecutor {
 		return sample(state, bee, plan, progress.remainingTicks(), progress.productionCycles(), progress.energyCost(), samplingBudget);
 	}
 	private static Result sample(BeeMemberState state, BeeRecord bee, StaticBeePlan plan, int progress, long pending, long energyUsed, int budget) {
+		Math.addExact(bee.random().cursor(), pending);
 		long sampled = Math.min(pending, budget);
 		if (sampled == 0 && progress == bee.progress() && pending == bee.pendingCycles() && energyUsed == 0) return new Result(Status.BUDGET, state, state, 0);
-		var amount = ProductAmount.of(sampled).multiply(plan.countPerCycle());
+		var amount = ProductAmount.ZERO;
+		if (sampled > 0) {
+			if (plan.productionMultiplier() == 1) amount = ProductAmount.of(sampled).multiply(plan.countPerRoll());
+			else {
+				var rolls = BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier());
+				long extra = 0;
+				if (rolls.extraChance() > 0) {
+					sampled = Math.min(sampled, MAX_RANDOM_CYCLES_PER_STEP);
+					for (int i = 0; i < sampled; i++) if (bee.random().draw(i) < rolls.extraChance()) extra++;
+				}
+				amount = rolls.fixedRolls().multiply(sampled).add(ProductAmount.of(extra)).multiply(plan.countPerRoll());
+			}
+		}
 		var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),
-				progress, pending - sampled, bee.frozen().add(amount));
+				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled));
 		long remaining = state.networkPowered() ? 0 : state.energy() - energyUsed;
 		return new Result(Status.READY, state, plan == bee.plan() ? state.update(next, remaining) : state.updateTiming(next, remaining), energyUsed);
 	}

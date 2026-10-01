@@ -18,6 +18,7 @@ public final class BeeRestartProbe {
 	}
 	public static void write(NetworkCheckpoint initial) {
 		try {
+			BeeRandomRestartProbe.write(initial);
 			var current = initial; var member = initial.ownedMachines().values().iterator().next().claim().member();
 			store(current, STAGES.get(0));
 			current = work(current, member, 0, 3, 0); store(current, STAGES.get(1));
@@ -31,6 +32,7 @@ public final class BeeRestartProbe {
 		CheckpointFiles.write(Path.of("results", "bee-restart", name + ".dat"), new CheckpointPayload.Network(checkpoint, SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
 	}
 	public static void read(ServerLevel level, Path folder, JsonObject report) throws Exception {
+		BeeRandomRestartProbe.read(level, folder, report);
 		var codec = NetworkCheckpointCodec.forRegistries(level.registryAccess()); int completed = 0;
 		try (var reader = new CheckpointReadService()) {
 			for (String name : STAGES) {
@@ -70,7 +72,7 @@ public final class BeeRestartProbe {
 		var record = checkpoint.ownedMachines().get(member); var bee = record.bees().bee(slot);
 		var result = BeeWorkExecutor.advance(record.bees(), slot, bee.revision(), context(), ticks, budget);
 		require(result.status() == BeeWorkExecutor.Status.READY, "Bee fixture advance failed");
-		return checkpoint.withOwnership(record.withBees(result.candidate()));
+		return checkpoint.applyBeeWork(member, result);
 	}
 	private static NetworkCheckpoint settle(NetworkCheckpoint checkpoint, UUID member, int slot) {
 		long revision = checkpoint.ownedMachines().get(member).bees().bee(slot).revision();

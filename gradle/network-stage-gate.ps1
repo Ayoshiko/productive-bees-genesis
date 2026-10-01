@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')][string]$Gate = 'D16b',
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')][string]$Gate = 'D16b',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +50,11 @@ try {
         if ($Ae2) { $arguments += '-PnetworkProbeAe2' }
         if ($Mode -ne 'domain') { $arguments += "-PnetworkAutomaticMode=$Mode" }
         if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
+        if ($Gate -eq 'D17b2b2b2' -and $Mode -eq 'read') {
+            $sourceName = $Name.Replace('-read', '-domain')
+            $source = Join-Path $workspace "build/network-probe-$RunId-$sourceName/results/bee-restart"
+            $arguments += "-PnetworkBeeRestartSource=$source"
+        }
         Invoke-GateGradle $Name $arguments
         $reportPath = Join-Path $workspace "build/network-probe-$probeId/results/domain.json"
         $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -85,12 +90,22 @@ try {
 
     foreach ($combination in @('noae2', 'ae2')) {
         $ae2 = $combination -eq 'ae2'
-        $null = Invoke-GateProbe "$combination-domain" $ae2 'domain'
+        $domain = Invoke-GateProbe "$combination-domain" $ae2 'domain'
         $writer = Invoke-GateProbe "$combination-write" $ae2 'write'
         $world = Join-Path $workspace "build/network-probe-$RunId-$combination-write/world"
         $reader = Invoke-GateProbe "$combination-read" $ae2 'read' $world
         if ($reader.producerPid -ne $writer.currentPid) { throw 'Reader consumed another writer fixture' }
-        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
+        if ($Gate -eq 'D17b2b2b2') {
+            if ($reader.beeRandomProducerPid -ne $domain.beeRandomWriterPid -or $reader.beeRandomReaderPid -ne $reader.currentPid) {
+                throw 'Random reader consumed another writer or reused its JVM'
+            }
+            $source = Join-Path $workspace "build/network-probe-$RunId-$combination-domain/results/bee-restart/random"
+            foreach ($name in @('partial.dat', 'pending.dat', 'sampled.dat', 'credited.dat', 'complete.dat', 'legacy.dat', 'writer.json')) {
+                $path = Join-Path $source $name
+                $summary.checks += [ordered]@{ name = "$combination-bee-random-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
+            }
+        }
+        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')) {
             $clientId = "$RunId-$combination-client"
             $arguments = @('runNetworkDomainClient', '-PnetworkDomainProbe', "-PnetworkProbeRun=$clientId")
             if ($ae2) { $arguments += '-PnetworkProbeAe2' }
@@ -105,7 +120,7 @@ try {
             }
         }
     }
-    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
+    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
     if ((Get-NetworkSourceFingerprint) -ne $fingerprint -or (& git rev-parse HEAD).Trim() -ne $revision) {
         throw 'Source changed during the gate; rerun the affected gate before accepting it'
     }

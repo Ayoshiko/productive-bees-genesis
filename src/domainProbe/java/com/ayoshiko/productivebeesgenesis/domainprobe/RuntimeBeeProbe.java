@@ -34,7 +34,7 @@ final class RuntimeBeeProbe {
 		Fixture(BlockPos position) { this.position = position; }
 		BeeRecord bee() { return data.checkpoint().ownedMachines().get(member).bees().bee(0); }
 		long output() { return data.checkpoint().ledger().balances().getOrDefault(bee().plan().output(), com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount.ZERO).longSaturated(); }
-		long cycles() { return output() / bee().plan().countPerCycle(); }
+		long cycles() { return output() / bee().plan().countPerRoll(); }
 		void charge(ServerLevel level) {
 			charge(level, cost);
 		}

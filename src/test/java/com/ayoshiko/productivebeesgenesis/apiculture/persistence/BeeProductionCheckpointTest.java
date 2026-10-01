@@ -57,7 +57,7 @@ class BeeProductionCheckpointTest {
 	private static OwnedMachineRecord record(NetworkCheckpoint checkpoint, Fixture fixture) { return checkpoint.ownedMachines().get(fixture.bees.member()); }
 	private static NetworkCheckpoint publishCandidate(NetworkCheckpoint checkpoint, Fixture fixture, BeeWorkExecutor.Result result) {
 		assertEquals(BeeWorkExecutor.Status.READY, result.status());
-		return checkpoint.withOwnership(record(checkpoint, fixture).withBees(result.candidate()));
+		return checkpoint.applyBeeWork(fixture.bees.member(), result);
 	}
 	@Test void migrationRemovesOldOwnersAndReturnRequiresDraining() {
 		var f = fixture(0, 3); var active = f.active(); var owned = record(active, f);

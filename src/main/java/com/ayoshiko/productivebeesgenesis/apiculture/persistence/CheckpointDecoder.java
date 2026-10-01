@@ -18,6 +18,7 @@ public final class CheckpointDecoder implements AutoCloseable {
 	private final Consumer<ProductKey> validateKey;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 	private final ArrayDeque<Frame> stack = new ArrayDeque<>();
+	private final BeeSchemaVersion beeSchema = new BeeSchemaVersion();
 	private NbtReadBatch batch;
 	private int cursor;
 	private Object candidate;
@@ -119,7 +120,7 @@ public final class CheckpointDecoder implements AutoCloseable {
 			stack.push(new Raw(start));
 		}
 	}
-	private Domain domain(String name, CheckpointSchema.Kind kind) { return new Domain(name, new CheckpointSchema.Node(kind, directory, validateKey, validateFeeding)); }
+	private Domain domain(String name, CheckpointSchema.Kind kind) { return new Domain(name, new CheckpointSchema.Node(kind, directory, validateKey, validateFeeding, beeSchema)); }
 	public Progress progress() { check(); return new Progress(state, steps, maxStepNanos, failure); }
 	public NetworkCheckpoint checkpoint() {
 		check(); if (state != State.COMPLETE || directory) throw new IllegalStateException("No completed network checkpoint");

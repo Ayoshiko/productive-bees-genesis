@@ -123,7 +123,7 @@ final class ApiaryUpgradeProbe {
 			var pending = state().bee(0);
 			require(pending.plan() == oldPlan && pending.pendingCycles() == 1 && pending.frozen().isZero(), "Old paid cycle was replaced");
 			require(work(0, 0, 1, false) == BeeWorkExecutor.Status.READY, "Old paid cycle could not freeze");
-			require(state().bee(0).frozen().equals(ProductAmount.of(oldPlan.countPerCycle())), "Old paid output changed");
+			require(state().bee(0).frozen().equals(ProductAmount.of(oldPlan.countPerRoll())), "Old paid output changed");
 			require(service.settle(level, member, 0, state().bee(0).revision()), "Old output could not settle");
 			setReference(Upgrade.SPEED, 3); setReference(Upgrade.ENERGY, 2); setReference(PbUpgradeType.TIME, 0); setReference(PbUpgradeType.TIME_2, 2);
 			var desired = StaticApiaryAdapter.timing(hive, record(), state().bee(0)); comparePhysical(desired);
@@ -267,12 +267,12 @@ final class ApiaryUpgradeProbe {
 		require(timing.cycleTicks() < old.cycleTicks() && timing.energyPerTick() == old.energyPerTick(), "PB time changed FE/t or did not change duration");
 		require(!new BlockEntityOwnershipEndpoint(hive).readyToReturn(record()), "PB-only partial cycle returned too early");
 		require(work(0, 999, 1, false) == BeeWorkExecutor.Status.READY && state().bee(0).progress() == 0
-				&& state().bee(0).plan() == old && state().bee(0).frozen().equals(ProductAmount.of(old.countPerCycle())), "PB edit changed old cycle/output");
+				&& state().bee(0).plan() == old && state().bee(0).frozen().equals(ProductAmount.of(old.countPerRoll())), "PB edit changed old cycle/output");
 		require(service.settle(player.serverLevel(), member, 0, state().bee(0).revision()), "PB old output did not settle");
 		var unchanged = data.checkpoint();
 		require(work(0, 1, 1, true) == BeeWorkExecutor.Status.READY && data.checkpoint() == unchanged, "Simulated PB timing published");
 		require(work(0, timing.cycleTicks(), 1, false) == BeeWorkExecutor.Status.READY
-				&& timing.matches(state().bee(0).plan()) && state().bee(0).frozen().equals(ProductAmount.of(old.countPerCycle())), "PB next cycle changed output");
+				&& timing.matches(state().bee(0).plan()) && state().bee(0).frozen().equals(ProductAmount.of(old.countPerRoll())), "PB next cycle changed output");
 		require(data.checkpoint().energy().stored() == before - (long) (old.cycleTicks() + timing.cycleTicks()) * old.energyPerTick(), "PB cycles charged incorrectly");
 		require(service.settle(player.serverLevel(), member, 0, state().bee(0).revision()), "PB next output did not settle");
 		check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME, 1);

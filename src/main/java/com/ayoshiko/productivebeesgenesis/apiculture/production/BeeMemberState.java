@@ -91,7 +91,7 @@ public final class BeeMemberState {
 		for (var bee : bees) {
 			var other = next.bees.stream().filter(value -> value.id().equals(bee.id())).findFirst().orElse(null);
 			if (other == null || !bee.plan().equals(other.plan()) || bee.progress() != other.progress()
-					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen())) return false;
+					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen()) || !bee.random().equals(other.random())) return false;
 		}
 		return true;
 	}
@@ -107,7 +107,7 @@ public final class BeeMemberState {
 		for (var previous : bees) {
 			var candidate = next.bees.stream().filter(bee -> bee.id().equals(previous.id())).findFirst().orElseThrow();
 			if (previous.equals(candidate)) continue;
-			if (!previous.originalSlot().equals(candidate.originalSlot()) || !previous.plan().equals(candidate.plan())
+			if (!previous.originalSlot().equals(candidate.originalSlot()) || !previous.plan().equals(candidate.plan()) || !previous.random().equals(candidate.random())
 					|| candidate.revision() != Math.incrementExact(previous.revision()) || previous.slot() != candidate.slot() && !previous.drained()) throw new IllegalArgumentException("Bee plan changed within paid work");
 			changed++;
 		}

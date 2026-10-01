@@ -42,7 +42,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `../decompiled-reference/productive-bees-addon-1.21.1/extendedae-plus-1.21.1-source` | `util/storage/InfinityDataStorage`、`InfinityStorageManager`、`api/storage/InfinityBigIntegerCellInventory` | long／BigInteger 双层、降级、总数增量缓存、storageRevision、纯模拟、饱和上报；已替换旧 1.20.1 副本 |
 | `.tmp_neoccoaeextension_src`（main／21.2.0，`70cea49f`） | `ECOInfiniteStorageData.save/add/subtract/replayJournal`、`ECOInfiniteStorage.neoecoae$visitExactAmounts` | 普通量变标脏、结构缓存 revision、原子快照、旧日志迁移和所有可见键的精确观察；早期 `neoecoaeextension-v21.1.2-source` 仅保留历史依据 |
 | `../../闪电全版本/Thunderbolt-Core-Reborn`（`42e0e7d2`） | `IndexedStorage.insert/insertExact/setAmountExact`、`BigAmounts`、`BigStorageOps` | 按键数组、结构／数量脏分离和实际接受量桥；精确模式仍有 16,384 位上限及大数开销，不采用其容量限制 |
-| `.tmp_useless_src`（2.3.8.3） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
+| `.tmp_useless_src`（2.4.5.4／`884e757b`，本步复核见 [13.15](#s13-15)） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources` | `common/content/qio/QIOFrequency`、`common/inventory/container/QIOItemViewerContainer` | 库存键索引、updatedItems、只向查看者同步、避免同时保存的思路；QIO 有容量且其终端协议不等于本方案的服务端分页 |
@@ -209,3 +209,12 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 采用逐周期轮数与逐栈取整；验证 2.5 倍的边界、20,480 次固定种子单周期物理采样对照、独立 IEEE-754 整数模型及基因例子。不采用 PB 的世界随机源、可变输出列表或本项目物理采样器的 int 总轮数饱和；网络纯内核接收调用者给定的样本，保持幂等计算，用现有 ProductAmount 表示精确轮数／总量。普通路径保持 long，大数只按实际 float 的二进制值构造，不能用十进制显示值代替。
 
 成功路径只返回私有不可变计算结果；非法倍率、样本和产物参数直接拒绝，不返回空产物掩盖错误。内核没有缓存、世界引用或线程任务，同一实例可只读复用；能力失效、周期所有权与重启不重抽仍由 b2／b3 的服务器事务负责，尚未接入。概率／多产物、Ω／BLOCK 转换不得使用固定单产物汇总捷径。合同与证据分别见[2.3](bee-processing-network-design.md#s2-3)和[10.76](bee-processing-network-evidence-current.md#s10-76)。
+
+<a id="s13-15"></a>
+### 13.15 付费随机状态、版本迁移与按键交付（2026-10-01）
+
+本步参考副本 `.tmp_useless_src` 在上轮确认独立根与干净工作树后，从 `23215c7` fast-forward 到 `884e757b`（1.21／2.4.5.4）；本轮再次核对该 HEAD 和干净状态。读取 `AlloyFurnaceBigIntegerCpuAdapter`、`AlloyFurnaceBigIntegerCrafting.unitOutputs/scaledOutputs` 及 `AdvancedAlloyFurnaceAeManager.notifyCpuBatchCompleted/notifyCpuBatchCancelled/claimOutputsFromCpu`：采用服务器线程、入队后固定实际结果、按键精确数量交付及单一终局的职责划分。其“装配一次再乘整批”的折叠语义不能替代本项目逐周期的小数概率；其回调异常后返回零接收也不能用于结果未知的资产交接。既有网络内账本继续直接提交冻结数量，不引入 AE2 回调、外部缓存或机器引用。
+
+随机流依据本地 Java 21 的 `SplittableRandom.nextDouble` 作独立数值对照，以显式 SplitMix64 计数公式固化采样版本 1，不依赖世界 RNG 或 JDK 对象的可变内部状态。种子／游标属于蜂记录；付款形成 pending，采样同时增加游标和冻结数量，结算仅转移冻结数量。旧请求须通过源状态身份校验，通用所有权更新不得改随机状态；移位、升级时间切换及正常恢复保持原流，取出后新装入的蜜蜂按新 beeId 建流。所有操作仍在权威服务器线程发布，没有新增后台计算。
+
+两种 decoder 都验证 schema 6／7；流式读取先记录实际蜂格式，结束时与网络 schema 核对，因此不依赖字段顺序。只接受完整旧字段迁移，缺失或损坏的新字段不降级为旧格式。读取会话独享格式记录，取消／关闭不留下全局状态。证据见[10.77](bee-processing-network-evidence-current.md#s10-77)；正式生产力升级仍按[11.5](bee-processing-network-roadmap.md#s11-5)的 b3 交付。

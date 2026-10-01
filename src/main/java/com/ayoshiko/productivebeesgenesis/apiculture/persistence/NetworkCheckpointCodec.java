@@ -13,7 +13,7 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 6;
+	public static final int SCHEMA = 7;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
@@ -78,7 +78,7 @@ public final class NetworkCheckpointCodec {
 		var tag = metadata(checkpoint); tag.put("balances", ProductRecordCodec.amounts(checkpoint.ledger().balances())); return tag;
 	}
 	public NetworkCheckpoint decode(CompoundTag tag) {
-		if (StrictNbt.integer(tag, "schema") != SCHEMA) throw new IllegalArgumentException("Unsupported network schema");
+		int schema = StrictNbt.integer(tag, "schema"); BeeSchemaVersion.requireSupported(schema);
 		var transactions = new ArrayList<LedgerCheckpoint.Pending>();
 		StrictNbt.list(tag, "transactions").forEach(raw -> transactions.add(readTransaction((CompoundTag) raw)));
 		var ledger = new LedgerCheckpoint(StrictNbt.number(tag, "ledgerRevision"), products.readAmounts(StrictNbt.list(tag, "balances")), transactions);
@@ -96,7 +96,7 @@ public final class NetworkCheckpointCodec {
 				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")), EnergyRecordCodec.decode(StrictNbt.compound(tag, "energy")));
 		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
 		for (var raw : StrictNbt.list(tag, "ownership")) {
-			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding);
+			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding, schema);
 			NetworkCheckpoint.validateOwnership(record, checkpoint.identity(), checkpoint.policyRevision());
 			NetworkCheckpoint.validateEnergyOwnership(record, checkpoint.energy());
 			owned.add(record);

@@ -59,7 +59,12 @@ public final class DomainProbeServer {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
 		if (System.getProperty("pbg.automatic.mode") != null) {
 			try {
-				if (event.getServer().getTickCount() == 40) { pendingReport = new JsonObject(); AutomaticRestartProbe.start(event.getServer()); }
+				if (event.getServer().getTickCount() == 40) {
+					pendingReport = new JsonObject();
+					if (System.getProperty("pbg.bee.restartSource") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.read(
+							event.getServer().overworld(), Path.of(System.getProperty("pbg.bee.restartSource")), pendingReport);
+					AutomaticRestartProbe.start(event.getServer());
+				}
 				if (pendingReport != null && AutomaticRestartProbe.advance(event.getServer(), pendingReport)) { finish(event, pendingReport); pendingReport = null; }
 			} catch (Exception error) {
 				if (pendingReport == null) pendingReport = new JsonObject(); failed(pendingReport, error); finish(event, pendingReport); pendingReport = null;

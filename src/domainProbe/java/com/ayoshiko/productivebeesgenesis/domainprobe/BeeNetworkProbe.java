@@ -75,6 +75,7 @@ final class BeeNetworkProbe {
 			hive.setControlType(RedstoneControl.DISABLED);
 			FeedingNetworkProbe.beforeProduction(level, data, directory, member, report);
 			com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRestartProbe.write(data.checkpoint());
+			report.addProperty("beeRandomWriterPid", ProcessHandle.current().pid());
 			require(!service.activate(level, member, data.checkpoint().revision(), 0), "Duplicate bee migration accepted");
 			hive.setControlType(RedstoneControl.DISABLED);
 			var before = data.checkpoint();

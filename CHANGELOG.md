@@ -35,7 +35,9 @@
 
 ### 新增
 
-- **D17b2b2b1 生产力轮数内核**：新增固定轮数与单周期概率附加轮的精确计划，逐栈应用基因后汇总，超 int／long 总量不截断。仅完成纯计算与构建验收；付费周期随机恢复、蜂箱生产力正式接入和蜜脾块转换仍待后续步骤。
+- **D17b2b2b2 付费周期随机恢复**：蜜蜂保存固定种子与周期游标，按预算冻结精确产物；候选丢弃、重放、分段和正常重启不重抽、不重复收费。网络 checkpoint 升至 schema 7，严格兼容 schema 6 的完整旧蜂状态；损坏或混合格式拒绝恢复。纯测试、实际文件、两组依赖的跨 JVM 与既有客户端回归通过；正式生产力升级和蜜脾块转换仍待后续步骤。
+
+- **D17b2b2b1 生产力轮数内核**：新增固定轮数与单周期概率附加轮的精确计划，逐栈应用基因后汇总，超 int／long 总量不截断。纯计算内核已验收；付费随机恢复由 b2 交付，正式升级准入与蜜脾块转换另验。
 
 - **维护版 1.0.10／PB 13.14.0 同步**：合入新版 PB 离心机条件 Mixin、依赖与 CI 更新，保留网络托管隔离和 PB 13.13.5 最低声明；网络检验门显式按 UTF-8 读取测试／运行报告，兼容 Windows PowerShell 5.1 的中文测试名。
 
@@ -133,7 +135,9 @@
 
 #### Added
 
-- Added the D17b2b2b1 exact productivity-roll kernel: fixed rolls plus one fractional Bernoulli event per cycle, per-stack gene rounding, and exact totals beyond int/long. This is a pure computation step; persisted random state, managed-apiary productivity admission and comb-block conversion remain pending.
+- Added D17b2b2b2 paid-cycle random recovery: persisted bee seeds and cycle cursors freeze exact outputs within a sampling budget. Discarded candidates, replay, partitioned sampling and normal restarts do not reroll results or charge twice. Network checkpoint schema 7 strictly migrates complete schema 6 bee records and rejects corrupt or mixed formats. Unit tests, real files, cross-JVM checks under both dependency combinations and existing client regressions passed; productivity-upgrade admission and comb-block conversion remain pending.
+
+- Added the D17b2b2b1 exact productivity-roll kernel: fixed rolls plus one fractional Bernoulli event per cycle, per-stack gene rounding, and exact totals beyond int/long. The pure kernel is accepted; b2 provides paid random recovery, while formal upgrade admission and comb-block conversion are separate steps.
 
 - Merged 1.0.10 maintenance with PB 13.14.0 conditional centrifuge Mixins, dependency and CI updates, preserving managed-network isolation and the PB 13.13.5 minimum. Network gates now read test/runtime reports explicitly as UTF-8, including Chinese test names under Windows PowerShell 5.1.
 
