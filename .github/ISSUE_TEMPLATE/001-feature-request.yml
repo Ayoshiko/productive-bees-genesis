@@ -1,0 +1,81 @@
+name: Feature Request / 功能建议
+description: Suggest an improvement or new behavior for Productive Bees Genesis. / 为资源蜜蜂：创世提出改进或新功能建议。
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提出建议。请先确认该需求尚未在现有 Issue 或 README 中说明，并尽量描述具体使用场景。
+
+        Thanks for the suggestion. Please check existing issues and the README first, and describe a concrete use case.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checklist / 提交检查清单
+      options:
+        - label: "I searched existing issues and found no duplicate. / 我已搜索现有 Issue，未发现重复建议。"
+          required: true
+        - label: "This request is about this addon, not a bug in another mod. / 此建议针对本附属模组，而不是其他模组本身的错误。"
+          required: true
+
+  - type: dropdown
+    id: target-version
+    attributes:
+      label: Target Minecraft and loader / 目标 Minecraft 与加载器
+      options:
+        - "Minecraft 1.21.1 + NeoForge"
+        - "Future version / 未来版本"
+    validations:
+      required: true
+
+  - type: input
+    id: cross-mod
+    attributes:
+      label: Cross-mod integration / 跨模组联动
+      description: Name the mod(s) involved, or leave this blank if none. / 如涉及其他模组，请填写名称；没有则留空。
+      placeholder: "Example: Applied Energistics 2, Mekanism Extras"
+    validations:
+      required: false
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature summary / 功能概要
+      description: What would you like to add or change? / 你希望新增或修改什么？
+      placeholder: "Example: Add a per-machine option to keep honeycomb input in the local buffer before sending it to AE2. / 例如：增加按机器设置，让蜜脾先保留在本地缓冲区再发送到 AE2。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case and benefit / 使用场景与收益
+      description: Explain the problem this solves and who would benefit. / 说明它解决什么问题，以及哪些玩家会受益。
+      placeholder: "Describe your setup, current workaround, and why it is insufficient. / 描述你的设备、当前替代方案，以及替代方案为何不足。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-behavior
+    attributes:
+      label: Proposed behavior / 建议的行为
+      description: Describe how the feature should work, including important settings, limits, or compatibility rules. / 描述功能应如何工作，包括重要设置、限制或兼容规则。
+    validations:
+      required: true
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples and additional details / 示例与补充信息
+      description: Add screenshots, recipes, config examples, links, or alternative solutions. / 可补充截图、配方、配置示例、链接或其他解决方案。
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        功能建议会结合兼容性、性能、平衡性和维护成本评估，不代表一定会实现。
+
+        Feature requests are evaluated against compatibility, performance, balance, and maintenance cost; submission does not guarantee implementation.
