@@ -7,11 +7,11 @@ import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
-/** 静态蜂箱 PB 时间升级的严格白名单；旧数量不因配置上限降低而截断。 */
+/** 静态蜂箱已适配 PB 升级的严格白名单；旧数量不因配置上限降低而截断。 */
 public final class PbApiaryUpgradeCounts {
 	public static boolean supported(PbUpgradeType type) {
 		return type != null && switch (type) {
-			case TIME, TIME_2 -> true;
+			case TIME, TIME_2, PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3 -> true;
 			default -> false;
 		};
 	}

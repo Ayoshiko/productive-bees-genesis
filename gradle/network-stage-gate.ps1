@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')][string]$Gate = 'D16b',
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3')][string]$Gate = 'D16b',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 
 $ErrorActionPreference = 'Stop'
@@ -50,7 +50,7 @@ try {
         if ($Ae2) { $arguments += '-PnetworkProbeAe2' }
         if ($Mode -ne 'domain') { $arguments += "-PnetworkAutomaticMode=$Mode" }
         if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
-        if ($Gate -eq 'D17b2b2b2' -and $Mode -eq 'read') {
+        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3') -and $Mode -eq 'read') {
             $sourceName = $Name.Replace('-read', '-domain')
             $source = Join-Path $workspace "build/network-probe-$RunId-$sourceName/results/bee-restart"
             $arguments += "-PnetworkBeeRestartSource=$source"
@@ -78,6 +78,7 @@ try {
     $properties = Get-Content -LiteralPath 'gradle.properties' -Raw -Encoding UTF8 | ConvertFrom-StringData
     $artifact = Join-Path $workspace "build/libs/$($properties.mod_id)-$($properties.mod_version).jar"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
+    Add-Type -AssemblyName System.Drawing
     $zip = [IO.Compression.ZipFile]::OpenRead($artifact)
     try {
         $probeClasses = (Resolve-Path 'build/classes/java/domainProbe').Path
@@ -95,7 +96,7 @@ try {
         $world = Join-Path $workspace "build/network-probe-$RunId-$combination-write/world"
         $reader = Invoke-GateProbe "$combination-read" $ae2 'read' $world
         if ($reader.producerPid -ne $writer.currentPid) { throw 'Reader consumed another writer fixture' }
-        if ($Gate -eq 'D17b2b2b2') {
+        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3')) {
             if ($reader.beeRandomProducerPid -ne $domain.beeRandomWriterPid -or $reader.beeRandomReaderPid -ne $reader.currentPid) {
                 throw 'Random reader consumed another writer or reused its JVM'
             }
@@ -105,7 +106,14 @@ try {
                 $summary.checks += [ordered]@{ name = "$combination-bee-random-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
             }
         }
-        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')) {
+        if ($Gate -eq 'D17b2b2b3') {
+            if ($reader.apiaryProductivityWriterPid -ne $domain.beeRandomWriterPid) { throw 'Productivity reader consumed another writer' }
+            foreach ($name in @('apiary-productivity.dat', 'apiary-productivity.json')) {
+                $path = Join-Path $workspace "build/network-probe-$RunId-$combination-domain/results/$name"
+                $summary.checks += [ordered]@{ name = "$combination-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
+            }
+        }
+        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3')) {
             $clientId = "$RunId-$combination-client"
             $arguments = @('runNetworkDomainClient', '-PnetworkDomainProbe', "-PnetworkProbeRun=$clientId")
             if ($ae2) { $arguments += '-PnetworkProbeAe2' }
@@ -116,11 +124,14 @@ try {
             $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
             foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'terminal-products', 'terminal-bee-icons', 'returned')) {
                 $screenshot = Join-Path $clientFolder "$name.png"
+                $bitmap = [Drawing.Image]::FromFile($screenshot)
+                $imageWidth = $bitmap.Width; $imageHeight = $bitmap.Height; $bitmap.Dispose()
+                if ($imageWidth -lt 320 -or $imageHeight -lt 240) { throw "Invalid client screenshot size: $screenshot" }
                 $summary.checks += [ordered]@{ name = "$combination-$name-image"; path = $screenshot; sha256 = (Get-FileHash -LiteralPath $screenshot).Hash }
             }
         }
     }
-    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
+    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
     if ((Get-NetworkSourceFingerprint) -ne $fingerprint -or (& git rev-parse HEAD).Trim() -ne $revision) {
         throw 'Source changed during the gate; rerun the affected gate before accepting it'
     }

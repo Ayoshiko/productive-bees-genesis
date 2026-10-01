@@ -56,6 +56,15 @@ class ApiaryUpgradeFormulaTest {
 				ApiaryUpgradeMath.computePbTimeDivisor(Integer.MAX_VALUE, Integer.MAX_VALUE, 0.15f));
 	}
 
+	@Test void productivityTiersUseTheExistingPhysicalFactors() {
+		assertEquals(1, ApiaryUpgradeMath.computeProductivityMultiplier(0, 0, 0, 0));
+		assertEquals(2.2f, ApiaryUpgradeMath.computeProductivityMultiplier(1, 0, 0, 0));
+		assertEquals(2.5f, ApiaryUpgradeMath.computeProductivityMultiplier(0, 1, 0, 0));
+		assertEquals(3, ApiaryUpgradeMath.computeProductivityMultiplier(0, 0, 1, 0));
+		assertEquals(3.6f, ApiaryUpgradeMath.computeProductivityMultiplier(0, 0, 0, 1));
+		assertEquals(59.4f, ApiaryUpgradeMath.computeProductivityMultiplier(8, 8, 8, 8));
+	}
+
 	private static Stream<Arguments> factoryEnergyTable() {
 		return Stream.of(
 				Arguments.of("normal", 50L, 1),

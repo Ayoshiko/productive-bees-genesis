@@ -395,3 +395,14 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 **失败及续验：** 初次单测夹具遗漏旧喂食库存，补齐后通过，原报告为 `build/network-gates/d17-random-unit-20261001/first-failed.xml`。初次整门 `d17-random-20261001-first` 在 AE2 客户端最小界面断言失败，其 automatic 截图仅 1×1 像素。源码／依赖／JAR 均未改变，保留失败报告和全部 37 条原证据，逐条核验哈希及服务器报告后，在新目录重跑 AE2 客户端。后续截图检查又发现原无 AE2 客户端虽通过交互断言，但部分截图也是 1×1，因此该组也单独补跑；最终两组 1000×700 截图回读和全部原断言通过，没有放宽布局或资产条件。中间续验 `d17-random-20261001-complete` 保留，最终联合记录为 `build/network-gates/d17-random-20261001-verified/gate.json`（49 条哈希证据）。
 
 **基线及边界：** 实际网络 worktree 基线 `c3a4257`，NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；源码指纹 `7E7251E75E31E1289C6376FF7E3B88D8284348B34AD2EC8DACFAF3CEB80A670C`，JAR SHA-256 `2457294963A186E4AAE897B5B3046FE02356D013D64B43EBD14432737C6D176C`，开发探针不入发布包。没有新增正式升级 GUI、双玩家升级／玩家文件联合恢复、强杀耐久性或 Spark／MSPT 证据；D17b2b2b3、Ω／BLOCK、D17c、M04 和性能父门保持开放。
+
+<a id="s10-78"></a>
+### 10.78 D17b2b2b3 α／β／γ 生产力升级（2026-10-01，服务器服务已验收）
+
+**合同与实现：** 按[2.3](bee-processing-network-design.md#s2-3)开放基础蜂箱 α／β／γ 的标准实物交换，复用当前上限、等级互斥、封存资产与成员 revision；独立蜂箱和网络共用原有 float 倍率公式。下一周期的耗时、单价和生产力一起随首次获准工作提交，旧部分周期、pending、冻结产物与随机游标保持原状态。小数倍率部分周期先结清再交还，匹配当前能力的整数倍率保留进度交还；schema 7 不变。参考与排除项见[13.16](bee-processing-network-references.md#s13-16)。
+
+**验证与修复：** 新增 4 项测试验证倍率基准、旧计划与首次新付款、拒绝路径不改随机状态、共享 FE 与新倍率一致提交；全量 1,085 项中 1,083 通过、2 项既有跳过、零失败／错误。开发中修正测试 lambda 的非 final 捕获与一处预期值笔误；旧测试的“拒绝全部生产力”改为明确拒绝 Ω／BLOCK 等未准入类型，错误字段断言保留，原失败报告在 `build/network-gates/d17-productivity-unit-20261001/first-failed.xml`。首次整门的探针误跨包调用预算 decoder，改放既有 persistence 探针内；同时修正验收脚本分支扩展并通过语法检查，未放宽生产断言。
+
+**运行证据：** `build/network-gates/d17-productivity-20261001-second/gate.json` 为最终 51 条哈希证据；`test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 和有／无 AE2 的 domain／write／read／client 全部通过。每组实际核心菜单服务完成 3 种生产力、42 次交换检查和 19 个整周期，包含逐档独立蜂箱倍率、模拟／旧请求／组件／满槽、旧超限／互斥数量取回、配置中途变化、FE 与产物独立模型及最新 γ 实物交还。新 JVM 对实际服务产生的“旧 2.5 倍已付费周期＋当前两件 β”文件执行完整及预算解码，核对旧结果不重抽、不收费及源文件不变；既有五阶段随机恢复、自动生产与两组客户端回归同样通过。截图门新增拒绝 1×1 等无效尺寸，最终两组截图已回读。
+
+**范围与基线：** 网络 worktree 基线 `0f285a8`，NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；源码指纹 `A09B7C32D0D4ACF7A7C27331E09F20BE432AC69830A19916BE1FBAD4F854C3C4`，JAR SHA-256 `D12C5E9E2DE5C34DF0D36474F807C7301592205B90B0ED89E50C1D523638B042`，开发探针不入发布包。升级调用来自专服菜单服务探针，客户端只回归现有交换，不能视为新升级 GUI、双玩家升级／玩家文件联合门或强杀耐久性验收。Ω／BLOCK、D17c、M04 和 Spark／MSPT 性能门保持开放。

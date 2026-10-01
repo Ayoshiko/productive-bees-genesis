@@ -229,12 +229,9 @@ public class ApiaryUpgradeHandler {
 	 * @return 生产力倍率(基础 1.0)
 	 */
 	float computeProductivityMultiplier() {
-		double mod = 1.0D;
-		mod += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_2);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_3.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3);
-		mod += (double) PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor() * getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4);
-		return SaturatingMath.positiveFiniteFloat(mod, 1.0f);
+		return ApiaryUpgradeMath.computeProductivityMultiplier(getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY),
+				getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_2), getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_3),
+				getInstalledUpgrades(PbUpgradeType.PRODUCTIVITY_4));
 	}
 
 	/**

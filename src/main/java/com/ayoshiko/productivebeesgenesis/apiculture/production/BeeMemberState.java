@@ -49,10 +49,10 @@ public final class BeeMemberState {
 	public BeeMemberState update(BeeRecord next, long remainingEnergy) {
 		return update(next, remainingEnergy, false);
 	}
-	/** 仅供带付款证明的工作执行器发布周期起点的时间／单价切换。 */
-	BeeMemberState updateTiming(BeeRecord next, long remainingEnergy) {
+	/** 仅供带付款证明的工作执行器发布周期起点的周期能力切换。 */
+	BeeMemberState updateCycle(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
-		if (old.progress() != 0 || !old.drained() || !old.plan().retime(next.plan().cycleTicks(), next.plan().energyPerTick()).equals(next.plan()))
+		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier()).equals(next.plan()))
 			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
 		return update(next, remainingEnergy, true);
 	}

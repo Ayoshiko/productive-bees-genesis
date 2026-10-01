@@ -54,6 +54,7 @@ public final class BeeRandomRestartProbe {
 				new CheckpointPayload.Network(current, SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
 	}
 	public static void read(ServerLevel level, Path source, JsonObject report) throws Exception {
+		readProductivity(level, source, report);
 		var folder = source.resolve("random"); var codec = NetworkCheckpointCodec.forRegistries(level.registryAccess());
 		long producer = com.google.gson.JsonParser.parseString(Files.readString(folder.resolve("writer.json"))).getAsJsonObject().get("producerPid").getAsLong();
 		require(producer != ProcessHandle.current().pid(), "Random reader reused the writer JVM");
@@ -93,6 +94,36 @@ public final class BeeRandomRestartProbe {
 		report.addProperty("beeRandomCrossJvmBoundaries", verified);
 		report.addProperty("beeRandomPartitionReplayAndOracle", true);
 		report.addProperty("beeRandomLegacySchemaSix", true);
+	}
+	public static void readProductivity(ServerLevel level, Path source, JsonObject report) throws Exception {
+		Path path = source.resolveSibling("apiary-productivity.dat"), metadataPath = source.resolveSibling("apiary-productivity.json");
+		if (!Files.exists(path)) return;
+		var metadata = com.google.gson.JsonParser.parseString(Files.readString(metadataPath)).getAsJsonObject();
+		require(metadata.get("writerPid").getAsLong() != ProcessHandle.current().pid(), "Productivity restart reused writer");
+		var bytes = Files.readAllBytes(path); var codec = NetworkCheckpointCodec.forRegistries(level.registryAccess());
+		var checkpoint = codec.decode(NbtIo.readCompressed(path, NbtAccounter.unlimitedHeap()).getCompound("data"));
+		try (var reader = new CheckpointReadService(); var decoder = codec.decoder(reader.tryOpen(path).orElseThrow())) {
+			long deadline = System.nanoTime() + 10_000_000_000L;
+			while (decoder.progress().state() == CheckpointDecoder.State.READING || decoder.progress().state() == CheckpointDecoder.State.VALIDATING) {
+				require(System.nanoTime() < deadline, "Productivity decoder timeout"); decoder.step(8, 1_000_000); Thread.yield();
+			}
+			require(decoder.progress().state() == CheckpointDecoder.State.COMPLETE && checkpoint.equals(decoder.checkpoint()), "Productivity decoders disagree");
+		}
+		var member = UUID.fromString(metadata.get("member").getAsString()); var record = checkpoint.ownedMachines().get(member); var bee = record.bees().bee(0);
+		require(bee.pendingCycles() == 1 && bee.plan().productionMultiplier() == 2.5f
+				&& com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts.read(record.assets().copy().getCompound("extra")).get(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.PRODUCTIVITY_2) == 2, "Saved old cycle/current upgrades changed");
+		var result = BeeWorkExecutor.advance(record.bees(), 0, bee.revision(), new BeeWorkExecutor.Context(true, false, false, 0, 0, null), 0, 1, checkpoint.energy().stored());
+		var next = checkpoint.applyBeeWork(member, result); var frozen = next.ownedMachines().get(member).bees().bee(0);
+		require(frozen.frozen().exact().longValueExact() == productivityExpected(bee) && next.energy().equals(checkpoint.energy()), "Restored productivity work rerolled or recharged");
+		require(Arrays.equals(bytes, Files.readAllBytes(path)), "Productivity reader changed original file");
+		report.addProperty("apiaryProductivityRestart", true);
+		report.addProperty("apiaryProductivityWriterPid", metadata.get("writerPid").getAsLong());
+	}
+	private static long productivityExpected(BeeRecord bee) {
+		var random = new SplittableRandom(bee.random().seed());
+		for (long i = 0; i < bee.random().cursor(); i++) random.nextDouble();
+		require(bee.plan().count() == 1 && bee.plan().productivity() == 0, "Unexpected productivity restart oracle bee");
+		return 2 + (random.nextDouble() < 0.5 ? 1 : 0);
 	}
 	private static NetworkCheckpoint decode(NetworkCheckpointCodec codec, Path file) throws Exception {
 		var full = codec.decode(NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap()).getCompound("data"));

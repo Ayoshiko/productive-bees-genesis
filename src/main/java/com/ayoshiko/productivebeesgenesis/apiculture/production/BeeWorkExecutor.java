@@ -6,9 +6,14 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 public final class BeeWorkExecutor {
 	public static final int MAX_RANDOM_CYCLES_PER_STEP = 64;
 	public enum Status { READY, STALE_PLAN, UNLOADED, DISABLED, FLOWER, ENVIRONMENT, ENERGY, DRAIN_FIRST, BUDGET }
-	public record Timing(int cycleTicks, long energyPerTick) {
-		public Timing { if (cycleTicks < 1 || energyPerTick < 0) throw new IllegalArgumentException("Invalid bee timing"); }
-		public boolean matches(StaticBeePlan plan) { return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick(); }
+	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier) {
+		public Cycle {
+			if (cycleTicks < 1 || energyPerTick < 0 || !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
+				throw new IllegalArgumentException("Invalid bee cycle");
+		}
+		public boolean matches(StaticBeePlan plan) {
+			return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick() && productionMultiplier == plan.productionMultiplier();
+		}
 	}
 	public record Context(boolean loaded, boolean enabled, boolean flower, long recipeRevision, long capabilityRevision,
 			BeeWorkConditions.Environment environment) { }
@@ -32,7 +37,7 @@ public final class BeeWorkExecutor {
 	}
 	/** 新能力只在本次确实获准生产时与付款、进度一起进入候选。 */
 	public static Result advance(BeeMemberState state, int slot, long expectedRevision, Context context, int ticks,
-			int samplingBudget, long energyBudget, Timing timing) {
+			int samplingBudget, long energyBudget, Cycle cycle) {
 		if (energyBudget < 0 || !state.networkPowered() && energyBudget != state.energy()) throw new IllegalArgumentException("Foreign bee energy budget");
 		var bee = state.bee(slot); var plan = bee.plan();
 		if (ticks < 0 || samplingBudget < 0) throw new IllegalArgumentException("Negative work budget");
@@ -46,9 +51,9 @@ public final class BeeWorkExecutor {
 		if (!context.flower()) return new Result(Status.FLOWER, state, state, 0);
 		if (plan.genesAffectWork() && BeeWorkConditions.evaluate(plan.traits(), context.environment()) != BeeWorkConditions.BlockedBy.NONE) return new Result(Status.ENVIRONMENT, state, state, 0);
 		if (ticks == 0) return new Result(Status.BUDGET, state, state, 0);
-		if (timing != null) {
-			if (bee.progress() != 0) throw new IllegalArgumentException("New bee timing inside an active cycle");
-			plan = plan.retime(timing.cycleTicks(), timing.energyPerTick());
+		if (cycle != null) {
+			if (bee.progress() != 0) throw new IllegalArgumentException("New bee capability inside an active cycle");
+			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier());
 		}
 		if (plan.energyPerTick() > 0 && ticks > energyBudget / plan.energyPerTick()) return new Result(Status.ENERGY, state, state, 0);
 		var progress = BeeProgressPlan.plan(bee.progress(), ticks, plan.cycleTicks(), plan.energyPerTick(), 1);
@@ -75,7 +80,7 @@ public final class BeeWorkExecutor {
 		var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),
 				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled));
 		long remaining = state.networkPowered() ? 0 : state.energy() - energyUsed;
-		return new Result(Status.READY, state, plan == bee.plan() ? state.update(next, remaining) : state.updateTiming(next, remaining), energyUsed);
+		return new Result(Status.READY, state, plan == bee.plan() ? state.update(next, remaining) : state.updateCycle(next, remaining), energyUsed);
 	}
 	private BeeWorkExecutor() { }
 }

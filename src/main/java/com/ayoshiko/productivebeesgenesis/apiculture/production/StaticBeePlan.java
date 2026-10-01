@@ -19,11 +19,11 @@ public record StaticBeePlan(String beeType, String recipe, long recipeRevision, 
 				|| energyPerTick < 0 || productivity < 0 || productivity > 3 || count < 1
 				|| !Float.isFinite(productionMultiplier) || productionMultiplier <= 0) throw new IllegalArgumentException("Invalid static bee plan");
 	}
-	/** 周期边界只切换耗时与单价，不改蜂种、基因、产物或配方身份。 */
-	public StaticBeePlan retime(int ticks, long energy) {
-		return cycleTicks == ticks && energyPerTick == energy ? this
+	/** 周期边界只切换本机能力，不改蜂种、基因、产物键或配方身份。 */
+	public StaticBeePlan withCycle(int ticks, long energy, float multiplier) {
+		return cycleTicks == ticks && energyPerTick == energy && productionMultiplier == multiplier ? this
 				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision),
-						ticks, energy, productivity, genesAffectWork, traits, output, count, productionMultiplier);
+						ticks, energy, productivity, genesAffectWork, traits, output, count, multiplier);
 	}
 	public int countPerRoll() { return BeeProductionSampling.adjustStackCount(count, productivity); }
 }

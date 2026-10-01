@@ -31,6 +31,7 @@ class BeeRandomCheckpointTest {
 		var slots = new ListTag(); slots.add(slot); var extra = new CompoundTag(); extra.put(BeeAssetProjection.SLOTS, slots);
 		var feeders = new ListTag(); for (int i = 0; i < 9; i++) feeders.add(new CompoundTag());
 		extra.put(com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingAssetProjection.SLOTS, feeders);
+		extra.put(com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS, new CompoundTag());
 		var image = new CompoundTag(); image.put("extra", extra); image.putLong("energy", 10000); image.putLong("energyCapacity", 10000);
 		var assets = new AssetImage(image);
 		var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
@@ -70,7 +71,7 @@ class BeeRandomCheckpointTest {
 		assertEquals(oracle(state(before).bee(0).random().seed(), 7, 2.5f), state(after).bee(0).frozen().exact());
 		var bee = state(after).bee(0);
 		assertEquals(bee.random(), bee.work(bee.progress(), bee.pendingCycles(), ProductAmount.ZERO).random());
-		assertEquals(2.5f, bee.plan().retime(2, 3).productionMultiplier());
+		assertEquals(2.5f, bee.plan().withCycle(2, 3, 2.5f).productionMultiplier());
 	}
 
 	@Test void partitionedSamplingAndSettlementMatchOneCycleOracleAcrossFiles() throws Exception {
@@ -102,7 +103,7 @@ class BeeRandomCheckpointTest {
 		assertSame(state, BeeWorkExecutor.advance(state, 0, bee.revision() + 1, context(), 1, 10).candidate());
 		var partial = work(before, 3, 0);
 		assertEquals(bee.random(), state(partial).bee(0).random());
-		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(state(partial), 0, state(partial).bee(0).revision(), context(), 1, 1, state(partial).energy(), new BeeWorkExecutor.Timing(2, 3)));
+		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(state(partial), 0, state(partial).bee(0).revision(), context(), 1, 1, state(partial).energy(), new BeeWorkExecutor.Cycle(2, 3, 2.5f)));
 		var paid = work(partial, 2, 0);
 		var result = BeeWorkExecutor.advance(state(paid), 0, state(paid).bee(0).revision(), blocked, 0, 1);
 		assertEquals(BeeWorkExecutor.Status.READY, result.status()); assertEquals(0, result.energyUsed());
@@ -162,6 +163,61 @@ class BeeRandomCheckpointTest {
 		assertNotEquals(original.random().seed(), insertion.bee().random().seed());
 		assertEquals(0, insertion.bee().random().cursor());
 	}
+	@Test void productivityUpgradeKeepsPaidCycleAndPublishesNextCapabilityWithPayment() throws Exception {
+		var before = work(fixture(2.5f), 3, 0); var original = state(before).bee(0);
+		var changed = before.exchangeUpgrade(MemberUpgradeChange.pb(before.ownedMachines().get(MEMBER),
+				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.PRODUCTIVITY_2, 1, 8));
+		assertSame(original, state(changed).bee(0));
+		var pending = roundTrip(work(changed, 2, 0), "upgraded-paid-old-cycle");
+		var desired = new BeeWorkExecutor.Cycle(2, 3, 4.25f);
+		var blocked = BeeWorkExecutor.advance(state(pending), 0, state(pending).bee(0).revision(), context(), 1, 1, state(pending).energy(), desired);
+		assertEquals(BeeWorkExecutor.Status.DRAIN_FIRST, blocked.status());
+		var sampled = BeeWorkExecutor.advance(state(pending), 0, state(pending).bee(0).revision(), context(), 0, 1, state(pending).energy(), desired);
+		var oldDone = pending.applyBeeWork(MEMBER, sampled);
+		assertEquals(2.5f, state(oldDone).bee(0).plan().productionMultiplier());
+		assertEquals(oracle(original.random().seed(), 1, 2.5f), state(oldDone).bee(0).frozen().exact());
+		oldDone = settle(oldDone);
+		var next = BeeWorkExecutor.advance(state(oldDone), 0, state(oldDone).bee(0).revision(), context(), 1, 0, state(oldDone).energy(), desired);
+		assertEquals(BeeWorkExecutor.Status.READY, next.status());
+		assertEquals(2.5f, state(oldDone).bee(0).plan().productionMultiplier());
+		var published = oldDone.applyBeeWork(MEMBER, next);
+		assertTrue(desired.matches(state(published).bee(0).plan()));
+		assertEquals(original.plan().capabilityRevision() + 1, state(published).bee(0).plan().capabilityRevision());
+		assertEquals(state(oldDone).bee(0).random(), state(published).bee(0).random());
+		assertEquals(9947, state(published).energy());
+		assertSame(published, published.applyBeeWork(MEMBER, next));
+		assertEquals(published, roundTrip(published, "upgraded-new-cycle"));
+		var completedRecord = oldDone.ownedMachines().get(MEMBER);
+		assertThrows(IllegalArgumentException.class, () -> completedRecord.withBees(next.candidate()));
+	}
+
+	@Test void blockedNewProductivityNeverPublishesPlanOrConsumesRandomState() {
+		var before = fixture(1); var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f);
+		for (var context : List.of(new BeeWorkExecutor.Context(false, true, true, 0, 0, context().environment()),
+				new BeeWorkExecutor.Context(true, false, true, 0, 0, context().environment()),
+				new BeeWorkExecutor.Context(true, true, false, 0, 0, context().environment()))) {
+			var result = BeeWorkExecutor.advance(source, 0, 0, context, 1, 1, source.energy(), desired);
+			assertSame(source, result.candidate()); assertEquals(0, result.energyUsed());
+		}
+		assertSame(source, BeeWorkExecutor.advance(source, 0, 1, context(), 1, 1, source.energy(), desired).candidate());
+		assertSame(source, BeeWorkExecutor.advance(source, 0, 0, context(), 4000, 1, source.energy(), desired).candidate());
+		assertEquals(0, source.bee(0).random().cursor());
+		assertEquals(1, source.bee(0).plan().productionMultiplier());
+		assertThrows(IllegalArgumentException.class, () -> new BeeWorkExecutor.Cycle(2, 3, Float.NaN));
+	}
+
+	@Test void sharedEnergyAndNewProductivityCommitTogetherWithoutChangingOtherAssets() {
+		var before = fixture(1).configureEnergy(10000).migrateEnergy(MEMBER);
+		var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f);
+		var result = BeeWorkExecutor.advance(source, 0, 0, context(), 2, 1, before.energy().stored(), desired);
+		var after = before.applyBeeWork(MEMBER, result);
+		assertEquals(before.energy().stored() - 6, after.energy().stored());
+		assertEquals(0, state(after).energy()); assertSame(before.ledger(), after.ledger());
+		assertTrue(desired.matches(state(after).bee(0).plan()));
+		assertEquals(oracle(source.bee(0).random().seed(), 1, 2.5f), state(after).bee(0).frozen().exact());
+		assertSame(after, after.applyBeeWork(MEMBER, result));
+	}
+
 	private static CompoundTag beeState(CompoundTag root) { return root.getList("ownership", 10).getCompound(0).getCompound("bees"); }
 	private static CompoundTag bee(CompoundTag root) { return beeState(root).getList("bees", 10).getCompound(0); }
 	private static CompoundTag legacy(CompoundTag encoded) {

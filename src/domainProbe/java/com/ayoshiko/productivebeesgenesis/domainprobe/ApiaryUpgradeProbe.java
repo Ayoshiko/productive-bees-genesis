@@ -103,7 +103,7 @@ final class ApiaryUpgradeProbe {
 			hive.setControlType(RedstoneControl.HIGH);
 			open(81);
 			setReference(Upgrade.ENERGY, 2); setReference(PbUpgradeType.TIME, 1);
-			comparePhysical(new BeeWorkExecutor.Timing(state().bee(0).plan().cycleTicks(), state().bee(0).plan().energyPerTick()));
+			comparePhysical(new BeeWorkExecutor.Cycle(state().bee(0).plan().cycleTicks(), state().bee(0).plan().energyPerTick(), state().bee(0).plan().productionMultiplier()));
 			slot(10, ItemStack.EMPTY); check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME, 0);
 			localCapacityChecks();
 			for (var id : List.of(member, otherMember)) require(NetworkEnergyService.migrate(level, data, directory, id, data.checkpoint().revision(), false), "Apiary FE migration failed");
@@ -114,7 +114,8 @@ final class ApiaryUpgradeProbe {
 		}
 		if (phase == 2) {
 			if (core.topology() == null || !core.topology().valid()) return false;
-			hive.setControlType(RedstoneControl.DISABLED); pbTimingBoundary(); beginOldCycle();
+			hive.setControlType(RedstoneControl.DISABLED); pbTimingBoundary();
+			ApiaryProductivityProbe.run(data, member, player, menu, hive, reference, report); beginOldCycle();
 			saved = data.checkpoint(); directory.requestSave(data); phase = 3; return false;
 		}
 		if (phase == 3) {
@@ -126,7 +127,7 @@ final class ApiaryUpgradeProbe {
 			require(state().bee(0).frozen().equals(ProductAmount.of(oldPlan.countPerRoll())), "Old paid output changed");
 			require(service.settle(level, member, 0, state().bee(0).revision()), "Old output could not settle");
 			setReference(Upgrade.SPEED, 3); setReference(Upgrade.ENERGY, 2); setReference(PbUpgradeType.TIME, 0); setReference(PbUpgradeType.TIME_2, 2);
-			var desired = StaticApiaryAdapter.timing(hive, record(), state().bee(0)); comparePhysical(desired);
+			var desired = StaticApiaryAdapter.cycle(hive, record(), state().bee(0)); comparePhysical(desired);
 			var before = data.checkpoint(); require(work(0, 1, 1, true) == BeeWorkExecutor.Status.READY && data.checkpoint() == before, "Simulated next cycle published timing");
 			require(work(0, 1, 1, false) == BeeWorkExecutor.Status.READY, "Next upgraded cycle did not run");
 			require(desired.matches(state().bee(0).plan()) && state().bee(0).plan().capabilityRevision() > oldPlan.capabilityRevision(), "Next cycle retained old timing");
@@ -138,6 +139,7 @@ final class ApiaryUpgradeProbe {
 			require(service.settle(level, member, 1, state().bee(1).revision()), "Second bee output could not settle");
 			require(data.checkpoint().energy().stored() == expectedEnergy, "Apiary cycles lost shared FE");
 			require(new BlockEntityOwnershipEndpoint(hive).readyToReturn(record()), "Current partial cycle should remain returnable");
+			ApiaryProductivityProbe.prepareReturn(data, member, player, menu, hive);
 			returnEnergy = data.checkpoint().energy().stored(); hive.setControlType(RedstoneControl.HIGH);
 			require(core.ownership().command(false), "Apiary assets could not return"); phase = 4; return false;
 		}
@@ -148,6 +150,8 @@ final class ApiaryUpgradeProbe {
 				&& other.getPbUpgradeCount(PbUpgradeType.TIME) == 0 && other.getPbUpgradeCount(PbUpgradeType.TIME_2) == 0, "Return lost or shared PB upgrades");
 		require(hive.getBeeSlot(0).getBeeData() != null && hive.getBeeSlot(1).getBeeData() != null && hive.getBeeSlot(0).getTicksInHive() == 1, "Return lost bees or progress");
 		require(hive.energyContainer().getEnergy() == 0 && data.checkpoint().energy().stored() == returnEnergy && record().assets().isEmpty(), "Return duplicated assets");
+		require(hive.getPbUpgradeCount(PbUpgradeType.PRODUCTIVITY_3) == 1 && other.getPbUpgradeCount(PbUpgradeType.PRODUCTIVITY_3) == 0, "Return lost or shared productivity upgrade");
+		report.addProperty("apiaryProductivityReturned", true);
 		shutdown = data.checkpoint(); player.containerMenu = player.inventoryMenu;
 		report.addProperty("apiaryBoundaryMaxNanos", boundaryNanos); report.addProperty("apiaryContinuationMaxNanos", continuationNanos);
 		report.addProperty("apiaryUpgradeChecks", checks); report.addProperty("apiaryUpgradeMaxExchangeNanos", maxNanos);
@@ -176,7 +180,7 @@ final class ApiaryUpgradeProbe {
 			int slot = upgrade == Upgrade.SPEED ? 0 : 1;
 			for (int count = 1; count <= upgrade.getMax(); count++) {
 				check(upgrade, INSTALL, slot, 1, false, MOVED, 1, revision()); setReference(upgrade, count);
-				comparePhysical(StaticApiaryAdapter.timing(hive, record(), state().bee(0)));
+				comparePhysical(StaticApiaryAdapter.cycle(hive, record(), state().bee(0)));
 				if (upgrade == Upgrade.ENERGY) compareCapacity(count);
 			}
 			check(upgrade, INSTALL, slot, 1, false, LIMIT, 0, revision());
@@ -201,21 +205,22 @@ final class ApiaryUpgradeProbe {
 		sync.onSend = () -> nested.set(menu.exchangeUpgrade(player, member, revision(), Upgrade.SPEED, 0, 1, REMOVE, false));
 		check(Upgrade.SPEED, REMOVE, 0, 1, false, MOVED, 1, revision()); require(nested.get().status() == UNAVAILABLE, "Apiary sync reentered exchange");
 		var before = data.checkpoint();
-		require(menu.exchangePbUpgrade(player, member, revision(), PbUpgradeType.PRODUCTIVITY, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Unreviewed PB apiary effect accepted");
+		require(menu.exchangePbUpgrade(player, member, revision(), PbUpgradeType.PRODUCTIVITY_4, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Unreviewed PB apiary effect accepted");
 		require(before == data.checkpoint(), "Rejected PB changed assets");
 	}
 	private static void pbExchanges() {
 		setReference(Upgrade.SPEED, 2); setReference(Upgrade.ENERGY, 1);
 		for (var type : PbUpgradeType.values()) {
 			if (type != PbUpgradeType.TIME && type != PbUpgradeType.TIME_2) {
-				check(type, INSTALL, 10, 1, false, UNSUPPORTED, 0, revision()); continue;
+				if (!PbApiaryUpgradeCounts.supported(type)) check(type, INSTALL, 10, 1, false, UNSUPPORTED, 0, revision());
+				continue;
 			}
 			pbTypes++; int limit = hive.getPbUpgradeLimit(type); require(limit > 0 && limit < 64, "Unexpected apiary PB cap");
 			slot(10, PbUpgradeInventorySlot.getRepresentativeStack(type).copyWithCount(64));
 			long old = revision(); check(type, INSTALL, 10, 1, true, MOVED, 1, old);
 			for (int count = 1; count <= limit; count++) {
 				check(type, INSTALL, 10, 1, false, MOVED, 1, revision()); setReference(type, count);
-				comparePhysical(StaticApiaryAdapter.timing(hive, record(), state().bee(0)));
+				comparePhysical(StaticApiaryAdapter.cycle(hive, record(), state().bee(0)));
 			}
 			check(type, INSTALL, 10, 1, false, STALE, 0, old); check(type, INSTALL, 10, 1, false, LIMIT, 0, revision());
 			check(type, REMOVE, 10, limit, true, MOVED, limit, revision());
@@ -244,7 +249,7 @@ final class ApiaryUpgradeProbe {
 			check(PbUpgradeType.TIME, INSTALL, 10, 6, false, MOVED, 6, revision()); setReference(PbUpgradeType.TIME, 6);
 			check(PbUpgradeType.TIME_2, INSTALL, 11, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME_2, 1);
 			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(4); ModConfig.SERVER.speedUpgradeTiersExclusive.set(true); BalanceConfig.refresh(false);
-			comparePhysical(StaticApiaryAdapter.timing(hive, record(), state().bee(0)));
+			comparePhysical(StaticApiaryAdapter.cycle(hive, record(), state().bee(0)));
 			check(PbUpgradeType.TIME, INSTALL, 10, 1, false, CONFLICT, 0, revision());
 			check(PbUpgradeType.TIME_2, REMOVE, 11, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME_2, 0);
 			check(PbUpgradeType.TIME, INSTALL, 10, 1, false, LIMIT, 0, revision());
@@ -263,7 +268,7 @@ final class ApiaryUpgradeProbe {
 		require(work(0, 1, 1, false) == BeeWorkExecutor.Status.READY, "PB initial cycle failed");
 		var old = state().bee(0).plan();
 		check(PbUpgradeType.TIME, INSTALL, 10, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME, 2);
-		var timing = StaticApiaryAdapter.timing(hive, record(), state().bee(0)); comparePhysical(timing);
+		var timing = StaticApiaryAdapter.cycle(hive, record(), state().bee(0)); comparePhysical(timing);
 		require(timing.cycleTicks() < old.cycleTicks() && timing.energyPerTick() == old.energyPerTick(), "PB time changed FE/t or did not change duration");
 		require(!new BlockEntityOwnershipEndpoint(hive).readyToReturn(record()), "PB-only partial cycle returned too early");
 		require(work(0, 999, 1, false) == BeeWorkExecutor.Status.READY && state().bee(0).progress() == 0
@@ -282,7 +287,7 @@ final class ApiaryUpgradeProbe {
 		long energyBeforeWork = data.checkpoint().energy().stored(); var before = data.checkpoint();
 		require(work(0, 1, 1, true) == BeeWorkExecutor.Status.READY && data.checkpoint() == before, "Simulated timing changed authority");
 		require(work(0, 1, 1, false) == BeeWorkExecutor.Status.READY, "First upgraded apiary cycle failed");
-		oldPlan = state().bee(0).plan(); comparePhysical(new BeeWorkExecutor.Timing(oldPlan.cycleTicks(), oldPlan.energyPerTick()));
+		oldPlan = state().bee(0).plan(); comparePhysical(new BeeWorkExecutor.Cycle(oldPlan.cycleTicks(), oldPlan.energyPerTick(), oldPlan.productionMultiplier()));
 		var bee = state().bee(0); var second = state().bee(1);
 		check(Upgrade.SPEED, INSTALL, 0, 1, false, MOVED, 1, revision()); check(Upgrade.ENERGY, INSTALL, 1, 1, false, MOVED, 1, revision());
 		check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision());
@@ -329,7 +334,7 @@ final class ApiaryUpgradeProbe {
 	private static void compareCapacity(int count) {
 		setReference(Upgrade.ENERGY, count); require(state().energyCapacity() == reference.energyContainer().getMaxEnergy(), "Apiary capacity differs from physical upgrades");
 	}
-	private static void comparePhysical(BeeWorkExecutor.Timing timing) {
+	private static void comparePhysical(BeeWorkExecutor.Cycle timing) {
 		int ticks = BeeProgressPlan.cycleTicks(20, ModConfig.SERVER.apiaryProcessingTime.get(), reference.getApiaryUpgradeHandler().getTimeMultiplier(), false);
 		require(timing.cycleTicks() == ticks && timing.energyPerTick() == reference.energyContainer().getEnergyPerTick(), "Apiary timing differs from physical upgrades");
 	}

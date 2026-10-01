@@ -42,7 +42,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 | `../decompiled-reference/productive-bees-addon-1.21.1/extendedae-plus-1.21.1-source` | `util/storage/InfinityDataStorage`、`InfinityStorageManager`、`api/storage/InfinityBigIntegerCellInventory` | long／BigInteger 双层、降级、总数增量缓存、storageRevision、纯模拟、饱和上报；已替换旧 1.20.1 副本 |
 | `.tmp_neoccoaeextension_src`（main／21.2.0，`70cea49f`） | `ECOInfiniteStorageData.save/add/subtract/replayJournal`、`ECOInfiniteStorage.neoecoae$visitExactAmounts` | 普通量变标脏、结构缓存 revision、原子快照、旧日志迁移和所有可见键的精确观察；早期 `neoecoaeextension-v21.1.2-source` 仅保留历史依据 |
 | `../../闪电全版本/Thunderbolt-Core-Reborn`（`42e0e7d2`） | `IndexedStorage.insert/insertExact/setAmountExact`、`BigAmounts`、`BigStorageOps` | 按键数组、结构／数量脏分离和实际接受量桥；精确模式仍有 16,384 位上限及大数开销，不采用其容量限制 |
-| `.tmp_useless_src`（2.4.5.4／`884e757b`，本步复核见 [13.15](#s13-15)） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
+| `.tmp_useless_src`（2.4.5.4／`1733aef5`，本步复核见 [13.16](#s13-16)） | `AlloyFurnaceBigIntegerCpuAdapter.claimOutputs`、`AdvancedAlloyFurnaceAeManager`、`MultiblockRecoveryData` | 大数产物按键整批交付、只回网剩余量；接收意味着库存所有权转移。异常后按零接收继续普通插入不能用于结果未知的权威交接；新配置改动尚未作为实现依据 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/dataenergistics-1.21-source` | `TrinityDataCoreStorageSavedData`、`TrinityDataCoreStorageProfile`、`PersistentTrinityPatternCore`、`TrinityHostedActionTicket` | 宿主身份、BigInteger、分类总数、排序缓存、拆卸作业保管／认领和窗口代际；其存储读取中坏记录跳过与未知 schema 返回空对象不能用于本项目权威域 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` | `appeng/api/storage/MEStorage`、`IStorageProvider`、`api/networking/storage/IStorageService`、`me/service/StorageService` | 稳定库存提供者、long 操作、挂载生命周期；缓存更新仍会枚举库存，不能假设免费增量 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources` | `common/content/qio/QIOFrequency`、`common/inventory/container/QIOItemViewerContainer` | 库存键索引、updatedItems、只向查看者同步、避免同时保存的思路；QIO 有容量且其终端协议不等于本方案的服务端分页 |
@@ -218,3 +218,12 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 随机流依据本地 Java 21 的 `SplittableRandom.nextDouble` 作独立数值对照，以显式 SplitMix64 计数公式固化采样版本 1，不依赖世界 RNG 或 JDK 对象的可变内部状态。种子／游标属于蜂记录；付款形成 pending，采样同时增加游标和冻结数量，结算仅转移冻结数量。旧请求须通过源状态身份校验，通用所有权更新不得改随机状态；移位、升级时间切换及正常恢复保持原流，取出后新装入的蜜蜂按新 beeId 建流。所有操作仍在权威服务器线程发布，没有新增后台计算。
 
 两种 decoder 都验证 schema 6／7；流式读取先记录实际蜂格式，结束时与网络 schema 核对，因此不依赖字段顺序。只接受完整旧字段迁移，缺失或损坏的新字段不降级为旧格式。读取会话独享格式记录，取消／关闭不留下全局状态。证据见[10.77](bee-processing-network-evidence-current.md#s10-77)；正式生产力升级仍按[11.5](bee-processing-network-roadmap.md#s11-5)的 b3 交付。
+
+<a id="s13-16"></a>
+### 13.16 正式生产力升级、配置变化与随机交还边界（2026-10-01）
+
+本步复核当前 1.0.10／PB 13.14.0 的 `ApiaryUpgradeHandler.computeProductivityMultiplier`、`PbUpgradeConfig.productivityMultiplier`、`ApiaryPbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType` 与封存升级交换。将物理原有的四档加权求和移入 `ApiaryUpgradeMath`，保留 double 累加顺序和有限 float 转换，网络仅准入 α／β／γ，Ω 自带蜜脾块而继续独立适配。能力在周期起点读取当前配置，原有部分周期不重新读倍率；实物交换只改当前封存数量，旧计划／随机状态直到已付费工作结清。
+
+沿用[13.15](#s13-15)的按键交付原则，并补清交还差异：物理蜂箱没有网络游标字段，故小数倍率部分周期先结清再移交；匹配当前能力的整数倍率部分周期不需要携带随机状态，可以保留原进度。此规则使用正式交还预检；不在物理槽补写私有种子，也不通过换源重新采样。
+
+`.tmp_useless_src` 经独立根和干净状态检查后，从 `884e757b` fast-forward 至 `1733aef5`（1.21／2.4.5.4）。新增 `AdapterUtils.reagentCandidates/isIngredientWithRetry` 把并发注册查询限制为 32 次重试，但仍可能返回缺项，也会在调用线程 sleep；本步不采用该恢复方式。网络生产继续使用已审查的静态配方及服务器线程，没有为升级引入后台世界查询或把失败当空产物；其它上游改动未扩展为本项目支持范围。

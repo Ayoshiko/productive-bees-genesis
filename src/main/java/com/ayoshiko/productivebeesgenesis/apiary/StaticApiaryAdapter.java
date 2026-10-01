@@ -61,20 +61,21 @@ public final class StaticApiaryAdapter {
 				mekanism.common.util.MekanismUtils.getMaxEnergy(installed, base));
 	}
 	/** 只在周期起点读取当前升级，不在每个进行中的 tick 复制封存映像。 */
-	public static BeeWorkExecutor.Timing timing(TileEntityMekApiary hive, OwnedMachineRecord record, BeeRecord bee) {
-		return timing(new SealedApiaryProfile(hive, record.assets()), bee);
+	public static BeeWorkExecutor.Cycle cycle(TileEntityMekApiary hive, OwnedMachineRecord record, BeeRecord bee) {
+		return cycle(new SealedApiaryProfile(hive, record.assets()), bee);
 	}
-	private static BeeWorkExecutor.Timing timing(SealedApiaryProfile profile, BeeRecord bee) {
-		return new BeeWorkExecutor.Timing(BeeProgressPlan.cycleTicks(bee.originalSlot().copy().getInt("base_min_occupation_ticks"),
-				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy());
+	private static BeeWorkExecutor.Cycle cycle(SealedApiaryProfile profile, BeeRecord bee) {
+		return new BeeWorkExecutor.Cycle(BeeProgressPlan.cycleTicks(bee.originalSlot().copy().getInt("base_min_occupation_ticks"),
+				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity());
 	}
-	/** 物理机无法保留另一份旧周期单价，先完成不同能力的部分周期再交还。 */
+	/** 物理机无法接收旧能力或网络随机游标；小数倍率的部分周期必须先结清。 */
 	public static boolean returnReady(TileEntityMekApiary hive, OwnedMachineRecord record) {
 		if (record.bees() == null) return true;
 		if (!record.bees().drained()) return false;
 		if (record.bees().bees().stream().noneMatch(bee -> bee.progress() > 0)) return true;
 		var profile = new SealedApiaryProfile(hive, record.assets());
-		return record.bees().bees().stream().allMatch(bee -> bee.progress() == 0 || timing(profile, bee).matches(bee.plan()));
+		return record.bees().bees().stream().allMatch(bee -> bee.progress() == 0 || cycle(profile, bee).matches(bee.plan())
+				&& bee.plan().productionMultiplier() == Math.floor(bee.plan().productionMultiplier()));
 	}
 	private static StaticBeePlan compilePlan(ServerLevel level, SealedApiaryProfile profile, CompoundTag slot,
 			long recipeRevision, long capabilityRevision) {
@@ -100,7 +101,7 @@ public final class StaticApiaryAdapter {
 		return new StaticBeePlan(IRON.toString(), holder.id().toString(), recipeRevision, capabilityRevision,
 				BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false),
 				profile.energy(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
-				BeeWorkConditionEvaluator.readTraits(data), ProductKeyCodec.item(entry.getKey(), level.registryAccess()), output.min());
+				BeeWorkConditionEvaluator.readTraits(data), ProductKeyCodec.item(entry.getKey(), level.registryAccess()), output.min(), profile.productivity());
 	}
 	public static boolean currentPlan(ServerLevel level, TileEntityMekApiary hive, BeeRecord bee) {
 		var plan = bee.plan(); var pref = BeeInfoHelper.getFlowerPreference(IRON);

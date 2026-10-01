@@ -12,7 +12,7 @@ import net.neoforged.fml.ModList;
 
 /** 基础蜂箱从唯一封存升级读取能力；物理升级组件在托管期间保持为空。 */
 final class SealedApiaryProfile {
-	private final float time;
+	private final float time, productivity;
 	private final long energy;
 	SealedApiaryProfile(TileEntityMekApiary hive, AssetImage assets) {
 		if (hive.getClass() != TileEntityMekApiary.class || ModList.get().isLoaded("mekanism_unleashed")
@@ -24,6 +24,8 @@ final class SealedApiaryProfile {
 				|| extra.getBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION))
 			throw new IllegalArgumentException("Static apiaries require sealed upgrades and disabled feeder conversion");
 		var pb = PbApiaryUpgradeCounts.read(extra);
+		productivity = ApiaryUpgradeMath.computeProductivityMultiplier(pb.getOrDefault(PbUpgradeType.PRODUCTIVITY, 0),
+				pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_2, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_3, 0), 0);
 		var upgrades = NativeUpgradeCounts.read(image.getCompound("upgrades"));
 		for (var entry : upgrades.entrySet())
 			if ((entry.getKey() != Upgrade.SPEED && entry.getKey() != Upgrade.ENERGY) || entry.getValue() > entry.getKey().getMax())
@@ -40,5 +42,6 @@ final class SealedApiaryProfile {
 		energy = MathUtils.ceilToLong(price);
 	}
 	float time() { return time; }
+	float productivity() { return productivity; }
 	long energy() { return energy; }
 }
