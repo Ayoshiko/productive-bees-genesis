@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')][string]$Gate = 'D16b',
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')][string]$Gate = 'D16b',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 
 $ErrorActionPreference = 'Stop'
@@ -90,7 +90,7 @@ try {
         $world = Join-Path $workspace "build/network-probe-$RunId-$combination-write/world"
         $reader = Invoke-GateProbe "$combination-read" $ae2 'read' $world
         if ($reader.producerPid -ne $writer.currentPid) { throw 'Reader consumed another writer fixture' }
-        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             $clientId = "$RunId-$combination-client"
             $arguments = @('runNetworkDomainClient', '-PnetworkDomainProbe', "-PnetworkProbeRun=$clientId")
             if ($ae2) { $arguments += '-PnetworkProbeAe2' }
@@ -105,7 +105,7 @@ try {
             }
         }
     }
-    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
+    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
     if ((Get-NetworkSourceFingerprint) -ne $fingerprint -or (& git rev-parse HEAD).Trim() -ne $revision) {
         throw 'Source changed during the gate; rerun the affected gate before accepting it'
     }

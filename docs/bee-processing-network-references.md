@@ -193,3 +193,10 @@ D17b2a 复核当前 1.0.10 的 `MekCentrifugePbUpgradeHandler.installPbUpgradeBu
 D17b2b1 复核当前 1.0.10 的 `ApiaryUpgradeMath.computeMekSpeedTimeMultiplier`、`ApiaryUpgradeHandler.getTimeMultiplier/invalidateUpgradeCache`、`TileEntityMekApiary.recalculateUpgrades`、`BeeProgressPlan`，继续使用固定 Mekanism 10.7.19.85 的升级单价与容量口径。封存读取仅支持基础蜂箱的 SPEED／ENERGY；PB 原生依赖仍为 13.14.0，静态铁蜂的基因、花朵、配方与气候准入保持原合同。已知改写原生公式的 Unleashed／Empowered、创造与扩展工厂不自动准入。新 `SealedApiaryProfile` 读取本机已经平衡的基础 FE，不重乘平衡系数；物理对照在独立蜂箱安装真实升级，核对每档耗时、单价及容量。
 
 本步沿用 [13.9](#s13-9) 的实物交付和 [13.10](#s13-10) 的危险缩容拒绝。蜂箱与离心机的状态差异决定实现边界：蜂计划属于长期蜂记录，故在旧周期结清后由付款证明同时发布新耗时／单价与首次工作；通用所有权更新仍拒绝任意改计划。名册代际、蜂身份、喂食及产物不因此改变。交还前比较当前升级与部分周期的时间／单价，尚不一致时先拒绝，避免物理机丢失旧收费上下文。升级映像与旧计划本已持久化，恢复后可重新计算下一周期能力，无需新增存档字段、全局缓存或后台队列；原有部分周期在能力一致时仍可交还。正式调度每次一 tick，只有周期起点与冷交还预检读取封存能力；具体证据见[10.73](bee-processing-network-evidence-current.md#s10-73)。
+
+<a id="s13-13"></a>
+### 13.13 蜂箱 PB 时间数量与同源公式（2026-10-01）
+
+D17b2b2a 复核本地 1.0.10、网络基线 `0b0523e` 的 `ApiaryPbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/getPbUpgradeLimit/loadPbUpgradeCounts`、`ApiaryUpgradeHandler.computeTimeMultiplier/invalidateUpgradeCache` 及 `ApiaryUpgradeMath.getPbTimeDivisor`。实际 PB 依赖为 13.14.0，Mekanism 为 10.7.19.85。采用服务器线程、当前蜂箱安装上限、等级互斥、完整组件匹配与先预检接收空间的规则；旧数量由持久化恢复保留，不按当前安装上限裁剪。物理机数量变化失效本机倍率缓存；网络只变更唯一封存映像和成员 revision，下一周期读取当前数量，不调用物理输入槽 ticker 或建立第二份升级缓存。
+
+从既有物理时间计算提取 `computePbTimeDivisor`，保留 TIME 单倍、TIME_2 双倍、非法 bonus 回退及大数量饱和语义；网络与独立蜂箱共用同一公式。蜂箱使用自己的 PB 数量键和安装配置，不能套用离心机白名单或上限。网络严格读取拒绝未知类型、错误 NBT 类型和非正数，不沿用物理旧格式加载中忽略未知项的宽松规则；封存之外的旧存档迁移仍由原有迁移器负责。沿用[13.12](#s13-12)的旧周期、首次新付款及交还边界；通过真实标准升级实物的逐档独立机对照、旧上限／互斥组合拆回、PB 单独周期切换及实际落盘验证，见[10.74](bee-processing-network-evidence-current.md#s10-74)。

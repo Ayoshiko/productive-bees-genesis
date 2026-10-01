@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbCentrifugeUpgradeCounts;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiary.*;
@@ -20,8 +22,18 @@ record MemberUpgradeTarget(TileEntityMekanism machine) {
 	static long revision(OwnedMachineRecord record) { return record.bees() != null ? record.bees().revision() : record.centrifuge().revision(); }
 	static long energy(OwnedMachineRecord record) { return record.bees() != null ? record.bees().energy() : record.centrifuge().energy(); }
 	boolean supports(Upgrade upgrade) { return machine.getComponent().supports(upgrade); }
-	boolean supports(PbUpgradeType upgrade) { return machine instanceof TileEntityMekCentrifuge centrifuge && centrifuge.isPbUpgradeSupported(upgrade); }
-	int limit(PbUpgradeType upgrade) { return machine instanceof TileEntityMekCentrifuge centrifuge ? centrifuge.getPbUpgradeLimit(upgrade) : 0; }
+	boolean supports(PbUpgradeType upgrade) {
+		return machine instanceof TileEntityMekApiary hive
+				? PbApiaryUpgradeCounts.supported(upgrade) && hive.isPbUpgradeSupported(upgrade)
+				: PbCentrifugeUpgradeCounts.supported(upgrade) && ((TileEntityMekCentrifuge) machine).isPbUpgradeSupported(upgrade);
+	}
+	int limit(PbUpgradeType upgrade) {
+		return machine instanceof TileEntityMekApiary hive ? hive.getPbUpgradeLimit(upgrade) : ((TileEntityMekCentrifuge) machine).getPbUpgradeLimit(upgrade);
+	}
+	java.util.Map<PbUpgradeType, Integer> pbCounts(AssetImage image) {
+		var extra = image.copy().getCompound("extra");
+		return machine instanceof TileEntityMekApiary ? PbApiaryUpgradeCounts.read(extra) : PbCentrifugeUpgradeCounts.read(extra);
+	}
 	void validate(AssetImage image) {
 		if (machine instanceof TileEntityMekApiary hive) StaticApiaryAdapter.validateUpgrades(hive, image);
 		else StaticCentrifugeAdapter.validateUpgrades((TileEntityMekCentrifuge) machine, image);

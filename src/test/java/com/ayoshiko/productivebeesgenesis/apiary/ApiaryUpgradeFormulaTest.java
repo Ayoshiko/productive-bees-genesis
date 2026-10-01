@@ -46,6 +46,16 @@ class ApiaryUpgradeFormulaTest {
 		assertEquals(200L, (long) Math.ceil(20L * 10.0f));
 	}
 
+	@Test void pbTimeWeightsBothTiersWithoutTruncatingLegacyCounts() {
+		assertEquals(1.0f, ApiaryUpgradeMath.computePbTimeDivisor(0, 0, 0.15f));
+		assertEquals(1.3f, ApiaryUpgradeMath.computePbTimeDivisor(0, 1, 0.15f), 0.000_001f);
+		assertEquals(4.6f, ApiaryUpgradeMath.computePbTimeDivisor(8, 8, 0.15f), 0.000_001f);
+		assertEquals(1.0f, ApiaryUpgradeMath.computePbTimeDivisor(8, 8, Float.NaN));
+		assertEquals(1.0f, ApiaryUpgradeMath.computePbTimeDivisor(8, 8, 0));
+		assertEquals((float) (1 + 3L * Integer.MAX_VALUE * (double) 0.15f),
+				ApiaryUpgradeMath.computePbTimeDivisor(Integer.MAX_VALUE, Integer.MAX_VALUE, 0.15f));
+	}
+
 	private static Stream<Arguments> factoryEnergyTable() {
 		return Stream.of(
 				Arguments.of("normal", 50L, 1),

@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 
 function Assert-NetworkProbeReport {
     param($Report, [bool]$Ae2, [ValidateSet('domain', 'write', 'read')][string]$Mode,
-        [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')][string]$Gate = 'D16b')
+        [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')][string]$Gate = 'D16b')
     if ($Report.passed -ne $true -or $Report.normalShutdownCheckpointSaved -ne $true -or $Report.ae2Loaded -ne $Ae2) {
         throw 'Probe failed, did not save normally, or used the wrong dependency combination'
     }
@@ -13,34 +13,34 @@ function Assert-NetworkProbeReport {
                 'automaticMaintenanceSharedPerTickAndAtomicWithWork')) {
             if ($Report.$field -ne $true) { throw "Missing joint gate: $field" }
         }
-        if ($Gate -in @('D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('playerFeedingFiniteExchangePermissionsAndConservation', 'playerFeedingComponentsDisabledGroupsAndFiniteLimits',
                     'playerFeedingNormalReturnUsesCurrentRemainder', 'playerFeedingShutdownRemainderSaved', 'playerFeedingSyncProtocolAndReentry')) {
                 if ($Report.$field -ne $true) { throw "Missing player feeding gate: $field" }
             }
         }
-        if ($Gate -in @('D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('playerProductsExactUnreservedFiniteDelivery', 'playerProductsSingleKeyIndexAndUnchangedWork',
                     'playerProductsPermissionsSyncAndReentry', 'playerProductsVerifiedBucketsAndComponentRejection', 'playerProductsShutdownExactRemainderSaved',
                     'playerProductsAutomaticDestinationAndLimits')) {
                 if ($Report.$field -ne $true) { throw "Missing product withdrawal gate: $field" }
             }
         }
-        if ($Gate -in @('D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('playerCagesFiniteTransferAndUniqueIdentity', 'playerCagesPaidWorkComponentsAndNoDrops',
                     'playerCagesPermissionsSyncAndReentry', 'playerCagesInsertedBeeResumesWithinSharedBudget',
                     'playerCagesReturnUsesCurrentRoster', 'playerCagesShutdownCurrentRosterSaved')) {
                 if ($Report.$field -ne $true) { throw "Missing player cage gate: $field" }
             }
         }
-        if ($Gate -in @('D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('playerSelectionsExactProductsAndReservations', 'playerSelectionsStableProductionAndRosterInvalidation',
                     'playerSelectionsExpiryPermissionsAndClose')) {
                 if ($Report.$field -ne $true) { throw "Missing player selection gate: $field" }
             }
             if ($Report.playerSelectionsLifetimeTicks -lt 100) { throw 'Selection expiry did not cross its lifetime' }
         }
-        if ($Gate -in @('D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('terminalProtocolFirstNetworkBinding', 'terminalProtocolFiniteFeedingAndReentry',
                     'terminalProtocolCagesReplayAndCommittedSyncFailure', 'terminalProtocolProductTransfer', 'terminalProtocolBucketTransfer',
                     'terminalProtocolPermissionsCancelRateAndClientSession')) {
@@ -50,37 +50,44 @@ function Assert-NetworkProbeReport {
                 throw 'Terminal reply byte budget was not verified'
             }
         }
-        if ($Gate -in @('D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('coreAccessCommandsAndLeastPrivilege', 'coreAccessViewerBindingRevocationAndRegrant',
                     'coreAccessGuestLedgerConservation', 'coreAccessReloadAndCorruptDataPreserved',
                     'maintenanceRestockOwnershipAndLegacyImage')) {
                 if ($Report.$field -ne $true) { throw "Missing core access gate: $field" }
             }
         }
-        if ($Gate -in @('D17a', 'D17b1', 'D17b2a', 'D17b2b1')) {
+        if ($Gate -in @('D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
             foreach ($field in @('memberUpgradeFiniteExchangeAndPermissions', 'memberUpgradeOldWorkAndFreshPhysicalCapacity',
                     'memberUpgradeCheckpointPreservesWork', 'memberUpgradeReturnCurrentAssets', 'memberUpgradeShutdownSaved')) {
                 if ($Report.$field -ne $true) { throw "Missing member upgrade gate: $field" }
             }
             if ($Report.memberUpgradeChecks -lt 20) { throw 'Incomplete member upgrade rejection and exchange matrix' }
-            if ($Gate -in @('D17b1', 'D17b2a', 'D17b2b1')) {
+            if ($Gate -in @('D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a')) {
                 foreach ($field in @('memberEnergyUpgradeLocalCapacityAndSharedConservation', 'memberEnergyUpgradeAllCountsMatchPhysical',
                         'memberEnergyUpgradeOldWorkAndReturn')) {
                     if ($Report.$field -ne $true) { throw "Missing member energy upgrade gate: $field" }
                 }
                 if ($Report.memberEnergyUpgradeChecks -lt 22) { throw 'Incomplete energy capacity and exchange matrix' }
-                if ($Gate -in @('D17b2a', 'D17b2b1')) {
+                if ($Gate -in @('D17b2a', 'D17b2b1', 'D17b2b2a')) {
                     foreach ($field in @('memberPbUpgradeLimitsConflictsAndConservation', 'memberPbUpgradePhysicalEffectsAndOldWork',
                             'memberPbUpgradeCheckpointAndReturn')) {
                         if ($Report.$field -ne $true) { throw "Missing PB member upgrade gate: $field" }
                     }
                     if ($Report.memberPbUpgradeTypes -ne 8 -or $Report.memberPbUpgradeChecks -lt 80) { throw 'Incomplete PB upgrade matrix' }
-                    if ($Gate -eq 'D17b2b1') {
+                    if ($Gate -in @('D17b2b1', 'D17b2b2a')) {
                         foreach ($field in @('apiaryUpgradeFinitePermissionsAndConservation', 'apiaryUpgradeAllCountsAndCapacityMatchPhysical',
                                 'apiaryUpgradeOldCycleAndAtomicTiming', 'apiaryUpgradeSavedWorkAndCurrentReturn', 'apiaryUpgradeShutdownSaved')) {
                             if ($Report.$field -ne $true) { throw "Missing apiary upgrade gate: $field" }
                         }
                         if ($Report.apiaryUpgradeChecks -lt 40) { throw 'Incomplete apiary upgrade matrix' }
+                        if ($Gate -eq 'D17b2b2a') {
+                            foreach ($field in @('apiaryPbUpgradeLimitsConflictsAndConservation', 'apiaryPbUpgradePhysicalTimingAndOldCycle',
+                                    'apiaryPbUpgradeCheckpointAndReturn')) {
+                                if ($Report.$field -ne $true) { throw "Missing apiary PB time gate: $field" }
+                            }
+                            if ($Report.apiaryPbUpgradeTypes -ne 2 -or $Report.apiaryPbUpgradeChecks -lt 50) { throw 'Incomplete apiary PB time matrix' }
+                        }
                     }
                 }
             }

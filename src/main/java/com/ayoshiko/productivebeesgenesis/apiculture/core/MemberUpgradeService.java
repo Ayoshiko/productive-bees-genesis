@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberUpgradeChan
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbCentrifugeUpgradeCounts;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
@@ -35,7 +34,7 @@ public final class MemberUpgradeService {
 		if (core == null || !core.ownerAllowed(player)) return result(Status.UNAVAILABLE);
 		if (member == null || action == null || expectedRevision < 0 || inventorySlot < 0 || inventorySlot >= 36
 				|| requested < 1 || requested > 64) return result(Status.INVALID);
-		if (pb == null ? upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY : !PbCentrifugeUpgradeCounts.supported(pb)) return result(Status.UNSUPPORTED);
+		if (pb == null && upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY) return result(Status.UNSUPPORTED);
 		if (action == Action.INSTALL && !ModConfig.SERVER.beeNetwork.enabled.get()) return result(Status.UNAVAILABLE);
 		var authority = core.ownership().readyAuthority(); if (authority == null) return result(Status.UNAVAILABLE);
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
@@ -51,7 +50,7 @@ public final class MemberUpgradeService {
 			tile.validate(record.assets());
 			var unit = pb == null ? UpgradeUtils.getStack(upgrade, 1) : PbUpgradeInventorySlot.getRepresentativeStack(pb);
 			if (unit.isEmpty()) return result(Status.UNSUPPORTED);
-			var pbCounts = pb == null ? null : PbCentrifugeUpgradeCounts.read(record.assets().copy().getCompound("extra"));
+			var pbCounts = pb == null ? null : tile.pbCounts(record.assets());
 			int installed = pb == null ? NativeUpgradeCounts.read(record.assets().copy().getCompound("upgrades")).getOrDefault(upgrade, 0) : pbCounts.getOrDefault(pb, 0);
 			int limit = pb == null ? upgrade.getMax() : tile.limit(pb);
 			if (action == Action.INSTALL) {

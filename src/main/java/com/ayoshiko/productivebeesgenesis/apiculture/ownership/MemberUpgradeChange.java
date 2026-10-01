@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.ownership;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkState;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.NativeUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbCentrifugeUpgradeCounts;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import mekanism.api.Upgrade;
@@ -25,12 +26,15 @@ public final class MemberUpgradeChange {
 	/** 新安装受当前上限约束；旧超限数量允许逐次取回，不能在加载或拆除时裁掉。 */
 	public static MemberUpgradeChange pb(OwnedMachineRecord source, PbUpgradeType upgrade, int delta, int installLimit) {
 		validateSource(source, delta);
-		if (source.centrifuge() == null || !PbCentrifugeUpgradeCounts.supported(upgrade)) throw new IllegalArgumentException("Unsupported PB upgrade");
+		boolean apiary = source.bees() != null;
+		if (!(apiary ? PbApiaryUpgradeCounts.supported(upgrade) : PbCentrifugeUpgradeCounts.supported(upgrade)))
+			throw new IllegalArgumentException("Unsupported PB upgrade");
 		var image = source.assets().copy(); var extra = image.getCompound("extra");
-		int count = Math.addExact(PbCentrifugeUpgradeCounts.read(extra).getOrDefault(upgrade, 0), delta);
+		var counts = apiary ? PbApiaryUpgradeCounts.read(extra) : PbCentrifugeUpgradeCounts.read(extra);
+		int count = Math.addExact(counts.getOrDefault(upgrade, 0), delta);
 		if (delta > 0 && (installLimit < 1 || count > installLimit)) throw new IllegalArgumentException("PB install limit exceeded");
-		image.put("extra", PbCentrifugeUpgradeCounts.withCount(extra, upgrade, count));
-		return finish(source, image, source.centrifuge().energyCapacity(), delta, count);
+		image.put("extra", apiary ? PbApiaryUpgradeCounts.withCount(extra, upgrade, count) : PbCentrifugeUpgradeCounts.withCount(extra, upgrade, count));
+		return finish(source, image, apiary ? source.bees().energyCapacity() : source.centrifuge().energyCapacity(), delta, count);
 	}
 	private static void validateSource(OwnedMachineRecord source, int delta) {
 		if (source == null || source.phase() != OwnedMachineRecord.Phase.OWNED || delta == 0 || delta < -64 || delta > 64

@@ -1,6 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.persistence;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler;
+import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.feeding.*;
@@ -25,7 +28,8 @@ class BeeProductionCheckpointTest {
 	private record Fixture(NetworkCheckpoint before, OwnedMachineRecord original, BeeMemberState bees) {
 		NetworkCheckpoint active() { return before.withOwnership(original.withBees(bees)); }
 	}
-	private static Fixture fixture(long pending, int productivity) {
+	private static Fixture fixture(long pending, int productivity) { return fixture(pending, productivity, 0, 0); }
+	private static Fixture fixture(long pending, int productivity, int time, int time2) {
 		var identity = CheckpointTestData.identity(); var member = UUID.randomUUID();
 		var claim = new MemberClaim(identity.networkId(), member, UUID.randomUUID(), new Origin("minecraft:overworld", 1, 64, 2), "productivebeesgenesis:mek_apiary");
 		var entity = new CompoundTag(); entity.putString("id", "productivebees:configurable_bee"); entity.putString("type", "productivebees:iron"); entity.putString("custom", "原始完整数据");
@@ -33,6 +37,12 @@ class BeeProductionCheckpointTest {
 		var slots = new ListTag(); slots.add(slot); var extra = new CompoundTag(); extra.put(BeeAssetProjection.SLOTS, slots);
 		var feeders = new ListTag(); for (int i = 0; i < 9; i++) feeders.add(new CompoundTag()); extra.put(FeedingAssetProjection.SLOTS, feeders);
 		if (pending > 0) { var paid = new CompoundTag(); paid.putIntArray("counts", new int[]{0, 0, Math.toIntExact(pending)}); extra.put(BeeAssetProjection.PENDING, paid); }
+		var counts = new CompoundTag();
+		if (time > 0) counts.putInt(PbUpgradeType.TIME.getId(), time);
+		if (time2 > 0) counts.putInt(PbUpgradeType.TIME_2.getId(), time2);
+		extra.put(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS, counts);
+		extra.putString("productivebeesgenesis_pb_upgrade_input", "保留输入");
+		extra.putString("productivebeesgenesis_pb_upgrade_output", "保留输出");
 		var image = new CompoundTag(); image.put("extra", extra); image.putLong("energy", 1000); image.putLong("energyCapacity", 2000);
 		image.put("upgrades", new CompoundTag());
 		var assets = new AssetImage(image); var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
@@ -215,7 +225,55 @@ class BeeProductionCheckpointTest {
 		assertEquals(bee, record(roundTrip(exact, "native-partial"), f).bees().bee(2));
 		assertThrows(IllegalArgumentException.class, () -> upgraded.exchangeUpgrade(speed));
 		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record(upgraded, f),
-				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.TIME, 1, 4));
+				PbUpgradeType.PRODUCTIVITY, 1, 4));
+	}
+	@Test void pbTimeExchangePreservesPartialPendingAndFrozenWork() throws Exception {
+		for (int ticks : new int[] {0, 2, 5}) for (int samples : new int[] {0, 1}) {
+			var f = fixture(0, 3); var current = f.active(); var member = f.bees.member();
+			if (ticks > 0) current = current.applyBeeWork(member, BeeWorkExecutor.advance(record(current, f).bees(), 2, 0, context(), ticks, samples));
+			var before = record(current, f); var change = MemberUpgradeChange.pb(before, PbUpgradeType.TIME_2, 2, 4);
+			var after = current.exchangeUpgrade(change); var next = record(after, f);
+			assertSame(before.bees().bee(2), next.bees().bee(2));
+			assertSame(before.bees().feeding(), next.bees().feeding()); assertSame(before.bees().rosterVersion(), next.bees().rosterVersion());
+			assertEquals(before.bees().energy(), next.bees().energy()); assertEquals(before.bees().energyCapacity(), next.bees().energyCapacity());
+			assertSame(current.energy(), after.energy()); assertSame(current.ledger(), after.ledger());
+			assertEquals(before.bees().revision() + 1, next.bees().revision());
+			assertThrows(IllegalArgumentException.class, () -> after.exchangeUpgrade(change));
+			var removed = after.exchangeUpgrade(MemberUpgradeChange.pb(next, PbUpgradeType.TIME_2, -1, 4));
+			var read = roundTrip(removed, "pb-" + ticks + "-" + samples);
+			var extra = record(read, f).assets().copy().getCompound("extra");
+			assertEquals(Map.of(PbUpgradeType.TIME_2, 1), PbApiaryUpgradeCounts.read(extra));
+			assertEquals("保留输入", extra.getString("productivebeesgenesis_pb_upgrade_input"));
+			assertEquals("保留输出", extra.getString("productivebeesgenesis_pb_upgrade_output"));
+			assertEquals(before.bees().bee(2), record(read, f).bees().bee(2));
+		}
+	}
+	@Test void legacyPbApiaryCountsSurviveLoweredLimitsAndReturn() throws Exception {
+		var f = fixture(0, 0, Integer.MAX_VALUE, 8); var current = roundTrip(f.active(), "pb-legacy");
+		var old = record(current, f);
+		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(old, PbUpgradeType.TIME_2, 1, 4));
+		var after = current.exchangeUpgrade(MemberUpgradeChange.pb(old, PbUpgradeType.TIME, -64, 4));
+		var extra = record(after, f).returnImage().copy().getCompound("extra");
+		assertEquals(Map.of(PbUpgradeType.TIME, Integer.MAX_VALUE - 64, PbUpgradeType.TIME_2, 8), PbApiaryUpgradeCounts.read(extra));
+		assertEquals(after, roundTrip(after, "pb-legacy-removed"));
+	}
+	@Test void malformedOrUnreviewedApiaryPbEffectsCannotBecomeAssets() {
+		var f = fixture(0, 0); var record = record(f.active(), f);
+		for (var type : PbUpgradeType.values()) if (type != PbUpgradeType.TIME && type != PbUpgradeType.TIME_2) {
+			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, type, 1, 64));
+			var extra = record.assets().copy().getCompound("extra");
+			extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).putInt(type.getId(), 1);
+			assertThrows(IllegalArgumentException.class, () -> PbApiaryUpgradeCounts.read(extra));
+		}
+		assertThrows(IllegalArgumentException.class, () -> PbApiaryUpgradeCounts.read(new CompoundTag()));
+		for (Tag value : List.of(IntTag.valueOf(0), IntTag.valueOf(-1), StringTag.valueOf("1"), LongTag.valueOf(1))) {
+			var extra = record.assets().copy().getCompound("extra");
+			extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).put("time", value);
+			assertThrows(IllegalArgumentException.class, () -> PbApiaryUpgradeCounts.read(extra));
+		}
+		var extra = record.assets().copy().getCompound("extra"); extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).putInt("unknown", 1);
+		assertThrows(IllegalArgumentException.class, () -> PbApiaryUpgradeCounts.read(extra));
+		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, PbUpgradeType.TIME, -1, 4));
 	}
 	@Test void timingAndFirstNewPaymentPublishTogetherAfterDrainingOldWork() throws Exception {
 		var f = fixture(0, 3); var member = f.bees.member();
