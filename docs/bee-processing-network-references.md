@@ -200,3 +200,12 @@ D17b2b1 复核当前 1.0.10 的 `ApiaryUpgradeMath.computeMekSpeedTimeMultiplier
 D17b2b2a 复核本地 1.0.10、网络基线 `0b0523e` 的 `ApiaryPbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/getPbUpgradeLimit/loadPbUpgradeCounts`、`ApiaryUpgradeHandler.computeTimeMultiplier/invalidateUpgradeCache` 及 `ApiaryUpgradeMath.getPbTimeDivisor`。实际 PB 依赖为 13.14.0，Mekanism 为 10.7.19.85。采用服务器线程、当前蜂箱安装上限、等级互斥、完整组件匹配与先预检接收空间的规则；旧数量由持久化恢复保留，不按当前安装上限裁剪。物理机数量变化失效本机倍率缓存；网络只变更唯一封存映像和成员 revision，下一周期读取当前数量，不调用物理输入槽 ticker 或建立第二份升级缓存。
 
 从既有物理时间计算提取 `computePbTimeDivisor`，保留 TIME 单倍、TIME_2 双倍、非法 bonus 回退及大数量饱和语义；网络与独立蜂箱共用同一公式。蜂箱使用自己的 PB 数量键和安装配置，不能套用离心机白名单或上限。网络严格读取拒绝未知类型、错误 NBT 类型和非正数，不沿用物理旧格式加载中忽略未知项的宽松规则；封存之外的旧存档迁移仍由原有迁移器负责。沿用[13.12](#s13-12)的旧周期、首次新付款及交还边界；通过真实标准升级实物的逐档独立机对照、旧上限／互斥组合拆回、PB 单独周期切换及实际落盘验证，见[10.74](bee-processing-network-evidence-current.md#s10-74)。
+
+<a id="s13-14"></a>
+### 13.14 蜂箱生产力轮数与精确聚合（2026-10-01）
+
+D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleRollCount/sampleAmounts`、`BatchProbabilitySampler.sampleBinomial`、`BeeProductionSampling.adjustStackCount` 和 `ApiaryUpgradeHandler.computeProductivityMultiplier`。另用 javap 检查实际 PB 13.14.0 JAR 的 `BeeHelper.getBeeProduce/lambda$getBeeProduce$0`、`AdvancedBeehiveBlockEntity` 生产回调及 `AdvancedBeehiveRecipe.getRecipeOutputs`：轮数为整数部分加小数 Bernoulli，每个原始栈再应用基因，配置蜜脾保留蜂种组件。ProductiveLib 0.2.0 的 `TagOutputRecipe` 仅提供输出目录，随机轮数不在该类中；没有将本地旧 13.13.5 源码目录称作当前依赖源码。
+
+采用逐周期轮数与逐栈取整；验证 2.5 倍的边界、20,480 次固定种子单周期物理采样对照、独立 IEEE-754 整数模型及基因例子。不采用 PB 的世界随机源、可变输出列表或本项目物理采样器的 int 总轮数饱和；网络纯内核接收调用者给定的样本，保持幂等计算，用现有 ProductAmount 表示精确轮数／总量。普通路径保持 long，大数只按实际 float 的二进制值构造，不能用十进制显示值代替。
+
+成功路径只返回私有不可变计算结果；非法倍率、样本和产物参数直接拒绝，不返回空产物掩盖错误。内核没有缓存、世界引用或线程任务，同一实例可只读复用；能力失效、周期所有权与重启不重抽仍由 b2／b3 的服务器事务负责，尚未接入。概率／多产物、Ω／BLOCK 转换不得使用固定单产物汇总捷径。合同与证据分别见[2.3](bee-processing-network-design.md#s2-3)和[10.76](bee-processing-network-evidence-current.md#s10-76)。

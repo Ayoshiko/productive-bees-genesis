@@ -31,9 +31,11 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 已验收；网络默认关闭；基础蜂箱和离心机自动生产已接入，P3 玩家闭环及阶段退出尚未完成。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；当前推进 D17 逐机升级，完整内容兼容、性能及发布门仍待完成。
 
 ### 新增
+
+- **D17b2b2b1 生产力轮数内核**：新增固定轮数与单周期概率附加轮的精确计划，逐栈应用基因后汇总，超 int／long 总量不截断。仅完成纯计算与构建验收；付费周期随机恢复、蜂箱生产力正式接入和蜜脾块转换仍待后续步骤。
 
 - **维护版 1.0.10／PB 13.14.0 同步**：合入新版 PB 离心机条件 Mixin、依赖与 CI 更新，保留网络托管隔离和 PB 13.13.5 最低声明；网络检验门显式按 UTF-8 读取测试／运行报告，兼容 Windows PowerShell 5.1 的中文测试名。
 
@@ -130,6 +132,8 @@
 ### English
 
 #### Added
+
+- Added the D17b2b2b1 exact productivity-roll kernel: fixed rolls plus one fractional Bernoulli event per cycle, per-stack gene rounding, and exact totals beyond int/long. This is a pure computation step; persisted random state, managed-apiary productivity admission and comb-block conversion remain pending.
 
 - Merged 1.0.10 maintenance with PB 13.14.0 conditional centrifuge Mixins, dependency and CI updates, preserving managed-network isolation and the PB 13.13.5 minimum. Network gates now read test/runtime reports explicitly as UTF-8, including Chinese test names under Windows PowerShell 5.1.
 

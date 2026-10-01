@@ -373,3 +373,14 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 现有 CI 的实际检查范围已从 `.github/workflows/build.yml` 复核：PR build、维护分支 push；没有把它写成已具备网络运行矩阵或强制远端合入保护。模型可用性／显示名不作能力保证，方案按实测首次通过率和审核成本分工。OpenAI Docs 的网页检索连接失败，官方 multi-agent 页面返回 403，未据此声明任何未验证的 DSH／Codex 自动编排功能。
 
 本步基线为网络 worktree 的 `abfaed7`，远端 fetch 后一致。检查七份设计文档：严格 UTF-8、无 BOM／替换字符、显式锚点无重复、236 个本地链接均有效，`git diff --check` 通过；回读中文和表格正常。仅文档变更，没有重跑游戏矩阵或关闭任何 D17／M04／性能门。
+
+<a id="s10-76"></a>
+### 10.76 D17b2b2b1 精确生产力轮数内核（2026-10-01，纯领域已验收）
+
+**合同及范围：** 按[2.3](bee-processing-network-design.md#s2-3)新增 `BeeProductionRollPlan`：有限正 float 倍率分成精确固定轮数与小数概率；调用者传入一个 [0,1) 样本，固定单产物逐栈应用既有基因数量语义再汇总。没有世界、库存、随机源或缓存引用，也没有修改正式升级白名单、tick、存档或独立机路径。后续 b2 才负责周期随机状态和恢复，b3 才接入正式蜂箱效果；本步不代表生产力升级已能在网络中使用。
+
+**参考及测试：** 读取实际 PB 13.14.0 JAR 的轮数与逐栈回调、ProductiveLib 0.2.0 输出目录，以及当前独立机采样器，采用与排除项见[13.14](bee-processing-network-references.md#s13-14)。6 项新测试覆盖 20,480 次固定种子单周期物理采样器对照、概率相等边界、四档基因与 1–64 原始数量、388 个大 float 位型的独立 BigInteger 模型、long 边界、Float.MAX_VALUE 总量、非法输入、重复纯计算和固定样本网格。首次一项夹具失败：Double.MIN_NORMAL 小于 Float.MIN_VALUE，本来应命中附加轮；改为恰等于概率的样本来检验拒绝边界，生产代码未改变，原失败 XML 保留。
+
+**构建及证据：** 网络 worktree 基线 `cfa8979`，NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85。针对性测试通过后，`test build verifyReleaseArtifact --no-daemon --no-configuration-cache` 成功，183 份 JUnit 报告共 1,073 项，1,071 通过、2 项既有跳过、零失败／错误。证据索引及报告副本为 `build/network-gates/d17-rolls-20261001/gate.json`。PowerShell 7.6.5 源码指纹为 `26A9A5D68FE0D9A4E4E5C2BFF2B18E40C1B8512C5CC3360ADCB4509AA8EBF853`；本次构建 JAR SHA-256 为 `9C9B378E9F1686C9845EB268F0D9C78C47B87A428248773C462370EE0D6DD7A1`，包含新内核且排除 domainProbe。额外核验初次误枚举 build/libs 的历史 JAR，随后按正式产物报告定位当前 JAR，原历史文件未改动。
+
+**成本及边界：** 每次只计算一个周期，无按轮数逐项展开；普通倍率使用 long，超 long 的精确 float 整数最多 128 bit，单固定产物汇总最多 159 bit，成本受数值位数约束。测试的超大轮数实际执行同一常量次数的比较／算术，不依赖耗时断言。不把物理入口的 int 饱和变成网络库存容量；概率／多产物仍需预算采样。没有新增游戏、真实玩家、跨 JVM 或 Spark 证据；D17b2b2b、D17、M04 与性能门保持开放。同步了合同、拆分路线、参考与双语未发布变更，并纠正 changelog 总览中已过时的 P3 状态。
