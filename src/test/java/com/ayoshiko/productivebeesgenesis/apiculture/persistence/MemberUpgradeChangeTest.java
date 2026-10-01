@@ -66,9 +66,50 @@ class MemberUpgradeChangeTest {
 		assertEquals("input/output slot metadata", returned.assets().copy().getCompound("upgrades").getString("unchanged"));
 		assertTrue(returned.phase(OwnedMachineRecord.Phase.RETURNED).assets().isEmpty());
 	}
+	@Test void energyCapacityChangesWithAssetsAndRejectsLossAtTheExactBoundary() {
+		var before = fixture(); var member = first(before); var old = before.ownedMachines().get(member);
+		var change = MemberUpgradeChange.energy(old, 2, 4000);
+		var after = before.exchangeUpgrade(change); var current = after.ownedMachines().get(member);
+		assertEquals(1000, current.centrifuge().energy()); assertEquals(4000, current.centrifuge().energyCapacity());
+		assertEquals(4000, current.assets().copy().getLong("energyCapacity"));
+		assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
+		assertThrows(IllegalArgumentException.class, () -> before.withOwnership(change.candidate()));
+		assertThrows(IllegalArgumentException.class, () -> after.exchangeUpgrade(change));
+		for (long capacity : new long[] {-1, 0, 999}) assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.energy(current, -1, capacity));
+		var boundary = after.exchangeUpgrade(MemberUpgradeChange.energy(current, -1, 1000)).ownedMachines().get(member);
+		assertEquals(1000, boundary.centrifuge().energy()); assertEquals(1000, boundary.centrifuge().energyCapacity());
+		assertEquals(1, NativeUpgradeCounts.read(boundary.assets().copy().getCompound("upgrades")).get(Upgrade.ENERGY));
+		assertEquals(1000, boundary.returnImage().copy().getLong("energy"));
+		assertEquals(1000, boundary.returnImage().copy().getLong("energyCapacity"));
+		var damaged = boundary.assets().copy(); damaged.putLong("energyCapacity", 999);
+		var image = new AssetImage(damaged);
+		assertThrows(IllegalArgumentException.class, () -> new OwnedMachineRecord(boundary.claim(), boundary.phase(), image,
+				image.fingerprint(), "", null, boundary.centrifuge()));
+	}
+	@Test void sharedEnergyStaysWithTheNetworkWhenMemberCapacityShrinks() {
+		var before = fixture().configureEnergy(5000).receiveEnergy(2000); var member = first(before);
+		before = before.migrateEnergy(member);
+		var raised = before.exchangeUpgrade(MemberUpgradeChange.energy(before.ownedMachines().get(member), 1, 2000));
+		var after = raised.exchangeUpgrade(MemberUpgradeChange.energy(raised.ownedMachines().get(member), -1, 500));
+		var record = after.ownedMachines().get(member);
+		assertSame(before.energy(), after.energy()); assertEquals(3000, after.energy().stored()); assertEquals(5000, after.energy().capacity());
+		assertTrue(record.centrifuge().networkPowered()); assertEquals(0, record.centrifuge().energy()); assertEquals(500, record.centrifuge().energyCapacity());
+		assertEquals(0, record.returnImage().copy().getLong("energy"));
+		assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
+	}
+	@Test void energyCapacityKeepsLongRangeAndRejectsInvalidCounts() {
+		var before = fixture(); var member = first(before); var record = before.ownedMachines().get(member);
+		for (long capacity : new long[] {(1L << 40) + 77, Long.MAX_VALUE}) {
+			var next = before.exchangeUpgrade(MemberUpgradeChange.energy(record, 1, capacity));
+			assertEquals(capacity, next.ownedMachines().get(member).centrifuge().energyCapacity());
+			assertEquals(next, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(next)));
+		}
+		for (int delta : new int[] {0, -1, 65, Upgrade.ENERGY.getMax() + 1})
+			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.energy(record, delta, 2000));
+	}
 	@Test void heldPartialAndFrozenWorkKeepTheOriginalPriceSeedAndOutputs() {
 		var policy = new ProductPolicyRegistry(new ProductPolicySnapshot(0, List.of(new AllowedProductDescriptor(OUTPUT, "test", "test:recipe")), List.of()));
-		for (int progress : new int[] {0, 2, 5}) {
+		for (boolean energyUpgrade : new boolean[] {false, true}) for (int progress : new int[] {0, 2, 5}) {
 			var before = fixture(); var member = first(before); var state = before.ownedMachines().get(member).centrifuge();
 			var plan = new CentrifugeRecipePlan("test:recipe", 0, 0, INPUT, 5, 2, 7, 1, 0,
 					List.of(new CentrifugeRecipePlan.Output(OUTPUT, 3, 3, 1)));
@@ -76,7 +117,8 @@ class MemberUpgradeChangeTest {
 			if (progress > 0) before = before.applyCentrifuge(member, CentrifugeWorkTransaction.advance(before.ownedMachines().get(member).centrifuge(), before.ledger(), 0, progress, true, true));
 			if (progress == 5) before = before.applyCentrifuge(member, CentrifugeWorkTransaction.freeze(before.ownedMachines().get(member).centrifuge(), before.ledger(), 0));
 			var record = before.ownedMachines().get(member); var job = record.centrifuge().jobs().get(0);
-			var after = before.exchangeUpgrade(MemberUpgradeChange.speed(record, 1));
+			var after = before.exchangeUpgrade(energyUpgrade ? MemberUpgradeChange.energy(record, 1, 2000) : MemberUpgradeChange.speed(record, 1));
+			assertEquals(after, CheckpointTestData.CODEC.decode(NetworkCheckpointCodec.encode(after)));
 			assertSame(job, after.ownedMachines().get(member).centrifuge().jobs().get(0));
 			assertSame(before.ledger(), after.ledger()); assertEquals(record.centrifuge().energy(), after.ownedMachines().get(member).centrifuge().energy());
 			if (progress < 5) {

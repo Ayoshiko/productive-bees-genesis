@@ -50,8 +50,8 @@ final class MemberUpgradeProbe {
 	private static UUID member, otherMember;
 	private static NetworkCheckpoint saved, shutdown;
 	private static CentrifugeRecipePlan oldPlan;
-	private static int phase, started, checks;
-	private static long maxExchangeNanos, workEnergy;
+	private static int phase, started, checks, energyChecks;
+	private static long maxExchangeNanos, workEnergy, returnCapacity, returnSharedEnergy;
 	static void start(MinecraftServer server) {
 		started = server.getTickCount(); var level = server.overworld(); ModConfig.SERVER.beeNetwork.enabled.set(true);
 		level.setChunkForced(POS.getX() >> 4, POS.getZ() >> 4, true);
@@ -59,6 +59,8 @@ final class MemberUpgradeProbe {
 		sync = new PlayerInventorySyncProbe(player);
 		level.setBlockAndUpdate(POS, NetworkContent.CORE.get().defaultBlockState()); core = (NetworkCoreBlockEntity) level.getBlockEntity(POS); core.initializeOwner(player.getUUID());
 		target = machine(POS.east()); other = machine(POS.west()); reference = machine(POS.south(5));
+		target.getComponent().addUpgrades(Upgrade.ENERGY, 2);
+		target.energyContainer().setEnergy(target.energyContainer().getMaxEnergy());
 		var comb = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_HONEYCOMB.get());
 		comb.set(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get(), IRON); input = ProductKeyCodec.item(comb, level.registryAccess());
 	}
@@ -90,9 +92,10 @@ final class MemberUpgradeProbe {
 			service = new NetworkCentrifugeService(data, directory, policy);
 			for (UUID id : List.of(member, otherMember)) require(service.activate(level, id, data.checkpoint().revision(), input), "Upgrade fixture activation failed");
 			require(data.checkpoint().energy().capacity() == ModConfig.SERVER.beeNetwork.energyCapacity.get(), "Core has not configured shared energy");
-			for (UUID id : List.of(member, otherMember)) require(NetworkEnergyService.migrate(level, data, directory, id, data.checkpoint().revision(), false), "Upgrade fixture energy migration failed");
 			target.setControlType(RedstoneControl.DISABLED); other.setControlType(RedstoneControl.DISABLED); open(71);
-			basicExchanges(); permissions(server);
+			localEnergyExchanges();
+			for (UUID id : List.of(member, otherMember)) require(NetworkEnergyService.migrate(level, data, directory, id, data.checkpoint().revision(), false), "Upgrade fixture energy migration failed");
+			basicExchanges(); sharedEnergyExchanges(); permissions(server);
 			core.toggleFace(Direction.EAST); check(INSTALL, 0, 1, false, UNAVAILABLE, 0, revision());
 			core.toggleFace(Direction.EAST); phase = 2; return false;
 		}
@@ -111,18 +114,26 @@ final class MemberUpgradeProbe {
 			var fresh = service.candidate(level, member, input); reference.getComponent().addUpgrades(Upgrade.SPEED, 1); comparePhysical(fresh.plan());
 			require(fresh.plan().cycleTicks() < oldPlan.cycleTicks() && fresh.plan().unitEnergyPerTick() > oldPlan.unitEnergyPerTick(), "New work ignored updated speed");
 			var selection = CentrifugeLaneAllocator.select(data.checkpoint(), policy, List.of(fresh), 0, 1, 1).selection();
+			check(Upgrade.ENERGY, REMOVE, 3, 1, false, MOVED, 1, revision());
+			require(!service.assign(level, selection, 7, false), "Pre-energy-change assignment survived capability change");
 			check(REMOVE, 0, 1, false, MOVED, 1, revision());
-			require(!service.assign(level, selection, 7, false), "Pre-upgrade assignment survived capability change");
+			energyCapacityMatchesPhysical(1);
+			returnCapacity = record().centrifuge().energyCapacity(); returnSharedEnergy = data.checkpoint().energy().stored();
 			target.setControlType(RedstoneControl.HIGH); other.setControlType(RedstoneControl.HIGH);
 			require(core.ownership().command(false), "Upgraded member could not return"); phase = 4; return false;
 		}
 		if (core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;
 		require(target.getComponent().getUpgrades(Upgrade.SPEED) == 2 && other.getComponent().getUpgrades(Upgrade.SPEED) == 0, "Return restored old or cross-member upgrades");
+		require(target.getComponent().getUpgrades(Upgrade.ENERGY) == 1 && other.getComponent().getUpgrades(Upgrade.ENERGY) == 0
+				&& target.energyContainer().getMaxEnergy() == returnCapacity && target.energyContainer().getEnergy() == 0
+				&& data.checkpoint().energy().stored() == returnSharedEnergy, "Return lost capacity or duplicated shared energy");
 		require(record().assets().isEmpty() && !MemberBinding.isolated(target), "Returned upgrades still have two owners");
 		shutdown = data.checkpoint(); player.containerMenu = player.inventoryMenu;
 		report.addProperty("memberUpgradeFiniteExchangeAndPermissions", true); report.addProperty("memberUpgradeOldWorkAndFreshPhysicalCapacity", true);
 		report.addProperty("memberUpgradeCheckpointPreservesWork", true); report.addProperty("memberUpgradeReturnCurrentAssets", true);
 		report.addProperty("memberUpgradeChecks", checks); report.addProperty("memberUpgradeMaxExchangeNanos", maxExchangeNanos);
+		report.addProperty("memberEnergyUpgradeChecks", energyChecks); report.addProperty("memberEnergyUpgradeLocalCapacityAndSharedConservation", true);
+		report.addProperty("memberEnergyUpgradeAllCountsMatchPhysical", true); report.addProperty("memberEnergyUpgradeOldWorkAndReturn", true);
 		level.removeBlock(reference.getBlockPos(), false); phase = 5; return true;
 	}
 	private static void basicExchanges() {
@@ -139,7 +150,7 @@ final class MemberUpgradeProbe {
 		check(INSTALL, 0, 64, false, MOVED, Upgrade.SPEED.getMax() - 1, revision()); check(INSTALL, 0, 1, false, LIMIT, 0, revision());
 		check(REMOVE, 0, Upgrade.SPEED.getMax() - 2, false, MOVED, Upgrade.SPEED.getMax() - 2, revision());
 		var before = data.checkpoint(); var inventory = player.getInventory().save(new ListTag());
-		require(menu.exchangeUpgrade(player, member, revision(), Upgrade.ENERGY, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Energy upgrade bypassed its capacity gate");
+		require(menu.exchangeUpgrade(player, member, revision(), Upgrade.MUFFLING, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Unreviewed native upgrade bypassed its admission gate");
 		require(before == data.checkpoint() && inventory.equals(player.getInventory().save(new ListTag())), "Unsupported upgrade mutated assets");
 		ModConfig.SERVER.beeNetwork.enabled.set(false); check(INSTALL, 0, 1, false, UNAVAILABLE, 0, revision());
 		check(REMOVE, 0, 1, false, MOVED, 1, revision()); ModConfig.SERVER.beeNetwork.enabled.set(true); check(INSTALL, 0, 1, false, MOVED, 1, revision());
@@ -147,6 +158,49 @@ final class MemberUpgradeProbe {
 		var nested = new java.util.concurrent.atomic.AtomicReference<MemberUpgradeService.Result>();
 		sync.onSend = () -> nested.set(menu.exchangeUpgrade(player, member, revision(), Upgrade.SPEED, 0, 1, REMOVE, false));
 		check(REMOVE, 0, 1, false, MOVED, 1, revision()); require(nested.get() != null && nested.get().status() == UNAVAILABLE, "Upgrade sync reentered an asset transaction");
+	}
+	private static void localEnergyExchanges() {
+		slot(3, UpgradeUtils.getStack(Upgrade.ENERGY, 16)); slot(4, ItemStack.EMPTY);
+		long stored = record().centrifuge().energy();
+		require(stored == record().centrifuge().energyCapacity() && !record().centrifuge().networkPowered(), "Need full local energy before migration");
+		check(Upgrade.ENERGY, REMOVE, 4, 1, true, ENERGY_CAPACITY, 0, revision());
+		check(Upgrade.ENERGY, REMOVE, 4, 1, false, ENERGY_CAPACITY, 0, revision());
+		check(Upgrade.ENERGY, INSTALL, 3, 1, true, MOVED, 1, revision());
+		check(Upgrade.ENERGY, INSTALL, 3, 1, false, MOVED, 1, revision()); energyCapacityMatchesPhysical(3);
+		require(record().centrifuge().energy() == stored && record().centrifuge().energyCapacity() > stored, "Installing energy created FE");
+		new MachineAssetStore(target).validate(record().returnImage(), player.serverLevel());
+		check(Upgrade.ENERGY, REMOVE, 4, 1, false, MOVED, 1, revision()); energyCapacityMatchesPhysical(2);
+		require(record().centrifuge().energy() == record().centrifuge().energyCapacity(), "Exact capacity boundary changed FE");
+		new MachineAssetStore(target).validate(record().returnImage(), player.serverLevel());
+	}
+	private static void sharedEnergyExchanges() {
+		slot(3, UpgradeUtils.getStack(Upgrade.ENERGY, 16)); slot(4, ItemStack.EMPTY);
+		check(Upgrade.ENERGY, REMOVE, 4, 2, false, MOVED, 2, revision()); energyCapacityMatchesPhysical(0);
+		require(record().centrifuge().networkPowered() && record().centrifuge().energy() == 0
+				&& data.checkpoint().energy().stored() > record().centrifuge().energyCapacity(), "Shared FE was constrained by a member capacity");
+		for (int count = 1; count <= Upgrade.ENERGY.getMax(); count++) {
+			check(Upgrade.ENERGY, INSTALL, 3, 1, false, MOVED, 1, revision()); energyCapacityMatchesPhysical(count);
+		}
+		check(Upgrade.ENERGY, INSTALL, 3, 1, false, LIMIT, 0, revision());
+		check(Upgrade.ENERGY, REMOVE, 4, Upgrade.ENERGY.getMax(), false, MOVED, Upgrade.ENERGY.getMax(), revision()); energyCapacityMatchesPhysical(0);
+		check(Upgrade.ENERGY, INSTALL, 3, 2, false, MOVED, 2, revision());
+		slot(5, UpgradeUtils.getStack(Upgrade.ENERGY, 63)); long oldRevision = revision();
+		check(Upgrade.ENERGY, REMOVE, 5, 2, false, MOVED, 1, oldRevision); energyCapacityMatchesPhysical(1);
+		check(Upgrade.ENERGY, REMOVE, 5, 1, false, STALE, 0, oldRevision);
+		check(Upgrade.ENERGY, REMOVE, 5, 1, false, NO_SPACE, 0, revision());
+		var named = UpgradeUtils.getStack(Upgrade.ENERGY, 1); named.set(DataComponents.CUSTOM_NAME, Component.literal("keep-energy-components")); slot(6, named);
+		check(Upgrade.ENERGY, INSTALL, 6, 1, false, UNSUPPORTED, 0, revision());
+	}
+	private static void energyCapacityMatchesPhysical(int installed) {
+		var component = reference.getComponent();
+		if (component.getUpgrades(Upgrade.ENERGY) < installed) component.addUpgrades(Upgrade.ENERGY, installed - component.getUpgrades(Upgrade.ENERGY));
+		for (int count = component.getUpgrades(Upgrade.ENERGY); count > installed; count--) {
+			component.getUpgradeOutputSlot().setStack(ItemStack.EMPTY); component.removeUpgrade(Upgrade.ENERGY, false);
+			require(component.getUpgrades(Upgrade.ENERGY) == count - 1, "Independent reference could not remove ENERGY");
+		}
+		long expected = reference.energyContainer().getMaxEnergy();
+		require(record().centrifuge().energyCapacity() == expected && record().assets().copy().getLong("energyCapacity") == expected,
+				"Sealed capacity differs from independent physical ENERGY upgrades");
 	}
 	private static void permissions(MinecraftServer server) throws Exception {
 		var old = menu; open(72); require(old.exchangeUpgrade(player, member, revision(), Upgrade.SPEED, 0, 1, INSTALL, false).status() == UNAVAILABLE, "Old upgrade menu accepted");
@@ -166,6 +220,8 @@ final class MemberUpgradeProbe {
 		require(service.work(player.serverLevel(), member, revision(), NetworkCentrifugeService.Action.ADVANCE, 1, false), "Upgrade work fixture could not advance");
 		var job = record().centrifuge().jobs().get(0); require(job.progress() == 1 && !job.paid(), "Need partial paid work");
 		check(INSTALL, 0, 1, false, MOVED, 1, revision()); require(record().centrifuge().jobs().get(0) == job, "Upgrade replaced old work");
+		check(Upgrade.ENERGY, INSTALL, 3, 1, false, MOVED, 1, revision()); energyCapacityMatchesPhysical(2);
+		require(record().centrifuge().jobs().get(0) == job, "Energy upgrade replaced old work");
 		require(service.work(player.serverLevel(), member, revision(), NetworkCentrifugeService.Action.ADVANCE, Integer.MAX_VALUE, false), "Old speed work did not finish");
 		require(data.checkpoint().energy().stored() == workEnergy - oldPlan.cycleTicks() * oldPlan.energyPerTick(job.operations()), "Old work charged the new speed price");
 		require(service.work(player.serverLevel(), member, revision(), NetworkCentrifugeService.Action.FREEZE, 0, false), "Old work could not freeze");
@@ -175,14 +231,19 @@ final class MemberUpgradeProbe {
 		require(plan.cycleTicks() == reference.getTicksForBase(base) && plan.unitEnergyPerTick() == reference.energyContainer().getEnergyPerTick(), "Upgrade capacity differs from independent physical machine");
 	}
 	private static void check(MemberUpgradeService.Action action, int slot, int requested, boolean simulate, MemberUpgradeService.Status status, int moved, long revision) {
+		check(Upgrade.SPEED, action, slot, requested, simulate, status, moved, revision);
+	}
+	private static void check(Upgrade upgrade, MemberUpgradeService.Action action, int slot, int requested, boolean simulate, MemberUpgradeService.Status status, int moved, long revision) {
 		var before = data.checkpoint(); var inventory = player.getInventory().save(new ListTag()); var total = totals(); int packets = sync.packets; boolean failure = sync.failNext;
-		long start = System.nanoTime(); var result = menu.exchangeUpgrade(player, member, revision, Upgrade.SPEED, slot, requested, action, simulate);
-		maxExchangeNanos = Math.max(maxExchangeNanos, System.nanoTime() - start); checks++;
+		long start = System.nanoTime(); var result = menu.exchangeUpgrade(player, member, revision, upgrade, slot, requested, action, simulate);
+		maxExchangeNanos = Math.max(maxExchangeNanos, System.nanoTime() - start); checks++; if (upgrade == Upgrade.ENERGY) energyChecks++;
 		require(result.status() == status && result.moved() == moved, "Upgrade result differs: " + action + " got " + result + " expected " + status + "/" + moved);
 		var after = data.checkpoint(); require(total.equals(totals()), "Player/member upgrade conservation failed");
 		require(before.ledger() == after.ledger() && before.energy() == after.energy() && before.scheduler() == after.scheduler()
 				&& before.ownedMachines().get(otherMember) == after.ownedMachines().get(otherMember)
-				&& before.ownedMachines().get(member).centrifuge().jobs().equals(record().centrifuge().jobs()), "Upgrade changed other assets or old work");
+				&& before.ownedMachines().get(member).centrifuge().jobs().equals(record().centrifuge().jobs())
+				&& before.ownedMachines().get(member).centrifuge().energy() == record().centrifuge().energy()
+				&& before.ownedMachines().get(member).centrifuge().networkPowered() == record().centrifuge().networkPowered(), "Upgrade changed other assets or old work");
 		if (simulate || moved == 0) require(before == after && inventory.equals(player.getInventory().save(new ListTag())), "Rejected/simulated upgrade changed assets");
 		require(sync.packets - packets == (simulate || moved == 0 ? 0 : 1), "Wrong upgrade synchronization count");
 		if (!simulate && moved > 0 && !failure) require(sync.last.getSlot() == slot && ItemStack.matches(sync.last.getItem(), player.getInventory().items.get(slot)), "Upgrade synchronization differs from actual inventory");
@@ -192,8 +253,8 @@ final class MemberUpgradeProbe {
 	private static Map<ProductKey, Integer> totals() {
 		var result = new HashMap<ProductKey, Integer>();
 		for (var stack : player.getInventory().items) if (!stack.isEmpty()) result.merge(ProductKeyCodec.item(stack, player.registryAccess()), stack.getCount(), Math::addExact);
-		int count = NativeUpgradeCounts.read(record().assets().copy().getCompound("upgrades")).getOrDefault(Upgrade.SPEED, 0);
-		if (count > 0) result.merge(ProductKeyCodec.item(UpgradeUtils.getStack(Upgrade.SPEED, 1), player.registryAccess()), count, Math::addExact);
+		NativeUpgradeCounts.read(record().assets().copy().getCompound("upgrades")).forEach((upgrade, count) ->
+				result.merge(ProductKeyCodec.item(UpgradeUtils.getStack(upgrade, 1), player.registryAccess()), count, Math::addExact));
 		return result;
 	}
 	private static OwnedMachineRecord record() { return data.checkpoint().ownedMachines().get(member); }

@@ -64,5 +64,12 @@ public final class StaticCentrifugeAdapter {
 		if (tile.getClass() != TileEntityMekCentrifuge.class) throw new IllegalArgumentException("Only basic centrifuges are supported");
 		new SealedCentrifugeProfile(tile, assets);
 	}
+	/** 读取未重复平衡的本机基础容量；数量来自权威候选，不临时安装到物理组件。 */
+	public static long energyCapacity(TileEntityMekCentrifuge tile, int installed) {
+		if (tile.getClass() != TileEntityMekCentrifuge.class || installed < 0 || installed > mekanism.api.Upgrade.ENERGY.getMax())
+			throw new IllegalArgumentException("Unsupported energy capacity request");
+		long base = tile.energyContainer().getBaseMaxEnergy();
+		return MekCentrifugeEnergyScaling.normalCapacity(base, mekanism.common.util.MekanismUtils.getMaxEnergy(installed, base));
+	}
 	private StaticCentrifugeAdapter() { }
 }

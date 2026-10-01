@@ -310,3 +310,16 @@
 **续接复核（2026-10-01）：** 提交前确认当前源码指纹与最终验收一致，35 项证据、57 个依赖文件及 JAR 共 93 项 SHA-256 全部匹配；8 份运行报告重新通过当前 D17a 验收断言。再次执行上述 Gradle 命令成功，编译与测试为 UP-TO-DATE，产物校验实际执行；现存 182 份测试报告合计 1,054 项、零失败／错误、2 项跳过。本次复核未重新启动游戏矩阵，代码审查未发现新增阻塞项。
 
 **未完成边界：** 本步服务器菜单服务不等于客户端升级按钮已交付；新升级的真实玩家 TCP 操作、跨 JVM 玩家文件及升级在制联合恢复仍属 D17c。ENERGY 容量变更、PB 升级、蜂箱能力、供给来源、批量及创造升级按[拆分路线](bee-processing-network-roadmap.md#s11-5)继续；D17 父门与 M04 前置仍开放，性能收益不由构建或本步耗时推断。
+
+<a id="s10-71"></a>
+### 10.71 D17b1 基础离心机 ENERGY 与容量（2026-10-01，服务器服务已验收）
+
+**合同与实现：** 按[逐机升级与 FE 合同](bee-processing-network-design.md#s2-3)，`MemberUpgradeService` 将标准 ENERGY 纳入既有所有者菜单有限交换。服务器按变更后数量调用固定 Mekanism 容量公式，`MemberUpgradeChange.energy` 同时发布升级映像、成员容量与递增 revision。成员本地 FE 超过新容量时返回 `ENERGY_CAPACITY` 并保留双方资产；等于新容量可以提交。共享供能状态、共享余额及核心容量保持原值；旧作业的计划、投入预约、随机种子、进度与冻结结果不变，新作业读取更新后的耗电。没有新增存档字段，仍严格校验映像与工作状态的容量相等。原生源码、缩容截断风险与交还顺序见[13.10](bee-processing-network-references.md#s13-10)。
+
+**纯测试与构建：** 升级事务新增 3 项测试，覆盖精确缩容边界、拒绝丢失本地 FE、共享能源不回流、`Long.MAX_VALUE` 容量与无效数量；既有未开始／部分付费／冻结作业用例扩展到 ENERGY，并验证严格 codec 往返与原费用结算。7 项针对性测试通过。随后 `test build verifyReleaseArtifact compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache` 全量成功：1,057 项中 1,055 通过、2 项既有跳过、零失败／错误，发布 JAR 排除 domainProbe 类。
+
+**运行与恢复：** `d17b1-20261001-first` 首次完整矩阵通过有／无 AE2 各 domain、writer、reader、client，共 6 个专服 JVM、2 个集成客户端。两组 domain 各通过 46 次交换检查，其中 23 次为 ENERGY：本地满电缩容拒绝、扩容不增加 FE、精确容量边界及分离机器交还预检；共享 FE 高于本机容量时仍能安全拆除；0 至当前上限逐级对照独立物理机；达到上限、部分接收、满槽、旧 revision 和完整组件拒绝；部分付费工作更换 ENERGY 后仍按原费用结算，新耗电与物理机相等，旧分配候选失效。实际脱网归还最新 SPEED／ENERGY 与新容量，本机 FE 为零，共享余额不变。ENERGY 与冻结作业在同一 JVM 完成实际落盘及严格解码核对；writer／reader 另覆盖既有九场景跨 JVM 自动生产恢复。两组客户端各一次接管成功，既有物品取回、界面与成员交还回归通过，抽查取回／交还截图；这不是新升级 GUI 验收。
+
+**来源与成本：** `build/network-gates/d17b1-20261001-first/gate.json` 保存 33 项证据，连同 57 个依赖与 JAR 共 91 项哈希核对一致。当前源码指纹为 `F8D2CD219E22C8861E568C3EA43B9508726F710C3A088E8D4943A4B5300980DA`，JAR SHA-256 为 `8561B73AEDC76D44E686B1ADBAC911D2C110463AEEEEAF5C9966B1DF302CFB4B`；测试进程已退出。只增加 O(1) 的单机容量计算，其余保留 D17a 的目标成员树更新与有限资产复制，不增加全网扫描、缓存或异步任务；不据此宣称 Spark／MSPT 改善。
+
+**未完成边界：** 本步签收基础离心机 ENERGY 的服务器服务。PB 效果、蜂箱能力、创造及扩展工厂仍按[实施路线](bee-processing-network-roadmap.md#s11-5)逐项验收；正式升级界面、供给来源、批量、真实玩家竞争及新升级／在制／玩家文件跨 JVM 联合恢复仍属 D17c。D17 父门与 M04 前置保持开放。

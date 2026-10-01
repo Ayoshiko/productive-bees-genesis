@@ -14,10 +14,10 @@ import mekanism.common.util.UpgradeUtils;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-/** 已激活基础离心机的有限升级实物事务；首个适配仅开放原生 SPEED。 */
+/** 已激活基础离心机的有限升级实物事务；仅开放已验收的原生 SPEED／ENERGY。 */
 public final class MemberUpgradeService {
 	public enum Action { INSTALL, REMOVE }
-	public enum Status { MOVED, NO_SPACE, LIMIT, EMPTY, STALE, UNSUPPORTED, INVALID, UNAVAILABLE }
+	public enum Status { MOVED, NO_SPACE, LIMIT, EMPTY, STALE, UNSUPPORTED, INVALID, UNAVAILABLE, ENERGY_CAPACITY }
 	public record Result(Status status, int moved, int installed, long revision) { }
 	static Result result(Status status) { return new Result(status, 0, -1, -1); }
 	static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
@@ -26,7 +26,7 @@ public final class MemberUpgradeService {
 		if (core == null || !core.ownerAllowed(player)) return result(Status.UNAVAILABLE);
 		if (member == null || action == null || expectedRevision < 0 || inventorySlot < 0 || inventorySlot >= 36
 				|| requested < 1 || requested > 64) return result(Status.INVALID);
-		if (upgrade != Upgrade.SPEED) return result(Status.UNSUPPORTED);
+		if (upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY) return result(Status.UNSUPPORTED);
 		if (action == Action.INSTALL && !ModConfig.SERVER.beeNetwork.enabled.get()) return result(Status.UNAVAILABLE);
 		var authority = core.ownership().readyAuthority(); if (authority == null) return result(Status.UNAVAILABLE);
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
@@ -56,7 +56,12 @@ public final class MemberUpgradeService {
 				if (moved <= 0) return result(Status.NO_SPACE);
 				received = unit.copyWithCount(inventory.getCount() + moved);
 			}
-			change = MemberUpgradeChange.speed(record, action == Action.INSTALL ? moved : -moved);
+			int delta = action == Action.INSTALL ? moved : -moved;
+			if (upgrade == Upgrade.ENERGY) {
+				long capacity = StaticCentrifugeAdapter.energyCapacity(tile, installed + delta);
+				if (record.centrifuge().energy() > capacity) return result(Status.ENERGY_CAPACITY);
+				change = MemberUpgradeChange.energy(record, delta, capacity);
+			} else change = MemberUpgradeChange.speed(record, delta);
 			StaticCentrifugeAdapter.validateUpgrades(tile, change.candidate().assets());
 			next = current.exchangeUpgrade(change);
 		} catch (IllegalArgumentException unsupported) { return result(Status.UNSUPPORTED); }

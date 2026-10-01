@@ -172,3 +172,10 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 D17a 复核固定 Mekanism 10.7.19.85 `TileComponentUpgrade.tickServer/addUpgrades/removeUpgrade/serialize/deserialize`、`Upgrade.getMax/getTag/buildMap`：采用服务器线程、当前上限、先预检接收空间再按实际量扣除、安装记录与输入／输出槽分离。其已安装状态只保存类型／数量，本项目只接收标准完整组件，拒绝有自定义组件的升级件；不采用宽松反序列化的 ordinal 回绕、重复键覆盖或非正数忽略。网络直接改唯一封存映像，原生物理组件保持清空，不调用其 ticker 或产生第二份已安装状态。
 
 本步检查 `.tmp_dataenergistics_src` 为独立干净根后，从 `c95a1244` fast-forward 到 `965b9d98`（`1.21`）；本次上游变化为 AE2 合成 CPU 列表修正及版本／变更记录，不扩大审查范围。复读 `TrinityHostedActionTicket` 与 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的会话、代际、实际菜单和单次认领边界；沿用本项目核心菜单的服务器线程／查看者／关闭／重入守卫，并使用目标成员 revision 拒绝旧升级请求。D17a 尚未新增客户端 payload，完整协议与真实客户端联合验证留 D17c；本步服务器服务证据见[10.70](bee-processing-network-evidence-current.md#s10-70)。
+
+<a id="s13-10"></a>
+### 13.10 ENERGY 容量、缩容与交还（2026-10-01）
+
+D17b1 从本地固定 Mekanism 10.7.19.85 源码复核 `MekanismUtils.getMaxEnergy(int,long)`、`MachineEnergyContainer.getBaseMaxEnergy/setMaxEnergy/updateMaxEnergy` 及 `TileComponentUpgrade.deserialize/removeUpgrade`：直接使用原生数量重载和本机已平衡的基础容量，对齐当前配置的 long 取整／饱和语义；不读取托管后已清空的升级组件，也不重乘平衡系数。原生 `setMaxEnergy` 会裁掉超出容量的电量，因此网络在发布前按成员本地余额拒绝危险缩容，不在物理组件试装／回退。既有 `MachineAssetStore` 在独立的预检机器中先反序列化升级、重算容量，再恢复 FE 并验证整个映像往返；实际交还沿用同一顺序，不增设第二份能源暂存。
+
+本步确认 `.tmp_dataenergistics_src` 独立且干净后，从 `965b9d98` fast-forward 到 `ddef032e`（`1.21`）；上游变化为封包神秘学仪式回收，与本步升级无关。复读现版 `TrinityHostedActionTicket` 和 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的失效／单次认领边界，继续采用 [13.9](#s13-9) 已有服务器菜单与成员 revision 保护，不引入外部恢复流程。

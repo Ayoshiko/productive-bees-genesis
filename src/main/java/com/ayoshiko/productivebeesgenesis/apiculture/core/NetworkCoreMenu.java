@@ -174,7 +174,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
 		finally { exchanging = false; }
 	}
-	/** 服务器升级入口；首次适配仅限所有者操作基础离心机 SPEED。 */
+	/** 服务器升级入口；仅限所有者操作基础离心机 SPEED／ENERGY。 */
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
