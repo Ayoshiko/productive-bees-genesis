@@ -473,3 +473,12 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 **基线与边界：** 网络 worktree 基线 `0627f29`，最终源码指纹 `4C01D998F6E6C912B418CC1F061731AA3C4ED19ABDE1479016E30A1B5BFEEBA3`，JAR SHA-256 `A925D90B3FE356F109DEC7A4893CFE8088DF87DA50945E1B1449E90AB9DF44CD`；两组合源码、依赖及产物一致，66 项证据已复核。NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85，可选组合为 AE2 19.2.17／Applied Flux 2.1.5。D17 在现有基础成员及静态蜂种范围内完成，解除 M04 的 D17 前置；M04 独立生产、D18、创造／扩展工厂及特殊蜂种、D29 故障耐久性和 D30 性能仍待各自验收。测试使用本地离线账户 TCP 登录，不代表公网账户认证或强制崩溃耐久性，无 Spark／MSPT 结论。
 
 **测试价值与执行效率复核：** 当前 202 个测试文件，默认快速集 185 个报告类、1,097 项，用例时间合计约 9.31 秒；51 个文件读取文本，含必要的存档、资源与编码校验。抽查 `ApiaryDirectEjectOptimizationTest`（3 项）及 `RecipeLookupCacheWiringTest`（5 项）依赖精确方法名、源码字符串或固定缓存大小，列为触及模块时合并／替换候选，不能作为性能实测。旧 `CombinedApiaryTimelineTest`（4 项，约 0.489 秒）覆盖六阶段原型，当前渲染未调用其 sample，但活动接收器与开发探针仍引用；应连同旧调用链整理。较慢的 `CheckpointReadTest`（12 项，约 2.955 秒）覆盖 CRC／截断、超大声明、背压、取消和停服，保留其恢复风险覆盖。没有逐条审完全部用例，也未为减少数字删除测试。主要减负落在[11.10](bee-processing-network-roadmap.md#s11-10)：默认定向测试、小步按需启动、阶段集中矩阵、复用现有夹具和固定参考；这轮专用探针开发及三次失败重跑不作为后续小步的默认流程。
+
+<a id="s10-84"></a>
+### 10.84 M04a 复合工作内核与有限产物交付（2026-10-02，纯内核子步已验收）
+
+**实现与范围：** 按[2.4](bee-processing-network-design.md#s2-4)引入 `CombinedMachineWork`：单个机器身份／代际、显式蜂位／lane 容量、同一 FE 余额、蜂记录及离心作业。不构造网络无限账本或两个伪成员，基础蜂箱入口改为包装共享单蜂候选，保留原三蜂位存档及计算语义。有限物品槽／流体罐按完整组件接收，旧栈优先；蜂的大数量冻结产物与离心多产物均可分次交付。离心原冻结样本保留校验，通过 delivered 精确区分已交付及剩余量，零产物作业仍释放 lane。满载、缺电、旧根提交或计算异常保留原状态。具体复用见[13.22](bee-processing-network-references.md#s13-22)。
+
+**验证：** 定向运行 `CombinedMachineWorkTest`、`BeeProductionCheckpointTest`、`BeeRandomCheckpointTest`、`BeeCageCheckpointTest`、`NetworkEnergyCheckpointTest`，共 56 项全部通过，无跳过／失败；新内核 8 项覆盖超过三蜂位、两路竞争同一 FE、输入不能重复预约、旧候选拒绝、完整组件与堆叠上限、超 long 蜂产物部分交付、物品与流体满载余量、旧周期升级切换、零产物和中途查限失败。沿用其余 48 项已有蜂随机／存档／资产／能量回归，未新增运行探针。测试命令约 23 秒，用例报告合计 0.771 秒；随后 `build -x test verifyReleaseArtifact --no-daemon` 约 9 秒通过，复用已通过测试，没有重复全量测试或游戏启动。
+
+**证据与边界：** `build/network-gates/m04a-work-20261002/gate.json` 保存命令、五份 XML 副本及产物信息。实际网络 worktree 基线 `813bd98`，源码指纹 `87AA7F2020DDDF59917695490EC485C0C34D1735D14B02E2FBC5FD2E0D62C488`，JAR SHA-256 `1D991534AA371B5E34F0FE91BC67AF12854F94B01A1BACC7FDAD103D2452751F`；依赖仍为 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85。内核只接受封闭值，不读取世界或外部容器；成本随本机实际蜂位、lane、产物种类及槽／罐数变化，大数量交付不逐件枚举。尚未接入独立机器持久化、正式容量参数、世界调度、权限／结构门、真实玩家物料／插件或外部端口；这些由 M04b／c 接入，独立参考与运行恢复留 M04d。M04 父门保持开放，不宣称一体机已可独立运行，也无新增性能或游戏证据。

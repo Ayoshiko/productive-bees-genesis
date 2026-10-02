@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **M04a 一体机复合工作内核**：单个机器身份同时保管蜂生产与离心工作，共用一份 FE；有限物品槽／流体罐按完整组件接收，已付费产物可分次交付，满载不丢失余量、不重抽、不重复收费。基础蜂箱复用同一单蜂计算。此步不开放独立世界生产、端口或插件，M04 后续接入仍未完成。
+
 - **D17c3 独立升级授权**：所有者可向现有访客单独授予升级权限，开放核心与成员代理的预估、安装和取回，同时保留所有者专属结构管理。撤权后旧菜单失效，撤销访问同时移除升级权；旧访问表默认无升级授权，损坏数据保留并拒绝访客。权限表升至版本 2、终端协议升至版本 7，网络 checkpoint 格式不变。
 
 - **D17c2b 托管成员升级代理**：主手非潜行右键基础蜂箱／离心机，直接打开当前成员的网络升级页。复用预估和真实安装／取回，距离按源机器校验；单成员入口不提供批量和全网管理。权限、绑定、核心／成员实例或拓扑失效会关闭旧菜单，独立机器保留原 GUI，交互不放置手持方块、不生成掉落物。终端协议升至版本 6，存档格式不变；D17c3 的双玩家与跨 JVM 联合门保持开放。
@@ -147,6 +149,8 @@
 ### English
 
 #### Added
+
+- Added the M04a combined-machine work kernel: one machine identity holds bee and centrifuge work with one FE balance. Finite item slots and fluid tanks preserve exact components, and paid outputs can drain in portions without loss, resampling or duplicate charges. Basic apiaries share the same per-bee calculation. Standalone world production, ports and plugins remain pending M04 integration.
 
 - Added D17c3 explicit upgrade permission for existing guests. Owners can authorize upgrade previews, installation and removal through the core and member menus while retaining exclusive structural controls. Permission changes invalidate old menus; revoking access also removes upgrade permission. Legacy access tables grant no upgrade rights, and invalid data remains preserved and denies guests. Access tables use version 2 and the terminal protocol uses version 7; network checkpoint format is unchanged.
 
