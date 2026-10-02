@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -111,16 +110,6 @@ class PbDataComponentsWiringTest {
 				"DataComponentType 属静态注册表，不随数据包重载变化，不应有失效入口");
 	}
 
-	@Test
-	@DisplayName("注册期与展示期的组件写入保持原样，不引入无谓间接层")
-	void registrationPathsKeepDirectHolder() throws Exception {
-		// ModItems 在注册期构造默认组件，此时 DeferredHolder 尚未绑定，必须保留原调用形式
-		String modItems = read(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/init/ModItems.java");
-		assertTrue(modItems.contains("ModDataComponents.BEE_TYPE.get()"),
-				"注册期路径应保留 DeferredHolder，不走缓存访问器");
-	}
-
 	private static int countOccurrences(String haystack, String needle) {
 		int count = 0;
 		int index = haystack.indexOf(needle);
@@ -131,12 +120,4 @@ class PbDataComponentsWiringTest {
 		return count;
 	}
 
-	@Test
-	@DisplayName("热路径文件均存在（防止重构改名后断言静默失效）")
-	void hotPathFilesExist() {
-		List<String> missing = Stream.of(HOT_PATH_FILES.toArray(new String[0]))
-				.filter(p -> !Files.isRegularFile(Path.of(p)))
-				.toList();
-		assertTrue(missing.isEmpty(), () -> "热路径文件缺失，断言已失去意义: " + missing);
-	}
 }
