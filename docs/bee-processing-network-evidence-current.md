@@ -482,3 +482,12 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 **验证：** 定向运行 `CombinedMachineWorkTest`、`BeeProductionCheckpointTest`、`BeeRandomCheckpointTest`、`BeeCageCheckpointTest`、`NetworkEnergyCheckpointTest`，共 56 项全部通过，无跳过／失败；新内核 8 项覆盖超过三蜂位、两路竞争同一 FE、输入不能重复预约、旧候选拒绝、完整组件与堆叠上限、超 long 蜂产物部分交付、物品与流体满载余量、旧周期升级切换、零产物和中途查限失败。沿用其余 48 项已有蜂随机／存档／资产／能量回归，未新增运行探针。测试命令约 23 秒，用例报告合计 0.771 秒；随后 `build -x test verifyReleaseArtifact --no-daemon` 约 9 秒通过，复用已通过测试，没有重复全量测试或游戏启动。
 
 **证据与边界：** `build/network-gates/m04a-work-20261002/gate.json` 保存命令、五份 XML 副本及产物信息。实际网络 worktree 基线 `813bd98`，源码指纹 `87AA7F2020DDDF59917695490EC485C0C34D1735D14B02E2FBC5FD2E0D62C488`，JAR SHA-256 `1D991534AA371B5E34F0FE91BC67AF12854F94B01A1BACC7FDAD103D2452751F`；依赖仍为 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85。内核只接受封闭值，不读取世界或外部容器；成本随本机实际蜂位、lane、产物种类及槽／罐数变化，大数量交付不逐件枚举。尚未接入独立机器持久化、正式容量参数、世界调度、权限／结构门、真实玩家物料／插件或外部端口；这些由 M04b／c 接入，独立参考与运行恢复留 M04d。M04 父门保持开放，不宣称一体机已可独立运行，也无新增性能或游戏证据。
+
+<a id="s10-85"></a>
+### 10.85 M04b1 正式容量与严格工作存档（2026-10-02，纯存档子步已验收）
+
+按[2.4](bee-processing-network-design.md#s2-4)固定首版容量并新增独立工作 schema 1；复用[13.22](bee-processing-network-references.md#s13-22)的单蜂／单作业编码，保存六蜂位、同一 FE、原冻结样本／已交付量、随机游标和有序有限槽罐。原网络格式及三蜂位限制保持。非法字段、重复资产、超量交付和无法恢复的组件／上限拒绝整个候选，输入 NBT 保持不变。同步移除路线旧“每次提交跑全量”表述，统一按 11.10 执行。
+
+网络 worktree 基线 `f658925`，依赖保持 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85。六组定向测试共 **60 项通过，无失败／跳过**，其中仅在现有 `CombinedMachineWorkTest` 新增 3 项：六蜂位和超 long 产物恢复、满载分次交付后再次恢复及未付完工作续费、坏记录拒绝与完整组件上限。其余沿用蜂随机／生产、离心和完整／预算 checkpoint 回归。测试命令 18 秒；一次 `build -x test verifyReleaseArtifact --no-daemon` 7 秒通过。报告与六份 XML 保存在 `build/network-gates/m04b1-work-codec-20261002/gate.json`；JAR SHA-256 为 `254FDD21F441A89EF9019B2C57389189856F2D20944F66D8724BC9C1F1FA78FE`。
+
+本步只证明 NBT 候选往返与恢复后的计算行为，未启动游戏、未新增专用探针，不证明世界文件正常重启。世界资产保管、控制器引用、缺档／损坏隔离和结构／卸载／所有权调度留 M04b2；喂食／插件／端口留 M04c，独立生产联合门留 M04d。M04b 与 M04 父门保持开放。

@@ -10,21 +10,15 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
-/** 当前每成员最多三个蜂位；恢复有界，任何错误都交给整域隔离路径。 */
-final class BeeRecordCodec {
+/** 共用单蜂记录格式；基础成员容器仍只准入三个蜂位。 */
+public final class BeeRecordCodec {
 	static CompoundTag encode(BeeMemberState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
 		tag.putInt("samplingVersion", 2);
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision());
 		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var list = new ListTag();
-		for (var bee : state.bees()) {
-			var value = new CompoundTag(); value.putUUID("id", bee.id()); value.putInt("slot", bee.slot());
-			value.put("original", bee.originalSlot().copy()); value.put("plan", plan(bee.plan()));
-			value.putLong("revision", bee.revision()); value.putInt("progress", bee.progress());
-			value.putLong("seed", bee.random().seed()); value.putLong("cursor", bee.random().cursor());
-			value.putLong("pending", bee.pendingCycles()); value.put("frozen", ProductRecordCodec.amount(bee.frozen())); list.add(value);
-		}
+		for (var bee : state.bees()) list.add(encodeBee(bee));
 		tag.put("bees", list); tag.put("feeding", FeedingRecordCodec.encode(state.feeding())); return tag;
 	}
 	static BeeMemberState decode(CompoundTag tag, Consumer<ProductKey> validate,
@@ -40,18 +34,30 @@ final class BeeRecordCodec {
 		var member = StrictNbt.uuid(tag, "member"); var list = StrictNbt.list(tag, "bees");
 		if (list.size() > 3) throw new IllegalArgumentException("Unverified factory bee state");
 		var bees = new ArrayList<BeeRecord>();
-		for (var raw : list) {
-			var value = (CompoundTag) raw;
-			if (legacy) fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen");
-			else fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen", "seed", "cursor");
-			var id = StrictNbt.uuid(value, "id");
-			var random = legacy ? BeeCycleRandom.initial(id) : new BeeCycleRandom(StrictNbt.number(value, "seed"), StrictNbt.number(value, "cursor"));
-			bees.add(new BeeRecord(id, member, StrictNbt.integer(value, "slot"),
-					new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, schema),
-					StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen"), random));
-		}
+		for (var raw : list) bees.add(decodeBee((CompoundTag) raw, member, validate, schema));
 		return new BeeMemberState(member, StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), bees,
 				FeedingRecordCodec.decode(StrictNbt.compound(tag, "feeding"), validateFeeding), StrictNbt.bool(tag, "networkPowered"));
+	}
+	public static CompoundTag encodeBee(BeeRecord bee) {
+		var value = new CompoundTag(); value.putUUID("id", bee.id()); value.putInt("slot", bee.slot());
+		value.put("original", bee.originalSlot().copy()); value.put("plan", plan(bee.plan()));
+		value.putLong("revision", bee.revision()); value.putInt("progress", bee.progress());
+		value.putLong("seed", bee.random().seed()); value.putLong("cursor", bee.random().cursor());
+		value.putLong("pending", bee.pendingCycles()); value.put("frozen", ProductRecordCodec.amount(bee.frozen())); return value;
+	}
+	/** 独立机器只接受当前完整记录；旧网络格式的兼容仍由网络容器决定。 */
+	public static BeeRecord decodeBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate) {
+		return decodeBee(value, member, validate, 8);
+	}
+	private static BeeRecord decodeBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate, int schema) {
+		boolean legacy = schema == 6;
+		if (legacy) fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen");
+		else fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen", "seed", "cursor");
+		var id = StrictNbt.uuid(value, "id");
+		var random = legacy ? BeeCycleRandom.initial(id) : new BeeCycleRandom(StrictNbt.number(value, "seed"), StrictNbt.number(value, "cursor"));
+		return new BeeRecord(id, member, StrictNbt.integer(value, "slot"),
+				new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, schema),
+				StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen"), random);
 	}
 	private static CompoundTag plan(StaticBeePlan plan) {
 		var tag = new CompoundTag(); tag.putString("type", plan.beeType()); tag.putString("recipe", plan.recipe());

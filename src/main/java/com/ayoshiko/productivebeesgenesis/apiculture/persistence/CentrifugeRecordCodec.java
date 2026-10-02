@@ -10,16 +10,14 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
 /** 有限作业记录的严格恢复；冻结结果直接读取，不再采样。 */
-final class CentrifugeRecordCodec {
+public final class CentrifugeRecordCodec {
 	static CompoundTag encode(CentrifugeWorkState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision()); tag.putInt("lanes", state.laneCount());
 		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var jobs = new ListTag();
 		state.jobs().forEach((lane, job) -> {
-			var value = new CompoundTag(); value.putInt("lane", lane); value.putUUID("id", job.id()); value.put("plan", plan(job.plan()));
-			value.putInt("operations", job.operations()); value.putInt("progress", job.progress()); value.putLong("seed", job.seed());
-			value.putBoolean("sampled", job.sampled()); value.put("frozen", job.sampled() ? ProductRecordCodec.amounts(job.frozen()) : new ListTag()); jobs.add(value);
+			var value = encodeJob(job); value.putInt("lane", lane); jobs.add(value);
 		});
 		tag.put("jobs", jobs); return tag;
 	}
@@ -30,14 +28,26 @@ final class CentrifugeRecordCodec {
 		for (var raw : StrictNbt.list(tag, "jobs")) {
 			var value = (CompoundTag) raw;
 			fields(value, "lane", "id", "plan", "operations", "progress", "seed", "sampled", "frozen");
-			var frozen = codec.readAmounts(StrictNbt.list(value, "frozen")); boolean sampled = StrictNbt.bool(value, "sampled");
-			if (!sampled && !frozen.isEmpty()) throw new IllegalArgumentException("Unsampled centrifuge has frozen output");
-			var job = new CentrifugeJob(StrictNbt.uuid(value, "id"), readPlan(StrictNbt.compound(value, "plan"), codec),
-					StrictNbt.integer(value, "operations"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "seed"), sampled ? frozen : null);
+			var job = readJob(value, codec);
 			if (jobs.putIfAbsent(StrictNbt.integer(value, "lane"), job) != null) throw new IllegalArgumentException("Duplicate centrifuge lane");
 		}
 		return new CentrifugeWorkState(StrictNbt.uuid(tag, "member"), StrictNbt.number(tag, "revision"), StrictNbt.integer(tag, "lanes"),
 				StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), jobs, StrictNbt.bool(tag, "networkPowered"));
+	}
+	public static CompoundTag encodeJob(CentrifugeJob job) {
+		var value = new CompoundTag(); value.putUUID("id", job.id()); value.put("plan", plan(job.plan()));
+		value.putInt("operations", job.operations()); value.putInt("progress", job.progress()); value.putLong("seed", job.seed());
+		value.putBoolean("sampled", job.sampled()); value.put("frozen", job.sampled() ? ProductRecordCodec.amounts(job.frozen()) : new ListTag()); return value;
+	}
+	public static CentrifugeJob decodeJob(CompoundTag value, Consumer<ProductKey> validate) {
+		fields(value, "id", "plan", "operations", "progress", "seed", "sampled", "frozen");
+		return readJob(value, new ProductRecordCodec(validate));
+	}
+	private static CentrifugeJob readJob(CompoundTag value, ProductRecordCodec codec) {
+		var frozen = codec.readAmounts(StrictNbt.list(value, "frozen")); boolean sampled = StrictNbt.bool(value, "sampled");
+		if (!sampled && !frozen.isEmpty()) throw new IllegalArgumentException("Unsampled centrifuge has frozen output");
+		return new CentrifugeJob(StrictNbt.uuid(value, "id"), readPlan(StrictNbt.compound(value, "plan"), codec),
+				StrictNbt.integer(value, "operations"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "seed"), sampled ? frozen : null);
 	}
 	private static CompoundTag plan(CentrifugeRecipePlan plan) {
 		var tag = new CompoundTag(); tag.putString("recipe", plan.recipe()); tag.putLong("recipeRevision", plan.recipeRevision());

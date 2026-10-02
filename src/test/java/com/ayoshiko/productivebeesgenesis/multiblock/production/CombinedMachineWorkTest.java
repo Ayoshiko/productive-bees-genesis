@@ -132,4 +132,88 @@ class CombinedMachineWorkTest {
 		var unpaid = new CentrifugeJob(UUID.randomUUID(), plan(2, 1, output(ITEM, 2)), 1, 0, 0, null);
 		assertThrows(IllegalArgumentException.class, () -> new CentrifugeDelivery(unpaid, Map.of(ITEM, ProductAmount.of(1))));
 	}
+	private static CombinedMachineWork checkpointFixture() {
+		var id = UUID.randomUUID(); var bees = new ArrayList<BeeRecord>();
+		for (int slot = 0; slot < CombinedMachineCapacity.BEE_SLOTS; slot++) bees.add(bee(id, slot, 1, 5, Float.MAX_VALUE));
+		var state = new CombinedMachineWork(id, 7, 0, CombinedMachineCapacity.BEE_SLOTS, CombinedMachineCapacity.LANES,
+				1000, CombinedMachineCapacity.ENERGY_CAPACITY, bees, Map.of(),
+				FiniteProductBuffer.empty(CombinedMachineCapacity.ITEM_SLOTS, CombinedMachineCapacity.FLUID_TANKS, CombinedMachineCapacity.TANK_CAPACITY));
+		state = change(state, state.insert(COMB, 2, 64));
+		state = change(state, state.assignCentrifuge(0, plan(4, 3, output(ITEM, 2)), 1, UUID.randomUUID(), 9));
+		state = change(state, state.advanceCentrifuge(0, 1, true));
+		state = change(state, state.assignCentrifuge(2, plan(2, 3, output(ITEM, 5000), output(FLUID, 100_000)), 1, UUID.randomUUID(), 8));
+		state = change(state, state.advanceCentrifuge(2, 2, true));
+		state = change(state, state.freezeCentrifuge(2));
+		state = change(state, state.settleCentrifuge(2, key -> 64));
+		state = change(state, state.advanceBee(5, 0, context(state.bee(5)), 1, 1, null));
+		return state;
+	}
+	private static CombinedMachineWork restore(CompoundTag tag) { return CombinedWorkCodec.decode(tag, key -> {}, key -> 64); }
+	private static net.minecraft.nbt.ListTag records(CompoundTag tag, String name) { return tag.getList(name, 10); }
+
+	@Test void checkpointResumesPartialDeliveryAndUnpaidWorkWithoutRerollOrDoublePayment() {
+		var before = checkpointFixture(); var encoded = CombinedWorkCodec.encode(before); var restored = restore(encoded);
+		assertEquals(6, restored.bees().size()); assertEquals(before.machine(), restored.machine()); assertEquals(7, restored.generation());
+		assertEquals(before.energy(), restored.energy()); assertEquals(before.revision(), restored.revision());
+		assertEquals(before.bee(5), restored.bee(5)); assertFalse(restored.bee(5).frozen().fitsLong());
+		assertEquals(before.centrifuges(), restored.centrifuges());
+		assertEquals(3272, restored.centrifuges().get(2).remaining(ITEM).longSaturated());
+		assertEquals(36_000, restored.centrifuges().get(2).remaining(FLUID).longSaturated());
+		var frozen = restored.centrifuges().get(2).job(); long energy = restored.energy();
+		long items = 0, fluids = 0;
+		while (restored.centrifuges().containsKey(2)) {
+			assertEquals(frozen, restored.centrifuges().get(2).job());
+			items += restored.buffer().count(ITEM); fluids += restored.buffer().count(FLUID);
+			restored = change(restored, restored.extract(ITEM, Long.MAX_VALUE));
+			restored = change(restored, restored.extract(FLUID, Long.MAX_VALUE));
+			restored = change(restored, restored.settleCentrifuge(2, key -> 64));
+			restored = restore(CombinedWorkCodec.encode(restored));
+		}
+		assertEquals(5000, items + restored.buffer().count(ITEM)); assertEquals(100_000, fluids + restored.buffer().count(FLUID));
+		assertEquals(energy, restored.energy()); assertEquals(before.bee(5).random(), restored.bee(5).random());
+		restored = change(restored, restored.advanceCentrifuge(0, 3, true));
+		assertEquals(energy - 9, restored.energy()); assertTrue(restored.centrifuges().get(0).job().paid());
+		encoded.putLong("energy", 0); records(encoded, "bees").getCompound(5).getCompound("original").putInt("ticks_in_hive", 99);
+		assertEquals(0, restored.bee(5).originalSlot().copy().getInt("ticks_in_hive")); assertEquals(986, before.energy());
+	}
+
+	@Test void checkpointRejectsIncompleteUnknownAndDuplicatedAssetsWithoutMutatingSource() {
+		var encoded = CombinedWorkCodec.encode(checkpointFixture()); var stable = encoded.copy();
+		for (var field : stable.getAllKeys()) {
+			var bad = encoded.copy(); bad.remove(field);
+			assertThrows(IllegalArgumentException.class, () -> restore(bad), field);
+		}
+		var mutations = List.<java.util.function.Consumer<CompoundTag>>of(
+				tag -> tag.putInt("schema", 2), tag -> tag.putInt("capacityVersion", 2),
+				tag -> tag.putInt("beeSlots", 3), tag -> tag.putLong("energyCapacity", 999),
+				tag -> tag.putInt("energy", 0), tag -> tag.putLong("generation", 0),
+				tag -> records(tag, "bees").getCompound(1).putUUID("id", records(tag, "bees").getCompound(0).getUUID("id")),
+				tag -> records(tag, "bees").getCompound(0).putInt("slot", 6),
+				tag -> records(tag, "bees").getCompound(0).remove("cursor"),
+				tag -> records(tag, "jobs").getCompound(1).putInt("lane", 0),
+				tag -> records(tag, "jobs").getCompound(1).getCompound("job").putUUID("id", records(tag, "bees").getCompound(0).getUUID("id")),
+				tag -> records(tag, "jobs").getCompound(1).getCompound("job").putBoolean("sampled", false),
+				tag -> records(records(tag, "jobs").getCompound(1), "delivered").getCompound(0).putLong("amount", 1_000_000),
+				tag -> records(tag, "items").remove(0),
+				tag -> records(tag, "items").getCompound(0).getCompound("key").putBoolean("unknown", true));
+		for (var mutation : mutations) {
+			var bad = encoded.copy(); mutation.accept(bad); var unchanged = bad.copy();
+			assertThrows(IllegalArgumentException.class, () -> restore(bad)); assertEquals(unchanged, bad);
+		}
+		assertEquals(stable, encoded);
+	}
+
+	@Test void checkpointPreservesComponentVariantsAndRejectsUnavailableOrShrunkenItems() {
+		var component = new CompoundTag(); component.putString("name", "variant");
+		var variant = new ProductKey(ProductKey.Kind.ITEM, ITEM.id(), component);
+		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1);
+		state = change(state, state.insert(ITEM, 16, 16)); state = change(state, state.insert(variant, 1, 1));
+		var encoded = CombinedWorkCodec.encode(state);
+		var restored = CombinedWorkCodec.decode(encoded, key -> {}, key -> key.equals(variant) ? 1 : 16);
+		assertEquals(16, restored.buffer().count(ITEM)); assertEquals(1, restored.buffer().count(variant));
+		assertThrows(IllegalArgumentException.class, () -> CombinedWorkCodec.decode(encoded, key -> {}, key -> 1));
+		assertThrows(IllegalStateException.class, () -> CombinedWorkCodec.decode(encoded, key -> { throw new IllegalStateException("missing registry entry"); }, key -> 64));
+		assertEquals(encoded, CombinedWorkCodec.encode(state));
+	}
+
 }

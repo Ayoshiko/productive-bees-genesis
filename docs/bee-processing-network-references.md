@@ -271,3 +271,5 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 ### 13.22 一体机复合计算与有限交付（2026-10-02）
 
 复用网络分支 `813bd98` 的 `BeeWorkExecutor`、`BeeRecord`、`CentrifugeJob`、`CentrifugeEnergyPricing` 及 `CentrifugeRecipePlan.validateFrozen`。单蜂候选沿用原收费／周期／随机内核，由原基础蜂箱入口包装回原有状态；一体机采用显式蜂位容量及同身份作业，避免借两个网络成员或三蜂位容器拼装复合机器。离心计划的必得产物下限要求保留完整冻结样本，因此部分交付单独记录 delivered，不能把剩余量冒充完整样本重建作业。原始冻结量是校验证据，只有 frozen - delivered 是当前待交付资产；完成后释放 lane。固定输入数、种子、旧计划、精确数量及每次原根校验沿用已有原则。此步只复核已有固定实现，无外部仓库更新或新世界 API；数据持久化、线程及角色端口资格在 M04b／c 接入。
+
+M04b1 继续复用网络分支 `f658925` 的 `BeeRecordCodec`、`CentrifugeRecordCodec`、`ProductRecordCodec` 和 `StrictNbt`：抽出单蜂／单作业公开入口，保留原外层网络格式和旧版兼容；完整组件与精确大数共用已有编码，新增的单机容器独立限定容量与 schema。读取只构造私有候选，保留随机种子／游标、原冻结量／已交付量及真实槽序，不进行生产或重新采样。合法旧记录保持可读；未知产品键／数量字段明确拒绝。注册表与实际堆叠上限通过调用方校验，世界保管、身份绑定、缺档与卸载仍需 M04b2 的实际接入验证。没有新增外部参考或依赖。
