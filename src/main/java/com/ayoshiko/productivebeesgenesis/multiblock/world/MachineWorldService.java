@@ -224,7 +224,7 @@ public final class MachineWorldService {
 	}
 	public static void remove(MachineControllerEntity core) {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
-		core.clearPartVisuals(); core.assets = null;
+		core.clearPartVisuals(); core.assets = null; core.production = null;
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
 		var directory = session.directories.get(level); var removed = core.handle;
 		var peers = directory != null && removed != null ? directory.sameIdentity(removed) : List.<MachineDirectory.Handle>of();
@@ -244,7 +244,7 @@ public final class MachineWorldService {
 	}
 	static void stop(MinecraftServer server) {
 		var session = SESSIONS.remove(server); if (session == null) return;
-		session.directories.values().forEach(MachineDirectory::clear); session.watched.forEach(core -> { core.handle = null; core.assets = null; });
+		session.directories.values().forEach(MachineDirectory::clear); session.watched.forEach(core -> { core.handle = null; core.assets = null; core.production = null; });
 	}
 	private MachineWorldService() { }
 }

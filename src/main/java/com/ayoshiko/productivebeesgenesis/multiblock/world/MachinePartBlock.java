@@ -56,6 +56,7 @@ public class MachinePartBlock extends BaseEntityBlock implements MachineContent.
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 		if (!(level.getBlockEntity(pos) instanceof MachineControllerEntity core) || !core.allowed(player)) return InteractionResult.FAIL;
 		if (player.isShiftKeyDown()) MachineWorldService.request(core);
+		else if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer && MachineMenu.open(core, serverPlayer)) return InteractionResult.CONSUME;
 		player.displayClientMessage(Component.translatable("message.productivebeesgenesis.machine." + core.status().name().toLowerCase(java.util.Locale.ROOT)), true);
 		return InteractionResult.CONSUME;
 	}

@@ -16,6 +16,7 @@ def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
 def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
+def machineMenuProbe = providers.gradleProperty('networkMachineMenu').isPresent()
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
@@ -209,6 +210,7 @@ neoForge {
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
             systemProperty 'pbg.machineClient.enabled', 'true'
+            if (machineMenuProbe) systemProperty 'pbg.machineClient.menuOnly', 'true'
             programArgument '--width'
             programArgument '1000'
             programArgument '--height'
@@ -323,8 +325,10 @@ tasks.named('runNetworkMultiblockClient') {
                 'activityClearedOnStructureInvalidation', 'activityIdentityAndDuplicateRejected', 'activityClearedOnResourceReload',
                 'activityClearedOnUntracking', 'activityFollowsRealPauseAndResume', 'activityClearedOnWorldDisconnect',
                 'fortyStaticStateModelsAndGlyphDirections', 'transparentWindowLayer', 'emissiveGlyphsWithoutWorldLight', 'normalIntegratedShutdown']
+        boolean menuOnly = machineMenuProbe
+        if (menuOnly) required = ['passed', 'simplifiedChineseWithoutOnboarding', 'machineMenuRealClientExchange', 'normalIntegratedShutdown']
         if (required.any { result[it] != true } || result.ae2Loaded != probeAe2
-                || result.detailedVertices != 11928 || result.reducedVertices != 1008) throw new GradleException('Machine visual checks failed or incomplete')
+                || (!menuOnly && (result.detailedVertices != 11928 || result.reducedVertices != 1008))) throw new GradleException('Machine visual checks failed or incomplete')
     }
 }
 

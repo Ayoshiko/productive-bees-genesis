@@ -17,6 +17,13 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 
 /** 普通蜜脾链只读适配；调用者仍须在发布前验证核心、拓扑和成员所有权。 */
 public final class StaticCentrifugeAdapter {
+	public record Profile(int fallbackTicks, float time, int parallel, long energy, int productivity, float stability, boolean discardByproducts) {
+		public Profile {
+			if (fallbackTicks < 1 || !Float.isFinite(time) || time <= 0 || parallel < 1 || energy < 0 || productivity < 1 || !Float.isFinite(stability) || stability < 0)
+				throw new IllegalArgumentException("Invalid centrifuge profile");
+		}
+		int ticks(int base) { return MekExtrasUpgradeSemantics.processingTicks(false, base > 0 ? base : fallbackTicks, time); }
+	}
 	public static CentrifugeRecipePlan compile(ServerLevel level, TileEntityMekCentrifuge tile,
 			OwnedMachineRecord record, ProductPolicyRegistry policy, ProductKey input, long capabilityRevision) {
 		if (!level.getServer().isSameThread() || tile.getClass() != TileEntityMekCentrifuge.class
@@ -27,6 +34,13 @@ public final class StaticCentrifugeAdapter {
 		var origin = record.claim().origin();
 		if (!origin.dimension().equals(level.dimension().location().toString()) || origin.x() != tile.getBlockPos().getX()
 				|| origin.y() != tile.getBlockPos().getY() || origin.z() != tile.getBlockPos().getZ()) throw new IllegalArgumentException("Foreign centrifuge claim");
+		var profile = new SealedCentrifugeProfile(tile, record.assets());
+		return compile(level, policy, input, capabilityRevision, new Profile(tile.baseTicksRequired(), profile.timeFactor(),
+				profile.parallel(), profile.energy(), profile.productivity(), profile.stability(), profile.discardByproducts()));
+	}
+	/** 已准入载体的固定能力输入；不读取或创建物理离心机。 */
+	public static CentrifugeRecipePlan compile(ServerLevel level, ProductPolicyRegistry policy, ProductKey input, long capabilityRevision, Profile profile) {
+		if (!level.getServer().isSameThread()) throw new IllegalArgumentException("Compile centrifuge plans on the server thread");
 		if (!policy.evaluate(input).allowed()) throw new IllegalArgumentException("Input is outside the current bee product chain");
 		var stack = ProductKeyCodec.item(input, 1, level.registryAccess());
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) throw new IllegalArgumentException("Dynamic myriad output requires its own adapter");
@@ -37,7 +51,6 @@ public final class StaticCentrifugeAdapter {
 		else holder = CentrifugeRecipeIndex.getSpecialCombBlock(stack);
 		if (holder == null || holder.value().getClass() != CentrifugeRecipe.class || !holder.value().ingredient.test(stack))
 			throw new IllegalArgumentException("No reviewed static comb recipe for " + input.id());
-		var profile = new SealedCentrifugeProfile(tile, record.assets());
 		var recipe = holder.value();
 		var outputs = new ArrayList<CentrifugeRecipePlan.Output>();
 		for (var entry : recipe.getRecipeOutputs().entrySet()) {
@@ -56,7 +69,7 @@ public final class StaticCentrifugeAdapter {
 		}
 		int base = recipe.getProcessingTime();
 		return new CentrifugeRecipePlan(holder.id().toString(), policy.snapshot().revision(), capabilityRevision, input,
-				profile.ticks(base > 0 ? base : tile.baseTicksRequired()), profile.parallel(), profile.energy(),
+				profile.ticks(base), profile.parallel(), profile.energy(),
 				profile.productivity(), profile.stability(), outputs);
 	}
 	/** 升级候选复用生产准入和计费校验；不触及物理组件或当前作业。 */

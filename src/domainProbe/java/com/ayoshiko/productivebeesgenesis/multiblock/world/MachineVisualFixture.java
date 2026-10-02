@@ -45,7 +45,7 @@ public final class MachineVisualFixture {
 				normalBudget = ModConfig.SERVER.beeNetwork.totalSteps.get();
 				level.setDayTime(6000); level.setWeatherParameters(0, 12000, false, false);
 				level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
-				for (int i=0; i<POSITIONS.size(); i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(variant(i)), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
+				for (int i=0; i<(Boolean.getBoolean("pbg.machineClient.menuOnly") ? 1 : POSITIONS.size()); i++) fixtures.add(MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().get(variant(i)), POSITIONS.get(i), FACINGS.get(i), player.getUUID()));
 				for (var fixture : fixtures) {
 					var size = fixture.template().geometry().size();
 					for (long i=0; i<size.volume(); i++) {
@@ -67,10 +67,22 @@ public final class MachineVisualFixture {
 				return;
 			}
 			int command = requested.getAndSet(-1); if (command < 0) return;
+			if (command == 200 && com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.peek(level) == null) { requested.set(command); return; }
 			if (command >= 100 && command < 100 + POSITIONS.size()) camera(player, command - 100);
 			else if (command < 4) camera(player, command);
 			else if (command >= 20 && command <= 23) oblique(player, command - 20);
 			else switch (command) {
+				case 200 -> {
+					var core = fixtures.getFirst().core(); player.setGameMode(GameType.SURVIVAL);
+					player.connection.teleport(core.getBlockPos().getX() + 0.5, core.getBlockPos().getY(), core.getBlockPos().getZ() - 2, 0, 0);
+					var bee = new CompoundTag(); bee.putString("entity", "productivebees:configurable_bee"); bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", java.util.UUID.randomUUID());
+					var cage = new net.minecraft.world.item.ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get());
+					cage.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(bee));
+					player.getInventory().items.set(0, cage); player.getInventory().items.set(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_BLOCK)); player.getInventory().selected = 0;
+					var state = core.getBlockState(); ((MachinePartBlock) state.getBlock()).useWithoutItem(state, level, core.getBlockPos(), player,
+							new net.minecraft.world.phys.BlockHitResult(core.getBlockPos().getCenter(), Direction.NORTH, core.getBlockPos(), false));
+					if (!(player.containerMenu instanceof MachineMenu)) throw new IllegalStateException("Controller did not open machine menu");
+				}
 				case 10 -> level.removeBlock(fixtures.getFirst().world(BlockPos.ZERO), false);
 				case 11 -> {
 					ModConfig.SERVER.beeNetwork.totalSteps.set(1);

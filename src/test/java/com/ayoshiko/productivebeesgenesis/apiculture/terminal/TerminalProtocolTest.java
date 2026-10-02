@@ -13,6 +13,18 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void machineCommandsAreBoundedAndRejectBadSlotAndFrame() {
+		var request = new com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest(7, UUID.randomUUID(), 1, 3, 0, 5, 35, 64);
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			var codec = com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest.STREAM_CODEC;
+			codec.encode(buffer, request); assertEquals(52, buffer.readableBytes()); assertEquals(request, codec.decode(buffer));
+			buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, 6);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+		} finally { buffer.release(); }
+	}
 	@Test void batchAndPreviewRepliesRoundTripWithoutInventingSuccessfulTransfers() {
 		var session = UUID.randomUUID();
 		var results = List.of(new TerminalReply.UpgradeResult(0, "test:apiary", TerminalReply.Status.MOVED, 1),

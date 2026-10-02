@@ -27,6 +27,7 @@ public final class MachineControllerEntity extends BlockEntity {
 	private boolean invalidIdentity;
 	boolean assetReferenced;
 	MachineAssets assets;
+	MachineProduction production;
 	long workTick = Long.MIN_VALUE;
 	private MachineVisualSnapshot publishedVisual;
 	private final MachinePartVisuals partVisuals = new MachinePartVisuals();

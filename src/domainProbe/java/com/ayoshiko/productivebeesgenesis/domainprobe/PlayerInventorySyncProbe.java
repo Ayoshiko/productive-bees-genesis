@@ -10,12 +10,12 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 
 /** 在真实服务端发送边界截获包，验证原版 codec；不把此测试称为客户端交互验收。 */
-final class PlayerInventorySyncProbe extends ServerGamePacketListenerImpl {
+public final class PlayerInventorySyncProbe extends ServerGamePacketListenerImpl {
 	ClientboundContainerSetSlotPacket last;
 	int packets;
 	boolean failNext;
 	Runnable onSend;
-	PlayerInventorySyncProbe(ServerPlayer player) {
+	public PlayerInventorySyncProbe(ServerPlayer player) {
 		super(player.serverLevel().getServer(), new Connection(PacketFlow.SERVERBOUND) {
 			@Override public void setListenerForServerboundHandshake(PacketListener listener) { }
 		}, player, CommonListenerCookie.createInitial(player.getGameProfile(), false));

@@ -1,8 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
-import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
-import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkConditions;
-import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineCapacity;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork;
 import com.mojang.logging.LogUtils;
@@ -77,22 +74,8 @@ public final class MachineWorkService {
 			// 全服共用一个静态产物目录；一次机器工作名额至多推进八个编译单位。
 			for (int i = 0; i < 8 && com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.peek(level) == null; i++)
 				com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.get(level, 0);
-			var environment = new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering());
-			for (var bee : before.bees()) {
-				// M04c 才接真实喂食与新周期能力；这里仅处理已经付款的采样和交付，不伪造花朵条件。
-				if (bee.pendingCycles() > 0) {
-					var context = new BeeWorkExecutor.Context(true, false, false, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), environment);
-					next = next.advanceBee(bee.slot(), bee.revision(), context, 0, 8, null).apply(next);
-				}
-				var output = next.bee(bee.slot()).plan().output();
-				next = next.settleBee(bee.slot(), Math.min(64, ProductKeyCodec.item(output, 1, level.registryAccess()).getMaxStackSize())).apply(next);
-			}
-			for (int lane = 0; lane < before.lanes(); lane++) {
-				// 输入已归此作业；推进沿用冻结的旧能力，并且每台机器每个真实 tick 至多获准一次。
-				next = next.advanceCentrifuge(lane, 1, true).apply(next);
-				next = next.freezeCentrifuge(lane).apply(next);
-				next = next.settleCentrifuge(lane, key -> Math.min(64, ProductKeyCodec.item(key, 1, level.registryAccess()).getMaxStackSize())).apply(next);
-			}
+			if (core.production == null) core.production = new MachineProduction();
+			next = core.production.advance(level, before);
 			if (access.current()) access.assets.commit(before, next);
 		} catch (RuntimeException failure) {
 			// 私有候选尚未提交；保留全部原资产，隔离一次并记录根因。

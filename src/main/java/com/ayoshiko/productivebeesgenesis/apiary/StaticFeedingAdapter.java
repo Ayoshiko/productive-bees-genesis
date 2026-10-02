@@ -60,6 +60,13 @@ public final class StaticFeedingAdapter {
 		if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) return false;
 		return store.matches(beeSlot, item -> BlockFlowerMatcher.matches(parse(item.unit().copy(), registries), pref));
 	}
+	public static boolean flower(List<FeedingSlotStore.Slot> slots, int beeSlot, ResourceLocation type, HolderLookup.Provider registries) {
+		var pref = BeeInfoHelper.getFlowerPreference(type);
+		if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType()) || !pref.hasFlowerDefinition()) return false;
+		int group = slots.get(beeSlot).group();
+		for (var slot : slots) if (slot.group() == group && slot.active() && BlockFlowerMatcher.matches(parse(slot.item().unit().copy(), registries), pref)) return true;
+		return false;
+	}
 	private static ItemStack parse(CompoundTag tag, HolderLookup.Provider registries) {
 		return SerializerHelper.OVERSIZED_ITEM_CODEC.parse(registries.createSerializationContext(NbtOps.INSTANCE), tag).getOrThrow();
 	}

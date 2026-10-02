@@ -54,6 +54,10 @@ public final class MachineLifecycleProbe {
 	private static IEnergyStorage energyPort;
 	private static com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork retainedWork;
 	private static int phase, started, until, rounds, unloadEvents, maxSteps;
+	private static net.minecraft.server.level.ServerPlayer worker;
+	private static MachineMenu workMenu, oldMenu;
+	private static net.minecraft.nbt.CompoundTag cagedData;
+	private static int originalCycle;
 	private static boolean enabled() { return "lifecycle".equals(System.getProperty("pbg.multiblock.mode")); }
 	@SubscribeEvent public static void unloaded(ChunkEvent.Unload event) {
 		if (enabled() && event.getChunk().getPos().equals(missing)) unloadEvents++;
@@ -84,10 +88,42 @@ public final class MachineLifecycleProbe {
 					if (!fixture.core().formed() || !noise.core().formed()) return;
 					if (RuntimeProductPolicies.peek(level) == null) return;
 					ports(level);
+					startWork(level); until = server.getTickCount() + 3; phase = 20;
+				}
+				case 20 -> {
+					if (server.getTickCount() < until) return;
+					var work = noise.core().assets.work();
+					check(work.energy() == 1000 && work.bee(5).progress() == 0, "Wrong flower started unpaid work");
+					worker.getInventory().items.set(0, ItemStack.EMPTY);
+					check(exchange(MachineExchange.Action.FEED_OUT, false).moved() == 1, "Cannot return wrong flower");
+					worker.getInventory().items.set(0, new ItemStack(Items.IRON_BLOCK));
+					check(exchange(MachineExchange.Action.FEED_IN, false).moved() == 1, "Cannot provide actual flower");
+					var access = MachineWorkService.access(noise.core()).orElseThrow();
+					check(MachineWorkService.commit(access, access.work().insert(access.work().bee(5).plan().sourceOutput(), 1, 64)), "Cannot seed a new centrifuge input");
+					until = server.getTickCount() + 2; phase = 21;
+				}
+				case 21 -> {
+					if (server.getTickCount() < until) return;
+					var work = noise.core().assets.work(); var bee = work.bee(5);
+					check(bee.progress() > 0 && bee.random().cursor() == 0 && work.centrifuges().size() == 1, "New work did not start through normal scheduler");
+					var job = work.centrifuges().values().iterator().next().job();
+					check(job.progress() > 0 && work.energy() == 1000 - 10 * (bee.progress() + job.progress()), "Shared FE differs from independently counted paid ticks");
+					worker.getInventory().items.set(0, new ItemStack(cy.jdkdigital.productivebees.init.ModItems.BEE_CAGE.get()));
+					check(exchange(MachineExchange.Action.CAGE_OUT, false).moved() == 1, "Cannot cage partially worked bee");
+					check(com.ayoshiko.productivebeesgenesis.apiculture.compat.VerifiedCageProjection.contents(worker.getInventory().items.get(0)).equals(cagedData), "Cage roundtrip lost bee data");
+					check(noise.core().assets.work().energy() == work.energy() && noise.core().assets.work().feeding().get(5).count() == 1, "Caging refunded energy or removed food");
+					report.addProperty("realCageFeedingExchangeAndNewWork", true);
+					ModConfig.SERVER.apiaryProcessingTime.set(originalCycle);
+					worker.setPos(fixture.pos().getX(), fixture.pos().getY(), fixture.pos().getZ());
+					check(exchange(MachineExchange.Action.CAGE_IN, true).status() == MachineExchange.Status.UNAVAILABLE, "Distant menu still accepted work");
+					worker = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(owner, "MachineOwner"));
+					new com.ayoshiko.productivebeesgenesis.domainprobe.PlayerInventorySyncProbe(worker);
+					worker.setPos(fixture.pos().getX(), fixture.pos().getY(), fixture.pos().getZ());
+					oldMenu = new MachineMenu(83, worker.getInventory(), fixture.core(), UUID.randomUUID()); worker.containerMenu = oldMenu;
 					heldAssets = fixture.core().assets; retainedWork = heldAssets.work(); retainedAccess = MachineWorkService.access(fixture.core()).orElseThrow();
 					oldBinding = fixture.core().handle.binding().orElseThrow();
 					level.setBlock(air(), Blocks.STONE.defaultBlockState(), 2);
-					check(!fixture.core().formed() && !MachineWorldService.active(level, oldBinding), "Silent mutation retained binding"); phase++;
+					check(!fixture.core().formed() && !MachineWorldService.active(level, oldBinding), "Silent mutation retained binding"); phase = 2;
 				}
 				case 2 -> {
 					if (fixture.core().status() != MachineDirectory.State.UNFORMED) return;
@@ -95,6 +131,8 @@ public final class MachineLifecycleProbe {
 				}
 				case 3 -> {
 					if (!fixture.core().formed()) return;
+					check(!oldMenu.stillValid(worker), "Reformation revived old management session");
+					report.addProperty("oldManagementSessionStaysRevoked", true); worker.closeContainer(); oldMenu = null;
 					report.addProperty("silentAirMutationAndRepair", true);
 					// 故意绕过 LevelChunk，验证补漏审计而不是重复验证 Mixin。
 					var pos = air(); level.getChunkAt(pos).getSection(level.getSectionIndex(pos.getY())).setBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, Blocks.STONE.defaultBlockState());
@@ -200,6 +238,39 @@ public final class MachineLifecycleProbe {
 		}
 	}
 
+	private static MachineExchange.Result exchange(MachineExchange.Action action, boolean simulate) {
+		return MachineExchange.exchange(workMenu, worker, action, 5, 0, 64, simulate);
+	}
+	private static void startWork(ServerLevel level) {
+		originalCycle = ModConfig.SERVER.apiaryProcessingTime.get(); ModConfig.SERVER.apiaryProcessingTime.set(4);
+		worker = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(noise.core().ownerId(), "MachineWorker"));
+		new com.ayoshiko.productivebeesgenesis.domainprobe.PlayerInventorySyncProbe(worker);
+		worker.setPos(noise.pos().getX(), noise.pos().getY(), noise.pos().getZ());
+		workMenu = new MachineMenu(82, worker.getInventory(), noise.core(), UUID.randomUUID()); worker.containerMenu = workMenu;
+		cagedData = new net.minecraft.nbt.CompoundTag(); cagedData.putString("entity", "productivebees:configurable_bee"); cagedData.putString("type", "productivebees:iron");
+		cagedData.putUUID("UUID", UUID.randomUUID()); cagedData.putString("probe:preserved", "x".repeat(16 * 1024));
+		var genes = new net.minecraft.nbt.CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any"); genes.putString("bee_productivity", "productivity.normal");
+		var attachments = new net.minecraft.nbt.CompoundTag(); attachments.put("productivebees:attributes_handler", genes); cagedData.put("neoforge:attachments", attachments);
+		var cage = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get());
+		cage.set(DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(cagedData)); cage.set(DataComponents.CUSTOM_NAME, Component.literal("component cage"));
+		worker.getInventory().items.set(0, cage.copy()); var before = noise.core().assets.work();
+		check(exchange(MachineExchange.Action.CAGE_IN, true).moved() == 1 && noise.core().assets.work() == before && ItemStack.matches(cage, worker.getInventory().items.get(0)), "Simulated cage exchange changed ownership");
+		var insert = new MachineMenuRequest(82, workMenu.session(), 1, workMenu.viewRevision(), 0, 5, 0, 1);
+		workMenu.request(worker, insert); check(workMenu.status() == MachineExchange.Status.MOVED.ordinal(), "Formal cage command failed");
+		check(worker.getInventory().items.get(0).get(DataComponents.CUSTOM_DATA) == null && worker.getInventory().items.get(0).has(DataComponents.CUSTOM_NAME), "Sturdy cage return lost components or kept bee");
+		before = noise.core().assets.work(); workMenu.request(worker, insert); check(noise.core().assets.work() == before, "Replayed command changed assets");
+		var visitor = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(UUID.randomUUID(), "MachineVisitor"));
+		visitor.setPos(worker.getX(), worker.getY(), worker.getZ()); visitor.containerMenu = workMenu;
+		check(MachineExchange.exchange(workMenu, visitor, MachineExchange.Action.CAGE_OUT, 5, 0, 1, true).status() == MachineExchange.Status.UNAVAILABLE, "Visitor gained ownership access");
+		worker.getInventory().items.set(0, new ItemStack(Items.STONE));
+		workMenu.request(worker, new MachineMenuRequest(82, workMenu.session(), 2, workMenu.viewRevision(), 2, 5, 0, 1));
+		check(workMenu.status() == MachineExchange.Status.MOVED.ordinal() && worker.getInventory().items.get(0).isEmpty(), "Formal food exchange failed");
+		var variant = new ItemStack(Items.STONE); variant.set(DataComponents.CUSTOM_NAME, Component.literal("different component")); worker.getInventory().items.set(0, variant);
+		before = noise.core().assets.work();
+		check(exchange(MachineExchange.Action.FEED_IN, false).moved() == 0 && exchange(MachineExchange.Action.FEED_OUT, false).moved() == 0 && noise.core().assets.work() == before, "Feeding exchange merged component variants");
+		var access = MachineWorkService.access(noise.core()).orElseThrow(); check(MachineWorkService.commit(access, access.work().receiveEnergy(1000)), "Missing FE fixture");
+		report.addProperty("machineCommandReplaySimulationOwnershipAndComponents", true);
+	}
 	private static BlockPos portPos(StructureRole role) {
 		var local = fixture.template().features().entrySet().stream().filter(entry -> entry.getValue().roles().contains(role)).findFirst().orElseThrow().getKey();
 		return fixture.world(local);

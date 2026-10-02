@@ -19,6 +19,8 @@ public final class MachineContent {
 	private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks("productivebeesgenesis");
 	private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems("productivebeesgenesis");
 	private static final DeferredRegister<BlockEntityType<?>> TILES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, "productivebeesgenesis");
+	private static final DeferredRegister<net.minecraft.world.inventory.MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, "productivebeesgenesis");
+	public static final DeferredHolder<net.minecraft.world.inventory.MenuType<?>, net.minecraft.world.inventory.MenuType<MachineMenu>> MENU = MENUS.register("combined_apiary", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(MachineMenu::new));
 	private static final Map<StructureRole, DeferredBlock<? extends Block>> PARTS = new ConcurrentHashMap<>();
 	private static final List<StructureRole> ROLES = List.of(FRAME, CASING, GLASS, CONTROLLER, CORE, APIARY_UNIT, CENTRIFUGE_UNIT, INTERFACE, ENERGY_PORT, INPUT_PORT, OUTPUT_PORT);
 	static {
@@ -35,6 +37,6 @@ public final class MachineContent {
 			() -> BlockEntityType.Builder.of(MachinePartEntity::new, block(CORE), block(APIARY_UNIT), block(CENTRIFUGE_UNIT), block(INTERFACE), block(ENERGY_PORT), block(INPUT_PORT), block(OUTPUT_PORT)).build(null));
 	public static Block block(StructureRole role) { return PARTS.get(role).get(); }
 	public static List<Block> registeredBlocks() { return ROLES.stream().map(MachineContent::block).toList(); }
-	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); bus.addListener(MachinePorts::register); }
+	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); bus.addListener(MachinePorts::register); bus.addListener(MachineMenuRequest::register); }
 	private MachineContent() { }
 }

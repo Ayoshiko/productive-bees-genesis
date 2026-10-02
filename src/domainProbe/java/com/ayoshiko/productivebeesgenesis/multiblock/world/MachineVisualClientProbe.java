@@ -51,6 +51,7 @@ public final class MachineVisualClientProbe {
 	private static MachineControllerEntity departed;
 	private static Object originalRenderer;
 	private static int pausedTicks;
+	private static int menuStage, menuWait;
 	@SubscribeEvent public static void tick(ClientTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.machineClient.enabled") || advancing || finished) return;
 		var client = Minecraft.getInstance(); advancing = true;
@@ -79,6 +80,7 @@ public final class MachineVisualClientProbe {
 				return;
 			}
 			if (client.level == null || client.player == null || client.getOverlay() != null) return;
+			if (Boolean.getBoolean("pbg.machineClient.menuOnly")) { menu(client); return; }
 			switch (step) {
 				case 1 -> {
 					if (!waitFor(allReady(client) && MachineVisualFixture.done == (direction == 0 ? 0 : 100 + direction))) return;
@@ -214,6 +216,35 @@ public final class MachineVisualClientProbe {
 		} catch (Exception failure) { finish(client, failure); }
 		finally { advancing = false; }
 	}
+	private static void menu(Minecraft client) throws Exception {
+		if (menuStage == 0) {
+			if (MachineVisualFixture.done != 0 || state(client, 0) != MachineVisualState.READY) return;
+			client.options.hideGui = false; MachineVisualFixture.request(200); menuStage = 1; return;
+		}
+		if (!(client.screen instanceof com.ayoshiko.productivebeesgenesis.multiblock.client.MachineScreen screen)) return;
+		var menu = screen.getMenu();
+		int x = (client.getWindow().getGuiScaledWidth() - 230) / 2, y = (client.getWindow().getGuiScaledHeight() - 226) / 2;
+		check(x >= 0 && y >= 0, "Machine menu does not fit logical viewport");
+		if (menuStage == 1) {
+			if (menu.viewRevision() == 0 || client.player.getInventory().items.get(0).isEmpty()) return;
+			screen.mouseClicked(x + 86, y + 111, 0); menuStage = 2; return;
+		}
+		if (menuStage == 2) {
+			if (menu.acknowledged() != 1) return;
+			check(menu.occupied(5) && menu.status() == 1 && !client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real cage insertion failed: status=" + menu.status() + ", occupied=" + menu.occupied(5) + ", caged=" + client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA));
+			screen.mouseClicked(x + 60, y + 208, 0); screen.mouseClicked(x + 160, y + 111, 0); menuStage = 3; return;
+		}
+		if (menuStage == 3) {
+			if (menu.acknowledged() != 2) return;
+			check(menu.foodCount(5) == 1 && menu.foodIcon(5).is(net.minecraft.world.item.Items.IRON_BLOCK)
+					&& client.player.getInventory().items.get(1).isEmpty(), "Real food insertion or display failed");
+			if (++menuWait < 10) return; capture(client, "machine-management");
+			screen.mouseClicked(x + 42, y + 208, 0); screen.mouseClicked(x + 124, y + 111, 0); menuStage = 4; return;
+		}
+		if (menu.acknowledged() != 3) return;
+		check(!menu.occupied(5) && menu.foodCount(5) == 1 && client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real caging lost bee or food");
+		report.addProperty("machineMenuRealClientExchange", true); client.player.closeContainer(); finish(client, null);
+	}
 	private static MachineVisualState state(Minecraft client, int index) {
 		var state = client.level.getBlockState(MachineVisualFixture.POSITIONS.get(index));
 		if (!state.is(MachineContent.block(StructureRole.CONTROLLER)) || !state.hasProperty(MachineControllerBlock.STATUS)) return null;
@@ -268,7 +299,7 @@ public final class MachineVisualClientProbe {
 		if (finished) return; finished=true;
 		try {
 			if(client.level!=null) { client.level.disconnect(); client.disconnect(new TitleScreen()); }
-			if (failure == null) { MachineActivityClientChecks.disconnected();
+			if (failure == null && !Boolean.getBoolean("pbg.machineClient.menuOnly")) { MachineActivityClientChecks.disconnected();
 				check(com.ayoshiko.productivebeesgenesis.multiblock.client.CombinedApiaryRenderer.detailedCount() == 0, "World unload retained core budget");
 				report.addProperty("coreBudgetClearedOnWorldDisconnect", true); report.addProperty("activityClearedOnWorldDisconnect", true); }
 			boolean closed = client.getSingleplayerServer()==null && client.level==null;
