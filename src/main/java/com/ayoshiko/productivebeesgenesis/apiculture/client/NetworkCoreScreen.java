@@ -46,9 +46,13 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); state = menu.clientState(); playerInventory = inventory;
 		imageWidth = WIDTH; imageHeight = HEIGHT;
+		if (menu.memberScoped()) tab = 3;
 	}
 	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) { event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new); }
-	@Override protected void init() { super.init(); rebuild(); }
+	@Override protected void init() {
+		super.init(); rebuild();
+		if (menu.memberScoped() && state.notice() == TerminalClientState.Notice.IDLE) refresh();
+	}
 	private Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network." + key, args); }
 	private Button button(Component label, int x, int y, int width, int height, Runnable action) {
 		var button = addRenderableWidget(new NetworkGuiButton(leftPos + x, topPos + y, width, height, label, action, false, -1));
@@ -60,6 +64,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private void rebuild() {
 		clearWidgets(); requests.clear(); management.clear(); production = null; upgradeInstall = null; upgradeRemove = null;
 		for (int i = 0; i < 4; i++) {
+			if (menu.memberScoped() && i != 3) continue;
 			int page = i;
 			var control = addRenderableWidget(new NetworkGuiButton(leftPos + 2, topPos + 27 + i * 32, 24, 28,
 					tr("tab." + i), () -> switchTab(page), i == tab, i));
@@ -71,12 +76,12 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			management.add(button(tr("return"), 130, 108, 44, 20, () -> coreCommand(2)));
 			production = button(productionLabel(), 177, 108, 44, 20, () -> coreCommand(3)); management.add(production);
 		} else {
-			requestButton(tr("refresh"), 36, 26, 90, 15, this::refresh);
-			if (tab == 3 && selectedRow() != null) {
+			requestButton(tr("refresh"), 36, 26, menu.memberScoped() ? 185 : 90, 15, this::refresh);
+			if (!menu.memberScoped() && tab == 3 && selectedRow() != null) {
 				var scope = requestButton(tr(upgradeBatch ? "upgrade_page" : "upgrade_single"), 130, 26, 91, 15,
 						() -> { upgradeBatch = !upgradeBatch; rebuild(); });
 				scope.setTooltip(Tooltip.create(tr("upgrade_page_hint", state.view().rows().size())));
-			} else {
+			} else if (!menu.memberScoped()) {
 				var next = requestButton(tr("next"), 130, 26, 91, 15, () -> send(NEXT, 0));
 				if (state.view() == null || !state.view().hasNext()) requests.remove(next);
 				next.active = state.view() != null && state.view().hasNext();
@@ -161,6 +166,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	}
 	private void cycleAmount() { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }
 	private void switchTab(int page) {
+		if (menu.memberScoped() && page != 3) return;
 		if (!state.ready(Util.getMillis())) return;
 		tab = page; refreshAfterTake = false; selected = -1; confirmCage = false;
 		if (tab == 0) send(CANCEL, 0); else refresh();
@@ -213,7 +219,8 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	@Override protected void containerTick() {
 		super.containerTick(); state.tick(Util.getMillis());
 		if (state.view() != displayed || state.notice() != displayedNotice) {
-			if (displayed != state.view()) selected = -1;
+			if (displayed != state.view()) selected = menu.memberScoped() && state.view() != null
+					&& state.view().kind() == NetworkSelectionSession.Kind.UPGRADES && state.view().rows().size() == 1 ? 0 : -1;
 			displayed = state.view(); displayedNotice = state.notice(); confirmCage = false; rebuild();
 		}
 		if (refreshAfterTake && !state.waiting() && state.ready(Util.getMillis()) && state.result() != null) {

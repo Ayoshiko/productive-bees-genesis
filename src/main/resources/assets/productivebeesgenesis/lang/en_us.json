@@ -1190,6 +1190,7 @@
   "screen.productivebeesgenesis.network.tab.1": "Bees",
   "screen.productivebeesgenesis.network.tab.2": "Take",
   "screen.productivebeesgenesis.network.tab.3": "Upgrades",
+  "screen.productivebeesgenesis.network.member_upgrades": "Member upgrades",
   "screen.productivebeesgenesis.network.upgrade_install": "Install",
   "screen.productivebeesgenesis.network.upgrade_remove": "Take out",
   "screen.productivebeesgenesis.network.upgrade_count": "Installed: %s / %s",

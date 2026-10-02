@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1', 'D17c2a')][string]$Gate = 'D16b',
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1', 'D17c2a', 'D17c2b')][string]$Gate = 'D16b',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')),
     [ValidateSet('Auto', 'Step', 'Joint')][string]$Scope = 'Auto')
 
 $ErrorActionPreference = 'Stop'
-$baseGate = if ($Gate -eq 'D17c2a') { 'D17c1' } else { $Gate }
+$baseGate = if ($Gate -in @('D17c2a', 'D17c2b')) { 'D17c1' } else { $Gate }
 $focused = $baseGate -eq 'D17c1' -and $Scope -ne 'Joint'
-if ($Scope -eq 'Step' -and -not $focused) { throw 'Step scope is currently defined for D17c1/D17c2a; use Joint for the cumulative matrix' }
+if ($Scope -eq 'Step' -and -not $focused) { throw 'Step scope is currently defined for D17c1/D17c2a/D17c2b; use Joint for the cumulative matrix' }
 . (Join-Path $PSScriptRoot 'network-stage-evidence.ps1')
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location -LiteralPath $workspace
@@ -69,10 +69,11 @@ try {
         else { Assert-NetworkProbeReport $report $Ae2 $Mode $baseGate }
         $summary.checks += [ordered]@{ name = "$Name-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
         if ($Gate -eq 'D17c2a' -and $Mode -eq 'domain' -and $report.coreUpgradeBatchPartialStalePreviewAndConservation -ne $true) { throw 'Missing batch and preview server gate' }
+        if ($Gate -eq 'D17c2b' -and $Mode -eq 'domain' -and ($report.memberProxyScopedDistancePermissionsBindingAndConservation -ne $true -or $report.memberProxyPendingAuditBlocksExchangeWithoutClosing -ne $true)) { throw 'Missing member proxy server gate' }
         return $report
     }
 
-    # 同一工作区和端口顺序运行；每个探针使用全新目录，reader 仅复制已停服 writer。
+    # Run sequentially in fresh directories; readers copy only stopped writers.
     Invoke-GateGradle 'build' @('test', 'build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe')
     $totals = [ordered]@{ tests = 0; failures = 0; errors = 0; skipped = 0 }
     $xmlFiles = @(Get-ChildItem -LiteralPath 'build/test-results/test' -Filter 'TEST-*.xml')
@@ -143,10 +144,12 @@ try {
             Assert-NetworkClientReport $clientReport $ae2
             if ($baseGate -eq 'D17c1' -and $clientReport.upgradeWidgetsBothMembersNativePbAndConservation -ne $true) { throw 'Missing upgrade widget client gate' }
             if ($Gate -eq 'D17c2a' -and $clientReport.upgradeBatchAndPreviewWidgets -ne $true) { throw 'Missing batch and preview client gate' }
+            if ($Gate -eq 'D17c2b' -and $clientReport.memberProxyWidgetsBothMembersDistanceAndConservation -ne $true) { throw 'Missing member proxy client gate' }
             $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
             $screenshots = @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'terminal-products', 'terminal-bee-icons', 'returned')
             if ($baseGate -eq 'D17c1') { $screenshots += @('terminal-upgrades-apiary', 'terminal-upgrades-centrifuge') }
             if ($Gate -eq 'D17c2a') { $screenshots += @('terminal-upgrade-preview', 'terminal-upgrade-batch') }
+            if ($Gate -eq 'D17c2b') { $screenshots += @('terminal-member-apiary', 'terminal-member-centrifuge') }
             foreach ($name in $screenshots) {
                 $screenshot = Join-Path $clientFolder "$name.png"
                 $bitmap = [Drawing.Image]::FromFile($screenshot)
@@ -162,6 +165,7 @@ try {
     }
     if ((Get-FileHash -LiteralPath $artifact).Hash -ne $summary.artifact.sha256) { throw 'Artifact changed during the gate' }
     if ((@(Get-NetworkDependencyHashes) -join "`n") -cne ($dependencies -join "`n")) { throw 'Dependencies changed during the gate' }
+    if (@($summary.checks | Where-Object { $_.name -eq 'build' }).Count -ne 1) { throw 'Build verification did not run' }
     $summary.passed = $true
 } catch {
     if ($null -ne $summary) { $summary.failure = $_.Exception.Message }

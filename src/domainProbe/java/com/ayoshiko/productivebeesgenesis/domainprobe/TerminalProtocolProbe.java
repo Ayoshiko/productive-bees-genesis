@@ -116,7 +116,7 @@ final class TerminalProtocolProbe {
 				var reply = send(player, request(menu, MEMBERS, 0, -1, -1, -1, 0)); expect(reply, OK, 0);
 				var buffer = new FriendlyByteBuf(Unpooled.buffer()); NetworkCoreMenu client;
 				try {
-					buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(menu.terminalSession());
+					buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(menu.terminalSession()); buffer.writeBoolean(false);
 					client = new NetworkCoreMenu(menu.containerId, player.getInventory(), buffer);
 				} finally { buffer.release(); }
 				client.acceptTerminalReply(reply); client.acceptTerminalReply(new TerminalReply(reply.containerId(), UUID.randomUUID(), reply.sequence() + 1, OK, 0, 0, null));

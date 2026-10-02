@@ -68,6 +68,15 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		else { ledger = snapshot.ledger(); products = ledger.balances().entrySet().iterator(); }
 		return advance(kind);
 	}
+	/** 机器代理页按身份直接定位；不遍历其它成员，也不保留可越出该成员的游标。 */
+	public Page beginMember(Object authority, NetworkCheckpoint snapshot, UUID member, long tick) {
+		check(); Objects.requireNonNull(authority); Objects.requireNonNull(snapshot); Objects.requireNonNull(member);
+		if (closed || tick < 0) return null;
+		clear(); var record = snapshot.ownedMachines().get(member);
+		if (record == null || record.phase() != OwnedMachineRecord.Phase.OWNED) return null;
+		this.authority = authority; identity = snapshot.identity(); openedAt = tick;
+		members = List.of(record).iterator(); return advance(Kind.UPGRADES);
+	}
 
 	/** 只向前推进一个固定大小的页面；过期或旧页请求不消耗当前游标。 */
 	public Page next(Object authority, NetworkCheckpoint current, long expectedGeneration, long tick) {

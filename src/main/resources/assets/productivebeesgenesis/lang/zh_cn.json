@@ -1190,6 +1190,7 @@
   "screen.productivebeesgenesis.network.tab.1": "蜜蜂",
   "screen.productivebeesgenesis.network.tab.2": "基础取回",
   "screen.productivebeesgenesis.network.tab.3": "升级",
+  "screen.productivebeesgenesis.network.member_upgrades": "成员升级",
   "screen.productivebeesgenesis.network.upgrade_install": "安装",
   "screen.productivebeesgenesis.network.upgrade_remove": "取回",
   "screen.productivebeesgenesis.network.upgrade_count": "已安装：%s／%s",

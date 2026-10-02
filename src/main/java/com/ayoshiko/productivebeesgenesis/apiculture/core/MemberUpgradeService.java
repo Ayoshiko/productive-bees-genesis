@@ -31,7 +31,7 @@ public final class MemberUpgradeService {
 	private static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
 			Upgrade upgrade, PbUpgradeType pb, int inventorySlot, int requested, Action action, boolean simulate) {
 		var core = menu.exchangeCore(player);
-		if (core == null || !core.ownerAllowed(player)) return result(Status.UNAVAILABLE);
+		if (core == null || !menu.ownerAllowed(player)) return result(Status.UNAVAILABLE);
 		if (member == null || action == null || expectedRevision < 0 || inventorySlot < 0 || inventorySlot >= 36
 				|| requested < 1 || requested > 64) return result(Status.INVALID);
 		if (pb == null && upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY) return result(Status.UNSUPPORTED);
@@ -82,7 +82,7 @@ public final class MemberUpgradeService {
 			com.mojang.logging.LogUtils.getLogger().warn("Cannot prepare member upgrade exchange at {}", core.getBlockPos(), failure);
 			return result(Status.INVALID);
 		}
-		if (menu.exchangeCore(player) != core || !core.ownerAllowed(player) || authority.checkpoint() != current
+		if (menu.exchangeCore(player) != core || !menu.ownerAllowed(player) || authority.checkpoint() != current
 				|| !ItemStack.matches(inventory, player.getInventory().items.get(inventorySlot))
 				|| !tile.equals(MemberUpgradeTarget.find(level, authority, directory, record))) return result(Status.STALE);
 		if (!simulate) {

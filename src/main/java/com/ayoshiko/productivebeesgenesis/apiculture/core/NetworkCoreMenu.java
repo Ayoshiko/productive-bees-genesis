@@ -11,6 +11,8 @@ import java.util.UUID;
 /** 核心菜单生命周期、只读同步与命令入口；资产变化委托独立有限交换服务。 */
 public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
+	private final MemberUpgradeMenuAccess memberAccess;
+	private final boolean memberScoped;
 	private final Player viewer;
 	private final UUID viewerId;
 	private final Object accessToken;
@@ -27,6 +29,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = null;
 		terminalSession = buffer.readUUID();
+		memberAccess = null; memberScoped = buffer.readBoolean();
 		selections = null; data = new SimpleContainerData(29); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory);
 	}
@@ -34,12 +37,16 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		this(id, inventory, core, UUID.randomUUID());
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session) {
+		this(id, inventory, core, session, null);
+	}
+	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, MemberUpgradeMenuAccess memberAccess) {
 		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
+		this.memberAccess = memberAccess; memberScoped = memberAccess != null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = core.accessToken();
 		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
-				if (index == 28) return core.ownerAllowed(viewer) ? 1 : 0;
+				if (index == 28) return NetworkCoreMenu.this.ownerAllowed(viewer) ? 1 : 0;
 				if (index == 26) return core.productionRunning() ? 1 : 0;
 				if (index == 27) return core.hasProductionSession() ? core.runtime().status().ordinal() : 0;
 				if (index >= 18) {
@@ -79,6 +86,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public int ownershipStatus() { return data.get(17); }
 	public boolean productionRunning() { return data.get(26) != 0; }
 	public boolean canManage() { return data.get(28) != 0; }
+	public boolean memberScoped() { return memberScoped; }
 	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
@@ -87,12 +95,13 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	@Override public boolean stillValid(Player player) {
 		return !closed && viewerId.equals(player.getUUID()) && (core == null || accessToken == core.accessToken()
-				&& player.level() == core.getLevel() && core.allowed(player)
-				&& player.level().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4)
-				&& player.level().getBlockEntity(core.getBlockPos()) == core);
+				&& (memberAccess == null ? core.allowed(player) : memberAccess.valid(player)));
+	}
+	boolean ownerAllowed(Player player) {
+		return core != null && stillValid(player) && core.owner() != null && core.owner().equals(player.getUUID());
 	}
 	@Override public boolean clickMenuButton(Player player, int id) {
-		if (core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
+		if (memberScoped || core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
 		if (id == 1 || id == 2) return core.ownership().command(id == 1);
 		if (id == 3) return core.setProductionRunning(!core.productionRunning());
@@ -116,11 +125,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public NetworkSelectionSession.Page querySelections(
 			net.minecraft.server.level.ServerPlayer player,
 			NetworkSelectionSession.Kind kind, long generation) {
-		if (exchangeCore(player) == null || exchanging || kind == null || generation < 0) return null;
+		if (exchangeCore(player) == null || exchanging || kind == null || generation < 0 || memberScoped && kind != NetworkSelectionSession.Kind.UPGRADES) return null;
 		if (generation != 0 && (selections.page() == null || selections.page().kind() != kind)) return null;
 		var authority = core.ownership().readyAuthority(); if (authority == null) return null;
 		long tick = player.serverLevel().getGameTime();
-		return generation == 0 ? selections.begin(authority, authority.checkpoint(), kind, tick)
+		return generation == 0 ? memberAccess == null ? selections.begin(authority, authority.checkpoint(), kind, tick)
+				: selections.beginMember(authority, authority.checkpoint(), memberAccess.member(), tick)
 				: selections.next(authority, authority.checkpoint(), generation, tick);
 	}
 	/** 只返回仍属于当前权威会话的已展示行；业务命令还需实时核对成员／名册。 */
@@ -134,7 +144,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (!player.serverLevel().getServer().isSameThread() || core == null || closed
 				|| !core.validNetworkReference() || !player.isAlive() || player.isSpectator()
 				|| player.containerMenu != this || player.level() != core.getLevel()
-				|| !player.serverLevel().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || !stillValid(player)) return null;
+				|| !player.serverLevel().hasChunk(core.getBlockPos().getX() >> 4, core.getBlockPos().getZ() >> 4) || !stillValid(player)
+				|| memberAccess != null && !memberAccess.ready(player)) return null;
 		// 未建网打开的菜单只能绑定一次；已绑定身份永远不能自动切换。
 		if (exchangeNetwork == null && core.network() != null) exchangeNetwork = core.network();
 		if (exchangeNetwork == null || !exchangeNetwork.equals(core.network())) return null;
@@ -156,12 +167,23 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				|| player.containerMenu != this || request.containerId() != containerId
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
 				|| !terminalSequence.begin(request.sequence())) return null;
-		try { return TerminalPayloads.allow(player) ? CoreTerminalCommands.execute(this, player, request, selections) : null; }
+		try {
+			if (!TerminalPayloads.allow(player)) return null;
+			if (memberScoped && !memberOperation(request.operation()))
+				return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
+			return CoreTerminalCommands.execute(this, player, request, selections);
+		}
 		finally { terminalSequence.finish(); }
+	}
+	private static boolean memberOperation(TerminalRequest.Operation operation) {
+		return switch (operation) {
+			case UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE, UPGRADE_PREVIEW_INSTALL, UPGRADE_PREVIEW_REMOVE, CANCEL -> true;
+			default -> false;
+		};
 	}
 	public CoreFeedingExchange.Result exchangeFeeding(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int feedingSlot, long expectedRevision, int inventorySlot, int requested, CoreFeedingExchange.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging) return new CoreFeedingExchange.Result(CoreFeedingExchange.Status.UNAVAILABLE, 0);
+		if (memberScoped || exchangeCore(player) == null || exchanging) return new CoreFeedingExchange.Result(CoreFeedingExchange.Status.UNAVAILABLE, 0);
 		exchanging = true;
 		try { return CoreFeedingExchange.exchange(this, player, member, feedingSlot, expectedRevision, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -169,7 +191,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public CoreProductWithdrawal.Result withdrawProduct(net.minecraft.server.level.ServerPlayer player,
 			com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey key, long expectedLedgerRevision,
 			int inventorySlot, int requested, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging) return new CoreProductWithdrawal.Result(CoreProductWithdrawal.Status.UNAVAILABLE, 0);
+		if (memberScoped || exchangeCore(player) == null || exchanging) return new CoreProductWithdrawal.Result(CoreProductWithdrawal.Status.UNAVAILABLE, 0);
 		exchanging = true;
 		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
 		finally { exchanging = false; }
@@ -178,7 +200,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		if (exchangeCore(player) == null || exchanging || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
 		exchanging = true;
 		try { return MemberUpgradeService.exchange(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -187,7 +209,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public MemberUpgradeService.Result exchangePbUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		if (exchangeCore(player) == null || exchanging || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
 		exchanging = true;
 		try { return MemberUpgradeService.exchangePb(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -196,7 +218,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public CoreBeeCageExchange.Result exchangeBee(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int beeSlot, long expectedRevision, java.util.UUID expectedBee, int inventorySlot,
 			CoreBeeCageExchange.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging) return CoreBeeCageExchange.result(CoreBeeCageExchange.Status.UNAVAILABLE);
+		if (memberScoped || exchangeCore(player) == null || exchanging) return CoreBeeCageExchange.result(CoreBeeCageExchange.Status.UNAVAILABLE);
 		exchanging = true;
 		try {
 			return CoreBeeCageExchange.exchange(this, player, member, beeSlot, expectedRevision,

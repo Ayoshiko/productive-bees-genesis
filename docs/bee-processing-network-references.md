@@ -252,3 +252,10 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 复核同一 Mekanism 10.7.19.85 源码的 `TileComponentUpgrade.addUpgrades`／`removeUpgrade`：服务器按实际上限安装，移除先模拟有限升级输出槽，按接收量减少安装数并重算能力。对[13.18](#s13-18)的接收位置作准确补充：原生组件使用升级输出槽，本项目服务使用玩家选定的主背包槽；采用的是“实际量先确定，再提交”的原则。
 
 本页批量复用同一 `MemberUpgradeService`，按已展示快照顺序处理最多八个成员；不预先复制一份背包给每台、不在部分失败后重放整批，也不把模拟变成预留。能力预估复用 `MemberUpgradeChange` 的私有候选及 `SealedApiaryProfile`／`SealedCentrifugeProfile`，不复制升级公式、不把升级暂装回物理机。客户端只展示服务器数值，超时、换页、关闭和旧资产版本沿用既有会话边界。每次预估只计算一个成员，批量最多八次有限事务；不查询全网配方或库存，不新增后台任务、世界缓存或全网通知。
+
+<a id="s13-20"></a>
+### 13.20 托管成员代理与菜单失效（2026-10-02）
+
+沿用[13.18](#s13-18)的同一升级服务，复核本项目 `ManagedMemberEvents`、`MemberBinding.phase/write`、`ManagedProductionAccess.member` 和 `NetworkCoreBlockEntity.usableBy`：绑定更新每次产生新 NBT 对象，菜单同时固定该对象、源 BE、原核心、权威域与交接 claim；距离从核心移到源成员，其余所有权校验继续复用。核心卸载／替换、权限代际或绑定变化不能让旧菜单转向新目标。同时核对 `NetworkTopologyService.watch` 的 200 tick 审计：它与事件重建共用暂时撤下拓扑的状态，因此菜单存活与命令就绪分开。待验证时仍核对源实例、交接引用、权威域、权限与物理空状态，只保留界面；命令必须重新通过完整的 `ManagedProductionAccess`，审计确认断开后关闭旧菜单，不改变原生产调度的拓扑门控。按成员索引直接查询一条，关闭／失效释放选择；不建立第二份物理升级库存、全网游标或全局菜单缓存。
+
+本地 NeoForge 21.1.216 的 `ICommonPacketListener.hasChannel` 会读取连接协商状态。服务器包捕获夹具仅声明 `AdvancedOpenScreenPayload`，其它扩展返回未协商；它验证服务器菜单与有限交换，真实菜单附加数据、注册屏幕和方块右键通过实际客户端另验。两者的证据范围独立，不能把夹具当作真实 TCP 登录。服务端取消托管方块与手持物品的原交互，客户端完成预测往返；独立机保留原入口。未新增外部依赖或更新参考仓库。

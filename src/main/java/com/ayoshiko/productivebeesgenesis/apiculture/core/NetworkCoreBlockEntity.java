@@ -62,7 +62,8 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 				&& server.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4)
 				&& server.getBlockEntity(worldPosition) == this;
 	}
-	public boolean allowed(Player player) { return usableBy(player) && owner != null && (owner.equals(player.getUUID()) || access.allows(player.getUUID())); }
+	boolean permits(Player player) { return owner != null && (owner.equals(player.getUUID()) || access.allows(player.getUUID())); }
+	public boolean allowed(Player player) { return usableBy(player) && permits(player); }
 	public boolean ownerAllowed(Player player) { return usableBy(player) && owner != null && owner.equals(player.getUUID()); }
 	Object accessToken() { return access.sessionToken(); }
 	public CoreAccessState.Change changeGuest(net.minecraft.server.level.ServerPlayer player, UUID target, boolean grant) {
@@ -127,6 +128,6 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 		var session = java.util.UUID.randomUUID();
 		player.openMenu(new net.minecraft.world.SimpleMenuProvider((id, inventory, viewer) ->
 				allowed(viewer) ? new NetworkCoreMenu(id, inventory, this, session) : null, getDisplayName()),
-				buffer -> { buffer.writeBlockPos(worldPosition); buffer.writeUUID(session); });
+				buffer -> { buffer.writeBlockPos(worldPosition); buffer.writeUUID(session); buffer.writeBoolean(false); });
 	}
 }

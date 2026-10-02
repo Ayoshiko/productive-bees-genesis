@@ -12,8 +12,13 @@ import net.neoforged.neoforge.event.level.ExplosionEvent;
 public final class ManagedMemberEvents {
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
 	public static void interact(PlayerInteractEvent.RightClickBlock event) {
-		if (MemberBinding.isolated(event.getLevel().getBlockEntity(event.getPos()))) {
-			event.setCanceled(true); event.setCancellationResult(net.minecraft.world.InteractionResult.FAIL);
+		var source = event.getLevel().getBlockEntity(event.getPos());
+		if (MemberBinding.isolated(source)) {
+			boolean open = event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND && !event.getEntity().isShiftKeyDown();
+			if (event.getLevel().isClientSide() && open) return;
+			boolean opened = open && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+					&& com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeMenuAccess.open(player, source);
+			event.setCanceled(true); event.setCancellationResult(opened ? net.minecraft.world.InteractionResult.CONSUME : net.minecraft.world.InteractionResult.FAIL);
 		}
 	}
 	@SubscribeEvent(priority = EventPriority.HIGHEST)

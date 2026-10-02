@@ -27,6 +27,23 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSele
 import static org.junit.jupiter.api.Assertions.*;
 
 class NetworkSelectionSessionTest {
+	@Test void memberScopeNeverPagesIntoOtherMembersAndRejectsUnavailableIdentities() {
+		var current = NetworkCheckpoint.empty(identity()); var selected = machine(current.identity(), 0);
+		current = current.withOwnership(selected); selected = selected.phase(OwnedMachineRecord.Phase.OWNED);
+		current = current.withOwnership(selected);
+		for (int i = 1; i < 20; i++) current = current.withOwnership(machine(current.identity(), i));
+		var authority = new Object();
+		try (var session = new NetworkSelectionSession()) {
+			var page = session.beginMember(authority, current, selected.claim().member(), 5);
+			assertEquals(UPGRADES, page.kind()); assertEquals(1, page.rows().size()); assertFalse(page.hasNext());
+			assertEquals(selected.claim(), ((NetworkSelectionSession.MemberRow) page.rows().getFirst()).claim());
+			assertNull(session.next(authority, current, page.generation(), 6));
+			assertNull(session.resolve(authority, current, page.generation(), 1, 6));
+			assertNull(session.beginMember(authority, current, UUID.randomUUID(), 7)); assertNull(session.page());
+			current = current.withOwnership(selected.phase(OwnedMachineRecord.Phase.RETURNING));
+			assertNull(session.beginMember(authority, current, selected.claim().member(), 8));
+		}
+	}
 	private static NetworkIdentity identity() {
 		return new NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 0,
 				new Origin("minecraft:overworld", 1, 64, 2));

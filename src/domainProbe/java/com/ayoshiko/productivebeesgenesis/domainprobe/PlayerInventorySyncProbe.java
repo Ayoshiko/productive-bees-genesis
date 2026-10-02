@@ -20,6 +20,10 @@ final class PlayerInventorySyncProbe extends ServerGamePacketListenerImpl {
 			@Override public void setListenerForServerboundHandshake(PacketListener listener) { }
 		}, player, CommonListenerCookie.createInitial(player.getGameProfile(), false));
 	}
+	/** 只声明本夹具接收的菜单扩展；真实协商与发送另由 TCP／客户端探针覆盖。 */
+	@Override public boolean hasChannel(net.minecraft.resources.ResourceLocation id) {
+		return id.equals(net.neoforged.neoforge.network.payload.AdvancedOpenScreenPayload.TYPE.id());
+	}
 	@Override public void send(Packet<?> packet) {
 		if (!(packet instanceof ClientboundContainerSetSlotPacket update)) return;
 		packets++;

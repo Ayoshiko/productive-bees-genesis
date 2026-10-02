@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D17c2b 托管成员升级代理**：主手非潜行右键基础蜂箱／离心机，直接打开当前成员的网络升级页。复用预估和真实安装／取回，距离按源机器校验；单成员入口不提供批量和全网管理。权限、绑定、核心／成员实例或拓扑失效会关闭旧菜单，独立机器保留原 GUI，交互不放置手持方块、不生成掉落物。终端协议升至版本 6，存档格式不变；D17c3 的双玩家与跨 JVM 联合门保持开放。
+
 - **D17c2a 升级预估与本页批量**：悬停安装／取回按钮，按所选真实背包格可转移量预估下一工作段的周期、FE、容量及产物参数；模拟不占料、不修改资产、不延长旧选择。“本机／本页”范围支持最多八成员按页序逐机安装或取回，逐项显示成功、缺料、容量和旧选择等结果，部分失败保留此前真实提交。协议升至版本 5，存档格式不变；旧 GUI 代理和玩家联合门继续由 c2b／c3 交付。
 
 - **D17c1 核心升级页**：按成员显示实际升级及上限，从所选背包格安装／取回原生与 PB 升级，复用现有实物交换服务。正式协议绑定菜单、成员和升级快照，普通生产不会使选择失效，升级改回原数量也不能复活旧请求；仅所有者可修改。能力预估、批量、旧 GUI 代理与双玩家联合验收继续由 D17c2／c3 交付。
@@ -143,6 +145,8 @@
 ### English
 
 #### Added
+
+- Added D17c2b managed-member upgrade menus. A main-hand, non-sneaking right-click on a basic managed apiary or centrifuge opens that member's network upgrade page, with previews and real install/return operations using distance from the source machine. The menu excludes page batches and network-wide controls. Permission, binding, block-entity or topology invalidation revokes old menus; standalone machines keep their original GUI. Interaction neither places the held block nor creates dropped items. Terminal protocol is version 6 with unchanged persistence; D17c3 two-player and cross-JVM joint gates remain open.
 
 - Added D17c2a upgrade previews and page batches. Hover over install/remove to estimate the next work segment using the quantity actually transferable through the selected inventory slot; simulation neither reserves items nor changes assets or page expiry. Explicit member/page scope processes up to eight members in page order, with individual success, shortage, capacity and stale-selection results. Partial failures preserve earlier committed transfers. Terminal protocol is now version 5; persistence is unchanged. Managed legacy GUI routing and joint player validation remain in c2b/c3.
 

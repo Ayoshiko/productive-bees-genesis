@@ -50,6 +50,7 @@ public final class NetworkClientProbe {
 				require(client.getSingleplayerServer() == null && client.level == null, "Integrated server did not close");
 				finish(client, null); return;
 			}
+			if (step == 7 && ClientUpgradeProbe.complete() && !ClientMemberProxyProbe.complete()) { ClientMemberProxyProbe.advance(client); return; }
 			if (!(client.screen instanceof NetworkCoreScreen screen) || !(client.player.containerMenu instanceof NetworkCoreMenu menu)) return;
 			if (lastStatus != menu.ownershipStatus()) { lastStatus = menu.ownershipStatus(); settled = 0; }
 			if (++settled < 10) return;
@@ -66,8 +67,8 @@ public final class NetworkClientProbe {
 			} else if (step == 6 && menu.productionRunning()) {
 				capture(client, "automatic"); press(screen, "pause"); step = 7; settled = 0;
 			} else if (step == 7 && !menu.productionRunning()) {
-				if ((!ClientTerminalProbe.complete() ? ClientTerminalProbe.advance(client, screen, menu) : true)
-						&& ClientUpgradeProbe.advance(client, screen, menu)) { press(screen, "return"); step = 3; settled = 0; }
+				if (ClientMemberProxyProbe.complete()) { press(screen, "return"); step = 3; settled = 0; }
+				else if (ClientTerminalProbe.complete() || ClientTerminalProbe.advance(client, screen, menu)) ClientUpgradeProbe.advance(client, screen, menu);
 			} else if (step == 3 && ClientOwnershipFixture.stage == 3 && menu.ownershipStatus() == CoreOwnershipController.Status.STANDALONE.ordinal()) {
 				capture(client, "returned"); client.player.closeContainer(); step = 5;
 			}
@@ -101,6 +102,7 @@ public final class NetworkClientProbe {
 		report.addProperty("componentItemGridAndPbTint", error == null && ClientTerminalProbe.complete());
 		report.addProperty("upgradeWidgetsBothMembersNativePbAndConservation", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 		report.addProperty("upgradeBatchAndPreviewWidgets", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
+		report.addProperty("memberProxyWidgetsBothMembersDistanceAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.verified);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);
