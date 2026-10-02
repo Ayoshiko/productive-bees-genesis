@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
+import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem;
+import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.StrictNbt;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineCapacity;
@@ -52,14 +54,14 @@ final class MachineAssets extends SavedData {
 	}
 	static MachineAssets load(CompoundTag tag, HolderLookup.Provider registries) {
 		return decode(tag, key -> ProductKeyCodec.validatePersisted(key, registries),
-				key -> ProductKeyCodec.item(key, 1, registries).getMaxStackSize());
+				key -> ProductKeyCodec.item(key, 1, registries).getMaxStackSize(), item -> StaticFeedingAdapter.validate(item, registries));
 	}
-	static MachineAssets decode(CompoundTag tag, Consumer<ProductKey> validate, ToIntFunction<ProductKey> limits) {
+	static MachineAssets decode(CompoundTag tag, Consumer<ProductKey> validate, ToIntFunction<ProductKey> limits, Consumer<FeedingItem> validateFeeding) {
 		try {
 			if (!tag.getAllKeys().equals(Set.of("schema", "owner", "dimension", "position", "mode", "failure", "work"))
 					|| StrictNbt.integer(tag, "schema") != 1) throw new IllegalArgumentException("Unsupported machine asset envelope");
 			var assets = new MachineAssets(StrictNbt.uuid(tag, "owner"), ResourceLocation.parse(StrictNbt.string(tag, "dimension")),
-					BlockPos.of(StrictNbt.number(tag, "position")), CombinedWorkCodec.decode(StrictNbt.compound(tag, "work"), validate, limits));
+					BlockPos.of(StrictNbt.number(tag, "position")), CombinedWorkCodec.decode(StrictNbt.compound(tag, "work"), validate, limits, validateFeeding));
 			assets.mode = StrictNbt.choice(tag, "mode", Mode.class); assets.failure = StrictNbt.string(tag, "failure");
 			if ((assets.mode == Mode.STANDALONE) != assets.failure.isEmpty()) throw new IllegalArgumentException("Inconsistent machine recovery state");
 			assets.persisted = true; assets.setDirty(false); return assets;

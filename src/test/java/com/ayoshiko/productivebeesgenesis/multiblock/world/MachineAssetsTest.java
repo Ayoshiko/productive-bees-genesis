@@ -24,7 +24,7 @@ class MachineAssetsTest {
 	private MachineAssets assets() {
 		return new MachineAssets(UUID.randomUUID(), DIMENSION, new BlockPos(1, 64, 2), CombinedMachineCapacity.empty(UUID.randomUUID(), 1));
 	}
-	private static MachineAssets decode(CompoundTag tag) { return MachineAssets.decode(tag, key -> {}, key -> 64); }
+	private static MachineAssets decode(CompoundTag tag) { return MachineAssets.decode(tag, key -> {}, key -> 64, item -> {}); }
 
 	@Test void firstCheckpointMustReachDiskBeforeUseAndReloadKeepsTheExactWorkAndAnchor() throws Exception {
 		var assets = assets(); assertFalse(assets.available()); assertTrue(assets.isDirty());

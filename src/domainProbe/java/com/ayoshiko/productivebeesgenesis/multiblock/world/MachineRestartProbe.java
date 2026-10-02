@@ -90,7 +90,7 @@ public final class MachineRestartProbe {
 				// 区块 BE 的正式 onLoad 可晚于 ServerStarted；等该入口完成，不手工调用生产服务注册。
 				if (fixture.core().assets == null) return;
 				check(!fixture.core().formed(), "Work checkpoint was not observed before formation");
-				check(sameWork(CombinedWorkCodec.decode(marker.getCompound("work"), key -> {}, key -> 64), fixture.core().assets.work()), "Normal world load changed work checkpoint");
+				check(sameWork(CombinedWorkCodec.decode(marker.getCompound("work"), key -> {}, key -> 64, item -> {}), fixture.core().assets.work()), "Normal world load changed work checkpoint");
 				report.addProperty("normalWorkCheckpointRestoredBeforeFormation", true);
 			}
 			if (!fixture.core().formed()) return;
@@ -120,7 +120,7 @@ public final class MachineRestartProbe {
 		return expected.machine().equals(actual.machine()) && expected.generation() == actual.generation() && expected.revision() == actual.revision()
 				&& expected.beeSlots() == actual.beeSlots() && expected.lanes() == actual.lanes()
 				&& expected.energy() == actual.energy() && expected.energyCapacity() == actual.energyCapacity()
-				&& expected.bees().equals(actual.bees()) && expected.centrifuges().equals(actual.centrifuges())
+				&& expected.bees().equals(actual.bees()) && expected.feeding().equals(actual.feeding()) && expected.centrifuges().equals(actual.centrifuges())
 				&& expected.buffer().tankCapacity() == actual.buffer().tankCapacity()
 				&& expected.buffer().items().equals(actual.buffer().items()) && expected.buffer().fluids().equals(actual.buffer().fluids());
 	}
@@ -140,21 +140,25 @@ public final class MachineRestartProbe {
 				List.of(new CentrifugeRecipePlan.Output(iron, 5000, 5000, 1), new CentrifugeRecipePlan.Output(water, 100_000, 100_000, 1)));
 		var paid = new CentrifugeDelivery(new CentrifugeJob(UUID.randomUUID(), large, 1, 2, 29, null).freeze(), Map.of());
 		var delivered = paid.deliver(original.buffer(), key -> 64);
-		return new CombinedMachineWork(original.machine(), original.generation(), original.revision() + 1, original.beeSlots(), original.lanes(),
+		var work = new CombinedMachineWork(original.machine(), original.generation(), original.revision() + 1, original.beeSlots(), original.lanes(),
 				1000, original.energyCapacity(), List.of(bee), Map.of(0, new CentrifugeDelivery(new CentrifugeJob(UUID.randomUUID(), small, 1, 1, 31, null), Map.of()),
-				2, delivered.work()), delivered.buffer());
+				2, delivered.work()), delivered.buffer(), original.feeding());
+		var food = com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.fromStack(new ItemStack(Items.IRON_BLOCK), registries);
+		return work.depositFeeding(5, food, 7).apply(work);
 	}
 	private static void verifyWork(MinecraftServer server) throws Exception {
 		var core = fixture.core();
 		MachineWorldService.stepWork(server); var once = core.assets.work();
 		MachineWorldService.stepWork(server); check(core.assets.work() == once, "Repeated service call advanced the same real tick");
 		if (server.getTickCount() < workUntil) return;
-		var state = core.assets.work(); var initial = CombinedWorkCodec.decode(marker.getCompound("work"), key -> {}, key -> 64);
+		var state = core.assets.work(); var initial = CombinedWorkCodec.decode(marker.getCompound("work"), key -> {}, key -> 64, item -> {});
 		check(state.energy() == 991 && state.centrifuges().get(0).job().paid(), "Restored work did not pay only its remaining three ticks");
 		check(state.bee(5).pendingCycles() == 0 && state.bee(5).random().cursor() == 7
 				&& state.bee(5).frozen().equals(initial.bee(5).frozen().add(ProductAmount.of(2))), "Paid bee sampling changed across restart");
 		check(state.centrifuges().get(2).equals(initial.centrifuges().get(2)), "Full buffer rerolled or redelivered paid outputs");
+		check(state.feeding().equals(initial.feeding()) && state.feeding().get(5).count() == 7, "Restored work lost real feeding items");
 		report.addProperty("singleTickWorkAndPaidRecovery", true);
+		report.addProperty("sixSlotFeedingSurvivesRestartAndWork", true);
 		rejectedFile(server, false); rejectedFile(server, true);
 		report.addProperty("missingAndUnreadableFilesNeverRecreated", true);
 		shutdownWork = CombinedWorkCodec.encode(state);

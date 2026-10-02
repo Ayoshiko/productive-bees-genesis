@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.production;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.feeding.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
@@ -148,7 +149,7 @@ class CombinedMachineWorkTest {
 		state = change(state, state.advanceBee(5, 0, context(state.bee(5)), 1, 1, null));
 		return state;
 	}
-	private static CombinedMachineWork restore(CompoundTag tag) { return CombinedWorkCodec.decode(tag, key -> {}, key -> 64); }
+	private static CombinedMachineWork restore(CompoundTag tag) { return CombinedWorkCodec.decode(tag, key -> {}, key -> 64, item -> {}); }
 	private static net.minecraft.nbt.ListTag records(CompoundTag tag, String name) { return tag.getList(name, 10); }
 
 	@Test void checkpointResumesPartialDeliveryAndUnpaidWorkWithoutRerollOrDoublePayment() {
@@ -184,7 +185,7 @@ class CombinedMachineWorkTest {
 			assertThrows(IllegalArgumentException.class, () -> restore(bad), field);
 		}
 		var mutations = List.<java.util.function.Consumer<CompoundTag>>of(
-				tag -> tag.putInt("schema", 2), tag -> tag.putInt("capacityVersion", 2),
+				tag -> tag.putInt("schema", 3), tag -> tag.putInt("capacityVersion", 2),
 				tag -> tag.putInt("beeSlots", 3), tag -> tag.putLong("energyCapacity", 999),
 				tag -> tag.putInt("energy", 0), tag -> tag.putLong("generation", 0),
 				tag -> records(tag, "bees").getCompound(1).putUUID("id", records(tag, "bees").getCompound(0).getUUID("id")),
@@ -209,10 +210,10 @@ class CombinedMachineWorkTest {
 		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1);
 		state = change(state, state.insert(ITEM, 16, 16)); state = change(state, state.insert(variant, 1, 1));
 		var encoded = CombinedWorkCodec.encode(state);
-		var restored = CombinedWorkCodec.decode(encoded, key -> {}, key -> key.equals(variant) ? 1 : 16);
+		var restored = CombinedWorkCodec.decode(encoded, key -> {}, key -> key.equals(variant) ? 1 : 16, item -> {});
 		assertEquals(16, restored.buffer().count(ITEM)); assertEquals(1, restored.buffer().count(variant));
-		assertThrows(IllegalArgumentException.class, () -> CombinedWorkCodec.decode(encoded, key -> {}, key -> 1));
-		assertThrows(IllegalStateException.class, () -> CombinedWorkCodec.decode(encoded, key -> { throw new IllegalStateException("missing registry entry"); }, key -> 64));
+		assertThrows(IllegalArgumentException.class, () -> CombinedWorkCodec.decode(encoded, key -> {}, key -> 1, item -> {}));
+		assertThrows(IllegalStateException.class, () -> CombinedWorkCodec.decode(encoded, key -> { throw new IllegalStateException("missing registry entry"); }, key -> 64, item -> {}));
 		assertEquals(encoded, CombinedWorkCodec.encode(state));
 	}
 
@@ -234,4 +235,57 @@ class CombinedMachineWorkTest {
 		assertThrows(IllegalArgumentException.class, () -> frozen.extractItem(0, -1));
 	}
 
+	private static FeedingItem food(String variant, int limit) {
+		var tag = new CompoundTag(); tag.putString("id", "test:flower"); tag.putInt("count", 1);
+		var components = new CompoundTag(); components.putString("test:variant", variant); tag.put("components", components);
+		return new FeedingItem(new AssetImage(tag), limit);
+	}
+	@Test void sixFeedingSlotsShareTheAssetRootAndPreserveComponentsAcrossWorkAndRestore() {
+		var original = CombinedMachineCapacity.empty(UUID.randomUUID(), 1); var item = food("one", 16);
+		var deposit = original.depositFeeding(5, item, 64); var staleEnergy = original.receiveEnergy(100);
+		assertEquals(16, deposit.moved()); assertEquals(0, original.feeding().get(5).count());
+		var state = deposit.apply(original); assertEquals(6, state.feeding().size());
+		assertThrows(IllegalArgumentException.class, () -> staleEnergy.apply(state));
+		assertFalse(state.depositFeeding(5, food("two", 16), 1).changed()); assertEquals(0, state.feeding().get(0).count());
+		var charged = state.receiveEnergy(100).apply(state); assertSame(state.feeding(), charged.feeding());
+		var saved = CombinedWorkCodec.encode(charged); var restored = restore(saved);
+		assertEquals(charged.feeding(), restored.feeding()); assertEquals(100, restored.energy());
+		var withdrawn = restored.withdrawFeeding(5, 7); assertEquals(7, withdrawn.moved()); restored = withdrawn.apply(restored);
+		assertEquals(9, restored.feeding().get(5).count()); assertEquals(item, restored.feeding().get(5).item());
+		restored = restored.withdrawFeeding(5, 64).apply(restored); assertNull(restored.feeding().get(5).item());
+		assertThrows(IllegalStateException.class, () -> CombinedWorkCodec.decode(saved, key -> {}, key -> 64, value -> { throw new IllegalStateException("missing item"); }));
+		assertThrows(IllegalArgumentException.class, () -> new FeedingSlotStore(0, 9, "a".repeat(64), state.feeding()));
+	}
+	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
+		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); old.remove("feeding"); var unchanged = old.copy();
+		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(2, newTag.getInt("schema"));
+		newTag.putInt("schema", 1); newTag.remove("feeding"); assertEquals(old, newTag); assertEquals(unchanged, old);
+		var complete = CombinedWorkCodec.encode(restored);
+		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
+				tag -> tag.remove("feeding"), tag -> records(tag, "feeding").remove(0),
+				tag -> records(tag, "feeding").getCompound(5).remove("item"),
+				tag -> records(tag, "feeding").getCompound(5).putInt("count", 1),
+				tag -> records(tag, "feeding").getCompound(5).putInt("group", 6),
+				tag -> tag.putInt("schema", 1))) {
+			var broken = complete.copy(); mutation.accept(broken); var preserved = broken.copy();
+			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(preserved, broken);
+		}
+	}
+	@Test void beeExchangeChangesIdentityRetainsFoodAndCannotExtractPaidResults() {
+		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1); var seed = bee(state.machine(), 5, 2, 5, 1);
+		state = state.depositFeeding(5, food("one", 64), 3).apply(state);
+		var insert = state.insertBee(5, seed.originalSlot(), seed.plan()); assertTrue(state.bees().isEmpty());
+		state = insert.apply(state); var firstId = state.bee(5).id();
+		state = state.receiveEnergy(30).apply(state);
+		state = state.advanceBee(5, 0, context(state.bee(5)), 2, 1, null).apply(state); var paid = state;
+		assertThrows(IllegalStateException.class, () -> paid.extractBee(5, firstId));
+		state = state.settleBee(5, 64).apply(state);
+		state = state.extractBee(5, firstId).apply(state); assertTrue(state.bees().isEmpty()); assertEquals(3, state.feeding().get(5).count());
+		state = state.insertBee(5, seed.originalSlot(), seed.plan()).apply(state); assertNotEquals(firstId, state.bee(5).id()); var fresh = state;
+		assertThrows(IllegalArgumentException.class, () -> fresh.extractBee(5, firstId));
+		state = state.advanceBee(5, 0, context(state.bee(5)), 1, 1, null).apply(state);
+		state = state.extractBee(5, state.bee(5).id()).apply(state);
+		assertEquals(15, state.energy()); assertEquals(1, state.buffer().count(COMB)); assertEquals(3, state.feeding().get(5).count());
+	}
 }

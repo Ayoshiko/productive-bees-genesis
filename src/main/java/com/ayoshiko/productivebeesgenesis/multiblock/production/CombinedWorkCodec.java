@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.production;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.BeeRecordCodec;
+import com.ayoshiko.productivebeesgenesis.apiculture.persistence.FeedingRecordCodec;
+import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRecordCodec;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.ProductRecordCodec;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.StrictNbt;
@@ -15,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 1；读取完整候选后才发布，失败由调用方隔离原始存档。 */
+/** 独立机器 schema 2；schema 1 仅迁入空喂食槽，损坏新格式绝不补缺失资产。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 1); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 2); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -31,12 +33,17 @@ public final class CombinedWorkCodec {
 			value.put("delivered", ProductRecordCodec.amounts(entry.getValue().delivered())); jobs.add(value);
 		});
 		tag.put("jobs", jobs); tag.putInt("tankCapacity", work.buffer().tankCapacity());
+		tag.put("feeding", FeedingRecordCodec.encodeSlots(work.feeding()));
 		tag.put("items", cells(work.buffer().items())); tag.put("fluids", cells(work.buffer().fluids())); return tag;
 	}
-	public static CombinedMachineWork decode(CompoundTag tag, Consumer<ProductKey> validate, ToIntFunction<ProductKey> itemLimits) {
-		fields(tag, "schema", "capacityVersion", "machine", "generation", "revision", "beeSlots", "lanes", "energy", "energyCapacity",
-				"bees", "jobs", "tankCapacity", "items", "fluids");
-		if (StrictNbt.integer(tag, "schema") != 1 || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+	public static CombinedMachineWork decode(CompoundTag tag, Consumer<ProductKey> validate, ToIntFunction<ProductKey> itemLimits,
+			Consumer<FeedingItem> validateFeeding) {
+		int schema = StrictNbt.integer(tag, "schema");
+		var expected = new java.util.HashSet<>(Set.of("schema", "capacityVersion", "machine", "generation", "revision", "beeSlots", "lanes",
+				"energy", "energyCapacity", "bees", "jobs", "tankCapacity", "items", "fluids"));
+		if (schema == 2) expected.add("feeding");
+		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
+		if ((schema != 1 && schema != 2) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");
@@ -53,9 +60,11 @@ public final class CombinedWorkCodec {
 		}
 		var items = readCells(StrictNbt.list(tag, "items"), CombinedMachineCapacity.ITEM_SLOTS, codec, itemLimits);
 		var fluids = readCells(StrictNbt.list(tag, "fluids"), CombinedMachineCapacity.FLUID_TANKS, codec, itemLimits);
+		var feeding = schema == 1 ? CombinedMachineWork.emptyFeeding(CombinedMachineCapacity.BEE_SLOTS)
+				: FeedingRecordCodec.decodeSlots(StrictNbt.list(tag, "feeding"), CombinedMachineCapacity.BEE_SLOTS, validateFeeding);
 		var work = new CombinedMachineWork(machine, StrictNbt.number(tag, "generation"), StrictNbt.number(tag, "revision"),
 				StrictNbt.integer(tag, "beeSlots"), StrictNbt.integer(tag, "lanes"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "energyCapacity"),
-				bees, jobs, new FiniteProductBuffer(items, fluids, StrictNbt.integer(tag, "tankCapacity")));
+				bees, jobs, new FiniteProductBuffer(items, fluids, StrictNbt.integer(tag, "tankCapacity")), feeding);
 		CombinedMachineCapacity.validate(work); return work;
 	}
 	private static ListTag cells(List<FiniteProductBuffer.Cell> cells) {
