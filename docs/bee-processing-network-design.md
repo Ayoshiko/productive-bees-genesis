@@ -8,9 +8,9 @@
 | --- | --- |
 | [主设计合同](bee-processing-network-design.md) | 第 1–9、10.1–10.3、12 节：目标、职责、权威边界和通用验收标准；行为变化在原条目内修订 |
 | [实施路线与当前状态](bee-processing-network-roadmap.md#current) | 第 11、14 节：唯一的当前状态、下一步、依赖、未完成门与小步交付清单 |
-| [当前验收记录](bee-processing-network-evidence-current.md) | 第 10.46 起：本步改动、失败及修复、实际证据、结论与未完成边界 |
+| [当前验收记录](bee-processing-network-evidence-current.md) | 第 10.46–10.69 及 10.84 起：本步改动、失败及修复、实际证据、结论与未完成边界 |
 | [基础阶段验收归档](bee-processing-network-evidence-foundation.md) | 第 10.4–10.21：D01–D12／P2 的历史证据 |
-| [生产阶段验收归档](bee-processing-network-evidence-production.md) | 第 10.22–10.45：D13–D16c2c 的历史证据 |
+| [生产与升级阶段验收归档](bee-processing-network-evidence-production.md) | 第 10.22–10.45 与 10.70–10.83：生产闭环及 D17 升级的历史证据 |
 | [界面、材质与美术规格](bee-processing-network-visual-design.md) | 第 9.1–9.3：GUI 坐标、交互、材质、模型、动画与资源交付清单 |
 | [参考实现与采用边界](bee-processing-network-references.md) | 第 13 节：本地源码路径、版本／提交、实际读取入口、采用原则与不采用的行为 |
 

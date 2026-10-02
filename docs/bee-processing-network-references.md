@@ -171,7 +171,7 @@ EAEP 新版成功克隆并验证后，旧 `.tmp_eaeplus_src` 1.20.1 副本也已
 
 D17a 复核固定 Mekanism 10.7.19.85 `TileComponentUpgrade.tickServer/addUpgrades/removeUpgrade/serialize/deserialize`、`Upgrade.getMax/getTag/buildMap`：采用服务器线程、当前上限、先预检接收空间再按实际量扣除、安装记录与输入／输出槽分离。其已安装状态只保存类型／数量，本项目只接收标准完整组件，拒绝有自定义组件的升级件；不采用宽松反序列化的 ordinal 回绕、重复键覆盖或非正数忽略。网络直接改唯一封存映像，原生物理组件保持清空，不调用其 ticker 或产生第二份已安装状态。
 
-本步检查 `.tmp_dataenergistics_src` 为独立干净根后，从 `c95a1244` fast-forward 到 `965b9d98`（`1.21`）；本次上游变化为 AE2 合成 CPU 列表修正及版本／变更记录，不扩大审查范围。复读 `TrinityHostedActionTicket` 与 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的会话、代际、实际菜单和单次认领边界；沿用本项目核心菜单的服务器线程／查看者／关闭／重入守卫，并使用目标成员 revision 拒绝旧升级请求。D17a 尚未新增客户端 payload，完整协议与真实客户端联合验证留 D17c；本步服务器服务证据见[10.70](bee-processing-network-evidence-current.md#s10-70)。
+本步检查 `.tmp_dataenergistics_src` 为独立干净根后，从 `c95a1244` fast-forward 到 `965b9d98`（`1.21`）；本次上游变化为 AE2 合成 CPU 列表修正及版本／变更记录，不扩大审查范围。复读 `TrinityHostedActionTicket` 与 `TrinityHostedActionPayloadHandler.route/claimRoutedAction` 的会话、代际、实际菜单和单次认领边界；沿用本项目核心菜单的服务器线程／查看者／关闭／重入守卫，并使用目标成员 revision 拒绝旧升级请求。D17a 尚未新增客户端 payload，完整协议与真实客户端联合验证留 D17c；本步服务器服务证据见[10.70](bee-processing-network-evidence-production.md#s10-70)。
 
 <a id="s13-10"></a>
 ### 13.10 ENERGY 容量、缩容与交还（2026-10-01）
@@ -185,21 +185,21 @@ D17b1 从本地固定 Mekanism 10.7.19.85 源码复核 `MekanismUtils.getMaxEner
 
 D17b2a 复核当前 1.0.10 的 `MekCentrifugePbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/loadCounts/getLimit/refreshMultiplierCacheIfNeeded`、`BalanceConfig.canInstall/pbUpgradeLimit/refresh` 及 `PbUpgradeInventorySlot.getRepresentativeStack`：安装使用当前白名单、上限和等级互斥，数量变更递增版本使物理倍率缓存失效；旧存档数量保留，取回按真实槽位空间交付。网络沿用相同物品与配置规则，但权威数量只写入封存映像，能力候选由成员 revision 失效；不把升级临时装回托管机器，不使用物理输入槽 ticker，也不采用宽松加载时跳过未知类型的行为。严格数量读取改用服务器局部 EnumMap，不增加缓存或后台任务。
 
-本步复读固定 Mekanism 10.7.19.85 `TileComponentUpgrade.addUpgrades/removeUpgrade/serialize/deserialize` 的预检接收量、成功后重算及输入／输出槽分离，继续采用 [13.9](#s13-9) 的实物交付与会话合同；未引入新的外部框架。实际 PB 依赖为 13.14.0，使用本地 JAR 的 `CentrifugeBlockEntity` API 和本项目当前独立机作对照，不将旧 13.13.5 反编译目录称为当前源码。验证覆盖八种升级的单件／满上限物理能力、上限降低及旧互斥组合取回、旧计划与新效果分离、标准组件守恒、实际保存及最新实物交还；具体结果见[10.72](bee-processing-network-evidence-current.md#s10-72)。
+本步复读固定 Mekanism 10.7.19.85 `TileComponentUpgrade.addUpgrades/removeUpgrade/serialize/deserialize` 的预检接收量、成功后重算及输入／输出槽分离，继续采用 [13.9](#s13-9) 的实物交付与会话合同；未引入新的外部框架。实际 PB 依赖为 13.14.0，使用本地 JAR 的 `CentrifugeBlockEntity` API 和本项目当前独立机作对照，不将旧 13.13.5 反编译目录称为当前源码。验证覆盖八种升级的单件／满上限物理能力、上限降低及旧互斥组合取回、旧计划与新效果分离、标准组件守恒、实际保存及最新实物交还；具体结果见[10.72](bee-processing-network-evidence-production.md#s10-72)。
 
 <a id="s13-12"></a>
 ### 13.12 蜂箱原生升级与周期边界（2026-10-01）
 
 D17b2b1 复核当前 1.0.10 的 `ApiaryUpgradeMath.computeMekSpeedTimeMultiplier`、`ApiaryUpgradeHandler.getTimeMultiplier/invalidateUpgradeCache`、`TileEntityMekApiary.recalculateUpgrades`、`BeeProgressPlan`，继续使用固定 Mekanism 10.7.19.85 的升级单价与容量口径。封存读取仅支持基础蜂箱的 SPEED／ENERGY；PB 原生依赖仍为 13.14.0，静态铁蜂的基因、花朵、配方与气候准入保持原合同。已知改写原生公式的 Unleashed／Empowered、创造与扩展工厂不自动准入。新 `SealedApiaryProfile` 读取本机已经平衡的基础 FE，不重乘平衡系数；物理对照在独立蜂箱安装真实升级，核对每档耗时、单价及容量。
 
-本步沿用 [13.9](#s13-9) 的实物交付和 [13.10](#s13-10) 的危险缩容拒绝。蜂箱与离心机的状态差异决定实现边界：蜂计划属于长期蜂记录，故在旧周期结清后由付款证明同时发布新耗时／单价与首次工作；通用所有权更新仍拒绝任意改计划。名册代际、蜂身份、喂食及产物不因此改变。交还前比较当前升级与部分周期的时间／单价，尚不一致时先拒绝，避免物理机丢失旧收费上下文。升级映像与旧计划本已持久化，恢复后可重新计算下一周期能力，无需新增存档字段、全局缓存或后台队列；原有部分周期在能力一致时仍可交还。正式调度每次一 tick，只有周期起点与冷交还预检读取封存能力；具体证据见[10.73](bee-processing-network-evidence-current.md#s10-73)。
+本步沿用 [13.9](#s13-9) 的实物交付和 [13.10](#s13-10) 的危险缩容拒绝。蜂箱与离心机的状态差异决定实现边界：蜂计划属于长期蜂记录，故在旧周期结清后由付款证明同时发布新耗时／单价与首次工作；通用所有权更新仍拒绝任意改计划。名册代际、蜂身份、喂食及产物不因此改变。交还前比较当前升级与部分周期的时间／单价，尚不一致时先拒绝，避免物理机丢失旧收费上下文。升级映像与旧计划本已持久化，恢复后可重新计算下一周期能力，无需新增存档字段、全局缓存或后台队列；原有部分周期在能力一致时仍可交还。正式调度每次一 tick，只有周期起点与冷交还预检读取封存能力；具体证据见[10.73](bee-processing-network-evidence-production.md#s10-73)。
 
 <a id="s13-13"></a>
 ### 13.13 蜂箱 PB 时间数量与同源公式（2026-10-01）
 
 D17b2b2a 复核本地 1.0.10、网络基线 `0b0523e` 的 `ApiaryPbUpgradeHandler.installPbUpgradeBulk/extractPbUpgradeByType/getPbUpgradeLimit/loadPbUpgradeCounts`、`ApiaryUpgradeHandler.computeTimeMultiplier/invalidateUpgradeCache` 及 `ApiaryUpgradeMath.getPbTimeDivisor`。实际 PB 依赖为 13.14.0，Mekanism 为 10.7.19.85。采用服务器线程、当前蜂箱安装上限、等级互斥、完整组件匹配与先预检接收空间的规则；旧数量由持久化恢复保留，不按当前安装上限裁剪。物理机数量变化失效本机倍率缓存；网络只变更唯一封存映像和成员 revision，下一周期读取当前数量，不调用物理输入槽 ticker 或建立第二份升级缓存。
 
-从既有物理时间计算提取 `computePbTimeDivisor`，保留 TIME 单倍、TIME_2 双倍、非法 bonus 回退及大数量饱和语义；网络与独立蜂箱共用同一公式。蜂箱使用自己的 PB 数量键和安装配置，不能套用离心机白名单或上限。网络严格读取拒绝未知类型、错误 NBT 类型和非正数，不沿用物理旧格式加载中忽略未知项的宽松规则；封存之外的旧存档迁移仍由原有迁移器负责。沿用[13.12](#s13-12)的旧周期、首次新付款及交还边界；通过真实标准升级实物的逐档独立机对照、旧上限／互斥组合拆回、PB 单独周期切换及实际落盘验证，见[10.74](bee-processing-network-evidence-current.md#s10-74)。
+从既有物理时间计算提取 `computePbTimeDivisor`，保留 TIME 单倍、TIME_2 双倍、非法 bonus 回退及大数量饱和语义；网络与独立蜂箱共用同一公式。蜂箱使用自己的 PB 数量键和安装配置，不能套用离心机白名单或上限。网络严格读取拒绝未知类型、错误 NBT 类型和非正数，不沿用物理旧格式加载中忽略未知项的宽松规则；封存之外的旧存档迁移仍由原有迁移器负责。沿用[13.12](#s13-12)的旧周期、首次新付款及交还边界；通过真实标准升级实物的逐档独立机对照、旧上限／互斥组合拆回、PB 单独周期切换及实际落盘验证，见[10.74](bee-processing-network-evidence-production.md#s10-74)。
 
 <a id="s13-14"></a>
 ### 13.14 蜂箱生产力轮数与精确聚合（2026-10-01）
@@ -208,7 +208,7 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 
 采用逐周期轮数与逐栈取整；验证 2.5 倍的边界、20,480 次固定种子单周期物理采样对照、独立 IEEE-754 整数模型及基因例子。不采用 PB 的世界随机源、可变输出列表或本项目物理采样器的 int 总轮数饱和；网络纯内核接收调用者给定的样本，保持幂等计算，用现有 ProductAmount 表示精确轮数／总量。普通路径保持 long，大数只按实际 float 的二进制值构造，不能用十进制显示值代替。
 
-成功路径只返回私有不可变计算结果；非法倍率、样本和产物参数直接拒绝，不返回空产物掩盖错误。内核没有缓存、世界引用或线程任务，同一实例可只读复用；能力失效、周期所有权与重启不重抽仍由 b2／b3 的服务器事务负责，尚未接入。概率／多产物、Ω／BLOCK 转换不得使用固定单产物汇总捷径。合同与证据分别见[2.3](bee-processing-network-design.md#s2-3)和[10.76](bee-processing-network-evidence-current.md#s10-76)。
+成功路径只返回私有不可变计算结果；非法倍率、样本和产物参数直接拒绝，不返回空产物掩盖错误。内核没有缓存、世界引用或线程任务，同一实例可只读复用；能力失效、周期所有权与重启不重抽仍由 b2／b3 的服务器事务负责，尚未接入。概率／多产物、Ω／BLOCK 转换不得使用固定单产物汇总捷径。合同与证据分别见[2.3](bee-processing-network-design.md#s2-3)和[10.76](bee-processing-network-evidence-production.md#s10-76)。
 
 <a id="s13-15"></a>
 ### 13.15 付费随机状态、版本迁移与按键交付（2026-10-01）
@@ -217,7 +217,7 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 
 随机流依据本地 Java 21 的 `SplittableRandom.nextDouble` 作独立数值对照，以显式 SplitMix64 计数公式固化采样版本 1，不依赖世界 RNG 或 JDK 对象的可变内部状态。种子／游标属于蜂记录；付款形成 pending，采样同时增加游标和冻结数量，结算仅转移冻结数量。旧请求须通过源状态身份校验，通用所有权更新不得改随机状态；移位、升级时间切换及正常恢复保持原流，取出后新装入的蜜蜂按新 beeId 建流。所有操作仍在权威服务器线程发布，没有新增后台计算。
 
-两种 decoder 都验证 schema 6／7；流式读取先记录实际蜂格式，结束时与网络 schema 核对，因此不依赖字段顺序。只接受完整旧字段迁移，缺失或损坏的新字段不降级为旧格式。读取会话独享格式记录，取消／关闭不留下全局状态。证据见[10.77](bee-processing-network-evidence-current.md#s10-77)；正式生产力升级仍按[11.5](bee-processing-network-roadmap.md#s11-5)的 b3 交付。
+两种 decoder 都验证 schema 6／7；流式读取先记录实际蜂格式，结束时与网络 schema 核对，因此不依赖字段顺序。只接受完整旧字段迁移，缺失或损坏的新字段不降级为旧格式。读取会话独享格式记录，取消／关闭不留下全局状态。证据见[10.77](bee-processing-network-evidence-production.md#s10-77)；正式生产力升级仍按[11.5](bee-processing-network-roadmap.md#s11-5)的 b3 交付。
 
 <a id="s13-16"></a>
 ### 13.16 正式生产力升级、配置变化与随机交还边界（2026-10-01）
@@ -235,7 +235,7 @@ D17b2b2b1 读取当前网络基线 `cfa8979` 的 `BeeProduceBatchSampler.sampleR
 
 成功路径在服务器线程、下一周期付款前解析一个模板键，没有按产量生成物品列表或引入全局缓存。已付费计划固定实际键，配置、升级变化和正常恢复不会重新映射旧产物。独立转换器在已生成产物后捕获异常并保留原栈；网络尚未付款时让映射／组件编码错误向外传播，由既有调度故障路径暂停，不能默默换成另一种产物后收费。无匹配返回空与异常分开处理，前者保留原键。每蜂计划多保存一个完整源键，复杂度取决于单个模板组件字节，不取决于产物数量；无新的世界引用或停服清理责任。
 
-沿用[13.15](#s13-15)的单一所有权与确定随机流。schema 8／采样格式 2 同时保存源键和实际键；schema 6／7 只能迁入各自完整字段，旧源键取原输出，schema 7 的种子／游标不重建。完整解码与预算解码均核对格式和源键字段。对应验证覆盖三类边界：真实核心菜单安装／取回及独立蜂箱对照、原生／配置蜜脾组件和数量、安装及拆除后旧付费文件的跨 JVM 恢复；见[10.79](bee-processing-network-evidence-current.md#s10-79)。其它蜂种、正式升级 GUI、双玩家及性能验收仍沿[11.5](bee-processing-network-roadmap.md#s11-5)推进。
+沿用[13.15](#s13-15)的单一所有权与确定随机流。schema 8／采样格式 2 同时保存源键和实际键；schema 6／7 只能迁入各自完整字段，旧源键取原输出，schema 7 的种子／游标不重建。完整解码与预算解码均核对格式和源键字段。对应验证覆盖三类边界：真实核心菜单安装／取回及独立蜂箱对照、原生／配置蜜脾组件和数量、安装及拆除后旧付费文件的跨 JVM 恢复；见[10.79](bee-processing-network-evidence-production.md#s10-79)。其它蜂种、正式升级 GUI、双玩家及性能验收仍沿[11.5](bee-processing-network-roadmap.md#s11-5)推进。
 
 <a id="s13-18"></a>
 ### 13.18 正式升级页与有界服务器选择（2026-10-02）
