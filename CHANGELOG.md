@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D17c2a 升级预估与本页批量**：悬停安装／取回按钮，按所选真实背包格可转移量预估下一工作段的周期、FE、容量及产物参数；模拟不占料、不修改资产、不延长旧选择。“本机／本页”范围支持最多八成员按页序逐机安装或取回，逐项显示成功、缺料、容量和旧选择等结果，部分失败保留此前真实提交。协议升至版本 5，存档格式不变；旧 GUI 代理和玩家联合门继续由 c2b／c3 交付。
+
 - **D17c1 核心升级页**：按成员显示实际升级及上限，从所选背包格安装／取回原生与 PB 升级，复用现有实物交换服务。正式协议绑定菜单、成员和升级快照，普通生产不会使选择失效，升级改回原数量也不能复活旧请求；仅所有者可修改。能力预估、批量、旧 GUI 代理与双玩家联合验收继续由 D17c2／c3 交付。
 
 - **D17b2b2b4 Ω／BLOCK 蜜脾块转换**：基础网络蜂箱支持 Ω 与 BLOCK 实物升级，按独立蜂箱规则 1:1 转换，保留数量及目标蜂种组件；两者并存只转换一次。计划分别保存原配方键和本周期实际键，安装／拆除不改旧付费结果，交还检查实际输出一致。checkpoint 升至 schema 8，兼容完整 schema 6／7；正式升级界面、批量及玩家联合门仍由 D17c 验收。
@@ -141,6 +143,8 @@
 ### English
 
 #### Added
+
+- Added D17c2a upgrade previews and page batches. Hover over install/remove to estimate the next work segment using the quantity actually transferable through the selected inventory slot; simulation neither reserves items nor changes assets or page expiry. Explicit member/page scope processes up to eight members in page order, with individual success, shortage, capacity and stale-selection results. Partial failures preserve earlier committed transfers. Terminal protocol is now version 5; persistence is unchanged. Managed legacy GUI routing and joint player validation remain in c2b/c3.
 
 - Added the D17c1 core upgrade page with per-member installed counts and limits. Owners install or return native/PB upgrades through a selected inventory slot using the existing item exchange service. Requests bind the menu, member and upgrade snapshot: normal production preserves the selection, while changing upgrades back to the same count cannot revive an old request. Capability estimates, bulk operations, managed legacy GUI routing and joint player validation remain in D17c2/c3.
 

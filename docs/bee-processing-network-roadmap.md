@@ -5,11 +5,11 @@
 当前状态和下一步以本文件为唯一维护位置；历史实施详情只链接验收记录。更新规则见主设计入口。
 
 <a id="current"></a>
-状态总览（2026-10-02）：维护版 1.0.10／PB 13.14.0 网络合并、核心紧凑界面及文档分工已验收（[10.65](bee-processing-network-evidence-current.md#s10-65)、[10.66](bee-processing-network-evidence-current.md#s10-66)、[10.67](bee-processing-network-evidence-current.md#s10-67)）；D16c／P3 最小玩家生产闭环已联合验收（[10.69](bee-processing-network-evidence-current.md#s10-69)）。基础离心机 SPEED／ENERGY／PB、基础蜂箱 SPEED／ENERGY 及 D17b2b2a 蜂箱 PB 时间服务器服务已验收（[10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74)），D17b2b2b1／b2 内核与随机恢复、b3 α／β／γ 与 b4 Ω／BLOCK 生产力及转换服务已验收（[10.76](bee-processing-network-evidence-current.md#s10-76)–[10.79](bee-processing-network-evidence-current.md#s10-79)），D17c1 核心单成员升级页已验收（[10.80](bee-processing-network-evidence-current.md#s10-80)）；下一步 D17c2 能力预估、批量及旧 GUI 代理，随后 c3 联合验收；D17 父门仍开放。
+状态总览（2026-10-02）：维护版 1.0.10／PB 13.14.0 网络合并、核心紧凑界面及文档分工已验收（[10.65](bee-processing-network-evidence-current.md#s10-65)、[10.66](bee-processing-network-evidence-current.md#s10-66)、[10.67](bee-processing-network-evidence-current.md#s10-67)）；D16c／P3 最小玩家生产闭环已联合验收（[10.69](bee-processing-network-evidence-current.md#s10-69)）。基础离心机 SPEED／ENERGY／PB、基础蜂箱 SPEED／ENERGY 及 D17b2b2a 蜂箱 PB 时间服务器服务已验收（[10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74)），D17b2b2b1／b2 内核与随机恢复、b3 α／β／γ 与 b4 Ω／BLOCK 生产力及转换服务已验收（[10.76](bee-processing-network-evidence-current.md#s10-76)–[10.79](bee-processing-network-evidence-current.md#s10-79)），D17c1 核心单成员升级页已验收（[10.80](bee-processing-network-evidence-current.md#s10-80)）；D17c2a 预估与本页批量已验收（[10.81](bee-processing-network-evidence-current.md#s10-81)），下一步 c2b 旧 GUI 代理，随后 c3 联合验收；D17 父门仍开放。
 
 | 路线 | 已验收范围 | 当前推进与未完成门 |
 | --- | --- | --- |
-| 网络主线 | P2；D13–D16；P3 玩家闭环；基础离心机升级与蜂箱原生／PB 时间升级见 [10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74) | D17b2b2b1／b2／b3／b4 与 D17c1 已验收；继续 D17c2／c3；见 [11.5](#s11-5) |
+| 网络主线 | P2；D13–D16；P3 玩家闭环；基础离心机升级与蜂箱原生／PB 时间升级见 [10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74) | D17b2b2b1／b2／b3／b4 与 D17c1 已验收；D17c2a 已验收；继续 c2b／c3；见 [11.5](#s11-5) |
 | 矩形机器 | M01–M03、M03d；M02c 六布局；M06a／b 和 c2a／b 的蜂巢与卫星蜜蜂展示 | M06c2c 兼容／连接材质／性能；M04 的 D16c 前置已满足，仍等 D17 |
 | 发布与性能 | 分步构建与指定场景验证；P3 最小功能联合门 | 完整 M06、D29 故障耐久性和 D30 同场景性能仍待独立验收 |
 
@@ -138,7 +138,7 @@ D16b2 进一步按依赖拆分：**b2a** 增量可用量索引和保留占料凭
 | D17b2b2b4 Ω／BLOCK 转换（服务器服务已验收，[10.79](bee-processing-network-evidence-current.md#s10-79)） | b3；按 1:1 映射完整产物键，分离原配方键与本周期实际键；schema 8 兼容 6／7 | 独立机数量／组件、Ω 与 BLOCK 并存、安装／拆除后的旧付费结果、交还及两组跨 JVM 恢复通过；D17c 和内容兼容门保持独立 |
 | D17c 正式界面、批量及联合门 | D17a／b；有界升级快照、正式请求、安装／拆除按钮及旧机代理 | 真实客户端、双人旧选择、跨 JVM 玩家／升级／在制恢复和批量逐项结果通过后，才解除 M04 的 D17 前置 |
 
-D17c 按同一目标分步交付：**c1（已验收，[10.80](bee-processing-network-evidence-current.md#s10-80)）** 核心正式升级页、八成员有界快照、单成员安装／取回及旧选择拒绝；**c2（下一步）** 能力预估、批量逐项结果与托管旧 GUI 代理；**c3** 明确可授权升级权限、双玩家竞争及真实玩家／升级／在制跨 JVM 恢复。c1 的所有者单人界面不代替 c3，c1／c2 子步通过不自动关闭 D17。按[11.10](#s11-10)选择本步验证范围，通过后独立提交推送。
+D17c 按同一目标分步交付：**c1（已验收，[10.80](bee-processing-network-evidence-current.md#s10-80)）** 核心正式升级页、八成员有界快照、单成员安装／取回及旧选择拒绝；**c2（父项开放）** 中 c2a 核心能力预估与本页批量已验收（[10.81](bee-processing-network-evidence-current.md#s10-81)），下一步 c2b 托管旧 GUI 代理；**c3** 明确可授权升级权限、双玩家竞争及真实玩家／升级／在制跨 JVM 恢复。c1 的所有者单人界面不代替 c3，c1／c2 子步通过不自动关闭 D17。按[11.10](#s11-10)选择本步验证范围，通过后独立提交推送。
 
 **D18 — 蜜蜂与离心终端。** 前置：D08、D14、D16–D17。在现有菜单／屏幕框架上实现成员页、蜂位／喂食页、能力池页、规则页和库存页；离心页同时显示理论能力、实际吞吐和限制原因。分页查询复用版本索引，增量同步仅发送订阅范围。通过条件为管理大量蜂位不需逐机打开 GUI，两个终端均可便捷管理对应机器升级。
 
@@ -328,7 +328,7 @@ DSH 实施提示可直接使用：“只执行任务卡的任务 ID；先核对�
 <a id="s14"></a>
 ## 14. 开发前检查结论与下一步
 
-当前主线下一步为 D17c2 能力预估、批量及旧 GUI 代理，D17c1 核心单成员升级页已通过[10.80](bee-processing-network-evidence-current.md#s10-80)；b1 精确轮数、b2 随机恢复、b3 α／β／γ 与 b4 Ω／BLOCK 服务已通过[10.76](bee-processing-network-evidence-current.md#s10-76)–[10.79](bee-processing-network-evidence-current.md#s10-79)：D16c／P3 最小玩家生产闭环、基础离心机 SPEED／ENERGY／PB，以及基础蜂箱 SPEED／ENERGY／PB 时间服务器服务均已验收，见[10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74)。按 [11.5](#s11-5) 推进 D17c2／c3 的剩余能力、批量、旧 GUI 代理与真实玩家联合验证，不能由 c1 的单人入口通过替代。多方块当前采用 [9.2](bee-processing-network-visual-design.md#s9-2) 的正十二面蜂巢与独立轨道蜜蜂，M02c、M06c2a／b 已分别验收，下一步进入 M06c2c 兼容、连接材质与性能联合门；六阶段具象原型仅保留历史证据。M04 的 D16c 前置已经满足，生产／插件仍等待 D17；环境旋转不表示生产，完整 M06、兼容与性能联合门仍未关闭。
+当前主线下一步为 D17c2b 托管旧 GUI 代理，c2a 能力预估与本页批量已通过[10.81](bee-processing-network-evidence-current.md#s10-81)，D17c1 核心单成员升级页已通过[10.80](bee-processing-network-evidence-current.md#s10-80)；b1 精确轮数、b2 随机恢复、b3 α／β／γ 与 b4 Ω／BLOCK 服务已通过[10.76](bee-processing-network-evidence-current.md#s10-76)–[10.79](bee-processing-network-evidence-current.md#s10-79)：D16c／P3 最小玩家生产闭环、基础离心机 SPEED／ENERGY／PB，以及基础蜂箱 SPEED／ENERGY／PB 时间服务器服务均已验收，见[10.70](bee-processing-network-evidence-current.md#s10-70)–[10.74](bee-processing-network-evidence-current.md#s10-74)。按 [11.5](#s11-5) 推进 D17c2b／c3 的旧 GUI 代理与真实玩家联合验证，不能由 c1 的单人入口通过替代。多方块当前采用 [9.2](bee-processing-network-visual-design.md#s9-2) 的正十二面蜂巢与独立轨道蜜蜂，M02c、M06c2a／b 已分别验收，下一步进入 M06c2c 兼容、连接材质与性能联合门；六阶段具象原型仅保留历史证据。M04 的 D16c 前置已经满足，生产／插件仍等待 D17；环境旋转不表示生产，完整 M06、兼容与性能联合门仍未关闭。
 
 用户已选定首台为蜂箱与离心一体机，并要求后续安装自动离心升级以直接产出离心结果。当前按 2.5 的插件首发方案推进，保留结构升级方块输入同一能力模型的扩展；机器尺寸和角色已在 M02 明确，单元容量与直出计费仍在各自进入门校准。已可形成一体机结构；尚未注册升级物品或启用独立／直出生产。
 

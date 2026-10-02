@@ -107,6 +107,7 @@ final class MemberUpgradeProbe {
 		}
 		if (phase == 2) {
 			if (core.topology() == null || !core.topology().valid()) return false;
+			if (!CoreUpgradeBatchProbe.advance(data, player, menu, report)) return false;
 			beginWork(); saved = data.checkpoint(); directory.requestSave(data); phase = 3; return false;
 		}
 		if (phase == 3) {

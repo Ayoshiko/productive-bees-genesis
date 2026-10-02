@@ -13,6 +13,23 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void batchAndPreviewRepliesRoundTripWithoutInventingSuccessfulTransfers() {
+		var session = UUID.randomUUID();
+		var results = List.of(new TerminalReply.UpgradeResult(0, "test:apiary", TerminalReply.Status.MOVED, 1),
+				new TerminalReply.UpgradeResult(1, "test:centrifuge", TerminalReply.Status.EMPTY, 0));
+		var capacity = new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(0.5F, 20, 1000, 2, 1.5F, 0, false, false);
+		var preview = new TerminalUpgradePreview(0, 0, 35, 64, true, TerminalReply.Status.MOVED, 1, capacity, capacity);
+		for (var reply : List.of(new TerminalReply(7, session, 1, TerminalReply.Status.BATCH_COMPLETE, 1, 0, null, results, null),
+				new TerminalReply(7, session, 2, TerminalReply.Status.OK, 0, 0, null, List.of(), preview))) {
+			var buffer = new FriendlyByteBuf(Unpooled.buffer());
+			try { TerminalReply.STREAM_CODEC.encode(buffer, reply); assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
+				assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer)); } finally { buffer.release(); }
+		}
+		assertThrows(IllegalArgumentException.class, () -> new TerminalReply(7, session, 1, TerminalReply.Status.BATCH_COMPLETE, 2, 0, null, results, null));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalReply.UpgradeResult(1, "x", TerminalReply.Status.EMPTY, 1));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalReply(7, session, 1, TerminalReply.Status.BATCH_COMPLETE, 2, 0, null, List.of(results.getFirst(), results.getFirst()), null));
+		assertThrows(IllegalArgumentException.class, () -> new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(Float.NaN, 1, 1, 1, 1, 0, false, false));
+	}
 	@Test void requestsHaveConstantSizeAndRejectMalformedFrames() {
 		for (var operation : TerminalRequest.Operation.values()) {
 			var request = new TerminalRequest(7, UUID.randomUUID(), Long.MAX_VALUE, operation, 6, 7, 2, 35, 1000);
@@ -50,7 +67,10 @@ class TerminalProtocolTest {
 		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, view);
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());
 		try {
-			TerminalReply.STREAM_CODEC.encode(buffer, reply); buffer.setByte(buffer.writerIndex() - 1, 255);
+			// 写入完整回复头和非法页面长度；不假定页面长度永远位于包尾。
+			buffer.writeInt(reply.containerId()); buffer.writeUUID(reply.session()); buffer.writeLong(reply.sequence());
+			buffer.writeEnum(reply.status()); buffer.writeInt(0); buffer.writeInt(0); buffer.writeBoolean(true);
+			buffer.writeEnum(view.kind()); buffer.writeLong(view.generation()); buffer.writeBoolean(false); buffer.writeByte(255);
 			assertThrows(IllegalArgumentException.class, () -> TerminalReply.STREAM_CODEC.decode(buffer));
 		} finally { buffer.release(); }
 	}

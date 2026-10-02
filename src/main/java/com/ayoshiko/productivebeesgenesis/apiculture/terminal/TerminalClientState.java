@@ -12,6 +12,8 @@ public final class TerminalClientState {
 	private TerminalView view;
 	private TerminalReply result, exchangeResult;
 	private boolean pendingExchange;
+	private boolean pendingPreview;
+	private TerminalUpgradePreview preview;
 	private Notice notice = Notice.IDLE;
 	private boolean closed;
 
@@ -21,6 +23,7 @@ public final class TerminalClientState {
 	public TerminalReply result() { return result; }
 	/** 查询刷新不会抹去刚确认的交换结果；下一次资产请求开始即清除。 */
 	public TerminalReply exchangeResult() { return exchangeResult; }
+	public TerminalUpgradePreview preview() { return preview; }
 	public Notice notice() { return notice; }
 	public boolean waiting() { return pending != 0; }
 
@@ -29,22 +32,26 @@ public final class TerminalClientState {
 		if (!ready(now)) return null;
 		boolean query = operation == TerminalRequest.Operation.MEMBERS || operation == TerminalRequest.Operation.PRODUCTS || operation == TerminalRequest.Operation.UPGRADES;
 		boolean cancel = operation == TerminalRequest.Operation.CANCEL;
+		boolean previewQuery = TerminalRequest.upgradePreview(operation);
 		if (!query && !cancel && (view == null || operation == TerminalRequest.Operation.NEXT && !view.hasNext()
 				|| operation != TerminalRequest.Operation.NEXT && (row < 0 || row >= view.rows().size()))) return null;
 		long generation = query || cancel ? 0 : view.generation();
 		var request = new TerminalRequest(container, session, sequence + 1, operation, generation, row, target, inventory, amount);
-		pendingExchange = !query && !cancel && operation != TerminalRequest.Operation.NEXT;
+		pendingExchange = !query && !cancel && !previewQuery && operation != TerminalRequest.Operation.NEXT;
+		pendingPreview = previewQuery; preview = null;
 		if (pendingExchange) exchangeResult = null;
 		pending = ++sequence; sentAt = now; nextSendAt = now + SEND_INTERVAL_MILLIS;
 		if (query) expiresAt = now + TIMEOUT_MILLIS;
-		view = null; result = null; notice = Notice.WAITING;
+		if (!previewQuery) view = null;
+		result = null; notice = Notice.WAITING;
 		return request;
 	}
 	public void accept(TerminalReply reply, long now) {
 		if (closed || pending == 0 || reply.sequence() != pending || reply.containerId() != container || !reply.session().equals(session)) return;
 		if (pendingExchange) exchangeResult = reply;
-		pendingExchange = false;
-		pending = 0; result = reply; view = reply.view(); notice = Notice.REPLY;
+		if (pendingPreview && reply.preview() != null) preview = reply.preview(); else view = reply.view();
+		pendingExchange = false; pendingPreview = false;
+		pending = 0; result = reply; notice = Notice.REPLY;
 		tick(now);
 	}
 	public void tick(long now) {
@@ -52,5 +59,5 @@ public final class TerminalClientState {
 		if (pending != 0 && now - sentAt >= TIMEOUT_MILLIS) { pending = 0; view = null; notice = Notice.TIMEOUT; }
 		if (view != null && now >= expiresAt) { view = null; notice = Notice.EXPIRED; }
 	}
-	public void close() { closed = true; view = null; result = null; exchangeResult = null; pending = 0; pendingExchange = false; }
+	public void close() { closed = true; view = null; result = null; exchangeResult = null; preview = null; pending = 0; pendingExchange = false; pendingPreview = false; }
 }

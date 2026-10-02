@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.terminal;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
@@ -10,9 +11,20 @@ import net.minecraft.resources.ResourceLocation;
 
 /** 每个已接纳请求只回复一次，包体最多 16 KiB，无分片队列，图标组件 NBT 每项最多 512 字节。 */
 public record TerminalReply(int containerId, UUID session, long sequence, Status status,
-		int moved, int interruptedTicks, TerminalView view) implements CustomPacketPayload {
+		int moved, int interruptedTicks, TerminalView view, List<UpgradeResult> upgrades, TerminalUpgradePreview preview) implements CustomPacketPayload {
 	public enum Status { OK, MOVED, STALE, INVALID, UNAVAILABLE, NO_SPACE, EMPTY_OR_RESERVED, DRAIN_FIRST,
-		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER, LIMIT, UNSUPPORTED, ENERGY_CAPACITY, CONFLICT }
+		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER, LIMIT, UNSUPPORTED, ENERGY_CAPACITY, CONFLICT, BATCH_COMPLETE }
+	public record UpgradeResult(int row, String label, Status status, int moved) {
+		public UpgradeResult {
+			Objects.requireNonNull(label); Objects.requireNonNull(status);
+			if (row < 0 || row >= NetworkSelectionSession.PAGE_SIZE || label.length() > TerminalView.TEXT_LIMIT
+					|| moved < 0 || moved > 64 || status == Status.BATCH_COMPLETE || (status == Status.MOVED) != (moved > 0))
+				throw new IllegalArgumentException("Invalid per-member upgrade result");
+		}
+	}
+	public TerminalReply(int containerId, UUID session, long sequence, Status status, int moved, int interruptedTicks, TerminalView view) {
+		this(containerId, session, sequence, status, moved, interruptedTicks, view, List.of(), null);
+	}
 	public static final int MAX_BYTES = 16 * 1024;
 	public static final Type<TerminalReply> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_reply"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalReply> STREAM_CODEC = new StreamCodec<>() {
@@ -21,20 +33,32 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			int container = b.readInt(); UUID session = b.readUUID(); long sequence = b.readLong();
 			Status status = b.readEnum(Status.class); int moved = b.readInt(), interrupted = b.readInt();
 			TerminalView view = b.readBoolean() ? readView(b) : null;
+			int count = boundedSize(b, NetworkSelectionSession.PAGE_SIZE); var upgrades = new ArrayList<UpgradeResult>(count);
+			for (int i = 0; i < count; i++) upgrades.add(new UpgradeResult(b.readUnsignedByte(), b.readUtf(TerminalView.TEXT_LIMIT), b.readEnum(Status.class), b.readUnsignedByte()));
+			var preview = b.readBoolean() ? TerminalUpgradePreview.read(b) : null;
 			if (b.isReadable()) throw new IllegalArgumentException("Trailing terminal reply bytes");
-			return new TerminalReply(container, session, sequence, status, moved, interrupted, view);
+			return new TerminalReply(container, session, sequence, status, moved, interrupted, view, upgrades, preview);
 		}
 		@Override public void encode(FriendlyByteBuf b, TerminalReply r) {
 			int start = b.writerIndex();
 			b.writeInt(r.containerId); b.writeUUID(r.session); b.writeLong(r.sequence); b.writeEnum(r.status);
 			b.writeInt(r.moved); b.writeInt(r.interruptedTicks); b.writeBoolean(r.view != null);
 			if (r.view != null) writeView(b, r.view);
+			b.writeByte(r.upgrades.size());
+			for (var upgrade : r.upgrades) { b.writeByte(upgrade.row()); b.writeUtf(upgrade.label(), TerminalView.TEXT_LIMIT); b.writeEnum(upgrade.status()); b.writeByte(upgrade.moved()); }
+			b.writeBoolean(r.preview != null); if (r.preview != null) r.preview.write(b);
 			if (b.writerIndex() - start > MAX_BYTES) throw new IllegalArgumentException("Oversized terminal reply");
 		}
 	};
 	public TerminalReply {
 		Objects.requireNonNull(session); Objects.requireNonNull(status);
 		if (containerId < 0 || sequence <= 0 || moved < 0 || moved > 1000 || interruptedTicks < 0) throw new IllegalArgumentException("Invalid terminal reply");
+		upgrades = List.copyOf(upgrades);
+		if (upgrades.size() > NetworkSelectionSession.PAGE_SIZE || upgrades.stream().map(UpgradeResult::row).distinct().count() != upgrades.size()
+				|| (status == Status.BATCH_COMPLETE) != !upgrades.isEmpty()
+				|| !upgrades.isEmpty() && (view != null || preview != null || interruptedTicks != 0 || moved != upgrades.stream().mapToInt(UpgradeResult::moved).sum())
+				|| preview != null && (status != Status.OK || moved != 0 || interruptedTicks != 0 || view != null))
+			throw new IllegalArgumentException("Invalid upgrade reply");
 	}
 	@Override public Type<TerminalReply> type() { return TYPE; }
 	private static TerminalView readView(FriendlyByteBuf b) {

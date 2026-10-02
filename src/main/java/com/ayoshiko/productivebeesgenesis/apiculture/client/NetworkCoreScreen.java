@@ -39,6 +39,9 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private Button production;
 	private Button upgradeInstall, upgradeRemove;
 	private int upgradeChoice;
+	private boolean upgradeBatch;
+	private int previewHover;
+	private long previewHoverSince;
 
 	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); state = menu.clientState(); playerInventory = inventory;
@@ -69,9 +72,15 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			production = button(productionLabel(), 177, 108, 44, 20, () -> coreCommand(3)); management.add(production);
 		} else {
 			requestButton(tr("refresh"), 36, 26, 90, 15, this::refresh);
-			var next = requestButton(tr("next"), 130, 26, 91, 15, () -> send(NEXT, 0));
-			if (state.view() == null || !state.view().hasNext()) requests.remove(next);
-			next.active = state.view() != null && state.view().hasNext();
+			if (tab == 3 && selectedRow() != null) {
+				var scope = requestButton(tr(upgradeBatch ? "upgrade_page" : "upgrade_single"), 130, 26, 91, 15,
+						() -> { upgradeBatch = !upgradeBatch; rebuild(); });
+				scope.setTooltip(Tooltip.create(tr("upgrade_page_hint", state.view().rows().size())));
+			} else {
+				var next = requestButton(tr("next"), 130, 26, 91, 15, () -> send(NEXT, 0));
+				if (state.view() == null || !state.view().hasNext()) requests.remove(next);
+				next.active = state.view() != null && state.view().hasNext();
+			}
 			var view = state.view();
 			if (view != iconView) {
 				iconView = view; productIcons.clear();
@@ -95,6 +104,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			}
 			if (tab == 1 && selectedRow() != null) addActions();
 			if (tab == 3 && selectedRow() != null) addUpgradeActions();
+			if (tab == 3 && view == null && state.exchangeResult() != null) for (var result : state.exchangeResult().upgrades()) {
+				var label = tr("upgrade_row_result", result.row() + 1, UpgradePreviewText.result(result.status(), result.moved()));
+				var row = button(label, 35, 43 + result.row() * 11, 185, 11, () -> { }); row.active = false;
+				row.setTooltip(Tooltip.create(Component.literal(result.label()).append("\n").append(label)));
+			}
 		}
 		updateEnabled();
 	}
@@ -137,8 +151,10 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 					.append("\n").append(tr(upgrade.installable() ? "upgrade_next_cycle" : "upgrade_blocked"))));
 		}
 		button(Component.literal(Integer.toString(amount)), 36, 111, 40, 18, this::cycleAmount).setTooltip(Tooltip.create(tr("amount", amount)));
-		upgradeInstall = requestButton(tr("upgrade_install"), 80, 111, 68, 18, () -> send(UPGRADE_INSTALL, amount));
-		upgradeRemove = requestButton(tr("upgrade_remove"), 152, 111, 69, 18, () -> send(UPGRADE_REMOVE, amount));
+		upgradeInstall = requestButton(tr(upgradeBatch ? "upgrade_install_page" : "upgrade_install"), 80, 111, 68, 18,
+				() -> send(upgradeBatch ? UPGRADE_INSTALL_PAGE : UPGRADE_INSTALL, amount));
+		upgradeRemove = requestButton(tr(upgradeBatch ? "upgrade_remove_page" : "upgrade_remove"), 152, 111, 69, 18,
+				() -> send(upgradeBatch ? UPGRADE_REMOVE_PAGE : UPGRADE_REMOVE, amount));
 	}
 	private TerminalView.Upgrade selectedUpgrade() {
 		var row = selectedRow(); return row == null ? null : row.upgrades().stream().filter(upgrade -> upgrade.choice() == upgradeChoice).findFirst().orElse(null);
@@ -154,7 +170,9 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private void send(TerminalRequest.Operation operation, int count) {
 		var request = state.begin(operation, selected, TerminalRequest.upgradeAction(operation) ? upgradeChoice : target, inventorySlot, count, Util.getMillis());
 		if (request == null) return;
-		PacketDistributor.sendToServer(request); selected = -1; confirmCage = false; rebuild();
+		PacketDistributor.sendToServer(request);
+		if (!TerminalRequest.upgradePreview(operation)) selected = -1;
+		confirmCage = false; rebuild();
 	}
 	private void coreCommand(int id) { minecraft.gameMode.handleInventoryButtonClick(menu.containerId, id); }
 	private Component productionLabel() { return tr(menu.productionRunning() ? "pause" : "start"); }
@@ -172,15 +190,31 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		}
 		if (upgradeInstall != null) {
 			var upgrade = selectedUpgrade(); boolean allowed = state.ready(Util.getMillis()) && menu.canManage() && upgrade != null;
-			upgradeInstall.active = allowed && upgrade.installable(); upgradeRemove.active = allowed && upgrade.installed() > 0;
-			upgradeInstall.setTooltip(Tooltip.create(tr(menu.canManage() ? "upgrade_next_cycle" : "owner_only")));
-			upgradeRemove.setTooltip(Tooltip.create(tr(menu.canManage() ? "upgrade_destination" : "owner_only")));
+			upgradeInstall.active = allowed && (upgradeBatch || upgrade.installable()); upgradeRemove.active = allowed && (upgradeBatch || upgrade.installed() > 0);
+			upgradeInstall.setTooltip(Tooltip.create(upgradeTooltip(true))); upgradeRemove.setTooltip(Tooltip.create(upgradeTooltip(false)));
 		}
+	}
+	private boolean matchingPreview(boolean install) {
+		var p = state.preview(); return p != null && p.row() == selected && p.choice() == upgradeChoice && p.inventorySlot() == inventorySlot
+				&& p.requested() == amount && p.installing() == install;
+	}
+	private Component upgradeTooltip(boolean install) {
+		if (!menu.canManage()) return tr("owner_only");
+		return matchingPreview(install) ? UpgradePreviewText.text(state.preview(), upgradeBatch) : tr("preview_hover");
+	}
+	private void previewHoveredUpgrade() {
+		int hover = tab == 3 && selectedRow() != null && upgradeInstall != null && menu.canManage()
+				? upgradeInstall.isHovered() ? 1 : upgradeRemove.isHovered() ? 2 : 0 : 0;
+		long now = Util.getMillis();
+		if (hover != previewHover) { previewHover = hover; previewHoverSince = now; }
+		if (hover != 0 && now - previewHoverSince >= 350 && state.ready(now) && !matchingPreview(hover == 1))
+			send(hover == 1 ? UPGRADE_PREVIEW_INSTALL : UPGRADE_PREVIEW_REMOVE, amount);
 	}
 	@Override protected void containerTick() {
 		super.containerTick(); state.tick(Util.getMillis());
 		if (state.view() != displayed || state.notice() != displayedNotice) {
-			displayed = state.view(); displayedNotice = state.notice(); selected = -1; confirmCage = false; rebuild();
+			if (displayed != state.view()) selected = -1;
+			displayed = state.view(); displayedNotice = state.notice(); confirmCage = false; rebuild();
 		}
 		if (refreshAfterTake && !state.waiting() && state.ready(Util.getMillis()) && state.result() != null) {
 			refreshAfterTake = false;
@@ -188,6 +222,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		}
 		if (production != null) production.setMessage(productionLabel());
 		updateEnabled();
+		previewHoveredUpgrade();
 	}
 	@Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if ((tab == 1 || tab == 3) && button == 0) for (var slot : menu.slots) {

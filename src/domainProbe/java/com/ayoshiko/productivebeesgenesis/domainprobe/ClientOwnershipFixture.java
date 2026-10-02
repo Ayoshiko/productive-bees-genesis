@@ -19,6 +19,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class ClientOwnershipFixture {
 	static volatile int stage;
+	static volatile int serverTick;
 	static volatile String failure;
 	static volatile boolean retryJoin;
 	static final long ENERGY_CAPACITY = (1L << 40) + 77, ENERGY_STORED = 3_000_000_009L;
@@ -28,6 +29,7 @@ public final class ClientOwnershipFixture {
 	@SubscribeEvent public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.client.enabled") || stage == 4 || failure != null) return;
 		var server = event.getServer();
+		serverTick = server.getTickCount();
 		if (server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer player = server.getPlayerList().getPlayers().getFirst(); var level = server.overworld();
 		try {

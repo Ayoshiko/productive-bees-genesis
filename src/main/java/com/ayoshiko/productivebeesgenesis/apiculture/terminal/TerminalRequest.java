@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 public record TerminalRequest(int containerId, UUID session, long sequence, Operation operation,
 		long generation, int row, int targetSlot, int inventorySlot, int amount) implements CustomPacketPayload {
 	public enum Operation { MEMBERS, PRODUCTS, NEXT, CANCEL, FEED_IN, FEED_OUT, CAGE_IN, CAGE_OUT, TAKE_PRODUCT,
-		UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE }
+		UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE, UPGRADE_INSTALL_PAGE, UPGRADE_REMOVE_PAGE, UPGRADE_PREVIEW_INSTALL, UPGRADE_PREVIEW_REMOVE }
 	public static final int BYTES = 53;
 	public static final Type<TerminalRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_request"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalRequest> STREAM_CODEC = new StreamCodec<>() {
@@ -33,6 +33,13 @@ public record TerminalRequest(int containerId, UUID session, long sequence, Oper
 			throw new IllegalArgumentException("Invalid terminal request");
 		}
 	}
-	public static boolean upgradeAction(Operation operation) { return operation == Operation.UPGRADE_INSTALL || operation == Operation.UPGRADE_REMOVE; }
+	public static boolean upgradeAction(Operation operation) {
+		return operation == Operation.UPGRADE_INSTALL || operation == Operation.UPGRADE_REMOVE || upgradeBatch(operation) || upgradePreview(operation);
+	}
+	public static boolean upgradeBatch(Operation operation) { return operation == Operation.UPGRADE_INSTALL_PAGE || operation == Operation.UPGRADE_REMOVE_PAGE; }
+	public static boolean upgradePreview(Operation operation) { return operation == Operation.UPGRADE_PREVIEW_INSTALL || operation == Operation.UPGRADE_PREVIEW_REMOVE; }
+	public static boolean upgradeInstalling(Operation operation) {
+		return operation == Operation.UPGRADE_INSTALL || operation == Operation.UPGRADE_INSTALL_PAGE || operation == Operation.UPGRADE_PREVIEW_INSTALL;
+	}
 	@Override public Type<TerminalRequest> type() { return TYPE; }
 }

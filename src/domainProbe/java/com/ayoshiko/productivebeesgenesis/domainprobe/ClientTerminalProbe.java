@@ -17,19 +17,24 @@ final class ClientTerminalProbe {
 	private static int step;
 	private static final java.util.Set<Integer> beeColors = new java.util.HashSet<>();
 	private static long nextAt, resizeSequence;
+	private static int nextServerTick;
+	static int step() { return step; }
 	static boolean complete() { return step == 25; }
 	static boolean advance(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu) throws Exception {
 		return advance(client, screen, menu, false);
 	}
 	static boolean advance(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu, boolean remote) throws Exception {
 		verifyLayout(screen, menu);
+		require(menu.clientState().notice() != TerminalClientState.Notice.TIMEOUT, "Terminal request timed out at client step " + step);
 		if (!remote) ClientTerminalFixture.requested = true;
+		if (!remote && ClientOwnershipFixture.serverTick < nextServerTick) return false;
 		if ((!remote && !ClientTerminalFixture.ready) || Util.getMillis() < nextAt || menu.clientState().waiting() || !menu.clientState().ready(Util.getMillis())) return false;
 		// 回复可能在界面 tick 后到达；等控件消费新状态，不在同 tick 使用旧的禁用按钮。
 		String refresh = Component.translatable("screen.productivebeesgenesis.network.refresh").getString();
 		if (screen.children().stream().anyMatch(child -> child instanceof Button button
 				&& button.getMessage().getString().equals(refresh) && !button.active)) return false;
 		nextAt = Util.getMillis() + 250;
+		if (!remote) nextServerTick = ClientOwnershipFixture.serverTick + 8;
 		switch (step) {
 			case 0 -> { press(screen, "tab.1"); step++; }
 			case 1 -> { if (!member(screen, menu)) return false; press(screen, "feed_in"); step++; }

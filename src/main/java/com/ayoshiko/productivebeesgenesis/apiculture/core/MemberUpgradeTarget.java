@@ -38,6 +38,10 @@ record MemberUpgradeTarget(TileEntityMekanism machine) {
 		if (machine instanceof TileEntityMekApiary hive) StaticApiaryAdapter.validateUpgrades(hive, image);
 		else StaticCentrifugeAdapter.validateUpgrades((TileEntityMekCentrifuge) machine, image);
 	}
+	com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity capability(AssetImage image) {
+		return machine instanceof TileEntityMekApiary hive ? StaticApiaryAdapter.upgradeCapacity(hive, image)
+				: StaticCentrifugeAdapter.upgradeCapacity((TileEntityMekCentrifuge) machine, image);
+	}
 	long capacity(int installed) {
 		return machine instanceof TileEntityMekApiary hive ? StaticApiaryAdapter.energyCapacity(hive, installed)
 				: StaticCentrifugeAdapter.energyCapacity((TileEntityMekCentrifuge) machine, installed);

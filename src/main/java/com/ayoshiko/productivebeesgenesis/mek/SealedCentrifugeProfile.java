@@ -50,6 +50,7 @@ final class SealedCentrifugeProfile {
 	}
 	private int count(PbUpgradeType type) { return pb.getOrDefault(type, 0); }
 	int ticks(int base) { return MekExtrasUpgradeSemantics.processingTicks(false, base, time); }
+	float timeFactor() { return time; }
 	int parallel() { return parallel; }
 	long energy() { return energy; }
 	int productivity() { return Math.max(1, (int) Math.floor(CentrifugePbMultipliers.productivity(this::count))); }

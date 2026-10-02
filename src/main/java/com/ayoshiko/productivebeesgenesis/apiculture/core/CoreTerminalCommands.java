@@ -28,7 +28,12 @@ final class CoreTerminalCommands {
 		}
 		var selected = menu.selectedRow(player, request.session(), request.generation(), request.row());
 		if (selected == null) return reply(request, STALE, 0, 0, null);
+		if (TerminalRequest.upgradePreview(operation)) {
+			return selected instanceof NetworkSelectionSession.MemberRow member ? CoreUpgradePreview.preview(menu, player, member, request)
+					: reply(request, INVALID, 0, 0, null);
+		}
 		try {
+			if (TerminalRequest.upgradeBatch(operation)) return CoreUpgradeCommands.batch(menu, player, request, selections.page());
 			var current = core.ownership().readyAuthority().checkpoint();
 			if (operation == TerminalRequest.Operation.TAKE_PRODUCT) {
 				if (!(selected instanceof NetworkSelectionSession.ProductRow product)) return reply(request, INVALID, 0, 0, null);

@@ -36,7 +36,9 @@ public final class DomainProbeServer {
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
 			try {
-				if (Boolean.getBoolean("pbg.upgrades.only")) ApiaryUpgradeProbe.verifyShutdown(event.getServer(), report);
+				if (Boolean.getBoolean("pbg.upgrades.only")) {
+					MemberUpgradeProbe.verifyShutdown(event.getServer(), report); ApiaryUpgradeProbe.verifyShutdown(event.getServer(), report);
+				}
 				else if (System.getProperty("pbg.automatic.mode") != null) AutomaticRestartProbe.verifyShutdown(event.getServer(), report);
 				else if (System.getProperty("pbg.centrifuge.mode") != null) com.ayoshiko.productivebeesgenesis.apiculture.persistence.CentrifugeRestartProbe.verifyShutdown(event.getServer(), report);
 				else {
@@ -62,9 +64,12 @@ public final class DomainProbeServer {
 			try {
 				if (event.getServer().getTickCount() == 40) {
 					pendingReport = new JsonObject(); pendingReport.addProperty("scope", "upgrades");
-					pendingReport.addProperty("ae2Loaded", ModList.get().isLoaded("ae2")); ApiaryUpgradeProbe.start(event.getServer());
+					pendingReport.addProperty("ae2Loaded", ModList.get().isLoaded("ae2")); MemberUpgradeProbe.start(event.getServer());
 				}
-				if (pendingReport != null && ApiaryUpgradeProbe.advance(event.getServer(), pendingReport)) {
+				if (pendingReport != null && !apiaryUpgradesStarted && MemberUpgradeProbe.advance(event.getServer(), pendingReport)) {
+					ApiaryUpgradeProbe.start(event.getServer()); apiaryUpgradesStarted = true;
+				}
+				if (pendingReport != null && apiaryUpgradesStarted && ApiaryUpgradeProbe.advance(event.getServer(), pendingReport)) {
 					pendingReport.addProperty("passed", true); finish(event, pendingReport); pendingReport = null;
 				}
 			} catch (Exception failure) {

@@ -7,6 +7,18 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalRequest.Operation.*;
 
 class TerminalClientStateTest {
+	@Test void previewKeepsTheSamePageWithoutExtendingExpiryOrBecomingAnExchange() {
+		state.begin(UPGRADES, -1, -1, 0, 0, 0);
+		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 1, false,
+				List.of(new TerminalView.Row("test:apiary", false, "", "", true, List.of())));
+		state.accept(reply(1, page), 10);
+		state.begin(UPGRADE_PREVIEW_INSTALL, 0, 0, 0, 1, 200); assertSame(page, state.view());
+		var preview = new TerminalUpgradePreview(0, 0, 0, 1, true, TerminalReply.Status.EMPTY, 0, null, null);
+		state.accept(new TerminalReply(7, session, 2, TerminalReply.Status.OK, 0, 0, null, List.of(), preview), 400);
+		assertSame(page, state.view()); assertEquals(preview, state.preview()); assertNull(state.exchangeResult());
+		state.tick(5000); assertNull(state.view());
+		assertNull(state.begin(UPGRADE_INSTALL_PAGE, 0, 0, 0, 1, 5001));
+	}
 	private final UUID session = UUID.randomUUID();
 	private final TerminalClientState state = new TerminalClientState(7, session);
 	private TerminalView page(long generation) {

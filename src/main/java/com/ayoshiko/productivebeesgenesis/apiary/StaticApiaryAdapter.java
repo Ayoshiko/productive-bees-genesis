@@ -56,6 +56,11 @@ public final class StaticApiaryAdapter {
 	public static void validateUpgrades(TileEntityMekApiary hive, AssetImage image) {
 		new SealedApiaryProfile(hive, image);
 	}
+	public static com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity upgradeCapacity(TileEntityMekApiary hive, AssetImage image) {
+		var profile = new SealedApiaryProfile(hive, image);
+		return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(profile.time(), profile.energy(),
+				image.copy().getLong("energyCapacity"), 1, profile.productivity(), 0, profile.combBlock(), false);
+	}
 	public static long energyCapacity(TileEntityMekApiary hive, int installed) {
 		if (hive.getClass() != TileEntityMekApiary.class || installed < 0 || installed > mekanism.api.Upgrade.ENERGY.getMax())
 			throw new IllegalArgumentException("Unsupported apiary energy capacity request");

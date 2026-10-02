@@ -87,6 +87,12 @@ public final class NetworkClientProbe {
 	private static void finish(Minecraft client, Exception error) {
 		finished = true;
 		var report = new JsonObject(); report.addProperty("passed", error == null); report.addProperty("completedStage", ClientOwnershipFixture.stage);
+		report.addProperty("terminalProbeStep", ClientTerminalProbe.step()); report.addProperty("upgradeProbeStep", ClientUpgradeProbe.step());
+		if (error != null && client.player != null && client.player.containerMenu instanceof NetworkCoreMenu menu) {
+			report.addProperty("notice", menu.clientState().notice().name()); report.addProperty("waiting", menu.clientState().waiting());
+			report.addProperty("lastReply", String.valueOf(menu.terminalReply()));
+			try { capture(client, "client-failure"); } catch (java.io.IOException captureFailure) { error.addSuppressed(captureFailure); }
+		}
 		report.addProperty("ae2Present", net.neoforged.fml.ModList.get().isLoaded("ae2"));
 		report.addProperty("takeoverAttempts", joinAttempts);
 		report.addProperty("menuCountsAndButtons", error == null); report.addProperty("permissionsAndStaleMenu", error == null);
@@ -94,6 +100,7 @@ public final class NetworkClientProbe {
 		report.addProperty("permanentInventoryAndMinimumViewport", error == null && ClientTerminalProbe.complete());
 		report.addProperty("componentItemGridAndPbTint", error == null && ClientTerminalProbe.complete());
 		report.addProperty("upgradeWidgetsBothMembersNativePbAndConservation", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
+		report.addProperty("upgradeBatchAndPreviewWidgets", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

@@ -64,6 +64,12 @@ public final class StaticCentrifugeAdapter {
 		if (tile.getClass() != TileEntityMekCentrifuge.class) throw new IllegalArgumentException("Only basic centrifuges are supported");
 		new SealedCentrifugeProfile(tile, assets);
 	}
+	public static com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity upgradeCapacity(TileEntityMekCentrifuge tile,
+			com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage assets) {
+		var profile = new SealedCentrifugeProfile(tile, assets);
+		return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(profile.timeFactor(), profile.energy(),
+				assets.copy().getLong("energyCapacity"), profile.parallel(), profile.productivity(), profile.stability(), false, profile.discardByproducts());
+	}
 	/** 读取未重复平衡的本机基础容量；数量来自权威候选，不临时安装到物理组件。 */
 	public static long energyCapacity(TileEntityMekCentrifuge tile, int installed) {
 		if (tile.getClass() != TileEntityMekCentrifuge.class || installed < 0 || installed > mekanism.api.Upgrade.ENERGY.getMax())
