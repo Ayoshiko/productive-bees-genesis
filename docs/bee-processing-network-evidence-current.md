@@ -491,3 +491,14 @@ PB 单独变更时，部分周期仍按旧耗时及费用完成，旧产物结�
 网络 worktree 基线 `f658925`，依赖保持 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85。六组定向测试共 **60 项通过，无失败／跳过**，其中仅在现有 `CombinedMachineWorkTest` 新增 3 项：六蜂位和超 long 产物恢复、满载分次交付后再次恢复及未付完工作续费、坏记录拒绝与完整组件上限。其余沿用蜂随机／生产、离心和完整／预算 checkpoint 回归。测试命令 18 秒；一次 `build -x test verifyReleaseArtifact --no-daemon` 7 秒通过。报告与六份 XML 保存在 `build/network-gates/m04b1-work-codec-20261002/gate.json`；JAR SHA-256 为 `254FDD21F441A89EF9019B2C57389189856F2D20944F66D8724BC9C1F1FA78FE`。
 
 本步只证明 NBT 候选往返与恢复后的计算行为，未启动游戏、未新增专用探针，不证明世界文件正常重启。世界资产保管、控制器引用、缺档／损坏隔离和结构／卸载／所有权调度留 M04b2；喂食／插件／端口留 M04c，独立生产联合门留 M04d。M04b 与 M04 父门保持开放。
+
+<a id="s10-86"></a>
+### 10.86 M04b2 世界资产保管与有界调度（2026-10-02，M04b 已验收）
+
+实现见[2.4](bee-processing-network-design.md#s2-4)，复用边界见[13.22](bee-processing-network-references.md#s13-22)。单机资产独立落盘，严格绑定 owner／维度／位置／代际；缺档不建空库，写失败保留原文件与 dirty，运行异常保留原根并撤销资格。共享调度推进已持有输入的离心旧工作、已付费蜂采样与有限交付，旧结构操作凭据不能在重建后复活。
+
+网络 worktree 基线 `331e30a`，NeoForge 21.1.216／PB 13.14.0／Mekanism 10.7.19.85，无 AE2／Applied Flux。33 项定向测试全部通过（新增 4 项资产保存／失败／锚点／隔离行为，17 秒）；一次构建／产物检查通过（7 秒）。复用现有专服夹具：writer `m04b2-write-20261002a`、另一 JVM reader `m04b2-read-20261002d`、生命周期 `m04b2-lifecycle-20261002b` 均正常停服通过。验证完整资产恢复、仅补付余下三 tick、满载不重抽、单 tick 去重、缺失／坏文件不覆盖、RECOVERY 落盘、完整卸载重建、重复控制器及拆除后资产保留；两轮局部区块可用性丢失通过，局部物理 Unload 事件计数为 0。
+
+失败与修复：读档探针等待正式 onLoad；跨 JVM 比较无序 Map 的列表导致误报，文件哈希一致，改为全部权威字段／Map 语义与真实槽序比较；工作轮询续 UNKNOWN 票据导致完整卸载超时，改用 getChunkNow 后通过；自审补齐隔离时先撤销绑定再发布 FAULT。只重跑受影响入口，保留原失败产物。
+
+证据与命令在 `build/network-gates/m04b2-world-20261002/gate.json`，含四份 XML、三份专服报告及源码哈希；JAR SHA-256 `615BC74E2BC4960BB901740DD87BDCEE68B3B841ADAE45876FADF8027E1515DB`。M04b 完成；真实喂食／新周期／实物端口／插件仍属 M04c，独立生产联合门属 M04d，M04 父门未关闭。本步无真实玩家、双依赖联合、规模保存延迟或 Spark 性能结论。

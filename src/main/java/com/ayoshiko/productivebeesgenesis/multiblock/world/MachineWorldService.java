@@ -25,7 +25,7 @@ public final class MachineWorldService {
 	private static final class Session {
 		final Map<ServerLevel, MachineDirectory> directories = new ConcurrentHashMap<>();
 		final Set<MachineControllerEntity> watched = ConcurrentHashMap.newKeySet(), queued = ConcurrentHashMap.newKeySet();
-		final ArrayDeque<MachineControllerEntity> waiting = new ArrayDeque<>(), audit = new ArrayDeque<>();
+		final ArrayDeque<MachineControllerEntity> waiting = new ArrayDeque<>(), audit = new ArrayDeque<>(), working = new ArrayDeque<>();
 		final Map<MachineControllerEntity, ScanJob> scans = new ConcurrentHashMap<>();
 		boolean auditTurn;
 		long visualRevision;
@@ -70,7 +70,12 @@ public final class MachineWorldService {
 		var directory = session.directories.computeIfAbsent(level, ignored -> new MachineDirectory(CombinedApiaryDefinition.DEFINITION));
 		try { core.handle = directory.attach(core.machineId(), core.generation(), core.getBlockPos(), core.getBlockState().getValue(MachinePartBlock.FACING)); }
 		catch (RuntimeException failure) { core.registrationFailed = true; core.publishState(); LogUtils.getLogger().warn("Machine registration failed at {}", core.getBlockPos(), failure); return; }
-		session.watched.add(core); session.audit.addLast(core); enqueue(session, core);
+		session.watched.add(core); session.audit.addLast(core); session.working.addLast(core);
+		try { MachineWorkService.attach(core); enqueue(session, core); }
+		catch (RuntimeException failure) {
+			core.registrationFailed = true; directory.invalidate(core.handle, MachineDirectory.State.RECOVERY);
+			core.publishState(); LogUtils.getLogger().warn("Machine assets unavailable at {}", core.getBlockPos(), failure);
+		}
 		// 重复 UUID 会使原有控制器也失效，显示只是投影；运行资格已在目录中同步撤销。
 		for (var other : directory.sameIdentity(core.handle)) sync(level, other);
 	}
@@ -78,9 +83,16 @@ public final class MachineWorldService {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
 		if (!level.getServer().isSameThread()) throw new IllegalStateException("Request machine validation on the server thread");
 		core.registrationFailed = false;
+		if (core.handle != null && (!core.assetReferenced || core.assets == null || !core.assets.available())) remove(core);
 		watch(core);
 		if (core.handle == null) return;
 		var session = SESSIONS.get(level.getServer()); invalidate(session, core, MachineDirectory.State.REBUILDING);
+	}
+	static void workFailed(MachineControllerEntity core) {
+		if (core.getLevel() instanceof ServerLevel level) {
+			var session = SESSIONS.get(level.getServer());
+			if (session != null) invalidate(session, core, MachineDirectory.State.RECOVERY);
+		}
 	}
 	private static void enqueue(Session session, MachineControllerEntity core) { if (session.queued.add(core)) session.waiting.addLast(core); }
 	private static void invalidate(Session session, MachineControllerEntity core, MachineDirectory.State state) {
@@ -108,6 +120,15 @@ public final class MachineWorldService {
 		if (level.hasChunk(handle.controller().getX() >> 4, handle.controller().getZ() >> 4) && level.getBlockEntity(handle.controller()) instanceof MachineControllerEntity core && core.handle == handle) {
 			invalidate(session, core, state);
 		} else session.directories.get(level).invalidate(handle, state);
+	}
+	/** 与结构扫描分开计入同一全服预算；不按卸载时间补跑。 */
+	public static boolean stepWork(MinecraftServer server) {
+		if (!server.isSameThread()) throw new IllegalStateException("Advance machine work on the server thread");
+		var session = SESSIONS.get(server); if (session == null || session.working.isEmpty()) return false;
+		var core = session.working.peekFirst(); long tick = server.getTickCount();
+		if (core.workTick == tick) return false;
+		session.working.removeFirst(); session.working.addLast(core); core.workTick = tick;
+		MachineWorkService.step(core); return true;
 	}
 	public static boolean step(MinecraftServer server) {
 		if (!server.isSameThread()) throw new IllegalStateException("Advance machine validation on the server thread");
@@ -203,12 +224,12 @@ public final class MachineWorldService {
 	}
 	public static void remove(MachineControllerEntity core) {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
-		core.clearPartVisuals();
+		core.clearPartVisuals(); core.assets = null;
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
 		var directory = session.directories.get(level); var removed = core.handle;
 		var peers = directory != null && removed != null ? directory.sameIdentity(removed) : List.<MachineDirectory.Handle>of();
 		if (directory != null && removed != null) directory.remove(removed);
-		core.handle = null; session.watched.remove(core); session.queued.remove(core); session.waiting.remove(core); session.audit.remove(core);
+		core.handle = null; session.watched.remove(core); session.queued.remove(core); session.waiting.remove(core); session.audit.remove(core); session.working.remove(core);
 		var scan = session.scans.remove(core); if (scan != null) scan.cancel();
 		for (var peer : peers) if (peer != removed && directory.current(peer)) {
 			if (peer.state() == MachineDirectory.State.REBUILDING) invalidateHandle(session, level, peer, MachineDirectory.State.REBUILDING);
@@ -222,7 +243,7 @@ public final class MachineWorldService {
 	}
 	static void stop(MinecraftServer server) {
 		var session = SESSIONS.remove(server); if (session == null) return;
-		session.directories.values().forEach(MachineDirectory::clear); session.watched.forEach(core -> core.handle = null);
+		session.directories.values().forEach(MachineDirectory::clear); session.watched.forEach(core -> { core.handle = null; core.assets = null; });
 	}
 	private MachineWorldService() { }
 }

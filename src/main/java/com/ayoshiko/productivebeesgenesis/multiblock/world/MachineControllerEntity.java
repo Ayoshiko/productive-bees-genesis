@@ -25,6 +25,9 @@ public final class MachineControllerEntity extends BlockEntity {
 	private UUID machine = UUID.randomUUID(), owner;
 	private long generation = 1;
 	private boolean invalidIdentity;
+	boolean assetReferenced;
+	MachineAssets assets;
+	long workTick = Long.MIN_VALUE;
 	private MachineVisualSnapshot publishedVisual;
 	private final MachinePartVisuals partVisuals = new MachinePartVisuals();
 	private final MachineVisualInbox visualInbox = new MachineVisualInbox();
@@ -89,11 +92,12 @@ public final class MachineControllerEntity extends BlockEntity {
 	}
 	@Override public void onLoad() { super.onLoad(); MachineWorldService.watch(this); }
 	void clearPartVisuals() { if (level instanceof ServerLevel server) partVisuals.sync(server, null); }
-	@Override public void onChunkUnloaded() { clearPartVisuals(); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.onChunkUnloaded(); }
+	@Override public void onChunkUnloaded() { MachineWorldService.remove(this); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.onChunkUnloaded(); }
 	@Override public void setRemoved() { MachineWorldService.remove(this); visualInbox.clear(); visualActivity.invalidate(); publishedVisual = null; super.setRemoved(); }
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("machine", machine); tag.putLong("generation", generation);
 		if (owner != null) tag.putUUID("owner", owner); tag.putBoolean("invalidIdentity", invalidIdentity); tag.putInt("layout", CombinedApiaryDefinition.DEFINITION.layoutVersion());
+		tag.putInt("storageVersion", 1); tag.putBoolean("assetReferenced", assetReferenced);
 	}
 	@Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		MachineWorldService.remove(this);
@@ -102,6 +106,13 @@ public final class MachineControllerEntity extends BlockEntity {
 				|| !tag.contains("generation", Tag.TAG_LONG) || tag.getLong("generation") < 1
 				// 布局 1 只含身份且尚无独立机资产；保留身份后按含旧模板的布局 2 重扫。
 				|| !tag.contains("layout", Tag.TAG_INT) || (tag.getInt("layout") != 1 && tag.getInt("layout") != 2);
+		assetReferenced = false;
+		if (tag.contains("storageVersion") || tag.contains("assetReferenced")) {
+			try {
+				if (com.ayoshiko.productivebeesgenesis.apiculture.persistence.StrictNbt.integer(tag, "storageVersion") != 1) throw new IllegalArgumentException("Unsupported machine storage reference");
+				assetReferenced = com.ayoshiko.productivebeesgenesis.apiculture.persistence.StrictNbt.bool(tag, "assetReferenced");
+			} catch (RuntimeException failure) { invalidIdentity = true; }
+		}
 		if (tag.hasUUID("machine")) machine = tag.getUUID("machine"); generation = Math.max(1, tag.getLong("generation"));
 		owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null; handle = null; registrationFailed = false; MachineWorldService.watch(this);
 	}

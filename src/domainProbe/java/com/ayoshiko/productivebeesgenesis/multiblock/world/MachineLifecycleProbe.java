@@ -35,6 +35,9 @@ public final class MachineLifecycleProbe {
 	private static MachinePartEntity oldPart;
 	private static ChunkPos missing;
 	private static UUID identity, owner;
+	private static MachineAssets heldAssets;
+	private static MachineWorkService.Access retainedAccess;
+	private static com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork retainedWork;
 	private static int phase, started, until, rounds, unloadEvents, maxSteps;
 	private static boolean enabled() { return "lifecycle".equals(System.getProperty("pbg.multiblock.mode")); }
 	@SubscribeEvent public static void unloaded(ChunkEvent.Unload event) {
@@ -61,6 +64,9 @@ public final class MachineLifecycleProbe {
 				}
 				case 1 -> {
 					if (!fixture.core().formed() || !noise.core().formed()) return;
+					var firstAccess = MachineWorkService.access(fixture.core()).orElseThrow(); var empty = firstAccess.work();
+					check(MachineWorkService.commit(firstAccess, empty.receiveEnergy(123)), "Cannot fund formed standalone assets");
+					heldAssets = fixture.core().assets; retainedWork = heldAssets.work(); retainedAccess = MachineWorkService.access(fixture.core()).orElseThrow();
 					oldBinding = fixture.core().handle.binding().orElseThrow();
 					level.setBlock(air(), Blocks.STONE.defaultBlockState(), 2);
 					check(!fixture.core().formed() && !MachineWorldService.active(level, oldBinding), "Silent mutation retained binding"); phase++;
@@ -103,12 +109,15 @@ public final class MachineLifecycleProbe {
 				}
 				case 7 -> {
 					check(!level.hasChunk(missing.x, missing.z) && !fixture.core().formed(), "Service force-loaded missing chunk");
+					check(MachineWorkService.view(fixture.core()).isEmpty() && !MachineWorkService.commit(retainedAccess, retainedWork.receiveEnergy(1)), "Unloaded region allowed asset access");
+					check(heldAssets.work() == retainedWork, "Partial unload changed held assets");
 					if (server.getTickCount() < until) return;
 					force(level, fixture, true); phase++;
 				}
 				case 8 -> {
 					if (!fixture.core().formed()) return;
 					check(!MachineWorldService.active(level, oldBinding), "Reload revived old binding");
+					check(!MachineWorkService.commit(retainedAccess, retainedWork.receiveEnergy(1)), "Reformation revived an old asset operation");
 					check(!oldPart.isRemoved() || !oldPart.bound(), "Reload revived removed part");
 					check(fixture.core().machineId().equals(identity), "Partial unload changed identity");
 					if (++rounds < 2) { phase = 5; return; }
@@ -123,6 +132,7 @@ public final class MachineLifecycleProbe {
 					if (!fixture.core().isRemoved() || MachineWorldService.tracked(server) != 0) return;
 					check(!MachineWorldService.active(level, oldBinding), "Controller unload retained binding");
 					check(oldPart.isRemoved() && !oldPart.bound(), "Full unload retained old part");
+					check(fixture.core().assets == null && MachineWorkService.view(fixture.core()).isEmpty() && heldAssets.work() == retainedWork, "Controller unload lost assets or retained live access");
 					force(level, fixture, true); phase++;
 				}
 				case 10 -> {
@@ -131,6 +141,8 @@ public final class MachineLifecycleProbe {
 					check(!MachineWorldService.active(level, oldBinding), "Controller reload revived old binding");
 					fixture = new MachineProbeFixture(fixture.template(), fixture.pos(), fixture.facing(), reloaded);
 					report.addProperty("controllerUnloadRecreatesHandleAndKeepsOwner", true);
+					check(MachineWorkService.view(reloaded).orElseThrow() == retainedWork, "Reload replaced the sole asset root");
+					report.addProperty("assetAccessClosesAndRootSurvivesRealUnload", true);
 					noise = MachineProbeFixture.place(level, fixture.template(), new BlockPos(1088, 128, 1008), Direction.NORTH, UUID.randomUUID());
 					noise.core().loadWithComponents(reloaded.saveWithFullMetadata(level.registryAccess()), level.registryAccess());
 					check(!reloaded.formed() && reloaded.status() == MachineDirectory.State.RECOVERY && noise.core().status() == MachineDirectory.State.RECOVERY, "Replayed controller did not isolate both");
@@ -139,8 +151,9 @@ public final class MachineLifecycleProbe {
 				case 11 -> {
 					if (!fixture.core().formed()) return;
 					report.addProperty("duplicateControllerReplayAndRecovery", true);
+					check(MachineWorkService.view(fixture.core()).orElseThrow() == retainedWork, "Duplicate replay changed asset root");
 					var core = fixture.core(); var valid = core.saveWithFullMetadata(level.registryAccess());
-					for (String field : new String[]{"machine", "owner", "generation", "layout"}) {
+					for (String field : new String[]{"machine", "owner", "generation", "layout", "storageVersion", "assetReferenced"}) {
 						var broken = valid.copy(); broken.remove(field); core.loadWithComponents(broken, level.registryAccess());
 						check(!core.formed() && core.status() == MachineDirectory.State.RECOVERY, "Missing identity field accepted: " + field);
 						core.initializeOwner(UUID.randomUUID()); check(!core.readyIdentity(), "Malformed identity adopted by placer");
@@ -154,6 +167,8 @@ public final class MachineLifecycleProbe {
 					report.addProperty("malformedIdentityFailsClosed", true);
 					fixture.remove(level); force(level, fixture, false);
 					check(MachineWorldService.tracked(server) == 0, "Removed controller retained by service");
+					check(fixture.core().assets == null && heldAssets.work() == retainedWork && heldAssets.work().energy() == 123, "Breaking controller discarded assets");
+					report.addProperty("removedControllerKeepsAssetsWithoutAccess", true);
 					report.addProperty("cleanup", true); report.addProperty("passed", true); finish(event);
 				}
 			}
@@ -175,7 +190,7 @@ public final class MachineLifecycleProbe {
 		write(); event.getServer().halt(false);
 	}
 	@SubscribeEvent public static void stopped(ServerStoppedEvent event) {
-		if (enabled()) { report.addProperty("normalShutdown", true); write(); fixture = noise = null; oldBinding = null; oldPart = null; }
+		if (enabled()) { report.addProperty("normalShutdown", true); write(); fixture = noise = null; oldBinding = null; oldPart = null; heldAssets = null; retainedWork = null; retainedAccess = null; }
 	}
 	private static void write() {
 		try { Files.createDirectories(Path.of("results")); Files.writeString(Path.of("results/multiblock.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }

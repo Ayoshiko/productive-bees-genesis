@@ -295,10 +295,11 @@ tasks.named('runNetworkMultiblockServer') {
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
                 'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup',
-                'waitingStateProjectedWithoutChunkLoad']
+                'waitingStateProjectedWithoutChunkLoad', 'assetAccessClosesAndRootSurvivesRealUnload', 'removedControllerKeepsAssetsWithoutAccess']
         if (multiblockMode in ['write', 'read']) {
-            required = ['identityOwnerAndGenerationRetained', 'formalQueueReformedAndPartsBound', 'malformedIdentityRemainsIsolated', 'singleRegisteredController']
-            if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm']
+            required = ['identityOwnerAndGenerationRetained', 'formalQueueReformedAndPartsBound', 'malformedIdentityRemainsIsolated', 'singleRegisteredController', 'normalAssetCheckpointSaved']
+            if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm', 'normalWorkCheckpointRestoredBeforeFormation',
+                    'singleTickWorkAndPaidRecovery', 'missingAndUnreadableFilesNeverRecreated', 'recoveryQuarantineRevokesAuthority']
         }
         if (result.passed != true || result.normalShutdown != true || required.any { result[it] != true }
                 || result.ae2Loaded != probeAe2
