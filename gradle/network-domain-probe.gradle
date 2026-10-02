@@ -295,7 +295,8 @@ tasks.named('runNetworkMultiblockServer') {
         if (multiblockMode == 'lifecycle') required = ['silentAirMutationAndRepair', 'auditProgressesWhileAnotherScanKeepsQueueBusy',
                 'twoRealPartialChunkAvailabilityLossesAndReloads', 'missingChunkNotForceLoadedAndOldBindingRevoked',
                 'controllerUnloadRecreatesHandleAndKeepsOwner', 'duplicateControllerReplayAndRecovery', 'malformedIdentityFailsClosed', 'cleanup',
-                'waitingStateProjectedWithoutChunkLoad', 'assetAccessClosesAndRootSurvivesRealUnload', 'removedControllerKeepsAssetsWithoutAccess']
+                'waitingStateProjectedWithoutChunkLoad', 'assetAccessClosesAndRootSurvivesRealUnload', 'removedControllerKeepsAssetsWithoutAccess',
+                'rolePortsFaceComponentsLimitsAndSimulation', 'portCachesStayRevokedAcrossUnloadAndReformation']
         if (multiblockMode in ['write', 'read']) {
             required = ['identityOwnerAndGenerationRetained', 'formalQueueReformedAndPartsBound', 'malformedIdentityRemainsIsolated', 'singleRegisteredController', 'normalAssetCheckpointSaved']
             if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm', 'normalWorkCheckpointRestoredBeforeFormation',

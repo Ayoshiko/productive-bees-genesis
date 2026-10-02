@@ -216,4 +216,22 @@ class CombinedMachineWorkTest {
 		assertEquals(encoded, CombinedWorkCodec.encode(state));
 	}
 
+	@Test void portTransfersStayInTheSpecifiedSlotAndRejectDifferentComponents() {
+		var tag = new CompoundTag(); tag.putString("name", "variant");
+		var variant = new ProductKey(ProductKey.Kind.ITEM, ITEM.id(), tag);
+		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1);
+		var first = state.insertItem(5, ITEM, 64, 16);
+		assertEquals(16, first.moved()); assertEquals(0, state.buffer().count(ITEM));
+		state = first.apply(state); assertNull(state.buffer().items().get(0).key()); assertEquals(16, state.buffer().items().get(5).count());
+		assertFalse(state.insertItem(5, variant, 10, 64).changed());
+		state = change(state, state.insertItem(6, variant, 10, 64));
+		state = change(state, state.insertItem(7, ITEM, 4, 16));
+		var removed = state.extractItem(5, 100); assertEquals(16, removed.moved()); state = removed.apply(state);
+		assertEquals(4, state.buffer().count(ITEM)); assertEquals(10, state.buffer().count(variant)); assertNull(state.buffer().items().get(5).key());
+		assertFalse(state.extractItem(5, 1).changed());
+		var frozen = state;
+		assertThrows(IllegalArgumentException.class, () -> frozen.insertItem(0, FLUID, 1, 64));
+		assertThrows(IllegalArgumentException.class, () -> frozen.extractItem(0, -1));
+	}
+
 }

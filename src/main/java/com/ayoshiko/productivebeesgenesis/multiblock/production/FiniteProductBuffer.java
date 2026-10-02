@@ -63,6 +63,28 @@ public final class FiniteProductBuffer {
 		}
 		return new Transfer(remaining == requested ? this : replace(key, next), requested - remaining);
 	}
+	/** 管道按真实槽号操作，不能把指定槽插入偷偷转移到其它槽。 */
+	public Transfer insertItem(int slot, ProductKey key, long offered, int itemLimit) {
+		Objects.requireNonNull(key);
+		if (key.kind() != ProductKey.Kind.ITEM || offered < 0 || itemLimit < 1 || itemLimit > 64)
+			throw new IllegalArgumentException("Invalid item slot offer");
+		var current = items.get(slot);
+		if (current.key() != null && !current.key().equals(key)) return new Transfer(this, 0);
+		int limit = current.key() == null ? itemLimit : Math.min(itemLimit, current.limit());
+		long moved = Math.min(offered, Math.max(0, limit - current.count()));
+		if (moved == 0) return new Transfer(this, 0);
+		var next = new ArrayList<>(items);
+		next.set(slot, new Cell(key, current.count() + moved, current.key() == null ? limit : current.limit()));
+		return new Transfer(new FiniteProductBuffer(next, fluids, tankCapacity), moved);
+	}
+	public Transfer extractItem(int slot, long requested) {
+		if (requested < 0) throw new IllegalArgumentException("Negative item slot withdrawal");
+		var current = items.get(slot); long moved = Math.min(requested, current.count());
+		if (moved == 0) return new Transfer(this, 0);
+		var next = new ArrayList<>(items); long count = current.count() - moved;
+		next.set(slot, count == 0 ? Cell.empty() : new Cell(current.key(), count, current.limit()));
+		return new Transfer(new FiniteProductBuffer(next, fluids, tankCapacity), moved);
+	}
 	private List<Cell> cells(ProductKey key) { return key.kind() == ProductKey.Kind.ITEM ? items : fluids; }
 	private FiniteProductBuffer replace(ProductKey key, List<Cell> cells) {
 		return key.kind() == ProductKey.Kind.ITEM ? new FiniteProductBuffer(cells, fluids, tankCapacity) : new FiniteProductBuffer(items, cells, tankCapacity);

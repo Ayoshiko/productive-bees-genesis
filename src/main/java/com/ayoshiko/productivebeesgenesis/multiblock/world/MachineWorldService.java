@@ -237,6 +237,7 @@ public final class MachineWorldService {
 		}
 	}
 	static void unload(ServerLevel level) {
+		com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.clear(level.getServer());
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
 		for (var core : List.copyOf(session.watched)) if (core.getLevel() == level) remove(core);
 		var directory = session.directories.remove(level); if (directory != null) directory.clear();

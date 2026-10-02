@@ -13,7 +13,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.*;
 import static com.ayoshiko.productivebeesgenesis.multiblock.definition.StructureRole.*;
 
-/** 独立机器注册不依赖蜂业核心或可选模组；当前只开放结构，不提供产能。 */
+/** 独立机器注册不依赖蜂业核心或可选模组；角色端口转发同一单机服务。 */
 public final class MachineContent {
 	public interface RoleBlock { StructureRole role(); }
 	private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks("productivebeesgenesis");
@@ -35,6 +35,6 @@ public final class MachineContent {
 			() -> BlockEntityType.Builder.of(MachinePartEntity::new, block(CORE), block(APIARY_UNIT), block(CENTRIFUGE_UNIT), block(INTERFACE), block(ENERGY_PORT), block(INPUT_PORT), block(OUTPUT_PORT)).build(null));
 	public static Block block(StructureRole role) { return PARTS.get(role).get(); }
 	public static List<Block> registeredBlocks() { return ROLES.stream().map(MachineContent::block).toList(); }
-	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); }
+	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); bus.addListener(MachinePorts::register); }
 	private MachineContent() { }
 }

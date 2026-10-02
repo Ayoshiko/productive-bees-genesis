@@ -25,7 +25,7 @@ public final class MachineWorkService {
 			this.core = core; binding = core.handle.binding().orElseThrow(); assets = core.assets; work = assets.work();
 		}
 		public CombinedMachineWork work() { return work; }
-		private boolean current() {
+		boolean current() {
 			return active(core) && core.assets == assets && assets.work() == work && core.handle.binding().orElse(null) == binding;
 		}
 	}
@@ -74,6 +74,9 @@ public final class MachineWorkService {
 		var access = access(core).orElse(null); if (access == null) return;
 		var level = (ServerLevel) core.getLevel(); var before = access.work(); var next = before;
 		try {
+			// 全服共用一个静态产物目录；一次机器工作名额至多推进八个编译单位。
+			for (int i = 0; i < 8 && com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.peek(level) == null; i++)
+				com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.get(level, 0);
 			var environment = new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering());
 			for (var bee : before.bees()) {
 				// M04c 才接真实喂食与新周期能力；这里仅处理已经付款的采样和交付，不伪造花朵条件。

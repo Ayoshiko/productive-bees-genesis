@@ -9,7 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 /** 静态产品资格按服务器和配方代际共享；动态发现仍属于各网络自己的注册表。 */
-final class RuntimeProductPolicies {
+public final class RuntimeProductPolicies {
 	private static final class Cache {
 		long epoch = -1;
 		Object recipes;
@@ -17,7 +17,7 @@ final class RuntimeProductPolicies {
 		ProductPolicySnapshot snapshot;
 	}
 	private static final Map<MinecraftServer, Cache> CACHES = new ConcurrentHashMap<>();
-	static ProductPolicySnapshot get(ServerLevel level, long revision) {
+	public static ProductPolicySnapshot get(ServerLevel level, long revision) {
 		if (!level.getServer().isSameThread()) throw new IllegalStateException("Runtime policy belongs to the server thread");
 		if (revision < 0) throw new IllegalArgumentException("Negative policy revision");
 		var cache = CACHES.computeIfAbsent(level.getServer(), ignored -> new Cache()); long epoch = ProductiveBeesGenesis.RECIPE_VERSION.get();
@@ -32,6 +32,13 @@ final class RuntimeProductPolicies {
 		if (!result.diagnostics().isEmpty()) ProductiveBeesGenesis.LOGGER.warn("Network product policy skipped invalid recipes: {}", result.diagnostics());
 		return cache.snapshot.withRevision(revision);
 	}
-	static void clear(MinecraftServer server) { CACHES.remove(server); }
+	/** 端口查询只读已发布索引；模拟与频繁能力查询不能推进编译或绕过共享调度预算。 */
+	public static ProductPolicySnapshot peek(ServerLevel level) {
+		if (!level.getServer().isSameThread()) throw new IllegalStateException("Runtime policy belongs to the server thread");
+		var cache = CACHES.get(level.getServer());
+		return cache != null && cache.epoch == ProductiveBeesGenesis.RECIPE_VERSION.get()
+				&& cache.recipes == level.getRecipeManager().getRecipes() ? cache.snapshot : null;
+	}
+	public static void clear(MinecraftServer server) { CACHES.remove(server); }
 	private RuntimeProductPolicies() { }
 }

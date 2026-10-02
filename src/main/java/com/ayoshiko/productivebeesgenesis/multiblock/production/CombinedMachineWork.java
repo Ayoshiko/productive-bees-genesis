@@ -63,6 +63,14 @@ public final class CombinedMachineWork {
 		var transfer = buffer.extract(key, requested);
 		return transfer.moved() == 0 ? unchanged() : change(energy, bees, centrifuges, transfer.buffer(), transfer.moved());
 	}
+	public Change insertItem(int slot, ProductKey key, long offered, int stackLimit) {
+		var transfer = buffer.insertItem(slot, key, offered, stackLimit);
+		return transfer.moved() == 0 ? unchanged() : change(energy, bees, centrifuges, transfer.buffer(), transfer.moved());
+	}
+	public Change extractItem(int slot, long requested) {
+		var transfer = buffer.extractItem(slot, requested);
+		return transfer.moved() == 0 ? unchanged() : change(energy, bees, centrifuges, transfer.buffer(), transfer.moved());
+	}
 	public Change advanceBee(int slot, long expectedBeeRevision, BeeWorkExecutor.Context context, int ticks, int samplingBudget, BeeWorkExecutor.Cycle nextCycle) {
 		var current = bee(slot);
 		// 已付费周期只能沿用原能力到周期边界；下一次调用才切入新计划。
