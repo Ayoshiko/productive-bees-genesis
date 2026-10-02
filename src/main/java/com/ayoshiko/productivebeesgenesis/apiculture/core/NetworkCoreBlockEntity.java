@@ -63,6 +63,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 				&& server.getBlockEntity(worldPosition) == this;
 	}
 	boolean permits(Player player) { return owner != null && (owner.equals(player.getUUID()) || access.allows(player.getUUID())); }
+	boolean permitsUpgrades(Player player) { return owner != null && (owner.equals(player.getUUID()) || access.allowsUpgrades(player.getUUID())); }
 	public boolean allowed(Player player) { return usableBy(player) && permits(player); }
 	public boolean ownerAllowed(Player player) { return usableBy(player) && owner != null && owner.equals(player.getUUID()); }
 	Object accessToken() { return access.sessionToken(); }
@@ -71,6 +72,15 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 		var result = access.change(owner, target, grant);
 		if (result == CoreAccessState.Change.CHANGED) setChanged();
 		return result;
+	}
+	public CoreAccessState.Change changeUpgradeGuest(net.minecraft.server.level.ServerPlayer player, UUID target, boolean grant) {
+		if (!ownerAllowed(player)) return CoreAccessState.Change.DENIED;
+		var result = access.changeUpgrades(owner, target, grant);
+		if (result == CoreAccessState.Change.CHANGED) setChanged();
+		return result;
+	}
+	public java.util.List<UUID> upgradeGuests(net.minecraft.server.level.ServerPlayer player) {
+		return ownerAllowed(player) && access.valid() ? access.upgradeGuests() : null;
 	}
 	public java.util.List<UUID> guests(net.minecraft.server.level.ServerPlayer player) {
 		return ownerAllowed(player) && access.valid() ? access.guests() : null;

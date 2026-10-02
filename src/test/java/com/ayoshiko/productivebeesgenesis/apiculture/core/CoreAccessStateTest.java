@@ -8,6 +8,45 @@ import org.junit.jupiter.api.Test;
 class CoreAccessStateTest {
 	private final UUID owner = UUID.randomUUID(), controller = UUID.randomUUID(), guest = UUID.randomUUID();
 
+	@Test void upgradePermissionRequiresGuestAndRevocationDoesNotRegrantIt() {
+		var state = new CoreAccessState();
+		assertEquals(CoreAccessState.Change.INVALID, state.changeUpgrades(owner, guest, true));
+		state.change(owner, guest, true); var ordinary = state.sessionToken();
+		assertFalse(state.allowsUpgrades(guest));
+		assertEquals(CoreAccessState.Change.CHANGED, state.changeUpgrades(owner, guest, true));
+		assertTrue(state.allowsUpgrades(guest)); assertNotSame(ordinary, state.sessionToken());
+		var granted = state.sessionToken();
+		assertEquals(CoreAccessState.Change.UNCHANGED, state.changeUpgrades(owner, guest, true));
+		assertSame(granted, state.sessionToken());
+		state.changeUpgrades(owner, guest, false);
+		assertTrue(state.allows(guest)); assertFalse(state.allowsUpgrades(guest)); assertNotSame(granted, state.sessionToken());
+		state.changeUpgrades(owner, guest, true); state.change(owner, guest, false); state.change(owner, guest, true);
+		assertFalse(state.allowsUpgrades(guest)); assertTrue(state.upgradeGuests().isEmpty());
+	}
+	@Test void legacyAccessNeverAcquiresUpgradePermissionAndNewFormatRestoresIt() {
+		var state = new CoreAccessState(); state.change(owner, guest, true);
+		var old = (CompoundTag) state.save(owner, controller); old.putInt("version", 1); old.remove("upgrades");
+		var legacy = CoreAccessState.read(old, owner, controller);
+		assertTrue(legacy.valid()); assertTrue(legacy.allows(guest)); assertFalse(legacy.allowsUpgrades(guest));
+		state.changeUpgrades(owner, guest, true);
+		var saved = state.save(owner, controller); var restored = CoreAccessState.read(saved, owner, controller);
+		assertTrue(restored.valid()); assertTrue(restored.allowsUpgrades(guest));
+		assertEquals(saved, restored.save(owner, controller)); assertNotSame(state.sessionToken(), restored.sessionToken());
+	}
+	@Test void corruptUpgradeGrantsDenyTheWholeAccessTableAndPreserveData() {
+		var state = new CoreAccessState(); state.change(owner, guest, true); state.changeUpgrades(owner, guest, true);
+		for (int fault = 0; fault < 4; fault++) {
+			var saved = (CompoundTag) state.save(owner, controller);
+			if (fault == 0) saved.remove("upgrades");
+			if (fault == 1) saved.putString("upgrades", "invalid");
+			if (fault == 2) saved.getList("upgrades", Tag.TAG_INT_ARRAY).add(NbtUtils.createUUID(guest));
+			if (fault == 3) saved.getList("upgrades", Tag.TAG_INT_ARRAY).set(0, NbtUtils.createUUID(UUID.randomUUID()));
+			var restored = CoreAccessState.read(saved, owner, controller);
+			assertFalse(restored.valid()); assertFalse(restored.allows(guest)); assertFalse(restored.allowsUpgrades(guest));
+			assertEquals(saved, restored.save(owner, controller));
+		}
+	}
+
 	@Test void defaultsAndNoOpDoNotInvalidateSessions() {
 		var state = new CoreAccessState(); var token = state.sessionToken();
 		assertFalse(state.allows(guest)); assertFalse(state.allows(null));
@@ -57,7 +96,7 @@ class CoreAccessStateTest {
 
 	@Test void corruptRootAndUnknownVersionStayQuarantinedAndPreserved() {
 		var state = new CoreAccessState(); state.change(owner, guest, true);
-		var unknown = (CompoundTag) state.save(owner, controller); unknown.putInt("version", 2);
+		var unknown = (CompoundTag) state.save(owner, controller); unknown.putInt("version", 3);
 		for (Tag raw : new Tag[]{unknown, StringTag.valueOf("broken")}) {
 			var restored = CoreAccessState.read(raw, owner, controller);
 			assertFalse(restored.valid()); assertFalse(restored.allows(guest));
@@ -67,7 +106,7 @@ class CoreAccessStateTest {
 		}
 		var quarantined = CoreAccessState.read(unknown, owner, controller);
 		unknown.putInt("version", 99);
-		assertEquals(2, ((CompoundTag) quarantined.save(owner, controller)).getInt("version"));
+		assertEquals(3, ((CompoundTag) quarantined.save(owner, controller)).getInt("version"));
 	}
 
 	@Test void duplicateWrongTypeAndMalformedUuidDoNotPartiallyGrant() {

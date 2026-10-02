@@ -1,4 +1,9 @@
 {
+  "screen.productivebeesgenesis.network.upgrade_permission": "需要所有者或升级授权",
+  "productivebeesgenesis.network.access.upgrades.list": "可升级的访客（%s/%s）：%s",
+  "productivebeesgenesis.network.access.upgrades.granted": "已授予访客升级权限：%s",
+  "productivebeesgenesis.network.access.upgrades.revoked": "已撤销访客升级权限：%s",
+  "productivebeesgenesis.network.access.upgrades.invalid": "升级授权失败：目标须为现有访客，且访问数据有效。",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.machines.server.toml": "机器设置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.machines.server.toml.title": "机器配置",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.capacities.server.toml": "容量矩阵",

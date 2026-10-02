@@ -20,11 +20,17 @@ public final class CoreAccessCommands {
 		event.getDispatcher().register(Commands.literal("pbgnetwork")
 				.requires(source -> source.getEntity() instanceof ServerPlayer)
 				.then(Commands.literal("access").then(Commands.argument("core", BlockPosArgument.blockPos())
-						.then(Commands.literal("list").executes(CoreAccessCommands::list))
+						.then(Commands.literal("upgrades")
+								.then(Commands.literal("list").executes(context -> list(context, true)))
+								.then(Commands.literal("grant").then(Commands.argument("player", UuidArgument.uuid())
+										.executes(context -> change(context, true, true))))
+								.then(Commands.literal("revoke").then(Commands.argument("player", UuidArgument.uuid())
+										.executes(context -> change(context, false, true)))))
+						.then(Commands.literal("list").executes(context -> list(context, false)))
 						.then(Commands.literal("grant").then(Commands.argument("player", UuidArgument.uuid())
-								.executes(context -> change(context, true))))
+								.executes(context -> change(context, true, false))))
 						.then(Commands.literal("revoke").then(Commands.argument("player", UuidArgument.uuid())
-								.executes(context -> change(context, false)))))));
+								.executes(context -> change(context, false, false)))))));
 	}
 
 	private static NetworkCoreBlockEntity core(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -35,27 +41,29 @@ public final class CoreAccessCommands {
 		source.sendFailure(Component.translatable("productivebeesgenesis.network.access.denied")); return null;
 	}
 
-	private static int list(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+	private static int list(CommandContext<CommandSourceStack> context, boolean upgrades) throws CommandSyntaxException {
 		var core = core(context); if (core == null) return 0;
-		var guests = core.guests(context.getSource().getPlayerOrException());
+		var player = context.getSource().getPlayerOrException();
+		var guests = upgrades ? core.upgradeGuests(player) : core.guests(player);
 		if (guests == null) {
 			context.getSource().sendFailure(Component.translatable("productivebeesgenesis.network.access.invalid")); return 0;
 		}
-		context.getSource().sendSuccess(() -> Component.translatable("productivebeesgenesis.network.access.list",
+		context.getSource().sendSuccess(() -> Component.translatable(upgrades ? "productivebeesgenesis.network.access.upgrades.list" : "productivebeesgenesis.network.access.list",
 				guests.size(), CoreAccessState.MAX_GUESTS, String.join(", ", guests.stream().map(Object::toString).toList())), false);
 		return 1;
 	}
 
-	private static int change(CommandContext<CommandSourceStack> context, boolean grant) throws CommandSyntaxException {
+	private static int change(CommandContext<CommandSourceStack> context, boolean grant, boolean upgrades) throws CommandSyntaxException {
 		var core = core(context); if (core == null) return 0;
 		var target = UuidArgument.getUuid(context, "player");
-		var result = core.changeGuest(context.getSource().getPlayerOrException(), target, grant);
+		var player = context.getSource().getPlayerOrException();
+		var result = upgrades ? core.changeUpgradeGuest(player, target, grant) : core.changeGuest(player, target, grant);
 		var key = "productivebeesgenesis.network.access." + switch (result) {
-			case CHANGED -> grant ? "granted" : "revoked";
+			case CHANGED -> (upgrades ? "upgrades." : "") + (grant ? "granted" : "revoked");
 			case UNCHANGED -> "unchanged";
 			case DENIED -> "denied";
 			case FULL -> "full";
-			case INVALID -> "invalid";
+			case INVALID -> upgrades ? "upgrades.invalid" : "invalid";
 		};
 		if (result == CoreAccessState.Change.CHANGED || result == CoreAccessState.Change.UNCHANGED) {
 			context.getSource().sendSuccess(() -> Component.translatable(key, target.toString()), false); return 1;

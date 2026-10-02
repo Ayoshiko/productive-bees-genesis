@@ -195,7 +195,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			button.setTooltip(Tooltip.create(menu.canManage() ? button.getMessage() : tr("owner_only")));
 		}
 		if (upgradeInstall != null) {
-			var upgrade = selectedUpgrade(); boolean allowed = state.ready(Util.getMillis()) && menu.canManage() && upgrade != null;
+			var upgrade = selectedUpgrade(); boolean allowed = state.ready(Util.getMillis()) && menu.canUpgrade() && upgrade != null;
 			upgradeInstall.active = allowed && (upgradeBatch || upgrade.installable()); upgradeRemove.active = allowed && (upgradeBatch || upgrade.installed() > 0);
 			upgradeInstall.setTooltip(Tooltip.create(upgradeTooltip(true))); upgradeRemove.setTooltip(Tooltip.create(upgradeTooltip(false)));
 		}
@@ -205,11 +205,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 				&& p.requested() == amount && p.installing() == install;
 	}
 	private Component upgradeTooltip(boolean install) {
-		if (!menu.canManage()) return tr("owner_only");
+		if (!menu.canUpgrade()) return tr("upgrade_permission");
 		return matchingPreview(install) ? UpgradePreviewText.text(state.preview(), upgradeBatch) : tr("preview_hover");
 	}
 	private void previewHoveredUpgrade() {
-		int hover = tab == 3 && selectedRow() != null && upgradeInstall != null && menu.canManage()
+		int hover = tab == 3 && selectedRow() != null && upgradeInstall != null && menu.canUpgrade()
 				? upgradeInstall.isHovered() ? 1 : upgradeRemove.isHovered() ? 2 : 0 : 0;
 		long now = Util.getMillis();
 		if (hover != previewHover) { previewHover = hover; previewHoverSince = now; }

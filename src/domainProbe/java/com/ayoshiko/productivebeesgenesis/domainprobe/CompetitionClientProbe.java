@@ -59,6 +59,11 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (UpgradeCompetitionProbe.enabled() && stage >= 100) {
+                var reply = UpgradeCompetitionClient.advance(client, stage, OWNER);
+                if (reply != null) ack(reply.moved(), reply.status());
+                return;
+            }
             if (stage == 51) {
                 if (OWNER) ack(0, -1);
                 else {
@@ -99,6 +104,7 @@ public final class CompetitionClientProbe {
             if (stage == 0) { setup(client, screen, menu); return; }
             if (stage == 1) { prepareBee(screen, menu); return; }
             if (stage == 80) {
+                if (UpgradeCompetitionProbe.enabled() && !menu.canUpgrade()) return;
                 if (!queryReady(screen, menu)) return;
                 if (step == 0) { press(screen, "tab.2"); step++; return; }
                 if (menu.clientState().view() == null) return;
@@ -125,7 +131,7 @@ public final class CompetitionClientProbe {
     }
     private static void setup(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu) {
         switch (step) {
-            case 0 -> { if (menu.value(1) != 1) return; press(screen, "join"); step++; }
+            case 0 -> { if (menu.value(1) != (UpgradeCompetitionProbe.enabled() ? 2 : 1)) return; press(screen, "join"); step++; }
             case 1 -> { if (menu.ownershipStatus() != CoreOwnershipController.Status.MANAGED.ordinal()) return; press(screen, "start"); step++; }
             case 2 -> { if (!menu.productionRunning() || ++settled < 10) return; press(screen, "pause"); step++; }
             case 3 -> {

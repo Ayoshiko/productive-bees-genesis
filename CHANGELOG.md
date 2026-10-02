@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D17c3 独立升级授权**：所有者可向现有访客单独授予升级权限，开放核心与成员代理的预估、安装和取回，同时保留所有者专属结构管理。撤权后旧菜单失效，撤销访问同时移除升级权；旧访问表默认无升级授权，损坏数据保留并拒绝访客。权限表升至版本 2、终端协议升至版本 7，网络 checkpoint 格式不变。
+
 - **D17c2b 托管成员升级代理**：主手非潜行右键基础蜂箱／离心机，直接打开当前成员的网络升级页。复用预估和真实安装／取回，距离按源机器校验；单成员入口不提供批量和全网管理。权限、绑定、核心／成员实例或拓扑失效会关闭旧菜单，独立机器保留原 GUI，交互不放置手持方块、不生成掉落物。终端协议升至版本 6，存档格式不变；D17c3 的双玩家与跨 JVM 联合门保持开放。
 
 - **D17c2a 升级预估与本页批量**：悬停安装／取回按钮，按所选真实背包格可转移量预估下一工作段的周期、FE、容量及产物参数；模拟不占料、不修改资产、不延长旧选择。“本机／本页”范围支持最多八成员按页序逐机安装或取回，逐项显示成功、缺料、容量和旧选择等结果，部分失败保留此前真实提交。协议升至版本 5，存档格式不变；旧 GUI 代理和玩家联合门继续由 c2b／c3 交付。
@@ -145,6 +147,8 @@
 ### English
 
 #### Added
+
+- Added D17c3 explicit upgrade permission for existing guests. Owners can authorize upgrade previews, installation and removal through the core and member menus while retaining exclusive structural controls. Permission changes invalidate old menus; revoking access also removes upgrade permission. Legacy access tables grant no upgrade rights, and invalid data remains preserved and denies guests. Access tables use version 2 and the terminal protocol uses version 7; network checkpoint format is unchanged.
 
 - Added D17c2b managed-member upgrade menus. A main-hand, non-sneaking right-click on a basic managed apiary or centrifuge opens that member's network upgrade page, with previews and real install/return operations using distance from the source machine. The menu excludes page batches and network-wide controls. Permission, binding, block-entity or topology invalidation revokes old menus; standalone machines keep their original GUI. Interaction neither places the held block nor creates dropped items. Terminal protocol is version 6 with unchanged persistence; D17c3 two-player and cross-JVM joint gates remain open.
 

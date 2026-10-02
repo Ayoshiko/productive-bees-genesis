@@ -1,4 +1,9 @@
 {
+  "screen.productivebeesgenesis.network.upgrade_permission": "Requires ownership or upgrade permission",
+  "productivebeesgenesis.network.access.upgrades.list": "Guests with upgrade permission (%s/%s): %s",
+  "productivebeesgenesis.network.access.upgrades.granted": "Granted guest upgrade permission: %s",
+  "productivebeesgenesis.network.access.upgrades.revoked": "Revoked guest upgrade permission: %s",
+  "productivebeesgenesis.network.access.upgrades.invalid": "Cannot change upgrade permission: the target must be an existing guest and access data must be valid.",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.machines.server.toml": "Machine Settings",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.machines.server.toml.title": "Machine Configuration",
   "productivebeesgenesis.configuration.section.productivebeesgenesis.capacities.server.toml": "Capacity Matrices",

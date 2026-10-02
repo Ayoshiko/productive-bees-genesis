@@ -30,7 +30,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = null;
 		terminalSession = buffer.readUUID();
 		memberAccess = null; memberScoped = buffer.readBoolean();
-		selections = null; data = new SimpleContainerData(29); addDataSlots(data);
+		selections = null; data = new SimpleContainerData(30); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
@@ -46,6 +46,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index == 29) return NetworkCoreMenu.this.upgradeAllowed(viewer) ? 1 : 0;
 				if (index == 28) return NetworkCoreMenu.this.ownerAllowed(viewer) ? 1 : 0;
 				if (index == 26) return core.productionRunning() ? 1 : 0;
 				if (index == 27) return core.hasProductionSession() ? core.runtime().status().ordinal() : 0;
@@ -63,7 +64,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 29; }
+			@Override public int getCount() { return 30; }
 		}; addDataSlots(data); addInventory(inventory);
 	}
 	private void addInventory(Inventory inventory) {
@@ -85,6 +86,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	public int ownershipStatus() { return data.get(17); }
 	public boolean productionRunning() { return data.get(26) != 0; }
+	public boolean canUpgrade() { return data.get(29) != 0; }
 	public boolean canManage() { return data.get(28) != 0; }
 	public boolean memberScoped() { return memberScoped; }
 	public int runtimeStatus() { return data.get(27); }
@@ -96,6 +98,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	@Override public boolean stillValid(Player player) {
 		return !closed && viewerId.equals(player.getUUID()) && (core == null || accessToken == core.accessToken()
 				&& (memberAccess == null ? core.allowed(player) : memberAccess.valid(player)));
+	}
+	boolean upgradeAllowed(Player player) {
+		return core != null && stillValid(player) && core.permitsUpgrades(player);
 	}
 	boolean ownerAllowed(Player player) {
 		return core != null && stillValid(player) && core.owner() != null && core.owner().equals(player.getUUID());
@@ -196,7 +201,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
 		finally { exchanging = false; }
 	}
-	/** 所有者操作已准入基础成员的原生升级；正式终端与服务器探针共用。 */
+	/** 所有者或获准升级的访客操作已准入基础成员的原生升级；正式终端与服务器探针共用。 */
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {

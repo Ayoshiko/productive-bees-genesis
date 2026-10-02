@@ -106,19 +106,28 @@ public final class CompetitionServerProbe {
                 if (core.topology() == null || !core.topology().valid()) return;
                 if (reader()) {
                     if (core.ownership().readyAuthority() == null) return;
-                    verifyRecovered(server, players); openBoth(players);
+                    verifyRecovered(server, players);
+                    if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
+                    openBoth(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
                     begin(server, 80);
                 } else { core.openTerminal(owner); begin(server, 0); }
                 return;
             }
-            require(server.overworld().getGameTime() - stageAt < 1200, "Stage timeout: " + stage);
+            require(server.overworld().getGameTime() - stageAt < 1200, "Stage timeout: " + stage + "; acknowledgments=" + acks);
             if (stage == 0) {
                 if (!acks.containsKey(OWNER) || core.ownership().readyAuthority() == null || !core.allowed(players.get(1))) return;
                 require(!core.productionRunning() && checkpoint().ownedMachines().values().stream().anyMatch(r -> r.bees() != null), "Setup did not activate then pause");
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (UpgradeCompetitionProbe.enabled() && stage >= 100) {
+                if (!UpgradeCompetitionProbe.ready(core, players, stage)) return;
+                int next = UpgradeCompetitionProbe.advance(core, players, stage, acks, before, beforeInventory);
+                noDrops(server);
+                if (next < 0) finish(server); else begin(server, next);
+                return;
+            }
             if (stage == 1) {
                 conserved(server); require(networkBees() == 1 && networkFood() == 1, "UI preparation incomplete");
                 begin(server, 10); return;
@@ -154,7 +163,11 @@ public final class CompetitionServerProbe {
                 case 50 -> { unchanged(server); saveSessions(players); begin(server, 51); }
                 case 53 -> { unchanged(server); begin(server, 54); }
                 case 54 -> { unchanged(server); begin(server, 55); }
-                case 55 -> { verifyCase(server, 8); finish(server); }
+                case 55 -> {
+                    verifyCase(server, 8);
+                    if (UpgradeCompetitionProbe.enabled()) { UpgradeCompetitionProbe.seed(core, players); begin(server, 100); }
+                    else finish(server);
+                }
                 case 80 -> { unchanged(server); finish(server); }
                 default -> throw new IllegalStateException("Unexpected stage " + stage);
             }
@@ -173,11 +186,16 @@ public final class CompetitionServerProbe {
             core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); core.initializeOwner(OWNER);
             level.setBlockAndUpdate(pos.east(), ModBlocks.MEK_APIARY.get().defaultBlockState());
             var hive = (TileEntityMekApiary) level.getBlockEntity(pos.east()); hive.setOwnerUUID(OWNER); hive.setFeederConversionEnabled(false);
+            if (UpgradeCompetitionProbe.enabled()) {
+                level.setBlockAndUpdate(pos.east(2), ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState());
+                ((com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge) level.getBlockEntity(pos.east(2))).setOwnerUUID(OWNER);
+            }
         }
         for (var player : players) player.teleportTo(8.5, 100, 10.5);
     }
     private static void begin(MinecraftServer server, int next) {
         stage = next; stageAt = server.overworld().getGameTime(); acks.clear();
+        if (UpgradeCompetitionProbe.enabled() && next >= 100) com.mojang.logging.LogUtils.getLogger().info("UPGRADE_COMPETITION_STAGE {}", next);
         if (core.ownership().readyAuthority() != null && server.getPlayerList().getPlayerCount() == 2) {
             before = checkpoint(); beforeInventory = CompetitionAssets.inventories(players(server));
         }
@@ -241,6 +259,7 @@ public final class CompetitionServerProbe {
             }
             NbtIo.writeCompressed(manifest, manifestPath(server));
         }
+        if (reader() && UpgradeCompetitionProbe.enabled()) manifest.put("checkpoint", NetworkCheckpointCodec.encode(checkpoint()));
         closing = true; begin(server, 90);
     }
     private static void verifyRecovered(MinecraftServer server, List<ServerPlayer> players) {
@@ -289,7 +308,11 @@ public final class CompetitionServerProbe {
             report.add("playerFiles", paths); report.addProperty("domainFile", path.toAbsolutePath().toString());
             report.addProperty("producerPid", manifest.getLong("producerPid")); report.addProperty("normalPlayerFilesVerified", true);
             report.addProperty("replays", replays); report.addProperty("revocationAndRegrant", revoked && regranted);
-            report.addProperty("reconnectAndOldSessionRejected", disconnected && reconnected); report.addProperty("passed", true);
+            report.addProperty("reconnectAndOldSessionRejected", disconnected && reconnected);
+            if (UpgradeCompetitionProbe.enabled()) {
+                UpgradeCompetitionProbe.report(report); UpgradeCompetitionRecovery.report(report, reader());
+            }
+            report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }
         try { write("concurrent-server.json", report); } catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write competition report", error); }
         CompetitionSignal.server = null; core = null; before = null; beforeInventory = null; finalInventory = null; initial = null; manifest = null; acks.clear(); previousSessions.clear();

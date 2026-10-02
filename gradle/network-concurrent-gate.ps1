@@ -6,6 +6,8 @@ param(
     [ValidateSet('', 'write', 'read')][string]$ProbeMode = '',
     [string]$SeedWorld = '',
     [switch]$Ae2,
+    [switch]$Upgrades,
+    [ValidateSet('All', 'noae2', 'ae2')][string]$Combination = 'All',
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +17,7 @@ if ($ChildTask) {
     $arguments = @($ChildTask, '-PnetworkDomainProbe', "-PnetworkProbeRun=$ProbeId",
         "-PnetworkPlayerMode=$ProbeMode", '-PnetworkConcurrentProbe', "-PnetworkPlayerRole=$Role", '--no-daemon', '--no-configuration-cache')
     if ($Ae2) { $arguments += '-PnetworkProbeAe2' }
+    if ($Upgrades) { $arguments += '-PnetworkConcurrentUpgrades' }
     if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
     & .\gradlew @arguments
     exit $LASTEXITCODE
@@ -26,7 +29,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = 'D16c3c'; passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
     sourceFingerprint = Get-NetworkSourceFingerprint; dependencies = @(Get-NetworkDependencyHashes)
     checks = @(); limits = @('Local offline-mode TCP login, no account-service authentication',
@@ -48,6 +51,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     $arguments = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
         '-ChildTask', $Task, '-ProbeId', $Id, '-ProbeMode', $Mode, '-Role', $PlayerRole)
     if ($WithAe2) { $arguments += '-Ae2' }
+    if ($Upgrades) { $arguments += '-Upgrades' }
     if ($Seed) { $arguments += @('-SeedWorld', $Seed) }
     # All arguments are literal file paths or validated internal identifiers.
     if (@($arguments | Where-Object { $_.Contains('"') }).Count) { throw 'Unsupported quote in probe path' }
@@ -77,7 +81,7 @@ try {
     $artifact = Join-Path $workspace "build/libs/$($properties.mod_id)-$($properties.mod_version).jar"
     $artifactHash = (Get-FileHash -LiteralPath $artifact).Hash
     Add-Evidence 'runtime-artifact' $artifact
-    foreach ($combination in @('noae2', 'ae2')) {
+    foreach ($combination in $(if ($Combination -eq 'All') { @('noae2', 'ae2') } else { @($Combination) })) {
         $withAe2 = $combination -eq 'ae2'
         $seed = ''
         $writer = $null
@@ -115,6 +119,7 @@ try {
                     $clientReport.connections -ne $connections) { throw "Invalid concurrent client report: $roleId" }
                 Add-Evidence "$roleId-report" $clientPath
                 Add-Evidence "$roleId-image" (Join-Path $clientRoot 'concurrent.png')
+                if ($Upgrades -and $mode -eq 'write' -and $playerRole -eq 'guest') { Add-Evidence "$roleId-upgrade-image" (Join-Path $clientRoot 'upgrade-guest-proxy.png') }
                 $clientReports[$playerRole] = $clientReport
             }
             Wait-Probe $server $serverId
@@ -135,6 +140,9 @@ try {
                     if ($rows.Count -ne 1 -or $rows[0].twoPlayersOnline -ne $true) { throw "Missing competition case: $case" }
                 }
             }
+            if ($Upgrades -and ($serverReport.upgradeAuthorizationCompetitionProxyAndConservation -ne $true -or
+                ($mode -eq 'write' -and ($serverReport.upgradePartialWorkPreserved -ne $true -or $serverReport.upgradePlayerTransfers -ne 11)) -or
+                ($mode -eq 'read' -and $serverReport.upgradeRestoredWorkSettledExactlyOnce -ne $true))) { throw 'Missing upgrade joint checks' }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner
             Add-Evidence "$serverId-guest-file" $serverReport.playerFiles.guest
