@@ -225,7 +225,7 @@ class BeeProductionCheckpointTest {
 		assertEquals(bee, record(roundTrip(exact, "native-partial"), f).bees().bee(2));
 		assertThrows(IllegalArgumentException.class, () -> upgraded.exchangeUpgrade(speed));
 		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record(upgraded, f),
-				PbUpgradeType.PRODUCTIVITY_4, 1, 4));
+				PbUpgradeType.SIMULATION, 1, 4));
 	}
 	@Test void pbTimeExchangePreservesPartialPendingAndFrozenWork() throws Exception {
 		for (int ticks : new int[] {0, 2, 5}) for (int samples : new int[] {0, 1}) {
@@ -260,7 +260,7 @@ class BeeProductionCheckpointTest {
 	@Test void malformedOrUnreviewedApiaryPbEffectsCannotBecomeAssets() {
 		var f = fixture(0, 0); var record = record(f.active(), f);
 		for (var type : PbUpgradeType.values()) if (!List.of(PbUpgradeType.TIME, PbUpgradeType.TIME_2,
-				PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3).contains(type)) {
+				PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.BLOCK).contains(type)) {
 			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, type, 1, 64));
 			var extra = record.assets().copy().getCompound("extra");
 			extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).putInt(type.getId(), 1);
@@ -289,7 +289,7 @@ class BeeProductionCheckpointTest {
 		current = current.applyBeeWork(member, BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 0, 1, current.energy().stored()));
 		current = current.settleBee(member, 2, record(current, f).bees().bee(2).revision());
 		assertEquals(ProductAmount.of(4), current.ledger().balances().get(COMB));
-		state = record(current, f).bees(); var timing = new BeeWorkExecutor.Cycle(2, 3, 1);
+		state = record(current, f).bees(); var timing = new BeeWorkExecutor.Cycle(2, 3, 1, COMB);
 		var denied = BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 2, 1, 5, timing);
 		assertEquals(BeeWorkExecutor.Status.ENERGY, denied.status()); assertSame(state, denied.candidate());
 		var next = BeeWorkExecutor.advance(state, 2, state.bee(2).revision(), context(), 2, 1, current.energy().stored(), timing);
@@ -305,7 +305,7 @@ class BeeProductionCheckpointTest {
 		assertEquals(paid, roundTrip(paid, "new-native-cycle"));
 	}
 	@Test void newTimingCannotOverwritePartialOrPendingWork() {
-		var state = fixture(0, 0).bees; var timing = new BeeWorkExecutor.Cycle(2, 3, 1);
+		var state = fixture(0, 0).bees; var timing = new BeeWorkExecutor.Cycle(2, 3, 1, COMB);
 		var partial = BeeWorkExecutor.advance(state, 2, 0, context(), 2, 0).candidate();
 		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(partial, 2, 1, context(), 1, 1, partial.energy(), timing));
 		var pending = BeeWorkExecutor.advance(state, 2, 0, context(), 5, 0).candidate();

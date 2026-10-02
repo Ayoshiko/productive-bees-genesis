@@ -20,7 +20,8 @@ class BeeRandomCheckpointTest {
 	@TempDir Path folder;
 	private static final UUID MEMBER = new UUID(17, 3);
 	private static final ProductKey COMB = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:configurable_honeycomb"), new CompoundTag());
-	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> assertEquals(COMB, key));
+	private static final ProductKey BLOCK = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:configurable_comb"), new CompoundTag());
+	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> assertTrue(COMB.equals(key) || BLOCK.equals(key)));
 	@BeforeAll static void version() { SharedConstants.tryDetectVersion(); }
 
 	private NetworkCheckpoint fixture(float multiplier) {
@@ -71,7 +72,7 @@ class BeeRandomCheckpointTest {
 		assertEquals(oracle(state(before).bee(0).random().seed(), 7, 2.5f), state(after).bee(0).frozen().exact());
 		var bee = state(after).bee(0);
 		assertEquals(bee.random(), bee.work(bee.progress(), bee.pendingCycles(), ProductAmount.ZERO).random());
-		assertEquals(2.5f, bee.plan().withCycle(2, 3, 2.5f).productionMultiplier());
+		assertEquals(2.5f, bee.plan().withCycle(2, 3, 2.5f, COMB).productionMultiplier());
 	}
 
 	@Test void partitionedSamplingAndSettlementMatchOneCycleOracleAcrossFiles() throws Exception {
@@ -103,7 +104,7 @@ class BeeRandomCheckpointTest {
 		assertSame(state, BeeWorkExecutor.advance(state, 0, bee.revision() + 1, context(), 1, 10).candidate());
 		var partial = work(before, 3, 0);
 		assertEquals(bee.random(), state(partial).bee(0).random());
-		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(state(partial), 0, state(partial).bee(0).revision(), context(), 1, 1, state(partial).energy(), new BeeWorkExecutor.Cycle(2, 3, 2.5f)));
+		assertThrows(IllegalArgumentException.class, () -> BeeWorkExecutor.advance(state(partial), 0, state(partial).bee(0).revision(), context(), 1, 1, state(partial).energy(), new BeeWorkExecutor.Cycle(2, 3, 2.5f, COMB)));
 		var paid = work(partial, 2, 0);
 		var result = BeeWorkExecutor.advance(state(paid), 0, state(paid).bee(0).revision(), blocked, 0, 1);
 		assertEquals(BeeWorkExecutor.Status.READY, result.status()); assertEquals(0, result.energyUsed());
@@ -118,7 +119,7 @@ class BeeRandomCheckpointTest {
 		assertEquals(exact, settle(current).ledger().balances().get(COMB).exact());
 	}
 
-	@Test void legacySixRestoresExactPaidStateAndNewSevenRejectsMissingOrMixedFields() throws Exception {
+	@Test void legacySixRestoresExactPaidStateAndCurrentSchemaRejectsMissingOrMixedFields() throws Exception {
 		var initial = fixture(1); var paid = work(initial, 15, 0);
 		var old = legacy(NetworkCheckpointCodec.encode(paid));
 		assertEquals(paid, CODEC.decode(old));
@@ -126,7 +127,7 @@ class BeeRandomCheckpointTest {
 		var encoded = NetworkCheckpointCodec.encode(work(paid, 0, 1));
 		List<Consumer<CompoundTag>> mutations = List.of(
 				root -> beeState(root).remove("samplingVersion"),
-				root -> beeState(root).putInt("samplingVersion", 2),
+				root -> beeState(root).putInt("samplingVersion", 3),
 				root -> bee(root).remove("cursor"),
 				root -> bee(root).remove("seed"),
 				root -> bee(root).putInt("cursor", 1),
@@ -135,8 +136,11 @@ class BeeRandomCheckpointTest {
 				root -> bee(root).getCompound("plan").remove("multiplier"),
 				root -> bee(root).getCompound("plan").putDouble("multiplier", 2.5),
 				root -> bee(root).getCompound("plan").putFloat("multiplier", Float.NaN),
+				root -> bee(root).getCompound("plan").remove("sourceOutput"),
+				root -> bee(root).getCompound("plan").putString("sourceOutput", "invalid"),
 				root -> root.putInt("schema", 6),
-				root -> root.putInt("schema", 8));
+				root -> root.putInt("schema", 7),
+				root -> root.putInt("schema", 9));
 		int index = 0;
 		for (var mutation : mutations) {
 			var invalid = encoded.copy(); mutation.accept(invalid);
@@ -169,7 +173,7 @@ class BeeRandomCheckpointTest {
 				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.PRODUCTIVITY_2, 1, 8));
 		assertSame(original, state(changed).bee(0));
 		var pending = roundTrip(work(changed, 2, 0), "upgraded-paid-old-cycle");
-		var desired = new BeeWorkExecutor.Cycle(2, 3, 4.25f);
+		var desired = new BeeWorkExecutor.Cycle(2, 3, 4.25f, COMB);
 		var blocked = BeeWorkExecutor.advance(state(pending), 0, state(pending).bee(0).revision(), context(), 1, 1, state(pending).energy(), desired);
 		assertEquals(BeeWorkExecutor.Status.DRAIN_FIRST, blocked.status());
 		var sampled = BeeWorkExecutor.advance(state(pending), 0, state(pending).bee(0).revision(), context(), 0, 1, state(pending).energy(), desired);
@@ -192,7 +196,7 @@ class BeeRandomCheckpointTest {
 	}
 
 	@Test void blockedNewProductivityNeverPublishesPlanOrConsumesRandomState() {
-		var before = fixture(1); var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f);
+		var before = fixture(1); var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f, COMB);
 		for (var context : List.of(new BeeWorkExecutor.Context(false, true, true, 0, 0, context().environment()),
 				new BeeWorkExecutor.Context(true, false, true, 0, 0, context().environment()),
 				new BeeWorkExecutor.Context(true, true, false, 0, 0, context().environment()))) {
@@ -203,12 +207,12 @@ class BeeRandomCheckpointTest {
 		assertSame(source, BeeWorkExecutor.advance(source, 0, 0, context(), 4000, 1, source.energy(), desired).candidate());
 		assertEquals(0, source.bee(0).random().cursor());
 		assertEquals(1, source.bee(0).plan().productionMultiplier());
-		assertThrows(IllegalArgumentException.class, () -> new BeeWorkExecutor.Cycle(2, 3, Float.NaN));
+		assertThrows(IllegalArgumentException.class, () -> new BeeWorkExecutor.Cycle(2, 3, Float.NaN, COMB));
 	}
 
 	@Test void sharedEnergyAndNewProductivityCommitTogetherWithoutChangingOtherAssets() {
 		var before = fixture(1).configureEnergy(10000).migrateEnergy(MEMBER);
-		var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f);
+		var source = state(before); var desired = new BeeWorkExecutor.Cycle(2, 3, 2.5f, COMB);
 		var result = BeeWorkExecutor.advance(source, 0, 0, context(), 2, 1, before.energy().stored(), desired);
 		var after = before.applyBeeWork(MEMBER, result);
 		assertEquals(before.energy().stored() - 6, after.energy().stored());
@@ -218,12 +222,67 @@ class BeeRandomCheckpointTest {
 		assertSame(after, after.applyBeeWork(MEMBER, result));
 	}
 
+	@Test void blockInstallAndRemovalKeepOldKeysThroughPartialPendingFrozenAndSettledWork() throws Exception {
+		var current = work(fixture(1), 3, 0); var original = state(current).bee(0);
+		current = current.exchangeUpgrade(MemberUpgradeChange.pb(current.ownedMachines().get(MEMBER),
+				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK, 1, 1));
+		assertSame(original, state(current).bee(0));
+		current = roundTrip(work(current, 2, 0), "comb-pending-after-install");
+		var block = new BeeWorkExecutor.Cycle(5, 10, 1, BLOCK);
+		var blocked = BeeWorkExecutor.advance(state(current), 0, state(current).bee(0).revision(), context(), 1, 1, state(current).energy(), block);
+		assertEquals(BeeWorkExecutor.Status.DRAIN_FIRST, blocked.status());
+		current = roundTrip(work(current, 0, 1), "comb-frozen-after-install");
+		current = settle(current); assertEquals(ProductAmount.of(3), current.ledger().balances().get(COMB));
+		current = roundTrip(cycleWork(current, 2, 0, block), "block-partial");
+		assertEquals(COMB, state(current).bee(0).plan().sourceOutput());
+		assertEquals(BLOCK, state(current).bee(0).plan().output());
+		current = current.exchangeUpgrade(MemberUpgradeChange.pb(current.ownedMachines().get(MEMBER),
+				com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK, -1, 1));
+		current = roundTrip(cycleWork(current, 3, 0, null), "block-pending-after-removal");
+		current = roundTrip(cycleWork(current, 0, 1, null), "block-frozen-after-removal");
+		current = settle(current); assertEquals(ProductAmount.of(3), current.ledger().balances().get(BLOCK));
+		current = settle(cycleWork(current, 5, 1, new BeeWorkExecutor.Cycle(5, 10, 1, COMB)));
+		assertEquals(Map.of(COMB, ProductAmount.of(6), BLOCK, ProductAmount.of(3)), current.ledger().balances());
+		assertEquals(9850, state(current).energy()); assertEquals(3, state(current).bee(0).random().cursor());
+		assertEquals(original.random().seed(), state(current).bee(0).random().seed());
+		assertEquals(current, roundTrip(current, "block-fully-settled"));
+	}
+	@Test void rejectedBlockCycleCannotChangePlanOrPublishAnUnpaidKey() {
+		var before = fixture(1); var source = state(before); var desired = new BeeWorkExecutor.Cycle(5, 10, 1, BLOCK);
+		assertFalse(desired.matches(source.bee(0).plan()));
+		for (var denied : List.of(new BeeWorkExecutor.Context(true, false, true, 0, 0, context().environment()),
+				new BeeWorkExecutor.Context(true, true, false, 0, 0, context().environment())))
+			assertSame(source, BeeWorkExecutor.advance(source, 0, 0, denied, 1, 1, source.energy(), desired).candidate());
+		assertSame(source, BeeWorkExecutor.advance(source, 0, 1, context(), 1, 1, source.energy(), desired).candidate());
+		assertSame(source, BeeWorkExecutor.advance(source, 0, 0, context(), 1001, 1, source.energy(), desired).candidate());
+		var candidate = BeeWorkExecutor.advance(source, 0, 0, context(), 1, 1, source.energy(), desired);
+		assertEquals(COMB, source.bee(0).plan().output()); assertEquals(BLOCK, candidate.candidate().bee(0).plan().output());
+		assertThrows(IllegalArgumentException.class, () -> before.ownedMachines().get(MEMBER).withBees(candidate.candidate()));
+		var paid = before.applyBeeWork(MEMBER, candidate); assertEquals(9990, state(paid).energy());
+		assertSame(paid, paid.applyBeeWork(MEMBER, candidate));
+	}
+	@Test void schemaSevenMigratesSourceKeyWithoutChangingPaidRandomState() throws Exception {
+		var paid = work(fixture(2.5f), 20, 1); var old = NetworkCheckpointCodec.encode(paid);
+		old.putInt("schema", 7); beeState(old).putInt("samplingVersion", 1); bee(old).getCompound("plan").remove("sourceOutput");
+		assertEquals(paid, CODEC.decode(old)); assertEquals(paid, decodeFile(old, "schema-seven", true));
+		var mixed = old.copy(); bee(mixed).getCompound("plan").put("sourceOutput", ProductRecordCodec.key(BLOCK));
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(mixed)); decodeFile(mixed, "seven-with-new-field", false);
+		var invalidSource = NetworkCheckpointCodec.encode(paid);
+		bee(invalidSource).getCompound("plan").getCompound("sourceOutput").putString("unexpected", "corrupt");
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(invalidSource)); decodeFile(invalidSource, "invalid-source-key", false);
+	}
+	private static NetworkCheckpoint cycleWork(NetworkCheckpoint current, int ticks, int budget, BeeWorkExecutor.Cycle cycle) {
+		var source = state(current); var bee = source.bee(0);
+		var context = new BeeWorkExecutor.Context(true, true, true, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), context().environment());
+		var result = BeeWorkExecutor.advance(source, 0, bee.revision(), context, ticks, budget, source.energy(), cycle);
+		assertEquals(BeeWorkExecutor.Status.READY, result.status()); return current.applyBeeWork(MEMBER, result);
+	}
 	private static CompoundTag beeState(CompoundTag root) { return root.getList("ownership", 10).getCompound(0).getCompound("bees"); }
 	private static CompoundTag bee(CompoundTag root) { return beeState(root).getList("bees", 10).getCompound(0); }
 	private static CompoundTag legacy(CompoundTag encoded) {
 		encoded.putInt("schema", 6); beeState(encoded).remove("samplingVersion");
 		for (var raw : beeState(encoded).getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier");
+			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		return encoded;
 	}

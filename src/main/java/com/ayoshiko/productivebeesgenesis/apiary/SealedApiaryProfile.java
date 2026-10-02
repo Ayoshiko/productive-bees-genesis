@@ -14,6 +14,7 @@ import net.neoforged.fml.ModList;
 final class SealedApiaryProfile {
 	private final float time, productivity;
 	private final long energy;
+	private final boolean combBlock;
 	SealedApiaryProfile(TileEntityMekApiary hive, AssetImage assets) {
 		if (hive.getClass() != TileEntityMekApiary.class || ModList.get().isLoaded("mekanism_unleashed")
 				|| ModList.get().isLoaded("mekanism_empowered"))
@@ -25,7 +26,8 @@ final class SealedApiaryProfile {
 			throw new IllegalArgumentException("Static apiaries require sealed upgrades and disabled feeder conversion");
 		var pb = PbApiaryUpgradeCounts.read(extra);
 		productivity = ApiaryUpgradeMath.computeProductivityMultiplier(pb.getOrDefault(PbUpgradeType.PRODUCTIVITY, 0),
-				pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_2, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_3, 0), 0);
+				pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_2, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_3, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0));
+		combBlock = pb.getOrDefault(PbUpgradeType.BLOCK, 0) > 0 || pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0) > 0;
 		var upgrades = NativeUpgradeCounts.read(image.getCompound("upgrades"));
 		for (var entry : upgrades.entrySet())
 			if ((entry.getKey() != Upgrade.SPEED && entry.getKey() != Upgrade.ENERGY) || entry.getValue() > entry.getKey().getMax())
@@ -43,5 +45,6 @@ final class SealedApiaryProfile {
 	}
 	float time() { return time; }
 	float productivity() { return productivity; }
+	boolean combBlock() { return combBlock; }
 	long energy() { return energy; }
 }

@@ -8,9 +8,12 @@ import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import java.util.ArrayList;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.HoneycombItem;
+import cy.jdkdigital.productivebees.util.BeeHelper;
 
 /** 只读封存数据和成员原位置；不构造隐藏机器，不执行物理生产、喂食或输出。 */
 public final class StaticApiaryAdapter {
@@ -62,11 +65,12 @@ public final class StaticApiaryAdapter {
 	}
 	/** 只在周期起点读取当前升级，不在每个进行中的 tick 复制封存映像。 */
 	public static BeeWorkExecutor.Cycle cycle(TileEntityMekApiary hive, OwnedMachineRecord record, BeeRecord bee) {
-		return cycle(new SealedApiaryProfile(hive, record.assets()), bee);
+		return cycle(new SealedApiaryProfile(hive, record.assets()), bee, hive.getLevel().registryAccess());
 	}
-	private static BeeWorkExecutor.Cycle cycle(SealedApiaryProfile profile, BeeRecord bee) {
+	private static BeeWorkExecutor.Cycle cycle(SealedApiaryProfile profile, BeeRecord bee, HolderLookup.Provider registries) {
 		return new BeeWorkExecutor.Cycle(BeeProgressPlan.cycleTicks(bee.originalSlot().copy().getInt("base_min_occupation_ticks"),
-				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity());
+				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity(),
+				output(bee.plan().sourceOutput(), profile.combBlock(), registries));
 	}
 	/** 物理机无法接收旧能力或网络随机游标；小数倍率的部分周期必须先结清。 */
 	public static boolean returnReady(TileEntityMekApiary hive, OwnedMachineRecord record) {
@@ -74,8 +78,16 @@ public final class StaticApiaryAdapter {
 		if (!record.bees().drained()) return false;
 		if (record.bees().bees().stream().noneMatch(bee -> bee.progress() > 0)) return true;
 		var profile = new SealedApiaryProfile(hive, record.assets());
-		return record.bees().bees().stream().allMatch(bee -> bee.progress() == 0 || cycle(profile, bee).matches(bee.plan())
+		return record.bees().bees().stream().allMatch(bee -> bee.progress() == 0 || cycle(profile, bee, hive.getLevel().registryAccess()).matches(bee.plan())
 				&& bee.plan().productionMultiplier() == Math.floor(bee.plan().productionMultiplier()));
+	}
+	/** 只解析下一周期的固定模板；PB 映射错误向外传播，不能在扣费后降级换键。 */
+	public static ProductKey output(ProductKey source, boolean combBlock, HolderLookup.Provider registries) {
+		if (!combBlock) return source;
+		var stack = ProductKeyCodec.item(source, 1, registries);
+		if (!(stack.getItem() instanceof HoneycombItem)) return source;
+		var block = BeeHelper.getCombBlockFromHoneyComb(stack);
+		return block.isEmpty() ? source : ProductKeyCodec.item(block, registries);
 	}
 	private static StaticBeePlan compilePlan(ServerLevel level, SealedApiaryProfile profile, CompoundTag slot,
 			long recipeRevision, long capabilityRevision) {
@@ -98,10 +110,11 @@ public final class StaticApiaryAdapter {
 		if (entry.getKey().isEmpty() || output.chance() != 1 || output.min() < 1 || output.min() != output.max()) {
 			throw new IllegalArgumentException("Random output requires a dedicated adapter");
 		}
+		var source = ProductKeyCodec.item(entry.getKey(), level.registryAccess());
 		return new StaticBeePlan(IRON.toString(), holder.id().toString(), recipeRevision, capabilityRevision,
 				BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false),
 				profile.energy(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
-				BeeWorkConditionEvaluator.readTraits(data), ProductKeyCodec.item(entry.getKey(), level.registryAccess()), output.min(), profile.productivity());
+				BeeWorkConditionEvaluator.readTraits(data), output(source, profile.combBlock(), level.registryAccess()), output.min(), profile.productivity(), source);
 	}
 	public static boolean currentPlan(ServerLevel level, TileEntityMekApiary hive, BeeRecord bee) {
 		var plan = bee.plan(); var pref = BeeInfoHelper.getFlowerPreference(IRON);
@@ -111,7 +124,7 @@ public final class StaticApiaryAdapter {
 		if (outputs.size() != 1) return false;
 		var entry = outputs.entrySet().iterator().next(); var value = entry.getValue();
 		return value.chance() == 1 && value.min() == plan.count() && value.max() == plan.count()
-				&& plan.output().equals(ProductKeyCodec.item(entry.getKey(), level.registryAccess()));
+				&& plan.sourceOutput().equals(ProductKeyCodec.item(entry.getKey(), level.registryAccess()));
 	}
 	private StaticApiaryAdapter() { }
 }

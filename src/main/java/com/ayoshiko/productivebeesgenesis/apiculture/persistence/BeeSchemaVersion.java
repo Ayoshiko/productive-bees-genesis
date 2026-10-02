@@ -6,16 +6,21 @@ import net.minecraft.nbt.CompoundTag;
 final class BeeSchemaVersion {
 	private int observed;
 	static void requireSupported(int schema) {
-		if (schema != 6 && schema != 7) throw new IllegalArgumentException("Unsupported network schema");
+		if (schema != 6 && schema != 7 && schema != 8) throw new IllegalArgumentException("Unsupported network schema");
 	}
 	int observe(CompoundTag bees) {
-		int schema = bees.contains("samplingVersion") ? 7 : 6;
-		if (!bees.isEmpty()) observed |= schema == 6 ? 1 : 2;
+		int schema = 6;
+		if (bees.contains("samplingVersion")) {
+			int version = StrictNbt.integer(bees, "samplingVersion");
+			if (version != 1 && version != 2) throw new IllegalArgumentException("Unsupported bee sampling version");
+			schema = version + 6;
+		}
+		if (!bees.isEmpty()) observed |= 1 << (schema - 6);
 		return schema;
 	}
 	void validate(int schema) {
 		requireSupported(schema);
-		if (observed != 0 && observed != (schema == 6 ? 1 : 2))
+		if (observed != 0 && observed != (1 << (schema - 6)))
 			throw new IllegalArgumentException("Bee sampling format differs from network schema");
 	}
 }

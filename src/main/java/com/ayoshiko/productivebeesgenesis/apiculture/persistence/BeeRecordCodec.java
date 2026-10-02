@@ -14,7 +14,7 @@ import net.minecraft.nbt.Tag;
 final class BeeRecordCodec {
 	static CompoundTag encode(BeeMemberState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
-		tag.putInt("samplingVersion", 1);
+		tag.putInt("samplingVersion", 2);
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision());
 		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var list = new ListTag();
@@ -35,7 +35,7 @@ final class BeeRecordCodec {
 		if (legacy) fields(tag, "member", "revision", "energy", "capacity", "bees", "feeding", "networkPowered");
 		else {
 			fields(tag, "samplingVersion", "member", "revision", "energy", "capacity", "bees", "feeding", "networkPowered");
-			if (StrictNbt.integer(tag, "samplingVersion") != 1) throw new IllegalArgumentException("Unsupported bee sampling version");
+			if (StrictNbt.integer(tag, "samplingVersion") != (schema == 7 ? 1 : 2)) throw new IllegalArgumentException("Unsupported bee sampling version");
 		}
 		var member = StrictNbt.uuid(tag, "member"); var list = StrictNbt.list(tag, "bees");
 		if (list.size() > 3) throw new IllegalArgumentException("Unverified factory bee state");
@@ -47,7 +47,7 @@ final class BeeRecordCodec {
 			var id = StrictNbt.uuid(value, "id");
 			var random = legacy ? BeeCycleRandom.initial(id) : new BeeCycleRandom(StrictNbt.number(value, "seed"), StrictNbt.number(value, "cursor"));
 			bees.add(new BeeRecord(id, member, StrictNbt.integer(value, "slot"),
-					new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, legacy),
+					new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, schema),
 					StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen"), random));
 		}
 		return new BeeMemberState(member, StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "capacity"), bees,
@@ -57,21 +57,30 @@ final class BeeRecordCodec {
 		var tag = new CompoundTag(); tag.putString("type", plan.beeType()); tag.putString("recipe", plan.recipe());
 		tag.putLong("recipeRevision", plan.recipeRevision()); tag.putLong("capabilityRevision", plan.capabilityRevision());
 		tag.putInt("ticks", plan.cycleTicks()); tag.putLong("cost", plan.energyPerTick()); tag.putInt("productivity", plan.productivity());
-		tag.putFloat("multiplier", plan.productionMultiplier());
+		tag.putFloat("multiplier", plan.productionMultiplier()); tag.put("sourceOutput", ProductRecordCodec.key(plan.sourceOutput()));
 		tag.putBoolean("genes", plan.genesAffectWork()); tag.putString("behavior", plan.traits().behavior().name());
 		tag.putString("weather", plan.traits().weatherTolerance().name()); tag.put("output", ProductRecordCodec.key(plan.output())); tag.putInt("count", plan.count()); return tag;
 	}
-	private static StaticBeePlan readPlan(CompoundTag tag, Consumer<ProductKey> validate, boolean legacy) {
+	private static StaticBeePlan readPlan(CompoundTag tag, Consumer<ProductKey> validate, int schema) {
+		boolean legacy = schema == 6;
 		if (legacy) fields(tag, "type", "recipe", "recipeRevision", "capabilityRevision", "ticks", "cost", "productivity", "genes", "behavior", "weather", "output", "count");
 		else {
-			fields(tag, "type", "recipe", "recipeRevision", "capabilityRevision", "ticks", "cost", "productivity", "genes", "behavior", "weather", "output", "count", "multiplier");
+			if (schema == 7) fields(tag, "type", "recipe", "recipeRevision", "capabilityRevision", "ticks", "cost", "productivity", "genes", "behavior", "weather", "output", "count", "multiplier");
+			else fields(tag, "type", "recipe", "recipeRevision", "capabilityRevision", "ticks", "cost", "productivity", "genes", "behavior", "weather", "output", "count", "multiplier", "sourceOutput");
 			if (!tag.contains("multiplier", Tag.TAG_FLOAT)) throw new IllegalArgumentException("Invalid bee multiplier type");
+		}
+		var products = new ProductRecordCodec(validate);
+		var output = products.readKey(StrictNbt.compound(tag, "output"));
+		var source = output;
+		if (schema >= 8) {
+			var sourceTag = StrictNbt.compound(tag, "sourceOutput"); fields(sourceTag, "kind", "id", "components");
+			source = products.readKey(sourceTag);
 		}
 		return new StaticBeePlan(StrictNbt.string(tag, "type"), StrictNbt.string(tag, "recipe"), StrictNbt.number(tag, "recipeRevision"),
 				StrictNbt.number(tag, "capabilityRevision"), StrictNbt.integer(tag, "ticks"), StrictNbt.number(tag, "cost"), StrictNbt.integer(tag, "productivity"),
 				StrictNbt.bool(tag, "genes"), new BeeWorkConditions.Traits(StrictNbt.choice(tag, "behavior", BeeWorkConditions.Behavior.class),
-				StrictNbt.choice(tag, "weather", BeeWorkConditions.WeatherTolerance.class)), new ProductRecordCodec(validate).readKey(StrictNbt.compound(tag, "output")),
-				StrictNbt.integer(tag, "count"), legacy ? 1 : tag.getFloat("multiplier"));
+				StrictNbt.choice(tag, "weather", BeeWorkConditions.WeatherTolerance.class)), output,
+				StrictNbt.integer(tag, "count"), legacy ? 1 : tag.getFloat("multiplier"), source);
 	}
 	private static void fields(CompoundTag tag, String... names) {
 		if (!tag.getAllKeys().equals(Set.of(names))) throw new IllegalArgumentException("Unknown or missing bee state fields");

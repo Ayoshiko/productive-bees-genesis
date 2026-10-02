@@ -35,9 +35,11 @@
 
 ### 新增
 
-- **D17b2b2b3 蜂箱生产力升级服务**：基础网络蜂箱支持 α／β／γ 实物安装与取回，沿用当前上限、等级互斥和完整组件校验。新倍率与耗时、费用在旧周期结清后随首次付款生效，升级及配置变化保留旧随机结果；小数倍率部分周期先结清再交还。复用 schema 7，Ω／蜜脾块转换及正式升级界面、批量和玩家联合门另行验收。
+- **D17b2b2b4 Ω／BLOCK 蜜脾块转换**：基础网络蜂箱支持 Ω 与 BLOCK 实物升级，按独立蜂箱规则 1:1 转换，保留数量及目标蜂种组件；两者并存只转换一次。计划分别保存原配方键和本周期实际键，安装／拆除不改旧付费结果，交还检查实际输出一致。checkpoint 升至 schema 8，兼容完整 schema 6／7；正式升级界面、批量及玩家联合门仍由 D17c 验收。
 
-- **D17b2b2b2 付费周期随机恢复**：蜜蜂保存固定种子与周期游标，按预算冻结精确产物；候选丢弃、重放、分段和正常重启不重抽、不重复收费。网络 checkpoint 升至 schema 7，严格兼容 schema 6 的完整旧蜂状态；损坏或混合格式拒绝恢复。纯测试、实际文件、两组依赖的跨 JVM 与既有客户端回归通过；正式生产力服务由 b3 接入，蜜脾块转换仍待后续步骤。
+- **D17b2b2b3 蜂箱生产力升级服务**：基础网络蜂箱支持 α／β／γ 实物安装与取回，沿用当前上限、等级互斥和完整组件校验。新倍率与耗时、费用在旧周期结清后随首次付款生效，升级及配置变化保留旧随机结果；小数倍率部分周期先结清再交还。本步复用 schema 7；Ω／蜜脾块转换见 b4，正式升级界面、批量和玩家联合门见 D17c。
+
+- **D17b2b2b2 付费周期随机恢复**：蜜蜂保存固定种子与周期游标，按预算冻结精确产物；候选丢弃、重放、分段和正常重启不重抽、不重复收费。网络 checkpoint 升至 schema 7，严格兼容 schema 6 的完整旧蜂状态；损坏或混合格式拒绝恢复。纯测试、实际文件、两组依赖的跨 JVM 与既有客户端回归通过；正式生产力服务由 b3 接入，蜜脾块转换由 b4 接入。
 
 - **D17b2b2b1 生产力轮数内核**：新增固定轮数与单周期概率附加轮的精确计划，逐栈应用基因后汇总，超 int／long 总量不截断。纯计算内核已验收；付费随机恢复由 b2 交付，正式升级准入与蜜脾块转换另验。
 
@@ -137,9 +139,11 @@
 
 #### Added
 
-- Added D17b2b2b3 server-side apiary productivity upgrades: basic managed apiaries accept and return alpha/beta/gamma items under current limits, tier conflicts and exact component checks. New multipliers, timing and cost take effect with the first payment after old work drains; upgrades and configuration changes preserve paid random results. Fractional partial cycles must finish before physical return. Schema 7 is reused; omega/comb-block conversion, upgrade GUI, bulk actions and joint player validation remain separate steps.
+- Added D17b2b2b4 omega/BLOCK comb conversion for basic managed apiaries. Conversion matches standalone apiaries at 1:1 with unchanged counts and target bee-type components; combined upgrades convert once. Plans retain both the recipe source key and the current cycle output, preserving paid results across installation/removal and checking output identity before return. Checkpoint schema 8 migrates complete schema 6/7 records; upgrade GUI, bulk actions and joint player validation remain in D17c.
 
-- Added D17b2b2b2 paid-cycle random recovery: persisted bee seeds and cycle cursors freeze exact outputs within a sampling budget. Discarded candidates, replay, partitioned sampling and normal restarts do not reroll results or charge twice. Network checkpoint schema 7 strictly migrates complete schema 6 bee records and rejects corrupt or mixed formats. Unit tests, real files, cross-JVM checks under both dependency combinations and existing client regressions passed; b3 adds the productivity service, while comb-block conversion remains pending.
+- Added D17b2b2b3 server-side apiary productivity upgrades: basic managed apiaries accept and return alpha/beta/gamma items under current limits, tier conflicts and exact component checks. New multipliers, timing and cost take effect with the first payment after old work drains; upgrades and configuration changes preserve paid random results. Fractional partial cycles must finish before physical return. This step reused schema 7; b4 adds omega/comb-block conversion, while D17c covers upgrade GUI, bulk actions and joint player validation.
+
+- Added D17b2b2b2 paid-cycle random recovery: persisted bee seeds and cycle cursors freeze exact outputs within a sampling budget. Discarded candidates, replay, partitioned sampling and normal restarts do not reroll results or charge twice. Network checkpoint schema 7 strictly migrates complete schema 6 bee records and rejects corrupt or mixed formats. Unit tests, real files, cross-JVM checks under both dependency combinations and existing client regressions passed; b3 adds the productivity service and b4 adds comb-block conversion.
 
 - Added the D17b2b2b1 exact productivity-roll kernel: fixed rolls plus one fractional Bernoulli event per cycle, per-stack gene rounding, and exact totals beyond int/long. The pure kernel is accepted; b2 provides paid random recovery, while formal upgrade admission and comb-block conversion are separate steps.
 

@@ -103,7 +103,7 @@ final class ApiaryUpgradeProbe {
 			hive.setControlType(RedstoneControl.HIGH);
 			open(81);
 			setReference(Upgrade.ENERGY, 2); setReference(PbUpgradeType.TIME, 1);
-			comparePhysical(new BeeWorkExecutor.Cycle(state().bee(0).plan().cycleTicks(), state().bee(0).plan().energyPerTick(), state().bee(0).plan().productionMultiplier()));
+			comparePhysical(new BeeWorkExecutor.Cycle(state().bee(0).plan().cycleTicks(), state().bee(0).plan().energyPerTick(), state().bee(0).plan().productionMultiplier(), state().bee(0).plan().output()));
 			slot(10, ItemStack.EMPTY); check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME, 0);
 			localCapacityChecks();
 			for (var id : List.of(member, otherMember)) require(NetworkEnergyService.migrate(level, data, directory, id, data.checkpoint().revision(), false), "Apiary FE migration failed");
@@ -152,6 +152,8 @@ final class ApiaryUpgradeProbe {
 		require(hive.energyContainer().getEnergy() == 0 && data.checkpoint().energy().stored() == returnEnergy && record().assets().isEmpty(), "Return duplicated assets");
 		require(hive.getPbUpgradeCount(PbUpgradeType.PRODUCTIVITY_3) == 1 && other.getPbUpgradeCount(PbUpgradeType.PRODUCTIVITY_3) == 0, "Return lost or shared productivity upgrade");
 		report.addProperty("apiaryProductivityReturned", true);
+		require(hive.getPbUpgradeCount(PbUpgradeType.BLOCK) == 1 && other.getPbUpgradeCount(PbUpgradeType.BLOCK) == 0, "Return lost or shared block upgrade");
+		report.addProperty("apiaryBlockReturned", true);
 		shutdown = data.checkpoint(); player.containerMenu = player.inventoryMenu;
 		report.addProperty("apiaryBoundaryMaxNanos", boundaryNanos); report.addProperty("apiaryContinuationMaxNanos", continuationNanos);
 		report.addProperty("apiaryUpgradeChecks", checks); report.addProperty("apiaryUpgradeMaxExchangeNanos", maxNanos);
@@ -205,7 +207,7 @@ final class ApiaryUpgradeProbe {
 		sync.onSend = () -> nested.set(menu.exchangeUpgrade(player, member, revision(), Upgrade.SPEED, 0, 1, REMOVE, false));
 		check(Upgrade.SPEED, REMOVE, 0, 1, false, MOVED, 1, revision()); require(nested.get().status() == UNAVAILABLE, "Apiary sync reentered exchange");
 		var before = data.checkpoint();
-		require(menu.exchangePbUpgrade(player, member, revision(), PbUpgradeType.PRODUCTIVITY_4, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Unreviewed PB apiary effect accepted");
+		require(menu.exchangePbUpgrade(player, member, revision(), PbUpgradeType.SIMULATION, 0, 1, INSTALL, false).status() == UNSUPPORTED, "Unreviewed PB apiary effect accepted");
 		require(before == data.checkpoint(), "Rejected PB changed assets");
 	}
 	private static void pbExchanges() {
@@ -228,6 +230,8 @@ final class ApiaryUpgradeProbe {
 		}
 		var unit = PbUpgradeInventorySlot.getRepresentativeStack(PbUpgradeType.TIME);
 		slot(10, unit.copyWithCount(64)); slot(11, PbUpgradeInventorySlot.getRepresentativeStack(PbUpgradeType.TIME_2).copyWithCount(64));
+		check(PbUpgradeType.TIME, INSTALL, 10, 0, false, INVALID, 0, revision());
+		check(PbUpgradeType.TIME_2, REMOVE, 11, 65, false, INVALID, 0, revision());
 		check(PbUpgradeType.TIME, INSTALL, 10, 2, false, MOVED, 2, revision());
 		slot(12, unit.copyWithCount(63)); check(PbUpgradeType.TIME, REMOVE, 12, 2, false, MOVED, 1, revision());
 		check(PbUpgradeType.TIME, REMOVE, 12, 1, false, NO_SPACE, 0, revision());
@@ -287,7 +291,7 @@ final class ApiaryUpgradeProbe {
 		long energyBeforeWork = data.checkpoint().energy().stored(); var before = data.checkpoint();
 		require(work(0, 1, 1, true) == BeeWorkExecutor.Status.READY && data.checkpoint() == before, "Simulated timing changed authority");
 		require(work(0, 1, 1, false) == BeeWorkExecutor.Status.READY, "First upgraded apiary cycle failed");
-		oldPlan = state().bee(0).plan(); comparePhysical(new BeeWorkExecutor.Cycle(oldPlan.cycleTicks(), oldPlan.energyPerTick(), oldPlan.productionMultiplier()));
+		oldPlan = state().bee(0).plan(); comparePhysical(new BeeWorkExecutor.Cycle(oldPlan.cycleTicks(), oldPlan.energyPerTick(), oldPlan.productionMultiplier(), oldPlan.output()));
 		var bee = state().bee(0); var second = state().bee(1);
 		check(Upgrade.SPEED, INSTALL, 0, 1, false, MOVED, 1, revision()); check(Upgrade.ENERGY, INSTALL, 1, 1, false, MOVED, 1, revision());
 		check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision());

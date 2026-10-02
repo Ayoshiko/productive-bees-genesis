@@ -37,12 +37,17 @@ public final class BeeRandomRestartProbe {
 		for (int slot = 0; slot < 2; slot++) current = settle(current, member, slot);
 		store(current, "credited");
 		current = finish(current, member); store(current, "complete");
+		var seven = NetworkCheckpointCodec.encode(current); seven.putInt("schema", 7);
+		var sevenBees = seven.getList("ownership", 10).getCompound(0).getCompound("bees"); sevenBees.putInt("samplingVersion", 1);
+		for (var raw : sevenBees.getList("bees", 10)) ((CompoundTag) raw).getCompound("plan").remove("sourceOutput");
+		var sevenRoot = new CompoundTag(); sevenRoot.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); sevenRoot.put("data", seven);
+		NbtIo.writeCompressed(sevenRoot, Path.of("results", "bee-restart", "random", "legacy-seven.dat"));
 		// schema 6 文件由当前正式 writer 的等价旧形状生成，只包含原有倍率 1 工作。
 		var legacy = NetworkCheckpointCodec.encode(initial); legacy.putInt("schema", 6);
 		var state = legacy.getList("ownership", 10).getCompound(0).getCompound("bees");
 		state.remove("samplingVersion");
 		for (var raw : state.getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier");
+			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		var root = new CompoundTag(); root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); root.put("data", legacy);
 		NbtIo.writeCompressed(root, Path.of("results", "bee-restart", "random", "legacy.dat"));
@@ -55,6 +60,7 @@ public final class BeeRandomRestartProbe {
 	}
 	public static void read(ServerLevel level, Path source, JsonObject report) throws Exception {
 		readProductivity(level, source, report);
+		readBlock(level, source, report);
 		var folder = source.resolve("random"); var codec = NetworkCheckpointCodec.forRegistries(level.registryAccess());
 		long producer = com.google.gson.JsonParser.parseString(Files.readString(folder.resolve("writer.json"))).getAsJsonObject().get("producerPid").getAsLong();
 		require(producer != ProcessHandle.current().pid(), "Random reader reused the writer JVM");
@@ -91,6 +97,11 @@ public final class BeeRandomRestartProbe {
 		var legacy = decode(codec, folder.resolve("legacy.dat"));
 		for (var record : legacy.ownedMachines().values()) for (var bee : record.bees().bees())
 			require(bee.plan().productionMultiplier() == 1 && bee.random().equals(BeeCycleRandom.initial(bee.id())), "Legacy bee stream migration changed");
+		var seven = decode(codec, folder.resolve("legacy-seven.dat"));
+		for (var record : seven.ownedMachines().values()) for (var bee : record.bees().bees())
+			require(bee.plan().productionMultiplier() == 2.5f && bee.random().cursor() == CYCLES && bee.plan().sourceOutput().equals(bee.plan().output()), "Schema seven lost output or random state");
+		require(seven.equals(decode(codec, folder.resolve("complete.dat"))), "Schema seven migration changed completed assets");
+		report.addProperty("beeRandomLegacySchemaSeven", true);
 		report.addProperty("beeRandomCrossJvmBoundaries", verified);
 		report.addProperty("beeRandomPartitionReplayAndOracle", true);
 		report.addProperty("beeRandomLegacySchemaSix", true);
@@ -118,6 +129,27 @@ public final class BeeRandomRestartProbe {
 		require(Arrays.equals(bytes, Files.readAllBytes(path)), "Productivity reader changed original file");
 		report.addProperty("apiaryProductivityRestart", true);
 		report.addProperty("apiaryProductivityWriterPid", metadata.get("writerPid").getAsLong());
+	}
+	private static void readBlock(ServerLevel level, Path source, JsonObject report) throws Exception {
+		var folder = source.getParent(); var metadataFile = folder.resolve("apiary-block.json");
+		if (!Files.exists(metadataFile)) return;
+		var metadata = com.google.gson.JsonParser.parseString(Files.readString(metadataFile)).getAsJsonObject();
+		long writer = metadata.get("writerPid").getAsLong(); require(writer != ProcessHandle.current().pid(), "Block reader reused writer JVM");
+		var member = UUID.fromString(metadata.get("member").getAsString()); var codec = NetworkCheckpointCodec.forRegistries(level.registryAccess());
+		for (String phase : List.of("install", "remove")) {
+			var path = folder.resolve("apiary-block-" + phase + ".dat"); var bytes = Files.readAllBytes(path); var before = decode(codec, path);
+			var record = before.ownedMachines().get(member); var bee = record.bees().bee(0); boolean installed = phase.equals("install");
+			var counts = com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts.read(record.assets().copy().getCompound("extra"));
+			require(counts.getOrDefault(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK, 0) == (installed ? 1 : 0), "Block upgrade image changed");
+			require(bee.pendingCycles() == 1 && bee.frozen().isZero() && bee.plan().output().equals(bee.plan().sourceOutput()) == installed, "Paid block key changed on restart");
+			var result = BeeWorkExecutor.advance(record.bees(), 0, bee.revision(), new BeeWorkExecutor.Context(true, false, false, 0, 0, null), 0, 1, before.energy().stored());
+			var sampled = before.applyBeeWork(member, result); var frozen = sampled.ownedMachines().get(member).bees().bee(0);
+			require(frozen.frozen().equals(ProductAmount.of(1)) && frozen.random().cursor() == bee.random().cursor() + 1 && sampled.energy().equals(before.energy()), "Block recovery recharged or resampled");
+			var next = sampled.settleBee(member, 0, frozen.revision()); var expected = new HashMap<>(before.ledger().balances()); expected.merge(bee.plan().output(), ProductAmount.of(1), ProductAmount::add);
+			require(next.ledger().balances().equals(expected) && next.settleBee(member, 0, frozen.revision()) == next, "Restored block settled to another key or twice");
+			require(Arrays.equals(bytes, Files.readAllBytes(path)), "Block recovery rewrote source file");
+		}
+		report.addProperty("apiaryBlockRestart", true); report.addProperty("apiaryBlockWriterPid", writer);
 	}
 	private static long productivityExpected(BeeRecord bee) {
 		var random = new SplittableRandom(bee.random().seed());

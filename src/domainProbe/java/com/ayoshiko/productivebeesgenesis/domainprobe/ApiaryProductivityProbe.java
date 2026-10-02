@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.domainprobe;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts;
+import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
+import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
@@ -21,7 +23,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 
 /** 真实核心菜单交换、独立蜂箱能力对照和付费结果恢复；只存在于开发源集。 */
 final class ApiaryProductivityProbe {
-	private static final List<PbUpgradeType> TYPES = List.of(PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3);
+	private static final List<PbUpgradeType> TYPES = List.of(PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.BLOCK);
 	private final NetworkSavedData data;
 	private final UUID member;
 	private final ServerPlayer player;
@@ -29,6 +31,7 @@ final class ApiaryProductivityProbe {
 	private final TileEntityMekApiary hive, reference;
 	private final NetworkBeeService service;
 	private int exchanges, cycles;
+	private long boundaryNanos, continuationNanos;
 	private ApiaryProductivityProbe(NetworkSavedData data, UUID member, ServerPlayer player, NetworkCoreMenu menu,
 			TileEntityMekApiary hive, TileEntityMekApiary reference) {
 		this.data = data; this.member = member; this.player = player; this.menu = menu; this.hive = hive; this.reference = reference;
@@ -37,12 +40,15 @@ final class ApiaryProductivityProbe {
 	static void run(NetworkSavedData data, UUID member, ServerPlayer player, NetworkCoreMenu menu,
 			TileEntityMekApiary hive, TileEntityMekApiary reference, JsonObject report) throws Exception {
 		var probe = new ApiaryProductivityProbe(data, member, player, menu, hive, reference);
-		probe.tiers(); probe.legacy(); probe.boundaries();
+		probe.tiers(); probe.legacy(); probe.boundaries(); probe.blockBoundaries(); probe.mappingCases(report);
 		report.addProperty("apiaryProductivityTypes", TYPES.size());
 		report.addProperty("apiaryProductivityExchanges", probe.exchanges);
 		report.addProperty("apiaryProductivityCycles", probe.cycles);
 		report.addProperty("apiaryProductivityPhysicalAndConservation", true);
 		report.addProperty("apiaryProductivityOldCycleConfigAndReturnGuard", true);
+		report.addProperty("apiaryBlockOldKeysAndCombinedUpgrades", true);
+		report.addProperty("apiaryOutputBoundaryMaxNanos", probe.boundaryNanos);
+		report.addProperty("apiaryOutputContinuationMaxNanos", probe.continuationNanos);
 	}
 	private BeeMemberState state() { return data.checkpoint().ownedMachines().get(member).bees(); }
 	private BeeRecord bee() { return state().bee(0); }
@@ -76,6 +82,10 @@ final class ApiaryProductivityProbe {
 		var current = desired();
 		require(current.productionMultiplier() == reference.getApiaryUpgradeHandler().getProductivityMultiplier(), "Sealed multiplier differs from physical apiary");
 		require(current.energyPerTick() == reference.energyContainer().getEnergyPerTick(), "Productivity changed energy price");
+		var source = ProductKeyCodec.item(bee().plan().sourceOutput(), 1, player.registryAccess());
+		var outputs = reference.getApiaryUpgradeHandler().hasCombBlockUpgrade()
+				? new CombBlockConverter().convertCombsToBlocks(List.of(source)) : List.of(source);
+		require(current.output().equals(ProductKeyCodec.item(outputs.getFirst(), player.registryAccess())), "Sealed key differs from independent physical conversion");
 	}
 	private void tiers() {
 		for (var type : TYPES) {
@@ -112,9 +122,12 @@ final class ApiaryProductivityProbe {
 		}
 	}
 	private void work(int ticks, int budget, boolean simulate) {
-		var bee = bee();
+		var bee = bee(); long started = System.nanoTime();
 		require(service.advance(player.serverLevel(), member, 0, bee.revision(), bee.plan().recipeRevision(),
 				bee.plan().capabilityRevision(), ticks, budget, simulate) == BeeWorkExecutor.Status.READY, "Productivity cycle failed");
+		long elapsed = System.nanoTime() - started;
+		if (ticks > 0 && bee.progress() == 0 && bee.drained()) boundaryNanos = Math.max(boundaryNanos, elapsed);
+		else continuationNanos = Math.max(continuationNanos, elapsed);
 	}
 	private void settle() {
 		long revision = bee().revision();
@@ -135,7 +148,10 @@ final class ApiaryProductivityProbe {
 		require(cycle.matches(bee().plan()) && bee().frozen().exact().equals(java.math.BigInteger.valueOf(amount)), "Production differs from independent per-cycle model");
 		require(data.checkpoint().energy().stored() == before.energy().stored() - (long) cycle.cycleTicks() * cycle.energyPerTick(), "Wrong productivity FE");
 		require(bee().random().cursor() == old.random().cursor() + 1, "Productivity reset random cursor");
-		settle(); cycles++;
+		settle();
+		var expectedLedger = new HashMap<>(before.ledger().balances());
+		expectedLedger.merge(cycle.output(), ProductAmount.of(amount), ProductAmount::add);
+		require(data.checkpoint().ledger().balances().equals(expectedLedger), "Converted output changed count, key or another balance"); cycles++;
 	}
 	private void boundaries() throws Exception {
 		var beta = TYPES.get(1); source(beta); exchange(beta, INSTALL, 1); physical(beta, 1);
@@ -162,12 +178,66 @@ final class ApiaryProductivityProbe {
 		} finally { config.set(original); reference.getApiaryUpgradeHandler().invalidateUpgradeCache(); }
 		exchange(beta, REMOVE, 2); physical(beta, 0); round();
 	}
+	private void blockBoundaries() throws Exception {
+		var block = PbUpgradeType.BLOCK; var omega = PbUpgradeType.PRODUCTIVITY_4;
+		work(1, 0, false); var comb = bee();
+		source(block); exchange(block, INSTALL, 1); physical(block, 1);
+		require(!StaticApiaryAdapter.returnReady(hive, data.checkpoint().ownedMachines().get(member)), "Changed output key returned a partial comb cycle");
+		work(comb.plan().cycleTicks() - comb.progress(), 0, false); saveBlock("install");
+		long energy = data.checkpoint().energy().stored(); work(0, 1, false);
+		require(bee().plan() == comb.plan() && bee().frozen().exact().longValueExact() == 1 && data.checkpoint().energy().stored() == energy, "Block install changed paid comb"); settle();
+		round(); work(1, 0, false); var converted = bee();
+		require(!converted.plan().output().equals(converted.plan().sourceOutput()), "Block upgrade did not convert iron comb");
+		exchange(block, REMOVE, 1); physical(block, 0);
+		require(!StaticApiaryAdapter.returnReady(hive, data.checkpoint().ownedMachines().get(member)), "Removed conversion returned old partial block cycle");
+		work(converted.plan().cycleTicks() - converted.progress(), 0, false); saveBlock("remove");
+		energy = data.checkpoint().energy().stored(); work(0, 1, false);
+		require(bee().plan() == converted.plan() && bee().frozen().exact().longValueExact() == 1 && data.checkpoint().energy().stored() == energy, "Block removal changed paid block"); settle(); round();
+		source(omega); exchange(omega, INSTALL, 1); physical(omega, 1); round();
+		var omegaCycle = desired(); source(block); exchange(block, INSTALL, 1); physical(block, 1);
+		require(omegaCycle.equals(desired()), "Omega plus block converted or multiplied twice"); round();
+		player.getInventory().items.set(20, ItemStack.EMPTY); exchange(omega, REMOVE, 1); physical(omega, 0); round();
+		player.getInventory().items.set(20, ItemStack.EMPTY); exchange(block, REMOVE, 1); physical(block, 0); round();
+	}
+	private void saveBlock(String phase) throws Exception {
+		var root = new CompoundTag(); root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); root.put("data", NetworkCheckpointCodec.encode(data.checkpoint()));
+		NbtIo.writeCompressed(root, Path.of("results", "apiary-block-" + phase + ".dat"));
+		var metadata = new JsonObject(); metadata.addProperty("writerPid", ProcessHandle.current().pid()); metadata.addProperty("member", member.toString());
+		Files.writeString(Path.of("results", "apiary-block.json"), metadata.toString());
+	}
+	private void mappingCases(JsonObject report) {
+		var registry = player.registryAccess(); var converter = new CombBlockConverter(); int verified = 0;
+		var inputs = new ArrayList<ItemStack>();
+		for (String id : List.of("minecraft:honeycomb", "productivebees:honeycomb_ghostly", "productivebees:honeycomb_milky", "productivebees:honeycomb_powdery", "minecraft:iron_ingot", "minecraft:honeycomb_block")) {
+			var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(id));
+			require(item != net.minecraft.world.item.Items.AIR, "Missing conversion fixture: " + id); inputs.add(new ItemStack(item, 23));
+		}
+		for (String type : List.of("iron", "gold")) {
+			var stack = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_HONEYCOMB.get(), 23);
+			stack.set(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get(), net.minecraft.resources.ResourceLocation.parse("productivebees:" + type));
+			stack.set(DataComponents.CUSTOM_NAME, Component.literal("source-only")); inputs.add(stack);
+		}
+		for (var input : inputs) {
+			var source = ProductKeyCodec.item(input, registry); var snapshot = input.copy();
+			var actual = StaticApiaryAdapter.output(source, true, registry); var physical = converter.convertCombsToBlocks(List.of(input.copy())).getFirst();
+			require(physical.getCount() == 23 && actual.equals(ProductKeyCodec.item(physical, registry)), "Mapping changed complete components or count");
+			require(StaticApiaryAdapter.output(source, false, registry).equals(source) && ItemStack.matches(snapshot, input), "Mapping mutated source or disabled result");
+			if (input.is(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_HONEYCOMB.get())) {
+				var converted = ProductKeyCodec.item(actual, 23, registry);
+				require(!converted.has(DataComponents.CUSTOM_NAME) && Objects.equals(input.get(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get()), converted.get(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get())), "Conversion copied unrelated components or lost bee type");
+			}
+			verified++;
+		}
+		report.addProperty("apiaryBlockMappingCases", verified);
+	}
 	static void prepareReturn(NetworkSavedData data, UUID member, ServerPlayer player, NetworkCoreMenu menu, TileEntityMekApiary hive) {
 		var probe = new ApiaryProductivityProbe(data, member, player, menu, hive, null);
 		var old = probe.bee(); probe.work(old.plan().cycleTicks() - old.progress(), 1, false); probe.settle();
 		probe.source(PbUpgradeType.PRODUCTIVITY_3); probe.exchange(PbUpgradeType.PRODUCTIVITY_3, INSTALL, 1);
+		probe.source(PbUpgradeType.BLOCK); probe.exchange(PbUpgradeType.BLOCK, INSTALL, 1);
 		probe.work(1, 1, false);
 		require(probe.bee().plan().productionMultiplier() == 3 && StaticApiaryAdapter.returnReady(hive, data.checkpoint().ownedMachines().get(member)), "Matching integer partial cycle cannot return");
+		require(!probe.bee().plan().output().equals(probe.bee().plan().sourceOutput()), "Matching converted partial cycle was not tested");
 	}
 
 }

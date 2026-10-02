@@ -1,18 +1,22 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.production;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
+import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
+import java.util.Objects;
 
 /** 私有候选计算；只有外层发布整个 checkpoint 才产生付款或生产。 */
 public final class BeeWorkExecutor {
 	public static final int MAX_RANDOM_CYCLES_PER_STEP = 64;
 	public enum Status { READY, STALE_PLAN, UNLOADED, DISABLED, FLOWER, ENVIRONMENT, ENERGY, DRAIN_FIRST, BUDGET }
-	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier) {
+	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, ProductKey output) {
 		public Cycle {
+			Objects.requireNonNull(output);
 			if (cycleTicks < 1 || energyPerTick < 0 || !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
 				throw new IllegalArgumentException("Invalid bee cycle");
 		}
 		public boolean matches(StaticBeePlan plan) {
-			return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick() && productionMultiplier == plan.productionMultiplier();
+			return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick()
+					&& productionMultiplier == plan.productionMultiplier() && output.equals(plan.output());
 		}
 	}
 	public record Context(boolean loaded, boolean enabled, boolean flower, long recipeRevision, long capabilityRevision,
@@ -53,7 +57,7 @@ public final class BeeWorkExecutor {
 		if (ticks == 0) return new Result(Status.BUDGET, state, state, 0);
 		if (cycle != null) {
 			if (bee.progress() != 0) throw new IllegalArgumentException("New bee capability inside an active cycle");
-			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier());
+			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier(), cycle.output());
 		}
 		if (plan.energyPerTick() > 0 && ticks > energyBudget / plan.energyPerTick()) return new Result(Status.ENERGY, state, state, 0);
 		var progress = BeeProgressPlan.plan(bee.progress(), ticks, plan.cycleTicks(), plan.energyPerTick(), 1);
