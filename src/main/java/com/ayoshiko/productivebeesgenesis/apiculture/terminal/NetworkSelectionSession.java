@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.terminal;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity;
@@ -23,14 +24,16 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	/** 固定快照最长保留时间，翻页不延长。 */
 	public static final int LIFETIME_TICKS = 100;
 	/** 每个查询只遍历一种权威索引。 */
-	public enum Kind { MEMBERS, PRODUCTS }
+	public enum Kind { MEMBERS, PRODUCTS, UPGRADES }
 	/** 仅服务端保存的选择行；不直接编码为客户端权威数据。 */
 	public sealed interface Row permits MemberRow, ProductRow { }
 	/** 基础蜂箱的蜂位摘要，空位 id 为 null，不携带蜜蜂 NBT。 */
 	public record BeeRow(int slot, UUID id, String type, int progress, int cycleTicks, boolean pending) { }
 	/** 成员交接身份、瞬态名册戳与喂食版本独立保留。 */
 	public record MemberRow(MemberClaim claim, OwnedMachineRecord.Phase phase,
-			BeeMemberState.RosterVersion rosterVersion, long feedingRevision, List<BeeRow> bees) implements Row {
+			BeeMemberState.RosterVersion rosterVersion, long feedingRevision, List<BeeRow> bees, AssetImage upgradeVersion) implements Row {
+		public MemberRow(MemberClaim claim, OwnedMachineRecord.Phase phase, BeeMemberState.RosterVersion rosterVersion,
+				long feedingRevision, List<BeeRow> bees) { this(claim, phase, rosterVersion, feedingRevision, bees, null); }
 		public MemberRow { bees = List.copyOf(bees); }
 	}
 	/** 完整组件键和查询时刻的精确总量／可用量，命令必须重新读取当前余额。 */
@@ -61,7 +64,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		check(); Objects.requireNonNull(authority); Objects.requireNonNull(snapshot); Objects.requireNonNull(kind);
 		if (closed || tick < 0) return null;
 		clear(); this.authority = authority; identity = snapshot.identity(); openedAt = tick;
-		if (kind == Kind.MEMBERS) members = snapshot.ownedMachines().activeValues().iterator();
+		if (kind != Kind.PRODUCTS) members = snapshot.ownedMachines().activeValues().iterator();
 		else { ledger = snapshot.ledger(); products = ledger.balances().entrySet().iterator(); }
 		return advance(kind);
 	}
@@ -87,6 +90,12 @@ public final class NetworkSelectionSession implements AutoCloseable {
 				&& selected.claim().equals(current.claim()) && current.bees() != null
 				&& selected.rosterVersion() == current.bees().rosterVersion();
 	}
+	/** 生产进度不改封存资产对象；升级改回原数量仍会产生新对象，不能复活旧选择。 */
+	public static boolean sameUpgrades(MemberRow selected, OwnedMachineRecord current) {
+		return selected != null && selected.upgradeVersion() != null && current != null
+				&& selected.phase() == OwnedMachineRecord.Phase.OWNED && current.phase() == OwnedMachineRecord.Phase.OWNED
+				&& selected.claim().equals(current.claim()) && selected.upgradeVersion() == current.assets();
+	}
 
 	/** 未继续请求的菜单也须从菜单 tick 调用，按时释放旧根。 */
 	public void expire(long tick) {
@@ -109,7 +118,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		long nextGeneration = generation + 1;
 		var rows = new ArrayList<Row>(PAGE_SIZE);
 		for (int i = 0; i < PAGE_SIZE && hasNext(); i++) {
-			if (kind == Kind.MEMBERS) rows.add(member(members.next()));
+			if (kind != Kind.PRODUCTS) rows.add(member(members.next(), kind));
 			else {
 				var entry = products.next();
 				rows.add(new ProductRow(entry.getKey(), entry.getValue(), ledger.available(entry.getKey())));
@@ -119,7 +128,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		return page;
 	}
 	private boolean hasNext() { return members != null ? members.hasNext() : products != null && products.hasNext(); }
-	private static MemberRow member(OwnedMachineRecord record) {
+	private static MemberRow member(OwnedMachineRecord record, Kind kind) {
 		var state = record.bees();
 		var bees = new ArrayList<BeeRow>(3);
 		if (state != null) for (int slot = 0; slot < 3; slot++) {
@@ -129,7 +138,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 					: new BeeRow(slot, bee.id(), bee.plan().beeType(), bee.progress(), bee.plan().cycleTicks(), !bee.drained()));
 		}
 		return new MemberRow(record.claim(), record.phase(), state == null ? null : state.rosterVersion(),
-				state == null || state.feeding() == null ? -1 : state.feeding().revision(), bees);
+				state == null || state.feeding() == null ? -1 : state.feeding().revision(), bees, kind == Kind.UPGRADES ? record.assets() : null);
 	}
 	private void clear() { authority = null; identity = null; ledger = null; members = null; products = null; page = null; }
 	private void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Selection belongs to menu thread"); }

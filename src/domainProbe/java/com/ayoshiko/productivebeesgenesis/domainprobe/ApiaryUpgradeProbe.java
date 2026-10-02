@@ -115,7 +115,12 @@ final class ApiaryUpgradeProbe {
 		if (phase == 2) {
 			if (core.topology() == null || !core.topology().valid()) return false;
 			hive.setControlType(RedstoneControl.DISABLED); pbTimingBoundary();
-			ApiaryProductivityProbe.run(data, member, player, menu, hive, reference, report); beginOldCycle();
+			ApiaryProductivityProbe.run(data, member, player, menu, hive, reference, report);
+			phase = 6; return false;
+		}
+		if (phase == 6) {
+			if (!CoreUpgradeProtocolProbe.advance(data, member, player, menu, report)) return false;
+			beginOldCycle();
 			saved = data.checkpoint(); directory.requestSave(data); phase = 3; return false;
 		}
 		if (phase == 3) {

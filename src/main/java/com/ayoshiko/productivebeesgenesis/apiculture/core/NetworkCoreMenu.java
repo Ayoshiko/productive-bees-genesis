@@ -174,7 +174,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return CoreProductWithdrawal.withdraw(this, player, key, expectedLedgerRevision, inventorySlot, requested, simulate); }
 		finally { exchanging = false; }
 	}
-	/** 服务器升级入口；仅限所有者操作基础离心机 SPEED／ENERGY。 */
+	/** 所有者操作已准入基础成员的原生升级；正式终端与服务器探针共用。 */
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
@@ -183,7 +183,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		try { return MemberUpgradeService.exchange(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
 	}
-	/** PB 升级共用同一菜单及重入边界；客户端入口仍由后续终端协议接入。 */
+	/** PB 升级与正式终端共用同一菜单、权限及重入边界。 */
 	public MemberUpgradeService.Result exchangePbUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {

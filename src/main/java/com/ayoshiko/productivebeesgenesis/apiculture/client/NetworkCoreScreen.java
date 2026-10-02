@@ -37,6 +37,8 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private final List<TerminalProductIcon> productIcons = new ArrayList<>();
 	private TerminalClientState.Notice displayedNotice;
 	private Button production;
+	private Button upgradeInstall, upgradeRemove;
+	private int upgradeChoice;
 
 	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); state = menu.clientState(); playerInventory = inventory;
@@ -53,8 +55,8 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		var button = button(label, x, y, width, height, action); requests.add(button); return button;
 	}
 	private void rebuild() {
-		clearWidgets(); requests.clear(); management.clear(); production = null;
-		for (int i = 0; i < 3; i++) {
+		clearWidgets(); requests.clear(); management.clear(); production = null; upgradeInstall = null; upgradeRemove = null;
+		for (int i = 0; i < 4; i++) {
 			int page = i;
 			var control = addRenderableWidget(new NetworkGuiButton(leftPos + 2, topPos + 27 + i * 32, 24, 28,
 					tr("tab." + i), () -> switchTab(page), i == tab, i));
@@ -88,10 +90,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 				}
 				var label = Component.literal("#" + (i + 1) + " " + entryName(entry).getString());
 				var control = addRenderableWidget(new NetworkGuiButton(leftPos + 35, topPos + 43 + i * 11, 185, 11,
-						label, () -> { selected = row; target = 0; confirmCage = false; rebuild(); }, i == selected, -1));
+						label, () -> { selected = row; target = 0; upgradeChoice = 0; confirmCage = false; rebuild(); }, i == selected, -1));
 				control.setTooltip(Tooltip.create(rowTooltip(entry, i)));
 			}
 			if (tab == 1 && selectedRow() != null) addActions();
+			if (tab == 3 && selectedRow() != null) addUpgradeActions();
 		}
 		updateEnabled();
 	}
@@ -123,6 +126,23 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		refreshAfterTake = true; takeSequence = request.sequence();
 		PacketDistributor.sendToServer(request); selected = -1; rebuild();
 	}
+	private void addUpgradeActions() {
+		var upgrades = selectedRow().upgrades();
+		for (int i = 0; i < upgrades.size(); i++) {
+			var upgrade = upgrades.get(i);
+			var control = addRenderableWidget(new NetworkUpgradeButton(leftPos + 36 + (i % 5) * 37, topPos + 58 + (i / 5) * 25,
+					upgrade, upgradeChoice == upgrade.choice(), () -> { upgradeChoice = upgrade.choice(); rebuild(); }));
+			requests.add(control);
+			control.setTooltip(Tooltip.create(control.getMessage().copy().append("\n").append(tr("upgrade_count", upgrade.installed(), upgrade.limit()))
+					.append("\n").append(tr(upgrade.installable() ? "upgrade_next_cycle" : "upgrade_blocked"))));
+		}
+		button(Component.literal(Integer.toString(amount)), 36, 111, 40, 18, this::cycleAmount).setTooltip(Tooltip.create(tr("amount", amount)));
+		upgradeInstall = requestButton(tr("upgrade_install"), 80, 111, 68, 18, () -> send(UPGRADE_INSTALL, amount));
+		upgradeRemove = requestButton(tr("upgrade_remove"), 152, 111, 69, 18, () -> send(UPGRADE_REMOVE, amount));
+	}
+	private TerminalView.Upgrade selectedUpgrade() {
+		var row = selectedRow(); return row == null ? null : row.upgrades().stream().filter(upgrade -> upgrade.choice() == upgradeChoice).findFirst().orElse(null);
+	}
 	private void cycleAmount() { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }
 	private void switchTab(int page) {
 		if (!state.ready(Util.getMillis())) return;
@@ -130,9 +150,9 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		if (tab == 0) send(CANCEL, 0); else refresh();
 		rebuild();
 	}
-	private void refresh() { send(tab == 1 ? MEMBERS : PRODUCTS, 0); }
+	private void refresh() { send(tab == 1 ? MEMBERS : tab == 3 ? UPGRADES : PRODUCTS, 0); }
 	private void send(TerminalRequest.Operation operation, int count) {
-		var request = state.begin(operation, selected, target, inventorySlot, count, Util.getMillis());
+		var request = state.begin(operation, selected, TerminalRequest.upgradeAction(operation) ? upgradeChoice : target, inventorySlot, count, Util.getMillis());
 		if (request == null) return;
 		PacketDistributor.sendToServer(request); selected = -1; confirmCage = false; rebuild();
 	}
@@ -150,6 +170,12 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			button.active = menu.canManage();
 			button.setTooltip(Tooltip.create(menu.canManage() ? button.getMessage() : tr("owner_only")));
 		}
+		if (upgradeInstall != null) {
+			var upgrade = selectedUpgrade(); boolean allowed = state.ready(Util.getMillis()) && menu.canManage() && upgrade != null;
+			upgradeInstall.active = allowed && upgrade.installable(); upgradeRemove.active = allowed && upgrade.installed() > 0;
+			upgradeInstall.setTooltip(Tooltip.create(tr(menu.canManage() ? "upgrade_next_cycle" : "owner_only")));
+			upgradeRemove.setTooltip(Tooltip.create(tr(menu.canManage() ? "upgrade_destination" : "owner_only")));
+		}
 	}
 	@Override protected void containerTick() {
 		super.containerTick(); state.tick(Util.getMillis());
@@ -164,7 +190,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		updateEnabled();
 	}
 	@Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (tab == 1 && button == 0) for (var slot : menu.slots) {
+		if ((tab == 1 || tab == 3) && button == 0) for (var slot : menu.slots) {
 			if (mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
 					&& mouseY >= topPos + slot.y && mouseY < topPos + slot.y + 16) {
 				inventorySlot = slot.getContainerSlot(); confirmCage = false; rebuild(); return true;
@@ -179,7 +205,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	}
 	@Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
 		graphics.blit(BACKGROUND, leftPos, topPos, 0, 0, WIDTH, HEIGHT, WIDTH, HEIGHT);
-		for (var slot : menu.slots) if (tab == 1 && slot.getContainerSlot() == inventorySlot)
+		for (var slot : menu.slots) if ((tab == 1 || tab == 3) && slot.getContainerSlot() == inventorySlot)
 			graphics.renderOutline(leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18, 0xfff0c66f);
 	}
 	private void line(GuiGraphics graphics, Component text, int x, int y, int width) {
@@ -204,6 +230,12 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 				line(graphics, bee == null ? tr("no_bees") : bee.occupied() ? beeName(bee.type()) : tr("empty_bee"), 36, 44, 185);
 				if (bee != null) line(graphics, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 36, 55, 185);
 			} else if (state.view() != null && state.view().rows().isEmpty()) line(graphics, tr("empty_page"), 36, 48, 185);
+		} else if (tab == 3) {
+			var row = selectedRow();
+			if (row != null) {
+				line(graphics, entryName(row), 36, 44, 185);
+				if (row.upgrades().isEmpty()) line(graphics, tr("upgrade_unavailable"), 36, 65, 185);
+			} else if (state.view() != null && state.view().rows().isEmpty()) line(graphics, tr("empty_page"), 36, 48, 185);
 		} else {
 			line(graphics, tr("state." + menu.value(0)), 36, 47, 185);
 			if (state.view() != null && state.view().rows().isEmpty()) line(graphics, tr("empty_page"), 40, 71, 174);
@@ -212,7 +244,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		}
 		line(graphics, statusMessage(), 36, 134, 185);
 		line(graphics, playerInventory.getDisplayName(), 38, 144, 68);
-		line(graphics, tab == 1 ? tr("inventory_slot", inventorySlot + 1) : tr(menu.canManage() ? "role_owner" : "role_guest"), 112, 144, 107);
+		line(graphics, tab == 1 || tab == 3 ? tr("inventory_slot", inventorySlot + 1) : tr(menu.canManage() ? "role_owner" : "role_guest"), 112, 144, 107);
 	}
 
 	private Component beeName(String type) {
@@ -220,7 +252,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		return id == null ? Component.literal(type) : com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.getBeeDisplayName(id);
 	}
 	private Component entryName(TerminalView.Row row) {
-		if (tab == 1) {
+		if (tab == 1 || tab == 3) {
 			int at = row.label().indexOf(" @ ");
 			if (at > 0) {
 				var machine = ResourceLocation.tryParse(row.label().substring(0, at));
@@ -247,6 +279,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 				var result = tab == 2 && state.exchangeResult() != null && state.exchangeResult().sequence() == takeSequence ? state.exchangeResult() : state.result();
 				if (tab == 2 && state.view() != null && result.status() == TerminalReply.Status.MOVED) yield tr("quick_moved", result.moved());
 				if (result.interruptedTicks() > 0) yield tr("interrupted", result.interruptedTicks());
+				if (tab == 3 && result.status() == TerminalReply.Status.EMPTY) yield tr("upgrade_empty");
 				yield tr("result." + result.status().name().toLowerCase(java.util.Locale.ROOT), result.moved());
 			}
 		};

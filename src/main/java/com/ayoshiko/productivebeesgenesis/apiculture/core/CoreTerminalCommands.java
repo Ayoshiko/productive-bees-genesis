@@ -13,16 +13,18 @@ final class CoreTerminalCommands {
 		}
 		var core = menu.exchangeCore(player);
 		if (core == null || core.ownership().readyAuthority() == null) return reply(request, UNAVAILABLE, 0, 0, null);
-		if (operation == TerminalRequest.Operation.MEMBERS || operation == TerminalRequest.Operation.PRODUCTS || operation == TerminalRequest.Operation.NEXT) {
+		if (operation == TerminalRequest.Operation.MEMBERS || operation == TerminalRequest.Operation.PRODUCTS
+				|| operation == TerminalRequest.Operation.UPGRADES || operation == TerminalRequest.Operation.NEXT) {
 			NetworkSelectionSession.Page page;
 			if (operation == TerminalRequest.Operation.NEXT) {
 				var previous = selections.page();
 				page = previous == null || request.generation() == 0 ? null : menu.querySelections(player, previous.kind(), request.generation());
 			} else {
 				page = menu.querySelections(player, operation == TerminalRequest.Operation.MEMBERS
-						? NetworkSelectionSession.Kind.MEMBERS : NetworkSelectionSession.Kind.PRODUCTS, 0);
+						? NetworkSelectionSession.Kind.MEMBERS : operation == TerminalRequest.Operation.UPGRADES
+								? NetworkSelectionSession.Kind.UPGRADES : NetworkSelectionSession.Kind.PRODUCTS, 0);
 			}
-			return reply(request, page == null ? STALE : OK, 0, 0, page == null ? null : TerminalViewProjection.project(page));
+			return reply(request, page == null ? STALE : OK, 0, 0, page == null ? null : CoreUpgradeCommands.project(menu, player, page));
 		}
 		var selected = menu.selectedRow(player, request.session(), request.generation(), request.row());
 		if (selected == null) return reply(request, STALE, 0, 0, null);
@@ -34,6 +36,10 @@ final class CoreTerminalCommands {
 				return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), 0, null);
 			}
 			if (!(selected instanceof NetworkSelectionSession.MemberRow member)) return reply(request, INVALID, 0, 0, null);
+			if (TerminalRequest.upgradeAction(operation)) {
+				var result = CoreUpgradeCommands.exchange(menu, player, member, request);
+				return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), 0, null);
+			}
 			var record = current.ownedMachines().get(member.claim().member());
 			if (!NetworkSelectionSession.sameRoster(member, record)) return reply(request, STALE, 0, 0, null);
 			if (request.targetSlot() < 0 || request.targetSlot() >= 3) return reply(request, INVALID, 0, 0, null);

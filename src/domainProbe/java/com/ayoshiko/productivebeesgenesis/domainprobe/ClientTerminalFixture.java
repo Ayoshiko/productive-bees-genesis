@@ -19,10 +19,11 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 /** 客户端点击场景的服务端资产夹具和独立守恒断言；不从客户端线程访问世界。 */
 final class ClientTerminalFixture {
 	static volatile boolean requested, ready, done, verified;
+	static volatile boolean upgradesDone, upgradesVerified;
 	private static ProductKey iron, red, blue, water;
 	private static CompoundTag beeData;
 	static void tick(NetworkCoreBlockEntity core, ServerPlayer player) {
-		if (!requested || verified) return;
+		if (!requested || verified && (!upgradesDone || upgradesVerified)) return;
 		var data = core.ownership().readyAuthority(); if (data == null) return;
 		var current = data.checkpoint();
 		if (!ready) {
@@ -43,6 +44,18 @@ final class ClientTerminalFixture {
 				stock.put(ProductKeyCodec.item(comb, player.registryAccess()), ProductAmount.of(64));
 			}
 			com.ayoshiko.productivebeesgenesis.apiculture.persistence.ClientTerminalStockFixture.seed(data, stock);
+			// 原取回夹具未处理过蜜脾；显式满足升级服务的已激活成员前置，不启动或结算生产。
+			var centrifuge = current.ownedMachines().values().stream()
+					.filter(record -> record.claim().machine().equals("productivebeesgenesis:mek_centrifuge")).findFirst().orElseThrow();
+			if (centrifuge.centrifuge() == null) {
+				var policy = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductPolicyRegistry(
+						com.ayoshiko.productivebeesgenesis.apiculture.compat.PbProductPolicyCompiler.compile(player.serverLevel(), data.checkpoint().policyRevision()).snapshot());
+				var service = new com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.NetworkCentrifugeService(data,
+						com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server), policy);
+				var comb = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_HONEYCOMB.get());
+				comb.set(cy.jdkdigital.productivebees.init.ModDataComponents.BEE_TYPE.get(), net.minecraft.resources.ResourceLocation.parse("productivebees:iron"));
+				require(service.activate(player.serverLevel(), centrifuge.claim().member(), data.checkpoint().revision(), ProductKeyCodec.item(comb, player.registryAccess())), "Client upgrade centrifuge activation failed");
+			}
 			for (int i = 0; i < 36; i++) player.getInventory().setItem(i, new ItemStack(Items.STONE, 64));
 			player.getInventory().setItem(0, new ItemStack(Items.IRON_BLOCK, 64));
 			beeData = new CompoundTag(); beeData.putString("entity", "productivebees:configurable_bee");
@@ -51,6 +64,8 @@ final class ClientTerminalFixture {
 			player.getInventory().setItem(1, cage); player.getInventory().setItem(2, new ItemStack(Items.BUCKET));
 			player.getInventory().setItem(3, new ItemStack(Items.DIAMOND, 64));
 			player.getInventory().setItem(4, new ItemStack(Items.IRON_INGOT, 63)); player.getInventory().setItem(5, ItemStack.EMPTY);
+			player.getInventory().setItem(6, mekanism.common.util.UpgradeUtils.getStack(mekanism.api.Upgrade.SPEED, 2));
+			player.getInventory().setItem(7, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot.getRepresentativeStack(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK).copyWithCount(2));
 			player.getInventory().setChanged(); player.containerMenu.broadcastChanges(); ready = true;
 		} else if (done) {
 			require(current.ledger().available(iron).equals(ProductAmount.of(64)), "Client partial item transfer changed wrong amount");
@@ -64,6 +79,14 @@ final class ClientTerminalFixture {
 				require(record.bees().bees().isEmpty() && record.bees().feeding().slots().stream().allMatch(s -> s.count() == 0), "Client left duplicate food or bee");
 			}
 			verified = true;
+			if (upgradesDone) {
+				require(player.getInventory().getItem(6).getCount() == 2 && player.getInventory().getItem(7).getCount() == 2, "Upgrade UI round trip lost items");
+				for (var record : current.ownedMachines().activeValues()) {
+					require(com.ayoshiko.productivebeesgenesis.apiculture.compat.NativeUpgradeCounts.read(record.assets().copy().getCompound("upgrades")).getOrDefault(mekanism.api.Upgrade.SPEED, 0) == 0, "Upgrade UI left native duplicates");
+					if (record.bees() != null) require(com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts.read(record.assets().copy().getCompound("extra")).getOrDefault(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK, 0) == 0, "Upgrade UI left PB duplicates");
+				}
+				upgradesVerified = true;
+			}
 		}
 	}
 	private ClientTerminalFixture() { }

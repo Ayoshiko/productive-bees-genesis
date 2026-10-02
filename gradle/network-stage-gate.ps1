@@ -1,9 +1,12 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4')][string]$Gate = 'D16b',
-    [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
+    [ValidateSet('D16b', 'D16c1a', 'D16c1b', 'D16c1c', 'D16c2a', 'D16c2b', 'D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1')][string]$Gate = 'D16b',
+    [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = ('network-' + (Get-Date -Format 'yyyyMMdd-HHmmss')),
+    [ValidateSet('Auto', 'Step', 'Joint')][string]$Scope = 'Auto')
 
 $ErrorActionPreference = 'Stop'
+$focused = $Gate -eq 'D17c1' -and $Scope -ne 'Joint'
+if ($Scope -eq 'Step' -and -not $focused) { throw 'Step scope is currently defined for D17c1; use Joint for the cumulative matrix' }
 . (Join-Path $PSScriptRoot 'network-stage-evidence.ps1')
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location -LiteralPath $workspace
@@ -20,12 +23,14 @@ try {
     $dependencies = @(Get-NetworkDependencyHashes)
     $summary = [ordered]@{
         schema = 1; gate = $Gate; runId = $RunId; passed = $false
+        scope = $(if ($focused) { 'step' } else { 'joint' })
         startedUtc = [DateTime]::UtcNow.ToString('o'); sourceRevision = $revision
         sourceFingerprint = $fingerprint; worktree = $workspace
         dependencyHashes = $dependencies
         workingTree = @(& git status --short); checks = @()
         limits = @('No client or cross-JVM player-file gate', 'No Spark/MSPT or cold-latency acceptance', 'No forced-crash durability claim')
     }
+    if ($focused) { $summary.limits += 'Upgrade step only: cumulative dependency and restart acceptance remains at the D17c joint gate' }
 
     function Invoke-GateGradle {
         param([string]$Name, [string[]]$Arguments)
@@ -48,9 +53,10 @@ try {
         $probeId = "$RunId-$Name"
         $arguments = @('runNetworkDomainServer', '-PnetworkDomainProbe', "-PnetworkProbeRun=$probeId")
         if ($Ae2) { $arguments += '-PnetworkProbeAe2' }
+        if ($focused) { $arguments += '-PnetworkUpgradeProbe' }
         if ($Mode -ne 'domain') { $arguments += "-PnetworkAutomaticMode=$Mode" }
         if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
-        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4') -and $Mode -eq 'read') {
+        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1') -and $Mode -eq 'read') {
             $sourceName = $Name.Replace('-read', '-domain')
             $source = Join-Path $workspace "build/network-probe-$RunId-$sourceName/results/bee-restart"
             $arguments += "-PnetworkBeeRestartSource=$source"
@@ -58,7 +64,8 @@ try {
         Invoke-GateGradle $Name $arguments
         $reportPath = Join-Path $workspace "build/network-probe-$probeId/results/domain.json"
         $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        Assert-NetworkProbeReport $report $Ae2 $Mode $Gate
+        if ($focused) { Assert-NetworkUpgradeStepReport $report $Ae2 }
+        else { Assert-NetworkProbeReport $report $Ae2 $Mode $Gate }
         $summary.checks += [ordered]@{ name = "$Name-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
         return $report
     }
@@ -89,14 +96,16 @@ try {
     } finally { $zip.Dispose() }
     $summary.artifact = [ordered]@{ path = $artifact; sha256 = (Get-FileHash -LiteralPath $artifact).Hash }
 
-    foreach ($combination in @('noae2', 'ae2')) {
+    $combinations = if ($focused) { @('noae2') } else { @('noae2', 'ae2') }
+    foreach ($combination in $combinations) {
         $ae2 = $combination -eq 'ae2'
         $domain = Invoke-GateProbe "$combination-domain" $ae2 'domain'
+        if (-not $focused) {
         $writer = Invoke-GateProbe "$combination-write" $ae2 'write'
         $world = Join-Path $workspace "build/network-probe-$RunId-$combination-write/world"
         $reader = Invoke-GateProbe "$combination-read" $ae2 'read' $world
         if ($reader.producerPid -ne $writer.currentPid) { throw 'Reader consumed another writer fixture' }
-        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4')) {
+        if ($Gate -in @('D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1')) {
             if ($reader.beeRandomProducerPid -ne $domain.beeRandomWriterPid -or $reader.beeRandomReaderPid -ne $reader.currentPid) {
                 throw 'Random reader consumed another writer or reused its JVM'
             }
@@ -106,30 +115,35 @@ try {
                 $summary.checks += [ordered]@{ name = "$combination-bee-random-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
             }
         }
-        if ($Gate -in @('D17b2b2b3', 'D17b2b2b4')) {
+        if ($Gate -in @('D17b2b2b3', 'D17b2b2b4', 'D17c1')) {
             if ($reader.apiaryProductivityWriterPid -ne $domain.beeRandomWriterPid) { throw 'Productivity reader consumed another writer' }
             foreach ($name in @('apiary-productivity.dat', 'apiary-productivity.json')) {
                 $path = Join-Path $workspace "build/network-probe-$RunId-$combination-domain/results/$name"
                 $summary.checks += [ordered]@{ name = "$combination-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
             }
         }
-        if ($Gate -eq 'D17b2b2b4') {
+        if ($Gate -in @('D17b2b2b4', 'D17c1')) {
             if ($reader.apiaryBlockWriterPid -ne $domain.beeRandomWriterPid) { throw 'Block reader consumed another writer' }
             foreach ($name in @('apiary-block-install.dat', 'apiary-block-remove.dat', 'apiary-block.json', 'bee-restart/random/legacy-seven.dat')) {
                 $path = Join-Path $workspace "build/network-probe-$RunId-$combination-domain/results/$name"
                 $summary.checks += [ordered]@{ name = "$combination-$name"; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
             }
         }
-        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4')) {
+        }
+        if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1')) {
             $clientId = "$RunId-$combination-client"
             $arguments = @('runNetworkDomainClient', '-PnetworkDomainProbe', "-PnetworkProbeRun=$clientId")
             if ($ae2) { $arguments += '-PnetworkProbeAe2' }
             Invoke-GateGradle "$combination-client" $arguments
             $clientFolder = Join-Path $workspace "build/network-probe-$clientId/results"
             $reportPath = Join-Path $clientFolder 'client.json'
-            Assert-NetworkClientReport (Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json) $ae2
+            $clientReport = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            Assert-NetworkClientReport $clientReport $ae2
+            if ($Gate -eq 'D17c1' -and $clientReport.upgradeWidgetsBothMembersNativePbAndConservation -ne $true) { throw 'Missing upgrade widget client gate' }
             $summary.checks += [ordered]@{ name = "$combination-client-report"; report = $reportPath; sha256 = (Get-FileHash -LiteralPath $reportPath).Hash }
-            foreach ($name in @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'terminal-products', 'terminal-bee-icons', 'returned')) {
+            $screenshots = @('managed', 'terminal-feeding', 'terminal-variants', 'terminal-expired', 'terminal-inventory', 'terminal-products', 'terminal-bee-icons', 'returned')
+            if ($Gate -eq 'D17c1') { $screenshots += @('terminal-upgrades-apiary', 'terminal-upgrades-centrifuge') }
+            foreach ($name in $screenshots) {
                 $screenshot = Join-Path $clientFolder "$name.png"
                 $bitmap = [Drawing.Image]::FromFile($screenshot)
                 $imageWidth = $bitmap.Width; $imageHeight = $bitmap.Height; $bitmap.Dispose()
@@ -138,7 +152,7 @@ try {
             }
         }
     }
-    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
+    if ($Gate -in @('D16c2c', 'D16c3a', 'D17a', 'D17b1', 'D17b2a', 'D17b2b1', 'D17b2b2a', 'D17b2b2b2', 'D17b2b2b3', 'D17b2b2b4', 'D17c1')) { $summary.limits[0] = 'No two-player or cross-JVM player-file gate' }
     if ((Get-NetworkSourceFingerprint) -ne $fingerprint -or (& git rev-parse HEAD).Trim() -ne $revision) {
         throw 'Source changed during the gate; rerun the affected gate before accepting it'
     }

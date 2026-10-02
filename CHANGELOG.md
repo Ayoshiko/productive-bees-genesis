@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D17c1 核心升级页**：按成员显示实际升级及上限，从所选背包格安装／取回原生与 PB 升级，复用现有实物交换服务。正式协议绑定菜单、成员和升级快照，普通生产不会使选择失效，升级改回原数量也不能复活旧请求；仅所有者可修改。能力预估、批量、旧 GUI 代理与双玩家联合验收继续由 D17c2／c3 交付。
+
 - **D17b2b2b4 Ω／BLOCK 蜜脾块转换**：基础网络蜂箱支持 Ω 与 BLOCK 实物升级，按独立蜂箱规则 1:1 转换，保留数量及目标蜂种组件；两者并存只转换一次。计划分别保存原配方键和本周期实际键，安装／拆除不改旧付费结果，交还检查实际输出一致。checkpoint 升至 schema 8，兼容完整 schema 6／7；正式升级界面、批量及玩家联合门仍由 D17c 验收。
 
 - **D17b2b2b3 蜂箱生产力升级服务**：基础网络蜂箱支持 α／β／γ 实物安装与取回，沿用当前上限、等级互斥和完整组件校验。新倍率与耗时、费用在旧周期结清后随首次付款生效，升级及配置变化保留旧随机结果；小数倍率部分周期先结清再交还。本步复用 schema 7；Ω／蜜脾块转换见 b4，正式升级界面、批量和玩家联合门见 D17c。
@@ -123,6 +125,7 @@
 
 ### 变更
 
+- 网络开发验证分为小步与阶段联合范围：D17c1 默认只启动升级专项专服及一组客户端；双依赖与跨 JVM 累计矩阵保留在联合验收。取消任意检查数量门槛，按行为和风险保留测试，失败只重跑受影响入口。
 - 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
 - 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
 - 同步 `main-neo/1.21.1` 的 `1.0.8-hotfix`，版本元数据更新为 `1.0.8-hotfix`；PB 离心配方缓存改为跨机器共享的有界缓存，并在配方重载及服务器停止时清理。
@@ -138,6 +141,8 @@
 ### English
 
 #### Added
+
+- Added the D17c1 core upgrade page with per-member installed counts and limits. Owners install or return native/PB upgrades through a selected inventory slot using the existing item exchange service. Requests bind the menu, member and upgrade snapshot: normal production preserves the selection, while changing upgrades back to the same count cannot revive an old request. Capability estimates, bulk operations, managed legacy GUI routing and joint player validation remain in D17c2/c3.
 
 - Added D17b2b2b4 omega/BLOCK comb conversion for basic managed apiaries. Conversion matches standalone apiaries at 1:1 with unchanged counts and target bee-type components; combined upgrades convert once. Plans retain both the recipe source key and the current cycle output, preserving paid results across installation/removal and checking output identity before return. Checkpoint schema 8 migrates complete schema 6/7 records; upgrade GUI, bulk actions and joint player validation remain in D17c.
 
@@ -217,6 +222,7 @@
 
 #### Changed
 
+- Split network validation into step and joint scopes. D17c1 defaults to one focused upgrade server and one client; the cumulative dependency and cross-JVM matrix remains a joint gate. Removed arbitrary check-count thresholds, kept behavior-based checks, and rerun only affected entries after a failure.
 - Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
 - Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Takeover remains disabled by default; managed machines do not produce yet.
 - Updated local references to DataEnergistics `1.21`/3.3.0 (`dbdfe17e`), NeoECOAEExtension `v21.1.2` (`1cae738a`), and Useless 2.3.8 (`267b38a6`). Documented exact batch delivery and recovery receipt boundaries. All D09b capture, save, recovery and publication steps are complete.

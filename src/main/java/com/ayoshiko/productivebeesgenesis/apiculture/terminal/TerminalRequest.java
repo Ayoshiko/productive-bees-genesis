@@ -10,7 +10,8 @@ import net.minecraft.resources.ResourceLocation;
 /** 固定长度命令；没有客户端提供的资产键、蜜蜂 NBT 或成员身份。 */
 public record TerminalRequest(int containerId, UUID session, long sequence, Operation operation,
 		long generation, int row, int targetSlot, int inventorySlot, int amount) implements CustomPacketPayload {
-	public enum Operation { MEMBERS, PRODUCTS, NEXT, CANCEL, FEED_IN, FEED_OUT, CAGE_IN, CAGE_OUT, TAKE_PRODUCT }
+	public enum Operation { MEMBERS, PRODUCTS, NEXT, CANCEL, FEED_IN, FEED_OUT, CAGE_IN, CAGE_OUT, TAKE_PRODUCT,
+		UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE }
 	public static final int BYTES = 53;
 	public static final Type<TerminalRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_request"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalRequest> STREAM_CODEC = new StreamCodec<>() {
@@ -27,9 +28,11 @@ public record TerminalRequest(int containerId, UUID session, long sequence, Oper
 	public TerminalRequest {
 		Objects.requireNonNull(session); Objects.requireNonNull(operation);
 		if (containerId < 0 || sequence <= 0 || generation < 0 || row < -1 || row >= NetworkSelectionSession.PAGE_SIZE
-				|| targetSlot < -1 || targetSlot >= 3 || inventorySlot < -1 || inventorySlot >= 36 || amount < 0 || amount > 1000) {
+				|| targetSlot < -1 || targetSlot >= (upgradeAction(operation) ? 16 : 3)
+				|| inventorySlot < -1 || inventorySlot >= 36 || amount < 0 || amount > 1000) {
 			throw new IllegalArgumentException("Invalid terminal request");
 		}
 	}
+	public static boolean upgradeAction(Operation operation) { return operation == Operation.UPGRADE_INSTALL || operation == Operation.UPGRADE_REMOVE; }
 	@Override public Type<TerminalRequest> type() { return TYPE; }
 }

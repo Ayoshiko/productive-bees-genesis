@@ -15,7 +15,7 @@ public final class TerminalViewProjection {
 			} else if (row instanceof NetworkSelectionSession.MemberRow member) {
 				var origin = member.claim().origin();
 				rows.add(new TerminalView.Row(shortText(member.claim().machine() + " @ " + origin.x() + "," + origin.y() + "," + origin.z()),
-						false, "", "", true, member.bees().stream().map(bee -> new TerminalView.Bee(bee.slot(), bee.id() != null,
+						false, "", "", true, page.kind() == NetworkSelectionSession.Kind.UPGRADES ? java.util.List.of() : member.bees().stream().map(bee -> new TerminalView.Bee(bee.slot(), bee.id() != null,
 								shortText(bee.type()), bee.progress(), bee.cycleTicks(), bee.pending())).toList()));
 			}
 		}

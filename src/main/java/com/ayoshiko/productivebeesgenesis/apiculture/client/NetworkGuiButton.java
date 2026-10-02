@@ -13,10 +13,12 @@ final class NetworkGuiButton extends Button {
 	private static final ResourceLocation ICONS = texture("icons");
 	private final boolean selected;
 	private final int icon;
+	private final net.minecraft.world.item.ItemStack upgradeIcon;
 
 	NetworkGuiButton(int x, int y, int width, int height, Component label, Runnable action, boolean selected, int icon) {
 		super(x, y, width, height, label, ignored -> action.run(), DEFAULT_NARRATION);
 		this.selected = selected; this.icon = icon;
+		upgradeIcon = icon == 3 ? mekanism.common.util.UpgradeUtils.getStack(mekanism.api.Upgrade.SPEED, 1) : net.minecraft.world.item.ItemStack.EMPTY;
 	}
 	static ResourceLocation texture(String name) {
 		return ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "textures/gui/network/" + name + ".png");
@@ -24,9 +26,10 @@ final class NetworkGuiButton extends Button {
 	@Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		int state = !active ? 3 : selected ? 2 : isHoveredOrFocused() ? 1 : 0;
 		if (icon >= 0) {
-			graphics.blit(TABS, getX(), getY(), 0, icon * 28, 24, 28, 24, 84);
+			graphics.blit(TABS, getX(), getY(), 0, Math.min(icon, 2) * 28, 24, 28, 24, 84);
 			if (selected || isHoveredOrFocused()) graphics.fill(getX() + 2, getY() + 2, getX() + 4, getY() + 26, active ? 0xffefd18a : 0xff75786a);
-			graphics.blit(ICONS, getX() + 5, getY() + 6, icon * 16, 0, 16, 16, 48, 16);
+			if (icon == 3) graphics.renderItem(upgradeIcon, getX() + 5, getY() + 6);
+			else graphics.blit(ICONS, getX() + 5, getY() + 6, icon * 16, 0, 16, 16, 48, 16);
 		} else {
 			// 只伸展中心，保留两侧 2 像素边框；美术可直接替换四态图集。
 			graphics.blit(BUTTON, getX(), getY(), 2, height, 0, state * 16, 2, 16, 24, 64);

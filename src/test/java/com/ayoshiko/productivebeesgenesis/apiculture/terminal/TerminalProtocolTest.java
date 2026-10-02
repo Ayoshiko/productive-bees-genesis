@@ -92,6 +92,24 @@ class TerminalProtocolTest {
 		assertFalse(sequence.begin(1)); assertTrue(sequence.begin(Long.MAX_VALUE)); sequence.finish();
 		assertFalse(sequence.begin(Long.MAX_VALUE)); sequence.close(); assertFalse(sequence.begin(Long.MAX_VALUE));
 	}
+	@Test void upgradePagesBoundAllEightMembersAndRejectDuplicateOrMalformedChoices() {
+		var upgrades = java.util.stream.IntStream.range(0, 10).mapToObj(i -> new TerminalView.Upgrade(i, "test:" + "a".repeat(75), Integer.MAX_VALUE, 8, false)).toList();
+		var row = new TerminalView.Row("机".repeat(80), false, "", "", true, List.of(), "", "", upgrades);
+		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 1, true, java.util.Collections.nCopies(8, row));
+		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, page);
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			TerminalReply.STREAM_CODEC.encode(buffer, reply); assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
+			assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer));
+		} finally { buffer.release(); }
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Upgrade(16, "test:item", 0, 1, true));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Upgrade(0, "乱码", 0, 1, true));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Row("x", false, "", "", true, List.of(), "", "", List.of(upgrades.getFirst(), upgrades.getFirst())));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 1, false, List.of(row)));
+		var request = new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.UPGRADE_REMOVE, 1, 0, 10, 35, 64);
+		assertEquals(10, request.targetSlot());
+		assertThrows(IllegalArgumentException.class, () -> new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 10, 35, 1));
+	}
 	@Test void sharedBudgetBoundsBurstAndSustainedRequests() {
 		var budget = new TerminalRateBudget(); int accepted = 0;
 		for (int tick = 0; tick < 20; tick++) for (int packet = 0; packet < 100; packet++) if (budget.accept(tick)) accepted++;

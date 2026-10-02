@@ -66,7 +66,8 @@ public final class NetworkClientProbe {
 			} else if (step == 6 && menu.productionRunning()) {
 				capture(client, "automatic"); press(screen, "pause"); step = 7; settled = 0;
 			} else if (step == 7 && !menu.productionRunning()) {
-				if (ClientTerminalProbe.advance(client, screen, menu)) { press(screen, "return"); step = 3; settled = 0; }
+				if ((!ClientTerminalProbe.complete() ? ClientTerminalProbe.advance(client, screen, menu) : true)
+						&& ClientUpgradeProbe.advance(client, screen, menu)) { press(screen, "return"); step = 3; settled = 0; }
 			} else if (step == 3 && ClientOwnershipFixture.stage == 3 && menu.ownershipStatus() == CoreOwnershipController.Status.STANDALONE.ordinal()) {
 				capture(client, "returned"); client.player.closeContainer(); step = 5;
 			}
@@ -92,6 +93,7 @@ public final class NetworkClientProbe {
 		report.addProperty("coreOwnerRoleSynchronized", error == null);
 		report.addProperty("permanentInventoryAndMinimumViewport", error == null && ClientTerminalProbe.complete());
 		report.addProperty("componentItemGridAndPbTint", error == null && ClientTerminalProbe.complete());
+		report.addProperty("upgradeWidgetsBothMembersNativePbAndConservation", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

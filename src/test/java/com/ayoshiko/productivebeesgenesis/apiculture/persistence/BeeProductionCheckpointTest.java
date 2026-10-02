@@ -328,4 +328,21 @@ class BeeProductionCheckpointTest {
 			assertEquals(expected, decoder.checkpoint()); return decoder.checkpoint();
 		}
 	}
+	@Test void upgradeSelectionSurvivesProductionButRejectsChangedRestoredAndRecreatedAssets() {
+		var f = fixture(0, 0); var current = f.active(); var original = record(current, f);
+		try (var selection = new com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession()) {
+			var page = selection.begin(new Object(), current, com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.Kind.UPGRADES, 0);
+			var row = (com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.MemberRow) page.rows().getFirst();
+			current = publishCandidate(current, f, BeeWorkExecutor.advance(original.bees(), 2, 0, context(), 1, 0));
+			assertTrue(com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.sameUpgrades(row, record(current, f)));
+			current = current.exchangeUpgrade(MemberUpgradeChange.pb(record(current, f), PbUpgradeType.TIME, 1, 4));
+			assertFalse(com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.sameUpgrades(row, record(current, f)));
+			current = current.exchangeUpgrade(MemberUpgradeChange.pb(record(current, f), PbUpgradeType.TIME, -1, 4));
+			assertEquals(original.assets(), record(current, f).assets());
+			assertFalse(com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.sameUpgrades(row, record(current, f)));
+			var loaded = CODEC.decode(NetworkCheckpointCodec.encode(current));
+			assertFalse(com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSelectionSession.sameUpgrades(row, record(loaded, f)));
+			selection.expire(100); assertNull(selection.page());
+		}
+	}
 }

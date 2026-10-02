@@ -111,8 +111,10 @@ final class ClientTerminalProbe {
 	}
 	static void press(NetworkCoreScreen screen, String key) {
 		String label = Component.translatable("screen.productivebeesgenesis.network." + key).getString();
-		var button = screen.children().stream().filter(child -> child instanceof Button b && b.getMessage().getString().endsWith(label))
-				.map(Button.class::cast).findFirst().orElseThrow(() -> new IllegalStateException("Missing button " + key + " at " + step));
+		var buttons = screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).toList();
+		var button = buttons.stream().filter(b -> b.getMessage().getString().equals(label)).findFirst()
+				.orElseGet(() -> buttons.stream().filter(b -> b.getMessage().getString().endsWith(label)).findFirst()
+						.orElseThrow(() -> new IllegalStateException("Missing button " + key + " at " + step)));
 		require(button.active && button.visible, "Inactive client button " + key + " at step " + step);
 		require(screen.mouseClicked(button.getX() + button.getWidth() / 2.0, button.getY() + button.getHeight() / 2.0, 0), "Button did not receive click");
 		screen.mouseReleased(button.getX() + 2, button.getY() + 2, 0);

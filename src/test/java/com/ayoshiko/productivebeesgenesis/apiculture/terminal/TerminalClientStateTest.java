@@ -59,4 +59,17 @@ class TerminalClientStateTest {
 		state.accept(reply(2, page(1)), 2); assertTrue(state.waiting());
 		state.accept(reply(1, page(1)), 3); assertFalse(state.waiting());
 	}
+	@Test void upgradeActionsRequireRefreshAndLostRepliesCannotRepeatAnExchange() {
+		var query = state.begin(UPGRADES, -1, -1, 0, 0, 0); assertEquals(0, query.generation());
+		var upgrade = new TerminalView.Upgrade(8, "test:block_upgrade", 0, 1, true);
+		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 3, false,
+				List.of(new TerminalView.Row("test:apiary", false, "", "", true, List.of(), "", "", List.of(upgrade))));
+		state.accept(reply(1, page), 10);
+		var request = state.begin(UPGRADE_INSTALL, 0, 8, 7, 1, 200); assertEquals(3, request.generation());
+		assertNull(state.view()); state.tick(5200);
+		assertNull(state.begin(UPGRADE_INSTALL, 0, 8, 7, 1, 5200));
+		assertNotNull(state.begin(UPGRADES, -1, -1, 0, 0, 5200));
+		state.accept(new TerminalReply(7, session, 2, TerminalReply.Status.MOVED, 1, 0, null), 5300);
+		assertTrue(state.waiting()); assertNull(state.exchangeResult());
+	}
 }

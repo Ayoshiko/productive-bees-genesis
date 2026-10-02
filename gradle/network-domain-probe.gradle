@@ -18,6 +18,11 @@ def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
 def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
+def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
+if (upgradeProbe && (automaticMode != null || multiblockMode != null || coldProbe ||
+        ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode', 'networkPlayerMode'].any { providers.gradleProperty(it).isPresent() })) {
+    throw new GradleException('Upgrade step probe cannot be combined with another probe mode')
+}
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
 def playerConcurrent = providers.gradleProperty('networkConcurrentProbe').isPresent()
 def playerMode = providers.gradleProperty('networkPlayerMode').orNull
@@ -236,6 +241,7 @@ neoForge {
             gameDirectory = probeDirectory
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
+            if (upgradeProbe) systemProperty 'pbg.upgrades.only', 'true'
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
@@ -330,7 +336,10 @@ tasks.named('runNetworkDomainServer') {
         File report = new File(probeDirectory.get().asFile, 'results/domain.json')
         if (!report.isFile()) throw new GradleException('Network domain report is missing')
         def result = new groovy.json.JsonSlurper().parse(report)
-        if (!result.passed || (!coldProbe && !result.normalShutdownCheckpointSaved)) {
+        def shutdownSaved = upgradeProbe
+                ? result.scope == 'upgrades' && result.apiaryUpgradeShutdownSaved == true
+                : result.normalShutdownCheckpointSaved == true
+        if (result.passed != true || (!coldProbe && !shutdownSaved)) {
             throw new GradleException('Network domain assertions did not complete')
         }
     }

@@ -27,7 +27,7 @@ public final class TerminalClientState {
 	public TerminalRequest begin(TerminalRequest.Operation operation, int row, int target, int inventory, int amount, long now) {
 		tick(now);
 		if (!ready(now)) return null;
-		boolean query = operation == TerminalRequest.Operation.MEMBERS || operation == TerminalRequest.Operation.PRODUCTS;
+		boolean query = operation == TerminalRequest.Operation.MEMBERS || operation == TerminalRequest.Operation.PRODUCTS || operation == TerminalRequest.Operation.UPGRADES;
 		boolean cancel = operation == TerminalRequest.Operation.CANCEL;
 		if (!query && !cancel && (view == null || operation == TerminalRequest.Operation.NEXT && !view.hasNext()
 				|| operation != TerminalRequest.Operation.NEXT && (row < 0 || row >= view.rows().size()))) return null;

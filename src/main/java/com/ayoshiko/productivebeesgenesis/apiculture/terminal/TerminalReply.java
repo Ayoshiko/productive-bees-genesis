@@ -12,7 +12,7 @@ import net.minecraft.resources.ResourceLocation;
 public record TerminalReply(int containerId, UUID session, long sequence, Status status,
 		int moved, int interruptedTicks, TerminalView view) implements CustomPacketPayload {
 	public enum Status { OK, MOVED, STALE, INVALID, UNAVAILABLE, NO_SPACE, EMPTY_OR_RESERVED, DRAIN_FIRST,
-		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER }
+		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER, LIMIT, UNSUPPORTED, ENERGY_CAPACITY, CONFLICT }
 	public static final int MAX_BYTES = 16 * 1024;
 	public static final Type<TerminalReply> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_reply"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalReply> STREAM_CODEC = new StreamCodec<>() {
@@ -49,7 +49,9 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			int count = boundedSize(b, 3); var bees = new ArrayList<TerminalView.Bee>(count);
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
-			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon));
+			int upgradesCount = boundedSize(b, TerminalView.MAX_UPGRADES); var upgrades = new ArrayList<TerminalView.Upgrade>(upgradesCount);
+			for (int j = 0; j < upgradesCount; j++) upgrades.add(new TerminalView.Upgrade(b.readUnsignedByte(), b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
+			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades));
 		}
 		return new TerminalView(kind, generation, next, rows);
 	}
@@ -67,6 +69,11 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			for (var bee : row.bees()) {
 				b.writeByte(bee.slot()); b.writeBoolean(bee.occupied()); b.writeUtf(bee.type(), TerminalView.TEXT_LIMIT);
 				b.writeInt(bee.progress()); b.writeInt(bee.cycleTicks()); b.writeBoolean(bee.pending());
+			}
+			b.writeByte(row.upgrades().size());
+			for (var upgrade : row.upgrades()) {
+				b.writeByte(upgrade.choice()); b.writeUtf(upgrade.item(), TerminalView.TEXT_LIMIT);
+				b.writeInt(upgrade.installed()); b.writeInt(upgrade.limit()); b.writeBoolean(upgrade.installable());
 			}
 		}
 	}
