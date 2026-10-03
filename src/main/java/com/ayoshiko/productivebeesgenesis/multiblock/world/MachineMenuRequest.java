@@ -25,11 +25,11 @@ public record MachineMenuRequest(int containerId, UUID session, long sequence, l
 	};
 	public MachineMenuRequest {
 		Objects.requireNonNull(session);
-		if (containerId < 0 || sequence < 1 || viewRevision < 0 || action < 0 || action >= 4 || slot < 0 || slot >= 6
+		if (containerId < 0 || sequence < 1 || viewRevision < 0 || action < 0 || action >= 6 || slot < 0 || slot >= (action >= 4 ? 4 : 6)
 				|| inventorySlot < 0 || inventorySlot >= 36 || amount < 1 || amount > 64) throw new IllegalArgumentException("Invalid machine request");
 	}
 	static void register(RegisterPayloadHandlersEvent event) {
-		event.registrar("1").executesOn(HandlerThread.MAIN).playToServer(TYPE, STREAM_CODEC, (request, context) -> {
+		event.registrar("2").executesOn(HandlerThread.MAIN).playToServer(TYPE, STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof MachineMenu menu) menu.request(player, request);
 		});
 	}

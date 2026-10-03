@@ -108,6 +108,8 @@ public final class MachineLifecycleProbe {
 					check(bee.progress() > 0 && bee.random().cursor() == 0 && work.centrifuges().size() == 1, "New work did not start through normal scheduler");
 					var job = work.centrifuges().values().iterator().next().job();
 					check(job.progress() > 0 && work.energy() == 1000 - 10 * (bee.progress() + job.progress()), "Shared FE differs from independently counted paid ticks");
+					MachineUpgradeChecks.verify(workMenu, worker, noise.core(), fixture.core());
+					report.addProperty("nativePluginExchangeIsolationOldWorkAndRecovery", true);
 					worker.getInventory().items.set(0, new ItemStack(cy.jdkdigital.productivebees.init.ModItems.BEE_CAGE.get()));
 					check(exchange(MachineExchange.Action.CAGE_OUT, false).moved() == 1, "Cannot cage partially worked bee");
 					check(com.ayoshiko.productivebeesgenesis.apiculture.compat.VerifiedCageProjection.contents(worker.getInventory().items.get(0)).equals(cagedData), "Cage roundtrip lost bee data");

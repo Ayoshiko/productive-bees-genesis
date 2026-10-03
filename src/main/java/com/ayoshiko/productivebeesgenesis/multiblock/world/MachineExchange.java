@@ -11,8 +11,8 @@ import net.minecraft.world.item.ItemStack;
 
 /** 单个玩家槽与单机资产根交换；准备双方结果后在服务器线程内一次提交。 */
 final class MachineExchange {
-	enum Action { CAGE_IN, CAGE_OUT, FEED_IN, FEED_OUT }
-	enum Status { IDLE, MOVED, NO_SPACE, INVALID, STALE, DRAIN_FIRST, UNAVAILABLE }
+	enum Action { CAGE_IN, CAGE_OUT, FEED_IN, FEED_OUT, UPGRADE_IN, UPGRADE_OUT }
+	enum Status { IDLE, MOVED, NO_SPACE, INVALID, STALE, DRAIN_FIRST, UNAVAILABLE, LIMIT }
 	record Result(Status status, int moved) { }
 	static Result exchange(MachineMenu menu, ServerPlayer player, Action action, int slot, int inventorySlot, int amount, boolean simulate) {
 		var core = menu.controller(player);
@@ -27,7 +27,7 @@ final class MachineExchange {
 				case CAGE_IN -> {
 					if (work.bees().stream().anyMatch(bee -> bee.slot() == slot)) return result(Status.NO_SPACE);
 					var policy = RuntimeProductPolicies.peek(level); if (policy == null) return result(Status.UNAVAILABLE);
-					var bee = StaticApiaryAdapter.caged(level, MachineProduction.apiaryProfile(), slot, work.beeSlots(), VerifiedCageProjection.contents(inventory), policy.revision());
+					var bee = StaticApiaryAdapter.caged(level, MachineUpgradeProfiles.apiary(work.upgrades()), slot, work.beeSlots(), VerifiedCageProjection.contents(inventory), policy.revision());
 					received = VerifiedCageProjection.afterRelease(inventory);
 					change = work.insertBee(slot, bee.original(), bee.plan());
 				}
@@ -49,6 +49,29 @@ final class MachineExchange {
 					int count = inventory.getCount(), space = Math.min(64, unit.getMaxStackSize()) - count;
 					if (space <= 0) return result(Status.NO_SPACE);
 					change = work.withdrawFeeding(slot, Math.min(amount, space)); received = unit.copyWithCount(count + (int) change.moved());
+				}
+				case UPGRADE_IN, UPGRADE_OUT -> {
+					if (slot >= com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.SLOTS) return result(Status.INVALID);
+					var unit = MachineUpgradeProfiles.unit(slot); int installed = work.upgrades().count(slot), moved;
+					if (action == Action.UPGRADE_IN) {
+						if (inventory.isEmpty() || !ItemStack.isSameItemSameComponents(inventory, unit)) return result(Status.INVALID);
+						moved = Math.min(Math.min(amount, inventory.getCount()),
+								com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.LIMIT - installed);
+						if (moved <= 0) return result(Status.LIMIT);
+						received = inventory.copyWithCount(inventory.getCount() - moved);
+					} else {
+						if (!inventory.isEmpty() && !ItemStack.isSameItemSameComponents(inventory, unit)) return result(Status.NO_SPACE);
+						int space = Math.min(64, unit.getMaxStackSize()) - inventory.getCount();
+						moved = Math.min(Math.min(amount, installed), space);
+						if (moved <= 0) return result(Status.NO_SPACE);
+						received = unit.copyWithCount(inventory.getCount() + moved);
+					}
+					change = work.exchangeUpgrade(slot, action == Action.UPGRADE_IN ? moved : -moved);
+					// 配置无效时拒绝安装；取回实物始终不依赖当前公式是否可计算。
+					if (action == Action.UPGRADE_IN) {
+						var candidate = change.apply(work);
+						MachineUpgradeProfiles.apiary(candidate.upgrades()); MachineUpgradeProfiles.centrifuge(candidate.upgrades());
+					}
 				}
 				default -> throw new IllegalArgumentException("Unknown machine exchange");
 			}

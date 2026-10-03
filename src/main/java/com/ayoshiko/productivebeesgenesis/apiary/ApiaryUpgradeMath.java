@@ -10,13 +10,13 @@ import mekanism.common.config.MekanismConfig;
  * 从 {@link ApiaryUpgradeHandler} 拆分而来，职责（SRP）：MEK 速度/能量升级的
  * 纯公式计算与诊断 getter，不持有方块实体状态。
  */
-final class ApiaryUpgradeMath {
+public final class ApiaryUpgradeMath {
 
 	private ApiaryUpgradeMath() {
 	}
 
 	/** 纯公式：MEK 速度升级时间倍率（运行时入口由 {@code MekanismUtils} 承接可选模组 mixin） */
-	static float computeMekSpeedTimeMultiplier(int speedUpgrades, int maxSpeed, float maxMultiplier) {
+	public static float computeMekSpeedTimeMultiplier(int speedUpgrades, int maxSpeed, float maxMultiplier) {
 		if (maxSpeed <= 0 || speedUpgrades <= 0 || maxMultiplier <= 0 || !Float.isFinite(maxMultiplier)) return 1.0f;
 		float speedFraction = (float) speedUpgrades / maxSpeed;
 		return SaturatingMath.positiveFiniteFloat(Math.pow(maxMultiplier, -speedFraction), 1.0f);

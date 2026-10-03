@@ -17,7 +17,7 @@ import net.minecraft.world.item.ItemStack;
 
 /** 六个蜂位的有限管理视图；原版槽只读，所有资产变化经带会话和序号的命令。 */
 public final class MachineMenu extends AbstractContainerMenu {
-	private static final int DATA_COUNT = 38;
+	private static final int DATA_COUNT = 42;
 	private final MachineControllerEntity core;
 	private final MachineDirectory.Binding binding;
 	private final UUID viewer, session;
@@ -25,6 +25,7 @@ public final class MachineMenu extends AbstractContainerMenu {
 	private final ContainerData data = new SimpleContainerData(DATA_COUNT);
 	private final UUID[] shownBees = new UUID[6];
 	private List<FeedingSlotStore.Slot> shownFeeding;
+	private com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades shownUpgrades;
 	private boolean closed;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -58,6 +59,7 @@ public final class MachineMenu extends AbstractContainerMenu {
 	public long acknowledged() { return number(34); }
 	public int status() { return data.get(32); }
 	public int jobs() { return data.get(33); }
+	public int upgradeCount(int slot) { return data.get(38 + slot); }
 	public boolean occupied(int slot) { return data.get(slot) != 0; }
 	public int foodCount(int slot) { return data.get(18 + slot); }
 	public ItemStack foodIcon(int slot) {
@@ -76,13 +78,15 @@ public final class MachineMenu extends AbstractContainerMenu {
 	private void refresh() {
 		if (core == null || core.handle == null || core.handle.binding().orElse(null) != binding) return; var access = MachineWorkService.access(core).orElse(null); if (access == null) return;
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();
-		if (!Arrays.equals(ids, shownBees) || !work.feeding().equals(shownFeeding)) {
+		if (!Arrays.equals(ids, shownBees) || !work.feeding().equals(shownFeeding) || !work.upgrades().equals(shownUpgrades)) {
 			System.arraycopy(ids, 0, shownBees, 0, 6); shownFeeding = work.feeding(); viewRevision = Math.incrementExact(viewRevision);
 			for (int i = 0; i < 6; i++) {
 				data.set(i, ids[i] == null ? 0 : 1); var food = shownFeeding.get(i);
 				int item = food.item() == null ? 0 : BuiltInRegistries.ITEM.getId(StaticFeedingAdapter.toStack(food.item(), 1, core.getLevel().registryAccess()).getItem());
 				data.set(6 + i, item & 65535); data.set(12 + i, item >>> 16); data.set(18 + i, food.count());
 			}
+			shownUpgrades = work.upgrades();
+			for (int i = 0; i < 4; i++) data.set(38 + i, shownUpgrades.count(i));
 			number(24, viewRevision);
 		}
 		number(28, work.energy()); data.set(33, work.centrifuges().size());

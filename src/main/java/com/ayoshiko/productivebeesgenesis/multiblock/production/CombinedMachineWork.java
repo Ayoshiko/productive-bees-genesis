@@ -29,6 +29,7 @@ public final class CombinedMachineWork {
 	private final Map<Integer, CentrifugeDelivery> centrifuges;
 	private final FiniteProductBuffer buffer;
 	private final List<FeedingSlotStore.Slot> feeding;
+	private final MachineUpgrades upgrades;
 	public CombinedMachineWork(UUID machine, long generation, long revision, int beeSlots, int lanes,
 			long energy, long energyCapacity, List<BeeRecord> bees, Map<Integer, CentrifugeDelivery> centrifuges, FiniteProductBuffer buffer) {
 		this(machine, generation, revision, beeSlots, lanes, energy, energyCapacity, bees, centrifuges, buffer, emptyFeeding(beeSlots));
@@ -36,6 +37,12 @@ public final class CombinedMachineWork {
 	public CombinedMachineWork(UUID machine, long generation, long revision, int beeSlots, int lanes,
 			long energy, long energyCapacity, List<BeeRecord> bees, Map<Integer, CentrifugeDelivery> centrifuges,
 			FiniteProductBuffer buffer, List<FeedingSlotStore.Slot> feeding) {
+		this(machine, generation, revision, beeSlots, lanes, energy, energyCapacity, bees, centrifuges, buffer, feeding, MachineUpgrades.EMPTY);
+	}
+	public CombinedMachineWork(UUID machine, long generation, long revision, int beeSlots, int lanes,
+			long energy, long energyCapacity, List<BeeRecord> bees, Map<Integer, CentrifugeDelivery> centrifuges,
+			FiniteProductBuffer buffer, List<FeedingSlotStore.Slot> feeding, MachineUpgrades upgrades) {
+		this.upgrades = Objects.requireNonNull(upgrades);
 		this.feeding = List.copyOf(feeding);
 		if (feeding.size() != beeSlots) throw new IllegalArgumentException("Feeding capacity differs from bee slots");
 		for (int i = 0; i < feeding.size(); i++) {
@@ -65,6 +72,12 @@ public final class CombinedMachineWork {
 	public Map<Integer, CentrifugeDelivery> centrifuges() { return centrifuges; }
 	public FiniteProductBuffer buffer() { return buffer; }
 	public List<FeedingSlotStore.Slot> feeding() { return feeding; }
+	public MachineUpgrades upgrades() { return upgrades; }
+	public Change exchangeUpgrade(int slot, int delta) {
+		var next = upgrades.change(slot, delta);
+		return next == upgrades ? unchanged() : new Change(this, new CombinedMachineWork(machine, generation, Math.incrementExact(revision),
+				beeSlots, lanes, energy, energyCapacity, bees, centrifuges, buffer, feeding, next), Math.abs((long) delta));
+	}
 	public static List<FeedingSlotStore.Slot> emptyFeeding(int size) {
 		if (size < 1) throw new IllegalArgumentException("Invalid feeding size");
 		return java.util.stream.IntStream.range(0, size).mapToObj(i -> new FeedingSlotStore.Slot(null, 0, false, i)).toList();
@@ -84,7 +97,7 @@ public final class CombinedMachineWork {
 	}
 	private Change feedingChange(int slot, FeedingSlotStore.Slot value, int moved) {
 		var next = new ArrayList<>(feeding); next.set(slot, value);
-		return new Change(this, new CombinedMachineWork(machine, generation, Math.incrementExact(revision), beeSlots, lanes, energy, energyCapacity, bees, centrifuges, buffer, next), moved);
+		return new Change(this, new CombinedMachineWork(machine, generation, Math.incrementExact(revision), beeSlots, lanes, energy, energyCapacity, bees, centrifuges, buffer, next, upgrades), moved);
 	}
 	/** 新身份由原根版本派生；模拟不消耗随机数，取出后再插入也不会复活旧身份。 */
 	public Change insertBee(int slot, AssetImage original, StaticBeePlan plan) {
@@ -176,6 +189,6 @@ public final class CombinedMachineWork {
 	private void checkLane(int lane) { if (lane < 0 || lane >= lanes) throw new IllegalArgumentException("Invalid centrifuge lane"); }
 	private Change unchanged() { return new Change(this, this, 0); }
 	private Change change(long energy, List<BeeRecord> bees, Map<Integer, CentrifugeDelivery> jobs, FiniteProductBuffer buffer, long moved) {
-		return new Change(this, new CombinedMachineWork(machine, generation, Math.incrementExact(revision), beeSlots, lanes, energy, energyCapacity, bees, jobs, buffer, feeding), moved);
+		return new Change(this, new CombinedMachineWork(machine, generation, Math.incrementExact(revision), beeSlots, lanes, energy, energyCapacity, bees, jobs, buffer, feeding, upgrades), moved);
 	}
 }

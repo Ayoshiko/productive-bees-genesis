@@ -8,8 +8,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
-import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork;
 import java.nio.charset.StandardCharsets;
@@ -25,15 +23,8 @@ final class MachineProduction {
 	private boolean genes;
 	private final Map<ProductKey, Optional<CentrifugeRecipePlan>> recipes = new HashMap<>();
 	private final Map<StaticBeePlan, Boolean> bees = new IdentityHashMap<>();
-	static StaticApiaryAdapter.Profile apiaryProfile() {
-		return new StaticApiaryAdapter.Profile(1, MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(ModConfig.SERVER.apiaryEnergyPerTick.get()), 1, false);
-	}
-	private static StaticCentrifugeAdapter.Profile centrifugeProfile() {
-		return new StaticCentrifugeAdapter.Profile(mekanism.common.tile.prefab.TileEntityElectricMachine.BASE_TICKS_REQUIRED,
-				1, 1, MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()), 1, 0, false);
-	}
 	CombinedMachineWork advance(ServerLevel level, CombinedMachineWork work) {
-		var published = RuntimeProductPolicies.peek(level); var profile = centrifugeProfile();
+		var published = RuntimeProductPolicies.peek(level); var profile = MachineUpgradeProfiles.centrifuge(work.upgrades());
 		if (snapshot != published || !profile.equals(centrifuge) || genes != BalanceConfig.apiaryBeeGenesAffectWork()) {
 			snapshot = published; centrifuge = profile; genes = BalanceConfig.apiaryBeeGenesAffectWork();
 			policy = published == null ? null : new ProductPolicyRegistry(published); recipes.clear(); bees.clear();
@@ -50,7 +41,7 @@ final class MachineProduction {
 				boolean current = bees.computeIfAbsent(bee.plan(), ignored -> StaticApiaryAdapter.currentPlan(level, candidate));
 				boolean flower = current && StaticFeedingAdapter.flower(work.feeding(), bee.slot(), ResourceLocation.parse(bee.plan().beeType()), level.registryAccess());
 				context = new BeeWorkExecutor.Context(true, current, flower, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), environment);
-				var cycle = bee.progress() == 0 && current ? StaticApiaryAdapter.cycle(apiaryProfile(), bee, level.registryAccess()) : null;
+				var cycle = bee.progress() == 0 && current ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level.registryAccess()) : null;
 				work = work.advanceBee(bee.slot(), bee.revision(), context, 1, 8, cycle).apply(work);
 				work = settleBee(level, work, bee.slot());
 			}
@@ -69,7 +60,7 @@ final class MachineProduction {
 			if (cell.key() == null) continue;
 			if (recipes.size() >= 128) recipes.clear();
 			var plan = recipes.computeIfAbsent(cell.key(), key -> {
-				try { return Optional.of(StaticCentrifugeAdapter.compile(level, policy, key, 0, centrifuge)); }
+				try { return Optional.of(StaticCentrifugeAdapter.compile(level, policy, key, work.upgrades().revision(), centrifuge)); }
 				catch (IllegalArgumentException unsupported) { return Optional.empty(); }
 			}).orElse(null);
 			if (plan == null) continue;

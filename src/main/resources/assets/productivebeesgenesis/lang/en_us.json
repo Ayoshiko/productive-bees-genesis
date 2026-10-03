@@ -1321,5 +1321,17 @@
   "screen.productivebeesgenesis.machine.status.3": "Unsupported cage, bee or item",
   "screen.productivebeesgenesis.machine.status.4": "Contents changed; try again",
   "screen.productivebeesgenesis.machine.status.5": "Free output space before caging",
-  "screen.productivebeesgenesis.machine.status.6": "Machine unavailable; try again"
+  "screen.productivebeesgenesis.machine.status.6": "Machine unavailable; try again",
+  "screen.productivebeesgenesis.machine.bees_tab": "Bees",
+  "screen.productivebeesgenesis.machine.upgrades_tab": "Upgrades",
+  "screen.productivebeesgenesis.machine.upgrade_in": "Add",
+  "screen.productivebeesgenesis.machine.upgrade_out": "Take",
+  "screen.productivebeesgenesis.machine.upgrade_in_hint": "Install standard upgrades from the selected inventory slot; Shift for more",
+  "screen.productivebeesgenesis.machine.upgrade_out_hint": "Return upgrades to the selected inventory slot; Shift for more",
+  "screen.productivebeesgenesis.machine.upgrade_slot.0": "Bee speed  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_slot.1": "Bee energy  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_slot.2": "Centrifuge speed  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_slot.3": "Centrifuge energy  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_scope": "Separate effects; fixed FE buffer",
+  "screen.productivebeesgenesis.machine.status.7": "This upgrade slot is full"
 }

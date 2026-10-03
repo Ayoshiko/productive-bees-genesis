@@ -241,9 +241,22 @@ public final class MachineVisualClientProbe {
 			if (++menuWait < 10) return; capture(client, "machine-management");
 			screen.mouseClicked(x + 42, y + 208, 0); screen.mouseClicked(x + 124, y + 111, 0); menuStage = 4; return;
 		}
-		if (menu.acknowledged() != 3) return;
-		check(!menu.occupied(5) && menu.foodCount(5) == 1 && client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real caging lost bee or food");
-		report.addProperty("machineMenuRealClientExchange", true); client.player.closeContainer(); finish(client, null);
+		if (menuStage == 4) {
+			if (menu.acknowledged() != 3) return;
+			check(!menu.occupied(5) && menu.foodCount(5) == 1 && client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real caging lost bee or food");
+			report.addProperty("machineMenuRealClientExchange", true);
+			screen.mouseClicked(x + 197, y + 10, 0); screen.mouseClicked(x + 78, y + 208, 0);
+			screen.mouseClicked(x + 166, y + 35, 0); menuStage = 5; menuWait = 0; return;
+		}
+		if (menuStage == 5) {
+			if (menu.acknowledged() != 4) return;
+			check(menu.upgradeCount(0) == 1 && client.player.getInventory().items.get(2).isEmpty(), "Real plugin installation failed");
+			if (++menuWait < 10) return; capture(client, "machine-upgrades");
+			screen.mouseClicked(x + 201, y + 35, 0); menuStage = 6; return;
+		}
+		if (menu.acknowledged() != 5) return;
+		check(menu.upgradeCount(0) == 0 && client.player.getInventory().items.get(2).getCount() == 1, "Real plugin return failed");
+		report.addProperty("machinePluginRealClientExchange", true); client.player.closeContainer(); finish(client, null);
 	}
 	private static MachineVisualState state(Minecraft client, int index) {
 		var state = client.level.getBlockState(MachineVisualFixture.POSITIONS.get(index));

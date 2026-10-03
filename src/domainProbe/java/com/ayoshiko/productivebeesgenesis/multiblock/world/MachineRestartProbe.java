@@ -118,7 +118,7 @@ public final class MachineRestartProbe {
 	/** Map 的编码列表顺序可跨 JVM 改变；核对全部权威字段与真实槽序，不把顺序当资产差异。 */
 	private static boolean sameWork(CombinedMachineWork expected, CombinedMachineWork actual) {
 		return expected.machine().equals(actual.machine()) && expected.generation() == actual.generation() && expected.revision() == actual.revision()
-				&& expected.beeSlots() == actual.beeSlots() && expected.lanes() == actual.lanes()
+				&& expected.upgrades().equals(actual.upgrades()) && expected.beeSlots() == actual.beeSlots() && expected.lanes() == actual.lanes()
 				&& expected.energy() == actual.energy() && expected.energyCapacity() == actual.energyCapacity()
 				&& expected.bees().equals(actual.bees()) && expected.feeding().equals(actual.feeding()) && expected.centrifuges().equals(actual.centrifuges())
 				&& expected.buffer().tankCapacity() == actual.buffer().tankCapacity()
@@ -144,7 +144,9 @@ public final class MachineRestartProbe {
 				1000, original.energyCapacity(), List.of(bee), Map.of(0, new CentrifugeDelivery(new CentrifugeJob(UUID.randomUUID(), small, 1, 1, 31, null), Map.of()),
 				2, delivered.work()), delivered.buffer(), original.feeding());
 		var food = com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.fromStack(new ItemStack(Items.IRON_BLOCK), registries);
-		return work.depositFeeding(5, food, 7).apply(work);
+		work = work.depositFeeding(5, food, 7).apply(work);
+		for (int slot = 0; slot < 4; slot++) work = work.exchangeUpgrade(slot, slot + 1).apply(work);
+		return work;
 	}
 	private static void verifyWork(MinecraftServer server) throws Exception {
 		var core = fixture.core();
@@ -159,6 +161,8 @@ public final class MachineRestartProbe {
 		check(state.feeding().equals(initial.feeding()) && state.feeding().get(5).count() == 7, "Restored work lost real feeding items");
 		report.addProperty("singleTickWorkAndPaidRecovery", true);
 		report.addProperty("sixSlotFeedingSurvivesRestartAndWork", true);
+		check(state.upgrades().equals(initial.upgrades()) && state.upgrades().counts().equals(List.of(1, 2, 3, 4)), "Restart lost plugins");
+		report.addProperty("fourPluginSlotsSurviveRestartAndOldWork", true);
 		rejectedFile(server, false); rejectedFile(server, true);
 		report.addProperty("missingAndUnreadableFilesNeverRecreated", true);
 		shutdownWork = CombinedWorkCodec.encode(state);

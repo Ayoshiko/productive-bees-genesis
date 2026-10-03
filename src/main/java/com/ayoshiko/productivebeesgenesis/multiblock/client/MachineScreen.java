@@ -20,6 +20,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private final List<Button> actions = new ArrayList<>();
 	private int inventorySlot;
+	private boolean upgrades;
 	private long sequence;
 	public MachineScreen(MachineMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); imageWidth = 230; imageHeight = 226; inventorySlot = inventory.selected;
@@ -28,6 +29,17 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private static Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.machine." + key, args); }
 	@Override protected void init() {
 		super.init(); actions.clear();
+		addRenderableWidget(Button.builder(tr(upgrades ? "bees_tab" : "upgrades_tab"), button -> { upgrades = !upgrades; rebuildWidgets(); })
+				.bounds(leftPos + 177, topPos + 4, 46, 14).build());
+		if (upgrades) {
+			for (int row = 0; row < 4; row++) for (int action = 0; action < 2; action++) {
+				int slot = row, operation = 4 + action; String key = action == 0 ? "upgrade_in" : "upgrade_out";
+				var button = addRenderableWidget(Button.builder(tr(key), ignored -> send(operation, slot))
+						.bounds(leftPos + 151 + action * 36, topPos + 27 + row * 21, 34, 18).build());
+				button.setTooltip(Tooltip.create(tr(key + "_hint"))); actions.add(button);
+			}
+			return;
+		}
 		String[] labels = {"cage_in", "cage_out", "feed_in", "feed_out"};
 		for (int row = 0; row < 6; row++) for (int action = 0; action < labels.length; action++) {
 			int slot = row, operation = action;
@@ -50,7 +62,14 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	@Override protected void renderBg(GuiGraphics g, float partial, int mouseX, int mouseY) {
 		g.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xffa77932);
 		g.fill(leftPos + 2, topPos + 2, leftPos + imageWidth - 2, topPos + imageHeight - 2, 0xff282c31);
-		for (int row = 0; row < 6; row++) {
+		if (upgrades) {
+			for (int row = 0; row < 4; row++) {
+				int y = topPos + 27 + row * 21;
+				g.fill(leftPos + 6, y, leftPos + 146, y + 18, 0xff383d43);
+				g.drawString(font, tr("upgrade_slot." + row, menu.upgradeCount(row)), leftPos + 9, y + 5, 0xffead5a7, false);
+			}
+			g.drawString(font, tr("upgrade_scope"), leftPos + 7, topPos + 112, 0xffc3c8cc, false);
+		} else for (int row = 0; row < 6; row++) {
 			int y = topPos + 24 + row * 16;
 			g.fill(leftPos + 6, y, leftPos + 74, y + 15, 0xff383d43);
 			g.drawString(font, tr(menu.occupied(row) ? "occupied" : "empty", row + 1), leftPos + 9, y + 4, 0xffead5a7, false);

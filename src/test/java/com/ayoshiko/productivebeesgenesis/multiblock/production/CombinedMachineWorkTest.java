@@ -185,7 +185,7 @@ class CombinedMachineWorkTest {
 			assertThrows(IllegalArgumentException.class, () -> restore(bad), field);
 		}
 		var mutations = List.<java.util.function.Consumer<CompoundTag>>of(
-				tag -> tag.putInt("schema", 3), tag -> tag.putInt("capacityVersion", 2),
+				tag -> tag.putInt("schema", 99), tag -> tag.putInt("capacityVersion", 2),
 				tag -> tag.putInt("beeSlots", 3), tag -> tag.putLong("energyCapacity", 999),
 				tag -> tag.putInt("energy", 0), tag -> tag.putLong("generation", 0),
 				tag -> records(tag, "bees").getCompound(1).putUUID("id", records(tag, "bees").getCompound(0).getUUID("id")),
@@ -257,10 +257,10 @@ class CombinedMachineWorkTest {
 		assertThrows(IllegalArgumentException.class, () -> new FeedingSlotStore(0, 9, "a".repeat(64), state.feeding()));
 	}
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
-		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); old.remove("feeding"); var unchanged = old.copy();
+		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(2, newTag.getInt("schema"));
-		newTag.putInt("schema", 1); newTag.remove("feeding"); assertEquals(old, newTag); assertEquals(unchanged, old);
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(3, newTag.getInt("schema"));
+		newTag.putInt("schema", 1); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
 				tag -> tag.remove("feeding"), tag -> records(tag, "feeding").remove(0),
@@ -269,6 +269,32 @@ class CombinedMachineWorkTest {
 				tag -> records(tag, "feeding").getCompound(5).putInt("group", 6),
 				tag -> tag.putInt("schema", 1))) {
 			var broken = complete.copy(); mutation.accept(broken); var preserved = broken.copy();
+			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(preserved, broken);
+		}
+	}
+	@Test void pluginsPreserveAllExistingAssetsAndOnlyStrictOldSchemasGetEmptySlots() {
+		var original = checkpointFixture(); var stale = original.receiveEnergy(1);
+		var install = original.exchangeUpgrade(2, 8); assertEquals(MachineUpgrades.EMPTY, original.upgrades());
+		var installed = install.apply(original);
+		assertEquals(8, installed.upgrades().count(2)); assertEquals(8, install.moved());
+		assertSame(original.bees(), installed.bees()); assertEquals(original.centrifuges(), installed.centrifuges());
+		assertSame(original.buffer(), installed.buffer()); assertEquals(original.energy(), installed.energy());
+		assertThrows(IllegalArgumentException.class, () -> stale.apply(installed));
+		assertThrows(IllegalArgumentException.class, () -> installed.exchangeUpgrade(2, 1));
+		assertThrows(IllegalArgumentException.class, () -> installed.exchangeUpgrade(0, -1));
+		var fed = installed.depositFeeding(5, food("upgrade", 64), 3).apply(installed);
+		var restored = restore(CombinedWorkCodec.encode(fed));
+		assertEquals(installed.upgrades(), restored.upgrades()); assertEquals(fed.feeding(), restored.feeding());
+		var returned = restored.exchangeUpgrade(2, -8).apply(restored);
+		assertEquals(0, returned.upgrades().count(2)); assertEquals(2, returned.upgrades().revision());
+		var legacy = CombinedWorkCodec.encode(fed); legacy.putInt("schema", 2); legacy.remove("upgrades");
+		assertEquals(MachineUpgrades.EMPTY, restore(legacy).upgrades()); assertEquals(fed.feeding(), restore(legacy).feeding());
+		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
+				tag -> tag.remove("upgrades"), tag -> tag.getCompound("upgrades").remove("slot3"),
+				tag -> tag.getCompound("upgrades").putInt("slot0", -1), tag -> tag.getCompound("upgrades").putInt("slot2", 9),
+				tag -> tag.getCompound("upgrades").putLong("revision", -1), tag -> tag.getCompound("upgrades").putInt("extra", 1),
+				tag -> tag.putInt("schema", 2))) {
+			var broken = CombinedWorkCodec.encode(fed); mutation.accept(broken); var preserved = broken.copy();
 			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(preserved, broken);
 		}
 	}

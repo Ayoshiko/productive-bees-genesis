@@ -25,6 +25,18 @@ class TerminalProtocolTest {
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 		} finally { buffer.release(); }
 	}
+	@Test void upgradeCommandsUseFourSlotsAndCannotBorrowTheSixBeeSlotRange() {
+		var codec = com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest.STREAM_CODEC;
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			for (int action : new int[]{4, 5}) {
+				var request = new com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest(7, UUID.randomUUID(), 1, 0, action, 3, 0, 64);
+				buffer.clear(); codec.encode(buffer, request); assertEquals(request, codec.decode(buffer));
+				buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, 4);
+				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			}
+		} finally { buffer.release(); }
+	}
 	@Test void batchAndPreviewRepliesRoundTripWithoutInventingSuccessfulTransfers() {
 		var session = UUID.randomUUID();
 		var results = List.of(new TerminalReply.UpgradeResult(0, "test:apiary", TerminalReply.Status.MOVED, 1),

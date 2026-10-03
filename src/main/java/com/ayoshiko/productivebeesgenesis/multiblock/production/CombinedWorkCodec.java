@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 2；schema 1 仅迁入空喂食槽，损坏新格式绝不补缺失资产。 */
+/** 独立机器 schema 3；旧格式只迁入对应的空资产，损坏新格式绝不补缺失字段。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 2); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 3); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -34,6 +34,9 @@ public final class CombinedWorkCodec {
 		});
 		tag.put("jobs", jobs); tag.putInt("tankCapacity", work.buffer().tankCapacity());
 		tag.put("feeding", FeedingRecordCodec.encodeSlots(work.feeding()));
+		var upgrades = new CompoundTag(); upgrades.putLong("revision", work.upgrades().revision());
+		for (int i = 0; i < MachineUpgrades.SLOTS; i++) upgrades.putInt("slot" + i, work.upgrades().count(i));
+		tag.put("upgrades", upgrades);
 		tag.put("items", cells(work.buffer().items())); tag.put("fluids", cells(work.buffer().fluids())); return tag;
 	}
 	public static CombinedMachineWork decode(CompoundTag tag, Consumer<ProductKey> validate, ToIntFunction<ProductKey> itemLimits,
@@ -41,9 +44,10 @@ public final class CombinedWorkCodec {
 		int schema = StrictNbt.integer(tag, "schema");
 		var expected = new java.util.HashSet<>(Set.of("schema", "capacityVersion", "machine", "generation", "revision", "beeSlots", "lanes",
 				"energy", "energyCapacity", "bees", "jobs", "tankCapacity", "items", "fluids"));
-		if (schema == 2) expected.add("feeding");
+		if (schema >= 2) expected.add("feeding");
+		if (schema == 3) expected.add("upgrades");
 		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
-		if ((schema != 1 && schema != 2) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+		if ((schema != 1 && schema != 2 && schema != 3) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");
@@ -62,9 +66,16 @@ public final class CombinedWorkCodec {
 		var fluids = readCells(StrictNbt.list(tag, "fluids"), CombinedMachineCapacity.FLUID_TANKS, codec, itemLimits);
 		var feeding = schema == 1 ? CombinedMachineWork.emptyFeeding(CombinedMachineCapacity.BEE_SLOTS)
 				: FeedingRecordCodec.decodeSlots(StrictNbt.list(tag, "feeding"), CombinedMachineCapacity.BEE_SLOTS, validateFeeding);
+		var upgrades = MachineUpgrades.EMPTY;
+		if (schema == 3) {
+			var raw = StrictNbt.compound(tag, "upgrades"); fields(raw, "revision", "slot0", "slot1", "slot2", "slot3");
+			var counts = new ArrayList<Integer>();
+			for (int i = 0; i < MachineUpgrades.SLOTS; i++) counts.add(StrictNbt.integer(raw, "slot" + i));
+			upgrades = new MachineUpgrades(StrictNbt.number(raw, "revision"), counts);
+		}
 		var work = new CombinedMachineWork(machine, StrictNbt.number(tag, "generation"), StrictNbt.number(tag, "revision"),
 				StrictNbt.integer(tag, "beeSlots"), StrictNbt.integer(tag, "lanes"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "energyCapacity"),
-				bees, jobs, new FiniteProductBuffer(items, fluids, StrictNbt.integer(tag, "tankCapacity")), feeding);
+				bees, jobs, new FiniteProductBuffer(items, fluids, StrictNbt.integer(tag, "tankCapacity")), feeding, upgrades);
 		CombinedMachineCapacity.validate(work); return work;
 	}
 	private static ListTag cells(List<FiniteProductBuffer.Cell> cells) {

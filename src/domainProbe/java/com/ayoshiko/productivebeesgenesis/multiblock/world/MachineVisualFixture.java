@@ -79,6 +79,7 @@ public final class MachineVisualFixture {
 					var cage = new net.minecraft.world.item.ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get());
 					cage.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(bee));
 					player.getInventory().items.set(0, cage); player.getInventory().items.set(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_BLOCK)); player.getInventory().selected = 0;
+					player.getInventory().items.set(2, MachineUpgradeProfiles.unit(0));
 					var state = core.getBlockState(); ((MachinePartBlock) state.getBlock()).useWithoutItem(state, level, core.getBlockPos(), player,
 							new net.minecraft.world.phys.BlockHitResult(core.getBlockPos().getCenter(), Direction.NORTH, core.getBlockPos(), false));
 					if (!(player.containerMenu instanceof MachineMenu)) throw new IllegalStateException("Controller did not open machine menu");
