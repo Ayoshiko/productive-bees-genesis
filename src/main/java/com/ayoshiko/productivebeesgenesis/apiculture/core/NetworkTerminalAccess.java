@@ -15,22 +15,33 @@ public final class NetworkTerminalAccess {
 	private final NetworkCoreBlockEntity core;
 	private final NetworkSavedData authority;
 	private final Object connectionToken;
+	private final TerminalScope scope;
 	private boolean revoked;
-	private NetworkTerminalAccess(NetworkTerminalBlockEntity source, NetworkCoreBlockEntity core, NetworkSavedData authority) {
-		this.source = source; this.core = core; this.authority = authority; connectionToken = source.token();
+	private NetworkTerminalAccess(NetworkTerminalBlockEntity source, NetworkCoreBlockEntity core, NetworkSavedData authority, TerminalScope scope) {
+		this.source = source; this.core = core; this.authority = authority; this.scope = scope; connectionToken = source.token();
 	}
 	public static boolean open(ServerPlayer player, NetworkTerminalBlockEntity terminal) {
+		return open(player, terminal, terminal.scope());
+	}
+	private static boolean open(ServerPlayer player, NetworkTerminalBlockEntity terminal, TerminalScope scope) {
+		if (scope == TerminalScope.ALL || !terminal.combined() && scope != terminal.scope()) return false;
 		var core = terminal.connection(); if (core == null) return false;
 		var authority = core.ownership().readyAuthority(); if (authority == null) return false;
-		var access = new NetworkTerminalAccess(terminal, core, authority);
+		var access = new NetworkTerminalAccess(terminal, core, authority, scope);
 		if (!access.valid(player)) return false;
 		var session = UUID.randomUUID();
 		return player.openMenu(new SimpleMenuProvider((id, inventory, viewer) -> access.valid(viewer)
 				? new NetworkCoreMenu(id, inventory, core, session, access) : null,
 				Component.translatable(terminal.getBlockState().getBlock().getDescriptionId())),
-				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(false); }).isPresent();
+				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(false);
+					if (terminal.combined()) buffer.writeEnum(scope); }).isPresent();
 	}
-	TerminalScope scope() { return source.scope(); }
+	TerminalScope scope() { return scope; }
+	boolean combined() { return source.combined(); }
+	/** 切换只重开同一来源的菜单；关闭旧菜单释放选择根，不能把旧行号解释为新类型。 */
+	boolean switchMode(ServerPlayer player, TerminalScope requested) {
+		return combined() && requested != scope && valid(player) && open(player, source, requested);
+	}
 	boolean valid(Player player) {
 		if (revoked) return false;
 		if (!(core.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread() || player.level() != level

@@ -16,12 +16,17 @@ import net.minecraft.world.phys.BlockHitResult;
 /** 无库存和 ticker 的专用入口；不参与生产成员或拓扑传播。 */
 public final class NetworkTerminalBlock extends BaseEntityBlock {
 	private final TerminalScope scope;
+	private final boolean combined;
 	public NetworkTerminalBlock(TerminalScope scope) {
+		this(scope, false);
+	}
+	public NetworkTerminalBlock(TerminalScope scope, boolean combined) {
 		super(Properties.of().mapColor(MapColor.GOLD).strength(4).sound(SoundType.METAL));
 		if (scope == TerminalScope.ALL) throw new IllegalArgumentException("Terminal requires a machine scope");
-		this.scope = scope;
+		this.scope = scope; this.combined = combined;
 	}
 	public TerminalScope scope() { return scope; }
+	public boolean combined() { return combined; }
 	@Override protected MapCodec<? extends BaseEntityBlock> codec() { return MapCodec.unit(this); }
 	@Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
 	@Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new NetworkTerminalBlockEntity(pos, state); }

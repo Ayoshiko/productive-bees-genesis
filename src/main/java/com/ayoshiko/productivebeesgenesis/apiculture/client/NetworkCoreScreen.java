@@ -53,6 +53,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new);
 		event.register(NetworkContent.BEE_MENU.get(), NetworkCoreScreen::new);
 		event.register(NetworkContent.CENTRIFUGE_MENU.get(), NetworkCoreScreen::new);
+		event.register(NetworkContent.COMBINED_MENU.get(), NetworkCoreScreen::new);
 	}
 	@Override protected void init() {
 		super.init(); rebuild();
@@ -68,6 +69,12 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	}
 	private void rebuild() {
 		clearWidgets(); requests.clear(); management.clear(); production = null; upgradeInstall = null; upgradeRemove = null;
+		if (menu.combinedTerminal()) {
+			boolean bees = menu.scope() == TerminalScope.APIARY;
+			var change = requestButton(tr(bees ? "mode.centrifuge" : "mode.bees"), 163, 6, 60, 16,
+					() -> coreCommand(bees ? 11 : 10));
+			change.setTooltip(Tooltip.create(tr("mode.switch_hint")));
+		}
 		for (int i = 0; i < 4; i++) {
 			if (!tabAvailable(i)) continue;
 			int page = i;
@@ -263,7 +270,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	}
 	@Override protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
 		line(graphics, title, 36, 9, 118);
-		line(graphics, tr("tab." + tab), 169, 9, 52);
+		if (!menu.combinedTerminal()) line(graphics, tr("tab." + tab), 169, 9, 52);
 		if (tab == 0) {
 			line(graphics, tr("state." + menu.value(0)), 36, 29, 185);
 			for (int i = 1; i <= 4; i++) line(graphics, tr("count." + i, menu.value(i)), 36 + (i - 1) % 2 * 94, 44 + (i - 1) / 2 * 13, 90);

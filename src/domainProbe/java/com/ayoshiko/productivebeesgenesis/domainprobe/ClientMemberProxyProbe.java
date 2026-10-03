@@ -19,7 +19,8 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class ClientMemberProxyProbe {
 	private static int step, observedStep = -1, nextServerTick;
 	private static long nextAt, stepStarted;
-	static boolean complete() { return step == 34; }
+	private static java.util.UUID combinedSession;
+	static boolean complete() { return step == 50; }
 	static boolean advance(Minecraft client) throws Exception {
 		long now = Util.getMillis();
 		if (observedStep != step) { observedStep = step; stepStarted = now; }
@@ -70,6 +71,29 @@ final class ClientMemberProxyProbe {
 			case 32 -> { interact(client, new BlockPos(8, 100, 8)); step++; }
 			case 33 -> { if (menu == null || screen == null || menu.dedicatedTerminal() || !menu.canManage()) return false;
 				ClientMemberProxyFixture.terminalsDone = true; if (!ClientMemberProxyFixture.terminalsVerified) return false; step++; }
+			case 34 -> { client.player.closeContainer(); step++; }
+			case 35 -> { interact(client, DedicatedTerminalChecks.COMBINED); step++; }
+			case 36 -> { if (!terminal(screen, menu, TerminalScope.APIARY)) return false;
+				require(menu.combinedTerminal(), "Combined client menu missing"); ClientTerminalProbe.press(screen, "tab.3"); step++; }
+			case 37 -> { if (!selectTerminal(screen, menu)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
+			case 38 -> { terminalResult(client, menu, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
+			case 39 -> { if (!selectTerminal(screen, menu)) return false; capture(client, "combined-terminal-bees"); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 40 -> { terminalResult(client, menu, 2); combinedSession = menu.terminalSession(); ClientTerminalProbe.press(screen, "mode.centrifuge"); step++; }
+			case 41 -> { if (!terminal(screen, menu, TerminalScope.CENTRIFUGE) || !selectTerminal(screen, menu)) return false;
+				require(menu.combinedTerminal() && !menu.terminalSession().equals(combinedSession), "Client mode switch kept old session");
+				ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
+			case 42 -> { terminalResult(client, menu, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
+			case 43 -> { if (!selectTerminal(screen, menu)) return false; capture(client, "combined-terminal-centrifuges"); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 44 -> { terminalResult(client, menu, 2); ClientTerminalProbe.press(screen, "mode.bees"); step++; }
+			case 45 -> { if (!terminal(screen, menu, TerminalScope.APIARY)) return false; ClientTerminalProbe.press(screen, "tab.2"); step++; }
+			case 46 -> { require(menu.clientState().view() != null && menu.clientState().view().kind() == NetworkSelectionSession.Kind.PRODUCTS
+					&& !menu.clientState().view().rows().isEmpty(), "Combined terminal shared stock missing");
+				screen.resize(client, 320, 240); ClientTerminalProbe.verifyLayout(screen, menu); capture(client, "combined-terminal-compact");
+				client.player.closeContainer(); step++; }
+			case 47 -> { interact(client, new BlockPos(8, 100, 8)); step++; }
+			case 48 -> { if (menu == null || screen == null || menu.dedicatedTerminal() || !menu.canManage()) return false;
+				ClientMemberProxyFixture.combinedDone = true; step++; }
+			case 49 -> { if (!ClientMemberProxyFixture.combinedVerified) return false; step++; }
 		}
 		return complete();
 	}

@@ -13,6 +13,7 @@ public final class NetworkTerminalBlockEntity extends BlockEntity {
 	private Object connectionToken = new Object();
 	public NetworkTerminalBlockEntity(BlockPos pos, BlockState state) { super(NetworkContent.TERMINAL_TILE.get(), pos, state); }
 	public TerminalScope scope() { return ((NetworkTerminalBlock) getBlockState().getBlock()).scope(); }
+	public boolean combined() { return ((NetworkTerminalBlock) getBlockState().getBlock()).combined(); }
 	Object token() { return connectionToken; }
 	NetworkCoreBlockEntity connection() {
 		if (!(level instanceof ServerLevel server) || !server.getServer().isSameThread()) return null;

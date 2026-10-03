@@ -294,3 +294,19 @@ M04d 基于 `001d40e`，复核 `ApiaryUpgradeProbe`／`ApiaryProductivityProbe`�
 基于网络 worktree 的 `1880cd2` 与未提交 D18a 草稿，复用已验收的 `NetworkCoreMenu`、`MemberUpgradeMenuAccess`、`NetworkSelectionSession`、`OwnedMachines` 和核心访问表。入口按源方块距离校验、固定 BE／权威域／菜单代际；失效先撤销，关闭不保留查询根。类型索引从占用记录派生，读档 Builder 重建，不把分页改成全表过滤。终端没有库存或独立生产，复用已有实际量交换、旧周期和背包同步。既有 QIO／ECO 订阅参考只供 D18b 使用，本步未实现订阅或大数详情。
 
 本轮没有拉取上游或增加第三方实现；固定 API 以 NeoForge 21.1.216／MC 1.21.1 本地编译和真实运行验证。文档复核修正 D18／D19／D20 依赖环、过期 M04 关键路径、D13b 无升级限制、ECO 历史 WAL 与现行快照混写、已有存档兼容和 GUI 授权描述。参考更新改为按需要进行，复用已读版本不反复联网；目标／已实现范围和验证证据继续分开。
+
+<a id="s13-24"></a>
+### 13.24 后续科技线与完整终端的本地参考（2026-10-03）
+
+本轮仅核对本地已有源码，不拉取／更新参考库，不复制其代码。ECO、Useless、AE2WT 工作树检查为干净；以下是本轮 HEAD，13.2 的历史读取记录不改写。采用原则对应[2.6](bee-processing-network-design.md#s2-6)、[9](bee-processing-network-design.md#s9)和[11.14](bee-processing-network-roadmap.md#s11-14)，科技线仍等待 T00。
+
+| 本地来源与核实版本 | 实际读取入口 | 采用与不采用 |
+| --- | --- | --- |
+| `../../闪电全版本/ae2lt-src-2.1.0-beta.5`，2.1.0-beta.5／`1d4589b6bd50672051f78d766505530beacfebc0` | `logic/tianshu/CpuInternalCoreCalculator.calculate` → `ComputingUnitTotals`／统一能力描述调用，非法核心和单元数量拒绝 | 核心等级与存储／并行／放大单元分责，形成后给单份能力；不照搬 26 单元或 16,384 并行常量，也不把源码引用当本项目自动搭建实现证据 |
+| `.tmp_neoccoaeextension_src`，21.2.1／`1723bf0665055ae9e601497ef9a9b38da4d3264f` | `data/recipe/CoolingRecipes`；`ECOCraftingCoolingController.getCoolingRecipe/canRefillWith/ensureCoolantAvailable/refillCoolant` | 流体→冷量、最高超频档、同组件液体与热态出口限制；查询可能触发真实 refill，分次整数换算也不能直接套入本项目，改为纯预览、精确余数和单次资产提交 |
+| `.tmp_useless_src`，1.21.1-2.4.5.4／`93486296e0e7eb38620aa660cb7ea66b03f92272` | `MultiblockAlloyFurnaceCoreBlockEntity` 的形成、tick、批次入口／单任务并行；`OmniversalCoilStats.singleTaskParallel/threads/processTime/resolveEffect` | 分开线程、单任务并行、周期和计费；最高有用线圈为 1 tick、long 最大视图及整批固定价特例，普通线圈受配置影响。只确立 T07 对照变量，未实测吞吐，不宣称复制这些数字就与万象炉等效 |
+| `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources`，固定本地版本 | `FactoryTier`；`ItemTierInstaller.useOn` 的权限／等级检查、升级数据、放置失败、配置恢复和能力失效 | 3／5／7／9 是工厂进程数；采用逐级解锁、升级前检查与保留机器数据，不照搬方块替换后的外部失败处理。新机容量与多方块蜂位另算，有限账户不允许丢失 |
+| `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled`，固定 19.2.17 | `WirelessCraftingTerminalMenuHost.createCraftingInv`、既有 `MEStorageScreen`／终端同步参考 | 真实九格合成材料、宿主生命周期、产物网格与背包分区；本项目不直接把权威大数账户放进物品组件，不采用关闭掉落兜底 |
+| `build/reference/ae2wt-1.21.1`，1.21.1 源码／`49f70f0627b40762cfbd33732834c7271d5ec17d`，声明 AE2 19.2.17／NeoForge 21.1.219 | `WUTHandler.setTerminal/hasTerminal/open/findTerminal`；`wut/recipe/Common.mergeTerminal`；`WTMenuHost.consumeIdlePower/recharge` | 借鉴已安装功能、当前功能和实际物品定位。合并有升级／能量／组件处理，不能简单丢掉另一输入；其 SIMULATE 分支可能 recharge 并 MODULATE，明确不采用。仅源码参考，未安装为项目依赖，未声称本项目已支持 Curios／量子跨维度 |
+
+完整终端先交付 D18d 的无状态有线合并与模式切换，e／f 才接真实合成资产和无线宿主。关闭释放选择、来源 BE／网络身份与权限失效沿用 D18a／D17；服务器线程负责世界和权威资产，不把参考库的后台合成能力推导成本项目可以后台访问世界。新材料的加工配方和附属等级尚未进入编码，需在 T03–T06 核对对应发行源码／JAR 和成功、拒绝、恢复路径。

@@ -104,6 +104,7 @@ public final class NetworkClientProbe {
 		report.addProperty("upgradeBatchAndPreviewWidgets", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 		report.addProperty("memberProxyWidgetsBothMembersDistanceAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.verified);
 		report.addProperty("dedicatedTerminalsTypedUpgradeSharedStockAndRevocation", error == null && ClientMemberProxyFixture.terminalsVerified);
+		report.addProperty("combinedTerminalModesRecipeReplayAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.combinedVerified);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

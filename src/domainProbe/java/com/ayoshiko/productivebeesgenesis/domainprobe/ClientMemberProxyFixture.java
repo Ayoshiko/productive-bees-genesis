@@ -11,6 +11,7 @@ final class ClientMemberProxyFixture {
 	static volatile int positionRequest, positionApplied;
 	static volatile boolean done, verified;
 	static volatile boolean terminalsRequested, terminalsReady, terminalsDone, terminalsVerified;
+	static volatile boolean combinedDone, combinedVerified;
 	static void tick(NetworkCoreBlockEntity core, ServerPlayer player) {
 		if (positionRequest != positionApplied) {
 			player.teleportTo(positionRequest == 1 ? 17.5 : 8.5, 102, 8.5); positionApplied = positionRequest;
@@ -23,6 +24,12 @@ final class ClientMemberProxyFixture {
 			for (var record : core.ownership().readyAuthority().checkpoint().ownedMachines().activeValues())
 				require(NativeUpgradeCounts.read(record.assets().copy().getCompound("upgrades")).getOrDefault(Upgrade.SPEED, 0) == 0, "Dedicated terminal retained duplicate upgrade");
 			terminalsVerified = true;
+		}
+		if (combinedDone && !combinedVerified) {
+			require(player.getInventory().getItem(6).getCount() == 2, "Combined terminal upgrade conservation");
+			for (var record : core.ownership().readyAuthority().checkpoint().ownedMachines().activeValues())
+				require(NativeUpgradeCounts.read(record.assets().copy().getCompound("upgrades")).getOrDefault(Upgrade.SPEED, 0) == 0, "Combined terminal duplicated upgrade");
+			combinedVerified = true;
 		}
 		if (!done || verified) return;
 		require(player.getInventory().getItem(6).getCount() == 2 && player.getInventory().getItem(7).getCount() == 2

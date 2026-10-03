@@ -31,9 +31,11 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；当前推进 D17 逐机升级，完整内容兼容、性能及发布门仍待完成。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；D17 基础成员升级、M04 独立一体机和 D18a／d 终端入口已验收，当前推进 D18 完整终端；完整内容兼容、性能及发布门仍待完成。
 
 ### 新增
+
+- **D18d 蜂业综合终端**：标准蜜蜂管理终端与离心管理终端可无序合成；在同一方块切换两类管理功能，分别管理对应成员升级并共享产物库存。切换创建新会话、拒绝旧选择与重放；合并拒绝命名／自定义组件输入以保留未知数据。完整网格、无线和 3×3 合成仍在后续 D18 步骤。
 
 - **M04a 一体机复合工作内核**：单个机器身份同时保管蜂生产与离心工作，共用一份 FE；有限物品槽／流体罐按完整组件接收，已付费产物可分次交付，满载不丢失余量、不重抽、不重复收费。基础蜂箱复用同一单蜂计算。此步不开放独立世界生产、端口或插件，M04 后续接入仍未完成。
 
@@ -149,6 +151,8 @@
 ### English
 
 #### Added
+
+- **D18d combined apiculture terminal**: Craft the standard bee and centrifuge terminals together in any arrangement. Switch between their management functions, manage upgrades for the selected member type, and access shared products. Switching creates a fresh session and rejects old selections; nonstandard input components are rejected to preserve unknown data. The full grid, wireless access, and 3x3 crafting remain in subsequent D18 steps.
 
 - Added the M04a combined-machine work kernel: one machine identity holds bee and centrifuge work with one FE balance. Finite item slots and fluid tanks preserve exact components, and paid outputs can drain in portions without loss, resampling or duplicate charges. Basic apiaries share the same per-bee calculation. Standalone world production, ports and plugins remain pending M04 integration.
 

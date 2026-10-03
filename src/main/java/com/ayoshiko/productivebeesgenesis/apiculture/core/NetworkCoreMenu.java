@@ -15,6 +15,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final boolean memberScoped;
 	private final NetworkTerminalAccess terminalAccess;
 	private final TerminalScope scope;
+	private final boolean combinedTerminal;
 	private final Player viewer;
 	private final UUID viewerId;
 	private final Object accessToken;
@@ -31,11 +32,16 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		this(id, inventory, buffer, TerminalScope.ALL);
 	}
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer, TerminalScope scope) {
-		super(NetworkContent.menu(scope), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
-		this.scope = scope; terminalAccess = null;
+		this(id, inventory, buffer, scope, false);
+	}
+	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer, TerminalScope scope, boolean combined) {
+		super(NetworkContent.menu(scope, combined), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		combinedTerminal = combined; terminalAccess = null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = null;
 		terminalSession = buffer.readUUID();
 		memberAccess = null; memberScoped = buffer.readBoolean();
+		this.scope = combined ? buffer.readEnum(TerminalScope.class) : scope;
+		if (combined && (memberScoped || this.scope == TerminalScope.ALL)) throw new IllegalArgumentException("Invalid combined terminal mode");
 		selections = null; data = new SimpleContainerData(30); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory);
 	}
@@ -53,8 +59,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	private NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session,
 			MemberUpgradeMenuAccess memberAccess, NetworkTerminalAccess terminalAccess) {
-		super(NetworkContent.menu(terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope()), id);
+		super(NetworkContent.menu(terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope(), terminalAccess != null && terminalAccess.combined()), id);
 		this.core = core; exchangeNetwork = core.network(); this.terminalAccess = terminalAccess;
+		combinedTerminal = terminalAccess != null && terminalAccess.combined();
 		scope = terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope();
 		this.memberAccess = memberAccess; memberScoped = memberAccess != null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = core.accessToken();
@@ -106,6 +113,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public boolean memberScoped() { return memberScoped; }
 	public TerminalScope scope() { return scope; }
 	public boolean dedicatedTerminal() { return scope != TerminalScope.ALL; }
+	public boolean combinedTerminal() { return combinedTerminal; }
 	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
@@ -123,6 +131,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		return core != null && !dedicatedTerminal() && stillValid(player) && core.owner() != null && core.owner().equals(player.getUUID());
 	}
 	@Override public boolean clickMenuButton(Player player, int id) {
+		if (id == 10 || id == 11) {
+			if (!combinedTerminal || terminalAccess == null || player.containerMenu != this || !stillValid(player)
+					|| !(player instanceof net.minecraft.server.level.ServerPlayer server) || !TerminalPayloads.allow(server)) return false;
+			return terminalAccess.switchMode(server, id == 10 ? TerminalScope.APIARY : TerminalScope.CENTRIFUGE);
+		}
 		if (memberScoped || dedicatedTerminal() || core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
 		if (id == 1 || id == 2) return core.ownership().command(id == 1);
