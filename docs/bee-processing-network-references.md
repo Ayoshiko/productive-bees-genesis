@@ -31,7 +31,7 @@ D15b1 于同日再次检查边界与工作树后，对本步使用的两个仓�
 
 D16b2c3b 于 2026-09-22 使用当前系统代理再次 `pull --ff-only`，DataEnergistics 快进至 `7416267860ee446bf45bceb1bd0aeb43d848ebf4`，版本仍为 3.3.0，工作树干净。恢复候选及动作代际两个参考类与上述提交无差异；本步采用范围与测试对应关系见 [10.37](bee-processing-network-evidence-production.md#s10-37)，未宣称审查全部上游新增功能。
 
-每次参考前先确认独立仓库边界、工作树和上游，再执行 `pull --ff-only`；若有本地改动或不能快进，保留现场并记录原因，不自动 stash／reset。PB 13.13.5、Mekanism 10.7.19.85 的版本源码、`.tmp_gtnh_src`／`.tmp_gtceu_src` 摘录与 Thunderbolt JAR 没有可拉取的独立 Git 元数据，不能报为已更新；固定依赖 API 继续以实际编译 JAR 为准。第 5.4 节保留存储算法原审查提交，最新工作副本与本轮新增核对范围以本节为准。
+复用已固定版本时直接引用已读入口，不把每轮联网拉取当作前置；只有任务需要更新上游或现有 API／行为发生变化时，先确认独立仓库边界、工作树和上游，再执行 `pull --ff-only`；若有本地改动或不能快进，保留现场并记录原因，不自动 stash／reset。PB 13.13.5、Mekanism 10.7.19.85 的版本源码、`.tmp_gtnh_src`／`.tmp_gtceu_src` 摘录与 Thunderbolt JAR 没有可拉取的独立 Git 元数据，不能报为已更新；固定依赖 API 继续以实际编译 JAR 为准。第 5.4 节保留存储算法原审查提交，最新工作副本与本轮新增核对范围以本节为准。
 
 AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；这些是历史参考快照的 API 基线；本项目当前开发基线为 21.1.216、发布最低为 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
 
@@ -52,7 +52,7 @@ AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 2
 
 相关项目：[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)、[Mekanism](https://github.com/mekanism/Mekanism)、[GTCEu Modern](https://github.com/GregTechCEu/GregTech-Modern)、[KubaTech](https://github.com/GTNewHorizons/KubaTech)。这些仓库主页是定位入口；五个独立 Git 参考仓库均已在 D15 前联网 `pull --ff-only` 并固定上述提交；更新状态以拉取时刻为准，也没有将未经读取的网上介绍作为性能排名。
 
-本地旧研究 `docs/2026-09-15-天枢库存保留研究与对齐方案.md` 是背景资料，其中旧 AE2LT 路径属于历史锚点；合成库存策略的实施结论以本文第 6.6 节及新版源码为准。无需为使用保留算法强行引入 Thunderbolt；只有其可选合成扩展需要独立兼容边界。
+本地旧研究 `docs/2026-09-15-天枢库存保留研究与对齐方案.md` 是背景资料，其中旧 AE2LT 路径属于历史锚点；合成库存策略的实施结论以[主合同 6.6](bee-processing-network-design.md#s6-6)及新版源码为准。无需为使用保留算法强行引入 Thunderbolt；只有其可选合成扩展需要独立兼容边界。
 
 D16c2b 于 2026-09-23 核对独立 Git 根和干净工作树后更新本轮实际使用的两个参考副本：`.tmp_dataenergistics_src`／`1.21` 为 `5623cc0fbb978879abf6edb1ec0807d644c89819`，`.tmp_neoccoaeextension_src`／`v21.1.2` 为 `7249cb56ba6500668834c18abb8ea85a26453036`。直连 GitHub 失败后通过本机代理完成 `pull --ff-only`，没有更改全局 Git／TLS 设置。复核 DataEnergistics 的 `TrinityHostedActionTicket`、`TrinityHostedActionPayloadHandler.route/claimRoutedAction` 与 ECO `MenuDataTransport.send/tick/receive/stopped`：采用菜单身份、先占动作序号、服务端重建参数、每玩家预算及关闭清理；本项目没有 hosted 子窗口、整表分片队列或 AE2 依赖，使用单个八行回复并由原版开菜单数据下发 nonce。未审查这些仓库的其它上游更新。
 <a id="s13-3"></a>
@@ -287,3 +287,10 @@ M04c3a 基于 `f95c117` 复核 `MemberUpgradeService` 的标准完整组件、�
 M04c3b 基于 `2f849b7`，复核 `PbApiaryUpgradeCounts`／`PbCentrifugeUpgradeCounts` 的现有白名单，读取 `ApiaryPbUpgradeHandler.getPbUpgradeLimit`／`MekCentrifugePbUpgradeHandler.getLimit` 的成功安装、超限拒绝和取回路径，公开配置查询委托并保留原实例方法签名。两路分别使用 `ApiaryUpgradeMath` 与 `CentrifugePbMultipliers` 已有公式；PB 13.14.0 的标准实物由现有 `PbUpgradeInventorySlot` 投影，BLOCK／Ω 沿用 `StaticApiaryAdapter.output` 的单次映射，副产物过滤沿用 `StaticCentrifugeAdapter.compile`。没有扩大蜂种或升级效果准入。接口资格借鉴 `MachinePorts.Endpoint` 的结构绑定、实际 BE 身份和 getChunkNow 查询，菜单增加入口距离而不另建资产域。正常恢复、失效和失败保管复用当前单机 codec／保存服务，验证继续扩展已有生命周期、重启与聚焦菜单夹具；无新外部仓库或依赖。
 
 M04d 基于 `001d40e`，复核 `ApiaryUpgradeProbe`／`ApiaryProductivityProbe`／`MemberUpgradeProbe` 的实物参考方法：PB 13.14.0、Mekanism 10.7.19.85 的独立蜂箱／离心机安装相同升级，读取时间、FE、生产力、并行和稳定性，并直接核对原配方的物品／流体数量与概率。参考机保持红石停机、无蜜蜂与输入；一体机由正式 `NetworkTickService` 调度，不调用私有生产候选充当期望值。独立账目以真实周期／作业身份核算输入、付款、冻结余量与端口交付，蜂产量用 `SplittableRandom` 顺序样本及独立取整对照；离心随机样本复用已验收内核，仅证明调度与结算符合固定计划，不声称物理逐件 RNG 等价。复用 `MachineProbeFixture`、正常世界复制／停服包装和完整根比较；新增联合模式与旧损坏身份模式相互隔离，reader 校验 writer 模式及依赖一致。没有更新外部源码副本或新增运行依赖。
+
+<a id="s13-23"></a>
+### 13.23 D18a 终端入口与本轮文档复核（2026-10-03）
+
+基于网络 worktree 的 `1880cd2` 与未提交 D18a 草稿，复用已验收的 `NetworkCoreMenu`、`MemberUpgradeMenuAccess`、`NetworkSelectionSession`、`OwnedMachines` 和核心访问表。入口按源方块距离校验、固定 BE／权威域／菜单代际；失效先撤销，关闭不保留查询根。类型索引从占用记录派生，读档 Builder 重建，不把分页改成全表过滤。终端没有库存或独立生产，复用已有实际量交换、旧周期和背包同步。既有 QIO／ECO 订阅参考只供 D18b 使用，本步未实现订阅或大数详情。
+
+本轮没有拉取上游或增加第三方实现；固定 API 以 NeoForge 21.1.216／MC 1.21.1 本地编译和真实运行验证。文档复核修正 D18／D19／D20 依赖环、过期 M04 关键路径、D13b 无升级限制、ECO 历史 WAL 与现行快照混写、已有存档兼容和 GUI 授权描述。参考更新改为按需要进行，复用已读版本不反复联网；目标／已实现范围和验证证据继续分开。
