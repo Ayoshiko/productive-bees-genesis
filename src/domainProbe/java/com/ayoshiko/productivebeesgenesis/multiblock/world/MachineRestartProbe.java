@@ -43,7 +43,7 @@ public final class MachineRestartProbe {
 	private static int workUntil;
 	private static int phase, started;
 	private static String mode() { return System.getProperty("pbg.multiblock.mode", ""); }
-	private static boolean enabled() { return mode().equals("write") || mode().equals("read"); }
+	private static boolean enabled() { return !Boolean.getBoolean("pbg.multiblock.production") && (mode().equals("write") || mode().equals("read")); }
 	@SubscribeEvent public static void started(ServerStartedEvent event) {
 		if (!enabled()) return;
 		var server = event.getServer(); var level = server.overworld();
@@ -116,7 +116,7 @@ public final class MachineRestartProbe {
 	}
 
 	/** Map 的编码列表顺序可跨 JVM 改变；核对全部权威字段与真实槽序，不把顺序当资产差异。 */
-	private static boolean sameWork(CombinedMachineWork expected, CombinedMachineWork actual) {
+	static boolean sameWork(CombinedMachineWork expected, CombinedMachineWork actual) {
 		return expected.machine().equals(actual.machine()) && expected.generation() == actual.generation() && expected.revision() == actual.revision()
 				&& expected.upgrades().equals(actual.upgrades()) && expected.beeSlots() == actual.beeSlots() && expected.lanes() == actual.lanes()
 				&& expected.energy() == actual.energy() && expected.energyCapacity() == actual.energyCapacity()

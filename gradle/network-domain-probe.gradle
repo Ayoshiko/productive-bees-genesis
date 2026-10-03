@@ -17,6 +17,8 @@ def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
 def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 def machineMenuProbe = providers.gradleProperty('networkMachineMenu').isPresent()
+def machineProduction = providers.gradleProperty('networkMachineProduction').isPresent()
+if (machineProduction && !(multiblockMode in ['write', 'read'])) throw new GradleException('Machine production requires write/read mode')
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
@@ -89,7 +91,7 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
                 File writerReport = new File(sourceWorld.parentFile, 'results/multiblock.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing machine writer report')
                 def writer = new groovy.json.JsonSlurper().parse(writerReport)
-                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) {
+                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2 || (writer.production == true) != machineProduction) {
                     throw new GradleException('Machine reader requires successfully stopped matching writer')
                 }
             }
@@ -225,6 +227,7 @@ neoForge {
             programArgument '--nogui'
             systemProperty 'pbg.multiblock.enabled', 'true'
             if (multiblockMode != null) systemProperty 'pbg.multiblock.mode', multiblockMode
+            systemProperty 'pbg.multiblock.production', machineProduction.toString()
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
         }
@@ -304,7 +307,15 @@ tasks.named('runNetworkMultiblockServer') {
             if (multiblockMode == 'read') required += ['noFormedAuthorityBeforeFirstTick', 'newJvm', 'normalWorkCheckpointRestoredBeforeFormation',
                     'singleTickWorkAndPaidRecovery', 'sixSlotFeedingSurvivesRestartAndWork', 'missingAndUnreadableFilesNeverRecreated', 'recoveryQuarantineRevokesAuthority']
         }
+        if (machineProduction) {
+            required = ['twoLayoutsOneCapacityEach', 'fullBufferStableFor40Ticks', 'tickAccountingConserved',
+                    'noWorldDrops', 'normalAssetCheckpointSaved']
+            if (multiblockMode == 'write') required += ['realScheduledProductionAndReference', 'localUpgradePreservesOldAndOtherWork']
+            else required += ['checkpointRestoredBeforeFormation', 'newJvm', 'partialDeliveryAndProductionResumed',
+                    'finalProductsEnergyAndReturnedAssetsConserved']
+        }
         if (result.passed != true || result.normalShutdown != true || required.any { result[it] != true }
+                || (result.production == true) != machineProduction
                 || result.ae2Loaded != probeAe2
                 || (multiblockMode != null && result.mode != multiblockMode)
                 || (!(multiblockMode in ['write', 'read']) && (!(result.maxStructureSteps instanceof Number) || result.maxStructureSteps < 1 || result.maxStructureSteps > 32))) {
