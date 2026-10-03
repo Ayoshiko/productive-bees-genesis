@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.client;
 
 import com.ayoshiko.productivebeesgenesis.multiblock.world.*;
+import com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
@@ -21,6 +22,12 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private final List<Button> actions = new ArrayList<>();
 	private int inventorySlot;
 	private boolean upgrades;
+	private int upgradePage;
+	private static final int[] UPGRADE_STARTS = {0, 4, 8, 11, 15};
+	private int upgradeRows() { return upgradePage == 2 ? 3 : 4; }
+	private Component upgradeName(int slot) {
+		var pb = MachineUpgrades.pbType(slot); return pb == null ? tr("upgrade_name." + slot) : Component.translatable(pb.getNameKey());
+	}
 	private long sequence;
 	public MachineScreen(MachineMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); imageWidth = 230; imageHeight = 226; inventorySlot = inventory.selected;
@@ -30,14 +37,18 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	@Override protected void init() {
 		super.init(); actions.clear();
 		addRenderableWidget(Button.builder(tr(upgrades ? "bees_tab" : "upgrades_tab"), button -> { upgrades = !upgrades; rebuildWidgets(); })
-				.bounds(leftPos + 177, topPos + 4, 46, 14).build());
+				.bounds(leftPos + 177, topPos + 4, 46, 14).build()).setTooltip(Tooltip.create(tr("upgrade_scope")));
 		if (upgrades) {
-			for (int row = 0; row < 4; row++) for (int action = 0; action < 2; action++) {
-				int slot = row, operation = 4 + action; String key = action == 0 ? "upgrade_in" : "upgrade_out";
+			for (int row = 0; row < upgradeRows(); row++) for (int action = 0; action < 2; action++) {
+				int slot = UPGRADE_STARTS[upgradePage] + row, operation = 4 + action; String key = action == 0 ? "upgrade_in" : "upgrade_out";
 				var button = addRenderableWidget(Button.builder(tr(key), ignored -> send(operation, slot))
 						.bounds(leftPos + 151 + action * 36, topPos + 27 + row * 21, 34, 18).build());
-				button.setTooltip(Tooltip.create(tr(key + "_hint"))); actions.add(button);
+				button.setTooltip(Tooltip.create(Component.empty().append(upgradeName(slot)).append("\n").append(tr(key + "_hint")))); actions.add(button);
 			}
+			addRenderableWidget(Button.builder(Component.literal("<"), ignored -> { upgradePage--; rebuildWidgets(); })
+					.bounds(leftPos + 6, topPos + 109, 18, 12).build()).active = upgradePage > 0;
+			addRenderableWidget(Button.builder(Component.literal(">"), ignored -> { upgradePage++; rebuildWidgets(); })
+					.bounds(leftPos + 205, topPos + 109, 18, 12).build()).active = upgradePage < UPGRADE_STARTS.length - 1;
 			return;
 		}
 		String[] labels = {"cage_in", "cage_out", "feed_in", "feed_out"};
@@ -63,12 +74,15 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		g.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xffa77932);
 		g.fill(leftPos + 2, topPos + 2, leftPos + imageWidth - 2, topPos + imageHeight - 2, 0xff282c31);
 		if (upgrades) {
-			for (int row = 0; row < 4; row++) {
+			for (int row = 0; row < upgradeRows(); row++) {
+				int slot = UPGRADE_STARTS[upgradePage] + row;
 				int y = topPos + 27 + row * 21;
 				g.fill(leftPos + 6, y, leftPos + 146, y + 18, 0xff383d43);
-				g.drawString(font, tr("upgrade_slot." + row, menu.upgradeCount(row)), leftPos + 9, y + 5, 0xffead5a7, false);
+				String count = menu.upgradeCount(slot) + "/" + menu.upgradeLimit(slot); int countWidth = font.width(count);
+				g.drawString(font, font.plainSubstrByWidth(upgradeName(slot).getString(), Math.max(1, 128 - countWidth)), leftPos + 9, y + 5, 0xffead5a7, false);
+				g.drawString(font, count, leftPos + 142 - countWidth, y + 5, 0xffead5a7, false);
 			}
-			g.drawString(font, tr("upgrade_scope"), leftPos + 7, topPos + 112, 0xffc3c8cc, false);
+			g.drawCenteredString(font, tr("upgrade_page." + upgradePage), leftPos + imageWidth / 2, topPos + 111, 0xffc3c8cc);
 		} else for (int row = 0; row < 6; row++) {
 			int y = topPos + 24 + row * 16;
 			g.fill(leftPos + 6, y, leftPos + 74, y + 15, 0xff383d43);

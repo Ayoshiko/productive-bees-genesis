@@ -253,7 +253,9 @@ public class ApiaryPbUpgradeHandler {
 	 * @param type 升级类型（null 返回 0）
 	 * @return 该类型的最大安装数量
 	 */
-	int getPbUpgradeLimit(PbUpgradeType type) {
+	int getPbUpgradeLimit(PbUpgradeType type) { return configuredLimit(type); }
+	/** 已准入载体共用当前上限，不需要构造物理蜂箱。 */
+	public static int configuredLimit(PbUpgradeType type) {
 		if (type == null) return 0;
 		if (ModConfig.SERVER == null) return type.getMaxCount();
 		return switch (type) {

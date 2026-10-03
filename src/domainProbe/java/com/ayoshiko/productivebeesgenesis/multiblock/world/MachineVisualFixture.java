@@ -84,6 +84,18 @@ public final class MachineVisualFixture {
 							new net.minecraft.world.phys.BlockHitResult(core.getBlockPos().getCenter(), Direction.NORTH, core.getBlockPos(), false));
 					if (!(player.containerMenu instanceof MachineMenu)) throw new IllegalStateException("Controller did not open machine menu");
 				}
+				case 201 -> {
+					var fixture = fixtures.getFirst();
+					var local = fixture.template().features().entrySet().stream().filter(e -> e.getValue().roles().contains(StructureRole.INTERFACE)).findFirst().orElseThrow().getKey();
+					var pos = fixture.world(local); var state = level.getBlockState(pos); var face = state.getValue(MachinePartBlock.FACING);
+					player.connection.teleport(pos.getX() + 0.5 + face.getStepX() * 2, pos.getY(), pos.getZ() + 0.5 + face.getStepZ() * 2, 0, 0);
+					int alpha = com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.slot(true, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.PRODUCTIVITY);
+					int stability = com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.slot(false, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.STABILITY);
+					player.getInventory().items.set(3, MachineUpgradeProfiles.unit(alpha).copyWithCount(2));
+					player.getInventory().items.set(4, MachineUpgradeProfiles.unit(stability));
+					((MachinePartBlock) state.getBlock()).useWithoutItem(state, level, pos, player, new net.minecraft.world.phys.BlockHitResult(pos.getCenter(), face, pos, false));
+					if (!(player.containerMenu instanceof MachineMenu)) throw new IllegalStateException("Interface did not open shared machine menu");
+				}
 				case 10 -> level.removeBlock(fixtures.getFirst().world(BlockPos.ZERO), false);
 				case 11 -> {
 					ModConfig.SERVER.beeNetwork.totalSteps.set(1);

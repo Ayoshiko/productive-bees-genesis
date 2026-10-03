@@ -284,7 +284,9 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 离心机支持产量系列、时间系列、稳定性和功能型升级，上限由离心机独立配置段控制，
 	 * 配置未加载时回退到枚举默认值。
 	 */
-	int getLimit(PbUpgradeType type) {
+	int getLimit(PbUpgradeType type) { return configuredLimit(type); }
+	/** 已准入载体共用当前上限，不需要构造物理离心机。 */
+	public static int configuredLimit(PbUpgradeType type) {
 		if (type == null) return 0;
 		if (ModConfig.SERVER == null) return type.getMaxCount();
 		return switch (type) {

@@ -6,18 +6,20 @@ import com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolic
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork;
+import com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades;
+import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /** 单个玩家槽与单机资产根交换；准备双方结果后在服务器线程内一次提交。 */
 final class MachineExchange {
 	enum Action { CAGE_IN, CAGE_OUT, FEED_IN, FEED_OUT, UPGRADE_IN, UPGRADE_OUT }
-	enum Status { IDLE, MOVED, NO_SPACE, INVALID, STALE, DRAIN_FIRST, UNAVAILABLE, LIMIT }
+	enum Status { IDLE, MOVED, NO_SPACE, INVALID, STALE, DRAIN_FIRST, UNAVAILABLE, LIMIT, CONFLICT }
 	record Result(Status status, int moved) { }
 	static Result exchange(MachineMenu menu, ServerPlayer player, Action action, int slot, int inventorySlot, int amount, boolean simulate) {
 		var core = menu.controller(player);
 		if (core == null) return result(Status.UNAVAILABLE);
-		if (action == null || slot < 0 || slot >= 6 || inventorySlot < 0 || inventorySlot >= 36 || amount < 1 || amount > 64) return result(Status.INVALID);
+		if (action == null || slot < 0 || slot >= (action == Action.UPGRADE_IN || action == Action.UPGRADE_OUT ? MachineUpgrades.SLOTS : 6) || inventorySlot < 0 || inventorySlot >= 36 || amount < 1 || amount > 64) return result(Status.INVALID);
 		var access = MachineWorkService.access(core).orElse(null); if (access == null) return result(Status.UNAVAILABLE);
 		var work = access.work(); var level = player.serverLevel();
 		var inventory = player.getInventory().items.get(inventorySlot).copy();
@@ -51,12 +53,13 @@ final class MachineExchange {
 					change = work.withdrawFeeding(slot, Math.min(amount, space)); received = unit.copyWithCount(count + (int) change.moved());
 				}
 				case UPGRADE_IN, UPGRADE_OUT -> {
-					if (slot >= com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.SLOTS) return result(Status.INVALID);
 					var unit = MachineUpgradeProfiles.unit(slot); int installed = work.upgrades().count(slot), moved;
+					if (unit.isEmpty()) return result(Status.INVALID);
 					if (action == Action.UPGRADE_IN) {
 						if (inventory.isEmpty() || !ItemStack.isSameItemSameComponents(inventory, unit)) return result(Status.INVALID);
-						moved = Math.min(Math.min(amount, inventory.getCount()),
-								com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.LIMIT - installed);
+						var pb = MachineUpgrades.pbType(slot);
+						if (pb != null && !BalanceConfig.canInstall(pb, work.upgrades().pbCounts(MachineUpgrades.apiarySlot(slot)))) return result(Status.CONFLICT);
+						moved = Math.min(Math.min(amount, inventory.getCount()), MachineUpgradeProfiles.limit(slot) - installed);
 						if (moved <= 0) return result(Status.LIMIT);
 						received = inventory.copyWithCount(inventory.getCount() - moved);
 					} else {

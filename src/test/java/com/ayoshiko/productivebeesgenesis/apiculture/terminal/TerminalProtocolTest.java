@@ -25,14 +25,14 @@ class TerminalProtocolTest {
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 		} finally { buffer.release(); }
 	}
-	@Test void upgradeCommandsUseFourSlotsAndCannotBorrowTheSixBeeSlotRange() {
+	@Test void upgradeCommandsUseNineteenSlotsWithIndependentBeeBounds() {
 		var codec = com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest.STREAM_CODEC;
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());
 		try {
-			for (int action : new int[]{4, 5}) {
-				var request = new com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest(7, UUID.randomUUID(), 1, 0, action, 3, 0, 64);
+			for (int action : new int[]{4, 5}) for (int slot = 0; slot < 19; slot++) {
+				var request = new com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest(7, UUID.randomUUID(), 1, 0, action, slot, 0, 64);
 				buffer.clear(); codec.encode(buffer, request); assertEquals(request, codec.decode(buffer));
-				buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, 4);
+				buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, 19);
 				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 			}
 		} finally { buffer.release(); }

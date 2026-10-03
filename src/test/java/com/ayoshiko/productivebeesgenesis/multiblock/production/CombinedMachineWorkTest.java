@@ -259,7 +259,7 @@ class CombinedMachineWorkTest {
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
 		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(3, newTag.getInt("schema"));
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(4, newTag.getInt("schema"));
 		newTag.putInt("schema", 1); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
@@ -297,6 +297,39 @@ class CombinedMachineWorkTest {
 			var broken = CombinedWorkCodec.encode(fed); mutation.accept(broken); var preserved = broken.copy();
 			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(preserved, broken);
 		}
+	}
+	@Test void pbPluginTargetsRestoreWithoutClampingOrChangingPaidWork() {
+		var original = checkpointFixture(); var state = original;
+		for (int slot = MachineUpgrades.NATIVE_SLOTS; slot < MachineUpgrades.SLOTS; slot++) {
+			state = state.exchangeUpgrade(slot, slot + 1).apply(state);
+		}
+		var encoded = CombinedWorkCodec.encode(state); var restored = restore(encoded);
+		assertEquals(state.upgrades(), restored.upgrades()); assertEquals(original.bees(), restored.bees());
+		assertEquals(original.centrifuges(), restored.centrifuges()); assertEquals(original.energy(), restored.energy());
+		assertEquals(7, restored.upgrades().apiary().size()); assertEquals(8, restored.upgrades().centrifuge().size());
+		assertThrows(IllegalArgumentException.class, () -> MachineUpgrades.slot(true, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.STABILITY));
+		assertThrows(IllegalArgumentException.class, () -> MachineUpgrades.slot(false, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK));
+		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
+				tag -> tag.getCompound("upgrades").remove("apiary"), tag -> tag.getCompound("upgrades").remove("centrifuge"),
+				tag -> tag.getCompound("upgrades").getCompound("apiary").putInt("stability", 1),
+				tag -> tag.getCompound("upgrades").getCompound("centrifuge").putInt("block", 1),
+				tag -> tag.getCompound("upgrades").getCompound("apiary").putInt("unknown", 1),
+				tag -> tag.getCompound("upgrades").getCompound("apiary").putInt("time", 0),
+				tag -> tag.getCompound("upgrades").getCompound("centrifuge").putInt("time", -1),
+				tag -> tag.getCompound("upgrades").getCompound("apiary").putLong("time", 1),
+				tag -> tag.putInt("schema", 3))) {
+			var broken = encoded.copy(); mutation.accept(broken); var unchanged = broken.copy();
+			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(unchanged, broken);
+		}
+		var nativeState = original.exchangeUpgrade(0, 3).apply(original); var legacy = CombinedWorkCodec.encode(nativeState);
+		legacy.putInt("schema", 3); legacy.getCompound("upgrades").remove("apiary"); legacy.getCompound("upgrades").remove("centrifuge");
+		var migrated = restore(legacy); assertEquals(nativeState.upgrades(), migrated.upgrades()); assertEquals(original.bees(), migrated.bees());
+		for (int slot = MachineUpgrades.NATIVE_SLOTS; slot < MachineUpgrades.SLOTS; slot++) {
+			int amount = restored.upgrades().count(slot); var take = restored.exchangeUpgrade(slot, -amount);
+			assertEquals(amount, take.moved()); restored = take.apply(restored);
+		}
+		assertTrue(restored.upgrades().apiary().isEmpty()); assertTrue(restored.upgrades().centrifuge().isEmpty());
+		assertEquals(original.bees(), restored.bees()); assertEquals(original.centrifuges(), restored.centrifuges());
 	}
 	@Test void beeExchangeChangesIdentityRetainsFoodAndCannotExtractPaidResults() {
 		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1); var seed = bee(state.machine(), 5, 2, 5, 1);

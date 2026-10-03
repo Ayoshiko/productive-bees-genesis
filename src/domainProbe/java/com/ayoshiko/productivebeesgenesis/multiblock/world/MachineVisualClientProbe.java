@@ -254,9 +254,40 @@ public final class MachineVisualClientProbe {
 			if (++menuWait < 10) return; capture(client, "machine-upgrades");
 			screen.mouseClicked(x + 201, y + 35, 0); menuStage = 6; return;
 		}
-		if (menu.acknowledged() != 5) return;
-		check(menu.upgradeCount(0) == 0 && client.player.getInventory().items.get(2).getCount() == 1, "Real plugin return failed");
-		report.addProperty("machinePluginRealClientExchange", true); client.player.closeContainer(); finish(client, null);
+		if (menuStage == 6) {
+			if (menu.acknowledged() != 5) return;
+			check(menu.upgradeCount(0) == 0 && client.player.getInventory().items.get(2).getCount() == 1, "Real plugin return failed");
+			report.addProperty("machinePluginRealClientExchange", true); client.player.closeContainer();
+			MachineVisualFixture.request(201); menuStage = 7; return;
+		}
+		if (menuStage == 7) {
+			if (MachineVisualFixture.done != 201 || menu.viewRevision() == 0 || client.player.getInventory().items.get(3).getCount() != 2) return;
+			screen.mouseClicked(x + 197, y + 10, 0); screen.mouseClicked(x + 213, y + 114, 0);
+			screen.mouseClicked(x + 96, y + 208, 0); screen.mouseClicked(x + 166, y + 35, 0);
+			menuStage = 8; menuWait = 0; return;
+		}
+		if (menuStage == 8) {
+			if (menu.acknowledged() != 1) return;
+			check(menu.upgradeCount(4) == 1 && client.player.getInventory().items.get(3).getCount() == 1, "Interface PB installation failed");
+			if (++menuWait < 10) return; capture(client, "machine-pb-apiary");
+			screen.mouseClicked(x + 201, y + 35, 0); menuStage = 9; return;
+		}
+		if (menuStage == 9) {
+			if (menu.acknowledged() != 2) return;
+			check(menu.upgradeCount(4) == 0 && client.player.getInventory().items.get(3).getCount() == 2, "Interface PB return failed");
+			for (int i = 0; i < 3; i++) screen.mouseClicked(x + 213, y + 114, 0);
+			screen.mouseClicked(x + 114, y + 208, 0); screen.mouseClicked(x + 166, y + 77, 0);
+			menuStage = 10; menuWait = 0; return;
+		}
+		if (menuStage == 10) {
+			if (menu.acknowledged() != 3) return;
+			check(menu.upgradeCount(17) == 1 && client.player.getInventory().items.get(4).isEmpty(), "Last-page stability installation failed");
+			if (++menuWait < 10) return; capture(client, "machine-pb-centrifuge");
+			screen.mouseClicked(x + 201, y + 77, 0); menuStage = 11; return;
+		}
+		if (menu.acknowledged() != 4) return;
+		check(menu.upgradeCount(17) == 0 && client.player.getInventory().items.get(4).getCount() == 1, "Last-page stability return failed");
+		report.addProperty("pbPagesAndInterfaceRealClientExchange", true); client.player.closeContainer(); finish(client, null);
 	}
 	private static MachineVisualState state(Minecraft client, int index) {
 		var state = client.level.getBlockState(MachineVisualFixture.POSITIONS.get(index));

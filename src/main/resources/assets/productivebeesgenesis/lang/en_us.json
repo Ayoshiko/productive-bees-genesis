@@ -1328,10 +1328,16 @@
   "screen.productivebeesgenesis.machine.upgrade_out": "Take",
   "screen.productivebeesgenesis.machine.upgrade_in_hint": "Install standard upgrades from the selected inventory slot; Shift for more",
   "screen.productivebeesgenesis.machine.upgrade_out_hint": "Return upgrades to the selected inventory slot; Shift for more",
-  "screen.productivebeesgenesis.machine.upgrade_slot.0": "Bee speed  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.1": "Bee energy  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.2": "Centrifuge speed  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.3": "Centrifuge energy  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_name.0": "Bee speed",
+  "screen.productivebeesgenesis.machine.upgrade_name.1": "Bee energy",
+  "screen.productivebeesgenesis.machine.upgrade_name.2": "Centrifuge speed",
+  "screen.productivebeesgenesis.machine.upgrade_name.3": "Centrifuge energy",
   "screen.productivebeesgenesis.machine.upgrade_scope": "Separate effects; fixed FE buffer",
-  "screen.productivebeesgenesis.machine.status.7": "This upgrade slot is full"
+  "screen.productivebeesgenesis.machine.status.7": "This upgrade slot is full",
+  "screen.productivebeesgenesis.machine.upgrade_page.0": "Native upgrades  1/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.1": "Bee PB  2/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.2": "Bee PB  3/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.3": "Centrifuge PB  4/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.4": "Centrifuge PB  5/5",
+  "screen.productivebeesgenesis.machine.status.8": "Remove conflicting tier in this subsystem first"
 }

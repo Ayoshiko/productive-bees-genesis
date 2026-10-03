@@ -145,7 +145,7 @@ public final class MachineRestartProbe {
 				2, delivered.work()), delivered.buffer(), original.feeding());
 		var food = com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.fromStack(new ItemStack(Items.IRON_BLOCK), registries);
 		work = work.depositFeeding(5, food, 7).apply(work);
-		for (int slot = 0; slot < 4; slot++) work = work.exchangeUpgrade(slot, slot + 1).apply(work);
+		for (int slot = 0; slot < MachineUpgrades.SLOTS; slot++) work = work.exchangeUpgrade(slot, slot < 4 ? slot + 1 : 1).apply(work);
 		return work;
 	}
 	private static void verifyWork(MinecraftServer server) throws Exception {
@@ -163,6 +163,8 @@ public final class MachineRestartProbe {
 		report.addProperty("sixSlotFeedingSurvivesRestartAndWork", true);
 		check(state.upgrades().equals(initial.upgrades()) && state.upgrades().counts().equals(List.of(1, 2, 3, 4)), "Restart lost plugins");
 		report.addProperty("fourPluginSlotsSurviveRestartAndOldWork", true);
+		check(state.upgrades().apiary().size() == 7 && state.upgrades().centrifuge().size() == 8, "Restart lost PB plugin targets");
+		report.addProperty("pbPluginMapsSurviveRestartAndOldWork", true);
 		rejectedFile(server, false); rejectedFile(server, true);
 		report.addProperty("missingAndUnreadableFilesNeverRecreated", true);
 		shutdownWork = CombinedWorkCodec.encode(state);

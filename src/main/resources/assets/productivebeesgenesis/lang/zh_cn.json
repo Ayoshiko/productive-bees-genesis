@@ -1328,10 +1328,16 @@
   "screen.productivebeesgenesis.machine.upgrade_out": "取回",
   "screen.productivebeesgenesis.machine.upgrade_in_hint": "安装选中背包格的标准升级件；Shift 尽量装满",
   "screen.productivebeesgenesis.machine.upgrade_out_hint": "退回选中背包格；Shift 尽量取回",
-  "screen.productivebeesgenesis.machine.upgrade_slot.0": "蜂箱速度  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.1": "蜂箱节能  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.2": "离心速度  %s/8",
-  "screen.productivebeesgenesis.machine.upgrade_slot.3": "离心节能  %s/8",
+  "screen.productivebeesgenesis.machine.upgrade_name.0": "蜂箱速度",
+  "screen.productivebeesgenesis.machine.upgrade_name.1": "蜂箱节能",
+  "screen.productivebeesgenesis.machine.upgrade_name.2": "离心速度",
+  "screen.productivebeesgenesis.machine.upgrade_name.3": "离心节能",
   "screen.productivebeesgenesis.machine.upgrade_scope": "各自生效；节能不扩大 FE 缓冲",
-  "screen.productivebeesgenesis.machine.status.7": "该升级槽已满"
+  "screen.productivebeesgenesis.machine.status.7": "该升级槽已满",
+  "screen.productivebeesgenesis.machine.upgrade_page.0": "原生升级  1/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.1": "蜂箱 PB  2/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.2": "蜂箱 PB  3/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.3": "离心 PB  4/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.4": "离心 PB  5/5",
+  "screen.productivebeesgenesis.machine.status.8": "同一路已有互斥等级，请先取回"
 }

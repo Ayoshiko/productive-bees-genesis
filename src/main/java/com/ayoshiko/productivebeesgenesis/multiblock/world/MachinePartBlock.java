@@ -52,6 +52,12 @@ public class MachinePartBlock extends BaseEntityBlock implements MachineContent.
 		super.onRemove(state, level, pos, next, moved);
 	}
 	@Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+		if (role == StructureRole.INTERFACE) {
+			if (level.isClientSide) return InteractionResult.SUCCESS;
+			return !player.isShiftKeyDown() && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer
+					&& level.getBlockEntity(pos) instanceof MachinePartEntity part && MachineMenu.open(part, serverPlayer)
+					? InteractionResult.CONSUME : InteractionResult.FAIL;
+		}
 		if (role != StructureRole.CONTROLLER) return InteractionResult.PASS;
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 		if (!(level.getBlockEntity(pos) instanceof MachineControllerEntity core) || !core.allowed(player)) return InteractionResult.FAIL;

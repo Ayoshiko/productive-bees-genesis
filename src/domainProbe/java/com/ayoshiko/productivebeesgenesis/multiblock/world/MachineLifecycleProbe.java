@@ -110,6 +110,8 @@ public final class MachineLifecycleProbe {
 					check(job.progress() > 0 && work.energy() == 1000 - 10 * (bee.progress() + job.progress()), "Shared FE differs from independently counted paid ticks");
 					MachineUpgradeChecks.verify(workMenu, worker, noise.core(), fixture.core());
 					report.addProperty("nativePluginExchangeIsolationOldWorkAndRecovery", true);
+					MachinePbUpgradeChecks.verify(workMenu, worker, noise.core(), fixture.core());
+					report.addProperty("pbPluginExchangeLimitsConflictsOldAndNewWork", true);
 					worker.getInventory().items.set(0, new ItemStack(cy.jdkdigital.productivebees.init.ModItems.BEE_CAGE.get()));
 					check(exchange(MachineExchange.Action.CAGE_OUT, false).moved() == 1, "Cannot cage partially worked bee");
 					check(com.ayoshiko.productivebeesgenesis.apiculture.compat.VerifiedCageProjection.contents(worker.getInventory().items.get(0)).equals(cagedData), "Cage roundtrip lost bee data");
@@ -121,7 +123,8 @@ public final class MachineLifecycleProbe {
 					worker = net.neoforged.neoforge.common.util.FakePlayerFactory.get(level, new com.mojang.authlib.GameProfile(owner, "MachineOwner"));
 					new com.ayoshiko.productivebeesgenesis.domainprobe.PlayerInventorySyncProbe(worker);
 					worker.setPos(fixture.pos().getX(), fixture.pos().getY(), fixture.pos().getZ());
-					oldMenu = new MachineMenu(83, worker.getInventory(), fixture.core(), UUID.randomUUID()); worker.containerMenu = oldMenu;
+					oldMenu = MachinePbUpgradeChecks.interfaceMenu(worker, fixture);
+					report.addProperty("interfaceSourceDistanceOwnerAndInstance", true);
 					heldAssets = fixture.core().assets; retainedWork = heldAssets.work(); retainedAccess = MachineWorkService.access(fixture.core()).orElseThrow();
 					oldBinding = fixture.core().handle.binding().orElseThrow();
 					level.setBlock(air(), Blocks.STONE.defaultBlockState(), 2);

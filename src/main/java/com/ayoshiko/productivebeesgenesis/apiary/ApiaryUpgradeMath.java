@@ -71,7 +71,7 @@ public final class ApiaryUpgradeMath {
 	}
 
 	/** 逐级累加顺序与独立蜂箱保持一致；数量由各自库存边界校验。 */
-	static float computeProductivityMultiplier(int alpha, int beta, int gamma, int omega) {
+	public static float computeProductivityMultiplier(int alpha, int beta, int gamma, int omega) {
 		double multiplier = 1.0D;
 		multiplier += (double) PbUpgradeType.PRODUCTIVITY.getProductivityFactor() * alpha;
 		multiplier += (double) PbUpgradeType.PRODUCTIVITY_2.getProductivityFactor() * beta;
@@ -81,7 +81,7 @@ public final class ApiaryUpgradeMath {
 	}
 
 	/** 独立蜂箱与网络封存能力共用同一饱和公式；不裁掉旧存档中超过安装上限的数量。 */
-	static float computePbTimeDivisor(int timeCount, int time2Count, float timeBonus) {
+	public static float computePbTimeDivisor(int timeCount, int time2Count, float timeBonus) {
 		long effectiveTimeUpgrades = SaturatingMath.saturatingAdd(
 				Math.max(0, timeCount), SaturatingMath.saturatingMultiply(Math.max(0, time2Count), 2));
 		if (Float.isNaN(timeBonus) || timeBonus <= 0.0f) return 1.0f;

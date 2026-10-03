@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 3；旧格式只迁入对应的空资产，损坏新格式绝不补缺失字段。 */
+/** 独立机器 schema 4；旧格式只迁入对应的空资产，损坏新格式绝不补缺失字段。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 3); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 4); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -35,7 +35,8 @@ public final class CombinedWorkCodec {
 		tag.put("jobs", jobs); tag.putInt("tankCapacity", work.buffer().tankCapacity());
 		tag.put("feeding", FeedingRecordCodec.encodeSlots(work.feeding()));
 		var upgrades = new CompoundTag(); upgrades.putLong("revision", work.upgrades().revision());
-		for (int i = 0; i < MachineUpgrades.SLOTS; i++) upgrades.putInt("slot" + i, work.upgrades().count(i));
+		for (int i = 0; i < MachineUpgrades.NATIVE_SLOTS; i++) upgrades.putInt("slot" + i, work.upgrades().count(i));
+		upgrades.put("apiary", pbCounts(work.upgrades().apiary())); upgrades.put("centrifuge", pbCounts(work.upgrades().centrifuge()));
 		tag.put("upgrades", upgrades);
 		tag.put("items", cells(work.buffer().items())); tag.put("fluids", cells(work.buffer().fluids())); return tag;
 	}
@@ -45,9 +46,9 @@ public final class CombinedWorkCodec {
 		var expected = new java.util.HashSet<>(Set.of("schema", "capacityVersion", "machine", "generation", "revision", "beeSlots", "lanes",
 				"energy", "energyCapacity", "bees", "jobs", "tankCapacity", "items", "fluids"));
 		if (schema >= 2) expected.add("feeding");
-		if (schema == 3) expected.add("upgrades");
+		if (schema >= 3) expected.add("upgrades");
 		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
-		if ((schema != 1 && schema != 2 && schema != 3) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+		if ((schema < 1 || schema > 4) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");
@@ -67,16 +68,32 @@ public final class CombinedWorkCodec {
 		var feeding = schema == 1 ? CombinedMachineWork.emptyFeeding(CombinedMachineCapacity.BEE_SLOTS)
 				: FeedingRecordCodec.decodeSlots(StrictNbt.list(tag, "feeding"), CombinedMachineCapacity.BEE_SLOTS, validateFeeding);
 		var upgrades = MachineUpgrades.EMPTY;
-		if (schema == 3) {
-			var raw = StrictNbt.compound(tag, "upgrades"); fields(raw, "revision", "slot0", "slot1", "slot2", "slot3");
+		if (schema >= 3) {
+			var raw = StrictNbt.compound(tag, "upgrades");
+			if (schema == 3) fields(raw, "revision", "slot0", "slot1", "slot2", "slot3");
+			else fields(raw, "revision", "slot0", "slot1", "slot2", "slot3", "apiary", "centrifuge");
 			var counts = new ArrayList<Integer>();
-			for (int i = 0; i < MachineUpgrades.SLOTS; i++) counts.add(StrictNbt.integer(raw, "slot" + i));
-			upgrades = new MachineUpgrades(StrictNbt.number(raw, "revision"), counts);
+			for (int i = 0; i < MachineUpgrades.NATIVE_SLOTS; i++) counts.add(StrictNbt.integer(raw, "slot" + i));
+			upgrades = new MachineUpgrades(StrictNbt.number(raw, "revision"), counts,
+					schema == 3 ? java.util.Map.of() : readPb(StrictNbt.compound(raw, "apiary")),
+					schema == 3 ? java.util.Map.of() : readPb(StrictNbt.compound(raw, "centrifuge")));
 		}
 		var work = new CombinedMachineWork(machine, StrictNbt.number(tag, "generation"), StrictNbt.number(tag, "revision"),
 				StrictNbt.integer(tag, "beeSlots"), StrictNbt.integer(tag, "lanes"), StrictNbt.number(tag, "energy"), StrictNbt.number(tag, "energyCapacity"),
 				bees, jobs, new FiniteProductBuffer(items, fluids, StrictNbt.integer(tag, "tankCapacity")), feeding, upgrades);
 		CombinedMachineCapacity.validate(work); return work;
+	}
+	private static CompoundTag pbCounts(java.util.Map<com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType, Integer> counts) {
+		var tag = new CompoundTag(); counts.forEach((type, count) -> tag.putInt(type.getId(), count)); return tag;
+	}
+	private static java.util.Map<com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType, Integer> readPb(CompoundTag tag) {
+		var counts = new java.util.EnumMap<com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType, Integer>(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.class);
+		for (var key : tag.getAllKeys()) {
+			var type = com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.byId(key);
+			if (type == null) throw new IllegalArgumentException("Unknown machine PB upgrade");
+			counts.put(type, StrictNbt.integer(tag, key));
+		}
+		return counts;
 	}
 	private static ListTag cells(List<FiniteProductBuffer.Cell> cells) {
 		var list = new ListTag();
