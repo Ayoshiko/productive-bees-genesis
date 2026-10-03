@@ -103,6 +103,7 @@ public final class NetworkClientProbe {
 		report.addProperty("upgradeWidgetsBothMembersNativePbAndConservation", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 		report.addProperty("upgradeBatchAndPreviewWidgets", error == null && ClientUpgradeProbe.complete() && ClientTerminalFixture.upgradesVerified);
 		report.addProperty("memberProxyWidgetsBothMembersDistanceAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.verified);
+		report.addProperty("dedicatedTerminalsTypedUpgradeSharedStockAndRevocation", error == null && ClientMemberProxyFixture.terminalsVerified);
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

@@ -60,11 +60,12 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	public void cancel() { check(); clear(); }
 
 	/** 重新查询会丢弃旧游标；两个遍历器中只有当前页面类型的一个存活。 */
-	public Page begin(Object authority, NetworkCheckpoint snapshot, Kind kind, long tick) {
-		check(); Objects.requireNonNull(authority); Objects.requireNonNull(snapshot); Objects.requireNonNull(kind);
+	public Page begin(Object authority, NetworkCheckpoint snapshot, Kind kind, long tick) { return begin(authority, snapshot, kind, tick, TerminalScope.ALL); }
+	public Page begin(Object authority, NetworkCheckpoint snapshot, Kind kind, long tick, TerminalScope scope) {
+		check(); Objects.requireNonNull(scope); Objects.requireNonNull(authority); Objects.requireNonNull(snapshot); Objects.requireNonNull(kind);
 		if (closed || tick < 0) return null;
 		clear(); this.authority = authority; identity = snapshot.identity(); openedAt = tick;
-		if (kind != Kind.PRODUCTS) members = snapshot.ownedMachines().activeValues().iterator();
+		if (kind != Kind.PRODUCTS) members = snapshot.ownedMachines().activeValues(scope.machine()).iterator();
 		else { ledger = snapshot.ledger(); products = ledger.balances().entrySet().iterator(); }
 		return advance(kind);
 	}

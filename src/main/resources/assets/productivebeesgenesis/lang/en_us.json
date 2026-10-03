@@ -1126,6 +1126,8 @@
   "productivebeesgenesis.guide.tooltip": "The built-in Productive Bees Genesis tutorial",
   "productivebeesgenesis.guide.landing": "Welcome to the Productive Bees Genesis guide. Read about setup, Myriad Creations, apiaries, centrifuges, upgrades, AE2 integration, filters, configuration, and troubleshooting.",
   "block.productivebeesgenesis.bee_network_core": "Apiculture Controller",
+  "block.productivebeesgenesis.bee_network_terminal": "Bee Management Terminal",
+  "block.productivebeesgenesis.centrifuge_network_terminal": "Centrifuge Management Terminal",
   "productivebeesgenesis.network.access.denied": "Only this controller's owner can manage access within 8 blocks.",
   "productivebeesgenesis.network.access.invalid": "Cannot change access: invalid target UUID or access data needs repair.",
   "productivebeesgenesis.network.access.list": "Controller guests (%s/%s): %s",

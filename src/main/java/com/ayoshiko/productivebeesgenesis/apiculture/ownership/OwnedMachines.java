@@ -11,17 +11,21 @@ public final class OwnedMachines {
 	private final Map<UUID, OwnedMachineRecord> records;
 	private final Map<Origin, UUID> positions;
 	private final Map<UUID, UUID> transfers;
+	private final Map<String, Map<Origin, UUID>> byMachine;
 	private final Object token = new Object();
 	private final Object previous;
-	private OwnedMachines(Map<UUID, OwnedMachineRecord> records, Map<Origin, UUID> positions, Map<UUID, UUID> transfers, Object previous) { this.records = records; this.positions = positions; this.transfers = transfers; this.previous = previous; }
+	private OwnedMachines(Map<UUID, OwnedMachineRecord> records, Map<Origin, UUID> positions, Map<UUID, UUID> transfers, Map<String, Map<Origin, UUID>> byMachine, Object previous) { this.records = records; this.positions = positions; this.transfers = transfers; this.byMachine = byMachine; this.previous = previous; }
 	public boolean hasTransfer(UUID transfer) { return transfers.containsKey(transfer); }
 	public OwnedMachineRecord get(UUID member) { return records.get(member); }
 	public OwnedMachineRecord at(Origin origin) { var member = positions.get(origin); return member == null ? null : records.get(member); }
 	public Collection<OwnedMachineRecord> values() { return records.values(); }
 	/** 调度发现只遍历当前保管成员，不反复扫描已交还的历史记录。 */
-	public Iterable<OwnedMachineRecord> activeValues() {
+	public Iterable<OwnedMachineRecord> activeValues() { return activeValues(null); }
+	/** 类型位置索引与资产根一起派生；翻页不扫描其它机器类型。 */
+	public Iterable<OwnedMachineRecord> activeValues(String machine) {
+		var selected = machine == null ? positions : byMachine.getOrDefault(machine, Map.of());
 		return () -> new Iterator<>() {
-			private final Iterator<UUID> ids = positions.values().iterator();
+			private final Iterator<UUID> ids = selected.values().iterator();
 			@Override public boolean hasNext() { return ids.hasNext(); }
 			@Override public OwnedMachineRecord next() { return records.get(ids.next()); }
 		};
@@ -35,7 +39,7 @@ public final class OwnedMachines {
 		if (!change.matches(records.get(member))) throw new IllegalArgumentException("Stale member upgrade exchange");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, change.candidate());
-		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
 	}
 	/** 付款证明绑定原蜂状态；允许执行器在空周期切换时间，不放宽通用 put。 */
 	public OwnedMachines applyBeeWork(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor.Result result) {
@@ -45,7 +49,7 @@ public final class OwnedMachines {
 				|| !result.matches(old.bees())) throw new IllegalArgumentException("Stale bee work");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, new OwnedMachineRecord(old.claim(), old.phase(), old.assets(), old.fingerprint(), "", result.candidate()));
-		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
 	}
 	/** 有限蜂笼交接只替换对应记录；原位置和机器交接收据沿用原根。 */
 	public OwnedMachines exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
@@ -53,7 +57,7 @@ public final class OwnedMachines {
 		var old = Objects.requireNonNull(records.get(member), "Missing bee owner");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, old.exchangeBee(change));
-		return new OwnedMachines(next.snapshot(), positions, transfers, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
 	}
 	public OwnedMachines put(OwnedMachineRecord record) {
 		var next = SnapshotRecords.fork(records, UUID::compareTo); var locations = SnapshotRecords.fork(positions, POSITIONS);
@@ -66,7 +70,26 @@ public final class OwnedMachines {
 			old.validateSuccessor(record);
 		}
 		if (old != null && old.phase() != OwnedMachineRecord.Phase.RETURNED) locations.remove(old.claim().origin());
-		add(next, locations, intents, record, false); return new OwnedMachines(next.snapshot(), locations.snapshot(), intents.snapshot(), token);
+		add(next, locations, intents, record, false);
+		Map<String, Map<Origin, UUID>> groups = byMachine;
+		boolean wasActive = old != null && old.phase() != OwnedMachineRecord.Phase.RETURNED;
+		boolean active = record.phase() != OwnedMachineRecord.Phase.RETURNED;
+		if (wasActive != active || wasActive && (!old.claim().origin().equals(record.claim().origin())
+				|| !old.claim().machine().equals(record.claim().machine()))) {
+			var changed = SnapshotRecords.fork(byMachine, String::compareTo);
+			if (wasActive) index(changed, old, false);
+			if (active) index(changed, record, true);
+			groups = changed.snapshot();
+		}
+		return new OwnedMachines(next.snapshot(), locations.snapshot(), intents.snapshot(), groups, token);
+	}
+	private static void index(SnapshotRecords<String, Map<Origin, UUID>> groups, OwnedMachineRecord record, boolean insert) {
+		var machine = record.claim().machine();
+		var existing = groups.get(machine);
+		var group = SnapshotRecords.fork(existing == null ? Map.of() : existing, POSITIONS);
+		if (insert) group.put(record.claim().origin(), record.claim().member()); else group.remove(record.claim().origin());
+		var snapshot = group.snapshot();
+		if (snapshot.isEmpty()) groups.remove(machine); else groups.put(machine, snapshot);
 	}
 	private static void add(SnapshotRecords<UUID, OwnedMachineRecord> values, SnapshotRecords<Origin, UUID> positions, SnapshotRecords<UUID, UUID> transfers, OwnedMachineRecord record, boolean restoring) {
 		var claim = record.claim();
@@ -83,8 +106,15 @@ public final class OwnedMachines {
 		private final SnapshotRecords<UUID, OwnedMachineRecord> records = new SnapshotRecords<>(UUID::compareTo);
 		private final SnapshotRecords<Origin, UUID> positions = new SnapshotRecords<>(POSITIONS);
 		private final SnapshotRecords<UUID, UUID> transfers = new SnapshotRecords<>(UUID::compareTo);
-		public void add(OwnedMachineRecord value) { OwnedMachines.add(records, positions, transfers, value, true); }
-		public OwnedMachines finish() { return new OwnedMachines(records.snapshot(), positions.snapshot(), transfers.snapshot(), null); }
+		private final SnapshotRecords<String, Map<Origin, UUID>> groups = new SnapshotRecords<>(String::compareTo);
+		public void add(OwnedMachineRecord value) {
+			OwnedMachines.add(records, positions, transfers, value, true);
+			if (value.phase() != OwnedMachineRecord.Phase.RETURNED) index(groups, value, true);
+		}
+		public OwnedMachines finish() {
+			// 索引构建计入逐条恢复预算；最终发布只冻结根，不再扫描全部成员。
+			return new OwnedMachines(records.snapshot(), positions.snapshot(), transfers.snapshot(), groups.snapshot(), null);
+		}
 	}
 	@Override public boolean equals(Object other) { return this == other || other instanceof OwnedMachines machines && records.equals(machines.records); }
 	@Override public int hashCode() { return records.hashCode(); }

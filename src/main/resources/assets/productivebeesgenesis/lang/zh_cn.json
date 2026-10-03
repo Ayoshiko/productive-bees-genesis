@@ -1126,6 +1126,8 @@
   "productivebeesgenesis.guide.tooltip": "资源蜜蜂：创世内置教程",
   "productivebeesgenesis.guide.landing": "欢迎阅读资源蜜蜂：创世指南。本书涵盖入门、万象创世蜜蜂、机械蜂箱、离心机、升级、AE2 联动、过滤器、配置与故障排查。",
   "block.productivebeesgenesis.bee_network_core": "蜂业控制核心",
+  "block.productivebeesgenesis.bee_network_terminal": "蜜蜂管理终端",
+  "block.productivebeesgenesis.centrifuge_network_terminal": "离心管理终端",
   "productivebeesgenesis.network.access.denied": "只有该核心所有者可在 8 格内管理访问权限。",
   "productivebeesgenesis.network.access.invalid": "无法修改访问权限：目标 UUID 无效或授权数据需要修复。",
   "productivebeesgenesis.network.access.list": "核心访客（%s/%s）：%s",

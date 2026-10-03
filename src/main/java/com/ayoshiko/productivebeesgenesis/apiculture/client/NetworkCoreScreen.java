@@ -46,12 +46,17 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	public NetworkCoreScreen(NetworkCoreMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); state = menu.clientState(); playerInventory = inventory;
 		imageWidth = WIDTH; imageHeight = HEIGHT;
-		if (menu.memberScoped()) tab = 3;
+		if (menu.memberScoped() || menu.scope() == TerminalScope.CENTRIFUGE) tab = 3;
+		else if (menu.dedicatedTerminal()) tab = 1;
 	}
-	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) { event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new); }
+	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) {
+		event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new);
+		event.register(NetworkContent.BEE_MENU.get(), NetworkCoreScreen::new);
+		event.register(NetworkContent.CENTRIFUGE_MENU.get(), NetworkCoreScreen::new);
+	}
 	@Override protected void init() {
 		super.init(); rebuild();
-		if (menu.memberScoped() && state.notice() == TerminalClientState.Notice.IDLE) refresh();
+		if ((menu.memberScoped() || menu.dedicatedTerminal()) && state.notice() == TerminalClientState.Notice.IDLE) refresh();
 	}
 	private Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network." + key, args); }
 	private Button button(Component label, int x, int y, int width, int height, Runnable action) {
@@ -64,7 +69,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private void rebuild() {
 		clearWidgets(); requests.clear(); management.clear(); production = null; upgradeInstall = null; upgradeRemove = null;
 		for (int i = 0; i < 4; i++) {
-			if (menu.memberScoped() && i != 3) continue;
+			if (!tabAvailable(i)) continue;
 			int page = i;
 			var control = addRenderableWidget(new NetworkGuiButton(leftPos + 2, topPos + 27 + i * 32, 24, 28,
 					tr("tab." + i), () -> switchTab(page), i == tab, i));
@@ -165,8 +170,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		var row = selectedRow(); return row == null ? null : row.upgrades().stream().filter(upgrade -> upgrade.choice() == upgradeChoice).findFirst().orElse(null);
 	}
 	private void cycleAmount() { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }
+	private boolean tabAvailable(int page) {
+		return menu.memberScoped() ? page == 3 : !menu.dedicatedTerminal() || page == 2 || page == 3 || page == 1 && menu.scope() == TerminalScope.APIARY;
+	}
 	private void switchTab(int page) {
-		if (menu.memberScoped() && page != 3) return;
+		if (!tabAvailable(page)) return;
 		if (!state.ready(Util.getMillis())) return;
 		tab = page; refreshAfterTake = false; selected = -1; confirmCage = false;
 		if (tab == 0) send(CANCEL, 0); else refresh();

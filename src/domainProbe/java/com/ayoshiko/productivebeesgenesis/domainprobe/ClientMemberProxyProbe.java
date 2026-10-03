@@ -19,7 +19,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class ClientMemberProxyProbe {
 	private static int step, observedStep = -1, nextServerTick;
 	private static long nextAt, stepStarted;
-	static boolean complete() { return step == 17; }
+	static boolean complete() { return step == 34; }
 	static boolean advance(Minecraft client) throws Exception {
 		long now = Util.getMillis();
 		if (observedStep != step) { observedStep = step; stepStarted = now; }
@@ -47,7 +47,29 @@ final class ClientMemberProxyProbe {
 			case 13 -> { interact(client, new BlockPos(8, 100, 8)); step++; }
 			case 14 -> { if (menu == null || screen == null || menu.memberScoped() || !menu.canManage()) return false; ClientMemberProxyFixture.done = true; step++; }
 			case 15 -> { if (!ClientMemberProxyFixture.verified) return false; step++; }
-			case 16 -> step++;
+			case 16 -> { ClientMemberProxyFixture.terminalsRequested = true; step++; }
+			case 17 -> { if (!ClientMemberProxyFixture.terminalsReady) return false; client.player.closeContainer(); step++; }
+			case 18 -> { interact(client, DedicatedTerminalChecks.BEE); step++; }
+			case 19 -> { if (!terminal(screen, menu, TerminalScope.APIARY)) return false; ClientTerminalProbe.press(screen, "tab.3"); step++; }
+			case 20 -> { if (!selectTerminal(screen, menu)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
+			case 21 -> { terminalResult(client, menu, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
+			case 22 -> { if (!selectTerminal(screen, menu)) return false; step++; }
+			case 23 -> { capture(client, "dedicated-bee-terminal"); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 24 -> { terminalResult(client, menu, 2); client.player.closeContainer(); step++; }
+			case 25 -> { interact(client, DedicatedTerminalChecks.CENTRIFUGE); step++; }
+			case 26 -> { if (!terminal(screen, menu, TerminalScope.CENTRIFUGE) || !selectTerminal(screen, menu)) return false;
+				ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
+			case 27 -> { terminalResult(client, menu, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
+			case 28 -> { if (!selectTerminal(screen, menu)) return false; step++; }
+			case 29 -> { capture(client, "dedicated-centrifuge-terminal"); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 30 -> { terminalResult(client, menu, 2); ClientTerminalProbe.press(screen, "tab.2"); step++; }
+			case 31 -> { require(menu.clientState().view() != null && menu.clientState().view().kind() == NetworkSelectionSession.Kind.PRODUCTS
+					&& !menu.clientState().view().rows().isEmpty(), "Dedicated terminal shared products missing");
+				screen.resize(client, 320, 240); ClientTerminalProbe.verifyLayout(screen, menu);
+				client.player.closeContainer(); step++; }
+			case 32 -> { interact(client, new BlockPos(8, 100, 8)); step++; }
+			case 33 -> { if (menu == null || screen == null || menu.dedicatedTerminal() || !menu.canManage()) return false;
+				ClientMemberProxyFixture.terminalsDone = true; if (!ClientMemberProxyFixture.terminalsVerified) return false; step++; }
 		}
 		return complete();
 	}
@@ -62,6 +84,25 @@ final class ClientMemberProxyProbe {
 			require(screen.children().stream().noneMatch(child -> child instanceof Button b && b.getMessage().getString().equals(text)), "Proxy exposed whole-core controls");
 		}
 		return screen.children().stream().anyMatch(child -> child instanceof Button b && b.getMessage().getString().equals(label) && b.active);
+	}
+	private static boolean terminal(NetworkCoreScreen screen, NetworkCoreMenu menu, TerminalScope scope) {
+		if (screen == null || menu == null || menu.clientState().view() == null) return false;
+		require(menu.scope() == scope && !menu.memberScoped() && !menu.canManage(), "Dedicated terminal role incorrect");
+		for (var row : menu.clientState().view().rows()) require(row.label().startsWith(scope.machine() + " @ "), "Dedicated terminal crossed type");
+		String overview = Component.translatable("screen.productivebeesgenesis.network.tab.0").getString();
+		require(screen.children().stream().noneMatch(child -> child instanceof Button b && b.getMessage().getString().equals(overview)), "Dedicated terminal exposed overview");
+		return true;
+	}
+	private static boolean selectTerminal(NetworkCoreScreen screen, NetworkCoreMenu menu) {
+		if (screen == null || menu == null || menu.clientState().view() == null) return false;
+		var view = menu.clientState().view(); require(view.kind() == NetworkSelectionSession.Kind.UPGRADES && view.rows().size() == 1, "Dedicated upgrade page missing");
+		var row = screen.children().stream().filter(child -> child instanceof Button b && b.getMessage().getString().startsWith("#1 ")).findFirst();
+		if (row.isEmpty()) return false; ((Button) row.get()).onPress(); return true;
+	}
+	private static void terminalResult(Minecraft client, NetworkCoreMenu menu, int count) {
+		require(menu != null && menu.dedicatedTerminal(), "Dedicated terminal closed during exchange");
+		ClientTerminalProbe.result(menu, TerminalReply.Status.MOVED, 1);
+		require(client.player.getInventory().getItem(6).getCount() == count, "Dedicated terminal inventory mismatch");
 	}
 	private static void result(Minecraft client, NetworkCoreMenu menu, int count) {
 		require(menu != null && menu.memberScoped(), "Proxy closed during member exchange"); ClientTerminalProbe.result(menu, TerminalReply.Status.MOVED, 1);

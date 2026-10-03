@@ -44,6 +44,54 @@ class NetworkSelectionSessionTest {
 			assertNull(session.beginMember(authority, current, selected.claim().member(), 8));
 		}
 	}
+	@Test void typedPagesKeepFrozenMembershipAndRebuildAfterRestore() {
+		var current = NetworkCheckpoint.empty(identity());
+		var bees = new java.util.HashSet<UUID>(); var centrifuges = new java.util.HashSet<UUID>();
+		OwnedMachineRecord returned = null;
+		for (int i = 0; i < 36; i++) {
+			var record = machine(current.identity(), i);
+			if (i % 2 == 0) {
+				var claim = record.claim();
+				record = new OwnedMachineRecord(new MemberClaim(claim.network(), claim.member(), claim.transfer(), claim.origin(),
+						TerminalScope.APIARY.machine()), record.phase(), record.assets(), record.fingerprint(), "");
+				bees.add(record.claim().member());
+			} else centrifuges.add(record.claim().member());
+			current = current.withOwnership(record);
+			if (i == 0) returned = record;
+		}
+		var authority = new Object();
+		try (var session = new NetworkSelectionSession()) {
+			var page = session.begin(authority, current, UPGRADES, 0, TerminalScope.APIARY);
+			current = current.withOwnership(returned.phase(OwnedMachineRecord.Phase.OWNED));
+			current = current.withOwnership(current.ownedMachines().get(returned.claim().member()).phase(OwnedMachineRecord.Phase.RETURNING));
+			current = current.withOwnership(current.ownedMachines().get(returned.claim().member()).phase(OwnedMachineRecord.Phase.RETURNED));
+			var seen = new java.util.HashSet<UUID>();
+			while (true) {
+				assertTrue(page.rows().size() <= NetworkSelectionSession.PAGE_SIZE);
+				for (var row : page.rows()) {
+					var member = (NetworkSelectionSession.MemberRow) row;
+					assertEquals(TerminalScope.APIARY.machine(), member.claim().machine());
+					assertTrue(seen.add(member.claim().member()));
+				}
+				if (!page.hasNext()) break;
+				page = session.next(authority, current, page.generation(), 1);
+			}
+			assertEquals(bees, seen);
+			var builder = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
+			current.ownedMachines().values().forEach(builder::add);
+			var restored = builder.finish();
+			var remaining = new java.util.HashSet<UUID>();
+			restored.activeValues(TerminalScope.APIARY.machine()).forEach(r -> remaining.add(r.claim().member()));
+			bees.remove(returned.claim().member()); assertEquals(bees, remaining);
+			remaining.clear(); restored.activeValues(TerminalScope.CENTRIFUGE.machine()).forEach(r -> remaining.add(r.claim().member()));
+			assertEquals(centrifuges, remaining); assertFalse(restored.activeValues("unknown").iterator().hasNext());
+		}
+		try (var session = new NetworkSelectionSession()) {
+			var stock = products(3);
+			assertEquals(3, session.begin(authority, stock, PRODUCTS, 0, TerminalScope.APIARY).rows().size());
+			assertEquals(3, session.begin(authority, stock, PRODUCTS, 0, TerminalScope.CENTRIFUGE).rows().size());
+		}
+	}
 	private static NetworkIdentity identity() {
 		return new NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 0,
 				new Origin("minecraft:overworld", 1, 64, 2));

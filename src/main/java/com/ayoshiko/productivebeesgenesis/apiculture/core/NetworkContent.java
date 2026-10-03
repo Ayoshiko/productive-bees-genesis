@@ -20,6 +20,16 @@ public final class NetworkContent {
 	public static final DeferredItem<BlockItem> CORE_ITEM = ITEMS.register("bee_network_core", () -> new BlockItem(CORE.get(), new Item.Properties()));
 	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<NetworkCoreBlockEntity>> CORE_TILE = TILES.register("bee_network_core", () -> BlockEntityType.Builder.of(NetworkCoreBlockEntity::new, CORE.get()).build(null));
 	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> CORE_MENU = MENUS.register("bee_network_core", () -> IMenuTypeExtension.create(NetworkCoreMenu::new));
+	public static final DeferredBlock<NetworkTerminalBlock> BEE_TERMINAL = BLOCKS.register("bee_network_terminal", () -> new NetworkTerminalBlock(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY));
+	public static final DeferredBlock<NetworkTerminalBlock> CENTRIFUGE_TERMINAL = BLOCKS.register("centrifuge_network_terminal", () -> new NetworkTerminalBlock(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE));
+	public static final DeferredItem<BlockItem> BEE_TERMINAL_ITEM = ITEMS.register("bee_network_terminal", () -> new BlockItem(BEE_TERMINAL.get(), new Item.Properties()));
+	public static final DeferredItem<BlockItem> CENTRIFUGE_TERMINAL_ITEM = ITEMS.register("centrifuge_network_terminal", () -> new BlockItem(CENTRIFUGE_TERMINAL.get(), new Item.Properties()));
+	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<NetworkTerminalBlockEntity>> TERMINAL_TILE = TILES.register("bee_network_terminal", () -> BlockEntityType.Builder.of(NetworkTerminalBlockEntity::new, BEE_TERMINAL.get(), CENTRIFUGE_TERMINAL.get()).build(null));
+	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> BEE_MENU = MENUS.register("bee_network_terminal", () -> IMenuTypeExtension.create((id, inventory, buffer) -> new NetworkCoreMenu(id, inventory, buffer, com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY)));
+	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> CENTRIFUGE_MENU = MENUS.register("centrifuge_network_terminal", () -> IMenuTypeExtension.create((id, inventory, buffer) -> new NetworkCoreMenu(id, inventory, buffer, com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE)));
+	static MenuType<NetworkCoreMenu> menu(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope scope) {
+		return switch (scope) { case ALL -> CORE_MENU.get(); case APIARY -> BEE_MENU.get(); case CENTRIFUGE -> CENTRIFUGE_MENU.get(); };
+	}
 	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); }
 	private NetworkContent() { }
 }

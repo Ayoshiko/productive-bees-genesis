@@ -13,6 +13,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final MemberUpgradeMenuAccess memberAccess;
 	private final boolean memberScoped;
+	private final NetworkTerminalAccess terminalAccess;
+	private final TerminalScope scope;
 	private final Player viewer;
 	private final UUID viewerId;
 	private final Object accessToken;
@@ -26,7 +28,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
-		super(NetworkContent.CORE_MENU.get(), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		this(id, inventory, buffer, TerminalScope.ALL);
+	}
+	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer, TerminalScope scope) {
+		super(NetworkContent.menu(scope), id); buffer.readBlockPos(); core = null; exchangeNetwork = null;
+		this.scope = scope; terminalAccess = null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = null;
 		terminalSession = buffer.readUUID();
 		memberAccess = null; memberScoped = buffer.readBoolean();
@@ -37,10 +43,19 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		this(id, inventory, core, UUID.randomUUID());
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session) {
-		this(id, inventory, core, session, null);
+		this(id, inventory, core, session, (MemberUpgradeMenuAccess) null);
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, MemberUpgradeMenuAccess memberAccess) {
-		super(NetworkContent.CORE_MENU.get(), id); this.core = core; exchangeNetwork = core.network();
+		this(id, inventory, core, session, memberAccess, null);
+	}
+	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, NetworkTerminalAccess terminalAccess) {
+		this(id, inventory, core, session, null, terminalAccess);
+	}
+	private NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session,
+			MemberUpgradeMenuAccess memberAccess, NetworkTerminalAccess terminalAccess) {
+		super(NetworkContent.menu(terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope()), id);
+		this.core = core; exchangeNetwork = core.network(); this.terminalAccess = terminalAccess;
+		scope = terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope();
 		this.memberAccess = memberAccess; memberScoped = memberAccess != null;
 		viewer = inventory.player; viewerId = viewer.getUUID(); accessToken = core.accessToken();
 		terminalSession = session; selections = new NetworkSelectionSession(session);
@@ -89,6 +104,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public boolean canUpgrade() { return data.get(29) != 0; }
 	public boolean canManage() { return data.get(28) != 0; }
 	public boolean memberScoped() { return memberScoped; }
+	public TerminalScope scope() { return scope; }
+	public boolean dedicatedTerminal() { return scope != TerminalScope.ALL; }
 	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
@@ -97,16 +114,16 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	@Override public boolean stillValid(Player player) {
 		return !closed && viewerId.equals(player.getUUID()) && (core == null || accessToken == core.accessToken()
-				&& (memberAccess == null ? core.allowed(player) : memberAccess.valid(player)));
+				&& (terminalAccess != null ? terminalAccess.valid(player) : memberAccess == null ? core.allowed(player) : memberAccess.valid(player)));
 	}
 	boolean upgradeAllowed(Player player) {
 		return core != null && stillValid(player) && core.permitsUpgrades(player);
 	}
 	boolean ownerAllowed(Player player) {
-		return core != null && stillValid(player) && core.owner() != null && core.owner().equals(player.getUUID());
+		return core != null && !dedicatedTerminal() && stillValid(player) && core.owner() != null && core.owner().equals(player.getUUID());
 	}
 	@Override public boolean clickMenuButton(Player player, int id) {
-		if (memberScoped || core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
+		if (memberScoped || dedicatedTerminal() || core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
 		if (id == 0) { core.requestRebuild(); return true; }
 		if (id == 1 || id == 2) return core.ownership().command(id == 1);
 		if (id == 3) return core.setProductionRunning(!core.productionRunning());
@@ -134,7 +151,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (generation != 0 && (selections.page() == null || selections.page().kind() != kind)) return null;
 		var authority = core.ownership().readyAuthority(); if (authority == null) return null;
 		long tick = player.serverLevel().getGameTime();
-		return generation == 0 ? memberAccess == null ? selections.begin(authority, authority.checkpoint(), kind, tick)
+		return generation == 0 ? memberAccess == null ? selections.begin(authority, authority.checkpoint(), kind, tick, scope)
 				: selections.beginMember(authority, authority.checkpoint(), memberAccess.member(), tick)
 				: selections.next(authority, authority.checkpoint(), generation, tick);
 	}
@@ -155,6 +172,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (exchangeNetwork == null && core.network() != null) exchangeNetwork = core.network();
 		if (exchangeNetwork == null || !exchangeNetwork.equals(core.network())) return null;
 		return core;
+	}
+	private boolean acceptsMember(UUID member) {
+		if (scope == TerminalScope.ALL) return true;
+		var authority = core.ownership().readyAuthority();
+		var record = authority == null ? null : authority.checkpoint().ownedMachines().get(member);
+		return record != null && scope.accepts(record.claim().machine());
 	}
 	public UUID terminalSession() { return terminalSession; }
 	public TerminalReply terminalReply() { return terminalReply; }
@@ -188,7 +211,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	public CoreFeedingExchange.Result exchangeFeeding(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int feedingSlot, long expectedRevision, int inventorySlot, int requested, CoreFeedingExchange.Action action, boolean simulate) {
-		if (memberScoped || exchangeCore(player) == null || exchanging) return new CoreFeedingExchange.Result(CoreFeedingExchange.Status.UNAVAILABLE, 0);
+		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return new CoreFeedingExchange.Result(CoreFeedingExchange.Status.UNAVAILABLE, 0);
 		exchanging = true;
 		try { return CoreFeedingExchange.exchange(this, player, member, feedingSlot, expectedRevision, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -205,7 +228,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		if (exchangeCore(player) == null || exchanging || !acceptsMember(member) || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
 		exchanging = true;
 		try { return MemberUpgradeService.exchange(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -214,7 +237,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public MemberUpgradeService.Result exchangePbUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {
-		if (exchangeCore(player) == null || exchanging || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		if (exchangeCore(player) == null || exchanging || !acceptsMember(member) || memberAccess != null && !memberAccess.member().equals(member)) return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
 		exchanging = true;
 		try { return MemberUpgradeService.exchangePb(this, player, member, expectedRevision, upgrade, inventorySlot, requested, action, simulate); }
 		finally { exchanging = false; }
@@ -223,7 +246,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public CoreBeeCageExchange.Result exchangeBee(net.minecraft.server.level.ServerPlayer player, java.util.UUID member,
 			int beeSlot, long expectedRevision, java.util.UUID expectedBee, int inventorySlot,
 			CoreBeeCageExchange.Action action, boolean simulate) {
-		if (memberScoped || exchangeCore(player) == null || exchanging) return CoreBeeCageExchange.result(CoreBeeCageExchange.Status.UNAVAILABLE);
+		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return CoreBeeCageExchange.result(CoreBeeCageExchange.Status.UNAVAILABLE);
 		exchanging = true;
 		try {
 			return CoreBeeCageExchange.exchange(this, player, member, beeSlot, expectedRevision,
