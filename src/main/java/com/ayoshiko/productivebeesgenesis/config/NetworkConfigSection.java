@@ -13,6 +13,9 @@ public final class NetworkConfigSection {
 	public final ModConfigSpec.IntValue runtimeMicros;
 	public final ModConfigSpec.IntValue totalSteps;
 	public final ModConfigSpec.IntValue totalMicros;
+	public final ModConfigSpec.IntValue wirelessRange;
+	public final ModConfigSpec.IntValue wirelessTickFe;
+	public final ModConfigSpec.IntValue wirelessCommandFe;
 	NetworkConfigSection(ModConfigSpec.Builder builder) {
 		builder.translation("productivebeesgenesis.configuration.bee_network").push("bee_network");
 		enabled = builder.translation("productivebeesgenesis.configuration.bee_network.enabled").comment("启用蜂业控制核心；关闭后托管成员继续暂停，不自动恢复独立生产。").define("enabled", false);
@@ -24,6 +27,9 @@ public final class NetworkConfigSection {
 		runtimeMicros = builder.translation("productivebeesgenesis.configuration.bee_network.runtimeMicros").comment("全服务器生产调度软时间预算，单位微秒；单步不可抢占。").defineInRange("runtimeMicros", 2000, 100, 10000);
 		topologyNodes = builder.translation("productivebeesgenesis.configuration.bee_network.topologyNodes").comment("每个服务器 tick 共享的拓扑候选节点预算。").defineInRange("topologyNodes", 256, 1, 4096);
 		topologyMicros = builder.translation("productivebeesgenesis.configuration.bee_network.topologyMicros").comment("拓扑扫描软时间预算，单位微秒；单次节点读取不可抢占。").defineInRange("topologyMicros", 2000, 100, 10000);
+		wirelessRange = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessRange").comment("无线终端与同维度已加载核心的最大距离，单位方块；不加载区块。研发默认 64，待平衡测试。 ").defineInRange("wirelessRange", 64, 8, 1024);
+		wirelessTickFe = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessTickFe").comment("无线菜单每真实 tick 的设备 FE；不补扣离线时间。 ").defineInRange("wirelessTickFe", 1, 0, 1000);
+		wirelessCommandFe = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessCommandFe").comment("通过会话及速率检查的无线请求费用，含查询及业务拒绝；模拟不收费。 ").defineInRange("wirelessCommandFe", 8, 0, 10000);
 		builder.pop();
 	}
 }

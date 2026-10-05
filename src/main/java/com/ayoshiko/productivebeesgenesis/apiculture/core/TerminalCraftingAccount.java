@@ -31,17 +31,21 @@ public final class TerminalCraftingAccount extends SavedData {
 	private UUID owner;
 	private final ResourceLocation dimension;
 	private final BlockPos position;
+	private final UUID device;
 	private final CompoundTag quarantined;
 	private State state;
 	private boolean persisted, busy;
 	private String failure = "";
 	private Path boundPath;
 	private TerminalCraftingAccount(UUID owner, ResourceLocation dimension, BlockPos position) {
-		this.owner = Objects.requireNonNull(owner); this.dimension = dimension; this.position = position.immutable(); quarantined = null;
+		this(owner, dimension, position, null);
+	}
+	private TerminalCraftingAccount(UUID owner, ResourceLocation dimension, BlockPos position, UUID device) {
+		this.owner = Objects.requireNonNull(owner); this.dimension = dimension; this.position = position == null ? null : position.immutable(); this.device = device; quarantined = null;
 		state = new State(0, Collections.nCopies(9, ItemStack.EMPTY), ItemStack.EMPTY, false); setDirty();
 	}
 	private TerminalCraftingAccount(CompoundTag raw, RuntimeException failure) {
-		owner = null; dimension = null; position = null; quarantined = raw.copy(); this.failure = failure.toString();
+		owner = null; dimension = null; position = null; device = null; quarantined = raw.copy(); this.failure = failure.toString();
 	}
 	public static String name(ResourceLocation dimension, BlockPos pos) {
 		return "pbg_terminal_crafting_" + UUID.nameUUIDFromBytes((dimension + "/" + pos.asLong()).getBytes(StandardCharsets.UTF_8));
@@ -68,7 +72,22 @@ public final class TerminalCraftingAccount extends SavedData {
 		terminal.referenceCrafting(); return account;
 	}
 	public boolean matches(UUID owner, ResourceLocation dimension, BlockPos pos) {
-		check(); return quarantined == null && this.owner.equals(owner) && this.dimension.equals(dimension) && position.equals(pos);
+		check(); return quarantined == null && device == null && this.owner.equals(owner) && this.dimension.equals(dimension) && position.equals(pos);
+	}
+	public static String wirelessName(UUID device) { return "pbg_wireless_crafting_" + device; }
+	/** 已有设备缺失文件时拒绝；只有首次绑定新 UUID 可以建立空账户。 */
+	static TerminalCraftingAccount wireless(net.minecraft.server.level.ServerPlayer player, UUID device, UUID owner, boolean create) {
+		if (!player.server.isSameThread()) throw new IllegalStateException("Crafting accounts belong to the server thread");
+		var name = wirelessName(device); var storage = player.server.overworld().getDataStorage();
+		var factory = new SavedData.Factory<TerminalCraftingAccount>(() -> { throw new IllegalStateException("Explicit account creation required"); }, TerminalCraftingAccount::load, null);
+		var account = storage.get(factory, name);
+		if (account == null) {
+			var file = player.server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(name + ".dat");
+			if (!create || !Files.notExists(file)) throw new IllegalStateException("Missing or unreadable wireless account: " + name);
+			account = new TerminalCraftingAccount(owner, null, null, device); storage.set(name, account); account.save(file.toFile(), player.registryAccess());
+		}
+		if (!account.available() || !device.equals(account.device) || !owner.equals(account.owner)) return null;
+		return account;
 	}
 	public boolean available() { check(); return persisted && quarantined == null && failure.isEmpty(); }
 	public State state() { check(); return state; }
@@ -80,9 +99,12 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	public static TerminalCraftingAccount load(CompoundTag tag, HolderLookup.Provider registries) {
 		try {
-			if (!tag.getAllKeys().equals(Set.of("schema", "owner", "dimension", "position", "revision", "grid", "pending", "uncertain"))
-					|| StrictNbt.integer(tag, "schema") != 1) throw new IllegalArgumentException("Invalid crafting account schema");
-			var result = new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), ResourceLocation.parse(StrictNbt.string(tag, "dimension")), BlockPos.of(StrictNbt.number(tag, "position")));
+			int schema = StrictNbt.integer(tag, "schema");
+			if (schema != 1 && schema != 2 || !tag.getAllKeys().equals(schema == 1
+					? Set.of("schema", "owner", "dimension", "position", "revision", "grid", "pending", "uncertain")
+					: Set.of("schema", "owner", "device", "revision", "grid", "pending", "uncertain"))) throw new IllegalArgumentException("Invalid crafting account schema");
+			var result = schema == 1 ? new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), ResourceLocation.parse(StrictNbt.string(tag, "dimension")), BlockPos.of(StrictNbt.number(tag, "position")))
+					: new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), null, null, StrictNbt.uuid(tag, "device"));
 			var list = StrictNbt.list(tag, "grid"); if (list.size() != 9) throw new IllegalArgumentException("Invalid crafting grid length");
 			var grid = new ArrayList<ItemStack>(9); for (var raw : list) grid.add(stack((CompoundTag) raw, registries));
 			result.state = new State(StrictNbt.number(tag, "revision"), grid, stack(StrictNbt.compound(tag, "pending"), registries), StrictNbt.bool(tag, "uncertain"));
@@ -96,8 +118,9 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	@Override public CompoundTag save(CompoundTag ignored, HolderLookup.Provider registries) {
 		check(); if (quarantined != null) return quarantined.copy();
-		var tag = new CompoundTag(); tag.putInt("schema", 1); tag.putUUID("owner", owner); tag.putString("dimension", dimension.toString());
-		tag.putLong("position", position.asLong()); tag.putLong("revision", state.revision()); tag.putBoolean("uncertain", state.uncertain());
+		var tag = new CompoundTag(); tag.putInt("schema", device == null ? 1 : 2); tag.putUUID("owner", owner);
+		if (device == null) { tag.putString("dimension", dimension.toString()); tag.putLong("position", position.asLong()); } else tag.putUUID("device", device);
+		tag.putLong("revision", state.revision()); tag.putBoolean("uncertain", state.uncertain());
 		var grid = new ListTag(); state.grid().forEach(stack -> grid.add(stack.saveOptional(registries))); tag.put("grid", grid);
 		tag.put("pending", state.pending().saveOptional(registries)); return tag;
 	}

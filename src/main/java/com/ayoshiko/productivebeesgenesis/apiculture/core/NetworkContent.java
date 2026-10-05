@@ -27,17 +27,26 @@ public final class NetworkContent {
 	public static final DeferredItem<BlockItem> CENTRIFUGE_TERMINAL_ITEM = ITEMS.register("centrifuge_network_terminal", () -> new BlockItem(CENTRIFUGE_TERMINAL.get(), new Item.Properties()));
 	public static final DeferredBlock<NetworkTerminalBlock> COMBINED_TERMINAL = BLOCKS.register("combined_network_terminal", () -> new NetworkTerminalBlock(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY, true));
 	public static final DeferredItem<BlockItem> COMBINED_TERMINAL_ITEM = ITEMS.register("combined_network_terminal", () -> new BlockItem(COMBINED_TERMINAL.get(), new Item.Properties()));
+	public static final DeferredItem<WirelessTerminalItem> WIRELESS_BEE = ITEMS.register("wireless_bee_terminal", () -> new WirelessTerminalItem(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY, false));
+	public static final DeferredItem<WirelessTerminalItem> WIRELESS_CENTRIFUGE = ITEMS.register("wireless_centrifuge_terminal", () -> new WirelessTerminalItem(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE, false));
+	public static final DeferredItem<WirelessTerminalItem> WIRELESS_COMBINED = ITEMS.register("wireless_combined_terminal", () -> new WirelessTerminalItem(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY, true));
 	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<NetworkTerminalBlockEntity>> TERMINAL_TILE = TILES.register("bee_network_terminal", () -> BlockEntityType.Builder.of(NetworkTerminalBlockEntity::new, BEE_TERMINAL.get(), CENTRIFUGE_TERMINAL.get(), COMBINED_TERMINAL.get()).build(null));
 	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> BEE_MENU = MENUS.register("bee_network_terminal", () -> IMenuTypeExtension.create((id, inventory, buffer) -> new NetworkCoreMenu(id, inventory, buffer, com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY)));
 	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> CENTRIFUGE_MENU = MENUS.register("centrifuge_network_terminal", () -> IMenuTypeExtension.create((id, inventory, buffer) -> new NetworkCoreMenu(id, inventory, buffer, com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE)));
 	public static final DeferredHolder<MenuType<?>, MenuType<NetworkCoreMenu>> COMBINED_MENU = MENUS.register("combined_network_terminal", () -> IMenuTypeExtension.create((id, inventory, buffer) -> new NetworkCoreMenu(id, inventory, buffer, com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY, true)));
 	public static final DeferredHolder<net.minecraft.world.item.crafting.RecipeSerializer<?>, net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer<CombinedTerminalRecipe>> COMBINE_RECIPE = RECIPES.register("combine_network_terminals", () -> new net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer<>(CombinedTerminalRecipe::new));
+	public static final DeferredHolder<net.minecraft.world.item.crafting.RecipeSerializer<?>, net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer<WirelessTerminalRecipe>> WIRELESS_RECIPE = RECIPES.register("wireless_network_terminal", () -> new net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer<>(WirelessTerminalRecipe::new));
 	static MenuType<NetworkCoreMenu> menu(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope scope) {
 		return switch (scope) { case ALL -> CORE_MENU.get(); case APIARY -> BEE_MENU.get(); case CENTRIFUGE -> CENTRIFUGE_MENU.get(); };
 	}
 	static MenuType<NetworkCoreMenu> menu(com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope scope, boolean combined) {
 		return combined ? COMBINED_MENU.get() : menu(scope);
 	}
-	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); RECIPES.register(bus); }
+	public static void register(IEventBus bus) {
+		BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); RECIPES.register(bus);
+		bus.addListener((net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent event) -> event.registerItem(
+				net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.ITEM, (stack, context) -> WirelessTerminalItem.energyStorage(stack),
+				WIRELESS_BEE.get(), WIRELESS_CENTRIFUGE.get(), WIRELESS_COMBINED.get()));
+	}
 	private NetworkContent() { }
 }

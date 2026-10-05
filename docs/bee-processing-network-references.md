@@ -354,3 +354,10 @@ g1b 继续采用上述网络 worktree 的独立机交互原则，核对 `Managed
 读取本地 `build/moddev/artifacts/neoforge-21.1.216-sources.jar` 中 Minecraft 1.21.1 的 `CraftingMenu.slotChangedCraftingGrid`、`CraftingInput.ofPositioned`、`ResultSlot.onTake/checkTakeAchievements`、`RecipeCraftingHolder`、`RecipeManager` 和 `SavedData.save`。采用裁剪输入后的原网格偏移、当前配方／功能开关与受限合成检查、容器余料、制作回调及配方奖励；不采用 `ResultSlot` 在背包满时的掉落兜底，也不调用 `CraftingMenu.removed` 的清空材料路径。地图制作回调会改变新结果的组件和地图身份，因此先记录一次已付费结果，再调用原生／NeoForge 回调并交付，不能只通知一份与实际输出无关的副本。
 
 持久化复核本 worktree `MachineWorkService.attach` 与 `MachineAssets`：原生 SavedData 读取失败也可能返回 null，不能据此新建空资产；NeoForge 原生保存会排后台 IO 并清 dirty，因此有限账户采用同源的服务器线程捕获、独立临时文件、force 和原子替换，成功才确认，失败保留状态。合成文件按维度／位置直接定位，BE 只记曾引用标志，菜单保留有界展示副本；无全服账户枚举、额外可选依赖或后台世界访问。完整组件与账户所有者在加载／交付时核对，损坏数据保留原始 NBT 并隔离，非空账户不能改所属所有者。
+
+<a id="s13-28"></a>
+### 13.28 片状终端与无线双宿主（2026-10-05）
+
+本地 AE2 19.2.17 的 `AbstractTerminalPart`／`AbstractDisplayPart` 及 AE2WT `WTMenuHost` 路径与版本沿[13.24](#s13-24)：采用薄片显示面板、真实设备定位与功能分工；外形使用本项目三张终端纹理，独立六面方块模型和同尺寸碰撞框，不采用 AE2 宿主框架或掉落材料路径。无线像素图由本项目终端正面缩放并新增手持机壳／天线生成，生成源在忽略的 `build/generate-wireless-art.py`；未复制外部 PNG。再次核对 `consumeIdlePower(SIMULATE)` 会执行 recharge 的上游路径，继续不采用，其模拟不能作为本项目收费参考。
+
+复核当前 worktree 的 `MachineControllerEntity`、`MachinePartEntity`、`MachineMenu`、`MachineWorkService` 和 `MachineDirectory.Binding`：内部 CORE 解析已形成控制器，远程菜单保留原绑定实例与机器 generation，操作仍经 MachineExchange 的权威候选与守恒提交。只扩大合法访问来源，不创建第二机器、网络或物理库存，不提前实施 M05 联网。设备材料沿[13.27](#s13-27)同一 SavedData 保存路径新增 device UUID 的 schema 2，位置账户继续 schema 1；网络 checkpoint 仍为 9。NeoForge 21.1.216 编译与实际物品能力注册使用 `Capabilities.EnergyStorage.ITEM`／`IEnergyStorage`，充能的 simulate 分支不创建绑定或改动数据。

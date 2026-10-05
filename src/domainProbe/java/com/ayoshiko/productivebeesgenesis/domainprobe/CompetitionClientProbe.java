@@ -59,6 +59,9 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (WirelessProbe.enabled() && stage >= 330) {
+                var reply = WirelessClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (CraftingProbe.enabled() && (stage >= 300 || stage == 80)) {
                 if (client.player.containerMenu instanceof NetworkCoreMenu menu) session = menu.terminalSession().toString();
                 var reply = CraftingClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;

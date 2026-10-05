@@ -78,6 +78,7 @@ public final class CompetitionServerProbe {
         if (!enabled() || !(event.getEntity() instanceof ServerPlayer player) || failure != null) return;
         try {
             require(!(player instanceof FakePlayer) && IDS.contains(player.getUUID()), "Unexpected login");
+            if (WirelessProbe.visualOnly()) player.connection.teleport(player.getUUID().equals(OWNER) ? 8.5 : 9.5, 100, 10.5, 0, 0);
             logins++;
             if (logins > 2) require(!reader() && player.getUUID().equals(GUEST) && disconnected && !reconnected, "Unexpected repeat login");
         } catch (Exception error) { fail(player.server, error); }
@@ -111,6 +112,7 @@ public final class CompetitionServerProbe {
                     if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
                     if (CraftingProbe.enabled()) CraftingProbe.open(core, players, true); else openBoth(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
+                    if (WirelessProbe.visualOnly()) { WirelessProbe.advance(core, players, 348, Map.of()); begin(server, 349); return; }
                     begin(server, 80);
                 } else { core.openTerminal(owner); begin(server, 0); }
                 return;
@@ -123,6 +125,11 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (WirelessProbe.enabled() && stage >= 330) {
+                if (!WirelessProbe.ready(stage)) return;
+                int next = WirelessProbe.advance(core, players, stage, acks); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (CraftingProbe.enabled() && stage >= 300) {
                 int next = CraftingProbe.advance(core, players, stage, acks); noDrops(server);
                 if (next < 0) finish(server); else begin(server, next); return;

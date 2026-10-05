@@ -13,7 +13,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final NetworkCoreBlockEntity core;
 	private final MemberUpgradeMenuAccess memberAccess;
 	private final boolean memberScoped;
-	private final NetworkTerminalAccess terminalAccess;
+	private final TerminalMenuAccess terminalAccess;
 	private final TerminalScope scope;
 	private final boolean combinedTerminal;
 	private final Player viewer;
@@ -45,7 +45,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		memberAccess = null; memberScoped = buffer.readBoolean();
 		this.scope = combined ? buffer.readEnum(TerminalScope.class) : scope;
 		if (combined && (memberScoped || this.scope == TerminalScope.ALL)) throw new IllegalArgumentException("Invalid combined terminal mode");
-		selections = null; data = new SimpleContainerData(35); addDataSlots(data);
+		selections = null; data = new SimpleContainerData(38); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory); addCrafting();
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
@@ -57,11 +57,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, MemberUpgradeMenuAccess memberAccess) {
 		this(id, inventory, core, session, memberAccess, null);
 	}
-	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, NetworkTerminalAccess terminalAccess) {
+	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session, TerminalMenuAccess terminalAccess) {
 		this(id, inventory, core, session, null, terminalAccess);
 	}
 	private NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core, UUID session,
-			MemberUpgradeMenuAccess memberAccess, NetworkTerminalAccess terminalAccess) {
+			MemberUpgradeMenuAccess memberAccess, TerminalMenuAccess terminalAccess) {
 		super(NetworkContent.menu(terminalAccess == null ? TerminalScope.ALL : terminalAccess.scope(), terminalAccess != null && terminalAccess.combined()), id);
 		this.core = core; exchangeNetwork = core.network(); this.terminalAccess = terminalAccess;
 		combinedTerminal = terminalAccess != null && terminalAccess.combined();
@@ -71,6 +71,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index == 35) return terminalAccess instanceof WirelessTerminalAccess ? 1 : 0;
+				if (index >= 36) return terminalAccess == null ? 0 : (terminalAccess.energy() >>> ((index - 36) * 16)) & 65535;
 				if (index == 34) return crafting == null ? 0 : crafting.flag();
 				if (index >= 30) return crafting == null ? 0 : (int) (crafting.generation() >>> ((index - 30) * 16)) & 65535;
 				if (index == 29) return NetworkCoreMenu.this.upgradeAllowed(viewer) ? 1 : 0;
@@ -91,7 +93,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 35; }
+			@Override public int getCount() { return 38; }
 		}; addDataSlots(data); addInventory(inventory); addCrafting();
 	}
 	private void addCrafting() {
@@ -153,6 +155,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public TerminalScope scope() { return scope; }
 	public boolean dedicatedTerminal() { return scope != TerminalScope.ALL; }
 	public boolean combinedTerminal() { return combinedTerminal; }
+	public boolean wirelessTerminal() { return data.get(35) != 0; }
+	public int wirelessEnergy() { return (data.get(36) & 65535) | (data.get(37) & 65535) << 16; }
 	public int runtimeStatus() { return data.get(27); }
 	public long energy(boolean capacity) {
 		long result = 0; int start = capacity ? 22 : 18;
@@ -172,7 +176,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	@Override public boolean clickMenuButton(Player player, int id) {
 		if (id == 10 || id == 11) {
 			if (!combinedTerminal || terminalAccess == null || player.containerMenu != this || !stillValid(player)
-					|| !(player instanceof net.minecraft.server.level.ServerPlayer server) || !TerminalPayloads.allow(server)) return false;
+					|| !(player instanceof net.minecraft.server.level.ServerPlayer server) || !TerminalPayloads.allow(server) || !terminalAccess.charge(player, true)) return false;
 			return terminalAccess.switchMode(server, id == 10 ? TerminalScope.APIARY : TerminalScope.CENTRIFUGE);
 		}
 		if (memberScoped || dedicatedTerminal() || core == null || player.containerMenu != this || !stillValid(player) || !core.ownerAllowed(player)) return false;
@@ -192,6 +196,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		if (clientState != null) clientState.close();
 	}
 	@Override public void broadcastChanges() {
+		if (core != null && terminalAccess != null && !closed && (!stillValid(viewer) || !terminalAccess.charge(viewer, false))) {
+			if (viewer instanceof net.minecraft.server.level.ServerPlayer player && player.containerMenu == this) { player.closeContainer(); return; }
+		}
 		if (core != null && !stillValid(viewer)) {
 			if (viewer instanceof net.minecraft.server.level.ServerPlayer player) cancelSubscription(player);
 			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; return;
@@ -257,7 +264,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				|| automaticBee != null && request.operation() != TerminalRequest.Operation.CANCEL
 				|| !terminalSequence.begin(request.sequence())) return null;
 		try {
-			if (!TerminalPayloads.allow(player)) return null;
+			if (!TerminalPayloads.allow(player) || terminalAccess != null && !terminalAccess.charge(player, true)) return null;
 			if (memberScoped && !memberOperation(request.operation()))
 				return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
 			var reply = CoreTerminalCommands.execute(this, player, request, selections);
@@ -274,7 +281,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
 				|| !terminalSequence.begin(request.sequence())) return null;
 		try {
-			if (!TerminalPayloads.allow(player)) return null;
+			if (!TerminalPayloads.allow(player) || terminalAccess != null && !terminalAccess.charge(player, true)) return null;
 			if (crafting != null) crafting.pause();
 			if (subscription == null) subscription = new CoreTerminalSubscription(this, selections);
 			boolean accepted = subscription.request(request);

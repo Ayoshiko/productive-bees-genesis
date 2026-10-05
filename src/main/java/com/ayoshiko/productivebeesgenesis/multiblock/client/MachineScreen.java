@@ -20,6 +20,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = "productivebeesgenesis", value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private final List<Button> actions = new ArrayList<>();
+	private final java.util.Map<Button, int[]> scopes = new java.util.HashMap<>();
 	private int inventorySlot;
 	private boolean upgrades;
 	private int upgradePage;
@@ -35,7 +36,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) { event.register(MachineContent.MENU.get(), MachineScreen::new); }
 	private static Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.machine." + key, args); }
 	@Override protected void init() {
-		super.init(); actions.clear();
+		super.init(); actions.clear(); scopes.clear();
 		addRenderableWidget(Button.builder(tr(upgrades ? "bees_tab" : "upgrades_tab"), button -> { upgrades = !upgrades; rebuildWidgets(); })
 				.bounds(leftPos + 177, topPos + 4, 46, 14).build()).setTooltip(Tooltip.create(tr("upgrade_scope")));
 		if (upgrades) {
@@ -43,7 +44,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 				int slot = UPGRADE_STARTS[upgradePage] + row, operation = 4 + action; String key = action == 0 ? "upgrade_in" : "upgrade_out";
 				var button = addRenderableWidget(Button.builder(tr(key), ignored -> send(operation, slot))
 						.bounds(leftPos + 151 + action * 36, topPos + 27 + row * 21, 34, 18).build());
-				button.setTooltip(Tooltip.create(Component.empty().append(upgradeName(slot)).append("\n").append(tr(key + "_hint")))); actions.add(button);
+				button.setTooltip(Tooltip.create(Component.empty().append(upgradeName(slot)).append("\n").append(tr(key + "_hint")))); actions.add(button); scopes.put(button, new int[]{operation, slot});
 			}
 			addRenderableWidget(Button.builder(Component.literal("<"), ignored -> { upgradePage--; rebuildWidgets(); })
 					.bounds(leftPos + 6, topPos + 109, 18, 12).build()).active = upgradePage > 0;
@@ -56,15 +57,15 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 			int slot = row, operation = action;
 			var button = addRenderableWidget(Button.builder(tr(labels[action]), ignored -> send(operation, slot))
 					.bounds(leftPos + 79 + action * 36, topPos + 24 + row * 16, 34, 15).build());
-			button.setTooltip(Tooltip.create(tr(labels[action] + "_hint"))); actions.add(button);
+			button.setTooltip(Tooltip.create(tr(labels[action] + "_hint"))); actions.add(button); scopes.put(button, new int[]{operation, slot});
 		}
 	}
 	private void send(int action, int slot) {
-		if (sequence > menu.acknowledged()) return;
+		if (sequence > menu.acknowledged() || !menu.allowsAction(action, slot)) return;
 		PacketDistributor.sendToServer(new MachineMenuRequest(menu.containerId, menu.session(), ++sequence, menu.viewRevision(), action, slot, inventorySlot, hasShiftDown() ? 64 : 1));
 	}
 	@Override protected void containerTick() {
-		super.containerTick(); for (var button : actions) button.active = sequence <= menu.acknowledged();
+		super.containerTick(); for (var button : actions) { var scope = scopes.get(button); button.active = sequence <= menu.acknowledged() && menu.allowsAction(scope[0], scope[1]); }
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
 		if (button == 0) for (var slot : menu.slots) if (isHovering(slot.x, slot.y, 16, 16, x, y)) { inventorySlot = slot.getContainerSlot(); return true; }
@@ -96,10 +97,10 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		}
 	}
 	@Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
-		g.drawString(font, title, 7, 7, 0xffead5a7, false);
+		g.drawString(font, font.plainSubstrByWidth(title.getString(), 164), 7, 7, 0xffead5a7, false);
 		g.drawString(font, tr("energy", menu.energy(), menu.jobs()), 7, 16, 0xffc3c8cc, false);
 		g.drawString(font, tr("status." + menu.status()), 7, 123, 0xffe1b96b, false);
-		g.drawString(font, tr("inventory_hint"), 7, 133, 0xffc3c8cc, false);
+		g.drawString(font, menu.wireless() ? Component.translatable("screen.productivebeesgenesis.network.terminal.wireless_energy", menu.deviceEnergy()) : tr("inventory_hint"), 7, 133, 0xffc3c8cc, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
 		super.render(g, mouseX, mouseY, partial); renderTooltip(g, mouseX, mouseY);

@@ -10,7 +10,7 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 
 /** 固定终端实例、唯一邻接核心与权威域；失效不可在同一菜单内复活。 */
-public final class NetworkTerminalAccess {
+public final class NetworkTerminalAccess implements TerminalMenuAccess {
 	private final NetworkTerminalBlockEntity source;
 	private final NetworkCoreBlockEntity core;
 	private final NetworkSavedData authority;
@@ -36,14 +36,14 @@ public final class NetworkTerminalAccess {
 				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(false);
 					if (terminal.combined()) buffer.writeEnum(scope); }).isPresent();
 	}
-	TerminalScope scope() { return scope; }
-	TerminalCraftingAccount crafting(ServerPlayer player) { return valid(player) ? source.crafting(core) : null; }
-	boolean combined() { return source.combined(); }
+	public TerminalScope scope() { return scope; }
+	public TerminalCraftingAccount crafting(ServerPlayer player) { return valid(player) ? source.crafting(core) : null; }
+	public boolean combined() { return source.combined(); }
 	/** 切换只重开同一来源的菜单；关闭旧菜单释放选择根，不能把旧行号解释为新类型。 */
-	boolean switchMode(ServerPlayer player, TerminalScope requested) {
+	public boolean switchMode(ServerPlayer player, TerminalScope requested) {
 		return combined() && requested != scope && valid(player) && open(player, source, requested);
 	}
-	boolean valid(Player player) {
+	public boolean valid(Player player) {
 		if (revoked) return false;
 		if (!(core.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread() || player.level() != level
 				|| !player.isAlive() || player.isSpectator() || source.isRemoved() || source.getLevel() != level

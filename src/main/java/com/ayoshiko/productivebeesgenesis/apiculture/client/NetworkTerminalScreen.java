@@ -434,7 +434,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		if ((tab == 2 || tab == 4) && sortAge >= 0) status = status.copy().append(" · ").append(own("sort_age", sortAge));
 		if (tab == 4 && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable");
 		line(g, status, 38, inventoryY - 22, 253, TerminalSkin.MUTED);
-		line(g, inventory.getDisplayName(), 40, inventoryY - 11, 63, TerminalSkin.INK);
+		line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), 40, inventoryY - 11, menu.wirelessTerminal() ? 128 : 63, TerminalSkin.INK);
 		line(g, tr("inventory_slot", sourceSlot + 1), 174, inventoryY - 11, 118, TerminalSkin.MUTED);
 	}
 	private void line(GuiGraphics g, Component value, int x, int y, int width, int color) { g.drawString(font, font.plainSubstrByWidth(value.getString(), width), x, y, color, false); }

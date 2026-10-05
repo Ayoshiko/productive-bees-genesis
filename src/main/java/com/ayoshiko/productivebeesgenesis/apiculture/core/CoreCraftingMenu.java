@@ -81,6 +81,8 @@ final class CoreCraftingMenu {
 		var state = account.state(); var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
 		var operation = request.operation(); TerminalCraftingPlan.Change change;
 		if (operation == TerminalRequest.Operation.CRAFT_IN || operation == TerminalRequest.Operation.CRAFT_OUT) {
+			if (operation == TerminalRequest.Operation.CRAFT_IN && request.inventorySlot() >= 0 && request.inventorySlot() < 36
+					&& inventory.get(request.inventorySlot()).getItem() instanceof WirelessTerminalItem) return reply(request, INVALID, 0);
 			if (request.row() < 0 || request.row() >= 9 || request.amount() < 1 || request.amount() > 64
 					|| operation == TerminalRequest.Operation.CRAFT_OUT && request.inventorySlot() != -1) return reply(request, INVALID, 0);
 			change = TerminalCraftingPlan.exchange(state.grid(), inventory, request.row(), request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.CRAFT_IN);
@@ -147,7 +149,7 @@ final class CoreCraftingMenu {
 		return menu.craftingAccount(player) == account && account.state() == before && ItemStack.listMatches(inventory, player.getInventory().items);
 	}
 	private static void inventory(ServerPlayer player, List<ItemStack> before, List<ItemStack> after) {
-		for (int i = 0; i < 36; i++) player.getInventory().items.set(i, after.get(i));
+		for (int i = 0; i < 36; i++) if (!ItemStack.matches(before.get(i), after.get(i))) player.getInventory().items.set(i, after.get(i));
 		player.getInventory().setChanged();
 		for (int i = 0; i < 36; i++) if (!ItemStack.matches(before.get(i), after.get(i))) CoreInventorySync.committed(player, i, after.get(i));
 	}

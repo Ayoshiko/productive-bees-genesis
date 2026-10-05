@@ -9,6 +9,8 @@ param(
     [switch]$Upgrades,
     [switch]$Terminals,
     [switch]$Crafting,
+    [switch]$Wireless,
+    [switch]$WirelessVisualOnly,
     [switch]$CraftingWriteOnly,
     [ValidateSet('All', 'noae2', 'ae2')][string]$Combination = 'All',
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
@@ -17,6 +19,8 @@ $ErrorActionPreference = 'Stop'
 if ($Upgrades -and $Terminals) { throw 'Upgrade and terminal gates use separate fixtures' }
 if ($Crafting -and ($Upgrades -or $Terminals)) { throw 'Crafting uses a separate focused fixture' }
 if ($CraftingWriteOnly -and !$Crafting) { throw 'The bounded write-only follow-up is only for crafting' }
+if ($Wireless -and !$Crafting) { throw 'Wireless requires the focused crafting fixture' }
+if ($WirelessVisualOnly -and (!$Wireless -or !$SeedWorld -or $CraftingWriteOnly)) { throw 'Wireless visual follow-up requires Wireless and an existing seed world' }
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Set-Location -LiteralPath $workspace
 if ($ChildTask) {
@@ -26,6 +30,8 @@ if ($ChildTask) {
     if ($Upgrades) { $arguments += '-PnetworkConcurrentUpgrades' }
     if ($Terminals) { $arguments += '-PnetworkConcurrentTerminals' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
+    if ($Wireless) { $arguments += '-PnetworkConcurrentWireless' }
+    if ($WirelessVisualOnly) { $arguments += '-PnetworkWirelessVisualOnly' }
     if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
     & .\gradlew @arguments
     exit $LASTEXITCODE
@@ -37,8 +43,9 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
-    recoveryIncluded = !$CraftingWriteOnly
+    schema = 1; gate = $(if ($Wireless) { 'D18f1' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly
+    visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
     sourceFingerprint = Get-NetworkSourceFingerprint; dependencies = @(Get-NetworkDependencyHashes)
     checks = @(); limits = @('Local offline-mode TCP login, no account-service authentication',
@@ -63,6 +70,8 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($Upgrades) { $arguments += '-Upgrades' }
     if ($Terminals) { $arguments += '-Terminals' }
     if ($Crafting) { $arguments += '-Crafting' }
+    if ($Wireless) { $arguments += '-Wireless' }
+    if ($WirelessVisualOnly) { $arguments += '-WirelessVisualOnly' }
     if ($Seed) { $arguments += @('-SeedWorld', $Seed) }
     # All arguments are literal file paths or validated internal identifiers.
     if (@($arguments | Where-Object { $_.Contains('"') }).Count) { throw 'Unsupported quote in probe path' }
@@ -88,6 +97,7 @@ try {
     $buildArgs = @('test')
     if ($Crafting) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
+    if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
     if ($LASTEXITCODE -ne 0) { throw 'Build failed; inspect build.log' }
     Add-Evidence 'build' (Join-Path $folder 'build.log')
@@ -97,10 +107,10 @@ try {
     Add-Evidence 'runtime-artifact' $artifact
     foreach ($combination in $(if ($Combination -eq 'All') { @('noae2', 'ae2') } else { @($Combination) })) {
         $withAe2 = $combination -eq 'ae2'
-        $seed = ''
+        $seed = if ($WirelessVisualOnly) { $SeedWorld } else { '' }
         $writer = $null
         $writerClient = $null
-        foreach ($mode in $(if ($CraftingWriteOnly) { @('write') } else { @('write', 'read') })) {
+        foreach ($mode in $(if ($WirelessVisualOnly) { @('read') } elseif ($CraftingWriteOnly) { @('write') } else { @('write', 'read') })) {
             $serverId = "$RunId-$combination-$mode-server"
             $clientId = "$RunId-$combination-$mode-client"
             Write-Host "Player gate $combination $mode started"
@@ -136,6 +146,13 @@ try {
                 if ($Crafting -and $mode -eq 'write') {
                     Add-Evidence "$roleId-crafting-materials" (Join-Path $clientRoot 'crafting-materials.png')
                     Add-Evidence "$roleId-crafting-retained" (Join-Path $clientRoot 'crafting-retained.png')
+                }
+                if ($Wireless -and ($mode -eq 'write' -or $WirelessVisualOnly)) {
+                    Add-Evidence "$roleId-panels" (Join-Path $clientRoot 'terminal-panels.png')
+                    if ($playerRole -eq 'owner' -and !$WirelessVisualOnly) {
+                        Add-Evidence "$roleId-wireless-network" (Join-Path $clientRoot 'wireless-network.png')
+                        Add-Evidence "$roleId-wireless-machine" (Join-Path $clientRoot 'wireless-machine.png')
+                    }
                 }
                 if ($Terminals) {
                     if ($clientReport.terminalPermissionsClient -ne $true) { throw 'Missing terminal client checks' }
@@ -180,6 +197,10 @@ try {
                 if (@($serverReport.craftingFiles).Count -ne 2) { throw 'Missing crafting account files' }
                 for ($i = 0; $i -lt 2; $i++) { Add-Evidence "$serverId-crafting-$i" $serverReport.craftingFiles[$i] }
             }
+            if ($Wireless) {
+                if ($serverReport.wirelessNetworkMachineAndRecovery -ne $true) { throw 'Missing wireless target and recovery checks' }
+                Add-Evidence "$serverId-wireless-file" $serverReport.wirelessFile
+            }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner
             Add-Evidence "$serverId-guest-file" $serverReport.playerFiles.guest
@@ -188,6 +209,8 @@ try {
             if ($mode -eq 'write') {
                 $writer = $serverReport; $writerClient = $clientReports
                 $seed = Join-Path $serverRoot 'world'
+            } elseif ($WirelessVisualOnly) {
+                if ($serverReport.producerPid -eq $serverReport.pid -or $serverReport.wirelessVisualOnly -ne $true) { throw 'Invalid independent visual follow-up' }
             } else {
                 if ($serverReport.producerPid -ne $writer.pid -or $serverReport.pid -eq $writer.pid) { throw 'Reader reused writer process' }
                 foreach ($playerRole in @('owner','guest')) {

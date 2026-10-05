@@ -21,10 +21,12 @@ import net.minecraft.world.item.ItemStack;
 /** 六个蜂位的有限管理视图；原版槽只读，所有资产变化经带会话和序号的命令。 */
 public final class MachineMenu extends AbstractContainerMenu {
 	// 回执字段最后发送，客户端看到完成序号时，本轮升级数量和上限已同步。
-	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, DATA_COUNT = ACKNOWLEDGED_DATA + 4;
+	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4, DATA_COUNT = WIRELESS_DATA + 3;
 	private final MachineControllerEntity core;
 	private final MachineDirectory.Binding binding;
 	private final MachinePartEntity origin;
+	private final com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession wireless;
+	private final Player viewingPlayer;
 	private final UUID viewer, session;
 	private final TerminalSequence sequences = new TerminalSequence();
 	private final ContainerData data = new SimpleContainerData(DATA_COUNT);
@@ -36,13 +38,18 @@ public final class MachineMenu extends AbstractContainerMenu {
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(MachineContent.MENU.get(), id); buffer.readBlockPos(); session = buffer.readUUID();
-		viewer = inventory.player.getUUID(); core = null; binding = null; origin = null; initialize(inventory);
+		viewer = inventory.player.getUUID(); viewingPlayer = inventory.player; core = null; binding = null; origin = null; wireless = null; initialize(inventory);
 	}
 	MachineMenu(int id, Inventory inventory, MachineControllerEntity core, UUID session) {
 		this(id, inventory, core, session, null);
 	}
 	MachineMenu(int id, Inventory inventory, MachineControllerEntity core, UUID session, MachinePartEntity origin) {
+		this(id, inventory, core, session, origin, null);
+	}
+	private MachineMenu(int id, Inventory inventory, MachineControllerEntity core, UUID session, MachinePartEntity origin,
+			com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession wireless) {
 		super(MachineContent.MENU.get(), id); this.core = core; this.session = session; this.origin = origin;
+		this.wireless = wireless; viewingPlayer = inventory.player;
 		viewer = inventory.player.getUUID(); binding = core.handle.binding().orElseThrow(); initialize(inventory); refresh();
 	}
 	private void initialize(Inventory inventory) {
@@ -56,6 +63,12 @@ public final class MachineMenu extends AbstractContainerMenu {
 		}
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
+	static boolean openWireless(MachineControllerEntity core, ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession device) {
+		if (!WirelessMachineAccess.valid(core, device, player)) return false; var session = UUID.randomUUID();
+		return player.openMenu(new SimpleMenuProvider((id, inventory, ignored) -> WirelessMachineAccess.valid(core, device, player)
+				? new MachineMenu(id, inventory, core, session, null, device) : null, device.stack().getHoverName()),
+				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); }).isPresent();
+	}
 	static boolean open(MachinePartEntity part, ServerPlayer player) {
 		if (!(part.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread() || !part.bound()) return false;
 		var binding = part.binding(); var pos = binding.handle().controller();
@@ -86,6 +99,13 @@ public final class MachineMenu extends AbstractContainerMenu {
 	public long acknowledged() { return number(ACKNOWLEDGED_DATA); }
 	public int status() { return data.get(32); }
 	public int jobs() { return data.get(33); }
+	public boolean wireless() { return data.get(WIRELESS_DATA) != 0; }
+	public int deviceEnergy() { return integer(WIRELESS_DATA + 1); }
+	public boolean allowsAction(int action, int slot) {
+		int mode = data.get(WIRELESS_DATA); if (mode == 0 || mode == 3) return true;
+		boolean apiary = action < 4 || slot < 2 || MachineUpgrades.apiarySlot(slot);
+		return mode == 1 ? apiary : !apiary;
+	}
 	public int upgradeCount(int slot) { return integer(UPGRADE_DATA + slot * 4); }
 	public int upgradeLimit(int slot) { return integer(UPGRADE_DATA + 2 + slot * 4); }
 	private int integer(int index) { return (data.get(index) & 65535) | (data.get(index + 1) & 65535) << 16; }
@@ -102,10 +122,11 @@ public final class MachineMenu extends AbstractContainerMenu {
 		return core != null && !player.isSpectator() && player.containerMenu == this && stillValid(player) && MachineWorkService.access(core).isPresent() ? core : null;
 	}
 	@Override public boolean stillValid(Player player) {
-		return !closed && viewer.equals(player.getUUID()) && (core == null || allowed(core, origin, binding, player) && MachineWorkService.active(core)
+		return !closed && viewer.equals(player.getUUID()) && (core == null || (wireless == null ? allowed(core, origin, binding, player) : WirelessMachineAccess.valid(core, wireless, player)) && MachineWorkService.active(core)
 				&& core.handle.binding().orElse(null) == binding);
 	}
 	private void refresh() {
+		if (wireless != null) { data.set(WIRELESS_DATA, wireless.combined() ? 3 : wireless.binding().mode() == com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY ? 1 : 2); integer(WIRELESS_DATA + 1, wireless.energy()); }
 		if (core == null || core.handle == null || core.handle.binding().orElse(null) != binding) return; var access = MachineWorkService.access(core).orElse(null); if (access == null) return;
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();
 		var limits = new int[MachineUpgrades.SLOTS]; for (int i = 0; i < limits.length; i++) limits[i] = MachineUpgradeProfiles.limit(i);
@@ -129,14 +150,19 @@ public final class MachineMenu extends AbstractContainerMenu {
 				|| controller(player) == null || !sequences.begin(request.sequence())) return;
 		try {
 			number(ACKNOWLEDGED_DATA, request.sequence());
-			if (!TerminalPayloads.allow(player)) { data.set(32, MachineExchange.Status.UNAVAILABLE.ordinal()); return; }
+			if (!TerminalPayloads.allow(player) || wireless != null && !wireless.charge(player, true) || !allowsAction(request.action(), request.slot())) { data.set(32, MachineExchange.Status.UNAVAILABLE.ordinal()); return; }
 			refresh();
 			if (request.viewRevision() != viewRevision) { data.set(32, MachineExchange.Status.STALE.ordinal()); return; }
 			var result = MachineExchange.exchange(this, player, MachineExchange.Action.values()[request.action()], request.slot(), request.inventorySlot(), request.amount(), false);
 			data.set(32, result.status().ordinal()); refresh();
 		} finally { sequences.finish(); }
 	}
-	@Override public void broadcastChanges() { refresh(); super.broadcastChanges(); }
+	@Override public void broadcastChanges() {
+		if (wireless != null && !closed && (!stillValid(viewingPlayer) || !wireless.charge(viewingPlayer, false))) {
+			if (viewingPlayer instanceof ServerPlayer player && player.containerMenu == this) { player.closeContainer(); return; }
+		}
+		refresh(); super.broadcastChanges();
+	}
 	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
 	@Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
 	@Override public void removed(Player player) { closed = true; sequences.close(); super.removed(player); }
