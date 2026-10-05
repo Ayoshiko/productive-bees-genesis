@@ -19,6 +19,17 @@ public final class AssetImage {
 		} catch (IOException | NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
 	}
 	public CompoundTag copy() { return tag.copy(); }
+	/** 只读基础字段投影，不为显示一个 ID 复制整份组件树。 */
+	public String string(String key) { return tag.getString(key); }
+	/** 固定路径读取不可变字符串；不复制或泄露实体附件树。 */
+	public String stringAt(String... path) {
+		Tag value = tag;
+		for (String key : path) {
+			if (!(value instanceof CompoundTag compound)) return "";
+			value = compound.get(key);
+		}
+		return value instanceof StringTag text ? text.getAsString() : "";
+	}
 	public boolean isEmpty() { return tag.isEmpty(); }
 	public String fingerprint() { return fingerprint; }
 	private static void canonical(Tag tag, DataOutput output, int depth) throws IOException {

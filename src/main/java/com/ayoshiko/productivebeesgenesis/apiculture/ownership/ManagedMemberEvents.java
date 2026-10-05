@@ -13,6 +13,7 @@ public final class ManagedMemberEvents {
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
 	public static void interact(PlayerInteractEvent.RightClickBlock event) {
 		var source = event.getLevel().getBlockEntity(event.getPos());
+		if (com.ayoshiko.productivebeesgenesis.apiculture.core.WorldBeeInputRequest.intercept(event, source)) return;
 		if (MemberBinding.isolated(source)) {
 			boolean open = event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND && !event.getEntity().isShiftKeyDown();
 			if (event.getLevel().isClientSide() && open) return;

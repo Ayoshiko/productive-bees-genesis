@@ -33,7 +33,7 @@ public final class NetworkClientProbe {
 		var client = Minecraft.getInstance();
 		try {
 			if (started == 0) started = System.nanoTime();
-			require(System.nanoTime() - started < 240_000_000_000L, "Client probe timeout at " + step);
+			require(System.nanoTime() - started < 360_000_000_000L, "Client probe timeout at " + step);
 			require(ClientOwnershipFixture.failure == null, ClientOwnershipFixture.failure);
 			if (step == 0) {
 				if (!(client.screen instanceof TitleScreen) || client.getOverlay() != null) return;
@@ -51,6 +51,7 @@ public final class NetworkClientProbe {
 				finish(client, null); return;
 			}
 			if (step == 7 && ClientUpgradeProbe.complete() && !ClientMemberProxyProbe.complete()) { ClientMemberProxyProbe.advance(client); return; }
+			if (step == 7 && ClientMemberProxyProbe.complete() && !ClientBeeInputProbe.complete()) { ClientBeeInputProbe.advance(client); return; }
 			if (!(client.screen instanceof NetworkCoreScreen screen) || !(client.player.containerMenu instanceof NetworkCoreMenu menu)) return;
 			if (lastStatus != menu.ownershipStatus()) { lastStatus = menu.ownershipStatus(); settled = 0; }
 			if (++settled < 10) return;
@@ -88,6 +89,8 @@ public final class NetworkClientProbe {
 	private static void finish(Minecraft client, Exception error) {
 		finished = true;
 		var report = new JsonObject(); report.addProperty("passed", error == null); report.addProperty("completedStage", ClientOwnershipFixture.stage);
+		report.addProperty("capacitySortedAutomaticCageEggAndConservation", error == null && ClientBeeInputProbe.complete() && ClientBeeInputFixture.verified);
+		report.addProperty("worldBeeTargetOffhandRejectionCancellationAndStandalone", error == null && ClientBeeInputFixture.worldVerified);
 		report.addProperty("terminalProbeStep", ClientTerminalProbe.step()); report.addProperty("upgradeProbeStep", ClientUpgradeProbe.step());
 		if (error != null && client.player != null && client.player.containerMenu instanceof NetworkCoreMenu menu) {
 			report.addProperty("notice", menu.clientState().notice().name()); report.addProperty("waiting", menu.clientState().waiting());
@@ -105,6 +108,16 @@ public final class NetworkClientProbe {
 		report.addProperty("memberProxyWidgetsBothMembersDistanceAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.verified);
 		report.addProperty("dedicatedTerminalsTypedUpgradeSharedStockAndRevocation", error == null && ClientMemberProxyFixture.terminalsVerified);
 		report.addProperty("combinedTerminalModesRecipeReplayAndConservation", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.combinedVerified);
+		report.addProperty("dedicatedTerminalSkinGridLocationAndFeedingControls", error == null && ClientMemberProxyProbe.complete() && ClientMemberProxyFixture.terminalsVerified);
+		report.addProperty("terminalLivePagingRenewalAndServerChanges", error == null && ClientTerminalLiveProbe.complete() && ClientMemberProxyFixture.liveRestored);
+		report.addProperty("beeControlUiRuntimeAbaSimulateAndCageReset", error == null && ClientMemberProxyFixture.controlVerified && ClientMemberProxyFixture.liveBeeChanged);
+		report.addProperty("terminalNamesGenesTagsQuantityAndBidirectionalPaging", error == null && ClientTerminalLiveProbe.complete());
+		report.addProperty("terminalExternalBeeReplacementClearsSelection", error == null && ClientTerminalLiveProbe.replacementVerified);
+		report.addProperty("jeiPresent", net.neoforged.fml.ModList.get().isLoaded("jei"));
+		if (net.neoforged.fml.ModList.get().isLoaded("jei")) {
+			report.addProperty("terminalBeeJeiUsesAndReturn", error == null && TerminalJeiProbe.complete);
+			report.add("terminalBeeJeiCategories", new com.google.gson.Gson().toJsonTree(TerminalJeiProbe.categories));
+		}
 			report.addProperty("physicalAssetsReturned", error == null); report.addProperty("normalIntegratedShutdown", error == null);
 			report.addProperty("longCoreEnergySynchronized", error == null);
 			report.addProperty("automaticProductionButtonsSynchronized", error == null);

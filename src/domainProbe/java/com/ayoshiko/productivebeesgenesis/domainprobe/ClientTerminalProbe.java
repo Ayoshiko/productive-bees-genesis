@@ -102,19 +102,21 @@ final class ClientTerminalProbe {
 		}
 		require(view.hasNext(), "Client missing product " + label + " " + detail); press(screen, "next"); return false;
 	}
-	static void chooseSlot(NetworkCoreScreen screen, NetworkCoreMenu menu, int inventorySlot) {
+	static void chooseSlot(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, NetworkCoreMenu menu, int inventorySlot) {
 		var slot = menu.slots.stream().filter(value -> value.getContainerSlot() == inventorySlot).findFirst().orElseThrow();
 		click(screen, slot.x + 8, slot.y + 8);
 	}
 	static void result(NetworkCoreMenu menu, TerminalReply.Status status, int moved) {
 		var result = menu.clientState().exchangeResult(); require(result != null && result.status() == status && result.moved() == moved,
 				"Client result mismatch at step " + step + ": " + result);
-		require(menu.clientState().view() == null || menu.terminalReply().sequence() > result.sequence(), "Asset command left clickable stale rows");
+		if (menu.clientState().live()) require(!menu.clientState().actionable(Util.getMillis())
+				|| menu.clientState().acknowledgedSequence() >= result.sequence(), "Live page re-enabled before action confirmation");
+		else require(menu.clientState().view() == null || menu.terminalReply().sequence() > result.sequence(), "Asset command left clickable stale rows");
 	}
 	private static boolean autoRefreshed(NetworkCoreMenu menu) {
 		return menu.clientState().view() != null && menu.terminalReply().sequence() > menu.clientState().exchangeResult().sequence();
 	}
-	static void press(NetworkCoreScreen screen, String key) {
+	static void press(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, String key) {
 		String label = Component.translatable("screen.productivebeesgenesis.network." + key).getString();
 		var buttons = screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).toList();
 		var button = buttons.stream().filter(b -> b.getMessage().getString().equals(label)).findFirst()
@@ -124,11 +126,11 @@ final class ClientTerminalProbe {
 		require(screen.mouseClicked(button.getX() + button.getWidth() / 2.0, button.getY() + button.getHeight() / 2.0, 0), "Button did not receive click");
 		screen.mouseReleased(button.getX() + 2, button.getY() + 2, 0);
 	}
-	private static void click(NetworkCoreScreen screen, int x, int y) {
+	private static void click(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, int x, int y) {
 		click(screen, x, y, 0);
 	}
-	private static void click(NetworkCoreScreen screen, int x, int y, int mouseButton) {
-		double mouseX = (screen.width - NetworkCoreScreen.WIDTH) / 2 + x, mouseY = (screen.height - NetworkCoreScreen.HEIGHT) / 2 + y;
+	private static void click(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, int x, int y, int mouseButton) {
+		double mouseX = screen.getGuiLeft() + x, mouseY = screen.getGuiTop() + y;
 		require(screen.mouseClicked(mouseX, mouseY, mouseButton), "Client click missed at " + step + ": " + x + "," + y);
 		screen.mouseReleased(mouseX, mouseY, mouseButton);
 	}
@@ -152,10 +154,10 @@ final class ClientTerminalProbe {
 		require(menu.clientState().view().hasNext(), "PB iron and gold comb previews lost their distinct tint");
 		press(screen, "next"); return false;
 	}
-	static void verifyLayout(NetworkCoreScreen screen, NetworkCoreMenu menu) {
-		require(screen.width >= NetworkCoreScreen.WIDTH && screen.height >= NetworkCoreScreen.HEIGHT, "Core exceeds minimum GUI viewport");
-		require(menu.slots.size() == 36 && menu.slots.stream().allMatch(slot -> slot.isActive() && slot.y >= 154
-				&& slot.y + 16 <= NetworkCoreScreen.HEIGHT && slot.x + 16 <= NetworkCoreScreen.WIDTH), "Inventory is not permanently visible below content");
+	static void verifyLayout(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, NetworkCoreMenu menu) {
+		require(screen.width >= screen.getXSize() && screen.height >= screen.getYSize(), "Menu exceeds minimum GUI viewport");
+		require(menu.slots.size() == 36 && menu.slots.stream().allMatch(slot -> slot.isActive() && slot.y >= 152
+				&& slot.y + 16 <= screen.getYSize() && slot.x + 16 <= screen.getXSize()), "Inventory is not permanently visible below content");
 	}
 	private ClientTerminalProbe() { }
 }

@@ -9,5 +9,6 @@ public final class TerminalSequence {
 		last = sequence; busy = true; return true;
 	}
 	public void finish() { busy = false; }
+	public long last() { return last; }
 	public void close() { closed = true; }
 }

@@ -28,6 +28,10 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	private CoreOwnershipController ownership = new CoreOwnershipController(this);
 	private com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkCoreEnergyPort energyPort;
 	private int productionMode;
+	private final CoreApiaryIndex apiaryIndex = new CoreApiaryIndex();
+	CoreApiaryIndex apiaryIndex() { return apiaryIndex; }
+	private final com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex quantityIndex = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex();
+	com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex quantityIndex() { return quantityIndex; }
 	private com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntime runtime;
 	public NetworkCoreBlockEntity(BlockPos pos, BlockState state) { super(NetworkContent.CORE_TILE.get(), pos, state); }
 	public UUID owner() { return owner; }
@@ -100,6 +104,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 	}
 	public void publishTopology(TopologyScan.View view) { topology = view; }
 	@Override public void setRemoved() {
+		apiaryIndex.clear(); quantityIndex.clear();
 		if (level instanceof ServerLevel server) {
 			NetworkTopologyService.remove(server, this);
 			com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.remove(server, this);
@@ -127,6 +132,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 			catch (RuntimeException failure) { invalidNetwork = true; invalidNetworkData = tag.getCompound("network").copy(); }
 		}
 		ownership = new CoreOwnershipController(this);
+		apiaryIndex.clear(); quantityIndex.clear();
 		energyPort = null;
 		int mode = tag.getInt("productionMode"); productionMode = mode >= 0 && mode <= 2 ? mode : 2; runtime = null;
 	}

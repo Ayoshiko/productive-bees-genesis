@@ -14,11 +14,11 @@ import net.minecraft.nbt.Tag;
 public final class BeeRecordCodec {
 	static CompoundTag encode(BeeMemberState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
-		tag.putInt("samplingVersion", 2);
+		tag.putInt("samplingVersion", 3);
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision());
 		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var list = new ListTag();
-		for (var bee : state.bees()) list.add(encodeBee(bee));
+		for (var bee : state.bees()) list.add(encodeBee(bee, true));
 		tag.put("bees", list); tag.put("feeding", FeedingRecordCodec.encode(state.feeding())); return tag;
 	}
 	static BeeMemberState decode(CompoundTag tag, Consumer<ProductKey> validate,
@@ -29,7 +29,7 @@ public final class BeeRecordCodec {
 		if (legacy) fields(tag, "member", "revision", "energy", "capacity", "bees", "feeding", "networkPowered");
 		else {
 			fields(tag, "samplingVersion", "member", "revision", "energy", "capacity", "bees", "feeding", "networkPowered");
-			if (StrictNbt.integer(tag, "samplingVersion") != (schema == 7 ? 1 : 2)) throw new IllegalArgumentException("Unsupported bee sampling version");
+			if (StrictNbt.integer(tag, "samplingVersion") != (schema - 6)) throw new IllegalArgumentException("Unsupported bee sampling version");
 		}
 		var member = StrictNbt.uuid(tag, "member"); var list = StrictNbt.list(tag, "bees");
 		if (list.size() > 3) throw new IllegalArgumentException("Unverified factory bee state");
@@ -39,9 +39,14 @@ public final class BeeRecordCodec {
 				FeedingRecordCodec.decode(StrictNbt.compound(tag, "feeding"), validateFeeding), StrictNbt.bool(tag, "networkPowered"));
 	}
 	public static CompoundTag encodeBee(BeeRecord bee) {
+		if (!bee.enabled()) throw new IllegalArgumentException("Network bee control requires its network container");
+		return encodeBee(bee, false);
+	}
+	private static CompoundTag encodeBee(BeeRecord bee, boolean controlled) {
 		var value = new CompoundTag(); value.putUUID("id", bee.id()); value.putInt("slot", bee.slot());
 		value.put("original", bee.originalSlot().copy()); value.put("plan", plan(bee.plan()));
 		value.putLong("revision", bee.revision()); value.putInt("progress", bee.progress());
+		if (controlled) value.putBoolean("enabled", bee.enabled());
 		value.putLong("seed", bee.random().seed()); value.putLong("cursor", bee.random().cursor());
 		value.putLong("pending", bee.pendingCycles()); value.put("frozen", ProductRecordCodec.amount(bee.frozen())); return value;
 	}
@@ -52,12 +57,13 @@ public final class BeeRecordCodec {
 	private static BeeRecord decodeBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate, int schema) {
 		boolean legacy = schema == 6;
 		if (legacy) fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen");
+		else if (schema == 9) fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen", "seed", "cursor", "enabled");
 		else fields(value, "id", "slot", "original", "plan", "revision", "progress", "pending", "frozen", "seed", "cursor");
 		var id = StrictNbt.uuid(value, "id");
 		var random = legacy ? BeeCycleRandom.initial(id) : new BeeCycleRandom(StrictNbt.number(value, "seed"), StrictNbt.number(value, "cursor"));
 		return new BeeRecord(id, member, StrictNbt.integer(value, "slot"),
 				new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, schema),
-				StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen"), random);
+				StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"), StrictNbt.number(value, "pending"), ProductRecordCodec.readAmount(value, "frozen"), random, schema < 9 || StrictNbt.bool(value, "enabled"));
 	}
 	private static CompoundTag plan(StaticBeePlan plan) {
 		var tag = new CompoundTag(); tag.putString("type", plan.beeType()); tag.putString("recipe", plan.recipe());

@@ -58,11 +58,19 @@ public final class BeeMemberState {
 	}
 	private BeeMemberState update(BeeRecord next, long remainingEnergy, boolean timing) {
 		var old = bee(next.slot());
-		if (!old.id().equals(next.id()) || !old.originalSlot().equals(next.originalSlot()) || !timing && !old.plan().equals(next.plan())
+		if (!old.id().equals(next.id()) || old.enabled() != next.enabled() || !old.originalSlot().equals(next.originalSlot()) || !timing && !old.plan().equals(next.plan())
 				|| next.revision() != Math.incrementExact(old.revision()) || remainingEnergy < 0 || remainingEnergy > energy)
 			throw new IllegalArgumentException("Invalid bee successor");
 		return new BeeMemberState(member, Math.incrementExact(revision), remainingEnergy, energyCapacity,
 				bees.stream().map(bee -> bee.slot() == next.slot() ? next : bee).toList(), feeding, networkPowered, rosterVersion);
+	}
+	/** 单蜂开关只改变控制状态；重发名册戳使旧菜单选择在 ABA 后仍失效。 */
+	public BeeMemberState withBeeEnabled(int slot, UUID expectedBee, boolean enabled) {
+		var old = bee(slot);
+		if (!old.id().equals(expectedBee)) throw new IllegalArgumentException("Bee identity changed");
+		var next = old.enabled(enabled); if (next == old) return this;
+		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity,
+				bees.stream().map(bee -> bee.slot() == slot ? next : bee).toList(), feeding, networkPowered);
 	}
 	public BeeMemberState withFeeding(FeedingSlotStore next) {
 		if (feeding == next) return this;

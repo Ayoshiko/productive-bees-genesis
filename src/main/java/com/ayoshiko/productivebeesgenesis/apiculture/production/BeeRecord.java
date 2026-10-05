@@ -8,7 +8,11 @@ import java.util.UUID;
 
 /** 原始蜂位数据只作无损交还模板；执行进度、未采样轮数和冻结数量各有唯一字段。 */
 public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot, StaticBeePlan plan,
-		long revision, int progress, long pendingCycles, ProductAmount frozen, BeeCycleRandom random) {
+		long revision, int progress, long pendingCycles, ProductAmount frozen, BeeCycleRandom random, boolean enabled) {
+	public BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot, StaticBeePlan plan,
+			long revision, int progress, long pendingCycles, ProductAmount frozen, BeeCycleRandom random) {
+		this(id, member, slot, originalSlot, plan, revision, progress, pendingCycles, frozen, random, true);
+	}
 	public BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot, StaticBeePlan plan,
 			long revision, int progress, long pendingCycles, ProductAmount frozen) {
 		this(id, member, slot, originalSlot, plan, revision, progress, pendingCycles, frozen, BeeCycleRandom.initial(id));
@@ -28,11 +32,15 @@ public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot,
 		return UUID.nameUUIDFromBytes((member + ":bee:" + slot).getBytes(StandardCharsets.UTF_8));
 	}
 	public BeeRecord work(int remaining, long pending, ProductAmount result) {
-		return new BeeRecord(id, member, slot, originalSlot, plan, Math.incrementExact(revision), remaining, pending, result, random);
+		return new BeeRecord(id, member, slot, originalSlot, plan, Math.incrementExact(revision), remaining, pending, result, random, enabled);
+	}
+	public BeeRecord enabled(boolean value) {
+		return enabled == value ? this : new BeeRecord(id, member, slot, originalSlot, plan,
+				Math.incrementExact(revision), progress, pendingCycles, frozen, random, value);
 	}
 	public boolean drained() { return pendingCycles == 0 && frozen.isZero(); }
 	public BeeRecord relocate(int target) {
 		if (!drained()) throw new IllegalStateException("Drain paid bee work before moving");
-		return new BeeRecord(id, member, target, originalSlot, plan, Math.incrementExact(revision), progress, pendingCycles, frozen, random);
+		return new BeeRecord(id, member, target, originalSlot, plan, Math.incrementExact(revision), progress, pendingCycles, frozen, random, enabled);
 	}
 }

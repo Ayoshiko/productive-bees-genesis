@@ -39,7 +39,7 @@ public final class BeeRandomRestartProbe {
 		current = finish(current, member); store(current, "complete");
 		var seven = NetworkCheckpointCodec.encode(current); seven.putInt("schema", 7);
 		var sevenBees = seven.getList("ownership", 10).getCompound(0).getCompound("bees"); sevenBees.putInt("samplingVersion", 1);
-		for (var raw : sevenBees.getList("bees", 10)) ((CompoundTag) raw).getCompound("plan").remove("sourceOutput");
+		for (var raw : sevenBees.getList("bees", 10)) { ((CompoundTag) raw).remove("enabled"); ((CompoundTag) raw).getCompound("plan").remove("sourceOutput"); }
 		var sevenRoot = new CompoundTag(); sevenRoot.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); sevenRoot.put("data", seven);
 		NbtIo.writeCompressed(sevenRoot, Path.of("results", "bee-restart", "random", "legacy-seven.dat"));
 		// schema 6 文件由当前正式 writer 的等价旧形状生成，只包含原有倍率 1 工作。
@@ -47,7 +47,7 @@ public final class BeeRandomRestartProbe {
 		var state = legacy.getList("ownership", 10).getCompound(0).getCompound("bees");
 		state.remove("samplingVersion");
 		for (var raw : state.getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
+			var bee = (CompoundTag) raw; bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		var root = new CompoundTag(); root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); root.put("data", legacy);
 		NbtIo.writeCompressed(root, Path.of("results", "bee-restart", "random", "legacy.dat"));
@@ -57,6 +57,9 @@ public final class BeeRandomRestartProbe {
 	private static void store(NetworkCheckpoint current, String stage) throws Exception {
 		CheckpointFiles.write(Path.of("results", "bee-restart", "random", stage + ".dat"),
 				new CheckpointPayload.Network(current, SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
+		var member = current.ownedMachines().values().iterator().next().claim().member();
+		CheckpointFiles.write(Path.of("results", "bee-restart", "random", "controlled-" + stage + ".dat"),
+				new CheckpointPayload.Network(control(current, member, false), SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
 	}
 	public static void read(ServerLevel level, Path source, JsonObject report) throws Exception {
 		readProductivity(level, source, report);
@@ -101,10 +104,41 @@ public final class BeeRandomRestartProbe {
 		for (var record : seven.ownedMachines().values()) for (var bee : record.bees().bees())
 			require(bee.plan().productionMultiplier() == 2.5f && bee.random().cursor() == CYCLES && bee.plan().sourceOutput().equals(bee.plan().output()), "Schema seven lost output or random state");
 		require(seven.equals(decode(codec, folder.resolve("complete.dat"))), "Schema seven migration changed completed assets");
+		readControls(codec, folder, report);
 		report.addProperty("beeRandomLegacySchemaSeven", true);
 		report.addProperty("beeRandomCrossJvmBoundaries", verified);
 		report.addProperty("beeRandomPartitionReplayAndOracle", true);
 		report.addProperty("beeRandomLegacySchemaSix", true);
+	}
+	private static NetworkCheckpoint control(NetworkCheckpoint current, UUID member, boolean enabled) {
+		var record = current.ownedMachines().get(member); var state = record.bees();
+		return current.withOwnership(record.withBees(state.withBeeEnabled(0, state.bee(0).id(), enabled)));
+	}
+	private static void readControls(NetworkCheckpointCodec codec, Path folder, JsonObject report) throws Exception {
+		int verified = 0;
+		for (String stage : STAGES) {
+			var file = folder.resolve("controlled-" + stage + ".dat"); var bytes = Files.readAllBytes(file);
+			var source = decode(codec, folder.resolve(stage + ".dat"));
+			var current = decode(codec, file); var record = current.ownedMachines().values().iterator().next();
+			var member = record.claim().member(); var state = record.bees(); var bee = state.bee(0);
+			require(current.equals(control(source, member, false)), "Disabled checkpoint changed paid assets at " + stage);
+			require(!bee.enabled() && state.bee(1).enabled(), "Per-bee control lost across JVM");
+			var denied = BeeWorkExecutor.advance(state, 0, bee.revision(), context(), 1, 1);
+			require(denied.status() != BeeWorkExecutor.Status.READY && denied.candidate() == state && denied.energyUsed() == 0,
+					"Disabled restored bee accepted new work");
+			var drained = finish(current, member);
+			require(!drained.ownedMachines().get(member).bees().bee(0).enabled() && drained.ownedMachines().get(member).bees().energy() == state.energy(),
+					"Paid settlement resumed disabled bee or charged energy");
+			var image = drained.ownedMachines().get(member).returnImage().copy().getCompound("extra").getList(BeeAssetProjection.SLOTS, 10);
+			require(image.stream().noneMatch(raw -> ((CompoundTag) raw).contains("enabled")), "Network control leaked into physical bee data");
+			var resumed = control(drained, member, true); var resumedState = resumed.ownedMachines().get(member).bees();
+			var next = BeeWorkExecutor.advance(resumedState, 0, resumedState.bee(0).revision(), context(), 1, 1);
+			require(next.status() == BeeWorkExecutor.Status.READY && next.energyUsed() == 1, "Restored enable could not resume");
+			require(Arrays.equals(bytes, Files.readAllBytes(file)), "Control reader rewrote source checkpoint");
+			verified++;
+		}
+		report.addProperty("beeControlCrossJvmBoundaries", verified);
+		report.addProperty("beeControlPaidSettlementReturnAndResume", true);
 	}
 	public static void readProductivity(ServerLevel level, Path source, JsonObject report) throws Exception {
 		Path path = source.resolveSibling("apiary-productivity.dat"), metadataPath = source.resolveSibling("apiary-productivity.json");

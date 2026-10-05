@@ -84,6 +84,25 @@ public final class BeeSpawnEggHelper {
 		return false;
 	}
 
+	/** 沿独立蜂箱的 PB 默认初始化生成单蜂数据；候选从未加入世界。 */
+	public static CompoundTag contents(net.minecraft.server.level.ServerLevel level, BeeSpawnEggData source) {
+		if (!level.getServer().isSameThread() || source == null || source.configurableBeeType() != null
+				&& cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(source.configurableBeeType()) == null)
+			throw new IllegalArgumentException("Unknown PB spawn egg");
+		if (!(source.entityType().create(level) instanceof cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee bee))
+			throw new IllegalArgumentException("Spawn egg is not a productive bee");
+		if (bee instanceof cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee configurable) {
+			if (source.configurableBeeType() == null) throw new IllegalArgumentException("Missing configurable bee type");
+			configurable.setBeeType(source.configurableBeeType().toString());
+		}
+		bee.setDefaultAttributes(); bee.setHasNectar(false);
+		var cage = new ItemStack(ModItems.BEE_CAGE.get());
+		cy.jdkdigital.productivebees.common.item.BeeCage.captureEntity(bee, cage);
+		var data = cage.get(DataComponents.CUSTOM_DATA);
+		if (data == null) throw new IllegalArgumentException("Missing captured bee data");
+		return data.copyTag();
+	}
+
 	/**
 	 * @param entityType 实际要创建的 PB 蜜蜂实体类型
 	 * @param beeType 机械蜂箱用于配方和花源判断的蜂种键

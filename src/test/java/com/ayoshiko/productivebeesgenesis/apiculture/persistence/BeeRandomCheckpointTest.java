@@ -60,6 +60,52 @@ class BeeRandomCheckpointTest {
 		return BigInteger.valueOf(rolls * 3);
 	}
 
+	private static NetworkCheckpoint control(NetworkCheckpoint source, boolean enabled) {
+		var record = source.ownedMachines().get(MEMBER); var state = record.bees();
+		return source.withOwnership(record.withBees(state.withBeeEnabled(0, state.bee(0).id(), enabled)));
+	}
+	@Test void beePausePreservesPaidWorkRandomFoodAndEnergyAndRejectsOldCandidates() throws Exception {
+		var initial = fixture(2.25f); var partial = work(initial, 3, 0); var old = state(partial).bee(0);
+		var oldCandidate = candidate(partial, 2, 1);
+		var paused = control(partial, false); var held = state(paused).bee(0);
+		assertFalse(held.enabled()); assertEquals(old.originalSlot(), held.originalSlot()); assertEquals(old.plan(), held.plan());
+		assertEquals(old.random(), held.random()); assertEquals(old.progress(), held.progress());
+		assertEquals(state(partial).energy(), state(paused).energy()); assertSame(state(partial).feeding(), state(paused).feeding());
+		assertSame(state(paused), state(paused).withBeeEnabled(0, held.id(), false));
+		assertNotSame(state(partial).rosterVersion(), state(paused).rosterVersion());
+		var denied = candidate(paused, 100, 64); assertEquals(BeeWorkExecutor.Status.DISABLED, denied.status());
+		assertSame(state(paused), denied.candidate()); assertEquals(0, denied.energyUsed());
+		var restored = roundTrip(paused, "disabled-partial"); assertFalse(state(restored).bee(0).enabled());
+		assertSame(restored, restored.applyBeeWork(MEMBER, oldCandidate));
+		var enabled = control(restored, true); assertNotSame(state(partial).rosterVersion(), state(enabled).rosterVersion());
+		assertSame(enabled, enabled.applyBeeWork(MEMBER, oldCandidate));
+		var resumed = work(enabled, 2, 1); assertEquals(9950, state(resumed).energy());
+		assertEquals(1, state(resumed).bee(0).random().cursor()); assertEquals(0, state(resumed).bee(0).progress());
+	}
+	@Test void disabledBeeSettlesEveryPaidStageAndReturnsWithoutExportingNetworkControl() throws Exception {
+		var initial = fixture(2.5f); var paid = work(initial, 13, 0);
+		var paused = roundTrip(control(paid, false), "disabled-unsampled");
+		assertThrows(IllegalStateException.class, () -> paused.ownedMachines().get(MEMBER).returnImage());
+		var frozen = roundTrip(work(paused, 0, 1), "disabled-frozen"); assertFalse(state(frozen).bee(0).enabled());
+		var credited = roundTrip(settle(frozen), "disabled-credited"); assertFalse(state(credited).bee(0).enabled());
+		var drained = roundTrip(settle(work(credited, 0, 1)), "disabled-drained");
+		assertEquals(oracle(state(initial).bee(0).random().seed(), 2, 2.5f), drained.ledger().balances().get(COMB).exact());
+		assertEquals(9870, state(drained).energy()); assertEquals(3, state(drained).bee(0).progress());
+		assertFalse(state(drained).bee(0).enabled()); assertEquals(BeeWorkExecutor.Status.DISABLED, candidate(drained, 1, 1).status());
+		var moved = state(drained).moveBee(0, 1, false); assertFalse(moved.bee(1).enabled());
+		assertEquals(state(drained).bee(0).id(), moved.bee(1).id());
+		var returned = drained.ownedMachines().get(MEMBER).returnImage().copy().getCompound("extra").getList(BeeAssetProjection.SLOTS, 10).getCompound(0);
+		assertFalse(returned.contains("enabled")); assertEquals(3, returned.getInt("ticks_in_hive"));
+		assertEquals(state(drained).bee(0).originalSlot().copy().getCompound("entity_data"), returned.getCompound("entity_data"));
+		assertThrows(IllegalArgumentException.class, () -> BeeRecordCodec.encodeBee(state(drained).bee(0)));
+	}
+	@Test void schemaEightDefaultsEnabledAndStandaloneEncodingStaysCompatible() throws Exception {
+		var source = work(fixture(2.5f), 13, 1); var old = NetworkCheckpointCodec.encode(source);
+		old.putInt("schema", 8); beeState(old).putInt("samplingVersion", 2); bee(old).remove("enabled");
+		assertEquals(source, CODEC.decode(old)); assertEquals(source, decodeFile(old, "schema-eight", true));
+		var single = BeeRecordCodec.encodeBee(state(source).bee(0)); assertFalse(single.contains("enabled"));
+		assertEquals(state(source).bee(0), BeeRecordCodec.decodeBee(single, MEMBER, key -> { }));
+	}
 	@Test void candidateDiscardReplayAndGeneralMutationCannotChangeRandomAuthority() {
 		var before = fixture(2.5f); var first = candidate(before, 1000, 7); var repeated = candidate(before, 1000, 7);
 		assertEquals(first.candidate(), repeated.candidate());
@@ -127,7 +173,7 @@ class BeeRandomCheckpointTest {
 		var encoded = NetworkCheckpointCodec.encode(work(paid, 0, 1));
 		List<Consumer<CompoundTag>> mutations = List.of(
 				root -> beeState(root).remove("samplingVersion"),
-				root -> beeState(root).putInt("samplingVersion", 3),
+				root -> beeState(root).putInt("samplingVersion", 4),
 				root -> bee(root).remove("cursor"),
 				root -> bee(root).remove("seed"),
 				root -> bee(root).putInt("cursor", 1),
@@ -140,7 +186,9 @@ class BeeRandomCheckpointTest {
 				root -> bee(root).getCompound("plan").putString("sourceOutput", "invalid"),
 				root -> root.putInt("schema", 6),
 				root -> root.putInt("schema", 7),
-				root -> root.putInt("schema", 9));
+				root -> root.putInt("schema", 10),
+				root -> bee(root).remove("enabled"),
+				root -> bee(root).putInt("enabled", 0));
 		int index = 0;
 		for (var mutation : mutations) {
 			var invalid = encoded.copy(); mutation.accept(invalid);
@@ -263,7 +311,7 @@ class BeeRandomCheckpointTest {
 	}
 	@Test void schemaSevenMigratesSourceKeyWithoutChangingPaidRandomState() throws Exception {
 		var paid = work(fixture(2.5f), 20, 1); var old = NetworkCheckpointCodec.encode(paid);
-		old.putInt("schema", 7); beeState(old).putInt("samplingVersion", 1); bee(old).getCompound("plan").remove("sourceOutput");
+		old.putInt("schema", 7); beeState(old).putInt("samplingVersion", 1); bee(old).remove("enabled"); bee(old).getCompound("plan").remove("sourceOutput");
 		assertEquals(paid, CODEC.decode(old)); assertEquals(paid, decodeFile(old, "schema-seven", true));
 		var mixed = old.copy(); bee(mixed).getCompound("plan").put("sourceOutput", ProductRecordCodec.key(BLOCK));
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(mixed)); decodeFile(mixed, "seven-with-new-field", false);
@@ -282,7 +330,7 @@ class BeeRandomCheckpointTest {
 	private static CompoundTag legacy(CompoundTag encoded) {
 		encoded.putInt("schema", 6); beeState(encoded).remove("samplingVersion");
 		for (var raw : beeState(encoded).getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
+			var bee = (CompoundTag) raw; bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		return encoded;
 	}

@@ -401,23 +401,8 @@ class ApiaryCageHandler {
 	private CompoundTag buildBeeDataFromSpawnEgg(BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
 		if (spawnEgg == null || manager.getLevel() == null || manager.getLevel().isClientSide) return null;
 		try {
-			Entity entity = spawnEgg.entityType().create(manager.getLevel());
-			if (!(entity instanceof ProductiveBee bee)) return null;
-
-			// 使用 PB 原版默认属性初始化，保证刷怪蛋直入与正常放出/捕获完全一致。
-			if (bee instanceof ConfigurableBee configurable) {
-				if (spawnEgg.configurableBeeType() == null) return null;
-				configurable.setBeeType(spawnEgg.configurableBeeType().toString());
-			}
-			bee.setDefaultAttributes();
-			bee.setHasNectar(false);
-
-			// BeeCage.captureEntity 会写入 entity、type、完整实体 NBT、属性附件及 PB 标记，
-			// 避免手工拼接遗漏字段导致客户端属性 Tooltip 为空。
-			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
-			BeeCage.captureEntity(bee, cage);
-			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
-			return customData == null ? null : customData.copyTag();
+			return manager.getLevel() instanceof net.minecraft.server.level.ServerLevel level
+					? BeeSpawnEggHelper.contents(level, spawnEgg) : null;
 		} catch (RuntimeException e) {
 			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.warn("构造刷怪蛋蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));

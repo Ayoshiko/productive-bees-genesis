@@ -75,7 +75,7 @@ public final class BeeWorkExecutor {
 		if (ticks == 0 && bee.pendingCycles() > 0) return sample(bee, plan, bee.progress(), bee.pendingCycles(), 0, samplingBudget);
 		if (!bee.drained()) return new BeeResult(Status.DRAIN_FIRST, bee, bee, 0);
 		if (plan.recipeRevision() != context.recipeRevision() || plan.capabilityRevision() != context.capabilityRevision()) return new BeeResult(Status.STALE_PLAN, bee, bee, 0);
-		if (!context.enabled()) return new BeeResult(Status.DISABLED, bee, bee, 0);
+		if (!context.enabled() || !bee.enabled()) return new BeeResult(Status.DISABLED, bee, bee, 0);
 		if (!context.flower()) return new BeeResult(Status.FLOWER, bee, bee, 0);
 		if (plan.genesAffectWork() && BeeWorkConditions.evaluate(plan.traits(), context.environment()) != BeeWorkConditions.BlockedBy.NONE) return new BeeResult(Status.ENVIRONMENT, bee, bee, 0);
 		if (ticks == 0) return new BeeResult(Status.BUDGET, bee, bee, 0);
@@ -106,7 +106,7 @@ public final class BeeWorkExecutor {
 			}
 		}
 		var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),
-				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled));
+				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled), bee.enabled());
 		return new BeeResult(Status.READY, bee, next, energyUsed);
 	}
 	private BeeWorkExecutor() { }

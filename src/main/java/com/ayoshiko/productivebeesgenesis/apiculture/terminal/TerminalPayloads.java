@@ -16,7 +16,7 @@ import net.neoforged.neoforge.network.registration.HandlerThread;
 public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-		var registrar = event.registrar("9").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("16").executesOn(HandlerThread.MAIN);
 		registrar.playToServer(TerminalRequest.TYPE, TerminalRequest.STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player) {
 				var reply = handle(player, request);
@@ -25,6 +25,15 @@ public final class TerminalPayloads {
 		});
 		registrar.playToClient(TerminalReply.TYPE, TerminalReply.STREAM_CODEC, (reply, context) -> {
 			if (context.player().containerMenu instanceof NetworkCoreMenu menu) menu.acceptTerminalReply(reply);
+		});
+		registrar.playToClient(TerminalLiveUpdate.TYPE, TerminalLiveUpdate.STREAM_CODEC, (update, context) -> {
+			if (context.player().containerMenu instanceof NetworkCoreMenu menu) menu.acceptTerminalUpdate(update);
+		});
+		registrar.playToServer(TerminalSearchRequest.TYPE, TerminalSearchRequest.STREAM_CODEC, (request, context) -> {
+			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof NetworkCoreMenu menu) {
+				var reply = menu.terminalSearch(player, request);
+				if (reply != null) PacketDistributor.sendToPlayer(player, reply);
+			}
 		});
 	}
 	/** 探针与注册处理器共用此入口；所有访问和预算均在服务器线程。 */

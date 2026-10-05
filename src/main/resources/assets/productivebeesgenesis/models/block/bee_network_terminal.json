@@ -1,8 +1,6 @@
 {
-  "parent": "minecraft:block/cube_bottom_top",
+  "parent": "minecraft:block/cube_all",
   "textures": {
-    "side": "minecraft:block/bee_nest_side",
-    "top": "minecraft:block/bee_nest_top",
-    "bottom": "minecraft:block/lodestone_side"
+    "all": "productivebeesgenesis:block/terminal/bee"
   }
 }

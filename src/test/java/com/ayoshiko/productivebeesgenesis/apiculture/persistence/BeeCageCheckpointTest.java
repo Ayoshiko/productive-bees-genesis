@@ -86,6 +86,8 @@ class BeeCageCheckpointTest {
 		assertTrue(source.bees().isEmpty()); assertTrue(insert.matches(source));
 		assertNotEquals(BeeRecord.identity(f.member(), 1), insert.bee().id());
 		var added = before.exchangeBee(insert);
+		assertSame(before.ownedMachines().capabilityToken(), added.ownedMachines().capabilityToken());
+		assertNotSame(before.ownedMachines().queryToken(), added.ownedMachines().queryToken());
 		assertSame(before.ledger(), added.ledger()); assertSame(before.energy(), added.energy());
 		assertSame(before.scheduler(), added.scheduler()); assertSame(before.transfers(), added.transfers());
 		assertSame(source.feeding(), state(added, f.member()).feeding());

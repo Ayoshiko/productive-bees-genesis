@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersiste
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange;
 import com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeSpawnEggHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.server.level.ServerPlayer;
@@ -25,10 +26,16 @@ public final class CoreBeeCageExchange {
 
 	static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, int slot,
 			long expectedRevision, UUID expectedBee, int inventorySlot, Action action, boolean simulate) {
-		var core = menu.exchangeCore(player);
+		if (inventorySlot < 0 || inventorySlot >= 36) return result(Status.INVALID);
+		return exchange(menu::exchangeCore, player, member, slot, expectedRevision, expectedBee, inventorySlot, action, simulate);
+	}
+	/** 世界入口可使用副手槽；权限回调在准备前和提交前各校验一次。 */
+	static Result exchange(java.util.function.Function<ServerPlayer, NetworkCoreBlockEntity> access, ServerPlayer player,
+			UUID member, int slot, long expectedRevision, UUID expectedBee, int inventorySlot, Action action, boolean simulate) {
+		var core = access.apply(player);
 		if (core == null) return result(Status.UNAVAILABLE);
 		if (member == null || action == null || expectedRevision < 0 || slot < 0 || slot >= 3
-				|| inventorySlot < 0 || inventorySlot >= 36
+				|| inventorySlot < 0 || inventorySlot >= 36 && inventorySlot != 40
 				|| (action == Action.EXTRACT) != (expectedBee != null)) return result(Status.INVALID);
 		var authority = core.ownership().readyAuthority();
 		if (authority == null) return result(Status.UNAVAILABLE);
@@ -46,16 +53,18 @@ public final class CoreBeeCageExchange {
 			if (!bee.id().equals(expectedBee)) return result(Status.STALE);
 			if (!bee.drained()) return result(Status.DRAIN_FIRST);
 		} else if (!ModConfig.SERVER.beeNetwork.enabled.get()) return result(Status.UNAVAILABLE);
-		var inventory = player.getInventory().items.get(inventorySlot).copy();
-		if (!VerifiedCageProjection.supported(inventory)) return result(Status.UNSUPPORTED_CAGE);
+		var inventory = player.getInventory().getItem(inventorySlot).copy();
+		var egg = action == Action.INSERT ? BeeSpawnEggHelper.resolve(inventory) : null;
+		if (!VerifiedCageProjection.supported(inventory) && egg == null) return result(Status.UNSUPPORTED_CAGE);
 		BeeRosterChange change; ItemStack received; NetworkCheckpoint next;
 		try {
 			if (action == Action.EXTRACT) {
 				received = VerifiedCageProjection.fill(inventory, bee);
 				change = BeeRosterChange.extract(state, slot, expectedBee);
 			} else {
-				var contents = VerifiedCageProjection.contents(inventory);
-				received = VerifiedCageProjection.afterRelease(inventory);
+				var contents = egg == null ? VerifiedCageProjection.contents(inventory) : BeeSpawnEggHelper.contents(level, egg);
+				if (egg == null) received = VerifiedCageProjection.afterRelease(inventory);
+				else { received = inventory.copy(); received.consume(1, player); }
 				try { change = StaticApiaryAdapter.insertCaged(level, hive, record, slot, contents, current.policyRevision()); }
 				catch (IllegalArgumentException unsupported) { return result(Status.UNSUPPORTED_BEE); }
 			}
@@ -65,15 +74,15 @@ public final class CoreBeeCageExchange {
 			com.mojang.logging.LogUtils.getLogger().warn("Cannot prepare bee network cage exchange at {}", core.getBlockPos(), failure);
 			return result(Status.INVALID);
 		}
-		if (menu.exchangeCore(player) != core || authority.checkpoint() != current
-				|| !ItemStack.matches(inventory, player.getInventory().items.get(inventorySlot))
+		if (access.apply(player) != core || authority.checkpoint() != current
+				|| !ItemStack.matches(inventory, player.getInventory().getItem(inventorySlot))
 				|| ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class) != hive) {
 			return result(Status.STALE);
 		}
 		if (!simulate) {
 			// 两次写入之间无能力回调；只在完成所有权交换后同步和唤醒可丢弃索引。
 			authority.publish(next);
-			player.getInventory().items.set(inventorySlot, received); player.getInventory().setChanged();
+			player.getInventory().setItem(inventorySlot, received); player.getInventory().setChanged();
 			CoreInventorySync.committed(player, inventorySlot, received);
 			try {
 				core.runtime().beeChanged(member, slot, change.insertion(), level.getServer().overworld().getGameTime());

@@ -1,8 +1,6 @@
 {
-  "parent": "minecraft:block/cube_bottom_top",
+  "parent": "minecraft:block/cube_all",
   "textures": {
-    "side": "minecraft:block/blast_furnace_front",
-    "top": "minecraft:block/blast_furnace_top",
-    "bottom": "minecraft:block/lodestone_side"
+    "all": "productivebeesgenesis:block/terminal/centrifuge"
   }
 }

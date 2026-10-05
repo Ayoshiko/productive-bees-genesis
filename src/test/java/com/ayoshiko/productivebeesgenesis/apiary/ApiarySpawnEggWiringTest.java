@@ -43,26 +43,7 @@ class ApiarySpawnEggWiringTest {
 		assertTrue(source.contains("CONFIGURABLE_ENTITY_ID"));
 	}
 
-	@Test
-	void serverBuildsCompletePbBeeDataWithoutSpawningAnEntity() throws Exception {
-		String source = Files.readString(Path.of(HANDLER));
-		assertTrue(source.contains("isKnownConfigurableBee(spawnEgg)"));
-		assertTrue(source.contains("if (!targetSlot.isEmpty()) return false;"));
-		assertTrue(source.contains("spawnEgg.entityType().create(manager.getLevel())"));
-		assertTrue(source.contains("entity instanceof ProductiveBee bee"),
-				"必须在服务端拒绝被篡改为非 PB 蜜蜂实体的刷怪蛋");
-		assertTrue(source.contains("configurable.setBeeType(spawnEgg.configurableBeeType().toString())"));
-		assertTrue(source.contains("bee.setDefaultAttributes()"),
-				"必须先让 PB 按蜂种初始化默认基因属性");
-		assertTrue(source.contains("BeeCage.captureEntity(bee, cage)"),
-				"必须复用 PB 蜂笼序列化以保存属性附件");
-		assertFalse(source.contains("bee.getData(ProductiveBees.ATTRIBUTE_HANDLER)"),
-				"提前创建空附件会让 setDefaultAttributes 跳过蜂种默认值");
-		assertFalse(source.contains("addFreshEntity"),
-				"临时实体只用于序列化，不得加入世界");
-		assertFalse(source.contains("eggNbt.getAllKeys()"),
-				"不得把客户端刷怪蛋的任意 NBT 写入蜂箱蜜蜂数据");
-	}
+	// PB 初始化、基因附件、扣物与无世界实体由 ClientBeeInputFixture 的真实注册表场景验证。
 
 	@Test
 	void legacySimplifiedBeeDataIsNormalizedBeforeCaging() throws Exception {

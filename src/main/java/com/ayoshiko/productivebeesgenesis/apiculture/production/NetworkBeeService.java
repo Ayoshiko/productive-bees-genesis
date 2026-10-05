@@ -29,6 +29,7 @@ public final class NetworkBeeService {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
 		if (record == null || record.bees() == null) return BeeWorkExecutor.Status.DISABLED;
 		var hive = member(level, record); if (hive == null) return BeeWorkExecutor.Status.UNLOADED;
+		if (ticks > 0 && !record.bees().bee(slot).enabled()) return BeeWorkExecutor.Status.DISABLED;
 		if (ticks > 0 && (!StaticApiaryAdapter.currentPlan(level, hive, record.bees().bee(slot)) || recipeRevision != current.policyRevision())) return BeeWorkExecutor.Status.STALE_PLAN;
 		var bee = record.bees().bee(slot); BeeWorkExecutor.Cycle cycle = null;
 		if (ticks > 0 && bee.drained()) {
@@ -48,6 +49,17 @@ public final class NetworkBeeService {
 			authority.publishMaintainedWork(current, current.applyBeeWork(member, result), tick, fee);
 		}
 		return result.status();
+	}
+	public boolean setEnabled(ServerLevel level, UUID member, int slot, UUID beeId,
+			BeeMemberState.RosterVersion expectedRoster, boolean enabled, boolean simulate) {
+		if (!level.getServer().isSameThread() || slot < 0 || slot >= 3 || beeId == null || expectedRoster == null) return false;
+		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
+		if (record == null || record.bees() == null || record.bees().rosterVersion() != expectedRoster || member(level, record) == null) return false;
+		var bee = record.bees().bees().stream().filter(value -> value.slot() == slot).findFirst().orElse(null);
+		if (bee == null || !bee.id().equals(beeId)) return false;
+		var next = record.bees().withBeeEnabled(slot, beeId, enabled);
+		if (!simulate && next != record.bees()) authority.publish(current.withOwnership(record.withBees(next)));
+		return true;
 	}
 	public boolean settle(ServerLevel level, UUID member, int slot, long beeRevision) {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);

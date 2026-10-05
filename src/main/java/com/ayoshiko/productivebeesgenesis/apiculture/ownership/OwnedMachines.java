@@ -14,7 +14,9 @@ public final class OwnedMachines {
 	private final Map<String, Map<Origin, UUID>> byMachine;
 	private final Object token = new Object();
 	private final Object previous;
-	private OwnedMachines(Map<UUID, OwnedMachineRecord> records, Map<Origin, UUID> positions, Map<UUID, UUID> transfers, Map<String, Map<Origin, UUID>> byMachine, Object previous) { this.records = records; this.positions = positions; this.transfers = transfers; this.byMachine = byMachine; this.previous = previous; }
+	private final Object queryToken;
+	private final Object capabilityToken;
+	private OwnedMachines(Map<UUID, OwnedMachineRecord> records, Map<Origin, UUID> positions, Map<UUID, UUID> transfers, Map<String, Map<Origin, UUID>> byMachine, Object previous, Object queryToken, Object capabilityToken) { this.records = records; this.positions = positions; this.transfers = transfers; this.byMachine = byMachine; this.previous = previous; this.queryToken = queryToken; this.capabilityToken = capabilityToken; }
 	public boolean hasTransfer(UUID transfer) { return transfers.containsKey(transfer); }
 	public OwnedMachineRecord get(UUID member) { return records.get(member); }
 	public OwnedMachineRecord at(Origin origin) { var member = positions.get(origin); return member == null ? null : records.get(member); }
@@ -31,7 +33,16 @@ public final class OwnedMachines {
 		};
 	}
 	public int size() { return records.size(); }
+	/** 在当前类型位置索引正反向续查；不保留旧记录根，也不枚举之前的成员。 */
+	public OwnedMachineRecord activeEntry(String machine, Origin cursor, boolean reverse) {
+		var selected = machine == null ? positions : byMachine.getOrDefault(machine, Map.of());
+		if (selected.isEmpty()) return null;
+		var entry = reverse ? SnapshotRecords.previousEntry(selected, cursor) : SnapshotRecords.nextEntry(selected, cursor);
+		return entry == null ? null : records.get(entry.getValue());
+	}
 	public int activeCount() { return positions.size(); }
+	public Object queryToken() { return queryToken; }
+	public Object capabilityToken() { return capabilityToken; }
 	public boolean follows(OwnedMachines old) { return this == old || previous == old.token || old.size() == 0 && size() == 0; }
 	/** 升级只接受从当前记录签发的专用凭据，不放宽通用生产后继的资产约束。 */
 	public OwnedMachines exchangeUpgrade(MemberUpgradeChange change) {
@@ -39,7 +50,7 @@ public final class OwnedMachines {
 		if (!change.matches(records.get(member))) throw new IllegalArgumentException("Stale member upgrade exchange");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, change.candidate());
-		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token, queryToken, new Object());
 	}
 	/** 付款证明绑定原蜂状态；允许执行器在空周期切换时间，不放宽通用 put。 */
 	public OwnedMachines applyBeeWork(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor.Result result) {
@@ -49,7 +60,7 @@ public final class OwnedMachines {
 				|| !result.matches(old.bees())) throw new IllegalArgumentException("Stale bee work");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, new OwnedMachineRecord(old.claim(), old.phase(), old.assets(), old.fingerprint(), "", result.candidate()));
-		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token, queryToken, capabilityToken);
 	}
 	/** 有限蜂笼交接只替换对应记录；原位置和机器交接收据沿用原根。 */
 	public OwnedMachines exchangeBee(com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange change) {
@@ -57,7 +68,7 @@ public final class OwnedMachines {
 		var old = Objects.requireNonNull(records.get(member), "Missing bee owner");
 		var next = SnapshotRecords.fork(records, UUID::compareTo);
 		next.put(member, old.exchangeBee(change));
-		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token);
+		return new OwnedMachines(next.snapshot(), positions, transfers, byMachine, token, new Object(), capabilityToken);
 	}
 	public OwnedMachines put(OwnedMachineRecord record) {
 		var next = SnapshotRecords.fork(records, UUID::compareTo); var locations = SnapshotRecords.fork(positions, POSITIONS);
@@ -81,7 +92,11 @@ public final class OwnedMachines {
 			if (active) index(changed, record, true);
 			groups = changed.snapshot();
 		}
-		return new OwnedMachines(next.snapshot(), locations.snapshot(), intents.snapshot(), groups, token);
+		boolean rosterChanged = old == null || old.bees() == null != (record.bees() == null)
+				|| old.bees() != null && record.bees() != null && old.bees().rosterVersion() != record.bees().rosterVersion();
+		return new OwnedMachines(next.snapshot(), locations.snapshot(), intents.snapshot(), groups, token,
+				groups != byMachine || rosterChanged ? new Object() : queryToken,
+				groups != byMachine || old == null || old.phase() != record.phase() || old.bees() == null != (record.bees() == null) ? new Object() : capabilityToken);
 	}
 	private static void index(SnapshotRecords<String, Map<Origin, UUID>> groups, OwnedMachineRecord record, boolean insert) {
 		var machine = record.claim().machine();
@@ -113,7 +128,7 @@ public final class OwnedMachines {
 		}
 		public OwnedMachines finish() {
 			// 索引构建计入逐条恢复预算；最终发布只冻结根，不再扫描全部成员。
-			return new OwnedMachines(records.snapshot(), positions.snapshot(), transfers.snapshot(), groups.snapshot(), null);
+			return new OwnedMachines(records.snapshot(), positions.snapshot(), transfers.snapshot(), groups.snapshot(), null, new Object(), new Object());
 		}
 	}
 	@Override public boolean equals(Object other) { return this == other || other instanceof OwnedMachines machines && records.equals(machines.records); }

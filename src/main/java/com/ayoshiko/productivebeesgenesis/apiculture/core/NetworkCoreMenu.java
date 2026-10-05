@@ -26,6 +26,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private final TerminalSequence terminalSequence = new TerminalSequence();
 	private TerminalReply terminalReply;
 	private TerminalClientState clientState;
+	private CoreTerminalSubscription subscription;
+	private CoreAutomaticBeeInput automaticBee;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -92,10 +94,22 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private void addInventory(Inventory inventory) {
 		for (int row = 0; row < 4; row++) for (int column = 0; column < 9; column++) {
 			int index = row == 3 ? column : (row + 1) * 9 + column;
-			addSlot(new Slot(inventory, index, 47 + column * 18, 154 + row * 18 + (row == 3 ? 4 : 0)) {
-				@Override public boolean mayPlace(ItemStack stack) { return false; }
-				@Override public boolean mayPickup(Player player) { return false; }
-			});
+			addSlot(selectionSlot(inventory, index, 47 + column * 18, 154 + row * 18 + (row == 3 ? 4 : 0)));
+		}
+	}
+	private static Slot selectionSlot(Inventory inventory, int index, int x, int y) {
+		return new Slot(inventory, index, x, y) {
+			@Override public boolean mayPlace(ItemStack stack) { return false; }
+			@Override public boolean mayPickup(Player player) { return false; }
+		};
+	}
+	/** 只更换客户端的槽坐标；槽序号和真实背包索引始终不变。 */
+	public void layoutTerminalInventory(int x, int y) {
+		if (core != null || !dedicatedTerminal() || slots.size() != 36) return;
+		for (int i = 0; i < slots.size(); i++) {
+			var previous = slots.get(i); int row = i / 9;
+			var slot = selectionSlot(viewer.getInventory(), previous.getContainerSlot(), x + (i % 9) * 18, y + row * 18 + (row == 3 ? 4 : 0));
+			slot.index = previous.index; slots.set(i, slot);
 		}
 	}
 	public TerminalClientState clientState() { return clientState; }
@@ -144,6 +158,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	@Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
 	@Override public void removed(Player player) {
+		// 客户端切到 JEI 子屏幕也会调用 removed；只有实际菜单已替换才撤销会话。
+		if (core == null && player.containerMenu == this) return;
+		if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) cancelSubscription(serverPlayer);
 		super.removed(player);
 		if (selections != null) selections.close();
 		closed = true; terminalSequence.close(); terminalReply = null;
@@ -151,6 +168,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	@Override public void broadcastChanges() {
 		if (core != null && !stillValid(viewer)) {
+			if (viewer instanceof net.minecraft.server.level.ServerPlayer player) cancelSubscription(player);
 			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; return;
 		}
 		super.broadcastChanges();
@@ -202,19 +220,98 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 			clientState.accept(reply, net.minecraft.Util.getMillis());
 		}
 	}
+	public void acceptTerminalUpdate(TerminalLiveUpdate update) {
+		if (core == null && !closed && dedicatedTerminal()) clientState.acceptLive(update, net.minecraft.Util.getMillis());
+	}
 	/** 正式网络入口；提前消费序号，发送槽同步时的回调也不能重入下一条动作。 */
 	public TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
 		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
 				|| player.containerMenu != this || request.containerId() != containerId
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
+				|| automaticBee != null && request.operation() != TerminalRequest.Operation.CANCEL
 				|| !terminalSequence.begin(request.sequence())) return null;
 		try {
 			if (!TerminalPayloads.allow(player)) return null;
 			if (memberScoped && !memberOperation(request.operation()))
 				return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
-			return CoreTerminalCommands.execute(this, player, request, selections);
+			var reply = CoreTerminalCommands.execute(this, player, request, selections);
+			if (request.operation() == TerminalRequest.Operation.CANCEL) cancelSubscription(player);
+			else if (subscription != null || automaticBee != null) TerminalSubscriptionService.watch(player, this);
+			return reply;
 		}
 		finally { terminalSequence.finish(); }
+	}
+	/** 独立终端检索同样先消费序号，有限扫描与操作令牌共用同一会话。 */
+	public TerminalReply terminalSearch(net.minecraft.server.level.ServerPlayer player, TerminalSearchRequest request) {
+		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
+				|| !dedicatedTerminal() || automaticBee != null || player.containerMenu != this || request.containerId() != containerId
+				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
+				|| !terminalSequence.begin(request.sequence())) return null;
+		try {
+			if (!TerminalPayloads.allow(player)) return null;
+			if (subscription == null) subscription = new CoreTerminalSubscription(this, selections);
+			boolean accepted = subscription.request(request);
+			if (accepted) { selections.cancel(); TerminalSubscriptionService.watch(player, this); }
+			return new TerminalReply(containerId, terminalSession, request.sequence(), accepted ? TerminalReply.Status.OK : TerminalReply.Status.STALE, 0, 0, null);
+		} finally { terminalSequence.finish(); }
+	}
+	public NetworkSelectionSession.Page terminalSelectionPage() { return selections == null ? null : selections.page(); }
+	public long stepSubscription(net.minecraft.server.level.ServerPlayer player, TerminalSyncBudget bytes, long now) {
+		if (subscription == null && automaticBee == null || closed || player.containerMenu != this || !stillValid(player) || !player.isAlive() || player.isSpectator()) {
+			cancelSubscription(player); return Long.MAX_VALUE;
+		}
+		if (exchanging) return now + 1;
+		if (automaticBee != null) {
+			if (!bytes.acquire(now, 128)) return now + 1;
+			var reply = automaticBee.step(this, player, now);
+			if (reply == null) return now + 1;
+			automaticBee = null;
+			net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, reply);
+		}
+		if (subscription == null) return Long.MAX_VALUE;
+		return subscription.step(player, bytes, now, terminalSequence.last());
+	}
+	public void cancelSubscription(net.minecraft.server.level.ServerPlayer player) {
+		TerminalSubscriptionService.remove(player, this); if (subscription != null) subscription.close(); subscription = null; automaticBee = null;
+		if (selections != null) selections.cancel();
+	}
+	TerminalReply queueAutomaticBee(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
+		selections.expire(player.serverLevel().getGameTime());
+		var page = selections.page();
+		boolean valid = dedicatedTerminal() && scope == TerminalScope.APIARY && !memberScoped && automaticBee == null
+				&& ModConfig.SERVER.beeNetwork.enabled.get() && exchangeCore(player) != null && page != null
+				&& page.generation() == request.generation() && request.row() == -1 && request.targetSlot() == -1
+				&& request.amount() == 1 && request.inventorySlot() >= 0;
+		if (!valid) return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
+		var stack = player.getInventory().getItem(request.inventorySlot());
+		if (!com.ayoshiko.productivebeesgenesis.apiculture.compat.VerifiedCageProjection.supported(stack)
+				&& !com.ayoshiko.productivebeesgenesis.apiary.BeeSpawnEggHelper.isResourceBeeSpawnEgg(stack))
+			return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.UNSUPPORTED_CAGE, 0, 0, null);
+		automaticBee = new CoreAutomaticBeeInput(request, player); return null;
+	}
+	public boolean setBeeEnabled(net.minecraft.server.level.ServerPlayer player, UUID member, int slot, UUID beeId,
+			com.ayoshiko.productivebeesgenesis.apiculture.production.BeeMemberState.RosterVersion expectedRoster, boolean enabled, boolean simulate) {
+		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return false;
+		var authority = core.ownership().readyAuthority(); if (authority == null) return false;
+		exchanging = true;
+		try {
+			return new com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkBeeService(authority,
+					com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server))
+					.setEnabled(player.serverLevel(), member, slot, beeId, expectedRoster, enabled, simulate);
+		} finally { exchanging = false; }
+	}
+	public boolean setFeedingDisabled(net.minecraft.server.level.ServerPlayer player, UUID member, int slot,
+			long expectedRevision, boolean disabled) {
+		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return false;
+		var authority = core.ownership().readyAuthority();
+		var record = authority.checkpoint().ownedMachines().get(member);
+		if (record == null || record.bees() == null || record.bees().feeding() == null || slot < 0 || slot >= 3) return false;
+		exchanging = true;
+		try {
+			return new com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkFeedingService(authority,
+					com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server))
+					.apply(player.serverLevel(), member, expectedRevision, record.bees().feeding().disabled(slot, disabled), false);
+		} finally { exchanging = false; }
 	}
 	private static boolean memberOperation(TerminalRequest.Operation operation) {
 		return switch (operation) {

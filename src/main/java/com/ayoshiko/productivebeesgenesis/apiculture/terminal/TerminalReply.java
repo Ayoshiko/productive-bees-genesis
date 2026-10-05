@@ -9,7 +9,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-/** 每个已接纳请求只回复一次，包体最多 16 KiB，无分片队列，图标组件 NBT 每项最多 512 字节。 */
+/** 每个已接纳请求只回复一次，包体最多 64 KiB，无分片队列，图标组件 NBT 每项最多 512 字节。 */
 public record TerminalReply(int containerId, UUID session, long sequence, Status status,
 		int moved, int interruptedTicks, TerminalView view, List<UpgradeResult> upgrades, TerminalUpgradePreview preview) implements CustomPacketPayload {
 	public enum Status { OK, MOVED, STALE, INVALID, UNAVAILABLE, NO_SPACE, EMPTY_OR_RESERVED, DRAIN_FIRST,
@@ -25,7 +25,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 	public TerminalReply(int containerId, UUID session, long sequence, Status status, int moved, int interruptedTicks, TerminalView view) {
 		this(containerId, session, sequence, status, moved, interruptedTicks, view, List.of(), null);
 	}
-	public static final int MAX_BYTES = 16 * 1024;
+	public static final int MAX_BYTES = 64 * 1024;
 	public static final Type<TerminalReply> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_reply"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalReply> STREAM_CODEC = new StreamCodec<>() {
 		@Override public TerminalReply decode(FriendlyByteBuf b) {
@@ -61,9 +61,9 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			throw new IllegalArgumentException("Invalid upgrade reply");
 	}
 	@Override public Type<TerminalReply> type() { return TYPE; }
-	private static TerminalView readView(FriendlyByteBuf b) {
+	static TerminalView readView(FriendlyByteBuf b) {
 		var kind = b.readEnum(NetworkSelectionSession.Kind.class); long generation = b.readLong(); boolean next = b.readBoolean();
-		int size = boundedSize(b, NetworkSelectionSession.PAGE_SIZE);
+		int size = boundedSize(b, kind == NetworkSelectionSession.Kind.PRODUCTS ? NetworkSelectionSession.PRODUCT_PAGE_SIZE : NetworkSelectionSession.PAGE_SIZE);
 		var rows = new ArrayList<TerminalView.Row>(size);
 		for (int i = 0; i < size; i++) {
 			String label = b.readUtf(TerminalView.TEXT_LIMIT); boolean fluid = b.readBoolean();
@@ -72,17 +72,22 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			String owned = b.readUtf(TerminalView.AMOUNT_LIMIT), available = b.readUtf(TerminalView.AMOUNT_LIMIT); boolean exact = b.readBoolean();
 			int count = boundedSize(b, 3); var bees = new ArrayList<TerminalView.Bee>(count);
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
-					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
+					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean(),
+					b.readUtf(TerminalView.TEXT_LIMIT), b.readUnsignedByte(), b.readBoolean(), b.readBoolean() ? TerminalBeeGenes.read(b) : null,
+					b.readBoolean() ? b.readUUID() : null, b.readBoolean()));
 			int upgradesCount = boundedSize(b, TerminalView.MAX_UPGRADES); var upgrades = new ArrayList<TerminalView.Upgrade>(upgradesCount);
 			for (int j = 0; j < upgradesCount; j++) upgrades.add(new TerminalView.Upgrade(b.readUnsignedByte(), b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
-			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades));
+			var location = b.readBoolean() ? new TerminalView.Location(b.readUtf(TerminalView.TEXT_LIMIT),
+					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readInt()) : null;
+			var apiary = b.readBoolean() ? new TerminalView.Apiary(b.readInt(), b.readFloat()) : null;
+			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, apiary));
 		}
 		return new TerminalView(kind, generation, next, rows);
 	}
 	private static int boundedSize(FriendlyByteBuf b, int max) {
 		int size = b.readUnsignedByte(); if (size > max) throw new IllegalArgumentException("Oversized terminal list"); return size;
 	}
-	private static void writeView(FriendlyByteBuf b, TerminalView view) {
+	static void writeView(FriendlyByteBuf b, TerminalView view) {
 		b.writeEnum(view.kind()); b.writeLong(view.generation()); b.writeBoolean(view.hasNext()); b.writeByte(view.rows().size());
 		for (var row : view.rows()) {
 			b.writeUtf(row.label(), TerminalView.TEXT_LIMIT); b.writeBoolean(row.fluid());
@@ -93,12 +98,22 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			for (var bee : row.bees()) {
 				b.writeByte(bee.slot()); b.writeBoolean(bee.occupied()); b.writeUtf(bee.type(), TerminalView.TEXT_LIMIT);
 				b.writeInt(bee.progress()); b.writeInt(bee.cycleTicks()); b.writeBoolean(bee.pending());
+				b.writeUtf(bee.feedingItem(), TerminalView.TEXT_LIMIT); b.writeByte(bee.feedingCount()); b.writeBoolean(bee.feedingDisabled());
+				b.writeBoolean(bee.genes() != null); if (bee.genes() != null) bee.genes().write(b);
+				b.writeBoolean(bee.identity() != null); if (bee.identity() != null) b.writeUUID(bee.identity()); b.writeBoolean(bee.enabled());
 			}
 			b.writeByte(row.upgrades().size());
 			for (var upgrade : row.upgrades()) {
 				b.writeByte(upgrade.choice()); b.writeUtf(upgrade.item(), TerminalView.TEXT_LIMIT);
 				b.writeInt(upgrade.installed()); b.writeInt(upgrade.limit()); b.writeBoolean(upgrade.installable());
 			}
+			b.writeBoolean(row.location() != null);
+			if (row.location() != null) {
+				var p = row.location(); b.writeUtf(p.machine(), TerminalView.TEXT_LIMIT); b.writeUtf(p.dimension(), TerminalView.TEXT_LIMIT);
+				b.writeInt(p.x()); b.writeInt(p.y()); b.writeInt(p.z());
+			}
+			b.writeBoolean(row.apiary() != null);
+			if (row.apiary() != null) { b.writeInt(row.apiary().cycleTicks()); b.writeFloat(row.apiary().productivity()); }
 		}
 	}
 }

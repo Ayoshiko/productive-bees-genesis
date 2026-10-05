@@ -62,6 +62,16 @@ public final class SnapshotRecords<K, V> {
 		}
 		return next == null ? null : Map.entry(next.key, next.value);
 	}
+	/** 反向稳定游标；null 从末项开始，不为上一页建立历史列表。 */
+	public static <K, V> Map.Entry<K, V> previousEntry(Map<K, V> snapshot, K before) {
+		if (!(snapshot instanceof FrozenMap<K, V> frozen)) throw new IllegalArgumentException("Expected a frozen ordered index");
+		var node = frozen.root; Node<K, V> previous = null;
+		while (node != null) {
+			if (before == null || frozen.order.compare(node.key, before) < 0) { previous = node; node = node.right; }
+			else node = node.left;
+		}
+		return previous == null ? null : Map.entry(previous.key, previous.value);
+	}
 	private static int height(Node<?, ?> node) { return node == null ? 0 : node.height; }
 	private static int size(Node<?, ?> node) { return node == null ? 0 : node.size; }
 	private static <K, V> V find(Node<K, V> node, K key, Comparator<? super K> order) {

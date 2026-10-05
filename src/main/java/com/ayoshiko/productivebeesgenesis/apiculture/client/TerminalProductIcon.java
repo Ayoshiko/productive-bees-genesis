@@ -14,7 +14,7 @@ import net.minecraft.world.item.*;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-/** 当前页最多八个只读图标；不持有纹理句柄，资源重载后仍通过原版图集查询。 */
+/** 当前页有限只读图标；不持有纹理句柄，资源重载后仍通过原版图集查询。 */
 final class TerminalProductIcon {
 	private ItemStack item = ItemStack.EMPTY;
 	private FluidStack fluid = FluidStack.EMPTY;

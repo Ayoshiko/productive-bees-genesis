@@ -60,6 +60,13 @@ final class ClientTerminalFixture {
 			player.getInventory().setItem(0, new ItemStack(Items.IRON_BLOCK, 64));
 			beeData = new CompoundTag(); beeData.putString("entity", "productivebees:configurable_bee");
 			beeData.putString("type", "productivebees:iron"); beeData.putUUID("UUID", UUID.randomUUID());
+			var genes = new CompoundTag();
+			for (String field : com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalBeeGenes.FIELDS)
+				genes.putString("bee_" + field, field + "." + switch (field) {
+					case "temper" -> "passive"; case "behavior" -> "diurnal"; case "weather_tolerance" -> "none"; default -> "normal";
+				});
+			var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes);
+			beeData.put("neoforge:attachments", attachments);
 			var cage = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get()); cage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData));
 			player.getInventory().setItem(1, cage); player.getInventory().setItem(2, new ItemStack(Items.BUCKET));
 			player.getInventory().setItem(3, new ItemStack(Items.DIAMOND, 64));

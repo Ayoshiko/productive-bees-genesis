@@ -307,6 +307,41 @@ M04d 基于 `001d40e`，复核 `ApiaryUpgradeProbe`／`ApiaryProductivityProbe`�
 | `.tmp_useless_src`，1.21.1-2.4.5.4／`93486296e0e7eb38620aa660cb7ea66b03f92272` | `MultiblockAlloyFurnaceCoreBlockEntity` 的形成、tick、批次入口／单任务并行；`OmniversalCoilStats.singleTaskParallel/threads/processTime/resolveEffect` | 分开线程、单任务并行、周期和计费；最高有用线圈为 1 tick、long 最大视图及整批固定价特例，普通线圈受配置影响。只确立 T07 对照变量，未实测吞吐，不宣称复制这些数字就与万象炉等效 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/mekanism-10.7.19.85-sources`，固定本地版本 | `FactoryTier`；`ItemTierInstaller.useOn` 的权限／等级检查、升级数据、放置失败、配置恢复和能力失效 | 3／5／7／9 是工厂进程数；采用逐级解锁、升级前检查与保留机器数据，不照搬方块替换后的外部失败处理。新机容量与多方块蜂位另算，有限账户不允许丢失 |
 | `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled`，固定 19.2.17 | `WirelessCraftingTerminalMenuHost.createCraftingInv`、既有 `MEStorageScreen`／终端同步参考 | 真实九格合成材料、宿主生命周期、产物网格与背包分区；本项目不直接把权威大数账户放进物品组件，不采用关闭掉落兜底 |
-| `build/reference/ae2wt-1.21.1`，1.21.1 源码／`49f70f0627b40762cfbd33732834c7271d5ec17d`，声明 AE2 19.2.17／NeoForge 21.1.219 | `WUTHandler.setTerminal/hasTerminal/open/findTerminal`；`wut/recipe/Common.mergeTerminal`；`WTMenuHost.consumeIdlePower/recharge` | 借鉴已安装功能、当前功能和实际物品定位。合并有升级／能量／组件处理，不能简单丢掉另一输入；其 SIMULATE 分支可能 recharge 并 MODULATE，明确不采用。仅源码参考，未安装为项目依赖，未声称本项目已支持 Curios／量子跨维度 |
+| `build/reference/ae2wt-1.21.1`，1.21.1 源码／`49f70f0627b40762cfbd33732834c7271d5ec17d`，声明 AE2 19.2.17／NeoForge 21.1.219 | `WUTHandler.setCurrentTerminal/hasTerminal/open/findTerminal`；`wut/recipe/Common.mergeTerminal`；`WTMenuHost.consumeIdlePower/recharge` | 借鉴已安装功能、当前功能和实际物品定位。合并有升级／能量／组件处理，不能简单丢掉另一输入；其 SIMULATE 分支可能 recharge 并 MODULATE，明确不采用。仅源码参考，未安装为项目依赖，未声称本项目已支持 Curios／量子跨维度 |
 
 完整终端先交付 D18d 的无状态有线合并与模式切换，e／f 才接真实合成资产和无线宿主。关闭释放选择、来源 BE／网络身份与权限失效沿用 D18a／D17；服务器线程负责世界和权威资产，不把参考库的后台合成能力推导成本项目可以后台访问世界。新材料的加工配方和附属等级尚未进入编码，需在 T03–T06 核对对应发行源码／JAR 和成功、拒绝、恢复路径。
+
+<a id="s13-25"></a>
+### 13.25 独立终端界面、真实合成与功能切换调用链（2026-10-03）
+
+版本与本地根沿[13.24](#s13-24)，本步没有更新参考副本。用户提供的 AE2／QIO／通用无线终端截图用于分区与交互参考，界面和方块纹理由本项目独立生成，不提取截图或上游 PNG。
+
+- AE2 `CraftingTermMenu` 构造九个真实 `CraftingMatrixSlot` 和单个 `CraftingTermSlot`；`updateCurrentRecipeAndOutput` 只在输入变化时重新匹配并生成预览，`hasIngredient` 对已保留材料分别计数。采用真实材料／预览结果分离和变更失效，后续 e2 仍需本项目自己的无掉落提交。
+- `CraftingTermSlot.craftItem` 重新取得配方，`extractItemsByRecipe` 校验替代输入仍匹配同一结果，`getRemainingItems` 处理容器余料；`postCraft` 的回存余量会调用 `Platform.spawnDrops`，明确不采用。其全量 `getAvailableStacks` 和模糊枚举也不能直接用于任意大产物账本。
+- `PatternAccessTermScreen.postFullUpdate/refreshList` 按供应者分组、筛选并排序，`GuiQIOItemViewer` 使用搜索框、可滚动槽网格及高度布局。采用机器分组／图标／常驻背包，不照搬客户端持有全部机器和库存的刷新成本；e1a 只保留一页，扫描上限、完整索引与订阅分别验收。
+- AE2WT `WUTHandler.setCurrentTerminal` 先验证已安装功能，写 `CURRENT_TERMINAL` 并发布当前功能；`cycle/nextTerminal` 在已安装功能间前后切换，`open` 由实际物品定位器和当前功能选择菜单。采用服务器校验功能集合、实际设备定位、切换菜单身份；未来 f 对空集合／未知功能显式拒绝，不能无界轮询寻找不存在的功能。D18d 的有线切换已经用同一来源重新签发会话。
+- 本项目的 `NetworkSelectionSession` 保留旧八成员分页，独立产物页扩到 36 格；搜索读取冻结索引且每请求最多检查 128 条，旧页／名册／权限拒绝继续沿用。位置由服务端独立字段下发；采蜜基础图标通过只读字符串字段取得，避免为一个 ID 复制完整 NBT。
+- 定位绘制按本项目 NeoForge 21.1.216 的实际 JAR 核对。AE2 参考中的 `LevelRenderer.renderShape` 在本项目未开放访问，不能依赖参考库的 AT；最终使用公开 `renderLineBox`。定位不绑定实体或加载区块，只有一个有过期时间的客户端位置值。
+
+素材生成源位于忽略的 `build/generate-terminal-art.py`；交付为原创终端框架、四态按钮、八个功能图标及三种终端方块纹理。后续完整合成、无线、独立蜂启停与离心能力汇总仍按路线逐项实现，不以本步布局完成推导这些功能已上线。
+
+<a id="s13-26"></a>
+### 13.26 AE2 操作、无线选择器与全网蜂务复用边界（2026-10-04）
+
+AE2 固定 19.2.17 的本地路径沿 [13.24](#s13-24)。本次复读 `MEStorageScreen.mouseClicked/setSearchText/storeState`、`Repo.handleUpdate/updateView`：采用输入响应、右键清空、可见范围滚动及更新时保持身份。AE2 的全量客户端 Repo 不能直接用于本项目任意大账本；全局检索／排序和订阅公平继续按 D18b 逐步验收。原版 1.21.1 `AbstractContainerScreen.removed` 会在打开 JEI 时调用菜单 removed；`LocalPlayer.clientSideCloseContainer` 则先替换真实 containerMenu，客户端据此区分子屏幕与关闭，服务器撤销路径保持。
+
+用户指定 [AE2WirelessTerminalLibrary](https://github.com/Mari023/AE2WirelessTerminalLibrary) 的本地 `build/reference/ae2wt-1.21.1` 仍为干净的 1.21.1／`49f70f0627b40762cfbd33732834c7271d5ec17d`，未拉取或安装依赖。本次读取 `WUTHandler.setCurrentTerminal/hasTerminal/cycle/nextTerminal/open/findTerminal`、`TerminalSelectionButton.installedTerminals/renderMenu`、`WTMenuHost.consumeIdlePower/recharge`。采用只展示已安装功能、当前功能高亮、正反轮换和真实设备定位；空功能／未知功能须有界拒绝。SIMULATE 分支 recharge 会执行 MODULATE，继续明确不采用。
+
+本项目当前网络 worktree 的 `ApiaryJeiGuiHandler` 以 PB `BeeIngredientFactory` 向 JEI 注册蜜蜂命中区域；新终端复用该原生原料类型，按本地 JEI 19.36.0.360 API 编译、19.39.0.368 运行，常驻 Screen 不引用 JEI。五项基因读取 PB 13.14.0 已有 `entity_data/neoforge:attachments/productivebees:attributes_handler` 的固定字符串字段，与 `BeeTooltipRenderer` 的翻译键一致；不为每行复制实体附件或伪造缺失属性。
+
+复读当前 `ApiaryQuickInsertHandler`、`GeneTreatAutoFeeder`、`ApiaryGeneTreatRestocker`：沿用权限检查、拦截 useOn、完整组件模板、无提升不消费、TYPE 拒绝、概率和已提取暂存／未知提取隔离原则。其物理槽写入、每实例喂食节流和逐机 AE2 节点不能直接进入托管模式；D18g／h 必须通过网络唯一所有者、旧周期和全服预算重新接线。已有独立机代码不作为新网络输入／自动小食的运行验收证据。
+
+e1b1 继续采用同一 AE2 19.2.17，复核 `Repo.handleUpdate` 的首次完整条目、后续数量替换和删除，以及 `updateView` 的稳定身份／暂停时保持槽位；`MEStorageScreen.setSearchText/storeState` 负责输入后更新及重建时保存搜索。本项目改为服务端仅发送当前有界页和续租，首帧完整页、后续帧带查询及命令确认序号；不照搬 AE2 客户端全量 Repo。读档复用本项目 `SnapshotRecords`／`PagedProductAmounts` 不可变根，订阅接入 `FairDueQueue`／`NetworkTickService` 已有全服公平框架，取消和停服释放队列，失败只暂停该订阅。AE2WT 参考仍为上述干净提交，本步未更新副本或添加依赖。
+
+g1a 复核本 worktree 的 `SealedApiaryProfile`、`StaticApiaryAdapter.upgradeCapacity/caged`、`ApiaryUpgradeMath` 和 `PbUpgradeConfig`：排名复用封存升级和运行配置的同源公式，不读取托管期间为空的物理升级组件。`ApiaryCageHandler.buildBeeDataFromSpawnEgg` 的 PB 13.14.0 默认属性／captureEntity 路径抽到 `BeeSpawnEggHelper.contents`，独立机与网络共用；保持仅解析注册蛋和类型组件的既有语义，不把任意蛋 NBT 写入蜜蜂。正式入蜂仍走 `CoreBeeCageExchange`／`BeeRosterChange` 的准备、双侧复核和无回调提交，按 `ManagedProductionAccess` 实时拒绝失效目标。未移植独立机物理槽写入或每实例预算；托管实物快捷入口与基因小食保留各自后续门。
+
+g1b 继续采用上述网络 worktree 的独立机交互原则，核对 `ManagedMemberEvents` 的 HIGHEST 隔离拦截先于 `ApiaryQuickInsertHandler` 的 HIGH 处理，世界入口因此接在隔离事件最前。原版 Minecraft 1.21.1 的主副手 `useItemOn`／携带槽与潜行包负责传递交互，`Inventory.getItem/setItem` 的副手索引为 40；不构造临时菜单或新增资产 payload。NeoForge 21.1.216 本地源码中的 `PlayerContainerEvent.Open` 和登出事件撤销 pending，共享 `CoreBeeInputSearch` 与 `CoreBeeCageExchange` 保留有界扫描、准备后复核和无回调提交。没有把原版 RightClickBlock 写成拥有终端自定义序号，也没有移植独立机物理槽或每实例预算。
+
+2026-10-05 e1b2 复核本 worktree 的 `PagedProductAmounts`、`ProductAmountTrie`、`SnapshotRecords`、`TerminalLiveQuery` 和订阅生命周期：数量使用 `ProductAmount.compareTo` 比较，独立测试以 `exact` 导出 BigInteger 对照，冻结余额差量跳过共享子树，排序只在完整一轮完成后发布；没有把数量排序塞进生产写路径。沿用本节 AE2／QIO 的身份保持与按需订阅原则，本轮未更新或重新引入第三方参考代码。直接读取 PB 13.14.0 JAR 中 en_us／zh_cn 的 `entity.productivebees.iron_bee`，确认为 Iron Bee／铁蜜蜂；五项基因继续使用已核对的 PB 附件字段与本模组翻译键。服务器搜索字典通过 `ModuleClassLoader.getResource` 跨命名模块读取，停服清理，不依赖客户端 Language。实际启动确认原版 JAR 仅带 en_us，zh_cn 位于客户端资产；因此原版名称补充由客户端按当前语言匹配固定注册表并编码位图，服务器按已同步原版 ID 排序解释，不复制分发 Mojang 语言文件，不信任客户端提供资产身份。
+
+2026-10-05 e1c 沿用本 worktree 的 `BeeWorkExecutor` 已付费积压优先路径、`BeeAssetProjection.attach` 交还及 `VerifiedCageProjection` 的 PB 13.14.0 完整 entity_data 往返。网络启停位保存在 BeeRecord 外层，不写入 PB 实体／蜂笼数据；因此同一 beeId 移位和保存保留，结束网络托管后不把控制位带入独立机。复核 `BeeMemberState.rosterVersion`、`NetworkSelectionSession.sameRoster` 与服务器菜单授权，控制变更重新签发名册戳，普通生产保留名册戳。网络 schema 9 单独增加必填 enabled，独立一体机继续使用原单蜂编码；两种 decoder 对新字段严格校验，旧 6–8 格式显式默认启用。本轮未读取或复制新的第三方实现。

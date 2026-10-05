@@ -420,6 +420,8 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 
 	@Override
 	public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+		registration.addGuiContainerHandler(com.ayoshiko.productivebeesgenesis.apiculture.client.NetworkTerminalScreen.class,
+				new NetworkTerminalJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
 		registration.addGenericGuiContainerHandler(GuiMekApiary.class,
 				new ApiaryJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
 	}

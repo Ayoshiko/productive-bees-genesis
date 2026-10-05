@@ -20,7 +20,7 @@ final class BeeRuntimeStep {
 		}
 		int ticks = bee.pendingCycles() > 0 ? 0 : 1;
 		if (ticks > 0) {
-			if (!running) return NetworkRuntime.Status.STOPPED;
+			if (!running || !bee.enabled()) return NetworkRuntime.Status.STOPPED;
 			if (!state.networkPowered()) {
 				if (!NetworkEnergyService.migrate(level, data, directory, member, data.checkpoint().revision(), false)) return NetworkRuntime.Status.ENERGY;
 				state = data.checkpoint().ownedMachines().get(member).bees(); bee = state.bee(slot);

@@ -29,7 +29,7 @@ public final class BeeAssetProjection {
 		int[] pending = extra.contains(PENDING) ? extra.getCompound(PENDING).getIntArray("counts") : new int[0];
 		for (var raw : slots) {
 			var slot = (net.minecraft.nbt.CompoundTag) raw; var bee = state.bee(slot.getInt("slot_index"));
-			if (bee.revision() != 0 || !bee.frozen().isZero() || !bee.originalSlot().copy().equals(slot) || bee.progress() != slot.getInt("ticks_in_hive")
+			if (bee.revision() != 0 || !bee.enabled() || !bee.frozen().isZero() || !bee.originalSlot().copy().equals(slot) || bee.progress() != slot.getInt("ticks_in_hive")
 					|| bee.pendingCycles() != (bee.slot() < pending.length ? pending[bee.slot()] : 0)) throw new IllegalArgumentException("Bee migration lost or duplicated paid work");
 		}
 	}

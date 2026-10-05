@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
 import java.util.ArrayList;
 
-/** 投影成本只随当前八行增长；不序列化完整组件或先转成无限长十进制文本。 */
+/** 投影只随当前页增长（八成员／36 产物）；不序列化完整组件或无限长十进制文本。 */
 public final class TerminalViewProjection {
 	public static TerminalView project(NetworkSelectionSession.Page page) {
 		var rows = new ArrayList<TerminalView.Row>(page.rows().size());
@@ -16,7 +16,9 @@ public final class TerminalViewProjection {
 				var origin = member.claim().origin();
 				rows.add(new TerminalView.Row(shortText(member.claim().machine() + " @ " + origin.x() + "," + origin.y() + "," + origin.z()),
 						false, "", "", true, page.kind() == NetworkSelectionSession.Kind.UPGRADES ? java.util.List.of() : member.bees().stream().map(bee -> new TerminalView.Bee(bee.slot(), bee.id() != null,
-								shortText(bee.type()), bee.progress(), bee.cycleTicks(), bee.pending())).toList()));
+								shortText(bee.type()), bee.progress(), bee.cycleTicks(), bee.pending(),
+								bee.feedingItem(), bee.feedingCount(), bee.feedingDisabled(), bee.genes(), bee.id(), bee.enabled())).toList(), "", "", java.util.List.of(),
+						new TerminalView.Location(member.claim().machine(), origin.dimension(), origin.x(), origin.y(), origin.z())));
 			}
 		}
 		return new TerminalView(page.kind(), page.generation(), page.hasNext(), rows);

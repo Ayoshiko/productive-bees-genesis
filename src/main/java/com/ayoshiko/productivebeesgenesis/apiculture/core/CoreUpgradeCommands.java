@@ -30,7 +30,7 @@ final class CoreUpgradeCommands {
 		for (int i = 0; i < page.rows().size(); i++) {
 			var row = basic.rows().get(i);
 			rows.add(new TerminalView.Row(row.label(), false, "", "", true, List.of(), "", "",
-					choices(menu, player, (NetworkSelectionSession.MemberRow) page.rows().get(i))));
+					choices(menu, player, (NetworkSelectionSession.MemberRow) page.rows().get(i)), row.location()));
 		}
 		return new TerminalView(page.kind(), page.generation(), page.hasNext(), rows);
 	}

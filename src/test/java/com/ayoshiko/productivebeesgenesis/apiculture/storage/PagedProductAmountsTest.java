@@ -53,8 +53,10 @@ class PagedProductAmountsTest {
 			store.set(keys.getLast(), ProductAmount.of(i + 1));
 		}
 		var original = store.snapshot();
+		verifyOrdered(original);
 		for (int i = 0; i < keys.size(); i += 2) store.set(keys.get(i), ProductAmount.ZERO);
 		var half = store.snapshot();
+		verifyOrdered(half); verifyOrdered(original);
 		for (int i = 0; i < keys.size(); i += 2) store.set(keys.get(i), ProductAmount.of(5000 + i));
 		for (int i = 0; i < keys.size(); i++) {
 			assertEquals(ProductAmount.of(i + 1), original.get(keys.get(i)));
@@ -67,6 +69,35 @@ class PagedProductAmountsTest {
 		assertEquals(0, store.size());
 		for (int i = 0; i < keys.size(); i++) store.set(keys.get(i), ProductAmount.of(i + 1));
 		assertEquals(original, store.snapshot());
+		verifyOrdered(store.snapshot());
+	}
+	private static void verifyOrdered(Map<ProductKey, ProductAmount> amounts) {
+		var forward = new ArrayList<ProductKey>();
+		ProductKey cursor = null;
+		while (true) {
+			var entry = PagedProductAmounts.orderedEntry(amounts, cursor, false); if (entry == null) break;
+			assertEquals(amounts.get(entry.getKey()), entry.getValue()); forward.add(cursor = entry.getKey());
+			assertTrue(forward.size() <= amounts.size());
+		}
+		assertEquals(amounts.keySet(), new java.util.HashSet<>(forward)); assertEquals(amounts.size(), forward.size());
+		cursor = null;
+		for (var expected : forward.reversed()) {
+			var entry = PagedProductAmounts.orderedEntry(amounts, cursor, true); assertNotNull(entry);
+			assertEquals(expected, cursor = entry.getKey());
+		}
+		assertNull(PagedProductAmounts.orderedEntry(amounts, cursor, true));
+	}
+	@Test void catalogTokenChangesOnlyForKeysAndForksRetainTheirOwnIndexes() {
+		var store = new PagedProductAmounts(); store.set(key(1), ProductAmount.of(4));
+		var initial = store.snapshot(); var token = PagedProductAmounts.keyToken(initial);
+		var fork = PagedProductAmounts.restore(initial); fork.set(key(1), ProductAmount.of(8));
+		assertSame(token, PagedProductAmounts.keyToken(fork.snapshot()));
+		fork.set(key(2), ProductAmount.of(3)); var expanded = fork.snapshot();
+		assertNotSame(token, PagedProductAmounts.keyToken(expanded));
+		store.set(key(1), ProductAmount.ZERO); assertNull(PagedProductAmounts.orderedEntry(store.snapshot(), null, false));
+		verifyOrdered(initial); verifyOrdered(expanded);
+		assertEquals(ProductAmount.of(4), initial.get(key(1)));
+		assertEquals(ProductAmount.of(8), expanded.get(key(1)));
 	}
 	@Test void freezeAndForkDoNotShareWritablePagesOrLargeNumbers() {
 		var store = new PagedProductAmounts(); var key = key(1);

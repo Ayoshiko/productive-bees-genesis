@@ -56,7 +56,7 @@ public final class ClientOwnershipFixture {
 			retryJoin = stage == 1 && core.ownership().status() == CoreOwnershipController.Status.REJECTED && !core.ownership().busy()
 					&& core.ownership().failure().equals("Topology changed; completed transfers remain owned")
 					&& core.topology() != null && core.topology().valid() && core.topology().members().size() == 2;
-			if (stage == 2) { ClientTerminalFixture.tick(core, player); ClientMemberProxyFixture.tick(core, player); }
+			if (stage == 2) { ClientTerminalFixture.tick(core, player); ClientMemberProxyFixture.tick(core, player); ClientBeeInputFixture.tick(core, player); }
 			if (stage == 0) {
 				if (core.topology() == null || !core.topology().valid()) return;
 				require(core.topology().members().size() == 2, "Client fixture topology differs");

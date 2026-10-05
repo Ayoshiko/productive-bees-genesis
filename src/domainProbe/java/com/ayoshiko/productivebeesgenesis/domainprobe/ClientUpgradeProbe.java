@@ -15,12 +15,14 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class ClientUpgradeProbe {
 	private static int step;
 	private static int previewWaits;
+	private static boolean apiaryCaptured, previewCaptured;
 	private static int nextServerTick;
 	static int step() { return step; }
 	private static long nextAt;
 	static boolean complete() { return step == 25; }
 	static boolean advance(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu) throws Exception {
 		require(menu.clientState().notice() != TerminalClientState.Notice.TIMEOUT, "Upgrade request timed out at client step " + step);
+		if (step == 16 && menu.clientState().view() != null) hover(client, screen, "upgrade_install_page");
 		if (ClientOwnershipFixture.serverTick < nextServerTick) return false;
 		if (Util.getMillis() < nextAt || !menu.clientState().ready(Util.getMillis())) return false;
 		String refresh = Component.translatable("screen.productivebeesgenesis.network.refresh").getString();
@@ -38,23 +40,35 @@ final class ClientUpgradeProbe {
 			case 5 -> { if (!select(screen, menu, "mek_apiary", 8, 0)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 7); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
 			case 6 -> { result(client, menu, 7, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
 			case 7 -> { if (!select(screen, menu, "mek_apiary", 8, 1)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 7); step++; }
-			case 8 -> { capture(client, "terminal-upgrades-apiary"); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 8 -> {
+				if (!apiaryCaptured) { capture(client, "terminal-upgrades-apiary"); apiaryCaptured = true; ClientTerminalProbe.press(screen, "refresh"); return false; }
+				if (!select(screen, menu, "mek_apiary", 8, 1)) return false;
+				ClientTerminalProbe.chooseSlot(screen, menu, 7); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
 			case 9 -> { result(client, menu, 7, 2); ClientTerminalProbe.press(screen, "refresh"); step++; }
 			case 10 -> { if (!select(screen, menu, "mek_centrifuge", 0, 0)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install"); step++; }
 			case 11 -> { result(client, menu, 6, 1); ClientTerminalProbe.press(screen, "refresh"); step++; }
-			case 12 -> { if (!select(screen, menu, "mek_centrifuge", 0, 1)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); step++; }
-			case 13 -> { capture(client, "terminal-upgrades-centrifuge"); screen.resize(client, 320, 240); ClientTerminalProbe.verifyLayout(screen, menu); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
+			case 12 -> { if (!select(screen, menu, "mek_centrifuge", 0, 1)) return false;
+				capture(client, "terminal-upgrades-centrifuge"); screen.resize(client, 320, 240); ClientTerminalProbe.verifyLayout(screen, menu);
+				// 截图／窗口重建可能超过选择保留期；重新取得页面，再验证小视口里的真实取回。
+				ClientTerminalProbe.press(screen, "refresh"); step++; }
+			case 13 -> { if (!select(screen, menu, "mek_centrifuge", 0, 1)) return false;
+				ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_remove"); step++; }
 			case 14 -> { result(client, menu, 6, 2); screen.resize(client, client.getWindow().getGuiScaledWidth(), client.getWindow().getGuiScaledHeight()); ClientTerminalProbe.press(screen, "refresh"); step++; }
 			case 15 -> { if (!select(screen, menu, "mek_apiary", 0, 0)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_single"); hover(client, screen, "upgrade_install_page"); step++; }
 			case 16 -> { if (menu.clientState().preview() == null) {
-					capture(client, "terminal-preview-wait");
+					// 等待悬停时不做同步 GPU 读回／PNG 编码，避免探针自身耗尽页面有效期。
+					hover(client, screen, "upgrade_install_page");
 					require(++previewWaits < 4, "Hover preview missing: mouse=" + client.mouseHandler.xpos() + "," + client.mouseHandler.ypos()
 							+ " scale=" + client.getWindow().getGuiScale() + " notice=" + menu.clientState().notice() + " view=" + menu.clientState().view());
 					return false;
 				}
 				require(menu.clientState().preview().movable() == 1 && menu.clientState().preview().after().timeFactor() < menu.clientState().preview().before().timeFactor(), "Client upgrade estimate missing");
 				require(client.player.getInventory().getItem(6).getCount() == 2, "Hover preview consumed upgrades"); step++; }
-			case 17 -> { capture(client, "terminal-upgrade-preview"); org.lwjgl.glfw.GLFW.glfwSetCursorPos(client.getWindow().getWindow(), 10, 10); ClientTerminalProbe.press(screen, "upgrade_install_page"); step++; }
+			case 17 -> {
+				if (!previewCaptured) { capture(client, "terminal-upgrade-preview"); previewCaptured = true;
+					org.lwjgl.glfw.GLFW.glfwSetCursorPos(client.getWindow().getWindow(), 10, 10); ClientTerminalProbe.press(screen, "refresh"); return false; }
+				if (!select(screen, menu, "mek_apiary", 0, 0)) return false;
+				ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_install_page"); step++; }
 			case 18 -> { batchResult(client, menu, 0); ClientTerminalProbe.press(screen, "refresh"); step++; }
 			case 19 -> { if (!select(screen, menu, "mek_apiary", 0, 1)) return false; ClientTerminalProbe.chooseSlot(screen, menu, 6); ClientTerminalProbe.press(screen, "upgrade_remove_page"); step++; }
 			case 20 -> { batchResult(client, menu, 2); step++; }
@@ -95,8 +109,15 @@ final class ClientUpgradeProbe {
 		String label = Component.translatable("screen.productivebeesgenesis.network." + key).getString();
 		var button = screen.children().stream().filter(c -> c instanceof Button b && b.getMessage().getString().equals(label)).map(Button.class::cast).findFirst().orElseThrow();
 		var scale = client.getWindow().getGuiScale();
-		org.lwjgl.glfw.GLFW.glfwFocusWindow(client.getWindow().getWindow());
-		org.lwjgl.glfw.GLFW.glfwSetCursorPos(client.getWindow().getWindow(), (button.getX() + button.getWidth() / 2.0) * scale, (button.getY() + 8) * scale);
+		// 通过 GLFW 使用的同一客户端事件入口投递；后台窗口不依赖操作系统抢焦点成功。
+		try {
+			var method = net.minecraft.client.MouseHandler.class.getDeclaredMethod("onMove", long.class, double.class, double.class);
+			method.setAccessible(true);
+			method.invoke(client.mouseHandler, client.getWindow().getWindow(), (button.getX() + button.getWidth() / 2.0) * scale, (button.getY() + 8) * scale);
+			// 后台窗口可能暂停绘制；仍通过真实控件的 render 命中逻辑更新悬停。
+			var graphics = new net.minecraft.client.gui.GuiGraphics(client, client.renderBuffers().bufferSource());
+			button.render(graphics, button.getX() + button.getWidth() / 2, button.getY() + 8, 0); graphics.flush();
+		} catch (ReflectiveOperationException failure) { throw new IllegalStateException("Cannot deliver probe mouse event", failure); }
 	}
 	private static void click(NetworkCoreScreen screen, int x, int y) {
 		double mouseX = (screen.width - NetworkCoreScreen.WIDTH) / 2 + x, mouseY = (screen.height - NetworkCoreScreen.HEIGHT) / 2 + y;

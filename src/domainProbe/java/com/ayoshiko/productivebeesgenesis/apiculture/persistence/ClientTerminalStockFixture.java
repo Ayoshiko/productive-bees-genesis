@@ -12,5 +12,10 @@ public final class ClientTerminalStockFixture {
 				new LedgerCheckpoint(current.ledger().revision() + 1, stock, List.of()), current.transfers(), current.discoveries(),
 				current.members(), current.lanes(), current.scheduler(), current.energy()).restoredOwnership(current.ownedMachines()));
 	}
+	public static void withdraw(NetworkSavedData data, ProductKey key, int amount) {
+		var current = data.checkpoint(); var next = current.withdrawProduct(current.ledger().revision(), key, amount);
+		if (next == current) throw new IllegalStateException("Live fixture withdrawal rejected");
+		data.publish(next);
+	}
 	private ClientTerminalStockFixture() { }
 }

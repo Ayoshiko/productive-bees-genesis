@@ -16,6 +16,10 @@ final class DedicatedTerminalChecks {
 	static void verify(NetworkCoreBlockEntity core, ServerPlayer player) {
 		var level = player.serverLevel(); var data = core.ownership().readyAuthority();
 		require(data != null, "Dedicated terminal authority missing");
+		var names = TerminalSearchNames.INSTANCE;
+		require(names.text("bee", "productivebees:iron").contains("铁蜜蜂"), "PB Chinese search dictionary missing: " + names.text("bee", "productivebees:iron"));
+		require(names.text("item", "minecraft:iron_ingot").contains("iron ingot"),
+				"Vanilla English search dictionary missing: " + names.text("item", "minecraft:iron_ingot"));
 		var before = data.checkpoint(); var position = player.position();
 		level.setBlockAndUpdate(BEE, NetworkContent.BEE_TERMINAL.get().defaultBlockState());
 		level.setBlockAndUpdate(CENTRIFUGE, NetworkContent.CENTRIFUGE_TERMINAL.get().defaultBlockState());
@@ -59,6 +63,85 @@ final class DedicatedTerminalChecks {
 		player.closeContainer(); verifyCombined(core, player);
 		require(data.checkpoint() == before, "Rejected terminal checks changed network assets");
 		core.openTerminal(player);
+	}
+	private static int detailStep;
+	private static long nextDetailTick;
+	private static NetworkCoreMenu detailMenu;
+	private static TerminalReply detailReply;
+	private static TerminalRequest disabledRequest;
+	private static int detailSlot;
+	private static UUID detailMember;
+	private static com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore.Slot detailFood;
+	private static net.minecraft.world.item.ItemStack originalInventory;
+	static boolean advanceDetails(NetworkCoreBlockEntity core, ServerPlayer player) {
+		if (player.serverLevel().getGameTime() < nextDetailTick) return false;
+		nextDetailTick = player.serverLevel().getGameTime() + 5;
+		var authority = core.ownership().readyAuthority();
+		if (detailStep == 0) {
+			var initial = authority.checkpoint().ownedMachines().activeValues(TerminalScope.APIARY.machine()).iterator().next();
+			if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedProductionAccess.member(player.serverLevel(), authority,
+					com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server), initial,
+					com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary.class) == null) return false;
+			detailMenu = open(player, (NetworkTerminalBlockEntity) player.serverLevel().getBlockEntity(BEE));
+			require(initial.bees().feeding().slots().getFirst().count() == 0, "Flower fixture must start empty");
+			originalInventory = player.getInventory().getItem(8).copy();
+			player.getInventory().setItem(8, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_BLOCK));
+			var deposited = detailMenu.exchangeFeeding(player, initial.claim().member(), 0, initial.bees().feeding().revision(), 8, 1,
+					CoreFeedingExchange.Action.DEPOSIT, false);
+			require(deposited.moved() == 1, "Flower fixture deposit failed: " + deposited);
+			var fed = authority.checkpoint().ownedMachines().get(initial.claim().member());
+			require(detailMenu.exchangeBee(player, fed.claim().member(), 0, fed.bees().revision(), null, 1,
+					CoreBeeCageExchange.Action.INSERT, false).moved() == 1, "Bee display fixture insertion failed");
+			detailReply = TerminalPayloads.handle(player, new TerminalRequest(detailMenu.containerId, detailMenu.terminalSession(), 1,
+					TerminalRequest.Operation.MEMBERS, 0, -1, 0, 0, 0));
+			require(detailReply != null && detailReply.view() != null && detailReply.view().rows().size() == 1, "Detailed terminal page missing");
+			var row = detailReply.view().rows().getFirst();
+			require(row.location() != null && row.location().x() == 9 && row.location().dimension().equals("minecraft:overworld"), "Structured location mismatch");
+			detailSlot = row.bees().stream().filter(value -> value.feedingCount() > 0).findFirst().orElseThrow().slot();
+			var record = authority.checkpoint().ownedMachines().activeValues(TerminalScope.APIARY.machine()).iterator().next();
+			detailMember = record.claim().member(); detailFood = record.bees().feeding().slots().get(detailSlot);
+		} else if (detailStep == 1) {
+			disabledRequest = new TerminalRequest(detailMenu.containerId, detailMenu.terminalSession(), 2, TerminalRequest.Operation.FEED_DISABLE,
+					detailReply.view().generation(), 0, detailSlot, 0, 0);
+			var reply = TerminalPayloads.handle(player, disabledRequest);
+			require(reply != null && reply.status() == TerminalReply.Status.OK, "Feeding disable failed");
+			var updated = authority.checkpoint().ownedMachines().get(detailMember).bees().feeding().slots().get(detailSlot);
+			require(updated.disabled() && updated.item().equals(detailFood.item()) && updated.count() == detailFood.count(), "Feeding control changed assets");
+		} else if (detailStep == 2) {
+			require(TerminalPayloads.handle(player, disabledRequest) == null, "Feeding control replay accepted");
+			detailReply = TerminalPayloads.handle(player, new TerminalRequest(detailMenu.containerId, detailMenu.terminalSession(), 3,
+					TerminalRequest.Operation.MEMBERS, 0, -1, 0, 0, 0));
+			require(detailReply != null && detailReply.view().rows().getFirst().bees().get(detailSlot).feedingDisabled(), "Disabled state not projected");
+		} else if (detailStep == 3) {
+			var reply = TerminalPayloads.handle(player, new TerminalRequest(detailMenu.containerId, detailMenu.terminalSession(), 4, TerminalRequest.Operation.FEED_ENABLE,
+					detailReply.view().generation(), 0, detailSlot, 0, 0));
+			require(reply != null && reply.status() == TerminalReply.Status.OK, "Feeding enable failed");
+			var updated = authority.checkpoint().ownedMachines().get(detailMember).bees().feeding().slots().get(detailSlot);
+			require(!updated.disabled() && updated.item().equals(detailFood.item()) && updated.count() == detailFood.count(), "Feeding restore lost assets");
+		} else if (detailStep == 4) {
+			var search = detailMenu.terminalSearch(player, new TerminalSearchRequest(detailMenu.containerId, detailMenu.terminalSession(), 5, NetworkSelectionSession.Kind.MEMBERS, "definitely_missing"));
+			require(search != null && search.status() == TerminalReply.Status.OK && search.view() == null, "Server search did not acknowledge subscription");
+		} else {
+			var page = detailMenu.terminalSelectionPage(); if (page == null) return false;
+			require(page.rows().isEmpty() && !page.hasNext(), "Server subscription ignored filter");
+			player.closeContainer(); core.openTerminal(player); detailMenu = null; detailReply = null; detailFood = null; disabledRequest = null; return true;
+		}
+		detailStep++; return false;
+	}
+	static void cleanupDetails(NetworkCoreBlockEntity core, ServerPlayer player) {
+		require(player.containerMenu instanceof NetworkCoreMenu, "Flower cleanup menu missing");
+		var menu = (NetworkCoreMenu) player.containerMenu;
+		var record = core.ownership().readyAuthority().checkpoint().ownedMachines().get(detailMember);
+		require(menu.exchangeBee(player, detailMember, 0, record.bees().revision(), record.bees().bee(0).id(), 1,
+				CoreBeeCageExchange.Action.EXTRACT, false).moved() == 1, "Bee display fixture extraction failed");
+		record = core.ownership().readyAuthority().checkpoint().ownedMachines().get(detailMember);
+		require(player.getInventory().getItem(8).isEmpty(), "Flower fixture receiver changed");
+		require(menu.exchangeFeeding(player, detailMember, detailSlot, record.bees().feeding().revision(), 8, 1,
+				CoreFeedingExchange.Action.WITHDRAW, false).moved() == 1, "Flower fixture withdrawal failed");
+		require(player.getInventory().getItem(8).is(net.minecraft.world.item.Items.IRON_BLOCK) && player.getInventory().getItem(8).getCount() == 1,
+				"Flower fixture duplicated or changed item");
+		player.getInventory().setItem(8, originalInventory); originalInventory = null;
+		player.getInventory().setChanged(); player.inventoryMenu.broadcastChanges(); player.containerMenu.broadcastChanges();
 	}
 	private static void verifyCombined(NetworkCoreBlockEntity core, ServerPlayer player) {
 		var terminal = (NetworkTerminalBlockEntity) player.serverLevel().getBlockEntity(COMBINED);

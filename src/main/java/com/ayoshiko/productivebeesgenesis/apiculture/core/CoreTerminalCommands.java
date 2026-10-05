@@ -26,6 +26,9 @@ final class CoreTerminalCommands {
 			}
 			return reply(request, page == null ? STALE : OK, 0, 0, page == null ? null : CoreUpgradeCommands.project(menu, player, page));
 		}
+		if (operation == TerminalRequest.Operation.AUTO_BEE_IN) {
+			try { return menu.queueAutomaticBee(player, request); } finally { selections.cancel(); }
+		}
 		var selected = menu.selectedRow(player, request.session(), request.generation(), request.row());
 		if (selected == null) return reply(request, STALE, 0, 0, null);
 		if (TerminalRequest.upgradePreview(operation)) {
@@ -48,6 +51,20 @@ final class CoreTerminalCommands {
 			var record = current.ownedMachines().get(member.claim().member());
 			if (!NetworkSelectionSession.sameRoster(member, record)) return reply(request, STALE, 0, 0, null);
 			if (request.targetSlot() < 0 || request.targetSlot() >= 3) return reply(request, INVALID, 0, 0, null);
+			if (operation == TerminalRequest.Operation.BEE_ENABLE || operation == TerminalRequest.Operation.BEE_DISABLE) {
+				if (request.amount() != 0 || request.inventorySlot() != -1) return reply(request, INVALID, 0, 0, null);
+				var bee = member.bees().stream().filter(value -> value.slot() == request.targetSlot()).findFirst().orElse(null);
+				if (bee == null || bee.id() == null) return reply(request, EMPTY, 0, 0, null);
+				boolean accepted = menu.setBeeEnabled(player, member.claim().member(), bee.slot(), bee.id(), member.rosterVersion(),
+						operation == TerminalRequest.Operation.BEE_ENABLE, false);
+				return reply(request, accepted ? OK : STALE, 0, 0, null);
+			}
+			if (operation == TerminalRequest.Operation.FEED_ENABLE || operation == TerminalRequest.Operation.FEED_DISABLE) {
+				if (request.amount() != 0) return reply(request, INVALID, 0, 0, null);
+				boolean changed = menu.setFeedingDisabled(player, member.claim().member(), request.targetSlot(),
+						member.feedingRevision(), operation == TerminalRequest.Operation.FEED_DISABLE);
+				return reply(request, changed ? OK : STALE, 0, 0, null);
+			}
 			if (operation == TerminalRequest.Operation.FEED_IN || operation == TerminalRequest.Operation.FEED_OUT) {
 				if (record.bees().feeding() == null) return reply(request, UNAVAILABLE, 0, 0, null);
 				var result = menu.exchangeFeeding(player, member.claim().member(), request.targetSlot(), record.bees().feeding().revision(),
@@ -64,7 +81,7 @@ final class CoreTerminalCommands {
 					operation == TerminalRequest.Operation.CAGE_IN ? CoreBeeCageExchange.Action.INSERT : CoreBeeCageExchange.Action.EXTRACT, false);
 			return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), result.interruptedTicks(), null);
 		} finally {
-			// 结果不再携带可继续点按的旧页；客户端仅可重新查询显示，不自动重试资产命令。
+			// 旧令牌立即撤销；由显式查询或当前订阅重新签发，资产命令不自动重试。
 			selections.cancel();
 		}
 	}

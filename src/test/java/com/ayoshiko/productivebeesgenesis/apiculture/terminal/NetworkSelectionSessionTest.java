@@ -27,6 +27,159 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSele
 import static org.junit.jupiter.api.Assertions.*;
 
 class NetworkSelectionSessionTest {
+	@Test void quantityPagesFreezeOrderButKeepLiveBalancesAndSkipDeletedKeys() {
+		var source = products(83);
+		var index = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex(); index.retain(UUID.randomUUID());
+		for (int i = 0; index.order() == null; i++) { assertTrue(i < 1000); index.step(source.ledger().balances(), 0, 7); }
+		var order = index.order(); var expected = new java.util.ArrayList<ProductKey>();
+		var cursor = order.next(null, false);
+		while (cursor != null) { expected.add(cursor.getValue()); cursor = order.next(cursor.getKey(), false); }
+		for (boolean ascending : new boolean[]{false, true}) {
+			var query = new TerminalLiveQuery(PRODUCTS, TerminalScope.APIARY, "kind:item @test");
+			query.quantity(order, ascending); var seen = new java.util.ArrayList<ProductKey>();
+			for (int page = 0; page < 3; page++) {
+				finish(query, source);
+				query.currentRows(source).forEach(row -> seen.add(((NetworkSelectionSession.ProductRow) row).key()));
+				assertEquals(page < 2, query.hasNext()); if (query.hasNext()) assertTrue(query.navigate(false));
+			}
+			var reference = new java.util.ArrayList<>(expected); if (ascending) java.util.Collections.reverse(reference);
+			assertEquals(reference, seen); assertEquals(83, new java.util.HashSet<>(seen).size());
+			assertTrue(query.navigate(true)); finish(query, source);
+			assertEquals(reference.subList(36, 72), query.currentRows(source).stream().map(NetworkSelectionSession.ProductRow.class::cast).map(NetworkSelectionSession.ProductRow::key).toList());
+			assertTrue(query.navigate(true)); finish(query, source); assertFalse(query.hasPrevious());
+		}
+		var query = new TerminalLiveQuery(PRODUCTS, TerminalScope.APIARY, ""); query.quantity(order, false); finish(query, source);
+		var current = source.withdrawProduct(source.ledger().revision(), key(0), 17);
+		assertEquals(ProductAmount.of(BigInteger.ONE.shiftLeft(90).subtract(BigInteger.valueOf(17))),
+				((NetworkSelectionSession.ProductRow) query.currentRows(current).getFirst()).owned());
+		current = current.withdrawProduct(current.ledger().revision(), key(82), 83);
+		query.restart(); finish(query, current);
+		assertEquals(36, query.currentRows(current).size());
+		assertFalse(query.currentRows(current).stream().map(NetworkSelectionSession.ProductRow.class::cast).anyMatch(row -> row.key().equals(key(82))));
+		assertEquals(83, order.rows().size());
+	}
+
+	@Test void capacityOrderIsGlobalAndNavigatesWithoutRepeats() {
+		var source = NetworkCheckpoint.empty(identity());
+		var sorted = new java.util.TreeMap<ApiaryRank, UUID>(); var members = new java.util.HashMap<UUID, ApiaryRank>();
+		for (int i = 0; i < 19; i++) {
+			var record = machine(source.identity(), i); source = source.withOwnership(record);
+			var rank = new ApiaryRank(0, 100, i + 1, record.claim().origin(), record.claim().member());
+			sorted.put(rank, rank.member()); members.put(rank.member(), rank);
+		}
+		var order = new ApiaryRank.Order(new Object(), sorted, members);
+		var query = new TerminalLiveQuery(MEMBERS, TerminalScope.CENTRIFUGE, ""); query.order(order);
+		var seen = new java.util.ArrayList<Integer>();
+		for (int page = 0; page < 3; page++) {
+			while (!query.complete()) assertTrue(query.step(source, 3, order) <= 3);
+			query.currentRows(source).forEach(row -> seen.add(((NetworkSelectionSession.MemberRow) row).claim().origin().x()));
+			assertEquals(page < 2, query.hasNext()); if (page < 2) assertTrue(query.navigate(false));
+		}
+		assertEquals(java.util.stream.IntStream.iterate(18, i -> i - 1).limit(19).boxed().toList(), seen);
+		assertTrue(query.navigate(true)); while (!query.complete()) query.step(source, 3, order);
+		assertEquals(10, ((NetworkSelectionSession.MemberRow) query.currentRows(source).getFirst()).claim().origin().x());
+		var changed = new java.util.TreeMap<ApiaryRank, UUID>();
+		var changedMembers = new java.util.HashMap<UUID, ApiaryRank>();
+		for (var rank : sorted.keySet()) {
+			var value = new ApiaryRank(0, 100, 20 - rank.productivity(), rank.origin(), rank.member());
+			changed.put(value, value.member()); changedMembers.put(value.member(), value);
+		}
+		var replacement = new ApiaryRank.Order(new Object(), changed, changedMembers); query.order(replacement);
+		while (!query.complete()) query.step(source, 3, replacement);
+		assertFalse(query.hasPrevious());
+		assertEquals(0, ((NetworkSelectionSession.MemberRow) query.currentRows(source).getFirst()).claim().origin().x());
+	}
+	@Test void rankUsesTierThenEffectiveRateThenCycleAndStablePosition() {
+		var id = UUID.randomUUID(); var pos = new Origin("minecraft:overworld", 0, 64, 0);
+		assertTrue(new ApiaryRank(1, 1000, 1, pos, id).compareTo(new ApiaryRank(0, 1, 100, pos, id)) < 0);
+		assertTrue(new ApiaryRank(0, 100, 4, pos, id).compareTo(new ApiaryRank(0, 50, 1, pos, id)) < 0);
+		assertTrue(new ApiaryRank(0, 50, 1, pos, id).compareTo(new ApiaryRank(0, 100, 2, pos, id)) < 0);
+		assertTrue(new ApiaryRank(0, Integer.MAX_VALUE, Float.MAX_VALUE, pos, id)
+				.compareTo(new ApiaryRank(0, Integer.MAX_VALUE, Float.MAX_VALUE, new Origin("minecraft:overworld", 1, 64, 0), id)) < 0);
+	}
+	@Test void livePagesTraverseBothDirectionsWithoutDuplicatesAndRefreshCurrentAmounts() {
+		var source = products(83); var query = new TerminalLiveQuery(PRODUCTS, TerminalScope.APIARY, "test:product");
+		finish(query, source); var first = query.currentRows(source); assertEquals(36, first.size());
+		assertFalse(query.hasPrevious()); assertTrue(query.hasNext());
+		assertTrue(query.navigate(false)); finish(query, source); var second = query.currentRows(source);
+		assertEquals(36, second.size()); assertTrue(query.hasPrevious()); assertTrue(query.hasNext());
+		assertTrue(query.navigate(false)); finish(query, source); var third = query.currentRows(source);
+		assertEquals(11, third.size()); assertFalse(query.hasNext());
+		var seen = new java.util.HashSet<NetworkSelectionSession.Row>();
+		seen.addAll(first); seen.addAll(second); seen.addAll(third); assertEquals(83, seen.size());
+		assertTrue(query.navigate(true)); finish(query, source); assertEquals(second, query.currentRows(source));
+		assertTrue(query.navigate(true)); finish(query, source); assertEquals(first, query.currentRows(source));
+		var current = source.withdrawProduct(source.ledger().revision(), key(0), 1);
+		assertFalse(query.catalogChanged(current));
+		var refreshed = query.currentRows(current).stream().map(NetworkSelectionSession.ProductRow.class::cast)
+				.filter(row -> row.key().equals(key(0))).findFirst().orElseThrow();
+		assertEquals(current.ledger().balances().get(key(0)), refreshed.owned());
+		assertEquals(ProductAmount.of(BigInteger.ONE.shiftLeft(90)), source.ledger().balances().get(key(0)));
+		current = current.withdrawProduct(current.ledger().revision(), key(2), 3);
+		assertTrue(query.catalogChanged(current)); query.restart(); finish(query, current);
+		assertEquals(36, query.currentRows(current).size());
+		assertTrue(query.currentRows(current).stream().map(NetworkSelectionSession.ProductRow.class::cast).noneMatch(row -> row.key().equals(key(2))));
+	}
+	@Test void sparseLiveQueryAdvancesAcrossBudgetsAndSeesLaterDirectoryChanges() {
+		var source = NetworkCheckpoint.empty(identity());
+		for (int i = 0; i < 300; i++) source = source.withOwnership(machine(source.identity(), i));
+		var query = new TerminalLiveQuery(MEMBERS, TerminalScope.CENTRIFUGE, "299,64,2");
+		for (int i = 0; i < 9; i++) { assertEquals(32, query.step(source, 32)); assertFalse(query.complete()); }
+		assertEquals(13, query.step(source, 32)); assertTrue(query.complete());
+		assertEquals(299, ((NetworkSelectionSession.MemberRow) query.currentRows(source).getFirst()).claim().origin().x());
+		var changed = source.withOwnership(machine(source.identity(), 300)); assertTrue(query.catalogChanged(changed));
+		query.restart(); finish(query, changed); assertEquals(1, query.currentRows(changed).size());
+		assertEquals(300, source.ownedMachines().size());
+	}
+	@Test void liveLeaseRetainsSelectionForQuantityUpdatesAndRevokesChangedRows() {
+		var source = products(4); var authority = new Object();
+		var query = new TerminalLiveQuery(PRODUCTS, TerminalScope.APIARY, ""); finish(query, source);
+		try (var session = new NetworkSelectionSession()) {
+			var page = session.publishLive(authority, source, PRODUCTS, false, query.currentRows(source), 0);
+			var current = source.withdrawProduct(0, key(0), 1);
+			var prepared = session.prepareLive(authority, current, PRODUCTS, false, query.currentRows(current));
+			assertEquals(page.generation(), prepared.generation());
+			for (int tick = 40; tick <= 200; tick += 40) {
+				assertNotNull(session.resolve(authority, current, page.generation(), 0, tick));
+				assertEquals(page.generation(), session.publishLive(authority, current, PRODUCTS, false, query.currentRows(current), tick).generation());
+			}
+			current = current.withdrawProduct(current.ledger().revision(), key(2), 3); query.restart(); finish(query, current);
+			prepared = session.prepareLive(authority, current, PRODUCTS, false, query.currentRows(current));
+			assertTrue(prepared.generation() > page.generation());
+			assertEquals(page.generation(), session.page().generation()); // 准备包不延长或替换已发布选择。
+			session.publishLive(authority, current, PRODUCTS, false, query.currentRows(current), 240);
+			assertNull(session.resolve(authority, current, page.generation(), 0, 240));
+			session.expire(340); assertNull(session.page());
+		}
+	}
+	private static void finish(TerminalLiveQuery query, NetworkCheckpoint source) {
+		int steps = 0;
+		while (!query.complete()) { assertTrue(query.step(source, 32) <= 32); assertTrue(++steps < 100); }
+	}
+	@Test void sparseSearchYieldsAndProductGridKeepsExactSelectionAcrossPages() {
+		var source = NetworkCheckpoint.empty(identity());
+		for (int i = 0; i < 300; i++) source = source.withOwnership(machine(source.identity(), i));
+		var authority = new Object();
+		try (var session = new NetworkSelectionSession()) {
+			var page = session.begin(authority, source, MEMBERS, 0, TerminalScope.CENTRIFUGE, "259,64,2", 8);
+			assertTrue(page.rows().isEmpty()); assertTrue(page.hasNext());
+			page = session.next(authority, source, page.generation(), 1);
+			assertTrue(page.rows().isEmpty()); assertTrue(page.hasNext());
+			page = session.next(authority, source, page.generation(), 2);
+			assertEquals(1, page.rows().size()); assertFalse(page.hasNext());
+			var member = (NetworkSelectionSession.MemberRow) page.rows().getFirst();
+			assertEquals(259, member.claim().origin().x());
+			assertSame(member, session.resolve(authority, source, page.generation(), 0, 2));
+			var stock = products(67);
+			page = session.begin(authority, stock, PRODUCTS, 3, TerminalScope.APIARY, "TEST:PRODUCT", 36);
+			assertEquals(36, page.rows().size()); assertTrue(page.hasNext());
+			assertSame(page.rows().get(35), session.resolve(authority, stock, page.generation(), 35, 3));
+			var next = session.next(authority, stock, page.generation(), 4);
+			assertEquals(31, next.rows().size()); assertFalse(next.hasNext());
+			assertNull(session.resolve(authority, stock, page.generation(), 35, 4));
+			assertEquals(8, session.begin(authority, stock, PRODUCTS, 5).rows().size());
+		}
+	}
 	@Test void memberScopeNeverPagesIntoOtherMembersAndRejectsUnavailableIdentities() {
 		var current = NetworkCheckpoint.empty(identity()); var selected = machine(current.identity(), 0);
 		current = current.withOwnership(selected); selected = selected.phase(OwnedMachineRecord.Phase.OWNED);

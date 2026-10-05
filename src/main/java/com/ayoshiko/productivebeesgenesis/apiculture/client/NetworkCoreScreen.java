@@ -51,9 +51,9 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	}
 	@SubscribeEvent public static void register(RegisterMenuScreensEvent event) {
 		event.register(NetworkContent.CORE_MENU.get(), NetworkCoreScreen::new);
-		event.register(NetworkContent.BEE_MENU.get(), NetworkCoreScreen::new);
-		event.register(NetworkContent.CENTRIFUGE_MENU.get(), NetworkCoreScreen::new);
-		event.register(NetworkContent.COMBINED_MENU.get(), NetworkCoreScreen::new);
+		event.register(NetworkContent.BEE_MENU.get(), NetworkTerminalScreen::new);
+		event.register(NetworkContent.CENTRIFUGE_MENU.get(), NetworkTerminalScreen::new);
+		event.register(NetworkContent.COMBINED_MENU.get(), NetworkTerminalScreen::new);
 	}
 	@Override protected void init() {
 		super.init(); rebuild();

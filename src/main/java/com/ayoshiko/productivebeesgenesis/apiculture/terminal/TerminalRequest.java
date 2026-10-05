@@ -11,7 +11,8 @@ import net.minecraft.resources.ResourceLocation;
 public record TerminalRequest(int containerId, UUID session, long sequence, Operation operation,
 		long generation, int row, int targetSlot, int inventorySlot, int amount) implements CustomPacketPayload {
 	public enum Operation { MEMBERS, PRODUCTS, NEXT, CANCEL, FEED_IN, FEED_OUT, CAGE_IN, CAGE_OUT, TAKE_PRODUCT,
-		UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE, UPGRADE_INSTALL_PAGE, UPGRADE_REMOVE_PAGE, UPGRADE_PREVIEW_INSTALL, UPGRADE_PREVIEW_REMOVE }
+		UPGRADES, UPGRADE_INSTALL, UPGRADE_REMOVE, UPGRADE_INSTALL_PAGE, UPGRADE_REMOVE_PAGE, UPGRADE_PREVIEW_INSTALL, UPGRADE_PREVIEW_REMOVE,
+		FEED_ENABLE, FEED_DISABLE, AUTO_BEE_IN, BEE_ENABLE, BEE_DISABLE }
 	public static final int BYTES = 53;
 	public static final Type<TerminalRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "network_terminal_request"));
 	public static final StreamCodec<FriendlyByteBuf, TerminalRequest> STREAM_CODEC = new StreamCodec<>() {
@@ -27,7 +28,7 @@ public record TerminalRequest(int containerId, UUID session, long sequence, Oper
 	};
 	public TerminalRequest {
 		Objects.requireNonNull(session); Objects.requireNonNull(operation);
-		if (containerId < 0 || sequence <= 0 || generation < 0 || row < -1 || row >= NetworkSelectionSession.PAGE_SIZE
+		if (containerId < 0 || sequence <= 0 || generation < 0 || row < -1 || row >= NetworkSelectionSession.PRODUCT_PAGE_SIZE
 				|| targetSlot < -1 || targetSlot >= (upgradeAction(operation) ? 16 : 3)
 				|| inventorySlot < -1 || inventorySlot >= 36 || amount < 0 || amount > 1000) {
 			throw new IllegalArgumentException("Invalid terminal request");
