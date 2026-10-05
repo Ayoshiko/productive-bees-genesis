@@ -37,6 +37,7 @@ public final class NetworkTerminalAccess {
 					if (terminal.combined()) buffer.writeEnum(scope); }).isPresent();
 	}
 	TerminalScope scope() { return scope; }
+	TerminalCraftingAccount crafting(ServerPlayer player) { return valid(player) ? source.crafting(core) : null; }
 	boolean combined() { return source.combined(); }
 	/** 切换只重开同一来源的菜单；关闭旧菜单释放选择根，不能把旧行号解释为新类型。 */
 	boolean switchMode(ServerPlayer player, TerminalScope requested) {

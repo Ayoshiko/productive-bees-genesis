@@ -156,8 +156,10 @@ final class ClientTerminalProbe {
 	}
 	static void verifyLayout(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen, NetworkCoreMenu menu) {
 		require(screen.width >= screen.getXSize() && screen.height >= screen.getYSize(), "Menu exceeds minimum GUI viewport");
-		require(menu.slots.size() == 36 && menu.slots.stream().allMatch(slot -> slot.isActive() && slot.y >= 152
+		require(menu.slots.size() == (menu.dedicatedTerminal() ? 46 : 36) && menu.slots.subList(0, 36).stream().allMatch(slot -> slot.isActive() && slot.y >= 152
 				&& slot.y + 16 <= screen.getYSize() && slot.x + 16 <= screen.getXSize()), "Inventory is not permanently visible below content");
+		if (menu.dedicatedTerminal()) require(menu.slots.subList(36, 46).stream().allMatch(slot -> !slot.isActive()
+				|| slot.x >= 0 && slot.y >= 0 && slot.x + 16 <= screen.getXSize() && slot.y + 16 <= screen.getYSize() - 84), "Crafting slots overlap the inventory");
 	}
 	private ClientTerminalProbe() { }
 }

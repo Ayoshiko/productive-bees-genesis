@@ -107,8 +107,9 @@ public final class CompetitionServerProbe {
                 if (reader()) {
                     if (core.ownership().readyAuthority() == null) return;
                     verifyRecovered(server, players);
+                    if (CraftingProbe.enabled()) CraftingProbe.recovered(core, manifest);
                     if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
-                    openBoth(players);
+                    if (CraftingProbe.enabled()) CraftingProbe.open(core, players, true); else openBoth(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
                     begin(server, 80);
                 } else { core.openTerminal(owner); begin(server, 0); }
@@ -118,9 +119,14 @@ public final class CompetitionServerProbe {
             if (stage == 0) {
                 if (!acks.containsKey(OWNER) || core.ownership().readyAuthority() == null || !core.allowed(players.get(1))) return;
                 require(!core.productionRunning() && checkpoint().ownedMachines().values().stream().anyMatch(r -> r.bees() != null), "Setup did not activate then pause");
+                if (CraftingProbe.enabled()) { CraftingProbe.seed(core, players); begin(server, 300); return; }
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (CraftingProbe.enabled() && stage >= 300) {
+                int next = CraftingProbe.advance(core, players, stage, acks); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (TerminalPermissionProbe.enabled() && stage >= 200) {
                 if (!TerminalPermissionProbe.ready(core, players, stage)) return;
                 int next = TerminalPermissionProbe.advance(core, players, stage, acks, before, beforeInventory);
@@ -199,6 +205,7 @@ public final class CompetitionServerProbe {
                 ((com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge) level.getBlockEntity(pos.east(2))).setOwnerUUID(OWNER);
             }
             if (TerminalPermissionProbe.enabled()) TerminalPermissionProbe.place(core);
+            if (CraftingProbe.enabled()) CraftingProbe.place(core);
         }
         for (var player : players) player.teleportTo(8.5, 100, 10.5);
     }
@@ -206,6 +213,7 @@ public final class CompetitionServerProbe {
         stage = next; stageAt = server.overworld().getGameTime(); acks.clear();
         if (UpgradeCompetitionProbe.enabled() && next >= 100) com.mojang.logging.LogUtils.getLogger().info("UPGRADE_COMPETITION_STAGE {}", next);
         if (TerminalPermissionProbe.enabled() && next >= 200) com.mojang.logging.LogUtils.getLogger().info("TERMINAL_PERMISSION_STAGE {}", next);
+        if (CraftingProbe.enabled() && next >= 300) com.mojang.logging.LogUtils.getLogger().info("TERMINAL_CRAFTING_STAGE {}", next);
         if (core.ownership().readyAuthority() != null && server.getPlayerList().getPlayerCount() == 2) {
             before = checkpoint(); beforeInventory = CompetitionAssets.inventories(players(server));
         }
@@ -259,10 +267,11 @@ public final class CompetitionServerProbe {
     private static void finish(MinecraftServer server) throws Exception {
         var players = players(server); finalInventory = CompetitionAssets.inventories(players);
         if (!reader()) {
-            require(cases.size() == 9 && replays == 8 && revoked && regranted && reconnected, "Incomplete competition matrix");
+            if (!CraftingProbe.enabled()) require(cases.size() == 9 && replays == 8 && revoked && regranted && reconnected, "Incomplete competition matrix");
             manifest = new CompoundTag(); manifest.putInt("schema", 1); manifest.putUUID("jvm", JVM);
             manifest.putUUID("controller", core.controller()); manifest.putLong("producerPid", ProcessHandle.current().pid());
             manifest.put("checkpoint", NetworkCheckpointCodec.encode(checkpoint())); manifest.put("core", core.saveWithoutMetadata(server.registryAccess()));
+            if (CraftingProbe.enabled()) CraftingProbe.capture(core, manifest);
             for (var player : players) {
                 manifest.put(player.getUUID().toString(), finalInventory.get(player.getUUID()));
                 manifest.putUUID("session-" + player.getUUID(), ((NetworkCoreMenu) player.containerMenu).terminalSession());
@@ -305,7 +314,7 @@ public final class CompetitionServerProbe {
         report.addProperty("logins", logins); report.addProperty("logouts", logouts); report.add("cases", cases);
         try {
             require(failure == null, failure);
-            require(closing && maxConcurrent == 2 && logins == (reader() ? 2 : 3) && logouts == logins, "Incomplete real player lifecycle");
+            require(closing && maxConcurrent == 2 && logins == (reader() || CraftingProbe.enabled() ? 2 : 3) && logouts == logins, "Incomplete real player lifecycle");
             var paths = new JsonObject();
             for (UUID id : IDS) {
                 var path = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(id + ".dat");
@@ -326,6 +335,7 @@ public final class CompetitionServerProbe {
                 if (reader()) report.addProperty("terminalCheckpointAndPlayerRecovery", true);
                 else TerminalPermissionProbe.report(report);
             }
+            if (CraftingProbe.enabled()) CraftingProbe.report(server, core, manifest, report, reader());
             report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }
         try { write("concurrent-server.json", report); } catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write competition report", error); }

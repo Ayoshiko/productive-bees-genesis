@@ -89,6 +89,15 @@ public final class TerminalClientState {
 		result = null; notice = Notice.WAITING;
 		return request;
 	}
+	public TerminalRequest beginCrafting(TerminalRequest.Operation operation, long generation, int row, int inventory, int amount, long now) {
+		tick(now); if (!ready(now) || !TerminalRequest.crafting(operation)) return null;
+		var request = new TerminalRequest(container, session, sequence + 1, operation, generation, row, -1, inventory, amount);
+		liveReady = false; if (!live) view = null; preview = null; result = null;
+		pendingExchange = operation != TerminalRequest.Operation.CRAFTING; pendingPreview = false;
+		if (pendingExchange) exchangeResult = null;
+		pending = ++sequence; sentAt = now; nextSendAt = now + SEND_INTERVAL_MILLIS; notice = Notice.WAITING;
+		return request;
+	}
 	public void accept(TerminalReply reply, long now) {
 		if (closed || pending == 0 || reply.sequence() != pending || reply.containerId() != container || !reply.session().equals(session)) return;
 		if (pendingExchange) exchangeResult = reply;

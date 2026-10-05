@@ -13,7 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-/** 无库存和 ticker 的专用入口；不参与生产成员或拓扑传播。 */
+/** 无生产 ticker 的专用入口；合成资产留在独立账户，不随方块掉落或移动。 */
 public final class NetworkTerminalBlock extends BaseEntityBlock {
 	private final TerminalScope scope;
 	private final boolean combined;
@@ -21,7 +21,7 @@ public final class NetworkTerminalBlock extends BaseEntityBlock {
 		this(scope, false);
 	}
 	public NetworkTerminalBlock(TerminalScope scope, boolean combined) {
-		super(Properties.of().mapColor(MapColor.GOLD).strength(4).sound(SoundType.METAL));
+		super(Properties.of().mapColor(MapColor.GOLD).strength(4).sound(SoundType.METAL).pushReaction(net.minecraft.world.level.material.PushReaction.BLOCK));
 		if (scope == TerminalScope.ALL) throw new IllegalArgumentException("Terminal requires a machine scope");
 		this.scope = scope; this.combined = combined;
 	}

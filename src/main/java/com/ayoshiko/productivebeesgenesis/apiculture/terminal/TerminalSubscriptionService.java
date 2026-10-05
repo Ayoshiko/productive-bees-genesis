@@ -21,8 +21,17 @@ public final class TerminalSubscriptionService {
 		final TerminalSyncBudget bytes = new TerminalSyncBudget();
 		final Map<UUID, WorldBeeInputRequest> world = new HashMap<>();
 		boolean stepping;
+		long craftingTick = Long.MIN_VALUE;
+		int craftingWork;
 	}
 	private static final Map<MinecraftServer, Session> SERVERS = new HashMap<>();
+	/** 配方匹配和实际制作的全服共享额度；达到额度时保留材料，客户端不自动重放动作。 */
+	public static boolean allowCrafting(MinecraftServer server) {
+		check(server); var state = SERVERS.computeIfAbsent(server, ignored -> new Session()); long tick = server.overworld().getGameTime();
+		if (tick != state.craftingTick) { state.craftingTick = tick; state.craftingWork = 0; }
+		if (state.craftingWork >= 32) return false;
+		state.craftingWork++; return true;
+	}
 	public static void watch(ServerPlayer player, NetworkCoreMenu menu) {
 		var server = player.server; check(server);
 		SERVERS.computeIfAbsent(server, ignored -> new Session()).due.wake(new Key(player.getUUID(), menu.terminalSession(), false), server.overworld().getGameTime());

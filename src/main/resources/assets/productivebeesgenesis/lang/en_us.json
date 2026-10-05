@@ -1,4 +1,11 @@
 {
+  "screen.productivebeesgenesis.network.tab.4": "Craft",
+  "screen.productivebeesgenesis.network.terminal.craft_clear": "Return inputs",
+  "screen.productivebeesgenesis.network.terminal.craft_input_hint": "Left-click inserts from the selected inventory slot. Right-click takes one; Shift-click takes a stack. Inputs remain at this terminal position and can be recovered by rebuilding here.",
+  "screen.productivebeesgenesis.network.terminal.craft_output_hint": "Click to craft once; Shift-click crafts up to 8 times. Stored results are collected first.",
+  "screen.productivebeesgenesis.network.terminal.craft_pending": "Result stored; click the result slot to collect",
+  "screen.productivebeesgenesis.network.terminal.craft_quarantined": "Crafting paused; inputs and result retained",
+  "screen.productivebeesgenesis.network.terminal.craft_unavailable": "Crafting unavailable; refresh to retry",
   "screen.productivebeesgenesis.network.upgrade_permission": "Requires ownership or upgrade permission",
   "productivebeesgenesis.network.access.upgrades.list": "Guests with upgrade permission (%s/%s): %s",
   "productivebeesgenesis.network.access.upgrades.granted": "Granted guest upgrade permission: %s",

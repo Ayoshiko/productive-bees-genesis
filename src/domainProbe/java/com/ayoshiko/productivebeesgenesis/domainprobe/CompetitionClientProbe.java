@@ -59,6 +59,10 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (CraftingProbe.enabled() && (stage >= 300 || stage == 80)) {
+                if (client.player.containerMenu instanceof NetworkCoreMenu menu) session = menu.terminalSession().toString();
+                var reply = CraftingClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (TerminalPermissionProbe.enabled() && stage >= 200) {
                 var reply = TerminalPermissionClient.advance(client, stage, OWNER);
                 if (reply != null) ack(reply.moved(), reply.status());
@@ -216,7 +220,7 @@ public final class CompetitionClientProbe {
         try {
             Files.createDirectories(Path.of("results"));
             if (failure == null) {
-                require(stage == 90 && connections == (reader() || OWNER ? 1 : 2), "Incomplete connection lifecycle");
+                require(stage == 90 && connections == (reader() || OWNER || CraftingProbe.enabled() ? 1 : 2), "Incomplete connection lifecycle");
                 if (TerminalPermissionProbe.enabled() && !reader()) require(TerminalPermissionClient.completed(), "Terminal permission client incomplete");
                 try (var image = Screenshot.takeScreenshot(client.getMainRenderTarget())) { image.writeToFile(Path.of("results/concurrent.png")); }
                 client.player.closeContainer(); client.level.disconnect(); client.disconnect(new TitleScreen());

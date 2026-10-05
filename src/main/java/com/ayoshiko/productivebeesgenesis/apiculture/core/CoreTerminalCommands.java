@@ -29,6 +29,7 @@ final class CoreTerminalCommands {
 		if (operation == TerminalRequest.Operation.AUTO_BEE_IN) {
 			try { return menu.queueAutomaticBee(player, request); } finally { selections.cancel(); }
 		}
+		if (TerminalRequest.crafting(operation)) return menu.craftingRequest(player, request);
 		var selected = menu.selectedRow(player, request.session(), request.generation(), request.row());
 		if (selected == null) return reply(request, STALE, 0, 0, null);
 		if (TerminalRequest.upgradePreview(operation)) {

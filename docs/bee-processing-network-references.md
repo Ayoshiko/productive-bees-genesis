@@ -347,3 +347,10 @@ g1b 继续采用上述网络 worktree 的独立机交互原则，核对 `Managed
 2026-10-05 e1c 沿用本 worktree 的 `BeeWorkExecutor` 已付费积压优先路径、`BeeAssetProjection.attach` 交还及 `VerifiedCageProjection` 的 PB 13.14.0 完整 entity_data 往返。网络启停位保存在 BeeRecord 外层，不写入 PB 实体／蜂笼数据；因此同一 beeId 移位和保存保留，结束网络托管后不把控制位带入独立机。复核 `BeeMemberState.rosterVersion`、`NetworkSelectionSession.sameRoster` 与服务器菜单授权，控制变更重新签发名册戳，普通生产保留名册戳。网络 schema 9 单独增加必填 enabled，独立一体机继续使用原单蜂编码；两种 decoder 对新字段严格校验，旧 6–8 格式显式默认启用。本轮未读取或复制新的第三方实现。
 
 2026-10-05 D19a 复核本 worktree 的 `NetworkTerminalAccess.valid/switchMode`、`NetworkCoreMenu.terminalRequest/terminalSearch/removed`、`CoreTerminalCommands` 及 `TerminalSubscriptionService`：来源实例、权限代际、会话、服务端行选择与资产提交检查沿现有正式服务；当前页数量索引在取消／最后订阅关闭时释放。验证复用[13.21](#s13-21)的 `CompetitionServerProbe`／`CompetitionClientProbe` 双 TCP 玩家屏障及原版正常保存／登录链路，新增终端阶段在开发源集中运行，独立核算两人背包、网络余额及蜂笼内完整蜂数据。客户端只在屏障后发送已冻结的正式请求，开发回执不携带资产键、不授予权限；生产协议 16 和 schema 9 不变。本步没有更新参考副本或添加第三方依赖。
+
+<a id="s13-27"></a>
+### 13.27 有限合成账户、原生制作回调与恢复（2026-10-05）
+
+读取本地 `build/moddev/artifacts/neoforge-21.1.216-sources.jar` 中 Minecraft 1.21.1 的 `CraftingMenu.slotChangedCraftingGrid`、`CraftingInput.ofPositioned`、`ResultSlot.onTake/checkTakeAchievements`、`RecipeCraftingHolder`、`RecipeManager` 和 `SavedData.save`。采用裁剪输入后的原网格偏移、当前配方／功能开关与受限合成检查、容器余料、制作回调及配方奖励；不采用 `ResultSlot` 在背包满时的掉落兜底，也不调用 `CraftingMenu.removed` 的清空材料路径。地图制作回调会改变新结果的组件和地图身份，因此先记录一次已付费结果，再调用原生／NeoForge 回调并交付，不能只通知一份与实际输出无关的副本。
+
+持久化复核本 worktree `MachineWorkService.attach` 与 `MachineAssets`：原生 SavedData 读取失败也可能返回 null，不能据此新建空资产；NeoForge 原生保存会排后台 IO 并清 dirty，因此有限账户采用同源的服务器线程捕获、独立临时文件、force 和原子替换，成功才确认，失败保留状态。合成文件按维度／位置直接定位，BE 只记曾引用标志，菜单保留有界展示副本；无全服账户枚举、额外可选依赖或后台世界访问。完整组件与账户所有者在加载／交付时核对，损坏数据保留原始 NBT 并隔离，非空账户不能改所属所有者。

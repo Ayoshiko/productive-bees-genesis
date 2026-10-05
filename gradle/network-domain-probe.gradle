@@ -29,6 +29,10 @@ if (upgradeProbe && (automaticMode != null || multiblockMode != null || coldProb
 if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new GradleException('Invalid automatic restart mode')
 def playerConcurrent = providers.gradleProperty('networkConcurrentProbe').isPresent()
 def terminalPermissions = providers.gradleProperty('networkConcurrentTerminals').isPresent()
+def craftingProbe = providers.gradleProperty('networkConcurrentCrafting').isPresent()
+if (craftingProbe && (!playerConcurrent || terminalPermissions || providers.gradleProperty('networkConcurrentUpgrades').isPresent())) {
+    throw new GradleException('Crafting probe requires its separate concurrent fixture')
+}
 if (terminalPermissions && (!playerConcurrent || providers.gradleProperty('networkConcurrentUpgrades').isPresent())) {
     throw new GradleException('Terminal permission mode requires concurrent players and its separate fixture')
 }
@@ -154,6 +158,7 @@ neoForge {
             systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
+            systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
         }
@@ -165,6 +170,7 @@ neoForge {
             systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
+            systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.role', 'owner'
             systemProperty 'pbg.concurrent.port', playerPort
             programArguments.addAll('--username', 'PbgLoginOwner', '--width', '1000', '--height', '700')
@@ -179,6 +185,7 @@ neoForge {
             systemProperty 'pbg.concurrent.mode', playerMode ?: 'write'
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
+            systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.role', 'guest'
             systemProperty 'pbg.concurrent.port', playerPort
             programArguments.addAll('--username', 'PbgLoginGuest', '--width', '1000', '--height', '700')

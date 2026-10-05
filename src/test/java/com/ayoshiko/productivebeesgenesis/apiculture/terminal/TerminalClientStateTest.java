@@ -7,6 +7,25 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalRequest.Operation.*;
 
 class TerminalClientStateTest {
+	@Test void craftingKeepsLiveProductsButOldFramesCannotAcknowledgeTheAssetCommand() {
+		state.beginLive(NetworkSelectionSession.Kind.PRODUCTS, "", TerminalSearchRequest.Navigation.FIRST, 0);
+		var products = page(1);
+		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 1, 1, TerminalLiveUpdate.Status.READY, false, products), 10);
+		var request = state.beginCrafting(CRAFT_IN, 19, 8, 35, 16, 200);
+		assertEquals(2, request.sequence()); assertEquals(19, request.generation()); assertSame(products, state.view());
+		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 1, 2, TerminalLiveUpdate.Status.READY, false, page(2)), 210);
+		assertTrue(state.waiting()); assertSame(products, state.view());
+		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 2, 3, TerminalLiveUpdate.Status.READY, false, null), 220);
+		assertTrue(state.waiting());
+		state.accept(new TerminalReply(7, session, 2, TerminalReply.Status.MOVED, 16, 0, null), 230);
+		assertSame(products, state.view()); assertTrue(state.actionable(400)); assertEquals(16, state.exchangeResult().moved());
+	}
+	@Test void closingCraftingRejectsLateRepliesAndCannotReuseItsSequence() {
+		var request = state.beginCrafting(CRAFTING, 0, -1, -1, 0, 0);
+		assertEquals(1, request.sequence()); state.close();
+		state.accept(reply(1, null), 100); assertNull(state.result());
+		assertNull(state.beginCrafting(CRAFT_TAKE, 1, -1, -1, 8, 200));
+	}
 	@Test void previewKeepsTheSamePageWithoutExtendingExpiryOrBecomingAnExchange() {
 		state.begin(UPGRADES, -1, -1, 0, 0, 0);
 		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 1, false,

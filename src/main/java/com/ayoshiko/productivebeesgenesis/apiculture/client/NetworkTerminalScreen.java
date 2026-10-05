@@ -49,6 +49,8 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	private long hoverAt;
 	private int hover;
 	private int inventoryY;
+	private int craftingTarget;
+	private boolean craftingRequested;
 	private TerminalView.Location restoreLocation;
 	private java.util.UUID restoreBee;
 
@@ -82,24 +84,25 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		result.setTooltip(Tooltip.create(label)); actions.add(result); return result;
 	}
 	private void rebuild() {
+		menu.layoutCrafting(tab == 4, inventoryY - 78);
 		synchronizeView();
 		boolean focus = search != null && search.isFocused();
 		int cursor = search == null ? 0 : search.getCursorPosition();
 		if (search != null) query = search.getValue();
 		clearWidgets(); actions.clear(); navigationActions.clear(); hoveredBees.clear(); install = null; remove = null;
-		for (int page : menu.scope() == TerminalScope.APIARY ? new int[]{1, 2, 3} : new int[]{2, 3}) {
-			var button = control(tr("tab." + page), 2, 42 + (page - 1) * 30, 26, 26, () -> switchTab(page), page == tab, page == 1 ? 0 : page == 2 ? 2 : 3);
+		for (int page : menu.scope() == TerminalScope.APIARY ? new int[]{1, 2, 3, 4} : new int[]{2, 3, 4}) {
+			var button = control(tr("tab." + page), 2, 42 + (page - 1) * 30, 26, 26, () -> switchTab(page), page == tab, page == 1 ? 0 : page == 2 ? 2 : page == 3 ? 3 : -1);
 			navigationActions.add(button);
 		}
-		if (menu.scope() == TerminalScope.APIARY && tab != 2) {
-			navigation(own(sort == TerminalSearchRequest.Sort.CAPACITY ? "sort_capacity" : "sort_position"), 2, 138, 26, 26,
+		if (menu.scope() == TerminalScope.APIARY && (tab == 1 || tab == 3)) {
+			navigation(own(sort == TerminalSearchRequest.Sort.CAPACITY ? "sort_capacity" : "sort_position"), 2, 168, 26, 26,
 					() -> { sort = sort == TerminalSearchRequest.Sort.CAPACITY ? TerminalSearchRequest.Sort.POSITION : TerminalSearchRequest.Sort.CAPACITY; refresh(); })
 					.setTooltip(Tooltip.create(own("sort_hint")));
-			if (tab == 1) request(own("auto_bee"), 2, 168, 26, 26, this::automaticBee).setTooltip(Tooltip.create(own("auto_bee_hint")));
+			if (tab == 1) request(own("auto_bee"), 2, 198, 26, 26, this::automaticBee).setTooltip(Tooltip.create(own("auto_bee_hint")));
 		}
-		if (tab == 2) navigation(own(switch (productSort) {
+		if (tab == 2 || tab == 4) navigation(own(switch (productSort) {
 			case QUANTITY_DESC -> "sort_quantity_desc"; case QUANTITY_ASC -> "sort_quantity_asc"; default -> "sort_id";
-		}), 2, 138, 26, 26, () -> {
+		}), 2, 168, 26, 26, () -> {
 			productSort = switch (productSort) {
 				case POSITION -> TerminalSearchRequest.Sort.QUANTITY_DESC;
 				case QUANTITY_DESC -> TerminalSearchRequest.Sort.QUANTITY_ASC;
@@ -118,10 +121,15 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		nextPage = navigation(tr("next"), 258, 28, 38, 18, () -> navigate(TerminalSearchRequest.Navigation.NEXT));
 		var view = state.view();
 		if (view != null) {
-			if (tab == 2) productGrid(view);
+			if (tab == 2 || tab == 4) productGrid(view);
 			else if (selectedRow() == null) memberGrid(view);
 			else if (tab == 1) beeActions();
 			else upgradeActions();
+		}
+		if (tab == 4) {
+			request(own("craft_clear"), 202, inventoryY - 78, 89, 18, () -> craft(CRAFT_CLEAR, -1, -1, 0));
+			control(tr("amount", amount), 202, inventoryY - 54, 89, 18, () -> { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }, false, -1)
+					.setTooltip(Tooltip.create(own("craft_input_hint")));
 		}
 		updateEnabled();
 	}
@@ -145,10 +153,10 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		}
 	}
 	private void productGrid(TerminalView view) {
-		int visible = Math.max(1, (inventoryY - 80) / 24);
+		int visible = Math.max(1, (inventoryY - (tab == 4 ? 128 : 80)) / 24);
 		int rows = (view.rows().size() + 8) / 9; scroll = Math.min(scroll, Math.max(0, rows - visible));
 		for (int i = scroll * 9; i < Math.min(view.rows().size(), (scroll + visible) * 9); i++) {
-			int row = i, x = 48 + i % 9 * 26, y = 54 + (i / 9 - scroll) * 24; var product = products.get(i);
+			int row = i, x = 48 + i % 9 * 26, y = (tab == 4 ? 50 : 54) + (i / 9 - scroll) * 24; var product = products.get(i);
 			cell(product.name().copy().append("\n").append(tr("owned", view.rows().get(i).owned()))
 					.append("\n").append(tr("available", view.rows().get(i).available())).append("\n").append(tr("quick_take")),
 					x, y, false, mouse -> take(row, mouse), g -> product.render(g, leftPos + x + 1, topPos + y + 1));
@@ -260,6 +268,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		tab = page; selected = -1; scroll = 0; query = ""; search.setValue(""); refresh();
 	}
 	private void refresh() {
+		craftingRequested = false;
 		query = search == null ? query : search.getValue();
 		var request = state.beginLive(tab == 1 ? NetworkSelectionSession.Kind.MEMBERS : tab == 3 ? NetworkSelectionSession.Kind.UPGRADES : NetworkSelectionSession.Kind.PRODUCTS,
 				query, TerminalSearchRequest.Navigation.FIRST, selectedSort(), TerminalClientNames.resolve(query), Util.getMillis()); if (request == null) return;
@@ -272,7 +281,12 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		var request = state.beginLive(view.kind(), query, navigation, selectedSort(), TerminalClientNames.resolve(query), Util.getMillis()); if (request == null) return;
 		selected = -1; restoreLocation = null; scroll = 0; PacketDistributor.sendToServer(request); rebuild();
 	}
-	private TerminalSearchRequest.Sort selectedSort() { return tab == 2 ? productSort : menu.scope() == TerminalScope.APIARY ? sort : TerminalSearchRequest.Sort.POSITION; }
+	private TerminalSearchRequest.Sort selectedSort() { return tab == 2 || tab == 4 ? productSort : menu.scope() == TerminalScope.APIARY ? sort : TerminalSearchRequest.Sort.POSITION; }
+	private void craft(TerminalRequest.Operation operation, int slot, int inventorySlot, int count) {
+		if (queryDirty || operation != CRAFTING && (!state.actionable(Util.getMillis()) || menu.craftingGeneration() == 0 || menu.craftingStatus() == 3)) return;
+		var request = state.beginCrafting(operation, operation == CRAFTING ? 0 : menu.craftingGeneration(), slot, inventorySlot, count, Util.getMillis());
+		if (request != null) { if (operation == CRAFTING) craftingRequested = true; PacketDistributor.sendToServer(request); updateEnabled(); }
+	}
 	private void automaticBee() {
 		if (queryDirty || menu.scope() != TerminalScope.APIARY || tab != 1) return;
 		var request = state.begin(AUTO_BEE_IN, -1, -1, sourceSlot, 1, Util.getMillis());
@@ -316,6 +330,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	@Override protected void containerTick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { state.close(); minecraft.setScreen(null); return; }
 		super.containerTick(); long now = Util.getMillis(); state.tick(now);
+		if (tab == 4 && !craftingRequested && !queryDirty && state.actionable(now) && state.view() != null) craft(CRAFTING, -1, -1, 0);
 		if (queryDirty && now >= searchAt && state.ready(now)) { selected = -1; scroll = 0; restoreLocation = null; refresh(); }
 		if (displayed != state.view() || notice != state.notice()) {
 			notice = state.notice(); rebuild();
@@ -339,13 +354,20 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return super.mouseScrolled(x, y, horizontal, vertical);
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
+		if (tab == 4 && (button == 0 || button == 1)) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive()
+				&& x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
+			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);
+			else { craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown(); craft(take ? CRAFT_OUT : CRAFT_IN, craftingTarget, take ? -1 : sourceSlot, take ? hasShiftDown() ? 64 : 1 : amount); }
+			return true;
+		}
 		if (button == 1 && search.isMouseOver(x, y)) { search.setValue(""); setFocused(search); return true; }
 		if (button == 0 && maxScroll() > 0 && x >= leftPos + 289 && x < leftPos + 297 && y >= topPos + 51 && y < topPos + inventoryY - 28) {
 			draggingScroll = true; scrollTo(y); return true;
 		}
-		if (button == 0) for (var slot : menu.slots) if (x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
+		if (button == 0) for (var slot : menu.slots) if (slot.index < 36 && x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
 			sourceSlot = slot.getContainerSlot(); confirmCage = false;
 			if (hasShiftDown() && tab == 1 && menu.scope() == TerminalScope.APIARY) automaticBee();
+			if (hasShiftDown() && tab == 4) craft(CRAFT_IN, craftingTarget, sourceSlot, 64);
 			rebuild(); return true;
 		}
 		return super.mouseClicked(x, y, button);
@@ -360,7 +382,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	private int maxScroll() {
 		var view = state.view(); if (view == null || selectedRow() != null) return 0;
-		return tab == 2 ? Math.max(0, (view.rows().size() + 8) / 9 - Math.max(1, (inventoryY - 80) / 24))
+		return tab == 2 || tab == 4 ? Math.max(0, (view.rows().size() + 8) / 9 - Math.max(1, (inventoryY - (tab == 4 ? 128 : 80)) / 24))
 				: Math.max(0, view.rows().size() - Math.max(1, (inventoryY - 79) / (tab == 1 ? 44 : 30)));
 	}
 	private void scrollTo(double mouseY) {
@@ -376,12 +398,20 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 			TerminalSkin.panel(g, leftPos + 290, topPos + thumb, 6, 12);
 		}
 		for (var slot : menu.slots) {
+			if (!slot.isActive()) continue;
 			TerminalSkin.panel(g, leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18);
-			if (slot.getContainerSlot() == sourceSlot) g.renderOutline(leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18, TerminalSkin.GOLD);
+			if (slot.index < 36 && slot.getContainerSlot() == sourceSlot || slot.index == 36 + craftingTarget) g.renderOutline(leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18, TerminalSkin.GOLD);
 		}
+		if (tab == 4) g.drawString(font, "→", leftPos + 126, topPos + inventoryY - 54, TerminalSkin.INK, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
+		if (tab == 4) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
+				&& mouseY >= topPos + slot.y && mouseY < topPos + slot.y + 16) {
+			var hint = new ArrayList<Component>(); if (slot.hasItem()) hint.add(slot.getItem().getHoverName());
+			hint.add(own(slot.index == 45 ? "craft_output_hint" : "craft_input_hint"));
+			g.renderComponentTooltip(font, hint, mouseX, mouseY); break;
+		}
 	}
 	@Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
 		line(g, title, 41, 11, menu.combinedTerminal() ? 172 : 246, TerminalSkin.GOLD);
@@ -395,13 +425,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 					line(g, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 42, 117, 246, TerminalSkin.MUTED);
 				}
 			}
-		} else if (state.view() != null && state.view().rows().isEmpty()) line(g, own(state.view().hasNext() ? "continue_search" : "no_matches"), 45, 68, 240, TerminalSkin.MUTED);
+		} else if (state.view() != null && state.view().rows().isEmpty()) line(g, own(state.view().hasNext() ? "continue_search" : "no_matches"), 45, tab == 4 ? 54 : 68, 240, TerminalSkin.MUTED);
 		Component status = queryDirty || state.notice() == TerminalClientState.Notice.WAITING ? own("syncing")
 				: state.notice() == TerminalClientState.Notice.EXPIRED || state.notice() == TerminalClientState.Notice.TIMEOUT ? own("sync_wait")
 				: state.exchangeResult() != null ? state.exchangeResult().status() == TerminalReply.Status.MOVED ? own("moved", state.exchangeResult().moved())
 						: tr("result." + state.exchangeResult().status().name().toLowerCase(java.util.Locale.ROOT), state.exchangeResult().moved()) : own("live");
 		long sortAge = state.sortAgeSeconds(Util.getMillis());
-		if (tab == 2 && sortAge >= 0) status = status.copy().append(" · ").append(own("sort_age", sortAge));
+		if ((tab == 2 || tab == 4) && sortAge >= 0) status = status.copy().append(" · ").append(own("sort_age", sortAge));
+		if (tab == 4 && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable");
 		line(g, status, 38, inventoryY - 22, 253, TerminalSkin.MUTED);
 		line(g, inventory.getDisplayName(), 40, inventoryY - 11, 63, TerminalSkin.INK);
 		line(g, tr("inventory_slot", sourceSlot + 1), 174, inventoryY - 11, 118, TerminalSkin.MUTED);

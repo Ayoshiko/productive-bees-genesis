@@ -1,4 +1,11 @@
 {
+  "screen.productivebeesgenesis.network.tab.4": "合成",
+  "screen.productivebeesgenesis.network.terminal.craft_clear": "取回材料",
+  "screen.productivebeesgenesis.network.terminal.craft_input_hint": "左键从选中背包槽放入；右键取回 1 个，Shift 点击取回一组。材料保留在此终端位置，拆除后原位重建可取回。",
+  "screen.productivebeesgenesis.network.terminal.craft_output_hint": "点击合成一次，Shift 点击最多合成 8 次。已保管的结果优先取回。",
+  "screen.productivebeesgenesis.network.terminal.craft_pending": "结果已保管，点击结果格取回",
+  "screen.productivebeesgenesis.network.terminal.craft_quarantined": "合成已暂停，材料与结果已保管",
+  "screen.productivebeesgenesis.network.terminal.craft_unavailable": "合成暂不可用，可刷新重试",
   "screen.productivebeesgenesis.network.upgrade_permission": "需要所有者或升级授权",
   "productivebeesgenesis.network.access.upgrades.list": "可升级的访客（%s/%s）：%s",
   "productivebeesgenesis.network.access.upgrades.granted": "已授予访客升级权限：%s",
