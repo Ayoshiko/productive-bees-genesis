@@ -121,6 +121,13 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (TerminalPermissionProbe.enabled() && stage >= 200) {
+                if (!TerminalPermissionProbe.ready(core, players, stage)) return;
+                int next = TerminalPermissionProbe.advance(core, players, stage, acks, before, beforeInventory);
+                noDrops(server);
+                if (next < 0) finish(server); else begin(server, next);
+                return;
+            }
             if (UpgradeCompetitionProbe.enabled() && stage >= 100) {
                 if (!UpgradeCompetitionProbe.ready(core, players, stage)) return;
                 int next = UpgradeCompetitionProbe.advance(core, players, stage, acks, before, beforeInventory);
@@ -165,7 +172,8 @@ public final class CompetitionServerProbe {
                 case 54 -> { unchanged(server); begin(server, 55); }
                 case 55 -> {
                     verifyCase(server, 8);
-                    if (UpgradeCompetitionProbe.enabled()) { UpgradeCompetitionProbe.seed(core, players); begin(server, 100); }
+                    if (TerminalPermissionProbe.enabled()) { TerminalPermissionProbe.seed(core, players); begin(server, 200); }
+                    else if (UpgradeCompetitionProbe.enabled()) { UpgradeCompetitionProbe.seed(core, players); begin(server, 100); }
                     else finish(server);
                 }
                 case 80 -> { unchanged(server); finish(server); }
@@ -186,16 +194,18 @@ public final class CompetitionServerProbe {
             core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); core.initializeOwner(OWNER);
             level.setBlockAndUpdate(pos.east(), ModBlocks.MEK_APIARY.get().defaultBlockState());
             var hive = (TileEntityMekApiary) level.getBlockEntity(pos.east()); hive.setOwnerUUID(OWNER); hive.setFeederConversionEnabled(false);
-            if (UpgradeCompetitionProbe.enabled()) {
+            if (UpgradeCompetitionProbe.enabled() || TerminalPermissionProbe.enabled()) {
                 level.setBlockAndUpdate(pos.east(2), ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState());
                 ((com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge) level.getBlockEntity(pos.east(2))).setOwnerUUID(OWNER);
             }
+            if (TerminalPermissionProbe.enabled()) TerminalPermissionProbe.place(core);
         }
         for (var player : players) player.teleportTo(8.5, 100, 10.5);
     }
     private static void begin(MinecraftServer server, int next) {
         stage = next; stageAt = server.overworld().getGameTime(); acks.clear();
         if (UpgradeCompetitionProbe.enabled() && next >= 100) com.mojang.logging.LogUtils.getLogger().info("UPGRADE_COMPETITION_STAGE {}", next);
+        if (TerminalPermissionProbe.enabled() && next >= 200) com.mojang.logging.LogUtils.getLogger().info("TERMINAL_PERMISSION_STAGE {}", next);
         if (core.ownership().readyAuthority() != null && server.getPlayerList().getPlayerCount() == 2) {
             before = checkpoint(); beforeInventory = CompetitionAssets.inventories(players(server));
         }
@@ -311,6 +321,10 @@ public final class CompetitionServerProbe {
             report.addProperty("reconnectAndOldSessionRejected", disconnected && reconnected);
             if (UpgradeCompetitionProbe.enabled()) {
                 UpgradeCompetitionProbe.report(report); UpgradeCompetitionRecovery.report(report, reader());
+            }
+            if (TerminalPermissionProbe.enabled()) {
+                if (reader()) report.addProperty("terminalCheckpointAndPlayerRecovery", true);
+                else TerminalPermissionProbe.report(report);
             }
             report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }

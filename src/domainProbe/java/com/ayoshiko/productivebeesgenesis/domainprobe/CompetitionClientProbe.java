@@ -59,6 +59,11 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (TerminalPermissionProbe.enabled() && stage >= 200) {
+                var reply = TerminalPermissionClient.advance(client, stage, OWNER);
+                if (reply != null) ack(reply.moved(), reply.status());
+                return;
+            }
             if (UpgradeCompetitionProbe.enabled() && stage >= 100) {
                 var reply = UpgradeCompetitionClient.advance(client, stage, OWNER);
                 if (reply != null) ack(reply.moved(), reply.status());
@@ -110,7 +115,7 @@ public final class CompetitionClientProbe {
                 if (menu.clientState().view() == null) return;
                 var inventory = client.player.getInventory();
                 require(inventory.getItem(4).getCount() == 64 && inventory.getItem(7).getCount() == 64
-                        && inventory.getItem(8).is(Items.GOLD_INGOT) && inventory.getItem(8).getCount() == (OWNER ? 62 : 63),
+                        && inventory.getItem(8).is(Items.GOLD_INGOT) && inventory.getItem(8).getCount() == (TerminalPermissionProbe.enabled() ? 64 : OWNER ? 62 : 63),
                         "Recovered inventory was not synchronized");
                 ack(0, -1); return;
             }
@@ -131,7 +136,7 @@ public final class CompetitionClientProbe {
     }
     private static void setup(Minecraft client, NetworkCoreScreen screen, NetworkCoreMenu menu) {
         switch (step) {
-            case 0 -> { if (menu.value(1) != (UpgradeCompetitionProbe.enabled() ? 2 : 1)) return; press(screen, "join"); step++; }
+            case 0 -> { if (menu.value(1) != (UpgradeCompetitionProbe.enabled() || TerminalPermissionProbe.enabled() ? 2 : 1)) return; press(screen, "join"); step++; }
             case 1 -> { if (menu.ownershipStatus() != CoreOwnershipController.Status.MANAGED.ordinal()) return; press(screen, "start"); step++; }
             case 2 -> { if (!menu.productionRunning() || ++settled < 10) return; press(screen, "pause"); step++; }
             case 3 -> {
@@ -212,6 +217,7 @@ public final class CompetitionClientProbe {
             Files.createDirectories(Path.of("results"));
             if (failure == null) {
                 require(stage == 90 && connections == (reader() || OWNER ? 1 : 2), "Incomplete connection lifecycle");
+                if (TerminalPermissionProbe.enabled() && !reader()) require(TerminalPermissionClient.completed(), "Terminal permission client incomplete");
                 try (var image = Screenshot.takeScreenshot(client.getMainRenderTarget())) { image.writeToFile(Path.of("results/concurrent.png")); }
                 client.player.closeContainer(); client.level.disconnect(); client.disconnect(new TitleScreen());
             } else if (client.player != null && stage >= 0) PacketDistributor.sendToServer(new CompetitionSignal(stage, 0, -3));
@@ -219,6 +225,7 @@ public final class CompetitionClientProbe {
         report.addProperty("passed", failure == null); report.addProperty("role", OWNER ? "owner" : "guest");
         report.addProperty("mode", reader() ? "read" : "write"); report.addProperty("connections", connections);
         report.addProperty("session", session); report.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
+        if (TerminalPermissionProbe.enabled()) report.addProperty("terminalPermissionsClient", reader() || TerminalPermissionClient.completed());
         if (failure != null) { report.addProperty("failure", failure.toString()); com.mojang.logging.LogUtils.getLogger().error("CONCURRENT_CLIENT_FAILED at {}/{}", stage, step, failure); }
         try { Files.writeString(Path.of("results/concurrent-client.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
         catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write concurrent report", error); }

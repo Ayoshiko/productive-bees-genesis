@@ -41,6 +41,13 @@ final class CompetitionAssets {
             if (player == owner) {
                 var bee = new CompoundTag(); bee.putString("entity", "productivebees:configurable_bee");
                 bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", UUID.randomUUID());
+                var genes = new CompoundTag();
+                for (String field : com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalBeeGenes.FIELDS)
+                    genes.putString("bee_" + field, field + "." + switch (field) {
+                        case "temper" -> "passive"; case "behavior" -> "diurnal"; case "weather_tolerance" -> "none"; default -> "normal";
+                    });
+                var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes);
+                bee.put("neoforge:attachments", attachments);
                 cage.set(DataComponents.CUSTOM_DATA, CustomData.of(bee));
             }
             player.getInventory().setItem(1, cage); player.getInventory().setItem(2, new ItemStack(Items.BUCKET));
@@ -48,6 +55,7 @@ final class CompetitionAssets {
             player.getInventory().setItem(4, new ItemStack(Items.IRON_INGOT, 63));
             player.getInventory().setItem(6, variant("red", 63)); player.getInventory().setItem(7, variant("blue", 63));
             player.getInventory().setItem(8, new ItemStack(Items.GOLD_INGOT, 62));
+            if (TerminalPermissionProbe.enabled()) player.getInventory().setItem(20, mekanism.common.util.UpgradeUtils.getStack(mekanism.api.Upgrade.SPEED, 1));
             player.getInventory().setChanged(); player.containerMenu.broadcastChanges();
         }
     }
