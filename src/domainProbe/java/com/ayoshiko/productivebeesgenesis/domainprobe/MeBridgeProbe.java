@@ -94,6 +94,7 @@ final class MeBridgeProbe {
 			CraftingProbe.open(core, players, false);
 		}
 		stages++;
+		if (stage == 511 && WorkspaceProbe.enabled()) { WorkspaceProbe.seed(core, players); return 700; }
 		if (stage == 511 && MeCraftingProbe.enabled()) { MeCraftingProbe.seed(core, players); return 600; }
 		return stage == 511 ? -1 : stage + 1;
 	}

@@ -1,4 +1,13 @@
 {
+  "screen.productivebeesgenesis.network.terminal.workspace_search": "Filter products",
+  "screen.productivebeesgenesis.network.terminal.workspace_refresh": "Refresh",
+  "screen.productivebeesgenesis.network.terminal.workspace_next": "›",
+  "screen.productivebeesgenesis.network.terminal.workspace_products": "Products & crafting",
+  "screen.productivebeesgenesis.network.terminal.workspace_status": "Network overview",
+  "screen.productivebeesgenesis.network.terminal.workspace_members": "%s members · %s bee slots · %s lanes",
+  "screen.productivebeesgenesis.network.terminal.workspace_energy": "FE: %s / %s",
+  "screen.productivebeesgenesis.network.terminal.workspace_running": "Production enabled",
+  "screen.productivebeesgenesis.network.terminal.workspace_stopped": "Production paused",
   "screen.productivebeesgenesis.me_terminal.title": "ME Crafting",
   "screen.productivebeesgenesis.me_terminal.open": "Click to open crafting",
   "screen.productivebeesgenesis.me_terminal.catalogue": "Craftable",

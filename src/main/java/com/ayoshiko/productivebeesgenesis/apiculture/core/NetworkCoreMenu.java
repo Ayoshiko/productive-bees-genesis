@@ -27,6 +27,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private TerminalReply terminalReply;
 	private TerminalClientState clientState;
 	private CoreTerminalSubscription subscription;
+	private CoreProductWorkspace products;
+	private long memberDue, productDue;
+	private boolean productTurn;
 	private CoreAutomaticBeeInput automaticBee;
 	private TerminalCraftingMenu crafting;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
@@ -104,10 +107,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (!dedicatedTerminal()) return; crafting = new TerminalCraftingMenu(this);
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 	}
-	public void layoutCrafting(boolean visible, int top) {
+	public void layoutCrafting(boolean visible, int top) { layoutCrafting(visible, 51, top); }
+	public void layoutCrafting(boolean visible, int left, int top) {
 		if (core != null || crafting == null) return; crafting.visible(visible);
 		for (int i = 0; i < 10; i++) {
-			var slot = crafting.slot(i, i == 9 ? 162 : 51 + (i % 3) * 18, i == 9 ? top + 18 : top + (i / 3) * 18);
+			var slot = crafting.slot(i, i == 9 ? left + 111 : left + (i % 3) * 18, i == 9 ? top + 18 : top + (i / 3) * 18);
 			slot.index = 36 + i; slots.set(36 + i, slot);
 		}
 	}
@@ -125,6 +129,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		try { return crafting.handle(player, request); } finally { exchanging = false; }
 	}
 	private void addInventory(Inventory inventory) {
+		if (dedicatedTerminal()) products = new CoreProductWorkspace(this);
 		me = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession(containerId, terminalSession);
 		for (int row = 0; row < 4; row++) for (int column = 0; column < 9; column++) {
 			int index = row == 3 ? column : (row + 1) * 9 + column;
@@ -147,6 +152,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		}
 	}
 	public TerminalClientState clientState() { return clientState; }
+	public TerminalClientState productState() { return products == null ? null : products.client(); }
+	boolean workspaceAvailable(net.minecraft.server.level.ServerPlayer player) { return dedicatedTerminal() && !exchanging && automaticBee == null && exchangeCore(player) != null; }
+	boolean chargeTerminalRequest(net.minecraft.server.level.ServerPlayer player) { return TerminalPayloads.allow(player) && (terminalAccess == null || terminalAccess.charge(player, true)); }
+	void wakeProducts(net.minecraft.server.level.ServerPlayer player) { productDue = 0; TerminalSubscriptionService.watch(player, this); }
 	/** 背包槽只同步和选择；包括丢弃、热键交换和创造复制在内的原版搬运均关闭。 */
 	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
 	public long value(int index) {
@@ -202,6 +211,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (selections != null) selections.close();
 		closed = true; terminalSequence.close(); terminalReply = null; me.close();
 		if (clientState != null) clientState.close();
+		if (products != null) products.close();
 	}
 	@Override public void broadcastChanges() {
 		if (core != null && terminalAccess != null && !closed && (!stillValid(viewer) || !terminalAccess.charge(viewer, false))) {
@@ -209,7 +219,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		}
 		if (core != null && !stillValid(viewer)) {
 			if (viewer instanceof net.minecraft.server.level.ServerPlayer player) cancelSubscription(player);
-			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; me.close(); return;
+			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; me.close(); if (products != null) products.close(); return;
 		}
 		if (viewer instanceof net.minecraft.server.level.ServerPlayer player && me.active()) me.tick(meBridge(player));
 		if (crafting != null && viewer instanceof net.minecraft.server.level.ServerPlayer player) crafting.refresh(player, false);
@@ -266,6 +276,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	public TerminalReply terminalReply() { return terminalReply; }
 	/** 客户端只接收本次打开的菜单且顺序更新的只读回复。 */
 	public void acceptTerminalReply(TerminalReply reply) {
+		if (core == null && !closed && products != null && products.matches(reply.session())) { products.client().accept(reply, net.minecraft.Util.getMillis()); return; }
 		if (core == null && !closed && containerId == reply.containerId() && terminalSession.equals(reply.session())
 				&& (terminalReply == null || reply.sequence() > terminalReply.sequence())) {
 			terminalReply = reply;
@@ -273,7 +284,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		}
 	}
 	public void acceptTerminalUpdate(TerminalLiveUpdate update) {
-		if (core == null && !closed && dedicatedTerminal()) clientState.acceptLive(update, net.minecraft.Util.getMillis());
+		if (core == null && !closed && dedicatedTerminal()) {
+			if (products.matches(update.session())) products.client().acceptLive(update, net.minecraft.Util.getMillis());
+			else clientState.acceptLive(update, net.minecraft.Util.getMillis());
+		}
 	}
 	/** 正式网络入口；提前消费序号，发送槽同步时的回调也不能重入下一条动作。 */
 	public TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
@@ -283,6 +297,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		return terminalRequest(player, request.command(), request.recipe());
 	}
 	private TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation recipe) {
+		if (recipe == null && products != null && products.matches(request.session())) return products.request(player, request);
 		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
 				|| player.containerMenu != this || request.containerId() != containerId
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
@@ -305,6 +320,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	}
 	/** 独立终端检索同样先消费序号，有限扫描与操作令牌共用同一会话。 */
 	public TerminalReply terminalSearch(net.minecraft.server.level.ServerPlayer player, TerminalSearchRequest request) {
+		if (products != null && products.matches(request.session())) return products.search(player, request);
 		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
 				|| !dedicatedTerminal() || automaticBee != null || player.containerMenu != this || request.containerId() != containerId
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
@@ -314,13 +330,13 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 			if (crafting != null) crafting.pause();
 			if (subscription == null) subscription = new CoreTerminalSubscription(this, selections);
 			boolean accepted = subscription.request(request);
-			if (accepted) { selections.cancel(); TerminalSubscriptionService.watch(player, this); }
+			if (accepted) { selections.cancel(); memberDue = 0; TerminalSubscriptionService.watch(player, this); }
 			return new TerminalReply(containerId, terminalSession, request.sequence(), accepted ? TerminalReply.Status.OK : TerminalReply.Status.STALE, 0, 0, null);
 		} finally { terminalSequence.finish(); }
 	}
 	public NetworkSelectionSession.Page terminalSelectionPage() { return selections == null ? null : selections.page(); }
 	public long stepSubscription(net.minecraft.server.level.ServerPlayer player, TerminalSyncBudget bytes, long now) {
-		if (subscription == null && automaticBee == null || closed || player.containerMenu != this || !stillValid(player) || !player.isAlive() || player.isSpectator()) {
+		if (subscription == null && automaticBee == null && (products == null || !products.active()) || closed || player.containerMenu != this || !stillValid(player) || !player.isAlive() || player.isSpectator()) {
 			cancelSubscription(player); return Long.MAX_VALUE;
 		}
 		if (exchanging) return now + 1;
@@ -331,13 +347,22 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 			automaticBee = null;
 			net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, reply);
 		}
-		if (subscription == null) return Long.MAX_VALUE;
-		return subscription.step(player, bytes, now, terminalSequence.last());
+		boolean hasProducts = products != null && products.active();
+		if (subscription == null) memberDue = Long.MAX_VALUE;
+		if (!hasProducts) productDue = Long.MAX_VALUE;
+		// 两个视图仍共用一次最多 32 条的服务步；到期时轮流推进。
+		if (hasProducts && productDue <= now && (memberDue > now || productTurn)) {
+			productDue = products.step(player, bytes, now); productTurn = false;
+		} else if (subscription != null && memberDue <= now) {
+			memberDue = subscription.step(player, bytes, now, terminalSequence.last()); productTurn = true;
+		}
+		return Math.min(memberDue, productDue);
 	}
 	public void cancelSubscription(net.minecraft.server.level.ServerPlayer player) {
 		if (crafting != null) crafting.pause();
 		TerminalSubscriptionService.remove(player, this); if (subscription != null) subscription.close(); subscription = null; automaticBee = null;
 		if (selections != null) selections.cancel();
+		if (products != null) products.cancel();
 	}
 	TerminalReply queueAutomaticBee(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
 		selections.expire(player.serverLevel().getGameTime());

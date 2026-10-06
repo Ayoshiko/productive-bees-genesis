@@ -1,4 +1,13 @@
 {
+  "screen.productivebeesgenesis.network.terminal.workspace_search": "产物筛选",
+  "screen.productivebeesgenesis.network.terminal.workspace_refresh": "刷新产物",
+  "screen.productivebeesgenesis.network.terminal.workspace_next": "›",
+  "screen.productivebeesgenesis.network.terminal.workspace_products": "产物与合成",
+  "screen.productivebeesgenesis.network.terminal.workspace_status": "网络概况",
+  "screen.productivebeesgenesis.network.terminal.workspace_members": "%s 台成员 · %s 蜂位 · %s 进程",
+  "screen.productivebeesgenesis.network.terminal.workspace_energy": "FE：%s / %s",
+  "screen.productivebeesgenesis.network.terminal.workspace_running": "生产已开启",
+  "screen.productivebeesgenesis.network.terminal.workspace_stopped": "生产已暂停",
   "screen.productivebeesgenesis.me_terminal.title": "ME 合成工作页",
   "screen.productivebeesgenesis.me_terminal.open": "点击打开合成工作页",
   "screen.productivebeesgenesis.me_terminal.catalogue": "可合成",

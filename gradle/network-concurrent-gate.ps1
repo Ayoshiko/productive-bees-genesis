@@ -11,6 +11,7 @@ param(
     [switch]$Crafting,
     [switch]$MeBridge,
     [switch]$MeCrafting,
+    [switch]$ProductWorkspace,
     [ValidateSet('19.2.17', '19.2.18')][string]$Ae2Version = '19.2.17',
     [switch]$RecipeFill,
     [switch]$Wireless,
@@ -20,7 +21,8 @@ param(
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
 $ErrorActionPreference = 'Stop'
-if ($MeCrafting) { $MeBridge = $true }
+if ($MeCrafting -or $ProductWorkspace) { $MeBridge = $true }
+if ($ProductWorkspace -and $MeCrafting) { throw 'Workspace and ME crafting use separate focused stages' }
 if ($MeBridge -and ($Crafting -or $Upgrades -or $Terminals)) { throw 'ME bridge uses a separate focused fixture' }
 if ($Upgrades -and $Terminals) { throw 'Upgrade and terminal gates use separate fixtures' }
 if ($Crafting -and ($Upgrades -or $Terminals)) { throw 'Crafting uses a separate focused fixture' }
@@ -38,6 +40,7 @@ if ($ChildTask) {
     if ($Terminals) { $arguments += '-PnetworkConcurrentTerminals' }
     if ($MeBridge) { $arguments += '-PnetworkMeBridge' }
     if ($MeCrafting) { $arguments += '-PnetworkMeCrafting' }
+    if ($ProductWorkspace) { $arguments += '-PnetworkWorkspace' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
     if ($RecipeFill) { $arguments += '-PnetworkRecipeFill' }
     if ($Wireless) { $arguments += '-PnetworkConcurrentWireless' }
@@ -53,8 +56,8 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
-    recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly
+    schema = 1; gate = $(if ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
     ae2Version = $Ae2Version; sourceFingerprint = Get-NetworkSourceFingerprint; dependencies = @(Get-NetworkDependencyHashes)
@@ -81,6 +84,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($Terminals) { $arguments += '-Terminals' }
     if ($MeBridge) { $arguments += '-MeBridge' }
     if ($MeCrafting) { $arguments += '-MeCrafting' }
+    if ($ProductWorkspace) { $arguments += '-ProductWorkspace' }
     if ($Crafting) { $arguments += '-Crafting' }
     if ($RecipeFill) { $arguments += '-RecipeFill' }
     if ($Wireless) { $arguments += '-Wireless' }
@@ -123,7 +127,7 @@ try {
         $seed = if ($WirelessVisualOnly) { $SeedWorld } else { '' }
         $writer = $null
         $writerClient = $null
-        foreach ($mode in $(if ($WirelessVisualOnly) { @('read') } elseif ($CraftingWriteOnly) { @('write') } else { @('write', 'read') })) {
+        foreach ($mode in $(if ($WirelessVisualOnly) { @('read') } elseif ($CraftingWriteOnly -or $ProductWorkspace) { @('write') } else { @('write', 'read') })) {
             $serverId = "$RunId-$combination-$mode-server"
             $clientId = "$RunId-$combination-$mode-client"
             Write-Host "Player gate $combination $mode started"
@@ -156,6 +160,9 @@ try {
                     $clientReport.connections -ne $connections) { throw "Invalid concurrent client report: $roleId" }
                 Add-Evidence "$roleId-report" $clientPath
                 Add-Evidence "$roleId-image" (Join-Path $clientRoot 'concurrent.png')
+                if ($ProductWorkspace -and $playerRole -eq 'owner') {
+                    foreach ($image in @('workspace-bees', 'workspace-upgrades', 'workspace-crafting', 'workspace-restored')) { Add-Evidence "$roleId-$image" (Join-Path $clientRoot "$image.png") }
+                }
                 if ($MeCrafting -and $withAe2 -and $mode -eq 'write' -and $playerRole -eq 'owner') {
                     Add-Evidence "$roleId-me-plan" (Join-Path $clientRoot 'me-plan.png')
                     Add-Evidence "$roleId-me-jobs" (Join-Path $clientRoot 'me-jobs.png')
@@ -227,6 +234,7 @@ try {
                 Add-Evidence "$serverId-wireless-file" $serverReport.wirelessFile
             }
             if ($withAe2 -and $serverReport.ae2Version -ne $Ae2Version) { throw 'Unexpected runtime AE2 version' }
+            if ($ProductWorkspace -and $serverReport.workspaceVerified -ne $true) { throw 'Missing workspace checks' }
             if ($MeCrafting -and $serverReport.meCraftingVerified -ne $true) { throw 'Missing ME crafting checks' }
             if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }
             if ($RecipeFill -and $serverReport.recipeFillJeiAndConservation -ne $true) { throw 'Missing recipe fill checks' }

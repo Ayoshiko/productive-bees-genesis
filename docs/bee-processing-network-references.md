@@ -392,3 +392,8 @@ ICraftingCPU 公共接口不提供任务 UUID；对已核实的原生 CraftingCP
 按用户补充核对[19.2.17 → 19.2.18 完整差异](https://github.com/AppliedEnergistics/Applied-Energistics-2/compare/neoforge/v19.2.17...neoforge/v19.2.18)：`CPUSelectionList.formatStorage(CraftingStatusMenu.CraftingCpuListEntry)` 被删除，drawBackgroundLayer 改用 `Tooltips.getByteAmount` 与 `Tooltips.getAmount`。注入旧方法或调用点的附属 Mixin 可能失效。本项目未引用这些 CPU 列表目标，新工作页及格式化独立实现；本步采用的计划／CPU／任务接口和原生 link 入口没有出现在该版本改动列表。该版本还调整 FillCraftingGridFromRecipePacket，包含剩余物品掉落兜底；本项目继续使用已验收的自有 JEI 填格事务，不移植该兜底。
 
 编译基线保留 19.2.17，运行脚本新增显式 `-Ae2Version 19.2.18` 选择与实际加载版本核对。19.2.18 来自官方项目 Modrinth 发布文件，8,236,552 字节，SHA-256 `df15a07f86ca1ca93aa66373f9d5d84dd3d4586631fceb38f4fbc85dad591e39`，并核对发布端 SHA-512；JAR 只保存在忽略的 libs，比较原始响应在 `build/ae2-19.2.18-compare.json`。运行结果以本步验收记录为准，不将源码差异核对等同于所有 AE2 附属模组的兼容验收。
+
+<a id="s13-32"></a>
+### 13.32 网络工作台的双视图复用（2026-10-06）
+
+以本 worktree 的 `02b74ca` 为基线读取 `TerminalClientState`、`NetworkSelectionSession`、`CoreTerminalSubscription`、`TerminalSubscriptionService`、`TerminalCraftingMenu` 及 JEI 转移入口。采用现有会话／代际校验、当前页续租、全服公平调度、数量索引 retain/release 和真实材料账户；常驻产物区使用独立会话，但只在原队列条目中轮流执行现有查询步。不得把管理页 generation 当作产物授权，也不复制库存／合成服务。界面复用本项目九宫格皮肤、物品预览与原版控件，延续 [13.24](#s13-24) 的分区原则；本步未更新参考副本或引入外部贴图／依赖。

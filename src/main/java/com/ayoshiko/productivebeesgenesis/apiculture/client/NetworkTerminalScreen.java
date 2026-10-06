@@ -25,7 +25,9 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReq
 
 /** 专用终端界面：机器分组、蜜蜂／采蜜格、产物网格及固定背包，复用服务端资产事务。 */
 public final class NetworkTerminalScreen extends AbstractContainerScreen<NetworkCoreMenu> {
-	public static final int WIDTH = 304;
+	public static final int WIDTH = 304, WORKSPACE_WIDTH = 492;
+	private final TerminalProductPane productPane;
+	private boolean workspace;
 	private final TerminalClientState state;
 	private final Inventory inventory;
 	private final List<Button> actions = new ArrayList<>();
@@ -50,17 +52,20 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	private int hover;
 	private int inventoryY;
 	private int craftingTarget;
-	private boolean craftingRequested;
+	private boolean craftingRequested, craftingSource;
 	private TerminalView.Location restoreLocation;
 	private java.util.UUID restoreBee;
 
 	public NetworkTerminalScreen(NetworkCoreMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title); this.state = menu.clientState(); this.inventory = inventory;
+		productPane = new TerminalProductPane(menu, this::rebuild);
 		tab = menu.scope() == TerminalScope.APIARY ? 1 : 3;
 	}
 	@Override protected void init() {
-		imageWidth = WIDTH; imageHeight = Math.max(236, Math.min(332, height - 4));
-		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(88, inventoryY);
+		workspace = width >= WORKSPACE_WIDTH + 4 && height >= 300;
+		if (workspace && (tab == 2 || tab == 4)) { tab = menu.scope() == TerminalScope.APIARY ? 1 : 3; query = ""; queryDirty = true; }
+		imageWidth = workspace ? WORKSPACE_WIDTH : WIDTH; imageHeight = Math.max(236, Math.min(332, height - 4));
+		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : 88, inventoryY);
 		state.tick(Util.getMillis());
 		rebuild();
 		if (state.view() == null && state.ready(Util.getMillis())) refresh();
@@ -84,13 +89,13 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		result.setTooltip(Tooltip.create(label)); actions.add(result); return result;
 	}
 	private void rebuild() {
-		menu.layoutCrafting(tab == 4, inventoryY - 78);
+		menu.layoutCrafting(craftingVisible(), workspace ? 318 : 51, inventoryY - 78);
 		synchronizeView();
 		boolean focus = search != null && search.isFocused();
 		int cursor = search == null ? 0 : search.getCursorPosition();
 		if (search != null) query = search.getValue();
 		clearWidgets(); actions.clear(); navigationActions.clear(); hoveredBees.clear(); install = null; remove = null;
-		for (int page : menu.scope() == TerminalScope.APIARY ? new int[]{1, 2, 3, 4} : new int[]{2, 3, 4}) {
+		for (int page : workspace ? menu.scope() == TerminalScope.APIARY ? new int[]{1, 3} : new int[]{3} : menu.scope() == TerminalScope.APIARY ? new int[]{1, 2, 3, 4} : new int[]{2, 3, 4}) {
 			var button = control(tr("tab." + page), 2, 42 + (page - 1) * 30, 26, 26, () -> switchTab(page), page == tab, page == 1 ? 0 : page == 2 ? 2 : page == 3 ? 3 : -1);
 			navigationActions.add(button);
 		}
@@ -121,19 +126,24 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		nextPage = navigation(tr("next"), 258, 28, 38, 18, () -> navigate(TerminalSearchRequest.Navigation.NEXT));
 		var view = state.view();
 		// JEI 返回时仍可能持有成员页快照，等待新订阅前不能将它解释为产物行。
-		if (view != null && view.kind() == ((tab == 2 || tab == 4) ? NetworkSelectionSession.Kind.PRODUCTS : NetworkSelectionSession.Kind.MEMBERS)) {
+		if (view != null && view.kind() == ((tab == 2 || tab == 4) ? NetworkSelectionSession.Kind.PRODUCTS : tab == 3 ? NetworkSelectionSession.Kind.UPGRADES : NetworkSelectionSession.Kind.MEMBERS)) {
 			if (tab == 2 || tab == 4) productGrid(view);
 			else if (selectedRow() == null) memberGrid(view);
 			else if (tab == 1) beeActions();
 			else upgradeActions();
 		}
-		if (tab == 4) {
-			request(own("craft_clear"), 202, inventoryY - 78, 89, 18, () -> craft(CRAFT_CLEAR, -1, -1, 0));
-			control(tr("amount", amount), 202, inventoryY - 54, 89, 18, () -> { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }, false, -1)
+		if (craftingVisible()) {
+			request(own("craft_clear"), workspace ? 398 : 202, inventoryY - (workspace ? 36 : 78), workspace ? 86 : 89, 18, () -> craft(CRAFT_CLEAR, -1, -1, 0));
+			control(tr("amount", amount), workspace ? 398 : 202, inventoryY - (workspace ? 78 : 54), workspace ? 86 : 89, 18, () -> { amount = amount == 1 ? 16 : amount == 16 ? 64 : 1; rebuild(); }, false, -1)
 					.setTooltip(Tooltip.create(own("craft_input_hint")));
+		}
+		if (workspace) {
+			for (var widget : productPane.build(font, leftPos, topPos, inventoryY)) addRenderableWidget(widget);
+			if (productPane.focusedSearch() != null) setFocused(productPane.focusedSearch());
 		}
 		updateEnabled();
 	}
+	private boolean craftingVisible() { return workspace || tab == 4; }
 	private void synchronizeView() {
 		if (displayed == state.view()) return;
 		var priorRow = displayed != null && selected >= 0 && selected < displayed.rows().size() ? displayed.rows().get(selected) : null;
@@ -183,7 +193,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 			}
 		}
 	}
-	private void select(int row, int slot) { selected = row; target = slot; upgradeChoice = 0; confirmCage = false; rebuild(); }
+	private void select(int row, int slot) { craftingSource = false; selected = row; target = slot; upgradeChoice = 0; confirmCage = false; rebuild(); }
 	private void detailHeader() {
 		var row = selectedRow();
 		control(own("back"), 37, 51, 34, 15, () -> { selected = -1; rebuild(); }, false, -1);
@@ -270,7 +280,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	/** JEI 发送资产命令后只切换显示；等待其回执，再建立产物页订阅。 */
 	public void prepareRecipeTransfer() {
-		tab = 4; selected = -1; scroll = 0; query = ""; if (search != null) search.setValue("");
+		if (!workspace) tab = 4; selected = -1; scroll = 0; query = ""; if (search != null) search.setValue("");
 		craftingRequested = false; queryDirty = true; searchAt = Util.getMillis();
 		if (minecraft != null && minecraft.screen == this) rebuild();
 	}
@@ -337,7 +347,8 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	@Override protected void containerTick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { state.close(); minecraft.setScreen(null); return; }
 		super.containerTick(); long now = Util.getMillis(); state.tick(now);
-		if (tab == 4 && !craftingRequested && !queryDirty && state.actionable(now) && state.view() != null) craft(CRAFTING, -1, -1, 0);
+		productPane.tick(workspace);
+		if (craftingVisible() && !craftingRequested && !queryDirty && state.actionable(now) && state.view() != null) craft(CRAFTING, -1, -1, 0);
 		if (queryDirty && now >= searchAt && state.ready(now)) { selected = -1; scroll = 0; restoreLocation = null; refresh(); }
 		if (displayed != state.view() || notice != state.notice()) {
 			notice = state.notice(); rebuild();
@@ -349,11 +360,13 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		updateEnabled();
 	}
 	@Override public boolean keyPressed(int key, int scan, int modifiers) {
+		if (workspace && productPane.keyPressed(key, scan, modifiers)) return true;
 		if (search.isFocused() && key == GLFW.GLFW_KEY_ENTER) { selected = -1; scroll = 0; refresh(); search.setFocused(false); setFocused(null); return true; }
 		if (search.isFocused() && key != GLFW.GLFW_KEY_ESCAPE) return search.keyPressed(key, scan, modifiers);
 		return super.keyPressed(key, scan, modifiers);
 	}
 	@Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+		if (workspace && productPane.scroll(x, y, vertical)) return true;
 		if (x >= leftPos + 32 && x < leftPos + WIDTH && y >= topPos + 48 && y < topPos + inventoryY - 24 && selectedRow() == null) {
 			if (vertical == 0) return false;
 			scroll = Math.clamp(scroll + (vertical > 0 ? -1 : 1), 0, maxScroll()); rebuild(); return true;
@@ -361,13 +374,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return super.mouseScrolled(x, y, horizontal, vertical);
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
+		if (workspace && productPane.clear(x, y, button)) return true;
 		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+9 && x < leftPos+28 && y >= topPos+10 && y < topPos+22) {
 			minecraft.setScreen(new MeTerminalScreen(this, menu)); return true;
 		}
-		if (tab == 4 && (button == 0 || button == 1)) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive()
+		if (craftingVisible() && (button == 0 || button == 1)) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive()
 				&& x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
 			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);
-			else { craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown(); craft(take ? CRAFT_OUT : CRAFT_IN, craftingTarget, take ? -1 : sourceSlot, take ? hasShiftDown() ? 64 : 1 : amount); }
+			else { craftingSource = true; craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown(); craft(take ? CRAFT_OUT : CRAFT_IN, craftingTarget, take ? -1 : sourceSlot, take ? hasShiftDown() ? 64 : 1 : amount); }
 			return true;
 		}
 		if (button == 1 && search.isMouseOver(x, y)) { search.setValue(""); setFocused(search); return true; }
@@ -376,8 +390,8 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		}
 		if (button == 0) for (var slot : menu.slots) if (slot.index < 36 && x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
 			sourceSlot = slot.getContainerSlot(); confirmCage = false;
-			if (hasShiftDown() && tab == 1 && menu.scope() == TerminalScope.APIARY) automaticBee();
-			if (hasShiftDown() && tab == 4) craft(CRAFT_IN, craftingTarget, sourceSlot, 64);
+			if (hasShiftDown() && (tab == 4 || workspace && craftingSource)) craft(CRAFT_IN, craftingTarget, sourceSlot, 64);
+			else if (hasShiftDown() && tab == 1 && menu.scope() == TerminalScope.APIARY) automaticBee();
 			rebuild(); return true;
 		}
 		return super.mouseClicked(x, y, button);
@@ -412,12 +426,18 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 			TerminalSkin.panel(g, leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18);
 			if (slot.index < 36 && slot.getContainerSlot() == sourceSlot || slot.index == 36 + craftingTarget) g.renderOutline(leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18, TerminalSkin.GOLD);
 		}
-		if (tab == 4) g.drawString(font, "→", leftPos + 126, topPos + inventoryY - 54, TerminalSkin.INK, false);
+		if (workspace) {
+			g.fill(leftPos + 306, topPos + 6, leftPos + 307, topPos + imageHeight - 6, 0xff5c5845);
+			g.fill(leftPos + 310, topPos + 69, leftPos + 484, topPos + inventoryY - 104, 0xff14232a);
+		}
+		if (craftingVisible()) g.drawString(font, "→", leftPos + (workspace ? 393 : 126), topPos + inventoryY - 54, TerminalSkin.INK, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
 		MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
-		if (tab == 4) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
+		if (workspace && mouseX >= leftPos + 38 && mouseX < leftPos + 297 && mouseY >= topPos + inventoryY && mouseY < topPos + imageHeight - 6)
+			g.renderComponentTooltip(font, List.of(own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), own("workspace_energy", menu.energy(false), menu.energy(true))), mouseX, mouseY);
+		if (craftingVisible()) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
 				&& mouseY >= topPos + slot.y && mouseY < topPos + slot.y + 16) {
 			var hint = new ArrayList<Component>(); if (slot.hasItem()) hint.add(slot.getItem().getHoverName());
 			hint.add(own(slot.index == 45 ? "craft_output_hint" : "craft_input_hint"));
@@ -443,10 +463,17 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 						: tr("result." + state.exchangeResult().status().name().toLowerCase(java.util.Locale.ROOT), state.exchangeResult().moved()) : own("live");
 		long sortAge = state.sortAgeSeconds(Util.getMillis());
 		if ((tab == 2 || tab == 4) && sortAge >= 0) status = status.copy().append(" · ").append(own("sort_age", sortAge));
-		if (tab == 4 && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable");
+		if (craftingVisible() && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable");
 		line(g, status, 38, inventoryY - 22, 253, TerminalSkin.MUTED);
-		line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), 40, inventoryY - 11, menu.wirelessTerminal() ? 128 : 63, TerminalSkin.INK);
-		line(g, tr("inventory_slot", sourceSlot + 1), 174, inventoryY - 11, 118, TerminalSkin.MUTED);
+		line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), workspace ? 318 : 40, inventoryY - 11, workspace ? 92 : menu.wirelessTerminal() ? 128 : 63, TerminalSkin.INK);
+		line(g, tr("inventory_slot", sourceSlot + 1), workspace ? 414 : 174, inventoryY - 11, workspace ? 70 : 118, TerminalSkin.MUTED);
+		if (workspace) {
+			productPane.labels(g, font, inventoryY);
+			line(g, own("workspace_status"), 42, inventoryY + 4, 246, TerminalSkin.GOLD);
+			line(g, own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), 42, inventoryY + 22, 246, TerminalSkin.INK);
+			line(g, own("workspace_energy", menu.energy(false), menu.energy(true)), 42, inventoryY + 38, 246, TerminalSkin.MUTED);
+			line(g, own(menu.productionRunning() ? "workspace_running" : "workspace_stopped"), 42, inventoryY + 54, 246, TerminalSkin.MUTED);
+		}
 	}
 	private void line(GuiGraphics g, Component value, int x, int y, int width, int color) { g.drawString(font, font.plainSubstrByWidth(value.getString(), width), x, y, color, false); }
 	private Component memberName(TerminalView.Row row) {

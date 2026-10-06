@@ -8,6 +8,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 final class CoreTerminalSubscription {
 	private final NetworkCoreMenu menu;
 	private final NetworkSelectionSession selections;
+	private final java.util.UUID session;
 	private TerminalLiveQuery query;
 	private String text;
 	private TerminalNameMatches nameMatches;
@@ -17,7 +18,8 @@ final class CoreTerminalSubscription {
 	private TerminalLiveUpdate.Status sentStatus;
 	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex quantityIndex;
 	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex.Order quantityOrder;
-	CoreTerminalSubscription(NetworkCoreMenu menu, NetworkSelectionSession selections) { this.menu = menu; this.selections = selections; }
+	CoreTerminalSubscription(NetworkCoreMenu menu, NetworkSelectionSession selections) { this(menu, selections, menu.terminalSession()); }
+	CoreTerminalSubscription(NetworkCoreMenu menu, NetworkSelectionSession selections, java.util.UUID session) { this.menu = menu; this.selections = selections; this.session = session; }
 	boolean request(TerminalSearchRequest request) {
 		if (request.sort() == TerminalSearchRequest.Sort.CAPACITY && menu.scope() != TerminalScope.APIARY) return false;
 		if (request.navigation() == TerminalSearchRequest.Navigation.FIRST) {
@@ -31,7 +33,7 @@ final class CoreTerminalSubscription {
 		sequence = request.sequence(); sentView = null; sentStatus = null; sentAt = Long.MIN_VALUE;
 		return true;
 	}
-	void close() { if (quantityIndex != null) quantityIndex.release(menu.terminalSession()); quantityIndex = null; quantityOrder = null; }
+	void close() { if (quantityIndex != null) quantityIndex.release(session); quantityIndex = null; quantityOrder = null; }
 	private boolean quantities() { return sort == TerminalSearchRequest.Sort.QUANTITY_DESC || sort == TerminalSearchRequest.Sort.QUANTITY_ASC; }
 	long step(ServerPlayer player, TerminalSyncBudget bytes, long now, long acknowledged) {
 		if (query == null) return Long.MAX_VALUE;
@@ -44,7 +46,7 @@ final class CoreTerminalSubscription {
 		int scanBudget = 32;
 		if (quantities()) {
 			if (quantityIndex != core.quantityIndex()) { close(); quantityIndex = core.quantityIndex(); }
-			quantityIndex.retain(menu.terminalSession());
+			quantityIndex.retain(session);
 			// 已有排序根后给查询保留一半工作额度，持续写入不能饿死稀疏查询。
 			scanBudget -= quantityIndex.step(current.ledger().balances(), now, quantityIndex.order() == null ? scanBudget : 16);
 			if (quantityOrder == null || query.complete() && query.atStart() && now - quantityOrder.sampledAt() >= 100) {
@@ -87,7 +89,7 @@ final class CoreTerminalSubscription {
 			TerminalLiveUpdate.Status status, TerminalView view, boolean previous) {
 		boolean unchanged = status == sentStatus && java.util.Objects.equals(view, sentView);
 		if (unchanged && sentAcknowledged == acknowledged && sentAt != Long.MIN_VALUE && now - sentAt < 40) return false;
-		var update = new TerminalLiveUpdate(menu.containerId, menu.terminalSession(), sequence, acknowledged,
+		var update = new TerminalLiveUpdate(menu.containerId, session, sequence, acknowledged,
 				Math.incrementExact(revision), status, previous, unchanged ? null : view, quantityOrder == null ? -1 : Math.max(0, now - quantityOrder.sampledAt()));
 		if (!budget.acquire(now, update.encodedBytes())) return false;
 		PacketDistributor.sendToPlayer(player, update);
