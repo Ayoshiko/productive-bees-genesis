@@ -1,0 +1,62 @@
+package com.ayoshiko.productivebeesgenesis.apiculture.me;
+
+import com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalPayloads;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalSequence;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalSubscriptionService;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+public final class MeTerminalSession {
+	private final int containerId;
+	private final UUID session;
+	private final TerminalSequence sequences = new TerminalSequence();
+	private MeTerminalBackend backend;
+	private MeTerminalView view = MeTerminalView.empty(MeTerminalView.Status.CLOSED);
+	private long sent, acknowledged, sentAt;
+	public MeTerminalSession(int containerId, UUID session) { this.containerId = containerId; this.session = session; }
+	public long sequence() { return sent; }
+	public MeTerminalView view() { return view; }
+	public boolean active() { return backend != null; }
+	public boolean waiting() { return sent > acknowledged && net.minecraft.Util.getMillis() - sentAt < 10_000; }
+	public MeTerminalRequest begin(MeTerminalRequest.Action action, int row, int page, long amount, String query) {
+		if (waiting() && action != MeTerminalRequest.Action.CLOSE) return null;
+		sentAt = net.minecraft.Util.getMillis(); return new MeTerminalRequest(containerId, session, ++sent, action, view.revision(), row, page, amount, query);
+	}
+	public void accept(MeTerminalReply reply) {
+		if (reply.containerId() == containerId && reply.session().equals(session) && reply.sequence() == sent && reply.sequence() > acknowledged) { acknowledged = reply.sequence(); view = reply.view(); }
+	}
+	public void tick(MeBridgeBlockEntity bridge) { if (backend != null && !backend.valid(bridge)) closePage(); }
+	public void handle(ServerPlayer player, MeTerminalRequest request, Supplier<MeBridgeBlockEntity> resolve, BooleanSupplier charge) {
+		if (request.containerId() != containerId || !request.session().equals(session) || !sequences.begin(request.sequence())) return;
+		try {
+			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
+			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
+			var bridge = resolve.get(); tick(bridge);
+			if (bridge == null) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
+			if (backend == null) {
+				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.TASKS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
+				backend = bridge.link().terminal(player);
+			}
+			if (backend == null || !backend.valid(bridge)) { closePage(); send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
+			send(player, request, backend.request(request));
+		} catch (RuntimeException | LinkageError error) {
+			closePage(); com.mojang.logging.LogUtils.getLogger().error("ME terminal stopped for {}", player.getUUID(), error);
+			send(player, request, MeTerminalView.empty(MeTerminalView.Status.UNKNOWN));
+		} finally { sequences.finish(); }
+	}
+	private void send(ServerPlayer player, MeTerminalRequest request, MeTerminalView value) {
+		var reply = new MeTerminalReply(containerId, session, request.sequence(), value);
+		var buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), player.registryAccess()); int size;
+		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }
+		catch (RuntimeException invalid) { reply = new MeTerminalReply(containerId, session, request.sequence(), MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE)); size = 256; }
+		finally { buffer.release(); }
+		if (MeTerminalBudget.bytes(player.server, size)) PacketDistributor.sendToPlayer(player, reply);
+	}
+	private void closePage() { var old = backend; backend = null; if (old != null) old.close(); }
+	public void close() { closePage(); sequences.close(); }
+}

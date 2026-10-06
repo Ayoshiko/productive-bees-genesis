@@ -361,6 +361,9 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return super.mouseScrolled(x, y, horizontal, vertical);
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
+		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+9 && x < leftPos+28 && y >= topPos+10 && y < topPos+22) {
+			minecraft.setScreen(new MeTerminalScreen(this, menu)); return true;
+		}
 		if (tab == 4 && (button == 0 || button == 1)) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive()
 				&& x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
 			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);

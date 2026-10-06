@@ -99,6 +99,9 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		for (var button : actions) { var scope = scopes.get(button); button.active = state.ready(now) && sequence <= menu.acknowledged() && menu.allowsAction(scope[0], scope[1]); }
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
+		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+200 && x < leftPos+219 && y >= topPos+131 && y < topPos+143) {
+			minecraft.setScreen(new com.ayoshiko.productivebeesgenesis.apiculture.client.MeTerminalScreen(this, menu)); return true;
+		}
 		if ((button == 0 || button == 1) && crafting) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive() && isHovering(slot.x, slot.y, 16, 16, x, y)) {
 			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);
 			else { craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown();

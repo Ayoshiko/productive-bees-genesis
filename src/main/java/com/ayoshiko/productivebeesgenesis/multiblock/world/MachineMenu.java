@@ -20,7 +20,7 @@ import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 
 /** 六个蜂位的有限管理视图；原版槽只读，所有资产变化经带会话和序号的命令。 */
-public final class MachineMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host {
+public final class MachineMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host, com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalHost {
 	// 回执字段最后发送，客户端看到完成序号时，本轮升级数量和上限已同步。
 	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4,
 			CRAFTING_DATA = WIRELESS_DATA + 3, ME_DATA = CRAFTING_DATA + 5, DATA_COUNT = ME_DATA + 1;
@@ -40,6 +40,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private final TerminalSequence craftingSequences = new TerminalSequence();
 	private TerminalClientState craftingState;
 	private TerminalCraftingMenu crafting;
+	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(MachineContent.MENU.get(), id); buffer.readBlockPos(); session = buffer.readUUID();
@@ -58,6 +59,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		viewer = inventory.player.getUUID(); binding = core.handle.binding().orElseThrow(); initialize(inventory); refresh();
 	}
 	private void initialize(Inventory inventory) {
+		me = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession(containerId, session);
 		craftingState = new TerminalClientState(containerId, session); crafting = new TerminalCraftingMenu(this);
 		addDataSlots(data);
 		for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
@@ -108,6 +110,16 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		catch (RuntimeException error) {
 			wireless.revoke(); com.mojang.logging.LogUtils.getLogger().error("Wireless machine crafting unavailable: {}", wireless.binding().device(), error); return null;
 		}
+	}
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession meTerminal() { return me; }
+	private com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity meBridge(ServerPlayer player) {
+		return controller(player) == null ? null : com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player);
+	}
+	@Override public void meRequest(ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest request) {
+		if (!player.server.isSameThread() || exchanging || controller(player) == null) return;
+		exchanging = true;
+		try { me.handle(player, request, () -> meBridge(player), () -> wireless == null || wireless.charge(player, true)); }
+		finally { exchanging = false; }
 	}
 	public TerminalClientState craftingState() { return craftingState; }
 	public long craftingGeneration() { return number(CRAFTING_DATA); }
@@ -209,13 +221,14 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		if (viewingPlayer instanceof ServerPlayer player && !exchanging) {
 			crafting.refresh(player, false); number(CRAFTING_DATA, crafting.generation()); data.set(CRAFTING_DATA + 4, crafting.flag());
 		}
+		if (viewingPlayer instanceof ServerPlayer player && me.active()) me.tick(meBridge(player));
 		refresh(); super.broadcastChanges();
 	}
 	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
 	@Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
 	@Override public void removed(Player player) {
 		// 客户端打开 JEI 也会调用 removed；只有服务端真正关闭菜单才撤销会话和订阅。
-		if (core != null) { closed = true; sequences.close(); craftingSequences.close(); craftingState.close(); crafting.pause(); }
+		if (core != null) { closed = true; sequences.close(); craftingSequences.close(); craftingState.close(); crafting.pause(); me.close(); }
 		super.removed(player);
 	}
 }

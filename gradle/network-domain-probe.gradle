@@ -15,6 +15,9 @@ if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network pr
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
+def probeAe2Version = providers.gradleProperty('networkProbeAe2Version').getOrElse('19.2.17')
+if (!(probeAe2Version in ['19.2.17', '19.2.18'])) throw new GradleException('Unsupported probe AE2 version')
+def meCraftingProbe = providers.gradleProperty('networkMeCrafting').isPresent()
 def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 def machineMenuProbe = providers.gradleProperty('networkMachineMenu').isPresent()
 def machineProduction = providers.gradleProperty('networkMachineProduction').isPresent()
@@ -34,6 +37,7 @@ def recipeFillProbe = providers.gradleProperty('networkRecipeFill').isPresent()
 if (recipeFillProbe && (!craftingProbe || providers.gradleProperty('networkConcurrentWireless').isPresent())) throw new GradleException('Recipe fill requires a separate crafting fixture')
 def meBridgeProbe = providers.gradleProperty('networkMeBridge').isPresent()
 if (meBridgeProbe && (!playerConcurrent || craftingProbe || terminalPermissions || providers.gradleProperty('networkConcurrentUpgrades').isPresent())) throw new GradleException('ME bridge requires its separate concurrent fixture')
+if (meCraftingProbe && !meBridgeProbe) throw new GradleException('ME crafting extends the bridge fixture')
 def wirelessProbe = providers.gradleProperty('networkConcurrentWireless').isPresent()
 def wirelessVisualOnly = providers.gradleProperty('networkWirelessVisualOnly').isPresent()
 if (wirelessVisualOnly && !wirelessProbe) throw new GradleException('Wireless visual follow-up requires wireless mode')
@@ -71,7 +75,7 @@ if (automaticMode != null && (coldProbe || ['networkOwnershipMode', 'networkCent
 }
 def probeDependencies = [file('run/mods/igleelib-1.21.1-1.2.7.jar')]
 if (probeAe2) {
-    probeDependencies.addAll(['appliedenergistics2-1.21.1-19.2.17.jar', 'AppliedFlux-1.21-2.1.5-neoforge.jar'].collect { file('libs/' + it) })
+    probeDependencies.addAll(["appliedenergistics2-1.21.1-${probeAe2Version}.jar", 'AppliedFlux-1.21-2.1.5-neoforge.jar'].collect { file('libs/' + it) })
     probeDependencies.addAll(['guideme-21.1.16.jar', 'Glodium-1.21-2.2-neoforge.jar'].collect { file('run/mods/' + it) })
 }
 def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
@@ -168,6 +172,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meCrafting', meCraftingProbe.toString()
             systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
@@ -184,6 +189,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meCrafting', meCraftingProbe.toString()
             systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
@@ -203,6 +209,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meCrafting', meCraftingProbe.toString()
             systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()

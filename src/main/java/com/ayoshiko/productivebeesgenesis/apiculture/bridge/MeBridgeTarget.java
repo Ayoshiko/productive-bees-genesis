@@ -68,5 +68,11 @@ public record MeBridgeTarget(BlockEntity host, Object generation, MeBridgeStatus
 		if (!level.mayInteract(player, bridge.getBlockPos())) return MeBridgeStatus.OWNER_ONLY;
 		var target = inspect(bridge); return target.status != MeBridgeStatus.ONLINE ? target.status : target.host != host ? MeBridgeStatus.CONFLICT : bridge.status();
 	}
+	public static MeBridgeBlockEntity resolve(BlockEntity host, ServerPlayer player) {
+		if (status(host, player) != MeBridgeStatus.ONLINE) return null;
+		var level = (ServerLevel) host.getLevel();
+		for (var side : Direction.values()) if (at(level, host.getBlockPos().relative(side)) instanceof MeBridgeBlockEntity bridge && player.getUUID().equals(bridge.owner())) return bridge;
+		return null;
+	}
 	private static MeBridgeTarget denied(MeBridgeStatus status) { return new MeBridgeTarget(null, null, status); }
 }

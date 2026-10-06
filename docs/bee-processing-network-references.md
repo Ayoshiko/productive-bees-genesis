@@ -381,3 +381,14 @@ f2a 核对同一 Minecraft 1.21.1 源码中的 `DataComponentPatch.forget`、`It
 复核本项目 `Ae2GridNodeManager.prepareNode/connectNode` 的延迟连接原因：NBT／clearRemoved 期间不能连接并递归查询邻居。桥在首个有效服务器 tick 创建；公共 Link 与菜单无 AE2 类型，ModList 守卫后才进入兼容 holder 注册能力及构造节点，查询不创建节点。每次访问重新检查最多六个相邻宿主和六个桥、实际实例／代际与已加载区块，不使用全世界桥表或后台世界访问。旧能力对象在宿主失效后返回空节点，正式卸载销毁节点；桥异常只隔离并保留原数据。没有复用独立机逐槽存储包装或新增 IStorageProvider，双向账本仍属 D20b。
 
 桥接材质由本项目忽略目录 `build/generate-me-bridge-art.py` 用 Pillow 生成，方块及物品共用原创像素图，不复制第三方资产。菜单使用同一个 ME 指示组件与有界枚举，没有全网内容同步。
+
+<a id="s13-31"></a>
+### 13.31 ME 合成计划／任务与 AE2 19.2.18 兼容（2026-10-06）
+
+继续读取固定 19.2.17 的 `ICraftingService`、`ICraftingPlan`、`ICraftingCPU`、`ICraftingLink`、`CraftingService.submitJob/getCpus`、`CraftingCPUCluster`、`CraftingCpuLogic.cancel/storeItems/getLastLink` 与 `NetworkCraftingProviders.getCraftables`。采用官方 beginCraftingCalculation 返回的 Future 与原生 submitJob，所有本模组访问和提交仍在服务器线程。原生 catalogue API 会复制集合，首次快照／筛选并非严格恒定耗时；按网格共享 40 tick 快照并限制全服昂贵查询频率，旧菜单最多保留一个列表。计划最多四份等待且限时，关闭和失效撤销未提交 Future；资产不进入本模组库存。
+
+ICraftingCPU 公共接口不提供任务 UUID；对已核实的原生 CraftingCPUCluster，从 craftingLogic.getLastLink 取得真实 link／UUID，提交取消前同时核对原 CPU、link、UUID 及当前网格成员资格。其它 CPU 实现只读，不能仅凭同名产物或进度近似判断旧任务。采用 link.cancel 标记后由 AE2 本身退出作业；原生 storeItems 按实际存入量扣除 CPU 保管库存，剩余继续留存，不复制任何世界掉落路径。
+
+按用户补充核对[19.2.17 → 19.2.18 完整差异](https://github.com/AppliedEnergistics/Applied-Energistics-2/compare/neoforge/v19.2.17...neoforge/v19.2.18)：`CPUSelectionList.formatStorage(CraftingStatusMenu.CraftingCpuListEntry)` 被删除，drawBackgroundLayer 改用 `Tooltips.getByteAmount` 与 `Tooltips.getAmount`。注入旧方法或调用点的附属 Mixin 可能失效。本项目未引用这些 CPU 列表目标，新工作页及格式化独立实现；本步采用的计划／CPU／任务接口和原生 link 入口没有出现在该版本改动列表。该版本还调整 FillCraftingGridFromRecipePacket，包含剩余物品掉落兜底；本项目继续使用已验收的自有 JEI 填格事务，不移植该兜底。
+
+编译基线保留 19.2.17，运行脚本新增显式 `-Ae2Version 19.2.18` 选择与实际加载版本核对。19.2.18 来自官方项目 Modrinth 发布文件，8,236,552 字节，SHA-256 `df15a07f86ca1ca93aa66373f9d5d84dd3d4586631fceb38f4fbc85dad591e39`，并核对发布端 SHA-512；JAR 只保存在忽略的 libs，比较原始响应在 `build/ae2-19.2.18-compare.json`。运行结果以本步验收记录为准，不将源码差异核对等同于所有 AE2 附属模组的兼容验收。

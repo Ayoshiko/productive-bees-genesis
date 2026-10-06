@@ -28,6 +28,9 @@ public final class MeBridgeNode implements MeBridgeLink, IInWorldGridNodeHost {
 		event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, NetworkContent.ME_BRIDGE_TILE.get(),
 				(bridge, context) -> bridge.link() instanceof MeBridgeNode node ? node : null);
 	}
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBackend terminal(net.minecraft.server.level.ServerPlayer player) {
+		return status() == MeBridgeStatus.ONLINE ? new AeMeTerminal(this, bridge, player) : null;
+	}
 	@Override public void connect() { if (!closed && bridge.currentLink(this)) node.create(bridge.getLevel(), bridge.getBlockPos()); }
 	@Override public IGridNode getGridNode(Direction side) { return !closed && bridge.currentLink(this) ? node.getNode() : null; }
 	@Override public MeBridgeStatus status() {

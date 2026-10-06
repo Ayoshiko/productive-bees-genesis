@@ -127,6 +127,11 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (MeCraftingProbe.enabled() && stage >= 600) {
+                if (!MeCraftingProbe.ready(stage)) return;
+                int next = MeCraftingProbe.advance(core, players, stage); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (MeBridgeProbe.enabled() && stage >= 500) {
                 if (!MeBridgeProbe.ready(stage)) return;
                 int next = MeBridgeProbe.advance(core, players, stage); noDrops(server);
@@ -330,6 +335,7 @@ public final class CompetitionServerProbe {
         if (!enabled()) return;
         var server = event.getServer(); var report = new JsonObject();
         report.addProperty("mode", reader() ? "read" : "write"); report.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
+        report.addProperty("ae2Version", ModList.get().getModContainerById("ae2").map(container -> container.getModInfo().getVersion().toString()).orElse(""));
         report.addProperty("pid", ProcessHandle.current().pid()); report.addProperty("maxConcurrent", maxConcurrent);
         report.addProperty("logins", logins); report.addProperty("logouts", logouts); report.add("cases", cases);
         try {
@@ -357,6 +363,7 @@ public final class CompetitionServerProbe {
             }
             if (CraftingProbe.enabled()) CraftingProbe.report(server, core, manifest, report, reader());
             if (MeBridgeProbe.enabled()) MeBridgeProbe.report(report, reader());
+            if (MeCraftingProbe.enabled()) MeCraftingProbe.report(report, reader());
             report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }
         try { write("concurrent-server.json", report); } catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write competition report", error); }

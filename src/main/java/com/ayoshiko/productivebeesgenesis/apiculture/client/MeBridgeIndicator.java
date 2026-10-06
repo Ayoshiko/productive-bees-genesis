@@ -11,7 +11,7 @@ public final class MeBridgeIndicator {
 		graphics.fill(x - 3, y - 2, x + 16, y + 10, 0xff17252c);
 		graphics.drawString(font, "ME", x, y, color, false);
 		if (mouseX >= x - 3 && mouseX < x + 16 && mouseY >= y - 2 && mouseY < y + 10)
-			graphics.renderTooltip(font, status.message(), mouseX, mouseY);
+			graphics.renderTooltip(font, status == MeBridgeStatus.ONLINE ? status.message().copy().append(" · ").append(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.me_terminal.open")) : status.message(), mouseX, mouseY);
 	}
 	private MeBridgeIndicator() { }
 }

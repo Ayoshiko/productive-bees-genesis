@@ -10,7 +10,9 @@ public final class MeBridgeIntegration {
 		return installed() ? Loaded.create(bridge, saved) : null;
 	}
 	public static void register(RegisterCapabilitiesEvent event) { if (installed()) Loaded.register(event); }
+	public static void clearMeCache(net.minecraft.server.MinecraftServer server) { if (installed()) Loaded.clear(server); }
 	private static final class Loaded {
+		static void clear(net.minecraft.server.MinecraftServer server) { com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeMeCatalogue.clear(server); }
 		static MeBridgeLink create(MeBridgeBlockEntity bridge, CompoundTag saved) {
 			return new com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.MeBridgeNode(bridge, saved);
 		}

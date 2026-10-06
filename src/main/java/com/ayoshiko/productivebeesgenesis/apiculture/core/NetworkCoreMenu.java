@@ -9,7 +9,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.terminal.*;
 import java.util.UUID;
 
 /** 核心菜单生命周期、只读同步与命令入口；资产变化委托独立有限交换服务。 */
-public final class NetworkCoreMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host {
+public final class NetworkCoreMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host, com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalHost {
 	private final NetworkCoreBlockEntity core;
 	private final MemberUpgradeMenuAccess memberAccess;
 	private final boolean memberScoped;
@@ -29,6 +29,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private CoreTerminalSubscription subscription;
 	private CoreAutomaticBeeInput automaticBee;
 	private TerminalCraftingMenu crafting;
+	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -124,6 +125,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		try { return crafting.handle(player, request); } finally { exchanging = false; }
 	}
 	private void addInventory(Inventory inventory) {
+		me = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession(containerId, terminalSession);
 		for (int row = 0; row < 4; row++) for (int column = 0; column < 9; column++) {
 			int index = row == 3 ? column : (row + 1) * 9 + column;
 			addSlot(selectionSlot(inventory, index, 47 + column * 18, 154 + row * 18 + (row == 3 ? 4 : 0)));
@@ -198,7 +200,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) cancelSubscription(serverPlayer);
 		super.removed(player);
 		if (selections != null) selections.close();
-		closed = true; terminalSequence.close(); terminalReply = null;
+		closed = true; terminalSequence.close(); terminalReply = null; me.close();
 		if (clientState != null) clientState.close();
 	}
 	@Override public void broadcastChanges() {
@@ -207,8 +209,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		}
 		if (core != null && !stillValid(viewer)) {
 			if (viewer instanceof net.minecraft.server.level.ServerPlayer player) cancelSubscription(player);
-			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; return;
+			selections.close(); closed = true; terminalSequence.close(); terminalReply = null; me.close(); return;
 		}
+		if (viewer instanceof net.minecraft.server.level.ServerPlayer player && me.active()) me.tick(meBridge(player));
 		if (crafting != null && viewer instanceof net.minecraft.server.level.ServerPlayer player) crafting.refresh(player, false);
 		super.broadcastChanges();
 		if (selections != null && core.getLevel() != null) selections.expire(core.getLevel().getGameTime());
@@ -248,6 +251,16 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		var authority = core.ownership().readyAuthority();
 		var record = authority == null ? null : authority.checkpoint().ownedMachines().get(member);
 		return record != null && scope.accepts(record.claim().machine());
+	}
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession meTerminal() { return me; }
+	private com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity meBridge(net.minecraft.server.level.ServerPlayer player) {
+		return dedicatedTerminal() && exchangeCore(player) != null ? com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player) : null;
+	}
+	@Override public void meRequest(net.minecraft.server.level.ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest request) {
+		if (exchanging || !player.server.isSameThread() || !dedicatedTerminal() || exchangeCore(player) == null) return;
+		exchanging = true;
+		try { me.handle(player, request, () -> meBridge(player), () -> terminalAccess == null || terminalAccess.charge(player, true)); }
+		finally { exchanging = false; }
 	}
 	public UUID terminalSession() { return terminalSession; }
 	public TerminalReply terminalReply() { return terminalReply; }

@@ -93,7 +93,9 @@ final class MeBridgeProbe {
 			require(NetworkContent.WIRELESS_COMBINED.get().bind(player, player.getMainHandItem(), core), "Cannot return to network after machine invalidation");
 			CraftingProbe.open(core, players, false);
 		}
-		stages++; return stage == 511 ? -1 : stage + 1;
+		stages++;
+		if (stage == 511 && MeCraftingProbe.enabled()) { MeCraftingProbe.seed(core, players); return 600; }
+		return stage == 511 ? -1 : stage + 1;
 	}
 	private static void codec(ServerPlayer player) {
 		var detached = new MeBridgeBlockEntity(new BlockPos(1, 1, 1), NetworkContent.ME_BRIDGE.get().defaultBlockState());
