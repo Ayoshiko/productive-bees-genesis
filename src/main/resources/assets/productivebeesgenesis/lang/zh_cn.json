@@ -1,4 +1,7 @@
 {
+  "screen.productivebeesgenesis.network.terminal.fill_wait": "正在同步，请稍后填入配方",
+  "screen.productivebeesgenesis.network.terminal.fill_unsupported": "此配方暂不支持自动填格",
+  "screen.productivebeesgenesis.network.result.missing_ingredients": "材料不足，请检查材料格与背包",
   "item.productivebeesgenesis.wireless_bee_terminal": "无线蜜蜂终端",
   "item.productivebeesgenesis.wireless_centrifuge_terminal": "无线离心终端",
   "item.productivebeesgenesis.wireless_combined_terminal": "无线综合终端",

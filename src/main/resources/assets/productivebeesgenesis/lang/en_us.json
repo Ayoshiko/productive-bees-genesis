@@ -1,4 +1,7 @@
 {
+  "screen.productivebeesgenesis.network.terminal.fill_wait": "Synchronizing; please wait before filling the recipe",
+  "screen.productivebeesgenesis.network.terminal.fill_unsupported": "This recipe does not support automatic filling yet",
+  "screen.productivebeesgenesis.network.result.missing_ingredients": "Missing ingredients; check the crafting grid and inventory",
   "item.productivebeesgenesis.wireless_bee_terminal": "Wireless Bee Terminal",
   "item.productivebeesgenesis.wireless_centrifuge_terminal": "Wireless Centrifuge Terminal",
   "item.productivebeesgenesis.wireless_combined_terminal": "Wireless Combined Terminal",

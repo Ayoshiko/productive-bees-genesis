@@ -111,7 +111,9 @@ public final class CraftingProbe {
 			else require(snapshot == state && inventories.equals(CompetitionAssets.inventories(players)), "Uncertain callback was retried");
 		}
 		var row = new JsonObject(); row.addProperty("stage", stage); row.addProperty("moved", replies.values().stream().mapToInt(CompetitionSignal::moved).sum()); stages.add(row);
-		if (stage == 328) { completed = true; codec(core, players.getFirst()); if (WirelessProbe.enabled()) { WirelessProbe.seed(core, players); return 330; } return -1; }
+		if (stage == 328) { completed = true; codec(core, players.getFirst());
+			if (WirelessProbe.enabled()) { WirelessProbe.seed(core, players); return 330; }
+			if (RecipeFillProbe.enabled()) { RecipeFillProbe.seed(core, players); return 400; } return -1; }
 		return stage + 1;
 	}
 	private static void codec(NetworkCoreBlockEntity core, ServerPlayer player) {
@@ -138,6 +140,7 @@ public final class CraftingProbe {
 				.equals(manifest.getCompound(second ? "crafting-secondary" : "crafting-primary")), "Restart changed crafting account");
 	}
 	static void report(MinecraftServer server, NetworkCoreBlockEntity core, CompoundTag manifest, JsonObject report, boolean reader) throws Exception {
+		if (RecipeFillProbe.enabled()) RecipeFillProbe.report(report, reader);
 		if (WirelessProbe.enabled()) WirelessProbe.report(server, manifest, report, reader);
 		require(reader || completed && failedCallbacks == 1 && stages.size() == 29, "Crafting stages incomplete");
 		var files = new JsonArray();

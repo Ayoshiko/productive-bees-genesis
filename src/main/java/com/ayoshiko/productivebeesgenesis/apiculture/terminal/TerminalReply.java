@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 public record TerminalReply(int containerId, UUID session, long sequence, Status status,
 		int moved, int interruptedTicks, TerminalView view, List<UpgradeResult> upgrades, TerminalUpgradePreview preview) implements CustomPacketPayload {
 	public enum Status { OK, MOVED, STALE, INVALID, UNAVAILABLE, NO_SPACE, EMPTY_OR_RESERVED, DRAIN_FIRST,
-		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER, LIMIT, UNSUPPORTED, ENERGY_CAPACITY, CONFLICT, BATCH_COMPLETE }
+		OCCUPIED, EMPTY, UNSUPPORTED_CAGE, UNSUPPORTED_BEE, UNSUPPORTED_CONTAINER, LIMIT, UNSUPPORTED, ENERGY_CAPACITY, CONFLICT, BATCH_COMPLETE, MISSING_INGREDIENTS }
 	public record UpgradeResult(int row, String label, Status status, int moved) {
 		public UpgradeResult {
 			Objects.requireNonNull(label); Objects.requireNonNull(status);

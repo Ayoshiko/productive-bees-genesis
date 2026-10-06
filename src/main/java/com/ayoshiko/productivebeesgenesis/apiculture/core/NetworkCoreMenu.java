@@ -258,6 +258,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	}
 	/** 正式网络入口；提前消费序号，发送槽同步时的回调也不能重入下一条动作。 */
 	public TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
+		return terminalRequest(player, request, null);
+	}
+	public TerminalReply terminalRecipe(net.minecraft.server.level.ServerPlayer player, TerminalRecipeRequest request) {
+		return terminalRequest(player, request.command(), request.recipe());
+	}
+	private TerminalReply terminalRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation recipe) {
 		if (core == null || !player.serverLevel().getServer().isSameThread() || closed || exchanging
 				|| player.containerMenu != this || request.containerId() != containerId
 				|| !terminalSession.equals(request.session()) || !stillValid(player) || player.isSpectator() || !player.isAlive()
@@ -267,7 +273,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 			if (!TerminalPayloads.allow(player) || terminalAccess != null && !terminalAccess.charge(player, true)) return null;
 			if (memberScoped && !memberOperation(request.operation()))
 				return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
-			var reply = CoreTerminalCommands.execute(this, player, request, selections);
+			TerminalReply reply;
+			if (recipe != null) {
+				if (crafting == null) return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
+				exchanging = true; try { reply = crafting.fill(player, request, recipe); } finally { exchanging = false; }
+			} else reply = CoreTerminalCommands.execute(this, player, request, selections);
 			if (request.operation() == TerminalRequest.Operation.CANCEL) cancelSubscription(player);
 			else if (subscription != null || automaticBee != null) TerminalSubscriptionService.watch(player, this);
 			return reply;

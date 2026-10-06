@@ -16,7 +16,12 @@ import net.neoforged.neoforge.network.registration.HandlerThread;
 public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-		var registrar = event.registrar("18").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("19").executesOn(HandlerThread.MAIN);
+		registrar.playToServer(TerminalRecipeRequest.TYPE, TerminalRecipeRequest.STREAM_CODEC, (request, context) -> {
+			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof NetworkCoreMenu menu) {
+				var reply = menu.terminalRecipe(player, request); if (reply != null) PacketDistributor.sendToPlayer(player, reply);
+			}
+		});
 		registrar.playToServer(TerminalRequest.TYPE, TerminalRequest.STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player) {
 				var reply = handle(player, request);

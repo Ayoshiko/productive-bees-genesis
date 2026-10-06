@@ -125,6 +125,10 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (RecipeFillProbe.enabled() && stage >= 400) {
+                int next = RecipeFillProbe.advance(core, players, stage, acks); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (WirelessProbe.enabled() && stage >= 330) {
                 if (!WirelessProbe.ready(stage)) return;
                 int next = WirelessProbe.advance(core, players, stage, acks); noDrops(server);

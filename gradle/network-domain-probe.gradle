@@ -30,6 +30,8 @@ if (automaticMode != null && !(automaticMode in ['write', 'read'])) throw new Gr
 def playerConcurrent = providers.gradleProperty('networkConcurrentProbe').isPresent()
 def terminalPermissions = providers.gradleProperty('networkConcurrentTerminals').isPresent()
 def craftingProbe = providers.gradleProperty('networkConcurrentCrafting').isPresent()
+def recipeFillProbe = providers.gradleProperty('networkRecipeFill').isPresent()
+if (recipeFillProbe && (!craftingProbe || providers.gradleProperty('networkConcurrentWireless').isPresent())) throw new GradleException('Recipe fill requires a separate crafting fixture')
 def wirelessProbe = providers.gradleProperty('networkConcurrentWireless').isPresent()
 def wirelessVisualOnly = providers.gradleProperty('networkWirelessVisualOnly').isPresent()
 if (wirelessVisualOnly && !wirelessProbe) throw new GradleException('Wireless visual follow-up requires wireless mode')
@@ -163,6 +165,7 @@ neoForge {
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
+            systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             logLevel = org.slf4j.event.Level.INFO
@@ -177,6 +180,7 @@ neoForge {
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
+            systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             systemProperty 'pbg.concurrent.role', 'owner'
@@ -194,6 +198,7 @@ neoForge {
             systemProperty 'pbg.concurrent.upgrades', providers.gradleProperty('networkConcurrentUpgrades').isPresent().toString()
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
+            systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             systemProperty 'pbg.concurrent.role', 'guest'

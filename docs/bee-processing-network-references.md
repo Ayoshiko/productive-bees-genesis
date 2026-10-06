@@ -361,3 +361,10 @@ g1b 继续采用上述网络 worktree 的独立机交互原则，核对 `Managed
 本地 AE2 19.2.17 的 `AbstractTerminalPart`／`AbstractDisplayPart` 及 AE2WT `WTMenuHost` 路径与版本沿[13.24](#s13-24)：采用薄片显示面板、真实设备定位与功能分工；外形使用本项目三张终端纹理，独立六面方块模型和同尺寸碰撞框，不采用 AE2 宿主框架或掉落材料路径。无线像素图由本项目终端正面缩放并新增手持机壳／天线生成，生成源在忽略的 `build/generate-wireless-art.py`；未复制外部 PNG。再次核对 `consumeIdlePower(SIMULATE)` 会执行 recharge 的上游路径，继续不采用，其模拟不能作为本项目收费参考。
 
 复核当前 worktree 的 `MachineControllerEntity`、`MachinePartEntity`、`MachineMenu`、`MachineWorkService` 和 `MachineDirectory.Binding`：内部 CORE 解析已形成控制器，远程菜单保留原绑定实例与机器 generation，操作仍经 MachineExchange 的权威候选与守恒提交。只扩大合法访问来源，不创建第二机器、网络或物理库存，不提前实施 M05 联网。设备材料沿[13.27](#s13-27)同一 SavedData 保存路径新增 device UUID 的 schema 2，位置账户继续 schema 1；网络 checkpoint 仍为 9。NeoForge 21.1.216 编译与实际物品能力注册使用 `Capabilities.EnergyStorage.ITEM`／`IEnergyStorage`，充能的 simulate 分支不创建绑定或改动数据。
+
+<a id="s13-29"></a>
+### 13.29 JEI 正式转移 API 与统一工作终端补充（2026-10-05）
+
+本步直接通过本地 `jei-1.21.1-neoforge-19.36.0.360.jar` 的 javap 核对 `IRecipeTransferHandler`、`IRecipeTransferRegistration`、`IRecipeTransferHandlerHelper`、`IRecipeTransferManager`、`IRecipesGui.getParentScreen`、`IRecipeLayoutDrawable.getRecipeSlotsView` 和 `RecipeTypes.CRAFTING`，运行仍使用 JEI 19.39.0.368。2026-10-06 补核运行版 `RecipeTransferManager.getHandler`：索引键是菜单 Java 类与 RecipeType，同类不同 MenuType 不能重复注册。三种终端共用一个 NetworkCoreMenu 处理器，`getMenuType` 返回空可选值，入口再检查专用终端；通过公开父屏幕 API 回到合成页，旧成员快照不渲染为产物行；只发送本模组的有界配方意图，不采用 JEI 默认服务器槽搬运。主菜单、配方解析和物料事务不引用 JEI 类型，服务器无需 JEI。
+
+Minecraft 1.21.1 的本地 NeoForge 21.1.216 JAR 核对 `ShapedRecipe`／`ShapelessRecipe` 的宽度、配方原料及标准 CraftingInput 匹配。容量匹配与物品副本沿本项目 TerminalCraftingPlan，不复制 AE2 的全量库存扫描。用户新图仅作为上部物品网格、合成区、常驻背包和侧签交互参照；完整 AE2 操作、下单／任务和蜂务／升级／机器信息的目标已同步主合同，尚无实际 ME 网格的能力不能由图示或 AE2 已安装状态推断为已实现。

@@ -59,6 +59,9 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (RecipeFillProbe.enabled() && stage >= 400) {
+                var reply = RecipeFillClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (WirelessProbe.enabled() && stage >= 330) {
                 var reply = WirelessClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
             }

@@ -9,6 +9,7 @@ param(
     [switch]$Upgrades,
     [switch]$Terminals,
     [switch]$Crafting,
+    [switch]$RecipeFill,
     [switch]$Wireless,
     [switch]$WirelessVisualOnly,
     [switch]$CraftingWriteOnly,
@@ -21,6 +22,7 @@ if ($Crafting -and ($Upgrades -or $Terminals)) { throw 'Crafting uses a separate
 if ($CraftingWriteOnly -and !$Crafting) { throw 'The bounded write-only follow-up is only for crafting' }
 if ($Wireless -and !$Crafting) { throw 'Wireless requires the focused crafting fixture' }
 if ($WirelessVisualOnly -and (!$Wireless -or !$SeedWorld -or $CraftingWriteOnly)) { throw 'Wireless visual follow-up requires Wireless and an existing seed world' }
+if ($RecipeFill -and (!$Crafting -or $Wireless)) { throw 'Recipe fill requires a separate crafting fixture' }
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Set-Location -LiteralPath $workspace
 if ($ChildTask) {
@@ -30,6 +32,7 @@ if ($ChildTask) {
     if ($Upgrades) { $arguments += '-PnetworkConcurrentUpgrades' }
     if ($Terminals) { $arguments += '-PnetworkConcurrentTerminals' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
+    if ($RecipeFill) { $arguments += '-PnetworkRecipeFill' }
     if ($Wireless) { $arguments += '-PnetworkConcurrentWireless' }
     if ($WirelessVisualOnly) { $arguments += '-PnetworkWirelessVisualOnly' }
     if ($SeedWorld) { $arguments += "-PnetworkProbeSeedWorld=$SeedWorld" }
@@ -43,7 +46,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($Wireless) { 'D18f1' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f1' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -70,6 +73,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($Upgrades) { $arguments += '-Upgrades' }
     if ($Terminals) { $arguments += '-Terminals' }
     if ($Crafting) { $arguments += '-Crafting' }
+    if ($RecipeFill) { $arguments += '-RecipeFill' }
     if ($Wireless) { $arguments += '-Wireless' }
     if ($WirelessVisualOnly) { $arguments += '-WirelessVisualOnly' }
     if ($Seed) { $arguments += @('-SeedWorld', $Seed) }
@@ -143,6 +147,7 @@ try {
                     $clientReport.connections -ne $connections) { throw "Invalid concurrent client report: $roleId" }
                 Add-Evidence "$roleId-report" $clientPath
                 Add-Evidence "$roleId-image" (Join-Path $clientRoot 'concurrent.png')
+                if ($RecipeFill -and $mode -eq 'write' -and $playerRole -eq 'owner') { Add-Evidence "$roleId-jei-fill" (Join-Path $clientRoot 'jei-filled.png') }
                 if ($Crafting -and $mode -eq 'write') {
                     Add-Evidence "$roleId-crafting-materials" (Join-Path $clientRoot 'crafting-materials.png')
                     Add-Evidence "$roleId-crafting-retained" (Join-Path $clientRoot 'crafting-retained.png')
@@ -201,6 +206,7 @@ try {
                 if ($serverReport.wirelessNetworkMachineAndRecovery -ne $true) { throw 'Missing wireless target and recovery checks' }
                 Add-Evidence "$serverId-wireless-file" $serverReport.wirelessFile
             }
+            if ($RecipeFill -and $serverReport.recipeFillJeiAndConservation -ne $true) { throw 'Missing recipe fill checks' }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner
             Add-Evidence "$serverId-guest-file" $serverReport.playerFiles.guest

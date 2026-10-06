@@ -120,7 +120,8 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		previousPage = navigation(own("previous"), 226, 28, 30, 18, () -> navigate(TerminalSearchRequest.Navigation.PREVIOUS));
 		nextPage = navigation(tr("next"), 258, 28, 38, 18, () -> navigate(TerminalSearchRequest.Navigation.NEXT));
 		var view = state.view();
-		if (view != null) {
+		// JEI 返回时仍可能持有成员页快照，等待新订阅前不能将它解释为产物行。
+		if (view != null && view.kind() == ((tab == 2 || tab == 4) ? NetworkSelectionSession.Kind.PRODUCTS : NetworkSelectionSession.Kind.MEMBERS)) {
 			if (tab == 2 || tab == 4) productGrid(view);
 			else if (selectedRow() == null) memberGrid(view);
 			else if (tab == 1) beeActions();
@@ -266,6 +267,12 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	private void switchTab(int page) {
 		if (!state.ready(Util.getMillis())) return;
 		tab = page; selected = -1; scroll = 0; query = ""; search.setValue(""); refresh();
+	}
+	/** JEI 发送资产命令后只切换显示；等待其回执，再建立产物页订阅。 */
+	public void prepareRecipeTransfer() {
+		tab = 4; selected = -1; scroll = 0; query = ""; if (search != null) search.setValue("");
+		craftingRequested = false; queryDirty = true; searchAt = Util.getMillis();
+		if (minecraft != null && minecraft.screen == this) rebuild();
 	}
 	private void refresh() {
 		craftingRequested = false;

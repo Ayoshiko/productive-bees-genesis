@@ -77,6 +77,30 @@ final class CoreCraftingMenu {
 		} finally { account.busy(false); }
 		refresh(player, true); return result;
 	}
+	TerminalReply fill(ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation id) {
+		subscribed = true;
+		var account = menu.craftingAccount(player);
+		if (account == null || account.busy() || account.state().uncertain() || !account.state().pending().isEmpty()) return reply(request, UNAVAILABLE, 0);
+		if (!TerminalSubscriptionService.allowCrafting(player.server)) return reply(request, UNAVAILABLE, 0);
+		account.busy(true);
+		try {
+			var holder = player.serverLevel().getRecipeManager().byKey(id).orElse(null);
+			if (holder == null || !(holder.value() instanceof CraftingRecipe target) || !TerminalRecipeFillPlan.supports(target)) return reply(request, INVALID, 0);
+			if (!target.isSpecial() && player.serverLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING) && !player.getRecipeBook().contains(holder)) return reply(request, INVALID, 0);
+			var before = account.state(); var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
+			var result = TerminalRecipeFillPlan.plan(target, before.grid(), inventory, request.amount() == 64);
+			if (result.change() == null) return reply(request, result.failure() == TerminalRecipeFillPlan.Failure.NO_SPACE ? NO_SPACE
+					: result.failure() == TerminalRecipeFillPlan.Failure.MISSING ? MISSING_INGREDIENTS : INVALID, 0);
+			var change = result.change(); var input = CraftingInput.ofPositioned(3, 3, TerminalCraftingPlan.copy(change.grid())).input();
+			if (!target.matches(input, player.serverLevel()) || !current(player, account, before, inventory)
+					|| player.serverLevel().getRecipeManager().byKey(id).orElse(null) != holder) return reply(request, STALE, 0);
+			if (ItemStack.listMatches(before.grid(), change.grid()) && ItemStack.listMatches(inventory, change.inventory())) return reply(request, OK, 0);
+			account.publish(before, change.grid(), before.pending(), false); inventory(player, inventory, change.inventory());
+			return reply(request, change.moved() > 0 ? MOVED : OK, change.moved());
+		} catch (RuntimeException failure) {
+			com.mojang.logging.LogUtils.getLogger().warn("Recipe fill rejected without retry for {}: {}", player.getUUID(), id, failure); return reply(request, UNAVAILABLE, 0);
+		} finally { account.busy(false); refresh(player, true); }
+	}
 	private TerminalReply execute(ServerPlayer player, TerminalRequest request, TerminalCraftingAccount account) {
 		var state = account.state(); var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
 		var operation = request.operation(); TerminalCraftingPlan.Change change;

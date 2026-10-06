@@ -62,6 +62,11 @@ import java.util.Set;
 	 */
 @JeiPlugin
 public class ProductiveBeesGenesisJEI implements IModPlugin {
+	private IJeiRuntime terminalRuntime;
+	@Override public void registerRecipeTransferHandlers(mezz.jei.api.registration.IRecipeTransferRegistration registration) {
+		registration.addRecipeTransferHandler(new NetworkTerminalRecipeTransfer(registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
+	}
+	@Override public void onRuntimeUnavailable() { terminalRuntime = null; }
 
 	/** JEI插件ID */
 	private static final ResourceLocation PLUGIN_ID =
@@ -437,6 +442,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 */
 	@Override
 	public void onRuntimeAvailable(IJeiRuntime runtime) {
+		terminalRuntime = runtime;
 		// 检查配置是否加载以及万象创世是否被禁用
 		if (!ModConfig.areServerSpecsLoaded()) {
 			return;
