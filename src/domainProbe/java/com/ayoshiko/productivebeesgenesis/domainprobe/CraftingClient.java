@@ -24,7 +24,7 @@ final class CraftingClient {
 		var state = menu.clientState(); long now = Util.getMillis();
 		if (stage == 300 || stage == 322 || stage == 324 || stage == 80) {
 			if (!state.ready(now)) return null;
-			if (step == 0) { ClientTerminalProbe.press(screen, "tab.4"); step++; return null; }
+			if (step == 0) { if (screen.getXSize() == NetworkTerminalScreen.WIDTH) ClientTerminalProbe.press(screen, "tab.4"); step++; return null; }
 			if (menu.craftingGeneration() == 0 || !state.actionable(now)) return null;
 			if (stage == 322) require(menu.craftingItem(0).is(Items.OAK_LOG) && menu.craftingItem(0).getCount() == 3, "Rebuilt terminal lost real material grid");
 			if (stage == 80) require(menu.craftingStatus() == 3 && menu.craftingItem(9).is(Items.OAK_PLANKS) && menu.craftingItem(9).getCount() == 4, "Restored callback result was not retained");
@@ -65,8 +65,8 @@ final class CraftingClient {
 						menu.craftingGeneration(), stage == 301 ? 0 : -1, -1, stage == 301 ? 0 : -1, stage == 308 ? 0 : 1);
 				if (stage == 308) ClientTerminalProbe.press(screen, "terminal.craft_clear");
 				else {
-					var slot = menu.slots.get(stage == 301 ? 36 : 45); int h = Math.max(236, Math.min(332, screen.height - 4));
-					double x = (screen.width - NetworkTerminalScreen.WIDTH) / 2 + slot.x + 8, y = (screen.height - h) / 2 + slot.y + 8;
+					var slot = menu.slots.get(stage == 301 ? 36 : 45);
+					double x = screen.getGuiLeft() + slot.x + 8, y = screen.getGuiTop() + slot.y + 8;
 					require(screen.mouseClicked(x, y, 0), "Crafting click missed"); screen.mouseReleased(x, y, 0);
 				}
 				step++; return null;

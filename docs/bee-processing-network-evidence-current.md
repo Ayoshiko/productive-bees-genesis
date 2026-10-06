@@ -477,3 +477,5 @@ AE2 writer 的 600–612 十三阶段覆盖实际点击入口、九条可合成�
 四张最终工作台截图已目视核对，升级图标／安装取回控件、原木和木板预览、真实背包与网络概况可见。产物区 INVALID 提示来自主动伪造管理命令的拒绝用例；右上原版进度／配方／新手提示遮挡一部分工具栏，未把它们当作本模组布局元素。证据索引为 `build/network-gates/d18i2a-workspace-20261006-final/gate.json`，明确 `recoveryIncluded=false`：本步没有更改存档，未重跑重启读取、AE2 下单或完整 JEI 填格回归。交付审计保存测试 XML、JAR、源文件／证据哈希并检查文档链接、UTF-8／JSON 和暂存范围。
 
 本步仅关闭 i2a 网络工作台，独立多方块的统一布局、条件吞吐／插件等完整机器详情、ME 双向存取和账本／ME 配方补格仍需各自实现；完整 i2、D18／D19／T00 和性能／故障耐久门均保持开放。未测量 MSPT 或宣称增加视图后无性能开销。
+
+同日探针适配补充：功能提交 `eb1fb62` 验收后，三个既有开发客户端 `CraftingClient`／`MeBridgeClient`／`MeCraftingClient` 改用实际界面 getGuiLeft/getGuiTop，普通合成探针只在紧凑布局点击合成侧签，避免旧 304px 假设造成误点。仅执行 `compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache`，10 秒通过；生产 compileJava 为 UP-TO-DATE，JAR SHA-256 仍为 `e7fd89d1c77f8af0410b98daa8aca0ce82405321068506acb2ca7435f5c33517`。该后续提交只改变测试驱动和本条证据，未重跑旧合成／ME 场景，原 gate 源码指纹仍对应功能提交，不改写历史运行记录。

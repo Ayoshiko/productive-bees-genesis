@@ -28,9 +28,9 @@ final class MeBridgeClient {
 			if (!(client.player.containerMenu instanceof MachineMenu menu) || menu.meStatus() != expected || !(client.screen instanceof MachineScreen)) return null;
 		} else if (!(client.player.containerMenu instanceof NetworkCoreMenu menu) || menu.meStatus() != expected || !(client.screen instanceof NetworkTerminalScreen)) return null;
 		if (owner && (stage == 502 || stage == 509)) {
-			int width = stage == 509 ? 230 : 304, height = stage == 509 ? 226 : Math.max(236, Math.min(332, client.getWindow().getGuiScaledHeight() - 4));
-			double x = (client.getWindow().getGuiScaledWidth() - width) / 2 + (stage == 509 ? 207 : 16);
-			double y = (client.getWindow().getGuiScaledHeight() - height) / 2 + (stage == 509 ? 136 : 16);
+			var screen = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) client.screen;
+			double x = screen.getGuiLeft() + (stage == 509 ? 207 : 16);
+			double y = screen.getGuiTop() + (stage == 509 ? 136 : 16);
 			GLFW.glfwSetCursorPos(client.getWindow().getWindow(), x * client.getWindow().getGuiScale(), y * client.getWindow().getGuiScale());
 			if (step++ < 3) return null;
 			Files.createDirectories(Path.of("results"));

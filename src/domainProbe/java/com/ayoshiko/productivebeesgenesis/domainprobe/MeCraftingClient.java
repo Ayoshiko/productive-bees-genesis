@@ -28,7 +28,7 @@ final class MeCraftingClient {
 		if (!owner) return ack();
 		if (stage==600 || stage==611) {
 			if (client.screen instanceof NetworkTerminalScreen screen) {
-				int left=(screen.width-304)/2, top=(screen.height-Math.max(236,Math.min(332,screen.height-4)))/2;
+				int left=screen.getGuiLeft(), top=screen.getGuiTop();
 				screen.mouseClicked(left+16,top+16,0); screen.mouseReleased(left+16,top+16,0); return null;
 			}
 			if (!(client.screen instanceof MeTerminalScreen screen) || session.waiting() || view.mode()!=Mode.CATALOGUE || view.rows().isEmpty()) return null;
