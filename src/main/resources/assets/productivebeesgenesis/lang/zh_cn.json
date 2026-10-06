@@ -1,4 +1,12 @@
 {
+  "item.productivebeesgenesis.wireless_terminal.merge_hint": "主副手各持一种无线终端，潜行右键合并",
+  "item.productivebeesgenesis.wireless_terminal.merge.merged": "已合并为无线综合终端",
+  "item.productivebeesgenesis.wireless_terminal.merge.invalid": "需要两种单功能终端及有效设备数据",
+  "item.productivebeesgenesis.wireless_terminal.merge.conflict": "绑定或配置不同，无法合并",
+  "item.productivebeesgenesis.wireless_terminal.merge.materials": "两台都有材料，请先取回其中一台的材料与结果",
+  "item.productivebeesgenesis.wireless_terminal.merge.energy_capacity": "总能量超过综合终端容量，无法合并",
+  "item.productivebeesgenesis.wireless_terminal.merge.not_owner": "只能合并本人材料账户的设备",
+  "item.productivebeesgenesis.wireless_terminal.merge.unavailable": "暂时无法合并，请关闭菜单并检查设备账户",
   "screen.productivebeesgenesis.machine.crafting_hint": "左键放入，右键取回；Shift 批量。材料随此无线设备保管。",
   "screen.productivebeesgenesis.machine.crafting_ready": "点击结果制作；材料由无线设备保管",
   "screen.productivebeesgenesis.network.terminal.fill_wait": "正在同步，请稍后填入配方",

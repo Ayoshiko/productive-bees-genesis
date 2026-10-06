@@ -369,4 +369,6 @@ g1b 继续采用上述网络 worktree 的独立机交互原则，核对 `Managed
 
 Minecraft 1.21.1 的本地 NeoForge 21.1.216 JAR 核对 `ShapedRecipe`／`ShapelessRecipe` 的宽度、配方原料及标准 CraftingInput 匹配。容量匹配与物品副本沿本项目 TerminalCraftingPlan，不复制 AE2 的全量库存扫描。2026-10-06 f2b 复核本 worktree 的 `WirelessDeviceSession`、`WirelessMachineAccess`、`MachineMenu` 与 `CoreInventorySync`：以设备原 UUID／owner 直接定位 schema 2 账户，结构代际、真实手持栈、范围及 FE 的原检查继续限定入口。将原 `CoreCraftingMenu` 的账户访问和实际菜单抽为三个宿主方法后更名为 `TerminalCraftingMenu`，网络／独立机共用同一制作、余料和未知结果保管实现；本机操作与合成命令各自消费序号，但共用菜单重入锁和全服预算。JEI 处理器按两种菜单 Java 类注册，共用转移逻辑，服务器仍不引用 JEI。本地 `neoforge-21.1.216-sources.jar` 的 `AbstractContainerScreen.removed` 第 639–642 行会在切换 JEI 屏幕时调用客户端菜单 removed，因此只在服务端真正关闭时撤销会话，客户端返回原菜单时保留序号／展示；不把换屏当作服务端关闭。没有新增存档格式、资产来源或第三方依赖。
 
+f2a 核对同一 Minecraft 1.21.1 源码中的 `DataComponentPatch.forget`、`ItemStack.applyComponents`，以及当前 `WirelessTerminalItem`、`TerminalCraftingAccount.wireless` 和 `CoreInventorySync`。采用只更新所保留设备的能量／token、其它组件原样复制，模组数据与宿主身份分别核对的方式；两套不同非空账户不自动拼网格。材料账户不发布新版本、不跨文件转存或删除源文件，旧空账户保持可恢复。原版主副手物品列表在服务器线程连续提交，之后同步已提交内容；模拟不创建绑定 token、不扣 FE，不新增合并配方、外部能力调用或后台任务。
+
 用户新图仅作为上部物品网格、合成区、常驻背包和侧签交互参照；完整 AE2 操作、下单／任务和蜂务／升级／机器信息的目标已同步主合同，尚无实际 ME 网格的能力不能由图示或 AE2 已安装状态推断为已实现。

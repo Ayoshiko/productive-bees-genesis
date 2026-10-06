@@ -21,7 +21,7 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 /** 设备物品只携带绑定引用与有限 FE；真实合成材料始终保存在世界账户中。 */
 public final class WirelessTerminalItem extends Item {
 	public static final int CAPACITY = 200_000;
-	private static final String KEY = "pbg_wireless";
+	static final String KEY = "pbg_wireless";
 	private final TerminalScope scope;
 	private final boolean combined;
 	public record MachineReference(UUID machine, UUID owner, long generation) {
@@ -35,12 +35,12 @@ public final class WirelessTerminalItem extends Item {
 	}
 	public boolean combined() { return combined; }
 	boolean supports(TerminalScope mode) { return mode != TerminalScope.ALL && (combined || mode == scope); }
-	private static CompoundTag data(ItemStack stack) {
+	static CompoundTag data(ItemStack stack) {
 		var root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
 		if (root.contains(KEY) && !root.contains(KEY, 10)) throw new IllegalArgumentException("Invalid wireless data");
 		return root.getCompound(KEY);
 	}
-	private static void data(ItemStack stack, CompoundTag data) {
+	static void data(ItemStack stack, CompoundTag data) {
 		CustomData.update(DataComponents.CUSTOM_DATA, stack, root -> root.put(KEY, data));
 	}
 	public static int energy(ItemStack stack) {
@@ -114,6 +114,13 @@ public final class WirelessTerminalItem extends Item {
 	}
 	@Override public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
 		var stack = player.getItemInHand(hand);
+		if (hand == InteractionHand.MAIN_HAND && player.isShiftKeyDown() && player.getOffhandItem().getItem() instanceof WirelessTerminalItem) {
+			if (player instanceof ServerPlayer server) {
+				var status = WirelessTerminalMerge.merge(server, false);
+				server.displayClientMessage(message("merge." + status.name().toLowerCase(Locale.ROOT)), true);
+			}
+			return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide());
+		}
 		if (player instanceof ServerPlayer server && !WirelessTerminalAccess.open(server, hand)) server.displayClientMessage(message("unavailable"), true);
 		return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
 	}
@@ -123,6 +130,7 @@ public final class WirelessTerminalItem extends Item {
 		var binding = binding(stack);
 		tooltip.add(binding == null ? message("bind_hint") : message("target", binding.dimension(), binding.position().toShortString()));
 		tooltip.add(message("range", ModConfig.SERVER.beeNetwork.wirelessRange.get()));
+		if (!combined) tooltip.add(message("merge_hint"));
 	}
 	@Override public boolean isBarVisible(ItemStack stack) { return true; }
 	@Override public int getBarWidth(ItemStack stack) { return Math.max(0, energy(stack)) * 13 / CAPACITY; }

@@ -25,13 +25,26 @@ final class WirelessClient {
 			client.options.hideGui = true; if (step++ < 4) return null;
 			picture(client, "terminal-panels.png"); client.options.hideGui = false; return ack();
 		}
-		if (!owner && stage != 330 && stage != 332 && stage != 333 && stage != 342) return ack();
+		if (!owner && stage != 330 && stage != 332 && stage != 333 && stage != 342 && stage != 362) return ack();
 		if (stage >= 350 && stage <= 357) return machineCrafting(client, stage);
+		if (stage == 360) {
+			if (step == 0) {
+				if (client.player.containerMenu != client.player.inventoryMenu || !(client.player.getOffhandItem().getItem() instanceof WirelessTerminalItem)) return null;
+				client.player.setShiftKeyDown(true);
+				client.getConnection().send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(client.player, net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.PRESS_SHIFT_KEY));
+				client.gameMode.useItem(client.player, InteractionHand.MAIN_HAND);
+				client.player.setShiftKeyDown(false);
+				client.getConnection().send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(client.player, net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.RELEASE_SHIFT_KEY));
+				step++; return null;
+			}
+			return client.player.getMainHandItem().is(NetworkContent.WIRELESS_COMBINED.get()) && client.player.getOffhandItem().isEmpty() ? ack() : null;
+		}
+		if (stage == 361) { picture(client, "wireless-merge.png"); return ack(); }
 		if (stage == 336 || stage == 338 || stage == 340 || stage == 342 || stage == 346) {
 			if (client.player.containerMenu instanceof NetworkCoreMenu || client.player.containerMenu instanceof MachineMenu) return null;
 			if (pending != null) PacketDistributor.sendToServer(pending); return ack();
 		}
-		if (stage == 330 || stage == 337 || stage == 339 || stage == 341 || stage == 343 || stage == 347) {
+		if (stage == 330 || stage == 337 || stage == 339 || stage == 341 || stage == 343 || stage == 347 || stage == 362) {
 			if (step == 0) {
 				if (!(client.player.getMainHandItem().getItem() instanceof WirelessTerminalItem)) return null;
 				client.gameMode.useItem(client.player, InteractionHand.MAIN_HAND); step++; return null;

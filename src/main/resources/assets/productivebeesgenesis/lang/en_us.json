@@ -1,4 +1,12 @@
 {
+  "item.productivebeesgenesis.wireless_terminal.merge_hint": "Hold one wireless terminal of each kind in both hands; sneak-right-click to merge",
+  "item.productivebeesgenesis.wireless_terminal.merge.merged": "Merged into a Wireless Combined Terminal",
+  "item.productivebeesgenesis.wireless_terminal.merge.invalid": "Requires both single-function terminal types with valid device data",
+  "item.productivebeesgenesis.wireless_terminal.merge.conflict": "Bindings or settings conflict; cannot merge",
+  "item.productivebeesgenesis.wireless_terminal.merge.materials": "Both devices hold materials; return the materials and result from one first",
+  "item.productivebeesgenesis.wireless_terminal.merge.energy_capacity": "Combined energy exceeds terminal capacity",
+  "item.productivebeesgenesis.wireless_terminal.merge.not_owner": "You must own the devices' material accounts",
+  "item.productivebeesgenesis.wireless_terminal.merge.unavailable": "Cannot merge now; close menus and check the device accounts",
   "screen.productivebeesgenesis.machine.crafting_hint": "Left-click to insert, right-click to return; Shift for a stack. Materials stay with this wireless device.",
   "screen.productivebeesgenesis.machine.crafting_ready": "Click the result to craft; materials stay with the device",
   "screen.productivebeesgenesis.network.terminal.fill_wait": "Synchronizing; please wait before filling the recipe",

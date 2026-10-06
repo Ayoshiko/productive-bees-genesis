@@ -46,7 +46,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2b' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -158,6 +158,7 @@ try {
                         Add-Evidence "$roleId-wireless-network" (Join-Path $clientRoot 'wireless-network.png')
                         Add-Evidence "$roleId-wireless-machine" (Join-Path $clientRoot 'wireless-machine.png')
                         Add-Evidence "$roleId-wireless-machine-crafting" (Join-Path $clientRoot 'wireless-machine-crafting.png')
+                        Add-Evidence "$roleId-wireless-merge" (Join-Path $clientRoot 'wireless-merge.png')
                     }
                 }
                 if ($Terminals) {
@@ -205,7 +206,7 @@ try {
             }
             if ($Wireless) {
                 if ($serverReport.wirelessNetworkMachineAndRecovery -ne $true) { throw 'Missing wireless target and recovery checks' }
-                if (!$WirelessVisualOnly -and $serverReport.wirelessMachineCrafting -ne $true) { throw 'Missing wireless machine crafting checks' }
+                if (!$WirelessVisualOnly -and ($serverReport.wirelessMachineCrafting -ne $true -or $serverReport.wirelessDeviceMerge -ne $true)) { throw 'Missing wireless crafting or merge checks' }
                 Add-Evidence "$serverId-wireless-file" $serverReport.wirelessFile
             }
             if ($RecipeFill -and $serverReport.recipeFillJeiAndConservation -ne $true) { throw 'Missing recipe fill checks' }
