@@ -94,8 +94,15 @@ public final class TerminalCraftingAccount extends SavedData {
 	boolean busy() { check(); return busy; }
 	void busy(boolean value) { check(); busy = value; }
 	void publish(State expected, List<ItemStack> grid, ItemStack pending, boolean uncertain) {
+		publishPrepared(expected, prepare(expected, grid, pending, uncertain));
+	}
+	State prepare(State expected, List<ItemStack> grid, ItemStack pending, boolean uncertain) {
 		check(); if (!available() || state != expected) throw new IllegalStateException("Stale crafting account");
-		state = new State(Math.incrementExact(state.revision()), grid, pending, uncertain); setDirty();
+		return new State(Math.incrementExact(state.revision()), grid, pending, uncertain);
+	}
+	void publishPrepared(State expected, State prepared) {
+		check(); if (!available() || state != expected || prepared.revision() != expected.revision() + 1) throw new IllegalStateException("Stale crafting account");
+		state = prepared; setDirty();
 	}
 	public static TerminalCraftingAccount load(CompoundTag tag, HolderLookup.Provider registries) {
 		try {

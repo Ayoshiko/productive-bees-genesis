@@ -373,6 +373,8 @@ f2a 核对同一 Minecraft 1.21.1 源码中的 `DataComponentPatch.forget`、`It
 
 用户新图仅作为上部物品网格、合成区、常驻背包和侧签交互参照；完整 AE2 操作、下单／任务和蜂务／升级／机器信息的目标已同步主合同，尚无实际 ME 网格的能力不能由图示或 AE2 已安装状态推断为已实现。
 
+2026-10-06 e3b 以网络 worktree 的 `28b8318` 为基线复核 `TerminalRecipeFillPlan/TerminalCraftingPlan/TerminalCraftingAccount`、`CoreProductWithdrawal`、`LedgerCheckpoint/NetworkCheckpoint`、`ProductLedger/LedgerTransaction/ReservationBook/TransferStaging` 与 `ProductKeyCodec`。采用既有冻结账本候选、可用量扣除预约、完整组件往返和同服务器调用内有限接收的提交方式；九格与背包先规划，账户下一状态在账本扣款前构建，全部缺额只发布一次。外部接收结果未知的 TransferStaging 路径保留给真实外部接口，本步没有外部容器回调，不为内部账户再建转移队列。已有 `PagedProductAmounts` 按 ID／种类／组件排序的索引支持 O(log N) 定位，补充单调前缀下界查询以跳过无关库存；无新增生产索引、全表扫描或跨请求缓存。候选访问有明确预算，最小费用容量匹配按实际本地份额计算缺额，独立穷举对照不复用匹配实现。仍沿本节固定 Minecraft／NeoForge／JEI API，不更新第三方副本，不引入 AE2 材料或新依赖。
+
 <a id="s13-30"></a>
 ### 13.30 D20a 真实桥接节点与可选依赖边界（2026-10-06）
 

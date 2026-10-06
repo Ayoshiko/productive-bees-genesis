@@ -68,6 +68,19 @@ public final class NetworkCheckpoint {
 		if (ledger.revision() != expectedLedgerRevision || ledger.available(key).compareTo(ProductAmount.of(amount)) < 0) return this;
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger.withdrawExact(key, ProductAmount.of(amount)));
 	}
+	/** 合成补格最多九格、576 件；整个缺额一起发布，不借此扩大普通存入准入。 */
+	public NetworkCheckpoint withdrawCraftingProducts(long expectedLedgerRevision, Map<ProductKey, ProductAmount> amounts) {
+		var debit = Map.copyOf(amounts); int total = 0;
+		if (debit.isEmpty() || debit.size() > 9) throw new IllegalArgumentException("Invalid crafting withdrawal");
+		for (var entry : debit.entrySet()) {
+			long amount = entry.getValue().longSaturated();
+			if (entry.getKey().kind() != ProductKey.Kind.ITEM || amount <= 0 || amount > 576 || (total += (int) amount) > 576)
+				throw new IllegalArgumentException("Invalid crafting withdrawal");
+		}
+		if (ledger.revision() != expectedLedgerRevision) return this;
+		for (var entry : debit.entrySet()) if (ledger.available(entry.getKey()).compareTo(entry.getValue()) < 0) return this;
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger.withdrawExact(debit));
+	}
 	public NetworkCheckpoint configureEnergy(long capacity) {
 		if (capacity <= 0) throw new IllegalArgumentException("Positive energy capacity required");
 		if (capacity == energy.capacity() || capacity < energy.stored()) return this;

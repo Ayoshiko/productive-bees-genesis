@@ -62,6 +62,15 @@ public final class SnapshotRecords<K, V> {
 		}
 		return next == null ? null : Map.entry(next.key, next.value);
 	}
+	/** 前缀下界查询；谓词必须沿本索引顺序从 false 单调变为 true。 */
+	public static <K, V> Map.Entry<K, V> firstEntryAtOrAfter(Map<K, V> snapshot, java.util.function.Predicate<? super K> atOrAfter) {
+		if (!(snapshot instanceof FrozenMap<K, V> frozen)) throw new IllegalArgumentException("Expected a frozen ordered index");
+		var node = frozen.root; Node<K, V> first = null;
+		while (node != null) {
+			if (atOrAfter.test(node.key)) { first = node; node = node.left; } else node = node.right;
+		}
+		return first == null ? null : Map.entry(first.key, first.value);
+	}
 	/** 反向稳定游标；null 从末项开始，不为上一页建立历史列表。 */
 	public static <K, V> Map.Entry<K, V> previousEntry(Map<K, V> snapshot, K before) {
 		if (!(snapshot instanceof FrozenMap<K, V> frozen)) throw new IllegalArgumentException("Expected a frozen ordered index");

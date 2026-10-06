@@ -65,6 +65,44 @@ class ProductWithdrawalCheckpointTest {
 		assertSame(before.transfers(), after.transfers()); assertSame(before.discoveries(), after.discoveries());
 		var codec = new NetworkCheckpointCodec(key -> { }); assertEquals(after, codec.decode(NetworkCheckpointCodec.encode(after)));
 	}
+	@Test void craftingBatchWithdrawsAllDeficitsAndRetainsReservationsAndDelta() {
+		var before = new NetworkCheckpoint(CheckpointTestData.identity(), 12, 0, ledger(ProductAmount.of(100), 90),
+				List.of(), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
+		var debit = Map.of(KEY, ProductAmount.of(10), OTHER, ProductAmount.of(4));
+		var after = before.withdrawCraftingProducts(7, debit);
+		assertEquals(ProductAmount.of(90), after.ledger().balances().get(KEY)); assertEquals(ProductAmount.of(38), after.ledger().available(OTHER));
+		assertSame(before.ledger().transactions(), after.ledger().transactions());
+		assertEquals(Set.of(KEY, OTHER), after.ledger().changesSince(before.ledger()));
+		assertSame(before, before.withdrawCraftingProducts(6, debit));
+		assertSame(before, before.withdrawCraftingProducts(7, Map.of(KEY, ProductAmount.of(11), OTHER, ProductAmount.of(4))));
+		assertEquals(ProductAmount.of(42), before.ledger().available(OTHER));
+		var codec = new NetworkCheckpointCodec(key -> { }); assertEquals(after, codec.decode(NetworkCheckpointCodec.encode(after)));
+	}
+	@Test void craftingBatchRejectsFluidOversizeAndCannotSpendReservedOrOverflowedBalances() {
+		var before = new NetworkCheckpoint(CheckpointTestData.identity(), 12, 0, ledger(ProductAmount.of(1000), 900),
+				List.of(), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
+		assertThrows(IllegalArgumentException.class, () -> before.withdrawCraftingProducts(7, Map.of(KEY, ProductAmount.of(577))));
+		var fluid = new ProductKey(ProductKey.Kind.FLUID, KEY.id(), new CompoundTag());
+		assertThrows(IllegalArgumentException.class, () -> before.withdrawCraftingProducts(7, Map.of(fluid, ProductAmount.of(1))));
+		assertThrows(IllegalArgumentException.class, () -> before.ledger().withdrawExact(Map.of(KEY, ProductAmount.of(101), OTHER, ProductAmount.of(1))));
+		var last = new LedgerCheckpoint(Long.MAX_VALUE, before.ledger().balances(), before.ledger().transactions());
+		assertThrows(ArithmeticException.class, () -> last.withdrawExact(Map.of(KEY, ProductAmount.of(1), OTHER, ProductAmount.of(1))));
+		assertEquals(before.ledger().balances(), last.balances());
+	}
+	@Test void itemPrefixSeeksEveryComponentVariantWithoutScanningOtherProducts() {
+		var tag = new CompoundTag(); tag.putString("test:name", "variant");
+		var named = new ProductKey(ProductKey.Kind.ITEM, KEY.id(), tag); var fluid = new ProductKey(ProductKey.Kind.FLUID, KEY.id(), tag);
+		var store = new PagedProductAmounts(); store.set(KEY, ProductAmount.of(3)); store.set(named, ProductAmount.of(5));
+		store.set(fluid, ProductAmount.of(7)); store.set(OTHER, ProductAmount.of(9));
+		var balances = store.snapshot(); var first = PagedProductAmounts.firstItemEntry(balances, KEY.id());
+		var second = PagedProductAmounts.orderedEntry(balances, first.getKey(), false);
+		assertEquals(Set.of(KEY, named), Set.of(first.getKey(), second.getKey()));
+		assertEquals(OTHER, PagedProductAmounts.firstItemEntry(balances, OTHER.id()).getKey());
+		assertNull(PagedProductAmounts.firstItemEntry(balances, ResourceLocation.parse("test:absent")));
+		store.set(KEY, ProductAmount.ZERO); store.set(named, ProductAmount.ZERO);
+		assertNull(PagedProductAmounts.firstItemEntry(store.snapshot(), KEY.id()));
+		assertNotNull(PagedProductAmounts.firstItemEntry(balances, KEY.id()));
+	}
 	@Test void repeatedFiniteDeliveriesMatchAnIndependentBigIntegerReference() {
 		var value = BigInteger.ONE.shiftLeft(100); var current = ledger(ProductAmount.of(value), 1234); var random = new Random(20260922);
 		for (int i = 0; i < 2000; i++) {

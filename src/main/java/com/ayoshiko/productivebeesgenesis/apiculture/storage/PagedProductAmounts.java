@@ -64,6 +64,13 @@ public final class PagedProductAmounts {
 		var entry = reverse ? SnapshotRecords.previousEntry(frozen.orderedKeys, cursor) : SnapshotRecords.nextEntry(frozen.orderedKeys, cursor);
 		return entry == null ? null : Map.entry(entry.getKey(), frozen.get(entry.getKey()));
 	}
+	/** 按 ID 跳到第一种物品组件变体，O(log N)，不枚举其它物品或流体。 */
+	public static Map.Entry<ProductKey, ProductAmount> firstItemEntry(Map<ProductKey, ProductAmount> amounts, net.minecraft.resources.ResourceLocation id) {
+		if (!(amounts instanceof Frozen frozen)) throw new IllegalArgumentException("Expected frozen product balances");
+		var entry = SnapshotRecords.firstEntryAtOrAfter(frozen.orderedKeys, key -> key.id().compareTo(id) >= 0);
+		return entry != null && entry.getKey().id().equals(id) && entry.getKey().kind() == ProductKey.Kind.ITEM
+				? Map.entry(entry.getKey(), frozen.get(entry.getKey())) : null;
+	}
 	public static Object keyToken(Map<ProductKey, ProductAmount> amounts) {
 		if (!(amounts instanceof Frozen frozen)) throw new IllegalArgumentException("Expected frozen product balances");
 		return frozen.keyToken;

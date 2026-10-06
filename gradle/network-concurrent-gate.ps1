@@ -59,7 +59,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -117,6 +117,7 @@ function Wait-Probe([Diagnostics.Process]$Process, [string]$Id) {
 try {
     $buildArgs = @('test')
     if ($Crafting -or $MeBridge) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
+    if ($RecipeFill) { $buildArgs += @('--tests', '*ProductWithdrawalCheckpointTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
@@ -245,7 +246,7 @@ try {
             if ($ProductWorkspace -and $serverReport.workspaceVerified -ne $true) { throw 'Missing workspace checks' }
             if ($MeCrafting -and $serverReport.meCraftingVerified -ne $true) { throw 'Missing ME crafting checks' }
             if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }
-            if ($RecipeFill -and $serverReport.recipeFillJeiAndConservation -ne $true) { throw 'Missing recipe fill checks' }
+            if ($RecipeFill -and ($serverReport.recipeFillJeiAndConservation -ne $true -or $serverReport.recipeFillLedgerDeficitComponentsAndNoSpace -ne $true)) { throw 'Missing recipe fill checks' }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner
             Add-Evidence "$serverId-guest-file" $serverReport.playerFiles.guest

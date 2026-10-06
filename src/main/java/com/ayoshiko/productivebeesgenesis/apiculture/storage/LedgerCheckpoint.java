@@ -58,11 +58,17 @@ public final class LedgerCheckpoint {
 	public ProductAmount available(ProductKey key) { return balances.getOrDefault(key, ProductAmount.ZERO).subtract(reserved.getOrDefault(key, ProductAmount.ZERO)); }
 	/** 单键精确扣减，只分叉余额页；既有预约和变化键凭据随同保留。 */
 	public LedgerCheckpoint withdrawExact(ProductKey key, ProductAmount amount) {
-		Objects.requireNonNull(key); Objects.requireNonNull(amount);
-		if (amount.isZero() || amount.compareTo(available(key)) > 0) throw new IllegalArgumentException("Unfunded product withdrawal");
+		return withdrawExact(Map.of(key, amount));
+	}
+	/** 同一候选根内预约并扣除全部缺额；失败不产生部分扣款，已有预约保持原样。 */
+	public LedgerCheckpoint withdrawExact(Map<ProductKey, ProductAmount> amounts) {
+		var debit = Map.copyOf(amounts);
+		if (debit.isEmpty()) throw new IllegalArgumentException("Empty product withdrawal");
+		for (var entry : debit.entrySet()) if (entry.getValue().isZero() || entry.getValue().compareTo(available(entry.getKey())) > 0)
+			throw new IllegalArgumentException("Unfunded product withdrawal");
 		var changed = PagedProductAmounts.restore(balances);
-		changed.set(key, balances.get(key).subtract(amount));
-		return new LedgerCheckpoint(Math.incrementExact(revision), changed.snapshot(), transactions, reserved, token, Set.of(key));
+		debit.forEach((key, amount) -> changed.set(key, balances.get(key).subtract(amount)));
+		return new LedgerCheckpoint(Math.incrementExact(revision), changed.snapshot(), transactions, reserved, token, debit.keySet());
 	}
 	/** 逐记录恢复；输入摘要与余额的比较必须由调用者按预算推进，结束才可封装。 */
 	public static final class RestoreBuilder {

@@ -21,33 +21,35 @@ final class RecipeFillClient {
 		if (previous != stage) { previous = stage; step = 0; }
 		if (!(client.player.containerMenu instanceof NetworkCoreMenu menu)) return null;
 		var state = menu.clientState(); long now = Util.getMillis();
-		if (stage == 404) { PacketDistributor.sendToServer(replay); return new CraftingClient.Reply(0, -1); }
+		if (stage == 404 || stage == 410 || stage == 415) { PacketDistributor.sendToServer(replay); return new CraftingClient.Reply(0, -1); }
+		if (stage == 414) return new CraftingClient.Reply(0, -1);
 		if (stage == 406) {
 			if (!(client.screen instanceof NetworkTerminalScreen) || menu.craftingGeneration() == 0) return null;
 			Files.createDirectories(Path.of("results")); try (var image = Screenshot.takeScreenshot(client.getMainRenderTarget())) { image.writeToFile(Path.of("results/jei-filled.png")); }
 			return new CraftingClient.Reply(0, -1);
 		}
 		if (step == 0) {
-			if (!state.ready(now)) return null;
+			// 工作台会自动订阅合成；须等 live 确认追上该请求，才能由确认号定位本次 JEI 命令。
+			if (!state.actionable(now)) return null;
 			if (stage == 403) {
 				if (!state.actionable(now) || menu.craftingGeneration() == 0) return null;
 				var request = state.beginCrafting(TerminalRequest.Operation.CRAFT_TAKE, menu.craftingGeneration(), -1, -1, 1, now);
 				if (request == null) return null; sequence = request.sequence(); PacketDistributor.sendToServer(request);
 			} else {
 				var runtime = mezz.jei.common.Internal.getJeiRuntime(); var manager = runtime.getRecipeManager();
-				var id = ResourceLocation.withDefaultNamespace(stage == 401 ? "cake" : stage == 405 ? "oak_planks" : "crafting_table");
+				var id = ResourceLocation.withDefaultNamespace(stage == 401 ? "cake" : stage == 405 ? "oak_planks" : stage == 411 ? "diamond_block" : stage >= 412 ? "gold_nugget" : stage >= 407 ? "iron_block" : "crafting_table");
 				var recipe = manager.createRecipeLookup(RecipeTypes.CRAFTING).get().filter(r -> r.id().equals(id)).findFirst().orElseThrow(() -> new IllegalStateException("JEI missing crafting recipe: " + id));
 				var category = manager.getRecipeCategory(RecipeTypes.CRAFTING);
 				var handler = runtime.getRecipeTransferManager().getRecipeTransferHandler(menu, category).orElseThrow(() -> new IllegalStateException("JEI missing transfer handler: " + net.minecraft.core.registries.BuiltInRegistries.MENU.getKey(menu.getType())));
 				require(handler.getClass().getName().endsWith("NetworkTerminalRecipeTransfer"), "JEI did not register our transfer handler");
 				var view = manager.createRecipeLayoutDrawableOrShowError(category, recipe, runtime.getJeiHelpers().getFocusFactory().getEmptyFocusGroup()).getRecipeSlotsView();
 				long before = state.acknowledgedSequence();
-				require(handler.transferRecipe(menu, recipe, view, client.player, stage == 402, false) == null && before == state.acknowledgedSequence(), "JEI simulation changed sequence");
+				require(handler.transferRecipe(menu, recipe, view, client.player, (stage == 402 || stage == 409), false) == null && before == state.acknowledgedSequence(), "JEI simulation changed sequence");
 				runtime.getRecipesGui().showRecipes(category, List.of(recipe), List.of());
 				if (stage == 400) { sequence = before + 1; step = 2; return null; }
-				require(handler.transferRecipe(menu, recipe, view, client.player, stage == 402, true) == null, "JEI transfer rejected");
+				require(handler.transferRecipe(menu, recipe, view, client.player, (stage == 402 || stage == 409), true) == null, "JEI transfer rejected");
 				sequence = before + 1;
-				if (stage == 402) replay = new TerminalRecipeRequest(menu.containerId, menu.terminalSession(), sequence, id, true);
+				if (stage == 402 || stage == 409 || stage == 413) replay = new TerminalRecipeRequest(menu.containerId, menu.terminalSession(), sequence, id, stage != 413);
 				client.screen.onClose(); require(client.screen instanceof NetworkTerminalScreen, "JEI did not return to terminal");
 			}
 			step++; return null;

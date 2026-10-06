@@ -123,6 +123,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	@Override public TerminalCraftingAccount craftingAccount(net.minecraft.server.level.ServerPlayer player) {
 		return terminalAccess != null && ModConfig.SERVER.beeNetwork.enabled.get() && exchangeCore(player) != null ? terminalAccess.crafting(player) : null;
 	}
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData craftingLedger(net.minecraft.server.level.ServerPlayer player) {
+		var target = terminalAccess == null ? null : exchangeCore(player);
+		return target == null || !ModConfig.SERVER.beeNetwork.enabled.get() ? null : target.ownership().readyAuthority();
+	}
 	TerminalReply craftingRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {
 		if (crafting == null || exchanging) return new TerminalReply(containerId, terminalSession, request.sequence(), TerminalReply.Status.INVALID, 0, 0, null);
 		exchanging = true;
