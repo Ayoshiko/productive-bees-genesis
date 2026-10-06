@@ -23,7 +23,7 @@ import net.minecraft.world.item.ItemStack;
 public final class MachineMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host {
 	// 回执字段最后发送，客户端看到完成序号时，本轮升级数量和上限已同步。
 	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4,
-			CRAFTING_DATA = WIRELESS_DATA + 3, DATA_COUNT = CRAFTING_DATA + 5;
+			CRAFTING_DATA = WIRELESS_DATA + 3, ME_DATA = CRAFTING_DATA + 5, DATA_COUNT = ME_DATA + 1;
 	private final MachineControllerEntity core;
 	private final MachineDirectory.Binding binding;
 	private final MachinePartEntity origin;
@@ -165,7 +165,11 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		return !closed && viewer.equals(player.getUUID()) && (core == null || (wireless == null ? allowed(core, origin, binding, player) : WirelessMachineAccess.valid(core, wireless, player)) && MachineWorkService.active(core)
 				&& core.handle.binding().orElse(null) == binding);
 	}
+	public com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus meStatus() { return com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.decode(data.get(ME_DATA)); }
 	private void refresh() {
+		if (core != null && viewingPlayer instanceof ServerPlayer player) data.set(ME_DATA, stillValid(player)
+				? com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.status(core, player).ordinal()
+				: com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.HOST_UNAVAILABLE.ordinal());
 		if (wireless != null) { data.set(WIRELESS_DATA, wireless.combined() ? 3 : wireless.binding().mode() == com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY ? 1 : 2); integer(WIRELESS_DATA + 1, wireless.energy()); }
 		if (core == null || core.handle == null || core.handle.binding().orElse(null) != binding) return; var access = MachineWorkService.access(core).orElse(null); if (access == null) return;
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();

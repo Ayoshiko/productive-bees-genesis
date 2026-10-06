@@ -9,6 +9,7 @@ param(
     [switch]$Upgrades,
     [switch]$Terminals,
     [switch]$Crafting,
+    [switch]$MeBridge,
     [switch]$RecipeFill,
     [switch]$Wireless,
     [switch]$WirelessVisualOnly,
@@ -17,6 +18,7 @@ param(
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
 $ErrorActionPreference = 'Stop'
+if ($MeBridge -and ($Crafting -or $Upgrades -or $Terminals)) { throw 'ME bridge uses a separate focused fixture' }
 if ($Upgrades -and $Terminals) { throw 'Upgrade and terminal gates use separate fixtures' }
 if ($Crafting -and ($Upgrades -or $Terminals)) { throw 'Crafting uses a separate focused fixture' }
 if ($CraftingWriteOnly -and !$Crafting) { throw 'The bounded write-only follow-up is only for crafting' }
@@ -31,6 +33,7 @@ if ($ChildTask) {
     if ($Ae2) { $arguments += '-PnetworkProbeAe2' }
     if ($Upgrades) { $arguments += '-PnetworkConcurrentUpgrades' }
     if ($Terminals) { $arguments += '-PnetworkConcurrentTerminals' }
+    if ($MeBridge) { $arguments += '-PnetworkMeBridge' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
     if ($RecipeFill) { $arguments += '-PnetworkRecipeFill' }
     if ($Wireless) { $arguments += '-PnetworkConcurrentWireless' }
@@ -46,7 +49,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3a' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -72,6 +75,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($WithAe2) { $arguments += '-Ae2' }
     if ($Upgrades) { $arguments += '-Upgrades' }
     if ($Terminals) { $arguments += '-Terminals' }
+    if ($MeBridge) { $arguments += '-MeBridge' }
     if ($Crafting) { $arguments += '-Crafting' }
     if ($RecipeFill) { $arguments += '-RecipeFill' }
     if ($Wireless) { $arguments += '-Wireless' }
@@ -99,7 +103,7 @@ function Wait-Probe([Diagnostics.Process]$Process, [string]$Id) {
 }
 try {
     $buildArgs = @('test')
-    if ($Crafting) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
+    if ($Crafting -or $MeBridge) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
@@ -141,12 +145,16 @@ try {
                 $clientRoot = Join-Path $workspace "build/network-probe-$roleId/results"
                 $clientPath = Join-Path $clientRoot 'concurrent-client.json'
                 $clientReport = Read-Report $clientPath
-                $connections = if (!$Crafting -and $mode -eq 'write' -and $playerRole -eq 'guest') { 2 } else { 1 }
+                $connections = if (!$Crafting -and !$MeBridge -and $mode -eq 'write' -and $playerRole -eq 'guest') { 2 } else { 1 }
                 if ($clientReport.passed -ne $true -or $clientReport.ae2Loaded -ne $withAe2 -or
                     $clientReport.mode -ne $mode -or $clientReport.role -ne $playerRole -or
                     $clientReport.connections -ne $connections) { throw "Invalid concurrent client report: $roleId" }
                 Add-Evidence "$roleId-report" $clientPath
                 Add-Evidence "$roleId-image" (Join-Path $clientRoot 'concurrent.png')
+                if ($MeBridge -and $mode -eq 'write' -and $playerRole -eq 'owner') {
+                    Add-Evidence "$roleId-me-network" (Join-Path $clientRoot 'me-network.png')
+                    Add-Evidence "$roleId-me-machine" (Join-Path $clientRoot 'me-machine.png')
+                }
                 if ($RecipeFill -and $mode -eq 'write' -and $playerRole -eq 'owner') { Add-Evidence "$roleId-jei-fill" (Join-Path $clientRoot 'jei-filled.png') }
                 if ($Crafting -and $mode -eq 'write') {
                     Add-Evidence "$roleId-crafting-materials" (Join-Path $clientRoot 'crafting-materials.png')
@@ -171,13 +179,13 @@ try {
             Wait-Probe $server $serverId
             $serverPath = Join-Path $serverRoot 'results/concurrent-server.json'
             $serverReport = Read-Report $serverPath
-            $logins = if ($mode -eq 'write' -and !$Crafting) { 3 } else { 2 }
+            $logins = if ($mode -eq 'write' -and !$Crafting -and !$MeBridge) { 3 } else { 2 }
             if ($serverReport.passed -ne $true -or $serverReport.ae2Loaded -ne $withAe2 -or
                 $serverReport.mode -ne $mode -or $serverReport.normalPlayerFilesVerified -ne $true -or
                 $serverReport.maxConcurrent -ne 2 -or $serverReport.logins -ne $logins -or $serverReport.logouts -ne $logins) {
                 throw "Incomplete concurrent server report: $combination $mode"
             }
-            if ($mode -eq 'write' -and !$Crafting) {
+            if ($mode -eq 'write' -and !$Crafting -and !$MeBridge) {
                 $expectedCases = @('SINGLE','PARTIAL','FULL','FLUID','VARIANT','FOOD','BEE','REGRANTED','RECONNECTED')
                 if (@($serverReport.cases).Count -ne 9 -or $serverReport.replays -ne 8 -or
                     $serverReport.revocationAndRegrant -ne $true -or $serverReport.reconnectAndOldSessionRejected -ne $true) { throw 'Incomplete competition coverage' }
@@ -209,6 +217,7 @@ try {
                 if (!$WirelessVisualOnly -and ($serverReport.wirelessMachineCrafting -ne $true -or $serverReport.wirelessDeviceMerge -ne $true)) { throw 'Missing wireless crafting or merge checks' }
                 Add-Evidence "$serverId-wireless-file" $serverReport.wirelessFile
             }
+            if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }
             if ($RecipeFill -and $serverReport.recipeFillJeiAndConservation -ne $true) { throw 'Missing recipe fill checks' }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner

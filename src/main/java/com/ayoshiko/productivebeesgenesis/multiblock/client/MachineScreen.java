@@ -151,9 +151,11 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 					: Component.translatable("screen.productivebeesgenesis.network.result." + result.status().name().toLowerCase(java.util.Locale.ROOT), result.moved());
 		}
 		g.drawString(font, font.plainSubstrByWidth(status.getString(), 216), 7, 123, 0xffe1b96b, false);
-		g.drawString(font, menu.wireless() ? Component.translatable("screen.productivebeesgenesis.network.terminal.wireless_energy", menu.deviceEnergy()) : tr("inventory_hint"), 7, 133, 0xffc3c8cc, false);
+		var footer = menu.wireless() ? Component.translatable("screen.productivebeesgenesis.network.terminal.wireless_energy", menu.deviceEnergy()) : tr("inventory_hint");
+		g.drawString(font, font.plainSubstrByWidth(footer.getString(), 188), 7, 133, 0xffc3c8cc, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
 		super.render(g, mouseX, mouseY, partial); renderTooltip(g, mouseX, mouseY);
+		com.ayoshiko.productivebeesgenesis.apiculture.client.MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 203, topPos + 133, mouseX, mouseY);
 	}
 }

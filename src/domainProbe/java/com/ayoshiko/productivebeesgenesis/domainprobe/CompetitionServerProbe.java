@@ -106,11 +106,12 @@ public final class CompetitionServerProbe {
                 if (core == null) { initialize(server, players); return; }
                 if (core.topology() == null || !core.topology().valid()) return;
                 if (reader()) {
-                    if (core.ownership().readyAuthority() == null) return;
+                    if (core.ownership().readyAuthority() == null || MeBridgeProbe.enabled() && !MeBridgeProbe.recoveryReady(core)) return;
                     verifyRecovered(server, players);
                     if (CraftingProbe.enabled()) CraftingProbe.recovered(core, manifest);
+                    if (MeBridgeProbe.enabled()) MeBridgeProbe.recovered(core, players, manifest);
                     if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
-                    if (CraftingProbe.enabled()) CraftingProbe.open(core, players, true); else openBoth(players);
+                    if (CraftingProbe.enabled()) CraftingProbe.open(core, players, true); else if (MeBridgeProbe.enabled()) CraftingProbe.open(core, players, false); else openBoth(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
                     if (WirelessProbe.visualOnly()) { WirelessProbe.advance(core, players, 348, Map.of()); begin(server, 349); return; }
                     begin(server, 80);
@@ -121,10 +122,16 @@ public final class CompetitionServerProbe {
             if (stage == 0) {
                 if (!acks.containsKey(OWNER) || core.ownership().readyAuthority() == null || !core.allowed(players.get(1))) return;
                 require(!core.productionRunning() && checkpoint().ownedMachines().values().stream().anyMatch(r -> r.bees() != null), "Setup did not activate then pause");
+                if (MeBridgeProbe.enabled()) { MeBridgeProbe.seed(core, players); begin(server, 500); return; }
                 if (CraftingProbe.enabled()) { CraftingProbe.seed(core, players); begin(server, 300); return; }
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (MeBridgeProbe.enabled() && stage >= 500) {
+                if (!MeBridgeProbe.ready(stage)) return;
+                int next = MeBridgeProbe.advance(core, players, stage); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (RecipeFillProbe.enabled() && stage >= 400) {
                 int next = RecipeFillProbe.advance(core, players, stage, acks); noDrops(server);
                 if (next < 0) finish(server); else begin(server, next); return;
@@ -216,7 +223,7 @@ public final class CompetitionServerProbe {
                 ((com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge) level.getBlockEntity(pos.east(2))).setOwnerUUID(OWNER);
             }
             if (TerminalPermissionProbe.enabled()) TerminalPermissionProbe.place(core);
-            if (CraftingProbe.enabled()) CraftingProbe.place(core);
+            if (CraftingProbe.enabled() || MeBridgeProbe.enabled()) CraftingProbe.place(core);
         }
         for (var player : players) player.teleportTo(8.5, 100, 10.5);
     }
@@ -224,6 +231,7 @@ public final class CompetitionServerProbe {
         stage = next; stageAt = server.overworld().getGameTime(); acks.clear();
         if (UpgradeCompetitionProbe.enabled() && next >= 100) com.mojang.logging.LogUtils.getLogger().info("UPGRADE_COMPETITION_STAGE {}", next);
         if (TerminalPermissionProbe.enabled() && next >= 200) com.mojang.logging.LogUtils.getLogger().info("TERMINAL_PERMISSION_STAGE {}", next);
+        if (MeBridgeProbe.enabled() && next >= 500) com.mojang.logging.LogUtils.getLogger().info("ME_BRIDGE_STAGE {}", next);
         if (CraftingProbe.enabled() && next >= 300) com.mojang.logging.LogUtils.getLogger().info("TERMINAL_CRAFTING_STAGE {}", next);
         if (core.ownership().readyAuthority() != null && server.getPlayerList().getPlayerCount() == 2) {
             before = checkpoint(); beforeInventory = CompetitionAssets.inventories(players(server));
@@ -278,11 +286,12 @@ public final class CompetitionServerProbe {
     private static void finish(MinecraftServer server) throws Exception {
         var players = players(server); finalInventory = CompetitionAssets.inventories(players);
         if (!reader()) {
-            if (!CraftingProbe.enabled()) require(cases.size() == 9 && replays == 8 && revoked && regranted && reconnected, "Incomplete competition matrix");
+            if (!CraftingProbe.enabled() && !MeBridgeProbe.enabled()) require(cases.size() == 9 && replays == 8 && revoked && regranted && reconnected, "Incomplete competition matrix");
             manifest = new CompoundTag(); manifest.putInt("schema", 1); manifest.putUUID("jvm", JVM);
             manifest.putUUID("controller", core.controller()); manifest.putLong("producerPid", ProcessHandle.current().pid());
             manifest.put("checkpoint", NetworkCheckpointCodec.encode(checkpoint())); manifest.put("core", core.saveWithoutMetadata(server.registryAccess()));
             if (CraftingProbe.enabled()) CraftingProbe.capture(core, manifest);
+            if (MeBridgeProbe.enabled()) MeBridgeProbe.capture(core, manifest);
             for (var player : players) {
                 manifest.put(player.getUUID().toString(), finalInventory.get(player.getUUID()));
                 manifest.putUUID("session-" + player.getUUID(), ((NetworkCoreMenu) player.containerMenu).terminalSession());
@@ -325,7 +334,7 @@ public final class CompetitionServerProbe {
         report.addProperty("logins", logins); report.addProperty("logouts", logouts); report.add("cases", cases);
         try {
             require(failure == null, failure);
-            require(closing && maxConcurrent == 2 && logins == (reader() || CraftingProbe.enabled() ? 2 : 3) && logouts == logins, "Incomplete real player lifecycle");
+            require(closing && maxConcurrent == 2 && logins == (reader() || CraftingProbe.enabled() || MeBridgeProbe.enabled() ? 2 : 3) && logouts == logins, "Incomplete real player lifecycle");
             var paths = new JsonObject();
             for (UUID id : IDS) {
                 var path = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(id + ".dat");
@@ -347,6 +356,7 @@ public final class CompetitionServerProbe {
                 else TerminalPermissionProbe.report(report);
             }
             if (CraftingProbe.enabled()) CraftingProbe.report(server, core, manifest, report, reader());
+            if (MeBridgeProbe.enabled()) MeBridgeProbe.report(report, reader());
             report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }
         try { write("concurrent-server.json", report); } catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write competition report", error); }

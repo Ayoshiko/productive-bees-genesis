@@ -413,6 +413,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
+		MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
 		if (tab == 4) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
 				&& mouseY >= topPos + slot.y && mouseY < topPos + slot.y + 16) {
 			var hint = new ArrayList<Component>(); if (slot.hasItem()) hint.add(slot.getItem().getHoverName());

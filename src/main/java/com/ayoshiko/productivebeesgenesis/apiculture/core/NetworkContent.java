@@ -17,6 +17,9 @@ public final class NetworkContent {
 	private static final DeferredRegister<BlockEntityType<?>> TILES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD);
 	private static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD);
 	private static final DeferredRegister<net.minecraft.world.item.crafting.RecipeSerializer<?>> RECIPES = DeferredRegister.create(Registries.RECIPE_SERIALIZER, MOD);
+	public static final DeferredBlock<com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlock> ME_BRIDGE = BLOCKS.register("bee_network_me_bridge", com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlock::new);
+	public static final DeferredItem<BlockItem> ME_BRIDGE_ITEM = ITEMS.register("bee_network_me_bridge", () -> new BlockItem(ME_BRIDGE.get(), new Item.Properties()));
+	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity>> ME_BRIDGE_TILE = TILES.register("bee_network_me_bridge", () -> BlockEntityType.Builder.of(com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity::new, ME_BRIDGE.get()).build(null));
 	public static final DeferredBlock<NetworkCoreBlock> CORE = BLOCKS.register("bee_network_core", NetworkCoreBlock::new);
 	public static final DeferredItem<BlockItem> CORE_ITEM = ITEMS.register("bee_network_core", () -> new BlockItem(CORE.get(), new Item.Properties()));
 	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<NetworkCoreBlockEntity>> CORE_TILE = TILES.register("bee_network_core", () -> BlockEntityType.Builder.of(NetworkCoreBlockEntity::new, CORE.get()).build(null));
@@ -43,6 +46,7 @@ public final class NetworkContent {
 		return combined ? COMBINED_MENU.get() : menu(scope);
 	}
 	public static void register(IEventBus bus) {
+		bus.addListener(com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeIntegration::register);
 		BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); RECIPES.register(bus);
 		bus.addListener((net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent event) -> event.registerItem(
 				net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.ITEM, (stack, context) -> WirelessTerminalItem.energyStorage(stack),

@@ -45,7 +45,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		memberAccess = null; memberScoped = buffer.readBoolean();
 		this.scope = combined ? buffer.readEnum(TerminalScope.class) : scope;
 		if (combined && (memberScoped || this.scope == TerminalScope.ALL)) throw new IllegalArgumentException("Invalid combined terminal mode");
-		selections = null; data = new SimpleContainerData(38); addDataSlots(data);
+		selections = null; data = new SimpleContainerData(39); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory); addCrafting();
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
@@ -71,6 +71,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		terminalSession = session; selections = new NetworkSelectionSession(session);
 		data = new ContainerData() {
 			@Override public int get(int index) {
+				if (index == 38) return viewer instanceof net.minecraft.server.level.ServerPlayer player && NetworkCoreMenu.this.stillValid(player)
+						? com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.status(core, player).ordinal()
+						: com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.HOST_UNAVAILABLE.ordinal();
 				if (index == 35) return terminalAccess instanceof WirelessTerminalAccess ? 1 : 0;
 				if (index >= 36) return terminalAccess == null ? 0 : (terminalAccess.energy() >>> ((index - 36) * 16)) & 65535;
 				if (index == 34) return crafting == null ? 0 : crafting.flag();
@@ -93,7 +96,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 				return (int) (count >>> (((index - 1) % 4) * 16)) & 65535;
 			}
 			@Override public void set(int index, int value) { }
-			@Override public int getCount() { return 38; }
+			@Override public int getCount() { return 39; }
 		}; addDataSlots(data); addInventory(inventory); addCrafting();
 	}
 	private void addCrafting() {
@@ -149,6 +152,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		long result = 0; for (int part = 0; part < 4; part++) result |= (data.get(1 + (index - 1) * 4 + part) & 65535L) << (part * 16);
 		return result;
 	}
+	public com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus meStatus() { return com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.decode(data.get(38)); }
 	public int ownershipStatus() { return data.get(17); }
 	public boolean productionRunning() { return data.get(26) != 0; }
 	public boolean canUpgrade() { return data.get(29) != 0; }

@@ -372,3 +372,12 @@ Minecraft 1.21.1 的本地 NeoForge 21.1.216 JAR 核对 `ShapedRecipe`／`Shapel
 f2a 核对同一 Minecraft 1.21.1 源码中的 `DataComponentPatch.forget`、`ItemStack.applyComponents`，以及当前 `WirelessTerminalItem`、`TerminalCraftingAccount.wireless` 和 `CoreInventorySync`。采用只更新所保留设备的能量／token、其它组件原样复制，模组数据与宿主身份分别核对的方式；两套不同非空账户不自动拼网格。材料账户不发布新版本、不跨文件转存或删除源文件，旧空账户保持可恢复。原版主副手物品列表在服务器线程连续提交，之后同步已提交内容；模拟不创建绑定 token、不扣 FE，不新增合并配方、外部能力调用或后台任务。
 
 用户新图仅作为上部物品网格、合成区、常驻背包和侧签交互参照；完整 AE2 操作、下单／任务和蜂务／升级／机器信息的目标已同步主合同，尚无实际 ME 网格的能力不能由图示或 AE2 已安装状态推断为已实现。
+
+<a id="s13-30"></a>
+### 13.30 D20a 真实桥接节点与可选依赖边界（2026-10-06）
+
+继续核对固定 AE2 19.2.17 反编译源码 `../decompiled-reference/productive-bees-addon-1.21.1/ae2-19.2.17-decompiled` 中的 `IManagedGridNode`、`IGridNodeListener`、`IInWorldGridNodeHost`、`GridHelper.getNodeHost/getExposedNode`、`InWorldGridNode.findInWorldConnections`、`IPlayerRegistry` 和 `Platform.hasPermissions`。采用 NeoForge 世界节点能力、REQUIRE_CHANNEL、节点元数据往返及服务器侧玩家 ID 映射；实际访问以节点活动状态和本项目宿主／所有者／菜单边界共同决定。该版 IGrid 不再提供旧安全终端服务，Platform 的位置访问采用同维度与 Level.mayInteract；不照搬旧版 SecurityPermissions。首步仅所有者访问，访客与自动化授权随后续入口独立设计。
+
+复核本项目 `Ae2GridNodeManager.prepareNode/connectNode` 的延迟连接原因：NBT／clearRemoved 期间不能连接并递归查询邻居。桥在首个有效服务器 tick 创建；公共 Link 与菜单无 AE2 类型，ModList 守卫后才进入兼容 holder 注册能力及构造节点，查询不创建节点。每次访问重新检查最多六个相邻宿主和六个桥、实际实例／代际与已加载区块，不使用全世界桥表或后台世界访问。旧能力对象在宿主失效后返回空节点，正式卸载销毁节点；桥异常只隔离并保留原数据。没有复用独立机逐槽存储包装或新增 IStorageProvider，双向账本仍属 D20b。
+
+桥接材质由本项目忽略目录 `build/generate-me-bridge-art.py` 用 Pillow 生成，方块及物品共用原创像素图，不复制第三方资产。菜单使用同一个 ME 指示组件与有界枚举，没有全网内容同步。

@@ -34,6 +34,7 @@ public final class ModCreativeTabs {
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.CORE_ITEM.get());
+						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.ME_BRIDGE_ITEM.get());
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.BEE_TERMINAL_ITEM.get());
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.CENTRIFUGE_TERMINAL_ITEM.get());
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.COMBINED_TERMINAL_ITEM.get());

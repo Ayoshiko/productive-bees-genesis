@@ -32,6 +32,8 @@ def terminalPermissions = providers.gradleProperty('networkConcurrentTerminals')
 def craftingProbe = providers.gradleProperty('networkConcurrentCrafting').isPresent()
 def recipeFillProbe = providers.gradleProperty('networkRecipeFill').isPresent()
 if (recipeFillProbe && (!craftingProbe || providers.gradleProperty('networkConcurrentWireless').isPresent())) throw new GradleException('Recipe fill requires a separate crafting fixture')
+def meBridgeProbe = providers.gradleProperty('networkMeBridge').isPresent()
+if (meBridgeProbe && (!playerConcurrent || craftingProbe || terminalPermissions || providers.gradleProperty('networkConcurrentUpgrades').isPresent())) throw new GradleException('ME bridge requires its separate concurrent fixture')
 def wirelessProbe = providers.gradleProperty('networkConcurrentWireless').isPresent()
 def wirelessVisualOnly = providers.gradleProperty('networkWirelessVisualOnly').isPresent()
 if (wirelessVisualOnly && !wirelessProbe) throw new GradleException('Wireless visual follow-up requires wireless mode')
@@ -166,6 +168,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             logLevel = org.slf4j.event.Level.INFO
@@ -181,6 +184,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             systemProperty 'pbg.concurrent.role', 'owner'
@@ -199,6 +203,7 @@ neoForge {
             systemProperty 'pbg.concurrent.terminals', terminalPermissions.toString()
             systemProperty 'pbg.concurrent.crafting', craftingProbe.toString()
             systemProperty 'pbg.concurrent.recipeFill', recipeFillProbe.toString()
+            systemProperty 'pbg.concurrent.meBridge', meBridgeProbe.toString()
             systemProperty 'pbg.concurrent.wireless', wirelessProbe.toString()
             systemProperty 'pbg.concurrent.wirelessVisualOnly', wirelessVisualOnly.toString()
             systemProperty 'pbg.concurrent.role', 'guest'
