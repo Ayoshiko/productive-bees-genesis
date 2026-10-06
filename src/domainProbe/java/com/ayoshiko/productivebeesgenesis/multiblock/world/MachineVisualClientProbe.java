@@ -222,8 +222,9 @@ public final class MachineVisualClientProbe {
 			client.options.hideGui = false; MachineVisualFixture.request(200); menuStage = 1; return;
 		}
 		if (!(client.screen instanceof com.ayoshiko.productivebeesgenesis.multiblock.client.MachineScreen screen)) return;
+		if (screen.getXSize() != 230) { screen.resize(client, 320, 240); return; }
 		var menu = screen.getMenu();
-		int x = (client.getWindow().getGuiScaledWidth() - 230) / 2, y = (client.getWindow().getGuiScaledHeight() - 226) / 2;
+		int x = screen.getGuiLeft(), y = screen.getGuiTop();
 		check(x >= 0 && y >= 0, "Machine menu does not fit logical viewport");
 		if (menuStage == 1) {
 			if (menu.viewRevision() == 0 || client.player.getInventory().items.get(0).isEmpty()) return;

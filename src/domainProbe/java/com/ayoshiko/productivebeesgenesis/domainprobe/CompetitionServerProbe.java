@@ -127,6 +127,9 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (MachineWorkspaceProbe.enabled() && stage >= 750) {
+                int next = MachineWorkspaceProbe.advance(players.getFirst(), stage); noDrops(server); begin(server, next); return;
+            }
             if (WorkspaceProbe.enabled() && stage >= 700) {
                 int next = WorkspaceProbe.advance(core, players, stage); noDrops(server);
                 if (next < 0) finish(server); else begin(server, next); return;
@@ -369,6 +372,7 @@ public final class CompetitionServerProbe {
             if (MeBridgeProbe.enabled()) MeBridgeProbe.report(report, reader());
             if (MeCraftingProbe.enabled()) MeCraftingProbe.report(report, reader());
             if (WorkspaceProbe.enabled()) WorkspaceProbe.report(report);
+            if (MachineWorkspaceProbe.enabled()) MachineWorkspaceProbe.report(report);
             report.addProperty("passed", true);
         } catch (Exception error) { report.addProperty("passed", false); report.addProperty("failure", error.toString()); }
         try { write("concurrent-server.json", report); } catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write competition report", error); }

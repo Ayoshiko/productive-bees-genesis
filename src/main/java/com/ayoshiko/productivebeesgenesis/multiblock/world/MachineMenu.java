@@ -32,6 +32,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private final UUID viewer, session;
 	private final TerminalSequence sequences = new TerminalSequence();
 	private final ContainerData data = new SimpleContainerData(DATA_COUNT);
+	private final MachineMenuDetails details = new MachineMenuDetails();
 	private final UUID[] shownBees = new UUID[6];
 	private List<FeedingSlotStore.Slot> shownFeeding;
 	private MachineUpgrades shownUpgrades;
@@ -61,13 +62,10 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private void initialize(Inventory inventory) {
 		me = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession(containerId, session);
 		craftingState = new TerminalClientState(containerId, session); crafting = new TerminalCraftingMenu(this);
-		addDataSlots(data);
+		addDataSlots(data); addDataSlots(details.data());
 		for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
 			int index = row == 3 ? col : (row + 1) * 9 + col;
-			addSlot(new Slot(inventory, index, 35 + col * 18, 143 + row * 18 + (row == 3 ? 4 : 0)) {
-				@Override public boolean mayPlace(ItemStack stack) { return false; }
-				@Override public boolean mayPickup(Player player) { return false; }
-			});
+			addSlot(inventorySlot(inventory, index, 35 + col * 18, 143 + row * 18 + (row == 3 ? 4 : 0)));
 		}
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 	}
@@ -125,11 +123,27 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	public long craftingGeneration() { return number(CRAFTING_DATA); }
 	public int craftingStatus() { return data.get(CRAFTING_DATA + 4); }
 	public ItemStack craftingItem(int index) { return crafting.item(index); }
-	public void layoutCrafting(boolean visible) {
+	public void layoutCrafting(boolean visible) { layoutCrafting(visible, 35, 42); }
+	public void layoutCrafting(boolean visible, int left, int top) {
 		if (core != null) return; crafting.visible(visible);
 		for (int i = 0; i < 10; i++) {
-			var slot = crafting.slot(i, i == 9 ? 126 : 35 + i % 3 * 18, i == 9 ? 60 : 42 + i / 3 * 18);
+			var slot = crafting.slot(i, i == 9 ? left + 91 : left + i % 3 * 18, i == 9 ? top + 18 : top + i / 3 * 18);
 			slot.index = 36 + i; slots.set(slot.index, slot);
+		}
+	}
+	public MachineMenuDetails details() { return details; }
+	private static Slot inventorySlot(Inventory inventory, int index, int x, int y) {
+		return new Slot(inventory, index, x, y) {
+			@Override public boolean mayPlace(ItemStack stack) { return false; }
+			@Override public boolean mayPickup(Player player) { return false; }
+		};
+	}
+	public void layoutInventory(int x, int y) {
+		if (core != null) return;
+		for (int i = 0; i < 36; i++) {
+			var old = slots.get(i); int row = i / 9;
+			var slot = inventorySlot(viewingPlayer.getInventory(), old.getContainerSlot(), x + i % 9 * 18, y + row * 18 + (row == 3 ? 4 : 0));
+			slot.index = i; slots.set(i, slot);
 		}
 	}
 	public void acceptTerminalReply(TerminalReply reply) {
@@ -183,7 +197,10 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 				? com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.status(core, player).ordinal()
 				: com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.HOST_UNAVAILABLE.ordinal());
 		if (wireless != null) { data.set(WIRELESS_DATA, wireless.combined() ? 3 : wireless.binding().mode() == com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.APIARY ? 1 : 2); integer(WIRELESS_DATA + 1, wireless.energy()); }
-		if (core == null || core.handle == null || core.handle.binding().orElse(null) != binding) return; var access = MachineWorkService.access(core).orElse(null); if (access == null) return;
+		if (core == null) return;
+		if (core.handle == null || core.handle.binding().orElse(null) != binding) { details.unavailable(); return; }
+		var access = MachineWorkService.access(core).orElse(null); if (access == null) { details.unavailable(); return; }
+		details.capture(access.work(), binding, core.getLevel().getGameTime());
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();
 		var limits = new int[MachineUpgrades.SLOTS]; for (int i = 0; i < limits.length; i++) limits[i] = MachineUpgradeProfiles.limit(i);
 		if (!Arrays.equals(ids, shownBees) || !work.feeding().equals(shownFeeding) || !work.upgrades().equals(shownUpgrades) || !Arrays.equals(limits, shownLimits)) {

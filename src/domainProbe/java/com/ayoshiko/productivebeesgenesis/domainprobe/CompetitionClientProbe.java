@@ -59,6 +59,9 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (MachineWorkspaceProbe.enabled() && stage >= 750) {
+                var reply = MachineWorkspaceClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (WorkspaceProbe.enabled() && stage >= 700) {
                 var reply = WorkspaceClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
             }

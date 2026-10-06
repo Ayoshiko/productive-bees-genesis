@@ -479,3 +479,16 @@ AE2 writer 的 600–612 十三阶段覆盖实际点击入口、九条可合成�
 本步仅关闭 i2a 网络工作台，独立多方块的统一布局、条件吞吐／插件等完整机器详情、ME 双向存取和账本／ME 配方补格仍需各自实现；完整 i2、D18／D19／T00 和性能／故障耐久门均保持开放。未测量 MSPT 或宣称增加视图后无性能开销。
 
 同日探针适配补充：功能提交 `eb1fb62` 验收后，三个既有开发客户端 `CraftingClient`／`MeBridgeClient`／`MeCraftingClient` 改用实际界面 getGuiLeft/getGuiTop，普通合成探针只在紧凑布局点击合成侧签，避免旧 304px 假设造成误点。仅执行 `compileDomainProbeJava -PnetworkDomainProbe --no-daemon --no-configuration-cache`，10 秒通过；生产 compileJava 为 UP-TO-DATE，JAR SHA-256 仍为 `e7fd89d1c77f8af0410b98daa8aca0ce82405321068506acb2ca7435f5c33517`。该后续提交只改变测试驱动和本条证据，未重跑旧合成／ME 场景，原 gate 源码指纹仍对应功能提交，不改写历史运行记录。
+
+<a id="s10-114"></a>
+### 10.114 D18i2b 独立机器工作台与基础详情（2026-10-06，本步范围已验收）
+
+在网络 worktree 的 `e76583e` 上将 MachineScreen 扩展为自适应工作台。足够宽的视口同时保留左侧六蜂位／逐路插件管理、三页机器详情以及右侧无线合成／真实背包；小视口沿用 230×226 分页，本地菜单只显示实际具备的管理／详情／背包，不建立无线材料账户。MachineMenuDetails 从当前形成绑定及 CombinedMachineWork 有界采样位置／世界轴向尺寸、FE 容量、六蜂位／三进程、有限缓存占用、当前周期进度／并行和待交付蜂位／作业数。49 个 long 显示字段按 16 位拆分，沿原菜单同步变化，每十 tick 采样，不扫描世界、不匹配配方、不参与权威操作。机器菜单协议升至 8，终端协议 23、资产格式和无线账户保持。合同／布局／参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.33](bee-processing-network-references.md#s13-33)。
+
+编译预检修正了文案辅助方法以 Component 返回却调用 MutableComponent.append 的类型错误；使用明确的 MutableComponent 返回类型后完成构建。既有 MachineVisualClientProbe 与 WirelessClient 的历史坐标场景显式保留紧凑布局，新宽屏由专用场景覆盖；未为坐标适配重跑旧大矩阵。命令为 `gradle/network-concurrent-gate.ps1 -RunId d18i2b-machine-workspace-20261006-first -MachineWorkspace -Combination noae2`，45 项终端／会话定向测试零失败／错误／跳过，build、verifyReleaseArtifact 与开发源集编译通过，实际游戏场景一次通过。
+
+运行基线为 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368，无 AE2；服务器 PID 22380，两名实际 TCP 客户端正常登录、保存并退出。复用桥接夹具的无线多方块入口，在拆机前插入 750–757 八阶段：核对 12,345／1,000,000 FE、六蜂位／三进程、3 件物品与 1,000／64,000 mB、控制器位置及非零尺寸；切换概况／蜂位／离心详情；实际装入和取回一个蜂箱速度升级；管理仍可见时把一块原木放入无线材料格并取回；最后在 320×240 和宽屏之间往返。服务器逐阶段核对机器 FE、缓存和原木／升级守恒，世界无新增掉落物；随后沿原流程拆除结构并拒绝旧菜单。
+
+六张工作台截图已目视核对，宽屏升级计数、材料／结果预览、真实背包、位置与缓存概况可见，紧凑页可读；原版新手／配方提示占据右侧一部分空白区。本次夹具为空蜂位及空闲离心进程，非零生产进度和已付费阻塞显示只做源码投影核对，不声称新增了这些运行证据；本地接口入口与完整 JEI 填格也未重复运行。证据索引为 `build/network-gates/d18i2b-machine-workspace-20261006-first/gate.json`，`recoveryIncluded=false`；无资产格式变更，未重复重启读取、AE2 下单或性能矩阵。交付审计检查源文件／证据哈希、测试 XML、JAR、文档链接及 UTF-8／JSON／暂存范围。
+
+本步关闭 i2b 的布局与基础详情范围，完整条件吞吐、有限产物便捷存取、更详细的限制原因、账本／ME 材料补格及完整 i2／D18／D19／T00 仍未完成。下一步按路线推进 e3b 账本补格；没有 Spark／MSPT 或故障耐久性的新结论。

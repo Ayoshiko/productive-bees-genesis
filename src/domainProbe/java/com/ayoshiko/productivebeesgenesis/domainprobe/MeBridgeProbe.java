@@ -85,6 +85,7 @@ final class MeBridgeProbe {
 		}
 		if (stage == 509) {
 			require(player.containerMenu instanceof MachineMenu menu && menu.wireless() && menu.meStatus() == expected(stage, true), "Machine menu did not use its own bridge");
+			if (MachineWorkspaceProbe.enabled() && !MachineWorkspaceProbe.complete()) { MachineWorkspaceProbe.seed(player); return 750; }
 			old = machineBridge.link(); WirelessMachineFixture.breakStructure();
 		}
 		if (stage == 510) {

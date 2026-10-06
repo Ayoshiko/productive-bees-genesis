@@ -397,3 +397,8 @@ ICraftingCPU 公共接口不提供任务 UUID；对已核实的原生 CraftingCP
 ### 13.32 网络工作台的双视图复用（2026-10-06）
 
 以本 worktree 的 `02b74ca` 为基线读取 `TerminalClientState`、`NetworkSelectionSession`、`CoreTerminalSubscription`、`TerminalSubscriptionService`、`TerminalCraftingMenu` 及 JEI 转移入口。采用现有会话／代际校验、当前页续租、全服公平调度、数量索引 retain/release 和真实材料账户；常驻产物区使用独立会话，但只在原队列条目中轮流执行现有查询步。不得把管理页 generation 当作产物授权，也不复制库存／合成服务。界面复用本项目九宫格皮肤、物品预览与原版控件，延续 [13.24](#s13-24) 的分区原则；本步未更新参考副本或引入外部贴图／依赖。
+
+<a id="s13-33"></a>
+### 13.33 独立机器工作状态与菜单详情（2026-10-06）
+
+以网络分支 `e76583e` 为基线读取 `MachineMenu`、`MachineWorkService.access/commit`、`MachineAssets.work/commit`、`CombinedMachineWork`、`FiniteProductBuffer`、`MachineUpgradeProfiles`、`BeeRecord.drained` 与 `CentrifugeJob.paid`。详情沿当前工作根和形成绑定读取，不调用升级预估或配方重算；旧周期已固定的进度／并行与下一周期配置不能混用。采用原菜单 ContainerData 的 16 位拆分传递有符号坐标及 long 数量，固定六蜂位／三进程字段，十 tick 采样且只同步变化；现有读写守卫和无线材料账户继续负责操作。未引入第三方 UI／可选模组类型，未更新外部参考副本。

@@ -96,6 +96,8 @@ final class WirelessClient {
 	}
 	private static CraftingClient.Reply machineCrafting(Minecraft client, int stage) throws Exception {
 		if (!(client.player.containerMenu instanceof MachineMenu menu)) return null;
+		// 此历史回归保留紧凑分页；宽屏交互由机器工作台专用场景覆盖。
+		if (client.screen instanceof com.ayoshiko.productivebeesgenesis.multiblock.client.MachineScreen screen && screen.getXSize() != 230) { screen.resize(client, 320, 240); return null; }
 		var state = menu.craftingState(); long now = Util.getMillis();
 		if (stage == 353) { PacketDistributor.sendToServer(recipeReplay); return ack(); }
 		if (stage == 350 || stage == 357) {
