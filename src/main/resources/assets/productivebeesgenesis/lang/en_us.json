@@ -1,4 +1,6 @@
 {
+  "screen.productivebeesgenesis.machine.crafting_hint": "Left-click to insert, right-click to return; Shift for a stack. Materials stay with this wireless device.",
+  "screen.productivebeesgenesis.machine.crafting_ready": "Click the result to craft; materials stay with the device",
   "screen.productivebeesgenesis.network.terminal.fill_wait": "Synchronizing; please wait before filling the recipe",
   "screen.productivebeesgenesis.network.terminal.fill_unsupported": "This recipe does not support automatic filling yet",
   "screen.productivebeesgenesis.network.result.missing_ingredients": "Missing ingredients; check the crafting grid and inventory",

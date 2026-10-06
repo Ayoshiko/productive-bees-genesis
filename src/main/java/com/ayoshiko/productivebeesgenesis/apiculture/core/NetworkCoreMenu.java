@@ -9,7 +9,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.terminal.*;
 import java.util.UUID;
 
 /** 核心菜单生命周期、只读同步与命令入口；资产变化委托独立有限交换服务。 */
-public final class NetworkCoreMenu extends AbstractContainerMenu {
+public final class NetworkCoreMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host {
 	private final NetworkCoreBlockEntity core;
 	private final MemberUpgradeMenuAccess memberAccess;
 	private final boolean memberScoped;
@@ -28,7 +28,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	private TerminalClientState clientState;
 	private CoreTerminalSubscription subscription;
 	private CoreAutomaticBeeInput automaticBee;
-	private CoreCraftingMenu crafting;
+	private TerminalCraftingMenu crafting;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -97,7 +97,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 		}; addDataSlots(data); addInventory(inventory); addCrafting();
 	}
 	private void addCrafting() {
-		if (!dedicatedTerminal()) return; crafting = new CoreCraftingMenu(this);
+		if (!dedicatedTerminal()) return; crafting = new TerminalCraftingMenu(this);
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 	}
 	public void layoutCrafting(boolean visible, int top) {
@@ -110,7 +110,9 @@ public final class NetworkCoreMenu extends AbstractContainerMenu {
 	public ItemStack craftingItem(int index) { return crafting == null ? ItemStack.EMPTY : crafting.item(index); }
 	public long craftingGeneration() { long value = 0; for (int i = 0; i < 4; i++) value |= (data.get(30 + i) & 65535L) << (i * 16); return value; }
 	public int craftingStatus() { return data.get(34); }
-	TerminalCraftingAccount craftingAccount(net.minecraft.server.level.ServerPlayer player) {
+	@Override public AbstractContainerMenu craftingMenu() { return this; }
+	@Override public UUID craftingSession() { return terminalSession; }
+	@Override public TerminalCraftingAccount craftingAccount(net.minecraft.server.level.ServerPlayer player) {
 		return terminalAccess != null && ModConfig.SERVER.beeNetwork.enabled.get() && exchangeCore(player) != null ? terminalAccess.crafting(player) : null;
 	}
 	TerminalReply craftingRequest(net.minecraft.server.level.ServerPlayer player, TerminalRequest request) {

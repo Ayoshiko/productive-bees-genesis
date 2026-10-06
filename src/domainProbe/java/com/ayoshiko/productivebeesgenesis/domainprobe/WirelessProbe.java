@@ -24,6 +24,10 @@ final class WirelessProbe {
 	private static UUID device;
 	private static TerminalCraftingAccount.State material;
 	private static NetworkCoreMenu previous;
+	private static MachineMenu previousMachine;
+	private static TerminalCraftingAccount.State craftingStable;
+	private static List<ItemStack> craftingInventory, beforeFull;
+	private static boolean machineCrafting;
 	private static final JsonArray stages = new JsonArray();
 	static TerminalCraftingAccount account(ServerPlayer player) {
 		var factory = new SavedData.Factory<TerminalCraftingAccount>(() -> { throw new IllegalStateException("Missing wireless account"); }, TerminalCraftingAccount::load, null);
@@ -50,6 +54,7 @@ final class WirelessProbe {
 	static boolean ready(int stage) { return stage != 342 || WirelessMachineFixture.ready(); }
 	static int advance(NetworkCoreBlockEntity core, List<ServerPlayer> players, int stage, Map<UUID, CompetitionSignal> replies) {
 		var owner = players.getFirst(); var guest = players.get(1); var state = account(owner).state();
+		if (stage >= 350 && stage <= 357) return advanceCrafting(owner, stage, replies.get(owner.getUUID()));
 		if (stage == 330) require(players.stream().allMatch(p -> p.containerMenu instanceof NetworkCoreMenu m && m.wirelessTerminal()), "Real item use did not open wireless menus");
 		if (stage == 331) require(state.grid().getFirst().getCount() == 3, "Wireless material insert failed");
 		if (stage == 333) {
@@ -75,9 +80,10 @@ final class WirelessProbe {
 		}
 		if (stage == 343) require(owner.containerMenu instanceof MachineMenu m && m.wireless() && owner.distanceToSqr(WirelessMachineFixture.controller().getBlockPos().getCenter()) > 64, "Remote machine did not open beyond local distance");
 		if (stage == 344) WirelessMachineFixture.checkFood(1);
-		if (stage == 345) { WirelessMachineFixture.checkFood(0); WirelessMachineFixture.breakStructure(); }
+		if (stage == 345) WirelessMachineFixture.checkFood(0);
 		if (stage == 346) {
 			require(!(owner.containerMenu instanceof MachineMenu) && material == state, "Broken machine kept wireless authority");
+			require(previousMachine.terminalCrafting(owner, new TerminalRequest(previousMachine.containerId, previousMachine.session(), 999, TerminalRequest.Operation.CRAFT_TAKE, 1, -1, -1, -1, 1), null) == null, "Closed machine accepted crafting");
 			require(NetworkContent.WIRELESS_COMBINED.get().bind(owner, owner.getMainHandItem(), core), "Cannot rebind existing device to original network");
 		}
 		if (stage == 347) require(owner.containerMenu instanceof NetworkCoreMenu && material == state, "Target switch lost device materials");
@@ -93,11 +99,50 @@ final class WirelessProbe {
 			guest.connection.teleport(13.5, 100, 2.5, 42, 0);
 		}
 		if (stage == 349) { for (var p : players) p.connection.teleport(8.5, 100, 10.5, 0, 0); CraftingProbe.open(core, players, true); return -1; }
-		var record = new JsonObject(); record.addProperty("stage", stage); stages.add(record); return stage + 1;
+		var record = new JsonObject(); record.addProperty("stage", stage); stages.add(record); return stage == 345 ? 350 : stage + 1;
+	}
+	private static List<ItemStack> materialInventory(ServerPlayer player) {
+		var copy = TerminalCraftingPlan.copy(player.getInventory().items); copy.set(8, ItemStack.EMPTY); return copy;
+	}
+	private static int advanceCrafting(ServerPlayer owner, int stage, CompetitionSignal reply) {
+		var state = account(owner).state();
+		if (stage == 350) {
+			require(material == state && owner.containerMenu instanceof MachineMenu, "Machine did not share the network device account");
+			previousMachine = (MachineMenu) owner.containerMenu;
+			owner.getInventory().setItem(0, new ItemStack(Items.OAK_PLANKS, 8)); owner.containerMenu.broadcastChanges();
+		}
+		if (stage == 351) {
+			for (int slot : new int[]{0, 1, 3, 4}) require(state.grid().get(slot).is(Items.OAK_PLANKS) && state.grid().get(slot).getCount() == 1, "Machine JEI grid mismatch");
+			require(state.grid().stream().mapToInt(ItemStack::getCount).sum() == 4
+					&& owner.getInventory().items.stream().filter(s -> s.is(Items.OAK_LOG)).mapToInt(ItemStack::getCount).sum() == 2, "Machine JEI lost prior material");
+		}
+		if (stage == 352) {
+			require(state.grid().stream().allMatch(ItemStack::isEmpty) && owner.getInventory().items.stream().filter(s -> s.is(Items.CRAFTING_TABLE)).mapToInt(ItemStack::getCount).sum() == 1, "Machine crafted more than once");
+			craftingStable = state; craftingInventory = materialInventory(owner);
+		}
+		if (stage == 353 || stage == 354) {
+			require(state == craftingStable && ItemStack.listMatches(craftingInventory, materialInventory(owner)), "Machine replay/stale command changed materials");
+			if (stage == 354) require(reply.status() == TerminalReply.Status.STALE.ordinal(), "Stale machine generation accepted");
+		}
+		if (stage == 355) {
+			require(state.grid().getFirst().is(Items.OAK_LOG) && state.grid().getFirst().getCount() == 2, "Machine insert lost device material");
+			beforeFull = TerminalCraftingPlan.copy(owner.getInventory().items); craftingStable = state;
+			for (int i = 0; i < 36; i++) if (i != 8) owner.getInventory().setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+			craftingInventory = materialInventory(owner); owner.containerMenu.broadcastChanges();
+		}
+		if (stage == 356) {
+			require(state == craftingStable && ItemStack.listMatches(craftingInventory, materialInventory(owner))
+					&& reply.status() == TerminalReply.Status.NO_SPACE.ordinal(), "Full machine inventory consumed recipe");
+			for (int i = 0; i < 36; i++) if (i != 8) owner.getInventory().setItem(i, beforeFull.get(i));
+			owner.containerMenu.broadcastChanges();
+		}
+		var row = new JsonObject(); row.addProperty("stage", stage); stages.add(row);
+		if (stage == 357) { material = state; machineCrafting = true; WirelessMachineFixture.breakStructure(); return 346; }
+		return stage + 1;
 	}
 	static void capture(NetworkCoreBlockEntity core, CompoundTag manifest) {
 		var player = ((ServerLevel) core.getLevel()).getServer().getPlayerList().getPlayer(CompetitionServerProbe.OWNER);
-		manifest.putUUID("wireless-device", device); manifest.put("wireless-account", account(player).save(new CompoundTag(), player.registryAccess()));
+		manifest.putBoolean("wireless-machine-crafting", machineCrafting); manifest.putUUID("wireless-device", device); manifest.put("wireless-account", account(player).save(new CompoundTag(), player.registryAccess()));
 	}
 	static void recovered(NetworkCoreBlockEntity core, CompoundTag manifest) {
 		device = manifest.getUUID("wireless-device"); var player = ((ServerLevel) core.getLevel()).getServer().getPlayerList().getPlayer(CompetitionServerProbe.OWNER);
@@ -105,7 +150,8 @@ final class WirelessProbe {
 		require(WirelessTerminalAccess.open(player, InteractionHand.MAIN_HAND), "Normal saved wireless item could not reopen");
 	}
 	static void report(net.minecraft.server.MinecraftServer server, CompoundTag manifest, JsonObject report, boolean reader) throws Exception {
-		require(reader || stages.size() == 19, "Wireless stages incomplete");
+		require(reader || stages.size() == 27 && machineCrafting, "Wireless stages incomplete");
+		report.addProperty("wirelessMachineCrafting", reader ? manifest.getBoolean("wireless-machine-crafting") : machineCrafting);
 		var path = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(TerminalCraftingAccount.wirelessName(manifest.getUUID("wireless-device")) + ".dat");
 		require(NbtIo.readCompressed(path, NbtAccounter.unlimitedHeap()).getCompound("data").equals(manifest.getCompound("wireless-account")), "Wireless save differs");
 		report.addProperty("wirelessFile", path.toAbsolutePath().toString()); report.add("wirelessStages", stages);

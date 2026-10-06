@@ -1,8 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore;
-import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalPayloads;
-import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalSequence;
+import com.ayoshiko.productivebeesgenesis.apiculture.terminal.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCraftingMenu;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCraftingAccount;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades;
@@ -19,9 +20,10 @@ import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 
 /** 六个蜂位的有限管理视图；原版槽只读，所有资产变化经带会话和序号的命令。 */
-public final class MachineMenu extends AbstractContainerMenu {
+public final class MachineMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host {
 	// 回执字段最后发送，客户端看到完成序号时，本轮升级数量和上限已同步。
-	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4, DATA_COUNT = WIRELESS_DATA + 3;
+	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4,
+			CRAFTING_DATA = WIRELESS_DATA + 3, DATA_COUNT = CRAFTING_DATA + 5;
 	private final MachineControllerEntity core;
 	private final MachineDirectory.Binding binding;
 	private final MachinePartEntity origin;
@@ -34,7 +36,10 @@ public final class MachineMenu extends AbstractContainerMenu {
 	private List<FeedingSlotStore.Slot> shownFeeding;
 	private MachineUpgrades shownUpgrades;
 	private int[] shownLimits;
-	private boolean closed;
+	private boolean closed, exchanging;
+	private final TerminalSequence craftingSequences = new TerminalSequence();
+	private TerminalClientState craftingState;
+	private TerminalCraftingMenu crafting;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(MachineContent.MENU.get(), id); buffer.readBlockPos(); session = buffer.readUUID();
@@ -53,6 +58,7 @@ public final class MachineMenu extends AbstractContainerMenu {
 		viewer = inventory.player.getUUID(); binding = core.handle.binding().orElseThrow(); initialize(inventory); refresh();
 	}
 	private void initialize(Inventory inventory) {
+		craftingState = new TerminalClientState(containerId, session); crafting = new TerminalCraftingMenu(this);
 		addDataSlots(data);
 		for (int row = 0; row < 4; row++) for (int col = 0; col < 9; col++) {
 			int index = row == 3 ? col : (row + 1) * 9 + col;
@@ -61,6 +67,7 @@ public final class MachineMenu extends AbstractContainerMenu {
 				@Override public boolean mayPickup(Player player) { return false; }
 			});
 		}
+		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
 	static boolean openWireless(MachineControllerEntity core, ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession device) {
@@ -92,6 +99,39 @@ public final class MachineMenu extends AbstractContainerMenu {
 				|| player.distanceToSqr(origin.getBlockPos().getCenter()) > 64) return false;
 		var pos = origin.getBlockPos(); var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
 		return chunk != null && chunk.getBlockEntity(pos) == origin;
+	}
+	@Override public AbstractContainerMenu craftingMenu() { return this; }
+	@Override public UUID craftingSession() { return session; }
+	@Override public TerminalCraftingAccount craftingAccount(ServerPlayer player) {
+		if (wireless == null || controller(player) == null) return null;
+		try { return TerminalCraftingAccount.wireless(player, wireless.binding().device(), core.ownerId(), false); }
+		catch (RuntimeException error) {
+			wireless.revoke(); com.mojang.logging.LogUtils.getLogger().error("Wireless machine crafting unavailable: {}", wireless.binding().device(), error); return null;
+		}
+	}
+	public TerminalClientState craftingState() { return craftingState; }
+	public long craftingGeneration() { return number(CRAFTING_DATA); }
+	public int craftingStatus() { return data.get(CRAFTING_DATA + 4); }
+	public ItemStack craftingItem(int index) { return crafting.item(index); }
+	public void layoutCrafting(boolean visible) {
+		if (core != null) return; crafting.visible(visible);
+		for (int i = 0; i < 10; i++) {
+			var slot = crafting.slot(i, i == 9 ? 126 : 35 + i % 3 * 18, i == 9 ? 60 : 42 + i / 3 * 18);
+			slot.index = 36 + i; slots.set(slot.index, slot);
+		}
+	}
+	public void acceptTerminalReply(TerminalReply reply) {
+		if (core == null && !closed) craftingState.accept(reply, net.minecraft.Util.getMillis());
+	}
+	public TerminalReply terminalCrafting(ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation recipe) {
+		if (!player.server.isSameThread() || exchanging || wireless == null || controller(player) == null
+				|| request.containerId() != containerId || !session.equals(request.session())
+				|| !TerminalRequest.crafting(request.operation()) || !craftingSequences.begin(request.sequence())) return null;
+		exchanging = true;
+		try {
+			if (!TerminalPayloads.allow(player) || !wireless.charge(player, true)) return null;
+			return recipe == null ? crafting.handle(player, request) : crafting.fill(player, request, recipe);
+		} finally { exchanging = false; craftingSequences.finish(); }
 	}
 	public UUID session() { return session; }
 	public long viewRevision() { return number(24); }
@@ -146,8 +186,9 @@ public final class MachineMenu extends AbstractContainerMenu {
 	}
 	/** 注册处理器与既有服务器夹具共享的正式入口；拒绝也消费序号。 */
 	public void request(ServerPlayer player, MachineMenuRequest request) {
-		if (!player.serverLevel().getServer().isSameThread() || request.containerId() != containerId || !session.equals(request.session())
+		if (!player.serverLevel().getServer().isSameThread() || exchanging || request.containerId() != containerId || !session.equals(request.session())
 				|| controller(player) == null || !sequences.begin(request.sequence())) return;
+		exchanging = true;
 		try {
 			number(ACKNOWLEDGED_DATA, request.sequence());
 			if (!TerminalPayloads.allow(player) || wireless != null && !wireless.charge(player, true) || !allowsAction(request.action(), request.slot())) { data.set(32, MachineExchange.Status.UNAVAILABLE.ordinal()); return; }
@@ -155,15 +196,22 @@ public final class MachineMenu extends AbstractContainerMenu {
 			if (request.viewRevision() != viewRevision) { data.set(32, MachineExchange.Status.STALE.ordinal()); return; }
 			var result = MachineExchange.exchange(this, player, MachineExchange.Action.values()[request.action()], request.slot(), request.inventorySlot(), request.amount(), false);
 			data.set(32, result.status().ordinal()); refresh();
-		} finally { sequences.finish(); }
+		} finally { exchanging = false; sequences.finish(); }
 	}
 	@Override public void broadcastChanges() {
 		if (wireless != null && !closed && (!stillValid(viewingPlayer) || !wireless.charge(viewingPlayer, false))) {
 			if (viewingPlayer instanceof ServerPlayer player && player.containerMenu == this) { player.closeContainer(); return; }
 		}
+		if (viewingPlayer instanceof ServerPlayer player && !exchanging) {
+			crafting.refresh(player, false); number(CRAFTING_DATA, crafting.generation()); data.set(CRAFTING_DATA + 4, crafting.flag());
+		}
 		refresh(); super.broadcastChanges();
 	}
 	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
 	@Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
-	@Override public void removed(Player player) { closed = true; sequences.close(); super.removed(player); }
+	@Override public void removed(Player player) {
+		// 客户端打开 JEI 也会调用 removed；只有服务端真正关闭菜单才撤销会话和订阅。
+		if (core != null) { closed = true; sequences.close(); craftingSequences.close(); craftingState.close(); crafting.pause(); }
+		super.removed(player);
+	}
 }

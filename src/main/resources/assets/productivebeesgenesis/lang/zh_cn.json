@@ -1,4 +1,6 @@
 {
+  "screen.productivebeesgenesis.machine.crafting_hint": "左键放入，右键取回；Shift 批量。材料随此无线设备保管。",
+  "screen.productivebeesgenesis.machine.crafting_ready": "点击结果制作；材料由无线设备保管",
   "screen.productivebeesgenesis.network.terminal.fill_wait": "正在同步，请稍后填入配方",
   "screen.productivebeesgenesis.network.terminal.fill_unsupported": "此配方暂不支持自动填格",
   "screen.productivebeesgenesis.network.result.missing_ingredients": "材料不足，请检查材料格与背包",

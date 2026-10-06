@@ -76,7 +76,7 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	public static String wirelessName(UUID device) { return "pbg_wireless_crafting_" + device; }
 	/** 已有设备缺失文件时拒绝；只有首次绑定新 UUID 可以建立空账户。 */
-	static TerminalCraftingAccount wireless(net.minecraft.server.level.ServerPlayer player, UUID device, UUID owner, boolean create) {
+	public static TerminalCraftingAccount wireless(net.minecraft.server.level.ServerPlayer player, UUID device, UUID owner, boolean create) {
 		if (!player.server.isSameThread()) throw new IllegalStateException("Crafting accounts belong to the server thread");
 		var name = wirelessName(device); var storage = player.server.overworld().getDataStorage();
 		var factory = new SavedData.Factory<TerminalCraftingAccount>(() -> { throw new IllegalStateException("Explicit account creation required"); }, TerminalCraftingAccount::load, null);

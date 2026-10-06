@@ -13,8 +13,14 @@ import net.minecraft.world.level.GameRules;
 import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReply.Status.*;
 
 /** 菜单的有限合成投影与事务；原版槽仅同步副本，所有修改仍走有序命令。 */
-final class CoreCraftingMenu {
-	private final NetworkCoreMenu menu;
+public final class TerminalCraftingMenu {
+	/** 两类菜单提供各自已经授权的账户，制作与余料提交只维护一份实现。 */
+	public interface Host {
+		net.minecraft.world.inventory.AbstractContainerMenu craftingMenu();
+		UUID craftingSession();
+		TerminalCraftingAccount craftingAccount(ServerPlayer player);
+	}
+	private final Host menu;
 	private final SimpleContainer display = new SimpleContainer(10);
 	private boolean visible, subscribed;
 	private long generation, serial, nextCheck;
@@ -23,20 +29,20 @@ final class CoreCraftingMenu {
 	private TerminalCraftingAccount.State shown;
 	private RecipeHolder<CraftingRecipe> recipe;
 	private String failure;
-	CoreCraftingMenu(NetworkCoreMenu menu) { this.menu = menu; }
-	Slot slot(int index, int x, int y) {
+	public TerminalCraftingMenu(Host menu) { this.menu = menu; }
+	public Slot slot(int index, int x, int y) {
 		return new Slot(display, index, x, y) {
 			@Override public boolean mayPlace(ItemStack stack) { return false; }
 			@Override public boolean mayPickup(Player player) { return false; }
 			@Override public boolean isActive() { return visible; }
 		};
 	}
-	void visible(boolean value) { visible = value; }
-	long generation() { return generation; }
-	int flag() { return flag; }
-	ItemStack item(int index) { return display.getItem(index).copy(); }
-	void pause() { subscribed = false; shownAccount = null; shown = null; recipe = null; generation = 0; flag = 0; display.clearContent(); }
-	void refresh(ServerPlayer player, boolean force) {
+	public void visible(boolean value) { visible = value; }
+	public long generation() { return generation; }
+	public int flag() { return flag; }
+	public ItemStack item(int index) { return display.getItem(index).copy(); }
+	public void pause() { subscribed = false; shownAccount = null; shown = null; recipe = null; generation = 0; flag = 0; display.clearContent(); }
+	public void refresh(ServerPlayer player, boolean force) {
 		if (!subscribed) return;
 		long now = player.server.overworld().getGameTime(); if (!force && now < nextCheck) return; nextCheck = now + 10;
 		var account = menu.craftingAccount(player);
@@ -58,7 +64,7 @@ final class CoreCraftingMenu {
 			failure = error.toString(); shownAccount = account; shown = state; recipe = null; display.setItem(9, ItemStack.EMPTY); generation = 0; flag = 0;
 		}
 	}
-	TerminalReply handle(ServerPlayer player, TerminalRequest request) {
+	public TerminalReply handle(ServerPlayer player, TerminalRequest request) {
 		if (request.operation() == TerminalRequest.Operation.CRAFTING) {
 			if (request.generation() != 0 || request.row() != -1 || request.targetSlot() != -1 || request.inventorySlot() != -1 || request.amount() != 0)
 				return reply(request, INVALID, 0);
@@ -77,7 +83,7 @@ final class CoreCraftingMenu {
 		} finally { account.busy(false); }
 		refresh(player, true); return result;
 	}
-	TerminalReply fill(ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation id) {
+	public TerminalReply fill(ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation id) {
 		subscribed = true;
 		var account = menu.craftingAccount(player);
 		if (account == null || account.busy() || account.state().uncertain() || !account.state().pending().isEmpty()) return reply(request, UNAVAILABLE, 0);
@@ -148,7 +154,7 @@ final class CoreCraftingMenu {
 		var paid = account.state(); var processed = output.copy();
 		try {
 			processed.onCraftedBy(player.serverLevel(), player, output.getCount());
-			var context = new TransientCraftingContainer(menu, 3, 3); for (int i = 0; i < 9; i++) context.setItem(i, grid.get(i).copy());
+			var context = new TransientCraftingContainer(menu.craftingMenu(), 3, 3); for (int i = 0; i < 9; i++) context.setItem(i, grid.get(i).copy());
 			net.neoforged.neoforge.event.EventHooks.firePlayerCraftingEvent(player, processed, context);
 			player.triggerRecipeCrafted(selected, positioned.input().items());
 			if (!selected.value().isSpecial()) player.awardRecipes(List.of(selected));
@@ -183,6 +189,6 @@ final class CoreCraftingMenu {
 				|| player.getRecipeBook().contains(found)) ? found : null;
 	}
 	private TerminalReply reply(TerminalRequest request, TerminalReply.Status status, int moved) {
-		return new TerminalReply(menu.containerId, menu.terminalSession(), request.sequence(), status, moved, 0, null);
+		return new TerminalReply(menu.craftingMenu().containerId, menu.craftingSession(), request.sequence(), status, moved, 0, null);
 	}
 }

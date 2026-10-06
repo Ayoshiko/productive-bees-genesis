@@ -64,7 +64,12 @@ import java.util.Set;
 public class ProductiveBeesGenesisJEI implements IModPlugin {
 	private IJeiRuntime terminalRuntime;
 	@Override public void registerRecipeTransferHandlers(mezz.jei.api.registration.IRecipeTransferRegistration registration) {
-		registration.addRecipeTransferHandler(new NetworkTerminalRecipeTransfer(registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
+		registration.addRecipeTransferHandler(new NetworkTerminalRecipeTransfer<>(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreMenu.class,
+				com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreMenu::clientState, com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreMenu::dedicatedTerminal,
+				registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
+		registration.addRecipeTransferHandler(new NetworkTerminalRecipeTransfer<>(com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu.class,
+				com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::craftingState, com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::wireless,
+				registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
 	}
 	@Override public void onRuntimeUnavailable() { terminalRuntime = null; }
 

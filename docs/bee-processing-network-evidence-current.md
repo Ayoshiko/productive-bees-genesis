@@ -412,3 +412,16 @@ D19a 的 `TerminalPermissionClient`／`TerminalPermissionProbe` 为上次中断�
 最终 `d18e3a-jei-fill-20261006-click` 使用 `-Crafting -RecipeFill -CraftingWriteOnly -Combination noae2`。45 项终端／选择会话定向测试零失败／错误／跳过；build、verifyReleaseArtifact、开发源集编译通过，后续仅修改探针的运行复用未变化测试和生产产物。NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85、JEI 19.39.0.368；专服 PID 9416、两名实际 TCP 玩家、两次登录并正常退出。复用原 29 阶段合成回归，新增 400–406 阶段通过实际 JEI “＋”按下／松开、有序四格、最大两份、单次制作、缺料不变、重放不变、无序命名原木填入和正式材料账户保存；批量意图通过 JEI 正式处理器传入，未模拟实体 Shift 键。服务端夹具还验证标签选项竞争、组件变体不合栈、已有整栈保留、满背包拒绝和规划不修改输入，世界无新增掉落物。最终合成截图已目视核对，九格、结果和背包显示一致。
 
 运行记录与原始日志在 `build/network-gates/d18e3a-jei-fill-20261006-click` 及其引用目录；delivery-audit.json 汇总证据哈希、最终源码指纹、测试 XML、产物和文档／编码／暂存复核。本步关闭网格／背包范围 e3a，不重复已有 D18e2／f1 的跨 JVM、D19a 权限矩阵或有／无 AE2 组合。未新增无线实物填格、故障断电或性能证据；账本／ME 自动材料来源、f2、多方块统一合成、AE2 下单／任务及完整 D18／D19／T00 仍开放。
+
+<a id="s10-109"></a>
+### 10.109 D18f2b 无线多方块合成页与跨目标材料保管（2026-10-06，本步已验收）
+
+在网络 worktree 的 `0946206` 上让多方块无线菜单直接访问同一设备 UUID／owner 的 schema 2 九格账户。原 CoreCraftingMenu 更名为 TerminalCraftingMenu，只将实际菜单、session 和已授权账户提为三个宿主方法，网络与多方块共用制作、组件余料、已付费结果和异常隔离逻辑。MachineMenu 增加十个只读合成槽和有限显示状态，合成请求与本机操作分别消费序号、共用菜单重入锁及全服请求／制作预算；新入口继续核对实际设备、结构实例与代际、所有者、范围和 FE。JEI 按两种菜单类注册同一转移逻辑，服务器无 JEI 类型引用。终端协议 20、独立机菜单协议 5；账户与网络存档格式均不变。合同与布局见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)，采用边界见[13.29](bee-processing-network-references.md#s13-29)。
+
+`d18f2b-machine-crafting-20261006-first` 在真实 JEI “＋”处暴露客户端菜单被提前关闭：原版 AbstractContainerScreen 切到 JEI 也调用 menu.removed，原多方块关闭逻辑因而撤销本地状态。核对 1.21.1 源码后改为仅服务端实际关闭时撤销会话／订阅；没有放宽服务端有效性或序号校验。探针中止后出现的 JEI runtime 卸载渲染异常及清理进程竞态保留于首次日志，不作为第二个资产故障，也不删除失败记录。
+
+最终 `d18f2b-machine-crafting-20261006-jei` 使用 `-Crafting -Wireless -Combination noae2` 完成 writer／reader：45 项定向测试零失败／错误／跳过，build／verifyReleaseArtifact／开发源集编译通过；已有结果在相同源码下由 Gradle 增量复用。运行基线为 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368，不加载 AE2。writer PID 25344、reader PID 24780，四个独立客户端进程完成四次实际 TCP 登录，最大同时两人，正常停服退出。
+
+复用原有线合成 29 阶段和无线绑定／范围／FE／权限／双引用竞争，增加 350–357 八阶段：在多方块合成页看见原网络留下的两块原木，实际 JEI “＋”放入四格木板并归还原木，真实结果格只制作一次，重放和伪造 generation 不动资产，重新装回两块原木，满背包不扣料，切回本机／合成页保留材料；拆结构后旧 MachineMenu 的合成请求拒绝，再绑定原网络仍见同一设备材料。未向机器物理槽或无限账本搬移合成资产，世界无新增掉落物。500×350 GUI 截图目视核对十个合成槽、背包、切页和 FE 显示；截图中的 NO_SPACE 为前一阶段实际拒绝结果。
+
+独立 reader 正常登录读取玩家文件、完整设备组件／FE 和同一材料账户，恢复已回绑网络的设备并核对保存内容，没有手工注入玩家 NBT；本步没有新增“仍绑定已形成机器”的重启场景。全部原始文件与证据哈希由 `build/network-gates/d18f2b-machine-crafting-20261006-jei/gate.json` 定位，交付审计同时保存产物、测试 XML、源码指纹及文档／编码核对。本步关闭无线多方块合成 f2b，设备合并 f2a、完整工作台布局／机器信息与 AE2 下单入口、账本／ME 补格及 D18／D19／T00 父门保持开放；不新增性能、故障断电或完整可选依赖矩阵结论。

@@ -53,18 +53,21 @@ final class RecipeFillClient {
 			step++; return null;
 		}
 		if (step == 2 && stage == 400) {
-			var screen = client.screen;
-			var layoutsField = screen.getClass().getDeclaredField("layouts"); layoutsField.setAccessible(true); var layouts = layoutsField.get(screen);
-			var entriesField = layouts.getClass().getDeclaredField("recipeLayoutsWithButtons"); entriesField.setAccessible(true);
-			var entries = (List<?>) entriesField.get(layouts); require(entries.size() == 1, "JEI recipe view was not ready");
-			var layout = ((mezz.jei.gui.recipes.IRecipeLayoutWithButtons<?>) entries.getFirst()).getRecipeLayout();
-			var area = layout.getRect(); var button = layout.getSideButtonArea(0);
-			double x = area.getX() + button.getX() + button.getWidth() / 2.0, y = area.getY() + button.getY() + button.getHeight() / 2.0;
-			require(screen.mouseClicked(x, y, 0) && screen.mouseReleased(x, y, 0), "JEI plus did not handle press/release");
+			clickPlus(client);
 			require(client.screen instanceof NetworkTerminalScreen, "JEI plus did not return to terminal"); step = 1;
 		}
 		var result = state.exchangeResult(); if (result == null || result.sequence() != sequence) return null;
 		return new CraftingClient.Reply(result.moved(), result.status().ordinal());
+	}
+	static void clickPlus(Minecraft client) throws Exception {
+		var screen = client.screen;
+		var layoutsField = screen.getClass().getDeclaredField("layouts"); layoutsField.setAccessible(true); var layouts = layoutsField.get(screen);
+		var entriesField = layouts.getClass().getDeclaredField("recipeLayoutsWithButtons"); entriesField.setAccessible(true);
+		var entries = (List<?>) entriesField.get(layouts); require(entries.size() == 1, "JEI recipe view was not ready");
+		var layout = ((mezz.jei.gui.recipes.IRecipeLayoutWithButtons<?>) entries.getFirst()).getRecipeLayout();
+		var area = layout.getRect(); var button = layout.getSideButtonArea(0);
+		double x = area.getX() + button.getX() + button.getWidth() / 2.0, y = area.getY() + button.getY() + button.getHeight() / 2.0;
+		require(screen.mouseClicked(x, y, 0) && screen.mouseReleased(x, y, 0), "JEI plus did not handle press/release");
 	}
 	private RecipeFillClient() { }
 }

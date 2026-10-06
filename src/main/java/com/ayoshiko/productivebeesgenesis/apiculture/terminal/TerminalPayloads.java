@@ -16,10 +16,12 @@ import net.neoforged.neoforge.network.registration.HandlerThread;
 public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-		var registrar = event.registrar("19").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("20").executesOn(HandlerThread.MAIN);
 		registrar.playToServer(TerminalRecipeRequest.TYPE, TerminalRecipeRequest.STREAM_CODEC, (request, context) -> {
-			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof NetworkCoreMenu menu) {
-				var reply = menu.terminalRecipe(player, request); if (reply != null) PacketDistributor.sendToPlayer(player, reply);
+			if (context.player() instanceof ServerPlayer player) {
+				var reply = player.containerMenu instanceof NetworkCoreMenu menu ? menu.terminalRecipe(player, request)
+						: player.containerMenu instanceof com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu menu ? menu.terminalCrafting(player, request.command(), request.recipe()) : null;
+				if (reply != null) PacketDistributor.sendToPlayer(player, reply);
 			}
 		});
 		registrar.playToServer(TerminalRequest.TYPE, TerminalRequest.STREAM_CODEC, (request, context) -> {
@@ -30,6 +32,7 @@ public final class TerminalPayloads {
 		});
 		registrar.playToClient(TerminalReply.TYPE, TerminalReply.STREAM_CODEC, (reply, context) -> {
 			if (context.player().containerMenu instanceof NetworkCoreMenu menu) menu.acceptTerminalReply(reply);
+			else if (context.player().containerMenu instanceof com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu menu) menu.acceptTerminalReply(reply);
 		});
 		registrar.playToClient(TerminalLiveUpdate.TYPE, TerminalLiveUpdate.STREAM_CODEC, (update, context) -> {
 			if (context.player().containerMenu instanceof NetworkCoreMenu menu) menu.acceptTerminalUpdate(update);
@@ -44,7 +47,8 @@ public final class TerminalPayloads {
 	/** 探针与注册处理器共用此入口；所有访问和预算均在服务器线程。 */
 	public static TerminalReply handle(ServerPlayer player, TerminalRequest request) {
 		if (!player.serverLevel().getServer().isSameThread()) return null;
-		return player.containerMenu instanceof NetworkCoreMenu menu ? menu.terminalRequest(player, request) : null;
+		return player.containerMenu instanceof NetworkCoreMenu menu ? menu.terminalRequest(player, request)
+				: player.containerMenu instanceof com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu menu ? menu.terminalCrafting(player, request, null) : null;
 	}
 	/** 序号先消费，限流拒绝不回复也不排队；同一请求以后不能重新执行。 */
 	public static boolean allow(ServerPlayer player) {
