@@ -245,6 +245,14 @@ dependencies {
             }
             testRuntimeOnly dispatchTestMods
         }
+        if (providers.gradleProperty('mekEnergisticsCompatJar').isPresent()) {
+            def patternTestMods = files(providers.gradleProperty('mekEnergisticsCompatJar').get(),
+                    providers.gradleProperty('appliedMekanisticsCompatJar').get())
+            patternTestMods.each { jar ->
+                if (!jar.isFile()) throw new GradleException("Missing Mek Energistics test mod: ${jar}")
+            }
+            testRuntimeOnly patternTestMods
+        }
     }
 }
 

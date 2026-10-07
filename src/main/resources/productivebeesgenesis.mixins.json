@@ -44,6 +44,7 @@
     "mek.ExtraUpgradeStackMixin",
     "mek.PoweredCentrifugeBlockEntityMixin",
     "mekenergistics.MekEnergisticsInstallerGuardMixin",
+    "mekenergistics.MekEnergisticsPatternGuardMixin",
     "mekenergistics.MekEnergisticsTargetResolverGuardMixin",
     "recipe.AdvancedBeehiveRecipeSerializerMixin",
     "recipe.BeeBreedingRecipeSerializerMixin",

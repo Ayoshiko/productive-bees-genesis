@@ -65,6 +65,7 @@ class Ae2OptionalDependencyGuardTest {
 	 * issue #8 的崩溃正是宿主 BlockEntity 生命周期触碰了可选类型。
 	 */
 	private static final List<String> GATED_INTEGRATION_FILES = List.of(
+			"mixin/mekenergistics/MekEnergisticsPatternGuardMixin.java",
 			"client/screen/GlobalGearButton.java",
 			"client/screen/StockGearButton.java",
 			"client/screen/GuiAeInputConfig.java",
@@ -187,6 +188,12 @@ class Ae2OptionalDependencyGuardTest {
 		String config = Files.readString(
 				Path.of("src/main/resources/productivebeesgenesis.mixins.json"));
 		Map<String, Set<String>> memberships = parsePluginMemberships(plugin);
+		assertTrue(plugin.replace("\r\n", "\n").contains("if (MEKENERGISTICS_AE2_MIXINS.contains(simpleName)) {\n"
+				+ "\t\t\treturn Holder.MEKENERGISTICS_LOADED && Holder.AE2_LOADED;"),
+				"Mek Energistics pattern guards require both Mek Energistics and AE2");
+		assertTrue(plugin.replace("\r\n", "\n").contains("if (MEKENERGISTICS_MIXINS.contains(simpleName)) {\n"
+				+ "\t\t\treturn Holder.MEKENERGISTICS_LOADED;"),
+				"Existing installer guards must keep their original loading condition");
 		List<String> unregistered = new ArrayList<>();
 		List<String> strictOptionalInjectors = new ArrayList<>();
 		Matcher matcher = Pattern.compile("\"([A-Za-z0-9_$.]+)\"").matcher(config);
@@ -299,7 +306,7 @@ class Ae2OptionalDependencyGuardTest {
 			case "ME" -> setName.equals("ME_MIXINS") || setName.startsWith("ME_")
 					|| setName.contains("_ME_") || setName.endsWith("_ME_MIXINS");
 			case "EME" -> setName.contains("EME");
-			case "AE2" -> setName.startsWith("AE2_");
+			case "AE2" -> setName.startsWith("AE2_") || setName.equals("MEKENERGISTICS_AE2_MIXINS");
 			case "JDTE" -> setName.startsWith("JDTE_");
 			case "MEKENERGISTICS" -> setName.startsWith("MEKENERGISTICS_");
 			case "BUILDING_GADGETS" -> setName.startsWith("BUILDING_GADGETS_");

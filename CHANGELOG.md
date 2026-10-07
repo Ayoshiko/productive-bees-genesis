@@ -29,6 +29,20 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [Unreleased]
+
+### 修复
+
+- **Mek Energistics 样板槽位误暴露**：关闭通用机械离心机、蜂箱及全部工厂等级从 Mekanism 基类继承的样板供应器入口。接入 AE2／闪电科技无线网络后不再向样板管理终端暴露默认 72 槽，拒绝通过这些继承入口执行样板；保留本模组正常的 AE2 输入、输出和外部样板发配目标。新增守卫独立门控，既有安装器兼容处理、加载条件和可选依赖声明保持原样。
+- **精华转化黑名单**：排除 `exdeorum:bone_crook`，防止骷髅蜜蜂的骨头被自动合成为不可分解的骨钩；同时排除原版 `minecraft:music_disc_5` 和整合包配方 `kubejs:kjs/music_disc_5`，保留幽匿蜜蜂产出的唱片 5 残片。仅限制精华转化升级，正常工作台合成不受影响。
+- **玩家环境复测**：用户于 2026-10-07 在原反馈的 Infinity Legacy II 整合包中确认，机器不再显示样板槽位，WCWT 也不再提供对应的供应器 UI 按钮，原断连触发路径已消除。
+
+### English
+
+- **Unintended Mek Energistics pattern slots**: disabled the pattern-provider entry points inherited from Mekanism by the addon's centrifuges, apiaries and all factory tiers. Connecting through AE2 or Lightning Tech wireless networks no longer exposes the default 72 slots in pattern-management terminals, and inherited pattern execution is rejected. The addon's AE2 input/output integration and external pattern delivery targets remain available. The new guard has a separate loading condition; existing installer compatibility, loading conditions and optional dependency declarations are unchanged.
+- **Essence Conversion exclusions**: excluded `exdeorum:bone_crook` so Skeleton Bee bones are not automatically crafted into non-reversible bone crooks. Also excluded vanilla `minecraft:music_disc_5` and the pack recipe `kubejs:kjs/music_disc_5`, preserving Sculk Bee disc fragments. These exclusions apply only to the Essence Conversion Upgrade; normal crafting remains available.
+- **Player environment validation**: on 2026-10-07, the user confirmed in the original Infinity Legacy II pack that the machines no longer expose pattern slots or corresponding provider UI buttons in WCWT, eliminating the reported disconnection trigger.
+
 ## [1.0.10] - 2026-09-28
 
 - **Productive Bees 13.14.0 兼容热修复**：保留 PB 13.13.5+ 的运行时兼容范围；针对 13.14.0 热能离心机改为从动力离心机继承 `canOperate()` 的变化，按目标类字节码条件应用旧版专用 Mixin，保留两代版本的能量门控、万象蜜脾产物空间检查与输入守恒。

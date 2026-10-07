@@ -52,7 +52,11 @@ final class EssenceConversionRecipeIndex {
 	private static final ResourceLocation NETHER_STAR_ID =
 			ResourceLocation.fromNamespaceAndPath("minecraft", "nether_star");
 	private static final Set<ResourceLocation> EXCLUDED_RECIPE_IDS = Set.of(
-			ResourceLocation.fromNamespaceAndPath("industrialforegoing", "straw"));
+			ResourceLocation.fromNamespaceAndPath("industrialforegoing", "straw"),
+			ResourceLocation.fromNamespaceAndPath("exdeorum", "bone_crook"),
+			ResourceLocation.fromNamespaceAndPath("minecraft", "music_disc_5"),
+			// 整合包会用 KubeJS 重建唱片配方，需同时排除其独立 ID。
+			ResourceLocation.fromNamespaceAndPath("kubejs", "kjs/music_disc_5"));
 	private static final long BUILD_RETRY_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(5);
 	private static volatile ConversionSnapshot conversionSnapshot = ConversionSnapshot.EMPTY;
 	private static volatile boolean conversionSnapshotLoaded;

@@ -156,6 +156,11 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"MekEnergisticsTargetResolverGuardMixin"
 	);
 
+	/** 新样板入口引用 AE2 API，独立门控以保留既有安装器兼容条件。 */
+	private static final Set<String> MEKENERGISTICS_AE2_MIXINS = Set.of(
+			"MekEnergisticsPatternGuardMixin"
+	);
+
 	/** 引用 buildinggadgets2 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> BUILDING_GADGETS_MIXINS = Set.of(
 			"RenderBlockBeLoadFixMixin"
@@ -314,6 +319,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		// AE2 + EME Mixin — 目标类继承 EME 基类，需两者同时加载
 		if (AE2_EME_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.EME_LOADED;
+		}
+		if (MEKENERGISTICS_AE2_MIXINS.contains(simpleName)) {
+			return Holder.MEKENERGISTICS_LOADED && Holder.AE2_LOADED;
 		}
 		if (MEKENERGISTICS_MIXINS.contains(simpleName)) {
 			return Holder.MEKENERGISTICS_LOADED;
