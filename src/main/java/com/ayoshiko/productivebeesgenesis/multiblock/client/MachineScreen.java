@@ -109,7 +109,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		if (menu.wireless() && craftingVisible() && !menu.slots.get(36).isActive()) { rebuildWidgets(); return; }
 		craftTab.visible = menu.wireless() && !workspace; craftTab.active = state.ready(now) && sequence <= menu.acknowledged();
 		if (craftingVisible() && !craftingRequested && state.ready(now)) craft(CRAFTING, -1, -1, 0);
-		if (clearCrafting != null) clearCrafting.active = state.ready(now) && menu.craftingGeneration() != 0 && menu.craftingStatus() == 1;
+		if (clearCrafting != null) clearCrafting.active = state.ready(now) && menu.craftingGeneration() != 0 && (menu.craftingStatus() == 1 || menu.craftingStatus() == 4);
 		for (var button : actions) { var scope = scopes.get(button); button.active = state.ready(now) && sequence <= menu.acknowledged() && menu.allowsAction(scope[0], scope[1]); }
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
@@ -157,7 +157,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 			g.drawString(font, font.plainSubstrByWidth(tr("crafting_hint").getString(), workspace ? 174 : 210), workspace ? 251 : 7, workspace ? 33 : 105, 0xffc3c8cc, false);
 			var state = menu.craftingState(); var result = state.exchangeResult();
 			status = state.waiting() ? terminal("syncing") : menu.craftingStatus() != 1
-					? terminal(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable")
+					? terminal(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : menu.craftingStatus() == 4 ? "craft_material_unknown" : "craft_unavailable")
 					: result == null || result.status() == TerminalReply.Status.OK ? tr("crafting_ready") : result.status() == TerminalReply.Status.MOVED ? terminal("moved", result.moved())
 					: Component.translatable("screen.productivebeesgenesis.network.result." + result.status().name().toLowerCase(java.util.Locale.ROOT), result.moved());
 		}

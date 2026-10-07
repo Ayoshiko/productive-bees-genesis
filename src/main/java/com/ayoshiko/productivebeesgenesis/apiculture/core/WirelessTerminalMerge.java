@@ -101,7 +101,7 @@ public final class WirelessTerminalMerge {
 		return binding == null ? null : TerminalCraftingAccount.wireless(player, binding.device(), player.getUUID(), false);
 	}
 	private static boolean occupied(TerminalCraftingAccount.State state) {
-		return state != null && (!state.pending().isEmpty() || state.grid().stream().anyMatch(stack -> !stack.isEmpty()));
+		return state != null && (state.materialRequest() != null || !state.pending().isEmpty() || state.grid().stream().anyMatch(stack -> !stack.isEmpty()));
 	}
 	private static boolean current(ServerPlayer player, ItemStack main, ItemStack off, ItemStack beforeMain, ItemStack beforeOff,
 			TerminalCraftingAccount first, TerminalCraftingAccount.State firstState, TerminalCraftingAccount second, TerminalCraftingAccount.State secondState) {

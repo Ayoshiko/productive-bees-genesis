@@ -453,7 +453,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 						: tr("result." + state.exchangeResult().status().name().toLowerCase(java.util.Locale.ROOT), state.exchangeResult().moved()) : own("live");
 		long sortAge = state.sortAgeSeconds(Util.getMillis());
 		if ((tab == 2 || tab == 4) && sortAge >= 0) status = status.copy().append(" · ").append(own("sort_age", sortAge));
-		if (craftingVisible() && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : "craft_unavailable");
+		if (craftingVisible() && menu.craftingStatus() != 1) status = own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : menu.craftingStatus() == 4 ? "craft_material_unknown" : "craft_unavailable");
 		line(g, status, 38, inventoryY - 22, 253, TerminalSkin.MUTED);
 		line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), workspace ? 318 : 40, inventoryY - 11, workspace ? 92 : menu.wirelessTerminal() ? 128 : 63, TerminalSkin.INK);
 		line(g, tr("inventory_slot", sourceSlot + 1), workspace ? 414 : 174, inventoryY - 11, workspace ? 70 : 118, TerminalSkin.MUTED);

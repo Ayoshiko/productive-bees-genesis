@@ -112,6 +112,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		}
 	}
 	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession meTerminal() { return me; }
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity craftingBridge(ServerPlayer player) { return meBridge(player); }
 	private com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity meBridge(ServerPlayer player) {
 		return controller(player) == null ? null : com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player);
 	}

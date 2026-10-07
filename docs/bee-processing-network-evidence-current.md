@@ -542,3 +542,14 @@ reader 通过正常登录读取 writer 玩家文件、网络 checkpoint 和桥 N
 writer PID 23464、reader PID 28040；NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368，无 AE2。writer 的 800–826 场景通过：两个真实 TCP 玩家交错拿放、完整组件保留、拖拽分配、标准 Container 整理、制作输入输出守恒、拒绝丢弃、无线设备锁定与替换失效、无线独立机合成、满背包时双方鼠标物品独立保管、重开和坏数据 codec。reader 使用独立 JVM 正常登录，材料账户、玩家文件与鼠标 attachment 和 writer 清单一致；四个客户端均正常退出，没有转移掉落物。已查看常规与紧凑布局截图。
 
 证据为 `build/network-gates/d18j1-native-slots-20261007-resume/gate.json`（passed=true）。本步仅签收 j1a 的原生交互与正常恢复；未安装具体整理插件，Container 场景不能代替 j1b 兼容验收。死亡复制仅已接入 copyOnDeath，未新增真实死亡场景；强制断电耐久、完整 AE2／附属矩阵与 Spark 性能仍按后续联合门验收。完整 j1、D18／D19 和发布门保持开放。
+
+<a id="s10-119"></a>
+### 10.119 D18j2a ME 材料联合补格、部分接收与未决请求（2026-10-07，本步范围已验收）
+
+在网络 worktree `c61d88e` 上继续接入原 JEI 填格请求。有线／无线网络和无线独立机沿已有宿主方法解析实际桥；AE2 类型留在兼容包，本地规划、账本扣款、账户和菜单仍不依赖 AE2。抽出 TerminalRecipeFiller，复用九格完整组件与最小缺额匹配；本地／账本和 ME 外部库存联合规划，action source 的上下文在模拟、实际提取时排除同一蜂业账本，避免重复计算。已收到材料直接保留在真实九格，部分结果不回滚；未知返回保留槽号、完整请求与桥位置，禁止后续填格重试，已知材料仍可取回。行为、视觉和 API 依据见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+生产源码首轮 compileJava／compileDomainProbeJava 通过；新增夹具最初缺少既有 ClientTerminalStockFixture 的 import，补齐后构建通过。最终仅执行 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j2a-me-materials-20261007-first -MeMaterials -Combination ae2 -Ae2Version 19.2.18`，复用原双玩家桥接和正常恢复入口；定向 TerminalClientStateTest、build、verifyReleaseArtifact 与开发源集编译通过，没有重新运行全量终端、物理工厂或性能矩阵。编译 AE2 19.2.17，运行 AE2 19.2.18／Applied Flux 2.1.5，其它依赖保持 10.118 的开发基线。
+
+真实 AE2 网格同时挂载蜂业账本与有限故障存储，服务器从两位实际 TCP 玩家的正式菜单入口执行填格。内部 9 粗铁、外部 9 粗铁＋18 个带名称钻石、背包 18 原木恰好形成 18 份三材料配方，各来源按真实缺额扣减且组件保持。伪造会话不提取；外部先实际给 3／8，九格保留 3、外部剩 5，后续补到 8 没有重复或丢失。未知案例中外部将 2 件移入夹具保管后抛异常，终端只保留原有 1 件及未决 8 件请求；第二次操作不再调用提取，原生 Shift 仍能取回已知 1 件。该预期异常日志不是未处理失败，未决数量没有被当作终端资产。
+
+有线未决账户 schema 3 的完整 codec、旧 schema 1 读取和真实世界文件正常保存通过；writer PID 26084、独立 reader PID 27476，后者从正常保存读取同一材料请求及玩家文件，meMaterialsVerified=true，所有客户端正常退出，无转移掉落物。证据为 `build/network-gates/d18j2a-me-materials-20261007-first/gate.json`。新提取场景由服务器调用正式菜单方法，真实客户端负责原桥接显示／无线入口／登录，不将其写成新增 JEI 鼠标点击验证。无线 schema 4、无线设备合并和独立机共用实现已经接入，但本轮未新增其未决提取运行矩阵；无 AE2 入口隔离按源码复核，10.118 的无 AE2 运行早于本步修改。未知外部结果需要核实，未新增自动解锁或跨存储断电原子性承诺。j2b 统一库存浏览／实际存取、完整 D18／D19、D29／D30 和发布门仍未完成。

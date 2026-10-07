@@ -5,6 +5,8 @@ import net.minecraft.nbt.CompoundTag;
 /** 可选 AE2 的生命周期边界；常驻方块及菜单不加载 AE2 类型。 */
 public interface MeBridgeLink {
 	com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBackend terminal(net.minecraft.server.level.ServerPlayer player);
+	default com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalMaterialSource materials(net.minecraft.server.level.ServerPlayer player,
+			com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData excluded) { return null; }
 	void connect();
 	default void tick() { }
 	default void storageStep() { }

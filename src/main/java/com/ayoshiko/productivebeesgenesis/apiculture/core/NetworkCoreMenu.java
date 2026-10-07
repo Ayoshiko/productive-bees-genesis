@@ -282,6 +282,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		return record != null && scope.accepts(record.claim().machine());
 	}
 	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession meTerminal() { return me; }
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity craftingBridge(net.minecraft.server.level.ServerPlayer player) { return meBridge(player); }
 	private com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity meBridge(net.minecraft.server.level.ServerPlayer player) {
 		return dedicatedTerminal() && exchangeCore(player) != null ? com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player) : null;
 	}

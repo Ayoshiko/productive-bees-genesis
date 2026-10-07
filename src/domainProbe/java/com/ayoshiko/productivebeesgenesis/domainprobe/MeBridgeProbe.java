@@ -19,6 +19,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class MeBridgeProbe {
 	static boolean enabled() { return Boolean.getBoolean("pbg.concurrent.meBridge"); }
 	static boolean ae() { return MeBridgeIntegration.installed(); }
+	static boolean materials() { return Boolean.getBoolean("pbg.concurrent.meMaterials"); }
 	static boolean storage() { return Boolean.getBoolean("pbg.concurrent.meStorage"); }
 	private static int stages;
 	private static MeBridgeBlockEntity bridge, machineBridge;
@@ -41,6 +42,7 @@ final class MeBridgeProbe {
 	}
 	static boolean ready(int stage) {
 		if (storage() && ae() && stage == 504 && !MeStorageAeFixture.ready(bridge)) return false;
+		if (materials() && ae() && stage == 511 && !MeMaterialAeFixture.advance()) return false;
 		return stage != 508 || WirelessMachineFixture.ready();
 	}
 	static int advance(NetworkCoreBlockEntity core, List<ServerPlayer> players, int stage) {
@@ -98,6 +100,7 @@ final class MeBridgeProbe {
 			if (ae()) MeBridgeAeFixture.closed(old);
 			require(NetworkContent.WIRELESS_COMBINED.get().bind(player, player.getMainHandItem(), core), "Cannot return to network after machine invalidation");
 			CraftingProbe.open(core, players, false);
+			if (materials() && ae()) MeMaterialAeFixture.prepare(core, bridge, players);
 		}
 		stages++;
 		if (stage == 511 && WorkspaceProbe.enabled()) { WorkspaceProbe.seed(core, players); return 700; }
@@ -113,6 +116,7 @@ final class MeBridgeProbe {
 	static void capture(NetworkCoreBlockEntity core, CompoundTag manifest) {
 		require(stages == 12, "ME bridge stages incomplete");
 		manifest.put("me-bridge", bridge.saveWithoutMetadata(core.getLevel().registryAccess()));
+		if (materials() && ae()) manifest.put("me-materials", CraftingProbe.account(core, false).save(new CompoundTag(), core.getLevel().registryAccess()));
 	}
 	static boolean recoveryReady(NetworkCoreBlockEntity core) {
 		var pos = core.getBlockPos().above(); var tile = core.getLevel().getBlockEntity(pos);
@@ -124,11 +128,16 @@ final class MeBridgeProbe {
 		require(bridge.owner().equals(expected.getUUID("owner")) && bridge.owner().equals(players.getFirst().getUUID()), "Bridge owner changed across restart");
 		require(ae() ? bridge.link() != null : bridge.link() == null, "Restart optional dependency boundary failed");
 		require(bridge.automation() == expected.getBoolean("automation"), "Storage authorization changed across restart");
+		if (materials() && ae()) {
+			var account = CraftingProbe.account(core, false);
+			require(account.state().materialRequest() != null && account.save(new CompoundTag(), core.getLevel().registryAccess()).equals(manifest.get("me-materials")), "ME material request changed across JVM recovery");
+		}
 		recovered = true;
 	}
 	static void report(JsonObject report, boolean reader) {
 		require(reader ? recovered : stages == 12, "ME bridge evidence incomplete");
 		if (storage() && ae()) { require(reader || (MeCraftingProbe.enabled() ? MeCraftingAeFixture.storageVerified : MeStorageAeFixture.verified), "Missing ME storage evidence"); report.addProperty("meStorageVerified", true); }
+		if (materials() && ae()) { require(reader || MeMaterialAeFixture.verified, "Missing material transfer cases"); report.addProperty("meMaterialsVerified", true); }
 		report.addProperty("meBridgeConnectionAndRecovery", true); report.addProperty("meBridgeStages", stages);
 	}
 }

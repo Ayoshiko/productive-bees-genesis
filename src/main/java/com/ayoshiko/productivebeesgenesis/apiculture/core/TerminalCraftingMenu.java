@@ -24,6 +24,7 @@ public final class TerminalCraftingMenu {
 		boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse);
 		void nativeEditing(boolean value);
 		TerminalCraftingAccount craftingAccount(ServerPlayer player);
+		default com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity craftingBridge(ServerPlayer player) { return null; }
 		default com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData craftingLedger(ServerPlayer player) { return null; }
 	}
 	private final Host menu;
@@ -130,7 +131,7 @@ public final class TerminalCraftingMenu {
 			try { for (int i = 0; i < 9; i++) display.setItem(i, grid.get(i).copy()); result.setItem(0, preview.copy()); }
 			finally { synchronizing = false; }
 			shownAccount = account; shown = state; recipe = found; generation = Math.incrementExact(serial); serial = generation;
-			flag = state.uncertain() ? 3 : state.pending().isEmpty() ? 1 : 2; failure = null;
+			flag = state.uncertain() ? 3 : state.materialRequest() != null ? 4 : state.pending().isEmpty() ? 1 : 2; failure = null;
 		} catch (RuntimeException error) {
 			if (failure == null) com.mojang.logging.LogUtils.getLogger().warn("Cannot preview terminal crafting for {}", player.getUUID(), error);
 			failure = error.toString(); shownAccount = account; shown = state; recipe = null;
@@ -160,44 +161,11 @@ public final class TerminalCraftingMenu {
 	public TerminalReply fill(ServerPlayer player, TerminalRequest request, net.minecraft.resources.ResourceLocation id) {
 		subscribed = true;
 		var account = menu.craftingAccount(player);
-		if (account == null || account.busy() || account.state().uncertain() || !account.state().pending().isEmpty()) return reply(request, UNAVAILABLE, 0);
+		if (account == null || account.busy() || account.state().uncertain() || account.state().materialRequest() != null || !account.state().pending().isEmpty()) return reply(request, UNAVAILABLE, 0);
 		if (!TerminalSubscriptionService.allowCrafting(player.server)) return reply(request, UNAVAILABLE, 0);
 		account.busy(true);
 		try {
-			var holder = player.serverLevel().getRecipeManager().byKey(id).orElse(null);
-			if (holder == null || !(holder.value() instanceof CraftingRecipe target) || !TerminalRecipeFillPlan.supports(target)) return reply(request, INVALID, 0);
-			if (!target.isSpecial() && player.serverLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING) && !player.getRecipeBook().contains(holder)) return reply(request, INVALID, 0);
-			var before = account.state(); var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
-			var result = TerminalRecipeFillPlan.plan(target, before.grid(), inventory, request.amount() == 64);
-			var ledger = menu.craftingLedger(player); var checkpoint = ledger == null ? null : ledger.checkpoint();
-			if (ledger != null && (request.amount() == 64 || result.failure() == TerminalRecipeFillPlan.Failure.MISSING)) {
-				var candidates = TerminalRecipeLedger.candidates(target, checkpoint.ledger(), player.registryAccess());
-				if (candidates == null) return reply(request, UNAVAILABLE, 0);
-				result = TerminalRecipeFillPlan.plan(target, before.grid(), inventory, candidates, request.amount() == 64);
-			}
-			if (result.change() == null) return reply(request, result.failure() == TerminalRecipeFillPlan.Failure.NO_SPACE ? NO_SPACE
-					: result.failure() == TerminalRecipeFillPlan.Failure.MISSING ? MISSING_INGREDIENTS : INVALID, 0);
-			var change = result.change(); var input = CraftingInput.ofPositioned(3, 3, TerminalCraftingPlan.copy(change.grid())).input();
-			if (!target.matches(input, player.serverLevel()) || !current(player, account, before, inventory)
-					|| player.serverLevel().getRecipeManager().byKey(id).orElse(null) != holder) return reply(request, STALE, 0);
-			if (ItemStack.listMatches(before.grid(), change.grid()) && ItemStack.listMatches(inventory, change.inventory())) return reply(request, OK, 0);
-			var prepared = account.prepare(before, change.grid(), before.pending(), false);
-			if (result.withdrawals().isEmpty()) {
-				account.publishPrepared(before, prepared); inventory(player, inventory, change.inventory());
-			} else {
-				if (ledger == null) return reply(request, STALE, 0);
-				var next = checkpoint.withdrawCraftingProducts(checkpoint.ledger().revision(), TerminalRecipeLedger.debit(result.withdrawals(), player.registryAccess()));
-				if (next == checkpoint || menu.craftingLedger(player) != ledger || ledger.checkpoint() != checkpoint
-						|| !current(player, account, before, inventory) || player.serverLevel().getRecipeManager().byKey(id).orElse(null) != holder)
-					return reply(request, STALE, 0);
-				// 所有可失败的配方、组件与容量计算均已完成；提交间不调用第三方容器。
-				try { ledger.publish(next); }
-				finally {
-					// publish 后展示索引异常也不能让已扣的材料失去接收账户，不退款或重试。
-					if (ledger.checkpoint() == next) { account.publishPrepared(before, prepared); inventory(player, inventory, change.inventory()); }
-				}
-			}
-			return reply(request, change.moved() > 0 ? MOVED : OK, change.moved());
+			return TerminalRecipeFiller.fill(menu, player, request, id, account);
 		} catch (RuntimeException failure) {
 			com.mojang.logging.LogUtils.getLogger().warn("Recipe fill rejected without retry for {}: {}", player.getUUID(), id, failure); return reply(request, UNAVAILABLE, 0);
 		} finally { account.busy(false); refresh(player, true); }

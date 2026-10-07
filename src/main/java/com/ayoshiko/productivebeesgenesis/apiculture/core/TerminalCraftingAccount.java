@@ -17,7 +17,17 @@ import net.minecraft.world.level.storage.LevelResource;
 
 /** 每个终端位置的有限保管账户；BE 和菜单只持引用，拆除后原位重建可取回。 */
 public final class TerminalCraftingAccount extends SavedData {
-	public record State(long revision, List<ItemStack> grid, ItemStack pending, boolean uncertain) {
+	/** 非空请求只表示外部结果尚未确认，不代表拥有对应数量。 */
+	public record MaterialRequest(int slot, ItemStack item, String source) {
+		public MaterialRequest {
+			if (slot < 0 || slot >= 9 || item.isEmpty() || item.getCount() < 1 || item.getCount() > Math.min(64, item.getMaxStackSize())
+					|| source == null || source.isBlank() || source.length() > 512) throw new IllegalArgumentException("Invalid material request");
+			item = item.copy();
+		}
+		@Override public ItemStack item() { return item.copy(); }
+	}
+	public record State(long revision, List<ItemStack> grid, ItemStack pending, boolean uncertain, MaterialRequest materialRequest) {
+		public State(long revision, List<ItemStack> grid, ItemStack pending, boolean uncertain) { this(revision, grid, pending, uncertain, null); }
 		public State {
 			if (revision < 0 || grid.size() != 9 || uncertain && pending.isEmpty()) throw new IllegalArgumentException("Invalid crafting state");
 			grid = List.copyOf(TerminalCraftingPlan.copy(grid)); pending = pending.copy();
@@ -64,7 +74,7 @@ public final class TerminalCraftingAccount extends SavedData {
 			account.save(file.toFile(), level.registryAccess());
 		}
 		if (account.available() && !account.owner.equals(core.owner()) && !account.busy
-				&& account.state.pending().isEmpty() && account.state.grid().stream().allMatch(ItemStack::isEmpty)) {
+				&& account.state.pending().isEmpty() && account.state.materialRequest() == null && account.state.grid().stream().allMatch(ItemStack::isEmpty)) {
 			account.owner = core.owner(); account.publish(account.state, account.state.grid(), ItemStack.EMPTY, false);
 		}
 		if (!account.matches(core.owner(), level.dimension().location(), terminal.getBlockPos()) || !account.available())
@@ -98,23 +108,47 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	State prepare(State expected, List<ItemStack> grid, ItemStack pending, boolean uncertain) {
 		check(); if (!available() || state != expected) throw new IllegalStateException("Stale crafting account");
-		return new State(Math.incrementExact(state.revision()), grid, pending, uncertain);
+		return new State(Math.incrementExact(state.revision()), grid, pending, uncertain, expected.materialRequest());
 	}
 	void publishPrepared(State expected, State prepared) {
 		check(); if (!available() || state != expected || prepared.revision() != expected.revision() + 1) throw new IllegalStateException("Stale crafting account");
 		state = prepared; setDirty();
 	}
+	State requestMaterial(State expected, int slot, ItemStack requested, String source) {
+		if (expected.materialRequest() != null) throw new IllegalStateException("Unresolved material extraction");
+		var target = expected.grid().get(slot);
+		if (!target.isEmpty() && !ItemStack.isSameItemSameComponents(target, requested)
+				|| target.getCount() + requested.getCount() > Math.min(64, requested.getMaxStackSize())) throw new IllegalArgumentException("No material receiving space");
+		var prepared = new State(Math.incrementExact(expected.revision()), expected.grid(), expected.pending(), expected.uncertain(), new MaterialRequest(slot, requested, source));
+		publishPrepared(expected, prepared); return prepared;
+	}
+	void receiveMaterial(State expected, int amount) {
+		var request = Objects.requireNonNull(expected.materialRequest());
+		if (amount < 0 || amount > request.item().getCount()) throw new IllegalArgumentException("Invalid material receipt");
+		var grid = TerminalCraftingPlan.copy(expected.grid()); var target = grid.get(request.slot());
+		if (amount > 0) grid.set(request.slot(), request.item().copyWithCount(target.getCount() + amount));
+		publishPrepared(expected, new State(Math.incrementExact(expected.revision()), grid, expected.pending(), expected.uncertain(), null));
+	}
 	public static TerminalCraftingAccount load(CompoundTag tag, HolderLookup.Provider registries) {
 		try {
 			int schema = StrictNbt.integer(tag, "schema");
-			if (schema != 1 && schema != 2 || !tag.getAllKeys().equals(schema == 1
-					? Set.of("schema", "owner", "dimension", "position", "revision", "grid", "pending", "uncertain")
-					: Set.of("schema", "owner", "device", "revision", "grid", "pending", "uncertain"))) throw new IllegalArgumentException("Invalid crafting account schema");
-			var result = schema == 1 ? new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), ResourceLocation.parse(StrictNbt.string(tag, "dimension")), BlockPos.of(StrictNbt.number(tag, "position")))
+			if (schema < 1 || schema > 4) throw new IllegalArgumentException("Invalid crafting account schema");
+			boolean wired = schema == 1 || schema == 3;
+			var fields = new HashSet<>(wired ? Set.of("schema", "owner", "dimension", "position", "revision", "grid", "pending", "uncertain")
+					: Set.of("schema", "owner", "device", "revision", "grid", "pending", "uncertain"));
+			if (schema >= 3) fields.add("materialRequest");
+			if (!tag.getAllKeys().equals(fields)) throw new IllegalArgumentException("Invalid crafting account fields");
+			var result = wired ? new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), ResourceLocation.parse(StrictNbt.string(tag, "dimension")), BlockPos.of(StrictNbt.number(tag, "position")))
 					: new TerminalCraftingAccount(StrictNbt.uuid(tag, "owner"), null, null, StrictNbt.uuid(tag, "device"));
 			var list = StrictNbt.list(tag, "grid"); if (list.size() != 9) throw new IllegalArgumentException("Invalid crafting grid length");
 			var grid = new ArrayList<ItemStack>(9); for (var raw : list) grid.add(stack((CompoundTag) raw, registries));
-			result.state = new State(StrictNbt.number(tag, "revision"), grid, stack(StrictNbt.compound(tag, "pending"), registries), StrictNbt.bool(tag, "uncertain"));
+			MaterialRequest request = null;
+			if (schema >= 3) {
+				var data = StrictNbt.compound(tag, "materialRequest");
+				if (!data.getAllKeys().equals(Set.of("slot", "item", "source"))) throw new IllegalArgumentException("Invalid material request fields");
+				request = new MaterialRequest(StrictNbt.integer(data, "slot"), stack(StrictNbt.compound(data, "item"), registries), StrictNbt.string(data, "source"));
+			}
+			result.state = new State(StrictNbt.number(tag, "revision"), grid, stack(StrictNbt.compound(tag, "pending"), registries), StrictNbt.bool(tag, "uncertain"), request);
 			result.persisted = true; result.setDirty(false); return result;
 		} catch (RuntimeException failure) { return new TerminalCraftingAccount(tag, failure); }
 	}
@@ -125,11 +159,16 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	@Override public CompoundTag save(CompoundTag ignored, HolderLookup.Provider registries) {
 		check(); if (quarantined != null) return quarantined.copy();
-		var tag = new CompoundTag(); tag.putInt("schema", device == null ? 1 : 2); tag.putUUID("owner", owner);
+		var tag = new CompoundTag(); tag.putInt("schema", (device == null ? 1 : 2) + (state.materialRequest() == null ? 0 : 2)); tag.putUUID("owner", owner);
 		if (device == null) { tag.putString("dimension", dimension.toString()); tag.putLong("position", position.asLong()); } else tag.putUUID("device", device);
 		tag.putLong("revision", state.revision()); tag.putBoolean("uncertain", state.uncertain());
 		var grid = new ListTag(); state.grid().forEach(stack -> grid.add(stack.saveOptional(registries))); tag.put("grid", grid);
-		tag.put("pending", state.pending().saveOptional(registries)); return tag;
+		tag.put("pending", state.pending().saveOptional(registries));
+		if (state.materialRequest() != null) {
+			var request = state.materialRequest(); var data = new CompoundTag();
+			data.putInt("slot", request.slot()); data.put("item", request.item().save(registries)); data.putString("source", request.source()); tag.put("materialRequest", data);
+		}
+		return tag;
 	}
 	@Override public void save(File file, HolderLookup.Provider registries) {
 		check(); if (quarantined != null || !isDirty()) return;

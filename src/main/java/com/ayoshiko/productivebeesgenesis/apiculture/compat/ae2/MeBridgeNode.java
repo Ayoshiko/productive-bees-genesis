@@ -36,6 +36,10 @@ public final class MeBridgeNode implements MeBridgeLink, IInWorldGridNodeHost {
 	@Override public com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBackend terminal(net.minecraft.server.level.ServerPlayer player) {
 		return status() == MeBridgeStatus.ONLINE ? new AeMeTerminal(this, bridge, player) : null;
 	}
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalMaterialSource materials(net.minecraft.server.level.ServerPlayer player,
+			com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData excluded) {
+		return status() == MeBridgeStatus.ONLINE ? new AeRecipeMaterials(this, bridge, player, excluded) : null;
+	}
 	@Override public void connect() { if (!closed && bridge.currentLink(this)) node.create(bridge.getLevel(), bridge.getBlockPos()); }
 	@Override public IGridNode getGridNode(Direction side) { return !closed && bridge.currentLink(this) ? node.getNode() : null; }
 	@Override public MeBridgeStatus status() {

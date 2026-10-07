@@ -48,7 +48,8 @@ public final class MeBridgeStorage implements MEStorage {
 		if (entered || amount <= 0 || key == null || mode == null || source == null) return 0;
 		entered = true;
 		try {
-			var data = authority(); if (data == null || !permitted(source)) return 0;
+			var data = authority(); if (data == null || !permitted(source)
+					|| source.context(AeRecipeMaterials.class).filter(materials -> materials.excludes(data)).isPresent()) return 0;
 			com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey product;
 			try { product = MeStorageProjection.decode(key, bridge.getLevel().registryAccess()); }
 			catch (IllegalArgumentException invalid) { return 0; }
