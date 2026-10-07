@@ -19,7 +19,7 @@ import net.minecraft.world.entity.player.*;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 
-/** 六个蜂位的有限管理视图；原版槽只读，所有资产变化经带会话和序号的命令。 */
+/** 六蜂位管理与原生背包／合成槽；机器资产仍由带会话的管理命令提交。 */
 public final class MachineMenu extends AbstractContainerMenu implements TerminalCraftingMenu.Host, com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalHost {
 	// 回执字段最后发送，客户端看到完成序号时，本轮升级数量和上限已同步。
 	private static final int UPGRADE_DATA = 34, ACKNOWLEDGED_DATA = UPGRADE_DATA + MachineUpgrades.SLOTS * 4, WIRELESS_DATA = ACKNOWLEDGED_DATA + 4,
@@ -41,6 +41,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private final TerminalSequence craftingSequences = new TerminalSequence();
 	private TerminalClientState craftingState;
 	private TerminalCraftingMenu crafting;
+	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots nativeSlots;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -68,6 +69,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 			addSlot(inventorySlot(inventory, index, 35 + col * 18, 143 + row * 18 + (row == 3 ? 4 : 0)));
 		}
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
+		nativeSlots = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots(this, crafting); nativeSlots.open(viewingPlayer);
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
 	static boolean openWireless(MachineControllerEntity core, ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession device) {
@@ -132,10 +134,10 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		}
 	}
 	public MachineMenuDetails details() { return details; }
-	private static Slot inventorySlot(Inventory inventory, int index, int x, int y) {
+	private Slot inventorySlot(Inventory inventory, int index, int x, int y) {
 		return new Slot(inventory, index, x, y) {
-			@Override public boolean mayPlace(ItemStack stack) { return false; }
-			@Override public boolean mayPickup(Player player) { return false; }
+			@Override public boolean mayPlace(ItemStack stack) { return !lockedNativeStack(getItem()) && !lockedNativeStack(stack); }
+			@Override public boolean mayPickup(Player player) { return !lockedNativeStack(getItem()); }
 		};
 	}
 	public void layoutInventory(int x, int y) {
@@ -241,10 +243,24 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		if (viewingPlayer instanceof ServerPlayer player && me.active()) me.tick(meBridge(player));
 		refresh(); super.broadcastChanges();
 	}
-	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
-	@Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
+	@Override public void clicked(int slot, int button, ClickType type, Player player) {
+		nativeSlots.click(slot, button, type, player, () -> super.clicked(slot, button, type, player));
+	}
+	@Override public ItemStack quickMoveStack(Player player, int slot) { return nativeSlots.quickMove(player, slot); }
+	@Override public Player craftingPlayer() { return viewingPlayer; }
+	@Override public boolean nativeAllowed(ServerPlayer player) {
+		return !exchanging && controller(player) != null && (wireless == null || wireless.charge(player, true));
+	}
+	@Override public void nativeEditing(boolean value) { exchanging = value; }
+	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
+	@Override public boolean lockedNativeStack(ItemStack stack) {
+		return wireless() && stack.getItem() instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem
+				&& (stack == viewingPlayer.getMainHandItem() || stack == viewingPlayer.getOffhandItem());
+	}
 	@Override public void removed(Player player) {
 		// 客户端打开 JEI 也会调用 removed；只有服务端真正关闭菜单才撤销会话和订阅。
+		if (core == null && player.containerMenu == this) return;
+		nativeSlots.close(player);
 		if (core != null) { closed = true; sequences.close(); craftingSequences.close(); craftingState.close(); crafting.pause(); me.close(); }
 		super.removed(player);
 	}

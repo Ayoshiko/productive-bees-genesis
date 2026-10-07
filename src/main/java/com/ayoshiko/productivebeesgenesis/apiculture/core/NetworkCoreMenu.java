@@ -32,6 +32,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private boolean productTurn;
 	private CoreAutomaticBeeInput automaticBee;
 	private TerminalCraftingMenu crafting;
+	private TerminalNativeSlots nativeSlots;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private boolean closed;
 	private boolean exchanging;
@@ -106,6 +107,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private void addCrafting() {
 		if (!dedicatedTerminal()) return; crafting = new TerminalCraftingMenu(this);
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
+		nativeSlots = new TerminalNativeSlots(this, crafting); nativeSlots.open(viewer);
 	}
 	public void layoutCrafting(boolean visible, int top) { layoutCrafting(visible, 51, top); }
 	public void layoutCrafting(boolean visible, int left, int top) {
@@ -140,10 +142,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 			addSlot(selectionSlot(inventory, index, 47 + column * 18, 154 + row * 18 + (row == 3 ? 4 : 0)));
 		}
 	}
-	private static Slot selectionSlot(Inventory inventory, int index, int x, int y) {
+	private Slot selectionSlot(Inventory inventory, int index, int x, int y) {
 		return new Slot(inventory, index, x, y) {
-			@Override public boolean mayPlace(ItemStack stack) { return false; }
-			@Override public boolean mayPickup(Player player) { return false; }
+			@Override public boolean mayPlace(ItemStack stack) { return dedicatedTerminal() && !lockedNativeStack(getItem()) && !lockedNativeStack(stack); }
+			@Override public boolean mayPickup(Player player) { return dedicatedTerminal() && !lockedNativeStack(getItem()); }
 		};
 	}
 	/** 只更换客户端的槽坐标；槽序号和真实背包索引始终不变。 */
@@ -160,8 +162,20 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	boolean workspaceAvailable(net.minecraft.server.level.ServerPlayer player) { return dedicatedTerminal() && !exchanging && automaticBee == null && exchangeCore(player) != null; }
 	boolean chargeTerminalRequest(net.minecraft.server.level.ServerPlayer player) { return TerminalPayloads.allow(player) && (terminalAccess == null || terminalAccess.charge(player, true)); }
 	void wakeProducts(net.minecraft.server.level.ServerPlayer player) { productDue = 0; TerminalSubscriptionService.watch(player, this); }
-	/** 背包槽只同步和选择；包括丢弃、热键交换和创造复制在内的原版搬运均关闭。 */
-	@Override public void clicked(int slot, int button, ClickType type, Player player) { }
+	/** 专用终端使用原生槽交互；核心／成员代理的管理命令边界保持独立。 */
+	@Override public void clicked(int slot, int button, ClickType type, Player player) {
+		if (nativeSlots != null) nativeSlots.click(slot, button, type, player, () -> super.clicked(slot, button, type, player));
+	}
+	@Override public Player craftingPlayer() { return viewer; }
+	@Override public boolean nativeAllowed(net.minecraft.server.level.ServerPlayer player) {
+		return !exchanging && automaticBee == null && exchangeCore(player) != null && (terminalAccess == null || terminalAccess.charge(player, true));
+	}
+	@Override public void nativeEditing(boolean value) { exchanging = value; }
+	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
+	@Override public boolean lockedNativeStack(ItemStack stack) {
+		return wirelessTerminal() && stack.getItem() instanceof WirelessTerminalItem
+				&& (stack == viewer.getMainHandItem() || stack == viewer.getOffhandItem());
+	}
 	public long value(int index) {
 		if (index == 0) return data.get(0);
 		long result = 0; for (int part = 0; part < 4; part++) result |= (data.get(1 + (index - 1) * 4 + part) & 65535L) << (part * 16);
@@ -206,10 +220,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (id == 3) return core.setProductionRunning(!core.productionRunning());
 		return false;
 	}
-	@Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
+	@Override public ItemStack quickMoveStack(Player player, int index) { return nativeSlots == null ? ItemStack.EMPTY : nativeSlots.quickMove(player, index); }
 	@Override public void removed(Player player) {
 		// 客户端切到 JEI 子屏幕也会调用 removed；只有实际菜单已替换才撤销会话。
 		if (core == null && player.containerMenu == this) return;
+		if (nativeSlots != null) nativeSlots.close(player);
 		if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) cancelSubscription(serverPlayer);
 		super.removed(player);
 		if (selections != null) selections.close();

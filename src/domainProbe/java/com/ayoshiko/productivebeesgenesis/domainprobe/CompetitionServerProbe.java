@@ -111,7 +111,7 @@ public final class CompetitionServerProbe {
                     if (CraftingProbe.enabled()) CraftingProbe.recovered(core, manifest);
                     if (MeBridgeProbe.enabled()) MeBridgeProbe.recovered(core, players, manifest);
                     if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
-                    if (CraftingProbe.enabled()) CraftingProbe.open(core, players, true); else if (MeBridgeProbe.enabled()) CraftingProbe.open(core, players, false); else openBoth(players);
+                    if (CraftingProbe.enabled()) CraftingProbe.open(core, players, !NativeSlotsProbe.enabled()); else if (MeBridgeProbe.enabled()) CraftingProbe.open(core, players, false); else openBoth(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
                     if (WirelessProbe.visualOnly()) { WirelessProbe.advance(core, players, 348, Map.of()); begin(server, 349); return; }
                     begin(server, 80);
@@ -123,10 +123,16 @@ public final class CompetitionServerProbe {
                 if (!acks.containsKey(OWNER) || core.ownership().readyAuthority() == null || !core.allowed(players.get(1))) return;
                 require(!core.productionRunning() && checkpoint().ownedMachines().values().stream().anyMatch(r -> r.bees() != null), "Setup did not activate then pause");
                 if (MeBridgeProbe.enabled()) { MeBridgeProbe.seed(core, players); begin(server, 500); return; }
+                if (NativeSlotsProbe.enabled()) { NativeSlotsProbe.seed(core, players); begin(server, 800); return; }
                 if (CraftingProbe.enabled()) { CraftingProbe.seed(core, players); begin(server, 300); return; }
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (NativeSlotsProbe.enabled() && stage >= 800) {
+                if (!NativeSlotsProbe.ready(stage)) return;
+                int next = NativeSlotsProbe.advance(core, players, stage); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (MachineWorkspaceProbe.enabled() && stage >= 750) {
                 int next = MachineWorkspaceProbe.advance(players.getFirst(), stage); noDrops(server); begin(server, next); return;
             }

@@ -116,14 +116,8 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+200 && x < leftPos+219 && y >= topPos+131 && y < topPos+143) {
 			minecraft.setScreen(new com.ayoshiko.productivebeesgenesis.apiculture.client.MeTerminalScreen(this, menu)); return true;
 		}
-		if ((button == 0 || button == 1) && craftingVisible()) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive() && isHovering(slot.x, slot.y, 16, 16, x, y)) {
-			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);
-			else { craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown();
-				craft(take ? CRAFT_OUT : CRAFT_IN, craftingTarget, take ? -1 : inventorySlot, take && hasShiftDown() ? 64 : 1); }
-			return true;
-		}
 		if (button == 0) for (var slot : menu.slots) if (slot.index < 36 && isHovering(slot.x, slot.y, 16, 16, x, y)) {
-			inventorySlot = slot.getContainerSlot(); if (craftingVisible() && hasShiftDown()) craft(CRAFT_IN, craftingTarget, inventorySlot, 64); return true;
+			inventorySlot = slot.getContainerSlot(); if (hasAltDown()) return true; break;
 		}
 		return super.mouseClicked(x, y, button);
 	}
@@ -153,12 +147,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 			g.fill(leftPos + 233, topPos + 6, leftPos + 234, topPos + imageHeight - 6, 0xffa77932);
 			MachineDetailsPanel.render(g, font, menu, detailsPage, leftPos + 7, topPos + 167, 215, 17);
 		}
-		for (var slot : menu.slots) {
-			if (!slot.isActive()) continue;
-			int x = leftPos + slot.x, y = topPos + slot.y;
-			g.fill(x - 1, y - 1, x + 17, y + 17, (slot.index < 36 ? slot.getContainerSlot() == inventorySlot : slot.index == 36 + craftingTarget) ? 0xffffce65 : 0xff626970);
-			g.fill(x, y, x + 16, y + 16, 0xff171a1e);
-		}
+		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSlotGrid.render(g, menu, leftPos, topPos);
 	}
 	@Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
 		g.drawString(font, font.plainSubstrByWidth(title.getString(), 74), 7, 7, 0xffead5a7, false);
@@ -183,6 +172,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
 		super.render(g, mouseX, mouseY, partial); renderTooltip(g, mouseX, mouseY);
+		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSlotGrid.lockedTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 		if (workspace || detailsOpen) MachineDetailsPanel.tooltip(g, font, menu, detailsPage, leftPos + 7, topPos + (workspace ? 167 : 27), 215, workspace ? 17 : 13, mouseX, mouseY);
 		com.ayoshiko.productivebeesgenesis.apiculture.client.MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 203, topPos + 133, mouseX, mouseY);
 	}

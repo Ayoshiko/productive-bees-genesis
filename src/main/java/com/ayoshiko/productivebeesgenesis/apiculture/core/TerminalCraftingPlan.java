@@ -48,6 +48,10 @@ public final class TerminalCraftingPlan {
 	}
 	public static Change craft(List<ItemStack> source, List<ItemStack> inventory, CraftingInput.Positioned input,
 			List<ItemStack> remainders, ItemStack output) {
+		return craft(source, inventory, input, remainders, output, true);
+	}
+	public static Change craft(List<ItemStack> source, List<ItemStack> inventory, CraftingInput.Positioned input,
+			List<ItemStack> remainders, ItemStack output, boolean inventoryOutput) {
 		if (source.size() != 9 || inventory.size() != 36 || remainders.size() != input.input().size() || output.isEmpty())
 			throw new IllegalArgumentException("Invalid crafting result");
 		var grid = copy(source); var player = copy(inventory);
@@ -64,7 +68,7 @@ public final class TerminalCraftingPlan {
 			if (!insert(player, rest).isEmpty()) return null;
 		}
 		// 输出先成为宿主内已付费结果；回调之后再交给玩家，但初始空间不足不能扣料。
-		if (!insert(copy(player), output).isEmpty()) return null;
+		if (inventoryOutput && !insert(copy(player), output).isEmpty()) return null;
 		return new Change(grid, player, output.getCount());
 	}
 	private TerminalCraftingPlan() { }

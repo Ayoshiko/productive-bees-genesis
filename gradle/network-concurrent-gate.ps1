@@ -9,6 +9,7 @@ param(
     [switch]$Upgrades,
     [switch]$Terminals,
     [switch]$Crafting,
+    [switch]$NativeSlots,
     [switch]$MeBridge,
     [switch]$MeCrafting,
     [switch]$MeStorage,
@@ -23,6 +24,7 @@ param(
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
 $ErrorActionPreference = 'Stop'
+if ($NativeSlots) { $Crafting = $true }
 if ($MeStorage) { $MeBridge = $true }
 if ($MachineWorkspace -and ($MeCrafting -or $ProductWorkspace)) { throw 'Machine workspace uses separate focused stages' }
 if ($MeCrafting -or $ProductWorkspace -or $MachineWorkspace) { $MeBridge = $true }
@@ -48,6 +50,7 @@ if ($ChildTask) {
     if ($ProductWorkspace) { $arguments += '-PnetworkWorkspace' }
     if ($MachineWorkspace) { $arguments += '-PnetworkMachineWorkspace' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
+    if ($NativeSlots) { $arguments += '-PnetworkNativeSlots' }
     if ($RecipeFill) { $arguments += '-PnetworkRecipeFill' }
     if ($Wireless) { $arguments += '-PnetworkConcurrentWireless' }
     if ($WirelessVisualOnly) { $arguments += '-PnetworkWirelessVisualOnly' }
@@ -62,7 +65,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($NativeSlots) { 'D18j1' } elseif ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -94,6 +97,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($ProductWorkspace) { $arguments += '-ProductWorkspace' }
     if ($MachineWorkspace) { $arguments += '-MachineWorkspace' }
     if ($Crafting) { $arguments += '-Crafting' }
+    if ($NativeSlots) { $arguments += '-NativeSlots' }
     if ($RecipeFill) { $arguments += '-RecipeFill' }
     if ($Wireless) { $arguments += '-Wireless' }
     if ($WirelessVisualOnly) { $arguments += '-WirelessVisualOnly' }
@@ -123,6 +127,7 @@ try {
     if ($Crafting -or $MeBridge) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
     if ($RecipeFill -or $MeStorage) { $buildArgs += @('--tests', '*ProductWithdrawalCheckpointTest') }
     if ($MeStorage) { $buildArgs = @('test', '--tests', '*ProductWithdrawalCheckpointTest', '--tests', '*MixinBoundaryConventionTest') }
+    if ($NativeSlots) { $buildArgs = @('test', '--tests', '*TerminalClientStateTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
@@ -185,7 +190,11 @@ try {
                     Add-Evidence "$roleId-me-machine" (Join-Path $clientRoot 'me-machine.png')
                 }
                 if ($RecipeFill -and $mode -eq 'write' -and $playerRole -eq 'owner') { Add-Evidence "$roleId-jei-fill" (Join-Path $clientRoot 'jei-filled.png') }
-                if ($Crafting -and $mode -eq 'write') {
+                if ($NativeSlots -and $mode -eq 'write') {
+                    foreach ($image in @('native-slots', 'native-compact')) { Add-Evidence "$roleId-$image" (Join-Path $clientRoot "$image.png") }
+                    if ($playerRole -eq 'owner') { Add-Evidence "$roleId-native-machine" (Join-Path $clientRoot 'native-machine.png') }
+                }
+                if ($Crafting -and !$NativeSlots -and $mode -eq 'write') {
                     Add-Evidence "$roleId-crafting-materials" (Join-Path $clientRoot 'crafting-materials.png')
                     Add-Evidence "$roleId-crafting-retained" (Join-Path $clientRoot 'crafting-retained.png')
                 }
@@ -234,7 +243,11 @@ try {
                     }
                 } elseif ($serverReport.terminalCheckpointAndPlayerRecovery -ne $true) { throw 'Missing terminal player recovery' }
             }
-            if ($Crafting) {
+            if ($NativeSlots) {
+                if ($serverReport.nativeSlotsVerified -ne $true) { throw 'Missing native slot checks' }
+                Add-Evidence "$serverId-native-grid" $serverReport.nativeGridFile
+            }
+            if ($Crafting -and !$NativeSlots) {
                 foreach ($check in @('craftingConservationRemaindersFullAndCompetition', 'craftingCallbacksAndRetainedResults', 'craftingNormalSaveAndRecovery')) {
                     if ($serverReport.$check -ne $true) { throw "Missing crafting check: $check" }
                 }

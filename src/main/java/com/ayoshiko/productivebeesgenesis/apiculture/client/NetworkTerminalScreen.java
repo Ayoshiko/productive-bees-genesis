@@ -378,21 +378,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+9 && x < leftPos+28 && y >= topPos+10 && y < topPos+22) {
 			minecraft.setScreen(new MeTerminalScreen(this, menu)); return true;
 		}
-		if (craftingVisible() && (button == 0 || button == 1)) for (var slot : menu.slots) if (slot.index >= 36 && slot.isActive()
-				&& x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
-			if (slot.index == 45) craft(CRAFT_TAKE, -1, -1, hasShiftDown() ? 8 : 1);
-			else { craftingSource = true; craftingTarget = slot.index - 36; boolean take = button == 1 || hasShiftDown(); craft(take ? CRAFT_OUT : CRAFT_IN, craftingTarget, take ? -1 : sourceSlot, take ? hasShiftDown() ? 64 : 1 : amount); }
-			return true;
-		}
 		if (button == 1 && search.isMouseOver(x, y)) { search.setValue(""); setFocused(search); return true; }
 		if (button == 0 && maxScroll() > 0 && x >= leftPos + 289 && x < leftPos + 297 && y >= topPos + 51 && y < topPos + inventoryY - 28) {
 			draggingScroll = true; scrollTo(y); return true;
 		}
 		if (button == 0) for (var slot : menu.slots) if (slot.index < 36 && x >= leftPos + slot.x && x < leftPos + slot.x + 16 && y >= topPos + slot.y && y < topPos + slot.y + 16) {
 			sourceSlot = slot.getContainerSlot(); confirmCage = false;
-			if (hasShiftDown() && (tab == 4 || workspace && craftingSource)) craft(CRAFT_IN, craftingTarget, sourceSlot, 64);
-			else if (hasShiftDown() && tab == 1 && menu.scope() == TerminalScope.APIARY) automaticBee();
-			rebuild(); return true;
+			if (hasAltDown()) { rebuild(); return true; }
+			break;
 		}
 		return super.mouseClicked(x, y, button);
 	}
@@ -421,11 +414,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 			int thumb = 51 + scroll * (inventoryY - 91) / maxScroll();
 			TerminalSkin.panel(g, leftPos + 290, topPos + thumb, 6, 12);
 		}
-		for (var slot : menu.slots) {
-			if (!slot.isActive()) continue;
-			TerminalSkin.panel(g, leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18);
-			if (slot.index < 36 && slot.getContainerSlot() == sourceSlot || slot.index == 36 + craftingTarget) g.renderOutline(leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18, TerminalSkin.GOLD);
-		}
+		TerminalSlotGrid.render(g, menu, leftPos, topPos);
 		if (workspace) {
 			g.fill(leftPos + 306, topPos + 6, leftPos + 307, topPos + imageHeight - 6, 0xff5c5845);
 			g.fill(leftPos + 310, topPos + 69, leftPos + 484, topPos + inventoryY - 104, 0xff14232a);
@@ -434,6 +423,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
+		TerminalSlotGrid.lockedTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 		MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
 		if (workspace && mouseX >= leftPos + 38 && mouseX < leftPos + 297 && mouseY >= topPos + inventoryY && mouseY < topPos + imageHeight - 6)
 			g.renderComponentTooltip(font, List.of(own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), own("workspace_energy", menu.energy(false), menu.energy(true))), mouseX, mouseY);

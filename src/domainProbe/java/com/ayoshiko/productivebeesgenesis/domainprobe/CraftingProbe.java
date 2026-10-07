@@ -129,17 +129,20 @@ public final class CraftingProbe {
 		}
 	}
 	static void capture(NetworkCoreBlockEntity core, CompoundTag manifest) {
+		if (NativeSlotsProbe.enabled()) { NativeSlotsProbe.capture(core, manifest); return; }
 		if (WirelessProbe.enabled()) WirelessProbe.capture(core, manifest);
 		var registry = core.getLevel().registryAccess();
 		manifest.put("crafting-primary", account(core, false).save(new CompoundTag(), registry));
 		manifest.put("crafting-secondary", account(core, true).save(new CompoundTag(), registry));
 	}
 	static void recovered(NetworkCoreBlockEntity core, CompoundTag manifest) {
+		if (NativeSlotsProbe.enabled()) { NativeSlotsProbe.recovered(core, manifest); return; }
 		if (WirelessProbe.enabled()) WirelessProbe.recovered(core, manifest);
 		for (boolean second : new boolean[]{false, true}) require(account(core, second).save(new CompoundTag(), core.getLevel().registryAccess())
 				.equals(manifest.getCompound(second ? "crafting-secondary" : "crafting-primary")), "Restart changed crafting account");
 	}
 	static void report(MinecraftServer server, NetworkCoreBlockEntity core, CompoundTag manifest, JsonObject report, boolean reader) throws Exception {
+		if (NativeSlotsProbe.enabled()) { NativeSlotsProbe.report(server, core, manifest, report, reader); return; }
 		if (RecipeFillProbe.enabled()) RecipeFillProbe.report(report, reader);
 		if (WirelessProbe.enabled()) WirelessProbe.report(server, manifest, report, reader);
 		require(reader || completed && failedCallbacks == 1 && stages.size() == 29, "Crafting stages incomplete");

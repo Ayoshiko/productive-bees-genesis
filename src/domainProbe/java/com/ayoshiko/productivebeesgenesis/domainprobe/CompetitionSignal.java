@@ -23,7 +23,7 @@ public record CompetitionSignal(int stage, int moved, int status) implements Cus
         public void encode(FriendlyByteBuf buffer, CompetitionSignal value) { buffer.writeInt(value.stage); buffer.writeInt(value.moved); buffer.writeInt(value.status); }
     };
     public CompetitionSignal {
-		if (stage < 0 || stage > 757 || moved < 0 || moved > 1000 || status < -3 || status > 30)
+		if (stage < 0 || stage > 826 || moved < 0 || moved > 1000 || status < -3 || status > 30)
             throw new IllegalArgumentException("Invalid probe signal");
     }
     @Override public Type<CompetitionSignal> type() { return TYPE; }

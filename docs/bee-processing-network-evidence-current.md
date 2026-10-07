@@ -531,3 +531,14 @@ reader 通过正常登录读取 writer 玩家文件、网络 checkpoint 和桥 N
 最终 AE2 证据索引为 `build/network-gates/d20b2-me-crafting-20261007-reload/gate.json`；无 AE2 原始通过报告保留在首轮的 noae2-write-server/results/concurrent-server.json，后续只改不会在无 AE2 时加载的 AE2 夹具。两轮均为正常 writer 保存，不新增跨 JVM；配方测试使用服务器实际配方集合替换与正式索引重建，不声称执行了资源包文件 I/O。与 D20a／b1 的失效、模拟、物品／流体、大数、多提供者及正常恢复证据共同关闭当前静态准入的 D20；完整附属、自拉取、目标库存、故障耐久与性能仍属后续门。
 
 本轮用户补充的 13 张 WCWT 图已纳入现有主合同、视觉规格及 D18j1–j4；已确认当前只读 Slot／定量按钮与目标有差距。此为要求接入，未将尚未实现的原生槽位、整理兼容或 WCWT 扩展签收；下一步优先 j1。
+
+<a id="s10-118"></a>
+### 10.118 D18j1a 原生槽位、逐玩家鼠标保管与正常恢复（2026-10-07，本步范围已验收）
+
+接续网络 worktree `48a109b` 上的未提交实现，有线／综合／无线网络与独立机器复用标准菜单槽位，材料九格、结果及玩家 27＋9 背包保持独立 Container 与稳定索引。原版拿放、单件／半组、拖拽、Shift、数字键与双击归集由服务器沿真实资产入口执行；制作结果继续走已付费账户，不开放预览普通拾取。逐玩家 `terminal_cursor` attachment 保存携带物，关闭先有限插回背包，余量继续保管；非法 Tag 原样隔离。共享材料账户和原生编辑共用 busy／重入边界，整理的 setChanged 发布真实账户。合同、视觉和固定 API 参考分别见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+原聊天发现并修复夹具阶段上限、旧低频管理限流打断连续拖拽、匿名 Slot 的 index 遮蔽材料索引，以及无线独立机夹具绑定距离。原 final 轮只有构建通过，客户端启动期间中断，无完整验收结果。本轮复用未变化编译／测试，执行 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j1-native-slots-20261007-resume -NativeSlots -Combination noae2`；定向 TerminalClientStateTest、build、verifyReleaseArtifact 与开发源集编译通过（10 项 Gradle 任务 up-to-date，仅产物检查执行）。未扩跑无关测试或 AE2 大矩阵。
+
+writer PID 23464、reader PID 28040；NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368，无 AE2。writer 的 800–826 场景通过：两个真实 TCP 玩家交错拿放、完整组件保留、拖拽分配、标准 Container 整理、制作输入输出守恒、拒绝丢弃、无线设备锁定与替换失效、无线独立机合成、满背包时双方鼠标物品独立保管、重开和坏数据 codec。reader 使用独立 JVM 正常登录，材料账户、玩家文件与鼠标 attachment 和 writer 清单一致；四个客户端均正常退出，没有转移掉落物。已查看常规与紧凑布局截图。
+
+证据为 `build/network-gates/d18j1-native-slots-20261007-resume/gate.json`（passed=true）。本步仅签收 j1a 的原生交互与正常恢复；未安装具体整理插件，Container 场景不能代替 j1b 兼容验收。死亡复制仅已接入 copyOnDeath，未新增真实死亡场景；强制断电耐久、完整 AE2／附属矩阵与 Spark 性能仍按后续联合门验收。完整 j1、D18／D19 和发布门保持开放。

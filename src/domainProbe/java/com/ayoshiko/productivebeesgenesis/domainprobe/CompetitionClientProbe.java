@@ -59,6 +59,10 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (NativeSlotsProbe.enabled() && (stage >= 800 || stage == 80)) {
+                if (client.player.containerMenu instanceof NetworkCoreMenu menu) session = menu.terminalSession().toString();
+                var reply = NativeSlotsClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (MachineWorkspaceProbe.enabled() && stage >= 750) {
                 var reply = MachineWorkspaceClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
             }
