@@ -59,7 +59,7 @@ final class MeBridgeProbe {
 			if (ae()) MeBridgeAeFixture.overload(bridge);
 		}
 		if (stage == 503 && ae()) MeBridgeAeFixture.clear();
-		if (stage == 504) { if (storage() && ae()) MeStorageAeFixture.exercise(core, bridge, players); old = bridge.link(); place(player, core.getBlockPos().south()); }
+		if (stage == 504) { if (storage() && ae() && !MeCraftingProbe.enabled()) MeStorageAeFixture.exercise(core, bridge, players); old = bridge.link(); place(player, core.getBlockPos().south()); }
 		if (stage == 505) {
 			require(MeBridgeTarget.inspect(bridge).status() == MeBridgeStatus.CONFLICT, "Two bridges selected an arbitrary grid");
 			if (ae()) { MeBridgeAeFixture.closed(old); if (storage()) MeStorageAeFixture.closed(old, player); }
@@ -128,7 +128,7 @@ final class MeBridgeProbe {
 	}
 	static void report(JsonObject report, boolean reader) {
 		require(reader ? recovered : stages == 12, "ME bridge evidence incomplete");
-		if (storage() && ae()) { require(reader || MeStorageAeFixture.verified, "Missing ME storage evidence"); report.addProperty("meStorageVerified", true); }
+		if (storage() && ae()) { require(reader || (MeCraftingProbe.enabled() ? MeCraftingAeFixture.storageVerified : MeStorageAeFixture.verified), "Missing ME storage evidence"); report.addProperty("meStorageVerified", true); }
 		report.addProperty("meBridgeConnectionAndRecovery", true); report.addProperty("meBridgeStages", stages);
 	}
 }

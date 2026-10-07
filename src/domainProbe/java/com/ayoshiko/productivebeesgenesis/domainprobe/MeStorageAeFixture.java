@@ -104,6 +104,7 @@ final class MeStorageAeFixture {
 		require(counts.get(iron) < 0 && !((SafeStorageAggregation) (Object) bad).pbgSafeAggregationAvailable(), "Negative contribution was hidden");
 		core.setProductionRunning(running); verified = true;
 	}
+	static void finish(NetworkCoreBlockEntity core) { core.setProductionRunning(running); }
 	static void closed(MeBridgeLink old, ServerPlayer player) {
 		require(((MeBridgeNode) old).storage().extract(AEItemKey.of(Items.IRON_INGOT), 1, Actionable.MODULATE, IActionSource.ofPlayer(player)) == 0,
 				"Old storage reference survived host conflict");

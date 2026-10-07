@@ -17,6 +17,7 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 final class MeCraftingClient {
 	private static int previous=-1, step;
 	private static MeTerminalRequest replay;
+	private static String outputId() { return MeBridgeProbe.storage() ? "minecraft:raw_gold" : "minecraft:iron_ingot"; }
 	static CraftingClient.Reply advance(Minecraft client, int stage, boolean owner) throws Exception {
 		if (previous!=stage) { previous=stage; step=0; }
 		if (!(client.player.containerMenu instanceof NetworkCoreMenu menu)) return null;
@@ -33,7 +34,7 @@ final class MeCraftingClient {
 			}
 			if (!(client.screen instanceof MeTerminalScreen screen) || session.waiting() || view.mode()!=Mode.CATALOGUE || view.rows().isEmpty()) return null;
 			if (stage==600) { require(view.more() && view.rows().size()==8,"Craftable pagination missing"); return ack(); }
-			if (step==0) { input(screen,"filter","minecraft:iron_ingot"); input(screen,"quantity","2"); press(screen,"refresh"); step++; return null; }
+			if (step==0) { input(screen,"filter",outputId()); input(screen,"quantity","2"); press(screen,"refresh"); step++; return null; }
 			if (view.rows().size()!=1) return null;
 			choose(screen,0); press(screen,"plan"); return ack();
 		}
@@ -44,7 +45,7 @@ final class MeCraftingClient {
 		if (!(client.screen instanceof MeTerminalScreen screen) || session.waiting()) return null;
 		if (stage==601 || stage==606) {
 			if (step==0) { press(screen,"catalogue"); step++; return null; }
-			if (step==1) { input(screen,"filter","minecraft:iron_ingot"); input(screen,"quantity",stage==601?"4":"2"); press(screen,"refresh"); step++; return null; }
+			if (step==1) { input(screen,"filter",outputId()); input(screen,"quantity",stage==601?"4":"2"); press(screen,"refresh"); step++; return null; }
 			if (step==2) {
 				if (view.mode()!=Mode.CATALOGUE || view.rows().size()!=1) return null;
 				choose(screen,0); press(screen,"plan"); step++; return null;
@@ -60,7 +61,7 @@ final class MeCraftingClient {
 		if (stage==603 || stage==607) {
 			if (step==0) {
 				long revision=view.revision(); int page=view.page(); press(screen,"confirm");
-				replay=new MeTerminalRequest(menu.containerId,menu.terminalSession(),session.sequence(),CONFIRM,revision,-1,page,stage==603?4:2,"minecraft:iron_ingot"); step++; return null;
+				replay=new MeTerminalRequest(menu.containerId,menu.terminalSession(),session.sequence(),CONFIRM,revision,-1,page,stage==603?4:2,outputId()); step++; return null;
 			}
 			if (view.mode()!=Mode.TASKS || view.rows().isEmpty()) return null;
 			require(view.rows().size()==1 && view.rows().getFirst().enabled(),"Missing cancellable AE2 job");

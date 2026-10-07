@@ -18,7 +18,7 @@ param(
     [switch]$RecipeFill,
     [switch]$Wireless,
     [switch]$WirelessVisualOnly,
-    [switch]$CraftingWriteOnly,
+    [Alias('WriteOnly')][switch]$CraftingWriteOnly,
     [ValidateSet('All', 'noae2', 'ae2')][string]$Combination = 'All',
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
@@ -30,7 +30,7 @@ if ($ProductWorkspace -and $MeCrafting) { throw 'Workspace and ME crafting use s
 if ($MeBridge -and ($Crafting -or $Upgrades -or $Terminals)) { throw 'ME bridge uses a separate focused fixture' }
 if ($Upgrades -and $Terminals) { throw 'Upgrade and terminal gates use separate fixtures' }
 if ($Crafting -and ($Upgrades -or $Terminals)) { throw 'Crafting uses a separate focused fixture' }
-if ($CraftingWriteOnly -and !$Crafting) { throw 'The bounded write-only follow-up is only for crafting' }
+if ($CraftingWriteOnly -and !$Crafting -and !$MeBridge) { throw 'Write-only mode requires a focused crafting or bridge fixture' }
 if ($Wireless -and !$Crafting) { throw 'Wireless requires the focused crafting fixture' }
 if ($WirelessVisualOnly -and (!$Wireless -or !$SeedWorld -or $CraftingWriteOnly)) { throw 'Wireless visual follow-up requires Wireless and an existing seed world' }
 if ($RecipeFill -and (!$Crafting -or $Wireless)) { throw 'Recipe fill requires a separate crafting fixture' }
@@ -62,7 +62,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MeStorage) { 'D20b' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()

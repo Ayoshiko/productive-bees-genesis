@@ -118,7 +118,7 @@ public final class CompetitionServerProbe {
                 } else { core.openTerminal(owner); begin(server, 0); }
                 return;
             }
-            require(server.overworld().getGameTime() - stageAt < (MeBridgeProbe.storage() && stage == 504 ? 2400 : 1200), "Stage timeout: " + stage + "; acknowledgments=" + acks);
+            require(server.overworld().getGameTime() - stageAt < (MeBridgeProbe.storage() && (stage == 504 || stage == 605) ? 2400 : 1200), "Stage timeout: " + stage + "; acknowledgments=" + acks);
             if (stage == 0) {
                 if (!acks.containsKey(OWNER) || core.ownership().readyAuthority() == null || !core.allowed(players.get(1))) return;
                 require(!core.productionRunning() && checkpoint().ownedMachines().values().stream().anyMatch(r -> r.bees() != null), "Setup did not activate then pause");

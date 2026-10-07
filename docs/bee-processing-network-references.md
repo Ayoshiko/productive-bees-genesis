@@ -406,3 +406,12 @@ ICraftingCPU 公共接口不提供任务 UUID；对已核实的原生 CraftingCP
 ### 13.33 独立机器工作状态与菜单详情（2026-10-06）
 
 以网络分支 `e76583e` 为基线读取 `MachineMenu`、`MachineWorkService.access/commit`、`MachineAssets.work/commit`、`CombinedMachineWork`、`FiniteProductBuffer`、`MachineUpgradeProfiles`、`BeeRecord.drained` 与 `CentrifugeJob.paid`。详情沿当前工作根和形成绑定读取，不调用升级预估或配方重算；旧周期已固定的进度／并行与下一周期配置不能混用。采用原菜单 ContainerData 的 16 位拆分传递有符号坐标及 long 数量，固定六蜂位／三进程字段，十 tick 采样且只同步变化；现有读写守卫和无线材料账户继续负责操作。未引入第三方 UI／可选模组类型，未更新外部参考副本。
+
+D20b2 于 2026-10-07 继续复核上述固定 AE2 的 `CraftingCalculation` 构造器、`NetworkCraftingSimulationState`、`CraftingCpuLogic.trySubmitJob/finishJob/storeItems` 和 `CraftingCPUCluster.getSrc`：计划在主线程捕获库存，后台使用封闭快照；提交按玩家 source 实际取料，CPU 持有输入，取消／完成通过自身 MachineSource 回流。接收方不可用或当前类型被拒绝时，CPU 只扣实际存入量并保留余量。以真实 CPU、现有终端点击和蜂业账本验证这些路径，不移植 CPU 私有资产或增加第二份合成库存。测试配方替换必须同时调用本项目正式 `CentrifugeRecipeIndex.rebuild` 与递增代际；只换 RecipeManager 而保留旧派生蜜脾块索引不能代表正常重载。
+
+<a id="s13-34"></a>
+### 13.34 用户 WCWT 截图与标准槽位目标（2026-10-07）
+
+来源为用户本轮提供的 13 张 AE2 WCWT 截图，物品 tooltip 标识为 `wcwt:wireless_comprehensive_work_terminal`。可直接确认：综合工作台的连续库存／手动合成／背包、样板编辑与批处理区域；名称／数量／模组排序、升序、已存储／可合成浏览；物品／流体／其它类型过滤及可见类型列表；无线与终端设置中的选块、缺料合成、补货、磁力、拾取入网、样板／工具包选项、完成置顶／提醒及搜索模式／记忆／焦点／JEI 同步。截图不能证明插件版本、服务端协议或整理兼容；当前未找到可核实的本地 WCWT JAR／源码，因此不把图中所有功能写成 AE2 19.2.17 原生 API，也不据图复制上游实现或素材。
+
+本项目实际差距已由源码确认：`NetworkCoreMenu`／`MachineMenu` 的 clicked 和 quickMoveStack 被关闭，背包槽禁止 pickup／place；`TerminalCraftingMenu.slot` 返回只读 SimpleContainer 投影；两种 Screen 把鼠标动作截获为选源及定量请求。有线材料账户由同一位置的授权查看者共享，鼠标携带资产不能使用一份公共 cursor 覆盖不同玩家。沿现有已付费制作、账户严格保存与无掉落原则建设原生槽位，不以开放副本拾取或单纯改边框替代。实现及验收按[主合同 9](bee-processing-network-design.md#s9)、[D18j](bee-processing-network-roadmap.md#s11-5)推进。

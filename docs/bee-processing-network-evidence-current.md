@@ -518,3 +518,16 @@ AE2 writer 的 600–612 十三阶段覆盖实际点击入口、九条可合成�
 writer 从实际网格存入 Long.MAX_VALUE 粗铁，再加一验证精确余额；原生网格及两种独立挂载顺序均报告饱和值。同组件命名粗铁、1,000 mB 蜂蜜往返，模拟原根不变、匿名／访客／非法品拒收、配置关闭、核心暂停同 tick 缓存、撤权和旧桥引用拒绝均通过，最后全部余额与入口前逐键一致。负贡献测试只故障化独立真实 NetworkStorage，不影响正常重启场景。十二阶段复用缺电、缺通道、冲突和重连；新增存储动作由服务器夹具对正式 MEStorage／授权服务调用，真实客户端负责原桥接显示、无线开关与登录流程，不能写成新增原生 ME 终端拖拽或实体 Shift 点击证据。已查看本轮网络截图。世界无新增转移掉落物。
 
 reader 通过正常登录读取 writer 玩家文件、网络 checkpoint 和桥 NBT，核对所有者、授权位与节点重新上线；writer 在保存前已退回本次大数／流体且恢复原暂停状态，因此不扩写为“大数未交付库存或运行中合成作业跨 JVM 恢复”。证据索引为 `build/network-gates/d20b-me-storage-20261007-products/gate.json`，工具内部 gate 标签为 D20b，本记录仅签收 b1。交付审计核对源码／依赖指纹、JAR、测试 XML、证据哈希、文档链接、UTF-8／JSON 和暂存一致性。完整自动化来源与合成消费／回流、重载、无 AE2 本轮启动及 D20b2 联合门仍未关闭；没有新增 Spark、故障断电或完整可选模组矩阵。
+
+<a id="s10-117"></a>
+### 10.117 D20b2 原生 ME 合成消费、取消保管与配方失效（2026-10-07，当前静态范围已验收）
+
+在网络 worktree `9d54bf1` 上复用 D18i1 的真实点击／CPU／任务夹具，ME 合成材料改从已授权蜂业桥读取，移除测试库存作为替代来源。蜂业账本经正式接口注入两次 Long.MAX_VALUE 加 64 粗铁，原生合成规划读取饱和视图，权威余额始终精确；旧无 AE2 场景沿原不可用入口验证。没有新增生产代码、JAR 行为或依赖，补齐 D20b1 尚未覆盖的消费／回流证据。合同与参考见[6.2](bee-processing-network-design.md#s6-2)、[13.30](bee-processing-network-references.md#s13-30)及[13.31](bee-processing-network-references.md#s13-31)。
+
+首轮 `d20b2-me-crafting-20261007-first -MeStorage -MeCrafting -WriteOnly -Combination All -Ae2Version 19.2.18` 的无 AE2 writer 通过；AE2 组已完成规划、提交和暂停取消，后在配方移除断言失败。原因是夹具只替换 RecipeManager 并递增代际，遗漏正式重载会重建的 CentrifugeRecipeIndex，旧派生蜜脾块索引仍使粗铁合法。修正夹具同时重建索引后，仅重跑 AE2 writer：`d20b2-me-crafting-20261007-reload`，其余参数相同、Combination=ae2。17 项定向检查、build／verifyReleaseArtifact 全部复用未变化生产源码结果，仅编译开发源集；没有再跑重启矩阵。
+
+最终 AE2 writer PID 29348，两名真实 TCP 客户端正常登录退出；运行 AE2 19.2.18／Applied Flux 2.1.5，其它依赖仍为 NeoForge 21.1.216／PB 13.14.0／Mekanism 10.7.19.85／JEI 19.39.0.368。十二桥接阶段后完成十三合成阶段：规划不扣款，四份计划只扣八粗铁，重放不多扣；暂停目标后取消，CPU 保管八粗铁；移除粗铁离心配方并发布新目录后继续拒绝回存，但原有粗铁仍可提取；恢复实际配方集合与索引后由 CPU MachineSource 自动退回。第二单消费四粗铁产出两粗金，经真实机器来源插入并完成任务；全部其它余额不变，最后经正式提取退回夹具剩余输入和结果。伪造计划版本、访客下单和关闭旧页面继续拒绝，世界无新增转移掉落物。
+
+最终 AE2 证据索引为 `build/network-gates/d20b2-me-crafting-20261007-reload/gate.json`；无 AE2 原始通过报告保留在首轮的 noae2-write-server/results/concurrent-server.json，后续只改不会在无 AE2 时加载的 AE2 夹具。两轮均为正常 writer 保存，不新增跨 JVM；配方测试使用服务器实际配方集合替换与正式索引重建，不声称执行了资源包文件 I/O。与 D20a／b1 的失效、模拟、物品／流体、大数、多提供者及正常恢复证据共同关闭当前静态准入的 D20；完整附属、自拉取、目标库存、故障耐久与性能仍属后续门。
+
+本轮用户补充的 13 张 WCWT 图已纳入现有主合同、视觉规格及 D18j1–j4；已确认当前只读 Slot／定量按钮与目标有差距。此为要求接入，未将尚未实现的原生槽位、整理兼容或 WCWT 扩展签收；下一步优先 j1。
