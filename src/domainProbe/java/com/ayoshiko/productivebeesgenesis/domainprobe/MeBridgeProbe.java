@@ -19,6 +19,7 @@ import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.r
 final class MeBridgeProbe {
 	static boolean enabled() { return Boolean.getBoolean("pbg.concurrent.meBridge"); }
 	static boolean ae() { return MeBridgeIntegration.installed(); }
+	static boolean storage() { return Boolean.getBoolean("pbg.concurrent.meStorage"); }
 	private static int stages;
 	private static MeBridgeBlockEntity bridge, machineBridge;
 	private static MeBridgeLink old;
@@ -38,7 +39,10 @@ final class MeBridgeProbe {
 	private static void power(MeBridgeBlockEntity value, Direction side) {
 		if (ae()) value.getLevel().setBlockAndUpdate(value.getBlockPos().relative(side), BuiltInRegistries.BLOCK.get(ResourceLocation.parse("ae2:creative_energy_cell")).defaultBlockState());
 	}
-	static boolean ready(int stage) { return stage != 508 || WirelessMachineFixture.ready(); }
+	static boolean ready(int stage) {
+		if (storage() && ae() && stage == 504 && !MeStorageAeFixture.ready(bridge)) return false;
+		return stage != 508 || WirelessMachineFixture.ready();
+	}
 	static int advance(NetworkCoreBlockEntity core, List<ServerPlayer> players, int stage) {
 		var player = players.getFirst(); var level = player.serverLevel();
 		if (stage <= 506 || stage == 511) {
@@ -51,13 +55,14 @@ final class MeBridgeProbe {
 			var before = bridge.saveWithoutMetadata(level.registryAccess());
 			for (int i = 0; i < 5; i++) MeBridgeTarget.status(core, player);
 			require(before.equals(bridge.saveWithoutMetadata(level.registryAccess())), "Read-only query changed node data");
+			if (storage() && ae()) MeStorageAeFixture.prepare(core, bridge, players);
 			if (ae()) MeBridgeAeFixture.overload(bridge);
 		}
 		if (stage == 503 && ae()) MeBridgeAeFixture.clear();
-		if (stage == 504) { old = bridge.link(); place(player, core.getBlockPos().south()); }
+		if (stage == 504) { if (storage() && ae()) MeStorageAeFixture.exercise(core, bridge, players); old = bridge.link(); place(player, core.getBlockPos().south()); }
 		if (stage == 505) {
 			require(MeBridgeTarget.inspect(bridge).status() == MeBridgeStatus.CONFLICT, "Two bridges selected an arbitrary grid");
-			if (ae()) MeBridgeAeFixture.closed(old);
+			if (ae()) { MeBridgeAeFixture.closed(old); if (storage()) MeStorageAeFixture.closed(old, player); }
 			level.setBlockAndUpdate(core.getBlockPos().south(), Blocks.AIR.defaultBlockState());
 		}
 		if (stage == 506) {
@@ -117,10 +122,13 @@ final class MeBridgeProbe {
 		bridge = (MeBridgeBlockEntity) core.getLevel().getBlockEntity(core.getBlockPos().above());
 		var expected = manifest.getCompound("me-bridge").getCompound("meBridge");
 		require(bridge.owner().equals(expected.getUUID("owner")) && bridge.owner().equals(players.getFirst().getUUID()), "Bridge owner changed across restart");
-		require(ae() ? bridge.link() != null : bridge.link() == null, "Restart optional dependency boundary failed"); recovered = true;
+		require(ae() ? bridge.link() != null : bridge.link() == null, "Restart optional dependency boundary failed");
+		require(bridge.automation() == expected.getBoolean("automation"), "Storage authorization changed across restart");
+		recovered = true;
 	}
 	static void report(JsonObject report, boolean reader) {
 		require(reader ? recovered : stages == 12, "ME bridge evidence incomplete");
+		if (storage() && ae()) { require(reader || MeStorageAeFixture.verified, "Missing ME storage evidence"); report.addProperty("meStorageVerified", true); }
 		report.addProperty("meBridgeConnectionAndRecovery", true); report.addProperty("meBridgeStages", stages);
 	}
 }

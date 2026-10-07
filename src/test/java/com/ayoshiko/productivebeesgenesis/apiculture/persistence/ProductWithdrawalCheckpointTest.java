@@ -103,6 +103,39 @@ class ProductWithdrawalCheckpointTest {
 		assertNull(PagedProductAmounts.firstItemEntry(store.snapshot(), KEY.id()));
 		assertNotNull(PagedProductAmounts.firstItemEntry(balances, KEY.id()));
 	}
+
+	@Test void meInsertionAndExtractionPreserveWideAmountsReservationsAndOtherAssets() {
+		var amount = BigInteger.ONE.shiftLeft(160);
+		var before = new NetworkCheckpoint(CheckpointTestData.identity(), 12, 0, ledger(ProductAmount.of(amount), 123),
+				List.of(), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
+		var policy = new ProductPolicySnapshot(0, List.of(new AllowedProductDescriptor(KEY, "test", "test:recipe")), List.of());
+		var inserted = before.insertProduct(7, KEY, Long.MAX_VALUE, policy);
+		assertEquals(amount.add(BigInteger.valueOf(Long.MAX_VALUE)), inserted.ledger().balances().get(KEY).exact());
+		assertSame(before.ledger().transactions(), inserted.ledger().transactions());
+		assertSame(before.energy(), inserted.energy());
+		assertSame(before, before.insertProduct(6, KEY, 1, policy));
+		assertSame(before, before.insertProduct(7, OTHER, 1, policy));
+		var extracted = inserted.extractProduct(8, KEY, Long.MAX_VALUE);
+		assertEquals(amount, extracted.ledger().balances().get(KEY).exact());
+		assertEquals(amount.subtract(BigInteger.valueOf(123)), extracted.ledger().available(KEY).exact());
+		assertSame(inserted, inserted.extractProduct(7, KEY, 1));
+		var codec = new NetworkCheckpointCodec(key -> { });
+		assertEquals(extracted, codec.decode(NetworkCheckpointCodec.encode(extracted)));
+	}
+	@Test void meExtractionReturnsOnlyUnreservedStockAndInsertionKeepsComponentIdentity() {
+		var before = new NetworkCheckpoint(CheckpointTestData.identity(), 12, 0, ledger(ProductAmount.of(100), 90),
+				List.of(), Set.of(), List.of(), List.of(), SchedulerCheckpoint.EMPTY);
+		var after = before.extractProduct(7, KEY, Long.MAX_VALUE);
+		assertEquals(ProductAmount.of(90), after.ledger().balances().get(KEY));
+		assertSame(after, after.extractProduct(8, KEY, 1));
+		var components = new CompoundTag(); components.putString("minecraft:custom_name", "named");
+		var named = new ProductKey(KEY.kind(), KEY.id(), components);
+		var policy = new ProductPolicySnapshot(0, List.of(new AllowedProductDescriptor(KEY, "test", "test:recipe")), List.of());
+		var inserted = before.insertProduct(7, named, 3, policy);
+		assertEquals(ProductAmount.of(3), inserted.ledger().balances().get(named));
+		assertEquals(ProductAmount.of(100), inserted.ledger().balances().get(KEY));
+		assertEquals(2, before.ledger().balances().size());
+	}
 	@Test void repeatedFiniteDeliveriesMatchAnIndependentBigIntegerReference() {
 		var value = BigInteger.ONE.shiftLeft(100); var current = ledger(ProductAmount.of(value), 1234); var random = new Random(20260922);
 		for (int i = 0; i < 2000; i++) {

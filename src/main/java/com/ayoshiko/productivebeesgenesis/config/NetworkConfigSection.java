@@ -13,6 +13,7 @@ public final class NetworkConfigSection {
 	public final ModConfigSpec.IntValue runtimeMicros;
 	public final ModConfigSpec.IntValue totalSteps;
 	public final ModConfigSpec.IntValue totalMicros;
+	public final ModConfigSpec.BooleanValue meStorageSafeAggregation;
 	public final ModConfigSpec.IntValue wirelessRange;
 	public final ModConfigSpec.IntValue wirelessTickFe;
 	public final ModConfigSpec.IntValue wirelessCommandFe;
@@ -30,6 +31,9 @@ public final class NetworkConfigSection {
 		wirelessRange = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessRange").comment("无线终端与同维度已加载核心的最大距离，单位方块；不加载区块。研发默认 64，待平衡测试。 ").defineInRange("wirelessRange", 64, 8, 1024);
 		wirelessTickFe = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessTickFe").comment("无线菜单每真实 tick 的设备 FE；不补扣离线时间。 ").defineInRange("wirelessTickFe", 1, 0, 1000);
 		wirelessCommandFe = builder.translation("productivebeesgenesis.configuration.bee_network.wirelessCommandFe").comment("通过会话及速率检查的无线请求费用，含查询及业务拒绝；模拟不收费。 ").defineInRange("wirelessCommandFe", 8, 0, 10000);
+		meStorageSafeAggregation = builder.translation("productivebeesgenesis.configuration.bee_network.meStorageSafeAggregation")
+				.comment("为含蜂业桥的 ME 网格逐提供者安全汇总显示数量；关闭后停止挂载蜂业产物，不改变真实余额或合成下单入口。")
+				.define("meStorageSafeAggregation", true);
 		builder.pop();
 	}
 }

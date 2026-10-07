@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D20b1 ME 双向产物存储**：网络核心的桥接端口新增显式自动化授权，合法蜂业物品／流体按完整组件和实际数量双向交接，保留超 long 精确余额与在制预约。键索引分批发布，提供可关闭的安全显示汇总与故障拒绝；旧桥默认未授权，独立多方块仍仅连接与下单。完整合成消费／回流及 D20 联合验收继续推进。
+
 - **D18d 蜂业综合终端**：标准蜜蜂管理终端与离心管理终端可无序合成；在同一方块切换两类管理功能，分别管理对应成员升级并共享产物库存。切换创建新会话、拒绝旧选择与重放；合并拒绝命名／自定义组件输入以保留未知数据。完整网格、无线和 3×3 合成仍在后续 D18 步骤。
 
 - **M04a 一体机复合工作内核**：单个机器身份同时保管蜂生产与离心工作，共用一份 FE；有限物品槽／流体罐按完整组件接收，已付费产物可分次交付，满载不丢失余量、不重抽、不重复收费。基础蜂箱复用同一单蜂计算。此步不开放独立世界生产、端口或插件，M04 后续接入仍未完成。
@@ -151,6 +153,8 @@
 ### English
 
 #### Added
+
+- **D20b1 bidirectional ME product storage**: Network-core bridges now require explicit automation authorization and transfer eligible bee items and fluids with full components and exact quantities, preserving balances beyond long and in-flight reservations. Product keys publish incrementally; optional safe display aggregation fails closed. Legacy bridges remain unauthorized, and standalone multiblock bridges retain connection and crafting access only. Crafting consumption, cancellation returns and the full D20 gate remain in progress.
 
 - **D18d combined apiculture terminal**: Craft the standard bee and centrifuge terminals together in any arrangement. Switch between their management functions, manage upgrades for the selected member type, and access shared products. Switching creates a fresh session and rejects old selections; nonstandard input components are rejected to preserve unknown data. The full grid, wireless access, and 3x3 crafting remain in subsequent D18 steps.
 

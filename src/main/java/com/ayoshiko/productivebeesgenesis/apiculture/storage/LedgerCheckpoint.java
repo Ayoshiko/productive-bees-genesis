@@ -60,6 +60,14 @@ public final class LedgerCheckpoint {
 	public LedgerCheckpoint withdrawExact(ProductKey key, ProductAmount amount) {
 		return withdrawExact(Map.of(key, amount));
 	}
+	/** 调用者已核对当前产物资格和外部实际交付；余额使用精确加法。 */
+	public LedgerCheckpoint insertExact(ProductKey key, ProductAmount amount) {
+		Objects.requireNonNull(key); Objects.requireNonNull(amount);
+		if (amount.isZero()) throw new IllegalArgumentException("Empty product insertion");
+		var changed = PagedProductAmounts.restore(balances);
+		changed.set(key, balances.getOrDefault(key, ProductAmount.ZERO).add(amount));
+		return new LedgerCheckpoint(Math.incrementExact(revision), changed.snapshot(), transactions, reserved, token, Set.of(key));
+	}
 	/** 同一候选根内预约并扣除全部缺额；失败不产生部分扣款，已有预约保持原样。 */
 	public LedgerCheckpoint withdrawExact(Map<ProductKey, ProductAmount> amounts) {
 		var debit = Map.copyOf(amounts);

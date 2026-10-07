@@ -11,6 +11,7 @@ param(
     [switch]$Crafting,
     [switch]$MeBridge,
     [switch]$MeCrafting,
+    [switch]$MeStorage,
     [switch]$ProductWorkspace,
     [switch]$MachineWorkspace,
     [ValidateSet('19.2.17', '19.2.18')][string]$Ae2Version = '19.2.17',
@@ -22,6 +23,7 @@ param(
     [ValidateSet('owner', 'guest', 'stranger')][string]$Role = 'owner')
 
 $ErrorActionPreference = 'Stop'
+if ($MeStorage) { $MeBridge = $true }
 if ($MachineWorkspace -and ($MeCrafting -or $ProductWorkspace)) { throw 'Machine workspace uses separate focused stages' }
 if ($MeCrafting -or $ProductWorkspace -or $MachineWorkspace) { $MeBridge = $true }
 if ($ProductWorkspace -and $MeCrafting) { throw 'Workspace and ME crafting use separate focused stages' }
@@ -42,6 +44,7 @@ if ($ChildTask) {
     if ($Terminals) { $arguments += '-PnetworkConcurrentTerminals' }
     if ($MeBridge) { $arguments += '-PnetworkMeBridge' }
     if ($MeCrafting) { $arguments += '-PnetworkMeCrafting' }
+    if ($MeStorage) { $arguments += '-PnetworkMeStorage' }
     if ($ProductWorkspace) { $arguments += '-PnetworkWorkspace' }
     if ($MachineWorkspace) { $arguments += '-PnetworkMachineWorkspace' }
     if ($Crafting) { $arguments += '-PnetworkConcurrentCrafting' }
@@ -59,7 +62,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MeStorage) { 'D20b' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -87,6 +90,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($Terminals) { $arguments += '-Terminals' }
     if ($MeBridge) { $arguments += '-MeBridge' }
     if ($MeCrafting) { $arguments += '-MeCrafting' }
+    if ($MeStorage) { $arguments += '-MeStorage' }
     if ($ProductWorkspace) { $arguments += '-ProductWorkspace' }
     if ($MachineWorkspace) { $arguments += '-MachineWorkspace' }
     if ($Crafting) { $arguments += '-Crafting' }
@@ -117,7 +121,8 @@ function Wait-Probe([Diagnostics.Process]$Process, [string]$Id) {
 try {
     $buildArgs = @('test')
     if ($Crafting -or $MeBridge) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
-    if ($RecipeFill) { $buildArgs += @('--tests', '*ProductWithdrawalCheckpointTest') }
+    if ($RecipeFill -or $MeStorage) { $buildArgs += @('--tests', '*ProductWithdrawalCheckpointTest') }
+    if ($MeStorage) { $buildArgs = @('test', '--tests', '*ProductWithdrawalCheckpointTest', '--tests', '*MixinBoundaryConventionTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
@@ -246,6 +251,7 @@ try {
             if ($ProductWorkspace -and $serverReport.workspaceVerified -ne $true) { throw 'Missing workspace checks' }
             if ($MeCrafting -and $serverReport.meCraftingVerified -ne $true) { throw 'Missing ME crafting checks' }
             if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }
+            if ($MeStorage -and $withAe2 -and $serverReport.meStorageVerified -ne $true) { throw 'Missing ME storage checks' }
             if ($RecipeFill -and ($serverReport.recipeFillJeiAndConservation -ne $true -or $serverReport.recipeFillLedgerDeficitComponentsAndNoSpace -ne $true)) { throw 'Missing recipe fill checks' }
             Add-Evidence "$serverId-report" $serverPath
             Add-Evidence "$serverId-owner-file" $serverReport.playerFiles.owner

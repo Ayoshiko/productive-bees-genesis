@@ -25,6 +25,7 @@
     "jdte.JdteCentrifugeFactoryCoalescedMixin",
     "jdte.JdteExtraCentrifugeFactoryCoalescedMixin",
     "jdte.JdteEMExtraCentrifugeFactoryCoalescedMixin",
+    "ae2.Ae2NetworkStorageAggregationMixin",
     "ae2.Ae2ApiaryMixin",
     "ae2.Ae2PatternProviderTargetMixin",
     "ae2.Ae2PatternProviderTargetCacheMixin",

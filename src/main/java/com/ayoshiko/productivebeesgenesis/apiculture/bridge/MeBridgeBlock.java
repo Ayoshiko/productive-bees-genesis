@@ -34,8 +34,19 @@ public final class MeBridgeBlock extends BaseEntityBlock {
 		if (!level.isClientSide && placer instanceof Player player && level.getBlockEntity(pos) instanceof MeBridgeBlockEntity bridge) bridge.initializeOwner(player.getUUID());
 	}
 	@Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-		if (player instanceof ServerPlayer server && level.getBlockEntity(pos) instanceof MeBridgeBlockEntity bridge)
-			server.displayClientMessage(server.getUUID().equals(bridge.owner()) ? bridge.status().message() : MeBridgeStatus.OWNER_ONLY.message(), true);
+		if (player instanceof ServerPlayer server && level.getBlockEntity(pos) instanceof MeBridgeBlockEntity bridge) {
+			if (server.isShiftKeyDown()) {
+				boolean changed = bridge.toggleAutomation(server);
+				server.displayClientMessage(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.me_bridge."
+						+ (!changed ? "automation_denied" : bridge.automation() ? "automation_on" : "automation_off")), true);
+			} else {
+				var message = !server.getUUID().equals(bridge.owner()) ? MeBridgeStatus.OWNER_ONLY.message()
+						: bridge.status() != MeBridgeStatus.ONLINE ? bridge.status().message()
+						: net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.me_bridge."
+								+ (!bridge.automation() ? "automation_off" : bridge.link().storageAvailable() ? "automation_on" : "storage_unavailable"));
+				server.displayClientMessage(message, true);
+			}
+		}
 		return InteractionResult.sidedSuccess(level.isClientSide);
 	}
 }

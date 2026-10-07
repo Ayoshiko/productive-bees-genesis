@@ -505,3 +505,16 @@ AE2 writer 的 600–612 十三阶段覆盖实际点击入口、九条可合成�
 运行依赖为 NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368，无 AE2；服务器 PID 18100，两名实际 TCP 客户端正常登录、保存和退出。原合成 29 阶段及 JEI 填格 400–415 共 16 阶段通过，新增 407–415 九阶段按完整组件独立核算账本、合成格和两人背包：九格铁块配方先用背包 4 件命名铁锭，再仅取账本同组件 5 件；重复普通填格不改根；Shift 可填 12 份，命名／普通铁锭分别扣 3／96 件，账本分别剩 2／4 件；同会话重放、缺钻石、满背包换配方均保持原状态；腾空背包后只取 1 件金锭，重开菜单拒绝旧会话。容器余料和未知制作回调保管复用原场景，世界无新增掉落物。
 
 证据索引为 `build/network-gates/d18e3b-ledger-fill-20261006-final/gate.json`，`recoveryIncluded=false`。正常玩家文件、网络与合成账户已落盘核对；未重跑跨 JVM 恢复、无线补格单独场景、AE2／ME 来源或性能矩阵，跨文件异常断电仍由 D29 验收。交付审计保存对应源码指纹、测试 XML、JAR 与证据哈希并核对 UTF-8／JSON、文档链接及暂存范围。本步仅关闭 e3b 的蜂业账本来源，完整 e3／i2／D18／D19／T00 及 D20b、故障耐久性和性能门保持开放，下一步转入 D20b 双向产物存储。
+
+<a id="s10-116"></a>
+### 10.116 D20b1 双向产物存储、显式授权与安全聚合（2026-10-07，本步范围已验收）
+
+接续原聊天在网络 worktree 的 `098a51b` 上留下的 D20b 实现，完成网络核心单桥的 IStorageProvider 挂载、静态产物准入、物品／mB 流体完整组件与精确 long 转移。桥授权默认关闭，由所有者近距离潜行空手右键切换，玩家与同网活动机器来源分别验证；匿名来源拒绝。NBT schema=2 严格迁移完整 schema=1 为未授权，节点和账本分别沿原保存路径保管。独立多方块不挂库存。行为和版本参考见[6.1](bee-processing-network-design.md#s6-1)、[6.2](bee-processing-network-design.md#s6-2)、[13.30](bee-processing-network-references.md#s13-30)。
+
+复核修正持续变化时键索引不发布、负贡献被正数掩盖及核心暂停同 tick 缓存残留。键适配每步最多 32 个索引单位，纳入原全服公平预算；枚举仍为 O(K)，保留根为初始／差异快照及当前投影，不保留世界对象。配置 meStorageSafeAggregation 经原 ServerConfigScreen 的 NeoForge 分组界面自动注册，并补齐中英文文案；字节码不匹配时关闭挂载。初次定向检查拦下遗留的独占 Redirect；改为 WrapOperation 后 17 项账本与 Mixin 约束检查、build、verifyReleaseArtifact、compileDomainProbeJava 通过。账本用独立 BigInteger 计算验证 160 位余额与 long 转移、旧 revision、预约、组件和 codec 往返；不新增全量测试。
+
+真实运行使用既有桥接十二阶段和同一组玩家文件恢复流程，新增 MeStorage 模式。首轮 `d20b-me-storage-20261007-first` 在 504 准备阶段超时，双方回执已到，尚未执行资产测试；定位为桥每真实 tick 只编译一个资格单位，在 4,769 条已加载配方下准备过慢。改为每次共享步骤最多八个编译单位，并把仅此准备阶段的探针等待放宽到 2,400 tick。修正轮 `d20b-me-storage-20261007-bounded` 在约 35 秒完成目录准备，但夹具使用不在当前静态产物目录内的铁锭，模拟按合同拒收；原错误信息把“接收量不符”和“根变化”合并，已拆开。核对 PB 13.14.0 JAR 的 `raw_materials/honeycomb_iron.json` 后，夹具改用实际粗铁及蜂蜜流体；没有放宽生产准入。最终命令为 `gradle/network-concurrent-gate.ps1 -RunId d20b-me-storage-20261007-products -MeStorage -Combination ae2 -Ae2Version 19.2.18`。最终 17 项定向检查、build／verifyReleaseArtifact 复用未变化生产源码的通过结果，仅重编修正夹具。NeoForge 21.1.216／PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85／JEI 19.39.0.368；编译 AE2 19.2.17，实际 AE2 19.2.18／Applied Flux 2.1.5。writer PID 27004、reader PID 17356，四个独立客户端进程完成四次真实 TCP 登录，最多同时两人，均正常保存退出。
+
+writer 从实际网格存入 Long.MAX_VALUE 粗铁，再加一验证精确余额；原生网格及两种独立挂载顺序均报告饱和值。同组件命名粗铁、1,000 mB 蜂蜜往返，模拟原根不变、匿名／访客／非法品拒收、配置关闭、核心暂停同 tick 缓存、撤权和旧桥引用拒绝均通过，最后全部余额与入口前逐键一致。负贡献测试只故障化独立真实 NetworkStorage，不影响正常重启场景。十二阶段复用缺电、缺通道、冲突和重连；新增存储动作由服务器夹具对正式 MEStorage／授权服务调用，真实客户端负责原桥接显示、无线开关与登录流程，不能写成新增原生 ME 终端拖拽或实体 Shift 点击证据。已查看本轮网络截图。世界无新增转移掉落物。
+
+reader 通过正常登录读取 writer 玩家文件、网络 checkpoint 和桥 NBT，核对所有者、授权位与节点重新上线；writer 在保存前已退回本次大数／流体且恢复原暂停状态，因此不扩写为“大数未交付库存或运行中合成作业跨 JVM 恢复”。证据索引为 `build/network-gates/d20b-me-storage-20261007-products/gate.json`，工具内部 gate 标签为 D20b，本记录仅签收 b1。交付审计核对源码／依赖指纹、JAR、测试 XML、证据哈希、文档链接、UTF-8／JSON 和暂存一致性。完整自动化来源与合成消费／回流、重载、无 AE2 本轮启动及 D20b2 联合门仍未关闭；没有新增 Spark、故障断电或完整可选模组矩阵。

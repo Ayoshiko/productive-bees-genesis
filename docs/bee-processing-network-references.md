@@ -384,6 +384,8 @@ f2a 核对同一 Minecraft 1.21.1 源码中的 `DataComponentPatch.forget`、`It
 
 桥接材质由本项目忽略目录 `build/generate-me-bridge-art.py` 用 Pillow 生成，方块及物品共用原创像素图，不复制第三方资产。菜单使用同一个 ME 指示组件与有界枚举，没有全网内容同步。
 
+2026-10-07 D20b1 复读本 worktree 的固定 `.tmp_ae2_19_2_17/appeng/me/storage/NetworkStorage.java` 和 `appeng/me/service/StorageService.java`，并以 `libs/appliedenergistics2-1.21.1-19.2.17.jar` 的 javap 核对字段及调用点。NetworkStorage 用 mountsInUse 拒绝重入、每提供者直接累加 KeyCounter；StorageService 按需重建缓存并通知 watcher，增删 global provider 本身不保证同 tick 缓存刷新。采用稳定挂载对象、明确请求重挂载和显式缓存失效；不更改实际存取循环，不把外部显示饱和写回内部 BigInteger 账本。全聚合修复通过 WrapOperation 为每提供者隔离贡献后安全相加，保持第三方包装链；字节码结构不匹配时不启用存储挂载，负贡献锁定兼容故障。AE2 API 与世界操作仍在服务器线程；首次键适配按完整组件往返验证，数量读取沿本项目冻结账本及预约扣除。运行结果与未覆盖的自动合成边界见[10.116](bee-processing-network-evidence-current.md#s10-116)，没有更新参考副本或新增运行依赖。
+
 <a id="s13-31"></a>
 ### 13.31 ME 合成计划／任务与 AE2 19.2.18 兼容（2026-10-06）
 

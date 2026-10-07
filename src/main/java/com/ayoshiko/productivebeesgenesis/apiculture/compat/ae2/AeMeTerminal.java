@@ -47,6 +47,10 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	}
 	@Override public MeTerminalView request(MeTerminalRequest request) {
 		var action = request.action();
+		if (action == MeTerminalRequest.Action.PLAN || action == MeTerminalRequest.Action.CONFIRM) {
+			grid.getStorageService().getCachedInventory();
+			if (bridgeNode.aggregationFaulted()) { cancelPlan(); return clear(Status.FAILED); }
+		}
 		if (action == MeTerminalRequest.Action.BROWSE) {
 			if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
 			cancelPlan(); tasks = List.of(); catalogue = AeMeCatalogue.get(player, grid).stream().filter(key -> key.getId().toString().toLowerCase(Locale.ROOT).contains(request.query().toLowerCase(Locale.ROOT))).toList();

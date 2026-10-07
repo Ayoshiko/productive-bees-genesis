@@ -133,6 +133,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final Set<String> AE2_MIXINS = Set.of(
 			"Ae2PatternProviderTargetMixin",
 			"Ae2PatternProviderTargetCacheMixin",
+			"Ae2NetworkStorageAggregationMixin",
 			"Ae2ApiaryMixin",
 			"Ae2CentrifugeMixin",
 			"Ae2CentrifugeFactoryMixin"
@@ -241,6 +242,28 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 	}
 
+	private static boolean supportsSafeAeAggregation() {
+		try (InputStream stream = openClassResource("appeng/me/storage/NetworkStorage.class")) {
+			if (stream == null) return false;
+			ClassNode node = new ClassNode();
+			new ClassReader(stream).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+			boolean fields = node.fields.stream().anyMatch(f -> f.name.equals("mountsInUse") && f.desc.equals("Z"))
+					&& node.fields.stream().anyMatch(f -> f.name.equals("priorityInventory") && f.desc.equals("Ljava/util/NavigableMap;"));
+			if (!fields) return false;
+			for (var method : node.methods) {
+				if (!method.name.equals("getAvailableStacks") || !method.desc.equals("(Lappeng/api/stacks/KeyCounter;)V")) continue;
+				int calls = 0;
+				for (var instruction : method.instructions) if (instruction instanceof org.objectweb.asm.tree.MethodInsnNode call
+						&& call.owner.equals("appeng/api/storage/MEStorage") && call.name.equals("getAvailableStacks")
+						&& call.desc.equals(method.desc)) calls++;
+				return calls == 1;
+			}
+		} catch (IOException | RuntimeException error) {
+			System.err.println("[ProductiveBeesGenesis] Cannot inspect AE2 storage aggregation; bridge storage disabled: " + error);
+		}
+		return false;
+	}
+
 	private static InputStream openClassResource(String resourceName) {
 		ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
 		if (contextLoader != null) {
@@ -302,6 +325,10 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 		if (ME_EME_MIXINS.contains(simpleName)) {
 			return Holder.ME_LOADED && Holder.EME_LOADED;
+		}
+		// 只读字节码匹配已审查的聚合入口；不兼容时保留节点与下单，关闭库存挂载。
+		if ("Ae2NetworkStorageAggregationMixin".equals(simpleName)) {
+			return Holder.AE2_LOADED && supportsSafeAeAggregation();
 		}
 		// AE2 接口注入 Mixin — 仅在 AE2 已安装时应用
 		if (AE2_MIXINS.contains(simpleName)) {

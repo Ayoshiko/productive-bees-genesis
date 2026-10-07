@@ -51,6 +51,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 				|| !server.hasChunk(worldPosition.getX() >> 4, worldPosition.getZ() >> 4) || server.getBlockEntity(worldPosition) != this || network == null || invalidNetwork) return false;
 		if (running && (!ModConfig.SERVER.beeNetwork.enabled.get() || ownership.readyAuthority() == null || topology() == null || !topology().valid())) return false;
 		productionMode = running ? 1 : 2; setChanged();
+		com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStorageService.hostChanged(this);
 		com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.watch(this, true); return true;
 	}
 	public void bindNetwork(NetworkIdentity value) { if (network != null || invalidNetwork) throw new IllegalStateException("Core already bound"); network = value; energyPort = null; invalidateCapabilities(); setChanged(); }
@@ -110,6 +111,7 @@ public final class NetworkCoreBlockEntity extends BlockEntity implements MenuPro
 			com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.remove(server, this);
 		}
 		super.setRemoved();
+		com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStorageService.hostChanged(this);
 	}
 	@Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
 		super.saveAdditional(tag, registries); tag.putUUID("controller", controller); tag.putInt("closedFaces", closedFaces); if (owner != null) tag.putUUID("owner", owner);

@@ -6,6 +6,9 @@ import net.minecraft.nbt.CompoundTag;
 public interface MeBridgeLink {
 	com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBackend terminal(net.minecraft.server.level.ServerPlayer player);
 	void connect();
+	default void tick() { }
+	default void storageStep() { }
+	default boolean storageAvailable() { return false; }
 	MeBridgeStatus status();
 	CompoundTag save();
 	void close();

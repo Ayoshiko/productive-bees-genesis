@@ -16,7 +16,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /** 唯一网络后台调度入口；世界保存和正常停服的耐久等待不属于可延期工作。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class NetworkTickService {
-	public enum Service { PERSISTENCE, TOPOLOGY, OWNERSHIP, PRODUCTION, STRUCTURES, MACHINE_WORK, TERMINALS }
+	public enum Service { PERSISTENCE, TOPOLOGY, OWNERSHIP, PRODUCTION, STRUCTURES, MACHINE_WORK, TERMINALS, ME_STORAGE }
 	private static final class Session {
 		final FairServiceBudget budget = new FairServiceBudget(Service.values().length);
 		final int[] limits = new int[Service.values().length];
@@ -32,6 +32,7 @@ public final class NetworkTickService {
 		session.limits[4] = 32; session.times[4] = 500_000;
 		session.limits[5] = 32; session.times[5] = 500_000;
 		session.limits[6] = 8; session.times[6] = 500_000;
+		session.limits[7] = 8; session.times[7] = 500_000;
 		session.budget.run(server.getTickCount(), config.totalSteps.get(), config.totalMicros.get() * 1000L, session.limits, session.times,
 				service -> switch (service) {
 					case 0 -> NetworkPersistence.step(server);
@@ -41,6 +42,7 @@ public final class NetworkTickService {
 					case 4 -> com.ayoshiko.productivebeesgenesis.multiblock.world.MachineWorldService.step(server);
 					case 5 -> com.ayoshiko.productivebeesgenesis.multiblock.world.MachineWorldService.stepWork(server);
 					case 6 -> com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalSubscriptionService.step(server);
+					case 7 -> com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStorageService.step(server);
 					default -> throw new IllegalArgumentException("Unknown network service");
 				});
 	}
