@@ -13,6 +13,7 @@ param(
     [switch]$MeBridge,
     [switch]$MeCrafting,
     [switch]$MeMaterials,
+    [switch]$MeInventory,
     [switch]$MeStorage,
     [switch]$ProductWorkspace,
     [switch]$MachineWorkspace,
@@ -26,7 +27,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if ($NativeSlots) { $Crafting = $true }
-if ($MeStorage -or $MeMaterials) { $MeBridge = $true }
+if ($MeStorage -or $MeMaterials -or $MeInventory) { $MeBridge = $true }
 if ($MachineWorkspace -and ($MeCrafting -or $ProductWorkspace)) { throw 'Machine workspace uses separate focused stages' }
 if ($MeCrafting -or $ProductWorkspace -or $MachineWorkspace) { $MeBridge = $true }
 if ($ProductWorkspace -and $MeCrafting) { throw 'Workspace and ME crafting use separate focused stages' }
@@ -48,6 +49,7 @@ if ($ChildTask) {
     if ($MeBridge) { $arguments += '-PnetworkMeBridge' }
     if ($MeCrafting) { $arguments += '-PnetworkMeCrafting' }
     if ($MeMaterials) { $arguments += '-PnetworkMeMaterials' }
+    if ($MeInventory) { $arguments += '-PnetworkMeInventory' }
     if ($MeStorage) { $arguments += '-PnetworkMeStorage' }
     if ($ProductWorkspace) { $arguments += '-PnetworkWorkspace' }
     if ($MachineWorkspace) { $arguments += '-PnetworkMachineWorkspace' }
@@ -67,7 +69,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($MeMaterials) { 'D18j2a' } elseif ($NativeSlots) { 'D18j1' } elseif ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MeInventory) { 'D18j2b1' } elseif ($MeMaterials) { 'D18j2a' } elseif ($NativeSlots) { 'D18j1' } elseif ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -96,6 +98,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($MeBridge) { $arguments += '-MeBridge' }
     if ($MeCrafting) { $arguments += '-MeCrafting' }
     if ($MeMaterials) { $arguments += '-MeMaterials' }
+    if ($MeInventory) { $arguments += '-MeInventory' }
     if ($MeStorage) { $arguments += '-MeStorage' }
     if ($ProductWorkspace) { $arguments += '-ProductWorkspace' }
     if ($MachineWorkspace) { $arguments += '-MachineWorkspace' }
@@ -130,7 +133,7 @@ try {
     if ($Crafting -or $MeBridge) { $buildArgs += @('--tests', '*Terminal*Test', '--tests', '*NetworkSelectionSessionTest') }
     if ($RecipeFill -or $MeStorage) { $buildArgs += @('--tests', '*ProductWithdrawalCheckpointTest') }
     if ($MeStorage) { $buildArgs = @('test', '--tests', '*ProductWithdrawalCheckpointTest', '--tests', '*MixinBoundaryConventionTest') }
-    if ($NativeSlots -or $MeMaterials) { $buildArgs = @('test', '--tests', '*TerminalClientStateTest') }
+    if ($NativeSlots -or $MeMaterials -or $MeInventory) { $buildArgs = @('test', '--tests', '*TerminalClientStateTest') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
     & .\gradlew @buildArgs *> (Join-Path $folder 'build.log')
@@ -187,6 +190,9 @@ try {
                 if ($MeCrafting -and $withAe2 -and $mode -eq 'write' -and $playerRole -eq 'owner') {
                     Add-Evidence "$roleId-me-plan" (Join-Path $clientRoot 'me-plan.png')
                     Add-Evidence "$roleId-me-jobs" (Join-Path $clientRoot 'me-jobs.png')
+                }
+                if ($MeInventory -and $withAe2 -and $mode -eq 'write' -and $playerRole -eq 'owner') {
+                    foreach ($image in @('me-inventory', 'me-inventory-compact')) { Add-Evidence "$roleId-$image" (Join-Path $clientRoot "$image.png") }
                 }
                 if ($MeBridge -and $mode -eq 'write' -and $playerRole -eq 'owner') {
                     Add-Evidence "$roleId-me-network" (Join-Path $clientRoot 'me-network.png')
@@ -265,6 +271,7 @@ try {
             if ($withAe2 -and $serverReport.ae2Version -ne $Ae2Version) { throw 'Unexpected runtime AE2 version' }
             if ($MachineWorkspace -and $serverReport.machineWorkspaceVerified -ne $true) { throw 'Missing machine workspace checks' }
             if ($ProductWorkspace -and $serverReport.workspaceVerified -ne $true) { throw 'Missing workspace checks' }
+            if ($MeInventory -and $withAe2 -and $serverReport.meInventoryVerified -ne $true) { throw 'Missing ME inventory checks' }
             if ($MeMaterials -and $withAe2 -and $serverReport.meMaterialsVerified -ne $true) { throw 'Missing ME material fill checks' }
             if ($MeCrafting -and $serverReport.meCraftingVerified -ne $true) { throw 'Missing ME crafting checks' }
             if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }

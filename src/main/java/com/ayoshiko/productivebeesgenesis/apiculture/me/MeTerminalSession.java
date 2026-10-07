@@ -24,8 +24,11 @@ public final class MeTerminalSession {
 	public boolean active() { return backend != null; }
 	public boolean waiting() { return sent > acknowledged && net.minecraft.Util.getMillis() - sentAt < 10_000; }
 	public MeTerminalRequest begin(MeTerminalRequest.Action action, int row, int page, long amount, String query) {
+		return begin(action, row, page, amount, query, MeStorageFilter.DEFAULT);
+	}
+	public MeTerminalRequest begin(MeTerminalRequest.Action action, int row, int page, long amount, String query, MeStorageFilter filter) {
 		if (waiting() && action != MeTerminalRequest.Action.CLOSE) return null;
-		sentAt = net.minecraft.Util.getMillis(); return new MeTerminalRequest(containerId, session, ++sent, action, view.revision(), row, page, amount, query);
+		sentAt = net.minecraft.Util.getMillis(); return new MeTerminalRequest(containerId, session, ++sent, action, view.revision(), row, page, amount, query, filter);
 	}
 	public void accept(MeTerminalReply reply) {
 		if (reply.containerId() == containerId && reply.session().equals(session) && reply.sequence() == sent && reply.sequence() > acknowledged) { acknowledged = reply.sequence(); view = reply.view(); }
@@ -39,7 +42,7 @@ public final class MeTerminalSession {
 			var bridge = resolve.get(); tick(bridge);
 			if (bridge == null) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
 			if (backend == null) {
-				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.TASKS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
+				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.STORAGE && request.action() != MeTerminalRequest.Action.TASKS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
 				backend = bridge.link().terminal(player);
 			}
 			if (backend == null || !backend.valid(bridge)) { closePage(); send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }

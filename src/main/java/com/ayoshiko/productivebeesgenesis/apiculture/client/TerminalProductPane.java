@@ -17,6 +17,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 final class TerminalProductPane {
 	static final int LEFT = 312, WIDTH = 172;
 	private final TerminalClientState state;
+	private final NetworkCoreMenu menu;
+	private final MeInventoryPane mePane;
+	private boolean meMode;
 	private final Runnable rebuild;
 	private final List<AbstractWidget> widgets = new ArrayList<>();
 	private final List<TerminalSkin.Control> buttons = new ArrayList<>();
@@ -30,13 +33,19 @@ final class TerminalProductPane {
 	private long searchAt;
 	private int scroll, visible, left, top;
 	private TerminalSkin.Control previous, next, refresh, ordering;
-	TerminalProductPane(NetworkCoreMenu menu, Runnable rebuild) { state = menu.productState(); this.rebuild = rebuild; }
+	TerminalProductPane(NetworkCoreMenu menu, Runnable rebuild) {
+		this.menu = menu; state = menu.productState(); this.rebuild = rebuild;
+		mePane = new MeInventoryPane(menu, rebuild, () -> { var client = net.minecraft.client.Minecraft.getInstance(); client.setScreen(new MeTerminalScreen(client.screen, menu, true)); });
+	}
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network.terminal." + key, args); }
 	List<AbstractWidget> build(Font font, int x, int y, int inventoryY) {
 		left = x; top = y; visible = Math.max(1, (inventoryY - 100 - 72) / 22);
 		boolean focus = search != null && search.isFocused(); int cursor = search == null ? 0 : search.getCursorPosition();
 		if (search != null) query = search.getValue();
 		widgets.clear(); buttons.clear();
+		var source = new TerminalSkin.Control(left + LEFT, top + 7, WIDTH, 17, Component.literal(meMode ? "ME" : "").append(meMode ? MeInventoryPane.text("storage") : text("workspace_products")), ignored -> { meMode = !meMode; rebuild.run(); }, meMode, -1, null);
+		source.setTooltip(Tooltip.create(MeInventoryPane.text("source_hint"))); widgets.add(source);
+		if (meMode) { widgets.addAll(mePane.build(font, left + LEFT, top + 29, WIDTH)); return widgets; }
 		if (shown != state.view()) { shown = state.view(); icons.clear(); if (shown != null) for (var row : shown.rows()) icons.add(new TerminalProductIcon(row)); }
 		notice = state.notice();
 		search = new EditBox(font, left + LEFT, top + 29, 113, 16, text("workspace_search"));
@@ -65,10 +74,11 @@ final class TerminalProductPane {
 		var label = text(key); var button = new TerminalSkin.Control(left + x, top + y, width, 17, label, ignored -> action.run(), false, -1, null);
 		button.setTooltip(Tooltip.create(label)); widgets.add(button); buttons.add(button); return button;
 	}
-	EditBox focusedSearch() { return search != null && search.isFocused() ? search : null; }
+	EditBox focusedSearch() { if (meMode) return mePane.focusedSearch(); return search != null && search.isFocused() ? search : null; }
 	void tick(boolean visible) {
 		long now = Util.getMillis(); state.tick(now);
-		if (!visible) {
+		mePane.tick(visible && meMode);
+		if (!visible || meMode) {
 			if (subscribed && state.ready(now)) { var request = state.begin(TerminalRequest.Operation.CANCEL, -1, -1, -1, 0, now); if (request != null) { PacketDistributor.sendToServer(request); subscribed = false; } }
 			return;
 		}
@@ -95,17 +105,19 @@ final class TerminalProductPane {
 	}
 	private int maxScroll() { return shown == null ? 0 : Math.max(0, (shown.rows().size() + 7) / 8 - visible); }
 	boolean scroll(double x, double y, double delta) {
+		if (meMode) return false;
 		if (delta == 0 || x < left + LEFT || x >= left + LEFT + WIDTH || y < top + 72 || y >= top + 72 + visible * 22) return false;
 		scroll = Math.clamp(scroll + (delta > 0 ? -1 : 1), 0, maxScroll()); rebuild.run(); return true;
 	}
 	boolean keyPressed(int key, int scan, int modifiers) {
+		if (meMode) return mePane.keyPressed(key, scan, modifiers);
 		if (search == null || !search.isFocused()) return false;
 		if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER) { request(TerminalSearchRequest.Navigation.FIRST); return true; }
 		return key != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE && search.keyPressed(key, scan, modifiers);
 	}
-	boolean clear(double x, double y, int button) { if (button != 1 || search == null || !search.isMouseOver(x, y)) return false; search.setValue(""); return true; }
+	boolean clear(double x, double y, int button) { if (meMode) return mePane.click(x, y, button); if (button != 1 || search == null || !search.isMouseOver(x, y)) return false; search.setValue(""); return true; }
 	void labels(GuiGraphics g, Font font, int inventoryY) {
-		g.drawString(font, text("workspace_products"), LEFT, 11, TerminalSkin.GOLD, false);
+		if (meMode) { mePane.labels(g, font, left, top); return; }
 		Component status = dirty || state.notice() == TerminalClientState.Notice.WAITING ? text("syncing") : state.notice() == TerminalClientState.Notice.EXPIRED || state.notice() == TerminalClientState.Notice.TIMEOUT ? text("sync_wait")
 				: state.exchangeResult() != null ? Component.translatable("screen.productivebeesgenesis.network.result." + state.exchangeResult().status().name().toLowerCase(java.util.Locale.ROOT), state.exchangeResult().moved()) : text("live");
 		g.drawString(font, font.plainSubstrByWidth(status.getString(), WIDTH), LEFT, inventoryY - 100, TerminalSkin.MUTED, false);

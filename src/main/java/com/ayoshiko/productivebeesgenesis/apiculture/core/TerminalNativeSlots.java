@@ -39,6 +39,7 @@ public final class TerminalNativeSlots {
 			// 原版点击已交付到真实背包或鼠标；异常也不能回滚并重放已移动的物品。
 			try {
 				TerminalCursor.get(server).set(menu.getCarried());
+				TerminalCursorExchange.recover(server, menu, false);
 				if (account != null) {
 					var grid = crafting.nativeGrid();
 					if (!ItemStack.listMatches(before.grid(), grid)) account.publish(before, grid, before.pending(), before.uncertain());

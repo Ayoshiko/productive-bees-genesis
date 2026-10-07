@@ -7,20 +7,24 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /** 只传已展示行和版本；不接受客户端资产、网格、CPU 或任务身份。 */
-public record MeTerminalRequest(int containerId, UUID session, long sequence, Action action, long revision, int row, int page, long amount, String query) implements CustomPacketPayload {
-	public enum Action { BROWSE, PLAN, POLL, PAGE, CPU_NEXT, CONFIRM, TASKS, CANCEL, CLOSE }
+public record MeTerminalRequest(int containerId, UUID session, long sequence, Action action, long revision, int row, int page, long amount, String query, MeStorageFilter filter) implements CustomPacketPayload {
+	public enum Action { BROWSE, PLAN, POLL, PAGE, CPU_NEXT, CONFIRM, TASKS, CANCEL, CLOSE, STORAGE, TAKE, TAKE_INVENTORY, DEPOSIT }
+	public MeTerminalRequest(int containerId, UUID session, long sequence, Action action, long revision, int row, int page, long amount, String query) {
+		this(containerId, session, sequence, action, revision, row, page, amount, query, MeStorageFilter.DEFAULT);
+	}
 	public static final Type<MeTerminalRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", "me_terminal_request"));
 	public static final StreamCodec<FriendlyByteBuf, MeTerminalRequest> CODEC = new StreamCodec<>() {
 		public MeTerminalRequest decode(FriendlyByteBuf b) {
 			if (b.readableBytes() > 512) throw new IllegalArgumentException("ME request too large");
-			return new MeTerminalRequest(b.readInt(), b.readUUID(), b.readLong(), b.readEnum(Action.class), b.readLong(), b.readInt(), b.readInt(), b.readLong(), b.readUtf(64));
+			var result = new MeTerminalRequest(b.readInt(), b.readUUID(), b.readLong(), b.readEnum(Action.class), b.readLong(), b.readInt(), b.readInt(), b.readLong(), b.readUtf(64), new MeStorageFilter(b.readEnum(MeStorageFilter.Sort.class), b.readBoolean(), b.readEnum(MeStorageFilter.Content.class), b.readEnum(MeStorageFilter.Type.class)));
+			if (b.isReadable()) throw new IllegalArgumentException("Trailing ME request data"); return result;
 		}
 		public void encode(FriendlyByteBuf b, MeTerminalRequest r) {
-			b.writeInt(r.containerId); b.writeUUID(r.session); b.writeLong(r.sequence); b.writeEnum(r.action); b.writeLong(r.revision); b.writeInt(r.row); b.writeInt(r.page); b.writeLong(r.amount); b.writeUtf(r.query, 64);
+			b.writeInt(r.containerId); b.writeUUID(r.session); b.writeLong(r.sequence); b.writeEnum(r.action); b.writeLong(r.revision); b.writeInt(r.row); b.writeInt(r.page); b.writeLong(r.amount); b.writeUtf(r.query, 64); b.writeEnum(r.filter.sort()); b.writeBoolean(r.filter.descending()); b.writeEnum(r.filter.content()); b.writeEnum(r.filter.type());
 		}
 	};
 	public MeTerminalRequest {
-		if (containerId < 0 || session == null || sequence < 1 || action == null || revision < 0 || row < -1 || row >= 8 || page < 0 || page > Integer.MAX_VALUE / 8 || amount < 0 || query == null || query.length() > 64)
+		if (containerId < 0 || session == null || sequence < 1 || action == null || revision < 0 || row < -1 || row >= 8 || page < 0 || page > Integer.MAX_VALUE / 8 || amount < 0 || query == null || query.length() > 64 || filter == null)
 			throw new IllegalArgumentException("Invalid ME request");
 	}
 	@Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

@@ -128,6 +128,10 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (MeBridgeProbe.inventory() && stage >= 850) {
+                int next = MeInventoryAeFixture.advance(core, players, stage); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (NativeSlotsProbe.enabled() && stage >= 800) {
                 if (!NativeSlotsProbe.ready(stage)) return;
                 int next = NativeSlotsProbe.advance(core, players, stage); noDrops(server);

@@ -19,6 +19,7 @@ public final class MeTerminalScreen extends Screen {
 	private final Screen parent;
 	private final AbstractContainerMenu menu;
 	private final MeTerminalSession session;
+	private final MeInventoryPane storage;
 	private final List<Button> actions = new ArrayList<>();
 	private MeTerminalView shown;
 	private EditBox filter, quantity;
@@ -27,7 +28,10 @@ public final class MeTerminalScreen extends Screen {
 	private boolean opened;
 	private long nextPoll;
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu) {
-		super(text("title")); this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal();
+		this(parent, menu, false);
+	}
+	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume) {
+		super(text("title")); opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
 	}
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.me_terminal." + key, args); }
 	private Button button(String key, int x, int y, int width, Runnable action) {
@@ -40,9 +44,17 @@ public final class MeTerminalScreen extends Screen {
 	private void build() {
 		if (filter != null) query = filter.getValue(); if (quantity != null) count = quantity.getValue();
 		clearWidgets(); actions.clear(); shown = session.view(); selected = -1;
-		button("catalogue", 8, 20, 72, () -> request(BROWSE, -1, 0));
-		button("tasks", 84, 20, 56, () -> request(TASKS, -1, 0));
-		button("refresh", 144, 20, 56, () -> request(shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()));
+		button("storage", 8, 20, 56, storage::refresh);
+		button("catalogue", 68, 20, 72, () -> request(BROWSE, -1, 0));
+		button("tasks", 144, 20, 56, () -> request(TASKS, -1, 0));
+		button("refresh", 204, 20, panelWidth - 212, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		if (shown.mode() == Mode.STORAGE) {
+			if (filter != null) filter.setFocused(false);
+			for (var widget : storage.build(font, left + 8, top + 40, panelWidth - 16)) addRenderableWidget(widget);
+			if (storage.focusedSearch() != null) setFocused(storage.focusedSearch());
+			addRenderableWidget(Button.builder(text("back"), ignored -> onClose()).bounds(left + 8, top + panelHeight - 21, 52, 14).build());
+			return;
+		}
 		filter = addRenderableWidget(new EditBox(font, left+8, top+38, panelWidth-114, 14, text("filter"))); filter.setMaxLength(64); filter.setValue(query); filter.setHint(text("filter")); filter.visible = shown.mode() == Mode.CATALOGUE;
 		quantity = addRenderableWidget(new EditBox(font, left+panelWidth-100, top+38, 92, 14, text("quantity"))); quantity.setMaxLength(19); quantity.setFilter(value -> value.isEmpty() || value.matches("[0-9]+")); quantity.setValue(count); quantity.setHint(text("quantity")); quantity.visible = shown.mode() == Mode.CATALOGUE;
 		int bottom = panelHeight-21;
@@ -66,18 +78,21 @@ public final class MeTerminalScreen extends Screen {
 	}
 	@Override public void tick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { minecraft.setScreen(null); return; }
+		if (session.view().mode() == Mode.STORAGE) storage.tick(true);
 		if (shown != session.view() || !session.waiting() && actions.stream().noneMatch(button -> button.active)) build();
 		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.status() == Status.WAITING || shown.mode() == Mode.TASKS)) {
 			nextPoll = Util.getMillis()+2000; request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
 		}
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
+		if (shown.mode() == Mode.STORAGE) return storage.click(x, y, button) || super.mouseClicked(x, y, button);
 		if (button == 0 && x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184 && !session.waiting()) {
 			int row = (int)(y-top-56)/16; if (row < shown.rows().size()) { selected = row; return true; }
 		}
 		return super.mouseClicked(x, y, button);
 	}
 	@Override public boolean keyPressed(int key, int scan, int modifiers) {
+		if (shown.mode() == Mode.STORAGE) return storage.keyPressed(key, scan, modifiers) || super.keyPressed(key, scan, modifiers);
 		if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && filter.isFocused()) { request(BROWSE, -1, 0); return true; }
 		return super.keyPressed(key, scan, modifiers);
 	}
@@ -88,6 +103,12 @@ public final class MeTerminalScreen extends Screen {
 		g.fill(left, top, left+panelWidth, top+panelHeight, 0xff9e793c); g.fill(left+2, top+2, left+panelWidth-2, top+panelHeight-2, 0xff15252c);
 		g.drawString(font, title, left+8, top+7, 0xffffd47e, false);
 		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, 0xffbccdd3, false);
+		if (shown.mode() == Mode.STORAGE) {
+			storage.labels(g, font, 0, 0);
+			g.drawWordWrap(font, text("stored_hint"), left + 8, top + 137, panelWidth - 16, 0xffbccdd3);
+			var held = menu.getCarried(); if (!held.isEmpty()) { g.renderItem(held, left + 10, top + 183); g.renderItemDecorations(font, held, left + 10, top + 183); }
+			for (var widget : renderables) widget.render(g, x, y, partial); return;
+		}
 		if (shown.mode() == Mode.PLAN) g.drawString(font, font.plainSubstrByWidth(text("plan_info", shown.bytes(), shown.cpu().isEmpty() ? text("automatic").getString() : shown.cpu()).getString(), panelWidth-16), left+8, top+40, 0xffbccdd3, false);
 		for (int i=0;i<shown.rows().size();i++) {
 			var row = shown.rows().get(i); int rowY = top+56+i*16;

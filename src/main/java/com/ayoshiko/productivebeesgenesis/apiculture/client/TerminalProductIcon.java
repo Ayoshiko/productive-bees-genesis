@@ -59,7 +59,7 @@ final class TerminalProductIcon {
 			graphics.drawString(font, amount, -font.width(amount), 0, 0xfff6edcc, true);
 		} finally { graphics.pose().popPose(); }
 	}
-	private static String compact(String value) {
+	static String compact(String value) {
 		if (value.startsWith(">=2^")) return "2^" + value.substring(4) + "+";
 		try {
 			var number = new BigInteger(value);

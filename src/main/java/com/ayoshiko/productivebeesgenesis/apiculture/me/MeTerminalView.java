@@ -4,9 +4,9 @@ import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
 public record MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows) {
-	public enum Mode { CATALOGUE, PLAN, TASKS }
-	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED }
-	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK }
+	public enum Mode { CATALOGUE, PLAN, TASKS, STORAGE }
+	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN }
+	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER }
 	public record Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled) {
 		public Row { icon = icon.copy(); if (label.length() > 128 || amount < 0 || extra < 0) throw new IllegalArgumentException("Invalid ME row"); }
 		@Override public ItemStack icon() { return icon.copy(); }
