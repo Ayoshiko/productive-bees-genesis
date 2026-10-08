@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4a2 九格合成样板编码**：ME 工作页新增编码页，持空白样板右键任务图标可直接预览。读取真实九格的普通配方，每格以一件样本编码；确认将鼠标整叠空白样板转换为同张数 AE2 合成样板，材料不消耗，默认关闭物品和流体替代，并保留自定义组件。材料账户、配方、输出或鼠标变化时拒绝旧预览，沿原权限、收费及无掉落保管；无需在线 ME 网格。ME 协议升至 9，存档格式不变；本包未编译／未运行验证。
+
 - **D18j4a1 处理样板倍率**：ME 工作页新增样板页，库存任务图标支持右键进入。对鼠标上的 AE2 原生处理样板预览整数倍放大或精确缩小全部输入／输出，再确认应用至整叠；保留张数、空位、完整资源键及其它组件。不能整除、逐格或同键合计溢出、缺失资源与过期预览均拒绝改写；关闭和切换不自动应用。支持 ME 离线时编辑，仍沿原菜单授权、序号、设备收费和无掉落保管。ME 协议升至 8，存档格式不变；本包未编译／未运行验证。
 
 - **D18j2b2b2 ME 化学品容器**：新增可选 Applied Mekanistics 1.6.3+ 集成，ME 库存提供化学品分类与烧瓶图标，支持单件容器左键装填、右键排出及 Shift 放入背包。数量全程使用 long，多罐净变化使用精确整数核对；拒收余量尽量装回，其余保管量可通过烧瓶按钮离线取回，未知结果隔离且停止重试，不掉落或倾倒辐射。ME 协议升至 7，玩家附件 schema 5 严格读取旧格式。编译依赖保持非传递、运行时可选；按加速开发要求未编译／未运行验证。
@@ -173,6 +175,8 @@
 ### English
 
 #### Added
+
+- **D18j4a2 Crafting pattern encoding**: Added an encoding workspace, also opened by right-clicking the jobs icon while carrying blank patterns. Read a regular recipe from the real crafting grid with one sample per occupied slot, then convert the carried blank stack into the same number of native AE2 crafting patterns. Grid materials are not consumed, custom components are preserved, and item/fluid substitutions default to disabled. Changed material accounts, recipes, outputs or cursor stacks invalidate the preview. Existing authorization, charging and no-drop custody apply without requiring an online ME grid. ME protocol advances to 9 with no saved-data format changes. Compilation and runtime validation were skipped.
 
 - **D18j4a1 Processing pattern scaling**: Added a pattern workspace, also opened by right-clicking the inventory jobs icon. Preview integer multiplication or exact division of every input and output in native AE2 processing patterns, then apply it to the identical carried stack. Pattern count, sparse positions, full resource keys and other components are preserved. Non-divisible quantities, per-slot or combined-key overflow, missing content and stale previews are rejected; closing or switching pages never applies a preview. Editing works without an online ME grid while retaining menu authorization, sequencing, device charging and no-drop custody. ME protocol advances to 8 with no saved-data format changes. Compilation and runtime validation were skipped.
 

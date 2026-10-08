@@ -18,8 +18,11 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	}
 	public static final int STORAGE_ROWS = 36;
 	public static int pageSize(Mode mode) { return mode == Mode.STORAGE ? STORAGE_ROWS : 8; }
-	public enum Mode { CATALOGUE, PLAN, TASKS, STORAGE, PATTERN }
-	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN, PATTERN_UNSUPPORTED, PATTERN_INVALID, PATTERN_NOT_DIVISIBLE, PATTERN_OVERFLOW, PATTERN_APPLIED }
+	public enum Mode {
+		CATALOGUE, PLAN, TASKS, STORAGE, PATTERN, PATTERN_ENCODING;
+		public boolean pattern() { return this == PATTERN || this == PATTERN_ENCODING; }
+	}
+	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN, PATTERN_UNSUPPORTED, PATTERN_INVALID, PATTERN_NOT_DIVISIBLE, PATTERN_OVERFLOW, PATTERN_APPLIED, PATTERN_NEEDS_BLANK, PATTERN_NO_RECIPE, PATTERN_ENCODED }
 	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER, ENERGY, CHEMICAL, PATTERN_INPUT, PATTERN_OUTPUT }
 	public record Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled, boolean pinned) {
 		public Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled) { this(kind, icon, label, amount, extra, enabled, false); }
@@ -36,7 +39,8 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	}
 	public static MeTerminalView empty(Status status) { return new MeTerminalView(0, Mode.CATALOGUE, status, 0, false, "", 0, "", false, List.of()); }
 	public static MeTerminalView storageStatus(Status status) { return new MeTerminalView(0, Mode.STORAGE, status, 0, false, "", 0, "", false, List.of()); }
-	public static MeTerminalView patternStatus(Status status) { return new MeTerminalView(0, Mode.PATTERN, status, 0, false, "", 0, "", false, List.of()); }
+	public static MeTerminalView patternStatus(Status status) { return patternStatus(status, false); }
+	public static MeTerminalView patternStatus(Status status, boolean encoding) { return new MeTerminalView(0, encoding ? Mode.PATTERN_ENCODING : Mode.PATTERN, status, 0, false, "", 0, "", false, List.of()); }
 	public MeTerminalView status(Status value) { return new MeTerminalView(revision, mode, value, page, more, title, bytes, cpu, value == Status.OK && confirm, rows, receipt); }
 	public MeTerminalView withReceipt(Receipt value) { return new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, value); }
 }

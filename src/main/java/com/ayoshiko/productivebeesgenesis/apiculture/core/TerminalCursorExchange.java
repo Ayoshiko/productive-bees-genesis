@@ -59,12 +59,19 @@ public final class TerminalCursorExchange {
 	}
 	/** 服务器已准备的同类同数量物品重写；不调用外部库存，不创建第二份实物。 */
 	public static Result rewrite(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement) {
+		return replace(player, menu, expected, replacement, false);
+	}
+	/** 调用方已核实编码原料与结果类型；只允许同数量转换，不能用客户端物品构造结果。 */
+	public static Result convert(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement) {
+		return replace(player, menu, expected, replacement, true);
+	}
+	private static Result replace(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement, boolean changeItem) {
 		var cursor = TerminalCursor.get(player);
 		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
 		cursor.containerBusy = true;
 		try {
 			if (expected.isEmpty() || replacement.isEmpty() || expected.getCount() < 1 || expected.getCount() > 64
-					|| replacement.getCount() != expected.getCount() || expected.getItem() != replacement.getItem()
+					|| replacement.getCount() != expected.getCount() || !changeItem && expected.getItem() != replacement.getItem()
 					|| replacement.getCount() > replacement.getMaxStackSize() || !cursor.pending.isEmpty()
 					|| player.containerMenu != menu || !ItemStack.matches(expected, menu.getCarried()) || !ItemStack.matches(expected, cursor.item()))
 				return new Result(Outcome.INVALID, 0);

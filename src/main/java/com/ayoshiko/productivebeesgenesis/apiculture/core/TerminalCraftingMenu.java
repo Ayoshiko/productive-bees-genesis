@@ -267,7 +267,7 @@ public final class TerminalCraftingMenu {
 		player.getInventory().setChanged();
 		for (int i = 0; i < 36; i++) if (!ItemStack.matches(before.get(i), after.get(i))) CoreInventorySync.committed(player, i, after.get(i));
 	}
-	private static RecipeHolder<CraftingRecipe> find(ServerPlayer player, CraftingInput input) {
+	static RecipeHolder<CraftingRecipe> find(ServerPlayer player, CraftingInput input) {
 		var found = player.serverLevel().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, player.serverLevel()).orElse(null);
 		return found != null && (found.value().isSpecial() || !player.serverLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING)
 				|| player.getRecipeBook().contains(found)) ? found : null;

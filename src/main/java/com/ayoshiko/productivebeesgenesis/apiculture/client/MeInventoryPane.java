@@ -157,7 +157,7 @@ final class MeInventoryPane {
 	void tick(boolean visible) {
 		if (!visible) { if (subscribed && !session.waiting()) { request(CLOSE, -1, 0, 0); subscribed = false; } return; }
 		searchSync.tick(search, text("storage_filter"));
-		if (opening && !session.waiting() && (session.view().mode() == MeTerminalView.Mode.PLAN || session.view().mode() == MeTerminalView.Mode.TASKS || session.view().mode() == MeTerminalView.Mode.PATTERN)) {
+		if (opening && !session.waiting() && (session.view().mode() == MeTerminalView.Mode.PLAN || session.view().mode() == MeTerminalView.Mode.TASKS || session.view().mode().pattern())) {
 			opening = false; openPlan.run(); return;
 		}
 		long now = Util.getMillis();

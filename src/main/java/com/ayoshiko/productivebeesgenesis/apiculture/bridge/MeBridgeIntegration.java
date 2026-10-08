@@ -16,7 +16,18 @@ public final class MeBridgeIntegration {
 		return installed() ? Loaded.scalePattern(item, factor, divide)
 				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
 	}
+	public static boolean blankPattern(net.minecraft.world.item.ItemStack item) { return installed() && Loaded.blankPattern(item); }
+	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan encodeCraftingPattern(net.minecraft.server.level.ServerPlayer player,
+			net.minecraft.world.item.ItemStack item, com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternSource source) {
+		return installed() ? Loaded.encodeCraftingPattern(player, item, source)
+				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
+	}
 	private static final class Loaded {
+		static boolean blankPattern(net.minecraft.world.item.ItemStack item) { return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingPatternEncoder.isBlank(item); }
+		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan encodeCraftingPattern(net.minecraft.server.level.ServerPlayer player,
+				net.minecraft.world.item.ItemStack item, com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternSource source) {
+			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingPatternEncoder.prepare(player, item, source);
+		}
 		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan scalePattern(net.minecraft.world.item.ItemStack item, long factor, boolean divide) {
 			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternEditor.prepare(item, factor, divide);
 		}

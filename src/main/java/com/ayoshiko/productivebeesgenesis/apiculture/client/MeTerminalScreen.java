@@ -46,12 +46,13 @@ public final class MeTerminalScreen extends Screen {
 	private void build() {
 		if (filter != null) query = filter.getValue(); if (quantity != null) count = quantity.getValue();
 		clearWidgets(); actions.clear(); shown = session.view(); selected = -1;
-		button("storage", 8, 20, 52, storage::refresh);
-		button("catalogue", 64, 20, 60, () -> request(BROWSE, -1, 0));
-		button("tasks", 128, 20, 44, () -> request(TASKS, -1, 0));
-		button("patterns", 176, 20, 56, () -> request(PATTERN_READ, -1, 0));
-		button("refresh", 236, 20, panelWidth - 244, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
-		if (shown.mode() == Mode.PATTERN) {
+		button("storage", 8, 20, 44, storage::refresh);
+		button("catalogue", 56, 20, 60, () -> request(BROWSE, -1, 0));
+		button("tasks", 120, 20, 40, () -> request(TASKS, -1, 0));
+		button("patterns", 164, 20, 44, () -> request(PATTERN_READ, -1, 0));
+		button("pattern_encode", 212, 20, 44, () -> request(PATTERN_ENCODE_CRAFTING, -1, 0, 0));
+		button("refresh", 260, 20, panelWidth - 268, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN_ENCODING ? PATTERN_ENCODE_CRAFTING : shown.mode() == Mode.PATTERN ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		if (shown.mode().pattern()) {
 			filter = null; quantity = null;
 			for (var widget : patterns.build(font, left, top, panelWidth, panelHeight, this::onClose)) addRenderableWidget(widget);
 			if (session.waiting()) for (var action : actions) action.active = false;
@@ -91,7 +92,7 @@ public final class MeTerminalScreen extends Screen {
 	@Override public void tick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { minecraft.setScreen(null); return; }
 		if (session.view().mode() == Mode.STORAGE) storage.tick(true);
-		if (session.view().mode() == Mode.PATTERN) patterns.tick();
+		if (session.view().mode().pattern()) patterns.tick();
 		if (shown != session.view() || !session.waiting() && actions.stream().noneMatch(button -> button.active)) build();
 		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS)) {
 			nextPoll = Util.getMillis()+2000; request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
@@ -99,7 +100,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
 		if (shown.mode() == Mode.STORAGE) return storage.click(x, y, button) || super.mouseClicked(x, y, button);
-		if (shown.mode() == Mode.PATTERN) return super.mouseClicked(x, y, button);
+		if (shown.mode().pattern()) return super.mouseClicked(x, y, button);
 		if (button == 0 && x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184 && !session.waiting()) {
 			int row = (int)(y-top-56)/16; if (row < shown.rows().size()) { selected = row; return true; }
 		}
@@ -134,7 +135,7 @@ public final class MeTerminalScreen extends Screen {
 		TerminalSkin.panel(g, left, top, panelWidth, panelHeight);
 		g.drawString(font, title, left+8, top+7, TerminalSkin.INK, false);
 		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, TerminalSkin.MUTED, false);
-		if (shown.mode() == Mode.PATTERN) {
+		if (shown.mode().pattern()) {
 			patterns.render(g, font, x, y);
 			for (var widget : renderables) widget.render(g, x, y, partial); return;
 		}

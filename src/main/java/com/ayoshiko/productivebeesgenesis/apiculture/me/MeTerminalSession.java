@@ -80,7 +80,7 @@ public final class MeTerminalSession {
 		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }
 		catch (RuntimeException invalid) {
 			if (patterns != null) { patterns.close(); patterns = null; }
-			var fallback = value.mode() == MeTerminalView.Mode.PATTERN ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE)
+			var fallback = value.mode().pattern() ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE, value.mode() == MeTerminalView.Mode.PATTERN_ENCODING)
 					: value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
 			reply = new MeTerminalReply(containerId, session, request.sequence(), fallback.withReceipt(value.receipt()));
 			buffer.clear(); MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes();
