@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4a1 处理样板倍率**：ME 工作页新增样板页，库存任务图标支持右键进入。对鼠标上的 AE2 原生处理样板预览整数倍放大或精确缩小全部输入／输出，再确认应用至整叠；保留张数、空位、完整资源键及其它组件。不能整除、逐格或同键合计溢出、缺失资源与过期预览均拒绝改写；关闭和切换不自动应用。支持 ME 离线时编辑，仍沿原菜单授权、序号、设备收费和无掉落保管。ME 协议升至 8，存档格式不变；本包未编译／未运行验证。
+
 - **D18j2b2b2 ME 化学品容器**：新增可选 Applied Mekanistics 1.6.3+ 集成，ME 库存提供化学品分类与烧瓶图标，支持单件容器左键装填、右键排出及 Shift 放入背包。数量全程使用 long，多罐净变化使用精确整数核对；拒收余量尽量装回，其余保管量可通过烧瓶按钮离线取回，未知结果隔离且停止重试，不掉落或倾倒辐射。ME 协议升至 7，玩家附件 schema 5 严格读取旧格式。编译依赖保持非传递、运行时可选；按加速开发要求未编译／未运行验证。
 
 - **D18j2b2b1 ME 充放电**：新增 Applied Flux FE 类型筛选与单件 NeoForge 充能物品交互，左键 FE 行充电、右键放电，Shift 将结果交给背包；纯电池可右键空格向 ME 放电。按实际接收量结算，拒收余量尽量充回，否则保存在玩家附件，可通过闪电按钮离线取回；未知外部结果隔离且停止重试，不生成掉落。Applied Flux 可选类型延迟加载，GTEU 保持原行为。ME 协议升至 6，玩家附件 schema 4 严格兼容旧格式；本包已实现，按开发加速要求未编译／未运行验证。
@@ -171,6 +173,8 @@
 ### English
 
 #### Added
+
+- **D18j4a1 Processing pattern scaling**: Added a pattern workspace, also opened by right-clicking the inventory jobs icon. Preview integer multiplication or exact division of every input and output in native AE2 processing patterns, then apply it to the identical carried stack. Pattern count, sparse positions, full resource keys and other components are preserved. Non-divisible quantities, per-slot or combined-key overflow, missing content and stale previews are rejected; closing or switching pages never applies a preview. Editing works without an online ME grid while retaining menu authorization, sequencing, device charging and no-drop custody. ME protocol advances to 8 with no saved-data format changes. Compilation and runtime validation were skipped.
 
 - **D18j2b2b2 ME chemical containers**: Added optional Applied Mekanistics 1.6.3+ integration with chemical filtering, flask icons and single-item container transfers: left-click to fill, right-click to drain, and Shift to send the result to inventory. Quantities remain long throughout, with exact multi-tank balance checks. Rejected chemicals return to the item when possible; retained amounts can be recovered offline through the flask button. Unknown results stay isolated without retries, world drops or radiation dumping. ME protocol advances to 7 and cursor schema 5 strictly reads older formats. The compile dependency is non-transitive and optional at runtime. Compilation and runtime validation were skipped to prioritize development.
 

@@ -57,6 +57,21 @@ public final class TerminalCursorExchange {
 		if (player.containerMenu == menu) { recover(player, menu, inventory); menu.broadcastFullState(); }
 		return new Result(cursor.pending.isEmpty() ? actual == 0 ? Outcome.NO_SPACE : Outcome.MOVED : Outcome.RETAINED, actual);
 	}
+	/** 服务器已准备的同类同数量物品重写；不调用外部库存，不创建第二份实物。 */
+	public static Result rewrite(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement) {
+		var cursor = TerminalCursor.get(player);
+		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		cursor.containerBusy = true;
+		try {
+			if (expected.isEmpty() || replacement.isEmpty() || expected.getCount() < 1 || expected.getCount() > 64
+					|| replacement.getCount() != expected.getCount() || expected.getItem() != replacement.getItem()
+					|| replacement.getCount() > replacement.getMaxStackSize() || !cursor.pending.isEmpty()
+					|| player.containerMenu != menu || !ItemStack.matches(expected, menu.getCarried()) || !ItemStack.matches(expected, cursor.item()))
+				return new Result(Outcome.INVALID, 0);
+			cursor.set(replacement); menu.setCarried(replacement.copy()); menu.broadcastFullState();
+			return new Result(Outcome.MOVED, replacement.getCount());
+		} finally { cursor.containerBusy = false; }
+	}
 	static void recover(ServerPlayer player, AbstractContainerMenu menu, boolean inventoryFirst) {
 		var cursor = TerminalCursor.get(player);
 		if (!cursor.available() || cursor.request != null || cursor.pending.isEmpty() || !ItemStack.matches(cursor.item(), menu.getCarried())) return;

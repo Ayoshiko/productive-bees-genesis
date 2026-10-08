@@ -16,6 +16,7 @@ public final class MeTerminalSession {
 	private final UUID session;
 	private final TerminalSequence sequences = new TerminalSequence();
 	private MeTerminalBackend backend;
+	private MePatternSession patterns;
 	private MeTerminalView view = MeTerminalView.empty(MeTerminalView.Status.CLOSED);
 	private long sent, acknowledged, sentAt;
 	public MeTerminalSession(int containerId, UUID session) { this.containerId = containerId; this.session = session; }
@@ -42,6 +43,11 @@ public final class MeTerminalSession {
 		try {
 			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
 			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
+			if (MePatternSession.handles(request.action()) || request.action() == MeTerminalRequest.Action.PAGE && patterns != null) {
+				closeBackend(); if (patterns == null) patterns = new MePatternSession();
+				send(player, request, patterns.request(player, request)); return;
+			}
+			if (patterns != null) { patterns.close(); patterns = null; }
 			if (request.action() == MeTerminalRequest.Action.RECOVER_CHEMICAL) {
 				if (request.row() != -1 || request.amount() > 1) { send(player, request, MeTerminalView.storageStatus(MeTerminalView.Status.INVALID)); return; }
 				var result = com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalChemicalExchange.recover(player, player.containerMenu, request.amount() == 1);
@@ -73,7 +79,9 @@ public final class MeTerminalSession {
 		var buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), player.registryAccess()); int size;
 		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }
 		catch (RuntimeException invalid) {
-			var fallback = value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
+			if (patterns != null) { patterns.close(); patterns = null; }
+			var fallback = value.mode() == MeTerminalView.Mode.PATTERN ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE)
+					: value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
 			reply = new MeTerminalReply(containerId, session, request.sequence(), fallback.withReceipt(value.receipt()));
 			buffer.clear(); MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes();
 		}
@@ -86,6 +94,7 @@ public final class MeTerminalSession {
 			case UNKNOWN -> MeTerminalView.Status.TRANSFER_UNKNOWN; case INVALID -> MeTerminalView.Status.INVALID;
 		};
 	}
-	private void closePage() { var old = backend; backend = null; if (old != null) old.close(); }
+	private void closeBackend() { var old = backend; backend = null; if (old != null) old.close(); }
+	private void closePage() { closeBackend(); if (patterns != null) patterns.close(); patterns = null; }
 	public void close() { closePage(); sequences.close(); }
 }

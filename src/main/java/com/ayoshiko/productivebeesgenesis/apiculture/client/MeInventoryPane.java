@@ -59,7 +59,10 @@ final class MeInventoryPane {
 		int bottom = 24 + grid.rows * 18;
 		button("previous", 24, bottom, 22, 14, -1, () -> page(-1)).active &= shown.page() > 0;
 		button("next", 48, bottom, 22, 14, -1, () -> page(1)).active &= shown.more();
-		button("tasks", width - 20, bottom, 20, 16, 13, () -> { opening = true; request(TASKS, -1, 0, 0); });
+		var workPages = new TerminalSkin.Control(left + width - 20, top + bottom, 20, 16, text("tasks_patterns"), mouse -> {
+			opening = true; request(mouse == 1 ? PATTERN_READ : TASKS, -1, 0, 0);
+		}, false, -1, g -> TerminalSkin.glyph(g, 13, left + width - 18, top + bottom));
+		workPages.setTooltip(Tooltip.create(text("tasks_patterns"))); workPages.active = !session.waiting() && !dirty; widgets.add(workPages);
 		var receipt = shown.receipt();
 		if (receipt.retained() > 0 || receipt.uncertain() > 0) {
 			var recover = button("recover_fluid", width - 44, bottom, 20, 16, 17, () -> request(RECOVER_FLUID, -1, 0, Screen.hasShiftDown() ? 1 : 0));
@@ -154,7 +157,7 @@ final class MeInventoryPane {
 	void tick(boolean visible) {
 		if (!visible) { if (subscribed && !session.waiting()) { request(CLOSE, -1, 0, 0); subscribed = false; } return; }
 		searchSync.tick(search, text("storage_filter"));
-		if (opening && !session.waiting() && (session.view().mode() == MeTerminalView.Mode.PLAN || session.view().mode() == MeTerminalView.Mode.TASKS)) {
+		if (opening && !session.waiting() && (session.view().mode() == MeTerminalView.Mode.PLAN || session.view().mode() == MeTerminalView.Mode.TASKS || session.view().mode() == MeTerminalView.Mode.PATTERN)) {
 			opening = false; openPlan.run(); return;
 		}
 		long now = Util.getMillis();

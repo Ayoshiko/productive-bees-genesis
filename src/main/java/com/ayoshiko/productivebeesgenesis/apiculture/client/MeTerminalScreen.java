@@ -20,6 +20,7 @@ public final class MeTerminalScreen extends Screen {
 	private final AbstractContainerMenu menu;
 	private final MeTerminalSession session;
 	private final MeInventoryPane storage;
+	private final MePatternPane patterns;
 	private final List<Button> actions = new ArrayList<>();
 	private MeTerminalView shown;
 	private EditBox filter, quantity;
@@ -32,6 +33,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume) {
 		super(text("title")); opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
+		patterns = new MePatternPane(menu, session, (action, page, amount) -> request(action, -1, page, amount));
 	}
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.me_terminal." + key, args); }
 	private Button button(String key, int x, int y, int width, Runnable action) {
@@ -44,10 +46,17 @@ public final class MeTerminalScreen extends Screen {
 	private void build() {
 		if (filter != null) query = filter.getValue(); if (quantity != null) count = quantity.getValue();
 		clearWidgets(); actions.clear(); shown = session.view(); selected = -1;
-		button("storage", 8, 20, 56, storage::refresh);
-		button("catalogue", 68, 20, 72, () -> request(BROWSE, -1, 0));
-		button("tasks", 144, 20, 56, () -> request(TASKS, -1, 0));
-		button("refresh", 204, 20, panelWidth - 212, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		button("storage", 8, 20, 52, storage::refresh);
+		button("catalogue", 64, 20, 60, () -> request(BROWSE, -1, 0));
+		button("tasks", 128, 20, 44, () -> request(TASKS, -1, 0));
+		button("patterns", 176, 20, 56, () -> request(PATTERN_READ, -1, 0));
+		button("refresh", 236, 20, panelWidth - 244, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		if (shown.mode() == Mode.PATTERN) {
+			filter = null; quantity = null;
+			for (var widget : patterns.build(font, left, top, panelWidth, panelHeight, this::onClose)) addRenderableWidget(widget);
+			if (session.waiting()) for (var action : actions) action.active = false;
+			return;
+		}
 		if (shown.mode() == Mode.STORAGE) {
 			if (filter != null) filter.setFocused(false);
 			for (var widget : storage.build(font, left + 8, top + 40, panelWidth - 16, 4)) addRenderableWidget(widget);
@@ -73,19 +82,24 @@ public final class MeTerminalScreen extends Screen {
 		long amount;
 		try { amount = Long.parseLong(quantity == null ? count : quantity.getValue()); if (action == PLAN && amount <= 0) return; }
 		catch (NumberFormatException invalid) { if (action == PLAN) return; amount = 0; }
+		request(action, row, page, amount);
+	}
+	private void request(MeTerminalRequest.Action action, int row, int page, long amount) {
 		var request = session.begin(action, row, page, amount, filter == null ? query : filter.getValue());
 		if (request != null) { PacketDistributor.sendToServer(request); nextPoll = Util.getMillis()+1000; for (var button : actions) button.active = false; }
 	}
 	@Override public void tick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { minecraft.setScreen(null); return; }
 		if (session.view().mode() == Mode.STORAGE) storage.tick(true);
+		if (session.view().mode() == Mode.PATTERN) patterns.tick();
 		if (shown != session.view() || !session.waiting() && actions.stream().noneMatch(button -> button.active)) build();
-		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.status() == Status.WAITING || shown.mode() == Mode.TASKS)) {
+		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS)) {
 			nextPoll = Util.getMillis()+2000; request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
 		}
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
 		if (shown.mode() == Mode.STORAGE) return storage.click(x, y, button) || super.mouseClicked(x, y, button);
+		if (shown.mode() == Mode.PATTERN) return super.mouseClicked(x, y, button);
 		if (button == 0 && x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184 && !session.waiting()) {
 			int row = (int)(y-top-56)/16; if (row < shown.rows().size()) { selected = row; return true; }
 		}
@@ -93,7 +107,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	@Override public boolean keyPressed(int key, int scan, int modifiers) {
 		if (shown.mode() == Mode.STORAGE) return storage.keyPressed(key, scan, modifiers) || super.keyPressed(key, scan, modifiers);
-		if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && filter.isFocused()) { request(BROWSE, -1, 0); return true; }
+		if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && filter != null && filter.isFocused()) { request(BROWSE, -1, 0); return true; }
 		return super.keyPressed(key, scan, modifiers);
 	}
 	@Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
@@ -120,6 +134,10 @@ public final class MeTerminalScreen extends Screen {
 		TerminalSkin.panel(g, left, top, panelWidth, panelHeight);
 		g.drawString(font, title, left+8, top+7, TerminalSkin.INK, false);
 		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, TerminalSkin.MUTED, false);
+		if (shown.mode() == Mode.PATTERN) {
+			patterns.render(g, font, x, y);
+			for (var widget : renderables) widget.render(g, x, y, partial); return;
+		}
 		if (shown.mode() == Mode.STORAGE) {
 			storage.background(g);
 			storage.labels(g, font, 0, 0);

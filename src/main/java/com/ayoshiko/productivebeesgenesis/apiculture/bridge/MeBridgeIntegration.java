@@ -12,7 +12,14 @@ public final class MeBridgeIntegration {
 	public static void register(RegisterCapabilitiesEvent event) { if (installed()) Loaded.register(event); }
 	public static void clearMeCache(net.minecraft.server.MinecraftServer server) { if (installed()) Loaded.clear(server); }
 	public static void forgetCompletions(net.minecraft.server.level.ServerPlayer player) { if (installed()) Loaded.forget(player); }
+	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan scalePattern(net.minecraft.world.item.ItemStack item, long factor, boolean divide) {
+		return installed() ? Loaded.scalePattern(item, factor, divide)
+				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
+	}
 	private static final class Loaded {
+		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan scalePattern(net.minecraft.world.item.ItemStack item, long factor, boolean divide) {
+			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternEditor.prepare(item, factor, divide);
+		}
 		static void clear(net.minecraft.server.MinecraftServer server) {
 			com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeMeCatalogue.clear(server);
 			com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingCompletions.clear(server);
