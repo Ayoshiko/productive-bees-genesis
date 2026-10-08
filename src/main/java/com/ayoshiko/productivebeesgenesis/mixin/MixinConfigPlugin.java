@@ -131,6 +131,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	/** AE2 兼容 Mixin，仅在 AE2 已安装时应用。 */
 	private static final Set<String> AE2_MIXINS = Set.of(
+			"Ae2CraftingCompletionMixin",
 			"Ae2CraftingNotificationMixin",
 			"Ae2PatternProviderTargetMixin",
 			"Ae2PatternProviderTargetCacheMixin",

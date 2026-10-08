@@ -1,4 +1,7 @@
 {
+  "productivebeesgenesis.configuration.terminalPinCraftingFinished": "Pin completed ME outputs",
+  "productivebeesgenesis.configuration.terminalPinCraftingFinished.tooltip": "Disabled by default. Moves up to 9 recently completed outputs of your jobs to the front of the current ME network's filtered results while stock remains. Pins last 10 minutes; search and type filters still apply. Leaving the server clears the history.",
+  "screen.productivebeesgenesis.me_terminal.completed_pin": "Recently completed (temporarily pinned)",
   "productivebeesgenesis.configuration.terminalReturnCraftingOnClose": "Return crafting materials on close",
   "productivebeesgenesis.configuration.terminalReturnCraftingOnClose.tooltip": "Disabled by default. Returns crafting materials to your inventory when you close the terminal; excess stays in the grid. Requires the account owner to be its only viewer with no pending action. Switching pages or disconnecting does not trigger a return.",
   "productivebeesgenesis.configuration.terminalNotifyCraftingFinished": "ME crafting completion notifications",

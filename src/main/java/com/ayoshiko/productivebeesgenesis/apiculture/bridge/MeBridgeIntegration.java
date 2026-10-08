@@ -11,8 +11,13 @@ public final class MeBridgeIntegration {
 	}
 	public static void register(RegisterCapabilitiesEvent event) { if (installed()) Loaded.register(event); }
 	public static void clearMeCache(net.minecraft.server.MinecraftServer server) { if (installed()) Loaded.clear(server); }
+	public static void forgetCompletions(net.minecraft.server.level.ServerPlayer player) { if (installed()) Loaded.forget(player); }
 	private static final class Loaded {
-		static void clear(net.minecraft.server.MinecraftServer server) { com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeMeCatalogue.clear(server); }
+		static void clear(net.minecraft.server.MinecraftServer server) {
+			com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeMeCatalogue.clear(server);
+			com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingCompletions.clear(server);
+		}
+		static void forget(net.minecraft.server.level.ServerPlayer player) { com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingCompletions.forget(player); }
 		static MeBridgeLink create(MeBridgeBlockEntity bridge, CompoundTag saved) {
 			return new com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.MeBridgeNode(bridge, saved);
 		}

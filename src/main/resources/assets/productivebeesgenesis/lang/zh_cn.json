@@ -1,4 +1,7 @@
 {
+  "productivebeesgenesis.configuration.terminalPinCraftingFinished": "ME 完成产物置顶",
+  "productivebeesgenesis.configuration.terminalPinCraftingFinished.tooltip": "默认关闭。将当前 ME 网络中自己最近完成且仍有库存的产物排在筛选结果最前，最多 9 种，保留 10 分钟。搜索和类型筛选仍有效；退出服务器后清除记录。",
+  "screen.productivebeesgenesis.me_terminal.completed_pin": "最近完成（临时置顶）",
   "productivebeesgenesis.configuration.terminalReturnCraftingOnClose": "关闭时取回合成材料",
   "productivebeesgenesis.configuration.terminalReturnCraftingOnClose.tooltip": "默认关闭。主动关闭终端时，将合成材料取回背包，装不下的留在原格。仅账户所有者单独使用且当前操作已完成时生效；切换页面或断线不触发。",
   "productivebeesgenesis.configuration.terminalNotifyCraftingFinished": "ME 合成完成提醒",

@@ -13,6 +13,22 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void meCompletionPreferenceIsBoundedAndRequiresTheNewFrame() {
+		var filter = com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.DEFAULT;
+		for (boolean pin : new boolean[]{false, true}) {
+			var request = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest(7, UUID.randomUUID(), 1,
+					com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.STORAGE, 0, -1, 0, 0, "iron", filter, pin);
+			var codec = com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.CODEC;
+			var buffer = new FriendlyByteBuf(Unpooled.buffer());
+			try {
+				codec.encode(buffer, request); assertTrue(buffer.readableBytes() <= 512); assertEquals(request, codec.decode(buffer));
+				buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
+				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+				buffer.clear(); codec.encode(buffer, request); buffer.writerIndex(buffer.writerIndex() - 1);
+				assertThrows(IndexOutOfBoundsException.class, () -> codec.decode(buffer));
+			} finally { buffer.release(); }
+		}
+	}
 	@Test void disabledBeeAndControlCommandsRoundTripWithinExistingBounds() {
 		var bee = new TerminalView.Bee(0, true, "productivebees:iron", 3, 10, true, "minecraft:iron_block", 1, false, null, UUID.randomUUID(), false);
 		var view = new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 4, false, List.of(new TerminalView.Row("apiary", false, "", "", true, List.of(bee))));

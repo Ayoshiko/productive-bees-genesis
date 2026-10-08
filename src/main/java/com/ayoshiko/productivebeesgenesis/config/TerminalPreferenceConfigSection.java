@@ -15,7 +15,7 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
-	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose;
+	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
 	public final ModConfigSpec.EnumValue<BeeOrder> beeSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Sort> meSort;
@@ -29,6 +29,7 @@ public final class TerminalPreferenceConfigSection {
 		syncJeiSearch = builder.translation(KEY + "terminalSyncJeiSearch").define("terminalSyncJeiSearch", false);
 		notifyCraftingFinished = builder.translation(KEY + "terminalNotifyCraftingFinished").define("terminalNotifyCraftingFinished", false);
 		returnCraftingOnClose = builder.translation(KEY + "terminalReturnCraftingOnClose").define("terminalReturnCraftingOnClose", false);
+		pinCraftingFinished = builder.translation(KEY + "terminalPinCraftingFinished").define("terminalPinCraftingFinished", false);
 		meSource = builder.translation(KEY + "terminalMeSource").define("terminalMeSource", false);
 		beeSearch = search(builder, "terminalBeeSearch"); meSearch = search(builder, "terminalMeSearch");
 		beeSort = builder.translation(KEY + "terminalBeeSort").defineEnum("terminalBeeSort", BeeOrder.POSITION);

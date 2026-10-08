@@ -14,6 +14,7 @@ param(
     [switch]$MeBridge,
     [switch]$MeCrafting,
     [switch]$MeNotifications,
+    [switch]$MeCompletionPins,
     [switch]$MeMaterials,
     [switch]$MeInventory,
     [switch]$MeFluid,
@@ -31,6 +32,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($CraftingReturn) { $NativeSlots = $true; $CraftingWriteOnly = $true }
 if ($MeNotifications) { $MeCrafting = $true }
+if ($MeCompletionPins) { $MeCrafting = $true; $CraftingWriteOnly = $true }
 if ($NativeSlots) { $Crafting = $true }
 if ($MeStorage -or $MeMaterials -or $MeInventory -or $MeFluid) { $MeBridge = $true }
 if ($MachineWorkspace -and ($MeCrafting -or $ProductWorkspace)) { throw 'Machine workspace uses separate focused stages' }
@@ -54,6 +56,7 @@ if ($ChildTask) {
     if ($MeBridge) { $arguments += '-PnetworkMeBridge' }
     if ($MeCrafting) { $arguments += '-PnetworkMeCrafting' }
     if ($MeNotifications) { $arguments += '-PnetworkMeNotifications' }
+    if ($MeCompletionPins) { $arguments += '-PnetworkMeCompletionPins' }
     if ($MeMaterials) { $arguments += '-PnetworkMeMaterials' }
     if ($MeInventory) { $arguments += '-PnetworkMeInventory' }
     if ($MeFluid) { $arguments += '-PnetworkMeFluid' }
@@ -77,7 +80,7 @@ if (Test-Path -LiteralPath $folder) { throw 'Use a new RunId; existing evidence 
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $summary = [ordered]@{
-    schema = 1; gate = $(if ($CraftingReturn) { 'D18j3c2' } elseif ($MeNotifications) { 'D18j3c1' } elseif ($MeFluid) { 'D18j2b2a' } elseif ($MeInventory) { 'D18j2b1' } elseif ($MeMaterials) { 'D18j2a' } elseif ($NativeSlots) { 'D18j1' } elseif ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
+    schema = 1; gate = $(if ($MeCompletionPins) { 'D18j3c3' } elseif ($CraftingReturn) { 'D18j3c2' } elseif ($MeNotifications) { 'D18j3c1' } elseif ($MeFluid) { 'D18j2b2a' } elseif ($MeInventory) { 'D18j2b1' } elseif ($MeMaterials) { 'D18j2a' } elseif ($NativeSlots) { 'D18j1' } elseif ($MeStorage -and $MeCrafting) { 'D20b2' } elseif ($MeStorage) { 'D20b1' } elseif ($MachineWorkspace) { 'D18i2b' } elseif ($ProductWorkspace) { 'D18i2a' } elseif ($MeCrafting) { 'D18i1' } elseif ($MeBridge) { 'D20a' } elseif ($RecipeFill) { 'D18e3b' } elseif ($Wireless) { 'D18f2a' } elseif ($CraftingWriteOnly) { 'D18e2-write-followup' } elseif ($Crafting) { 'D18e2' } elseif ($Terminals) { 'D19a' } elseif ($Upgrades) { 'D17c3' } else { 'D16c3c' }); passed = $false; startedUtc = [DateTime]::UtcNow.ToString('o')
     recoveryIncluded = !$CraftingWriteOnly -and !$WirelessVisualOnly -and !$ProductWorkspace -and !$MachineWorkspace
     visualOnly = [bool]$WirelessVisualOnly
     worktree = $workspace; sourceRevision = (& git rev-parse HEAD).Trim()
@@ -106,6 +109,7 @@ function Start-Probe([string]$Task, [string]$Id, [string]$Mode, [bool]$WithAe2, 
     if ($MeBridge) { $arguments += '-MeBridge' }
     if ($MeCrafting) { $arguments += '-MeCrafting' }
     if ($MeNotifications) { $arguments += '-MeNotifications' }
+    if ($MeCompletionPins) { $arguments += '-MeCompletionPins' }
     if ($MeMaterials) { $arguments += '-MeMaterials' }
     if ($MeInventory) { $arguments += '-MeInventory' }
     if ($MeFluid) { $arguments += '-MeFluid' }
@@ -146,6 +150,7 @@ try {
     if ($MeStorage) { $buildArgs = @('test', '--tests', '*ProductWithdrawalCheckpointTest', '--tests', '*MixinBoundaryConventionTest') }
     if ($NativeSlots -or $MeMaterials -or $MeInventory -or $MeFluid) { $buildArgs = @('test', '--tests', '*TerminalClientStateTest') }
     if ($MeNotifications) { $buildArgs = @('test', '--tests', '*TerminalClientStateTest', '--tests', '*MixinBoundaryConventionTest') }
+    if ($MeCompletionPins) { $buildArgs = @('test', '--tests', '*TerminalProtocolTest.meCompletionPreferenceIsBoundedAndRequiresTheNewFrame', '--tests', '*MixinBoundaryConventionTest') }
     if ($CraftingReturn) { $buildArgs += @('--tests', '*TerminalProtocolTest.requestsHaveConstantSizeAndRejectMalformedFrames') }
     $buildArgs += @('build', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache')
     if ($WirelessVisualOnly) { $buildArgs = @('assemble', 'verifyReleaseArtifact', 'compileDomainProbeJava', '-PnetworkDomainProbe', '--no-daemon', '--no-configuration-cache') }
@@ -210,6 +215,10 @@ try {
                 }
                 if ($MeInventory -and $withAe2 -and $mode -eq 'write' -and $playerRole -eq 'owner') {
                     foreach ($image in @('me-inventory', 'me-inventory-compact')) { Add-Evidence "$roleId-$image" (Join-Path $clientRoot "$image.png") }
+                }
+                if ($MeCompletionPins -and $withAe2 -and $playerRole -eq 'owner') {
+                    if ($clientReport.meCompletionPinsVerified -ne $true) { throw 'Missing completed pin client checks' }
+                    Add-Evidence "$roleId-me-completed-pin" (Join-Path $clientRoot 'me-completed-pin.png')
                 }
                 if ($MeBridge -and $mode -eq 'write' -and $playerRole -eq 'owner') {
                     Add-Evidence "$roleId-me-network" (Join-Path $clientRoot 'me-network.png')
@@ -297,6 +306,7 @@ try {
             if ($MeFluid -and $withAe2 -and $serverReport.meFluidVerified -ne $true) { throw 'Missing ME fluid checks' }
             if ($MeMaterials -and $withAe2 -and $serverReport.meMaterialsVerified -ne $true) { throw 'Missing ME material fill checks' }
             if ($MeCrafting -and $serverReport.meCraftingVerified -ne $true) { throw 'Missing ME crafting checks' }
+            if ($MeCompletionPins -and $withAe2 -and ($serverReport.meCompletionPinsVerified -ne $true -or $serverReport.completionHistoryCleared -ne $true)) { throw 'Missing completed pin server checks' }
             if ($MeBridge -and $serverReport.meBridgeConnectionAndRecovery -ne $true) { throw 'Missing ME bridge checks' }
             if ($MeStorage -and $withAe2 -and $serverReport.meStorageVerified -ne $true) { throw 'Missing ME storage checks' }
             if ($RecipeFill -and ($serverReport.recipeFillJeiAndConservation -ne $true -or $serverReport.recipeFillLedgerDeficitComponentsAndNoSpace -ne $true)) { throw 'Missing recipe fill checks' }

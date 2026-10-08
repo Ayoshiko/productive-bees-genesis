@@ -664,3 +664,18 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 运行基线沿[10.122](#s10-122)，本轮实际不安装 AE2／Applied Flux，JEI 运行版 19.39.0.368；writer PID 24588，两人正常登录／退出，recoveryIncluded=false。JAR 4,117,186 字节，SHA-256 `8750eb65ec3225907af77a15959f6c074c5ede781432da6c52c9f69eef9a867c`，保留为 `build/network-gates/d18j3c2-return-20261008-verified/runtime-verified.jar`；源码指纹 `011CBB0DC47F993D42FFA39050D36C2E3FCB00679086416BE3378E7128C72C60`。同目录保留 gate.json、两份测试 XML、实际客户端配置副本和 delivery-audit.json；正常保存的两份材料账户与两份玩家文件均在 gate 中登记哈希。
 
 本步只关闭 j3c2 的主动关闭取回背包范围。已付费结果和未决 ME 请求保管沿既有状态发布逻辑静态复核，本轮没有新增未知外部结果注入。没有新增 AE2 启用矩阵、客户端跨 JVM 配置恢复、故障断电／死亡或性能结论；蜂业／ME 自动入库、完成产物置顶、附属资源交互及完整 D18／D19／D29／D30 和发布门保持开放。
+
+<a id="s10-127"></a>
+### 10.127 D18j3c3 ME 完成产物置顶（2026-10-08，已实现，退出联合门保留）
+
+在网络 worktree 的 `55e04ce` 上实现默认关闭的独立置顶偏好。服务器观察 AE2 对在线所有者的真实 FINISHED 通知，记录完整 AEKey、弱网格引用及短期作业 ID；最多 32 个作业、当前网格最近 9 种产物，12000 tick 后失效，退出／停服清理。共享库存筛选缓存不变，只在当前菜单内重排仍有库存的匹配结果；图钉、页行号及实际存取引用同步。ME 协议升至 5，终端／机器仍为 25／9，存档未变。合同、视觉及本地 AE2 来源见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+`d18j3c3-pins-20261008-first` 的生产构建、产物核验和 6 项定向测试通过；探针编译因误用 ServerLevel.setGameTime 失败。改为向现有历史 prune 入口传入未来时间，不修改世界时钟。随后 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j3c3-pins-20261008-final -MeCompletionPins -Combination All -Ae2Version 19.2.18 -WriteOnly` 复用生产构建／测试结果，探针编译通过。测试为 1 项偏好请求帧完整性与 5 项 Mixin 边界，均零失败／错误／跳过。
+
+无 AE2／Applied Flux 的组合通过，writer PID 28588，两人正常登录／退出，服务端及两个客户端报告 passed=true。安装 AE2 19.2.18 的组合完成原桥接和真实 CPU 的取消／完成流程，实际消耗四份石料、产出两份铁锭。两客户端 passed=true，owner 的 meCompletionPinsVerified=true；新增 620–631 的 12 个置顶阶段已执行。四十种同 ID 不同自定义名称的库存使普通铁锭落在第一页之外，默认关闭保持原排序，开启后只有真实完成的普通铁锭排在首格并标记图钉。数量排序、搜索和流体筛选保持有效；实际右键取一件、旧 revision 拒绝、回存、取尽与再次回存均守恒，耗尽后的刷新移除置顶。无线重开仍显示本人的同网格记录。
+
+真实取消不产生记录，真实完成由新 Mixin 入口捕获。另以受控历史调用检查重复 jobId、STARTED／CANCELLED 拒绝、32 个作业／9 个置顶上限、最近顺序及过期清理；跨玩家和另一个网格身份通过查询入口检查，后者使用独立身份替身，不写成另一个真实 ME 网络的联合运行。过期检查是注入未来清理时间，不是实际等待十分钟。原始日志和 me-completed-pin.png 保留在该 run 的 build 目录。
+
+AE2 服务端收尾未通过：writer PID 20888 在退出时报告 Inventory changed while closing。对比 concurrent-probe.dat 与实际玩家 NBT，唯一变化是仍打开的无线设备正常扣费，FE 从 49870 降至 49861，物品数量、位置与绑定完全一致。已修改夹具：关闭无线菜单并回到有线菜单，新增 632 阶段后才截取最终背包；生产代码未因该问题改变。用户随后明确要求进一步加速、尽可能不测试验证，因此停止追加运行，夹具最后修正未重新编译／运行，原失败 gate.json 不改写。退出与正常玩家文件联合门仍开放，不签收完整 j3c3。
+
+本次已构建并运行主要流程的 JAR 为 4,124,362 字节，SHA-256 `dce4a0834eaa4a5b9a7bde29f85463b8e8739f0e0c59b246bdb0cb605e689d4f`，留存 `build/network-gates/d18j3c3-pins-20261008-final/runtime-exercised.jar`。当次源码指纹为 `D291EB9B0CEAB666AD30ED1CEE580630431EE906BED0CF16ECD86DC550B35D62`，不代表后续未复验的夹具修正。该目录保留两份测试 XML、实际客户端配置副本和 delivery-audit.json。完成产物置顶功能已交付实现；退出联合门、完整 D18／D19／D29／D30、附属资源交互和发布门保持开放。

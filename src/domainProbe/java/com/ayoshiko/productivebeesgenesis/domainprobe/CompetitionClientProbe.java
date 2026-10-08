@@ -263,6 +263,10 @@ public final class CompetitionClientProbe {
             report.addProperty("craftingNotificationsVerified", CraftingNotificationClient.verified);
             if (failure == null && !CraftingNotificationClient.verified) { failure = new IllegalStateException("Missing crafting notification checks"); report.addProperty("passed", false); }
         }
+        if (OWNER && ModList.get().isLoaded("ae2") && MeCraftingProbe.pins()) {
+            report.addProperty("meCompletionPinsVerified", MeCompletionPinsClient.verified);
+            if (failure == null && !MeCompletionPinsClient.verified) { failure = new IllegalStateException("Missing completed pin client checks"); report.addProperty("passed", false); }
+        }
         if (failure != null) { report.addProperty("failure", failure.toString()); com.mojang.logging.LogUtils.getLogger().error("CONCURRENT_CLIENT_FAILED at {}/{}", stage, step, failure); }
         try { Files.writeString(Path.of("results/concurrent-client.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
         catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write concurrent report", error); }

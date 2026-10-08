@@ -72,6 +72,7 @@ final class MeInventoryPane {
 			var row = shown.rows().get(i); int index = i, x = grid.cellX(i), y = grid.cellY(i);
 			var label = (row.icon().isEmpty() ? Component.literal(row.label()) : row.icon().getHoverName().copy()).append("\n" + row.label() + "\n" + row.amount() + (row.kind() == MeTerminalView.Kind.FLUID ? " mB" : ""))
 					.append("\n").append(text(row.kind() == MeTerminalView.Kind.FLUID ? "fluid_container_hint" : row.enabled() ? "stored_craftable_hint" : row.kind() == MeTerminalView.Kind.ITEM ? "stored_hint" : "resource_readonly"));
+			if (row.pinned()) label.append("\n").append(text("completed_pin"));
 			var button = new TerminalSkin.Control(x, y, 18, 18, label, mouse -> choose(index, mouse), false, -1, g -> {
 				var icon = row.icon(); if (!icon.isEmpty()) g.renderItem(icon, x, y);
 				String count = row.amount() == 0 && row.enabled() ? "+" : TerminalProductIcon.compact(Long.toString(row.amount()));
@@ -79,6 +80,12 @@ final class MeInventoryPane {
 				try { g.pose().translate(x + 17, y + 11, 200); float scale = Math.min(.65f, 18f / Math.max(1, font.width(count))); g.pose().scale(scale, scale, 1); g.drawString(font, count, -font.width(count), 0, 0xfff6edcc, true); }
 				finally { g.pose().popPose(); }
 				if (row.enabled() && row.amount() > 0) g.drawString(font, "+", x, y - 2, 0xffffde75, true);
+				if (row.pinned()) {
+					g.fill(x + 12, y + 1, x + 16, y + 3, 0xffffde75);
+					g.fill(x + 13, y + 3, x + 15, y + 5, 0xffffde75);
+					g.fill(x + 12, y + 5, x + 16, y + 6, 0xffffde75);
+					g.fill(x + 14, y + 6, x + 15, y + 8, 0xffffde75);
+				}
 			}).slot();
 			button.setTooltip(Tooltip.create(label)); button.active = !session.waiting() && !dirty; widgets.add(button);
 		}
@@ -91,7 +98,7 @@ final class MeInventoryPane {
 	private void request(MeTerminalRequest.Action action, int row, int page, long amount) {
 		loadPreferences();
 		if (action == STORAGE) opening = false;
-		var request = session.begin(action, row, page, amount, query, filter);
+		var request = session.begin(action, row, page, amount, query, filter, preferences().pinCraftingFinished.get());
 		if (request != null) { dirty = false; subscribed = action != CLOSE; due = Util.getMillis() + 2000; PacketDistributor.sendToServer(request); rebuild.run(); }
 	}
 	private void page(int direction) { if (direction < 0 ? shown.page() > 0 : shown.more()) request(PAGE, -1, Math.max(0, shown.page() + direction), 0); }

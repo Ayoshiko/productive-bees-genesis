@@ -16,8 +16,13 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	public enum Mode { CATALOGUE, PLAN, TASKS, STORAGE }
 	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN }
 	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER }
-	public record Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled) {
-		public Row { icon = icon.copy(); if (label.length() > 128 || amount < 0 || extra < 0) throw new IllegalArgumentException("Invalid ME row"); }
+	public record Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled, boolean pinned) {
+		public Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled) { this(kind, icon, label, amount, extra, enabled, false); }
+		public Row {
+			icon = icon.copy();
+			if (label.length() > 128 || amount < 0 || extra < 0 || pinned && (amount == 0 || kind != Kind.ITEM && kind != Kind.FLUID && kind != Kind.OTHER))
+				throw new IllegalArgumentException("Invalid ME row");
+		}
 		@Override public ItemStack icon() { return icon.copy(); }
 	}
 	public MeTerminalView {

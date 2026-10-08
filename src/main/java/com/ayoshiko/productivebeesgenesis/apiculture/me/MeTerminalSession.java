@@ -27,8 +27,11 @@ public final class MeTerminalSession {
 		return begin(action, row, page, amount, query, MeStorageFilter.DEFAULT);
 	}
 	public MeTerminalRequest begin(MeTerminalRequest.Action action, int row, int page, long amount, String query, MeStorageFilter filter) {
+		return begin(action, row, page, amount, query, filter, false);
+	}
+	public MeTerminalRequest begin(MeTerminalRequest.Action action, int row, int page, long amount, String query, MeStorageFilter filter, boolean pinCompleted) {
 		if (waiting() && action != MeTerminalRequest.Action.CLOSE) return null;
-		sentAt = net.minecraft.Util.getMillis(); return new MeTerminalRequest(containerId, session, ++sent, action, view.revision(), row, page, amount, query, filter);
+		sentAt = net.minecraft.Util.getMillis(); return new MeTerminalRequest(containerId, session, ++sent, action, view.revision(), row, page, amount, query, filter, pinCompleted);
 	}
 	public void accept(MeTerminalReply reply) {
 		if (reply.containerId() == containerId && reply.session().equals(session) && reply.sequence() == sent && reply.sequence() > acknowledged) { acknowledged = reply.sequence(); view = reply.view(); }

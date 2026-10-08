@@ -19,6 +19,7 @@ final class MeCraftingClient {
 	private static MeTerminalRequest replay;
 	private static String outputId() { return MeBridgeProbe.storage() ? "minecraft:raw_gold" : "minecraft:iron_ingot"; }
 	static CraftingClient.Reply advance(Minecraft client, int stage, boolean owner) throws Exception {
+		if (MeCraftingProbe.pins() && stage >= 620) return MeCompletionPinsClient.advance(client, stage, owner);
 		if (previous!=stage) { previous=stage; step=0; }
 		if (!(client.player.containerMenu instanceof NetworkCoreMenu menu)) return null;
 		var session=menu.meTerminal(); var view=session.view();

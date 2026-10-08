@@ -29,6 +29,8 @@ public final class MeTerminalBudget {
 	public static boolean bytes(MinecraftServer server, int amount) { return state(server).bytes.acquire(server.overworld().getGameTime(), amount); }
 	@SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
 		if (event.getEntity().containerMenu instanceof MeTerminalHost host) host.meTerminal().close();
+		if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)
+			com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeIntegration.forgetCompletions(player);
 	}
 	@SubscribeEvent public static void stopped(ServerStoppedEvent event) {
 		STATES.remove(event.getServer()); com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeIntegration.clearMeCache(event.getServer());

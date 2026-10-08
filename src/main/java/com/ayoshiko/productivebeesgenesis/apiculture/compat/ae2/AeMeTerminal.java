@@ -28,6 +28,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	private MeTerminalView view = MeTerminalView.empty(Status.CLOSED);
 	private List<AEKey> catalogue = List.of();
 	private List<AeMeCatalogue.Entry> stock = List.of();
+	private Set<AEKey> pinned = Set.of();
 	private List<Row> rows = List.of();
 	private List<Task> tasks = List.of();
 	private List<ICraftingCPU> cpus = List.of();
@@ -56,7 +57,8 @@ public final class AeMeTerminal implements MeTerminalBackend {
 			if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
 			grid.getStorageService().getCachedInventory(); if (bridgeNode.aggregationFaulted()) return clear(Status.FAILED);
 			cancelPlan(); tasks = List.of(); rows = List.of(); catalogue = List.of();
-			stock = AeMeCatalogue.stored(player, grid, request.query(), request.filter()); return storagePage(request.page(), Status.OK);
+			stock = AeMeCatalogue.stored(player, grid, request.query(), request.filter());
+			orderCompleted(request.pinCompleted()); return storagePage(request.page(), Status.OK);
 		}
 		if (action == MeTerminalRequest.Action.BROWSE) {
 			if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
@@ -85,10 +87,24 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		int start = stock.isEmpty() ? 0 : Math.min(page, (stock.size() - 1) / size) * size; var shown = new ArrayList<Row>();
 		for (int i = start; i < Math.min(start + size, stock.size()); i++) {
 			var entry = stock.get(i); var key = entry.key();
-			shown.add(row(key, key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : Kind.OTHER, entry.amount(), 0, entry.craftable()));
+			shown.add(new Row(key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : Kind.OTHER,
+					icon(key), clip(key.getId().toString(), 128), entry.amount(), 0, entry.craftable(), pinned.contains(key)));
 		}
 		if (com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.unknown(player)) status = Status.TRANSFER_UNKNOWN;
 		return publish(Mode.STORAGE, status, start / size, start + size < stock.size(), "", 0, "", false, shown);
+	}
+	private void orderCompleted(boolean enabled) {
+		pinned = Set.of(); if (!enabled) return;
+		var ranks = AeCraftingCompletions.ranks(player, grid); if (ranks.isEmpty()) return;
+		var front = new ArrayList<AeMeCatalogue.Entry>();
+		for (var entry : stock) if (entry.amount() > 0 && ranks.containsKey(entry.key())) front.add(entry);
+		if (front.isEmpty()) return;
+		front.sort(Comparator.comparingInt(entry -> ranks.get(entry.key())));
+		pinned = Set.copyOf(front.stream().map(AeMeCatalogue.Entry::key).toList());
+		// 基础筛选结果跨玩家共享且不可变；只重排本菜单的行，行号和点击引用一起更新。
+		var ordered = new ArrayList<AeMeCatalogue.Entry>(stock.size()); ordered.addAll(front);
+		for (var entry : stock) if (!pinned.contains(entry.key())) ordered.add(entry);
+		stock = List.copyOf(ordered);
 	}
 	private MeTerminalView exchange(MeTerminalRequest request) {
 		if (view.mode() != Mode.STORAGE || request.amount() < 1 || request.amount() > 64) return view.status(Status.INVALID);
@@ -231,7 +247,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	private MeTerminalView publish(Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows) {
 		return view = new MeTerminalView(MeTerminalBudget.revision(player.server), mode, status, page, more, title, bytes, cpu, confirm, rows);
 	}
-	private MeTerminalView clear(Status status) { stock = List.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); return publish(Mode.CATALOGUE, status, 0, false, "", 0, "", false, List.of()); }
+	private MeTerminalView clear(Status status) { stock = List.of(); pinned = Set.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); return publish(Mode.CATALOGUE, status, 0, false, "", 0, "", false, List.of()); }
 	private static int start(int page, int size) { return size == 0 ? 0 : Math.min(page, (size-1)/8)*8; }
 	private static Row row(AEKey key, Kind kind, long amount, long extra, boolean enabled) { return new Row(kind, icon(key), clip(key.getId().toString(), 128), amount, extra, enabled); }
 	private static ItemStack icon(AEKey key) { return key instanceof AEItemKey item ? item.toStack(1) : key instanceof AEFluidKey fluid ? new ItemStack(fluid.getFluid().getBucket()) : ItemStack.EMPTY; }
@@ -239,5 +255,5 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	private static String clip(String text, int length) { return text.length() <= length ? text : text.substring(0, Character.isHighSurrogate(text.charAt(length-1)) ? length-1 : length); }
 	private void release() { if (leased) { leased = false; MeTerminalBudget.release(player.server); } }
 	private void cancelPlan() { if (future != null) future.cancel(true); future = null; plan = null; cpus = List.of(); selectedCpu = null; release(); }
-	@Override public void close() { closed = true; cancelPlan(); stock = List.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); }
+	@Override public void close() { closed = true; cancelPlan(); stock = List.of(); pinned = Set.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); }
 }
