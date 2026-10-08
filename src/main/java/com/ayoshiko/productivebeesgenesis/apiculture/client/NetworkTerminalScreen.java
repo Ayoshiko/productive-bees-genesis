@@ -526,6 +526,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	public record HoveredBee(ResourceLocation type, net.minecraft.client.renderer.Rect2i area) { }
 	@Override public void removed() {
+		productPane.savePreferences();
 		var row = selectedRow(); if (row != null) { restoreLocation = row.location(); restoreBee = selectedBee() == null ? null : selectedBee().identity(); }
 		super.removed(); displayed = null; products.clear(); bees.clear(); hoveredBees.clear();
 	}

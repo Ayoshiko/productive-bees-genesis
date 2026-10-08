@@ -598,3 +598,20 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 运行基线 Java 21／NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、JEI 19.39.0.368、AE2 19.2.18／Applied Flux 2.1.5，编译 AE2 19.2.17。最终 JAR 4,099,843 字节，SHA-256 `92b5b827eac3b51dfa04eb222cc9b8bc42c6a225aa5a3bf6e843da3564a1c9d7`，原样保留在 `build/network-gates/d18j2b2a-fluid-20261008-recovery/runtime-verified.jar`；源码指纹为 `BED83E1B7DFDBAA1701CCE23A6E1E7371FA403D55CD08EE3E0D9AF23C5CA1744`。gate.json、测试 XML、截图和交付摘要保留在该 gate 及其引用路径。
 
 本步只关闭 j2b2a 单件流体容器交接与正常恢复范围；销毁容器／多件输出、超过 32 罐容器未开放。附属化学品／能量实际交互、完整无线／独立机联合、真实整理插件、强制断电原子性、偏好持久化、完整 D18／D19／D29／D30 与发布门保持开放。
+
+<a id="s10-123"></a>
+### 10.123 D18j3a 本地库存偏好、搜索记忆与聚焦（2026-10-08，本步范围已验收）
+
+在网络 worktree 的 `a79fb7c` 上接入固定大小的 NeoForge 客户端偏好：蜂业／ME 来源、两种独立搜索词、蜂业标识／数量排序，以及 ME 排序、升降序、内容和类型。搜索记忆默认开启，自动聚焦默认关闭；两种搜索最多 64 字符且拒绝控制字符。沿现有客户端配置分组展示有中文／英文名称及枚举的真实设置，不添加 AE2 客户端内部依赖。合同与界面见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)，现有配置入口及采用边界见[13.34](bee-processing-network-references.md#s13-34)。
+
+只在退出屏幕时保存改变的偏好，下一屏首次 build 时加载，避免构造子屏早于父屏 removed 保存而读取旧值。重新展示时请求第一页，确认前拒绝旧投影操作，不保存菜单、服务器身份或资产。自动聚焦用于首次搜索框，后续重建保持已有焦点，Enter 提交后释放；关闭记忆会在退出终端时清除两种已存搜索词，排序与筛选不受影响。世界、网络 checkpoint、玩家附件和 ME 协议均未变化。
+
+最终命令 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j3a-preferences-20261008-final -MeInventory -Combination ae2 -Ae2Version 19.2.18 -WriteOnly` 通过。已有 TerminalClientStateTest 9 项，零失败／错误／跳过；build、verifyReleaseArtifact、compileDomainProbeJava 通过。writer PID 21936，两名真实 TCP 玩家正常登录／退出，meInventoryVerified=true、passed=true、recoveryIncluded=false。gate 沿用 D18j2b1 标识，本条按扩展的 860 客户端步骤记录 j3a，不据此关闭完整 D18。
+
+实际客户端在原 ME 存取／手动合成／管理页往返场景后重建同一菜单的屏幕：ME 搜索 diamond、数量降序、物品类型和来源恢复；切到蜂业后查询为空，设 honey 并改数量降序，再重建恢复且 ME 搜索仍为 diamond。启用聚焦后可直接输入，Enter 释放焦点；关闭记忆并重建后两种查询为空，右键清空继续有效；关闭自动聚焦后新搜索框不聚焦，排序仍保持。配置布尔项通过实际 CLIENT_SPEC 设置而非点击原生配置页，搜索、来源与排序走正式屏幕控件。已核对真实落盘的 productivebeesgenesis-client.toml：两种查询为空，remember=false、autoFocus=false、ME source=true、ME amount／descending／item、bee quantity_desc，与最终场景一致。此为同进程屏幕恢复与正常配置落盘，不扩写为跨 JVM 客户端重启证据。
+
+首轮 `d18j3a-preferences-20261008-first` 的构建、客户端偏好断言及服务器报告均通过，但夹具进入新增步骤时提前跳过原 me-inventory-compact.png 截图，收集证据时报文件缺失，gate 未签收。只修正客户端夹具子步顺序，保留生产代码，重跑相同写入范围后全部通过。两轮日志和报告保留，没有扩大无 AE2、附属全矩阵、玩家 reader 或性能场景。
+
+最终运行基线沿[10.122](#s10-122)，JAR 4,107,578 字节，SHA-256 `ef13ddc027d33f6b5d9268008f9b4a784c4a9130160b954bf1a43682a0dbaa3c`，原样保留为 `build/network-gates/d18j3a-preferences-20261008-final/runtime-verified.jar`；源码指纹 `477D4044E1FED65DC7CCAE89CB7CC7E42EE76BC2A10512CDF3102DC095577CE2`。该目录保留测试 XML、verified-client-preferences.toml 和 delivery-audit.json。已目视检查 terminal-preferences-me／bee／forgotten 及补齐的 me-inventory-compact 四张截图；英文标题 Terminal preferences 来自夹具重建屏幕，不是生产终端改名。
+
+本步关闭 j3a 本地库存偏好范围；JEI 搜索同步、任务完成置顶／提示、关闭材料可行回存、完整无线／独立机联合、附属资源存取、完整 D18／D19／D29／D30 和发布门保持开放。

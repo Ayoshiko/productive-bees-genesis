@@ -106,6 +106,14 @@ public final class MeTerminalScreen extends Screen {
 		return shown.mode() == Mode.STORAGE && storage.release(button) || super.mouseReleased(x, y, button);
 	}
 	@Override public void onClose() { request(CLOSE, -1, 0); minecraft.setScreen(parent); }
+	@Override public void removed() {
+		try {
+			boolean changed = storage.savePreferences(); changed |= com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT.terminalPreferences.forgetDisabledSearches();
+			if (changed) com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT_SPEC.save();
+		}
+		catch (RuntimeException failure) { com.mojang.logging.LogUtils.getLogger().warn("Could not save ME display preferences", failure); }
+		super.removed();
+	}
 	@Override public boolean isPauseScreen() { return false; }
 	@Override public void render(GuiGraphics g, int x, int y, float partial) {
 		renderBackground(g, x, y, partial);

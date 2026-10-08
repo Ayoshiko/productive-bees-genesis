@@ -77,6 +77,7 @@ final class MeInventoryClient {
 		}
 		if (stage == 858) return ack();
 		if (stage == 860) {
+			if (step == 6) return TerminalPreferencesClient.advance(client, menu) ? ack() : null;
 			if (step == 0) { ((NetworkTerminalScreen) client.screen).resize(client, 320, 240); step++; return null; }
 			if (step == 1) { picture(client, "me-home-compact.png"); var screen = (NetworkTerminalScreen) client.screen; require(menu.slots.get(36).isActive() && menu.slots.get(0).y > menu.slots.get(44).y + 16, "Compact home hid crafting or overlapped inventory"); if (!menu.clientState().ready(net.minecraft.Util.getMillis())) return null; click(client, screen.getGuiLeft() + 16, screen.getGuiTop() + 153, 0); step++; return null; }
 			if (step == 2) { if (!menu.clientState().actionable(net.minecraft.Util.getMillis()) || menu.clientState().view() == null) return null; var screen = (NetworkTerminalScreen) client.screen; picture(client, "me-home-management.png"); click(client, screen.getGuiLeft() + 16, screen.getGuiTop() + 16, 0); step++; return null; }
@@ -84,7 +85,7 @@ final class MeInventoryClient {
 			if (!(client.screen instanceof MeTerminalScreen)) return null;
 			if (step == 4) { button(client, "storage"); step++; return null; }
 			if (session.view().mode() != MeTerminalView.Mode.STORAGE) return null;
-			picture(client, "me-inventory-compact.png"); return ack();
+			picture(client, "me-inventory-compact.png"); step = 6; return null;
 		}
 		return ack();
 	}

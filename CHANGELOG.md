@@ -35,9 +35,11 @@
 
 ### 新增
 
+- **D18j3a 终端本地偏好**：保存蜂业／ME 库存来源、各自的搜索词、排序和筛选条件，重开后重新查询库存；客户端配置新增“终端偏好”分组。搜索记忆默认开启，自动聚焦默认关闭；关闭记忆后退出终端清除已存搜索词，保留排序，Enter 提交后释放焦点。偏好只在退出界面时保存，库存、菜单身份与资产不进入配置。JEI 同步、完成提示和关闭回存仍属后续范围。
+
 - **D18j2b2a 流体容器交接**：持容器左键 ME 流体装入、右键库存格区倒入，Shift 将单件结果送入背包；按完整流体组件和实际转移量结算。未装入余量按玩家保管，ME 无通道时仍可用水滴按钮取回；外部结果未知时保留请求并停止重试，不生成掉落。新增玩家附件 schema 3 并严格兼容旧格式，界面显示已知保管量与未决量。有限 ME 存储、原版桶、NeoForge 标准单罐夹具和正常跨 JVM 恢复已验证，附属容器完整矩阵仍待交付。
 
-- **D18j2c AE2 操作风格库存首页**：网络终端默认同屏显示连续产物网格、手动合成和真实背包，蜂务／升级从侧签进入；顶部搜索、左侧排序／类型／方向图标栏与右侧滚动条沿 AE2 使用习惯组织。ME 库存页最多 36 项，保留 32 KiB 回复限制，支持跨页存取与键盘翻页；小视口减少库存行数，槽位不缩小。流体容器见本轮 j2b2a；附属完整工作流和偏好持久化继续按后续步骤交付。
+- **D18j2c AE2 操作风格库存首页**：网络终端默认同屏显示连续产物网格、手动合成和真实背包，蜂务／升级从侧签进入；顶部搜索、左侧排序／类型／方向图标栏与右侧滚动条沿 AE2 使用习惯组织。ME 库存页最多 36 项，保留 32 KiB 回复限制，支持跨页存取与键盘翻页；小视口减少库存行数，槽位不缩小。流体容器见本轮 j2b2a；附属完整工作流继续按后续步骤交付，基础偏好保存见 j3a。
 
 - **D20b1 ME 双向产物存储**：网络核心的桥接端口新增显式自动化授权，合法蜂业物品／流体按完整组件和实际数量双向交接，保留超 long 精确余额与在制预约。键索引分批发布，提供可关闭的安全显示汇总与故障拒绝；旧桥默认未授权，独立多方块仍仅连接与下单。完整合成消费／回流及 D20 联合验收继续推进。
 
@@ -158,9 +160,11 @@
 
 #### Added
 
+- **D18j3a local terminal preferences**: Remembers the bee/ME storage source, separate queries, sorting and filters, then requests fresh inventory when reopened. The client configuration now has a terminal-preferences section. Search memory defaults on and autofocus defaults off; disabling memory clears saved queries when leaving a terminal while keeping sort settings. Enter submits and releases focus. Preferences are saved when leaving the screen and contain no inventory, menu identity or assets. JEI synchronization, completion notifications and return-on-close remain separate follow-ups.
+
 - **D18j2b2a fluid container exchange**: Left-click an ME fluid while holding a container to fill it, or right-click the storage grid to empty it; Shift sends the single resulting container to inventory. Transfers preserve full fluid components and use actual accepted amounts. Unfilled fluid remains in player custody and can be recovered with the droplet button while ME has no channel. Unknown external results retain their requests without retry or world drops. Player attachment schema 3 strictly reads older formats, and the UI distinguishes known fluid from unresolved amounts. Finite ME storage, vanilla buckets, a standard NeoForge single-tank fixture and normal cross-JVM recovery passed; the full addon-container matrix remains pending.
 
-- **D18j2c AE2-style storage home**: Network terminals open with a continuous product grid, manual crafting and the real player inventory together; side tabs lead to bee and upgrade management. Search, sorting, type and direction controls follow familiar AE2 positions, with a draggable scrollbar and keyboard paging. ME storage pages show up to 36 entries within the existing 32 KiB reply limit. Compact layouts reduce visible rows while preserving slot size. Fluid containers are covered by j2b2a above; complete addon workflows and persistent preferences remain in subsequent steps.
+- **D18j2c AE2-style storage home**: Network terminals open with a continuous product grid, manual crafting and the real player inventory together; side tabs lead to bee and upgrade management. Search, sorting, type and direction controls follow familiar AE2 positions, with a draggable scrollbar and keyboard paging. ME storage pages show up to 36 entries within the existing 32 KiB reply limit. Compact layouts reduce visible rows while preserving slot size. Fluid containers are covered by j2b2a above; complete addon workflows remain in subsequent steps, with basic preference persistence covered by j3a.
 
 - **D20b1 bidirectional ME product storage**: Network-core bridges now require explicit automation authorization and transfer eligible bee items and fluids with full components and exact quantities, preserving balances beyond long and in-flight reservations. Product keys publish incrementally; optional safe display aggregation fails closed. Legacy bridges remain unauthorized, and standalone multiblock bridges retain connection and crafting access only. Crafting consumption, cancellation returns and the full D20 gate remain in progress.
 

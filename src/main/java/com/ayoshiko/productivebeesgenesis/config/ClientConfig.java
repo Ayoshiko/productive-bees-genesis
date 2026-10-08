@@ -18,6 +18,7 @@ public final class ClientConfig {
 		}
 	}
 	public final ModConfigSpec.EnumValue<CoreEffects> machineCoreEffects;
+	public final TerminalPreferenceConfigSection terminalPreferences;
 
 	// ========== 彩虹特效（纯客户端渲染）==========
 	public final ModConfigSpec.BooleanValue rainbowMode;
@@ -79,6 +80,8 @@ public final class ClientConfig {
 				.translation("productivebeesgenesis.configuration.multiblock_visuals.coreEffects")
 				.defineEnum("coreEffects", CoreEffects.FULL);
 		builder.pop();
+
+		terminalPreferences = new TerminalPreferenceConfigSection(builder);
 
 		// PB 自定义窗口位置持久化
 		windowPositions.registerAll(builder);

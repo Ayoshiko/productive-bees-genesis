@@ -23,7 +23,7 @@ final class MeInventoryPane {
 	private MeStorageFilter filter = MeStorageFilter.DEFAULT;
 	private EditBox search;
 	private String query = "";
-	private boolean dirty, subscribed, opening, awaiting;
+	private boolean dirty, subscribed, opening, awaiting, preferencesLoaded, preferencesDirty;
 	private long due;
 	private int left, top, width;
 	MeInventoryPane(AbstractContainerMenu menu, Runnable rebuild, Runnable openPlan) {
@@ -32,26 +32,27 @@ final class MeInventoryPane {
 	static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.me_terminal." + key, args); }
 	List<AbstractWidget> build(Font font, int left, int top, int width) { return build(font, left, top, width, 2); }
 	List<AbstractWidget> build(Font font, int left, int top, int width, int visibleRows) {
+		loadPreferences();
 		this.left = left; this.top = top; this.width = width;
 		if (shown != null && shown.page() != session.view().page()) grid.offset = 0;
 		shown = session.view(); awaiting = session.waiting(); widgets.clear();
-		boolean focus = search != null && search.isFocused(); int cursor = search == null ? 0 : search.getCursorPosition();
+		boolean focus = search == null ? preferences().autoFocus.get() : search.isFocused(); int cursor = search == null ? query.length() : search.getCursorPosition();
 		search = new EditBox(font, left + 24, top, width - 46, 15, text("storage_filter"));
 		search.setMaxLength(64); search.setValue(query); search.setHint(text("storage_filter")); search.setFocused(focus);
 		search.setCursorPosition(cursor); search.setHighlightPos(cursor);
-		search.setResponder(value -> { query = value; dirty = true; grid.offset = 0; due = Util.getMillis() + 300; }); widgets.add(search);
+		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; grid.offset = 0; due = Util.getMillis() + 300; }); widgets.add(search);
 		button("refresh", width - 20, -1, 20, 16, 14, () -> request(STORAGE, -1, 0, 0));
 		button("sort." + filter.sort().name().toLowerCase(Locale.ROOT), 0, 20, 20, 20, 9, () -> {
-			filter = new MeStorageFilter(MeStorageFilter.Sort.values()[(filter.sort().ordinal() + 1) % 3], filter.descending(), filter.content(), filter.type()); request(STORAGE, -1, 0, 0);
+			filter = new MeStorageFilter(MeStorageFilter.Sort.values()[(filter.sort().ordinal() + 1) % 3], filter.descending(), filter.content(), filter.type()); preferencesDirty = true; request(STORAGE, -1, 0, 0);
 		});
 		button("content." + filter.content().name().toLowerCase(Locale.ROOT), 0, 42, 20, 20, 12, () -> {
-			filter = new MeStorageFilter(filter.sort(), filter.descending(), MeStorageFilter.Content.values()[(filter.content().ordinal() + 1) % 3], filter.type()); request(STORAGE, -1, 0, 0);
+			filter = new MeStorageFilter(filter.sort(), filter.descending(), MeStorageFilter.Content.values()[(filter.content().ordinal() + 1) % 3], filter.type()); preferencesDirty = true; request(STORAGE, -1, 0, 0);
 		});
 		button("type." + filter.type().name().toLowerCase(Locale.ROOT), 0, 64, 20, 20, 11, () -> {
-			filter = new MeStorageFilter(filter.sort(), filter.descending(), filter.content(), MeStorageFilter.Type.values()[(filter.type().ordinal() + 1) % 4]); request(STORAGE, -1, 0, 0);
+			filter = new MeStorageFilter(filter.sort(), filter.descending(), filter.content(), MeStorageFilter.Type.values()[(filter.type().ordinal() + 1) % 4]); preferencesDirty = true; request(STORAGE, -1, 0, 0);
 		});
 		button(filter.descending() ? "descending" : "ascending", 0, 86, 20, 20, filter.descending() ? 10 : 16, () -> {
-			filter = new MeStorageFilter(filter.sort(), !filter.descending(), filter.content(), filter.type()); request(STORAGE, -1, 0, 0);
+			filter = new MeStorageFilter(filter.sort(), !filter.descending(), filter.content(), filter.type()); preferencesDirty = true; request(STORAGE, -1, 0, 0);
 		});
 		grid.layout(left + 24, top + 22, width - 24, visibleRows, shown.mode() == MeTerminalView.Mode.STORAGE ? shown.rows().size() : 0);
 		int bottom = 24 + grid.rows * 18;
@@ -87,6 +88,7 @@ final class MeInventoryPane {
 		value.setTooltip(Tooltip.create(label)); value.active = !session.waiting() && !dirty; widgets.add(value); return value;
 	}
 	private void request(MeTerminalRequest.Action action, int row, int page, long amount) {
+		loadPreferences();
 		if (action == STORAGE) opening = false;
 		var request = session.begin(action, row, page, amount, query, filter);
 		if (request != null) { dirty = false; subscribed = action != CLOSE; due = Util.getMillis() + 2000; PacketDistributor.sendToServer(request); rebuild.run(); }
@@ -117,6 +119,19 @@ final class MeInventoryPane {
 		if (shown != session.view() || awaiting != session.waiting()) rebuild.run();
 	}
 	void refresh() { request(STORAGE, -1, 0, 0); }
+	private static com.ayoshiko.productivebeesgenesis.config.TerminalPreferenceConfigSection preferences() { return com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT.terminalPreferences; }
+	private void loadPreferences() {
+		if (preferencesLoaded) return;
+		var prefs = preferences(); filter = prefs.meFilter(); query = prefs.rememberSearch.get() ? prefs.meSearch.get() : "";
+		preferencesLoaded = true; search = null; subscribed = false; dirty = true; due = 0; grid.offset = 0;
+	}
+	boolean savePreferences() {
+		if (!preferencesLoaded) return false;
+		var prefs = preferences(); boolean changed = preferencesDirty || !prefs.rememberSearch.get() && !prefs.meSearch.get().isEmpty();
+		if (changed) prefs.storeMe(query, filter);
+		preferencesLoaded = false; preferencesDirty = false; search = null;
+		return changed;
+	}
 	EditBox focusedSearch() { return search != null && search.isFocused() ? search : null; }
 	boolean keyPressed(int key, int scan, int modifiers) {
 		if (search != null && search.isFocused()) {

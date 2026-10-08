@@ -28,7 +28,7 @@ final class TerminalProductPane {
 	private TerminalSearchRequest.Sort sort = TerminalSearchRequest.Sort.POSITION;
 	private EditBox search;
 	private String query = "";
-	private boolean dirty, subscribed, meMode;
+	private boolean dirty, subscribed, meMode, preferencesLoaded, preferencesDirty;
 	private long searchAt;
 	private int left, top, paneWidth;
 	private TerminalSkin.Control previous, next, refresh, ordering;
@@ -39,13 +39,17 @@ final class TerminalProductPane {
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network.terminal." + key, args); }
 	List<AbstractWidget> build(Font font, int x, int y, int inventoryY) { return build(font, x, y, inventoryY, false); }
 	List<AbstractWidget> build(Font font, int x, int y, int inventoryY, boolean home) {
+		if (!preferencesLoaded) {
+			var prefs = preferences(); meMode = prefs.meSource.get(); query = prefs.rememberSearch.get() ? prefs.beeSearch.get() : "";
+			sort = TerminalSearchRequest.Sort.valueOf(prefs.beeSort.get().name()); preferencesLoaded = true; search = null; subscribed = false; dirty = true; searchAt = 0; grid.offset = 0;
+		}
 		left = x + (home ? 8 : LEFT); top = y + 29; paneWidth = home ? 288 : WIDTH;
 		int rows = Math.max(1, (inventoryY - (home ? 135 : 149)) / 18);
-		boolean focus = search != null && search.isFocused(); int cursor = search == null ? 0 : search.getCursorPosition();
+		boolean focus = search == null ? preferences().autoFocus.get() : search.isFocused(); int cursor = search == null ? query.length() : search.getCursorPosition();
 		if (search != null) query = search.getValue();
 		widgets.clear(); buttons.clear();
 		var source = new TerminalSkin.Control(x + (home ? 188 : LEFT), y + 7, home ? 108 : WIDTH, 17,
-				meMode ? MeInventoryPane.text("storage") : text("workspace_products"), ignored -> { meMode = !meMode; rebuild.run(); }, meMode, -1, null);
+				meMode ? MeInventoryPane.text("storage") : text("workspace_products"), ignored -> { meMode = !meMode; preferencesDirty = true; rebuild.run(); }, meMode, -1, null);
 		source.setTooltip(Tooltip.create(MeInventoryPane.text("source_hint"))); widgets.add(source);
 		if (meMode) { widgets.addAll(mePane.build(font, left, top, paneWidth, rows)); return widgets; }
 		if (shown != state.view()) { shown = state.view(); icons.clear(); if (shown != null) for (var row : shown.rows()) icons.add(new TerminalProductIcon(row)); }
@@ -53,10 +57,11 @@ final class TerminalProductPane {
 		search = new EditBox(font, left + 24, top, paneWidth - 46, 16, text("workspace_search"));
 		search.setMaxLength(64); search.setValue(query); search.setHint(text("workspace_search")); search.setTooltip(Tooltip.create(text("search_help")));
 		search.setFocused(focus); search.setCursorPosition(cursor); search.setHighlightPos(cursor);
-		search.setResponder(value -> { query = value; dirty = true; searchAt = Util.getMillis() + 300; updateEnabled(); }); widgets.add(search);
+		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; searchAt = Util.getMillis() + 300; updateEnabled(); }); widgets.add(search);
 		refresh = button("workspace_refresh", paneWidth - 20, -1, 20, 16, 14, () -> request(TerminalSearchRequest.Navigation.FIRST));
 		ordering = button(switch (sort) { case QUANTITY_DESC -> "sort_quantity_desc"; case QUANTITY_ASC -> "sort_quantity_asc"; default -> "sort_id"; }, 0, 20, 20, 20, 9, () -> {
 			sort = switch (sort) { case POSITION -> TerminalSearchRequest.Sort.QUANTITY_DESC; case QUANTITY_DESC -> TerminalSearchRequest.Sort.QUANTITY_ASC; default -> TerminalSearchRequest.Sort.POSITION; };
+			preferencesDirty = true;
 			request(TerminalSearchRequest.Navigation.FIRST);
 		});
 		grid.layout(left + 24, top + 22, paneWidth - 24, rows, shown == null ? 0 : shown.rows().size());
@@ -132,6 +137,19 @@ final class TerminalProductPane {
 	}
 	boolean drag(double y, int button) { if (meMode) return mePane.drag(y, button); if (!grid.drag(y, button)) return false; rebuild.run(); return true; }
 	boolean release(int button) { return meMode ? mePane.release(button) : grid.release(button); }
+	private static com.ayoshiko.productivebeesgenesis.config.TerminalPreferenceConfigSection preferences() { return com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT.terminalPreferences; }
+	void savePreferences() {
+		try {
+			boolean changed = mePane.savePreferences(); var prefs = preferences();
+			if (preferencesLoaded && (preferencesDirty || !prefs.rememberSearch.get() && !prefs.beeSearch.get().isEmpty())) {
+				prefs.meSource.set(meMode); prefs.beeSearch.set(prefs.rememberSearch.get() ? query : "");
+				prefs.beeSort.set(com.ayoshiko.productivebeesgenesis.config.TerminalPreferenceConfigSection.BeeOrder.valueOf(sort.name())); changed = true;
+			}
+			changed |= prefs.forgetDisabledSearches();
+			if (changed) com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT_SPEC.save();
+			preferencesLoaded = false; preferencesDirty = false; search = null;
+		} catch (RuntimeException failure) { com.mojang.logging.LogUtils.getLogger().warn("Could not save terminal display preferences", failure); }
+	}
 	void background(GuiGraphics g) { if (meMode) mePane.background(g); else grid.render(g); }
 	void labels(GuiGraphics g, Font font, int originX, int originY) {
 		if (meMode) { mePane.labels(g, font, originX, originY); return; }
