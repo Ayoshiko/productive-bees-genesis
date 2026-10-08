@@ -51,8 +51,9 @@ final class TerminalPreferencesClient {
 			}
 			case 7 -> {
 				require(!search(client).isFocused() && prefs.meSearch.get().isEmpty() && prefs.meSort.get() == MeStorageFilter.Sort.AMOUNT, "Disabled focus or retained sort failed");
-				picture(client, "terminal-preferences-forgotten.png"); return true;
+				picture(client, "terminal-preferences-forgotten.png");
 			}
+			case 8 -> { return JeiSearchClient.advance(client); }
 			default -> throw new IllegalStateException("Unexpected preference stage");
 		}
 		step++; return false;

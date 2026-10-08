@@ -416,6 +416,8 @@ D20b2 于 2026-10-07 继续复核上述固定 AE2 的 `CraftingCalculation` 构�
 
 2026-10-08 继续读取原聊天最后四张截图及本地固定 AE2 19.2.17 的 MEStorageScreen 构造、SettingToggleButton 和库存点击入口；采用顶部搜索、左侧排序／显示／类型／方向工具栏、连续格距、右侧滚动条、下方合成与背包的组织方式。截图已从原聊天的嵌入图片恢复至忽略的 build/ae-terminal-user-reference-1.png 至 -4.png。工具栏仅连接已实现行为，面板与图标由本项目绘制；本轮不调用 AE2 客户端内部类，也不引入 WCWT 依赖。目录只扩大当前有界库存页至 36 项，保留 32 KiB 预算及服务器键身份，不沿用 AE2 整目录客户端仓库。
 
+D18j3b 读取固定 AE2 19.2.17 的 MEStorageScreen.updateSearch：外部键盘焦点与本地输入焦点决定同步方向，不将缓存搜索反复覆盖另一侧。通过本地 JEI 19.36.0.360 JAR 的 javap 核对 IIngredientFilter.getFilterText／setFilterText、IIngredientListOverlay.hasKeyboardFocus 和 IModPlugin 的运行时可用／停用回调，运行版仍为 19.39.0.368。只采用公开字符串与焦点 API，通过既有 ProductiveBeesGenesisJEI 插件注册可撤销入口，不引用 ItemListMod／JEI 内部类实现生产同步，也不移植 AE2 的客户端全目录检索。NeoForge 21.1.216 ScreenEvent 的鼠标按下／释放、字符输入签名由本地 universal JAR 核对，客户端探针沿实际事件链获得 JEI 焦点并输入；Internal.getJeiRuntime 及 MouseHandler 反射仅留在 domainProbe。
+
 D18j3a 沿本项目 ClientConfig、WindowPositionConfigSection 与 CustomConfigScreenFactory 的现有 NeoForge 客户端配置入口实现；读取与存储使用 ModConfigSpec 的有界值，原生 ConfigurationSectionScreen 展示分组，枚举使用 TranslatableEnum。偏好在屏幕 removed 时保存、下一屏首次 build 时读取，避免子屏构造早于父屏保存而复用旧值；只有实际改变的展示条件写入，搜索记忆关闭后清空查询。没有引用 AE2 客户端内部类、WCWT 配置包或第三方磁盘文件；JEI 搜索同步与 AE2 任务完成通知没有在本步模拟接入。
 
 D18j2b2a 复核 AE2 19.2.17 的 ContainerItemStrategies、FluidContainerItemStrategy 及 StorageHelper.poweredExtraction／poweredInsert。采用左键装入、右键排出、模拟只读和实际返回量结算；不使用 AE2 CarriedContext.addOverflow 的 placeItemBackInInventory 回退，因为满载时可能产生掉落。NeoForge 21.1.216 的 FluidHandlerItemStack／SimpleFluidContent 签名从本地 universal JAR 核对，容器能力在单件副本上准备，全部罐的完整组件与净变化由本项目校验；每次最多检查 32 罐。逐玩家保管与未知请求沿现有 TerminalCursor 扩展，不在常驻代码引用 AEFluidKey，也不引入新的全服缓存。注册给 PAPER 的标准单罐和 probe_fluid 组件仅属于 domainProbe 隔离夹具，不进入产物或真实玩家世界。

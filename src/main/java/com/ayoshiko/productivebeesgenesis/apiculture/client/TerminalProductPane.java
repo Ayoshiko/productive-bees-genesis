@@ -23,6 +23,7 @@ final class TerminalProductPane {
 	private final List<TerminalSkin.Control> buttons = new ArrayList<>();
 	private final List<TerminalProductIcon> icons = new ArrayList<>();
 	private final TerminalGridViewport grid = new TerminalGridViewport();
+	private final TerminalSearchSync searchSync = new TerminalSearchSync();
 	private TerminalView shown;
 	private TerminalClientState.Notice notice;
 	private TerminalSearchRequest.Sort sort = TerminalSearchRequest.Sort.POSITION;
@@ -57,7 +58,7 @@ final class TerminalProductPane {
 		search = new EditBox(font, left + 24, top, paneWidth - 46, 16, text("workspace_search"));
 		search.setMaxLength(64); search.setValue(query); search.setHint(text("workspace_search")); search.setTooltip(Tooltip.create(text("search_help")));
 		search.setFocused(focus); search.setCursorPosition(cursor); search.setHighlightPos(cursor);
-		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; searchAt = Util.getMillis() + 300; updateEnabled(); }); widgets.add(search);
+		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; searchAt = Util.getMillis() + 300; updateEnabled(); searchSync.edited(value); }); widgets.add(search);
 		refresh = button("workspace_refresh", paneWidth - 20, -1, 20, 16, 14, () -> request(TerminalSearchRequest.Navigation.FIRST));
 		ordering = button(switch (sort) { case QUANTITY_DESC -> "sort_quantity_desc"; case QUANTITY_ASC -> "sort_quantity_asc"; default -> "sort_id"; }, 0, 20, 20, 20, 9, () -> {
 			sort = switch (sort) { case POSITION -> TerminalSearchRequest.Sort.QUANTITY_DESC; case QUANTITY_DESC -> TerminalSearchRequest.Sort.QUANTITY_ASC; default -> TerminalSearchRequest.Sort.POSITION; };
@@ -90,6 +91,7 @@ final class TerminalProductPane {
 			if (subscribed && state.ready(now)) { var request = state.begin(TerminalRequest.Operation.CANCEL, -1, -1, -1, 0, now); if (request != null) { PacketDistributor.sendToServer(request); subscribed = false; } }
 			return;
 		}
+		searchSync.tick(search, text("search_help"));
 		if ((!subscribed || dirty && now >= searchAt) && state.ready(now)) request(TerminalSearchRequest.Navigation.FIRST);
 		if (shown != state.view() || notice != state.notice()) rebuild.run();
 		updateEnabled();
@@ -147,7 +149,7 @@ final class TerminalProductPane {
 			}
 			changed |= prefs.forgetDisabledSearches();
 			if (changed) com.ayoshiko.productivebeesgenesis.config.ModConfig.CLIENT_SPEC.save();
-			preferencesLoaded = false; preferencesDirty = false; search = null;
+			preferencesLoaded = false; preferencesDirty = false; search = null; searchSync.reset();
 		} catch (RuntimeException failure) { com.mojang.logging.LogUtils.getLogger().warn("Could not save terminal display preferences", failure); }
 	}
 	void background(GuiGraphics g) { if (meMode) mePane.background(g); else grid.render(g); }

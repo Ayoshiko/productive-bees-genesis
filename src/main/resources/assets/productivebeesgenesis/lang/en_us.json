@@ -1,4 +1,9 @@
 {
+  "productivebeesgenesis.configuration.terminalSyncJeiSearch": "Synchronize search with JEI",
+  "productivebeesgenesis.configuration.terminalSyncJeiSearch.tooltip": "Disabled by default. Synchronizes the active search field in both directions. Terminal search remains available without JEI. Terminal syntax and the 64-character limit still apply.",
+  "screen.productivebeesgenesis.network.terminal.jei_search.active": "Search text is synchronized with JEI; terminal syntax still applies.",
+  "screen.productivebeesgenesis.network.terminal.jei_search.unavailable": "JEI is unavailable; terminal search works independently.",
+  "screen.productivebeesgenesis.network.terminal.jei_search.invalid": "JEI search exceeds 64 characters or contains control characters. The terminal keeps its previous query.",
   "productivebeesgenesis.configuration.terminal_preferences": "Terminal preferences",
   "productivebeesgenesis.configuration.terminal_preferences.tooltip": "Local search and display settings shared by apiculture terminals.",
   "productivebeesgenesis.configuration.terminalRememberSearch": "Remember terminal searches",

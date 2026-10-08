@@ -15,7 +15,7 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
-	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending;
+	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
 	public final ModConfigSpec.EnumValue<BeeOrder> beeSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Sort> meSort;
@@ -26,6 +26,7 @@ public final class TerminalPreferenceConfigSection {
 		builder.comment("蜂业终端本地偏好；各终端共享，不包含资产或服务器身份").push("terminal_preferences");
 		rememberSearch = builder.translation(KEY + "terminalRememberSearch").define("terminalRememberSearch", true);
 		autoFocus = builder.translation(KEY + "terminalAutoFocus").define("terminalAutoFocus", false);
+		syncJeiSearch = builder.translation(KEY + "terminalSyncJeiSearch").define("terminalSyncJeiSearch", false);
 		meSource = builder.translation(KEY + "terminalMeSource").define("terminalMeSource", false);
 		beeSearch = search(builder, "terminalBeeSearch"); meSearch = search(builder, "terminalMeSearch");
 		beeSort = builder.translation(KEY + "terminalBeeSort").defineEnum("terminalBeeSort", BeeOrder.POSITION);

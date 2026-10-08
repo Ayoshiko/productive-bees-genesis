@@ -71,7 +71,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::craftingState, com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::wireless,
 				registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
 	}
-	@Override public void onRuntimeUnavailable() { terminalRuntime = null; }
+	@Override public void onRuntimeUnavailable() { terminalRuntime = null; com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSearchSync.connect(null); }
 
 	/** JEI插件ID */
 	private static final ResourceLocation PLUGIN_ID =
@@ -448,6 +448,11 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	@Override
 	public void onRuntimeAvailable(IJeiRuntime runtime) {
 		terminalRuntime = runtime;
+		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSearchSync.connect(new com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSearchSync.Endpoint() {
+			public String text() { return runtime.getIngredientFilter().getFilterText(); }
+			public void text(String value) { runtime.getIngredientFilter().setFilterText(value); }
+			public boolean focused() { return runtime.getIngredientListOverlay().hasKeyboardFocus(); }
+		});
 		// 检查配置是否加载以及万象创世是否被禁用
 		if (!ModConfig.areServerSpecsLoaded()) {
 			return;

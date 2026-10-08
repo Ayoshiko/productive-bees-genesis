@@ -615,3 +615,20 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 最终运行基线沿[10.122](#s10-122)，JAR 4,107,578 字节，SHA-256 `ef13ddc027d33f6b5d9268008f9b4a784c4a9130160b954bf1a43682a0dbaa3c`，原样保留为 `build/network-gates/d18j3a-preferences-20261008-final/runtime-verified.jar`；源码指纹 `477D4044E1FED65DC7CCAE89CB7CC7E42EE76BC2A10512CDF3102DC095577CE2`。该目录保留测试 XML、verified-client-preferences.toml 和 delivery-audit.json。已目视检查 terminal-preferences-me／bee／forgotten 及补齐的 me-inventory-compact 四张截图；英文标题 Terminal preferences 来自夹具重建屏幕，不是生产终端改名。
 
 本步关闭 j3a 本地库存偏好范围；JEI 搜索同步、任务完成置顶／提示、关闭材料可行回存、完整无线／独立机联合、附属资源存取、完整 D18／D19／D29／D30 和发布门保持开放。
+
+<a id="s10-124"></a>
+### 10.124 D18j3b JEI 搜索词双向同步与运行时入口撤销（2026-10-08，本步范围已验收）
+
+在网络 worktree 的 `b418200` 上扩展现有客户端偏好，新增默认关闭的 JEI 同步开关。终端编辑／右键清空写入实际 JEI 过滤器，外部持有键盘焦点时导入到当前可见的终端框并撤销旧焦点。导入期间不反馈写回；无变化不重复调用外部 setter。超过 64 字符、含控制字符或无效的外部文本保留旧终端查询并提示，合法输入恢复后继续工作。同步限定搜索词，两侧各用自身检索语法和既有预算；不读取 JEI 原料全表，不改变资产／菜单／存档协议。合同、界面与 API 依据见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+常驻客户端只引用可撤销的字符串／焦点接口，JEI 类型仅在既有插件和隔离探针内。onRuntimeUnavailable 清空入口，onRuntimeAvailable 在配置早退前重新注册；外部接口异常清除当前连接并保留一条根因，后续访问不逐 tick 重试。调用后按当前入口身份判断是否仍可发布文本，屏幕退出清除装饰控件引用。缺少入口时保留独立搜索，不因保存的同步开关为 true 而阻止使用终端。
+
+本轮一次通过 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j3b-jei-search-20261008-first -MeInventory -Combination ae2 -Ae2Version 19.2.18 -WriteOnly`。已有 TerminalClientStateTest 共 9 项，零失败／错误／跳过，build、verifyReleaseArtifact 和 compileDomainProbeJava 通过。writer PID 3732，两名真实 TCP 玩家正常登录／退出，服务器及客户端报告 passed=true，meInventoryVerified=true，recoveryIncluded=false。脚本仍使用 MeInventory 的 D18j2b1 标识，本条对应其新增 JEI 搜索子场景。
+
+实际客户端检查：默认关闭时终端 diamond 不覆盖 JEI coal；启用后终端 gold 写入 JEI。沿 NeoForge 鼠标按下／释放事件获得真实 JEI 搜索焦点，再发送字符输入 iron，两个搜索框一致且旧终端失焦。JEI 的 65 字符文本不截断、不覆盖终端 iron，随后合法 diamond 可恢复；蜂业查询 honey 同样更新实际 JEI；关闭开关后独立编辑不改外部，重新启用后的右键清空同时清空两边。截图 terminal-jei-outbound／inbound／bee／cleared 已目视检查；截取点验证搜索框内容，库存行仍沿原 300 ms 查询延迟更新，不以瞬时截图宣称两套检索结果等价。
+
+受控调用插件停用入口后编辑终端不再改变旧 JEI 过滤器；注入抛异常的字符串入口后仅首次访问失败，后续编辑不再调用该入口。再调用实际可用回调注册原 JEI runtime，搜索恢复。日志中的 Intentional JEI search endpoint failure 和唯一对应 WARN 为预期故障夹具；此场景验证生命周期入口逻辑，不扩写为卸载模组或真实资源重载全矩阵。生产使用 JEI 公开 API，探针的 Internal.getJeiRuntime／MouseHandler 反射仅用于驱动真实输入。
+
+运行基线沿[10.122](#s10-122)，JEI 编译 19.36.0.360、运行 19.39.0.368。最终 JAR 4,113,074 字节，SHA-256 `ffc31ea31b4a15994b6adeb84c8d126d578635672e777dbbff8ec9c248548d27`，保留为 `build/network-gates/d18j3b-jei-search-20261008-first/runtime-verified.jar`；源码指纹 `63EECECDDC1328FA89A7405CEBDE46584AA9CA2F1DC699FC990CBE2D5141DC5A`。该目录保留 gate.json、测试 XML、实际客户端配置副本和 delivery-audit.json，截图及完整日志沿 gate 引用路径保留。
+
+本步只关闭 j3b 搜索词同步范围，没有新增无 JEI／无 AE2 启动、跨 JVM 客户端重启、完整无线／独立机或性能矩阵；可选类型隔离已按调用链复核。任务完成置顶／提醒、关闭材料回存、外部检索语法完全对齐、附属资源存取、完整 D18／D19／D29／D30 与发布门保持开放。

@@ -1,4 +1,9 @@
 {
+  "productivebeesgenesis.configuration.terminalSyncJeiSearch": "与 JEI 同步搜索",
+  "productivebeesgenesis.configuration.terminalSyncJeiSearch.tooltip": "默认关闭。按正在输入的一侧双向同步搜索词；JEI 未就绪时仍可使用终端搜索。终端保留自身检索语法与 64 字符限制。",
+  "screen.productivebeesgenesis.network.terminal.jei_search.active": "与 JEI 同步搜索词；终端使用自身检索语法。",
+  "screen.productivebeesgenesis.network.terminal.jei_search.unavailable": "JEI 未就绪，当前使用独立终端搜索。",
+  "screen.productivebeesgenesis.network.terminal.jei_search.invalid": "JEI 搜索词超过 64 字符或包含控制字符，暂未同步；终端保留原查询。",
   "productivebeesgenesis.configuration.terminal_preferences": "终端偏好",
   "productivebeesgenesis.configuration.terminal_preferences.tooltip": "本地终端共享的搜索与显示设置；只影响界面。",
   "productivebeesgenesis.configuration.terminalRememberSearch": "记住终端搜索",

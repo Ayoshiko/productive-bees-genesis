@@ -35,7 +35,9 @@
 
 ### 新增
 
-- **D18j3a 终端本地偏好**：保存蜂业／ME 库存来源、各自的搜索词、排序和筛选条件，重开后重新查询库存；客户端配置新增“终端偏好”分组。搜索记忆默认开启，自动聚焦默认关闭；关闭记忆后退出终端清除已存搜索词，保留排序，Enter 提交后释放焦点。偏好只在退出界面时保存，库存、菜单身份与资产不进入配置。JEI 同步、完成提示和关闭回存仍属后续范围。
+- **D18j3b JEI 搜索同步**：客户端终端偏好新增默认关闭的双向搜索词同步，终端输入／右键清空可更新 JEI，JEI 获得键盘焦点后同步到当前终端。超长或含控制字符的外部查询保留原查询并提示；JEI 未就绪或接口失败时保留独立搜索，运行时重新注册后恢复连接。沿用终端自身检索语法与当前页预算，不复制 JEI 原料全表。
+
+- **D18j3a 终端本地偏好**：保存蜂业／ME 库存来源、各自的搜索词、排序和筛选条件，重开后重新查询库存；客户端配置新增“终端偏好”分组。搜索记忆默认开启，自动聚焦默认关闭；关闭记忆后退出终端清除已存搜索词，保留排序，Enter 提交后释放焦点。偏好只在退出界面时保存，库存、菜单身份与资产不进入配置。JEI 搜索词同步见 j3b，完成提示和关闭回存仍属后续范围。
 
 - **D18j2b2a 流体容器交接**：持容器左键 ME 流体装入、右键库存格区倒入，Shift 将单件结果送入背包；按完整流体组件和实际转移量结算。未装入余量按玩家保管，ME 无通道时仍可用水滴按钮取回；外部结果未知时保留请求并停止重试，不生成掉落。新增玩家附件 schema 3 并严格兼容旧格式，界面显示已知保管量与未决量。有限 ME 存储、原版桶、NeoForge 标准单罐夹具和正常跨 JVM 恢复已验证，附属容器完整矩阵仍待交付。
 
@@ -160,7 +162,9 @@
 
 #### Added
 
-- **D18j3a local terminal preferences**: Remembers the bee/ME storage source, separate queries, sorting and filters, then requests fresh inventory when reopened. The client configuration now has a terminal-preferences section. Search memory defaults on and autofocus defaults off; disabling memory clears saved queries when leaving a terminal while keeping sort settings. Enter submits and releases focus. Preferences are saved when leaving the screen and contain no inventory, menu identity or assets. JEI synchronization, completion notifications and return-on-close remain separate follow-ups.
+- **D18j3b JEI search synchronization**: An optional client preference, off by default, synchronizes search text in both directions. Terminal edits and right-click clearing update JEI; focused JEI input updates the visible terminal. Oversized or control-character queries preserve the previous terminal query with a hint. Terminal search remains independent while JEI is unavailable or its endpoint fails, and a new runtime registration restores the link. Terminal syntax and page budgets remain in effect; no complete JEI ingredient list is copied.
+
+- **D18j3a local terminal preferences**: Remembers the bee/ME storage source, separate queries, sorting and filters, then requests fresh inventory when reopened. The client configuration now has a terminal-preferences section. Search memory defaults on and autofocus defaults off; disabling memory clears saved queries when leaving a terminal while keeping sort settings. Enter submits and releases focus. Preferences are saved when leaving the screen and contain no inventory, menu identity or assets. JEI search text synchronization is covered by j3b; completion notifications and return-on-close remain separate follow-ups.
 
 - **D18j2b2a fluid container exchange**: Left-click an ME fluid while holding a container to fill it, or right-click the storage grid to empty it; Shift sends the single resulting container to inventory. Transfers preserve full fluid components and use actual accepted amounts. Unfilled fluid remains in player custody and can be recovered with the droplet button while ME has no channel. Unknown external results retain their requests without retry or world drops. Player attachment schema 3 strictly reads older formats, and the UI distinguishes known fluid from unresolved amounts. Finite ME storage, vanilla buckets, a standard NeoForge single-tank fixture and normal cross-JVM recovery passed; the full addon-container matrix remains pending.
 

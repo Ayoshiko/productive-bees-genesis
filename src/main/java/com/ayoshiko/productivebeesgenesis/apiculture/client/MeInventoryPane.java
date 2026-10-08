@@ -19,6 +19,7 @@ final class MeInventoryPane {
 	private final Runnable rebuild, openPlan;
 	private final List<AbstractWidget> widgets = new ArrayList<>();
 	private final TerminalGridViewport grid = new TerminalGridViewport();
+	private final TerminalSearchSync searchSync = new TerminalSearchSync();
 	private MeTerminalView shown;
 	private MeStorageFilter filter = MeStorageFilter.DEFAULT;
 	private EditBox search;
@@ -40,7 +41,7 @@ final class MeInventoryPane {
 		search = new EditBox(font, left + 24, top, width - 46, 15, text("storage_filter"));
 		search.setMaxLength(64); search.setValue(query); search.setHint(text("storage_filter")); search.setFocused(focus);
 		search.setCursorPosition(cursor); search.setHighlightPos(cursor);
-		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; grid.offset = 0; due = Util.getMillis() + 300; }); widgets.add(search);
+		search.setResponder(value -> { query = value; dirty = true; preferencesDirty = true; grid.offset = 0; due = Util.getMillis() + 300; searchSync.edited(value); }); widgets.add(search);
 		button("refresh", width - 20, -1, 20, 16, 14, () -> request(STORAGE, -1, 0, 0));
 		button("sort." + filter.sort().name().toLowerCase(Locale.ROOT), 0, 20, 20, 20, 9, () -> {
 			filter = new MeStorageFilter(MeStorageFilter.Sort.values()[(filter.sort().ordinal() + 1) % 3], filter.descending(), filter.content(), filter.type()); preferencesDirty = true; request(STORAGE, -1, 0, 0);
@@ -111,6 +112,7 @@ final class MeInventoryPane {
 	}
 	void tick(boolean visible) {
 		if (!visible) { if (subscribed && !session.waiting()) { request(CLOSE, -1, 0, 0); subscribed = false; } return; }
+		searchSync.tick(search, text("storage_filter"));
 		if (opening && !session.waiting() && (session.view().mode() == MeTerminalView.Mode.PLAN || session.view().mode() == MeTerminalView.Mode.TASKS)) {
 			opening = false; openPlan.run(); return;
 		}
@@ -129,7 +131,7 @@ final class MeInventoryPane {
 		if (!preferencesLoaded) return false;
 		var prefs = preferences(); boolean changed = preferencesDirty || !prefs.rememberSearch.get() && !prefs.meSearch.get().isEmpty();
 		if (changed) prefs.storeMe(query, filter);
-		preferencesLoaded = false; preferencesDirty = false; search = null;
+		preferencesLoaded = false; preferencesDirty = false; search = null; searchSync.reset();
 		return changed;
 	}
 	EditBox focusedSearch() { return search != null && search.isFocused() ? search : null; }
