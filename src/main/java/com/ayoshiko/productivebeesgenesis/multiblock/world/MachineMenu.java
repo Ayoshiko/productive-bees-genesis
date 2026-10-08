@@ -43,6 +43,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private TerminalCraftingMenu crafting;
 	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots nativeSlots;
 	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEquipmentSlots equipment;
+	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalToolbox toolbox;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -72,6 +73,8 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 		equipment = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEquipmentSlots(this);
 		for (int i = 0; i < 5; i++) addSlot(equipment.slot(i, -1000, -1000));
+		toolbox = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalToolbox(this); addDataSlot(toolbox.data());
+		for (int i = 0; i < 9; i++) addSlot(toolbox.slot(i, -1000, -1000));
 		nativeSlots = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots(this, crafting); nativeSlots.open(viewingPlayer);
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
@@ -239,6 +242,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		} finally { exchanging = false; sequences.finish(); }
 	}
 	@Override public void broadcastChanges() {
+		if (!exchanging) toolbox.refresh();
 		if (wireless != null && !closed && (!stillValid(viewingPlayer) || !wireless.charge(viewingPlayer, false))) {
 			if (viewingPlayer instanceof ServerPlayer player && player.containerMenu == this) { player.closeContainer(); return; }
 		}
@@ -253,13 +257,14 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	}
 	@Override public ItemStack quickMoveStack(Player player, int slot) { return nativeSlots.quickMove(player, slot); }
 	@Override public Player craftingPlayer() { return viewingPlayer; }
+	@Override public com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalToolbox toolbox() { return toolbox; }
 	@Override public boolean nativeAllowed(ServerPlayer player) {
 		return !exchanging && controller(player) != null && (wireless == null || wireless.charge(player, true));
 	}
 	@Override public void nativeEditing(boolean value) { exchanging = value; }
 	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
 	@Override public boolean lockedNativeStack(ItemStack stack) {
-		return wireless() && stack.getItem() instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem
+		return toolbox != null && toolbox.locks(stack) || wireless() && stack.getItem() instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem
 				&& (stack == viewingPlayer.getMainHandItem() || stack == viewingPlayer.getOffhandItem());
 	}
 	@Override public void removed(Player player) {

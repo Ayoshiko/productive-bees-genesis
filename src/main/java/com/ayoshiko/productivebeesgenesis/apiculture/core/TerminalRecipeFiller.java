@@ -39,6 +39,8 @@ final class TerminalRecipeFiller {
 		if (result.change() == null) return reply(menu, request, result.failure() == TerminalRecipeFillPlan.Failure.NO_SPACE ? NO_SPACE
 				: result.failure() == TerminalRecipeFillPlan.Failure.MISSING ? MISSING_INGREDIENTS : INVALID, 0);
 		var change = result.change(); var input = CraftingInput.ofPositioned(3, 3, TerminalCraftingPlan.copy(change.grid())).input();
+		for (int slot = 0; slot < 36; slot++) if (menu.lockedNativeStack(player.getInventory().getItem(slot)) && !ItemStack.matches(inventory.get(slot), change.inventory().get(slot)))
+			return reply(menu, request, UNAVAILABLE, 0);
 		if (!target.matches(input, player.serverLevel()) || !current(menu, player, account, before, inventory, id, holder)
 				|| ledger != null && (menu.craftingLedger(player) != ledger || ledger.checkpoint() != checkpoint)
 				|| source != null && (!source.valid() || menu.craftingBridge(player) != bridge)) return reply(menu, request, STALE, 0);

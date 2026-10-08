@@ -23,6 +23,7 @@ public final class TerminalCraftingMenu {
 		boolean lockedNativeStack(ItemStack stack);
 		boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse);
 		void nativeEditing(boolean value);
+		default TerminalToolbox toolbox() { return null; }
 		TerminalCraftingAccount craftingAccount(ServerPlayer player);
 		default com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity craftingBridge(ServerPlayer player) { return null; }
 		default com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData craftingLedger(ServerPlayer player) { return null; }
@@ -175,7 +176,7 @@ public final class TerminalCraftingMenu {
 		var operation = request.operation(); TerminalCraftingPlan.Change change;
 		if (operation == TerminalRequest.Operation.CRAFT_IN || operation == TerminalRequest.Operation.CRAFT_OUT) {
 			if (operation == TerminalRequest.Operation.CRAFT_IN && request.inventorySlot() >= 0 && request.inventorySlot() < 36
-					&& inventory.get(request.inventorySlot()).getItem() instanceof WirelessTerminalItem) return reply(request, INVALID, 0);
+					&& (inventory.get(request.inventorySlot()).getItem() instanceof WirelessTerminalItem || menu.lockedNativeStack(player.getInventory().getItem(request.inventorySlot())))) return reply(request, INVALID, 0);
 			if (request.row() < 0 || request.row() >= 9 || request.amount() < 1 || request.amount() > 64
 					|| operation == TerminalRequest.Operation.CRAFT_OUT && request.inventorySlot() != -1) return reply(request, INVALID, 0);
 			change = TerminalCraftingPlan.exchange(state.grid(), inventory, request.row(), request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.CRAFT_IN);

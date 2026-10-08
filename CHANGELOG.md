@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4c2 AE2 网络工具包**：携带原版 AE2 网络工具打开终端时，在网络工作台和独立机器菜单中显示其九格升级卡仓，支持原生点击、拖拽和 Shift 存取。满载余量留原位，工具本体在使用期间锁定，显式材料填格也不能动用；更换物品或容器组件撤销旧绑定。内容直接保存在原网络工具组件中，无新增资产账户；异常槽数／堆叠不截断，不生成掉落。终端／机器协议升至 27／11，ME 协议保持 14。本包未编译／未运行验证。
+
 - **D18j4c1 装备与副手槽**：网络有线／无线工作台及独立多方块菜单在背包旁增加四个真实护甲槽与副手槽，支持原生拿放、拖拽和 Shift 穿戴／取下，遵守装备准入、绑定诅咒及满背包保留。数字键和 F 键同时检查交换两端的在用无线设备，避免绕过锁定。原背包／材料／结果序号保持，装备沿玩家库存保存，无新增依赖；终端／机器协议升至 26／10，ME 协议保持 14。本包未编译／未运行验证。
 
 - **D18j4b2 供应器样板管理**：ME 工作页支持按名称、维度和坐标分次搜索当前维度内已加载、有权限的可见供应器，分页查看真实样板槽。向空槽存入一张有效编码样板，支持取回鼠标、右键一张、Shift 到背包和通过私人缓冲中转；拒收余量保管，不产生掉落。每次复核原节点、宿主与库存，异常返回隔离并保存完整样本和数量；schema 7 严格兼容完整旧格式。大组件图标省略后仍可取回，ME 协议升至 14。本包未编译／未运行验证。
@@ -187,6 +189,8 @@
 ### English
 
 #### Added
+
+- **D18j4c2 AE2 network toolbox**: Opening a terminal with a standard AE2 Network Tool now exposes its nine upgrade-card slots in network workbenches and standalone machine menus, with native clicks, dragging and Shift transfers. Unaccepted items stay in place. The tool itself is locked, including explicit crafting-fill requests; replacing the item or its container component revokes the binding. Contents remain in the original tool component without another asset account. Invalid slot counts or stacks are not truncated, and no world-drop fallback is used. Terminal/machine protocols advance to 27/11; ME remains at 14. Compilation and runtime validation were skipped.
 
 - **D18j4c1 Equipment and offhand slots**: Network wired/wireless workbenches and standalone machine menus now show four real armor slots and an offhand slot beside the inventory. Native clicks, dragging and Shift equip/unequip respect equipment eligibility, binding curses and available inventory space. Number-key and F-key swaps check active wireless devices at both ends. Existing inventory/crafting/result indices stay unchanged; equipment remains in player inventory with no new dependency. Terminal/machine protocols advance to 26/10; ME remains at 14. Compilation and runtime validation were skipped.
 

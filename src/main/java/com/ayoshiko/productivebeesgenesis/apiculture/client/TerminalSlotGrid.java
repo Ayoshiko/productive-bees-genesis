@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.client;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEquipmentSlots;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalToolbox;
 
 /** 18px 连续凹槽网格，共用分隔线和外缘，不把物品格绘制为独立按钮。 */
 public final class TerminalSlotGrid {
@@ -20,18 +21,25 @@ public final class TerminalSlotGrid {
 			var armor = menu.slots.get(TerminalEquipmentSlots.START); grid(graphics, left + armor.x, top + armor.y, 1, 4);
 			var offhand = menu.slots.get(TerminalEquipmentSlots.OFFHAND); grid(graphics, left + offhand.x, top + offhand.y, 1, 1);
 		}
+		if (menu.slots.size() >= TerminalToolbox.END && menu.slots.get(TerminalToolbox.START).isActive()) {
+			var tools = menu.slots.get(TerminalToolbox.START); grid(graphics, left + tools.x, top + tools.y, 3, 3);
+		}
 	}
 	public static void playerSlotTooltip(GuiGraphics g, net.minecraft.client.gui.Font font, AbstractContainerMenu menu, int left, int top, int mouseX, int mouseY) {
 		if (!(menu instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCraftingMenu.Host host)) return;
-		for (var slot : menu.slots) if (slot.isActive() && (slot.index < 36 && host.lockedNativeStack(slot.getItem()) || slot.index >= TerminalEquipmentSlots.START && slot.index < TerminalEquipmentSlots.END)
+		for (var slot : menu.slots) if (slot.isActive() && (slot.index < 36 && host.lockedNativeStack(slot.getItem()) || slot.index >= TerminalEquipmentSlots.START && slot.index < TerminalToolbox.END)
 				&& mouseX >= left + slot.x && mouseX < left + slot.x + 16 && mouseY >= top + slot.y && mouseY < top + slot.y + 16) {
 			var lines = new java.util.ArrayList<net.minecraft.network.chat.Component>();
 			if (slot.hasItem()) lines.addAll(net.minecraft.client.gui.screens.Screen.getTooltipFromItem(net.minecraft.client.Minecraft.getInstance(), slot.getItem()));
-			if (slot.index >= TerminalEquipmentSlots.START) {
+			if (slot.index >= TerminalToolbox.START) {
+				lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal.toolbox_slot", slot.index - TerminalToolbox.START + 1));
+				lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal.toolbox_hint"));
+			} else if (slot.index >= TerminalEquipmentSlots.START) {
 				lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal.equipment." + (slot.index - TerminalEquipmentSlots.START)));
 				lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal.equipment_hint"));
 			}
-			if (host.lockedNativeStack(slot.getItem())) lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal.active_device"));
+			if (host.lockedNativeStack(slot.getItem())) lines.add(net.minecraft.network.chat.Component.translatable("screen.productivebeesgenesis.network.terminal."
+					+ (host.toolbox() != null && host.toolbox().locks(slot.getItem()) ? "toolbox_locked" : "active_device")));
 			g.renderComponentTooltip(font, lines, mouseX, mouseY); return;
 		}
 	}

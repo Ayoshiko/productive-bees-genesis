@@ -34,6 +34,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private TerminalCraftingMenu crafting;
 	private TerminalNativeSlots nativeSlots;
 	private TerminalEquipmentSlots equipment;
+	private TerminalToolbox toolbox;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private boolean closed;
 	private boolean exchanging;
@@ -110,6 +111,8 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
 		equipment = new TerminalEquipmentSlots(this);
 		for (int i = 0; i < 5; i++) addSlot(equipment.slot(i, -1000, -1000));
+		toolbox = new TerminalToolbox(this); addDataSlot(toolbox.data());
+		for (int i = 0; i < 9; i++) addSlot(toolbox.slot(i, -1000, -1000));
 		nativeSlots = new TerminalNativeSlots(this, crafting); nativeSlots.open(viewer);
 	}
 	public void layoutCrafting(boolean visible, int top) { layoutCrafting(visible, 51, top); }
@@ -171,13 +174,14 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (nativeSlots != null) nativeSlots.click(slot, button, type, player, () -> super.clicked(slot, button, type, player));
 	}
 	@Override public Player craftingPlayer() { return viewer; }
+	@Override public TerminalToolbox toolbox() { return toolbox; }
 	@Override public boolean nativeAllowed(net.minecraft.server.level.ServerPlayer player) {
 		return !exchanging && automaticBee == null && exchangeCore(player) != null && (terminalAccess == null || terminalAccess.charge(player, true));
 	}
 	@Override public void nativeEditing(boolean value) { exchanging = value; }
 	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
 	@Override public boolean lockedNativeStack(ItemStack stack) {
-		return wirelessTerminal() && stack.getItem() instanceof WirelessTerminalItem
+		return toolbox != null && toolbox.locks(stack) || wirelessTerminal() && stack.getItem() instanceof WirelessTerminalItem
 				&& (stack == viewer.getMainHandItem() || stack == viewer.getOffhandItem());
 	}
 	public long value(int index) {
@@ -237,6 +241,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (products != null) products.close();
 	}
 	@Override public void broadcastChanges() {
+		if (toolbox != null && !exchanging) toolbox.refresh();
 		if (core != null && terminalAccess != null && !closed && (!stillValid(viewer) || !terminalAccess.charge(viewer, false))) {
 			if (viewer instanceof net.minecraft.server.level.ServerPlayer player && player.containerMenu == this) { player.closeContainer(); return; }
 		}

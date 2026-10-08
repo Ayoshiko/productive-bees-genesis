@@ -26,7 +26,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private final java.util.Map<Button, int[]> scopes = new java.util.HashMap<>();
 	private int inventorySlot;
 	public static final int WORKSPACE_WIDTH = 436;
-	private boolean upgrades, crafting, craftingRequested, workspace, detailsOpen;
+	private boolean upgrades, crafting, craftingRequested, workspace, detailsOpen, toolboxVisible;
 	private int detailsPage, inventoryY = 143;
 	private int craftingTarget;
 	private Button craftTab, clearCrafting;
@@ -59,12 +59,14 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		super.onClose();
 	}
 	@Override protected void init() {
-		workspace = width >= WORKSPACE_WIDTH + 4 && height >= 300;
-		imageWidth = workspace ? WORKSPACE_WIDTH : 230; imageHeight = workspace ? Math.max(296, Math.min(332, height - 4)) : 226;
+		toolboxVisible = menu.toolbox().present(); int toolboxWidth = toolboxVisible ? 64 : 0;
+		workspace = width >= WORKSPACE_WIDTH + toolboxWidth + 4 && height >= 300;
+		imageWidth = (workspace ? WORKSPACE_WIDTH : 230) + toolboxWidth; imageHeight = workspace ? Math.max(296, Math.min(332, height - 4)) : 226;
 		inventoryY = imageHeight - 83;
 		super.init(); actions.clear(); scopes.clear(); clearCrafting = null;
 		menu.layoutInventory(workspace ? 260 : 35, inventoryY);
 		menu.layoutEquipment(workspace ? 236 : 9, inventoryY, workspace ? 236 : 207, workspace ? inventoryY - 22 : inventoryY + 58);
+		menu.toolbox().layout(workspace ? 438 : 236, inventoryY);
 		menu.layoutCrafting(craftingVisible(), workspace ? 260 : 35, workspace ? inventoryY - 78 : 42);
 		craftTab = addRenderableWidget(Button.builder(crafting ? tr("bees_tab") : Component.translatable("screen.productivebeesgenesis.network.tab.4"), button -> {
 			if (!menu.craftingState().ready(Util.getMillis()) || sequence > menu.acknowledged()) return;
@@ -111,6 +113,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		PacketDistributor.sendToServer(new MachineMenuRequest(menu.containerId, menu.session(), ++sequence, menu.viewRevision(), action, slot, inventorySlot, hasShiftDown() ? 64 : 1));
 	}
 	@Override protected void containerTick() {
+		if (toolboxVisible != menu.toolbox().present()) { rebuildWidgets(); return; }
 		super.containerTick(); long now = Util.getMillis(); var state = menu.craftingState(); state.tick(now);
 		if (menu.wireless() && craftingVisible() && !menu.slots.get(36).isActive()) { rebuildWidgets(); return; }
 		craftTab.visible = menu.wireless() && !workspace; craftTab.active = state.ready(now) && sequence <= menu.acknowledged();

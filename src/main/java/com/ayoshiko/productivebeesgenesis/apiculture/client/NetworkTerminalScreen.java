@@ -27,7 +27,7 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReq
 public final class NetworkTerminalScreen extends AbstractContainerScreen<NetworkCoreMenu> {
 	public static final int WIDTH = 304, WORKSPACE_WIDTH = 492;
 	private final TerminalProductPane productPane;
-	private boolean workspace, stockHome = true;
+	private boolean workspace, stockHome = true, toolboxVisible;
 	private final TerminalClientState state;
 	private final Inventory inventory;
 	private final List<Button> actions = new ArrayList<>();
@@ -62,11 +62,13 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		tab = menu.scope() == TerminalScope.APIARY ? 1 : 3;
 	}
 	@Override protected void init() {
+		toolboxVisible = menu.toolbox() != null && menu.toolbox().present();
 		workspace = !stockHome && width >= WORKSPACE_WIDTH + 4 && height >= 300;
 		if (workspace && (tab == 2 || tab == 4)) { tab = menu.scope() == TerminalScope.APIARY ? 1 : 3; query = ""; queryDirty = true; }
 		imageWidth = workspace ? WORKSPACE_WIDTH : WIDTH; imageHeight = Math.max(236, Math.min(stockHome ? 452 : 332, height - 4));
-		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : stockHome ? 64 : 88, inventoryY);
-		menu.layoutEquipment(workspace ? 290 : stockHome ? 36 : 60, inventoryY, workspace ? 268 : stockHome ? 244 : 260, inventoryY + 58);
+		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : stockHome || toolboxVisible ? 64 : 88, inventoryY);
+		menu.layoutEquipment(workspace ? 290 : stockHome || toolboxVisible ? 36 : 60, inventoryY, workspace ? 268 : stockHome || toolboxVisible ? 244 : 260, inventoryY + 58);
+		if (menu.toolbox() != null) menu.toolbox().layout(workspace ? 232 : 236, inventoryY);
 		state.tick(Util.getMillis());
 		rebuild();
 		if (!stockHome && state.view() == null && state.ready(Util.getMillis())) refresh();
@@ -365,6 +367,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return !menu.canUpgrade() ? tr("upgrade_permission") : matchingPreview(installing) ? UpgradePreviewText.text(state.preview(), batch) : tr("preview_hover");
 	}
 	@Override protected void containerTick() {
+		if (toolboxVisible != (menu.toolbox() != null && menu.toolbox().present())) { init(); return; }
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { state.close(); minecraft.setScreen(null); return; }
 		super.containerTick(); long now = Util.getMillis(); state.tick(now);
 		productPane.tick(stockHome || workspace);
@@ -494,9 +497,9 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		line(g, tr("inventory_slot", sourceSlot + 1), workspace ? 414 : 174, inventoryY - 11, workspace ? 70 : 118, TerminalSkin.MUTED);
 		if (workspace) {
 			productPane.labels(g, font, leftPos, topPos);
-			line(g, own("workspace_status"), 42, inventoryY + 4, 246, TerminalSkin.GOLD);
-			line(g, own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), 42, inventoryY + 22, 246, TerminalSkin.INK);
-			line(g, own("workspace_energy", menu.energy(false), menu.energy(true)), 42, inventoryY + 38, 246, TerminalSkin.MUTED);
+			line(g, own("workspace_status"), 42, inventoryY + 4, toolboxVisible ? 184 : 246, TerminalSkin.GOLD);
+			line(g, own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), 42, inventoryY + 22, toolboxVisible ? 184 : 246, TerminalSkin.INK);
+			line(g, own("workspace_energy", menu.energy(false), menu.energy(true)), 42, inventoryY + 38, toolboxVisible ? 184 : 246, TerminalSkin.MUTED);
 			line(g, own(menu.productionRunning() ? "workspace_running" : "workspace_stopped"), 42, inventoryY + 54, 220, TerminalSkin.MUTED);
 		}
 	}

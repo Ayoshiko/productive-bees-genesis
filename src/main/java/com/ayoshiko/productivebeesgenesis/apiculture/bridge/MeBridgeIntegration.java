@@ -6,6 +6,8 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 public final class MeBridgeIntegration {
 	public static boolean installed() { return ModList.get().isLoaded("ae2"); }
+	public static boolean toolboxItem(net.minecraft.world.item.ItemStack item) { return installed() && Loaded.toolboxItem(item); }
+	public static boolean toolboxUpgrade(net.minecraft.world.item.ItemStack item) { return installed() && Loaded.toolboxUpgrade(item); }
 	public static MeBridgeLink create(MeBridgeBlockEntity bridge, CompoundTag saved) {
 		return installed() ? Loaded.create(bridge, saved) : null;
 	}
@@ -32,6 +34,8 @@ public final class MeBridgeIntegration {
 		return installed() ? Loaded.patternReplacement(pattern, row, sample) : new com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED, null);
 	}
 	private static final class Loaded {
+		static boolean toolboxItem(net.minecraft.world.item.ItemStack item) { return appeng.core.definitions.AEItems.NETWORK_TOOL.is(item); }
+		static boolean toolboxUpgrade(net.minecraft.world.item.ItemStack item) { return !item.isEmpty() && appeng.api.upgrades.Upgrades.isUpgradeCardItem(item); }
 		static boolean bufferPattern(net.minecraft.world.item.ItemStack item) {
 			return blankPattern(item) || appeng.api.crafting.PatternDetailsHelper.isEncodedPattern(item);
 		}

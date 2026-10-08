@@ -23,6 +23,8 @@ public final class TerminalNativeSlots {
 		}
 		if (!(player instanceof ServerPlayer server)) { if (index != 45) vanilla.run(); return; }
 		if (inside || !host.nativeAllowed(server) || !TerminalCursor.get(server).available() || TerminalCursor.get(server).containerBusy) { menu.broadcastFullState(); return; }
+		var toolbox = host.toolbox(); if (toolbox != null) toolbox.refresh();
+		if (index >= TerminalToolbox.START && (toolbox == null || !toolbox.present())) { menu.broadcastFullState(); return; }
 		var account = host.craftingAccount(server);
 		if (account != null && account.busy() || index >= 36 && index < TerminalEquipmentSlots.START && (account == null || account.state().uncertain())) { menu.broadcastFullState(); return; }
 		if (index == 45) {
@@ -40,6 +42,7 @@ public final class TerminalNativeSlots {
 			try {
 				TerminalCursor.get(server).set(menu.getCarried());
 				TerminalCursorExchange.recover(server, menu, false);
+				if (toolbox != null) toolbox.publish();
 				if (account != null) {
 					var grid = crafting.nativeGrid();
 					if (!ItemStack.listMatches(before.grid(), grid)) account.publish(before, grid, before.pending(), before.uncertain());
@@ -73,6 +76,8 @@ public final class TerminalNativeSlots {
 		boolean moved;
 		if (index >= 36) moved = host.moveNativeStack(stack, 0, 36, false);
 		else if (equip(player, stack)) moved = true;
+		else if (host.toolbox() != null && host.toolbox().present() && com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeIntegration.toolboxUpgrade(stack))
+			moved = host.moveNativeStack(stack, TerminalToolbox.START, TerminalToolbox.END, false);
 		else if (crafting.nativeMaterialsAvailable(player)) moved = host.moveNativeStack(stack, 36, 45, false);
 		else moved = index < 27 ? host.moveNativeStack(stack, 27, 36, false) : host.moveNativeStack(stack, 0, 27, false);
 		if (!moved) return ItemStack.EMPTY;
@@ -89,6 +94,7 @@ public final class TerminalNativeSlots {
 		if (closed) return;
 		closed = true;
 		if (player instanceof ServerPlayer server) TerminalCursor.close(server, host.craftingMenu());
+		if (host.toolbox() != null) host.toolbox().close();
 	}
 	public boolean active() { return inside; }
 }
