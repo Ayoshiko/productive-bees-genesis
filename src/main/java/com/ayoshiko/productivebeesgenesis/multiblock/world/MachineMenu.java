@@ -42,6 +42,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private TerminalClientState craftingState;
 	private TerminalCraftingMenu crafting;
 	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots nativeSlots;
+	private com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEquipmentSlots equipment;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private long viewRevision;
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -69,6 +70,8 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 			addSlot(inventorySlot(inventory, index, 35 + col * 18, 143 + row * 18 + (row == 3 ? 4 : 0)));
 		}
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
+		equipment = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEquipmentSlots(this);
+		for (int i = 0; i < 5; i++) addSlot(equipment.slot(i, -1000, -1000));
 		nativeSlots = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots(this, crafting); nativeSlots.open(viewingPlayer);
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
@@ -127,6 +130,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	public int craftingStatus() { return data.get(CRAFTING_DATA + 4); }
 	public ItemStack craftingItem(int index) { return crafting.item(index); }
 	public void layoutCrafting(boolean visible) { layoutCrafting(visible, 35, 42); }
+	public void layoutEquipment(int armorX, int armorY, int offhandX, int offhandY) { equipment.layout(armorX, armorY, offhandX, offhandY); }
 	public void layoutCrafting(boolean visible, int left, int top) {
 		if (core != null) return; crafting.visible(visible);
 		for (int i = 0; i < 10; i++) {

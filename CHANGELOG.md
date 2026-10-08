@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4c1 装备与副手槽**：网络有线／无线工作台及独立多方块菜单在背包旁增加四个真实护甲槽与副手槽，支持原生拿放、拖拽和 Shift 穿戴／取下，遵守装备准入、绑定诅咒及满背包保留。数字键和 F 键同时检查交换两端的在用无线设备，避免绕过锁定。原背包／材料／结果序号保持，装备沿玩家库存保存，无新增依赖；终端／机器协议升至 26／10，ME 协议保持 14。本包未编译／未运行验证。
+
 - **D18j4b2 供应器样板管理**：ME 工作页支持按名称、维度和坐标分次搜索当前维度内已加载、有权限的可见供应器，分页查看真实样板槽。向空槽存入一张有效编码样板，支持取回鼠标、右键一张、Shift 到背包和通过私人缓冲中转；拒收余量保管，不产生掉落。每次复核原节点、宿主与库存，异常返回隔离并保存完整样本和数量；schema 7 严格兼容完整旧格式。大组件图标省略后仍可取回，ME 协议升至 14。本包未编译／未运行验证。
 
 - **D18j4b1 私人样板缓冲**：ME 工作页增加九格样板缓冲，接受空白或已编码样板，支持左键一叠、右键一张、Shift 及全部取回背包。完整组件分别保管，满背包余量留原格；关闭终端后保留，同一玩家可跨终端使用，ME 离线仍可取回。玩家附件 schema 6 严格兼容旧格式，损坏数据原样隔离；ME 协议升至 13。本包未编译／未运行验证，供应器管理由 D18j4b2 接入。
@@ -185,6 +187,8 @@
 ### English
 
 #### Added
+
+- **D18j4c1 Equipment and offhand slots**: Network wired/wireless workbenches and standalone machine menus now show four real armor slots and an offhand slot beside the inventory. Native clicks, dragging and Shift equip/unequip respect equipment eligibility, binding curses and available inventory space. Number-key and F-key swaps check active wireless devices at both ends. Existing inventory/crafting/result indices stay unchanged; equipment remains in player inventory with no new dependency. Terminal/machine protocols advance to 26/10; ME remains at 14. Compilation and runtime validation were skipped.
 
 - **D18j4b2 Provider pattern management**: Added incremental name/dimension/position search for loaded, visible providers accessible in the player's current dimension, with paged pattern slots. Insert one valid encoded pattern into an empty slot, withdraw to the cursor or inventory, and move patterns through the personal buffer. Rejected items remain retained without world drops. Operations recheck the original node, host and inventory; unexpected returned stacks retain their exact sample and count in quarantine. Schema 7 strictly reads older formats. Oversized icons are omitted without blocking withdrawal; ME protocol advances to 14. Compilation and runtime validation were skipped.
 

@@ -33,6 +33,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private CoreAutomaticBeeInput automaticBee;
 	private TerminalCraftingMenu crafting;
 	private TerminalNativeSlots nativeSlots;
+	private TerminalEquipmentSlots equipment;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
 	private boolean closed;
 	private boolean exchanging;
@@ -107,9 +108,12 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private void addCrafting() {
 		if (!dedicatedTerminal()) return; crafting = new TerminalCraftingMenu(this);
 		for (int i = 0; i < 10; i++) addSlot(crafting.slot(i, -1000, -1000));
+		equipment = new TerminalEquipmentSlots(this);
+		for (int i = 0; i < 5; i++) addSlot(equipment.slot(i, -1000, -1000));
 		nativeSlots = new TerminalNativeSlots(this, crafting); nativeSlots.open(viewer);
 	}
 	public void layoutCrafting(boolean visible, int top) { layoutCrafting(visible, 51, top); }
+	public void layoutEquipment(int armorX, int armorY, int offhandX, int offhandY) { if (equipment != null) equipment.layout(armorX, armorY, offhandX, offhandY); }
 	public void layoutCrafting(boolean visible, int left, int top) {
 		if (core != null || crafting == null) return; crafting.visible(visible);
 		for (int i = 0; i < 10; i++) {

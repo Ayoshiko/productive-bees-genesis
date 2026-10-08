@@ -64,6 +64,7 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		inventoryY = imageHeight - 83;
 		super.init(); actions.clear(); scopes.clear(); clearCrafting = null;
 		menu.layoutInventory(workspace ? 260 : 35, inventoryY);
+		menu.layoutEquipment(workspace ? 236 : 9, inventoryY, workspace ? 236 : 207, workspace ? inventoryY - 22 : inventoryY + 58);
 		menu.layoutCrafting(craftingVisible(), workspace ? 260 : 35, workspace ? inventoryY - 78 : 42);
 		craftTab = addRenderableWidget(Button.builder(crafting ? tr("bees_tab") : Component.translatable("screen.productivebeesgenesis.network.tab.4"), button -> {
 			if (!menu.craftingState().ready(Util.getMillis()) || sequence > menu.acknowledged()) return;
@@ -166,19 +167,19 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 					: result == null || result.status() == TerminalReply.Status.OK ? tr("crafting_ready") : result.status() == TerminalReply.Status.MOVED ? terminal("moved", result.moved())
 					: Component.translatable("screen.productivebeesgenesis.network.result." + result.status().name().toLowerCase(java.util.Locale.ROOT), result.moved());
 		}
-		g.drawString(font, font.plainSubstrByWidth(status.getString(), workspace ? 178 : 216), workspace ? 249 : 7, workspace ? inventoryY - 20 : 123, 0xffe1b96b, false);
+		g.drawString(font, font.plainSubstrByWidth(status.getString(), workspace ? 167 : 216), workspace ? 260 : 7, workspace ? inventoryY - 20 : 123, 0xffe1b96b, false);
 		if (workspace) {
 			g.drawString(font, MachineDetailsPanel.text(menu.wireless() ? "crafting" : "inventory"), 251, 12, 0xffead5a7, false);
 			g.drawString(font, font.plainSubstrByWidth(tr("status." + menu.status()).getString(), 216), 7, 123, 0xffe1b96b, false);
 			if (!menu.wireless()) g.drawString(font, font.plainSubstrByWidth(MachineDetailsPanel.text("wireless_hint").getString(), 178), 249, 34, 0xffc3c8cc, false);
 		}
 		var footer = menu.wireless() ? Component.translatable("screen.productivebeesgenesis.network.terminal.wireless_energy", menu.deviceEnergy()) : tr("inventory_hint");
-		g.drawString(font, font.plainSubstrByWidth(footer.getString(), workspace ? 178 : 188), workspace ? 249 : 7, workspace ? inventoryY - 10 : 133, 0xffc3c8cc, false);
+		g.drawString(font, font.plainSubstrByWidth(footer.getString(), workspace ? 167 : 188), workspace ? 260 : 7, workspace ? inventoryY - 10 : 133, 0xffc3c8cc, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partial) {
 		super.render(g, mouseX, mouseY, partial); renderTooltip(g, mouseX, mouseY);
-		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSlotGrid.lockedTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 		if (workspace || detailsOpen) MachineDetailsPanel.tooltip(g, font, menu, detailsPage, leftPos + 7, topPos + (workspace ? 167 : 27), 215, workspace ? 17 : 13, mouseX, mouseY);
 		com.ayoshiko.productivebeesgenesis.apiculture.client.MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 203, topPos + 133, mouseX, mouseY);
+		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSlotGrid.playerSlotTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 	}
 }

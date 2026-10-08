@@ -24,7 +24,7 @@ public final class TerminalNativeSlots {
 		if (!(player instanceof ServerPlayer server)) { if (index != 45) vanilla.run(); return; }
 		if (inside || !host.nativeAllowed(server) || !TerminalCursor.get(server).available() || TerminalCursor.get(server).containerBusy) { menu.broadcastFullState(); return; }
 		var account = host.craftingAccount(server);
-		if (account != null && account.busy() || index >= 36 && (account == null || account.state().uncertain())) { menu.broadcastFullState(); return; }
+		if (account != null && account.busy() || index >= 36 && index < TerminalEquipmentSlots.START && (account == null || account.state().uncertain())) { menu.broadcastFullState(); return; }
 		if (index == 45) {
 			inside = true; host.nativeEditing(true);
 			try { if (type == ClickType.PICKUP || type == ClickType.QUICK_MOVE) crafting.nativeResult(server, type == ClickType.QUICK_MOVE); }
@@ -52,6 +52,8 @@ public final class TerminalNativeSlots {
 	private boolean safeSwap(int index, int button, Player player) {
 		if (index < 0 || button < 0 || button > 8 && button != 40) return false;
 		var slot = host.craftingMenu().slots.get(index); var hotbar = player.getInventory().getItem(button);
+		// 数字键和 F 键直接操作背包另一端，不能绕过该端在用无线设备的槽限制。
+		if (host.lockedNativeStack(hotbar) || host.lockedNativeStack(slot.getItem())) return false;
 		// 原版在超大堆叠挤出原槽且背包满时会丢弃余量；该分支整次拒绝，资产留在原位。
 		return !slot.hasItem() || hotbar.isEmpty() || hotbar.getCount() <= slot.getMaxStackSize(hotbar);
 	}
@@ -70,12 +72,18 @@ public final class TerminalNativeSlots {
 		var stack = source.getItem(); var original = stack.copy();
 		boolean moved;
 		if (index >= 36) moved = host.moveNativeStack(stack, 0, 36, false);
+		else if (equip(player, stack)) moved = true;
 		else if (crafting.nativeMaterialsAvailable(player)) moved = host.moveNativeStack(stack, 36, 45, false);
 		else moved = index < 27 ? host.moveNativeStack(stack, 27, 36, false) : host.moveNativeStack(stack, 0, 27, false);
 		if (!moved) return ItemStack.EMPTY;
 		if (stack.isEmpty()) source.setByPlayer(ItemStack.EMPTY); else source.setChanged();
 		source.onTake(player, stack);
 		return original;
+	}
+	private boolean equip(Player player, ItemStack stack) {
+		int index = TerminalEquipmentSlots.preferredSlot(player, stack); var slots = host.craftingMenu().slots;
+		return index >= TerminalEquipmentSlots.START && index < slots.size() && !slots.get(index).hasItem() && slots.get(index).mayPlace(stack)
+				&& host.moveNativeStack(stack, index, index + 1, false);
 	}
 	public void close(Player player) {
 		if (closed) return;

@@ -66,6 +66,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		if (workspace && (tab == 2 || tab == 4)) { tab = menu.scope() == TerminalScope.APIARY ? 1 : 3; query = ""; queryDirty = true; }
 		imageWidth = workspace ? WORKSPACE_WIDTH : WIDTH; imageHeight = Math.max(236, Math.min(stockHome ? 452 : 332, height - 4));
 		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : stockHome ? 64 : 88, inventoryY);
+		menu.layoutEquipment(workspace ? 290 : stockHome ? 36 : 60, inventoryY, workspace ? 268 : stockHome ? 244 : 260, inventoryY + 58);
 		state.tick(Util.getMillis());
 		rebuild();
 		if (!stockHome && state.view() == null && state.ready(Util.getMillis())) refresh();
@@ -451,16 +452,16 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
-		TerminalSlotGrid.lockedTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 		if (stockHome) MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
 		if (workspace && mouseX >= leftPos + 38 && mouseX < leftPos + 297 && mouseY >= topPos + inventoryY && mouseY < topPos + imageHeight - 6)
 			g.renderComponentTooltip(font, List.of(own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), own("workspace_energy", menu.energy(false), menu.energy(true))), mouseX, mouseY);
-		if (craftingVisible()) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
+		if (craftingVisible()) for (var slot : menu.slots) if (slot.index >= 36 && slot.index < 46 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
 				&& mouseY >= topPos + slot.y && mouseY < topPos + slot.y + 16) {
 			var hint = new ArrayList<Component>(); if (slot.hasItem()) hint.add(slot.getItem().getHoverName());
 			hint.add(own(slot.index == 45 ? "craft_output_hint" : "craft_input_hint"));
 			g.renderComponentTooltip(font, hint, mouseX, mouseY); break;
 		}
+		TerminalSlotGrid.playerSlotTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
 	}
 	@Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
 		if (stockHome) {
@@ -496,7 +497,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 			line(g, own("workspace_status"), 42, inventoryY + 4, 246, TerminalSkin.GOLD);
 			line(g, own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), 42, inventoryY + 22, 246, TerminalSkin.INK);
 			line(g, own("workspace_energy", menu.energy(false), menu.energy(true)), 42, inventoryY + 38, 246, TerminalSkin.MUTED);
-			line(g, own(menu.productionRunning() ? "workspace_running" : "workspace_stopped"), 42, inventoryY + 54, 246, TerminalSkin.MUTED);
+			line(g, own(menu.productionRunning() ? "workspace_running" : "workspace_stopped"), 42, inventoryY + 54, 220, TerminalSkin.MUTED);
 		}
 	}
 	private void line(GuiGraphics g, Component value, int x, int y, int width, int color) { g.drawString(font, font.plainSubstrByWidth(value.getString(), width), x, y, color, false); }
