@@ -22,10 +22,11 @@ public final class TerminalCursor {
 			try {
 				if (!(original instanceof CompoundTag tag)) throw new IllegalArgumentException("Invalid terminal cursor tag");
 				int schema = StrictNbt.integer(tag, "schema");
-				if (schema < 1 || schema > 5 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
+				if (schema < 1 || schema > 6 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
 						: schema == 3 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request")
 						: schema == 4 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request")
-						: Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request", "chemical", "chemical_request")))
+						: schema == 5 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request", "chemical", "chemical_request")
+						: Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request", "chemical", "chemical_request", "pattern_buffer")))
 					throw new IllegalArgumentException("Unsupported terminal cursor");
 				var item = StrictNbt.compound(tag, "item");
 				result.stack = item.isEmpty() ? ItemStack.EMPTY : ItemStack.parse(registries, item).orElseThrow();
@@ -62,7 +63,7 @@ public final class TerminalCursor {
 						if (result.request != null || result.fluidRequest != null) throw new IllegalArgumentException("Conflicting energy requests");
 					}
 				}
-				if (schema == 5) {
+				if (schema >= 5) {
 					result.chemical = readChemical(StrictNbt.compound(tag, "chemical"), registries);
 					var request = StrictNbt.compound(tag, "chemical_request");
 					if (!request.isEmpty()) {
@@ -73,6 +74,7 @@ public final class TerminalCursor {
 							throw new IllegalArgumentException("Conflicting chemical requests");
 					}
 				}
+				if (schema == 6) result.patternBuffer = TerminalPatternBuffer.read(tag.get("pattern_buffer"), registries);
 			} catch (RuntimeException failure) {
 				result.invalid = original.copy();
 				com.mojang.logging.LogUtils.getLogger().error("Terminal cursor retained in player data after decode failure", failure);
@@ -81,11 +83,12 @@ public final class TerminalCursor {
 		}
 		@Override public Tag write(TerminalCursor value, HolderLookup.Provider registries) {
 			if (value.invalid != null) return value.invalid.copy();
-			var tag = new CompoundTag(); boolean chemicals = !value.chemical.isEmpty() || value.chemicalRequest != null;
+			var tag = new CompoundTag(); boolean patterns = value.patternBuffer.stream().anyMatch(item -> !item.isEmpty());
+			boolean chemicals = patterns || !value.chemical.isEmpty() || value.chemicalRequest != null;
 			boolean energy = chemicals || value.energy != 0 || value.energyRequest != null;
 			boolean fluids = energy || !value.fluid.isEmpty() || value.fluidRequest != null;
 			boolean extended = fluids || value.request != null || !value.pending.isEmpty();
-			tag.putInt("schema", chemicals ? 5 : energy ? 4 : fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
+			tag.putInt("schema", patterns ? 6 : chemicals ? 5 : energy ? 4 : fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
 			if (extended) {
 				tag.put("pending", value.pending.saveOptional(registries)); var request = new CompoundTag();
 				if (value.request != null) { request.put("item", value.request.item().save(registries)); request.putBoolean("insert", value.request.insert()); request.putString("source", value.request.source()); }
@@ -106,6 +109,7 @@ public final class TerminalCursor {
 				if (value.chemicalRequest != null) { request.put("chemical", value.chemicalRequest.chemical().save(registries)); request.putBoolean("insert", value.chemicalRequest.insert()); request.putString("source", value.chemicalRequest.source()); }
 				tag.put("chemical_request", request);
 			}
+			if (patterns) tag.put("pattern_buffer", TerminalPatternBuffer.write(value.patternBuffer, registries));
 			return tag;
 		}
 	};
@@ -120,6 +124,7 @@ public final class TerminalCursor {
 	ChemicalStack chemical = ChemicalStack.EMPTY;
 	TerminalChemicalExchange.Request chemicalRequest;
 	boolean containerBusy;
+	java.util.List<ItemStack> patternBuffer = TerminalPatternBuffer.empty();
 	private static Tag saveFluid(FluidStack fluid, HolderLookup.Provider registries) { return fluid.isEmpty() ? new CompoundTag() : fluid.save(registries); }
 	private static FluidStack readFluid(CompoundTag raw, HolderLookup.Provider registries) {
 		if (raw.isEmpty()) return FluidStack.EMPTY;
