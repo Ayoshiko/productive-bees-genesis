@@ -245,6 +245,18 @@ dependencies {
             }
             testRuntimeOnly dispatchTestMods
         }
+        if (providers.gradleProperty('infiniteStorageModsDir').isPresent()) {
+            def sourceDir = file(providers.gradleProperty('infiniteStorageModsDir').get())
+            def infiniteStorageMods = files(
+                    new File(sourceDir, 'create-1.21.1-6.0.10.jar'),
+                    new File(sourceDir, 'meinfinitycell-1.21.1-2.0.0.jar'),
+                    new File(sourceDir, 'ExtendedAE-1.21-2.2.35-neoforge.jar'),
+                    new File(sourceDir, 'Glodium-1.21-2.2-neoforge.jar'))
+            infiniteStorageMods.each { jar ->
+                if (!jar.isFile()) throw new GradleException("Missing infinite storage test mod: ${jar}")
+            }
+            testRuntimeOnly infiniteStorageMods
+        }
         if (providers.gradleProperty('mekEnergisticsCompatJar').isPresent()) {
             def patternTestMods = files(providers.gradleProperty('mekEnergisticsCompatJar').get(),
                     providers.gradleProperty('appliedMekanisticsCompatJar').get())
@@ -276,6 +288,7 @@ tasks.named('test', Test) {
         include '**/*MinecraftTest.class'
         systemProperty 'productivebeesgenesis.test.ecoCompat', providers.gradleProperty('ecoCompatTests').isPresent()
         systemProperty 'productivebeesgenesis.test.ae2ltCompat', providers.gradleProperty('ae2ltCompatTests').isPresent()
+        systemProperty 'productivebeesgenesis.test.infiniteStorage', providers.gradleProperty('infiniteStorageModsDir').isPresent()
     } else {
         exclude '**/*MinecraftTest.class'
     }

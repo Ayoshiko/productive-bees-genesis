@@ -33,6 +33,10 @@ public final class Ae2NbtKeys {
 	/** 离心机 per-tile 电力熔炼炉配方兼容开关 */
 	public static final String NBT_KEY_SMELTING_COMPAT = "productivebeesgenesis_smelting_compat";
 
+	/** 熔炼兼容关闭后尚未完成的输入扫描/返还请求 */
+	public static final String NBT_KEY_UNPROCESSABLE_INPUT_RETURN_PENDING =
+			"productivebeesgenesis_unprocessable_input_return_pending";
+
 	/** 离心机新产物优先直接写入 AE 开关 */
 	public static final String NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT =
 			"productivebeesgenesis_centrifuge_direct_ae_output";

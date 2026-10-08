@@ -33,15 +33,61 @@
 
 ### 修复
 
+- **配置卡关闭熔炼后的输入回收**：统一按钮、配置卡批量粘贴和升级恢复的关闭逻辑；目标机器的回收请求不再被来源卡片的状态覆盖。重复粘贴关闭配置、加载旧存档时也补查一次不可处理输入，修复超级融合卡粘贴后熔炼原料滞留的问题；可处理蜜脾和目标机器已有待返还物品仍按原有归属保留。
+- **配置卡实测确认**：用户于 2026-10-08 确认，超级融合卡批量关闭熔炼后的自动返还正常工作。
+- **AE2 空槽拉取容量**：按实际候选物品计算空槽接收量，修复空栈上限将首批拉取错误压低、或与低堆叠物品实际容量不符的问题；候选选定前的总配额不再被空栈上限截断。带 `MAX_STACK_SIZE` 修改的物品绕过仅按 Item 缓存的槽位上限，保留分等级堆叠倍率与实际插入约束。
 - **Mek Energistics 样板槽位误暴露**：关闭通用机械离心机、蜂箱及全部工厂等级从 Mekanism 基类继承的样板供应器入口。接入 AE2／闪电科技无线网络后不再向样板管理终端暴露默认 72 槽，拒绝通过这些继承入口执行样板；保留本模组正常的 AE2 输入、输出和外部样板发配目标。新增守卫独立门控，既有安装器兼容处理、加载条件和可选依赖声明保持原样。
 - **精华转化黑名单**：排除 `exdeorum:bone_crook`，防止骷髅蜜蜂的骨头被自动合成为不可分解的骨钩；同时排除原版 `minecraft:music_disc_5` 和整合包配方 `kubejs:kjs/music_disc_5`，保留幽匿蜜蜂产出的唱片 5 残片。仅限制精华转化升级，正常工作台合成不受影响。
 - **玩家环境复测**：用户于 2026-10-07 在原反馈的 Infinity Legacy II 整合包中确认，机器不再显示样板槽位，WCWT 也不再提供对应的供应器 UI 按钮，原断连触发路径已消除。
 
+### 性能
+
+- **输入校验工作集**：输入有效性缓存改为有界 64 条 LRU 哈希查找，覆盖 19 进程工厂最多 38 种 AE2 候选，减少原 20 条缓存的循环驱逐、线性查找与数组搬移；保留有效期、熔炼开关失效和现有配方判定，清理期间的旧校验结果不再写回。
+- **网络协调器重复登记**：同一宿主同刻连续输出重试只登记一次活跃状态；宿主表在既有状态锁下使用原始 long 映射，减少重复并发映射写入和装箱。每次调用仍检查最新成本预算，保留网络隔离、轮转、卸载清理和同刻重新登记。
+- **万象稀疏容量搜索**：按事务内的真实模板容量建立有序可接收槽位索引，二分试算跳过无关蜂种、满槽和拒收槽；临时状态由六组数组缩减为数量与归属两组，正式计划再从原快照求增量。仍逐槽模拟内部接收，保留完整组件、原槽位优先级与共享模板归属。
+- **待输出缓存命中路径**：精华／粗矿转换升级启用时，直接用实际 pending 模板规划，省去未参与规划的原配方输出表查询；PB 输出表和粗矿转换缓存命中先执行只读查询，避免重复进入 `computeIfAbsent`。产出概率、数量、输入扣除和部分接收规则不变。
+- **普通蜜脾待输出直推**：AE2 与邻居直通分开传递物品模板和数量，取消预算、开关或目标检查之前的请求栈复制；AE2 直接使用完整物品键与请求量，邻居路径仅在实际提交时创建独立栈。保留部分接收、余量挂起及输入只扣一次的结算顺序。
+- **重试中的标签判定**：粗矿转换缓存普通产物的否定结果；蜂蜡副产物使用只包含注册表物品的不可变标签快照，减少高并行配方累积和待输出重试中的重复标签查询。标签重载和停服清理缓存，转换规则、升级开关及数量余数不变。
+- **万象模拟探针复用**：同一事务内，相同模板和请求数量的容量探针跨输出槽复用，减少派生组件初始化；仍逐槽调用内部插入模拟，保留各槽权限与实际容量约束。
+- **混养蜂箱输出索引**：使用物品与 `bee_type` 分桶，并按库存内容版本与堆叠倍率版本复用输出索引，减少多蜂种逐组产出时的重复扫描及派生组件哈希；自身写入增量维护索引，外部库存变更、槽位列表替换、倍率变更或异常会使索引失效。桶内仍精确比较完整组件，满槽余量继续保留。
+- **AE2 输出指纹延迟编码与共享**：输出扫描只收集条目，实际预留账本前才查询指纹；相同注册表与重载代际内，多台机器共享按条目数及字符数限制的 LRU 缓存，停服清空。被预算、退避或直连优先跳过的条目不提前编码，超大指纹仍完整交付，保留先记账再写入网络的顺序。
+- **多候选输入校验**：工厂输入/输出兼容性由单条缓存改为有界多条缓存，减少熔炼与蜜脾候选交替时的重复配方查询；完整物品组件、输入数量及三个输出槽均参与匹配，世界或配方重载变化时失效，校验期间发生失效时禁止写回旧代际结果，修复仅按 Item 与蜂种匹配可能复用错误组件结果的问题。
+- **高负载 AE2 输入拉取**：中等及高成本抽取接入既有网络轮转和预算，调度顺延不记为拉取失败；保持单次请求数量、过滤与库存保留规则。
+- **创造容器批量抽取**：本模组同步 AE2 拉取命中 Mekanism Bin 或 Create 创造板条箱时，按请求批量返回，减少逐组构造物品栈；保留 ME 路由、原有提取权限、有限库存扣减和创造容器不消耗标记库存的语义，退出或异常立即清理作用域。
+- **无限元件固定键复用**：MEInfinityCell 的固定物品/流体供应商按数据重载代际复用 AE2 键，避免高频注册表解析和组件构造；任意脚本动态供应商与列表变更仍实时生效。Create 和 MEInfinityCell 均按可选依赖独立门控。
+- **万象与待输出重试**：万象容量搜索复用事务内临时数组，先检验整批和最小批次，减少全接收/完全阻塞时的二分试算；容量判定共用正式规划的分配逻辑，不构造执行计划，并复用原有非空槽已经完成的组件匹配。每种候选前缀的分配顺序、真实模板及模板间匹配仅在事务内准备一次，后续试算只更新数量数组，保持原分配余数和槽位优先级。粗矿转换在无可转换产物时保留原 pending，在有转换时减少中间栈复制，保留余数和超大数量。
+- **离心机输入优先级与自动回收**：保留熔炼配方优先级，按各自游标轮转熔炼候选；只有本轮没有足够可用熔炼候选时才以蜜脾补位。关闭单机熔炼适配时触发一次不可处理输入检测；网络暂时拒收时保留在输入槽或持久化待返还队列，已知待处理物即使新输入拉取关闭仍会继续回收；AE2 写入结果未知时隔离数量且不盲目重试。
+
 ### English
 
+- **Input-validation working set**: a bounded 64-entry LRU hash cache covers up to 38 AE2 candidates across a 19-process factory, reducing cyclic eviction from the previous 20-entry cache, linear searches and array shifts. TTL, smelting-toggle invalidation and recipe rules remain intact; invalidated in-flight results cannot repopulate the cache.
+- **Repeated network-worker registration**: consecutive calls from the same worker in one tick register activity once. A primitive long map uses the existing state lock, avoiding redundant concurrent-map writes and boxing. Every call still checks current cost budgets, with independent networks, fair rotation, unloading and same-tick re-registration preserved.
+- **Sparse Myriad capacity searches**: transaction-local, ordered eligible-slot indices skip unrelated templates, full slots and rejected slots during binary search. Scratch state uses count and owner arrays instead of six arrays, deriving committed increments from the original snapshot. Per-slot internal simulation, exact components, physical slot priority and shared-template ownership remain intact.
+- **Pending-output cache hits**: essence/raw-ore conversion upgrades plan from actual pending templates without querying an unused recipe-output map. PB output and raw-ore conversion cache hits use a read lookup before `computeIfAbsent`; probabilities, quantities, input consumption and partial acceptance are unchanged.
+- **Input recovery after configuration-card smelting changes**: buttons, bulk configuration pastes and tier restoration now share the same disable behavior. A source card cannot overwrite the target's recovery request. Reapplying an off configuration or loading an older save schedules a check for unprocessable inputs, fixing smelting ingredients left behind by Super Fusion Card pastes while retaining processable combs and existing pending ownership.
+- **Configuration-card runtime confirmation**: on 2026-10-08, the user confirmed that automatic input recovery works after bulk disabling smelting with the Super Fusion Card.
+- **Direct flushing of ordinary comb outputs**: AE2 and neighbor output paths pass templates and quantities separately, avoiding request-stack copies before budget, switch and target checks. AE2 receives the exact key and amount; neighbor requests are copied only for actual insertion. Partial acceptance, retained remainders and one-time input consumption keep their existing order.
+- **Tag checks during retries**: raw-ore conversion caches negative results for ordinary outputs, and wax filtering shares an immutable registry-item tag snapshot. Tag reload and server shutdown invalidate these caches; conversion rules, upgrade switches and remainders are preserved.
+- **Myriad simulation probes**: reuse equal-template, equal-amount probes across slots within a transaction while still simulating internal insertion separately for every slot and respecting its permissions and capacity.
+- **AE2 empty-slot input capacity**: calculate empty-slot capacity from the actual candidate and avoid capping the preliminary machine quota by the empty stack's limit. Explicit `MAX_STACK_SIZE` changes bypass item-only slot-limit caches, preserving tier multipliers and actual insertion limits.
+- **Mixed-bee apiary output indexing**: bucket by item and `bee_type`, and reuse the index while inventory and stack-multiplier versions match. Own writes update it incrementally; external inventory changes, slot-list replacement, multiplier changes and exceptions invalidate it. Full component comparison still separates variants, and overflow remains retained.
+- **Deferred and shared AE2 output fingerprints**: encode only when reserving a ledger entry, and share results across machines within the same registry and reload generation using an LRU bounded by entries and characters. Server shutdown clears the cache. Skipped entries avoid encoding, oversized fingerprints remain intact, and ledger reservation still precedes the network write.
+- **Multiple input candidates**: a bounded multi-entry factory compatibility cache avoids repeated recipe lookups as smelting and comb candidates alternate. Matching covers full components, input count and all three output slots, with world/reload invalidation and rejection of stale in-flight cache writes, fixing incorrect reuse between component variants sharing an item and bee type.
+- **High-load AE2 input pulling**: moderate and expensive extracts participate in existing per-network rotation and budgets. Scheduling deferrals no longer count as failed pulls; request amounts, filters and reserve rules remain intact.
+- **Bulk extraction from creative containers**: Genesis AE2 pulls request batches from Mekanism bins and Create creative crates, avoiding per-stack allocation loops while retaining ME routing, extraction rules, finite-stock accounting and creative templates. The synchronous scope is cleared on return and failure.
+- **Fixed keys for infinity cells**: MEInfinityCell fixed item/fluid suppliers reuse AE2 keys until data reload, while arbitrary dynamic script suppliers and list mutations remain live. Create and MEInfinityCell integrations are independently guarded as optional dependencies.
+- **Myriad planning and pending output retries**: capacity probes share transaction-local arrays and check the full and minimum batch before binary search. Capacity-only probes use the same allocation rules without building execution plans and reuse component matches already established for occupied slots. Allocation order, actual templates and pairwise template matches are prepared once per candidate prefix within the transaction; subsequent probes update primitive counts while preserving allocation remainders and slot priority. Raw-ore conversion avoids copying unchanged pending outputs and reduces intermediate copies for actual conversions while preserving remainders and large counts.
+- **Centrifuge input priority and automatic recovery**: smelting priority is preserved, with an independent rotating cursor for each class; combs fill only the candidate slots left after no further usable smelting candidates are found. Turning off per-machine smelting compatibility schedules a one-time scan for inputs the machine cannot process. Temporary network rejection keeps them in the input slots or a persistent pending queue. Known pending assets continue recovery even when new input pulling is disabled. An unknown AE2 write result is quarantined and never blindly retried.
 - **Unintended Mek Energistics pattern slots**: disabled the pattern-provider entry points inherited from Mekanism by the addon's centrifuges, apiaries and all factory tiers. Connecting through AE2 or Lightning Tech wireless networks no longer exposes the default 72 slots in pattern-management terminals, and inherited pattern execution is rejected. The addon's AE2 input/output integration and external pattern delivery targets remain available. The new guard has a separate loading condition; existing installer compatibility, loading conditions and optional dependency declarations are unchanged.
 - **Essence Conversion exclusions**: excluded `exdeorum:bone_crook` so Skeleton Bee bones are not automatically crafted into non-reversible bone crooks. Also excluded vanilla `minecraft:music_disc_5` and the pack recipe `kubejs:kjs/music_disc_5`, preserving Sculk Bee disc fragments. These exclusions apply only to the Essence Conversion Upgrade; normal crafting remains available.
 - **Player environment validation**: on 2026-10-07, the user confirmed in the original Infinity Legacy II pack that the machines no longer expose pattern slots or corresponding provider UI buttons in WCWT, eliminating the reported disconnection trigger.
+
+### 验证 / Validation
+
+- **2026-10-08 三组复测**：Spark [CrlVBcZEyz](https://spark.lucko.me/CrlVBcZEyz)、[vnVWmkKEQA](https://spark.lucko.me/vnVWmkKEQA)、[LXaKXT2VC4](https://spark.lucko.me/LXaKXT2VC4) 分别对应“关闭熔炼、排除万象”“开启熔炼、排除万象”“关闭熔炼、启用万象”。均为 NeoForge 21.1.234、120 秒服务器线程采样，最近一分钟平均/P95 MSPT 分别为 87.51/131.82、89.45/127.66、87.26/124.70 ms。配对 Observable [8HNn](https://observable.tas.sh/p/8HNn)、[JCAP](https://observable.tas.sh/p/JCAP)、[ksx3](https://observable.tas.sh/p/ksx3) 均有 79 台离心机与 37 台蜂箱，本模组总耗时分别为 42.111、42.874、41.780 ms/tick。报告用于定位本轮热点，尚无本轮修改后的同场景采样，不宣称新的 MSPT 或吞吐提升比例。
+- **Profile scope**: the three paired reports cover the previous test JAR, with identical addon machine counts but different smelting/Myriad settings. They identify this round's hotspots; post-change runtime performance and throughput remain unmeasured.
+- **本轮自动验证**：维护 worktree 普通测试 704 项（702 通过、2 跳过），NeoForge 21.1.234 完整初始化测试 164 项（147 通过、17 项按可选依赖条件跳过）；另带 Create 6.0.10、MEInfinityCell 2.0.0 等依赖的定向测试 25 项全部通过，包含新增的 57 槽稀疏万象分配回归。验证 38 种候选 × 19 槽 × 256 轮仅调用 38 次校验器，以及 38 台宿主 × 76 刻 × 256 次调用的公平轮转与预算边界。`build verifyReleaseArtifact` 通过；未运行本轮新包的真实玩家存档性能复测。
+- **Automated validation**: 704 plain tests (702 passed, 2 skipped), 164 NeoForge-initialized tests (147 passed, 17 conditional skips), plus 25 passing focused tests with Create/MEInfinityCell loaded. These cover candidate-cache reuse, accelerated worker fairness, sparse-slot placement, exact components and item conservation. Build and artifact verification pass; these checks do not establish an in-game speedup.
 
 ## [1.0.10] - 2026-09-28
 

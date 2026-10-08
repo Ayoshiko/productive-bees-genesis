@@ -512,6 +512,8 @@ public class PbRecipeCompleter {
 	@Nullable
 	static Map<ItemStack, ChancedOutput> getRecipeOutputsCached(@Nullable CentrifugeRecipe recipe) {
 		if (recipe == null) return null;
-		return recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
+		Map<ItemStack, ChancedOutput> cached = recipeOutputsCache.get(recipe);
+		return cached != null ? cached
+				: recipeOutputsCache.computeIfAbsent(recipe, CentrifugeRecipe::getRecipeOutputs);
 	}
 }

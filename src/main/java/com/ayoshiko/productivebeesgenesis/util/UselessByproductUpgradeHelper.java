@@ -8,15 +8,22 @@ import cy.jdkdigital.productivebees.init.ModTags;
 import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
+
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 /** Shared predicates for the useless-byproduct upgrade and its optional compat. */
 public final class UselessByproductUpgradeHelper {
 
 	public static final ResourceLocation POLLEN_PUFF_ID =
 			ResourceLocation.fromNamespaceAndPath("the_bumblezone", "pollen_puff");
+	/** 只保存注册表物品的不可变集合；跨调用共享，标签重载和停服时释放。 */
+	private static volatile Set<Item> waxItems;
 
 	private UselessByproductUpgradeHelper() {
 	}
@@ -37,7 +44,24 @@ public final class UselessByproductUpgradeHelper {
 
 	/** Returns whether the item belongs to the common wax tag used by centrifuge recipes. */
 	public static boolean isWax(ItemStack stack) {
-		return !stack.isEmpty() && stack.is(ModTags.Common.WAXES);
+		if (stack.isEmpty()) return false;
+		Set<Item> items = waxItems;
+		if (items == null) items = resolveWaxItems();
+		return items.contains(stack.getItem());
+	}
+
+	private static synchronized Set<Item> resolveWaxItems() {
+		if (waxItems == null) {
+			Set<Item> items = Collections.newSetFromMap(new IdentityHashMap<>());
+			BuiltInRegistries.ITEM.getTag(ModTags.Common.WAXES).ifPresent(
+					tag -> tag.forEach(holder -> items.add(holder.value())));
+			waxItems = Collections.unmodifiableSet(items);
+		}
+		return waxItems;
+	}
+
+	public static synchronized void invalidateCache() {
+		waxItems = null;
 	}
 
 	public static boolean isHoney(FluidStack stack) {

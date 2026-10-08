@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 import mekanism.api.inventory.IInventorySlot;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -20,6 +21,8 @@ final class Ae2SlotEntry {
 	int process;
 	int slotIdx;
 	String fingerprint;
+	private Ae2FingerprintCache fingerprintCache;
+	private HolderLookup.Provider registries;
 
 	Ae2SlotEntry() {
 	}
@@ -33,5 +36,20 @@ final class Ae2SlotEntry {
 		this.process = process;
 		this.slotIdx = slotIdx;
 		this.fingerprint = fingerprint;
+		this.fingerprintCache = null;
+		this.registries = null;
+	}
+
+	void set(IInventorySlot slot, ItemStack stack, AEItemKey key, int count, int process, int slotIdx,
+			Ae2FingerprintCache cache, HolderLookup.Provider registries) {
+		set(slot, stack, key, count, process, slotIdx, (String) null);
+		this.fingerprintCache = cache;
+		this.registries = registries;
+	}
+
+	/** 被预算、退避或直连优先跳过的条目不编码；提交前仍先取得完整持久化指纹。 */
+	String fingerprint() {
+		if (fingerprint == null) fingerprint = fingerprintCache.get(key, registries);
+		return fingerprint;
 	}
 }

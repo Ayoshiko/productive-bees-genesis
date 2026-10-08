@@ -105,14 +105,19 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 
 	@Override
 	public int productivebeesgenesis$pushGeneratedItem(ItemStack stack) {
-		if (stack.isEmpty()) return 0;
+		return productivebeesgenesis$pushGeneratedItem(stack, stack.getCount());
+	}
+
+	@Override
+	public int productivebeesgenesis$pushGeneratedItem(ItemStack stack, int amount) {
+		if (stack.isEmpty() || amount <= 0) return 0;
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide
 				|| !ExternalLogisticsSettings.directContainerOutput(level.getGameTime())
 				|| !perTileDirectOutput(tile)) {
 			return 0;
 		}
-		return itemEjector.pushDirect(this, itemConfig, stack, level.getGameTime());
+		return itemEjector.pushDirect(this, itemConfig, stack, amount, level.getGameTime());
 	}
 
 	private static boolean perTileDirectOutput(TileEntityMekanism tile) {

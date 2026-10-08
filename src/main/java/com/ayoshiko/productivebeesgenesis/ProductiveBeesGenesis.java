@@ -352,6 +352,7 @@ public final class ProductiveBeesGenesis {
 		EssenceConversionUpgradeHelper.invalidateCache();
 		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
 		RawOreSmeltingUpgradeHelper.invalidateCache();
+		com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
 		// CombFuzzyMatcher 已改为无缓存直读组件（AEItemKey.equals 比重算更贵），无需失效
@@ -436,6 +437,8 @@ public final class ProductiveBeesGenesis {
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
 		safeClear(EssenceConversionUpgradeHelper::invalidateCache, "EssenceConversionUpgradeHelper");
 		safeClear(RawOreSmeltingUpgradeHelper::invalidateCache, "RawOreSmeltingUpgradeHelper");
+		safeClear(com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper::invalidateCache,
+				"UselessByproductUpgradeHelper");
 		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
 		safeClear(BeeConversionQueries::invalidate, "BeeConversionQueries");
 		safeClear(SingleIngredientCraftingIndex::invalidate, "SingleIngredientCraftingIndex");

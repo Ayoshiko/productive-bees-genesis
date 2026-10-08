@@ -28,7 +28,8 @@ class Ae2PendingItemBufferTest {
 		String source = Files.readString(Path.of(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
 		// 抽取量必须直接用槽位容量算出的 amount，不得再被 pending 缓冲额度截断
-		assertTrue(source.contains("meStorage.extract(key, amount, Actionable.MODULATE, actionSource)"));
+		assertTrue(source.contains("extractFromNetwork(meStorage, key, amount, actionSource)"));
+		assertTrue(source.contains("storage.extract(key, amount, Actionable.MODULATE, source)"));
 		// 抽取前的兜底闸门保留，但只在缓冲真的满了才付一次 SNBT 指纹编码去精确查重
 		assertTrue(source.contains("if (!pending.hasFreeEntrySlot()"),
 				"正常态（缓冲未满）必须走 O(1) 判定，不得为闸门无条件编码指纹");

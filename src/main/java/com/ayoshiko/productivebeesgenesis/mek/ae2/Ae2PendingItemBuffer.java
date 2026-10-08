@@ -23,6 +23,8 @@ public final class Ae2PendingItemBuffer {
 	private static final String KEY_ENTRIES = "entries";
 	private static final String KEY_FINGERPRINT = "fingerprint";
 	private static final String KEY_AMOUNT = "amount";
+	private static final String KEY_RETURN_TO_NETWORK_AMOUNT = "return_to_network_amount";
+	private static final String KEY_UNCERTAIN_AMOUNT = "uncertain_amount";
 	private static final String KEY_RETRIES = "retries";
 	private static final String KEY_NEXT_ATTEMPT = "next_attempt";
 
@@ -32,7 +34,7 @@ public final class Ae2PendingItemBuffer {
 	/**
 	 * 将数量登记到缓冲，返回实际登记的数量。
 	 * <p>
-	 * 只限制「类型条目数」而不限制数量：NBT 体积由条目数决定（每条 = 指纹字符串 + 3 个 long），
+	 * 只限制「类型条目数」而不限制数量：NBT 体积由条目数决定（每条 = 指纹字符串 + 4 个 long），
 	 * 数量再大也只占 8 字节，因此对数量设上限只会伤吞吐（无限拉取模式下单槽堆叠上限可达 17M），
 	 * 并不能防止 NBT 膨胀。数量用饱和加法防溢出。
 	 */
@@ -41,7 +43,7 @@ public final class Ae2PendingItemBuffer {
 		PendingItem existing = find(fingerprint);
 		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
 		if (existing == null) {
-			entries.add(new PendingItem(fingerprint, amount, 0, currentTick));
+			entries.add(new PendingItem(fingerprint, amount, 0L, 0L, 0, currentTick));
 		} else {
 			long before = existing.amount;
 			existing.amount = SaturatingMath.saturatingAdd(before, amount);
@@ -52,6 +54,61 @@ public final class Ae2PendingItemBuffer {
 		}
 		totalAmount = SaturatingMath.saturatingAdd(totalAmount, amount);
 		return amount;
+	}
+
+	/**
+	 * Retains an item whose ME insertion threw after mutation became possible. This amount is persisted
+	 * for reconciliation but is excluded from automatic retries because the accepted count is unknown.
+	 */
+	public long enqueueUncertain(String fingerprint, long amount, long currentTick) {
+		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
+		PendingItem existing = find(fingerprint);
+		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
+		if (existing == null) {
+			entries.add(new PendingItem(fingerprint, 0L, 0L, amount, 0, currentTick));
+		} else {
+			long before = existing.uncertainAmount;
+			existing.uncertainAmount = SaturatingMath.saturatingAdd(before, amount);
+			amount = existing.uncertainAmount - before;
+			if (amount <= 0L) return 0L;
+		}
+		totalAmount = SaturatingMath.saturatingAdd(totalAmount, amount);
+		return amount;
+	}
+
+	/** Retains known items that must return to ME and must never be placed back in processing slots. */
+	public long enqueueReturnToNetwork(String fingerprint, long amount, long currentTick) {
+		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
+		PendingItem existing = find(fingerprint);
+		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
+		if (existing == null) {
+			entries.add(new PendingItem(fingerprint, 0L, amount, 0L, 0, currentTick));
+		} else {
+			long before = existing.returnToNetworkAmount;
+			existing.returnToNetworkAmount = SaturatingMath.saturatingAdd(before, amount);
+			amount = existing.returnToNetworkAmount - before;
+			if (amount <= 0L) return 0L;
+			existing.retries = 0;
+			existing.nextAttemptTick = Math.min(existing.nextAttemptTick, currentTick);
+		}
+		totalAmount = SaturatingMath.saturatingAdd(totalAmount, amount);
+		return amount;
+	}
+
+	/** Reclassifies already retained ordinary work as ME-return-only without changing ownership totals. */
+	public long moveToReturnToNetwork(String fingerprint, long amount, long currentTick) {
+		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
+		PendingItem existing = find(fingerprint);
+		if (existing == null || existing.amount <= 0L) return 0L;
+		long movable = Math.min(existing.amount, amount);
+		long before = existing.returnToNetworkAmount;
+		existing.returnToNetworkAmount = SaturatingMath.saturatingAdd(before, movable);
+		long moved = existing.returnToNetworkAmount - before;
+		if (moved <= 0L) return 0L;
+		existing.amount -= moved;
+		existing.retries = 0;
+		existing.nextAttemptTick = Math.min(existing.nextAttemptTick, currentTick);
+		return moved;
 	}
 
 	/**
@@ -92,32 +149,76 @@ public final class Ae2PendingItemBuffer {
 	public List<PendingItem> snapshot(long currentTick) {
 		List<PendingItem> result = new ArrayList<>();
 		for (PendingItem entry : entries) {
-			if (entry.amount > 0L && entry.nextAttemptTick <= currentTick) {
+			if ((entry.amount > 0L || entry.returnToNetworkAmount > 0L)
+					&& entry.nextAttemptTick <= currentTick) {
 				result.add(entry.copy());
 			}
 		}
 		return result;
 	}
 
+	/** Whether any known amount is ready for delivery; uncertain inserts are never retried. */
+	public boolean hasRetryableItems(long currentTick) {
+		for (PendingItem entry : entries) {
+			if ((entry.amount > 0L || entry.returnToNetworkAmount > 0L)
+					&& entry.nextAttemptTick <= currentTick) return true;
+		}
+		return false;
+	}
+
 	/** 从记录中扣除已安全交付到输入槽或 ME 的数量。 */
 	public void consume(String fingerprint, long amount, long currentTick) {
 		if (amount <= 0L) return;
 		PendingItem entry = find(fingerprint);
-		if (entry == null) return;
+		if (entry == null || entry.amount <= 0L) return;
 		long consumed = Math.min(entry.amount, amount);
 		entry.amount -= consumed;
 		totalAmount -= consumed;
-		if (entry.amount <= 0L) {
+		if (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L && entry.uncertainAmount <= 0L) {
 			entries.remove(entry);
-		} else {
+		} else if (entry.amount > 0L) {
 			entry.nextAttemptTick = currentTick;
 		}
+	}
+
+	/** Removes known ME-return work after ME accepted it, without consuming other ownership classes. */
+	public void consumeReturnToNetwork(String fingerprint, long amount, long currentTick) {
+		if (amount <= 0L) return;
+		PendingItem entry = find(fingerprint);
+		if (entry == null || entry.returnToNetworkAmount <= 0L) return;
+		long consumed = Math.min(entry.returnToNetworkAmount, amount);
+		entry.returnToNetworkAmount -= consumed;
+		totalAmount -= consumed;
+		if (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L && entry.uncertainAmount <= 0L) {
+			entries.remove(entry);
+		} else if (entry.amount > 0L || entry.returnToNetworkAmount > 0L) {
+			entry.nextAttemptTick = currentTick;
+		}
+	}
+
+	/** Moves a known amount into the non-retryable quarantine after an ME write throws. */
+	public long quarantine(String fingerprint, long amount, boolean returnToNetworkOnly) {
+		if (amount <= 0L) return 0L;
+		PendingItem entry = find(fingerprint);
+		if (entry == null) return 0L;
+		long known = returnToNetworkOnly ? entry.returnToNetworkAmount : entry.amount;
+		long moved = Math.min(known, amount);
+		if (moved <= 0L) return 0L;
+		if (returnToNetworkOnly) entry.returnToNetworkAmount -= moved;
+		else entry.amount -= moved;
+		long before = entry.uncertainAmount;
+		entry.uncertainAmount = SaturatingMath.saturatingAdd(before, moved);
+		long quarantined = entry.uncertainAmount - before;
+		if (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L && entry.uncertainAmount <= 0L) {
+			entries.remove(entry);
+		}
+		return quarantined;
 	}
 
 	/** 记录一次失败并应用有界指数退避。 */
 	public void recordFailure(String fingerprint, long currentTick) {
 		PendingItem entry = find(fingerprint);
-		if (entry == null) return;
+		if (entry == null || (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L)) return;
 		entry.retries = Math.min(MAX_RETRY_COUNT, entry.retries + 1);
 		long delay = Math.min(MAX_RETRY_DELAY_TICKS,
 				1L << Math.min(10, Math.max(0, entry.retries - 1)));
@@ -132,10 +233,12 @@ public final class Ae2PendingItemBuffer {
 		}
 		ListTag list = new ListTag();
 		for (PendingItem entry : entries) {
-			if (entry.amount <= 0L) continue;
+			if (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L && entry.uncertainAmount <= 0L) continue;
 			CompoundTag tag = new CompoundTag();
 			tag.putString(KEY_FINGERPRINT, entry.fingerprint);
 			tag.putLong(KEY_AMOUNT, entry.amount);
+			tag.putLong(KEY_RETURN_TO_NETWORK_AMOUNT, entry.returnToNetworkAmount);
+			tag.putLong(KEY_UNCERTAIN_AMOUNT, entry.uncertainAmount);
 			tag.putInt(KEY_RETRIES, entry.retries);
 			tag.putLong(KEY_NEXT_ATTEMPT, entry.nextAttemptTick);
 			list.add(tag);
@@ -152,11 +255,16 @@ public final class Ae2PendingItemBuffer {
 			CompoundTag tag = list.getCompound(i);
 			String fingerprint = tag.getString(KEY_FINGERPRINT);
 			long amount = Math.max(0L, tag.getLong(KEY_AMOUNT));
-			if (fingerprint.isBlank() || amount <= 0L) continue;
-			entries.add(new PendingItem(fingerprint, amount,
+			long returnToNetworkAmount = Math.max(0L, tag.getLong(KEY_RETURN_TO_NETWORK_AMOUNT));
+			long uncertainAmount = Math.max(0L, tag.getLong(KEY_UNCERTAIN_AMOUNT));
+			if (fingerprint.isBlank()
+					|| (amount <= 0L && returnToNetworkAmount <= 0L && uncertainAmount <= 0L)) continue;
+			entries.add(new PendingItem(fingerprint, amount, returnToNetworkAmount, uncertainAmount,
 					Math.min(MAX_RETRY_COUNT, Math.max(0, tag.getInt(KEY_RETRIES))),
 					tag.getLong(KEY_NEXT_ATTEMPT)));
-			totalAmount = SaturatingMath.saturatingAdd(totalAmount, amount);
+			totalAmount = SaturatingMath.saturatingAdd(totalAmount,
+					SaturatingMath.saturatingAdd(SaturatingMath.saturatingAdd(amount, returnToNetworkAmount),
+							uncertainAmount));
 		}
 	}
 
@@ -180,21 +288,29 @@ public final class Ae2PendingItemBuffer {
 	public static final class PendingItem {
 		private final String fingerprint;
 		private long amount;
+		private long returnToNetworkAmount;
+		private long uncertainAmount;
 		private int retries;
 		private long nextAttemptTick;
 
-		private PendingItem(String fingerprint, long amount, int retries, long nextAttemptTick) {
+		private PendingItem(String fingerprint, long amount, long returnToNetworkAmount,
+				long uncertainAmount, int retries, long nextAttemptTick) {
 			this.fingerprint = fingerprint;
 			this.amount = amount;
+			this.returnToNetworkAmount = returnToNetworkAmount;
+			this.uncertainAmount = uncertainAmount;
 			this.retries = retries;
 			this.nextAttemptTick = nextAttemptTick;
 		}
 
 		private PendingItem copy() {
-			return new PendingItem(fingerprint, amount, retries, nextAttemptTick);
+			return new PendingItem(fingerprint, amount, returnToNetworkAmount,
+					uncertainAmount, retries, nextAttemptTick);
 		}
 
 		public String fingerprint() { return fingerprint; }
 		public long amount() { return amount; }
+		public long returnToNetworkAmount() { return returnToNetworkAmount; }
+		public long uncertainAmount() { return uncertainAmount; }
 	}
 }

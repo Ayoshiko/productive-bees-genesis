@@ -2,7 +2,8 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.Map;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongMaps;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -92,9 +93,9 @@ final class Ae2NetworkWorkCoordinator {
 	/**
 	 * 记录一次网络操作成本。
 	 * <p>
-	 * 预算与昂贵判定都使用调用方给出的健康阈值：insert 传 150µs，extract 传 5ms。
-	 * 这样 0.2-0.4ms 的高频中等成本 insert 会触发网络内错峰，而健康大型网络常见的
-	 * 0.6-3ms extract 不会被误判为病态。
+	 * 预算与昂贵判定都使用调用方给出的健康阈值：insert 传 150µs，input extract 传
+	 * {@link Ae2ExtractBudget#HEALTHY_EXTRACT_NANOS}。这样一组机器的中等成本重复拉取也会
+	 * 触发网络内错峰；只有明显超过 5ms 的操作才会额外进入全局慢操作预算。
 	 */
 	static void recordCost(Object networkIdentity, long gameTick, long costNanos, long thresholdNanos) {
 		recordResolvedCost(resolve(networkIdentity), gameTick, costNanos, thresholdNanos);
@@ -125,6 +126,7 @@ final class Ae2NetworkWorkCoordinator {
 		if (state == null) return;
 		synchronized (state) {
 			state.workerLastSeen.remove(workerId);
+			if (state.lastTouchedWorkerId == workerId) state.lastTouchedWorkerId = 0L;
 			if (state.turnWorkerId == workerId) state.turnWorkerId = 0L;
 		}
 	}
@@ -141,7 +143,9 @@ final class Ae2NetworkWorkCoordinator {
 	static int workerCountForTest(Object networkIdentity) {
 		if (networkIdentity == null) return 0;
 		NetworkState state = stateFor(networkIdentity);
-		return state.workerLastSeen.size();
+		synchronized (state) {
+			return state.workerLastSeen.size();
+		}
 	}
 
 	/** 清空全部网络状态；仅在服务端停止或测试隔离时调用。 */
@@ -180,7 +184,10 @@ final class Ae2NetworkWorkCoordinator {
 	}
 
 	private static final class NetworkState {
-		private final ConcurrentHashMap<Long, Long> workerLastSeen = new ConcurrentHashMap<>();
+		// 所有访问均持有 state 锁；原始 long 表无需额外并发节点或逐次装箱。
+		private final Long2LongOpenHashMap workerLastSeen = new Long2LongOpenHashMap();
+		private long lastTouchedWorkerId;
+		private long lastTouchedTick = Long.MIN_VALUE;
 		private boolean hasCostSample;
 		private long averageExcessNanos;
 		private long budgetTick = Long.MIN_VALUE;
@@ -204,11 +211,14 @@ final class Ae2NetworkWorkCoordinator {
 		/**
 		 * 登记本刻活跃宿主。
 		 * <p>
-		 * 热路径只做一次 put；淘汰改为每 {@link #WORKER_REAP_INTERVAL_TICKS} 刻一次，
+		 * 同刻连续调用的同一宿主只登记一次；淘汰每 {@link #WORKER_REAP_INTERVAL_TICKS} 刻一次，
 		 * 「本刻谁有资格被选中」由 {@link #selectNextWorker(long)} 的活跃窗口过滤保证，
 		 * 因此淘汰延后不会让已消失的宿主拿到令牌。
 		 */
 		private void touchWorker(long workerId, long gameTick) {
+			if (lastTouchedWorkerId == workerId && lastTouchedTick == gameTick) return;
+			lastTouchedWorkerId = workerId;
+			lastTouchedTick = gameTick;
 			workerLastSeen.put(workerId, gameTick);
 			// 初值必须单独判断：Long.MIN_VALUE 与 gameTick 相减会溢出成负数，
 			// 直接比较大小会让淘汰永远不触发（宿主表随历史机器数量无界增长）。
@@ -222,7 +232,10 @@ final class Ae2NetworkWorkCoordinator {
 		/** 回收活跃窗口之外的宿主条目，防止宿主表随历史机器数量无界增长。 */
 		private void reapInactiveWorkers(long gameTick) {
 			long oldestActiveTick = gameTick - ACTIVE_WORKER_WINDOW_TICKS;
-			workerLastSeen.values().removeIf(lastSeen -> lastSeen < oldestActiveTick);
+			var iterator = Long2LongMaps.fastIterator(workerLastSeen);
+			while (iterator.hasNext()) {
+				if (iterator.next().getLongValue() < oldestActiveTick) iterator.remove();
+			}
 		}
 
 		/**
@@ -235,9 +248,11 @@ final class Ae2NetworkWorkCoordinator {
 			long oldestActiveTick = gameTick - ACTIVE_WORKER_WINDOW_TICKS;
 			long first = Long.MAX_VALUE;
 			long afterCursor = Long.MAX_VALUE;
-			for (Map.Entry<Long, Long> entry : workerLastSeen.entrySet()) {
-				if (entry.getValue() < oldestActiveTick) continue;
-				long workerId = entry.getKey();
+			var iterator = Long2LongMaps.fastIterator(workerLastSeen);
+			while (iterator.hasNext()) {
+				var entry = iterator.next();
+				if (entry.getLongValue() < oldestActiveTick) continue;
+				long workerId = entry.getLongKey();
 				if (workerId < first) first = workerId;
 				if (workerId > cursorWorkerId && workerId < afterCursor) afterCursor = workerId;
 			}

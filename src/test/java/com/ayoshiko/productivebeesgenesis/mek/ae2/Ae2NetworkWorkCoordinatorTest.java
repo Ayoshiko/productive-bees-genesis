@@ -25,6 +25,49 @@ class Ae2NetworkWorkCoordinatorTest {
 	}
 
 	@Test
+	void repeatedTouchesStillObserveCostAndReleaseCanReregisterInTheSameTick() {
+		Object network = new Object();
+		long worker = Ae2NetworkWorkCoordinator.createWorkerId();
+		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
+		for (int i = 0; i < 256; i++) {
+			assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, worker, 10L));
+		}
+		assertEquals(1, Ae2NetworkWorkCoordinator.workerCountForTest(network));
+		Ae2NetworkWorkCoordinator.release(network, worker);
+		assertEquals(0, Ae2NetworkWorkCoordinator.workerCountForTest(network));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, worker, 10L));
+		assertEquals(1, Ae2NetworkWorkCoordinator.workerCountForTest(network));
+		Ae2NetworkWorkCoordinator.recordResolvedCost(handle, 10L, 3_000_000L, 150_000L);
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, worker, 10L));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, worker, 11L));
+	}
+
+	@Test
+	void acceleratedWorkersKeepFairRotationAndReaping() {
+		Object network = new Object();
+		long[] workers = new long[38];
+		int[] turns = new int[workers.length];
+		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
+		for (int i = 0; i < workers.length; i++) {
+			workers[i] = Ae2NetworkWorkCoordinator.createWorkerId();
+			assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, workers[i], 0));
+		}
+		Ae2NetworkWorkCoordinator.recordResolvedCost(handle, 0, 1_000_000L, 150_000L);
+		for (int tick = 1; tick <= 76; tick++) {
+			for (int i = 0; i < workers.length; i++) {
+				boolean expected = i == (tick - 1) % workers.length;
+				for (int repeat = 0; repeat < 256; repeat++) {
+					assertEquals(expected, Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, workers[i], tick));
+				}
+				if (expected) turns[i]++;
+			}
+		}
+		for (int turnsPerWorker : turns) assertEquals(2, turnsPerWorker);
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, workers[0], 100));
+		assertEquals(1, Ae2NetworkWorkCoordinator.workerCountForTest(network));
+	}
+
+	@Test
 	void expensiveNetworkRotatesOneWorkerPerTickWithoutStarvation() {
 		Object network = new Object();
 		long first = Ae2NetworkWorkCoordinator.createWorkerId();
@@ -48,6 +91,31 @@ class Ae2NetworkWorkCoordinatorTest {
 		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 23L));
 		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 23L));
 		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, third, 23L));
+	}
+
+	@Test
+	void moderateExtractCostsShareTheNetworkBudgetAndRotateWorkers() {
+		Object network = new Object();
+		long first = Ae2NetworkWorkCoordinator.createWorkerId();
+		long second = Ae2NetworkWorkCoordinator.createWorkerId();
+
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 24L));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 24L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 24L, 400_000L,
+				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
+
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 25L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 25L, 2_100_001L,
+				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 25L, 500_001L,
+				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 25L));
+
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 26L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 26L));
 	}
 
 	@Test

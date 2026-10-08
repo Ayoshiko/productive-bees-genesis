@@ -46,14 +46,16 @@ class MyriadSpecialCombOutputWiringTest {
 	void mekanismPlannerUsesTheSameRealTemplates() throws Exception {
 		String handler = Files.readString(HANDLER);
 		String planner = Files.readString(PLANNER);
+		String prepared = Files.readString(PLANNER.resolveSibling("MyriadPlanningAllocation.java"));
 		assertTrue(handler.contains(".selectTemplates(selectedTypes, isCombBlock, level.getRandom())"));
 		assertTrue(handler.contains("MyriadBeeTypeCache.cachedBeeTypes(isCombBlock)"));
 		assertTrue(handler.contains("selectedTypes, effectiveBatchSize, templateByType"));
 		assertTrue(handler.contains("allocation, currentTick, templateByType"));
 		assertTrue(handler.contains("allocation, templateByType"));
-		assertTrue(planner.contains("ItemStack.isSameItemSameComponents(workingTemplates[i], outputTemplate)"));
-		assertTrue(planner.contains("int[] limits = snapshot.limitsFor(outputTemplate)"));
-		assertTrue(planner.contains("Plan plan = plan(snapshot, baseItem, allocation, templateByType)"));
-		assertTrue(planner.contains("resolveTemplate(baseItem, beeType, templateByType)"));
+		assertTrue(prepared.contains("ItemStack.isSameItemSameComponents(templates[right], templates[left])"));
+		assertTrue(prepared.contains("snapshot.limitsFor(templates[index])"));
+		assertTrue(planner.contains("return plan(snapshot, baseItem, allocation, templateByType, new PlanningScratch(snapshot.slotCount))"));
+		assertTrue(planner.contains("return fillScratch(snapshot, allocation, scratch)"));
+		assertTrue(prepared.contains("resolveTemplate(baseItem, entry.getKey(), templateByType)"));
 	}
 }

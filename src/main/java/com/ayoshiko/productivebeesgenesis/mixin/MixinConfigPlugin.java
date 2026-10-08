@@ -150,6 +150,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"Ae2EMExtraCentrifugeFactoryInputMixin"
 	);
 
+	private static final Set<String> AE2_CREATE_MIXINS = Set.of("CreateBottomlessBulkPullMixin");
+	private static final Set<String> AE2_INFINITY_CELL_MIXINS = Set.of("InfinityCellKeySupplierMixin");
+
 	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
 			"MekEnergisticsInstallerGuardMixin",
@@ -184,6 +187,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean EME_LOADED = isModLoaded(EME_MOD_ID);
 		/** AE2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean AE2_LOADED = isModLoaded(AE2_MOD_ID);
+		static final boolean CREATE_LOADED = isModLoaded("create");
+		static final boolean ME_INFINITY_CELL_LOADED = isModLoaded("meinfinitycell");
 		/** Mek Energistics 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
@@ -296,6 +301,12 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (AE2_CREATE_MIXINS.contains(simpleName)) {
+			return Holder.AE2_LOADED && Holder.CREATE_LOADED;
+		}
+		if (AE2_INFINITY_CELL_MIXINS.contains(simpleName)) {
+			return Holder.AE2_LOADED && Holder.ME_INFINITY_CELL_LOADED;
+		}
 		if (PB_LEGACY_MIXINS.contains(simpleName)) {
 			return Holder.PB_LEGACY_HEATED_CAN_OPERATE;
 		}

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -52,6 +53,7 @@ public final class SlotLimitCache {
 	 * @return 命中时返回非负上限；未命中返回 -1
 	 */
 	public int peekEffectiveLimit(@NotNull ItemStack stack) {
+		if (hasStackLimitPatch(stack)) return -1;
 		Item item = stack.isEmpty() ? Items.AIR : stack.getItem();
 		if (effectiveItem != item) return -1;
 		return effectiveVersion == TieredInputSlot.MULTIPLIER_VERSION.get() ? effectiveLimit : -1;
@@ -64,7 +66,7 @@ public final class SlotLimitCache {
 	 * @param limit 已乘倍率并钳制后的最终上限
 	 */
 	public void storeEffectiveLimit(@NotNull ItemStack stack, int limit) {
-		if (limit < 0) return;
+		if (limit < 0 || hasStackLimitPatch(stack)) return;
 		effectiveLimit = limit;
 		effectiveVersion = TieredInputSlot.MULTIPLIER_VERSION.get();
 		// 最后发布 item：读侧先比 item 再比 version，此顺序保证不会读到「item 已匹配但值未写入」
@@ -95,6 +97,9 @@ public final class SlotLimitCache {
 	 * @return 基础堆叠上限
 	 */
 	public int getBaseLimit(@NotNull ItemStack stack, int rawLimit, boolean obeyLimit, int multiplier) {
+		if (hasStackLimitPatch(stack)) {
+			return obeyLimit ? Math.min(rawLimit, stack.getMaxStackSize()) : rawLimit;
+		}
 		// 空槽直接计算（不缓存空槽）
 		if (stack.isEmpty()) {
 			return obeyLimit ? Math.min(rawLimit, stack.getMaxStackSize()) : rawLimit;
@@ -113,6 +118,11 @@ public final class SlotLimitCache {
 		cachedBaseLimit = baseLimit;
 		cachedMultiplierVersion = currentVersion;
 		return baseLimit;
+	}
+
+	/** 普通蜜脾的 bee_type 不影响上限；显式修改或移除堆叠上限的组件不能复用 Item 缓存。 */
+	private static boolean hasStackLimitPatch(ItemStack stack) {
+		return !stack.isEmpty() && stack.getComponentsPatch().get(DataComponents.MAX_STACK_SIZE) != null;
 	}
 
 	/**

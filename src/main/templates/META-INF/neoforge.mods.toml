@@ -121,6 +121,19 @@ config="${mod_id}.iris.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
+# Create 与 MEInfinityCell 可选性能兼容；Mixin 还要求 AE2 同时在场。
+[[dependencies.${mod_id}]]
+    modId="create"
+    type="optional"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="meinfinitycell"
+    type="optional"
+    ordering="NONE"
+    side="BOTH"
+
 # Jade 可选依赖（提供方块实体信息悬停显示，显示 AE2 网络连接状态）
 # @WailaPlugin 注解确保仅 Jade 安装时才加载集成类，未安装时无影响
 [[dependencies.${mod_id}]]

@@ -17,6 +17,8 @@
     "jdte.JdteCentrifugeFactoryCoalescedMixin",
     "jdte.JdteExtraCentrifugeFactoryCoalescedMixin",
     "jdte.JdteEMExtraCentrifugeFactoryCoalescedMixin",
+    "ae2.CreateBottomlessBulkPullMixin",
+    "ae2.InfinityCellKeySupplierMixin",
     "ae2.Ae2ApiaryMixin",
     "ae2.Ae2PatternProviderTargetMixin",
     "ae2.Ae2PatternProviderTargetCacheMixin",

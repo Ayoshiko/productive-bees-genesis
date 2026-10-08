@@ -54,7 +54,7 @@ final class Ae2OutputCommitter {
 			buffers.entryPoolCursor++;
 		}
 		entry.set(slot, stack, key, stack.getCount(), process, slotIdx,
-				buffers.fingerprintCache.get(key, registries));
+				buffers.fingerprintCache, registries);
 		buffers.entries.add(entry);
 	}
 
@@ -116,7 +116,7 @@ final class Ae2OutputCommitter {
 		IInventorySlot slot = entry.slot;
 		int originalCount = entry.count;
 		long inserted = 0;
-		if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint, originalCount)) return 0;
+		if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), originalCount)) return 0;
 		try {
 			inserted = SaturatingMath.clampToRequest(
 					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource),
@@ -161,7 +161,7 @@ final class Ae2OutputCommitter {
 			MEStorage meStorage, IActionSource actionSource, Ae2OutputLedger ledger) {
 		int reserved = 0;
 		for (Ae2SlotEntry entry : slotEntries) {
-			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint, entry.count)) {
+			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), entry.count)) {
 				for (int i = 0; i < reserved; i++) {
 					Ae2SlotEntry reservedEntry = slotEntries.get(i);
 					ledger.cancel(reservedEntry.process, reservedEntry.slotIdx);

@@ -38,16 +38,16 @@ class Ae2HotPathCacheWiringTest {
 	}
 
 	@Test
-	@DisplayName("输出账本与输入 pending 都走 per-tile 指纹缓存，不再每次重新编码")
+	@DisplayName("输出账本与输入 pending 共用指纹缓存入口")
 	void fingerprintEncodingIsMemoizedPerHost() throws Exception {
 		String buffers = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PushBuffers.java");
 		assertTrue(buffers.contains("final Ae2FingerprintCache fingerprintCache = new Ae2FingerprintCache()"),
-				"指纹缓存必须与其他 per-tile 缓冲同生命周期");
+				"宿主保留轻量指纹缓存访问入口");
 
 		String committer = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2OutputCommitter.java");
-		assertTrue(committer.contains("buffers.fingerprintCache.get(key, registries)"),
-				"输出槽收集必须复用缓存指纹");
+		assertTrue(committer.contains("buffers.fingerprintCache, registries"),
+				"输出槽收集必须传递宿主指纹缓存，实际提交时才编码");
 		assertFalse(committer.contains("Ae2ItemFingerprint.encode(key, registries)"),
 				"collectSlot 不得再直接编码（每个非空输出槽每刻一次）");
 
@@ -59,16 +59,18 @@ class Ae2HotPathCacheWiringTest {
 	}
 
 	@Test
-	@DisplayName("指纹缓存按 LRU 有界且随注册表切换整表失效")
+	@DisplayName("共享指纹缓存按条目及字符数有界且随注册表切换失效")
 	void fingerprintCacheIsBoundedAndRegistryAware() throws Exception {
 		String cache = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2FingerprintCache.java");
 		assertTrue(cache.contains("MAX_ENTRIES"), "必须有条目上限，防止内存无界增长");
-		assertTrue(cache.contains("if (registries != provider)"),
+		assertTrue(cache.contains("registries.get() != provider"),
 				"注册表访问器变化（换存档/重启）必须整表清空，否则可能返回旧注册表的编码");
-		assertTrue(cache.contains("BoundedLruMap.accessOrdered(MAX_ENTRIES)"),
-				"超上限必须按 LRU 淘汰最久未使用条目；旧的\"满即整表清空\"在物品种类超上限的"
-						+ "大网络里会周期性丢弃全部热条目，命中率塌陷");
+		assertTrue(cache.contains("new LinkedHashMap<>(128, 0.75f, true)"));
+		assertTrue(cache.contains("cachedCharacters > MAX_CACHED_CHARACTERS"));
+		assertTrue(cache.contains("iterator.remove()"), "只淘汰最久未使用条目");
+		String loader = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2IntegrationLoader.java");
+		assertTrue(loader.contains("Ae2FingerprintCache.clearShared()"), "停服必须释放共享键");
 		assertFalse(cache.contains("if (cache.size() >= MAX_ENTRIES) cache.clear();"),
 				"不得回退到满即整表清空");
 	}
@@ -209,8 +211,17 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("空 pending 与空输出账本跳过快照和逐槽检查")
 	void emptyPersistentStateSkipsHotPathWork() throws Exception {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		assertTrue(puller.contains("if (hadPendingItems) {\n\t\t\tretryPendingItems"),
-				"pending 为空时不得构建回送快照");
+		assertTrue(puller.contains("if (pendingRetryable) {\n\t\t\tMEStorage pendingStorage"),
+				"入口恢复只在有到期待重试资产时获取网络存储");
+		String returnService = read("src/main/java/com/ayoshiko/productivebeesgenesis/network/"
+				+ "Ae2CentrifugeInputReturnService.java");
+		assertTrue(returnService.contains("holder.isUnprocessableInputReturnCheckPending()"),
+				"配方探测只能由熔炼兼容关闭时的单次请求触发");
+		assertTrue(returnService.indexOf("backoff.shouldSkip(now)")
+				< returnService.indexOf("hasMatchingInput(inputSlots, unprocessable)"),
+				"返还退避期间不得重复检查输入配方");
+		assertTrue(puller.contains("if (hasRetryablePending && !pendingRetriedEarly) {"),
+				"正常拉取流程不得为无到期条目的 pending 构建回送快照");
 
 		String pusher = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2OutputPusher.java");
 		assertTrue(pusher.contains("outputLedger.size() == 0 ? 0"),
@@ -472,12 +483,15 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("候选分类结果随条目传递，排序阶段不再重跑分类")
 	void classificationIsCarriedByPullEntry() throws Exception {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		assertTrue(puller.contains("entry.smelting = kind.isSmelting();"),
-				"直探路径必须直接沿用 classify 的返回值");
+		assertTrue(puller.contains("Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,"),
+				"扫描候选必须保留熔炼优先，并在窗口剩余时才加入蜜脾");
 		assertTrue(puller.contains("entry.smelting = index < smeltingSelected;"),
-				"扫描路径必须用优先组分界还原分类，而不是再查一次配方缓存");
-		assertFalse(puller.contains("entry.smelting = Ae2InputCandidatePolicy.classify("),
-				"排序阶段不得为每个条目重跑 classify");
+				"分类结果应随候选传递，执行排序必须保持熔炼优先");
+		assertTrue(puller.contains("if (keyBackoff.shouldSkip(key, nanoNow)) return false;"),
+				"正在退避的熔炼键不得占满有界候选窗口并挡住蜜脾回退");
+		assertTrue(puller.contains("if (a.smelting != b.smelting)"));
+		assertTrue(puller.contains("holder.setInputCombCandidateCursor(key)"));
+		assertTrue(puller.contains("holder.setInputSmeltingCandidateCursor(key)"));
 	}
 
 	@Test

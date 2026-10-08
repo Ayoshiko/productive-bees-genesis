@@ -24,6 +24,12 @@ public interface IFastEjectHost {
 	 */
 	int productivebeesgenesis$pushGeneratedItem(ItemStack stack);
 
+	/** 保留旧宿主兼容；本模组弹出器覆盖此入口并延后请求栈分配。 */
+	default int productivebeesgenesis$pushGeneratedItem(ItemStack template, int amount) {
+		return amount <= 0 || template.isEmpty() ? 0
+				: productivebeesgenesis$pushGeneratedItem(template.copyWithCount(amount));
+	}
+
 	/**
 	 * 便捷委托：把机器的弹出器组件当作直通宿主使用。
 	 *
@@ -34,5 +40,10 @@ public interface IFastEjectHost {
 	static int push(Object ejectorComponent, ItemStack stack) {
 		return ejectorComponent instanceof IFastEjectHost host
 				? host.productivebeesgenesis$pushGeneratedItem(stack) : 0;
+	}
+
+	static int push(Object ejectorComponent, ItemStack template, int amount) {
+		return ejectorComponent instanceof IFastEjectHost host
+				? host.productivebeesgenesis$pushGeneratedItem(template, amount) : 0;
 	}
 }

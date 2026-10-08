@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.RandomHoneycombSelector;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
@@ -15,6 +14,7 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -223,20 +223,39 @@ public final class MyriadBatchPlanner {
 		}
 
 		/** 同一事务内，每个真实模板仅模拟一次各槽的内部接收容量。 */
-		private int[] limitsFor(ItemStack template) {
+		int[] limitsFor(ItemStack template) {
 			return candidateLimits.computeIfAbsent(template, key -> {
 				int[] limits = new int[slotCount];
+				ItemStack probe = ItemStack.EMPTY;
 				for (int i = 0; i < slotCount; i++) {
 					IInventorySlot slot = slots.get(i);
 					if (slot == null || (!empty[i] && (slotTemplates[i] == null
 							|| !ItemStack.isSameItemSameComponents(slotTemplates[i], key)))) continue;
 					int remaining = safeGetSlotLimit(slot, key) - slotCounts[i];
 					if (remaining <= 0) continue;
-					ItemStack rejected = slot.insertItem(key.copyWithCount(remaining), Action.SIMULATE, AutomationType.INTERNAL);
+					// 相同模板/数量的模拟请求可跨槽复用；仍逐槽检查内部插入权限。
+					if (probe.getCount() != remaining) probe = key.copyWithCount(remaining);
+					ItemStack rejected = slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL);
 					limits[i] = slotCounts[i] + Math.max(0, remaining - rejected.getCount());
 				}
 				return limits;
 			});
+		}
+	}
+
+	/** Temporary arrays reused by the binary-search probes for one output transaction. */
+	private static final class PlanningScratch {
+		private final int[] slotOwners;
+		private final int[] workingCounts;
+
+		private PlanningScratch(int slotCount) {
+			slotOwners = new int[slotCount];
+			workingCounts = new int[slotCount];
+		}
+
+		private void reset(SlotCapacitySnapshot snapshot) {
+			Arrays.fill(slotOwners, -1);
+			System.arraycopy(snapshot.slotCounts, 0, workingCounts, 0, snapshot.slotCount);
 		}
 	}
 
@@ -330,62 +349,71 @@ public final class MyriadBatchPlanner {
 	public static Plan plan(SlotCapacitySnapshot snapshot, Item baseItem,
 			Map<ResourceLocation, Integer> allocation,
 			Map<ResourceLocation, ItemStack> templateByType) {
-		int slotCount = snapshot.slotCount;
-		int[] addAmounts = new int[slotCount];
-		boolean[] wasEmpty = new boolean[slotCount];
-		ItemStack[] templates = new ItemStack[slotCount];
-		boolean[] availableAsEmpty = snapshot.empty.clone();
-		ItemStack[] workingTemplates = snapshot.slotTemplates.clone();
-		int[] workingCounts = snapshot.slotCounts.clone();
+		return plan(snapshot, baseItem, allocation, templateByType, new PlanningScratch(snapshot.slotCount));
+	}
 
-		for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
-			ResourceLocation beeType = entry.getKey();
-			int remaining = entry.getValue();
+	private static Plan plan(SlotCapacitySnapshot snapshot, Item baseItem,
+			Map<ResourceLocation, Integer> allocation,
+			Map<ResourceLocation, ItemStack> templateByType, PlanningScratch scratch) {
+		MyriadPlanningAllocation prepared = new MyriadPlanningAllocation(snapshot, baseItem, allocation, templateByType);
+		if (!fillScratch(snapshot, prepared, scratch)) return Plan.failure();
+		List<SlotPlan> plans = new ArrayList<>(snapshot.slotCount);
+		for (int i = 0; i < snapshot.slotCount; i++) {
+			int added = scratch.workingCounts[i] - snapshot.slotCounts[i];
+			if (added > 0) {
+				SlotPlan sp = borrowSlotPlan();
+				sp.set(i, added, snapshot.empty[i], prepared.template(scratch.slotOwners[i]));
+				plans.add(sp);
+			}
+		}
+		return Plan.success(plans);
+	}
+
+	/** 容量试算与正式规划共用同一分配规则；试算不创建或借用执行计划。 */
+	private static boolean fillScratch(SlotCapacitySnapshot snapshot, MyriadPlanningAllocation allocation,
+			PlanningScratch scratch) {
+		scratch.reset(snapshot);
+		int[] slotOwners = scratch.slotOwners;
+		int[] workingCounts = scratch.workingCounts;
+
+		for (int type = 0; type < allocation.size(); type++) {
+			int remaining = allocation.amount(type);
 			if (remaining <= 0) continue;
-			ItemStack outputTemplate = resolveTemplate(baseItem, beeType, templateByType);
-			if (outputTemplate.isEmpty()) return Plan.failure();
-			int[] limits = snapshot.limitsFor(outputTemplate);
+			ItemStack outputTemplate = allocation.template(type);
+			if (outputTemplate.isEmpty()) return false;
+			int[] limits = allocation.limits(type);
+			int[] candidates = allocation.eligibleSlots(type);
 
-			// 第一优先级：已有相同物品及组件的槽位。
-			for (int i = 0; i < slotCount && remaining > 0; i++) {
+			// 保留槽位顺序；事务内只遍历已通过完整组件与内部接收校验的槽位。
+			for (int candidate = 0; candidate < candidates.length && remaining > 0; candidate++) {
+				int i = candidates[candidate];
 				int space = limits[i] - workingCounts[i];
-				if (space <= 0 || availableAsEmpty[i] || workingTemplates[i] == null
-						|| !ItemStack.isSameItemSameComponents(workingTemplates[i], outputTemplate)) continue;
+				if (space <= 0 || (snapshot.empty[i] && slotOwners[i] < 0)) continue;
+				// 原有非空槽的正容量已由 limitsFor 精确匹配；只需重验本次新占用的空槽。
+				if (snapshot.empty[i] && !allocation.matches(type, slotOwners[i])) continue;
 				int add = Math.min(space, remaining);
-				addAmounts[i] += add;
-				if (templates[i] == null) templates[i] = outputTemplate;
+				if (slotOwners[i] < 0) slotOwners[i] = type;
 				// 本轮先占用的空槽仍须 setStack，后续同模板分配不能改成 growStack。
 				workingCounts[i] += add;
 				remaining -= add;
 			}
 
 			// 第二优先级：空槽；上限必须按真实模板重新计算。
-			for (int i = 0; i < slotCount && remaining > 0; i++) {
-				if (!availableAsEmpty[i]) continue;
+			for (int candidate = 0; candidate < candidates.length && remaining > 0; candidate++) {
+				int i = candidates[candidate];
+				if (!snapshot.empty[i] || slotOwners[i] >= 0) continue;
 				int limit = limits[i];
 				int space = limit - workingCounts[i];
 				if (space <= 0) continue;
 				int add = Math.min(space, remaining);
-				addAmounts[i] += add;
-				wasEmpty[i] = true;
-				availableAsEmpty[i] = false;
-				workingTemplates[i] = outputTemplate;
+				slotOwners[i] = type;
 				workingCounts[i] = add;
 				remaining -= add;
-				if (templates[i] == null) templates[i] = outputTemplate;
 			}
-			if (remaining > 0) return Plan.failure();
+			if (remaining > 0) return false;
 		}
 
-		List<SlotPlan> plans = new ArrayList<>(slotCount);
-		for (int i = 0; i < slotCount; i++) {
-			if (addAmounts[i] > 0) {
-				SlotPlan sp = borrowSlotPlan();
-				sp.set(i, addAmounts[i], wasEmpty[i], templates[i]);
-				plans.add(sp);
-			}
-		}
-		return Plan.success(plans);
+		return true;
 	}
 
 	/** 计算输出槽能容纳的最大输入数量；预检与正式计划必须使用同一真实模板映射。 */
@@ -397,36 +425,47 @@ public final class MyriadBatchPlanner {
 			return 0;
 		}
 
-		int high = maxRequested;
-		if (high <= 0) {
+		PlanningScratch scratch = new PlanningScratch(snapshot.slotCount);
+		MyriadPlanningAllocation[] allocations = new MyriadPlanningAllocation[3];
+		// 大容量槽通常能接收整批；满槽则往往连一份都放不下。这两个端点无需二分。
+		if (canFitBatch(snapshot, baseItem, multiplier, selectedTypes, maxRequested, templateByType, scratch, allocations)) {
+			return maxRequested;
+		}
+		if (maxRequested == 1
+				|| !canFitBatch(snapshot, baseItem, multiplier, selectedTypes, 1, templateByType, scratch, allocations)) {
 			return 0;
 		}
 
-		int best = 0;
-		int low = 1;
+		int best = 1;
+		int low = 2;
+		int high = maxRequested - 1;
 		while (low <= high) {
 			int mid = (low + high) >>> 1;
-			int totalCount = SaturatingMath.saturatingToInt(
-					SaturatingMath.saturatingMultiply(mid, multiplier));
-			// 类型数不超过总数量（避免 allocateEvenly 出现大量 0 分配），也不超过 3 种
-			int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
-			Map<ResourceLocation, Integer> allocation = RandomHoneycombSelector.allocateEvenly(
-					totalCount, selectedTypes.subList(0, typesToUse));
-
-			Plan plan = plan(snapshot, baseItem, allocation, templateByType);
-			try {
-				if (plan.isSuccess()) {
-					best = mid;
-					low = mid + 1;
-				} else {
-					high = mid - 1;
-				}
-			} finally {
-				// 二分搜索每次迭代的 plan 必须回收，否则会随迭代次数泄漏
-				recyclePlan(plan);
+			if (canFitBatch(snapshot, baseItem, multiplier, selectedTypes, mid, templateByType, scratch, allocations)) {
+				best = mid;
+				low = mid + 1;
+			} else {
+				high = mid - 1;
 			}
 		}
 		return best;
+	}
+
+	private static boolean canFitBatch(SlotCapacitySnapshot snapshot, Item baseItem, int multiplier,
+			List<ResourceLocation> selectedTypes, int batchSize,
+			Map<ResourceLocation, ItemStack> templateByType, PlanningScratch scratch,
+			MyriadPlanningAllocation[] allocations) {
+		int totalCount = SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(batchSize, multiplier));
+		int typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, 3)));
+		MyriadPlanningAllocation allocation = allocations[typesToUse - 1];
+		if (allocation == null) {
+			allocation = MyriadPlanningAllocation.evenly(snapshot, baseItem,
+					selectedTypes.subList(0, typesToUse), templateByType);
+			allocations[typesToUse - 1] = allocation;
+		}
+		allocation.setTotal(totalCount);
+		return fillScratch(snapshot, allocation, scratch);
 	}
 
 	// ===== 执行 =====
@@ -503,7 +542,7 @@ public final class MyriadBatchPlanner {
 	}
 
 	/** 创建实际产物模板；仅旧签名允许构造可配置模板，显式映射缺项时暂停。 */
-	private static ItemStack resolveTemplate(Item baseItem, ResourceLocation beeType,
+	static ItemStack resolveTemplate(Item baseItem, ResourceLocation beeType,
 			Map<ResourceLocation, ItemStack> templateByType) {
 		ItemStack resolved = templateByType == null ? null : templateByType.get(beeType);
 		// 发布的真实模板只读，可直接复用；仅按物品缓存会丢失重载后的组件变化。

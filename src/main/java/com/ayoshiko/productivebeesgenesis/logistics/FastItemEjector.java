@@ -190,12 +190,17 @@ public final class FastItemEjector {
 	 */
 	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig,
 			ItemStack stack, long gameTime) {
-		if (stack.isEmpty() || itemConfig == null) return 0;
+		return pushDirect(ejector, itemConfig, stack, stack.getCount(), gameTime);
+	}
+
+	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig,
+			ItemStack stack, int amount, long gameTime) {
+		if (stack.isEmpty() || amount <= 0 || itemConfig == null) return 0;
 		if (!ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return 0;
 		List<Direction> sides = targets.outputSides(itemConfig);
 		if (sides.isEmpty()) return 0;
 
-		int total = stack.getCount();
+		int total = amount;
 		int inserted = 0;
 		for (Direction side : sides) {
 			if (inserted >= total) break;

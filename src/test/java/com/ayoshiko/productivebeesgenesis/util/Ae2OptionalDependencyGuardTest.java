@@ -112,7 +112,7 @@ class Ae2OptionalDependencyGuardTest {
 		for (String modId : List.of(
 				"ae2", "appflux", "mekanism_extras", "emextras", "evolvedmekanism",
 				"mekanism_empowered", "jei", "jade", "kubejs", "jdte", "iris",
-				"buildinggadgets2", "mekenergistics")) {
+				"buildinggadgets2", "mekenergistics", "create", "meinfinitycell")) {
 			int blockStart = toml.indexOf("modId=\"" + modId + "\"");
 			assertTrue(blockStart >= 0, "mods.toml 必须声明 " + modId + " 依赖");
 			int blockEnd = toml.indexOf("[[", blockStart + 1);
@@ -188,6 +188,9 @@ class Ae2OptionalDependencyGuardTest {
 		String config = Files.readString(
 				Path.of("src/main/resources/productivebeesgenesis.mixins.json"));
 		Map<String, Set<String>> memberships = parsePluginMemberships(plugin);
+		String normalizedPlugin = plugin.replaceAll("\\s+", " ");
+		assertTrue(normalizedPlugin.contains("if (AE2_CREATE_MIXINS.contains(simpleName)) { return Holder.AE2_LOADED && Holder.CREATE_LOADED;"));
+		assertTrue(normalizedPlugin.contains("if (AE2_INFINITY_CELL_MIXINS.contains(simpleName)) { return Holder.AE2_LOADED && Holder.ME_INFINITY_CELL_LOADED;"));
 		assertTrue(plugin.replace("\r\n", "\n").contains("if (MEKENERGISTICS_AE2_MIXINS.contains(simpleName)) {\n"
 				+ "\t\t\treturn Holder.MEKENERGISTICS_LOADED && Holder.AE2_LOADED;"),
 				"Mek Energistics pattern guards require both Mek Energistics and AE2");
@@ -286,6 +289,8 @@ class Ae2OptionalDependencyGuardTest {
 	private static Set<String> requiredMixinGates(String entry, String source) {
 		Set<String> required = new HashSet<>();
 		if (entry.startsWith("ae2.") || source.contains("import appeng.")) required.add("AE2");
+		if (source.contains("com.simibubi.create.")) required.add("CREATE");
+		if (source.contains("net.yxiao233.meinfinitycell.")) required.add("INFINITY_CELL");
 		if (source.contains("import com.jerry.mekextras")
 				|| source.contains("targets = \"com.ayoshiko.productivebeesgenesis.compat.mekanism_extras")) {
 			required.add("ME");
@@ -311,6 +316,8 @@ class Ae2OptionalDependencyGuardTest {
 			case "MEKENERGISTICS" -> setName.startsWith("MEKENERGISTICS_");
 			case "BUILDING_GADGETS" -> setName.startsWith("BUILDING_GADGETS_");
 			case "JEI" -> setName.startsWith("JEI_");
+			case "CREATE" -> setName.equals("AE2_CREATE_MIXINS");
+			case "INFINITY_CELL" -> setName.equals("AE2_INFINITY_CELL_MIXINS");
 			default -> false;
 		};
 	}

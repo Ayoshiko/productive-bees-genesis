@@ -75,6 +75,7 @@ class PbRecipeOutputsMinecraftTest {
 		try {
 			BuiltInRegistries.ITEM.bindTags(Map.of(ModTags.Common.WAXES,
 					List.of(BuiltInRegistries.ITEM.wrapAsHolder(ModItems.WAX.get()))));
+			com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 			var wax = recipe(new ItemStack(ModItems.WAX.get()), 1, 1);
 			var discardWax = new AtomicBoolean();
 			var context = context(discardWax);
@@ -90,6 +91,7 @@ class PbRecipeOutputsMinecraftTest {
 			assertEquals(1, wax.outputQueries);
 		} finally {
 			BuiltInRegistries.ITEM.bindTags(originalTags);
+			com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 		}
 	}
 

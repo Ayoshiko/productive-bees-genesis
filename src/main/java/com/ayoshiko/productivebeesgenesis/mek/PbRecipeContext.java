@@ -294,6 +294,12 @@ public interface PbRecipeContext {
 		return 0;
 	}
 
+	/** 模板与数量分开传递；旧实现继续通过独立拷贝接收完整请求。 */
+	default int productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, int amount) {
+		return amount <= 0 || template.isEmpty() ? 0
+				: productivebeesgenesis$pushGeneratedItemToAe(template.copyWithCount(amount));
+	}
+
 	/**
 	 * 尝试将新生成的流体直接写入 AE。
 	 *
@@ -319,6 +325,15 @@ public interface PbRecipeContext {
 				? com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost.push(
 						sideConfiguration.getEjector(), stack)
 				: 0;
+	}
+
+	/** 先解析直通目标，只有实际提交给外部容器时才构造请求栈。 */
+	default int productivebeesgenesis$pushGeneratedItemToNeighbors(ItemStack template, int amount) {
+		if (amount <= 0 || template.isEmpty()) return 0;
+		return this instanceof mekanism.common.tile.interfaces.ISideConfiguration sideConfiguration
+				? com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost.push(
+						sideConfiguration.getEjector(), template, amount)
+				: productivebeesgenesis$pushGeneratedItemToNeighbors(template.copyWithCount(amount));
 	}
 
 	/** Simulates direct AE fluid acceptance without mutating the network. */

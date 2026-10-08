@@ -75,8 +75,8 @@ class RecipeLookupCacheWiringTest {
 	void inputValidationCacheCoversHighestTierProcessCount() throws Exception {
 		String cache = read("src/main/java/com/ayoshiko/productivebeesgenesis/util/"
 				+ "InputValidationCache.java");
-		assertTrue(cache.contains("DEFAULT_MAX_ENTRIES = 20"),
-				"槽位数须覆盖最高等级工厂的 19 进程；过小会让各进程输入互相驱逐，"
+		assertTrue(cache.contains("DEFAULT_MAX_ENTRIES = 64"),
+				"缓存须覆盖最高等级工厂的 38 个候选；过小会让各进程输入互相驱逐，"
 						+ "退化成每次探测都重跑配方查找");
 	}
 

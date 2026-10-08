@@ -14,6 +14,18 @@ import org.junit.jupiter.api.Test;
 class Ae2InputPullerTest {
 
 	@Test
+	void disablingSmeltingCompatSchedulesOneShotInputReturnCheck() {
+		Ae2OutputStateHolder holder = new Ae2OutputStateHolder();
+
+		holder.toggleSmeltingCompatEnabled();
+		assertFalse(holder.isUnprocessableInputReturnCheckPending(), "开启熔炼兼容不应触发扫描");
+		holder.toggleSmeltingCompatEnabled();
+		assertTrue(holder.isUnprocessableInputReturnCheckPending(), "关闭熔炼兼容应安排一次扫描");
+		holder.setUnprocessableInputReturnCheckPending(false);
+		assertFalse(holder.isUnprocessableInputReturnCheckPending(), "完成扫描后应清除请求");
+	}
+
+	@Test
 	void accelerationShortensConfiguredIntervalWithoutDroppingBelowOneGameTick() {
 		assertEquals(10, Ae2PullFairnessPolicy.effectiveInterval(10, 1));
 		assertEquals(5, Ae2PullFairnessPolicy.effectiveInterval(10, 2));
@@ -221,6 +233,40 @@ class Ae2InputPullerTest {
 		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
 				List.of(), List.of("gold_comb"), "gold_comb", 2, key -> true);
 		assertEquals(List.of("gold_comb"), out);
+	}
+
+	@Test
+	void boundedCandidateScanPrioritizesSmeltingBeforeCombFallback() {
+		List<String> out = new ArrayList<>();
+		var seen = new java.util.HashSet<String>();
+
+		int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b", "smelt_c"), List.of("comb_a", "comb_b"),
+				null, null, 2, key -> true);
+		assertEquals(2, smeltingSelected);
+		assertEquals(List.of("smelt_a", "smelt_b"), out,
+				"当熔炼候选填满有界窗口时蜜脾不能抢在熔炼前");
+
+		out.clear();
+		seen.clear();
+		smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b", "comb_c"),
+				"smelt_a", "comb_a", 3, key -> true);
+		assertEquals(2, smeltingSelected);
+		assertEquals(List.of("smelt_b", "smelt_a", "comb_b"), out,
+				"蜜脾只能补足熔炼候选未占用的窗口");
+	}
+
+	@Test
+	void combFallbackCursorRotatesOnlyAfterNoSmeltingCandidateIsAccepted() {
+		List<String> out = new ArrayList<>();
+		var seen = new java.util.HashSet<String>();
+		int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b", "comb_c"),
+				"smelt_a", "comb_b", 3, key -> key.startsWith("comb"));
+		assertEquals(0, smeltingSelected);
+		assertEquals(List.of("comb_c", "comb_a", "comb_b"), out,
+				"熔炼键不再可用时蜜脾回退游标也应持续轮转");
 	}
 
 	@Test

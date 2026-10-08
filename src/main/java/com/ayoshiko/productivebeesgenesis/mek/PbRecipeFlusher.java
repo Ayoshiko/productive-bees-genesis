@@ -228,12 +228,13 @@ public final class PbRecipeFlusher {
 		if (pendingOutputs.isEmpty()) {
 			return Outcome.COMMITTED;
 		}
-		Map<ItemStack, ChancedOutput> recipeOutputs = resolveRecipeOutputs(completer);
-		Iterable<ItemStack> orderedTemplates = context.productivebeesgenesis$hasEssenceConversionUpgrade()
-				|| context.productivebeesgenesis$hasRawOreSmeltingUpgrade()
-				? pendingOutputs.keySet()
-				: recipeOutputs == null
-				? pendingOutputs.keySet() : recipeOutputs.keySet();
+		Iterable<ItemStack> orderedTemplates = pendingOutputs.keySet();
+		// 转换升级使用实际 pending 模板，原配方输出表不会参与规划，无需每次重试查询它。
+		if (!context.productivebeesgenesis$hasEssenceConversionUpgrade()
+				&& !context.productivebeesgenesis$hasRawOreSmeltingUpgrade()) {
+			Map<ItemStack, ChancedOutput> recipeOutputs = resolveRecipeOutputs(completer);
+			if (recipeOutputs != null) orderedTemplates = recipeOutputs.keySet();
+		}
 		planner.snapshot(orderedTemplates, pendingOutputs);
 		planner.simulate(reusableOutputSlots, slotCount);
 		lastPlanUnplaceableType = planner.hasUnplaceableType();
@@ -370,9 +371,8 @@ public final class PbRecipeFlusher {
 				iterator.remove();
 				continue;
 			}
-			ItemStack stack = entry.getKey().copyWithCount(requested);
 			int accepted = Math.max(0, Math.min(requested,
-					context.productivebeesgenesis$pushGeneratedItemToAe(stack)));
+					context.productivebeesgenesis$pushGeneratedItemToAe(entry.getKey(), requested)));
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -416,9 +416,8 @@ public final class PbRecipeFlusher {
 				iterator.remove();
 				continue;
 			}
-			ItemStack stack = entry.getKey().copyWithCount(requested);
 			int accepted = Math.max(0, Math.min(requested,
-					context.productivebeesgenesis$pushGeneratedItemToNeighbors(stack)));
+					context.productivebeesgenesis$pushGeneratedItemToNeighbors(entry.getKey(), requested)));
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);

@@ -39,8 +39,6 @@ final class Ae2InputLaneSnapshot {
 	private int[] counts = new int[0];
 	/** 非空槽对「自身内容」的可插入上限；空槽恒为 0 */
 	private long[] limits = new long[0];
-	/** 空槽的可插入上限（{@code getLimit(EMPTY)}）；非空槽恒为 0 */
-	private long[] emptyLimits = new long[0];
 	/**
 	 * 非空槽的组件补丁数量；空槽恒为 0。
 	 * <p>
@@ -82,7 +80,6 @@ final class Ae2InputLaneSnapshot {
 			stacks = new ItemStack[length];
 			counts = new int[length];
 			limits = new long[length];
-			emptyLimits = new long[length];
 			patchSizes = new int[length];
 			beeTypes = new ResourceLocation[length];
 		}
@@ -101,7 +98,6 @@ final class Ae2InputLaneSnapshot {
 			stacks[index] = ItemStack.EMPTY;
 			counts[index] = 0;
 			limits[index] = 0L;
-			emptyLimits[index] = 0L;
 			patchSizes[index] = 0;
 			beeTypes[index] = null;
 			return;
@@ -112,7 +108,6 @@ final class Ae2InputLaneSnapshot {
 			items[index] = null;
 			counts[index] = 0;
 			limits[index] = 0L;
-			emptyLimits[index] = safeLimit(slot, ItemStack.EMPTY);
 			patchSizes[index] = 0;
 			beeTypes[index] = null;
 		} else {
@@ -120,7 +115,6 @@ final class Ae2InputLaneSnapshot {
 			items[index] = item;
 			counts[index] = stack.getCount();
 			limits[index] = safeLimit(slot, stack);
-			emptyLimits[index] = 0L;
 			int patchSize = stack.getComponentsPatch().size();
 			patchSizes[index] = patchSize;
 			beeTypes[index] = singleBeeType(stack, item, patchSize);
@@ -147,7 +141,7 @@ final class Ae2InputLaneSnapshot {
 
 
 	/** 与 {@code getSlotRemainingCapacity} 一致：上限查询异常视为不可插入。 */
-	private static long safeLimit(IInventorySlot slot, ItemStack probe) {
+	static long safeLimit(IInventorySlot slot, ItemStack probe) {
 		try {
 			return Math.max(0, slot.getLimit(probe));
 		} catch (RuntimeException e) {
@@ -180,11 +174,6 @@ final class Ae2InputLaneSnapshot {
 	/** 读取非空车道的可插入上限（空槽为 0）。 */
 	long limit(int index) {
 		return index >= 0 && index < size ? limits[index] : 0L;
-	}
-
-	/** 读取空车道的可插入上限（非空槽为 0）。 */
-	long emptyLimit(int index) {
-		return index >= 0 && index < size ? emptyLimits[index] : 0L;
 	}
 
 	/** 读取车道栈的组件补丁数（空槽为 0）。 */

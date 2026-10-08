@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -11,7 +10,7 @@ import net.minecraft.world.level.Level;
 
 import javax.annotation.Nullable;
 
-import java.util.Arrays;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -20,7 +19,7 @@ import java.util.function.Supplier;
 	 * SFM / AE2 等自动化模组会每 tick 多次探测输入槽有效性（{@code isItemValidForSlot} / {@code isValidInputItem}），
 	 * 每次探测都触发 SMELTING + PB 配方查找以及 {@link ItemStack#hashItemAndComponents(ItemStack)}。
 	 * 此缓存按"输入物品 + tick 窗口"复用最近结果，在自动化高频交互场景下显著降低 CPU 占用；
-	 * 默认保留最近 {@value #DEFAULT_MAX_ENTRIES} 个输入，覆盖最高等级工厂的进程数，
+	 * 默认保留最近 {@value #DEFAULT_MAX_ENTRIES} 个输入，覆盖最高等级工厂的双倍候选窗口，
 	 * 避免多进程工厂交替输入时缓存槽位互相驱逐。
 	 * <p>
 	 * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
@@ -53,12 +52,10 @@ public class InputValidationCache {
 	/**
 	 * Default number of recent inputs retained for alternating factory lanes.
 	 * <p>
-	 * 取 20 覆盖最高等级工厂的进程数（EM CREATIVE 为 19 进程，每进程可放不同蜜脾类型）。
-	 * 此前的 4 在多进程工厂上会让各进程的输入互相驱逐，退化成每次探测都重跑配方查找。
-	 * 未命中时的代价是最多 20 次 {@link InputFingerprint} 记录比较（Item 引用 + 可空
-	 * ResourceLocation + int）与一次数组移位，远低于一次 SMELTING/PB 配方查找。
+	 * AE2 一轮最多收集进程数两倍的候选；19 进程可交替探测 38 种输入。
+	 * 64 条有界 LRU 覆盖该工作集，避免原 20 条缓存循环驱逐；哈希查找不再逐条扫描和搬移数组。
 	 */
-	private static final int DEFAULT_MAX_ENTRIES = 20;
+	private static final int DEFAULT_MAX_ENTRIES = 64;
 
 	/**
 	 * 输入指纹 — Item + beeType + 通用组件哈希，不含 count
@@ -105,15 +102,14 @@ public class InputValidationCache {
 	}
 
 	private final int ttlTicks;
-	private final CacheEntry[] entries;
+	private final Map<InputFingerprint, CacheEntry> entries;
+	private long generation;
 
 	private static final class CacheEntry {
-		private final InputFingerprint fingerprint;
 		private final ValidationResult result;
 		private final long cachedAt;
 
-		private CacheEntry(InputFingerprint fingerprint, ValidationResult result, long cachedAt) {
-			this.fingerprint = fingerprint;
+		private CacheEntry(ValidationResult result, long cachedAt) {
 			this.result = result;
 			this.cachedAt = cachedAt;
 		}
@@ -136,7 +132,7 @@ public class InputValidationCache {
 			throw new IllegalArgumentException("maxEntries must be positive, got: " + maxEntries);
 		}
 		this.ttlTicks = ttlTicks;
-		this.entries = new CacheEntry[maxEntries];
+		this.entries = BoundedLruMap.accessOrdered(maxEntries);
 	}
 
 	/**
@@ -173,14 +169,12 @@ public class InputValidationCache {
 		long now = level.getGameTime();
 		// 指纹比对（轻量 key，避免 isSameItemSameComponents 的全组件哈希）
 		InputFingerprint fp = InputFingerprint.of(input);
-		int hit = findFreshEntry(fp, now);
-		if (hit >= 0) {
-			promote(hit);
-			return entries[0].result;
-		}
+		CacheEntry hit = findFreshEntry(fp, now);
+		if (hit != null) return hit.result;
 		// 未命中 — 重新校验并缓存指纹
+		long validationGeneration = generation;
 		ValidationResult result = validator.get();
-		insert(fp, result, now);
+		if (generation == validationGeneration) entries.put(fp, new CacheEntry(result, now));
 		return result;
 	}
 
@@ -202,42 +196,24 @@ public class InputValidationCache {
 		long now = level.getGameTime();
 		// 指纹比对
 		InputFingerprint fp = InputFingerprint.of(input);
-		int hit = findFreshEntry(fp, now);
-		if (hit >= 0) {
-			promote(hit);
-			return entries[0].result.valid();
-		}
+		CacheEntry hit = findFreshEntry(fp, now);
+		if (hit != null) return hit.result.valid();
+		long validationGeneration = generation;
 		boolean result = validator.get();
-		insert(fp, new ValidationResult(result, null, null, false), now);
+		if (generation == validationGeneration) {
+			entries.put(fp, new CacheEntry(new ValidationResult(result, null, null, false), now));
+		}
 		return result;
 	}
 
-	private int findFreshEntry(InputFingerprint fingerprint, long now) {
-		for (int i = 0; i < entries.length; i++) {
-			CacheEntry entry = entries[i];
-			if (entry != null && now >= entry.cachedAt && now - entry.cachedAt < ttlTicks
-					&& fingerprint.equals(entry.fingerprint)) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	/** Move a hit to the front so alternating hot inputs stay resident. */
-	private void promote(int index) {
-		if (index <= 0) return;
-		CacheEntry hit = entries[index];
-		System.arraycopy(entries, 0, entries, 1, index);
-		entries[0] = hit;
-	}
-
-	private void insert(InputFingerprint fingerprint, ValidationResult result, long now) {
-		System.arraycopy(entries, 0, entries, 1, entries.length - 1);
-		entries[0] = new CacheEntry(fingerprint, result, now);
+	private CacheEntry findFreshEntry(InputFingerprint fingerprint, long now) {
+		CacheEntry entry = entries.get(fingerprint);
+		return entry != null && now >= entry.cachedAt && now - entry.cachedAt < ttlTicks ? entry : null;
 	}
 
 	/** 清空缓存（配方重载等场景调用） */
 	public void clear() {
-		Arrays.fill(entries, null);
+		generation++;
+		entries.clear();
 	}
 }

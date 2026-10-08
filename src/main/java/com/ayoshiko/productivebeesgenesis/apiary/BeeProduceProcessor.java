@@ -81,7 +81,7 @@ public class BeeProduceProcessor {
 	private final MyriadAggregatedStacksBuilder myriadAggregatedBuilder = new MyriadAggregatedStacksBuilder();
 
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
-	private final BeeProduceOutputDispatcher outputDispatcher = new BeeProduceOutputDispatcher();
+	private final BeeProduceOutputDispatcher outputDispatcher;
 	private final ArrayList<ItemStack> reusableProducedItems = new ArrayList<>();
 	/** 每次 flush 复用的四档生产力基因计数，避免按蜜蜂类型分组时反复分配数组。 */
 	private final long[] reusableProductivityCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
@@ -96,6 +96,8 @@ public class BeeProduceProcessor {
 	public BeeProduceProcessor(ApiaryUpgradeHandler upgradeHandler, TileEntityMekApiary apiary) {
 		this.upgradeHandler = upgradeHandler;
 		this.apiary = apiary;
+		this.outputDispatcher = new BeeProduceOutputDispatcher(
+				apiary == null ? null : apiary::productivebeesgenesis$outputContentsVersion);
 	}
 
 	/**

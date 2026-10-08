@@ -10,7 +10,7 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
  */
 final class Ae2ExtractBudget {
 
-	private static final long HEALTHY_EXTRACT_NANOS = 300_000L;
+	static final long HEALTHY_EXTRACT_NANOS = 300_000L;
 	private static final long QUOTA_BUDGET_NANOS = 2_000_000L;
 	private static final long TILE_TICK_BUDGET_NANOS = 8_000_000L;
 	private static final long COMBINED_TILE_TICK_BUDGET_NANOS = 10_000_000L;

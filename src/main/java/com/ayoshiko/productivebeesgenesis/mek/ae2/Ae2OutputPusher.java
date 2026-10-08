@@ -146,9 +146,14 @@ public final class Ae2OutputPusher {
 	 * @return 实际推送数量；0 表示未推送或完全失败
 	 */
 	public static int pushItemStack(IAe2OutputHostBase host, ItemStack stack) {
-		if (stack == null || stack.isEmpty()) return 0;
+		return pushItemStack(host, stack, stack == null ? 0 : stack.getCount());
+	}
+
+	/** 生成物已有稳定模板，无需在节点/预算检查前复制派生组件。 */
+	public static int pushItemStack(IAe2OutputHostBase host, ItemStack template, int amount) {
+		if (template == null || template.isEmpty() || amount <= 0) return 0;
 		Ae2DirectItemPushSession session = prepareDirectItemPush(host);
-		return session == null ? 0 : session.applyAsInt(stack);
+		return session == null ? 0 : session.push(template, amount);
 	}
 
 	/** Resolves the AE target once so a bounded buffer drain does not repeat host/grid lookups per group. */

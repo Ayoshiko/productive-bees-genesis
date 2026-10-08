@@ -148,6 +148,11 @@ public final class Ae2OutputStateHolder {
 
 	/** 上次候选扫描的最后一个 AEItemKey；Object 保持 AE2 可选隔离。 */
 	private volatile Object inputCandidateCursor;
+	/** Independent cursors keep smelting and comb candidates moving through their bounded lists. */
+	private volatile Object inputSmeltingCandidateCursor;
+	private volatile Object inputCombCandidateCursor;
+	/** Persisted one-shot scan scheduled when per-tile smelting compatibility is turned off. */
+	private volatile boolean unprocessableInputReturnCheckPending;
 
 	/** 离心机 per-tile 电力熔炼炉配方兼容开关（默认 false，与全局总开关 AND 关系） */
 	private volatile boolean smeltingCompatEnabled = false;
@@ -235,6 +240,9 @@ public final class Ae2OutputStateHolder {
 		// 重置类型轮转索引，方块重建后从 0 开始轮转
 		typeRotationIndex = 0;
 		inputCandidateCursor = null;
+		inputSmeltingCandidateCursor = null;
+		inputCombCandidateCursor = null;
+		unprocessableInputReturnCheckPending = false;
 		// Task 21：清空 PendingBatchBuffer（若存在），避免方块重建后残留旧累积量
 		if (pendingBatchBuffer instanceof Ae2PendingBatchBuffer batchBuffer) {
 			batchBuffer.reset();
@@ -304,11 +312,17 @@ public final class Ae2OutputStateHolder {
 	/** 获取 per-tile 熔炉配方兼容开关 */
 	public boolean isSmeltingCompatEnabled() { return smeltingCompatEnabled; }
 
-	/** 设置 per-tile 熔炉配方兼容开关 */
-	public void setSmeltingCompatEnabled(boolean enabled) { this.smeltingCompatEnabled = enabled; }
+	/** 显式应用关闭状态也安排一次检查，修复旧版配置卡留下的未标记输入。 */
+	public void setSmeltingCompatEnabled(boolean enabled) {
+		smeltingCompatEnabled = enabled;
+		unprocessableInputReturnCheckPending = !enabled;
+		if (!enabled) pushState.getReturnBackoff().reset();
+	}
 
-	/** 取反 per-tile 熔炉配方兼容开关 */
-	public void toggleSmeltingCompatEnabled() { this.smeltingCompatEnabled = !this.smeltingCompatEnabled; }
+	/** 按钮、配置卡、升级恢复共用相同的关闭语义。 */
+	public void toggleSmeltingCompatEnabled() {
+		setSmeltingCompatEnabled(!smeltingCompatEnabled);
+	}
 
 	public boolean isCentrifugeDirectAeOutputEnabled() { return centrifugeDirectAeOutputEnabled; }
 	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) { centrifugeDirectAeOutputEnabled = enabled; }
@@ -638,6 +652,15 @@ public final class Ae2OutputStateHolder {
 
 	public Object getInputCandidateCursor() { return inputCandidateCursor; }
 	public void setInputCandidateCursor(Object cursor) { inputCandidateCursor = cursor; }
+	public Object getInputSmeltingCandidateCursor() { return inputSmeltingCandidateCursor; }
+	public void setInputSmeltingCandidateCursor(Object cursor) { inputSmeltingCandidateCursor = cursor; }
+	public Object getInputCombCandidateCursor() { return inputCombCandidateCursor; }
+	public void setInputCombCandidateCursor(Object cursor) { inputCombCandidateCursor = cursor; }
+
+	public boolean isUnprocessableInputReturnCheckPending() { return unprocessableInputReturnCheckPending; }
+	public void setUnprocessableInputReturnCheckPending(boolean pending) {
+		unprocessableInputReturnCheckPending = pending;
+	}
 
 	/** 获取输入过滤器实例(懒初始化,DCL 保证多线程下仅创建一个) */
 	public Ae2InputFilter getOrCreateInputFilter() {

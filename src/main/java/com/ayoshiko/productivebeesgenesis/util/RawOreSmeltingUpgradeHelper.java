@@ -65,17 +65,35 @@ public final class RawOreSmeltingUpgradeHelper {
 	/** 将 pending 输出按熔炼配方转换；无变化时返回 false。 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
-		List<ItemStack> source = new ArrayList<>(outputs.size());
+		boolean hasConversion = false;
 		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
 			int count = Math.max(0, entry.getValue());
-			if (count > 0) source.add(entry.getKey().copyWithCount(count));
+			Conversion conversion = findConversion(level, entry.getKey(), count).orElse(null);
+			if (conversion != null && count >= conversion.inputCount()) {
+				hasConversion = true;
+				break;
+			}
 		}
-		if (source.isEmpty()) return false;
-		List<ItemStack> converted = convert(level, source);
-		if (sameStacks(source, converted)) return false;
+		// 待输出重试通常只剩锭/普通产物/不足一组的粗矿，不再为无变化的结果复制所有栈。
+		if (!hasConversion) return false;
+		List<ItemStack> converted = new ArrayList<>(outputs.size());
+		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
+			int count = Math.max(0, entry.getValue());
+			if (count <= 0) continue;
+			ItemStack template = entry.getKey();
+			Conversion conversion = findConversion(level, template, count).orElse(null);
+			if (conversion == null) {
+				addAmount(converted, template, count);
+			} else {
+				long crafts = count / (long) conversion.inputCount();
+				addAmount(converted, conversion.result(), crafts * conversion.result().getCount());
+				addAmount(converted, template, count % conversion.inputCount());
+			}
+		}
+		// 所有转换与合并完成后才提交；异常时原 pending 仍完整持有资产。
 		outputs.clear();
 		for (ItemStack stack : converted) {
-			if (!stack.isEmpty()) outputs.put(stack.copyWithCount(stack.getCount()), stack.getCount());
+			outputs.put(stack, stack.getCount());
 		}
 		return true;
 	}
@@ -136,9 +154,19 @@ public final class RawOreSmeltingUpgradeHelper {
 	}
 
 	private static Optional<Conversion> findConversion(Level level, ItemStack stack) {
-		if (level == null || stack == null || stack.isEmpty() || !isRawMaterial(stack)) return Optional.empty();
+		return findConversion(level, stack, stack == null ? 0 : stack.getCount());
+	}
+
+	private static Optional<Conversion> findConversion(Level level, ItemStack stack, int count) {
+		if (level == null || count <= 0 || stack == null || stack.isEmpty()) return Optional.empty();
 		Item key = stack.getItem();
-		return CONVERSIONS.computeIfAbsent(key, ignored -> resolveConversion(level, stack));
+		Optional<Conversion> cached = CONVERSIONS.get(key);
+		if (cached != null) return cached;
+		// 普通产物也缓存否定结果，避免每次 pending 重试都检查四个粗矿标签。
+		// Item 键的保留范围受注册表限制；既有重载/停服入口同时清理这些结果。
+		return CONVERSIONS.computeIfAbsent(key,
+				ignored -> isRawMaterial(stack)
+						? resolveConversion(level, stack.copyWithCount(count)) : Optional.empty());
 	}
 
 	private static Optional<Conversion> resolveConversion(Level level, ItemStack input) {

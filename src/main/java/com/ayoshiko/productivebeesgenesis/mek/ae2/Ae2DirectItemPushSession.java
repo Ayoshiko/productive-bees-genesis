@@ -108,7 +108,12 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 
 	@Override
 	public int applyAsInt(ItemStack stack) {
-		if (stack == null || stack.isEmpty()) return 0;
+		return push(stack, stack == null ? 0 : stack.getCount());
+	}
+
+	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
+	public int push(ItemStack stack, int amount) {
+		if (stack == null || stack.isEmpty() || amount <= 0) return 0;
 		// 满存储/预算耗尽短路：不再发起 insert（即完整网络遍历），物品由调用方保留
 		if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
 				|| zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT
@@ -129,14 +134,14 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		long inserted;
 		long insertStart = System.nanoTime();
 		try {
-			inserted = meStorage.insert(key, stack.getCount(), Actionable.MODULATE,
+			inserted = meStorage.insert(key, amount, Actionable.MODULATE,
 					Ae2PushLimits.ActionSourceHolder.INSTANCE);
 		} catch (Exception e) {
 			// 抛异常的 insert 恰恰最昂贵（病态网络的 fsync/转换接口），同样入账预算防止每 tick 重复全量遍历
 			recordInsertCost(System.nanoTime() - insertStart);
 			zeroAcceptStreak++;
 			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
-			Ae2PushExceptionLog.handle(e, 0, 0, stack, stack.getCount());
+			Ae2PushExceptionLog.handle(e, 0, 0, stack, amount);
 			return 0;
 		}
 		long insertCost = System.nanoTime() - insertStart;
@@ -146,7 +151,7 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 			zeroAcceptStreak++;
 			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 			LogThrottle.warnWithCooldown("ae2_buffer_push_backoff", 60_000L,
-					"AE2 缓冲区物品推送失败 item={}, count={}", key, stack.getCount());
+					"AE2 缓冲区物品推送失败 item={}, count={}", key, amount);
 			return 0;
 		}
 		zeroAcceptStreak = 0;
@@ -155,6 +160,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 			else keyBackoff.recordSuccess(key);
 		}
 		return SaturatingMath.saturatingToInt(
-				SaturatingMath.clampToRequest(inserted, stack.getCount()));
+				SaturatingMath.clampToRequest(inserted, amount));
 	}
 }

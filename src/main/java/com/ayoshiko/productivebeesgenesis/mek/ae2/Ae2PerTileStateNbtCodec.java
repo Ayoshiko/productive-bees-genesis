@@ -26,6 +26,8 @@ final class Ae2PerTileStateNbtCodec {
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_ITEM_INPUT, holder.isAeItemInputEnabled());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_AE_INPUT_NBT_IGNORE, holder.isAeInputNbtIgnore());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT, holder.isSmeltingCompatEnabled());
+		tag.putBoolean(Ae2NbtKeys.NBT_KEY_UNPROCESSABLE_INPUT_RETURN_PENDING,
+				holder.isUnprocessableInputReturnCheckPending());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT, holder.isCentrifugeDirectAeOutputEnabled());
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_DIRECT_CONTAINER_OUTPUT, holder.isDirectContainerOutputEnabled());
 		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
@@ -66,6 +68,8 @@ final class Ae2PerTileStateNbtCodec {
 		// 熔炉配方兼容开关默认 false（与字段声明一致），旧存档无此键时回退 false
 		holder.setSmeltingCompatEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT)
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_SMELTING_COMPAT) : false);
+		// 回收请求属于目标机器；不让配置卡的旧标记覆盖 setter 安排的检查。
+		// 关闭状态在存档加载时也补查一次，兼容旧版未标记的卡料。
 		holder.setCentrifugeDirectAeOutputEnabled(tag.contains(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT)
 				? tag.getBoolean(Ae2NbtKeys.NBT_KEY_CENTRIFUGE_DIRECT_AE_OUTPUT) : false);
 		// 产物直通默认 true（与字段声明一致），旧存档无此键时保持既有直通行为
