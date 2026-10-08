@@ -10,6 +10,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 /** 鼠标物品由玩家存档保管；菜单只投影，关闭后无空间的余量不掉落、不进入共享合成账户。 */
 public final class TerminalCursor {
@@ -19,12 +20,13 @@ public final class TerminalCursor {
 			try {
 				if (!(original instanceof CompoundTag tag)) throw new IllegalArgumentException("Invalid terminal cursor tag");
 				int schema = StrictNbt.integer(tag, "schema");
-				if (schema != 1 && schema != 2 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : Set.of("schema", "item", "pending", "request")))
+				if (schema < 1 || schema > 3 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
+						: Set.of("schema", "item", "pending", "request", "fluid", "fluid_request")))
 					throw new IllegalArgumentException("Unsupported terminal cursor");
 				var item = StrictNbt.compound(tag, "item");
 				result.stack = item.isEmpty() ? ItemStack.EMPTY : ItemStack.parse(registries, item).orElseThrow();
 				if (!result.stack.saveOptional(registries).equals(item)) throw new IllegalArgumentException("Lossy terminal cursor");
-				if (schema == 2) {
+				if (schema >= 2) {
 					var pending = StrictNbt.compound(tag, "pending");
 					result.pending = pending.isEmpty() ? ItemStack.EMPTY : ItemStack.parse(registries, pending).orElseThrow();
 					if (!result.pending.saveOptional(registries).equals(pending) || result.pending.getCount() > 64) throw new IllegalArgumentException("Invalid retained receipt");
@@ -37,6 +39,15 @@ public final class TerminalCursor {
 					}
 					if (result.request != null && !result.pending.isEmpty()) throw new IllegalArgumentException("Conflicting cursor receipts");
 				}
+				if (schema == 3) {
+					result.fluid = readFluid(StrictNbt.compound(tag, "fluid"), registries);
+					var request = StrictNbt.compound(tag, "fluid_request");
+					if (!request.isEmpty()) {
+						if (!request.getAllKeys().equals(Set.of("fluid", "insert", "source"))) throw new IllegalArgumentException("Invalid fluid request");
+						result.fluidRequest = new TerminalFluidExchange.Request(readFluid(StrictNbt.compound(request, "fluid"), registries), StrictNbt.bool(request, "insert"), StrictNbt.string(request, "source"));
+						if (result.request != null || !result.fluid.isEmpty() && !FluidStack.isSameFluidSameComponents(result.fluid, result.fluidRequest.fluid())) throw new IllegalArgumentException("Conflicting fluid requests");
+					}
+				}
 			} catch (RuntimeException failure) {
 				result.invalid = original.copy();
 				com.mojang.logging.LogUtils.getLogger().error("Terminal cursor retained in player data after decode failure", failure);
@@ -45,12 +56,18 @@ public final class TerminalCursor {
 		}
 		@Override public Tag write(TerminalCursor value, HolderLookup.Provider registries) {
 			if (value.invalid != null) return value.invalid.copy();
-			var tag = new CompoundTag(); boolean extended = value.request != null || !value.pending.isEmpty();
-			tag.putInt("schema", extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
+			var tag = new CompoundTag(); boolean fluids = !value.fluid.isEmpty() || value.fluidRequest != null;
+			boolean extended = fluids || value.request != null || !value.pending.isEmpty();
+			tag.putInt("schema", fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
 			if (extended) {
 				tag.put("pending", value.pending.saveOptional(registries)); var request = new CompoundTag();
 				if (value.request != null) { request.put("item", value.request.item().save(registries)); request.putBoolean("insert", value.request.insert()); request.putString("source", value.request.source()); }
 				tag.put("request", request);
+			}
+			if (fluids) {
+				tag.put("fluid", saveFluid(value.fluid, registries)); var request = new CompoundTag();
+				if (value.fluidRequest != null) { request.put("fluid", saveFluid(value.fluidRequest.fluid(), registries)); request.putBoolean("insert", value.fluidRequest.insert()); request.putString("source", value.fluidRequest.source()); }
+				tag.put("fluid_request", request);
 			}
 			return tag;
 		}
@@ -59,6 +76,16 @@ public final class TerminalCursor {
 	private Tag invalid;
 	ItemStack pending = ItemStack.EMPTY;
 	TerminalCursorExchange.Request request;
+	FluidStack fluid = FluidStack.EMPTY;
+	TerminalFluidExchange.Request fluidRequest;
+	boolean fluidBusy;
+	private static Tag saveFluid(FluidStack fluid, HolderLookup.Provider registries) { return fluid.isEmpty() ? new CompoundTag() : fluid.save(registries); }
+	private static FluidStack readFluid(CompoundTag raw, HolderLookup.Provider registries) {
+		if (raw.isEmpty()) return FluidStack.EMPTY;
+		var fluid = FluidStack.parseOptional(registries, raw);
+		if (fluid.isEmpty() || !saveFluid(fluid, registries).equals(raw)) throw new IllegalArgumentException("Lossy terminal fluid");
+		return fluid;
+	}
 	public boolean available() { return invalid == null; }
 	public ItemStack item() { return stack.copy(); }
 	void set(ItemStack value) {

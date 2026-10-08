@@ -72,6 +72,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 			case PLAN -> beginPlan(request);
 			case POLL -> poll();
 			case TAKE, TAKE_INVENTORY, DEPOSIT -> exchange(request);
+			case FILL_CONTAINER, EMPTY_CONTAINER -> fluidExchange(request);
 			case PAGE -> view.mode() == Mode.STORAGE ? storagePage(request.page(), Status.OK) : view.mode() == Mode.CATALOGUE ? cataloguePage(request.page()) : view.mode() == Mode.PLAN ? planPage(request.page()) : taskSnapshotPage(request.page(), Status.OK);
 			case CPU_NEXT -> nextCpu();
 			case CONFIRM -> confirm();
@@ -118,6 +119,29 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		};
 		// 数量等待下一次只读刷新；本次回执只确认实际转移，绝不重发资产命令。
 		return storagePage(page, status);
+	}
+	private MeTerminalView fluidExchange(MeTerminalRequest request) {
+		if (view.mode() != Mode.STORAGE || request.amount() > 1) return view.status(Status.INVALID);
+		boolean insert = request.action() == MeTerminalRequest.Action.EMPTY_CONTAINER;
+		AEFluidKey key = null;
+		if (!insert) {
+			if (request.row() < 0 || request.row() >= view.rows().size() || !(stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key() instanceof AEFluidKey fluid)) return view.status(Status.INVALID);
+			key = fluid;
+		} else if (request.row() != -1) return view.status(Status.INVALID);
+		if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
+		int page = view.page(); storagePage(page, Status.WAITING);
+		String location = bridge.getLevel().dimension().location() + " " + bridge.getBlockPos().toShortString();
+		com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.Transfer transfer = (fluid, deposit, simulate) -> {
+			if (!valid(bridge)) return 0;
+			var fluidKey = AEFluidKey.of(fluid); var mode = simulate ? appeng.api.config.Actionable.SIMULATE : appeng.api.config.Actionable.MODULATE;
+			long actual = deposit ? appeng.api.storage.StorageHelper.poweredInsert(grid.getEnergyService(), grid.getStorageService().getInventory(), fluidKey, fluid.getAmount(), source, mode)
+					: appeng.api.storage.StorageHelper.poweredExtraction(grid.getEnergyService(), grid.getStorageService().getInventory(), fluidKey, fluid.getAmount(), source, mode);
+			if (actual < 0 || actual > fluid.getAmount()) throw new IllegalStateException("Invalid ME container amount"); return (int) actual;
+		};
+		var result = insert ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.empty(player, player.containerMenu, request.amount() == 1, location, transfer)
+				: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.fill(player, player.containerMenu, key.toStack(1), request.amount() == 1, location, transfer);
+		AeMeCatalogue.invalidate(player.server, grid); grid.getStorageService().invalidateCache();
+		return storagePage(page, MeTerminalSession.fluidStatus(result.outcome()));
 	}
 	private MeTerminalView cataloguePage(int page) {
 		int start = start(page, catalogue.size()); var shown = new ArrayList<Row>();

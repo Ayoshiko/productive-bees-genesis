@@ -17,12 +17,12 @@ public final class TerminalCursorExchange {
 		}
 		@Override public ItemStack item() { return item.copy(); }
 	}
-	public static boolean unknown(ServerPlayer player) { var cursor = TerminalCursor.get(player); return !cursor.available() || cursor.request != null; }
+	public static boolean unknown(ServerPlayer player) { var cursor = TerminalCursor.get(player); return !cursor.available() || cursor.request != null || cursor.fluidRequest != null; }
 	public static Result exchange(ServerPlayer player, AbstractContainerMenu menu, ItemStack wanted, boolean insert, boolean inventory,
 			String source, ToIntFunction<ItemStack> external) {
 		if (player.containerMenu != menu) return new Result(Outcome.INVALID, 0);
 		var cursor = TerminalCursor.get(player);
-		if (unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		if (cursor.fluidBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
 		recover(player, menu, inventory);
 		if (!cursor.pending.isEmpty()) return new Result(Outcome.RETAINED, 0);
 		if (player.containerMenu != menu || !ItemStack.matches(cursor.item(), menu.getCarried()) || wanted.isEmpty()

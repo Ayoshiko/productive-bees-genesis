@@ -112,6 +112,7 @@ public final class CompetitionServerProbe {
                     if (MeBridgeProbe.enabled()) MeBridgeProbe.recovered(core, players, manifest);
                     if (UpgradeCompetitionProbe.enabled()) UpgradeCompetitionRecovery.resume(core, players);
                     if (CraftingProbe.enabled()) CraftingProbe.open(core, players, !NativeSlotsProbe.enabled()); else if (MeBridgeProbe.enabled()) CraftingProbe.open(core, players, false); else openBoth(players);
+                    if (MeBridgeProbe.fluid()) MeFluidAeFixture.recovered(players);
                     for (var p : players) require(!((NetworkCoreMenu) p.containerMenu).terminalSession().equals(manifest.getUUID("session-" + p.getUUID())), "Restart revived a menu");
                     if (WirelessProbe.visualOnly()) { WirelessProbe.advance(core, players, 348, Map.of()); begin(server, 349); return; }
                     begin(server, 80);
@@ -128,6 +129,10 @@ public final class CompetitionServerProbe {
                 CompetitionAssets.seed(core, players); initial = CompetitionAssets.capture(core, players); openBoth(players); begin(server, 1); return;
             }
             if (acks.size() != 2) return;
+            if (MeBridgeProbe.fluid() && stage >= 870) {
+                int next = MeFluidAeFixture.advance(core, players, stage); noDrops(server);
+                if (next < 0) finish(server); else begin(server, next); return;
+            }
             if (MeBridgeProbe.inventory() && stage >= 850) {
                 int next = MeInventoryAeFixture.advance(core, players, stage); noDrops(server);
                 if (next < 0) finish(server); else begin(server, next); return;

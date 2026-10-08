@@ -20,6 +20,7 @@ final class MeBridgeProbe {
 	static boolean enabled() { return Boolean.getBoolean("pbg.concurrent.meBridge"); }
 	static boolean ae() { return MeBridgeIntegration.installed(); }
 	static boolean inventory() { return Boolean.getBoolean("pbg.concurrent.meInventory"); }
+	static boolean fluid() { return Boolean.getBoolean("pbg.concurrent.meFluid"); }
 	static boolean materials() { return Boolean.getBoolean("pbg.concurrent.meMaterials"); }
 	static boolean storage() { return Boolean.getBoolean("pbg.concurrent.meStorage"); }
 	private static int stages;
@@ -104,6 +105,7 @@ final class MeBridgeProbe {
 			if (materials() && ae()) MeMaterialAeFixture.prepare(core, bridge, players);
 		}
 		stages++;
+        if (stage == 511 && fluid() && ae()) { MeFluidAeFixture.seed(core, bridge, players); return 870; }
 		if (stage == 511 && inventory() && ae()) { MeInventoryAeFixture.seed(core, bridge, players); return 850; }
 		if (stage == 511 && WorkspaceProbe.enabled()) { WorkspaceProbe.seed(core, players); return 700; }
 		if (stage == 511 && MeCraftingProbe.enabled()) { MeCraftingProbe.seed(core, players); return 600; }
@@ -118,7 +120,7 @@ final class MeBridgeProbe {
 	static void capture(NetworkCoreBlockEntity core, CompoundTag manifest) {
 		require(stages == 12, "ME bridge stages incomplete");
 		manifest.put("me-bridge", bridge.saveWithoutMetadata(core.getLevel().registryAccess()));
-		if (inventory() && ae()) for (var p : core.getLevel().getServer().getPlayerList().getPlayers()) manifest.put("cursor-exchange-" + p.getUUID(), TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()));
+		if ((inventory() || fluid()) && ae()) for (var p : core.getLevel().getServer().getPlayerList().getPlayers()) manifest.put("cursor-exchange-" + p.getUUID(), TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()));
 		if (materials() && ae()) manifest.put("me-materials", CraftingProbe.account(core, false).save(new CompoundTag(), core.getLevel().registryAccess()));
 	}
 	static boolean recoveryReady(NetworkCoreBlockEntity core) {
@@ -135,7 +137,7 @@ final class MeBridgeProbe {
 			var account = CraftingProbe.account(core, false);
 			require(account.state().materialRequest() != null && account.save(new CompoundTag(), core.getLevel().registryAccess()).equals(manifest.get("me-materials")), "ME material request changed across JVM recovery");
 		}
-		if (inventory() && ae()) for (var p : players) require(TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()).equals(manifest.get("cursor-exchange-" + p.getUUID())), "Cursor exchange record lost across JVM");
+		if ((inventory() || fluid()) && ae()) for (var p : players) require(TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()).equals(manifest.get("cursor-exchange-" + p.getUUID())), "Cursor exchange record lost across JVM");
 		recovered = true;
 	}
 	static void report(JsonObject report, boolean reader) {
@@ -143,6 +145,7 @@ final class MeBridgeProbe {
 		if (storage() && ae()) { require(reader || (MeCraftingProbe.enabled() ? MeCraftingAeFixture.storageVerified : MeStorageAeFixture.verified), "Missing ME storage evidence"); report.addProperty("meStorageVerified", true); }
 		if (materials() && ae()) { require(reader || MeMaterialAeFixture.verified, "Missing material transfer cases"); report.addProperty("meMaterialsVerified", true); }
 		if (inventory() && ae()) { require(reader || MeInventoryAeFixture.verified, "Missing ME inventory cases"); report.addProperty("meInventoryVerified", true); }
+		if (fluid() && ae()) { require(MeFluidAeFixture.verified, "Missing fluid container cases"); report.addProperty("meFluidVerified", true); }
 		report.addProperty("meBridgeConnectionAndRecovery", true); report.addProperty("meBridgeStages", stages);
 	}
 }

@@ -39,8 +39,13 @@ public final class MeTerminalSession {
 		try {
 			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
 			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
+			if (request.action() == MeTerminalRequest.Action.RECOVER_FLUID) {
+				if (request.row() != -1 || request.amount() > 1) { send(player, request, MeTerminalView.storageStatus(MeTerminalView.Status.INVALID)); return; }
+				var result = com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.recover(player, player.containerMenu, request.amount() == 1);
+				send(player, request, MeTerminalView.storageStatus(fluidStatus(result.outcome()))); return;
+			}
 			var bridge = resolve.get(); tick(bridge);
-			if (bridge == null) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
+			if (bridge == null) { send(player, request, request.action() == MeTerminalRequest.Action.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.DISCONNECTED) : MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
 			if (backend == null) {
 				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.STORAGE && request.action() != MeTerminalRequest.Action.TASKS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
 				backend = bridge.link().terminal(player);
@@ -53,12 +58,23 @@ public final class MeTerminalSession {
 		} finally { sequences.finish(); }
 	}
 	private void send(ServerPlayer player, MeTerminalRequest request, MeTerminalView value) {
+		value = value.withReceipt(com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.receipt(player));
 		var reply = new MeTerminalReply(containerId, session, request.sequence(), value);
 		var buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), player.registryAccess()); int size;
 		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }
-		catch (RuntimeException invalid) { reply = new MeTerminalReply(containerId, session, request.sequence(), MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE)); size = 256; }
+		catch (RuntimeException invalid) {
+			var fallback = value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
+			reply = new MeTerminalReply(containerId, session, request.sequence(), fallback.withReceipt(value.receipt()));
+			buffer.clear(); MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes();
+		}
 		finally { buffer.release(); }
 		if (MeTerminalBudget.bytes(player.server, size)) PacketDistributor.sendToPlayer(player, reply);
+	}
+	public static MeTerminalView.Status fluidStatus(com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.Outcome outcome) {
+		return switch (outcome) {
+			case MOVED -> MeTerminalView.Status.MOVED; case NO_SPACE -> MeTerminalView.Status.NO_SPACE; case RETAINED -> MeTerminalView.Status.RETAINED;
+			case UNKNOWN -> MeTerminalView.Status.TRANSFER_UNKNOWN; case INVALID -> MeTerminalView.Status.INVALID;
+		};
 	}
 	private void closePage() { var old = backend; backend = null; if (old != null) old.close(); }
 	public void close() { closePage(); sequences.close(); }

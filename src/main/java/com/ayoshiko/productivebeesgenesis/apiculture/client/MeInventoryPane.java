@@ -58,10 +58,18 @@ final class MeInventoryPane {
 		button("previous", 24, bottom, 22, 14, -1, () -> page(-1)).active &= shown.page() > 0;
 		button("next", 48, bottom, 22, 14, -1, () -> page(1)).active &= shown.more();
 		button("tasks", width - 20, bottom, 20, 16, 13, () -> { opening = true; request(TASKS, -1, 0, 0); });
+		var receipt = shown.receipt();
+		if (receipt.retained() > 0 || receipt.uncertain() > 0) {
+			var recover = button("recover_fluid", width - 44, bottom, 20, 16, 17, () -> request(RECOVER_FLUID, -1, 0, Screen.hasShiftDown() ? 1 : 0));
+			var hint = text("retained_fluid", receipt.fluid(), receipt.retained());
+			if (receipt.uncertain() > 0) hint = hint.copy().append("\n").append(text("uncertain_fluid", receipt.uncertain()));
+			recover.setTooltip(Tooltip.create(hint.copy().append("\n").append(text("recover_fluid_hint"))));
+			recover.active = !session.waiting() && receipt.retained() > 0;
+		}
 		for (int i = grid.first(); i < grid.end(); i++) {
 			var row = shown.rows().get(i); int index = i, x = grid.cellX(i), y = grid.cellY(i);
 			var label = (row.icon().isEmpty() ? Component.literal(row.label()) : row.icon().getHoverName().copy()).append("\n" + row.label() + "\n" + row.amount() + (row.kind() == MeTerminalView.Kind.FLUID ? " mB" : ""))
-					.append("\n").append(text(row.enabled() ? "stored_craftable_hint" : row.kind() == MeTerminalView.Kind.ITEM ? "stored_hint" : "resource_readonly"));
+					.append("\n").append(text(row.kind() == MeTerminalView.Kind.FLUID ? "fluid_container_hint" : row.enabled() ? "stored_craftable_hint" : row.kind() == MeTerminalView.Kind.ITEM ? "stored_hint" : "resource_readonly"));
 			var button = new TerminalSkin.Control(x, y, 18, 18, label, mouse -> choose(index, mouse), false, -1, g -> {
 				var icon = row.icon(); if (!icon.isEmpty()) g.renderItem(icon, x, y);
 				String count = row.amount() == 0 && row.enabled() ? "+" : TerminalProductIcon.compact(Long.toString(row.amount()));
@@ -86,7 +94,14 @@ final class MeInventoryPane {
 	private void page(int direction) { if (direction < 0 ? shown.page() > 0 : shown.more()) request(PAGE, -1, Math.max(0, shown.page() + direction), 0); }
 	private void choose(int row, int mouse) {
 		if (session.waiting() || dirty || shown != session.view() || shown.mode() != MeTerminalView.Mode.STORAGE) return;
-		if (!menu.getCarried().isEmpty()) request(DEPOSIT, -1, shown.page(), mouse == 1 ? 1 : 64);
+		if (!menu.getCarried().isEmpty()) {
+			boolean container;
+			try { container = menu.getCarried().copyWithCount(1).getCapability(net.neoforged.neoforge.capabilities.Capabilities.FluidHandler.ITEM) != null; }
+			catch (RuntimeException failure) { container = false; }
+			if (container && mouse == 1) request(EMPTY_CONTAINER, -1, shown.page(), Screen.hasShiftDown() ? 1 : 0);
+			else if (container && row >= 0 && row < shown.rows().size() && shown.rows().get(row).kind() == MeTerminalView.Kind.FLUID) request(FILL_CONTAINER, row, shown.page(), Screen.hasShiftDown() ? 1 : 0);
+			else request(DEPOSIT, -1, shown.page(), mouse == 1 ? 1 : 64);
+		}
 		else if (row >= 0 && row < shown.rows().size()) {
 			if (Screen.hasControlDown() && shown.rows().get(row).enabled()) { opening = true; request(PLAN, row, 0, 1); }
 			else if (shown.rows().get(row).kind() == MeTerminalView.Kind.ITEM) request(Screen.hasShiftDown() ? TAKE_INVENTORY : TAKE, row, shown.page(), mouse == 1 ? 1 : 64);
@@ -130,6 +145,8 @@ final class MeInventoryPane {
 	void background(GuiGraphics g) { grid.render(g); }
 	void labels(GuiGraphics g, Font font, int originX, int originY) {
 		var status = text("status." + (session.waiting() ? "waiting" : session.view().status().name().toLowerCase(Locale.ROOT)));
-		g.drawString(font, font.plainSubstrByWidth(status.getString(), width - 100), left - originX + 76, grid.y - originY + grid.rows * 18 + 5, TerminalSkin.MUTED, false);
+		var receipt = session.view().receipt();
+		if (!session.waiting() && receipt.retained() > 0 && receipt.uncertain() == 0) status = text("retained_fluid", receipt.fluid(), receipt.retained());
+		g.drawString(font, font.plainSubstrByWidth(status.getString(), width - 124), left - originX + 76, grid.y - originY + grid.rows * 18 + 5, TerminalSkin.MUTED, false);
 	}
 }

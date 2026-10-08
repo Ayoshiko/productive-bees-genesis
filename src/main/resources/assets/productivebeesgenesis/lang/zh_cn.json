@@ -1,4 +1,9 @@
 {
+  "screen.productivebeesgenesis.me_terminal.fluid_container_hint": "持容器左键装入流体，右键倒入 ME；Shift 将结果放入背包。Ctrl 点击可合成项下单。",
+  "screen.productivebeesgenesis.me_terminal.recover_fluid": "取回保管流体",
+  "screen.productivebeesgenesis.me_terminal.retained_fluid": "%s：已保管 %s mB",
+  "screen.productivebeesgenesis.me_terminal.uncertain_fluid": "另有 %s mB 外部请求结果未知，停止重试",
+  "screen.productivebeesgenesis.me_terminal.recover_fluid_hint": "持合适容器点击取回已知余量；无需 ME 在线，Shift 放入背包。",
   "screen.productivebeesgenesis.machine.details.open": "详情",
   "screen.productivebeesgenesis.machine.details.page.0": "机器概况 ›",
   "screen.productivebeesgenesis.machine.details.page.1": "蜂位进度 ›",

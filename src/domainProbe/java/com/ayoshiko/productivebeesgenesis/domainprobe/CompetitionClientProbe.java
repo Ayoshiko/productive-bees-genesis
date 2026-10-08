@@ -59,6 +59,9 @@ public final class CompetitionClientProbe {
             if (stage < 0 || acknowledged || Util.getMillis() < nextAt) return;
             nextAt = Util.getMillis() + 300;
             if (stage == 90) { finish(client, null); return; }
+            if (MeBridgeProbe.fluid() && stage >= 870) {
+                var reply = MeFluidClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
+            }
             if (MeBridgeProbe.inventory() && stage >= 850) {
                 var reply = MeInventoryClient.advance(client, stage, OWNER); if (reply != null) ack(reply.moved(), reply.status()); return;
             }

@@ -581,3 +581,20 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 运行基线为 Java 21／NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、JEI 19.39.0.368、AE2 19.2.18／Applied Flux 2.1.5，编译 AE2 19.2.17。最终 JAR 4,084,681 字节，SHA-256 `8bca1f67d3e2aea01db3fd4186e0409d7a20c3bdaa3811eb99d3547f21282e0f`，原样保留为 `build/network-gates/d18j2c-ae-layout-20261008-final/runtime-verified.jar`。两轮 gate 保留原路径；最终 gate 沿用 MeInventory 夹具的 D18j2b1 标识，本条记录对应本次 j2c 范围。新增网格／紧凑／管理／返回截图与交付哈希在同目录 delivery-audit.json，已目视核对。
 
 本步关闭 j2c 所列库存首页与控件布局范围；仅重跑受影响测试及 AE2 写入场景，没有新增跨 JVM reader、无 AE2 客户端、全量依赖、整理插件或 Spark／MSPT 矩阵。槽和资产事务沿已有验证，独立机器主工作台整合、流体容器与附属资源存取、偏好持久化、完整 D18／D19／D29／D30 和发布门保持开放。
+
+<a id="s10-122"></a>
+### 10.122 D18j2b2a 流体容器、部分量保管与正常恢复（2026-10-08，本步范围已验收）
+
+在网络 worktree 的 `5eab438` 上接入 NeoForge 单件流体容器与 ME 流体行，复用原菜单权限、序号和预算；客户端不提供流体键或数量。服务器在容器副本上准备变更，核对模拟不变、返回量、完整组件及全部罐的净流体变化，容器和流体分别确认接收空间与所有权。部分量优先保管，下次只向 ME 提取缺额；倒入前先接管已排出流体及已知容器，外部结果未知则隔离请求并阻止重试。已知流体通过独立入口取回，无需 ME 在线。合同见[9](bee-processing-network-design.md#s9)，交互与参考见[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。ME 协议 4 保持 32 KiB 回复上限，玩家附件 schema 3 严格兼容 schema 1／2；未决量不计入已有流体。
+
+最终命令为 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j2b2a-fluid-20261008-recovery -MeFluid -Combination ae2 -Ae2Version 19.2.18`。已有 TerminalClientStateTest 共 9 项，零失败／错误／跳过，build、verifyReleaseArtifact 和 compileDomainProbeJava 通过。writer PID 19340、独立 reader PID 9672，两边均有两名真实 TCP 玩家正常登录／退出，meFluidVerified=true、normalPlayerFilesVerified=true、passed=true。只跑本步 AE2 组合与相关测试，没有扩大无 AE2、其它附属或性能矩阵。
+
+正式客户端点击覆盖：空桶装入／倒出使有限 ME 水库存 5000 → 4000 → 5000 mB；仅实际给付 400 时原空桶保留、400 mB 进入玩家保管，下次仅取缺额 600 完成水桶；倒入只收 300 后保管 700。实际桥无通道时，水滴按钮把该 700 装入 NeoForge 标准单罐容器，ME 余额保持 4300。该可接受零头的容器由 domainProbe 为 PAPER 注册标准 FluidHandlerItemStack 和持久化数据组件，仅用于夹具，不进入发布 JAR。已目视检查 me-fluid-retained.png 与 me-fluid-offline-recovered.png：显示流体名称和保管 mB，取回后按钮消失；原版教学 toast 不属于终端元素。
+
+服务器受控失败场景覆盖组件精确的 900 mB 倒入只收 450、另 450 装回原容器；背包满且手持两空桶时不发起外部提取；回调关闭菜单后保管已知 1000，重开后通过原生槽取回；未知倒入保留 1000 请求并只返已知空桶，未知提取保留已知 500 与未决 500，回调重入和后续重复调用被拒绝。schema 1／2 读取、schema 3 精确往返及损坏数据原样隔离通过。reader 从正常玩家文件恢复 owner 已知 500／未决 500、guest 未决 1000；沿正式菜单 recovery 请求把 owner 已有 700 的容器装至 1000，保管余量 200，未决 500 不变。上述故障调用是明确的服务器夹具，不写成真实外部崩溃或断电证据；未生成转移掉落物。
+
+前两轮原证据保留：`d18j2b2a-fluid-20261008-first` 的正式流体动作通过后，夹具只检查鼠标中的恢复水桶，遗漏空桶堆叠后结果正常进入背包，触发 Reopened menu lost paid fluid；改为核对鼠标加背包共一个水桶及保管清零。`d18j2b2a-fluid-20261008-final` 的流体与未知请求场景通过后，公共保存夹具在关菜单前记录背包，但此时仍持空桶，正常关闭放回背包后触发 Inventory changed while closing；改用正式原生槽点击先存好已知鼠标栈，再抓取保存快照。两轮均未签收；没有删掉守恒断言或手改玩家文件。最终第三轮 writer／reader 全部通过。
+
+运行基线 Java 21／NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、JEI 19.39.0.368、AE2 19.2.18／Applied Flux 2.1.5，编译 AE2 19.2.17。最终 JAR 4,099,843 字节，SHA-256 `92b5b827eac3b51dfa04eb222cc9b8bc42c6a225aa5a3bf6e843da3564a1c9d7`，原样保留在 `build/network-gates/d18j2b2a-fluid-20261008-recovery/runtime-verified.jar`；源码指纹为 `BED83E1B7DFDBAA1701CCE23A6E1E7371FA403D55CD08EE3E0D9AF23C5CA1744`。gate.json、测试 XML、截图和交付摘要保留在该 gate 及其引用路径。
+
+本步只关闭 j2b2a 单件流体容器交接与正常恢复范围；销毁容器／多件输出、超过 32 罐容器未开放。附属化学品／能量实际交互、完整无线／独立机联合、真实整理插件、强制断电原子性、偏好持久化、完整 D18／D19／D29／D30 与发布门保持开放。

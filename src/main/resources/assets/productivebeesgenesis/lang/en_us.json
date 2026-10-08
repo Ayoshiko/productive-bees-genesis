@@ -1,4 +1,9 @@
 {
+  "screen.productivebeesgenesis.me_terminal.fluid_container_hint": "Hold a container: left-click to fill, right-click to empty into ME. Shift sends the result to inventory. Ctrl-click a craftable entry to order.",
+  "screen.productivebeesgenesis.me_terminal.recover_fluid": "Recover retained fluid",
+  "screen.productivebeesgenesis.me_terminal.retained_fluid": "%s: %s mB retained",
+  "screen.productivebeesgenesis.me_terminal.uncertain_fluid": "Another %s mB request has an unknown external result; retries stopped",
+  "screen.productivebeesgenesis.me_terminal.recover_fluid_hint": "Hold a suitable container to recover known fluid, even while ME is offline. Shift sends it to inventory.",
   "screen.productivebeesgenesis.machine.details.open": "Details",
   "screen.productivebeesgenesis.machine.details.page.0": "Overview ›",
   "screen.productivebeesgenesis.machine.details.page.1": "Bee progress ›",
