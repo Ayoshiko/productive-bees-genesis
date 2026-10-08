@@ -101,6 +101,7 @@ public final class TerminalCraftingAccount extends SavedData {
 	}
 	public boolean available() { check(); return persisted && quarantined == null && failure.isEmpty(); }
 	public State state() { check(); return state; }
+	boolean ownedBy(UUID player) { check(); return available() && owner.equals(player); }
 	boolean busy() { check(); return busy; }
 	void busy(boolean value) { check(); busy = value; }
 	void publish(State expected, List<ItemStack> grid, ItemStack pending, boolean uncertain) {

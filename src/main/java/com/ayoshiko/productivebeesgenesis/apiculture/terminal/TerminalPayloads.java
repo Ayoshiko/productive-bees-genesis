@@ -17,7 +17,7 @@ public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
 		com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalPayloads.register(event);
-		var registrar = event.registrar("24").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("25").executesOn(HandlerThread.MAIN);
 		registrar.playToServer(TerminalRecipeRequest.TYPE, TerminalRecipeRequest.STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player) {
 				var reply = player.containerMenu instanceof NetworkCoreMenu menu ? menu.terminalRecipe(player, request)

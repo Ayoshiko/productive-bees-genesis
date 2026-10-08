@@ -1,4 +1,6 @@
 {
+  "productivebeesgenesis.configuration.terminalReturnCraftingOnClose": "关闭时取回合成材料",
+  "productivebeesgenesis.configuration.terminalReturnCraftingOnClose.tooltip": "默认关闭。主动关闭终端时，将合成材料取回背包，装不下的留在原格。仅账户所有者单独使用且当前操作已完成时生效；切换页面或断线不触发。",
   "productivebeesgenesis.configuration.terminalNotifyCraftingFinished": "ME 合成完成提醒",
   "productivebeesgenesis.configuration.terminalNotifyCraftingFinished.tooltip": "默认关闭。开启后，无需 AE2 无线终端也可收到自己的 ME 合成完成提醒；退出任务页后仍有效。关闭时保留 AE2 原有提醒设置。",
   "productivebeesgenesis.configuration.terminalSyncJeiSearch": "与 JEI 同步搜索",

@@ -53,6 +53,11 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		if (request != null) { craftingRequested = true; PacketDistributor.sendToServer(request); }
 	}
 	private boolean craftingVisible() { return menu.wireless() && (workspace || crafting); }
+	@Override public void onClose() {
+		if (menu.wireless() && sequence <= menu.acknowledged())
+			com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalCraftingClose.request(menu, menu.craftingState(), menu.craftingGeneration());
+		super.onClose();
+	}
 	@Override protected void init() {
 		workspace = width >= WORKSPACE_WIDTH + 4 && height >= 300;
 		imageWidth = workspace ? WORKSPACE_WIDTH : 230; imageHeight = workspace ? Math.max(296, Math.min(332, height - 4)) : 226;

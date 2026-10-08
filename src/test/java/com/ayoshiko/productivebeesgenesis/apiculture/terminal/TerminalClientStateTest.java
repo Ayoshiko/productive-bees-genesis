@@ -7,6 +7,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalRequest.Operation.*;
 
 class TerminalClientStateTest {
+	@Test void returnOnCloseUsesTheCraftingGenerationAndCannotQueueTwice() {
+		var request = state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 0);
+		assertEquals(19, request.generation()); assertEquals(1, request.sequence());
+		assertNull(state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 200));
+		state.close(); state.accept(reply(1, null), 300);
+		assertNull(state.result()); assertNull(state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 400));
+	}
 	@Test void foldingManagementRejectsLateListFramesAndAllowsCraftingAfterLeaseExpiry() {
 		state.beginLive(NetworkSelectionSession.Kind.PRODUCTS, "", TerminalSearchRequest.Navigation.FIRST, 0);
 		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 1, 1, TerminalLiveUpdate.Status.READY, false, page(1)), 10);

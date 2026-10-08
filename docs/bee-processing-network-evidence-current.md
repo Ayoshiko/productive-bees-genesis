@@ -649,3 +649,18 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 运行基线沿[10.122](#s10-122)，AE2 编译 19.2.17、运行 19.2.18。最终 JAR 4,115,109 字节，SHA-256 `84f7dd1d54a24ee2ec8b3d48d9f26836d549dcd5d9feaaad1d8da347b7e66843`，保留为 `build/network-gates/d18j3c1-completion-20261008-final/runtime-verified.jar`；源码指纹 `70DE74BD12AE94F558FA422B2BE80B9DD8141DDF5B275F532E4C77C64B1270F5`。该目录保留 gate.json、两份测试 XML、实际客户端配置副本和 delivery-audit.json，新增 toast 截图已纳入 gate 哈希。
 
 本步仅关闭 j3c1 完成提醒；没有新增服务器轮询、网络协议、玩家附件或世界存档。无 AE2 类型隔离按客户端登记和加载条件复核，本轮未新增无 AE2 启动、完整无线／独立机或性能矩阵。完成产物置顶、关闭材料回存、离线补通知、附属资源存取、完整 D18／D19／D29／D30 和发布门保持开放。
+
+<a id="s10-126"></a>
+### 10.126 D18j3c2 关闭时取回材料与满载保管（2026-10-08，本步范围已验收）
+
+在网络 worktree 的 `5c9bdfed` 上新增默认关闭的“关闭时取回合成材料”。主工作台主动关闭时发送一次带原会话、序号和材料 generation 的请求；服务器只允许账户所有者、无其他有效共享菜单时返还背包，保留完整组件和满载余量。沿原有有线／无线校验、FE 计费及部分返还事务，不调用外部库存、不生成掉落，不改变已付费结果、未决 ME 提取记录或存档 schema。终端协议升至 25，机器协议保持 9。合同、视觉及复用来源见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+最终 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j3c2-return-20261008-verified -CraftingReturn -Combination noae2` 通过。10 项 TerminalClientStateTest 与 1 项请求帧／编解码检查，共 11 项零失败／错误／跳过；build、verifyReleaseArtifact 和 compileDomainProbeJava 通过。后续轮次生产代码和测试未变，Gradle 复用已有结果，只重编译修正后的探针。两位真实 TCP 客户端完成 19 个关闭场景阶段，server／owner／guest 均 passed=true，craftingReturnVerified=true；只执行本包 writer，不重复原 27 阶段槽位矩阵或恢复 JVM。
+
+运行结果：默认关闭保留四份带组件材料；开启后往返实际 ME 子页不移动材料；所有者在访客仍使用时关闭、访客单独关闭均保留共享账户。背包仅有两件可合并空间时，四份材料返还两份、原格保留两份；全满再次关闭不改变资产；腾出空间后再关成功取回最后两份。generation=0 的关闭请求返回 STALE。无线网络和无线独立机使用同一设备账户，关闭各返还两份、设备仍在原手且 FE 实际减少。服务器强制关闭保留三份无线材料；正常保存后，有线及无线账户文件与捕获状态逐项相等。逐阶段检查无掉落，客户端截图 return-full-inventory.png 记录实际背包／材料布局。
+
+首轮 `d18j3c2-return-20261008-first` 已通过默认关闭、ME 子页往返和共享所有者关闭保管，随后阶段 804 超时：夹具在访客关闭阶段错误等待已关闭菜单的所有者再次就绪。只补所有者在该阶段直接确认的分支，保留访客关闭及服务器材料断言，生产代码未改；首轮 gate.json 与失败日志保留。首轮未签收。第二轮 `d18j3c2-return-20261008-final` 的服务器已完成全部 19 阶段及正常保存，craftingReturnVerified=true／passed=true；客户端收尾在旧 CompetitionClientProbe.finish 报 NoClassDefFoundError: appeng/api/stacks/AEKey，原因是先调用含 AE2 类型的 CraftingNotificationClient.enabled，再检查 AE2 是否安装。仅将 ModList 检查提前，第三轮重新运行相同门验证正常写出报告；前两轮原报告保留，不改写失败。
+
+运行基线沿[10.122](#s10-122)，本轮实际不安装 AE2／Applied Flux，JEI 运行版 19.39.0.368；writer PID 24588，两人正常登录／退出，recoveryIncluded=false。JAR 4,117,186 字节，SHA-256 `8750eb65ec3225907af77a15959f6c074c5ede781432da6c52c9f69eef9a867c`，保留为 `build/network-gates/d18j3c2-return-20261008-verified/runtime-verified.jar`；源码指纹 `011CBB0DC47F993D42FFA39050D36C2E3FCB00679086416BE3378E7128C72C60`。同目录保留 gate.json、两份测试 XML、实际客户端配置副本和 delivery-audit.json；正常保存的两份材料账户与两份玩家文件均在 gate 中登记哈希。
+
+本步只关闭 j3c2 的主动关闭取回背包范围。已付费结果和未决 ME 请求保管沿既有状态发布逻辑静态复核，本轮没有新增未知外部结果注入。没有新增 AE2 启用矩阵、客户端跨 JVM 配置恢复、故障断电／死亡或性能结论；蜂业／ME 自动入库、完成产物置顶、附属资源交互及完整 D18／D19／D29／D30 和发布门保持开放。

@@ -28,14 +28,16 @@ final class NativeSlotsProbe {
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("native-component-preserved")); return stack;
     }
     static void seed(NetworkCoreBlockEntity core, List<ServerPlayer> players) {
+        if (CraftingReturnProbe.enabled()) { CraftingReturnProbe.seed(core, players); return; }
         for (var p : players) { p.closeContainer(); p.getInventory().clearContent(); }
         players.getFirst().getInventory().setItem(0, logs(16));
         players.getFirst().getInventory().setItem(1, new ItemStack(Items.STONE, 3));
         players.get(1).getInventory().setItem(0, new ItemStack(Items.APPLE, 5));
         CraftingProbe.open(core, players, false);
     }
-    static boolean ready(int stage) { return stage != 818 || WirelessMachineFixture.ready(); }
+    static boolean ready(int stage) { return CraftingReturnProbe.enabled() ? CraftingReturnProbe.ready(stage) : stage != 818 || WirelessMachineFixture.ready(); }
     static int advance(NetworkCoreBlockEntity core, List<ServerPlayer> players, int stage) {
+        if (CraftingReturnProbe.enabled()) return CraftingReturnProbe.advance(core, players, stage);
         var owner = players.getFirst(); var guest = players.get(1);
         var account = CraftingProbe.account(core, false); var grid = account.state().grid();
         switch (stage) {
@@ -143,6 +145,7 @@ final class NativeSlotsProbe {
         }
     }
     static void capture(NetworkCoreBlockEntity core, CompoundTag manifest) {
+        if (CraftingReturnProbe.enabled()) { CraftingReturnProbe.capture(core, manifest); return; }
         manifest.put("native-grid", CraftingProbe.account(core, false).save(new CompoundTag(), core.getLevel().registryAccess()));
         for (var p : core.getLevel().getServer().getPlayerList().getPlayers())
             manifest.put("native-cursor-" + p.getUUID(), TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()));
@@ -153,6 +156,7 @@ final class NativeSlotsProbe {
             require(TerminalCursor.SERIALIZER.write(p.getData(NetworkContent.TERMINAL_CURSOR), p.registryAccess()).equals(manifest.get("native-cursor-" + p.getUUID())), "Restart lost private cursor");
     }
     static void report(MinecraftServer server, NetworkCoreBlockEntity core, CompoundTag manifest, JsonObject report, boolean reader) throws Exception {
+        if (CraftingReturnProbe.enabled()) { CraftingReturnProbe.report(server, core, manifest, report); return; }
         require(reader || completed && stages.size() == 27, "Native slot stages incomplete");
         var name = TerminalCraftingAccount.name(core.getLevel().dimension().location(), CraftingProbe.terminal(core, false));
         var file = server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(name + ".dat");

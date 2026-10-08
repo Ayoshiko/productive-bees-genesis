@@ -179,8 +179,9 @@ public final class TerminalCraftingMenu {
 			if (request.row() < 0 || request.row() >= 9 || request.amount() < 1 || request.amount() > 64
 					|| operation == TerminalRequest.Operation.CRAFT_OUT && request.inventorySlot() != -1) return reply(request, INVALID, 0);
 			change = TerminalCraftingPlan.exchange(state.grid(), inventory, request.row(), request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.CRAFT_IN);
-		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR) {
+		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR || operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() != 0) return reply(request, INVALID, 0);
+			if (operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE && !exclusiveOwner(player, account)) return reply(request, UNAVAILABLE, 0);
 			change = TerminalCraftingPlan.clear(state.grid(), inventory);
 		} else if (operation == TerminalRequest.Operation.CRAFT_TAKE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() < 1 || request.amount() > 8) return reply(request, INVALID, 0);
@@ -197,6 +198,14 @@ public final class TerminalCraftingMenu {
 		if (!current(player, account, state, inventory)) return reply(request, STALE, 0);
 		account.publish(state, change.grid(), state.pending(), false); inventory(player, inventory, change.inventory());
 		return reply(request, MOVED, change.moved());
+	}
+	private boolean exclusiveOwner(ServerPlayer player, TerminalCraftingAccount account) {
+		if (!account.ownedBy(player.getUUID())) return false;
+		// 只在关闭请求时检查在线菜单；共享材料仍有人使用就保留，不维护逐 tick 观察表。
+		for (var other : player.server.getPlayerList().getPlayers()) {
+			if (other != player && other.containerMenu instanceof Host host && host.craftingAccount(other) == account) return false;
+		}
+		return true;
 	}
 	private int craft(ServerPlayer player, TerminalCraftingAccount account) { return craft(player, account, true); }
 	private int craft(ServerPlayer player, TerminalCraftingAccount account, boolean inventoryOutput) {

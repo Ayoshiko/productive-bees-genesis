@@ -17,6 +17,7 @@ final class NativeSlotsClient {
     private static int previous = -1, step;
     private static boolean sortedSeen;
     static CraftingClient.Reply advance(Minecraft client, int stage, boolean owner) throws Exception {
+        if (CraftingReturnProbe.enabled()) return CraftingReturnClient.advance(client, stage, owner);
         if (previous != stage) { previous = stage; step = 0; }
         if (!owner && stage >= 804 && stage <= 822 && stage != 809 && stage != 810) return ack();
         if (stage == 818) return client.player.containerMenu == client.player.inventoryMenu ? ack() : null;
