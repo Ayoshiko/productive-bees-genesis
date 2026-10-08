@@ -34,6 +34,7 @@ final class TerminalSkin {
 			case 14 -> { g.fill(x + 3, y + 3, x + 12, y + 5, ink); g.fill(x + 3, y + 3, x + 5, y + 12, ink); g.fill(x + 3, y + 11, x + 12, y + 13, ink); g.fill(x + 11, y + 7, x + 13, y + 13, ink); g.fill(x + 9, y + 2, x + 13, y + 7, ink); }
 			case 15 -> { g.fill(x + 3, y + 4, x + 13, y + 6, ink); g.fill(x + 5, y + 7, x + 11, y + 14, ink); g.fill(x + 6, y + 2, x + 10, y + 4, ink); }
 			case 17 -> { for (int i = 0; i < 5; i++) g.fill(x + 7 - i, y + 2 + i, x + 9 + i, y + 3 + i, 0xff376daa); g.fill(x + 3, y + 7, x + 13, y + 11, 0xff376daa); g.fill(x + 5, y + 11, x + 11, y + 13, 0xff376daa); }
+			case 18 -> { for (int i = 0; i < 6; i++) { g.fill(x + 8 - i / 2, y + 1 + i, x + 12 - i / 2, y + 2 + i, 0xffd7a525); g.fill(x + 7 - i / 2, y + 7 + i, x + 11 - i / 2, y + 8 + i, 0xffd7a525); } g.fill(x + 5, y + 6, x + 12, y + 8, 0xffd7a525); }
 			default -> { }
 		}
 	}

@@ -42,9 +42,11 @@ public final class MeTerminalSession {
 		try {
 			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
 			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
-			if (request.action() == MeTerminalRequest.Action.RECOVER_FLUID) {
+			if (request.action() == MeTerminalRequest.Action.RECOVER_FLUID || request.action() == MeTerminalRequest.Action.RECOVER_ENERGY) {
 				if (request.row() != -1 || request.amount() > 1) { send(player, request, MeTerminalView.storageStatus(MeTerminalView.Status.INVALID)); return; }
-				var result = com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.recover(player, player.containerMenu, request.amount() == 1);
+				var result = request.action() == MeTerminalRequest.Action.RECOVER_ENERGY
+						? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.recover(player, player.containerMenu, request.amount() == 1)
+						: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.recover(player, player.containerMenu, request.amount() == 1);
 				send(player, request, MeTerminalView.storageStatus(fluidStatus(result.outcome()))); return;
 			}
 			var bridge = resolve.get(); tick(bridge);
@@ -61,7 +63,7 @@ public final class MeTerminalSession {
 		} finally { sequences.finish(); }
 	}
 	private void send(ServerPlayer player, MeTerminalRequest request, MeTerminalView value) {
-		value = value.withReceipt(com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.receipt(player));
+		value = value.withReceipt(com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursor.receipt(player));
 		var reply = new MeTerminalReply(containerId, session, request.sequence(), value);
 		var buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), player.registryAccess()); int size;
 		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }

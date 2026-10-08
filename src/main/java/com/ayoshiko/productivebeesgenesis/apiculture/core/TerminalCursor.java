@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.StrictNbt;
+import com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView;
 import java.util.Set;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -20,8 +21,9 @@ public final class TerminalCursor {
 			try {
 				if (!(original instanceof CompoundTag tag)) throw new IllegalArgumentException("Invalid terminal cursor tag");
 				int schema = StrictNbt.integer(tag, "schema");
-				if (schema < 1 || schema > 3 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
-						: Set.of("schema", "item", "pending", "request", "fluid", "fluid_request")))
+				if (schema < 1 || schema > 4 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
+						: schema == 3 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request")
+						: Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request")))
 					throw new IllegalArgumentException("Unsupported terminal cursor");
 				var item = StrictNbt.compound(tag, "item");
 				result.stack = item.isEmpty() ? ItemStack.EMPTY : ItemStack.parse(registries, item).orElseThrow();
@@ -39,13 +41,23 @@ public final class TerminalCursor {
 					}
 					if (result.request != null && !result.pending.isEmpty()) throw new IllegalArgumentException("Conflicting cursor receipts");
 				}
-				if (schema == 3) {
+				if (schema >= 3) {
 					result.fluid = readFluid(StrictNbt.compound(tag, "fluid"), registries);
 					var request = StrictNbt.compound(tag, "fluid_request");
 					if (!request.isEmpty()) {
 						if (!request.getAllKeys().equals(Set.of("fluid", "insert", "source"))) throw new IllegalArgumentException("Invalid fluid request");
 						result.fluidRequest = new TerminalFluidExchange.Request(readFluid(StrictNbt.compound(request, "fluid"), registries), StrictNbt.bool(request, "insert"), StrictNbt.string(request, "source"));
 						if (result.request != null || !result.fluid.isEmpty() && !FluidStack.isSameFluidSameComponents(result.fluid, result.fluidRequest.fluid())) throw new IllegalArgumentException("Conflicting fluid requests");
+					}
+				}
+				if (schema == 4) {
+					result.energy = StrictNbt.integer(tag, "energy");
+					if (result.energy < 0) throw new IllegalArgumentException("Invalid retained FE");
+					var request = StrictNbt.compound(tag, "energy_request");
+					if (!request.isEmpty()) {
+						if (!request.getAllKeys().equals(Set.of("energy", "insert", "source"))) throw new IllegalArgumentException("Invalid energy request");
+						result.energyRequest = new TerminalEnergyExchange.Request(StrictNbt.integer(request, "energy"), StrictNbt.bool(request, "insert"), StrictNbt.string(request, "source"));
+						if (result.request != null || result.fluidRequest != null) throw new IllegalArgumentException("Conflicting energy requests");
 					}
 				}
 			} catch (RuntimeException failure) {
@@ -56,9 +68,10 @@ public final class TerminalCursor {
 		}
 		@Override public Tag write(TerminalCursor value, HolderLookup.Provider registries) {
 			if (value.invalid != null) return value.invalid.copy();
-			var tag = new CompoundTag(); boolean fluids = !value.fluid.isEmpty() || value.fluidRequest != null;
+			var tag = new CompoundTag(); boolean energy = value.energy != 0 || value.energyRequest != null;
+			boolean fluids = energy || !value.fluid.isEmpty() || value.fluidRequest != null;
 			boolean extended = fluids || value.request != null || !value.pending.isEmpty();
-			tag.putInt("schema", fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
+			tag.putInt("schema", energy ? 4 : fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
 			if (extended) {
 				tag.put("pending", value.pending.saveOptional(registries)); var request = new CompoundTag();
 				if (value.request != null) { request.put("item", value.request.item().save(registries)); request.putBoolean("insert", value.request.insert()); request.putString("source", value.request.source()); }
@@ -69,6 +82,11 @@ public final class TerminalCursor {
 				if (value.fluidRequest != null) { request.put("fluid", saveFluid(value.fluidRequest.fluid(), registries)); request.putBoolean("insert", value.fluidRequest.insert()); request.putString("source", value.fluidRequest.source()); }
 				tag.put("fluid_request", request);
 			}
+			if (energy) {
+				tag.putInt("energy", value.energy); var request = new CompoundTag();
+				if (value.energyRequest != null) { request.putInt("energy", value.energyRequest.energy()); request.putBoolean("insert", value.energyRequest.insert()); request.putString("source", value.energyRequest.source()); }
+				tag.put("energy_request", request);
+			}
 			return tag;
 		}
 	};
@@ -78,13 +96,24 @@ public final class TerminalCursor {
 	TerminalCursorExchange.Request request;
 	FluidStack fluid = FluidStack.EMPTY;
 	TerminalFluidExchange.Request fluidRequest;
-	boolean fluidBusy;
+	int energy;
+	TerminalEnergyExchange.Request energyRequest;
+	boolean containerBusy;
 	private static Tag saveFluid(FluidStack fluid, HolderLookup.Provider registries) { return fluid.isEmpty() ? new CompoundTag() : fluid.save(registries); }
 	private static FluidStack readFluid(CompoundTag raw, HolderLookup.Provider registries) {
 		if (raw.isEmpty()) return FluidStack.EMPTY;
 		var fluid = FluidStack.parseOptional(registries, raw);
 		if (fluid.isEmpty() || !saveFluid(fluid, registries).equals(raw)) throw new IllegalArgumentException("Lossy terminal fluid");
 		return fluid;
+	}
+	public static MeTerminalView.Receipt receipt(ServerPlayer player) {
+		var cursor = get(player);
+		if (!cursor.available()) return MeTerminalView.Receipt.EMPTY;
+		var fluid = !cursor.fluid.isEmpty() ? cursor.fluid : cursor.fluidRequest == null ? FluidStack.EMPTY : cursor.fluidRequest.fluid();
+		String label = fluid.isEmpty() ? "" : fluid.getHoverName().getString();
+		if (label.length() > 128) label = label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
+		return new MeTerminalView.Receipt(label, cursor.fluid.getAmount(), cursor.fluidRequest == null ? 0 : cursor.fluidRequest.fluid().getAmount(),
+				cursor.energy, cursor.energyRequest == null ? 0 : cursor.energyRequest.energy());
 	}
 	public boolean available() { return invalid == null; }
 	public ItemStack item() { return stack.copy(); }

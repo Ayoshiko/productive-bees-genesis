@@ -13,7 +13,7 @@ public record MeStorageFilter(Sort sort, boolean descending, Content content, Ty
 		@Override public net.minecraft.network.chat.Component getTranslatedName() { return label("content", name()); }
 	}
 	public enum Type implements net.neoforged.neoforge.common.TranslatableEnum {
-		ALL, ITEM, FLUID, OTHER;
+		ALL, ITEM, FLUID, OTHER, ENERGY;
 		@Override public net.minecraft.network.chat.Component getTranslatedName() { return label("type", name()); }
 	}
 	private static net.minecraft.network.chat.Component label(String setting, String name) {

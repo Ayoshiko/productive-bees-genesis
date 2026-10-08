@@ -22,7 +22,7 @@ public final class TerminalNativeSlots {
 			if (player instanceof ServerPlayer) menu.broadcastFullState(); return;
 		}
 		if (!(player instanceof ServerPlayer server)) { if (index != 45) vanilla.run(); return; }
-		if (inside || !host.nativeAllowed(server) || !TerminalCursor.get(server).available() || TerminalCursor.get(server).fluidBusy) { menu.broadcastFullState(); return; }
+		if (inside || !host.nativeAllowed(server) || !TerminalCursor.get(server).available() || TerminalCursor.get(server).containerBusy) { menu.broadcastFullState(); return; }
 		var account = host.craftingAccount(server);
 		if (account != null && account.busy() || index >= 36 && (account == null || account.state().uncertain())) { menu.broadcastFullState(); return; }
 		if (index == 45) {

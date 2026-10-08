@@ -75,6 +75,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 			case POLL -> poll();
 			case TAKE, TAKE_INVENTORY, DEPOSIT -> exchange(request);
 			case FILL_CONTAINER, EMPTY_CONTAINER -> fluidExchange(request);
+			case CHARGE_ITEM, DISCHARGE_ITEM -> energyExchange(request);
 			case PAGE -> view.mode() == Mode.STORAGE ? storagePage(request.page(), Status.OK) : view.mode() == Mode.CATALOGUE ? cataloguePage(request.page()) : view.mode() == Mode.PLAN ? planPage(request.page()) : taskSnapshotPage(request.page(), Status.OK);
 			case CPU_NEXT -> nextCpu();
 			case CONFIRM -> confirm();
@@ -87,7 +88,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		int start = stock.isEmpty() ? 0 : Math.min(page, (stock.size() - 1) / size) * size; var shown = new ArrayList<Row>();
 		for (int i = start; i < Math.min(start + size, stock.size()); i++) {
 			var entry = stock.get(i); var key = entry.key();
-			shown.add(new Row(key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : Kind.OTHER,
+			shown.add(new Row(key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : AeMeEnergy.isFe(key) ? Kind.ENERGY : Kind.OTHER,
 					icon(key), clip(key.getId().toString(), 128), entry.amount(), 0, entry.craftable(), pinned.contains(key)));
 		}
 		if (com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.unknown(player)) status = Status.TRANSFER_UNKNOWN;
@@ -156,6 +157,33 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		};
 		var result = insert ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.empty(player, player.containerMenu, request.amount() == 1, location, transfer)
 				: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalFluidExchange.fill(player, player.containerMenu, key.toStack(1), request.amount() == 1, location, transfer);
+		AeMeCatalogue.invalidate(player.server, grid); grid.getStorageService().invalidateCache();
+		return storagePage(page, MeTerminalSession.fluidStatus(result.outcome()));
+	}
+	private MeTerminalView energyExchange(MeTerminalRequest request) {
+		if (view.mode() != Mode.STORAGE || request.amount() > 1) return view.status(Status.INVALID);
+		boolean insert = request.action() == MeTerminalRequest.Action.DISCHARGE_ITEM;
+		AEKey key;
+		if (insert) {
+			if (request.row() != -1) return view.status(Status.INVALID);
+			key = AeMeEnergy.key();
+		} else {
+			if (request.row() < 0 || request.row() >= view.rows().size()) return view.status(Status.INVALID);
+			key = stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key();
+		}
+		if (key == null || !AeMeEnergy.isFe(key)) return view.status(Status.INVALID);
+		if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
+		int page = view.page(); storagePage(page, Status.WAITING);
+		String location = bridge.getLevel().dimension().location() + " " + bridge.getBlockPos().toShortString();
+		com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.Transfer transfer = (energy, deposit, simulate) -> {
+			if (!valid(bridge)) return 0;
+			var mode = simulate ? appeng.api.config.Actionable.SIMULATE : appeng.api.config.Actionable.MODULATE;
+			long actual = deposit ? appeng.api.storage.StorageHelper.poweredInsert(grid.getEnergyService(), grid.getStorageService().getInventory(), key, energy, source, mode)
+					: appeng.api.storage.StorageHelper.poweredExtraction(grid.getEnergyService(), grid.getStorageService().getInventory(), key, energy, source, mode);
+			if (actual < 0 || actual > energy) throw new IllegalStateException("Invalid ME FE amount"); return (int) actual;
+		};
+		var result = insert ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.discharge(player, player.containerMenu, request.amount() == 1, location, transfer)
+				: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.charge(player, player.containerMenu, request.amount() == 1, location, transfer);
 		AeMeCatalogue.invalidate(player.server, grid); grid.getStorageService().invalidateCache();
 		return storagePage(page, MeTerminalSession.fluidStatus(result.outcome()));
 	}

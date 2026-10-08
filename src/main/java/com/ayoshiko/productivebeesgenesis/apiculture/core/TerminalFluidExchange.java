@@ -1,12 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
-import com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.Outcome.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.Result;
+import static com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalContainerItems.*;
 
 /** 容器、已知流体与外部未决请求分别拥有资产；不使用原版掉落回退。 */
 public final class TerminalFluidExchange {
@@ -18,15 +17,6 @@ public final class TerminalFluidExchange {
 		}
 		@Override public FluidStack fluid() { return fluid.copy(); }
 	}
-	public static MeTerminalView.Receipt receipt(ServerPlayer player) {
-		var cursor = TerminalCursor.get(player);
-		if (!cursor.available()) return MeTerminalView.Receipt.EMPTY;
-		var fluid = !cursor.fluid.isEmpty() ? cursor.fluid : cursor.fluidRequest == null ? FluidStack.EMPTY : cursor.fluidRequest.fluid();
-		if (fluid.isEmpty()) return MeTerminalView.Receipt.EMPTY;
-		String label = fluid.getHoverName().getString();
-		if (label.length() > 128) label = label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
-		return new MeTerminalView.Receipt(label, cursor.fluid.getAmount(), cursor.fluidRequest == null ? 0 : cursor.fluidRequest.fluid().getAmount());
-	}
 	public static Result recover(ServerPlayer player, AbstractContainerMenu menu, boolean inventory) {
 		var cursor = TerminalCursor.get(player);
 		if (!cursor.available() || cursor.request != null) return new Result(UNKNOWN, 0);
@@ -34,10 +24,10 @@ public final class TerminalFluidExchange {
 	}
 	public static Result fill(ServerPlayer player, AbstractContainerMenu menu, FluidStack key, boolean inventory, String source, Transfer transfer) {
 		var cursor = TerminalCursor.get(player);
-		if (cursor.fluidBusy) return new Result(RETAINED, 0);
-		cursor.fluidBusy = true;
+		if (cursor.containerBusy) return new Result(RETAINED, 0);
+		cursor.containerBusy = true;
 		try { return fillInside(player, menu, key, inventory, source, transfer); }
-		finally { cursor.fluidBusy = false; }
+		finally { cursor.containerBusy = false; }
 	}
 	private static Result fillInside(ServerPlayer player, AbstractContainerMenu menu, FluidStack key, boolean inventory, String source, Transfer transfer) {
 		var cursor = TerminalCursor.get(player);
@@ -74,10 +64,10 @@ public final class TerminalFluidExchange {
 	}
 	public static Result empty(ServerPlayer player, AbstractContainerMenu menu, boolean inventory, String source, Transfer transfer) {
 		var cursor = TerminalCursor.get(player);
-		if (cursor.fluidBusy) return new Result(RETAINED, 0);
-		cursor.fluidBusy = true;
+		if (cursor.containerBusy) return new Result(RETAINED, 0);
+		cursor.containerBusy = true;
 		try { return emptyInside(player, menu, inventory, source, transfer); }
-		finally { cursor.fluidBusy = false; }
+		finally { cursor.containerBusy = false; }
 	}
 	private static Result emptyInside(ServerPlayer player, AbstractContainerMenu menu, boolean inventory, String source, Transfer transfer) {
 		var cursor = TerminalCursor.get(player);
@@ -105,22 +95,6 @@ public final class TerminalFluidExchange {
 			if (restore != null) { cursor.pending = restore.container(); cursor.fluid = cursor.fluid.copyWithAmount(cursor.fluid.getAmount() - restore.fluid().getAmount()); }
 		} catch (RuntimeException | LinkageError failure) { invalidContainer(player, failure); }
 		return finish(player, menu, inventory || held.getCount() > 1, cursor.fluid.isEmpty() ? accepted > 0 ? MOVED : NO_SPACE : RETAINED, accepted);
-	}
-	private static boolean ready(ServerPlayer player, AbstractContainerMenu menu, TerminalCursor cursor) {
-		if (!cursor.available() || player.containerMenu != menu) return false;
-		TerminalCursorExchange.recover(player, menu, false);
-		return cursor.pending.isEmpty() && ItemStack.matches(cursor.item(), menu.getCarried()) && !menu.getCarried().isEmpty();
-	}
-	private static boolean unchanged(ServerPlayer player, AbstractContainerMenu menu, TerminalCursor cursor, ItemStack held) {
-		return player.containerMenu == menu && cursor.available() && cursor.pending.isEmpty()
-				&& ItemStack.matches(held, menu.getCarried()) && ItemStack.matches(held, cursor.item());
-	}
-	private static boolean fits(ServerPlayer player, ItemStack held, ItemStack output, boolean inventory) {
-		if (!inventory && (held.getCount() == 1 || ItemStack.isSameItemSameComponents(held, output) && held.getCount() <= output.getMaxStackSize())) return true;
-		return TerminalCraftingPlan.insert(TerminalCraftingPlan.copy(player.getInventory().items), output).isEmpty();
-	}
-	private static void replaceOne(AbstractContainerMenu menu, TerminalCursor cursor, ItemStack held, ItemStack output) {
-		var rest = held.copyWithCount(held.getCount() - 1); cursor.set(rest); menu.setCarried(rest.copy()); cursor.pending = output.copy();
 	}
 	private static Result finish(ServerPlayer player, AbstractContainerMenu menu, boolean inventory, TerminalCursorExchange.Outcome outcome, int amount) {
 		var cursor = TerminalCursor.get(player);

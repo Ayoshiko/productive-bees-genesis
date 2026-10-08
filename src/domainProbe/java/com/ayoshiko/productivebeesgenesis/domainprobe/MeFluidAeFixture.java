@@ -136,7 +136,7 @@ final class MeFluidAeFixture {
 		var corrupt = ((CompoundTag) TerminalCursor.SERIALIZER.write(player.getData(NetworkContent.TERMINAL_CURSOR), player.registryAccess())).copy(); corrupt.putString("fluid", "preserve invalid fluid");
 		decoded = TerminalCursor.SERIALIZER.read(player, corrupt, player.registryAccess()); require(!decoded.available() && corrupt.equals(TerminalCursor.SERIALIZER.write(decoded, player.registryAccess())), "Invalid fluid data was discarded");
 	}
-	private static MeTerminalView.Receipt receipt(ServerPlayer player) { return TerminalFluidExchange.receipt(player); }
+	private static MeTerminalView.Receipt receipt(ServerPlayer player) { return TerminalCursor.receipt(player); }
 	private static void stashCursor(ServerPlayer player) {
 		var carried = player.containerMenu.getCarried(); if (carried.isEmpty()) return;
 		var target = player.containerMenu.slots.stream().filter(s -> s.index < 36 && (!s.hasItem()

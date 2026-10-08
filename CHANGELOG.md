@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j2b2b1 ME 充放电**：新增 Applied Flux FE 类型筛选与单件 NeoForge 充能物品交互，左键 FE 行充电、右键放电，Shift 将结果交给背包；纯电池可右键空格向 ME 放电。按实际接收量结算，拒收余量尽量充回，否则保存在玩家附件，可通过闪电按钮离线取回；未知外部结果隔离且停止重试，不生成掉落。Applied Flux 可选类型延迟加载，GTEU 保持原行为。ME 协议升至 6，玩家附件 schema 4 严格兼容旧格式；本包已实现，按开发加速要求未编译／未运行验证。
+
 - **D18j3c3 ME 完成产物置顶**：新增默认关闭的独立偏好，将当前 ME 网络中自己最近完成且仍有库存的最多 9 种产物排在筛选结果最前，并显示金色图钉。沿真实完成事件、完整 AEKey 和当前库存数量，不影响搜索／类型筛选、不自动领取或跳页；短期记录按 10 分钟游戏时间、退出和停服清理。原生完成提醒设置独立，ME 协议升至 5，存档格式不变。
 
 - **D18j3c2 关闭时取回合成材料**：终端偏好新增默认关闭的开关，主动关闭有线、无线网络或无线独立机工作台时，将已知材料取回背包，装不下的保留原格。仅账户所有者单独使用且当前材料代际有效时执行；共享使用、过期请求、子页往返和服务器强制关闭保留材料，已付费结果与未决 ME 提取记录不受影响。沿原会话、序号、无线计费及无掉落事务，终端协议升至 25，存档格式不变。
@@ -167,6 +169,8 @@
 ### English
 
 #### Added
+
+- **D18j2b2b1 ME item charging**: Added an Applied Flux FE filter and single-item NeoForge energy transfers: left-click FE to charge, right-click to discharge, and Shift to send the result to inventory. Batteries without fluid storage can discharge into empty cells. Settlement uses actual ME acceptance; rejected FE is returned to the item when possible or retained per player for offline recovery via the lightning button. Unknown external results remain isolated without retries or world drops. Applied Flux types load behind the optional integration guard; GTEU retains its existing behavior. ME protocol advances to 6 and cursor attachment schema 4 strictly accepts older formats. Implemented without compilation or runtime validation at the user's request to prioritize development speed.
 
 - **D18j3c3 Pin completed ME outputs**: An independent preference, off by default, moves up to 9 recently completed outputs of your jobs to the front of the current ME network's filtered results and marks them with a golden pin while stock remains. Uses actual completion events, exact AEKeys and current inventory snapshots without bypassing filters, collecting outputs or changing pages. History expires after 10 minutes of game time and clears on logout or shutdown. Notification settings remain independent; ME protocol advances to 5 with no saved-data changes.
 
