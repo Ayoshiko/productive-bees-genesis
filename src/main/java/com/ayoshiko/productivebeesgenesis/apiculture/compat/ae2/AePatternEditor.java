@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2;
 
+import appeng.api.behaviors.ContainerItemStrategies;
 import appeng.api.ids.AEComponents;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
@@ -14,19 +15,12 @@ import java.util.List;
 import net.minecraft.world.item.ItemStack;
 import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 
-/** 仅改写原生处理样板的数量；保留稀疏槽位、完整键及其它物品组件。 */
+/** 原生处理样板倍率与同类型资源替换；保留稀疏槽位、精确数量及其它组件。 */
 public final class AePatternEditor {
 	public static MePatternPlan prepare(ItemStack original, long factor, boolean divide) {
-		if (!AEItems.PROCESSING_PATTERN.is(original)) return MePatternPlan.failed(Status.PATTERN_UNSUPPORTED);
-		if (factor < 1 || original.getCount() < 1 || original.getCount() > 64 || original.getCount() > original.getMaxStackSize()) return MePatternPlan.failed(Status.INVALID);
+		var status = validate(original); if (status != Status.OK) return MePatternPlan.failed(status);
+		if (factor < 1) return MePatternPlan.failed(Status.INVALID);
 		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);
-		if (encoded == null || encoded.sparseInputs().isEmpty()
-				|| encoded.sparseInputs().size() > AEProcessingPattern.MAX_INPUT_SLOTS || encoded.sparseOutputs().isEmpty()
-				|| encoded.sparseOutputs().size() > AEProcessingPattern.MAX_OUTPUT_SLOTS || encoded.sparseOutputs().getFirst() == null || encoded.containsMissingContent())
-			return MePatternPlan.failed(Status.PATTERN_INVALID);
-		try {
-			if (!valid(encoded.sparseInputs()) || !valid(encoded.sparseOutputs())) return MePatternPlan.failed(Status.PATTERN_INVALID);
-		} catch (ArithmeticException invalid) { return MePatternPlan.failed(Status.PATTERN_INVALID); }
 		if (divide && (!divisible(encoded.sparseInputs(), factor) || !divisible(encoded.sparseOutputs(), factor)))
 			return MePatternPlan.failed(Status.PATTERN_NOT_DIVISIBLE);
 		try {
@@ -40,6 +34,51 @@ public final class AePatternEditor {
 			append(rows, encoded.sparseOutputs(), outputs, Kind.PATTERN_OUTPUT);
 			return new MePatternPlan(Status.OK, result, rows);
 		} catch (ArithmeticException overflow) { return MePatternPlan.failed(Status.PATTERN_OVERFLOW); }
+	}
+	public static MePatternPlan replace(ItemStack original, int row, ItemStack sample) {
+		var status = validate(original); if (status != Status.OK) return MePatternPlan.failed(status);
+		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);
+		var keys = new ArrayList<AEKey>();
+		for (var stack : encoded.sparseInputs()) if (stack != null) keys.add(stack.what());
+		for (var stack : encoded.sparseOutputs()) if (stack != null) keys.add(stack.what());
+		if (row < 0 || row >= keys.size()) return MePatternPlan.failed(Status.STALE);
+		var source = keys.get(row); var target = sampleKey(source, sample);
+		if (target == null) return MePatternPlan.failed(Status.PATTERN_SAMPLE_INVALID);
+		if (source.equals(target)) return MePatternPlan.failed(Status.PATTERN_NO_CHANGE);
+		try {
+			var inputs = replace(encoded.sparseInputs(), source, target); var outputs = replace(encoded.sparseOutputs(), source, target);
+			if (!valid(inputs) || !valid(outputs)) return MePatternPlan.failed(Status.PATTERN_INVALID);
+			var result = original.copy(); AEProcessingPattern.encode(result, inputs, outputs); new AEProcessingPattern(AEItemKey.of(result));
+			var rows = new ArrayList<Row>(); append(rows, encoded.sparseInputs(), inputs, Kind.PATTERN_INPUT); append(rows, encoded.sparseOutputs(), outputs, Kind.PATTERN_OUTPUT);
+			return new MePatternPlan(Status.OK, result, rows);
+		} catch (ArithmeticException overflow) { return MePatternPlan.failed(Status.PATTERN_OVERFLOW); }
+	}
+	private static AEKey sampleKey(AEKey source, ItemStack sample) {
+		if (sample.isEmpty()) return null;
+		var probe = sample.copyWithCount(1); var before = probe.copy();
+		AEKey key;
+		if (source instanceof AEItemKey) key = AEItemKey.of(probe);
+		else {
+			// 按原类型读取已注册策略，避免多能力容器被其它类型抢先匹配。
+			var content = ContainerItemStrategies.getContainedStack(probe, source.getType());
+			key = content == null || content.amount() <= 0 ? null : content.what();
+		}
+		return key != null && key.getType() == source.getType() && !AEItems.MISSING_CONTENT.is(key) && ItemStack.matches(before, probe) ? key : null;
+	}
+	private static List<GenericStack> replace(List<GenericStack> stacks, AEKey source, AEKey target) {
+		var result = new ArrayList<GenericStack>(stacks.size());
+		for (var stack : stacks) result.add(stack != null && source.equals(stack.what()) ? new GenericStack(target, stack.amount()) : stack);
+		return result;
+	}
+	private static Status validate(ItemStack original) {
+		if (!AEItems.PROCESSING_PATTERN.is(original)) return Status.PATTERN_UNSUPPORTED;
+		if (original.getCount() < 1 || original.getCount() > Math.min(64, original.getMaxStackSize())) return Status.INVALID;
+		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);
+		if (encoded == null || encoded.sparseInputs().isEmpty() || encoded.sparseInputs().size() > AEProcessingPattern.MAX_INPUT_SLOTS
+				|| encoded.sparseOutputs().isEmpty() || encoded.sparseOutputs().size() > AEProcessingPattern.MAX_OUTPUT_SLOTS
+				|| encoded.sparseOutputs().getFirst() == null || encoded.containsMissingContent()) return Status.PATTERN_INVALID;
+		try { return valid(encoded.sparseInputs()) && valid(encoded.sparseOutputs()) ? Status.OK : Status.PATTERN_INVALID; }
+		catch (ArithmeticException invalid) { return Status.PATTERN_INVALID; }
 	}
 	private static boolean valid(List<GenericStack> stacks) {
 		var totals = new HashMap<AEKey, Long>();
@@ -61,11 +100,11 @@ public final class AePatternEditor {
 	private static void append(List<Row> rows, List<GenericStack> before, List<GenericStack> after, Kind kind) {
 		for (int i = 0; i < before.size(); i++) {
 			var stack = before.get(i); if (stack == null) continue;
-			var key = stack.what(); var icon = key instanceof AEItemKey item ? item.toStack(1) : key instanceof AEFluidKey fluid ? new ItemStack(fluid.getFluid().getBucket()) : ItemStack.EMPTY;
+			var key = after.get(i).what(); var icon = key instanceof AEItemKey item ? item.toStack(1) : key instanceof AEFluidKey fluid ? new ItemStack(fluid.getFluid().getBucket()) : ItemStack.EMPTY;
 			String unit = key instanceof AEFluidKey || AeMeChemical.isChemical(key) ? " mB" : AeMeEnergy.isFe(key) ? " FE" : "";
 			String label = (i + 1) + " · " + key.getDisplayName().getString() + " · " + key.getId() + unit;
 			if (label.length() > 128) label = label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
-			rows.add(new Row(kind, icon, label, stack.amount(), after.get(i).amount(), false));
+			rows.add(new Row(kind, icon, label, stack.amount(), after.get(i).amount(), !key.equals(stack.what())));
 		}
 	}
 	private AePatternEditor() { }

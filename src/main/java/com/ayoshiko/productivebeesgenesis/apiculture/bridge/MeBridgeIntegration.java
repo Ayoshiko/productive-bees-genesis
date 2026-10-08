@@ -22,7 +22,14 @@ public final class MeBridgeIntegration {
 		return installed() ? Loaded.encodeCraftingPattern(player, item, source)
 				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
 	}
+	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan replacePattern(net.minecraft.world.item.ItemStack item, int row, net.minecraft.world.item.ItemStack sample) {
+		return installed() ? Loaded.replacePattern(item, row, sample)
+				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
+	}
 	private static final class Loaded {
+		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan replacePattern(net.minecraft.world.item.ItemStack item, int row, net.minecraft.world.item.ItemStack sample) {
+			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternEditor.replace(item, row, sample);
+		}
 		static boolean blankPattern(net.minecraft.world.item.ItemStack item) { return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeCraftingPatternEncoder.isBlank(item); }
 		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan encodeCraftingPattern(net.minecraft.server.level.ServerPlayer player,
 				net.minecraft.world.item.ItemStack item, com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternSource source) {

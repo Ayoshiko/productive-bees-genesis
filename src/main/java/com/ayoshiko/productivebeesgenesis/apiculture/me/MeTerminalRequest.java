@@ -8,7 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 
 /** 只传已展示行和版本；不接受客户端资产、网格、CPU 或任务身份。 */
 public record MeTerminalRequest(int containerId, UUID session, long sequence, Action action, long revision, int row, int page, long amount, String query, MeStorageFilter filter, boolean pinCompleted) implements CustomPacketPayload {
-	public enum Action { BROWSE, PLAN, POLL, PAGE, CPU_NEXT, CONFIRM, TASKS, CANCEL, CLOSE, STORAGE, TAKE, TAKE_INVENTORY, DEPOSIT, FILL_CONTAINER, EMPTY_CONTAINER, RECOVER_FLUID, CHARGE_ITEM, DISCHARGE_ITEM, RECOVER_ENERGY, FILL_CHEMICAL, EMPTY_CHEMICAL, RECOVER_CHEMICAL, PATTERN_READ, PATTERN_MULTIPLY, PATTERN_DIVIDE, PATTERN_APPLY, PATTERN_ENCODE_CRAFTING }
+	public enum Action { BROWSE, PLAN, POLL, PAGE, CPU_NEXT, CONFIRM, TASKS, CANCEL, CLOSE, STORAGE, TAKE, TAKE_INVENTORY, DEPOSIT, FILL_CONTAINER, EMPTY_CONTAINER, RECOVER_FLUID, CHARGE_ITEM, DISCHARGE_ITEM, RECOVER_ENERGY, FILL_CHEMICAL, EMPTY_CHEMICAL, RECOVER_CHEMICAL, PATTERN_READ, PATTERN_MULTIPLY, PATTERN_DIVIDE, PATTERN_APPLY, PATTERN_ENCODE_CRAFTING, PATTERN_REPLACE }
 	public MeTerminalRequest(int containerId, UUID session, long sequence, Action action, long revision, int row, int page, long amount, String query, MeStorageFilter filter) {
 		this(containerId, session, sequence, action, revision, row, page, amount, query, filter, false);
 	}

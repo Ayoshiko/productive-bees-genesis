@@ -33,7 +33,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume) {
 		super(text("title")); opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
-		patterns = new MePatternPane(menu, session, (action, page, amount) -> request(action, -1, page, amount));
+		patterns = new MePatternPane(menu, session, this::request);
 	}
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.me_terminal." + key, args); }
 	private Button button(String key, int x, int y, int width, Runnable action) {
@@ -51,7 +51,7 @@ public final class MeTerminalScreen extends Screen {
 		button("tasks", 120, 20, 40, () -> request(TASKS, -1, 0));
 		button("patterns", 164, 20, 44, () -> request(PATTERN_READ, -1, 0));
 		button("pattern_encode", 212, 20, 44, () -> request(PATTERN_ENCODE_CRAFTING, -1, 0, 0));
-		button("refresh", 260, 20, panelWidth - 268, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN_ENCODING ? PATTERN_ENCODE_CRAFTING : shown.mode() == Mode.PATTERN ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		button("refresh", 260, 20, panelWidth - 268, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN_ENCODING ? PATTERN_ENCODE_CRAFTING : shown.mode().pattern() ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
 		if (shown.mode().pattern()) {
 			filter = null; quantity = null;
 			for (var widget : patterns.build(font, left, top, panelWidth, panelHeight, this::onClose)) addRenderableWidget(widget);
@@ -100,7 +100,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
 		if (shown.mode() == Mode.STORAGE) return storage.click(x, y, button) || super.mouseClicked(x, y, button);
-		if (shown.mode().pattern()) return super.mouseClicked(x, y, button);
+		if (shown.mode().pattern()) return patterns.click(x, y, button) || super.mouseClicked(x, y, button);
 		if (button == 0 && x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184 && !session.waiting()) {
 			int row = (int)(y-top-56)/16; if (row < shown.rows().size()) { selected = row; return true; }
 		}
