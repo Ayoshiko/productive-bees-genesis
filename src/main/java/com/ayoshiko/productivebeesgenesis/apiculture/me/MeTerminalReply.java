@@ -17,7 +17,7 @@ public record MeTerminalReply(int containerId, UUID session, long sequence, MeTe
 			int id = b.readInt(); var session = b.readUUID(); long sequence = b.readLong(), revision = b.readLong();
 			var mode = b.readEnum(MeTerminalView.Mode.class); var status = b.readEnum(MeTerminalView.Status.class); int page = b.readVarInt(); boolean more = b.readBoolean();
 			String title = b.readUtf(256); long bytes = b.readLong(); String cpu = b.readUtf(128); boolean confirm = b.readBoolean(); int count = b.readVarInt();
-			if (count < 0 || count > 8) throw new IllegalArgumentException("ME row count");
+			if (count < 0 || count > MeTerminalView.pageSize(mode)) throw new IllegalArgumentException("ME row count");
 			var rows = new ArrayList<MeTerminalView.Row>();
 			for (int i=0;i<count;i++) rows.add(new MeTerminalView.Row(b.readEnum(MeTerminalView.Kind.class), ItemStack.OPTIONAL_STREAM_CODEC.decode(b), b.readUtf(128), b.readLong(), b.readLong(), b.readBoolean()));
 			return new MeTerminalReply(id, session, sequence, new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows));

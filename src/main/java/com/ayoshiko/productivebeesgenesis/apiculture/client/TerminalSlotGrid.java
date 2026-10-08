@@ -25,13 +25,13 @@ public final class TerminalSlotGrid {
 			g.renderComponentTooltip(font, lines, mouseX, mouseY); return;
 		}
 	}
-	private static void grid(GuiGraphics g, int x, int y, int columns, int rows) {
+	static void grid(GuiGraphics g, int x, int y, int columns, int rows) {
 		int width = columns * 18, height = rows * 18;
 		g.fill(x - 1, y - 1, x + width - 1, y + height - 1, 0xffc2c8cc);
 		g.fill(x - 1, y - 1, x + width - 2, y + height - 2, 0xff46525b);
 		for (int row = 0; row < rows; row++) for (int column = 0; column < columns; column++) {
 			int sx = x + column * 18, sy = y + row * 18;
-			g.fill(sx, sy, sx + 16, sy + 16, 0xff7b8992);
+			g.fill(sx, sy, sx + 16, sy + 16, 0xff999db5);
 			g.fill(sx, sy + 16, sx + 17, sy + 17, 0xffc2c8cc);
 			g.fill(sx + 16, sy, sx + 17, sy + 16, 0xffc2c8cc);
 		}

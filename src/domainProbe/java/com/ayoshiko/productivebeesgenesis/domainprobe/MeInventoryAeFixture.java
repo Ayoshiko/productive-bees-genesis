@@ -60,10 +60,16 @@ final class MeInventoryAeFixture {
 	static void seed(NetworkCoreBlockEntity core, MeBridgeBlockEntity bridge, List<ServerPlayer> players) {
 		for (var player : players) { player.closeContainer(); player.getInventory().clearContent(); }
 		CraftingProbe.open(core, players, false);
+		players.getFirst().getInventory().setItem(0, new ItemStack(Items.OAK_LOG));
 		var named = new ItemStack(Items.DIAMOND); named.set(DataComponents.CUSTOM_NAME, Component.literal("ME component diamond")); diamond = AEItemKey.of(named);
 		grid = ((MeBridgeNode) bridge.link()).grid(); stock.reset(); stock.add(diamond, 10);
 		int count = 64;
 		for (var item : List.of(Items.IRON_INGOT, Items.COPPER_INGOT, Items.GOLD_INGOT, Items.COAL, Items.REDSTONE, Items.LAPIS_LAZULI, Items.QUARTZ, Items.EMERALD, Items.COBBLESTONE)) stock.add(AEItemKey.of(item), count--);
+		int additional = 0;
+		for (var item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+			if (item == Items.AIR || item == Items.DIAMOND || stock.get(AEItemKey.of(item)) > 0) continue;
+			stock.add(AEItemKey.of(item), 1); if (++additional == 40) break;
+		}
 		stock.add(AEFluidKey.of(net.minecraft.world.level.material.Fluids.WATER), 1000);
 		for (var output : List.of(diamond, AEItemKey.of(Items.STICK))) {
 			var encoded = PatternDetailsHelper.encodeProcessingPattern(List.of(new GenericStack(AEItemKey.of(Items.COBBLESTONE), 1)), List.of(new GenericStack(output, 1)));
@@ -75,6 +81,8 @@ final class MeInventoryAeFixture {
 	static int advance(NetworkCoreBlockEntity core, List<ServerPlayer> players, int stage) {
 		var owner = players.getFirst(); var guest = players.get(1);
 		switch (stage) {
+			case 851 -> require(owner.getInventory().items.stream().filter(s -> s.is(Items.OAK_PLANKS)).mapToInt(ItemStack::getCount).sum() == 4
+					&& owner.getInventory().items.stream().noneMatch(s -> s.is(Items.OAK_LOG)), "ME home paused manual crafting or lost its result");
 			case 854 -> require(owner.containerMenu.getCarried().getCount() == 1 && ItemStack.isSameItemSameComponents(owner.containerMenu.getCarried(), diamond.toStack()) && stock.get(diamond) == 9, "Right-click extraction lost exact components");
 			case 855 -> require(owner.containerMenu.getCarried().isEmpty() && stock.get(diamond) == 10, "Cursor insertion did not return exact quantity");
 			case 856 -> { require(owner.containerMenu.getCarried().isEmpty() && inventory(owner) == 10 && stock.get(diamond) == 0, "Inventory extraction lost items"); insertLimit = 4; }

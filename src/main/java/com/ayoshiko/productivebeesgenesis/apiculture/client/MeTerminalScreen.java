@@ -50,7 +50,7 @@ public final class MeTerminalScreen extends Screen {
 		button("refresh", 204, 20, panelWidth - 212, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
 		if (shown.mode() == Mode.STORAGE) {
 			if (filter != null) filter.setFocused(false);
-			for (var widget : storage.build(font, left + 8, top + 40, panelWidth - 16)) addRenderableWidget(widget);
+			for (var widget : storage.build(font, left + 8, top + 40, panelWidth - 16, 4)) addRenderableWidget(widget);
 			if (storage.focusedSearch() != null) setFocused(storage.focusedSearch());
 			addRenderableWidget(Button.builder(text("back"), ignored -> onClose()).bounds(left + 8, top + panelHeight - 21, 52, 14).build());
 			return;
@@ -96,20 +96,30 @@ public final class MeTerminalScreen extends Screen {
 		if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && filter.isFocused()) { request(BROWSE, -1, 0); return true; }
 		return super.keyPressed(key, scan, modifiers);
 	}
+	@Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+		return shown.mode() == Mode.STORAGE && storage.scroll(x, y, vertical) || super.mouseScrolled(x, y, horizontal, vertical);
+	}
+	@Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+		return shown.mode() == Mode.STORAGE && storage.drag(y, button) || super.mouseDragged(x, y, button, dx, dy);
+	}
+	@Override public boolean mouseReleased(double x, double y, int button) {
+		return shown.mode() == Mode.STORAGE && storage.release(button) || super.mouseReleased(x, y, button);
+	}
 	@Override public void onClose() { request(CLOSE, -1, 0); minecraft.setScreen(parent); }
 	@Override public boolean isPauseScreen() { return false; }
 	@Override public void render(GuiGraphics g, int x, int y, float partial) {
 		renderBackground(g, x, y, partial);
-		g.fill(left, top, left+panelWidth, top+panelHeight, 0xff9e793c); g.fill(left+2, top+2, left+panelWidth-2, top+panelHeight-2, 0xff15252c);
-		g.drawString(font, title, left+8, top+7, 0xffffd47e, false);
-		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, 0xffbccdd3, false);
+		TerminalSkin.panel(g, left, top, panelWidth, panelHeight);
+		g.drawString(font, title, left+8, top+7, TerminalSkin.INK, false);
+		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, TerminalSkin.MUTED, false);
 		if (shown.mode() == Mode.STORAGE) {
+			storage.background(g);
 			storage.labels(g, font, 0, 0);
-			g.drawWordWrap(font, text("stored_hint"), left + 8, top + 137, panelWidth - 16, 0xffbccdd3);
+			g.drawWordWrap(font, text("stored_hint"), left + 32, top + 156, panelWidth - 40, TerminalSkin.MUTED);
 			var held = menu.getCarried(); if (!held.isEmpty()) { g.renderItem(held, left + 10, top + 183); g.renderItemDecorations(font, held, left + 10, top + 183); }
 			for (var widget : renderables) widget.render(g, x, y, partial); return;
 		}
-		if (shown.mode() == Mode.PLAN) g.drawString(font, font.plainSubstrByWidth(text("plan_info", shown.bytes(), shown.cpu().isEmpty() ? text("automatic").getString() : shown.cpu()).getString(), panelWidth-16), left+8, top+40, 0xffbccdd3, false);
+		if (shown.mode() == Mode.PLAN) g.drawString(font, font.plainSubstrByWidth(text("plan_info", shown.bytes(), shown.cpu().isEmpty() ? text("automatic").getString() : shown.cpu()).getString(), panelWidth-16), left+8, top+40, TerminalSkin.MUTED, false);
 		for (int i=0;i<shown.rows().size();i++) {
 			var row = shown.rows().get(i); int rowY = top+56+i*16;
 			g.fill(left+7, rowY, left+panelWidth-7, rowY+16, selected == i ? 0xff526a6e : 0xff25383e);
@@ -120,7 +130,7 @@ public final class MeTerminalScreen extends Screen {
 			String amount = row.kind() == Kind.TASK ? row.amount()+"/"+row.extra() : row.amount() == 0 ? "" : Long.toString(row.amount());
 			g.drawString(font, font.plainSubstrByWidth(amount, 83), left+panelWidth-91, rowY+4, 0xffc8cfba, false);
 		}
-		g.drawString(font, font.plainSubstrByWidth(text("status."+(session.waiting() ? "waiting" : shown.status().name().toLowerCase(java.util.Locale.ROOT))).getString(), panelWidth-16), left+8, top+panelHeight-34, 0xffd1bd90, false);
+		g.drawString(font, font.plainSubstrByWidth(text("status."+(session.waiting() ? "waiting" : shown.status().name().toLowerCase(java.util.Locale.ROOT))).getString(), panelWidth-16), left+8, top+panelHeight-34, TerminalSkin.MUTED, false);
 		// Screen.render 会再次绘制模糊背景，组件在面板之后单独绘制。
 		for (var widget : renderables) widget.render(g, x, y, partial);
 		if (x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184) {

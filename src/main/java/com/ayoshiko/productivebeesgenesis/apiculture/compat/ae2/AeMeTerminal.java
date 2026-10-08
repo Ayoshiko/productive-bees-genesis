@@ -80,13 +80,14 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		};
 	}
 	private MeTerminalView storagePage(int page, Status status) {
-		int start = start(page, stock.size()); var shown = new ArrayList<Row>();
-		for (int i = start; i < Math.min(start + 8, stock.size()); i++) {
+		int size = MeTerminalView.STORAGE_ROWS;
+		int start = stock.isEmpty() ? 0 : Math.min(page, (stock.size() - 1) / size) * size; var shown = new ArrayList<Row>();
+		for (int i = start; i < Math.min(start + size, stock.size()); i++) {
 			var entry = stock.get(i); var key = entry.key();
 			shown.add(row(key, key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : Kind.OTHER, entry.amount(), 0, entry.craftable()));
 		}
 		if (com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.unknown(player)) status = Status.TRANSFER_UNKNOWN;
-		return publish(Mode.STORAGE, status, start / 8, start + 8 < stock.size(), "", 0, "", false, shown);
+		return publish(Mode.STORAGE, status, start / size, start + size < stock.size(), "", 0, "", false, shown);
 	}
 	private MeTerminalView exchange(MeTerminalRequest request) {
 		if (view.mode() != Mode.STORAGE || request.amount() < 1 || request.amount() > 64) return view.status(Status.INVALID);
@@ -97,7 +98,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 			if (held.isEmpty()) return view.status(Status.INVALID);
 			key = AEItemKey.of(held);
 		} else {
-			if (request.row() < 0 || request.row() >= view.rows().size() || !(stock.get(view.page() * 8 + request.row()).key() instanceof AEItemKey item)) return view.status(Status.INVALID);
+			if (request.row() < 0 || request.row() >= view.rows().size() || !(stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key() instanceof AEItemKey item)) return view.status(Status.INVALID);
 			key = item;
 		}
 		if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
@@ -125,7 +126,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	}
 	private MeTerminalView beginPlan(MeTerminalRequest request) {
 		if (view.mode() != Mode.CATALOGUE && view.mode() != Mode.STORAGE || request.amount() < 1 || request.row() < 0 || request.row() >= view.rows().size()) return view.status(Status.INVALID);
-		var key = view.mode() == Mode.STORAGE ? stock.get(view.page() * 8 + request.row()).key() : catalogue.get(view.page() * 8 + request.row());
+		var key = view.mode() == Mode.STORAGE ? stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key() : catalogue.get(view.page() * 8 + request.row());
 		if (!grid.getCraftingService().isCraftable(key) && !grid.getCraftingService().canEmitFor(key)) return view.status(Status.STALE);
 		cancelPlan(); if (!MeTerminalBudget.plan(player.server)) return view.status(Status.BUSY); leased = true;
 		deadline = player.server.overworld().getGameTime() + 600;

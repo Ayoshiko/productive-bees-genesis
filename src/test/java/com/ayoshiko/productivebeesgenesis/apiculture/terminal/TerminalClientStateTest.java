@@ -7,6 +7,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalRequest.Operation.*;
 
 class TerminalClientStateTest {
+	@Test void foldingManagementRejectsLateListFramesAndAllowsCraftingAfterLeaseExpiry() {
+		state.beginLive(NetworkSelectionSession.Kind.PRODUCTS, "", TerminalSearchRequest.Navigation.FIRST, 0);
+		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 1, 1, TerminalLiveUpdate.Status.READY, false, page(1)), 10);
+		assertEquals(CANCEL, state.suspend(200).operation());
+		state.accept(reply(2, null), 210);
+		state.acceptLive(new TerminalLiveUpdate(7, session, 1, 2, 2, TerminalLiveUpdate.Status.READY, false, page(2)), 220);
+		assertFalse(state.live()); assertNull(state.view()); assertTrue(state.actionable(10_000));
+		assertNotNull(state.beginCrafting(CRAFTING, 0, -1, -1, 0, 10_000));
+	}
 	@Test void craftingKeepsLiveProductsButOldFramesCannotAcknowledgeTheAssetCommand() {
 		state.beginLive(NetworkSelectionSession.Kind.PRODUCTS, "", TerminalSearchRequest.Navigation.FIRST, 0);
 		var products = page(1);

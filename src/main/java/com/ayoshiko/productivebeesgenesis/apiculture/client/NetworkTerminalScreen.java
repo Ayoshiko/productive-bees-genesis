@@ -27,7 +27,7 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReq
 public final class NetworkTerminalScreen extends AbstractContainerScreen<NetworkCoreMenu> {
 	public static final int WIDTH = 304, WORKSPACE_WIDTH = 492;
 	private final TerminalProductPane productPane;
-	private boolean workspace;
+	private boolean workspace, stockHome = true;
 	private final TerminalClientState state;
 	private final Inventory inventory;
 	private final List<Button> actions = new ArrayList<>();
@@ -62,13 +62,13 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		tab = menu.scope() == TerminalScope.APIARY ? 1 : 3;
 	}
 	@Override protected void init() {
-		workspace = width >= WORKSPACE_WIDTH + 4 && height >= 300;
+		workspace = !stockHome && width >= WORKSPACE_WIDTH + 4 && height >= 300;
 		if (workspace && (tab == 2 || tab == 4)) { tab = menu.scope() == TerminalScope.APIARY ? 1 : 3; query = ""; queryDirty = true; }
-		imageWidth = workspace ? WORKSPACE_WIDTH : WIDTH; imageHeight = Math.max(236, Math.min(332, height - 4));
-		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : 88, inventoryY);
+		imageWidth = workspace ? WORKSPACE_WIDTH : WIDTH; imageHeight = Math.max(236, Math.min(stockHome ? 452 : 332, height - 4));
+		super.init(); inventoryY = imageHeight - 84; menu.layoutTerminalInventory(workspace ? 318 : stockHome ? 64 : 88, inventoryY);
 		state.tick(Util.getMillis());
 		rebuild();
-		if (state.view() == null && state.ready(Util.getMillis())) refresh();
+		if (!stockHome && state.view() == null && state.ready(Util.getMillis())) refresh();
 		if (search != null) setInitialFocus(search);
 	}
 	private Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network." + key, args); }
@@ -89,12 +89,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		result.setTooltip(Tooltip.create(label)); actions.add(result); return result;
 	}
 	private void rebuild() {
-		menu.layoutCrafting(craftingVisible(), workspace ? 318 : 51, inventoryY - 78);
+		menu.layoutCrafting(craftingVisible(), workspace ? 318 : stockHome ? 64 : 51, inventoryY - (stockHome ? 66 : 78));
+		if (stockHome) { rebuildStockHome(); return; }
 		synchronizeView();
 		boolean focus = search != null && search.isFocused();
 		int cursor = search == null ? 0 : search.getCursorPosition();
 		if (search != null) query = search.getValue();
 		clearWidgets(); actions.clear(); navigationActions.clear(); hoveredBees.clear(); install = null; remove = null;
+		control(own("workspace_products"), 2, 8, 26, 26, this::showStockHome, false, 8);
 		for (int page : workspace ? menu.scope() == TerminalScope.APIARY ? new int[]{1, 3} : new int[]{3} : menu.scope() == TerminalScope.APIARY ? new int[]{1, 2, 3, 4} : new int[]{2, 3, 4}) {
 			var button = control(tr("tab." + page), 2, 42 + (page - 1) * 30, 26, 26, () -> switchTab(page), page == tab, page == 1 ? 0 : page == 2 ? 2 : page == 3 ? 3 : -1);
 			navigationActions.add(button);
@@ -143,7 +145,23 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		}
 		updateEnabled();
 	}
-	private boolean craftingVisible() { return workspace || tab == 4; }
+	private boolean craftingVisible() { return stockHome || workspace || tab == 4; }
+	private void rebuildStockHome() {
+		clearWidgets(); actions.clear(); navigationActions.clear(); hoveredBees.clear(); install = null; remove = null; search = null;
+		for (var widget : productPane.build(font, leftPos, topPos, inventoryY, true)) addRenderableWidget(widget);
+		var management = control(tr(menu.scope() == TerminalScope.APIARY ? "tab.1" : "tab.3"), 2, 140, 26, 26, () -> {
+			stockHome = false; query = ""; queryDirty = false; selected = -1; init(); refresh();
+		}, false, menu.scope() == TerminalScope.APIARY ? 0 : 3);
+		navigationActions.add(management);
+		actions.add(control(own("craft_clear"), 232, inventoryY - 46, 22, 22, () -> craft(CRAFT_CLEAR, -1, -1, 0), false, 15));
+		if (productPane.focusedSearch() != null) setFocused(productPane.focusedSearch());
+		displayed = state.view(); notice = state.notice(); updateEnabled();
+	}
+	private void showStockHome() {
+		if (!state.ready(Util.getMillis())) return;
+		var cancel = state.suspend(Util.getMillis()); if (cancel != null) PacketDistributor.sendToServer(cancel);
+		stockHome = true; query = ""; queryDirty = false; craftingRequested = false; init();
+	}
 	private void synchronizeView() {
 		if (displayed == state.view()) return;
 		var priorRow = displayed != null && selected >= 0 && selected < displayed.rows().size() ? displayed.rows().get(selected) : null;
@@ -280,6 +298,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	/** JEI 发送资产命令后只切换显示；等待其回执，再建立产物页订阅。 */
 	public void prepareRecipeTransfer() {
+		if (stockHome) { craftingRequested = false; queryDirty = false; if (minecraft != null && minecraft.screen == this) rebuild(); return; }
 		if (!workspace) tab = 4; selected = -1; scroll = 0; query = ""; if (search != null) search.setValue("");
 		craftingRequested = false; queryDirty = true; searchAt = Util.getMillis();
 		if (minecraft != null && minecraft.screen == this) rebuild();
@@ -347,8 +366,8 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	@Override protected void containerTick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { state.close(); minecraft.setScreen(null); return; }
 		super.containerTick(); long now = Util.getMillis(); state.tick(now);
-		productPane.tick(workspace);
-		if (craftingVisible() && !craftingRequested && !queryDirty && state.actionable(now) && state.view() != null) craft(CRAFTING, -1, -1, 0);
+		productPane.tick(stockHome || workspace);
+		if (craftingVisible() && !craftingRequested && !queryDirty && state.actionable(now) && (stockHome || state.view() != null)) craft(CRAFTING, -1, -1, 0);
 		if (queryDirty && now >= searchAt && state.ready(now)) { selected = -1; scroll = 0; restoreLocation = null; refresh(); }
 		if (displayed != state.view() || notice != state.notice()) {
 			notice = state.notice(); rebuild();
@@ -360,13 +379,15 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		updateEnabled();
 	}
 	@Override public boolean keyPressed(int key, int scan, int modifiers) {
-		if (workspace && productPane.keyPressed(key, scan, modifiers)) return true;
+		if ((stockHome || workspace) && productPane.keyPressed(key, scan, modifiers)) return true;
+		if (stockHome) return super.keyPressed(key, scan, modifiers);
 		if (search.isFocused() && key == GLFW.GLFW_KEY_ENTER) { selected = -1; scroll = 0; refresh(); search.setFocused(false); setFocused(null); return true; }
 		if (search.isFocused() && key != GLFW.GLFW_KEY_ESCAPE) return search.keyPressed(key, scan, modifiers);
 		return super.keyPressed(key, scan, modifiers);
 	}
 	@Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
-		if (workspace && productPane.scroll(x, y, vertical)) return true;
+		if ((stockHome || workspace) && productPane.scroll(x, y, vertical)) return true;
+		if (stockHome) return super.mouseScrolled(x, y, horizontal, vertical);
 		if (x >= leftPos + 32 && x < leftPos + WIDTH && y >= topPos + 48 && y < topPos + inventoryY - 24 && selectedRow() == null) {
 			if (vertical == 0) return false;
 			scroll = Math.clamp(scroll + (vertical > 0 ? -1 : 1), 0, maxScroll()); rebuild(); return true;
@@ -374,10 +395,11 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return super.mouseScrolled(x, y, horizontal, vertical);
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
-		if (workspace && productPane.clear(x, y, button)) return true;
-		if (button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+9 && x < leftPos+28 && y >= topPos+10 && y < topPos+22) {
+		if ((stockHome || workspace) && productPane.clear(x, y, button)) return true;
+		if (stockHome && button == 0 && menu.meStatus() == com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.ONLINE && x >= leftPos+9 && x < leftPos+28 && y >= topPos+10 && y < topPos+22) {
 			minecraft.setScreen(new MeTerminalScreen(this, menu)); return true;
 		}
+		if (stockHome) return super.mouseClicked(x, y, button);
 		if (button == 1 && search.isMouseOver(x, y)) { search.setValue(""); setFocused(search); return true; }
 		if (button == 0 && maxScroll() > 0 && x >= leftPos + 289 && x < leftPos + 297 && y >= topPos + 51 && y < topPos + inventoryY - 28) {
 			draggingScroll = true; scrollTo(y); return true;
@@ -390,10 +412,12 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return super.mouseClicked(x, y, button);
 	}
 	@Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+		if ((stockHome || workspace) && productPane.drag(y, button)) return true;
 		if (draggingScroll && button == 0) { scrollTo(y); return true; }
 		return super.mouseDragged(x, y, button, dx, dy);
 	}
 	@Override public boolean mouseReleased(double x, double y, int button) {
+		if ((stockHome || workspace) && productPane.release(button)) return true;
 		if (button == 0 && draggingScroll) { draggingScroll = false; return true; }
 		return super.mouseReleased(x, y, button);
 	}
@@ -407,8 +431,12 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	@Override protected void renderBg(GuiGraphics g, float partialTick, int mouseX, int mouseY) {
 		TerminalSkin.panel(g, leftPos + 30, topPos, imageWidth - 30, imageHeight);
-		g.fill(leftPos + 36, topPos + 6, leftPos + 297, topPos + 24, 0xff182d36);
-		g.fill(leftPos + 35, topPos + 48, leftPos + 297, topPos + inventoryY - 25, 0xff14232a);
+		if (stockHome) {
+			productPane.background(g); TerminalSlotGrid.render(g, menu, leftPos, topPos);
+			g.drawString(font, "→", leftPos + 139, topPos + inventoryY - 42, TerminalSkin.MUTED, false); return;
+		}
+		g.fill(leftPos + 36, topPos + 6, leftPos + 297, topPos + 24, 0xffb7b9c9);
+		g.fill(leftPos + 35, topPos + 48, leftPos + 297, topPos + inventoryY - 25, 0xffbfc0cf);
 		if (maxScroll() > 0) {
 			g.fill(leftPos + 290, topPos + 51, leftPos + 296, topPos + inventoryY - 28, 0xff0c171c);
 			int thumb = 51 + scroll * (inventoryY - 91) / maxScroll();
@@ -417,14 +445,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		TerminalSlotGrid.render(g, menu, leftPos, topPos);
 		if (workspace) {
 			g.fill(leftPos + 306, topPos + 6, leftPos + 307, topPos + imageHeight - 6, 0xff5c5845);
-			g.fill(leftPos + 310, topPos + 69, leftPos + 484, topPos + inventoryY - 104, 0xff14232a);
+			productPane.background(g);
 		}
 		if (craftingVisible()) g.drawString(font, "→", leftPos + (workspace ? 393 : 126), topPos + inventoryY - 54, TerminalSkin.INK, false);
 	}
 	@Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
 		super.render(g, mouseX, mouseY, partialTick); renderTooltip(g, mouseX, mouseY);
 		TerminalSlotGrid.lockedTooltip(g, font, menu, leftPos, topPos, mouseX, mouseY);
-		MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
+		if (stockHome) MeBridgeIndicator.render(g, font, menu.meStatus(), leftPos + 12, topPos + 12, mouseX, mouseY);
 		if (workspace && mouseX >= leftPos + 38 && mouseX < leftPos + 297 && mouseY >= topPos + inventoryY && mouseY < topPos + imageHeight - 6)
 			g.renderComponentTooltip(font, List.of(own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), own("workspace_energy", menu.energy(false), menu.energy(true))), mouseX, mouseY);
 		if (craftingVisible()) for (var slot : menu.slots) if (slot.index >= 36 && mouseX >= leftPos + slot.x && mouseX < leftPos + slot.x + 16
@@ -435,6 +463,12 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		}
 	}
 	@Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
+		if (stockHome) {
+			line(g, title, 36, 11, 148, TerminalSkin.INK); productPane.labels(g, font, leftPos, topPos);
+			line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), 64, inventoryY - 10, 222, TerminalSkin.INK);
+			if (menu.craftingStatus() != 1) line(g, own(menu.craftingStatus() == 2 ? "craft_pending" : menu.craftingStatus() == 3 ? "craft_quarantined" : menu.craftingStatus() == 4 ? "craft_material_unknown" : "craft_unavailable"), 198, inventoryY - 65, 96, TerminalSkin.MUTED);
+			return;
+		}
 		line(g, title, 41, 11, menu.combinedTerminal() ? 172 : 246, TerminalSkin.GOLD);
 		var row = selectedRow();
 		if (row != null) {
@@ -458,7 +492,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		line(g, menu.wirelessTerminal() ? own("wireless_energy", menu.wirelessEnergy()) : inventory.getDisplayName(), workspace ? 318 : 40, inventoryY - 11, workspace ? 92 : menu.wirelessTerminal() ? 128 : 63, TerminalSkin.INK);
 		line(g, tr("inventory_slot", sourceSlot + 1), workspace ? 414 : 174, inventoryY - 11, workspace ? 70 : 118, TerminalSkin.MUTED);
 		if (workspace) {
-			productPane.labels(g, font, inventoryY);
+			productPane.labels(g, font, leftPos, topPos);
 			line(g, own("workspace_status"), 42, inventoryY + 4, 246, TerminalSkin.GOLD);
 			line(g, own("workspace_members", menu.value(1), menu.value(2), menu.value(3)), 42, inventoryY + 22, 246, TerminalSkin.INK);
 			line(g, own("workspace_energy", menu.energy(false), menu.energy(true)), 42, inventoryY + 38, 246, TerminalSkin.MUTED);

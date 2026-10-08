@@ -4,6 +4,8 @@ import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
 public record MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows) {
+	public static final int STORAGE_ROWS = 36;
+	public static int pageSize(Mode mode) { return mode == Mode.STORAGE ? STORAGE_ROWS : 8; }
 	public enum Mode { CATALOGUE, PLAN, TASKS, STORAGE }
 	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN }
 	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER }
@@ -13,7 +15,7 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	}
 	public MeTerminalView {
 		rows = List.copyOf(rows);
-		if (revision < 0 || page < 0 || bytes < 0 || title.length() > 256 || cpu.length() > 128 || rows.size() > 8) throw new IllegalArgumentException("Invalid ME view");
+		if (revision < 0 || page < 0 || bytes < 0 || title.length() > 256 || cpu.length() > 128 || rows.size() > pageSize(mode)) throw new IllegalArgumentException("Invalid ME view");
 	}
 	public static MeTerminalView empty(Status status) { return new MeTerminalView(0, Mode.CATALOGUE, status, 0, false, "", 0, "", false, List.of()); }
 	public MeTerminalView status(Status value) { return new MeTerminalView(revision, mode, value, page, more, title, bytes, cpu, value == Status.OK && confirm, rows); }

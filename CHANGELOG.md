@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j2c AE2 操作风格库存首页**：网络终端默认同屏显示连续产物网格、手动合成和真实背包，蜂务／升级从侧签进入；顶部搜索、左侧排序／类型／方向图标栏与右侧滚动条沿 AE2 使用习惯组织。ME 库存页最多 36 项，保留 32 KiB 回复限制，支持跨页存取与键盘翻页；小视口减少库存行数，槽位不缩小。流体容器、附属完整工作流和偏好持久化继续按后续步骤交付。
+
 - **D20b1 ME 双向产物存储**：网络核心的桥接端口新增显式自动化授权，合法蜂业物品／流体按完整组件和实际数量双向交接，保留超 long 精确余额与在制预约。键索引分批发布，提供可关闭的安全显示汇总与故障拒绝；旧桥默认未授权，独立多方块仍仅连接与下单。完整合成消费／回流及 D20 联合验收继续推进。
 
 - **D18d 蜂业综合终端**：标准蜜蜂管理终端与离心管理终端可无序合成；在同一方块切换两类管理功能，分别管理对应成员升级并共享产物库存。切换创建新会话、拒绝旧选择与重放；合并拒绝命名／自定义组件输入以保留未知数据。完整网格、无线和 3×3 合成仍在后续 D18 步骤。
@@ -153,6 +155,8 @@
 ### English
 
 #### Added
+
+- **D18j2c AE2-style storage home**: Network terminals open with a continuous product grid, manual crafting and the real player inventory together; side tabs lead to bee and upgrade management. Search, sorting, type and direction controls follow familiar AE2 positions, with a draggable scrollbar and keyboard paging. ME storage pages show up to 36 entries within the existing 32 KiB reply limit. Compact layouts reduce visible rows while preserving slot size. Fluid containers, complete addon workflows and persistent preferences remain in subsequent steps.
 
 - **D20b1 bidirectional ME product storage**: Network-core bridges now require explicit automation authorization and transfer eligible bee items and fluids with full components and exact quantities, preserving balances beyond long and in-flight reservations. Product keys publish incrementally; optional safe display aggregation fails closed. Legacy bridges remain unauthorized, and standalone multiblock bridges retain connection and crafting access only. Crafting consumption, cancellation returns and the full D20 gate remain in progress.
 

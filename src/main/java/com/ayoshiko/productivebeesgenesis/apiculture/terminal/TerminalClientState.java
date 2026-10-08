@@ -34,6 +34,12 @@ public final class TerminalClientState {
 	public boolean live() { return live; }
 	public boolean hasPrevious() { return hasPrevious; }
 	public boolean actionable(long now) { return ready(now) && (!live || liveReady && now < expiresAt); }
+	/** 折叠管理页时撤销订阅；独立合成命令不再等待已取消的列表续租。 */
+	public TerminalRequest suspend(long now) {
+		var request = begin(TerminalRequest.Operation.CANCEL, -1, -1, -1, 0, now);
+		if (request != null) { live = false; liveReady = false; view = null; preview = null; }
+		return request;
+	}
 	public long acknowledgedSequence() { return liveAcknowledged; }
 	public TerminalSearchRequest beginLive(NetworkSelectionSession.Kind kind, String query, TerminalSearchRequest.Navigation navigation, long now) {
 		return beginLive(kind, query, navigation, TerminalSearchRequest.Sort.POSITION, now);

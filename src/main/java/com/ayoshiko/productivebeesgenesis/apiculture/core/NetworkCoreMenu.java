@@ -356,9 +356,11 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	}
 	public NetworkSelectionSession.Page terminalSelectionPage() { return selections == null ? null : selections.page(); }
 	public long stepSubscription(net.minecraft.server.level.ServerPlayer player, TerminalSyncBudget bytes, long now) {
-		if (subscription == null && automaticBee == null && (products == null || !products.active()) || closed || player.containerMenu != this || !stillValid(player) || !player.isAlive() || player.isSpectator()) {
+		if (closed || player.containerMenu != this || !stillValid(player) || !player.isAlive() || player.isSpectator()) {
 			cancelSubscription(player); return Long.MAX_VALUE;
 		}
+		// 没有列表订阅只退出查询调度；ME 首页的手动合成仍属于同一有效菜单。
+		if (subscription == null && automaticBee == null && (products == null || !products.active())) return Long.MAX_VALUE;
 		if (exchanging) return now + 1;
 		if (automaticBee != null) {
 			if (!bytes.acquire(now, 128)) return now + 1;

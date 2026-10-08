@@ -24,7 +24,7 @@ public record MeTerminalRequest(int containerId, UUID session, long sequence, Ac
 		}
 	};
 	public MeTerminalRequest {
-		if (containerId < 0 || session == null || sequence < 1 || action == null || revision < 0 || row < -1 || row >= 8 || page < 0 || page > Integer.MAX_VALUE / 8 || amount < 0 || query == null || query.length() > 64 || filter == null)
+		if (containerId < 0 || session == null || sequence < 1 || action == null || revision < 0 || row < -1 || row >= MeTerminalView.STORAGE_ROWS || page < 0 || page > Integer.MAX_VALUE / MeTerminalView.STORAGE_ROWS || amount < 0 || query == null || query.length() > 64 || filter == null)
 			throw new IllegalArgumentException("Invalid ME request");
 	}
 	@Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

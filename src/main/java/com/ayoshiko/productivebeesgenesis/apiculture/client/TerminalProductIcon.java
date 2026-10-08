@@ -39,6 +39,10 @@ final class TerminalProductIcon {
 	Component name() { return fluid.isEmpty() ? item.getHoverName() : fluid.getHoverName(); }
 	boolean simplified() { return simplified; }
 	void render(GuiGraphics graphics, int x, int y) {
+		render(graphics, x, y, false);
+	}
+	void render(GuiGraphics graphics, int x, int y, boolean compactSlot) {
+		int inset = compactSlot ? 0 : 2;
 		if (!fluid.isEmpty()) {
 			var properties = IClientFluidTypeExtensions.of(fluid.getFluid());
 			var texture = properties.getStillTexture(fluid);
@@ -46,14 +50,14 @@ final class TerminalProductIcon {
 				var sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(texture);
 				int color = properties.getTintColor(fluid);
 				graphics.setColor((color >> 16 & 255) / 255f, (color >> 8 & 255) / 255f, (color & 255) / 255f, (color >>> 24) / 255f);
-				try { graphics.blit(x + 2, y + 2, 0, 16, 16, sprite); }
+				try { graphics.blit(x + inset, y + inset, 0, 16, 16, sprite); }
 				finally { graphics.setColor(1, 1, 1, 1); }
 			}
-		} else graphics.renderItem(item, x + 2, y + 2);
+		} else graphics.renderItem(item, x + inset, y + inset);
 		var font = Minecraft.getInstance().font;
 		graphics.pose().pushPose();
 		try {
-			graphics.pose().translate(x + 19, y + 14, 200);
+			graphics.pose().translate(x + (compactSlot ? 17 : 19), y + (compactSlot ? 11 : 14), 200);
 			float scale = Math.min(0.65f, 18f / Math.max(1, font.width(amount)));
 			graphics.pose().scale(scale, scale, 1);
 			graphics.drawString(font, amount, -font.width(amount), 0, 0xfff6edcc, true);

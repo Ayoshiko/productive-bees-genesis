@@ -566,3 +566,18 @@ writer PID 23464、reader PID 28040；NeoForge 21.1.216／PB 13.14.0／Productiv
 850–864 场景覆盖实际主界面切换、数量降序、物品类型和 diamond 查询、存储／可合成标记合并、右键取一件、携带物存回、正式客户端背包提取请求、部分存入四件与鼠标保留六件、余量存回及紧凑库存页。闭包测试在真实玩家接收期间关闭菜单，已知三件保管并在重新打开后恢复。过期行拒绝；未知提取只由外部夹具保管两件，终端不凭请求数生成物品；未知存入后原五件不恢复成可再次存入的鼠标物品。两个方向后续调用都被保管记录阻止。存入未知案例由服务器直接调用公共保管边界，普通存取走真实客户端控件／协议；不将该故障夹具调用写成访客 ME 授权入口。两位玩家的 schema 2 未决记录经真实玩家文件在独立 JVM 恢复，meInventoryVerified=true，无转移掉落物。已查看宽屏和紧凑截图，覆盖条目之外的教学 toast 属原版界面。
 
 完整运行证据为 `build/network-gates/d18j2b1-me-inventory-20261007-first/gate.json`。交付自审又移除存入入口对所有无线终端物品的多余拒绝；正在使用的设备继续由既有原生槽锁保护。此修正只改变该输入类型条件，随后定向 test／build／verifyReleaseArtifact 再次通过；普通物品存取与恢复复用上述未变化调用链证据，运行时 JAR 单独保存为 runtime-verified.jar，最终产物与唯一条件差异登记到 delivery-audit.json，不混用两份指纹。未新增未使用无线设备的实际存入场景。当前仅签收 j2b1 的普通物品存取与所列浏览范围；流体／其它类型可浏览和下单，容器转移、完整附属资源、独立机器主布局整合及客户端本地化名称排序仍待后续。D18／D19、D29／D30 和发布门保持开放。
+
+<a id="s10-121"></a>
+### 10.121 D18j2c AE2 风格库存首页、连续网格与合成生命周期（2026-10-08，本步范围已验收）
+
+在网络 worktree `a913db2` 上接续原聊天最后四张截图，默认入口改为库存首页，保留同一菜单及原生材料／结果／背包槽；蜂务与升级通过侧签进入旧管理页。顶部搜索、左侧图标排序／内容／类型／方向、右侧滚动条与底部合成／背包按[9.4](bee-processing-network-visual-design.md#s9-4)组织，源码与截图依据见[13.34](bee-processing-network-references.md#s13-34)。面板、凹槽与图标由本项目绘制，16px 物品及 18px 格距保持；最小 320×240 减少库存行数。独立机器的 ME 工作页沿用相同网格，主机器布局继续后续整合。
+
+ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限保持 32 KiB；分页、下单和实际取物分别使用正确页宽，键与完整组件仍在服务端。客户端只保存本页，滚动 O(可见格)，不创建全库仓库或新增查询预算。折叠管理页撤销旧列表，迟到帧不恢复选择；无列表时只退出查询调度，不暂停同一有效菜单的手动合成，失效／关闭仍走完整清理。资产账户、玩家保管和网络 checkpoint 格式均未改变。
+
+首轮 compileJava／compileDomainProbeJava 通过；随后 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j2c-ae-layout-20261008-first -MeInventory -Combination ae2 -Ae2Version 19.2.18 -WriteOnly` 的构建和已有场景通过。截图及调用链复核发现：切换 ME 来源后最后一个列表结束会进入 cancelSubscription，连带暂停手动合成。修正查询调度退出边界，并移开管理页返回按钮与 ME 标记的冲突；补实际原木制作与管理页往返，使用相同命令和 `d18j2c-ae-layout-20261008-final` 重跑受影响入口。未出现编译／断言失败；首轮脚本通过不作为该合成问题不存在的证明。
+
+最终 TerminalClientStateTest 共 9 项，零失败／错误／跳过，包含撤销列表后拒绝迟到帧且合成不受旧租约阻塞；build、verifyReleaseArtifact、compileDomainProbeJava 均通过。writer PID 9420，两名实际 TCP 玩家完成正常登录／退出，meInventoryVerified=true、passed=true、recoveryIncluded=false。实际客户端检查 36 项首页、下一页取物与原样存回、返回上一页、数量降序、物品筛选、同键已存储／可合成合并、组件钻石取回与部分存入、1 根原木经原生合成槽生成 4 块木板并收回背包、320×240 布局与管理页往返后合成继续可用。旧未知存取／关闭保管场景继续通过，无转移掉落；未知故障仍是既有受控夹具，不扩写为外部故障断电证据。
+
+运行基线为 Java 21／NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、JEI 19.39.0.368、AE2 19.2.18／Applied Flux 2.1.5，编译 AE2 19.2.17。最终 JAR 4,084,681 字节，SHA-256 `8bca1f67d3e2aea01db3fd4186e0409d7a20c3bdaa3811eb99d3547f21282e0f`，原样保留为 `build/network-gates/d18j2c-ae-layout-20261008-final/runtime-verified.jar`。两轮 gate 保留原路径；最终 gate 沿用 MeInventory 夹具的 D18j2b1 标识，本条记录对应本次 j2c 范围。新增网格／紧凑／管理／返回截图与交付哈希在同目录 delivery-audit.json，已目视核对。
+
+本步关闭 j2c 所列库存首页与控件布局范围；仅重跑受影响测试及 AE2 写入场景，没有新增跨 JVM reader、无 AE2 客户端、全量依赖、整理插件或 Spark／MSPT 矩阵。槽和资产事务沿已有验证，独立机器主工作台整合、流体容器与附属资源存取、偏好持久化、完整 D18／D19／D29／D30 和发布门保持开放。
