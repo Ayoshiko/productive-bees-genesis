@@ -48,6 +48,7 @@ public final class AeMeCatalogue {
 			var type = entry.key instanceof appeng.api.stacks.AEItemKey ? com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.ITEM
 					: entry.key instanceof appeng.api.stacks.AEFluidKey ? com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.FLUID
 					: AeMeEnergy.isFe(entry.key) ? com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.ENERGY
+					: AeMeChemical.isChemical(entry.key) ? com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.CHEMICAL
 					: com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.OTHER;
 			if (filter.type() != com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Type.ALL && filter.type() != type
 					|| filter.content() == com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.Content.STORED && entry.amount <= 0

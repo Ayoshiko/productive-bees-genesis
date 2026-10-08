@@ -201,6 +201,9 @@ dependencies {
     // 未安装 AppliedFlux 时 extractAppliedFluxFe 方法入口即返回 0，不触发类加载
     compileOnly files('libs/AppliedFlux-1.21-2.1.5-neoforge.jar')
 
+    // Applied Mekanistics 化学品终端桥接；保持可选，运行时经 appmek 守卫加载。
+    compileOnly('maven.modrinth:applied-mekanistics:1.6.3') { transitive = false }
+
     // Jade（可选依赖，编译时需要访问 Jade API 显示 AE2 网络状态）
     // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
     compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'

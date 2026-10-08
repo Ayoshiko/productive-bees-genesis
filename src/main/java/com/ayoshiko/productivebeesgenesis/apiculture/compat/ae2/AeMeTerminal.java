@@ -76,6 +76,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 			case TAKE, TAKE_INVENTORY, DEPOSIT -> exchange(request);
 			case FILL_CONTAINER, EMPTY_CONTAINER -> fluidExchange(request);
 			case CHARGE_ITEM, DISCHARGE_ITEM -> energyExchange(request);
+			case FILL_CHEMICAL, EMPTY_CHEMICAL -> chemicalExchange(request);
 			case PAGE -> view.mode() == Mode.STORAGE ? storagePage(request.page(), Status.OK) : view.mode() == Mode.CATALOGUE ? cataloguePage(request.page()) : view.mode() == Mode.PLAN ? planPage(request.page()) : taskSnapshotPage(request.page(), Status.OK);
 			case CPU_NEXT -> nextCpu();
 			case CONFIRM -> confirm();
@@ -88,7 +89,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		int start = stock.isEmpty() ? 0 : Math.min(page, (stock.size() - 1) / size) * size; var shown = new ArrayList<Row>();
 		for (int i = start; i < Math.min(start + size, stock.size()); i++) {
 			var entry = stock.get(i); var key = entry.key();
-			shown.add(new Row(key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : AeMeEnergy.isFe(key) ? Kind.ENERGY : Kind.OTHER,
+			shown.add(new Row(key instanceof AEItemKey ? Kind.ITEM : key instanceof AEFluidKey ? Kind.FLUID : AeMeEnergy.isFe(key) ? Kind.ENERGY : AeMeChemical.isChemical(key) ? Kind.CHEMICAL : Kind.OTHER,
 					icon(key), clip(key.getId().toString(), 128), entry.amount(), 0, entry.craftable(), pinned.contains(key)));
 		}
 		if (com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange.unknown(player)) status = Status.TRANSFER_UNKNOWN;
@@ -184,6 +185,32 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		};
 		var result = insert ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.discharge(player, player.containerMenu, request.amount() == 1, location, transfer)
 				: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalEnergyExchange.charge(player, player.containerMenu, request.amount() == 1, location, transfer);
+		AeMeCatalogue.invalidate(player.server, grid); grid.getStorageService().invalidateCache();
+		return storagePage(page, MeTerminalSession.fluidStatus(result.outcome()));
+	}
+	private MeTerminalView chemicalExchange(MeTerminalRequest request) {
+		if (view.mode() != Mode.STORAGE || request.amount() > 1 || !net.neoforged.fml.ModList.get().isLoaded("appmek")) return view.status(Status.INVALID);
+		boolean insert = request.action() == MeTerminalRequest.Action.EMPTY_CHEMICAL;
+		var content = mekanism.api.chemical.ChemicalStack.EMPTY;
+		if (!insert) {
+			if (request.row() < 0 || request.row() >= view.rows().size()) return view.status(Status.INVALID);
+			content = AeMeChemical.stack(stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key());
+			if (content.isEmpty()) return view.status(Status.INVALID);
+		} else if (request.row() != -1) return view.status(Status.INVALID);
+		if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
+		int page = view.page(); storagePage(page, Status.WAITING);
+		String location = bridge.getLevel().dimension().location() + " " + bridge.getBlockPos().toShortString();
+		com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalChemicalExchange.Transfer transfer = (chemical, deposit, simulate) -> {
+			if (!valid(bridge)) return 0;
+			var key = AeMeChemical.key(chemical);
+			if (key == null) throw new IllegalStateException("ME chemical identity unavailable");
+			var mode = simulate ? appeng.api.config.Actionable.SIMULATE : appeng.api.config.Actionable.MODULATE;
+			long actual = deposit ? appeng.api.storage.StorageHelper.poweredInsert(grid.getEnergyService(), grid.getStorageService().getInventory(), key, chemical.getAmount(), source, mode)
+					: appeng.api.storage.StorageHelper.poweredExtraction(grid.getEnergyService(), grid.getStorageService().getInventory(), key, chemical.getAmount(), source, mode);
+			if (actual < 0 || actual > chemical.getAmount()) throw new IllegalStateException("Invalid ME chemical amount"); return actual;
+		};
+		var result = insert ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalChemicalExchange.empty(player, player.containerMenu, request.amount() == 1, location, transfer)
+				: com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalChemicalExchange.fill(player, player.containerMenu, content, request.amount() == 1, location, transfer);
 		AeMeCatalogue.invalidate(player.server, grid); grid.getStorageService().invalidateCache();
 		return storagePage(page, MeTerminalSession.fluidStatus(result.outcome()));
 	}

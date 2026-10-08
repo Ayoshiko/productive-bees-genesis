@@ -42,6 +42,11 @@ public final class MeTerminalSession {
 		try {
 			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
 			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
+			if (request.action() == MeTerminalRequest.Action.RECOVER_CHEMICAL) {
+				if (request.row() != -1 || request.amount() > 1) { send(player, request, MeTerminalView.storageStatus(MeTerminalView.Status.INVALID)); return; }
+				var result = com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalChemicalExchange.recover(player, player.containerMenu, request.amount() == 1);
+				send(player, request, MeTerminalView.storageStatus(fluidStatus(result.outcome()))); return;
+			}
 			if (request.action() == MeTerminalRequest.Action.RECOVER_FLUID || request.action() == MeTerminalRequest.Action.RECOVER_ENERGY) {
 				if (request.row() != -1 || request.amount() > 1) { send(player, request, MeTerminalView.storageStatus(MeTerminalView.Status.INVALID)); return; }
 				var result = request.action() == MeTerminalRequest.Action.RECOVER_ENERGY

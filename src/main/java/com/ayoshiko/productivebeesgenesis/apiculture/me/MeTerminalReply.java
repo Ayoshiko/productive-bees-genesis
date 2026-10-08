@@ -20,7 +20,7 @@ public record MeTerminalReply(int containerId, UUID session, long sequence, MeTe
 			if (count < 0 || count > MeTerminalView.pageSize(mode)) throw new IllegalArgumentException("ME row count");
 			var rows = new ArrayList<MeTerminalView.Row>();
 			for (int i=0;i<count;i++) rows.add(new MeTerminalView.Row(b.readEnum(MeTerminalView.Kind.class), ItemStack.OPTIONAL_STREAM_CODEC.decode(b), b.readUtf(128), b.readLong(), b.readLong(), b.readBoolean(), b.readBoolean()));
-			var receipt = new MeTerminalView.Receipt(b.readUtf(128), b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readVarInt());
+			var receipt = new MeTerminalView.Receipt(b.readUtf(128), b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readUtf(128), b.readVarLong(), b.readVarLong());
 			if (b.isReadable()) throw new IllegalArgumentException("Trailing ME reply data");
 			return new MeTerminalReply(id, session, sequence, new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, receipt));
 		}
@@ -31,6 +31,7 @@ public record MeTerminalReply(int containerId, UUID session, long sequence, MeTe
 			for (var row : v.rows()) { b.writeEnum(row.kind()); ItemStack.OPTIONAL_STREAM_CODEC.encode(b, row.icon()); b.writeUtf(row.label(), 128); b.writeLong(row.amount()); b.writeLong(row.extra()); b.writeBoolean(row.enabled()); b.writeBoolean(row.pinned()); }
 			b.writeUtf(v.receipt().fluid(), 128); b.writeVarInt(v.receipt().retained()); b.writeVarInt(v.receipt().uncertain());
 			b.writeVarInt(v.receipt().retainedEnergy()); b.writeVarInt(v.receipt().uncertainEnergy());
+			b.writeUtf(v.receipt().chemical(), 128); b.writeVarLong(v.receipt().retainedChemical()); b.writeVarLong(v.receipt().uncertainChemical());
 			if (b.writerIndex() - start > MAX_BYTES) throw new IllegalArgumentException("ME reply too large");
 		}
 	};

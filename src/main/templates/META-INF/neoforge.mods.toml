@@ -149,6 +149,14 @@ config="${mod_id}.iris.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
+# Applied Mekanistics 可选依赖（提供 ME 化学品容器交接）
+[[dependencies.${mod_id}]]
+    modId="appmek"
+    type="optional"
+    versionRange="[1.6.3,)"
+    ordering="AFTER"
+    side="BOTH"
+
 # Just Enough Items 可选依赖（提供配方查看集成）
 # JEI 集成通过 @JeiPlugin 注解自动加载，JeiRecipeHider 通过反射隐藏冲突配方
 [[dependencies.${mod_id}]]

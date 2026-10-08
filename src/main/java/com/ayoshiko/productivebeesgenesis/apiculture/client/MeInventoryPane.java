@@ -75,15 +75,23 @@ final class MeInventoryPane {
 			recover.setTooltip(Tooltip.create(hint.copy().append("\n").append(text("recover_energy_hint"))));
 			recover.active = !session.waiting() && receipt.retainedEnergy() > 0;
 		}
+		if (receipt.retainedChemical() > 0 || receipt.uncertainChemical() > 0) {
+			var recover = button("recover_chemical", width - 92, bottom, 20, 16, 19, () -> request(RECOVER_CHEMICAL, -1, 0, Screen.hasShiftDown() ? 1 : 0));
+			var hint = text("retained_chemical", receipt.chemical(), receipt.retainedChemical());
+			if (receipt.uncertainChemical() > 0) hint = hint.copy().append("\n").append(text("uncertain_chemical", receipt.uncertainChemical()));
+			recover.setTooltip(Tooltip.create(hint.copy().append("\n").append(text("recover_chemical_hint"))));
+			recover.active = !session.waiting() && receipt.retainedChemical() > 0;
+		}
 		for (int i = grid.first(); i < grid.end(); i++) {
 			var row = shown.rows().get(i); int index = i, x = grid.cellX(i), y = grid.cellY(i);
-			var label = (row.kind() == MeTerminalView.Kind.ENERGY ? text("type.energy").copy() : row.icon().isEmpty() ? Component.literal(row.label()) : row.icon().getHoverName().copy())
-					.append("\n" + row.label() + "\n" + row.amount() + (row.kind() == MeTerminalView.Kind.FLUID ? " mB" : row.kind() == MeTerminalView.Kind.ENERGY ? " FE" : ""))
-					.append("\n").append(text(row.kind() == MeTerminalView.Kind.ENERGY ? "energy_container_hint" : row.kind() == MeTerminalView.Kind.FLUID ? "fluid_container_hint" : row.enabled() ? "stored_craftable_hint" : row.kind() == MeTerminalView.Kind.ITEM ? "stored_hint" : "resource_readonly"));
+			var label = (row.kind() == MeTerminalView.Kind.CHEMICAL ? chemicalName(row.label()).copy() : row.kind() == MeTerminalView.Kind.ENERGY ? text("type.energy").copy() : row.icon().isEmpty() ? Component.literal(row.label()) : row.icon().getHoverName().copy())
+					.append("\n" + row.label() + "\n" + row.amount() + (row.kind() == MeTerminalView.Kind.FLUID || row.kind() == MeTerminalView.Kind.CHEMICAL ? " mB" : row.kind() == MeTerminalView.Kind.ENERGY ? " FE" : ""))
+					.append("\n").append(text(row.kind() == MeTerminalView.Kind.CHEMICAL ? "chemical_container_hint" : row.kind() == MeTerminalView.Kind.ENERGY ? "energy_container_hint" : row.kind() == MeTerminalView.Kind.FLUID ? "fluid_container_hint" : row.enabled() ? "stored_craftable_hint" : row.kind() == MeTerminalView.Kind.ITEM ? "stored_hint" : "resource_readonly"));
 			if (row.pinned()) label.append("\n").append(text("completed_pin"));
 			var button = new TerminalSkin.Control(x, y, 18, 18, label, mouse -> choose(index, mouse), false, -1, g -> {
 				var icon = row.icon(); if (!icon.isEmpty()) g.renderItem(icon, x, y);
 				else if (row.kind() == MeTerminalView.Kind.ENERGY) TerminalSkin.glyph(g, 18, x, y);
+				else if (row.kind() == MeTerminalView.Kind.CHEMICAL) TerminalSkin.glyph(g, 19, x, y);
 				String count = row.amount() == 0 && row.enabled() ? "+" : TerminalProductIcon.compact(Long.toString(row.amount()));
 				g.pose().pushPose();
 				try { g.pose().translate(x + 17, y + 11, 200); float scale = Math.min(.65f, 18f / Math.max(1, font.width(count))); g.pose().scale(scale, scale, 1); g.drawString(font, count, -font.width(count), 0, 0xfff6edcc, true); }
@@ -100,6 +108,11 @@ final class MeInventoryPane {
 		}
 		return widgets;
 	}
+	private static Component chemicalName(String id) {
+		var key = net.minecraft.resources.ResourceLocation.tryParse(id);
+		return key != null && mekanism.api.MekanismAPI.CHEMICAL_REGISTRY.containsKey(key)
+				? mekanism.api.MekanismAPI.CHEMICAL_REGISTRY.get(key).getTextComponent() : Component.literal(id);
+	}
 	private TerminalSkin.Control button(String key, int x, int y, int width, int height, int icon, Runnable action) {
 		var label = text(key); var value = new TerminalSkin.Control(left + x, top + y, width, height, label, ignored -> action.run(), false, icon, null);
 		value.setTooltip(Tooltip.create(label)); value.active = !session.waiting() && !dirty; widgets.add(value); return value;
@@ -114,17 +127,22 @@ final class MeInventoryPane {
 	private void choose(int row, int mouse) {
 		if (session.waiting() || dirty || shown != session.view() || shown.mode() != MeTerminalView.Mode.STORAGE) return;
 		if (!menu.getCarried().isEmpty()) {
-			boolean container = false, energy = false;
+			boolean container = false, energy = false, chemical = false;
 			try { container = menu.getCarried().copyWithCount(1).getCapability(net.neoforged.neoforge.capabilities.Capabilities.FluidHandler.ITEM) != null; }
 			catch (RuntimeException | LinkageError failure) { }
 			try { energy = com.ayoshiko.productivebeesgenesis.mek.ae2.AppliedFluxIntegrationLoader.isAppliedFluxLoaded()
 					&& menu.getCarried().copyWithCount(1).getCapability(net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.ITEM) != null; }
 			catch (RuntimeException | LinkageError failure) { }
+			try { chemical = net.neoforged.fml.ModList.get().isLoaded("appmek")
+					&& menu.getCarried().copyWithCount(1).getCapability(mekanism.common.capabilities.Capabilities.CHEMICAL.item()) != null; }
+			catch (RuntimeException | LinkageError failure) { }
 			var kind = row >= 0 && row < shown.rows().size() ? shown.rows().get(row).kind() : null;
 			long target = Screen.hasShiftDown() ? 1 : 0;
-			if (kind == MeTerminalView.Kind.ENERGY && energy) request(mouse == 1 ? DISCHARGE_ITEM : CHARGE_ITEM, mouse == 1 ? -1 : row, shown.page(), target);
+			if (kind == MeTerminalView.Kind.CHEMICAL && chemical) request(mouse == 1 ? EMPTY_CHEMICAL : FILL_CHEMICAL, mouse == 1 ? -1 : row, shown.page(), target);
+			else if (kind == MeTerminalView.Kind.ENERGY && energy) request(mouse == 1 ? DISCHARGE_ITEM : CHARGE_ITEM, mouse == 1 ? -1 : row, shown.page(), target);
 			else if (container && mouse == 1) request(EMPTY_CONTAINER, -1, shown.page(), target);
 			else if (container && kind == MeTerminalView.Kind.FLUID) request(FILL_CONTAINER, row, shown.page(), target);
+			else if (chemical && mouse == 1) request(EMPTY_CHEMICAL, -1, shown.page(), target);
 			else if (energy && mouse == 1) request(DISCHARGE_ITEM, -1, shown.page(), target);
 			else request(DEPOSIT, -1, shown.page(), mouse == 1 ? 1 : 64);
 		}
@@ -187,10 +205,12 @@ final class MeInventoryPane {
 		var status = text("status." + (session.waiting() ? "waiting" : session.view().status().name().toLowerCase(Locale.ROOT)));
 		var receipt = session.view().receipt();
 		boolean energy = receipt.retainedEnergy() > 0 || receipt.uncertainEnergy() > 0;
-		if (!session.waiting() && receipt.uncertain() == 0 && receipt.uncertainEnergy() == 0 && session.view().status() != MeTerminalView.Status.TRANSFER_UNKNOWN) {
+		boolean chemical = receipt.retainedChemical() > 0 || receipt.uncertainChemical() > 0;
+		if (!session.waiting() && receipt.uncertain() == 0 && receipt.uncertainEnergy() == 0 && receipt.uncertainChemical() == 0 && session.view().status() != MeTerminalView.Status.TRANSFER_UNKNOWN) {
 			if (receipt.retained() > 0) status = text("retained_fluid", receipt.fluid(), receipt.retained());
 			else if (receipt.retainedEnergy() > 0) status = text("retained_energy", receipt.retainedEnergy());
+			else if (receipt.retainedChemical() > 0) status = text("retained_chemical", receipt.chemical(), receipt.retainedChemical());
 		}
-		g.drawString(font, font.plainSubstrByWidth(status.getString(), Math.max(0, width - (energy ? 148 : 124))), left - originX + 76, grid.y - originY + grid.rows * 18 + 5, TerminalSkin.MUTED, false);
+		g.drawString(font, font.plainSubstrByWidth(status.getString(), Math.max(0, width - (chemical ? 172 : energy ? 148 : 124))), left - originX + 76, grid.y - originY + grid.rows * 18 + 5, TerminalSkin.MUTED, false);
 	}
 }
