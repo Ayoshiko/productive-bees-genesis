@@ -22,6 +22,7 @@ public final class MeTerminalScreen extends Screen {
 	private final MeInventoryPane storage;
 	private final MePatternPane patterns;
 	private final MeProcessingPane processing;
+	private final MePatternBatchPane batches;
 	private final List<Button> actions = new ArrayList<>();
 	private MeTerminalView shown;
 	private EditBox filter, quantity;
@@ -35,6 +36,7 @@ public final class MeTerminalScreen extends Screen {
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume) {
 		super(text("title")); opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
 		patterns = new MePatternPane(menu, session, this::request);
+		batches = new MePatternBatchPane(menu, session, this::request);
 		processing = new MeProcessingPane(menu, session, (action, row, page, amount, contents) -> transmit(session.begin(action, row, page, amount, contents ? "contents" : "item")));
 	}
 	private static Component text(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.me_terminal." + key, args); }
@@ -53,10 +55,11 @@ public final class MeTerminalScreen extends Screen {
 		button("tasks", 120, 20, 40, () -> request(TASKS, -1, 0));
 		button("patterns", 164, 20, 44, () -> request(PATTERN_READ, -1, 0));
 		button("pattern_encode", 212, 20, 44, () -> request(PATTERN_ENCODE_CRAFTING, -1, 0, 0));
-		button("refresh", 260, 20, panelWidth - 268, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode() == Mode.PATTERN_PROCESSING ? PATTERN_ENCODE_PROCESSING : shown.mode() == Mode.PATTERN_ENCODING ? PATTERN_ENCODE_CRAFTING : shown.mode().pattern() ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
+		button("refresh", 260, 20, panelWidth - 268, () -> { if (shown.mode() == Mode.STORAGE) storage.refresh(); else request(shown.mode().batch() ? POLL : shown.mode() == Mode.PATTERN_PROCESSING ? PATTERN_ENCODE_PROCESSING : shown.mode() == Mode.PATTERN_ENCODING ? PATTERN_ENCODE_CRAFTING : shown.mode().pattern() ? PATTERN_READ : shown.mode() == Mode.TASKS ? TASKS : shown.mode() == Mode.PLAN ? POLL : BROWSE, -1, shown.page()); });
 		if (shown.mode().pattern()) {
 			filter = null; quantity = null;
-			var widgets = shown.mode() == Mode.PATTERN_PROCESSING ? processing.build(font, left, top, panelWidth, panelHeight, this::onClose) : patterns.build(font, left, top, panelWidth, panelHeight, this::onClose);
+			var widgets = shown.mode().batch() ? batches.build(font, left, top, panelWidth, panelHeight, this::onClose)
+					: shown.mode() == Mode.PATTERN_PROCESSING ? processing.build(font, left, top, panelWidth, panelHeight, this::onClose) : patterns.build(font, left, top, panelWidth, panelHeight, this::onClose);
 			for (var widget : widgets) addRenderableWidget(widget);
 			if (session.waiting()) for (var action : actions) action.active = false;
 			return;
@@ -92,20 +95,20 @@ public final class MeTerminalScreen extends Screen {
 		transmit(session.begin(action, row, page, amount, filter == null ? query : filter.getValue()));
 	}
 	private void transmit(MeTerminalRequest request) {
-		if (request != null) { PacketDistributor.sendToServer(request); nextPoll = Util.getMillis()+1000; for (var button : actions) button.active = false; }
+		if (request != null) { PacketDistributor.sendToServer(request); nextPoll = Util.getMillis() + (shown.mode().batch() || request.action() == PATTERN_BATCH_REPLACE ? 250 : 1000); for (var button : actions) button.active = false; }
 	}
 	@Override public void tick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { minecraft.setScreen(null); return; }
 		if (session.view().mode() == Mode.STORAGE) storage.tick(true);
-		if (session.view().mode() == Mode.PATTERN_PROCESSING) processing.tick(); else if (session.view().mode().pattern()) patterns.tick();
+		if (session.view().mode().batch()) batches.tick(); else if (session.view().mode() == Mode.PATTERN_PROCESSING) processing.tick(); else if (session.view().mode().pattern()) patterns.tick();
 		if (shown != session.view() || !session.waiting() && actions.stream().noneMatch(button -> button.active)) build();
-		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS)) {
-			nextPoll = Util.getMillis()+2000; request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
+		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS || shown.mode().batch() && shown.status() == Status.WAITING)) {
+			nextPoll = Util.getMillis() + (shown.mode().batch() ? 250 : 2000); request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
 		}
 	}
 	@Override public boolean mouseClicked(double x, double y, int button) {
 		if (shown.mode() == Mode.STORAGE) return storage.click(x, y, button) || super.mouseClicked(x, y, button);
-		if (shown.mode().pattern()) return (shown.mode() == Mode.PATTERN_PROCESSING ? processing.click(x, y, button) : patterns.click(x, y, button)) || super.mouseClicked(x, y, button);
+		if (shown.mode().pattern()) return (shown.mode().batch() ? batches.click(x, y, button) : shown.mode() == Mode.PATTERN_PROCESSING ? processing.click(x, y, button) : patterns.click(x, y, button)) || super.mouseClicked(x, y, button);
 		if (button == 0 && x >= left+8 && x < left+panelWidth-8 && y >= top+56 && y < top+184 && !session.waiting()) {
 			int row = (int)(y-top-56)/16; if (row < shown.rows().size()) { selected = row; return true; }
 		}
@@ -141,7 +144,7 @@ public final class MeTerminalScreen extends Screen {
 		g.drawString(font, title, left+8, top+7, TerminalSkin.INK, false);
 		g.drawString(font, text("page", shown.page()+1), left+panelWidth-70, top+7, TerminalSkin.MUTED, false);
 		if (shown.mode().pattern()) {
-			if (shown.mode() == Mode.PATTERN_PROCESSING) processing.render(g, font, x, y); else patterns.render(g, font, x, y);
+			if (shown.mode().batch()) batches.render(g, font, x, y); else if (shown.mode() == Mode.PATTERN_PROCESSING) processing.render(g, font, x, y); else patterns.render(g, font, x, y);
 			for (var widget : renderables) widget.render(g, x, y, partial); return;
 		}
 		if (shown.mode() == Mode.STORAGE) {

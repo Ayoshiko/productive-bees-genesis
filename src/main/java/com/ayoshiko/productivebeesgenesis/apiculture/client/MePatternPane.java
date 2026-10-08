@@ -70,7 +70,7 @@ final class MePatternPane {
 		if (button != 1 || !canReplace() || x < left + 8 || x >= left + width - 8 || y < top + 56 || y >= top + 184) return false;
 		int row = (int) (y - top - 56) / 16;
 		if (row >= shown.rows().size()) return false;
-		commands.send(PATTERN_REPLACE, row, shown.page(), 0); return true;
+		commands.send(net.minecraft.client.gui.screens.Screen.hasShiftDown() ? PATTERN_BATCH_REPLACE : PATTERN_REPLACE, row, shown.page(), 0); return true;
 	}
 	void tick() {
 		if (shown == null || apply == null) return;

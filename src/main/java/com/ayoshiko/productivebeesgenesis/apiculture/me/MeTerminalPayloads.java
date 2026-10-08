@@ -6,7 +6,7 @@ import net.neoforged.neoforge.network.registration.HandlerThread;
 
 public final class MeTerminalPayloads {
 	public static void register(RegisterPayloadHandlersEvent event) {
-		var r = event.registrar("11").executesOn(HandlerThread.MAIN);
+		var r = event.registrar("12").executesOn(HandlerThread.MAIN);
 		r.playToServer(MeTerminalRequest.TYPE, MeTerminalRequest.CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof MeTerminalHost host) host.meRequest(player, request);
 		});

@@ -51,7 +51,7 @@ public final class MeTerminalSession {
 				send(player, request, processing.request(player, request)); return;
 			}
 			if (processing != null) processing.suspend(); processingPage = false;
-			if (MePatternSession.handles(request.action()) || request.action() == MeTerminalRequest.Action.PAGE && patterns != null) {
+			if (MePatternSession.handles(request.action()) || (request.action() == MeTerminalRequest.Action.PAGE || request.action() == MeTerminalRequest.Action.POLL) && patterns != null) {
 				closeBackend(); if (patterns == null) patterns = new MePatternSession();
 				send(player, request, patterns.request(player, request)); return;
 			}

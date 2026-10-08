@@ -37,14 +37,25 @@ public final class AePatternEditor {
 	}
 	public static MePatternPlan replace(ItemStack original, int row, ItemStack sample) {
 		var status = validate(original); if (status != Status.OK) return MePatternPlan.failed(status);
-		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);
-		var keys = new ArrayList<AEKey>();
-		for (var stack : encoded.sparseInputs()) if (stack != null) keys.add(stack.what());
-		for (var stack : encoded.sparseOutputs()) if (stack != null) keys.add(stack.what());
-		if (row < 0 || row >= keys.size()) return MePatternPlan.failed(Status.STALE);
-		var source = keys.get(row); var target = sampleKey(source, sample);
+		var source = sourceKey(original, row);
+		if (source == null) return MePatternPlan.failed(Status.STALE);
+		var target = sampleKey(source, sample);
 		if (target == null) return MePatternPlan.failed(Status.PATTERN_SAMPLE_INVALID);
 		if (source.equals(target)) return MePatternPlan.failed(Status.PATTERN_NO_CHANGE);
+		return replace(original, source, target);
+	}
+	static AEKey sourceKey(ItemStack original, int row) {
+		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN); int index = 0;
+		for (var stack : encoded.sparseInputs()) if (stack != null && index++ == row) return stack.what();
+		for (var stack : encoded.sparseOutputs()) if (stack != null && index++ == row) return stack.what();
+		return null;
+	}
+	static MePatternPlan replace(ItemStack original, AEKey source, AEKey target) {
+		var status = validate(original); if (status != Status.OK) return MePatternPlan.failed(status);
+		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);
+		boolean found = encoded.sparseInputs().stream().anyMatch(stack -> stack != null && source.equals(stack.what()))
+				|| encoded.sparseOutputs().stream().anyMatch(stack -> stack != null && source.equals(stack.what()));
+		if (!found) return MePatternPlan.failed(Status.PATTERN_NO_MATCH);
 		try {
 			var inputs = replace(encoded.sparseInputs(), source, target); var outputs = replace(encoded.sparseOutputs(), source, target);
 			if (!valid(inputs) || !valid(outputs)) return MePatternPlan.failed(Status.PATTERN_INVALID);
@@ -53,7 +64,7 @@ public final class AePatternEditor {
 			return new MePatternPlan(Status.OK, result, rows);
 		} catch (ArithmeticException overflow) { return MePatternPlan.failed(Status.PATTERN_OVERFLOW); }
 	}
-	private static AEKey sampleKey(AEKey source, ItemStack sample) {
+	static AEKey sampleKey(AEKey source, ItemStack sample) {
 		if (sample.isEmpty()) return null;
 		var probe = sample.copyWithCount(1); var before = probe.copy();
 		AEKey key;
@@ -70,7 +81,7 @@ public final class AePatternEditor {
 		for (var stack : stacks) result.add(stack != null && source.equals(stack.what()) ? new GenericStack(target, stack.amount()) : stack);
 		return result;
 	}
-	private static Status validate(ItemStack original) {
+	static Status validate(ItemStack original) {
 		if (!AEItems.PROCESSING_PATTERN.is(original)) return Status.PATTERN_UNSUPPORTED;
 		if (original.getCount() < 1 || original.getCount() > Math.min(64, original.getMaxStackSize())) return Status.INVALID;
 		var encoded = original.get(AEComponents.ENCODED_PROCESSING_PATTERN);

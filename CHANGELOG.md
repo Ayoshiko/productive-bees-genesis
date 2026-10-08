@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4a5 背包样板批量替换**：读取鼠标处理样板后，Shift＋右键原资源，使用九格左上角样本预览背包中不同处理样板的替换。按全服预算逐叠准备，支持逐项选择／全选及完整差异；非法、无匹配或溢出项不可选。确认统一核对并原位改写选中叠，保留张数、数量、空位及组件，不消耗来源样板或样本，不需要空背包格。ME 协议升至 12，存档格式不变；本包未编译／未运行验证。
+
 - **D18j4a4 自由处理样板编码**：从真实九格任选样本，以物品或容器内容添加最多 81 输入／27 输出，支持正整数数量编辑、逐项删除和清空；首个输出为主产物，同键合计溢出拒绝。返回主工作台调整样本或切换工作页保留草稿，实际关闭终端清除；确认前重新核对版本、权限与鼠标，将整叠空白样板转换为同张数处理样板，保留自定义组件且不消耗样本。ME 协议升至 11，存档格式不变；本包未编译／未运行验证。
 
 - **D18j4a3 处理样板资源替换**：读取鼠标上的处理样板后，右键原资源，用九格左上角样本预览替换全部同键输入和输出。物品使用完整组件样本，其它类型沿 AE2 对应容器策略读取；预览高亮变化项，确认才改写同版整叠，保留数量、空位及自定义组件，不消耗样本。相同键、不可用样本、合计溢出和过期结果均不改写；提交前重新比对样本结果和账户版本。ME 协议升至 10，存档格式不变；本包未编译／未运行验证。
@@ -179,6 +181,8 @@
 ### English
 
 #### Added
+
+- **D18j4a5 Inventory pattern batch replacement**: Shift-right-click a resource in a carried processing pattern to preview replacements across different inventory patterns using the top-left crafting sample. Each stack is prepared under the shared server budget, with individual/all-eligible selection and full change details. Invalid, unmatched or overflowing patterns cannot be selected. Confirmation checks every selected stack before replacing them in place, preserving counts, amounts, sparse slots and components without consuming the source pattern or sample or requiring empty inventory slots. ME protocol advances to 12 with no saved-data format changes. Compilation and runtime validation were skipped.
 
 - **D18j4a4 Free-form processing pattern encoding**: Add item or container-content samples from any real crafting slot, with up to 81 inputs and 27 outputs, positive amounts, per-entry editing/removal and draft clearing. The first output is the primary result; combined-key overflow is rejected. Drafts survive workbench returns and work-page changes until the actual terminal menu closes. Confirmation rechecks the preview, permissions and carried stack, then converts blank patterns into the same number of processing patterns while preserving custom components and consuming no samples. ME protocol advances to 11 with no saved-data format changes. Compilation and runtime validation were skipped.
 

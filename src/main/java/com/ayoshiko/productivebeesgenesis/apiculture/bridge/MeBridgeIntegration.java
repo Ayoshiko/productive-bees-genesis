@@ -27,7 +27,13 @@ public final class MeBridgeIntegration {
 				: com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan.failed(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED);
 	}
 	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MeProcessingDraft processingDraft() { return installed() ? Loaded.processingDraft() : null; }
+	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared patternReplacement(net.minecraft.world.item.ItemStack pattern, int row, net.minecraft.world.item.ItemStack sample) {
+		return installed() ? Loaded.patternReplacement(pattern, row, sample) : new com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED, null);
+	}
 	private static final class Loaded {
+		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared patternReplacement(net.minecraft.world.item.ItemStack pattern, int row, net.minecraft.world.item.ItemStack sample) {
+			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternReplacement.capture(pattern, row, sample);
+		}
 		static com.ayoshiko.productivebeesgenesis.apiculture.me.MeProcessingDraft processingDraft() { return new com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AeProcessingDraft(); }
 		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternPlan replacePattern(net.minecraft.world.item.ItemStack item, int row, net.minecraft.world.item.ItemStack sample) {
 			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternEditor.replace(item, row, sample);
