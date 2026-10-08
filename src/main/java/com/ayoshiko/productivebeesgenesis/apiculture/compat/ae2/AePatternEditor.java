@@ -80,7 +80,7 @@ public final class AePatternEditor {
 		try { return valid(encoded.sparseInputs()) && valid(encoded.sparseOutputs()) ? Status.OK : Status.PATTERN_INVALID; }
 		catch (ArithmeticException invalid) { return Status.PATTERN_INVALID; }
 	}
-	private static boolean valid(List<GenericStack> stacks) {
+	static boolean valid(List<GenericStack> stacks) {
 		var totals = new HashMap<AEKey, Long>();
 		for (var stack : stacks) if (stack != null) {
 			if (stack.amount() <= 0 || AEItems.MISSING_CONTENT.is(stack.what())) return false;
@@ -97,7 +97,7 @@ public final class AePatternEditor {
 		for (var stack : stacks) result.add(stack == null ? null : new GenericStack(stack.what(), divide ? stack.amount() / factor : Math.multiplyExact(stack.amount(), factor)));
 		return result;
 	}
-	private static void append(List<Row> rows, List<GenericStack> before, List<GenericStack> after, Kind kind) {
+	static void append(List<Row> rows, List<GenericStack> before, List<GenericStack> after, Kind kind) {
 		for (int i = 0; i < before.size(); i++) {
 			var stack = before.get(i); if (stack == null) continue;
 			var key = after.get(i).what(); var icon = key instanceof AEItemKey item ? item.toStack(1) : key instanceof AEFluidKey fluid ? new ItemStack(fluid.getFluid().getBucket()) : ItemStack.EMPTY;
@@ -106,6 +106,13 @@ public final class AePatternEditor {
 			if (label.length() > 128) label = label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
 			rows.add(new Row(kind, icon, label, stack.amount(), after.get(i).amount(), !key.equals(stack.what())));
 		}
+	}
+	static Status blankStatus(ItemStack original) {
+		if (!AEItems.BLANK_PATTERN.is(original)) return Status.PATTERN_NEEDS_BLANK;
+		if (original.getCount() < 1 || original.getCount() > Math.min(64, original.getMaxStackSize())
+				|| original.has(AEComponents.ENCODED_CRAFTING_PATTERN) || original.has(AEComponents.ENCODED_PROCESSING_PATTERN)
+				|| original.has(AEComponents.ENCODED_SMITHING_TABLE_PATTERN) || original.has(AEComponents.ENCODED_STONECUTTING_PATTERN)) return Status.PATTERN_INVALID;
+		return Status.OK;
 	}
 	private AePatternEditor() { }
 }

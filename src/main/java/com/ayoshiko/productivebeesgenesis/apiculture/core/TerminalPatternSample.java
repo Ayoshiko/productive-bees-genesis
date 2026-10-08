@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 
-/** 替换样本属于真实材料账户；只提供副本，不消耗物品或容器内容。 */
+/** 样板样本属于真实材料账户；只提供副本，不消耗物品或容器内容。 */
 public final class TerminalPatternSample {
 	private final TerminalCraftingAccount account;
 	private final TerminalCraftingAccount.State state;
@@ -13,12 +13,13 @@ public final class TerminalPatternSample {
 	private TerminalPatternSample(TerminalCraftingAccount account, TerminalCraftingAccount.State state, ItemStack item) {
 		this.account = account; this.state = state; this.item = item.copyWithCount(1);
 	}
-	public static TerminalPatternSample capture(ServerPlayer player, AbstractContainerMenu menu) {
+	public static TerminalPatternSample capture(ServerPlayer player, AbstractContainerMenu menu) { return capture(player, menu, 0); }
+	public static TerminalPatternSample capture(ServerPlayer player, AbstractContainerMenu menu, int slot) {
 		if (!player.server.isSameThread()) throw new IllegalStateException("Pattern samples belong to the server thread");
-		if (player.containerMenu != menu || !(menu instanceof TerminalCraftingMenu.Host host)) return null;
+		if (slot < 0 || slot >= 9 || player.containerMenu != menu || !(menu instanceof TerminalCraftingMenu.Host host)) return null;
 		var account = host.craftingAccount(player);
 		if (account == null || !account.available() || account.busy()) return null;
-		var state = account.state(); var item = state.grid().getFirst();
+		var state = account.state(); var item = state.grid().get(slot);
 		if (item.isEmpty() || state.uncertain() || state.materialRequest() != null || !state.pending().isEmpty()) return null;
 		return new TerminalPatternSample(account, state, item);
 	}

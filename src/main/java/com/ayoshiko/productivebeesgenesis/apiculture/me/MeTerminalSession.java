@@ -17,6 +17,8 @@ public final class MeTerminalSession {
 	private final TerminalSequence sequences = new TerminalSequence();
 	private MeTerminalBackend backend;
 	private MePatternSession patterns;
+	private MeProcessingSession processing;
+	private boolean processingPage;
 	private MeTerminalView view = MeTerminalView.empty(MeTerminalView.Status.CLOSED);
 	private long sent, acknowledged, sentAt;
 	public MeTerminalSession(int containerId, UUID session) { this.containerId = containerId; this.session = session; }
@@ -43,6 +45,12 @@ public final class MeTerminalSession {
 		try {
 			if (request.action() == MeTerminalRequest.Action.CLOSE) { closePage(); if (TerminalPayloads.allow(player)) send(player, request, MeTerminalView.empty(MeTerminalView.Status.CLOSED)); return; }
 			if (!TerminalPayloads.allow(player) || !TerminalSubscriptionService.allowCrafting(player.server) || !charge.getAsBoolean()) return;
+			if (MeProcessingDraft.handles(request.action()) || processingPage && (request.action() == MeTerminalRequest.Action.PAGE || request.action() == MeTerminalRequest.Action.PATTERN_APPLY)) {
+				closeBackend(); if (patterns != null) { patterns.close(); patterns = null; }
+				if (processing == null) processing = new MeProcessingSession(); processingPage = true;
+				send(player, request, processing.request(player, request)); return;
+			}
+			if (processing != null) processing.suspend(); processingPage = false;
 			if (MePatternSession.handles(request.action()) || request.action() == MeTerminalRequest.Action.PAGE && patterns != null) {
 				closeBackend(); if (patterns == null) patterns = new MePatternSession();
 				send(player, request, patterns.request(player, request)); return;
@@ -80,6 +88,7 @@ public final class MeTerminalSession {
 		try { MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes(); }
 		catch (RuntimeException invalid) {
 			if (patterns != null) { patterns.close(); patterns = null; }
+			if (processing != null) processing.suspend();
 			var fallback = value.mode().pattern() ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE, value.mode())
 					: value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
 			reply = new MeTerminalReply(containerId, session, request.sequence(), fallback.withReceipt(value.receipt()));
@@ -95,6 +104,9 @@ public final class MeTerminalSession {
 		};
 	}
 	private void closeBackend() { var old = backend; backend = null; if (old != null) old.close(); }
-	private void closePage() { closeBackend(); if (patterns != null) patterns.close(); patterns = null; }
-	public void close() { closePage(); sequences.close(); }
+	private void closePage() {
+		closeBackend(); if (patterns != null) patterns.close(); patterns = null;
+		if (processing != null) processing.suspend(); processingPage = false;
+	}
+	public void close() { closePage(); if (processing != null) processing.close(); processing = null; sequences.close(); }
 }

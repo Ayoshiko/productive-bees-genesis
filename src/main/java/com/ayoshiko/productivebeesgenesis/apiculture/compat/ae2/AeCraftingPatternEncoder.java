@@ -17,11 +17,7 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 public final class AeCraftingPatternEncoder {
 	public static boolean isBlank(ItemStack item) { return AEItems.BLANK_PATTERN.is(item); }
 	public static MePatternPlan prepare(ServerPlayer player, ItemStack original, TerminalPatternSource source) {
-		if (!isBlank(original)) return MePatternPlan.failed(Status.PATTERN_NEEDS_BLANK);
-		if (original.getCount() < 1 || original.getCount() > Math.min(64, original.getMaxStackSize())
-				|| original.has(AEComponents.ENCODED_CRAFTING_PATTERN) || original.has(AEComponents.ENCODED_PROCESSING_PATTERN)
-				|| original.has(AEComponents.ENCODED_SMITHING_TABLE_PATTERN) || original.has(AEComponents.ENCODED_STONECUTTING_PATTERN))
-			return MePatternPlan.failed(Status.PATTERN_INVALID);
+		var status = AePatternEditor.blankStatus(original); if (status != Status.OK) return MePatternPlan.failed(status);
 		var ingredients = source.ingredients(); var output = source.output();
 		var encoded = PatternDetailsHelper.encodeCraftingPattern(source.recipe(), ingredients.toArray(ItemStack[]::new), output, false, false);
 		var result = original.transmuteCopy(encoded.getItem(), original.getCount());

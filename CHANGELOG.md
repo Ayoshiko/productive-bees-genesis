@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4a4 自由处理样板编码**：从真实九格任选样本，以物品或容器内容添加最多 81 输入／27 输出，支持正整数数量编辑、逐项删除和清空；首个输出为主产物，同键合计溢出拒绝。返回主工作台调整样本或切换工作页保留草稿，实际关闭终端清除；确认前重新核对版本、权限与鼠标，将整叠空白样板转换为同张数处理样板，保留自定义组件且不消耗样本。ME 协议升至 11，存档格式不变；本包未编译／未运行验证。
+
 - **D18j4a3 处理样板资源替换**：读取鼠标上的处理样板后，右键原资源，用九格左上角样本预览替换全部同键输入和输出。物品使用完整组件样本，其它类型沿 AE2 对应容器策略读取；预览高亮变化项，确认才改写同版整叠，保留数量、空位及自定义组件，不消耗样本。相同键、不可用样本、合计溢出和过期结果均不改写；提交前重新比对样本结果和账户版本。ME 协议升至 10，存档格式不变；本包未编译／未运行验证。
 
 - **D18j4a2 九格合成样板编码**：ME 工作页新增编码页，持空白样板右键任务图标可直接预览。读取真实九格的普通配方，每格以一件样本编码；确认将鼠标整叠空白样板转换为同张数 AE2 合成样板，材料不消耗，默认关闭物品和流体替代，并保留自定义组件。材料账户、配方、输出或鼠标变化时拒绝旧预览，沿原权限、收费及无掉落保管；无需在线 ME 网格。ME 协议升至 9，存档格式不变；本包未编译／未运行验证。
@@ -177,6 +179,8 @@
 ### English
 
 #### Added
+
+- **D18j4a4 Free-form processing pattern encoding**: Add item or container-content samples from any real crafting slot, with up to 81 inputs and 27 outputs, positive amounts, per-entry editing/removal and draft clearing. The first output is the primary result; combined-key overflow is rejected. Drafts survive workbench returns and work-page changes until the actual terminal menu closes. Confirmation rechecks the preview, permissions and carried stack, then converts blank patterns into the same number of processing patterns while preserving custom components and consuming no samples. ME protocol advances to 11 with no saved-data format changes. Compilation and runtime validation were skipped.
 
 - **D18j4a3 Processing pattern resource replacement**: Right-click a resource after reading a carried processing pattern to preview replacement of all exact matching inputs and outputs from the top-left crafting slot. Items retain their components; other resource types use the corresponding AE2 container strategy. Changed entries are highlighted and confirmation rewrites the identical carried stack while preserving amounts, sparse positions and custom components without consuming the sample. Identical keys, unavailable samples, combined-key overflow and stale results do not rewrite the item. Confirmation rechecks the sample result and material account. ME protocol advances to 10 with no saved-data format changes. Compilation and runtime validation were skipped.
 
