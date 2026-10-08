@@ -129,8 +129,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"ExtraFactoryForEMEMixin"
 	);
 
-	/** AE2 接口注入 Mixin（目标类始终可加载，仅要求 AE2 已安装） */
+	/** AE2 兼容 Mixin，仅在 AE2 已安装时应用。 */
 	private static final Set<String> AE2_MIXINS = Set.of(
+			"Ae2CraftingNotificationMixin",
 			"Ae2PatternProviderTargetMixin",
 			"Ae2PatternProviderTargetCacheMixin",
 			"Ae2NetworkStorageAggregationMixin",

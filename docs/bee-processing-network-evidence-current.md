@@ -632,3 +632,20 @@ ME 协议 3 的库存页最多 36 项，计划／任务仍八项，回复上限�
 运行基线沿[10.122](#s10-122)，JEI 编译 19.36.0.360、运行 19.39.0.368。最终 JAR 4,113,074 字节，SHA-256 `ffc31ea31b4a15994b6adeb84c8d126d578635672e777dbbff8ec9c248548d27`，保留为 `build/network-gates/d18j3b-jei-search-20261008-first/runtime-verified.jar`；源码指纹 `63EECECDDC1328FA89A7405CEBDE46584AA9CA2F1DC699FC990CBE2D5141DC5A`。该目录保留 gate.json、测试 XML、实际客户端配置副本和 delivery-audit.json，截图及完整日志沿 gate 引用路径保留。
 
 本步只关闭 j3b 搜索词同步范围，没有新增无 JEI／无 AE2 启动、跨 JVM 客户端重启、完整无线／独立机或性能矩阵；可选类型隔离已按调用链复核。任务完成置顶／提醒、关闭材料回存、外部检索语法完全对齐、附属资源存取、完整 D18／D19／D29／D30 与发布门保持开放。
+
+<a id="s10-125"></a>
+### 10.125 D18j3c1 真实 ME 作业完成提醒与短历史去重（2026-10-08，本步范围已验收）
+
+在网络 worktree 的 `22440c8` 上新增默认关闭的客户端完成提醒。沿 AE2 已有的所属玩家 FINISHED 事件、资格检查和 FinishedJobToast 入口，开启后不要求 AE2 无线设备，关闭时保持原生设置。完成与取消来自实际 CPU 状态；standalone 提交可返回空 link，因此没有新增 isDone 轮询或以任务列表消失推断成功。Mixin 只位于 client 且经 AE2 加载检查，复用同一 addToast 调用；最近 256 个已展示 jobId 去重，只保存 UUID，随 AE2 新登录的 clearPendingJobs 清理。合同、视觉和已核对的 19.2.17／19.2.18 来源见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+最终 `pwsh -NoProfile -File gradle/network-concurrent-gate.ps1 -RunId d18j3c1-completion-20261008-final -MeNotifications -Combination ae2 -Ae2Version 19.2.18 -WriteOnly` 通过。TerminalClientStateTest 9 项及 MixinBoundaryConventionTest 5 项，合计 14 项零失败／错误／跳过；build、verifyReleaseArtifact、compileDomainProbeJava 通过。首轮已执行这些检查，第二轮生产源码未变，Gradle 复用相同结果，只重编译修正后的探针。writer PID 9196，两位真实 TCP 玩家正常登录／退出；server passed=true、meCraftingVerified=true、13 个原合成阶段完成，owner passed=true、craftingNotificationsVerified=true，recoveryIncluded=false。
+
+正式客户端完成原计划浏览、材料预览、CPU 选择与提交；第一单取消后没有完成 toast。第二单实际消耗四份石料、产出两份铁锭，客户端先退出 ME 任务页，再由有限加工夹具向真实 ME CPU／存储交付成品；蜂业首页出现原生“自动合成完毕！2 铁锭”提示。客户端关闭了 AE2 原生提醒配置且未提供 AE2 无线物品，只启用本模组开关；同一测试保留材料守恒、重复确认拒绝与计划关闭断言。截图 me-completed-toast.png 已目视核对。作业和成品仍由 AE2 保管，本功能没有新增领取或服务端资产操作。
+
+真实完成后，用受控客户端状态调用补充边界：重放同一完成 ID 不再产生 toast；关闭附加开关且原生开关关闭时不显示；两边开关均开启时仍走同一提示路径，重复 ID 被抑制；调用原生 clearPendingJobs 后可再次展示同一测试 ID。此清理测试是生命周期入口调用，不写成新增客户端跨 JVM／离线完成补播验证。原生 AE2 库存屏幕的抑制规则保持，缓存容量只限定近期提示去重，不限制作业或库存。
+
+首轮 `d18j3c1-completion-20261008-first` 的提醒与去重已经通过，craftingNotificationsVerified=true，但返回任务页后的旧 609 负向断言报 Forged plan revision accepted。该检查读取最终界面状态，自动 TASKS 轮询可覆盖所需回执，首轮未记录实际对应状态，不能据此认定服务器接受了伪造计划。仅在探针发送该负向请求前将下一次自动轮询延后 10 秒，并补充实际失败状态信息；保留原 STALE 拒绝断言和服务端守恒检查。第二轮全部通过，生产代码未因该夹具修正改变，两轮原报告均保留。
+
+运行基线沿[10.122](#s10-122)，AE2 编译 19.2.17、运行 19.2.18。最终 JAR 4,115,109 字节，SHA-256 `84f7dd1d54a24ee2ec8b3d48d9f26836d549dcd5d9feaaad1d8da347b7e66843`，保留为 `build/network-gates/d18j3c1-completion-20261008-final/runtime-verified.jar`；源码指纹 `70DE74BD12AE94F558FA422B2BE80B9DD8141DDF5B275F532E4C77C64B1270F5`。该目录保留 gate.json、两份测试 XML、实际客户端配置副本和 delivery-audit.json，新增 toast 截图已纳入 gate 哈希。
+
+本步仅关闭 j3c1 完成提醒；没有新增服务器轮询、网络协议、玩家附件或世界存档。无 AE2 类型隔离按客户端登记和加载条件复核，本轮未新增无 AE2 启动、完整无线／独立机或性能矩阵。完成产物置顶、关闭材料回存、离线补通知、附属资源存取、完整 D18／D19／D29／D30 和发布门保持开放。

@@ -27,6 +27,16 @@ final class MeCraftingClient {
 			if (session.waiting()) return null; require(session.view().status()==Status.DISCONNECTED,"Unowned/absent ME accepted a request"); return ack();
 		}
 		if (!owner) return ack();
+		if (CraftingNotificationClient.enabled()) {
+			if (stage == 600) CraftingNotificationClient.prepare(client);
+			if (stage == 608) {
+				if (step == 0) { if (!CraftingNotificationClient.completed(client)) return null; step = 1; }
+				if (client.screen instanceof NetworkTerminalScreen parent) { parent.mouseClicked(parent.getGuiLeft() + 16, parent.getGuiTop() + 16, 0); parent.mouseReleased(parent.getGuiLeft() + 16, parent.getGuiTop() + 16, 0); return null; }
+				if (!(client.screen instanceof MeTerminalScreen taskScreen) || session.waiting()) return null;
+				if (step == 1) { press(taskScreen, "tasks"); step = 2; return null; }
+				return view.mode() == Mode.TASKS && view.rows().isEmpty() ? ack() : null;
+			}
+		}
 		if (stage==600 || stage==611) {
 			if (client.screen instanceof NetworkTerminalScreen screen) {
 				int left=screen.getGuiLeft(), top=screen.getGuiTop();
@@ -65,12 +75,14 @@ final class MeCraftingClient {
 			}
 			if (view.mode()!=Mode.TASKS || view.rows().isEmpty()) return null;
 			require(view.rows().size()==1 && view.rows().getFirst().enabled(),"Missing cancellable AE2 job");
+			if (CraftingNotificationClient.enabled()) { CraftingNotificationClient.submitted(); if (stage == 607) press(screen, "back"); }
 			if (stage==603) picture(client,"me-jobs.png"); return ack();
 		}
 		if (stage==604) { send(replay); return ack(); }
 		if (stage==605) {
 			if (step==0) { choose(screen,0); press(screen,"cancel"); step++; return null; }
-			return view.status()==Status.CANCELLED || view.mode()==Mode.TASKS && view.rows().isEmpty() ? ack() : null;
+			if (view.status()==Status.CANCELLED || view.mode()==Mode.TASKS && view.rows().isEmpty()) { if (CraftingNotificationClient.enabled()) CraftingNotificationClient.cancelled(client); return ack(); }
+			return null;
 		}
 		if (stage==608) {
 			if (step==0) { press(screen,"tasks"); step++; return null; }
@@ -78,9 +90,10 @@ final class MeCraftingClient {
 		}
 		if (stage==609) {
 			if (step==0) {
+				var polling = MeTerminalScreen.class.getDeclaredField("nextPoll"); polling.setAccessible(true); polling.setLong(screen, net.minecraft.Util.getMillis() + 10_000);
 				var valid=session.begin(CONFIRM,-1,0,1,""); send(new MeTerminalRequest(valid.containerId(),valid.session(),valid.sequence(),CONFIRM,Long.MAX_VALUE,-1,0,1,"")); step++; return null;
 			}
-			require(view.status()==Status.STALE,"Forged plan revision accepted"); return ack();
+			require(view.status()==Status.STALE,"Forged plan revision reply was " + view.status()); return ack();
 		}
 		return null;
 	}

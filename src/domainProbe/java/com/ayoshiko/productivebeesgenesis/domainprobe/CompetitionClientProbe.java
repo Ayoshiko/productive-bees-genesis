@@ -259,6 +259,10 @@ public final class CompetitionClientProbe {
         report.addProperty("mode", reader() ? "read" : "write"); report.addProperty("connections", connections);
         report.addProperty("session", session); report.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
         if (TerminalPermissionProbe.enabled()) report.addProperty("terminalPermissionsClient", reader() || TerminalPermissionClient.completed());
+        if (CraftingNotificationClient.enabled() && OWNER && ModList.get().isLoaded("ae2")) {
+            report.addProperty("craftingNotificationsVerified", CraftingNotificationClient.verified);
+            if (failure == null && !CraftingNotificationClient.verified) { failure = new IllegalStateException("Missing crafting notification checks"); report.addProperty("passed", false); }
+        }
         if (failure != null) { report.addProperty("failure", failure.toString()); com.mojang.logging.LogUtils.getLogger().error("CONCURRENT_CLIENT_FAILED at {}/{}", stage, step, failure); }
         try { Files.writeString(Path.of("results/concurrent-client.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
         catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Cannot write concurrent report", error); }

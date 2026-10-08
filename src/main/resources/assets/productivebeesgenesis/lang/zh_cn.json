@@ -1,4 +1,6 @@
 {
+  "productivebeesgenesis.configuration.terminalNotifyCraftingFinished": "ME 合成完成提醒",
+  "productivebeesgenesis.configuration.terminalNotifyCraftingFinished.tooltip": "默认关闭。开启后，无需 AE2 无线终端也可收到自己的 ME 合成完成提醒；退出任务页后仍有效。关闭时保留 AE2 原有提醒设置。",
   "productivebeesgenesis.configuration.terminalSyncJeiSearch": "与 JEI 同步搜索",
   "productivebeesgenesis.configuration.terminalSyncJeiSearch.tooltip": "默认关闭。按正在输入的一侧双向同步搜索词；JEI 未就绪时仍可使用终端搜索。终端保留自身检索语法与 64 字符限制。",
   "screen.productivebeesgenesis.network.terminal.jei_search.active": "与 JEI 同步搜索词；终端使用自身检索语法。",

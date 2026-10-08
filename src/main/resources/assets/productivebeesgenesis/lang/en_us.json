@@ -1,4 +1,6 @@
 {
+  "productivebeesgenesis.configuration.terminalNotifyCraftingFinished": "ME crafting completion notifications",
+  "productivebeesgenesis.configuration.terminalNotifyCraftingFinished.tooltip": "Disabled by default. Shows completion notifications for your ME jobs without requiring an AE2 wireless terminal, including after leaving the task page. Disabling preserves AE2's original notification settings.",
   "productivebeesgenesis.configuration.terminalSyncJeiSearch": "Synchronize search with JEI",
   "productivebeesgenesis.configuration.terminalSyncJeiSearch.tooltip": "Disabled by default. Synchronizes the active search field in both directions. Terminal search remains available without JEI. Terminal syntax and the 64-character limit still apply.",
   "screen.productivebeesgenesis.network.terminal.jei_search.active": "Search text is synchronized with JEI; terminal syntax still applies.",

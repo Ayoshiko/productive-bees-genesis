@@ -64,6 +64,7 @@
     "AbstractUpgradeItemMixin"
   ],
   "client": [
+    "client.Ae2CraftingNotificationMixin",
     "client.ContainerSlotCountMixin",
     "client.MekGuiBlockItemDepthMixin",
     "client.JeiGhostIngredientDragMixin",
