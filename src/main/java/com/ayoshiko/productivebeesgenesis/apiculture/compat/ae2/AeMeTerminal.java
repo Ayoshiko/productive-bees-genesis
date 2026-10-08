@@ -34,6 +34,7 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	private List<ICraftingCPU> cpus = List.of();
 	private ICraftingCPU selectedCpu;
 	private ICraftingPlan plan;
+	private AeMePatternProviders providers;
 	private Future<ICraftingPlan> future;
 	private boolean leased, closed;
 	private long deadline;
@@ -43,12 +44,19 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		source = new PlayerSource(player, () -> node);
 	}
 	@Override public boolean valid(MeBridgeBlockEntity candidate) {
+		if (providers != null) providers.expire();
 		if ((future != null || plan != null) && player.server.overworld().getGameTime() > deadline) { cancelPlan(); clear(Status.TIMEOUT); }
 		if (future != null && future.isDone()) release();
 		return !closed && candidate == bridge && bridgeNode.status() == MeBridgeStatus.ONLINE && bridgeNode.getGridNode(Direction.UP) == node && node.getGrid() == grid;
 	}
 	@Override public MeTerminalView request(MeTerminalRequest request) {
 		var action = request.action();
+		if (AeMePatternProviders.handles(action) || providers != null && (action == MeTerminalRequest.Action.PAGE || action == MeTerminalRequest.Action.POLL)) {
+			cancelPlan(); stock = List.of(); pinned = Set.of(); rows = List.of(); tasks = List.of(); catalogue = List.of();
+			if (providers == null) providers = new AeMePatternProviders(player, grid, () -> valid(bridge));
+			return view = providers.request(request);
+		}
+		if (providers != null) { providers.close(); providers = null; }
 		if (action == MeTerminalRequest.Action.PLAN || action == MeTerminalRequest.Action.CONFIRM) {
 			grid.getStorageService().getCachedInventory();
 			if (bridgeNode.aggregationFaulted()) { cancelPlan(); return clear(Status.FAILED); }
@@ -310,5 +318,5 @@ public final class AeMeTerminal implements MeTerminalBackend {
 	private static String clip(String text, int length) { return text.length() <= length ? text : text.substring(0, Character.isHighSurrogate(text.charAt(length-1)) ? length-1 : length); }
 	private void release() { if (leased) { leased = false; MeTerminalBudget.release(player.server); } }
 	private void cancelPlan() { if (future != null) future.cancel(true); future = null; plan = null; cpus = List.of(); selectedCpu = null; release(); }
-	@Override public void close() { closed = true; cancelPlan(); stock = List.of(); pinned = Set.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); }
+	@Override public void close() { closed = true; cancelPlan(); if (providers != null) providers.close(); providers = null; stock = List.of(); pinned = Set.of(); rows = List.of(); tasks = List.of(); catalogue = List.of(); }
 }

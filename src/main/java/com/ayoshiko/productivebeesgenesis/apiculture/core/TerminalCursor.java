@@ -22,7 +22,7 @@ public final class TerminalCursor {
 			try {
 				if (!(original instanceof CompoundTag tag)) throw new IllegalArgumentException("Invalid terminal cursor tag");
 				int schema = StrictNbt.integer(tag, "schema");
-				if (schema < 1 || schema > 6 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
+				if (schema < 1 || schema > 7 || !tag.getAllKeys().equals(schema == 1 ? Set.of("schema", "item") : schema == 2 ? Set.of("schema", "item", "pending", "request")
 						: schema == 3 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request")
 						: schema == 4 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request")
 						: schema == 5 ? Set.of("schema", "item", "pending", "request", "fluid", "fluid_request", "energy", "energy_request", "chemical", "chemical_request")
@@ -37,10 +37,16 @@ public final class TerminalCursor {
 					if (!result.pending.saveOptional(registries).equals(pending) || result.pending.getCount() > 64) throw new IllegalArgumentException("Invalid retained receipt");
 					var request = StrictNbt.compound(tag, "request");
 					if (!request.isEmpty()) {
-						if (!request.getAllKeys().equals(Set.of("item", "insert", "source"))) throw new IllegalArgumentException("Invalid cursor request");
+						if (!request.getAllKeys().equals(schema == 7 ? Set.of("item", "insert", "source", "observed", "observed_count") : Set.of("item", "insert", "source"))) throw new IllegalArgumentException("Invalid cursor request");
 						var raw = StrictNbt.compound(request, "item"); var wanted = ItemStack.parse(registries, raw).orElseThrow();
 						if (!wanted.save(registries).equals(raw)) throw new IllegalArgumentException("Lossy cursor request");
-						result.request = new TerminalCursorExchange.Request(wanted, StrictNbt.bool(request, "insert"), StrictNbt.string(request, "source"));
+						TerminalCursorExchange.Observed observed = null;
+						if (schema == 7) {
+							var evidence = StrictNbt.compound(request, "observed"); var sample = ItemStack.parse(registries, evidence).orElseThrow();
+							if (!sample.save(registries).equals(evidence)) throw new IllegalArgumentException("Lossy observed cursor return");
+							observed = new TerminalCursorExchange.Observed(sample, StrictNbt.integer(request, "observed_count"));
+						}
+						result.request = new TerminalCursorExchange.Request(wanted, StrictNbt.bool(request, "insert"), StrictNbt.string(request, "source"), observed);
 					}
 					if (result.request != null && !result.pending.isEmpty()) throw new IllegalArgumentException("Conflicting cursor receipts");
 				}
@@ -74,7 +80,8 @@ public final class TerminalCursor {
 							throw new IllegalArgumentException("Conflicting chemical requests");
 					}
 				}
-				if (schema == 6) result.patternBuffer = TerminalPatternBuffer.read(tag.get("pattern_buffer"), registries);
+				if (schema >= 6) result.patternBuffer = TerminalPatternBuffer.read(tag.get("pattern_buffer"), registries);
+				if (schema == 7 && result.request == null) throw new IllegalArgumentException("Missing observed cursor request");
 			} catch (RuntimeException failure) {
 				result.invalid = original.copy();
 				com.mojang.logging.LogUtils.getLogger().error("Terminal cursor retained in player data after decode failure", failure);
@@ -83,15 +90,17 @@ public final class TerminalCursor {
 		}
 		@Override public Tag write(TerminalCursor value, HolderLookup.Provider registries) {
 			if (value.invalid != null) return value.invalid.copy();
-			var tag = new CompoundTag(); boolean patterns = value.patternBuffer.stream().anyMatch(item -> !item.isEmpty());
+			var tag = new CompoundTag(); boolean observed = value.request != null && value.request.observed() != null;
+			boolean patterns = observed || value.patternBuffer.stream().anyMatch(item -> !item.isEmpty());
 			boolean chemicals = patterns || !value.chemical.isEmpty() || value.chemicalRequest != null;
 			boolean energy = chemicals || value.energy != 0 || value.energyRequest != null;
 			boolean fluids = energy || !value.fluid.isEmpty() || value.fluidRequest != null;
 			boolean extended = fluids || value.request != null || !value.pending.isEmpty();
-			tag.putInt("schema", patterns ? 6 : chemicals ? 5 : energy ? 4 : fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
+			tag.putInt("schema", observed ? 7 : patterns ? 6 : chemicals ? 5 : energy ? 4 : fluids ? 3 : extended ? 2 : 1); tag.put("item", value.stack.saveOptional(registries));
 			if (extended) {
 				tag.put("pending", value.pending.saveOptional(registries)); var request = new CompoundTag();
 				if (value.request != null) { request.put("item", value.request.item().save(registries)); request.putBoolean("insert", value.request.insert()); request.putString("source", value.request.source()); }
+				if (observed) { request.put("observed", value.request.observed().item().save(registries)); request.putInt("observed_count", value.request.observed().amount()); }
 				tag.put("request", request);
 			}
 			if (fluids) {

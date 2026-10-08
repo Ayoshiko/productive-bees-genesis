@@ -17,14 +17,15 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 		this(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, Receipt.EMPTY);
 	}
 	public static final int STORAGE_ROWS = 36;
-	public static int pageSize(Mode mode) { return mode == Mode.STORAGE ? STORAGE_ROWS : mode == Mode.PATTERN_BUFFER ? 9 : 8; }
+	public static int pageSize(Mode mode) { return mode == Mode.STORAGE || mode == Mode.PROVIDER_SLOTS ? STORAGE_ROWS : mode == Mode.PATTERN_BUFFER ? 9 : 8; }
 	public enum Mode {
-		CATALOGUE, PLAN, TASKS, STORAGE, PATTERN, PATTERN_ENCODING, PATTERN_REPLACEMENT, PATTERN_PROCESSING, PATTERN_BATCH, PATTERN_BATCH_DETAIL, PATTERN_BUFFER;
+		CATALOGUE, PLAN, TASKS, STORAGE, PATTERN, PATTERN_ENCODING, PATTERN_REPLACEMENT, PATTERN_PROCESSING, PATTERN_BATCH, PATTERN_BATCH_DETAIL, PATTERN_BUFFER, PROVIDERS, PROVIDER_SLOTS;
+		public boolean providers() { return this == PROVIDERS || this == PROVIDER_SLOTS; }
 		public boolean pattern() { return this == PATTERN || this == PATTERN_ENCODING || this == PATTERN_REPLACEMENT || this == PATTERN_PROCESSING || this == PATTERN_BUFFER || batch(); }
 		public boolean batch() { return this == PATTERN_BATCH || this == PATTERN_BATCH_DETAIL; }
 	}
 	public enum Status { OK, WAITING, MISSING, NO_CPU, BUSY, STALE, DISCONNECTED, INVALID, FAILED, SUBMITTED, CANCELLED, UNKNOWN, TOO_LARGE, TIMEOUT, CLOSED, MOVED, NO_SPACE, RETAINED, TRANSFER_UNKNOWN, PATTERN_UNSUPPORTED, PATTERN_INVALID, PATTERN_NOT_DIVISIBLE, PATTERN_OVERFLOW, PATTERN_APPLIED, PATTERN_NEEDS_BLANK, PATTERN_NO_RECIPE, PATTERN_ENCODED, PATTERN_SAMPLE_INVALID, PATTERN_NO_CHANGE, PATTERN_REPLACED, PATTERN_INCOMPLETE, PATTERN_DRAFT_FULL, PATTERN_PROCESSING_ENCODED, PATTERN_NO_MATCH, PATTERN_BATCH_EMPTY, PATTERN_BATCH_APPLIED }
-	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER, ENERGY, CHEMICAL, PATTERN_INPUT, PATTERN_OUTPUT, PATTERN_BATCH_ITEM, PATTERN_BUFFER_SLOT }
+	public enum Kind { ITEM, FLUID, USED, MISSING, EMITTED, TASK, OTHER, ENERGY, CHEMICAL, PATTERN_INPUT, PATTERN_OUTPUT, PATTERN_BATCH_ITEM, PATTERN_BUFFER_SLOT, PROVIDER, PROVIDER_SLOT }
 	public record Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled, boolean pinned) {
 		public Row(Kind kind, ItemStack icon, String label, long amount, long extra, boolean enabled) { this(kind, icon, label, amount, extra, enabled, false); }
 		public Row {

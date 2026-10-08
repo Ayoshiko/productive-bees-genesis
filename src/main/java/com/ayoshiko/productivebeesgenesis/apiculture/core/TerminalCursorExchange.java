@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import java.util.function.ToIntFunction;
+import java.util.function.Function;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
@@ -9,7 +10,15 @@ import net.minecraft.world.item.ItemStack;
 public final class TerminalCursorExchange {
 	public enum Outcome { MOVED, NO_SPACE, RETAINED, UNKNOWN, INVALID }
 	public record Result(Outcome outcome, int amount) { }
-	record Request(ItemStack item, boolean insert, String source) {
+	record Observed(ItemStack item, int amount) {
+		Observed {
+			if (item.isEmpty() || item.getCount() != 1 || amount <= 0) throw new IllegalArgumentException("Invalid observed cursor return");
+			item = item.copy();
+		}
+		@Override public ItemStack item() { return item.copy(); }
+	}
+	record Request(ItemStack item, boolean insert, String source, Observed observed) {
+		Request(ItemStack item, boolean insert, String source) { this(item, insert, source, null); }
 		Request {
 			if (item.isEmpty() || item.getCount() < 1 || item.getCount() > 64 || source == null || source.isBlank() || source.length() > 512)
 				throw new IllegalArgumentException("Invalid cursor transfer");
@@ -23,6 +32,27 @@ public final class TerminalCursorExchange {
 		if (player.containerMenu != menu) return new Result(Outcome.INVALID, 0);
 		var cursor = TerminalCursor.get(player);
 		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		cursor.containerBusy = true;
+		try { return exchangeLocked(player, menu, wanted, insert, inventory, source, external); }
+		finally { cursor.containerBusy = false; }
+	}
+	/** 库存回调返回插入余量或实际提取栈；异常返回仅作隔离证据，不能直接退款或交付。 */
+	public static Result exchangeItems(ServerPlayer player, AbstractContainerMenu menu, ItemStack wanted, boolean insert, boolean inventory,
+			String source, Function<ItemStack, ItemStack> external) {
+		return exchange(player, menu, wanted, insert, inventory, source, requested -> {
+			var expected = requested.copy(); var returned = external.apply(requested);
+			var cursor = TerminalCursor.get(player); var record = cursor.request;
+			if (returned != null && !returned.isEmpty())
+				cursor.request = new Request(record.item(), record.insert(), record.source(), new Observed(returned.copyWithCount(1), returned.getCount()));
+			if (returned == null || !ItemStack.matches(expected, requested) || !returned.isEmpty()
+					&& (!ItemStack.isSameItemSameComponents(expected, returned) || returned.getCount() > expected.getCount()))
+				throw new IllegalStateException("Invalid external cursor stack; observed return retained");
+			return insert ? expected.getCount() - returned.getCount() : returned.getCount();
+		});
+	}
+	private static Result exchangeLocked(ServerPlayer player, AbstractContainerMenu menu, ItemStack wanted, boolean insert, boolean inventory,
+			String source, ToIntFunction<ItemStack> external) {
+		var cursor = TerminalCursor.get(player);
 		recover(player, menu, inventory);
 		if (!cursor.pending.isEmpty()) return new Result(Outcome.RETAINED, 0);
 		if (player.containerMenu != menu || !ItemStack.matches(cursor.item(), menu.getCarried()) || wanted.isEmpty()

@@ -35,7 +35,9 @@
 
 ### 新增
 
-- **D18j4b1 私人样板缓冲**：ME 工作页增加九格样板缓冲，接受空白或已编码样板，支持左键一叠、右键一张、Shift 及全部取回背包。完整组件分别保管，满背包余量留原格；关闭终端后保留，同一玩家可跨终端使用，ME 离线仍可取回。玩家附件 schema 6 严格兼容旧格式，损坏数据原样隔离；ME 协议升至 13。本包未编译／未运行验证，供应器管理继续后续接入。
+- **D18j4b2 供应器样板管理**：ME 工作页支持按名称、维度和坐标分次搜索当前维度内已加载、有权限的可见供应器，分页查看真实样板槽。向空槽存入一张有效编码样板，支持取回鼠标、右键一张、Shift 到背包和通过私人缓冲中转；拒收余量保管，不产生掉落。每次复核原节点、宿主与库存，异常返回隔离并保存完整样本和数量；schema 7 严格兼容完整旧格式。大组件图标省略后仍可取回，ME 协议升至 14。本包未编译／未运行验证。
+
+- **D18j4b1 私人样板缓冲**：ME 工作页增加九格样板缓冲，接受空白或已编码样板，支持左键一叠、右键一张、Shift 及全部取回背包。完整组件分别保管，满背包余量留原格；关闭终端后保留，同一玩家可跨终端使用，ME 离线仍可取回。玩家附件 schema 6 严格兼容旧格式，损坏数据原样隔离；ME 协议升至 13。本包未编译／未运行验证，供应器管理由 D18j4b2 接入。
 
 - **D18j4a5 背包样板批量替换**：读取鼠标处理样板后，Shift＋右键原资源，使用九格左上角样本预览背包中不同处理样板的替换。按全服预算逐叠准备，支持逐项选择／全选及完整差异；非法、无匹配或溢出项不可选。确认统一核对并原位改写选中叠，保留张数、数量、空位及组件，不消耗来源样板或样本，不需要空背包格。ME 协议升至 12，存档格式不变；本包未编译／未运行验证。
 
@@ -184,7 +186,9 @@
 
 #### Added
 
-- **D18j4b1 Personal pattern buffer**: Added nine player-owned slots for blank or encoded patterns, with stack/single-item clicks, Shift withdrawal and return-all to inventory. Exact components stay separate; leftovers remain buffered when inventory space runs out. Contents persist after closing and are shared across the same player's terminals, with retrieval available while ME is offline. Player attachment schema 6 strictly reads older formats and preserves invalid raw data in quarantine; ME protocol advances to 13. Compilation and runtime validation were skipped; provider management follows separately.
+- **D18j4b2 Provider pattern management**: Added incremental name/dimension/position search for loaded, visible providers accessible in the player's current dimension, with paged pattern slots. Insert one valid encoded pattern into an empty slot, withdraw to the cursor or inventory, and move patterns through the personal buffer. Rejected items remain retained without world drops. Operations recheck the original node, host and inventory; unexpected returned stacks retain their exact sample and count in quarantine. Schema 7 strictly reads older formats. Oversized icons are omitted without blocking withdrawal; ME protocol advances to 14. Compilation and runtime validation were skipped.
+
+- **D18j4b1 Personal pattern buffer**: Added nine player-owned slots for blank or encoded patterns, with stack/single-item clicks, Shift withdrawal and return-all to inventory. Exact components stay separate; leftovers remain buffered when inventory space runs out. Contents persist after closing and are shared across the same player's terminals, with retrieval available while ME is offline. Player attachment schema 6 strictly reads older formats and preserves invalid raw data in quarantine; ME protocol advances to 13. Compilation and runtime validation were skipped; provider management is added in D18j4b2.
 
 - **D18j4a5 Inventory pattern batch replacement**: Shift-right-click a resource in a carried processing pattern to preview replacements across different inventory patterns using the top-left crafting sample. Each stack is prepared under the shared server budget, with individual/all-eligible selection and full change details. Invalid, unmatched or overflowing patterns cannot be selected. Confirmation checks every selected stack before replacing them in place, preserving counts, amounts, sparse slots and components without consuming the source pattern or sample or requiring empty inventory slots. ME protocol advances to 12 with no saved-data format changes. Compilation and runtime validation were skipped.
 

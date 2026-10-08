@@ -79,7 +79,7 @@ public final class MeTerminalSession {
 			var bridge = resolve.get(); tick(bridge);
 			if (bridge == null) { send(player, request, request.action() == MeTerminalRequest.Action.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.DISCONNECTED) : MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
 			if (backend == null) {
-				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.STORAGE && request.action() != MeTerminalRequest.Action.TASKS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
+				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.STORAGE && request.action() != MeTerminalRequest.Action.TASKS && request.action() != MeTerminalRequest.Action.PROVIDERS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
 				backend = bridge.link().terminal(player);
 			}
 			if (backend == null || !backend.valid(bridge)) { closePage(); send(player, request, MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
@@ -98,7 +98,8 @@ public final class MeTerminalSession {
 			if (patternBuffer != null) { patternBuffer.close(); patternBuffer = null; }
 			if (patterns != null) { patterns.close(); patterns = null; }
 			if (processing != null) processing.suspend();
-			var fallback = value.mode().pattern() ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE, value.mode())
+			if (value.mode().providers()) closeBackend();
+			var fallback = value.mode().pattern() || value.mode().providers() ? MeTerminalView.patternStatus(MeTerminalView.Status.TOO_LARGE, value.mode())
 					: value.mode() == MeTerminalView.Mode.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.TOO_LARGE) : MeTerminalView.empty(MeTerminalView.Status.TOO_LARGE);
 			reply = new MeTerminalReply(containerId, session, request.sequence(), fallback.withReceipt(value.receipt()));
 			buffer.clear(); MeTerminalReply.CODEC.encode(buffer, reply); size = buffer.readableBytes();
