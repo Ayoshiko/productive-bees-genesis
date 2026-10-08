@@ -108,7 +108,7 @@ public final class MeTerminalScreen extends Screen {
 		transmit(session.begin(action, row, page, amount, filter == null ? query : filter.getValue()));
 	}
 	private void transmit(MeTerminalRequest request) {
-		if (request != null) { PacketDistributor.sendToServer(request); nextPoll = Util.getMillis() + (shown.mode().batch() || shown.mode().providers() || request.action() == PATTERN_BATCH_REPLACE || request.action() == PROVIDERS ? 250 : 1000); for (var button : actions) button.active = false; }
+		if (request != null) { PacketDistributor.sendToServer(request); nextPoll = Util.getMillis() + (shown.mode().batch() || shown.mode().providers() || request.action() == PATTERN_BATCH_REPLACE || request.action() == PATTERN_BUFFER_BATCH_REPLACE || request.action() == PROVIDERS ? 250 : 1000); for (var button : actions) button.active = false; }
 	}
 	@Override public void tick() {
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { minecraft.setScreen(null); return; }

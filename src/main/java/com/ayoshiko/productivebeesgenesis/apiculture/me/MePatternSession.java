@@ -24,10 +24,10 @@ final class MePatternSession {
 	private String title = "";
 	private long until;
 	private MeTerminalView view = MeTerminalView.patternStatus(Status.CLOSED);
-	static boolean handles(MeTerminalRequest.Action action) { return action == PATTERN_READ || action == PATTERN_MULTIPLY || action == PATTERN_DIVIDE || action == PATTERN_APPLY || action == PATTERN_ENCODE_CRAFTING || action == PATTERN_REPLACE || action == PATTERN_BATCH_REPLACE || action == PATTERN_BATCH_TOGGLE || action == PATTERN_BATCH_SELECT || action == PATTERN_BATCH_DETAILS || action == PATTERN_BATCH_LIST; }
+	static boolean handles(MeTerminalRequest.Action action) { return action == PATTERN_READ || action == PATTERN_MULTIPLY || action == PATTERN_DIVIDE || action == PATTERN_APPLY || action == PATTERN_ENCODE_CRAFTING || action == PATTERN_REPLACE || action == PATTERN_BATCH_REPLACE || action == PATTERN_BUFFER_BATCH_REPLACE || action == PATTERN_BATCH_TOGGLE || action == PATTERN_BATCH_SELECT || action == PATTERN_BATCH_DETAILS || action == PATTERN_BATCH_LIST; }
 	MeTerminalView request(ServerPlayer player, MeTerminalRequest request) {
 		if (batch != null && (request.action() == PAGE || request.action() == POLL || request.action() == PATTERN_APPLY || request.action() == PATTERN_BATCH_TOGGLE || request.action() == PATTERN_BATCH_SELECT || request.action() == PATTERN_BATCH_DETAILS || request.action() == PATTERN_BATCH_LIST)) return batch.request(player, request);
-		if (request.action() == PATTERN_BATCH_REPLACE) return beginBatch(player, request);
+		if (request.action() == PATTERN_BATCH_REPLACE || request.action() == PATTERN_BUFFER_BATCH_REPLACE) return beginBatch(player, request);
 		if (request.action() == PATTERN_REPLACE) return replace(player, request);
 		boolean preview = request.action() == PATTERN_READ || request.action() == PATTERN_MULTIPLY || request.action() == PATTERN_DIVIDE || request.action() == PATTERN_ENCODE_CRAFTING;
 		if (preview) { close(); mode = request.action() == PATTERN_ENCODE_CRAFTING ? Mode.PATTERN_ENCODING : Mode.PATTERN; }
@@ -93,7 +93,8 @@ final class MePatternSession {
 		if (mode != Mode.PATTERN || view.confirm() || view.status() != Status.OK || request.revision() != view.revision()
 				|| request.page() != view.page() || request.row() < 0 || request.row() >= view.rows().size() || !current(player)) return clear(player, Status.STALE);
 		var before = original; var target = menu; int selectedRow = view.page() * 8 + request.row();
-		close(); mode = Mode.PATTERN_BATCH;
+		boolean buffered = request.action() == PATTERN_BUFFER_BATCH_REPLACE;
+		close(); mode = buffered ? Mode.PATTERN_BUFFER_BATCH : Mode.PATTERN_BATCH;
 		if (TerminalCursorExchange.unknown(player)) return clear(player, Status.TRANSFER_UNKNOWN);
 		if (!MeTerminalBudget.expensive(player.server)) return clear(player, Status.BUSY);
 		var material = TerminalPatternSample.capture(player, target);
@@ -101,7 +102,9 @@ final class MePatternSession {
 		var mapping = MeBridgeIntegration.patternReplacement(before, selectedRow, material.item());
 		if (mapping.status() != Status.OK) return clear(player, mapping.status());
 		if (!material.current(player, target) || !ItemStack.matches(before, target.getCarried())) return clear(player, Status.STALE);
-		batch = new MePatternBatchSession(player, before, material, mapping.editor());
+		var buffer = buffered ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternBuffer.capture(player) : null;
+		if (buffered && buffer == null) return clear(player, Status.TRANSFER_UNKNOWN);
+		batch = new MePatternBatchSession(player, before, material, mapping.editor(), buffer);
 		return batch.start(player);
 	}
 	private boolean current(ServerPlayer player) {

@@ -22,7 +22,8 @@ final class MePatternPane {
 	private final MeTerminalSession session;
 	private final Commands commands;
 	private EditBox factor;
-	private Button multiply, divide, encode, processing, apply, previous, next;
+	private Button multiply, divide, encode, processing, apply, previous, next, batchScope;
+	private boolean bufferedBatch;
 	private String factorValue = "2";
 	private ItemStack cursor = ItemStack.EMPTY;
 	private MeTerminalView shown;
@@ -33,7 +34,7 @@ final class MePatternPane {
 		if (factor != null) factorValue = factor.getValue();
 		this.left = left; this.top = top; this.width = width; this.height = height; shown = session.view(); cursor = menu.getCarried().copy();
 		var widgets = new ArrayList<AbstractWidget>();
-		factor = null; multiply = divide = encode = processing = null;
+		factor = null; multiply = divide = encode = processing = batchScope = null;
 		if (encoding()) {
 			encode = button("pattern_encode_preview", 8, 38, 100, () -> commands.send(PATTERN_ENCODE_CRAFTING, -1, 0, 0)); widgets.add(encode);
 			encode.setTooltip(Tooltip.create(text("pattern_encode_hint")));
@@ -43,11 +44,14 @@ final class MePatternPane {
 			encode = button("pattern_read", 8, 38, 108, () -> commands.send(PATTERN_READ, -1, 0, 0)); widgets.add(encode);
 			encode.setTooltip(Tooltip.create(text("pattern_replace_hint")));
 		} else {
-			factor = new EditBox(font, left + 8, top + 38, 96, 14, text("pattern_factor"));
+			factor = new EditBox(font, left + 8, top + 38, 56, 14, text("pattern_factor"));
 			factor.setMaxLength(19); factor.setFilter(s -> s.isEmpty() || s.matches("[0-9]+")); factor.setValue(factorValue); factor.setHint(text("pattern_factor"));
 			factor.setTooltip(Tooltip.create(text("pattern_factor_hint"))); widgets.add(factor);
-			multiply = button("pattern_multiply", 108, 38, 88, () -> preview(PATTERN_MULTIPLY)); widgets.add(multiply);
-			divide = button("pattern_divide", 200, 38, width - 208, () -> preview(PATTERN_DIVIDE)); widgets.add(divide);
+			multiply = button("pattern_multiply", 68, 38, 60, () -> preview(PATTERN_MULTIPLY)); widgets.add(multiply);
+			divide = button("pattern_divide", 132, 38, 60, () -> preview(PATTERN_DIVIDE)); widgets.add(divide);
+			batchScope = button(bufferedBatch ? "pattern_batch_scope_buffer" : "pattern_batch_scope_inventory", 196, 38, width - 204, () -> {
+				bufferedBatch = !bufferedBatch; batchScope.setMessage(text(bufferedBatch ? "pattern_batch_scope_buffer" : "pattern_batch_scope_inventory"));
+			}); batchScope.setTooltip(Tooltip.create(text("pattern_batch_scope_hint"))); widgets.add(batchScope);
 		}
 		int bottom = height - 21;
 		widgets.add(button("back", 8, bottom, 52, back));
@@ -70,12 +74,13 @@ final class MePatternPane {
 		if (button != 1 || !canReplace() || x < left + 8 || x >= left + width - 8 || y < top + 56 || y >= top + 184) return false;
 		int row = (int) (y - top - 56) / 16;
 		if (row >= shown.rows().size()) return false;
-		commands.send(net.minecraft.client.gui.screens.Screen.hasShiftDown() ? PATTERN_BATCH_REPLACE : PATTERN_REPLACE, row, shown.page(), 0); return true;
+		commands.send(net.minecraft.client.gui.screens.Screen.hasShiftDown() ? bufferedBatch ? PATTERN_BUFFER_BATCH_REPLACE : PATTERN_BATCH_REPLACE : PATTERN_REPLACE, row, shown.page(), 0); return true;
 	}
 	void tick() {
 		if (shown == null || apply == null) return;
 		boolean idle = !session.waiting(); long value = value();
 		if (processing != null) processing.active = idle;
+		if (batchScope != null) batchScope.active = canReplace();
 		if (factor == null) encode.active = idle;
 		else { factor.active = idle; multiply.active = divide.active = idle && value > 0; }
 		apply.active = idle && current() && shown.confirm() && (factor == null || value > 0 && shown.title().endsWith(" " + value));

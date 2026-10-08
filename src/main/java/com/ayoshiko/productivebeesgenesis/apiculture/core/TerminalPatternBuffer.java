@@ -84,6 +84,29 @@ public final class TerminalPatternBuffer {
 			menu.broadcastFullState(); return new Result(Outcome.MOVED, moved);
 		} finally { cursor.containerBusy = false; }
 	}
+	/** 已确认的批量样板改写；保留张数及未选择格，一次发布整个缓冲根。 */
+	public static Result replace(ServerPlayer player, AbstractContainerMenu menu, ItemStack carried, Snapshot snapshot, List<TerminalPatternInventory.Replacement> replacements) {
+		var cursor = TerminalCursor.get(player);
+		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		cursor.containerBusy = true;
+		try {
+			if (snapshot == null || !snapshot.current(player) || replacements.isEmpty() || replacements.size() > SLOTS
+					|| player.containerMenu != menu || !menu.stillValid(player) || !cursor.pending.isEmpty()
+					|| !ItemStack.matches(carried, menu.getCarried()) || !ItemStack.matches(carried, cursor.item())) return new Result(Outcome.INVALID, 0);
+			var next = TerminalCraftingPlan.copy(snapshot.state); int seen = 0, count = 0;
+			for (var change : replacements) {
+				int slot = change.slot(); var before = change.before(); var after = change.after();
+				if (slot < 0 || slot >= SLOTS || (seen & 1 << slot) != 0 || before.isEmpty() || after.isEmpty()
+						|| before.getCount() < 1 || before.getCount() > Math.min(64, before.getMaxStackSize())
+						|| before.getItem() != after.getItem() || before.getCount() != after.getCount()
+						|| after.getCount() < 1 || after.getCount() > Math.min(64, after.getMaxStackSize())
+						|| !ItemStack.matches(before, snapshot.state.get(slot))) return new Result(Outcome.INVALID, 0);
+				seen |= 1 << slot; next.set(slot, after); count += after.getCount();
+			}
+			// 全部校验及结果复制后只发布一个九格根；不移动鼠标或背包，不调用外部库存。
+			cursor.patternBuffer = List.copyOf(next); menu.broadcastFullState(); return new Result(Outcome.MOVED, count);
+		} finally { cursor.containerBusy = false; }
+	}
 	/** 只回收已知缓冲物品；未决外部请求独立保留，满背包余量仍在原格。 */
 	public static Result returnAll(ServerPlayer player, AbstractContainerMenu menu) {
 		var cursor = TerminalCursor.get(player);

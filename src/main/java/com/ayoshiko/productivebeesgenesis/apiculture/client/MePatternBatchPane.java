@@ -15,7 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 
-/** 背包批量选择和逐样板差异；客户端不持权威槽或编码结果。 */
+/** 背包／私人缓冲批量选择和逐样板差异；客户端不持权威槽或编码结果。 */
 final class MePatternBatchPane {
 	private static final Status[] STATUSES = Status.values();
 	private final AbstractContainerMenu menu;
@@ -41,12 +41,12 @@ final class MePatternBatchPane {
 		previous = button("previous", 64, bottom, 24, () -> commands.send(PAGE, -1, Math.max(0, shown.page() - 1), 0)); widgets.add(previous);
 		next = button("next", 92, bottom, 24, () -> commands.send(PAGE, -1, shown.page() + 1, 0)); widgets.add(next);
 		apply = button("pattern_batch_apply", width - 100, bottom, 92, () -> commands.send(PATTERN_APPLY, -1, shown.page(), 0));
-		apply.setTooltip(Tooltip.create(text("pattern_batch_apply_hint", shown.bytes()))); widgets.add(apply); tick(); return widgets;
+		apply.setTooltip(Tooltip.create(text(shown.mode().bufferBatch() ? "pattern_buffer_batch_apply_hint" : "pattern_batch_apply_hint", shown.bytes()))); widgets.add(apply); tick(); return widgets;
 	}
 	private Button button(String key, int x, int y, int width, Runnable action) {
 		return Button.builder(text(key), ignored -> action.run()).bounds(left + x, top + y, width, 14).build();
 	}
-	private boolean detail() { return shown.mode() == Mode.PATTERN_BATCH_DETAIL; }
+	private boolean detail() { return shown.mode().batchDetail(); }
 	private boolean current() { return ItemStack.matches(cursor, menu.getCarried()); }
 	private static Status status(Row row) { return row.extra() < STATUSES.length ? STATUSES[(int) row.extra()] : Status.INVALID; }
 	void tick() {
@@ -64,8 +64,8 @@ final class MePatternBatchPane {
 		commands.send(button == 0 ? PATTERN_BATCH_TOGGLE : PATTERN_BATCH_DETAILS, row, shown.page(), 0); return true;
 	}
 	void render(GuiGraphics g, Font font, int mouseX, int mouseY) {
-		g.drawString(font, font.plainSubstrByWidth(text("pattern_batch_selected", shown.bytes()).getString(), width - 212), left + 204, top + 41, TerminalSkin.MUTED, false);
-		if (shown.rows().isEmpty()) g.drawWordWrap(font, text("pattern_batch_hint"), left + 8, top + 61, width - 16, TerminalSkin.MUTED);
+		g.drawString(font, font.plainSubstrByWidth(text(shown.mode().bufferBatch() ? "pattern_buffer_batch_selected" : "pattern_batch_selected", shown.bytes()).getString(), width - 212), left + 204, top + 41, TerminalSkin.MUTED, false);
+		if (shown.rows().isEmpty()) g.drawWordWrap(font, text(shown.mode().bufferBatch() ? "pattern_buffer_batch_hint" : "pattern_batch_hint"), left + 8, top + 61, width - 16, TerminalSkin.MUTED);
 		for (int i = 0; i < shown.rows().size(); i++) {
 			var row = shown.rows().get(i); int y = top + 56 + i * 16;
 			g.fill(left + 7, y, left + width - 7, y + 16, row.enabled() ? detail() ? 0xff465439 : 0xff526a6e : 0xff25383e);

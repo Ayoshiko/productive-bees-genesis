@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.me;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalCursorExchange;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternInventory;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternSample;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,7 +12,7 @@ import net.minecraft.world.item.ItemStack;
 import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 
-/** 按共享预算逐张准备；选定项在一次无外部调用的背包提交中全部改写。 */
+/** 按共享预算逐张准备；选定项在所属背包或私人缓冲内一次提交。 */
 final class MePatternBatchSession {
 	private static final class Entry {
 		final int slot; final ItemStack original;
@@ -24,16 +25,21 @@ final class MePatternBatchSession {
 	private ItemStack carried;
 	private TerminalPatternSample sample;
 	private MePatternBatchEditor editor;
+	private TerminalPatternBuffer.Snapshot buffer;
+	private final boolean bufferBatch;
 	private String title;
 	private long until, generation;
 	private int prepared, detail = -1;
 	private MeTerminalView view;
-	MePatternBatchSession(ServerPlayer player, ItemStack carried, TerminalPatternSample sample, MePatternBatchEditor editor) {
+	MePatternBatchSession(ServerPlayer player, ItemStack carried, TerminalPatternSample sample, MePatternBatchEditor editor, TerminalPatternBuffer.Snapshot buffer) {
+		this.buffer = buffer; bufferBatch = buffer != null;
 		menu = player.containerMenu; this.carried = carried.copy(); this.sample = sample; this.editor = editor; title = editor.title();
-		for (int i = 0; i < 36; i++) if (editor.supports(player.getInventory().items.get(i))) entries.add(new Entry(i, player.getInventory().items.get(i)));
+		for (int i = 0; i < (bufferBatch ? TerminalPatternBuffer.SLOTS : 36); i++) {
+			var item = item(player, i); if (editor.supports(item)) entries.add(new Entry(i, item));
+		}
 		until = player.server.overworld().getGameTime() + 600;
 	}
-	MeTerminalView start(ServerPlayer player) { return current(player) ? page(player, 0, entries.isEmpty() ? Status.PATTERN_BATCH_EMPTY : Status.WAITING) : clear(Status.STALE); }
+	MeTerminalView start(ServerPlayer player) { return current(player) ? page(player, 0, readyStatus()) : clear(Status.STALE); }
 	MeTerminalView request(ServerPlayer player, MeTerminalRequest request) {
 		if (view == null || request.revision() == 0 || request.revision() != view.revision() || !current(player)) return clear(Status.STALE);
 		if (request.action() == POLL) {
@@ -73,17 +79,28 @@ final class MePatternBatchSession {
 		if (!MeTerminalBudget.expensive(player.server)) return page(player, view.page(), Status.BUSY);
 		var changes = new ArrayList<TerminalPatternInventory.Replacement>();
 		for (var entry : entries) if (entry.selected) changes.add(new TerminalPatternInventory.Replacement(entry.slot, entry.original, entry.plan.result()));
-		var target = menu; var source = carried; var material = sample; var mapping = editor;
+		var target = menu; var source = carried; var material = sample; var mapping = editor; var snapshot = buffer;
 		close(); long expectedGeneration = generation;
 		if (!mapping.current(material.item()) || generation != expectedGeneration || !material.current(player, target)) return clear(Status.STALE);
-		var changed = material.commit(player, target, () -> TerminalPatternInventory.replace(player, target, source, changes));
-		return clear(changed.outcome() == TerminalCursorExchange.Outcome.MOVED ? Status.PATTERN_BATCH_APPLIED : MeTerminalSession.fluidStatus(changed.outcome()));
+		var changed = material.commit(player, target, () -> bufferBatch ? TerminalPatternBuffer.replace(player, target, source, snapshot, changes)
+				: TerminalPatternInventory.replace(player, target, source, changes));
+		var success = bufferBatch ? Status.PATTERN_BUFFER_BATCH_APPLIED : Status.PATTERN_BATCH_APPLIED;
+		return clear(changed.outcome() == TerminalCursorExchange.Outcome.MOVED ? success : MeTerminalSession.fluidStatus(changed.outcome()));
 	}
-	private Status readyStatus() { return entries.isEmpty() ? Status.PATTERN_BATCH_EMPTY : prepared < entries.size() ? Status.WAITING : Status.OK; }
+	private Status readyStatus() {
+		if (entries.isEmpty()) return bufferBatch ? Status.PATTERN_BUFFER_BATCH_EMPTY : Status.PATTERN_BATCH_EMPTY;
+		return prepared < entries.size() ? Status.WAITING : Status.OK;
+	}
+	private Mode mode() {
+		if (bufferBatch) return detail < 0 ? Mode.PATTERN_BUFFER_BATCH : Mode.PATTERN_BUFFER_BATCH_DETAIL;
+		return detail < 0 ? Mode.PATTERN_BATCH : Mode.PATTERN_BATCH_DETAIL;
+	}
+	private ItemStack item(ServerPlayer player, int slot) { return bufferBatch ? buffer.item(slot) : player.getInventory().items.get(slot); }
 	private boolean current(ServerPlayer player) {
 		if (menu == null || player.containerMenu != menu || !menu.stillValid(player) || player.server.overworld().getGameTime() >= until
-				|| TerminalCursorExchange.unknown(player) || !ItemStack.matches(carried, menu.getCarried()) || !sample.current(player, menu)) return false;
-		for (var entry : entries) if (!ItemStack.matches(entry.original, player.getInventory().items.get(entry.slot))) return false;
+				|| TerminalCursorExchange.unknown(player) || !ItemStack.matches(carried, menu.getCarried()) || !sample.current(player, menu)
+				|| bufferBatch && (buffer == null || !buffer.current(player))) return false;
+		for (var entry : entries) if (!ItemStack.matches(entry.original, item(player, entry.slot))) return false;
 		return true;
 	}
 	private MeTerminalView page(ServerPlayer player, int page, Status status) {
@@ -97,13 +114,13 @@ final class MePatternBatchSession {
 			// 列表图标不携带整份编码组件；完整资源差异由详情页按八行发送。
 			rows.add(new Row(Kind.PATTERN_BATCH_ITEM, new ItemStack(entry.original.getItem()), entry.label, entry.original.getCount(), entry.plan.status().ordinal(), entry.selected));
 		}
-		return view = new MeTerminalView(MeTerminalBudget.revision(player.server), detail < 0 ? Mode.PATTERN_BATCH : Mode.PATTERN_BATCH_DETAIL,
+		return view = new MeTerminalView(MeTerminalBudget.revision(player.server), mode(),
 				status, start / 8, start + 8 < size, title, selected, "", status == Status.OK && detail < 0 && selected > 0, rows);
 	}
 	private static String label(int slot, String resource) {
 		String label = (slot + 1) + " · " + resource;
 		return label.length() <= 128 ? label : label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
 	}
-	private MeTerminalView clear(Status status) { close(); return view = MeTerminalView.patternStatus(status, Mode.PATTERN_BATCH); }
-	void close() { generation++; menu = null; carried = ItemStack.EMPTY; sample = null; editor = null; title = ""; entries.clear(); prepared = 0; detail = -1; until = 0; }
+	private MeTerminalView clear(Status status) { close(); return view = MeTerminalView.patternStatus(status, bufferBatch ? Mode.PATTERN_BUFFER_BATCH : Mode.PATTERN_BATCH); }
+	void close() { generation++; menu = null; carried = ItemStack.EMPTY; sample = null; editor = null; buffer = null; title = ""; entries.clear(); prepared = 0; detail = -1; until = 0; }
 }
