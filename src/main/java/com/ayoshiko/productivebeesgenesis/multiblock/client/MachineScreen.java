@@ -113,6 +113,9 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 		PacketDistributor.sendToServer(new MachineMenuRequest(menu.containerId, menu.session(), ++sequence, menu.viewRevision(), action, slot, inventorySlot, hasShiftDown() ? 64 : 1));
 	}
 	@Override protected void containerTick() {
+		if (minecraft.player != null && minecraft.player.containerMenu == menu && menu.meTerminal().takePickScreen()) {
+			minecraft.setScreen(new com.ayoshiko.productivebeesgenesis.apiculture.client.MeTerminalScreen(this, menu, false, true)); return;
+		}
 		if (toolboxVisible != menu.toolbox().present()) { rebuildWidgets(); return; }
 		super.containerTick(); long now = Util.getMillis(); var state = menu.craftingState(); state.tick(now);
 		if (menu.wireless() && craftingVisible() && !menu.slots.get(36).isActive()) { rebuildWidgets(); return; }

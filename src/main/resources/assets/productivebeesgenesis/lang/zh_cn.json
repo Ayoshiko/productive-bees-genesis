@@ -1,6 +1,8 @@
 {
+  "screen.productivebeesgenesis.me_terminal.status.not_craftable": "当前 ME 网络无法合成这种完整组件的物品。",
+  "screen.productivebeesgenesis.me_terminal.pick_plan_hint": "确认后才下单，成品进入 ME 库存；完成后可再次选块取回。",
   "productivebeesgenesis.configuration.terminalWirelessPickBlock": "无线 ME 选块",
-  "productivebeesgenesis.configuration.terminalWirelessPickBlock.tooltip": "默认关闭。世界中按选取方块键，背包缺少目标时，使用背包或副手的第一件可用无线终端从绑定 ME 网络取回至多一叠。目标限交互距离内且最多 8 格，路径和宿主须已加载；按无线命令收费，缺货不自动合成。",
+  "productivebeesgenesis.configuration.terminalWirelessPickBlock.tooltip": "默认关闭。世界中按选取方块键，背包缺少目标时，使用背包或副手的第一件可用无线终端从绑定 ME 网络取回至多一叠。目标限交互距离内且最多 8 格，路径和宿主须已加载；选取和计划操作沿无线费用收费；取不到物品时打开最多一叠的合成计划，确认后下单，成品进入 ME 库存。",
   "item.productivebeesgenesis.wireless_terminal.pick_hint": "可在客户端“终端偏好”启用无线 ME 选块。",
   "item.productivebeesgenesis.wireless_terminal.pick.unavailable": "无线设备、绑定宿主或 ME 连接不可用。",
   "item.productivebeesgenesis.wireless_terminal.pick.retained": "选块已暂停：终端保管区有物品或未决请求。",

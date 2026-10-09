@@ -231,11 +231,22 @@ public final class AeMeTerminal implements MeTerminalBackend {
 		if (view.mode() != Mode.CATALOGUE && view.mode() != Mode.STORAGE || request.amount() < 1 || request.row() < 0 || request.row() >= view.rows().size()) return view.status(Status.INVALID);
 		var key = view.mode() == Mode.STORAGE ? stock.get(view.page() * MeTerminalView.STORAGE_ROWS + request.row()).key() : catalogue.get(view.page() * 8 + request.row());
 		if (!grid.getCraftingService().isCraftable(key) && !grid.getCraftingService().canEmitFor(key)) return view.status(Status.STALE);
+		return beginPlan(key, request.amount());
+	}
+	@Override public MeTerminalView planPicked(ItemStack target) {
+		if (!valid(bridge) || target.isEmpty() || target.getCount() > Math.min(64, target.getMaxStackSize())) return clear(Status.INVALID);
+		grid.getStorageService().getCachedInventory();
+		if (bridgeNode.aggregationFaulted()) return clear(Status.FAILED);
+		var key = AEItemKey.of(target);
+		if (!grid.getCraftingService().isCraftable(key) && !grid.getCraftingService().canEmitFor(key)) return clear(Status.NOT_CRAFTABLE);
+		return beginPlan(key, target.getCount());
+	}
+	private MeTerminalView beginPlan(AEKey key, long amount) {
 		cancelPlan(); if (!MeTerminalBudget.plan(player.server)) return view.status(Status.BUSY); leased = true;
 		deadline = player.server.overworld().getGameTime() + 600;
-		try { future = grid.getCraftingService().beginCraftingCalculation(player.serverLevel(), () -> source, key, request.amount(), CalculationStrategy.REPORT_MISSING_ITEMS); }
+		try { future = grid.getCraftingService().beginCraftingCalculation(player.serverLevel(), () -> source, key, amount, CalculationStrategy.REPORT_MISSING_ITEMS); }
 		catch (RuntimeException | LinkageError error) { release(); throw error; }
-		return publish(Mode.PLAN, Status.WAITING, 0, false, clip(key.getDisplayName().getString() + " × " + request.amount() + (key instanceof AEFluidKey ? " mB" : ""), 256), 0, "", false, List.of());
+		return publish(Mode.PLAN, Status.WAITING, 0, false, clip(key.getDisplayName().getString() + " × " + amount + (key instanceof AEFluidKey ? " mB" : ""), 256), 0, "", false, List.of());
 	}
 	private MeTerminalView poll() {
 		if (future == null) {

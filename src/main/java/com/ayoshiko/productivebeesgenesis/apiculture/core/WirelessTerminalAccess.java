@@ -9,26 +9,34 @@ import net.minecraft.world.entity.player.Player;
 
 /** 固定网络核心实例与权威域；设备检查由两类无线入口共用。 */
 public final class WirelessTerminalAccess implements TerminalMenuAccess {
-	private final InteractionHand hand;
 	private final WirelessDeviceSession device;
 	private final NetworkCoreBlockEntity core;
 	private final NetworkSavedData authority;
-	private WirelessTerminalAccess(InteractionHand hand, WirelessDeviceSession device, NetworkCoreBlockEntity core) {
-		this.hand = hand; this.device = device; this.core = core; authority = core.ownership().readyAuthority();
+	private WirelessTerminalAccess(WirelessDeviceSession device, NetworkCoreBlockEntity core) {
+		this.device = device; this.core = core; authority = core.ownership().readyAuthority();
 	}
 	public static boolean open(ServerPlayer player, InteractionHand hand) {
-		var device = new WirelessDeviceSession(player, hand); if (!device.valid(player)) return false;
+		return open(player, new WirelessDeviceSession(player, hand), net.minecraft.world.item.ItemStack.EMPTY);
+	}
+	public static boolean open(ServerPlayer player, WirelessDeviceSession device, net.minecraft.world.item.ItemStack pickTarget) {
+		if (!device.valid(player)) return false;
 		var binding = device.binding();
-		if (binding.machine() != null) return com.ayoshiko.productivebeesgenesis.multiblock.world.WirelessMachineAccess.open(player, device);
+		if (binding.machine() != null) return com.ayoshiko.productivebeesgenesis.multiblock.world.WirelessMachineAccess.open(player, device, pickTarget);
 		var chunk = player.serverLevel().getChunkSource().getChunkNow(binding.position().getX() >> 4, binding.position().getZ() >> 4);
 		if (chunk == null || !(chunk.getBlockEntity(binding.position()) instanceof NetworkCoreBlockEntity core)) return false;
-		var access = new WirelessTerminalAccess(hand, device, core); if (!access.valid(player)) return false;
+		var access = new WirelessTerminalAccess(device, core); if (!access.valid(player)) return false;
 		var session = UUID.randomUUID();
-		return player.openMenu(new SimpleMenuProvider((id, inventory, viewer) -> access.valid(viewer)
-				? new NetworkCoreMenu(id, inventory, core, session, access) : null, device.stack().getHoverName()),
-				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(false);
-					if (device.combined()) buffer.writeEnum(binding.mode()); }).isPresent();
+		return player.openMenu(new SimpleMenuProvider((id, inventory, viewer) -> {
+			if (!access.valid(viewer)) return null;
+			var menu = new NetworkCoreMenu(id, inventory, core, session, access);
+			if (!pickTarget.isEmpty()) menu.meTerminal().seedPick(player, pickTarget, com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player));
+			return menu;
+		}, device.stack().getHoverName()), buffer -> {
+			buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(false);
+			if (device.combined()) buffer.writeEnum(binding.mode()); buffer.writeBoolean(!pickTarget.isEmpty()); buffer.writeInt(device.inventorySlot(player));
+		}).isPresent();
 	}
+	boolean locks(net.minecraft.world.item.ItemStack stack) { return stack == device.stack(); }
 	@Override public TerminalScope scope() { return device.binding().mode(); }
 	@Override public boolean combined() { return device.combined(); }
 	@Override public int energy() { return device.energy(); }
@@ -46,7 +54,7 @@ public final class WirelessTerminalAccess implements TerminalMenuAccess {
 	@Override public boolean charge(Player player, boolean command) { return valid(player) && device.charge(player, command); }
 	@Override public boolean switchMode(ServerPlayer player, TerminalScope requested) {
 		if (!combined() || requested == scope() || requested == TerminalScope.ALL || !valid(player)) return false;
-		WirelessTerminalItem.mode(device.stack(), device.binding(), requested); device.revoke(); return open(player, hand);
+		WirelessTerminalItem.mode(device.stack(), device.binding(), requested); device.revoke(); return open(player, device.renewed(player), net.minecraft.world.item.ItemStack.EMPTY);
 	}
 	@Override public TerminalCraftingAccount crafting(ServerPlayer player) {
 		if (!valid(player)) return null;

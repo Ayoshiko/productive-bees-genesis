@@ -36,6 +36,7 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	private TerminalEquipmentSlots equipment;
 	private TerminalToolbox toolbox;
 	private com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalSession me;
+	private int wirelessInventorySlot = -1;
 	private boolean closed;
 	private boolean exchanging;
 	public NetworkCoreMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
@@ -54,6 +55,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (combined && (memberScoped || this.scope == TerminalScope.ALL)) throw new IllegalArgumentException("Invalid combined terminal mode");
 		selections = null; data = new SimpleContainerData(39); addDataSlots(data);
 		clientState = new TerminalClientState(id, terminalSession); addInventory(inventory); addCrafting();
+		if (buffer.isReadable()) {
+			me.showPickScreen(buffer.readBoolean()); wirelessInventorySlot = buffer.readInt();
+			if (!WirelessPickRequest.validSlot(wirelessInventorySlot) || buffer.isReadable()) throw new IllegalArgumentException("Invalid wireless menu slot");
+		}
 	}
 	NetworkCoreMenu(int id, Inventory inventory, NetworkCoreBlockEntity core) {
 		this(id, inventory, core, UUID.randomUUID());
@@ -181,8 +186,10 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 	@Override public void nativeEditing(boolean value) { exchanging = value; }
 	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
 	@Override public boolean lockedNativeStack(ItemStack stack) {
-		return toolbox != null && toolbox.locks(stack) || wirelessTerminal() && stack.getItem() instanceof WirelessTerminalItem
-				&& (stack == viewer.getMainHandItem() || stack == viewer.getOffhandItem());
+		return toolbox != null && toolbox.locks(stack) || terminalAccess instanceof WirelessTerminalAccess wireless && wireless.locks(stack)
+				|| wirelessTerminal() && stack.getItem() instanceof WirelessTerminalItem
+				&& (stack == viewer.getMainHandItem() || stack == viewer.getOffhandItem()
+						|| wirelessInventorySlot >= 0 && stack == viewer.getInventory().getItem(wirelessInventorySlot));
 	}
 	public long value(int index) {
 		if (index == 0) return data.get(0);

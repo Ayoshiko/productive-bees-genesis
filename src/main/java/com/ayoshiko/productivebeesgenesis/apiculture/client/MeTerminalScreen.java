@@ -31,12 +31,16 @@ public final class MeTerminalScreen extends Screen {
 	private String query = "", count = "1";
 	private int left, top, panelWidth, panelHeight, selected = -1;
 	private boolean opened;
+	private final boolean picked;
 	private long nextPoll;
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu) {
 		this(parent, menu, false);
 	}
 	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume) {
-		super(text("title")); opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
+		this(parent, menu, resume, false);
+	}
+	public MeTerminalScreen(Screen parent, AbstractContainerMenu menu, boolean resume, boolean picked) {
+		super(text("title")); this.picked = picked; opened = resume; this.parent = parent; this.menu = menu; session = ((MeTerminalHost) menu).meTerminal(); storage = new MeInventoryPane(menu, this::build, this::build);
 		patterns = new MePatternPane(menu, session, this::request);
 		batches = new MePatternBatchPane(menu, session, this::request);
 		patternBuffer = new MePatternBufferPane(menu, session, this::request);
@@ -49,7 +53,7 @@ public final class MeTerminalScreen extends Screen {
 	}
 	@Override protected void init() {
 		panelWidth = Math.min(312, width-8); panelHeight = Math.min(236, height-8); left = (width-panelWidth)/2; top = (height-panelHeight)/2;
-		build(); if (!opened) { opened = true; request(BROWSE, -1, 0); }
+		build(); if (!opened) { opened = true; if (picked) request(PICK_PLAN, -1, 0, 0); else request(BROWSE, -1, 0); }
 	}
 	private void build() {
 		if (filter != null) query = filter.getValue(); if (quantity != null) count = quantity.getValue();
@@ -93,7 +97,8 @@ public final class MeTerminalScreen extends Screen {
 		if (shown.mode() == Mode.CATALOGUE) button("plan", 206, bottom, panelWidth-214, () -> { if (selected >= 0) request(PLAN, selected, 0); });
 		if (shown.mode() == Mode.PLAN) {
 			button("cpu", 120, bottom, 78, () -> request(CPU_NEXT, -1, shown.page())).active = shown.status() != Status.WAITING;
-			button("confirm", 206, bottom, panelWidth-214, () -> request(CONFIRM, -1, shown.page())).active = shown.confirm();
+			var confirm = button("confirm", 206, bottom, panelWidth-214, () -> request(CONFIRM, -1, shown.page())); confirm.active = shown.confirm();
+			if (picked) confirm.setTooltip(net.minecraft.client.gui.components.Tooltip.create(text("pick_plan_hint")));
 		}
 		if (shown.mode() == Mode.TASKS) button("cancel", 206, bottom, panelWidth-214, () -> { if (selected >= 0 && shown.rows().get(selected).enabled()) request(CANCEL, selected, shown.page()); });
 		if (session.waiting()) for (var action : actions) action.active = false;

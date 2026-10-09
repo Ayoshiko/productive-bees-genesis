@@ -29,7 +29,7 @@ public record MachineMenuRequest(int containerId, UUID session, long sequence, l
 				|| inventorySlot < 0 || inventorySlot >= 36 || amount < 1 || amount > 64) throw new IllegalArgumentException("Invalid machine request");
 	}
 	static void register(RegisterPayloadHandlersEvent event) {
-		event.registrar("11").executesOn(HandlerThread.MAIN).playToServer(TYPE, STREAM_CODEC, (request, context) -> {
+		event.registrar("12").executesOn(HandlerThread.MAIN).playToServer(TYPE, STREAM_CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player && player.containerMenu instanceof MachineMenu menu) menu.request(player, request);
 		});
 	}

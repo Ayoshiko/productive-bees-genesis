@@ -35,7 +35,9 @@
 
 ### 新增
 
-- **D18j4d1 无线 ME 选块**：客户端“终端偏好”新增默认关闭的选块开关。世界中背包缺少目标方块物品时，通过背包或副手的无线设备，从绑定网络核心／独立机器的 ME 网格按完整组件取回至多一叠，再选择实际物品；已有物品、创造和实体选取保持原版。服务端重做至多 8 格且不超交互距离的射线，核对已加载路径、原设备、宿主、权限、序号和快捷栏，沿原 FE 费用及未决保管；满载不提取，未知不重试、不生成掉落。终端协议升至 28，ME／机器仍为 17／11，存档不变。本包未编译／未运行验证；缺料合成与持续补货继续独立交付。
+- **D18j4d2 选块缺料合成**：无线选块明确零提取后，复核服务器目标、设备与连接，打开网络／独立机器的 ME 计划页。按完整组件计划至多一叠，复用缺料明细、CPU 选择和确认下单；不可合成明确提示，成品进入 ME 库存。满载、未知或失效不触发，部分成功不补单；菜单固定原桥／网格，入口只消费一次，旧设备槽与模式切换校验保持。终端／ME／机器协议升至 29／18／12，存档不变。本包未编译／未运行验证，持续补货及其它容器工作流仍待交付。
+
+- **D18j4d1 无线 ME 选块**：客户端“终端偏好”新增默认关闭的选块开关。世界中背包缺少目标方块物品时，通过背包或副手的无线设备，从绑定网络核心／独立机器的 ME 网格按完整组件取回至多一叠，再选择实际物品；已有物品、创造和实体选取保持原版。服务端重做至多 8 格且不超交互距离的射线，核对已加载路径、原设备、宿主、权限、序号和快捷栏，沿原 FE 费用及未决保管；满载不提取，未知不重试、不生成掉落。终端协议升至 28，ME／机器仍为 17／11，存档不变。本包未编译／未运行验证；缺料合成见 D18j4d2，持续补货仍待交付。
 
 - **D18j4b4 供应器设置**：从样板槽页编辑原供应器的完整 int 优先级、阻塞模式和五种原生合成锁定模式，锁定选项先选择再应用；隐藏操作退出原目标，恢复显示需在供应器本体设置。逐项核对原配置与权限，改变锁定模式后显式保存，重复相同值不重置待解锁状态；保存／回读异常时报告待核实，不自动重试。设置不移动样板或玩家资产。ME 协议升至 17，其它协议及存档格式不变；本包未编译／未运行验证。
 
@@ -198,7 +200,9 @@
 
 #### Added
 
-- **D18j4d1 Wireless ME pick block**: A disabled-by-default client Terminal preference retrieves up to one component-exact stack when a world block's item is missing from the inventory. It uses a wireless device in the inventory or offhand and the ME grid of its bound network core or standalone machine, then selects the actual item. Existing items, creative picking and entity picking keep vanilla behavior. The server rechecks the loaded ray path within interaction reach and at most 8 blocks, device, host, permissions, sequence and hotbar selection. Existing FE charges and unresolved custody apply; a full inventory prevents extraction, and unknown outcomes are not retried or dropped. Terminal protocol advances to 28; ME/machine remain 17/11 and saved-data formats are unchanged. Compilation and runtime validation were skipped; missing-item crafting and continuous restocking remain separate work.
+- **D18j4d2 Missing-item crafting from pick block**: After an explicit zero extraction, rechecks the server's target, device and connection, then opens the network or standalone machine's ME plan page. Plans up to one component-exact stack with existing missing-material details, CPU selection and explicit confirmation; unsupported items show a clear status and outputs return to ME storage. Full inventories, unknown outcomes and stale targets do not trigger plans; partial success creates no extra order. The menu fixes the original bridge/grid and consumes its entry once, preserving device-slot and mode-switch checks. Terminal/ME/machine protocols advance to 29/18/12; saved-data formats are unchanged. Compilation and runtime validation were skipped; continuous restocking and other container workflows remain open.
+
+- **D18j4d1 Wireless ME pick block**: A disabled-by-default client Terminal preference retrieves up to one component-exact stack when a world block's item is missing from the inventory. It uses a wireless device in the inventory or offhand and the ME grid of its bound network core or standalone machine, then selects the actual item. Existing items, creative picking and entity picking keep vanilla behavior. The server rechecks the loaded ray path within interaction reach and at most 8 blocks, device, host, permissions, sequence and hotbar selection. Existing FE charges and unresolved custody apply; a full inventory prevents extraction, and unknown outcomes are not retried or dropped. Terminal protocol advances to 28; ME/machine remain 17/11 and saved-data formats are unchanged. Compilation and runtime validation were skipped; missing-item crafting follows in D18j4d2 and continuous restocking remains open.
 
 - **D18j4b4 Provider settings**: Edit the original provider's full signed-int priority, blocking mode and five native crafting-lock modes from its pattern page. Lock selection is local until applied; hiding exits the provider, with visibility restored through its own settings. Each write checks the displayed configuration and permissions. Lock-mode changes explicitly save, while unchanged values do not reset a pending lock. Save/readback failures require checking the actual setting without automatic retry. Patterns and player assets stay in place. ME protocol advances to 17; other protocols and saved-data formats stay unchanged. Compilation and runtime validation were skipped.
 

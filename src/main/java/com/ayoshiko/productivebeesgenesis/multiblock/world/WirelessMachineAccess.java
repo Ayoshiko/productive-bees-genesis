@@ -34,10 +34,13 @@ public final class WirelessMachineAccess {
 		return true;
 	}
 	public static boolean open(ServerPlayer player, WirelessDeviceSession device) {
+		return open(player, device, net.minecraft.world.item.ItemStack.EMPTY);
+	}
+	public static boolean open(ServerPlayer player, WirelessDeviceSession device, net.minecraft.world.item.ItemStack pickTarget) {
 		if (!device.valid(player) || device.binding().machine() == null) return false;
 		var pos = device.binding().position(); var chunk = player.serverLevel().getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
 		return chunk != null && chunk.getBlockEntity(pos) instanceof MachineControllerEntity core && valid(core, device, player)
-				&& MachineMenu.openWireless(core, player, device);
+				&& MachineMenu.openWireless(core, player, device, pickTarget);
 	}
 	private WirelessMachineAccess() { }
 }

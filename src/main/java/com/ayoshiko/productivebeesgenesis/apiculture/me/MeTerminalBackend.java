@@ -6,5 +6,6 @@ import com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeBlockEntity;
 public interface MeTerminalBackend {
 	boolean valid(MeBridgeBlockEntity bridge);
 	MeTerminalView request(MeTerminalRequest request);
+	MeTerminalView planPicked(net.minecraft.world.item.ItemStack target);
 	void close();
 }

@@ -9,6 +9,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class MeTerminalSession {
@@ -16,6 +17,8 @@ public final class MeTerminalSession {
 	private final UUID session;
 	private final TerminalSequence sequences = new TerminalSequence();
 	private MeTerminalBackend backend;
+	private ItemStack pickTarget = ItemStack.EMPTY;
+	private boolean pickScreen;
 	private MePatternSession patterns;
 	private MePatternBufferSession patternBuffer;
 	private MeProcessingSession processing;
@@ -23,6 +26,21 @@ public final class MeTerminalSession {
 	private MeTerminalView view = MeTerminalView.empty(MeTerminalView.Status.CLOSED);
 	private long sent, acknowledged, sentAt;
 	public MeTerminalSession(int containerId, UUID session) { this.containerId = containerId; this.session = session; }
+	/** 只接受服务器世界取样；后端在菜单创建时固定原桥和网格。 */
+	public void seedPick(ServerPlayer player, ItemStack target, MeBridgeBlockEntity bridge) {
+		if (target.isEmpty() || bridge == null) return;
+		if (backend != null || target.getCount() > Math.min(64, target.getMaxStackSize())) throw new IllegalArgumentException("Invalid pick plan seed");
+		try {
+			backend = bridge.link().terminal(player);
+			if (backend != null && backend.valid(bridge)) pickTarget = target.copy();
+			else closePage();
+		} catch (RuntimeException | LinkageError error) {
+			closePage(); com.mojang.logging.LogUtils.getLogger().error("Pick plan unavailable for {}", player.getUUID(), error);
+		}
+	}
+	public void showPickScreen(boolean show) { pickScreen = show; }
+	public boolean hasPickScreen() { return pickScreen; }
+	public boolean takePickScreen() { boolean show = pickScreen; pickScreen = false; return show; }
 	public long sequence() { return sent; }
 	public MeTerminalView view() { return view; }
 	public boolean active() { return backend != null; }
@@ -78,6 +96,15 @@ public final class MeTerminalSession {
 			}
 			var bridge = resolve.get(); tick(bridge);
 			if (bridge == null) { send(player, request, request.action() == MeTerminalRequest.Action.STORAGE ? MeTerminalView.storageStatus(MeTerminalView.Status.DISCONNECTED) : MeTerminalView.empty(MeTerminalView.Status.DISCONNECTED)); return; }
+			if (request.action() == MeTerminalRequest.Action.PICK_PLAN) {
+				var target = pickTarget; pickTarget = ItemStack.EMPTY;
+				if (target.isEmpty() || backend == null || !backend.valid(bridge) || request.row() != -1 || request.page() != 0
+						|| request.amount() != 0 || request.revision() != 0 || !request.query().isEmpty()) {
+					send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return;
+				}
+				send(player, request, backend.planPicked(target)); return;
+			}
+			pickTarget = ItemStack.EMPTY;
 			if (backend == null) {
 				if (request.action() != MeTerminalRequest.Action.BROWSE && request.action() != MeTerminalRequest.Action.STORAGE && request.action() != MeTerminalRequest.Action.TASKS && request.action() != MeTerminalRequest.Action.PROVIDERS) { send(player, request, MeTerminalView.empty(MeTerminalView.Status.STALE)); return; }
 				backend = bridge.link().terminal(player);
@@ -113,11 +140,11 @@ public final class MeTerminalSession {
 			case UNKNOWN -> MeTerminalView.Status.TRANSFER_UNKNOWN; case INVALID -> MeTerminalView.Status.INVALID;
 		};
 	}
-	private void closeBackend() { var old = backend; backend = null; if (old != null) old.close(); }
+	private void closeBackend() { pickTarget = ItemStack.EMPTY; var old = backend; backend = null; if (old != null) old.close(); }
 	private void closePage() {
 		if (patternBuffer != null) { patternBuffer.close(); patternBuffer = null; }
 		closeBackend(); if (patterns != null) patterns.close(); patterns = null;
 		if (processing != null) processing.suspend(); processingPage = false;
 	}
-	public void close() { closePage(); if (processing != null) processing.close(); processing = null; sequences.close(); }
+	public void close() { pickScreen = false; closePage(); if (processing != null) processing.close(); processing = null; sequences.close(); }
 }

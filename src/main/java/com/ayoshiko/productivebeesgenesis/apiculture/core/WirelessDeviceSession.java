@@ -20,8 +20,10 @@ public final class WirelessDeviceSession {
 		if (!WirelessPickRequest.validSlot(slot)) throw new IllegalArgumentException("Invalid wireless inventory slot");
 		hand = null; this.slot = slot; stack = player.getInventory().getItem(slot); binding = WirelessTerminalItem.binding(stack);
 	}
+	public WirelessDeviceSession renewed(Player player) { return hand == null ? new WirelessDeviceSession(player, slot) : new WirelessDeviceSession(player, hand); }
 	public WirelessTerminalItem.Binding binding() { return binding; }
 	public ItemStack stack() { return stack; }
+	public int inventorySlot(Player player) { return hand == null ? slot : hand == InteractionHand.MAIN_HAND ? player.getInventory().selected : 40; }
 	public int energy() { return WirelessTerminalItem.energy(stack); }
 	public boolean combined() { return stack.getItem() instanceof WirelessTerminalItem item && item.combined(); }
 	public void revoke() { revoked = true; }

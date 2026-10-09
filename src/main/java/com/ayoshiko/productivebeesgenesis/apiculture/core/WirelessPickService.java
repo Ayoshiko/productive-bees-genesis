@@ -23,7 +23,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
-/** 服务器线程上的单次世界选块；只从真实 ME 库存取回，不建立自动补货任务。 */
+/** 服务器线程上的单次世界选块；明确零提取可进入需确认的合成计划。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class WirelessPickService {
     private static final class Seen { long sequence; long tick = Long.MIN_VALUE; }
@@ -73,15 +73,29 @@ public final class WirelessPickService {
         if (cursor.containerBusy || TerminalCursorExchange.unknown(player) || !cursor.item().isEmpty() || !cursor.pending.isEmpty()) {
             message(player, "retained"); return;
         }
+        boolean[] attempted = { false };
         var result = TerminalCursorExchange.exchange(player, player.inventoryMenu, wanted, false, true, source.description(), requested -> {
             var currentSample = sample(player, request.target());
             if (!ItemStack.isSameItemSameComponents(sample, currentSample) || !worldMenu(player, request)
                     || !validHost(player, device, host, authority) || MeBridgeTarget.resolve(host, player) != bridge || !source.valid()) return 0;
+            attempted[0] = true;
             return source.extract(requested);
         });
         switch (result.outcome()) {
             case MOVED -> { select(player, sample, request); message(player, "moved", result.amount()); }
-            case NO_SPACE -> message(player, "missing");
+            case NO_SPACE -> {
+                // 仅明确执行且返回零的提取可以计划；异常、跳过和满载不能当作缺货。
+                if (!attempted[0]) { message(player, "missing"); return; }
+                var currentSample = sample(player, request.target());
+                if (!ItemStack.isSameItemSameComponents(sample, currentSample) || !worldMenu(player, request)
+                        || !validHost(player, device, host, authority) || MeBridgeTarget.resolve(host, player) != bridge || !source.valid()) {
+                    message(player, "target_changed"); return;
+                }
+                if (cursor.containerBusy || TerminalCursorExchange.unknown(player) || !cursor.item().isEmpty() || !cursor.pending.isEmpty()) {
+                    message(player, "retained"); return;
+                }
+                if (!WirelessTerminalAccess.open(player, device, wanted)) message(player, "unavailable");
+            }
             case RETAINED, UNKNOWN -> message(player, "retained");
             case INVALID -> message(player, "target_changed");
         }

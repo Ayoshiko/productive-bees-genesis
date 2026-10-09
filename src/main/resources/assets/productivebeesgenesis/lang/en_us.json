@@ -1,6 +1,8 @@
 {
+  "screen.productivebeesgenesis.me_terminal.status.not_craftable": "The ME network cannot craft this exact item and its components.",
+  "screen.productivebeesgenesis.me_terminal.pick_plan_hint": "Confirm to order; outputs go to ME storage. Pick again after completion to retrieve them.",
   "productivebeesgenesis.configuration.terminalWirelessPickBlock": "Wireless ME pick block",
-  "productivebeesgenesis.configuration.terminalWirelessPickBlock.tooltip": "Disabled by default. In the world, pick a block missing from your inventory to retrieve up to one stack from the bound ME network through the first usable wireless terminal in your inventory or offhand. Targets must be within interaction reach, at most 8 blocks; the path and host must be loaded. Uses the wireless command energy cost; missing items are not autocrafted.",
+  "productivebeesgenesis.configuration.terminalWirelessPickBlock.tooltip": "Disabled by default. In the world, pick a block missing from your inventory to retrieve up to one stack from the bound ME network through the first usable wireless terminal in your inventory or offhand. Targets must be within interaction reach, at most 8 blocks; the path and host must be loaded. Picking and plan actions use wireless energy fees. If no items can be taken, opens a crafting plan for up to one stack. Confirm to order; outputs go to ME storage.",
   "item.productivebeesgenesis.wireless_terminal.pick_hint": "Enable wireless ME pick block in client Terminal preferences.",
   "item.productivebeesgenesis.wireless_terminal.pick.unavailable": "Wireless device, bound host or ME connection unavailable.",
   "item.productivebeesgenesis.wireless_terminal.pick.retained": "Pick block paused: terminal custody contains items or an unresolved request.",

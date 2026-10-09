@@ -37,6 +37,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	private List<FeedingSlotStore.Slot> shownFeeding;
 	private MachineUpgrades shownUpgrades;
 	private int[] shownLimits;
+	private int wirelessInventorySlot = -1;
 	private boolean closed, exchanging;
 	private final TerminalSequence craftingSequences = new TerminalSequence();
 	private TerminalClientState craftingState;
@@ -49,6 +50,10 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	public MachineMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
 		super(MachineContent.MENU.get(), id); buffer.readBlockPos(); session = buffer.readUUID();
 		viewer = inventory.player.getUUID(); viewingPlayer = inventory.player; core = null; binding = null; origin = null; wireless = null; initialize(inventory);
+		if (buffer.isReadable()) {
+			me.showPickScreen(buffer.readBoolean()); wirelessInventorySlot = buffer.readInt();
+			if (!com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessPickRequest.validSlot(wirelessInventorySlot) || buffer.isReadable()) throw new IllegalArgumentException("Invalid wireless machine slot");
+		}
 	}
 	MachineMenu(int id, Inventory inventory, MachineControllerEntity core, UUID session) {
 		this(id, inventory, core, session, null);
@@ -78,11 +83,16 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		nativeSlots = new com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalNativeSlots(this, crafting); nativeSlots.open(viewingPlayer);
 	}
 	static boolean open(MachineControllerEntity core, ServerPlayer player) { return open(core, null, player); }
-	static boolean openWireless(MachineControllerEntity core, ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession device) {
+	static boolean openWireless(MachineControllerEntity core, ServerPlayer player, com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessDeviceSession device, ItemStack pickTarget) {
 		if (!WirelessMachineAccess.valid(core, device, player)) return false; var session = UUID.randomUUID();
-		return player.openMenu(new SimpleMenuProvider((id, inventory, ignored) -> WirelessMachineAccess.valid(core, device, player)
-				? new MachineMenu(id, inventory, core, session, null, device) : null, device.stack().getHoverName()),
-				buffer -> { buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); }).isPresent();
+		return player.openMenu(new SimpleMenuProvider((id, inventory, ignored) -> {
+			if (!WirelessMachineAccess.valid(core, device, player)) return null;
+			var menu = new MachineMenu(id, inventory, core, session, null, device);
+			if (!pickTarget.isEmpty()) menu.meTerminal().seedPick(player, pickTarget, com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget.resolve(core, player));
+			return menu;
+		}, device.stack().getHoverName()), buffer -> {
+			buffer.writeBlockPos(core.getBlockPos()); buffer.writeUUID(session); buffer.writeBoolean(!pickTarget.isEmpty()); buffer.writeInt(device.inventorySlot(player));
+		}).isPresent();
 	}
 	static boolean open(MachinePartEntity part, ServerPlayer player) {
 		if (!(part.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread() || !part.bound()) return false;
@@ -264,8 +274,10 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 	@Override public void nativeEditing(boolean value) { exchanging = value; }
 	@Override public boolean moveNativeStack(ItemStack stack, int start, int end, boolean reverse) { return moveItemStackTo(stack, start, end, reverse); }
 	@Override public boolean lockedNativeStack(ItemStack stack) {
-		return toolbox != null && toolbox.locks(stack) || wireless() && stack.getItem() instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem
-				&& (stack == viewingPlayer.getMainHandItem() || stack == viewingPlayer.getOffhandItem());
+		return toolbox != null && toolbox.locks(stack) || wireless != null && stack == wireless.stack()
+				|| wireless() && stack.getItem() instanceof com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem
+				&& (stack == viewingPlayer.getMainHandItem() || stack == viewingPlayer.getOffhandItem()
+						|| wirelessInventorySlot >= 0 && stack == viewingPlayer.getInventory().getItem(wirelessInventorySlot));
 	}
 	@Override public void removed(Player player) {
 		// 客户端打开 JEI 也会调用 removed；只有服务端真正关闭菜单才撤销会话和订阅。

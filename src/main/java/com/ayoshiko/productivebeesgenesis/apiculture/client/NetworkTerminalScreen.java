@@ -71,7 +71,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		if (menu.toolbox() != null) menu.toolbox().layout(workspace ? 232 : 236, inventoryY);
 		state.tick(Util.getMillis());
 		rebuild();
-		if (!stockHome && state.view() == null && state.ready(Util.getMillis())) refresh();
+		if (!menu.meTerminal().hasPickScreen() && !stockHome && state.view() == null && state.ready(Util.getMillis())) refresh();
 		if (search != null) setInitialFocus(search);
 	}
 	private Component tr(String key, Object... args) { return Component.translatable("screen.productivebeesgenesis.network." + key, args); }
@@ -367,6 +367,9 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		return !menu.canUpgrade() ? tr("upgrade_permission") : matchingPreview(installing) ? UpgradePreviewText.text(state.preview(), batch) : tr("preview_hover");
 	}
 	@Override protected void containerTick() {
+		if (minecraft.player != null && minecraft.player.containerMenu == menu && menu.meTerminal().takePickScreen()) {
+			minecraft.setScreen(new MeTerminalScreen(this, menu, false, true)); return;
+		}
 		if (toolboxVisible != (menu.toolbox() != null && menu.toolbox().present())) { init(); return; }
 		if (minecraft.player == null || minecraft.player.containerMenu != menu) { state.close(); minecraft.setScreen(null); return; }
 		super.containerTick(); long now = Util.getMillis(); state.tick(now);
