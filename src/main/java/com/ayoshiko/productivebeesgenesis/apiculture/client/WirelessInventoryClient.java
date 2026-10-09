@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.world.entity.player.Player;
 
-/** 两种世界库存操作使用相同设备顺序；客户端筛选不代替服务器授权。 */
+/** 世界交互使用相同设备顺序；客户端筛选不代替服务器授权。 */
 final class WirelessInventoryClient {
     static int deviceSlot(Player player) {
         int range = ModConfig.SERVER.beeNetwork.wirelessRange.get();

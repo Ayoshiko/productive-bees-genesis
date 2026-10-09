@@ -15,7 +15,7 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
-	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup;
+	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup, wirelessMagnet;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
 	public final ModConfigSpec.EnumValue<BeeOrder> beeSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Sort> meSort;
@@ -33,6 +33,7 @@ public final class TerminalPreferenceConfigSection {
 		wirelessPickBlock = builder.translation(KEY + "terminalWirelessPickBlock").define("terminalWirelessPickBlock", false);
 		wirelessRestock = builder.translation(KEY + "terminalWirelessRestock").define("terminalWirelessRestock", false);
 		wirelessPickup = builder.translation(KEY + "terminalWirelessPickup").define("terminalWirelessPickup", false);
+		wirelessMagnet = builder.translation(KEY + "terminalWirelessMagnet").define("terminalWirelessMagnet", false);
 		meSource = builder.translation(KEY + "terminalMeSource").define("terminalMeSource", false);
 		beeSearch = search(builder, "terminalBeeSearch"); meSearch = search(builder, "terminalMeSearch");
 		beeSort = builder.translation(KEY + "terminalBeeSort").defineEnum("terminalBeeSort", BeeOrder.POSITION);

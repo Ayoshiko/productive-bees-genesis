@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4e2 无线磁力拉近**：新增默认关闭、可潜行暂停的独立磁力偏好。通过有效无线宿主拉近 4 格内可见、主背包能装下的普通物品，保留延迟、归属、碰撞和真实拾取；每轮最多四个实体，共用全服预算和无线命令费用。仅同步现存实体速度，不修改物品或调用 ME；拾取后入网仍由独立偏好控制。玩家／维度变化、取消、断线及异常撤销或停止旧意图，退出／停服清理。复用原宿主权限且无需 AE2；终端协议 32，ME／机器 18／12，存档不变。本包未编译／未运行验证。
+
 - **D18j4e1 自然拾取后入 ME**：新增默认关闭的“拾取物品存入 ME”偏好，通过背包／副手无线设备，将原版实际拾取到主背包的同组件净增量存入绑定 ME，每次至多一组且最多 64。保留拾取延迟、归属及其它处理器拒绝，不改地面实体；在同 tick 末尾复核完整背包和绑定，变化或预算不足时保留原版结果。真实来源先转入未决保管，按 ME 实际接收量结算，拒收回背包或 pending，未知不重试、不生成掉落。沿全服预算及无线命令费用，未实现磁力或满背包直入。终端协议升至 31，ME／机器保持 18／12，存档不变；本包未编译／未运行验证。
 
 - **D18j4d3 无线 ME 已有堆叠补货**：新增默认关闭的客户端偏好，在世界中通过背包／副手无线设备，从绑定网络核心或独立机器的 ME 补充 36 格背包内已有物品，按完整组件补至常规一叠（最多 64），保留现有超大数量。服务器合并每玩家待办并轮流处理，共用全服预算，缺货退避，打开界面／关闭偏好撤销；无空槽模板、护甲／副手补货或自动合成。外部交接沿实际量与未决保管，不自动重发未知结果或生成掉落；尝试沿原无线命令费用，提示仅在状态变化时发送。终端协议升至 30，ME／机器保持 18／12，存档不变；本包未编译／未运行验证。
@@ -203,6 +205,8 @@
 ### English
 
 #### Added
+
+- **D18j4e2 Wireless magnet attraction**: Adds a separate disabled-by-default preference, paused by sneaking. A valid wireless host attracts visible ordinary item drops within 4 blocks when they fit in the main inventory, preserving delay, ownership, collisions and normal pickup. Pulses affect at most four entities under shared server budgets and wireless command energy costs. Only existing entity motion is changed; no item mutation or ME operation is performed, and pickup deposits keep their separate setting. Player/dimension changes, cancellation, disconnection and errors invalidate or stop old intents; logout/server stop clear state. Reuses host permissions without requiring AE2. Terminal protocol advances to 32; ME/machine remain 18/12 and saved-data formats are unchanged. Compilation and runtime validation were skipped.
 
 - **D18j4e1 Deposit normal pickups into ME**: Adds a disabled-by-default preference that uses an inventory/offhand wireless device to deposit the component-exact net increase actually picked up into the main inventory, up to one stack and at most 64. Preserves pickup delay, ownership and other handlers' denial without changing ground entities. Rechecks the complete inventory and binding at the end of the same tick; changes or unavailable budget keep vanilla results. Real inventory sources enter unresolved custody before ME insertion; actual acceptance settles the transfer, rejected items return to the inventory or pending custody, and unknown outcomes are neither retried nor dropped. Uses shared budgets and wireless command energy. Magnet attraction and direct pickup into ME with a full inventory remain open. Terminal protocol advances to 31; ME/machine remain 18/12 and saved-data formats are unchanged. Compilation and runtime validation were skipped.
 
