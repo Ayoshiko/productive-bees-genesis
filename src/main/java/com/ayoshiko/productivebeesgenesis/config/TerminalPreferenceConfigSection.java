@@ -5,7 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.TranslatableEnum;
 
-/** 固定大小的本地展示偏好；不保存库存、菜单或服务器身份。 */
+/** 固定大小的本地显示与交互偏好；不保存库存、菜单或服务器身份。 */
 public final class TerminalPreferenceConfigSection {
 	public enum BeeOrder implements TranslatableEnum {
 		POSITION, QUANTITY_DESC, QUANTITY_ASC;
@@ -15,7 +15,7 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
-	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished;
+	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
 	public final ModConfigSpec.EnumValue<BeeOrder> beeSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Sort> meSort;
@@ -23,13 +23,14 @@ public final class TerminalPreferenceConfigSection {
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Type> meType;
 	private static final String KEY = "productivebeesgenesis.configuration.";
 	TerminalPreferenceConfigSection(ModConfigSpec.Builder builder) {
-		builder.comment("蜂业终端本地偏好；各终端共享，不包含资产或服务器身份").push("terminal_preferences");
+		builder.comment("蜂业终端本地显示与交互偏好；各终端共享，不包含资产或服务器身份").push("terminal_preferences");
 		rememberSearch = builder.translation(KEY + "terminalRememberSearch").define("terminalRememberSearch", true);
 		autoFocus = builder.translation(KEY + "terminalAutoFocus").define("terminalAutoFocus", false);
 		syncJeiSearch = builder.translation(KEY + "terminalSyncJeiSearch").define("terminalSyncJeiSearch", false);
 		notifyCraftingFinished = builder.translation(KEY + "terminalNotifyCraftingFinished").define("terminalNotifyCraftingFinished", false);
 		returnCraftingOnClose = builder.translation(KEY + "terminalReturnCraftingOnClose").define("terminalReturnCraftingOnClose", false);
 		pinCraftingFinished = builder.translation(KEY + "terminalPinCraftingFinished").define("terminalPinCraftingFinished", false);
+		wirelessPickBlock = builder.translation(KEY + "terminalWirelessPickBlock").define("terminalWirelessPickBlock", false);
 		meSource = builder.translation(KEY + "terminalMeSource").define("terminalMeSource", false);
 		beeSearch = search(builder, "terminalBeeSearch"); meSearch = search(builder, "terminalMeSearch");
 		beeSort = builder.translation(KEY + "terminalBeeSort").defineEnum("terminalBeeSort", BeeOrder.POSITION);

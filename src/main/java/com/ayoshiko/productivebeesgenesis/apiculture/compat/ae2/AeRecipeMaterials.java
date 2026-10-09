@@ -18,7 +18,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 
-/** 只存活于一次服务器请求；按配方物品索引查询，实际提取使用同一玩家和封存节点。 */
+/** 只存活于一次服务器请求；配方候选按物品索引查询，精确键提取使用同一玩家和封存节点。 */
 final class AeRecipeMaterials implements TerminalMaterialSource {
 	private final MeBridgeNode bridgeNode;
 	private final MeBridgeBlockEntity bridge;
@@ -41,7 +41,7 @@ final class AeRecipeMaterials implements TerminalMaterialSource {
 		return player.server.isSameThread() && player.isAlive() && !player.isRemoved() && !player.isSpectator()
 				&& player.level() == bridge.getLevel() && bridge.owner().equals(player.getUUID())
 				&& player.serverLevel().mayInteract(player, bridge.getBlockPos())
-				&& bridgeNode.status() == MeBridgeStatus.ONLINE && bridgeNode.getGridNode(Direction.UP) == node && node.getGrid() == grid;
+				&& bridgeNode.status() == MeBridgeStatus.ONLINE && bridgeNode.getGridNode(Direction.UP) == node && node.getGrid() == grid && !bridgeNode.aggregationFaulted();
 	}
 	@Override public List<ItemStack> candidates(CraftingRecipe recipe, int limit) {
 		if (!valid() || !MeTerminalBudget.expensive(player.server)) return null;

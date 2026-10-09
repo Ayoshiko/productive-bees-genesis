@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
-	 * 客户端配置 — 仅影响本地渲染/显示
+	 * 客户端配置 — 本地渲染、显示与交互偏好
 	 * <p>
 	 * 从 {@link ModConfig} 抽取的独立配置类（Task 21），遵循单一职责原则（SRP）。
 	 * 实例由 {@link ModConfig#CLIENT} 聚合持有，外部访问路径 {@code ModConfig.CLIENT.xxx} 保持不变。

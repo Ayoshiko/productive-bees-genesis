@@ -131,6 +131,7 @@ public final class WirelessTerminalItem extends Item {
 		tooltip.add(binding == null ? message("bind_hint") : message("target", binding.dimension(), binding.position().toShortString()));
 		tooltip.add(message("range", ModConfig.SERVER.beeNetwork.wirelessRange.get()));
 		if (!combined) tooltip.add(message("merge_hint"));
+		tooltip.add(message("pick_hint"));
 	}
 	@Override public boolean isBarVisible(ItemStack stack) { return true; }
 	@Override public int getBarWidth(ItemStack stack) { return Math.max(0, energy(stack)) * 13 / CAPACITY; }
