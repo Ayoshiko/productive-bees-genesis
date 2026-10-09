@@ -71,6 +71,12 @@ public final class TerminalCursorExchange {
 		var requested = wanted.copyWithCount(amount); var record = new Request(requested, insert, source);
 		cursor.request = record;
 		if (insert) { var rest = held.copyWithCount(held.getCount() - amount); cursor.set(rest); menu.setCarried(rest.copy()); }
+		return complete(player, menu, requested, insert, inventory, source, external);
+	}
+	/** 调用前请求中的资产已由鼠标或真实背包移交；这里只结算外部实际结果。 */
+	private static Result complete(ServerPlayer player, AbstractContainerMenu menu, ItemStack requested, boolean insert, boolean inventory,
+			String source, ToIntFunction<ItemStack> external) {
+		var cursor = TerminalCursor.get(player); int amount = requested.getCount();
 		int actual;
 		try {
 			actual = external.applyAsInt(requested.copy());
@@ -86,6 +92,31 @@ public final class TerminalCursorExchange {
 		cursor.request = null;
 		if (player.containerMenu == menu) { recover(player, menu, inventory); menu.broadcastFullState(); }
 		return new Result(cursor.pending.isEmpty() ? actual == 0 ? Outcome.NO_SPACE : Outcome.MOVED : Outcome.RETAINED, actual);
+	}
+	/** 仅从仍与服务端快照一致的主背包取源；拒收回背包，未知量留在原 Request。 */
+	static Result depositInventory(ServerPlayer player, AbstractContainerMenu menu, java.util.List<ItemStack> expected,
+			ItemStack wanted, String source, ToIntFunction<ItemStack> external) {
+		var cursor = TerminalCursor.get(player);
+		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		cursor.containerBusy = true;
+		try {
+			if (player.containerMenu != menu || !menu.getCarried().isEmpty() || !cursor.item().isEmpty() || !cursor.pending.isEmpty()
+					|| expected.size() != 36 || wanted.isEmpty() || wanted.getCount() > 64 || wanted.getItem() instanceof WirelessTerminalItem
+					|| !ItemStack.listMatches(expected, player.getInventory().items)) return new Result(Outcome.INVALID, 0);
+			var after = TerminalCraftingPlan.copy(expected); int needed = wanted.getCount();
+			for (int i = 35; i >= 0 && needed > 0; i--) {
+				var stack = after.get(i);
+				if (!ItemStack.isSameItemSameComponents(stack, wanted)) continue;
+				int amount = Math.min(needed, stack.getCount()); stack.shrink(amount); needed -= amount;
+			}
+			if (needed != 0 || !ItemStack.listMatches(expected, player.getInventory().items)) return new Result(Outcome.INVALID, 0);
+			var record = new Request(wanted, true, source);
+			// 以下发布只写已准备的原生 36 格，无外部库存／世界回调；先撤销可操作来源再访问 ME。
+			cursor.request = record;
+			for (int i = 0; i < 36; i++) if (!ItemStack.matches(expected.get(i), after.get(i))) player.getInventory().items.set(i, after.get(i));
+			player.getInventory().setChanged();
+			return complete(player, menu, wanted, true, true, source, external);
+		} finally { cursor.containerBusy = false; }
 	}
 	/** 服务器已准备的同类同数量物品重写；不调用外部库存，不创建第二份实物。 */
 	public static Result rewrite(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement) {

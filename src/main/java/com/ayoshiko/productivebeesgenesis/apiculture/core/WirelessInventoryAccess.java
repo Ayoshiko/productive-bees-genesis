@@ -7,7 +7,7 @@ import com.ayoshiko.productivebeesgenesis.multiblock.world.WirelessMachineAccess
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-/** 仅存活一次服务器调用；选块和补货共享宿主、权威域及精确 ME 来源校验。 */
+/** 仅存活一次服务器调用；世界库存操作共享宿主、权威域及精确 ME 来源校验。 */
 record WirelessInventoryAccess(WirelessDeviceSession device, BlockEntity host, Object authority,
         MeBridgeBlockEntity bridge, TerminalMaterialSource source) {
     static WirelessInventoryAccess capture(ServerPlayer player, WirelessDeviceSession device) {

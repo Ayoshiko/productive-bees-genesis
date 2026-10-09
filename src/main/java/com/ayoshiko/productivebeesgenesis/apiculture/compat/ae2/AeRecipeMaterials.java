@@ -18,7 +18,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 
-/** 只存活于一次服务器请求；配方候选按物品索引查询，精确键提取使用同一玩家和封存节点。 */
+/** 只存活于一次服务器请求；配方候选按物品索引查询，精确键存取使用同一玩家和封存节点。 */
 final class AeRecipeMaterials implements TerminalMaterialSource {
 	private final MeBridgeNode bridgeNode;
 	private final MeBridgeBlockEntity bridge;
@@ -75,6 +75,14 @@ final class AeRecipeMaterials implements TerminalMaterialSource {
 		if (key == null || requested.isEmpty() || requested.getCount() > Math.min(64, requested.getMaxStackSize())) throw new IllegalArgumentException("Invalid ME material request");
 		long actual = StorageHelper.poweredExtraction(grid.getEnergyService(), grid.getStorageService().getInventory(), key, requested.getCount(), source);
 		if (actual < 0 || actual > requested.getCount()) throw new IllegalStateException("Invalid actual ME material amount");
+		return (int) actual;
+	}
+	@Override public int insert(ItemStack requested) {
+		if (!valid()) return 0;
+		var key = AEItemKey.of(requested);
+		if (key == null || requested.isEmpty() || requested.getCount() > Math.min(64, requested.getMaxStackSize())) throw new IllegalArgumentException("Invalid ME deposit request");
+		long actual = StorageHelper.poweredInsert(grid.getEnergyService(), grid.getStorageService().getInventory(), key, requested.getCount(), source);
+		if (actual < 0 || actual > requested.getCount()) throw new IllegalStateException("Invalid actual ME deposit amount");
 		return (int) actual;
 	}
 	@Override public String description() { return bridge.getLevel().dimension().location() + " " + bridge.getBlockPos().toShortString(); }
