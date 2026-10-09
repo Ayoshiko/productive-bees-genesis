@@ -76,24 +76,8 @@ final class AeProviderPatternEdit {
 		var checked = AePatternEditor.replace(original, row, material.item());
 		if (!current() || checked.status() != Status.OK || !ItemStack.matches(wanted, checked.result())) return end(Status.STALE);
 		close();
-		var result = material.commit(player, menu, () -> {
-			if (!live() || !ItemStack.matches(original, target.inventory().getStackInSlot(slot))) return new TerminalCursorExchange.Result(TerminalCursorExchange.Outcome.INVALID, 0);
-			var offered = wanted.copy();
-			if (offered.getItem() != original.getItem() || offered.getCount() != original.getCount()
-					|| offered.getCount() > target.inventory().getSlotLimit(slot) || !target.inventory().isItemValid(slot, offered)
-					|| !ItemStack.matches(wanted, offered) || !live() || !ItemStack.matches(original, target.inventory().getStackInSlot(slot)))
-				return new TerminalCursorExchange.Result(TerminalCursorExchange.Outcome.INVALID, 0);
-			try {
-				target.inventory().setItemDirect(slot, offered);
-				if (!ItemStack.matches(wanted, target.inventory().getStackInSlot(slot)) || !live())
-					throw new IllegalStateException("Provider pattern readback changed");
-				return new TerminalCursorExchange.Result(TerminalCursorExchange.Outcome.MOVED, wanted.getCount());
-			} catch (RuntimeException | LinkageError error) {
-				com.mojang.logging.LogUtils.getLogger().error("Provider pattern edit outcome unknown for {} at {} slot={}; no retry or rollback",
-						player.getUUID(), target.location(), slot, error);
-				return new TerminalCursorExchange.Result(TerminalCursorExchange.Outcome.UNKNOWN, 0);
-			}
-		});
+		var result = material.commit(player, menu,
+				() -> AeProviderPatternWriter.replace(player, target, slot, original, wanted, this::live));
 		return end(result.outcome() == TerminalCursorExchange.Outcome.MOVED ? Status.PROVIDER_PATTERN_REPLACED
 				: result.outcome() == TerminalCursorExchange.Outcome.UNKNOWN ? Status.PROVIDER_PATTERN_UNKNOWN : Status.STALE);
 	}

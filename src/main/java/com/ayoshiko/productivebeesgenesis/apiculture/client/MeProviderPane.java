@@ -21,22 +21,24 @@ final class MeProviderPane {
     private final AbstractContainerMenu menu;
     private final MeTerminalSession session;
     private final Commands commands;
+    private final MeProviderEditPane edits;
     private final List<Button> buttons = new ArrayList<>();
     private static final Status[] STATUSES = Status.values();
     private Button previous, next, apply, selectAll, deselectAll, cancel, uploadPreview, returnPreview;
     private MeTerminalView shown;
     private EditBox filter, priority;
-    private Button priorityApply, blocking, lockChoice, lockApply, hide, unlock, patternApply;
+    private Button priorityApply, blocking, lockChoice, lockApply, hide, unlock, patternApply, editOpen;
     private int lockMode;
     private static final String[] LOCK_NAMES = {"none", "until_pulse", "while_high", "while_low", "until_result"};
     private String query = "";
     private int left, top, width, height;
     MeProviderPane(AbstractContainerMenu menu, MeTerminalSession session, Commands commands) {
-        this.menu = menu; this.session = session; this.commands = commands;
+        this.menu = menu; this.session = session; this.commands = commands; edits = new MeProviderEditPane(menu, session, commands);
     }
     void browse() { refreshSearch(); commands.send(PROVIDERS, -1, 0, 0, query); }
     void refresh() {
-        if (session.view().mode() == Mode.PROVIDER_SETTINGS) commands.send(PROVIDER_SETTINGS, -1, 0, 0, "");
+        if (session.view().mode().providerEdit()) commands.send(POLL, -1, session.view().page(), 0, "");
+        else if (session.view().mode() == Mode.PROVIDER_SETTINGS) commands.send(PROVIDER_SETTINGS, -1, 0, 0, "");
         else if (session.view().mode().providerPattern()) commands.send(PROVIDER_PATTERN_READ, -1, session.view().page(), 0, "");
         else if (session.view().mode().providerBatch()) commands.send(POLL, -1, session.view().page(), 0, query);
         else if (session.view().mode() == Mode.PROVIDER_SLOTS && session.view().revision() != 0) commands.send(PROVIDER_REFRESH, -1, session.view().page(), 0, query);
@@ -45,9 +47,10 @@ final class MeProviderPane {
     private void refreshSearch() { if (filter != null) query = filter.getValue(); }
     List<AbstractWidget> build(Font font, int left, int top, int width, int height, Runnable back) {
         refreshSearch(); this.left = left; this.top = top; this.width = width; this.height = height; shown = session.view();
+        if (shown.mode().providerEdit()) return edits.build(font, left, top, width, height, back, this::browse);
         buttons.clear(); var widgets = new ArrayList<AbstractWidget>(); filter = null;
         apply = selectAll = deselectAll = cancel = uploadPreview = returnPreview = null;
-        priority = null; priorityApply = blocking = lockChoice = lockApply = hide = unlock = patternApply = null;
+        priority = null; priorityApply = blocking = lockChoice = lockApply = hide = unlock = patternApply = editOpen = null;
         if (shown.mode() == Mode.PROVIDERS) {
             filter = new EditBox(font, left + 8, top + 38, width - 84, 14, MeInventoryPane.text("provider_search"));
             filter.setMaxLength(64); filter.setValue(query); filter.setHint(MeInventoryPane.text("provider_search")); widgets.add(filter);
@@ -70,6 +73,13 @@ final class MeProviderPane {
         add(widgets, "back", 8, height - 21, 52, back);
         previous = add(widgets, "previous", 64, height - 21, 24, () -> commands.send(PAGE, -1, Math.max(0, shown.page() - 1), 0, shown.mode().providerPattern() ? "" : query));
         next = add(widgets, "next", 92, height - 21, 24, () -> commands.send(PAGE, -1, shown.page() + 1, 0, shown.mode().providerPattern() ? "" : query));
+        if (shown.mode() == Mode.PROVIDERS || shown.mode() == Mode.PROVIDER_SLOTS) {
+            boolean slots = shown.mode() == Mode.PROVIDER_SLOTS;
+            editOpen = add(widgets, slots ? "provider_edit_single" : "provider_edit_page",
+                    slots ? 188 : 120, slots ? 182 : height - 21, slots ? width - 198 : width - 128,
+                    () -> commands.send(PROVIDER_EDIT_OPEN, -1, shown.page(), 0, ""));
+            editOpen.setTooltip(net.minecraft.client.gui.components.Tooltip.create(MeInventoryPane.text("provider_edit_open_hint")));
+        }
         if (shown.mode() == Mode.PROVIDER_SLOTS) {
             add(widgets, "provider_settings", width - 90, 38, 82, () -> commands.send(PROVIDER_SETTINGS, -1, shown.page(), 0, ""));
             uploadPreview = add(widgets, "provider_upload_preview", 120, height - 21, 88, () -> commands.send(PROVIDER_UPLOAD_PREVIEW, -1, shown.page(), 0, query));
@@ -127,6 +137,7 @@ final class MeProviderPane {
         buttons.add(button); widgets.add(button); return button;
     }
     void tick() {
+        if (shown.mode().providerEdit()) { edits.tick(); return; }
         for (var button : buttons) button.active = !session.waiting();
         if (priority != null) {
             boolean ready = settingsReady() && !session.waiting();
@@ -139,6 +150,7 @@ final class MeProviderPane {
             previous.active &= shown.revision() != 0 && shown.status() != Status.WAITING && shown.page() > 0;
             next.active &= shown.revision() != 0 && shown.status() != Status.WAITING && shown.more();
         }
+        if (editOpen != null) editOpen.active &= shown.revision() != 0 && shown.status() == Status.OK && !shown.rows().isEmpty() && !menu.getCarried().isEmpty();
         if (patternApply != null) patternApply.active &= shown.confirm() && menu.getCarried().isEmpty();
         if (apply != null) {
             apply.active &= shown.confirm(); selectAll.active &= shown.status() == Status.OK; deselectAll.active &= shown.status() == Status.OK;
@@ -147,11 +159,13 @@ final class MeProviderPane {
         if (uploadPreview != null) { uploadPreview.active &= shown.revision() != 0; returnPreview.active &= shown.revision() != 0; }
     }
     boolean keyPressed(int key) {
+        if (shown.mode().providerEdit()) return false;
         if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && priority != null && priority.isFocused()) { applyPriority(); return true; }
         if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && filter != null && filter.isFocused()) { browse(); return true; }
         return false;
     }
     boolean click(double x, double y, int button) {
+        if (shown.mode().providerEdit()) return edits.click(x, y, button);
         if (shown.mode() == Mode.PROVIDER_SETTINGS) return false;
         if (session.waiting() || shown.revision() == 0 || shown.status() == Status.WAITING) return false;
         if (shown.mode().providerPattern()) {
@@ -185,6 +199,7 @@ final class MeProviderPane {
         commands.send(action, row, shown.page(), button == 1 ? 1 : 64, query); return true;
     }
     void render(GuiGraphics g, Font font, int mouseX, int mouseY) {
+        if (shown.mode().providerEdit()) { edits.render(g, font, mouseX, mouseY); return; }
         if (shown.mode() == Mode.PROVIDER_SETTINGS) {
             g.drawString(font, MeInventoryPane.text("provider_priority"), left + 12, top + 58, TerminalSkin.MUTED, false);
             g.drawString(font, MeInventoryPane.text("provider_lock"), left + 12, top + 114, TerminalSkin.MUTED, false);

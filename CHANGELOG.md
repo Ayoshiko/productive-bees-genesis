@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4b3d 供应器批量原位替换**：新增当前供应器整台和当前搜索页至多八台的范围入口，合计最多 288 槽。使用鼠标处理样板的原资源与真实九格左上角样本，分步准备全部同键替换；逐项／全选、查看资源明细并确认后按槽执行。来源样板和样本不消耗，原位张数、数量与其它组件保持；失败／停止保留已完成项，未执行项单独标记，未知不重试、不补偿或掉落。共用原单槽写入与全服预算，ME 协议升至 20，其它协议／存档不变。编译、相关检查及构建通过；实际多人／客户端与失败恢复联合仍待验收。
+
 - **D18 集中构建与回归**：修正可选依赖守卫检查对网络隔离包和字节码结构守卫的识别，完成提醒的可选注入在缺少目标时跳过；集中完成全量普通测试、AE2 原生供应器测试和无 AE2 专服基线。新功能真实玩家交互、恢复和性能验收仍独立开放。
 
 - **D18j4b4a／j4b3c 供应器管理补全**：合并提供当前锁定理由、待回流资源／数量和手动解除等待锁，原生锁实例版本阻止旧页面解锁后续同配方作业；红石高低电平锁保持原条件。空鼠标 Ctrl＋左键读取原生供应器处理样板，右键资源用真实九格样本预览替换，确认后一次原位写回；保留张数、数量、其它组件且不消耗样本。原槽／样本／权限变化拒绝，写入或解锁结果未知时退出，不自动重试、补偿或生成掉落。附属自定义逻辑／库存不开放这些原生专属操作。ME 协议升至 19，终端／机器保持 32／12，存档不变；本组已通过集中编译、构建及现有回归；真实客户端与新功能联合仍待验收。
@@ -209,6 +211,8 @@
 ### English
 
 #### Added
+
+- **D18j4b3d Batch in-place provider pattern replacement**: Adds scopes for the whole current provider or up to eight providers on the current search page, with a 288-slot preview budget. Uses the held processing pattern's source resource and the real top-left grid sample to prepare matching replacements incrementally. Select entries, inspect resource details and confirm sequential slot updates. Source patterns and samples remain untouched; pattern counts, resource amounts and other components are preserved. Stopping or failure keeps completed edits, marks unattempted entries and never retries, compensates or drops unknown results. Shares the single-slot writer and server budget. ME protocol advances to 20; other protocols and saved-data formats stay unchanged. Compilation, focused checks and build passed; multiplayer, client and failure/recovery acceptance remains open.
 
 - **D18 combined build and regression checks**: Updates optional-dependency checks to recognize the isolated network integration and bytecode-validated hooks, and makes completion-notification hooks optional when targets are absent. Completes the ordinary test suite, native AE2 provider tests and the dedicated-server baseline without AE2. New-workflow player interaction, recovery and performance acceptance remains separate.
 

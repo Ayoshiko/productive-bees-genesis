@@ -27,6 +27,7 @@ final class AeMePatternProviders {
     private AeProviderBatch batch;
     private AeProviderSettings settings;
     private AeProviderPatternEdit patternEdit;
+    private AeProviderPatternBatch patternBatch;
     private List<ItemStack> slots = List.of();
     private String query = "";
     private int skip, requestedPage;
@@ -39,7 +40,7 @@ final class AeMePatternProviders {
     static boolean handles(MeTerminalRequest.Action action) {
         return action == PROVIDERS || action == PROVIDER_OPEN || action == PROVIDER_REFRESH || action == PROVIDER_STORE
                 || action == PROVIDER_TAKE || action == PROVIDER_TAKE_INVENTORY || action == PROVIDER_UPLOAD_PREVIEW || action == PROVIDER_RETURN_PREVIEW
-                || AeProviderPatternEdit.handles(action) || action == PROVIDER_BATCH_TOGGLE || action == PROVIDER_BATCH_SELECT || action == PROVIDER_BATCH_APPLY || action == PROVIDER_BATCH_CANCEL || action == PROVIDER_SETTINGS || AeProviderSettings.edits(action);
+                || AeProviderPatternBatch.handles(action) || AeProviderPatternEdit.handles(action) || action == PROVIDER_BATCH_TOGGLE || action == PROVIDER_BATCH_SELECT || action == PROVIDER_BATCH_APPLY || action == PROVIDER_BATCH_CANCEL || action == PROVIDER_SETTINGS || AeProviderSettings.edits(action);
     }
     MeTerminalView request(MeTerminalRequest request) {
         if (!connected.getAsBoolean()) return clear(Status.DISCONNECTED);
@@ -47,6 +48,14 @@ final class AeMePatternProviders {
         if (request.action() != PROVIDERS && (now - touched > 600 || request.revision() == 0 || request.revision() != view.revision()))
             return clear(Status.STALE);
         touched = now;
+        if (patternBatch != null) {
+            if (AeProviderPatternBatch.handles(request.action()) || request.action() == PAGE || request.action() == POLL) {
+                var result = patternBatch.request(request);
+                if (!result.mode().providerEdit()) close();
+                return view = result;
+            }
+            patternBatch.close(); patternBatch = null;
+        }
         if (patternEdit != null) {
             if (AeProviderPatternEdit.handles(request.action()) || request.action() == PAGE) {
                 var result = patternEdit.request(request);
@@ -96,8 +105,23 @@ final class AeMePatternProviders {
             case PROVIDER_UPLOAD_PREVIEW, PROVIDER_RETURN_PREVIEW -> beginBatch(request);
             case PROVIDER_SETTINGS -> beginSettings(request);
             case PROVIDER_PATTERN_OPEN -> beginPatternEdit(request);
+            case PROVIDER_EDIT_OPEN -> beginPatternBatch(request);
             default -> view.status(Status.INVALID);
         };
+    }
+    private MeTerminalView beginPatternBatch(MeTerminalRequest request) {
+        if (request.row() != -1 || request.page() != view.page() || request.amount() != 0 || !request.query().isEmpty()
+                || view.status() != Status.OK || view.mode() != Mode.PROVIDERS && view.mode() != Mode.PROVIDER_SLOTS)
+            return view.status(Status.INVALID);
+        if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
+        var scope = view.mode() == Mode.PROVIDER_SLOTS ? selected == null ? List.<AePatternProviderTarget>of() : List.of(selected)
+                : List.copyOf(matches.subList(0, Math.min(view.rows().size(), matches.size())));
+        if (scope.isEmpty() || scope.stream().anyMatch(target -> !target.valid(player, grid))) return clear(Status.STALE);
+        patternBatch = new AeProviderPatternBatch(player, grid, scope, connected);
+        slots = List.of(); matches.clear(); selected = null; scan = null;
+        var result = patternBatch.start();
+        if (!result.mode().providerEdit()) close();
+        return view = result;
     }
     private MeTerminalView beginPatternEdit(MeTerminalRequest request) {
         if (view.mode() != Mode.PROVIDER_SLOTS || selected == null || request.row() < 0 || request.row() >= slots.size()
@@ -223,9 +247,9 @@ final class AeMePatternProviders {
     private MeTerminalView clear(Status status) {
         close(); return publish(Mode.PROVIDERS, status, 0, false, "", List.of());
     }
-    void close() { if (patternEdit != null) patternEdit.close(); patternEdit = null; if (settings != null) settings.close(); settings = null; if (batch != null) batch.close(); batch = null; scan = null; selected = null; slots = List.of(); matches.clear(); }
+    void close() { if (patternBatch != null) patternBatch.close(); patternBatch = null; if (patternEdit != null) patternEdit.close(); patternEdit = null; if (settings != null) settings.close(); settings = null; if (batch != null) batch.close(); batch = null; scan = null; selected = null; slots = List.of(); matches.clear(); }
     void expire() {
-        if (settings != null && settings.expired() || batch != null && batch.expired() || patternEdit != null && patternEdit.expired()
+        if (patternBatch != null && patternBatch.expired() || settings != null && settings.expired() || batch != null && batch.expired() || patternEdit != null && patternEdit.expired()
                 || (scan != null || selected != null || !matches.isEmpty()) && player.server.overworld().getGameTime() - touched > 600) clear(Status.STALE);
     }
 }
