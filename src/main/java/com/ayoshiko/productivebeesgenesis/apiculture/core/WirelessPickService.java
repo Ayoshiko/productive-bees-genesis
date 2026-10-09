@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
-import com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeTarget;
 import com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBudget;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalPayloads;
-import com.ayoshiko.productivebeesgenesis.multiblock.world.MachineControllerEntity;
-import com.ayoshiko.productivebeesgenesis.multiblock.world.WirelessMachineAccess;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -16,7 +13,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -55,19 +51,14 @@ public final class WirelessPickService {
         var sample = sample(player, request.target());
         if (sample.isEmpty() || !worldMenu(player, request)) { message(player, "target_changed"); return; }
         if (player.getInventory().findSlotMatchingItem(sample) >= 0) { select(player, sample, request); return; }
-        var binding = device.binding();
-        var chunk = player.serverLevel().getChunkSource().getChunkNow(binding.position().getX() >> 4, binding.position().getZ() >> 4);
-        var host = chunk == null ? null : chunk.getBlockEntity(binding.position());
-        Object authority = host instanceof NetworkCoreBlockEntity core ? core.ownership().readyAuthority() : null;
-        if (!validHost(player, device, host, authority)) { message(player, "unavailable"); return; }
-        var bridge = MeBridgeTarget.resolve(host, player);
-        var source = bridge == null ? null : bridge.link().materials(player, null);
-        if (source == null || !source.valid()) { message(player, "unavailable"); return; }
+        var access = WirelessInventoryAccess.capture(player, device);
+        if (access == null) { message(player, "unavailable"); return; }
+        var source = access.source();
         var wanted = sample.copyWithCount(Math.min(64, sample.getMaxStackSize()));
         if (!TerminalCraftingPlan.insert(TerminalCraftingPlan.copy(player.getInventory().items), sample).isEmpty()) {
             message(player, "full"); return;
         }
-        if (!worldMenu(player, request) || !validHost(player, device, host, authority) || !device.charge(player, true)) {
+        if (!worldMenu(player, request) || !access.valid(player) || !device.charge(player, true)) {
             message(player, "unavailable"); return;
         }
         if (cursor.containerBusy || TerminalCursorExchange.unknown(player) || !cursor.item().isEmpty() || !cursor.pending.isEmpty()) {
@@ -77,7 +68,7 @@ public final class WirelessPickService {
         var result = TerminalCursorExchange.exchange(player, player.inventoryMenu, wanted, false, true, source.description(), requested -> {
             var currentSample = sample(player, request.target());
             if (!ItemStack.isSameItemSameComponents(sample, currentSample) || !worldMenu(player, request)
-                    || !validHost(player, device, host, authority) || MeBridgeTarget.resolve(host, player) != bridge || !source.valid()) return 0;
+                    || !access.valid(player)) return 0;
             attempted[0] = true;
             return source.extract(requested);
         });
@@ -88,7 +79,7 @@ public final class WirelessPickService {
                 if (!attempted[0]) { message(player, "missing"); return; }
                 var currentSample = sample(player, request.target());
                 if (!ItemStack.isSameItemSameComponents(sample, currentSample) || !worldMenu(player, request)
-                        || !validHost(player, device, host, authority) || MeBridgeTarget.resolve(host, player) != bridge || !source.valid()) {
+                        || !access.valid(player)) {
                     message(player, "target_changed"); return;
                 }
                 if (cursor.containerBusy || TerminalCursorExchange.unknown(player) || !cursor.item().isEmpty() || !cursor.pending.isEmpty()) {
@@ -104,16 +95,6 @@ public final class WirelessPickService {
         return player.isAlive() && !player.isRemoved() && !player.isSpectator() && !player.getAbilities().instabuild
                 && player.containerMenu == player.inventoryMenu && player.inventoryMenu.getCarried().isEmpty()
                 && player.getInventory().selected == request.selected();
-    }
-    private static boolean validHost(ServerPlayer player, WirelessDeviceSession device, BlockEntity host, Object authority) {
-        if (!device.valid(player) || host == null) return false;
-        if (host instanceof NetworkCoreBlockEntity core) {
-            var network = device.binding().network();
-            return network != null && authority != null && MeBridgeTarget.live(core) && core.permits(player) && core.validNetworkReference()
-                    && network.equals(core.network()) && network.controllerId().equals(core.controller())
-                    && core.ownership().readyAuthority() == authority && core.ownership().readyAuthority().identity().equals(network);
-        }
-        return host instanceof MachineControllerEntity core && WirelessMachineAccess.valid(core, device, player);
     }
     private static ItemStack sample(ServerPlayer player, BlockPos expected) {
         double reach = Math.min(WirelessPickRequest.MAX_REACH, player.blockInteractionRange());

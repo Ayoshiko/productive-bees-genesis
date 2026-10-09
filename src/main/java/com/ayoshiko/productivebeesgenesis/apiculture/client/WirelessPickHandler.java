@@ -31,19 +31,13 @@ public final class WirelessPickHandler {
         var state = minecraft.level.getBlockState(hit.getBlockPos());
         var sample = state.getCloneItemStack(hit, minecraft.level, hit.getBlockPos(), player);
         if (sample == null || sample.isEmpty() || player.getInventory().findSlotMatchingItem(sample) >= 0) return;
-        for (int index = 0; index <= 36; index++) {
-            int slot = index == 36 ? 40 : index; var stack = player.getInventory().getItem(slot);
-            if (!(stack.getItem() instanceof WirelessTerminalItem) || stack.getCount() != 1 || WirelessTerminalItem.energy(stack) <= 0) continue;
-            var binding = WirelessTerminalItem.binding(stack); int range = ModConfig.SERVER.beeNetwork.wirelessRange.get();
-            if (binding == null || !binding.dimension().equals(player.level().dimension().location())
-                    || player.distanceToSqr(binding.position().getCenter()) > (double) range * range) continue;
-            event.setCanceled(true); event.setSwingHand(false);
-            long now = Util.getMillis();
-            if (now < nextRequest || sequence == Long.MAX_VALUE) return;
-            nextRequest = now + 250;
-            PacketDistributor.sendToServer(new WirelessPickRequest(++sequence, slot, player.getInventory().selected, binding.device(), binding.token(), hit.getBlockPos()));
-            return;
-        }
+        int slot = WirelessInventoryClient.deviceSlot(player); if (slot < 0) return;
+        var binding = WirelessTerminalItem.binding(player.getInventory().getItem(slot)); if (binding == null) return;
+        event.setCanceled(true); event.setSwingHand(false);
+        long now = Util.getMillis();
+        if (now < nextRequest || sequence == Long.MAX_VALUE) return;
+        nextRequest = now + 250;
+        PacketDistributor.sendToServer(new WirelessPickRequest(++sequence, slot, player.getInventory().selected, binding.device(), binding.token(), hit.getBlockPos()));
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { sequence = 0; nextRequest = 0; }
     private WirelessPickHandler() { }
