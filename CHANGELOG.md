@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4b3b 供应器与缓冲批量交接**：从供应器当前页预览上传或取回计划，逐项／全选后确认执行。上传将私人缓冲中的有效编码样板逐张放入本页空槽；取回每槽至多 64 张，按九格实际容量分配。按共享预算逐项交接并显示实际张数；拒收、部分接收、失效或未知结果停止余项，已完成项保留。未决请求及异常返回继续保管，不退款、不自动重试或生成掉落；600 tick 窗口到期释放计划。ME 协议升至 16，其它协议及存档格式不变；本包未编译／未运行验证。
+
 - **D18j4b3a 私人缓冲样板批量替换**：样板页增加“批量：背包／缓冲”目标选择，Shift＋右键原资源可预览私人九格中不同处理样板的替换。复用逐叠准备、逐项／全选及完整差异，确认一次改写缓冲，保留未选中格、各叠张数、数量和其它组件；鼠标来源样板、样本与背包不变，满背包也可原位操作。缓冲、样本或会话变化拒绝旧预览，不调用外部库存、不产生掉落。ME 协议升至 15，存档及终端／机器协议不变；本包未编译／未运行验证。
 
 - **D18j4c2 AE2 网络工具包**：携带原版 AE2 网络工具打开终端时，在网络工作台和独立机器菜单中显示其九格升级卡仓，支持原生点击、拖拽和 Shift 存取。满载余量留原位，工具本体在使用期间锁定，显式材料填格也不能动用；更换物品或容器组件撤销旧绑定。内容直接保存在原网络工具组件中，无新增资产账户；异常槽数／堆叠不截断，不生成掉落。终端／机器协议升至 27／11，ME 协议保持 14。本包未编译／未运行验证。
@@ -191,6 +193,8 @@
 ### English
 
 #### Added
+
+- **D18j4b3b Provider/buffer batch transfers**: Preview uploads or returns for the current provider page, select individual or all eligible entries, then confirm. Upload places one valid encoded pattern from the personal buffer into each planned empty slot; return takes up to 64 per provider slot within the nine-slot buffer's actual space. Transfers execute one at a time under the shared budget and report actual counts. Rejection, partial acceptance, invalidation or an unknown outcome stops the remaining entries while keeping completed transfers. Unresolved requests and observed returns stay in custody without refunds, automatic retries or world drops; the 600-tick window expires the plan. ME protocol advances to 16; other protocols and saved-data formats stay unchanged. Compilation and runtime validation were skipped.
 
 - **D18j4b3a Personal-buffer pattern batch replacement**: The pattern page now lets you choose inventory or personal buffer as the batch target. Shift-right-click a source resource to preview replacements across different buffered processing patterns, with incremental preparation, individual/all-eligible selection and full details. Confirmation replaces the buffer in one publication, preserving unselected slots, counts, amounts and other components. The carried source, sample and inventory stay unchanged, so no free inventory slot is needed. Changed buffer/sample/session state invalidates the preview; no external inventory or world-drop fallback is used. ME protocol advances to 15; saved-data and terminal/machine protocols stay unchanged. Compilation and runtime validation were skipped.
 

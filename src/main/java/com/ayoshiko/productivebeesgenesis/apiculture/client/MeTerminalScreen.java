@@ -116,7 +116,7 @@ public final class MeTerminalScreen extends Screen {
 		if (session.view().mode().providers()) providers.tick();
 		if (session.view().mode() == Mode.PATTERN_BUFFER) patternBuffer.tick(); else if (session.view().mode().batch()) batches.tick(); else if (session.view().mode() == Mode.PATTERN_PROCESSING) processing.tick(); else if (session.view().mode().pattern()) patterns.tick();
 		if (shown != session.view() || !session.waiting() && actions.stream().noneMatch(button -> button.active)) build();
-		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS || (shown.mode().batch() || shown.mode() == Mode.PROVIDERS) && shown.status() == Status.WAITING)) {
+		if (!session.waiting() && Util.getMillis() >= nextPoll && (shown.mode() == Mode.PLAN && shown.status() == Status.WAITING || shown.mode() == Mode.TASKS || (shown.mode().batch() || shown.mode().providers()) && shown.status() == Status.WAITING)) {
 			nextPoll = Util.getMillis() + (shown.mode().batch() || shown.mode().providers() ? 250 : 2000); request(shown.mode() == Mode.TASKS ? TASKS : POLL, -1, shown.page());
 		}
 	}

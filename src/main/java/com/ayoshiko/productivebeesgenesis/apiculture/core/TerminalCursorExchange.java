@@ -39,16 +39,16 @@ public final class TerminalCursorExchange {
 	/** 库存回调返回插入余量或实际提取栈；异常返回仅作隔离证据，不能直接退款或交付。 */
 	public static Result exchangeItems(ServerPlayer player, AbstractContainerMenu menu, ItemStack wanted, boolean insert, boolean inventory,
 			String source, Function<ItemStack, ItemStack> external) {
-		return exchange(player, menu, wanted, insert, inventory, source, requested -> {
-			var expected = requested.copy(); var returned = external.apply(requested);
-			var cursor = TerminalCursor.get(player); var record = cursor.request;
-			if (returned != null && !returned.isEmpty())
-				cursor.request = new Request(record.item(), record.insert(), record.source(), new Observed(returned.copyWithCount(1), returned.getCount()));
-			if (returned == null || !ItemStack.matches(expected, requested) || !returned.isEmpty()
-					&& (!ItemStack.isSameItemSameComponents(expected, returned) || returned.getCount() > expected.getCount()))
-				throw new IllegalStateException("Invalid external cursor stack; observed return retained");
-			return insert ? expected.getCount() - returned.getCount() : returned.getCount();
-		});
+		return exchange(player, menu, wanted, insert, inventory, source, requested -> transferItems(TerminalCursor.get(player), requested, insert, external));
+	}
+	static int transferItems(TerminalCursor cursor, ItemStack requested, boolean insert, Function<ItemStack, ItemStack> external) {
+		var expected = requested.copy(); var returned = external.apply(requested); var record = cursor.request;
+		if (returned != null && !returned.isEmpty())
+			cursor.request = new Request(record.item(), record.insert(), record.source(), new Observed(returned.copyWithCount(1), returned.getCount()));
+		if (returned == null || !ItemStack.matches(expected, requested) || !returned.isEmpty()
+				&& (!ItemStack.isSameItemSameComponents(expected, returned) || returned.getCount() > expected.getCount()))
+			throw new IllegalStateException("Invalid external cursor stack; observed return retained");
+		return insert ? expected.getCount() - returned.getCount() : returned.getCount();
 	}
 	private static Result exchangeLocked(ServerPlayer player, AbstractContainerMenu menu, ItemStack wanted, boolean insert, boolean inventory,
 			String source, ToIntFunction<ItemStack> external) {
