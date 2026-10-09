@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4b4 供应器设置**：从样板槽页编辑原供应器的完整 int 优先级、阻塞模式和五种原生合成锁定模式，锁定选项先选择再应用；隐藏操作退出原目标，恢复显示需在供应器本体设置。逐项核对原配置与权限，改变锁定模式后显式保存，重复相同值不重置待解锁状态；保存／回读异常时报告待核实，不自动重试。设置不移动样板或玩家资产。ME 协议升至 17，其它协议及存档格式不变；本包未编译／未运行验证。
+
 - **D18j4b3b 供应器与缓冲批量交接**：从供应器当前页预览上传或取回计划，逐项／全选后确认执行。上传将私人缓冲中的有效编码样板逐张放入本页空槽；取回每槽至多 64 张，按九格实际容量分配。按共享预算逐项交接并显示实际张数；拒收、部分接收、失效或未知结果停止余项，已完成项保留。未决请求及异常返回继续保管，不退款、不自动重试或生成掉落；600 tick 窗口到期释放计划。ME 协议升至 16，其它协议及存档格式不变；本包未编译／未运行验证。
 
 - **D18j4b3a 私人缓冲样板批量替换**：样板页增加“批量：背包／缓冲”目标选择，Shift＋右键原资源可预览私人九格中不同处理样板的替换。复用逐叠准备、逐项／全选及完整差异，确认一次改写缓冲，保留未选中格、各叠张数、数量和其它组件；鼠标来源样板、样本与背包不变，满背包也可原位操作。缓冲、样本或会话变化拒绝旧预览，不调用外部库存、不产生掉落。ME 协议升至 15，存档及终端／机器协议不变；本包未编译／未运行验证。
@@ -193,6 +195,8 @@
 ### English
 
 #### Added
+
+- **D18j4b4 Provider settings**: Edit the original provider's full signed-int priority, blocking mode and five native crafting-lock modes from its pattern page. Lock selection is local until applied; hiding exits the provider, with visibility restored through its own settings. Each write checks the displayed configuration and permissions. Lock-mode changes explicitly save, while unchanged values do not reset a pending lock. Save/readback failures require checking the actual setting without automatic retry. Patterns and player assets stay in place. ME protocol advances to 17; other protocols and saved-data formats stay unchanged. Compilation and runtime validation were skipped.
 
 - **D18j4b3b Provider/buffer batch transfers**: Preview uploads or returns for the current provider page, select individual or all eligible entries, then confirm. Upload places one valid encoded pattern from the personal buffer into each planned empty slot; return takes up to 64 per provider slot within the nine-slot buffer's actual space. Transfers execute one at a time under the shared budget and report actual counts. Rejection, partial acceptance, invalidation or an unknown outcome stops the remaining entries while keeping completed transfers. Unresolved requests and observed returns stay in custody without refunds, automatic retries or world drops; the 600-tick window expires the plan. ME protocol advances to 16; other protocols and saved-data formats stay unchanged. Compilation and runtime validation were skipped.
 
