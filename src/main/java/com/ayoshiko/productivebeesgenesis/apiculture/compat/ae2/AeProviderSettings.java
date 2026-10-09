@@ -29,6 +29,7 @@ final class AeProviderSettings {
     private final IConfigManager config;
     private final int slotPage;
     private State expected;
+    private AeProviderLock expectedLock;
     private MeTerminalView view;
     private long until;
     private boolean closed;
@@ -38,7 +39,7 @@ final class AeProviderSettings {
         logic = target.host().getLogic(); config = logic.getConfigManager(); until = now() + 600;
     }
     static boolean edits(MeTerminalRequest.Action action) {
-        return action == PROVIDER_PRIORITY || action == PROVIDER_BLOCKING || action == PROVIDER_LOCK_MODE || action == PROVIDER_HIDE;
+        return action == PROVIDER_PRIORITY || action == PROVIDER_BLOCKING || action == PROVIDER_LOCK_MODE || action == PROVIDER_HIDE || action == PROVIDER_UNLOCK;
     }
     MeTerminalView start() { return refresh(Status.OK); }
     MeTerminalView request(MeTerminalRequest request) {
@@ -49,6 +50,10 @@ final class AeProviderSettings {
         if (request.action() == PROVIDER_SETTINGS) return refresh(Status.OK);
         if (!current() || expected == null || !expected.equals(read())) return end(Status.STALE);
         var before = expected;
+        if (request.action() == PROVIDER_UNLOCK) {
+            if (request.amount() != 1 || !request.query().isEmpty()) return view.status(Status.INVALID);
+            return unlock(before);
+        }
         State desired;
         switch (request.action()) {
             case PROVIDER_PRIORITY -> {
@@ -75,7 +80,7 @@ final class AeProviderSettings {
         if (desired.equals(before)) return publish(Status.OK);
         if (!current() || !before.equals(read())) return end(Status.STALE);
         // 在任何 setter／保存回调之前撤销旧资格，异常只能重新读取，不能重放。
-        expected = null; view = MeTerminalView.patternStatus(Status.WAITING, Mode.PROVIDER_SETTINGS);
+        expected = null; expectedLock = null; view = MeTerminalView.patternStatus(Status.WAITING, Mode.PROVIDER_SETTINGS);
         try {
             switch (request.action()) {
                 case PROVIDER_PRIORITY -> target.host().setPriority(desired.priority());
@@ -95,6 +100,24 @@ final class AeProviderSettings {
             return end(Status.PROVIDER_SETTING_UNKNOWN);
         }
     }
+    private MeTerminalView unlock(State before) {
+        var lock = expectedLock;
+        if (lock == null || !lock.resettable()) return publish(Status.PROVIDER_UNLOCK_UNAVAILABLE);
+        if (!current() || !lock.equals(AeProviderLock.capture(player, target, logic)) || !before.equals(read()) || !current()) return end(Status.STALE);
+        expected = null; expectedLock = null; view = MeTerminalView.patternStatus(Status.WAITING, Mode.PROVIDER_SETTINGS);
+        try {
+            logic.resetCraftingLock(); // 原生方法先清锁，再保存；不更改锁模式或 ME 作业。
+            var after = AeProviderLock.capture(player, target, logic);
+            if (!current() || !before.equals(read()) || after == null || after.version() != lock.version() + 1
+                    || after.reason() != LockCraftingMode.NONE || after.result() != null)
+                throw new IllegalStateException("Provider lock changed during reset");
+            return refresh(Status.PROVIDER_UNLOCKED);
+        } catch (RuntimeException | LinkageError failure) {
+            com.mojang.logging.LogUtils.getLogger().error("Provider unlock outcome unknown for {} at {}: version={}, reason={}; no retry",
+                    player.getUUID(), target.location(), lock.version(), lock.reason(), failure);
+            return end(Status.PROVIDER_UNLOCK_UNKNOWN);
+        }
+    }
     private State read() {
         var result = new State(target.host().getPriority(), config.getSetting(Settings.BLOCKING_MODE),
                 config.getSetting(Settings.LOCK_CRAFTING_MODE), config.getSetting(Settings.PATTERN_ACCESS_TERMINAL));
@@ -105,18 +128,30 @@ final class AeProviderSettings {
     }
     private MeTerminalView refresh(Status status) {
         if (!current()) return end(Status.STALE);
-        var state = read();
-        if (!current()) return end(Status.STALE);
-        expected = state; until = now() + 600; return publish(status);
+        var state = read(); var lock = AeProviderLock.capture(player, target, logic);
+        if (!current() || !state.equals(read())) return end(Status.STALE);
+        expected = state; expectedLock = lock; until = now() + 600; return publish(status);
     }
     private MeTerminalView publish(Status status) {
         return view = new MeTerminalView(MeTerminalBudget.revision(player.server), Mode.PROVIDER_SETTINGS, status, 0, false, target.label(), 0, "", false,
                 List.of(new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, Integer.toString(expected.priority()), 0, 0, true),
                         new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, "blocking", expected.blocking() == YesNo.YES ? 1 : 0, 0, true),
-                        new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, "lock", LOCK_MODES.indexOf(expected.lock()), 0, true)));
+                        new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, "lock", LOCK_MODES.indexOf(expected.lock()), 0, true),
+                        new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, expectedLock == null ? "unavailable" : "state",
+                                expectedLock == null ? 0 : LOCK_MODES.indexOf(expectedLock.reason()), 0, expectedLock != null && expectedLock.resettable()),
+                        waitingResult()));
+    }
+    private Row waitingResult() {
+        var result = expectedLock == null ? null : expectedLock.result();
+        if (result == null || expectedLock.reason() != LockCraftingMode.LOCK_UNTIL_RESULT)
+            return new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, "", 0, 0, false);
+        String unit = result.what() instanceof appeng.api.stacks.AEFluidKey || AeMeChemical.isChemical(result.what()) ? " mB" : AeMeEnergy.isFe(result.what()) ? " FE" : "";
+        String label = result.what().getDisplayName().getString() + unit + " · " + result.what().getId()
+                + " [" + result.what().getType().getId() + "]";
+        return new Row(Kind.PROVIDER_SETTING, ItemStack.EMPTY, AePatternProviderTarget.clip(label, 128), result.amount(), 0, true);
     }
     private boolean current() {
-        return !closed && !expired() && player.containerMenu == menu && menu.stillValid(player) && connected.getAsBoolean()
+        return player.server.isSameThread() && !closed && !expired() && player.containerMenu == menu && menu.stillValid(player) && connected.getAsBoolean()
                 && target.valid(player, grid) && target.host().getLogic() == logic && logic.getConfigManager() == config;
     }
     private MeTerminalView end(Status status) {
@@ -125,5 +160,5 @@ final class AeProviderSettings {
     int slotPage() { return slotPage; }
     boolean expired() { return now() >= until; }
     private long now() { return player.server.overworld().getGameTime(); }
-    void close() { closed = true; expected = null; }
+    void close() { closed = true; expected = null; expectedLock = null; }
 }

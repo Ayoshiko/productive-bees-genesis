@@ -22,13 +22,13 @@ public abstract class Ae2CraftingNotificationMixin {
 	@Unique private static final LinkedHashSet<UUID> productivebeesgenesis$notified = new LinkedHashSet<>();
 	@Unique private static boolean productivebeesgenesis$enabled() { return ModConfig.CLIENT.terminalPreferences.notifyCraftingFinished.get(); }
 
-	@ModifyExpressionValue(method = "jobStatus", at = @At(value = "INVOKE", target = "Lappeng/core/AEConfig;isNotifyForFinishedCraftingJobs()Z"), require = 1)
+	@ModifyExpressionValue(method = "jobStatus", at = @At(value = "INVOKE", target = "Lappeng/core/AEConfig;isNotifyForFinishedCraftingJobs()Z"), require = 0)
 	private static boolean productivebeesgenesis$enableCompletion(boolean original) { return original || productivebeesgenesis$enabled(); }
 
-	@ModifyExpressionValue(method = "jobStatus", at = @At(value = "INVOKE", target = "Lappeng/client/gui/me/common/PendingCraftingJobs;hasNotificationEnablingItem(Lnet/minecraft/client/player/LocalPlayer;)Z"), require = 1)
+	@ModifyExpressionValue(method = "jobStatus", at = @At(value = "INVOKE", target = "Lappeng/client/gui/me/common/PendingCraftingJobs;hasNotificationEnablingItem(Lnet/minecraft/client/player/LocalPlayer;)Z"), require = 0)
 	private static boolean productivebeesgenesis$allowWithoutAeDevice(boolean original) { return original || productivebeesgenesis$enabled(); }
 
-	@WrapOperation(method = "jobStatus", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/toasts/ToastComponent;addToast(Lnet/minecraft/client/gui/components/toasts/Toast;)V", remap = true), require = 1)
+	@WrapOperation(method = "jobStatus", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/toasts/ToastComponent;addToast(Lnet/minecraft/client/gui/components/toasts/Toast;)V", remap = true), require = 0)
 	private static void productivebeesgenesis$notifyOnce(ToastComponent manager, Toast toast, Operation<Void> original,
 			UUID id, AEKey what, long requested, long remaining, CraftingJobStatusPacket.Status status) {
 		if (productivebeesgenesis$enabled()) {
@@ -40,6 +40,6 @@ public abstract class Ae2CraftingNotificationMixin {
 		} else original.call(manager, toast);
 	}
 
-	@Inject(method = "clearPendingJobs", at = @At("HEAD"), require = 1)
+	@Inject(method = "clearPendingJobs", at = @At("HEAD"), require = 0)
 	private static void productivebeesgenesis$clearCompletionHistory(CallbackInfo ci) { productivebeesgenesis$notified.clear(); }
 }

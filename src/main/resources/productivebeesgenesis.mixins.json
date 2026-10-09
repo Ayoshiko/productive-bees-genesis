@@ -29,6 +29,7 @@
     "ae2.Ae2CraftingCompletionMixin",
     "ae2.Ae2ApiaryMixin",
     "ae2.Ae2PatternProviderTargetMixin",
+    "ae2.Ae2ProviderCraftingLockMixin",
     "ae2.Ae2PatternProviderTargetCacheMixin",
     "ae2.Ae2CentrifugeFactoryMixin",
     "ae2.Ae2CentrifugeMixin",

@@ -900,3 +900,32 @@ setter 前撤销旧快照；相同值不调用 setter，避免重复清除待解
 同步原生客户端配置、六个双语键、设备提示、主行为合同、视觉、路线、参考及双语变更日志。终端／ME／机器协议为 32／18／12，附件与网络存档不变，Java 21／Minecraft 1.21.1／NeoForge 21.1.216／PB 13.14.0／AE2 19.2.17 基线保持。参考与合同见[13.34](bee-processing-network-references.md#s13-34)、[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)。
 
 按此前加速要求，未新增测试／探针，未运行 Gradle、依赖解析、编译、构建、产物核验或游戏。仅进行本地 API／源码静态自审、UTF-8 回读、JSON／语言键、相关锚点和差异检查，并沿正常提交编码钩子。真实客户端运动／暂停、遮挡／液体／区块边界、多人预算与拾取竞争、满背包和超大堆叠、双宿主／费用、保留库存重生／换维度、保护插件及有／无 AE2 仍待验收；本包、此前未验证包及完整 j4／D18 均不签收。满背包直入、跨 tick 批量拾取、磁力筛选及其它外部容器工作流继续开放。
+
+<a id="s10-147"></a>
+### 10.147 D18j4b4a／j4b3c 供应器锁状态、手动解锁与原位替换（2026-10-09，已实现）
+
+接续网络 worktree `bees-processing-network/1.21.1` 的 `47c8b6a` 未提交改动，按用户减少提交数量的要求将三项相关功能合为一包。设置页新增实际锁理由、待回流资源／long 数量及解除当前等待；只解除原生等待脉冲／结果，不改变模式、取消任务或伪造产物。核对原生五个锁字段写入口，实例版本包含同值重建及读档，提交复核配置、原实例、版本、理由和结果；六邻区块未加载、未支持的附属逻辑或版本饱和时不可解锁。异常不自动重试，保留原外部状态。
+
+Ctrl＋左键供应器当前槽打开原生处理样板，右键资源沿真实九格左上角样本预览全部同完整键替换。只为精确原生逻辑、原库存和一致 host 开放；确认重算结果、撤销预览，在样本账户互斥内复核原槽／样本／权限／加载／容量后一次 setItemDirect。数量和其它组件保持，样本不消耗；原生保存／配方重建异常或回读不符报告未知并退出，不取出重插、补写回滚或生成掉落。翻页只浏览已准备行，关闭／断线／过期释放资格，回复超预算撤销后端。
+
+客户端设置页按五行状态重排，缩短隐藏按钮文案；状态只反映上次读取，刷新显式重读。原位页面保留原槽号、供应器摘要、输入／输出和数量，高亮变化项后明确应用；返回原槽页或工作台不提交。共有 23 个新增双语键。代码自审覆盖页面路由、空鼠标／未知请求拒绝、样本根及原槽复核、一次写入与异常退出，保持既有原生存取和批量交接。
+
+行为、视觉、参考分别见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。准备／确认 O(R)，R≤108；原生更新回调仍包含本供应器 S 槽扫描，不主张全流程常数成本或已有性能收益。ME 协议为 19，终端／机器 32／12，附件 schema 与网络 checkpoint 不变。用户随后授权在适当进度集中验收，本包及此前累积内容的统一验证见[10.148](#s10-148)；完整 j4／D18、跨供应器批量原位编辑、附属库存与真实玩家工作流仍有独立验收门。
+
+<a id="s10-148"></a>
+### 10.148 D18 累积功能的集中编译与现有回归检查（2026-10-09，本轮检查通过，功能联合门保持开放）
+
+用户在本轮明确要求未验证／未编译内容达到适当数量和开发进度时进行一次统一验收，因此以[10.147](#s10-147) 供应器功能组为检查点，覆盖截至本工作区的全部生产源码编译，补跑已有普通测试、AE2 供应器测试和无 AE2 专服基线。未新增测试或探针，不因本次构建将[10.128](#s10-128)起各功能场景自动签收；历史记录保留其当时未验证事实，当前状态以本条和路线为准。
+
+首轮 `test build` 完成编译及产物检查，但 1154 项普通测试有两项守卫失败：原检查清单尚未登记网络隔离包／客户端通知入口，新锁 Mixin 也未加入集合清单。核对 MeBridgeIntegration 的 installed → Loaded 路径与客户端配置后补齐；普通完成提醒注入由严格匹配调整为缺少目标时跳过。后续复跑暴露原安全聚合 Mixin 的结构守卫也未被检查识别，保留其完整注入要求，仅让检查识别两种先核对字节码结构的严格入口，锁版本仍要求五个写入口全部覆盖。没有删除断言、跳过失败测试或放开宿主包的可选类型限制。初次失败 XML 保留于 `build/network-gates/d18-batch-20261009/initial-guard-failure.xml`。
+
+| 检查及实际命令 | 结果与证据范围 |
+| --- | --- |
+| `.\gradlew test build --no-daemon --console=plain` | 最终成功；189 个测试类、1154 项，0 失败、0 错误、2 跳过（既有 Skyhive 迁移兼容用例）。完整编译、构建及 build 所含 verifyReleaseArtifact 通过；XML 归档于 `build/network-gates/d18-batch-20261009/unit/` |
+| `.\gradlew test '-PminecraftTests' --tests '*CentrifugePatternProviderMinecraftTest' --tests '*PatternContainerExposureMinecraftTest' --no-daemon --console=plain` | NeoForge 初始化并加载 AE2 19.2.17；2 类、10 项，0 失败、0 错误、1 跳过（未开启 ECO 专项）。原生供应器目标、实际量、模拟、阻塞、库存暴露和剩余量回归通过；XML 归档于同目录 `minecraft/` |
+| `.\gradlew runNetworkDomainServer '-PnetworkDomainProbe' '-PnetworkUpgradeProbe' '-PnetworkProbeRun=d18-batch-20261009-noae2' --no-daemon --console=plain` | 专服启动并正常退出；`results/domain.json` 的 `scope=upgrades`、`ae2Loaded=false`、`passed=true`，成员／蜂箱升级、权限、守恒及正常停服保存标记为 true。原始日志和世界保留在 `build/network-probe-d18-batch-20261009-noae2/`；日志中的 Injected inventory sync failure 属既有失败路径夹具 |
+| 文本／产物 | 23 个本任务文件 UTF-8 无 BOM／无替换字符，双语各 1782 键、23 个新增键齐全，Mixin JSON 可解析，差异检查通过；`build/libs/productivebeesgenesis-1.0.10.jar` 为 4,361,810 字节，SHA-256 `afc33eddb30804df00d2a7df7b2a5ec6967162857c66d0f9c1fc9b7044043f47` |
+
+实际源码为网络 worktree `47c8b6a` 加本次功能／守卫修复；Java 21.0.9、Minecraft 1.21.1、NeoForge 21.1.216、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85 基线保持。无 AE2 专服实际还含 ME 1.4.0、EM 1.2.1-fix3、EME 1.2.1、IgleeLib 1.2.7 和 JEI 19.39.0.368；不据此声明覆盖全部可选模组组合。编译输出有弃用警告，未作为无关清理扩展本次变更。
+
+这次关闭的是集中编译／现有回归检查，未执行新 GUI 的真实玩家操作、资源容器／私人附件各 schema 跨 JVM 恢复、手动解锁同配方重建与原位编辑的完整失败矩阵、无线选块／补货／拾取／磁力联合及 Spark 对照；这些功能运行门和完整 D18／D19／D30 继续开放。原有 `.github/ISSUE_TEMPLATE/config.yml` 改动单独保留，不纳入本提交。后续继续按相关功能组开发与合并提交，在下一组工作流闭环或公共边界变化时集中运行适用验收，避免每个小功能单独提交与重复全量测试。

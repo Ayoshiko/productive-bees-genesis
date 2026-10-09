@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class Ae2CraftingCompletionMixin {
 	@Shadow @Final private CraftingCPUCluster cluster;
 	@Unique private boolean productivebeesgenesis$pinRecordingFailed;
-	@WrapOperation(method = "notifyJobOwner", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V", remap = true), require = 1)
+	@WrapOperation(method = "notifyJobOwner", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V", remap = true), require = 0)
 	private void productivebeesgenesis$observeCompletion(ServerGamePacketListenerImpl connection, CustomPacketPayload payload, Operation<Void> original) {
 		original.call(connection, payload);
 		if (productivebeesgenesis$pinRecordingFailed || !(payload instanceof CraftingJobStatusPacket message)) return;

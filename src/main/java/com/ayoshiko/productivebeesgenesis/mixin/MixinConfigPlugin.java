@@ -136,6 +136,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"Ae2PatternProviderTargetMixin",
 			"Ae2PatternProviderTargetCacheMixin",
 			"Ae2NetworkStorageAggregationMixin",
+			"Ae2ProviderCraftingLockMixin",
 			"Ae2ApiaryMixin",
 			"Ae2CentrifugeMixin",
 			"Ae2CentrifugeFactoryMixin"
@@ -266,6 +267,39 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		return false;
 	}
 
+	/** 只在全部锁写入口已覆盖时启用版本追踪；字节码检查不加载 AE2 类。 */
+	private static boolean supportsProviderLockVersion() {
+		String owner = "appeng/helpers/patternprovider/PatternProviderLogic";
+		var writers = Set.of("resetCraftingLock()V",
+				"onPushPatternSuccess(Lappeng/api/crafting/IPatternDetails;)V",
+				"onStackReturnedToNetwork(Lappeng/api/stacks/GenericStack;)V", "updateRedstoneState()V",
+				"readFromNBT(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V");
+		try (InputStream stream = openClassResource(owner + ".class")) {
+			if (stream == null) return false;
+			var node = new ClassNode();
+			new ClassReader(stream).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+			var fields = java.util.Map.of("unlockEvent", "Lappeng/helpers/patternprovider/UnlockCraftingEvent;",
+					"unlockStack", "Lappeng/api/stacks/GenericStack;");
+			for (var entry : fields.entrySet()) if (node.fields.stream().noneMatch(field ->
+					field.name.equals(entry.getKey()) && field.desc.equals(entry.getValue())
+					&& (field.access & org.objectweb.asm.Opcodes.ACC_PRIVATE) != 0
+					&& (field.access & org.objectweb.asm.Opcodes.ACC_STATIC) == 0)) return false;
+			var found = new java.util.HashSet<String>();
+			for (var method : node.methods) for (var instruction : method.instructions) {
+				if (!(instruction instanceof org.objectweb.asm.tree.FieldInsnNode field)
+						|| field.getOpcode() != org.objectweb.asm.Opcodes.PUTFIELD || !field.owner.equals(owner)
+						|| !fields.containsKey(field.name)) continue;
+				String signature = method.name + method.desc;
+				if (!writers.contains(signature) || !fields.get(field.name).equals(field.desc)) return false;
+				found.add(signature);
+			}
+			return found.equals(writers);
+		} catch (IOException | RuntimeException error) {
+			System.err.println("[ProductiveBeesGenesis] Cannot inspect provider lock writers; manual unlock disabled: " + error);
+			return false;
+		}
+	}
+
 	private static InputStream openClassResource(String resourceName) {
 		ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
 		if (contextLoader != null) {
@@ -331,6 +365,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		// 只读字节码匹配已审查的聚合入口；不兼容时保留节点与下单，关闭库存挂载。
 		if ("Ae2NetworkStorageAggregationMixin".equals(simpleName)) {
 			return Holder.AE2_LOADED && supportsSafeAeAggregation();
+		}
+		if ("Ae2ProviderCraftingLockMixin".equals(simpleName)) {
+			return Holder.AE2_LOADED && supportsProviderLockVersion();
 		}
 		// AE2 接口注入 Mixin — 仅在 AE2 已安装时应用
 		if (AE2_MIXINS.contains(simpleName)) {

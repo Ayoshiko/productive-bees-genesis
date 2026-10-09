@@ -49,9 +49,10 @@ import org.junit.jupiter.api.Test;
  */
 class Ae2OptionalDependencyGuardTest {
 
-	/** 唯一允许 import 可选 AE2 生态类型的包前缀（相对于源码根）：受 MixinConfigPlugin 门控。 */
+	/** 允许 import 可选 AE2 生态类型的隔离包；网络兼容包由 MeBridgeIntegration.Loaded 守卫。 */
 	private static final List<String> AE2_ISOLATED_PACKAGES = List.of(
 			"mek/ae2/",
+			"apiculture/compat/ae2/",
 			"mixin/ae2/");
 
 	/**
@@ -65,6 +66,7 @@ class Ae2OptionalDependencyGuardTest {
 	 * issue #8 的崩溃正是宿主 BlockEntity 生命周期触碰了可选类型。
 	 */
 	private static final List<String> GATED_INTEGRATION_FILES = List.of(
+			"mixin/client/Ae2CraftingNotificationMixin.java",
 			"client/screen/GlobalGearButton.java",
 			"client/screen/StockGearButton.java",
 			"client/screen/GuiAeInputConfig.java",
@@ -197,7 +199,16 @@ class Ae2OptionalDependencyGuardTest {
 			String source = Files.readString(sourcePath);
 			Set<String> requiredGates = requiredMixinGates(entry, source);
 			if (requiredGates.isEmpty()) continue;
-			if (hasMethodBodyInjector(source) && !source.matches("(?s).*require\\s*=\\s*0.*")) {
+			// 锁版本必须覆盖全部五个入口；仅在插件先验证原生写入口全集时允许严格注入。
+			boolean verifiedLockWriters = entry.equals("ae2.Ae2ProviderCraftingLockMixin")
+					&& plugin.contains("return Holder.AE2_LOADED && supportsProviderLockVersion();")
+					&& plugin.contains("return found.equals(writers);")
+					&& source.matches("(?s).*require\\s*=\\s*5.*");
+			boolean verifiedAggregation = entry.equals("ae2.Ae2NetworkStorageAggregationMixin")
+					&& plugin.contains("return Holder.AE2_LOADED && supportsSafeAeAggregation();")
+					&& plugin.contains("return calls == 1;");
+			if (hasMethodBodyInjector(source) && !source.matches("(?s).*require\\s*=\\s*0.*")
+					&& !verifiedLockWriters && !verifiedAggregation) {
 				strictOptionalInjectors.add(entry);
 			}
 			String simpleName = entry.substring(entry.lastIndexOf('.') + 1);
@@ -213,7 +224,7 @@ class Ae2OptionalDependencyGuardTest {
 						+ "在该模组未安装时会被无条件应用并抛 NoClassDefFoundError（issue #8 同类）: "
 						+ unregistered);
 		assertTrue(strictOptionalInjectors.isEmpty(),
-				() -> "可选第三方模组的方法体注入必须 require=0；上游改签名时应降级功能而不是阻止整合包启动: "
+				() -> "可选方法体注入必须 require=0，或先核对所需字节码结构再严格注入；上游改签名时应禁用该功能: "
 						+ strictOptionalInjectors);
 
 		String irisConfig = Files.readString(

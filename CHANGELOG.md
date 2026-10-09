@@ -35,6 +35,10 @@
 
 ### 新增
 
+- **D18 集中构建与回归**：修正可选依赖守卫检查对网络隔离包和字节码结构守卫的识别，完成提醒的可选注入在缺少目标时跳过；集中完成全量普通测试、AE2 原生供应器测试和无 AE2 专服基线。新功能真实玩家交互、恢复和性能验收仍独立开放。
+
+- **D18j4b4a／j4b3c 供应器管理补全**：合并提供当前锁定理由、待回流资源／数量和手动解除等待锁，原生锁实例版本阻止旧页面解锁后续同配方作业；红石高低电平锁保持原条件。空鼠标 Ctrl＋左键读取原生供应器处理样板，右键资源用真实九格样本预览替换，确认后一次原位写回；保留张数、数量、其它组件且不消耗样本。原槽／样本／权限变化拒绝，写入或解锁结果未知时退出，不自动重试、补偿或生成掉落。附属自定义逻辑／库存不开放这些原生专属操作。ME 协议升至 19，终端／机器保持 32／12，存档不变；本组已通过集中编译、构建及现有回归；真实客户端与新功能联合仍待验收。
+
 - **D18j4e2 无线磁力拉近**：新增默认关闭、可潜行暂停的独立磁力偏好。通过有效无线宿主拉近 4 格内可见、主背包能装下的普通物品，保留延迟、归属、碰撞和真实拾取；每轮最多四个实体，共用全服预算和无线命令费用。仅同步现存实体速度，不修改物品或调用 ME；拾取后入网仍由独立偏好控制。玩家／维度变化、取消、断线及异常撤销或停止旧意图，退出／停服清理。复用原宿主权限且无需 AE2；终端协议 32，ME／机器 18／12，存档不变。本包未编译／未运行验证。
 
 - **D18j4e1 自然拾取后入 ME**：新增默认关闭的“拾取物品存入 ME”偏好，通过背包／副手无线设备，将原版实际拾取到主背包的同组件净增量存入绑定 ME，每次至多一组且最多 64。保留拾取延迟、归属及其它处理器拒绝，不改地面实体；在同 tick 末尾复核完整背包和绑定，变化或预算不足时保留原版结果。真实来源先转入未决保管，按 ME 实际接收量结算，拒收回背包或 pending，未知不重试、不生成掉落。沿全服预算及无线命令费用，未实现磁力或满背包直入。终端协议升至 31，ME／机器保持 18／12，存档不变；本包未编译／未运行验证。
@@ -205,6 +209,10 @@
 ### English
 
 #### Added
+
+- **D18 combined build and regression checks**: Updates optional-dependency checks to recognize the isolated network integration and bytecode-validated hooks, and makes completion-notification hooks optional when targets are absent. Completes the ordinary test suite, native AE2 provider tests and the dedicated-server baseline without AE2. New-workflow player interaction, recovery and performance acceptance remains separate.
+
+- **D18j4b4a/j4b3c Provider management additions**: Combines the current lock reason, pending result resource/amount and manual release of waiting locks. A native per-instance lock version prevents stale pages from unlocking a later identical crafting cycle; high/low signal locks keep their redstone conditions. With an empty cursor, Ctrl-click a native provider processing pattern, right-click a resource to preview replacement using the real crafting-grid sample, then confirm one in-place slot update. Preserves pattern counts, amounts and other components without consuming the sample. Changed slots, samples or permissions reject the preview; uncertain writes or unlocks stop without automatic retries, rollback or drops. Custom addon logic/inventories are excluded from these native operations. ME protocol advances to 19; terminal/machine remain 32/12 and saved-data formats are unchanged. Combined compilation, build and existing regressions passed; real-client and new-workflow acceptance remains open.
 
 - **D18j4e2 Wireless magnet attraction**: Adds a separate disabled-by-default preference, paused by sneaking. A valid wireless host attracts visible ordinary item drops within 4 blocks when they fit in the main inventory, preserving delay, ownership, collisions and normal pickup. Pulses affect at most four entities under shared server budgets and wireless command energy costs. Only existing entity motion is changed; no item mutation or ME operation is performed, and pickup deposits keep their separate setting. Player/dimension changes, cancellation, disconnection and errors invalidate or stop old intents; logout/server stop clear state. Reuses host permissions without requiring AE2. Terminal protocol advances to 32; ME/machine remain 18/12 and saved-data formats are unchanged. Compilation and runtime validation were skipped.
 
