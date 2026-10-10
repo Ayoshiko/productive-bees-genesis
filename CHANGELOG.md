@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4e4 连续拾取合并与预算等待**：拾取入网可合并同一会话内的完整组件增量，最多 8 种、每种一叠，预算不足最多等待 40 tick；等待期间物品仍在真实背包。沿原全服额度逐玩家轮转，不从旧库存创建额度。整理、消耗、设备／设置／菜单变化和过期撤销待办；仅完整接收且背包扣减一致时继续下一组，部分接收或拒绝停止本批，未知结果保持 Request 保管且不重试、不生成掉落。保持默认关闭、原筛选与 35／20／12 协议及存档格式；满背包直入和真实客户端／ME／保护插件联合仍待交付或验收。
+
 - **D18j4d5 会话空槽补货模板**：新增默认关闭的“记住空槽补货”。服务端在连续会话中记录主背包及可选副手的完整组件单件样本，空槽按样本和目标数量从 ME 补回；初始空槽无样本，模板不作为实物或订单。打开界面／暂停、设备或设置变化、过期／断线与异常清模板，已提取实物仍走原 Request／pending 保管，不退款、不重试未知结果或生成掉落。空闲仍续租并按原轮转／退避观察，共用原全服提取预算；不跨登录保存。终端／ME／机器协议 35／20／12，存档不变。42 项普通检查、11 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端与 ME 联合仍待验收。
 
 - **D18j4d4 目标数量与副手补货**：无线 ME 补货可设置每个已有堆叠的目标数量（1–64，默认 64），并可单独开启副手补货（默认关闭）；受物品自身堆叠上限限制，超过目标不抽走物品。主背包与副手共用轮转和全服预算，完整组件物品只投递原选中槽；空槽、护甲和无线设备不参与。已取回量在原槽／菜单／设置／来源失效时保管，未知不重试、不生成掉落；补齐旧设置、重生及跨维度意图失效。终端协议 34，ME／机器 20／12，存档不变。42 项普通检查、7 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端、ME 与保存联合仍待验收。
@@ -217,6 +219,8 @@
 ### English
 
 #### Added
+
+- **D18j4e4 Batched pickup deposits and bounded budget waiting**: Merges component-exact pickup increments within the same session, up to 8 types and one stack each, with at most 40 ticks of budget waiting while items remain in the real inventory. Rotates players under the shared server budget without creating credits from old stock. Sorting, consumption, device/preference/menu changes and expiry revoke pending work. Continues another group only after full acceptance and matching inventory deductions; partial or rejected transfers stop the batch, and unknown results retain Request custody without retries or drops. Keeps the disabled default, filters, 35/20/12 protocols and save formats. Direct pickup with a full inventory and live-client/ME/protection integration remain pending.
 
 - **D18j4d5 Session templates for empty-slot refills**: Adds disabled-by-default empty-slot memory. During a continuous session, the server records component-exact single-item samples from main inventory and enabled offhand slots, then refills emptied slots from ME to the target. Initially empty slots have no sample; templates are neither assets nor crafting orders. Screens/pauses, device or preference changes, expiry/disconnection and errors clear templates while extracted items retain existing Request/pending custody without refunds, unknown retries or drops. Idle sessions keep renewing and observe under existing scheduling/backoff and shared extraction budgets. Templates are not saved across logins. Terminal/ME/machine protocols are 35/20/12; save formats are unchanged. Passed 42 ordinary checks, 11 behavior tests with Minecraft initialization, build and artifact verification; live-client and ME acceptance remains open.
 

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalBudget;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalPayloads;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,50 +24,62 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class WirelessPickupService {
     private static final class Intent {
+        final UUID player;
         long sequence, generation, acceptedAt = Long.MIN_VALUE, receivedAt;
         WirelessPickupRequest request;
-        boolean halted;
+        Batch batch;
+        boolean halted, queued;
         String notice = "";
+        Intent(UUID player) { this.player = player; }
     }
+    private record Session(int playerEntity, ResourceLocation dimension, long generation,
+            WirelessPickupRequest request, WirelessTerminalItem.Binding binding) { }
     private static final class Capture {
         final UUID player, entity;
-        final int playerEntity;
-        final ResourceLocation dimension;
-        final long tick, generation;
-        final WirelessPickupRequest request;
-        final WirelessTerminalItem.Binding binding;
+        final long tick;
+        final Session session;
         final List<ItemStack> before;
         final ItemStack sample;
-        List<ItemStack> after;
-        ItemStack wanted = ItemStack.EMPTY;
-        Capture(ServerPlayer player, UUID entity, ItemStack sample, Intent intent, long tick, WirelessTerminalItem.Binding binding) {
-            this.player = player.getUUID(); playerEntity = player.getId(); this.entity = entity; dimension = player.level().dimension().location();
-            this.tick = tick; generation = intent.generation; request = intent.request; this.binding = binding;
+        final boolean eligible;
+        Capture(ServerPlayer player, UUID entity, ItemStack sample, Intent intent, long tick,
+                WirelessTerminalItem.Binding binding, boolean eligible) {
+            this.player = player.getUUID(); this.entity = entity; this.tick = tick; this.eligible = eligible;
+            session = new Session(player.getId(), player.level().dimension().location(), intent.generation, intent.request, binding);
             before = TerminalCraftingPlan.copy(player.getInventory().items); this.sample = sample.copyWithCount(1);
+        }
+    }
+    private static final class Batch {
+        final long createdAt;
+        final Session session;
+        final WirelessPickupBatch contents;
+        Batch(Capture capture) {
+            createdAt = capture.tick; session = capture.session; contents = new WirelessPickupBatch(capture.before);
         }
     }
     private static final class State {
         final Map<UUID, Intent> players = new HashMap<>();
+        final ArrayDeque<Intent> queue = new ArrayDeque<>();
         Capture capture;
-        long window = Long.MIN_VALUE, capturedAt = Long.MIN_VALUE;
-        int used;
+        long window = Long.MIN_VALUE, capturedAt = Long.MIN_VALUE, processedAt = Long.MIN_VALUE;
+        int used, captures;
+        boolean running;
     }
     private static final Map<MinecraftServer, State> STATES = new HashMap<>();
 
     public static void handle(ServerPlayer player, WirelessPickupRequest request) {
         if (!player.server.isSameThread()) return;
         var state = STATES.computeIfAbsent(player.server, ignored -> new State());
-        var intent = state.players.computeIfAbsent(player.getUUID(), ignored -> new Intent());
+        var intent = state.players.computeIfAbsent(player.getUUID(), Intent::new);
         if (request.sequence() <= intent.sequence) return;
         intent.sequence = request.sequence(); long now = clock(player.server);
         if (!request.enabled()) {
-            intent.generation++; intent.request = null; intent.halted = false; intent.notice = "";
+            intent.generation++; intent.request = null; intent.batch = null; intent.halted = false; intent.notice = "";
             if (state.capture != null && state.capture.player.equals(player.getUUID())) state.capture = null;
             return;
         }
         // 在限流之前撤销旧捕获；改变筛选不能让旧规则的待办继续入网。
         if (!request.sameIntent(intent.request)) {
-            intent.generation++; intent.request = null;
+            intent.generation++; intent.request = null; intent.batch = null;
             if (state.capture != null && state.capture.player.equals(player.getUUID())) state.capture = null;
         }
         if (intent.halted || !worldMenu(player) || intent.acceptedAt != Long.MIN_VALUE && now - intent.acceptedAt < 20
@@ -77,22 +90,29 @@ public final class WirelessPickupService {
 
     @SubscribeEvent(priority = EventPriority.LOWEST) public static void before(ItemEntityPickupEvent.Pre event) {
         if (!(event.getPlayer() instanceof ServerPlayer player) || !player.server.isSameThread() || !worldMenu(player)) return;
-        var state = STATES.get(player.server); if (state == null || state.capture != null) return;
+        var state = STATES.get(player.server); if (state == null || state.capture != null || state.running) return;
         var intent = state.players.get(player.getUUID()); long now = clock(player.server);
-        if (!active(intent, now) || state.capturedAt == now) return;
+        if (!active(intent, now)) return;
         var entity = event.getItemEntity();
         if (event.canPickup().isFalse() || entity.isRemoved() || entity.level() != player.level() || entity.hasPickUpDelay()
                 || entity.getTarget() != null && !entity.getTarget().equals(player.getUUID())) return;
         try {
             var sample = entity.getItem();
             if (sample.isEmpty() || sample.getItem() instanceof WirelessTerminalItem) return;
-            if (!intent.request.filter().allows(sample)) { report(player, intent, intent.request.filter().rejectsAll() ? "filter_empty" : "filtered"); return; }
-            if (!clearCursor(player)) return;
-            var device = device(player, intent.request); if (device == null) return;
-            if (state.window == Long.MIN_VALUE || now - state.window >= 20) { state.window = now; state.used = 0; }
-            if (state.used >= 2 || !MeTerminalBudget.expensive(player.server)) return;
-            state.used++; state.capturedAt = now;
-            state.capture = new Capture(player, entity.getUUID(), sample, intent, now, device.binding());
+            if (state.capturedAt != now) { state.capturedAt = now; state.captures = 0; }
+            if (state.captures >= 8) return;
+            state.captures++;
+            if (intent.batch != null && (!current(player, intent, intent.batch)
+                    || !intent.batch.contents.matches(player.getInventory().items))) intent.batch = null;
+            boolean eligible = intent.request.filter().allows(sample);
+            if (!eligible) {
+                report(player, intent, intent.request.filter().rejectsAll() ? "filter_empty" : "filtered");
+                if (intent.batch == null) return;
+            }
+            if (!clearCursor(player)) { intent.batch = null; return; }
+            var device = device(player, intent.request); if (device == null) { intent.batch = null; return; }
+            if (intent.batch != null && !intent.batch.session.binding().equals(device.binding())) intent.batch = null;
+            state.capture = new Capture(player, entity.getUUID(), sample, intent, now, device.binding(), eligible);
         } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); }
     }
 
@@ -100,72 +120,99 @@ public final class WirelessPickupService {
         if (!(event.getPlayer() instanceof ServerPlayer player) || !player.server.isSameThread()) return;
         var state = STATES.get(player.server); if (state == null) return;
         var capture = state.capture;
-        if (capture == null || capture.after != null || !capture.player.equals(player.getUUID())
-                || !capture.entity.equals(event.getItemEntity().getUUID())) return;
+        if (capture == null || !capture.player.equals(player.getUUID()) || !capture.entity.equals(event.getItemEntity().getUUID())) return;
+        state.capture = null;
         var intent = state.players.get(player.getUUID());
         try {
-            if (!current(player, intent, capture) || !worldMenu(player)) { state.capture = null; return; }
+            if (clock(player.server) != capture.tick || !current(player, intent, capture.session)) { if (intent != null) intent.batch = null; return; }
             var original = event.getOriginalStack(); var remaining = event.getCurrentStack();
             if (!ItemStack.isSameItemSameComponents(capture.sample, original) || !remaining.isEmpty()
-                    && (!ItemStack.isSameItemSameComponents(original, remaining) || remaining.getCount() > original.getCount())) { state.capture = null; return; }
+                    && (!ItemStack.isSameItemSameComponents(original, remaining) || remaining.getCount() > original.getCount())) { intent.batch = null; return; }
             long received = (long) original.getCount() - (remaining.isEmpty() ? 0 : remaining.getCount());
-            var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
-            long delta = count(inventory, capture.sample) - count(capture.before, capture.sample);
-            if (received <= 0 || delta <= 0) { state.capture = null; return; }
-            int amount = (int) Math.min(Math.min(received, delta), Math.min(64, original.getMaxStackSize()));
-            if (amount <= 0) { state.capture = null; return; }
-            capture.after = inventory; capture.wanted = capture.sample.copyWithCount(amount);
+            var batch = intent.batch;
+            if (batch == null) batch = new Batch(capture);
+            if (!batch.contents.matches(capture.before) || !batch.contents.observe(player.getInventory().items, capture.sample, received, capture.eligible)) {
+                intent.batch = null; return;
+            }
+            if (!batch.contents.empty()) {
+                intent.batch = batch;
+                if (!intent.queued) { intent.queued = true; state.queue.addLast(intent); }
+            }
         } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST) public static void finish(ServerTickEvent.Post event) {
         var server = event.getServer(); if (!server.isSameThread()) return;
-        var state = STATES.get(server); if (state == null) return;
-        var capture = state.capture; state.capture = null; // 先释放待办，任何回调都不能重入同一份拾取。
-        if (capture == null || capture.after == null) return;
-        var player = server.getPlayerList().getPlayer(capture.player); if (player == null) return;
-        var intent = state.players.get(capture.player);
-        try {
-            if (!current(player, intent, capture) || !worldMenu(player)) return;
-            if (!ItemStack.listMatches(capture.after, player.getInventory().items)) { report(player, intent, "changed"); return; }
-            if (!clearCursor(player)) { report(player, intent, "retained"); return; }
-            var device = device(player, capture.request);
-            var access = device == null || !device.binding().equals(capture.binding) ? null : WirelessInventoryAccess.capture(player, device);
-            if (access == null || !access.valid(player)) { report(player, intent, "unavailable"); return; }
-            if (!current(player, intent, capture) || !worldMenu(player) || !ItemStack.listMatches(capture.after, player.getInventory().items)
-                    || !device.charge(player, true)) { report(player, intent, "unavailable"); return; }
-            // 已核对的设备收费只改变原设备组件；其它背包变动不能挪用旧物品补足拾取增量。
-            if (!sameExceptDevice(capture.after, player.getInventory().items, capture.request.slot())) { report(player, intent, "changed"); return; }
-            var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
-            var result = TerminalCursorExchange.depositInventory(player, player.inventoryMenu, inventory, capture.wanted, access.source().description(), requested -> {
-                if (!current(player, intent, capture) || !worldMenu(player) || !access.valid(player)) return 0;
-                return access.source().insert(requested);
-            });
-            switch (result.outcome()) {
-                case MOVED -> report(player, intent, result.amount() == capture.wanted.getCount() ? "stored" : "partial");
-                case NO_SPACE -> report(player, intent, "rejected");
-                case RETAINED, UNKNOWN -> { intent.halted = true; report(player, intent, "retained"); }
-                case INVALID -> report(player, intent, "changed");
+        var state = STATES.get(server); if (state == null || state.running) return;
+        state.capture = null;
+        long now = clock(server);
+        if (state.processedAt == now) return;
+        if (state.window == Long.MIN_VALUE || now < state.window || now - state.window >= 20) { state.window = now; state.used = 0; }
+        int checks = Math.min(4, state.queue.size());
+        for (int i = 0; i < checks; i++) {
+            var intent = state.queue.removeFirst(); intent.queued = false;
+            var batch = intent.batch; var player = server.getPlayerList().getPlayer(intent.player);
+            if (batch == null) continue;
+            try {
+                if (player == null || state.players.get(intent.player) != intent || !current(player, intent, batch)) { intent.batch = null; continue; }
+                if (!batch.contents.matches(player.getInventory().items)) { intent.batch = null; report(player, intent, "changed"); continue; }
+                if (!clearCursor(player)) { intent.batch = null; report(player, intent, "retained"); continue; }
+                if (state.used >= 2 || !MeTerminalBudget.expensive(server)) {
+                    intent.queued = true; state.queue.addFirst(intent); report(player, intent, "waiting"); return;
+                }
+                // 待办先脱离队列和玩家状态；回调只能撤销身份，不能重入或领取第二份增量。
+                intent.batch = null; state.running = true; state.processedAt = now; state.used++;
+                if (deposit(player, intent, batch) && current(player, intent, batch) && state.players.get(intent.player) == intent) {
+                    intent.batch = batch; intent.queued = true; state.queue.addLast(intent);
+                }
+            } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); }
+            finally { state.running = false; }
+            if (state.processedAt == now) return;
+        }
+    }
+
+    private static boolean deposit(ServerPlayer player, Intent intent, Batch batch) {
+        var session = batch.session; var expected = batch.contents.snapshot(); var wanted = batch.contents.wanted();
+        var device = device(player, session.request());
+        var access = device == null || !device.binding().equals(session.binding()) ? null : WirelessInventoryAccess.capture(player, device);
+        if (access == null || !access.valid(player)) { report(player, intent, "unavailable"); return false; }
+        if (!current(player, intent, batch) || !ItemStack.listMatches(expected, player.getInventory().items)
+                || !device.charge(player, true)) { report(player, intent, "unavailable"); return false; }
+        // 设备收费只改变原设备组件；其余背包变化不能挪用旧物品补足拾取增量。
+        if (!sameExceptDevice(expected, player.getInventory().items, session.request().slot())) { report(player, intent, "changed"); return false; }
+        var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
+        var result = TerminalCursorExchange.depositInventory(player, player.inventoryMenu, inventory, wanted, access.source().description(), requested -> {
+            if (!current(player, intent, batch) || !access.valid(player)) return 0;
+            return access.source().insert(requested);
+        });
+        switch (result.outcome()) {
+            case MOVED -> {
+                report(player, intent, result.amount() == wanted.getCount() ? "stored" : "partial");
+                return result.amount() == wanted.getCount() && clearCursor(player)
+                        && batch.contents.settled(inventory, player.getInventory().items, wanted) && !batch.contents.empty();
             }
-        } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); }
+            case NO_SPACE -> report(player, intent, "rejected");
+            case RETAINED, UNKNOWN -> { intent.halted = true; report(player, intent, "retained"); }
+            case INVALID -> report(player, intent, "changed");
+        }
+        return false;
     }
 
     private static boolean active(Intent intent, long now) {
-        return intent != null && !intent.halted && intent.request != null && now - intent.receivedAt <= 40;
+        return intent != null && !intent.halted && intent.request != null && now >= intent.receivedAt && now - intent.receivedAt <= 40;
     }
-    private static boolean current(ServerPlayer player, Intent intent, Capture capture) {
+    private static boolean current(ServerPlayer player, Intent intent, Batch batch) {
         long now = clock(player.server);
-        return active(intent, now) && player.getId() == capture.playerEntity && now == capture.tick && intent.generation == capture.generation
-                && capture.request.sameIntent(intent.request) && intent.request.filter().allows(capture.sample) && capture.dimension.equals(player.level().dimension().location());
+        return now >= batch.createdAt && now - batch.createdAt <= 40 && current(player, intent, batch.session);
+    }
+    private static boolean current(ServerPlayer player, Intent intent, Session session) {
+        return active(intent, clock(player.server)) && worldMenu(player) && player.server.getPlayerList().getPlayer(player.getUUID()) == player
+                && player.getId() == session.playerEntity() && intent.generation == session.generation()
+                && session.request().sameIntent(intent.request) && session.dimension().equals(player.level().dimension().location());
     }
     private static WirelessDeviceSession device(ServerPlayer player, WirelessPickupRequest request) {
         var device = new WirelessDeviceSession(player, request.slot());
         return device.valid(player) && device.binding().device().equals(request.device()) && device.binding().token().equals(request.token()) ? device : null;
-    }
-    private static long count(List<ItemStack> inventory, ItemStack sample) {
-        long total = 0;
-        for (var stack : inventory) if (ItemStack.isSameItemSameComponents(stack, sample)) total += stack.getCount();
-        return total;
     }
     private static boolean sameExceptDevice(List<ItemStack> expected, List<ItemStack> actual, int slot) {
         if (expected.size() != 36 || actual.size() != 36) return false;
@@ -188,7 +235,7 @@ public final class WirelessPickupService {
     }
     private static void fail(ServerPlayer player, State state, Intent intent, Throwable error) {
         state.capture = null;
-        if (intent != null) intent.halted = true;
+        if (intent != null) { intent.halted = true; intent.batch = null; }
         com.mojang.logging.LogUtils.getLogger().error("Wireless pickup deposit stopped for {}; original pickup and custody preserved", player.getUUID(), error);
         report(player, intent, "failed");
     }
@@ -196,7 +243,7 @@ public final class WirelessPickupService {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         var state = STATES.get(player.server); if (state == null) return;
         var intent = state.players.remove(player.getUUID());
-        if (intent != null) { intent.request = null; intent.generation++; }
+        if (intent != null) { intent.request = null; intent.batch = null; intent.generation++; if (intent.queued) state.queue.remove(intent); }
         if (state.capture != null && state.capture.player.equals(player.getUUID())) state.capture = null;
     }
     @SubscribeEvent public static void stopped(ServerStoppedEvent event) { STATES.remove(event.getServer()); }

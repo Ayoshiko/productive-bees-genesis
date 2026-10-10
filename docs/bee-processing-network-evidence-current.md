@@ -1006,3 +1006,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 清理脚本已完成原件删除并生成 `cleanup-result.json`；外层命令误用 PowerShell 脚本之后的 LASTEXITCODE 导致退出码 1，未重复删除。独立复核确认全部 283 个原路径消失、23 个保留根均存在、新旧归档 SHA-256 正确。含恢复副本的清理后盘点为 7,364 文件、3,602,115,921 字节（最终元数据另占数 KiB），由约 6.00 GiB 降至 3.35 GiB，实际净回收约 2.64 GiB；复核记录见 `post-cleanup-audit.json`。
 
 `archive-manifest.json` 保存原 build 相对路径、大小及内容哈希；`restore.py <原 build 相对路径> <新的空目录>` 可按实例或单文件恢复，拒绝覆盖现有目录。历史 gate 的原命令和路径保持当时事实，读取旧实例时先按该清单恢复；旧归档继续位于 `build/maintenance-20261003/`。本步只整理本地产物，不改变游戏功能或任何未完成验收门，归档、清理及恢复文件均保持 Git 忽略。
+
+<a id="s10-154"></a>
+### 10.154 D18j4e4 连续拾取合并与短时预算等待（2026-10-10，已实现并验证行为，功能运行待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `416a7ae` 上，将单次同 tick 拾取捕获扩展为每玩家一份有界批次。只累计 NeoForge Pre／Post 配对后已进入主背包的完整组件净增量，最多 8 种、每种 min(64, 堆叠上限)，实际物品在交接前仍归背包。已有批次可观察被筛除的后续拾取而不增加其额度；无法由本次同组件增加解释的变化撤销旧计划。复用原默认开关、筛选、收费及 Request／pending 事务，协议仍为 35／20／12，存档格式不变。合同、交互与参考分别见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+每服每 tick 最多 8 次有预算的捕获，批次从首次捕获起最多 40 tick，不被心跳或新增事件无限续期。每 tick 有界检查四个队首，至多一次存入尝试，每 20 tick 两次，并继续共享 MeTerminalBudget；预算等待保留队首，成功后剩余组移到队尾。每玩家一份 36 格快照和最多 8 组额度，全服一份未配对 Pre；队列只持在线意图及身份，不持玩家、实体或外部来源，登出／停服清理。取消、规则变化、菜单／实体／维度／设备失效、背包不一致和过期均阻止旧待办。队列登记不提前扣款，真实存入仍先从主背包转交唯一 Request；仅全组接收且库存扣减与该组一致才继续，部分／拒绝或额外回调变化撤销剩余组，未知结果保管且不重试、不掉落。
+
+执行 `.\gradlew test '-PminecraftTests' --tests '*WirelessPickupMinecraftTest' --tests '*WirelessRestockMinecraftTest' --no-daemon`，最终 20 项通过（9 项拾取、11 项补货），0 失败／错误／跳过。真实注册表、ItemStack／组件、Inventory、NeoForge Pre／Post 与 ServerTickEvent 对象配合模拟服务器／玩家／来源，经过正式 handle、before、after、finish 入口；覆盖连续同键合并、跨 tick 等待、旧库存保留、过滤后的其它物品、组件区分与 8 种上限、双玩家共享预算及轮转、设备扣费变更、取消／规则／实体／维度／菜单／登出／过期、捕获预算耗尽、未配对与拒绝拾取、部分／拒绝／未知接收和回调重入／变更。未运行真实 ME 网格或专服世界，不能把这些模拟入口测试称为真实玩家游戏验证。
+
+首次 compileTestJava 因夹具的 ServerTickEvent.Post 缺少 BooleanSupplier 参数失败；修正当前版本构造签名及 Mockito 匹配器后，首次行为运行因夹具未设置 serverLevel／level.getServer 导致初始化空指针，遗留构造模拟又连带影响后续用例。已补齐夹具服务器入口，并把意图启用移到开启静态／构造模拟之前；最终两类测试全部通过。失败摘要及原始 XML 保留在 `first-compile-failure.json`、`minecraft-first-failure/`，未覆盖失败记录，也未跳过失败测试。
+
+执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*WirelessItemFilterTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --no-daemon`，32 项普通回归、编译、构建及产物核验通过；与上述合计 52 项，0 失败／错误／跳过。除已有 ItemStack.listMatches 弃用、Mockito／JVM 提示外无新构建阻碍。实际基线保持 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,399,917 字节，SHA-256 `8d536e88a6caed5aa22747b28602486fbb5c766420bf0ec2326f69f31c5cd395`。证据目录 `build/network-gates/d18j4e4-20261010/` 保留 `minecraft-final/`、`unit-final/`、产物报告及源码／依赖哈希；本轮新增报告集中存入该目录，没有恢复散落的历史实例。
+
+真实客户端自然拾取、实际 ME 连接／保护插件、多人竞争及正常玩家文件恢复仍待联合验收，j4e4 与完整 j4／D18 门保持开放；满背包直入与其它外部容器另行交付。未增加自动合成、后台世界访问或全库扫描，无 Spark／MSPT 结论。
