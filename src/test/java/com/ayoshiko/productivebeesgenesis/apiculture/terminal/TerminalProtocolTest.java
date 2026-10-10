@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.terminal;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessRestockRequest;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
 import io.netty.buffer.Unpooled;
 import java.math.BigInteger;
@@ -13,6 +14,33 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void restockPreferencesAreBoundedAndRequireTheNewFrame() {
+		var codec = WirelessRestockRequest.CODEC; var device = UUID.randomUUID(); var token = UUID.randomUUID();
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			for (int target : new int[]{1, 16, 64}) for (boolean offhand : new boolean[]{false, true}) {
+				var request = new WirelessRestockRequest(1, 40, device, token, target, offhand);
+				buffer.clear(); codec.encode(buffer, request);
+				assertEquals(47, buffer.readableBytes()); assertEquals(request, codec.decode(buffer));
+			}
+			var request = new WirelessRestockRequest(2, 0, device, token, 64, true);
+			for (int invalid : new int[]{0, 65, 255}) {
+				buffer.clear(); codec.encode(buffer, request); buffer.setByte(45, invalid);
+				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			}
+			buffer.clear(); codec.encode(buffer, request); buffer.setByte(46, 2);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			buffer.clear(); codec.encode(buffer, request); buffer.writerIndex(45);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			var cancel = new WirelessRestockRequest(3, -1, null, null, 64, false);
+			buffer.clear(); codec.encode(buffer, cancel);
+			assertEquals(9, buffer.readableBytes()); assertEquals(cancel, codec.decode(buffer));
+			assertThrows(IllegalArgumentException.class, () -> new WirelessRestockRequest(4, -1, null, null, 1, false));
+		} finally { buffer.release(); }
+	}
+
 	@Test void meCompletionPreferenceIsBoundedAndRequiresTheNewFrame() {
 		var filter = com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter.DEFAULT;
 		for (boolean pin : new boolean[]{false, true}) {

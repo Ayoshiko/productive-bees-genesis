@@ -959,3 +959,20 @@ MeProviderEditPane 独立提供来源、批次和明细页；列表底栏与槽�
 实际依赖为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、编译 AE2 19.2.17；mod 版本 1.0.10。证据归档 `build/network-gates/d18j4e3-20261010/` 保存原测试 XML、产物报告与本次源码／依赖哈希及验证范围。JAR 4,388,639 字节，SHA-256 `d6d99a35dfdba22c2f42971418a8115f0a878009f1deb999d475f266a2ea724e`。本组 19 个文件检查 UTF-8／BOM、中文、差异和相关链接；双语各 1811 键且键集合一致。
 
 以上测试没有实际执行玩家拾取事件链、实体运动或配置 GUI。真实配置新增／编辑／删除、两表不同规则／完整组件变体、受限流规则切换后的待办撤销、保护插件／多人竞争、断线与正常保存联合仍需集中运行验收；本步与完整 j4／D18 功能门保持开放，无 Spark／MSPT 结论。原有 Issue 模板配置改动独立保留。后续按路线继续其它外部容器、满背包直入／跨 tick 拾取及联合验收。
+
+<a id="s10-151"></a>
+### 10.151 D18j4d4 无线补货目标数量与副手原槽交付（2026-10-10，已实现并验证组件行为，功能运行待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `cc94923` 上，按剩余补货范围合并交付目标数量、副手开关、共享轮转和原槽投递。目标范围 1–64、默认 64；副手默认关闭，原无线补货总开关仍默认关闭。主背包已有堆叠与可选副手按同一目标补缺，服从物品自身上限；空槽、护甲、无线设备及已达目标的堆叠不提取，不减少已有大堆叠。合同、交互及实际读取来源见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+WirelessRestockSlots 共用纯候选／缺额／交付规划，最多检查 36＋1 格；选中副手后轮回主背包，共用原全服每 tick 一次／20 tick 四次提取和 MeTerminalBudget。服务端新请求在限流前撤销旧设备／目标／副手规则，队列与提取回调核对原玩家对象／实体／维度、序号和菜单。TerminalCursorExchange.restockSlot 先登记原 Request，共用实际外部量结算，再重新核对原槽完整组件／数量及权限／会话；明确量进入 pending 后才以原生列表与保管量一起提交。回调失效保持原槽现状与已取回量，未知请求停止自动交接，不退款、跨槽补偿或生成掉落。既有手动取物／拾取入网沿原恢复策略。
+
+正式补货请求追加目标字节与副手标志，开启 47 字节、撤销 9 字节，拒绝非法目标、标志、旧包长、截断及尾随数据。终端／ME／机器协议为 34／20／12，原玩家附件与网络 checkpoint 不变。客户端新增两个原生设置及四个双语键，并更新原补货提示。复核当前 Inventory 的 36／4／1 原生列表、副手索引 40 和无外部回调的 setChanged；无新可选依赖、注册表全量扫描或后台世界访问。
+
+执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*WirelessItemFilterTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --no-daemon`：42 项普通检查、编译、构建和产物核验通过，0 失败／错误／跳过。执行 `.\gradlew test '-PminecraftTests' --tests '*WirelessRestockMinecraftTest' --no-daemon`：首次 7 项中 6 项在夹具初始化时因 final server 字段反射写入失败，尚未进入交接；仅修正测试夹具字段可访问性，重跑本组 7 项全部通过。失败与最终 XML 分别保留在 `build/network-gates/d18j4d4-20261010/minecraft-fixture-failed/` 与 `minecraft-final/`，普通结果在 `unit/`。未为测试夹具变化重复产品构建或已通过的普通回归。
+
+带 Minecraft 初始化的测试使用真实 ItemStack／Inventory、组件注册表、原 Request／pending 及序列化器，玩家和服务器入口由 Mockito 提供；覆盖常规上限／超大数量、36＋1 轮转／设备排除、主背包／副手原槽部分交付、完整组件、过期快照、目标已满足、回调改变物品／组件／菜单／意图、重入拒绝、异常及非法返回的未知保管／禁止重试、已知和未知量的序列化往返，以及原普通提取／存入恢复。合计 49 项最终检查通过；这些是协议与组件行为证据，不是实际专服 tick、真实玩家文件或客户端 GUI 验证。
+
+实际依赖保持 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,393,024 字节，SHA-256 `9fcd8250270255a4068ac0d0b03771ce204a8a9078204ee61da6020f831512cb`；源码／依赖哈希和产物报告保存在同一证据目录。17 个本组文件的编码、中文／换行、JSON 键集合、相关锚点和差异检查完成；双语各 1815 键。预存 Issue 模板修改保持独立。
+
+本步仍需实际客户端配置、真实 ME 网络的主背包／副手补货、设置／菜单中途改变、共享预算多人轮转、重生／跨维度、断线与跨 JVM 玩家保存联合；j4d4 及完整 j4／D18 运行门保持开放，没有 Spark／MSPT 结论。空槽模板、其它外部容器、满背包直入与跨 tick 拾取继续按路线交付。

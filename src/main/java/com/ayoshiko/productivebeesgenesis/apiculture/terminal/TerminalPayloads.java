@@ -17,7 +17,7 @@ public final class TerminalPayloads {
 	private static final ConcurrentHashMap<UUID, TerminalRateBudget> BUDGETS = new ConcurrentHashMap<>();
 	@SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
 		com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalPayloads.register(event);
-		var registrar = event.registrar("33").executesOn(HandlerThread.MAIN);
+		var registrar = event.registrar("34").executesOn(HandlerThread.MAIN);
 		registrar.playToServer(com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessPickRequest.TYPE,
 				com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessPickRequest.CODEC, (request, context) -> {
 			if (context.player() instanceof ServerPlayer player) com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessPickService.handle(player, request);

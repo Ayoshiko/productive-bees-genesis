@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import java.util.function.ToIntFunction;
 import java.util.function.Function;
+import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
@@ -76,6 +77,10 @@ public final class TerminalCursorExchange {
 	/** 调用前请求中的资产已由鼠标或真实背包移交；这里只结算外部实际结果。 */
 	private static Result complete(ServerPlayer player, AbstractContainerMenu menu, ItemStack requested, boolean insert, boolean inventory,
 			String source, ToIntFunction<ItemStack> external) {
+		return complete(player, menu, requested, insert, source, external, () -> recover(player, menu, inventory));
+	}
+	private static Result complete(ServerPlayer player, AbstractContainerMenu menu, ItemStack requested, boolean insert,
+			String source, ToIntFunction<ItemStack> external, Runnable deliver) {
 		var cursor = TerminalCursor.get(player); int amount = requested.getCount();
 		int actual;
 		try {
@@ -90,8 +95,37 @@ public final class TerminalCursorExchange {
 		// 明确的接收／拒收余量先进入持久保管；随后同步异常不能被误报成未知外部数量。
 		cursor.pending = requested.copyWithCount(insert ? amount - actual : actual);
 		cursor.request = null;
-		if (player.containerMenu == menu) { recover(player, menu, inventory); menu.broadcastFullState(); }
+		if (player.containerMenu == menu) { deliver.run(); menu.broadcastFullState(); }
 		return new Result(cursor.pending.isEmpty() ? actual == 0 ? Outcome.NO_SPACE : Outcome.MOVED : Outcome.RETAINED, actual);
+	}
+	/** 只补足服务器选中的已有槽；已取回但失去原槽资格的物品留在原 pending。 */
+	static Result restockSlot(ServerPlayer player, AbstractContainerMenu menu, int slot, ItemStack expected, int target,
+			String source, ToIntFunction<ItemStack> external, BooleanSupplier current) {
+		var cursor = TerminalCursor.get(player);
+		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
+		cursor.containerBusy = true;
+		try {
+			if (!WirelessPickRequest.validSlot(slot) || !WirelessRestockSlots.validTarget(target)) return new Result(Outcome.INVALID, 0);
+			var inventory = player.getInventory();
+			var destination = slot == 40 ? inventory.offhand : inventory.items; int index = slot == 40 ? 0 : slot;
+			var snapshot = expected.copy();
+			if (!current.getAsBoolean() || player.containerMenu != menu || player.getInventory() != inventory
+					|| !menu.getCarried().isEmpty() || !cursor.item().isEmpty() || !cursor.pending.isEmpty()
+					|| !ItemStack.matches(snapshot, destination.get(index))) return new Result(Outcome.INVALID, 0);
+			int missing = WirelessRestockSlots.missing(snapshot, target);
+			if (missing <= 0) return new Result(Outcome.NO_SPACE, 0);
+			var wanted = snapshot.copyWithCount(missing);
+			cursor.request = new Request(wanted, false, source);
+			return complete(player, menu, wanted, false, source, external, () -> {
+				if (!current.getAsBoolean() || player.containerMenu != menu || player.getInventory() != inventory
+						|| !menu.getCarried().isEmpty() || !cursor.item().isEmpty()) return;
+				var delivery = WirelessRestockSlots.deliver(snapshot, destination.get(index), cursor.pending, target);
+				if (delivery == null) return;
+				// 原生列表与保管量一起提交；两次写入之间没有外部回调。
+				cursor.pending = delivery.remainder(); destination.set(index, delivery.slot());
+				inventory.setChanged();
+			});
+		} finally { cursor.containerBusy = false; }
 	}
 	/** 仅从仍与服务端快照一致的主背包取源；拒收回背包，未知量留在原 Request。 */
 	static Result depositInventory(ServerPlayer player, AbstractContainerMenu menu, java.util.List<ItemStack> expected,

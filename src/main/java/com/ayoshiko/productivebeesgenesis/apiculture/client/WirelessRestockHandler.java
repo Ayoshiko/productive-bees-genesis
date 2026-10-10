@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.client;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessRestockRequest;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessRestockSlots;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessTerminalItem;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.Util;
@@ -27,22 +28,22 @@ public final class WirelessRestockHandler {
         long now = Util.getMillis();
         if (now < nextRequest || sequence == Long.MAX_VALUE) return;
         nextRequest = now + 1000;
-        boolean partial = false;
-        for (var stack : player.getInventory().items) {
-            if (!stack.isEmpty() && !(stack.getItem() instanceof WirelessTerminalItem) && stack.getCount() < Math.min(64, stack.getMaxStackSize())) { partial = true; break; }
-        }
+        int target = ModConfig.CLIENT.terminalPreferences.wirelessRestockTarget.get();
+        boolean offhand = ModConfig.CLIENT.terminalPreferences.wirelessRestockOffhand.get();
+        if (!WirelessRestockSlots.validTarget(target)) { cancel(); return; }
+        boolean partial = WirelessRestockSlots.find(player.getInventory().items, player.getOffhandItem(), 0, target, offhand) >= 0;
         int slot = partial ? WirelessInventoryClient.deviceSlot(player) : -1;
         if (slot < 0) { cancel(); return; }
         var binding = WirelessTerminalItem.binding(player.getInventory().getItem(slot));
         if (binding == null) { cancel(); return; }
-        PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, slot, binding.device(), binding.token()));
+        PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, slot, binding.device(), binding.token(), target, offhand));
         active = true;
     }
 
     private static void cancel() {
         if (!active) return;
         active = false;
-        if (sequence < Long.MAX_VALUE) PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, -1, null, null));
+        if (sequence < Long.MAX_VALUE) PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, -1, null, null, 64, false));
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { active = false; sequence = 0; nextRequest = 0; }
     private WirelessRestockHandler() { }

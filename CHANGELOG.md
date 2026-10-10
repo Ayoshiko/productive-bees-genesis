@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4d4 目标数量与副手补货**：无线 ME 补货可设置每个已有堆叠的目标数量（1–64，默认 64），并可单独开启副手补货（默认关闭）；受物品自身堆叠上限限制，超过目标不抽走物品。主背包与副手共用轮转和全服预算，完整组件物品只投递原选中槽；空槽、护甲和无线设备不参与。已取回量在原槽／菜单／设置／来源失效时保管，未知不重试、不生成掉落；补齐旧设置、重生及跨维度意图失效。终端协议 34，ME／机器 20／12，存档不变。42 项普通检查、7 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端、ME 与保存联合仍待验收。
+
 - **D18j4e3 磁力／拾取入网筛选**：两项功能分别提供全部、仅允许列表、排除列表及原生可编辑 ID 列表；每表最多 16 项，按物品 ID 匹配全部组件变体。默认全部，空允许列表不处理、空排除列表允许全部。服务端在原候选预算内筛选，规则变化在限流前撤销旧待办；未匹配物品保持正常拾取，完整组件交接和未知保管沿用原流程。补充空列表、无效规则与跳过提示。终端协议升至 33，ME／机器保持 20／12，存档不变。编译、41 项相关检查、构建和产物核验通过；真实配置界面、拾取／磁力和保护插件联合待验收。
 
 - **D18j4b3d 供应器批量原位替换**：新增当前供应器整台和当前搜索页至多八台的范围入口，合计最多 288 槽。使用鼠标处理样板的原资源与真实九格左上角样本，分步准备全部同键替换；逐项／全选、查看资源明细并确认后按槽执行。来源样板和样本不消耗，原位张数、数量与其它组件保持；失败／停止保留已完成项，未执行项单独标记，未知不重试、不补偿或掉落。共用原单槽写入与全服预算，ME 协议升至 20，其它协议／存档不变。编译、相关检查及构建通过；实际多人／客户端与失败恢复联合仍待验收。
@@ -213,6 +215,8 @@
 ### English
 
 #### Added
+
+- **D18j4d4 Restock targets and offhand refills**: Wireless ME restocking now supports a target for each existing stack (1–64, default 64) and optional offhand refills (disabled by default). Respects item stack limits and keeps amounts already above the target. Main inventory and offhand share round-robin scheduling and server budgets; exact-component receipts go only to the selected original slot. Empty slots, armor and wireless devices are excluded. Receipts remain in custody if the slot, menu, preferences or source change; unknown transfers are not retried or dropped. Invalidates old preferences and respawn/dimension intents. Terminal/ME/machine protocols are 34/20/12; save formats are unchanged. Passed 42 ordinary checks, 7 behavior tests with Minecraft initialization, build and artifact verification; live-client, ME and save/recovery acceptance remains open.
 
 - **D18j4e3 Magnet and pickup deposit filters**: Adds separate All, Allow list and Deny list modes with native editable item-ID lists for each feature, up to 16 entries per list. IDs match all component variants. Defaults to All; empty allow lists process nothing and empty deny lists allow everything. The server filters within existing candidate budgets and invalidates old work before rate checks when rules change. Unmatched items retain normal pickup; exact-component transfers and unresolved custody retain their existing rules. Adds empty-list, invalid-rule and skipped-deposit messages. Terminal protocol advances to 33; ME/machine remain 20/12 and save formats are unchanged. Compilation, 41 focused checks, build and artifact verification passed; live configuration, pickup/magnet and protection-mod acceptance remains open.
 
