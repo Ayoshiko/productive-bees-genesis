@@ -98,8 +98,12 @@ public final class TerminalCursorExchange {
 		if (player.containerMenu == menu) { deliver.run(); menu.broadcastFullState(); }
 		return new Result(cursor.pending.isEmpty() ? actual == 0 ? Outcome.NO_SPACE : Outcome.MOVED : Outcome.RETAINED, actual);
 	}
-	/** 只补足服务器选中的已有槽；已取回但失去原槽资格的物品留在原 pending。 */
+	/** 补足服务器选中的槽；已取回但失去原槽资格的物品留在原 pending。 */
 	static Result restockSlot(ServerPlayer player, AbstractContainerMenu menu, int slot, ItemStack expected, int target,
+			String source, ToIntFunction<ItemStack> external, BooleanSupplier current) {
+		return restockSlot(player, menu, slot, expected, expected, target, source, external, current);
+	}
+	static Result restockSlot(ServerPlayer player, AbstractContainerMenu menu, int slot, ItemStack expected, ItemStack template, int target,
 			String source, ToIntFunction<ItemStack> external, BooleanSupplier current) {
 		var cursor = TerminalCursor.get(player);
 		if (cursor.containerBusy || unknown(player)) return new Result(Outcome.UNKNOWN, 0);
@@ -108,18 +112,18 @@ public final class TerminalCursorExchange {
 			if (!WirelessPickRequest.validSlot(slot) || !WirelessRestockSlots.validTarget(target)) return new Result(Outcome.INVALID, 0);
 			var inventory = player.getInventory();
 			var destination = slot == 40 ? inventory.offhand : inventory.items; int index = slot == 40 ? 0 : slot;
-			var snapshot = expected.copy();
+			var snapshot = expected.copy(); var sample = template.copyWithCount(1);
 			if (!current.getAsBoolean() || player.containerMenu != menu || player.getInventory() != inventory
 					|| !menu.getCarried().isEmpty() || !cursor.item().isEmpty() || !cursor.pending.isEmpty()
 					|| !ItemStack.matches(snapshot, destination.get(index))) return new Result(Outcome.INVALID, 0);
-			int missing = WirelessRestockSlots.missing(snapshot, target);
+			int missing = WirelessRestockSlots.missing(snapshot, sample, target);
 			if (missing <= 0) return new Result(Outcome.NO_SPACE, 0);
-			var wanted = snapshot.copyWithCount(missing);
+			var wanted = sample.copyWithCount(missing);
 			cursor.request = new Request(wanted, false, source);
 			return complete(player, menu, wanted, false, source, external, () -> {
 				if (!current.getAsBoolean() || player.containerMenu != menu || player.getInventory() != inventory
 						|| !menu.getCarried().isEmpty() || !cursor.item().isEmpty()) return;
-				var delivery = WirelessRestockSlots.deliver(snapshot, destination.get(index), cursor.pending, target);
+				var delivery = WirelessRestockSlots.deliver(snapshot, destination.get(index), sample, cursor.pending, target);
 				if (delivery == null) return;
 				// 原生列表与保管量一起提交；两次写入之间没有外部回调。
 				cursor.pending = delivery.remainder(); destination.set(index, delivery.slot());

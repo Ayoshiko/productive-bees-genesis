@@ -30,20 +30,21 @@ public final class WirelessRestockHandler {
         nextRequest = now + 1000;
         int target = ModConfig.CLIENT.terminalPreferences.wirelessRestockTarget.get();
         boolean offhand = ModConfig.CLIENT.terminalPreferences.wirelessRestockOffhand.get();
+        boolean emptySlots = ModConfig.CLIENT.terminalPreferences.wirelessRestockEmptySlots.get();
         if (!WirelessRestockSlots.validTarget(target)) { cancel(); return; }
         boolean partial = WirelessRestockSlots.find(player.getInventory().items, player.getOffhandItem(), 0, target, offhand) >= 0;
-        int slot = partial ? WirelessInventoryClient.deviceSlot(player) : -1;
+        int slot = partial || emptySlots ? WirelessInventoryClient.deviceSlot(player) : -1;
         if (slot < 0) { cancel(); return; }
         var binding = WirelessTerminalItem.binding(player.getInventory().getItem(slot));
         if (binding == null) { cancel(); return; }
-        PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, slot, binding.device(), binding.token(), target, offhand));
+        PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, slot, binding.device(), binding.token(), target, offhand, emptySlots));
         active = true;
     }
 
     private static void cancel() {
         if (!active) return;
         active = false;
-        if (sequence < Long.MAX_VALUE) PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, -1, null, null, 64, false));
+        if (sequence < Long.MAX_VALUE) PacketDistributor.sendToServer(new WirelessRestockRequest(++sequence, -1, null, null, 64, false, false));
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { active = false; sequence = 0; nextRequest = 0; }
     private WirelessRestockHandler() { }

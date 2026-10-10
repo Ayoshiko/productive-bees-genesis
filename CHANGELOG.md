@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4d5 会话空槽补货模板**：新增默认关闭的“记住空槽补货”。服务端在连续会话中记录主背包及可选副手的完整组件单件样本，空槽按样本和目标数量从 ME 补回；初始空槽无样本，模板不作为实物或订单。打开界面／暂停、设备或设置变化、过期／断线与异常清模板，已提取实物仍走原 Request／pending 保管，不退款、不重试未知结果或生成掉落。空闲仍续租并按原轮转／退避观察，共用原全服提取预算；不跨登录保存。终端／ME／机器协议 35／20／12，存档不变。42 项普通检查、11 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端与 ME 联合仍待验收。
+
 - **D18j4d4 目标数量与副手补货**：无线 ME 补货可设置每个已有堆叠的目标数量（1–64，默认 64），并可单独开启副手补货（默认关闭）；受物品自身堆叠上限限制，超过目标不抽走物品。主背包与副手共用轮转和全服预算，完整组件物品只投递原选中槽；空槽、护甲和无线设备不参与。已取回量在原槽／菜单／设置／来源失效时保管，未知不重试、不生成掉落；补齐旧设置、重生及跨维度意图失效。终端协议 34，ME／机器 20／12，存档不变。42 项普通检查、7 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端、ME 与保存联合仍待验收。
 
 - **D18j4e3 磁力／拾取入网筛选**：两项功能分别提供全部、仅允许列表、排除列表及原生可编辑 ID 列表；每表最多 16 项，按物品 ID 匹配全部组件变体。默认全部，空允许列表不处理、空排除列表允许全部。服务端在原候选预算内筛选，规则变化在限流前撤销旧待办；未匹配物品保持正常拾取，完整组件交接和未知保管沿用原流程。补充空列表、无效规则与跳过提示。终端协议升至 33，ME／机器保持 20／12，存档不变。编译、41 项相关检查、构建和产物核验通过；真实配置界面、拾取／磁力和保护插件联合待验收。
@@ -215,6 +217,8 @@
 ### English
 
 #### Added
+
+- **D18j4d5 Session templates for empty-slot refills**: Adds disabled-by-default empty-slot memory. During a continuous session, the server records component-exact single-item samples from main inventory and enabled offhand slots, then refills emptied slots from ME to the target. Initially empty slots have no sample; templates are neither assets nor crafting orders. Screens/pauses, device or preference changes, expiry/disconnection and errors clear templates while extracted items retain existing Request/pending custody without refunds, unknown retries or drops. Idle sessions keep renewing and observe under existing scheduling/backoff and shared extraction budgets. Templates are not saved across logins. Terminal/ME/machine protocols are 35/20/12; save formats are unchanged. Passed 42 ordinary checks, 11 behavior tests with Minecraft initialization, build and artifact verification; live-client and ME acceptance remains open.
 
 - **D18j4d4 Restock targets and offhand refills**: Wireless ME restocking now supports a target for each existing stack (1–64, default 64) and optional offhand refills (disabled by default). Respects item stack limits and keeps amounts already above the target. Main inventory and offhand share round-robin scheduling and server budgets; exact-component receipts go only to the selected original slot. Empty slots, armor and wireless devices are excluded. Receipts remain in custody if the slot, menu, preferences or source change; unknown transfers are not retried or dropped. Invalidates old preferences and respawn/dimension intents. Terminal/ME/machine protocols are 34/20/12; save formats are unchanged. Passed 42 ordinary checks, 7 behavior tests with Minecraft initialization, build and artifact verification; live-client, ME and save/recovery acceptance remains open.
 

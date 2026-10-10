@@ -18,26 +18,28 @@ class TerminalProtocolTest {
 		var codec = WirelessRestockRequest.CODEC; var device = UUID.randomUUID(); var token = UUID.randomUUID();
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());
 		try {
-			for (int target : new int[]{1, 16, 64}) for (boolean offhand : new boolean[]{false, true}) {
-				var request = new WirelessRestockRequest(1, 40, device, token, target, offhand);
+			for (int target : new int[]{1, 16, 64}) for (boolean offhand : new boolean[]{false, true}) for (boolean empty : new boolean[]{false, true}) {
+				var request = new WirelessRestockRequest(1, 40, device, token, target, offhand, empty);
 				buffer.clear(); codec.encode(buffer, request);
-				assertEquals(47, buffer.readableBytes()); assertEquals(request, codec.decode(buffer));
+				assertEquals(48, buffer.readableBytes()); assertEquals(request, codec.decode(buffer));
 			}
-			var request = new WirelessRestockRequest(2, 0, device, token, 64, true);
+			var request = new WirelessRestockRequest(2, 0, device, token, 64, true, true);
 			for (int invalid : new int[]{0, 65, 255}) {
 				buffer.clear(); codec.encode(buffer, request); buffer.setByte(45, invalid);
 				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 			}
 			buffer.clear(); codec.encode(buffer, request); buffer.setByte(46, 2);
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
-			buffer.clear(); codec.encode(buffer, request); buffer.writerIndex(45);
+			buffer.clear(); codec.encode(buffer, request); buffer.setByte(47, 2);
+			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			buffer.clear(); codec.encode(buffer, request); buffer.writerIndex(47);
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 			buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
-			var cancel = new WirelessRestockRequest(3, -1, null, null, 64, false);
+			var cancel = new WirelessRestockRequest(3, -1, null, null, 64, false, false);
 			buffer.clear(); codec.encode(buffer, cancel);
 			assertEquals(9, buffer.readableBytes()); assertEquals(cancel, codec.decode(buffer));
-			assertThrows(IllegalArgumentException.class, () -> new WirelessRestockRequest(4, -1, null, null, 1, false));
+			assertThrows(IllegalArgumentException.class, () -> new WirelessRestockRequest(4, -1, null, null, 1, false, false));
 		} finally { buffer.release(); }
 	}
 
