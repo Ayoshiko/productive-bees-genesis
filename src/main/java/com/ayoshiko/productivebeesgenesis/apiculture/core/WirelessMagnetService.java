@@ -53,6 +53,8 @@ public final class WirelessMagnetService {
 			pending.request = null; pending.halted = false; pending.notice = "";
 			return;
 		}
+		// 新筛选即使受限流拒绝，也不能继续沿用旧规则。
+		if (!request.sameIntent(pending.request)) pending.request = null;
 		if (pending.running || pending.halted || !worldMenu(player)
 				|| pending.acceptedAt != Long.MIN_VALUE && now - pending.acceptedAt < 20 || !TerminalPayloads.allow(player)) return;
 		pending.acceptedAt = now; pending.receivedAt = now; pending.request = request;
@@ -77,6 +79,7 @@ public final class WirelessMagnetService {
 					|| !worldMenu(player) || now - pending.receivedAt > 40) {
 				pending.request = null; continue;
 			}
+			if (pending.request.filter().rejectsAll()) { report(player, pending, "filter_empty"); continue; }
 			if (now < pending.due) { enqueue(state, pending); continue; }
 			if (state.used >= 2 || !MeTerminalBudget.expensive(server)) {
 				pending.queued = true; state.queue.addFirst(pending); return;
@@ -104,7 +107,7 @@ public final class WirelessMagnetService {
 		}
 		var access = WirelessHostAccess.capture(player, device);
 		if (access == null) { unavailable(player, pending); return; }
-		var targets = WirelessMagnetTargets.find(player, state.moved);
+		var targets = WirelessMagnetTargets.find(player, state.moved, request.filter());
 		if (targets.isEmpty()) return;
 		if (!current(player, state, pending, sequence) || !access.valid(player) || !clearCursor(player) || !device.charge(player, true)) {
 			unavailable(player, pending); return;
@@ -114,7 +117,7 @@ public final class WirelessMagnetService {
 		var inventory = TerminalCraftingPlan.copy(expected);
 		for (var target : targets) {
 			if (!current(player, state, pending, sequence) || !access.valid(player) || !clearCursor(player)) return;
-			if (state.moved.contains(target.entity().getUUID()) || !WirelessMagnetTargets.current(player, target)) continue;
+			if (state.moved.contains(target.entity().getUUID()) || !WirelessMagnetTargets.current(player, target, request.filter())) continue;
 			var next = TerminalCraftingPlan.copy(inventory);
 			if (!TerminalCraftingPlan.insert(next, target.stack()).isEmpty()) continue;
 			if (!current(player, state, pending, sequence) || !access.valid(player) || !clearCursor(player)

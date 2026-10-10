@@ -944,3 +944,18 @@ MeProviderEditPane 独立提供来源、批次和明细页；列表底栏与槽�
 实际执行 `.\gradlew test --tests '*Ae2OptionalDependencyGuardTest' --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' build --no-daemon --console=plain`，最终编译、构建及产物核验通过；现有三类检查共 37 项、0 失败／错误／跳过。首次通过后补充上述终态／异常报告及回调返回后的阶段复核，每次变更后复跑受影响检查通过；未重复上一轮全量／有无 AE2 启动矩阵，未新增测试或探针。最终 XML 和产物报告归档在 `build/network-gates/d18j4b3d-20261009/unit-final/` 与 `release-artifact-final.txt`；此前结果保留。JAR 4,381,885 字节，SHA-256 `58d4dff757a80ed1af2dfa20a3fbdbbcac7e0ff8a4143c62bf59bce808cb9cfb`。17 个本任务文件 UTF-8 无 BOM／无替换字符，双语各 1795 键、13 个新增键齐全，相关锚点及差异检查通过。
 
 这些现有检查覆盖隔离约束和基础终端协议／客户端状态，不能代替新批次实际行为。新界面、跨供应器成功／拒绝／部分完成、回调异常、样本及来源变化、同槽竞争、超预算／超时与正常保存联合仍待集中运行验收；本步及完整 j4／D18 保持功能验收门。原有 Issue 模板配置改动继续单独保留。本组之后推进其它外部容器与剩余拾取扩展，按功能组闭环和公共边界风险选择下一次集中验收点。
+
+<a id="s10-150"></a>
+### 10.150 D18j4e3 磁力与拾取入网独立 ID 筛选（2026-10-10，已实现并编译，功能运行待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `0f91d98` 上续接原聊天中断的筛选功能组。磁力／拾取各自新增 ALL／ALLOW／DENY 和原生可编辑 ID 列表，默认 ALL／空列表，原功能开关默认关闭；空 ALLOW 拒绝全部，空 DENY 允许全部。每表至多 16 个完整 ID、每项至多 128 字符，匹配其全部组件变体，重复／顺序规范化后比较规则身份；资产交接仍按完整组件守恒。具体合同、交互与版本来源见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+服务端沿正式无线包、磁力队列与拾取 Pre／Post／同 tick 结算接入；规则变化先撤销旧待办，再判断原限流，避免受限流时沿用旧筛选。磁力空 ALLOW 不占昂贵预算、不扫描或收费，其余筛选仍限制在原 16 个候选内，移动前复核；拾取筛选在捕获及昂贵预算前拒绝，保持原版拾取，不清理旧背包资产。原权限、设备、保护、拒收与未知保管保持。两类请求限制项数、ID、总包和尾随数据：开启 47–2127 字节、撤销 9 字节。终端／ME／机器协议为 33／20／12，存档格式不变。
+
+读取当前 NeoForge 21.1.216 原生配置源码后采用带新增行供应者和 Range.of(0,16) 的列表定义，避免旧重载无法新增列表项；新增行圆石示例可编辑／删除。客户端无效快照撤销意图并提示，不发送截断规则；双语增加 16 个配置／状态键。按每次有界规则匹配增加 O(F)、F≤16，原队列／捕获与退出／停服清理不变；未引入全库枚举、后台世界访问、共享可变缓存或新的可选依赖。
+
+执行 `.\gradlew test --tests '*WirelessItemFilterTest' --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --no-daemon`，一次通过编译、41 项测试、构建及产物核验，0 失败／错误／跳过。新增 4 项行为／协议用例覆盖三种模式／空表、独立不可变快照、畸形 ID／超限拒绝、心跳与规则身份变化、两类包的最大长度／截断／尾随／非法模式与数量；37 项既有回归覆盖基础终端协议、客户端状态和可选依赖守卫。编译只有现有 API 弃用警告，无构建失败。未重复无新变化的完整回归、双依赖启动或客户端矩阵。
+
+实际依赖为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、编译 AE2 19.2.17；mod 版本 1.0.10。证据归档 `build/network-gates/d18j4e3-20261010/` 保存原测试 XML、产物报告与本次源码／依赖哈希及验证范围。JAR 4,388,639 字节，SHA-256 `d6d99a35dfdba22c2f42971418a8115f0a878009f1deb999d475f266a2ea724e`。本组 19 个文件检查 UTF-8／BOM、中文、差异和相关链接；双语各 1811 键且键集合一致。
+
+以上测试没有实际执行玩家拾取事件链、实体运动或配置 GUI。真实配置新增／编辑／删除、两表不同规则／完整组件变体、受限流规则切换后的待办撤销、保护插件／多人竞争、断线与正常保存联合仍需集中运行验收；本步与完整 j4／D18 功能门保持开放，无 Spark／MSPT 结论。原有 Issue 模板配置改动独立保留。后续按路线继续其它外部容器、满背包直入／跨 tick 拾取及联合验收。

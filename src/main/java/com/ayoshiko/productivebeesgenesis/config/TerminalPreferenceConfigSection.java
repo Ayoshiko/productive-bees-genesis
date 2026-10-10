@@ -1,6 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.me.MeStorageFilter;
+import com.ayoshiko.productivebeesgenesis.apiculture.core.WirelessItemFilter;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.TranslatableEnum;
@@ -17,6 +20,8 @@ public final class TerminalPreferenceConfigSection {
 	}
 	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup, wirelessMagnet;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
+	public final ModConfigSpec.EnumValue<WirelessItemFilter.Mode> wirelessMagnetFilterMode, wirelessPickupFilterMode;
+	public final ModConfigSpec.ConfigValue<List<? extends String>> wirelessMagnetFilterItems, wirelessPickupFilterItems;
 	public final ModConfigSpec.EnumValue<BeeOrder> beeSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Sort> meSort;
 	public final ModConfigSpec.EnumValue<MeStorageFilter.Content> meContent;
@@ -34,6 +39,10 @@ public final class TerminalPreferenceConfigSection {
 		wirelessRestock = builder.translation(KEY + "terminalWirelessRestock").define("terminalWirelessRestock", false);
 		wirelessPickup = builder.translation(KEY + "terminalWirelessPickup").define("terminalWirelessPickup", false);
 		wirelessMagnet = builder.translation(KEY + "terminalWirelessMagnet").define("terminalWirelessMagnet", false);
+		wirelessMagnetFilterMode = builder.translation(KEY + "terminalWirelessMagnetFilterMode").defineEnum("terminalWirelessMagnetFilterMode", WirelessItemFilter.Mode.ALL);
+		wirelessMagnetFilterItems = filterItems(builder, "terminalWirelessMagnetFilterItems");
+		wirelessPickupFilterMode = builder.translation(KEY + "terminalWirelessPickupFilterMode").defineEnum("terminalWirelessPickupFilterMode", WirelessItemFilter.Mode.ALL);
+		wirelessPickupFilterItems = filterItems(builder, "terminalWirelessPickupFilterItems");
 		meSource = builder.translation(KEY + "terminalMeSource").define("terminalMeSource", false);
 		beeSearch = search(builder, "terminalBeeSearch"); meSearch = search(builder, "terminalMeSearch");
 		beeSort = builder.translation(KEY + "terminalBeeSort").defineEnum("terminalBeeSort", BeeOrder.POSITION);
@@ -46,6 +55,12 @@ public final class TerminalPreferenceConfigSection {
 	private static ModConfigSpec.ConfigValue<String> search(ModConfigSpec.Builder builder, String name) {
 		return builder.translation(KEY + name).define(name, "", value -> value instanceof String text && text.length() <= 64 && text.chars().noneMatch(Character::isISOControl));
 	}
+	private static ModConfigSpec.ConfigValue<List<? extends String>> filterItems(ModConfigSpec.Builder builder, String name) {
+		return builder.translation(KEY + name).defineList(List.of(name), List::of, () -> "minecraft:cobblestone",
+				WirelessItemFilter::validId, ModConfigSpec.Range.of(0, WirelessItemFilter.MAX_ITEMS));
+	}
+	public WirelessItemFilter magnetFilter() { return new WirelessItemFilter(wirelessMagnetFilterMode.get(), new ArrayList<>(wirelessMagnetFilterItems.get())); }
+	public WirelessItemFilter pickupFilter() { return new WirelessItemFilter(wirelessPickupFilterMode.get(), new ArrayList<>(wirelessPickupFilterItems.get())); }
 	public MeStorageFilter meFilter() { return new MeStorageFilter(meSort.get(), meDescending.get(), meContent.get(), meType.get()); }
 	public void storeMe(String query, MeStorageFilter filter) {
 		meSearch.set(rememberSearch.get() ? query : ""); meSort.set(filter.sort()); meDescending.set(filter.descending()); meContent.set(filter.content()); meType.set(filter.type());

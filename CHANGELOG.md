@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4e3 磁力／拾取入网筛选**：两项功能分别提供全部、仅允许列表、排除列表及原生可编辑 ID 列表；每表最多 16 项，按物品 ID 匹配全部组件变体。默认全部，空允许列表不处理、空排除列表允许全部。服务端在原候选预算内筛选，规则变化在限流前撤销旧待办；未匹配物品保持正常拾取，完整组件交接和未知保管沿用原流程。补充空列表、无效规则与跳过提示。终端协议升至 33，ME／机器保持 20／12，存档不变。编译、41 项相关检查、构建和产物核验通过；真实配置界面、拾取／磁力和保护插件联合待验收。
+
 - **D18j4b3d 供应器批量原位替换**：新增当前供应器整台和当前搜索页至多八台的范围入口，合计最多 288 槽。使用鼠标处理样板的原资源与真实九格左上角样本，分步准备全部同键替换；逐项／全选、查看资源明细并确认后按槽执行。来源样板和样本不消耗，原位张数、数量与其它组件保持；失败／停止保留已完成项，未执行项单独标记，未知不重试、不补偿或掉落。共用原单槽写入与全服预算，ME 协议升至 20，其它协议／存档不变。编译、相关检查及构建通过；实际多人／客户端与失败恢复联合仍待验收。
 
 - **D18 集中构建与回归**：修正可选依赖守卫检查对网络隔离包和字节码结构守卫的识别，完成提醒的可选注入在缺少目标时跳过；集中完成全量普通测试、AE2 原生供应器测试和无 AE2 专服基线。新功能真实玩家交互、恢复和性能验收仍独立开放。
@@ -211,6 +213,8 @@
 ### English
 
 #### Added
+
+- **D18j4e3 Magnet and pickup deposit filters**: Adds separate All, Allow list and Deny list modes with native editable item-ID lists for each feature, up to 16 entries per list. IDs match all component variants. Defaults to All; empty allow lists process nothing and empty deny lists allow everything. The server filters within existing candidate budgets and invalidates old work before rate checks when rules change. Unmatched items retain normal pickup; exact-component transfers and unresolved custody retain their existing rules. Adds empty-list, invalid-rule and skipped-deposit messages. Terminal protocol advances to 33; ME/machine remain 20/12 and save formats are unchanged. Compilation, 41 focused checks, build and artifact verification passed; live configuration, pickup/magnet and protection-mod acceptance remains open.
 
 - **D18j4b3d Batch in-place provider pattern replacement**: Adds scopes for the whole current provider or up to eight providers on the current search page, with a 288-slot preview budget. Uses the held processing pattern's source resource and the real top-left grid sample to prepare matching replacements incrementally. Select entries, inspect resource details and confirm sequential slot updates. Source patterns and samples remain untouched; pattern counts, resource amounts and other components are preserved. Stopping or failure keeps completed edits, marks unattempted entries and never retries, compensates or drops unknown results. Shares the single-slot writer and server budget. ME protocol advances to 20; other protocols and saved-data formats stay unchanged. Compilation, focused checks and build passed; multiplayer, client and failure/recovery acceptance remains open.
 

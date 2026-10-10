@@ -20,7 +20,7 @@ final class WirelessMagnetTargets {
 	private static final EntityTypeTest<Entity, ItemEntity> ITEMS = EntityTypeTest.forClass(ItemEntity.class);
 	record Target(ItemEntity entity, ItemStack stack, Vec3 position, Vec3 motion) { }
 
-	static List<Target> find(ServerPlayer player, Set<UUID> moved) {
+	static List<Target> find(ServerPlayer player, Set<UUID> moved, WirelessItemFilter filter) {
 		if (!loaded(player)) return List.of();
 		var candidates = new ArrayList<ItemEntity>(16);
 		// 先截断空间查询，再做过滤；拒绝项不能使返回列表扩展成全区域物品集合。
@@ -29,7 +29,7 @@ final class WirelessMagnetTargets {
 		var result = new ArrayList<Target>(4);
 		var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
 		for (var entity : candidates) {
-			if (moved.contains(entity.getUUID()) || !eligible(player, entity)) continue;
+			if (moved.contains(entity.getUUID()) || !eligible(player, entity, filter)) continue;
 			var stack = entity.getItem().copy();
 			var next = TerminalCraftingPlan.copy(inventory);
 			if (!TerminalCraftingPlan.insert(next, stack).isEmpty()) continue;
@@ -39,9 +39,9 @@ final class WirelessMagnetTargets {
 		}
 		return result;
 	}
-	static boolean current(ServerPlayer player, Target target) {
+	static boolean current(ServerPlayer player, Target target, WirelessItemFilter filter) {
 		var entity = target.entity();
-		return loaded(player) && eligible(player, entity) && unchanged(target);
+		return loaded(player) && eligible(player, entity, filter) && unchanged(target);
 	}
 	static boolean unchanged(Target target) {
 		var entity = target.entity();
@@ -51,7 +51,7 @@ final class WirelessMagnetTargets {
 	static Vec3 velocity(ServerPlayer player, Target target) {
 		return player.position().add(0, 0.5, 0).subtract(target.position()).normalize().scale(0.35);
 	}
-	private static boolean eligible(ServerPlayer player, ItemEntity entity) {
+	private static boolean eligible(ServerPlayer player, ItemEntity entity, WirelessItemFilter filter) {
 		double distance = entity.distanceToSqr(player);
 		if (entity.getClass() != ItemEntity.class || entity.level() != player.level() || !entity.isAlive() || entity.noPhysics
 				|| entity.hasPickUpDelay() || entity.getTarget() != null && !entity.getTarget().equals(player.getUUID())
@@ -59,7 +59,7 @@ final class WirelessMagnetTargets {
 				|| entity.getTags().contains("productivebeesgenesis:no_magnet")
 				|| entity.getPersistentData().getBoolean("PreventRemoteMovement")) return false;
 		var stack = entity.getItem();
-		if (stack.isEmpty() || stack.getItem() instanceof WirelessTerminalItem
+		if (!filter.allows(stack) || stack.getItem() instanceof WirelessTerminalItem
 				|| stack.getCount() > Math.min(64, stack.getMaxStackSize())
 				|| !player.serverLevel().mayInteract(player, entity.blockPosition())) return false;
 		var hit = player.serverLevel().clip(new ClipContext(entity.getBoundingBox().getCenter(),

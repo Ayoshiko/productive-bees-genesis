@@ -64,10 +64,15 @@ public final class WirelessPickupService {
             if (state.capture != null && state.capture.player.equals(player.getUUID())) state.capture = null;
             return;
         }
+        // 在限流之前撤销旧捕获；改变筛选不能让旧规则的待办继续入网。
+        if (!request.sameIntent(intent.request)) {
+            intent.generation++; intent.request = null;
+            if (state.capture != null && state.capture.player.equals(player.getUUID())) state.capture = null;
+        }
         if (intent.halted || !worldMenu(player) || intent.acceptedAt != Long.MIN_VALUE && now - intent.acceptedAt < 20
                 || !TerminalPayloads.allow(player)) return;
-        if (!request.sameDevice(intent.request)) intent.generation++;
         intent.request = request; intent.acceptedAt = now; intent.receivedAt = now;
+        if (request.filter().rejectsAll()) report(player, intent, "filter_empty");
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST) public static void before(ItemEntityPickupEvent.Pre event) {
@@ -80,7 +85,9 @@ public final class WirelessPickupService {
                 || entity.getTarget() != null && !entity.getTarget().equals(player.getUUID())) return;
         try {
             var sample = entity.getItem();
-            if (sample.isEmpty() || sample.getItem() instanceof WirelessTerminalItem || !clearCursor(player)) return;
+            if (sample.isEmpty() || sample.getItem() instanceof WirelessTerminalItem) return;
+            if (!intent.request.filter().allows(sample)) { report(player, intent, intent.request.filter().rejectsAll() ? "filter_empty" : "filtered"); return; }
+            if (!clearCursor(player)) return;
             var device = device(player, intent.request); if (device == null) return;
             if (state.window == Long.MIN_VALUE || now - state.window >= 20) { state.window = now; state.used = 0; }
             if (state.used >= 2 || !MeTerminalBudget.expensive(player.server)) return;
@@ -149,7 +156,7 @@ public final class WirelessPickupService {
     private static boolean current(ServerPlayer player, Intent intent, Capture capture) {
         long now = clock(player.server);
         return active(intent, now) && player.getId() == capture.playerEntity && now == capture.tick && intent.generation == capture.generation
-                && capture.request.sameDevice(intent.request) && capture.dimension.equals(player.level().dimension().location());
+                && capture.request.sameIntent(intent.request) && intent.request.filter().allows(capture.sample) && capture.dimension.equals(player.level().dimension().location());
     }
     private static WirelessDeviceSession device(ServerPlayer player, WirelessPickupRequest request) {
         var device = new WirelessDeviceSession(player, request.slot());
