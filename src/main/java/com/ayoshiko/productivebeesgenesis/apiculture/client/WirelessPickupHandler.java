@@ -40,7 +40,8 @@ public final class WirelessPickupHandler {
             invalidFilter = true; return;
         }
         invalidFilter = false;
-        PacketDistributor.sendToServer(new WirelessPickupRequest(++sequence, slot, binding.device(), binding.token(), filter));
+        PacketDistributor.sendToServer(new WirelessPickupRequest(++sequence, slot, binding.device(), binding.token(), filter,
+                ModConfig.CLIENT.terminalPreferences.wirelessPickupOverflow.get()));
         active = true;
     }
     private static void cancel() {

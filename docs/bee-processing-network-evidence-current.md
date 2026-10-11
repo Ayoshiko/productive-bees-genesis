@@ -1007,6 +1007,8 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 
 `archive-manifest.json` 保存原 build 相对路径、大小及内容哈希；`restore.py <原 build 相对路径> <新的空目录>` 可按实例或单文件恢复，拒绝覆盖现有目录。历史 gate 的原命令和路径保持当时事实，读取旧实例时先按该清单恢复；旧归档继续位于 `build/maintenance-20261003/`。本步只整理本地产物，不改变游戏功能或任何未完成验收门，归档、清理及恢复文件均保持 Git 忽略。
 
+2026-10-11 续接清理：按用户明确要求再次尝试删除恢复验证副本。先核对原归档 SHA-256，再逐文件确认 `restore-check` 内 88 个文件、23,957,675 字节与归档内容一致；删除命令再次被自动审批以 `blocked by policy` 拒绝，目录仍保留，没有改用其它路径或工具删除。结果补入原 `restore-result.json` 的 `retry`，此次未释放额外空间。
+
 <a id="s10-154"></a>
 ### 10.154 D18j4e4 连续拾取合并与短时预算等待（2026-10-10，已实现并验证行为，功能运行待验收）
 
@@ -1021,3 +1023,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*WirelessItemFilterTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --no-daemon`，32 项普通回归、编译、构建及产物核验通过；与上述合计 52 项，0 失败／错误／跳过。除已有 ItemStack.listMatches 弃用、Mockito／JVM 提示外无新构建阻碍。实际基线保持 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,399,917 字节，SHA-256 `8d536e88a6caed5aa22747b28602486fbb5c766420bf0ec2326f69f31c5cd395`。证据目录 `build/network-gates/d18j4e4-20261010/` 保留 `minecraft-final/`、`unit-final/`、产物报告及源码／依赖哈希；本轮新增报告集中存入该目录，没有恢复散落的历史实例。
 
 真实客户端自然拾取、实际 ME 连接／保护插件、多人竞争及正常玩家文件恢复仍待联合验收，j4e4 与完整 j4／D18 门保持开放；满背包直入与其它外部容器另行交付。未增加自动合成、后台世界访问或全库扫描，无 Spark／MSPT 结论。
+
+<a id="s10-155"></a>
+### 10.155 D18j4e5 满背包直接拾取入网（2026-10-11，已实现并验证原生入口，功能联合待验收）
+
+在网络 worktree 的 `43c65ff` 上增加默认关闭的“满背包拾取入网”，需同时启用拾取入网；共用设备／筛选、有效意图、每 tick 八次捕获和原全服存入预算。Mixin 包装当前 NeoForge ItemEntity.playerTouch 的 Inventory.add，先完成所有 Pre 处理和原版背包尝试；只有明确未接收、活栈和主背包仍匹配，且原生主背包／副手容量查询确认满载时才接管。收费后再次检查容量、归属和授权，不把其它模组在仍有容量时返回的插入失败当作满背包。合同、交互与参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+每次至多 min(64, 堆叠上限)，先发布唯一 cursor Request 并扣减原版活栈，再按 ME 实际量结算。拒收余量留 pending，能装入主背包时按原恢复逻辑交付；部分或拒绝仍停止自动交接，未知保留 Request 并暂停、不重试。接管量继续走原版 Post、take、统计及空实体丢弃，避免 setItem 替换引用和原版后续恢复局部栈数量导致重入风险；不生成新掉落。终端协议升至 36，开启包 48–2128 字节，撤销 9 字节，非法布尔值与旧开启帧拒绝；ME／机器 20／12 及资产存档不变。NeoForge 原生客户端配置自动包含新开关，中英文说明同步。
+
+最终执行 `.\gradlew test -PminecraftTests --tests '*WirelessPickupMinecraftTest' --tests '*WirelessRestockMinecraftTest' --offline --no-daemon`，27 项通过（16 项拾取、11 项补货），零失败／错误／跳过。新增测试经过当前 NeoForge 转换后的真实 ItemEntity.playerTouch／Inventory／ItemStack 和事件总线，服务器、世界、玩家和 ME 来源仍为模拟对象；验证同优先级后续 Pre 拒绝、全量／部分／拒收／未知、回调再入、空实体后原版丢弃与一次 take、完整组件及超一叠余量、原背包保留、主背包／副手尚有容量不直入、收费时空间／归属变化、撤销／失效及两种入网共享窗口。部分量回到新腾空背包后仍停止后续直入，原拾取批次／补货回归继续通过。
+
+首次原生入口测试因模拟 Level 缺少 random 字段失败，其余 23 项通过；补齐世界随机源后 24 项通过，随后增加边界审查用例达到最终 27 项。失败 XML 保留在 `minecraft-first-failure/`，审查前通过报告保留在 `minecraft-final/`，最终报告在 `minecraft-reviewed/`。一次在线 Gradle 重新配置停在 HTTP 元数据连接，取消后使用已有完整依赖的离线模式验证，未变更依赖、仓库或全局 TLS 配置。
+
+最终执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*WirelessItemFilterTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon`，33 项普通回归、编译、构建及 JAR 核验通过；合计 **60 项**，零失败／错误／跳过。基线保持 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 为 4,402,851 字节，SHA-256 `b93b4167231160c723cde7fd6df45956378c163131e7d0e6306db69070fd9d63`。原始报告、源码／依赖哈希和核验脚本集中保留在 `build/network-gates/d18j4e5-20261011/`。
+
+真实客户端操作、实际网络／独立机 ME 来源、保护插件、多玩家同时碰撞及正常玩家文件跨 JVM 恢复仍待联合验收；j4e5、完整 j4／D18 和发布门保持开放。未启动真实专服世界、未测 Spark／MSPT，也不把此步视为磁力满背包支持或所有外部容器流程完成。

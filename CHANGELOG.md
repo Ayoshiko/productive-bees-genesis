@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4e5 满背包拾取入网**：新增默认关闭的独立开关，需同时启用拾取入网；原版拾取允许且背包未接收时，将至多一叠完整组件物品从原实体转入 ME／终端保管。遵守延迟、归属及拾取拒绝，与背包批次共享全服预算；拒收余量保管、未知暂停且不重试、不生成新掉落。沿原版实际量播放拾取并更新统计，终端协议升至 36，ME／机器 20／12 及存档格式不变；实际客户端／ME／保护插件联合仍待验收。
+
 - **D18j4e4 连续拾取合并与预算等待**：拾取入网可合并同一会话内的完整组件增量，最多 8 种、每种一叠，预算不足最多等待 40 tick；等待期间物品仍在真实背包。沿原全服额度逐玩家轮转，不从旧库存创建额度。整理、消耗、设备／设置／菜单变化和过期撤销待办；仅完整接收且背包扣减一致时继续下一组，部分接收或拒绝停止本批，未知结果保持 Request 保管且不重试、不生成掉落。保持默认关闭、原筛选与 35／20／12 协议及存档格式；满背包直入和真实客户端／ME／保护插件联合仍待交付或验收。
 
 - **D18j4d5 会话空槽补货模板**：新增默认关闭的“记住空槽补货”。服务端在连续会话中记录主背包及可选副手的完整组件单件样本，空槽按样本和目标数量从 ME 补回；初始空槽无样本，模板不作为实物或订单。打开界面／暂停、设备或设置变化、过期／断线与异常清模板，已提取实物仍走原 Request／pending 保管，不退款、不重试未知结果或生成掉落。空闲仍续租并按原轮转／退避观察，共用原全服提取预算；不跨登录保存。终端／ME／机器协议 35／20／12，存档不变。42 项普通检查、11 项带 Minecraft 初始化的行为测试及构建／产物核验通过；实际客户端与 ME 联合仍待验收。
@@ -219,6 +221,8 @@
 ### English
 
 #### Added
+
+- **D18j4e5 Direct pickup with a full inventory**: Adds a separate disabled-by-default toggle requiring pickup deposits. After native pickup checks and a failed inventory insertion, transfers up to one component-exact stack from the original entity into ME or terminal custody. Respects delay, ownership and pickup denials; shares server budgets with inventory batches. Rejections stay in custody and unknown transfers pause without retries or new drops. Native pickup effects and statistics use the acquired amount. Terminal protocol is 36; ME/machine protocols remain 20/12 and saves are unchanged. Live-client/ME/protection integration remains pending.
 
 - **D18j4e4 Batched pickup deposits and bounded budget waiting**: Merges component-exact pickup increments within the same session, up to 8 types and one stack each, with at most 40 ticks of budget waiting while items remain in the real inventory. Rotates players under the shared server budget without creating credits from old stock. Sorting, consumption, device/preference/menu changes and expiry revoke pending work. Continues another group only after full acceptance and matching inventory deductions; partial or rejected transfers stop the batch, and unknown results retain Request custody without retries or drops. Keeps the disabled default, filters, 35/20/12 protocols and save formats. Direct pickup with a full inventory and live-client/ME/protection integration remain pending.
 

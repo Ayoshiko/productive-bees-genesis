@@ -156,6 +156,33 @@ public final class TerminalCursorExchange {
 			return complete(player, menu, wanted, true, true, source, external);
 		} finally { cursor.containerBusy = false; }
 	}
+	/** null 表示未接管；非 null 表示已从原实体扣款，原版必须完成本次拾取。 */
+	static Result depositPickup(ServerPlayer player, net.minecraft.world.entity.item.ItemEntity entity, ItemStack live,
+			ItemStack expected, String source, ToIntFunction<ItemStack> external, BooleanSupplier current) {
+		var cursor = TerminalCursor.get(player); var menu = player.inventoryMenu;
+		if (cursor.containerBusy || unknown(player)) return null;
+		cursor.containerBusy = true;
+		try {
+			if (!current.getAsBoolean() || player.containerMenu != menu || !menu.getCarried().isEmpty()
+					|| !cursor.item().isEmpty() || !cursor.pending.isEmpty() || entity.isRemoved()
+					|| entity.getItem() != live || !ItemStack.matches(expected, live) || expected.isEmpty()
+					|| expected.getItem() instanceof WirelessTerminalItem) return null;
+			int amount = Math.min(expected.getCount(), Math.min(64, expected.getMaxStackSize()));
+			if (amount <= 0) return null;
+			var wanted = expected.copyWithCount(amount); var record = new Request(wanted, true, source);
+			// 保留原版 playerTouch 的栈引用；发布请求及扣减之间无外部回调，不替换实体栈。
+			cursor.request = record;
+			live.setCount(expected.getCount() - amount);
+			try {
+				return complete(player, menu, wanted, true, true, source, external);
+			} catch (RuntimeException | LinkageError error) {
+				// 后续同步失败不撤销已经完成的所有权转移；已知余量或未知请求仍归原保管。
+				com.mojang.logging.LogUtils.getLogger().error("Pickup custody delivery failed for {} at {}; transfer retained",
+						player.getUUID(), source, error);
+				return new Result(cursor.request != null ? Outcome.UNKNOWN : Outcome.RETAINED, 0);
+			}
+		} finally { cursor.containerBusy = false; }
+	}
 	/** 服务器已准备的同类同数量物品重写；不调用外部库存，不创建第二份实物。 */
 	public static Result rewrite(ServerPlayer player, AbstractContainerMenu menu, ItemStack expected, ItemStack replacement) {
 		return replace(player, menu, expected, replacement, false);

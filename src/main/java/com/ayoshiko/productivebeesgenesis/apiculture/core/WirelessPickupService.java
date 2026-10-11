@@ -11,6 +11,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -20,7 +23,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-/** 只处理原版已实际交付的主背包增量；不改地面实体或强制允许拾取。 */
+/** 原版背包增量及显式满背包直入共用意图、捕获和全服预算；不强制允许拾取。 */
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class WirelessPickupService {
     private static final class Intent {
@@ -45,7 +48,7 @@ public final class WirelessPickupService {
                 WirelessTerminalItem.Binding binding, boolean eligible) {
             this.player = player.getUUID(); this.entity = entity; this.tick = tick; this.eligible = eligible;
             session = new Session(player.getId(), player.level().dimension().location(), intent.generation, intent.request, binding);
-            before = TerminalCraftingPlan.copy(player.getInventory().items); this.sample = sample.copyWithCount(1);
+            before = TerminalCraftingPlan.copy(player.getInventory().items); this.sample = sample.copy();
         }
     }
     private static final class Batch {
@@ -116,6 +119,50 @@ public final class WirelessPickupService {
         } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); }
     }
 
+    /** 仅由原版 playerTouch 在全部 Pre 处理完毕、背包 add 返回 false 后调用。 */
+    public static boolean overflow(Player owner, Inventory inventory, ItemEntity entity, ItemStack live) {
+        if (!(owner instanceof ServerPlayer player) || !player.server.isSameThread()) return false;
+        var state = STATES.get(player.server); if (state == null || state.running) return false;
+        var capture = state.capture;
+        if (capture == null || !capture.player.equals(player.getUUID()) || !capture.entity.equals(entity.getUUID())) return false;
+        state.capture = null;
+        var intent = state.players.get(player.getUUID()); long now = clock(player.server);
+        boolean acquired = false;
+        try {
+            if (now != capture.tick || !capture.eligible || !capture.session.request().overflow()
+                    || !current(player, intent, capture.session) || player.getInventory() != inventory
+                    || entity.isRemoved() || entity.level() != player.level() || entity.hasPickUpDelay()
+                    || entity.getTarget() != null && !entity.getTarget().equals(player.getUUID())
+                    || entity.getItem() != live || !ItemStack.matches(capture.sample, live)
+                    || !ItemStack.listMatches(capture.before, inventory.items) || !clearCursor(player)
+                    || inventory.getFreeSlot() >= 0 || inventory.getSlotWithRemainingSpace(live) >= 0) return false;
+            resetWindow(state, now);
+            if (state.processedAt == now || state.used >= 2 || !MeTerminalBudget.expensive(player.server)) return false;
+            state.running = true; state.processedAt = now; state.used++; intent.batch = null;
+            var device = device(player, capture.session.request());
+            var access = device == null || !capture.session.binding().equals(device.binding()) ? null : WirelessInventoryAccess.capture(player, device);
+            if (access == null || !access.valid(player) || !current(player, intent, capture.session)
+                    || !device.charge(player, true) || !sameExceptDevice(capture.before, inventory.items, capture.session.request().slot())) return false;
+            var result = TerminalCursorExchange.depositPickup(player, entity, live, capture.sample, access.source().description(),
+                    wanted -> current(player, intent, capture.session) && access.valid(player) ? access.source().insert(wanted) : 0,
+                    () -> current(player, intent, capture.session) && access.valid(player) && player.getInventory() == inventory
+                            && entity.level() == player.level() && !entity.hasPickUpDelay()
+                            && (entity.getTarget() == null || entity.getTarget().equals(player.getUUID()))
+                            && sameExceptDevice(capture.before, inventory.items, capture.session.request().slot())
+                            && inventory.getFreeSlot() < 0 && inventory.getSlotWithRemainingSpace(live) < 0);
+            if (result == null) return false;
+            acquired = true;
+            int requested = Math.min(capture.sample.getCount(), Math.min(64, capture.sample.getMaxStackSize()));
+            if (result.outcome() == TerminalCursorExchange.Outcome.MOVED && result.amount() == requested) report(player, intent, "stored");
+            else {
+                intent.halted = true;
+                report(player, intent, switch (result.outcome()) { case MOVED -> "partial"; case NO_SPACE -> "rejected"; default -> "retained"; });
+            }
+            return true;
+        } catch (RuntimeException | LinkageError error) { fail(player, state, intent, error); return acquired; }
+        finally { state.running = false; }
+    }
+
     @SubscribeEvent(priority = EventPriority.LOWEST) public static void after(ItemEntityPickupEvent.Post event) {
         if (!(event.getPlayer() instanceof ServerPlayer player) || !player.server.isSameThread()) return;
         var state = STATES.get(player.server); if (state == null) return;
@@ -147,7 +194,7 @@ public final class WirelessPickupService {
         state.capture = null;
         long now = clock(server);
         if (state.processedAt == now) return;
-        if (state.window == Long.MIN_VALUE || now < state.window || now - state.window >= 20) { state.window = now; state.used = 0; }
+        resetWindow(state, now);
         int checks = Math.min(4, state.queue.size());
         for (int i = 0; i < checks; i++) {
             var intent = state.queue.removeFirst(); intent.queued = false;
@@ -198,6 +245,9 @@ public final class WirelessPickupService {
         return false;
     }
 
+    private static void resetWindow(State state, long now) {
+        if (state.window == Long.MIN_VALUE || now < state.window || now - state.window >= 20) { state.window = now; state.used = 0; }
+    }
     private static boolean active(Intent intent, long now) {
         return intent != null && !intent.halted && intent.request != null && now >= intent.receivedAt && now - intent.receivedAt <= 40;
     }

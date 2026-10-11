@@ -97,6 +97,16 @@ class WirelessPickupMinecraftTest {
         void enable(WirelessItemFilter filter) {
             WirelessPickupService.handle(player, new WirelessPickupRequest(++sequence, 0, deviceId, token, filter));
         }
+        void overflow() {
+            tick = 20;
+            WirelessPickupService.handle(player, new WirelessPickupRequest(++sequence, 0, deviceId, token, WirelessItemFilter.ALL, true));
+            for (int i = 0; i < 36; i++) inventory.items.set(i, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        boolean direct(ItemEntity entity) {
+            WirelessPickupService.before(new ItemEntityPickupEvent.Pre(player, entity));
+            assertFalse(inventory.add(entity.getItem()));
+            return WirelessPickupService.overflow(player, inventory, entity, entity.getItem());
+        }
         ItemEntity entity(ItemStack stack) {
             var entity = mock(ItemEntity.class);
             when(entity.getUUID()).thenReturn(UUID.randomUUID());
@@ -281,6 +291,135 @@ class WirelessPickupMinecraftTest {
             r.tick = 2;
             WirelessPickupService.before(new ItemEntityPickupEvent.Pre(r.player, entity));
             r.finish(2); assertTrue(r.inserted.isEmpty());
+        }
+    }
+
+    @Test void overflowUsesEntityCustodyAndPreservesCompleteComponentsAndOriginalInventory() throws Exception {
+        for (int mode = 0; mode < 4; mode++) try (var r = new Rig()) {
+            r.overflow(); final int response = mode;
+            var stack = new ItemStack(Items.DIAMOND, 70);
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal("exact-pickup"));
+            var entity = r.entity(stack);
+            r.insert = wanted -> {
+                assertEquals(6, stack.getCount()); assertEquals(64, r.cursor.request.item().getCount());
+                assertEquals("exact-pickup", wanted.get(DataComponents.CUSTOM_NAME).getString());
+                for (var original : r.inventory.items) assertEquals(64, original.getCount());
+                assertFalse(WirelessPickupService.overflow(r.player, r.inventory, entity, stack));
+                if (response == 3) throw new IllegalStateException("Unknown direct pickup");
+                return response == 0 ? 64 : response == 1 ? 10 : 0;
+            };
+            assertTrue(r.direct(entity)); assertEquals(6, stack.getCount());
+            verify(entity, never()).setItem(any()); verify(entity, never()).discard();
+            assertEquals(1, r.inserted.size());
+            if (mode == 3) { assertEquals(64, r.cursor.request.item().getCount()); assertTrue(r.cursor.pending.isEmpty()); }
+            else { assertNull(r.cursor.request); assertEquals(mode == 0 ? 0 : mode == 1 ? 54 : 64, r.cursor.pending.getCount()); }
+            r.finish(21); r.finish(40); assertEquals(1, r.inserted.size());
+        }
+    }
+
+    @Test void overflowRequiresOptInAndUnchangedAllowedLivePickup() throws Exception {
+        for (int mode = 0; mode < 15; mode++) try (var r = new Rig()) {
+            r.overflow(); var stack = new ItemStack(Items.DIAMOND, 4); var entity = r.entity(stack);
+            var pre = new ItemEntityPickupEvent.Pre(r.player, entity);
+            if (mode == 0) { r.tick = 40; r.enable(WirelessItemFilter.ALL); }
+            if (mode == 1) pre.setCanPickup(TriState.FALSE);
+            if (mode == 2) when(entity.hasPickUpDelay()).thenReturn(true);
+            if (mode == 3) when(entity.getTarget()).thenReturn(UUID.randomUUID());
+            WirelessPickupService.before(pre);
+            switch (mode) {
+                case 4 -> stack.shrink(1);
+                case 5 -> r.inventory.items.set(2, new ItemStack(Items.EMERALD));
+                case 6 -> when(entity.getItem()).thenReturn(stack.copy());
+                case 7 -> r.player.containerMenu = mock(InventoryMenu.class);
+                case 8 -> r.tick = 61;
+                case 9 -> when(r.access.valid(any())).thenReturn(false);
+                case 10 -> r.charge = () -> when(entity.getTarget()).thenReturn(UUID.randomUUID());
+                case 11 -> r.charge = () -> r.inventory.items.set(3, new ItemStack(Items.EMERALD));
+                case 12 -> r.enable(new WirelessItemFilter(WirelessItemFilter.Mode.DENY, List.of("minecraft:diamond")));
+                case 13 -> WirelessPickupService.handle(r.player, new WirelessPickupRequest(++r.sequence, -1, null, null, WirelessItemFilter.ALL));
+                case 14 -> r.charge = () -> r.inventory.offhand.set(0, new ItemStack(Items.DIAMOND, 1));
+            }
+            assertFalse(WirelessPickupService.overflow(r.player, r.inventory, entity, stack), "mode=" + mode);
+            assertTrue(r.inserted.isEmpty()); assertNull(r.cursor.request); assertTrue(r.cursor.pending.isEmpty());
+            assertEquals(mode == 4 ? 3 : 4, stack.getCount());
+        }
+    }
+
+    @Test void overflowCannotReplaceDeniedInventoryInsertionWhenCapacityStillExists() throws Exception {
+        for (int mode = 0; mode < 3; mode++) try (var r = new Rig()) {
+            r.overflow(); var stack = new ItemStack(Items.DIAMOND, 4); var entity = r.entity(stack);
+            if (mode == 0) r.inventory.items.set(2, ItemStack.EMPTY);
+            if (mode == 1) r.inventory.items.set(2, new ItemStack(Items.DIAMOND, 63));
+            if (mode == 2) r.inventory.offhand.set(0, new ItemStack(Items.DIAMOND, 63));
+            WirelessPickupService.before(new ItemEntityPickupEvent.Pre(r.player, entity));
+            assertFalse(WirelessPickupService.overflow(r.player, r.inventory, entity, stack));
+            assertEquals(4, stack.getCount()); assertTrue(r.inserted.isEmpty());
+        }
+    }
+
+    @Test void overflowPartialReturnToNewInventorySpaceStillStopsAutomaticTransfers() throws Exception {
+        try (var r = new Rig()) {
+            r.overflow();
+            r.insert = wanted -> { r.inventory.items.set(1, ItemStack.EMPTY); return 1; };
+            assertTrue(r.direct(r.entity(new ItemStack(Items.DIAMOND, 4))));
+            assertEquals(3, r.inventory.getItem(1).getCount()); assertEquals(Items.DIAMOND, r.inventory.getItem(1).getItem());
+            assertTrue(r.cursor.pending.isEmpty()); assertNull(r.cursor.request);
+            r.inventory.items.set(1, new ItemStack(Items.COBBLESTONE, 64)); r.tick = 21;
+            assertFalse(r.direct(r.entity(new ItemStack(Items.DIAMOND, 4)))); assertEquals(1, r.inserted.size());
+        }
+    }
+
+    @Test void overflowAndInventoryDepositsShareTheSameGlobalWindow() throws Exception {
+        try (var r = new Rig()) {
+            r.overflow(); assertTrue(r.direct(r.entity(new ItemStack(Items.DIAMOND, 4))));
+            r.tick = 21; r.inventory.getItem(1).shrink(2);
+            r.pickup(1, new ItemStack(Items.COBBLESTONE, 2)); r.finish(21);
+            assertEquals(2, r.inserted.size()); r.inventory.getItem(1).grow(2);
+            r.tick = 22; var waiting = r.entity(new ItemStack(Items.DIAMOND, 3));
+            assertFalse(r.direct(waiting)); assertEquals(3, waiting.getItem().getCount());
+            r.tick = 40; assertTrue(r.direct(waiting)); assertEquals(3, r.inserted.size());
+        }
+    }
+
+    @Test void nativePlayerTouchHonorsLateDenialAndSettlesPickupOnlyOnce() throws Exception {
+        try (var r = new Rig()) {
+            r.overflow();
+            var randomField = Level.class.getField("random"); randomField.setAccessible(true);
+            randomField.set(r.level, net.minecraft.util.RandomSource.create(1));
+            var entity = new ItemEntity(r.level, 0, 0, 0, new ItemStack(Items.DIAMOND, 4));
+            entity.setNoPickUpDelay();
+            java.util.function.Consumer<ItemEntityPickupEvent.Pre> deny = event -> event.setCanPickup(TriState.FALSE);
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, deny);
+            try { entity.playerTouch(r.player); }
+            finally { net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny); }
+            assertEquals(4, entity.getItem().getCount()); assertTrue(r.inserted.isEmpty()); assertFalse(entity.isRemoved());
+            r.finish(20); r.tick = 21;
+            entity.playerTouch(r.player);
+            assertEquals(1, r.inserted.size()); assertEquals(4, r.inserted.getFirst().getCount());
+            assertTrue(entity.isRemoved()); verify(r.player).take(entity, 4);
+            assertNull(r.cursor.request); assertTrue(r.cursor.pending.isEmpty());
+        }
+    }
+
+    @Test void nativeFullStackRejectionAndUnknownResultsDoNotResurrectTheEntity() throws Exception {
+        for (int mode = 0; mode < 3; mode++) try (var r = new Rig()) {
+            r.overflow(); final int response = mode;
+            var randomField = Level.class.getField("random"); randomField.setAccessible(true);
+            randomField.set(r.level, net.minecraft.util.RandomSource.create(1));
+            var entity = new ItemEntity(r.level, 0, 0, 0, new ItemStack(Items.DIAMOND, 4));
+            entity.setNoPickUpDelay();
+            r.insert = wanted -> {
+                assertTrue(entity.getItem().isEmpty()); assertNotNull(r.cursor.request);
+                entity.playerTouch(r.player);
+                if (response == 2) throw new IllegalStateException("Unknown native pickup");
+                return response;
+            };
+            entity.playerTouch(r.player);
+            assertTrue(entity.isRemoved()); verify(r.player).take(entity, 4);
+            assertEquals(1, r.inserted.size());
+            if (mode == 2) { assertEquals(4, r.cursor.request.item().getCount()); assertTrue(r.cursor.pending.isEmpty()); }
+            else { assertNull(r.cursor.request); assertEquals(4 - mode, r.cursor.pending.getCount()); }
+            r.finish(21); assertEquals(1, r.inserted.size());
         }
     }
 

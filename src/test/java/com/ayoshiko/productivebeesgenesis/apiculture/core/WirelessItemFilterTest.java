@@ -51,6 +51,8 @@ class WirelessItemFilterTest {
         assertFalse(pickup.sameIntent(new WirelessPickupRequest(2, 1, DEVICE, TOKEN, allow)));
         assertFalse(pickup.sameIntent(new WirelessPickupRequest(2, 0, DEVICE, UUID.randomUUID(), allow)));
         assertFalse(pickup.sameIntent(new WirelessPickupRequest(2, -1, null, null, WirelessItemFilter.ALL)));
+        assertFalse(pickup.sameIntent(new WirelessPickupRequest(2, 0, DEVICE, TOKEN, allow, true)));
+        assertThrows(IllegalArgumentException.class, () -> new WirelessPickupRequest(2, -1, null, null, WirelessItemFilter.ALL, true));
         var magnet = new WirelessMagnetRequest(1, 40, DEVICE, TOKEN, allow);
         assertTrue(magnet.sameIntent(new WirelessMagnetRequest(2, 40, DEVICE, TOKEN, reorder)));
         assertFalse(magnet.sameIntent(new WirelessMagnetRequest(2, 40, DEVICE, TOKEN, WirelessItemFilter.ALL)));
@@ -62,17 +64,29 @@ class WirelessItemFilterTest {
         var ids = new ArrayList<String>();
         for (int i = 0; i < 16; i++) ids.add("test:" + "a".repeat(121) + String.format("%02x", i));
         var filter = new WirelessItemFilter(WirelessItemFilter.Mode.DENY, ids);
-        checkWire(WirelessPickupRequest.CODEC, new WirelessPickupRequest(1, 0, DEVICE, TOKEN, filter),
-                new WirelessPickupRequest(2, -1, null, null, WirelessItemFilter.ALL));
+        checkWire(WirelessPickupRequest.CODEC, new WirelessPickupRequest(1, 0, DEVICE, TOKEN, filter, true),
+                new WirelessPickupRequest(2, -1, null, null, WirelessItemFilter.ALL), 2128);
         checkWire(WirelessMagnetRequest.CODEC, new WirelessMagnetRequest(1, 40, DEVICE, TOKEN, filter),
-                new WirelessMagnetRequest(2, -1, null, null, WirelessItemFilter.ALL));
+                new WirelessMagnetRequest(2, -1, null, null, WirelessItemFilter.ALL), 2127);
     }
 
-    private static <T> void checkWire(StreamCodec<FriendlyByteBuf, T> codec, T enabled, T disabled) {
+    @Test void overflowFlagRejectsMalformedValuesAndLegacyEnabledFrames() {
+        var buffer = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            var request = new WirelessPickupRequest(1, 0, DEVICE, TOKEN, WirelessItemFilter.ALL, true);
+            WirelessPickupRequest.CODEC.encode(buffer, request);
+            buffer.setByte(buffer.writerIndex() - 1, 2);
+            assertThrows(IllegalArgumentException.class, () -> WirelessPickupRequest.CODEC.decode(buffer));
+            buffer.clear(); WirelessPickupRequest.CODEC.encode(buffer, request); buffer.writerIndex(buffer.writerIndex() - 1);
+            assertThrows(RuntimeException.class, () -> WirelessPickupRequest.CODEC.decode(buffer));
+        } finally { buffer.release(); }
+    }
+
+    private static <T> void checkWire(StreamCodec<FriendlyByteBuf, T> codec, T enabled, T disabled, int size) {
         var buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             codec.encode(buffer, enabled);
-            assertEquals(2127, buffer.readableBytes()); assertEquals(enabled, codec.decode(buffer));
+            assertEquals(size, buffer.readableBytes()); assertEquals(enabled, codec.decode(buffer));
             buffer.clear(); codec.encode(buffer, disabled);
             assertEquals(9, buffer.readableBytes()); assertEquals(disabled, codec.decode(buffer));
             buffer.clear(); codec.encode(buffer, disabled); buffer.writeByte(0);

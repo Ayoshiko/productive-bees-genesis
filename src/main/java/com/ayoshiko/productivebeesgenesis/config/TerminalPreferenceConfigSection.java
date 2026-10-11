@@ -18,7 +18,7 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
-	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup, wirelessMagnet, wirelessRestockOffhand, wirelessRestockEmptySlots;
+	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup, wirelessPickupOverflow, wirelessMagnet, wirelessRestockOffhand, wirelessRestockEmptySlots;
 	public final ModConfigSpec.IntValue wirelessRestockTarget;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
 	public final ModConfigSpec.EnumValue<WirelessItemFilter.Mode> wirelessMagnetFilterMode, wirelessPickupFilterMode;
@@ -42,6 +42,7 @@ public final class TerminalPreferenceConfigSection {
 		wirelessRestockOffhand = builder.translation(KEY + "terminalWirelessRestockOffhand").define("terminalWirelessRestockOffhand", false);
 		wirelessRestockEmptySlots = builder.translation(KEY + "terminalWirelessRestockEmptySlots").define("terminalWirelessRestockEmptySlots", false);
 		wirelessPickup = builder.translation(KEY + "terminalWirelessPickup").define("terminalWirelessPickup", false);
+		wirelessPickupOverflow = builder.translation(KEY + "terminalWirelessPickupOverflow").define("terminalWirelessPickupOverflow", false);
 		wirelessMagnet = builder.translation(KEY + "terminalWirelessMagnet").define("terminalWirelessMagnet", false);
 		wirelessMagnetFilterMode = builder.translation(KEY + "terminalWirelessMagnetFilterMode").defineEnum("terminalWirelessMagnetFilterMode", WirelessItemFilter.Mode.ALL);
 		wirelessMagnetFilterItems = filterItems(builder, "terminalWirelessMagnetFilterItems");
