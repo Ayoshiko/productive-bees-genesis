@@ -180,9 +180,10 @@ public final class TerminalCraftingMenu {
 			if (request.row() < 0 || request.row() >= 9 || request.amount() < 1 || request.amount() > 64
 					|| operation == TerminalRequest.Operation.CRAFT_OUT && request.inventorySlot() != -1) return reply(request, INVALID, 0);
 			change = TerminalCraftingPlan.exchange(state.grid(), inventory, request.row(), request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.CRAFT_IN);
-		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR || operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE) {
+		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR || operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE || operation == TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() != 0) return reply(request, INVALID, 0);
-			if (operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE && !exclusiveOwner(player, account)) return reply(request, UNAVAILABLE, 0);
+			if (operation != TerminalRequest.Operation.CRAFT_CLEAR && !exclusiveOwner(player, account)) return reply(request, UNAVAILABLE, 0);
+			if (operation == TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE) return TerminalCraftingReturn.toNetwork(menu, player, request, account);
 			change = TerminalCraftingPlan.clear(state.grid(), inventory);
 		} else if (operation == TerminalRequest.Operation.CRAFT_TAKE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() < 1 || request.amount() > 8) return reply(request, INVALID, 0);
@@ -263,7 +264,7 @@ public final class TerminalCraftingMenu {
 	private boolean current(ServerPlayer player, TerminalCraftingAccount account, TerminalCraftingAccount.State before, List<ItemStack> inventory) {
 		return menu.craftingAccount(player) == account && account.state() == before && ItemStack.listMatches(inventory, player.getInventory().items);
 	}
-	private static void inventory(ServerPlayer player, List<ItemStack> before, List<ItemStack> after) {
+	static void inventory(ServerPlayer player, List<ItemStack> before, List<ItemStack> after) {
 		for (int i = 0; i < 36; i++) if (!ItemStack.matches(before.get(i), after.get(i))) player.getInventory().items.set(i, after.get(i));
 		player.getInventory().setChanged();
 		for (int i = 0; i < 36; i++) if (!ItemStack.matches(before.get(i), after.get(i))) CoreInventorySync.committed(player, i, after.get(i));

@@ -8,11 +8,14 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReq
 
 class TerminalClientStateTest {
 	@Test void returnOnCloseUsesTheCraftingGenerationAndCannotQueueTwice() {
-		var request = state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 0);
-		assertEquals(19, request.generation()); assertEquals(1, request.sequence());
-		assertNull(state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 200));
-		state.close(); state.accept(reply(1, null), 300);
-		assertNull(state.result()); assertNull(state.beginCrafting(CRAFT_RETURN_ON_CLOSE, 19, -1, -1, 0, 400));
+		for (var operation : List.of(CRAFT_RETURN_ON_CLOSE, CRAFT_STORE_ON_CLOSE)) {
+			var current = new TerminalClientState(7, session);
+			var request = current.beginCrafting(operation, 19, -1, -1, 0, 0);
+			assertEquals(19, request.generation()); assertEquals(1, request.sequence());
+			assertNull(current.beginCrafting(operation, 19, -1, -1, 0, 200));
+			current.close(); current.accept(reply(1, null), 300);
+			assertNull(current.result()); assertNull(current.beginCrafting(operation, 19, -1, -1, 0, 400));
+		}
 	}
 	@Test void foldingManagementRejectsLateListFramesAndAllowsCraftingAfterLeaseExpiry() {
 		state.beginLive(NetworkSelectionSession.Kind.PRODUCTS, "", TerminalSearchRequest.Navigation.FIRST, 0);

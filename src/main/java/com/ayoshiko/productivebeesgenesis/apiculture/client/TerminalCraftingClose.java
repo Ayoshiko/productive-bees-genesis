@@ -14,7 +14,10 @@ public final class TerminalCraftingClose {
 		var player = Minecraft.getInstance().player;
 		if (player == null || player.containerMenu != menu || generation == 0 || state.waiting()
 				|| !ModConfig.CLIENT.terminalPreferences.returnCraftingOnClose.get()) return;
-		var request = state.beginCrafting(TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE, generation, -1, -1, 0, Util.getMillis());
+		var target = ModConfig.CLIENT.terminalPreferences.craftingReturnTarget.get();
+		var operation = target == com.ayoshiko.productivebeesgenesis.config.TerminalPreferenceConfigSection.CraftingReturnTarget.BEE_NETWORK
+				? TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE : TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE;
+		var request = state.beginCrafting(operation, generation, -1, -1, 0, Util.getMillis());
 		if (request != null) PacketDistributor.sendToServer(request);
 	}
 	private TerminalCraftingClose() { }

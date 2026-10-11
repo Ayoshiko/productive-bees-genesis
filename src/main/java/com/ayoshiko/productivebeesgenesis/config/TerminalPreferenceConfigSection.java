@@ -18,6 +18,13 @@ public final class TerminalPreferenceConfigSection {
 			});
 		}
 	}
+	public enum CraftingReturnTarget implements TranslatableEnum {
+		INVENTORY, BEE_NETWORK;
+		@Override public Component getTranslatedName() {
+			return Component.translatable("productivebeesgenesis.configuration.terminalCraftingReturnTarget." + name().toLowerCase(java.util.Locale.ROOT));
+		}
+	}
+	public final ModConfigSpec.EnumValue<CraftingReturnTarget> craftingReturnTarget;
 	public final ModConfigSpec.BooleanValue rememberSearch, autoFocus, meSource, meDescending, syncJeiSearch, notifyCraftingFinished, returnCraftingOnClose, pinCraftingFinished, wirelessPickBlock, wirelessRestock, wirelessPickup, wirelessPickupOverflow, wirelessMagnet, wirelessRestockOffhand, wirelessRestockEmptySlots;
 	public final ModConfigSpec.IntValue wirelessRestockTarget;
 	public final ModConfigSpec.ConfigValue<String> beeSearch, meSearch;
@@ -35,6 +42,7 @@ public final class TerminalPreferenceConfigSection {
 		syncJeiSearch = builder.translation(KEY + "terminalSyncJeiSearch").define("terminalSyncJeiSearch", false);
 		notifyCraftingFinished = builder.translation(KEY + "terminalNotifyCraftingFinished").define("terminalNotifyCraftingFinished", false);
 		returnCraftingOnClose = builder.translation(KEY + "terminalReturnCraftingOnClose").define("terminalReturnCraftingOnClose", false);
+		craftingReturnTarget = builder.translation(KEY + "terminalCraftingReturnTarget").defineEnum("terminalCraftingReturnTarget", CraftingReturnTarget.INVENTORY);
 		pinCraftingFinished = builder.translation(KEY + "terminalPinCraftingFinished").define("terminalPinCraftingFinished", false);
 		wirelessPickBlock = builder.translation(KEY + "terminalWirelessPickBlock").define("terminalWirelessPickBlock", false);
 		wirelessRestock = builder.translation(KEY + "terminalWirelessRestock").define("terminalWirelessRestock", false);

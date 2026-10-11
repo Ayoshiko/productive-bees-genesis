@@ -14,6 +14,17 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void networkReturnOnCloseUsesTheExistingBoundedCraftingFrame() {
+		var request = new TerminalRequest(7, UUID.randomUUID(), 3, TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE, 9, -1, -1, -1, 0);
+		assertTrue(TerminalRequest.crafting(request.operation()));
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			TerminalRequest.STREAM_CODEC.encode(buffer, request); assertEquals(TerminalRequest.BYTES, buffer.readableBytes());
+			assertEquals(request, TerminalRequest.STREAM_CODEC.decode(buffer));
+			buffer.clear(); TerminalRequest.STREAM_CODEC.encode(buffer, request); buffer.writeByte(0);
+			assertThrows(IllegalArgumentException.class, () -> TerminalRequest.STREAM_CODEC.decode(buffer));
+		} finally { buffer.release(); }
+	}
 	@Test void providerScaleRequestsRoundTripWithoutClientPatternData() {
 		var codec = com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.CODEC;
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());

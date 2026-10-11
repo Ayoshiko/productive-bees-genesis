@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j3c4a 关闭时优先回存蜂业网络**：终端偏好新增“关闭材料去向”，默认仍为背包，自动取回主开关仍默认关闭。选择优先蜂业网络后，符合当前准入的合成材料先入蜂业账本，其余尝试回背包，满载余量留在原格；独立机无蜂业账本时回背包。仅账户所有者单独使用且主动关闭时生效；完整组件、已付费结果及未决提取保管不变，不生成掉落。账本与材料／背包先完整准备，提交后通知异常不重放；终端协议升至 37，ME／机器保持 23／12，存档格式不变。真实客户端与跨进程保存联合仍待验收。
+
 - **D18j4b3f 供应器范围批量样板倍率**：当前整台、当前列表页或跨页已选范围均可输入倍率并预览放大／缩小，无需替换样本。逐槽展示完整差异，拒绝不能整除、溢出、非法及无变化项；选择确认后沿共享预算原位改写，保留张数、空位与其它组件。停止保留已完成项，变化或未知写入停止余项，不补偿、重试或掉落。仍限已支持的原生库存、8 台／288 槽；ME 协议升至 23，终端／机器 36／12 及存档不变。真实客户端、实际 ME 与供应器保存联合仍待验收。
 
 - **D18j4a6 背包／缓冲批量样板倍率**：选择目标容器后，Shift＋点击放大／缩小即可逐叠预览原生处理样板的数量变化；普通点击仍处理鼠标整叠。无需替换样本，支持逐项／全选和完整差异，拒绝不能整除、溢出、非法编码及无变化项。确认只改所选原槽，保留张数、空位和其它组件；原物／会话变化拒绝，重复确认不能重放，不消费材料或生成掉落。ME 协议升至 22，终端／机器保持 36／12，存档不变；真实客户端及玩家保存联合仍待验收。
@@ -227,6 +229,8 @@
 ### English
 
 #### Added
+
+- **D18j3c4a Prefer the bee network when returning crafting materials on close**: Adds a return destination preference; inventory remains the default and automatic return remains disabled by default. Eligible materials can return to the current bee ledger first, with the rest going to inventory and excess retained in the grid. Standalone machines without a bee ledger use inventory. Requires an explicit close by the account owner with no other viewer. Full components, paid results and unresolved withdrawals remain intact; no items are dropped. Ledger, grid and inventory results are prepared before publication, and notification failures cannot replay committed transfers. Terminal protocol is 37; ME/machine stay at 23/12 with unchanged save formats. Live-client and cross-process save acceptance stays open.
 
 - **D18j4b3f Batch scaling in pattern providers**: Preview multiplication or division for a whole provider, the current list page or the cross-page selection, without a replacement sample. Inspect per-slot differences and select eligible entries; non-divisible quantities, overflow, invalid content and unchanged patterns are rejected. Confirmed edits run in place under the shared budget, preserving counts, sparse slots and other components. Stopping keeps completed edits; changed or uncertain writes stop the remainder without compensation, retries or drops. The supported native-inventory limit remains 8 providers/288 slots. ME protocol is 23; terminal/machine stay at 36/12 with unchanged save formats. Live-client, ME and provider-save integration acceptance stays open.
 

@@ -1083,3 +1083,16 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,411,364 字节，SHA-256 `b46035bce27ee4ffb1ef8d603af0a1953b91e4950be0bc64fa803daf3265a0a9`。初始／最终 XML、构建输出、固定本地参考、源码／依赖／产物哈希与链接检查保存在 `build/network-gates/d18j4b3f-20261011/`。
 
 真实客户端倍率输入／缩放及长文案、实际 ME／宿主权限与无线费用、多玩家竞争、跨 JVM 供应器保存恢复及附属完整注入联合尚未运行；j4b3f、完整 j4／D18 与发布门继续开放。其它外部容器、自定义库存和普通合成样板倍率后续按实际接口交付，无 Spark／MSPT 性能结论。
+
+<a id="s10-159"></a>
+### 10.159 D18j3c4a 关闭时优先回存蜂业网络（2026-10-11，已实现并验证材料守恒，功能联合待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `f305e96` 基线上，为默认关闭的自动取回新增客户端去向枚举，默认仍为背包。选择优先蜂业网络时，主动关闭发送一次 CRAFT_STORE_ON_CLOSE；符合当前已发布静态准入的九格材料入蜂业账本，其余回背包，满载留原格；无蜂业账本的独立机使用背包。合同、交互与参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+正式入口继续沿 NetworkTerminalScreen／MachineScreen.onClose、两类菜单的会话／序号／权限与无线费用，以及 TerminalCraftingMenu 的所有者、共享账户和材料 generation 检查。TerminalCraftingReturn 在服务器线程和账户锁内准备账本、材料与背包的最终结果，复核原根／策略／背包及锁定栈后只发布一次账本。若权威根发布后的展示索引异常，仍完成已准备的材料扣减和背包接收；旧 generation 不可再次提交。未准入及部分接收不改变组件或生成掉落，已付费结果和未决 ME 提取保持保管。本步不调用 ME 存储，不新增逐 tick 扫描或存档格式；终端协议为 37，ME／机器保持 23／12。
+
+`.\gradlew test -PminecraftTests --tests '*TerminalCraftingReturnMinecraftTest' --offline --no-daemon` 的 **12 项**行为测试通过。使用初始化后的 Minecraft 物品／组件、真实 TerminalCraftingMenu、账户、账本和序列化；服务器、玩家、菜单宿主及准入提供者为模拟对象。覆盖默认值、命名物品及含物品容器的完整组件、混合准入、满背包部分接收、无账本／策略未就绪回退、原背包路径不访问策略、非所有者／共享账户拒绝、非法帧／旧代际／隔离状态、规划时背包／策略／账本／账户／菜单变化、锁定物品、发布前后异常、背包通知失败，以及已付费结果／未决提取的 NBT 往返。故障注入均核对真实余额与材料归属，提交后异常不重放。
+
+`.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **42 项**普通回归与构建、产物核验通过。合计 **54 项**，零失败／错误／跳过；本步验证未发现需继续修正的生产问题。NeoForge 客户端通用配置界面直接读取新枚举，默认值与中英文语言键同步。基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。
+
+JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85579614e959b2a26f82b1`。XML、构建输出、源码／依赖／产物哈希及 UTF-8／JSON／跨文档链接检查保存在 `build/network-gates/d18j3c4a-20261011/`。未运行真实客户端的配置保存重开、主动关闭包顺序、无线费用及双玩家联合，也未运行实际存档跨 JVM 恢复／故障耐久性；NBT 往返测试不替代这些证据。j3c4a、完整 j3／D18 与发布门仍开放，ME 自动回存及其它 WCWT 工作流继续独立交付，无 Spark／MSPT 性能结论。
