@@ -1038,3 +1038,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 最终执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*WirelessItemFilterTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon`，33 项普通回归、编译、构建及 JAR 核验通过；合计 **60 项**，零失败／错误／跳过。基线保持 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 为 4,402,851 字节，SHA-256 `b93b4167231160c723cde7fd6df45956378c163131e7d0e6306db69070fd9d63`。原始报告、源码／依赖哈希和核验脚本集中保留在 `build/network-gates/d18j4e5-20261011/`。
 
 真实客户端操作、实际网络／独立机 ME 来源、保护插件、多玩家同时碰撞及正常玩家文件跨 JVM 恢复仍待联合验收；j4e5、完整 j4／D18 和发布门保持开放。未启动真实专服世界、未测 Spark／MSPT，也不把此步视为磁力满背包支持或所有外部容器流程完成。
+
+<a id="s10-156"></a>
+### 10.156 D18j4b3e 跨页选择供应器批量替换（2026-10-11，已实现并验证原生库存行为，功能联合待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `a33c94e` 上，将原当前页／单台批量替换扩展为显式跨页选择。界面增加勾选框、Ctrl＋左键、已选台数／槽数及清空；有勾选时底部入口仅使用已选范围，无勾选时保持原当前页行为。范围仍为最多八台／288槽，不自动截断。合同、交互和参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+选择只从当前版本／页的已展示行取得，按原库存对象去重，保留原节点／宿主／BE／逻辑／尺寸；每次请求及进入批次前复核权限、已加载位置和身份，任一失效撤销整个范围，不静默缩小。相同搜索、翻页和单台槽页往返可保留，改搜索、关闭、断线和首次选择满 600 tick 清空，后续操作不续期。范围交给原批次时先消费菜单选择；样板仍在供应器，沿原逐项准备、确认和一次写入／未知停止，无新资产账户、后台世界访问或全网 tick 缓存。ME 协议 21 追加三个动作，终端／机器 36／12 及存档格式不变。
+
+执行 `.\gradlew test -PminecraftTests --tests '*ProviderSelectionMinecraftTest' --offline --no-daemon`，最终 **7 项**通过，零失败／错误／跳过。真实注册表、AE2 PatternProviderLogic、AppEngInternalInventory、原生处理样板编解码和样板重建配合模拟服务器／世界／玩家／节点／宿主与样本账户入口；十台供应器跨两页只选第 1／9 台，实际确认后仅改这两台，原样板和样本不消耗。覆盖八台／288槽限制与拒绝新增、取消／清空、同搜索／槽页往返、换搜索／断线／关闭、固定期限、隐藏／卸载／逻辑或库存替换／节点离线、未展示行／错页／旧版本，以及保存回调异常后保留未知、停止其它供应器和重复 POLL 不重放。测试没有启动真实 ME 网格或玩家世界，样本账户互斥复用原实现而非本轮完整集成验收。
+
+首个测试命令因测试目录尚未创建、文件写入失败而未发现用例；补建目录并用同一 UTF-8 工具写入后，六项行为检查通过；再补槽页往返及原生写后保存异常用例，最终七项通过。没有跳过测试或修改依赖。最终执行 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon`，**39 项**普通回归、编译、构建和 JAR 核验通过；本步合计 **46 项**，零失败／错误／跳过。
+
+基线仍为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,407,407 字节，SHA-256 `4195b99f6ee3813b690c2e7af1cc489bb3639f792508f2e75b6cfe7f340259e2`。报告、源码／依赖哈希与本地参考集中在 `build/network-gates/d18j4b3e-20261011/`。本地 ExtendedAE 2.2.35 两类供应器使用原生 36 槽逻辑的源码核对只是结构依据，未新增重复适配、未在本轮加载 ExtendedAE／EAEP 或签收完整附属注入矩阵。
+
+真实客户端勾选／缩放与长文案、多玩家竞争、网络／独立机无线费用、实际 ME 和保护插件及完整附属供应器联合仍待验收；j4b3e、完整 j4／D18 与发布门保持开放。超过八台／288槽的范围和其它外部容器工作流后续独立交付，无 Spark／MSPT 结论。

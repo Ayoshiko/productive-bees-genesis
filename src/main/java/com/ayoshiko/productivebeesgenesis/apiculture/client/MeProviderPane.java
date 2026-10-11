@@ -27,7 +27,7 @@ final class MeProviderPane {
     private Button previous, next, apply, selectAll, deselectAll, cancel, uploadPreview, returnPreview;
     private MeTerminalView shown;
     private EditBox filter, priority;
-    private Button priorityApply, blocking, lockChoice, lockApply, hide, unlock, patternApply, editOpen;
+    private Button priorityApply, blocking, lockChoice, lockApply, hide, unlock, patternApply, editOpen, selectionClear;
     private int lockMode;
     private static final String[] LOCK_NAMES = {"none", "until_pulse", "while_high", "while_low", "until_result"};
     private String query = "";
@@ -50,10 +50,12 @@ final class MeProviderPane {
         if (shown.mode().providerEdit()) return edits.build(font, left, top, width, height, back, this::browse);
         buttons.clear(); var widgets = new ArrayList<AbstractWidget>(); filter = null;
         apply = selectAll = deselectAll = cancel = uploadPreview = returnPreview = null;
-        priority = null; priorityApply = blocking = lockChoice = lockApply = hide = unlock = patternApply = editOpen = null;
+        priority = null; priorityApply = blocking = lockChoice = lockApply = hide = unlock = patternApply = editOpen = selectionClear = null;
         if (shown.mode() == Mode.PROVIDERS) {
-            filter = new EditBox(font, left + 8, top + 38, width - 84, 14, MeInventoryPane.text("provider_search"));
+            filter = new EditBox(font, left + 8, top + 38, width - 156, 14, MeInventoryPane.text("provider_search"));
             filter.setMaxLength(64); filter.setValue(query); filter.setHint(MeInventoryPane.text("provider_search")); widgets.add(filter);
+            selectionClear = add(widgets, "provider_selection_clear", width - 144, 38, 68,
+                    () -> commands.send(PROVIDER_SELECTION_CLEAR, -1, shown.page(), 0, ""));
             add(widgets, "provider_search_button", width - 72, 38, 64, this::browse);
         } else add(widgets, "provider_list", 8, 38, 92, this::browse);
         if (shown.mode() == Mode.PROVIDER_SETTINGS) {
@@ -77,7 +79,8 @@ final class MeProviderPane {
             boolean slots = shown.mode() == Mode.PROVIDER_SLOTS;
             editOpen = add(widgets, slots ? "provider_edit_single" : "provider_edit_page",
                     slots ? 188 : 120, slots ? 182 : height - 21, slots ? width - 198 : width - 128,
-                    () -> commands.send(PROVIDER_EDIT_OPEN, -1, shown.page(), 0, ""));
+                    () -> commands.send(!slots && shown.bytes() > 0 ? PROVIDER_EDIT_SELECTED : PROVIDER_EDIT_OPEN, -1, shown.page(), 0, ""));
+            if (!slots && shown.bytes() > 0) editOpen.setMessage(MeInventoryPane.text("provider_edit_selected", shown.bytes()));
             editOpen.setTooltip(net.minecraft.client.gui.components.Tooltip.create(MeInventoryPane.text("provider_edit_open_hint")));
         }
         if (shown.mode() == Mode.PROVIDER_SLOTS) {
@@ -150,7 +153,9 @@ final class MeProviderPane {
             previous.active &= shown.revision() != 0 && shown.status() != Status.WAITING && shown.page() > 0;
             next.active &= shown.revision() != 0 && shown.status() != Status.WAITING && shown.more();
         }
-        if (editOpen != null) editOpen.active &= shown.revision() != 0 && shown.status() == Status.OK && !shown.rows().isEmpty() && !menu.getCarried().isEmpty();
+        if (editOpen != null) editOpen.active &= shown.revision() != 0 && shown.status() != Status.WAITING
+                && (!shown.rows().isEmpty() || shown.mode() == Mode.PROVIDERS && shown.bytes() > 0) && !menu.getCarried().isEmpty();
+        if (selectionClear != null) selectionClear.active &= shown.revision() != 0 && shown.status() != Status.WAITING && shown.bytes() > 0;
         if (patternApply != null) patternApply.active &= shown.confirm() && menu.getCarried().isEmpty();
         if (apply != null) {
             apply.active &= shown.confirm(); selectAll.active &= shown.status() == Status.OK; deselectAll.active &= shown.status() == Status.OK;
@@ -185,7 +190,9 @@ final class MeProviderPane {
             if (button != 0 || x < left + 8 || x >= left + width - 8 || y < top + 56 || y >= top + 184) return false;
             int row = (int) (y - top - 56) / 16;
             if (row >= shown.rows().size() || !shown.rows().get(row).enabled()) return false;
-            commands.send(PROVIDER_OPEN, row, 0, 0, query); return true;
+            if (x < left + 25 || Screen.hasControlDown()) commands.send(PROVIDER_SELECT, row, shown.page(), 0, "");
+            else commands.send(PROVIDER_OPEN, row, shown.page(), 0, query);
+            return true;
         }
         if (shown.mode() != Mode.PROVIDER_SLOTS) return false;
         if (button != 0 && button != 1 || x < left + 14 || x >= left + 176 || y < top + 64 || y >= top + 136) return false;
@@ -212,14 +219,18 @@ final class MeProviderPane {
         else if (shown.mode() == Mode.PROVIDERS) {
             for (int i = 0; i < shown.rows().size(); i++) {
                 var row = shown.rows().get(i); int y = top + 56 + i * 16;
-                g.fill(left + 7, y, left + width - 7, y + 16, 0xff25383e);
-                if (!row.icon().isEmpty()) g.renderItem(row.icon(), left + 9, y);
-                g.drawString(font, font.plainSubstrByWidth(row.label(), width - 74), left + 28, y + 4, row.enabled() ? 0xffe0e5de : 0xff8d9899, false);
+                g.fill(left + 7, y, left + width - 7, y + 16, row.extra() == 1 ? 0xff526a6e : 0xff25383e);
+                g.drawString(font, row.extra() == 1 ? "☑" : "☐", left + 11, y + 4, 0xffe0e5de, false);
+                if (!row.icon().isEmpty()) g.renderItem(row.icon(), left + 26, y);
+                g.drawString(font, font.plainSubstrByWidth(row.label(), width - 91), left + 45, y + 4, row.enabled() ? 0xffe0e5de : 0xff8d9899, false);
                 g.drawString(font, Long.toString(row.amount()), left + width - 36, y + 4, 0xffc8cfba, false);
                 if (mouseX >= left + 8 && mouseX < left + width - 8 && mouseY >= y && mouseY < y + 16)
-                    g.renderComponentTooltip(font, List.of(Component.literal(row.label()), MeInventoryPane.text("provider_open_hint", row.amount())), mouseX, mouseY);
+                    g.renderComponentTooltip(font, List.of(Component.literal(row.label()), MeInventoryPane.text("provider_open_hint", row.amount()),
+                            MeInventoryPane.text("provider_selection_hint")), mouseX, mouseY);
             }
             if (shown.rows().isEmpty() && shown.status() == Status.OK) g.drawWordWrap(font, MeInventoryPane.text("provider_none"), left + 12, top + 64, width - 24, TerminalSkin.MUTED);
+            g.drawString(font, font.plainSubstrByWidth(MeInventoryPane.text("provider_selection_count", shown.bytes(), shown.cpu()).getString(), width - 16),
+                    left + 8, top + 188, TerminalSkin.MUTED, false);
         } else {
             g.drawString(font, font.plainSubstrByWidth(shown.title(), width - 204), left + 108, top + 41, TerminalSkin.MUTED, false);
             for (int i = 0; i < shown.rows().size(); i++) {

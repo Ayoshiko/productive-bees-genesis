@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4b3e 跨页选择样板供应器**：供应器列表可通过勾选框或 Ctrl＋左键选择不同页的供应器，再按已选范围预览和批量替换；最多 8 台、合计 288 槽。支持已选数量显示及清空，相同搜索刷新／翻页／槽页往返保留选择，换搜索、失效、关闭或首次选择满 600 tick 清空。只接受当前页和版本的真实行，确认前复核原节点、逻辑和库存，未知写入停止且不补偿、不重试、不生成掉落。ME 协议升至 21，终端／机器保持 36／12；实际客户端及附属联合仍待验收。
+
 - **D18j4e5 满背包拾取入网**：新增默认关闭的独立开关，需同时启用拾取入网；原版拾取允许且背包未接收时，将至多一叠完整组件物品从原实体转入 ME／终端保管。遵守延迟、归属及拾取拒绝，与背包批次共享全服预算；拒收余量保管、未知暂停且不重试、不生成新掉落。沿原版实际量播放拾取并更新统计，终端协议升至 36，ME／机器 20／12 及存档格式不变；实际客户端／ME／保护插件联合仍待验收。
 
 - **D18j4e4 连续拾取合并与预算等待**：拾取入网可合并同一会话内的完整组件增量，最多 8 种、每种一叠，预算不足最多等待 40 tick；等待期间物品仍在真实背包。沿原全服额度逐玩家轮转，不从旧库存创建额度。整理、消耗、设备／设置／菜单变化和过期撤销待办；仅完整接收且背包扣减一致时继续下一组，部分接收或拒绝停止本批，未知结果保持 Request 保管且不重试、不生成掉落。保持默认关闭、原筛选与 35／20／12 协议及存档格式；满背包直入和真实客户端／ME／保护插件联合仍待交付或验收。
@@ -221,6 +223,8 @@
 ### English
 
 #### Added
+
+- **D18j4b3e Cross-page pattern provider selection**: Check providers on different list pages, or Ctrl-click, then preview and edit only the selected scope. Limited to 8 providers and 288 slots, with counts and a clear action. Paging, the same search and slot-page visits preserve selection; changed searches, invalid targets, closing or 600 ticks from the first choice clear it. The server accepts current-page rows and revisions, revalidates original nodes/logic/inventories, and stops uncertain writes without compensation, retries or drops. ME protocol is 21; terminal/machine remain 36/12. Live-client and addon integration acceptance stays open.
 
 - **D18j4e5 Direct pickup with a full inventory**: Adds a separate disabled-by-default toggle requiring pickup deposits. After native pickup checks and a failed inventory insertion, transfers up to one component-exact stack from the original entity into ME or terminal custody. Respects delay, ownership and pickup denials; shares server budgets with inventory batches. Rejections stay in custody and unknown transfers pause without retries or new drops. Native pickup effects and statistics use the acquired amount. Terminal protocol is 36; ME/machine protocols remain 20/12 and saves are unchanged. Live-client/ME/protection integration remains pending.
 

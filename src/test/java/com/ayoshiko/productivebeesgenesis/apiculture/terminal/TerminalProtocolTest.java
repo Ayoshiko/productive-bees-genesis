@@ -14,6 +14,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void providerSelectionCommandsRoundTripWithoutClientTargetIdentities() {
+		var codec = com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.CODEC;
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			for (var action : List.of(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.PROVIDER_SELECT,
+					com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.PROVIDER_SELECTION_CLEAR,
+					com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.PROVIDER_EDIT_SELECTED)) {
+				var request = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest(7, UUID.randomUUID(), 9,
+						action, 12, action == com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.PROVIDER_SELECT ? 7 : -1, 5, 0, "");
+				buffer.clear(); codec.encode(buffer, request); assertTrue(buffer.readableBytes() <= 512); assertEquals(request, codec.decode(buffer));
+				buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
+				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+			}
+		} finally { buffer.release(); }
+	}
 	@Test void restockPreferencesAreBoundedAndRequireTheNewFrame() {
 		var codec = WirelessRestockRequest.CODEC; var device = UUID.randomUUID(); var token = UUID.randomUUID();
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());

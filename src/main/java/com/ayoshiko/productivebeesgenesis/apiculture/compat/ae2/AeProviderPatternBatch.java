@@ -16,7 +16,6 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 
 /** 一个已展示供应器范围的只读计划；确认后按共享预算逐槽改写，部分完成不回滚。 */
 final class AeProviderPatternBatch {
-    private static final int MAX_SLOTS = 8 * STORAGE_ROWS;
     private enum Phase { SOURCE, PREPARING, READY, APPLYING, FINISHED }
     private record Target(AePatternProviderTarget provider, PatternProviderLogic logic) { }
     private static final class Entry {
@@ -64,7 +63,7 @@ final class AeProviderPatternBatch {
                 || action == PROVIDER_EDIT_APPLY || action == PROVIDER_EDIT_CANCEL;
     }
     MeTerminalView start() {
-        if (targets.isEmpty() || targets.size() > 8 || totalSlots > MAX_SLOTS) return abort(Status.TOO_LARGE);
+        if (targets.isEmpty() || targets.size() > AeProviderSelection.MAX_PROVIDERS || totalSlots > AeProviderSelection.MAX_SLOTS) return abort(Status.TOO_LARGE);
         if (!live() || targets.stream().anyMatch(target -> !valid(target))) return abort(Status.PATTERN_UNSUPPORTED);
         var inventories = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Object, Boolean>());
         for (var target : targets) if (!inventories.add(target.provider().inventory())) return abort(Status.INVALID);
