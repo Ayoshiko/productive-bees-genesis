@@ -74,7 +74,7 @@ final class MachineProductionFixture {
 			install(MachineUpgrades.slot(false, PbUpgradeType.STABILITY), 1);
 		}
 		for (int slot = 0; slot < work().beeSlots(); slot++) {
-			var data = new CompoundTag(); data.putString("entity", "productivebees:configurable_bee"); data.putString("type", "productivebees:iron");
+			var data = new CompoundTag(); data.putString("entity", "productivebees:configurable_bee"); data.putString("type", slot % 2 == 0 ? "productivebees:iron" : "productivebees:gold");
 			data.putUUID("UUID", UUID.randomUUID());
 			var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any");
 			genes.putString("bee_productivity", "productivity.normal");
@@ -83,7 +83,7 @@ final class MachineProductionFixture {
 			cage.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
 			exchange(MachineExchange.Action.CAGE_IN, slot, cage, 1);
 			check(player.getInventory().items.getFirst().get(DataComponents.CUSTOM_DATA) == null, "Input cage kept its bee");
-			exchange(MachineExchange.Action.FEED_IN, slot, new ItemStack(Items.IRON_BLOCK), 1);
+			exchange(MachineExchange.Action.FEED_IN, slot, new ItemStack(slot % 2 == 0 ? Items.IRON_BLOCK : Items.GOLD_BLOCK), 1);
 		}
 		var comb = ProductKeyCodec.item(work().bee(0).plan().sourceOutput(), 48, level.registryAccess());
 		put(0, comb); refuel(); ledger.baseline(work()); reference();

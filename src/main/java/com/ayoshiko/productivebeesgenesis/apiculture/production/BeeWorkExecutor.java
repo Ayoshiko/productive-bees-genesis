@@ -8,15 +8,19 @@ import java.util.Objects;
 public final class BeeWorkExecutor {
 	public static final int MAX_RANDOM_CYCLES_PER_STEP = 64;
 	public enum Status { READY, STALE_PLAN, UNLOADED, DISABLED, FLOWER, ENVIRONMENT, ENERGY, DRAIN_FIRST, BUDGET }
-	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, ProductKey output) {
+	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, ProductKey output, ProductKey fluidOutput, int fluidPerCycle) {
+		public Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, ProductKey output) { this(cycleTicks, energyPerTick, productionMultiplier, output, null, 0); }
 		public Cycle {
 			Objects.requireNonNull(output);
 			if (cycleTicks < 1 || energyPerTick < 0 || !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
 				throw new IllegalArgumentException("Invalid bee cycle");
+			if (fluidOutput == null ? fluidPerCycle != 0 : fluidOutput.kind() != ProductKey.Kind.FLUID || fluidPerCycle < 1)
+				throw new IllegalArgumentException("Invalid cycle byproduct");
 		}
 		public boolean matches(StaticBeePlan plan) {
 			return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick()
-					&& productionMultiplier == plan.productionMultiplier() && output.equals(plan.output());
+					&& productionMultiplier == plan.productionMultiplier() && output.equals(plan.output())
+					&& Objects.equals(fluidOutput, plan.fluidOutput()) && fluidPerCycle == plan.fluidPerCycle();
 		}
 	}
 	public record Context(boolean loaded, boolean enabled, boolean flower, long recipeRevision, long capabilityRevision,
@@ -81,7 +85,7 @@ public final class BeeWorkExecutor {
 		if (ticks == 0) return new BeeResult(Status.BUDGET, bee, bee, 0);
 		if (cycle != null) {
 			if (bee.progress() != 0) throw new IllegalArgumentException("New bee capability inside an active cycle");
-			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier(), cycle.output());
+			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier(), cycle.output(), cycle.fluidOutput(), cycle.fluidPerCycle());
 		}
 		if (plan.energyPerTick() > 0 && ticks > energyBudget / plan.energyPerTick()) return new BeeResult(Status.ENERGY, bee, bee, 0);
 		var progress = BeeProgressPlan.plan(bee.progress(), ticks, plan.cycleTicks(), plan.energyPerTick(), 1);
@@ -106,7 +110,7 @@ public final class BeeWorkExecutor {
 			}
 		}
 		var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),
-				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled), bee.enabled());
+				progress, pending - sampled, bee.frozen().add(amount), bee.random().advance(sampled), bee.enabled(), bee.frozenFluid().add(ProductAmount.of(sampled).multiply(plan.fluidPerCycle())));
 		return new BeeResult(Status.READY, bee, next, energyUsed);
 	}
 	private BeeWorkExecutor() { }

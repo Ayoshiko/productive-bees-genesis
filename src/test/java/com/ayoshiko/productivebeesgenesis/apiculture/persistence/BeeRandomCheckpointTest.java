@@ -21,10 +21,12 @@ class BeeRandomCheckpointTest {
 	private static final UUID MEMBER = new UUID(17, 3);
 	private static final ProductKey COMB = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:configurable_honeycomb"), new CompoundTag());
 	private static final ProductKey BLOCK = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:configurable_comb"), new CompoundTag());
-	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> assertTrue(COMB.equals(key) || BLOCK.equals(key)));
+	private static final ProductKey HONEY = new ProductKey(ProductKey.Kind.FLUID, ResourceLocation.parse("productivebees:honey"), new CompoundTag());
+	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> assertTrue(COMB.equals(key) || BLOCK.equals(key) || HONEY.equals(key)));
 	@BeforeAll static void version() { SharedConstants.tryDetectVersion(); }
 
-	private NetworkCheckpoint fixture(float multiplier) {
+	private NetworkCheckpoint fixture(float multiplier) { return fixture(multiplier, false); }
+	private NetworkCheckpoint fixture(float multiplier, boolean honey) {
 		var identity = CheckpointTestData.identity();
 		var claim = new MemberClaim(identity.networkId(), MEMBER, new UUID(29, 1), new Origin("minecraft:overworld", 1, 64, 2), "productivebeesgenesis:mek_apiary");
 		var entity = new CompoundTag(); entity.putString("type", "productivebees:iron");
@@ -38,7 +40,7 @@ class BeeRandomCheckpointTest {
 		var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
 		var owned = sealed.phase(OwnedMachineRecord.Phase.OWNED);
 		var plan = new StaticBeePlan("productivebees:iron", "productivebees:bee_produce/iron", 0, 0, 5, 10, 2, true,
-				BeeWorkConditions.Traits.DEFAULT, COMB, 1, multiplier);
+				BeeWorkConditions.Traits.DEFAULT, COMB, 1, multiplier, COMB, honey ? HONEY : null, honey ? 250 : 0);
 		var bee = new BeeRecord(new UUID(123, 456), MEMBER, 0, new AssetImage(slot), plan, 0, 0, 0, ProductAmount.ZERO);
 		var state = new BeeMemberState(MEMBER, 0, 10000, 10000, List.of(bee));
 		return NetworkCheckpoint.empty(identity).withOwnership(sealed).withOwnership(owned).withOwnership(owned.withBees(state));
@@ -101,10 +103,59 @@ class BeeRandomCheckpointTest {
 	}
 	@Test void schemaEightDefaultsEnabledAndStandaloneEncodingStaysCompatible() throws Exception {
 		var source = work(fixture(2.5f), 13, 1); var old = NetworkCheckpointCodec.encode(source);
-		old.putInt("schema", 8); beeState(old).putInt("samplingVersion", 2); bee(old).remove("enabled");
+		old.putInt("schema", 8); beeState(old).putInt("samplingVersion", 2); bee(old).remove("enabled"); removeFluidFields(bee(old));
 		assertEquals(source, CODEC.decode(old)); assertEquals(source, decodeFile(old, "schema-eight", true));
 		var single = BeeRecordCodec.encodeBee(state(source).bee(0)); assertFalse(single.contains("enabled"));
 		assertEquals(state(source).bee(0), BeeRecordCodec.decodeBee(single, MEMBER, key -> { }));
+	}
+	@Test void honeyUsesPaidCyclesAndSurvivesPausedSamplingAndCheckpointSettlement() throws Exception {
+		var initial = fixture(2.5f, true); var paid = work(initial, 23, 0);
+		var paused = roundTrip(control(paid, false), "honey-paid");
+		assertEquals(4, state(paused).bee(0).pendingCycles()); assertEquals(9770, state(paused).energy());
+		for (int sampled = 1; sampled <= 4; sampled++) {
+			var frozen = roundTrip(work(paused, 0, 1), "honey-frozen-" + sampled);
+			assertEquals(250, state(frozen).bee(0).frozenFluid().longSaturated());
+			assertThrows(IllegalStateException.class, () -> frozen.ownedMachines().get(MEMBER).returnImage());
+			var revision = state(frozen).bee(0).revision();
+			paused = roundTrip(settle(frozen), "honey-settled-" + sampled);
+			assertSame(paused, paused.settleBee(MEMBER, 0, revision));
+			assertEquals(sampled * 250, paused.ledger().balances().get(HONEY).longSaturated());
+		}
+		assertEquals(oracle(state(initial).bee(0).random().seed(), 4, 2.5f), paused.ledger().balances().get(COMB).exact());
+		assertEquals(9770, state(paused).energy()); assertEquals(3, state(paused).bee(0).progress());
+		assertTrue(state(paused).bee(0).drained()); assertFalse(state(paused).bee(0).enabled());
+	}
+	@Test void fluidOnlyFrozenResultStillBlocksNextCycleAndCanBeSettled() throws Exception {
+		var source = fixture(0.000001f, true); var paid = roundTrip(work(source, 5, 1), "fluid-only");
+		assertTrue(state(paid).bee(0).frozen().isZero()); assertTrue(state(paid).bee(0).hasFrozen());
+		assertEquals(BeeWorkExecutor.Status.DRAIN_FIRST, candidate(paid, 1, 1).status());
+		var result = roundTrip(settle(paid), "fluid-only-settled");
+		assertEquals(250, result.ledger().balances().get(HONEY).longSaturated());
+		assertTrue(state(result).bee(0).drained()); assertEquals(9950, state(result).energy());
+	}
+	@Test void schemaNineFinishesItsPaidCycleBeforeEnablingHoneyAtNextBoundary() throws Exception {
+		var partial = work(fixture(1), 3, 0); var old = NetworkCheckpointCodec.encode(partial);
+		old.putInt("schema", 9); beeState(old).putInt("samplingVersion", 3); removeFluidFields(bee(old));
+		var restored = decodeFile(old, "schema-nine-partial", true);
+		assertEquals(partial, restored); assertNull(state(restored).bee(0).plan().fluidOutput());
+		restored = settle(work(restored, 2, 1)); assertFalse(restored.ledger().balances().containsKey(HONEY));
+		var next = new BeeWorkExecutor.Cycle(5, 10, 1, COMB, HONEY, 250);
+		restored = roundTrip(settle(cycleWork(restored, 5, 1, next)), "schema-nine-new-cycle");
+		assertEquals(250, restored.ledger().balances().get(HONEY).longSaturated()); assertEquals(9900, state(restored).energy());
+	}
+	@Test void malformedFluidStateIsRejectedByBothCheckpointReaders() throws Exception {
+		var valid = NetworkCheckpointCodec.encode(work(fixture(1, true), 5, 1)); int index = 0;
+		for (var mutation : List.<Consumer<CompoundTag>>of(
+				tag -> bee(tag).remove("frozenFluid"),
+				tag -> bee(tag).getCompound("plan").remove("fluidOutput"),
+				tag -> bee(tag).getCompound("plan").remove("fluidPerCycle"),
+				tag -> bee(tag).getCompound("plan").putInt("fluidPerCycle", -1),
+				tag -> bee(tag).getCompound("plan").put("fluidOutput", ProductRecordCodec.key(COMB)),
+				tag -> bee(tag).getCompound("plan").put("fluidOutput", new CompoundTag()))) {
+			var bad = valid.copy(); mutation.accept(bad);
+			assertThrows(RuntimeException.class, () -> CODEC.decode(bad));
+			decodeFile(bad, "invalid-honey-" + index++, false);
+		}
 	}
 	@Test void candidateDiscardReplayAndGeneralMutationCannotChangeRandomAuthority() {
 		var before = fixture(2.5f); var first = candidate(before, 1000, 7); var repeated = candidate(before, 1000, 7);
@@ -173,7 +224,7 @@ class BeeRandomCheckpointTest {
 		var encoded = NetworkCheckpointCodec.encode(work(paid, 0, 1));
 		List<Consumer<CompoundTag>> mutations = List.of(
 				root -> beeState(root).remove("samplingVersion"),
-				root -> beeState(root).putInt("samplingVersion", 4),
+				root -> beeState(root).putInt("samplingVersion", 5),
 				root -> bee(root).remove("cursor"),
 				root -> bee(root).remove("seed"),
 				root -> bee(root).putInt("cursor", 1),
@@ -186,7 +237,7 @@ class BeeRandomCheckpointTest {
 				root -> bee(root).getCompound("plan").putString("sourceOutput", "invalid"),
 				root -> root.putInt("schema", 6),
 				root -> root.putInt("schema", 7),
-				root -> root.putInt("schema", 10),
+				root -> root.putInt("schema", 11),
 				root -> bee(root).remove("enabled"),
 				root -> bee(root).putInt("enabled", 0));
 		int index = 0;
@@ -311,7 +362,7 @@ class BeeRandomCheckpointTest {
 	}
 	@Test void schemaSevenMigratesSourceKeyWithoutChangingPaidRandomState() throws Exception {
 		var paid = work(fixture(2.5f), 20, 1); var old = NetworkCheckpointCodec.encode(paid);
-		old.putInt("schema", 7); beeState(old).putInt("samplingVersion", 1); bee(old).remove("enabled"); bee(old).getCompound("plan").remove("sourceOutput");
+		old.putInt("schema", 7); beeState(old).putInt("samplingVersion", 1); bee(old).remove("enabled"); bee(old).getCompound("plan").remove("sourceOutput"); removeFluidFields(bee(old));
 		assertEquals(paid, CODEC.decode(old)); assertEquals(paid, decodeFile(old, "schema-seven", true));
 		var mixed = old.copy(); bee(mixed).getCompound("plan").put("sourceOutput", ProductRecordCodec.key(BLOCK));
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(mixed)); decodeFile(mixed, "seven-with-new-field", false);
@@ -327,10 +378,13 @@ class BeeRandomCheckpointTest {
 	}
 	private static CompoundTag beeState(CompoundTag root) { return root.getList("ownership", 10).getCompound(0).getCompound("bees"); }
 	private static CompoundTag bee(CompoundTag root) { return beeState(root).getList("bees", 10).getCompound(0); }
+	private static void removeFluidFields(CompoundTag bee) {
+		bee.remove("frozenFluid"); bee.getCompound("plan").remove("fluidOutput"); bee.getCompound("plan").remove("fluidPerCycle");
+	}
 	private static CompoundTag legacy(CompoundTag encoded) {
 		encoded.putInt("schema", 6); beeState(encoded).remove("samplingVersion");
 		for (var raw : beeState(encoded).getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
+			var bee = (CompoundTag) raw; removeFluidFields(bee); bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		return encoded;
 	}

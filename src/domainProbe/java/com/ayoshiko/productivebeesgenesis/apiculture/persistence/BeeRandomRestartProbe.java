@@ -39,7 +39,7 @@ public final class BeeRandomRestartProbe {
 		current = finish(current, member); store(current, "complete");
 		var seven = NetworkCheckpointCodec.encode(current); seven.putInt("schema", 7);
 		var sevenBees = seven.getList("ownership", 10).getCompound(0).getCompound("bees"); sevenBees.putInt("samplingVersion", 1);
-		for (var raw : sevenBees.getList("bees", 10)) { ((CompoundTag) raw).remove("enabled"); ((CompoundTag) raw).getCompound("plan").remove("sourceOutput"); }
+		for (var raw : sevenBees.getList("bees", 10)) { removeFluidFields((CompoundTag) raw); ((CompoundTag) raw).remove("enabled"); ((CompoundTag) raw).getCompound("plan").remove("sourceOutput"); }
 		var sevenRoot = new CompoundTag(); sevenRoot.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); sevenRoot.put("data", seven);
 		NbtIo.writeCompressed(sevenRoot, Path.of("results", "bee-restart", "random", "legacy-seven.dat"));
 		// schema 6 文件由当前正式 writer 的等价旧形状生成，只包含原有倍率 1 工作。
@@ -47,12 +47,15 @@ public final class BeeRandomRestartProbe {
 		var state = legacy.getList("ownership", 10).getCompound(0).getCompound("bees");
 		state.remove("samplingVersion");
 		for (var raw : state.getList("bees", 10)) {
-			var bee = (CompoundTag) raw; bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
+			var bee = (CompoundTag) raw; removeFluidFields(bee); bee.remove("enabled"); bee.remove("seed"); bee.remove("cursor"); bee.getCompound("plan").remove("multiplier"); bee.getCompound("plan").remove("sourceOutput");
 		}
 		var root = new CompoundTag(); root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); root.put("data", legacy);
 		NbtIo.writeCompressed(root, Path.of("results", "bee-restart", "random", "legacy.dat"));
 		var metadata = new JsonObject(); metadata.addProperty("producerPid", ProcessHandle.current().pid());
 		Files.writeString(Path.of("results", "bee-restart", "random", "writer.json"), metadata.toString());
+	}
+	private static void removeFluidFields(CompoundTag bee) {
+		bee.remove("frozenFluid"); bee.getCompound("plan").remove("fluidOutput"); bee.getCompound("plan").remove("fluidPerCycle");
 	}
 	private static void store(NetworkCheckpoint current, String stage) throws Exception {
 		CheckpointFiles.write(Path.of("results", "bee-restart", "random", stage + ".dat"),

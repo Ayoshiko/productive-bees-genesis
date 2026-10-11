@@ -36,7 +36,8 @@ public final class DomainProbeServer {
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
 			try {
-				if (Boolean.getBoolean("pbg.upgrades.only")) {
+				if (Boolean.getBoolean("pbg.ordinary.only")) report.addProperty("normalShutdown", true);
+				else if (Boolean.getBoolean("pbg.upgrades.only")) {
 					MemberUpgradeProbe.verifyShutdown(event.getServer(), report); ApiaryUpgradeProbe.verifyShutdown(event.getServer(), report);
 				}
 				else if (System.getProperty("pbg.automatic.mode") != null) AutomaticRestartProbe.verifyShutdown(event.getServer(), report);
@@ -60,6 +61,22 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (Boolean.getBoolean("pbg.ordinary.only")) {
+			try {
+				if (event.getServer().getTickCount() == 40) {
+					pendingReport = new JsonObject(); pendingReport.addProperty("scope", "ordinary-production");
+					pendingReport.addProperty("ae2Loaded", ModList.get().isLoaded("ae2"));
+					com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.enabled.set(true);
+					RuntimeBeeProbe.start(event.getServer());
+				}
+				if (pendingReport != null && RuntimeBeeProbe.advance(event.getServer(), pendingReport)) {
+					pendingReport.addProperty("passed", true); finish(event, pendingReport); pendingReport = null;
+				}
+			} catch (Exception failure) {
+				if (pendingReport == null) pendingReport = new JsonObject(); failed(pendingReport, failure); finish(event, pendingReport); pendingReport = null;
+			}
+			return;
+		}
 		if (Boolean.getBoolean("pbg.upgrades.only")) {
 			try {
 				if (event.getServer().getTickCount() == 40) {

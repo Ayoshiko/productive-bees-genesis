@@ -9,6 +9,8 @@
 
 2026-10-11 全文现状审查以本网络 worktree 的 gradle.properties、build.gradle、注册元数据及源码为准：NetworkConfigSection 与 run/config 的开关、StaticApiaryAdapter 的铁蜂／单产物准入、BeeWorkExecutor／StaticBeePlan 的冻结结果、BeeProduceProcessor／BeeFluidOutputResolver 的独立蜂蜜、NetworkContent 注册项、CombinedMachineWork／MachineProduction 的独立资格和 11／14 节执行路线逐项对照。发现与重排仅在[路线 14](bee-processing-network-roadmap.md#s14)维护；未更新上游参考副本，不将普通本地配置、静态检查或既有探针证据表述为新一轮完整游戏验收。
 
+R1 普通生产复核本网络 worktree 的 `StaticApiaryAdapter`、`StaticFeedingAdapter`、`BeeProduceProcessor`、`BeeFluidOutputResolver` 和两种宿主的工作／恢复入口。实际依赖 PB 13.14.0 的 JAR 配方用于铁／金方块花源与单一蜜脾输出对照；蜂蜜口径沿本模组 `BeeFluidOutputResolver` 每周期 250 mB，非蜂蜜离心流体不额外注入蜂蜜。没有复制维护 worktree 尚未提交的扩展资源代码，也没有更新固定上游副本。采用原随机游标、旧周期锁定及独立流体余量；具体范围与失败修复见[10.162](bee-processing-network-evidence-current.md#s10-162)。
+
 <a id="s13-1"></a>
 ### 13.1 本仓库源码入口
 

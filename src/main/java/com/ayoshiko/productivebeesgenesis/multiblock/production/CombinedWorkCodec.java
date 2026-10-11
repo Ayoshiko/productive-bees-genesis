@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 4；旧格式只迁入对应的空资产，损坏新格式绝不补缺失字段。 */
+/** 独立机器 schema 5；旧格式只迁入对应的空资产，损坏新格式绝不补缺失字段。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 4); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 5); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -48,14 +48,14 @@ public final class CombinedWorkCodec {
 		if (schema >= 2) expected.add("feeding");
 		if (schema >= 3) expected.add("upgrades");
 		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
-		if ((schema < 1 || schema > 4) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+		if ((schema < 1 || schema > 5) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");
 		if (beeTags.size() > CombinedMachineCapacity.BEE_SLOTS || jobTags.size() > CombinedMachineCapacity.LANES)
 			throw new IllegalArgumentException("Too many combined work records");
 		var bees = new ArrayList<BeeRecord>();
-		for (var raw : beeTags) bees.add(BeeRecordCodec.decodeBee((CompoundTag) raw, machine, validate));
+		for (var raw : beeTags) bees.add(BeeRecordCodec.decodeBee((CompoundTag) raw, machine, validate, schema < 5));
 		var jobs = new HashMap<Integer, CentrifugeDelivery>();
 		for (var raw : jobTags) {
 			var value = (CompoundTag) raw; fields(value, "lane", "job", "delivered");

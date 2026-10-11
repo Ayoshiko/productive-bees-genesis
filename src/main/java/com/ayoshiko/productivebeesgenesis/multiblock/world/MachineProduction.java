@@ -23,6 +23,8 @@ final class MachineProduction {
 	private boolean genes;
 	private final Map<ProductKey, Optional<CentrifugeRecipePlan>> recipes = new HashMap<>();
 	private final Map<StaticBeePlan, Boolean> bees = new IdentityHashMap<>();
+	private final BeeWorkExecutor.Status[] beeStatus = new BeeWorkExecutor.Status[6];
+	BeeWorkExecutor.Status beeStatus(int slot) { return beeStatus[slot]; }
 	CombinedMachineWork advance(ServerLevel level, CombinedMachineWork work) {
 		var published = RuntimeProductPolicies.peek(level); var profile = MachineUpgradeProfiles.centrifuge(work.upgrades());
 		if (snapshot != published || !profile.equals(centrifuge) || genes != BalanceConfig.apiaryBeeGenesAffectWork()) {
@@ -30,20 +32,25 @@ final class MachineProduction {
 			policy = published == null ? null : new ProductPolicyRegistry(published); recipes.clear(); bees.clear();
 		}
 		var environment = new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering());
+		Arrays.fill(beeStatus, null);
 		for (var original : work.bees()) {
 			var bee = work.bee(original.slot());
 			var context = new BeeWorkExecutor.Context(true, false, false, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), environment);
 			if (bee.pendingCycles() > 0) work = work.advanceBee(bee.slot(), bee.revision(), context, 0, 8, null).apply(work);
 			work = settleBee(level, work, bee.slot()); bee = work.bee(bee.slot());
+			beeStatus[bee.slot()] = bee.drained() ? BeeWorkExecutor.Status.STALE_PLAN : BeeWorkExecutor.Status.DRAIN_FIRST;
 			if (policy != null && bee.drained()) {
 				if (bees.size() >= 32) bees.clear();
 				var candidate = bee;
 				boolean current = bees.computeIfAbsent(bee.plan(), ignored -> StaticApiaryAdapter.currentPlan(level, candidate));
 				boolean flower = current && StaticFeedingAdapter.flower(work.feeding(), bee.slot(), ResourceLocation.parse(bee.plan().beeType()), level.registryAccess());
 				context = new BeeWorkExecutor.Context(true, current, flower, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), environment);
-				var cycle = bee.progress() == 0 && current ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level.registryAccess()) : null;
-				work = work.advanceBee(bee.slot(), bee.revision(), context, 1, 8, cycle).apply(work);
+				var cycle = bee.progress() == 0 && current ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level) : null;
+				var step = work.stepBee(bee.slot(), bee.revision(), context, 1, 8, cycle);
+				work = step.change().apply(work);
 				work = settleBee(level, work, bee.slot());
+				beeStatus[bee.slot()] = !work.bee(bee.slot()).drained() ? BeeWorkExecutor.Status.DRAIN_FIRST
+						: !current ? BeeWorkExecutor.Status.STALE_PLAN : step.status();
 			}
 		}
 		for (int lane = 0; lane < work.lanes(); lane++) {

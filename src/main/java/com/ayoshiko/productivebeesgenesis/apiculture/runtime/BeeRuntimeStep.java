@@ -15,7 +15,7 @@ final class BeeRuntimeStep {
 		var state = record.bees(); var bee = state.bees().stream().filter(value -> value.slot() == slot).findFirst().orElse(null);
 		if (bee == null) return NetworkRuntime.Status.UNAVAILABLE;
 		var service = new NetworkBeeService(data, directory);
-		if (!bee.frozen().isZero()) {
+		if (bee.hasFrozen()) {
 			return service.settle(level, member, slot, bee.revision()) ? NetworkRuntime.Status.SETTLING : NetworkRuntime.Status.UNAVAILABLE;
 		}
 		int ticks = bee.pendingCycles() > 0 ? 0 : 1;
@@ -30,7 +30,7 @@ final class BeeRuntimeStep {
 				com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER.beeNetwork.maintenanceFe.get());
 		if (result == BeeWorkExecutor.Status.READY) {
 			var updated = data.checkpoint().ownedMachines().get(member).bees().bee(slot);
-			if (!updated.frozen().isZero()) service.settle(level, member, slot, updated.revision());
+			if (updated.hasFrozen()) service.settle(level, member, slot, updated.revision());
 			return ticks == 0 ? NetworkRuntime.Status.SETTLING : NetworkRuntime.Status.RUNNING;
 		}
 		return switch (result) {

@@ -138,20 +138,31 @@ public final class CombinedMachineWork {
 		var transfer = buffer.extractItem(slot, requested);
 		return transfer.moved() == 0 ? unchanged() : change(energy, bees, centrifuges, transfer.buffer(), transfer.moved());
 	}
+	public record BeeStep(Change change, BeeWorkExecutor.Status status) { }
 	public Change advanceBee(int slot, long expectedBeeRevision, BeeWorkExecutor.Context context, int ticks, int samplingBudget, BeeWorkExecutor.Cycle nextCycle) {
+		return stepBee(slot, expectedBeeRevision, context, ticks, samplingBudget, nextCycle).change();
+	}
+	/** 将同一次计算的阻塞原因交给显示层，不重复执行或从进度猜测。 */
+	public BeeStep stepBee(int slot, long expectedBeeRevision, BeeWorkExecutor.Context context, int ticks, int samplingBudget, BeeWorkExecutor.Cycle nextCycle) {
 		var current = bee(slot);
 		// 已付费周期只能沿用原能力到周期边界；下一次调用才切入新计划。
 		if (current.progress() != 0 && ticks > 0) { ticks = Math.min(ticks, current.plan().cycleTicks() - current.progress() % current.plan().cycleTicks()); nextCycle = null; }
 		var result = BeeWorkExecutor.advanceBee(current, expectedBeeRevision, context, ticks, samplingBudget, energy, nextCycle);
-		if (result.status() != BeeWorkExecutor.Status.READY) return unchanged();
-		return change(energy - result.energyUsed(), replaceBee(result.candidate()), centrifuges, buffer, 0);
+		if (result.status() != BeeWorkExecutor.Status.READY) return new BeeStep(unchanged(), result.status());
+		return new BeeStep(change(energy - result.energyUsed(), replaceBee(result.candidate()), centrifuges, buffer, 0), result.status());
 	}
 	public Change settleBee(int slot, int stackLimit) {
-		var current = bee(slot); if (current.frozen().isZero()) return unchanged();
-		var transfer = buffer.insert(current.plan().output(), current.frozen().longSaturated(), stackLimit);
-		if (transfer.moved() == 0) return unchanged();
-		var next = current.work(current.progress(), current.pendingCycles(), current.frozen().subtract(ProductAmount.of(transfer.moved())));
-		return change(energy, replaceBee(next), centrifuges, transfer.buffer(), transfer.moved());
+		var current = bee(slot); if (!current.hasFrozen()) return unchanged();
+		var items = buffer.insert(current.plan().output(), current.frozen().longSaturated(), stackLimit);
+		var nextBuffer = items.buffer(); long fluidMoved = 0;
+		if (!current.frozenFluid().isZero()) {
+			var fluids = nextBuffer.insert(current.plan().fluidOutput(), current.frozenFluid().longSaturated(), 0);
+			nextBuffer = fluids.buffer(); fluidMoved = fluids.moved();
+		}
+		if (items.moved() == 0 && fluidMoved == 0) return unchanged();
+		var next = current.work(current.progress(), current.pendingCycles(), current.frozen().subtract(ProductAmount.of(items.moved())),
+				current.frozenFluid().subtract(ProductAmount.of(fluidMoved)));
+		return change(energy, replaceBee(next), centrifuges, nextBuffer, Math.addExact(items.moved(), fluidMoved));
 	}
 	public Change assignCentrifuge(int lane, CentrifugeRecipePlan plan, int requested, UUID jobId, long seed) {
 		checkLane(lane); Objects.requireNonNull(plan); Objects.requireNonNull(jobId);

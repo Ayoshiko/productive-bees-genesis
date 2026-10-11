@@ -27,6 +27,8 @@ def machineProduction = providers.gradleProperty('networkMachineProduction').isP
 if (machineProduction && !(multiblockMode in ['write', 'read'])) throw new GradleException('Machine production requires write/read mode')
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
+def ordinaryProbe = providers.gradleProperty('networkOrdinaryProduction').isPresent()
+if (ordinaryProbe && (automaticMode != null || multiblockMode != null || coldProbe || providers.gradleProperty('networkUpgradeProbe').isPresent() || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode', 'networkPlayerMode'].any { providers.gradleProperty(it).isPresent() })) throw new GradleException('Ordinary production requires its focused probe mode')
 def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
 if (upgradeProbe && (automaticMode != null || multiblockMode != null || coldProbe ||
         ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode', 'networkPlayerMode'].any { providers.gradleProperty(it).isPresent() })) {
@@ -327,6 +329,7 @@ neoForge {
             programArgument '--nogui'
             systemProperty 'pbg.domain.enabled', 'true'
             if (upgradeProbe) systemProperty 'pbg.upgrades.only', 'true'
+            if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
@@ -433,8 +436,9 @@ tasks.named('runNetworkDomainServer') {
         File report = new File(probeDirectory.get().asFile, 'results/domain.json')
         if (!report.isFile()) throw new GradleException('Network domain report is missing')
         def result = new groovy.json.JsonSlurper().parse(report)
-        def shutdownSaved = upgradeProbe
-                ? result.scope == 'upgrades' && result.apiaryUpgradeShutdownSaved == true
+        def shutdownSaved = ordinaryProbe
+                ? result.scope == 'ordinary-production' && result.normalShutdown == true && result.ordinaryIronGoldAndIndependentHoney == true
+                : upgradeProbe ? result.scope == 'upgrades' && result.apiaryUpgradeShutdownSaved == true
                 : result.normalShutdownCheckpointSaved == true
         if (result.passed != true || (!coldProbe && !shutdownSaved)) {
             throw new GradleException('Network domain assertions did not complete')

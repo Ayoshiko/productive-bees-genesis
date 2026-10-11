@@ -23,7 +23,11 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 @EventBusSubscriber(modid = "productivebeesgenesis")
 public final class NetworkTopologyService {
 	private record ChunkKey(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension, int x, int z) { }
-	private static final class ChunkState { long epoch, auditTick; int cores; ChunkState(long epoch) { this.epoch = epoch; } }
+	private static final class ChunkState {
+		long epoch, auditTick; int cores, pendingScans;
+		ChunkState(long epoch) { this.epoch = epoch; }
+		void invalidate(long nextEpoch) { epoch = nextEpoch; pendingScans = cores; }
+	}
 	private static final class Session {
 		final Map<ChunkKey, ChunkState> chunks = new ConcurrentHashMap<>();
 		final Set<GlobalPos> cores = ConcurrentHashMap.newKeySet();
@@ -41,9 +45,11 @@ public final class NetworkTopologyService {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
 		var session = SESSIONS.computeIfAbsent(level.getServer(), ignored -> new Session());
 		var key = key(level, core.getBlockPos()); var chunk = session.chunks.computeIfAbsent(key, ignored -> new ChunkState(++session.sequence));
-		if (session.cores.add(GlobalPos.of(level.dimension(), core.getBlockPos()))) { chunk.cores++; chunk.epoch = ++session.sequence; }
+		if (session.cores.add(GlobalPos.of(level.dimension(), core.getBlockPos()))) { chunk.cores++; chunk.invalidate(++session.sequence); }
 		long now = level.getGameTime();
-		if (now - chunk.auditTick >= 200) { chunk.auditTick = now; chunk.epoch = ++session.sequence; }
+		// 周期审计等待本轮所有核心完成；真实变化仍由 dirty 立即撤销。
+		// 否则低预算下扫描超过 200 tick 就会永远被下一轮审计打断。
+		if (chunk.pendingScans == 0 && now - chunk.auditTick >= 200) chunk.invalidate(++session.sequence);
 		if (core.topology() == null && session.active != core && session.queued.add(core)) session.waiting.addLast(core);
 	}
 	public static long epoch(ServerLevel level, BlockPos pos) {
@@ -53,13 +59,14 @@ public final class NetworkTopologyService {
 	public static void dirty(ServerLevel level, BlockPos pos) {
 		if (!level.getServer().isSameThread()) { var stable = pos.immutable(); level.getServer().execute(() -> dirty(level, stable)); return; }
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
-		var chunk = session.chunks.get(key(level, pos)); if (chunk != null) chunk.epoch = ++session.sequence;
+		var chunk = session.chunks.get(key(level, pos)); if (chunk != null) chunk.invalidate(++session.sequence);
 	}
 	public static void remove(ServerLevel level, NetworkCoreBlockEntity core) {
 		var session = SESSIONS.get(level.getServer()); if (session == null) return;
 		var key = key(level, core.getBlockPos()); var chunk = session.chunks.get(key);
 		if (chunk != null && session.cores.remove(GlobalPos.of(level.dimension(), core.getBlockPos()))) {
-			chunk.epoch = ++session.sequence; if (--chunk.cores == 0) session.chunks.remove(key);
+			if (--chunk.cores == 0) session.chunks.remove(key);
+			else chunk.invalidate(++session.sequence);
 		}
 	}
 	private static TopologyScan.Node node(ServerLevel level, BlockPos pos) {
@@ -99,7 +106,13 @@ public final class NetworkTopologyService {
 			clear(session); if (session.queued.add(core)) session.waiting.addLast(core); return true;
 		}
 		if (session.scan == null) { session.scanEpoch = epoch; session.scan = new TopologyScan(core.getBlockPos(), core.owner(), epoch, pos -> node(level, pos)); }
-		if (session.scan.step(epoch)) { core.publishTopology(session.scan.finish()); clear(session); }
+		if (session.scan.step(epoch)) {
+			core.publishTopology(session.scan.finish());
+			var chunk = session.chunks.get(key(level, core.getBlockPos()));
+			if (chunk != null && chunk.epoch == epoch && chunk.pendingScans > 0 && --chunk.pendingScans == 0)
+				chunk.auditTick = level.getGameTime();
+			clear(session);
+		}
 		return true;
 	}
 	private static void clear(Session session) { session.active = null; session.scan = null; }

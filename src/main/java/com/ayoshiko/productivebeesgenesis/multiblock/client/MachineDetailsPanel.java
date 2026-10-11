@@ -26,7 +26,7 @@ final class MachineDetailsPanel {
 			result.add(text("size", d.value(SIZE_X), d.value(SIZE_Y), d.value(SIZE_Z)));
 		} else if (page == 1) {
 			for (int i = 0; i < 6; i++) result.add(d.beeCycle(i) == 0 ? text("bee_empty", i + 1)
-					: text("bee", i + 1, d.beeProgress(i), d.beeCycle(i)).append(d.beeWaiting(i) != 0 ? text("waiting") : Component.empty()));
+					: text("bee", i + 1, d.beeProgress(i), d.beeCycle(i)).append(text("bee_status." + d.beeStatus(i))));
 		} else {
 			for (int i = 0; i < 3; i++) result.add(d.jobCycle(i) == 0 ? text("job_empty", i + 1)
 					: text("job", i + 1, d.jobProgress(i), d.jobCycle(i), d.jobOperations(i)).append(d.jobPaid(i) != 0 ? text("waiting") : Component.empty()));

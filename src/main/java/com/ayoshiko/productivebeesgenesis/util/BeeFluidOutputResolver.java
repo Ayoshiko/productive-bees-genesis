@@ -77,6 +77,19 @@ public final class BeeFluidOutputResolver {
 		return resolved;
 	}
 
+	/** 网络计划在付款前读取；配方异常向外传播，不把未知结果当作默认蜂蜜。 */
+	@Nonnull
+	public static FluidStack resolveFluidOutputStrict(@Nonnull ResourceLocation beeTypeKey, @Nonnull Level level) {
+		var holder = CentrifugeRecipeIndex.get(beeTypeKey);
+		if (holder == null) return new FluidStack(ModFluids.HONEY.get(), HONEY_AMOUNT_PER_PRODUCE);
+		var recipe = holder.value(); var fluid = recipe.getFluidOutputs();
+		if (fluid.isEmpty() && recipe.fluidOutput != null) {
+			for (var candidate : recipe.fluidOutput.getFluids()) { fluid = candidate.copyWithAmount(recipe.fluidOutput.amount()); break; }
+		}
+		return fluid.isEmpty() || fluid.getFluid() == ModFluids.HONEY.get()
+				? new FluidStack(ModFluids.HONEY.get(), HONEY_AMOUNT_PER_PRODUCE) : FluidStack.EMPTY;
+	}
+
 	/**
 	 * 无缓存查询 — 实际流体类型判定逻辑
 	 *

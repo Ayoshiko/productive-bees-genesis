@@ -43,7 +43,7 @@ final class RuntimeBeeProbe {
 			require(port != null && port.receiveEnergy(Math.toIntExact(amount), false) == amount, "Runtime FE input failed");
 		}
 	}
-	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(72, 150, 4))};
+	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(40, 150, 10))};
 	private static int phase, started, until, previousBudget, previousTotalBudget;
 	private static final int[] serviceChecks = new int[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length];
 	private static final long[] longestStep = new long[com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length];
@@ -60,19 +60,19 @@ final class RuntimeBeeProbe {
 			level.setBlockAndUpdate(f.position, NetworkContent.CORE.get().defaultBlockState()); f.core = (NetworkCoreBlockEntity) level.getBlockEntity(f.position); f.core.initializeOwner(owner);
 			level.setBlockAndUpdate(f.position.east(), ModBlocks.MEK_APIARY.get().defaultBlockState()); f.hive = (TileEntityMekApiary) level.getBlockEntity(f.position.east());
 			f.hive.setOwnerUUID(owner); f.hive.setControlType(RedstoneControl.HIGH); f.hive.setFeederConversionEnabled(false);
-			var bee = new CompoundTag(); bee.putString("id", "productivebees:configurable_bee"); bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", UUID.randomUUID());
+			var bee = new CompoundTag(); bee.putString("id", "productivebees:configurable_bee"); bee.putString("type", i == 0 ? "productivebees:iron" : "productivebees:gold"); bee.putUUID("UUID", UUID.randomUUID());
 			var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any");
 			genes.putString("bee_productivity", i == 0 ? "productivity.normal" : "productivity.very_high");
 			var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes); bee.put("neoforge:attachments", attachments);
 			f.hive.getBeeSlot(0).setBeeData(bee); f.hive.getBeeSlot(0).setBaseMinOccupationTicks(5);
-			f.hive.getFeederSlots().getFirst().setStack(new ItemStack(Items.IRON_BLOCK));
+			f.hive.getFeederSlots().getFirst().setStack(new ItemStack(i == 0 ? Items.IRON_BLOCK : Items.GOLD_BLOCK));
 		}
 	}
 	static boolean advance(MinecraftServer server, JsonObject report) {
 		if (phase == 11) return true;
 		var budget = com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.budget(server);
 		if (phase > 0 && server.getTickCount() > started && budget != null) {
-			require(budget.attempts() <= 1, "Subsystems overspent the total one-step budget");
+			require(budget.attempts() <= 1, "Subsystems overspent the total budget");
 			for (int i = 0; i < com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length; i++) {
 				serviceChecks[i] += budget.used(i); longestStep[i] = Math.max(longestStep[i], budget.longestStepNanos(i));
 			}
@@ -100,6 +100,8 @@ final class RuntimeBeeProbe {
 				var state = f.data.checkpoint().ownedMachines().get(f.member).bees();
 				if (state == null || !state.networkPowered()) return false;
 				require(f.bee().progress() == 0 && f.cycles() == 0, "Unfunded runtime progressed");
+				var wrongType = net.minecraft.resources.ResourceLocation.parse(f.bee().plan().beeType().endsWith(":iron") ? "productivebees:gold" : "productivebees:iron");
+				require(!com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.flower(state.feeding(), 0, wrongType, level.registryAccess()), "Different block flowers were accepted");
 			}
 			for (var f : FIXTURES) { f.cost = Math.multiplyExact(f.bee().plan().cycleTicks(), f.bee().plan().energyPerTick() + MAINTENANCE); require(f.cost > 0, "Fixture must charge FE"); f.charge(level); }
 			phase = 2; return false;
@@ -159,6 +161,9 @@ final class RuntimeBeeProbe {
 			if (FIXTURES[0].cycles() != 4) return false;
 			for (var f : FIXTURES) {
 				require(f.data.checkpoint().energy().stored() == 0 && f.bee().drained(), "Final runtime conservation failed");
+				require(f.bee().plan().fluidPerCycle() == 250 && f.bee().plan().fluidOutput() != null
+						&& f.data.checkpoint().ledger().balances().get(f.bee().plan().fluidOutput()).longSaturated() == f.cycles() * 250,
+						"Independent apiary honey was lost or multiplied by productivity");
 				f.core.setProductionRunning(false); f.hive.setControlType(RedstoneControl.HIGH); require(f.core.ownership().command(false), "Runtime return failed");
 			}
 			phase = 10; return false;
@@ -172,6 +177,8 @@ final class RuntimeBeeProbe {
 			ModConfig.SERVER.beeNetwork.runtimeSteps.set(previousBudget); ModConfig.SERVER.beeNetwork.totalSteps.set(previousTotalBudget); phase = 11;
 			ModConfig.SERVER.beeNetwork.maintenanceFe.set(previousMaintenance);
 			report.addProperty("runtimeBeeMaintenanceExactAndPaidSettlementFree", true);
+			report.addProperty("ordinaryIronGoldAndIndependentHoney", true);
+			report.addProperty("sameChunkAuditCompletesUnderOneStepBudget", true);
 			for (int i = 0; i < com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkTickService.Service.values().length; i++) {
 				require(serviceChecks[i] > 0, "A service was starved"); report.addProperty("sharedBudgetServiceChecks" + i, serviceChecks[i]);
 				report.addProperty("sharedBudgetLongestStepNanos" + i, longestStep[i]);

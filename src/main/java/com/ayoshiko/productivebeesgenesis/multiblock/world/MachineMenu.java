@@ -220,7 +220,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		if (core == null) return;
 		if (core.handle == null || core.handle.binding().orElse(null) != binding) { details.unavailable(); return; }
 		var access = MachineWorkService.access(core).orElse(null); if (access == null) { details.unavailable(); return; }
-		details.capture(access.work(), binding, core.getLevel().getGameTime());
+		details.capture(access.work(), binding, core.getLevel().getGameTime(), core.production);
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();
 		var limits = new int[MachineUpgrades.SLOTS]; for (int i = 0; i < limits.length; i++) limits[i] = MachineUpgradeProfiles.limit(i);
 		if (!Arrays.equals(ids, shownBees) || !work.feeding().equals(shownFeeding) || !work.upgrades().equals(shownUpgrades) || !Arrays.equals(limits, shownLimits)) {

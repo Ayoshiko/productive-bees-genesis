@@ -17,13 +17,17 @@ public final class MachineMenuDetails {
 	public long value(Field field) { return number(field.ordinal()); }
 	public long beeProgress(int slot) { return number(BEE_START + slot * 3); }
 	public long beeCycle(int slot) { return number(BEE_START + slot * 3 + 1); }
-	public long beeWaiting(int slot) { return number(BEE_START + slot * 3 + 2); }
+	public long beeWaiting(int slot) { return number(BEE_START + slot * 3 + 2) == 1 ? 1 : 0; }
+	public int beeStatus(int slot) { return (int) number(BEE_START + slot * 3 + 2); }
 	public long jobProgress(int lane) { return number(JOB_START + lane * 4); }
 	public long jobCycle(int lane) { return number(JOB_START + lane * 4 + 1); }
 	public long jobOperations(int lane) { return number(JOB_START + lane * 4 + 2); }
 	public long jobPaid(int lane) { return number(JOB_START + lane * 4 + 3); }
 	void unavailable() { put(Field.AVAILABLE, 0); }
 	void capture(CombinedMachineWork work, MachineDirectory.Binding binding, long now) {
+		capture(work, binding, now, null);
+	}
+	void capture(CombinedMachineWork work, MachineDirectory.Binding binding, long now, MachineProduction production) {
 		if (now < nextSample && value(Field.AVAILABLE) != 0) return;
 		nextSample = now + 10;
 		put(Field.ENERGY_CAPACITY, work.energyCapacity()); put(Field.BEE_SLOTS, work.beeSlots()); put(Field.LANES, work.lanes());
@@ -37,7 +41,9 @@ public final class MachineMenuDetails {
 		int waiting = 0, paid = 0;
 		for (var bee : work.bees()) {
 			int start = BEE_START + bee.slot() * 3;
-			number(start, bee.progress()); number(start + 1, bee.plan().cycleTicks()); number(start + 2, bee.drained() ? 0 : 1);
+			number(start, bee.progress()); number(start + 1, bee.plan().cycleTicks());
+			var status = production == null ? null : production.beeStatus(bee.slot());
+			number(start + 2, !bee.drained() ? 1 : status == null ? 0 : status.ordinal() + 2);
 			if (!bee.drained()) waiting++;
 		}
 		for (var entry : work.centrifuges().entrySet()) {

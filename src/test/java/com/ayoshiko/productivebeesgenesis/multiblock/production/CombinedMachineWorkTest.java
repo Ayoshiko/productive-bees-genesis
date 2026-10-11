@@ -257,10 +257,10 @@ class CombinedMachineWorkTest {
 		assertThrows(IllegalArgumentException.class, () -> new FeedingSlotStore(0, 9, "a".repeat(64), state.feeding()));
 	}
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
-		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
+		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); removeBeeFluidFields(old); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(4, newTag.getInt("schema"));
-		newTag.putInt("schema", 1); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(5, newTag.getInt("schema"));
+		newTag.putInt("schema", 1); removeBeeFluidFields(newTag); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
 				tag -> tag.remove("feeding"), tag -> records(tag, "feeding").remove(0),
@@ -287,7 +287,7 @@ class CombinedMachineWorkTest {
 		assertEquals(installed.upgrades(), restored.upgrades()); assertEquals(fed.feeding(), restored.feeding());
 		var returned = restored.exchangeUpgrade(2, -8).apply(restored);
 		assertEquals(0, returned.upgrades().count(2)); assertEquals(2, returned.upgrades().revision());
-		var legacy = CombinedWorkCodec.encode(fed); legacy.putInt("schema", 2); legacy.remove("upgrades");
+		var legacy = CombinedWorkCodec.encode(fed); legacy.putInt("schema", 2); removeBeeFluidFields(legacy); legacy.remove("upgrades");
 		assertEquals(MachineUpgrades.EMPTY, restore(legacy).upgrades()); assertEquals(fed.feeding(), restore(legacy).feeding());
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
 				tag -> tag.remove("upgrades"), tag -> tag.getCompound("upgrades").remove("slot3"),
@@ -322,7 +322,7 @@ class CombinedMachineWorkTest {
 			assertThrows(IllegalArgumentException.class, () -> restore(broken)); assertEquals(unchanged, broken);
 		}
 		var nativeState = original.exchangeUpgrade(0, 3).apply(original); var legacy = CombinedWorkCodec.encode(nativeState);
-		legacy.putInt("schema", 3); legacy.getCompound("upgrades").remove("apiary"); legacy.getCompound("upgrades").remove("centrifuge");
+		legacy.putInt("schema", 3); removeBeeFluidFields(legacy); legacy.getCompound("upgrades").remove("apiary"); legacy.getCompound("upgrades").remove("centrifuge");
 		var migrated = restore(legacy); assertEquals(nativeState.upgrades(), migrated.upgrades()); assertEquals(original.bees(), migrated.bees());
 		for (int slot = MachineUpgrades.NATIVE_SLOTS; slot < MachineUpgrades.SLOTS; slot++) {
 			int amount = restored.upgrades().count(slot); var take = restored.exchangeUpgrade(slot, -amount);
@@ -330,6 +330,50 @@ class CombinedMachineWorkTest {
 		}
 		assertTrue(restored.upgrades().apiary().isEmpty()); assertTrue(restored.upgrades().centrifuge().isEmpty());
 		assertEquals(original.bees(), restored.bees()); assertEquals(original.centrifuges(), restored.centrifuges());
+	}
+	private static void removeBeeFluidFields(CompoundTag root) {
+		for (var raw : records(root, "bees")) {
+			var bee = (CompoundTag) raw; bee.remove("frozenFluid");
+			bee.getCompound("plan").remove("fluidOutput"); bee.getCompound("plan").remove("fluidPerCycle");
+		}
+	}
+	@Test void beeHoneySurvivesPartialTankDeliveryAndRestartWithoutRepeatingItemsOrPayment() {
+		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1);
+		var seed = bee(state.machine(), 5, 1, 5, 1);
+		state = state.insertBee(5, seed.originalSlot(), seed.plan()).apply(state);
+		state = state.receiveEnergy(100).apply(state);
+		long capacity = (long) state.buffer().fluids().size() * state.buffer().tankCapacity();
+		state = state.insert(FLUID, capacity - 100, 0).apply(state);
+		var cycle = new BeeWorkExecutor.Cycle(1, 5, 1, COMB, FLUID, 250);
+		state = state.advanceBee(5, 0, context(state.bee(5)), 1, 1, cycle).apply(state);
+		assertEquals(250, state.bee(5).frozenFluid().longSaturated());
+		state = state.settleBee(5, 64).apply(state);
+		assertEquals(1, state.buffer().count(COMB)); assertTrue(state.bee(5).frozen().isZero());
+		assertEquals(150, state.bee(5).frozenFluid().longSaturated()); assertFalse(state.bee(5).drained());
+		var held = restore(CombinedWorkCodec.encode(state));
+		assertEquals(state.bee(5), held.bee(5)); assertEquals(95, held.energy());
+		assertThrows(IllegalStateException.class, () -> held.extractBee(5, held.bee(5).id()));
+		assertFalse(held.settleBee(5, 64).changed());
+		assertFalse(held.advanceBee(5, held.bee(5).revision(), context(held.bee(5)), 1, 1, cycle).changed());
+		state = held.extract(FLUID, 150).apply(held);
+		state = state.settleBee(5, 64).apply(state);
+		assertTrue(state.bee(5).drained()); assertEquals(capacity, state.buffer().count(FLUID));
+		assertEquals(1, state.buffer().count(COMB)); assertEquals(95, state.energy());
+		assertFalse(state.settleBee(5, 64).changed());
+	}
+	@Test void schemaFourMigratesNoHoneyAndSchemaFiveCannotHideMissingFluidFields() {
+		var original = checkpointFixture(); var old = CombinedWorkCodec.encode(original);
+		old.putInt("schema", 4); removeBeeFluidFields(old);
+		var migrated = restore(old);
+		assertEquals(original.bees(), migrated.bees()); assertEquals(original.energy(), migrated.energy());
+		var current = CombinedWorkCodec.encode(migrated);
+		for (var field : List.of("frozenFluid", "fluidOutput", "fluidPerCycle")) {
+			var bad = current.copy(); var bee = records(bad, "bees").getCompound(0);
+			(field.equals("frozenFluid") ? bee : bee.getCompound("plan")).remove(field);
+			assertThrows(IllegalArgumentException.class, () -> restore(bad));
+		}
+		var disguised = current.copy(); disguised.putInt("schema", 4);
+		assertThrows(IllegalArgumentException.class, () -> restore(disguised));
 	}
 	@Test void beeExchangeChangesIdentityRetainsFoodAndCannotExtractPaidResults() {
 		var state = CombinedMachineCapacity.empty(UUID.randomUUID(), 1); var seed = bee(state.machine(), 5, 2, 5, 1);

@@ -233,20 +233,30 @@ public final class MachineVisualClientProbe {
 		if (menuStage == 2) {
 			if (menu.acknowledged() != 1) return;
 			check(menu.occupied(5) && menu.status() == 1 && !client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real cage insertion failed: status=" + menu.status() + ", occupied=" + menu.occupied(5) + ", caged=" + client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA));
-			screen.mouseClicked(x + 60, y + 208, 0); screen.mouseClicked(x + 160, y + 111, 0); menuStage = 3; return;
+			selectInventory(client, screen, 1); screen.mouseClicked(x + 160, y + 111, 0); menuStage = 3; return;
 		}
 		if (menuStage == 3) {
 			if (menu.acknowledged() != 2) return;
-			check(menu.foodCount(5) == 1 && menu.foodIcon(5).is(net.minecraft.world.item.Items.IRON_BLOCK)
+			check(menu.foodCount(5) == 1 && menu.foodIcon(5).is(net.minecraft.world.item.Items.GOLD_BLOCK)
 					&& client.player.getInventory().items.get(1).isEmpty(), "Real food insertion or display failed");
-			if (++menuWait < 10) return; capture(client, "machine-management");
-			screen.mouseClicked(x + 42, y + 208, 0); screen.mouseClicked(x + 124, y + 111, 0); menuStage = 4; return;
+			if (++menuWait < 15 || menu.details().beeStatus(5) != 8) return;
+			capture(client, "machine-management");
+			screen.mouseClicked(x + 100, y + 10, 0); screen.mouseClicked(x + 100, y + 10, 0);
+			menuStage = 30; menuWait = 0; return;
+		}
+		if (menuStage == 30) {
+			if (++menuWait < 15) return;
+			check(menu.details().beeStatus(5) == 8, "Server energy reason did not synchronize");
+			capture(client, "machine-bee-energy");
+			report.addProperty("ordinaryGoldBeeAndEnergyStatus", true);
+			screen.mouseClicked(x + 197, y + 10, 0);
+			selectInventory(client, screen, 0); screen.mouseClicked(x + 124, y + 111, 0); menuStage = 4; return;
 		}
 		if (menuStage == 4) {
 			if (menu.acknowledged() != 3) return;
 			check(!menu.occupied(5) && menu.foodCount(5) == 1 && client.player.getInventory().items.get(0).has(net.minecraft.core.component.DataComponents.CUSTOM_DATA), "Real caging lost bee or food");
 			report.addProperty("machineMenuRealClientExchange", true);
-			screen.mouseClicked(x + 197, y + 10, 0); screen.mouseClicked(x + 78, y + 208, 0);
+			screen.mouseClicked(x + 197, y + 10, 0); selectInventory(client, screen, 2);
 			screen.mouseClicked(x + 166, y + 35, 0); menuStage = 5; menuWait = 0; return;
 		}
 		if (menuStage == 5) {
@@ -264,7 +274,7 @@ public final class MachineVisualClientProbe {
 		if (menuStage == 7) {
 			if (MachineVisualFixture.done != 201 || menu.viewRevision() == 0 || client.player.getInventory().items.get(3).getCount() != 2) return;
 			screen.mouseClicked(x + 197, y + 10, 0); screen.mouseClicked(x + 213, y + 114, 0);
-			screen.mouseClicked(x + 96, y + 208, 0); screen.mouseClicked(x + 166, y + 35, 0);
+			selectInventory(client, screen, 3); screen.mouseClicked(x + 166, y + 35, 0);
 			menuStage = 8; menuWait = 0; return;
 		}
 		if (menuStage == 8) {
@@ -277,7 +287,7 @@ public final class MachineVisualClientProbe {
 			if (menu.acknowledged() != 2) return;
 			check(menu.upgradeCount(4) == 0 && client.player.getInventory().items.get(3).getCount() == 2, "Interface PB return failed");
 			for (int i = 0; i < 3; i++) screen.mouseClicked(x + 213, y + 114, 0);
-			screen.mouseClicked(x + 114, y + 208, 0); screen.mouseClicked(x + 166, y + 77, 0);
+			selectInventory(client, screen, 4); screen.mouseClicked(x + 166, y + 77, 0);
 			menuStage = 10; menuWait = 0; return;
 		}
 		if (menuStage == 10) {
@@ -289,6 +299,16 @@ public final class MachineVisualClientProbe {
 		if (menu.acknowledged() != 4) return;
 		check(menu.upgradeCount(17) == 0 && client.player.getInventory().items.get(4).getCount() == 1, "Last-page stability return failed");
 		report.addProperty("pbPagesAndInterfaceRealClientExchange", true); client.player.closeContainer(); finish(client, null);
+	}
+	private static void selectInventory(Minecraft client, com.ayoshiko.productivebeesgenesis.multiblock.client.MachineScreen screen, int inventorySlot) {
+		var slot = screen.getMenu().slots.stream().filter(value -> value.index < 36 && value.getContainerSlot() == inventorySlot).findFirst().orElseThrow();
+		int x = screen.getGuiLeft() + slot.x + 8, y = screen.getGuiTop() + slot.y + 8;
+		int count = slot.getItem().getCount();
+		check(count <= 2 && screen.getMenu().getCarried().isEmpty(), "Unexpected selection fixture");
+		// 原生拿放保留选中格；将光标逐件放回，不依赖旧版只选择、不拿起的点击行为。
+		screen.mouseClicked(x, y, 0); screen.mouseReleased(x, y, 0);
+		for (int i = 0; i < count; i++) { screen.mouseClicked(x, y, 1); screen.mouseReleased(x, y, 1); }
+		check(screen.getMenu().getCarried().isEmpty(), "Selection retained cursor assets");
 	}
 	private static MachineVisualState state(Minecraft client, int index) {
 		var state = client.level.getBlockState(MachineVisualFixture.POSITIONS.get(index));

@@ -1128,3 +1128,23 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 依赖仍为 Minecraft 1.21.1／NeoForge 21.1.216／Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85，原生测试使用 AE2 19.2.17。JAR 4,424,537 字节，SHA-256 `c6f2e7210fc60ddbda49d4b3c8c6efce384f70f7d2626c3e7380bcdc786304ca`。本地 run/config 的 bee_network.enabled 从 false 改为 true 并回读，发布默认不变；未启动用户世界、未写世界资产。维护 worktree 的并行源码改动保持原样。
 
 **未完成边界。** 本包没有实现普通蜂种／蜂蜜副产物对齐、D23a 或 M05，不把文档重排表述为这些生产功能已经可用。新样板选项的真实客户端操作、实际自动合成、多人／保存联合继续待验收；R1 按新队列推进，完整 D18／D19、P5–P7、M05、M06c2c、D25-auto／T00 保持开放，无新增 Spark／MSPT 结论。
+
+<a id="s10-162"></a>
+### 10.162 R1 普通生产、双产物恢复与低预算阻塞修复（2026-10-11）
+
+**本包工程范围。** 在网络 worktree 的 `833f1ac` 上接续被额度错误中断的 18 个脏文件，完成五项关联工作：共享普通静态蜂准入；蜂箱物品／独立蜂蜜冻结和两种宿主结算；网络与一体机旧档迁移；低预算拓扑审计阻塞修复；单机逐蜂生产原因及双语提示。未修改维护 worktree 的并行扩展资源实现。行为合同见[2.3](bee-processing-network-design.md#s2-3)、[2.4](bee-processing-network-design.md#s2-4)及[3](bee-processing-network-design.md#s3)，队列只见[14](bee-processing-network-roadmap.md#s14)，界面合同见[9.3](bee-processing-network-visual-design.md#s9-3)。
+
+**生产与资产。** 只准入未转换、方块花源、单一必得固定物品的普通可配置蜂；Wanna Bee、万象创世、动态多花、概率与多输出继续拒绝。原计划固定蜂种、物品组件、种子和游标；蜂箱蜂蜜每个付费周期独立 250 mB，不随物品倍率重复放大，非蜂蜜离心流体沿独立机规则不额外注蜜。网络把两种冻结产物一次记入账本；一体机按真实槽罐空间分别交付，只有流体剩余也必须保管，不能再次收费、重抽或装笼。网络 schema 10／samplingVersion 4、单机工作 schema 5 严格保存新字段；旧格式迁入零流体，原部分周期和 pending 先按旧计划结清，不追补历史蜂蜜。单机状态来自同次工作计算，有限同步沿既有十 tick 采样；机器协议 13，终端／ME 保持 38／24。
+
+**失败与修复。** 上一聊天留下的一体机旧格式夹具未剥离新流体字段，修正为显式旧 schema 数据。新增 schema 9 部分周期测试暴露 `BeeMemberState.updateCycle` 仍只校验物品参数，导致下一周期启用蜂蜜被误拒绝；改为一并核对流体计划。首次专服 `r1-ordinary-20261011a` 在全服仅一步预算下超时：周期审计每 200 tick 再次撤销未完成拓扑扫描。普通预算的 `b` 仅用于确认范围；随后按每区块待完成核心数合并周期审计，真实事件仍立即失效，最终 `c` 恢复全部原一步预算断言，并加强为同区块两个网络通过。没有提高该验收预算、删除资产断言或以正常预算结果冒充低预算修复。
+
+**本次真实专服证据。** 使用 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；没有 AE2／Applied Flux，已有 Mekanism 扩展与 JEI 按本工作区运行依赖加载。
+
+- `build/network-probe-r1-ordinary-20261011c/results/domain.json`：两个同区块核心的正式 ticker、铁／金不同方块花源及拒绝互换花源、基因产量、独立蜂蜜、精确 FE／维护费、暂停、旧付费工作、核心重载、断连／重连、物理成员不双跑和正常停服全部通过。全服每 tick 一步，八类服务都获得公平份额。
+- `build/network-probe-r1-machine-write-20261011a/results/multiblock.json` 与 `build/network-probe-r1-machine-read-20261011a/results/multiblock.json`：两种布局各六位铁／金蜂，正式菜单和角色端口投入，持续生产／离心，独立账目核对蜂蜜、物品、冻结余量与 FE；满槽满罐连续 40 tick 不再扣费或增长，正常保存后由另一 JVM 恢复，分次提取、恢复生产和最终装笼／升级取回守恒，未生成掉落物实体。
+
+**集中检查与客户端。** `test` 覆盖 apiculture 的 persistence／production／topology、multiblock.production、TerminalProtocolTest 与 Ae2OptionalDependencyGuardTest，同一 Gradle 任务图执行 `build runNetworkMultiblockClient -PnetworkDomainProbe -PnetworkMachineMenu -PnetworkProbeRun=r1-client-20261011a --offline --no-daemon`；223 项全部通过，无失败、错误或跳过。build 自带的产物核验通过，JAR 为 4,428,902 字节，SHA-256 `bdb54eda9057745df91c1ad1b2f5890d0e5c114609a5f0f43f4b02d4d724878e`。测试 XML 与摘要归档在 `build/network-gates/r1-production-20261011/`，不是把累计测试数量作为阶段完成度。
+
+`build/network-probe-r1-client-20261011a/results/machine-client.json` 已通过真实客户端金蜂装入／金块喂食／装笼、原生与 PB 升级的控制器／接口交换、服务端能源不足状态同步及正常集成服保存退出。原客户端夹具仍按旧版“点击仅选格”操作，现已使用实际原生拿放归还光标后选择，选择步骤未直接改写背包或绕过交换请求。已目视检查 `machine-bee-energy.png`：六蜂位进度和“能源不足”清晰显示，无新增控件遮挡。相关静态及服务端证据均为本次运行；`c` 之后只有客户端夹具、机器协议版本及文档收尾变化，不重复无变化的网络生产测试。七份文档的 731 条本地链接、唯一锚点与严格 UTF-8 检查通过，所有本次文本与语言 JSON 通过编码／解析和 diff 检查。
+
+**未完成门。** 本包按跨存档／所有权大变更例外完成普通生产闭环，D23a 供给及网络普通产物端口尚未实现，R1 总门保持开放并直接接续该包；M05、工厂全等级、动态／多输出蜂、自动离心直出、完整可选依赖／玩家世界／多人矩阵和 Spark 性能门未关闭。已有无 AE2 专服及本包测试不能代替这些门。

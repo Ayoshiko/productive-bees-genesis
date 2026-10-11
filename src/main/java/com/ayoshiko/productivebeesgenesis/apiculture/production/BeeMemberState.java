@@ -52,7 +52,7 @@ public final class BeeMemberState {
 	/** 仅供带付款证明的工作执行器发布周期起点的周期能力切换。 */
 	BeeMemberState updateCycle(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
-		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier(), next.plan().output()).equals(next.plan()))
+		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier(), next.plan().output(), next.plan().fluidOutput(), next.plan().fluidPerCycle()).equals(next.plan()))
 			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
 		return update(next, remainingEnergy, true);
 	}
@@ -99,7 +99,7 @@ public final class BeeMemberState {
 		for (var bee : bees) {
 			var other = next.bees.stream().filter(value -> value.id().equals(bee.id())).findFirst().orElse(null);
 			if (other == null || !bee.plan().equals(other.plan()) || bee.progress() != other.progress()
-					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen()) || !bee.random().equals(other.random())) return false;
+					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen()) || !bee.frozenFluid().equals(other.frozenFluid()) || !bee.random().equals(other.random())) return false;
 		}
 		return true;
 	}

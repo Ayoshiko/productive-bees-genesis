@@ -38,7 +38,9 @@ final class MachineProductionLedger {
 				for (long cursor = 0; cursor < old.random().cursor(); cursor++) random.nextDouble();
 				long rolls = (long) Math.floor(plan.productionMultiplier());
 				if (random.nextDouble() < plan.productionMultiplier() - rolls) rolls++;
-				add(expected, plan.output(), rolls); beeCycles++;
+				add(expected, plan.output(), rolls);
+				if (plan.fluidOutput() != null) add(expected, plan.fluidOutput(), plan.fluidPerCycle());
+				beeCycles++;
 			}
 		}
 		for (int lane = 0; lane < work.lanes(); lane++) {
@@ -75,7 +77,10 @@ final class MachineProductionLedger {
 		var actual = new HashMap<ProductKey, Long>();
 		for (var cell : work.buffer().items()) if (cell.key() != null) add(actual, cell.key(), cell.count());
 		for (var cell : work.buffer().fluids()) if (cell.key() != null) add(actual, cell.key(), cell.count());
-		for (var bee : work.bees()) add(actual, bee.plan().output(), bee.frozen().exact().longValueExact());
+		for (var bee : work.bees()) {
+			add(actual, bee.plan().output(), bee.frozen().exact().longValueExact());
+			if (bee.plan().fluidOutput() != null) add(actual, bee.plan().fluidOutput(), bee.frozenFluid().exact().longValueExact());
+		}
 		for (var delivery : work.centrifuges().values()) if (delivery.job().sampled())
 			for (var key : delivery.job().frozen().keySet()) add(actual, key, delivery.remaining(key).exact().longValueExact());
 		check(actual.equals(expected), "Product conservation failed: expected=" + expected + " actual=" + actual);

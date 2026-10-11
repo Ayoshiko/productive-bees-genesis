@@ -75,10 +75,12 @@ public final class MachineVisualFixture {
 				case 200 -> {
 					var core = fixtures.getFirst().core(); player.setGameMode(GameType.SURVIVAL);
 					player.connection.teleport(core.getBlockPos().getX() + 0.5, core.getBlockPos().getY(), core.getBlockPos().getZ() - 2, 0, 0);
-					var bee = new CompoundTag(); bee.putString("entity", "productivebees:configurable_bee"); bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", java.util.UUID.randomUUID());
+					var bee = new CompoundTag(); bee.putString("entity", "productivebees:configurable_bee"); bee.putString("type", "productivebees:gold"); bee.putUUID("UUID", java.util.UUID.randomUUID());
+					var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any");
+					var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes); bee.put("neoforge:attachments", attachments);
 					var cage = new net.minecraft.world.item.ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get());
 					cage.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(bee));
-					player.getInventory().items.set(0, cage); player.getInventory().items.set(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_BLOCK)); player.getInventory().selected = 0;
+					player.getInventory().items.set(0, cage); player.getInventory().items.set(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_BLOCK)); player.getInventory().selected = 0;
 					player.getInventory().items.set(2, MachineUpgradeProfiles.unit(0));
 					var state = core.getBlockState(); ((MachinePartBlock) state.getBlock()).useWithoutItem(state, level, core.getBlockPos(), player,
 							new net.minecraft.world.phys.BlockHitResult(core.getBlockPos().getCenter(), Direction.NORTH, core.getBlockPos(), false));
