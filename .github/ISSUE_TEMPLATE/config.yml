@@ -1,4 +1,4 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: Documentation and usage guide / 文档与使用指南
     url: https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README_zh.md
