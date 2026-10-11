@@ -115,7 +115,7 @@ public final class AePatternEditor {
 			String unit = key instanceof AEFluidKey || AeMeChemical.isChemical(key) ? " mB" : AeMeEnergy.isFe(key) ? " FE" : "";
 			String label = (i + 1) + " · " + key.getDisplayName().getString() + " · " + key.getId() + unit;
 			if (label.length() > 128) label = label.substring(0, Character.isHighSurrogate(label.charAt(127)) ? 127 : 128);
-			rows.add(new Row(kind, icon, label, stack.amount(), after.get(i).amount(), !key.equals(stack.what())));
+			rows.add(new Row(kind, icon, label, stack.amount(), after.get(i).amount(), !key.equals(stack.what()) || stack.amount() != after.get(i).amount()));
 		}
 	}
 	static Status blankStatus(ItemStack original) {

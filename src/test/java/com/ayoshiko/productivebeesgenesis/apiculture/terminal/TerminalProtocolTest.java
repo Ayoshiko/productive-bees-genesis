@@ -14,6 +14,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void batchScaleCommandsPreserveLongFactorsAndRejectTrailingData() {
+		var codec = com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.CODEC;
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			for (var action : com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.Action.values()) {
+				if (!action.patternScaleBatch()) continue;
+				for (long factor : new long[]{1, 2, Long.MAX_VALUE}) {
+					var request = new com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest(7, UUID.randomUUID(), 9, action, 12, -1, 5, factor, "");
+					buffer.clear(); codec.encode(buffer, request); assertTrue(buffer.readableBytes() <= 512); assertEquals(request, codec.decode(buffer));
+					buffer.clear(); codec.encode(buffer, request); buffer.writeByte(0);
+					assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
+				}
+			}
+		} finally { buffer.release(); }
+	}
 	@Test void providerSelectionCommandsRoundTripWithoutClientTargetIdentities() {
 		var codec = com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalRequest.CODEC;
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());

@@ -81,9 +81,11 @@ final class MePatternBatchSession {
 		for (var entry : entries) if (entry.selected) changes.add(new TerminalPatternInventory.Replacement(entry.slot, entry.original, entry.plan.result()));
 		var target = menu; var source = carried; var material = sample; var mapping = editor; var snapshot = buffer;
 		close(); long expectedGeneration = generation;
-		if (!mapping.current(material.item()) || generation != expectedGeneration || !material.current(player, target)) return clear(Status.STALE);
-		var changed = material.commit(player, target, () -> bufferBatch ? TerminalPatternBuffer.replace(player, target, source, snapshot, changes)
-				: TerminalPatternInventory.replace(player, target, source, changes));
+		if (!mapping.current(material == null ? ItemStack.EMPTY : material.item()) || generation != expectedGeneration
+				|| material != null && !material.current(player, target)) return clear(Status.STALE);
+		java.util.function.Supplier<TerminalCursorExchange.Result> commit = () -> bufferBatch ? TerminalPatternBuffer.replace(player, target, source, snapshot, changes)
+				: TerminalPatternInventory.replace(player, target, source, changes);
+		var changed = material == null ? commit.get() : material.commit(player, target, commit);
 		var success = bufferBatch ? Status.PATTERN_BUFFER_BATCH_APPLIED : Status.PATTERN_BATCH_APPLIED;
 		return clear(changed.outcome() == TerminalCursorExchange.Outcome.MOVED ? success : MeTerminalSession.fluidStatus(changed.outcome()));
 	}
@@ -98,7 +100,7 @@ final class MePatternBatchSession {
 	private ItemStack item(ServerPlayer player, int slot) { return bufferBatch ? buffer.item(slot) : player.getInventory().items.get(slot); }
 	private boolean current(ServerPlayer player) {
 		if (menu == null || player.containerMenu != menu || !menu.stillValid(player) || player.server.overworld().getGameTime() >= until
-				|| TerminalCursorExchange.unknown(player) || !ItemStack.matches(carried, menu.getCarried()) || !sample.current(player, menu)
+				|| TerminalCursorExchange.unknown(player) || !ItemStack.matches(carried, menu.getCarried()) || sample != null && !sample.current(player, menu)
 				|| bufferBatch && (buffer == null || !buffer.current(player))) return false;
 		for (var entry : entries) if (!ItemStack.matches(entry.original, item(player, entry.slot))) return false;
 		return true;

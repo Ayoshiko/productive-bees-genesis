@@ -49,6 +49,7 @@ final class MePatternPane {
 			factor.setTooltip(Tooltip.create(text("pattern_factor_hint"))); widgets.add(factor);
 			multiply = button("pattern_multiply", 68, 38, 60, () -> preview(PATTERN_MULTIPLY)); widgets.add(multiply);
 			divide = button("pattern_divide", 132, 38, 60, () -> preview(PATTERN_DIVIDE)); widgets.add(divide);
+			multiply.setTooltip(Tooltip.create(text("pattern_scale_hint"))); divide.setTooltip(Tooltip.create(text("pattern_scale_hint")));
 			batchScope = button(bufferedBatch ? "pattern_batch_scope_buffer" : "pattern_batch_scope_inventory", 196, 38, width - 204, () -> {
 				bufferedBatch = !bufferedBatch; batchScope.setMessage(text(bufferedBatch ? "pattern_batch_scope_buffer" : "pattern_batch_scope_inventory"));
 			}); batchScope.setTooltip(Tooltip.create(text("pattern_batch_scope_hint"))); widgets.add(batchScope);
@@ -67,7 +68,16 @@ final class MePatternPane {
 	private long value() { try { return factor == null ? 0 : Long.parseLong(factor.getValue()); } catch (NumberFormatException invalid) { return 0; } }
 	private boolean encoding() { return shown.mode() == MeTerminalView.Mode.PATTERN_ENCODING; }
 	private boolean replacing() { return shown.mode() == MeTerminalView.Mode.PATTERN_REPLACEMENT; }
-	private void preview(MeTerminalRequest.Action action) { long value = value(); if (value > 0) commands.send(action, -1, 0, value); }
+	private void preview(MeTerminalRequest.Action action) {
+		long value = value(); if (value < 1) return;
+		if (net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
+			if (!canScaleBatch()) return;
+			action = action == PATTERN_DIVIDE ? bufferedBatch ? PATTERN_BUFFER_BATCH_DIVIDE : PATTERN_BATCH_DIVIDE
+					: bufferedBatch ? PATTERN_BUFFER_BATCH_MULTIPLY : PATTERN_BATCH_MULTIPLY;
+		}
+		commands.send(action, -1, action.patternScaleBatch() ? shown.page() : 0, value);
+	}
+	private boolean canScaleBatch() { return shown.mode() == MeTerminalView.Mode.PATTERN && shown.status() == MeTerminalView.Status.OK && !session.waiting() && current(); }
 	private boolean current() { return ItemStack.matches(cursor, menu.getCarried()); }
 	private boolean canReplace() { return shown.mode() == MeTerminalView.Mode.PATTERN && shown.status() == MeTerminalView.Status.OK && !shown.confirm() && !session.waiting() && current(); }
 	boolean click(double x, double y, int button) {
@@ -80,7 +90,7 @@ final class MePatternPane {
 		if (shown == null || apply == null) return;
 		boolean idle = !session.waiting(); long value = value();
 		if (processing != null) processing.active = idle;
-		if (batchScope != null) batchScope.active = canReplace();
+		if (batchScope != null) batchScope.active = canScaleBatch();
 		if (factor == null) encode.active = idle;
 		else { factor.active = idle; multiply.active = divide.active = idle && value > 0; }
 		apply.active = idle && current() && shown.confirm() && (factor == null || value > 0 && shown.title().endsWith(" " + value));

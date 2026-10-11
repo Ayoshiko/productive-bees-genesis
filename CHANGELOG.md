@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j4a6 背包／缓冲批量样板倍率**：选择目标容器后，Shift＋点击放大／缩小即可逐叠预览原生处理样板的数量变化；普通点击仍处理鼠标整叠。无需替换样本，支持逐项／全选和完整差异，拒绝不能整除、溢出、非法编码及无变化项。确认只改所选原槽，保留张数、空位和其它组件；原物／会话变化拒绝，重复确认不能重放，不消费材料或生成掉落。ME 协议升至 22，终端／机器保持 36／12，存档不变；真实客户端及玩家保存联合仍待验收。
+
 - **D18j4b3e 跨页选择样板供应器**：供应器列表可通过勾选框或 Ctrl＋左键选择不同页的供应器，再按已选范围预览和批量替换；最多 8 台、合计 288 槽。支持已选数量显示及清空，相同搜索刷新／翻页／槽页往返保留选择，换搜索、失效、关闭或首次选择满 600 tick 清空。只接受当前页和版本的真实行，确认前复核原节点、逻辑和库存，未知写入停止且不补偿、不重试、不生成掉落。ME 协议升至 21，终端／机器保持 36／12；实际客户端及附属联合仍待验收。
 
 - **D18j4e5 满背包拾取入网**：新增默认关闭的独立开关，需同时启用拾取入网；原版拾取允许且背包未接收时，将至多一叠完整组件物品从原实体转入 ME／终端保管。遵守延迟、归属及拾取拒绝，与背包批次共享全服预算；拒收余量保管、未知暂停且不重试、不生成新掉落。沿原版实际量播放拾取并更新统计，终端协议升至 36，ME／机器 20／12 及存档格式不变；实际客户端／ME／保护插件联合仍待验收。
@@ -223,6 +225,8 @@
 ### English
 
 #### Added
+
+- **D18j4a6 Batch pattern scaling in inventory or buffer**: Choose a target, then Shift-click Multiply or Divide to preview each native processing pattern; normal clicks still preview the carried stack. No replacement sample is needed. Select entries, inspect full differences and confirm; non-divisible amounts, overflow, invalid content and unchanged patterns cannot be selected. Only chosen original slots are rewritten, preserving stack counts, sparse slots and other components. Changed items or sessions invalidate the preview; confirmations cannot replay, consume materials or create drops. ME protocol is 22; terminal/machine remain 36/12 and save formats stay unchanged. Live-client and player-save integration acceptance stays open.
 
 - **D18j4b3e Cross-page pattern provider selection**: Check providers on different list pages, or Ctrl-click, then preview and edit only the selected scope. Limited to 8 providers and 288 slots, with counts and a clear action. Paging, the same search and slot-page visits preserve selection; changed searches, invalid targets, closing or 600 ticks from the first choice clear it. The server accepts current-page rows and revisions, revalidates original nodes/logic/inventories, and stops uncertain writes without compensation, retries or drops. ME protocol is 21; terminal/machine remain 36/12. Live-client and addon integration acceptance stays open.
 

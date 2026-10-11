@@ -33,7 +33,13 @@ public final class MeBridgeIntegration {
 	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared patternReplacement(net.minecraft.world.item.ItemStack pattern, int row, net.minecraft.world.item.ItemStack sample) {
 		return installed() ? Loaded.patternReplacement(pattern, row, sample) : new com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED, null);
 	}
+	public static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared patternScale(long factor, boolean divide) {
+		return installed() ? Loaded.patternScale(factor, divide) : new com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared(com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.Status.PATTERN_UNSUPPORTED, null);
+	}
 	private static final class Loaded {
+		static com.ayoshiko.productivebeesgenesis.apiculture.me.MePatternBatchEditor.Prepared patternScale(long factor, boolean divide) {
+			return com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2.AePatternScale.capture(factor, divide);
+		}
 		static boolean toolboxItem(net.minecraft.world.item.ItemStack item) { return appeng.core.definitions.AEItems.NETWORK_TOOL.is(item); }
 		static boolean toolboxUpgrade(net.minecraft.world.item.ItemStack item) { return !item.isEmpty() && appeng.api.upgrades.Upgrades.isUpgradeCardItem(item); }
 		static boolean bufferPattern(net.minecraft.world.item.ItemStack item) {

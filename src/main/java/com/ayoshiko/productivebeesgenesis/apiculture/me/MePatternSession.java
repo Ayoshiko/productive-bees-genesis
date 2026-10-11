@@ -24,10 +24,11 @@ final class MePatternSession {
 	private String title = "";
 	private long until;
 	private MeTerminalView view = MeTerminalView.patternStatus(Status.CLOSED);
-	static boolean handles(MeTerminalRequest.Action action) { return action == PATTERN_READ || action == PATTERN_MULTIPLY || action == PATTERN_DIVIDE || action == PATTERN_APPLY || action == PATTERN_ENCODE_CRAFTING || action == PATTERN_REPLACE || action == PATTERN_BATCH_REPLACE || action == PATTERN_BUFFER_BATCH_REPLACE || action == PATTERN_BATCH_TOGGLE || action == PATTERN_BATCH_SELECT || action == PATTERN_BATCH_DETAILS || action == PATTERN_BATCH_LIST; }
+	static boolean handles(MeTerminalRequest.Action action) { return action.patternScaleBatch() || action == PATTERN_READ || action == PATTERN_MULTIPLY || action == PATTERN_DIVIDE || action == PATTERN_APPLY || action == PATTERN_ENCODE_CRAFTING || action == PATTERN_REPLACE || action == PATTERN_BATCH_REPLACE || action == PATTERN_BUFFER_BATCH_REPLACE || action == PATTERN_BATCH_TOGGLE || action == PATTERN_BATCH_SELECT || action == PATTERN_BATCH_DETAILS || action == PATTERN_BATCH_LIST; }
 	MeTerminalView request(ServerPlayer player, MeTerminalRequest request) {
 		if (batch != null && (request.action() == PAGE || request.action() == POLL || request.action() == PATTERN_APPLY || request.action() == PATTERN_BATCH_TOGGLE || request.action() == PATTERN_BATCH_SELECT || request.action() == PATTERN_BATCH_DETAILS || request.action() == PATTERN_BATCH_LIST)) return batch.request(player, request);
 		if (request.action() == PATTERN_BATCH_REPLACE || request.action() == PATTERN_BUFFER_BATCH_REPLACE) return beginBatch(player, request);
+		if (request.action().patternScaleBatch()) return beginScaleBatch(player, request);
 		if (request.action() == PATTERN_REPLACE) return replace(player, request);
 		boolean preview = request.action() == PATTERN_READ || request.action() == PATTERN_MULTIPLY || request.action() == PATTERN_DIVIDE || request.action() == PATTERN_ENCODE_CRAFTING;
 		if (preview) { close(); mode = request.action() == PATTERN_ENCODE_CRAFTING ? Mode.PATTERN_ENCODING : Mode.PATTERN; }
@@ -105,6 +106,24 @@ final class MePatternSession {
 		var buffer = buffered ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternBuffer.capture(player) : null;
 		if (buffered && buffer == null) return clear(player, Status.TRANSFER_UNKNOWN);
 		batch = new MePatternBatchSession(player, before, material, mapping.editor(), buffer);
+		return batch.start(player);
+	}
+	private MeTerminalView beginScaleBatch(ServerPlayer player, MeTerminalRequest request) {
+		if (mode != Mode.PATTERN || view.status() != Status.OK || request.revision() == 0 || request.revision() != view.revision()
+				|| request.page() != view.page() || !current(player) || !menu.stillValid(player)) return clear(player, Status.STALE);
+		if (request.row() != -1 || request.amount() < 1) return clear(player, Status.INVALID);
+		var before = original; var target = menu;
+		boolean buffered = request.action() == PATTERN_BUFFER_BATCH_MULTIPLY || request.action() == PATTERN_BUFFER_BATCH_DIVIDE;
+		boolean divide = request.action() == PATTERN_BATCH_DIVIDE || request.action() == PATTERN_BUFFER_BATCH_DIVIDE;
+		close(); mode = buffered ? Mode.PATTERN_BUFFER_BATCH : Mode.PATTERN_BATCH;
+		if (TerminalCursorExchange.unknown(player)) return clear(player, Status.TRANSFER_UNKNOWN);
+		if (!MeTerminalBudget.expensive(player.server)) return clear(player, Status.BUSY);
+		var scaling = MeBridgeIntegration.patternScale(request.amount(), divide);
+		if (scaling.status() != Status.OK) return clear(player, scaling.status());
+		if (player.containerMenu != target || !ItemStack.matches(before, target.getCarried())) return clear(player, Status.STALE);
+		var buffer = buffered ? com.ayoshiko.productivebeesgenesis.apiculture.core.TerminalPatternBuffer.capture(player) : null;
+		if (buffered && buffer == null) return clear(player, Status.TRANSFER_UNKNOWN);
+		batch = new MePatternBatchSession(player, before, null, scaling.editor(), buffer);
 		return batch.start(player);
 	}
 	private boolean current(ServerPlayer player) {

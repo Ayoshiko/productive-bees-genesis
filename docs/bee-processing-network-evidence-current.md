@@ -1053,3 +1053,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 基线仍为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,407,407 字节，SHA-256 `4195b99f6ee3813b690c2e7af1cc489bb3639f792508f2e75b6cfe7f340259e2`。报告、源码／依赖哈希与本地参考集中在 `build/network-gates/d18j4b3e-20261011/`。本地 ExtendedAE 2.2.35 两类供应器使用原生 36 槽逻辑的源码核对只是结构依据，未新增重复适配、未在本轮加载 ExtendedAE／EAEP 或签收完整附属注入矩阵。
 
 真实客户端勾选／缩放与长文案、多玩家竞争、网络／独立机无线费用、实际 ME 和保护插件及完整附属供应器联合仍待验收；j4b3e、完整 j4／D18 与发布门保持开放。超过八台／288槽的范围和其它外部容器工作流后续独立交付，无 Spark／MSPT 结论。
+
+<a id="s10-157"></a>
+### 10.157 D18j4a6 背包／私人缓冲批量样板倍率（2026-10-11，已实现并验证原槽行为，功能联合待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `0b5189f` 上，将鼠标单叠倍率扩展为背包／私人缓冲批次：有效样板页选择目标后 Shift＋点击放大／缩小，普通点击保持单叠；批次冻结倍率与方向，不叠加未提交鼠标预览，也不要求九格样本或材料账户。合同、交互与参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+复用既有逐叠全服预算、八项分页、逐项／全选及详情；每个候选独立检查编码、逐项整除、逐格与同侧同键 long 溢出，倍率 1 的无变化项不可选。确认只写选中原槽，保留张数、稀疏位置、完整资源键及其它组件；撤销授权后沿原背包发布或缓冲单根替换提交，无样本分支仍复核 cursor 保管／互斥，旧资源替换继续校验并锁定样本账户。无 ME 资产调用、新存档或掉落路径。ME 协议追加四个动作并升至 22，终端／机器仍为 36／12。
+
+执行 `.\gradlew test -PminecraftTests --tests '*PatternBatchScaleMinecraftTest' --offline --no-daemon`，最终 **12 项**通过。测试使用真实初始化的 AE2 编码／组件、MePatternSession 请求、TerminalPatternInventory／TerminalPatternBuffer 提交；服务器、玩家与菜单为模拟对象，原资源替换回归的样本入口为测试替身。覆盖两种容器乘除、合法 64 张及不同叠数、物品／流体完整键与稀疏位置、跨页选择／详情、非法和不能整除项、逐项／合计溢出、long 最大倍率、倍率 0／1、旧 revision／页／行、过期／关闭、任一捕获槽或鼠标变化、缓冲根替换、保管冲突、重复确认和发布后同步异常不重放。另验证无需替换样本的倍率路径，以及原资源替换仍要求有效样本并使用提交守卫。
+
+首轮 12 项中两项失败，原因是夹具直接构造多张原生不可堆叠样板，未赋予对应堆叠上限组件；按现行规则被拒绝。仅修正夹具为显式 MAX_STACK_SIZE=64 的合法场景后全部通过，未放宽生产代码的实际堆叠限制。随后 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **40 项**普通回归、编译、构建及产物核验通过；合计 **52 项**，零失败／错误／跳过。审查后仅修正接口注释，再构建核验，JAR 无变化。
+
+依赖为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,410,032 字节，SHA-256 `f829e7404122ff7a3e27af7156c12a0749b5626aa5c220054dd846928046478f`；初始／最终 XML、构建输出、源码／依赖／产物哈希和链接检查位于 `build/network-gates/d18j4a6-20261011/`。
+
+真实客户端 Shift 操作／长文案与缩放、网络／独立机宿主权限及无线费用、实际 ME 与跨 JVM 玩家保存联合尚未运行；j4a6、完整 j4／D18 和发布门继续开放。供应器、其它外部容器及普通合成样板倍率后续按实际接口交付；没有 Spark／MSPT 结论。
