@@ -31,9 +31,11 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；D17 基础成员升级、M04 独立一体机和 D18a／d 终端入口已验收，当前推进 D18 完整终端；完整内容兼容、性能及发布门仍待完成。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；D17 基础成员升级、M04 独立一体机和 D18a／d 终端入口已验收，后续按[生产功能包队列](docs/bee-processing-network-roadmap.md#s14)推进普通生产、物流与多方块联网，D18 未完成需求保留；完整内容兼容、性能及发布门仍待完成。
 
 ### 新增
+
+- **合成样板替代选项**：新编码普通合成样板时可分别启用物品替代和流体替代，默认均关闭。按 AE2 原生配方／桶原料规则编码，确认前重新核对实际九格和完整输出，保留样板张数与组件，不消耗材料样本。编码页以六行分页容纳两个开关；ME 协议升至 24，终端／机器 38／12 和存档不变，实际客户端与自动合成联合仍待验收。
 
 - **D18j3c4b 关闭时优先回存 ME**：“关闭材料去向”新增“优先 ME 网络”，自动取回仍默认关闭、默认目标仍为背包。材料逐格经当前授权桥存入 ME，明确余量回背包，满载留格；无可用网络或共享预算不足时回背包。每格先移交玩家保管再调用外部库存；未知结果停止后续格且不退款或重试，菜单失效时已知余量保留玩家保管，不生成掉落。保留鼠标栈、完整组件、已付费结果及原未决提取；终端协议升至 38，ME／机器 23／12 及存档格式不变。真实 ME、客户端关闭及跨进程保存联合仍待验收。
 
@@ -231,6 +233,8 @@
 ### English
 
 #### Added
+
+- **Crafting pattern substitutions**: New crafting patterns can independently enable native AE2 item and fluid substitutions; both default to off. Confirmation rechecks the real crafting samples and complete output, preserves pattern count and components, and consumes no samples. The encoding page uses six rows with two toggles. ME protocol is now 24; terminal/machine protocols remain 38/12 and saves are unchanged. Client interaction and automated crafting integration still require runtime validation.
 
 - **D18j3c4b Prefer ME when returning crafting materials on close**: Adds a Prefer ME network destination while automatic return stays disabled by default and inventory remains the default target. Materials transfer one slot at a time through the current authorized bridge; confirmed leftovers return to inventory, with excess retained in the grid. Unavailable networks or an exhausted shared budget fall back to inventory. Each slot enters player custody before external insertion; unknown results stop the remaining slots without refunds or retries. Known leftovers stay in player custody if the menu becomes invalid. No drops; cursor contents, full components, paid outputs and existing unresolved withdrawals remain intact. Terminal protocol is 38; ME/machine stay at 23/12 with unchanged save formats. Live ME, client-close and cross-process save acceptance stays open.
 

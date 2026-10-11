@@ -1111,3 +1111,20 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 随后 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **42 项**普通回归、构建与产物核验通过。最终合计 **71 项**，零失败／错误／跳过；注入的外部异常及通知失败属于预期负向用例。基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR **4,421,237 字节**，SHA-256 `140927d1b2d70087136f73156735094e7727d2f6f0b30ac96125203141c33982`。
 
 初始／最终 XML、构建输出、固定参考副本、源码／依赖／产物哈希与 UTF-8／JSON／跨文档链接检查保存在 `build/network-gates/d18j3c4b-20261011/`。真实客户端的配置保存重开、关闭包顺序、实际 ME／权限／无线费用、多玩家和跨 JVM 正常保存／故障耐久性仍待联合验收；j3c4b、完整 j3／D18 与发布门保持开放。其它外部容器和剩余 WCWT 工作流继续按实际接口交付，无 Spark／MSPT 性能结论。
+
+<a id="s10-161"></a>
+### 10.161 R0 开发流程重排与接续收尾（2026-10-11，文档／静态检查完成，游戏联合未签收）
+
+**本包范围。** 网络 worktree 基线 `d0bde62`，保留并接续上一聊天已有的 j4a7 九个 Java 文件和主合同改动。审查主合同、路线、视觉、参考和两份历史证据的职责／范围，与当前配置、注册、蜂计划和多方块生产入口对照；结论及 R0–R5 队列只在[路线 14](bee-processing-network-roadmap.md#s14)维护。原首页状态快照折叠保留，章节号／显式锚点不变；D24／D25 去掉不必要的串行开发前置，完整验收范围没有取消。
+
+**持续生效的规则与工具。** 两 worktree 的本地 AGENTS 同步同一内容并保持 Git 忽略：一次对话推进多个相关任务、生产优先、包内聚焦检查／包尾集中构建、已通过证据按变化失效、按功能包提交。旧 network-stage-gate 的累计矩阵须显式 Scope Joint；实际调用默认 D16b 已验证在构建和创建证据目录前拒绝。新增 network-doc-check.ps1 只检查七份网络文档的 UTF-8／显式锚点／本地链接，不启动游戏或关闭功能门。它们不是强制模型工作量或远端审批保护。
+
+**接续功能。** j4a7 合成样板物品／流体替代保留既有默认关闭、真实九格／原生 AE2 编码及确认前重编译比对。补齐双语控件、六行分页说明和行为测试；四种标记、分页保持、旧预览／重复确认、配方／输出变化、菜单失效／过期、组件／张数及回执 codec 拒绝均覆盖。使用初始化后的 MC／AE2 物品与 AECraftingPattern，世界、菜单与配方夹具为模拟对象，不是实际 AE2 自动合成。ME 协议 24、终端／机器 38／12，存档格式不变。
+
+**失败与修正。** 在线 Gradle 解析长时间无输出后中止，改用本地依赖离线运行。新夹具首次误用其它版本的 GameRules 构造，改为显式模拟本次规则。随后发现普通空白样板默认堆叠 64，设置相同 MAX_STACK_SIZE 不形成组件差异，transmuteCopy 后仍受编码样板默认 1 的上限；夹具改用非默认的 32 上限，并新增每个负向场景的成功预览前置断言。没有放宽产品数量限制、删除失败断言或把无效预览的拒绝当作有效覆盖。
+
+**实际验证。** `test -PminecraftTests --tests '*CraftingPatternOptionsMinecraftTest' --offline --no-daemon` 的 5 项通过；随后 `test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build --offline --no-daemon` 的 42 项和构建通过。build 自身依赖的 verifyReleaseArtifact 同时通过，没有额外启动一轮产物验收。最终两组共 47 项，零失败／跳过。脚本解析、默认累计门负向调用、语言 JSON、严格 UTF-8、git diff --check 通过；七文档全量本地链接检查通过，原始 XML／摘要保留在 `build/network-gates/r0-workflow-20261011/`。
+
+依赖仍为 Minecraft 1.21.1／NeoForge 21.1.216／Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85，原生测试使用 AE2 19.2.17。JAR 4,424,537 字节，SHA-256 `c6f2e7210fc60ddbda49d4b3c8c6efce384f70f7d2626c3e7380bcdc786304ca`。本地 run/config 的 bee_network.enabled 从 false 改为 true 并回读，发布默认不变；未启动用户世界、未写世界资产。维护 worktree 的并行源码改动保持原样。
+
+**未完成边界。** 本包没有实现普通蜂种／蜂蜜副产物对齐、D23a 或 M05，不把文档重排表述为这些生产功能已经可用。新样板选项的真实客户端操作、实际自动合成、多人／保存联合继续待验收；R1 按新队列推进，完整 D18／D19、P5–P7、M05、M06c2c、D25-auto／T00 保持开放，无新增 Spark／MSPT 结论。

@@ -7,6 +7,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $baseGate = if ($Gate -in @('D17c2a', 'D17c2b')) { 'D17c1' } else { $Gate }
 $focused = $baseGate -eq 'D17c1' -and $Scope -ne 'Joint'
+# Cumulative dependency/restart runs must be intentional; ordinary iteration uses focused commands.
+if ($Scope -eq 'Auto' -and -not $focused) { throw 'Cumulative gates require explicit -Scope Joint; use focused Gradle tests for development' }
 if ($Scope -eq 'Step' -and -not $focused) { throw 'Step scope is currently defined for D17c1/D17c2a/D17c2b; use Joint for the cumulative matrix' }
 . (Join-Path $PSScriptRoot 'network-stage-evidence.ps1')
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))

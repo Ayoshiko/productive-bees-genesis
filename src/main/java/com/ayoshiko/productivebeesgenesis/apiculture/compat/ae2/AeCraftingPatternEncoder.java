@@ -17,14 +17,18 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.me.MeTerminalView.*;
 public final class AeCraftingPatternEncoder {
 	public static boolean isBlank(ItemStack item) { return AEItems.BLANK_PATTERN.is(item); }
 	public static MePatternPlan prepare(ServerPlayer player, ItemStack original, TerminalPatternSource source) {
+		return prepare(player, original, source, CraftingOptions.DEFAULT);
+	}
+	public static MePatternPlan prepare(ServerPlayer player, ItemStack original, TerminalPatternSource source, CraftingOptions options) {
 		var status = AePatternEditor.blankStatus(original); if (status != Status.OK) return MePatternPlan.failed(status);
 		var ingredients = source.ingredients(); var output = source.output();
-		var encoded = PatternDetailsHelper.encodeCraftingPattern(source.recipe(), ingredients.toArray(ItemStack[]::new), output, false, false);
+		var encoded = PatternDetailsHelper.encodeCraftingPattern(source.recipe(), ingredients.toArray(ItemStack[]::new), output, options.substituteItems(), options.substituteFluids());
 		var result = original.transmuteCopy(encoded.getItem(), original.getCount());
 		result.set(AEComponents.ENCODED_CRAFTING_PATTERN, Objects.requireNonNull(encoded.get(AEComponents.ENCODED_CRAFTING_PATTERN)));
 		var decoded = new AECraftingPattern(AEItemKey.of(result), player.serverLevel());
 		var outputs = decoded.getOutputs();
 		if (outputs.size() != 1 || !outputs.getFirst().what().equals(AEItemKey.of(output)) || outputs.getFirst().amount() != output.getCount()
+				|| decoded.canSubstitute() != options.substituteItems() || decoded.canSubstituteFluids() != options.substituteFluids()
 				|| result.getCount() > result.getMaxStackSize()) return MePatternPlan.failed(Status.STALE);
 		var rows = new ArrayList<Row>();
 		for (int i = 0; i < ingredients.size(); i++) if (!ingredients.get(i).isEmpty()) rows.add(row(ingredients.get(i), Kind.PATTERN_INPUT, i + 1));

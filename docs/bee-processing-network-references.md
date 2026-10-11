@@ -7,6 +7,8 @@
 <a id="s13"></a>
 ## 13. 参考实现与证据边界
 
+2026-10-11 全文现状审查以本网络 worktree 的 gradle.properties、build.gradle、注册元数据及源码为准：NetworkConfigSection 与 run/config 的开关、StaticApiaryAdapter 的铁蜂／单产物准入、BeeWorkExecutor／StaticBeePlan 的冻结结果、BeeProduceProcessor／BeeFluidOutputResolver 的独立蜂蜜、NetworkContent 注册项、CombinedMachineWork／MachineProduction 的独立资格和 11／14 节执行路线逐项对照。发现与重排仅在[路线 14](bee-processing-network-roadmap.md#s14)维护；未更新上游参考副本，不将普通本地配置、静态检查或既有探针证据表述为新一轮完整游戏验收。
+
 <a id="s13-1"></a>
 ### 13.1 本仓库源码入口
 
@@ -425,6 +427,8 @@ D18j4a1 读取本地固定 AE2 19.2.17 的 PatternDetailsHelper、EncodedProcess
 D18j4a6（2026-10-11）复用 a1／a5 已核对的固定 AE2 19.2.17 合同，并复核本地发布 JAR 的 AEProcessingPattern 构造与 encode 字节码：编码只写处理样板组件，原生详情按完整键合并。批量倍率直接调用已有 AePatternEditor，沿 MePatternBatchSession 与 TerminalPatternInventory／TerminalPatternBuffer 的预览、所有权和一次发布边界；固定倍率无需 ContainerItemStrategies 或材料样本，原资源替换仍保留其样本账户复核与提交锁。大叠仍须满足物品实际堆叠上限；行为测试用明确的 MAX_STACK_SIZE 组件构造合法多张场景，不放宽原生默认限制。未增加依赖或更新参考副本，WCWT 截图只作为工作流目标；实际测试与剩余边界见[10.157](bee-processing-network-evidence-current.md#s10-157)。
 
 D18j4a2 继续读取同一固定 AE2 19.2.17 的 PatternEncodingTermMenu.encode／encodeCraftingPattern、PatternDetailsHelper.encodeCraftingPattern、AECraftingPattern 构造／encode、EncodedCraftingPattern，以及 StorageCellUpgradeRecipe 的 ItemStack.transmuteCopy 用法。原生合成编码保存九格输入、输出、配方 ID 和两种替代标记；详情构造按当前配方重新匹配及组装。本项目沿 TerminalCraftingMenu.find 的普通配方／有限合成规则，捕获实际材料账户的一件样本，默认不允许物品或流体替代。用 transmuteCopy 保留空白样板组件与张数，仅增加合成编码，再构造原生详情比较输出。借鉴原生空白样板消耗语义，但不复制其菜单槽位、自动补充或直接设置结果栈；确认复用本项目账户锁与 cursor 保管。材料与配方身份仅存当前预览，未引入新依赖、长期缓存或上游参考更新。
+
+D18j4a7（2026-10-11）复核同一固定 AE2 19.2.17 的 AECraftingPattern 构造、canSubstitute／canSubstituteFluids 和原生输入替代路径：编码保存两种独立标记，详情按实际配方重匹配和组装。复用本项目 TerminalPatternSource 的真实九格、账户锁与配方对象复核；确认重新编码比较完整结果，再原张数提交，不新增外部库存访问。选项属于预览会话，回复保管状态不得丢失选项；默认仍关闭。测试使用真实 AE2 编码组件／详情，世界和菜单为模拟对象；不据此签收实际自动合成或客户端交互。
 
 D18j4a3 读取固定 AE2 19.2.17 的 ContainerItemStrategies.getContainedStack(ItemStack, AEKeyType)、ContainerItemStrategy、FluidContainerItemStrategy、GenericContainerHelper、AEKey.getType 及 EncodedProcessingPattern；复用前包已核对的 AEProcessingPattern.encode／构造与原生数量边界。带类型重载只查询对应注册策略，流体默认委托 FluidUtil.getFluidContained，不会遍历全部键类型；不采用 findCarriedContext／insert／extract 或 EmptyingAction。样本仅提供副本，调用前后比对完整 ItemStack，返回键再次核对类型与正数量；附属资源可用性取决于实际策略登记，不声称全部容器已验证。共享编码验证处理缺失资源、稀疏槽和同键 long 合计；复用本项目材料账户 State 和 cursor 改写，不新增第三方类型引用、依赖或参考副本更新。
 

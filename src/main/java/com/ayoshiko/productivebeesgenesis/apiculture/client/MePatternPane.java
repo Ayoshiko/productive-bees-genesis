@@ -22,7 +22,7 @@ final class MePatternPane {
 	private final MeTerminalSession session;
 	private final Commands commands;
 	private EditBox factor;
-	private Button multiply, divide, encode, processing, apply, previous, next, batchScope;
+	private Button multiply, divide, encode, processing, apply, previous, next, batchScope, itemSubstitution, fluidSubstitution;
 	private boolean bufferedBatch;
 	private String factorValue = "2";
 	private ItemStack cursor = ItemStack.EMPTY;
@@ -34,12 +34,15 @@ final class MePatternPane {
 		if (factor != null) factorValue = factor.getValue();
 		this.left = left; this.top = top; this.width = width; this.height = height; shown = session.view(); cursor = menu.getCarried().copy();
 		var widgets = new ArrayList<AbstractWidget>();
-		factor = null; multiply = divide = encode = processing = batchScope = null;
+		factor = null; multiply = divide = encode = processing = batchScope = itemSubstitution = fluidSubstitution = null;
 		if (encoding()) {
-			encode = button("pattern_encode_preview", 8, 38, 100, () -> commands.send(PATTERN_ENCODE_CRAFTING, -1, 0, 0)); widgets.add(encode);
+			encode = button("pattern_encode_preview", 8, 38, 100, () -> commands.send(PATTERN_ENCODE_CRAFTING, -1, 0, shown.craftingOptions().bits())); widgets.add(encode);
 			encode.setTooltip(Tooltip.create(text("pattern_encode_hint")));
 			processing = button("pattern_processing", 112, 38, 92, () -> commands.send(PATTERN_ENCODE_PROCESSING, -1, 0, 0));
 			processing.setTooltip(Tooltip.create(text("pattern_processing_hint"))); widgets.add(processing);
+			int optionWidth = (width - 20) / 2;
+			itemSubstitution = optionButton(false, 8, optionWidth); widgets.add(itemSubstitution);
+			fluidSubstitution = optionButton(true, 12 + optionWidth, optionWidth); widgets.add(fluidSubstitution);
 		} else if (replacing()) {
 			encode = button("pattern_read", 8, 38, 108, () -> commands.send(PATTERN_READ, -1, 0, 0)); widgets.add(encode);
 			encode.setTooltip(Tooltip.create(text("pattern_replace_hint")));
@@ -65,6 +68,15 @@ final class MePatternPane {
 	private Button button(String key, int x, int y, int width, Runnable action) {
 		return Button.builder(text(key), ignored -> action.run()).bounds(left + x, top + y, width, 14).build();
 	}
+	private Button optionButton(boolean fluid, int x, int width) {
+		String key = fluid ? "pattern_substitute_fluids" : "pattern_substitute_items";
+		boolean enabled = fluid ? shown.craftingOptions().substituteFluids() : shown.craftingOptions().substituteItems();
+		var button = Button.builder(text(key, text(enabled ? "pattern_option_on" : "pattern_option_off")),
+				ignored -> commands.send(PATTERN_ENCODE_CRAFTING, -1, 0, shown.craftingOptions().bits() ^ (fluid ? 2 : 1)))
+				.bounds(left + x, top + 56, width, 14).build();
+		button.setTooltip(Tooltip.create(text(key + "_hint"))); return button;
+	}
+	private int rowTop() { return encoding() ? 74 : 56; }
 	private long value() { try { return factor == null ? 0 : Long.parseLong(factor.getValue()); } catch (NumberFormatException invalid) { return 0; } }
 	private boolean encoding() { return shown.mode() == MeTerminalView.Mode.PATTERN_ENCODING; }
 	private boolean replacing() { return shown.mode() == MeTerminalView.Mode.PATTERN_REPLACEMENT; }
@@ -90,6 +102,7 @@ final class MePatternPane {
 		if (shown == null || apply == null) return;
 		boolean idle = !session.waiting(); long value = value();
 		if (processing != null) processing.active = idle;
+		if (itemSubstitution != null) itemSubstitution.active = fluidSubstitution.active = idle && current();
 		if (batchScope != null) batchScope.active = canScaleBatch();
 		if (factor == null) encode.active = idle;
 		else { factor.active = idle; multiply.active = divide.active = idle && value > 0; }
@@ -97,11 +110,11 @@ final class MePatternPane {
 		previous.active = idle && shown.page() > 0; next.active = idle && shown.more();
 	}
 	void render(GuiGraphics g, Font font, int mouseX, int mouseY) {
-		if (shown.rows().isEmpty()) g.drawWordWrap(font, text(encoding() ? "pattern_encode_hint" : replacing() ? "pattern_replace_hint" : "pattern_hint"), left + 8, top + 61, width - 16, TerminalSkin.MUTED);
+		if (shown.rows().isEmpty()) g.drawWordWrap(font, text(encoding() ? "pattern_encode_hint" : replacing() ? "pattern_replace_hint" : "pattern_hint"), left + 8, top + rowTop() + 5, width - 16, TerminalSkin.MUTED);
 		int titleX = encoding() ? 212 : 124;
 		if (factor == null) g.drawString(font, font.plainSubstrByWidth(shown.title(), Math.max(0, width - titleX - 8)), left + titleX, top + 41, TerminalSkin.MUTED, false);
 		for (int i = 0; i < shown.rows().size(); i++) {
-			var row = shown.rows().get(i); int y = top + 56 + i * 16;
+			var row = shown.rows().get(i); int y = top + rowTop() + i * 16;
 			g.fill(left + 7, y, left + width - 7, y + 16, replacing() && row.enabled() ? 0xff465439 : 0xff25383e);
 			var icon = row.icon(); if (!icon.isEmpty()) g.renderItem(icon, left + 9, y);
 			String label = text(row.kind() == MeTerminalView.Kind.PATTERN_INPUT ? "pattern_input" : "pattern_output").getString() + " " + row.label();
@@ -118,8 +131,9 @@ final class MePatternPane {
 			String held = factor == null ? text("pattern_stack_count", menu.getCarried().getCount()).getString() : menu.getCarried().getCount() + " · " + shown.title();
 			g.drawString(font, font.plainSubstrByWidth(held, Math.max(0, width - 242)), left + 138, top + height - 18, TerminalSkin.MUTED, false);
 		}
-		if (mouseX >= left + 8 && mouseX < left + width - 8 && mouseY >= top + 56 && mouseY < top + 184) {
-			int index = (mouseY - top - 56) / 16;
+		if (mouseX >= left + 8 && mouseX < left + width - 8 && mouseY >= top + rowTop()
+				&& mouseY < top + rowTop() + MeTerminalView.pageSize(shown.mode()) * 16) {
+			int index = (mouseY - top - rowTop()) / 16;
 			if (index < shown.rows().size()) {
 				var row = shown.rows().get(index);
 				var lines = new ArrayList<Component>(); lines.add(Component.literal(row.label()));

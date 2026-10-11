@@ -17,12 +17,13 @@ final class MePatternSession {
 	private AbstractContainerMenu menu;
 	private TerminalPatternSource source;
 	private TerminalPatternSample sample;
+	private CraftingOptions craftingOptions = CraftingOptions.DEFAULT;
 	private MePatternBatchSession batch;
 	private int replacementRow = -1;
 	private Mode mode = Mode.PATTERN;
 	private List<Row> rows = List.of();
 	private String title = "";
-	private long until;
+	private long until, generation;
 	private MeTerminalView view = MeTerminalView.patternStatus(Status.CLOSED);
 	static boolean handles(MeTerminalRequest.Action action) { return action.patternScaleBatch() || action == PATTERN_READ || action == PATTERN_MULTIPLY || action == PATTERN_DIVIDE || action == PATTERN_APPLY || action == PATTERN_ENCODE_CRAFTING || action == PATTERN_REPLACE || action == PATTERN_BATCH_REPLACE || action == PATTERN_BUFFER_BATCH_REPLACE || action == PATTERN_BATCH_TOGGLE || action == PATTERN_BATCH_SELECT || action == PATTERN_BATCH_DETAILS || action == PATTERN_BATCH_LIST; }
 	MeTerminalView request(ServerPlayer player, MeTerminalRequest request) {
@@ -40,11 +41,12 @@ final class MePatternSession {
 			MePatternPlan plan;
 			if (request.action() == PATTERN_ENCODE_CRAFTING || request.action() == PATTERN_READ && MeBridgeIntegration.blankPattern(original)) {
 				mode = Mode.PATTERN_ENCODING;
+				craftingOptions = request.action() == PATTERN_ENCODE_CRAFTING ? CraftingOptions.from(request.amount()) : CraftingOptions.DEFAULT;
 				if (!MeBridgeIntegration.installed()) return clear(player, Status.PATTERN_UNSUPPORTED);
 				if (!MeBridgeIntegration.blankPattern(original)) return clear(player, Status.PATTERN_NEEDS_BLANK);
 				source = TerminalPatternSource.capture(player, menu);
 				if (source == null) return clear(player, Status.PATTERN_NO_RECIPE);
-				plan = MeBridgeIntegration.encodeCraftingPattern(player, original, source); title = source.recipe().id().toString();
+				plan = MeBridgeIntegration.encodeCraftingPattern(player, original, source, craftingOptions); title = source.recipe().id().toString();
 				if (title.length() > 256) title = title.substring(0, 256);
 			} else {
 				long factor = request.action() == PATTERN_READ ? 1 : request.amount();
@@ -63,10 +65,17 @@ final class MePatternSession {
 		if (request.action() != PATTERN_APPLY || !view.confirm()) return clear(player, Status.INVALID);
 		if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
 		var before = original; var after = result; var target = menu; var encodingSource = source; var replacementSample = sample; int selectedRow = replacementRow;
+		var selectedOptions = craftingOptions;
 		boolean encoding = mode == Mode.PATTERN_ENCODING, replacing = mode == Mode.PATTERN_REPLACEMENT;
 		clear(player, Status.WAITING);
+		long commitGeneration = generation;
 		TerminalCursorExchange.Result changed;
-		if (encodingSource != null) changed = encodingSource.commit(player, target, () -> TerminalCursorExchange.convert(player, target, before, after));
+		if (encodingSource != null) {
+			var fresh = MeBridgeIntegration.encodeCraftingPattern(player, before, encodingSource, selectedOptions);
+			if (generation != commitGeneration || fresh.status() != Status.OK || !ItemStack.matches(after, fresh.result())) return clear(player, Status.STALE);
+			changed = encodingSource.commit(player, target, () -> generation == commitGeneration && target.stillValid(player)
+					? TerminalCursorExchange.convert(player, target, before, after) : new TerminalCursorExchange.Result(TerminalCursorExchange.Outcome.INVALID, 0));
+		}
 		else if (replacementSample != null) {
 			var fresh = MeBridgeIntegration.replacePattern(before, selectedRow, replacementSample.item());
 			if (fresh.status() != Status.OK || !ItemStack.matches(after, fresh.result())) return clear(player, Status.STALE);
@@ -133,10 +142,10 @@ final class MePatternSession {
 				&& (sample == null ? mode != Mode.PATTERN_REPLACEMENT : sample.current(player, menu));
 	}
 	private MeTerminalView page(ServerPlayer player, int page, Status status) {
-		int start = rows.isEmpty() ? 0 : Math.min(page, (rows.size() - 1) / 8) * 8;
-		return view = new MeTerminalView(MeTerminalBudget.revision(player.server), mode, status, start / 8, start + 8 < rows.size(), title, 0, "",
-				status == Status.OK && !result.isEmpty() && !ItemStack.matches(original, result), rows.subList(start, Math.min(start + 8, rows.size())));
+		int size = MeTerminalView.pageSize(mode), start = rows.isEmpty() ? 0 : Math.min(page, (rows.size() - 1) / size) * size;
+		return view = new MeTerminalView(MeTerminalBudget.revision(player.server), mode, status, start / size, start + size < rows.size(), title, 0, "",
+				status == Status.OK && !result.isEmpty() && !ItemStack.matches(original, result), rows.subList(start, Math.min(start + size, rows.size()))).withCraftingOptions(craftingOptions);
 	}
-	private MeTerminalView clear(ServerPlayer player, Status status) { close(); return page(player, 0, status); }
-	void close() { if (batch != null) batch.close(); batch = null; original = ItemStack.EMPTY; result = ItemStack.EMPTY; rows = List.of(); menu = null; source = null; sample = null; replacementRow = -1; title = ""; until = 0; }
+	private MeTerminalView clear(ServerPlayer player, Status status) { var selected = craftingOptions; close(); if (mode == Mode.PATTERN_ENCODING) craftingOptions = selected; return page(player, 0, status); }
+	void close() { generation++; if (batch != null) batch.close(); batch = null; original = ItemStack.EMPTY; result = ItemStack.EMPTY; rows = List.of(); menu = null; source = null; sample = null; craftingOptions = CraftingOptions.DEFAULT; replacementRow = -1; title = ""; until = 0; }
 }

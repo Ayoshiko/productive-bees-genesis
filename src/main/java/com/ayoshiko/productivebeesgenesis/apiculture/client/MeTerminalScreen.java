@@ -104,6 +104,9 @@ public final class MeTerminalScreen extends Screen {
 		if (session.waiting()) for (var action : actions) action.active = false;
 	}
 	private void request(MeTerminalRequest.Action action, int row, int page) {
+		if (action == PATTERN_ENCODE_CRAFTING) {
+			request(action, row, 0, shown.mode() == Mode.PATTERN_ENCODING ? shown.craftingOptions().bits() : 0); return;
+		}
 		long amount;
 		try { amount = Long.parseLong(quantity == null ? count : quantity.getValue()); if (action == PLAN && amount <= 0) return; }
 		catch (NumberFormatException invalid) { if (action == PLAN) return; amount = 0; }

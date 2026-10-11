@@ -3,7 +3,15 @@ package com.ayoshiko.productivebeesgenesis.apiculture.me;
 import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
-public record MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows, Receipt receipt) {
+public record MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows, Receipt receipt, CraftingOptions craftingOptions) {
+	public record CraftingOptions(boolean substituteItems, boolean substituteFluids) {
+		public static final CraftingOptions DEFAULT = new CraftingOptions(false, false);
+		public int bits() { return (substituteItems ? 1 : 0) | (substituteFluids ? 2 : 0); }
+		public static CraftingOptions from(long bits) {
+			if (bits < 0 || bits > 3) throw new IllegalArgumentException("Invalid crafting options");
+			return new CraftingOptions((bits & 1) != 0, (bits & 2) != 0);
+		}
+	}
 	public record Receipt(String fluid, int retained, int uncertain, int retainedEnergy, int uncertainEnergy, String chemical, long retainedChemical, long uncertainChemical) {
 		public static final Receipt EMPTY = new Receipt("", 0, 0);
 		public Receipt(String fluid, int retained, int uncertain) { this(fluid, retained, uncertain, 0, 0); }
@@ -16,8 +24,11 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	public MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows) {
 		this(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, Receipt.EMPTY);
 	}
+	public MeTerminalView(long revision, Mode mode, Status status, int page, boolean more, String title, long bytes, String cpu, boolean confirm, List<Row> rows, Receipt receipt) {
+		this(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, receipt, CraftingOptions.DEFAULT);
+	}
 	public static final int STORAGE_ROWS = 36;
-	public static int pageSize(Mode mode) { return mode == Mode.STORAGE || mode == Mode.PROVIDER_SLOTS ? STORAGE_ROWS : mode == Mode.PATTERN_BUFFER ? 9 : 8; }
+	public static int pageSize(Mode mode) { return mode == Mode.STORAGE || mode == Mode.PROVIDER_SLOTS ? STORAGE_ROWS : mode == Mode.PATTERN_BUFFER ? 9 : mode == Mode.PATTERN_ENCODING ? 6 : 8; }
 	public enum Mode {
 		CATALOGUE, PLAN, TASKS, STORAGE, PATTERN, PATTERN_ENCODING, PATTERN_REPLACEMENT, PATTERN_PROCESSING, PATTERN_BATCH, PATTERN_BATCH_DETAIL, PATTERN_BUFFER, PROVIDERS, PROVIDER_SLOTS, PATTERN_BUFFER_BATCH, PATTERN_BUFFER_BATCH_DETAIL, PROVIDER_UPLOAD_BATCH, PROVIDER_RETURN_BATCH, PROVIDER_SETTINGS, PROVIDER_PATTERN, PROVIDER_PATTERN_REPLACEMENT, PROVIDER_EDIT_SOURCE, PROVIDER_EDIT_BATCH, PROVIDER_EDIT_DETAIL;
 		public boolean providerBatch() { return this == PROVIDER_UPLOAD_BATCH || this == PROVIDER_RETURN_BATCH; }
@@ -42,12 +53,14 @@ public record MeTerminalView(long revision, Mode mode, Status status, int page, 
 	}
 	public MeTerminalView {
 		rows = List.copyOf(rows);
-		if (revision < 0 || page < 0 || bytes < 0 || title.length() > 256 || cpu.length() > 128 || rows.size() > pageSize(mode) || receipt == null) throw new IllegalArgumentException("Invalid ME view");
+		if (revision < 0 || page < 0 || bytes < 0 || title.length() > 256 || cpu.length() > 128 || rows.size() > pageSize(mode) || receipt == null
+				|| craftingOptions == null || mode != Mode.PATTERN_ENCODING && !craftingOptions.equals(CraftingOptions.DEFAULT)) throw new IllegalArgumentException("Invalid ME view");
 	}
 	public static MeTerminalView empty(Status status) { return new MeTerminalView(0, Mode.CATALOGUE, status, 0, false, "", 0, "", false, List.of()); }
 	public static MeTerminalView storageStatus(Status status) { return new MeTerminalView(0, Mode.STORAGE, status, 0, false, "", 0, "", false, List.of()); }
 	public static MeTerminalView patternStatus(Status status) { return patternStatus(status, Mode.PATTERN); }
 	public static MeTerminalView patternStatus(Status status, Mode mode) { return new MeTerminalView(0, mode, status, 0, false, "", 0, "", false, List.of()); }
-	public MeTerminalView status(Status value) { return new MeTerminalView(revision, mode, value, page, more, title, bytes, cpu, value == Status.OK && confirm, rows, receipt); }
-	public MeTerminalView withReceipt(Receipt value) { return new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, value); }
+	public MeTerminalView status(Status value) { return new MeTerminalView(revision, mode, value, page, more, title, bytes, cpu, value == Status.OK && confirm, rows, receipt, craftingOptions); }
+	public MeTerminalView withReceipt(Receipt value) { return new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, value, craftingOptions); }
+	public MeTerminalView withCraftingOptions(CraftingOptions value) { return new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, receipt, value); }
 }

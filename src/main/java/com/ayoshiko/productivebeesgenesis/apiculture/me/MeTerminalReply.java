@@ -21,8 +21,9 @@ public record MeTerminalReply(int containerId, UUID session, long sequence, MeTe
 			var rows = new ArrayList<MeTerminalView.Row>();
 			for (int i=0;i<count;i++) rows.add(new MeTerminalView.Row(b.readEnum(MeTerminalView.Kind.class), ItemStack.OPTIONAL_STREAM_CODEC.decode(b), b.readUtf(128), b.readLong(), b.readLong(), b.readBoolean(), b.readBoolean()));
 			var receipt = new MeTerminalView.Receipt(b.readUtf(128), b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readUtf(128), b.readVarLong(), b.readVarLong());
+			var options = MeTerminalView.CraftingOptions.from(b.readUnsignedByte());
 			if (b.isReadable()) throw new IllegalArgumentException("Trailing ME reply data");
-			return new MeTerminalReply(id, session, sequence, new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, receipt));
+			return new MeTerminalReply(id, session, sequence, new MeTerminalView(revision, mode, status, page, more, title, bytes, cpu, confirm, rows, receipt, options));
 		}
 		public void encode(RegistryFriendlyByteBuf b, MeTerminalReply r) {
 			int start = b.writerIndex(); var v = r.view;
@@ -32,6 +33,7 @@ public record MeTerminalReply(int containerId, UUID session, long sequence, MeTe
 			b.writeUtf(v.receipt().fluid(), 128); b.writeVarInt(v.receipt().retained()); b.writeVarInt(v.receipt().uncertain());
 			b.writeVarInt(v.receipt().retainedEnergy()); b.writeVarInt(v.receipt().uncertainEnergy());
 			b.writeUtf(v.receipt().chemical(), 128); b.writeVarLong(v.receipt().retainedChemical()); b.writeVarLong(v.receipt().uncertainChemical());
+			b.writeByte(v.craftingOptions().bits());
 			if (b.writerIndex() - start > MAX_BYTES) throw new IllegalArgumentException("ME reply too large");
 		}
 	};
