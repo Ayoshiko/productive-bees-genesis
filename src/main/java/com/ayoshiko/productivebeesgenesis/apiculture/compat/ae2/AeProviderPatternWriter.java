@@ -5,7 +5,7 @@ import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-/** 调用者先撤销本项资格并锁定样本账户；原供应器始终拥有样板，一次写入后不补偿。 */
+/** 调用者先消费本项资格；资源替换另锁定样本账户；原供应器始终拥有样板，一次写入后不补偿。 */
 final class AeProviderPatternWriter {
     static TerminalCursorExchange.Result replace(ServerPlayer player, AePatternProviderTarget target, int slot,
             ItemStack original, ItemStack wanted, BooleanSupplier live) {

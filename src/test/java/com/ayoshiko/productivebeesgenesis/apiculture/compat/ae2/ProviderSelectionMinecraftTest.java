@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.compat.ae2;
 
 import appeng.api.crafting.PatternDetailsHelper;
+import appeng.api.ids.AEComponents;
+import appeng.core.definitions.AEItems;
 import appeng.api.networking.*;
 import appeng.api.stacks.*;
 import appeng.blockentity.crafting.PatternProviderBlockEntity;
@@ -11,6 +13,9 @@ import java.util.*;
 import java.util.function.Supplier;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -80,6 +85,24 @@ class ProviderSelectionMinecraftTest {
             return view = backend.request(new MeTerminalRequest(1, UUID.randomUUID(), ++sequence, action, view.revision(), row, page, 0, query));
         }
         MeTerminalView send(MeTerminalRequest.Action action, int row) { return send(action, row, view.page(), ""); }
+        MeTerminalView amount(MeTerminalRequest.Action action, int row, long amount) {
+            tick += 5;
+            return view = backend.request(new MeTerminalRequest(1, UUID.randomUUID(), ++sequence, action, view.revision(), row, view.page(), amount, ""));
+        }
+        void scale(int scope, MeTerminalRequest.Action action, long factor) {
+            carried = pattern();
+            if (scope == 2) selectAcrossPages();
+            else { browse(); if (scope == 1) send(PROVIDER_OPEN, 1); }
+            assertEquals(MeTerminalView.Mode.PROVIDER_EDIT_SOURCE, send(scope == 2 ? PROVIDER_EDIT_SELECTED : PROVIDER_EDIT_OPEN, -1).mode());
+            assertEquals(Status.WAITING, amount(action, -1, factor).status());
+        }
+        void advance() {
+            for (int i = 0; i < 400 && view.status() == Status.WAITING; i++) send(POLL, -1);
+        }
+        void ready() { advance(); assertEquals(Status.OK, view.status()); }
+        void selectAll() { assertTrue(amount(PROVIDER_EDIT_SELECT, -1, 1).confirm()); }
+        ItemStack item(int provider, int slot) { return logics.get(provider).getPatternInv().getStackInSlot(slot); }
+        void put(int provider, int slot, ItemStack item) { logics.get(provider).getPatternInv().setItemDirect(slot, item.copy()); }
         void browse() { assertEquals(Status.OK, send(PROVIDERS, -1, 0, "").status()); }
         void selectAcrossPages() {
             browse(); assertEquals(Status.OK, send(PROVIDER_SELECT, 0).status());
@@ -90,6 +113,163 @@ class ProviderSelectionMinecraftTest {
     private static ItemStack pattern() {
         return PatternDetailsHelper.encodeProcessingPattern(List.of(new GenericStack(AEItemKey.of(Items.RAW_IRON), 2)),
                 List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1)));
+    }
+
+
+    private static ItemStack pattern(long input, long output) {
+        return PatternDetailsHelper.encodeProcessingPattern(List.of(new GenericStack(AEItemKey.of(Items.RAW_IRON), input)),
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), output)));
+    }
+    private static void scaled(ItemStack before, ItemStack actual, long factor, boolean divide) {
+        var original = before.get(AEComponents.ENCODED_PROCESSING_PATTERN); var result = actual.get(AEComponents.ENCODED_PROCESSING_PATTERN);
+        for (int side = 0; side < 2; side++) {
+            var a = side == 0 ? original.sparseInputs() : original.sparseOutputs();
+            var b = side == 0 ? result.sparseInputs() : result.sparseOutputs(); assertEquals(a.size(), b.size());
+            for (int slot = 0; slot < a.size(); slot++) {
+                if (a.get(slot) == null) { assertNull(b.get(slot)); continue; }
+                assertEquals(a.get(slot).what(), b.get(slot).what());
+                assertEquals(divide ? a.get(slot).amount() / factor : a.get(slot).amount() * factor, b.get(slot).amount());
+            }
+        }
+        var restored = actual.copy(); restored.set(AEComponents.ENCODED_PROCESSING_PATTERN, original);
+        assertTrue(ItemStack.matches(before, restored), "Preserve count and all other components");
+    }
+    @Test void providerScalingUsesEachScopeAndNeedsNoSampleOrDivisibleCarriedPattern() throws Exception {
+        for (int scope = 0; scope < 3; scope++) for (boolean divide : new boolean[]{false, true})
+                try (var r = new Rig(10, 36); var samples = mockStatic(TerminalPatternSample.class)) {
+            samples.when(() -> TerminalPatternSample.capture(r.player, r.menu)).thenThrow(new AssertionError("Scaling must not capture a material sample"));
+            var named = new ItemStack(Items.RAW_IRON); named.set(DataComponents.CUSTOM_NAME, Component.literal("精确键"));
+            var original = PatternDetailsHelper.encodeProcessingPattern(Arrays.asList(new GenericStack(AEItemKey.of(named), 6), null,
+                    new GenericStack(AEFluidKey.of(Fluids.WATER), 1000)), List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4)));
+            original.set(DataComponents.CUSTOM_NAME, Component.literal("供应器倍率"));
+            for (int provider = 0; provider < 10; provider++) r.put(provider, 0, original);
+            r.scale(scope, divide ? PROVIDER_EDIT_DIVIDE : PROVIDER_EDIT_MULTIPLY, 2); r.ready(); r.selectAll();
+            int count = scope == 0 ? 8 : scope == 1 ? 1 : 2; assertEquals(count, r.view.bytes());
+            assertEquals(Status.WAITING, r.send(PROVIDER_EDIT_APPLY, -1).status()); r.advance();
+            assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status()); assertEquals(Integer.toString(count), r.view.cpu());
+            for (int provider = 0; provider < 10; provider++) {
+                boolean chosen = scope == 0 ? provider < 8 : scope == 1 ? provider == 1 : provider == 0 || provider == 8;
+                if (chosen) scaled(original, r.item(provider, 0), 2, divide); else assertTrue(ItemStack.matches(original, r.item(provider, 0)));
+            }
+            assertTrue(ItemStack.matches(pattern(), r.carried)); samples.verifyNoInteractions();
+        }
+    }
+    @Test void scaledSlotSelectionSurvivesPagesAndDetailsAndDoesNotSelectOtherPatterns() throws Exception {
+        try (var r = new Rig(1, 36)) {
+            for (int slot = 0; slot < 10; slot++) r.put(0, slot, pattern(2 * (slot + 1), 2));
+            r.scale(0, PROVIDER_EDIT_MULTIPLY, 4); r.ready(); r.send(PROVIDER_EDIT_TOGGLE, 0); r.send(PROVIDER_EDIT_DETAILS, 0);
+            assertEquals(MeTerminalView.Mode.PROVIDER_EDIT_DETAIL, r.view.mode());
+            assertEquals(2, r.view.rows().getFirst().amount()); assertEquals(8, r.view.rows().getFirst().extra()); assertTrue(r.view.rows().getFirst().enabled());
+            r.send(PROVIDER_EDIT_LIST, -1); r.send(PAGE, -1, 1, ""); r.send(PROVIDER_EDIT_TOGGLE, 0);
+            assertEquals(2, r.view.bytes()); r.send(PROVIDER_EDIT_APPLY, -1); r.advance(); assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status());
+            for (int slot = 0; slot < 10; slot++) {
+                var before = pattern(2 * (slot + 1), 2);
+                if (slot == 0 || slot == 8) scaled(before, r.item(0, slot), 4, false); else assertTrue(ItemStack.matches(before, r.item(0, slot)));
+            }
+        }
+    }
+    @Test void divisionShowsIneligibleCandidatesAndCanStillApplyTheEligibleOnes() throws Exception {
+        try (var r = new Rig(1, 9)) {
+            r.put(0, 0, pattern(6, 4)); r.put(0, 1, pattern(3, 2)); r.put(0, 2, AEItems.PROCESSING_PATTERN.stack());
+            r.scale(0, PROVIDER_EDIT_DIVIDE, 2); r.ready(); assertEquals(3, r.view.rows().size());
+            assertEquals(Status.PATTERN_NOT_DIVISIBLE.ordinal(), r.view.rows().get(1).extra());
+            assertEquals(Status.PATTERN_INVALID.ordinal(), r.view.rows().get(2).extra());
+            r.send(PROVIDER_EDIT_TOGGLE, 1); assertEquals(0, r.view.bytes());
+            r.selectAll(); assertEquals(1, r.view.bytes()); r.send(PROVIDER_EDIT_APPLY, -1); r.advance();
+            assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status()); scaled(pattern(6, 4), r.item(0, 0), 2, true);
+            assertTrue(ItemStack.matches(pattern(3, 2), r.item(0, 1))); assertTrue(ItemStack.matches(AEItems.PROCESSING_PATTERN.stack(), r.item(0, 2)));
+        }
+    }
+    @Test void providerScalingRefusesIndividualAndCombinedOverflowAndFactorOne() throws Exception {
+        for (boolean unchanged : new boolean[]{false, true}) try (var r = new Rig(1, 9)) {
+            r.put(0, 0, pattern(Long.MAX_VALUE / 2 + 1, 1));
+            long amount = Long.MAX_VALUE / 4 + 1;
+            r.put(0, 1, PatternDetailsHelper.encodeProcessingPattern(List.of(new GenericStack(AEItemKey.of(Items.RAW_IRON), amount),
+                    new GenericStack(AEItemKey.of(Items.RAW_IRON), amount)), List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1))));
+            r.scale(0, PROVIDER_EDIT_MULTIPLY, unchanged ? 1 : 2); r.ready();
+            assertTrue(r.view.rows().stream().allMatch(row -> row.extra() == (unchanged ? Status.PATTERN_NO_CHANGE : Status.PATTERN_OVERFLOW).ordinal()));
+            r.amount(PROVIDER_EDIT_SELECT, -1, 1); assertEquals(0, r.view.bytes()); assertFalse(r.view.confirm());
+            assertEquals(Status.INVALID, r.send(PROVIDER_EDIT_APPLY, -1).status()); assertEquals(Long.MAX_VALUE / 2 + 1, r.item(0, 0).get(AEComponents.ENCODED_PROCESSING_PATTERN).sparseInputs().getFirst().amount());
+        }
+        try (var r = new Rig(1, 9)) {
+            var original = pattern(1, 1); r.put(0, 0, original); r.scale(0, PROVIDER_EDIT_MULTIPLY, Long.MAX_VALUE); r.ready(); r.selectAll();
+            r.send(PROVIDER_EDIT_APPLY, -1); r.advance(); assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status()); scaled(original, r.item(0, 0), Long.MAX_VALUE, false);
+        }
+    }
+    @Test void malformedScaleRequestsCannotChangeTheFrozenOperationOrSkipConfirmation() throws Exception {
+        for (int failure = 0; failure < 5; failure++) try (var r = new Rig(1, 9)) {
+            r.put(0, 0, pattern(4, 2)); r.carried = pattern(); r.browse(); r.send(PROVIDER_EDIT_OPEN, -1); r.tick += 5;
+            r.view = r.backend.request(new MeTerminalRequest(1, UUID.randomUUID(), ++r.sequence, PROVIDER_EDIT_MULTIPLY,
+                    failure == 0 ? r.view.revision() + 1 : r.view.revision(), failure == 1 ? 0 : -1,
+                    failure == 2 ? 1 : 0, failure == 3 ? 0 : 2, failure == 4 ? "unexpected" : ""));
+            assertEquals(failure == 0 || failure == 2 ? Status.STALE : Status.INVALID, r.view.status());
+            assertTrue(ItemStack.matches(pattern(4, 2), r.item(0, 0)));
+        }
+        try (var r = new Rig(1, 9)) {
+            var original = pattern(4, 2); r.put(0, 0, original); r.scale(0, PROVIDER_EDIT_MULTIPLY, 2);
+            assertEquals(Status.INVALID, r.amount(PROVIDER_EDIT_DIVIDE, -1, 2).status()); r.send(POLL, -1); r.ready();
+            assertEquals(Status.INVALID, r.amount(PROVIDER_EDIT_MULTIPLY, -1, 10).status());
+            r.selectAll(); r.send(PROVIDER_EDIT_APPLY, -1); r.advance(); assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status());
+            scaled(original, r.item(0, 0), 2, false);
+            r.send(PROVIDER_EDIT_APPLY, -1); r.send(POLL, -1); scaled(original, r.item(0, 0), 2, false);
+        }
+    }
+    @Test void changedSlotsTargetsPermissionsAndCarriedPatternsRejectTheConfirmedBatch() throws Exception {
+        for (int failure = 0; failure < 9; failure++) try (var r = new Rig(1, 9)) {
+            var original = pattern(4, 2); r.put(0, 0, original); r.scale(0, PROVIDER_EDIT_MULTIPLY, 2); r.ready(); r.selectAll();
+            switch (failure) {
+                case 0 -> r.put(0, 0, pattern(8, 2));
+                case 1 -> when(r.hosts.getFirst().getLogic()).thenReturn(mock(PatternProviderLogic.class));
+                case 2 -> when(r.nodes.getFirst().isActive()).thenReturn(false);
+                case 3 -> when(r.hosts.getFirst().isVisibleInTerminal()).thenReturn(false);
+                case 4 -> r.blocks.clear();
+                case 5 -> when(r.level.mayInteract(eq(r.player), any())).thenReturn(false);
+                case 6 -> r.carried = pattern(8, 4);
+                case 7 -> when(r.menu.stillValid(r.player)).thenReturn(false);
+                case 8 -> r.tick += 601;
+            }
+            var before = r.item(0, 0).copy(); clearInvocations(r.hosts.getFirst());
+            assertEquals(Status.STALE, r.send(PROVIDER_EDIT_APPLY, -1).status(), "failure=" + failure);
+            assertTrue(ItemStack.matches(before, r.item(0, 0))); verify(r.hosts.getFirst(), never()).saveChanges();
+        }
+    }
+    @Test void cancellationAndChangedNextSlotKeepCompletedScaleWithoutRepeatingIt() throws Exception {
+        for (boolean cancelled : new boolean[]{false, true}) try (var r = new Rig(1, 9)) {
+            var original = pattern(4, 2); r.put(0, 0, original); r.put(0, 1, original);
+            r.scale(0, PROVIDER_EDIT_MULTIPLY, 2); r.ready(); r.selectAll(); r.send(PROVIDER_EDIT_APPLY, -1); r.send(POLL, -1);
+            scaled(original, r.item(0, 0), 2, false); assertTrue(ItemStack.matches(original, r.item(0, 1)));
+            if (cancelled) r.send(PROVIDER_EDIT_CANCEL, -1); else { r.put(0, 1, pattern(8, 2)); r.send(POLL, -1); }
+            assertEquals(Status.PROVIDER_EDIT_STOPPED, r.view.status()); assertEquals("1", r.view.cpu());
+            var second = r.item(0, 1).copy(); r.send(POLL, -1); r.send(PAGE, -1, 0, ""); r.send(PROVIDER_EDIT_APPLY, -1);
+            scaled(original, r.item(0, 0), 2, false); assertTrue(ItemStack.matches(second, r.item(0, 1)));
+        }
+    }
+    @Test void unknownScaleWriteAndReentrantCloseStopOtherProvidersWithoutCompensation() throws Exception {
+        for (boolean reentrant : new boolean[]{false, true}) try (var r = new Rig(10, 36)) {
+            var original = pattern(4, 2); r.put(0, 0, original); r.put(8, 0, original);
+            r.scale(2, PROVIDER_EDIT_MULTIPLY, 2); r.ready(); r.selectAll(); clearInvocations(r.hosts.get(0));
+            if (reentrant) doAnswer(call -> { r.backend.close(); return null; }).when(r.hosts.get(0)).saveChanges();
+            else doThrow(new IllegalStateException("Unknown save after scaled slot write")).when(r.hosts.get(0)).saveChanges();
+            r.send(PROVIDER_EDIT_APPLY, -1); r.send(POLL, -1);
+            assertEquals(Status.PROVIDER_PATTERN_UNKNOWN, r.view.status()); assertEquals("0", r.view.cpu());
+            scaled(original, r.item(0, 0), 2, false); assertTrue(ItemStack.matches(original, r.item(8, 0)));
+            // 一次原生写入可能触发两个保存回调；重放后不能再触发保存或改写。
+            verify(r.hosts.get(0), atLeastOnce()).saveChanges(); clearInvocations(r.hosts.get(0));
+            r.send(POLL, -1); r.send(PROVIDER_EDIT_APPLY, -1);
+            scaled(original, r.item(0, 0), 2, false); assertTrue(ItemStack.matches(original, r.item(8, 0))); verify(r.hosts.get(0), never()).saveChanges();
+        }
+    }
+    @Test void sharedBudgetDefersScalePreparationAndExecutionWithoutMovingTheSlot() throws Exception {
+        try (var r = new Rig(1, 9)) {
+            var original = pattern(4, 2); r.put(0, 0, original); r.scale(0, PROVIDER_EDIT_MULTIPLY, 2);
+            r.tick += 5; assertTrue(MeTerminalBudget.expensive(r.server));
+            r.view = r.backend.request(new MeTerminalRequest(1, UUID.randomUUID(), ++r.sequence, POLL, r.view.revision(), -1, 0, 0, ""));
+            assertEquals(Status.WAITING, r.view.status()); assertTrue(r.view.rows().isEmpty()); r.ready(); r.selectAll(); r.send(PROVIDER_EDIT_APPLY, -1);
+            r.tick += 5; assertTrue(MeTerminalBudget.expensive(r.server)); clearInvocations(r.hosts.getFirst());
+            r.view = r.backend.request(new MeTerminalRequest(1, UUID.randomUUID(), ++r.sequence, POLL, r.view.revision(), -1, 0, 0, ""));
+            assertTrue(ItemStack.matches(original, r.item(0, 0))); verify(r.hosts.getFirst(), never()).saveChanges();
+            r.advance(); assertEquals(Status.PROVIDER_EDIT_DONE, r.view.status()); scaled(original, r.item(0, 0), 2, false);
+        }
     }
 
     @Test void selectionsSurvivePagingAndSameSearchWithoutIncludingOtherVisibleProviders() throws Exception {

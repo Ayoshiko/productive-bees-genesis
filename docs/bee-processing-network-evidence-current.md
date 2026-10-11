@@ -1068,3 +1068,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 依赖为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,410,032 字节，SHA-256 `f829e7404122ff7a3e27af7156c12a0749b5626aa5c220054dd846928046478f`；初始／最终 XML、构建输出、源码／依赖／产物哈希和链接检查位于 `build/network-gates/d18j4a6-20261011/`。
 
 真实客户端 Shift 操作／长文案与缩放、网络／独立机宿主权限及无线费用、实际 ME 与跨 JVM 玩家保存联合尚未运行；j4a6、完整 j4／D18 和发布门继续开放。供应器、其它外部容器及普通合成样板倍率后续按实际接口交付；没有 Spark／MSPT 结论。
+
+<a id="s10-158"></a>
+### 10.158 D18j4b3f 供应器范围批量样板倍率（2026-10-11，已实现并验证原生库存行为，功能联合待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `a5dca2e` 上，将 a6 倍率编辑器接入已有供应器批次。当前整台、当前列表页与跨页已选范围均可在来源页输入正 long 倍率并预览乘除，无需九格替换样本；鼠标仍持原生处理样板以绑定当前会话。原右键资源替换继续要求真实样本账户。合同、交互及参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+每个候选沿原生编码、精确整除及逐格／同键 long 检查独立准备；无变化或非法项不可选。确认固定倍率与选中槽，执行前重算同一结果并先消费项资格，再复用 AeProviderPatternWriter 的一次写入／回读。来源、原槽、权限或目标身份变化停止；部分完成不回滚，未知不补偿、不重试、不掉落。倍率路径直接使用供应器写入边界，资源替换仍经过样本提交守卫。原生范围、8 台／288 槽上限和全服预算不变，ME 协议追加两个动作并升至 23，终端／机器 36／12 及存档格式不变。
+
+执行 `.\gradlew test -PminecraftTests --tests '*ProviderSelectionMinecraftTest' --offline --no-daemon`，最终 **16 项**通过，其中本步新增 **9 项**、原选择及资源替换回归 **7 项**。真实初始化的 AE2 编码、PatternProviderLogic 和 AppEngInternalInventory 经过正式范围／批次／写入路径；服务器、玩家、菜单、网格节点和宿主为模拟对象。覆盖三种范围的乘除、鼠标不可整除而候选可整除、无样本调用、完整物品／流体键及稀疏位保留、跨页逐槽选择／详情、不能整除及损坏编码、逐格／合计溢出、倍率 0／1／long 上限、错误页／行／revision／请求参数、禁止叠加倍率、原槽／逻辑／权限／加载／鼠标／菜单／期限变化、取消及部分完成、共享预算等待、保存异常与回调内关闭后不重放。
+
+首轮 16 项中两项测试断言失败：一次原生槽写入会经变更和保存通知触发两处宿主保存，原“只保存一次”断言不成立；另一个用例收到非法动作回复后未先 POLL 刷新就等待就绪。补读固定 AE2 19.2.17 的实际回调链，改为核对重放不新增保存及原槽结果不变，并修正测试刷新顺序后全部通过；未为测试放宽生产边界。随后 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **41 项**普通回归、编译、构建与产物核验通过；合计 **57 项**，零失败／错误／跳过。
+
+基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR 4,411,364 字节，SHA-256 `b46035bce27ee4ffb1ef8d603af0a1953b91e4950be0bc64fa803daf3265a0a9`。初始／最终 XML、构建输出、固定本地参考、源码／依赖／产物哈希与链接检查保存在 `build/network-gates/d18j4b3f-20261011/`。
+
+真实客户端倍率输入／缩放及长文案、实际 ME／宿主权限与无线费用、多玩家竞争、跨 JVM 供应器保存恢复及附属完整注入联合尚未运行；j4b3f、完整 j4／D18 与发布门继续开放。其它外部容器、自定义库存和普通合成样板倍率后续按实际接口交付，无 Spark／MSPT 性能结论。

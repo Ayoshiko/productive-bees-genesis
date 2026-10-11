@@ -8,6 +8,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -22,6 +23,9 @@ final class MeProviderEditPane {
     private final MeProviderPane.Commands commands;
     private final List<Button> buttons = new ArrayList<>();
     private Button previous, next, apply, select, deselect, stop;
+    private EditBox factor;
+    private Button multiply, divide;
+    private String factorValue = "2";
     private MeTerminalView shown;
     private int left, top, width, height;
     MeProviderEditPane(AbstractContainerMenu menu, MeTerminalSession session, MeProviderPane.Commands commands) {
@@ -29,7 +33,8 @@ final class MeProviderEditPane {
     }
     List<AbstractWidget> build(Font font, int left, int top, int width, int height, Runnable back, Runnable browse) {
         this.left = left; this.top = top; this.width = width; this.height = height; shown = session.view();
-        buttons.clear(); select = deselect = null;
+        if (factor != null) factorValue = factor.getValue();
+        buttons.clear(); select = deselect = multiply = divide = null; factor = null;
         var widgets = new ArrayList<AbstractWidget>();
         add(widgets, "provider_list", 8, 38, 92, browse);
         if (shown.mode() == Mode.PROVIDER_EDIT_DETAIL) add(widgets, "pattern_batch_list", 104, 38, width - 112, () -> send(PROVIDER_EDIT_LIST, -1, shown.page(), 0));
@@ -37,14 +42,26 @@ final class MeProviderEditPane {
             select = add(widgets, "pattern_batch_select", 104, 38, 92, () -> send(PROVIDER_EDIT_SELECT, -1, shown.page(), 1));
             deselect = add(widgets, "pattern_batch_deselect", 200, 38, width - 208, () -> send(PROVIDER_EDIT_SELECT, -1, shown.page(), 0));
         }
+        if (shown.mode() == Mode.PROVIDER_EDIT_SOURCE) {
+            factor = new EditBox(font, left + 104, top + 38, 56, 14, MeInventoryPane.text("pattern_factor"));
+            factor.setMaxLength(19); factor.setFilter(value -> value.isEmpty() || value.matches("[0-9]+")); factor.setValue(factorValue);
+            factor.setHint(MeInventoryPane.text("pattern_factor")); widgets.add(factor);
+            multiply = add(widgets, "pattern_multiply", 164, 38, 60, () -> scale(PROVIDER_EDIT_MULTIPLY));
+            divide = add(widgets, "pattern_divide", 228, 38, width - 236, () -> scale(PROVIDER_EDIT_DIVIDE));
+            var hint = Tooltip.create(MeInventoryPane.text("provider_scale_hint"));
+            factor.setTooltip(hint); multiply.setTooltip(hint); divide.setTooltip(hint);
+        }
         add(widgets, "back", 8, height - 21, 52, back);
         previous = add(widgets, "previous", 64, height - 21, 24, () -> send(PAGE, -1, Math.max(0, shown.page() - 1), 0));
         next = add(widgets, "next", 92, height - 21, 24, () -> send(PAGE, -1, shown.page() + 1, 0));
         stop = add(widgets, "provider_batch_stop", 120, height - 21, 80, () -> send(PROVIDER_EDIT_CANCEL, -1, shown.page(), 0));
         apply = add(widgets, "provider_edit_apply", 204, height - 21, width - 212, () -> send(PROVIDER_EDIT_APPLY, -1, shown.page(), 0));
         var hint = Tooltip.create(MeInventoryPane.text("provider_edit_apply_hint"));
-        apply.setTooltip(hint); stop.setTooltip(hint); tick(); return widgets;
+        apply.setTooltip(hint); stop.setTooltip(hint);
+        if (factor != null) factor.setResponder(ignored -> tick()); tick(); return widgets;
     }
+    private long factor() { try { return factor == null ? 0 : Long.parseLong(factor.getValue()); } catch (NumberFormatException invalid) { return 0; } }
+    private void scale(MeTerminalRequest.Action action) { long value = factor(); if (value > 0) send(action, -1, shown.page(), value); }
     private void send(MeTerminalRequest.Action action, int row, int page, long amount) { commands.send(action, row, page, amount, ""); }
     private Button add(List<AbstractWidget> widgets, String key, int x, int y, int size, Runnable action) {
         var button = Button.builder(MeInventoryPane.text(key), ignored -> action.run()).bounds(left + x, top + y, size, 14).build();
@@ -57,6 +74,7 @@ final class MeProviderEditPane {
         apply.active &= shown.confirm();
         stop.active &= shown.status() == Status.OK || shown.status() == Status.WAITING || shown.status() == Status.BUSY;
         if (select != null) { select.active &= shown.status() == Status.OK; deselect.active &= shown.status() == Status.OK; }
+        if (factor != null) { factor.active = available; multiply.active &= factor() > 0; divide.active &= factor() > 0; }
     }
     boolean click(double x, double y, int button) {
         if (session.waiting() || shown.revision() == 0 || shown.status() != Status.OK

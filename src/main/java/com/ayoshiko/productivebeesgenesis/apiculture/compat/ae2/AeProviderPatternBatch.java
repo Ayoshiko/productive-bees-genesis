@@ -58,7 +58,7 @@ final class AeProviderPatternBatch {
         totalSlots = (int) Math.min(Integer.MAX_VALUE, slots); until = now() + 600;
     }
     static boolean handles(MeTerminalRequest.Action action) {
-        return action == PROVIDER_EDIT_OPEN || action == PROVIDER_EDIT_REPLACE || action == PROVIDER_EDIT_TOGGLE
+        return action.providerScaleBatch() || action == PROVIDER_EDIT_OPEN || action == PROVIDER_EDIT_REPLACE || action == PROVIDER_EDIT_TOGGLE
                 || action == PROVIDER_EDIT_SELECT || action == PROVIDER_EDIT_DETAILS || action == PROVIDER_EDIT_LIST
                 || action == PROVIDER_EDIT_APPLY || action == PROVIDER_EDIT_CANCEL;
     }
@@ -72,7 +72,7 @@ final class AeProviderPatternBatch {
     }
     MeTerminalView request(MeTerminalRequest request) {
         if (closed || request.revision() == 0 || request.revision() != view.revision()) return abort(Status.STALE);
-        if (!request.query().isEmpty() || request.amount() != 0 && request.action() != PROVIDER_EDIT_SELECT) return view.status(Status.INVALID);
+        if (!request.query().isEmpty() || request.amount() != 0 && request.action() != PROVIDER_EDIT_SELECT && !request.action().providerScaleBatch()) return view.status(Status.INVALID);
         if (phase == Phase.FINISHED) {
             if (request.action() == PAGE && request.row() == -1) return page(request.page());
             if (request.action() == POLL && request.row() == -1) return page(view.page());
@@ -98,7 +98,7 @@ final class AeProviderPatternBatch {
             return page(view.page());
         }
         if (request.page() != view.page()) return view.status(Status.STALE);
-        if (phase == Phase.SOURCE) return selectResource(request);
+        if (phase == Phase.SOURCE) return request.action().providerScaleBatch() ? selectScale(request) : selectResource(request);
         if (phase != Phase.READY) return view.status(Status.INVALID);
         if (request.action() == PROVIDER_EDIT_LIST && request.row() == -1) {
             int page = Math.max(0, detail) / 8; detail = -1; return page(page);
@@ -119,13 +119,22 @@ final class AeProviderPatternBatch {
         }
         if (request.action() != PROVIDER_EDIT_APPLY || request.row() != -1 || !view.confirm()) return view.status(Status.INVALID);
         if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
-        boolean mappingCurrent = editor.current(sample.item());
+        boolean mappingCurrent = editor.current(sample == null ? ItemStack.EMPTY : sample.item());
         if (!active(Phase.READY)) return view;
         if (!mappingCurrent || !current()) return finish(Status.STALE);
         // 确认时先排除已知变化；执行阶段仍逐槽复核，不承诺跨供应器原子性。
         for (var entry : entries) if (entry.selected && !sameSlot(entry)) return finish(Status.STALE);
         if (!active(Phase.READY)) return view;
         phase = Phase.APPLYING; until = now() + 3600; return page(view.page());
+    }
+    private MeTerminalView selectScale(MeTerminalRequest request) {
+        if (request.row() != -1 || request.amount() < 1) return view.status(Status.INVALID);
+        if (!MeTerminalBudget.expensive(player.server)) return view.status(Status.BUSY);
+        var scaling = AePatternScale.capture(request.amount(), request.action() == PROVIDER_EDIT_DIVIDE);
+        if (!current()) return finish(Status.STALE);
+        if (!active(Phase.SOURCE)) return view;
+        editor = scaling.editor(); sourcePlan = null;
+        phase = Phase.PREPARING; until = now() + 3600; return page(0);
     }
     private MeTerminalView selectResource(MeTerminalRequest request) {
         if (request.action() != PROVIDER_EDIT_REPLACE || request.row() < 0 || request.row() >= view.rows().size()) return view.status(Status.INVALID);
@@ -167,13 +176,14 @@ final class AeProviderPatternBatch {
         if (executed == entries.size()) { finish(Status.PROVIDER_EDIT_DONE); return; }
         var entry = entries.get(executed++); // 先消费本项，任何回调不得重放它。
         var material = sample; var mapping = editor;
-        if (!sameSlot(entry) || !mapping.current(material.item()) || !current()) { entry.status = Status.STALE; finish(Status.PROVIDER_EDIT_STOPPED); return; }
+        if (!sameSlot(entry) || !mapping.current(material == null ? ItemStack.EMPTY : material.item()) || !current()) { entry.status = Status.STALE; finish(Status.PROVIDER_EDIT_STOPPED); return; }
         var plan = mapping.prepare(entry.original);
         if (plan.status() != Status.OK || !ItemStack.matches(entry.plan.result(), plan.result()) || !current()) { entry.status = Status.STALE; finish(Status.PROVIDER_EDIT_STOPPED); return; }
         if (!active(Phase.APPLYING)) return;
         entry.status = Status.WAITING;
-        var result = material.commit(player, menu, () -> AeProviderPatternWriter.replace(player, entry.target.provider(),
-                entry.slot, entry.original, plan.result(), () -> live() && valid(entry.target) && active(Phase.APPLYING)));
+        java.util.function.Supplier<TerminalCursorExchange.Result> commit = () -> AeProviderPatternWriter.replace(player, entry.target.provider(),
+                entry.slot, entry.original, plan.result(), () -> live() && valid(entry.target) && active(Phase.APPLYING));
+        var result = material == null ? commit.get() : material.commit(player, menu, commit);
         entry.status = switch (result.outcome()) {
             case MOVED -> Status.PROVIDER_PATTERN_REPLACED;
             case UNKNOWN -> Status.PROVIDER_PATTERN_UNKNOWN;
