@@ -1096,3 +1096,18 @@ WirelessRestockTemplates 只持有至多 37 个单件副本，不持玩家／世
 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **42 项**普通回归与构建、产物核验通过。合计 **54 项**，零失败／错误／跳过；本步验证未发现需继续修正的生产问题。NeoForge 客户端通用配置界面直接读取新枚举，默认值与中英文语言键同步。基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。
 
 JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85579614e959b2a26f82b1`。XML、构建输出、源码／依赖／产物哈希及 UTF-8／JSON／跨文档链接检查保存在 `build/network-gates/d18j3c4a-20261011/`。未运行真实客户端的配置保存重开、主动关闭包顺序、无线费用及双玩家联合，也未运行实际存档跨 JVM 恢复／故障耐久性；NBT 往返测试不替代这些证据。j3c4a、完整 j3／D18 与发布门仍开放，ME 自动回存及其它 WCWT 工作流继续独立交付，无 Spark／MSPT 性能结论。
+
+<a id="s10-160"></a>
+### 10.160 D18j3c4b 关闭时优先回存 ME（2026-10-11，已实现并验证逐格保管，功能联合待验收）
+
+在网络 worktree `bees-processing-network/1.21.1` 的 `3c8c252` 基线上追加“优先 ME 网络”去向，自动取回主开关仍默认关闭、默认去向仍为背包。主动关闭发送 CRAFT_STORE_ME_ON_CLOSE，沿已有所有者／独占、会话／序号／材料 generation、宿主权限及无线计费入口，使用当前桥提供的一次性 TerminalMaterialSource；不要求 ME 页面已经打开，不新增 AE2 硬依赖。合同、交互及参考见[9](bee-processing-network-design.md#s9)、[9.4](bee-processing-network-visual-design.md#s9-4)、[13.34](bee-processing-network-references.md#s13-34)。
+
+新 TerminalCraftingMeReturn 只存活于一次关闭请求；最多九格在一个全服昂贵操作令牌内逐格交接。完整组件往返校验通过后，先发布扣除原格的账户根及逐玩家插入 request，再调用真实接收量接口。确定余量先登记 cursor.pending，原账户／菜单／独占使用仍有效时返格，最后沿 c4a 的私有副本逻辑回背包；预算不足或没有可用桥直接使用背包。失效菜单的已知余量留玩家保管，未知请求停止后续格、不退款或重试；不移动鼠标栈、已付费结果与既有未决提取，不生成掉落。原物品保管 schema 2–7 和合成账户格式保持，终端协议升至 38，ME／机器仍为 23／12。
+
+执行 `.\gradlew test -PminecraftTests --tests '*TerminalCraftingMeReturnMinecraftTest' --tests '*TerminalCraftingReturnMinecraftTest' --offline --no-daemon`：首轮 **28 项**通过；审查补上每格／返格／最终回背包的独占使用复查，并增加“外部回调打开另一玩家共享菜单”的用例后，最终 **29 项**通过，其中新增 ME 回存 **17 项**、蜂业回存回归 **12 项**。覆盖默认值、完整命名／容器组件、鼠标及已付费结果保留、未知提取并存、逐格重复请求拒绝、部分／零接收与满背包留格、无桥／无来源／离线／预算不足、九格 576 件与同 tick 共享预算、异常／LinkageError／非法返回量、接收后抛错无退款、菜单关闭后的已知余量离线取回、账户替换／原根变化、通知失败、连接失效、锁定背包槽、已有保管拒绝、非法帧与非所有者／共享账户、瞬态组件拒绝，以及回调重入和新增查看者停止。
+
+测试运行初始化后的 Minecraft 物品／组件、原生玩家 Inventory、正式 TerminalCraftingMenu、合成账户、cursor 保管及 NBT 编解码；服务器、玩家、宿主菜单、ME 桥／连接和 TerminalMaterialSource 为模拟对象。未知 request 与已知 pending 分别做序列化恢复，不能据此称已验证实际 ME 提供者或跨 JVM 存档。固定本地 AE2 19.2.17 的 AEItemKey／StorageHelper 源码核对完整组件、模拟／实际接收及接收后的统计回调；无上游源码修改或新依赖。
+
+随后 `.\gradlew test --tests '*TerminalProtocolTest' --tests '*TerminalClientStateTest' --tests '*Ae2OptionalDependencyGuardTest' build verifyReleaseArtifact --offline --no-daemon` 的 **42 项**普通回归、构建与产物核验通过。最终合计 **71 项**，零失败／错误／跳过；注入的外部异常及通知失败属于预期负向用例。基线为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85、AE2 19.2.17，mod 1.0.10。JAR **4,421,237 字节**，SHA-256 `140927d1b2d70087136f73156735094e7727d2f6f0b30ac96125203141c33982`。
+
+初始／最终 XML、构建输出、固定参考副本、源码／依赖／产物哈希与 UTF-8／JSON／跨文档链接检查保存在 `build/network-gates/d18j3c4b-20261011/`。真实客户端的配置保存重开、关闭包顺序、实际 ME／权限／无线费用、多玩家和跨 JVM 正常保存／故障耐久性仍待联合验收；j3c4b、完整 j3／D18 与发布门保持开放。其它外部容器和剩余 WCWT 工作流继续按实际接口交付，无 Spark／MSPT 性能结论。

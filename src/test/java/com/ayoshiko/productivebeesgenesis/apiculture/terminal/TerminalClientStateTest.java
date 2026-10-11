@@ -8,7 +8,7 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalReq
 
 class TerminalClientStateTest {
 	@Test void returnOnCloseUsesTheCraftingGenerationAndCannotQueueTwice() {
-		for (var operation : List.of(CRAFT_RETURN_ON_CLOSE, CRAFT_STORE_ON_CLOSE)) {
+		for (var operation : List.of(CRAFT_RETURN_ON_CLOSE, CRAFT_STORE_ON_CLOSE, CRAFT_STORE_ME_ON_CLOSE)) {
 			var current = new TerminalClientState(7, session);
 			var request = current.beginCrafting(operation, 19, -1, -1, 0, 0);
 			assertEquals(19, request.generation()); assertEquals(1, request.sequence());

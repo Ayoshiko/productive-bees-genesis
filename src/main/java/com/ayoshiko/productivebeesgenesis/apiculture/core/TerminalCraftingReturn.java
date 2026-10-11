@@ -11,10 +11,16 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalRep
 /** 关闭回存只处理已知九格材料；账本与接收区全部准备完才发布，不调用外部库存。 */
 final class TerminalCraftingReturn {
 	static TerminalReply toNetwork(TerminalCraftingMenu.Host menu, ServerPlayer player, TerminalRequest request, TerminalCraftingAccount account) {
+		return transfer(menu, player, request, account, true);
+	}
+	static TerminalReply toInventory(TerminalCraftingMenu.Host menu, ServerPlayer player, TerminalRequest request, TerminalCraftingAccount account) {
+		return transfer(menu, player, request, account, false);
+	}
+	private static TerminalReply transfer(TerminalCraftingMenu.Host menu, ServerPlayer player, TerminalRequest request, TerminalCraftingAccount account, boolean network) {
 		if (!player.server.isSameThread() || !account.busy()) throw new IllegalStateException("Crafting return requires its server-thread account lock");
 		var before = account.state(); var inventory = TerminalCraftingPlan.copy(player.getInventory().items);
 		var grid = TerminalCraftingPlan.copy(before.grid());
-		var ledger = menu.craftingLedger(player); var checkpoint = ledger == null ? null : ledger.checkpoint();
+		var ledger = network ? menu.craftingLedger(player) : null; var checkpoint = ledger == null ? null : ledger.checkpoint();
 		var policy = ledger == null ? null : RuntimeProductPolicies.peek(player.serverLevel());
 		var next = checkpoint; int stored = 0;
 		if (policy != null) for (int slot = 0; slot < 9; slot++) {
@@ -36,7 +42,7 @@ final class TerminalCraftingReturn {
 		var prepared = account.prepare(before, remaining, before.pending(), before.uncertain());
 		if (player.containerMenu != menu.craftingMenu() || !menu.craftingMenu().stillValid(player)
 				|| menu.craftingAccount(player) != account || account.state() != before || !ItemStack.listMatches(inventory, player.getInventory().items)
-				|| menu.craftingLedger(player) != ledger || ledger != null && (ledger.checkpoint() != checkpoint || RuntimeProductPolicies.peek(player.serverLevel()) != policy))
+				|| network && menu.craftingLedger(player) != ledger || ledger != null && (ledger.checkpoint() != checkpoint || RuntimeProductPolicies.peek(player.serverLevel()) != policy))
 			return reply(menu, request, STALE, 0);
 		if (next == checkpoint) {
 			account.publishPrepared(before, prepared); TerminalCraftingMenu.inventory(player, inventory, received);

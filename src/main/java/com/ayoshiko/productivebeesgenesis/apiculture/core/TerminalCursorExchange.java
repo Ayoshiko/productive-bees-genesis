@@ -79,7 +79,7 @@ public final class TerminalCursorExchange {
 			String source, ToIntFunction<ItemStack> external) {
 		return complete(player, menu, requested, insert, source, external, () -> recover(player, menu, inventory));
 	}
-	private static Result complete(ServerPlayer player, AbstractContainerMenu menu, ItemStack requested, boolean insert,
+	static Result complete(ServerPlayer player, AbstractContainerMenu menu, ItemStack requested, boolean insert,
 			String source, ToIntFunction<ItemStack> external, Runnable deliver) {
 		var cursor = TerminalCursor.get(player); int amount = requested.getCount();
 		int actual;

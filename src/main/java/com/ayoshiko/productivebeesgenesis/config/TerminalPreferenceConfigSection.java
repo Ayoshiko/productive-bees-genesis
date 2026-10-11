@@ -19,7 +19,7 @@ public final class TerminalPreferenceConfigSection {
 		}
 	}
 	public enum CraftingReturnTarget implements TranslatableEnum {
-		INVENTORY, BEE_NETWORK;
+		INVENTORY, BEE_NETWORK, ME_NETWORK;
 		@Override public Component getTranslatedName() {
 			return Component.translatable("productivebeesgenesis.configuration.terminalCraftingReturnTarget." + name().toLowerCase(java.util.Locale.ROOT));
 		}

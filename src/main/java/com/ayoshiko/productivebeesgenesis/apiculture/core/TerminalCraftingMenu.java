@@ -180,10 +180,12 @@ public final class TerminalCraftingMenu {
 			if (request.row() < 0 || request.row() >= 9 || request.amount() < 1 || request.amount() > 64
 					|| operation == TerminalRequest.Operation.CRAFT_OUT && request.inventorySlot() != -1) return reply(request, INVALID, 0);
 			change = TerminalCraftingPlan.exchange(state.grid(), inventory, request.row(), request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.CRAFT_IN);
-		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR || operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE || operation == TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE) {
+		} else if (operation == TerminalRequest.Operation.CRAFT_CLEAR || operation == TerminalRequest.Operation.CRAFT_RETURN_ON_CLOSE
+				|| operation == TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE || operation == TerminalRequest.Operation.CRAFT_STORE_ME_ON_CLOSE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() != 0) return reply(request, INVALID, 0);
 			if (operation != TerminalRequest.Operation.CRAFT_CLEAR && !exclusiveOwner(player, account)) return reply(request, UNAVAILABLE, 0);
 			if (operation == TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE) return TerminalCraftingReturn.toNetwork(menu, player, request, account);
+			if (operation == TerminalRequest.Operation.CRAFT_STORE_ME_ON_CLOSE) return TerminalCraftingMeReturn.toMe(menu, player, request, account);
 			change = TerminalCraftingPlan.clear(state.grid(), inventory);
 		} else if (operation == TerminalRequest.Operation.CRAFT_TAKE) {
 			if (request.row() != -1 || request.inventorySlot() != -1 || request.amount() < 1 || request.amount() > 8) return reply(request, INVALID, 0);
@@ -201,7 +203,7 @@ public final class TerminalCraftingMenu {
 		account.publish(state, change.grid(), state.pending(), false); inventory(player, inventory, change.inventory());
 		return reply(request, MOVED, change.moved());
 	}
-	private boolean exclusiveOwner(ServerPlayer player, TerminalCraftingAccount account) {
+	static boolean exclusiveOwner(ServerPlayer player, TerminalCraftingAccount account) {
 		if (!account.ownedBy(player.getUUID())) return false;
 		// 只在关闭请求时检查在线菜单；共享材料仍有人使用就保留，不维护逐 tick 观察表。
 		for (var other : player.server.getPlayerList().getPlayers()) {

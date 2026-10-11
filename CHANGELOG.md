@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **D18j3c4b 关闭时优先回存 ME**：“关闭材料去向”新增“优先 ME 网络”，自动取回仍默认关闭、默认目标仍为背包。材料逐格经当前授权桥存入 ME，明确余量回背包，满载留格；无可用网络或共享预算不足时回背包。每格先移交玩家保管再调用外部库存；未知结果停止后续格且不退款或重试，菜单失效时已知余量保留玩家保管，不生成掉落。保留鼠标栈、完整组件、已付费结果及原未决提取；终端协议升至 38，ME／机器 23／12 及存档格式不变。真实 ME、客户端关闭及跨进程保存联合仍待验收。
+
 - **D18j3c4a 关闭时优先回存蜂业网络**：终端偏好新增“关闭材料去向”，默认仍为背包，自动取回主开关仍默认关闭。选择优先蜂业网络后，符合当前准入的合成材料先入蜂业账本，其余尝试回背包，满载余量留在原格；独立机无蜂业账本时回背包。仅账户所有者单独使用且主动关闭时生效；完整组件、已付费结果及未决提取保管不变，不生成掉落。账本与材料／背包先完整准备，提交后通知异常不重放；终端协议升至 37，ME／机器保持 23／12，存档格式不变。真实客户端与跨进程保存联合仍待验收。
 
 - **D18j4b3f 供应器范围批量样板倍率**：当前整台、当前列表页或跨页已选范围均可输入倍率并预览放大／缩小，无需替换样本。逐槽展示完整差异，拒绝不能整除、溢出、非法及无变化项；选择确认后沿共享预算原位改写，保留张数、空位与其它组件。停止保留已完成项，变化或未知写入停止余项，不补偿、重试或掉落。仍限已支持的原生库存、8 台／288 槽；ME 协议升至 23，终端／机器 36／12 及存档不变。真实客户端、实际 ME 与供应器保存联合仍待验收。
@@ -229,6 +231,8 @@
 ### English
 
 #### Added
+
+- **D18j3c4b Prefer ME when returning crafting materials on close**: Adds a Prefer ME network destination while automatic return stays disabled by default and inventory remains the default target. Materials transfer one slot at a time through the current authorized bridge; confirmed leftovers return to inventory, with excess retained in the grid. Unavailable networks or an exhausted shared budget fall back to inventory. Each slot enters player custody before external insertion; unknown results stop the remaining slots without refunds or retries. Known leftovers stay in player custody if the menu becomes invalid. No drops; cursor contents, full components, paid outputs and existing unresolved withdrawals remain intact. Terminal protocol is 38; ME/machine stay at 23/12 with unchanged save formats. Live ME, client-close and cross-process save acceptance stays open.
 
 - **D18j3c4a Prefer the bee network when returning crafting materials on close**: Adds a return destination preference; inventory remains the default and automatic return remains disabled by default. Eligible materials can return to the current bee ledger first, with the rest going to inventory and excess retained in the grid. Standalone machines without a bee ledger use inventory. Requires an explicit close by the account owner with no other viewer. Full components, paid results and unresolved withdrawals remain intact; no items are dropped. Ledger, grid and inventory results are prepared before publication, and notification failures cannot replay committed transfers. Terminal protocol is 37; ME/machine stay at 23/12 with unchanged save formats. Live-client and cross-process save acceptance stays open.
 
