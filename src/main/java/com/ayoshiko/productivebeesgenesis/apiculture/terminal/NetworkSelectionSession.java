@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.LedgerCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
@@ -47,7 +48,11 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	public record ProductRow(ProductKey key, ProductAmount owned, ProductAmount available) implements Row { }
 	/** 当前页的只读结果；generation 在本会话中递增。 */
 	public record Page(UUID session, long generation, Kind kind, boolean hasNext, List<Row> rows) {
-		public Page { rows = List.copyOf(rows); }
+		public Page {
+			rows = List.copyOf(rows);
+			if (kind == Kind.MEMBERS && rows.stream().mapToInt(TerminalMemberPageBudget::weight).sum() > TerminalMemberPageBudget.MAX_BYTES)
+				throw new IllegalArgumentException("Member page exceeds display budget");
+		}
 	}
 
 	private final Thread owner = Thread.currentThread();
@@ -56,6 +61,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	private NetworkIdentity identity;
 	private LedgerCheckpoint ledger;
 	private Iterator<OwnedMachineRecord> members;
+	private OwnedMachineRecord pendingMember;
 	private Iterator<Map.Entry<ProductKey, ProductAmount>> products;
 	private Page page;
 	private long generation, openedAt;
@@ -136,7 +142,12 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	public Page publishLive(Object authority, NetworkCheckpoint current, Kind kind, boolean hasNext, List<Row> rows, long tick) {
 		var candidate = prepareLive(authority, current, kind, hasNext, rows); if (candidate == null || tick < 0) return null;
 		this.authority = authority; identity = current.identity(); openedAt = tick; generation = candidate.generation();
-		ledger = null; members = null; products = null; page = candidate; return page;
+		ledger = null;
+		members = null;
+		pendingMember = null;
+		products = null;
+		page = candidate;
+		return page;
 	}
 	public Page prepareLive(Object authority, NetworkCheckpoint current, Kind kind, boolean hasNext, List<Row> rows) {
 		check(); if (closed) return null;
@@ -164,10 +175,19 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		if (generation == Long.MAX_VALUE) { close(); return null; }
 		long nextGeneration = generation + 1;
 		var rows = new ArrayList<Row>(pageLimit);
+		int memberBytes = 0;
 		for (int i = 0; i < SCAN_BUDGET && rows.size() < pageLimit && hasNext(); i++) {
 			if (kind != Kind.PRODUCTS) {
-				var record = members.next();
-				if (matches(record)) rows.add(member(record, kind));
+				var record = pendingMember == null ? members.next() : pendingMember;
+				pendingMember = null;
+				if (!matches(record)) continue;
+				int bytes = kind == Kind.MEMBERS ? TerminalMemberPageBudget.weight(record.workLayout().beeSlots()) : 0;
+				if (memberBytes + bytes > TerminalMemberPageBudget.MAX_BYTES) {
+					pendingMember = record;
+					break;
+				}
+				rows.add(member(record, kind));
+				memberBytes += bytes;
 			}
 			else {
 				var entry = products.next();
@@ -178,7 +198,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		page = new Page(id, generation = nextGeneration, kind, hasNext(), rows);
 		return page;
 	}
-	private boolean hasNext() { return members != null ? members.hasNext() : products != null && products.hasNext(); }
+	private boolean hasNext() { return pendingMember != null || (members != null ? members.hasNext() : products != null && products.hasNext()); }
 	private boolean matches(OwnedMachineRecord record) {
 		if (search.isEmpty() || record.claim().machine().contains(search)) return true;
 		var p = record.claim().origin();
@@ -186,10 +206,12 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		return record.beeReady() && record.beeRecords().stream().anyMatch(bee -> bee.plan().beeType().contains(search));
 	}
 	static MemberRow member(OwnedMachineRecord record, Kind kind) {
-		var bees = new ArrayList<BeeRow>(record.workLayout().beeSlots());
-		if (record.beeReady()) for (int slot = 0; slot < record.workLayout().beeSlots(); slot++) {
-			int index = slot;
-			var bee = record.beeRecords().stream().filter(value -> value.slot() == index).findFirst().orElse(null);
+		int slots = record.workLayout().beeSlots();
+		var roster = new BeeRecord[slots];
+		for (var bee : record.beeRecords()) roster[bee.slot()] = bee;
+		var bees = new ArrayList<BeeRow>(slots);
+		if (record.beeReady()) for (int slot = 0; slot < slots; slot++) {
+			var bee = roster[slot];
 			var feed = record.feedingSlots().isEmpty() ? null : record.feedingSlots().get(slot);
 			bees.add(new BeeRow(slot, bee == null ? null : bee.id(), bee == null ? "" : bee.plan().beeType(),
 					bee == null ? 0 : bee.progress(), bee == null ? 0 : bee.plan().cycleTicks(), bee != null && !bee.drained(),
@@ -199,6 +221,16 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		return new MemberRow(record.claim(), record.phase(), record.rosterVersion(),
 				record.feedingRevision(), bees, kind == Kind.UPGRADES ? record.upgradeVersion() : null);
 	}
-	private void clear() { authority = null; identity = null; ledger = null; members = null; products = null; page = null; search = ""; pageLimit = PAGE_SIZE; }
+	private void clear() {
+		authority = null;
+		identity = null;
+		ledger = null;
+		members = null;
+		pendingMember = null;
+		products = null;
+		page = null;
+		search = "";
+		pageLimit = PAGE_SIZE;
+	}
 	private void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Selection belongs to menu thread"); }
 }

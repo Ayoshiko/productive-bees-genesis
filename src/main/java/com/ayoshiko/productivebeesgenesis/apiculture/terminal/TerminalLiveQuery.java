@@ -26,6 +26,7 @@ public final class TerminalLiveQuery {
 	private boolean reverse, complete, hasPrevious, hasNext;
 	private Object catalog, orderToken;
 	private final ArrayList<Row> collecting = new ArrayList<>();
+	private int memberBytes;
 	private List<Row> rows = List.of();
 	public TerminalLiveQuery(Kind kind, TerminalScope scope, String query) {
 		this(kind, scope, query, (type, id) -> "");
@@ -42,14 +43,22 @@ public final class TerminalLiveQuery {
 		if (quantity != order) { quantity = order; this.ascending = ascending; start = null; reverse = false; restart(); }
 	}
 	public boolean complete() { return complete; }
-	public boolean atStart() { return start == null && !reverse; }
+	public boolean atStart() { return complete ? !hasPrevious : start == null && !reverse; }
 	public boolean hasPrevious() { return hasPrevious; }
 	public boolean hasNext() { return hasNext; }
 	public boolean navigate(boolean backwards) {
 		if (!complete || (backwards ? !hasPrevious : !hasNext)) return false;
 		start = backwards ? lower : upper; reverse = backwards; restart(); return true;
 	}
-	public void restart() { cursor = start; first = null; last = null; collecting.clear(); complete = false; catalog = null; }
+	public void restart() {
+		cursor = start;
+		first = null;
+		last = null;
+		collecting.clear();
+		memberBytes = 0;
+		complete = false;
+		catalog = null;
+	}
 	public boolean catalogChanged(NetworkCheckpoint state) { return catalog != token(state); }
 	public void order(ApiaryRank.Order order) {
 		if (order != null && orderToken != order.token()) { orderToken = order.token(); start = null; reverse = false; restart(); }
@@ -68,7 +77,13 @@ public final class TerminalLiveQuery {
 			if (row == null) { complete = true; break; }
 			cursor = anchor(row, order);
 			if (row instanceof ProductRow product && !state.ledger().balances().containsKey(product.key()) || !filter.matches(row, names)) continue;
-			if (collecting.size() == limit) { more = true; complete = true; break; }
+			int bytes = kind == Kind.MEMBERS ? TerminalMemberPageBudget.weight(row) : 0;
+			if (collecting.size() == limit || memberBytes + bytes > TerminalMemberPageBudget.MAX_BYTES) {
+				more = true;
+				complete = true;
+				break;
+			}
+			memberBytes += bytes;
 			if (first == null) first = cursor; last = cursor; collecting.add(row);
 		}
 		if (complete) {
@@ -78,8 +93,12 @@ public final class TerminalLiveQuery {
 			hasNext = reverse ? start != null : more;
 			if (reverse) {
 				Collections.reverse(collecting);
-				var previous = lower == null ? null : next(state, lower, true, order);
-				start = previous == null ? null : anchor(previous, order); reverse = false;
+				// 保留反向查询的起点；不同容量的成员重新正向填页会改变当前页边界。
+				if (kind != Kind.MEMBERS) {
+					var previous = lower == null ? null : next(state, lower, true, order);
+					start = previous == null ? null : anchor(previous, order);
+					reverse = false;
+				}
 			}
 			rows = List.copyOf(collecting); collecting.clear();
 		}

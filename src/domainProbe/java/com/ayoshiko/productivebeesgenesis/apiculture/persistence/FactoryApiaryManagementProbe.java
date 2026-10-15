@@ -45,6 +45,10 @@ final class FactoryApiaryManagementProbe {
 		var record = record();
 		switch (stage) {
 			case 0 -> {
+				if (fixture.hive.getFeederSlots().size() > slot + 1)
+					require(record.feedingSlots().stream().filter(feed -> feed.item() != null
+							&& feed.item().unit().string("id").equals("minecraft:diamond")).mapToInt(feed -> feed.count()).sum() == 7,
+							"Factory extra physical feeding items lost during migration or restart");
 				command(TerminalRequest.Operation.BEE_DISABLE);
 				require(!record().bees().bee(slot).enabled(), "Factory last slot disable failed");
 			}
@@ -92,6 +96,12 @@ final class FactoryApiaryManagementProbe {
 			}
 			case 8 -> {
 				if (fixture.core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;
+				var layout = com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.forMachine(fixture.factoryType);
+				require(fixture.hive.getBeeSlotCount() == layout.bees() && fixture.hive.getFeederSlots().size() == layout.feeders(),
+						"Factory return changed physical slot layout");
+				if (layout.feeders() > layout.bees())
+					require(fixture.hive.getFeederSlots().stream().filter(feed -> feed.getStack().is(Items.DIAMOND))
+							.mapToInt(feed -> feed.getCount()).sum() == 7, "Factory return lost migrated extra feeding items");
 				require(!fixture.hive.getBeeSlot(slot).isEmpty() && fixture.hive.getFeederSlots().get(slot).getCount() == 1
 						&& fixture.hive.energyContainer().getEnergy() == 0 && !OwnershipEndpoints.bound(fixture.hive), "Factory return lost bee/food or duplicated FE");
 				return true;

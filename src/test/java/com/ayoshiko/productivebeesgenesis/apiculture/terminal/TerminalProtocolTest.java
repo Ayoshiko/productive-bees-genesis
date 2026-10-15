@@ -480,4 +480,27 @@ class TerminalProtocolTest {
 		assertEquals(8, accepted); assertTrue(budget.accept(20)); assertTrue(budget.accept(20)); assertFalse(budget.accept(20));
 		assertFalse(budget.accept(-1));
 	}
+	@Test void evolvedMembersKeepFortyFiveUnicodeSlotsAndAllGenesInBothCodecs() {
+		var genes = new TerminalBeeGenes(java.util.Collections.nCopies(5, "a".repeat(32)));
+		var bees = java.util.stream.IntStream.range(0, 45).mapToObj(i -> new TerminalView.Bee(i, true,
+				"蜂".repeat(80), Integer.MAX_VALUE, Integer.MAX_VALUE, true, "test:" + "b".repeat(75),
+				64, true, genes, new UUID(1, i))).toList();
+		var location = new TerminalView.Location("test:" + "m".repeat(75), "test:" + "d".repeat(75), -1, -1, -1);
+		var row = new TerminalView.Row("机".repeat(80), false, "", "", true, bees, "", "", List.of(), location,
+				new TerminalView.Apiary(Integer.MAX_VALUE, Float.MAX_VALUE));
+		var view = new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 1, true, List.of(row, row));
+		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, view);
+		var update = new TerminalLiveUpdate(1, reply.session(), 1, 1, 1, TerminalLiveUpdate.Status.READY, true, view);
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			TerminalReply.STREAM_CODEC.encode(buffer, reply);
+			assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
+			assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer));
+			buffer.clear();
+			TerminalLiveUpdate.STREAM_CODEC.encode(buffer, update);
+			assertTrue(buffer.readableBytes() <= TerminalLiveUpdate.MAX_BYTES);
+			assertEquals(update, TerminalLiveUpdate.STREAM_CODEC.decode(buffer));
+			assertEquals(44, new TerminalRequest(1, reply.session(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 44, 0, 1).targetSlot());
+		} finally { buffer.release(); }
+	}
 }

@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **EM 五档蜂箱接入蜂业网络**：支持 26／30／36／42／45 蜂位，共用生产、普通供给、喂食、装笼、逐机升级和安全交还；完整保留原喂食物料及已付工作。核心与蜜蜂终端可翻页管理至第 45 槽，成员列表按完整蜂位和五项基因的字节预算分页，保持单包 64 KiB，修复混合容量成员反向翻页后刷新改变页边界的问题。终端协议为 43，网络仍默认关闭。
+
 - **合成样板替代选项**：新编码普通合成样板时可分别启用物品替代和流体替代，默认均关闭。按 AE2 原生配方／桶原料规则编码，确认前重新核对实际九格和完整输出，保留样板张数与组件，不消耗材料样本。编码页以六行分页容纳两个开关；ME 协议升至 24，终端／机器 38／12 和存档不变，实际客户端与自动合成联合仍待验收。
 
 - **D18j3c4b 关闭时优先回存 ME**：“关闭材料去向”新增“优先 ME 网络”，自动取回仍默认关闭、默认目标仍为背包。材料逐格经当前授权桥存入 ME，明确余量回背包，满载留格；无可用网络或共享预算不足时回背包。每格先移交玩家保管再调用外部库存；未知结果停止后续格且不退款或重试，菜单失效时已知余量保留玩家保管，不生成掉落。保留鼠标栈、完整组件、已付费结果及原未决提取；终端协议升至 38，ME／机器 23／12 及存档格式不变。真实 ME、客户端关闭及跨进程保存联合仍待验收。
@@ -233,6 +235,8 @@
 ### English
 
 #### Added
+
+- **EM apiary factories in bee networks**: Adds all five tiers with 26/30/36/42/45 bee slots to shared production, ordinary supply, feeding, caging, per-machine upgrades and safe return, preserving physical feeding items and paid work. The core and bee terminal can manage slot 45 through paging. Member pages budget every bee slot and all five genes within the existing 64 KiB packet limit; refreshing a reverse page of mixed-capacity members now preserves its boundaries. Terminal protocol is 43; bee networks remain disabled by default.
 
 - **Crafting pattern substitutions**: New crafting patterns can independently enable native AE2 item and fluid substitutions; both default to off. Confirmation rechecks the real crafting samples and complete output, preserves pattern count and components, and consumes no samples. The encoding page uses six rows with two toggles. ME protocol is now 24; terminal/machine protocols remain 38/12 and saves are unchanged. Client interaction and automated crafting integration still require runtime validation.
 

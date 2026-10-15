@@ -27,6 +27,81 @@ import static com.ayoshiko.productivebeesgenesis.apiculture.terminal.NetworkSele
 import static org.junit.jupiter.api.Assertions.*;
 
 class NetworkSelectionSessionTest {
+	@Test void memberBudgetPreservesPendingRowsAndCancelRevokesThem() {
+		var source = NetworkCheckpoint.empty(identity());
+		for (int i = 0; i < 9; i++) source = source.withOwnership(factory(source.identity(), i, "creative"));
+		var authority = new Object();
+		try (var session = new NetworkSelectionSession()) {
+			var page = session.begin(authority, source, MEMBERS, 0);
+			var seen = new java.util.HashSet<UUID>();
+			while (true) {
+				assertTrue(page.rows().size() <= 2);
+				for (var row : page.rows()) assertTrue(seen.add(((NetworkSelectionSession.MemberRow) row).claim().member()));
+				if (!page.hasNext()) break;
+				long previous = page.generation();
+				assertNull(session.next(authority, source, previous + 1, 1));
+				page = session.next(authority, source, previous, 1);
+				assertNull(session.resolve(authority, source, previous, 0, 1));
+			}
+			assertEquals(9, seen.size());
+			page = session.begin(authority, source, MEMBERS, 2);
+			assertTrue(page.hasNext());
+			session.cancel();
+			assertNull(session.next(authority, source, page.generation(), 3));
+			assertTrue(session.begin(authority, NetworkCheckpoint.empty(source.identity()), MEMBERS, 4).rows().isEmpty());
+			assertEquals(8, session.begin(authority, source, UPGRADES, 5).rows().size());
+		}
+	}
+
+	@Test void mixedFactoryPagesTraverseBothDirectionsWithinStableBudget() {
+		var source = NetworkCheckpoint.empty(identity());
+		var tiers = List.of("ultimate", "overclocked", "quantum", "dense", "multiversal", "creative");
+		for (int i = 0; i < 27; i++) source = source.withOwnership(factory(source.identity(), i, tiers.get(i % tiers.size())));
+		var query = new TerminalLiveQuery(MEMBERS, TerminalScope.APIARY, "");
+		var forward = new java.util.ArrayList<UUID>();
+		while (true) {
+			finish(query, source);
+			var rows = query.currentRows(source);
+			assertFalse(rows.isEmpty());
+			assertTrue(rows.stream().mapToInt(TerminalMemberPageBudget::weight).sum() <= TerminalMemberPageBudget.MAX_BYTES);
+			rows.forEach(row -> forward.add(((NetworkSelectionSession.MemberRow) row).claim().member()));
+			if (!query.hasNext()) break;
+			assertTrue(query.navigate(false));
+		}
+		assertEquals(27, forward.size());
+		assertEquals(27, new java.util.HashSet<>(forward).size());
+		var backward = new java.util.ArrayList<UUID>();
+		while (true) {
+			var rows = query.currentRows(source);
+			assertTrue(rows.stream().mapToInt(TerminalMemberPageBudget::weight).sum() <= TerminalMemberPageBudget.MAX_BYTES);
+			rows.reversed().forEach(row -> backward.add(((NetworkSelectionSession.MemberRow) row).claim().member()));
+			if (!query.hasPrevious()) break;
+			assertTrue(query.navigate(true));
+			finish(query, source);
+		}
+		assertEquals(forward.reversed(), backward);
+		var first = query.currentRows(source);
+		query.restart();
+		finish(query, source);
+		assertEquals(first, query.currentRows(source));
+		var record = factory(source.identity(), 100, "creative");
+		var empty = NetworkSelectionSession.member(record, MEMBERS);
+		var bees = java.util.stream.IntStream.range(0, 45)
+				.mapToObj(i -> new NetworkSelectionSession.BeeRow(i, UUID.randomUUID(), "蜂".repeat(80), 1, 20, true)).toList();
+		assertEquals(TerminalMemberPageBudget.weight(empty), TerminalMemberPageBudget.weight(new NetworkSelectionSession.MemberRow(
+				record.claim(), record.phase(), null, 0, bees)));
+		var upgrades = new TerminalLiveQuery(UPGRADES, TerminalScope.APIARY, "");
+		finish(upgrades, source);
+		assertEquals(8, upgrades.currentRows(source).size());
+	}
+
+	private static OwnedMachineRecord factory(NetworkIdentity identity, int x, String tier) {
+		var record = machine(identity, x);
+		var claim = record.claim();
+		return new OwnedMachineRecord(new MemberClaim(claim.network(), claim.member(), claim.transfer(), claim.origin(),
+				"productivebeesgenesis:" + tier + "_mek_apiary_factory"), record.phase(), record.assets(), record.fingerprint(), "");
+	}
+
 	@Test void quantityPagesFreezeOrderButKeepLiveBalancesAndSkipDeletedKeys() {
 		var source = products(83);
 		var index = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex(); index.retain(UUID.randomUUID());

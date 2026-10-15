@@ -1,10 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.capacity;
 
+import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection;
 import java.util.Objects;
 
 /** 蜂位和离心进程互不借用；存档总索引保持旧单类型布局，任务使用类型和局部槽号。 */
 public record MemberWorkLayout(int beeSlots, int centrifugeLanes) {
 	public static final MemberWorkLayout EMPTY = new MemberWorkLayout(0, 0);
+
+	/** 已准入机型的声明容量；调度和展示预算共用，空蜂位也计入完整布局。 */
+	public static MemberWorkLayout forMachine(String machine) {
+		if (CombinedAssetProjection.MACHINE.equals(machine)) return new MemberWorkLayout(6, 3);
+		var apiary = ApiaryWorkLayout.forMachine(machine);
+		return new MemberWorkLayout(apiary == null ? 0 : apiary.bees(), CentrifugeWorkLayout.lanes(machine));
+	}
 
 	public record Slot(WorkKey.Kind kind, int index) {
 		public Slot {

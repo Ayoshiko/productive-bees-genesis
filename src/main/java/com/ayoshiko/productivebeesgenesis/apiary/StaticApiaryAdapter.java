@@ -1,14 +1,17 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
+import com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
+import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import java.util.ArrayList;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -27,8 +30,9 @@ public final class StaticApiaryAdapter {
 	public record CagedBee(AssetImage original, StaticBeePlan plan) { }
 	public static boolean supports(TileEntityMekApiary hive) {
 		if (hive.getClass() != TileEntityMekApiary.class && hive.getClass() != TileEntityMekApiaryFactory.class) return false;
-		var layout = com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.forMachine(
-				net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(hive.getBlockState().getBlock()).toString());
+		String machine = BuiltInRegistries.BLOCK.getKey(hive.getBlockState().getBlock()).toString();
+		if (ApiaryWorkLayout.EVOLVED_MACHINES.contains(machine) && !MekCompatHooks.isEvolvedMekanismLoaded()) return false;
+		var layout = ApiaryWorkLayout.forMachine(machine);
 		return layout != null && hive.getBeeSlotCount() == layout.bees() && hive.getFeederSlots().size() == layout.feeders();
 	}
 	private static Profile profile(SealedApiaryProfile value) { return new Profile(value.time(), value.energy(), value.productivity(), value.combBlock()); }

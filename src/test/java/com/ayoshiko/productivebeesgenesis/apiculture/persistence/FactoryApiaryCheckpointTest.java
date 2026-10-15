@@ -13,7 +13,7 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FactoryApiaryCheckpointTest {
-	private static final List<String> TYPES = List.of("basic", "advanced", "elite", "ultimate");
+	private static final List<String> TYPES = List.of("basic", "advanced", "elite", "ultimate", "overclocked", "quantum", "dense", "multiversal", "creative");
 	private static final UUID MEMBER = new UUID(17, 3);
 	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> {});
 	@BeforeAll static void version() { SharedConstants.tryDetectVersion(); }
@@ -37,7 +37,7 @@ class FactoryApiaryCheckpointTest {
 		var owned = sealed.phase(OwnedMachineRecord.Phase.OWNED);
 		return NetworkCheckpoint.empty(base.identity()).withOwnership(sealed).withOwnership(owned).withOwnership(owned.withBees(state));
 	}
-	@Test void allFourTiersKeepLastSlotPaidOutputsUpgradeAndReturnLayout() {
+	@Test void allAdmittedTiersKeepLastSlotPaidOutputsUpgradeAndReturnLayout() {
 		for (var tier : TYPES) {
 			var root = fixture(tier); var record = root.ownedMachines().get(MEMBER); var state = record.bees(); int slot = state.slotCount() - 1;
 			assertEquals(record.workLayout().beeSlots(), state.slotCount());
@@ -88,7 +88,7 @@ class FactoryApiaryCheckpointTest {
 		}
 	}
 	@Test void streamingDecoderPreservesFactoryLayout() throws Exception {
-		var root = fixture("ultimate"); var file = java.nio.file.Files.createTempFile("factory-apiary", ".dat");
+		var root = fixture("creative"); var file = java.nio.file.Files.createTempFile("factory-apiary", ".dat");
 		try {
 			try (var out = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) { NetworkCheckpointStream.write(root, out); }
 			try (var service = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadService();

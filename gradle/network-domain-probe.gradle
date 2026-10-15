@@ -32,6 +32,8 @@ if (machineProduction && !(multiblockMode in ['write', 'read'])) throw new Gradl
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 def factoryProbe = providers.gradleProperty('networkFactoryProbe').isPresent()
+def evolvedApiaryProbe = providers.gradleProperty('networkEvolvedApiaryProbe').isPresent()
+if (evolvedApiaryProbe && !factoryProbe) throw new GradleException('Evolved apiary probe requires the factory probe')
 def centrifugeFactoryProbe = providers.gradleProperty('networkCentrifugeFactoryProbe').isPresent()
 def evolvedCentrifugeProbe = providers.gradleProperty('networkEvolvedCentrifugeProbe').isPresent()
 if (evolvedCentrifugeProbe && !centrifugeFactoryProbe) throw new GradleException('Evolved factory probe requires the centrifuge factory probe')
@@ -372,6 +374,7 @@ neoForge {
             if (factoryProbe) {
                 systemProperty 'pbg.factory.client', 'true'
                 systemProperty 'pbg.factory.enabled', 'true'
+                systemProperty 'pbg.factory.evolved', evolvedApiaryProbe.toString()
                 systemProperty 'pbg.domain.enabled', 'true'
                 systemProperty 'pbg.automatic.mode', 'write'
             }
@@ -392,6 +395,7 @@ neoForge {
             if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (factoryProbe) systemProperty 'pbg.factory.enabled', 'true'
+            if (factoryProbe) systemProperty 'pbg.factory.evolved', evolvedApiaryProbe.toString()
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.evolved', evolvedCentrifugeProbe.toString()
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
@@ -540,7 +544,7 @@ tasks.named('runNetworkDomainClient') {
         if (factoryProbe) {
             def client = new groovy.json.JsonSlurper().parse(report)
             File domain = new File(probeDirectory.get().asFile, 'results/domain.json')
-            if (client.coreAndTerminalSelectSlot20 != true || !domain.isFile()
+            if (client.coreAndTerminalSelectLastSlot != true || client.slots != (evolvedApiaryProbe ? 45 : 20) || !domain.isFile()
                     || new groovy.json.JsonSlurper().parse(domain).normalShutdownCheckpointSaved != true)
                 throw new GradleException('Factory client or normal shutdown assertions did not complete')
         }

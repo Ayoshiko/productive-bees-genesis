@@ -60,6 +60,8 @@ final class AutomaticRestartFixture {
 			hive.getBeeSlot(slot).setBeeData(bee); hive.getBeeSlot(slot).setBaseMinOccupationTicks(5);
 			hive.getFeederSlots().get(slot).setStack(new ItemStack(Items.IRON_BLOCK));
 			if (!factoryType.isEmpty()) {
+				if (hive.getFeederSlots().size() > hive.getBeeSlotCount())
+					hive.getFeederSlots().getLast().setStack(new ItemStack(Items.DIAMOND, 7));
 				level.setBlockAndUpdate(pos.north(), NetworkContent.SUPPLY_PORT.get().defaultBlockState());
 				((com.ayoshiko.productivebeesgenesis.apiculture.port.NetworkPortBlockEntity) level.getBlockEntity(pos.north())).initializeOwner(owner);
 			}

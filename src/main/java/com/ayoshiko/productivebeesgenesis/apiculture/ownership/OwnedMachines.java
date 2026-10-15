@@ -1,14 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.ownership;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin;
+import com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.SnapshotRecords;
 import java.util.*;
 
 /** 封存记录及占用位置的不可变根；一次交接更新只复制两条树路径。 */
 public final class OwnedMachines {
-	private static final List<String> APIARIES = List.of("productivebeesgenesis:mek_apiary",
-			"productivebeesgenesis:basic_mek_apiary_factory", "productivebeesgenesis:advanced_mek_apiary_factory",
-			"productivebeesgenesis:elite_mek_apiary_factory", "productivebeesgenesis:ultimate_mek_apiary_factory");
+	private static final List<String> APIARIES = ApiaryWorkLayout.MACHINES;
 	private static final List<String> CENTRIFUGES = com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout.MACHINES;
 	private static final Comparator<Origin> POSITIONS = Comparator.comparing(Origin::dimension).thenComparingInt(Origin::x).thenComparingInt(Origin::y).thenComparingInt(Origin::z);
 	public static final OwnedMachines EMPTY = new Builder().finish();

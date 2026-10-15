@@ -44,12 +44,7 @@ public record OwnedMachineRecord(MemberClaim claim, Phase phase, AssetImage asse
 	}
 	/** 当前载体的工作布局；不授予新类型接管资格，复合适配接入时在本边界扩展。 */
 	public com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberWorkLayout workLayout() {
-		if (claim.machine().equals(com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.MACHINE))
-			return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberWorkLayout(6, 3);
-		var apiary = com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.forMachine(claim.machine());
-		int hiveSlots = apiary == null ? 0 : apiary.bees();
-		int processSlots = com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout.lanes(claim.machine());
-		return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberWorkLayout(hiveSlots, processSlots);
+		return com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberWorkLayout.forMachine(claim.machine());
 	}
 	public CentrifugeWorkState centrifugeState() { return combined == null ? centrifuge : combined.centrifugeView(); }
 	/** 统一管理只读视图；不构造第二份可写蜂箱状态。 */

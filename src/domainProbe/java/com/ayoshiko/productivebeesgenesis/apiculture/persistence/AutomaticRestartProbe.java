@@ -23,11 +23,20 @@ public final class AutomaticRestartProbe {
 	private static final Map<UUID, NetworkCheckpoint> shutdown = new ConcurrentHashMap<>();
 	private static boolean reading;
 	private static boolean factoryMode() { return Boolean.getBoolean("pbg.factory.enabled"); }
-	private static int caseCount() { return factoryMode() ? Boolean.getBoolean("pbg.factory.client") ? 1 : 4 : 9; }
+	private static boolean evolvedFactory() { return Boolean.getBoolean("pbg.factory.evolved"); }
+	private static List<String> factoryTiers() {
+		return evolvedFactory() ? List.of("overclocked", "quantum", "dense", "multiversal", "creative")
+				: List.of("basic", "advanced", "elite", "ultimate");
+	}
+	private static int caseCount() {
+		if (!factoryMode()) return 9;
+		return Boolean.getBoolean("pbg.factory.client") ? 1 : factoryTiers().size();
+	}
 	private static FactoryApiaryManagementProbe factoryManagement;
 	private static int factoryManagementIndex;
 	public static volatile boolean clientReady, clientVerified, clientSaved;
 	public static volatile net.minecraft.core.BlockPos clientPos;
+	public static volatile int clientSlots;
 	private static int started, phase, until;
 	private static long producerPid;
 	private static com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreBlockEntity unbound;
@@ -44,6 +53,7 @@ public final class AutomaticRestartProbe {
 			unbound = (com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreBlockEntity) level.getBlockEntity(emptyPos);
 			unbound.initializeOwner(UUID.randomUUID());
 			var root = NbtIo.readCompressed(manifest(server), NbtAccounter.unlimitedHeap());
+			require(root.getBoolean("evolvedFactory") == evolvedFactory(), "Automatic restart factory family mismatch");
 			require(!JVM.equals(root.getUUID("producerJvm")), "Automatic restart reused writer JVM"); producerPid = root.getLong("producerPid");
 			for (var raw : root.getList("fixtures", Tag.TAG_COMPOUND)) {
 				var tag = (CompoundTag) raw; var pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
@@ -53,7 +63,7 @@ public final class AutomaticRestartProbe {
 			}
 			require(fixtures.size() == caseCount(), "Incomplete automatic restart matrix");
 		} else if (factoryMode()) {
-			for (var tier : server.isDedicatedServer() ? List.of("basic", "advanced", "elite", "ultimate") : List.of("ultimate")) {
+			for (var tier : server.isDedicatedServer() ? factoryTiers() : List.of(factoryTiers().getLast())) {
 				var pos = new BlockPos(168 + fixtures.size() * 16, 160, 8); level.setChunkForced(pos.getX() >> 4, 0, true);
 				var fixture = new AutomaticRestartFixture(AutomaticRestartFixture.Kind.CHAIN, AutomaticRestartFixture.Mode.RUNNING,
 						pos, "productivebeesgenesis:" + tier + "_mek_apiary_factory"); fixture.create(level); fixtures.add(fixture);
@@ -119,12 +129,14 @@ public final class AutomaticRestartProbe {
 				// 停在同一明确保存边界；保留核心意图，配置门防止本 tick 剩余回调推进。
 				ModConfig.SERVER.beeNetwork.enabled.set(false);
 				var root = new CompoundTag(); var list = new ListTag();
+				root.putBoolean("evolvedFactory", evolvedFactory());
 				for (var fixture : fixtures) { fixture.redstone(RedstoneControl.DISABLED); fixture.saved = fixture.data.checkpoint(); list.add(fixture.manifest()); }
 				root.put("fixtures", list); root.putUUID("producerJvm", JVM); root.putLong("producerPid", ProcessHandle.current().pid()); NbtIo.writeCompressed(root, manifest(server));
 				if (factoryMode() && !server.isDedicatedServer()) {
 					for (var fixture : fixtures) fixture.core.setProductionRunning(false);
 					ModConfig.SERVER.beeNetwork.enabled.set(true);
 					clientPos = fixtures.getLast().pos;
+					clientSlots = fixtures.getLast().hive.getBeeSlotCount();
 					level.setBlockAndUpdate(clientPos.south(), com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.BEE_TERMINAL.get().defaultBlockState());
 					var player = server.getPlayerList().getPlayers().getFirst();
 					player.getAbilities().mayfly = true; player.getAbilities().flying = true; player.onUpdateAbilities();
@@ -178,7 +190,11 @@ public final class AutomaticRestartProbe {
 		report.add("sharedBudgetServices", services); report.addProperty("maxChecksPerTick", maxChecks);
 		report.addProperty("observedTicks", observedTicks); report.addProperty("maintenanceFe", MAINTENANCE);
 		report.addProperty("oracle", "single-input-independent");
-		if (factoryMode()) { report.addProperty("factoryMode", true); report.addProperty("factoryManagementAndReturn", reading && factoryManagementIndex == 4); }
+		if (factoryMode()) {
+			report.addProperty("factoryMode", true);
+			report.addProperty("evolvedFactory", evolvedFactory());
+			report.addProperty("factoryManagementAndReturn", reading && factoryManagementIndex == caseCount());
+		}
 		report.addProperty("noItemEntities", true);
 		report.add("automaticRestartCases", rows); report.addProperty("automaticRestartIsNewJvm", reading);
 		report.addProperty("producerPid", reading ? producerPid : ProcessHandle.current().pid()); report.addProperty("currentPid", ProcessHandle.current().pid());

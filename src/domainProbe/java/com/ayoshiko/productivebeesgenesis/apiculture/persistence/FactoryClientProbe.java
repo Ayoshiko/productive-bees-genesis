@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkCoreMenu;
 import com.google.gson.*;
 import java.nio.file.*;
 import net.minecraft.client.*;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.*;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.*;
@@ -30,8 +31,11 @@ public final class FactoryClientProbe {
 		try {
 			if (logged != step) { logged = step; com.mojang.logging.LogUtils.getLogger().info("FACTORY_CLIENT_STEP {}", step); }
 			if (started == 0) started = System.nanoTime();
-			check(System.nanoTime() - started < 300_000_000_000L, "Factory client timeout at " + step);
-			if (System.currentTimeMillis() < next) return; next = System.currentTimeMillis() + 500;
+			check(System.nanoTime() - started < 240_000_000_000L, "Factory client timeout at " + step);
+			if (System.currentTimeMillis() < next) return;
+			// 本地翻页不发请求；七页操作须在核心 100 tick 选择租期内完成。
+			boolean localPaging = step == 31 || step == 32 || step == 61 || step == 62;
+			next = System.currentTimeMillis() + (localPaging ? 100 : 500);
 			if (step == 0) {
 				if (!(client.screen instanceof TitleScreen) || client.getOverlay() != null) return;
 				client.options.pauseOnLostFocus = false; client.options.renderDistance().set(5);
@@ -49,45 +53,91 @@ public final class FactoryClientProbe {
 				open(client, AutomaticRestartProbe.clientPos); step++; return;
 			}
 			if (step == 2 && client.screen == null) { open(client, AutomaticRestartProbe.clientPos); return; }
-			if (step == 2 && client.screen instanceof NetworkCoreScreen screen) { click(screen, 14, 73); step++; return; }
+			if (step == 2 && client.screen instanceof NetworkCoreScreen screen) {
+				if (!click(screen, 14, 73)) return;
+				step++;
+				return;
+			}
 			if (step == 3 && client.screen instanceof NetworkCoreScreen screen && client.player.containerMenu instanceof NetworkCoreMenu menu) {
 				var view = menu.clientState().view(); if (view == null || view.rows().isEmpty()) return;
-				int row = 0; while (row < view.rows().size() && view.rows().get(row).bees().size() != 20) row++;
-				check(row < view.rows().size(), "Core truncated factory slots"); click(screen, 80, 48 + row * 11);
-				for (int i = 0; i < 3; i++) click(screen, 213, 73);
-				click(screen, 87, 73); check(target(screen) == 19, "Core last page chose wrong bee");
-				step++; return;
+				int row = 0;
+				while (row < view.rows().size() && view.rows().get(row).bees().size() != AutomaticRestartProbe.clientSlots) row++;
+				check(row < view.rows().size(), "Core truncated factory slots");
+				if (!click(screen, 80, 48 + row * 11)) return;
+				check(selected(screen) == row, "Core factory row was not selected");
+				pages = 0;
+				step = 31;
+				return;
+			}
+			if (step == 31 && client.screen instanceof NetworkCoreScreen screen) {
+				if (pages < (AutomaticRestartProbe.clientSlots - 1) / 6) {
+					if (!click(screen, 213, 73)) return;
+					pages++;
+					check(target(screen) == pages * 6, "Core page selection did not advance");
+				} else step = 32;
+				return;
+			}
+			if (step == 32 && client.screen instanceof NetworkCoreScreen screen) {
+				int last = AutomaticRestartProbe.clientSlots - 1;
+				if (!click(screen, 65 + last % 6 * 25, 73)) return;
+				check(target(screen) == last, "Core last page chose wrong bee");
+				step = 4;
+				return;
 			}
 			if (step == 4) { capture(client, "factory-core-last-page"); open(client, AutomaticRestartProbe.clientPos.south()); step++; return; }
 			if (step == 5 && client.screen == null) { open(client, AutomaticRestartProbe.clientPos.south()); return; }
-			if (step == 5 && client.screen instanceof NetworkTerminalScreen screen) { click(screen, 14, 153); step++; return; }
+			if (step == 5 && client.screen instanceof NetworkTerminalScreen screen) {
+				if (!click(screen, 14, 153)) return;
+				step++;
+				return;
+			}
 			if (step == 6 && client.screen instanceof NetworkTerminalScreen screen && client.player.containerMenu instanceof NetworkCoreMenu menu) {
 				var view = menu.clientState().view(); if (view == null || view.rows().isEmpty() || !menu.clientState().actionable(net.minecraft.Util.getMillis())) return;
-				check(view.rows().getFirst().bees().size() == 20, "Terminal truncated factory slots"); click(screen, 130, 57);
+				check(view.rows().getFirst().bees().size() == AutomaticRestartProbe.clientSlots, "Terminal truncated factory slots");
+				if (!click(screen, 130, 57)) return;
 				if (selected(screen) != 0) return;
 				pages = 0; step = 61; return;
 			}
 			if (step == 61 && client.screen instanceof NetworkTerminalScreen screen) {
 				if (selected(screen) < 0) { step = 6; return; }
-				if (pages < 3) {
-					click(screen, 229, 57); pages++;
+				if (pages < (AutomaticRestartProbe.clientSlots - 1) / 6) {
+					if (!click(screen, 229, 57)) return;
+					pages++;
 					check(target(screen) == pages * 6, "Terminal page selection: " + target(screen) + " after " + pages);
 				} else step = 62;
 				return;
 			}
 			if (step == 62 && client.screen instanceof NetworkTerminalScreen screen) {
-				click(screen, 133, 78); check(target(screen) == 19, "Terminal last page chose " + target(screen));
+				int last = AutomaticRestartProbe.clientSlots - 1;
+				int local = last % 6;
+				if (!click(screen, 59 + local % 3 * 79, 80 + local / 3 * 24)) return;
+				check(target(screen) == last, "Terminal last page chose " + target(screen));
 				step = 7; return;
 			}
 			if (step == 7) { capture(client, "factory-terminal-last-page"); client.player.closeContainer(); AutomaticRestartProbe.clientVerified = true; step = 9; }
-		} catch (Exception failure) { try { capture(client, "factory-failure-" + step); } catch (Exception ignored) { } finish(client, failure); }
+		} catch (Exception failure) {
+			try { capture(client, "factory-failure-" + step); }
+			catch (Exception captureFailure) { failure.addSuppressed(captureFailure); }
+			finish(client, failure);
+		}
 	}
 	private static int selected(Object screen) throws Exception { var field = screen.getClass().getDeclaredField("selected"); field.setAccessible(true); return field.getInt(screen); }
 	private static int target(Object screen) throws Exception { var field = screen.getClass().getDeclaredField("target"); field.setAccessible(true); return field.getInt(screen); }
 	private static void open(Minecraft client, BlockPos pos) {
 		client.player.closeContainer(); client.gameMode.useItemOn(client.player, InteractionHand.MAIN_HAND, new BlockHitResult(pos.getCenter(), Direction.UP, pos, false));
 	}
-	private static void click(AbstractContainerScreen<?> screen, int x, int y) { check(screen.mouseClicked(screen.getGuiLeft() + x, screen.getGuiTop() + y, 0), "Factory GUI click ignored"); }
+	private static boolean click(AbstractContainerScreen<?> screen, int x, int y) {
+		double absoluteX = screen.getGuiLeft() + x;
+		double absoluteY = screen.getGuiTop() + y;
+		var widget = screen.children().stream().filter(child -> child instanceof AbstractWidget candidate
+				&& candidate.visible && absoluteX >= candidate.getX() && absoluteX < candidate.getX() + candidate.getWidth()
+				&& absoluteY >= candidate.getY() && absoluteY < candidate.getY() + candidate.getHeight()).findFirst();
+		check(widget.isPresent(), "No widget at " + x + "," + y);
+		if (!((AbstractWidget) widget.get()).active) return false;
+		check(screen.mouseClicked(absoluteX, absoluteY, 0), "Factory GUI click ignored");
+		screen.mouseReleased(absoluteX, absoluteY, 0);
+		return true;
+	}
 	private static void capture(Minecraft client, String name) throws Exception {
 		Files.createDirectories(Path.of("results")); try (var image = Screenshot.takeScreenshot(client.getMainRenderTarget())) { image.writeToFile(Path.of("results/" + name + ".png")); }
 	}
@@ -97,7 +147,8 @@ public final class FactoryClientProbe {
 		try {
 			if (client.level != null) { client.level.disconnect(); client.disconnect(new TitleScreen()); }
 			report.addProperty("passed", failure == null && AutomaticRestartProbe.clientSaved);
-			report.addProperty("coreAndTerminalSelectSlot20", failure == null);
+			report.addProperty("coreAndTerminalSelectLastSlot", failure == null);
+			report.addProperty("slots", AutomaticRestartProbe.clientSlots);
 			if (failure != null) report.addProperty("failure", failure.toString());
 			Files.createDirectories(Path.of("results")); Files.writeString(Path.of("results/factory-client.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report));
 		} catch (Exception error) { com.mojang.logging.LogUtils.getLogger().error("Factory client shutdown", error); }
