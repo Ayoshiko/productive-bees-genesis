@@ -23,7 +23,10 @@ public final class StaticCentrifugeAdapter {
 	public static boolean supports(TileEntityMekanism tile) {
 		if (tile == null) return false;
 		String machine = BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString();
-		if (CentrifugeWorkLayout.EXTRA_MACHINES.contains(machine)) {
+		if (CentrifugeWorkLayout.EVOLVED_EXTRA_MACHINES.contains(machine)) {
+			if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded() || !tile.getClass().getName().equals(
+					"com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekCentrifugeFactory")) return false;
+		} else if (CentrifugeWorkLayout.EXTRA_MACHINES.contains(machine)) {
 			if (!MekCompatHooks.isMekanismExtrasLoaded() || !tile.getClass().getName().equals(
 					"com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory")) return false;
 		} else if (tile.getClass() != TileEntityMekCentrifuge.class && tile.getClass() != TileEntityMekCentrifugeFactory.class) return false;

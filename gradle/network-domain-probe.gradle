@@ -37,11 +37,15 @@ if (evolvedApiaryProbe && !factoryProbe) throw new GradleException('Evolved apia
 def centrifugeFactoryProbe = providers.gradleProperty('networkCentrifugeFactoryProbe').isPresent()
 def evolvedCentrifugeProbe = providers.gradleProperty('networkEvolvedCentrifugeProbe').isPresent()
 def extraFactoryProbe = providers.gradleProperty('networkExtraFactoryProbe').isPresent()
+def evolvedExtraFactoryProbe = providers.gradleProperty('networkEvolvedExtraFactoryProbe').isPresent()
 if (extraFactoryProbe && (!factoryProbe && !centrifugeFactoryProbe || evolvedApiaryProbe || evolvedCentrifugeProbe))
     throw new GradleException('ME factories require their own apiary or centrifuge probe family')
+if (evolvedExtraFactoryProbe && (!factoryProbe && !centrifugeFactoryProbe || evolvedApiaryProbe || evolvedCentrifugeProbe || extraFactoryProbe))
+    throw new GradleException('EME factories require their own apiary or centrifuge probe family')
 def expectedApiarySlots = 20
 if (evolvedApiaryProbe) expectedApiarySlots = 45
 if (extraFactoryProbe) expectedApiarySlots = 42
+if (evolvedExtraFactoryProbe) expectedApiarySlots = 60
 if (evolvedCentrifugeProbe && !centrifugeFactoryProbe) throw new GradleException('Evolved factory probe requires the centrifuge factory probe')
 if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'read']))) throw new GradleException('Centrifuge factory probe requires its own automatic write/read mode')
 if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
@@ -375,6 +379,7 @@ neoForge {
                 systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
                 systemProperty 'pbg.factoryCentrifuge.evolved', evolvedCentrifugeProbe.toString()
                 systemProperty 'pbg.factoryCentrifuge.extra', extraFactoryProbe.toString()
+                systemProperty 'pbg.factoryCentrifuge.evolvedExtra', evolvedExtraFactoryProbe.toString()
                 systemProperty 'pbg.domain.enabled', 'true'
                 systemProperty 'pbg.automatic.mode', 'write'
             }
@@ -383,6 +388,7 @@ neoForge {
                 systemProperty 'pbg.factory.enabled', 'true'
                 systemProperty 'pbg.factory.evolved', evolvedApiaryProbe.toString()
                 systemProperty 'pbg.factory.extra', extraFactoryProbe.toString()
+                systemProperty 'pbg.factory.evolvedExtra', evolvedExtraFactoryProbe.toString()
                 systemProperty 'pbg.domain.enabled', 'true'
                 systemProperty 'pbg.automatic.mode', 'write'
             }
@@ -405,9 +411,11 @@ neoForge {
             if (factoryProbe) systemProperty 'pbg.factory.enabled', 'true'
             if (factoryProbe) systemProperty 'pbg.factory.evolved', evolvedApiaryProbe.toString()
             if (factoryProbe) systemProperty 'pbg.factory.extra', extraFactoryProbe.toString()
+            if (factoryProbe) systemProperty 'pbg.factory.evolvedExtra', evolvedExtraFactoryProbe.toString()
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.evolved', evolvedCentrifugeProbe.toString()
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.extra', extraFactoryProbe.toString()
+            if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.evolvedExtra', evolvedExtraFactoryProbe.toString()
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
 			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'

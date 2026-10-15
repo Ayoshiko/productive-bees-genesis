@@ -67,6 +67,7 @@ public final class FactoryMixedProbe {
 			level.setBlockAndUpdate(pos.east(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(factoryMachine)).defaultBlockState());
 			factory = (TileEntityMekanism) level.getBlockEntity(pos.east());
 			String hiveMachine = CentrifugeWorkLayout.EXTRA_MACHINES.contains(factoryMachine)
+					|| CentrifugeWorkLayout.EVOLVED_EXTRA_MACHINES.contains(factoryMachine)
 					? factoryMachine.replace("centrifuge", "apiary") : "productivebeesgenesis:ultimate_mek_apiary_factory";
 			level.setBlockAndUpdate(pos.west(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(hiveMachine)).defaultBlockState());
 			hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());

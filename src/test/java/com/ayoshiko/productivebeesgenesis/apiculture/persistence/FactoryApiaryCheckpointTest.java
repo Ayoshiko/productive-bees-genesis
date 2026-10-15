@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FactoryApiaryCheckpointTest {
 	private static final List<String> TYPES = List.of("basic", "advanced", "elite", "ultimate", "overclocked", "quantum", "dense", "multiversal", "creative",
-			"absolute_extra", "supreme_extra", "cosmic_extra", "infinite_extra");
+			"absolute_extra", "supreme_extra", "cosmic_extra", "infinite_extra",
+			"absolute_overclocked_emextra", "supreme_quantum_emextra", "cosmic_dense_emextra", "infinite_multiversal_emextra");
 	private static final UUID MEMBER = new UUID(17, 3);
 	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> {});
 	@BeforeAll static void version() { SharedConstants.tryDetectVersion(); }
@@ -89,7 +90,8 @@ class FactoryApiaryCheckpointTest {
 		}
 	}
 	@Test void streamingDecoderPreservesFactoryLayout() throws Exception {
-		var root = fixture("creative"); var file = java.nio.file.Files.createTempFile("factory-apiary", ".dat");
+		var root = fixture("infinite_multiversal_emextra");
+		var file = java.nio.file.Files.createTempFile("factory-apiary", ".dat");
 		try {
 			try (var out = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) { NetworkCheckpointStream.write(root, out); }
 			try (var service = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadService();

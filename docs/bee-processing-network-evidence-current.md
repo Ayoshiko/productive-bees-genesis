@@ -1331,3 +1331,22 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 五份 domain.json 的 passed／normalShutdownCheckpointSaved 全部为 true；离心读档的 allLanesPaidAndRestored／sealedAssetsAndReturn／upgradesSimulationAndStale／mixedFourCarriersProducedAndReturned、蜂箱读档的 factoryManagementAndReturn 均为 true。全部场景无物品实体，两组 XML 无失败／错误／跳过。核心与离心终端两张 1000×700 截图已回看，11 项升级及动作区完整可见；终端显示最高档 42 蜂位、17 进程，不推导其它分辨率结论。原聊天因服务额度中断而未收尾，最后蜂箱读档已在中断前退出成功；不存在需要重启的失败场景。
 
 **边界与证据。** 编译沿既有 ME 1.4.1，实际运行 ME 1.4.0；其余组合为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、EME 1.2.1，无 AE2。只扩纯布局、既有 loader 守卫及本项目资产接口，不在常驻类无条件链接 ME 类型。终端完整分页与协议 43 沿用[10.172](#s10-172)，schema 15／samplingVersion 6 不变；普通／EM 及未变共用生产机制沿用[10.165](#s10-165)–[10.171](#s10-171)。本次接续集中核对改动编码、文档链接、报告和 JAR 内容，源码／依赖／报告／截图／日志／XML／产物摘要索引为 `build/network-gates/r3-me-factories-20261015/verification.json`，原世界和日志继续留在 build，不进入发布 JAR。该包游戏进程均已退出。EME 工厂准入、CREATIVE／STACK 蜂箱升级件、动态／中性资源、完整 RF／D24／M05、缺依赖／故障／多人矩阵及 64×／256×／Spark 门仍开放。下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。
+
+<a id="s10-174"></a>
+### 10.174 R3 EME 四档工厂与 60 蜂位完整管理（2026-10-15）
+
+**本包交付。** 网络 worktree `productive-bees-addon`、分支 `bees-processing-network/1.21.1`，基线 `25653bb`。EME 四档 ABSOLUTE_OVERCLOCKED／SUPREME_QUANTUM／COSMIC_DENSE／INFINITE_MULTIVERSAL 按精确注册身份、隔离宿主类、加载状态与实际容量准入：蜂位 45／51／55／60，原喂食槽 45／55／55／60，离心进程 12／14／16／18。EME 离心机实现已有资产 Provider，复用不同基类的统一资产保管、生产与升级；既有原槽、多流体、休眠罐及已生成 long 余量完整保留。MAX_BEES 扩至 60，同步存档容量校验、终端请求及成员显示，终端协议升至 44，schema 15／samplingVersion 6 不变。共享分页算法与每页六蜂位界面复用；两台满 60 槽成员按最坏编码预算仍小于 64 KiB，不截断基因或末槽。合同与对应版本来源见[7.3](bee-processing-network-design.md#s7-3)、[13.1](bee-processing-network-references.md#s13-1)。
+
+**本次实际验收。** 只扩展两组已有资产存档测试、完整双向成员分页及终端双 codec 测试；覆盖四个 EME 身份、末槽已付输出、升级不改旧工作、60 槽流式恢复、混合容量前后翻页／刷新、空槽随后装蜂预算不变、完整 Unicode／长合法 ID／五项基因，以及第 60 槽可请求和越界拒绝。四组 XML 无失败／错误／跳过，和 build、离心写档合并一次任务图；其后仅运行对应恢复和客户端，不重复测试或构建。所有运行使用 `--offline --no-daemon`，有 285 秒外部进程树硬超时，均首次通过、退出 0，未触及上限。
+
+| 运行 ID | 实际耗时 | 结果 |
+| --- | --- | --- |
+| r3-eme-centrifuge-write-20261015a | 65.0 秒 | 四组受影响测试、build 及全部四档部分已付进程写档、正常保存通过 |
+| r3-eme-centrifuge-read-20261015a | 192.9 秒 | 独立 JVM 恢复全部 60 个进程；费用／产物、原槽、多流体、已生成余量、模拟不变、旧请求拒绝、升级和交还通过；最高档 EME 蜂箱＋EME 离心工厂＋基础离心机＋组合一体机完成混合生产、排空和交还 |
+| r3-eme-apiary-client-20261015a | 85.9 秒 | 最高档核心与蜜蜂终端各翻九页，真实选中第 60 槽；客户端和集成服正常保存通过 |
+| r3-eme-apiary-write-20261015a | 42.7 秒 | 四档末蜂位部分已付工作、原花源和额外喂食物料写档通过 |
+| r3-eme-apiary-read-20261015a | 74.3 秒 | 独立 JVM 四档各完成末槽一轮蜂生产与离心链；费用／产物、启停、喂食模拟／取回、普通供给、装笼／入驻、逐机升级、权限与完整交还通过 |
+
+五份 domain.json 的 passed／normalShutdownCheckpointSaved 全为 true；离心读档 allLanesPaidAndRestored／sealedAssetsAndReturn／upgradesSimulationAndStale／mixedFourCarriersProducedAndReturned、蜂箱读档 factoryManagementAndReturn 均为 true，全部场景无物品掉落实体。两张实际 1000×700 截图已回看：核心显示 55–60 六个完整按钮，终端显示 55–60／60 与末槽蜜蜂／食物、管理按钮，选中槽正确；不代表全部分辨率。未改变升级页布局，逐机升级使用真实服务器事务验证，最高档离心客户端的共同操作路径沿用[10.173](#s10-173)。
+
+**组合、复用与剩余门。** 实际组合为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、ME 1.4.0、EME 1.2.1，无 AE2；编译用既有 ME 1.4.1，未改外部依赖或元数据。普通／EM／ME 资产接口、升级语义和未变生产路径沿用[10.170](#s10-170)–[10.173](#s10-173)，只补 EME 和 60 槽风险；不重跑全量缺依赖矩阵，也没有 Spark 或高倍率收益结论。源码、命令／退出码／耗时、报告、XML、截图、日志、依赖及 JAR 摘要集中于 `build/network-gates/r3-eme-factories-20261015/verification.json`；原始世界与日志保留在忽略的 build，探针不进入发布 JAR。本包客户端、专服及限时助手均已退出。CREATIVE／STACK 蜂箱升级件、修改费用公式的可选组合、动态／中性资源、完整 RF／D24／D25／M05、故障／多人及 64×／256× 门仍开放；下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。

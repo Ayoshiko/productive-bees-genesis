@@ -44,6 +44,7 @@ public final class FactoryCentrifugeProbe {
 	public static volatile BlockPos clientPos;
 	public static volatile String clientMachine;
 	private static List<String> factoryMachines() {
+		if (Boolean.getBoolean("pbg.factoryCentrifuge.evolvedExtra")) return CentrifugeWorkLayout.EVOLVED_EXTRA_MACHINES;
 		if (Boolean.getBoolean("pbg.factoryCentrifuge.extra")) return CentrifugeWorkLayout.EXTRA_MACHINES;
 		return Boolean.getBoolean("pbg.factoryCentrifuge.evolved") ? CentrifugeWorkLayout.EVOLVED_MACHINES
 				: CentrifugeWorkLayout.ORDINARY_MACHINES.subList(1, CentrifugeWorkLayout.ORDINARY_MACHINES.size());
@@ -58,6 +59,7 @@ public final class FactoryCentrifugeProbe {
 			var tag = NbtIo.readCompressed(manifest(server), NbtAccounter.unlimitedHeap()); writerPid = tag.getLong("writerPid");
 			require(tag.getBoolean("evolvedFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.evolved"), "Reader factory family differs from writer");
 			require(tag.getBoolean("extraFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.extra"), "Reader ME family differs from writer");
+			require(tag.getBoolean("evolvedExtraFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.evolvedExtra"), "Reader EME family differs from writer");
 			require(writerPid != ProcessHandle.current().pid(), "Factory reader reused writer JVM");
 			for (var raw : tag.getList("fixtures", 10)) {
 				var value = (CompoundTag) raw; var fixture = new Fixture(BlockPos.of(value.getLong("position")), value.getString("machine"));
@@ -115,12 +117,14 @@ public final class FactoryCentrifugeProbe {
 			tag.putLong("writerPid", writerPid);
 			tag.putBoolean("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
 			tag.putBoolean("extraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.extra"));
+			tag.putBoolean("evolvedExtraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolvedExtra"));
 			tag.put("fixtures", list);
 			NbtIo.writeCompressed(tag, manifest(server));
 		}
 		report.add("centrifugeFactories", rows); report.addProperty("factoryCentrifuge", true);
 		report.addProperty("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
 		report.addProperty("extraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.extra"));
+		report.addProperty("evolvedExtraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolvedExtra"));
 		report.addProperty("automaticRestartIsNewJvm", reading); report.addProperty("producerPid", writerPid);
 		report.addProperty("allLanesPaidAndRestored", reading); report.addProperty("sealedAssetsAndReturn", reading);
 		report.addProperty("upgradesSimulationAndStale", reading); report.addProperty("noItemEntities", true);

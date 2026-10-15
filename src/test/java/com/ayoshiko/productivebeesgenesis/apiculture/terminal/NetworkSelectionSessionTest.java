@@ -55,7 +55,8 @@ class NetworkSelectionSessionTest {
 
 	@Test void mixedFactoryPagesTraverseBothDirectionsWithinStableBudget() {
 		var source = NetworkCheckpoint.empty(identity());
-		var tiers = List.of("ultimate", "overclocked", "quantum", "dense", "multiversal", "creative");
+		var tiers = List.of("ultimate", "overclocked", "quantum", "dense", "multiversal", "creative",
+				"absolute_overclocked_emextra", "supreme_quantum_emextra", "cosmic_dense_emextra", "infinite_multiversal_emextra");
 		for (int i = 0; i < 27; i++) source = source.withOwnership(factory(source.identity(), i, tiers.get(i % tiers.size())));
 		var query = new TerminalLiveQuery(MEMBERS, TerminalScope.APIARY, "");
 		var forward = new java.util.ArrayList<UUID>();
@@ -84,9 +85,9 @@ class NetworkSelectionSessionTest {
 		query.restart();
 		finish(query, source);
 		assertEquals(first, query.currentRows(source));
-		var record = factory(source.identity(), 100, "creative");
+		var record = factory(source.identity(), 100, "infinite_multiversal_emextra");
 		var empty = NetworkSelectionSession.member(record, MEMBERS);
-		var bees = java.util.stream.IntStream.range(0, 45)
+		var bees = java.util.stream.IntStream.range(0, 60)
 				.mapToObj(i -> new NetworkSelectionSession.BeeRow(i, UUID.randomUUID(), "蜂".repeat(80), 1, 20, true)).toList();
 		assertEquals(TerminalMemberPageBudget.weight(empty), TerminalMemberPageBudget.weight(new NetworkSelectionSession.MemberRow(
 				record.claim(), record.phase(), null, 0, bees)));

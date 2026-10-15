@@ -480,9 +480,9 @@ class TerminalProtocolTest {
 		assertEquals(8, accepted); assertTrue(budget.accept(20)); assertTrue(budget.accept(20)); assertFalse(budget.accept(20));
 		assertFalse(budget.accept(-1));
 	}
-	@Test void evolvedMembersKeepFortyFiveUnicodeSlotsAndAllGenesInBothCodecs() {
+	@Test void evolvedExtraMembersKeepSixtyUnicodeSlotsAndAllGenesInBothCodecs() {
 		var genes = new TerminalBeeGenes(java.util.Collections.nCopies(5, "a".repeat(32)));
-		var bees = java.util.stream.IntStream.range(0, 45).mapToObj(i -> new TerminalView.Bee(i, true,
+		var bees = java.util.stream.IntStream.range(0, 60).mapToObj(i -> new TerminalView.Bee(i, true,
 				"蜂".repeat(80), Integer.MAX_VALUE, Integer.MAX_VALUE, true, "test:" + "b".repeat(75),
 				64, true, genes, new UUID(1, i))).toList();
 		var location = new TerminalView.Location("test:" + "m".repeat(75), "test:" + "d".repeat(75), -1, -1, -1);
@@ -500,7 +500,9 @@ class TerminalProtocolTest {
 			TerminalLiveUpdate.STREAM_CODEC.encode(buffer, update);
 			assertTrue(buffer.readableBytes() <= TerminalLiveUpdate.MAX_BYTES);
 			assertEquals(update, TerminalLiveUpdate.STREAM_CODEC.decode(buffer));
-			assertEquals(44, new TerminalRequest(1, reply.session(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 44, 0, 1).targetSlot());
+			assertEquals(59, new TerminalRequest(1, reply.session(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 59, 0, 1).targetSlot());
+			assertThrows(IllegalArgumentException.class, () -> new TerminalRequest(1, reply.session(), 1,
+					TerminalRequest.Operation.CAGE_OUT, 1, 0, 60, 0, 1));
 		} finally { buffer.release(); }
 	}
 }

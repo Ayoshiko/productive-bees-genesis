@@ -14,10 +14,15 @@ public final class CentrifugeWorkLayout {
 	public static final List<String> EXTRA_MACHINES = List.of("productivebeesgenesis:absolute_extra_mek_centrifuge_factory",
 			"productivebeesgenesis:supreme_extra_mek_centrifuge_factory", "productivebeesgenesis:cosmic_extra_mek_centrifuge_factory",
 			"productivebeesgenesis:infinite_extra_mek_centrifuge_factory");
-	public static final List<String> MACHINES = Stream.of(ORDINARY_MACHINES, EVOLVED_MACHINES, EXTRA_MACHINES)
+	public static final List<String> EVOLVED_EXTRA_MACHINES = List.of("productivebeesgenesis:absolute_overclocked_emextra_mek_centrifuge_factory",
+			"productivebeesgenesis:supreme_quantum_emextra_mek_centrifuge_factory", "productivebeesgenesis:cosmic_dense_emextra_mek_centrifuge_factory",
+			"productivebeesgenesis:infinite_multiversal_emextra_mek_centrifuge_factory");
+	public static final List<String> MACHINES = Stream.of(ORDINARY_MACHINES, EVOLVED_MACHINES, EXTRA_MACHINES, EVOLVED_EXTRA_MACHINES)
 			.flatMap(List::stream).toList();
 	public static int lanes(String machine) {
-		int index = EXTRA_MACHINES.indexOf(machine);
+		int index = EVOLVED_EXTRA_MACHINES.indexOf(machine);
+		if (index >= 0) return 12 + index * 2;
+		index = EXTRA_MACHINES.indexOf(machine);
 		if (index >= 0) return 11 + index * 2;
 		index = EVOLVED_MACHINES.indexOf(machine);
 		if (index >= 0) return 11 + index * 2;

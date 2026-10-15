@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **EME 四档工厂接入蜂业网络**：Absolute Overclocked／Supreme Quantum／Cosmic Dense／Infinite Multiversal 蜂箱与离心工厂接入共同生产，分别支持 45／51／55／60 蜂位和 12／14／16／18 进程。共享普通供给、末槽管理、逐机升级和完整资产交还；保留原槽、多流体和已付工作。终端完整显示至第 60 槽及全部基因，仍限制单包 64 KiB，协议升至 44；存档格式和网络默认关闭保持不变。
+
 - **ME 四档工厂接入蜂业网络**：Mekanism Extras 的 Absolute／Supreme／Cosmic／Infinite 蜂箱与离心工厂可共同托管生产，分别支持 26／30／36／42 蜂位及 11／13／15／17 进程。复用普通供给、末槽管理、逐机升级和完整交还，保留原输入／输出、多流体及已生成余量；STACK 仅影响离心工厂后续并行，CREATIVE 升级件不开放。沿用完整蜂位分页、终端协议 43 和现有存档格式，网络仍默认关闭。
 
 - **EM 五档蜂箱接入蜂业网络**：支持 26／30／36／42／45 蜂位，共用生产、普通供给、喂食、装笼、逐机升级和安全交还；完整保留原喂食物料及已付工作。核心与蜜蜂终端可翻页管理至第 45 槽，成员列表按完整蜂位和五项基因的字节预算分页，保持单包 64 KiB，修复混合容量成员反向翻页后刷新改变页边界的问题。终端协议为 43，网络仍默认关闭。
@@ -237,6 +239,8 @@
 ### English
 
 #### Added
+
+- **EME factories in bee networks**: Absolute Overclocked/Supreme Quantum/Cosmic Dense/Infinite Multiversal apiaries and centrifuges join shared production with 45/51/55/60 bee slots and 12/14/16/18 processing lanes. Reuses ordinary supply, last-slot management, per-machine upgrades and complete asset return, preserving original slots, multiple fluids and paid work. Terminals retain all 60 bee slots and all genes within the 64 KiB packet limit; terminal protocol is now 44. Save formats and the disabled-by-default network setting are unchanged.
 
 - **ME factories in bee networks**: Mekanism Extras Absolute/Supreme/Cosmic/Infinite apiaries and centrifuges join shared network production with 26/30/36/42 bee slots and 11/13/15/17 processing lanes. Reuses ordinary supply, last-slot management, per-machine upgrades and complete return, preserving original input/output stacks, multiple fluids and committed remainders. STACK affects future centrifuge parallelism; CREATIVE upgrades remain unsupported. Full bee-slot paging, terminal protocol 43 and save formats are unchanged; networks remain disabled by default.
 

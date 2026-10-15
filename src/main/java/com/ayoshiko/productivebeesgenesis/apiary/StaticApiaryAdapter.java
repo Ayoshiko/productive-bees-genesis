@@ -30,7 +30,10 @@ public final class StaticApiaryAdapter {
 	public record CagedBee(AssetImage original, StaticBeePlan plan) { }
 	public static boolean supports(TileEntityMekApiary hive) {
 		String machine = BuiltInRegistries.BLOCK.getKey(hive.getBlockState().getBlock()).toString();
-		if (ApiaryWorkLayout.EXTRA_MACHINES.contains(machine)) {
+		if (ApiaryWorkLayout.EVOLVED_EXTRA_MACHINES.contains(machine)) {
+			if (!MekCompatHooks.isEvolvedMekanismExtrasLoaded() || !hive.getClass().getName().equals(
+					"com.ayoshiko.productivebeesgenesis.compat.emextras.TileEntityEMExtraMekApiaryFactory")) return false;
+		} else if (ApiaryWorkLayout.EXTRA_MACHINES.contains(machine)) {
 			if (!MekCompatHooks.isMekanismExtrasLoaded() || !hive.getClass().getName().equals(
 					"com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory")) return false;
 		} else if (hive.getClass() != TileEntityMekApiary.class && hive.getClass() != TileEntityMekApiaryFactory.class) return false;
