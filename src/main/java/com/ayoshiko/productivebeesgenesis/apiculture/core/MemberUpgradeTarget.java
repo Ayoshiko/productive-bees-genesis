@@ -31,7 +31,7 @@ record MemberUpgradeTarget(TileEntityMekanism machine, ManagedBeeAccess combined
 	boolean supports(Upgrade upgrade) {
 		if (combined != null) return upgrade == Upgrade.SPEED || upgrade == Upgrade.ENERGY;
 		return machine.getComponent().supports(upgrade) && (!upgrade.name().equals("STACK")
-				|| machine instanceof AbstractMekCentrifugeFactory && StaticCentrifugeAdapter.supports(machine));
+				|| machine instanceof MachineAssetSection.Provider && StaticCentrifugeAdapter.supports(machine));
 	}
 	boolean supports(PbUpgradeType upgrade) {
 		if (combined != null) return (apiary ? com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.APIARY_TYPES

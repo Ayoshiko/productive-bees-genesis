@@ -24,7 +24,7 @@ public final class MachineAssetStore {
 		if (tile instanceof TileEntityMekApiary hive && com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter.supports(hive)) section = new ApiaryOwnershipAssets(hive);
 		else if (tile.getClass() == TileEntityMekCentrifuge.class) section = ((TileEntityMekCentrifuge) tile).ownershipAssets();
 		else if (com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter.supports(tile))
-			section = ((com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory) tile).ownershipAssets();
+			section = ((MachineAssetSection.Provider) tile).ownershipAssets();
 		else throw new IllegalArgumentException("No verified ownership asset adapter for " + tile.getClass().getName());
 		host = (IAe2OutputHostBase) tile;
 	}
@@ -53,7 +53,7 @@ public final class MachineAssetStore {
 		for (var slot : machine.getInventorySlots(null)) if (!slot.isEmpty() && slot.getCount() > slot.getLimit(slot.getStack())) throw new IllegalArgumentException("Inventory exceeds physical slot capacity");
 		for (var upgrade : Upgrade.values()) if (machine.getComponent().getUpgrades(upgrade) > 0 && !machine.getComponent().supports(upgrade)) throw new IllegalArgumentException("Unsupported native upgrade");
 		if (!image.equals(candidate.capture(level.registryAccess()))) throw new IllegalArgumentException("Asset data cannot round-trip on the current machine and registries");
-		if (tile instanceof com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory)
+		if (tile instanceof MachineAssetSection.Provider)
 			com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter.validateUpgrades(machine, image);
 	}
 	public void clear(HolderLookup.Provider registries) {

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
@@ -27,7 +28,7 @@ final class SealedCentrifugeProfile {
 				|| !tag.getCompound("extra").contains(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, Tag.TAG_COMPOUND))
 			throw new IllegalArgumentException("Missing sealed upgrade records");
 		var nativeUpgrades = NativeUpgradeCounts.read(tag.getCompound("upgrades"));
-		boolean factory = tile instanceof AbstractMekCentrifugeFactory;
+		boolean factory = tile instanceof MachineAssetSection.Provider;
 		int stack = 0;
 		for (var entry : nativeUpgrades.entrySet()) {
 			boolean stacking = factory && entry.getKey().name().equals("STACK") && MekCompatHooks.isMekanismExtrasLoaded();

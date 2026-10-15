@@ -12,7 +12,11 @@ public record ApiaryWorkLayout(int bees, int feeders) {
 	public static final List<String> EVOLVED_MACHINES = List.of("productivebeesgenesis:overclocked_mek_apiary_factory",
 			"productivebeesgenesis:quantum_mek_apiary_factory", "productivebeesgenesis:dense_mek_apiary_factory",
 			"productivebeesgenesis:multiversal_mek_apiary_factory", "productivebeesgenesis:creative_mek_apiary_factory");
-	public static final List<String> MACHINES = Stream.concat(ORDINARY_MACHINES.stream(), EVOLVED_MACHINES.stream()).toList();
+	public static final List<String> EXTRA_MACHINES = List.of("productivebeesgenesis:absolute_extra_mek_apiary_factory",
+			"productivebeesgenesis:supreme_extra_mek_apiary_factory", "productivebeesgenesis:cosmic_extra_mek_apiary_factory",
+			"productivebeesgenesis:infinite_extra_mek_apiary_factory");
+	public static final List<String> MACHINES = Stream.of(ORDINARY_MACHINES, EVOLVED_MACHINES, EXTRA_MACHINES)
+			.flatMap(List::stream).toList();
 	public ApiaryWorkLayout {
 		if (!((bees == 3 || bees == 5) && feeders == 9
 				|| (bees == 10 || bees == 15 || bees == 20 || bees == 30 || bees == 45) && feeders == bees
@@ -31,6 +35,10 @@ public record ApiaryWorkLayout(int bees, int feeders) {
 			case "productivebeesgenesis:dense_mek_apiary_factory" -> new ApiaryWorkLayout(36, 40);
 			case "productivebeesgenesis:multiversal_mek_apiary_factory" -> new ApiaryWorkLayout(42, 45);
 			case "productivebeesgenesis:creative_mek_apiary_factory" -> new ApiaryWorkLayout(45, 45);
+			case "productivebeesgenesis:absolute_extra_mek_apiary_factory" -> new ApiaryWorkLayout(26, 30);
+			case "productivebeesgenesis:supreme_extra_mek_apiary_factory" -> new ApiaryWorkLayout(30, 30);
+			case "productivebeesgenesis:cosmic_extra_mek_apiary_factory" -> new ApiaryWorkLayout(36, 40);
+			case "productivebeesgenesis:infinite_extra_mek_apiary_factory" -> new ApiaryWorkLayout(42, 45);
 			default -> null;
 		};
 	}

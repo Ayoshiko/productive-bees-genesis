@@ -24,7 +24,9 @@ public final class AutomaticRestartProbe {
 	private static boolean reading;
 	private static boolean factoryMode() { return Boolean.getBoolean("pbg.factory.enabled"); }
 	private static boolean evolvedFactory() { return Boolean.getBoolean("pbg.factory.evolved"); }
+	private static boolean extraFactory() { return Boolean.getBoolean("pbg.factory.extra"); }
 	private static List<String> factoryTiers() {
+		if (extraFactory()) return List.of("absolute_extra", "supreme_extra", "cosmic_extra", "infinite_extra");
 		return evolvedFactory() ? List.of("overclocked", "quantum", "dense", "multiversal", "creative")
 				: List.of("basic", "advanced", "elite", "ultimate");
 	}
@@ -54,6 +56,7 @@ public final class AutomaticRestartProbe {
 			unbound.initializeOwner(UUID.randomUUID());
 			var root = NbtIo.readCompressed(manifest(server), NbtAccounter.unlimitedHeap());
 			require(root.getBoolean("evolvedFactory") == evolvedFactory(), "Automatic restart factory family mismatch");
+			require(root.getBoolean("extraFactory") == extraFactory(), "Automatic restart ME family mismatch");
 			require(!JVM.equals(root.getUUID("producerJvm")), "Automatic restart reused writer JVM"); producerPid = root.getLong("producerPid");
 			for (var raw : root.getList("fixtures", Tag.TAG_COMPOUND)) {
 				var tag = (CompoundTag) raw; var pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
@@ -130,6 +133,7 @@ public final class AutomaticRestartProbe {
 				ModConfig.SERVER.beeNetwork.enabled.set(false);
 				var root = new CompoundTag(); var list = new ListTag();
 				root.putBoolean("evolvedFactory", evolvedFactory());
+				root.putBoolean("extraFactory", extraFactory());
 				for (var fixture : fixtures) { fixture.redstone(RedstoneControl.DISABLED); fixture.saved = fixture.data.checkpoint(); list.add(fixture.manifest()); }
 				root.put("fixtures", list); root.putUUID("producerJvm", JVM); root.putLong("producerPid", ProcessHandle.current().pid()); NbtIo.writeCompressed(root, manifest(server));
 				if (factoryMode() && !server.isDedicatedServer()) {
@@ -193,6 +197,7 @@ public final class AutomaticRestartProbe {
 		if (factoryMode()) {
 			report.addProperty("factoryMode", true);
 			report.addProperty("evolvedFactory", evolvedFactory());
+			report.addProperty("extraFactory", extraFactory());
 			report.addProperty("factoryManagementAndReturn", reading && factoryManagementIndex == caseCount());
 		}
 		report.addProperty("noItemEntities", true);

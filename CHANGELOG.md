@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **ME 四档工厂接入蜂业网络**：Mekanism Extras 的 Absolute／Supreme／Cosmic／Infinite 蜂箱与离心工厂可共同托管生产，分别支持 26／30／36／42 蜂位及 11／13／15／17 进程。复用普通供给、末槽管理、逐机升级和完整交还，保留原输入／输出、多流体及已生成余量；STACK 仅影响离心工厂后续并行，CREATIVE 升级件不开放。沿用完整蜂位分页、终端协议 43 和现有存档格式，网络仍默认关闭。
+
 - **EM 五档蜂箱接入蜂业网络**：支持 26／30／36／42／45 蜂位，共用生产、普通供给、喂食、装笼、逐机升级和安全交还；完整保留原喂食物料及已付工作。核心与蜜蜂终端可翻页管理至第 45 槽，成员列表按完整蜂位和五项基因的字节预算分页，保持单包 64 KiB，修复混合容量成员反向翻页后刷新改变页边界的问题。终端协议为 43，网络仍默认关闭。
 
 - **合成样板替代选项**：新编码普通合成样板时可分别启用物品替代和流体替代，默认均关闭。按 AE2 原生配方／桶原料规则编码，确认前重新核对实际九格和完整输出，保留样板张数与组件，不消耗材料样本。编码页以六行分页容纳两个开关；ME 协议升至 24，终端／机器 38／12 和存档不变，实际客户端与自动合成联合仍待验收。
@@ -235,6 +237,8 @@
 ### English
 
 #### Added
+
+- **ME factories in bee networks**: Mekanism Extras Absolute/Supreme/Cosmic/Infinite apiaries and centrifuges join shared network production with 26/30/36/42 bee slots and 11/13/15/17 processing lanes. Reuses ordinary supply, last-slot management, per-machine upgrades and complete return, preserving original input/output stacks, multiple fluids and committed remainders. STACK affects future centrifuge parallelism; CREATIVE upgrades remain unsupported. Full bee-slot paging, terminal protocol 43 and save formats are unchanged; networks remain disabled by default.
 
 - **EM apiary factories in bee networks**: Adds all five tiers with 26/30/36/42/45 bee slots to shared production, ordinary supply, feeding, caging, per-machine upgrades and safe return, preserving physical feeding items and paid work. The core and bee terminal can manage slot 45 through paging. Member pages budget every bee slot and all five genes within the existing 64 KiB packet limit; refreshing a reverse page of mixed-capacity members now preserves its boundaries. Terminal protocol is 43; bee networks remain disabled by default.
 

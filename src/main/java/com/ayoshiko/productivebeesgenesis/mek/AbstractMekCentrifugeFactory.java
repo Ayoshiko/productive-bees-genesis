@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection;
+
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
@@ -63,7 +65,8 @@ import java.util.function.BooleanSupplier;
 public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemFactory<ItemStackToItemStackRecipe>
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess,
 		IAe2InputHost, IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
-		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost {
+		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost,
+		MachineAssetSection.Provider {
 
 	@Override
 	public void productivebeesgenesis$onSmeltingCompatChanged() {
@@ -86,8 +89,9 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** PB 配方处理器 — 封装所有 PB 离心配方处理逻辑 */
 	protected final PbRecipeProcessor pbProcessor;
 	/** 多进程、PB 余量及多罐共用外层所有权双回执。 */
-	public com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection ownershipAssets() {
-		return new FactoryCentrifugeOwnershipAssets(this, progress);
+	@Override
+	public MachineAssetSection ownershipAssets() {
+		return new FactoryCentrifugeOwnershipAssets(this, pbProcessor, pbUpgradeDelegate, fluidOutputHolder, progress);
 	}
 	/** AE2 生命周期处理器 — 封装网格节点、缓存和待连接标志 */
 	protected final MekAe2LifecycleHandler productivebeesgenesis$ae2LifecycleHandler = new MekAe2LifecycleHandler();

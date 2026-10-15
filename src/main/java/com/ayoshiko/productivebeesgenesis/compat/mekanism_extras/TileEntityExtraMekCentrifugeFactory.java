@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection;
+import com.ayoshiko.productivebeesgenesis.mek.FactoryCentrifugeOwnershipAssets;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
@@ -85,7 +87,13 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		implements ItemRecipeLookupHandler<ItemStackToItemStackRecipe>, IFactoryPbDelegateAccess,
 		IAe2OutputHostBase, IPbUpgradeProvider, IUpgradeableBlockEntity, IMekCentrifugePbUpgradeHost,
 		com.ayoshiko.productivebeesgenesis.ICustomDataPersistable, IMultiFluidTankHost,
-		IJdteCentrifugeFactory {
+		IJdteCentrifugeFactory, MachineAssetSection.Provider {
+
+	@Override
+	public MachineAssetSection ownershipAssets() {
+		return new FactoryCentrifugeOwnershipAssets(this, pbProcessor, pbUpgradeDelegate,
+				getOrCreateDelegate().getFluidOutputHolder(), progress);
+	}
 
 	@Override public void productivebeesgenesis$onSmeltingCompatChanged(
 	) {

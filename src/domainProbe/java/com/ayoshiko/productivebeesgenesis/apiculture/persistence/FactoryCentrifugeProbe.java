@@ -16,6 +16,7 @@ import com.mojang.authlib.GameProfile;
 import java.nio.file.Path;
 import java.util.*;
 import mekanism.api.Upgrade;
+import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -43,6 +44,7 @@ public final class FactoryCentrifugeProbe {
 	public static volatile BlockPos clientPos;
 	public static volatile String clientMachine;
 	private static List<String> factoryMachines() {
+		if (Boolean.getBoolean("pbg.factoryCentrifuge.extra")) return CentrifugeWorkLayout.EXTRA_MACHINES;
 		return Boolean.getBoolean("pbg.factoryCentrifuge.evolved") ? CentrifugeWorkLayout.EVOLVED_MACHINES
 				: CentrifugeWorkLayout.ORDINARY_MACHINES.subList(1, CentrifugeWorkLayout.ORDINARY_MACHINES.size());
 	}
@@ -55,6 +57,7 @@ public final class FactoryCentrifugeProbe {
 		if (reading) {
 			var tag = NbtIo.readCompressed(manifest(server), NbtAccounter.unlimitedHeap()); writerPid = tag.getLong("writerPid");
 			require(tag.getBoolean("evolvedFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.evolved"), "Reader factory family differs from writer");
+			require(tag.getBoolean("extraFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.extra"), "Reader ME family differs from writer");
 			require(writerPid != ProcessHandle.current().pid(), "Factory reader reused writer JVM");
 			for (var raw : tag.getList("fixtures", 10)) {
 				var value = (CompoundTag) raw; var fixture = new Fixture(BlockPos.of(value.getLong("position")), value.getString("machine"));
@@ -111,11 +114,13 @@ public final class FactoryCentrifugeProbe {
 			var tag = new CompoundTag();
 			tag.putLong("writerPid", writerPid);
 			tag.putBoolean("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
+			tag.putBoolean("extraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.extra"));
 			tag.put("fixtures", list);
 			NbtIo.writeCompressed(tag, manifest(server));
 		}
 		report.add("centrifugeFactories", rows); report.addProperty("factoryCentrifuge", true);
 		report.addProperty("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
+		report.addProperty("extraFactories", Boolean.getBoolean("pbg.factoryCentrifuge.extra"));
 		report.addProperty("automaticRestartIsNewJvm", reading); report.addProperty("producerPid", writerPid);
 		report.addProperty("allLanesPaidAndRestored", reading); report.addProperty("sealedAssetsAndReturn", reading);
 		report.addProperty("upgradesSimulationAndStale", reading); report.addProperty("noItemEntities", true);
@@ -153,7 +158,9 @@ public final class FactoryCentrifugeProbe {
 		final String machine;
 		final int lanes;
 		NetworkCoreBlockEntity core;
-		TileEntityMekCentrifugeFactory factory;
+		TileEntityMekanism factory;
+		PbRecipeContext context;
+		MachineAssetSection assets;
 		TileEntityMekApiary hive;
 		NetworkSavedData data;
 		AssetImage original;
@@ -166,11 +173,14 @@ public final class FactoryCentrifugeProbe {
 		Fixture(BlockPos pos, String machine) { this.pos = pos; this.machine = machine; lanes = CentrifugeWorkLayout.lanes(machine); }
 		void force(ServerLevel level) { for (int dx = -1; dx <= 1; dx++) level.setChunkForced((pos.getX() >> 4) + dx, pos.getZ() >> 4, true); level.getChunkAt(pos); }
 		void bind(ServerLevel level) {
-			core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); factory = (TileEntityMekCentrifugeFactory) level.getBlockEntity(pos.east());
+			core = (NetworkCoreBlockEntity) level.getBlockEntity(pos);
+			factory = (TileEntityMekanism) level.getBlockEntity(pos.east());
+			context = (PbRecipeContext) factory;
+			assets = ((MachineAssetSection.Provider) factory).ownershipAssets();
 			hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());
-			require(core != null && factory != null && hive != null && factory.processes() == lanes, "Missing real factory layout");
+			require(core != null && factory != null && hive != null && context.processes() == lanes, "Missing real factory layout");
 		}
-		void create(ServerLevel level) {
+		void create(ServerLevel level) throws ReflectiveOperationException {
 			force(level); var owner = level.getServer().isDedicatedServer() ? UUID.randomUUID() : level.getServer().getSingleplayerProfile().getId();
 			level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState());
 			level.setBlockAndUpdate(pos.east(), BuiltInRegistries.BLOCK.get(ResourceLocation.parse(machine)).defaultBlockState());
@@ -181,23 +191,29 @@ public final class FactoryCentrifugeProbe {
 			core.initializeOwner(owner); factory.setOwnerUUID(owner); hive.setOwnerUUID(owner);
 			factory.setControlType(RedstoneControl.HIGH); hive.setControlType(RedstoneControl.HIGH);
 			factory.getComponent().addUpgrades(Upgrade.ENERGY, 4); factory.getComponent().addUpgrades(Upgrade.SPEED, 2);
-			factory.getPbUpgradeOutputSlot().setStack(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot.getRepresentativeStack(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.TIME_2));
+			var upgradeOutput = (mekanism.api.inventory.IInventorySlot) factory.getClass().getMethod("getPbUpgradeOutputSlot").invoke(factory);
+			upgradeOutput.setStack(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot.getRepresentativeStack(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.TIME_2));
 			for (int i = 0; i < lanes; i++) {
-				factory.inputSlot(i).setStack(comb().copyWithCount(i + 2));
-				factory.primaryOutputSlot(i).setStack(new ItemStack(Items.IRON_INGOT, i + 1));
-				factory.secondaryOutputSlot(i).setStack(new ItemStack(Items.GOLD_INGOT, i + 1));
-				factory.tertiaryOutputSlot(i).setStack(new ItemStack(Items.DIAMOND, i + 1));
+				context.inputSlot(i).setStack(comb().copyWithCount(i + 2));
+				context.primaryOutputSlot(i).setStack(new ItemStack(Items.IRON_INGOT, i + 1));
+				context.secondaryOutputSlot(i).setStack(new ItemStack(Items.GOLD_INGOT, i + 1));
+				context.tertiaryOutputSlot(i).setStack(new ItemStack(Items.DIAMOND, i + 1));
 			}
-			for (var fluid : List.of(new FluidStack(Fluids.WATER, 1234), new FluidStack(Fluids.LAVA, 2345))) factory.fluidOutputTankForInsert(fluid).setStack(fluid);
-			var extra = factory.ownershipAssets().capture(level.registryAccess()); var pending = new ListTag(); var job = new CompoundTag();
+			for (var fluid : List.of(new FluidStack(Fluids.WATER, 1234), new FluidStack(Fluids.LAVA, 2345))) context.fluidOutputTankForInsert(fluid).setStack(fluid);
+			var extra = assets.capture(level.registryAccess());
+			var pending = new ListTag();
+			var job = new CompoundTag();
 			job.putInt("process", lanes - 1); var items = new ListTag(); var item = (CompoundTag) new ItemStack(Items.EMERALD).save(level.registryAccess());
 			item.putInt("productivebeesgenesis_count", 19); items.add(item); job.put("items", items);
 			job.put("fluid", new FluidStack(Fluids.WATER, 1).save(level.registryAccess())); job.putLong("fluid_amount", 3_000_000_000L); pending.add(job);
-			extra.put("productivebeesgenesis_pb_committed_pending", pending); factory.ownershipAssets().restore(extra, level.registryAccess());
+			extra.put("productivebeesgenesis_pb_committed_pending", pending);
+			assets.restore(extra, level.registryAccess());
 			var store = new MachineAssetStore(factory); original = store.capture(level.registryAccess()); store.validate(original, level);
 			var partial = extra.copy(); var progress = new int[lanes]; progress[lanes - 1] = 1; partial.putIntArray("nativeProgress", progress);
-			factory.ownershipAssets().restore(partial, level.registryAccess()); require(!store.prepared() && !OwnershipEndpoints.bound(factory), "Legacy partial cycle accepted");
-			factory.ownershipAssets().restore(extra, level.registryAccess()); require(original.equals(store.capture(level.registryAccess())), "Refusal changed physical assets");
+			assets.restore(partial, level.registryAccess());
+			require(!store.prepared() && !OwnershipEndpoints.bound(factory), "Legacy partial cycle accepted");
+			assets.restore(extra, level.registryAccess());
+			require(original.equals(store.capture(level.registryAccess())), "Refusal changed physical assets");
 			var excessive = original.copy(); var fluids = new ListTag();
 			for (int i = 0; i <= lanes; i++) {
 				var fluid = new FluidStack(Fluids.WATER, 1000); var component = new CompoundTag(); component.putInt("variant", i);

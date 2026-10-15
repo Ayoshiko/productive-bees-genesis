@@ -11,9 +11,17 @@ public final class CentrifugeWorkLayout {
 	public static final List<String> EVOLVED_MACHINES = List.of("productivebeesgenesis:overclocked_mek_centrifuge_factory",
 			"productivebeesgenesis:quantum_mek_centrifuge_factory", "productivebeesgenesis:dense_mek_centrifuge_factory",
 			"productivebeesgenesis:multiversal_mek_centrifuge_factory", "productivebeesgenesis:creative_mek_centrifuge_factory");
-	public static final List<String> MACHINES = Stream.concat(ORDINARY_MACHINES.stream(), EVOLVED_MACHINES.stream()).toList();
+	public static final List<String> EXTRA_MACHINES = List.of("productivebeesgenesis:absolute_extra_mek_centrifuge_factory",
+			"productivebeesgenesis:supreme_extra_mek_centrifuge_factory", "productivebeesgenesis:cosmic_extra_mek_centrifuge_factory",
+			"productivebeesgenesis:infinite_extra_mek_centrifuge_factory");
+	public static final List<String> MACHINES = Stream.of(ORDINARY_MACHINES, EVOLVED_MACHINES, EXTRA_MACHINES)
+			.flatMap(List::stream).toList();
 	public static int lanes(String machine) {
-		int index = MACHINES.indexOf(machine);
+		int index = EXTRA_MACHINES.indexOf(machine);
+		if (index >= 0) return 11 + index * 2;
+		index = EVOLVED_MACHINES.indexOf(machine);
+		if (index >= 0) return 11 + index * 2;
+		index = ORDINARY_MACHINES.indexOf(machine);
 		return index < 0 ? 0 : 1 + index * 2;
 	}
 	private CentrifugeWorkLayout() { }

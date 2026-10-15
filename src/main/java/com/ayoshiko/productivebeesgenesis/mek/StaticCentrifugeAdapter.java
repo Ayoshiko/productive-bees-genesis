@@ -21,8 +21,12 @@ import com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayo
 /** 普通蜜脾链只读适配；调用者仍须在发布前验证核心、拓扑和成员所有权。 */
 public final class StaticCentrifugeAdapter {
 	public static boolean supports(TileEntityMekanism tile) {
-		if (tile == null || tile.getClass() != TileEntityMekCentrifuge.class && tile.getClass() != TileEntityMekCentrifugeFactory.class) return false;
+		if (tile == null) return false;
 		String machine = BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString();
+		if (CentrifugeWorkLayout.EXTRA_MACHINES.contains(machine)) {
+			if (!MekCompatHooks.isMekanismExtrasLoaded() || !tile.getClass().getName().equals(
+					"com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory")) return false;
+		} else if (tile.getClass() != TileEntityMekCentrifuge.class && tile.getClass() != TileEntityMekCentrifugeFactory.class) return false;
 		if (CentrifugeWorkLayout.EVOLVED_MACHINES.contains(machine) && !MekCompatHooks.isEvolvedMekanismLoaded()) return false;
 		int lanes = CentrifugeWorkLayout.lanes(machine);
 		return lanes > 0 && ((PbRecipeContext) tile).processes() == lanes;

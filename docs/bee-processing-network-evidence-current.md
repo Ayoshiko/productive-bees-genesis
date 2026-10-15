@@ -1312,3 +1312,22 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 **真实客户端。** `r3-em-apiary-client-20261015a` 含最终分页回归与构建，耗时 83.1 秒、退出 1；核心已翻到末页，但夹具每步等待半秒耗尽 100 tick 的选择租期，截图明确显示列表过期。按正式按钮源码确认坐标，纯本地翻页改为每 100 ms 一步，仍核对按钮 active 与实际选中槽；没有延长正式租期或放宽断言。只重跑客户端 `r3-em-apiary-client-20261015b`，耗时 80.9 秒、退出 0；核心和蜜蜂终端均翻七页并选中第 45 槽，客户端与集成服正常落盘报告通过。两张实际截图已回看：1000×700 当前缩放下显示 43–45／45，蜂位、食物和动作区完整；不代表所有分辨率。所有运行均有 285 秒外部进程树硬超时且未触及上限，本任务客户端／专服均已退出。
 
 **范围、证据与交付。** 实际组合为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、ME 1.4.0、EME 1.2.1，无 AE2。本包只添加固定布局和既有加载守卫，不引入 EM 类型的常驻引用；未重跑全部缺依赖组合。普通／EM 离心、共用所有权和未变生产路径沿用[10.165](#s10-165)–[10.171](#s10-171)，没有全量测试或高倍率性能测量。最终文档、import 顺序与语句换行不改变行为，不使已有验证失效。源码、依赖、报告、截图、日志、XML 和 JAR 哈希集中于 `build/network-gates/r3-em-apiary-20261015/verification.json`，原世界与失败现场保留；本地规则和 build 证据不入提交。ME／EME 工厂、CREATIVE／STACK 蜂箱升级件、动态／中性资源、完整 RF／D24／M05、故障／多人和 64×／256×／Spark 门仍开放。下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。
+
+<a id="s10-173"></a>
+### 10.173 R3 ME 四档蜂箱与离心工厂共同生产（2026-10-15）
+
+**本包交付。** 在网络 worktree `productive-bees-addon`、分支 `bees-processing-network/1.21.1`、基线 `dc09d24` 上，接入 ABSOLUTE／SUPREME／COSMIC／INFINITE 两类工厂。蜂位为 26／30／36／42、原喂食槽为 30／30／40／45，离心进程为 11／13／15／17。加载状态、注册身份、精确实体类和实际容量共同准入；不同离心工厂父类通过 MachineAssetSection.Provider 共用 PB 进度／升级／多流体／休眠罐／已生成 long 余量资产段，外层原槽物品、FE 与双回执保持原合同。普通供给、末槽管理、逐机升级、生产索引及混合网络同步接入，旧独立周期未结清仍拒绝接管；STACK 只影响后续离心并行，CREATIVE 升级件仍拒绝。合同与本地版本依据见[7.3](bee-processing-network-design.md#s7-3)、[13.1](bee-processing-network-references.md#s13-1)。
+
+**本包运行与接续复用。** 以下运行均于 2026-10-15 在原聊天完成，各有 285 秒外部进程树硬超时，退出码全部为 0；接续聊天读取原报告、日志、工具退出结果和截图，确认代码未在验证后变化，不重跑测试、构建或游戏。共同参数为 `-PnetworkDomainProbe -PnetworkExtraFactoryProbe --offline --no-daemon`；离心机使用 `-PnetworkCentrifugeFactoryProbe`，蜂箱使用 `-PnetworkFactoryProbe`，写／读档分别指定 `-PnetworkAutomaticMode=write/read`，读档通过 `-PnetworkProbeSeedWorld` 使用相应写档世界。运行名均以 `r3-me-` 开头、`-20261015a` 结尾。
+
+| 运行中段／任务 | 实际耗时 | 结果与范围 |
+| --- | --- | --- |
+| centrifuge-write：两组 FactoryApiaryCheckpointTest／FactoryCentrifugeCheckpointTest、build、runNetworkDomainServer 合并任务图 | 64.7 秒 | 两组存档测试全部通过；四档所有进程写出部分已付工作，正常保存通过 |
+| centrifuge-read：runNetworkDomainServer | 159.8 秒 | 新 JVM 完成全部 56 个进程；费用／产物、原输入与三类输出、多流体、已生成余量、模拟不变、旧命令拒绝、升级与完整交还通过；最高档 ME 蜂箱＋ME 离心工厂＋基础离心机＋组合一体机完成混合生产、积压排空和交还 |
+| centrifuge-client：runNetworkDomainClient | 78.7 秒 | 最高档核心和离心终端各完成 STACK 安装／取回，共四次成功交换回执；物品数量与组件守恒，正常保存通过 |
+| apiary-write：runNetworkDomainServer | 38.2 秒 | 四档末蜂位写出部分已付工作，额外喂食物料随原资产保存 |
+| apiary-read：runNetworkDomainServer | 70.7 秒 | 新 JVM 四档各完成一轮蜂生产及离心链，费用与原预期一致；末槽启停、喂食模拟／取回、普通供给、装笼／入驻、升级、权限和完整交还通过 |
+
+五份 domain.json 的 passed／normalShutdownCheckpointSaved 全部为 true；离心读档的 allLanesPaidAndRestored／sealedAssetsAndReturn／upgradesSimulationAndStale／mixedFourCarriersProducedAndReturned、蜂箱读档的 factoryManagementAndReturn 均为 true。全部场景无物品实体，两组 XML 无失败／错误／跳过。核心与离心终端两张 1000×700 截图已回看，11 项升级及动作区完整可见；终端显示最高档 42 蜂位、17 进程，不推导其它分辨率结论。原聊天因服务额度中断而未收尾，最后蜂箱读档已在中断前退出成功；不存在需要重启的失败场景。
+
+**边界与证据。** 编译沿既有 ME 1.4.1，实际运行 ME 1.4.0；其余组合为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、EME 1.2.1，无 AE2。只扩纯布局、既有 loader 守卫及本项目资产接口，不在常驻类无条件链接 ME 类型。终端完整分页与协议 43 沿用[10.172](#s10-172)，schema 15／samplingVersion 6 不变；普通／EM 及未变共用生产机制沿用[10.165](#s10-165)–[10.171](#s10-171)。本次接续集中核对改动编码、文档链接、报告和 JAR 内容，源码／依赖／报告／截图／日志／XML／产物摘要索引为 `build/network-gates/r3-me-factories-20261015/verification.json`，原世界和日志继续留在 build，不进入发布 JAR。该包游戏进程均已退出。EME 工厂准入、CREATIVE／STACK 蜂箱升级件、动态／中性资源、完整 RF／D24／M05、缺依赖／故障／多人矩阵及 64×／256×／Spark 门仍开放。下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。

@@ -14,6 +14,7 @@ import com.ayoshiko.productivebeesgenesis.multiblock.definition.*;
 import com.mojang.authlib.GameProfile;
 import java.util.*;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
+import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.core.*;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.*;
@@ -30,7 +31,8 @@ public final class FactoryMixedProbe {
 	private NetworkCoreBlockEntity core;
 	private TileEntityMekApiary hive;
 	private TileEntityMekCentrifuge basic;
-	private TileEntityMekCentrifugeFactory factory;
+	private TileEntityMekanism factory;
+	private int beeSlot;
 	private NetworkSavedData data;
 	private NetworkCheckpoint previous;
 	private final Set<UUID> produced = new HashSet<>();
@@ -63,15 +65,21 @@ public final class FactoryMixedProbe {
 			level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState()); core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); core.initializeOwner(structure.core().ownerId());
 			level.setBlockAndUpdate(pos.north(), ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState()); basic = (TileEntityMekCentrifuge) level.getBlockEntity(pos.north());
 			level.setBlockAndUpdate(pos.east(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(factoryMachine)).defaultBlockState());
-			factory = (TileEntityMekCentrifugeFactory) level.getBlockEntity(pos.east());
-			level.setBlockAndUpdate(pos.west(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("productivebeesgenesis:ultimate_mek_apiary_factory")).defaultBlockState());
+			factory = (TileEntityMekanism) level.getBlockEntity(pos.east());
+			String hiveMachine = CentrifugeWorkLayout.EXTRA_MACHINES.contains(factoryMachine)
+					? factoryMachine.replace("centrifuge", "apiary") : "productivebeesgenesis:ultimate_mek_apiary_factory";
+			level.setBlockAndUpdate(pos.west(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(hiveMachine)).defaultBlockState());
 			hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());
+			beeSlot = hive.getBeeSlotCount() - 1;
 			for (var machine : List.of(basic, factory, hive)) { machine.setOwnerUUID(core.owner()); machine.setControlType(RedstoneControl.HIGH); }
 			basic.getComponent().addUpgrades(mekanism.api.Upgrade.SPEED, 2); factory.getComponent().addUpgrades(mekanism.api.Upgrade.SPEED, 2);
 			var bee = new CompoundTag(); bee.putString("id", "productivebees:configurable_bee"); bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", UUID.randomUUID());
 			var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any"); genes.putString("bee_productivity", "productivity.normal");
 			var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes); bee.put("neoforge:attachments", attachments);
-			hive.getBeeSlot(19).setBeeData(bee); hive.getBeeSlot(19).setBaseMinOccupationTicks(5); hive.getFeederSlots().get(19).setStack(new ItemStack(Items.IRON_BLOCK)); hive.setFeederConversionEnabled(false);
+			hive.getBeeSlot(beeSlot).setBeeData(bee);
+			hive.getBeeSlot(beeSlot).setBaseMinOccupationTicks(5);
+			hive.getFeederSlots().get(beeSlot).setStack(new ItemStack(Items.IRON_BLOCK));
+			hive.setFeederConversionEnabled(false);
 			stage = 1; return false;
 		}
 		check(core.ownership().status() != CoreOwnershipController.Status.RECOVERY, core.ownership().failure());
@@ -102,7 +110,8 @@ public final class FactoryMixedProbe {
 					});
 				}
 				if (record.bees() != null && old.bees() != null) {
-					var bee = record.bees().bee(19); var before = old.bees().bee(19);
+					var bee = record.bees().bee(beeSlot);
+					var before = old.bees().bee(beeSlot);
 					if (bee != null && before != null && bee.progress() < before.progress()) { produced.add(record.claim().member()); beeProduced = true; }
 				}
 			}

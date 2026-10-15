@@ -13,7 +13,8 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FactoryApiaryCheckpointTest {
-	private static final List<String> TYPES = List.of("basic", "advanced", "elite", "ultimate", "overclocked", "quantum", "dense", "multiversal", "creative");
+	private static final List<String> TYPES = List.of("basic", "advanced", "elite", "ultimate", "overclocked", "quantum", "dense", "multiversal", "creative",
+			"absolute_extra", "supreme_extra", "cosmic_extra", "infinite_extra");
 	private static final UUID MEMBER = new UUID(17, 3);
 	private static final NetworkCheckpointCodec CODEC = new NetworkCheckpointCodec(key -> {});
 	@BeforeAll static void version() { SharedConstants.tryDetectVersion(); }
