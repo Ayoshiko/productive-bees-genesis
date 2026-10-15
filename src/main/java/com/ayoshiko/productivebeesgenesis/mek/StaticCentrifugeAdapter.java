@@ -22,7 +22,9 @@ import com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayo
 public final class StaticCentrifugeAdapter {
 	public static boolean supports(TileEntityMekanism tile) {
 		if (tile == null || tile.getClass() != TileEntityMekCentrifuge.class && tile.getClass() != TileEntityMekCentrifugeFactory.class) return false;
-		int lanes = CentrifugeWorkLayout.lanes(BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString());
+		String machine = BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString();
+		if (CentrifugeWorkLayout.EVOLVED_MACHINES.contains(machine) && !MekCompatHooks.isEvolvedMekanismLoaded()) return false;
+		int lanes = CentrifugeWorkLayout.lanes(machine);
 		return lanes > 0 && ((PbRecipeContext) tile).processes() == lanes;
 	}
 	public record Profile(int fallbackTicks, float time, int parallel, long energy, int productivity, float stability, boolean discardByproducts) {

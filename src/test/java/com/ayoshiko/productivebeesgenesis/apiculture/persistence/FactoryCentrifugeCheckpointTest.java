@@ -40,7 +40,7 @@ class FactoryCentrifugeCheckpointTest {
 		var policy = new ProductPolicyRegistry(new ProductPolicySnapshot(0,
 				List.of(new AllowedProductDescriptor(INPUT, "test", "test:comb"), new AllowedProductDescriptor(OUTPUT, "test", "test:comb")), List.of()));
 		var plan = new CentrifugeRecipePlan("test:comb", 0, 0, INPUT, 4, 2, 3, 1, 0, List.of(new CentrifugeRecipePlan.Output(OUTPUT, 2, 2, 1)));
-		for (var machine : CentrifugeWorkLayout.MACHINES.subList(1, 5)) {
+		for (var machine : CentrifugeWorkLayout.MACHINES.subList(1, CentrifugeWorkLayout.MACHINES.size())) {
 			var root = fixture(machine); var original = root.ownedMachines().get(MEMBER).returnImage(); int lanes = CentrifugeWorkLayout.lanes(machine);
 			for (int lane = 0; lane < lanes; lane++) root = root.applyCentrifuge(MEMBER, CentrifugeWorkTransaction.assign(
 					root.ownedMachines().get(MEMBER).centrifuge(), root.ledger(), policy, lane, plan, 2, lane));

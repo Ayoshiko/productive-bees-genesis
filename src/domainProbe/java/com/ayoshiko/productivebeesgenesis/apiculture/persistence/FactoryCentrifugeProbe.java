@@ -41,6 +41,11 @@ public final class FactoryCentrifugeProbe {
 	private static int clientStarted;
 	public static volatile boolean clientReady, clientVerified, clientSaved;
 	public static volatile BlockPos clientPos;
+	public static volatile String clientMachine;
+	private static List<String> factoryMachines() {
+		return Boolean.getBoolean("pbg.factoryCentrifuge.evolved") ? CentrifugeWorkLayout.EVOLVED_MACHINES
+				: CentrifugeWorkLayout.ORDINARY_MACHINES.subList(1, CentrifugeWorkLayout.ORDINARY_MACHINES.size());
+	}
 	private static Path manifest(MinecraftServer server) { return server.getWorldPath(LevelResource.ROOT).resolve("automatic-probe.dat"); }
 	public static void start(MinecraftServer server) throws Exception {
 		reading = "read".equals(System.getProperty("pbg.automatic.mode")); started = server.getTickCount();
@@ -49,16 +54,19 @@ public final class FactoryCentrifugeProbe {
 		var level = server.overworld();
 		if (reading) {
 			var tag = NbtIo.readCompressed(manifest(server), NbtAccounter.unlimitedHeap()); writerPid = tag.getLong("writerPid");
+			require(tag.getBoolean("evolvedFactories") == Boolean.getBoolean("pbg.factoryCentrifuge.evolved"), "Reader factory family differs from writer");
 			require(writerPid != ProcessHandle.current().pid(), "Factory reader reused writer JVM");
 			for (var raw : tag.getList("fixtures", 10)) {
 				var value = (CompoundTag) raw; var fixture = new Fixture(BlockPos.of(value.getLong("position")), value.getString("machine"));
+				require(factoryMachines().contains(fixture.machine), "Writer contains a foreign factory family");
 				fixture.force(level); fixture.bind(level); fixture.original = new AssetImage(value.getCompound("original"));
 				fixture.saved = NetworkCheckpointCodec.forRegistries(level.registryAccess()).decode(value.getCompound("saved"));
 				fixture.member = value.getUUID("member"); fixtures.add(fixture);
 			}
 		} else {
 			writerPid = ProcessHandle.current().pid();
-			for (var machine : CentrifugeWorkLayout.MACHINES.subList(server.isDedicatedServer() ? 1 : 4, 5)) {
+			var machines = factoryMachines();
+			for (var machine : server.isDedicatedServer() ? machines : List.of(machines.getLast())) {
 				var fixture = new Fixture(new BlockPos(440 + fixtures.size() * 32, 160, 8), machine);
 				fixture.create(level); fixtures.add(fixture);
 			}
@@ -73,7 +81,9 @@ public final class FactoryCentrifugeProbe {
 		if (fixtures.stream().anyMatch(f -> f.stage != 9)) return false;
 		if (!server.isDedicatedServer() && !clientVerified) {
 			if (!clientReady) {
-				var fixture = fixtures.getFirst(); clientPos = fixture.pos;
+				var fixture = fixtures.getFirst();
+				clientPos = fixture.pos;
+				clientMachine = fixture.machine;
 				level.setBlockAndUpdate(clientPos.south(), NetworkContent.CENTRIFUGE_TERMINAL.get().defaultBlockState());
 				var player = server.getPlayerList().getPlayers().getFirst();
 				player.teleportTo(level, clientPos.getX() + 0.5, clientPos.getY() + 1.5, clientPos.getZ() + 2.5, 180, 30);
@@ -85,7 +95,7 @@ public final class FactoryCentrifugeProbe {
 			return false;
 		}
 		if (reading) {
-			if (mixed == null) mixed = new com.ayoshiko.productivebeesgenesis.multiblock.world.FactoryMixedProbe(level);
+			if (mixed == null) mixed = new com.ayoshiko.productivebeesgenesis.multiblock.world.FactoryMixedProbe(level, factoryMachines().getLast());
 			if (!mixed.step(level)) return false;
 			mixedSaved = mixed.checkpoint();
 		}
@@ -97,8 +107,15 @@ public final class FactoryCentrifugeProbe {
 			var tag = new CompoundTag(); tag.putLong("position", f.pos.asLong()); tag.putString("machine", f.machine);
 			tag.put("original", f.original.copy()); tag.put("saved", NetworkCheckpointCodec.encode(f.saved)); tag.putUUID("member", f.member); list.add(tag);
 		}
-		if (!reading) { var tag = new CompoundTag(); tag.putLong("writerPid", writerPid); tag.put("fixtures", list); NbtIo.writeCompressed(tag, manifest(server)); }
+		if (!reading) {
+			var tag = new CompoundTag();
+			tag.putLong("writerPid", writerPid);
+			tag.putBoolean("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
+			tag.put("fixtures", list);
+			NbtIo.writeCompressed(tag, manifest(server));
+		}
 		report.add("centrifugeFactories", rows); report.addProperty("factoryCentrifuge", true);
+		report.addProperty("evolvedFactories", Boolean.getBoolean("pbg.factoryCentrifuge.evolved"));
 		report.addProperty("automaticRestartIsNewJvm", reading); report.addProperty("producerPid", writerPid);
 		report.addProperty("allLanesPaidAndRestored", reading); report.addProperty("sealedAssetsAndReturn", reading);
 		report.addProperty("upgradesSimulationAndStale", reading); report.addProperty("noItemEntities", true);
@@ -106,7 +123,7 @@ public final class FactoryCentrifugeProbe {
 		report.addProperty("ae2Loaded", net.neoforged.fml.ModList.get().isLoaded("ae2")); report.addProperty("passed", true); return true;
 	}
 	public static void verifyShutdown(MinecraftServer server, JsonObject report) throws Exception {
-		require(fixtures.size() == (server.isDedicatedServer() ? 4 : 1) && fixtures.stream().allMatch(f -> f.stage == 9), "Incomplete factory shutdown");
+		require(fixtures.size() == (server.isDedicatedServer() ? factoryMachines().size() : 1) && fixtures.stream().allMatch(f -> f.stage == 9), "Incomplete factory shutdown");
 		for (var f : fixtures) {
 			var file = server.getWorldPath(LevelResource.ROOT).resolve("data/productivebeesgenesis_network_" + f.core.network().networkId() + ".dat");
 			require(NetworkCheckpointCodec.encode(f.saved).equals(NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap()).getCompound("data")), "Factory shutdown checkpoint mismatch");
@@ -157,7 +174,10 @@ public final class FactoryCentrifugeProbe {
 			force(level); var owner = level.getServer().isDedicatedServer() ? UUID.randomUUID() : level.getServer().getSingleplayerProfile().getId();
 			level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState());
 			level.setBlockAndUpdate(pos.east(), BuiltInRegistries.BLOCK.get(ResourceLocation.parse(machine)).defaultBlockState());
-			level.setBlockAndUpdate(pos.west(), BuiltInRegistries.BLOCK.get(ResourceLocation.parse(machine.replace("centrifuge", "apiary"))).defaultBlockState()); bind(level);
+			String hiveMachine = CentrifugeWorkLayout.EVOLVED_MACHINES.contains(machine)
+					? "productivebeesgenesis:ultimate_mek_apiary_factory" : machine.replace("centrifuge", "apiary");
+			level.setBlockAndUpdate(pos.west(), BuiltInRegistries.BLOCK.get(ResourceLocation.parse(hiveMachine)).defaultBlockState());
+			bind(level);
 			core.initializeOwner(owner); factory.setOwnerUUID(owner); hive.setOwnerUUID(owner);
 			factory.setControlType(RedstoneControl.HIGH); hive.setControlType(RedstoneControl.HIGH);
 			factory.getComponent().addUpgrades(Upgrade.ENERGY, 4); factory.getComponent().addUpgrades(Upgrade.SPEED, 2);

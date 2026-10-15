@@ -33,6 +33,8 @@ if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read']
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
 def factoryProbe = providers.gradleProperty('networkFactoryProbe').isPresent()
 def centrifugeFactoryProbe = providers.gradleProperty('networkCentrifugeFactoryProbe').isPresent()
+def evolvedCentrifugeProbe = providers.gradleProperty('networkEvolvedCentrifugeProbe').isPresent()
+if (evolvedCentrifugeProbe && !centrifugeFactoryProbe) throw new GradleException('Evolved factory probe requires the centrifuge factory probe')
 if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'read']))) throw new GradleException('Centrifuge factory probe requires its own automatic write/read mode')
 if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
 def ordinaryProbe = providers.gradleProperty('networkOrdinaryProduction').isPresent()
@@ -363,6 +365,7 @@ neoForge {
             if (centrifugeFactoryProbe) {
                 systemProperty 'pbg.factoryCentrifuge.client', 'true'
                 systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
+                systemProperty 'pbg.factoryCentrifuge.evolved', evolvedCentrifugeProbe.toString()
                 systemProperty 'pbg.domain.enabled', 'true'
                 systemProperty 'pbg.automatic.mode', 'write'
             }
@@ -390,6 +393,7 @@ neoForge {
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (factoryProbe) systemProperty 'pbg.factory.enabled', 'true'
             if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
+            if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.evolved', evolvedCentrifugeProbe.toString()
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
 			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'

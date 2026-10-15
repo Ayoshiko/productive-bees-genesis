@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.core.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.*;
@@ -24,6 +25,8 @@ import static com.ayoshiko.productivebeesgenesis.multiblock.world.MachineLifecyc
 public final class FactoryMixedProbe {
 	private final MachineProbeFixture structure;
 	private final long started;
+	private final String factoryMachine;
+	private final int expectedLanes;
 	private NetworkCoreBlockEntity core;
 	private TileEntityMekApiary hive;
 	private TileEntityMekCentrifuge basic;
@@ -37,7 +40,10 @@ public final class FactoryMixedProbe {
 	private NetworkCoreMenu menu;
 	private long sequence;
 	private boolean beeProduced, beesStopped;
-	public FactoryMixedProbe(ServerLevel level) {
+	public FactoryMixedProbe(ServerLevel level, String factoryMachine) {
+		this.factoryMachine = factoryMachine;
+		expectedLanes = CentrifugeWorkLayout.lanes(factoryMachine);
+		check(expectedLanes > 1, "Unsupported mixed factory layout");
 		ModConfig.SERVER.beeNetwork.enabled.set(true); ModConfig.SERVER.apiaryProcessingTime.set(40);
 		structure = MachineProbeFixture.place(level, CombinedApiaryDefinition.DEFINITION.candidates().getFirst(), new BlockPos(1012, 128, 1012), Direction.NORTH, UUID.randomUUID());
 		started = level.getGameTime();
@@ -56,7 +62,7 @@ public final class FactoryMixedProbe {
 			for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.setChunkForced((pos.getX() >> 4) + dx, (pos.getZ() >> 4) + dz, true);
 			level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState()); core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); core.initializeOwner(structure.core().ownerId());
 			level.setBlockAndUpdate(pos.north(), ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState()); basic = (TileEntityMekCentrifuge) level.getBlockEntity(pos.north());
-			level.setBlockAndUpdate(pos.east(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("productivebeesgenesis:ultimate_mek_centrifuge_factory")).defaultBlockState());
+			level.setBlockAndUpdate(pos.east(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(factoryMachine)).defaultBlockState());
 			factory = (TileEntityMekCentrifugeFactory) level.getBlockEntity(pos.east());
 			level.setBlockAndUpdate(pos.west(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("productivebeesgenesis:ultimate_mek_apiary_factory")).defaultBlockState());
 			hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());
@@ -78,7 +84,7 @@ public final class FactoryMixedProbe {
 		if (stage == 2) {
 			data = core.ownership().readyAuthority(); if (data == null || core.ownership().status() != CoreOwnershipController.Status.MANAGED) return false;
 			// 独立组合机的迁移保管输入不属于公共账本；显式准备两轮共享原料。
-			FactoryCentrifugeProbe.supplyComb(data, level, 26);
+			FactoryCentrifugeProbe.supplyComb(data, level, 2 * (expectedLanes + 4));
 			for (var machine : List.of(basic, factory, hive)) machine.setControlType(RedstoneControl.DISABLED);
 			var power = level.getCapability(Capabilities.EnergyStorage.BLOCK, core.getBlockPos(), Direction.UP); check(power != null, "Missing mixed energy port"); power.receiveEnergy(1_000_000, false);
 			check(core.setProductionRunning(true), "Mixed start rejected"); previous = data.checkpoint(); stage = 3; return false;
@@ -90,7 +96,7 @@ public final class FactoryMixedProbe {
 				if (old == null) continue;
 				var work = record.centrifugeState(); var oldWork = old.centrifugeState();
 				if (work != null) {
-					if (record.claim().machine().endsWith("ultimate_mek_centrifuge_factory")) factoryLanes.addAll(work.jobs().keySet());
+					if (record.claim().machine().equals(factoryMachine)) factoryLanes.addAll(work.jobs().keySet());
 					if (oldWork != null) oldWork.jobs().forEach((lane, job) -> {
 						if (!work.jobs().containsKey(lane) || !work.jobs().get(lane).id().equals(job.id())) produced.add(record.claim().member());
 					});
@@ -103,7 +109,7 @@ public final class FactoryMixedProbe {
 			check(new MachineAssetStore(factory).empty() && new MachineAssetStore(hive).empty() && new MachineAssetStore(basic).empty() && structure.core().assets.empty(), "Mixed physical producer ran twice");
 			previous = current;
 			if (beeProduced && !beesStopped) beesStopped = disableBees(level);
-			if (produced.size() != 4 || factoryLanes.size() != 9 || !beesStopped) return false;
+			if (produced.size() != 4 || factoryLanes.size() != expectedLanes || !beesStopped) return false;
 			stage = 4; return false;
 		}
 		if (stage == 4) {

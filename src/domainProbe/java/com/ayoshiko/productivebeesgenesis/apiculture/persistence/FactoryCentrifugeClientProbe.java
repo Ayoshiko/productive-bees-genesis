@@ -114,8 +114,8 @@ public final class FactoryCentrifugeClientProbe {
 			if (view == null || view.kind() != NetworkSelectionSession.Kind.UPGRADES || !state.actionable(Util.getMillis())) return;
 			int row = 0;
 			while (row < view.rows().size() && (view.rows().get(row).location() == null
-					|| !view.rows().get(row).location().machine().endsWith("ultimate_mek_centrifuge_factory"))) row++;
-			check(row < view.rows().size(), "Ultimate centrifuge factory is missing");
+					|| !view.rows().get(row).location().machine().equals(FactoryCentrifugeProbe.clientMachine))) row++;
+			check(row < view.rows().size(), "Configured centrifuge factory is missing");
 			var upgrades = view.rows().get(row).upgrades();
 			if (upgrades.isEmpty()) {
 				if (!awaitingUpgrades) com.mojang.logging.LogUtils.getLogger().info("CENTRIFUGE_CLIENT_UPGRADES_PENDING step={}", step);

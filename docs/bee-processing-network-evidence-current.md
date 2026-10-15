@@ -1284,3 +1284,18 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 **客户端与最终收尾。** `r3-centrifuge-client-20261015c` 真实中文客户端退出 0、耗时 84.4 秒；核心和离心终端各一次 STACK 安装／取回，共四份成功回执，安装后原槽为空，取回后与原物品组件／数量完全一致。客户端报告及集成服正常落盘报告均通过，两张截图已回看：1000×700 窗口当前缩放下，11 项图标完整可见，动作区无重叠；不代表所有分辨率。每次本轮验证均有 285 秒外部进程树超时，实际均低于上限，失败现场保留；本任务启动的客户端和专服已退出。原始 stdout／stderr、运行报告、截图、复用 XML 与最终哈希集中在 `build/network-gates/r3-centrifuge-20261014` 及对应 run 目录。最后只做受影响编码／JSON／链接、报告、JAR 和 diff 检查，不重启已通过场景。
 
 **范围与后续。** 本包当前范围通过；RF-A／RF-B、D23a、R2、共享概率模型和普通蜂箱工厂未变部分沿用[10.165](#s10-165)–[10.169](#s10-169)，没有重跑历史全矩阵。附属工厂等级、动态蜂／中性资源／直出、完整 RF1／RF2／RF3、D24／M05、多人／故障注入及 64×／256×／Spark 仍开放，没有新的吞吐或 MSPT 结论。下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)；维护 worktree 未修改，本包未提交、推送或发布。
+
+<a id="s10-171"></a>
+### 10.171 R3 EM 五档离心工厂与集中交付（2026-10-15）
+
+**先交付已验收基础。** 本次先按用户授权检查积压与远端：原 HEAD／远端同为 `0d88098`，积压全部位于工作区。RF-A／RF-B、D23a、R2、R3 多输出及普通工厂共同依赖同一存档／所有权迁移，集中为一个生产功能包提交 `29e9d0d32a24451b1a6786e05d87cfad68451c6d` 并推送网络分支，远端提交号一致，提交后工作区干净。暂存范围不含本地 AGENTS、build 证据、日志或 JAR，现有编码钩子实际通过；复用各包有效测试与真实运行，未为推送重跑游戏矩阵。维护分支及发布平台未改动。
+
+**本包实现与取舍。** 在上述提交上接入 Evolved Mekanism 的 OVERCLOCKED／QUANTUM／DENSE／MULTIVERSAL／CREATIVE 五档离心工厂，实际进程为 11／13／15／17／19。固定注册表与已安装 loader、精确实体类和真实进程数共同准入；所有权、持久化、工作调度、终端范围和能力索引复用 CentrifugeWorkLayout，未新增资产根、第二套费用算法或存档格式。五档继续使用 SPEED／ENERGY／PB／可用时 STACK 的封存能力与完整资产交还；CREATIVE 升级件仍拒绝。对应源码／JAR 依据见[13.1](bee-processing-network-references.md#s13-1)，现行合同见[7.3](bee-processing-network-design.md#s7-3)。EM 蜂箱最高 45 蜂位涉及完整成员详情和 64 KiB 页预算，明确留在紧接的共享分页／蜂箱包，未仅靠提高常量放行。
+
+**最小静态验证。** 一次 `test --tests *FactoryCentrifugeCheckpointTest --tests *CentrifugeInputSearchesTest build runNetworkDomainServer` 调用，加 `-PnetworkDomainProbe -PnetworkCentrifugeFactoryProbe -PnetworkEvolvedCentrifugeProbe -PnetworkAutomaticMode=write --offline --no-daemon`。现有工厂资产测试扩展到全部九档普通／EM 工厂，逐进程核对部分已付费用、冻结结果、升级不改旧工作、编解码恢复、重复结算拒绝及原封存余量；另保留共享候选回归。两个测试组共 7 项零失败／错误／跳过，build 与 verifyReleaseArtifact 通过；没有新增只检查接线的测试、重跑全量测试或扩大未变协议矩阵。XML 已保管于 `build/network-gates/r3-em-centrifuge-20261015/junit`。
+
+**一次通过的运行。** `r3-em-centrifuge-write-20261015a` 正常写档，连同聚焦构建耗时 50.7 秒、退出 0；复用该世界的 `r3-em-centrifuge-read-20261015a` 耗时 199.1 秒、退出 0。五档全部 75 个进程从部分已付工作跨 JVM 恢复并完成，每 tick 的实际 FE 和完整输出与已冻结计划一致，逐档升级模拟／安装／旧请求拒绝／取回及原输入、多类输出、两种流体、PB 升级槽和 long 已生成余量完整交还通过。随后以最高 19 进程工厂替换混合夹具中的普通工厂，与普通蜂箱工厂、基础离心机和组合一体机共同产出；全部工厂进程参与，有限积压排空、四类安全交还、无物品实体及最终磁盘根一致通过。运行组合为 Minecraft 1.21.1／NeoForge 21.1.216／Java 21.0.9、PB 13.14.0、Mekanism 10.7.19、EM 1.2.1-fix3，同时安装 ME 1.4.0／EME 1.2.1，无 AE2；完整版本见各 `results/domain.json`。
+
+**客户端与证据。** 与读档并行的独立 `r3-em-centrifuge-client-20261015a` 耗时 83.9 秒、退出 0，最高档核心与离心终端各一次 STACK 安装／取回，四次 MOVED=1 回执、原物品组件／数量守恒和集成服正常落盘均通过。两张实际截图已回看，1000×700 当前缩放下的 11 项升级与动作区无重叠，能力区显示 19 进程；不冒充所有分辨率验证。三项运行均使用 285 秒外部进程树超时且一次通过，本任务进程正常退出。源码、测试、报告、截图、日志、依赖与 JAR 哈希在 `build/network-gates/r3-em-centrifuge-20261015/verification.json`，原始世界保留在对应 run 目录。
+
+**边界与复用。** 本包只新增纯字符串布局和既有 loader 守卫，未引入 EM 类型的常驻引用；缺少全部可选依赖的运行矩阵未重跑，不据本次带 EM／ME／EME 的结果宣称全部组合通过。普通工厂、资产映像、终端协议 42、普通供给与复合几何等未变证据沿用[10.165](#s10-165)–[10.170](#s10-170)。旧独立未完成周期仍须先结清；EM 蜂箱、ME／EME 工厂、CREATIVE 升级件、动态／中性资源、完整 D24／M05／RF1／RF2／RF3、故障／多人及 64×／256×／Spark 门仍开放，没有新增性能收益结论。下一功能包只见[14.5](bee-processing-network-roadmap.md#s14-5)。
