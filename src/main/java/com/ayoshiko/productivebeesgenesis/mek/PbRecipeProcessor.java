@@ -625,7 +625,12 @@ public class PbRecipeProcessor {
 		if (!pendingList.isEmpty()) nbt.put(NBT_COMMITTED_PENDING, pendingList);
 		else nbt.remove(NBT_COMMITTED_PENDING);
 	}
-	/** 交接后物理处理器必须无进度、已扣料剩余结果或未扣料计划。 */
+	/** 旧独立周期没有完整费用快照，非零进度须在原机结清后才可迁入。 */
+	public boolean hasOwnershipProgress() {
+		for (int ticks : pbOperatingTicks) if (ticks != 0) return true;
+		return false;
+	}
+	/** 已生成余量可以封存；清空源时必须连同这些余量一并撤销。 */
 	public boolean hasOwnershipWork() {
 		for (int i = 0; i < recipeCompleters.length; i++) {
 			if (pbOperatingTicks[i] != 0 || pbProcessing[i] || recipeCompleters[i].hasCommittedPendingOutputs()) return true;

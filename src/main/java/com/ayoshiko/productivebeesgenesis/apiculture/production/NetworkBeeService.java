@@ -52,9 +52,9 @@ public final class NetworkBeeService {
 	}
 	public boolean setEnabled(ServerLevel level, UUID member, int slot, UUID beeId,
 			BeeMemberState.RosterVersion expectedRoster, boolean enabled, boolean simulate) {
-		if (!level.getServer().isSameThread() || slot < 0 || slot >= 3 || beeId == null || expectedRoster == null) return false;
+		if (!level.getServer().isSameThread() || slot < 0 || beeId == null || expectedRoster == null) return false;
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
-		if (record == null || record.bees() == null || record.bees().rosterVersion() != expectedRoster || member(level, record) == null) return false;
+		if (record == null || record.bees() == null || slot >= record.bees().slotCount() || record.bees().rosterVersion() != expectedRoster || member(level, record) == null) return false;
 		var bee = record.bees().bees().stream().filter(value -> value.slot() == slot).findFirst().orElse(null);
 		if (bee == null || !bee.id().equals(beeId)) return false;
 		var next = record.bees().withBeeEnabled(slot, beeId, enabled);

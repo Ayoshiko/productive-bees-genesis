@@ -5,9 +5,9 @@ import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
 
-/** 基础蜂箱保管状态；迁入共享供能后，本地 FE 恒为零。 */
+/** 已准入蜂箱保管状态；迁入共享供能后，本地 FE 恒为零。 */
 public final class BeeMemberState {
 	/** 只供当前权威会话的选择校验；恢复后重新签发，不写入存档或参与值相等。 */
 	public static final class RosterVersion { private RosterVersion() { } }
@@ -29,10 +29,11 @@ public final class BeeMemberState {
 	private BeeMemberState(UUID member, long revision, long energy, long energyCapacity, List<BeeRecord> bees,
 			FeedingSlotStore feeding, boolean networkPowered, RosterVersion rosterVersion) {
 		Objects.requireNonNull(member); bees = List.copyOf(bees);
-		if (revision < 0 || energy < 0 || energyCapacity < energy || bees.size() > 3 || networkPowered && energy != 0) throw new IllegalArgumentException("Invalid basic apiary state");
-		var slots = ConcurrentHashMap.newKeySet();
-		var ids = ConcurrentHashMap.newKeySet();
-		for (var bee : bees) if (!member.equals(bee.member()) || bee.slot() >= 3 || !slots.add(bee.slot()) || !ids.add(bee.id())) throw new IllegalArgumentException("Duplicate or foreign bee slot");
+		int capacity = feeding == null ? 3 : feeding.slots().size();
+		if (revision < 0 || energy < 0 || energyCapacity < energy || bees.size() > capacity || networkPowered && energy != 0) throw new IllegalArgumentException("Invalid apiary state");
+		var slots = new HashSet<Integer>();
+		var ids = new HashSet<UUID>();
+		for (var bee : bees) if (!member.equals(bee.member()) || bee.slot() >= capacity || !slots.add(bee.slot()) || !ids.add(bee.id())) throw new IllegalArgumentException("Duplicate or foreign bee slot");
 		this.member = member; this.revision = revision; this.energy = energy; this.energyCapacity = energyCapacity;
 		this.bees = bees; this.feeding = feeding; this.networkPowered = networkPowered; this.rosterVersion = rosterVersion;
 	}
@@ -41,6 +42,7 @@ public final class BeeMemberState {
 	public long energy() { return energy; }
 	public long energyCapacity() { return energyCapacity; }
 	public List<BeeRecord> bees() { return bees; }
+	public int slotCount() { return feeding == null ? 3 : feeding.slots().size(); }
 	public FeedingSlotStore feeding() { return feeding; }
 	public boolean networkPowered() { return networkPowered; }
 	/** 生产、喂食和供能保持不变，换蜂／移位或重新恢复会失效。 */
@@ -52,7 +54,7 @@ public final class BeeMemberState {
 	/** 仅供带付款证明的工作执行器发布周期起点的周期能力切换。 */
 	BeeMemberState updateCycle(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
-		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier(), next.plan().output(), next.plan().fluidOutput(), next.plan().fluidPerCycle()).equals(next.plan()))
+		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier(), next.plan().outputs()).equals(next.plan()))
 			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
 		return update(next, remainingEnergy, true);
 	}
@@ -80,7 +82,7 @@ public final class BeeMemberState {
 	}
 	public BeeMemberState moveBee(int from, int to, boolean withFeeding) {
 		var moved = bee(from).relocate(to);
-		if (to < 0 || to >= 3 || bees.stream().anyMatch(bee -> bee.slot() == to)) throw new IllegalArgumentException("Bee target occupied or out of range");
+		if (to < 0 || to >= slotCount() || bees.stream().anyMatch(bee -> bee.slot() == to)) throw new IllegalArgumentException("Bee target occupied or out of range");
 		var nextFeeding = withFeeding ? Objects.requireNonNull(feeding).moveWithBee(from, to) : feeding;
 		return new BeeMemberState(member, Math.incrementExact(revision), energy, energyCapacity,
 				bees.stream().map(bee -> bee.slot() == from ? moved : bee).sorted(java.util.Comparator.comparingInt(BeeRecord::slot)).toList(), nextFeeding, networkPowered);
@@ -99,14 +101,14 @@ public final class BeeMemberState {
 		for (var bee : bees) {
 			var other = next.bees.stream().filter(value -> value.id().equals(bee.id())).findFirst().orElse(null);
 			if (other == null || !bee.plan().equals(other.plan()) || bee.progress() != other.progress()
-					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozen().equals(other.frozen()) || !bee.frozenFluid().equals(other.frozenFluid()) || !bee.random().equals(other.random())) return false;
+					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozenOutputs().equals(other.frozenOutputs()) || !Objects.equals(bee.sampling(), other.sampling()) || !bee.random().equals(other.random())) return false;
 		}
 		return true;
 	}
 	public boolean drained() { return bees.stream().allMatch(BeeRecord::drained); }
 	public void validateSuccessor(BeeMemberState next) {
 		if (!member.equals(next.member) || next.revision != Math.incrementExact(revision) || next.energy > energy
-				|| energyCapacity != next.energyCapacity || bees.size() != next.bees.size()) throw new IllegalArgumentException("Invalid member production successor");
+				|| energyCapacity != next.energyCapacity || slotCount() != next.slotCount() || bees.size() != next.bees.size()) throw new IllegalArgumentException("Invalid member production successor");
 		if (networkPowered != next.networkPowered) {
 			if (networkPowered || !bees.equals(next.bees) || !Objects.equals(feeding, next.feeding) || next.energy != 0) throw new IllegalArgumentException("Invalid bee energy transfer");
 			return;
@@ -115,7 +117,7 @@ public final class BeeMemberState {
 		for (var previous : bees) {
 			var candidate = next.bees.stream().filter(bee -> bee.id().equals(previous.id())).findFirst().orElseThrow();
 			if (previous.equals(candidate)) continue;
-			if (!previous.originalSlot().equals(candidate.originalSlot()) || !previous.plan().equals(candidate.plan()) || !previous.random().equals(candidate.random())
+			if (!previous.originalSlot().equals(candidate.originalSlot()) || !previous.plan().equals(candidate.plan()) || !previous.random().equals(candidate.random()) || !Objects.equals(previous.sampling(), candidate.sampling())
 					|| candidate.revision() != Math.incrementExact(previous.revision()) || previous.slot() != candidate.slot() && !previous.drained()) throw new IllegalArgumentException("Bee plan changed within paid work");
 			changed++;
 		}

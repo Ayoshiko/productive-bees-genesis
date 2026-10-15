@@ -5,22 +5,28 @@ import net.minecraft.nbt.CompoundTag;
 /** 每次流式读取独享；只记格式位，不依赖 schema 与 ownership 字段的先后顺序。 */
 final class BeeSchemaVersion {
 	private int observed;
+	private int ownershipFields;
+	private boolean modernCombined;
+	void observeCombined(CompoundTag value) { if (!value.isEmpty() && StrictNbt.integer(value, "schema") >= 6) modernCombined = true; }
+	void observeOwnership(boolean combined) { ownershipFields |= combined ? 1 : 2; }
 	static void requireSupported(int schema) {
-		if (schema != 6 && schema != 7 && schema != 8 && schema != 9 && schema != 10) throw new IllegalArgumentException("Unsupported network schema");
+		if (schema < 6 || schema > 15) throw new IllegalArgumentException("Unsupported network schema");
 	}
 	int observe(CompoundTag bees) {
 		int schema = 6;
 		if (bees.contains("samplingVersion")) {
 			int version = StrictNbt.integer(bees, "samplingVersion");
-			if (version < 1 || version > 4) throw new IllegalArgumentException("Unsupported bee sampling version");
-			schema = version + 6;
+			if (version < 1 || version > 6) throw new IllegalArgumentException("Unsupported bee sampling version");
+			schema = version >= 5 ? version + 9 : version + 6;
 		}
 		if (!bees.isEmpty()) observed |= 1 << (schema - 6);
 		return schema;
 	}
 	void validate(int schema) {
 		requireSupported(schema);
-		if (observed != 0 && observed != (1 << (schema - 6)))
+		if ((ownershipFields & (schema >= 13 ? 2 : 1)) != 0) throw new IllegalArgumentException("Combined field differs from network schema");
+		if (schema < 14 && modernCombined) throw new IllegalArgumentException("New combined work inside an old network schema");
+		if (observed != 0 && observed != (1 << (schema >= 14 ? schema - 6 : Math.min(schema, 10) - 6)))
 			throw new IllegalArgumentException("Bee sampling format differs from network schema");
 	}
 }

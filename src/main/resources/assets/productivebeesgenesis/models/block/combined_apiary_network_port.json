@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "productivebeesgenesis:block/combined_apiary_frame",
+    "front": "minecraft:block/observer_back",
+    "side": "productivebeesgenesis:block/combined_apiary_casing"
+  }
+}

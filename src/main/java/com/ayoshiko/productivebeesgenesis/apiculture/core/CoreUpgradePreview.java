@@ -17,14 +17,12 @@ final class CoreUpgradePreview {
 		if (result.status() == MemberUpgradeService.Status.MOVED) {
 			var authority = menu.exchangeCore(player).ownership().readyAuthority();
 			var record = authority.checkpoint().ownedMachines().get(selected.claim().member());
-			var target = MemberUpgradeTarget.find(player.serverLevel(), authority, NetworkPersistence.directory(player.server), record);
-			var choice = CoreUpgradeCommands.CHOICES.get(request.targetSlot());
+			var target = MemberUpgradeTarget.find(player.serverLevel(), authority, NetworkPersistence.directory(player.server), record, CoreUpgradeCommands.apiary(menu, request.targetSlot()));
+			var choice = CoreUpgradeCommands.CHOICES.get(request.targetSlot() % CoreUpgradeCommands.CHOICES.size());
 			int delta = TerminalRequest.upgradeInstalling(request.operation()) ? result.moved() : -result.moved();
 			try {
-				var change = choice.pb() != null ? MemberUpgradeChange.pb(record, choice.pb(), delta, target.limit(choice.pb()))
-						: choice.nativeType() == Upgrade.ENERGY ? MemberUpgradeChange.energy(record, delta, target.capacity(result.installed()))
-						: MemberUpgradeChange.speed(record, delta);
-				before = target.capability(record.assets()); after = target.capability(change.candidate().assets());
+				var next = target.change(authority.checkpoint(), record, choice.nativeType(), choice.pb(), delta);
+				before = target.capability(record); after = target.capability(next.ownedMachines().get(record.claim().member()));
 			} catch (RuntimeException failure) {
 				com.mojang.logging.LogUtils.getLogger().warn("Cannot preview member upgrades for {}", selected.claim().member(), failure);
 				result = MemberUpgradeService.result(MemberUpgradeService.Status.UNSUPPORTED);

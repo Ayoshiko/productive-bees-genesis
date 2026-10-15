@@ -12,7 +12,7 @@ import net.minecraft.resources.ResourceLocation;
 /** schema 1 的流式领域映射；集合直接进入对应候选索引，不生成整域 NBT。 */
 final class CheckpointSchema {
 	enum Kind { ROOT, NETWORK, ENERGY, DIRECTORY, IDENTITY, ORIGIN, KEY, AMOUNT_ENTRY, TRANSACTION, TRANSFER, DISCOVERY,
-		MEMBER, LANE, CAPACITY, EFFECTS, SCHEDULER, WATERMARKS, RULE, SELECTOR, MATCHER, LIMIT, LAYER, RESERVE_ENTRY, CLAIM, OWNERSHIP, RAW }
+		MEMBER, LANE, CAPACITY, EFFECTS, SCHEDULER, WATERMARKS, RULE, SELECTOR, MATCHER, LIMIT, LAYER, RESERVE_ENTRY, CLAIM, OWNERSHIP, PORT, RAW }
 	record Field(int type, Kind nested, Kind element) { }
 	record AmountEntry(ProductKey key, ProductAmount amount) { }
 	record SchedulerState(SchedulerCheckpoint.RestoreBuilder builder, ProcessingRuleScheduler.Mode mode, String cursor, int used) { }
@@ -20,11 +20,12 @@ final class CheckpointSchema {
 	private static Map<Kind, Map<String, Field>> definitions() {
 		Map<Kind, Map<String, Field>> result = new EnumMap<>(Kind.class);
 		define(result, Kind.ROOT, "DataVersion:i data:NETWORK");
-		define(result, Kind.NETWORK, "schema:i energy:ENERGY identity:IDENTITY revision:l policy:l ledgerRevision:l balances:[AMOUNT_ENTRY transactions:[TRANSACTION transfers:[TRANSFER discoveries:[DISCOVERY members:[MEMBER lanes:[LANE scheduler:SCHEDULER ownership:[OWNERSHIP");
+		define(result, Kind.NETWORK, "schema:i energy:ENERGY identity:IDENTITY revision:l policy:l ledgerRevision:l balances:[AMOUNT_ENTRY transactions:[TRANSACTION transfers:[TRANSFER discoveries:[DISCOVERY members:[MEMBER lanes:[LANE scheduler:SCHEDULER ownership:[OWNERSHIP ports:[PORT");
+		define(result, Kind.PORT, "data:RAW");
 		define(result, Kind.ENERGY, "stored:l capacity:l");
 		define(result, Kind.DIRECTORY, "schema:i revision:l networks:[IDENTITY claims:[CLAIM");
 		define(result, Kind.CLAIM, "network:u member:u transfer:u origin:ORIGIN machine:s");
-		define(result, Kind.OWNERSHIP, "claim:CLAIM phase:s assets:RAW fingerprint:s failure:s bees:RAW centrifuge:RAW");
+		define(result, Kind.OWNERSHIP, "claim:CLAIM phase:s assets:RAW fingerprint:s failure:s bees:RAW centrifuge:RAW combined:RAW");
 		define(result, Kind.IDENTITY, "network:u controller:u owner:u generation:l origin:ORIGIN");
 		define(result, Kind.ORIGIN, "dimension:s x:i y:i z:i");
 		define(result, Kind.KEY, "kind:s id:s components:RAW");
@@ -94,14 +95,15 @@ final class CheckpointSchema {
 		private final boolean directory;
 		private final BeeSchemaVersion beeSchema;
 		private final Consumer<ProductKey> validateKey;
+		private final java.util.function.ToIntFunction<ProductKey> itemLimits;
 		private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 		private final Map<String, Object> values = new ConcurrentHashMap<>();
 		private final Set<String> seen = ConcurrentHashMap.newKeySet();
 		private final Object state;
 		Node watermarkTarget;
-		Node(Kind kind, boolean directory, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, BeeSchemaVersion beeSchema) {
+		Node(Kind kind, boolean directory, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, java.util.function.ToIntFunction<ProductKey> itemLimits, BeeSchemaVersion beeSchema) {
 			this.kind = kind; this.directory = directory; this.validateKey = validateKey;
-			this.validateFeeding = validateFeeding; this.beeSchema = beeSchema;
+			this.validateFeeding = validateFeeding; this.itemLimits = itemLimits; this.beeSchema = beeSchema;
 			state = switch (kind) {
 				case NETWORK -> new NetworkRestoreState();
 				case DIRECTORY -> new DirectoryState();
@@ -155,7 +157,14 @@ final class CheckpointSchema {
 		Object finish() {
 			if (kind == Kind.EFFECTS) return ((WorkCapacity.EffectsBuilder) state).finish();
 			if (kind == Kind.WATERMARKS) return Boolean.TRUE;
-			if (kind != Kind.SELECTOR && !seen.equals(FIELDS.get(kind).keySet())) throw new IllegalArgumentException("Missing fields in " + kind);
+			var expected = FIELDS.get(kind).keySet();
+			if (kind == Kind.NETWORK && integer("schema") < 11) { expected = new java.util.HashSet<>(expected); expected.remove("ports"); }
+			if (kind == Kind.OWNERSHIP) {
+				beeSchema.observeOwnership(seen.contains("combined"));
+				if (seen.contains("combined")) beeSchema.observeCombined(value("combined"));
+				if (!seen.contains("combined")) { expected = new java.util.HashSet<>(expected); expected.remove("combined"); }
+			}
+			if (kind != Kind.SELECTOR && !seen.equals(expected)) throw new IllegalArgumentException("Missing or unexpected fields in " + kind);
 			return switch (kind) {
 				case ROOT -> {
 					int version = integer("DataVersion");
@@ -164,17 +173,18 @@ final class CheckpointSchema {
 				}
 				case NETWORK -> {
 					beeSchema.validate(integer("schema"));
-					var network = (NetworkRestoreState) state; network.identity = value("identity"); network.revision = nonnegative("revision");
+					var network = (NetworkRestoreState) state; network.schema = integer("schema"); network.identity = value("identity"); network.revision = nonnegative("revision");
 					network.policyRevision = nonnegative("policy"); network.ledgerRevision = nonnegative("ledgerRevision"); network.scheduler = value("scheduler"); network.energy = value("energy"); yield network;
 				}
 				case DIRECTORY -> {
 					if (integer("schema") != 2) throw new IllegalArgumentException("Unsupported directory schema");
 					var index = (DirectoryState) state; index.revision = nonnegative("revision"); yield index;
 				}
+				case PORT -> PortRecordCodec.data(value("data"), validateKey, itemLimits);
 				case ENERGY -> new com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyAccount(number("stored"), number("capacity"));
 				case IDENTITY -> new NetworkIdentity(uuid("network"), uuid("controller"), uuid("owner"), number("generation"), value("origin"));
 				case CLAIM -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim(uuid("network"), uuid("member"), uuid("transfer"), value("origin"), string("machine"));
-				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding, beeSchema.observe(value("bees"))), CentrifugeRecordCodec.decode(value("centrifuge"), validateKey));
+				case OWNERSHIP -> new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord(value("claim"), choice("phase", com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.class), new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(value("assets")), string("fingerprint"), string("failure"), BeeRecordCodec.decode(value("bees"), validateKey, validateFeeding, beeSchema.observe(value("bees"))), CentrifugeRecordCodec.decode(value("centrifuge"), validateKey), seen.contains("combined") ? OwnershipRecordCodec.combined(value("combined"), validateKey, validateFeeding, itemLimits) : null);
 				case ORIGIN -> new MemberCapabilitySnapshot.Origin(ResourceLocation.parse(string("dimension")).toString(), integer("x"), integer("y"), integer("z"));
 				case KEY -> { var key = new ProductKey(choice("kind", ProductKey.Kind.class), ResourceLocation.parse(string("id")), value("components")); validateKey.accept(key); yield key; }
 				case AMOUNT_ENTRY -> new AmountEntry(value("key"), amount("amount"));

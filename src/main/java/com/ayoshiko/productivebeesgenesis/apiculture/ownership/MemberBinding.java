@@ -20,7 +20,9 @@ public final class MemberBinding {
 				|| com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.holdsMember(tile));
 	}
 	public static Reference read(BlockEntity tile) {
-		var tag = tile.getPersistentData().getCompound(TAG);
+		return decode(tile.getPersistentData().getCompound(TAG));
+	}
+	public static Reference decode(CompoundTag tag) {
 		if (!tag.hasUUID("member") || !tag.hasUUID("transfer") || !tag.contains("mode", 8)) throw new IllegalArgumentException("Malformed member binding");
 		return new Reference(NetworkCheckpointCodec.readIdentity(tag.getCompound("network")), tag.getUUID("member"), tag.getUUID("transfer"), Mode.valueOf(tag.getString("mode")));
 	}
@@ -38,9 +40,13 @@ public final class MemberBinding {
 		if (tile instanceof IAe2OutputHostBase host) host.productivebeesgenesis$getAe2LifecycleHandler().prepareForLoad(host);
 	}
 	private static void write(BlockEntity tile, Reference value) {
+		var tag = encode(value);
+		tile.getPersistentData().put(TAG, tag); tile.setChanged(); tile.getLevel().invalidateCapabilities(tile.getBlockPos());
+	}
+	public static CompoundTag encode(Reference value) {
 		var tag = new CompoundTag(); tag.put("network", NetworkCheckpointCodec.identity(value.network()));
 		tag.putUUID("member", value.member()); tag.putUUID("transfer", value.transfer()); tag.putString("mode", value.mode().name());
-		tile.getPersistentData().put(TAG, tag); tile.setChanged(); tile.getLevel().invalidateCapabilities(tile.getBlockPos());
+		return tag;
 	}
 	public static void suspend(BlockEntity tile) {
 		if (tile instanceof IAe2OutputHostBase host) {

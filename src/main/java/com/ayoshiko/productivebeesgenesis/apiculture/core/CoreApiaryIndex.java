@@ -1,8 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin;
-import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedProductionAccess;
-import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedBeeAccess;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProgressPlan;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.ApiaryRank;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope;
@@ -39,9 +38,8 @@ final class CoreApiaryIndex {
 			sorted = new TreeMap<>(); members = new HashMap<>();
 		}
 		if (result != null) return result;
-		var directory = NetworkPersistence.directory(level.getServer());
-		for (int i = 0; i < 4; i++) {
-			var record = current.ownedMachines().activeEntry(TerminalScope.APIARY.machine(), cursor, false);
+				for (int i = 0; i < 4; i++) {
+			var record = TerminalScope.APIARY.next(current.ownedMachines(), cursor, false);
 			if (record == null) {
 				result = new ApiaryRank.Order(new Object(), Collections.unmodifiableNavigableMap(sorted), Collections.unmodifiableMap(members));
 				return result;
@@ -49,10 +47,10 @@ final class CoreApiaryIndex {
 			var origin = record.claim().origin();
 			// 未就绪成员仍可管理，排在已知能力之后；自动输入另作实时资格校验。
 			int ticks = Integer.MAX_VALUE; float productivity = Float.MIN_NORMAL;
-			var hive = record.bees() == null ? null : ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class);
-			if (hive != null) {
-				var capacity = StaticApiaryAdapter.upgradeCapacity(hive, record.assets());
-				ticks = BeeProgressPlan.cycleTicks(0, rules.ticks(), capacity.timeFactor(), false);
+			var access = ManagedBeeAccess.capture(level, authority, record);
+			if (access != null) {
+				var capacity = access.profile();
+				ticks = BeeProgressPlan.cycleTicks(0, rules.ticks(), capacity.time(), false);
 				productivity = capacity.productivity();
 			}
 			var rank = new ApiaryRank(0, ticks, productivity, origin, record.claim().member());

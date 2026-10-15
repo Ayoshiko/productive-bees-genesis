@@ -14,6 +14,19 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalProtocolTest {
+	@Test void processingCapacityRoundTripsAsBoundedReadOnlyProductDetails() {
+		var capacity = new TerminalView.Processing(2, 8, "34", "2200");
+		var row = new TerminalView.Row("minecraft:honeycomb", false, "10", "10", true, List.of()).withProcessing(capacity);
+		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0,
+				new TerminalView(NetworkSelectionSession.Kind.PRODUCTS, 1, false, List.of(row)));
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try { TerminalReply.STREAM_CODEC.encode(buffer, reply); assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer)); }
+		finally { buffer.release(); }
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Processing(2, 1, "34", "2200"));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Processing(1, 1, "NaN", "0"));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Processing(1, 1, "1".repeat(97), "0"));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 1, false, List.of(row)));
+	}
 	@Test void networkReturnOnCloseUsesTheExistingBoundedCraftingFrame() {
 		for (var operation : List.of(TerminalRequest.Operation.CRAFT_STORE_ON_CLOSE, TerminalRequest.Operation.CRAFT_STORE_ME_ON_CLOSE)) {
 			var request = new TerminalRequest(7, UUID.randomUUID(), 3, operation, 9, -1, -1, -1, 0);
@@ -428,7 +441,7 @@ class TerminalProtocolTest {
 		assertFalse(sequence.begin(Long.MAX_VALUE)); sequence.close(); assertFalse(sequence.begin(Long.MAX_VALUE));
 	}
 	@Test void upgradePagesBoundAllEightMembersAndRejectDuplicateOrMalformedChoices() {
-		var upgrades = java.util.stream.IntStream.range(0, 10).mapToObj(i -> new TerminalView.Upgrade(i, "test:" + "a".repeat(75), Integer.MAX_VALUE, 8, false)).toList();
+		var upgrades = java.util.stream.IntStream.range(0, TerminalView.MAX_UPGRADES).mapToObj(i -> new TerminalView.Upgrade(i == 18 ? 22 : i, "test:" + "a".repeat(75), Integer.MAX_VALUE, 8, false)).toList();
 		var row = new TerminalView.Row("机".repeat(80), false, "", "", true, List.of(), "", "", upgrades);
 		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 1, true, java.util.Collections.nCopies(8, row));
 		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, page);
@@ -437,13 +450,29 @@ class TerminalProtocolTest {
 			TerminalReply.STREAM_CODEC.encode(buffer, reply); assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
 			assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer));
 		} finally { buffer.release(); }
-		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Upgrade(16, "test:item", 0, 1, true));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Upgrade(TerminalView.UPGRADE_CHOICES, "test:item", 0, 1, true));
 		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Upgrade(0, "乱码", 0, 1, true));
 		assertThrows(IllegalArgumentException.class, () -> new TerminalView.Row("x", false, "", "", true, List.of(), "", "", List.of(upgrades.getFirst(), upgrades.getFirst())));
 		assertThrows(IllegalArgumentException.class, () -> new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 1, false, List.of(row)));
 		var request = new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.UPGRADE_REMOVE, 1, 0, 10, 35, 64);
 		assertEquals(10, request.targetSlot());
-		assertThrows(IllegalArgumentException.class, () -> new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 10, 35, 1));
+		assertThrows(IllegalArgumentException.class, () -> new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, TerminalView.MAX_BEE_SLOTS, 35, 1));
+	}
+	@Test void eightFactoryMembersKeepTwentySlotsWithinReplyBudget() {
+		var genes = new TerminalBeeGenes(java.util.Collections.nCopies(5, "a".repeat(32)));
+		var bees = java.util.stream.IntStream.range(0, 20).mapToObj(i -> new TerminalView.Bee(i, true,
+				"test:" + "a".repeat(75), 1, 20, false, "test:" + "b".repeat(75), 64, false, genes, new UUID(1, i))).toList();
+		var row = new TerminalView.Row("机".repeat(80), false, "", "", true, bees);
+		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0,
+				new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 1, true, java.util.Collections.nCopies(8, row)));
+		var buffer = new FriendlyByteBuf(Unpooled.buffer());
+		try {
+			TerminalReply.STREAM_CODEC.encode(buffer, reply);
+			assertTrue(buffer.readableBytes() <= TerminalReply.MAX_BYTES);
+			assertEquals(reply, TerminalReply.STREAM_CODEC.decode(buffer));
+			var request = new TerminalRequest(1, UUID.randomUUID(), 1, TerminalRequest.Operation.CAGE_OUT, 1, 0, 19, 0, 1);
+			assertEquals(19, request.targetSlot());
+		} finally { buffer.release(); }
 	}
 	@Test void sharedBudgetBoundsBurstAndSustainedRequests() {
 		var budget = new TerminalRateBudget(); int accepted = 0;

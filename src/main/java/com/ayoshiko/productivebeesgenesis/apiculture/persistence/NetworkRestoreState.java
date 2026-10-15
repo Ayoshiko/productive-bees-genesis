@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** 私有候选域：按步验证引用，只有全部检查通过才签发不可变 checkpoint。 */
 final class NetworkRestoreState {
 	final LedgerCheckpoint.RestoreBuilder ledger = new LedgerCheckpoint.RestoreBuilder();
+	final SnapshotRecords<UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState> ports = new SnapshotRecords<>(UUID::compareTo);
 	final SnapshotRecords<Integer, LedgerCheckpoint.Pending> transactions = new SnapshotRecords<>(Integer::compare);
 	final SnapshotRecords<Integer, TransferStaging.View> transfers = new SnapshotRecords<>(Integer::compare);
 	final SnapshotRecords<ProductPolicyRegistry.Discovery, Boolean> discoveries = new SnapshotRecords<>(
@@ -24,6 +25,7 @@ final class NetworkRestoreState {
 	NetworkIdentity identity;
 	com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyAccount energy;
 	long revision, policyRevision, ledgerRevision;
+	int schema;
 	CheckpointSchema.SchedulerState scheduler;
 	private int phase;
 	private Iterator<?> checks;
@@ -32,6 +34,10 @@ final class NetworkRestoreState {
 	com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines ownedSnapshot;
 	void add(String list, Object value) {
 		switch (list) {
+			case "ports" -> {
+				var port = (com.ayoshiko.productivebeesgenesis.apiculture.port.PortState) value;
+				if (ports.get(port.id()) != null) throw new IllegalArgumentException("Duplicate port"); ports.put(port.id(), port);
+			}
 			case "ownership" -> owned.add((com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord) value);
 			case "balances" -> { var entry = (CheckpointSchema.AmountEntry) value; ledger.balance(entry.key(), entry.amount()); }
 			case "transactions" -> { var pending = (LedgerCheckpoint.Pending) value; ledger.transaction(pending); transactions.put(transactions.size(), pending); }
@@ -70,7 +76,9 @@ final class NetworkRestoreState {
 			}
 			case 2 -> {
 				if (checks.hasNext()) {
-					if (!((MemberCapabilitySnapshot) checks.next()).origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Member dimension mismatch");
+					var member = (MemberCapabilitySnapshot) checks.next();
+					CapacityRecordCodec.validateVersion(member, schema);
+					if (!member.origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Member dimension mismatch");
 				} else { phase++; checks = lanes.valuesSnapshot().iterator(); }
 			}
 			case 3 -> {
@@ -83,7 +91,11 @@ final class NetworkRestoreState {
 					var record = (com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord) checks.next();
 					NetworkCheckpoint.validateOwnership(record, identity, policyRevision);
 					NetworkCheckpoint.validateEnergyOwnership(record, energy);
-				} else complete = true;
+				} else { phase++; checks = ports.valuesSnapshot().iterator(); }
+			}
+			case 6 -> {
+				if (checks.hasNext()) ((com.ayoshiko.productivebeesgenesis.apiculture.port.PortState) checks.next()).validateNetwork(identity);
+				else complete = true;
 			}
 			default -> throw new IllegalStateException("Invalid validation phase");
 		}

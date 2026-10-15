@@ -30,6 +30,7 @@ final class AutomaticRestartFixture {
 	enum Mode { RUNNING, PAUSED, STARVED }
 	final Kind kind;
 	final Mode mode;
+	final String factoryType;
 	final BlockPos pos;
 	NetworkCoreBlockEntity core;
 	TileEntityMekApiary hive;
@@ -40,18 +41,28 @@ final class AutomaticRestartFixture {
 	int hiveTicker, centrifugeTicker, completedBees, completedJobs, maintenanceTicks;
 	long expectedEnergy, workFe;
 	private final Map<ProductKey, ProductAmount> expected = new ConcurrentHashMap<>();
-	AutomaticRestartFixture(Kind kind, Mode mode, BlockPos pos) { this.kind = kind; this.mode = mode; this.pos = pos; }
+	private ProductKey honey;
+	AutomaticRestartFixture(Kind kind, Mode mode, BlockPos pos) { this(kind, mode, pos, ""); }
+	AutomaticRestartFixture(Kind kind, Mode mode, BlockPos pos, String factoryType) {
+		this.kind = kind; this.mode = mode; this.pos = pos; this.factoryType = factoryType;
+	}
 	void create(ServerLevel level) {
-		var owner = UUID.randomUUID(); level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState());
+		var owner = level.getServer().isDedicatedServer() ? UUID.randomUUID() : level.getServer().getSingleplayerProfile().getId(); level.setBlockAndUpdate(pos, NetworkContent.CORE.get().defaultBlockState());
 		core = (NetworkCoreBlockEntity) level.getBlockEntity(pos); core.initializeOwner(owner);
 		if (kind != Kind.CENTRIFUGE) {
-			level.setBlockAndUpdate(pos.west(), ModBlocks.MEK_APIARY.get().defaultBlockState()); hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());
+			level.setBlockAndUpdate(pos.west(), (factoryType.isEmpty() ? ModBlocks.MEK_APIARY.get()
+					: net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(ResourceLocation.parse(factoryType))).defaultBlockState()); hive = (TileEntityMekApiary) level.getBlockEntity(pos.west());
 			hive.setOwnerUUID(owner); hive.setControlType(RedstoneControl.HIGH); hive.setFeederConversionEnabled(false);
 			var bee = new CompoundTag(); bee.putString("id", "productivebees:configurable_bee"); bee.putString("type", "productivebees:iron"); bee.putUUID("UUID", UUID.randomUUID());
 			var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any"); genes.putString("bee_productivity", "productivity.normal");
 			var attachments = new CompoundTag(); attachments.put("productivebees:attributes_handler", genes); bee.put("neoforge:attachments", attachments);
-			hive.getBeeSlot(0).setBeeData(bee); hive.getBeeSlot(0).setBaseMinOccupationTicks(5);
-			hive.getFeederSlots().getFirst().setStack(new ItemStack(Items.IRON_BLOCK));
+			int slot = factoryType.isEmpty() ? 0 : hive.getBeeSlotCount() - 1;
+			hive.getBeeSlot(slot).setBeeData(bee); hive.getBeeSlot(slot).setBaseMinOccupationTicks(5);
+			hive.getFeederSlots().get(slot).setStack(new ItemStack(Items.IRON_BLOCK));
+			if (!factoryType.isEmpty()) {
+				level.setBlockAndUpdate(pos.north(), NetworkContent.SUPPLY_PORT.get().defaultBlockState());
+				((com.ayoshiko.productivebeesgenesis.apiculture.port.NetworkPortBlockEntity) level.getBlockEntity(pos.north())).initializeOwner(owner);
+			}
 		}
 		if (kind != Kind.BEE) {
 			level.setBlockAndUpdate(pos.east(), ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState()); centrifuge = (TileEntityMekCentrifuge) level.getBlockEntity(pos.east());
@@ -98,6 +109,14 @@ final class AutomaticRestartFixture {
 		data = NetworkPersistence.directory(level.getServer()).loadExisting(core.network()).ready();
 		require(saved.equals(data.checkpoint()), "Automatic restart changed paid checkpoint before release: " + kind + "/" + mode);
 		previous = saved; expected.putAll(saved.ledger().balances()); expectedEnergy = saved.energy().stored();
+		if (hive != null) {
+			// 固定铁蜂夹具按 PB 蜂蜜键与 250 mB 独立核算，不调用被测产物解析器。
+			honey = ProductKeyCodec.fluid(new net.neoforged.neoforge.fluids.FluidStack(
+					cy.jdkdigital.productivebees.init.ModFluids.HONEY.get(), 250), level.registryAccess());
+			var plan = bee(saved).plan();
+			require(plan.beeType().equals("productivebees:iron") && honey.equals(plan.fluidOutput())
+					&& plan.fluidPerCycle() == 250, "Restart fixture has an unexpected bee honey plan");
+		}
 		require((hive == null || hive.ticker == hiveTicker && new MachineAssetStore(hive).empty())
 				&& (centrifuge == null || centrifuge.ticker == centrifugeTicker && new MachineAssetStore(centrifuge).empty()), "Recovery ran a physical member before authority became ready");
 		ready = true;
@@ -114,7 +133,8 @@ final class AutomaticRestartFixture {
 				progressed = true; long cost = after.plan().energyPerTick(); workFe += cost; expectedEnergy -= cost;
 				if (after.progress() == 0) {
 					require(after.plan().productivity() == 0, "Restart oracle requires normal bee productivity");
-					completedBees++; add(after.plan().output(), ProductAmount.of(after.plan().count())); hive.setControlType(RedstoneControl.HIGH);
+					completedBees++; add(after.plan().output(), ProductAmount.of(after.plan().count()));
+					add(honey, ProductAmount.of(250)); hive.setControlType(RedstoneControl.HIGH);
 				}
 			}
 		}
@@ -133,7 +153,7 @@ final class AutomaticRestartFixture {
 		}
 		if (progressed) { maintenanceTicks++; expectedEnergy -= AutomaticRestartProbe.MAINTENANCE; }
 		require(current.energy().stored() == expectedEnergy, "Restart FE or maintenance mismatch: " + kind + "/" + mode + " expected=" + expectedEnergy + " actual=" + current.energy().stored());
-		require(current.ledger().balances().equals(expected), "Restart item/fluid conservation failed: " + kind + "/" + mode);
+		require(current.ledger().balances().equals(expected), "Restart item/fluid conservation failed: " + kind + "/" + mode + " expected=" + expected + " actual=" + current.ledger().balances());
 		previous = current;
 		if (!finished && (kind == Kind.CENTRIFUGE || completedBees == 1) && (kind == Kind.BEE || completedJobs == 1)) {
 			require((hive == null || bee(current).drained()) && job(current) == null, "Restart left paid outputs unsettled");
@@ -147,6 +167,7 @@ final class AutomaticRestartFixture {
 	void redstone(RedstoneControl control) { if (hive != null) hive.setControlType(control); if (centrifuge != null) centrifuge.setControlType(control); }
 	CompoundTag manifest() {
 		var tag = new CompoundTag(); tag.putString("kind", kind.name()); tag.putString("mode", mode.name());
+		if (!factoryType.isEmpty()) tag.putString("factoryType", factoryType);
 		tag.putInt("x", pos.getX()); tag.putInt("y", pos.getY()); tag.putInt("z", pos.getZ()); tag.put("saved", NetworkCheckpointCodec.encode(saved)); return tag;
 	}
 	private void add(ProductKey key, ProductAmount amount) { if (!amount.isZero()) expected.merge(key, amount, ProductAmount::add); }
@@ -155,7 +176,7 @@ final class AutomaticRestartFixture {
 		if (remaining.isZero()) expected.remove(key); else expected.put(key, remaining);
 	}
 	private static BeeRecord bee(NetworkCheckpoint checkpoint) {
-		for (var record : checkpoint.ownedMachines().values()) if (record.bees() != null) return record.bees().bee(0); return null;
+		for (var record : checkpoint.ownedMachines().values()) if (record.bees() != null) return record.bees().bees().getFirst(); return null;
 	}
 	private static CentrifugeJob job(NetworkCheckpoint checkpoint) {
 		for (var record : checkpoint.ownedMachines().values()) if (record.centrifuge() != null) return record.centrifuge().jobs().get(0); return null;

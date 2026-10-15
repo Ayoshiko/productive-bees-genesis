@@ -83,7 +83,11 @@ public final class CentrifugeWorkTransaction {
 	public static CentrifugeWorkTransaction settle(CentrifugeWorkState state, LedgerCheckpoint ledger, int lane, long policyRevision) {
 		var job = state.jobs().get(lane);
 		if (job == null || !job.sampled()) return null;
-		return release(state, ledger, lane, policyRevision, job, job.frozen());
+		var remaining = new java.util.HashMap<>(job.frozen());
+		state.delivered().getOrDefault(lane, Map.of()).forEach((key, amount) -> remaining.compute(key, (ignored, total) -> {
+			var rest = total.subtract(amount); return rest.isZero() ? null : rest;
+		}));
+		return release(state, ledger, lane, policyRevision, job, remaining);
 	}
 	/** 只有尚未付过任何工作 tick 的预约可以撤销；已付费作业须继续完成或保留托管。 */
 	public static CentrifugeWorkTransaction cancel(CentrifugeWorkState state, LedgerCheckpoint ledger, int lane, long policyRevision) {

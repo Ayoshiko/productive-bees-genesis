@@ -13,13 +13,13 @@ import mekanism.common.config.MekanismConfig;
 import net.minecraft.nbt.Tag;
 import net.neoforged.fml.ModList;
 
-/** 基础机的封存能力视图，不将升级临时装回实体，也不执行隐藏 ticker。 */
+/** 已准入离心载体的封存能力，不将升级临时装回实体，也不执行隐藏 ticker。 */
 final class SealedCentrifugeProfile {
 	private final Map<PbUpgradeType, Integer> pb;
 	private final float time;
 	private final int parallel;
 	private final long energy;
-	SealedCentrifugeProfile(TileEntityMekCentrifuge tile, AssetImage assets) {
+	SealedCentrifugeProfile(mekanism.common.tile.base.TileEntityMekanism tile, AssetImage assets) {
 		if (ModList.get().isLoaded("mekanism_unleashed") || ModList.get().isLoaded("mekanism_empowered"))
 			throw new IllegalArgumentException("Modified Mekanism upgrade formulas require a dedicated network adapter");
 		var tag = assets.copy();
@@ -27,11 +27,15 @@ final class SealedCentrifugeProfile {
 				|| !tag.getCompound("extra").contains(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, Tag.TAG_COMPOUND))
 			throw new IllegalArgumentException("Missing sealed upgrade records");
 		var nativeUpgrades = NativeUpgradeCounts.read(tag.getCompound("upgrades"));
+		boolean factory = tile instanceof AbstractMekCentrifugeFactory;
+		int stack = 0;
 		for (var entry : nativeUpgrades.entrySet()) {
-			if (entry.getKey() != Upgrade.SPEED && entry.getKey() != Upgrade.ENERGY)
+			boolean stacking = factory && entry.getKey().name().equals("STACK") && MekCompatHooks.isMekanismExtrasLoaded();
+			if (entry.getKey() != Upgrade.SPEED && entry.getKey() != Upgrade.ENERGY && !stacking)
 				throw new IllegalArgumentException("Unsupported network upgrade: " + entry.getKey());
 			if (entry.getValue() < 0 || entry.getValue() > entry.getKey().getMax())
 				throw new IllegalArgumentException("Unsupported native upgrade count");
+			if (stacking) stack = entry.getValue();
 		}
 		pb = Map.copyOf(PbCentrifugeUpgradeCounts.read(tag.getCompound("extra")));
 		double speed = nativeUpgrades.getOrDefault(Upgrade.SPEED, 0) / (double) Upgrade.SPEED.getMax();
@@ -40,11 +44,13 @@ final class SealedCentrifugeProfile {
 		// 对齐固定依赖 MekanismUtils；改写此公式的已知集成在入口隔离。
 		double speedFactor = Math.pow(multiplier, -speed);
 		time = CentrifugePbMultipliers.time(this::count, (float) Math.min(1, speedFactor));
-		int operations = MathUtils.clampToInt(Math.max(1, 1 / (tile.baseTicksRequired() * speedFactor)));
+		var context = (PbRecipeContext) tile;
+		int operations = MathUtils.clampToInt(Math.max(1, 1 / (context.baseTicksRequired() * speedFactor))
+				* SaturatingMath.saturatingPowerOfTwo(stack));
 		int limit = ModConfig.SERVER.mekCentrifugeMaxOpsPerTick.get();
 		if (limit > 0) operations = Math.min(operations, limit);
 		parallel = SaturatingMath.saturatingToInt((long) operations * CentrifugePbMultipliers.parallel(this::count));
-		double price = tile.energyContainer().getBaseEnergyPerTick() * Math.pow(multiplier, 2 * speed - saving);
+		double price = context.energyContainer().getBaseEnergyPerTick() * Math.pow(multiplier, 2 * speed - saving);
 		if (!Double.isFinite(price) || price < 0 || price >= 0x1.0p63) throw new IllegalArgumentException("Unrepresentable native energy price");
 		energy = MathUtils.ceilToLong(price);
 	}

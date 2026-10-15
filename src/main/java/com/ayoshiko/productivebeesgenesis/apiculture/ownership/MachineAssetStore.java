@@ -17,12 +17,14 @@ public final class MachineAssetStore {
 	private final TileEntityMekanism tile;
 	private final IAe2OutputHostBase host;
 	private final MachineAssetSection section;
-	public static boolean supports(TileEntityMekanism tile) { return tile.getClass() == TileEntityMekApiary.class || tile.getClass() == TileEntityMekCentrifuge.class; }
+	public static boolean supports(TileEntityMekanism tile) { return tile instanceof TileEntityMekApiary hive && com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter.supports(hive) || com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter.supports(tile); }
 	public MachineAssetStore(TileEntityMekanism tile) {
 		this.tile = tile;
-		// 工厂的多罐和等级升级矩阵在对应适配器验收后扩展，不能继承基础机假装支持。
-		if (tile.getClass() == TileEntityMekApiary.class) section = new ApiaryOwnershipAssets((TileEntityMekApiary) tile);
+		// 外层库存、升级与回执相同；工厂多罐和逐进程余量由资产段完整封存。
+		if (tile instanceof TileEntityMekApiary hive && com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter.supports(hive)) section = new ApiaryOwnershipAssets(hive);
 		else if (tile.getClass() == TileEntityMekCentrifuge.class) section = ((TileEntityMekCentrifuge) tile).ownershipAssets();
+		else if (com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter.supports(tile))
+			section = ((com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory) tile).ownershipAssets();
 		else throw new IllegalArgumentException("No verified ownership asset adapter for " + tile.getClass().getName());
 		host = (IAe2OutputHostBase) tile;
 	}
@@ -32,7 +34,7 @@ public final class MachineAssetStore {
 			// 补货尚有已提取物品或结果未知时，保留独立机的结算／隔离入口，不能先冻结。
 			if (restock.hasPending() || restock.isSuspended()) return false;
 		}
-		return host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().size() == 0;
+		return section.prepared() && host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().size() == 0;
 	}
 	public AssetImage capture(HolderLookup.Provider registries) {
 		if (!prepared()) throw new IllegalStateException("Outstanding external output settlement");
@@ -51,6 +53,8 @@ public final class MachineAssetStore {
 		for (var slot : machine.getInventorySlots(null)) if (!slot.isEmpty() && slot.getCount() > slot.getLimit(slot.getStack())) throw new IllegalArgumentException("Inventory exceeds physical slot capacity");
 		for (var upgrade : Upgrade.values()) if (machine.getComponent().getUpgrades(upgrade) > 0 && !machine.getComponent().supports(upgrade)) throw new IllegalArgumentException("Unsupported native upgrade");
 		if (!image.equals(candidate.capture(level.registryAccess()))) throw new IllegalArgumentException("Asset data cannot round-trip on the current machine and registries");
+		if (tile instanceof com.ayoshiko.productivebeesgenesis.mek.AbstractMekCentrifugeFactory)
+			com.ayoshiko.productivebeesgenesis.mek.StaticCentrifugeAdapter.validateUpgrades(machine, image);
 	}
 	public void clear(HolderLookup.Provider registries) {
 		section.clear(registries);

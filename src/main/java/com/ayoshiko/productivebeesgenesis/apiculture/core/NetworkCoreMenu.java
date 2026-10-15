@@ -417,14 +417,24 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		automaticBee = new CoreAutomaticBeeInput(request, player); return null;
 	}
 	public boolean setBeeEnabled(net.minecraft.server.level.ServerPlayer player, UUID member, int slot, UUID beeId,
-			com.ayoshiko.productivebeesgenesis.apiculture.production.BeeMemberState.RosterVersion expectedRoster, boolean enabled, boolean simulate) {
+			Object expectedRoster, boolean enabled, boolean simulate) {
 		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return false;
 		var authority = core.ownership().readyAuthority(); if (authority == null) return false;
 		exchanging = true;
 		try {
-			return new com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkBeeService(authority,
-					com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server))
-					.setEnabled(player.serverLevel(), member, slot, beeId, expectedRoster, enabled, simulate);
+			var record = authority.checkpoint().ownedMachines().get(member);
+			if (record == null || expectedRoster == null || record.rosterVersion() != expectedRoster
+					|| slot < 0 || slot >= record.workLayout().beeSlots()) return false;
+			var access = com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedBeeAccess.capture(player.serverLevel(), authority, record);
+			if (access == null || beeId == null || record.beeRecords().stream().noneMatch(bee -> bee.slot() == slot && bee.id().equals(beeId))) return false;
+			var next = access.beeEnabled(slot, beeId, enabled);
+			if (exchangeCore(player) != core || !access.current()) return false;
+			if (!simulate && next != authority.checkpoint()) {
+				authority.publish(next);
+				core.runtime().beeChanged(member, slot, enabled, player.server.overworld().getGameTime());
+				com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService.watch(core, true);
+			}
+			return true;
 		} finally { exchanging = false; }
 	}
 	public boolean setFeedingDisabled(net.minecraft.server.level.ServerPlayer player, UUID member, int slot,
@@ -432,12 +442,14 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		if (memberScoped || scope == TerminalScope.CENTRIFUGE || exchangeCore(player) == null || exchanging || !acceptsMember(member)) return false;
 		var authority = core.ownership().readyAuthority();
 		var record = authority.checkpoint().ownedMachines().get(member);
-		if (record == null || record.bees() == null || record.bees().feeding() == null || slot < 0 || slot >= 3) return false;
+		if (record == null || record.feedingSlots().isEmpty() || record.feedingRevision() != expectedRevision || slot < 0 || slot >= record.workLayout().beeSlots()) return false;
 		exchanging = true;
 		try {
-			return new com.ayoshiko.productivebeesgenesis.apiculture.production.NetworkFeedingService(authority,
-					com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence.directory(player.server))
-					.apply(player.serverLevel(), member, expectedRevision, record.bees().feeding().disabled(slot, disabled), false);
+			var access = com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedBeeAccess.capture(player.serverLevel(), authority, record);
+			if (access == null) return false;
+			var next = access.feedingDisabled(slot, disabled);
+			if (exchangeCore(player) != core || !access.current()) return false;
+			if (next != authority.checkpoint()) authority.publish(next); return true;
 		} finally { exchanging = false; }
 	}
 	private static boolean memberOperation(TerminalRequest.Operation operation) {
@@ -462,6 +474,17 @@ public final class NetworkCoreMenu extends AbstractContainerMenu implements Term
 		finally { exchanging = false; }
 	}
 	/** 所有者或获准升级的访客操作已准入基础成员的原生升级；正式终端与服务器探针共用。 */
+	MemberUpgradeService.Result exchangeUpgradeChoice(net.minecraft.server.level.ServerPlayer player, UUID member,
+			long revision, mekanism.api.Upgrade nativeType, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType pb,
+			int inventorySlot, int amount, MemberUpgradeService.Action action, boolean simulate, boolean apiary) {
+		if (exchangeCore(player) == null || exchanging || !acceptsMember(member)
+				|| memberAccess != null && !memberAccess.member().equals(member)
+				|| scope == TerminalScope.APIARY && !apiary || scope == TerminalScope.CENTRIFUGE && apiary)
+			return MemberUpgradeService.result(MemberUpgradeService.Status.UNAVAILABLE);
+		exchanging = true;
+		try { return MemberUpgradeService.exchange(this, player, member, revision, nativeType, pb, inventorySlot, amount, action, simulate, apiary); }
+		finally { exchanging = false; }
+	}
 	public MemberUpgradeService.Result exchangeUpgrade(net.minecraft.server.level.ServerPlayer player, UUID member,
 			long expectedRevision, mekanism.api.Upgrade upgrade, int inventorySlot, int requested,
 			MemberUpgradeService.Action action, boolean simulate) {

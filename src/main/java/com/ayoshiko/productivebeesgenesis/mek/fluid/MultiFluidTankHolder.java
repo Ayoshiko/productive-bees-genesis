@@ -459,13 +459,10 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		return tanksInOrder;
 	}
 
-	/** 供 NbtCodec 访问流体映射(用于 clear 重置映射) */
-	Map<FluidKey, List<IExtendedFluidTank>> getTanksByFluidKeyForCodec() {
-		return tanksByFluidKey;
-	}
-
-	/** 供 NbtCodec 访问空槽计数器(用于 set 重置为 maxTanks) */
-	AtomicInteger getEmptyTankCountForCodec() {
-		return emptyTankCount;
+	/** 恢复前同时撤销正反映射；保留旧反向占用会使交还时无法重新分配已清空的罐。 */
+	void clearForRestore() {
+		tanksByFluidKey.clear(); mappedTanks.clear(); emptyTankCount.set(maxTanks);
+		for (var tank : tanksInOrder) tank.setStack(FluidStack.EMPTY);
+		externalTankView.invalidate();
 	}
 }

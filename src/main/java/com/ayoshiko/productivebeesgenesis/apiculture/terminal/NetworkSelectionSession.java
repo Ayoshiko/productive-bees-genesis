@@ -1,11 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.terminal;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim;
-import com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity;
-import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeMemberState;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.LedgerCheckpoint;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
@@ -40,8 +38,8 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	}
 	/** 成员交接身份、瞬态名册戳与喂食版本独立保留。 */
 	public record MemberRow(MemberClaim claim, OwnedMachineRecord.Phase phase,
-			BeeMemberState.RosterVersion rosterVersion, long feedingRevision, List<BeeRow> bees, AssetImage upgradeVersion) implements Row {
-		public MemberRow(MemberClaim claim, OwnedMachineRecord.Phase phase, BeeMemberState.RosterVersion rosterVersion,
+			Object rosterVersion, long feedingRevision, List<BeeRow> bees, Object upgradeVersion) implements Row {
+		public MemberRow(MemberClaim claim, OwnedMachineRecord.Phase phase, Object rosterVersion,
 				long feedingRevision, List<BeeRow> bees) { this(claim, phase, rosterVersion, feedingRevision, bees, null); }
 		public MemberRow { bees = List.copyOf(bees); }
 	}
@@ -84,7 +82,7 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		if (closed || tick < 0) return null;
 		clear(); this.authority = authority; identity = snapshot.identity(); openedAt = tick;
 		search = query.strip().toLowerCase(java.util.Locale.ROOT); pageLimit = limit;
-		if (kind != Kind.PRODUCTS) members = snapshot.ownedMachines().activeValues(scope.machine()).iterator();
+		if (kind != Kind.PRODUCTS) members = scope.values(snapshot.ownedMachines()).iterator();
 		else { ledger = snapshot.ledger(); products = ledger.balances().entrySet().iterator(); }
 		return advance(kind);
 	}
@@ -116,14 +114,14 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	public static boolean sameRoster(MemberRow selected, OwnedMachineRecord current) {
 		return selected != null && selected.phase() == OwnedMachineRecord.Phase.OWNED
 				&& current != null && current.phase() == OwnedMachineRecord.Phase.OWNED
-				&& selected.claim().equals(current.claim()) && current.bees() != null
-				&& selected.rosterVersion() == current.bees().rosterVersion();
+				&& selected.claim().equals(current.claim()) && current.beeReady()
+				&& selected.rosterVersion() == current.rosterVersion();
 	}
 	/** 生产进度不改封存资产对象；升级改回原数量仍会产生新对象，不能复活旧选择。 */
 	public static boolean sameUpgrades(MemberRow selected, OwnedMachineRecord current) {
 		return selected != null && selected.upgradeVersion() != null && current != null
 				&& selected.phase() == OwnedMachineRecord.Phase.OWNED && current.phase() == OwnedMachineRecord.Phase.OWNED
-				&& selected.claim().equals(current.claim()) && selected.upgradeVersion() == current.assets();
+				&& selected.claim().equals(current.claim()) && selected.upgradeVersion() == current.upgradeVersion();
 	}
 
 	/** 未继续请求的菜单也须从菜单 tick 调用，按时释放旧根。 */
@@ -185,22 +183,21 @@ public final class NetworkSelectionSession implements AutoCloseable {
 		if (search.isEmpty() || record.claim().machine().contains(search)) return true;
 		var p = record.claim().origin();
 		if ((p.x() + "," + p.y() + "," + p.z()).contains(search)) return true;
-		return record.bees() != null && record.bees().bees().stream().anyMatch(bee -> bee.plan().beeType().contains(search));
+		return record.beeReady() && record.beeRecords().stream().anyMatch(bee -> bee.plan().beeType().contains(search));
 	}
 	static MemberRow member(OwnedMachineRecord record, Kind kind) {
-		var state = record.bees();
-		var bees = new ArrayList<BeeRow>(3);
-		if (state != null) for (int slot = 0; slot < 3; slot++) {
+		var bees = new ArrayList<BeeRow>(record.workLayout().beeSlots());
+		if (record.beeReady()) for (int slot = 0; slot < record.workLayout().beeSlots(); slot++) {
 			int index = slot;
-			var bee = state.bees().stream().filter(value -> value.slot() == index).findFirst().orElse(null);
-			var feed = state.feeding() == null ? null : state.feeding().slots().get(slot);
+			var bee = record.beeRecords().stream().filter(value -> value.slot() == index).findFirst().orElse(null);
+			var feed = record.feedingSlots().isEmpty() ? null : record.feedingSlots().get(slot);
 			bees.add(new BeeRow(slot, bee == null ? null : bee.id(), bee == null ? "" : bee.plan().beeType(),
 					bee == null ? 0 : bee.progress(), bee == null ? 0 : bee.plan().cycleTicks(), bee != null && !bee.drained(),
 					feed == null || feed.item() == null ? "" : feed.item().unit().string("id"),
 					feed == null ? 0 : feed.count(), feed != null && feed.disabled(), bee == null ? null : TerminalBeeGenes.from(bee.originalSlot()), bee == null || bee.enabled()));
 		}
-		return new MemberRow(record.claim(), record.phase(), state == null ? null : state.rosterVersion(),
-				state == null || state.feeding() == null ? -1 : state.feeding().revision(), bees, kind == Kind.UPGRADES ? record.assets() : null);
+		return new MemberRow(record.claim(), record.phase(), record.rosterVersion(),
+				record.feedingRevision(), bees, kind == Kind.UPGRADES ? record.upgradeVersion() : null);
 	}
 	private void clear() { authority = null; identity = null; ledger = null; members = null; products = null; page = null; search = ""; pageLimit = PAGE_SIZE; }
 	private void check() { if (Thread.currentThread() != owner) throw new IllegalStateException("Selection belongs to menu thread"); }

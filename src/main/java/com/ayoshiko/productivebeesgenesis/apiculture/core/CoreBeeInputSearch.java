@@ -1,10 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
-import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedProductionAccess;
-import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedBeeAccess;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeMemberState;
 import com.ayoshiko.productivebeesgenesis.apiculture.terminal.ApiaryRank;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -25,17 +24,25 @@ final class CoreBeeInputSearch {
 			cursor = entry.getKey();
 			var authority = core.ownership().readyAuthority();
 			var record = authority.checkpoint().ownedMachines().get(entry.getValue());
-			if (record == null || record.bees() == null) continue;
-			var hive = ManagedProductionAccess.member(player.serverLevel(), authority, NetworkPersistence.directory(player.server), record, TileEntityMekApiary.class);
-			if (hive == null || !hive.canFunction()) continue;
-			int slot = emptySlot(record.bees(), -1);
-			if (slot >= 0) return new Target(entry.getValue(), slot, record.bees().revision());
+			if (record == null) continue;
+			if (!record.beeReady()) {
+				if (!ManagedBeeAccess.activate(player.serverLevel(), authority, record)) continue;
+				record = authority.checkpoint().ownedMachines().get(entry.getValue());
+			}
+			var access = ManagedBeeAccess.capture(player.serverLevel(), authority, record);
+			if (access == null || !access.canFunction()) continue;
+			int slot = emptySlot(record, -1);
+			if (slot >= 0) return new Target(entry.getValue(), slot, record.beeRevision());
 		}
 		return null;
 	}
-	static int emptySlot(BeeMemberState state, int preferred) {
-		if (preferred >= 0 && preferred < 3 && state.bees().stream().noneMatch(bee -> bee.slot() == preferred)) return preferred;
-		for (int i = 0; i < 3; i++) { int slot = i; if (state.bees().stream().noneMatch(bee -> bee.slot() == slot)) return slot; }
+	static int emptySlot(OwnedMachineRecord record, int preferred) {
+		return emptySlot(record.beeRecords(), record.workLayout().beeSlots(), preferred);
+	}
+	static int emptySlot(BeeMemberState state, int preferred) { return emptySlot(state.bees(), state.slotCount(), preferred); }
+	private static int emptySlot(java.util.List<com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRecord> bees, int slots, int preferred) {
+		if (preferred >= 0 && preferred < slots && bees.stream().noneMatch(bee -> bee.slot() == preferred)) return preferred;
+		for (int i = 0; i < slots; i++) { int slot = i; if (bees.stream().noneMatch(bee -> bee.slot() == slot)) return slot; }
 		return -1;
 	}
 }

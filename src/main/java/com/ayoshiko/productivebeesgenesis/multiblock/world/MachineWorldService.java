@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.multiblock.definition.StructureDefinit
 import com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory;
 import com.ayoshiko.productivebeesgenesis.multiblock.validation.StructureScan;
 import com.mojang.logging.LogUtils;
+import com.ayoshiko.productivebeesgenesis.multiblock.definition.StructureRole;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +84,7 @@ public final class MachineWorldService {
 		if (!(core.getLevel() instanceof ServerLevel level)) return;
 		if (!level.getServer().isSameThread()) throw new IllegalStateException("Request machine validation on the server thread");
 		core.registrationFailed = false;
-		if (core.handle != null && (!core.assetReferenced || core.assets == null || !core.assets.available())) remove(core);
+		if (core.handle != null && (!core.assetReferenced || core.assets == null || !core.assets.readable())) remove(core);
 		watch(core);
 		if (core.handle == null) return;
 		var session = SESSIONS.get(level.getServer()); invalidate(session, core, MachineDirectory.State.REBUILDING);
@@ -216,7 +217,7 @@ public final class MachineWorldService {
 			var tile = level.getBlockEntity(pos);
 			if (pos.equals(core.getBlockPos())) { if (tile != core) throw new IllegalStateException("Controller replaced during formation"); }
 			else if (tile instanceof MachinePartEntity part && !part.isRemoved()) part.bind(binding);
-			else throw new IllegalStateException("Missing machine part entity");
+			else if (!match.template().features().get(local).roles().contains(StructureRole.CASING)) throw new IllegalStateException("Missing machine part entity");
 		}
 	}
 	private static void sync(ServerLevel level, MachineDirectory.Handle handle) {

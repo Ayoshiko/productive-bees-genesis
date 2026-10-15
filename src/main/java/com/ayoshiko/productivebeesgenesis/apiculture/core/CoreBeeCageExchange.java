@@ -1,14 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.core;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.VerifiedCageProjection;
-import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedProductionAccess;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.ManagedBeeAccess;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoint;
-import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence;
-import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRosterChange;
 import com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntimeService;
-import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSpawnEggHelper;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -34,19 +30,19 @@ public final class CoreBeeCageExchange {
 			UUID member, int slot, long expectedRevision, UUID expectedBee, int inventorySlot, Action action, boolean simulate) {
 		var core = access.apply(player);
 		if (core == null) return result(Status.UNAVAILABLE);
-		if (member == null || action == null || expectedRevision < 0 || slot < 0 || slot >= 3
+		if (member == null || action == null || expectedRevision < 0 || slot < 0
 				|| inventorySlot < 0 || inventorySlot >= 36 && inventorySlot != 40
 				|| (action == Action.EXTRACT) != (expectedBee != null)) return result(Status.INVALID);
 		var authority = core.ownership().readyAuthority();
 		if (authority == null) return result(Status.UNAVAILABLE);
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
-		if (record == null || record.bees() == null) return result(Status.UNAVAILABLE);
-		var state = record.bees();
-		if (state.revision() != expectedRevision) return result(Status.STALE);
-		var level = player.serverLevel(); var directory = NetworkPersistence.directory(level.getServer());
-		var hive = ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class);
-		if (hive == null) return result(Status.UNAVAILABLE);
-		var bee = state.bees().stream().filter(value -> value.slot() == slot).findFirst().orElse(null);
+		if (record == null || !record.beeReady()) return result(Status.UNAVAILABLE);
+		if (slot >= record.workLayout().beeSlots()) return result(Status.INVALID);
+		if (record.beeRevision() != expectedRevision) return result(Status.STALE);
+		var level = player.serverLevel();
+		var target = ManagedBeeAccess.capture(level, authority, record);
+		if (target == null) return result(Status.UNAVAILABLE);
+		var bee = record.beeRecords().stream().filter(value -> value.slot() == slot).findFirst().orElse(null);
 		if (action == Action.INSERT && bee != null) return result(Status.OCCUPIED);
 		if (action == Action.EXTRACT) {
 			if (bee == null) return result(Status.EMPTY);
@@ -56,19 +52,18 @@ public final class CoreBeeCageExchange {
 		var inventory = player.getInventory().getItem(inventorySlot).copy();
 		var egg = action == Action.INSERT ? BeeSpawnEggHelper.resolve(inventory) : null;
 		if (!VerifiedCageProjection.supported(inventory) && egg == null) return result(Status.UNSUPPORTED_CAGE);
-		BeeRosterChange change; ItemStack received; NetworkCheckpoint next;
+		ItemStack received; NetworkCheckpoint next;
 		try {
 			if (action == Action.EXTRACT) {
 				received = VerifiedCageProjection.fill(inventory, bee);
-				change = BeeRosterChange.extract(state, slot, expectedBee);
+				next = target.extract(slot, expectedBee);
 			} else {
 				var contents = egg == null ? VerifiedCageProjection.contents(inventory) : BeeSpawnEggHelper.contents(level, egg);
 				if (egg == null) received = VerifiedCageProjection.afterRelease(inventory);
 				else { received = inventory.copy(); received.consume(1, player); }
-				try { change = StaticApiaryAdapter.insertCaged(level, hive, record, slot, contents, current.policyRevision()); }
+				try { next = target.insert(slot, contents); }
 				catch (IllegalArgumentException unsupported) { return result(Status.UNSUPPORTED_BEE); }
 			}
-			next = current.exchangeBee(change);
 		} catch (IllegalArgumentException invalid) { return result(Status.INVALID); }
 		catch (RuntimeException failure) {
 			com.mojang.logging.LogUtils.getLogger().warn("Cannot prepare bee network cage exchange at {}", core.getBlockPos(), failure);
@@ -76,7 +71,7 @@ public final class CoreBeeCageExchange {
 		}
 		if (access.apply(player) != core || authority.checkpoint() != current
 				|| !ItemStack.matches(inventory, player.getInventory().getItem(inventorySlot))
-				|| ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class) != hive) {
+				|| !target.current()) {
 			return result(Status.STALE);
 		}
 		if (!simulate) {
@@ -85,13 +80,15 @@ public final class CoreBeeCageExchange {
 			player.getInventory().setItem(inventorySlot, received); player.getInventory().setChanged();
 			CoreInventorySync.committed(player, inventorySlot, received);
 			try {
-				core.runtime().beeChanged(member, slot, change.insertion(), level.getServer().overworld().getGameTime());
+				core.runtime().beeChanged(member, slot, action == Action.INSERT, level.getServer().overworld().getGameTime());
 				NetworkRuntimeService.watch(core, true);
 			} catch (RuntimeException failure) {
 				com.mojang.logging.LogUtils.getLogger().warn("Committed bee cage exchange awaits runtime rediscovery", failure);
 			}
 		}
-		return new Result(Status.MOVED, 1, change.bee().id(), change.insertion() ? 0 : change.bee().progress());
+		var movedBee = action == Action.EXTRACT ? bee : next.ownedMachines().get(member).beeRecords().stream()
+				.filter(value -> value.slot() == slot).findFirst().orElseThrow();
+		return new Result(Status.MOVED, 1, movedBee.id(), action == Action.INSERT ? 0 : movedBee.progress());
 	}
 
 	static Result result(Status status) { return new Result(status, 0, null, 0); }

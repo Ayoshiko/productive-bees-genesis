@@ -7,12 +7,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** 逐成员供能模式与占用 lane；共享模式不保留本地 FE，空闲 lane 不分配占位作业。 */
 public record CentrifugeWorkState(UUID member, long revision, int laneCount, long energy,
-		long energyCapacity, Map<Integer, CentrifugeJob> jobs, boolean networkPowered) {
+		long energyCapacity, Map<Integer, CentrifugeJob> jobs, boolean networkPowered, Map<Integer, Map<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey, com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount>> delivered) {
+	public CentrifugeWorkState(UUID member, long revision, int laneCount, long energy, long energyCapacity, Map<Integer, CentrifugeJob> jobs, boolean networkPowered) {
+		this(member, revision, laneCount, energy, energyCapacity, jobs, networkPowered, Map.of());
+	}
 	public CentrifugeWorkState(UUID member, long revision, int laneCount, long energy, long energyCapacity, Map<Integer, CentrifugeJob> jobs) {
 		this(member, revision, laneCount, energy, energyCapacity, jobs, false);
 	}
 	public CentrifugeWorkState {
 		Objects.requireNonNull(member); jobs = Map.copyOf(jobs);
+		var receipts = new java.util.HashMap<Integer, Map<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey, com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount>>();
+		for (var entry : delivered.entrySet()) {
+			var receipt = new com.ayoshiko.productivebeesgenesis.multiblock.production.CentrifugeDelivery(Objects.requireNonNull(jobs.get(entry.getKey())), entry.getValue());
+			if (!receipt.delivered().isEmpty()) receipts.put(entry.getKey(), receipt.delivered());
+		}
+		delivered = Map.copyOf(receipts);
 		if (revision < 0 || laneCount < 1 || energy < 0 || energyCapacity < energy || networkPowered && energy != 0) throw new IllegalArgumentException("Invalid centrifuge state");
 		var ids = ConcurrentHashMap.newKeySet();
 		for (var entry : jobs.entrySet()) if (entry.getKey() < 0 || entry.getKey() >= laneCount || !ids.add(entry.getValue().id()))
@@ -21,7 +30,7 @@ public record CentrifugeWorkState(UUID member, long revision, int laneCount, lon
 	public boolean drained() { return jobs.isEmpty(); }
 	public CentrifugeWorkState transferEnergy() {
 		if (networkPowered) return this;
-		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, 0, energyCapacity, jobs, true);
+		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, 0, energyCapacity, jobs, true, delivered);
 	}
 	public void validateSuccessor(CentrifugeWorkState next) {
 		if (!member.equals(next.member) || next.revision != Math.incrementExact(revision) || laneCount != next.laneCount
@@ -52,8 +61,10 @@ public record CentrifugeWorkState(UUID member, long revision, int laneCount, lon
 	}
 	CentrifugeWorkState replace(int lane, CentrifugeJob job, long remainingEnergy) {
 		if (lane < 0 || lane >= laneCount || remainingEnergy < 0 || remainingEnergy > energy) throw new IllegalArgumentException("Invalid centrifuge successor");
+		var receipts = new java.util.HashMap<>(delivered);
+		if (job == null) receipts.remove(lane);
 		var next = new ConcurrentHashMap<>(jobs);
 		if (job == null) next.remove(lane); else next.put(lane, job);
-		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, remainingEnergy, energyCapacity, next, networkPowered);
+		return new CentrifugeWorkState(member, Math.incrementExact(revision), laneCount, remainingEnergy, energyCapacity, next, networkPowered, receipts);
 	}
 }

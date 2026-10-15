@@ -23,10 +23,13 @@ public final class FeedingRecordCodec {
 		return slots;
 	}
 	static FeedingSlotStore decode(CompoundTag tag, Consumer<FeedingItem> validate) {
+		return decode(tag, validate, 3);
+	}
+	static FeedingSlotStore decode(CompoundTag tag, Consumer<FeedingItem> validate, int capacity) {
 		if (tag.isEmpty()) return null;
 		if (!tag.getAllKeys().equals(Set.of("revision", "legacySlots", "source", "slots"))) throw new IllegalArgumentException("Missing feeding account fields");
 		return new FeedingSlotStore(StrictNbt.number(tag, "revision"), StrictNbt.integer(tag, "legacySlots"), StrictNbt.string(tag, "source"),
-				decodeSlots(StrictNbt.list(tag, "slots"), 3, validate));
+				decodeSlots(StrictNbt.list(tag, "slots"), capacity, validate));
 	}
 	public static java.util.List<FeedingSlotStore.Slot> decodeSlots(ListTag list, int capacity, Consumer<FeedingItem> validate) {
 		if (list.size() != capacity) throw new IllegalArgumentException("Unverified feeding capacity");

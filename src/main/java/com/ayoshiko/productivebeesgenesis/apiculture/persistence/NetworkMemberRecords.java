@@ -55,7 +55,7 @@ final class NetworkMemberRecords {
 		if (owned != null) { owned.remove(index); if (owned.isEmpty()) byMember.remove(member); }
 	}
 	static void validateLane(MemberCapabilitySnapshot member, VirtualLaneState lane) {
-		if (member == null || lane.laneIndex() >= member.laneCount() || lane.capabilityRevision() > member.revision()) {
+		if (member == null || !member.layout().containsOrdinal(lane.capability().work().kind(), lane.laneIndex()) || lane.capabilityRevision() > member.revision()) {
 			throw new IllegalArgumentException("Orphaned lane or future capability");
 		}
 		if (lane.capabilityRevision() == member.revision() && !member.requireCapacity(lane.capability().work()).equals(lane.capability())) {

@@ -115,7 +115,7 @@ public final class TerminalLiveQuery {
 			var entry = PagedProductAmounts.orderedEntry(state.ledger().balances(), after == null ? null : after.product(), backwards);
 			return entry == null ? null : new ProductRow(entry.getKey(), entry.getValue(), state.ledger().available(entry.getKey()));
 		}
-		var record = state.ownedMachines().activeEntry(scope.machine(), after == null ? null : after.member(), backwards);
+		var record = scope.next(state.ownedMachines(), after == null ? null : after.member(), backwards);
 		return record == null ? null : NetworkSelectionSession.member(record, kind);
 	}
 	private Cursor anchor(Row row, ApiaryRank.Order order) {

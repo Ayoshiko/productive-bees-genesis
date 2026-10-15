@@ -43,6 +43,8 @@ public final class NetworkCheckpointStream {
 		stream.compound("scheduler"); scheduler(stream, checkpoint.scheduler());
 		stream.list("ownership", checkpoint.ownedMachines().size());
 		for (var record : checkpoint.ownedMachines().values()) OwnershipRecordCodec.owned(record).write(output);
+		stream.list("ports", checkpoint.ports().size());
+		for (var port : checkpoint.ports().values()) PortRecordCodec.encode(port).write(output);
 		stream.end(); stream.end();
 	}
 	private static void amounts(NbtStream stream, String name, Map<ProductKey, ProductAmount> values) throws IOException {

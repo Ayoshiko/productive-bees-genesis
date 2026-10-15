@@ -6,11 +6,12 @@ import java.util.Objects;
 /** 有限只读显示；字符串不是资产身份，完整键仅由服务器选择令牌引用。 */
 public record TerminalView(NetworkSelectionSession.Kind kind, long generation, boolean hasNext, List<Row> rows) {
 	public static final int TEXT_LIMIT = 80, AMOUNT_LIMIT = 96;
-	public static final int MAX_UPGRADES = 10;
+	public static final int MAX_UPGRADES = 19, UPGRADE_GROUP_SIZE = 12, UPGRADE_CHOICES = UPGRADE_GROUP_SIZE * 2;
+	public static final int MAX_BEE_SLOTS = com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.MAX_BEES;
 	public record Upgrade(int choice, String item, int installed, int limit, boolean installable) {
 		public Upgrade {
 			text(item, TEXT_LIMIT);
-			if (choice < 0 || choice >= 16 || installed < 0 || limit < 0 || net.minecraft.resources.ResourceLocation.tryParse(item) == null)
+			if (choice < 0 || choice >= TerminalView.UPGRADE_CHOICES || installed < 0 || limit < 0 || net.minecraft.resources.ResourceLocation.tryParse(item) == null)
 				throw new IllegalArgumentException("Invalid upgrade display");
 		}
 	}
@@ -34,7 +35,7 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 			if (feedingCount < 0 || feedingCount > 64 || feedingItem.isEmpty() != (feedingCount == 0)
 					|| !feedingItem.isEmpty() && net.minecraft.resources.ResourceLocation.tryParse(feedingItem) == null)
 				throw new IllegalArgumentException("Invalid feeding display");
-			if (slot < 0 || slot >= 3 || progress < 0 || cycleTicks < 0) throw new IllegalArgumentException("Invalid bee display");
+			if (slot < 0 || slot >= MAX_BEE_SLOTS || progress < 0 || cycleTicks < 0) throw new IllegalArgumentException("Invalid bee display");
 		}
 	}
 	/** 坐标仅用于展示和客户端标记，不能作为资产命令的成员身份。 */
@@ -48,7 +49,19 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 	public record Apiary(int cycleTicks, float productivity) {
 		public Apiary { if (cycleTicks < 1 || !Float.isFinite(productivity) || productivity <= 0) throw new IllegalArgumentException("Invalid apiary display"); }
 	}
-	public record Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees, String detail, String icon, List<Upgrade> upgrades, Location location, Apiary apiary) {
+	public record Processing(long members, long lanes, String operationsPerSecond, String fullLoadEnergy) {
+		public Processing {
+			text(operationsPerSecond, AMOUNT_LIMIT); text(fullLoadEnergy, AMOUNT_LIMIT);
+			if (members < 0 || lanes < members || (members == 0) != (lanes == 0)
+					|| !operationsPerSecond.matches("[0-9]+(?:\\.[0-9]+)?(?:E[+-]?[0-9]+)?") || !fullLoadEnergy.matches("[0-9]+"))
+				throw new IllegalArgumentException("Invalid processing capacity");
+		}
+	}
+	public record Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees, String detail, String icon, List<Upgrade> upgrades, Location location, Apiary apiary, Processing processing) {
+		public Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees, String detail, String icon, List<Upgrade> upgrades, Location location, Apiary apiary) {
+			this(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, apiary, null);
+		}
+		public Row withProcessing(Processing value) { return new Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, apiary, value); }
 		public Row(String label, boolean fluid, String owned, String available, boolean exact, List<Bee> bees, String detail, String icon, List<Upgrade> upgrades, Location location) {
 			this(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, null);
 		}
@@ -67,7 +80,7 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 		public Row {
 			text(icon, com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductIconPreview.MAX_TEXT);
 			text(label, TEXT_LIMIT); text(owned, AMOUNT_LIMIT); text(available, AMOUNT_LIMIT); text(detail, TEXT_LIMIT); bees = List.copyOf(bees);
-			if (bees.size() > 3) throw new IllegalArgumentException("Too many displayed bee slots");
+			if (bees.size() > MAX_BEE_SLOTS) throw new IllegalArgumentException("Too many displayed bee slots");
 			upgrades = List.copyOf(upgrades);
 			if (upgrades.size() > MAX_UPGRADES || upgrades.stream().map(Upgrade::choice).distinct().count() != upgrades.size())
 				throw new IllegalArgumentException("Invalid displayed upgrade list");
@@ -77,6 +90,7 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 		Objects.requireNonNull(kind); rows = List.copyOf(rows);
 		if (generation <= 0 || rows.size() > (kind == NetworkSelectionSession.Kind.PRODUCTS ? NetworkSelectionSession.PRODUCT_PAGE_SIZE : NetworkSelectionSession.PAGE_SIZE)) throw new IllegalArgumentException("Invalid terminal page");
 		for (var row : rows) {
+			if (row.processing() != null && (kind != NetworkSelectionSession.Kind.PRODUCTS || row.fluid())) throw new IllegalArgumentException("Processing capacity outside item products");
 			if (kind == NetworkSelectionSession.Kind.PRODUCTS && row.apiary() != null) throw new IllegalArgumentException("Capacity on product row");
 			if (kind != NetworkSelectionSession.Kind.UPGRADES && !row.upgrades().isEmpty()) throw new IllegalArgumentException("Upgrades outside upgrade page");
 			if (kind == NetworkSelectionSession.Kind.UPGRADES && (row.fluid() || !row.bees().isEmpty() || !row.icon().isEmpty()

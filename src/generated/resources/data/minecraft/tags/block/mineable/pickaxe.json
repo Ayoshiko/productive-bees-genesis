@@ -1,5 +1,8 @@
 {
   "values": [
+    "productivebeesgenesis:bee_network_supply_port",
+    "productivebeesgenesis:bee_network_input_port",
+    "productivebeesgenesis:bee_network_output_port",
     "productivebeesgenesis:mek_centrifuge",
     "productivebeesgenesis:mek_apiary",
     "productivebeesgenesis:basic_mek_apiary_factory",

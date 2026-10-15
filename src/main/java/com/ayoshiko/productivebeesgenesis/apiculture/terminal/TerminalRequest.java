@@ -30,7 +30,7 @@ public record TerminalRequest(int containerId, UUID session, long sequence, Oper
 	public TerminalRequest {
 		Objects.requireNonNull(session); Objects.requireNonNull(operation);
 		if (containerId < 0 || sequence <= 0 || generation < 0 || row < -1 || row >= NetworkSelectionSession.PRODUCT_PAGE_SIZE
-				|| targetSlot < -1 || targetSlot >= (upgradeAction(operation) ? 16 : 3)
+				|| targetSlot < -1 || targetSlot >= (upgradeAction(operation) ? TerminalView.UPGRADE_CHOICES : TerminalView.MAX_BEE_SLOTS)
 				|| inventorySlot < -1 || inventorySlot >= 36 || amount < 0 || amount > 1000) {
 			throw new IllegalArgumentException("Invalid terminal request");
 		}

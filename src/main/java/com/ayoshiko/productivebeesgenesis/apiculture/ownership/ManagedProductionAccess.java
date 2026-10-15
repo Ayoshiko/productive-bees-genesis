@@ -23,7 +23,7 @@ public final class ManagedProductionAccess {
 		if (record.phase() != OwnedMachineRecord.Phase.OWNED || !record.claim().equals(directory.claimAt(location))
 				|| !location.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(location.x() >> 4, location.z() >> 4)) return null;
 		var tile = level.getBlockEntity(position);
-		if (tile == null || tile.getClass() != type) return null;
+		if (!type.isInstance(tile) || !MachineAssetStore.supports(type.cast(tile))) return null;
 		var member = type.cast(tile); var endpoint = new BlockEntityOwnershipEndpoint(member);
 		// 方块仍在时 getBlockEntity 可能重建一个无主空 BE；失效候选只拒绝工作，不向调度器抛身份异常。
 		try {

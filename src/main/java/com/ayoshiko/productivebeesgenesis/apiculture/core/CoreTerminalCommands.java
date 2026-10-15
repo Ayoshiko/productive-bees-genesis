@@ -51,7 +51,7 @@ final class CoreTerminalCommands {
 			}
 			var record = current.ownedMachines().get(member.claim().member());
 			if (!NetworkSelectionSession.sameRoster(member, record)) return reply(request, STALE, 0, 0, null);
-			if (request.targetSlot() < 0 || request.targetSlot() >= 3) return reply(request, INVALID, 0, 0, null);
+			if (request.targetSlot() < 0 || request.targetSlot() >= record.workLayout().beeSlots()) return reply(request, INVALID, 0, 0, null);
 			if (operation == TerminalRequest.Operation.BEE_ENABLE || operation == TerminalRequest.Operation.BEE_DISABLE) {
 				if (request.amount() != 0 || request.inventorySlot() != -1) return reply(request, INVALID, 0, 0, null);
 				var bee = member.bees().stream().filter(value -> value.slot() == request.targetSlot()).findFirst().orElse(null);
@@ -67,17 +67,17 @@ final class CoreTerminalCommands {
 				return reply(request, changed ? OK : STALE, 0, 0, null);
 			}
 			if (operation == TerminalRequest.Operation.FEED_IN || operation == TerminalRequest.Operation.FEED_OUT) {
-				if (record.bees().feeding() == null) return reply(request, UNAVAILABLE, 0, 0, null);
-				var result = menu.exchangeFeeding(player, member.claim().member(), request.targetSlot(), record.bees().feeding().revision(),
+				if (record.feedingSlots().isEmpty()) return reply(request, UNAVAILABLE, 0, 0, null);
+				var result = menu.exchangeFeeding(player, member.claim().member(), request.targetSlot(), record.feedingRevision(),
 						request.inventorySlot(), request.amount(), operation == TerminalRequest.Operation.FEED_IN
 								? CoreFeedingExchange.Action.DEPOSIT : CoreFeedingExchange.Action.WITHDRAW, false);
 				return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), 0, null);
 			}
 			if (operation != TerminalRequest.Operation.CAGE_IN && operation != TerminalRequest.Operation.CAGE_OUT) return reply(request, INVALID, 0, 0, null);
-			var bee = record.bees().bees().stream().filter(value -> value.slot() == request.targetSlot()).findFirst().orElse(null);
+			var bee = record.beeRecords().stream().filter(value -> value.slot() == request.targetSlot()).findFirst().orElse(null);
 			if (request.amount() != 1) return reply(request, INVALID, 0, 0, null);
 			if (operation == TerminalRequest.Operation.CAGE_OUT && bee == null) return reply(request, EMPTY, 0, 0, null);
-			var result = menu.exchangeBee(player, member.claim().member(), request.targetSlot(), record.bees().revision(),
+			var result = menu.exchangeBee(player, member.claim().member(), request.targetSlot(), record.beeRevision(),
 					operation == TerminalRequest.Operation.CAGE_OUT ? bee.id() : null, request.inventorySlot(),
 					operation == TerminalRequest.Operation.CAGE_IN ? CoreBeeCageExchange.Action.INSERT : CoreBeeCageExchange.Action.EXTRACT, false);
 			return reply(request, TerminalReply.Status.valueOf(result.status().name()), result.moved(), result.interruptedTicks(), null);

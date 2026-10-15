@@ -85,11 +85,7 @@ public final class MultiFluidTankNbtCodec {
 			return;
 		}
 		// 清空映射 + 重置空槽计数 + 清空所有预分配槽位内容(保留槽位结构)
-		holder.getTanksByFluidKeyForCodec().clear();
-		holder.getEmptyTankCountForCodec().set(holder.getMaxTanks());
-		for (IExtendedFluidTank tank : holder.getTanksInOrderForCodec()) {
-			tank.setStack(FluidStack.EMPTY);
-		}
+		holder.clearForRestore();
 		CompoundTag root = nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
 		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
 		for (int i = 0; i < list.size(); i++) {

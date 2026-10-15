@@ -25,7 +25,7 @@ public final class OwnershipTransferService {
 	}
 	public static OwnershipTransferService begin(NetworkDirectory directory, NetworkSavedData authority, MemberClaim claim, OwnershipEndpoint endpoint) {
 		var service = new OwnershipTransferService(directory, authority, claim, Step.CLAIM);
-		if (directory.claimAt(claim.origin()) != null || authority.checkpoint().ownedMachines().hasTransfer(claim.transfer()) || authority.checkpoint().ownedMachines().get(claim.member()) != null
+		if (directory.claimAt(claim.origin()) != null || authority.checkpoint().ownedMachines().hasTransfer(claim.transfer()) || (authority.checkpoint().ownedMachines().get(claim.member()) != null && authority.checkpoint().ownedMachines().get(claim.member()).phase() != RETURNED)
 				|| authority.checkpoint().ownedMachines().at(claim.origin()) != null) throw new IllegalArgumentException("Member already claimed or transfer replayed");
 		endpoint.validate(authority.identity(), claim);
 		endpoint.freeze(authority.identity(), claim);
@@ -48,11 +48,23 @@ public final class OwnershipTransferService {
 			if (record.phase() != RETURNED && !claim.equals(indexed) || indexed != null && !claim.equals(indexed)) throw new IllegalStateException("Directory ownership mismatch");
 			switch (record.phase()) {
 				case SEALED -> {
+					if (endpoint.persistsModes() && endpoint.matches(authority.identity(), claim, MemberBinding.Mode.MANAGED)) {
+						service.requireEmpty(endpoint); service.publish(record.phase(OWNED)); service.step = Step.OWNED_RECEIPT; return service;
+					}
 					service.requireBinding(endpoint, MemberBinding.Mode.JOINING);
 					if (!record.assets().equals(endpoint.capture())) throw new IllegalStateException("Sealed source changed");
 					service.step = Step.SEAL;
 				}
-				case OWNED -> { service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint); if (record.bees() == null && record.centrifuge() == null) endpoint.validateReturn(record.assets()); service.step = Step.OWNED_RECEIPT; }
+				case OWNED -> {
+					if (endpoint.persistsModes() && endpoint.matches(authority.identity(), claim, MemberBinding.Mode.LEAVING)) {
+						service.requireEmpty(endpoint);
+						if (!endpoint.readyToReturn(record)) throw new IllegalStateException("Return intent contains unpaid work");
+						endpoint.validateReturn(record.returnImage()); service.publish(record.phase(RETURNING)); service.step = Step.RETURN_INTENT; return service;
+					}
+					service.requireBinding(endpoint, MemberBinding.Mode.MANAGED); service.requireEmpty(endpoint);
+					if (record.bees() == null && record.centrifuge() == null && record.combined() == null) endpoint.validateReturn(record.assets());
+					service.step = Step.OWNED_RECEIPT;
+				}
 				case RETURNING -> {
 					if (endpoint.matches(authority.identity(), claim, MemberBinding.Mode.LEAVING)) {
 						service.requireEmpty(endpoint); service.step = Step.RETURN_INTENT;

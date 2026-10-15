@@ -6,7 +6,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.topology.TopologyScan;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import java.util.*;
-import mekanism.common.tile.base.TileEntityMekanism;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -71,9 +71,9 @@ public final class CoreOwnershipController {
 			if (records != null) {
 				if (!records.hasNext()) { records = null; return; }
 				var record = records.next(); var tile = tile(level, record.claim());
-				if (record.phase() == OwnedMachineRecord.Phase.RETURNED && (tile == null || !tile.getPersistentData().contains(MemberBinding.TAG))) return;
+				if (record.phase() == OwnedMachineRecord.Phase.RETURNED && (tile == null || !OwnershipEndpoints.bound(tile))) return;
 				if (tile == null) throw new IllegalStateException("Owned member is missing; assets retained at " + record.claim().origin());
-				current = record.claim(); transfer = OwnershipTransferService.resume(directory, domain, current, new BlockEntityOwnershipEndpoint(tile)); return;
+				current = record.claim(); transfer = OwnershipTransferService.resume(directory, domain, current, OwnershipEndpoints.of(tile)); return;
 			}
 			if (scanClaims) {
 				var view = core.topology(); if (view == null || !view.valid()) return;
@@ -89,21 +89,20 @@ public final class CoreOwnershipController {
 					reject("Topology changed; completed transfers remain owned"); return;
 				}
 				if (!candidates.hasNext()) { candidates = null; return; }
-				var candidate = candidates.next(); var memberPos = candidate.position();
+				var candidate = candidates.next(); var memberPos = candidate.memberPosition();
 				var memberOrigin = new Origin(level.dimension().location().toString(), memberPos.getX(), memberPos.getY(), memberPos.getZ());
 				var claim = directory.claimAt(memberOrigin);
 				if (claim != null) {
 					if (!claim.network().equals(identity.networkId())) { reject("Member belongs to another network"); return; }
 					if (domain.checkpoint().ownedMachines().get(claim.member()) != null) return;
-					current = claim; transfer = OwnershipTransferService.resume(directory, domain, claim, new BlockEntityOwnershipEndpoint(Objects.requireNonNull(tile(level, claim)))); return;
+					current = claim; transfer = OwnershipTransferService.resume(directory, domain, claim, OwnershipEndpoints.of(Objects.requireNonNull(tile(level, claim)))); return;
 				}
 				if (action != Action.JOIN) return;
-				if (!(level.getBlockEntity(memberPos) instanceof TileEntityMekanism member)) { reject("Member disappeared"); return; }
-				if (!MachineAssetStore.supports(member)) { reject(Status.UNSUPPORTED_MEMBER, "No verified asset adapter for " + member.getBlockState()); return; }
-				if (!new MachineAssetStore(member).prepared()) { reject(Status.EXTERNAL_PENDING, "External output settlement still pending"); return; }
+				var member = level.getBlockEntity(memberPos);
+				if (member == null) { reject("Member disappeared"); return; }
 				try {
-					var endpoint = new BlockEntityOwnershipEndpoint(member);
-					current = new MemberClaim(identity.networkId(), UUID.randomUUID(), UUID.randomUUID(), memberOrigin, BuiltInRegistries.BLOCK.getKey(member.getBlockState().getBlock()).toString());
+					var endpoint = OwnershipEndpoints.of(member);
+					current = new MemberClaim(identity.networkId(), OwnershipEndpoints.memberId(member), UUID.randomUUID(), memberOrigin, BuiltInRegistries.BLOCK.getKey(member.getBlockState().getBlock()).toString());
 					transfer = OwnershipTransferService.begin(directory, domain, current, endpoint);
 				} catch (IllegalArgumentException | IllegalStateException error) { reject(Status.INVALID_ASSETS, error.getMessage()); }
 				return;
@@ -119,7 +118,7 @@ public final class CoreOwnershipController {
 	}
 	private void advanceTransfer(ServerLevel level) {
 		var member = tile(level, current); if (member == null) throw new IllegalStateException("Transfer member removed; ownership retained");
-		var endpoint = new BlockEntityOwnershipEndpoint(member); transfer.advance(endpoint);
+		var endpoint = OwnershipEndpoints.of(member); transfer.advance(endpoint);
 		if (transfer.step() == OwnershipTransferService.Step.RECOVERY) throw new IllegalStateException(transfer.failure());
 		if (transfer.step() == OwnershipTransferService.Step.OWNED) {
 			if (action == Action.RETURN) transfer.requestReturn(endpoint); else { transfer = null; current = null; }
@@ -127,15 +126,16 @@ public final class CoreOwnershipController {
 	}
 	private static boolean readyToReturn(ServerLevel level, OwnedMachineRecord record) {
 		if (record.bees() != null && !record.bees().drained() || record.centrifuge() != null && !record.centrifuge().drained()) return false;
-		if (record.bees() == null || record.bees().bees().stream().noneMatch(bee -> bee.progress() > 0)) return true;
+		if (record.combined() != null && !record.combined().drained()) return false;
+		if (record.combined() == null && (record.bees() == null || record.bees().bees().stream().noneMatch(bee -> bee.progress() > 0))) return true;
 		var member = tile(level, record.claim());
 		if (member == null) return false;
-		try { return new BlockEntityOwnershipEndpoint(member).readyToReturn(record); }
+		try { return OwnershipEndpoints.of(member).readyToReturn(record); }
 		catch (IllegalArgumentException | IllegalStateException invalid) { return false; }
 	}
-	private static TileEntityMekanism tile(ServerLevel level, MemberClaim claim) {
+	private static BlockEntity tile(ServerLevel level, MemberClaim claim) {
 		var origin = claim.origin(); if (!origin.dimension().equals(level.dimension().location().toString()) || !level.hasChunk(origin.x() >> 4, origin.z() >> 4)) return null;
-		return level.getBlockEntity(new BlockPos(origin.x(), origin.y(), origin.z())) instanceof TileEntityMekanism tile ? tile : null;
+		return level.getBlockEntity(new BlockPos(origin.x(), origin.y(), origin.z()));
 	}
 	private void reject(String reason) { reject(Status.REJECTED, reason); }
 	private void reject(Status state, String reason) {

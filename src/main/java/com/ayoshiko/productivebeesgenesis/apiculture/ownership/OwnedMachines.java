@@ -6,6 +6,10 @@ import java.util.*;
 
 /** 封存记录及占用位置的不可变根；一次交接更新只复制两条树路径。 */
 public final class OwnedMachines {
+	private static final List<String> APIARIES = List.of("productivebeesgenesis:mek_apiary",
+			"productivebeesgenesis:basic_mek_apiary_factory", "productivebeesgenesis:advanced_mek_apiary_factory",
+			"productivebeesgenesis:elite_mek_apiary_factory", "productivebeesgenesis:ultimate_mek_apiary_factory");
+	private static final List<String> CENTRIFUGES = com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout.MACHINES;
 	private static final Comparator<Origin> POSITIONS = Comparator.comparing(Origin::dimension).thenComparingInt(Origin::x).thenComparingInt(Origin::y).thenComparingInt(Origin::z);
 	public static final OwnedMachines EMPTY = new Builder().finish();
 	private final Map<UUID, OwnedMachineRecord> records;
@@ -41,6 +45,17 @@ public final class OwnedMachines {
 		return entry == null ? null : records.get(entry.getValue());
 	}
 	public int activeCount() { return positions.size(); }
+	/** 按工作种类合并固定载体索引的位置游标，不扫描或复制全体成员。 */
+	public OwnedMachineRecord workEntry(com.ayoshiko.productivebeesgenesis.apiculture.capacity.WorkKey.Kind kind, Origin cursor, boolean reverse) {
+		OwnedMachineRecord result = activeEntry(com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.MACHINE, cursor, reverse);
+		var types = kind == com.ayoshiko.productivebeesgenesis.apiculture.capacity.WorkKey.Kind.BEE_CYCLE ? APIARIES : CENTRIFUGES;
+		for (var type : types) {
+			var candidate = activeEntry(type, cursor, reverse);
+			if (candidate != null && (result == null || (POSITIONS.compare(candidate.claim().origin(), result.claim().origin()) < 0) != reverse))
+				result = candidate;
+		}
+		return result;
+	}
 	public Object queryToken() { return queryToken; }
 	public Object capabilityToken() { return capabilityToken; }
 	public boolean follows(OwnedMachines old) { return this == old || previous == old.token || old.size() == 0 && size() == 0; }
@@ -78,7 +93,9 @@ public final class OwnedMachines {
 			if (record.phase() != OwnedMachineRecord.Phase.SEALED) throw new IllegalArgumentException("Ownership must begin sealed");
 		} else {
 			if (old.equals(record)) return this;
-			old.validateSuccessor(record);
+			if (old.phase() != OwnedMachineRecord.Phase.RETURNED || record.phase() != OwnedMachineRecord.Phase.SEALED) old.validateSuccessor(record);
+			else if (!old.claim().origin().equals(record.claim().origin()) || !old.claim().machine().equals(record.claim().machine()) || hasTransfer(record.claim().transfer()))
+				throw new IllegalArgumentException("Foreign or replayed member rejoin");
 		}
 		if (old != null && old.phase() != OwnedMachineRecord.Phase.RETURNED) locations.remove(old.claim().origin());
 		add(next, locations, intents, record, false);
@@ -92,11 +109,11 @@ public final class OwnedMachines {
 			if (active) index(changed, record, true);
 			groups = changed.snapshot();
 		}
-		boolean rosterChanged = old == null || old.bees() == null != (record.bees() == null)
-				|| old.bees() != null && record.bees() != null && old.bees().rosterVersion() != record.bees().rosterVersion();
+		boolean rosterChanged = old == null || old.rosterVersion() != record.rosterVersion();
 		return new OwnedMachines(next.snapshot(), locations.snapshot(), intents.snapshot(), groups, token,
 				groups != byMachine || rosterChanged ? new Object() : queryToken,
-				groups != byMachine || old == null || old.phase() != record.phase() || old.bees() == null != (record.bees() == null) ? new Object() : capabilityToken);
+				groups != byMachine || old == null || old.phase() != record.phase() || old.beeReady() != record.beeReady()
+						|| old.upgradeVersion() != record.upgradeVersion() && record.combined() != null ? new Object() : capabilityToken);
 	}
 	private static void index(SnapshotRecords<String, Map<Origin, UUID>> groups, OwnedMachineRecord record, boolean insert) {
 		var machine = record.claim().machine();

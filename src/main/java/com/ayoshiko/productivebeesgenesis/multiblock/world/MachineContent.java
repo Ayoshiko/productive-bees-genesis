@@ -22,7 +22,7 @@ public final class MachineContent {
 	private static final DeferredRegister<net.minecraft.world.inventory.MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, "productivebeesgenesis");
 	public static final DeferredHolder<net.minecraft.world.inventory.MenuType<?>, net.minecraft.world.inventory.MenuType<MachineMenu>> MENU = MENUS.register("combined_apiary", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(MachineMenu::new));
 	private static final Map<StructureRole, DeferredBlock<? extends Block>> PARTS = new ConcurrentHashMap<>();
-	private static final List<StructureRole> ROLES = List.of(FRAME, CASING, GLASS, CONTROLLER, CORE, APIARY_UNIT, CENTRIFUGE_UNIT, INTERFACE, ENERGY_PORT, INPUT_PORT, OUTPUT_PORT);
+	private static final List<StructureRole> ROLES = List.of(FRAME, CASING, GLASS, CONTROLLER, CORE, APIARY_UNIT, CENTRIFUGE_UNIT, INTERFACE, ENERGY_PORT, INPUT_PORT, OUTPUT_PORT, NETWORK_PORT);
 	static {
 		for (var role : ROLES) {
 			String name = "combined_apiary_" + role.name().toLowerCase(java.util.Locale.ROOT);
@@ -34,7 +34,7 @@ public final class MachineContent {
 	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MachineControllerEntity>> CONTROLLER_TILE = TILES.register("combined_apiary_controller",
 			() -> BlockEntityType.Builder.of(MachineControllerEntity::new, block(CONTROLLER)).build(null));
 	public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MachinePartEntity>> PART_TILE = TILES.register("combined_apiary_part",
-			() -> BlockEntityType.Builder.of(MachinePartEntity::new, block(CORE), block(APIARY_UNIT), block(CENTRIFUGE_UNIT), block(INTERFACE), block(ENERGY_PORT), block(INPUT_PORT), block(OUTPUT_PORT)).build(null));
+			() -> BlockEntityType.Builder.of(MachinePartEntity::new, block(CORE), block(APIARY_UNIT), block(CENTRIFUGE_UNIT), block(INTERFACE), block(ENERGY_PORT), block(INPUT_PORT), block(OUTPUT_PORT), block(NETWORK_PORT)).build(null));
 	public static Block block(StructureRole role) { return PARTS.get(role).get(); }
 	public static List<Block> registeredBlocks() { return ROLES.stream().map(MachineContent::block).toList(); }
 	public static void register(IEventBus bus) { BLOCKS.register(bus); ITEMS.register(bus); TILES.register(bus); MENUS.register(bus); bus.addListener(MachinePorts::register); bus.addListener(MachineMenuRequest::register); }

@@ -16,6 +16,7 @@ public final class CheckpointDecoder implements AutoCloseable {
 	private final CheckpointReadSession input;
 	private final boolean directory;
 	private final Consumer<ProductKey> validateKey;
+	private final java.util.function.ToIntFunction<ProductKey> itemLimits;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 	private final ArrayDeque<Frame> stack = new ArrayDeque<>();
 	private final BeeSchemaVersion beeSchema = new BeeSchemaVersion();
@@ -28,12 +29,15 @@ public final class CheckpointDecoder implements AutoCloseable {
 	private long steps, maxStepNanos;
 	public CheckpointDecoder(CheckpointReadSession input, Consumer<ProductKey> validateKey) { this(input, validateKey, item -> { }); }
 	public CheckpointDecoder(CheckpointReadSession input, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
-		this(input, validateKey, validateFeeding, false);
+		this(input, validateKey, validateFeeding, key -> 64, false);
 	}
-	static CheckpointDecoder directory(CheckpointReadSession input) { return new CheckpointDecoder(input, key -> { }, item -> { }, true); }
-	private CheckpointDecoder(CheckpointReadSession input, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, boolean directory) {
+	public CheckpointDecoder(CheckpointReadSession input, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, java.util.function.ToIntFunction<ProductKey> itemLimits) {
+		this(input, validateKey, validateFeeding, itemLimits, false);
+	}
+	static CheckpointDecoder directory(CheckpointReadSession input) { return new CheckpointDecoder(input, key -> { }, item -> { }, key -> 64, true); }
+	private CheckpointDecoder(CheckpointReadSession input, Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, java.util.function.ToIntFunction<ProductKey> itemLimits, boolean directory) {
 		this.input = Objects.requireNonNull(input); this.validateKey = Objects.requireNonNull(validateKey); this.directory = directory;
-		this.validateFeeding = Objects.requireNonNull(validateFeeding);
+		this.validateFeeding = Objects.requireNonNull(validateFeeding); this.itemLimits = Objects.requireNonNull(itemLimits);
 	}
 	/** 时间是软预算；一次组件 codec／大数计算不可抢占，maxStepNanos 单独披露。 */
 	public Progress step(int maxSteps, long budgetNanos) {
@@ -120,7 +124,7 @@ public final class CheckpointDecoder implements AutoCloseable {
 			stack.push(new Raw(start));
 		}
 	}
-	private Domain domain(String name, CheckpointSchema.Kind kind) { return new Domain(name, new CheckpointSchema.Node(kind, directory, validateKey, validateFeeding, beeSchema)); }
+	private Domain domain(String name, CheckpointSchema.Kind kind) { return new Domain(name, new CheckpointSchema.Node(kind, directory, validateKey, validateFeeding, itemLimits, beeSchema)); }
 	public Progress progress() { check(); return new Progress(state, steps, maxStepNanos, failure); }
 	public NetworkCheckpoint checkpoint() {
 		check(); if (state != State.COMPLETE || directory) throw new IllegalStateException("No completed network checkpoint");

@@ -22,36 +22,37 @@ public final class MemberUpgradeService {
 	static Result result(Status status) { return new Result(status, 0, -1, -1); }
 	static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
 			Upgrade upgrade, int inventorySlot, int requested, Action action, boolean simulate) {
-		return exchange(menu, player, member, expectedRevision, upgrade, null, inventorySlot, requested, action, simulate);
+		return exchange(menu, player, member, expectedRevision, upgrade, null, inventorySlot, requested, action, simulate, menu.scope() != com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE);
 	}
 	static Result exchangePb(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
 			PbUpgradeType upgrade, int inventorySlot, int requested, Action action, boolean simulate) {
-		return exchange(menu, player, member, expectedRevision, null, upgrade, inventorySlot, requested, action, simulate);
+		return exchange(menu, player, member, expectedRevision, null, upgrade, inventorySlot, requested, action, simulate, menu.scope() != com.ayoshiko.productivebeesgenesis.apiculture.terminal.TerminalScope.CENTRIFUGE);
 	}
-	private static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
-			Upgrade upgrade, PbUpgradeType pb, int inventorySlot, int requested, Action action, boolean simulate) {
+	static Result exchange(NetworkCoreMenu menu, ServerPlayer player, UUID member, long expectedRevision,
+			Upgrade upgrade, PbUpgradeType pb, int inventorySlot, int requested, Action action, boolean simulate, boolean apiary) {
 		var core = menu.exchangeCore(player);
 		if (core == null || !menu.upgradeAllowed(player)) return result(Status.UNAVAILABLE);
 		if (member == null || action == null || expectedRevision < 0 || inventorySlot < 0 || inventorySlot >= 36
 				|| requested < 1 || requested > 64) return result(Status.INVALID);
-		if (pb == null && upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY) return result(Status.UNSUPPORTED);
+		if (pb == null && upgrade != Upgrade.SPEED && upgrade != Upgrade.ENERGY
+				&& (upgrade == null || !upgrade.name().equals("STACK"))) return result(Status.UNSUPPORTED);
 		if (action == Action.INSTALL && !ModConfig.SERVER.beeNetwork.enabled.get()) return result(Status.UNAVAILABLE);
 		var authority = core.ownership().readyAuthority(); if (authority == null) return result(Status.UNAVAILABLE);
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
-		if (record == null || record.bees() == null && record.centrifuge() == null) return result(Status.UNAVAILABLE);
+		if (record == null || !record.beeReady() && record.centrifuge() == null) return result(Status.UNAVAILABLE);
 		if (MemberUpgradeTarget.revision(record) != expectedRevision) return result(Status.STALE);
 		var level = player.serverLevel(); var directory = NetworkPersistence.directory(player.server);
-		var tile = MemberUpgradeTarget.find(level, authority, directory, record);
+		var tile = MemberUpgradeTarget.find(level, authority, directory, record, apiary);
 		if (tile == null) return result(Status.UNAVAILABLE);
 		if (pb == null ? !tile.supports(upgrade) : !tile.supports(pb)) return result(Status.UNSUPPORTED);
 		var inventory = player.getInventory().items.get(inventorySlot).copy();
-		MemberUpgradeChange change; ItemStack received; NetworkCheckpoint next; int moved;
+		ItemStack received; NetworkCheckpoint next; int moved;
 		try {
 			tile.validate(record.assets());
 			var unit = pb == null ? UpgradeUtils.getStack(upgrade, 1) : PbUpgradeInventorySlot.getRepresentativeStack(pb);
 			if (unit.isEmpty()) return result(Status.UNSUPPORTED);
 			var pbCounts = pb == null ? null : tile.pbCounts(record.assets());
-			int installed = pb == null ? NativeUpgradeCounts.read(record.assets().copy().getCompound("upgrades")).getOrDefault(upgrade, 0) : pbCounts.getOrDefault(pb, 0);
+			int installed = tile.installed(record, upgrade, pb);
 			int limit = pb == null ? upgrade.getMax() : tile.limit(pb);
 			if (action == Action.INSTALL) {
 				if (inventory.isEmpty()) return result(Status.EMPTY);
@@ -69,14 +70,9 @@ public final class MemberUpgradeService {
 				received = unit.copyWithCount(inventory.getCount() + moved);
 			}
 			int delta = action == Action.INSTALL ? moved : -moved;
-			if (pb != null) change = MemberUpgradeChange.pb(record, pb, delta, limit);
-			else if (upgrade == Upgrade.ENERGY) {
-				long capacity = tile.capacity(installed + delta);
-				if (MemberUpgradeTarget.energy(record) > capacity) return result(Status.ENERGY_CAPACITY);
-				change = MemberUpgradeChange.energy(record, delta, capacity);
-			} else change = MemberUpgradeChange.speed(record, delta);
-			tile.validate(change.candidate().assets());
-			next = current.exchangeUpgrade(change);
+			if (record.combined() == null && pb == null && upgrade == Upgrade.ENERGY
+					&& MemberUpgradeTarget.energy(record) > tile.capacity(installed + delta)) return result(Status.ENERGY_CAPACITY);
+			next = tile.change(current, record, upgrade, pb, delta);
 		} catch (IllegalArgumentException unsupported) { return result(Status.UNSUPPORTED); }
 		catch (RuntimeException failure) {
 			com.mojang.logging.LogUtils.getLogger().warn("Cannot prepare member upgrade exchange at {}", core.getBlockPos(), failure);
@@ -84,14 +80,15 @@ public final class MemberUpgradeService {
 		}
 		if (menu.exchangeCore(player) != core || !menu.upgradeAllowed(player) || authority.checkpoint() != current
 				|| !ItemStack.matches(inventory, player.getInventory().items.get(inventorySlot))
-				|| !tile.equals(MemberUpgradeTarget.find(level, authority, directory, record))) return result(Status.STALE);
+				|| !tile.current(level, authority, directory, record)) return result(Status.STALE);
 		if (!simulate) {
 			// 两次发布之间不进入第三方库存回调；已提交后的同步失败不回退或再次发放物品。
 			authority.publish(next);
 			player.getInventory().items.set(inventorySlot, received); player.getInventory().setChanged();
 			CoreInventorySync.committed(player, inventorySlot, received);
 		}
-		return new Result(Status.MOVED, moved, change.installed(), MemberUpgradeTarget.revision(change.candidate()));
+		var candidate = next.ownedMachines().get(member);
+		return new Result(Status.MOVED, moved, tile.installed(candidate, upgrade, pb), MemberUpgradeTarget.revision(candidate));
 	}
 	private MemberUpgradeService() { }
 }

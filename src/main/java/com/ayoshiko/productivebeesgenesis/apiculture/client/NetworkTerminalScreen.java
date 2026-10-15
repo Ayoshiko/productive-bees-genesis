@@ -195,16 +195,17 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		}
 	}
 	private void memberGrid(TerminalView view) {
-		int rowHeight = tab == 1 ? 44 : 30;
+		int rowHeight = tab == 1 ? view.rows().stream().anyMatch(row -> row.bees().size() > 3) ? 68 : 44 : 30;
 		int visible = Math.max(1, (inventoryY - 79) / rowHeight); scroll = Math.min(scroll, Math.max(0, view.rows().size() - visible));
 		for (int i = scroll; i < Math.min(view.rows().size(), scroll + visible); i++) {
 			int index = i, y = 52 + (i - scroll) * rowHeight; var row = view.rows().get(i);
 			var label = Component.literal("#" + (i + 1) + " ").append(memberName(row));
 			if (row.location() != null) { var p = row.location(); label.append(" · " + p.x() + "," + p.y() + "," + p.z()); }
 			var header = control(label, 37, y, tab == 1 ? 252 : 222, 15, () -> select(index, 0), false, -1);
-			header.setTooltip(Tooltip.create(locationText(row))); actions.add(header);
+			header.setTooltip(Tooltip.create(locationText(row).copy().append(tab == 1 ? "\n" + row.bees().size() + " " + tr("mode.bees").getString() : ""))); actions.add(header);
 			if (tab == 1) for (var bee : row.bees()) {
-				int x = 45 + bee.slot() * 78, yy = y + 17;
+				if (bee.slot() >= 6) continue;
+				int x = 45 + (bee.slot() % 3) * 78, yy = y + 17 + (bee.slot() / 3) * 24;
 				beeCell(bee, x, yy, false, () -> select(index, bee.slot()));
 				feedCell(bee, x + 26, yy, () -> select(index, bee.slot()));
 			}
@@ -223,10 +224,24 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	private void beeActions() {
 		detailHeader(); var row = selectedRow();
+		int start = target / 6 * 6;
+		if (row.bees().size() > 6) {
+			var previous = control(Component.literal("<"), 79, 51, 20, 15,
+					() -> { target = Math.max(0, start - 6); confirmCage = false; rebuild(); }, false, -1);
+			previous.active = start > 0;
+			var page = control(Component.literal((start + 1) + "–" + Math.min(start + 6, row.bees().size()) + " / " + row.bees().size()),
+					101, 51, 116, 15, () -> { }, false, -1);
+			page.active = false; page.setTooltip(Tooltip.create(memberName(row)));
+			var next = control(Component.literal(">"), 219, 51, 20, 15,
+					() -> { target = start + 6; confirmCage = false; rebuild(); }, false, -1);
+			next.active = start + 6 < row.bees().size();
+		}
 		for (var bee : row.bees()) {
-			int x = 48 + bee.slot() * 79;
-			beeCell(bee, x, 69, target == bee.slot(), () -> { target = bee.slot(); confirmCage = false; rebuild(); });
-			feedCell(bee, x + 27, 69, () -> { target = bee.slot(); rebuild(); });
+			if (bee.slot() < start || bee.slot() >= start + 6) continue;
+			int local = bee.slot() - start;
+			int x = 48 + (local % 3) * 79, yy = 69 + (local / 3) * 24;
+			beeCell(bee, x, yy, target == bee.slot(), () -> { target = bee.slot(); confirmCage = false; rebuild(); });
+			feedCell(bee, x + 27, yy, () -> { target = bee.slot(); rebuild(); });
 		}
 		var bee = selectedBee();
 		int y = Math.min(inventoryY - 58, 153);
@@ -479,12 +494,14 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 		line(g, title, 41, 11, menu.combinedTerminal() ? 172 : 246, TerminalSkin.GOLD);
 		var row = selectedRow();
 		if (row != null) {
-			line(g, memberName(row), 76, 54, 172, TerminalSkin.INK);
-			if (tab == 1 && inventoryY >= 186) {
+			if (tab != 1 || row.bees().size() <= 6) line(g, memberName(row), 76, 54, 172, TerminalSkin.INK);
+			int visibleBees = Math.min(6, row.bees().size() - target / 6 * 6);
+			int detailsY = 72 + (visibleBees + 2) / 3 * 24;
+			if (tab == 1 && detailsY + 22 <= Math.min(inventoryY - 58, 153)) {
 				var bee = selectedBee();
 				if (bee != null) {
-					line(g, bee.occupied() ? beeName(bee.type()) : tr("empty_bee"), 42, 104, 246, TerminalSkin.INK);
-					line(g, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 42, 117, 246, TerminalSkin.MUTED);
+					line(g, bee.occupied() ? beeName(bee.type()) : tr("empty_bee"), 42, detailsY, 246, TerminalSkin.INK);
+					line(g, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 42, detailsY + 13, 246, TerminalSkin.MUTED);
 				}
 			}
 		} else if (state.view() != null && state.view().rows().isEmpty()) line(g, own(state.view().hasNext() ? "continue_search" : "no_matches"), 45, tab == 4 ? 54 : 68, 240, TerminalSkin.MUTED);

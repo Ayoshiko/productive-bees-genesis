@@ -14,9 +14,17 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import java.util.ArrayList;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import mekanism.common.tile.base.TileEntityMekanism;
+import net.minecraft.core.registries.BuiltInRegistries;
+import com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout;
 
 /** 普通蜜脾链只读适配；调用者仍须在发布前验证核心、拓扑和成员所有权。 */
 public final class StaticCentrifugeAdapter {
+	public static boolean supports(TileEntityMekanism tile) {
+		if (tile == null || tile.getClass() != TileEntityMekCentrifuge.class && tile.getClass() != TileEntityMekCentrifugeFactory.class) return false;
+		int lanes = CentrifugeWorkLayout.lanes(BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString());
+		return lanes > 0 && ((PbRecipeContext) tile).processes() == lanes;
+	}
 	public record Profile(int fallbackTicks, float time, int parallel, long energy, int productivity, float stability, boolean discardByproducts) {
 		public Profile {
 			if (fallbackTicks < 1 || !Float.isFinite(time) || time <= 0 || parallel < 1 || energy < 0 || productivity < 1 || !Float.isFinite(stability) || stability < 0)
@@ -24,19 +32,23 @@ public final class StaticCentrifugeAdapter {
 		}
 		int ticks(int base) { return MekExtrasUpgradeSemantics.processingTicks(false, base > 0 ? base : fallbackTicks, time); }
 	}
-	public static CentrifugeRecipePlan compile(ServerLevel level, TileEntityMekCentrifuge tile,
+	public static CentrifugeRecipePlan compile(ServerLevel level, TileEntityMekanism tile,
 			OwnedMachineRecord record, ProductPolicyRegistry policy, ProductKey input, long capabilityRevision) {
-		if (!level.getServer().isSameThread() || tile.getClass() != TileEntityMekCentrifuge.class
+		return compile(level, policy, input, capabilityRevision, profile(level, tile, record));
+	}
+	/** 分组与最终计划使用同一份封存能力；不从已清空的物理升级槽推断托管能力。 */
+	public static Profile profile(ServerLevel level, TileEntityMekanism tile, OwnedMachineRecord record) {
+		if (!level.getServer().isSameThread() || !supports(tile)
 				|| tile.getLevel() != level || tile.isRemoved() || !level.hasChunk(tile.getBlockPos().getX() >> 4, tile.getBlockPos().getZ() >> 4)
 				|| level.getBlockEntity(tile.getBlockPos()) != tile || record.phase() != OwnedMachineRecord.Phase.OWNED
-				|| !record.claim().machine().equals("productivebeesgenesis:mek_centrifuge"))
-			throw new IllegalArgumentException("Only live owned basic centrifuges are supported");
+				|| !record.claim().machine().equals(BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).toString()))
+			throw new IllegalArgumentException("Only live owned supported centrifuges are supported");
 		var origin = record.claim().origin();
 		if (!origin.dimension().equals(level.dimension().location().toString()) || origin.x() != tile.getBlockPos().getX()
 				|| origin.y() != tile.getBlockPos().getY() || origin.z() != tile.getBlockPos().getZ()) throw new IllegalArgumentException("Foreign centrifuge claim");
 		var profile = new SealedCentrifugeProfile(tile, record.assets());
-		return compile(level, policy, input, capabilityRevision, new Profile(tile.baseTicksRequired(), profile.timeFactor(),
-				profile.parallel(), profile.energy(), profile.productivity(), profile.stability(), profile.discardByproducts()));
+		return new Profile(((PbRecipeContext) tile).baseTicksRequired(), profile.timeFactor(),
+				profile.parallel(), profile.energy(), profile.productivity(), profile.stability(), profile.discardByproducts());
 	}
 	/** 已准入载体的固定能力输入；不读取或创建物理离心机。 */
 	public static CentrifugeRecipePlan compile(ServerLevel level, ProductPolicyRegistry policy, ProductKey input, long capabilityRevision, Profile profile) {
@@ -73,21 +85,21 @@ public final class StaticCentrifugeAdapter {
 				profile.productivity(), profile.stability(), outputs);
 	}
 	/** 升级候选复用生产准入和计费校验；不触及物理组件或当前作业。 */
-	public static void validateUpgrades(TileEntityMekCentrifuge tile, com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage assets) {
-		if (tile.getClass() != TileEntityMekCentrifuge.class) throw new IllegalArgumentException("Only basic centrifuges are supported");
+	public static void validateUpgrades(TileEntityMekanism tile, com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage assets) {
+		if (!supports(tile)) throw new IllegalArgumentException("Unsupported centrifuge carrier");
 		new SealedCentrifugeProfile(tile, assets);
 	}
-	public static com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity upgradeCapacity(TileEntityMekCentrifuge tile,
+	public static com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity upgradeCapacity(TileEntityMekanism tile,
 			com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage assets) {
 		var profile = new SealedCentrifugeProfile(tile, assets);
 		return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(profile.timeFactor(), profile.energy(),
 				assets.copy().getLong("energyCapacity"), profile.parallel(), profile.productivity(), profile.stability(), false, profile.discardByproducts());
 	}
 	/** 读取未重复平衡的本机基础容量；数量来自权威候选，不临时安装到物理组件。 */
-	public static long energyCapacity(TileEntityMekCentrifuge tile, int installed) {
-		if (tile.getClass() != TileEntityMekCentrifuge.class || installed < 0 || installed > mekanism.api.Upgrade.ENERGY.getMax())
+	public static long energyCapacity(TileEntityMekanism tile, int installed) {
+		if (!supports(tile) || installed < 0 || installed > mekanism.api.Upgrade.ENERGY.getMax())
 			throw new IllegalArgumentException("Unsupported energy capacity request");
-		long base = tile.energyContainer().getBaseMaxEnergy();
+		long base = ((PbRecipeContext) tile).energyContainer().getBaseMaxEnergy();
 		return MekCentrifugeEnergyScaling.normalCapacity(base, mekanism.common.util.MekanismUtils.getMaxEnergy(installed, base));
 	}
 	private StaticCentrifugeAdapter() { }

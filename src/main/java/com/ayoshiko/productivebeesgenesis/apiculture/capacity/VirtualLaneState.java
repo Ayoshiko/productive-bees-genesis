@@ -20,7 +20,7 @@ public record VirtualLaneState(UUID memberId, long capabilityRevision, int laneI
 	public Advancement advanceFunded(MemberCapabilitySnapshot owner, long virtualTicks) {
 		if (virtualTicks < 0) throw new IllegalArgumentException("Negative work budget");
 		if (!owner.memberId().equals(memberId) || owner.revision() != capabilityRevision
-				|| laneIndex >= owner.laneCount() || !owner.requireCapacity(capability.work()).equals(capability)) {
+				|| !owner.layout().containsOrdinal(capability.work().kind(), laneIndex) || !owner.requireCapacity(capability.work()).equals(capability)) {
 			throw new IllegalArgumentException("Lane requires its original capability revision");
 		}
 		if (!owner.online()) return new Advancement(this, BigInteger.ZERO, BigInteger.ZERO);

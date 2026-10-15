@@ -85,7 +85,7 @@ final class ApiaryProductivityProbe {
 		var source = ProductKeyCodec.item(bee().plan().sourceOutput(), 1, player.registryAccess());
 		var outputs = reference.getApiaryUpgradeHandler().hasCombBlockUpgrade()
 				? new CombBlockConverter().convertCombsToBlocks(List.of(source)) : List.of(source);
-		require(current.output().equals(ProductKeyCodec.item(outputs.getFirst(), player.registryAccess())), "Sealed key differs from independent physical conversion");
+		require(current.outputs().getFirst().output().equals(ProductKeyCodec.item(outputs.getFirst(), player.registryAccess())), "Sealed key differs from independent physical conversion");
 	}
 	private void tiers() {
 		for (var type : TYPES) {
@@ -150,7 +150,7 @@ final class ApiaryProductivityProbe {
 		require(bee().random().cursor() == old.random().cursor() + 1, "Productivity reset random cursor");
 		settle();
 		var expectedLedger = new HashMap<>(before.ledger().balances());
-		expectedLedger.merge(cycle.output(), ProductAmount.of(amount), ProductAmount::add);
+		expectedLedger.merge(cycle.outputs().getFirst().output(), ProductAmount.of(amount), ProductAmount::add);
 		require(data.checkpoint().ledger().balances().equals(expectedLedger), "Converted output changed count, key or another balance"); cycles++;
 	}
 	private void boundaries() throws Exception {

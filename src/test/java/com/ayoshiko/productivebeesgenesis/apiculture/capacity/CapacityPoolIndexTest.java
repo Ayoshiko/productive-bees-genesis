@@ -9,6 +9,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CapacityPoolIndexTest {
+	@Test void incrementalQueryKeepsHeterogeneousContributionsAndRejectsDuplicateMachine() {
+		var query = new CapacityPoolIndex.QueryBuilder(IRON);
+		var first = UUID.randomUUID(); var second = UUID.randomUUID();
+		query.add(capacity(IRON, 4, 10, 400), first, 1, 3);
+		query.add(capacity(IRON, 2, 20, 200), second, 2, 5);
+		assertThrows(IllegalArgumentException.class, () -> query.add(capacity(IRON, 1, 1, 1), first, 3, 3));
+		assertNull(query.finishStep(1));
+		assertThrows(IllegalArgumentException.class, () -> query.add(capacity(IRON, 1, 1, 1), UUID.randomUUID(), 3, 1));
+		var result = query.finishStep(1);
+		assertEquals(ExactRate.of(17, 10), result.operationsPerTick());
+		assertEquals(BigInteger.valueOf(2200), result.fullLoadEnergyPerTick());
+		assertEquals(BigInteger.valueOf(8), result.pools().stream().map(CapacityPoolIndex.Pool::lanes).reduce(BigInteger.ZERO, BigInteger::add));
+		assertSame(result, query.finishStep(1));
+		assertThrows(UnsupportedOperationException.class, () -> result.pools().clear());
+	}
 	static final WorkKey IRON = new WorkKey(WorkKey.Kind.CENTRIFUGE_RECIPE, "test:iron", 1, "plain");
 	static final WorkKey COPPER = new WorkKey(WorkKey.Kind.CENTRIFUGE_RECIPE, "test:copper", 1, "plain");
 
@@ -70,6 +85,51 @@ class CapacityPoolIndexTest {
 		var modifiedOutput = new WorkCapacity(IRON, 17, 10, 100, 1700, 2, 0.3, Map.of("pb:STABILITY", 1));
 		var b = member(UUID.randomUUID(), 1, 1, 0, MemberCapabilitySnapshot.Availability.ONLINE, modifiedOutput);
 		assertEquals(2, new CapacityPoolIndex(List.of(a, b)).forWork(IRON).pools().size());
+	}
+
+	@Test
+	void compositeMemberKeepsBeeAndCentrifugeCapacityIndependent() {
+		var beeWork = new WorkKey(WorkKey.Kind.BEE_CYCLE, "test:bee", 1, "day");
+		var bee = capacity(beeWork, 2, 10, 8);
+		var centrifuge = capacity(IRON, 4, 20, 12);
+		var builder = new MemberCapabilitySnapshot.AlternativesBuilder();
+		builder.add(bee); builder.add(centrifuge);
+		var frozen = builder.finish();
+		builder.add(capacity(COPPER, 3, 30, 6));
+		var member = new MemberCapabilitySnapshot(UUID.randomUUID(), 1, "test:combined",
+				new MemberCapabilitySnapshot.Origin("test:dimension", 0, 80, 0),
+				MemberCapabilitySnapshot.Availability.ONLINE, 6, 9, frozen);
+		var index = new CapacityPoolIndex(List.of(member));
+		assertEquals(ExactRate.of(6, 5), index.forWork(beeWork).operationsPerTick());
+		assertEquals(ExactRate.of(3, 5), index.forWork(IRON).operationsPerTick());
+		assertEquals(BigInteger.valueOf(48), index.forWork(beeWork).fullLoadEnergyPerTick());
+		assertEquals(BigInteger.valueOf(36), index.forWork(IRON).fullLoadEnergyPerTick());
+		assertEquals(BigInteger.valueOf(6), index.ownedFeedingSlots());
+		assertEquals(ExactRate.ZERO, index.forWork(COPPER).operationsPerTick());
+		assertEquals(2, member.alternatives().size());
+		// 总索引 0 属于蜂位，6 属于离心局部 lane 0，不能跨种类借位。
+		assertThrows(IllegalArgumentException.class, () -> new VirtualLaneState(member.memberId(), 1, 0, centrifuge, 0).advanceFunded(member, 20));
+		assertThrows(IllegalArgumentException.class, () -> new VirtualLaneState(member.memberId(), 1, 6, bee, 0).advanceFunded(member, 10));
+		var result = new VirtualLaneState(member.memberId(), 1, 6, centrifuge, 0).advanceFunded(member, 20);
+		assertEquals(BigInteger.valueOf(4), result.completedOperations());
+		assertEquals(BigInteger.valueOf(240), result.energyUsed());
+	}
+
+	@Test
+	void layoutAddressesBothKindsWithoutOverflowOrCrossKindBorrowing() {
+		var layout = new MemberWorkLayout(6, 3);
+		for (int i = 0; i < 9; i++) assertEquals(i, layout.ordinal(layout.slot(i)));
+		assertEquals(new MemberWorkLayout.Slot(WorkKey.Kind.BEE_CYCLE, 0), layout.slot(0));
+		assertEquals(new MemberWorkLayout.Slot(WorkKey.Kind.CENTRIFUGE_RECIPE, 0), layout.slot(6));
+		assertFalse(layout.contains(new MemberWorkLayout.Slot(WorkKey.Kind.CENTRIFUGE_RECIPE, 3)));
+		assertThrows(IllegalArgumentException.class, () -> layout.slot(9));
+		assertThrows(IllegalArgumentException.class, () -> MemberWorkLayout.fromTotal(6, 5));
+		assertThrows(IllegalArgumentException.class, () -> new MemberWorkLayout(Integer.MAX_VALUE, 1));
+		var bee = capacity(new WorkKey(WorkKey.Kind.BEE_CYCLE, "test:bee", 1, "day"), 1, 10, 1);
+		assertThrows(IllegalArgumentException.class, () -> member(UUID.randomUUID(), 1, 3, 3,
+				MemberCapabilitySnapshot.Availability.ONLINE, capacity(IRON, 1, 10, 1)));
+		assertThrows(IllegalArgumentException.class, () -> member(UUID.randomUUID(), 1, 3, 0,
+				MemberCapabilitySnapshot.Availability.ONLINE, bee));
 	}
 
 	@Test

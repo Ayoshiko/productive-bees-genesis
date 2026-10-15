@@ -74,6 +74,8 @@ public final class NetworkTopologyService {
 		var tile = level.getBlockEntity(pos); if (tile == null || tile.isRemoved()) return null;
 		if (tile instanceof NetworkCoreBlockEntity core) return new TopologyScan.Node(pos, core.owner(), true, core.closedFaces(), 0, 0);
 		if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(tile.getBlockState().getBlock()).getNamespace().equals("productivebeesgenesis")) return null;
+		var combined = com.ayoshiko.productivebeesgenesis.multiblock.world.MachineNetworkAccess.node(level, tile);
+		if (combined != null) return combined;
 		var owner = tile instanceof ISecurityTile security ? security.getOwnerUUID() : null;
 		int faces = tile.getPersistentData().getInt("pbgNetworkClosedFaces") & 63;
 		if (tile instanceof TileEntityMekApiary hive) return new TopologyScan.Node(pos, owner, false, faces, hive.getBeeSlotCount(), 0);

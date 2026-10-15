@@ -33,6 +33,7 @@ public final class CombinedApiaryDefinition {
 						new BlockPos(2, 1, depth / 2), StructureCell.facing(APIARY_UNIT, Direction.NORTH),
 						new BlockPos(4, 1, depth / 2), StructureCell.facing(CENTRIFUGE_UNIT, Direction.NORTH),
 						new BlockPos(3, 2, 0), StructureCell.facing(INTERFACE, Direction.NORTH),
+						new BlockPos(1, 1, 0), new StructureCell(Set.of(CASING, GLASS, NETWORK_PORT), null),
 						new BlockPos(0, 1, 2), StructureCell.facing(ENERGY_PORT, Direction.WEST),
 						new BlockPos(2, 1, depth - 1), StructureCell.facing(INPUT_PORT, Direction.SOUTH),
 						new BlockPos(4, 1, depth - 1), StructureCell.facing(OUTPUT_PORT, Direction.SOUTH)));

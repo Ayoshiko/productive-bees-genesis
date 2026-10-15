@@ -18,18 +18,18 @@ import mekanism.common.util.UpgradeUtils;
 import net.minecraft.world.item.ItemStack;
 
 /** 单机两路各用自己的插件；读取基础公式，不创建或临时修改物理机器。 */
-final class MachineUpgradeProfiles {
-	static ItemStack unit(int slot) {
+public final class MachineUpgradeProfiles {
+	public static ItemStack unit(int slot) {
 		if (slot < 0 || slot >= MachineUpgrades.SLOTS) throw new IllegalArgumentException("Invalid upgrade slot");
 		var pb = MachineUpgrades.pbType(slot);
 		return pb == null ? UpgradeUtils.getStack(slot % 2 == 0 ? Upgrade.SPEED : Upgrade.ENERGY, 1) : PbUpgradeInventorySlot.getRepresentativeStack(pb);
 	}
-	static int limit(int slot) {
+	public static int limit(int slot) {
 		var pb = MachineUpgrades.pbType(slot);
 		return pb == null ? MachineUpgrades.LIMIT : MachineUpgrades.apiarySlot(slot)
 				? ApiaryPbUpgradeHandler.configuredLimit(pb) : MekCentrifugePbUpgradeHandler.configuredLimit(pb);
 	}
-	static StaticApiaryAdapter.Profile apiary(MachineUpgrades upgrades) {
+	public static StaticApiaryAdapter.Profile apiary(MachineUpgrades upgrades) {
 		validate(upgrades);
 		float multiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
 		var pb = upgrades.apiary();
@@ -41,7 +41,7 @@ final class MachineUpgradeProfiles {
 		return new StaticApiaryAdapter.Profile(SaturatingMath.positiveFiniteFloat((double) mekTime / pbTime, 1),
 				price(ModConfig.SERVER.apiaryEnergyPerTick.get(), upgrades.count(0), upgrades.count(1), multiplier), productivity, block);
 	}
-	static StaticCentrifugeAdapter.Profile centrifuge(MachineUpgrades upgrades) {
+	public static StaticCentrifugeAdapter.Profile centrifuge(MachineUpgrades upgrades) {
 		validate(upgrades);
 		int baseTicks = TileEntityElectricMachine.BASE_TICKS_REQUIRED;
 		float multiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
@@ -55,6 +55,17 @@ final class MachineUpgradeProfiles {
 				price(ModConfig.SERVER.mekCentrifugeEnergyPerTick.get(), upgrades.count(2), upgrades.count(3), multiplier),
 				Math.max(1, (int) Math.floor(CentrifugePbMultipliers.productivity(count))), CentrifugePbMultipliers.stability(count),
 				count.applyAsInt(PbUpgradeType.USELESS_BYPRODUCT) > 0);
+	}
+	public static com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity capacity(
+			MachineUpgrades upgrades, boolean bee, long energyCapacity) {
+		if (bee) {
+			var p = apiary(upgrades);
+			return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(
+					p.time(), p.energy(), energyCapacity, 1, p.productivity(), 0, p.combBlock(), false);
+		}
+		var p = centrifuge(upgrades);
+		return new com.ayoshiko.productivebeesgenesis.apiculture.capacity.UpgradeCapacity(
+				p.time(), p.energy(), energyCapacity, p.parallel(), p.productivity(), p.stability(), false, p.discardByproducts());
 	}
 	private static void validate(MachineUpgrades upgrades) {
 		if (upgrades.counts().stream().noneMatch(count -> count > 0)) return;

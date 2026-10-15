@@ -78,4 +78,73 @@ class MachineAssetsTest {
 		assertFalse(loaded.available()); assertEquals(20, loaded.save(new CompoundTag(), null).getCompound("work").getLong("energy"));
 		assertThrows(IllegalArgumentException.class, () -> loaded.commit(after, after));
 	}
+	@Test void everyDurableModeKeepsOnlyTheCurrentOwnerAndReturnMustBeSaved() throws Exception {
+		var assets = assets(); var path = folder.resolve("ownership.dat"); assets.save(path.toFile(), null);
+		var work = assets.work(); assets.commit(work, work.receiveEnergy(42).apply(work)); work = assets.work();
+		var tag = assets.save(new CompoundTag(), null);
+		var network = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(),
+				tag.getUUID("owner"), 0, new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin("minecraft:overworld", 0, 64, 0));
+		var reference = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Reference(network, work.machine(), UUID.randomUUID(),
+				com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.JOINING);
+		assets.freeze(reference); assets.save(path.toFile(), null); assets = decode(assets.save(new CompoundTag(), null));
+		assertFalse(assets.available()); assertEquals(work, assets.captured());
+		assets.seal(com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.capture(work));
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.MANAGED);
+		assets.save(path.toFile(), null); assets = decode(assets.save(new CompoundTag(), null));
+		assertTrue(assets.empty()); assertFalse(assets.available()); assertTrue(assets.save(new CompoundTag(), null).getCompound("work").isEmpty());
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.LEAVING); assets.save(path.toFile(), null);
+		assets = decode(assets.save(new CompoundTag(), null)); assets.restore(work);
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.RETURNED);
+		var unsaved = assets; assertThrows(IllegalStateException.class, unsaved::release);
+		assets.save(path.toFile(), null); assets = decode(assets.save(new CompoundTag(), null));
+		assertFalse(assets.available()); assertEquals(work, assets.captured()); assets.release(); assets.save(path.toFile(), null);
+		assertTrue(assets.available()); assertNull(assets.binding()); assertEquals(42, assets.work().energy());
+	}
+	@Test void legacyTransferFingerprintSurvivesRepeatedRestartUntilReturnIsReleased() {
+		var assets = assets(); var file = folder.resolve("legacy-transfer.dat"); assets.save(file.toFile(), null);
+		var work = assets.work(); assets.commit(work, work.receiveEnergy(42).apply(work)); work = assets.work();
+		var tag = assets.save(new CompoundTag(), null);
+		var network = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(), tag.getUUID("owner"), 0,
+				new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin("minecraft:overworld", 0, 64, 0));
+		assets.freeze(new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Reference(network, work.machine(), UUID.randomUUID(), com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.JOINING));
+		tag = assets.save(new CompoundTag(), null); tag.getCompound("work").putInt("schema", 5);
+		var rawImage = new CompoundTag(); rawImage.put("combinedWork", tag.getCompound("work").copy());
+		var image = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage(rawImage);
+		for (int i = 0; i < 3; i++) { assets = decode(tag); assertEquals(image, assets.capture()); tag = assets.save(new CompoundTag(), null); assertEquals(5, tag.getCompound("work").getInt("schema")); }
+		assertTrue(com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.matches(work, image));
+		assets.seal(image); assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.MANAGED);
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.LEAVING); assets.restore(work, image);
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.RETURNED);
+		assets.save(file.toFile(), null); assets = decode(assets.save(new CompoundTag(), null)); assertEquals(image, assets.capture());
+		assets.release(); assertEquals(6, assets.save(new CompoundTag(), null).getCompound("work").getInt("schema")); assertEquals(42, assets.work().energy());
+	}
+	@Test void schemaOneMigratesWithoutChangingWorkOrInventingABinding() {
+		var assets = assets(); assets.save(folder.resolve("old.dat").toFile(), null);
+		var old = assets.save(new CompoundTag(), null); old.putInt("schema", 1); old.remove("machine"); old.remove("generation"); old.remove("binding");
+		var migrated = decode(old); assertTrue(migrated.available()); assertNull(migrated.binding());
+		assertEquals(old.getCompound("work"), migrated.save(new CompoundTag(), null).getCompound("work"));
+	}
+	@Test void failedReturnReceiptKeepsFiniteAssetsLockedAndNeverReleasesTheOldDiskOwner() throws Exception {
+		var assets = assets(); var path = folder.resolve("return.dat"); assets.save(path.toFile(), null);
+		var work = assets.work(); assets.commit(work, work.insert(ITEM, 64, 64).apply(work)); work = assets.work();
+		var tag = assets.save(new CompoundTag(), null);
+		var network = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(),
+				tag.getUUID("owner"), 0, new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin("minecraft:overworld", 0, 64, 0));
+		assets.freeze(new com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Reference(network, work.machine(), UUID.randomUUID(),
+				com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.JOINING));
+		assets.seal(com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.capture(work));
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.MANAGED);
+		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.LEAVING); assets.save(path.toFile(), null);
+		var oldFile = Files.readAllBytes(path);
+		assets.restore(work); assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.RETURNED);
+		var pending = folder.resolve("return.dat.pbg-pending"); Files.createDirectory(pending); assets.save(path.toFile(), null);
+		assertThrows(IllegalStateException.class, assets::release); assertFalse(assets.available()); assertTrue(assets.isDirty());
+		assertArrayEquals(oldFile, Files.readAllBytes(path));
+		var restored = decode(NbtIo.readCompressed(path, NbtAccounter.unlimitedHeap()).getCompound("data"));
+		assertTrue(restored.empty()); assertFalse(restored.available());
+		Files.delete(pending); assets.save(path.toFile(), null);
+		assertEquals(work, assets.captured()); assertFalse(assets.available());
+		assets.release(); assertEquals(64, assets.work().buffer().count(ITEM));
+		var returnedWork = work; assertThrows(IllegalStateException.class, () -> assets.restore(returnedWork));
+	}
 }

@@ -134,7 +134,7 @@ class BeeProductionCheckpointTest {
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(missing));
 		var duplicate = original.copy(); var list = duplicate.getList("ownership", 10).getCompound(0).getCompound("bees").getList("bees", 10); list.add(list.getFirst().copy());
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(duplicate));
-		var unknown = original.copy(); unknown.getList("ownership", 10).getCompound(0).getCompound("bees").getList("bees", 10).getCompound(0).getCompound("plan").getCompound("output").putString("id", "missing:comb");
+		var unknown = original.copy(); unknown.getList("ownership", 10).getCompound(0).getCompound("bees").getList("bees", 10).getCompound(0).getCompound("plan").getList("outputs", 10).getCompound(0).getCompound("key").putString("id", "missing:comb");
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(unknown));
 		var future = original.copy(); future.getList("ownership", 10).getCompound(0).getCompound("bees").getList("bees", 10).getCompound(0).getCompound("plan").putLong("recipeRevision", 1);
 		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(future));

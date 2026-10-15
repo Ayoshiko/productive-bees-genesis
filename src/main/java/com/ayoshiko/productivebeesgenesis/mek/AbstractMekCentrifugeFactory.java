@@ -85,6 +85,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	private CompoundTag orphanedMultiFluidTanksNbt;
 	/** PB 配方处理器 — 封装所有 PB 离心配方处理逻辑 */
 	protected final PbRecipeProcessor pbProcessor;
+	/** 多进程、PB 余量及多罐共用外层所有权双回执。 */
+	public com.ayoshiko.productivebeesgenesis.apiculture.ownership.MachineAssetSection ownershipAssets() {
+		return new FactoryCentrifugeOwnershipAssets(this, progress);
+	}
 	/** AE2 生命周期处理器 — 封装网格节点、缓存和待连接标志 */
 	protected final MekAe2LifecycleHandler productivebeesgenesis$ae2LifecycleHandler = new MekAe2LifecycleHandler();
 	/** 工厂 PB 上下文委托 — 封装公共状态和方法（Task 5/7/11/16） */

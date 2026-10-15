@@ -76,6 +76,95 @@ class CheckpointDecoderTest {
 			assertTrue(decoder.progress().failure().contains("Duplicate"));
 		}
 	}
+	private static NetworkCheckpoint composite(boolean withAlternatives) {
+		var original = rich(identity(), 4);
+		var centrifuge = original.members().getFirst().alternatives().getFirst();
+		var bee = new com.ayoshiko.productivebeesgenesis.apiculture.capacity.WorkCapacity(
+				new com.ayoshiko.productivebeesgenesis.apiculture.capacity.WorkKey(
+						com.ayoshiko.productivebeesgenesis.apiculture.capacity.WorkKey.Kind.BEE_CYCLE, "test:bee", 3, "day"),
+				1, 10, 2, 2, 1, 0, java.util.Map.of());
+		var member = new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot(
+				original.members().getFirst().memberId(), 5, "test:combined", original.members().getFirst().origin(),
+				com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Availability.OFFLINE,
+				6, 9, withAlternatives ? java.util.List.of(bee, centrifuge) : java.util.List.of());
+		var lanes = withAlternatives ? java.util.List.of(
+				new com.ayoshiko.productivebeesgenesis.apiculture.capacity.VirtualLaneState(member.memberId(), 5, 0, bee, 7),
+				new com.ayoshiko.productivebeesgenesis.apiculture.capacity.VirtualLaneState(member.memberId(), 5, 6, centrifuge, 13))
+				: java.util.List.<com.ayoshiko.productivebeesgenesis.apiculture.capacity.VirtualLaneState>of();
+		return new NetworkCheckpoint(original.identity(), original.revision(), original.policyRevision(),
+				original.ledger(), original.transfers(), original.discoveries(), java.util.List.of(member), lanes,
+				original.scheduler(), original.energy());
+	}
+	private void assertBothReaders(CompoundTag data, NetworkCheckpoint expected) throws Exception {
+		var before = data.copy();
+		if (expected == null) assertThrows(IllegalArgumentException.class, () -> CODEC.decode(data));
+		else assertEquals(expected, CODEC.decode(data));
+		var root = new CompoundTag(); root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion());
+		root.put("data", data); var file = folder.resolve("layout.dat"); NbtIo.writeCompressed(root, file);
+		byte[] fileBefore = Files.readAllBytes(file);
+		try (var reader = new CheckpointReadService(); var decoder = CODEC.decoder(reader.tryOpen(file).orElseThrow())) {
+			finish(decoder);
+			if (expected == null) {
+				assertEquals(CheckpointDecoder.State.FAILED, decoder.progress().state());
+				assertThrows(IllegalStateException.class, decoder::checkpoint);
+			} else {
+				assertEquals(CheckpointDecoder.State.COMPLETE, decoder.progress().state(), decoder.progress().failure());
+				assertEquals(expected, decoder.checkpoint());
+			}
+		}
+		assertArrayEquals(fileBefore, Files.readAllBytes(file));
+		assertEquals(before, data);
+	}
+	@Test void compositeLayoutSurvivesBothReadersAndStreamWriter() throws Exception {
+		var expected = composite(true);
+		assertBothReaders(NetworkCheckpointCodec.encode(expected), expected);
+		var file = folder.resolve("composite-stream.dat");
+		CheckpointFiles.write(file, new CheckpointPayload.Network(expected, SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
+		try (var reader = new CheckpointReadService(); var decoder = CODEC.decoder(reader.tryOpen(file).orElseThrow())) {
+			finish(decoder);
+			assertEquals(CheckpointDecoder.State.COMPLETE, decoder.progress().state(), decoder.progress().failure());
+			assertEquals(expected, decoder.checkpoint());
+		}
+	}
+	@Test void oldSchemasKeepOriginalLayoutAndRejectCompositeEvenWithoutAlternatives() throws Exception {
+		var original = rich(identity(), 4);
+		for (int schema = 6; schema <= 11; schema++) {
+			var old = NetworkCheckpointCodec.encode(original); old.putInt("schema", schema);
+			if (schema < 11) old.remove("ports");
+			assertBothReaders(old, original);
+			for (boolean alternatives : new boolean[]{false, true}) {
+				var invalid = NetworkCheckpointCodec.encode(composite(alternatives)); invalid.putInt("schema", schema);
+				if (schema < 11) invalid.remove("ports");
+				assertBothReaders(invalid, null);
+			}
+		}
+	}
+	@Test void schemaElevenFinitePortAssetsSurviveTheCapabilityFormatMigration() throws Exception {
+		var original = rich(identity(), 4);
+		var origin = new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberCapabilitySnapshot.Origin(
+				"minecraft:overworld", 1, 64, 2);
+		var port = com.ayoshiko.productivebeesgenesis.apiculture.port.PortState.empty(original.identity(), origin,
+				com.ayoshiko.productivebeesgenesis.apiculture.port.PortState.Kind.SUPPLY);
+		var loaded = port.stack(0, new com.ayoshiko.productivebeesgenesis.apiculture.port.PortState.Stack(RAW, 7));
+		var expected = original.withPort(null, port).withPort(port, loaded);
+		var old = NetworkCheckpointCodec.encode(expected); old.putInt("schema", 11);
+		assertBothReaders(old, expected);
+		assertBothReaders(NetworkCheckpointCodec.encode(expected), expected);
+	}
+
+	@Test void compositeWrongKindDuplicateAndOutOfRangeLanesRemainQuarantined() throws Exception {
+		var expected = composite(true);
+		for (int slot : new int[]{0, 5, 9}) {
+			var invalid = NetworkCheckpointCodec.encode(expected);
+			invalid.getList("lanes", Tag.TAG_COMPOUND).getCompound(1).putInt("index", slot);
+			assertBothReaders(invalid, null);
+		}
+		var oldCapability = NetworkCheckpointCodec.encode(expected);
+		oldCapability.getList("lanes", Tag.TAG_COMPOUND).getCompound(1).putInt("index", 1);
+		oldCapability.getList("lanes", Tag.TAG_COMPOUND).getCompound(1).putLong("revision", 4);
+		assertBothReaders(oldCapability, null);
+	}
+
 	@Test void oversizedComponentAndBigIntegerRemainExact() throws Exception {
 		var components = new CompoundTag(); var bytes = new byte[1024 * 1024]; new java.util.Random(812).nextBytes(bytes); components.putByteArray("payload", bytes);
 		var key = new com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey(RAW.kind(), RAW.id(), components);

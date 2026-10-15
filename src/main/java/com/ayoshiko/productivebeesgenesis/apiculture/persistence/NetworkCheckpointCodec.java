@@ -13,25 +13,32 @@ import net.minecraft.nbt.ListTag;
 
 /** 未知字段类型、版本、产品身份或交叉引用使整个域隔离，绝不跳过某条余额后继续。 */
 public final class NetworkCheckpointCodec {
-	public static final int SCHEMA = 10;
+	public static final int SCHEMA = 15;
 	private final ProductRecordCodec products;
 	private final Consumer<ProductKey> validateKey;
 	private final Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding;
 	private final RuleRecordCodec rules;
+	private final java.util.function.ToIntFunction<ProductKey> itemLimits;
 	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey) {
 		this(validateKey, item -> { });
 	}
 	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding) {
+		this(validateKey, validateFeeding, key -> 64);
+	}
+	public NetworkCheckpointCodec(Consumer<ProductKey> validateKey, Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding,
+			java.util.function.ToIntFunction<ProductKey> itemLimits) {
+		this.itemLimits = java.util.Objects.requireNonNull(itemLimits);
 		this.validateKey = java.util.Objects.requireNonNull(validateKey);
 		this.validateFeeding = java.util.Objects.requireNonNull(validateFeeding);
 		products = new ProductRecordCodec(validateKey); rules = new RuleRecordCodec(products);
 	}
 	CheckpointDecoder decoder(com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadSession input) {
-		return new CheckpointDecoder(input, validateKey, validateFeeding);
+		return new CheckpointDecoder(input, validateKey, validateFeeding, itemLimits);
 	}
 	public static NetworkCheckpointCodec forRegistries(HolderLookup.Provider registries) {
 		return new NetworkCheckpointCodec(key -> ProductKeyCodec.validatePersisted(key, registries),
-				item -> com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.validate(item, registries));
+				item -> com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.validate(item, registries),
+				key -> ProductKeyCodec.item(key, 1, registries).getMaxStackSize());
 	}
 	public static CompoundTag identity(NetworkIdentity identity) {
 		var tag = new CompoundTag(); tag.putUUID("network", identity.networkId()); tag.putUUID("controller", identity.controllerId());
@@ -72,6 +79,7 @@ public final class NetworkCheckpointCodec {
 		var members = new ListTag(); checkpoint.members().forEach(value -> members.add(CapacityRecordCodec.member(value))); tag.put("members", members);
 		var lanes = new ListTag(); checkpoint.lanes().forEach(value -> lanes.add(CapacityRecordCodec.lane(value))); tag.put("lanes", lanes);
 		var owned = new ListTag(); checkpoint.ownedMachines().values().forEach(value -> owned.add(OwnershipRecordCodec.owned(value))); tag.put("ownership", owned);
+		var ports = new ListTag(); checkpoint.ports().values().forEach(value -> ports.add(PortRecordCodec.encode(value))); tag.put("ports", ports);
 		tag.put("scheduler", RuleRecordCodec.scheduler(checkpoint.scheduler())); return tag;
 	}
 	public static CompoundTag encode(NetworkCheckpoint checkpoint) {
@@ -79,6 +87,10 @@ public final class NetworkCheckpointCodec {
 	}
 	public NetworkCheckpoint decode(CompoundTag tag) {
 		int schema = StrictNbt.integer(tag, "schema"); BeeSchemaVersion.requireSupported(schema);
+		var expected = new java.util.HashSet<>(java.util.Set.of("schema", "energy", "identity", "revision", "policy", "ledgerRevision",
+				"balances", "transactions", "transfers", "discoveries", "members", "lanes", "scheduler", "ownership"));
+		if (schema >= 11) expected.add("ports");
+		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing network fields");
 		var transactions = new ArrayList<LedgerCheckpoint.Pending>();
 		StrictNbt.list(tag, "transactions").forEach(raw -> transactions.add(readTransaction((CompoundTag) raw)));
 		var ledger = new LedgerCheckpoint(StrictNbt.number(tag, "ledgerRevision"), products.readAmounts(StrictNbt.list(tag, "balances")), transactions);
@@ -90,17 +102,22 @@ public final class NetworkCheckpointCodec {
 				throw new IllegalArgumentException("Duplicate discovery");
 			}
 		}
-		var members = new ArrayList<MemberCapabilitySnapshot>(); StrictNbt.list(tag, "members").forEach(raw -> members.add(CapacityRecordCodec.readMember((CompoundTag) raw)));
+		var members = new ArrayList<MemberCapabilitySnapshot>(); StrictNbt.list(tag, "members").forEach(raw -> members.add(CapacityRecordCodec.readMember((CompoundTag) raw, schema)));
 		var lanes = new ArrayList<VirtualLaneState>(); StrictNbt.list(tag, "lanes").forEach(raw -> lanes.add(CapacityRecordCodec.readLane((CompoundTag) raw)));
 		var checkpoint = new NetworkCheckpoint(readIdentity(StrictNbt.compound(tag, "identity")), StrictNbt.number(tag, "revision"), StrictNbt.number(tag, "policy"),
 				ledger, transfers, discoveries, members, lanes, rules.readScheduler(StrictNbt.compound(tag, "scheduler")), EnergyRecordCodec.decode(StrictNbt.compound(tag, "energy")));
 		var owned = new com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.Builder();
 		for (var raw : StrictNbt.list(tag, "ownership")) {
-			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding, schema);
+			var record = OwnershipRecordCodec.readOwned((CompoundTag) raw, validateKey, validateFeeding, itemLimits, schema);
 			NetworkCheckpoint.validateOwnership(record, checkpoint.identity(), checkpoint.policyRevision());
 			NetworkCheckpoint.validateEnergyOwnership(record, checkpoint.energy());
 			owned.add(record);
 		}
-		return checkpoint.restoredOwnership(owned.finish());
+		var ports = new SnapshotRecords<java.util.UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState>(java.util.UUID::compareTo);
+		if (schema >= 11) for (var raw : StrictNbt.list(tag, "ports")) {
+			var port = PortRecordCodec.decode((CompoundTag) raw, validateKey, itemLimits); port.validateNetwork(checkpoint.identity());
+			if (ports.get(port.id()) != null) throw new IllegalArgumentException("Duplicate port"); ports.put(port.id(), port);
+		}
+		return checkpoint.restoredOwnership(owned.finish()).restoredPorts(ports.snapshot());
 	}
 }

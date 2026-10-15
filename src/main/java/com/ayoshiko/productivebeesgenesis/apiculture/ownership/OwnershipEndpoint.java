@@ -14,6 +14,8 @@ public interface OwnershipEndpoint {
 	void seal(AssetImage expected);
 	boolean empty();
 	void mode(MemberBinding.Mode mode);
+	/** 模式已独立落盘时，恢复可完成领先网络回执的封存／交还意图。 */
+	default boolean persistsModes() { return false; }
 	/** 必须在改动目标前验证完整容量、注册表和组件；返回失败不能部分写入。 */
 	default boolean readyToReturn(OwnedMachineRecord record) {
 		return (record.bees() == null || record.bees().drained()) && (record.centrifuge() == null || record.centrifuge().drained());

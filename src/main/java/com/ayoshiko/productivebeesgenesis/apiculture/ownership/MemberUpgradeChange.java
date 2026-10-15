@@ -18,6 +18,12 @@ public final class MemberUpgradeChange {
 	public static MemberUpgradeChange speed(OwnedMachineRecord source, int delta) {
 		return prepare(source, Upgrade.SPEED, delta, 0);
 	}
+	/** STACK 只改变之后的并行计划，原已付作业和有限资产均保留。 */
+	public static MemberUpgradeChange stack(OwnedMachineRecord source, Upgrade upgrade, int delta) {
+		if (upgrade == null || !upgrade.name().equals("STACK") || source == null || source.centrifuge() == null
+				|| source.centrifuge().laneCount() <= 1) throw new IllegalArgumentException("STACK requires an ordinary centrifuge factory");
+		return prepare(source, upgrade, delta, 0);
+	}
 	/** 容量由服务器适配器按本机基础容量和变更后数量预检；拒绝裁掉仍归成员所有的 FE。 */
 	public static MemberUpgradeChange energy(OwnedMachineRecord source, int delta, long capacity) {
 		if (capacity <= 0) throw new IllegalArgumentException("Positive energy capacity required");
@@ -38,9 +44,9 @@ public final class MemberUpgradeChange {
 	}
 	private static void validateSource(OwnedMachineRecord source, int delta) {
 		if (source == null || source.phase() != OwnedMachineRecord.Phase.OWNED || delta == 0 || delta < -64 || delta > 64
-				|| !(source.centrifuge() != null && source.claim().machine().equals("productivebeesgenesis:mek_centrifuge")
-				|| source.bees() != null && source.claim().machine().equals("productivebeesgenesis:mek_apiary")))
-			throw new IllegalArgumentException("Upgrade exchange requires an activated basic member");
+				|| !(source.centrifuge() != null && com.ayoshiko.productivebeesgenesis.apiculture.capacity.CentrifugeWorkLayout.lanes(source.claim().machine()) > 0
+				|| source.bees() != null && com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.forMachine(source.claim().machine()) != null))
+			throw new IllegalArgumentException("Upgrade exchange requires an activated supported member");
 	}
 	private static MemberUpgradeChange prepare(OwnedMachineRecord source, Upgrade upgrade, int delta, long capacity) {
 		validateSource(source, delta);
@@ -52,7 +58,7 @@ public final class MemberUpgradeChange {
 		int count = Math.addExact(old, delta);
 		image.put("upgrades", NativeUpgradeCounts.withCount(component, upgrade, count));
 		long stored = source.bees() != null ? source.bees().energy() : source.centrifuge().energy();
-		if (upgrade == Upgrade.SPEED) capacity = source.bees() != null ? source.bees().energyCapacity() : source.centrifuge().energyCapacity();
+		if (upgrade != Upgrade.ENERGY) capacity = source.bees() != null ? source.bees().energyCapacity() : source.centrifuge().energyCapacity();
 		if (capacity < stored) throw new IllegalArgumentException("Member energy exceeds the new capacity");
 		image.putLong("energyCapacity", capacity);
 		return finish(source, image, capacity, delta, count);

@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.apiculture.core;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import java.util.UUID;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.core.BlockPos;
@@ -28,7 +27,7 @@ public final class MemberUpgradeMenuAccess {
 	public static boolean open(ServerPlayer player, BlockEntity source) {
 		if (!(source instanceof TileEntityMekanism machine) || !(source.getLevel() instanceof ServerLevel level)
 				|| !level.getServer().isSameThread() || source.isRemoved()
-				|| source.getClass() != TileEntityMekApiary.class && source.getClass() != TileEntityMekCentrifuge.class) return false;
+				|| !MachineAssetStore.supports(machine)) return false;
 		MemberBinding.Reference binding;
 		try { binding = MemberBinding.read(source); } catch (IllegalArgumentException invalid) { return false; }
 		var origin = binding.network().origin();
@@ -67,6 +66,6 @@ public final class MemberUpgradeMenuAccess {
 				&& level.getBlockEntity(source.getBlockPos()) == source && new MachineAssetStore(source).empty();
 		return source instanceof TileEntityMekApiary
 				? ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekApiary.class) == source
-				: ManagedProductionAccess.member(level, authority, directory, record, TileEntityMekCentrifuge.class) == source;
+				: ManagedProductionAccess.member(level, authority, directory, record, mekanism.common.tile.base.TileEntityMekanism.class) == source;
 	}
 }

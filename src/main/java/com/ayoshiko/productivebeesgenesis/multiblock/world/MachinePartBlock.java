@@ -31,6 +31,11 @@ public class MachinePartBlock extends BaseEntityBlock implements MachineContent.
 		return role == StructureRole.CORE || role == StructureRole.APIARY_UNIT || role == StructureRole.CENTRIFUGE_UNIT || role == StructureRole.INTERFACE
 				? properties.noOcclusion() : properties;
 	}
+	@Override public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context,
+			java.util.List<Component> tooltip, net.minecraft.world.item.TooltipFlag flag) {
+		super.appendHoverText(stack, context, tooltip, flag);
+		if (role == StructureRole.NETWORK_PORT) tooltip.add(Component.translatable("tooltip.productivebeesgenesis.machine.network_port"));
+	}
 	@Override protected MapCodec<? extends BaseEntityBlock> codec() { return MapCodec.unit(this); }
 	@Override public StructureRole role() { return role; }
 	@Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }

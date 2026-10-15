@@ -42,8 +42,8 @@ public final class CentrifugeLaneAllocator {
 		for (int inspected = 1; inspected <= limit; inspected++) {
 			var candidate = candidates.get(next); next = next == size - 1 ? 0 : next + 1;
 			var owner = checkpoint.ownedMachines().get(candidate.member());
-			if (owner == null || owner.phase() != OwnedMachineRecord.Phase.OWNED || owner.centrifuge() == null) continue;
-			var state = owner.centrifuge(); var plan = candidate.plan();
+			if (owner == null || owner.phase() != OwnedMachineRecord.Phase.OWNED || owner.centrifugeState() == null) continue;
+			var state = owner.centrifugeState(); var plan = candidate.plan();
 			if (state.revision() != candidate.stateRevision() || candidate.lane() >= state.laneCount()
 					|| state.jobs().containsKey(candidate.lane()) || plan.recipeRevision() != checkpoint.policyRevision()) continue;
 			if (!policy.evaluate(plan.input()).allowed() || plan.outputs().stream().anyMatch(output -> !policy.evaluate(output.key()).allowed())) continue;
@@ -56,7 +56,7 @@ public final class CentrifugeLaneAllocator {
 	}
 	public static NetworkCheckpoint commit(NetworkCheckpoint checkpoint, ProductPolicyRegistry policy, Selection selection, long seed) {
 		if (selection == null || !selection.matches(checkpoint)) return checkpoint;
-		var candidate = selection.candidate(); var state = checkpoint.ownedMachines().get(candidate.member()).centrifuge();
+		var candidate = selection.candidate(); var state = checkpoint.ownedMachines().get(candidate.member()).centrifugeState();
 		var transaction = CentrifugeWorkTransaction.assign(state, checkpoint.ledger(), policy, candidate.lane(), candidate.plan(), selection.operations(), seed, state.networkPowered() ? checkpoint.energy().stored() : state.energy());
 		return transaction == null ? checkpoint : checkpoint.applyCentrifuge(candidate.member(), transaction);
 	}

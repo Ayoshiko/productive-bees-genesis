@@ -27,7 +27,8 @@ public record FeedingSlotStore(long revision, int legacySlots, String sourceFing
 	}
 	public FeedingSlotStore {
 		slots = List.copyOf(slots);
-		if (revision < 0 || slots.size() != 3 || legacySlots != 9 || sourceFingerprint == null || !sourceFingerprint.matches("[0-9a-f]{64}"))
+		new com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout(slots.size(), legacySlots);
+		if (revision < 0 || sourceFingerprint == null || !sourceFingerprint.matches("[0-9a-f]{64}"))
 			throw new IllegalArgumentException("Unverified feeding layout");
 		for (int i = 0; i < slots.size(); i++) {
 			int group = slots.get(i).group();
@@ -102,6 +103,6 @@ public record FeedingSlotStore(long revision, int legacySlots, String sourceFing
 	}
 	public void validateSuccessor(FeedingSlotStore next) {
 		if (this == next) return;
-		if (next == null || next.revision != Math.incrementExact(revision) || next.legacySlots != legacySlots || !next.sourceFingerprint.equals(sourceFingerprint)) throw new IllegalArgumentException("Invalid feeding successor");
+		if (next == null || next.revision != Math.incrementExact(revision) || next.legacySlots != legacySlots || next.slots.size() != slots.size() || !next.sourceFingerprint.equals(sourceFingerprint)) throw new IllegalArgumentException("Invalid feeding successor");
 	}
 }

@@ -14,13 +14,25 @@ final class OwnershipRecordCodec {
 	static CompoundTag owned(OwnedMachineRecord record) {
 		var tag = new CompoundTag(); tag.put("claim", claim(record.claim())); tag.putString("phase", record.phase().name());
 		tag.put("assets", record.assets().copy()); tag.putString("fingerprint", record.fingerprint()); tag.putString("failure", record.failure());
-		tag.put("bees", BeeRecordCodec.encode(record.bees())); tag.put("centrifuge", CentrifugeRecordCodec.encode(record.centrifuge())); return tag;
+		tag.put("bees", BeeRecordCodec.encode(record.bees())); tag.put("centrifuge", CentrifugeRecordCodec.encode(record.centrifuge()));
+		tag.put("combined", record.combined() == null ? new CompoundTag() : com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedWorkCodec.encode(record.combined())); return tag;
 	}
 	static OwnedMachineRecord readOwned(CompoundTag tag, java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> validate,
-			java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, int schema) {
+			java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> validateFeeding, java.util.function.ToIntFunction<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> itemLimits, int schema) {
+		var fields = new java.util.HashSet<>(java.util.Set.of("claim", "phase", "assets", "fingerprint", "failure", "bees", "centrifuge"));
+		if (schema >= 13) fields.add("combined");
+		if (!tag.getAllKeys().equals(fields)) throw new IllegalArgumentException("Unknown or missing ownership fields");
+		if (schema == 13 && !StrictNbt.compound(tag, "combined").isEmpty() && StrictNbt.integer(StrictNbt.compound(tag, "combined"), "schema") >= 6)
+			throw new IllegalArgumentException("New combined work inside an old network schema");
 		return new OwnedMachineRecord(readClaim(StrictNbt.compound(tag, "claim")), StrictNbt.choice(tag, "phase", OwnedMachineRecord.Phase.class),
 				new AssetImage(StrictNbt.compound(tag, "assets")), StrictNbt.string(tag, "fingerprint"), StrictNbt.string(tag, "failure"), BeeRecordCodec.decode(StrictNbt.compound(tag, "bees"), validate, validateFeeding, schema),
-				CentrifugeRecordCodec.decode(StrictNbt.compound(tag, "centrifuge"), validate));
+				CentrifugeRecordCodec.decode(StrictNbt.compound(tag, "centrifuge"), validate),
+				schema < 13 ? null : combined(StrictNbt.compound(tag, "combined"), validate, validateFeeding, itemLimits));
+	}
+	static com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork combined(CompoundTag tag,
+			java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> validate,
+			java.util.function.Consumer<com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingItem> feeding, java.util.function.ToIntFunction<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey> itemLimits) {
+		return tag.isEmpty() ? null : com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedWorkCodec.decode(tag, validate, itemLimits, feeding);
 	}
 	private OwnershipRecordCodec() { }
 }

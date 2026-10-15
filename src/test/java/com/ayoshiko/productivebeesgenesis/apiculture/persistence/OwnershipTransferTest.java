@@ -29,7 +29,8 @@ class OwnershipTransferTest {
 		MemberBinding.Reference binding;
 		CompletableFuture<Void> write = new CompletableFuture<>();
 		int clears, restores, releases;
-		boolean prepared = true, full, failSeal;
+		boolean prepared = true, full, failSeal, durable;
+		@Override public boolean persistsModes() { return durable; }
 		@Override public void validate(NetworkIdentity network, MemberClaim claim) { }
 		@Override public void freeze(NetworkIdentity network, MemberClaim claim) {
 			if (binding != null) throw new IllegalStateException("Already frozen"); binding = new MemberBinding.Reference(network, claim.member(), claim.transfer(), MemberBinding.Mode.JOINING);
@@ -159,6 +160,28 @@ class OwnershipTransferTest {
 				if (stage == PREPARE || stage == SEAL || stage == OWNED) { reach(directory, service, endpoint, OWNED); service.requestReturn(endpoint); }
 				endpoint.write.complete(null); reach(directory, service, endpoint, RETURNED);
 				assertEquals(1, endpoint.clears); assertEquals(1, endpoint.restores); assertEquals(image(37), endpoint.assets); directory.flush();
+			}
+		}
+	}
+	@Test void durableSourceModeAheadOfNetworkReceiptResumesWithoutReissuingAssets() throws Exception {
+		for (boolean leaving : new boolean[]{false, true}) {
+			var identity = new NetworkIdentity(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 0, new Origin("minecraft:overworld", leaving ? 8 : 7, 70, 3));
+			var claim = claim(identity); var endpoint = new Endpoint(); endpoint.durable = true;
+			try (var directory = directory()) {
+				var data = ready(directory, directory.create(identity)); var service = OwnershipTransferService.begin(directory, data, claim, endpoint);
+				reach(directory, service, endpoint, leaving ? OWNED : SEAL);
+				if (leaving) endpoint.mode(MemberBinding.Mode.LEAVING);
+				else { endpoint.seal(endpoint.assets); endpoint.mode(MemberBinding.Mode.MANAGED); }
+				directory.flush();
+			}
+			try (var directory = directory()) {
+				var data = ready(directory, directory.loadExisting(identity));
+				var service = OwnershipTransferService.resume(directory, data, claim, endpoint);
+				assertNotEquals(RECOVERY, service.step(), service.failure());
+				if (!leaving) { reach(directory, service, endpoint, OWNED); service.requestReturn(endpoint); }
+				endpoint.write.complete(null); reach(directory, service, endpoint, RETURNED);
+				assertEquals(1, endpoint.clears); assertEquals(1, endpoint.restores); assertEquals(image(37), endpoint.assets);
+				directory.flush();
 			}
 		}
 	}

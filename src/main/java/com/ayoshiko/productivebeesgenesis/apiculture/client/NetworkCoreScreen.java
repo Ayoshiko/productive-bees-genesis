@@ -39,7 +39,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private Button production;
 	private Button upgradeInstall, upgradeRemove;
 	private int upgradeChoice;
-	private boolean upgradeBatch;
+	private boolean upgradeBatch, centrifugeUpgrades;
 	private int previewHover;
 	private long previewHoverSince;
 
@@ -132,9 +132,21 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 	private void addActions() {
 		var row = selectedRow();
 		if (tab == 1 && !row.bees().isEmpty()) {
+			int start = target / 6 * 6;
+			boolean paged = row.bees().size() > 6;
+			if (paged) {
+				var previous = button(Component.literal("<"), 36, 66, 15, 16,
+						() -> { target = Math.max(0, start - 6); confirmCage = false; rebuild(); });
+				previous.active = start > 0;
+				var next = button(Component.literal(">"), 206, 66, 15, 16,
+						() -> { target = start + 6; confirmCage = false; rebuild(); });
+				next.active = start + 6 < row.bees().size();
+			}
 			for (var bee : row.bees()) {
-				int slot = bee.slot();
-				button(Component.literal((target == slot ? "•" : "") + (slot + 1)), 36 + slot * 63, 66, 59, 16,
+				int slot = bee.slot(); if (slot < start || slot >= start + 6) continue;
+				int spacing = paged ? 25 : row.bees().size() > 3 ? 31 : 63;
+				button(Component.literal((target == slot ? "•" : "") + (slot + 1)),
+						(paged ? 54 : 36) + (slot - start) * spacing, 66, spacing - 3, 16,
 						() -> { target = slot; confirmCage = false; rebuild(); });
 			}
 			button(tr("amount", amount), 36, 84, 185, 15, () -> { cycleAmount(); });
@@ -158,10 +170,15 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		PacketDistributor.sendToServer(request); selected = -1; rebuild();
 	}
 	private void addUpgradeActions() {
-		var upgrades = selectedRow().upgrades();
+		var all = selectedRow().upgrades();
+		if (all.stream().anyMatch(upgrade -> upgrade.choice() >= TerminalView.UPGRADE_GROUP_SIZE)) {
+			button(tr(centrifugeUpgrades ? "combined_centrifuge" : "combined_apiary"), 36, 42, 185, 14,
+					() -> { centrifugeUpgrades = !centrifugeUpgrades; upgradeChoice = centrifugeUpgrades ? TerminalView.UPGRADE_GROUP_SIZE : 0; rebuild(); });
+		} else centrifugeUpgrades = false;
+		var upgrades = all.stream().filter(upgrade -> (upgrade.choice() >= TerminalView.UPGRADE_GROUP_SIZE) == centrifugeUpgrades).toList();
 		for (int i = 0; i < upgrades.size(); i++) {
 			var upgrade = upgrades.get(i);
-			var control = addRenderableWidget(new NetworkUpgradeButton(leftPos + 36 + (i % 5) * 37, topPos + 58 + (i / 5) * 25,
+			var control = addRenderableWidget(new NetworkUpgradeButton(leftPos + 36 + (i % 6) * 31, topPos + 58 + (i / 6) * 25,
 					upgrade, upgradeChoice == upgrade.choice(), () -> { upgradeChoice = upgrade.choice(); rebuild(); }));
 			requests.add(control);
 			control.setTooltip(Tooltip.create(control.getMessage().copy().append("\n").append(tr("upgrade_count", upgrade.installed(), upgrade.limit()))

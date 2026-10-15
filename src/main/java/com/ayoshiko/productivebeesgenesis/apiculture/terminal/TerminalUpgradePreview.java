@@ -9,7 +9,7 @@ public record TerminalUpgradePreview(int row, int choice, int inventorySlot, int
 		TerminalReply.Status status, int movable, UpgradeCapacity before, UpgradeCapacity after) {
 	public TerminalUpgradePreview {
 		Objects.requireNonNull(status);
-		if (row < 0 || row >= NetworkSelectionSession.PAGE_SIZE || choice < 0 || choice >= 16 || inventorySlot < 0
+		if (row < 0 || row >= NetworkSelectionSession.PAGE_SIZE || choice < 0 || choice >= TerminalView.UPGRADE_CHOICES || inventorySlot < 0
 				|| inventorySlot >= 36 || requested < 1 || requested > 64 || movable < 0 || movable > requested
 				|| (status == TerminalReply.Status.MOVED ? movable == 0 || before == null || after == null : movable != 0 || before != null || after != null))
 			throw new IllegalArgumentException("Invalid upgrade preview");

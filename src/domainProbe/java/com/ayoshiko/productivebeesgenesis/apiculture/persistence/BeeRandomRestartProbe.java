@@ -37,13 +37,13 @@ public final class BeeRandomRestartProbe {
 		for (int slot = 0; slot < 2; slot++) current = settle(current, member, slot);
 		store(current, "credited");
 		current = finish(current, member); store(current, "complete");
-		var seven = NetworkCheckpointCodec.encode(current); seven.putInt("schema", 7);
+		var seven = NetworkCheckpointCodec.encode(current); seven.putInt("schema", 7); seven.remove("ports"); seven.getList("ownership", 10).getCompound(0).remove("combined");
 		var sevenBees = seven.getList("ownership", 10).getCompound(0).getCompound("bees"); sevenBees.putInt("samplingVersion", 1);
 		for (var raw : sevenBees.getList("bees", 10)) { removeFluidFields((CompoundTag) raw); ((CompoundTag) raw).remove("enabled"); ((CompoundTag) raw).getCompound("plan").remove("sourceOutput"); }
 		var sevenRoot = new CompoundTag(); sevenRoot.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion()); sevenRoot.put("data", seven);
 		NbtIo.writeCompressed(sevenRoot, Path.of("results", "bee-restart", "random", "legacy-seven.dat"));
 		// schema 6 文件由当前正式 writer 的等价旧形状生成，只包含原有倍率 1 工作。
-		var legacy = NetworkCheckpointCodec.encode(initial); legacy.putInt("schema", 6);
+		var legacy = NetworkCheckpointCodec.encode(initial); legacy.putInt("schema", 6); legacy.remove("ports"); legacy.getList("ownership", 10).getCompound(0).remove("combined");
 		var state = legacy.getList("ownership", 10).getCompound(0).getCompound("bees");
 		state.remove("samplingVersion");
 		for (var raw : state.getList("bees", 10)) {
@@ -55,6 +55,16 @@ public final class BeeRandomRestartProbe {
 		Files.writeString(Path.of("results", "bee-restart", "random", "writer.json"), metadata.toString());
 	}
 	private static void removeFluidFields(CompoundTag bee) {
+		var plan = bee.getCompound("plan"); var outputs = plan.getList("outputs", 10);
+		var item = outputs.getCompound(0);
+		require(item.getString("basis").equals("ROLL") && item.getFloat("chance") == 1 && item.getInt("min") == item.getInt("max"), "Not a legacy scalar fixture");
+		plan.put("output", item.getCompound("key").copy()); plan.put("sourceOutput", item.getCompound("source").copy()); plan.putInt("count", item.getInt("min"));
+		bee.putLong("frozen", 0);
+		for (var raw : bee.getList("frozenOutputs", 10)) {
+			var value = (CompoundTag) raw;
+			if (value.getCompound("key").equals(plan.getCompound("output"))) bee.put("frozen", value.get("amount").copy());
+		}
+		plan.remove("outputs"); bee.remove("frozenOutputs"); bee.remove("sampling");
 		bee.remove("frozenFluid"); bee.getCompound("plan").remove("fluidOutput"); bee.getCompound("plan").remove("fluidPerCycle");
 	}
 	private static void store(NetworkCheckpoint current, String stage) throws Exception {

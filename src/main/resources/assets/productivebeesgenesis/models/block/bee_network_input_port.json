@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "productivebeesgenesis:block/combined_apiary_casing",
+    "down": "productivebeesgenesis:block/combined_apiary_casing",
+    "up": "productivebeesgenesis:block/combined_apiary_frame",
+    "north": "minecraft:block/dropper_front",
+    "south": "minecraft:block/dropper_front",
+    "east": "minecraft:block/dropper_front",
+    "west": "minecraft:block/dropper_front"
+  }
+}

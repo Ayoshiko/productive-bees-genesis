@@ -65,6 +65,9 @@ final class MachineProductionFixture {
 	}
 	private net.minecraft.core.Direction face(BlockPos pos) { return level.getBlockState(pos).getValue(MachinePartBlock.FACING); }
 	void seed(boolean upgraded) {
+		seed(upgraded, 48);
+	}
+	void seed(boolean upgraded, int inputCount) {
 		if (upgraded) {
 			for (int slot = 0; slot < 4; slot++) install(slot, 2);
 			for (boolean apiary : new boolean[]{true, false}) {
@@ -75,6 +78,7 @@ final class MachineProductionFixture {
 		}
 		for (int slot = 0; slot < work().beeSlots(); slot++) {
 			var data = new CompoundTag(); data.putString("entity", "productivebees:configurable_bee"); data.putString("type", slot % 2 == 0 ? "productivebees:iron" : "productivebees:gold");
+			if (Boolean.getBoolean("pbg.multiblock.multi") && slot == 4) data.putString("type", "productivebees:skeletal");
 			data.putUUID("UUID", UUID.randomUUID());
 			var genes = new CompoundTag(); genes.putString("bee_behavior", "behavior.metaturnal"); genes.putString("bee_weather_tolerance", "weather_tolerance.any");
 			genes.putString("bee_productivity", "productivity.normal");
@@ -83,9 +87,9 @@ final class MachineProductionFixture {
 			cage.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
 			exchange(MachineExchange.Action.CAGE_IN, slot, cage, 1);
 			check(player.getInventory().items.getFirst().get(DataComponents.CUSTOM_DATA) == null, "Input cage kept its bee");
-			exchange(MachineExchange.Action.FEED_IN, slot, new ItemStack(slot % 2 == 0 ? Items.IRON_BLOCK : Items.GOLD_BLOCK), 1);
+			exchange(MachineExchange.Action.FEED_IN, slot, new ItemStack(Boolean.getBoolean("pbg.multiblock.multi") && slot == 4 ? Items.BONE_BLOCK : slot % 2 == 0 ? Items.IRON_BLOCK : Items.GOLD_BLOCK), 1);
 		}
-		var comb = ProductKeyCodec.item(work().bee(0).plan().sourceOutput(), 48, level.registryAccess());
+		var comb = ProductKeyCodec.item(work().bee(0).plan().sourceOutput(), inputCount, level.registryAccess());
 		put(0, comb); refuel(); ledger.baseline(work()); reference();
 	}
 	void install(int slot, int count) { exchange(MachineExchange.Action.UPGRADE_IN, slot, MachineUpgradeProfiles.unit(slot).copyWithCount(count), count); }

@@ -41,12 +41,19 @@ final class CapacityRecordCodec {
 		tag.putInt("bees", member.beeSlots()); tag.putInt("lanes", member.laneCount());
 		var alternatives = new ListTag(); member.alternatives().forEach(value -> alternatives.add(capacity(value))); tag.put("alternatives", alternatives); return tag;
 	}
-	static MemberCapabilitySnapshot readMember(CompoundTag tag) {
+	static MemberCapabilitySnapshot readMember(CompoundTag tag, int schema) {
 		var alternatives = new ArrayList<WorkCapacity>();
 		StrictNbt.list(tag, "alternatives").forEach(raw -> alternatives.add(readCapacity((CompoundTag) raw)));
-		return new MemberCapabilitySnapshot(StrictNbt.uuid(tag, "id"), StrictNbt.number(tag, "revision"), StrictNbt.string(tag, "machine"),
+		var member = new MemberCapabilitySnapshot(StrictNbt.uuid(tag, "id"), StrictNbt.number(tag, "revision"), StrictNbt.string(tag, "machine"),
 				readOrigin(StrictNbt.compound(tag, "origin")), StrictNbt.choice(tag, "availability", MemberCapabilitySnapshot.Availability.class),
 				StrictNbt.integer(tag, "bees"), StrictNbt.integer(tag, "lanes"), alternatives);
+		validateVersion(member, schema);
+		return member;
+	}
+	/** 旧版本从未允许混合布局；新构造器不能使损坏的旧格式变为合法。 */
+	static void validateVersion(MemberCapabilitySnapshot member, int schema) {
+		if (schema < 12 && member.beeSlots() > 0 && member.laneCount() != member.beeSlots())
+			throw new IllegalArgumentException("Composite member requires network schema 12");
 	}
 	static CompoundTag lane(VirtualLaneState lane) {
 		var tag = new CompoundTag(); tag.putUUID("member", lane.memberId()); tag.putLong("revision", lane.capabilityRevision());

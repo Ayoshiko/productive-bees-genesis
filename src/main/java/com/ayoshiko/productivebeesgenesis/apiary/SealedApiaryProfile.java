@@ -10,13 +10,13 @@ import mekanism.common.config.MekanismConfig;
 import net.minecraft.nbt.Tag;
 import net.neoforged.fml.ModList;
 
-/** 基础蜂箱从唯一封存升级读取能力；物理升级组件在托管期间保持为空。 */
+/** 已准入蜂箱从唯一封存升级读取能力；物理升级组件在托管期间保持为空。 */
 final class SealedApiaryProfile {
 	private final float time, productivity;
 	private final long energy;
 	private final boolean combBlock;
 	SealedApiaryProfile(TileEntityMekApiary hive, AssetImage assets) {
-		if (hive.getClass() != TileEntityMekApiary.class || ModList.get().isLoaded("mekanism_unleashed")
+		if (!StaticApiaryAdapter.supports(hive) || ModList.get().isLoaded("mekanism_unleashed")
 				|| ModList.get().isLoaded("mekanism_empowered"))
 			throw new IllegalArgumentException("Modified apiary upgrade formulas need their own adapter");
 		var image = assets.copy(); var extra = image.getCompound("extra");

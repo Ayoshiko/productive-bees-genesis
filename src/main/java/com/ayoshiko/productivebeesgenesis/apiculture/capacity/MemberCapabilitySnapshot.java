@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/** 不持有世界、机器或可变升级对象；离线快照保留槽位所有权但不贡献在线能力。 */
+/** 不持有世界或可变升级；laneCount 为两类工作位总数，蜂位占前段，离心占后段。 */
 public record MemberCapabilitySnapshot(UUID memberId, long revision, String machineId,
 		Origin origin, Availability availability, int beeSlots, int laneCount,
 		List<WorkCapacity> alternatives) {
@@ -19,19 +19,22 @@ public record MemberCapabilitySnapshot(UUID memberId, long revision, String mach
 		Objects.requireNonNull(memberId);
 		Objects.requireNonNull(origin);
 		Objects.requireNonNull(availability);
-		if (revision < 0 || machineId == null || machineId.isBlank() || beeSlots < 0 || laneCount <= 0
-				|| (beeSlots > 0 && laneCount != beeSlots)) throw new IllegalArgumentException("Invalid member capability");
+		var layout = MemberWorkLayout.fromTotal(beeSlots, laneCount);
+		if (revision < 0 || machineId == null || machineId.isBlank() || laneCount <= 0)
+			throw new IllegalArgumentException("Invalid member capability");
 		if (alternatives instanceof Alternatives checked) {
-			if (!checked.isEmpty() && checked.beeWork != (beeSlots > 0)) throw new IllegalArgumentException("Work kind differs from member kind");
+			for (var kind : checked.kinds)
+				if (layout.lanes(kind) == 0) throw new IllegalArgumentException("Work kind has no member lanes");
 		} else {
 			alternatives = List.copyOf(alternatives);
-			if (alternatives.stream().map(WorkCapacity::work).distinct().count() != alternatives.size()) throw new IllegalArgumentException("Duplicate work capability");
-			for (WorkCapacity capacity : alternatives) {
-				if ((capacity.work().kind() == WorkKey.Kind.BEE_CYCLE) != (beeSlots > 0)) throw new IllegalArgumentException("Work kind differs from member kind");
-			}
+			if (alternatives.stream().map(WorkCapacity::work).distinct().count() != alternatives.size())
+				throw new IllegalArgumentException("Duplicate work capability");
+			for (WorkCapacity capacity : alternatives)
+				if (layout.lanes(capacity.work().kind()) == 0) throw new IllegalArgumentException("Work kind has no member lanes");
 		}
 	}
 
+	public MemberWorkLayout layout() { return MemberWorkLayout.fromTotal(beeSlots, laneCount); }
 	public int feedingSlots() { return beeSlots; }
 	public boolean online() { return availability == Availability.ONLINE; }
 
@@ -50,20 +53,19 @@ public record MemberCapabilitySnapshot(UUID memberId, long revision, String mach
 		private final com.ayoshiko.productivebeesgenesis.apiculture.storage.SnapshotRecords<WorkKey, WorkCapacity> byWork =
 				new com.ayoshiko.productivebeesgenesis.apiculture.storage.SnapshotRecords<>(java.util.Comparator.comparing(WorkKey::kind)
 						.thenComparing(WorkKey::id).thenComparingLong(WorkKey::recipeRevision).thenComparing(WorkKey::contextKey));
-		private boolean beeWork;
+		private final java.util.EnumSet<WorkKey.Kind> kinds = java.util.EnumSet.noneOf(WorkKey.Kind.class);
 		public void add(WorkCapacity value) {
-			boolean bee = value.work().kind() == WorkKey.Kind.BEE_CYCLE;
-			if (byWork.get(value.work()) != null || !values.isEmpty() && bee != beeWork) throw new IllegalArgumentException("Duplicate or mixed work capability");
-			beeWork = bee; byWork.put(value.work(), value); values.put(values.size(), value);
+			if (byWork.get(value.work()) != null) throw new IllegalArgumentException("Duplicate work capability");
+			kinds.add(value.work().kind()); byWork.put(value.work(), value); values.put(values.size(), value);
 		}
-		public List<WorkCapacity> finish() { return new Alternatives(values.valuesSnapshot(), byWork.snapshot(), beeWork); }
+		public List<WorkCapacity> finish() { return new Alternatives(values.valuesSnapshot(), byWork.snapshot(), java.util.Set.copyOf(kinds)); }
 	}
 	private static final class Alternatives extends java.util.AbstractList<WorkCapacity> {
 		private final List<WorkCapacity> values;
 		private final java.util.Map<WorkKey, WorkCapacity> byWork;
-		private final boolean beeWork;
-		Alternatives(List<WorkCapacity> values, java.util.Map<WorkKey, WorkCapacity> byWork, boolean beeWork) {
-			this.values = values; this.byWork = byWork; this.beeWork = beeWork;
+		private final java.util.Set<WorkKey.Kind> kinds;
+		Alternatives(List<WorkCapacity> values, java.util.Map<WorkKey, WorkCapacity> byWork, java.util.Set<WorkKey.Kind> kinds) {
+			this.values = values; this.byWork = byWork; this.kinds = kinds;
 		}
 		@Override public WorkCapacity get(int index) { return values.get(index); }
 		@Override public int size() { return values.size(); }

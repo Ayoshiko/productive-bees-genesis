@@ -51,6 +51,8 @@ public final class ModBlockTagsProvider extends BlockTagsProvider {
 				this.tag(BlockTags.MINEABLE_WITH_PICKAXE).add(block);
 			}
 		}
+		this.tag(BlockTags.MINEABLE_WITH_PICKAXE).add(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.SUPPLY_PORT.get(),
+				com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.INPUT_PORT.get(), com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.OUTPUT_PORT.get());
 		// F10: 不再为任何方块添加 MINEABLE_WITH_HOE 标签
 		// 蜜脾块统一用镐挖掘，与其它本模组方块一致
 	}

@@ -23,6 +23,7 @@ public final class MachineMenuDetails {
 	public long jobCycle(int lane) { return number(JOB_START + lane * 4 + 1); }
 	public long jobOperations(int lane) { return number(JOB_START + lane * 4 + 2); }
 	public long jobPaid(int lane) { return number(JOB_START + lane * 4 + 3); }
+	void energyCapacity(long capacity) { put(Field.ENERGY_CAPACITY, capacity); }
 	void unavailable() { put(Field.AVAILABLE, 0); }
 	void capture(CombinedMachineWork work, MachineDirectory.Binding binding, long now) {
 		capture(work, binding, now, null);

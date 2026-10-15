@@ -46,6 +46,20 @@ class FairDueQueueTest {
 		queue.offer("core", 200); queue.wake("core", 5);
 		assertEquals("core", queue.poll(5)); assertNull(queue.poll(200));
 	}
+	@Test void aCompositeMembersLocalZeroSlotsDoNotOverwriteEachOtherOrActivation() {
+		var member = java.util.UUID.randomUUID();
+		var layout = new com.ayoshiko.productivebeesgenesis.apiculture.capacity.MemberWorkLayout(6, 3);
+		var queue = new FairDueQueue<MemberWorkTask>(() -> 0);
+		var expected = new ArrayList<MemberWorkTask>();
+		expected.add(new MemberWorkTask.Activate(member)); expected.add(new MemberWorkTask.Register(member));
+		for (int i = 0; i < layout.totalLanes(); i++) expected.add(new MemberWorkTask.Produce(member, layout.slot(i)));
+		for (var task : expected) { queue.offer(task, 1); queue.offer(task, 0); }
+		assertEquals(11, queue.size());
+		var visited = new ArrayList<MemberWorkTask>();
+		for (long tick = 1; tick <= expected.size(); tick++)
+			assertEquals(1, queue.runDue(tick, 1, 100, task -> { visited.add(task); return Long.MAX_VALUE; }));
+		assertEquals(expected, visited); assertEquals(0, queue.size());
+	}
 	@Test void crossThreadMutationIsRejected() throws Exception {
 		var queue = new FairDueQueue<String>();
 		var task = new java.util.concurrent.FutureTask<>(() -> assertThrows(IllegalStateException.class, () -> queue.offer("core", 1)));

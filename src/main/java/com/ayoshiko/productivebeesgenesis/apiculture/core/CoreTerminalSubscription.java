@@ -16,6 +16,7 @@ final class CoreTerminalSubscription {
 	private long sequence, revision, sentAcknowledged, sentAt = Long.MIN_VALUE;
 	private TerminalView sentView;
 	private TerminalLiveUpdate.Status sentStatus;
+	private int processingRow;
 	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex quantityIndex;
 	private com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductQuantityIndex.Order quantityOrder;
 	CoreTerminalSubscription(NetworkCoreMenu menu, NetworkSelectionSession selections) { this(menu, selections, menu.terminalSession()); }
@@ -72,6 +73,19 @@ final class CoreTerminalSubscription {
 		var candidate = selections.prepareLive(authority, current, query.kind(), query.hasNext(), rows);
 		if (candidate == null) return Long.MAX_VALUE;
 		var view = CoreUpgradeCommands.project(menu, player, candidate);
+		boolean pendingCapacity = false;
+		if (query.kind() == NetworkSelectionSession.Kind.PRODUCTS && !rows.isEmpty()) {
+			var input = ((NetworkSelectionSession.ProductRow) rows.get(Math.floorMod(processingRow++, rows.size()))).key();
+			core.centrifugeIndex().step(core, input, now);
+			var displayed = new java.util.ArrayList<TerminalView.Row>(view.rows().size());
+			for (int i = 0; i < rows.size(); i++) {
+				var key = ((NetworkSelectionSession.ProductRow) rows.get(i)).key();
+				var summary = core.centrifugeIndex().cached(key);
+				pendingCapacity |= key.kind() == com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey.Kind.ITEM && summary == null;
+				displayed.add(view.rows().get(i).withProcessing(summary));
+			}
+			view = new TerminalView(view.kind(), view.generation(), view.hasNext(), displayed);
+		}
 		if (capacity != null) {
 			var displayed = new java.util.ArrayList<TerminalView.Row>(view.rows().size());
 			for (int i = 0; i < view.rows().size(); i++) {
@@ -83,7 +97,7 @@ final class CoreTerminalSubscription {
 		}
 		if (emit(player, bytes, now, acknowledged, TerminalLiveUpdate.Status.READY, view, query.hasPrevious()))
 			selections.publishLive(authority, current, query.kind(), query.hasNext(), rows, player.serverLevel().getGameTime());
-		return now + 10;
+		return now + (pendingCapacity ? 1 : 10);
 	}
 	private boolean emit(ServerPlayer player, TerminalSyncBudget budget, long now, long acknowledged,
 			TerminalLiveUpdate.Status status, TerminalView view, boolean previous) {

@@ -122,7 +122,7 @@ public final class WorldBeeInputRequest {
 		if (source.getLevel() != level || source.isRemoved()) return null;
 		if (source instanceof NetworkTerminalBlockEntity terminal)
 			return terminal.combined() || terminal.scope() == TerminalScope.APIARY ? terminal.connection() : null;
-		if (source.getClass() != TileEntityMekApiary.class) return null;
+		if (!(source instanceof TileEntityMekApiary hive) || !com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter.supports(hive)) return null;
 		try {
 			var binding = MemberBinding.read(source); var pos = binding.network().origin();
 			if (binding.mode() != MemberBinding.Mode.MANAGED || !pos.dimension().equals(level.dimension().location().toString())) return null;

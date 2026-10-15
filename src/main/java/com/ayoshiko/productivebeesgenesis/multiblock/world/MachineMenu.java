@@ -208,7 +208,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		return core != null && !player.isSpectator() && player.containerMenu == this && stillValid(player) && MachineWorkService.access(core).isPresent() ? core : null;
 	}
 	@Override public boolean stillValid(Player player) {
-		return !closed && viewer.equals(player.getUUID()) && (core == null || (wireless == null ? allowed(core, origin, binding, player) : WirelessMachineAccess.valid(core, wireless, player)) && MachineWorkService.active(core)
+		return !closed && viewer.equals(player.getUUID()) && (core == null || (wireless == null ? allowed(core, origin, binding, player) : WirelessMachineAccess.valid(core, wireless, player)) && MachineWorkService.access(core).isPresent()
 				&& core.handle.binding().orElse(null) == binding);
 	}
 	public com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus meStatus() { return com.ayoshiko.productivebeesgenesis.apiculture.bridge.MeBridgeStatus.decode(data.get(ME_DATA)); }
@@ -220,7 +220,8 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 		if (core == null) return;
 		if (core.handle == null || core.handle.binding().orElse(null) != binding) { details.unavailable(); return; }
 		var access = MachineWorkService.access(core).orElse(null); if (access == null) { details.unavailable(); return; }
-		details.capture(access.work(), binding, core.getLevel().getGameTime(), core.production);
+		details.capture(access.work(), binding, core.getLevel().getGameTime(), access.managed() ? null : core.production);
+		details.energyCapacity(access.energyCapacity());
 		var work = access.work(); var ids = new UUID[6]; for (var bee : work.bees()) ids[bee.slot()] = bee.id();
 		var limits = new int[MachineUpgrades.SLOTS]; for (int i = 0; i < limits.length; i++) limits[i] = MachineUpgradeProfiles.limit(i);
 		if (!Arrays.equals(ids, shownBees) || !work.feeding().equals(shownFeeding) || !work.upgrades().equals(shownUpgrades) || !Arrays.equals(limits, shownLimits)) {
@@ -235,7 +236,7 @@ public final class MachineMenu extends AbstractContainerMenu implements Terminal
 			for (int i = 0; i < limits.length; i++) { integer(UPGRADE_DATA + i * 4, shownUpgrades.count(i)); integer(UPGRADE_DATA + 2 + i * 4, limits[i]); }
 			number(24, viewRevision);
 		}
-		number(28, work.energy()); data.set(33, work.centrifuges().size());
+		number(28, access.energy()); data.set(33, work.centrifuges().size());
 	}
 	/** 注册处理器与既有服务器夹具共享的正式入口；拒绝也消费序号。 */
 	public void request(ServerPlayer player, MachineMenuRequest request) {

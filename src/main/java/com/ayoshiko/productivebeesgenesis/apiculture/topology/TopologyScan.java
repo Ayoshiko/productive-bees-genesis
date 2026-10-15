@@ -14,9 +14,10 @@ import net.minecraft.core.Direction;
 
 /** 单区块六面 BFS；每步读取一个候选位置，结构版本变化后整次扫描作废。 */
 public final class TopologyScan {
-	public record Node(BlockPos position, UUID owner, boolean core, int closedFaces, int beeSlots, int lanes) {
+	public record Node(BlockPos position, UUID owner, boolean core, int closedFaces, int beeSlots, int lanes, BlockPos memberPosition) {
+		public Node(BlockPos position, UUID owner, boolean core, int closedFaces, int beeSlots, int lanes) { this(position, owner, core, closedFaces, beeSlots, lanes, position); }
 		public Node {
-			position = position.immutable();
+			position = position.immutable(); memberPosition = memberPosition.immutable();
 			if (closedFaces < 0 || closedFaces > 63 || beeSlots < 0 || lanes < 0) throw new IllegalArgumentException("Invalid topology node");
 		}
 		boolean open(Direction side) { return (closedFaces & (1 << side.ordinal())) == 0; }
@@ -54,7 +55,7 @@ public final class TopologyScan {
 		visited.add(pos);
 		if (node.core()) cores++;
 		if (!owner.equals(node.owner())) { denied++; return false; }
-		if (!node.core()) { members.put(pos, node); bees = Math.addExact(bees, node.beeSlots()); lanes = Math.addExact(lanes, node.lanes()); }
+		if (!node.core() && members.get(node.memberPosition()) == null) { members.put(node.memberPosition(), node); bees = Math.addExact(bees, node.beeSlots()); lanes = Math.addExact(lanes, node.lanes()); }
 		for (var direction : Direction.values()) {
 			if (!node.open(direction)) continue;
 			var next = pos.relative(direction);

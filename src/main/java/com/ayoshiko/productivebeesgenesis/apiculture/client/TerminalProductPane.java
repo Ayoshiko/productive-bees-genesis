@@ -74,6 +74,11 @@ final class TerminalProductPane {
 			var row = shown.rows().get(i); var icon = icons.get(i);
 			var label = icon.name().copy().append("\n").append(Component.translatable("screen.productivebeesgenesis.network.owned", row.owned()))
 					.append("\n").append(Component.translatable("screen.productivebeesgenesis.network.available", row.available()));
+			if (row.processing() != null) {
+				var capacity = row.processing();
+				label.append("\n").append(text("processing_capacity", capacity.members(), capacity.lanes(), capacity.operationsPerSecond(), capacity.fullLoadEnergy()))
+						.append("\n").append(text("processing_capacity_hint"));
+			}
 			var button = new TerminalSkin.Control(cellX, cellY, 18, 18, label, mouse -> take(index, mouse), false, -1,
 					g -> icon.render(g, cellX, cellY, true)).slot();
 			button.setTooltip(Tooltip.create(label)); buttons.add(button); widgets.add(button);

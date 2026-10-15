@@ -70,7 +70,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			String detail = b.readUtf(TerminalView.TEXT_LIMIT);
 			String icon = b.readUtf(com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductIconPreview.MAX_TEXT);
 			String owned = b.readUtf(TerminalView.AMOUNT_LIMIT), available = b.readUtf(TerminalView.AMOUNT_LIMIT); boolean exact = b.readBoolean();
-			int count = boundedSize(b, 3); var bees = new ArrayList<TerminalView.Bee>(count);
+			int count = boundedSize(b, TerminalView.MAX_BEE_SLOTS); var bees = new ArrayList<TerminalView.Bee>(count);
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readUnsignedByte(), b.readBoolean(), b.readBoolean() ? TerminalBeeGenes.read(b) : null,
@@ -80,7 +80,8 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			var location = b.readBoolean() ? new TerminalView.Location(b.readUtf(TerminalView.TEXT_LIMIT),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readInt()) : null;
 			var apiary = b.readBoolean() ? new TerminalView.Apiary(b.readInt(), b.readFloat()) : null;
-			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, apiary));
+			var processing = b.readBoolean() ? new TerminalView.Processing(b.readLong(), b.readLong(), b.readUtf(TerminalView.AMOUNT_LIMIT), b.readUtf(TerminalView.AMOUNT_LIMIT)) : null;
+			rows.add(new TerminalView.Row(label, fluid, owned, available, exact, bees, detail, icon, upgrades, location, apiary, processing));
 		}
 		return new TerminalView(kind, generation, next, rows);
 	}
@@ -114,6 +115,8 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			}
 			b.writeBoolean(row.apiary() != null);
 			if (row.apiary() != null) { b.writeInt(row.apiary().cycleTicks()); b.writeFloat(row.apiary().productivity()); }
+			b.writeBoolean(row.processing() != null);
+			if (row.processing() != null) { var capacity = row.processing(); b.writeLong(capacity.members()); b.writeLong(capacity.lanes()); b.writeUtf(capacity.operationsPerSecond(), TerminalView.AMOUNT_LIMIT); b.writeUtf(capacity.fullLoadEnergy(), TerminalView.AMOUNT_LIMIT); }
 		}
 	}
 }

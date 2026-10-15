@@ -15,7 +15,7 @@ final class NetworkUpgradeButton extends Button {
 	private final String count;
 	private final boolean selected;
 	NetworkUpgradeButton(int x, int y, TerminalView.Upgrade upgrade, boolean selected, Runnable action) {
-		super(x, y, 34, 23, BuiltInRegistries.ITEM.get(ResourceLocation.parse(upgrade.item())).getDescription(), ignored -> action.run(), DEFAULT_NARRATION);
+		super(x, y, 29, 23, BuiltInRegistries.ITEM.get(ResourceLocation.parse(upgrade.item())).getDescription(), ignored -> action.run(), DEFAULT_NARRATION);
 		icon = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(upgrade.item())));
 		count = NumberFormatter.formatCompact(upgrade.installed()); this.selected = selected;
 	}

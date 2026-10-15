@@ -59,7 +59,7 @@ final class MachinePorts {
 			if (partChunk == null || partChunk.getBlockEntity(partPos) != part) return null;
 			var corePos = binding.handle().controller(); var chunk = level.getChunkSource().getChunkNow(corePos.getX() >> 4, corePos.getZ() >> 4);
 			if (chunk == null || !(chunk.getBlockEntity(corePos) instanceof MachineControllerEntity core) || core.handle != binding.handle()) return null;
-			return MachineWorkService.access(core).orElse(null);
+			return MachineWorkService.active(core) ? MachineWorkService.access(core).orElse(null) : null;
 		}
 		boolean allowed(ProductKey key) {
 			if (key == null) return false;

@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** 同一服务端边界捕获的 P1 权威状态；加载后成员资格仍须由拓扑重新验证。 */
 public final class NetworkCheckpoint {
 	private final NetworkIdentity identity;
+	private final Map<UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState> ports;
 	private final long revision;
 	private final long policyRevision;
 	private final LedgerCheckpoint ledger;
@@ -44,6 +45,7 @@ public final class NetworkCheckpoint {
 		this.energy = Objects.requireNonNull(energy); this.scheduler = Objects.requireNonNull(scheduler); this.revision = revision; this.policyRevision = policyRevision;
 		this.transfers = transfers; this.discoveries = discoveries; this.members = members; this.lanes = lanes;
 		this.ownedMachines = com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines.EMPTY;
+		this.ports = Map.of();
 		if (revision < 0 || policyRevision < 0) throw new IllegalArgumentException("Negative checkpoint revision");
 		if (!captured) validate();
 	}
@@ -57,9 +59,31 @@ public final class NetworkCheckpoint {
 		this(source, revision, machines, ledger, energy, source.scheduler);
 	}
 	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines, LedgerCheckpoint ledger, NetworkEnergyAccount energy, SchedulerCheckpoint scheduler) {
-		this.energy = energy;
+		this(source, revision, machines, ledger, energy, scheduler, source.ports);
+	}
+	private NetworkCheckpoint(NetworkCheckpoint source, long revision, com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachines machines,
+			LedgerCheckpoint ledger, NetworkEnergyAccount energy, SchedulerCheckpoint scheduler,
+			Map<UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState> ports) {
+		this.ports = ports; this.energy = energy;
 		identity = source.identity; this.revision = revision; policyRevision = source.policyRevision; this.ledger = ledger;
 		transfers = source.transfers; discoveries = source.discoveries; members = source.members; lanes = source.lanes; this.scheduler = scheduler; ownedMachines = machines;
+	}
+	public Map<UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState> ports() { return ports; }
+	/** 实物来源及成员候选已准备好；调用方只发布最终根，不发布中间的装蜂或补料状态。 */
+	public NetworkCheckpoint withPort(com.ayoshiko.productivebeesgenesis.apiculture.port.PortState expected,
+			com.ayoshiko.productivebeesgenesis.apiculture.port.PortState next) {
+		next.validateNetwork(identity);
+		if (ports.get(next.id()) != expected) throw new IllegalArgumentException("Stale port state");
+		if (next == expected) return this;
+		if (expected == null) {
+			if (!next.equals(com.ayoshiko.productivebeesgenesis.apiculture.port.PortState.empty(identity, next.origin(), next.kind())))
+				throw new IllegalArgumentException("A port must begin empty and disabled");
+		} else expected.validateSuccessor(next);
+		var values = SnapshotRecords.fork(ports, UUID::compareTo); values.put(next.id(), next);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger, energy, scheduler, values.snapshot());
+	}
+	NetworkCheckpoint restoredPorts(Map<UUID, com.ayoshiko.productivebeesgenesis.apiculture.port.PortState> values) {
+		return new NetworkCheckpoint(this, revision, ownedMachines, ledger, energy, scheduler, values);
 	}
 	public NetworkEnergyAccount energy() { return energy; }
 	/** 仅用于已准备好实际接收结果的有限交付；不修改作业、FE 或在制预约。 */
@@ -141,11 +165,45 @@ public final class NetworkCheckpoint {
 		var paid = candidate.importPaidOutput(new LedgerCheckpoint.Pending(bee.id(), bee.plan().recipeRevision(), LedgerTransaction.State.PAID,
 				Map.of(), bee.frozenOutputs()));
 		if (!candidate.commit(paid)) throw new IllegalStateException("Paid bee settlement failed");
-		var state = record.bees().update(bee.work(bee.progress(), bee.pendingCycles(), ProductAmount.ZERO, ProductAmount.ZERO), record.bees().energy());
+		var state = record.bees().update(bee.work(bee.progress(), bee.pendingCycles(), Map.of()), record.bees().energy());
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(record.withBees(state)), candidate.checkpoint());
+	}
+	/** 封存图像经当前注册表验证后，只一次移交工作根和整份 FE；容量不足原样保留。 */
+	public NetworkCheckpoint activateCombined(UUID member, com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork source) {
+		var old = ownedMachines.get(member);
+		if (old == null || old.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED || old.combined() != null
+				|| !com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedAssetProjection.matches(source, old.assets())
+				|| energy.capacity() == 0 || energy.accept(source.energy()) != source.energy()) return this;
+		var state = source.transferEnergy().apply(source); var next = old.withCombined(state);
+		validateOwnership(next, identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), ledger, energy.credit(source.energy()));
+	}
+	public NetworkCheckpoint exchangeCombined(UUID member, com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork.Change change) {
+		var old = ownedMachines.get(member);
+		if (old == null || old.combined() == null) return this;
+		var state = change.apply(old.combined()); if (state == old.combined()) return this;
+		var next = old.withCombined(state); validateOwnership(next, identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next));
+	}
+	public NetworkCheckpoint applyCombinedBee(UUID member, BeeWorkExecutor.BeeResult result) {
+		var old = ownedMachines.get(member);
+		if (old == null || old.combined() == null || result.status() != BeeWorkExecutor.Status.READY || result.energyUsed() > energy.stored()) return this;
+		var work = old.combined(); var state = work.applyBee(result).apply(work); var next = old.withCombined(state);
+		validateOwnership(next, identity, policyRevision);
+		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), ledger, energy.spend(result.energyUsed()));
+	}
+	public NetworkCheckpoint settleCombinedBee(UUID member, int slot, long revision) {
+		var old = ownedMachines.get(member);
+		if (old == null || old.combined() == null) return this;
+		var work = old.combined(); var bee = work.bee(slot);
+		var state = work.clearFrozenBee(slot, revision).apply(work); if (state == work) return this;
+		var balance = ledger;
+		for (var output : bee.frozenOutputs().entrySet()) balance = balance.insertExact(output.getKey(), output.getValue());
+		return new NetworkCheckpoint(this, Math.incrementExact(this.revision), ownedMachines.put(old.withCombined(state)), balance);
 	}
 	public NetworkCheckpoint withOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record) {
 		var old = ownedMachines.get(record.claim().member());
+		if (record.combined() != null && record.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.RECOVERY && (old == null || old.combined() != record.combined())) throw new IllegalArgumentException("Combined assets must use a compound transaction");
 		if (old != null && old.centrifuge() != null && record.centrifuge() != null && old.centrifuge() != record.centrifuge())
 			throw new IllegalArgumentException("Centrifuge work and ledger must be committed together");
 		if (old != null && old.bees() != null && record.bees() != null
@@ -169,10 +227,10 @@ public final class NetworkCheckpoint {
 	public NetworkCheckpoint applyCentrifuge(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkTransaction transaction) {
 		var old = ownedMachines.get(member);
 		if (old == null || old.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED
-				|| old.centrifuge() == null || !transaction.matches(old.centrifuge(), ledger) || !transaction.acceptsPolicy(policyRevision)) return this;
-		long cost = old.centrifuge().networkPowered() ? transaction.energyUsed() : 0;
+				|| old.centrifugeState() == null || !transaction.matches(old.centrifugeState(), ledger) || !transaction.acceptsPolicy(policyRevision)) return this;
+		long cost = old.centrifugeState().networkPowered() ? transaction.energyUsed() : 0;
 		if (cost > energy.stored()) return this;
-		var next = old.withCentrifuge(transaction.state()); validateOwnership(next, identity, policyRevision);
+		var next = old.combined() == null ? old.withCentrifuge(transaction.state()) : old.withCombined(old.combined().applyCentrifuge(transaction, ledger).apply(old.combined())); validateOwnership(next, identity, policyRevision);
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines.put(next), transaction.ledger(), energy.spend(cost));
 	}
 	public NetworkCheckpoint applyCentrifuge(UUID member, com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.CentrifugeWorkTransaction transaction,
@@ -182,12 +240,16 @@ public final class NetworkCheckpoint {
 		return next == this ? this : new NetworkCheckpoint(next, next.revision, next.ownedMachines, next.ledger, next.energy, claim.next());
 	}
 	static void validateEnergyOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record, NetworkEnergyAccount energy) {
-		if (energy.capacity() == 0 && (record.bees() != null && record.bees().networkPowered() || record.centrifuge() != null && record.centrifuge().networkPowered()))
+		if (energy.capacity() == 0 && (record.combined() != null || record.bees() != null && record.bees().networkPowered() || record.centrifuge() != null && record.centrifuge().networkPowered()))
 			throw new IllegalArgumentException("Shared member without a network energy account");
 	}
 
 	static void validateOwnership(com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord record, NetworkIdentity identity, long policyRevision) {
 		if (!record.claim().network().equals(identity.networkId()) || !record.claim().origin().dimension().equals(identity.origin().dimension())) throw new IllegalArgumentException("Foreign ownership record");
+		if (record.combined() != null) {
+			for (var bee : record.combined().bees()) if (bee.plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Future combined bee policy");
+			for (var job : record.combined().centrifuges().values()) if (job.job().plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Future combined centrifuge policy");
+		}
 		if (record.bees() != null) for (var bee : record.bees().bees()) {
 			if (bee.plan().recipeRevision() > policyRevision) throw new IllegalArgumentException("Bee work refers to a future recipe policy");
 		}
@@ -227,7 +289,7 @@ public final class NetworkCheckpoint {
 	static NetworkCheckpoint restore(NetworkRestoreState source) {
 		return new NetworkCheckpoint(source.identity, source.revision, source.policyRevision, source.ledger.finish(source.ledgerRevision),
 				source.transfers.valuesSnapshot(), source.discoveries.keysSnapshot(), source.members.valuesSnapshot(),
-				source.lanes.valuesSnapshot(), source.schedulerCheckpoint(), source.energy, true).restoredOwnership(source.ownedSnapshot);
+				source.lanes.valuesSnapshot(), source.schedulerCheckpoint(), source.energy, true).restoredOwnership(source.ownedSnapshot).restoredPorts(source.ports.snapshot());
 	}
 	public NetworkIdentity identity() { return identity; }
 	public long revision() { return revision; }
@@ -243,9 +305,9 @@ public final class NetworkCheckpoint {
 		return this == other || other instanceof NetworkCheckpoint checkpoint && revision == checkpoint.revision
 				&& policyRevision == checkpoint.policyRevision && energy.equals(checkpoint.energy) && identity.equals(checkpoint.identity) && ledger.equals(checkpoint.ledger)
 				&& transfers.equals(checkpoint.transfers) && discoveries.equals(checkpoint.discoveries) && members.equals(checkpoint.members)
-				&& lanes.equals(checkpoint.lanes) && scheduler.equals(checkpoint.scheduler) && ownedMachines.equals(checkpoint.ownedMachines);
+				&& lanes.equals(checkpoint.lanes) && scheduler.equals(checkpoint.scheduler) && ownedMachines.equals(checkpoint.ownedMachines) && ports.equals(checkpoint.ports);
 	}
-	@Override public int hashCode() { return Objects.hash(identity, revision, policyRevision, energy, ledger, transfers, discoveries, members, lanes, scheduler, ownedMachines); }
+	@Override public int hashCode() { return Objects.hash(identity, revision, policyRevision, energy, ledger, transfers, discoveries, members, lanes, scheduler, ownedMachines, ports); }
 	@Override public String toString() {
 		return "NetworkCheckpoint[network=" + identity.networkId() + ", revision=" + revision + ", policy=" + policyRevision + ", " + ledger + "]";
 	}

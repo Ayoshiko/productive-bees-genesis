@@ -18,15 +18,28 @@ public final class MachineWorkService {
 		private final com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory.Binding binding;
 		private final MachineAssets assets;
 		private final CombinedMachineWork work;
-		private Access(MachineControllerEntity core) {
-			this.core = core; binding = core.handle.binding().orElseThrow(); assets = core.assets; work = assets.work();
+		private final MachineNetworkAccess.Access network;
+		private Access(MachineControllerEntity core, MachineNetworkAccess.Access network) {
+			this.core = core; this.network = network; binding = core.handle.binding().orElseThrow(); assets = core.assets;
+			work = network == null ? assets.work() : network.record().combined();
 		}
 		public CombinedMachineWork work() { return work; }
-		boolean current() {
-			return active(core) && core.assets == assets && assets.work() == work && core.handle.binding().orElse(null) == binding;
+		boolean managed() { return network != null; }
+		long energyCapacity() { return network == null ? work.energyCapacity() : network.data().checkpoint().energy().capacity(); }
+		long energy() { return network == null ? work.energy() : network.data().checkpoint().energy().stored(); }
+		public boolean current() {
+			if (core.assets != assets || core.handle == null || core.handle.binding().orElse(null) != binding) return false;
+			if (network == null) return active(core) && assets.work() == work;
+			var fresh = MachineNetworkAccess.access(core);
+			return fresh != null && fresh.data() == network.data() && fresh.record() == network.record()
+					&& fresh.topologyEpoch() == network.topologyEpoch();
 		}
 	}
-	public static Optional<Access> access(MachineControllerEntity core) { return active(core) ? Optional.of(new Access(core)) : Optional.empty(); }
+	public static Optional<Access> access(MachineControllerEntity core) {
+		if (active(core)) return Optional.of(new Access(core, null));
+		var network = MachineNetworkAccess.access(core);
+		return network == null ? Optional.empty() : Optional.of(new Access(core, network));
+	}
 	static String dataName(UUID machine) { return "pbg_machine_" + machine; }
 	static void attach(MachineControllerEntity core) {
 		var level = (ServerLevel) core.getLevel(); var server = level.getServer();
@@ -48,7 +61,7 @@ public final class MachineWorkService {
 		if (!assets.matches(core.machineId(), core.generation(), core.ownerId(), level.dimension().location(), core.getBlockPos()))
 			throw new IllegalStateException("Machine asset identity conflict or invalid checkpoint: " + name + " " + assets.failure());
 		core.assets = assets;
-		if (!assets.available()) throw new IllegalStateException("Machine assets quarantined: " + assets.failure());
+		if (!assets.readable()) throw new IllegalStateException("Machine assets quarantined: " + assets.failure());
 		if (!core.assetReferenced) { core.assetReferenced = true; core.setChanged(); }
 	}
 	public static Optional<CombinedMachineWork> view(MachineControllerEntity core) {
@@ -65,9 +78,16 @@ public final class MachineWorkService {
 	/** 只接受内核生成的候选；模拟调用仅计算候选，不调用本方法。 */
 	static boolean commit(Access access, CombinedMachineWork.Change change) {
 		if (!access.current()) return false;
-		var after = change.apply(access.work); access.assets.commit(access.work, after); return after != access.work;
+		var after = change.apply(access.work);
+		if (after == access.work) return false;
+		if (access.network == null) access.assets.commit(access.work, after);
+		else {
+			var data = access.network.data(); data.publish(data.checkpoint().exchangeCombined(access.work.machine(), change));
+		}
+		return true;
 	}
 	static void step(MachineControllerEntity core) {
+		if (!active(core)) return;
 		var access = access(core).orElse(null); if (access == null) return;
 		var level = (ServerLevel) core.getLevel(); var before = access.work(); var next = before;
 		try {

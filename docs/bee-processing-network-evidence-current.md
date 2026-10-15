@@ -1148,3 +1148,139 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 `build/network-probe-r1-client-20261011a/results/machine-client.json` 已通过真实客户端金蜂装入／金块喂食／装笼、原生与 PB 升级的控制器／接口交换、服务端能源不足状态同步及正常集成服保存退出。原客户端夹具仍按旧版“点击仅选格”操作，现已使用实际原生拿放归还光标后选择，选择步骤未直接改写背包或绕过交换请求。已目视检查 `machine-bee-energy.png`：六蜂位进度和“能源不足”清晰显示，无新增控件遮挡。相关静态及服务端证据均为本次运行；`c` 之后只有客户端夹具、机器协议版本及文档收尾变化，不重复无变化的网络生产测试。七份文档的 731 条本地链接、唯一锚点与严格 UTF-8 检查通过，所有本次文本与语言 JSON 通过编码／解析和 diff 检查。
 
 **未完成门。** 本包按跨存档／所有权大变更例外完成普通生产闭环，D23a 供给及网络普通产物端口尚未实现，R1 总门保持开放并直接接续该包；M05、工厂全等级、动态／多输出蜂、自动离心直出、完整可选依赖／玩家世界／多人矩阵和 Spark 性能门未关闭。已有无 AE2 专服及本包测试不能代替这些门。
+
+<a id="s10-163"></a>
+### 10.163 网络生产主线与基础重构审查（2026-10-12，仅文档）
+
+**范围与基线。** 按用户要求继续指定聊天并审查、修改现有设计文档，没有实施产品代码重构。本次读取本地聊天 `01a12ad1-7e39-7583-8858-5455284a6424` 的接续记录，核对网络 worktree、`git status --short --branch`、worktree 列表和 HEAD `0d8809842244f98cc8684f586acbe9e7d2a075b8`。基线依赖见[参考 13](bee-processing-network-references.md#s13)；D23a 的 port／注册／标签／checkpoint 等未提交实现保持原样。原聊天的“继续开发”不在本次审查范围内自动扩展成新代码实施。
+
+**审查结论与文档修改。** 当前基础并非需要整体重写：保留账本／精确数量、事务保管、统一 checkpoint／严格恢复、全服公平预算与多方块几何。源码确认三处结构性缺口：基础成员状态无法表示单身份复合工作；正式离心链固定 lane 0、未消费已有能力池；蜂计划／冻结结果仍是单物品和单流体。目标迁移边界写入[主合同 7.3](bee-processing-network-design.md#s7-3)，源码导航与采用／不采用理由写入[参考 13.1](bee-processing-network-references.md#s13-1)，RF1–RF3 的时机与完整退出条件集中在[路线 14](bee-processing-network-roadmap.md#s14)。同时修正现行“铁蜂限定”和“端口尚无代码”、D03／D08 的正式接入范围，删除正文重复流水及滞后的下一步指令；旧验收记录和未完成门保留。
+
+**推进方式。** 当前在制 R1／D23a 先闭环，R2 连同 M05 完成成员与调度迁移，R3 的首个多输出内容组完成共享结果迁移；生产规则与便利收尾分开排队，全部既定需求仍保留。后续包以正式入口可操作流程、守恒／恢复及范围证据判定交付，不以子步、类或测试总数衡量。性能结构检查前移到多成员／多 lane 接入，完整 Spark／加速门仍保留。
+
+**本次验证。** 源码调用搜索与定点读取覆盖上述三条链及两种宿主；`network-doc-check.ps1` 通过七份文档的严格 UTF-8／无 BOM、替换字符、唯一显式锚点与 733 条本地链接检查。首次 `git diff --check` 发现本新增记录末尾多余空行，已修正并复验。未运行 Gradle、专服、客户端或 Spark；10.162 仅作为原普通生产的历史证据引用，没有重验或扩展其结论。
+
+**仍未完成。** D23a 资源、入口与行为／客户端／恢复联合尚未签收；RF1–RF3 只是已审查的实施合同，尚未实现。M05、完整 D18／D19、内容／等级／策略及性能发布门保持开放；不能把本次文档通过当成这些功能完成。后续代码包使用本记录之后的连续证据编号，不复用 10.163。
+
+<a id="s10-164"></a>
+### 10.164 RF-A 工作布局、显式进程与严格恢复（2026-10-12）
+
+**本包与顺序调整。** 用户明确要求进一步优化方案并开始重构，先实施共同工作布局／正式寻址闭环，随后才接复合资产根；不是把完整 M05 降级成纯接口验收。基线为网络 `0d88098` 加上一聊天的 D23a 在制代码和设计修改；端口草稿保持保管语义，维护 worktree 未改动。合同见[7.3](bee-processing-network-design.md#s7-3)，准确状态与下一包见[14](bee-processing-network-roadmap.md#s14)，源码导航见[13.1](bee-processing-network-references.md#s13-1)。
+
+**完成的工程任务。** MemberWorkLayout 将蜂位／离心进程分开计量；MemberCapabilitySnapshot 的混合能力与 CapacityPoolIndex 分别累计同种工作，不把九个总工作位同时乘到两类吞吐。VirtualLaneState 与两个恢复入口都校验工作种类／索引。NetworkRuntime 按激活、登记、带种类的生产任务分流，登记每步至多一个工作位；同成员的蜂位 0／离心 lane 0 不再碰撞。NetworkCentrifugeService 的正式候选、重校验、推进、冻结、结算和取消显式传 lane；空闲进程可独立选料，同成员的活动进程不清除其共享检索游标。基础载体资格仍严格保持三蜂位／单离心进程，未放开工厂或复合接管。
+
+**格式与迁移。** 网络 schema 12 表达混合能力布局，保留原字段形状和蜂采样版本 4；6–11 的原三蜂位／单类型进程布局精确读取，旧版本里的混合能力即使没有 alternatives 也拒绝。标准 decoder、逐事件 decoder 与 stream writer 均覆盖；错误种类、重复／越界 lane、旧能力 revision 的跨种类索引不可读成有效工作。新增 schema 11 有限端口材料在 12 中保持的用例，未将端口草稿签收为完整物流。
+
+**本次静态／构建。** 同一 Gradle 图完成 apiculture 的 capacity／persistence／centrifuge／production／runtime／policy 及 AE2 隔离相关测试、build、compileDomainProbeJava；首轮 242 项无失败／错误／跳过。之后补端口迁移用例，只复跑 CheckpointDecoderTest 的 9 项与受影响探针，没有重新编译无变化主代码。build 自带产物核验通过：JAR 4,487,547 字节，SHA-256 `9fa2d8c68b1390217283f058005456a4c3520c6bcb0915bec9e5091a0ca9e29c`；产物含当前 D23a 草稿，不作为发布候选。首次命令将 --tests 放在 compileDomainProbeJava 后导致任务选项错误，调整参数归属后通过，未改变验证范围。
+
+**真实专服与恢复。** Minecraft 1.21.1／NeoForge 21.1.216／Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；无 AE2／Applied Flux，已安装 Mekanism 扩展按本地运行依赖加载。`build/network-probe-rf-a-write-20261012a/results/domain.json` 正常写出九种基础蜂箱／离心／串联 × 运行／暂停／缺电状态。`build/network-probe-rf-a-read-20261012b/results/domain.json` 在不同 JVM 精确恢复，逐 tick 核对实际结果、FE、一次维护费、停机不推进、补电继续、原物理机不双跑、越界 lane 零变更及无掉落物；九场景均完成并正常保存。
+
+**失败与修复。** 首次 reader `rf-a-read-20261012a` 在 BEE/RUNNING 的流体守恒失败：旧 AutomaticRestartFixture 只登记蜜脾，遗漏 R1 已加入的独立蜂蜜。按固定铁蜂的 PB 蜂蜜键、每周期 250 mB 补独立预期，并检查计划类型与数量；保留整账本严格比较，失败日志原位保留。仅改夹具后使用原 writer 世界的另一副本重跑 reader，未删产物／改收费／放宽预算来通过。上游可选工厂配方加载日志不作为本包功能覆盖。
+
+**补充长期要求。** 用户本包内追加了网络／维护当前任务的全面深度重构授权，以及维护资源扩展完成后网络全面接入的必选要求。只读核对维护主设计 v3.1 的 §0、§2.7–2.8、§3、§4、§7–8 与 Git 状态，确认 M2 文档记载已验证但扩展任务仍有 M3 等后续且未形成完成提交；没有修改其并行代码或声称本轮已验收维护任务。授权与全项目系统审查边界写入[1.3](bee-processing-network-design.md#s1-3)和[路线 14.5](bee-processing-network-roadmap.md#s14-5)，完整资源／混合产物／账户／端口接入写入[7.4](bee-processing-network-design.md#s7-4)。
+
+**预算与剩余风险。** `build/network-probe-rf-a-low-budget-20261012a/results/domain.json` 已通过同区块铁／金双网络正式 ticker、全服每 tick 一步、九类服务公平获得份额、独立蜂蜜、精确 FE／维护费、暂停／花源／缺电、核心重载及拓扑失效恢复，并正常停服。九场景记录了每服共享步数；writer 的生产单步最大约 25.86 ms、所有权约 40.67 ms，reader 生产约 13.78 ms，属于该夹具不可抢占冷调用记录，不能推导持续 MSPT 或吞吐收益。全网能力分组、跨成员候选共享、复合所有权／有限资产双回执、工厂等级及多输出模型仍未交付；本包不关闭 RF1／RF2、M05、D23a 或 Spark 门。本轮未运行新客户端场景，界面布局与协议未改动。原始专服日志留各 run 目录，最新解码器 XML 与本包清单／42 个源码文件哈希留 `build/network-gates/rf-a-20261012/verification.json` 所在目录。七份设计文档的严格 UTF-8／无 BOM、唯一锚点及 752 条本地链接检查通过，`git diff --check` 通过。
+
+<a id="s10-165"></a>
+### 10.165 RF-B 复合托管闭环、候选共享与失联凭据（2026-10-12）
+
+**本包范围与合同。** 接续聊天 `01a12e03-b8dd-7f73-8ef2-39a302814074` 中被额度错误中断的 RF-B，在网络 worktree `bees-processing-network/1.21.1`／HEAD `0d88098` 上保留 RF-A、D23a 及 RF-B 的在制差异。连续完成复合资产接管与双回执、六蜂位／三进程正式生产、本机菜单管理、封存能力候选共享、失联凭据撤销及正常保存交还；不是单类或静态接口签收。合同见[7.3](bee-processing-network-design.md#s7-3)，连接口与菜单规格见[9.2](bee-processing-network-visual-design.md#s9-2)，实际源码入口和采用边界见[13.1](bee-processing-network-references.md#s13-1)。维护 worktree 的并行扩展任务未修改，本包没有提交、推送或发布。
+
+**资产与正式入口。** 单活动连接位只贡献控制器原 machineId；接管沿现有 OwnershipTransferService，MachineAssets schema 2 保存源端 JOINING／MANAGED／LEAVING／RETURNED 回执，network schema 13 保存唯一 combined 工作根。六蜂位、喂食、升级、三 lane、有限库存和 frozen-minus-delivered 的剩余结果一起交接；源端托管期间无第二份可用工作或独立 IO。源 FE 只原子迁入一次共享账户，容量不足保留封存资产；交还不抽走共享库存／共享 FE。两种 decoder 和 stream writer 同步，旧基础格式保持原限制，损坏／未知根隔离。MachineMenu／MachineExchange 通过同一原根凭据管理真实六蜂位、有限物料和升级，共享 FE 数值取当前网络；部分作业升级保留旧计划。
+
+**本次设计与代码收敛。** StaticCentrifugeAdapter.profile 与 MachineUpgradeProfiles 从封存升级生成完整 Profile，同时供最终计划和候选分组使用；CentrifugeInputSearches 替换逐成员续查，同能力成员／lane 共用游标，规则与保留仍走现有 RuntimeProcessingRules／ReserveAllowanceScan／正式事务。每步最多一个库存键及八个保留检查单位，库存／规则／能力／配方变化不复用失效结论。稳定无输入场景的扫描由按成员重复变为按能力组执行：64 个同能力成员交替查询 100 个拒收键，合计检查 100 次；库存变更、扫描途中插入、规则变化及成员换组／最后引用释放均有行为回归。这只证明结构性工作量，不能推导吞吐或 MSPT；完整 CapacityPoolIndex 汇总、异构等级与区间批处理仍待 R2／D26。每网络缓存最多保留参与成员数及对应组数，持有不可变规则／库存根；成员不可用／交还、网络失效、规则／配方重载时撤销，主线程所有权不使用并发容器。
+
+**发现与修复。** 复核旧夹具发现“已完成三条继承作业”不足以证明新原料可领取，新增 `newNetworkInputsAssigned` 硬断言并纳入 Gradle 门；新夹具仍独立比较每 tick 的完整产物、FE、一次维护费和冻结余量。失联审查发现旧 Access 仅绑定结构与工作根，断连重连但资产未变时可能复活；增加网络 topologyEpoch，AE2 writer 实际断开连接 30 tick 验证根不变化、独立源仍锁定、当前访问关闭、重连后旧凭据仍拒绝。新增单机交还存盘失败用例，验证旧磁盘所有者不释放、有限物品留在锁定目标、成功重存后才可释放且重复恢复拒绝。一次验证 `rf-b-new-work-read-20261012a` 与普通生产探针重叠使用 25581，因端口占用未启动；保留该失败日志，待前服正常退出后串行使用新目录重跑，没有改产品逻辑掩盖失败。
+
+**本次静态／构建。** `.\gradlew test build --offline --no-daemon` 通过；普通测试共 1190 项，零失败／错误，2 项因本地 Skyhive 外部配置／脚本缺失而按已有 assumption 跳过。拓扑凭据修复后，仅复跑 CombinedCheckpointTest／MachineAssetsTest／CentrifugeInputSearchesTest／OwnershipTransferTest 的 27 项并合并 build，全部通过；完整测试 XML 保存在 `build/network-gates/rf-b-20261012/full-test-results`，最终受影响 XML 在 `final-focused-tests`。build 自带 verifyReleaseArtifact 通过，最终 JAR 为 4,517,946 字节，SHA-256 `83e553cf19af8aa625622b8e66037c49d0eb9a81b9ebb4cea667406bc014a1c1`。产物包含尚未闭环的 D23a 草稿，不作为发布候选。
+
+**真实专服、沿用范围与恢复。** Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9；PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85，启用组合为 AE2 19.2.17／Applied Flux 2.1.5。运行使用各自独立世界，均正常保存和退出：
+
+- 沿用上一聊天 `rf-b-write-20261012c` 的无 AE2 writer 世界作为读取输入；其 reader `rf-b-read-20261012d` 的成功报告已核实，未误把聊天中断视为游戏失败。
+- 本次 `rf-b-new-work-read-20261012b`：无 AE2，用加强后的正式入口从旧 writer 跨 JVM 恢复，确实新分配 78 个作业，完成托管升级、喂食实际量、FE／产物守恒、交还及独立续产。此场景在最后的 topologyEpoch 修复前运行；后者由下述最终 AE2 组合覆盖，普通生产代码未再改变。
+- 本次 `rf-b-shared-ordinary-20261012a`：无 AE2，铁／金两基础网络的正式 ticker、全服一步预算／九服务公平、蜂蜜、计费、暂停／缺花／缺电、核心重建及断连恢复通过；这不是基础离心与复合成员混合场景。
+- 最终 `rf-b-ae2-write-20261012a` → `rf-b-ae2-read-20261012a`：全新独立部分工作接管、单身份六蜂位三进程、新原料分配、失联保管与旧凭据撤销、正常跨 JVM 工作／FE／账本恢复、托管升级、安全交还和独立续产全部通过。reader 新分配 6 个作业并完成 9 个作业；逐 tick 核对完整余额与实际费用，没有世界掉落。各目录 `results/multiblock.json`／`results/domain.json` 与日志是原始证据；最终源码／依赖／报告哈希清单在 `build/network-gates/rf-b-20261012/verification.json`。上游可选工厂配方和 Mekanism 扫描日志不作为这些附属内容已经兼容的证明。
+
+**仍开放的边界。** RF-B 本包的复合托管与正式工作闭环通过；完整 RF1／RF2、M05、D23a、D24／D25、维护扩展全面接入和 Spark／加速门均未关闭。本次未运行真实客户端，六布局连接口视觉、统一终端／供给的复合寻址、多人、基础／复合成员混合竞争及完整保存中断矩阵仍按后续门验收。下一包回到[14](bee-processing-network-roadmap.md#s14)的 D23a 普通物流，随后补 R2 联合；当前不扩展新 ME/WCWT 便利项。文档／编码／本地链接及最终 diff 检查单独执行，不重复已通过游戏门。
+
+<a id="s10-166"></a>
+### 10.166 D23a 普通物流、端口恢复与长配方轮转（2026-10-13）
+
+**本包交付与范围。** 接续聊天 `01a12fc5-884d-7311-9b4e-5ed6242e5593` 中未闭环的 D23a，在网络 worktree `bees-processing-network/1.21.1`／HEAD `0d88098` 保留 RF-A／RF-B 和端口草稿。完成基础蜂箱的有限供给与空笼保管、合法产物输入／有限配置输出、注册资源／双语菜单、权限与旧引用撤销、正常恢复，并修复实际生产暴露的离心输入饥饿。行为合同见[6.3.1](bee-processing-network-design.md#s6-3-1)及[7.3](bee-processing-network-design.md#s7-3)，界面见[9.3](bee-processing-network-visual-design.md#s9-3)，源码／配方依据见[13.1](bee-processing-network-references.md#s13-1)。
+
+**实现与失败边界。** 三种端口需原所有者首次打开并显式启用；九格有限供给与完整组件样本／单流体样本一起随网络根保存，方块不复制材料。暂停时可装蜂、补花源与手动取回；普通笼消耗、加固笼只退一个空壳，无空间或不支持时保留原输入。被动能力每次最多一叠或 1000 mB，模拟不变更根或推进索引；输入仅读已发布资格，输出按真实余额与事务预约结算，不宣称分层对外保留已接入。首次资格索引复用共享编译器，每服务步最多八单位，准备期间有中文／英文提示。菜单校验原会话、序号、配置修订、位置和所有者；完整组件留服务器，客户端只接收预算内图标。端口移除、配置／拓扑变化后旧引用不能复活，原位同类端口由原所有者重新连接已有保管账户。
+
+**实际发现与修复。** 上一聊天夹具反复发起接管，卡在队列清空到状态转换的窗口；改为仅发起一次并等待结果。FakePlayer 不实际打开菜单，改用 ServerPlayer 及原有发送边界夹具。铁锭拒收检查经固定 PB 13.14.0 JAR 核实是夹具错误：正式铁蜂蜜脾输出为粗铁／蜂蜡，修正断言而未放宽准入。随后 `d23a-write-20261013f` 正常跑满超时，保存结果显示只处理金蜂蜜脾、铁蜂蜜脾持续堆积；正式 300 tick 配方跨 200 tick 拓扑审计时清空候选轮转位置，导致每次重回首键。改为撤销候选、规则、库存与保留凭据，只保留无授权含义的最后检索键；成员／能力／规则／配方生命周期仍释放或重建。新增跨连续失效的双输入轮转回归；不会借保留游标继续失联生产。诊断中的旧 `a`／`g` 进程只在隔离 build 世界停止，不计正常恢复证据；旧失败目录保留。新增测试曾因 Java 不允许复合 `var` 声明编译失败，拆开声明后复验通过。
+
+**本次静态／构建。** `.\gradlew test build verifyReleaseArtifact --offline --no-daemon` 通过普通测试 1194 项，零失败／错误；既有 2 项 Skyhive 外部配置／脚本缺失 assumption 保持跳过。最终轮转修复后同一任务图运行 CentrifugeInputSearchesTest、PortCheckpointTest、OwnershipTransferTest 的 20 项、build、verifyReleaseArtifact 与 writer，全部通过。覆盖同能力共享扫描、输入公平、旧根／陈旧更新、两种 decoder、流式保存、非法字段／重复身份／错误归属、组件堆叠上限及交接失败保管。最终开发 JAR 4,525,315 字节，SHA-256 `1482600cd636705564f9e9308050d8558f26dae1f01e4a281ea4d2d45af4d582`；三类端口的 blockstate／模型／掉落表和正式类存在，domainProbe 类不进入 JAR。后续仅扩充客户端／reader 夹具与文档，未使该主代码构建证据失效。
+
+**本次真实运行。** Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9；PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；以下均为无 AE2 的独立测试世界，客户端含 JEI 19.39.0.368，均正常保存退出：
+
+- `d23a-write-20261013h`：从正式菜单装入加固笼铁蜂、金蜂刷怪蛋与对应花源，暂停时不推进生产，空笼只退一次；正式物品／流体能力的模拟不变、实际量、容量、拒收、供给满载／取回通过。启动正式 ticker 后确实生成并取出粗铁和蜂蜜；旧能力跨拓扑重建仍拒绝，原位替换找回保管空笼，陌生所有者不能打开，全程无拥有物掉落或原版蜜蜂实体。
+- `d23a-read-20261013a`：从上述已正常停止的 writer 世界复制到新目录，在新 JVM 恢复三种端口的完整配置、实际余量与停用状态；手动取回空笼、重放请求拒绝及恢复后的能力实际量通过。冷启动资格编译仍由正式服务推进。
+- `d23a-client-20261013a` 的初次 GUI 点击与截图通过；补强后的 `d23a-client-20261013b` 完成真实客户端左键存入／右键取回空笼、完整 bee_type 区分的铁／金蜜脾样本、含液容器样本、启停与服务器复核。按客户端配置启动生产后，实际取出两种蜜脾及蜂蜜。三种模型和本地化可用，208×208 面板在 320×240 逻辑视口内完整；截图回看文字、槽位和 JEI 区域无重叠。该逻辑视口检查不冒充全部显示器／GUI 缩放矩阵。
+
+原始 `results/ports.json`、`ports-client.json`、三张 PNG 和日志留在各 run 目录；当前主代码、报告与最终受影响测试的哈希导航放在 `build/network-gates/d23a-20261013/verification.json`。上游可选工厂配方／缺 Generators 的扫描日志保持原状，不作为附属矩阵已兼容的证据。
+
+**验收与后续。** 当前基础成员范围的 D23a 已通过，解除 R2 的普通物流前置。R2 仍须统一终端／供给的复合成员寻址、完整能力汇总、混合成员竞争及相应联合；完整 M05、RF1／RF2、D23b／D21–D22、工厂／动态蜂、完整中断恢复／多人／依赖和 Spark／高倍率门未关闭。RF-A／RF-B 的未受影响证据沿用，不把本轮局部调度修复写成 MSPT 收益。维护工作区未修改；本包没有提交、推送或发布。
+
+<a id="s10-167"></a>
+### 10.167 R2 复合管理、普通供给与条件能力联合（2026-10-13）
+
+**交付范围。** 在网络 worktree／HEAD `0d88098` 承接已有 RF-A／RF-B／D23a 及三／六蜂位管理改动，完成统一入口联合、按完整输入的离心能力显示和当前混合成员闭环。ManagedBeeAccess、工作索引、终端六蜂位与两路升级沿用接入时已有实现；新增 CoreCentrifugeIndex 并接入正式产物订阅／双语提示。合同见[7.3](bee-processing-network-design.md#s7-3)、[6.3.1](bee-processing-network-design.md#s6-3-1)，视觉见[9.3](bee-processing-network-visual-design.md#s9-3)，源码导航见[13.1](bee-processing-network-references.md#s13-1)。没有修改维护 worktree，没有提交、推送或发布。
+
+**能力与资产边界。** 同一输入使用正式 NetworkCentrifugeService 的封存 Profile 与 StaticCentrifugeAdapter 编译，基础一进程与组合三进程按 p×q/t 求和；满载能耗按实际逐 lane 报价相加，不叠乘各机升级。QueryBuilder 拒绝重复 machineId，按成员／能力组预算推进；每核心最多 72 个最近查询，同输入同 Profile 共享编译。配置／配方／能力／拓扑变化失效，红石资格按完成结果 100 tick 重采样；不采样产物、不预约或修改账本。客户端只收有界条件数值，库存先显示、汇总随后更新；终端协议由 39 升为 40，旧语义拒绝连接，存档 schema 13 不变。
+
+**本次必要检查。** 同一任务图运行受影响的 CapacityPoolIndexTest、TerminalProtocolTest、CombinedCheckpointTest、CentrifugeInputSearchesTest 与 build／compileDomainProbeJava，通过 46 项、零失败／错误／跳过；build 已包含 verifyReleaseArtifact。保留重复身份、异构精确吞吐／能耗、预算化冻结、有界显示包、组合恢复及候选共享回归。开发 JAR 为 4,546,986 字节，SHA-256 `4d0545e5b0a74466d42b163fd144014498d0066ef97d7d621bfdf49c4a366399`。随后只改夹具与文档，主代码的构建／测试证据沿用，没有重复全量 test 或历史 Step／Joint 矩阵。
+
+**真实运行。** Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9，PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19.85；三次通过的运行均无 AE2，各自独立世界，正常保存退出：
+- `r2-write-20261013b`：正式 ticker 的基础＋组合离心竞争、三／六工作寻址、每 tick FE／产物／一次维护费守恒通过。正式核心菜单禁用／启用第六蜂位、模拟取食不变、实际取食、普通供给原物归位、陌生玩家拒绝与重放拒绝通过；同输入汇总为两台／四进程，按两份不同速度计划独立核算。断连原根保管、旧访问凭据撤销及正常落盘通过。
+- `r2-read-20261013b`：从上述 writer 复制正常停止的世界，在新 JVM 恢复原组合工作、FE 与完整余额；继续真实生产、相同管理／供给、托管升级保留旧工作、两种成员一起清算后交还，独立续产通过。读档后基础离心完成 7 个作业、组合离心完成 58 个作业；计数仅证明两条正式路径确有工作，不代表吞吐测量。
+- `r2-client-20261013b`：真实中文客户端通过点击选择六号蜂位，取食／放回由服务器复核，普通供给显示组合控制器目标，专用终端收到两台／四进程的能力字段。界面截图显示正常中文、槽位与 JEI 区域；截图在点击当帧捕获，部分为选择前画面，没有据此宣称六按钮或悬停提示的完整视觉矩阵。客户端动作、显示包与服务端状态共同证明当前操作闭环。
+
+**失败与修正。** 首次 Gradle 命令将 `--tests` 放在 compileDomainProbeJava 后，被任务参数解析拒绝；改为紧跟 test 后执行。writer `a` 的夹具在同 tick 连发供给配置命令，被既有限流拒绝，修为分 tick 操作，没有放宽产品限流。reader `a` 只等待组合机清空，基础离心仍有在制工作，安全交还正确拒绝；夹具改为等待全部成员清算。client `a` 在传送／区块同步完成前点击，保留现场并正常关闭；`b` 等待客户端到位且只重试无资产的开菜单动作。失败目录保留，不计通过证据。
+
+**证据复用与设计精简。** RF-A 的格式／布局、RF-B 的所有权／AE2／交还保管、D23a 的端口物料／配置恢复及与本包无关的测试继续沿用原范围。当前只读能力显示不改变旧冻结结果／存档；普通编码和跨 JVM 运行覆盖当前接入，不复跑全部旧格式、所有客户端布局或全部依赖排列。路线 11.9–11.10 已合并重复要求，明确按实际变化触发检查，一套世界覆盖同包多个任务，文档仅做编码／链接／事实检查；资产、权限、未知结果保管和禁止掉落不变。
+
+**结论与剩余范围。** R2 当前基础成员＋静态组合蜂箱的管理／供给／混合生产联合通过，下一包按[路线 14](bee-processing-network-roadmap.md#s14)进入 R3 首个共享多输出／概率结果组。完整 RF1／RF2、全类型 M05、D23b／库存策略、维护资源全面接入、多人／完整依赖／故障注入／高倍率及 Spark 门继续开放。当前无 MSPT 收益声明。原始 JSON、日志和 PNG 在各运行目录；本包源码、测试和报告哈希导航在 `build/network-gates/r2-20261013/verification.json`。
+
+<a id="s10-168"></a>
+### 10.168 R3 多输出／概率与旧组合档恢复接续（2026-10-14，核实既有运行）
+
+**接续范围。** 本次核对上轮已留在网络 worktree／HEAD `0d88098` 的源码与原始报告，修正路线仍写“正在验收”的状态；没有重新执行这些已通过的 JVM。共享 BeeOutputPlan／冻结 Map／续采游标、两种宿主与严格旧档迁移的行为合同见[7.3](bee-processing-network-design.md#s7-3)，PB 13.14.0 原配方依据见[13.1](bee-processing-network-references.md#s13-1)。
+
+**沿用且本次核实的运行。** `r3-legacy-read-20261013a` 报告确认从旧组合世界恢复、实际生产、托管升级保留已付工作、交还和独立续产；`r3-write-20261013b` → `r3-read-20261013b` 确认六蜂位／三进程、基础离心竞争、多输出与概率物品实际出现、正常跨 JVM 恢复、交还后独立概率产出。三份 `results/multiblock.json` 的 passed、无掉落、正常保存与正常退出均为 true。概率场景是原 PB 骷髅蜂，使用无 AE2 组合；这些是上一轮产生、本次核实的运行证据，不称本次新跑。
+
+**本次静态复用边界。** 后续工厂包的受影响测试同时复验 BeeMultiOutputTest、BeeRandomCheckpointTest、CombinedCheckpointTest 和旧格式读取，结果通过；R3 普通分布首组可作为四档普通蜂箱的共享前置。动态蜂、直出、中性资源、其它附属等级、完整 M05／RF3 与高倍率／Spark 门仍开放。不得从旧小规模概率出现次数推断概率统计精度或 MSPT 收益。
+
+<a id="s10-169"></a>
+### 10.169 R3 普通蜂箱工厂、末槽管理与恢复包（2026-10-14）
+
+**工程交付。** 网络 worktree／HEAD `0d88098`，保留原 RF-A／RF-B／D23a／R2／R3 未提交成果。本包将 Basic／Advanced／Elite／Ultimate 蜂箱工厂同时接入：① 固定身份与 5／10／15／20 蜂位、9／10／15／20 原喂食槽；② 共同封存、正式逐蜂生产、普通供给和工作类型索引；③ 末槽启停、喂食、装笼及逐机升级；④ 严格 schema 15／samplingVersion 6、旧 6–14 读取与原资产交还；⑤ 两类终端每页六蜂位的客户端分页。行为、视觉和代码导航分别见[7.3](bee-processing-network-design.md#s7-3)、[9.3](bee-processing-network-visual-design.md#s9-3)、[13.1](bee-processing-network-references.md#s13-1)。蜂箱工厂沿用已存在父类资产序列化；离心工厂具有不同多罐／在制结构，留作紧接的完整资产包，未靠继承或字符串模糊匹配开放。
+
+**本次静态／构建。** FactoryApiaryCheckpointTest 验证四档末槽已付工作、升级不改旧计划、逐键蜂蜜、标准与流式往返、错配工厂容量拒绝、schema 14 兼容和正反向工作索引。与 BeeRandomCheckpointTest、BeeMultiOutputTest、CombinedCheckpointTest、OwnershipTransferTest、TerminalProtocolTest 集中通过。随后喂食入口修复只复跑相关工厂／协议测试并合并 build；最终新增“八成员各二十蜂位”的最大合法 ID／基因回复检查，确认编解码仍在 64 KiB 内，仅重跑协议测试。一次包末命令漏带测试筛选，实际额外运行了普通全量测试且通过；已在路线 11.10 明确 build 自带 test 的筛选规则，后续未重复全量检查。build 自带产物核验通过，开发 JAR 不含 domainProbe 类。
+
+**本次专服闭环。** `r3-factory-write-20261014a` → `r3-factory-read-20261014b` 使用 Minecraft 1.21.1／NeoForge 21.1.216／Java 21.0.9、PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19.85，无 AE2。四个独立网络各含一档蜂箱工厂与基础离心机：末蜂位保存部分已付工作，在新 JVM 精确恢复，正式 ticker 完成蜂产出、蜂蜜和离心；每 tick 核对 FE、维护费和完整产物。读档后逐档完成末槽启停与重放拒绝、喂食模拟不变／实际量、供给能力填回末槽、装笼／放回、速度升级取回、陌生玩家拒绝及安全交还；蜂、花源和原物理槽数保留，成员不重复拿共享 FE，全程无物品实体。四档报告与最终磁盘根核对均通过。该夹具每档使用一个占用末槽，证明寻址、资产与真实入口，不冒充所有槽同时满载或性能压力。
+
+**发现与修正。** 原协议测试把第 11 蜂位当作越界，改为第 21 位并保留越界断言；新夹具一次误用菜单方法名，修正为既有 exchangeBee。首次 reader `a` 在高档工厂喂食处失败，定位 CoreFeedingExchange 仍固定最多六槽，改为按权威成员布局校验；失败并未改变模拟资产。reader `b` 复用已正常停止的 writer 世界通过，不重新跑 writer。客户端初次四网络夹具在加载时拓扑改变；收窄为一台 Ultimate 后，空中测试位置未保持飞行导致等待界面前超时，后续夹具固定飞行并记录阶段；原失败目录保留，不计通过。
+
+**客户端与收尾。** 最终 `r3-factory-client-20261014f` 的真实中文客户端与 Gradle 门通过：核心和专用终端实际点击翻页并选中第 20 蜂位，两张截图已回看；页码 19–20／20、槽位、蜂种／进度及动作区无重叠，正常集成服落盘通过。`c` 已证明两类末槽选择，但截图发现机器名称叠在页码上，且 Gradle 仍读取通用 client.json；修正文字布局和专用报告入口。`d`／`e` 在只读列表尚不可操作时点击未进入详情，最终夹具等待 actionable、确认实际选择，再分帧检查每次翻页；没有放宽产品权限或断言。该运行覆盖 1000×700 窗口下的当前逻辑缩放，不代表所有分辨率，也不替代专服的资产检查。其余 R2、普通供给、共享概率与组合几何的未改动证据沿用，没有重跑历史 Step／Joint、完整依赖或加速矩阵。本包当前范围通过；开发 JAR 为 4,562,169 字节，SHA-256 `a3a68fd1b8029281e060a481e6e970afe8d58b57057a830f854fb5aa3258b843`。源码、已核实报告、最终截图和产物哈希导航在 `build/network-gates/r3-factory-20261014/verification.json`。
+
+**未关闭的门。** 普通离心工厂、EM／ME／EME 等附属等级、全类型 M05、完整 D24／RF1／RF2／RF3、动态／中性资源、多人／故障注入和 64×／256×／Spark 仍开放。维护 worktree 未修改，本包没有提交、推送或发布。
+
+<a id="s10-170"></a>
+### 10.170 R3 普通离心工厂、混合生产与升级闭环（2026-10-15）
+
+**工程交付。** 网络 worktree／HEAD `0d88098`，延续 2026-10-14 普通离心工厂包并保留其它未提交成果。Basic／Advanced／Elite／Ultimate 按实际身份、类和 3／5／7／9 进程准入；逐进程输入、三类输出槽、PB 升级槽、多罐／单罐、休眠多罐数据及已生成物品／long 流体余量进入同一迁移保管映像。原物理库存不计入公共余额，交还恢复原槽和组件；旧独立未完成周期缺少并行／费用快照，冻结前拒绝接管，须先由原机结清。网络已付作业按冻结计划恢复，不重抽、不重新收费。行为与参考导航见[7.3](bee-processing-network-design.md#s7-3)、[13.1](bee-processing-network-references.md#s13-1)；升级布局见[9.3](bee-processing-network-visual-design.md#s9-3)。
+
+**共享能力与界面。** 普通工厂复用共享候选和逐 lane 事务，封存 SPEED／ENERGY／PB 效果及可用时的 STACK；基础操作数先受既有 maxOpsPerTick 配置裁剪，再叠加 PB 并行。升级不改旧已付作业。终端协议 42、每组 12 个固定编号，组合离心组从 12 开始；核心使用六列两行，普通工厂的 11 项升级无需组合分页。物理菜单、核心和离心终端沿用同一资产交换服务。
+
+**静态／构建证据及复用。** 2026-10-14 的 FactoryCentrifugeCheckpointTest、CentrifugeCheckpointTest、MemberUpgradeChangeTest、CentrifugeWorkTransactionTest、CentrifugeInputSearchesTest、TerminalProtocolTest 六组报告合计 60 项，零失败／错误／跳过；覆盖全部 lane 的部分已付工作、旧计划不变、重复结算拒绝、完整恢复、布局／身份拒绝及最大升级编号编解码。2026-10-15 的合并调用保留相同筛选，`:test` 为 UP-TO-DATE，`:build` 与 `:verifyReleaseArtifact` 任务通过；同图首次客户端失败导致整条命令退出 1，不能记为整图通过。随后仅重跑变化的客户端探针，最终退出 0；生产源码未再修改，不重复测试或构建。原 XML 已保管于 `build/network-gates/r3-centrifuge-20261014/junit-reused-20261014`，最终 JAR 与源码哈希见同目录 `verification.json`，JAR 不含探针类。
+
+**专服恢复与混合生产。** 沿用成功且正常停止的 `r3-centrifuge-write-20261014c` 世界，本次运行 `r3-centrifuge-read-20261015a`，Gradle 退出 0、耗时 121.4 秒。Minecraft 1.21.1／NeoForge 21.1.216／Java 21.0.9、PB 13.14.0／ProductiveLib 0.2.0／Mekanism 10.7.19，无 AE2；具体附属版本以该运行 `results/domain.json` 为准。四档全部 3／5／7／9 lane 从部分已付进度跨 JVM 恢复并完成，原槽与组件资产安全交还，升级模拟／旧请求及无掉落检查通过。迁移夹具末进程包含 19 个物品和 3,000,000,000 mB 已生成流体余量。另在同一世界完成普通蜂箱工厂、普通离心工厂、基础离心机、组合一体机四类成员的共同产出，九个工厂进程参与，有限积压排空后四类均安全交还；所有检查点在正常停服后逐份与磁盘一致，passed 与 normalShutdownCheckpointSaved 均为 true。
+
+**失败定位与修正。** 首轮写档暴露多流体恢复只清正向映射而未清 mappedTanks，现由 clearForRestore 一起清正反索引、计数、槽内容与外部缓存，另显式清 PB 升级槽后恢复；容量不足仍在离线副本往返预检中拒绝。旧 reader `20261014e` 已完成生产，但停服核验调用关闭后的权威会话而失败；现提前保存不可变 mixedSaved，所有磁盘对比完成后才设置正常保存成功，不改旧失败报告。旧客户端只等待安装数量而未处理核心撤销列表，现分帧选择、检查控件 active、验证服务端回执，再刷新核心列表；本次 `20261015a` 在预览期间点击不可用按钮而退出 1，`20261015b` 已确认三次交换后在临时空升级投影处退出 1。已按 ManagedProductionAccess／CoreUpgradeCommands 的暂不可用合同等待投影恢复，完整 11 项、实际选择、四次 MOVED=1 以及组件与数量守恒断言均保留，资产请求不自动重试。
+
+**客户端与最终收尾。** `r3-centrifuge-client-20261015c` 真实中文客户端退出 0、耗时 84.4 秒；核心和离心终端各一次 STACK 安装／取回，共四份成功回执，安装后原槽为空，取回后与原物品组件／数量完全一致。客户端报告及集成服正常落盘报告均通过，两张截图已回看：1000×700 窗口当前缩放下，11 项图标完整可见，动作区无重叠；不代表所有分辨率。每次本轮验证均有 285 秒外部进程树超时，实际均低于上限，失败现场保留；本任务启动的客户端和专服已退出。原始 stdout／stderr、运行报告、截图、复用 XML 与最终哈希集中在 `build/network-gates/r3-centrifuge-20261014` 及对应 run 目录。最后只做受影响编码／JSON／链接、报告、JAR 和 diff 检查，不重启已通过场景。
+
+**范围与后续。** 本包当前范围通过；RF-A／RF-B、D23a、R2、共享概率模型和普通蜂箱工厂未变部分沿用[10.165](#s10-165)–[10.169](#s10-169)，没有重跑历史全矩阵。附属工厂等级、动态蜂／中性资源／直出、完整 RF1／RF2／RF3、D24／M05、多人／故障注入及 64×／256×／Spark 仍开放，没有新的吞吐或 MSPT 结论。下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)；维护 worktree 未修改，本包未提交、推送或发布。

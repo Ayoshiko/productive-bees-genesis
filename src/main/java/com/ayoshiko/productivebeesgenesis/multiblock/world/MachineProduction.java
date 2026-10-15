@@ -78,7 +78,7 @@ final class MachineProduction {
 		return work;
 	}
 	private static CombinedMachineWork settleBee(ServerLevel level, CombinedMachineWork work, int slot) {
-		return work.settleBee(slot, limit(level, work.bee(slot).plan().output())).apply(work);
+		return work.settleBee(slot, key -> limit(level, key)).apply(work);
 	}
 	private static int limit(ServerLevel level, ProductKey key) { return Math.min(64, ProductKeyCodec.item(key, 1, level.registryAccess()).getMaxStackSize()); }
 }

@@ -96,7 +96,7 @@ class CombinedMachineWorkTest {
 		var bee = bee(UUID.randomUUID(), 5, 4, 2, 1);
 		var state = machine(30, List.of(bee), FiniteProductBuffer.empty(2, 0, 1000));
 		state = change(state, state.advanceBee(5, 0, context(bee), 1, 0, null));
-		var next = new BeeWorkExecutor.Cycle(1, 7, 2, ITEM);
+		var next = new BeeWorkExecutor.Cycle(1, 7, 2, List.of(new BeeOutputPlan(COMB, ITEM, 1, 1, 1, BeeOutputPlan.Basis.ROLL)));
 		state = change(state, state.advanceBee(5, state.bee(5).revision(), context(state.bee(5)), 100, 1, next));
 		assertEquals(22, state.energy()); assertEquals(bee.plan(), state.bee(5).plan()); assertEquals(ProductAmount.of(1), state.bee(5).frozen());
 		state = change(state, state.settleBee(5, 64));
@@ -259,7 +259,7 @@ class CombinedMachineWorkTest {
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
 		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); removeBeeFluidFields(old); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(5, newTag.getInt("schema"));
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(6, newTag.getInt("schema"));
 		newTag.putInt("schema", 1); removeBeeFluidFields(newTag); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
@@ -333,7 +333,7 @@ class CombinedMachineWorkTest {
 	}
 	private static void removeBeeFluidFields(CompoundTag root) {
 		for (var raw : records(root, "bees")) {
-			var bee = (CompoundTag) raw; bee.remove("frozenFluid");
+			var bee = (CompoundTag) raw; com.ayoshiko.productivebeesgenesis.apiculture.persistence.LegacyBeeFixture.scalar(bee, 8, false); bee.remove("frozenFluid");
 			bee.getCompound("plan").remove("fluidOutput"); bee.getCompound("plan").remove("fluidPerCycle");
 		}
 	}
@@ -366,7 +366,8 @@ class CombinedMachineWorkTest {
 		old.putInt("schema", 4); removeBeeFluidFields(old);
 		var migrated = restore(old);
 		assertEquals(original.bees(), migrated.bees()); assertEquals(original.energy(), migrated.energy());
-		var current = CombinedWorkCodec.encode(migrated);
+		var current = CombinedWorkCodec.encode(migrated); current.putInt("schema", 5);
+		for (var raw : records(current, "bees")) com.ayoshiko.productivebeesgenesis.apiculture.persistence.LegacyBeeFixture.scalar((CompoundTag) raw, 10, false);
 		for (var field : List.of("frozenFluid", "fluidOutput", "fluidPerCycle")) {
 			var bad = current.copy(); var bee = records(bad, "bees").getCompound(0);
 			(field.equals("frozenFluid") ? bee : bee.getCompound("plan")).remove(field);

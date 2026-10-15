@@ -43,7 +43,7 @@ public final class MachineRestartProbe {
 	private static int workUntil;
 	private static int phase, started;
 	private static String mode() { return System.getProperty("pbg.multiblock.mode", ""); }
-	private static boolean enabled() { return !Boolean.getBoolean("pbg.multiblock.production") && (mode().equals("write") || mode().equals("read")); }
+	private static boolean enabled() { return !Boolean.getBoolean("pbg.multiblock.network") && !Boolean.getBoolean("pbg.multiblock.production") && (mode().equals("write") || mode().equals("read")); }
 	@SubscribeEvent public static void started(ServerStartedEvent event) {
 		if (!enabled()) return;
 		var server = event.getServer(); var level = server.overworld();

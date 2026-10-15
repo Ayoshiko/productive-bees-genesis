@@ -13,6 +13,8 @@ configurations {
 def runId = providers.gradleProperty('networkProbeRun').getOrElse('d04')
 if (!(runId ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('Invalid network probe run id')
 def probeDirectory = layout.buildDirectory.dir("network-probe-${runId}")
+def portMode = providers.gradleProperty('networkPortMode').orNull
+if (portMode != null && !(portMode in ['write', 'read', 'client'])) throw new GradleException('Invalid port probe mode')
 def coldProbe = providers.gradleProperty('networkColdProbe').isPresent()
 def probeAe2 = providers.gradleProperty('networkProbeAe2').isPresent()
 def probeAe2Version = providers.gradleProperty('networkProbeAe2Version').getOrElse('19.2.17')
@@ -24,9 +26,15 @@ def machineWorkspaceProbe = providers.gradleProperty('networkMachineWorkspace').
 def multiblockMode = providers.gradleProperty('networkMultiblockMode').orNull
 def machineMenuProbe = providers.gradleProperty('networkMachineMenu').isPresent()
 def machineProduction = providers.gradleProperty('networkMachineProduction').isPresent()
+def combinedNetwork = providers.gradleProperty('networkCombinedProbe').isPresent()
+if (combinedNetwork && (machineProduction || !(multiblockMode in ['write', 'read']))) throw new GradleException('Combined network probe requires its own write/read mode')
 if (machineProduction && !(multiblockMode in ['write', 'read'])) throw new GradleException('Machine production requires write/read mode')
 if (multiblockMode != null && !(multiblockMode in ['lifecycle', 'write', 'read'])) throw new GradleException('Invalid multiblock mode')
 def automaticMode = providers.gradleProperty('networkAutomaticMode').orNull
+def factoryProbe = providers.gradleProperty('networkFactoryProbe').isPresent()
+def centrifugeFactoryProbe = providers.gradleProperty('networkCentrifugeFactoryProbe').isPresent()
+if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'read']))) throw new GradleException('Centrifuge factory probe requires its own automatic write/read mode')
+if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
 def ordinaryProbe = providers.gradleProperty('networkOrdinaryProduction').isPresent()
 if (ordinaryProbe && (automaticMode != null || multiblockMode != null || coldProbe || providers.gradleProperty('networkUpgradeProbe').isPresent() || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode', 'networkPlayerMode'].any { providers.gradleProperty(it).isPresent() })) throw new GradleException('Ordinary production requires its focused probe mode')
 def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
@@ -77,6 +85,8 @@ if (playerMode == 'write' && seedWorld != null) throw new GradleException('Playe
 if (automaticMode == 'read' && seedWorld == null) throw new GradleException('Automatic restart requires its saved fixture world')
 if (multiblockMode == 'read' && seedWorld == null) throw new GradleException('Machine restart reader requires saved writer world')
 if (multiblockMode == 'write' && seedWorld != null) throw new GradleException('Machine restart writer requires fresh world')
+if (portMode == 'read' && seedWorld == null) throw new GradleException('Port reader requires its stopped writer world')
+if (portMode in ['write', 'client'] && seedWorld != null) throw new GradleException('Port writer/client requires a fresh world')
 if (automaticMode == 'write' && seedWorld != null) throw new GradleException('Automatic writer requires a fresh world')
 if (automaticMode != null && (coldProbe || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode'].any { providers.gradleProperty(it).isPresent() })) {
     throw new GradleException('Automatic restart cannot be combined with another probe mode')
@@ -97,8 +107,14 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = playerConcurrent ? 'concurrent-probe.dat' : playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = portMode == 'read' ? 'port-probe.dat' : playerConcurrent ? 'concurrent-probe.dat' : playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
+            if (portMode == 'read') {
+                File report = new File(sourceWorld.parentFile, 'results/ports.json')
+                if (!report.isFile()) throw new GradleException('Missing port writer report')
+                def writer = new groovy.json.JsonSlurper().parse(report)
+                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2) throw new GradleException('Port reader requires matching successful writer')
+            }
             if (playerMode == 'read' && playerConcurrent) {
                 File report = new File(sourceWorld.parentFile, 'results/concurrent-server.json')
                 if (!report.isFile()) throw new GradleException('Missing concurrent writer report')
@@ -119,7 +135,7 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
                 File writerReport = new File(sourceWorld.parentFile, 'results/multiblock.json')
                 if (!writerReport.isFile()) throw new GradleException('Missing machine writer report')
                 def writer = new groovy.json.JsonSlurper().parse(writerReport)
-                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2 || (writer.production == true) != machineProduction) {
+                if (writer.passed != true || writer.normalShutdown != true || writer.mode != 'write' || writer.ae2Loaded != probeAe2 || (writer.production == true) != machineProduction || (writer.combinedNetwork == true) != combinedNetwork) {
                     throw new GradleException('Machine reader requires successfully stopped matching writer')
                 }
             }
@@ -290,8 +306,35 @@ neoForge {
             client()
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
-            systemProperty 'pbg.machineClient.enabled', 'true'
+            systemProperty 'pbg.machineClient.enabled', (!combinedNetwork).toString()
+            if (combinedNetwork) {
+                systemProperty 'pbg.combined.client', 'true'
+                systemProperty 'pbg.multiblock.network', 'true'
+                systemProperty 'pbg.multiblock.enabled', 'true'
+                systemProperty 'pbg.multiblock.mode', 'write'
+            }
             if (machineMenuProbe) systemProperty 'pbg.machineClient.menuOnly', 'true'
+            programArgument '--width'
+            programArgument '1000'
+            programArgument '--height'
+            programArgument '700'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+        networkPortServer {
+            server()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            programArgument '--nogui'
+            systemProperty 'pbg.port.mode', portMode ?: 'write'
+            logLevel = org.slf4j.event.Level.INFO
+            taskBefore prepareProbe
+        }
+        networkPortClient {
+            client()
+            sourceSet = sourceSets.domainProbe
+            gameDirectory = probeDirectory
+            systemProperty 'pbg.port.mode', 'client'
             programArgument '--width'
             programArgument '1000'
             programArgument '--height'
@@ -307,6 +350,8 @@ neoForge {
             systemProperty 'pbg.multiblock.enabled', 'true'
             if (multiblockMode != null) systemProperty 'pbg.multiblock.mode', multiblockMode
             systemProperty 'pbg.multiblock.production', machineProduction.toString()
+            systemProperty 'pbg.multiblock.network', combinedNetwork.toString()
+            systemProperty 'pbg.multiblock.multi', providers.gradleProperty('networkMultiOutputProbe').isPresent().toString()
             logLevel = org.slf4j.event.Level.INFO
             taskBefore prepareProbe
         }
@@ -314,7 +359,19 @@ neoForge {
             client()
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
-            systemProperty 'pbg.client.enabled', 'true'
+            systemProperty 'pbg.client.enabled', (!factoryProbe && !centrifugeFactoryProbe).toString()
+            if (centrifugeFactoryProbe) {
+                systemProperty 'pbg.factoryCentrifuge.client', 'true'
+                systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
+                systemProperty 'pbg.domain.enabled', 'true'
+                systemProperty 'pbg.automatic.mode', 'write'
+            }
+            if (factoryProbe) {
+                systemProperty 'pbg.factory.client', 'true'
+                systemProperty 'pbg.factory.enabled', 'true'
+                systemProperty 'pbg.domain.enabled', 'true'
+                systemProperty 'pbg.automatic.mode', 'write'
+            }
             programArgument '--width'
             programArgument '1000'
             programArgument '--height'
@@ -331,6 +388,8 @@ neoForge {
             if (upgradeProbe) systemProperty 'pbg.upgrades.only', 'true'
             if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
+            if (factoryProbe) systemProperty 'pbg.factory.enabled', 'true'
+            if (centrifugeFactoryProbe) systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
             if (coldProbe) systemProperty 'pbg.cold.enabled', 'true'
             if (providers.gradleProperty('networkColdReference').isPresent()) systemProperty 'pbg.cold.reference', 'true'
 			if (providers.gradleProperty('networkSharedEnergy').isPresent()) systemProperty 'pbg.centrifuge.sharedEnergy', 'true'
@@ -394,7 +453,14 @@ tasks.named('runNetworkMultiblockServer') {
             else required += ['checkpointRestoredBeforeFormation', 'newJvm', 'partialDeliveryAndProductionResumed',
                     'finalProductsEnergyAndReturnedAssetsConserved']
         }
+        if (combinedNetwork) {
+            required = ['singleIdentitySixBeesThreeLanes', 'sourcePortsRevoked', 'sharedEnergyAndOutputsConserved', 'normalAssetCheckpointSaved', 'noWorldDrops', 'newNetworkInputsAssigned',
+                        'unifiedSixthSlotSupplyAndPermissions', 'heterogeneousCapacityAndCompetition']
+            if (multiblockMode == 'write') required += ['independentPartialWorkTransferred', 'managedMenuExchange', 'formalTypedProduction', 'disconnectionRetainsCustodyAndRevokesAccess']
+            else required += ['newJvm', 'managedCheckpointRestored', 'managedUpgradePreservesPaidWork', 'returnAndIndependentResume']
+        }
         if (result.passed != true || result.normalShutdown != true || required.any { result[it] != true }
+                || (result.combinedNetwork == true) != combinedNetwork
                 || (result.production == true) != machineProduction
                 || result.ae2Loaded != probeAe2
                 || (multiblockMode != null && result.mode != multiblockMode)
@@ -404,8 +470,40 @@ tasks.named('runNetworkMultiblockServer') {
     }
 }
 
+tasks.named('runNetworkPortServer') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/ports.json')
+        if (!report.isFile()) throw new GradleException('Missing port report')
+        def result = new groovy.json.JsonSlurper().parse(report)
+        def required = portMode == 'read' ? ['crossJvmPortAndManualRecovery'] : ['pausedBeeAndFlowerSupplyConserved', 'emptyCageReturnedOnce', 'formalBeeCentrifugeAndPipeOutput', 'staleReferencesAndOwnerBoundary', 'replacementRecoversSameAccount', 'finiteSupplyCapacityRefusalAndRecovery']
+        required += ['nativeCapabilitiesActualAmountsSimulationAndRoles', 'noWorldDropsOrBeeSpawns']
+        if (result.passed != true || result.normalShutdown != true || result.ae2Loaded != probeAe2 || result.mode != (portMode ?: 'write') || required.any { result[it] != true }) throw new GradleException('Port assertions failed')
+    }
+}
+tasks.named('runNetworkPortClient') {
+    doLast {
+        File report = new File(probeDirectory.get().asFile, 'results/ports-client.json')
+        File serverReport = new File(probeDirectory.get().asFile, 'results/ports.json')
+        if (!report.isFile() || !serverReport.isFile()) throw new GradleException('Missing port client/server report')
+        def client = new groovy.json.JsonSlurper().parse(report)
+        def server = new groovy.json.JsonSlurper().parse(serverReport)
+        if (client.passed != true || server.passed != true || server.normalShutdown != true
+                || client.componentIconsAndSamples != true || client.realRecoveryClick != true || client.modelsAndCompactLayout != true
+                || server.clientConfiguredProductionAndOutput != true) throw new GradleException('Port client assertions failed')
+    }
+}
 tasks.named('runNetworkMultiblockClient') {
     doLast {
+        if (combinedNetwork) {
+            File clientReport = new File(probeDirectory.get().asFile, 'results/combined-client.json')
+            File serverReport = new File(probeDirectory.get().asFile, 'results/multiblock.json')
+            if (!clientReport.isFile() || !serverReport.isFile()) throw new GradleException('Missing combined client reports')
+            def client = new groovy.json.JsonSlurper().parse(clientReport)
+            def server = new groovy.json.JsonSlurper().parse(serverReport)
+            if (client.passed != true || client.realSixthSlotRoundTrip != true || client.supplyTargetAndCapacityPacket != true
+                    || server.passed != true || server.normalShutdown != true) throw new GradleException('Combined client checks failed')
+            return
+        }
         File report = new File(probeDirectory.get().asFile, 'results/machine-client.json')
         if (!report.isFile()) throw new GradleException('Missing machine client report')
         def result = new groovy.json.JsonSlurper().parse(report)
@@ -425,9 +523,22 @@ tasks.named('runNetworkMultiblockClient') {
 
 tasks.named('runNetworkDomainClient') {
     doLast {
-        File report = new File(probeDirectory.get().asFile, 'results/client.json')
+        if (centrifugeFactoryProbe) {
+            def client = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/centrifuge-factory-client.json'))
+            def server = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/domain.json'))
+            if (client.passed != true || client.coreAndTerminalStackRoundTrip != true || server.passed != true || server.normalShutdownCheckpointSaved != true) throw new GradleException('Centrifuge factory client checks failed')
+            return
+        }
+        File report = new File(probeDirectory.get().asFile, factoryProbe ? 'results/factory-client.json' : 'results/client.json')
         if (!report.isFile() || !new groovy.json.JsonSlurper().parse(report).passed) {
             throw new GradleException('Network client assertions did not complete')
+        }
+        if (factoryProbe) {
+            def client = new groovy.json.JsonSlurper().parse(report)
+            File domain = new File(probeDirectory.get().asFile, 'results/domain.json')
+            if (client.coreAndTerminalSelectSlot20 != true || !domain.isFile()
+                    || new groovy.json.JsonSlurper().parse(domain).normalShutdownCheckpointSaved != true)
+                throw new GradleException('Factory client or normal shutdown assertions did not complete')
         }
     }
 }

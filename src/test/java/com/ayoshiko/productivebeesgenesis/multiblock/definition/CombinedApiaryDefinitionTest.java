@@ -25,7 +25,8 @@ class CombinedApiaryDefinitionTest {
 			}
 			assertEquals(8 + 4 * ((7 - 2) + (size.height() - 2) + (size.depth() - 2)), counts.get(FRAME));
 			assertEquals((7 - 2) * (size.height() - 2) * (size.depth() - 2) - 3, counts.get(AIR));
-			assertFalse(counts.containsKey(UPGRADE)); assertFalse(counts.containsKey(NETWORK_PORT));
+			assertFalse(counts.containsKey(UPGRADE)); assertEquals(1, counts.get(NETWORK_PORT));
+			assertEquals(Set.of(CASING, GLASS, NETWORK_PORT), template.cellAt(new BlockPos(1, 1, 0)).roles());
 			assertEquals(Set.of(AIR), template.cellAt(new BlockPos(3, size.height() / 2 + 1, size.depth() / 2)).roles());
 		}
 	}

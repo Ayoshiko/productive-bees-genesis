@@ -30,8 +30,8 @@ public final class BeeRosterChange {
 	/** 每次实际装入使用成员版本派生新身份；模拟不消耗随机状态，也不复用原槽蜜蜂身份。 */
 	public static BeeRosterChange insert(BeeMemberState source, int slot, AssetImage original, StaticBeePlan plan) {
 		Objects.requireNonNull(source);
-		if (slot < 0 || slot >= 3 || source.bees().stream().anyMatch(value -> value.slot() == slot)) {
-			throw new IllegalArgumentException("Bee target is occupied or outside the basic apiary");
+		if (slot < 0 || slot >= source.slotCount() || source.bees().stream().anyMatch(value -> value.slot() == slot)) {
+			throw new IllegalArgumentException("Bee target is occupied or outside the apiary");
 		}
 		var raw = original.copy();
 		if (raw.getInt("slot_index") != slot || raw.getInt("ticks_in_hive") != 0) {
