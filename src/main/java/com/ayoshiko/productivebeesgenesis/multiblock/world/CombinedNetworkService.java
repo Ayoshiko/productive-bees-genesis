@@ -4,7 +4,10 @@ import com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecor
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.runtime.NetworkRuntime;
+import com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies;
+import net.minecraft.core.BlockPos;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
+import com.ayoshiko.productivebeesgenesis.apiary.DynamicBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import net.minecraft.resources.ResourceLocation;
@@ -35,6 +38,7 @@ public final class CombinedNetworkService {
 		var context = new BeeWorkExecutor.Context(true, running, flower, bee.plan().recipeRevision(), bee.plan().capabilityRevision(),
 				new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
 		var cycle = ticks > 0 && bee.progress() == 0 ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level) : null;
+		context = DynamicBeeAdapter.prepare(level, bee, work.feeding(), ticks, cycle, context);
 		long tick = level.getServer().getTickCount(), fee = ticks == 0 ? 0 : ModConfig.SERVER.beeNetwork.maintenanceFe.get();
 		long due = data.maintenanceDue(tick, fee);
 		if (before.energy().stored() < due) return NetworkRuntime.Status.ENERGY;
@@ -42,6 +46,17 @@ public final class CombinedNetworkService {
 		if (result.status() == BeeWorkExecutor.Status.READY) {
 			data.publishMaintainedWork(before, before.applyCombinedBee(member, result), tick, fee);
 			var next = data.checkpoint(); var updated = next.ownedMachines().get(member).combined().bee(slot);
+			if (bee.generation() == null && updated.generation() != null && updated.generation().phase() == BeeGeneration.Phase.STARTED) {
+				var origin = record.claim().origin();
+				var generated = DynamicBeeAdapter.generate(level, new BlockPos(origin.x(), origin.y(), origin.z()), updated);
+				next = data.checkpoint();
+				var currentBee = next.ownedMachines().get(member).combined().bee(slot);
+				if (!DynamicBeeAdapter.sameRequest(updated, currentBee)) throw new IllegalStateException("Combined bee generation owner changed");
+				data.publish(next.applyCombinedBee(member, BeeWorkExecutor.resolveGeneration(currentBee, generated)));
+				RuntimeProductPolicies.recordGenerated(level, generated);
+				next = data.checkpoint();
+				updated = next.ownedMachines().get(member).combined().bee(slot);
+			}
 			if (updated.hasFrozen()) data.publish(next.settleCombinedBee(member, slot, updated.revision()));
 			return ticks == 0 ? NetworkRuntime.Status.SETTLING : NetworkRuntime.Status.RUNNING;
 		}
@@ -52,6 +67,7 @@ public final class CombinedNetworkService {
 			case STALE_PLAN -> NetworkRuntime.Status.STALE_PLAN;
 			case DISABLED -> NetworkRuntime.Status.STOPPED;
 			case UNLOADED -> NetworkRuntime.Status.UNAVAILABLE;
+			case GENERATION_UNKNOWN -> NetworkRuntime.Status.FAILED;
 			default -> NetworkRuntime.Status.SETTLING;
 		};
 	}

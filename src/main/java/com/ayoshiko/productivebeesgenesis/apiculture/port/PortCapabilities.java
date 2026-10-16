@@ -25,7 +25,7 @@ public final class PortCapabilities {
         var filter = view.state().filters().get(key.kind() == ProductKey.Kind.FLUID ? PortState.FLUID : -1);
         if (filter != null && !filter.equals(key)) return 0;
         var policy = insert ? RuntimeProductPolicies.peek(level) : null;
-        if (insert && (policy == null || policy.descriptors(key).stream().noneMatch(rule -> rule.accepts(key)))) return 0;
+        if (insert && (policy == null || !policy.accepts(key))) return 0;
         long amount = insert ? request : Math.min(request, view.root().ledger().available(key).longSaturated());
         if (amount == 0) return 0;
         if (simulate) return (!insert || RuntimeProductPolicies.peek(level) == policy) && access.commit(view, view.root(), true) ? amount : 0;
@@ -82,7 +82,7 @@ public final class PortCapabilities {
             if (view.state().kind() == PortState.Kind.SUPPLY) return true;
             var key = ProductKeyCodec.item(stack, access.port.getLevel().registryAccess()); var filter = view.state().filters().get(slot);
             var policy = RuntimeProductPolicies.peek((ServerLevel) access.port.getLevel());
-            return (filter == null || filter.equals(key)) && policy != null && policy.descriptors(key).stream().anyMatch(rule -> rule.accepts(key));
+            return (filter == null || filter.equals(key)) && policy != null && policy.accepts(key);
         }
         @Override public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
             var view = access.get(true); if (!slot(slot) || view == null || stack.isEmpty() || view.state().kind() == PortState.Kind.OUTPUT) return stack;

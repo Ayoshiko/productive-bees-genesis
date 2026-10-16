@@ -25,7 +25,7 @@ public final class OwnershipTransferService {
 	}
 	public static OwnershipTransferService begin(NetworkDirectory directory, NetworkSavedData authority, MemberClaim claim, OwnershipEndpoint endpoint) {
 		var service = new OwnershipTransferService(directory, authority, claim, Step.CLAIM);
-		if (directory.claimAt(claim.origin()) != null || authority.checkpoint().ownedMachines().hasTransfer(claim.transfer()) || (authority.checkpoint().ownedMachines().get(claim.member()) != null && authority.checkpoint().ownedMachines().get(claim.member()).phase() != RETURNED)
+		if (directory.claimAt(claim.origin()) != null || authority.checkpoint().ownedMachines().hasTransfer(claim.transfer()) || (authority.checkpoint().ownedMachines().get(claim.member()) != null && !authority.checkpoint().ownedMachines().isRejoin(claim))
 				|| authority.checkpoint().ownedMachines().at(claim.origin()) != null) throw new IllegalArgumentException("Member already claimed or transfer replayed");
 		endpoint.validate(authority.identity(), claim);
 		endpoint.freeze(authority.identity(), claim);
@@ -38,7 +38,7 @@ public final class OwnershipTransferService {
 		var service = new OwnershipTransferService(directory, authority, claim, Step.RECOVERY);
 		try {
 			endpoint.validate(authority.identity(), claim);
-			if (authority.checkpoint().ownedMachines().get(claim.member()) == null) {
+			if (authority.checkpoint().ownedMachines().get(claim.member()) == null || authority.checkpoint().ownedMachines().isRejoin(claim)) {
 				service.requireClaim(); service.requireBinding(endpoint, MemberBinding.Mode.JOINING);
 				// 同一进程重建核心时，内存目录可能领先磁盘；恢复也必须等待该版本的回执。
 				service.directoryRevision = directory.directoryRevision(); service.step = Step.CLAIM;

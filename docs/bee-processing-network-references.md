@@ -14,6 +14,8 @@ R1 普通生产复核本网络 worktree 的 `StaticApiaryAdapter`、`StaticFeedi
 <a id="s13-1"></a>
 ### 13.1 本仓库源码入口
 
+**R3 动态生产来源（2026-10-15）。** 基于本分支 BeeProduceProcessor、WannaBeeAmberAdapter／WannaBeeLootSelection、MultiFlowerBeeAdapter、AmberEntityFlowerHelper 与 PB 13.14.0。对应 JAR 的 `data/productivebees/productivebees/wanna.json` 和 ModEntities 注册表明确 WannaBee 属于可配置蜂，三种多花蜂为原生实体；不能把显示名推导成 `wanna_bee` 注册项。复用单事件战利品候选、PB 黑名单、花源标签及染料映射；旧独立 sampleBatches 的聚合上限／异常处理不用于网络。Minecraft 1.21.1 的铁傀儡表给出铁锭 3–5、虞美人 0–2，作为真实非空池夹具；凋灵表为空，不能把其实体死亡额外掉落当作战利品表输出。共享生成请求、池续算和格式入口分别为 DynamicBeeAdapter、BeeGeneration／GeneratedBeeSampler、BeeGenerationCodec；宿主接入 NetworkBeeService、CombinedNetworkService、MachineProduction。范围与实际结果见[10.175](bee-processing-network-evidence-current.md#s10-175)，不复用旧 Spark 数值推断本包性能。
+
 - [蜂箱分组与进度](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeSlotTickProcessor.java)、[产出处理](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProduceProcessor.java)、[蜜蜂数据](../src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeSlot.java)。说明可以复用已有业务知识，但当前仍与成员槽位和方块上下文耦合。
 - [离心上下文](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeContext.java)、[共享虚拟刻计划](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/centrifuge/PbVirtualTickPlan.java)、[共享数量采样](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/centrifuge/CentrifugeProductionSampling.java)。离心批量保底与原始二项分布不同，数量和仍采用现有近似，设计与验收必须如实反映。
 - [现有 AE2 外部存储](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CentrifugeExternalAeStorage.java)、[节点生命周期](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2GridNodeManager.java)。已支持 long 数量接口、物品／流体提取和实际插入数量，但后端是本机物理槽位。

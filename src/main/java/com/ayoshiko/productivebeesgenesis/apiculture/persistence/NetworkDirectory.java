@@ -58,8 +58,11 @@ public final class NetworkDirectory implements AutoCloseable {
 	}
 	public long reserveMember(NetworkSavedData authority, com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim claim) {
 		requireAuthority(authority); if (!authority.identity().networkId().equals(claim.network())) throw new IllegalArgumentException("Foreign claim");
-		var record = authority.checkpoint().ownedMachines().get(claim.member());
-		if (record != null && (!record.claim().equals(claim) || record.phase() == com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.RETURNED)) throw new IllegalArgumentException("Replayed member claim");
+		var owned = authority.checkpoint().ownedMachines();
+		var record = owned.get(claim.member());
+		if (record != null && !owned.isRejoin(claim)
+				&& (!record.claim().equals(claim) || record.phase() == com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.RETURNED))
+			throw new IllegalArgumentException("Replayed member claim");
 		long revision = index.reserve(claim); index.save(file(NAME).toFile(), registries); return revision;
 	}
 	public long releaseMember(NetworkSavedData authority, com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberClaim claim) {

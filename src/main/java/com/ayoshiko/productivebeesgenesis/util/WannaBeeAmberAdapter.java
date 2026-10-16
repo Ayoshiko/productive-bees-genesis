@@ -35,6 +35,13 @@ public final class WannaBeeAmberAdapter {
 	private WannaBeeAmberAdapter() {
 	}
 
+	/** 服务端已发布生成请求后调用；异常必须交给请求所有者保管，不能被当成空战利品。 */
+	public static List<ItemStack> generateEventPool(ServerLevel level, BlockPos origin, List<CustomData> candidates) {
+		if (!level.getServer().isSameThread() || candidates.isEmpty()) throw new IllegalArgumentException("Invalid Wanna Bee generation request");
+		return createLootPool(level, origin, candidates, ThreadLocalRandom.current()).eligibleDrops().stream()
+				.map(ItemStack::copy).toList();
+	}
+
 	/**
 	 * 按生产事件采样并聚合掉落。每个代表事件只执行一次实体战利品表，随后从其候选池
 	 * 抽取该事件代表的全部升级轮次。

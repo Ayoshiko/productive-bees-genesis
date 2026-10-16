@@ -19,7 +19,7 @@ public final class BridgeProductAccess {
 		if (expected == null || requested <= 0 || authority(bridge) != expected) return 0;
 		var before = expected.checkpoint(); var level = (ServerLevel) bridge.getLevel();
 		var policy = insert ? RuntimeProductPolicies.peek(level) : null;
-		if (insert && (policy == null || policy.descriptors(key).stream().noneMatch(rule -> rule.accepts(key)))) return 0;
+		if (insert && (policy == null || !policy.accepts(key))) return 0;
 		long actual = insert ? requested : Math.min(requested, before.ledger().available(key).longSaturated());
 		if (actual == 0 || simulate) return actual;
 		var next = insert ? before.insertProduct(before.ledger().revision(), key, actual, policy) : before.extractProduct(before.ledger().revision(), key, actual);

@@ -49,6 +49,11 @@ if (evolvedExtraFactoryProbe) expectedApiarySlots = 60
 if (evolvedCentrifugeProbe && !centrifugeFactoryProbe) throw new GradleException('Evolved factory probe requires the centrifuge factory probe')
 if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'read']))) throw new GradleException('Centrifuge factory probe requires its own automatic write/read mode')
 if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
+def dynamicProbe = providers.gradleProperty('networkDynamicBees').isPresent()
+def dynamicRestart = providers.gradleProperty('networkDynamicRestartSource').isPresent()
+def dynamicWorldMode = providers.gradleProperty('networkDynamicWorldMode').orNull
+if (dynamicWorldMode != null && (!dynamicProbe || dynamicRestart || !(dynamicWorldMode in ['write', 'read'])))
+    throw new GradleException('Dynamic world recovery requires its own write/read mode')
 def ordinaryProbe = providers.gradleProperty('networkOrdinaryProduction').isPresent()
 if (ordinaryProbe && (automaticMode != null || multiblockMode != null || coldProbe || providers.gradleProperty('networkUpgradeProbe').isPresent() || ['networkOwnershipMode', 'networkCentrifugeMode', 'networkRestoreMode', 'networkPlayerMode'].any { providers.gradleProperty(it).isPresent() })) throw new GradleException('Ordinary production requires its focused probe mode')
 def upgradeProbe = providers.gradleProperty('networkUpgradeProbe').isPresent()
@@ -97,6 +102,8 @@ def seedWorld = providers.gradleProperty('networkProbeSeedWorld').isPresent()
 if (playerMode == 'read' && seedWorld == null) throw new GradleException('Player reader requires its stopped writer world')
 if (playerMode == 'write' && seedWorld != null) throw new GradleException('Player writer requires a fresh world')
 if (automaticMode == 'read' && seedWorld == null) throw new GradleException('Automatic restart requires its saved fixture world')
+if (dynamicWorldMode == 'read' && seedWorld == null) throw new GradleException('Dynamic reader requires its saved world')
+if (dynamicWorldMode == 'write' && seedWorld != null) throw new GradleException('Dynamic writer requires a fresh world')
 if (multiblockMode == 'read' && seedWorld == null) throw new GradleException('Machine restart reader requires saved writer world')
 if (multiblockMode == 'write' && seedWorld != null) throw new GradleException('Machine restart writer requires fresh world')
 if (portMode == 'read' && seedWorld == null) throw new GradleException('Port reader requires its stopped writer world')
@@ -121,8 +128,13 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
         directory.mkdirs()
         if (seedWorld != null) {
             File sourceWorld = seedWorld
-            def marker = portMode == 'read' ? 'port-probe.dat' : playerConcurrent ? 'concurrent-probe.dat' : playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
+            def marker = dynamicWorldMode == 'read' ? 'dynamic-world-probe.dat' : portMode == 'read' ? 'port-probe.dat' : playerConcurrent ? 'concurrent-probe.dat' : playerMode == 'read' ? 'player-login-probe.dat' : multiblockMode == 'read' ? 'multiblock-probe.dat' : automaticMode != null ? 'automatic-probe.dat' : providers.gradleProperty('networkCentrifugeMode').isPresent() ? 'centrifuge-probe.dat' : 'ownership-probe.dat'
             if (!sourceWorld.isDirectory() || !new File(sourceWorld, marker).isFile()) throw new GradleException('Missing restart fixture world')
+            if (dynamicWorldMode == 'read') {
+                def writer = new groovy.json.JsonSlurper().parse(new File(sourceWorld.parentFile, 'results/domain.json'))
+                if (writer.passed != true || writer.dynamicWorldPrepared != true || writer.dynamicWorldShutdownSaved != true)
+                    throw new GradleException('Dynamic reader requires a successfully stopped world writer')
+            }
             if (portMode == 'read') {
                 File report = new File(sourceWorld.parentFile, 'results/ports.json')
                 if (!report.isFile()) throw new GradleException('Missing port writer report')
@@ -373,7 +385,12 @@ neoForge {
             client()
             sourceSet = sourceSets.domainProbe
             gameDirectory = probeDirectory
-            systemProperty 'pbg.client.enabled', (!factoryProbe && !centrifugeFactoryProbe).toString()
+            systemProperty 'pbg.client.enabled', (!factoryProbe && !centrifugeFactoryProbe && !dynamicProbe).toString()
+            if (dynamicProbe) {
+                systemProperty 'pbg.domain.enabled', 'true'
+                systemProperty 'pbg.dynamic.only', 'true'
+                systemProperty 'pbg.dynamic.client', 'true'
+            }
             if (centrifugeFactoryProbe) {
                 systemProperty 'pbg.factoryCentrifuge.client', 'true'
                 systemProperty 'pbg.factoryCentrifuge.enabled', 'true'
@@ -407,6 +424,9 @@ neoForge {
             systemProperty 'pbg.domain.enabled', 'true'
             if (upgradeProbe) systemProperty 'pbg.upgrades.only', 'true'
             if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
+            if (providers.gradleProperty('networkDynamicBees').isPresent()) systemProperty 'pbg.dynamic.only', 'true'
+            if (dynamicWorldMode != null) systemProperty 'pbg.dynamic.worldMode', dynamicWorldMode
+            if (providers.gradleProperty('networkDynamicRestartSource').isPresent()) systemProperty 'pbg.dynamic.restartSource', file(providers.gradleProperty('networkDynamicRestartSource').get()).absolutePath
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
             if (factoryProbe) systemProperty 'pbg.factory.enabled', 'true'
             if (factoryProbe) systemProperty 'pbg.factory.evolved', evolvedApiaryProbe.toString()
@@ -549,6 +569,15 @@ tasks.named('runNetworkMultiblockClient') {
 
 tasks.named('runNetworkDomainClient') {
     doLast {
+        if (dynamicProbe) {
+            def client = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/dynamic-client.json'))
+            def server = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/domain.json'))
+            if (client.passed != true || client.fourBeeRoundTrips != true || client.coreAndTerminalUnknownShown != true
+                    || server.passed != true || server.fourBeeCageFlowerAndToggleRoundTrips != true
+                    || server.unknownDisplayPreservesAuthority != true || server.dynamicClientShutdownSaved != true)
+                throw new GradleException('Dynamic client assertions did not complete')
+            return
+        }
         if (centrifugeFactoryProbe) {
             def client = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/centrifuge-factory-client.json'))
             def server = new groovy.json.JsonSlurper().parse(new File(probeDirectory.get().asFile, 'results/domain.json'))
@@ -577,6 +606,15 @@ tasks.named('runNetworkDomainServer') {
                 ? result.scope == 'ordinary-production' && result.normalShutdown == true && result.ordinaryIronGoldAndIndependentHoney == true
                 : upgradeProbe ? result.scope == 'upgrades' && result.apiaryUpgradeShutdownSaved == true
                 : result.normalShutdownCheckpointSaved == true
+        if (dynamicProbe) {
+            def resumed = dynamicRestart
+                    ? result.newJvmFrozenPoolResume == true : result.managedCombinedFourBeeTickerAndReturn == true
+            shutdownSaved = result.scope == 'dynamic-bees' && result.normalShutdown == true && resumed
+            if (dynamicWorldMode != null) shutdownSaved = result.dynamicWorldShutdownSaved == true
+                    && (dynamicWorldMode == 'write' ? result.dynamicWorldPrepared == true
+                    : result.dynamicWorldRestored == true && result.readyDeliveredWithoutNewFeeOrDraw == true
+                    && result.startedAndUnknownPreservedAndReturnRejected == true)
+        }
         if (result.passed != true || (!coldProbe && !shutdownSaved)) {
             throw new GradleException('Network domain assertions did not complete')
         }

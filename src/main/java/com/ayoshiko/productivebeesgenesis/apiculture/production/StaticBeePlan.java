@@ -3,16 +3,30 @@ package com.ayoshiko.productivebeesgenesis.apiculture.production;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey;
 import java.util.*;
 
-/** 已解析的普通配方：完整输出分布与当前周期能力一起固定，不依赖宿主库存形状。 */
+/** 周期固定合同；普通输出分布直接采样，动态结果另由生成凭据保管。 */
 public record StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
 		int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
-		BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs) {
+		BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs, BeeGenerator generator, boolean generatedCombBlock) {
 	public StaticBeePlan {
 		Objects.requireNonNull(beeType); Objects.requireNonNull(recipe); Objects.requireNonNull(traits); outputs = List.copyOf(outputs);
+		Objects.requireNonNull(generator);
+		generatedCombBlock = generator != BeeGenerator.STATIC && generatedCombBlock;
 		if (beeType.isBlank() || recipe.isBlank() || recipeRevision < 0 || capabilityRevision < 0 || cycleTicks < 1
-				|| energyPerTick < 0 || productivity < 0 || productivity > 3 || outputs.isEmpty()
+				|| energyPerTick < 0 || productivity < 0 || productivity > 3 || outputs.isEmpty() && generator == BeeGenerator.STATIC
 				|| !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
 			throw new IllegalArgumentException("Invalid static bee plan");
+	}
+	public StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
+			int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
+			BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs, BeeGenerator generator) {
+		this(beeType, recipe, recipeRevision, capabilityRevision, cycleTicks, energyPerTick, productivity,
+				genesAffectWork, traits, productionMultiplier, outputs, generator, false);
+	}
+	public StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
+			int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
+			BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs) {
+		this(beeType, recipe, recipeRevision, capabilityRevision, cycleTicks, energyPerTick, productivity,
+				genesAffectWork, traits, productionMultiplier, outputs, BeeGenerator.STATIC);
 	}
 	/** 旧双产物构造入口，只用于旧格式迁移与既有固定配方调用。 */
 	public StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
@@ -38,14 +52,18 @@ public record StaticBeePlan(String beeType, String recipe, long recipeRevision, 
 		return fluid == null ? List.of(item) : List.of(item, new BeeOutputPlan(fluid, fluid, fluidCount, fluidCount, 1, BeeOutputPlan.Basis.CYCLE));
 	}
 	public StaticBeePlan withCycle(int ticks, long energy, float multiplier, List<BeeOutputPlan> nextOutputs) {
+		return withCycle(ticks, energy, multiplier, nextOutputs, generatedCombBlock);
+	}
+	public StaticBeePlan withCycle(int ticks, long energy, float multiplier, List<BeeOutputPlan> nextOutputs, boolean combBlock) {
+		boolean generatedBlock = generator != BeeGenerator.STATIC && combBlock;
 		var before = outputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
 		var after = nextOutputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
 		if (before.size() != after.size()) throw new IllegalArgumentException("Bee recipe changed at capability boundary");
 		for (int i = 0; i < before.size(); i++) if (!before.get(i).sameRecipe(after.get(i))) throw new IllegalArgumentException("Bee recipe changed at capability boundary");
-		return cycleTicks == ticks && energyPerTick == energy && productionMultiplier == multiplier && outputs.equals(nextOutputs) ? this
-				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision), ticks, energy, productivity, genesAffectWork, traits, multiplier, nextOutputs);
+		return cycleTicks == ticks && energyPerTick == energy && productionMultiplier == multiplier && outputs.equals(nextOutputs) && generatedCombBlock == generatedBlock ? this
+				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision), ticks, energy, productivity, genesAffectWork, traits, multiplier, nextOutputs, generator, generatedBlock);
 	}
-	public boolean deterministic() { return outputs.stream().allMatch(BeeOutputPlan::deterministic); }
+	public boolean deterministic() { return generator == BeeGenerator.STATIC && outputs.stream().allMatch(BeeOutputPlan::deterministic); }
 	/** 标量兼容访问拒绝多输出，防止旧调用方静默遗漏新产物。 */
 	private BeeOutputPlan legacyItem() {
 		var items = outputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();

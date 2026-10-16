@@ -2,7 +2,9 @@ package com.ayoshiko.productivebeesgenesis.apiculture.production;
 
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
+import com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies;
 import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
+import com.ayoshiko.productivebeesgenesis.apiary.DynamicBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import java.util.UUID;
@@ -35,11 +37,15 @@ public final class NetworkBeeService {
 		if (ticks > 0 && bee.drained()) {
 			if (bee.progress() == 0) cycle = StaticApiaryAdapter.cycle(hive, record, bee);
 			else ticks = Math.min(ticks, bee.plan().cycleTicks() - bee.progress() % bee.plan().cycleTicks());
+			if (bee.plan().generator() != BeeGenerator.STATIC)
+				ticks = Math.min(ticks, (cycle == null ? bee.plan().cycleTicks() : cycle.cycleTicks()) - bee.progress());
 		}
 		boolean flower = record.bees().feeding() != null && com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.flower(
 				record.bees().feeding(), slot, net.minecraft.resources.ResourceLocation.parse(record.bees().bee(slot).plan().beeType()), level.registryAccess());
 		var context = new BeeWorkExecutor.Context(true, hive.canFunction() && ModConfig.SERVER.beeNetwork.enabled.get(), flower,
 				recipeRevision, capabilityRevision, new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
+		if (record.bees().feeding() != null)
+			context = DynamicBeeAdapter.prepare(level, bee, record.bees().feeding().slots(), ticks, cycle, context);
 		long tick = level.getServer().getTickCount(), fee = ticks > 0 ? maintenanceFee : 0;
 		long due = authority.maintenanceDue(tick, fee);
 		if (due > 0 && (!record.bees().networkPowered() || current.energy().stored() < due)) return BeeWorkExecutor.Status.ENERGY;
@@ -47,6 +53,18 @@ public final class NetworkBeeService {
 		if (!simulate && result.status() == BeeWorkExecutor.Status.READY) {
 			// publish 的 revision 即为脏状态；常规生产随世界保存，不逐蜂启动整域写盘。
 			authority.publishMaintainedWork(current, current.applyBeeWork(member, result), tick, fee);
+			var committed = authority.checkpoint();
+			var owner = committed.ownedMachines().get(member);
+			var started = owner.bees().bee(slot);
+			if (bee.generation() == null && started.generation() != null && started.generation().phase() == BeeGeneration.Phase.STARTED) {
+				var generated = DynamicBeeAdapter.generate(level, hive.getBlockPos(), started);
+				var latest = authority.checkpoint();
+				var live = latest.ownedMachines().get(member);
+				if (live == null || live.bees() == null || !DynamicBeeAdapter.sameRequest(started, live.bees().bee(slot)))
+					throw new IllegalStateException("Bee generation owner changed during its external call");
+				authority.publish(latest.applyBeeWork(member, BeeWorkExecutor.resolveGeneration(live.bees(), slot, generated)));
+				RuntimeProductPolicies.recordGenerated(level, generated);
+			}
 		}
 		return result.status();
 	}

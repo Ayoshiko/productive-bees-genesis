@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.*;
@@ -17,6 +18,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.HoneycombItem;
 import cy.jdkdigital.productivebees.util.BeeHelper;
+import cy.jdkdigital.productivebees.init.ModEntities;
+import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 
 /** 只读封存数据和成员原位置；不构造隐藏机器，不执行物理生产、喂食或输出。 */
 public final class StaticApiaryAdapter {
@@ -115,7 +118,7 @@ public final class StaticApiaryAdapter {
 			outputs.add(entry.mapped(output(entry.source(), profile.combBlock(), registries)));
 		if (!fluid.isEmpty()) { var key = ProductKeyCodec.fluid(fluid, registries); outputs.add(new BeeOutputPlan(key, key, fluid.getAmount(), fluid.getAmount(), 1, BeeOutputPlan.Basis.CYCLE)); }
 		return new BeeWorkExecutor.Cycle(BeeProgressPlan.cycleTicks(bee.originalSlot().copy().getInt("base_min_occupation_ticks"),
-				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity(), outputs);
+				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity(), outputs, profile.combBlock());
 	}
 	/** 物理机无法接收旧能力或网络随机游标；小数倍率的部分周期必须先结清。 */
 	public static boolean returnReady(TileEntityMekApiary hive, OwnedMachineRecord record) {
@@ -136,6 +139,23 @@ public final class StaticApiaryAdapter {
 	}
 	private static StaticBeePlan compilePlan(ServerLevel level, Profile profile, CompoundTag slot, long recipeRevision, long capabilityRevision) {
 		var data = slot.getCompound("entity_data"); var type = BeeNbtHelper.resolveBeeTypeKey(data);
+		var generator = DynamicBeeAdapter.generator(type);
+		if (generator != BeeGenerator.STATIC) {
+			var expected = generator == BeeGenerator.WANNA_BEE ? ModEntities.CONFIGURABLE_BEE.get() : BuiltInRegistries.ENTITY_TYPE.getOptional(type).orElse(null);
+			if (data.getBoolean("HasConverted") || expected == null || expected != BeeNbtHelper.resolveEntityType(data)
+					|| generator == BeeGenerator.WANNA_BEE && BeeReloadListener.INSTANCE.getData(type) == null)
+				throw new IllegalArgumentException("Unverified dynamic bee identity");
+			var outputs = dynamicRecipeOutputs(level, type, profile.combBlock());
+			var fluid = com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.resolveFluidOutputStrict(type, level);
+			if (!fluid.isEmpty()) {
+				var key = ProductKeyCodec.fluid(fluid, level.registryAccess());
+				outputs.add(new BeeOutputPlan(key, key, fluid.getAmount(), fluid.getAmount(), 1, BeeOutputPlan.Basis.CYCLE));
+			}
+			return new StaticBeePlan(type.toString(), DynamicBeeAdapter.recipe(type), recipeRevision, capabilityRevision,
+					BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false),
+					profile.energy(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
+					BeeWorkConditionEvaluator.readTraits(data), profile.productivity(), outputs, generator, profile.combBlock());
+		}
 		if (BeeNbtHelper.resolveEntityType(data) != cy.jdkdigital.productivebees.init.ModEntities.CONFIGURABLE_BEE.get()
 				|| !ordinary(type) || data.getBoolean("HasConverted")) {
 			throw new IllegalArgumentException("Only unconverted ordinary configurable bees are supported");
@@ -170,11 +190,25 @@ public final class StaticApiaryAdapter {
 				.thenComparingInt(BeeOutputPlan::maximum).thenComparingDouble(BeeOutputPlan::chance));
 		return result;
 	}
+	private static ArrayList<BeeOutputPlan> dynamicRecipeOutputs(ServerLevel level, ResourceLocation type, boolean combBlock) {
+		var holder = BeeInfoHelper.getBeeProductionRecipe(level, type);
+		if (DynamicBeeAdapter.generator(type) != BeeGenerator.WANNA_BEE || holder == null || holder.value().getRecipeOutputs().isEmpty())
+			return new ArrayList<>();
+		if (holder.value().ingredient.get() == null || !type.equals(holder.value().ingredient.get().getBeeType()))
+			throw new IllegalArgumentException("Dynamic bee recipe identity differs");
+		return recipeOutputs(level, type, combBlock);
+	}
 	public static boolean currentPlan(ServerLevel level, TileEntityMekApiary hive, BeeRecord bee) {
 		return !hive.isFeederConversionEnabled() && currentPlan(level, bee);
 	}
 	public static boolean currentPlan(ServerLevel level, BeeRecord bee) {
 		var plan = bee.plan(); var type = ResourceLocation.tryParse(plan.beeType());
+		if (plan.generator() != BeeGenerator.STATIC) {
+			if (type == null || DynamicBeeAdapter.generator(type) != plan.generator()
+					|| !plan.recipe().equals(DynamicBeeAdapter.recipe(type)) || plan.genesAffectWork() != BalanceConfig.apiaryBeeGenesAffectWork()) return false;
+			if (plan.generator() == BeeGenerator.WANNA_BEE ? BeeReloadListener.INSTANCE.getData(type) == null : !BuiltInRegistries.ENTITY_TYPE.containsKey(type)) return false;
+			return sameOutputs(dynamicRecipeOutputs(level, type, false), plan);
+		}
 		if (!ordinary(type)) return false;
 		var pref = BeeInfoHelper.getFlowerPreference(type);
 		if (!BeeInfoHelper.FlowerPreference.TYPE_BLOCKS.equals(pref.flowerType())
@@ -182,6 +216,9 @@ public final class StaticApiaryAdapter {
 		var holder = BeeInfoHelper.getBeeProductionRecipe(level, type);
 		if (holder == null || !holder.id().toString().equals(plan.recipe())) return false;
 		var outputs = recipeOutputs(level, type, false);
+		return sameOutputs(outputs, plan);
+	}
+	private static boolean sameOutputs(List<BeeOutputPlan> outputs, StaticBeePlan plan) {
 		var pinned = plan.outputs().stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
 		if (outputs.size() != pinned.size()) return false;
 		for (int i = 0; i < outputs.size(); i++) if (!outputs.get(i).sameRecipe(pinned.get(i))) return false;

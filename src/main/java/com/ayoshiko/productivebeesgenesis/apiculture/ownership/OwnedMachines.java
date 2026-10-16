@@ -21,6 +21,12 @@ public final class OwnedMachines {
 	private final Object capabilityToken;
 	private OwnedMachines(Map<UUID, OwnedMachineRecord> records, Map<Origin, UUID> positions, Map<UUID, UUID> transfers, Map<String, Map<Origin, UUID>> byMachine, Object previous, Object queryToken, Object capabilityToken) { this.records = records; this.positions = positions; this.transfers = transfers; this.byMachine = byMachine; this.previous = previous; this.queryToken = queryToken; this.capabilityToken = capabilityToken; }
 	public boolean hasTransfer(UUID transfer) { return transfers.containsKey(transfer); }
+	public boolean isRejoin(MemberClaim claim) {
+		var old = records.get(claim.member());
+		return old != null && old.phase() == OwnedMachineRecord.Phase.RETURNED
+				&& old.claim().network().equals(claim.network()) && old.claim().origin().equals(claim.origin())
+				&& old.claim().machine().equals(claim.machine()) && !hasTransfer(claim.transfer());
+	}
 	public OwnedMachineRecord get(UUID member) { return records.get(member); }
 	public OwnedMachineRecord at(Origin origin) { var member = positions.get(origin); return member == null ? null : records.get(member); }
 	public Collection<OwnedMachineRecord> values() { return records.values(); }
@@ -93,7 +99,7 @@ public final class OwnedMachines {
 		} else {
 			if (old.equals(record)) return this;
 			if (old.phase() != OwnedMachineRecord.Phase.RETURNED || record.phase() != OwnedMachineRecord.Phase.SEALED) old.validateSuccessor(record);
-			else if (!old.claim().origin().equals(record.claim().origin()) || !old.claim().machine().equals(record.claim().machine()) || hasTransfer(record.claim().transfer()))
+			else if (!isRejoin(record.claim()))
 				throw new IllegalArgumentException("Foreign or replayed member rejoin");
 		}
 		if (old != null && old.phase() != OwnedMachineRecord.Phase.RETURNED) locations.remove(old.claim().origin());

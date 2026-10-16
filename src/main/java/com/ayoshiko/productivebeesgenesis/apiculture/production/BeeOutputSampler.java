@@ -9,7 +9,7 @@ final class BeeOutputSampler {
 	record Result(Map<ProductKey, ProductAmount> outputs, BeeCycleRandom random, long pending, BeeSamplingCursor cursor) { }
 	static Result sample(BeeRecord bee, StaticBeePlan plan, long pending, int budget) {
 		var outputs = new HashMap<>(bee.frozenOutputs()); var random = bee.random();
-		if (plan.deterministic()) {
+		if (plan.outputs().stream().allMatch(BeeOutputPlan::deterministic)) {
 			long cycles = Math.min(pending, budget); var rolls = BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier());
 			long extra = 0;
 			if (rolls.extraChance() > 0) {

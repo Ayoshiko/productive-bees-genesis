@@ -6,6 +6,7 @@ import com.mojang.logging.LogUtils;
 import java.nio.file.Files;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.LevelResource;
@@ -95,11 +96,23 @@ public final class MachineWorkService {
 			for (int i = 0; i < 8 && com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.peek(level) == null; i++)
 				com.ayoshiko.productivebeesgenesis.apiculture.runtime.RuntimeProductPolicies.get(level, 0);
 			if (core.production == null) core.production = new MachineProduction();
-			next = core.production.advance(level, before);
-			if (access.current()) access.assets.commit(before, next);
+			var published = new CombinedMachineWork[]{before};
+			Consumer<CombinedMachineWork> publish = candidate -> {
+				if (!active(core) || core.assets != access.assets || access.assets.work() != published[0])
+					throw new IllegalStateException("Machine work owner changed during production");
+				access.assets.commit(published[0], candidate);
+				published[0] = candidate;
+			};
+			next = core.production.advance(level, before, core.getBlockPos(), publish, () -> {
+				if (!active(core) || core.assets != access.assets) throw new IllegalStateException("Machine generation owner unavailable");
+				published[0] = access.assets.work();
+				return published[0];
+			});
+			publish.accept(next);
 		} catch (RuntimeException failure) {
-			// 私有候选尚未提交；保留全部原资产，隔离一次并记录根因。
-			core.assets.quarantine(failure); MachineWorldService.workFailed(core);
+			// 保留最近发布的资产及生成凭据；未发布候选不覆盖权威，异常只隔离一次。
+			access.assets.quarantine(failure);
+			if (core.assets == access.assets) MachineWorldService.workFailed(core);
 			LogUtils.getLogger().error("Machine work quarantined at {} {}", level.dimension().location(), core.getBlockPos(), failure);
 		}
 	}

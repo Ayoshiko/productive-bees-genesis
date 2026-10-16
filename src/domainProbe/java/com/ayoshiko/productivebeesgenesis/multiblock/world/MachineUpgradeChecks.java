@@ -26,7 +26,8 @@ final class MachineUpgradeChecks {
 		check(MachineUpgradeProfiles.apiary(installed.upgrades()).time() < normalBee.time()
 				&& MachineUpgradeProfiles.apiary(installed.upgrades()).energy() > normalBee.energy(), "Bee speed did not change next-cycle capacity");
 		check(MachineUpgradeProfiles.centrifuge(installed.upgrades()).equals(normalCentrifuge) && other.assets.work() == otherBefore, "Bee upgrade affected other work or another machine");
-		var advanced = new MachineProduction().advance(player.serverLevel(), installed);
+		var advanced = new MachineProduction().advance(player.serverLevel(), installed, core.getBlockPos(),
+				value -> { throw new IllegalStateException("Static probe attempted external generation"); }, () -> installed);
 		check(advanced.bee(5).plan().equals(installed.bee(5).plan()) && advanced.centrifuges().get(0).job().plan().equals(installed.centrifuges().get(0).job().plan()), "Old work switched its plan");
 		check(advanced.energy() == installed.energy() - normalBee.energy() - normalCentrifuge.energy(), "Old work was repriced");
 		menu.request(player, new MachineMenuRequest(menu.containerId, menu.session(), 3, oldView, 5, 0, 0, 1));

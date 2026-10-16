@@ -108,7 +108,7 @@ final class AmberEntityFlowerHelper {
 		return candidates == null ? List.of() : candidates;
 	}
 
-	private static CustomData getAmberEntityData(ItemStack stack) {
+	static CustomData getAmberEntityData(ItemStack stack) {
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) return null;
 		ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
 		if (!"productivebees".equals(blockId.getNamespace()) || !"amber".equals(blockId.getPath())) return null;

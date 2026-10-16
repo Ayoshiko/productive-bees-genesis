@@ -501,7 +501,9 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 				var bee = selectedBee();
 				if (bee != null) {
 					line(g, bee.occupied() ? beeName(bee.type()) : tr("empty_bee"), 42, detailsY, 246, TerminalSkin.INK);
-					line(g, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 42, detailsY + 13, 246, TerminalSkin.MUTED);
+					var status = bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks());
+					if (bee.generationUnknown()) status = tr("generation_unknown");
+					line(g, status, 42, detailsY + 13, 246, TerminalSkin.MUTED);
 				}
 			}
 		} else if (state.view() != null && state.view().rows().isEmpty()) line(g, own(state.view().hasNext() ? "continue_search" : "no_matches"), 45, tab == 4 ? 54 : 68, 240, TerminalSkin.MUTED);

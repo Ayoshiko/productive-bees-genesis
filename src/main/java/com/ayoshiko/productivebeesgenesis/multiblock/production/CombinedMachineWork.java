@@ -196,6 +196,9 @@ public final class CombinedMachineWork {
 	public Change settleBee(int slot, int stackLimit) {
 		return settleBee(slot, key -> stackLimit);
 	}
+	public Change resolveGeneration(int slot, BeeGeneration generated) {
+		return change(energy, replaceBee(bee(slot).resolveGeneration(generated)), centrifuges, buffer, 0);
+	}
 	public Change settleBee(int slot, ToIntFunction<ProductKey> itemLimits) {
 		var current = bee(slot); if (!current.hasFrozen()) return unchanged();
 		var nextBuffer = buffer; long moved = 0;

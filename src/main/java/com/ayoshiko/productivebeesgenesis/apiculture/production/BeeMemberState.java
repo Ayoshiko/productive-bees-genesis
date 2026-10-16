@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiculture.production;
 import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.HashSet;
@@ -54,7 +55,8 @@ public final class BeeMemberState {
 	/** 仅供带付款证明的工作执行器发布周期起点的周期能力切换。 */
 	BeeMemberState updateCycle(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
-		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(), next.plan().productionMultiplier(), next.plan().outputs()).equals(next.plan()))
+		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(),
+				next.plan().productionMultiplier(), next.plan().outputs(), next.plan().generatedCombBlock()).equals(next.plan()))
 			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
 		return update(next, remainingEnergy, true);
 	}
@@ -101,7 +103,9 @@ public final class BeeMemberState {
 		for (var bee : bees) {
 			var other = next.bees.stream().filter(value -> value.id().equals(bee.id())).findFirst().orElse(null);
 			if (other == null || !bee.plan().equals(other.plan()) || bee.progress() != other.progress()
-					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozenOutputs().equals(other.frozenOutputs()) || !Objects.equals(bee.sampling(), other.sampling()) || !bee.random().equals(other.random())) return false;
+					|| bee.pendingCycles() != other.pendingCycles() || !bee.frozenOutputs().equals(other.frozenOutputs())
+					|| !Objects.equals(bee.sampling(), other.sampling()) || !Objects.equals(bee.generation(), other.generation())
+					|| !bee.random().equals(other.random())) return false;
 		}
 		return true;
 	}
@@ -117,7 +121,11 @@ public final class BeeMemberState {
 		for (var previous : bees) {
 			var candidate = next.bees.stream().filter(bee -> bee.id().equals(previous.id())).findFirst().orElseThrow();
 			if (previous.equals(candidate)) continue;
+			// 完成事件的最后一份冻结输出入账后，生成凭据随同该精确交付后继清除。
+			boolean generationSettled = previous.generation() != null && previous.pendingCycles() == 0 && previous.hasFrozen()
+					&& candidate.equals(previous.work(previous.progress(), 0, Map.of()));
 			if (!previous.originalSlot().equals(candidate.originalSlot()) || !previous.plan().equals(candidate.plan()) || !previous.random().equals(candidate.random()) || !Objects.equals(previous.sampling(), candidate.sampling())
+					|| !Objects.equals(previous.generation(), candidate.generation()) && !generationSettled
 					|| candidate.revision() != Math.incrementExact(previous.revision()) || previous.slot() != candidate.slot() && !previous.drained()) throw new IllegalArgumentException("Bee plan changed within paid work");
 			changed++;
 		}

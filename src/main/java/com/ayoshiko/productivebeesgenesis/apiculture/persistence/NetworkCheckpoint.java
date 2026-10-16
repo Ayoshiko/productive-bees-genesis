@@ -95,7 +95,7 @@ public final class NetworkCheckpoint {
 	/** 外部 long 边界；候选不调用接收方，只有已发布的当前静态蜂业资格可增加余额。 */
 	public NetworkCheckpoint insertProduct(long expectedLedgerRevision, ProductKey key, long amount, ProductPolicySnapshot policy) {
 		if (amount <= 0) throw new IllegalArgumentException("Positive insertion required");
-		if (ledger.revision() != expectedLedgerRevision || policy.descriptors(key).stream().noneMatch(rule -> rule.accepts(key))) return this;
+		if (ledger.revision() != expectedLedgerRevision || !policy.accepts(key)) return this;
 		return new NetworkCheckpoint(this, Math.incrementExact(revision), ownedMachines, ledger.insertExact(key, ProductAmount.of(amount)));
 	}
 	public NetworkCheckpoint extractProduct(long expectedLedgerRevision, ProductKey key, long amount) {

@@ -29,7 +29,10 @@ public final class NetworkSelectionSession implements AutoCloseable {
 	public sealed interface Row permits MemberRow, ProductRow { }
 	/** 基础蜂箱的蜂位摘要，空位 id 为 null，不携带蜜蜂 NBT。 */
 	public record BeeRow(int slot, UUID id, String type, int progress, int cycleTicks, boolean pending,
-			String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, boolean enabled) {
+			String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, boolean enabled, boolean generationUnknown) {
+		public BeeRow(int slot, UUID id, String type, int progress, int cycleTicks, boolean pending, String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, boolean enabled) {
+			this(slot, id, type, progress, cycleTicks, pending, feedingItem, feedingCount, feedingDisabled, genes, enabled, false);
+		}
 		public BeeRow(int slot, UUID id, String type, int progress, int cycleTicks, boolean pending, String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes) {
 			this(slot, id, type, progress, cycleTicks, pending, feedingItem, feedingCount, feedingDisabled, genes, true);
 		}
@@ -216,7 +219,8 @@ public final class NetworkSelectionSession implements AutoCloseable {
 			bees.add(new BeeRow(slot, bee == null ? null : bee.id(), bee == null ? "" : bee.plan().beeType(),
 					bee == null ? 0 : bee.progress(), bee == null ? 0 : bee.plan().cycleTicks(), bee != null && !bee.drained(),
 					feed == null || feed.item() == null ? "" : feed.item().unit().string("id"),
-					feed == null ? 0 : feed.count(), feed != null && feed.disabled(), bee == null ? null : TerminalBeeGenes.from(bee.originalSlot()), bee == null || bee.enabled()));
+					feed == null ? 0 : feed.count(), feed != null && feed.disabled(), bee == null ? null : TerminalBeeGenes.from(bee.originalSlot()), bee == null || bee.enabled(),
+					bee != null && bee.generation() != null && bee.generation().phase() != com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGeneration.Phase.READY));
 		}
 		return new MemberRow(record.claim(), record.phase(), record.rosterVersion(),
 				record.feedingRevision(), bees, kind == Kind.UPGRADES ? record.upgradeVersion() : null);

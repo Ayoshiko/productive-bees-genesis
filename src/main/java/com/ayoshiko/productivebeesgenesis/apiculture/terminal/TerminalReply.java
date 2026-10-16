@@ -74,7 +74,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 			for (int j = 0; j < count; j++) bees.add(new TerminalView.Bee(b.readUnsignedByte(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean(),
 					b.readUtf(TerminalView.TEXT_LIMIT), b.readUnsignedByte(), b.readBoolean(), b.readBoolean() ? TerminalBeeGenes.read(b) : null,
-					b.readBoolean() ? b.readUUID() : null, b.readBoolean()));
+					b.readBoolean() ? b.readUUID() : null, b.readBoolean(), b.readBoolean()));
 			int upgradesCount = boundedSize(b, TerminalView.MAX_UPGRADES); var upgrades = new ArrayList<TerminalView.Upgrade>(upgradesCount);
 			for (int j = 0; j < upgradesCount; j++) upgrades.add(new TerminalView.Upgrade(b.readUnsignedByte(), b.readUtf(TerminalView.TEXT_LIMIT), b.readInt(), b.readInt(), b.readBoolean()));
 			var location = b.readBoolean() ? new TerminalView.Location(b.readUtf(TerminalView.TEXT_LIMIT),
@@ -102,6 +102,7 @@ public record TerminalReply(int containerId, UUID session, long sequence, Status
 				b.writeUtf(bee.feedingItem(), TerminalView.TEXT_LIMIT); b.writeByte(bee.feedingCount()); b.writeBoolean(bee.feedingDisabled());
 				b.writeBoolean(bee.genes() != null); if (bee.genes() != null) bee.genes().write(b);
 				b.writeBoolean(bee.identity() != null); if (bee.identity() != null) b.writeUUID(bee.identity()); b.writeBoolean(bee.enabled());
+				b.writeBoolean(bee.generationUnknown());
 			}
 			b.writeByte(row.upgrades().size());
 			for (var upgrade : row.upgrades()) {

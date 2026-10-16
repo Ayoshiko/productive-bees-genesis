@@ -17,6 +17,7 @@ public final class ProductPolicySnapshot {
 	private final Map<ProductKey, List<AllowedProductDescriptor>> products;
 	private final Map<Domain, List<DynamicProductRule>> dynamic;
 	private final int descriptorCount;
+	private final Map<ProductKey, Boolean> generated;
 
 	public ProductPolicySnapshot(long revision, Collection<AllowedProductDescriptor> products, Collection<DynamicProductRule> dynamic) {
 		if (revision < 0) throw new IllegalArgumentException("Negative policy revision");
@@ -34,15 +35,35 @@ public final class ProductPolicySnapshot {
 		}
 		byDynamic.replaceAll((key, values) -> List.copyOf(values));
 		this.dynamic = Map.copyOf(byDynamic);
+		this.generated = Map.of();
 	}
 	private ProductPolicySnapshot(long revision, Map<ProductKey, List<AllowedProductDescriptor>> products,
 			Map<Domain, List<DynamicProductRule>> dynamic, int descriptorCount) {
+		this(revision, products, dynamic, descriptorCount, Map.of());
+	}
+	private ProductPolicySnapshot(long revision, Map<ProductKey, List<AllowedProductDescriptor>> products,
+			Map<Domain, List<DynamicProductRule>> dynamic, int descriptorCount, Map<ProductKey, Boolean> generated) {
 		if (revision < 0) throw new IllegalArgumentException("Negative policy revision");
 		this.revision = revision; this.products = products; this.dynamic = dynamic; this.descriptorCount = descriptorCount;
+		this.generated = generated;
 	}
 	/** 同一配方代际的静态目录共享不可变索引，网络 revision 不触发重复编译。 */
 	public ProductPolicySnapshot withRevision(long revision) {
-		return revision == this.revision ? this : new ProductPolicySnapshot(revision, products, dynamic, descriptorCount);
+		return revision == this.revision ? this : new ProductPolicySnapshot(revision, products, dynamic, descriptorCount, generated);
+	}
+	/** 仅由真实服务器生成入口提交完整键；不枚举物品注册表，也不扩大组件匹配。 */
+	public ProductPolicySnapshot withVerifiedGenerated(Collection<ProductKey> keys) {
+		var next = SnapshotRecords.fork(generated, java.util.Comparator.comparingInt(ProductKey::hashCode).thenComparing(ProductKey::orderingKey));
+		boolean changed = false;
+		for (var key : keys) if (!generated.containsKey(key)) {
+			next.put(key, true);
+			changed = true;
+		}
+		return changed ? new ProductPolicySnapshot(revision, products, dynamic, descriptorCount, next.snapshot()) : this;
+	}
+	public boolean verifiedGenerated(ProductKey key) { return generated.containsKey(key); }
+	public boolean accepts(ProductKey key) {
+		return verifiedGenerated(key) || descriptors(key).stream().anyMatch(rule -> rule.accepts(key));
 	}
 	/** 单次使用的构建器；发布转移私有索引所有权，不在最后一步复制整个目录。 */
 	public static final class Builder {

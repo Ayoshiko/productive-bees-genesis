@@ -3,6 +3,10 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
 import cy.jdkdigital.productivebees.init.ModTags;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -59,6 +63,15 @@ public final class MultiFlowerBeeAdapter {
 	public static boolean isMultiFlowerBee(ResourceLocation beeTypeKey) {
 		return STRATEGIES.containsKey(BeeTypeNormalizer.resolveLoadedBeeType(beeTypeKey));
 	}
+	public static boolean matchesFlower(ResourceLocation type, ItemStack stack) {
+		var strategy = STRATEGIES.get(BeeTypeNormalizer.resolveLoadedBeeType(type));
+		return strategy != null && strategy.matches(stack);
+	}
+	private static boolean blockMatches(ItemStack stack, TagKey<Block> tag, TagKey<Block> excluded) {
+		return !stack.isEmpty() && stack.getItem() instanceof BlockItem item
+				&& item.getBlock().defaultBlockState().is(tag)
+				&& (excluded == null || !item.getBlock().defaultBlockState().is(excluded));
+	}
 
 	/** 使用与动态产物抽样相同的标签规则检查喂食槽中是否有合法花源。 */
 	public static boolean hasValidFlower(ResourceLocation beeTypeKey, @Nullable FeederSlotManager feeder) {
@@ -109,6 +122,7 @@ public final class MultiFlowerBeeAdapter {
 	 * 每种 multi-flower 蜜蜂对应一个策略，封装产物标签和采样方式。
 	 */
 	private interface MultiFlowerStrategy {
+		boolean matches(ItemStack stack);
 		ItemStack sampleFromFeeder(FeederSlotManager feeder, @Nullable Level level);
 
 		List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level);
@@ -123,6 +137,7 @@ public final class MultiFlowerBeeAdapter {
 	 * getFloweringBlockFromTag(level, flowerPos, ModTags.LUMBER, beeEntity)
 	 */
 	private static final class LumberStrategy implements MultiFlowerStrategy {
+		@Override public boolean matches(ItemStack stack) { return blockMatches(stack, ModTags.LUMBER, ModTags.DUPE_BLACKLIST); }
 		@Override
 		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			return feeder.getAllBlocksFromFeeder(ModTags.LUMBER, ModTags.DUPE_BLACKLIST);
@@ -146,6 +161,7 @@ public final class MultiFlowerBeeAdapter {
 	 * getFloweringBlockFromTag(level, flowerPos, ModTags.QUARRY, beeEntity)
 	 */
 	private static final class QuarryStrategy implements MultiFlowerStrategy {
+		@Override public boolean matches(ItemStack stack) { return blockMatches(stack, ModTags.QUARRY, ModTags.DUPE_BLACKLIST); }
 		@Override
 		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			return feeder.getAllBlocksFromFeeder(ModTags.QUARRY, ModTags.DUPE_BLACKLIST);
@@ -171,6 +187,9 @@ public final class MultiFlowerBeeAdapter {
 	 * 喂食槽内没有花时回退到旧行为：直接取 c:dyes 物品标签内的染料产物（向后兼容）。
 	 */
 	private static final class DyeStrategy implements MultiFlowerStrategy {
+		@Override public boolean matches(ItemStack stack) {
+			return blockMatches(stack, BlockTags.FLOWERS, null) || stack.is(ModTags.Common.DYES);
+		}
 		@Override
 		public List<ItemStack> allFromFeeder(FeederSlotManager feeder, @Nullable Level level) {
 			List<ItemStack> outputs = new ArrayList<>();

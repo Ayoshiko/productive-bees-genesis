@@ -36,7 +36,7 @@ public final class DomainProbeServer {
 		try {
 			var report = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
 			try {
-				if (Boolean.getBoolean("pbg.ordinary.only")) report.addProperty("normalShutdown", true);
+				if (Boolean.getBoolean("pbg.ordinary.only") || Boolean.getBoolean("pbg.dynamic.only")) report.addProperty("normalShutdown", true);
 				else if (Boolean.getBoolean("pbg.upgrades.only")) {
 					MemberUpgradeProbe.verifyShutdown(event.getServer(), report); ApiaryUpgradeProbe.verifyShutdown(event.getServer(), report);
 				}
@@ -50,6 +50,10 @@ public final class DomainProbeServer {
 					MemberUpgradeProbe.verifyShutdown(event.getServer(), report);
 					ApiaryUpgradeProbe.verifyShutdown(event.getServer(), report);
 				}
+				if (System.getProperty("pbg.dynamic.worldMode") != null)
+					com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeRecoveryProbe.verifyShutdown(event.getServer(), report);
+				if (Boolean.getBoolean("pbg.dynamic.client"))
+					com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeClientFixture.verifyShutdown(event.getServer(), report);
 			}
 			catch (Exception failure) {
 				report.addProperty("passed", false); report.addProperty("shutdownFailure", failure.toString());
@@ -61,6 +65,31 @@ public final class DomainProbeServer {
 	@SubscribeEvent
 	public static void tick(ServerTickEvent.Post event) {
 		if (!Boolean.getBoolean("pbg.domain.enabled")) return;
+		if (Boolean.getBoolean("pbg.dynamic.only")) {
+			try {
+				if (event.getServer().getTickCount() == 40) {
+					pendingReport = new JsonObject();
+					pendingReport.addProperty("scope", "dynamic-bees");
+					if (!Boolean.getBoolean("pbg.dynamic.client"))
+						com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeProbe.start(event.getServer());
+				}
+				if (pendingReport != null && (Boolean.getBoolean("pbg.dynamic.client")
+						? com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeClientFixture.advance(event.getServer(), pendingReport)
+						: com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeProbe.advance(event.getServer(), pendingReport))) {
+					pendingReport.addProperty("passed", true);
+					finish(event, pendingReport);
+					pendingReport = null;
+				}
+			} catch (Exception failure) {
+				if (Boolean.getBoolean("pbg.dynamic.client"))
+					com.ayoshiko.productivebeesgenesis.multiblock.world.DynamicBeeClientFixture.failure = failure.toString();
+				if (pendingReport == null) pendingReport = new JsonObject();
+				failed(pendingReport, failure);
+				finish(event, pendingReport);
+				pendingReport = null;
+			}
+			return;
+		}
 		if (Boolean.getBoolean("pbg.ordinary.only")) {
 			try {
 				if (event.getServer().getTickCount() == 40) {

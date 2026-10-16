@@ -16,7 +16,10 @@ public record TerminalView(NetworkSelectionSession.Kind kind, long generation, b
 		}
 	}
 	public record Bee(int slot, boolean occupied, String type, int progress, int cycleTicks, boolean pending,
-			String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, java.util.UUID identity, boolean enabled) {
+			String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, java.util.UUID identity, boolean enabled, boolean generationUnknown) {
+		public Bee(int slot, boolean occupied, String type, int progress, int cycleTicks, boolean pending, String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, java.util.UUID identity, boolean enabled) {
+			this(slot, occupied, type, progress, cycleTicks, pending, feedingItem, feedingCount, feedingDisabled, genes, identity, enabled, false);
+		}
 		public Bee(int slot, boolean occupied, String type, int progress, int cycleTicks, boolean pending, String feedingItem, int feedingCount, boolean feedingDisabled, TerminalBeeGenes genes, java.util.UUID identity) {
 			this(slot, occupied, type, progress, cycleTicks, pending, feedingItem, feedingCount, feedingDisabled, genes, identity, true);
 		}

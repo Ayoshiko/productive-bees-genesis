@@ -76,6 +76,7 @@ public final class ProductPolicyRegistry {
 		} finally { evaluating = false; }
 	}
 	private Decision decide(ProductKey key) {
+		if (snapshot.verifiedGenerated(key)) return decision(Verdict.ALLOWED, "pb_generated");
 		for (var descriptor : snapshot.descriptors(key)) {
 			if (descriptor.accepts(key)) return decision(Verdict.ALLOWED, descriptor.recipeId());
 		}

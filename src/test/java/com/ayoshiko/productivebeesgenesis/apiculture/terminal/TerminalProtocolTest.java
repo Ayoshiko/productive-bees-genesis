@@ -131,7 +131,7 @@ class TerminalProtocolTest {
 		}
 	}
 	@Test void disabledBeeAndControlCommandsRoundTripWithinExistingBounds() {
-		var bee = new TerminalView.Bee(0, true, "productivebees:iron", 3, 10, true, "minecraft:iron_block", 1, false, null, UUID.randomUUID(), false);
+		var bee = new TerminalView.Bee(0, true, "productivebees:wanna", 3, 10, true, "productivebees:amber", 1, false, null, UUID.randomUUID(), false, true);
 		var view = new TerminalView(NetworkSelectionSession.Kind.MEMBERS, 4, false, List.of(new TerminalView.Row("apiary", false, "", "", true, List.of(bee))));
 		var reply = new TerminalReply(1, UUID.randomUUID(), 2, TerminalReply.Status.OK, 0, 0, view);
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());

@@ -127,6 +127,43 @@ class OwnershipTransferTest {
 			assertThrows(IllegalArgumentException.class, () -> OwnershipTransferService.begin(directory, data, claim, endpoint)); directory.flush();
 		}
 	}
+	@Test void returnedMemberCanRejoinAndResumeItsNewClaimWithoutReplayingTheOldTransfer() throws Exception {
+		var identity = CheckpointTestData.identity();
+		var first = claim(identity);
+		var next = new MemberClaim(first.network(), first.member(), UUID.randomUUID(), first.origin(), first.machine());
+		var endpoint = new Endpoint();
+		try (var directory = directory()) {
+			var data = ready(directory, directory.create(identity));
+			var service = OwnershipTransferService.begin(directory, data, first, endpoint);
+			reach(directory, service, endpoint, OWNED);
+			service.requestReturn(endpoint);
+			endpoint.write.complete(null);
+			reach(directory, service, endpoint, RETURNED);
+			assertThrows(IllegalArgumentException.class, () -> OwnershipTransferService.begin(directory, data, first, endpoint));
+			var foreign = new MemberClaim(next.network(), next.member(), next.transfer(), new Origin("minecraft:overworld", 9, 64, 1), next.machine());
+			assertThrows(IllegalArgumentException.class, () -> OwnershipTransferService.begin(directory, data, foreign, endpoint));
+			assertNull(endpoint.binding);
+			var rejoin = OwnershipTransferService.begin(directory, data, next, endpoint);
+			reach(directory, rejoin, endpoint, PREPARE);
+			assertEquals(image(37), endpoint.assets);
+			assertEquals(1, endpoint.clears);
+			directory.flush();
+		}
+		try (var directory = directory()) {
+			var data = ready(directory, directory.loadExisting(identity));
+			assertEquals(next, directory.claimAt(next.origin()));
+			var resumed = OwnershipTransferService.resume(directory, data, next, endpoint);
+			reach(directory, resumed, endpoint, OWNED);
+			assertEquals(2, endpoint.clears);
+			assertEquals(next, data.checkpoint().ownedMachines().get(next.member()).claim());
+			assertThrows(IllegalArgumentException.class, () -> OwnershipTransferService.begin(directory, data, first, endpoint));
+			resumed.requestReturn(endpoint);
+			reach(directory, resumed, endpoint, RETURNED);
+			assertEquals(2, endpoint.restores);
+			assertEquals(image(37), endpoint.assets);
+			assertNull(endpoint.binding);
+		}
+	}
 	@Test void claimIsDurableBeforeDomainSealingAndOldUnboundSourceIsNotReimported() throws Exception {
 		var identity = CheckpointTestData.identity(); var claim = claim(identity); var endpoint = new Endpoint();
 		try (var directory = directory()) {

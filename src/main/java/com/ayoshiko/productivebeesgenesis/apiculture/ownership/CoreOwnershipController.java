@@ -72,6 +72,10 @@ public final class CoreOwnershipController {
 				if (!records.hasNext()) { records = null; return; }
 				var record = records.next(); var tile = tile(level, record.claim());
 				if (record.phase() == OwnedMachineRecord.Phase.RETURNED && (tile == null || !OwnershipEndpoints.bound(tile))) return;
+				var currentClaim = directory.claimAt(record.claim().origin());
+				// 新预约可能尚未封存；旧交还回执不再拥有该位置，新凭据由后续扫描独立恢复。
+				if (record.phase() == OwnedMachineRecord.Phase.RETURNED && currentClaim != null
+						&& currentClaim.network().equals(identity.networkId()) && !currentClaim.equals(record.claim())) return;
 				if (tile == null) throw new IllegalStateException("Owned member is missing; assets retained at " + record.claim().origin());
 				current = record.claim(); transfer = OwnershipTransferService.resume(directory, domain, current, OwnershipEndpoints.of(tile)); return;
 			}
@@ -94,7 +98,8 @@ public final class CoreOwnershipController {
 				var claim = directory.claimAt(memberOrigin);
 				if (claim != null) {
 					if (!claim.network().equals(identity.networkId())) { reject("Member belongs to another network"); return; }
-					if (domain.checkpoint().ownedMachines().get(claim.member()) != null) return;
+					var existing = domain.checkpoint().ownedMachines().get(claim.member());
+					if (existing != null && existing.claim().equals(claim)) return;
 					current = claim; transfer = OwnershipTransferService.resume(directory, domain, claim, OwnershipEndpoints.of(Objects.requireNonNull(tile(level, claim)))); return;
 				}
 				if (action != Action.JOIN) return;

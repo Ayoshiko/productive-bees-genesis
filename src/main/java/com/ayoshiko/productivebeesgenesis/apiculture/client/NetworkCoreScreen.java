@@ -302,7 +302,11 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 			if (row != null) {
 				var bee = selectedBee();
 				line(graphics, bee == null ? tr("no_bees") : bee.occupied() ? beeName(bee.type()) : tr("empty_bee"), 36, 44, 185);
-				if (bee != null) line(graphics, bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks()), 36, 55, 185);
+				if (bee != null) {
+					var status = bee.pending() ? tr("pending") : tr("progress", bee.progress(), bee.cycleTicks());
+					if (bee.generationUnknown()) status = tr("generation_unknown");
+					line(graphics, status, 36, 55, 185);
+				}
 			} else if (state.view() != null && state.view().rows().isEmpty()) line(graphics, tr("empty_page"), 36, 48, 185);
 		} else if (tab == 3) {
 			var row = selectedRow();

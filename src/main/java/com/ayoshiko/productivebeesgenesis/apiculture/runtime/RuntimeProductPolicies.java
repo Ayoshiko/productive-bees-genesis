@@ -3,12 +3,13 @@ package com.ayoshiko.productivebeesgenesis.apiculture.runtime;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbProductPolicyCompilation;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductPolicySnapshot;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGeneration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
-/** 静态产品资格按服务器和配方代际共享；动态发现仍属于各网络自己的注册表。 */
+/** 静态目录和实际生成的完整键按服务器及配方代际共享；各网络独立保管库存。 */
 public final class RuntimeProductPolicies {
 	private static final class Cache {
 		long epoch = -1;
@@ -40,5 +41,14 @@ public final class RuntimeProductPolicies {
 				&& cache.recipes == level.getRecipeManager().getRecipes() ? cache.snapshot : null;
 	}
 	public static void clear(MinecraftServer server) { CACHES.remove(server); }
+	public static void recordGenerated(ServerLevel level, BeeGeneration generation) {
+		if (!level.getServer().isSameThread()) throw new IllegalStateException("Record generated products on the server thread");
+		if (generation.phase() != BeeGeneration.Phase.READY) return;
+		long expectedEpoch = generation.source().copy().getLong("epoch");
+		var cache = CACHES.get(level.getServer());
+		if (cache == null || cache.snapshot == null || cache.epoch != expectedEpoch
+				|| ProductiveBeesGenesis.RECIPE_VERSION.get() != expectedEpoch || cache.recipes != level.getRecipeManager().getRecipes()) return;
+		cache.snapshot = cache.snapshot.withVerifiedGenerated(generation.pool().stream().map(BeeGeneration.Drop::key).toList());
+	}
 	private RuntimeProductPolicies() { }
 }

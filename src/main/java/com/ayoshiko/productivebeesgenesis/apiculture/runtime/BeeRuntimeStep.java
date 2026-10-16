@@ -40,6 +40,7 @@ final class BeeRuntimeStep {
 			case STALE_PLAN -> NetworkRuntime.Status.STALE_PLAN;
 			case DISABLED -> NetworkRuntime.Status.STOPPED;
 			case UNLOADED -> NetworkRuntime.Status.UNAVAILABLE;
+			case GENERATION_UNKNOWN -> NetworkRuntime.Status.FAILED;
 			default -> NetworkRuntime.Status.SETTLING;
 		};
 	}

@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.multiblock.world;
 
 import com.ayoshiko.productivebeesgenesis.multiblock.production.CombinedMachineWork;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGeneration;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
 import com.ayoshiko.productivebeesgenesis.multiblock.runtime.MachineDirectory;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
@@ -44,7 +46,12 @@ public final class MachineMenuDetails {
 			int start = BEE_START + bee.slot() * 3;
 			number(start, bee.progress()); number(start + 1, bee.plan().cycleTicks());
 			var status = production == null ? null : production.beeStatus(bee.slot());
-			number(start + 2, !bee.drained() ? 1 : status == null ? 0 : status.ordinal() + 2);
+			int displayStatus = 0;
+			if (bee.generation() != null && bee.generation().phase() != BeeGeneration.Phase.READY)
+				displayStatus = BeeWorkExecutor.Status.GENERATION_UNKNOWN.ordinal() + 2;
+			else if (!bee.drained()) displayStatus = 1;
+			else if (status != null) displayStatus = status.ordinal() + 2;
+			number(start + 2, displayStatus);
 			if (!bee.drained()) waiting++;
 		}
 		for (var entry : work.centrifuges().entrySet()) {

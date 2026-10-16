@@ -8,9 +8,9 @@ final class TerminalMemberPageBudget {
 	static final int MAX_BYTES = TerminalReply.MAX_BYTES - 128;
 	// 标签可为 UTF-8；机器／维度注册 ID 为 ASCII，其余固定字段含可选能力摘要。
 	private static final int ROW_BYTES = 3 * TerminalView.TEXT_LIMIT + 2 + 2 * (TerminalView.TEXT_LIMIT + 1) + 64;
-	// 蜂种显示可为 UTF-8，喂食 ID 和五项基因有 ASCII 校验；32 字节覆盖其余字段与 UUID。
+	// 蜂种显示可为 UTF-8，喂食 ID 和五项基因有 ASCII 校验；33 字节覆盖其余字段与 UUID。
 	private static final int BEE_BYTES = 3 * TerminalView.TEXT_LIMIT + 2 + TerminalView.TEXT_LIMIT + 1
-			+ (TerminalBeeGenes.VALUE_LIMIT + 1) * TerminalBeeGenes.FIELDS.size() + 32;
+			+ (TerminalBeeGenes.VALUE_LIMIT + 1) * TerminalBeeGenes.FIELDS.size() + 33;
 
 	static int weight(NetworkSelectionSession.Row row) {
 		if (!(row instanceof NetworkSelectionSession.MemberRow member)) return 0;

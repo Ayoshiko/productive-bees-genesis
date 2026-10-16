@@ -116,7 +116,7 @@ class MachineAssetsTest {
 		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.LEAVING); assets.restore(work, image);
 		assets.mode(com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.Mode.RETURNED);
 		assets.save(file.toFile(), null); assets = decode(assets.save(new CompoundTag(), null)); assertEquals(image, assets.capture());
-		assets.release(); assertEquals(6, assets.save(new CompoundTag(), null).getCompound("work").getInt("schema")); assertEquals(42, assets.work().energy());
+		assets.release(); assertEquals(7, assets.save(new CompoundTag(), null).getCompound("work").getInt("schema")); assertEquals(42, assets.work().energy());
 	}
 	@Test void schemaOneMigratesWithoutChangingWorkOrInventingABinding() {
 		var assets = assets(); assets.save(folder.resolve("old.dat").toFile(), null);

@@ -1350,3 +1350,22 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 五份 domain.json 的 passed／normalShutdownCheckpointSaved 全为 true；离心读档 allLanesPaidAndRestored／sealedAssetsAndReturn／upgradesSimulationAndStale／mixedFourCarriersProducedAndReturned、蜂箱读档 factoryManagementAndReturn 均为 true，全部场景无物品掉落实体。两张实际 1000×700 截图已回看：核心显示 55–60 六个完整按钮，终端显示 55–60／60 与末槽蜜蜂／食物、管理按钮，选中槽正确；不代表全部分辨率。未改变升级页布局，逐机升级使用真实服务器事务验证，最高档离心客户端的共同操作路径沿用[10.173](#s10-173)。
 
 **组合、复用与剩余门。** 实际组合为 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、ME 1.4.0、EME 1.2.1，无 AE2；编译用既有 ME 1.4.1，未改外部依赖或元数据。普通／EM／ME 资产接口、升级语义和未变生产路径沿用[10.170](#s10-170)–[10.173](#s10-173)，只补 EME 和 60 槽风险；不重跑全量缺依赖矩阵，也没有 Spark 或高倍率收益结论。源码、命令／退出码／耗时、报告、XML、截图、日志、依赖及 JAR 摘要集中于 `build/network-gates/r3-eme-factories-20261015/verification.json`；原始世界与日志保留在忽略的 build，探针不进入发布 JAR。本包客户端、专服及限时助手均已退出。CREATIVE／STACK 蜂箱升级件、修改费用公式的可选组合、动态／中性资源、完整 RF／D24／D25／M05、故障／多人及 64×／256× 门仍开放；下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。
+
+<a id="s10-175"></a>
+### 10.175 R3 WannaBee／Lumber／Quarry／Dye 共享生成、管理与世界恢复（2026-10-16）
+
+**本包交付。** 网络 worktree `productive-bees-addon`、分支 `bees-processing-network/1.21.1`，基线 `daf395d`。四类蜂按 PB 13.14.0 的真实身份接入普通托管蜂箱、独立组合机与托管组合机；WannaBee 保留数据包固定物品和独立流体，再从单次琥珀战利品池结算升级轮次，Lumber／Quarry／Dye 复用真实花源映射。共同周期保存完整喂食分组快照、禁用状态、费用、随机游标、生成阶段与逐键余量；外部生成先发布 STARTED，成功保存 READY，异常保管 UNKNOWN，恢复不得自动重抽或重复扣费。已付 READY 不受后续暂停、花源失效或配方／能力代际变化影响，全部交付后才允许新周期、装笼或交还。完整组件产物只按当前配方代际的实际生成记录准入，普通端口、核心、终端与桥接共用资格。网络／蜂状态／组合机格式升至 16／7／7，旧格式和交接原始指纹严格保留。协议 45 在 64 KiB 页面预算内显示“生成结果待核验”，不向客户端发送完整候选池。合同与来源见[7.3](bee-processing-network-design.md#s7-3)、[13.1](bee-processing-network-references.md#s13-1)。
+
+**恢复修正。** 组合机完整交还后，同网络、位置和机器类型的新 transfer 可以再次接管，旧 transfer 仍拒绝重放。预约、封存和恢复共用判定；目录已保存新预约但尚未封存的窗口由新请求恢复，须验证当前 JOINING 绑定及目录保存回执。旧“已交还”记录不得覆盖新请求。
+
+**实际验收与本次接续。** 本包此前已执行受影响测试、build、专服、独立 JVM 和中文客户端；本次恢复原聊天后核对当前源码／夹具最后修改早于最终 build，复用有效结果，补证据、文档检查、编码与产物核验，不重复启动游戏。最终任务图为 `.\gradlew test --tests "*OwnershipTransferTest" --tests "*TerminalProtocolTest" --tests "*DynamicBeeCheckpointTest" build runNetworkDomainServer -PnetworkDomainProbe -PnetworkDynamicBees -PnetworkDynamicWorldMode=read -PnetworkProbeSeedWorld=build/network-probe-r3-dynamic-world-write-20261016-l/world -PnetworkProbeRun=r3-dynamic-world-read-20261016-s --offline --no-daemon`，外部进程树硬超时 290 秒；实际退出 0、40.59 秒。最终 XML 为 OwnershipTransfer 12、TerminalProtocol 29、DynamicBeeCheckpoint 8，无失败／错误／跳过；旧池跨预算续算、超过 long 的数量、严格旧格式、改组件拒收、旧周期升级保留及条件失效后零费用交付均覆盖。未改变的多输出、工厂存档和组合机资产检查沿用本包保存的 `passed-test-results-h`。
+
+| 证据运行 ID | 实际验证范围 |
+| --- | --- |
+| r3-dynamic-bees-write-20261016-h／read-20261016-h | 四类蜂三宿主生产、精确 FE、SIMULATE 不变、同组／禁用／全花设置、真实 ticker 与蜂笼入口、完整交还无掉落；独立 JVM 冻结池续算通过 |
+| r3-dynamic-world-write-20261016-l／read-20261016-s | 正常世界保存后恢复普通蜂箱和组合机的 READY／STARTED／UNKNOWN；READY 不重新扣费或抽取，未确认请求保管且拒绝交还；最终读档与正常停服通过 |
+| r3-dynamic-client-20261016-r | 中文独立客户端四蜂装笼／入驻、花源取出／放回、启停、实际 Dye 产物取出与普通端口回存、组件变体拒收、核心和终端待核验显示；客户端及服务端正常保存通过，原聊天记录耗时约 96 秒 |
+
+上述 domain.json 的 passed／normalShutdown 均为 true；世界与客户端报告还分别确认 dynamicWorldShutdownSaved／dynamicClientShutdownSaved。两张 1000×700 截图在原聊天已回看，显示核心／终端“生成结果待核验，已停止重抽”及实际染料、蜂蜜；只代表该视口。客户端夹具曾错误地把原生背包点击当成只选格、未迁入正式共享 FE 账户、未失效端口能力以及每 tick 只推进一次策略编译；均按真实菜单、容量、迁入服务和正式端口每 tick 最多八步预算修正后通过，失败报告保留，不能把准备等待算作成功。
+
+**组合与剩余边界。** 实际运行 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、ME 1.4.0、EME 1.2.1，无 AE2；未更换现有外部依赖。源码、依赖、命令、报告、已保存 XML、截图、日志和 JAR 摘要索引为 `build/network-gates/r3-dynamic-bees-20261016/verification.json`。证据留在忽略的 build，探针不进入发布 JAR。本包游戏进程已结束；UNKNOWN／恢复遇 STARTED 仍需依据原请求人工核验，本包未提供自动解锁。其余特殊蜂、升级产物链、中性资源、完整 ME／M05、异常退出／多人／缺依赖矩阵及 64×／256×／Spark 门仍开放，不从正常恢复或编译推导通过；下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。

@@ -12,6 +12,18 @@ import net.neoforged.neoforge.fluids.FluidStack;
 public final class ApiaryOwnershipAssets implements MachineAssetSection {
 	private final TileEntityMekApiary tile;
 	public ApiaryOwnershipAssets(TileEntityMekApiary tile) { this.tile = tile; }
+	@Override public boolean prepared() {
+		var pending = new CompoundTag();
+		tile.tickHandler.savePendingCycles(pending);
+		var slots = tile.getSlotManager().getBeeSlots();
+		var counts = PendingBeeCycles.read(pending, slots.length).counts();
+		for (int index = 0; index < slots.length; index++) {
+			var slot = slots[index];
+			if (!slot.isEmpty() && counts[index] > 0 && DynamicBeeAdapter.generator(BeeNbtHelper.resolveBeeTypeKey(slot.getBeeData()))
+					!= com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator.STATIC) return false;
+		}
+		return true;
+	}
 	@Override public CompoundTag capture(HolderLookup.Provider registries) {
 		if (!tile.pendingCyclesReadable()) throw new IllegalStateException("Unreadable apiary pending cycles");
 		var tag = new CompoundTag(); tile.nbtSerializer().saveApiaryState(tag, registries); tile.tickHandler.savePendingCycles(tag);

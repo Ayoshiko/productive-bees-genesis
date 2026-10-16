@@ -85,11 +85,13 @@ final class MachinePbUpgradeChecks {
 		var installed = core.assets.work(); var candidate = installed; var production = new MachineProduction();
 		int remaining = initial.bee(5).plan().cycleTicks() - initial.bee(5).progress();
 		for (int i = 0; i < remaining; i++) {
-			candidate = production.advance(level, candidate);
+			candidate = production.advance(level, candidate, core.getBlockPos(),
+					value -> { throw new IllegalStateException("Static probe attempted external generation"); }, () -> installed);
 			check(candidate.bee(5).plan().equals(initial.bee(5).plan()), "PB changed an in-progress cycle");
 		}
 		check(candidate.bee(5).progress() == 0 && candidate.bee(5).drained(), "Old bee cycle did not settle");
-		candidate = production.advance(level, candidate);
+		candidate = production.advance(level, candidate, core.getBlockPos(),
+				value -> { throw new IllegalStateException("Static probe attempted external generation"); }, () -> installed);
 		var newPlan = candidate.bee(5).plan();
 		check(newPlan.productionMultiplier() > 1 && !newPlan.output().equals(newPlan.sourceOutput()) && candidate.bee(5).progress() > 0, "New bee cycle did not adopt PB output");
 		check(newPlan.output().equals(StaticApiaryAdapter.output(input, true, level.registryAccess())), "Omega and block converted more than once");

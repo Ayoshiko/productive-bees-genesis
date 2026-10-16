@@ -24,6 +24,9 @@ final class OwnershipRecordCodec {
 		if (!tag.getAllKeys().equals(fields)) throw new IllegalArgumentException("Unknown or missing ownership fields");
 		if (schema == 13 && !StrictNbt.compound(tag, "combined").isEmpty() && StrictNbt.integer(StrictNbt.compound(tag, "combined"), "schema") >= 6)
 			throw new IllegalArgumentException("New combined work inside an old network schema");
+		if (schema >= 13 && schema < 16 && !StrictNbt.compound(tag, "combined").isEmpty()
+				&& StrictNbt.integer(StrictNbt.compound(tag, "combined"), "schema") >= 7)
+			throw new IllegalArgumentException("Dynamic combined work inside an old network schema");
 		return new OwnedMachineRecord(readClaim(StrictNbt.compound(tag, "claim")), StrictNbt.choice(tag, "phase", OwnedMachineRecord.Phase.class),
 				new AssetImage(StrictNbt.compound(tag, "assets")), StrictNbt.string(tag, "fingerprint"), StrictNbt.string(tag, "failure"), BeeRecordCodec.decode(StrictNbt.compound(tag, "bees"), validate, validateFeeding, schema),
 				CentrifugeRecordCodec.decode(StrictNbt.compound(tag, "centrifuge"), validate),
