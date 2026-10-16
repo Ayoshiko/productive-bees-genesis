@@ -27,6 +27,10 @@ final class CoreUpgradeCommands {
 		Upgrade stack = null;
 		for (var upgrade : Upgrade.values()) if (upgrade.name().equals("STACK")) stack = upgrade;
 		choices.add(new Choice(stack, null));
+		choices.add(new Choice(null, PbUpgradeType.GENE_SAMPLER));
+		choices.add(new Choice(null, PbUpgradeType.GENE_TYPE_ONLY));
+		choices.add(new Choice(null, PbUpgradeType.GENE_FULL_PURITY));
+		choices.add(new Choice(null, PbUpgradeType.ESSENCE_CONVERSION));
 		CHOICES = List.copyOf(choices);
 	}
 

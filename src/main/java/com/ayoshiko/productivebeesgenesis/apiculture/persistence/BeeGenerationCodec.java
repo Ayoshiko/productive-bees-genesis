@@ -28,24 +28,29 @@ final class BeeGenerationCodec {
 		tag.putBoolean("fixed", generation.fixedDone());
 		tag.put("consumed", ProductRecordCodec.amount(generation.consumed()));
 		tag.putString("failure", generation.failure());
+		if (generation.effects().enabled()) tag.put("effects", BeeProductionEffectsCodec.encode(generation.effects()));
 		return tag;
 	}
-	static BeeGeneration decode(CompoundTag tag, Consumer<ProductKey> validate, boolean weighted) {
-		if (!tag.getAllKeys().equals(Set.of("source", "phase", "pool", "fixed", "consumed", "failure")))
+	static BeeGeneration decode(CompoundTag tag, Consumer<ProductKey> validate, int schema) {
+		var fields = new java.util.HashSet<>(Set.of("source", "phase", "pool", "fixed", "consumed", "failure"));
+		if (schema >= 18 && tag.contains("effects")) fields.add("effects");
+		if (!tag.getAllKeys().equals(fields))
 			throw new IllegalArgumentException("Unknown or missing bee generation fields");
 		var codec = new ProductRecordCodec(validate);
 		var pool = new ArrayList<BeeGeneration.Drop>();
 		for (var raw : StrictNbt.list(tag, "pool")) {
 			var value = (CompoundTag) raw;
 			var expected = new java.util.HashSet<>(Set.of("key", "count"));
-			if (weighted && value.contains("weight")) expected.add("weight");
+			if (schema >= 17 && value.contains("weight")) expected.add("weight");
 			if (!value.getAllKeys().equals(expected) || value.contains("weight") && !value.contains("weight", Tag.TAG_DOUBLE))
 				throw new IllegalArgumentException("Invalid generated bee pool entry");
 			pool.add(new BeeGeneration.Drop(codec.readKey(StrictNbt.compound(value, "key")), StrictNbt.integer(value, "count"),
 					value.contains("weight") ? value.getDouble("weight") : 1));
 		}
 		return new BeeGeneration(new AssetImage(StrictNbt.compound(tag, "source")), StrictNbt.choice(tag, "phase", BeeGeneration.Phase.class),
-				pool, StrictNbt.bool(tag, "fixed"), ProductRecordCodec.readAmount(tag, "consumed"), StrictNbt.string(tag, "failure"));
+				pool, StrictNbt.bool(tag, "fixed"), ProductRecordCodec.readAmount(tag, "consumed"), StrictNbt.string(tag, "failure"),
+				tag.contains("effects") ? BeeProductionEffectsCodec.decode(StrictNbt.compound(tag, "effects"), validate)
+				: com.ayoshiko.productivebeesgenesis.apiculture.production.BeeProductionEffects.NONE);
 	}
 	private BeeGenerationCodec() { }
 }

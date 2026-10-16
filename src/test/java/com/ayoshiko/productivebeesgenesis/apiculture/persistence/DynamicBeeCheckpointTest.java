@@ -29,6 +29,9 @@ class DynamicBeeCheckpointTest {
 		return fixture(multiplier, generator, false);
 	}
 	private static NetworkCheckpoint fixture(float multiplier, BeeGenerator generator, boolean combBlock) {
+		return fixture(multiplier, generator, combBlock, BeeProductionEffects.NONE);
+	}
+	private static NetworkCheckpoint fixture(float multiplier, BeeGenerator generator, boolean combBlock, BeeProductionEffects effects) {
 		var identity = CheckpointTestData.identity();
 		var claim = new MemberClaim(identity.networkId(), MEMBER, new UUID(29, 1), new Origin("minecraft:overworld", 1, 64, 2), "productivebeesgenesis:mek_apiary");
 		var entity = new CompoundTag();
@@ -57,7 +60,9 @@ class DynamicBeeCheckpointTest {
 		var sealed = new OwnedMachineRecord(claim, OwnedMachineRecord.Phase.SEALED, assets, assets.fingerprint(), "");
 		var owned = sealed.phase(OwnedMachineRecord.Phase.OWNED);
 		var plan = new StaticBeePlan(type, "test:generated", 0, 0, 1, 3, 0, false,
-				BeeWorkConditions.Traits.DEFAULT, multiplier, List.of(), generator, combBlock);
+				BeeWorkConditions.Traits.DEFAULT, multiplier,
+				generator == BeeGenerator.STATIC ? List.of(new BeeOutputPlan(FIRST, FIRST, 1, 1, 1, BeeOutputPlan.Basis.ROLL)) : List.of(),
+				generator, combBlock, effects);
 		var bee = new BeeRecord(new UUID(123, 456), MEMBER, 0, new AssetImage(slot), plan, 0, 0, 0, ProductAmount.ZERO);
 		var state = new BeeMemberState(MEMBER, 0, 10000, 10000, List.of(bee));
 		return NetworkCheckpoint.empty(identity).withOwnership(sealed).withOwnership(owned).withOwnership(owned.withBees(state));
@@ -79,14 +84,15 @@ class DynamicBeeCheckpointTest {
 	}
 	private static NetworkCheckpoint pool(NetworkCheckpoint root, List<BeeGeneration.Drop> drops) {
 		var state = state(root);
-		return root.applyBeeWork(MEMBER, BeeWorkExecutor.resolveGeneration(state, 0, state.bee(0).generation().ready(drops)));
+		return root.applyBeeWork(MEMBER, BeeWorkExecutor.resolveGeneration(state, 0,
+				state.bee(0).generation().ready(drops, state.bee(0).plan().effects())));
 	}
 	private static NetworkCheckpoint drain(NetworkCheckpoint root, int budget, boolean restart) {
 		for (int step = 0; !state(root).bee(0).drained(); step++) {
 			assertTrue(step < 100, "Dynamic cycle failed to drain");
 			if (restart) root = CODEC.decode(NetworkCheckpointCodec.encode(root));
 			var state = state(root);
-			if (state.bee(0).hasFrozen()) root = root.settleBee(MEMBER, 0, state.bee(0).revision());
+			if (state.bee(0).deliverable()) root = root.settleBee(MEMBER, 0, state.bee(0).revision());
 			else {
 				var result = BeeWorkExecutor.advance(state, 0, state.bee(0).revision(), context(), 0, budget);
 				assertEquals(BeeWorkExecutor.Status.READY, result.status());
@@ -125,6 +131,58 @@ class DynamicBeeCheckpointTest {
 				.map(ProductAmount::exact).reduce(BigInteger.ZERO, BigInteger::add));
 		assertEquals(9997, state(huge).energy());
 		assertEquals(1, state(huge).bee(0).random().cursor());
+	}
+	@Test void upgradeEventHoldsRawOutputsAndRestoresExactConversionAndOneGene() {
+		var geneComponents = new CompoundTag();
+		var geneValue = new CompoundTag();
+		geneValue.putString("attribute", "type");
+		geneValue.putString("value", "productivebees:lumber_bee");
+		geneValue.putInt("purity", 100);
+		geneComponents.put("productivebees:gene_group", geneValue);
+		var gene = new ProductKey(ProductKey.Kind.ITEM, ResourceLocation.parse("productivebees:gene"), geneComponents);
+		var effects = new BeeProductionEffects(true, false, 1, List.of(gene),
+				List.of(new BeeProductionEffects.Conversion(FIRST, SECOND, 9, 1, false)), java.util.Set.of());
+		var ready = pool(pay(fixture(20, BeeGenerator.STATIC, false, effects)), List.of());
+		var state = state(ready);
+		var step = BeeWorkExecutor.advance(state, 0, state.bee(0).revision(), context(), 0, 1);
+		ready = ready.applyBeeWork(MEMBER, step);
+		assertTrue(state(ready).bee(0).hasFrozen());
+		assertFalse(state(ready).bee(0).deliverable());
+		assertSame(ready, ready.settleBee(MEMBER, 0, state(ready).bee(0).revision()));
+		var finished = drain(ready, 1, true);
+		assertEquals(Map.of(FIRST, ProductAmount.of(2), SECOND, ProductAmount.of(2), gene, ProductAmount.of(1)), finished.ledger().balances());
+		assertEquals(9997, state(finished).energy());
+		assertEquals(1, state(finished).bee(0).random().cursor());
+		var old = NetworkCheckpointCodec.encode(ready);
+		old.putInt("schema", 17);
+		old.getList("ownership", 10).getCompound(0).getCompound("bees").putInt("samplingVersion", 8);
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(old));
+		var huge = effects.finish(Map.of(FIRST, ProductAmount.of(BigInteger.ONE.shiftLeft(100))));
+		assertEquals(BigInteger.ONE.shiftLeft(100),
+				huge.get(SECOND).exact().multiply(BigInteger.valueOf(9)).add(huge.get(FIRST).exact()));
+	}
+	@Test void upgradeConversionPreservesBothChainRemaindersAndDoesNotRecurseOtherOutputs() {
+		var finalKey = key("final");
+		var honey = new ProductKey(ProductKey.Kind.FLUID, ResourceLocation.parse("test:honey"), new CompoundTag());
+		var effects = new BeeProductionEffects(true, true, 0, List.of(),
+				List.of(new BeeProductionEffects.Conversion(FIRST, SECOND, 9, 1, true),
+						new BeeProductionEffects.Conversion(SECOND, finalKey, 3, 1, false)), java.util.Set.of(honey));
+		assertEquals(Map.of(FIRST, ProductAmount.of(1), SECOND, ProductAmount.of(2), finalKey, ProductAmount.of(1)),
+				effects.finish(Map.of(FIRST, ProductAmount.of(46), honey, ProductAmount.of(250))));
+		var oneHop = new BeeProductionEffects(true, false, 0, List.of(),
+				List.of(new BeeProductionEffects.Conversion(FIRST, SECOND, 9, 1, false),
+						new BeeProductionEffects.Conversion(SECOND, finalKey, 3, 1, false)), java.util.Set.of());
+		assertEquals(Map.of(SECOND, ProductAmount.of(3)), oneHop.finish(Map.of(FIRST, ProductAmount.of(27))));
+	}
+	@Test void oldOwnershipSchemaCannotCarryNewSealedUpgradeWithoutActiveBees() {
+		var encoded = NetworkCheckpointCodec.encode(fixture(1, BeeGenerator.WANNA_BEE));
+		encoded.putInt("schema", 17);
+		var owned = encoded.getList("ownership", 10).getCompound(0);
+		owned.put("bees", new CompoundTag());
+		var counts = owned.getCompound("assets").getCompound("extra")
+				.getCompound(com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS);
+		counts.putInt(com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_SAMPLER.getId(), 1);
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(encoded));
 	}
 	@Test void schemaSixteenKeepsUnweightedRequestsAndCannotHideMyriadOrWeightedPool() {
 		var legacy = NetworkCheckpointCodec.encode(pool(pay(fixture(3, BeeGenerator.WANNA_BEE)),

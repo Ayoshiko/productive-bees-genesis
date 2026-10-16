@@ -10,7 +10,9 @@ import java.util.Map;
 public record MachineUpgrades(long revision, List<Integer> counts, Map<PbUpgradeType, Integer> apiary, Map<PbUpgradeType, Integer> centrifuge) {
 	public static final int NATIVE_SLOTS = 4, LIMIT = 8;
 	public static final List<PbUpgradeType> APIARY_TYPES = List.of(PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2,
-			PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.TIME, PbUpgradeType.TIME_2, PbUpgradeType.BLOCK);
+			PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.TIME, PbUpgradeType.TIME_2, PbUpgradeType.BLOCK,
+			PbUpgradeType.GENE_SAMPLER, PbUpgradeType.GENE_TYPE_ONLY, PbUpgradeType.GENE_FULL_PURITY,
+			PbUpgradeType.ESSENCE_CONVERSION, PbUpgradeType.USELESS_BYPRODUCT);
 	public static final List<PbUpgradeType> CENTRIFUGE_TYPES = List.of(PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2,
 			PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.TIME, PbUpgradeType.TIME_2,
 			PbUpgradeType.STABILITY, PbUpgradeType.USELESS_BYPRODUCT);

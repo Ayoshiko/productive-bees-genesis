@@ -24,7 +24,10 @@ import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 /** 只读封存数据和成员原位置；不构造隐藏机器，不执行物理生产、喂食或输出。 */
 public final class StaticApiaryAdapter {
 	/** 只含计算参数，载体负责真实升级资产与资格；公式由各载体的已验证能力输入给出。 */
-	public record Profile(float time, long energy, float productivity, boolean combBlock) {
+	public record Profile(float time, long energy, float productivity, boolean combBlock, ApiaryProductionEffects.Upgrades effects) {
+		public Profile(float time, long energy, float productivity, boolean combBlock) {
+			this(time, energy, productivity, combBlock, ApiaryProductionEffects.Upgrades.NONE);
+		}
 		public Profile {
 			if (!Float.isFinite(time) || time <= 0 || energy < 0 || !Float.isFinite(productivity) || productivity <= 0)
 				throw new IllegalArgumentException("Invalid apiary profile");
@@ -44,7 +47,9 @@ public final class StaticApiaryAdapter {
 		var layout = ApiaryWorkLayout.forMachine(machine);
 		return layout != null && hive.getBeeSlotCount() == layout.bees() && hive.getFeederSlots().size() == layout.feeders();
 	}
-	private static Profile profile(SealedApiaryProfile value) { return new Profile(value.time(), value.energy(), value.productivity(), value.combBlock()); }
+	private static Profile profile(SealedApiaryProfile value) {
+		return new Profile(value.time(), value.energy(), value.productivity(), value.combBlock(), value.effects());
+	}
 	private static boolean ordinary(ResourceLocation type) {
 		return type != null && !com.ayoshiko.productivebeesgenesis.util.PBConstants.WANNA_TYPE.equals(type)
 				&& !com.ayoshiko.productivebeesgenesis.util.PBConstants.MYRIADCREATIONS_TYPE.equals(type)
@@ -118,7 +123,10 @@ public final class StaticApiaryAdapter {
 			outputs.add(entry.mapped(output(entry.source(), profile.combBlock(), registries)));
 		if (!fluid.isEmpty()) { var key = ProductKeyCodec.fluid(fluid, registries); outputs.add(new BeeOutputPlan(key, key, fluid.getAmount(), fluid.getAmount(), 1, BeeOutputPlan.Basis.CYCLE)); }
 		return new BeeWorkExecutor.Cycle(BeeProgressPlan.cycleTicks(bee.originalSlot().copy().getInt("base_min_occupation_ticks"),
-				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity(), outputs, profile.combBlock());
+				ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false), profile.energy(), profile.productivity(), outputs,
+				profile.combBlock(), ApiaryProductionEffects.compile(level, profile.effects(),
+						bee.originalSlot().copy().getCompound("entity_data"), bee.plan().beeType(),
+						outputs.stream().map(BeeOutputPlan::output).toList()));
 	}
 	/** 物理机无法接收旧能力或网络随机游标；小数倍率的部分周期必须先结清。 */
 	public static boolean returnReady(TileEntityMekApiary hive, OwnedMachineRecord record) {
@@ -155,7 +163,9 @@ public final class StaticApiaryAdapter {
 			return new StaticBeePlan(type.toString(), DynamicBeeAdapter.recipe(type), recipeRevision, capabilityRevision,
 					BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false),
 					profile.energy(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
-					BeeWorkConditionEvaluator.readTraits(data), profile.productivity(), outputs, generator, profile.combBlock());
+					BeeWorkConditionEvaluator.readTraits(data), profile.productivity(), outputs, generator, profile.combBlock(),
+					ApiaryProductionEffects.compile(level, profile.effects(), data, type.toString(),
+							outputs.stream().map(BeeOutputPlan::output).toList()));
 		}
 		if (BeeNbtHelper.resolveEntityType(data) != cy.jdkdigital.productivebees.init.ModEntities.CONFIGURABLE_BEE.get()
 				|| !ordinary(type) || data.getBoolean("HasConverted")) {
@@ -175,7 +185,10 @@ public final class StaticApiaryAdapter {
 		return new StaticBeePlan(type.toString(), holder.id().toString(), recipeRevision, capabilityRevision,
 				BeeProgressPlan.cycleTicks(slot.getInt("base_min_occupation_ticks"), ModConfig.SERVER.apiaryProcessingTime.get(), profile.time(), false),
 				profile.energy(), BeeProductivityGene.readLevel(data), BalanceConfig.apiaryBeeGenesAffectWork(),
-				BeeWorkConditionEvaluator.readTraits(data), profile.productivity(), outputs);
+				BeeWorkConditionEvaluator.readTraits(data), profile.productivity(), outputs,
+				com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator.STATIC, false,
+				ApiaryProductionEffects.compile(level, profile.effects(), data, type.toString(),
+						outputs.stream().map(BeeOutputPlan::output).toList()));
 	}
 	private static ArrayList<BeeOutputPlan> recipeOutputs(ServerLevel level, ResourceLocation type, boolean combBlock) {
 		var holder = BeeInfoHelper.getBeeProductionRecipe(level, type);

@@ -259,7 +259,7 @@ class CombinedMachineWorkTest {
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
 		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); removeBeeFluidFields(old); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(8, newTag.getInt("schema"));
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(9, newTag.getInt("schema"));
 		newTag.putInt("schema", 1); removeBeeFluidFields(newTag); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(
@@ -306,7 +306,7 @@ class CombinedMachineWorkTest {
 		var encoded = CombinedWorkCodec.encode(state); var restored = restore(encoded);
 		assertEquals(state.upgrades(), restored.upgrades()); assertEquals(original.bees(), restored.bees());
 		assertEquals(original.centrifuges(), restored.centrifuges()); assertEquals(original.energy(), restored.energy());
-		assertEquals(7, restored.upgrades().apiary().size()); assertEquals(8, restored.upgrades().centrifuge().size());
+		assertEquals(12, restored.upgrades().apiary().size()); assertEquals(8, restored.upgrades().centrifuge().size());
 		assertThrows(IllegalArgumentException.class, () -> MachineUpgrades.slot(true, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.STABILITY));
 		assertThrows(IllegalArgumentException.class, () -> MachineUpgrades.slot(false, com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.BLOCK));
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(

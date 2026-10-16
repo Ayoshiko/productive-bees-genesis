@@ -17,10 +17,13 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 		tile.tickHandler.savePendingCycles(pending);
 		var slots = tile.getSlotManager().getBeeSlots();
 		var counts = PendingBeeCycles.read(pending, slots.length).counts();
+		boolean effects = tile.getPbUpgradeInstalledCount(PbUpgradeType.GENE_SAMPLER) > 0
+				|| tile.getPbUpgradeInstalledCount(PbUpgradeType.ESSENCE_CONVERSION) > 0
+				|| tile.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;
 		for (int index = 0; index < slots.length; index++) {
 			var slot = slots[index];
-			if (!slot.isEmpty() && counts[index] > 0 && DynamicBeeAdapter.generator(BeeNbtHelper.resolveBeeTypeKey(slot.getBeeData()))
-					!= com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator.STATIC) return false;
+			if (!slot.isEmpty() && counts[index] > 0 && (effects || DynamicBeeAdapter.generator(BeeNbtHelper.resolveBeeTypeKey(slot.getBeeData()))
+					!= com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator.STATIC)) return false;
 		}
 		return true;
 	}

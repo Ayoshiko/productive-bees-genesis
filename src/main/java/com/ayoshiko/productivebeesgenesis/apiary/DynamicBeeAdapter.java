@@ -56,7 +56,8 @@ public final class DynamicBeeAdapter {
 	}
 	public static BeeWorkExecutor.Context prepare(ServerLevel level, BeeRecord bee, List<FeedingSlotStore.Slot> slots,
 			int ticks, BeeWorkExecutor.Cycle cycle, BeeWorkExecutor.Context context) {
-		if (bee.plan().generator() == BeeGenerator.STATIC || ticks == 0 || !bee.drained()) return context;
+		boolean generated = bee.plan().requiresGeneration() || cycle != null && cycle.effects().enabled();
+		if (!generated || ticks == 0 || !bee.drained()) return context;
 		int required = cycle == null ? bee.plan().cycleTicks() : cycle.cycleTicks();
 		if ((long) bee.progress() + ticks < required) return context;
 		if (!level.getServer().isSameThread()) throw new IllegalStateException("Capture bee generation on the server thread");
@@ -80,7 +81,8 @@ public final class DynamicBeeAdapter {
 			if (!source.getAllKeys().equals(Set.of("bee", "epoch", "allFlowers", "items"))
 					|| !bee.plan().beeType().equals(source.getString("bee")) || !source.contains("items", Tag.TAG_LIST))
 				throw new IllegalArgumentException("Invalid bee generation source");
-			if (bee.plan().generator() == BeeGenerator.MYRIAD) return request.ready(myriadPool(level, bee));
+			if (bee.plan().generator() == BeeGenerator.MYRIAD) return ready(level, bee, myriadPool(level, bee));
+			if (bee.plan().generator() == BeeGenerator.STATIC) return ready(level, bee, List.of());
 			var stacks = new ArrayList<ItemStack>();
 			for (var raw : source.getList("items", Tag.TAG_COMPOUND))
 				stacks.add(StaticFeedingAdapter.parse((CompoundTag) raw, level.registryAccess()));
@@ -107,12 +109,20 @@ public final class DynamicBeeAdapter {
 				var output = StaticApiaryAdapter.output(sourceKey, bee.plan().generatedCombBlock(), level.registryAccess());
 				drops.add(new BeeGeneration.Drop(output, stack.getCount()));
 			}
-			return request.ready(drops);
+			return ready(level, bee, drops);
 		} catch (RuntimeException failure) {
 			ProductiveBeesGenesis.LOGGER.error("Bee generation requires recovery: member={} bee={} cycle={} origin={}",
 					bee.member(), bee.id(), bee.random().cursor(), origin, failure);
 			return request.unknown(failure.getClass().getName() + ": " + String.valueOf(failure.getMessage()));
 		}
+	}
+	private static BeeGeneration ready(ServerLevel level, BeeRecord bee, List<BeeGeneration.Drop> drops) {
+		var fixed = bee.plan().outputs().stream().map(
+				com.ayoshiko.productivebeesgenesis.apiculture.production.BeeOutputPlan::output).collect(java.util.stream.Collectors.toSet());
+		var keys = new ArrayList<com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductKey>();
+		for (var drop : drops) if (!fixed.contains(drop.key())) keys.add(drop.key());
+		var effects = keys.isEmpty() ? bee.plan().effects() : ApiaryProductionEffects.rules(level, bee.plan().effects(), keys);
+		return bee.generation().ready(drops, effects);
 	}
 	private static List<BeeGeneration.Drop> myriadPool(ServerLevel level, BeeRecord bee) {
 		var snapshot = MyriadBeeTypeCache.snapshot();

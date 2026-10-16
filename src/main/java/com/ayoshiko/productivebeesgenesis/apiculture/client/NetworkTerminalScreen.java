@@ -42,6 +42,7 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	private long searchAt;
 	private int tab, selected = -1, target, sourceSlot, amount = 1, upgradeChoice, scroll;
 	private boolean confirmCage, batch;
+	private int upgradePage;
 	private TerminalSearchRequest.Sort sort = TerminalSearchRequest.Sort.CAPACITY;
 	private TerminalSearchRequest.Sort productSort = TerminalSearchRequest.Sort.POSITION;
 	private TerminalView displayed;
@@ -294,9 +295,21 @@ public final class NetworkTerminalScreen extends AbstractContainerScreen<Network
 	}
 	private void upgradeActions() {
 		detailHeader();
-		for (int i = 0; i < selectedRow().upgrades().size(); i++) {
-			var upgrade = selectedRow().upgrades().get(i);
-			int x = inventoryY < 190 ? 40 + i * 24 : 42 + i % 5 * 49, y = inventoryY < 190 ? 69 : 72 + i / 5 * 25;
+		var upgrades = selectedRow().upgrades();
+		int columns = inventoryY < 190 ? 10 : 5;
+		int rows = Math.max(1, (Math.min(inventoryY - 57, 157) - 73) / 25);
+		int pageSize = columns * rows;
+		int pages = Math.max(1, (upgrades.size() + pageSize - 1) / pageSize);
+		upgradePage = Math.min(upgradePage, pages - 1);
+		if (pages > 1) {
+			navigation(Component.literal("<"), 236, 49, 18, 16, () -> { upgradePage--; rebuild(); }).active = upgradePage > 0;
+			navigation(Component.literal(">"), 257, 49, 18, 16, () -> { upgradePage++; rebuild(); }).active = upgradePage + 1 < pages;
+		}
+		for (int i = upgradePage * pageSize; i < Math.min(upgrades.size(), (upgradePage + 1) * pageSize); i++) {
+			var upgrade = upgrades.get(i);
+			int local = i % pageSize;
+			int x = inventoryY < 190 ? 40 + local % columns * 24 : 42 + local % columns * 49;
+			int y = 72 + local / columns * 25;
 			var icon = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(upgrade.item())));
 			cell(icon.getHoverName().copy().append(" " + upgrade.installed() + "/" + upgrade.limit()), x, y, upgradeChoice == upgrade.choice(),
 					ignored -> { upgradeChoice = upgrade.choice(); rebuild(); }, g -> {

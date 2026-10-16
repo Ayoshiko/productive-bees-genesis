@@ -43,7 +43,12 @@ final class GeneratedBeeSampler {
 			for (var entry : selected.entrySet()) add(outputs, pool.get(entry.getKey()), ProductAmount.of(entry.getValue()), plan.productivity());
 			consumed = generation.consumed().add(ProductAmount.of(count));
 		}
-		return copy(bee, outputs, null, generation.progress(true, consumed), consumed.equals(rolls));
+		boolean complete = consumed.equals(rolls);
+		if (complete && generation.effects().enabled()) {
+			generation.effects().sampleGene(outputs, bee.random());
+			outputs = new HashMap<>(generation.effects().finish(outputs));
+		}
+		return copy(bee, outputs, null, generation.progress(true, consumed), complete);
 	}
 	static ProductAmount rolls(StaticBeePlan plan, BeeCycleRandom random) {
 		if (plan.generator() == BeeGenerator.MYRIAD) {

@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.StaticApiaryAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.DynamicBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.RecipesUnavailableException;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
@@ -19,7 +20,12 @@ public final class NetworkBeeService {
 		var current = authority.checkpoint(); var record = current.ownedMachines().get(member);
 		if (!ModConfig.SERVER.beeNetwork.enabled.get() || current.revision() != expectedCheckpoint || record == null || record.bees() != null) return false;
 		var hive = member(level, record); if (hive == null) return false;
-		var state = StaticApiaryAdapter.compile(level, hive, record, current.policyRevision(), capabilityRevision);
+		BeeMemberState state;
+		try {
+			state = StaticApiaryAdapter.compile(level, hive, record, current.policyRevision(), capabilityRevision);
+		} catch (RecipesUnavailableException exception) {
+			return false;
+		}
 		authority.publish(current.withOwnership(record.withBees(state))); directory.requestSave(authority); return true;
 	}
 	public BeeWorkExecutor.Status advance(ServerLevel level, UUID member, int slot, long beeRevision,
@@ -35,9 +41,15 @@ public final class NetworkBeeService {
 		if (ticks > 0 && (!StaticApiaryAdapter.currentPlan(level, hive, record.bees().bee(slot)) || recipeRevision != current.policyRevision())) return BeeWorkExecutor.Status.STALE_PLAN;
 		var bee = record.bees().bee(slot); BeeWorkExecutor.Cycle cycle = null;
 		if (ticks > 0 && bee.drained()) {
-			if (bee.progress() == 0) cycle = StaticApiaryAdapter.cycle(hive, record, bee);
+			if (bee.progress() == 0) {
+				try {
+					cycle = StaticApiaryAdapter.cycle(hive, record, bee);
+				} catch (RecipesUnavailableException exception) {
+					return BeeWorkExecutor.Status.STALE_PLAN;
+				}
+			}
 			else ticks = Math.min(ticks, bee.plan().cycleTicks() - bee.progress() % bee.plan().cycleTicks());
-			if (bee.plan().generator() != BeeGenerator.STATIC)
+			if (bee.plan().requiresGeneration() || cycle != null && cycle.effects().enabled())
 				ticks = Math.min(ticks, (cycle == null ? bee.plan().cycleTicks() : cycle.cycleTicks()) - bee.progress());
 		}
 		boolean flower = record.bees().feeding() != null && com.ayoshiko.productivebeesgenesis.apiary.StaticFeedingAdapter.flower(
@@ -65,6 +77,7 @@ public final class NetworkBeeService {
 				authority.publish(latest.applyBeeWork(member, BeeWorkExecutor.resolveGeneration(live.bees(), slot, generated)));
 				RuntimeProductPolicies.recordGenerated(level, generated);
 			}
+			RuntimeProductPolicies.recordProduced(level, authority.checkpoint().ownedMachines().get(member).bees().bee(slot));
 		}
 		return result.status();
 	}

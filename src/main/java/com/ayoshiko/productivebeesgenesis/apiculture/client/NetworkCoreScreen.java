@@ -178,7 +178,7 @@ public final class NetworkCoreScreen extends AbstractContainerScreen<NetworkCore
 		var upgrades = all.stream().filter(upgrade -> (upgrade.choice() >= TerminalView.UPGRADE_GROUP_SIZE) == centrifugeUpgrades).toList();
 		for (int i = 0; i < upgrades.size(); i++) {
 			var upgrade = upgrades.get(i);
-			var control = addRenderableWidget(new NetworkUpgradeButton(leftPos + 36 + (i % 6) * 31, topPos + 58 + (i / 6) * 25,
+			var control = addRenderableWidget(new NetworkUpgradeButton(leftPos + 36 + (i % 8) * 23, topPos + 58 + (i / 8) * 25,
 					upgrade, upgradeChoice == upgrade.choice(), () -> { upgradeChoice = upgrade.choice(); rebuild(); }));
 			requests.add(control);
 			control.setTooltip(Tooltip.create(control.getMessage().copy().append("\n").append(tr("upgrade_count", upgrade.installed(), upgrade.limit()))

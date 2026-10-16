@@ -56,7 +56,7 @@ public final class BeeMemberState {
 	BeeMemberState updateCycle(BeeRecord next, long remainingEnergy) {
 		var old = bee(next.slot());
 		if (old.progress() != 0 || !old.drained() || !old.plan().withCycle(next.plan().cycleTicks(), next.plan().energyPerTick(),
-				next.plan().productionMultiplier(), next.plan().outputs(), next.plan().generatedCombBlock()).equals(next.plan()))
+				next.plan().productionMultiplier(), next.plan().outputs(), next.plan().generatedCombBlock(), next.plan().effects()).equals(next.plan()))
 			throw new IllegalArgumentException("Cannot replace an active bee cycle or its outputs");
 		return update(next, remainingEnergy, true);
 	}

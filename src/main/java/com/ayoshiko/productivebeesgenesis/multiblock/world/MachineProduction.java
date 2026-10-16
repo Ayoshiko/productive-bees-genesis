@@ -53,7 +53,15 @@ final class MachineProduction {
 				boolean current = bees.computeIfAbsent(bee.plan(), ignored -> StaticApiaryAdapter.currentPlan(level, candidate));
 				boolean flower = current && StaticFeedingAdapter.flower(work.feeding(), bee.slot(), ResourceLocation.parse(bee.plan().beeType()), level.registryAccess());
 				context = new BeeWorkExecutor.Context(true, current, flower, bee.plan().recipeRevision(), bee.plan().capabilityRevision(), environment);
-				var cycle = bee.progress() == 0 && current ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level) : null;
+				BeeWorkExecutor.Cycle cycle = null;
+				if (bee.progress() == 0 && current) {
+					try {
+						cycle = StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level);
+					} catch (com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.RecipesUnavailableException exception) {
+						beeStatus[bee.slot()] = BeeWorkExecutor.Status.STALE_PLAN;
+						continue;
+					}
+				}
 				context = DynamicBeeAdapter.prepare(level, bee, work.feeding(), 1, cycle, context);
 				var step = work.stepBee(bee.slot(), bee.revision(), context, 1, 8, cycle);
 				work = step.change().apply(work);
@@ -97,6 +105,7 @@ final class MachineProduction {
 		return work;
 	}
 	private static CombinedMachineWork settleBee(ServerLevel level, CombinedMachineWork work, int slot) {
+		RuntimeProductPolicies.recordProduced(level, work.bee(slot));
 		return work.settleBee(slot, key -> limit(level, key)).apply(work);
 	}
 	private static int limit(ServerLevel level, ProductKey key) { return Math.min(64, ProductKeyCodec.item(key, 1, level.registryAccess()).getMaxStackSize()); }

@@ -27,6 +27,24 @@ final class OwnershipRecordCodec {
 		if (schema >= 13 && schema < 16 && !StrictNbt.compound(tag, "combined").isEmpty()
 				&& StrictNbt.integer(StrictNbt.compound(tag, "combined"), "schema") >= 7)
 			throw new IllegalArgumentException("Dynamic combined work inside an old network schema");
+		if (schema >= 13 && !StrictNbt.compound(tag, "combined").isEmpty()) {
+			int combinedSchema = StrictNbt.integer(StrictNbt.compound(tag, "combined"), "schema");
+			if (schema < 17 && combinedSchema >= 8 || schema < 18 && combinedSchema >= 9)
+				throw new IllegalArgumentException("New combined work inside an old network schema");
+		}
+		if (schema < 18) {
+			var counts = StrictNbt.compound(tag, "assets").getCompound("extra")
+					.getCompound(com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS);
+			for (var key : counts.getAllKeys()) {
+				var type = com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.byId(key);
+				if (type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_SAMPLER
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_TYPE_ONLY
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_FULL_PURITY
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.ESSENCE_CONVERSION
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.USELESS_BYPRODUCT)
+					throw new IllegalArgumentException("New apiary upgrade inside an old network schema");
+			}
+		}
 		return new OwnedMachineRecord(readClaim(StrictNbt.compound(tag, "claim")), StrictNbt.choice(tag, "phase", OwnedMachineRecord.Phase.class),
 				new AssetImage(StrictNbt.compound(tag, "assets")), StrictNbt.string(tag, "fingerprint"), StrictNbt.string(tag, "failure"), BeeRecordCodec.decode(StrictNbt.compound(tag, "bees"), validate, validateFeeding, schema),
 				CentrifugeRecordCodec.decode(StrictNbt.compound(tag, "centrifuge"), validate),

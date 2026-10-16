@@ -81,7 +81,7 @@ public final class DynamicBeeRecoveryProbe {
 			for (int index = 0; index < cores.size(); index++) {
 				var core = cores.get(index);
 				int expected = 1;
-				if (index == 0) expected = Boolean.getBoolean("pbg.dynamic.myriad") ? 2 : 4;
+				if (index == 0) expected = Boolean.getBoolean("pbg.dynamic.myriad") || Boolean.getBoolean("pbg.dynamic.effects") ? 2 : 4;
 				if (core.ownership().readyAuthority().checkpoint().ownedMachines().activeCount() == expected) continue;
 				require(core.ownership().status() == com.ayoshiko.productivebeesgenesis.apiculture.ownership.CoreOwnershipController.Status.REJECTED
 						&& core.ownership().failure().equals("Topology changed; completed transfers remain owned")
@@ -156,7 +156,7 @@ public final class DynamicBeeRecoveryProbe {
 									== NetworkRuntime.Status.SETTLING, "Recovered combined delivery rejected");
 						} else {
 							var service = new NetworkBeeService(data, NetworkPersistence.directory(server));
-							if (live.hasFrozen()) require(service.settle(level, member, live.slot(), live.revision()), "Recovered apiary settlement rejected");
+							if (live.deliverable()) require(service.settle(level, member, live.slot(), live.revision()), "Recovered apiary settlement rejected");
 							else require(service.advance(level, member, live.slot(), live.revision(), 0, 0, 0, 1, false)
 									== BeeWorkExecutor.Status.READY, "Recovered apiary delivery rejected");
 						}
@@ -170,7 +170,7 @@ public final class DynamicBeeRecoveryProbe {
 		}
 		report.addProperty("dynamicWorldRestored", true);
 		report.addProperty("readyDeliveredWithoutNewFeeOrDraw", true);
-		report.addProperty(Boolean.getBoolean("pbg.dynamic.myriad")
+		report.addProperty(Boolean.getBoolean("pbg.dynamic.myriad") || Boolean.getBoolean("pbg.dynamic.effects")
 				? "startedPreservedAndReturnRejected" : "startedAndUnknownPreservedAndReturnRejected", true);
 		captureShutdown();
 		return true;
@@ -220,7 +220,7 @@ public final class DynamicBeeRecoveryProbe {
 				live = bee(record, live.slot());
 				require(live.generation().phase() == BeeGeneration.Phase.STARTED, "Expected paid generation window");
 				boolean myriad = live.plan().generator() == BeeGenerator.MYRIAD;
-				if (myriad && requestIndex++ % 2 == 1) continue;
+				if ((myriad || Boolean.getBoolean("pbg.dynamic.effects")) && requestIndex++ % 2 == 1) continue;
 				if (live.plan().beeType().equals("productivebees:lumber_bee")) continue;
 				var origin = record.claim().origin();
 				var resolved = live.plan().beeType().equals("productivebees:quarry_bee")
@@ -244,10 +244,10 @@ public final class DynamicBeeRecoveryProbe {
 				var live = bee(record, source.slot());
 				var context = new BeeWorkExecutor.Context(true, false, false, 0, 0, new BeeWorkConditions.Environment(false, false, false, false));
 				if (record.combined() != null) {
-					root = live.hasFrozen() ? root.settleCombinedBee(member, live.slot(), live.revision())
+					root = live.deliverable() ? root.settleCombinedBee(member, live.slot(), live.revision())
 							: root.applyCombinedBee(member, BeeWorkExecutor.advanceBee(live, live.revision(), context, 0, 1, root.energy().stored(), null));
 				} else {
-					root = live.hasFrozen() ? root.settleBee(member, live.slot(), live.revision())
+					root = live.deliverable() ? root.settleBee(member, live.slot(), live.revision())
 							: root.applyBeeWork(member, BeeWorkExecutor.advance(record.bees(), live.slot(), live.revision(), context, 0, 1,
 									record.bees().networkPowered() ? root.energy().stored() : record.bees().energy()));
 				}

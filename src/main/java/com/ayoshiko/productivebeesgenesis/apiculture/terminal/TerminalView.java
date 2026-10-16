@@ -6,7 +6,7 @@ import java.util.Objects;
 /** 有限只读显示；字符串不是资产身份，完整键仅由服务器选择令牌引用。 */
 public record TerminalView(NetworkSelectionSession.Kind kind, long generation, boolean hasNext, List<Row> rows) {
 	public static final int TEXT_LIMIT = 80, AMOUNT_LIMIT = 96;
-	public static final int MAX_UPGRADES = 19, UPGRADE_GROUP_SIZE = 12, UPGRADE_CHOICES = UPGRADE_GROUP_SIZE * 2;
+	public static final int MAX_UPGRADES = 25, UPGRADE_GROUP_SIZE = 16, UPGRADE_CHOICES = UPGRADE_GROUP_SIZE * 2;
 	public static final int MAX_BEE_SLOTS = com.ayoshiko.productivebeesgenesis.apiculture.capacity.ApiaryWorkLayout.MAX_BEES;
 	public record Upgrade(int choice, String item, int installed, int limit, boolean installable) {
 		public Upgrade {

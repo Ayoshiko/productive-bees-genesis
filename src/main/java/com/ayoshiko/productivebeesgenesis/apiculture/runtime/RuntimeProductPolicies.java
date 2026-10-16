@@ -50,5 +50,14 @@ public final class RuntimeProductPolicies {
 				|| ProductiveBeesGenesis.RECIPE_VERSION.get() != expectedEpoch || cache.recipes != level.getRecipeManager().getRecipes()) return;
 		cache.snapshot = cache.snapshot.withVerifiedGenerated(generation.pool().stream().map(BeeGeneration.Drop::key).toList());
 	}
+	public static void recordProduced(ServerLevel level, com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRecord bee) {
+		if (!level.getServer().isSameThread()) throw new IllegalStateException("Record bee products on the server thread");
+		if (!bee.deliverable() || bee.generation() == null || !bee.generation().effects().enabled()) return;
+		long epoch = bee.generation().source().copy().getLong("epoch");
+		var cache = CACHES.get(level.getServer());
+		if (cache == null || cache.snapshot == null || cache.epoch != epoch
+				|| ProductiveBeesGenesis.RECIPE_VERSION.get() != epoch || cache.recipes != level.getRecipeManager().getRecipes()) return;
+		cache.snapshot = cache.snapshot.withVerifiedGenerated(bee.frozenOutputs().keySet());
+	}
 	private RuntimeProductPolicies() { }
 }

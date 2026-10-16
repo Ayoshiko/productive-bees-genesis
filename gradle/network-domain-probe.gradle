@@ -51,6 +51,8 @@ if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'rea
 if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
 def dynamicProbe = providers.gradleProperty('networkDynamicBees').isPresent()
 def myriadProbe = providers.gradleProperty('networkMyriadBees').isPresent()
+def beeEffectsProbe = providers.gradleProperty('networkBeeEffects').isPresent()
+if (beeEffectsProbe && (!dynamicProbe || myriadProbe)) throw new GradleException('Bee effects require their separate dynamic probe mode')
 if (myriadProbe && !dynamicProbe) throw new GradleException('Myriad production requires the dynamic probe')
 def dynamicRestart = providers.gradleProperty('networkDynamicRestartSource').isPresent()
 def dynamicWorldMode = providers.gradleProperty('networkDynamicWorldMode').orNull
@@ -185,6 +187,16 @@ def prepareProbe = tasks.register('prepareNetworkDomainProbe') {
             }
         }
         new File(directory, 'eula.txt').setText(eula.getText('UTF-8'), 'UTF-8')
+        if (beeEffectsProbe && seedWorld == null) {
+            File datapack = new File(directory, 'world/datapacks/bee-effects-probe')
+            File recipe = new File(datapack, 'data/productivebees/recipe/bee_produce/obsidian_bee.json')
+            recipe.parentFile.mkdirs()
+            new File(datapack, 'pack.mcmeta').setText(groovy.json.JsonOutput.toJson([
+                    pack: [pack_format: 48, description: 'Fixed bee effects verification fixture']]), 'UTF-8')
+            recipe.setText(groovy.json.JsonOutput.toJson([
+                    type: 'productivebees:advanced_beehive', ingredient: 'productivebees:obsidian',
+                    results: [[item: [item: 'productivebees:obsidian_shard'], min: 20, max: 20, chance: 1.0]]]), 'UTF-8')
+        }
         // Fresh probe directories otherwise open the language/accessibility onboarding screen.
         new File(directory, 'options.txt').setText('lang:zh_cn\nonboardAccessibility:false\n', 'UTF-8')
         new File(directory, 'server.properties').setText('''server-ip=127.0.0.1
@@ -428,6 +440,7 @@ neoForge {
             if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
             if (providers.gradleProperty('networkDynamicBees').isPresent()) systemProperty 'pbg.dynamic.only', 'true'
             if (providers.gradleProperty('networkMyriadBees').isPresent()) systemProperty 'pbg.dynamic.myriad', 'true'
+            if (beeEffectsProbe) systemProperty 'pbg.dynamic.effects', 'true'
             if (dynamicWorldMode != null) systemProperty 'pbg.dynamic.worldMode', dynamicWorldMode
             if (providers.gradleProperty('networkDynamicRestartSource').isPresent()) systemProperty 'pbg.dynamic.restartSource', file(providers.gradleProperty('networkDynamicRestartSource').get()).absolutePath
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
@@ -611,13 +624,14 @@ tasks.named('runNetworkDomainServer') {
                 : result.normalShutdownCheckpointSaved == true
         if (dynamicProbe) {
             def resumed = dynamicRestart
-                    ? result.newJvmFrozenPoolResume == true : myriadProbe
+                    ? result.newJvmFrozenPoolResume == true : beeEffectsProbe
+                    ? result.managedCombinedBeeEffectsTickerAndReturn == true : myriadProbe
                     ? result.managedCombinedMyriadTickerAndReturn == true : result.managedCombinedFourBeeTickerAndReturn == true
             shutdownSaved = result.scope == 'dynamic-bees' && result.normalShutdown == true && resumed
             if (dynamicWorldMode != null) shutdownSaved = result.dynamicWorldShutdownSaved == true
                     && (dynamicWorldMode == 'write' ? result.dynamicWorldPrepared == true
                     : result.dynamicWorldRestored == true && result.readyDeliveredWithoutNewFeeOrDraw == true
-                    && (myriadProbe ? result.startedPreservedAndReturnRejected == true
+                    && (myriadProbe || beeEffectsProbe ? result.startedPreservedAndReturnRejected == true
                     : result.startedAndUnknownPreservedAndReturnRejected == true))
         }
         if (result.passed != true || (!coldProbe && !shutdownSaved)) {

@@ -89,7 +89,7 @@ public final class CombinedMachineWork {
 		return change(0, replaceBee(result.candidate()), centrifuges, buffer, 0);
 	}
 	public Change clearFrozenBee(int slot, long revision) {
-		var bee = bee(slot); if (bee.revision() != revision || !bee.hasFrozen()) return unchanged();
+		var bee = bee(slot); if (bee.revision() != revision || !bee.deliverable()) return unchanged();
 		return change(energy, replaceBee(bee.work(bee.progress(), bee.pendingCycles(), Map.of())), centrifuges, buffer, 0);
 	}
 	public boolean drained() { return bees.stream().allMatch(BeeRecord::drained) && centrifuges.isEmpty(); }
@@ -200,7 +200,7 @@ public final class CombinedMachineWork {
 		return change(energy, replaceBee(bee(slot).resolveGeneration(generated)), centrifuges, buffer, 0);
 	}
 	public Change settleBee(int slot, ToIntFunction<ProductKey> itemLimits) {
-		var current = bee(slot); if (!current.hasFrozen()) return unchanged();
+		var current = bee(slot); if (!current.deliverable()) return unchanged();
 		var nextBuffer = buffer; long moved = 0;
 		var remaining = new HashMap<>(current.frozenOutputs());
 		for (var entry : current.frozenOutputs().entrySet()) {

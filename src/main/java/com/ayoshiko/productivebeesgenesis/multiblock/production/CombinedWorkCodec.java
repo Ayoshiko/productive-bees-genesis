@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 8；动态权重与请求一起保管，旧格式精确迁入。 */
+/** 独立机器 schema 9；插件效果与已付请求一起保管，旧格式精确迁入。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 8); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 9); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -48,7 +48,7 @@ public final class CombinedWorkCodec {
 		if (schema >= 2) expected.add("feeding");
 		if (schema >= 3) expected.add("upgrades");
 		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
-		if ((schema < 1 || schema > 8) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+		if ((schema < 1 || schema > 9) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");
@@ -68,6 +68,18 @@ public final class CombinedWorkCodec {
 		var feeding = schema == 1 ? CombinedMachineWork.emptyFeeding(CombinedMachineCapacity.BEE_SLOTS)
 				: FeedingRecordCodec.decodeSlots(StrictNbt.list(tag, "feeding"), CombinedMachineCapacity.BEE_SLOTS, validateFeeding);
 		var upgrades = MachineUpgrades.EMPTY;
+		if (schema < 9 && tag.contains("upgrades")) {
+			var oldApiary = tag.getCompound("upgrades").getCompound("apiary");
+			for (var key : oldApiary.getAllKeys()) {
+				var type = com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.byId(key);
+				if (type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_SAMPLER
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_TYPE_ONLY
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.GENE_FULL_PURITY
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.ESSENCE_CONVERSION
+						|| type == com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType.USELESS_BYPRODUCT)
+					throw new IllegalArgumentException("New apiary upgrade inside an old machine schema");
+			}
+		}
 		if (schema >= 3) {
 			var raw = StrictNbt.compound(tag, "upgrades");
 			if (schema == 3) fields(raw, "revision", "slot0", "slot1", "slot2", "slot3");

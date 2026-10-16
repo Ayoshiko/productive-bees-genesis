@@ -159,7 +159,7 @@ public final class NetworkCheckpoint {
 		var record = ownedMachines.get(member);
 		if (record == null || record.phase() != com.ayoshiko.productivebeesgenesis.apiculture.ownership.OwnedMachineRecord.Phase.OWNED || record.bees() == null) throw new IllegalStateException("No owned bee state");
 		var bee = record.bees().bee(slot);
-		if (bee.revision() != beeRevision || !bee.hasFrozen()) return this;
+		if (bee.revision() != beeRevision || !bee.deliverable()) return this;
 		var policy = new ProductPolicyRegistry(new ProductPolicySnapshot(policyRevision, List.of(), List.of()));
 		var candidate = ProductLedger.restore(policy, Math.addExact(ledger.transactions().size(), 1), ledger);
 		var paid = candidate.importPaidOutput(new LedgerCheckpoint.Pending(bee.id(), bee.plan().recipeRevision(), LedgerTransaction.State.PAID,

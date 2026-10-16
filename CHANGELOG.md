@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **蜂箱升级产物链**：已准入网络蜂箱和组合机支持精华整除转换、成年蜂基因采样、蜂种／满纯度插件组合及无用副产物过滤。基因按实际生产事件采样，完整组件、旧效果、原料中间状态与逐键余量同根保管；固定结果在完成转换前不交付，拒收与正常恢复不重抽或重复扣费。核心／终端开放同组升级，组合机升级分为六页。网络／蜂／组合机格式为 18／9／9，终端协议为 46；离心精华与自动离心直出仍待接入。
+
 - **万象创世共享生产**：已准入蜂箱与组合机接入固定主产物和随机蜜脾追加；每周期保管最多三种真实完整模板及权重，BLOCK／Ω 的随机蜜脾块按四倍结算。保留任意精度数量、旧周期和未交付余量，候选未就绪停止新工作，未知结果不重抽。网络／蜂状态／组合机格式升至 17／8／8，兼容旧无权重动态事件；终端协议 45 不变。
 
 - **WannaBee 与多花蜂共同生产**：已准入的网络蜂箱和组合机接入琥珀战利品，以及 Lumber／Quarry／Dye 的真实花源产物。保留 WannaBee 数据包固定产物、独立流体、喂食分组与禁用状态；动态候选池按事件保存，拒收和重启后继续交付，未知生成结果保管并停止重抽。完整组件产物按当前配方代际实际生成后准入。网络／蜂状态／组合机保存格式分别升至 16／7／7，旧交接原始指纹保留。核心与蜜蜂终端显示“生成结果待核验”，终端协议升至 45。修复组合机完整交还后再次接管被误判为旧请求重放的问题，保留新接管的目录回执与恢复校验。
@@ -243,6 +245,8 @@
 ### English
 
 #### Added
+
+- **Apiary upgrade output chains**: Supported managed apiaries and combined machines now apply exact essence conversion with remainders, adult-bee gene sampling, combinable type-only/full-purity plugins and useless-byproduct filtering. Gene sampling follows actual production events; complete components, paid effects, intermediate raw outputs and delivery remainders remain in one authority root. Outputs stay held until conversion completes, with no reroll or repeated fee after rejection or normal restart. Core/terminal controls expose the same upgrades and combined machines use six upgrade pages. Network, bee and combined-machine formats are 18, 9 and 9; terminal protocol is 46. Centrifuge essence conversion and direct automatic centrifuging remain pending.
 
 - **Shared Myriad Creations production**: Supported apiaries and combined machines retain fixed recipe outputs and append random combs from up to three real component-exact templates with frozen weights. BLOCK/Omega applies the fourfold random comb-block count. Arbitrary-precision amounts, paid cycles and delivery remainders survive retries and restart; new work waits for candidate readiness and unknown results are held without rerolling. Network, bee and combined-machine formats advance to 17, 8 and 8 with strict migration of older unweighted events. Terminal protocol remains 45.
 

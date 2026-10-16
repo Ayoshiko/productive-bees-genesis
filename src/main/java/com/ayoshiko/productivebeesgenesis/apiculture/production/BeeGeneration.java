@@ -8,7 +8,10 @@ import java.util.Objects;
 
 /** 已付款事件的生成凭据；STARTED 在恢复时保持隔离，不推断外部调用是否完成。 */
 public record BeeGeneration(AssetImage source, Phase phase, List<Drop> pool,
-		boolean fixedDone, ProductAmount consumed, String failure) {
+		boolean fixedDone, ProductAmount consumed, String failure, BeeProductionEffects effects) {
+	public BeeGeneration(AssetImage source, Phase phase, List<Drop> pool, boolean fixedDone, ProductAmount consumed, String failure) {
+		this(source, phase, pool, fixedDone, consumed, failure, BeeProductionEffects.NONE);
+	}
 	public enum Phase { STARTED, READY, UNKNOWN }
 	public record Drop(ProductKey key, int count, double weight) {
 		public Drop {
@@ -25,9 +28,10 @@ public record BeeGeneration(AssetImage source, Phase phase, List<Drop> pool,
 		Objects.requireNonNull(phase);
 		Objects.requireNonNull(consumed);
 		Objects.requireNonNull(failure);
+		Objects.requireNonNull(effects);
 		pool = List.copyOf(pool);
 		if (source.isEmpty() || failure.length() > 256
-				|| phase != Phase.READY && (!pool.isEmpty() || fixedDone || !consumed.isZero())
+				|| phase != Phase.READY && (!pool.isEmpty() || fixedDone || !consumed.isZero() || effects.enabled())
 				|| phase == Phase.UNKNOWN && failure.isBlank()
 				|| phase != Phase.UNKNOWN && !failure.isEmpty()) {
 			throw new IllegalArgumentException("Invalid bee generation state");
@@ -37,8 +41,11 @@ public record BeeGeneration(AssetImage source, Phase phase, List<Drop> pool,
 		return new BeeGeneration(source, Phase.STARTED, List.of(), false, ProductAmount.ZERO, "");
 	}
 	public BeeGeneration ready(List<Drop> drops) {
+		return ready(drops, BeeProductionEffects.NONE);
+	}
+	public BeeGeneration ready(List<Drop> drops, BeeProductionEffects frozenEffects) {
 		if (phase != Phase.STARTED) throw new IllegalStateException("Bee generation already resolved");
-		return new BeeGeneration(source, Phase.READY, drops, false, ProductAmount.ZERO, "");
+		return new BeeGeneration(source, Phase.READY, drops, false, ProductAmount.ZERO, "", frozenEffects);
 	}
 	public BeeGeneration unknown(String reason) {
 		if (phase != Phase.STARTED) throw new IllegalStateException("Bee generation already resolved");
@@ -47,6 +54,6 @@ public record BeeGeneration(AssetImage source, Phase phase, List<Drop> pool,
 	}
 	public BeeGeneration progress(boolean fixed, ProductAmount nextConsumed) {
 		if (phase != Phase.READY) throw new IllegalStateException("Bee generation has no frozen pool");
-		return new BeeGeneration(source, phase, pool, fixed, nextConsumed, "");
+		return new BeeGeneration(source, phase, pool, fixed, nextConsumed, "", effects);
 	}
 }

@@ -9,7 +9,11 @@ import java.util.Objects;
 public final class BeeWorkExecutor {
 	public static final int MAX_RANDOM_CYCLES_PER_STEP = 64;
 	public enum Status { READY, STALE_PLAN, UNLOADED, DISABLED, FLOWER, ENVIRONMENT, ENERGY, DRAIN_FIRST, BUDGET, GENERATION_UNKNOWN }
-	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, java.util.List<BeeOutputPlan> outputs, boolean generatedCombBlock) {
+	public record Cycle(int cycleTicks, long energyPerTick, float productionMultiplier, java.util.List<BeeOutputPlan> outputs,
+			boolean generatedCombBlock, BeeProductionEffects effects) {
+		public Cycle(int ticks, long energy, float multiplier, java.util.List<BeeOutputPlan> outputs, boolean combBlock) {
+			this(ticks, energy, multiplier, outputs, combBlock, BeeProductionEffects.NONE);
+		}
 		public Cycle(int ticks, long energy, float multiplier, java.util.List<BeeOutputPlan> outputs) {
 			this(ticks, energy, multiplier, outputs, false);
 		}
@@ -18,6 +22,7 @@ public final class BeeWorkExecutor {
 			this(ticks, energy, multiplier, StaticBeePlan.legacyOutputs(output, 1, output, fluid, fluidCount));
 		}
 		public Cycle {
+			Objects.requireNonNull(effects);
 			outputs = java.util.List.copyOf(outputs);
 			if (cycleTicks < 1 || energyPerTick < 0 || !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
 				throw new IllegalArgumentException("Invalid bee cycle");
@@ -25,7 +30,8 @@ public final class BeeWorkExecutor {
 		public boolean matches(StaticBeePlan plan) {
 			return cycleTicks == plan.cycleTicks() && energyPerTick == plan.energyPerTick()
 					&& productionMultiplier == plan.productionMultiplier() && outputs.equals(plan.outputs())
-					&& (plan.generator() == BeeGenerator.STATIC || generatedCombBlock == plan.generatedCombBlock());
+					&& (plan.generator() == BeeGenerator.STATIC || generatedCombBlock == plan.generatedCombBlock())
+					&& effects.equals(plan.effects());
 		}
 	}
 	public record Context(boolean loaded, boolean enabled, boolean flower, long recipeRevision, long capabilityRevision,
@@ -90,7 +96,7 @@ public final class BeeWorkExecutor {
 		if (!context.loaded()) return new BeeResult(Status.UNLOADED, bee, bee, 0);
 		// 已付费积压使用保存的配方，不因重载或天气变化再次收费或丢弃。
 		if (ticks == 0 && bee.pendingCycles() > 0) {
-			if (plan.generator() != BeeGenerator.STATIC) {
+			if (plan.requiresGeneration()) {
 				if (bee.generation().phase() != BeeGeneration.Phase.READY)
 					return new BeeResult(Status.GENERATION_UNKNOWN, bee, bee, 0);
 				var next = GeneratedBeeSampler.sample(bee, samplingBudget);
@@ -106,16 +112,17 @@ public final class BeeWorkExecutor {
 		if (ticks == 0) return new BeeResult(Status.BUDGET, bee, bee, 0);
 		if (cycle != null) {
 			if (bee.progress() != 0) throw new IllegalArgumentException("New bee capability inside an active cycle");
-			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier(), cycle.outputs(), cycle.generatedCombBlock());
+			plan = plan.withCycle(cycle.cycleTicks(), cycle.energyPerTick(), cycle.productionMultiplier(), cycle.outputs(),
+					cycle.generatedCombBlock(), cycle.effects());
 		}
 		if (plan.energyPerTick() > 0 && ticks > energyBudget / plan.energyPerTick()) return new BeeResult(Status.ENERGY, bee, bee, 0);
 		var progress = BeeProgressPlan.plan(bee.progress(), ticks, plan.cycleTicks(), plan.energyPerTick(), 1);
 		if (progress.energyCost() > energyBudget) return new BeeResult(Status.ENERGY, bee, bee, 0);
-		if (plan.generator() != BeeGenerator.STATIC && progress.productionCycles() > 0) {
+		if (plan.requiresGeneration() && progress.productionCycles() > 0) {
 			if (progress.productionCycles() != 1) throw new IllegalArgumentException("Split dynamic work at each event boundary");
 			if (samplingBudget == 0 || context.generationSource() == null) return new BeeResult(Status.BUDGET, bee, bee, 0);
 			var generation = BeeGeneration.started(context.generationSource());
-			if (plan.generator() != BeeGenerator.MYRIAD
+			if (!plan.effects().enabled() && plan.generator() != BeeGenerator.MYRIAD
 					&& BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier()).sampleCycle(bee.random().draw(0)).isZero())
 				generation = generation.ready(java.util.List.of());
 			var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),

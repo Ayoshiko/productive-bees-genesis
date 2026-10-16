@@ -16,11 +16,19 @@ public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot,
 		if (slot < 0 || originalSlot.isEmpty() || revision < 0 || progress < 0 || pendingCycles < 0) throw new IllegalArgumentException("Invalid bee record");
 		Math.addExact(random.cursor(), pendingCycles);
 		var keys = new HashSet<ProductKey>(); for (var output : plan.outputs()) keys.add(output.output());
+		keys.addAll(plan.effects().resultKeys());
 		if (generation != null) {
-			if (plan.generator() == BeeGenerator.STATIC || pendingCycles > 1
+			if (!plan.requiresGeneration() || pendingCycles > 1
 					|| pendingCycles == 0 && generation.phase() != BeeGeneration.Phase.READY)
 				throw new IllegalArgumentException("Orphaned dynamic bee generation");
 			for (var drop : generation.pool()) keys.add(drop.key());
+			keys.addAll(generation.effects().resultKeys());
+			if (generation.phase() == BeeGeneration.Phase.READY
+					&& (generation.effects().essence() != plan.effects().essence()
+					|| generation.effects().discardByproducts() != plan.effects().discardByproducts()
+					|| generation.effects().geneChance() != plan.effects().geneChance()
+					|| !generation.effects().genes().equals(plan.effects().genes())))
+				throw new IllegalArgumentException("Bee event effects differ from its paid plan");
 			if (plan.generator() == BeeGenerator.MYRIAD && (generation.pool().size() > 3
 					|| generation.pool().stream().anyMatch(drop -> drop.count() != 1)))
 				throw new IllegalArgumentException("Invalid Myriad template allocation");
@@ -41,7 +49,7 @@ public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot,
 					throw new IllegalArgumentException("Generated bee cursor is not at a completed sampling boundary");
 			}
 		}
-		if (plan.generator() != BeeGenerator.STATIC && pendingCycles > 0 && generation == null)
+		if (plan.requiresGeneration() && pendingCycles > 0 && generation == null)
 			throw new IllegalArgumentException("Paid dynamic cycle has no generation request");
 		for (var entry : frozenOutputs.entrySet()) if (entry.getValue().isZero() || !keys.contains(entry.getKey())) throw new IllegalArgumentException("Foreign or zero frozen bee result");
 		if (sampling != null && (pendingCycles == 0 || plan.deterministic() || sampling.output() >= plan.outputs().size())) throw new IllegalArgumentException("Orphaned bee sampling cursor");
@@ -99,6 +107,9 @@ public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot,
 		return enabled == value ? this : new BeeRecord(id, member, slot, originalSlot, plan, Math.incrementExact(revision), progress, pendingCycles, frozenOutputs, random, value, sampling, generation);
 	}
 	public boolean hasFrozen() { return !frozenOutputs.isEmpty(); }
+	public boolean deliverable() {
+		return hasFrozen() && (generation == null || !generation.effects().enabled() || pendingCycles == 0);
+	}
 	public boolean drained() { return pendingCycles == 0 && sampling == null && generation == null && !hasFrozen(); }
 	public BeeRecord resolveGeneration(BeeGeneration resolved) {
 		if (generation == null || generation.phase() != BeeGeneration.Phase.STARTED

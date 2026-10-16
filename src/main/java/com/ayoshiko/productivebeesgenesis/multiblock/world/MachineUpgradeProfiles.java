@@ -39,7 +39,8 @@ public final class MachineUpgradeProfiles {
 				pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_2, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_3, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0));
 		boolean block = pb.getOrDefault(PbUpgradeType.BLOCK, 0) > 0 || pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0) > 0;
 		return new StaticApiaryAdapter.Profile(SaturatingMath.positiveFiniteFloat((double) mekTime / pbTime, 1),
-				price(ModConfig.SERVER.apiaryEnergyPerTick.get(), upgrades.count(0), upgrades.count(1), multiplier), productivity, block);
+				price(ModConfig.SERVER.apiaryEnergyPerTick.get(), upgrades.count(0), upgrades.count(1), multiplier), productivity, block,
+				ApiaryProductionEffects.Upgrades.from(pb));
 	}
 	public static StaticCentrifugeAdapter.Profile centrifuge(MachineUpgrades upgrades) {
 		validate(upgrades);

@@ -11,7 +11,8 @@ import net.minecraft.nbt.Tag;
 public final class PbApiaryUpgradeCounts {
 	public static boolean supported(PbUpgradeType type) {
 		return type != null && switch (type) {
-			case TIME, TIME_2, PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4, BLOCK -> true;
+			case TIME, TIME_2, PRODUCTIVITY, PRODUCTIVITY_2, PRODUCTIVITY_3, PRODUCTIVITY_4, BLOCK,
+					GENE_SAMPLER, GENE_TYPE_ONLY, GENE_FULL_PURITY, ESSENCE_CONVERSION, USELESS_BYPRODUCT -> true;
 			default -> false;
 		};
 	}

@@ -1882,10 +1882,11 @@
   "screen.productivebeesgenesis.machine.upgrade_name.3": "Centrifuge energy",
   "screen.productivebeesgenesis.machine.upgrade_scope": "Separate effects; fixed FE buffer",
   "screen.productivebeesgenesis.machine.status.7": "This upgrade slot is full",
-  "screen.productivebeesgenesis.machine.upgrade_page.0": "Native upgrades  1/5",
-  "screen.productivebeesgenesis.machine.upgrade_page.1": "Bee PB  2/5",
-  "screen.productivebeesgenesis.machine.upgrade_page.2": "Bee PB  3/5",
-  "screen.productivebeesgenesis.machine.upgrade_page.3": "Centrifuge PB  4/5",
-  "screen.productivebeesgenesis.machine.upgrade_page.4": "Centrifuge PB  5/5",
+  "screen.productivebeesgenesis.machine.upgrade_page.0": "Native upgrades  1/6",
+  "screen.productivebeesgenesis.machine.upgrade_page.1": "Bee PB  2/6",
+  "screen.productivebeesgenesis.machine.upgrade_page.2": "Bee PB  3/6",
+  "screen.productivebeesgenesis.machine.upgrade_page.3": "Bee PB  4/6",
+  "screen.productivebeesgenesis.machine.upgrade_page.4": "Centrifuge PB  5/6",
+  "screen.productivebeesgenesis.machine.upgrade_page.5": "Centrifuge PB  6/6",
   "screen.productivebeesgenesis.machine.status.8": "Remove conflicting tier in this subsystem first"
 }

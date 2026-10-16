@@ -15,6 +15,7 @@ final class SealedApiaryProfile {
 	private final float time, productivity;
 	private final long energy;
 	private final boolean combBlock;
+	private final ApiaryProductionEffects.Upgrades effects;
 	SealedApiaryProfile(TileEntityMekApiary hive, AssetImage assets) {
 		if (!StaticApiaryAdapter.supports(hive) || ModList.get().isLoaded("mekanism_unleashed")
 				|| ModList.get().isLoaded("mekanism_empowered"))
@@ -25,6 +26,7 @@ final class SealedApiaryProfile {
 				|| extra.getBoolean(ApiaryNbtSerializer.NBT_KEY_FEEDER_CONVERSION))
 			throw new IllegalArgumentException("Static apiaries require sealed upgrades and disabled feeder conversion");
 		var pb = PbApiaryUpgradeCounts.read(extra);
+		effects = ApiaryProductionEffects.Upgrades.from(pb);
 		productivity = ApiaryUpgradeMath.computeProductivityMultiplier(pb.getOrDefault(PbUpgradeType.PRODUCTIVITY, 0),
 				pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_2, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_3, 0), pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0));
 		combBlock = pb.getOrDefault(PbUpgradeType.BLOCK, 0) > 0 || pb.getOrDefault(PbUpgradeType.PRODUCTIVITY_4, 0) > 0;
@@ -47,4 +49,5 @@ final class SealedApiaryProfile {
 	float productivity() { return productivity; }
 	boolean combBlock() { return combBlock; }
 	long energy() { return energy; }
+	ApiaryProductionEffects.Upgrades effects() { return effects; }
 }

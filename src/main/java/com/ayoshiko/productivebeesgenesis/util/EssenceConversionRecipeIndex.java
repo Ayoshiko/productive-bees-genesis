@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * 解析并缓存精华转化配方，向运行时提供不可变查询快照。
  */
-final class EssenceConversionRecipeIndex {
+public final class EssenceConversionRecipeIndex {
 
 	private static final List<TagKey<Item>> EXCLUDED_INPUT_TAGS = List.of(
 			itemTag("c", "raw_materials"), itemTag("c", "raw_ores"),
@@ -61,8 +61,18 @@ final class EssenceConversionRecipeIndex {
 	private EssenceConversionRecipeIndex() {
 	}
 
-	static ConversionSnapshot snapshotFor(Level level) {
+	public static ConversionSnapshot snapshotFor(Level level) {
 		return ensureConversionSnapshot(level);
+	}
+	public static ConversionSnapshot requireSnapshot(Level level) {
+		var snapshot = ensureConversionSnapshot(level);
+		if (!conversionSnapshotLoaded) throw new RecipesUnavailableException();
+		return snapshot;
+	}
+	public static final class RecipesUnavailableException extends IllegalStateException {
+		private RecipesUnavailableException() {
+			super("Essence conversion recipes are not ready");
+		}
 	}
 
 	static void invalidate() {
@@ -349,13 +359,18 @@ final class EssenceConversionRecipeIndex {
 	record StackKey(Item item, DataComponentPatch components) {
 	}
 
-	record Conversion(int inputCount, ItemStack result, StackKey resultKey, boolean continueChain) {
-		Conversion {
+	public record Conversion(int inputCount, ItemStack result, StackKey resultKey, boolean continueChain) {
+		public Conversion {
 			result = result.copy();
 		}
+		@Override public ItemStack result() { return result.copy(); }
 	}
 
-	record ConversionSnapshot(Map<StackKey, Conversion> byInput, Map<Item, Conversion> byDefaultItem) {
+	public record ConversionSnapshot(Map<StackKey, Conversion> byInput, Map<Item, Conversion> byDefaultItem) {
+		public ConversionSnapshot {
+			byInput = Map.copyOf(byInput);
+			byDefaultItem = Map.copyOf(byDefaultItem);
+		}
 		private static final ConversionSnapshot EMPTY = new ConversionSnapshot(Map.of(), Map.of());
 
 		private static ConversionSnapshot create(Map<StackKey, Conversion> conversions) {
@@ -369,7 +384,7 @@ final class EssenceConversionRecipeIndex {
 			return new ConversionSnapshot(byInput, Map.copyOf(byDefaultItem));
 		}
 
-		Conversion find(ItemStack stack) {
+		public Conversion find(ItemStack stack) {
 			if (stack.getComponentsPatch().isEmpty()) return byDefaultItem.get(stack.getItem());
 			return byInput.get(stackKey(stack));
 		}

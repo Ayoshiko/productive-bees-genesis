@@ -29,7 +29,7 @@ public final class CombinedNetworkService {
 		if (MachineNetworkAccess.member(level, data, directory, record) == null) return NetworkRuntime.Status.UNAVAILABLE;
 		var before = data.checkpoint(); var work = record.combined(); var bee = work.bee(slot);
 		var member = record.claim().member();
-		if (bee.hasFrozen()) { data.publish(before.settleCombinedBee(member, slot, bee.revision())); return NetworkRuntime.Status.SETTLING; }
+		if (bee.deliverable()) { data.publish(before.settleCombinedBee(member, slot, bee.revision())); return NetworkRuntime.Status.SETTLING; }
 		int ticks = bee.pendingCycles() > 0 ? 0 : 1;
 		if (ticks > 0 && (!running || !bee.enabled())) return NetworkRuntime.Status.STOPPED;
 		boolean current = ticks == 0 || StaticApiaryAdapter.currentPlan(level, bee);
@@ -37,7 +37,14 @@ public final class CombinedNetworkService {
 		boolean flower = ticks == 0 || StaticFeedingAdapter.flower(work.feeding(), slot, ResourceLocation.parse(bee.plan().beeType()), level.registryAccess());
 		var context = new BeeWorkExecutor.Context(true, running, flower, bee.plan().recipeRevision(), bee.plan().capabilityRevision(),
 				new BeeWorkConditions.Environment(level.dimensionType().hasFixedTime(), level.isNight(), level.isRaining(), level.isThundering()));
-		var cycle = ticks > 0 && bee.progress() == 0 ? StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level) : null;
+		BeeWorkExecutor.Cycle cycle = null;
+		if (ticks > 0 && bee.progress() == 0) {
+			try {
+				cycle = StaticApiaryAdapter.cycle(MachineUpgradeProfiles.apiary(work.upgrades()), bee, level);
+			} catch (com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.RecipesUnavailableException exception) {
+				return NetworkRuntime.Status.STALE_PLAN;
+			}
+		}
 		context = DynamicBeeAdapter.prepare(level, bee, work.feeding(), ticks, cycle, context);
 		long tick = level.getServer().getTickCount(), fee = ticks == 0 ? 0 : ModConfig.SERVER.beeNetwork.maintenanceFe.get();
 		long due = data.maintenanceDue(tick, fee);
@@ -57,7 +64,8 @@ public final class CombinedNetworkService {
 				next = data.checkpoint();
 				updated = next.ownedMachines().get(member).combined().bee(slot);
 			}
-			if (updated.hasFrozen()) data.publish(next.settleCombinedBee(member, slot, updated.revision()));
+			RuntimeProductPolicies.recordProduced(level, updated);
+			if (updated.deliverable()) data.publish(next.settleCombinedBee(member, slot, updated.revision()));
 			return ticks == 0 ? NetworkRuntime.Status.SETTLING : NetworkRuntime.Status.RUNNING;
 		}
 		return switch (result.status()) {

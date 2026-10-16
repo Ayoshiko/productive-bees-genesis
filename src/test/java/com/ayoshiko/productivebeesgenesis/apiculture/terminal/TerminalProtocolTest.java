@@ -329,14 +329,14 @@ class TerminalProtocolTest {
 			assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 		} finally { buffer.release(); }
 	}
-	@Test void upgradeCommandsUseNineteenSlotsWithIndependentBeeBounds() {
+	@Test void upgradeCommandsUseCurrentSlotsWithIndependentBeeBounds() {
 		var codec = com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest.STREAM_CODEC;
 		var buffer = new FriendlyByteBuf(Unpooled.buffer());
 		try {
-			for (int action : new int[]{4, 5}) for (int slot = 0; slot < 19; slot++) {
+			for (int action : new int[]{4, 5}) for (int slot = 0; slot < com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.SLOTS; slot++) {
 				var request = new com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenuRequest(7, UUID.randomUUID(), 1, 0, action, slot, 0, 64);
 				buffer.clear(); codec.encode(buffer, request); assertEquals(request, codec.decode(buffer));
-				buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, 19);
+				buffer.clear(); codec.encode(buffer, request); buffer.setInt(40, com.ayoshiko.productivebeesgenesis.multiblock.production.MachineUpgrades.SLOTS);
 				assertThrows(IllegalArgumentException.class, () -> codec.decode(buffer));
 			}
 		} finally { buffer.release(); }
@@ -441,7 +441,7 @@ class TerminalProtocolTest {
 		assertFalse(sequence.begin(Long.MAX_VALUE)); sequence.close(); assertFalse(sequence.begin(Long.MAX_VALUE));
 	}
 	@Test void upgradePagesBoundAllEightMembersAndRejectDuplicateOrMalformedChoices() {
-		var upgrades = java.util.stream.IntStream.range(0, TerminalView.MAX_UPGRADES).mapToObj(i -> new TerminalView.Upgrade(i == 18 ? 22 : i, "test:" + "a".repeat(75), Integer.MAX_VALUE, 8, false)).toList();
+		var upgrades = java.util.stream.IntStream.range(0, TerminalView.MAX_UPGRADES).mapToObj(i -> new TerminalView.Upgrade(i, "test:" + "a".repeat(75), Integer.MAX_VALUE, 8, false)).toList();
 		var row = new TerminalView.Row("机".repeat(80), false, "", "", true, List.of(), "", "", upgrades);
 		var page = new TerminalView(NetworkSelectionSession.Kind.UPGRADES, 1, true, java.util.Collections.nCopies(8, row));
 		var reply = new TerminalReply(1, UUID.randomUUID(), 1, TerminalReply.Status.OK, 0, 0, page);

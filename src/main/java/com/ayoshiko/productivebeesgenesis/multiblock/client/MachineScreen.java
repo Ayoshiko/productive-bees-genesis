@@ -31,8 +31,8 @@ public final class MachineScreen extends AbstractContainerScreen<MachineMenu> {
 	private int craftingTarget;
 	private Button craftTab, clearCrafting;
 	private int upgradePage;
-	private static final int[] UPGRADE_STARTS = {0, 4, 8, 11, 15};
-	private int upgradeRows() { return upgradePage == 2 ? 3 : 4; }
+	private static final int[] UPGRADE_STARTS = {0, 4, 8, 12, 16, 20};
+	private int upgradeRows() { return 4; }
 	private Component upgradeName(int slot) {
 		var pb = MachineUpgrades.pbType(slot); return pb == null ? tr("upgrade_name." + slot) : Component.translatable(pb.getNameKey());
 	}

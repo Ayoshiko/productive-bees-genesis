@@ -6,15 +6,24 @@ import java.util.*;
 /** 周期固定合同；普通输出分布直接采样，动态结果另由生成凭据保管。 */
 public record StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
 		int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
-		BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs, BeeGenerator generator, boolean generatedCombBlock) {
+		BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs, BeeGenerator generator,
+		boolean generatedCombBlock, BeeProductionEffects effects) {
 	public StaticBeePlan {
 		Objects.requireNonNull(beeType); Objects.requireNonNull(recipe); Objects.requireNonNull(traits); outputs = List.copyOf(outputs);
 		Objects.requireNonNull(generator);
+		Objects.requireNonNull(effects);
 		generatedCombBlock = generator != BeeGenerator.STATIC && generatedCombBlock;
 		if (beeType.isBlank() || recipe.isBlank() || recipeRevision < 0 || capabilityRevision < 0 || cycleTicks < 1
 				|| energyPerTick < 0 || productivity < 0 || productivity > 3 || outputs.isEmpty() && generator == BeeGenerator.STATIC
 				|| !Float.isFinite(productionMultiplier) || productionMultiplier <= 0)
 			throw new IllegalArgumentException("Invalid static bee plan");
+	}
+	public StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
+			int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
+			BeeWorkConditions.Traits traits, float productionMultiplier, List<BeeOutputPlan> outputs,
+			BeeGenerator generator, boolean generatedCombBlock) {
+		this(beeType, recipe, recipeRevision, capabilityRevision, cycleTicks, energyPerTick, productivity,
+				genesAffectWork, traits, productionMultiplier, outputs, generator, generatedCombBlock, BeeProductionEffects.NONE);
 	}
 	public StaticBeePlan(String beeType, String recipe, long recipeRevision, long capabilityRevision,
 			int cycleTicks, long energyPerTick, int productivity, boolean genesAffectWork,
@@ -55,15 +64,22 @@ public record StaticBeePlan(String beeType, String recipe, long recipeRevision, 
 		return withCycle(ticks, energy, multiplier, nextOutputs, generatedCombBlock);
 	}
 	public StaticBeePlan withCycle(int ticks, long energy, float multiplier, List<BeeOutputPlan> nextOutputs, boolean combBlock) {
+		return withCycle(ticks, energy, multiplier, nextOutputs, combBlock, effects);
+	}
+	public StaticBeePlan withCycle(int ticks, long energy, float multiplier, List<BeeOutputPlan> nextOutputs,
+			boolean combBlock, BeeProductionEffects nextEffects) {
 		boolean generatedBlock = generator != BeeGenerator.STATIC && combBlock;
 		var before = outputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
 		var after = nextOutputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
 		if (before.size() != after.size()) throw new IllegalArgumentException("Bee recipe changed at capability boundary");
 		for (int i = 0; i < before.size(); i++) if (!before.get(i).sameRecipe(after.get(i))) throw new IllegalArgumentException("Bee recipe changed at capability boundary");
-		return cycleTicks == ticks && energyPerTick == energy && productionMultiplier == multiplier && outputs.equals(nextOutputs) && generatedCombBlock == generatedBlock ? this
-				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision), ticks, energy, productivity, genesAffectWork, traits, multiplier, nextOutputs, generator, generatedBlock);
+		return cycleTicks == ticks && energyPerTick == energy && productionMultiplier == multiplier && outputs.equals(nextOutputs)
+				&& generatedCombBlock == generatedBlock && effects.equals(nextEffects) ? this
+				: new StaticBeePlan(beeType, recipe, recipeRevision, Math.incrementExact(capabilityRevision), ticks, energy,
+						productivity, genesAffectWork, traits, multiplier, nextOutputs, generator, generatedBlock, nextEffects);
 	}
-	public boolean deterministic() { return generator == BeeGenerator.STATIC && outputs.stream().allMatch(BeeOutputPlan::deterministic); }
+	public boolean requiresGeneration() { return generator != BeeGenerator.STATIC || effects.enabled(); }
+	public boolean deterministic() { return !requiresGeneration() && outputs.stream().allMatch(BeeOutputPlan::deterministic); }
 	/** 标量兼容访问拒绝多输出，防止旧调用方静默遗漏新产物。 */
 	private BeeOutputPlan legacyItem() {
 		var items = outputs.stream().filter(p -> p.basis() == BeeOutputPlan.Basis.ROLL).toList();
