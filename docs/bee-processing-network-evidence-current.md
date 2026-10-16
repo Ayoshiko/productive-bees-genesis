@@ -1369,3 +1369,24 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 上述 domain.json 的 passed／normalShutdown 均为 true；世界与客户端报告还分别确认 dynamicWorldShutdownSaved／dynamicClientShutdownSaved。两张 1000×700 截图在原聊天已回看，显示核心／终端“生成结果待核验，已停止重抽”及实际染料、蜂蜜；只代表该视口。客户端夹具曾错误地把原生背包点击当成只选格、未迁入正式共享 FE 账户、未失效端口能力以及每 tick 只推进一次策略编译；均按真实菜单、容量、迁入服务和正式端口每 tick 最多八步预算修正后通过，失败报告保留，不能把准备等待算作成功。
 
 **组合与剩余边界。** 实际运行 Minecraft 1.21.1、NeoForge 21.1.216、Java 21.0.9、PB 13.14.0、ProductiveLib 0.2.0、Mekanism 10.7.19、EM 1.2.1-fix3、ME 1.4.0、EME 1.2.1，无 AE2；未更换现有外部依赖。源码、依赖、命令、报告、已保存 XML、截图、日志和 JAR 摘要索引为 `build/network-gates/r3-dynamic-bees-20261016/verification.json`。证据留在忽略的 build，探针不进入发布 JAR。本包游戏进程已结束；UNKNOWN／恢复遇 STARTED 仍需依据原请求人工核验，本包未提供自动解锁。其余特殊蜂、升级产物链、中性资源、完整 ME／M05、异常退出／多人／缺依赖矩阵及 64×／256×／Spark 门仍开放，不从正常恢复或编译推导通过；下一包只见[14.5](bee-processing-network-roadmap.md#s14-5)。
+
+<a id="s10-176"></a>
+### 10.176 R3 万象创世普通蜜脾／蜜脾块共享生产与正常恢复（2026-10-16）
+
+**本包交付。** 网络 worktree `productive-bees-addon`、分支 `bees-processing-network/1.21.1`，基线 `a1a319b`。核对 PB 13.14.0 与本分支的 configurable_bee／myriadcreations 身份、honey_treat 花源、固定 bee_produce 主产物及 MyriadBeeTypeCache／WeightedTypeSelector 的真实候选；普通托管蜂箱、独立组合机和托管组合机共用已付 STARTED／READY／UNKNOWN 凭据和逐键交付。每事件最多三类型，每类型冻结一个完整组件模板及正有限权重。追加总量按倍率乘单蜂基因调整后取整，再对 BLOCK／Ω 乘四；固定主产物保留既有概率计划，不重复乘四。WeightedAllocation 严格入口用任意精度整数比例分配，先整除再按权重降序／原索引分配余数；不套旧 576 槽截断，不降级为空列表或另一分布。候选未预热时不启动新工作。
+
+网络／蜂状态／组合机格式为 17／8／8，旧 16 的无权重生成事件继续严格迁入；旧格式拒绝伪装 MYRIAD 或权重字段，非 Myriad 池只允许权重 1。已付模板、权重、消费边界、费用和随机游标同根保管，恢复不重抽、不重复扣费、不生成世界掉落。合同与来源见[4.1](bee-processing-network-design.md#s4-1)、[7.3](bee-processing-network-design.md#s7-3)、[13.1](bee-processing-network-references.md#s13-1)。
+
+**受影响测试与产物复用。** 本包唯一测试／build 任务图为 `.\gradlew test --tests "*DynamicBeeCheckpointTest" --tests "*CombinedMachineWorkTest" --tests "*MachineAssetsTest" --tests "*FactoryApiaryCheckpointTest" build runNetworkDomainServer -PnetworkDomainProbe -PnetworkDynamicBees -PnetworkMyriadBees -PnetworkProbeRun=r3-myriad-write-20261016-a --offline --no-daemon`。Dynamic 10、FactoryApiary 4、CombinedMachineWork 19、MachineAssets 8 共 41 项通过，无失败／错误／跳过；测试 XML 在后续任务前保存到 `build/network-gates/r3-myriad-20261016/passed-test-results-a`。build 完成，随后专服 A 因交还夹具失败使整图退出 1，不能把整图记作成功。之后只改 domainProbe、报告判定和文档，业务源码／测试／依赖未变，复用该测试和 JAR。测试覆盖权重 2:1 的 10→7/3、块 40→27/13、倍率 2^80 的块总量 2^82、流式恢复、旧格式和已付边界。现有 `build/libs/productivebeesgenesis-1.0.10.jar` 为 4,598,163 字节，SHA-256 `cf315acb8867e4e86c3486f4ca96c5ce4c8353915ca62f112471a85733974684`；无 domainProbe、测试或本地 AGENTS 内容。
+
+| 证据运行 ID | 实际范围与结果 |
+| --- | --- |
+| r3-myriad-world-write-20261016-g | 正式专服普通／BLOCK 蜂箱生产、精确 FE、SIMULATE 不变、已付池交付、独立组合机 ticker／正式菜单蜂笼及升级输入、托管组合机生产与完整交还、蜜蜂／花源保留和无掉落；两台蜂箱与组合机全部重新接管后分别保存 READY／STARTED。退出 0，97.86 秒，passed／normalShutdown／dynamicWorldPrepared／dynamicWorldShutdownSaved 均 true |
+| r3-myriad-world-read-20261016-h | G 世界在独立 JVM 加载，READY 按冻结结果交付，无新费用或抽取；STARTED 保管，拒绝交还不改变权威；活动宿主物理库存为空，正常停服落盘。报告 passed／normalShutdown／dynamicWorldRestored／readyDeliveredWithoutNewFeeOrDraw／startedPreservedAndReturnRejected／dynamicWorldShutdownSaved 均 true；整任务因旧报告字段判定退出 1，58.10 秒 |
+| report-check-j | 修正 Gradle 的 Myriad 报告字段后，通过 build 内 init 脚本直接执行同一 runNetworkDomainServer 收尾动作，读取本次 H 报告；无编译、测试或游戏重启。退出 0，8.02 秒 |
+
+**失败定位与修正。** A 只等蜂工作结清，忽略蜜脾引出的新离心作业；B 先暂停再等待，未付完离心周期不能推进，触发夹具超时。按正式供电入口保持生产至全部 work drained 后暂停；C 恢复夹具漏 BeeGenerator import，编译失败、未启动游戏。D 生产与停服报告通过，但第二蜂箱接管期间拓扑变化，日志明确拒绝，夹具漏了全成员完成条件；E 又把 RETURNED 历史收据指向的合法独立蜂箱要求为空，故恢复失败。修正为活动记录空资产检查、保存前严格要求 2+1 活动宿主，只对明确拓扑拒绝有界重发接管，形成 G 世界。F 启动命令遗漏 write 参数后立即停止本任务进程树，未签收恢复；H 的运行通过而 Gradle 判定仍读旧 UNKNOWN 字段，已按范围修正；I 的报告校验漏种子世界参数，停在配置阶段，补齐后 J 通过。全部原日志和报告保留，不删断言、不放宽守恒。
+
+**包末静态检查。** network-doc-check.ps1 通过 7 份 UTF-8 文档、唯一锚点和 847 个本地链接；本次 26 份改动文本及证据 JSON 的严格 UTF-8／无 BOM／无替换字符检查通过，JSON 解析通过，git diff --check 通过。本次仅必要恢复及报告判定复验，未重复测试／build 或扩大游戏矩阵。
+
+**证据与剩余边界。** G／H 实际依赖同 10.175 的上述组合，无 AE2；源码／依赖摘要、已保存 XML、报告、命令、日志与 JAR 索引为 `build/network-gates/r3-myriad-20261016/verification.json`。每次运行使用外部 285 秒进程树超时；本包启动的游戏及助手均已结束。协议 45、64 KiB 分页和既有界面没有修改，沿用 10.175；本包未启动真实客户端，没有 Myriad 客户端、ME、64×／256× 或新 Spark 验收。Myriad 仅注入 READY／STARTED，UNKNOWN 的保管合同与四蜂注入证据沿用 10.175，不记作本包新注入通过。精华、基因采样、剩余升级产物链、中性资源、完整 D25／M05、异常退出／多人／缺依赖联合和高倍率门仍开放，队列见[14.5](bee-processing-network-roadmap.md#s14-5)。

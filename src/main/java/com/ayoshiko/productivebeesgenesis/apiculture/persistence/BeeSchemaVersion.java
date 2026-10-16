@@ -8,22 +8,24 @@ final class BeeSchemaVersion {
 	private int ownershipFields;
 	private boolean modernCombined;
 	private boolean generatedCombined;
+	private boolean weightedCombined;
 	void observeCombined(CompoundTag value) {
 		if (!value.isEmpty()) {
 			int schema = StrictNbt.integer(value, "schema");
 			if (schema >= 6) modernCombined = true;
 			if (schema >= 7) generatedCombined = true;
+			if (schema >= 8) weightedCombined = true;
 		}
 	}
 	void observeOwnership(boolean combined) { ownershipFields |= combined ? 1 : 2; }
 	static void requireSupported(int schema) {
-		if (schema < 6 || schema > 16) throw new IllegalArgumentException("Unsupported network schema");
+		if (schema < 6 || schema > 17) throw new IllegalArgumentException("Unsupported network schema");
 	}
 	int observe(CompoundTag bees) {
 		int schema = 6;
 		if (bees.contains("samplingVersion")) {
 			int version = StrictNbt.integer(bees, "samplingVersion");
-			if (version < 1 || version > 7) throw new IllegalArgumentException("Unsupported bee sampling version");
+			if (version < 1 || version > 8) throw new IllegalArgumentException("Unsupported bee sampling version");
 			schema = version >= 5 ? version + 9 : version + 6;
 		}
 		if (!bees.isEmpty()) observed |= 1 << (schema - 6);
@@ -34,6 +36,7 @@ final class BeeSchemaVersion {
 		if ((ownershipFields & (schema >= 13 ? 2 : 1)) != 0) throw new IllegalArgumentException("Combined field differs from network schema");
 		if (schema < 14 && modernCombined) throw new IllegalArgumentException("New combined work inside an old network schema");
 		if (schema < 16 && generatedCombined) throw new IllegalArgumentException("Dynamic combined work inside an old network schema");
+		if (schema < 17 && weightedCombined) throw new IllegalArgumentException("Weighted combined work inside an old network schema");
 		if (observed != 0 && observed != (1 << (schema >= 14 ? schema - 6 : Math.min(schema, 10) - 6)))
 			throw new IllegalArgumentException("Bee sampling format differs from network schema");
 	}

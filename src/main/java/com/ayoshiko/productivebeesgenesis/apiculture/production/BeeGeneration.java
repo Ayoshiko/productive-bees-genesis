@@ -10,10 +10,14 @@ import java.util.Objects;
 public record BeeGeneration(AssetImage source, Phase phase, List<Drop> pool,
 		boolean fixedDone, ProductAmount consumed, String failure) {
 	public enum Phase { STARTED, READY, UNKNOWN }
-	public record Drop(ProductKey key, int count) {
+	public record Drop(ProductKey key, int count, double weight) {
 		public Drop {
 			Objects.requireNonNull(key);
 			if (count < 1) throw new IllegalArgumentException("Nonpositive generated bee drop");
+			if (!Double.isFinite(weight) || weight <= 0) throw new IllegalArgumentException("Invalid generated bee weight");
+		}
+		public Drop(ProductKey key, int count) {
+			this(key, count, 1);
 		}
 	}
 	public BeeGeneration {

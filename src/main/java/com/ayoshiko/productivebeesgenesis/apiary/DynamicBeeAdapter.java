@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
 import com.ayoshiko.productivebeesgenesis.apiculture.feeding.FeedingSlotStore;
 import com.ayoshiko.productivebeesgenesis.apiculture.ownership.AssetImage;
@@ -9,6 +10,8 @@ import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
+import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.ayoshiko.productivebeesgenesis.util.WannaBeeAmberAdapter;
@@ -30,6 +33,7 @@ public final class DynamicBeeAdapter {
 	public static BeeGenerator generator(ResourceLocation type) {
 		if (type == null) return BeeGenerator.STATIC;
 		if (PBConstants.WANNA_TYPE.equals(type)) return BeeGenerator.WANNA_BEE;
+		if (PBConstants.MYRIADCREATIONS_TYPE.equals(type)) return BeeGenerator.MYRIAD;
 		return MultiFlowerBeeAdapter.isMultiFlowerBee(type) ? BeeGenerator.MULTI_FLOWER : BeeGenerator.STATIC;
 	}
 	public static String recipe(ResourceLocation type) {
@@ -42,6 +46,8 @@ public final class DynamicBeeAdapter {
 				&& expected.generation().source().equals(current.generation().source());
 	}
 	public static boolean flower(ResourceLocation type, ItemStack stack) {
+		if (generator(type) == BeeGenerator.MYRIAD)
+			return BlockFlowerMatcher.matches(stack, BeeInfoHelper.getFlowerPreference(type));
 		if (generator(type) != BeeGenerator.WANNA_BEE) return MultiFlowerBeeAdapter.matchesFlower(type, stack);
 		var data = AmberEntityFlowerHelper.getAmberEntityData(stack);
 		if (data == null) return false;
@@ -74,6 +80,7 @@ public final class DynamicBeeAdapter {
 			if (!source.getAllKeys().equals(Set.of("bee", "epoch", "allFlowers", "items"))
 					|| !bee.plan().beeType().equals(source.getString("bee")) || !source.contains("items", Tag.TAG_LIST))
 				throw new IllegalArgumentException("Invalid bee generation source");
+			if (bee.plan().generator() == BeeGenerator.MYRIAD) return request.ready(myriadPool(level, bee));
 			var stacks = new ArrayList<ItemStack>();
 			for (var raw : source.getList("items", Tag.TAG_COMPOUND))
 				stacks.add(StaticFeedingAdapter.parse((CompoundTag) raw, level.registryAccess()));
@@ -106,6 +113,26 @@ public final class DynamicBeeAdapter {
 					bee.member(), bee.id(), bee.random().cursor(), origin, failure);
 			return request.unknown(failure.getClass().getName() + ": " + String.valueOf(failure.getMessage()));
 		}
+	}
+	private static List<BeeGeneration.Drop> myriadPool(ServerLevel level, BeeRecord bee) {
+		var snapshot = MyriadBeeTypeCache.snapshot();
+		boolean blocks = bee.plan().generatedCombBlock();
+		var types = blocks ? snapshot.combBlockBeeTypes() : snapshot.beeTypes();
+		if (!MyriadBeeTypeCache.isWarmupComplete()) throw new IllegalStateException("Myriad candidates are not ready");
+		if (types.isEmpty()) return List.of();
+		var selector = WeightedTypeSelector.getInstance();
+		selector.rebuildWeightsIfNeeded(level);
+		var selected = selector.selectForProcess(0, 1, level, types, null);
+		if (selected.isEmpty()) throw new IllegalStateException("Myriad selection lost eligible candidates");
+		var templates = snapshot.selectTemplates(selected, blocks, level.getRandom());
+		var weights = selector.getWeightsFor(selected);
+		var drops = new ArrayList<BeeGeneration.Drop>(selected.size());
+		for (int index = 0; index < selected.size(); index++) {
+			var template = templates.get(selected.get(index));
+			if (template == null || template.isEmpty()) throw new IllegalStateException("Missing selected Myriad template");
+			drops.add(new BeeGeneration.Drop(ProductKeyCodec.item(template, level.registryAccess()), 1, weights[index]));
+		}
+		return drops;
 	}
 	private DynamicBeeAdapter() { }
 }

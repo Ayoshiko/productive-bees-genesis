@@ -33,8 +33,10 @@ class DynamicBeeCheckpointTest {
 		var claim = new MemberClaim(identity.networkId(), MEMBER, new UUID(29, 1), new Origin("minecraft:overworld", 1, 64, 2), "productivebeesgenesis:mek_apiary");
 		var entity = new CompoundTag();
 		String type = generator == BeeGenerator.WANNA_BEE ? "productivebees:wanna" : "productivebees:lumber_bee";
-		entity.putString("id", generator == BeeGenerator.WANNA_BEE ? "productivebees:configurable_bee" : type);
-		if (generator == BeeGenerator.WANNA_BEE) entity.putString("type", type);
+		if (generator == BeeGenerator.MYRIAD) type = "productivebees:myriadcreations";
+		boolean configurable = generator == BeeGenerator.WANNA_BEE || generator == BeeGenerator.MYRIAD;
+		entity.putString("id", configurable ? "productivebees:configurable_bee" : type);
+		if (configurable) entity.putString("type", type);
 		var slot = new CompoundTag();
 		slot.putInt("slot_index", 0);
 		slot.putInt("ticks_in_hive", 0);
@@ -92,6 +94,50 @@ class DynamicBeeCheckpointTest {
 			}
 		}
 		return root;
+	}
+	@Test void myriadAllocationPreservesWeightsLargeAmountsAndFourfoldBlocksAcrossRestart() throws Exception {
+		var drops = List.of(new BeeGeneration.Drop(FIRST, 1, 2), new BeeGeneration.Drop(SECOND, 1, 1));
+		var ready = pool(pay(fixture(10, BeeGenerator.MYRIAD)), drops);
+		var folder = java.nio.file.Path.of("build", "network-gates", "r3-myriad-20261016", "stream");
+		java.nio.file.Files.createDirectories(folder);
+		var file = java.nio.file.Files.createTempFile(folder, "weighted-pool-", ".dat");
+		try (var out = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) {
+			NetworkCheckpointStream.write(ready, out);
+		}
+		try (var service = new com.ayoshiko.productivebeesgenesis.apiculture.persistence.read.CheckpointReadService();
+				var decoder = CODEC.decoder(service.tryOpen(file).orElseThrow())) {
+			long deadline = System.nanoTime() + 10_000_000_000L;
+			while (decoder.progress().state() == CheckpointDecoder.State.READING || decoder.progress().state() == CheckpointDecoder.State.VALIDATING) {
+				assertTrue(System.nanoTime() < deadline);
+				decoder.step(1, 1_000_000);
+				Thread.yield();
+			}
+			assertEquals(CheckpointDecoder.State.COMPLETE, decoder.progress().state(), decoder.progress().failure());
+			assertEquals(ready, decoder.checkpoint());
+			ready = decoder.checkpoint();
+		}
+		var normal = drain(ready, 1, true);
+		assertEquals(Map.of(FIRST, ProductAmount.of(7), SECOND, ProductAmount.of(3)), normal.ledger().balances());
+		var blocks = drain(pool(pay(fixture(10, BeeGenerator.MYRIAD, true)), drops), 1, true);
+		assertEquals(Map.of(FIRST, ProductAmount.of(27), SECOND, ProductAmount.of(13)), blocks.ledger().balances());
+		var huge = drain(pool(pay(fixture(0x1.0p80f, BeeGenerator.MYRIAD, true)), drops), 1, true);
+		assertEquals(BigInteger.ONE.shiftLeft(82), huge.ledger().balances().values().stream()
+				.map(ProductAmount::exact).reduce(BigInteger.ZERO, BigInteger::add));
+		assertEquals(9997, state(huge).energy());
+		assertEquals(1, state(huge).bee(0).random().cursor());
+	}
+	@Test void schemaSixteenKeepsUnweightedRequestsAndCannotHideMyriadOrWeightedPool() {
+		var legacy = NetworkCheckpointCodec.encode(pool(pay(fixture(3, BeeGenerator.WANNA_BEE)),
+				List.of(new BeeGeneration.Drop(FIRST, 1))));
+		legacy.putInt("schema", 16);
+		legacy.getList("ownership", 10).getCompound(0).getCompound("bees").putInt("samplingVersion", 7);
+		assertEquals(ProductAmount.of(3), drain(CODEC.decode(legacy), 1, true).ledger().balances().get(FIRST));
+		var weighted = NetworkCheckpointCodec.encode(pool(pay(fixture(3, BeeGenerator.MYRIAD)),
+				List.of(new BeeGeneration.Drop(FIRST, 1, 2))));
+		weighted.putInt("schema", 16);
+		weighted.getList("ownership", 10).getCompound(0).getCompound("bees").putInt("samplingVersion", 7);
+		assertThrows(IllegalArgumentException.class, () -> CODEC.decode(weighted));
+		assertThrows(IllegalArgumentException.class, () -> new BeeGeneration.Drop(FIRST, 1, Double.NaN));
 	}
 	@Test void unresolvedPaidRequestSurvivesRestartWithoutRegenerationOrExtraCharge() {
 		var paid = CODEC.decode(NetworkCheckpointCodec.encode(pay(fixture(10, BeeGenerator.WANNA_BEE))));

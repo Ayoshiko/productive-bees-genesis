@@ -1,9 +1,45 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import java.util.Arrays;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 
 /** Pure numeric core for weighted integer allocation. */
 final class WeightedAllocationMath {
+	static BigInteger[] allocateExact(BigInteger total, double[] weights) {
+		if (total == null || total.signum() < 0 || weights == null || weights.length == 0)
+			throw new IllegalArgumentException("Invalid exact weighted allocation");
+		var decimals = new BigDecimal[weights.length];
+		int scale = 0;
+		for (int index = 0; index < weights.length; index++) {
+			if (!Double.isFinite(weights[index]) || weights[index] <= 0)
+				throw new IllegalArgumentException("Invalid exact allocation weight");
+			decimals[index] = BigDecimal.valueOf(weights[index]);
+			scale = Math.max(scale, decimals[index].scale());
+		}
+		var integers = new BigInteger[weights.length];
+		var sum = BigInteger.ZERO;
+		for (int index = 0; index < weights.length; index++) {
+			integers[index] = decimals[index].setScale(scale).unscaledValue();
+			sum = sum.add(integers[index]);
+		}
+		var result = new BigInteger[weights.length];
+		var allocated = BigInteger.ZERO;
+		var order = new Integer[weights.length];
+		for (int index = 0; index < weights.length; index++) {
+			result[index] = total.multiply(integers[index]).divide(sum);
+			allocated = allocated.add(result[index]);
+			order[index] = index;
+		}
+		Arrays.sort(order, (first, second) -> {
+			int comparison = Double.compare(weights[second], weights[first]);
+			return comparison == 0 ? Integer.compare(first, second) : comparison;
+		});
+		int remainder = total.subtract(allocated).intValueExact();
+		for (int index = 0; index < remainder; index++)
+			result[order[index]] = result[order[index]].add(BigInteger.ONE);
+		return result;
+	}
 
 	private WeightedAllocationMath() {
 	}

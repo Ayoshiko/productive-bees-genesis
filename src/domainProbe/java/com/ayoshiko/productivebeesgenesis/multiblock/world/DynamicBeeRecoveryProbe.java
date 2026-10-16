@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkCheckpoi
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkPersistence;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.NetworkSavedData;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGeneration;
+import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeGenerator;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeRecord;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkConditions;
 import com.ayoshiko.productivebeesgenesis.apiculture.production.BeeWorkExecutor;
@@ -40,6 +41,7 @@ public final class DynamicBeeRecoveryProbe {
 	private static final List<NetworkCheckpoint> shutdown = new ArrayList<>();
 	private static int phase;
 	private static int started;
+	private static int takeoverRetries;
 
 	static void prepare(MinecraftServer server, BlockPos apiaryCore, NetworkCoreBlockEntity combinedCore) {
 		cores.add((NetworkCoreBlockEntity) server.overworld().getBlockEntity(apiaryCore));
@@ -76,6 +78,17 @@ public final class DynamicBeeRecoveryProbe {
 				core.ownership().failure());
 		if (cores.stream().anyMatch(core -> core.ownership().busy() || core.ownership().readyAuthority() == null)) return false;
 		if (phase == 0) {
+			for (int index = 0; index < cores.size(); index++) {
+				var core = cores.get(index);
+				int expected = 1;
+				if (index == 0) expected = Boolean.getBoolean("pbg.dynamic.myriad") ? 2 : 4;
+				if (core.ownership().readyAuthority().checkpoint().ownedMachines().activeCount() == expected) continue;
+				require(core.ownership().status() == com.ayoshiko.productivebeesgenesis.apiculture.ownership.CoreOwnershipController.Status.REJECTED
+						&& core.ownership().failure().equals("Topology changed; completed transfers remain owned")
+						&& takeoverRetries++ < 3, "Recovery fixture did not take over every member: " + core.ownership().failure());
+				require(core.ownership().command(true), "Recovery fixture topology retry rejected");
+				return false;
+			}
 			for (var core : cores) {
 				require(core.setProductionRunning(false), "Cannot pause dynamic recovery fixture");
 				prepareRequests(level, core.ownership().readyAuthority());
@@ -157,13 +170,15 @@ public final class DynamicBeeRecoveryProbe {
 		}
 		report.addProperty("dynamicWorldRestored", true);
 		report.addProperty("readyDeliveredWithoutNewFeeOrDraw", true);
-		report.addProperty("startedAndUnknownPreservedAndReturnRejected", true);
+		report.addProperty(Boolean.getBoolean("pbg.dynamic.myriad")
+				? "startedPreservedAndReturnRejected" : "startedAndUnknownPreservedAndReturnRejected", true);
 		captureShutdown();
 		return true;
 	}
 
 	private static void prepareRequests(ServerLevel level, NetworkSavedData data) {
 		var directory = NetworkPersistence.directory(level.getServer());
+		int requestIndex = 0;
 		for (var initial : List.copyOf(data.checkpoint().ownedMachines().values())) {
 			if (initial.phase() != OwnedMachineRecord.Phase.OWNED) continue;
 			var member = initial.claim().member();
@@ -204,6 +219,8 @@ public final class DynamicBeeRecoveryProbe {
 				record = root.ownedMachines().get(member);
 				live = bee(record, live.slot());
 				require(live.generation().phase() == BeeGeneration.Phase.STARTED, "Expected paid generation window");
+				boolean myriad = live.plan().generator() == BeeGenerator.MYRIAD;
+				if (myriad && requestIndex++ % 2 == 1) continue;
 				if (live.plan().beeType().equals("productivebees:lumber_bee")) continue;
 				var origin = record.claim().origin();
 				var resolved = live.plan().beeType().equals("productivebees:quarry_bee")
@@ -247,7 +264,7 @@ public final class DynamicBeeRecoveryProbe {
 		return record.combined() != null ? record.combined().bee(slot) : record.bees().bee(slot);
 	}
 	private static void verifyPhysical(ServerLevel level, NetworkCheckpoint root) {
-		for (var record : root.ownedMachines().values()) {
+		for (var record : root.ownedMachines().activeValues()) {
 			var origin = record.claim().origin();
 			var pos = new BlockPos(origin.x(), origin.y(), origin.z());
 			var tile = level.getBlockEntity(pos);

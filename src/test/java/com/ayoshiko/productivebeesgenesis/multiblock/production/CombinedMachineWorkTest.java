@@ -259,7 +259,7 @@ class CombinedMachineWorkTest {
 	@Test void onlyExplicitSchemaOneMigratesEmptyFeedingAndNewDamageIsRejected() {
 		var old = CombinedWorkCodec.encode(checkpointFixture()); old.putInt("schema", 1); removeBeeFluidFields(old); old.remove("feeding"); old.remove("upgrades"); var unchanged = old.copy();
 		var restored = restore(old); assertTrue(restored.feeding().stream().allMatch(slot -> slot.item() == null));
-		var newTag = CombinedWorkCodec.encode(restored); assertEquals(7, newTag.getInt("schema"));
+		var newTag = CombinedWorkCodec.encode(restored); assertEquals(8, newTag.getInt("schema"));
 		newTag.putInt("schema", 1); removeBeeFluidFields(newTag); newTag.remove("feeding"); newTag.remove("upgrades"); assertEquals(old, newTag); assertEquals(unchanged, old);
 		var complete = CombinedWorkCodec.encode(restored);
 		for (var mutation : List.<java.util.function.Consumer<CompoundTag>>of(

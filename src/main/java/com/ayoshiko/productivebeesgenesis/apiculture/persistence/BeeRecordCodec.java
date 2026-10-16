@@ -14,7 +14,7 @@ import net.minecraft.nbt.Tag;
 public final class BeeRecordCodec {
 	static CompoundTag encode(BeeMemberState state) {
 		var tag = new CompoundTag(); if (state == null) return tag;
-		tag.putInt("samplingVersion", 7);
+		tag.putInt("samplingVersion", 8);
 		tag.putUUID("member", state.member()); tag.putLong("revision", state.revision());
 		tag.putBoolean("networkPowered", state.networkPowered()); tag.putLong("energy", state.energy()); tag.putLong("capacity", state.energyCapacity());
 		var list = new ListTag();
@@ -65,13 +65,14 @@ public final class BeeRecordCodec {
 	}
 	/** 旧一体机 schema 1–4 使用原单蜂格式；不能根据缺字段猜测新格式。 */
 	public static BeeRecord decodeBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate, boolean legacyMachine) {
-		return decodeBee(value, member, validate, legacyMachine ? 8 : 16, !legacyMachine);
+		return decodeBee(value, member, validate, legacyMachine ? 8 : 17, !legacyMachine);
 	}
 	public static BeeRecord decodeMachineBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate, int machineSchema) {
 		int schema = 14;
 		if (machineSchema < 5) schema = 8;
 		else if (machineSchema == 5) schema = 10;
-		else if (machineSchema >= 7) schema = 16;
+		else if (machineSchema >= 8) schema = 17;
+		else if (machineSchema == 7) schema = 16;
 		return decodeBee(value, member, validate, schema, machineSchema >= 6);
 	}
 	private static BeeRecord decodeBee(CompoundTag value, java.util.UUID member, Consumer<ProductKey> validate, int schema, boolean controlled) {
@@ -94,7 +95,7 @@ public final class BeeRecordCodec {
 			return new BeeRecord(id, member, StrictNbt.integer(value, "slot"), new AssetImage(StrictNbt.compound(value, "original")),
 					readPlan(StrictNbt.compound(value, "plan"), validate, schema), StrictNbt.number(value, "revision"), StrictNbt.integer(value, "progress"),
 					StrictNbt.number(value, "pending"), new ProductRecordCodec(validate).readAmounts(StrictNbt.list(value, "frozenOutputs")), random, StrictNbt.bool(value, "enabled"), sampling,
-					value.contains("generation") ? BeeGenerationCodec.decode(StrictNbt.compound(value, "generation"), validate) : null);
+					value.contains("generation") ? BeeGenerationCodec.decode(StrictNbt.compound(value, "generation"), validate, schema >= 17) : null);
 		}
 		return new BeeRecord(id, member, StrictNbt.integer(value, "slot"),
 				new AssetImage(StrictNbt.compound(value, "original")), readPlan(StrictNbt.compound(value, "plan"), validate, schema),
@@ -124,6 +125,8 @@ public final class BeeRecordCodec {
 			var expected = new java.util.HashSet<>(Set.of("type", "recipe", "recipeRevision", "capabilityRevision", "ticks", "cost", "productivity", "genes", "behavior", "weather", "multiplier", "outputs"));
 			if (schema >= 16 && tag.contains("generator")) expected.addAll(Set.of("generator", "generatedCombBlock"));
 			if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing bee plan fields");
+			if (schema < 17 && tag.getString("generator").equals(BeeGenerator.MYRIAD.name()))
+				throw new IllegalArgumentException("Myriad plan inside an old bee schema");
 			if (!tag.contains("multiplier", Tag.TAG_FLOAT)) throw new IllegalArgumentException("Invalid bee multiplier type");
 			var outputs = new ArrayList<BeeOutputPlan>(); var products = new ProductRecordCodec(validate);
 			for (var raw : StrictNbt.list(tag, "outputs")) {

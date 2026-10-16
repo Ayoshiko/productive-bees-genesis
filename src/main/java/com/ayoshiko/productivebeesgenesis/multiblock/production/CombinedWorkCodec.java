@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-/** 独立机器 schema 7；动态请求单独保管，旧双产物精确迁入。 */
+/** 独立机器 schema 8；动态权重与请求一起保管，旧格式精确迁入。 */
 public final class CombinedWorkCodec {
 	public static CompoundTag encode(CombinedMachineWork work) {
 		CombinedMachineCapacity.validate(work);
-		var tag = new CompoundTag(); tag.putInt("schema", 7); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
+		var tag = new CompoundTag(); tag.putInt("schema", 8); tag.putInt("capacityVersion", CombinedMachineCapacity.VERSION);
 		tag.putUUID("machine", work.machine()); tag.putLong("generation", work.generation()); tag.putLong("revision", work.revision());
 		tag.putInt("beeSlots", work.beeSlots()); tag.putInt("lanes", work.lanes());
 		tag.putLong("energy", work.energy()); tag.putLong("energyCapacity", work.energyCapacity());
@@ -48,7 +48,7 @@ public final class CombinedWorkCodec {
 		if (schema >= 2) expected.add("feeding");
 		if (schema >= 3) expected.add("upgrades");
 		if (!tag.getAllKeys().equals(expected)) throw new IllegalArgumentException("Unknown or missing combined work fields");
-		if ((schema < 1 || schema > 7) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
+		if ((schema < 1 || schema > 8) || StrictNbt.integer(tag, "capacityVersion") != CombinedMachineCapacity.VERSION)
 			throw new IllegalArgumentException("Unsupported combined work schema or capacity version");
 		var machine = StrictNbt.uuid(tag, "machine"); var codec = new ProductRecordCodec(validate);
 		var beeTags = StrictNbt.list(tag, "bees"); var jobTags = StrictNbt.list(tag, "jobs");

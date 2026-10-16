@@ -21,9 +21,16 @@ public record BeeRecord(UUID id, UUID member, int slot, AssetImage originalSlot,
 					|| pendingCycles == 0 && generation.phase() != BeeGeneration.Phase.READY)
 				throw new IllegalArgumentException("Orphaned dynamic bee generation");
 			for (var drop : generation.pool()) keys.add(drop.key());
+			if (plan.generator() == BeeGenerator.MYRIAD && (generation.pool().size() > 3
+					|| generation.pool().stream().anyMatch(drop -> drop.count() != 1)))
+				throw new IllegalArgumentException("Invalid Myriad template allocation");
+			if (plan.generator() != BeeGenerator.MYRIAD && generation.pool().stream().anyMatch(drop -> drop.weight() != 1))
+				throw new IllegalArgumentException("Weighted pool used by an unweighted generator");
 			if (generation.phase() == BeeGeneration.Phase.READY) {
 				var eventRandom = pendingCycles == 0 ? new BeeCycleRandom(random.seed(), Math.subtractExact(random.cursor(), 1)) : random;
-				var rolls = BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier()).sampleCycle(eventRandom.draw(0));
+				var rolls = GeneratedBeeSampler.rolls(plan, eventRandom);
+				if (plan.generator() == BeeGenerator.MYRIAD && !generation.consumed().isZero() && !generation.consumed().equals(rolls))
+					throw new IllegalArgumentException("Partial Myriad allocation is not a committed boundary");
 				if (generation.consumed().compareTo(rolls) > 0 || !generation.fixedDone() && !generation.consumed().isZero()
 						|| generation.fixedDone() && sampling != null
 						|| pendingCycles == 0 && (!generation.fixedDone() || !generation.consumed().equals(rolls)))

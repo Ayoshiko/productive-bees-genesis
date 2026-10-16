@@ -35,6 +35,8 @@
 
 ### 新增
 
+- **万象创世共享生产**：已准入蜂箱与组合机接入固定主产物和随机蜜脾追加；每周期保管最多三种真实完整模板及权重，BLOCK／Ω 的随机蜜脾块按四倍结算。保留任意精度数量、旧周期和未交付余量，候选未就绪停止新工作，未知结果不重抽。网络／蜂状态／组合机格式升至 17／8／8，兼容旧无权重动态事件；终端协议 45 不变。
+
 - **WannaBee 与多花蜂共同生产**：已准入的网络蜂箱和组合机接入琥珀战利品，以及 Lumber／Quarry／Dye 的真实花源产物。保留 WannaBee 数据包固定产物、独立流体、喂食分组与禁用状态；动态候选池按事件保存，拒收和重启后继续交付，未知生成结果保管并停止重抽。完整组件产物按当前配方代际实际生成后准入。网络／蜂状态／组合机保存格式分别升至 16／7／7，旧交接原始指纹保留。核心与蜜蜂终端显示“生成结果待核验”，终端协议升至 45。修复组合机完整交还后再次接管被误判为旧请求重放的问题，保留新接管的目录回执与恢复校验。
 
 - **EME 四档工厂接入蜂业网络**：Absolute Overclocked／Supreme Quantum／Cosmic Dense／Infinite Multiversal 蜂箱与离心工厂接入共同生产，分别支持 45／51／55／60 蜂位和 12／14／16／18 进程。共享普通供给、末槽管理、逐机升级和完整资产交还；保留原槽、多流体和已付工作。终端完整显示至第 60 槽及全部基因，仍限制单包 64 KiB，协议升至 44；存档格式和网络默认关闭保持不变。
@@ -241,6 +243,8 @@
 ### English
 
 #### Added
+
+- **Shared Myriad Creations production**: Supported apiaries and combined machines retain fixed recipe outputs and append random combs from up to three real component-exact templates with frozen weights. BLOCK/Omega applies the fourfold random comb-block count. Arbitrary-precision amounts, paid cycles and delivery remainders survive retries and restart; new work waits for candidate readiness and unknown results are held without rerolling. Network, bee and combined-machine formats advance to 17, 8 and 8 with strict migration of older unweighted events. Terminal protocol remains 45.
 
 - **Shared WannaBee and multi-flower production**: Supported network apiaries and combined machines now produce amber loot and Lumber, Quarry and Dye flower outputs. Preserves data-pack WannaBee recipe outputs, independent fluids, feeding groups and disabled slots. Each paid event retains its generated pool for bounded continuation and delivery after rejection or restart; unknown results are held without rerolling. Exact component keys gain admission after actual production within the current recipe epoch. Network, bee and combined-machine save formats advance to 16, 7 and 7 while retaining original transfer fingerprints. Core and bee terminals now show when a generation result needs verification, using terminal protocol 45. Fixes completed combined-machine returns preventing a new takeover, while preserving claim receipts and recovery checks.
 

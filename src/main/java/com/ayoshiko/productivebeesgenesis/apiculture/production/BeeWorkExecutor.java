@@ -115,7 +115,8 @@ public final class BeeWorkExecutor {
 			if (progress.productionCycles() != 1) throw new IllegalArgumentException("Split dynamic work at each event boundary");
 			if (samplingBudget == 0 || context.generationSource() == null) return new BeeResult(Status.BUDGET, bee, bee, 0);
 			var generation = BeeGeneration.started(context.generationSource());
-			if (BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier()).sampleCycle(bee.random().draw(0)).isZero())
+			if (plan.generator() != BeeGenerator.MYRIAD
+					&& BeeProductionRollPlan.fromMultiplier(plan.productionMultiplier()).sampleCycle(bee.random().draw(0)).isZero())
 				generation = generation.ready(java.util.List.of());
 			var next = new BeeRecord(bee.id(), bee.member(), bee.slot(), bee.originalSlot(), plan, Math.incrementExact(bee.revision()),
 					progress.remainingTicks(), 1, java.util.Map.of(), bee.random(), bee.enabled(), null, generation);

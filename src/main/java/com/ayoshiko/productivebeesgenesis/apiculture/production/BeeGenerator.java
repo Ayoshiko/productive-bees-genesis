@@ -4,5 +4,6 @@ package com.ayoshiko.productivebeesgenesis.apiculture.production;
 public enum BeeGenerator {
 	STATIC,
 	WANNA_BEE,
-	MULTI_FLOWER
+	MULTI_FLOWER,
+	MYRIAD
 }

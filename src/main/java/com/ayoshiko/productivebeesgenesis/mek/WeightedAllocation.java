@@ -35,6 +35,10 @@ import java.util.Map;
 @FieldsAreNonnullByDefault
 @MethodsReturnNonnullByDefault
 public final class WeightedAllocation {
+	/** 完整已付数量的严格分配；拒绝无效权重，不能静默改用另一分布。 */
+	public static java.math.BigInteger[] allocateExact(java.math.BigInteger total, double[] weights) {
+		return WeightedAllocationMath.allocateExact(total, weights);
+	}
 
 	/** 降级日志冷却器（静态共享，5 秒冷却） */
 	private static final LogThrottle DEGRADE_THROTTLE = new LogThrottle();

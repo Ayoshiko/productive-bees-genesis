@@ -141,9 +141,10 @@ public final class StaticApiaryAdapter {
 		var data = slot.getCompound("entity_data"); var type = BeeNbtHelper.resolveBeeTypeKey(data);
 		var generator = DynamicBeeAdapter.generator(type);
 		if (generator != BeeGenerator.STATIC) {
-			var expected = generator == BeeGenerator.WANNA_BEE ? ModEntities.CONFIGURABLE_BEE.get() : BuiltInRegistries.ENTITY_TYPE.getOptional(type).orElse(null);
+			boolean configurable = generator == BeeGenerator.WANNA_BEE || generator == BeeGenerator.MYRIAD;
+			var expected = configurable ? ModEntities.CONFIGURABLE_BEE.get() : BuiltInRegistries.ENTITY_TYPE.getOptional(type).orElse(null);
 			if (data.getBoolean("HasConverted") || expected == null || expected != BeeNbtHelper.resolveEntityType(data)
-					|| generator == BeeGenerator.WANNA_BEE && BeeReloadListener.INSTANCE.getData(type) == null)
+					|| configurable && BeeReloadListener.INSTANCE.getData(type) == null)
 				throw new IllegalArgumentException("Unverified dynamic bee identity");
 			var outputs = dynamicRecipeOutputs(level, type, profile.combBlock());
 			var fluid = com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.resolveFluidOutputStrict(type, level);
@@ -192,7 +193,7 @@ public final class StaticApiaryAdapter {
 	}
 	private static ArrayList<BeeOutputPlan> dynamicRecipeOutputs(ServerLevel level, ResourceLocation type, boolean combBlock) {
 		var holder = BeeInfoHelper.getBeeProductionRecipe(level, type);
-		if (DynamicBeeAdapter.generator(type) != BeeGenerator.WANNA_BEE || holder == null || holder.value().getRecipeOutputs().isEmpty())
+		if (DynamicBeeAdapter.generator(type) == BeeGenerator.MULTI_FLOWER || holder == null || holder.value().getRecipeOutputs().isEmpty())
 			return new ArrayList<>();
 		if (holder.value().ingredient.get() == null || !type.equals(holder.value().ingredient.get().getBeeType()))
 			throw new IllegalArgumentException("Dynamic bee recipe identity differs");
@@ -206,7 +207,9 @@ public final class StaticApiaryAdapter {
 		if (plan.generator() != BeeGenerator.STATIC) {
 			if (type == null || DynamicBeeAdapter.generator(type) != plan.generator()
 					|| !plan.recipe().equals(DynamicBeeAdapter.recipe(type)) || plan.genesAffectWork() != BalanceConfig.apiaryBeeGenesAffectWork()) return false;
-			if (plan.generator() == BeeGenerator.WANNA_BEE ? BeeReloadListener.INSTANCE.getData(type) == null : !BuiltInRegistries.ENTITY_TYPE.containsKey(type)) return false;
+			boolean configurable = plan.generator() == BeeGenerator.WANNA_BEE || plan.generator() == BeeGenerator.MYRIAD;
+			if (configurable ? BeeReloadListener.INSTANCE.getData(type) == null : !BuiltInRegistries.ENTITY_TYPE.containsKey(type)) return false;
+			if (plan.generator() == BeeGenerator.MYRIAD && !com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache.isWarmupComplete()) return false;
 			return sameOutputs(dynamicRecipeOutputs(level, type, false), plan);
 		}
 		if (!ordinary(type)) return false;

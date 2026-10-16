@@ -50,6 +50,8 @@ if (evolvedCentrifugeProbe && !centrifugeFactoryProbe) throw new GradleException
 if (centrifugeFactoryProbe && (factoryProbe || !(automaticMode in ['write', 'read']))) throw new GradleException('Centrifuge factory probe requires its own automatic write/read mode')
 if (factoryProbe && !(automaticMode in ['write', 'read'])) throw new GradleException('Factory probe requires automatic write/read mode')
 def dynamicProbe = providers.gradleProperty('networkDynamicBees').isPresent()
+def myriadProbe = providers.gradleProperty('networkMyriadBees').isPresent()
+if (myriadProbe && !dynamicProbe) throw new GradleException('Myriad production requires the dynamic probe')
 def dynamicRestart = providers.gradleProperty('networkDynamicRestartSource').isPresent()
 def dynamicWorldMode = providers.gradleProperty('networkDynamicWorldMode').orNull
 if (dynamicWorldMode != null && (!dynamicProbe || dynamicRestart || !(dynamicWorldMode in ['write', 'read'])))
@@ -425,6 +427,7 @@ neoForge {
             if (upgradeProbe) systemProperty 'pbg.upgrades.only', 'true'
             if (ordinaryProbe) systemProperty 'pbg.ordinary.only', 'true'
             if (providers.gradleProperty('networkDynamicBees').isPresent()) systemProperty 'pbg.dynamic.only', 'true'
+            if (providers.gradleProperty('networkMyriadBees').isPresent()) systemProperty 'pbg.dynamic.myriad', 'true'
             if (dynamicWorldMode != null) systemProperty 'pbg.dynamic.worldMode', dynamicWorldMode
             if (providers.gradleProperty('networkDynamicRestartSource').isPresent()) systemProperty 'pbg.dynamic.restartSource', file(providers.gradleProperty('networkDynamicRestartSource').get()).absolutePath
             if (automaticMode != null) systemProperty 'pbg.automatic.mode', automaticMode
@@ -608,12 +611,14 @@ tasks.named('runNetworkDomainServer') {
                 : result.normalShutdownCheckpointSaved == true
         if (dynamicProbe) {
             def resumed = dynamicRestart
-                    ? result.newJvmFrozenPoolResume == true : result.managedCombinedFourBeeTickerAndReturn == true
+                    ? result.newJvmFrozenPoolResume == true : myriadProbe
+                    ? result.managedCombinedMyriadTickerAndReturn == true : result.managedCombinedFourBeeTickerAndReturn == true
             shutdownSaved = result.scope == 'dynamic-bees' && result.normalShutdown == true && resumed
             if (dynamicWorldMode != null) shutdownSaved = result.dynamicWorldShutdownSaved == true
                     && (dynamicWorldMode == 'write' ? result.dynamicWorldPrepared == true
                     : result.dynamicWorldRestored == true && result.readyDeliveredWithoutNewFeeOrDraw == true
-                    && result.startedAndUnknownPreservedAndReturnRejected == true)
+                    && (myriadProbe ? result.startedPreservedAndReturnRejected == true
+                    : result.startedAndUnknownPreservedAndReturnRejected == true))
         }
         if (result.passed != true || (!coldProbe && !shutdownSaved)) {
             throw new GradleException('Network domain assertions did not complete')

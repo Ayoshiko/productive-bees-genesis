@@ -12,6 +12,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.*;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.domainprobe.PlayerInventorySyncProbe;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.multiblock.definition.CombinedApiaryDefinition;
 import com.ayoshiko.productivebeesgenesis.multiblock.definition.StructureRole;
 import com.ayoshiko.productivebeesgenesis.multiblock.production.*;
@@ -38,16 +39,19 @@ import net.neoforged.neoforge.common.util.FakePlayerFactory;
 /** 已校准的真实服务器入口；独立源集不进入发布产物。 */
 public final class DynamicBeeProbe {
 	private static final BlockPos POS = new BlockPos(4, 130, 4);
+	private static final boolean MYRIAD = Boolean.getBoolean("pbg.dynamic.myriad");
+	private static final int BEE_COUNT = MYRIAD ? 2 : 4;
 	private static final String[] TYPES = {"wanna", "lumber_bee", "quarry_bee", "dye_bee"};
-	private static final TileEntityMekApiary[] HIVES = new TileEntityMekApiary[4];
+	private static final TileEntityMekApiary[] HIVES = new TileEntityMekApiary[BEE_COUNT];
 	private static NetworkCoreBlockEntity core;
 	private static NetworkSavedData data;
 	private static MachineProbeFixture machine;
 	private static int phase, started, oldCycle;
 	private static boolean oldEnabled;
 	private static CompoundTag checkpoint;
-	private static final long[] standaloneCycles = new long[4];
+	private static final long[] standaloneCycles = new long[BEE_COUNT];
 	static ItemStack flower(int index) {
+		if (MYRIAD) return new ItemStack(cy.jdkdigital.productivebees.init.ModItems.HONEY_TREAT.get());
 		if (index == 0) {
 			var amber = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse("productivebees:amber")));
 			var entity = new CompoundTag();
@@ -59,8 +63,10 @@ public final class DynamicBeeProbe {
 	}
 	static CompoundTag bee(int index, boolean cage) {
 		var tag = new CompoundTag();
-		tag.putString(cage ? "entity" : "id", index == 0 ? "productivebees:configurable_bee" : "productivebees:" + TYPES[index]);
-		if (index == 0) tag.putString("type", "productivebees:wanna");
+		boolean configurable = MYRIAD || index == 0;
+		tag.putString(cage ? "entity" : "id", configurable ? "productivebees:configurable_bee" : "productivebees:" + TYPES[index]);
+		if (MYRIAD) tag.putString("type", "productivebees:myriadcreations");
+		else if (index == 0) tag.putString("type", "productivebees:wanna");
 		tag.putUUID("UUID", UUID.randomUUID());
 		var genes = new CompoundTag();
 		genes.putString("bee_behavior", "behavior.metaturnal");
@@ -92,9 +98,9 @@ public final class DynamicBeeProbe {
 		core = (NetworkCoreBlockEntity) level.getBlockEntity(POS);
 		core.initializeOwner(owner);
 		var directions = List.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
-		for (int index = 0; index < 4; index++) {
-			var type = ResourceLocation.parse("productivebees:" + TYPES[index]);
-			require((index == 0 ? cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(type) != null : BuiltInRegistries.ENTITY_TYPE.containsKey(type))
+		for (int index = 0; index < BEE_COUNT; index++) {
+			var type = ResourceLocation.parse(MYRIAD ? "productivebees:myriadcreations" : "productivebees:" + TYPES[index]);
+			require((MYRIAD || index == 0 ? cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(type) != null : BuiltInRegistries.ENTITY_TYPE.containsKey(type))
 					&& DynamicBeeAdapter.flower(type, flower(index)), "Invalid dynamic fixture " + type);
 			var pos = POS.relative(directions.get(index));
 			level.setBlockAndUpdate(pos, ModBlocks.MEK_APIARY.get().defaultBlockState());
@@ -107,6 +113,7 @@ public final class DynamicBeeProbe {
 			hive.setDirectContainerOutputEnabled(false);
 			hive.setCentrifugePriorityEnabled(false);
 			hive.setFeederConversionEnabled(false);
+			if (MYRIAD && index == 1) require(hive.installPbUpgrade(PbUpgradeType.BLOCK), "Myriad block fixture installation failed");
 			hive.getBeeSlot(0).setBeeData(bee(index, false));
 			hive.getFeederSlots().getFirst().setStack(flower(index));
 			hive.energyContainer().setEnergy(hive.energyContainer().getMaxEnergy());
@@ -135,6 +142,7 @@ public final class DynamicBeeProbe {
 		var directory = NetworkPersistence.directory(server);
 		if (phase == 0) {
 			if (core.topology() == null || !core.topology().valid() || !machine.core().formed() || RuntimeProductPolicies.peek(level) == null) return false;
+			if (MYRIAD && !MyriadBeeTypeCache.isWarmupComplete()) return false;
 			require(core.ownership().command(true), "Dynamic takeover rejected");
 			phase = 1;
 			return false;
@@ -182,8 +190,8 @@ public final class DynamicBeeProbe {
 			checkpoint.put("done", NetworkCheckpointCodec.encode(data.checkpoint()));
 			Files.createDirectories(Path.of("results"));
 			NbtIo.writeCompressed(checkpoint, Path.of("results/dynamic-checkpoint.dat"));
-			verifySources(level, data.checkpoint(), report);
-			report.addProperty("fourNativeBeesManagedProductionAndExactFE", true);
+			if (!MYRIAD) verifySources(level, data.checkpoint(), report);
+			report.addProperty(MYRIAD ? "myriadNormalAndBlockManagedProductionAndExactFE" : "fourNativeBeesManagedProductionAndExactFE", true);
 			report.addProperty("simulateUnchangedAndPaidPoolDelivery", true);
 			seedMachine(level);
 			require(core.ownership().command(false), "Settled dynamic return rejected");
@@ -205,9 +213,9 @@ public final class DynamicBeeProbe {
 			require(details.value(MachineMenuDetails.Field.PENDING_BEES) == 0, "Settled machine details show pending work");
 			if (core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;
 			for (var hive : HIVES) require(!hive.getBeeSlot(0).isEmpty() && hive.getFeederSlots().getFirst().getCount() == 1, "Return lost bee or flower");
-			report.addProperty("standaloneFourNativeBeeTickerAndCageInput", true);
+			report.addProperty(MYRIAD ? "standaloneMyriadTickerAndCageInput" : "standaloneFourNativeBeeTickerAndCageInput", true);
 			report.addProperty("normalReturnPreservesBeesFlowersAndNoDrops", true);
-			for (int index = 0; index < 4; index++) standaloneCycles[index] = work.bee(index).random().cursor();
+			for (int index = 0; index < BEE_COUNT; index++) standaloneCycles[index] = work.bee(index).random().cursor();
 			var port = machine.world(new BlockPos(1, 1, 0));
 			require(port.getX() >> 4 == port.north().getX() >> 4
 					&& port.getZ() >> 4 == port.north().getZ() >> 4, "Network fixture crosses the single-chunk boundary");
@@ -236,7 +244,7 @@ public final class DynamicBeeProbe {
 			if (record.combined() == null) {
 				require(CombinedNetworkService.activate(level, data, directory, record), "Combined dynamic activation failed");
 			}
-			for (int index = 0; index < 4; index++) {
+			for (int index = 0; index < BEE_COUNT; index++) {
 				var root = data.checkpoint();
 				var work = root.ownedMachines().get(machine.core().machineId()).combined();
 				data.publish(root.exchangeCombined(work.machine(), work.beeEnabled(index, work.bee(index).id(), true)));
@@ -246,6 +254,7 @@ public final class DynamicBeeProbe {
 			return false;
 		}
 		if (phase == 5) {
+			if (MYRIAD) core.energyPort().receiveEnergy(Integer.MAX_VALUE, false);
 			var root = data.checkpoint();
 			var work = root.ownedMachines().get(machine.core().machineId()).combined();
 			require(machine.core().assets.empty() && !MachineWorkService.active(machine.core()), "Managed machine retained independent producer");
@@ -257,14 +266,16 @@ public final class DynamicBeeProbe {
 			work = data.checkpoint().ownedMachines().get(work.machine()).combined();
 			for (var value : work.bees()) if (value.random().cursor() <= standaloneCycles[value.slot()] || !value.drained()) return false;
 			require(!data.checkpoint().ledger().balances().isEmpty(), "Combined dynamic scheduler produced no network balance");
-			require(core.setProductionRunning(false) && core.ownership().command(false), "Combined dynamic return rejected");
+			if (!work.drained()) return false;
+			require(core.setProductionRunning(false), "Combined dynamic pause rejected");
+			require(core.ownership().command(false), "Combined dynamic return rejected: " + core.ownership().failure());
 			phase = 6;
 			return false;
 		}
 		if (phase == 6) {
 			if (core.ownership().status() != CoreOwnershipController.Status.STANDALONE) return false;
-			require(machine.core().assets.available() && machine.core().assets.work().bees().size() == 4, "Combined dynamic return lost bees");
-			report.addProperty("managedCombinedFourBeeTickerAndReturn", true);
+			require(machine.core().assets.available() && machine.core().assets.work().bees().size() == BEE_COUNT, "Combined dynamic return lost bees");
+			report.addProperty(MYRIAD ? "managedCombinedMyriadTickerAndReturn" : "managedCombinedFourBeeTickerAndReturn", true);
 			if ("write".equals(System.getProperty("pbg.dynamic.worldMode"))) {
 				DynamicBeeRecoveryProbe.prepare(server, POS, core);
 				phase = 8;
@@ -277,6 +288,18 @@ public final class DynamicBeeProbe {
 		return false;
 	}
 	private static void checkPool(ServerLevel level, BeeRecord bee) {
+		if (MYRIAD) {
+			var snapshot = MyriadBeeTypeCache.snapshot();
+			var variants = bee.plan().generatedCombBlock() ? snapshot.combBlockVariants() : snapshot.honeycombVariants();
+			require(bee.generation().pool().size() <= 3, "Myriad event exceeded type budget");
+			for (var drop : bee.generation().pool()) {
+				var stack = ProductKeyCodec.item(drop.key(), 1, level.registryAccess());
+				require(variants.values().stream().flatMap(List::stream).anyMatch(template -> ItemStack.isSameItemSameComponents(stack, template)),
+						"Myriad generated a foreign complete template");
+				require(RuntimeProductPolicies.peek(level).accepts(drop.key()), "Myriad generated key was not admitted");
+			}
+			return;
+		}
 		for (var drop : bee.generation().pool()) {
 			var stack = ProductKeyCodec.item(drop.key(), drop.count(), level.registryAccess());
 			require(RuntimeProductPolicies.peek(level).accepts(drop.key()), "Generated complete key not admitted");
@@ -338,7 +361,13 @@ public final class DynamicBeeProbe {
 		player.setPos(machine.pos().getCenter());
 		var menu = new MachineMenu(87, player.getInventory(), controller, UUID.randomUUID());
 		player.containerMenu = menu;
-		for (int index = 0; index < 4; index++) {
+		if (MYRIAD) {
+			int upgrade = MachineUpgrades.slot(true, PbUpgradeType.BLOCK);
+			player.getInventory().items.set(0, MachineUpgradeProfiles.unit(upgrade));
+			require(MachineExchange.exchange(menu, player, MachineExchange.Action.UPGRADE_IN, upgrade, 0, 1, false).moved() == 1,
+					"Myriad machine block installation rejected");
+		}
+		for (int index = 0; index < BEE_COUNT; index++) {
 			var cage = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.STURDY_BEE_CAGE.get());
 			cage.set(DataComponents.CUSTOM_DATA, CustomData.of(bee(index, true)));
 			player.getInventory().items.set(0, cage);
