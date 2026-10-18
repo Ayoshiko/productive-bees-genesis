@@ -4,9 +4,8 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryDirectEjectPayload;
+import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
-import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
@@ -169,21 +168,12 @@ public final class ApiaryDirectEjectOverlay {
 		if (!(container.getTileEntity() instanceof TileEntityMekApiary apiary)) return null;
 		for (GuiWindow window : gui.getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				return new OverlayTarget(gui, sideConfig, apiary, getCurrentType(sideConfig));
+				return new OverlayTarget(gui, sideConfig, apiary, GuiResourceSideConfig.nativeType(sideConfig));
 			}
 		}
 		return null;
 	}
 
-	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab && !tab.visible) return tab.getTransmissionType();
-		}
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab) return tab.getTransmissionType();
-		}
-		return TransmissionType.ITEM;
-	}
 
 	private static ButtonBounds bounds(OverlayTarget target) {
 		return bounds(target, BUTTON_X_OFFSET);

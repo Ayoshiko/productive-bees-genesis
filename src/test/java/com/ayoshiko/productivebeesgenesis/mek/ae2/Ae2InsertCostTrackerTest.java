@@ -13,6 +13,33 @@ import org.junit.jupiter.api.Test;
  * 只有实测均值超过健康阈值后才收缩，避免优化伤害正常推送吞吐。
  */
 class Ae2InsertCostTrackerTest {
+	@Test
+	void successfulSlowCallsUseCostDelayInsteadOfFailureExponent() {
+		var tracker = new Ae2InsertCostTracker();
+		tracker.record(100, 800_000);
+		assertEquals(0, tracker.successDelayNanos());
+		for (int i = 0; i < 10; i++) tracker.record(101 + i, 800_000);
+		assertEquals(50_000_000, tracker.successDelayNanos());
+		tracker.record(120, 80_000);
+		assertEquals(0, tracker.successDelayNanos());
+		tracker.record(121, 6_000_000);
+		assertEquals(200_000_000, tracker.successDelayNanos());
+	}
+
+	@Test
+	void networkReplacementClearsOldCostAndRejectsLateSamples() {
+		var tracker = new Ae2InsertCostTracker();
+		var oldNetwork = new Object();
+		var nextNetwork = new Object();
+		tracker.useNetwork(oldNetwork);
+		tracker.recordForNetwork(oldNetwork, 200, 6_000_000);
+		assertEquals(1, tracker.keyQuota(32));
+		tracker.useNetwork(nextNetwork);
+		tracker.recordForNetwork(oldNetwork, 200, 6_000_000);
+		assertEquals(32, tracker.keyQuota(32));
+		assertFalse(tracker.isExhausted(201));
+		assertEquals(0, tracker.successDelayNanos());
+	}
 
 	/** 健康 insert：80µs */
 	private static final long HEALTHY_COST = 80_000L;

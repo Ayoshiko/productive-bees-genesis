@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.BlockEntityItemStackHandler;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.common.recipe.MekanismRecipeType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
@@ -29,8 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 粗矿熔炼升级的判定、配方缓存和输出转换工具。
  * <p>
- * 只有同时满足 raw_materials/raw_ores 标签、Mekanism 或原版熔炼配方以及 ingots 输出标签的物品才会转换。
- * 这样不会把食物、木炭或其他普通可熔炼物误当作粗矿；整合包缺少标签时仍可通过补充 common/forge 标签兼容。
+ * 只有带 raw_materials/raw_ores 标签且拥有 Mekanism 或原版熔炼配方的物品才会转换；普通产物仍要求
+ * ingots 输出标签，Powah 粗品质铀矿的非锭产物仅对其精确配方配对开放。
  * <p>
  * 服务端 tick 只访问本类的不可变快照和并发缓存；配方重载时由主类调用 {@link #invalidateCache()}。
  */
@@ -42,6 +43,8 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static final TagKey<Item> FORGE_RAW_ORES = itemTag("forge", "raw_ores");
 	private static final TagKey<Item> COMMON_INGOTS = itemTag("c", "ingots");
 	private static final TagKey<Item> FORGE_INGOTS = itemTag("forge", "ingots");
+	private static final ResourceLocation POWAH_RAW_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite_raw");
+	private static final ResourceLocation POWAH_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite");
 
 	private static final List<TagKey<Item>> RAW_TAGS = List.of(
 			COMMON_RAW_MATERIALS, COMMON_RAW_ORES, FORGE_RAW_MATERIALS, FORGE_RAW_ORES);
@@ -64,6 +67,15 @@ public final class RawOreSmeltingUpgradeHelper {
 
 	/** 将 pending 输出按熔炼配方转换；无变化时返回 false。 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, false);
+	}
+
+	/** 转换上界包含零到最大输入之间可能留下的粗矿余料。 */
+	public static boolean maximumPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, true);
+	}
+
+	private static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs, boolean maximum) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
 		boolean hasConversion = false;
 		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
@@ -87,7 +99,8 @@ public final class RawOreSmeltingUpgradeHelper {
 			} else {
 				long crafts = count / (long) conversion.inputCount();
 				addAmount(converted, conversion.result(), crafts * conversion.result().getCount());
-				addAmount(converted, template, count % conversion.inputCount());
+				addAmount(converted, template, maximum ? Math.min(count, conversion.inputCount() - 1L)
+						: count % conversion.inputCount());
 			}
 		}
 		// 所有转换与合并完成后才提交；异常时原 pending 仍完整持有资产。
@@ -192,7 +205,16 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static boolean isValidOutput(ItemStack input, ItemStack output) {
 		return output != null && !output.isEmpty()
 				&& !ItemStack.isSameItemSameComponents(input, output)
-				&& isIngot(output);
+				&& (isIngot(output) || isPowahUraniniteSmelting(input, output));
+	}
+
+	private static boolean isPowahUraniniteSmelting(ItemStack input, ItemStack output) {
+		return isPowahUraniniteSmelting(
+				BuiltInRegistries.ITEM.getKey(input.getItem()), BuiltInRegistries.ITEM.getKey(output.getItem()));
+	}
+
+	static boolean isPowahUraniniteSmelting(ResourceLocation input, ResourceLocation output) {
+		return POWAH_RAW_URANINITE.equals(input) && POWAH_URANINITE.equals(output);
 	}
 
 	private static boolean isRawMaterial(ItemStack stack) {

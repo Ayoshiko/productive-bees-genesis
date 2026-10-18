@@ -1,0 +1,8 @@
+{
+  "primaryColor": "#C97852",
+  "secondaryColor": "#82452F",
+  "flowerItem": "minecraft:copper_ingot",
+  "size": 0.7,
+  "selfbreed": true,
+  "renderer": "default"
+}

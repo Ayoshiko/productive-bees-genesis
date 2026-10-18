@@ -100,10 +100,11 @@ class Ae2CentrifugeInputReturnServiceMinecraftTest {
 		assertEquals(2L, result.returnedToAe());
 		assertEquals(3L, result.pending());
 		assertTrue(input.isEmpty());
-		assertTrue(fixture.holder.getPendingItemBuffer().hasRetryableItems(20L));
-		assertEquals(0L, fixture.holder.getPendingItemBuffer().snapshot(20L).getFirst().amount());
+		assertFalse(fixture.holder.getPendingItemBuffer().hasRetryableItems(20L));
+		assertTrue(fixture.holder.getPendingItemBuffer().hasRetryableItems(21L));
+		assertEquals(0L, fixture.holder.getPendingItemBuffer().snapshot(21L).getFirst().amount());
 		assertEquals(3L,
-				fixture.holder.getPendingItemBuffer().snapshot(20L).getFirst().returnToNetworkAmount());
+				fixture.holder.getPendingItemBuffer().snapshot(21L).getFirst().returnToNetworkAmount());
 	}
 
 	@Test

@@ -101,6 +101,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	protected final TickBatchSkipState tickBatchSkipState = new TickBatchSkipState();
 	/** operationsPerTick 每游戏刻记忆化 — CachedRecipe 每次完整计算都会调用该供应商（spark XnLugba3Cw 首位热点） */
 	protected final OperationsPerTickCache operationsPerTickCache = new OperationsPerTickCache();
+	/** 工作声音处理器 — 服务端按概率播放降噪后的离心机声（替代 Mekanism withSound 客户端循环，避免破坏后残留满音量循环） */
+	private final MekCentrifugeSoundHandler soundHandler = new MekCentrifugeSoundHandler(this);
 
 	/**
 	 * TickAccelTracker 懒缓存 — Spark 优化（报告 l5oASjsSuW）
@@ -190,7 +192,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		@Nullable CachedRecipe<ItemStackToItemStackRecipe> cached,
 		@NotNull ItemStack stack
 	) {
-		return MekCentrifugeFactoryHelper.isCachedRecipeValid(cached, stack);
+		return !pbProcessor.acceptsResourceInput(stack) && MekCentrifugeFactoryHelper.isCachedRecipeValid(cached, stack);
 	}
 
 	/** 查找 SMELTING/PB 配方（委托 AbstractMekCentrifugeFactorySetupHelper） */
@@ -285,7 +287,9 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public CachedRecipe<ItemStackToItemStackRecipe> createNewCachedRecipe(
 			@NotNull ItemStackToItemStackRecipe recipe, int cacheIndex) {
 		return CentrifugeFactoryCommonLogic.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
-				inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction,
+				inputHandlers, outputHandlers, errorTracker::onErrorsChanged,
+				() -> canFunction() && !hasUnresolvedInput() && !pbProcessor.hasResourceWork(cacheIndex)
+						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()),
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
 				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress, null);
 	}
@@ -302,7 +306,11 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 
 	@Override
 	protected boolean onUpdateServer() {
-		return AbstractMekCentrifugeFactoryJdteSupport.onUpdateServer(this, inputSlots, () -> super.onUpdateServer());
+		boolean sendUpdatePacket = AbstractMekCentrifugeFactoryJdteSupport.onUpdateServer(this, inputSlots,
+				() -> super.onUpdateServer());
+		// 机器激活时按概率播放降噪后的离心机工作声（替代 Mekanism withSound 客户端循环）
+		soundHandler.maybePlayWorkSound(getActive());
+		return sendUpdatePacket;
 	}
 
 	/**
@@ -422,15 +430,19 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	}
 
 	/** 构建升级数据 — 保存完整状态供等级切换时流转，含PB升级、AE2设置和多流体槽（Task 5） */
-	@NotNull
+	@org.jetbrains.annotations.Nullable
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
+		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
+		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
-		return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
+		var data = CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
 				getEnergyContainer(), progress, energySlot, inputSlots, outputSlots,
 				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(),
 				getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
 				fluidOutputHolder);
+		data.resourceUpgrade = resourceUpgrade;
+		return data;
 	}
 
 	/** 应用升级数据 — 恢复PB升级/AE2设置/多流体槽/深拷贝槽位（委托 StateSupport） */
@@ -438,6 +450,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
 		AbstractMekCentrifugeFactoryStateSupport.parseUpgradeData(this, provider, upgradeData,
 				inputSlots, outputSlots, data -> super.parseUpgradeData(provider, data));
+		if (upgradeData instanceof CentrifugeUpgradeData data && data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
 	}
 
 	// ===== PbRecipeContext 接口实现 =====

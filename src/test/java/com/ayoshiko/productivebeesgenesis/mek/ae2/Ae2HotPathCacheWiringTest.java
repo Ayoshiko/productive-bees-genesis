@@ -328,8 +328,8 @@ class Ae2HotPathCacheWiringTest {
 		assertTrue(source.contains(
 				"!pushState.tryAcquireGeneratedFluidInsert(gameTick, MAX_DIRECT_FLUID_INSERTS_PER_TICK)"),
 				"加速子 tick 必须受每真实游戏刻配额约束");
-		assertTrue(source.contains("keyBackoff.recordSuccess(key);"),
-				"真实插入成功必须清除该 key 的退避");
+		assertTrue(source.contains("keyBackoff.recordSuccess(key, System.nanoTime(), costTracker.successDelayNanos());"),
+				"真实插入成功必须清除失败指数，慢调用仅按成本延迟");
 		assertTrue(source.contains("keyBackoff.recordFailure(key, System.nanoTime());"),
 				"零接收或抛异常必须记入该 key 的退避");
 		assertFalse(source.contains("pushState.getFluidBackoff().recordFailure("),

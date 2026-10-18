@@ -279,7 +279,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		@Nullable CachedRecipe<ItemStackToItemStackRecipe> cached,
 		@NotNull ItemStack stack
 	) {
-		return MekCentrifugeFactoryHelper.isCachedRecipeValid(cached, stack);
+		return !pbProcessor.acceptsResourceInput(stack) && MekCentrifugeFactoryHelper.isCachedRecipeValid(cached, stack);
 	}
 
 	/** 只查SMELTING配方，PB配方由tryProcessPbRecipe独立处理 */
@@ -360,7 +360,9 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	public CachedRecipe<ItemStackToItemStackRecipe> createNewCachedRecipe(
 			@NotNull ItemStackToItemStackRecipe recipe, int cacheIndex) {
 		return TileEntityExtraFactoryDelegates.createNewCachedRecipe(recipe, cacheIndex, recheckAllRecipeErrors,
-				inputHandlers, outputHandlers, errorTracker::onErrorsChanged, this::canFunction,
+				inputHandlers, outputHandlers, errorTracker::onErrorsChanged,
+				() -> canFunction() && !hasUnresolvedInput() && !pbProcessor.hasResourceWork(cacheIndex)
+						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()),
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
 				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress,
 				productivebeesgenesis$zeroTickCoalesceStates[cacheIndex]);
@@ -530,14 +532,18 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	@Override public BlockPos productivebeesgenesis$getAe2BlockPos() { return getBlockPos(); }
 
 	/** 构建升级数据 — 保存完整状态供等级切换时流转，含PB升级、AE2设置和多流体槽（Task 5） */
-	@NotNull
+	@org.jetbrains.annotations.Nullable
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
+		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
+		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		EnergyInventorySlot energySlot = ((TileEntityExtraFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
-		return CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
+		var data = CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
 				getEnergyContainer(), progress, energySlot, inputSlots, outputSlots, isSorting(),
 				getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
 				getOrCreateDelegate().getFluidOutputHolder());
+		data.resourceUpgrade = resourceUpgrade;
+		return data;
 	}
 
 	/** 应用升级数据 — 先委托父类恢复标准字段，再恢复PB升级/AE2设置/多流体槽和深拷贝槽位内容 */
@@ -548,6 +554,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 				productivebeesgenesis$getAe2StateHolder(), getOrCreateDelegate().getFluidOutputHolder(),
 				inputSlots, outputSlots, energySlot,
 				data -> super.parseUpgradeData(provider, data));
+		if (upgradeData instanceof CentrifugeUpgradeData data && data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
 	}
 
 	// ===== PbRecipeContext 接口实现 =====

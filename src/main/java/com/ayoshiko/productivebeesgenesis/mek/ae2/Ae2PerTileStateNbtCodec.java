@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 
 /**
  * AE2 per-tile 状态 NBT 编解码（纯静态，无状态）
@@ -32,10 +33,15 @@ final class Ae2PerTileStateNbtCodec {
 		tag.putBoolean(Ae2NbtKeys.NBT_KEY_DIRECT_CONTAINER_OUTPUT, holder.isDirectContainerOutputEnabled());
 		// 过滤器状态序列化到子标签，避免与 per-tile 开关键名冲突
 		Ae2InputFilter filter = holder.getAeInputFilter();
-		if (filter != null) {
+		Tag deferred = holder.getDeferredInputFilter();
+		if (deferred != null) {
+			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, deferred.copy());
+		} else if (filter != null) {
 			CompoundTag filterTag = new CompoundTag();
 			filter.save(filterTag);
 			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, filterTag);
+		} else {
+			tag.remove(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER);
 		}
 		// 标签过滤表达式独立子标签；无配置时 save 不写任何键，子标签为空则不落盘
 		CompoundTag tagFilterTag = new CompoundTag();
@@ -82,17 +88,27 @@ final class Ae2PerTileStateNbtCodec {
 		} else {
 			holder.getAeTagFilter().reset();
 		}
-		// 过滤器状态反序列化（旧存档兼容：无此键时创建空过滤器）
-		// AE2 未安装时跳过：无 AE2 环境不应创建过滤器（方块实体从存档恢复即触发构造，
-		// Issue #8 类加载安全）；save 侧用 getAeInputFilter() 不创建，天然对称
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			Ae2InputFilter filter = holder.getOrCreateInputFilter();
-			if (tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER)) {
-				filter.load(tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER));
-			} else {
-				filter.resetPersistentState();
-			}
+		Tag rawFilter = tag.get(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER);
+		holder.setDeferredInputFilter(rawFilter == null ? null : rawFilter.copy());
+		if (rawFilter == null) {
+			Ae2InputFilter filter = holder.getAeInputFilter();
+			if (filter != null) filter.resetPersistentState();
+		} else {
+			restoreInputFilter(holder);
 		}
+	}
+
+	/** 先完整校验再发布，保留缺依赖、未来版本和坏结构；不触碰已付 pending。 */
+	static boolean restoreInputFilter(Ae2OutputStateHolder holder) {
+		Tag raw = holder.getDeferredInputFilter();
+		if (raw == null) return true;
+		if (!Ae2IntegrationLoader.isAe2Loaded() || !(raw instanceof CompoundTag tag)
+				|| !Ae2InputFilterNbtCodec.isReadable(tag)) return false;
+		Ae2InputFilter filter = holder.getOrCreateInputFilter();
+		filter.resetPersistentState();
+		filter.load(tag);
+		holder.setDeferredInputFilter(null);
+		return true;
 	}
 
 	/** 保存不应进入配置卡的 AE2 输入剩余物所有权记录。 */

@@ -1,0 +1,28 @@
+// Compile the public API example against this checkout without packaging it in the mod JAR.
+// Run: ./gradlew compileResourceApiExampleJava -I examples/resource-bees/api-example.gradle --no-daemon
+allprojects {
+    afterEvaluate { p ->
+        if (p.plugins.hasPlugin('java')) {
+            def example = p.sourceSets.create('resourceApiExample')
+            example.java.srcDir(p.file('examples/resource-bees/api'))
+            example.compileClasspath += p.sourceSets.main.output
+            p.configurations.resourceApiExampleImplementation.extendsFrom(p.configurations.implementation)
+            p.configurations.resourceApiExampleCompileOnly.extendsFrom(p.configurations.compileOnly)
+            p.neoForge.addModdingDependenciesTo(example)
+            if (p.providers.gradleProperty('uselessCompatJar').isPresent()) {
+                def candidate = p.sourceSets.create('resourceUselessExample')
+                candidate.java.srcDir(p.file('examples/resource-bees/useless'))
+                candidate.compileClasspath += p.sourceSets.main.output
+                p.configurations.resourceUselessExampleImplementation.extendsFrom(p.configurations.implementation)
+                p.configurations.resourceUselessExampleCompileOnly.extendsFrom(p.configurations.compileOnly)
+                def dependencies = p.files(p.providers.gradleProperty('uselessCompatJar').get(),
+                        p.providers.gradleProperty('appliedMekanisticsCompatJar').get())
+                dependencies.each { jar ->
+                    if (!jar.isFile()) throw new GradleException("Missing resource example dependency: ${jar}")
+                }
+                p.dependencies.add('resourceUselessExampleCompileOnly', dependencies)
+                p.neoForge.addModdingDependenciesTo(candidate)
+            }
+        }
+    }
+}

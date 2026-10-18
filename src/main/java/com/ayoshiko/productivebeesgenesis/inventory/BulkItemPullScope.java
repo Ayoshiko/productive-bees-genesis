@@ -21,8 +21,8 @@ public final class BulkItemPullScope {
 		try {
 			return operation.getAsLong();
 		} finally {
-			if (previous == null) TARGET.remove();
-			else TARGET.set(previous);
+			// 保留无资产的线程条目，避免每次无限拉取重建 ThreadLocalMap.Entry。
+			TARGET.set(previous);
 		}
 	}
 

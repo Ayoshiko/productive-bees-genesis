@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceMekEnergyConfig;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -183,7 +184,7 @@ final class MekCentrifugeIoConfigHelper {
 		}
 		// 重新调用setupItemIOConfig，将tertiaryOutputSlots注册到OUTPUT DataType
 		configComponent.setupItemIOConfig(inputSlots, outputSlots, energySlot, false);
-		configComponent.setupInputConfig(TransmissionType.ENERGY, energyContainer);
+		ResourceMekEnergyConfig.setup(factory, configComponent, energyContainer);
 		// Task 6: 配置流体输出侧面（右侧）— 区分 MULTI_PER_FLUID 和 SINGLE 模式
 		// MULTI_PER_FLUID 模式：使用 IProxiedSlotInfo.FluidProxy 包装 MultiFluidTankHolder,
 		//   Ejector 通过 IProxiedSlotInfo.FluidProxy.getTanks() -> multiHolder.getTanks() 动态获取槽列表

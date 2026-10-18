@@ -74,6 +74,28 @@ class Ae2PendingItemRetryMinecraftTest {
 		verify(slot, never()).insertItem(any(ItemStack.class), any(Action.class), any(AutomationType.class));
 	}
 
+	@Test
+	void repeatedRejectionsPreserveExponentialDelayAcrossTransferAndSave() {
+		var holder = new Ae2OutputStateHolder();
+		var key = AEItemKey.of(Items.RAW_IRON);
+		String fingerprint = Ae2ItemFingerprint.encodeOrLegacy(key, registries());
+		holder.getPendingItemBuffer().enqueueReturnToNetwork(fingerprint, 5, 20);
+		var storage = mock(MEStorage.class);
+		var level = level();
+		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 20);
+		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 21);
+		assertFalse(holder.getPendingItemBuffer().hasRetryableItems(22));
+		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 23);
+		var saved = new net.minecraft.nbt.CompoundTag();
+		holder.savePendingItems(saved);
+		var restored = new Ae2OutputStateHolder();
+		restored.loadPendingItems(saved);
+		assertFalse(restored.getPendingItemBuffer().hasRetryableItems(26));
+		assertEquals(3, restored.getPendingItemBuffer().snapshot(27).getFirst().retries());
+		assertEquals(5, restored.getPendingItemBuffer().getTotalAmount());
+		verify(storage, org.mockito.Mockito.times(3)).insert(eq(key), eq(5L), eq(Actionable.SIMULATE), any());
+	}
+
 	private static Level level() {
 		Level level = mock(Level.class);
 		when(level.registryAccess()).thenReturn(registries());

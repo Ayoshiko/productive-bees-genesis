@@ -38,6 +38,12 @@ final class Ae2InputLaneFairness {
 		return Math.max(1, (slotCount + typeCount - 1) / typeCount);
 	}
 
+	/** 已占用的槽位计入份额，防止慢耗料类型抢占快耗料类型刚腾出的空槽。 */
+	static int remainingLaneBudget(int laneBudget, int occupiedLanes) {
+		if (laneBudget == UNLIMITED_LANES) return UNLIMITED_LANES;
+		return Math.max(0, laneBudget - occupiedLanes);
+	}
+
 	/**
 	 * 单个类型本轮的速率配额份额（向上取整，保证小配额下每类型至少 1 个）。
 	 * <br/>

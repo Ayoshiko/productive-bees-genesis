@@ -146,6 +146,7 @@ public final class Ae2InputFilter {
 	private volatile FuzzyEntriesCache fuzzyEntriesCache;
 	/** 精确条目 {@code AEItemKey → 槽位} 索引，按 slots+keys 两个数组身份判版本 */
 	private volatile Ae2DirectKeyIndex<AEItemKey> directKeyIndexCache;
+	private Ae2FilterMatchCache matchCache;
 
 	/** 过滤器准入后对所有允许蜜脾生效的全局无限拉取开关。 */
 	private volatile boolean unlimitedAllFallback = false;
@@ -646,6 +647,14 @@ public final class Ae2InputFilter {
 	private record FuzzyEntriesCache(String[] slots, Ae2InputFilterQuerySupport.FuzzyEntry[] entries) {
 	}
 
+	private Ae2FilterMatchCache getMatchCache(String[] currentSlots, AEItemKey[] currentKeys) {
+		if (matchCache == null || !matchCache.valid(currentSlots, currentKeys, preciseMode)) {
+			matchCache = new Ae2FilterMatchCache(currentSlots, currentKeys, preciseMode,
+					getFuzzyEntries(currentSlots));
+		}
+		return matchCache;
+	}
+
 	/**
 	 * Returns true when the key matches at least one configured entry (direct or
 	 * fuzzy), regardless of whitelist/blacklist mode. The puller uses this to rank
@@ -697,22 +706,22 @@ public final class Ae2InputFilter {
 			boolean tagFilterActive, Ae2PullDecision decision) {
 		String[] currentSlots = slots;
 		AEItemKey[] currentKeys = resolvedDirectKeys;
-		Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries = getFuzzyEntries(currentSlots);
-		boolean hasConfiguredEntries = hasConfiguredEntries(currentSlots, fuzzyEntries);
-		return Ae2InputFilterQuerySupport.pullLimitIfAllowed(key, visibleStock, ignoreNbt,
-				filterMode, preciseMode, currentSlots, fuzzyEntries, currentKeys,
-				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
-				unlimitedAllFallback, tagFilterActive, hasConfiguredEntries,
-				globalNetworkStock, globalReserveAmount, getDirectKeyIndex(currentSlots, currentKeys), decision);
-	}
-
-	private static boolean hasConfiguredEntries(String[] currentSlots,
-			Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries) {
-		for (int i = 0; i < currentSlots.length; i++) {
-			if (Ae2InputFilter.isDirectFingerprint(currentSlots[i])
-					|| (i < fuzzyEntries.length && fuzzyEntries[i] != null)) return true;
+		if (key == null) {
+			if (decision != null) decision.set(false, false, false, -1L);
+			return PULL_DISALLOWED;
 		}
-		return false;
+		Ae2FilterMatchCache matches = getMatchCache(currentSlots, currentKeys);
+		Ae2DirectKeyIndex<AEItemKey> index = getDirectKeyIndex(currentSlots, currentKeys);
+		int[] hitSlots;
+		if (!ignoreNbt && CombFuzzyMatcher.getBeeType(key) == null && index.isComplete()) {
+			hitSlots = index.slotsFor(key);
+		} else {
+			hitSlots = matches.slotsFor(key, ignoreNbt);
+		}
+		return Ae2InputFilterQuerySupport.matchedPullLimit(visibleStock, filterMode, currentSlots,
+				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
+				unlimitedAllFallback, tagFilterActive, matches.hasConfiguredEntries,
+				globalNetworkStock, globalReserveAmount, hitSlots, decision);
 	}
 
 	/** Returns the reserve floor that must be rechecked immediately before extracting this key. */

@@ -8,6 +8,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.me.storage.ExternalStorageFacade;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.inventory.BulkItemPullScope;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -40,16 +41,20 @@ class CreativeSourceCompatibilityMinecraftTest {
 		var key = AEItemKey.of(Items.RAW_IRON);
 		assertEquals(64, handler.extractItem(0, 10_000_000, false).getCount());
 		calls.set(0);
-		assertEquals(10_000_000, Ae2InputPuller.extractFromNetwork(storage, key, 10_000_000, IActionSource.empty()));
+		assertEquals(10_000_000, BulkItemPullScope.extract(key.toStack(1),
+				() -> storage.extract(key, 10_000_000, Actionable.MODULATE, IActionSource.empty())));
 		assertTrue(calls.get() <= 4, "Actual Create/AE2 path must not loop once per stack");
 		assertEquals(1, source.get().getCount());
 		assertTrue(handler.extractItem(1, 1000, false).isEmpty());
 		assertEquals(64, handler.extractItem(0, 1000, true).getCount());
 		source.set(new ItemStack(Items.DIAMOND));
-		assertEquals(0, Ae2InputPuller.extractFromNetwork(storage, key, 1000, IActionSource.empty()));
-		assertEquals(1000, Ae2InputPuller.extractFromNetwork(storage, AEItemKey.of(Items.DIAMOND), 1000, IActionSource.empty()));
+		assertEquals(0, BulkItemPullScope.extract(key.toStack(1),
+				() -> storage.extract(key, 1000, Actionable.MODULATE, IActionSource.empty())));
+		assertEquals(1000, BulkItemPullScope.extract(new ItemStack(Items.DIAMOND),
+				() -> storage.extract(AEItemKey.of(Items.DIAMOND), 1000, Actionable.MODULATE, IActionSource.empty())));
 		source.set(ItemStack.EMPTY);
-		assertEquals(0, Ae2InputPuller.extractFromNetwork(storage, key, 1000, IActionSource.empty()));
+		assertEquals(0, BulkItemPullScope.extract(key.toStack(1),
+				() -> storage.extract(key, 1000, Actionable.MODULATE, IActionSource.empty())));
 	}
 
 	@Test
@@ -86,7 +91,8 @@ class CreativeSourceCompatibilityMinecraftTest {
 			assertEquals(10_000_000, cell.extract(cobblestone, 10_000_000, mode, IActionSource.empty()));
 			assertEquals(0, cell.extract(AEItemKey.of(Items.DIAMOND), 10_000_000, mode, IActionSource.empty()));
 		}
-		assertEquals(10_000_000, Ae2InputPuller.extractFromNetwork(cell, cobblestone, 10_000_000, IActionSource.empty()));
+		assertEquals(10_000_000, BulkItemPullScope.extract(cobblestone.toStack(1),
+				() -> cell.extract(cobblestone, 10_000_000, Actionable.MODULATE, IActionSource.empty())));
 	}
 
 	@Test

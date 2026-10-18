@@ -21,11 +21,19 @@ final class Ae2KeyBackoffRegistry<K> {
 	}
 
 	void recordFailure(K key, long now) {
+		if (key != null) entry(key, now).recordFailure(now);
+	}
+
+	void recordSuccess(K key, long now, long delayNanos) {
 		if (key == null) return;
+		if (delayNanos <= 0) backoffs.remove(key);
+		else entry(key, now).recordSuccessWithDelay(now, delayNanos);
+	}
+
+	private Ae2PushBackoff entry(K key, long now) {
 		pruneIfNeeded(now);
 		Ae2PushBackoff backoff = backoffs.get(key);
 		if (backoff == null) {
-			// 仅淘汰调度记录，不持有物品；容量满时允许旧类型提前重试。
 			if (backoffs.size() >= MAX_ENTRIES) {
 				Iterator<K> keys = backoffs.keySet().iterator();
 				if (keys.hasNext()) backoffs.remove(keys.next());
@@ -33,7 +41,7 @@ final class Ae2KeyBackoffRegistry<K> {
 			backoff = new Ae2PushBackoff();
 			backoffs.put(key, backoff);
 		}
-		backoff.recordFailure(now);
+		return backoff;
 	}
 
 	int size() {

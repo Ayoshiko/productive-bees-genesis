@@ -63,6 +63,9 @@ final class Ae2InsertCostTracker {
 
 	/** 本机 insert 平均耗时（纳秒）— 0 表示尚无样本，此时不限制配额 */
 	private long averageNanos;
+	private long lastCostNanos;
+	private int samples;
+	private Object networkIdentity;
 
 	/** 本机预算所属游戏刻 */
 	private long tileTick = Long.MIN_VALUE;
@@ -81,6 +84,8 @@ final class Ae2InsertCostTracker {
 	 */
 	void record(long gameTick, long costNanos) {
 		if (costNanos < 0L) return;
+		lastCostNanos = costNanos;
+		samples = Math.min(4, samples + 1);
 		averageNanos = averageNanos <= 0L
 				? costNanos
 				: averageNanos + ((costNanos - averageNanos) >> EWMA_SHIFT);
@@ -142,6 +147,27 @@ final class Ae2InsertCostTracker {
 		return quota <= 1L ? 1 : (int) quota;
 	}
 
+	/** 短暂抖动不算失败；持续偏慢或严重单次阻塞才对成功键施加成本延迟。 */
+	long successDelayNanos() {
+		if (lastCostNanos <= Ae2GlobalInsertBudget.SLOW_INSERT_NANOS) return 0;
+		boolean severe = lastCostNanos >= 5_000_000L;
+		if (!severe && (samples < 4 || averageNanos <= Ae2GlobalInsertBudget.SLOW_INSERT_NANOS)) return 0;
+		long cost = severe ? Math.max(lastCostNanos, averageNanos) : averageNanos;
+		long ticks = Math.min(20, 1 + (cost - 1) / QUOTA_BUDGET_NANOS);
+		return ticks * 50_000_000L;
+	}
+
+	void useNetwork(Object identity) {
+		if (networkIdentity != identity) {
+			reset();
+			networkIdentity = identity;
+		}
+	}
+
+	void recordForNetwork(Object identity, long gameTick, long costNanos) {
+		if (networkIdentity == identity) record(gameTick, costNanos);
+	}
+
 	/** 当前是否判定所在 ME 网络为昂贵网络（诊断日志用） */
 	boolean isExpensiveNetwork() {
 		return averageNanos > HEALTHY_INSERT_NANOS;
@@ -160,6 +186,9 @@ final class Ae2InsertCostTracker {
 	/** 方块销毁/重建时清空统计，避免旧网络的成本估计影响新网络 */
 	void reset() {
 		averageNanos = 0L;
+		lastCostNanos = 0L;
+		samples = 0;
+		networkIdentity = null;
 		tileTick = Long.MIN_VALUE;
 		tileSpentNanos = 0L;
 		tileInsertsThisTick = 0;

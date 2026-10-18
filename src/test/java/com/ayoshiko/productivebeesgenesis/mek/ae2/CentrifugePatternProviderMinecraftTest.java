@@ -234,7 +234,7 @@ class CentrifugePatternProviderMinecraftTest {
 				entry.set(fixture.output, fixture.output.getStack(), iron, fixture.output.getCount(),
 						0, 0, "iron");
 				int direct = Ae2OutputCommitter.tryPushSlotDirect(entry, network, IActionSource.empty(),
-						fixture.holder.getOutputLedger());
+						fixture.holder.getOutputLedger(), new com.ayoshiko.productivebeesgenesis.logistics.OutputCustody(() -> {}));
 				external += fixture.storage.extract(iron, 42, Actionable.MODULATE, IActionSource.empty());
 				assertEquals(inserted.get(), direct);
 				assertEquals(42, direct + external);

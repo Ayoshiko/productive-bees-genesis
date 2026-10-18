@@ -12,6 +12,20 @@ import org.junit.jupiter.api.Test;
  * 因此仅断言"确定跳过 < 0.75×"与"确定恢复 >= 1.25×"两个稳定区间。
  */
 class Ae2PushBackoffTest {
+	@Test
+	void successfulCostDelayNeverAccumulatesFailureExponent() {
+		var backoff = new Ae2PushBackoff();
+		for (int i = 1; i <= 20; i++) {
+			long now = i * 1_000_000_000L;
+			backoff.recordSuccessWithDelay(now, 50_000_000);
+			assertTrue(backoff.shouldSkip(now + 49_999_999));
+			assertFalse(backoff.shouldSkip(now + 50_000_000));
+		}
+		backoff.recordFailure(30_000_000_000L);
+		assertFalse(backoff.shouldSkip(30_062_500_000L));
+		backoff.recordSuccessWithDelay(30_062_500_001L, 0);
+		assertFalse(backoff.shouldSkip(30_062_500_001L));
+	}
 
 	@Test
 	void failuresUseProgressiveWindowsAndSuccessResetsImmediately() {

@@ -57,8 +57,14 @@ public final class BeeInfoHelper {
 			String flowerItem,
 			String flowerFluid,
 			String flowerBlock,
-			boolean inverseFlower
+			boolean inverseFlower,
+			com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower container
 	) {
+		public FlowerPreference(String flowerType, String flowerTag, String flowerItem, String flowerFluid,
+				String flowerBlock, boolean inverseFlower) {
+			this(flowerType, flowerTag, flowerItem, flowerFluid, flowerBlock, inverseFlower,
+					flowerFluid.isEmpty() ? null : com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.legacyFluid(flowerFluid));
+		}
 		/** flowerType 常量：方块型花朵（默认） */
 		public static final String TYPE_BLOCKS = "blocks";
 
@@ -76,7 +82,7 @@ public final class BeeInfoHelper {
 		 */
 		public boolean hasFlowerDefinition() {
 			return !flowerTag.isEmpty() || !flowerItem.isEmpty()
-					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty();
+					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty() || container != null;
 		}
 	}
 
@@ -418,7 +424,11 @@ public final class BeeInfoHelper {
 					nbt.getString("flowerItem"),
 					nbt.getString("flowerFluid"),
 					nbt.getString("flowerBlock"),
-					nbt.getBoolean("inverseFlower")
+					nbt.getBoolean("inverseFlower"),
+					nbt.contains(com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.NBT_KEY)
+							? com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.fromData(nbt)
+							: nbt.getString("flowerFluid").isEmpty() ? null
+							: com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.legacyFluid(nbt.getString("flowerFluid"))
 			);
 			}
 			// 缓存查询结果（含 EMPTY，避免重复查询不存在的蜜蜂类型）

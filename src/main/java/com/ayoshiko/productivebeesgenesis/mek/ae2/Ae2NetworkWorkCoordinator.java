@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMaps;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -10,7 +11,8 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * 按 ME 存储网络协调昂贵工作的共享调度器。
  * <p>
- * 健康网络不参与调度；检测到慢操作后，同一网络每刻只放行一个活跃宿主，
+ * 输入与输出分别共享网络预算和活跃宿主轮次，避免慢输出阻塞健康输入。
+ * 健康方向不限制宿主轮次；检测到慢操作后，同一网络该方向每刻只放行一个活跃宿主，
  * 并通过持久轮转游标避免固定 tick 顺序造成饥饿。不同网络拥有独立预算，
  * 不再因一套病态外部存储拖慢无关网络。
  * <p>
@@ -35,7 +37,7 @@ final class Ae2NetworkWorkCoordinator {
 	private static final int EWMA_SHIFT = 3;
 	private static final AtomicLong NEXT_WORKER_ID = new AtomicLong(1L);
 	private static final ReferenceQueue<Object> STALE_NETWORKS = new ReferenceQueue<>();
-	private static final ConcurrentHashMap<IdentityWeakReference, NetworkState> NETWORKS =
+	private static final ConcurrentHashMap<IdentityWeakReference, NetworkStates> NETWORKS =
 			new ConcurrentHashMap<>();
 
 	private Ae2NetworkWorkCoordinator() {
@@ -49,7 +51,7 @@ final class Ae2NetworkWorkCoordinator {
 	/**
 	 * 尝试取得当前网络本刻的工作令牌。
 	 *
-	 * @return 健康网络恒为 true；昂贵网络仅轮到的宿主且预算未耗尽时为 true
+	 * @return 预算未耗尽，且网络健康或本刻轮到该宿主时为 true
 	 */
 	static boolean tryAcquire(Object networkIdentity, long workerId, long gameTick) {
 		return tryAcquireResolved(resolve(networkIdentity), workerId, gameTick);
@@ -68,18 +70,54 @@ final class Ae2NetworkWorkCoordinator {
 		return networkIdentity == null ? null : stateFor(networkIdentity);
 	}
 
+	/** 新取料探测按等待顺序轮转；每网每真实刻最多四次，不遍历全部宿主。 */
+	static boolean tryAcquireResourceProbe(Object networkState, long workerId, long gameTick) {
+		if (!(networkState instanceof NetworkStates states) || workerId <= 0L) return false;
+		var probes = states.resourceProbes;
+		synchronized (probes) {
+			if (probes.turnTick != gameTick || probes.turnWorkerId != workerId) {
+				probes.waiting.put(workerId, gameTick);
+			}
+			if (probes.turnTick != gameTick) {
+				probes.turnTick = gameTick;
+				probes.used = 0;
+				probes.turnWorkerId = 0L;
+				while (!probes.waiting.isEmpty()) {
+					long next = probes.waiting.firstLongKey();
+					long seen = probes.waiting.removeFirstLong();
+					if (gameTick >= seen && gameTick - seen > ResourceProbeState.WAITING_TICKS) continue;
+					probes.turnWorkerId = next;
+					break;
+				}
+			}
+			if (probes.turnWorkerId != workerId || probes.used >= ResourceProbeState.MAX_PER_TICK) return false;
+			probes.used++;
+			return true;
+		}
+	}
+
 	/**
 	 * 用已解析的状态句柄取令牌（{@link #resolve(Object)} 的配套入口）。
 	 *
-	 * @return 健康网络恒为 true；昂贵网络仅轮到的宿主且预算未耗尽时为 true
+	 * @return 预算未耗尽，且网络健康或本刻轮到该宿主时为 true
 	 */
 	static boolean tryAcquireResolved(Object networkState, long workerId, long gameTick) {
-		if (!(networkState instanceof NetworkState state) || workerId <= 0L) return false;
+		if (!(networkState instanceof NetworkStates states)) return false;
+		return tryAcquire(states.output, workerId, gameTick);
+	}
+
+	static boolean tryAcquireExtractResolved(Object networkState, long workerId, long gameTick) {
+		if (!(networkState instanceof NetworkStates states)) return false;
+		return tryAcquire(states.input, workerId, gameTick);
+	}
+
+	private static boolean tryAcquire(NetworkState state, long workerId, long gameTick) {
+		if (workerId <= 0L) return false;
 		synchronized (state) {
 			state.touchWorker(workerId, gameTick);
-			if (!state.isExpensive()) return true;
 			state.refreshBudget(gameTick);
 			if (state.spentNanos >= NETWORK_BUDGET_NANOS) return false;
+			if (!state.isExpensive()) return true;
 			if (state.turnTick != gameTick) {
 				state.turnTick = gameTick;
 				state.turnWorkerId = state.selectNextWorker(gameTick);
@@ -103,10 +141,21 @@ final class Ae2NetworkWorkCoordinator {
 
 	/** 用已解析的状态句柄记录成本（{@link #resolve(Object)} 的配套入口）。 */
 	static void recordResolvedCost(Object networkState, long gameTick, long costNanos, long thresholdNanos) {
-		if (!(networkState instanceof NetworkState state) || costNanos < 0L) return;
+		if (!(networkState instanceof NetworkStates states)) return;
+		recordCost(states.output, gameTick, costNanos, thresholdNanos);
+	}
+
+	static void recordResolvedExtractCost(Object networkState, long gameTick, long costNanos, long thresholdNanos) {
+		if (!(networkState instanceof NetworkStates states)) return;
+		recordCost(states.input, gameTick, costNanos, thresholdNanos);
+	}
+
+	private static void recordCost(NetworkState state, long gameTick, long costNanos, long thresholdNanos) {
+		if (costNanos < 0L) return;
 		long healthThreshold = Math.max(0L, thresholdNanos);
 		long budgetExcess = Math.max(0L, costNanos - healthThreshold);
-		long healthExcess = budgetExcess;
+		// 健康调用的实际余量参与恢复；只累计正超额会把偶发尖峰拖成长时间轮转。
+		long healthExcess = costNanos - healthThreshold;
 		synchronized (state) {
 			state.refreshBudget(gameTick);
 			state.spentNanos = saturatingAdd(state.spentNanos, budgetExcess);
@@ -114,7 +163,9 @@ final class Ae2NetworkWorkCoordinator {
 				state.averageExcessNanos = healthExcess;
 				state.hasCostSample = true;
 			} else {
-				state.averageExcessNanos += (healthExcess - state.averageExcessNanos) >> EWMA_SHIFT;
+				// 分别移位，避免两个有符号极值相减溢出。
+				state.averageExcessNanos = state.averageExcessNanos
+						- (state.averageExcessNanos >> EWMA_SHIFT) + (healthExcess >> EWMA_SHIFT);
 			}
 		}
 	}
@@ -122,8 +173,17 @@ final class Ae2NetworkWorkCoordinator {
 	/** 主动移除宿主在旧网络上的活跃资格；网络状态本身仍由弱键自动回收。 */
 	static void release(Object networkIdentity, long workerId) {
 		if (networkIdentity == null || workerId <= 0L) return;
-		NetworkState state = NETWORKS.get(new IdentityWeakReference(networkIdentity));
-		if (state == null) return;
+		NetworkStates states = NETWORKS.get(new IdentityWeakReference(networkIdentity));
+		if (states == null) return;
+		release(states.output, workerId);
+		release(states.input, workerId);
+		synchronized (states.resourceProbes) {
+			states.resourceProbes.waiting.remove(workerId);
+			if (states.resourceProbes.turnWorkerId == workerId) states.resourceProbes.turnWorkerId = 0L;
+		}
+	}
+
+	private static void release(NetworkState state, long workerId) {
 		synchronized (state) {
 			state.workerLastSeen.remove(workerId);
 			if (state.lastTouchedWorkerId == workerId) state.lastTouchedWorkerId = 0L;
@@ -132,7 +192,7 @@ final class Ae2NetworkWorkCoordinator {
 	}
 
 	static long spentNanosForTest(Object networkIdentity, long gameTick) {
-		NetworkState state = stateFor(networkIdentity);
+		NetworkState state = stateFor(networkIdentity).output;
 		synchronized (state) {
 			state.refreshBudget(gameTick);
 			return state.spentNanos;
@@ -142,7 +202,7 @@ final class Ae2NetworkWorkCoordinator {
 	/** 已登记的活跃宿主条目数；供测试验证周期性回收确实生效（内存不随历史机器数量增长）。 */
 	static int workerCountForTest(Object networkIdentity) {
 		if (networkIdentity == null) return 0;
-		NetworkState state = stateFor(networkIdentity);
+		NetworkState state = stateFor(networkIdentity).output;
 		synchronized (state) {
 			return state.workerLastSeen.size();
 		}
@@ -160,14 +220,14 @@ final class Ae2NetworkWorkCoordinator {
 		clearAll();
 	}
 
-	private static NetworkState stateFor(Object networkIdentity) {
+	private static NetworkStates stateFor(Object networkIdentity) {
 		reapStaleNetworks();
 		IdentityWeakReference lookup = new IdentityWeakReference(networkIdentity);
-		NetworkState existing = NETWORKS.get(lookup);
+		NetworkStates existing = NETWORKS.get(lookup);
 		if (existing != null) return existing;
 		IdentityWeakReference stored = new IdentityWeakReference(networkIdentity, STALE_NETWORKS);
-		NetworkState created = new NetworkState();
-		NetworkState raced = NETWORKS.putIfAbsent(stored, created);
+		NetworkStates created = new NetworkStates();
+		NetworkStates raced = NETWORKS.putIfAbsent(stored, created);
 		return raced == null ? created : raced;
 	}
 
@@ -181,6 +241,21 @@ final class Ae2NetworkWorkCoordinator {
 	private static long saturatingAdd(long left, long right) {
 		if (right <= 0L) return left;
 		return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+	}
+
+	private static final class NetworkStates {
+		private final NetworkState output = new NetworkState();
+		private final NetworkState input = new NetworkState();
+		private final ResourceProbeState resourceProbes = new ResourceProbeState();
+	}
+
+	private static final class ResourceProbeState {
+		private static final int MAX_PER_TICK = 4;
+		private static final long WAITING_TICKS = 200L;
+		private final Long2LongLinkedOpenHashMap waiting = new Long2LongLinkedOpenHashMap();
+		private long turnTick = Long.MIN_VALUE;
+		private long turnWorkerId;
+		private int used;
 	}
 
 	private static final class NetworkState {

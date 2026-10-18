@@ -5,6 +5,16 @@
   "pages": [
     {
       "type": "patchouli:text",
+      "title": "原生侧面配置中的扩展资源",
+      "text": "打开机器的 Mekanism 原生侧面配置窗口，扩展资源页与物品、流体、ENERGY 并列；每个资源页仅在对应模组加载时出现。化学品使用 MEK 原生化学品侧面图标，其他资源页使用对应模组的代表性物品图标并居中。蓝色为输出，灰色为关闭。自动弹出送相邻兼容容器，关闭仍允许对应管道提取；空气主动安全供气。FE 使用原生 ENERGY 页或配置器：INPUT 充工作电池，OUTPUT 出 FE 产物，INPUT_OUTPUT 同面支持两者，NONE 关闭。两个容器分开，输出不抽工作电量。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "配置卡与机器升级",
+      "text": "设置随存档、工厂安装器、拆卸／挖掘的机器物品和合成升级保存。MEK 配置卡 Shift 右键读取，普通右键粘贴到兼容机器；只复制侧面和自动弹出设置，不复制资源账户、余额或 EMC 收款人。多机器合成取矩阵顺序首份设置。"
+    },
+    {
+      "type": "patchouli:text",
       "title": "先用默认设置",
       "text": "第一次游玩不需要翻配置文件，也不用记英文键名。在模组列表中选择“资源蜜蜂：创世”，点击配置即可看到中文分类。普通玩家通常只会用到玩法、机器和客户端画面这三页。"
     },
@@ -17,6 +27,11 @@
       "type": "patchouli:text",
       "title": "全部花源与平衡预设",
       "text": "玩法设置中的“蜂箱生产全部花源”（apiaryProduceAllFlowers）默认关闭，悖论无限预设开启。开启后，多花源蜜蜂一轮分别生产喂食槽中所有不同的有效花源；空槽、禁用槽和重复花源不增加次数，独立流体不按花源数倍增。想单独调整时，先切换并保存为“自定义”；切换时会继承原预设实际生效的值。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "高倍加速预算",
+      "text": "玩法设置中，每真实刻默认兑现 2048 个虚拟 tick，上限 4096；银行默认暂存 8192，上限 32768。更大银行只缓冲积压，不直接提高产速；高 MSPT 时仍降低兑现预算。已有配置保留旧值。"
     },
     {
       "type": "patchouli:text",
@@ -37,6 +52,143 @@
       "type": "patchouli:text",
       "title": "整合包作者",
       "text": "只有批量分发、脚本替换或迁移旧配置时才需要查看原始键名。世界玩法、机器和容量设置保存在存档的服务器配置目录中；请以当前配置界面和新生成文件的中文注释为准。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "做一只资源蜜蜂",
+      "text": "先跑通蜂箱 → 蜜脾 → Genesis 扩展资源离心 → 氢气。氢气、FE 等只是内置适配示例；其他模组注册的有效 AEKey 也可通过通用 ae_key 产物注册。没有 AEKey 的新类型仍需额外适配。"
+    },
+    {
+      "type": "patchouli:link",
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/tree/main-neo/1.21.1/examples/resource-bees",
+      "link_text": "打开 GitHub 示例",
+      "text": "示例不在正式模组 JAR 中。请从仓库下载与模组版本相符的 datapack 和 resourcepack。前者包含蜂种／配方，后者包含客户端名称。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "选择生产方式",
+      "text": "hydrogen 先产蜜脾再离心；energy 直接在蜂箱产 FE。energy_comb 是另一只先产蜜脾的蜂。createComb 只控制蜜脾外观，不会自动创建蜂箱配方。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "1. 放数据包",
+      "text": "datapack 放入存档 datapacks，根部为 pack.mcmeta 与 data。resourcepack 放入客户端 resourcepacks 并启用，根部为 pack.mcmeta 与 assets。1.21.1 格式分别为 48 和 34。开发 runClient 自动加载两者。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "一起添加名称",
+      "text": "语言文件在 assets/productivebees/lang。example:hydrogen 的键是 entity.productivebees.hydrogen_bee；中英文都要填。PB 使用固定 productivebees 前缀与蜂种路径，不使用 example。换名时同步配方和语言键。启用语言包后按 F3+T 重载。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "2. 定义蜂种",
+      "text": "data/example/productivebees/hydrogen.json 定义 example:hydrogen。primaryColor / secondaryColor 是颜色，flowerBlock 为 minecraft:iron_block，createComb 为 true。新增蜂种后重新进入世界。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "3. 蜂箱产蜜脾",
+      "text": "hydrogen_honeycomb.json 放在 data/example/recipe。类型是 productivebees:advanced_beehive，ingredient 为 example:hydrogen，结果为 configurable_honeycomb，并带 productivebees:bee_type = example:hydrogen。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "4. 离心产氢气",
+      "text": "hydrogen_centrifuging.json 使用 productivebeesgenesis:resource_centrifuging，bee 为 example:hydrogen。outputs 填 kind: chemical、id: mekanism:hydrogen、amount: \"100\"、chance: 1.0；processing_time 为 20。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "让机器开始工作",
+      "text": "机械蜂箱放氢气蜂，采蜜槽放铁块并供电。产出的蜜脾放 Genesis 机械离心机；单脾基础产 100 mB，蜜脾块自动按四份。示例不自然生成，生存获取另配 PB 繁殖或转化配方。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "扩展产出的支持范围",
+      "text": "Genesis 扩展资源暂未适配 PB 原版蜂箱和离心机，请使用 Genesis 机械设备。PB 普通产物仍按原配方工作。相关蜂笼、蛋、蜜脾和蜂槽会默认显示提示。扩展功能问题请反馈 Genesis，避免误报 PB 上游。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "直接进入 ME",
+      "text": "安装 AE2 + Applied Mekanistics，线缆直接接离心机，并准备供电、频道和化学品存储。机器侧面“扩展资源”TAB 显示待输出量；已入网部分在 ME 终端查看。不需要额外方块。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "显示与原生输出",
+      "text": "扩展资源 TAB 默认为生产监控，可切换待输出库存。产率按近 5 秒实际成功结算量计算，含升级与加速；空库存、蜜脾返网后仍显示已观察资源及等待状态，停产归零。只在窗口打开时同步变化，Jade 不同步产率。化学品罐显示待输出库存。“弹空”尝试 ME 或相邻容器，拒收余量保留。图标不可取出，已入网库存去 ME 查看。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "直接产 FE",
+      "text": "参考 energy.json 和 energy_production.json，花源用铜块。类型为 resource_production，输出 kind: energy、energy_type: FE、amount: \"1000\"。不需离心，入网需要 AE2 + Applied Flux；产物与机器工作用电分开。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "直接产极高压闪电",
+      "text": "参考 lightning_ehv 的两份文件。输出 kind: lightning、tier: extreme_high_voltage、amount: \"1000\"。安装 AE2 Lightning Tech 及前置，使用对应电压存储。高压填 high_voltage，两种电压不互换。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "改哪些字段",
+      "text": "amount 写正整数字符串，chance 写 0..1 数字；20 tick 为一秒。改蜂种时同步文件名、bee、ingredient 和 bee_type。flowerBlock / flowerItem 填花源 ID；flowerTag 不加 #。块份数与升级由机器计算。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "注释与 KubeJS",
+      "text": "JSON 示例使用 _comment 写说明，不能写 // 注释。蜂种 JSON 保留；对应 JS 放入 kubejs/server_scripts，删除它替代的配方 JSON，再 /reload。hydrogen.js 替代两份配方，energy.js 演示两只蜂的三份配方。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "多种产物",
+      "text": "mixed 保留同蜂种的 PB 蜂箱和直接资源配方。mixed_essence 演示精华转换。combined 设置 include_pb_outputs: true，并保留匹配的普通 PB 离心配方；同次只扣一次输入和费用，缺普通配方则暂停。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "其他资源与桥接",
+      "text": "魔源：Ars Nouveau + Ars Énergistique；灵魂：Industrial Foregoing Souls + Soulplied Energistics；空气：PneumaticCraft + Applied Pneumatics；经验：ExperienceLib + Applied Experienced。入 ME 均还需 AE2 和对应存储。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "原生资源说明",
+      "text": "空气 1000 原始单位为 1 L，管路须封闭。EMC 自动入账机主的 ProjectE 账户，无需 ME 或 EMC-ME 扩展。支持最多 4096 位精确整数；安装 Project Expansion 时采用其短格式。资源原生能力仍可供外部设备提取。产物 FE 可弹空到相邻 FE 接收方，与工作电池分开。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "多人 EMC 收款人",
+      "text": "同时安装 ProjectE 与 FTB Teams 时才显示收款人按钮，机主或管理员可点击资源窗口的“收款人”，循环选择同队在线玩家或返回机主；空库存也能切换。悬停查看当前收款身份与状态。离线、退队或能力不可用时 EMC 留在机器，恢复后继续入账。未知写入隔离；界面通知重试不会重复加钱。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "没跑起来时",
+      "text": "找不到蜂种：查目录、ID、JSON，再重新进世界。等待花源：核对采蜜槽与开关。资源未入网：打开资源面板检查桥接、频道、供电、存储。普通物品盘不能存化学品或闪电。扩展资源没有可用出口或暂存额度不足时，机械离心机把原蜜脾交给持久化返还缓冲，ME 可接收时返网，并暂停该类蜜脾的新取料。出口恢复后自动续料；已付周期保留原配方、种子和完整输入身份，未知扣料／接收结果继续保管，不自动重放。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "通用键与 Java",
+      "text": "ae_key 示例用 AE2 自带 ae2:i 键产钻石。其他类型需实际 type、id、完整 data 和字符串 amount，只走 ME。Java 开发者参考 ResourceBeeApiExample.java；普通作者使用 JSON 或 KubeJS 即可。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "其他机器与恢复",
+      "text": "Useless 2.4.6 原生 API 可接确定性独立资源离心：以 PB 离心机为模具，按炉子自身规则加工，需 AE2、键桥和存储。JDTE 0.6.4.3 官方版仍待接口；本地 API v3 仅接配方产物，使用自身周期暂存和 AE 输出升级回网，未知接收暂停重发。Genesis 不再读取 .session 标记；未知生产只暂停原槽，未知输出只暂停对应资源，其余继续。缺依赖蜜脾不进入万象候选或离心输入，已有蜜脾转入返还缓冲。真实损坏或保存故障仍保管资产；跨存储无断电原子保证。第三方遵循自身恢复规则。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "容器作为采蜜花源",
+      "text": "机械蜂箱与工厂可按容器内容匹配。蜂种 JSON 添加 flowerResource：kind 为 chemical，id 为 mekanism:hydrogen，amount 为字符串 \"1000\"。放入提供化学品能力且储有足量氢气的罐或桶，空罐、其他资源与不足量均拒绝。不要同时保留旧花源字段。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "液体、FE 与通用资源",
+      "text": "fluid 使用液体 ID，energy 使用 energy_type: FE；液体和化学品可写 #资源标签。ae_key 使用完整键身份，放入真实储有该资源的 ME 元件；包裹图标不算库存。已有 flowerFluid 也支持流体能力容器。其他模组原生物品须提供对应能力。"
+    },
+    {
+      "type": "patchouli:text",
+      "title": "容器花源不会消耗",
+      "text": "amount 为最低量，默认 \"1\"。采蜜不抽取资源、不消耗容器，不合并堆叠或采蜜槽；单个内部储槽须达标。JEI 用 AE2 元件展示资源和最低含量；对应桥与兼容元件可用时，展示副本内含资源。气体桶、化学品罐及对应能力容器按内容匹配。禁用格不匹配，内容变化最迟下个真实 tick 重验。新字段仅支持 Genesis 机械宿主。"
+    },
+    {
+      "type": "patchouli:link",
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_hydrogen.json",
+      "link_text": "查看容器花源示例",
+      "text": "仓库另有 container_water、container_energy、container_ae_key 示例，已配套中英文名称。KubeJS 配方注册不变，花源仍放在蜂种 JSON 中。"
     }
   ]
 }

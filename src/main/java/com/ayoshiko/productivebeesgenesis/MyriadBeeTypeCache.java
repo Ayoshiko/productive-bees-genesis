@@ -207,7 +207,8 @@ public final class MyriadBeeTypeCache {
 		CompiledBeeTypeFilter filter = CompiledBeeTypeFilter.compile(mode.name(), filteredList);
 
 		List<ResourceLocation> newCache = AbstractCombEventHandler.buildBeeTypeCache(
-				level, excluded, beeType -> filter.allows(beeType.toString()));
+				level, excluded, beeType -> filter.allows(beeType.toString())
+						&& com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission.allowsBee(level.getServer(), beeType));
 
 		if (newCache.isEmpty()) {
 			logEmptyResult(filter, currentTick);

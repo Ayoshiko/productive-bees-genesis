@@ -6,9 +6,8 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
+import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
-import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
@@ -211,7 +210,7 @@ public final class AeOutputOverlay {
 		if (screenTarget == null) return null;
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				TransmissionType type = getCurrentType(sideConfig);
+				TransmissionType type = GuiResourceSideConfig.nativeType(sideConfig);
 				return new OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(), type);
 			}
 		}
@@ -229,26 +228,6 @@ public final class AeOutputOverlay {
 		if (!(gui.getMenu() instanceof MekanismTileContainer<?> container)) return null;
 		if (!(container.getTileEntity() instanceof IAe2OutputHostBase)) return null;
 		return new ScreenTarget(gui, container.getTileEntity());
-	}
-
-	/**
-	 * 获取侧面配置窗口当前激活的 TransmissionType
-	 * <br/>
-	 * Mekanism 的 GuiConfigTypeTab 中，激活的 Tab 其 visible=false（按钮隐藏表示当前选中）。
-	 * 优先查找不可见的 Tab，其次回退到第一个可见 Tab，最终回退到 ITEM。
-	 */
-	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab && !tab.visible) {
-				return tab.getTransmissionType();
-			}
-		}
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab) {
-				return tab.getTransmissionType();
-			}
-		}
-		return TransmissionType.ITEM;
 	}
 
 	/**

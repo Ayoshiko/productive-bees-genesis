@@ -1,0 +1,7 @@
+{
+  "type": "productivebeesgenesis:resource_production",
+  "bee": "example:copper_energy",
+  "outputs": [
+    { "kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1 }
+  ]
+}

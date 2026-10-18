@@ -60,6 +60,8 @@ public class BeeEntityRenderer {
 
 	/** 当前 GUI 蜜蜂实体批次使用的缓冲源；仅在客户端渲染线程访问 */
 	private MultiBufferSource.BufferSource activeBufferSource;
+	private BeePreviewBuffers previewBuffers;
+	private long bufferGeneration = -1;
 
 	/** 是否处于批量实体渲染阶段 */
 	private boolean batchActive;
@@ -72,7 +74,15 @@ public class BeeEntityRenderer {
 	 */
 	public void beginBatch() {
 		if (batchActive) return;
-		activeBufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
+		long generation = BeeEntityCache.generation();
+		if (previewBuffers == null || bufferGeneration != generation) {
+			close();
+			previewBuffers = new BeePreviewBuffers();
+			bufferGeneration = generation;
+		}
+		// 先完成 GUI 背景及选择框，避免共享缓冲在专用实体批次之后覆盖预览。
+		Minecraft.getInstance().renderBuffers().bufferSource().endBatch();
+		activeBufferSource = previewBuffers;
 		batchActive = true;
 		RenderSystem.enableDepthTest();
 	}
@@ -88,12 +98,25 @@ public class BeeEntityRenderer {
 			if (activeBufferSource != null) {
 				activeBufferSource.endBatch();
 			}
+		} catch (RuntimeException | Error failure) {
+			close();
+			throw failure;
 		} finally {
 			activeBufferSource = null;
 			batchActive = false;
 			RenderSystem.disableDepthTest();
 			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 		}
+	}
+
+	/** 由所属 GUI 的 removed 入口调用；只在渲染线程释放原生缓冲。 */
+	public void close() {
+		if (previewBuffers != null) {
+			previewBuffers.close();
+			previewBuffers = null;
+		}
+		activeBufferSource = null;
+		batchActive = false;
 	}
 
 	/**

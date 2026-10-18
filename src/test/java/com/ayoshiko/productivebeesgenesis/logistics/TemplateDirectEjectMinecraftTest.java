@@ -18,6 +18,14 @@ import org.junit.jupiter.api.Test;
 
 @Tag("minecraft")
 class TemplateDirectEjectMinecraftTest {
+	private static TileEntityMekanism ownerWithCustody() {
+		var tile = mock(TileEntityMekanism.class);
+		var component = mock(GenesisTileComponentEjector.class);
+		when(component.outputCustody()).thenReturn(new OutputCustody(() -> {}));
+		when(tile.getComponents()).thenReturn(List.of(component));
+		return tile;
+	}
+
 	@Test
 	void actualNeighborAcceptsExplicitAmountAndPreservesTheTemplate() {
 		var target = new ItemStackHandler(1) {
@@ -30,7 +38,7 @@ class TemplateDirectEjectMinecraftTest {
 			var ejector = mock(TileComponentEjector.class);
 			var config = mock(ConfigInfo.class);
 			when(ejector.isEjecting(config, TransmissionType.ITEM)).thenReturn(true);
-			var fast = new FastItemEjector(mock(TileEntityMekanism.class));
+			var fast = new FastItemEjector(ownerWithCustody());
 			var template = new ItemStack(Items.DIAMOND);
 			assertEquals(13, fast.pushDirect(ejector, config, template, 50, 11L));
 			assertEquals(13, target.getStackInSlot(0).getCount());
@@ -41,7 +49,7 @@ class TemplateDirectEjectMinecraftTest {
 	@Test
 	void disabledOrMissingTargetDoesNotCopyTheTemplate() {
 		var template = spy(new ItemStack(Items.DIAMOND));
-		var fast = new FastItemEjector(mock(TileEntityMekanism.class));
+		var fast = new FastItemEjector(ownerWithCustody());
 		assertEquals(0, fast.pushDirect(mock(TileComponentEjector.class), null, template, 4096, 12L));
 		assertEquals(0, IFastEjectHost.push(null, template, 4096));
 		verify(template, never()).copyWithCount(anyInt());

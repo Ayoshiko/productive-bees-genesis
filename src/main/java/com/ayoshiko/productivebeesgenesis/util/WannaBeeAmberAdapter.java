@@ -74,6 +74,11 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			long[] productionCounts, float multiplier) {
+		return sampleBatches(level, origin, feeder, productionCounts, multiplier, false);
+	}
+
+	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
+			long[] productionCounts, float multiplier, boolean strict) {
 		if (level == null || origin == null || feeder == null || productionCounts == null
 				|| !Float.isFinite(multiplier) || multiplier <= 0.0F) return List.of();
 		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
@@ -97,6 +102,7 @@ public final class WannaBeeAmberAdapter {
 					LootPool pool = createLootPool(level, origin, candidates, random);
 					sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
 				} catch (Exception e) {
+					if (strict) throw new IllegalStateException("Wanna Bee resource batch generation failed", e);
 					LogThrottle.warn("wanna_bee_amber_loot",
 							"Wanna Bee 无法读取封存生物战利品，跳过本次代表事件: origin={}", origin, e);
 				}
@@ -105,8 +111,12 @@ public final class WannaBeeAmberAdapter {
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());
 		for (AggregatedDrop drop : aggregated) {
-			int count = drop.count >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) drop.count;
-			if (count > 0) result.add(drop.template.copyWithCount(count));
+			long remaining = drop.count;
+			while (remaining > 0) {
+				int count = (int) Math.min(Integer.MAX_VALUE, remaining);
+				result.add(drop.template.copyWithCount(count));
+				remaining -= count;
+			}
 		}
 		return result;
 	}

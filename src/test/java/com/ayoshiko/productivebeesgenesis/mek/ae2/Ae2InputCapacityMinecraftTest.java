@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import java.util.ArrayList;
 import java.util.List;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -41,6 +42,64 @@ class Ae2InputCapacityMinecraftTest {
 		assertEquals(64, slot.getLimit(smaller));
 		assertCapacityMatchesInsertion(slot, smaller);
 		assertEquals(256, slot.getLimit(regular));
+	}
+
+	@Test
+	void consumedLanesKeepTheirCompleteComponentIdentityAcrossPulls() {
+		var regularSlot = BasicInventorySlot.at(null, 0, 0);
+		var modifiedSlot = BasicInventorySlot.at(null, 0, 0);
+		var regular = new ItemStack(Items.HONEYCOMB);
+		var modified = regular.copy();
+		modified.set(DataComponents.MAX_STACK_SIZE, 16);
+		regularSlot.setStack(regular);
+		modifiedSlot.setStack(modified);
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(List.of(regularSlot, modifiedSlot), 2);
+		regularSlot.setStack(ItemStack.EMPTY);
+		modifiedSlot.setStack(ItemStack.EMPTY);
+		snapshot.capture(new ArrayList<>(List.of(regularSlot, modifiedSlot)), 2);
+		assertEquals(0, snapshot.preferredStart(AEItemKey.of(regular), 1));
+		assertEquals(1, snapshot.preferredStart(AEItemKey.of(modified), 0));
+		assertEquals(1, snapshot.preferredStart(AEItemKey.of(Items.RAW_IRON), 1));
+	}
+
+	@Test
+	void laneReplacementAndShrinkDiscardPreferencesWithoutLosingOtherLanesOnGrowth() {
+		var first = BasicInventorySlot.at(null, 0, 0);
+		var second = BasicInventorySlot.at(null, 0, 0);
+		first.setStack(new ItemStack(Items.RAW_IRON));
+		second.setStack(new ItemStack(Items.RAW_GOLD));
+		var iron = AEItemKey.of(Items.RAW_IRON);
+		var gold = AEItemKey.of(Items.RAW_GOLD);
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(List.of(first, second), 2);
+		first.setStack(ItemStack.EMPTY);
+		second.setStack(ItemStack.EMPTY);
+		var extra = BasicInventorySlot.at(null, 0, 0);
+		snapshot.capture(List.of(first, second, extra), 3);
+		assertEquals(0, snapshot.preferredStart(iron, 2));
+		assertEquals(1, snapshot.preferredStart(gold, 2));
+		var replacement = BasicInventorySlot.at(null, 0, 0);
+		snapshot.capture(List.of(replacement, second, extra), 3);
+		assertEquals(2, snapshot.preferredStart(iron, 2));
+		snapshot.capture(List.of(replacement), 1);
+		snapshot.capture(List.of(replacement, second, extra), 3);
+		assertEquals(2, snapshot.preferredStart(gold, 2));
+	}
+
+	@Test
+	void acceptedReplacementInputUpdatesThePreferenceOfAnEmptyLane() {
+		var slot = BasicInventorySlot.at(null, 0, 0);
+		var other = BasicInventorySlot.at(null, 0, 0);
+		slot.setStack(new ItemStack(Items.RAW_IRON));
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(List.of(slot, other), 2);
+		slot.setStack(new ItemStack(Items.RAW_GOLD));
+		snapshot.refresh(0);
+		slot.setStack(ItemStack.EMPTY);
+		snapshot.capture(List.of(slot, other), 2);
+		assertEquals(1, snapshot.preferredStart(AEItemKey.of(Items.RAW_IRON), 1));
+		assertEquals(0, snapshot.preferredStart(AEItemKey.of(Items.RAW_GOLD), 1));
 	}
 
 	private static void assertCapacityMatchesInsertion(BasicInventorySlot slot, ItemStack template) throws Exception {

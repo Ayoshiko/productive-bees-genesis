@@ -91,6 +91,7 @@ public final class MekAe2LifecycleHandler {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			Ae2GridNodeManager.destroyNode(host);
+			Ae2ResourceOutput.closeMachine(host);
 			stateHolder.clear();
 			// 重置连接标志，方块重建后 handler 实例可能复用，确保重新走连接流程
 			ae2NodeConnected = false;
@@ -110,6 +111,7 @@ public final class MekAe2LifecycleHandler {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			Ae2GridNodeManager.destroyNode(host);
+			Ae2ResourceOutput.closeMachine(host);
 			stateHolder.clearForChunkUnload();
 			// 重置连接标志，与 destroyForRemoval 行为一致
 			ae2NodeConnected = false;

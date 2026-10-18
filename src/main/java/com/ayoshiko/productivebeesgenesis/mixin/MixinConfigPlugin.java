@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
+import com.ayoshiko.productivebeesgenesis.resource.PbResourceMixinContract;
 import net.neoforged.fml.loading.FMLLoader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
@@ -86,6 +87,11 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"ExtraFactoryOutputInventorySlotMixin"
 	);
 
+	/** 资源事务要求整组入口齐全；版本与字节码预检通过后使用严格注入。 */
+	private static final Set<String> JDTE_RESOURCE_MIXINS = Set.of(
+		"JdteBioFactoryResourceMixin"
+	);
+
 	/** 仅依赖 JDTE 的合并加速 Mixin。 */
 	private static final Set<String> JDTE_MIXINS = Set.of(
 		"JdteApiaryCoalescedMixin",
@@ -169,9 +175,11 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"RenderBlockBeLoadFixMixin"
 	);
 
-	/** 仅引用 JEI GhostIngredientDrag 的客户端 Mixin。 */
+	/** JEI 拖拽及 PB 配方布局修正，仅在 JEI 存在时加载。 */
 	private static final Set<String> JEI_MIXINS = Set.of(
-			"JeiGhostIngredientDragMixin"
+			"JeiGhostIngredientDragMixin",
+			"PbContainerFlowerJeiMixin",
+			"PbCentrifugeJeiLayoutMixin"
 	);
 
 	/**
@@ -301,6 +309,15 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (simpleName.equals("MyriadGuideHotkeyMixin")) return isModLoaded("guideme");
+		if (simpleName.equals("PbResourceProductionMixin") || simpleName.equals("PbResourceMixedOutputMixin")) {
+			return PbResourceMixinContract.supported();
+		}
+		if (JDTE_RESOURCE_MIXINS.contains(simpleName)) {
+			return Holder.JDTE_LOADED && FMLLoader.getLoadingModList().getMods().stream()
+					.anyMatch(mod -> mod.getModId().equals("jdte") && mod.getVersion().toString().equals("0.6.1.0"))
+					&& com.ayoshiko.productivebeesgenesis.resource.JdteResourceMixinContract.supported();
+		}
 		if (AE2_CREATE_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.CREATE_LOADED;
 		}
@@ -367,6 +384,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-		// 无后置处理
+		// MixinExtras 的晚期变换在此回调之后执行；完整性由注入数量要求与加载后行为测试确认。
 	}
 }

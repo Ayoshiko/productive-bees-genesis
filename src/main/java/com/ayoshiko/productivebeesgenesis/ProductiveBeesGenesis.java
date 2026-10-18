@@ -131,6 +131,7 @@ public final class ProductiveBeesGenesis {
 	 * 注册 DeferredRegister 到 mod 事件总线
 	 */
 	private void registerDeferredRegisters(IEventBus eventBus) {
+		com.ayoshiko.productivebeesgenesis.resource.ResourceContent.register(eventBus);
 		ModBlocks.BLOCKS.register(eventBus);
 		ModBlockEntities.register(eventBus);
 		ModItems.ITEMS.register(eventBus);
@@ -479,6 +480,7 @@ public final class ProductiveBeesGenesis {
 		event.enqueueWork(() -> {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
+			com.ayoshiko.productivebeesgenesis.resource.UselessResourceIntegration.install();
 		});
 	}
 

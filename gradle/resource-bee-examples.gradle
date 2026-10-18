@@ -1,0 +1,46 @@
+// Author-facing example packs remain separate from the distributable mod.
+def exampleRoot = layout.projectDirectory.dir('examples/resource-bees')
+def verifyExamples = tasks.register('verifyResourceBeeExamples') {
+    group = 'verification'
+    description = 'Validates example JSON and complete bilingual PB bee names.'
+    inputs.dir(exampleRoot.dir('datapack'))
+    inputs.dir(exampleRoot.dir('resourcepack'))
+    doLast { task ->
+        def json = new groovy.json.JsonSlurper()
+        task.inputs.files.asFileTree.matching { include '**/*.json', '**/pack.mcmeta' }.each { file ->
+            json.parse(file, 'UTF-8')
+        }
+        def bees = new File(exampleRoot.asFile, 'datapack/data/example/productivebees').listFiles()
+                .findAll { it.name.endsWith('.json') }
+        def keys = bees.collect { 'entity.productivebees.' + it.name[0..-6] + '_bee' }.toSet()
+        ['zh_cn', 'en_us'].each { language ->
+            def names = json.parse(new File(exampleRoot.asFile,
+                    "resourcepack/assets/productivebees/lang/${language}.json"), 'UTF-8')
+            if (names.keySet() != keys || names.values().any { !(it instanceof String) || it.isBlank() }) {
+                throw new GradleException("Incomplete or stale example bee names: ${language}")
+            }
+        }
+        ['datapack': 48, 'resourcepack': 34].each { folder, format ->
+            if (json.parse(new File(exampleRoot.asFile, "${folder}/pack.mcmeta"), 'UTF-8').pack.pack_format != format) {
+                throw new GradleException("Wrong Minecraft 1.21.1 pack format: ${folder}")
+            }
+        }
+    }
+}
+def exampleZips = ['datapack', 'resourcepack'].collect { folder ->
+    tasks.register("packageResourceBee${folder.capitalize()}", Zip) {
+        group = 'distribution'
+        dependsOn verifyExamples
+        from exampleRoot.dir(folder)
+        destinationDirectory = layout.buildDirectory.dir('resource-bee-examples')
+        archiveFileName = "resource-bees-${folder}.zip"
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+}
+tasks.register('packageResourceBeeExamples') {
+    group = 'distribution'
+    description = 'Creates separate installable datapack and resourcepack ZIPs.'
+    dependsOn exampleZips
+}
+tasks.named('check') { dependsOn verifyExamples }

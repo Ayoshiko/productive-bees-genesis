@@ -29,19 +29,22 @@ class Ae2NetworkCostWiringTest {
 	void exceptionalExtractAndFluidInsertStillTeachNetworkCoordinator() throws Exception {
 		String input = read("Ae2InputPuller.java").replaceAll("\\s+", " ");
 		assertTrue(input.contains("catch (LinkageError | RuntimeException error) { long extractCost"));
-		assertTrue(input.contains("holder.recordNetworkCost(meStorage, gameTick, extractCost"));
+		assertTrue(input.contains("holder.recordNetworkExtractCost(meStorage, gameTick, extractCost"));
 
 		String fluid = read("Ae2FluidPusher.java").replaceAll("\\s+", " ");
-		assertTrue(fluid.contains("catch (RuntimeException error) { long insertCost"));
-		assertTrue(fluid.contains("holder.recordNetworkCost(meStorage, gameTick, insertCost"));
+		assertTrue(fluid.contains("measured.insert(key, requested, action, ActionSourceHolder.INSTANCE)"));
+		String measured = read("Ae2MeasuredStorage.java").replaceAll("\\s+", " ");
+		assertTrue(measured.contains("return current.insert(key, amount, mode, source); } finally {"));
+		assertTrue(measured.contains("Ae2NetworkWorkCoordinator.recordResolvedCost(currentNetwork, currentTick, lastCostNanos,"));
 	}
 
 	@Test
 	void leftoverCompensationRecordsBothSimulateAndCommitCost() throws Exception {
 		String source = read("Ae2LeftoverReturner.java");
-		assertTrue(source.contains("timedInsert(holder, meStorage, key, remaining,"));
-		assertTrue(source.contains("timedInsert(holder, meStorage, key, target,"));
-		assertTrue(source.contains("holder.recordNetworkCost(meStorage, gameTick, cost,"));
-		assertTrue(source.contains("buffers.insertCostTracker.record(gameTick, cost)"));
+		assertTrue(source.contains("timedInsert(holder, storage, key, remaining, Actionable.SIMULATE"));
+		assertTrue(source.contains("timedInsert(holder, storage, key, simulated, Actionable.MODULATE"));
+		assertTrue(source.contains("holder.recordNetworkCost(storage, tick, cost,"));
+		assertTrue(source.contains("buffers.insertCostTracker.record(tick, cost)"));
+		assertTrue(source.replaceAll("\\s+", " ").contains("return storage.insert(key, amount, action, source); } finally {"));
 	}
 }

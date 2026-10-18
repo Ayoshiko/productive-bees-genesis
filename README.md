@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.10-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.0-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,9 +11,15 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
+**Development version: 1.1.0 — unreleased.** See [CHANGELOG](CHANGELOG.md#unreleased---110) for pending changes.
+
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
 > Please report bugs and compatibility issues through [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
+
+**Translations and contributions:** everyone can submit a pull request through a [fork](https://github.com/Ayoshiko/productive-bees-genesis/fork). Create a branch in your fork, add or edit the translation under `src/main/resources/assets/productivebeesgenesis/lang/` (for example `fr_fr.json`), and use **Contribute → Open pull request** with `Ayoshiko/productive-bees-genesis` as the base repository and `main-neo/1.21.1` as the base branch. Write access to this repository is needed only to push here directly; it is not required for a pull request from your fork. If GitHub blocks this flow, please share the exact error and the compare-page URL in an issue.
+
+You can also [open a blank issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new) and attach the translation JSON. If GitHub does not accept the JSON attachment, put it in a ZIP file.
 
 ---
 
@@ -270,6 +276,244 @@ The mod ships **KubeJS** script hooks for dynamic bee recipe registration at run
   - `addMekData(...)` — register a Mekanism `mek_data` shaped crafting recipe.
 - Recipes registered through KubeJS are injected into the vanilla `RecipeManager` JSON map during the `beforeRecipeLoading` phase and coexist with datapack recipes; they are picked up by the in-game recipe caches and the JEI viewer.
 
+#### Extended resource bees
+
+This walkthrough is for modpack authors and players adding their first custom bee. Start with the working hydrogen example, then change its resource, colors or flower. Java is not required.
+
+**Resources are not limited to the built-in examples.** Hydrogen, FE, Source, souls, air, EMC, XP and lightning have built-in adapters. Any registered AEKey that fully round-trips, including another mod's custom resource, can use generic `kind: ae_key` output registration. Install the key provider and compatible ME storage. New types without an AEKey need a resource and transfer adapter. Machines retain output for native or ME export; icons are not inventory items, and no extra output block is needed.
+
+#### 1. Choose the production route
+
+| Player workflow | Example | Files to keep |
+| --- | --- | --- |
+| Produce combs, then centrifuge hydrogen | `hydrogen` | Bee definition + PB hive recipe + resource centrifuging recipe |
+| Produce FE directly in an apiary | `energy` | Bee definition + resource production recipe |
+| Produce extreme-high-voltage lightning directly | `lightning_ehv` | Bee definition + resource production recipe |
+| Produce items and FE together | `mixed` | Bee definition + PB hive recipe + resource production recipe |
+
+`energy` and `energy_comb` are separate bees. The first produces FE directly; the second produces combs. `createComb: true` enables the bee's comb appearance; **it does not create a comb-production recipe**. Giving one bee both routes produces resources at both stages, so do that only when intended.
+
+Resource centrifuging shares ordinary PB comb parallelism, virtual ticks and energy calculations. Each resource in a mechanical host has a pending-output limit of `1,000,000 x actual output-slot multiplier`; old default limits expand without losing balances. Resource amounts, productivity and four portions per comb block still count toward that limit. Insufficient space retains inputs, so high-yield recipes can still be limited by pending capacity and export speed.
+
+**Genesis extended resource outputs do not yet support PB's own hives or centrifuges. Use Genesis mechanical apiaries / centrifuges.** Ordinary PB outputs still follow PB recipes. Bee cages, spawn eggs, combs / comb blocks and mechanical apiary bee slots show this notice without holding Shift.
+
+Report extended-resource issues and compatibility limitations to [Genesis issues](https://github.com/Ayoshiko/productive-bees-genesis/issues). Please do not report this adaptation limitation to PB upstream. Development support for JDTE and Useless is described at the end.
+
+#### 2. Install the example and create the hydrogen bee
+
+Get version-matched files from the [GitHub example directory](https://github.com/Ayoshiko/productive-bees-genesis/tree/main-neo/1.21.1/examples/resource-bees). Release JARs do not include example bees or their language assets.
+
+- Install `datapack` at `<world>/datapacks/resource-bees-example/`, with `pack.mcmeta` and `data` directly inside.
+- Install `resourcepack` at `<game>/resourcepacks/resource-bees-example/`, with `pack.mcmeta` and `assets` directly inside, then enable it in the client resource-pack menu.
+- Minecraft 1.21.1 uses data pack format 48 and resource pack format 34. The server needs data; every client needs the language pack.
+- `kubejs/server_scripts` holds optional scripts and `api` holds Java examples. Existing recipe IDs are retained; filenames identify bee, hive, direct-production and centrifuging examples.
+
+Run `.\gradlew packageResourceBeeExamples --no-daemon` from the checkout to create two installable ZIPs in `build/resource-bee-examples`. Put them directly in the world's datapacks and client's resourcepacks folders respectively. Development `runClient` loads both automatically; the release JAR excludes them.
+
+The modpack-style `copper_energy` and `copper_energy_comb` examples use copper ingots as flowers, producing FE directly or through comb centrifuging respectively. The optional `kubejs/server_scripts/copper_energy_acquisition.js` crafts their spawn eggs from a bee cage, honey treat and copper ingot, adding beeswax for the comb route. KubeJS installations can place data and language assets under `kubejs/data` and `kubejs/assets`. Extended resource recipes require Genesis 1.1.0.
+
+**Register names together with the bee.** The [Chinese names](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/resourcepack/assets/productivebees/lang/zh_cn.json) and [English names](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/resourcepack/assets/productivebees/lang/en_us.json) live under `assets/productivebees/lang`. For `example:hydrogen`, PB uses `entity.productivebees.hydrogen_bee`, not `entity.example.hydrogen_bee`:
+
+```json
+{
+  "entity.productivebees.hydrogen_bee": "Hydrogen Bee"
+}
+```
+
+Use the same key for the Chinese name. Combs, eggs, JEI and apiary previews reuse the bee name. Rename all recipe references and both language keys together; avoid identical bee paths across namespaces because PB shares name keys. Each bee JSON's `_comment` identifies its correct key. If raw keys remain visible, enable the resource pack and press F3+T; `/reload` does not reload client names.
+
+Following the PB author's template, you can instead copy `data` into `kubejs/data` and `assets` into `kubejs/assets`, retaining namespace folders. Every client needs assets. Do not also enable the duplicate data pack; remove the JSON recipes replaced by server scripts.
+
+The three files below make one complete hydrogen bee. Example JSON files use `_comment` for explanations while remaining valid JSON. Keep or remove those fields; do not put `//` comments into JSON. The `example` folder is the namespace, and `hydrogen.json` makes the bee ID `example:hydrogen`.
+
+**File 1: bee definition** — `data/example/productivebees/hydrogen.json`
+
+```json
+{
+  "_comment": "Hydrogen bee appearance and flower. Put an iron block in the apiary flower input.",
+  "primaryColor": "#BFEFFF",
+  "secondaryColor": "#FFFFFF",
+  "flowerBlock": "minecraft:iron_block",
+  "createComb": true
+}
+```
+
+**File 2: comb production** — `data/example/recipe/hydrogen_honeycomb.json`
+
+```json
+{
+  "_comment": "ingredient and the resulting bee_type must match the bee definition ID.",
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "example:hydrogen",
+  "results": [{
+    "item": {
+      "item": "productivebees:configurable_honeycomb",
+      "components": {"productivebees:bee_type": "example:hydrogen"}
+    },
+    "chance": 1.0
+  }]
+}
+```
+
+**File 3: resource centrifuging** — `data/example/recipe/hydrogen_centrifuging.json`
+
+```json
+{
+  "_comment": "One comb gives 100 mB hydrogen; a matching comb block automatically counts as four portions.",
+  "type": "productivebeesgenesis:resource_centrifuging",
+  "bee": "example:hydrogen",
+  "outputs": [{"kind": "chemical", "id": "mekanism:hydrogen", "amount": "100", "chance": 1.0}],
+  "processing_time": 20
+}
+```
+
+Re-enter the world after adding a bee definition. Use `/reload` for edits to existing recipes. For testing, obtain its egg with the command below, put the bee in a mechanical apiary, add an iron block to the flower input, and supply power. Examples do not add natural spawning; provide PB breeding or conversion recipes for survival acquisition.
+
+```mcfunction
+/give @s productivebees:spawn_egg_configurable_bee[minecraft:entity_data={id:'productivebees:configurable_bee',type:'example:hydrogen'}]
+```
+
+#### 3. Connect output and see where resources go
+
+Put the resulting `example:hydrogen` comb into a **Genesis mechanical centrifuge** and power it. A comb gives 100 mB hydrogen; its comb block gives four portions, or 400 mB. These are base amounts before genes and upgrades. A chance-based block rolls each of its four portions separately.
+
+For ME export, install **AE2 + Applied Mekanistics**, cable the centrifuge directly, and provide network power, a channel, and storage that accepts chemicals. Keep the machine's AE output master switch enabled. The main-screen **Extended resources** tab shows resources awaiting export; check the ME terminal for resources already exported. Display icons cannot be taken, and output does not become dropped items.
+
+The extended resource window defaults to Production and can switch to Pending stock. Rates use actual successful production over the last five seconds, including upgrades and acceleration. Observed resources remain visible with no pending stock, including when combs return to ME while their output is unavailable; rates reach zero after production stops. Inventory transfers do not count as production. Changes synchronize every 500 ms while this window is open; closing it stops requests and releases the session. Jade does not receive production rates. Native 16×16 icons, exact quantities, units and states remain available, with no inventory access or extra storage.
+
+Mekanism chemical pipes can pull directly from the machine. Matching resources combine all processing slots. Search, filter and sort by name, rate / stock amount or type. Grid abbreviations round down; details and hover retain exact values. Chemical gauges show pending stock. Eject sends selected stock to ME or adjacent storage and retains rejected output. Produced FE stays separate from operating power. Exported stock appears in ME terminals.
+
+Air and ordinary generic AEKeys use long ME requests without a universal 2.1G batch limit. Actual acceptance still depends on network power, capacity, receiver interfaces and shared scheduling budgets. Native FE / Source / soul APIs use int parameters; native air also respects safe pressure. Soulplied Energistics 1.0.3 casts long directly to int in external soul storage, so souls and their generic key retain a 2,147,483,647 transfer safeguard.
+
+For output without ME, open the machine's Mekanism side-configuration window and select a resource page beside the native Items, Fluids and ENERGY tabs. Each page appears only when its supporting mod is loaded. Chemicals use Mekanism's native chemical-side icon; other resource pages show a centered representative item from their mod. Chemicals, Source, souls, experience and lightning configure their output faces there; air actively supplies pneumatic networks under safe pressure. Auto-eject sends to compatible adjacent containers or machines, while supported pipes can still pull with auto-eject off. FE uses the native ENERGY tab or configurator: INPUT charges the working battery, OUTPUT exports produced FE, INPUT_OUTPUT supports both on one face, and NONE disables the face. Separate containers keep product extraction from draining operating power.
+
+Existing machines retain six-sided extraction for chemicals and other native resources, with auto-eject off; air supply defaults on, and FE product faces default off. Settings survive saving, tier installers, dismantling/mining machine items and crafting upgrades. Shift-right-click a compatible machine with a Mekanism configuration card to copy; right-click to paste. Cards copy faces and auto-eject settings without resource accounts, balances or EMC recipients. Multi-machine crafting keeps the first settings in crafting-grid order.
+
+#### 4. Switch to direct FE or lightning
+
+Define `example:energy` with a copper-block flower, as in `energy.json`, and add only `data/example/recipe/energy_production.json`:
+
+```json
+{
+  "_comment": "The mechanical apiary produces 1000 FE per base cycle, without combs or centrifuging.",
+  "type": "productivebeesgenesis:resource_production",
+  "bee": "example:energy",
+  "outputs": [{"kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1.0}]
+}
+```
+
+ME export of FE requires AE2 + Applied Flux. Produced FE is stored separately from the machine's operating power. For extreme-high-voltage lightning, use `lightning_ehv.json` and `lightning_ehv_production.json`, install AE2 Lightning Tech and its dependencies, and use:
+
+```json
+[{"kind": "lightning", "tier": "extreme_high_voltage", "amount": "1000", "chance": 1.0}]
+```
+
+Use `high_voltage` for HV and `extreme_high_voltage` for EHV. Voltages are stored separately and never convert into each other. The separate `lightning_ehv_comb` example produces combs and needs its own hive and resource centrifuging recipes.
+
+#### 5. Fields you will usually edit
+
+| Field | What to write |
+| --- | --- |
+| `bee` / `ingredient` / `productivebees:bee_type` | The complete bee ID, such as `mypack:hydrogen`; update every reference when renaming |
+| `amount` | A positive decimal **string**, such as `"1000"`; never `1000` or `1e3`. Maximum for other resources: `9223372036854775807`; EMC supports up to 4096 decimal digits |
+| `chance` | A number from 0 to 1; `1.0` always produces, `0.25` means 25% per portion |
+| `processing_time` | Base centrifuging time in ticks; 20 ticks = 1 second. Only centrifuging uses this field |
+| `flowerBlock` / `flowerItem` | Block or item ID for the flower input. Ordinary static flowers are reused |
+| `flowerTag` | Tag ID without `#`, such as `example:resource_flowers`; see `mixed_tag` |
+| `include_pb_outputs` | Defaults to `false`; `true` also runs the matching ordinary PB centrifuge recipe |
+
+Change only `amount` for another quantity, or `id` for another chemical. For a second bee, copy its definition and recipes, rename the files, and update every bee ID so the original example is not replaced.
+
+| Resource | Output fields | Resource mod | Additional ME requirements |
+| --- | --- | --- | --- |
+| Chemical | `kind: chemical`, `id: mekanism:hydrogen` | Mekanism | AE2, Applied Mekanistics |
+| FE | `kind: energy`, `energy_type: FE` | None | AE2, Applied Flux |
+| Source | `kind: source` | Ars Nouveau | AE2, Ars Énergistique |
+| Soul | `kind: soul` | Industrial Foregoing Souls | AE2, Soulplied Energistics, soul-compatible storage |
+| Air | `kind: air` | PneumaticCraft | AE2, Applied Pneumatics |
+| EMC | `kind: emc` | ProjectE | Automatic credit to the online recipient; no EMC-ME addon required |
+| XP points | `kind: experience` | ExperienceLib | AE2, Applied Experienced |
+| Lightning | `kind: lightning`, `tier` | AE2 Lightning Tech | Storage for the matching voltage |
+
+1000 raw air units equal 1 L; pressure in bar is not a quantity. Native machine capabilities also work with Ars relays, soul pipes and pneumatic tubes. Air can push to adjacent receivers. Seal pneumatic leaks. XP and Source do not change player values directly.
+
+**EMC automatically credits a player account.** The default recipient is the player who placed the machine and owns its resource account. ProjectE balances and open transmutation screens are synchronized without AE2, ME storage or an EMC-ME addon. The Recipient button appears only with ProjectE and FTB Teams installed. The machine owner or an operator can click Recipient in the resource window to cycle through online teammates and the owner, even when no output is pending. If the recipient is offline, leaves the team or has no usable capability, EMC stays in the machine until eligibility returns. Output is not automatically redirected. Unknown writes are quarantined; notification retries never add EMC again. Third-party hosts retain their own output rules.
+
+**EMC uses exact integers.** Production, multipliers, comb-block portions, pending output, saved balances and menu amounts support up to 4096 decimal digits. For example, MK16's base rate can be declared as `"amount": "47958864426752"`; the hive still uses its own bee cycle and upgrades. Project Expansion's BigInteger capability can transfer an exact large amount when the receiver has room. Ordinary ProjectE receivers accept bounded batches; the remainder stays in the same account. Full or failing receivers never cause overflow or automatic replay. AppliedE is not supported.
+
+Other resources keep the existing long limit. Their pending-output allowance follows the machine's output tier, with a minimum of 1,000,000 per resource; EMC uses the exact-number budget instead. Old saved balances are preserved when the allowance grows. High acceleration still needs sufficient operating power and output capacity. Update both client and server together for the new resource protocol.
+
+When an extended resource has no usable output or its pending allowance is full, mechanical centrifuges move the original combs into persistent return custody, send them back when ME accepts them and pause new pulls of that input. Output recovery resumes pulling automatically. Paid cycles retain their recipe, seed and complete input identity; unknown consumption or acceptance remains quarantined without replay.
+
+#### Container flowers: match the contents
+
+Genesis mechanical apiaries and their factories can use filled resource items as reusable flowers. An ordinary item flower checks the item ID; a container flower also checks its contents, rejecting empty containers, the wrong resource and insufficient amounts.
+
+JEI flowering pages use an AE2 cell to show the actual resource, minimum quantity and feeder instructions. A compatible display cell contains the resource when its key bridge is available; otherwise it remains a hint. Gas buckets, Mekanism chemical tanks and other capable containers are checked by their contents without consumption or pooling.
+
+Add **flowerResource** to the bee JSON. Set kind and the string amount, which is a minimum and defaults to "1". Remove flowerBlock, flowerItem, flowerTag and flowerFluid from that definition. Inverse flowers and post-pollination callbacks are unsupported; conflicting or malformed definitions cannot work.
+
+```json
+{
+  "flowerResource": {
+    "kind": "chemical",
+    "id": "mekanism:hydrogen",
+    "amount": "1000"
+  }
+}
+```
+
+- **Chemicals:** kind chemical, an id such as mekanism:hydrogen, and amount such as "1000". Use a bucket, tank or other item exposing Mekanism's chemical capability. See the [hydrogen container bee](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_hydrogen.json).
+- **Fluids:** kind fluid, an id such as minecraft:water, and amount such as "1000". NeoForge fluid-capability items and traditional buckets are accepted. See the [water container bee](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_water.json).
+- **Energy:** kind energy and energy_type FE. Standard FE items and Mekanism energy items using the current conversion are supported. See the [energy container bee](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_energy.json).
+- **Other AEKey resources:** kind ae_key with the actual type, id and complete data. Insert a real ME storage cell containing that resource. Checking the cell does not require a network connection. See the [ME cell flower bee](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_ae_key.json).
+
+Fluid and chemical IDs may also be resource tags prefixed with #. Existing flowerFluid definitions remain valid and now accept fluid-capability items beyond buckets; their minimum is any positive matching fluid quantity.
+
+**Pollination does not extract resources or consume containers.** Check one item, without multiplying by stack count or combining feeder slots. A native container needs one internal tank meeting the minimum, with at most 64 tanks inspected. ME cells use the available amount of one complete key. Bee genes and upgrades do not increase the flower requirement.
+
+Emptying a container or changing its contents stops pollination by the next real server tick. Disabled slots stop matching immediately. Resource packs change appearance, not resource identity.
+
+Wrapped resource icons, display templates and remote-storage cards are not real local inventory. Other mods' native items must expose a supported capability; resources with registered AEKeys can use their real storage cells. New flowerResource definitions currently work only in Genesis mechanical hosts, not native PB or JDTE machines.
+
+Add both language keys when creating a bee. KubeJS recipes are unchanged; flowerResource stays in the data-pack bee JSON.
+
+#### 6. KubeJS and mixed output
+
+Keep bee definitions in the datapack. Copy the matching example JS to `kubejs/server_scripts/`, remove the recipe JSON files it replaces, and run `/reload`. `hydrogen.js` replaces two recipes; `energy.js` demonstrates three recipes for two bees. Scripts contain explanatory comments and also use strings for quantities. Manage each recipe in either JSON or JS to avoid same-ID overrides.
+
+`mixed` produces an iron ingot, comb and FE together: keep the PB hive recipe and direct resource recipe for one bee. `mixed_essence` demonstrates Essence Conversion, and `mixed_tag` demonstrates tagged flowers. Existing productivity, comb-block, gene-sampling and upgrade rules still apply. Resource-only bees do not gain default honey.
+
+`combined` produces ordinary centrifuge items and FE together. Set `include_pb_outputs: true` and keep a matching PB centrifuge recipe. One input and one payment cover both outputs. A missing ordinary recipe pauses processing. Essence Conversion runs before Raw Ore Smelting; results exceeding three output slots stay in the machine until drained.
+
+#### 7. Troubleshooting in order
+
+1. **No bee or JEI recipe:** Check the namespace, JSON syntax and singular `recipe` directory. Re-enter the world after adding a bee.
+2. **Waiting for a flower:** Put its configured flower into an enabled flower slot. Hydrogen uses iron blocks; FE and lightning examples use copper blocks.
+3. **Nothing in ME:** Open Extended resources. Check the AE master switch, channels, network power, bridges and compatible storage. An ordinary item cell cannot store hydrogen or lightning.
+4. **Local storage full:** Restore output and processing resumes. Inputs or already produced results remain held; registering the recipe again is unnecessary.
+5. **Paused for review:** Keep the save and reconcile input, costs and the receiver before operator recovery. Do not delete account data or repeatedly grant output. Unknown reception is not retried automatically.
+
+#### Advanced: generic resources, Java and other machines
+
+Other registered AE2 types can use `kind: ae_key`, with their actual `type`, `id`, complete `data` and string `amount`. The `ae_key` example uses AE2's built-in `ae2:i` key for diamonds. Check the target mod's key format before changing it. Complete identity is limited to 1024 bytes; missing-content substitutes are rejected. Generic resources export only to ME. Wrapped items are display values or templates, never inventory credits.
+
+`examples/resource-bees/api/ResourceBeeApiExample.java` uses `RegisterResourceRecipesEvent`; third-party machines use `RegisterResourceHostsEvent` and `ResourceHostApi`. Datapacks override Java defaults by ID. Reserve, debit and commit within one server tick. A `transfer` callback returns the amount actually accepted; an exception pauses the request and must not be interpreted as zero. Compile the example with:
+
+```powershell
+.\gradlew compileResourceApiExampleJava -I examples/resource-bees/api-example.gradle --no-daemon
+```
+
+**Useless 1.21.1-2.4.6 already exposes native recipe adapters and generic resource-key outputs. Genesis registers resource-centrifuging recipes through these APIs without an extra host patch.** Use a PB centrifuge as the Advanced Alloy Furnace mold, with fully component-matched combs / comb blocks as input. AE2, the resource's key bridge and compatible storage are required. Only deterministic, independent resource recipes are converted; random and `include_pb_outputs` recipes remain excluded. Parallelism, catalysts, power, processing, output and recovery follow Useless's own rules, without duplicate credits to Genesis accounts.
+
+Official JDTE 0.6.4.3 still lacks a bee-resource recipe hook. The local API v3 patch dispatches only for explicitly matched bees: Genesis supplies recipe results, while the Bio Factory owns its fees and existing completed-cycle buffer and returns resources through its linked AE output upgrade. A resource key bridge and receiving ME storage are required. Rejected or partial outputs remain pending; unknown execution results pause automatic retry. FE, hydrogen, exact item/fluid keys and both lightning voltages have been verified through native output routes. Its PR is planned after the Genesis resource-expansion release. Older fallback/API v1/v2 and Useless custody records remain historical evidence; legacy Useless reconciliation commands are available only when that prototype API is present.
+
+Operators inspect resources with `/pbgresources` and ordinary output with `/pbgoutput <pos> status`. Reconcile both ends before the appropriate `resolve`. `retry-data` rereads retained data after dependencies are restored; `confirm-production-settled` grants no compensation. Normal saves and upgrades retain assets and unresolved requests. Legacy .session files are no longer used to pause accounts. Saved unknown production stays isolated in its original lane, and unknown output in its resource; healthy work continues. Missing-resource combs are excluded from Myriad candidates and rejected by machine inputs; existing combs move to durable return custody. Real corrupt data and save failures still preserve affected assets. Separate stores do not commit atomically. Project Expansion's short EMC format is used when installed; authoritative amounts remain exact.
+
+Input retrieval and returns are also shown by `status`. For an unresolved input request, use `/pbgoutput <pos> resolve-input <UUID> <transferred>` only after checking both ends. In the `extract` and `withdraw-slot` phases, the number is what actually left the ME network or source slot; in `slot` and `return`, it is what the receiver actually accepted. Known remainders return only to ME after reconciliation. Unknown outcomes pause comb, resource and smelting processing and are not retried automatically.
+
+Temporarily removing AE2 retains the original input filter data. Reinstalling it restores the whitelist, complete item fingerprints, limits and stock policies. Unsupported versions or damaged fields pause new input pulls and reject filter edits; `status` explains the restriction, and `retry-data` rereads the data after repair. Restoring configuration does not clear, reconcile or duplicate pending items or unresolved input requests. Tier upgrades preserve configuration and carry custody in a separate snapshot; apiaries retain their actual AE output switches.
+
 ## Required Dependencies
 
 | Mod | Version | Purpose |
@@ -294,6 +538,8 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | Empowered Speed / Empowered Energy / IO Capacity / Auto Inserter / Fast Item Insert / Fast Item Eject upgrades (centrifuge 6 types, apiary 5 types) |
 | [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | Cable connection, item/fluid output, centrifuge input pulling, and ME energy input |
 | [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME-network-stored FE as energy source for machines |
+| Ars Nouveau 5.12.1+ | Source production and native relay output |
+| Ars Énergistique 2.1.1-beta+ | ME Source storage output with AE2 and Ars Nouveau |
 | [ExtendedAE](https://www.curseforge.com/minecraft/mc-mods/ex-pattern-provider) | Auto-discovered cable connection |
 | [AdvancedAE](https://www.curseforge.com/minecraft/mc-mods/advanced-ae) | Auto-discovered cable connection |
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 network status tooltip + MEK apiary bee count / production progress |
@@ -456,7 +702,9 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The release jar is `build/libs/productivebeesgenesis-1.0.10.jar`.
+The local development build is `build/libs/productivebeesgenesis-1.1.0.jar`; version 1.1.0 is not yet released.
+
+`./gradlew runClient --no-daemon` automatically loads the resource-bee examples through the development-only `devExamples` source set. Bees such as `example:energy`, `example:hydrogen` and `example:mixed` are available for testing; optional resource types still require their owning mods. The examples are not bundled in release jars, and `verifyReleaseArtifact` checks that boundary.
 
 > Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
 >
@@ -555,7 +803,7 @@ Third-party assets and code references are listed in [THIRD_PARTY_LICENSES.md](T
 
 ### Privacy Statement
 
-This mod **does not collect, store, or transmit any player data**. There is no telemetry, analytics, crash reporting, or external network communication. All network packets are strictly client-server game state synchronization within Minecraft's native channel. Player UUIDs are used only as in-memory rate-limiter keys and are never persisted or transmitted externally.
+This mod has no telemetry, analytics, crash reporting or external data upload. World saves retain resource-account owner and EMC recipient UUIDs for ownership, permissions and credits. Resource windows synchronize the necessary recipient identity and gameplay state over Minecraft's native channel. Rate limiters keep player identity keys in memory. These data serve local gameplay and are not uploaded to external services.
 
 ### Age Rating & Health Reminder
 

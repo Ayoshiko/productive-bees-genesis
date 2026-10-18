@@ -1,0 +1,13 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "example:copper_energy_comb",
+  "results": [
+    {
+      "item": {
+        "item": "productivebees:configurable_honeycomb",
+        "components": { "productivebees:bee_type": "example:copper_energy_comb" }
+      },
+      "chance": 1
+    }
+  ]
+}

@@ -30,6 +30,49 @@ final class Ae2InputFilterNbtCodec {
 	private Ae2InputFilterNbtCodec() {
 	}
 
+	/** 持久化边界拒绝会被宽松读取跳过、截断或覆盖的配置，旧紧凑列表仍可迁移。 */
+	static boolean isReadable(CompoundTag tag) {
+		if (!optionalType(tag, KEY_VERSION, Tag.TAG_INT)
+				|| (tag.contains(KEY_VERSION) && tag.getInt(KEY_VERSION) != CURRENT_FORMAT_VERSION)
+				|| !optionalType(tag, KEY_CAPACITY, Tag.TAG_INT)
+				|| (tag.contains(KEY_CAPACITY) && (tag.getInt(KEY_CAPACITY) < 0
+						|| tag.getInt(KEY_CAPACITY) > Ae2InputFilter.getMaxFilterSlots()))
+				|| !optionalType(tag, "mode", Tag.TAG_BYTE)
+				|| tag.getByte("mode") < 0 || tag.getByte("mode") >= Ae2InputFilter.FilterMode.values().length
+				|| !optionalBoolean(tag, "precise") || !optionalBoolean(tag, "unlimitedAllFallback")
+				|| !optionalBoolean(tag, "globalNetworkStock")
+				|| !optionalAmount(tag, "globalReserveAmount") || !optionalType(tag, "entries", Tag.TAG_LIST)) {
+			return false;
+		}
+		if (!(tag.get("entries") instanceof ListTag entries) || entries.isEmpty()) return true;
+		if (entries.size() > Ae2InputFilter.getMaxFilterSlots()) return false;
+		if (entries.getElementType() == Tag.TAG_STRING) return true;
+		if (entries.getElementType() != Tag.TAG_COMPOUND) return false;
+		boolean[] occupied = new boolean[Ae2InputFilter.getMaxFilterSlots()];
+		for (Tag raw : entries) {
+			CompoundTag entry = (CompoundTag) raw;
+			if (!entry.contains("i", Tag.TAG_INT) || !entry.contains("v", Tag.TAG_STRING)
+					|| !optionalAmount(entry, "a") || !optionalAmount(entry, "r")
+					|| !optionalBoolean(entry, "u") || !optionalBoolean(entry, "n")) return false;
+			int index = entry.getInt("i");
+			if (index < 0 || index >= occupied.length || occupied[index]) return false;
+			occupied[index] = true;
+		}
+		return true;
+	}
+
+	private static boolean optionalType(CompoundTag tag, String key, int type) {
+		return !tag.contains(key) || tag.contains(key, type);
+	}
+
+	private static boolean optionalBoolean(CompoundTag tag, String key) {
+		return optionalType(tag, key, Tag.TAG_BYTE) && tag.getByte(key) >= 0 && tag.getByte(key) <= 1;
+	}
+
+	private static boolean optionalAmount(CompoundTag tag, String key) {
+		return optionalType(tag, key, Tag.TAG_LONG) && tag.getLong(key) >= 0;
+	}
+
 	/**
 	 * 序列化到 NBT
 	 *

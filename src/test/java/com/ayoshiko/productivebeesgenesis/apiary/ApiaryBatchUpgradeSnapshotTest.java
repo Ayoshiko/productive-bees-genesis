@@ -36,7 +36,8 @@ class ApiaryBatchUpgradeSnapshotTest {
 	@Test
 	@DisplayName("逐组处理的 processBatchProduce 不得再查询机器级升级状态")
 	void perGroupProcessingDoesNotQueryMachineLevelUpgrades() throws Exception {
-		String body = methodBody(Files.readString(Path.of(PROCESSOR)), "public void processBatchProduce(");
+		String body = methodBody(Files.readString(Path.of(PROCESSOR)), "public void processBatchProduce(")
+				+ Files.readString(Path.of(APIARY + "BeeProductionGenerator.java"));
 		// 这些取值一轮 flush 内恒定，必须由 ApiaryBatchUpgradeSnapshot 提供
 		for (String forbidden : List.of(
 				"upgradeHandler.getGeneSamplerCount()",
@@ -88,9 +89,9 @@ class ApiaryBatchUpgradeSnapshotTest {
 	@Test
 	@DisplayName("快照在输出空间检查之后、分组循环之前采集一次")
 	void snapshotIsCapturedOncePerFlushAfterOutputCheck() throws Exception {
-		String source = Files.readString(Path.of(TICK_PROCESSOR));
+		String source = methodBody(Files.readString(Path.of(TICK_PROCESSOR)), "private void flushPendingProductions(");
 		int captureIndex = source.indexOf("ApiaryBatchUpgradeSnapshot.capture(tile, upgradeHandler)");
-		int outputFullIndex = source.indexOf("if (slotManager.isOutputFull()) {\n\t\t\t// 输出已满");
+		int outputFullIndex = source.indexOf("if (slotManager.isOutputFull()");
 		int groupLoopIndex = source.indexOf(
 				"for (int groupIndex = 0; groupIndex < activePendingProductionGroupCount; groupIndex++)");
 		assertTrue(captureIndex > 0, "flush 层必须采集一次机器级快照");

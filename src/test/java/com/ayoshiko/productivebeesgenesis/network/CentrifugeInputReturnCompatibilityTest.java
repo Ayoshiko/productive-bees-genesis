@@ -150,7 +150,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		String puller = Files.readString(Path.of(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
 		int autoReturn = puller.indexOf("Ae2CentrifugeInputReturnService.returnUnprocessableInputs");
-		int pullSwitch = puller.indexOf("if (!inputPullEnabled) return;");
+		int pullSwitch = puller.indexOf("if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;");
 		assertTrue(autoReturn >= 0 && pullSwitch > autoReturn,
 				"熔炼兼容关闭后的输入清理必须先于新输入拉取开关");
 		assertTrue(puller.contains("holder.getPendingItemBuffer().hasRetryableItems(currentTick)"));
