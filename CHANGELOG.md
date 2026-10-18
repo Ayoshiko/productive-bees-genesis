@@ -123,6 +123,7 @@
 
 ### 修复
 
+- **CI 可选 API 编译依赖**：补齐 JDTE 0.6.1.0、Useless、ProjectE、Ars Nouveau、Industrial Foregoing Souls、ExperienceLib、AE2LT 与 PneumaticCraft 的编译期 JAR，并校验 Useless 和 ExperienceLib 下载摘要；不改变模组运行时依赖声明。
 - **资源离心大批扣料**：修复高并行／高倍率下批次超过物品单组上限时，离心机已拉入原料却始终无法加工的问题。内部配方扣料沿用普通离心链的批量缩减接口，保留完整组件、模拟不修改库存、实际数量核验及异常结果保管。
 - **PB 离心 JEI 产物重叠**：普通／热能离心与 Genesis 分类共用三列换行布局，第四个及后续输出不再回到第一行；流体使用独立槽位和罐渲染，保留热能分类的蜂蜡过滤。资源离心分类更名为“扩展资源离心”。
 - **未决资源的等级安装器拒绝**：机械蜂箱、离心机及工厂在提供升级数据前检查资源账户；有未决请求、无效引用或存档故障时保留原机器和资产，安全拒绝安装器操作。核验后可正常升级，避免异常从升级数据入口传播。
@@ -161,6 +162,7 @@
 
 ### English
 
+- **CI optional API compile classpath**: restore the exact compile-only JARs for JDTE 0.6.1.0, Useless, ProjectE, Ars Nouveau, Industrial Foregoing Souls, ExperienceLib, AE2LT and PneumaticCraft, with Useless and ExperienceLib checksums. This leaves the mod runtime dependency metadata unchanged.
 - **Extended resource production monitoring**: the window defaults to actual successful production rates over five seconds and can switch to pending stock. Observed resources remain visible with no stock or after rejected combs return to ME; stopped rates reach zero. Bounded deltas synchronize only while the window is open, closing releases sessions, and Jade receives no rates. Display text and tooltips are cached. Recipient help explicitly names the EMC account, and Jade labels refer to extended resource outputs.
 - **Large ME transfers**: removes the incorrect universal 2.1G batch cap from air and ordinary generic AEKeys while preserving long acceptance, native limits and shared network budgets. Souls and their generic key retain overflow protection for Soulplied Energistics 1.0.3's direct long-to-int external-storage cast.
 

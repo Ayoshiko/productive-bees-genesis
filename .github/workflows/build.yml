@@ -65,6 +65,23 @@ jobs:
           curse_maven applied-energistics-2-223794 7027323 appliedenergistics2-1.21.1-19.2.17.jar
           curse_maven applied-flux-965012 6217144 AppliedFlux-1.21-2.1.5-neoforge.jar
 
+          # Compile-only APIs for optional integrations; these do not change mod runtime metadata.
+          curse_maven jdte-1566414 9027141 jdte-0.6.1.0.jar
+          curse_maven just-dire-things-1002348 7463040 justdirethings-1.5.7.jar
+          curse_maven ars-nouveau-401955 8346406 ars_nouveau-1.21.1-5.12.1.jar
+          curse_maven industrial-foregoing-souls-904394 7441306 industrial-foregoing-souls-1.21.1-1.10.7.jar
+          curse_maven projecte-226410 6611984 ProjectE-1.21.1-PE1.1.0.jar
+          curse_maven ae2-lightning-tech-1527395 9024605 ae2lt-2.1.1.jar
+          curse_maven pneumaticcraft-repressurized-281849 8436524 'pneumaticcraft-repressurized-8.2.21+mc1.21.1.jar'
+          fetch 'https://github.com/SorrowMist/UselessMod/releases/download/1.21.1-2.4.5.13/useless_mod-1.21.1-2.4.5.13.jar' \
+            useless_mod-1.21.1-2.4.5.13.jar
+          printf '%s  %s\n' '8621b8dd0b63880e51e8b9d2ee560dd164dc6c755a7290bb0620a05b5195d971' \
+            'libs/useless_mod-1.21.1-2.4.5.13.jar' | sha256sum --check
+          fetch 'https://cdn.modrinth.com/data/SglcIh0L/versions/xrg5MjEA/experiencelib-1.21.1-1.2.1.jar' \
+            experiencelib-1.21.1-1.2.1.jar
+          printf '%s  %s\n' '4e9757f770fda51495e3f63a1d84cf470994efa5482b32d9807d3903a6f3f07d01019561bdac54706d07722e985911307f357e7c5621c5e038786e7023e29e04' \
+            'libs/experiencelib-1.21.1-1.2.1.jar' | sha512sum --check
+
           # Match the Mixin runtime bundled by NeoForge 1.21.1.
           fetch 'https://maven.neoforged.net/releases/net/fabricmc/sponge-mixin/0.15.2%2Bmixin.0.8.7/sponge-mixin-0.15.2%2Bmixin.0.8.7.jar' \
             sponge-mixin.jar
