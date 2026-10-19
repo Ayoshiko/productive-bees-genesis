@@ -29,9 +29,15 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
-## [Unreleased] - 1.1.0
+## [1.1.0] - 2026-10-19
 
-> 开发中，尚未发布。Development version; not yet released.
+> **扩展资源蜜蜂产出的首个正式版本。** 本次新增和改动较多，新功能的稳定性暂不保证，仍可能存在 bug。更新前请备份存档。
+>
+> 本模组只提供扩展资源蜜蜂注册与产出的底层支持，不会主动提供或注册现成的扩展资源蜜蜂。注册示例见先前发布的[独立示例包](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/resource-bee-examples-1.1.0)。
+>
+> **First full release of extended-resource bee output support.** Many features and behaviors are new; their stability is not guaranteed and bugs may remain. Back up your world before updating.
+>
+> The mod provides registration and output support only; it does not include or automatically register ready-made extended-resource bees. See the previously published [standalone examples](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/resource-bee-examples-1.1.0).
 
 ### 开发基础
 
