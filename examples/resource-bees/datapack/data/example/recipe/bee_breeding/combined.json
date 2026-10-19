@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:mixed",
+  "parent2": "example:copper_energy_comb",
+  "offspring": "example:combined",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:copper_energy_comb"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:combined"
+    }
+  ]
+}

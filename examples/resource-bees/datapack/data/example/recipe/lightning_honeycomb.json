@@ -1,9 +1,4 @@
 {
-  "_comment": [
-    "蜂箱物品配方：ingredient 是蜂种 ID；蜜脾结果的 productivebees:bee_type 必须一致。",
-    "这里产出正常物品。要让蜂箱同次直接产资源，另给同蜂种添加 resource_production；仅走蜜脾离心时不用添加。",
-    "PB hive item recipe. Match ingredient and comb bee_type. A separate resource_production recipe adds direct resources only when intended."
-  ],
   "type": "productivebees:advanced_beehive",
   "ingredient": "example:lightning_comb",
   "results": [
@@ -15,6 +10,16 @@
         }
       },
       "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2lt"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:lightning_comb"
     }
   ]
 }

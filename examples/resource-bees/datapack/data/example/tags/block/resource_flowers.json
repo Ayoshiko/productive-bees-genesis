@@ -1,8 +1,4 @@
 {
-  "_comment": [
-    "flowerTag 引用 example:resource_flowers，不加 #。修改 values 可替换花源，之后执行 /reload。",
-    "Reference this tag without #; edit values and reload. Block and item tags use their respective directories."
-  ],
   "replace": false,
   "values": [
     "minecraft:copper_block",

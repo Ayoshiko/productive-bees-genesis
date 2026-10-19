@@ -4,5 +4,8 @@
   "flowerItem": "minecraft:copper_ingot",
   "size": 0.7,
   "selfbreed": true,
-  "renderer": "default"
+  "renderer": "default",
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1,
+  "createComb": false
 }

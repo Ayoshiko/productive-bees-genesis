@@ -17,14 +17,17 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class ResourceMachinePanel {
     private static GuiResourceWindow window;
-    private static GuiResourceSideConfig sidesWindow;
+    private static GuiResourceSideConfigPage sidesWindow;
     private ResourceMachinePanel() {}
     @SubscribeEvent public static void opening(ScreenEvent.Opening event) { window = null; sidesWindow = null; }
     static void opened(GuiResourceWindow value) { window = value; }
     static void closed(GuiResourceWindow value) { if (window == value) window = null; }
     public static void accept(ResourceMenuSync.Reply reply) { if (window != null) window.accept(reply); }
-    static void openedSides(GuiResourceSideConfig value) { sidesWindow = value; }
-    static void closedSides(GuiResourceSideConfig value) { if (sidesWindow == value) sidesWindow = null; }
+    static void openedSides(GuiResourceSideConfigPage value) {
+        if (sidesWindow != null && sidesWindow != value) sidesWindow.deactivate();
+        sidesWindow = value;
+    }
+    static void closedSides(GuiResourceSideConfigPage value) { if (sidesWindow == value) sidesWindow = null; }
     public static void acceptSides(com.ayoshiko.productivebeesgenesis.resource.ResourceSideConfigSync.Reply reply) {
         if (sidesWindow != null) sidesWindow.accept(reply);
     }

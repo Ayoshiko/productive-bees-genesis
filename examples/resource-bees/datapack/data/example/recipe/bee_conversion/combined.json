@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:mixed",
+  "result": "example:combined",
+  "chance": 1,
+  "item": {
+    "item": "productivebees:wax"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:combined"
+    }
+  ]
+}

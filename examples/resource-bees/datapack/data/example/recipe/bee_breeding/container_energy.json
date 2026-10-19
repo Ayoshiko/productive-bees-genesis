@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:energy",
+  "parent2": "example:pb_redstone",
+  "offspring": "example:container_energy",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_redstone"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_energy"
+    }
+  ]
+}

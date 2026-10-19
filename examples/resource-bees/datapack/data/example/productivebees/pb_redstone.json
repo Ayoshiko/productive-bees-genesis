@@ -1,0 +1,10 @@
+{
+  "primaryColor": "#C62828",
+  "secondaryColor": "#501010",
+  "particleColor": "#FF3333",
+  "flowerItem": "minecraft:redstone",
+  "createComb": true,
+  "breedingItem": "minecraft:redstone",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

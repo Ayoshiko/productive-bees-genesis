@@ -1,11 +1,4 @@
 {
-  "_comment": [
-    "机械蜂箱专用容器花源；单件容器须满足最低数量，检测不消耗内容，也不把多个槽位或堆叠数量相加。",
-    "不要同时写 flowerItem/flowerBlock/flowerTag/flowerFluid；已有这些字段的蜂可继续使用旧规则。",
-    "名称键：entity.productivebees.container_ae_key_bee；同步 resourcepack 中英文名称。",
-    "Genesis mechanical apiaries only. One container must meet the minimum; contents are not consumed or pooled across slots. No natural spawning.",
-    "使用保存了至少 16 个普通钻石的真实 ME 存储元件；包裹模板不计库存。Requires AE2 and a real filled storage cell, not a wrapped template."
-  ],
   "primaryColor": "#66FFDD",
   "secondaryColor": "#FFFFFF",
   "flowerResource": {
@@ -17,5 +10,14 @@
     },
     "amount": "16"
   },
-  "createComb": false
+  "createComb": false,
+  "breedingItem": "minecraft:diamond",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    }
+  ]
 }

@@ -281,182 +281,173 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 
 #### 扩展资源蜜蜂
 
-这部分面向整合包作者，也适合想自己加一只蜜蜂的玩家。先照着氢气蜂做通，再修改产物、颜色和花源；不需要写 Java。
+你可以自己添加蜜蜂，让它产出物品、蜜脾，或 FE、化学品、魔源等资源。外观、采蜜材料、繁殖食物和获得方式继续使用 PB 的 JSON；Genesis 增加资源产物配方和容器花源。
 
-**资源类型不限于这里列出的示例。** 氢气、FE、魔源、灵魂、压缩空气、EMC、经验和闪电是内置适配；任意已注册、可完整往返的 AEKey（包括其他模组的自定义资源）都可使用 `kind: ae_key` 走通用产物注册。须安装键提供方并准备对应 ME 存储；没有 AEKey 的新类型需要补充资源与传输适配。机器自动保管待输出资源，可从原生能力或本机 ME 连接输出，图标不能拖进背包，不需要额外资源接口方块。
+**扩展蜂同样支持 PB 的繁殖、物品转化、巢穴生成和钓鱼。** 在这些配方中填写扩展蜂的蜂种 ID 即可。扩展资源产出请使用 **Genesis 机械蜂箱、机械离心机及其工厂**；PB 自带的蜂箱和离心机用于普通 PB 产物。
 
-#### 1. 先选生产方式
+##### 下载与安装
 
-| 想让玩家怎么生产 | 参考示例 | 需要哪些文件 |
-| --- | --- | --- |
-| 蜂箱产蜜脾，再离心出氢气 | `hydrogen` | 蜂种 + PB 蜂箱配方 + 资源离心配方 |
-| 蜂箱直接产 FE | `energy` | 蜂种 + 直接资源配方 |
-| 蜂箱直接产极高压闪电 | `lightning_ehv` | 蜂种 + 直接资源配方 |
-| 蜂箱同时产物品和 FE | `mixed` | 蜂种 + PB 蜂箱配方 + 直接资源配方 |
+适用版本：Minecraft **1.21.1**、NeoForge、Productive Bees **13.14**、Genesis **1.1.0**。示例是可选内容，**不会打进模组 JAR，也不会随模组自动注册**。
 
-`energy` 与 `energy_comb` 是两只独立蜜蜂：前者直接产资源，后者先产蜜脾。`createComb: true` 只允许蜂种使用蜜脾外观，**不会自动创建产出蜜脾的配方**。同一蜂种同时添加两条路线会在两个阶段分别产出，只有希望这样设计时才这样写。
+| 下载 | 用途 |
+|---|---|
+| [全部示例合集](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip) | 推荐。包含可编辑文件、安装包、KubeJS 完整脚本、注释参考和每只蜂的文件索引 |
+| [可运行数据包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-datapack.zip) | 放进存档的 `datapacks`，不必解压 |
+| [中英文名称资源包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-resourcepack.zip) | 放进游戏的 `resourcepacks`，在“选项 → 资源包”启用 |
+| [带注释参考包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-reference.zip) | 逐字段说明，只用于阅读 |
 
-资源离心与普通 PB 蜜脾共用并行、虚拟 tick 和能耗计算。机械宿主每种资源的暂存上限为 `100 万 × 实际输出槽倍率`；旧默认额度自动扩容并保留余额。资源数量、生产力和蜜脾块四份计量仍占用额度，空间不足时保留输入，因此高产量配方仍可能受暂存与输出速度限制。
+**注释版 `.jsonc` 含有 `//` 注释，不能作为游戏 JSON 直接加载。只改后缀也不行。** 建议对照注释版，修改数据包中的无注释 `.json`。合集的 `INSTALL.txt` 提供安装步骤，`EXAMPLES.json` 列出每只蜂的定义、花源、获取材料和相关配方。
 
-**Genesis 扩展资源产出暂未适配 PB 原版蜂箱和离心机，请使用 Genesis 机械蜂箱／离心机。** PB 自己的普通产物仍按 PB 配方工作。这些蜂种的蜂笼、刷怪蛋、蜜脾／蜜脾块及机械蜂箱蜂槽会默认显示兼容提示，无需按 Shift。
+多人游戏由服务器安装数据包，每位玩家启用名称资源包。增加蜂种后重新进入世界；修改已有配方用 `/reload`，修改名称用 `F3+T`。缺少可选模组时，对应蜂种和配方不会加载。
 
-扩展资源功能及其兼容问题请反馈到 [Genesis 问题页](https://github.com/Ayoshiko/productive-bees-genesis/issues)，不要因上述适配限制向 PB 上游报错。JDTE、Useless 的开发接入要求见本节末尾。
+##### 先试一只铜能量蜂
 
-#### 2. 放好示例，先让氢气蜂出现
+这一例沿用整合包中实际使用的“空蜂笼 + 蜂蜜点心 + 铜锭”获取方式：
 
-从 [GitHub 示例目录](https://github.com/Ayoshiko/productive-bees-genesis/tree/main-neo/1.21.1/examples/resource-bees) 获取与模组版本匹配的文件。正式模组 JAR 不包含示例蜂或示例语言资源。
+1. 在工作台合成铜能量蜂蛋。**请使用空蜂笼**，配方不会保护装在蜂笼里的蜜蜂。
+2. 将蜜蜂放进 Genesis 机械蜂箱，在采蜜槽放铜锭，并给蜂箱供电。
+3. 它会直接产出 FE，无需离心。铜锭作为采蜜材料可重复使用。
+4. 打开 Mekanism 侧面配置，在 **ENERGY** 页把需要的面设为输出，再接能量线缆。产出的 FE 与机器工作电量分开。
+5. 在 JEI 中查看蜂蛋、蜜蜂和蜜脾的配方与用途，确认获得方式、采蜜材料和产物。
 
-- `datapack` 放到 `<存档>/datapacks/resource-bees-example/`，其中直接包含 `pack.mcmeta` 与 `data`。
-- `resourcepack` 放到 `<游戏目录>/resourcepacks/resource-bees-example/`，其中直接包含 `pack.mcmeta` 与 `assets`，并在客户端资源包菜单启用。
-- 数据包格式为 48，资源包格式为 34，适用于 Minecraft 1.21.1。服务器装数据包，每位客户端加载资源包。
-- `kubejs/server_scripts` 管理可选脚本；`api` 管理 Java 示例。现有配方 ID 保持不变，按文件用途寻找蜂种、蜂箱、直接生产和离心示例。
+32 只示例蜂均有便捷蜂蛋合成。28 只扩展蜂还各有繁殖与转化配方；玩家可以按整合包进度调整材料、产量，并选择保留哪些获取方式。
 
-在仓库根目录运行 `.\gradlew packageResourceBeeExamples --no-daemon`，可在 `build/resource-bee-examples` 获得两个根目录正确的 ZIP；分别直接放入存档数据包目录和客户端资源包目录。开发 `runClient` 自动加载两者，发布 JAR 不打包示例。
+##### 新建自己的蜂：只改这些文件
 
-另有按整合包蜂种格式编写的 `copper_energy`／`copper_energy_comb`：均以铜锭为花源，分别直接产 FE、先产蜜脾再离心产 FE。可选脚本 `kubejs/server_scripts/copper_energy_acquisition.js` 用蜂笼、蜂蜜点心和铜锭合成对应刷怪蛋，蜜脾路线再加蜂蜡。使用 KubeJS 时，数据与语言文件也可分别放到 `kubejs/data` 和 `kubejs/assets`；扩展资源配方需要 Genesis 1.1.0。
+以 `example:copper_energy` 为例，`example` 是命名空间，`copper_energy` 是蜂种名。若改成 `mypack:amber_energy`，要同时修改文件路径、配方里的蜂种 ID 和名称键。
 
-**注册蜂种时同步注册名称。** [中文语言文件](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/resourcepack/assets/productivebees/lang/zh_cn.json) 和 [英文语言文件](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/resourcepack/assets/productivebees/lang/en_us.json) 位于 `assets/productivebees/lang`。PB 对 `example:hydrogen` 使用 `entity.productivebees.hydrogen_bee`，而不是 `entity.example.hydrogen_bee`：
+**1. 蜂种定义** — [copper_energy.json](examples/resource-bees/datapack/data/example/productivebees/copper_energy.json)，位于 `data/example/productivebees/`：
 
-```json
+~~~json
 {
-  "entity.productivebees.hydrogen_bee": "氢气蜜蜂"
+  "primaryColor": "#C97852",
+  "secondaryColor": "#82452F",
+  "flowerItem": "minecraft:copper_ingot",
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "createComb": false
 }
-```
+~~~
 
-英文文件同键填写 `Hydrogen Bee`。蜜脾、刷怪蛋、JEI 和蜂箱预览复用蜂种名称。改蜂种路径时，同步所有配方 ID 引用和两份语言键；不同命名空间也应避免同路径名称冲突。每个蜂种 JSON 的 `_comment` 都提示其正确名称键。若仍显示原始键，启用语言资源包并按 F3+T；`/reload` 不重载客户端语言。
+这里改颜色、采蜜材料和繁殖食物。`flowerItem` 决定采蜜槽放什么；`breedingItem` 决定繁殖时喂什么，两者可以不同。`selfbreed: true` 允许同种繁殖，跨蜂种配对还需要下面的繁殖配方。
 
-参考 PB 作者模板的安装方式，也可以把 `data` 和 `assets` 分别放到 `kubejs/data`、`kubejs/assets`，保留命名空间层级，每位客户端都需要 assets。不要再重复启用同一数据包；使用服务器脚本时删除它替代的 JSON 配方。
+**2. 资源产物** — [copper_energy_production.json](examples/resource-bees/datapack/data/example/recipe/copper_energy_production.json)，位于 `data/example/recipe/`，注意 `recipe` 是单数：
 
-下面三份文件共同组成氢气蜂。示例 JSON 使用 `_comment` 写说明，仍是合法 JSON；说明字段可以保留，也可以删掉。不要在 JSON 中直接写 `//` 注释。文件夹 `example` 是命名空间，文件名 `hydrogen.json` 决定蜂种 ID 为 `example:hydrogen`。
-
-**第一份：蜂种** — `data/example/productivebees/hydrogen.json`
-
-```json
+~~~json
 {
-  "_comment": "氢气蜂的外观与花源；花源放在机械蜂箱的采蜜槽中。",
-  "primaryColor": "#BFEFFF",
-  "secondaryColor": "#FFFFFF",
-  "flowerBlock": "minecraft:iron_block",
-  "createComb": true
+  "type": "productivebeesgenesis:resource_production",
+  "bee": "example:copper_energy",
+  "outputs": [
+    { "kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1 }
+  ]
 }
-```
+~~~
 
-**第二份：蜂箱产什么蜜脾** — `data/example/recipe/hydrogen_honeycomb.json`
+改 `bee`、资源种类和数量即可。`amount` 必须是带引号的正整数；`chance` 是 0～1 的数字，`1` 必定产出，`0.25` 表示 25%。数量是基础值，蜜蜂基因和升级会继续生效。
 
-```json
+**3. 获取方式** — 根据玩法保留需要的配方：
+
+| 方式 | 示例文件 | 主要修改项 |
+|---|---|---|
+| 蜂蛋合成 | [acquisition/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/acquisition/copper_energy.json) | `ingredients` 材料、蜂蛋组件中的 `type` |
+| 两种蜂繁殖 | [bee_breeding/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_breeding/copper_energy.json) | `parent1`、`parent2`、`offspring` |
+| 物品转化 | [bee_conversion/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_conversion/copper_energy.json) | `source`、`result`、`item`、`chance` |
+| 巢穴生成 | [bee_spawning/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_spawning/copper_energy.json) | 巢穴 `ingredient`、蜂种 `results`、群系 `biomes` |
+| 钓鱼 | [bee_fishing/container_water.json](examples/resource-bees/datapack/data/example/recipe/bee_fishing/container_water.json) | `bee`、`biomes`、`chance` |
+
+例如，让 PB 铜蜂与红石蜂繁殖出你的扩展蜂：
+
+~~~json
 {
-  "_comment": "ingredient 和结果的 bee_type 必须与蜂种 ID 一致。",
-  "type": "productivebees:advanced_beehive",
-  "ingredient": "example:hydrogen",
-  "results": [{
-    "item": {
-      "item": "productivebees:configurable_honeycomb",
-      "components": {"productivebees:bee_type": "example:hydrogen"}
-    },
-    "chance": 1.0
-  }]
+  "type": "productivebees:bee_breeding",
+  "parent1": "productivebees:copper",
+  "parent2": "productivebees:redstone",
+  "offspring": "example:copper_energy"
 }
-```
+~~~
 
-**第三份：离心后得到什么** — `data/example/recipe/hydrogen_centrifuging.json`
+繁殖时分别给亲本喂它们自己的繁殖食物。转化则给源蜜蜂使用指定物品；转化概率与产物概率分别由各自配方的 `chance` 决定。巢穴和钓鱼也沿用 PB 的玩法。
 
-```json
+下载包保留了 `neoforge:conditions`：改名时一起修改里面的蜂种 ID；更换可选模组时一起修改 `modid`。引用示例亲本时，也要安装这些亲本的定义和获取配方，或换成整合包已经存在的蜂。
+
+**4. 名称** — 修改资源包中的 `assets/productivebees/lang/zh_cn.json` 和 `en_us.json`：
+
+~~~json
 {
-  "_comment": "每个蜜脾产 100 mB 氢气；蜜脾块自动按四份计算。",
+  "entity.productivebees.copper_energy_bee": "铜能量蜜蜂"
+}
+~~~
+
+PB 名称键固定以 `entity.productivebees.` 开头，再接蜂种路径和 `_bee`。例如 `mypack:amber_energy` 使用 `entity.productivebees.amber_energy_bee`，不要把键中的 `productivebees` 换成 `mypack`。
+
+##### PB 普通蜜蜂的完整配置示例
+
+[pb_copper.json](examples/resource-bees/datapack/data/example/productivebees/pb_copper.json) 包含所参考 PB 模板中的外观、初始基因、体型、速度、攻击、繁殖和环境字段；另有独立花源例子，避免把互斥字段写进同一只蜂。
+
+| 自定义内容 | 字段与示例 |
+|---|---|
+| 身体、条纹、花粉颜色 | `primaryColor`、`secondaryColor`、`particleColor`，使用 `#RRGGBB` |
+| 四种 PB 花源，选一种 | `pb_copper`：`flowerBlock` 铜块；`pb_redstone`：`flowerItem` 红石；`pb_water`：`flowerFluid` 水；`pb_tag`：`flowerTag` 自定义标签 |
+| 初始基因 | `attributes` 内的耐候、性情、作息、耐力和生产力；取值见注释版 |
+| 体型、速度、攻击 | `size`、`speed`、`attack` |
+| 繁殖食物与同种繁殖 | `breedingItem`、`breedingItemCount`、`selfbreed` |
+| 防水、防火 | `waterproof`、`fireproof` |
+| 专属蜜脾 | `createComb`；仍需写蜂箱产物配方 |
+| 可选模组条件 | 蜂种用 `conditions`，配方用 `neoforge:conditions` |
+
+普通 PB 路线是“蜜蜂 → 蜜脾 → 物品／液体”。四只 `pb_` 蜂均配有 `productivebees:advanced_beehive` 与 `productivebees:centrifuge` 配方；铜蜂演示繁殖，红石蜂演示转化，标签蜂演示巢穴，水蜂演示钓鱼与液体产物。**这些 PB 字段也可以加到扩展蜂上**，例如给魔源蜂设置夜间工作或自定义繁殖食物。
+
+`flowerTag` 填标签 ID，不加 `#`；同时参考 `tags/block/resource_flowers.json` 和 `tags/item/resource_flowers.json`。`flowerBlock`、`flowerItem`、`flowerFluid`、`flowerTag` 只选一种。
+
+##### 先产蜜脾，再离心出资源
+
+参考 [hydrogen.json](examples/resource-bees/datapack/data/example/productivebees/hydrogen.json)、[hydrogen_honeycomb.json](examples/resource-bees/datapack/data/example/recipe/hydrogen_honeycomb.json) 和 [hydrogen_centrifuging.json](examples/resource-bees/datapack/data/example/recipe/hydrogen_centrifuging.json)：
+
+1. 蜂种设置 `createComb: true`，氢气蜂的采蜜物品为铁锭。
+2. PB 蜂箱配方产出 `productivebees:configurable_honeycomb`，保留 `productivebees:bee_type` 组件，值为 `example:hydrogen`。
+3. Genesis 资源离心配方选择化学品：
+
+~~~json
+{
   "type": "productivebeesgenesis:resource_centrifuging",
   "bee": "example:hydrogen",
-  "outputs": [{"kind": "chemical", "id": "mekanism:hydrogen", "amount": "100", "chance": 1.0}],
-  "processing_time": 20
+  "processing_time": 20,
+  "outputs": [
+    { "kind": "chemical", "id": "mekanism:hydrogen", "amount": "100", "chance": 1 }
+  ]
 }
-```
+~~~
 
-增加蜂种后重新进入世界；修改已有配方可以用 `/reload`。测试时可用下面的命令获得蛋，再把蜜蜂放入机械蜂箱，采蜜槽放铁块并供电。示例不会自然生成蜜蜂；生存获取方式由整合包另配 PB 繁殖或转化配方。
+`processing_time` 是游戏刻，20 刻约一秒；不写时默认为 200。PB 普通离心配方使用的是 `processingTime`，不要混用。`createComb` 只提供蜜脾外观，不会自动添加产物配方。
 
-```mcfunction
-/give @s productivebees:spawn_egg_configurable_bee[minecraft:entity_data={id:'productivebees:configurable_bee',type:'example:hydrogen'}]
-```
+`energy` 与 `energy_comb` 分别演示直接产 FE、蜜脾离心产 FE。给同一只蜂同时加两条路线，会在两个阶段分别产资源。
 
-#### 3. 接线，看资源去了哪里
+##### 选用其他扩展资源
 
-先让蜂箱产出带 `example:hydrogen` 类型的蜜脾，再放进 **Genesis 机械离心机**。机器供电后，一个蜜脾得到 100 mB 氢气；一个对应蜜脾块按四份得到 400 mB。这里是未计入基因和升级的基础数量；有概率的蜜脾块会分别抽四次。
+以下均有完整蜂种、获取和产物文件。带 `_comb` 的例子先产蜜脾；氢气例子本身走蜜脾路线。
 
-想进 ME 网络：安装 **AE2 + Applied Mekanistics**，把线缆直接接离心机，给网络供电、频道以及能存化学品的存储元件。机器的 AE 输出总开关须开启。打开主 GUI 的“扩展资源”TAB 能看到待输出量；已送入网络的部分在 ME 终端查看。界面图标不可取出，产物不会掉到地上。
+| 示例 | 采蜜材料 | `kind` 与需要修改的字段 | 对应模组 |
+|---|---|---|---|
+| `energy` / `copper_energy` | 红石 / 铜锭 | `energy`，`energy_type: "FE"` | Genesis |
+| `hydrogen` | 铁锭 | `chemical`，`id: "mekanism:hydrogen"` | Mekanism |
+| `source` | 魔源宝石 | `source` | Ars Nouveau |
+| `soul` | 灵魂沙 | `soul` | Industrial Foregoing Souls |
+| `air` | 压力表 | `air` | PneumaticCraft |
+| `emc` | 炼金煤炭 | `emc` | ProjectE |
+| `experience` | 附魔之瓶 | `experience`，数量为经验点 | ExperienceLib |
+| `lightning` / `lightning_ehv` | 闪电坍缩矩阵 | `lightning`，`tier` 为 `high_voltage` / `extreme_high_voltage` | AE2 Lightning Tech |
+| `ae_key` | 钻石 | `ae_key`，`type`、`id`、完整 `data` | AE2 及所选资源提供方 |
 
-扩展资源窗口用于查看化学品、能量等物品／流体以外的产物，默认显示“生产监控”，可切换“待输出库存”。产率按近 5 秒实际成功结算量计算，含升级与加速影响；资源已全部输出、蜜脾因出口不可用返网后仍显示已观察资源和等待状态，停止生产后产率归零。统计不把库存转账计为新生产，不提供背包取放或额外存储。窗口打开时每 500 ms 同步变化，关闭后停止查询并释放会话；Jade 不同步产率。18×18 槽位保留原生 16×16 图标，详情与悬停提供数量、单位和状态。
+`ae_key` 示例每次产一颗钻石，使用 `type: "ae2:i"`。添加其他 AE2 资源时，需要提供方真实的资源键数据和可接收的存储；仅改显示名称不能创建新资源。
 
-化学品也能由 Mekanism 化学管道直接从机器拉取。同种资源汇总所有处理槽；可搜索、筛选，并按名称、产率／库存数量或类型排序。网格中的 K/M 等为向下截断的缩写，详情和悬停保留精确值，化学品原生罐展示本机待输出库存。“弹空”尝试把选中库存送入 ME 或相邻容器，拒收余量保留。FE 产物与工作电池分开；已入网库存请在 ME 终端查看。
+`mixed` 演示同一蜂同时产普通物品和 FE，保留 PB 蜂箱配方与 Genesis 直接资源配方即可。`mixed_essence` 提供小颗粒物品，便于搭配精华转换升级；`mixed_tag` 使用标签花源。`combined` 演示一次离心同时产普通物品与 FE：设置 `include_pb_outputs: true`，并保留匹配的 PB 离心配方。
 
-空气和普通通用 AEKey 的 ME 输出使用长整数请求，不再统一限制为每次 2.1G。实际接收量仍受网络供电、存储容量、接收方接口和共享调度预算约束。原生 FE／魔源／灵魂接口使用 int，原生供气另受安全压力限制。Soulplied Energistics 1.0.3 的外部灵魂存储直接把 long 强转 int，灵魂及对应通用键暂保留每次 2,147,483,647 的兼容保护。
+##### 用装满资源的容器采蜜
 
-不走 ME 时，打开机器的 Mekanism 原生侧面配置窗口，选择与物品、流体、ENERGY 并列的资源页。每个资源页只在对应模组加载时出现；化学品使用 MEK 原生化学品侧面图标，其他资源页使用对应模组的代表性物品图标并在页签按钮内居中。化学品、魔源、灵魂、经验与闪电可在对应页选择蓝色输出面；空气通过安全压力下的主动供气进入气动管网。自动弹出送相邻兼容容器／机器，关闭后仍允许支持对应能力的外部管道提取。FE 使用原生 ENERGY 页或配置器：INPUT 给工作电池充电，OUTPUT 只输出 FE 产物，INPUT_OUTPUT 同面支持两者，NONE 关闭。工作电池和 FE 产物使用独立容器，输出不会抽走机器工作电量。
+容器花源适用于 Genesis 机械蜂箱及工厂。在蜂种 JSON 中用 `flowerResource` 替换其他花源字段：
 
-旧机器默认保留化学品等资源的六面提取，自动弹出关闭；空气自动供气开启，FE 产物面默认全关。设置随存档、安装器升级、拆卸／挖掘的机器物品及合成升级保存。MEK 配置卡 Shift 右键读取，普通右键粘贴到兼容机器，只复制侧面和自动弹出设置，不复制资源账户、余额或 EMC 收款人；多机器合成沿矩阵顺序取首份设置。
-
-#### 4. 改成直接产 FE 或闪电
-
-以 `energy.json` 定义的 `example:energy` 为例，花源换成铜块，然后只添加 `data/example/recipe/energy_production.json`：
-
-```json
-{
-  "_comment": "机械蜂箱每个基础周期直接产 1000 FE，不经过蜜脾和离心。",
-  "type": "productivebeesgenesis:resource_production",
-  "bee": "example:energy",
-  "outputs": [{"kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1.0}]
-}
-```
-
-FE 进入 ME 需要 AE2 + Applied Flux；产物 FE 与机器工作用电分开保存。极高压闪电参考 `lightning_ehv.json` 和 `lightning_ehv_production.json`，把 `outputs` 改成下面这样，并安装 AE2 Lightning Tech 及其前置：
-
-```json
-[{"kind": "lightning", "tier": "extreme_high_voltage", "amount": "1000", "chance": 1.0}]
-```
-
-高压用 `high_voltage`，极高压用 `extreme_high_voltage`。两种电压分别存储，不能互换。先产闪电蜜脾的完整例子使用独立蜂种 `lightning_ehv_comb`；它需要自己的蜂箱与资源离心配方。
-
-#### 5. 最常修改的字段
-
-| 字段 | 怎么填 |
-| --- | --- |
-| `bee` / `ingredient` / `productivebees:bee_type` | 都填完整蜂种 ID，如 `mypack:hydrogen`；改命名空间时三处一起改 |
-| `amount` | 正整数**字符串**，如 `"1000"`；不要写 `1000` 或 `1e3`；其他资源最大为 `9223372036854775807`，EMC 支持最多 4096 位十进制整数 |
-| `chance` | 0 到 1 的数字；`1.0` 表示必定产出，`0.25` 表示每份 25% |
-| `processing_time` | 离心基础时间，单位 tick；20 tick = 1 秒，只用于离心配方 |
-| `flowerBlock` / `flowerItem` | 放进采蜜槽的方块或物品 ID，普通静态花源会重复使用 |
-| `flowerTag` | 标签 ID，不加 `#`，如 `example:resource_flowers`；参考 `mixed_tag` |
-| `include_pb_outputs` | 资源离心默认为 `false`；设为 `true` 时同时执行匹配的 PB 普通离心配方 |
-
-改数量只改 `amount`；改化学品只改 `id`。新建另一只蜂时，复制蜂种及相关配方，修改文件名和所有蜂种 ID，避免覆盖原示例。
-
-| 资源 | `outputs` 中的关键字段 | 资源模组 | ME 还需安装 |
-| --- | --- | --- | --- |
-| 化学品 | `kind: chemical`、`id: mekanism:hydrogen` | Mekanism | AE2、Applied Mekanistics |
-| FE | `kind: energy`、`energy_type: FE` | 无额外前置 | AE2、Applied Flux |
-| 魔源 | `kind: source` | Ars Nouveau | AE2、Ars Énergistique |
-| 灵魂 | `kind: soul` | Industrial Foregoing Souls | AE2、Soulplied Energistics，及支持灵魂的存储元件 |
-| 空气 | `kind: air` | PneumaticCraft | AE2、Applied Pneumatics |
-| EMC | `kind: emc` | ProjectE | 自动入账在线收款玩家，无需 EMC-ME 扩展 |
-| 经验点 | `kind: experience` | ExperienceLib | AE2、Applied Experienced |
-| 闪电 | `kind: lightning`、`tier` | AE2 Lightning Tech | 使用对应电压的存储 |
-
-空气的 1000 原始单位 = 1 L，压力 bar 不是产量。机器的原生能力可由 Ars 中继、灵魂管道、气动管道等提取对应资源；空气可主动送入相邻接收方。气动管路须封闭泄漏端。经验和魔源不会直接写入玩家个人数值。
-
-**EMC 自动入账玩家账户。** 默认收款人为放置机器并拥有其资源账户的玩家，入账后同步 ProjectE 余额和已打开的转化界面，无需 AE2、ME 存储或 EMC-ME 扩展。同时安装 ProjectE 与 FTB Teams 时才显示收款人按钮，机器拥有者或管理员可在资源窗口点击“收款人”，循环选择同队在线玩家或返回机主；机器没有待输出库存时仍可切换。收款人离线、退队或能力不可用时 EMC 留在机器，恢复资格后继续入账；不会自动改投其他去向。未知写入结果隔离，通知重试不会重复加钱。第三方宿主继续使用自身输出规则。
-
-**EMC 使用精确整数。** 生产、倍率、蜜脾块份数、待输出、存档余额与菜单数量支持最多 4096 位十进制整数。例如可把 MK16 的基础量声明为 `"amount": "47958864426752"`；蜂箱仍按自身蜂种周期和升级规则生产。安装 Project Expansion 后，可通过 BigInteger 能力向有足够空间的接收方交接完整大数量。普通 ProjectE 接收方按有界批次接收，余量留在同一账户；满载或异常不会导致越界或自动重放。不提供 AppliedE 适配。
-
-其他资源保持原 long 上限；每种资源的待输出额度随机器输出等级计算，至少为 100 万，EMC 使用精确数量预算。旧余额在额度扩容时保留。高倍率加速仍需足够工作电量和接收空间。资源网络协议已更新，客户端与服务端须同步更新。
-
-扩展资源没有可用出口或暂存额度不足时，机械离心机把原蜜脾交给持久化返还缓冲，ME 可接收时返网，并暂停该类蜜脾的新取料。出口恢复后自动续料；已付周期保留原配方、种子和完整输入身份，未知扣料／接收结果继续保管，不自动重放。
-
-#### 容器花源：按里面的资源匹配
-
-Genesis 机械蜂箱及其工厂支持把装有资源的物品作为可重复使用的花源。普通物品花源只看物品 ID；容器花源会核对内容，所以空罐、装错资源或数量不足都不能工作。
-
-JEI 采蜜页面使用 AE2 存储元件展示容器花源的实际资源、最低含量和采蜜槽用法。对应键桥与兼容元件可用时，展示副本内含所需资源；否则仅显示提示。气体桶、Mekanism 化学品罐和提供对应能力的容器按内容识别，单件单储槽达标且不消耗。
-
-在蜂种 JSON 中添加 **flowerResource**，填写 kind 和字符串 amount；amount 表示最低数量，省略时为 "1"。不要同时保留 flowerBlock、flowerItem、flowerTag、flowerFluid，也不支持 inverseFlower 或采后回调；冲突或错误定义会拒绝工作。
-
-```json
+~~~json
 {
   "flowerResource": {
     "kind": "chemical",
@@ -464,58 +455,45 @@ JEI 采蜜页面使用 AE2 存储元件展示容器花源的实际资源、最�
     "amount": "1000"
   }
 }
-```
+~~~
 
-- **化学品容器**：kind 为 chemical，id 例如 mekanism:hydrogen，amount 例如 "1000"。使用提供 Mekanism 化学品物品能力的桶、罐或其他容器。参考 [氢气容器蜂](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_hydrogen.json)。
-- **液体容器**：kind 为 fluid，id 例如 minecraft:water，amount 例如 "1000"。支持 NeoForge 流体能力物品与传统桶。参考 [水容器蜂](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_water.json)。
-- **能量容器**：kind 为 energy，energy_type 为 FE。支持标准 FE 能力物品，以及按当前换算读取的 Mekanism 能量物品。参考 [能量容器蜂](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_energy.json)。
-- **其他 AEKey 资源**：kind 为 ae_key，填写真实 type、id、完整 data。放入已存有该资源的真实 ME 存储元件，不需要把蜂箱接入网络才能检查这个元件。参考 [ME 元件花源蜂](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_ae_key.json)。
+这是花源字段片段，放入完整蜂种定义中使用。例子要求一个储槽内至少有 1000 mB 氢气，可以使用装有氢气的 Mekanism 化学品罐。**采蜜不会消耗容器或里面的资源**，空罐和装错资源的罐不满足条件。
 
-液体和化学品的 id 也可写带 # 的资源标签。已有 flowerFluid 蜂种继续使用原字段，现可识别普通桶以外的流体能力容器；其最低要求是存在正数量的对应液体。
+- `container_water`：至少 1000 mB 水，可用水桶，演示以水为花源产 FE。
+- `container_hydrogen`：至少 1000 mB 氢气。
+- `container_energy`：至少 1000 FE，可用已充电的能量容器。
+- `container_ae_key`：真实 ME 物品存储元件内至少有 16 颗钻石，产物也是钻石；检查花源时不要求蜂箱联网。
 
-**采蜜不抽取资源，不消耗容器。** 数量按单件容器检查，不乘物品堆叠数量，也不合并多个采蜜槽。原生容器须有一个内部储槽达到门槛，最多检查 64 个内部槽；ME 元件按一个完整资源键的可用量判断。蜜蜂基因和升级不放大花源门槛。
+`amount` 表示最低含量，默认 `"1"`。多个容器或多个采蜜槽的数量不会相加。四种容器例子也都提供 PB 繁殖和转化配方。
 
-容器被清空、换内容或数量不足后，最迟下一个真实服务器 tick 停止采蜜；禁用槽立即退出匹配。资源包只改变外观，不会改变所装资源身份。
+##### 使用 KubeJS 注册配方
 
-包裹资源图标、显示模板和连接远端仓库的卡片不等同于真实本地库存。其他模组的原生资源物品只有提供上述读取能力才可直接使用；已注册 AEKey 的资源可以使用对应真实存储元件。此项花源扩展当前只接入 Genesis 机械宿主，PB 原版／JDTE 不能按新字段生产。
+完整合集中的 `kubejs` 可以复制到整合包的 KubeJS 目录：
 
-新增蜂种时同步中英文名称键。KubeJS 配方写法不变，flowerResource 保留在数据包的蜂种 JSON 中。
+- `data` 保留蜂种 JSON 和花源标签。
+- `assets` 提供中英文名称。
+- `server_scripts/genesis_resource_bees.js` 使用 `event.custom(...)` 注册全部获取与产物配方，和数据包内容一致。
 
-#### 6. 使用 KubeJS，或者让一次加工有多种产物
+**数据包安装与完整脚本安装选一种。** 仓库里的分类型脚本供单独选用，不要与完整脚本重复安装。`flowerResource` 和 PB 属性继续放在蜂种 JSON 中。若只修改一个配方，保留它的配方 ID，避免旧配方与新配方同时生效。
 
-蜂种 JSON 保留在数据包里。将对应示例 JS 复制到 `kubejs/server_scripts/`，删除它替代的配方 JSON，执行 `/reload`。例如 `hydrogen.js` 替代氢气的两份配方；`energy.js` 演示两只蜂的三份配方。脚本有逐步注释，数量也要写成字符串。数据包与脚本选一种方式管理同一配方，避免同 ID 相互覆盖。
+##### 在游戏中输出资源
 
-`mixed` 演示同一只蜂产铁锭、蜜脾和 FE：保留同蜂种的 PB 蜂箱配方与直接资源配方。`mixed_essence` 演示精华转换，`mixed_tag` 演示标签花源。生产力、蜜脾块、基因采样和已有升级继续按机器原规则工作；纯资源蜂不会额外生成默认蜂蜜。
+在机器的 Mekanism 侧面配置窗口中，**化学品图标在左侧 ENERGY 下方**。其他扩展资源从**右侧入口**进入，再用正方形图标选择魔源、灵魂、空气、经验或闪电；仅显示已安装的类型。选择输出面后，可开启自动弹出，或使用该资源支持的管道提取。
 
-`combined` 演示离心时同时产普通物品与 FE。设置 `include_pb_outputs: true`，并保留匹配的 PB 离心配方；只扣一次输入和费用。没有匹配的普通配方会暂停。精华转换后再做粗矿熔炼；超出三个输出槽的余量留在机器内，排空后继续。
+FE 使用原生 ENERGY 页：输入给工作电池充电，输出提供蜜蜂产出的 FE，输入／输出可在同一面同时使用。空气需要连通且不漏气的气动管网。
 
-#### 7. 没跑起来时，按这个顺序检查
+使用 ME 存储时，需要 AE2、可用频道、供电、对应存储和资源桥接模组：化学品用 Applied Mekanistics，FE 用 Applied Flux，魔源用 Ars Énergistique，灵魂用 Soulplied Energistics，空气用 Applied Pneumatics，经验用 Applied Experienced，闪电用 AE2 Lightning Tech。EMC 会存入机器拥有者的 ProjectE 账户；安装 FTB Teams 后可在资源窗口选择同队在线收款人。
 
-1. **JEI 没有配方／找不到蜂种：** 检查目录是否是 `recipe`（单数）、命名空间和 JSON 语法。新增蜂种后重新进入世界。
-2. **蜜蜂等待花源：** 把定义中的花源放入采蜜槽，检查槽位是否禁用。氢气用铁块；FE、闪电例子用铜块。
-3. **资源没有进网络：** 打开“扩展资源”面板，检查 AE 输出开关、频道、网络供电、桥接模组和对应存储元件；只有普通物品盘不能存氢气或闪电。
-4. **本机资源已满：** 修好输出后会继续；满载时保留输入或已完成的产物，不需要重新注册配方。
-5. **显示待核验：** 先保留存档，核对接收端、输入和费用，再由管理员处理。不要删除账户文件或反复补发；未确认的外部接收不会自动重试。
+机器资源面板可查看产量和待输出库存，图标不能拿到背包里。暂时没有可用出口时，先检查输出面、容器空间或 ME 存储。
 
-#### 进阶：通用资源、Java 和其他机器
+##### 常见问题
 
-已注册到 AE2 的其他类型可以用 `kind: ae_key`，填写真实 `type`、`id`、完整 `data` 和字符串 `amount`。`ae_key` 示例使用 AE2 自带的 `ae2:i` 物品键演示钻石；修改前先核对目标模组键的格式。完整身份限 1024 字节，不能用缺失内容占位物代替；这条路线只向 ME 输出。包裹物品仅用于显示或模板，不会给库存入账。
-
-Java 示例在 `examples/resource-bees/api/ResourceBeeApiExample.java`，使用 `RegisterResourceRecipesEvent` 注册配方，第三方机器通过 `RegisterResourceHostsEvent` 与 `ResourceHostApi` 接入。数据包同 ID 覆盖 Java 默认配方。周期预约、扣料与提交必须在同一服务器 tick 完成；`transfer` 回调返回实际接收量，异常会暂停，不能把未知结果当作零接收。编译示例：
-
-```powershell
-.\gradlew compileResourceApiExampleJava -I examples/resource-bees/api-example.gradle --no-daemon
-```
-
-**Useless 1.21.1-2.4.6 已有原生配方转换和通用资源键 API，Genesis 通过这些接口注册资源离心配方，无需额外宿主补丁。** 在高级合金炉使用 PB 离心机作为模具，输入带完整蜂种组件的蜜脾／蜜脾块；还需 AE2、对应资源键桥和接收存储。只转换确定性、独立的资源离心配方，随机及 `include_pb_outputs` 组合不接入。并行、催化剂、能耗、加工、输出和恢复遵守 Useless 自身规则，不向 Genesis 资源账户重复记账。
-
-JDTE 0.6.4.3 官方版仍缺蜂种扩展配方入口。本地 API v3 补丁仅对显式匹配的扩展蜂触发：Genesis 提供配方产物，生物工厂负责费用和已有周期暂存，通过绑定网络的原生 AE 输出升级回网；还需对应资源键桥与接收 ME 存储。拒收、部分接收保留余量，执行结果未知时暂停自动重试。FE、氢气、完整物品／流体键及两种闪电电压已通过原生输出流程验证。正式 PR 留待 Genesis 资源扩展版本发布后提交。旧过渡桥、API v1／v2 与 Useless 保管记录仅作历史证据；旧 Useless 核验命令仅在原型接口存在时保留。
-
-管理员可用 `/pbgresources` 查看资源账户，用 `/pbgoutput <坐标> status` 查看普通输出保管。核验两端后才执行对应 `resolve`；`retry-data` 用于恢复缺失依赖后的原文重读，`confirm-production-settled` 不会补发产物。正常重启和升级保留已有资产与未决请求。旧 .session 文件不再作为停产判据。已保存的未知生产只隔离原车道，未知输出只隔离对应资源，其他生产继续。缺依赖的资源蜜脾不会进入万象候选或离心输入；已进入的蜜脾转入持久化返还缓冲，释放生产槽。真实损坏数据和保存故障仍保管受影响资产，不代表跨存储原子提交。安装 Project Expansion 后使用其短格式显示 EMC，后台数量保持精确。
-
-输入拉取及返还的未决请求也由 `status` 展示。核验两端后可用 `/pbgoutput <坐标> resolve-input <UUID> <实际转移量>`：`extract`／`withdraw-slot` 填写实际从 ME 或源槽扣出的数量，`slot`／`return` 填写接收方实际收到的数量。确认后已知余量只回 ME。未知结果暂停普通蜜脾、扩展资源和熔炼加工，不自动重试。
-
-暂时移除 AE2 时，机器仍保留输入过滤配置的原始数据，再装回后恢复白名单、完整物品指纹、限额及库存策略。无法读取的版本或损坏字段会暂停新取料并拒绝界面编辑，`status` 显示原因；修复原数据后可用 `retry-data` 重读。配置恢复不清除、确认或复制已有输入暂存和未决请求。等级升级同样保留配置，交接记录走独立快照；蜂箱保留其实际 AE 输出开关。
+- **找不到蜜蜂：** 检查所需模组、数据包是否启用、目录是否正确，再重新进入世界。
+- **有蜂但不工作：** 在 JEI 查看花源，把对应物品放进启用的采蜜槽，并给机械蜂箱供电。
+- **繁殖或转化无效：** 核对亲本／源蜜蜂 ID、繁殖食物或转化物品；改名后也要更新加载条件。
+- **只有蜜脾，没有资源：** 蜜脾路线需要 Genesis 机械离心机和匹配的资源离心配方。
+- **显示英文键名：** 启用名称资源包，核对 `entity.productivebees.<蜂种名>_bee`，按 `F3+T`。
+- **配方报错：** 使用无注释 JSON；检查逗号、引号、单数 `recipe` 目录，以及字符串形式的扩展 `amount`。
 
 ## 前置依赖
 

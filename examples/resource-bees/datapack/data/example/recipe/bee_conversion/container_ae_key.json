@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:ae_key",
+  "result": "example:container_ae_key",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:chest"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:ae_key"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_ae_key"
+    }
+  ]
+}

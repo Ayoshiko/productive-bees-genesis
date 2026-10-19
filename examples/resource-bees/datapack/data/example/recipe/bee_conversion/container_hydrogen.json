@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:hydrogen",
+  "result": "example:container_hydrogen",
+  "chance": 1,
+  "item": {
+    "item": "mekanism:basic_chemical_tank"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:hydrogen"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_hydrogen"
+    }
+  ]
+}

@@ -1,15 +1,30 @@
-// ae_key.js：先保留 datapack 中的蜂种定义，再将本文件放入 kubejs/server_scripts。
-// 此脚本替换下面同 ID 的配方 JSON；删除被替换的 JSON 后执行 /reload。
-// 蜂种 ID 必须与 bee / ingredient / bee_type 一致；amount 保持十进制字符串，chance 是 0..1 的数字。
-// 机械宿主的资源从本机 ME 连接输出；对应存储桥接模组仍须安装。
-// Keep the bee definitions, replace the matching recipe JSON files, and reload. Amounts are strings.
+// 保留蜂种 JSON；此脚本替换同 ID 的配方。数据包与脚本选择一种维护方式。
+// Keep bee definitions. Use this script instead of recipe JSON files with the same IDs.
 ServerEvents.recipes(event => {
   event.custom({
-    type: 'productivebeesgenesis:resource_production',
-    bee: 'example:ae_key',
-    outputs: [{
-      kind: 'ae_key', type: 'ae2:i', id: 'minecraft:diamond',
-      data: { id: 'minecraft:diamond' }, amount: '1000', chance: 1
-    }]
+    "type": "productivebeesgenesis:resource_production",
+    "bee": "example:ae_key",
+    "outputs": [
+      {
+        "kind": "ae_key",
+        "type": "ae2:i",
+        "id": "minecraft:diamond",
+        "data": {
+          "id": "minecraft:diamond"
+        },
+        "amount": "1",
+        "chance": 1
+      }
+    ],
+    "neoforge:conditions": [
+      {
+        "type": "neoforge:mod_loaded",
+        "modid": "ae2"
+      },
+      {
+        "type": "productivebees:bee_exists",
+        "bee": "example:ae_key"
+      }
+    ]
   }).id('example:ae_key_production')
 })

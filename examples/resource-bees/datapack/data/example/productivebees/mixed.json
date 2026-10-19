@@ -1,13 +1,9 @@
 {
-  "_comment": [
-    "蜂种 ID 为 example:mixed；改文件名或命名空间时，同步配方中的 bee、ingredient 和 bee_type。",
-    "primaryColor / secondaryColor 为外观颜色；flowerBlock=minecraft:copper_block 放入采蜜槽。静态花源重复使用。",
-    "createComb 只控制蜜脾外观；还需蜂箱产物配方才会产蜜脾。此示例不添加自然生成。",
-    "Bee ID: example:mixed. Match all recipe references. Colors and flower are editable; createComb does not create recipes. No natural spawning.",
-    "名称键 / Name key: entity.productivebees.mixed_bee；同步 resourcepack/assets/productivebees/lang 的 zh_cn.json 与 en_us.json。"
-  ],
   "primaryColor": "#C6C6C6",
   "secondaryColor": "#FFD34D",
-  "flowerBlock": "minecraft:copper_block",
-  "createComb": false
+  "createComb": false,
+  "flowerItem": "minecraft:iron_ingot",
+  "breedingItem": "minecraft:iron_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true
 }

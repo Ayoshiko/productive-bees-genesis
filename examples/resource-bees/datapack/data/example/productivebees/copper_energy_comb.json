@@ -5,5 +5,7 @@
   "size": 0.7,
   "selfbreed": true,
   "renderer": "default",
-  "createComb": true
+  "createComb": true,
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1
 }

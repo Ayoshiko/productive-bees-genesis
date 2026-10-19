@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "productivebees:crystalline",
+  "result": "example:ae_key",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:diamond"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "productivebees:crystalline"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:ae_key"
+    }
+  ]
+}

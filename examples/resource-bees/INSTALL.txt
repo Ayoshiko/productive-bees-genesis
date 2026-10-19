@@ -1,0 +1,52 @@
+资源蜜蜂注册示例 / Resource Bee Examples
+Minecraft 1.21.1 · NeoForge · Productive Bees 13.14 · Genesis 1.1.0
+这些是可选择安装、可以修改的教学示例，模组 JAR 不会自动注册它们。
+These are optional, editable examples. The mod JAR does not register them.
+
+开始使用 / Install
+1. resource-bees-datapack.zip 放入 存档/datapacks。
+   Put resource-bees-datapack.zip in your world's datapacks folder.
+2. resource-bees-resourcepack.zip 放入 游戏/resourcepacks，并在资源包菜单启用。
+   Put resource-bees-resourcepack.zip in resourcepacks and enable it.
+3. 重新进入世界，在 JEI 查看蜂蛋合成、繁殖、转化、采蜜和离心配方。
+   Reopen the world. Use JEI to view acquisition, flowers and output recipes.
+4. 完整合集解压后的 datapack / resourcepack 是同一套可编辑源文件。
+   The unpacked datapack / resourcepack folders contain the same editable files.
+缺少可选模组时，对应示例蜂与配方不会加载。示例产量和获取难度可自行调整。
+Examples for missing optional mods are skipped. Adjust yields and costs to your pack.
+
+KubeJS 用户 / KubeJS alternative
+完整合集的 kubejs 目录包含 data、assets 和 server_scripts，可复制到整合包 kubejs 目录。
+Choose the bundle's kubejs folder for the KubeJS installation method.
+其中 data 保留蜂种和标签，server_scripts/genesis_resource_bees.js 注册全部配方。
+data contains bee definitions/tags; server_scripts/genesis_resource_bees.js registers recipes.
+不要同时安装数据包与完整脚本；不要把仓库的分类型脚本再叠加到完整脚本上。
+Use either the datapack or the complete script. Do not combine complete and per-type scripts.
+新的蜂种或资源文件需要重新进入世界；已有配方修改可执行 /reload。
+Reopen the world for new bees/resources; /reload updates existing recipes.
+
+注释版 / Annotated reference
+reference-only 中 .jsonc 含 // 注释，只用于阅读，不能直接作为游戏 JSON 加载。
+Files in reference-only contain // comments. They CANNOT run as game JSON.
+只改后缀为 .json 仍然无效，必须去掉全部注释；建议直接修改无注释的 datapack 文件。
+Renaming .jsonc to .json is not enough. Remove comments, or edit the plain datapack files.
+field-notes.json 是注释说明表，不是蜂种注册文件。它本身是合法 JSON。
+field-notes.json is a valid JSON annotation dictionary, not a bee definition.
+
+选择一只蜂 / Customize one bee
+EXAMPLES.json 按蜂种列出定义、配方、采蜜和获取材料。
+EXAMPLES.json lists each bee, its files, flowers and acquisition ingredients.
+复制蜂种 JSON、相关 recipe、语言键；统一替换 example:蜂种名。
+Copy the bee definition, related recipes and name keys; update the bee ID everywhere.
+如果保留示例亲本，连同亲本蜂种和获取方式一起复制，或改成已有 PB 蜜蜂。
+Keep required example parents, or replace them with existing PB bees.
+原版 PB 与扩展蜂都支持繁殖、转化、巢穴和钓鱼配方；只需引用对应蜂种 ID。
+Both PB and extended bees use the same breeding, conversion, spawning and fishing recipes.
+32 只蜂均有便捷蜂蛋合成；28 只扩展蜂另有繁殖与转化；巢穴、钓鱼按主题提供示例。
+All 32 bees have egg recipes; all 28 extended bees have breeding and conversion recipes.
+空蜂笼 + 蜂蜜点心 + 对应材料合成蜂蛋。配方不会检查蜂笼内是否有蜂，请只用空蜂笼。
+Craft eggs with an EMPTY cage, a honey treat and the listed materials. Use empty cages only.
+
+教程 / Tutorial
+中文: https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README_zh.md#扩展资源蜜蜂
+English: https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README.md#extended-resource-bees

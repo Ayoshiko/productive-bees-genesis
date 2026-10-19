@@ -26,5 +26,9 @@
   "entity.productivebees.container_energy_bee": "能量容器花源蜜蜂",
   "entity.productivebees.container_ae_key_bee": "ME 元件花源蜜蜂",
   "entity.productivebees.copper_energy_bee": "铜锭花源能量蜜蜂",
-  "entity.productivebees.copper_energy_comb_bee": "铜锭花源能量蜜脾蜜蜂"
+  "entity.productivebees.copper_energy_comb_bee": "铜锭花源能量蜜脾蜜蜂",
+  "entity.productivebees.pb_copper_bee": "PB 铜蜜蜂（方块花源示例）",
+  "entity.productivebees.pb_redstone_bee": "PB 红石蜜蜂（物品花源示例）",
+  "entity.productivebees.pb_water_bee": "PB 水蜜蜂（流体花源示例）",
+  "entity.productivebees.pb_tag_bee": "PB 标签花源蜜蜂"
 }

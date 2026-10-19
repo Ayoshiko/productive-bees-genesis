@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:source",
+  "result": "example:source_comb",
+  "chance": 1,
+  "item": {
+    "item": "productivebees:wax"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ars_nouveau"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:source"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:source_comb"
+    }
+  ]
+}

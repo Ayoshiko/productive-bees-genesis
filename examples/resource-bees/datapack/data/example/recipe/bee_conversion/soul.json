@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_water",
+  "result": "example:soul",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:soul_sand"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "industrialforegoingsouls"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_water"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:soul"
+    }
+  ]
+}

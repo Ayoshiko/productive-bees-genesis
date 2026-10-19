@@ -1,0 +1,9 @@
+{
+  "primaryColor": "#FFCF40",
+  "secondaryColor": "#825C20",
+  "flowerTag": "example:resource_flowers",
+  "createComb": true,
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

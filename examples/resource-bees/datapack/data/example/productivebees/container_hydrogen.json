@@ -1,11 +1,4 @@
 {
-  "_comment": [
-    "机械蜂箱专用容器花源；单件容器须满足最低数量，检测不消耗内容，也不把多个槽位或堆叠数量相加。",
-    "不要同时写 flowerItem/flowerBlock/flowerTag/flowerFluid；已有这些字段的蜂可继续使用旧规则。",
-    "名称键：entity.productivebees.container_hydrogen_bee；同步 resourcepack 中英文名称。",
-    "Genesis mechanical apiaries only. One container must meet the minimum; contents are not consumed or pooled across slots. No natural spawning.",
-    "装入提供对应标准物品能力的容器；空容器或其他资源不匹配。Use a real item capability container."
-  ],
   "primaryColor": "#BFEFFF",
   "secondaryColor": "#FFFFFF",
   "flowerResource": {
@@ -13,5 +6,8 @@
     "id": "mekanism:hydrogen",
     "amount": "1000"
   },
-  "createComb": false
+  "createComb": false,
+  "breedingItem": "mekanism:basic_chemical_tank",
+  "breedingItemCount": 1,
+  "selfbreed": true
 }

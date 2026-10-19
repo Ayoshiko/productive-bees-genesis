@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:mixed",
+  "result": "example:mixed_tag",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:oak_leaves"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed_tag"
+    }
+  ]
+}

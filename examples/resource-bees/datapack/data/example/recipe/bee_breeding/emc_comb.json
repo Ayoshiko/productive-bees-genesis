@@ -1,0 +1,24 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:emc",
+  "parent2": "example:pb_tag",
+  "offspring": "example:emc_comb",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "projecte"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:emc"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:emc_comb"
+    }
+  ]
+}

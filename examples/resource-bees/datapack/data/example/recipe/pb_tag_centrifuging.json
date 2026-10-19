@@ -1,0 +1,27 @@
+{
+  "type": "productivebees:centrifuge",
+  "ingredient": {
+    "type": "productivebees:component",
+    "components": {
+      "productivebees:bee_type": "example:pb_tag"
+    },
+    "items": "productivebees:configurable_honeycomb"
+  },
+  "outputs": [
+    {
+      "item": {
+        "item": "minecraft:copper_ingot"
+      },
+      "min": 1,
+      "max": 2,
+      "chance": 1
+    }
+  ],
+  "processingTime": 200,
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    }
+  ]
+}

@@ -1,6 +1,11 @@
 {
-  "resource.productivebeesgenesis.sides.title": "Resource Side Config",
-  "resource.productivebeesgenesis.sides.tab_hint": "Configure native resource output; produced FE uses the native ENERGY side configuration",
+  "resource.productivebeesgenesis.sides.title": "Extended Resource Side Config",
+  "resource.productivebeesgenesis.sides.tab_hint": "Open a separate window, then choose a resource to configure its output faces",
+  "resource.productivebeesgenesis.sides.choose": "Choose a resource to configure",
+  "resource.productivebeesgenesis.sides.back": "Back to resource selection",
+  "resource.productivebeesgenesis.sides.configure": "Configure output faces for this resource",
+  "resource.productivebeesgenesis.sides.native_hint": "Chemicals / FE: left tabs",
+  "resource.productivebeesgenesis.sides.empty": "No extended resources available",
   "resource.productivebeesgenesis.sides.type.chemical": "Chemicals",
   "resource.productivebeesgenesis.sides.type.energy": "Produced FE",
   "resource.productivebeesgenesis.sides.type.source": "Source",

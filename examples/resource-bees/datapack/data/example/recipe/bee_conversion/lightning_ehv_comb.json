@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:lightning_ehv",
+  "result": "example:lightning_ehv_comb",
+  "chance": 1,
+  "item": {
+    "item": "productivebees:wax"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2lt"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:lightning_ehv"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:lightning_ehv_comb"
+    }
+  ]
+}

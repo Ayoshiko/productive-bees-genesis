@@ -1,15 +1,20 @@
 {
-  "_comment": [
-    "资源离心配方：蜂种见 bee。Genesis 机械离心机接受该蜂种蜜脾；蜜脾块自动按四份，不要手动再乘四。",
-    "amount 必须是正十进制字符串；chance 是 0..1 的数字。基础数量之后再应用基因与升级。",
-    "include_pb_outputs=true：同次追加该输入匹配的普通 PB 离心配方；缺少时暂停，不扣料。",
-    "processing_time 是升级前时间，20 tick=1 秒。",
-    "资源自动从机器入 ME；须安装对应资源模组、ME 桥和兼容存储。满载时保留资源，图标不能取到背包。",
-    "Match bee to the definition. amount is a decimal string; chance is 0..1. Machines store resources and export through ME; comb blocks automatically contain four portions."
-  ],
   "type": "productivebeesgenesis:resource_centrifuging",
   "bee": "example:combined",
   "include_pb_outputs": true,
   "processing_time": 20,
-  "outputs": [{ "kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1 }]
+  "outputs": [
+    {
+      "kind": "energy",
+      "energy_type": "FE",
+      "amount": "1000",
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:combined"
+    }
+  ]
 }

@@ -5,13 +5,13 @@
   "pages": [
     {
       "type": "patchouli:text",
-      "title": "Extended resources in side configuration",
-      "text": "Open the machine's Mekanism side-configuration window. Resource pages sit beside Items, Fluids and ENERGY and appear only when their supporting mod is loaded. Chemicals use Mekanism's native chemical-side icon; other pages show centered representative items from their mods. Blue exports; grey disables. Auto-eject sends to compatible neighbors, while supported pipes can pull with it off. Air supplies safely. FE uses the native ENERGY page or configurator: INPUT charges the battery, OUTPUT exports products, INPUT_OUTPUT supports both, and NONE disables. Separate containers protect operating power."
+      "title": "Resource output faces",
+      "text": "Open Mekanism side configuration. Chemicals sit below ENERGY on the left; other resources open from the right-side tab with square icons. Choose output faces and auto-eject. Native ENERGY input charges operating power, while output exports produced FE."
     },
     {
       "type": "patchouli:text",
       "title": "Cards and upgrades",
-      "text": "Settings survive saves, tier installers, dismantling/mining machine items and crafting upgrades. Shift-right-click with a Mekanism configuration card to copy and right-click a compatible machine to paste. Only faces and auto-eject settings are copied, without resource accounts, balances or EMC recipients. Multi-input crafting keeps the first settings."
+      "text": "Settings survive saves and machine upgrades. Shift-right-click a Mekanism configuration card to copy, then right-click a compatible machine to paste faces and auto-eject."
     },
     {
       "type": "patchouli:text",
@@ -54,141 +54,121 @@
       "text": "Raw option names are useful only for pack distribution, scripting, or migration. World gameplay, machine, and capacity settings live in the world's server configuration directory; client visuals and custom window positions affect only the local player. Prefer the current screen labels and generated comments over old file examples."
     },
     {
-      "type": "patchouli:text",
-      "title": "Create a resource bee",
-      "text": "Start with apiary → comb → Genesis extended resource centrifuging → hydrogen. Built-in types are examples; any valid registered AEKey, including another mod's custom resource, can use generic ae_key outputs. New types without AEKeys need an adapter."
-    },
-    {
       "type": "patchouli:link",
-      "url": "https://github.com/Ayoshiko/productive-bees-genesis/tree/main-neo/1.21.1/examples/resource-bees",
-      "link_text": "Open GitHub examples",
-      "text": "Examples are separate from the release JAR. Download version-matched datapack and resourcepack folders from the repository for bee data and client names."
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip",
+      "link_text": "Download all examples",
+      "text": "For MC 1.21.1, PB 13.14 and Genesis 1.1.0. Includes runnable data, names, KubeJS and annotated files. Example bees are excluded from the mod JAR."
     },
     {
       "type": "patchouli:text",
-      "title": "Choose a route",
-      "text": "hydrogen produces combs; energy produces FE directly. energy_comb is a separate comb bee. createComb enables appearance; it does not create a hive recipe."
+      "title": "Create your own bee",
+      "text": "PB JSON defines colors, flowers, breeding food and acquisition. Genesis adds FE, chemicals, Source and other outputs. Extended bees support the same PB breeding, conversion, nest spawning and fishing recipes."
     },
     {
       "type": "patchouli:text",
-      "title": "1. Install the datapack",
-      "text": "Put datapack in the world's datapacks folder, with pack.mcmeta and data at its root. Enable resourcepack in every client's resourcepacks folder, with pack.mcmeta and assets at its root. Formats are 48 and 34. Development runClient loads both."
+      "title": "Try copper energy",
+      "text": "Craft the egg with an empty cage, honey treat and copper ingot. Use empty cages only. Put the bee in a powered Genesis mechanical apiary with a copper-ingot flower. It produces FE directly; the flower is reusable."
     },
     {
       "type": "patchouli:text",
-      "title": "Add names with each bee",
-      "text": "Names live in assets/productivebees/lang. For example:hydrogen use entity.productivebees.hydrogen_bee in both languages. PB uses the fixed productivebees prefix and bee path, not example. Rename recipes and language keys together. Enable the pack and reload with F3+T."
+      "title": "Choose an example",
+      "text": "All 32 bees have egg recipes. All 28 extended bees also have breeding and conversion recipes. pb_copper, pb_redstone, pb_water and pb_tag show ordinary PB settings. EXAMPLES.json lists each bee's files and materials."
     },
     {
       "type": "patchouli:text",
-      "title": "2. Define the bee",
-      "text": "data/example/productivebees/hydrogen.json defines example:hydrogen. primaryColor and secondaryColor are colors; flowerBlock is minecraft:iron_block and createComb is true. Re-enter after adding a bee."
+      "title": "Install data and names",
+      "text": "Put the datapack ZIP in the world's datapacks folder. Put the name pack in resourcepacks and enable it. Reopen for new bees; /reload updates recipes and F3+T reloads names. Missing optional mods disable their examples."
     },
     {
       "type": "patchouli:text",
-      "title": "3. Produce combs",
-      "text": "Put hydrogen_honeycomb.json in data/example/recipe. Type: productivebees:advanced_beehive. ingredient: example:hydrogen. Output configurable_honeycomb with productivebees:bee_type = example:hydrogen."
+      "title": "Comments cannot run",
+      "text": "The reference-only .jsonc files contain // comments and cannot load as game JSON. Renaming them is not enough. Read them while editing the plain .json files in datapack."
     },
     {
       "type": "patchouli:text",
-      "title": "4. Centrifuge hydrogen",
-      "text": "hydrogen_centrifuging.json uses productivebeesgenesis:resource_centrifuging and bee: example:hydrogen. Output kind: chemical, id: mekanism:hydrogen, amount: \"100\", chance: 1.0. processing_time is 20."
+      "title": "1. Define the bee",
+      "text": "In data/example/productivebees, change primaryColor and secondaryColor, flowerItem for pollination and breedingItem for breeding food. selfbreed allows same-type breeding. The two foods may differ."
     },
     {
       "type": "patchouli:text",
-      "title": "Run the machines",
-      "text": "Put the hydrogen bee and iron-block flower in a powered mechanical apiary, then use a Genesis centrifuge. Base yield: 100 mB per comb or four portions per block. Examples add no spawning; add PB breeding/conversion for survival."
+      "title": "2. Breeding and conversion",
+      "text": "bee_breeding uses parent1, parent2 and offspring; feed each parent its own food. bee_conversion uses source, result, item and chance. Use the item on the source bee. Extended and ordinary bees share these formats."
     },
     {
       "type": "patchouli:text",
-      "title": "Extended output support",
-      "text": "Genesis extended resources do not yet support PB's own hives or centrifuges. Use Genesis mechanical machines. Ordinary PB outputs still work. Related cages, eggs, combs and bee slots show a notice without Shift. Report extension issues to Genesis, not PB upstream."
+      "title": "3. Nests and fishing",
+      "text": "bee_spawning uses a nest ingredient, bee results and biomes. bee_fishing uses bee, biomes and chance. Copper energy includes nest spawning; the water-container bee includes river fishing."
     },
     {
       "type": "patchouli:text",
-      "title": "Export directly to ME",
-      "text": "Install AE2 and Applied Mekanistics, cable the centrifuge directly, and provide power, a channel and chemical storage. The Extended resources side tab shows amounts awaiting output; exported resources appear in ME. No extra block is needed."
+      "title": "4. Resource output",
+      "text": "resource_production produces directly; resource_centrifuging processes combs. Customize bee, kind, resource id and amount. amount must be a quoted positive integer; chance is a number from 0 to 1."
     },
     {
       "type": "patchouli:text",
-      "title": "Read-only resource icons",
-      "text": "Extended resources defaults to Production; switch to Pending stock when needed. Rates use actual successful production over five seconds, including upgrades and acceleration. Observed resources remain visible without stock or after combs return to ME; rates reach zero when stopped. Only an open window synchronizes changes; Jade receives no rates. Chemical gauges show pending stock. Eject tries ME or adjacent storage and keeps rejected output. Icons cannot be taken; exported stock appears in ME."
+      "title": "5. Names and renaming",
+      "text": "Names live in assets/productivebees/lang. example:copper_energy uses entity.productivebees.copper_energy_bee. Rename the definition path, all recipe bee IDs, loading conditions and name keys together."
     },
     {
       "type": "patchouli:text",
-      "title": "Direct FE",
-      "text": "Use energy.json and energy_production.json with a copper-block flower. resource_production outputs kind: energy, energy_type: FE, amount: \"1000\". No centrifuge is required. ME needs AE2 and Applied Flux. Output FE is separate from operating power."
+      "title": "Full PB settings",
+      "text": "pb_copper shows pollen color, initial genes, size, speed, attack, breeding, water and fire protection. Choose one flowerBlock, flowerItem, flowerFluid or flowerTag. Extended bees accept these same fields."
     },
     {
       "type": "patchouli:text",
-      "title": "Direct EHV lightning",
-      "text": "Use lightning_ehv's two files. Output kind: lightning, tier: extreme_high_voltage, amount: \"1000\". Install AE2 Lightning Tech and matching storage. HV uses high_voltage. Voltages never convert."
+      "title": "The comb route",
+      "text": "hydrogen uses iron ingots as flowers. Keep the bee definition, honeycomb and centrifuging recipes. createComb enables the comb appearance but still needs a hive recipe. Preserve the matching bee_type component."
     },
     {
       "type": "patchouli:text",
-      "title": "Editable fields",
-      "text": "amount is a positive integer string; chance is 0..1. 20 ticks = one second. Rename files and all bee, ingredient and bee_type references together. flowerTag omits #. Machines apply block portions and upgrades."
+      "title": "Centrifuge time and amount",
+      "text": "Hydrogen uses kind chemical, id mekanism:hydrogen and quoted amount 100. processing_time 20 is about one second. Ordinary PB centrifuging uses processingTime instead."
     },
     {
       "type": "patchouli:text",
-      "title": "Comments and KubeJS",
-      "text": "JSON examples use _comment; do not use // in JSON. Keep bee definitions. Put matching JS in kubejs/server_scripts, remove replaced recipe JSON, and /reload. hydrogen.js replaces two recipes; energy.js demonstrates three for two bees."
+      "title": "Other resources",
+      "text": "Source uses Source gems; souls use soul sand; air uses pressure gauges; EMC uses alchemical coal; XP uses enchanting bottles; lightning uses collapse matrices. ae_key produces diamonds. Install the corresponding mods."
     },
     {
       "type": "patchouli:text",
-      "title": "Mixed output",
-      "text": "mixed keeps PB hive and direct-resource recipes. mixed_essence demonstrates conversion. combined sets include_pb_outputs: true with a matching PB centrifuge recipe. Consume input and power once; missing ordinary recipes pause."
+      "title": "Mixed outputs",
+      "text": "mixed keeps a PB hive recipe and a direct resource recipe. combined uses include_pb_outputs: true with a matching PB centrifuge recipe to produce items and FE together."
     },
     {
       "type": "patchouli:text",
-      "title": "Other resource bridges",
-      "text": "Source: Ars Nouveau + Ars Energistique. Souls: Industrial Foregoing Souls + Soulplied Energistics. Air: PneumaticCraft + Applied Pneumatics. XP: ExperienceLib + Applied Experienced. ME also requires AE2 and compatible storage."
+      "title": "Container flowers",
+      "text": "Replace other flower fields with flowerResource. kind chemical, id mekanism:hydrogen and quoted amount 1000 require at least 1000 mB hydrogen. Use a filled chemical tank; empty tanks do not qualify."
     },
     {
       "type": "patchouli:text",
-      "title": "Native resources",
-      "text": "1000 raw air units equal 1 L. Seal leaks. EMC automatically credits the owner's ProjectE account without ME or an EMC-ME addon. Amounts remain exact up to 4096 digits; Project Expansion supplies its short display format when installed. Native capabilities remain available for external extraction. Produced FE can be ejected separately from operating power."
+      "title": "Reusable contents",
+      "text": "Pollination consumes neither container nor contents. Water uses a bucket, FE a charged container, and the ME example a real item cell with at least 16 diamonds. Multiple containers or slots are not added together."
     },
     {
       "type": "patchouli:text",
-      "title": "Multiplayer EMC recipient",
-      "text": "The Recipient button appears only with ProjectE and FTB Teams. The owner or an operator can click Recipient in the resource window to cycle online teammates and the owner, even with no pending output. Hover for identity and status. Offline, removed or unavailable recipients retain EMC in the machine until eligible again. Unknown writes are quarantined; notification retries never add EMC again."
+      "title": "KubeJS installation",
+      "text": "Copy the bundle's kubejs directory: data contains bees/tags, assets names, and the complete server_scripts file registers acquisition and outputs. Choose either the datapack or complete script to avoid duplicates."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Machines and output",
+      "text": "Use Genesis mechanical apiaries, centrifuges and factories for extended outputs. FE uses ENERGY. Chemicals sit below ENERGY on the left; other resources use the right-side tab. The panel shows production and pending stock."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "ME and EMC",
+      "text": "ME needs AE2, power, a channel, resource bridges and storage. Use Applied Mekanistics for chemicals and Applied Flux for FE. EMC automatically credits the owner's ProjectE account."
     },
     {
       "type": "patchouli:text",
       "title": "Troubleshooting",
-      "text": "Missing bee: check folders, IDs and JSON, then re-enter. Waiting for flowers: check input and switch. No ME output: read the panel and check bridges, power, channels and storage. Ordinary item cells cannot hold chemicals or lightning. When an extended resource has no usable output or its pending allowance is full, mechanical centrifuges move the original combs into persistent return custody, send them back when ME accepts them and pause new pulls of that input. Output recovery resumes pulling automatically. Paid cycles retain their recipe, seed and complete input identity; unknown consumption or acceptance remains quarantined without replay."
-    },
-    {
-      "type": "patchouli:text",
-      "title": "Generic keys and Java",
-      "text": "ae_key uses AE2's ae2:i key for diamonds. Other types need actual type, id, complete data and string amount. Generic resources use ME. Java authors can use ResourceBeeApiExample.java; pack authors can use JSON/KubeJS."
-    },
-    {
-      "type": "patchouli:text",
-      "title": "Other machines and recovery",
-      "text": "Useless 2.4.6 natively accepts deterministic resource centrifuging: use a PB centrifuge mold, AE2, a key bridge and storage. Furnace rules apply. Official JDTE 0.6.4.3 still needs a hook; local API v3 only supplies recipe results and uses its existing cycle buffer and AE output upgrade. Unknown acceptance pauses retry. Genesis no longer reads .session markers. Unknown production pauses its lane and unknown output its resource; other work continues. Missing-resource combs are excluded from Myriad and input, while existing combs enter return custody. Corrupt data and real save failures still retain assets. Separate stores do not commit atomically. Third-party hosts use their own rules."
-    },
-    {
-      "type": "patchouli:text",
-      "title": "Containers as flowers",
-      "text": "Mechanical apiaries and factories can match item contents. Add flowerResource to the bee JSON: kind chemical, id mekanism:hydrogen and amount \"1000\". Use a capable tank or bucket containing enough hydrogen. Empty, wrong-resource and insufficient containers fail. Remove legacy flower fields."
-    },
-    {
-      "type": "patchouli:text",
-      "title": "Fluids, FE and generic keys",
-      "text": "fluid uses a fluid ID; energy uses energy_type FE. Fluid and chemical IDs accept #tags. ae_key uses the complete key and a real filled ME cell; wrapped icons do not count. Legacy flowerFluid also accepts capable containers. Other native items need the relevant capability."
-    },
-    {
-      "type": "patchouli:text",
-      "title": "Reusable container flowers",
-      "text": "amount is a minimum, default \"1\". Pollination consumes neither content nor item. Stacks and feeder slots are not pooled; one native tank must qualify. JEI uses an AE2 cell with the resource and minimum; compatible display cells contain the resource. Gas buckets, chemical tanks and capable containers match their contents. Disabled slots fail immediately; contents refresh by the next real tick. Genesis mechanical hosts only."
+      "text": "Missing bee: check mods, paths and datapack enablement, then reopen. No pollination: check flowers and power. No breeding/conversion: check IDs, food and conditions. Raw name keys: enable the pack and press F3+T."
     },
     {
       "type": "patchouli:link",
-      "url": "https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/examples/resource-bees/datapack/data/example/productivebees/container_hydrogen.json",
-      "link_text": "Container flower example",
-      "text": "The repository also includes container_water, container_energy and container_ae_key with both language files. KubeJS recipes are unchanged; flower rules stay in the bee JSON."
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README.md#extended-resource-bees",
+      "link_text": "Full registration tutorial",
+      "text": "The README provides copyable JSON, resource fields and file links. Annotated examples explain the editable settings."
     }
   ]
 }

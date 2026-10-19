@@ -1,16 +1,26 @@
 {
-  "_comment": [
-    "演示容器是可重复使用的花源，不是消耗型输入；产物倍率仍由机器与蜜蜂规则决定。",
-    "The container is a reusable flower, not a consumed ingredient. Output follows existing bee and machine multipliers."
-  ],
   "type": "productivebeesgenesis:resource_production",
   "bee": "example:container_ae_key",
   "outputs": [
     {
-      "kind": "energy",
-      "energy_type": "FE",
-      "amount": "1000",
+      "kind": "ae_key",
+      "type": "ae2:i",
+      "id": "minecraft:diamond",
+      "data": {
+        "id": "minecraft:diamond"
+      },
+      "amount": "1",
       "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_ae_key"
     }
   ]
 }

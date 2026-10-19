@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "productivebees:bee_cage"
+    },
+    {
+      "item": "productivebees:honey_treat"
+    },
+    {
+      "item": "minecraft:copper_ingot"
+    },
+    {
+      "item": "minecraft:oak_leaves"
+    }
+  ],
+  "result": {
+    "id": "productivebees:spawn_egg_configurable_bee",
+    "count": 1,
+    "components": {
+      "minecraft:entity_data": {
+        "id": "productivebees:configurable_bee",
+        "type": "example:mixed_tag"
+      }
+    }
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed_tag"
+    }
+  ]
+}

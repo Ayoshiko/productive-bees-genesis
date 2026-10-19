@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_redstone",
+  "result": "example:energy",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:redstone"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_redstone"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy"
+    }
+  ]
+}

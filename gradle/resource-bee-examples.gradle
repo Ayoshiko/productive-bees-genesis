@@ -1,17 +1,24 @@
-// Author-facing example packs remain separate from the distributable mod.
+// Player examples are packaged independently from the distributable mod.
 def exampleRoot = layout.projectDirectory.dir('examples/resource-bees')
+def generatedExamples = layout.buildDirectory.dir('generated/resource-bee-examples')
+def exampleOutput = layout.buildDirectory.dir('resource-bee-examples')
 def verifyExamples = tasks.register('verifyResourceBeeExamples') {
     group = 'verification'
-    description = 'Validates example JSON and complete bilingual PB bee names.'
+    description = 'Validates example JSON, names, acquisition and flower definitions.'
     inputs.dir(exampleRoot.dir('datapack'))
     inputs.dir(exampleRoot.dir('resourcepack'))
+    inputs.file(exampleRoot.file('field-notes.json'))
     doLast { task ->
         def json = new groovy.json.JsonSlurper()
         task.inputs.files.asFileTree.matching { include '**/*.json', '**/pack.mcmeta' }.each { file ->
-            json.parse(file, 'UTF-8')
+            def text = file.getText('UTF-8')
+            if (text.contains('"_comment"') || text.startsWith('\uFEFF')) {
+                throw new GradleException("Unexpected comment/BOM in runnable example: ${file}")
+            }
+            json.parseText(text)
         }
-        def bees = new File(exampleRoot.asFile, 'datapack/data/example/productivebees').listFiles()
-                .findAll { it.name.endsWith('.json') }
+        def data = new File(exampleRoot.asFile, 'datapack/data/example')
+        def bees = new File(data, 'productivebees').listFiles().findAll { it.name.endsWith('.json') }
         def keys = bees.collect { 'entity.productivebees.' + it.name[0..-6] + '_bee' }.toSet()
         ['zh_cn', 'en_us'].each { language ->
             def names = json.parse(new File(exampleRoot.asFile,
@@ -20,27 +27,185 @@ def verifyExamples = tasks.register('verifyResourceBeeExamples') {
                 throw new GradleException("Incomplete or stale example bee names: ${language}")
             }
         }
+        def signatures = [:]
+        bees.each { file ->
+            def name = file.name[0..-6]
+            def bee = json.parse(file, 'UTF-8')
+            if (['flowerBlock', 'flowerItem', 'flowerTag', 'flowerFluid', 'flowerResource']
+                    .count { bee.containsKey(it) } != 1) {
+                throw new GradleException("Choose exactly one flower for ${name}")
+            }
+            def acquisition = json.parse(new File(data, "recipe/acquisition/${name}.json"), 'UTF-8')
+            if (acquisition.result.components['minecraft:entity_data'].type != "example:${name}") {
+                throw new GradleException("Wrong acquisition result for ${name}")
+            }
+            def signature = acquisition.ingredients.collect { it.item }.sort().join('|')
+            if (signatures.containsKey(signature)) {
+                throw new GradleException("Conflicting egg recipes: ${name}, ${signatures[signature]}")
+            }
+            signatures[signature] = name
+            if (!name.startsWith('pb_')) {
+                ['bee_breeding', 'bee_conversion'].each { folder ->
+                    def recipe = json.parse(new File(data, "recipe/${folder}/${name}.json"), 'UTF-8')
+                    if ((recipe.offspring ?: recipe.result) != "example:${name}") {
+                        throw new GradleException("Wrong ${folder} result for ${name}")
+                    }
+                }
+            }
+        }
         ['datapack': 48, 'resourcepack': 34].each { folder, format ->
             if (json.parse(new File(exampleRoot.asFile, "${folder}/pack.mcmeta"), 'UTF-8').pack.pack_format != format) {
                 throw new GradleException("Wrong Minecraft 1.21.1 pack format: ${folder}")
             }
         }
+        logger.lifecycle("Validated ${bees.size()} example bees and their acquisition recipes.")
     }
 }
-def exampleZips = ['datapack', 'resourcepack'].collect { folder ->
-    tasks.register("packageResourceBee${folder.capitalize()}", Zip) {
+def generateExamples = tasks.register('generateResourceBeeReferences') {
+    group = 'distribution'
+    dependsOn verifyExamples
+    inputs.dir(exampleRoot.dir('datapack'))
+    inputs.dir(exampleRoot.dir('resourcepack'))
+    inputs.file(exampleRoot.file('field-notes.json'))
+    inputs.file(exampleRoot.file('INSTALL.txt'))
+    outputs.dir(generatedExamples)
+    doLast {
+        def json = new groovy.json.JsonSlurper()
+        def notes = json.parse(exampleRoot.file('field-notes.json').asFile, 'UTF-8')
+        def destination = generatedExamples.get().asFile
+        def write = { String relative, String content ->
+            def file = new File(destination, relative)
+            file.parentFile.mkdirs()
+            file.setText(content, 'UTF-8')
+        }
+        def recipes = [:]
+        def bees = [:]
+        ['datapack', 'resourcepack'].each { folder ->
+            def base = exampleRoot.dir(folder).asFile.toPath()
+            fileTree(base).matching { include '**/*.json', 'pack.mcmeta' }.files.sort().each { file ->
+                def relative = base.relativize(file.toPath()).toString().replace('\\', '/')
+                def text = file.getText('UTF-8')
+                def object = json.parseText(text)
+                def annotated = ['// 仅供阅读，含注释不能作为游戏 JSON 加载。Reference only: comments are not valid game JSON.',
+                                 '// 无注释文件 / Plain file: ' + folder + '/' + relative]
+                text.readLines().each { line ->
+                    def match = line =~ /^(\s*)"([^"]+)"\s*:/
+                    if (match.find() && notes.containsKey(match.group(2))) {
+                        annotated << match.group(1) + '// ' + notes[match.group(2)]
+                    }
+                    annotated << line
+                }
+                write("reference-only/${folder}/${relative}.jsonc", annotated.join('\n') + '\n')
+                if (folder == 'datapack' && relative.startsWith('data/example/recipe/')) {
+                    recipes['example:' + relative.substring('data/example/recipe/'.length(), relative.length() - 5)] = object
+                } else {
+                    if (relative != 'pack.mcmeta') write("kubejs/${relative}", text)
+                    if (folder == 'datapack' && relative.startsWith('data/example/productivebees/')) {
+                        bees['example:' + file.name[0..-6]] = object
+                    }
+                }
+            }
+        }
+        def script = ['// 保留 kubejs/data 蜂种定义；本脚本注册全部示例配方。不要再安装示例数据包。',
+                      '// Keep kubejs/data. This replaces all example recipe JSON; do not also install the datapack.',
+                      'ServerEvents.recipes(event => {']
+        recipes.each { id, recipe ->
+            script << '  event.custom(' + groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(recipe))
+                    .replace('\n', '\n  ') + ").id('${id}')"
+        }
+        script << '})'
+        write('kubejs/server_scripts/genesis_resource_bees.js', script.join('\n\n') + '\n')
+        def index = bees.collectEntries { id, bee ->
+            def name = id.substring('example:'.length())
+            def related = recipes.findAll { recipeId, recipe ->
+                groovy.json.JsonOutput.toJson(recipe).contains('"' + id + '"')
+            }.keySet().collect { 'datapack/data/example/recipe/' + it.substring('example:'.length()) + '.json' }
+            [(id): [
+                    definition: "datapack/data/example/productivebees/${name}.json",
+                    flower: bee.findAll { key, value -> key.startsWith('flower') },
+                    breedingFood: bee.breedingItem,
+                    eggIngredients: recipes["example:acquisition/${name}"].ingredients,
+                    recipes: related
+            ]]
+        }
+        write('EXAMPLES.json', groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(index)) + '\n')
+        write('INSTALL.txt', exampleRoot.file('INSTALL.txt').asFile.getText('UTF-8'))
+    }
+}
+def exampleZips = ['datapack', 'resourcepack'].collectEntries { folder ->
+    [(folder): tasks.register("packageResourceBee${folder.capitalize()}", Zip) {
         group = 'distribution'
         dependsOn verifyExamples
         from exampleRoot.dir(folder)
-        destinationDirectory = layout.buildDirectory.dir('resource-bee-examples')
+        destinationDirectory = exampleOutput
         archiveFileName = "resource-bees-${folder}.zip"
         preserveFileTimestamps = false
         reproducibleFileOrder = true
-    }
+    }]
+}
+def referenceZip = tasks.register('packageResourceBeeReference', Zip) {
+    group = 'distribution'
+    dependsOn generateExamples
+    from(generatedExamples) { include 'reference-only/**', 'INSTALL.txt', 'EXAMPLES.json' }
+    from(exampleRoot) { include 'field-notes.json' }
+    destinationDirectory = exampleOutput
+    archiveFileName = 'resource-bees-reference.zip'
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+def bundleZip = tasks.register('packageResourceBeeBundle', Zip) {
+    group = 'distribution'
+    dependsOn generateExamples, exampleZips.values(), referenceZip
+    from(generatedExamples)
+    from(exampleRoot) { include 'datapack/**', 'resourcepack/**', 'field-notes.json' }
+    from(exampleZips.values().collect { it.flatMap { zip -> zip.archiveFile } })
+    from(referenceZip.flatMap { it.archiveFile })
+    destinationDirectory = exampleOutput
+    archiveFileName = 'resource-bees-all.zip'
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
 }
 tasks.register('packageResourceBeeExamples') {
     group = 'distribution'
-    description = 'Creates separate installable datapack and resourcepack ZIPs.'
-    dependsOn exampleZips
+    description = 'Creates playable packs, annotated reference and a complete KubeJS-ready bundle.'
+    dependsOn bundleZip
 }
 tasks.named('check') { dependsOn verifyExamples }
+
+// Check the actual JAR, including language files accidentally merged with main resources.
+tasks.register('verifyNoExampleBeesInJar') {
+    group = 'verification'
+    def artifact = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    dependsOn tasks.named('jar')
+    inputs.file(artifact)
+    inputs.dir(exampleRoot.dir('datapack/data/example/productivebees'))
+    doLast {
+        def names = exampleRoot.dir('datapack/data/example/productivebees').asFile.listFiles()
+                .findAll { it.name.endsWith('.json') }.collect { it.name[0..-6] }
+        def zip = new java.util.zip.ZipFile(artifact.get().asFile)
+        try {
+            zip.entries().each { entry ->
+                if (entry.name.startsWith('data/example/') || entry.name.startsWith('assets/example/')
+                        || entry.name.startsWith('examples/') || entry.name.startsWith('reference-only/')
+                        || entry.name.startsWith('kubejs/') || entry.name.endsWith('.jsonc')
+                        || entry.name.contains('ResourceBeeExamplesProbe')) {
+                    throw new GradleException("Example content leaked into release JAR: ${entry.name}")
+                }
+                if (!entry.isDirectory() && entry.name.endsWith('.json')
+                        && (entry.name.startsWith('data/') || entry.name.contains('/lang/'))) {
+                    def text = zip.getInputStream(entry).getText('UTF-8')
+                    names.each { name ->
+                        if (text.contains('"example:' + name + '"')
+                                || text.contains('"entity.productivebees.' + name + '_bee"')) {
+                            throw new GradleException("Example identity leaked into release JAR: ${entry.name}")
+                        }
+                    }
+                }
+            }
+        } finally {
+            zip.close()
+        }
+        logger.lifecycle("Release JAR contains no registrations, recipes or names for ${names.size()} example bees.")
+    }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNoExampleBeesInJar') }

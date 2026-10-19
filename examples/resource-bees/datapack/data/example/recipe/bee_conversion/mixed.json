@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_copper",
+  "result": "example:mixed",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:iron_ingot"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_copper"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed"
+    }
+  ]
+}

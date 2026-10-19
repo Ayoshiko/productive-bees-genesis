@@ -1,6 +1,11 @@
 {
   "resource.productivebeesgenesis.sides.title": "扩展资源侧面配置",
-  "resource.productivebeesgenesis.sides.tab_hint": "配置化学品等原生资源的输出；FE 产物使用原生 ENERGY 侧面配置",
+  "resource.productivebeesgenesis.sides.tab_hint": "打开独立窗口，选择资源类别后配置输出面",
+  "resource.productivebeesgenesis.sides.choose": "选择要配置的资源",
+  "resource.productivebeesgenesis.sides.back": "返回资源选择",
+  "resource.productivebeesgenesis.sides.configure": "点击配置此资源的输出面",
+  "resource.productivebeesgenesis.sides.native_hint": "化学品与 FE 在左侧配置",
+  "resource.productivebeesgenesis.sides.empty": "没有可配置的扩展资源",
   "resource.productivebeesgenesis.sides.type.chemical": "化学品",
   "resource.productivebeesgenesis.sides.type.energy": "FE 产物",
   "resource.productivebeesgenesis.sides.type.source": "魔源",
