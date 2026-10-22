@@ -73,9 +73,11 @@ class ApiaryBatchUpgradeSnapshotTest {
 				"多花蜂判定必须作为参数传入");
 
 		String tickProcessor = Files.readString(Path.of(TICK_PROCESSOR));
-		assertTrue(tickProcessor.contains("boolean feederDependentProduce = "
-						+ "MultiFlowerBeeAdapter.isMultiFlowerBee(typeKey);"),
-				"每个分组只允许在 flush 层判定一次多花蜂");
+		String settlement = methodBody(tickProcessor, "private void settleProductionGroup(");
+		int perGroupChecks = settlement.split("MultiFlowerBeeAdapter\\.isMultiFlowerBee\\(", -1).length - 1;
+		assertEquals(1, perGroupChecks, "当前和保管周期共用的结算入口每组只判定一次多花蜂");
+		assertTrue(settlement.contains("upgrades, feederDependentProduce);"),
+				"该判定必须沿批量生成参数传入，不能在逐蜂生成内重算");
 	}
 
 	/** 截取指定方法的方法体（到下一个带 javadoc 的成员为止），避免把同文件其它方法算进来。 */

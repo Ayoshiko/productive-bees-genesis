@@ -69,6 +69,8 @@ class Ae2OptionalDependencyGuardTest {
 			"client/screen/GlobalGearButton.java",
 			"client/screen/StockGearButton.java",
 			"client/screen/GuiAeInputConfig.java",
+			"client/screen/authoring/DesignerAeItemKey.java",
+			"client/screen/authoring/DesignerAeKeyPicker.java",
 			"network/Ae2PayloadHandlers.java",
 			"network/Ae2FilterPayloadHandlers.java",
 			"network/Ae2CentrifugeInputReturnService.java");
@@ -102,6 +104,23 @@ class Ae2OptionalDependencyGuardTest {
 				() -> "以下文件 import 了可选 AE2 生态类型，但既不在受门控的 " + AE2_ISOLATED_PACKAGES
 						+ " 内、也不在显式集成面清单里。宿主类链接时会强制解析这些类型，"
 						+ "在未安装 AE2/Applied Flux 的环境下会复现 issue #8: " + offenders);
+	}
+
+	@Test
+	@DisplayName("编辑器的 AE2 选择和目录清理必须先确认可选依赖")
+	void designerAe2EntrypointsAreGuarded() throws Exception {
+		String fields = Files.readString(Path.of(SOURCE_ROOT + "client/screen/authoring/DesignerResourceFields.java"));
+		int guard = fields.indexOf("if (ModList.get().isLoaded(\"ae2\"))");
+		int missing = fields.indexOf("screen.note(\"dependency\"", guard);
+		assertTrue(guard >= 0 && missing > guard, "AE2 选择器必须有未安装依赖的分支");
+		int picker = fields.indexOf("new DesignerAeKeyPicker(");
+		int conversion = fields.indexOf("DesignerAeItemKey.select(");
+		assertTrue(picker > guard && picker < missing, "AE 键目录只能从 AE2 存在的分支打开");
+		assertTrue(conversion > guard && conversion < missing, "物品键转换只能从 AE2 存在的分支调用");
+		String client = Files.readString(Path.of(SOURCE_ROOT + "client/screen/authoring/BeeDesignerClient.java"));
+		Pattern guardedClear = Pattern.compile("if \\(net\\.neoforged\\.fml\\.ModList\\.get\\(\\)\\.isLoaded\\(\"ae2\"\\)\\) \\{\\s*DesignerAeKeyPicker\\.clear\\(\\);\\s*\\}");
+		assertTrue(guardedClear.matcher(client).results().count() == 2,
+				"登出和标签重载两处目录清理都必须先确认 AE2");
 	}
 
 	@Test
