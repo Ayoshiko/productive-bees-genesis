@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationComb;
+import com.ayoshiko.productivebeesgenesis.item.BeeDesignerItem;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationCombBlock;
 import com.ayoshiko.productivebeesgenesis.item.EssenceConversionUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.item.GeneSamplerPluginItem;
@@ -64,6 +65,9 @@ public final class ModItems {
 
 	public static final DeferredRegister.Items ITEMS =
 			DeferredRegister.createItems(ProductiveBeesGenesis.MOD_ID);
+
+	public static final DeferredItem<BeeDesignerItem> BEE_DESIGNER =
+			ITEMS.register("bee_designer", () -> new BeeDesignerItem(new Item.Properties()));
 
 	/**
 	 * MEK离心机默认侧面配置：物品标准机器、流体右侧输出（默认不自动弹出）、能量仅输入

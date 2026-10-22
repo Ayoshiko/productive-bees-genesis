@@ -15,6 +15,7 @@ import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactor
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
@@ -55,6 +56,7 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 public final class ProductiveBeesGenesisClient {
 
 	public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
+		BeeDesignerClient.initialize();
 		eventBus.addListener((RegisterClientReloadListenersEvent event) ->
 				event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)
 						manager -> BeeEntityCache.clearCache()));

@@ -41,6 +41,10 @@ final class EssenceConversionRecipeIndex {
 			ResourceLocation.fromNamespaceAndPath("productivebees", "obsidian_shard");
 	private static final ResourceLocation OBSIDIAN_ID =
 			ResourceLocation.fromNamespaceAndPath("minecraft", "obsidian");
+	private static final ResourceLocation WITHER_SKULL_CHIP_ID =
+			ResourceLocation.fromNamespaceAndPath("productivebees", "wither_skull_chip");
+	private static final ResourceLocation WITHER_SKULL_ID =
+			ResourceLocation.fromNamespaceAndPath("minecraft", "wither_skeleton_skull");
 	private static final ResourceLocation REDSTONE_ESSENCE_ID =
 			ResourceLocation.fromNamespaceAndPath("mysticalagriculture", "redstone_essence");
 	private static final ResourceLocation REDSTONE_ID =
@@ -322,6 +326,7 @@ final class EssenceConversionRecipeIndex {
 		private boolean isCompression() {
 			return isCompressionShape(inputCount, result.getCount(), inputIsBlock, resultIsBlock, excludedInput)
 					|| isAllowedObsidianShardConversion()
+					|| isAllowedWitherSkullConversion()
 					|| isAllowedRedstoneEssenceConversion()
 					|| isAllowedNetherStarConversion();
 		}
@@ -336,6 +341,12 @@ final class EssenceConversionRecipeIndex {
 			return inputCount == 8 && result.getCount() == 12
 					&& hasItemId(inputKey, REDSTONE_ESSENCE_ID)
 					&& hasItemId(resultKey, REDSTONE_ID);
+		}
+
+		private boolean isAllowedWitherSkullConversion() {
+			return inputCount == 9 && result.getCount() == 1
+					&& hasItemId(inputKey, WITHER_SKULL_CHIP_ID)
+					&& hasItemId(resultKey, WITHER_SKULL_ID);
 		}
 
 		private boolean isAllowedNetherStarConversion() {

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.jade;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
+import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -53,6 +54,7 @@ public final class JadeApiaryComponentProvider
 	private static final String NBT_WAITING_FLOWER = "productivebeesgenesis_apiary_waiting_flower";
 	private static final String NBT_WAITING_OUTPUT = "productivebeesgenesis_apiary_waiting_output";
 	private static final String NBT_PROGRESS = "productivebeesgenesis_apiary_progress";
+	private static final String NBT_OUTPUT_REASONS = "productivebeesgenesis_apiary_output_reasons";
 
 	// ===== 翻译键 =====
 	private static final String KEY_BEES = "productivebeesgenesis.jade.apiary.bees";
@@ -98,6 +100,7 @@ public final class JadeApiaryComponentProvider
 		int waitingEnergy = 0;
 		int waitingFlower = 0;
 		int waitingOutput = 0;
+		int[] outputReasons = new int[BeeState.values().length];
 		float progressSum = 0.0f;
 
 		for (BeeSlot slot : slots) {
@@ -109,6 +112,11 @@ public final class JadeApiaryComponentProvider
 				case WAITING_ENERGY -> waitingEnergy++;
 				case WAITING_FLOWER -> waitingFlower++;
 				case WAITING_OUTPUT -> waitingOutput++;
+				case WAITING_FLUID, WAITING_FROZEN_OUTPUT, WAITING_PREVIOUS_BEE, WAITING_RESOURCE,
+						PRODUCTION_SUSPENDED, OUTPUT_SUSPENDED, OUTPUT_DATA_INVALID, WAITING_OUTPUT_BUFFER -> {
+					waitingOutput++;
+					outputReasons[slot.getState().ordinal()]++;
+				}
 				default -> { /* IDLE 不计入等待状态 */ }
 			}
 		}
@@ -119,6 +127,7 @@ public final class JadeApiaryComponentProvider
 		tag.putInt(NBT_WAITING_ENERGY, waitingEnergy);
 		tag.putInt(NBT_WAITING_FLOWER, waitingFlower);
 		tag.putInt(NBT_WAITING_OUTPUT, waitingOutput);
+		tag.putIntArray(NBT_OUTPUT_REASONS, outputReasons);
 		// 平均进度（无蜜蜂时为 0）
 		tag.putFloat(NBT_PROGRESS, beeCount > 0 ? progressSum / beeCount : 0.0f);
 	}
@@ -150,6 +159,16 @@ public final class JadeApiaryComponentProvider
 		if (beeCount > 0) {
 			int progressPercent = Math.round(progress * 100.0f);
 			tooltip.add(buildStatusWithProgressLine(working, waitingEnergy, waitingFlower, waitingOutput, progressPercent));
+			int[] reasons = data.getIntArray(NBT_OUTPUT_REASONS);
+			BeeState[] states = BeeState.values();
+			for (int i = 0; i < Math.min(reasons.length, states.length); i++) {
+				if (reasons[i] > 0) {
+					BeeState state = states[i];
+					tooltip.add(Component.translatable("productivebeesgenesis.jade.apiary.output_reason",
+							Component.translatable(state.translationKey()), reasons[i])
+							.withStyle(style -> style.withColor(state.getColor())));
+				}
+			}
 		}
 		// 无蜜蜂时不添加任何内容，避免产生可见空行
 	}

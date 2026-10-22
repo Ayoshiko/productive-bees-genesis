@@ -37,6 +37,36 @@ class Ae2FilterPersistenceMinecraftTest {
     }
 
     @Test
+    void removedCentrifugeKeepsConfigurationAndCustodyUntilDropSerialization() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var block = ModBlocks.MEK_CENTRIFUGE.get();
+        var source = (TileEntityMekCentrifuge) block.newBlockEntity(BlockPos.ZERO, block.defaultBlockState());
+        var target = (TileEntityMekCentrifuge) block.newBlockEntity(BlockPos.ZERO, block.defaultBlockState());
+        var level = mock(net.minecraft.server.level.ServerLevel.class);
+        source.setLevel(level);
+        target.setLevel(level);
+        var holder = source.productivebeesgenesis$getAe2StateHolder();
+        holder.loadPerTileState(configuration());
+        holder.setAeInputNbtIgnore(false);
+        holder.setAeItemOutputEnabled(false);
+        holder.setAeFluidOutputEnabled(false);
+        holder.setSmeltingCompatEnabled(true);
+        holder.getPendingItemBuffer().enqueueReturnToNetwork("retained-components", 70, 0);
+        var before = save(holder);
+        source.setRemoved();
+        assertEquals(before, save(holder));
+        var drop = new net.minecraft.world.item.ItemStack(block);
+        source.saveToItem(drop, registries);
+        var custom = drop.get(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA);
+        assertNotNull(custom);
+        target.loadCustomOnly(custom.copyTag(), registries);
+        var restored = target.productivebeesgenesis$getAe2StateHolder();
+        assertEquals(before, save(restored));
+        assertEquals(70, restored.getPendingItemBuffer().getTotalAmount());
+        assertEquals(before.get(KEY), save(restored).get(KEY));
+    }
+
+    @Test
     void realCentrifugeUpgradeDataPreservesDeferredConfigurationAndCustody() {
         var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         for (boolean ae2Present : new boolean[] {false, true}) {

@@ -2,6 +2,10 @@ package com.ayoshiko.productivebeesgenesis.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 /**
 	 * 万象创世蜜蜂属性配置段 — 从 {@link ServerConfig} 抽取的独立配置段（Task 19）。
 	 * <p>
@@ -44,6 +48,14 @@ public final class BeeAttributeConfigSection {
 	public final ModConfigSpec.BooleanValue selfbreed;
 	public final ModConfigSpec.BooleanValue waterproof;
 	public final ModConfigSpec.BooleanValue fireproof;
+	public final ModConfigSpec.ConfigValue<String> renderer;
+	public final ModConfigSpec.ConfigValue<String> model;
+	public final ModConfigSpec.ConfigValue<String> animation;
+	public final ModConfigSpec.ConfigValue<String> beeTexture;
+	public final ModConfigSpec.ConfigValue<String> particleType;
+	public final ModConfigSpec.ConfigValue<String> nestingPreference;
+	public final ModConfigSpec.ConfigValue<String> postPollination;
+	public final Map<String, ModConfigSpec.BooleanValue> traits;
 
 	private BeeAttributeConfigSection(ModConfigSpec.Builder builder) {
 		builder.comment("万象创世蜜蜂属性覆盖配置（服务端生效）").push("bee_attributes");
@@ -103,8 +115,8 @@ public final class BeeAttributeConfigSection {
 				.defineInRange("speed", 0.6D, 0.01D, 10.0D);
 
 		attack = builder
-				.comment("攻击伤害")
-				.defineInRange("attack", 20.0D, 0.0D, 100.0D);
+				.comment("攻击伤害声明值（0～2147483647）；实际伤害仍受 Minecraft 攻击属性上限及其它模组影响")
+				.defineInRange("attack", 2.147483647E9D, 0.0D, (double) Integer.MAX_VALUE);
 
 		breedingItem = builder
 				.comment("繁殖物品ID")
@@ -126,7 +138,42 @@ public final class BeeAttributeConfigSection {
 				.comment("是否防火")
 				.define("fireproof", true);
 
+		renderer = builder.comment("PB 渲染外观；模型不会改变蜜蜂 AI")
+				.translation("productivebeesgenesis.configuration.bee_attributes.renderer")
+				.define("renderer", "default", value -> value instanceof String text && Set.of("default", "thicc", "default_crystal",
+						"default_shell", "default_foliage", "elvis", "tiny", "translucent_with_center", "small", "slim").contains(text));
+		model = builder.comment("PB 或已安装资源包的模型资源 ID；空值使用默认模型")
+				.translation("productivebeesgenesis.configuration.bee_attributes.model")
+				.define("model", "", BeeAttributeConfigSection::optionalResource);
+		animation = builder.comment("模型动画资源 ID；空值使用默认动画")
+				.translation("productivebeesgenesis.configuration.bee_attributes.animation")
+				.define("animation", "", BeeAttributeConfigSection::optionalResource);
+		beeTexture = builder.comment("蜜蜂贴图资源 ID，不包含 .png；空值使用默认贴图")
+				.translation("productivebeesgenesis.configuration.bee_attributes.beeTexture")
+				.define("beeTexture", "", BeeAttributeConfigSection::optionalResource);
+		particleType = builder.comment("PB 粒子类型：drip / pop / lava / portal / rising；只影响外观")
+				.translation("productivebeesgenesis.configuration.bee_attributes.particleType")
+				.define("particleType", "drip", value -> value instanceof String text && Set.of("drip", "pop", "lava", "portal", "rising").contains(text));
+		nestingPreference = builder.comment("筑巢材料标签；空值沿用 PB 默认偏好，不赋予独居蜂 AI")
+				.translation("productivebeesgenesis.configuration.bee_attributes.nestingPreference")
+				.define("nestingPreference", "", BeeAttributeConfigSection::optionalResource);
+		postPollination = builder.comment("PB 采蜜后行为：none / amber_encase / bonemeal / force_grow_crop / sus；目标仍由花源决定")
+				.translation("productivebeesgenesis.configuration.bee_attributes.postPollination")
+				.define("postPollination", "none", value -> value instanceof String text
+						&& Set.of("none", "amber_encase", "bonemeal", "force_grow_crop", "sus").contains(text));
+		Map<String, ModConfigSpec.BooleanValue> configurableTraits = new LinkedHashMap<>();
+		for (String trait : new String[]{"coldResistant", "selfheal", "irradiated", "withered", "blinding", "draconic",
+				"slimy", "teleporting", "munchies", "redstoned", "stringy", "stingless", "translucent", "colorCycle"}) {
+			configurableTraits.put(trait, builder.translation("productivebeesgenesis.configuration.bee_attributes." + trait)
+					.define(trait, false));
+		}
+		traits = java.util.Collections.unmodifiableMap(configurableTraits);
 		builder.pop(); // bee_attributes
+	}
+
+	private static boolean optionalResource(Object value) {
+		return value instanceof String text && text.length() <= 256
+				&& (text.isEmpty() || ModConfig.validateResourceLocation(text));
 	}
 
 	/**

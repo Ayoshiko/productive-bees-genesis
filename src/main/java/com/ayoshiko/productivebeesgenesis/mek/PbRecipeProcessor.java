@@ -285,8 +285,8 @@ public class PbRecipeProcessor {
 	/** 扩展资源与已付费工作独立于 PB 物品配方；不伪造一个空产物配方。 */
 	public boolean acceptsResourceInput(ItemStack input) { return MekResourceCentrifuge.accepts(context, input); }
 	public boolean allowsNewResourceInput(ItemStack input) {
-		return !(context.level() instanceof net.minecraft.server.level.ServerLevel level)
-				|| com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission.allows(level.getServer(), input);
+		return context instanceof net.minecraft.world.level.block.entity.BlockEntity host
+				&& com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission.allows(host, input);
 	}
 	public boolean hasResourceWork(int lane) { return invalidCommittedPending != null || MekResourceCentrifuge.hasWork(context, lane); }
 

@@ -1,11 +1,15 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -14,9 +18,34 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class ResourceDisplayMinecraftTest {
+	@Test
+	void healthyUnboundAttachmentIsDistinctFromInvalidSavedData() {
+		var level = mock(ServerLevel.class);
+		var host = mock(BlockEntity.class);
+		var player = mock(ServerPlayer.class);
+		var state = new ResourceHiveHost();
+		when(host.getLevel()).thenReturn(level);
+		when(host.getBlockPos()).thenReturn(BlockPos.ZERO);
+		when(level.getBlockEntity(BlockPos.ZERO)).thenReturn(host);
+		when(player.serverLevel()).thenReturn(level);
+		when(player.canInteractWithBlock(BlockPos.ZERO, 4)).thenReturn(true);
+		try (var hosts = mockStatic(ResourceHiveHost.class, CALLS_REAL_METHODS)) {
+			hosts.when(() -> ResourceHiveHost.existing(host)).thenReturn(state);
+			hosts.when(() -> ResourceHiveHost.canAccess(player, host)).thenReturn(true);
+			assertEquals(ResourceOutputStatus.State.UNBOUND, ResourceOutputStatus.capture(host, player).state());
+			var invalid = new CompoundTag();
+			invalid.putString("version", "invalid version type");
+			state.deserializeNBT(REGISTRIES, invalid);
+			assertEquals(ResourceOutputStatus.State.UNAVAILABLE, ResourceOutputStatus.capture(host, player).state());
+			assertEquals(invalid, state.serializeNBT(REGISTRIES));
+		}
+	}
+
+
 	private static final RegistryAccess REGISTRIES = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
 	private static final ResourceLocation BEE = ResourceLocation.parse("example:display");
 	private static ResourceRecipeView view(String id, long amount) {

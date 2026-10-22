@@ -28,6 +28,8 @@ public final class ApiaryProductionState {
     private String phase = "";
     private String failure = "";
     private CompoundTag invalid;
+    private ApiaryRetainedCycles retained;
+    private boolean activeRetained;
 
     ApiaryProductionState(int slots, Runnable changed) {
         this.changed = changed;
@@ -65,9 +67,38 @@ public final class ApiaryProductionState {
         return true;
     }
 
+    /** 只转移尚未开始生成的已付周期；结果未知的请求和原始坏数据继续由原所有者保管。 */
+    void detachReplaced(BeeSlot[] current) {
+        if (suspended()) {
+            return;
+        }
+        for (int i = 0; i < counts.length; i++) {
+            if (counts[i] <= 0 || !current[i].isEmpty() && canAdvance(i, current[i])) {
+                continue;
+            }
+            if (retained == null) {
+                retained = new ApiaryRetainedCycles();
+            }
+            if (!retained.accept(i, counts[i], bees[i].getBeeData())) {
+                continue;
+            }
+            counts[i] = 0;
+            bees[i].setBeeData(null);
+            beeSnapshots[i] = null;
+            changed.run();
+        }
+    }
+
+    ApiaryRetainedCycles retained() {
+        return retained;
+    }
+
     int total() {
         long total = 0;
         for (int n : counts) total += n;
+        if (retained != null) {
+            total += retained.total();
+        }
         return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
@@ -81,7 +112,15 @@ public final class ApiaryProductionState {
     long fluidAmount() { return fluidAmount; }
 
     void begin(OrderedSlotIndex indices) {
+        begin(indices, false);
+    }
+
+    void begin(OrderedSlotIndex indices, boolean retainedGroup) {
         if (suspended() || hasFrozen()) throw new IllegalStateException("Production already held");
+        if (retainedGroup && retained == null) {
+            throw new IllegalStateException("Missing retained group");
+        }
+        activeRetained = retainedGroup;
         activeSlots = new int[indices.size()];
         for (int i = 0; i < activeSlots.length; i++) activeSlots[i] = indices.get(i);
         request = UUID.randomUUID();
@@ -98,11 +137,16 @@ public final class ApiaryProductionState {
         fluid = generated.fluid().copy();
         fluidAmount = generated.fluidAmount();
         for (int slot : activeSlots) {
-            counts[slot] = 0;
-            bees[slot].setBeeData(null);
+            if (activeRetained) {
+                retained.clear(slot);
+            } else {
+                counts[slot] = 0;
+                bees[slot].setBeeData(null);
+            }
         }
         request = null;
         activeSlots = new int[0];
+        activeRetained = false;
         phase = "";
         changed.run();
     }
@@ -125,9 +169,17 @@ public final class ApiaryProductionState {
     public void acknowledgeSettled(UUID expected) {
         if (invalid != null || request == null || !request.equals(expected))
             throw new IllegalStateException("Stale production request");
-        for (int slot : activeSlots) { counts[slot] = 0; bees[slot].setBeeData(null); }
+        for (int slot : activeSlots) {
+            if (activeRetained) {
+                retained.clear(slot);
+            } else {
+                counts[slot] = 0;
+                bees[slot].setBeeData(null);
+            }
+        }
         request = null;
         activeSlots = new int[0];
+        activeRetained = false;
         phase = "";
         failure = "";
         changed.run();
@@ -136,7 +188,8 @@ public final class ApiaryProductionState {
     CompoundTag save(HolderLookup.Provider provider) {
         if (invalid != null) return invalid.copy();
         CompoundTag tag = new CompoundTag();
-        tag.putInt("version", 1);
+        tag.putInt("version", 2);
+        tag.putInt("live_slots", counts.length);
         ListTag pending = new ListTag();
         for (int i = 0; i < counts.length; i++) if (counts[i] > 0) {
             CompoundTag entry = new CompoundTag();
@@ -146,6 +199,7 @@ public final class ApiaryProductionState {
             pending.add(entry);
         }
         tag.put("pending", pending);
+        tag.put("retained", retained == null ? new ListTag() : retained.save());
         ListTag outputs = new ListTag();
         for (ItemStack item : items) {
             CompoundTag entry = new CompoundTag();
@@ -161,6 +215,7 @@ public final class ApiaryProductionState {
             tag.putIntArray("active", activeSlots);
             tag.putString("phase", phase);
             tag.putString("failure", failure);
+            tag.putBoolean("retained_request", activeRetained);
         }
         return tag;
     }
@@ -171,13 +226,41 @@ public final class ApiaryProductionState {
         for (BeeSlot bee : bees) bee.setBeeData(null);
         items.clear(); fluid = FluidStack.EMPTY; fluidAmount = 0;
         request = null; invalid = null; phase = ""; failure = ""; activeSlots = new int[0];
+        retained = null;
+        activeRetained = false;
         if (tag.isEmpty()) return;
         try {
             // NBT 宽松 getter 会把错误类型当空值或截断数字；资产快照必须先核对原始类型。
-            if (!Set.of("version", "pending", "items", "fluid_amount", "fluid", "request", "active", "phase", "failure")
+            if (!Set.of("version", "pending", "items", "fluid_amount", "fluid", "request", "active", "phase", "failure",
+                    "live_slots", "retained", "retained_request")
                     .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT)
-                    || tag.getInt("version") != 1 || !tag.contains("fluid_amount", Tag.TAG_LONG)) {
+                    || tag.getInt("version") < 1 || tag.getInt("version") > 2 || !tag.contains("fluid_amount", Tag.TAG_LONG)) {
                 throw new IllegalArgumentException("Invalid production header");
+            }
+            int savedSlots = counts.length;
+            if (tag.getInt("version") == 2) {
+                if (!tag.contains("live_slots", Tag.TAG_INT) || tag.getInt("live_slots") < 1
+                        || tag.getInt("live_slots") > counts.length) {
+                    throw new IllegalArgumentException("Invalid saved bee slots");
+                }
+                savedSlots = tag.getInt("live_slots");
+                ListTag retainedEntries = compoundList(tag, "retained");
+                if (!retainedEntries.isEmpty()) {
+                    retained = new ApiaryRetainedCycles();
+                    retained.load(retainedEntries, savedSlots);
+                }
+            } else {
+                // BlockItem 将新机器默认 NBT 递归合并进旧物品；只接受无资产的新增默认字段。
+                if (tag.contains("live_slots")) {
+                    if (!tag.contains("live_slots", Tag.TAG_INT) || tag.getInt("live_slots") != counts.length) {
+                        throw new IllegalArgumentException("Invalid merged legacy bee slots");
+                    }
+                    savedSlots = tag.getInt("live_slots");
+                }
+                if (tag.contains("retained") && !compoundList(tag, "retained").isEmpty()
+                        || tag.contains("retained_request")) {
+                    throw new IllegalArgumentException("Retained cycles in legacy production header");
+                }
             }
             for (var value : compoundList(tag, "pending")) {
                 CompoundTag entry = (CompoundTag) value;
@@ -187,7 +270,7 @@ public final class ApiaryProductionState {
                 }
                 int slot = entry.getInt("slot");
                 int count = entry.getInt("count");
-                if (slot < 0 || slot >= counts.length || counts[slot] != 0 || count <= 0
+                if (slot < 0 || slot >= savedSlots || counts[slot] != 0 || count <= 0
                         || !entry.contains("bee", 10)) throw new IllegalArgumentException("Invalid paid cycle");
                 counts[slot] = count;
                 bees[slot].setBeeData(entry.getCompound("bee").copy());
@@ -211,20 +294,45 @@ public final class ApiaryProductionState {
             }
             if (tag.contains("request")) {
                 if (!tag.hasUUID("request") || !tag.contains("active", Tag.TAG_INT_ARRAY)
-                        || !tag.contains("phase", Tag.TAG_STRING) || !tag.contains("failure", Tag.TAG_STRING)) {
+                        || !tag.contains("phase", Tag.TAG_STRING) || !tag.contains("failure", Tag.TAG_STRING)
+                        || tag.getInt("version") == 2 && !tag.contains("retained_request", Tag.TAG_BYTE)) {
                     throw new IllegalArgumentException("Invalid production request");
                 }
-                request = tag.getUUID("request"); activeSlots = tag.getIntArray("active");
-                if (activeSlots.length == 0 || activeSlots.length > counts.length) throw new IllegalArgumentException("Invalid group size");
-                boolean[] seen = new boolean[counts.length];
+                activeRetained = tag.getBoolean("retained_request");
+                if (activeRetained && retained == null) {
+                    throw new IllegalArgumentException("Missing retained request owner");
+                }
+                int[] activeCounts = activeRetained ? retained.counts : counts;
+                request = tag.getUUID("request");
+                activeSlots = tag.getIntArray("active");
+                if (activeSlots.length == 0 || activeSlots.length > activeCounts.length) throw new IllegalArgumentException("Invalid group size");
+                boolean[] seen = new boolean[activeCounts.length];
                 for (int i : activeSlots) {
-                    if (i < 0 || i >= counts.length || seen[i]) throw new IllegalArgumentException("Invalid group");
+                    if (i < 0 || i >= activeCounts.length || seen[i]
+                            || activeRetained && (retained.bees[i] == null || retained.bees[i].getBeeData() == null))
+                        throw new IllegalArgumentException("Invalid group");
                     seen[i] = true;
                 }
                 phase = tag.getString("phase"); failure = tag.getString("failure");
                 if (!phase.equals("conversion") && !phase.equals("generation")) throw new IllegalArgumentException("Unknown production phase");
-            } else if (tag.contains("active") || tag.contains("phase") || tag.contains("failure")) {
+            } else if (tag.contains("active") || tag.contains("phase") || tag.contains("failure") || tag.contains("retained_request")) {
                 throw new IllegalArgumentException("Production group without request");
+            }
+            if (retained != null) {
+                for (int i = 0; i < retained.counts.length; i++) {
+                    if (retained.bees[i] == null || retained.bees[i].getBeeData() == null || retained.counts[i] > 0) {
+                        continue;
+                    }
+                    boolean active = false;
+                    if (activeRetained && request != null) {
+                        for (int index : activeSlots) {
+                            active |= index == i;
+                        }
+                    }
+                    if (!active) {
+                        throw new IllegalArgumentException("Zero retained count without an active request");
+                    }
+                }
             }
         } catch (RuntimeException error) { invalid = tag.copy(); failure = "Invalid paid production; original preserved"; }
     }

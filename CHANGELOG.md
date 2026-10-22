@@ -29,6 +29,76 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.2.0] - 2026-10-22
+
+**资源蜜蜂编辑器初版正式发布。** 现在可以在游戏里创建、修改资源蜜蜂，并将设置应用到当前世界，或导出给整合包使用。
+
+**因时间有限，本版本没有进行充分测试，游玩中仍可能遇到问题。欢迎大家使用、测试，反馈问题并提出建议。更新前请备份存档。** 客户端和服务端请一起更新到 1.2.0。
+
+### 新增
+
+- **游戏内资源蜜蜂编辑器**：创造模式使用「蜂蜂应援手册」打开。支持名称与翻译、颜色、体型、模型、基础属性、基因、采蜜材料，以及繁殖、合成、机器配方、蜂巢生成和钓鱼等获得方式；也能设置直接产出或蜜脾离心后的物品、流体与扩展资源。
+- **图形总览与配方预览**：集中查看蜜蜂外观、属性、获得方式和产物，在总览中修改常用内容，或点击进入对应页面继续编辑。机器配方显示机器名称，支持查询 JEI 和更换机器时保留兼容设置。
+- **草稿、复制和回收站**：定时保存本地草稿，目录前置显示未应用的修改；草稿显示蜂蛋、名称和编辑日期。可以复制已有蜂种或草稿并自动避开命名冲突。删除蜂种需多步确认，删除后可从回收站恢复，应用到世界后才生效。
+- **数据包与 KubeJS 导出**：导出蜂种、配方和名称文件，方便整合包作者打包；本机文件浏览器可选择需要导入的文件。独立服务器应用需要管理员权限，编辑器内提供安装说明。
+- **个性化设置**：提供现代浅色、深色、AE 风格及自定义 JSON 主题，支持密度、界面尺寸、提示延迟、自动保存和动效设置，并展示快捷键。
+- **法语本地化**：补齐编辑器、配置、错误提示及本次新增功能的法语翻译。
+- **更多 PB 外观与行为设置**：支持已安装的 PB 模型和动画资源，以及 PB 可配置蜜蜂提供的部分特殊属性、授粉后行为和野外筑巢偏好。万象创世蜜蜂也能调整这些外观与属性，仍使用原有随机产出。
+
+### 变更
+
+- 目录改为连续滚动，支持滚轮和可拖动滑块，按窗口尺寸与当前语言调整每行显示数量；复制、删除按钮与蜂种来源标记更便于辨认。
+- 调整按钮、标题栏、开关、颜色选择器、配方网格与产物分组。改善 3×／4× 界面布局和默认文字缩放，重要提示移到窗口内。
+- 页面与滚动动效更柔和，支持调整幅度、时长和减少动态效果；保留标题栏明暗切换、固定、设置和关闭按钮，窗口移动可与 JEI 配合。
+- 材料浏览器分批建立索引，复用搜索结果，只在需要时读取名称与标签；蜂巢优先排序只用于蜂巢材料选择。
+- 攻击伤害声明范围支持 0～2147483647，万象创世蜜蜂的默认声明与 PB BeeBee 相同。实际伤害仍受游戏和其他模组影响。
+
+### 修复
+
+- 修复使用蜂笼取出、替换蜜蜂后，旧生产周期占用当前蜂槽并阻碍继续生产的问题；旧周期和产物会保留，木材、石料等依赖原花源的产物可补回对应材料后继续结算。
+- 修复旧蜂箱物品再次放置时，保存数据混入新机器默认字段后被错误判为无效、拆放或重进存档也无法恢复的问题。已确认的旧存档故障机器在更新后加载时自动恢复，背包中的故障蜂箱正常放置后恢复，不需要修复指令或清空旧产物。
+- 修复离心机挖下再放置后 AE2 输入拉取设置丢失，以及部分资源账户、ME 拒收和扩展资源蜜脾返还状态影响正常生产的问题。
+- 修复安装基因采样升级的机械蜂箱无法从神风特工队蜜蜂获取基因的问题；将凋零骷髅头碎片加入精华升级自动合成白名单。
+- 修复当前整合包的部分生效蜂种无法读取：正确选择条件加载后的定义，无关合成配方不再阻碍读取；无法安全编辑的内容保留并提供明确提示。
+- 修复 PB 默认离心时间错误显示为非法 0、目录滚轮跳页、浏览时冒出选择提示，以及请求失败后目录停止加载的问题。
+- 修复预览拖动方向、缩放后显示不完整、群系删除撤销、JSON 滑块拖动、错误定位、部分重复提示和翻译不同步等编辑交互问题。
+- 修复 MI 零 EU 配方无法转换为 MMR，以及万象设置修改后保存／退出被错误状态阻碍的问题。
+
+### English
+
+**First full release of the Resource Bee Editor.** Create and edit resource bees in game, apply your changes to the current world, or export them for a modpack.
+
+**Testing has been limited due to time constraints, and issues may remain. You are welcome to try the editor, report problems and suggest improvements. Back up your world before updating.** Update both clients and servers to 1.2.0.
+
+#### Added
+
+- **In-game Resource Bee Editor**: use the BeeBee Support Handbook in Creative mode. Edit names and translations, colors, size, models, traits, genes, flowering materials, and acquisition through breeding, crafting, machines, nests or fishing. Configure direct output or comb processing for items, fluids and extended resources.
+- **Visual overview and recipe previews**: review appearance, traits, acquisition and outputs in one place, edit common settings directly, or open the relevant page. Machine recipes show machine names, offer JEI lookup and retain compatible settings when changing machines.
+- **Drafts, copying and recycle bin**: save local drafts automatically, show unapplied changes first, and display bee eggs, names and edit dates. Copy existing bees or drafts with unique names. Deletion requires multiple confirmations and can be reversed in the recycle bin; world changes require applying.
+- **Datapack and KubeJS export**: export bee definitions, recipes and translations for modpacks, and browse local files for imports. Applying on a dedicated server requires administrator permission; setup guidance is included in the editor.
+- **Personalization**: modern light, dark, AE-style and custom JSON themes; adjustable density, UI size, hints, autosave and motion; keyboard shortcut reference.
+- **French localization**: completed translations for the editor, settings, errors and new features.
+- **More PB appearance and behavior options**: installed PB models and animations, selected configurable-bee traits, post-pollination actions and wild nesting preferences. Myriad Creations gains these appearance and trait settings while retaining its existing random output.
+
+#### Changed
+
+- Continuous bee catalog scrolling with wheel and draggable scrollbar, adaptive columns for the window and language, clearer copy/delete controls and source badges.
+- Refined buttons, title bar, switches, color picker, crafting grid and output groups; improved 3×/4× layouts and default text scaling, with important messages inside the window.
+- Softer page and scroll motion with adjustable distance, duration and reduced-motion settings. Title-bar theme, pin, settings and close controls remain available, and window movement works with JEI.
+- Material indexing runs in batches, reuses search results and reads names/tags only when needed. Nest-first ordering applies only to nest material selection.
+- Declared attack damage accepts 0–2147483647; Myriad Creations uses the same default declaration as PB BeeBee. Effective damage still depends on the game and other mods.
+
+#### Fixed
+
+- Fixed old paid cycles occupying current bee slots after cage extraction or replacement and preventing production. Old work and outputs are retained; dynamic wood/stone outputs resume when their original flowering materials are restored.
+- Fixed legacy apiary items becoming incorrectly invalid after placement merged their saved data with new machine defaults, leaving them stuck after replacement or restart. Confirmed affected machines recover when loaded after updating, and old affected items recover through normal placement, without repair commands or clearing retained products.
+- Fixed AE2 pulling settings being lost after mining and replacing centrifuges, and several resource-account, ME-rejection and comb-return states blocking healthy production.
+- Fixed gene sampling from Kamikazbees in mechanical apiaries, and added Wither Skeleton Skull Chips to Essence Conversion auto-crafting.
+- Fixed reading some active bees in the current modpack: select the definition that passed loading conditions and avoid encoding unrelated crafting recipes. Content that cannot be edited safely is retained with a clear message.
+- Fixed PB default centrifuge time appearing as invalid zero, skipped catalog pages, selection hints during browsing and catalog loading stopping after a failed request.
+- Fixed preview drag direction and resizing, biome-removal undo, JSON scrollbar dragging, issue navigation, duplicate tooltips and unsynchronized translations.
+- Fixed conversion of valid zero-EU MI recipes to MMR and incorrect states preventing Myriad settings from saving or closing.
+
 ## [1.1.0] - 2026-10-19
 
 > **扩展资源蜜蜂产出的首个正式版本。** 本次新增和改动较多，新功能的稳定性暂不保证，仍可能存在 bug。更新前请备份存档。

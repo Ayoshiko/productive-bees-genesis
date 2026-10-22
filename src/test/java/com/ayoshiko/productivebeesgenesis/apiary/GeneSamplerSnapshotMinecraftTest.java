@@ -27,6 +27,44 @@ class GeneSamplerSnapshotMinecraftTest {
 	}
 	private static final ResourceLocation BEE = ResourceLocation.parse("example:energy");
 
+	@Test
+	void emptyProductionStillSamplesAdultVeryHighGenesWithoutHoneyOrMutatingPaidCycles() {
+		ResourceLocation type = ResourceLocation.parse("productivebees:kamikaz");
+		CompoundTag attributes = new CompoundTag();
+		attributes.putString("bee_productivity", "productivity.very_high");
+		CompoundTag attachments = new CompoundTag();
+		attachments.put("productivebees:attributes_handler", attributes);
+		CompoundTag data = new CompoundTag();
+		data.put("neoforge:attachments", attachments);
+		data.putString("id", "productivebees:configurable_bee");
+		data.putString("type", type.toString());
+		BeeSlot slot = new BeeSlot();
+		slot.setBeeData(data);
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(100L);
+		when(level.getRandom()).thenReturn(RandomSource.create(7941));
+		var upgrades = new ApiaryBatchUpgradeSnapshot(10000, false, true, 1, false, false, false, false, false, false);
+		var indices = new OrderedSlotIndex();
+		indices.reset(1);
+		indices.add(0);
+		int[] pending = {256};
+		var generator = new BeeProductionGenerator(this, new MultiFlowerProductionCache());
+		var generated = generator.prepare(new BeeSlot[]{slot}, pending, indices, type, java.util.Map.of(), null,
+				net.minecraft.core.BlockPos.ZERO, level, upgrades, false, true, -1, null, null, 0);
+		assertArrayEquals(new int[]{256}, pending);
+		assertTrue(generated.fluid().isEmpty());
+		assertEquals(0, generated.fluidAmount());
+		assertFalse(generated.items().isEmpty());
+		assertTrue(generated.items().stream().allMatch(stack -> stack.getItem() instanceof Gene));
+		var expected = Gene.getStack(GeneAttribute.PRODUCTIVITY, "productivity.very_high", 1, 100);
+		assertTrue(generated.items().stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(expected, stack)));
+		data.putInt("Age", -24000);
+		var baby = generator.prepare(new BeeSlot[]{slot}, pending, indices, type, java.util.Map.of(), null,
+				net.minecraft.core.BlockPos.ZERO, level, upgrades, false, true, -1, null, null, 0);
+		assertTrue(baby.items().isEmpty());
+		assertTrue(baby.fluid().isEmpty());
+	}
+
 	@Test void resourceSnapshotUsesExactlyTheExistingSmallAndAggregatedSampler() {
 		for (int cycles : new int[]{1, 127, 128, 129, 256, 4096}) {
 			for (boolean type : new boolean[]{false, true}) for (boolean purity : new boolean[]{false, true}) {

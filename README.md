@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.1.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.0-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Development version: 1.1.0 — unreleased.** See [CHANGELOG](CHANGELOG.md#unreleased---110) for pending changes.
+**Version 1.2.0: first full release of the Resource Bee Editor.** Testing has been limited due to time constraints; feedback, bug reports and suggestions are welcome. See the [CHANGELOG](CHANGELOG.md#120---2026-10-22).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -143,10 +143,12 @@ The page is a client/container view only. AE2, Mekanism ejectors, adjacent centr
 - **Slot layout**: bee slots / output slots / cage slots (bidirectional transfer) / energy slot / honey fluid tank / PB upgrade slots.
 - **Feeder system**: dedicated window managing flower items. Base variant uses a fixed 3×3 = 9-slot grid; factory variants use a dynamic layout scaling with bee slot count.
 - **PB upgrade system**: self-developed upgrade cards — productivity (α/β/γ/Ω), time (I/II), gene sampler, honeycomb block, byproduct destruction, plus the built-in simulation upgrade; see [PB Upgrade System](#pb-upgrade-system) section.
+- **Sampling bees without native products**: adult Kamikaz bees and other bees without a comb recipe can still complete gene sampling in a mechanical apiary. Valid flowers, production costs and output capacity still apply; sampling alone does not create fallback honey.
 - **AE2 integration**: items and fluids can push into the ME network, while machine energy can be refilled from AppliedFlux-stored FE or AE2 native power with configurable priority.
 - **Direct ejection**: when a centrifuge is adjacent to the apiary, the apiary bypasses the MEK Ejector throttling and pushes honeycombs straight into the centrifuge's input slot — see [Direct Centrifuge Connection](#direct-centrifuge-connection).
 - **Centrifuge priority**: a per-tile toggle that keeps honeycombs out of the AE network and routes them to adjacent centrifuges — produced honeycombs take a fast path straight into centrifuge input slots without passing through the apiary's output slots, and buffered honeycombs are never FIFO-evicted (overflow returns to the AE network first, FIFO only as the last resort).
 - **Jade tooltip**: shows bee count, production progress, and AE2 network status.
+- **Production diagnostics**: bee slots and Jade distinguish pending honey, generated outputs, a previous bee's paid cycles, resource accounts, full buffers and unresolved outcomes. Operators can use `/pbgoutput <X> <Y> <Z> status` to inspect paid cycles, frozen outputs, honey, buffers and each slot. Unknown deliveries remain in custody without automatic compensation. Resource ME initialization failures pause the affected resource output while ordinary output continues.
 - **GUI tabs**: Sorting / Feeder / PB Upgrades / Multi-fluid tank — four customizable tabs with persisted window positions.
 - **Performance**: throttled GUI energy-bar sync (every 5 game ticks instead of every tick), batched energy deduction under tick acceleration, and cached per-slot NBT serialization keep large factories light on CPU and network.
 
@@ -248,6 +250,7 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
 - **AE2 native energy toggle** (`aeNativeEnergyInputEnabled`, shown only when Applied Flux is installed): disable it to draw energy only from AppliedFlux-stored FE, preventing excessive AE drain from powering down the ME network when FE runs low.
 - **Input pulling** (centrifuge only): actively pulls fuzzy-matched combs, precise comb/block entries, or ordinary Mekanism SMELTING inputs from the connected ME network.
 - **Pull filters**: disabled / blacklist / whitelist modes, precise matching, NBT-ignore mode, per-entry pull amounts, per-entry or global unlimited pulling, and machine-wide or per-entry network reserve floors. Exact whitelists are cursor-rotated so large lists do not starve later entries.
+- **Removal persistence**: mining and replacing a centrifuge preserves its AE2 pull filters and toggles, as do wrench removal, crafting upgrades and factory installers. Placement by the original owner can safely reclaim the same detached resource account. Conflicting references and unknown requests stay paused; unstarted invalid resource inputs are retained for return when the network recovers.
 - **SMELTING tag gate**: ordinary smelting candidates can be filtered with a separate whitelist/blacklist expression supporting item ids, tags, `&|^!()` operators, and `*` wildcards.
 - **Transaction safety**: extracted leftovers use a bounded, persistent per-machine pending buffer instead of world drops. Item output uses a persistent reserve-commit-confirm ledger, so accepted network inserts are only finalized after the source slot is safely decremented.
 - **Jade tooltip**: Shows AE2 network status (Offline / Booting / Missing Channel / Online).
@@ -260,6 +263,46 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
 - Visual distinction between added and unadded bees.
 - Numeric indices, dynamic product info for special bees.
 - Sort mode and collapse state persist across sessions.
+
+### Resource Bee Editor
+
+Get the BeeBee Support Handbook in Creative mode and right-click to open the Resource Bee Editor. Create or edit a bee, its appearance, attributes, flowers, acquisition and multiple outputs. The handbook is usable only in Creative mode; applying on a dedicated server requires OP level 2 or above. Creative non-OP players can edit, save and export locally. Inventory and hotbar remain visible; dragging a material copies its complete components without consuming items.
+
+Drag the title bar to move the editor, drag its edges or corners to resize, and use the pin to lock it. Resize cursors appear near an edge. Movement is bounded by the screen and bottom inventory; JEI adapts to the actual occupied areas. The designer adjusts its internal density at 3×/4× GUI scale, and bottom buttons grow with the window. The inventory stays outside with matching light/dark textures; navigation and editing tools remain visible. Ctrl+0 resets the layout, F2 switches the theme, Ctrl+F focuses search, and Ctrl+S saves the current draft. Ctrl+Z/Y and Edit History restore session snapshots with specific field changes; local drafts have their own library. Revision History records successful applications to the current world. Saving a draft or exporting locally does not create a published revision.
+
+Edit acquisition recipes and output quantities together. Browse items, blocks and tags by name, ID, @mod or #tag, and type a page number to jump. Add localized bee names beyond Chinese and English. The JSON editor provides syntax colors, line numbers, formatting and text undo. Review offers local export and an export-folder shortcut. The AE resource picker reads installed bridges, real JEI keys and wrapped templates; resources absent from those catalogs require a real template or exact data.
+
+Under Acquisition → Machine recipes, choose an MI, MBD2 or MMR recipe type or machine discovered by the server, then edit inputs, bee egg outputs, amounts, probabilities and host costs. MI uses EU and duration; MBD2 keeps separate capabilities and per-tick settings; MMR keeps material amounts separate from canvas positions. Missing hosts, machine definitions or incompatible versions block application while preserving drafts. The editor adds recipes to existing machines; the pack must provide their definitions.
+
+Import machine recipes by dropping a JS or native recipe JSON file. The original is archived and only supported data calls are parsed; dynamic expressions and unknown calls show specific diagnostics. The source digest is checked again before import to detect external edits. Export machine script creates a separate KubeJS script and project copy locally, preserving the original script. Install the exported script in the target instance's `kubejs/server_scripts`, then reload.
+
+Combined production flows configure matching outputs together and distinguish direct hive production from bee-specific comb processing. Individual recipes retain their original IDs and act separately; each entry describes its actual host and input. The preview supports horizontal and vertical dragging with yaw, pitch and sensitivity sliders, and refreshes entity dimensions after size changes. Configured languages appear first, and gene choices prefer PB's existing translations. Important status and errors stay in a fixed bar inside the panel.
+
+Machine catalogs and editors prefer in-game names provided by the host while retaining the mod, version and ID. Change machine, keep settings preserves original parameters within the same host. Cross-host conversion retains representable items, fluids, amounts, probabilities and duration. Unknown fields, incompatible units and per-tick behavior block conversion while keeping the original recipe.
+
+Export KubeJS author bundle creates a ZIP containing bee definitions and the project index in `kubejs/data`, localized names in `kubejs/assets`, and recipe scripts in `kubejs/server_scripts/bee_designer`. Extract it into the target pack root and restart the game; later recipe edits can be reloaded. The target instance still needs the required mods and machine definitions. Install either the datapack export or the KubeJS bundle for the same bee to avoid duplicates. The bundle can also be imported back into the designer.
+
+Open settings from the title bar or Ctrl+, for modern dark, modern light, AE-style light and separate custom dark/light palettes, density, internal scale, backdrop, animations, reduced motion, preview sensitivity, tooltip delay and automatic drafts. Edit colors or import/export theme JSON; invalid input retains the previous palette. Preferences are stored in the instance's `bee-designer/preferences.json`. Invalid settings retain the original file; closing settings without edits does not replace it with defaults. Shortcuts and dedicated-server installation instructions are included.
+
+New preferences default to modern light and existing themes are retained. Page transitions move only the content slightly while the window, title and inventory remain steady; switches animate locally. Close, settings, pin and theme icons share a size, and the title-bar X handles pending edits before saving and exiting. Forms and material grids scroll continuously, JSON and material scrollbars drag directly, and read-only JSON can be formatted. PB nests and hives appear first only when choosing a nest-spawning ingredient. Ctrl+Z restores deleted biome selections; items show one complete tooltip. MI recipes with EU=0 can migrate to MMR while retaining representable materials, amounts, probabilities and duration.
+
+Choose existing PB models and matching textures in Appearance; preview rotation follows the mouse. Special models require GeckoLib, and a shape does not grant solitary or farmer AI. Publish → Visual overview edits appearance, trait switches, acquisition recipes, machine materials and output quantities or probabilities directly. Each section or machine has an Edit action for its complete form. Combined centrifuge duration updates both ordinary and extended recipes and survives reopening its production editor. Diagnostics scroll to and highlight the actual field; changing pages clears the previous marker. World bee eggs and entities receive names on apply and login, and existing world bees refresh after model changes.
+
+The current bee autosaves locally every 60 seconds by default, with a configurable interval of 15 seconds to 10 minutes or an off switch. Continuous edits are saved at the interval; unconfirmed production nodes and raw JSON input can be restored and are cleared only after confirmation or explicit discard. Autosave does not apply to the world. The bee library highlights and lists unapplied drafts first; click to resume them. Drafts show localized names, bee eggs and edit dates with newest, oldest, name or ID sorting and search. Applying clears the marker, and editing again restores it.
+
+Copy bees from either the bee library or local drafts. The editor chooses a new ID that avoids registered bees, local drafts, PB name keys, and managed recipe IDs. Copies preserve traits, complete components, and unknown fields as an independent draft; the world changes only on apply. Catalog cards show their actual source: PB built-in, Genesis built-in, modpack content, another mod, or editor-created. Edited overrides and unapplied drafts have separate markers.
+
+Delete an existing configurable bee through three confirmation steps, ending with its complete ID. Confirmation stages a local deletion draft; Apply to World retires new work and managed acquisition recipes. A previous local draft is retained in the recycle bin. World entities, housed bees, eggs, cages, combs, and products in inventories or AE2 keep their identities, counts, and components. Player inventories are not scanned or cleared. Existing combs remain processable, and paid work and pending outputs stay with their original machines for settlement. World deletion records persist with the save; restore the same bee from the recycle bin and apply again to reactivate it. Local archived drafts can also be restored without overwriting a new draft with the same ID; copy a retained draft to resolve a conflict. Keep the compatibility definitions and the mods providing the original items installed.
+
+PB definitions and Myriad settings allow declared attack values from 0 to 2147483647. New Myriad configurations default to BeeBee\'s `2.147483647E9`; existing configuration values are retained. PB 13.14 parses JSON attack through float, which rounds BeeBee\'s internal value. Minecraft 1.21.1 caps its native attack attribute at 2048, and PB separately limits extra damage to 1000 in hardcore mode. The formal non-hardcore attack scenario measured both Myriad and BeeBee at 2048 damage; the declared value is not damage per hit. Invalid input identifies the field and range. Correct and retry a failed save without getting stuck on the close confirmation.
+
+Project and machine-source imports include Browse files: select a local drive, enter or leave folders, search JSON/ZIP files (plus JS for machine sources), and select a file to fill its import path. Directory reads use a separate bounded background queue and can be canceled; errors retain edits. This browser does not write server paths. Configurable behavior includes nesting tags, block or entity-tag flowers, post-pollination processing, particles and existing traits. Entity flowers validate entity type tags. FarmerBee and SolitaryBee retain their independent hardcoded AI without an upstream data-editing entry.
+
+Choose responsive or smooth page motion with 0–24 pixels of travel and 80–400 ms duration. The window, title and inventory remain opaque; buttons, navigation and switches provide local press, ripple and sliding feedback. Preview and draft monitoring rebuild snapshots only after a declaration changes. Material catalogs build incrementally and retain at most eight completed queries; measured benefits apply to the tested workload.
+
+The essence upgrade's automatic-crafting whitelist now accepts PB's wither-skull chip, `productivebees:wither_skull_chip`: exactly nine chips craft one `minecraft:wither_skeleton_skull`. Full component matching and remainders are preserved; insufficient space leaves the original items intact. Only the exact 9:1 recipe is admitted by this exception, without broadly enabling other block outputs or mixed recipes.
+
+Removing or replacing bees keeps their completed paid cycles without permanently occupying the new bee slots. Fixed recipes settle automatically. Dynamic wood, stone, dye or amber products retain their original bee data in a separate store of at most 128 groups; restore the original feeder flowers to settle them. `/pbgoutput <x> <y> <z> status` identifies retained bees and cycle counts. Full stores, full outputs and unknown outcomes pause explicitly while preserving assets. Ordinary bees with no extended account no longer report an unbound attachment as a resource-storage failure.
 
 ### KubeJS Integration
 
@@ -680,7 +723,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The local development build is `build/libs/productivebeesgenesis-1.1.0.jar`; version 1.1.0 is not yet released.
+The local build is `build/libs/productivebeesgenesis-1.2.0.jar`.
 
 `./gradlew runClient --no-daemon` automatically loads the resource-bee examples through the development-only `devExamples` source set. Bees such as `example:energy`, `example:hydrogen` and `example:mixed` are available for testing; optional resource types still require their owning mods. The examples are not bundled in release jars, and `verifyReleaseArtifact` checks that boundary.
 

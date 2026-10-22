@@ -45,6 +45,15 @@ public final class BeeConfigApplier {
 			data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
 			data.putInt("particleColor", parseHexColor(config.particleColor.get()));
 			data.putInt("glowColor", parseHexColor(config.glowColor.get()));
+			var appearance = config.beeAttributes();
+			data.putString("renderer", appearance.renderer.get());
+			optional(data, "model", appearance.model.get());
+			optional(data, "animation", appearance.animation.get());
+			optional(data, "beeTexture", appearance.beeTexture.get());
+			data.putString("particleType", appearance.particleType.get());
+			optional(data, "nestingPreference", appearance.nestingPreference.get());
+			optional(data, "postPollination", appearance.postPollination.get().equals("none") ? "" : appearance.postPollination.get());
+			appearance.traits.forEach((key, value) -> data.putBoolean(key, value.get()));
 
 			// 授粉
 			data.putString("flowerItem", config.flowerItem.get());
@@ -87,6 +96,14 @@ public final class BeeConfigApplier {
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("解析颜色值 '{}' 失败，使用默认金色", hex, e);
 			return 0xFFFFD700; // 默认金色
+		}
+	}
+
+	private static void optional(CompoundTag data, String key, String value) {
+		if (value.isEmpty()) {
+			data.remove(key);
+		} else {
+			data.putString(key, value);
 		}
 	}
 }

@@ -65,8 +65,6 @@ public final class Ae2ResourceOutput implements IInWorldGridNodeHost {
 		if (!(machine instanceof BlockEntity entity)) return;
 		var state = ResourceHiveHost.existing(entity);
 		if (state == null || state.reference() == null) return;
-		ResourceHiveHost.ensureMechanical(entity);
-		state.migrateMeOutput(entity);
 		var holder = machine.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
 		if (holder.getResourceOutput() == null) holder.setResourceOutput(new Ae2ResourceOutput(entity, holder));
@@ -135,7 +133,15 @@ public final class Ae2ResourceOutput implements IInWorldGridNodeHost {
 			var state = ResourceHiveHost.existing(host);
 			if (state == null || state.reference() == null) { disconnect(); return; }
 			failedAccount = ResourceRuntime.accounts(level.getServer()).accounts().find(state.reference().sourceId());
+			failedNode = currentMachineNode(host);
+			failedNodeActive = failedNode != null && failedNode.isActive();
+			if (machineHost != null) {
+				// 绑定恢复和旧开关迁移也受本输出器的退避保护，失败不能中断普通物品／流体输出。
+				ResourceHiveHost.ensureMechanical(host);
+				state.migrateMeOutput(host);
+			}
 			var account = state.account(host);
+			failedAccount = account;
 			boolean machine = host instanceof IAe2OutputHostBase;
 			if (!Objects.equals(source, state.reference()) || machineMode != machine) {
 				disconnect();
@@ -261,6 +267,7 @@ public final class Ae2ResourceOutput implements IInWorldGridNodeHost {
 			retryAt = tick + 40;
 			var state = ResourceHiveHost.existing(endpoint);
 			failedSource = state == null ? null : state.reference();
+			if (state != null) state.meStatus("unavailable");
 			// 异常路径不再查询可能失败的账户库或节点；下次只读检测失败仍受退避限制。
 			if (!reportedFailure) {
 				reportedFailure = true;

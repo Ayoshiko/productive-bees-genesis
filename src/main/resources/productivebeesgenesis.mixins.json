@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "beehive.BeeContainerFlowerDataMixin",
+    "beehive.DesignerRetiredSimulationMixin",
     "beehive.ResourceServerLifecycleMixin",
     "accessor.BasicInventorySlotAccessor",
     "accessor.BeeDataAccessor",
@@ -61,6 +62,7 @@
     "recipe.BeeFishingRecipeSerializerMixin",
     "recipe.BeeSpawningRecipeSerializerMixin",
     "BeeConfigReloadMixin",
+    "DesignerRetiredBeeMixin",
     "BeeHelperMixin",
     "AbstractUpgradeItemMixin"
   ],
@@ -74,6 +76,7 @@
     "client.JeiGhostIngredientDragMixin",
     "client.IBlockEntityExtensionMixin",
     "client.ConfigurableBeeColorMixin",
+    "client.DesignerGeckoBeeModelMixin",
     "client.CosmicItemRendererMixin",
     "mek.GuiUpgradeWindowMixin",
     "SelectedWindowDataMixin"

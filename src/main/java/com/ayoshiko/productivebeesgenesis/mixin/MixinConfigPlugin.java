@@ -309,6 +309,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (simpleName.equals("DesignerGeckoBeeModelMixin")) {
+			return isModLoaded("geckolib");
+		}
 		if (simpleName.equals("MyriadGuideHotkeyMixin")) return isModLoaded("guideme");
 		if (simpleName.equals("PbResourceProductionMixin") || simpleName.equals("PbResourceMixedOutputMixin")) {
 			return PbResourceMixinContract.supported();

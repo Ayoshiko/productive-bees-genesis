@@ -2,8 +2,10 @@ package com.ayoshiko.productivebeesgenesis.mixin.client;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerPreviewData;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import net.minecraft.nbt.CompoundTag;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +26,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * 也用于粒子颜色。发光效果由 onRenderLivingPost 事件处理。
 	 */
 @Mixin(ConfigurableBee.class)
-public abstract class ConfigurableBeeColorMixin {
+public abstract class ConfigurableBeeColorMixin implements DesignerPreviewData {
+	@Unique
+	private CompoundTag productivebeesgenesis$previewData;
+
+	@Override
+	public void productivebeesgenesis$setPreviewData(CompoundTag data) {
+		productivebeesgenesis$previewData = data.copy();
+	}
+
+	@Override
+	public boolean productivebeesgenesis$isPreview() {
+		return productivebeesgenesis$previewData != null;
+	}
+
+	@Inject(method = "getNBTData", at = @At("HEAD"), cancellable = true)
+	private void productivebeesgenesis$previewDefinition(CallbackInfoReturnable<CompoundTag> cir) {
+		if (productivebeesgenesis$previewData != null) {
+			cir.setReturnValue(productivebeesgenesis$previewData);
+		}
+	}
 
 	/**
 	 * 拦截 getColor 方法，为万象创世蜜蜂返回自定义彩虹颜色

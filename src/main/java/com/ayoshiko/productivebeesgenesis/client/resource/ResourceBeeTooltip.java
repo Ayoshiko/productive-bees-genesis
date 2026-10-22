@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.resource;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSpawnEggHelper;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.common.item.BeeCage;
 import net.minecraft.ChatFormatting;
@@ -27,7 +28,11 @@ public final class ResourceBeeTooltip {
 
 	@SubscribeEvent
 	public static void onItemTooltip(ItemTooltipEvent event) {
-		event.getToolTip().addAll(lines(beeType(event.getItemStack())));
+		ResourceLocation bee = beeType(event.getItemStack());
+		event.getToolTip().addAll(lines(bee));
+		if (bee != null && BeeDesignerClient.retired(bee.toString())) {
+			event.getToolTip().add(Component.translatable("designer.retired_item").withStyle(ChatFormatting.GOLD));
+		}
 	}
 
 	public static List<Component> lines(@Nullable ResourceLocation bee) {

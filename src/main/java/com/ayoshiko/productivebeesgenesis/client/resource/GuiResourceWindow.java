@@ -211,7 +211,8 @@ public final class GuiResourceWindow extends GuiWindow {
             tank = BasicChemicalTank.createAllValid(Math.max(1, reply == null ? 1 : reply.capacity()), null);
             tank.setStack(new ChemicalStack(MekanismAPI.CHEMICAL_REGISTRY.get(id), balance == null ? 0 : balance.amount()));
         }
-        boolean valid = reply != null && reply.source() != null && reply.status().state() != ResourceOutputStatus.State.PAUSED;
+        boolean valid = reply != null && reply.source() != null && reply.status().accountReadable()
+                && reply.status().state() != ResourceOutputStatus.State.PAUSED;
         var currentRecipient = reply == null ? ResourceMenuSync.EmcRecipient.NONE : reply.emcRecipient();
         recipientButton.visible = currentRecipient.player() != null
                 && recipientSelectionAvailable();

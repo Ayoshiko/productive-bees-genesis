@@ -38,7 +38,7 @@ final class BeeProductionGenerator {
 		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
 				|| produceList == null
 				|| (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(beeTypeKey)
-						&& !multiFlowerBee && sampling == null)) {
+						&& !multiFlowerBee && sampling == null && upgrades.geneSamplerCount() <= 0)) {
 			return Generated.EMPTY;
 		}
 
@@ -66,7 +66,9 @@ final class BeeProductionGenerator {
 		// 模块 2+3：循环外查询流体输出类型（同组蜜蜂共享 beeTypeKey，流体类型一致）
 		// BeeFluidOutputResolver 从离心配方推断流体类型：蜂蜜返回 FluidStack(honey, 250)，
 		// 非蜂蜜流体（如时间流体）返回 EMPTY，无配方返回蜂蜜（向后兼容）
-		FluidStack fluidTemplate = (nativeProduction && !discardUselessByproducts && beeTypeKey != null && level != null)
+		// 仅基因采样不属于普通生产，不能触发无离心配方时的蜂蜜兜底。
+		boolean hasNativeProducts = !produceList.isEmpty() || multiFlowerBee || wannaBeeLevel != null || isMyriad;
+		FluidStack fluidTemplate = (nativeProduction && hasNativeProducts && !discardUselessByproducts && beeTypeKey != null && level != null)
 				? BeeFluidOutputResolver.resolveFluidOutput(beeTypeKey, level)
 				: FluidStack.EMPTY;
 

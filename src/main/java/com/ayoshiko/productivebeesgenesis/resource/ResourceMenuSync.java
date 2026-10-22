@@ -168,7 +168,7 @@ public final class ResourceMenuSync {
         var tile = ((MekanismTileContainer<?>) player.containerMenu).getTileEntity();
         var status = ResourceOutputStatus.capture(tile, player, -1);
         var state = ResourceHiveHost.existing(tile);
-        boolean privateState = status.state() == ResourceOutputStatus.State.PRIVATE || status.state() == ResourceOutputStatus.State.UNAVAILABLE;
+		boolean privateState = !status.accountReadable();
         var currentSession = session(player, request);
         var balances = state == null || privateState || state.reference() == null ? java.util.Map.<ResourceKey, java.math.BigInteger>of() : state.account(tile).availableExact();
         var delta = currentSession.publisher.update(balances, request.revision);

@@ -83,9 +83,22 @@ public final class ResourceCentrifugeProcessor {
 			if (host.centrifugeProcessor == null) host.centrifugeProcessor = new ResourceCentrifugeProcessor();
 			return host.centrifugeProcessor.advance(access, host, account, level, Math.max(0, virtualTicks), current);
 		} catch (IllegalStateException invalid) {
-			host.status("invalid_resource_host");
+			if (host.status().isEmpty()) host.status("invalid_resource_host");
+			if (canReturnUnstartedInput(access, host, level)) access.returnInput();
 			return Result.BLOCKED;
 		}
+	}
+
+	private static boolean canReturnUnstartedInput(Access access, ResourceHiveHost host, ServerLevel level) {
+		var accounts = ResourceRuntime.accounts(level.getServer()).accounts();
+		if (accounts.hasInvalidData() || !accounts.persistenceFailure().isEmpty()) return false;
+		var account = accounts.find(host.reference().sourceId());
+		if (account == null || !account.owner().equals(
+				access.entity() instanceof mekanism.common.lib.security.ISecurityTile security ? security.getOwnerUUID() : null)) return false;
+		// 失效引用不能证明输入未消费；必须核对原账户的车道、全局请求和冻结记录。
+		return account.binding() == null && account.centrifugeWork(access.lane()) == null
+				&& !unresolvedLane(account, access.lane()) && account.productionTicket() == null
+				&& account.transferTicket() == null && !account.hasIsolatedRequests();
 	}
 
 	/** 只在新索引没有配方时查询旧工作，允许归还原输入后继续已付费周期。 */

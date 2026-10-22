@@ -8,8 +8,16 @@ import net.minecraft.server.level.ServerPlayer;
 /** 有权限的附近观察者最多获得四项余额；不会同步账户标识、未决事务或故障原文。 */
 public record ResourceOutputStatus(State state, boolean meEnabled, int totalKinds, java.util.List<ResourceStack> balances) {
 	public enum State { UNBOUND, UNAVAILABLE, PRIVATE, READY, PAUSED, MISSING_RECIPE,
-		MISSING_OWNER, BINDING_UNAVAILABLE, ME_OFFLINE, ME_MISSING_BRIDGE, ME_FULL, ME_DISABLED, PARTIAL }
+		MISSING_OWNER, BINDING_UNAVAILABLE, ME_OFFLINE, ME_MISSING_BRIDGE, ME_FULL, ME_DISABLED, PARTIAL,
+		REFERENCE_CONFLICT, REFERENCE_OWNER_MISMATCH, REFERENCE_PAUSED, ME_UNAVAILABLE }
 	public static final int MAX_ROWS = 4;
+	public boolean accountReadable() {
+		return switch (state) {
+			case UNBOUND, UNAVAILABLE, PRIVATE, MISSING_OWNER, BINDING_UNAVAILABLE,
+					REFERENCE_CONFLICT, REFERENCE_OWNER_MISMATCH, REFERENCE_PAUSED -> false;
+			default -> true;
+		};
+	}
 	public ResourceOutputStatus {
 		java.util.Objects.requireNonNull(state);
 		balances = java.util.List.copyOf(balances);
@@ -27,6 +35,7 @@ public record ResourceOutputStatus(State state, boolean meEnabled, int totalKind
 		var source = ResourceHiveHost.existing(host);
 		if (source == null) return empty(State.UNBOUND, true);
 		if (source.reference() == null) return empty(switch (source.status()) {
+			case "" -> State.UNBOUND;
 			case "missing_owner" -> State.MISSING_OWNER;
 			case "binding_unavailable" -> State.BINDING_UNAVAILABLE;
 			default -> State.UNAVAILABLE;
@@ -41,10 +50,20 @@ public record ResourceOutputStatus(State state, boolean meEnabled, int totalKind
 				case "missing_bridge" -> State.ME_MISSING_BRIDGE;
 				case "full" -> State.ME_FULL;
 				case "disabled" -> State.ME_DISABLED;
+				case "unavailable" -> State.ME_UNAVAILABLE;
 				default -> State.READY;
 			};
 			return new ResourceOutputStatus(state, summary.meEnabled(), summary.totalKinds(), summary.balances());
-		} catch (IllegalStateException invalid) { return empty(State.UNAVAILABLE, source.meOutputEnabled()); }
+		} catch (IllegalStateException invalid) {
+			State state = switch (source.status()) {
+				case "reference_conflict" -> State.REFERENCE_CONFLICT;
+				case "reference_owner_mismatch" -> State.REFERENCE_OWNER_MISMATCH;
+				case "reference_paused" -> State.REFERENCE_PAUSED;
+				case "binding_unavailable" -> State.BINDING_UNAVAILABLE;
+				default -> State.UNAVAILABLE;
+			};
+			return empty(state, source.meOutputEnabled());
+		}
 	}
 	static ResourceOutputStatus summarize(ResourceAccount account, boolean enabled) {
 		return summarize(account, enabled, 0);

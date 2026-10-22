@@ -27,9 +27,10 @@ public final class JadeResourceOutputProvider implements IBlockComponentProvider
 		ResourceOutputStatus status;
 		try { status = ResourceOutputStatus.load(accessor.getServerData().getCompound(DATA)); }
 		catch (IllegalArgumentException invalid) { return; }
+		if (status.state() == ResourceOutputStatus.State.UNBOUND) return;
 		tooltip.add(Component.translatable("resource.productivebeesgenesis.status." + status.state().name().toLowerCase(java.util.Locale.ROOT))
 				.withStyle(status.state() == ResourceOutputStatus.State.PAUSED ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
-		if (status.state() == ResourceOutputStatus.State.PRIVATE || status.state() == ResourceOutputStatus.State.UNAVAILABLE) return;
+		if (!status.accountReadable()) return;
 		tooltip.add(Component.translatable("resource.productivebeesgenesis.me." + (status.meEnabled() ? "enabled" : "disabled")));
 		for (var balance : status.balances()) {
 			var quantity = ResourceVisuals.compactAmount(balance.key(), balance.exactAmount()) + " ";

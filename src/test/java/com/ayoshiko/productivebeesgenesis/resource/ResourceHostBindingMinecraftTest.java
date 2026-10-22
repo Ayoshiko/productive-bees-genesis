@@ -17,6 +17,156 @@ import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class ResourceHostBindingMinecraftTest {
+	@Test
+	void emptyMachineRemovalClearsTheReferenceAndKeepsUnresolvedHistoryWithoutASource() {
+		var fixture = new BindingFixture();
+		var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(fixture.host));
+		var state = fixture.state(account.reference());
+		var raw = state.serializeNBT(fixture.registries);
+		var evidence = new CompoundTag();
+		evidence.putUUID("source", new java.util.UUID(17, 18));
+		evidence.putLong("generation", 1);
+		evidence.putString("reason", "missing_account");
+		var list = new net.minecraft.nbt.ListTag();
+		list.add(evidence);
+		raw.put("unresolved_references", list);
+		state.deserializeNBT(fixture.registries, raw);
+		try (var runtime = fixture.runtime()) {
+			ResourceHiveHost.removed(fixture.host);
+			assertNull(state.reference());
+			assertEquals(0, fixture.accounts.size());
+			var detached = state.serializeNBT(fixture.registries);
+			assertFalse(detached.contains("source"));
+			state.deserializeNBT(fixture.registries, detached);
+			assertEquals(detached, state.serializeNBT(fixture.registries));
+			assertEquals(evidence, detached.getList("unresolved_references", 10).getCompound(0));
+			for (int i = 0; i < 8; i++) {
+				ResourceHiveHost.ensureMechanical(fixture.host);
+				assertEquals(1, fixture.accounts.size());
+				ResourceHiveHost.removed(fixture.host);
+				assertEquals(0, fixture.accounts.size());
+				assertNull(state.reference());
+				state.deserializeNBT(fixture.registries, state.serializeNBT(fixture.registries));
+				when(fixture.level.getGameTime()).thenReturn((i + 1) * 40L);
+			}
+			assertEquals(1, state.serializeNBT(fixture.registries).getList("unresolved_references", 10).size());
+		}
+	}
+
+
+	@Test
+	void retiredMachineClaimsTheSameBalanceOnceAndKeepsCopiedReferencesInvalid() {
+		var fixture = new BindingFixture();
+		var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(fixture.host));
+		ResourceAccountsMinecraftTest.produce(account, 100);
+		var state = fixture.state(account.reference());
+		var original = state.serializeNBT(fixture.registries);
+		try (var runtime = fixture.runtime()) {
+			ResourceHiveHost.removed(fixture.host);
+			assertEquals(2, state.reference().generation());
+			assertNull(account.binding());
+			var detached = state.serializeNBT(fixture.registries);
+			state.deserializeNBT(fixture.registries, original);
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertSame(account, state.account(fixture.host));
+			assertEquals(3, state.reference().generation());
+			assertEquals(100L, account.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+			assertEquals(1, fixture.accounts.size());
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertEquals(3, state.reference().generation());
+			state.deserializeNBT(fixture.registries, detached);
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertEquals("reference_conflict", state.status());
+			assertThrows(IllegalStateException.class, () -> state.account(fixture.host));
+			assertEquals(100L, account.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+		}
+	}
+
+	@Test
+	void detachedReferenceSurvivesNormalPersistenceAndClaimsAtItsCurrentGeneration() {
+		var fixture = new BindingFixture();
+		var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(fixture.host));
+		ResourceAccountsMinecraftTest.produce(account, 100);
+		var state = fixture.state(account.reference());
+		try (var runtime = fixture.runtime()) {
+			ResourceHiveHost.removed(fixture.host);
+			state.deserializeNBT(fixture.registries, state.serializeNBT(fixture.registries));
+			fixture.accounts = ResourceAccounts.load(fixture.accounts.save(), () -> {});
+			when(fixture.data.accounts()).thenAnswer(invocation -> fixture.accounts);
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertEquals(3, state.reference().generation());
+			assertEquals(100L, state.account(fixture.host).available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+		}
+	}
+
+	@Test
+	void unknownTransfersAndWrongOwnersRemainDetachedWithoutChangingBalances() {
+		var fixture = new BindingFixture();
+		var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(fixture.host));
+		ResourceAccountsMinecraftTest.produce(account, 100);
+		var state = fixture.state(account.reference());
+		account.beginTransfer(account.reference(), ResourceAccountsMinecraftTest.HYDROGEN, 40);
+		try (var runtime = fixture.runtime()) {
+			ResourceHiveHost.removed(fixture.host);
+			var exact = fixture.accounts.save();
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertEquals("reference_paused", state.status());
+			assertEquals(exact, fixture.accounts.save());
+			when(fixture.host.getOwnerUUID()).thenReturn(new java.util.UUID(2, 3));
+			when(fixture.level.getGameTime()).thenReturn(40L);
+			ResourceHiveHost.ensureMechanical(fixture.host);
+			assertEquals("reference_owner_mismatch", state.status());
+			assertEquals(exact, fixture.accounts.save());
+		}
+	}
+
+	private static final class BindingFixture {
+
+		final ServerLevel level = mock(ServerLevel.class);
+		final MinecraftServer server = mock(MinecraftServer.class);
+		final com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary host = mock(com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary.class);
+		final RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		final ResourceAccountsSavedData data = mock(ResourceAccountsSavedData.class);
+		ResourceAccounts accounts = new ResourceAccounts(() -> {});
+
+		BindingFixture() {
+			when(host.getLevel()).thenReturn(level);
+			when(host.getBlockPos()).thenReturn(BlockPos.ZERO);
+			doReturn(BlockEntityType.FURNACE).when(host).getType();
+			when(host.getOwnerUUID()).thenReturn(ResourceAccountsMinecraftTest.OWNER);
+			when(host.getOutputSlots()).thenReturn(java.util.List.of());
+			when(level.dimension()).thenReturn(Level.OVERWORLD);
+			when(level.getServer()).thenReturn(server);
+			when(level.getBlockEntity(BlockPos.ZERO)).thenReturn(host);
+			when(level.registryAccess()).thenReturn(registries);
+			var chunks = mock(net.minecraft.server.level.ServerChunkCache.class);
+			when(level.getChunkSource()).thenReturn(chunks);
+			when(chunks.hasChunk(0, 0)).thenReturn(true);
+			when(server.isSameThread()).thenReturn(true);
+			when(data.accounts()).thenAnswer(invocation -> accounts);
+		}
+
+		ResourceHiveHost state(ResourceAccount.Reference reference) {
+			var saved = new CompoundTag();
+			saved.putInt("version", 1);
+			saved.putUUID("source", reference.sourceId());
+			saved.putLong("generation", reference.generation());
+			saved.putLong("capacity", 1_000_000_000);
+			saved.putBoolean("me_output", true);
+			var state = new ResourceHiveHost();
+			state.deserializeNBT(registries, saved);
+			when(host.getData(ResourceHiveHost.TYPE)).thenReturn(state);
+			when(host.getExistingDataOrNull(ResourceHiveHost.TYPE)).thenReturn(state);
+			return state;
+		}
+
+		org.mockito.MockedStatic<ResourceRuntime> runtime() {
+			var runtime = mockStatic(ResourceRuntime.class);
+			runtime.when(() -> ResourceRuntime.accounts(server)).thenReturn(data);
+			return runtime;
+		}
+	}
+
     @Test void missingReferenceRecoversIntoAnIndependentAccountAndKeepsOldIdentityEvidence() {
         var level = mock(ServerLevel.class);
         var server = mock(MinecraftServer.class);

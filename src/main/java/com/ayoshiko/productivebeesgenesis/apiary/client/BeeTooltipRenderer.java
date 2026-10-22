@@ -432,16 +432,7 @@ public class BeeTooltipRenderer {
 	 * 获取状态的本地化组件
 	 */
 	private Component getStateComponent(BeeState state) {
-		String key = switch (state) {
-			case IDLE -> "gui.productivebeesgenesis.bee_state.idle";
-			case WORKING -> "gui.productivebeesgenesis.bee_state.working";
-			case WAITING_FLOWER -> "gui.productivebeesgenesis.bee_state.waiting_flower";
-			case WAITING_ENERGY -> "gui.productivebeesgenesis.bee_state.waiting_energy";
-			case WAITING_OUTPUT -> "gui.productivebeesgenesis.bee_state.waiting_output";
-			case WAITING_DAY_CYCLE -> "gui.productivebeesgenesis.bee_state.waiting_day_cycle";
-			case WAITING_RAIN -> "gui.productivebeesgenesis.bee_state.waiting_rain";
-			case WAITING_THUNDER -> "gui.productivebeesgenesis.bee_state.waiting_thunder";
-		};
+		String key = state.translationKey();
 		int color = ALPHA_OPAQUE | state.getColor();
 		return Component.translatable(key).withStyle(s -> s.withColor(color));
 	}

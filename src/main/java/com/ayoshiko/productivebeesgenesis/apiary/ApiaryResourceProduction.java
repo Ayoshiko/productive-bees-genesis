@@ -78,20 +78,20 @@ final class ApiaryResourceProduction {
 			ApiaryUpgradeHandler upgrades, IEnergyContainer energy, long energyPerTick, long legacyEnergyReserved, Prepared prepared,
 			ApiaryConversionProcessor conversionProcessor, long conversionBatch, ApiaryBatchUpgradeSnapshot snapshot) {
 		var host = ResourceHiveHost.existing(tile);
-		if (host == null) return BeeState.WAITING_OUTPUT;
+		if (host == null) return BeeState.WAITING_RESOURCE;
 		host.productionMonitor().observe(index, spec.outputs(),
 				ResourceProductionSnapshot.State.WAITING_OUTPUT, level.getGameTime());
 		ResourceAccount account = null;
 		ResourceAccount.Ticket ticket = null;
 		try {
 			account = host.account(tile);
-			if (!account.canExtract(host.reference()) || account.laneSuspended(index)) return BeeState.WAITING_OUTPUT;
-			if (tile.getProduceProcessor().production.suspended() || tile.getProduceProcessor().production.hasFrozen())
-				return BeeState.WAITING_OUTPUT;
+			if (!account.canExtract(host.reference()) || account.laneSuspended(index)) return BeeState.WAITING_RESOURCE;
+			if (tile.getProduceProcessor().production.suspended()) return BeeState.PRODUCTION_SUSPENDED;
+			if (tile.getProduceProcessor().production.hasFrozen()) return BeeState.WAITING_FROZEN_OUTPUT;
 			int stack = upgrades.getStackProductionCount();
 			if (stack < 1) throw new IllegalArgumentException("Invalid STACK multiplier");
 			if (prepared == null || !prepared.valid(snapshot, tile.getFeederSlotManager().getFlowerCacheVersion(), slot))
-				return BeeState.WAITING_OUTPUT;
+				return BeeState.WAITING_RESOURCE;
             var plan = prepared.plan();
             long seed = level.random.nextLong();
 			var perCycle = plan.maximumExact(stack);
@@ -104,7 +104,7 @@ final class ApiaryResourceProduction {
                 capacityCycles = Math.min(capacityCycles, cycles);
 			}
 			if (capacityCycles == 0 || (!perCycle.isEmpty() && !host.fitsExact(account, perCycle))) {
-				return BeeState.WAITING_OUTPUT;
+				return BeeState.WAITING_RESOURCE;
 			}
 			int required = ApiaryProgressAdvancer.requiredTicks(slot, baseTime, timeMultiplier, creative);
 			int previousTicks = Math.max(0, slot.getTicksInHive());
@@ -180,7 +180,7 @@ final class ApiaryResourceProduction {
 						ticket.source().sourceId(), ticket.sequence(), tile.getBlockPos(), failure);
 			}
 			host.status(ticket == null ? "invalid_production_plan" : "production_uncertain");
-			return BeeState.WAITING_OUTPUT;
+			return BeeState.WAITING_RESOURCE;
 		}
 	}
 }

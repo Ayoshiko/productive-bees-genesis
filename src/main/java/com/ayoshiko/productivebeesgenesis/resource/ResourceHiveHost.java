@@ -221,7 +221,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		return state;
 	}
 
-	/** 旧账户不猜零余额、不重建同一 UUID；只给实际机器的后续生产分配独立身份。 */
+	/** 拆装只认领同一账户；缺失身份仍独立保管，不推测或补发旧余额。 */
 	private void recoverMechanicalReference(BlockEntity host, ServerLevel level) {
 		if (!(host instanceof mekanism.common.lib.security.ISecurityTile security) || security.getOwnerUUID() == null) return;
 		var accounts = ResourceRuntime.accounts(level.getServer()).accounts();
@@ -232,9 +232,38 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		if (tick < nextBindAttempt && old == lastRecoveryAccount) return;
 		lastRecoveryAccount = old;
 		nextBindAttempt = tick + 40;
-		if (accounts.hasInvalidData() || !accounts.persistenceFailure().isEmpty() || unresolvedReferences.size() >= 4) return;
-		// 现存账户的其它绑定、代际与托管状态必须显式核验；这里只修复账户确实缺失的引用。
-		if (old != null) return;
+		if (accounts.hasInvalidData() || !accounts.persistenceFailure().isEmpty()) {
+			status = "binding_unavailable";
+			return;
+		}
+		if (old != null) {
+			if (!old.owner().equals(security.getOwnerUUID())) {
+				status = "reference_owner_mismatch";
+				return;
+			}
+			var current = old.reference();
+			// 兼容掉落先保存、移除后才退役的旧路径；只接受紧邻的一次退役。
+			boolean retiredOnce = reference.generation() < Long.MAX_VALUE
+					&& current.generation() == reference.generation() + 1;
+			if (old.binding() != null || !current.equals(reference) && !retiredOnce) {
+				status = "reference_conflict";
+				return;
+			}
+			try {
+				var previous = reference;
+				claim(host, security.getOwnerUUID(), current);
+				ProductiveBeesGenesis.LOGGER.info("已恢复拆装机器的资源账户，维度 {}，位置 {}，引用 {} → {}；余额和已付工作保持在原账户",
+						level.dimension().location(), host.getBlockPos(), previous, reference);
+			} catch (IllegalStateException denied) {
+				status = old.hasIsolatedRequests() || old.productionTicket() != null
+						|| old.transferTicket() != null ? "reference_paused" : "reference_conflict";
+			}
+			return;
+		}
+		if (unresolvedReferences.size() >= 4) {
+			status = "binding_unavailable";
+			return;
+		}
 		var previous = reference;
 		var evidence = new CompoundTag();
 		evidence.putUUID("source", previous.sourceId());
@@ -313,7 +342,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		var state = host.getData(TYPE);
 		if (state.preservedInvalid != null || (state.reference != null
 				&& (!state.reference.sourceId().equals(source.sourceId())
-				|| state.reference.generation() >= source.generation()))) {
+				|| state.reference.generation() > source.generation()))) {
 			throw new IllegalStateException("Target hive already has a resource reference");
 		}
 		long nextCapacity = capacityFor(host);
@@ -322,6 +351,10 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
                 throw new IllegalStateException("Target resource buffer is too small");
         }
 		state.reference = account.claim(owner, source, binding(host));
+		state.accountBinding = null;
+		state.bindingType = null;
+		state.mechanicalCapacityResolved = false;
+		state.centrifugeProcessor = null;
 		state.productionMonitor = null;
 		state.emcRecipient = null;
 		state.outputPort = null;
@@ -450,8 +483,15 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		var account = accounts.find(state.reference.sourceId());
 		if (account == null || !account.reference().equals(state.reference)
 				|| !java.util.Objects.equals(account.binding(), binding(hive))) return;
-		account.retire(state.reference, binding(hive));
-		if (!state.upgradePrepared) accounts.retireEmpty(account.reference());
+		state.reference = account.retire(state.reference, binding(hive));
+		state.accountBinding = null;
+		state.bindingType = null;
+		if (!state.upgradePrepared && accounts.retireEmpty(account.reference())) {
+			state.reference = null;
+			state.outputPort = null;
+			state.emcRecipient = null;
+			state.meNodeData = new CompoundTag();
+		}
 	}
 
 	/** 按真实方块实体与代际验证引用；卸载旧对象不再可用。 */
@@ -592,7 +632,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		unresolvedReferences.clear();
 		try {
 			ResourceAccountData.keys(tag, java.util.Set.of("version", "source", "generation", "capacity", "output_port", "output_position", "me_output", "me_node", "emc_recipient", "unresolved_references", "native_output"));
-			if (!tag.contains("source") && !java.util.Set.of("version", "native_output").containsAll(tag.getAllKeys())) {
+			if (!tag.contains("source") && !java.util.Set.of("version", "native_output", "unresolved_references").containsAll(tag.getAllKeys())) {
 				throw new IllegalArgumentException("Incomplete resource host reference");
 			}
 			if (!tag.contains("version", Tag.TAG_INT) || tag.getInt("version") != 1) {
@@ -606,23 +646,23 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
                     invalidNativeConfig = tag.get("native_output").copy();
                 }
 			}
-			if (tag.contains("source")) {
-				if (tag.contains("unresolved_references")) {
-					if (!(tag.get("unresolved_references") instanceof net.minecraft.nbt.ListTag entries)
-							|| entries.size() > 4 || !entries.isEmpty() && entries.getElementType() != Tag.TAG_COMPOUND) {
-						throw new IllegalArgumentException("Invalid unresolved resource references");
-					}
-					for (var entry : entries) {
-						var evidence = (CompoundTag) entry;
-						ResourceAccountData.keys(evidence, java.util.Set.of("source", "generation", "reason"));
-						if (!evidence.hasUUID("source") || !evidence.contains("generation", Tag.TAG_LONG)
-								|| evidence.getLong("generation") < 1 || !evidence.contains("reason", Tag.TAG_STRING)
-								|| !java.util.Set.of("missing_account", "foreign_binding").contains(evidence.getString("reason"))) {
-							throw new IllegalArgumentException("Invalid unresolved resource identity");
-						}
-						unresolvedReferences.add(evidence.copy());
-					}
+			if (tag.contains("unresolved_references")) {
+				if (!(tag.get("unresolved_references") instanceof net.minecraft.nbt.ListTag entries)
+						|| entries.size() > 4 || !entries.isEmpty() && entries.getElementType() != Tag.TAG_COMPOUND) {
+					throw new IllegalArgumentException("Invalid unresolved resource references");
 				}
+				for (var entry : entries) {
+					var evidence = (CompoundTag) entry;
+					ResourceAccountData.keys(evidence, java.util.Set.of("source", "generation", "reason"));
+					if (!evidence.hasUUID("source") || !evidence.contains("generation", Tag.TAG_LONG)
+							|| evidence.getLong("generation") < 1 || !evidence.contains("reason", Tag.TAG_STRING)
+								|| !java.util.Set.of("missing_account", "foreign_binding").contains(evidence.getString("reason"))) {
+						throw new IllegalArgumentException("Invalid unresolved resource identity");
+					}
+					unresolvedReferences.add(evidence.copy());
+				}
+			}
+			if (tag.contains("source")) {
 				if (!tag.hasUUID("source") || !tag.contains("generation", Tag.TAG_LONG)
 						|| !tag.contains("capacity", Tag.TAG_LONG) || tag.getLong("capacity") < 1) {
 					throw new IllegalArgumentException("Invalid resource host reference");

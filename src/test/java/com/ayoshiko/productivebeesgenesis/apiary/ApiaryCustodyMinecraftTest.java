@@ -144,6 +144,213 @@ class ApiaryCustodyMinecraftTest {
         assertEquals(70, tile.getOutputBuffer().getBufferedGroupCount());
     }
 
+    @Test void removedBeeCyclesDetachWithoutBlockingReplacementAndSurviveUpgrade() {
+        var state = new ApiaryProductionState(1, () -> {});
+        var oldBee = new BeeSlot();
+        var data = new CompoundTag();
+        data.putString("entity", "productivebees:lumber_bee");
+        data.putString("evidence", "完整旧蜜蜂数据");
+        oldBee.setBeeData(data);
+        state.counts[0] = 61;
+        state.capture(0, oldBee);
+        oldBee.clear();
+        state.detachReplaced(new BeeSlot[]{oldBee});
+        assertEquals(0, state.counts[0]);
+        assertEquals(61, state.total());
+        assertEquals(data, state.retained().bees[0].getBeeData());
+        var replacement = data.copy();
+        replacement.putString("entity", "productivebees:configurable_bee");
+        replacement.putString("type", "productivebees:emerald");
+        oldBee.setBeeData(replacement);
+        assertTrue(state.canAdvance(0, oldBee));
+        state.counts[0] = 2;
+        state.capture(0, oldBee);
+        var restored = new ApiaryProductionState(3, () -> {});
+        restored.load(registries(), state.save(registries()));
+        assertFalse(restored.suspended());
+        assertEquals(63, restored.total());
+        assertEquals(data, restored.retained().bees[0].getBeeData());
+        var group = new OrderedSlotIndex();
+        group.reset(ApiaryRetainedCycles.MAX_GROUPS);
+        group.add(0);
+        restored.begin(group, true);
+        restored.converted();
+        restored.freeze(new BeeProduceProcessor.Generated(List.of(new ItemStack(Items.OAK_LOG, 61)), FluidStack.EMPTY, 0));
+        assertEquals(0, restored.retained().counts[0]);
+        assertEquals(2, restored.counts[0]);
+        assertEquals(61, restored.items().getFirst().getCount());
+    }
+
+    @Test void retainedCapacityRefusesNewIdentityAndPreservesCyclesUntilSpaceReturns() {
+        var state = new ApiaryProductionState(1, () -> {});
+        var slot = new BeeSlot();
+        for (int i = 0; i < ApiaryRetainedCycles.MAX_GROUPS; i++) {
+            var bee = new CompoundTag();
+            bee.putString("entity", "productivebees:lumber_bee");
+            bee.putInt("identity", i);
+            slot.setBeeData(bee);
+            state.counts[0] = 1;
+            state.capture(0, slot);
+            slot.clear();
+            state.detachReplaced(new BeeSlot[]{slot});
+        }
+        assertEquals(ApiaryRetainedCycles.MAX_GROUPS, state.retained().groups());
+        var data = new CompoundTag();
+        data.putString("entity", "productivebees:quarry_bee");
+        slot.setBeeData(data);
+        state.counts[0] = 4;
+        state.capture(0, slot);
+        slot.clear();
+        state.detachReplaced(new BeeSlot[]{slot});
+        assertEquals(4, state.counts[0]);
+        assertEquals(132, state.total());
+        var restored = new ApiaryProductionState(1, () -> {});
+        restored.load(registries(), state.save(registries()));
+        assertFalse(restored.suspended());
+        assertEquals(132, restored.total());
+        restored.retained().clear(0);
+        restored.detachReplaced(new BeeSlot[]{slot});
+        assertEquals(0, restored.counts[0]);
+        assertEquals(131, restored.total());
+        assertEquals(data, restored.retained().bees[0].getBeeData());
+    }
+
+    @Test void retainedConversionUnknownKeepsZeroSuffixRequestAndNeverDetachesOrReplays() {
+        var state = new ApiaryProductionState(1, () -> {});
+        var slot = new BeeSlot();
+        var data = new CompoundTag();
+        data.putString("entity", "productivebees:lumber_bee");
+        slot.setBeeData(data);
+        state.counts[0] = 1;
+        state.capture(0, slot);
+        slot.clear();
+        state.detachReplaced(new BeeSlot[]{slot});
+        var group = new OrderedSlotIndex();
+        group.reset(ApiaryRetainedCycles.MAX_GROUPS);
+        group.add(0);
+        state.begin(group, true);
+        state.retained().counts[0] = 0;
+        state.fail(new IllegalStateException("conversion completed, generation outcome unknown"));
+        var saved = state.save(registries());
+        var restored = new ApiaryProductionState(1, () -> {});
+        restored.load(registries(), saved);
+        assertTrue(restored.suspended());
+        assertEquals(state.request(), restored.request());
+        assertEquals(saved, restored.save(registries()));
+        restored.detachReplaced(new BeeSlot[]{slot});
+        assertEquals(saved, restored.save(registries()));
+        assertThrows(IllegalStateException.class, () -> restored.begin(group, true));
+        restored.acknowledgeSettled(restored.request());
+        assertFalse(restored.suspended());
+        assertNull(restored.retained().bees[0].getBeeData());
+    }
+
+    @Test void legacyPaidSnapshotMigratesAndMalformedRetainedStateKeepsOriginal() {
+        var state = new ApiaryProductionState(1, () -> {});
+        var slot = new BeeSlot();
+        var data = new CompoundTag();
+        data.putString("entity", "productivebees:quarry_bee");
+        slot.setBeeData(data);
+        state.counts[0] = 20;
+        state.capture(0, slot);
+        var legacy = state.save(registries());
+        legacy.putInt("version", 1);
+        legacy.remove("live_slots");
+        legacy.remove("retained");
+        var migrated = new ApiaryProductionState(1, () -> {});
+        migrated.load(registries(), legacy);
+        assertFalse(migrated.suspended());
+        assertEquals(20, migrated.total());
+        slot.clear();
+        migrated.detachReplaced(new BeeSlot[]{slot});
+        assertEquals(20, migrated.retained().total());
+        var damaged = migrated.save(registries());
+        damaged.getList("retained", 10).getCompound(0).putLong("count", 4_294_967_316L);
+        var restored = new ApiaryProductionState(1, () -> {});
+        restored.load(registries(), damaged);
+        assertTrue(restored.suspended());
+        assertEquals(damaged, restored.save(registries()));
+        var zero = migrated.save(registries());
+        zero.getList("retained", 10).getCompound(0).putInt("count", 0);
+        var invalidZero = new ApiaryProductionState(1, () -> {});
+        invalidZero.load(registries(), zero);
+        assertTrue(invalidZero.suspended());
+        assertEquals(zero, invalidZero.save(registries()));
+    }
+
+    @Test void legacyItemPlacementMergeMigratesWithoutLosingPaidBeeSnapshot() {
+        var source = tile();
+        var state = source.productionState();
+        var bee = new CompoundTag();
+        bee.putString("entity", "productivebees:quarry_bee");
+        bee.putString("evidence", "旧扳手机器的完整蜜蜂数据");
+        state.counts[0] = 61;
+        state.bees[0].setBeeData(bee);
+        var legacyRoot = source.saveCustomOnly(registries());
+        var legacy = legacyRoot.getCompound(ApiaryOutputBuffer.nbtKey()).getCompound("production");
+        legacy.putInt("version", 1);
+        legacy.remove("live_slots");
+        legacy.remove("retained");
+        var placed = tile();
+        assertTrue(net.minecraft.world.item.component.CustomData.of(legacyRoot).loadInto(placed, registries()));
+        assertFalse(placed.productionState().suspended());
+        assertEquals(61, placed.productionState().total());
+        assertEquals(bee, placed.productionState().bees[0].getBeeData());
+        var migrated = placed.productionState().save(registries());
+        assertEquals(2, migrated.getInt("version"));
+        var restored = tile();
+        restored.productionState().load(registries(), migrated);
+        assertFalse(restored.productionState().suspended());
+        assertEquals(migrated, restored.productionState().save(registries()));
+    }
+
+    @Test void mergedLegacyFieldsRejectAssetsWrongTypesAndUnexpectedSlotCounts() {
+        var state = new ApiaryProductionState(3, () -> {});
+        var legacy = state.save(registries());
+        legacy.putInt("version", 1);
+        var illegalRetained = new CompoundTag();
+        illegalRetained.putString("evidence", "不能丢弃的旧资产");
+        for (int variant = 0; variant < 4; variant++) {
+            var damaged = legacy.copy();
+            switch (variant) {
+                case 0 -> damaged.getList("retained", 10).add(illegalRetained.copy());
+                case 1 -> damaged.putString("retained", "原始保管数据");
+                case 2 -> damaged.putInt("live_slots", 2);
+                case 3 -> damaged.putBoolean("retained_request", false);
+                default -> throw new AssertionError(variant);
+            }
+            var restored = new ApiaryProductionState(3, () -> {});
+            restored.load(registries(), damaged);
+            assertTrue(restored.suspended());
+            assertEquals(damaged, restored.save(registries()));
+        }
+    }
+
+    @Test void legacyRequestMergedWithDefaultsRemainsSuspendedAndCannotReplay() {
+        var state = new ApiaryProductionState(3, () -> {});
+        var bee = new CompoundTag();
+        bee.putString("entity", "productivebees:configurable_bee");
+        bee.putString("type", "productivebees:emerald");
+        state.counts[0] = 4;
+        state.bees[0].setBeeData(bee);
+        var group = new OrderedSlotIndex();
+        group.reset(3);
+        group.add(0);
+        state.begin(group);
+        state.fail(new IllegalStateException("unknown external result"));
+        var legacy = state.save(registries());
+        legacy.putInt("version", 1);
+        legacy.remove("retained_request");
+        var restored = new ApiaryProductionState(3, () -> {});
+        restored.load(registries(), legacy);
+        assertTrue(restored.suspended());
+        assertEquals(state.request(), restored.request());
+        assertEquals(state.failure(), restored.failure());
+        assertEquals(4, restored.total());
+        assertThrows(IllegalStateException.class, () -> restored.begin(group));
+        assertEquals(bee, restored.bees[0].getBeeData());
+    }
+
     @Test void firstMiddleAndLastDispatchFailuresPreserveRemainingGroups() throws Exception {
         for (int failing = 0; failing < 3; failing++) {
             var tile = tile();

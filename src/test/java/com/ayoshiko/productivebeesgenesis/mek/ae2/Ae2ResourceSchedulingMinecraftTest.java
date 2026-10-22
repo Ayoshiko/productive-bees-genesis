@@ -1,6 +1,18 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.storage.MEStorage;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceAccount;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceAccounts;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceAccountsSavedData;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,6 +22,80 @@ import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class Ae2ResourceSchedulingMinecraftTest {
+    @Test
+    void resourceInitializationFailureCannotAbortOrdinaryOutputAndRetainsBackoff() {
+        var fixture = new InitializationFixture();
+        try (var runtime = mockStatic(ResourceRuntime.class);
+             var hosts = mockStatic(ResourceHiveHost.class)) {
+            runtime.when(() -> ResourceRuntime.accounts(fixture.server)).thenReturn(fixture.data);
+            hosts.when(() -> ResourceHiveHost.existing(fixture.machine)).thenReturn(fixture.state);
+            hosts.when(() -> ResourceHiveHost.ensureMechanical(fixture.machine))
+                    .thenThrow(new IllegalStateException("invalid account during initialization"));
+            when(fixture.level.getGameTime()).thenReturn(1L);
+            assertDoesNotThrow(() -> Ae2OutputPusher.pushOutputs(fixture.host));
+            verify(fixture.host).productivebeesgenesis$isOutputPushEnabled();
+            when(fixture.level.getGameTime()).thenReturn(2L);
+            assertDoesNotThrow(() -> Ae2OutputPusher.pushOutputs(fixture.host));
+            hosts.verify(() -> ResourceHiveHost.ensureMechanical(fixture.machine), times(1));
+            when(fixture.level.getGameTime()).thenReturn(41L);
+            assertDoesNotThrow(() -> Ae2OutputPusher.pushOutputs(fixture.host));
+            hosts.verify(() -> ResourceHiveHost.ensureMechanical(fixture.machine), times(2));
+            assertEquals(fixture.saved, fixture.accounts.save());
+            Ae2ResourceOutput.closeMachine(fixture.host);
+        }
+    }
+
+    @Test
+    void legacyResourceSwitchMigrationFailureCannotAbortOrdinaryOutput() {
+        var fixture = new InitializationFixture();
+        doThrow(new IllegalStateException("stale migration reference"))
+                .when(fixture.state).migrateMeOutput(fixture.machine);
+        try (var runtime = mockStatic(ResourceRuntime.class);
+             var hosts = mockStatic(ResourceHiveHost.class)) {
+            runtime.when(() -> ResourceRuntime.accounts(fixture.server)).thenReturn(fixture.data);
+            hosts.when(() -> ResourceHiveHost.existing(fixture.machine)).thenReturn(fixture.state);
+            hosts.when(() -> ResourceHiveHost.ensureMechanical(fixture.machine)).thenReturn(fixture.state);
+            when(fixture.level.getGameTime()).thenReturn(1L);
+            assertDoesNotThrow(() -> Ae2OutputPusher.pushOutputs(fixture.host));
+            verify(fixture.host).productivebeesgenesis$isOutputPushEnabled();
+            when(fixture.level.getGameTime()).thenReturn(2L);
+            assertDoesNotThrow(() -> Ae2OutputPusher.pushOutputs(fixture.host));
+            verify(fixture.state, times(1)).migrateMeOutput(fixture.machine);
+            verify(fixture.state).meStatus("unavailable");
+            assertEquals(fixture.saved, fixture.accounts.save());
+            Ae2ResourceOutput.closeMachine(fixture.host);
+        }
+    }
+
+    private static final class InitializationFixture {
+        final ServerLevel level = mock(ServerLevel.class);
+        final MinecraftServer server = mock(MinecraftServer.class);
+        final BlockEntity machine = mock(BlockEntity.class, withSettings().extraInterfaces(IAe2OutputHostBase.class));
+        final IAe2OutputHostBase host = (IAe2OutputHostBase) machine;
+        final Ae2OutputStateHolder holder = new Ae2OutputStateHolder();
+        final ResourceHiveHost state = mock(ResourceHiveHost.class);
+        final ResourceAccounts accounts = new ResourceAccounts(() -> {});
+        final ResourceAccountsSavedData data = mock(ResourceAccountsSavedData.class);
+        final CompoundTag saved;
+
+        InitializationFixture() {
+            when(machine.getLevel()).thenReturn(level);
+            when(machine.getBlockPos()).thenReturn(BlockPos.ZERO);
+            when(level.getBlockEntity(BlockPos.ZERO)).thenReturn(machine);
+            when(level.getServer()).thenReturn(server);
+            when(server.isSameThread()).thenReturn(true);
+            when(server.overworld()).thenReturn(level);
+            when(host.productivebeesgenesis$getAe2StateHolder()).thenReturn(holder);
+            when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+            var binding = new ResourceAccount.Binding(Level.OVERWORLD.location(), 0, ResourceLocation.parse("minecraft:furnace"));
+            var account = accounts.create(java.util.UUID.randomUUID(), binding);
+            when(state.reference()).thenReturn(account.reference());
+            when(data.accounts()).thenReturn(accounts);
+            saved = accounts.save();
+        }
+    }
+
+
     @Test
     void transientBindingFailureRecoversOnTheSameOutputInstanceBeforeRetryDeadline() {
         var level = mock(net.minecraft.server.level.ServerLevel.class);

@@ -49,7 +49,8 @@ public final class ApiaryOutputBuffer {
 	private CompoundTag invalidRoot;
 	private boolean draining;
 	public int freeGroups() { return Math.max(0, MAX_BUFFER_GROUPS - getBufferedGroupCount()); }
-	public boolean productionBlocked() { return invalidRoot != null || !quarantined.isEmpty() || bufferedStacks.size() >= MAX_BUFFER_GROUPS; }
+	public boolean hasInvalidData() { return invalidRoot != null || !quarantined.isEmpty(); }
+	public boolean productionBlocked() { return hasInvalidData() || bufferedStacks.size() >= MAX_BUFFER_GROUPS; }
 	public synchronized int accept(ItemStack stack) { return accept(stack, false); }
 	public synchronized int accept(ItemStack stack, boolean hold) {
 		if (invalidRoot != null || !quarantined.isEmpty()) return 0;

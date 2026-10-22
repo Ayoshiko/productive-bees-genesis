@@ -1,9 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiary.ApiaryOutputDiagnostics;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceOutputStatus;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
@@ -78,6 +81,36 @@ public final class OutputRecoveryCommands {
             if (tile instanceof TileEntityMekApiary apiary && apiary.productionState().suspended())
                 source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.production",
                         String.valueOf(apiary.productionState().request()), apiary.productionState().phase(), apiary.productionState().failure()), false);
+            if (tile instanceof TileEntityMekApiary apiary) {
+                var diagnostic = ApiaryOutputDiagnostics.capture(apiary);
+                source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.apiary",
+                        diagnostic.pendingCycles(), diagnostic.frozenItemKinds(), diagnostic.frozenFluidAmount(),
+                        diagnostic.pendingFluidAmount(), diagnostic.bufferGroups(), diagnostic.bufferLimit(),
+                        diagnostic.invalidBuffer(), diagnostic.occupiedOutputSlots(), diagnostic.outputSlots(),
+                        diagnostic.tankAmount(), diagnostic.tankCapacity()), false);
+                for (var slot : diagnostic.slots()) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.bee",
+                            slot.index() + 1, String.valueOf(slot.bee()), Component.translatable(slot.state().translationKey()),
+                            slot.paidCycles(), String.valueOf(slot.paidBee())), false);
+                }
+                if (!diagnostic.retained().isEmpty()) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.retained",
+                            diagnostic.retained().size()), false);
+                    for (var held : diagnostic.retained()) {
+                        source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.retained_bee",
+                                held.sourceSlot() + 1, String.valueOf(held.bee()), held.cycles()), false);
+                    }
+                }
+            }
+            if (source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                    && ResourceHiveHost.existing(tile) != null) {
+                var state = ResourceHiveHost.existing(tile);
+                var status = ResourceOutputStatus.capture(tile, player, -1);
+                source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.resources",
+                        Component.translatable("resource.productivebeesgenesis.status."
+                                + status.state().name().toLowerCase(java.util.Locale.ROOT)),
+                        state.status(), state.meStatus(), String.valueOf(state.reference())), false);
+            }
             if (!"status".equals(action)) ProductiveBeesGenesis.LOGGER.warn("Output recovery actor={} pos={} action={}",
                     source.getTextName(), pos, action);
             return 1;
