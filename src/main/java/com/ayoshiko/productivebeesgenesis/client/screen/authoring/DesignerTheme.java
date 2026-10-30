@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.util.StringUtil;
 
 import java.util.function.Supplier;
 
@@ -627,6 +628,7 @@ final class DesignerTheme {
 		private boolean editable = true;
 		private Component hint;
 		private String suggestion;
+		private int characterLimit = 32;
 
 		void bind(Object owner, String key) {
 			fieldOwner = owner;
@@ -678,8 +680,39 @@ final class DesignerTheme {
 
 		@Override
 		public void setHighlightPos(int position) {
-			super.setHighlightPos(position);
-			anchor = Math.max(0, Math.min(getValue().length(), position));
+			anchor = DesignerTextLayout.floorIndex(getValue(), position);
+			super.setHighlightPos(anchor);
+		}
+
+		@Override
+		public void setCursorPosition(int position) {
+			super.setCursorPosition(DesignerTextLayout.floorIndex(getValue(), position));
+		}
+
+		@Override
+		public void setValue(String value) {
+			super.setValue(DesignerTextLayout.truncate(value, characterLimit));
+		}
+
+		@Override
+		public void setMaxLength(int limit) {
+			if (limit < 0) {
+				throw new IllegalArgumentException("Character limit cannot be negative");
+			}
+			characterLimit = limit;
+			int length = DesignerTextLayout.truncate(getValue(), limit).length();
+			if (length < getValue().length()) {
+				super.setMaxLength(length);
+			}
+			super.setMaxLength(limit);
+			setCursorPosition(getCursorPosition());
+			setHighlightPos(anchor);
+		}
+
+		@Override
+		public void insertText(String text) {
+			int available = characterLimit - getValue().length() + getHighlighted().length();
+			super.insertText(DesignerTextLayout.truncate(StringUtil.filterText(text), Math.max(0, available)));
 		}
 
 		@Override

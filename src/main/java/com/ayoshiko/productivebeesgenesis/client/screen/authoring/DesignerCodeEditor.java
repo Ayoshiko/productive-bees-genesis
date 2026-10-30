@@ -604,8 +604,76 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	}
 
 	private static final class Model extends MultilineTextField {
+		private boolean changingText;
+
 		private Model(Font font, int width) {
 			super(font, width);
+		}
+
+		@Override
+		public void setValue(String value) {
+			super.setValue(DesignerTextLayout.truncate(value, characterLimit()));
+		}
+
+		@Override
+		public void setCursorListener(Runnable listener) {
+			super.setCursorListener(() -> {
+				if (!changingText) {
+					listener.run();
+				}
+			});
+		}
+
+		@Override
+		public void setCharacterLimit(int limit) {
+			super.setCharacterLimit(limit);
+			String text = DesignerTextLayout.truncate(value(), limit);
+			if (!text.equals(value())) {
+				setValue(text);
+			}
+		}
+
+		@Override
+		public void insertText(String text) {
+			int from = start();
+			int available = characterLimit() - value().length() + end() - from;
+			String insertion = DesignerTextLayout.truncate(StringUtil.filterText(text, true), Math.max(0, available));
+			if (insertion.isEmpty() && !hasSelection()) {
+				return;
+			}
+			// 原生插入预算未扣选区；整体赋值保留值通知，屏蔽文末中间光标以免视口跳动。
+			changingText = true;
+			try {
+				super.setValue(new StringBuilder(value()).replace(from, end(), insertion).toString());
+			} finally {
+				changingText = false;
+			}
+			setSelecting(false);
+			seekCursor(Whence.ABSOLUTE, from + insertion.length());
+		}
+
+		@Override
+		public void deleteText(int amount) {
+			if (!hasSelection()) {
+				int target = Math.max(0, Math.min(value().length(), cursor() + amount));
+				int[] boundaries = DesignerTextLayout.boundaries(value());
+				int position = DesignerTextLayout.floorBoundary(boundaries, target);
+				if (target > cursor() && position < target) {
+					position = DesignerTextLayout.moveBoundary(boundaries, position, 1);
+				}
+				position(cursor(), position);
+			}
+			insertText("");
+		}
+
+		@Override
+		public void seekCursor(Whence whence, int value) {
+			int target = switch (whence) {
+				case ABSOLUTE -> value;
+				case RELATIVE -> cursor() + value;
+				case END -> value().length() + value;
+			};
+			super.seekCursor(Whence.ABSOLUTE, DesignerTextLayout.floorIndex(value(), target));
 		}
 
 		private int start() {

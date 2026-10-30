@@ -18,6 +18,8 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / "src/main/resources/assets/productivebeesgenesis"
 FONTTOOLS_VERSION = "4.68.0"
+# The editor is horizontal: keep shaping/mark positioning, omit vertical and decorative alternates.
+HORIZONTAL_FEATURES = ["ccmp", "locl", "kern", "mark", "mkmk", "rlig", "liga", "clig", "calt", "curs"]
 SOURCES = (
     {
         "file": "notosanssc_regular.otf",
@@ -143,7 +145,7 @@ def main():
         font = TTFont(BytesIO(data), recalcTimestamp=False)
         requested = cjk if spec["output"] == "designer_cjk.otf" else latin
         options = subset.Options()
-        options.layout_features = ["*"]
+        options.layout_features = HORIZONTAL_FEATURES
         options.name_IDs = ["*"]
         options.name_languages = ["*"]
         options.name_legacy = True
@@ -180,6 +182,7 @@ def main():
         destination.write_bytes(data)
     report = {
         "fonttools": FONTTOOLS_VERSION,
+        "layout_features": HORIZONTAL_FEATURES,
         "coverage": "all current translation text + 3755 GB2312 first-level Han; common Western alphabets and symbols",
         "ui_codepoints": len(ui_points),
         "translations": {

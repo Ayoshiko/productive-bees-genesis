@@ -65,6 +65,7 @@ configurations {
 }
 
 apply from: 'gradle/resource-bee-examples.gradle'
+apply from: 'gradle/compact-release.gradle'
 
 // run/ 中的本地测试配置仅覆盖客户端启动，常规构建仍使用发布基线。
 if (gradle.startParameter.taskNames.any { it.tokenize(':').last() == 'runClient' }
@@ -464,25 +465,44 @@ def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
     doLast {
         File artifact = artifactFile.get().asFile
         def entries = []
+        int directories = 0
         def zip = new java.util.zip.ZipFile(artifact)
         try {
             zip.entries().each { entry ->
-                if (!entry.isDirectory()) {
-                    entries << [name: entry.name, size: entry.size]
+                if (entry.isDirectory()) {
+                    directories++
+                } else {
+                    entries << [name: entry.name, size: entry.size, compressed: entry.compressedSize]
                 }
             }
         } finally {
             zip.close()
         }
-        entries.sort { left, right -> right.size <=> left.size }
+        entries.sort { left, right -> right.compressed <=> left.compressed }
+        def categories = entries.groupBy { entry ->
+            String extension = entry.name.tokenize('.').last().toLowerCase(Locale.ROOT)
+            if (extension in ['otf', 'ttf']) return 'fonts'
+            if (extension in ['json', 'mcmeta']) return 'json'
+            if (extension in ['md', 'txt'] || entry.name.startsWith('LICENSE_')) return 'guides_and_licenses'
+            return extension in ['class', 'png'] ? extension : 'other'
+        }
+        def totals = categories.collect { category, values ->
+            [name: category, count: values.size(), size: values.sum { it.size }, compressed: values.sum { it.compressed }]
+        }.sort { left, right -> right.compressed <=> left.compressed }
+        long payload = entries.sum { it.compressed } as long
         File destination = reportFile.get().asFile
         destination.parentFile.mkdirs()
-        destination.text = ("artifact=${artifact.name}\n"
+        destination.setText("artifact=${artifact.name}\n"
                 + "bytes=${artifact.length()}\n"
                 + "entries=${entries.size()}\n"
-                + "top_entries:\n"
-                + entries.take(25).collect { "${it.size}\t${it.name}" }.join('\n')
-                + '\n')
+                + "directories=${directories}\n"
+                + "compressed_payload=${payload}\n"
+                + "zip_headers_and_directories=${artifact.length() - payload}\n"
+                + "categories (compressed, raw, count, name):\n"
+                + totals.collect { "${it.compressed}\t${it.size}\t${it.count}\t${it.name}" }.join('\n')
+                + "\ntop_entries (compressed, raw, name):\n"
+                + entries.take(25).collect { "${it.compressed}\t${it.size}\t${it.name}" }.join('\n')
+                + '\n', 'UTF-8')
         logger.lifecycle("Release artifact: ${artifact.length()} bytes; report: ${destination}")
     }
 }

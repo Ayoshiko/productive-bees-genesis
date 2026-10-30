@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections;
 import com.google.gson.JsonObject;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -10,6 +11,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.fluids.FluidStack;
+
+import java.util.ArrayList;
+import java.util.List;
 
 final class DesignerBeeFields {
 	private DesignerBeeFields() {
@@ -41,14 +45,20 @@ final class DesignerBeeFields {
 		screen.scope("definition");
 		screen.section("appearance");
 		DesignerBeeModels.add(screen, definition);
-		screen.field("primaryColor", definition, "primaryColor", "#E8BC39");
-		screen.field("secondaryColor", definition, "secondaryColor", "#383D43");
-		screen.field("particleColor", definition, "particleColor", "#E8BC39");
-		screen.field("tertiaryColor", definition, "tertiaryColor", BeeDesignerDocument.text(definition, "primaryColor", "#E8BC39"));
-		screen.toggle("colorCycle", definition, "colorCycle", false);
-		screen.number("size", definition, "size", "1");
-		screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
-		screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
+		screen.group("appearance_colors", () -> {
+			screen.field("primaryColor", definition, "primaryColor", "#E8BC39");
+			screen.field("secondaryColor", definition, "secondaryColor", BeeDesignerDocument.text(definition, "primaryColor", "#E8BC39"));
+			screen.field("particleColor", definition, "particleColor", "#000000");
+			screen.field("tertiaryColor", definition, "tertiaryColor", BeeDesignerDocument.text(definition, "primaryColor", "#E8BC39"));
+			screen.toggle("colorCycle", definition, "colorCycle", false);
+		});
+		screen.group("appearance_geometry", () -> {
+			screen.number("size", definition, "size", "1");
+			screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
+			renderTransform(screen, definition);
+			screen.toggle("translucent", definition, "translucent", BeeDesignerDocument.text(definition, "renderer", "default").equals("translucent_with_center"));
+			screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
+		});
 		screen.toggle("createComb", definition, "createComb", true);
 		screen.note("comb_help", DesignerFormScreen.tr("create_comb_help"));
 		if (advanced) {
@@ -58,8 +68,6 @@ final class DesignerBeeFields {
 				screen.field("renderer", definition, "renderer", "default");
 				screen.field("model", definition, "model", "");
 				screen.field("animation", definition, "animation", "");
-				screen.field("renderTransform", definition, "renderTransform", "");
-				screen.toggle("translucent", definition, "translucent", false);
 				screen.anchor("advanced");
 				screen.rows.add(new DesignerFormScreen.Row("advanced", (x, y, w) -> screen.button(x, y, w,
 						DesignerFormScreen.tr("edit_definition"), () -> mc.setScreen(new DesignerJsonScreen(screen, definition,
@@ -133,12 +141,13 @@ final class DesignerBeeFields {
 			screen.gene("endurance", genes, "endurance", "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
 			screen.gene("productivity", genes, "productivity", "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
 		});
-		screen.section("environment_section");
-		screen.toggle("waterproof", definition, "waterproof", false);
-		screen.toggle("fireproof", definition, "fireproof", false);
-		screen.toggle("coldResistant", definition, "coldResistant", false);
-		screen.number("speed", definition, "speed", "1");
-		screen.number("attack", definition, "attack", "2");
+		screen.group("environment_section", () -> {
+			screen.toggle("waterproof", definition, "waterproof", false);
+			screen.toggle("fireproof", definition, "fireproof", false);
+			screen.toggle("coldResistant", definition, "coldResistant", false);
+			screen.number("speed", definition, "speed", "1");
+			screen.number("attack", definition, "attack", "2");
+		});
 		if (advanced) {
 			screen.group("special_traits", () -> {
 				for (String key : new String[]{"selfheal", "irradiated", "withered", "blinding", "draconic", "slimy", "teleporting",
@@ -214,5 +223,34 @@ final class DesignerBeeFields {
 		screen.choice("postPollination", definition, "postPollination", "none", "none", "amber_encase", "bonemeal", "force_grow_crop", "sus");
 		screen.choice("particleType", definition, "particleType", "drip", "drip", "pop", "lava", "portal", "rising");
 		screen.note("", DesignerFormScreen.tr("special_behavior_help"));
+	}
+
+	static void renderTransform(DesignerFormScreen screen, JsonObject definition) {
+		screen.anchor("renderTransform");
+		screen.rows.add(new DesignerFormScreen.Row("renderTransform", (x, y, w) -> {
+			String current = BeeDesignerDocument.text(definition, "renderTransform", "none");
+			String selected = renderOption(current);
+			List<String> choices = new ArrayList<>(List.of("render.normal", "render.flipped"));
+			if (!choices.contains(selected)) {
+				choices.add(selected);
+			}
+			screen.dropdown(x, y, w, selected, choices.toArray(String[]::new), value -> {
+				if (!value.equals(selected)) {
+					String transform = switch (value) {
+						case "render.normal" -> "none";
+						case "render.flipped" -> "flipped";
+						default -> value;
+					};
+					definition.addProperty("renderTransform", transform);
+				}
+			}).setTooltip(Tooltip.create(DesignerFormScreen.tr("render_transform_help")));
+		}));
+	}
+
+	private static String renderOption(String transform) {
+		if (transform.isBlank() || transform.equals("none")) {
+			return "render.normal";
+		}
+		return transform.equals("flipped") ? "render.flipped" : transform;
 	}
 }

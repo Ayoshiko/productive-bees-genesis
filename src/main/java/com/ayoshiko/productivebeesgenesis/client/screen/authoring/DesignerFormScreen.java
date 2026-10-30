@@ -506,7 +506,9 @@ public abstract class DesignerFormScreen extends Screen {
 		anchor(key);
 		boolean compact = key.equals("min") || key.equals("max") || key.toLowerCase(java.util.Locale.ROOT).contains("chance")
 				|| label.equals("fluid_amount") || label.equals("processing_time") || label.equals("machine_amount")
-				|| label.equals("machine_processing_time") || label.equals("machine_eu") || label.equals("machine_priority");
+				|| label.equals("machine_processing_time") || label.equals("machine_eu") || label.equals("machine_priority")
+				|| key.equals("size") || key.equals("pollinatedSize") || key.equals("speed") || key.equals("attack")
+				|| key.equals("breedingItemCount");
 		rows.add(new Row(label, (x, y, w) -> {
 			int controlWidth = Math.min(w, 160);
 			EditBox input = new DesignerTheme.Input(font, x + 28, y + 5, Math.max(20, controlWidth - 56), 20, tr(label));

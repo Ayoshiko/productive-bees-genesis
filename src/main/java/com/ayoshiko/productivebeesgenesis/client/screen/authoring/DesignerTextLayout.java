@@ -253,6 +253,21 @@ final class DesignerTextLayout {
 		return boundaries[found >= 0 ? found : Math.max(0, -found - 2)];
 	}
 
+	static int floorIndex(String text, int position) {
+		int clamped = Math.max(0, Math.min(text.length(), position));
+		if (clamped == 0 || clamped == text.length()) {
+			return clamped;
+		}
+		return floorBoundary(boundaries(text), clamped);
+	}
+
+	static String truncate(String text, int limit) {
+		if (text.length() <= limit) {
+			return text;
+		}
+		return text.substring(0, floorIndex(text, limit));
+	}
+
 	int boundary(int position, int direction) {
 		return moveBoundary(boundaries, position, direction);
 	}

@@ -114,6 +114,8 @@ final class DesignerMyriadPage {
 					selected -> values.addProperty(key, selected.substring("attack.".length())))));
 		} else if (key.equals("flowerType")) {
 			screen.choice(key, values, key, "blocks", "blocks", "entity_types");
+		} else if (key.equals("renderTransform")) {
+			DesignerBeeFields.renderTransform(screen, values);
 		} else if (key.equals("breedingItem")) {
 			DesignerBeeFields.breedingFood(screen, values);
 		} else if (key.endsWith("Item") || key.equals("spawningNest")) {

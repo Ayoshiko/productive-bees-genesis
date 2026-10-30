@@ -35,7 +35,7 @@
 
 ### 新增
 
-- 蜜蜂编辑器及全部子页面独立实现平滑文字：Noto Sans／SC 与 JetBrains Mono 精简改名子集覆盖当前翻译、3,755 个一级常用汉字和常见西文／符号，裁剪外字符按系统矢量字体、Minecraft 原生字形依次回退，字体文件压缩增量约 1.14 MB。按实际屏幕尺寸栅格化，连续缩放可用距离场；提供自动／距离场／游戏当前字体选择，统一宽度、换行、光标、选区及字素移动删除。资源重载释放图集，不要求安装 ModernUI／LDLib2 或运行时下载，完整 OFL 与原版权保留。
+- 蜜蜂编辑器及全部子页面独立实现平滑文字：Noto Sans／SC 与 JetBrains Mono 精简改名子集覆盖当前翻译、3,755 个一级常用汉字和常见西文／符号，裁剪外字符按系统矢量字体、Minecraft 原生字形依次回退，字体文件压缩增量约 1.05 MB，保留相同字符覆盖与横排特性，去除未使用的竖排及装饰替代特性。按实际屏幕尺寸栅格化，连续缩放可用距离场；提供自动／距离场／游戏当前字体选择，统一宽度、换行、光标、选区及字素移动删除。资源重载释放图集，不要求安装 ModernUI／LDLib2 或运行时下载，完整 OFL 与原版权保留。
 - 现代主题采用自制高倍率圆角遮罩与非零中心九宫格材质，分层窗口／卡片／控件阴影、连续分组卡片、标题层级、实体／轻透面板、状态徽章和短保存反馈。错误与未知应用持续显示，拖入提示区分添加／替换，危险操作及输入／槽状态统一表达；现有 AE 像素主题、步进、分页与分段交互保留。
 - 逐步教学会实际跳转到目录、外观、属性、获得、产物、检查、导出与生成文件，并用贴近控件的柔和圆角光圈、步骤标记和短曲线箭头提示操作；支持键盘切步、跳过与减少动态效果。生成文件预览增加上一个／下一个和文件列表快捷切换。
 - 万象创世配置补齐伤害免疫、攻击反馈、第三颜色、采蜜体型、发光图层、渲染变换和方块／标签／流体花源。专属“获得方式”入口可添加 PB 繁殖、转化、巢穴、钓鱼、灌装、合成及已适配的 MI／MBD2／MMR 机器配方，并支持独立检查、应用、导出和跨包导入。
@@ -56,6 +56,8 @@
 
 ### 变更
 
+- 发布 JAR 构建无损精简 PNG 编码、JSON 空白与 ZIP 元数据，保留全部资源路径、像素、颜色元数据和完整许可；构建报告按实际压缩占用分类。
+- 外观页将颜色／粒子与体型／渲染分组，环境属性成组显示，常用组默认展开；体型、采蜜体型、速度、攻击与繁殖用量使用紧凑数字行。普通蜂种与万象直接选择普通／上下翻转姿态，保留未知旧值；半透明移到常用外观，颜色缺省对齐 PB。
 - 蜂种读取复用按资源代际失效的反向配方索引与有界编码缓存，同代际后续读取只处理相关配方；定义路径索引随快照重建、停服释放。物品／方块名称拼音与标签按查询需要生成，减少首次打开方块选择时的重复工作。
 - 基因和普通枚举统一使用下拉，布尔属性使用开关，流程模式和页面切换保留分段导航。过滤页宽窗双列，窄窗合并模式、筛选、全选和撤销，批量操作显示选择数量。
 - 获取与产物页面统一先显示配方摘要，再进入完整编辑；物品框随名称收紧，数量与概率可在摘要直接输入；固定数量同步上下限，范围数量分别编辑，概率按百分数填写。流体显示图标、名称和 mB，数量与处理时间也可直接修改。常用数值范围移至提示，非法输入仍保留校验。机器配方集中展示输入、输出与费用，将来源、MBD2 内容选项和 MMR 画布／位置放入可展开分组，窄窗口自动调整。短摘要字段按实际内容宽度合并：结果蜂与概率、流体与数量／时间优先同行，放不下时换行；重排后按字段身份恢复输入焦点。
@@ -67,6 +69,7 @@
 
 ### 修复
 
+- 字符数上限、粘贴、直接光标／选区定位与删除保留完整组合字符、代理对和 ZWJ 字素；JSON 达到上限后替换选区正确使用释放的空间。字体切换和资源重载使目录宽度缓存失效。
 - 完整资源重载期间暂停新资源生产与读取，重叠重载统一收口；任一失败保持暂停，后续新批次成功才恢复。停服后的迟到回调不重建旧服务器状态，成功加载、更新、卸载与独立重进均核对有效目录。
 - 修复万象新配置只展示而未完整写入实际蜂种 NBT 的缺口；清空免疫、继承颜色／体型和更换花源会清理旧值。额外获得配方不会在万象配置重载时被原处理器重写，便携与 KubeJS 导出保留归属；跨包导入沿用目标包万象属性，只导入额外配方。
 - 过滤配置保存使用服务器有序文件队列与请求回执，加入权限、基准冲突、分页代际和大小校验；保存超时或结果未知保留草稿并提示核对，单人主人可保存，多人继续要求 OP 等级至少 2。
@@ -110,6 +113,8 @@
 
 #### Changed
 
+- Release builds losslessly compact PNG encoding, JSON whitespace and ZIP metadata while retaining every resource path, pixel, color metadata chunk and full license. Artifact reports group actual compressed bytes.
+- Appearance groups colors/particles and size/rendering; common groups stay expanded, environment fields share a group, and size, nectar size, speed, attack and breeding amounts use compact numeric rows. Ordinary bees and Myriad have normal/upside-down pose choices with unknown values retained. Translucency is in ordinary appearance, and absent colors follow PB's defaults.
 - Bee reads reuse generation-aware reverse recipe indexes and bounded encoding caches, processing related recipes on subsequent reads. Definition paths follow their snapshot and are released on shutdown. Item/block Pinyin and tags are built only when the query needs them, reducing work when opening the block picker.
 - Genes and ordinary enums use dropdowns, booleans use switches, and workflow modes retain segmented navigation. The filter uses two columns in wide windows and combines mode, visibility, select-all and undo in narrow windows; bulk actions display selection counts.
 - Acquisition and production show summaries before full editing. Item fields fit their labels; amounts and probabilities are directly editable in summaries. Fixed amounts update both bounds, ranges retain separate bounds, and chance is entered as a percentage. Fluids show an icon, localized name and mB, with editable amounts and processing time. Common numeric ranges move to tooltips while invalid values remain checked. Machine inputs, outputs and costs are grouped, with sources, MBD2 content options and MMR canvas/positions collapsed by default and responsive layouts for narrow windows. Short summary fields share available row space: result bees stay with chances and fluids with amounts/times when they fit. Reflow preserves focus by field identity.
@@ -121,6 +126,7 @@
 
 #### Fixed
 
+- Character limits, pasting, direct cursor/selection placement and deletion preserve complete combining clusters, surrogate pairs and ZWJ graphemes. JSON selection replacement uses the space freed at the character limit. Font-mode switches and resource reloads invalidate catalog width measurements.
 - Pause new resource production and editor reads during complete resource reloads. Overlapping reloads share completion state; any failure keeps admission paused until a new successful batch. Late callbacks after shutdown do not recreate server state. Successful pack loading, updates, removal and an independent restart verify the stable catalog.
 - Apply all new Myriad fields to actual bee NBT, including clearing immunities, inherited colors/sizes and replaced flower sources. Additional acquisition recipes survive the Myriad configuration processor and retain ownership through portable/KubeJS exports. Cross-pack recipe-only imports retain the destination pack's Myriad attributes.
 - Filter saves use the server's ordered file queue with request acknowledgements, permissions, baseline conflict checks, generation-aware pages and size limits. Timeouts or unknown outcomes retain edits for reconciliation. Single-player owners can save; multiplayer still requires permission level 2.

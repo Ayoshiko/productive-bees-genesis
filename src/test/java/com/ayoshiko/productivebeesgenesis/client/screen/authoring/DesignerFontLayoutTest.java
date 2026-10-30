@@ -1,5 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.MultilineTextField;
+import net.minecraft.client.gui.components.Whence;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
@@ -13,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -65,6 +69,41 @@ class DesignerFontLayoutTest {
 		}
 		assertEquals(2, layout.boundary(0, 1));
 		assertEquals(3, layout.boundary(4, -1));
+	}
+
+	@Test
+	void characterBudgetsNeverKeepOnlyPartOfAGrapheme() {
+		String[] graphemes = {"A\u0301", "😀", "👩‍💻"};
+		for (String grapheme : graphemes) {
+			String text = "蜜" + grapheme + "B";
+			for (int limit = 1; limit < grapheme.length() + 1; limit++) {
+				assertEquals("蜜", DesignerTextLayout.truncate(text, limit));
+				assertEquals(1, DesignerTextLayout.floorIndex(text, limit));
+			}
+			assertEquals("蜜" + grapheme, DesignerTextLayout.truncate(text, grapheme.length() + 1));
+			assertEquals("", DesignerTextLayout.truncate(text, 0));
+			assertEquals(text, DesignerTextLayout.truncate(text, text.length()));
+		}
+	}
+
+	@Test
+	void selectionReplacementNotifiesOnlyTheFinalCursorAndCollapsesSelection() throws Exception {
+		var constructor = Class.forName(DesignerCodeEditor.class.getName() + "$Model").getDeclaredConstructor(Font.class, int.class);
+		constructor.setAccessible(true);
+		var model = (MultilineTextField) constructor.newInstance(DesignerFonts.code(), 120);
+		model.setValue("header\nmiddle\nfooter");
+		model.seekCursor(Whence.ABSOLUTE, 7);
+		model.setSelecting(true);
+		model.seekCursor(Whence.ABSOLUTE, 13);
+		var cursors = new ArrayList<Integer>();
+		var values = new ArrayList<String>();
+		model.setCursorListener(() -> cursors.add(model.cursor()));
+		model.setValueListener(values::add);
+		model.insertText("A\u0301");
+		assertEquals("header\nA\u0301\nfooter", model.value());
+		assertEquals(List.of(model.value()), values);
+		assertEquals(List.of(9), cursors);
+		assertFalse(model.hasSelection());
 	}
 
 	@Test
